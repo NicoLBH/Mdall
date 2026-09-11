@@ -12,41 +12,19 @@
  * moment du build, et le chemin diffère entre le navigateur et les tests.
  * L'injection évite d'avoir à le savoir ici.
  *
- * Une seule règle vraiment propre à cet organisme y figure : son nom, imprimé
- * en pied de chaque page. Les autres — types de livrables, format de chrono —
- * viennent du moteur, où elles seront regroupées en pack versionné lors d'une
- * étape ultérieure.
+ * Qui l'a émis ne se lit plus ici : `services/emetteur-du-document.js` le dit,
+ * pour tous les documents et pas seulement pour ceux-là. Un nom vit à un seul
+ * endroit (règle 10), et un courriel de bureau de contrôle doit se reconnaître
+ * comme son rapport.
  */
 
 import { CONFIDENCE } from "./document-recognition.js";
 import { MARKER } from "./project-identity.js";
 import { lowerFirst } from "../utils/lower-first.js";
-
-/**
- * Les émetteurs que nous savons nommer.
- *
- * Il n'y en a qu'un, et c'est volontaire : nous ne disposons d'aucun rapport
- * APAVE, Véritas ou Qualiconsult. Écrire leurs motifs au jugé produirait des
- * règles fausses, qui ne se découvriraient que le jour où elles feraient taire
- * un vrai document. On les ajoutera avec un corpus sous les yeux.
- */
-const AUTHORS = [{ id: "socotec", label: "SOCOTEC", pattern: /\bSOCOTEC\b/i }];
+import { emetteurDuDocument } from "./emetteur-du-document.js";
 
 const FAMILY = "ct_report";
 const FAMILY_LABEL = "Livrable de bureau de contrôle";
-
-/** La ligne qui prouve l'émetteur, et la page où elle se trouve. */
-function findEvidence(pattern, { text, pages }) {
-  for (const page of pages) {
-    for (const line of String(page?.text ?? "").split(/\r?\n/)) {
-      if (pattern.test(line)) return { text: line.trim().slice(0, 200), page: page.page ?? null };
-    }
-  }
-  for (const line of text.split(/\r?\n/)) {
-    if (pattern.test(line)) return { text: line.trim().slice(0, 200), page: null };
-  }
-  return null;
-}
 
 export function createCtReportRecognizer({ readDocumentMeta, discoverLegend }) {
   return {
@@ -57,7 +35,9 @@ export function createCtReportRecognizer({ readDocumentMeta, discoverLegend }) {
       const meta = readDocumentMeta({ content_available: true, content: text });
       const legend = discoverLegend(text);
 
-      const author = AUTHORS.find((entry) => entry.pattern.test(text)) ?? null;
+      // La preuve vient avec l'émetteur : la ligne qui le nomme, et sa page.
+      const emetteur = emetteurDuDocument({ texte: text, pages });
+      const author = emetteur.organisme;
       const hasType = Boolean(meta.document_type);
       const hasChrono = Boolean(meta.chrono_reference);
       const hasLegend = legend.codes.length > 0;
@@ -92,7 +72,9 @@ export function createCtReportRecognizer({ readDocumentMeta, discoverLegend }) {
           meta.chrono_affaire ? { type: MARKER.CHRONO_AFFAIRE, value: meta.chrono_affaire } : null,
           meta.affaire_reference ? { type: MARKER.AFFAIRE, value: meta.affaire_reference } : null
         ].filter(Boolean),
-        evidence: author ? findEvidence(author.pattern, { text, pages }) : null,
+        evidence: author
+          ? { text: emetteur.preuves[0]?.extrait ?? "", page: emetteur.preuves[0]?.page ?? null }
+          : null,
         // La légende est ce que le moteur de lecture exige : sans elle, aucun
         // avis ne peut être reconnu. Son absence n'est pas un défaut — une
         // attestation ou une fiche de correspondance n'en portent pas, et ce

@@ -2578,3 +2578,81 @@ choisir entre les deux.
 3. **Le doublon du [§ 24](#24-verser-les-contraintes-du-site) se voit ici aussi** :
    le résumé rend « Zone de neige A1 → E » deux fois, parce que la mémoire porte
    deux lignes pour ce fait.
+
+## 33. Quarante-cinq extracteurs, ou un seul appel
+
+Mdall lit aujourd'hui les rapports de bureau de contrôle en JavaScript :
+`spikes/ct-continuity` découpe les blocs, lit la légende des codes d'avis, tire
+les lignes du tableau, et un pack par organisme dit ce que celui-ci imprime sur
+ses livrables. C'est précis, c'est testé, ça ne coûte rien à l'exécution, et
+ça se vérifie ligne à ligne.
+
+Et c'est calibré sur **un** type de document : un rapport normalisé, avec un
+tableau, une légende et une mise en page stable. Demain les mêmes avis arriveront
+dans des comptes rendus de réunion de chantier, des comptes rendus de conception,
+des courriels, des notes manuscrites scannées. Aucun tableau, aucune légende,
+aucune mise en page — et la même question à leur poser : qu'est-ce qui a été dit
+du projet, par qui, et sur quoi ?
+
+### Ce qui plaide pour l'appel au modèle
+
+**Le coût de maintenance est le vrai sujet, pas le coût d'exécution.** Un
+extracteur par forme de document, c'est quarante-cinq extracteurs dans deux ans,
+chacun avec ses cas particuliers, ses régressions et ses tests. Un appel au
+modèle s'exécute **une fois par pièce**, au versement, jamais à la lecture.
+Comparé à cela, un appel cher est bon marché.
+
+**Ce n'est pas une première.** Un modèle extrait déjà des sujets depuis les
+comptes rendus de chantier. Le chemin existe, il est éprouvé, et il sait déjà
+rendre une structure qu'on relit avant de signer.
+
+**L'hétérogénéité est exactement ce qu'un modèle absorbe sans qu'on le
+reprogramme.** Un rapport, un courriel et une note manuscrite ne demandent pas
+trois consignes différentes.
+
+### Ce qui plaide pour garder le JavaScript
+
+**Il se vérifie.** Une ligne extraite par une expression régulière se retrouve
+dans le document, au caractère près. Une ligne extraite par un modèle se
+ressemble — et ressembler ne suffit pas quand ce qui est extrait devient un
+engagement qui couvre une valeur.
+
+**Il ne varie pas.** Deux exécutions sur le même PDF rendent le même tableau. Ce
+n'est pas un détail dans un outil dont l'argument est la mémoire.
+
+**Il est déjà là et il marche.** Le remplacer maintenant échangerait du code
+éprouvé contre du code à éprouver, sans rien débloquer qu'on attende.
+
+### La forme qui sort de l'arbitrage : les deux, et le désaccord se dit
+
+Ni l'un ni l'autre : **les deux en parallèle**, avec le désaccord rendu visible.
+Le JavaScript reste le lecteur de référence là où il sait lire — un rapport
+normalisé — et le modèle prend les formes qu'il ne sait pas lire. Quand les deux
+répondent, ce qu'ils disent différemment se signale au lieu de se choisir : c'est
+exactement ce que fait déjà la reconnaissance de l'organisme, qui refuse de
+trancher entre deux candidats et le dit.
+
+C'est aussi la seule façon de mesurer : on ne saura ce que vaut le modèle sur des
+rapports qu'en le faisant tourner à côté de celui qui a raison.
+
+### Pourquoi pas maintenant
+
+Parce que rien de ce qui est en cours ne l'attend. Le plan de fabrication va de
+la couverture d'une valeur au raisonnement jalonné, et il se nourrit d'avis déjà
+extraits — leur provenance ne change rien à ce qu'on en fait. Ouvrir ce chantier
+maintenant, c'est arrêter une démonstration à mi-course pour en commencer une
+autre, ce que l'ordre du plan interdit expressément.
+
+Une chose a quand même été faite tout de suite, parce qu'elle bloquait
+réellement : **qui a émis le document**, désormais lu dans la pièce elle-même
+(`apps/web/js/services/emetteur-du-document.js`). Elle est déjà écrite pour des
+documents hétérogènes — elle ne suppose ni tableau, ni légende, ni pages —, et
+c'est la part de ce chantier qui ne pouvait pas attendre.
+
+### Ce qui décidera du moment
+
+1. **Le premier compte rendu de réunion dont on veut tirer des avis.** C'est là
+   que le JavaScript s'arrête net, et c'est le vrai signal.
+2. **Le deuxième organisme dont il faut écrire le pack.** Un pack, c'est du
+   travail de forme ; deux, c'est une méthode à remettre en cause.
+3. **La fin du plan de fabrication**, qui est la borne par défaut.

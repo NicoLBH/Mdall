@@ -5,6 +5,7 @@ import { avisDuRapport, avisVersable, sujetDeLAvis } from "./avis-versement.js";
 import { engagementsDeLaFusion } from "./avis-engagement.js";
 import { ACT } from "./memoire-actes.js";
 import { LIAISON } from "./avis-liaison.js";
+import { EMETTEUR } from "./emetteur-du-document.js";
 
 const MEMOIRE = [
   { id: "neige", superseded_by: null, payload: { subject: "Zone de neige", value: "A1" } },
@@ -80,6 +81,49 @@ test("tout le rapport entre, accroché ou non", () => {
   // Ce qui n'a pas été reconnu se **compte** : c'est la mesure de ce que
   // l'extraction n'a pas su faire, et elle ne se cache pas.
   assert.equal(sansLiaison, 1);
+});
+
+/* ── L'organisme, lu dans le rapport ────────────────────────────── */
+
+/**
+ * L'étape précédente réclamait ce nom à l'utilisateur. Il est imprimé en pied de
+ * chaque page : le réclamer serait demander de retaper ce qui est sous les yeux.
+ */
+test("le rapport dit lui-même qui l'a émis", () => {
+  const pages = [{
+    page: 1,
+    text: "Email : responsable@socotec.com\n"
+      + "SOCOTEC Construction - S.A.S. au capital de 9 116 700 euros - 834 157 513 RCS Versailles"
+  }];
+
+  const { versables, emetteur } = avisDuRapport({
+    avis: [avis("2.1.3", "Zone de neige")], assertions: MEMOIRE, rapport: "rapport-4.pdf", pages
+  });
+
+  assert.equal(emetteur.certitude, EMETTEUR.CERTAIN);
+  assert.equal(versables[0].emisPar, "SOCOTEC");
+  assert.match(versables[0].provenance.quoi, /SOCOTEC/);
+});
+
+test("ce que l'appelant sait déjà l'emporte sur ce qu'on lit", () => {
+  const { versables } = avisDuRapport({
+    avis: [avis("2.1.3", "Zone de neige")], assertions: MEMOIRE,
+    emisPar: "Organisme de contrôle", pages: [{ page: 1, text: "contact@socotec.com" }]
+  });
+
+  assert.equal(versables[0].emisPar, "Organisme de contrôle");
+});
+
+test("un organisme seulement vraisemblable n'entre pas dans la mémoire", () => {
+  // Il se dira à l'écran, avec ses preuves, et quelqu'un signera (règle 1).
+  const { versables, emetteur } = avisDuRapport({
+    avis: [avis("2.1.3", "Zone de neige")], assertions: MEMOIRE,
+    texte: "Compte rendu de réunion — le bureau de contrôle APAVE a rendu son avis."
+  });
+
+  assert.equal(emetteur.certitude, EMETTEUR.PROBABLE);
+  assert.equal(emetteur.organisme.label, "APAVE");
+  assert.equal(versables[0].emisPar, "", "rien ne s'écrit qu'on ne puisse signer");
 });
 
 /* ── Ce que la fusion en fait ────────────────────────────────────────────── */
