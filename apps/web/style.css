@@ -644,32 +644,98 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
  * ne se trie pas, ne se pagine pas. C'est ce qui en fait un repère — il est au
  * même endroit à chaque ouverture, quoi qu'on ait fait de la liste en dessous.
  *
- * Il n'a donc pas de hauteur à lui : il fait celle de ses lignes, et le tableau
- * garde tout le reste.
+ * Le nombre de colonnes vient du rendu, qui compte les épingles : une carte
+ * seule occupe la moitié de la largeur, jamais la totalité — pleine largeur
+ * au-dessus d'un tableau pleine largeur, elle se lirait comme sa première
+ * ligne. À deux, la moitié chacune ; à trois, un tiers.
  */
 .subjects-pinned{
+  display:grid;
+  grid-template-columns:repeat(var(--subjects-pinned-colonnes, 3), minmax(0, 1fr));
+  gap:12px;
   flex:0 0 auto;
-  padding:0 12px 8px 12px;
+  padding:0 12px 12px 12px;
 }
 
-/*
- * Le gabarit partagé se dessine pour occuper ce qu'on lui donne : pleine
- * hauteur, corps qui défile. Ici il doit faire l'inverse — la hauteur de ses
- * lignes, et rien de plus. Le bandeau ne se parcourt pas, il se voit.
- *
- * Et il n'a pas de tête : les colonnes sont celles du tableau deux lignes plus
- * bas, les nommer deux fois de suite ferait lire le bandeau comme un autre
- * tableau.
- */
-.subjects-pinned .data-table-shell{
-  height:auto;
-  flex:0 0 auto;
+/* Au téléphone, trois cartes côte à côte ne portent plus que des titres coupés :
+   elles s'empilent, et le bandeau reste lisible. */
+@media (max-width: 760px){
+  .subjects-pinned{grid-template-columns:minmax(0, 1fr);}
 }
 
-.subjects-pinned .data-table-shell__body{
-  flex:0 0 auto;
-  overflow:visible;
+.subject-pinned-card{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  min-width:0;
+  padding:12px 14px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--bg-elevated, transparent);
 }
+
+.subject-pinned-card__head{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  min-width:0;
+}
+
+.subject-pinned-card__status{
+  display:inline-flex;
+  align-items:center;
+  flex:0 0 auto;
+  padding-top:1px;
+}
+
+/* Le titre peut tenir sur deux lignes : une carte au tiers de la largeur coupe
+   presque tous les titres de sujet, et un titre coupé ne se reconnaît pas. */
+.subject-pinned-card__title{
+  min-width:0;
+  text-align:left;
+  font-weight:600;
+  line-height:1.35;
+  background:transparent;
+  border:none;
+  padding:0;
+  cursor:pointer;
+  color:var(--text);
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+
+.subject-pinned-card__title:hover{color:var(--accent, var(--text));text-decoration:underline;}
+
+.subject-pinned-card__foot{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  color:var(--muted);
+}
+
+/* La croix ne se montre qu'au survol de sa carte : trois croix permanentes
+   au-dessus du tableau appellent le clic plus que les titres qu'elles bordent.
+   Au clavier, elle réapparaît dès qu'elle prend le focus. */
+.subject-pinned-card__unpin{
+  display:inline-flex;
+  align-items:center;
+  border:none;
+  background:transparent;
+  color:var(--muted);
+  padding:2px;
+  border-radius:var(--radius);
+  cursor:pointer;
+  opacity:0;
+}
+
+.subject-pinned-card:hover .subject-pinned-card__unpin,
+.subject-pinned-card__unpin:focus-visible{opacity:1;}
+.subject-pinned-card__unpin:hover{color:var(--text);background:rgba(110,118,129,.12);}
+
+/* ── Le bouton qui épingle, dans le panneau de droite ────────────────────── */
 
 .subject-meta-field--epingle{padding:8px 0 0 0;}
 
@@ -6526,6 +6592,18 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 }
 .bouton-leger:hover,
 .bouton-copier:hover{ background:rgba(110,118,129,.16); color:var(--text); }
+
+/* Le constat du suivi : un bouton **provisoire**, et cela doit se voir.
+   Il vit dans une barre de vrais boutons ; s'il leur ressemblait, il serait
+   pris pour une fonction et il resterait. Le trait discontinu dit qu'il est de
+   passage, et la taille le rend trouvable — un diagnostic qu'on ne trouve pas
+   ne diagnostique rien. */
+.bouton-copier--constat{
+  padding:5px 8px;
+  border:1px dashed var(--border);
+  border-radius:var(--radius);
+  line-height:0;
+}
 /* Enfoncé : le geste est en cours, et le bouton reste allumé le temps qu'il
    dure. Sans cela, on ne sait pas d'où vient le bandeau qui vient d'apparaître. */
 .bouton-leger.is-active{ background:rgba(110,118,129,.24); color:var(--text); }

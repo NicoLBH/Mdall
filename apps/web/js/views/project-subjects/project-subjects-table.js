@@ -228,6 +228,22 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
 }
 
 /**
+ * Combien de colonnes le bandeau porte, selon le nombre d'épingles.
+ *
+ * **Une carte seule fait la moitié de la largeur, pas la largeur entière.** Un
+ * bandeau pleine largeur au-dessus d'un tableau pleine largeur ne se distingue
+ * plus de lui : il devient une première ligne, et il cesse d'être un repère.
+ * À deux, chacune la moitié ; à trois, chacune un tiers.
+ *
+ * Ce qui revient à toujours poser au moins deux colonnes, et autant qu'il y a
+ * d'épingles au-delà.
+ */
+export function colonnesDuBandeau(combien = 0) {
+  const epingles = Number.isFinite(combien) ? Math.max(0, Math.trunc(combien)) : 0;
+  return Math.max(2, epingles);
+}
+
+/**
  * Le bandeau des sujets épinglés, au-dessus du tableau.
  *
  * ## Pourquoi un bandeau et pas un tri
@@ -241,29 +257,79 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
  * se pagine pas. C'est ce qui en fait un repère — il est au même endroit à
  * chaque ouverture, quoi qu'on ait fait de la liste en dessous.
  *
- * ## Les lignes sont celles du tableau
+ * ## Des cartes côte à côte, et non des lignes
  *
- * Même rendu, mêmes colonnes, même gabarit. Un sujet épinglé qui ne
- * ressemblerait pas à lui-même deux lignes plus bas se lirait comme un autre
- * objet (règle 10).
+ * Des lignes au même gabarit que le tableau se lisent comme les trois premières
+ * lignes du tableau : on ne voit plus qu'elles sont à part, et l'on cherche
+ * pourquoi le tri ne les touche pas. Une carte, elle, ne ressemble à rien
+ * d'autre sur cet écran — c'est tout ce qu'on lui demande.
  */
 export function renderSujetsEpinglesHtml({ sujets = [], deps = {} } = {}) {
-  const epingles = Array.isArray(sujets) ? sujets : [];
+  const epingles = (Array.isArray(sujets) ? sujets : []).filter(Boolean);
   if (epingles.length === 0) return "";
 
-  const { renderIssuesTable } = deps;
-  if (typeof renderIssuesTable !== "function") return "";
-
-  const rows = epingles.map((sujet) => renderFlatSujetRow(sujet, "", { isSelectable: false, deps }));
+  const cartes = epingles.map((sujet) => renderCarteEpinglee(sujet, deps)).filter(Boolean);
+  if (cartes.length === 0) return "";
 
   return `
-    <section class="subjects-pinned" aria-label="Sujets épinglés">
-      ${renderIssuesTable({
-        className: "issues-table",
-        gridTemplate: getSituationsTableGridTemplate(),
-        rowsHtml: rows.join("")
-      })}
+    <section class="subjects-pinned" aria-label="Sujets épinglés"
+      style="--subjects-pinned-colonnes:${colonnesDuBandeau(cartes.length)};">
+      ${cartes.join("")}
     </section>
+  `;
+}
+
+/**
+ * Une carte du bandeau.
+ *
+ * Elle porte **ce qui sert à reconnaître le sujet et à y retourner** : son
+ * état, son titre, son numéro. Pas ses labels, pas ses assignés, pas son
+ * compteur de messages — une carte qui redirait tout du sujet serait une
+ * seconde ligne de tableau, en plus encombrante.
+ *
+ * Le titre ouvre le sujet par le même bouton que le tableau : deux chemins vers
+ * le même sujet devraient se comporter pareil, et ils le font parce que c'est
+ * le même déclencheur (règle 10).
+ */
+function renderCarteEpinglee(sujet, deps = {}) {
+  const {
+    escapeHtml,
+    svgIcon,
+    issueIcon,
+    getEffectiveSujetStatus,
+    getEntityReviewMeta,
+    getReviewTitleStateClass,
+    getEntityDisplayRef,
+    firstNonEmpty
+  } = deps;
+
+  const id = String(sujet?.id ?? "").trim();
+  if (!id || typeof escapeHtml !== "function") return "";
+
+  const etat = getEffectiveSujetStatus?.(id) ?? "open";
+  const meta = getEntityReviewMeta?.("sujet", id) ?? {};
+  const titre = firstNonEmpty?.(sujet?.title, id, "Non classé") ?? (sujet?.title || id);
+  const reference = getEntityDisplayRef?.("sujet", sujet) ?? "";
+
+  return `
+    <article class="subject-pinned-card" data-sujet-id="${escapeHtml(id)}">
+      <div class="subject-pinned-card__head">
+        <span class="subject-pinned-card__status" aria-hidden="true">
+          ${issueIcon?.(etat, { reviewState: meta.review_state, entityType: "sujet", isSeen: meta.is_seen }) ?? ""}
+        </span>
+        <button type="button"
+          class="row-title-trigger js-row-title-trigger subject-pinned-card__title ${getReviewTitleStateClass?.("sujet", id) ?? ""}"
+          data-row-entity-type="sujet" data-row-entity-id="${escapeHtml(id)}">${escapeHtml(titre)}</button>
+      </div>
+      <div class="subject-pinned-card__foot mono-small">
+        <span class="subject-pinned-card__ref">${escapeHtml(reference)}</span>
+        <button type="button" class="subject-pinned-card__unpin"
+          data-subject-pin="${escapeHtml(id)}"
+          title="Retirer des épinglés" aria-label="Retirer des épinglés">
+          ${svgIcon?.("unpin", { className: "octicon" }) ?? ""}
+        </button>
+      </div>
+    </article>
   `;
 }
 

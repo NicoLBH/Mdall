@@ -15,6 +15,69 @@ se fera pas — et alors on écrit pourquoi.
 
 ---
 
+# Un point qui progresse n'est plus le même point
+
+**Constaté sur deux comptes rendus réels du même chantier, n° 6 et n° 7.**
+
+Le rapprochement d'un compte rendu à l'autre se fait par le **titre aplati** du
+point. Il ne reconnaît donc que ce qui est **repris mot pour mot**. Or c'est la
+moitié la moins intéressante : un point qui ne bouge pas se répète à
+l'identique, un point qui avance se réécrit.
+
+Quatre exemples, tous du même couple de comptes rendus :
+
+| Réunion n° 6 | Réunion n° 7 | Rapproché ? |
+| --- | --- | --- |
+| « Pose panneau chantier prévu demain » | « panneau chantier posé » | non |
+| « Réaliser sondage sur linteaux bois » | « Sondage réalisé, l'appui est suffisant » | non |
+| « Les murs de la cage peuvent être optimisés en épaisseur » | « Les murs de la cage restent finalement conformes au plan » | non |
+| « Établir vos plans fabrication et notes de calcul » | idem, mot pour mot | oui |
+
+## Ce que cela coûte, et c'est plus que ça n'en a l'air
+
+**Le point résolu rouvre un second sujet.** Le n° 7 ne reconnaît pas le point du
+n° 6, donc il en propose un nouveau. Le chantier finit avec deux sujets pour une
+seule question : « poser le panneau » et « panneau posé », l'un ouvert pour
+toujours.
+
+**Le sujet d'origine ment.** Il reste ouvert en disant « les murs peuvent être
+optimisés » alors que la décision est tombée : ils restent conformes. C'est
+règle 6 prise à l'envers — un constat ne devient jamais faux, mais celui-ci n'a
+jamais reçu la suite qui le clôt.
+
+**La moitié « a changé » du suivi est inatteignable.** `aChange` compare l'état
+d'une reprise à la précédente ; il ne se déclenche que sur un point rapproché ;
+un point rapproché est un point repris mot pour mot ; un point repris mot pour
+mot n'a par définition pas changé. Le mécanisme qui devait signaler les
+mouvements ne peut structurellement en signaler aucun.
+
+C'est très exactement ce qui rend le suivi d'une semaine à l'autre pénible, et
+que l'ajout d'une ligne d'activité ne corrigeait pas.
+
+## Ce qu'il faudra décider
+
+Le rapprochement par le texte ne suffira pas, quelle que soit la finesse de la
+comparaison : « prévu demain » et « posé » n'ont aucun mot en commun. Il faut
+que **le moteur qui lit le compte rendu dise lui-même quel sujet ouvert ce point
+continue** — il a les deux sous les yeux, il est le seul à pouvoir le dire.
+
+Trois choses à trancher, dans cet ordre :
+
+1. **Ce qu'on lui donne.** Les sujets ouverts du lot, avec leur titre et leur
+   dernier état — pas tout le projet, qui noierait la question.
+2. **Ce qu'il rend, et avec quelle prudence.** Un rapprochement proposé, jamais
+   posé : c'est une affirmation sur le chantier, elle passe par une proposition
+   comme le reste (règle 1). Et il doit pouvoir répondre « aucun », faute de quoi
+   il en inventera un.
+3. **Ce qu'on écrit quand il rapproche.** Le point continue le sujet : la reprise
+   s'enregistre avec `aChange`, et le sujet reçoit enfin la suite qui le clôt ou
+   qui le corrige — plutôt qu'un second sujet à côté.
+
+Rien de cela n'est fait. C'est le prochain vrai sujet du suivi de chantier, et
+il est plus gros que tout ce qui a été fait autour jusqu'ici.
+
+---
+
 # Le plan qui vient
 
 ## L'ordre, et pourquoi celui-là
