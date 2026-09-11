@@ -77,7 +77,7 @@ export function diagnosticDeLaListeDesSujets(etat = {}) {
     statut = "", priorite = "", recherche = "", tri = "",
     comptes = {}, charges = null, apresFiltres = null, affiches = null, lignes = null,
     pagination = {}, sousVue = "", tableSeule = null,
-    etatBrut = {}, fermes = []
+    etatBrut = {}, fermes = [], ecoute = null, recouvrements = []
   } = etat;
 
   const lignesDuTexte = [
@@ -103,6 +103,38 @@ export function diagnosticDeLaListeDesSujets(etat = {}) {
     "où le filtre est écrit :",
     ...Object.entries(etatBrut).map(([cle, valeur]) => `  ${cle} = ${texte(valeur) || "∅"}`)
   ];
+
+  // ── Ce que la tête du tableau entend ──────────────────────────────────────
+  //
+  // Un bouton muet a deux explications, et rien à l'écran ne les distingue :
+  // personne ne l'écoute, ou bien personne ne le clique. Quatre tours ont été
+  // dépensés sur la première sans envisager la seconde. Les deux faits se
+  // relèvent ici.
+  if (ecoute) {
+    lignesDuTexte.push(
+      "",
+      "écoute de la tête :",
+      `  posée            : ${ecoute.posee ? "oui" : "non"}`,
+      `  gestes écoutés   : ${(ecoute.gestes || []).join(", ") || "aucun"}`,
+      `  copies écoutées  : ${(ecoute.copies || []).join(", ") || "aucune"}`,
+      `  gestes reçus     : ${dit(ecoute.recus)}`,
+      `  dernier reçu     : ${ecoute.dernier
+        ? `${ecoute.dernier.cle} par ${ecoute.dernier.par}, il y a ${Math.round((Date.now() - Number(ecoute.dernier.quand || 0)) / 1000)} s`
+        : "aucun depuis l'ouverture de l'écran"}`
+    );
+  }
+
+  // Et ce que le navigateur fait du point où chaque bouton se dessine. Un
+  // bouton recouvert se survole encore : seule cette mesure le révèle.
+  if (Array.isArray(recouvrements) && recouvrements.length) {
+    lignesDuTexte.push(
+      "",
+      "boutons qui ne reçoivent pas le geste :",
+      ...recouvrements.map((ennui) => `  · ${texte(ennui?.cle)} recouvert par ${texte(ennui?.recouvertPar)}`)
+    );
+  } else if (ecoute) {
+    lignesDuTexte.push("  rien ne recouvre les boutons de la tête.");
+  }
 
   // La question qui tranche : ce que portent les sujets que le compteur trouve
   // fermés. Si la liste est vide alors qu'ils sont là, le défaut est dans le

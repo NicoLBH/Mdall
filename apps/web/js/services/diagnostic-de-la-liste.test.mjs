@@ -120,3 +120,55 @@ test("sans rien lui donner, il rend quand même un relevé lisible", () => {
   assert.match(dit, /Mdall — état de la liste des sujets/);
   assert.match(dit, /aucun sujet compté fermé/);
 });
+
+/* ── Ce que la tête entend, et ce qui la recouvre ────────────────────────── */
+
+/**
+ * **Les deux faits qui manquaient.** Un bouton muet a deux explications, et
+ * rien à l'écran ne les distingue : personne ne l'écoute, ou personne ne le
+ * clique. Quatre tours ont été dépensés sur la première sans envisager la
+ * seconde. Le relevé porte désormais les deux, constatés et non déduits.
+ */
+test("le relevé dit si la tête écoute, et ce qu'elle a reçu", () => {
+  const dit = diagnosticDeLaListeDesSujets({
+    ecoute: {
+      posee: true,
+      gestes: ["subjects-status-filter", "subjects-sort"],
+      copies: ["sujets-liste"],
+      recus: 0,
+      dernier: null
+    }
+  });
+
+  assert.match(dit, /posée\s+: oui/);
+  assert.match(dit, /subjects-sort/);
+  assert.match(dit, /gestes reçus\s+: 0/);
+  assert.match(dit, /aucun depuis l'ouverture/);
+});
+
+test("il nomme les boutons que quelque chose recouvre", () => {
+  const dit = diagnosticDeLaListeDesSujets({
+    ecoute: { posee: true, gestes: [], copies: [], recus: 0, dernier: null },
+    recouvrements: [{ cle: "button.table-head-sort", recouvertPar: "div.project-tabs" }]
+  });
+
+  assert.match(dit, /ne reçoivent pas le geste/);
+  assert.match(dit, /button\.table-head-sort recouvert par div\.project-tabs/);
+});
+
+/**
+ * Et quand rien ne recouvre, il le dit aussi : « je n'ai rien trouvé » et « je
+ * n'ai pas regardé » envoient chercher à deux endroits différents (règle 5).
+ */
+test("rien ne recouvre se dit, plutôt que de se taire", () => {
+  const dit = diagnosticDeLaListeDesSujets({
+    ecoute: { posee: true, gestes: [], copies: [], recus: 3, dernier: null }
+  });
+  assert.match(dit, /rien ne recouvre les boutons/);
+});
+
+test("sans relevé de l'écoute, le diagnostic n'invente pas d'écoute", () => {
+  const dit = diagnosticDeLaListeDesSujets({});
+  assert.doesNotMatch(dit, /écoute de la tête/);
+  assert.doesNotMatch(dit, /rien ne recouvre/);
+});

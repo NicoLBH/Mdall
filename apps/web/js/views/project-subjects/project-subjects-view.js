@@ -1,6 +1,6 @@
 import { getDisplayAuthorName, getAuthorIdentity } from "../ui/author-identity.js";
 import { renderBoutonCopier } from "../ui/bouton-copier.js";
-import { quandOnCopie, renderBoutonDeTri } from "../ui/tete-de-tableau.js";
+import { etatDeLEcoute, quandOnCopie, renderBoutonDeTri, veillerSurLaTete } from "../ui/tete-de-tableau.js";
 import { TRI, motDuTri } from "../../services/tri-des-sujets.js";
 import { diagnosticDeLaListeDesSujets } from "../../services/diagnostic-de-la-liste.js";
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
@@ -369,6 +369,11 @@ function etatDeLaListeDesSujets() {
       "situationsView.subjectsStatusFilter": store.situationsView?.subjectsStatusFilter,
       "situationsView.filters.status": store.situationsView?.filters?.status
     },
+    // Ce que l'écoute de la tête sait d'elle-même : posée ou non, ce qu'elle
+    // écoute, et ce qu'elle a réellement reçu. Ces faits se constatent ; les
+    // déduire du code a coûté cinq tours (règle 12).
+    ecoute: etatDeLEcoute(),
+    recouvrements: veillerSurLaTete(document.getElementById("situationsPanelHost")),
     // La question qui tranche : ce que portent vraiment les sujets que le
     // compteur trouve fermés.
     fermes: charges
@@ -2964,6 +2969,12 @@ function rerenderPanels() {
       // un écouteur sur un nœud qu'on vient de redessiner est précisément ce
       // qui a rendu ce bouton muet.
       quandOnCopie("sujets-liste", () => etatDeLaListeDesSujets());
+      // Puis on va **voir** si ces boutons reçoivent le geste. Un bouton
+      // recouvert par un élément transparent se survole encore, et rien ne le
+      // distingue à l'écran d'un bouton sans écoute : c'est la confusion qui a
+      // coûté cinq tours. La mesure se prend après le dessin, quand les cadres
+      // sont posés.
+      requestAnimationFrame(() => veillerSurLaTete(document.getElementById("situationsPanelHost")));
       syncSituationsPrimaryScrollSource();
     } else {
       const details = getProjectSubjectDetail().renderDetailsHtml(null, {
