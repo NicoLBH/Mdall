@@ -16,6 +16,14 @@ Ce qui existe, ce qui manque, et dans quel ordre le construire pour que « voir
 les conséquences d'un changement » cesse d'être une parole donnée :
 [`docs/rejouer-la-memoire.md`](docs/rejouer-la-memoire.md).
 
+## Ce qui couvre une valeur
+
+Un projet se rend unique par ce que des gens ont **engagé** dessus : un avis de
+bureau de contrôle sur une zone de neige est plus cher que la zone elle-même.
+Comment Mdall sait ce qu'un changement fait tomber — et pourquoi il ne sera
+jamais un outil de gestion de visas :
+[`docs/ce-qui-couvre-une-valeur.md`](docs/ce-qui-couvre-une-valeur.md).
+
 ## À traiter plus tard
 
 Les chantiers vus, compris, et repoussés — avec la raison, ce qu'ils
