@@ -51,6 +51,7 @@ import { ouvrirLEtudeDImpact } from "../../ui/fenetre-impact.js";
 import { ouvrirLAudit } from "../../ui/fenetre-audit.js";
 import { essayerLaVariante } from "../../../services/variante-en-cours.js";
 import { consequencesDeLaVariante, valeursSubstituables, variantePourLEcran } from "../../../services/memoire-variante.js";
+import { couvertureDeLaVariante, ligneDeLEngagement } from "../../../services/couverture.js";
 import { emploisParAffirmation } from "../../../services/memoire-applications.js";
 import { champDeLIdentifiant } from "../../../services/tableau-structure.js";
 
@@ -68,7 +69,12 @@ import { rejouerLesUtilitaires } from "../../../services/utilitaires-rejeu.js";
  * projet n'a rien versé ». Les confondre ferait passer une panne pour une page
  * blanche légitime — c'est la règle 5.
  */
-const memoire = { chargement: null, projectId: "", assertions: null, applications: null, erreur: "" };
+const memoire = {
+  chargement: null, projectId: "", assertions: null, applications: null,
+  /** Ce que des gens ont engagé sur des valeurs. `null` quand on n'a pas pu lire. */
+  actes: null,
+  erreur: ""
+};
 
 /** Vrai tant que la lecture est en route. Les trois panneaux le disent pareil. */
 let enLecture = false;
@@ -92,17 +98,23 @@ async function lireLaMemoire({ force = false } = {}) {
     try {
       const projectId = await resolveCurrentBackendProjectId();
       if (!projectId) throw new Error("Projet introuvable.");
-      const [{ listProjectAssertions }, { listerLesApplications }] = await Promise.all([
-        import("../../../services/project-memory-supabase.js"),
-        import("../../../services/memoire-applications-supabase.js")
-      ]);
+      const [{ listProjectAssertions }, { listerLesApplications }, { listHypothesisActs }] =
+        await Promise.all([
+          import("../../../services/project-memory-supabase.js"),
+          import("../../../services/memoire-applications-supabase.js"),
+          import("../../../services/memoire-actes-supabase.js")
+        ]);
       memoire.projectId = projectId;
       memoire.assertions = await listProjectAssertions(projectId);
       memoire.applications = await listerLesApplications(projectId).catch(() => null);
+      // Les actes non plus ne sont pas la mémoire : sans eux, une variante se
+      // calcule — elle ne dit simplement pas ce qu'elle fait tomber.
+      memoire.actes = await listHypothesisActs(projectId).catch(() => null);
     } catch (erreur) {
       memoire.erreur = erreur instanceof Error ? erreur.message : String(erreur);
       memoire.assertions = null;
       memoire.applications = null;
+      memoire.actes = null;
     } finally {
       enLecture = false;
       memoire.chargement = null;
@@ -273,11 +285,19 @@ async function calculerLaVariante(root) {
     assertions, substitutions, applications: memoire.applications, relectures
   });
 
+  // Ce que la variante ferait tomber. Calculé **à côté** : `consequencesDeLaVariante`
+  // répond à « qu'est-ce qui change », et lui faire répondre aussi à « qu'est-ce
+  // que ça coûte » ferait une fonction qui mêle deux questions.
+  const couverture = couvertureDeLaVariante({
+    rendu, assertions, actes: memoire.actes ?? [], applications: memoire.applications
+  });
+
   etatDeLaVariante = {
     ...etatDeLaVariante,
     etape: rendu.ok ? ETAPE.RESULTAT : ETAPE.SAISIE,
     echec: rendu.ok ? "" : rendu.raison,
-    rendu
+    rendu,
+    couverture
   };
   dessinerLaVariante(root);
 }

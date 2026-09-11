@@ -35,6 +35,7 @@
 import { valeursSubstituables, consequencesDeLaVariante, varieEnBloc } from "./memoire-variante.js";
 import { valeursTrouvees, rangDeLaReponse } from "./recherche-de-valeur.js";
 import { rejouerLesUtilitaires } from "./utilitaires-rejeu.js";
+import { couvertureDeLaVariante, ligneDeLEngagement, phraseDeLaCouverture } from "./couverture.js";
 import {
   estLaLocalisation, localisationDeLAdresse, localisationCalculable,
   substitutionsDeLaLocalisation, adresseEnUneLigne
@@ -203,6 +204,8 @@ export async function substitutionsDeLaDemande({ entree = null, valeur = "", res
  * @param {string} options.projectId le projet, en base
  * @param {object[]} options.assertions la mémoire en vigueur
  * @param {object[]|null} [options.applications] les lectures enregistrées, si on les a
+ * @param {object[]|null} [options.actes] ce que des gens ont engagé sur des
+ *   valeurs — sans eux, la variante dit ce qui change et pas ce que ça coûte
  * @param {string} options.sujet ce qu'on change, en mots
  * @param {string} options.valeur la valeur qu'on essaie
  * @param {Function} [options.resoudre] le service d'adresses, injecté par les tests
@@ -211,7 +214,7 @@ export async function substitutionsDeLaDemande({ entree = null, valeur = "", res
  *   depart?: object, essaye?: string}>}
  */
 export async function testerUneVariante({
-  projectId = "", assertions = [], applications = null,
+  projectId = "", assertions = [], applications = null, actes = null,
   sujet = "", valeur = "", resoudre = null, rejouer = null
 } = {}) {
   const cible = cibleDeLaVariante({ assertions, sujet });
@@ -233,7 +236,14 @@ export async function testerUneVariante({
   const rendu = consequencesDeLaVariante({ assertions, substitutions, applications, relectures });
   if (!rendu.ok) return { ok: false, refus: REFUS_DE_LA_DEMANDE.IMPOSSIBLE, raison: rendu.raison };
 
-  return { ok: true, rendu, depart: cible.entree, essaye };
+  // Ce que ça ferait tomber. C'est la moitié de la réponse que les chiffres ne
+  // donnent pas : un zonage se recalcule en une seconde, un avis de bureau de
+  // contrôle se redemande en six semaines.
+  const couverture = couvertureDeLaVariante({
+    rendu, assertions, actes: actes ?? [], applications
+  });
+
+  return { ok: true, rendu, couverture, depart: cible.entree, essaye };
 }
 
 /**
@@ -254,7 +264,7 @@ export async function testerUneVariante({
  * raison**. Taire les refus ferait passer une variante partielle pour une
  * variante complète, ce qui est la seule façon de rendre ce module dangereux.
  */
-export function resumeDeLaVariante({ rendu = null, depart = null, essaye = "" } = {}) {
+export function resumeDeLaVariante({ rendu = null, depart = null, essaye = "", couverture = null } = {}) {
   if (!rendu) return null;
 
   const valeurDe = (ligne) => ({
@@ -285,6 +295,26 @@ export function resumeDeLaVariante({ rendu = null, depart = null, essaye = "" } 
     })),
     cycles: (rendu.cycles ?? []).length,
     inchangees: Number(rendu.inchangees ?? 0),
-    confirmees: Number(rendu.confirmees ?? 0)
+    confirmees: Number(rendu.confirmees ?? 0),
+    // Ce qui ne couvre plus. Nommé pour que le modèle puisse le dire sans
+    // inventer le vocabulaire : on ne « périme » rien, on cesse de couvrir.
+    neCouvrentPlus: (couverture?.tombees ?? []).map(engagementDit),
+    aRevoirCote: (couverture?.aRevoir ?? []).map(engagementDit)
+  };
+}
+
+/** Ce qu'un engagement dit au modèle : ce qu'il a examiné, quand, et son sort. */
+function engagementDit(engagement) {
+  return {
+    examine: texte(engagement?.examinee?.payload?.subject) || texte(engagement?.examinee?.statement),
+    valeurExaminee: texte(engagement?.examinee?.payload?.value),
+    // Ce que la variante en ferait — et non la valeur d'aujourd'hui, qui est
+    // encore celle qui a été examinée : une variante n'écrit rien. Les deux
+    // côte à côte se lisaient comme une contradiction.
+    deviendrait: texte(engagement?.deviendrait),
+    le: texte(engagement?.acte?.created_at).slice(0, 10),
+    note: texte(engagement?.acte?.note) || null,
+    sort: phraseDeLaCouverture(engagement?.etat),
+    dit: ligneDeLEngagement(engagement)
   };
 }

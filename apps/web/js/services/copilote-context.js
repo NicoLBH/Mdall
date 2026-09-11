@@ -302,7 +302,7 @@ async function readProjectMemory() {
     import("./assertion-dependencies-supabase.js")
       .then((module) => module.listAssertionDependencies(projectId))
       .catch(() => []),
-    import("./hypothesis-acts-supabase.js")
+    import("./memoire-actes-supabase.js")
       .then((module) => module.listHypothesisActs(projectId))
       .catch(() => [])
   ]);

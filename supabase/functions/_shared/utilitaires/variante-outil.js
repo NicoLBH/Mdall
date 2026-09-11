@@ -92,5 +92,11 @@ export const CONSIGNES_VARIANTE = [
   "- Reprends ses chiffres tels quels, avec l'avant et l'après, et cite l'utilitaire qui a recalculé chaque valeur.",
   "- Distingue ce qui a **bougé** de ce qui a été **recalculé sans bouger** : « la zone de vent est recalculée et reste la même » est une information utile, pas un silence.",
   "- Dis ce qui n'a **pas** pu se recalculer et pourquoi : une variante partielle présentée comme complète est le seul vrai danger de cet outil.",
-  "- Rien de tout cela n'entre dans la mémoire. C'est une exploration ; quelqu'un décidera, et par une proposition."
+  "- Rien de tout cela n'entre dans la mémoire. C'est une exploration ; quelqu'un décidera, et par une proposition.",
+  "",
+  "Quand l'outil rend `neCouvrentPlus`, **commence par là**. Un zonage se recalcule en une seconde ; un avis de bureau de contrôle se redemande en six semaines, et c'est cette moitié-là de la réponse qui fait décider :",
+  "- Dis ce qui ne couvre plus, ce qui avait été examiné, et quand. Jamais « invalidé » ni « périmé » : un constat reste vrai à sa date, c'est sa couverture qui tombe.",
+  "- N'écris jamais les mots « visa », « à viser », « validé », « en attente » ni « approbation ». Dis ce qui a été fait, par qui, et quand.",
+  "- `aRevoirCote` n'est pas la même chose : ce qui a été examiné n'a pas bougé, mais une de ses entrées si. Dis « à revérifier », pas « ne couvre plus ».",
+  "- Ne conclus jamais qu'un examen tient toujours parce que le changement te paraît favorable. Tu n'as pas à en juger : dis ce qui a bougé, quelqu'un tranchera."
 ].join("\n");

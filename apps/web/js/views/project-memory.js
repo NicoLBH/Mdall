@@ -108,7 +108,7 @@ import {
   stateLabel,
   stateOf,
   verdictLabel
-} from "../services/hypothesis-acts.js";
+} from "../services/memoire-actes.js";
 import { bindGhActionButtons, bindGhSelectMenus, renderGhActionButton, renderGhSelectMenu } from "./ui/gh-split-button.js";
 import { renderLightTabs, bindLightTabs } from "./ui/light-tabs.js";
 import { renderSharedDetailsTitleWrap } from "./ui/detail-header.js";
@@ -1755,8 +1755,8 @@ async function recordHypothesisAct(root, { assertionId, verdict, proposedValue =
   if (!assertionId || view.busy) return;
 
   const [{ planAct }, { recordAct }] = await Promise.all([
-    import("../services/hypothesis-acts.js"),
-    import("../services/hypothesis-acts-supabase.js")
+    import("../services/memoire-actes.js"),
+    import("../services/memoire-actes-supabase.js")
   ]);
 
   const plan = planAct({
@@ -3392,7 +3392,7 @@ export function renderProjectMemory(root) {
 
       // Les actes disent l'état d'une hypothèse : sans eux, toutes paraîtraient
       // candidates, y compris celles que le bureau de contrôle a validées.
-      const { listHypothesisActs } = await import("../services/hypothesis-acts-supabase.js");
+      const { listHypothesisActs } = await import("../services/memoire-actes-supabase.js");
       view.acts = view.projectId ? await listHypothesisActs(view.projectId) : null;
 
       // Les noms des signataires, pour la marge du Blame. Un identifiant dans

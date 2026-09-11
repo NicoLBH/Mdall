@@ -52,7 +52,7 @@ C'est cette phrase-là qui fait décider. Pas les chiffres.
 | ce qui existe | où | ce que ça donne |
 | --- | --- | --- |
 | le genre `constat` nomme déjà l'avis de BC | `services/assertion-taxonomy.js` | l'avis a sa place dans la doctrine, et sa propriété : *« un constat ne devient jamais faux : il reste vrai à sa date »* |
-| les **actes** sur une hypothèse — émise, validée, contestée | `services/hypothesis-acts.js` | le dernier acte fait foi ; l'état est **déduit, jamais stocké** ; personne n'est filtré par sa qualification |
+| les **actes** sur une hypothèse — émise, validée, contestée | `services/memoire-actes.js` | le dernier acte fait foi ; l'état est **déduit, jamais stocké** ; personne n'est filtré par sa qualification |
 | la chaîne `supersedes` / `superseded_by` | la mémoire | une affirmation remplacée est identifiable, et ce qui l'a remplacée aussi |
 | les **lectures** de chaque conclusion, et leur index | `services/memoire-applications.js` | on sait quelle valeur chaque calcul a lu, et on peut remonter |
 | la marche dans le graphe d'une variante | `services/memoire-variante.js` | on sait déjà dire ce qu'un changement atteint, de proche en proche |
@@ -70,7 +70,7 @@ avis lit les rapports et s'arrête là.
 
 ### Une limite que le code avait déjà vue
 
-`hypothesis-acts.js` porte ceci, écrit avant cette page :
+`memoire-actes.js` porte ceci, écrit avant cette page :
 
 > *« Cinq personnes d'accord ne rendent pas un sol plus porteur : tant que la
 > distinction n'est pas faite, le compteur de corroboration donne du poids à ce
@@ -166,7 +166,7 @@ changé »*, et quelqu'un tranche.
 
 ### 6. Croire n'est pas couvrir
 
-`hypothesis-acts.js` dit, à juste titre, qu'une zone de neige n'est pas une
+`memoire-actes.js` dit, à juste titre, qu'une zone de neige n'est pas une
 hypothèse : c'est une contrainte, tranchée par un texte. Un module d'actes n'y
 avait rien à faire. Et pourtant l'avis F du BC porte bien sur une zone de neige.
 
@@ -192,7 +192,7 @@ Une valeur vérifiée par cinq personnes n'est pas une valeur que personne n'a
 regardée. C'est vrai. Mais **un nombre est la mauvaise abstraction**, pour trois
 raisons :
 
-1. Cinq signatures du même bureau ne font pas cinq vérifications. `hypothesis-acts.js`
+1. Cinq signatures du même bureau ne font pas cinq vérifications. `memoire-actes.js`
    le dit déjà : *« la répétition n'est pas une validation »*.
 2. Un nombre appelle une arithmétique qui n'a aucun sens — « poids 5 > poids 3,
    donc on garde ». C'est exactement le faux plausible que le projet refuse
@@ -273,19 +273,50 @@ distincts dès le premier jour :
 
 ## Les étapes
 
-### Étape 1 — le visa existe, et la variante l'emporte
+### Étape 1 — l'engagement existe, et la variante l'emporte · *fait*
 
-Un genre d'affirmation de plus, **strictement additif**, versé par proposition
-comme le reste (règle 1). Un geste manuel léger dans la mémoire. La couverture
-**lue et jamais stockée**, dans un service pur.
+Elle a coûté moins que prévu : **l'arête existait déjà**. La table
+`assertion_acts` lie un acte à un `assertion_id` — donc à une version — et porte
+même sa source et sa page. Ce qui manquait tenait en trois choses.
 
-Et la variante gagne sa section : *ce qui ne couvre plus* — à l'écran et pour le
-copilote, qui sait déjà tester une variante.
+**Un verdict qui couvre.** `memoire-actes.js` (ex-`hypothesis-acts.js`, renommé
+parce qu'il ne parle plus que d'hypothèses) gagne `ACT.COUVRE`. La colonne
+`verdict` est du texte libre en base : **aucune migration**.
 
-Rien ne touche à l'extraction des avis. C'est démontrable de bout en bout en un
-tour.
+Il refusait jusqu'ici tout acte sur une contrainte, et c'était juste pour les
+trois autres — on ne *croit* pas une zone de neige. Examiner, si : c'est
+exactement ce que fait un bureau de contrôle, et c'est le seul acte qu'on
+accepte partout. Les actes qui couvrent sont par ailleurs **exclus du compte de
+corroboration** : un avis n'est pas une voix de plus dans un débat qui n'a pas
+lieu.
 
-### Étape 2 — les avis du bureau de contrôle s'accrochent
+**La lecture.** `services/couverture.js`, pur, sans aucune écriture : il suit la
+chaîne des remplacements jusqu'à ce qui vaut aujourd'hui et rend l'un des trois
+états. Rien n'est stocké.
+
+**La variante l'emporte.** `couvertureDeLaVariante` prend le rendu d'une
+variante et dit ce qu'elle ferait tomber. Calculé **à côté** de
+`consequencesDeLaVariante`, qu'on ne touche pas : elle répond à « qu'est-ce qui
+change », et lui faire répondre aussi à « qu'est-ce que ça coûte » ferait une
+fonction qui mêle deux questions.
+
+À l'écran, le rang « Ce qui ne couvre plus » passe **devant** « Recalculé » —
+un test vérifie l'ordre. Et il montre ce que la valeur **deviendrait**, pas sa
+valeur d'aujourd'hui : une variante n'écrit rien, l'affirmation examinée est
+encore en vigueur, et « A1 → A1 » se lisait comme une contradiction.
+
+Le copilote reçoit `neCouvrentPlus` et `aRevoirCote` dans son résumé, avec la
+consigne de commencer par là.
+
+**Aucun geste manuel.** Il n'y a nulle part de bouton « j'ai vérifié » : les
+engagements entreront par les rapports de bureau de contrôle à l'étape 2. Le
+moteur est donc en place avant ce qui le nourrit — c'est voulu, et c'est
+l'inverse qui aurait été risqué.
+
+Un test refuse que l'écran parle comme un outil de visa : ni « visa », ni
+« viser », ni « à valider », ni « en attente », ni « approbation ».
+
+### Étape 2 — les avis du bureau de contrôle s'accrochent · *à faire*
 
 Le suivi des avis lit déjà les rapports. Il lui manque de **proposer** la
 liaison : « cet avis porte sur cette affirmation ».
@@ -294,13 +325,13 @@ Semi-automatique, et jamais autrement : l'extraction propose, un humain
 confirme. Un avis mal accroché est pire qu'un avis non accroché — il couvrirait
 une valeur que personne n'a examinée.
 
-### Étape 3 — le poids se voit
+### Étape 3 — le poids se voit · *à faire*
 
 La liste et le rang, dans la mémoire, dans la variante, dans le cerveau du
 projet. C'est là que la notion de poids est vraiment utile : elle y est
 visuelle, et non arithmétique. Un nœud couvert se dessine autrement.
 
-### Étape 4 — le raisonnement jalonné
+### Étape 4 — le raisonnement jalonné · *à faire*
 
 Un raisonnement n'est pas une suite de calculs : c'est une suite d'étapes dont
 certaines ont été **actées**. Une fois les trois étapes précédentes en place, le
@@ -311,6 +342,27 @@ dire.
 C'est la raison de traiter tout ceci **avant** le raisonnement. Sans cela, un
 moteur refait tout à chaque fois et perd la seule chose qui distingue Mdall d'une
 feuille de calcul : la trace de ce que des gens ont engagé.
+
+---
+
+## Ce qu'on a vu en construisant, et qui reste
+
+1. **Le report est nommé, pas encore offert.** L'état *à reporter* se calcule et
+   se dit ; le geste d'un clic qui reporte l'engagement sur la nouvelle version
+   n'existe pas. Il arrivera avec l'étape 2, quand il y aura des engagements à
+   reporter.
+2. **La couverture indirecte a besoin des lectures enregistrées.** Sans l'index
+   `assertion_applications`, on ne sait pas qu'une note de calcul a lu une zone.
+   Le service le **dit** (`lecturesLues: false`) au lieu de conclure qu'il n'y a
+   rien — mais un projet dont les lectures n'ont pas été enregistrées verra
+   moins que les autres.
+3. **La zone n'entre pas encore en compte.** Un avis peut ne couvrir que le
+   bâtiment A ; le mécanisme des portées existe dans la mémoire, la couverture
+   ne le lit pas. À faire quand un vrai rapport le demandera.
+4. **`versé par` et `émis par` ne sont pas encore distingués.** La table porte
+   `declared_by` — qui a saisi — et `source_assertion_id` — d'où ça vient. Le
+   nom de l'organisme qui engage sa responsabilité n'a pas sa place : c'est le
+   piège nommé plus haut, et il se referme à l'étape 2, pas avant.
 
 ---
 
