@@ -77,7 +77,7 @@ export function diagnosticDeLaListeDesSujets(etat = {}) {
     statut = "", priorite = "", recherche = "", tri = "",
     comptes = {}, charges = null, apresFiltres = null, affiches = null, lignes = null,
     pagination = {}, sousVue = "", tableSeule = null,
-    etatBrut = {}, fermes = [], ecoute = null, recouvrements = []
+    etatBrut = {}, fermes = [], ecoute = null, recouvrements = [], journal = ""
   } = etat;
 
   const lignesDuTexte = [
@@ -144,6 +144,10 @@ export function diagnosticDeLaListeDesSujets(etat = {}) {
   } else {
     lignesDuTexte.push("", "aucun sujet compté fermé n'a pu être relevé.");
   }
+
+  // Le journal en dernier : c'est le plus long, et on le lit quand les nombres
+  // au-dessus n'ont pas suffi.
+  if (texte(journal)) lignesDuTexte.push("", texte(journal));
 
   return lignesDuTexte.join("\n");
 }

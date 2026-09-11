@@ -25,8 +25,11 @@ function noeud(attributs = {}, ancetres = []) {
             getAttribute: (nomLu) => element.attributs?.[nomLu] ?? null,
             attributs: element.attributs
           };
-        } else if (element.attributs?.classe === selecteur.replace(/^\./, "")) {
-          return element;
+        } else {
+          // Le sélecteur des zones en liste une poignée : la tête du tableau et
+          // la barre de commandes. `closest` accepte la liste ; la feinte aussi.
+          const classes = selecteur.split(",").map((part) => part.trim().replace(/^\./, ""));
+          if (classes.includes(element.attributs?.classe)) return element;
         }
       }
       return null;
@@ -373,4 +376,90 @@ test("l'écran des sujets pose son écoute sans attendre une racine", async () =
     "l'écoute est redevenue dépendante du branchement de la racine"
   );
   assert.match(evenements, /\n  ecouterLaTeteDesSujets\(\);\n\n  return \{/);
+});
+
+/* ── La barre de commandes est écoutée comme la tête ─────────────────────── */
+
+const DANS_LA_BARRE = [{ attributs: { classe: "project-table-toolbar" } }];
+
+/**
+ * **Un outil de diagnostic ne peut pas dépendre de ce qu'il diagnostique.** Le
+ * bouton qui copie l'état de la liste vivait dans la tête du tableau, contre le
+ * filtre dont il devait expliquer le silence — et il s'est tu avec lui. Il vit
+ * maintenant dans la barre de commandes, qui ne dépend pas du rendu du tableau.
+ */
+test("le bouton copier de la barre de commandes est entendu", () => {
+  const geste = gesteDeLaTete(
+    noeud({ "data-copier": "sujets-liste" }, DANS_LA_BARRE),
+    { copies: ["sujets-liste"] }
+  );
+
+  assert.equal(geste.geste, GESTE.COPIE);
+  assert.equal(geste.cible, "sujets-liste");
+});
+
+test("la barre de commandes reste une zone, pas la page entière", () => {
+  const geste = gesteDeLaTete(
+    noeud({ "data-copier": "sujets-liste" }, [{ attributs: { classe: "gh-panel" } }]),
+    { copies: ["sujets-liste"] }
+  );
+
+  assert.equal(geste.geste, GESTE.RIEN);
+});
+
+/* ── Ce qu'aucun tour ne doit plus perdre ────────────────────────────────── */
+
+/**
+ * **Le constat qui a renversé cinq tours.** On clique « Fermés », rien ne
+ * bouge ; on change d'onglet, on revient, la liste des fermés s'affiche. Donc
+ * le geste arrive et l'état s'écrit : ce qui manque est le rendu qui devait
+ * suivre.
+ *
+ * Une exception dans un écouteur ne fait rien tomber — elle s'écrit dans la
+ * console et la page continue, l'air de rien. C'est ainsi qu'un rendu jamais
+ * produit peut passer cinq tours durant pour un bouton sans écoute. Elle se
+ * note désormais, et le geste dit qu'il a été fait.
+ */
+test("un geste qui échoue ne se perd pas en silence", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(fileURLToPath(new URL("./tete-de-tableau.js", import.meta.url)), "utf8");
+
+  assert.match(source, /noter\("geste reçu"/);
+  assert.match(source, /noter\("geste fait"/);
+  assert.match(source, /noterLEchec\("geste · échec", erreur\)/);
+});
+
+/**
+ * Le redessin qui suit un geste est le maillon suspect : il est encadré, et son
+ * entrée comme sa sortie se notent. Ce qui manque entre les deux nomme la
+ * rupture.
+ */
+test("le redessin des sujets est encadré, entrée et sortie", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const lis = (chemin) => readFileSync(fileURLToPath(new URL(chemin, import.meta.url)), "utf8");
+
+  const evenements = lis("../project-subjects/project-subjects-events.js");
+  const vue = lis("../project-subjects/project-subjects-view.js");
+
+  assert.match(evenements, /noter\("redessin · demandé"/);
+  assert.match(evenements, /noterLEchec\("redessin · échec", erreur\)/);
+  assert.match(vue, /noter\("redessin · entrée"/);
+  assert.match(vue, /noter\("redessin · sortie"/);
+
+  // Le nombre d'hôtes tranche la dernière famille de causes : un rendu qui a
+  // bien lieu, mais ailleurs que sur l'écran qu'on regarde.
+  assert.match(vue, /hotes: document\.querySelectorAll\("#situationsPanelHost"\)\.length/);
+});
+
+test("le bouton copier a quitté la tête pour la barre de commandes", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const vue = readFileSync(
+    fileURLToPath(new URL("../project-subjects/project-subjects-view.js", import.meta.url)), "utf8"
+  );
+
+  assert.doesNotMatch(vue, /table-head-filter__copier/, "le bouton est retourné dans la tête");
+  assert.match(vue, /project-table-toolbar__copier/);
 });
