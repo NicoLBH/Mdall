@@ -38,6 +38,7 @@ import { valeursDeLaPortee } from "./memoire-valeurs.js";
 import { sujetDe, valeurDuSujet } from "./memoire-raisonnement.js";
 import { VERDICT, lecteurDeValeurs, rejouerLaRegle } from "./memoire-evaluateur.js";
 import { ordreDeLaZone } from "./memoire-plan.js";
+import { jalonsDuRejeu } from "./raisonnement-jalonne.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -138,7 +139,7 @@ function sortieDeLaRegle(regle, assertions, zone) {
  * @returns {{conclusions: object[], indecidables: object[], sansObjet: object[],
  *   cycles: object[], tours: number, borne: boolean}}
  */
-export function rejouerLesRegles(assertions = [], { substitutions = new Map() } = {}) {
+export function rejouerLesRegles(assertions = [], { substitutions = new Map(), actes = null } = {}) {
   const toutes = (Array.isArray(assertions) ? assertions : []).filter(enVigueur);
   const imposees = substitutions instanceof Map ? substitutions : new Map(Object.entries(substitutions ?? {}));
 
@@ -253,10 +254,25 @@ export function rejouerLesRegles(assertions = [], { substitutions = new Map() } 
     sansObjet.push(...inapplicables.values());
   }
 
+  const trouvailles = [...conclusions.values()];
+
   return {
-    conclusions: [...conclusions.values()],
+    conclusions: trouvailles,
     /** Rejouées, et elles rendent ce que le projet affirme déjà. On a regardé. */
     tenues: [...tenues.values()],
+    /**
+     * Ce que le rejeu **réécrit alors que quelqu'un l'avait examiné**.
+     *
+     * C'est la seule question que le moteur pose à chaque nœud : *ce nœud
+     * est-il couvert ?* Il ne s'arrête pas pour autant — arrêter la chaîne
+     * perdrait les conséquences, qui sont tout l'intérêt du rejeu. Il cesse de
+     * se **taire**, ce qui n'est pas la même chose
+     * (`services/raisonnement-jalonne.js`).
+     *
+     * `null` quand les actes n'ont pas été donnés — **pas** une liste vide :
+     * ne pas savoir n'autorise pas à répondre « aucun » (règle 5).
+     */
+    jalons: Array.isArray(actes) ? jalonsDuRejeu({ conclusions: trouvailles, actes }) : null,
     indecidables, sansObjet, cycles, tours, borne
   };
 }
