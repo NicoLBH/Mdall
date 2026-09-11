@@ -20,6 +20,7 @@ import {
   pickAxisTicks,
   recallTone,
   renderTraceStep,
+  renderVersement,
   shortDocumentName,
   tabLabel,
   titleCase,
@@ -492,4 +493,96 @@ test("un groupe prend le verdict le plus sévère de ses documents", () => {
   assert.equal(groups.length, 1);
   assert.equal(groups[0].verdict, "FOREIGN");
   assert.equal(groups[0].reason, "autre affaire");
+});
+
+/* ── Le panneau de versement ─────────────────────────────────────────────── */
+
+/**
+ * L'écran qui manquait. Le chemin d'un avis vers la mémoire était complet et
+ * testé, et personne ne l'appelait : ces tests gardent le point d'entrée.
+ */
+const LOT = {
+  documents: [{
+    sourceId: "doc-1",
+    nom: "rapport-initial.pdf",
+    emetteur: {
+      organisme: { id: "socotec", label: "SOCOTEC" },
+      certitude: "certain",
+      preuves: [{ signal: "domaine", extrait: "Email : responsable@socotec.com", page: 1 }],
+      candidats: []
+    },
+    versables: [{ sujet: "Avis de contrôle technique n° 2.1.3", porteSur: "neige", emisPar: "SOCOTEC" }],
+    lus: 3, dejaVerses: 2, sansLiaison: 0
+  }],
+  versables: [{ sujet: "Avis de contrôle technique n° 2.1.3", porteSur: "neige", emisPar: "SOCOTEC" }],
+  accroches: 1, sansLiaison: 0, dejaVerses: 2, sansEmetteur: 0
+};
+
+const panneau = (lot, versement = {}) => renderVersement({
+  lot, versement: { running: false, error: "", proposition: null, ...versement }
+});
+
+test("le panneau nomme l'organisme et rend sa preuve vérifiable", () => {
+  const html = panneau(LOT);
+
+  assert.match(html, /SOCOTEC/);
+  // La preuve ouvre le PDF à sa page : on vérifie l'émetteur comme une citation.
+  assert.match(html, /data-ctlab-open-pdf="doc-1"/);
+  assert.match(html, /data-ctlab-pdf-page="1"/);
+});
+
+test("le panneau compte ce qui entre, et ce qui était déjà là", () => {
+  const html = panneau(LOT);
+
+  assert.match(html, /1 à proposer/);
+  assert.match(html, /2 déjà en mémoire/);
+  assert.match(html, /Proposer 1 avis à l'Atelier/);
+});
+
+test("un lot sans rien de neuf ne ressemble pas à un lot vide", () => {
+  const html = panneau({ ...LOT, versables: [], accroches: 0 });
+
+  assert.doesNotMatch(html, /Proposer/);
+  assert.match(html, /déjà en mémoire à l'identique/);
+});
+
+test("un émetteur non reconnu se dit, et n'empêche pas les avis d'entrer", () => {
+  const html = panneau({
+    ...LOT,
+    documents: [{
+      ...LOT.documents[0],
+      emetteur: { organisme: null, certitude: "inconnu", preuves: [], candidats: [{ label: "Contrôle du Sud" }] }
+    }]
+  });
+
+  assert.match(html, /Aucun organisme reconnu/);
+  assert.match(html, /Contrôle du Sud/);
+  assert.match(html, /Proposer 1 avis/, "les avis entrent quand même : ce sont des faits du projet");
+});
+
+test("deux organismes dans un document se disent tous les deux", () => {
+  const html = panneau({
+    ...LOT,
+    documents: [{
+      ...LOT.documents[0],
+      emetteur: {
+        organisme: null, certitude: "plusieurs", preuves: [],
+        candidats: [{ label: "SOCOTEC" }, { label: "APAVE" }]
+      }
+    }]
+  });
+
+  assert.match(html, /Plusieurs organismes/);
+  assert.match(html, /SOCOTEC, APAVE/);
+});
+
+test("sans lot, le panneau ne dit rien du tout", () => {
+  // Ne pas joindre la mémoire empêche de proposer, jamais de lire les avis :
+  // le panneau s'efface, l'onglet reste entier.
+  assert.equal(renderVersement({ lot: null }), "");
+});
+
+test("un refus de l'Atelier se lit à l'écran", () => {
+  const html = panneau(LOT, { error: "Ce projet n'est pas relié à la base." });
+  assert.match(html, /pas relié à la base/);
 });

@@ -55,6 +55,7 @@ import {
   parsePatterns,
   previewMatches
 } from "../../../services/ct-lab-patterns.js";
+import { renderPropositionOuverte } from "../../ui/avertissement-proposition.js";
 import { bindGhActionButtons, renderGhActionButton } from "../../ui/gh-split-button.js";
 import { renderLightTabs } from "../../ui/light-tabs.js";
 import { paginateItems, renderPaginationControls } from "../../ui/pagination.js";
@@ -2412,6 +2413,116 @@ function renderPatternEditor(state) {
  * Ici on voit tout — y compris les F, SO, PM, HM qui constituent l'essentiel
  * d'un rapport et n'apparaissent nulle part ailleurs.
  */
+/**
+ * Ce que ce lot peut verser dans la mémoire, et par quoi on le sait.
+ *
+ * ## Pourquoi ici, et pas ailleurs
+ *
+ * C'est l'écran qui manquait. Le chemin d'un avis vers la mémoire était
+ * complet — la liaison, le versement, l'engagement écrit à la fusion — et
+ * personne ne l'appelait. Il part d'ici parce que c'est ici qu'est la liste :
+ * quarante avis lus, chacun avec sa page, et l'endroit d'où l'on relit avant
+ * de signer.
+ *
+ * ## Ce que le panneau montre avant de proposer quoi que ce soit
+ *
+ * **L'organisme, et la ligne qui le prouve.** Elle ouvre le PDF à sa page :
+ * une reconnaissance qu'on ne peut pas vérifier ne vaut pas mieux qu'une
+ * devinette, et le lecteur est déjà là.
+ *
+ * **Ce qui n'a pas été accroché.** Ces avis entrent quand même — un avis est un
+ * fait du projet —, mais ils ne couvrent rien, et cela se voit **avant** la
+ * signature plutôt qu'après (règle 5).
+ *
+ * **Ce qui est déjà en mémoire.** Sans ce compte, un lot sans rien de nouveau
+ * ressemblerait à un lot vide.
+ */
+export function renderVersement(state) {
+  const lot = state.lot;
+  if (!lot) return "";
+
+  const documents = lot.documents.filter((document) => document.versables.length || document.dejaVerses);
+  if (!documents.length) return "";
+
+  const cartes = documents.map((document) => {
+    const emetteur = document.emetteur ?? {};
+    const preuve = emetteur.preuves?.[0] ?? null;
+    const nomme = emetteur.organisme?.label ?? "";
+
+    // La preuve ouvre le PDF à sa page. C'est le même lecteur que celui d'un
+    // avis : on vérifie l'émetteur comme on vérifie une citation.
+    const citation = preuve
+      ? `<button type="button" class="ctlab__link"
+          data-ctlab-open-pdf="${escapeHtml(document.sourceId)}"
+          data-ctlab-pdf-page="${escapeHtml(String(preuve.page ?? 1))}"
+          data-ctlab-pdf-excerpt="${escapeHtml(preuve.extrait ?? "")}"
+        >${escapeHtml(truncate(preuve.extrait ?? "", 72))}${preuve.page ? ` — p. ${preuve.page}` : ""}</button>`
+      : "";
+
+    const qui = nomme
+      ? `Émis par <b>${escapeHtml(nomme)}</b>${
+          emetteur.certitude === "probable" ? " — nommé dans le document, sans le signer" : ""
+        }`
+      : emetteur.certitude === "plusieurs"
+        ? `Plusieurs organismes y figurent (${escapeHtml(
+            (emetteur.candidats ?? []).map((candidat) => candidat.label).join(", ")
+          )}) : les avis entreront sans nom d'émetteur.`
+        : `Aucun organisme reconnu${
+            emetteur.candidats?.length
+              ? ` — le document nomme ${escapeHtml(emetteur.candidats.map((c) => c.label).join(", "))}`
+              : ""
+          } : les avis entreront sans nom d'émetteur.`;
+
+    const compte = [
+      document.versables.length ? `${document.versables.length} à proposer` : "",
+      document.sansLiaison ? `${document.sansLiaison} sans valeur accrochée` : "",
+      document.dejaVerses ? `${document.dejaVerses} déjà en mémoire` : ""
+    ].filter(Boolean).join(" · ");
+
+    return `
+      <div class="ctlab__notice ctlab__notice--info">
+        <span class="ctlab__notice-icon" aria-hidden="true">${svgIcon("file", { className: "octicon" })}</span>
+        <span>
+          <b>${escapeHtml(document.nom)}</b> — ${qui}
+          ${citation ? `<br>${citation}` : ""}
+          ${compte ? `<br><span class="ctlab__hint">${escapeHtml(compte)}</span>` : ""}
+        </span>
+      </div>
+    `;
+  }).join("");
+
+  const versement = state.versement ?? {};
+
+  return `
+    <h3>Ce qui peut entrer dans la mémoire</h3>
+    <p class="ctlab__hint">
+      Un avis de contrôle technique est un <b>fait du projet</b>, daté, rendu par un organisme qui engage
+      sa responsabilité. Il se verse comme le reste : par une proposition que quelqu'un signe. Ce qui porte
+      sur une valeur de la mémoire cessera de la couvrir le jour où elle change.
+    </p>
+    ${cartes}
+    ${
+      versement.error
+        ? `<div class="ctlab__alert">${escapeHtml(versement.error)}</div>`
+        : ""
+    }
+    ${renderPropositionOuverte({
+      projet: String(store.currentProjectId || "").trim(),
+      proposition: versement.proposition ?? null
+    })}
+    ${
+      lot.versables.length
+        ? `<p>
+            <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-ctlab-verser
+              ${versement.running ? "disabled" : ""}>
+              ${versement.running ? "Préparation…" : `Proposer ${lot.versables.length} avis à l'Atelier`}
+            </button>
+          </p>`
+        : `<p class="ctlab__hint">Tout ce que ce lot porte est déjà en mémoire à l'identique.</p>`
+    }
+  `;
+}
+
 function renderAvisTable(state) {
   const all = collectAvis(state.result.predictions);
   const filter = state.avisFilter;
@@ -2609,7 +2720,10 @@ function renderResults(state) {
         </div>
       `;
     case "avis":
-      return `<div class="ctlab__section">${renderAvisTable(state)}</div>`;
+      return `
+        ${state.lot ? `<div class="ctlab__section">${renderVersement(state)}</div>` : ""}
+        <div class="ctlab__section">${renderAvisTable(state)}</div>
+      `;
     case "indicators":
       return renderAnalytics(state);
     case "evidence":
@@ -3654,6 +3768,17 @@ export function renderCtContinuityLab(root) {
     /** Les livrables enregistrés que le stockage n'a pas rendus. */
     unreachable: null,
     /**
+     * Ce que ce lot peut verser dans la mémoire du projet.
+     *
+     * Calculé après l'analyse, jamais pendant : il lui faut la mémoire du
+     * projet pour savoir sur quoi chaque avis porte, et ce qui y est déjà.
+     */
+    lot: null,
+    /** La mémoire du projet, telle qu'elle est aujourd'hui. */
+    assertions: null,
+    /** Où en est le versement : ce qui tourne, ce qui a échoué, ce qui est ouvert. */
+    versement: { running: false, error: "", proposition: null },
+    /**
      * Ce qui identifie ce projet : ce qu'il sait de lui-même (`self`, cherché
      * dans les documents) et ce que des humains y ont rattaché (`known`).
      */
@@ -4134,6 +4259,8 @@ export function renderCtContinuityLab(root) {
   const resetAll = () => {
     state.reports = [];
     state.result = null;
+    state.lot = null;
+    state.versement = { running: false, error: "", proposition: null };
     state.unreachable = null;
     state.selectedCell = null;
     state.selectedReference = null;
@@ -4184,6 +4311,100 @@ export function renderCtContinuityLab(root) {
     }
 
     return false;
+  };
+
+  /**
+   * Ce que ce lot peut verser, une fois l'analyse faite.
+   *
+   * Isolé et silencieux en cas d'échec : ne pas joindre la mémoire empêche de
+   * **proposer**, jamais de lire ses avis. L'onglet reste entier, le panneau
+   * s'efface, et c'est la bonne façon de se taire — on ne prétend pas qu'il n'y
+   * a rien à verser, on n'affiche pas la question.
+   */
+  const refreshLot = async () => {
+    state.lot = null;
+    if (!state.result) return;
+
+    try {
+      const [{ listProjectAssertions }, { avisDuLot }] = await Promise.all([
+        import("../../../services/project-memory-supabase.js"),
+        import("../../../services/avis-du-lot.js")
+      ]);
+
+      const projectId = state.memory?.projectId ?? null;
+      if (!projectId) return;
+
+      state.assertions = await listProjectAssertions(projectId);
+      state.lot = avisDuLot({
+        sources: state.result.sources,
+        avis: collectAvis(state.result.predictions),
+        assertions: state.assertions
+      });
+    } catch {
+      state.lot = null;
+    }
+  };
+
+  /**
+   * Porter le lot dans une proposition.
+   *
+   * Rien n'entre directement : une proposition s'ouvre, quelqu'un la relit et
+   * la signe, et c'est la fusion qui écrit les engagements
+   * (`services/avis-engagement.js`). On **reste ici** — le lien vers la
+   * proposition est offert, pas imposé.
+   */
+  const verserLeLot = async () => {
+    if (!state.lot?.versables?.length || state.versement.running) return;
+
+    const projectId = state.memory?.projectId ?? null;
+    if (!projectId) {
+      state.versement = { running: false, error: "Ce projet n'est pas relié à la base.", proposition: null };
+      refresh();
+      return;
+    }
+
+    state.versement = { running: true, error: "", proposition: null };
+    refresh();
+
+    try {
+      const [{ preparerUneProposition }, { titreDuLot }] = await Promise.all([
+        import("../../../services/atelier-proposition.js"),
+        import("../../../services/avis-du-lot.js")
+      ]);
+
+      const { titre, description } = titreDuLot(state.lot, { le: state.asOf });
+      const rendu = await preparerUneProposition({
+        projectId, titre, intro: description, affirmations: state.lot.versables
+      });
+
+      if (!rendu.ok) {
+        state.versement = { running: false, error: rendu.raison, proposition: null };
+        refresh();
+        return;
+      }
+
+      state.versement = {
+        running: false,
+        error: "",
+        proposition: {
+          id: rendu.proposition.id,
+          numero: rendu.proposition.number ?? null,
+          titre,
+          // Ce qui n'a pas pu être porté se dit ici : le taire ferait croire
+          // que tout est passé.
+          tranches: rendu.tranches ?? []
+        }
+      };
+
+      // Ce qui vient d'être proposé ne doit plus l'être une seconde fois au
+      // clic suivant. La mémoire ne porte pas encore ces avis — la proposition
+      // n'est pas fusionnée —, donc c'est le lot qu'on vide, pas elle.
+      state.lot = { ...state.lot, versables: [], accroches: 0, sansLiaison: 0 };
+    } catch (error) {
+      state.versement = { running: false, error: error.message, proposition: null };
+    }
+
+    refresh();
   };
 
   const runAnalysis = async () => {
@@ -4304,6 +4525,10 @@ export function renderCtContinuityLab(root) {
     }
     state.running = false;
     state.stages = [];
+    // Ce qui a déjà été proposé appartient à l'analyse précédente : le garder
+    // ferait croire qu'on vient d'ouvrir une proposition pour ce lot-ci.
+    state.versement = { running: false, error: "", proposition: null };
+    await refreshLot();
     refresh();
   };
 
@@ -4372,7 +4597,8 @@ export function renderCtContinuityLab(root) {
         "[data-ctlab-as-of], " +
         "[data-pagination-entity='ctlab-avis'], " +
         "[data-ctlab-export-text], [data-ctlab-apply-patterns], [data-ctlab-reset-patterns], " +
-        "[data-ctlab-time-travel], [data-action-id='ctlabRun'], [data-action-id='ctlabReset']"
+        "[data-ctlab-time-travel], [data-ctlab-verser], " +
+        "[data-action-id='ctlabRun'], [data-action-id='ctlabReset']"
     );
     if (!target) return;
 
@@ -4384,6 +4610,12 @@ export function renderCtContinuityLab(root) {
 
     if (target.dataset.actionId === "ctlabReset") {
       resetAll();
+      return;
+    }
+
+    if (target.dataset.ctlabVerser !== undefined) {
+      captureEditors();
+      await verserLeLot();
       return;
     }
 

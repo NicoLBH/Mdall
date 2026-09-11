@@ -319,7 +319,7 @@ l'inverse qui aurait été risqué.
 Un test refuse que l'écran parle comme un outil de visa : ni « visa », ni
 « viser », ni « à valider », ni « en attente », ni « approbation ».
 
-### Étape 2 — les avis du bureau de contrôle s'accrochent · *le chemin est fait*
+### Étape 2 — les avis du bureau de contrôle s'accrochent · *fait*
 
 L'avis était **lu et restait dehors** : le moteur d'extraction sait depuis
 longtemps tirer d'un rapport le numéro, l'intitulé, la teneur et la page de
@@ -386,11 +386,54 @@ champs de l'avis y sont donc déclarés, et un test traverse la chaîne entière
 rapport, versable, item, affirmation, engagement, puis la variante qui le fait
 tomber.
 
-#### Ce qui manque encore : l'écran qui déclenche
+#### L'écran qui déclenche : « Suivi des avis BC »
 
-Le chemin est complet et testé de bout en bout, mais **aucun écran ne l'appelle
-encore**. Il lui faut un endroit d'où partir : le suivi des avis, qui tient déjà
-la liste.
+Le chemin partait de nulle part. Il part maintenant de l'onglet **Avis** du
+suivi, là où la liste est déjà — et c'est le bon endroit parce que c'est celui
+où l'on relit.
+
+Le panneau montre, avant de proposer quoi que ce soit :
+
+- **l'organisme, et la ligne qui le prouve**, qui ouvre le PDF à sa page. Le
+  lecteur est déjà là : on vérifie l'émetteur comme on vérifie une citation ;
+- **ce qui n'a pas été accroché.** Ces avis entrent quand même — un avis est un
+  fait du projet — mais ils ne couvrent rien, et cela se voit **avant** la
+  signature ;
+- **ce qui est déjà en mémoire**, sans quoi un lot sans rien de nouveau
+  ressemblerait à un lot vide.
+
+`services/avis-du-lot.js` fait la glu, et trois choses ne se voient qu'à
+l'échelle du lot :
+
+1. **un document, un émetteur.** Reconnaître l'organisme sur le lot entier
+   attribuerait les avis de l'un à l'autre ;
+2. **un avis déjà versé ne revient pas.** Le laboratoire se relance ; sans cela,
+   chaque exécution reproposerait les mêmes quarante lignes ;
+3. **un avis dont la teneur a changé, si** — suspendu devenu favorable : c'est
+   une valeur nouvelle, elle se verse par-dessus (règle 11).
+
+#### Ce que le rapport réel a montré, et que les tests ne montraient pas
+
+Le sujet d'un avis était son **numéro**, au motif que rien d'autre ne le suit
+d'un rapport à l'autre. Passé sur un vrai rapport, le mécanisme n'a rien versé
+d'utile — et la raison tient en une phrase :
+
+> **Un bureau de contrôle ne numérote que ce qui reste ouvert.**
+
+Sur le rapport d'essai, deux avis sur vingt-quatre portent un numéro, et ce sont
+les deux **suspendus**. « Neige — Favorable », « Vent — Favorable », « Taux de
+travail — Favorable » n'en ont aucun. Ce sont pourtant **exactement ceux qui
+couvrent une valeur** : un avis suspendu ne couvre rien, il demande.
+
+S'en tenir au numéro faisait donc entrer les points ouverts et laissait dehors
+tout ce qui avait été examiné. L'intitulé sert maintenant d'identité à défaut de
+numéro — deux lignes d'un même rapport ne portent pas le même, et s'il y en
+avait deux, ce serait le même point examiné deux fois. Ce qui n'a **ni numéro ni
+intitulé** n'entre toujours pas : sans identité, deux avis anonymes se
+périmeraient l'un l'autre.
+
+Sur le même rapport : 23 avis sur 24 entrent, l'organisme est reconnu avec
+certitude, et « Neige » et « Vent » s'accrochent aux valeurs de la mémoire.
 
 ### Étape 2 bis — l'organisme se lit dans le document · *fait*
 

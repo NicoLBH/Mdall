@@ -49,10 +49,33 @@ import { emetteurDuDocument, organismeCertain } from "./emetteur-du-document.js"
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
-/** Le sujet d'un avis : son numéro le distingue, et rien d'autre ne le peut. */
+/**
+ * Le sujet d'un avis : ce qui le distingue des autres avis du même rapport.
+ *
+ * **Son numéro d'abord.** C'est la seule chose qui le suive d'un rapport à
+ * l'autre : le bureau de contrôle renumérote rarement un point ouvert.
+ *
+ * **Son intitulé à défaut**, et c'était le trou. Un rapport réel ne numérote
+ * que ce qui reste ouvert : sur le rapport d'essai, deux avis sur vingt-quatre
+ * portent un numéro, et ce sont les deux suspendus. Les favorables — « Neige »,
+ * « Vent », « Taux de travail » — n'en ont aucun, et ce sont **exactement ceux
+ * qui couvrent une valeur**. S'en tenir au numéro faisait donc entrer les
+ * points ouverts et laissait dehors tout ce qui avait été examiné.
+ *
+ * L'intitulé les distingue aussi bien : deux lignes d'un même rapport ne
+ * portent pas le même, et s'il y en avait deux, ce serait le même point examiné
+ * deux fois. C'est d'ailleurs par lui que le moteur les suit d'un rapport à
+ * l'autre quand le numéro manque.
+ *
+ * **Ni l'un ni l'autre : l'avis n'entre pas.** Sans identité, deux avis anonymes
+ * du même rapport se périmeraient l'un l'autre à la fusion.
+ */
 export function sujetDeLAvis(avis = null) {
   const reference = texte(avis?.value?.external_reference_raw) || texte(avis?.reference);
-  return reference ? `Avis de contrôle technique n° ${reference}` : "";
+  if (reference) return `Avis de contrôle technique n° ${reference}`;
+
+  const intitule = intituleDeLAvis(avis);
+  return intitule ? `Avis de contrôle technique — ${intitule}` : "";
 }
 
 /** Ce que l'avis dit, tel que le rapport l'écrit. */
@@ -89,9 +112,13 @@ export function avisVersable({
   const teneur = teneurDeLAvis(avis);
   const page = Number(avis?.provenance?.page ?? avis?.page);
 
+  const numerote = Boolean(texte(avis?.value?.external_reference_raw) || texte(avis?.reference));
+
   return {
     sujet,
-    valeur: intitule ? `${teneur} — ${intitule}` : teneur,
+    // L'intitulé ne se répète pas quand le sujet le porte déjà : « Favorable —
+    // Neige » sous le sujet « Avis … — Neige » se lirait deux fois.
+    valeur: intitule && numerote ? `${teneur} — ${intitule}` : teneur,
     quoi: "Ce qu'un bureau de contrôle a écrit d'un point du projet, dans son rapport, à sa date.",
     utilisation: "Ce qu'il a examiné cesse d'être couvert le jour où la valeur change. "
       + "C'est ce que dit une variante avant de dire ce qui se recalcule.",
