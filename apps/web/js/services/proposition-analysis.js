@@ -120,7 +120,11 @@ export async function analyzeProposition({
     // `sujets: []` et non `null` : quand aucun compte rendu n'est soumis, il
     // n'y a effectivement aucun point à proposer — ce n'est pas une lacune.
     sujets: [],
-    sujetsDeja: []
+    sujetsDeja: [],
+    // L'identité des comptes rendus lus, par source. Elle sert à la fusion, qui
+    // enregistre les reprises : sans elle, la ligne d'activité ne pourrait pas
+    // nommer le compte rendu qui a repris un point.
+    identiteDesComptesRendus: []
   };
   if (!projectId || !proposition?.id) return { ...vide, error: "Aucune proposition à analyser." };
 
@@ -232,6 +236,7 @@ export async function analyzeProposition({
    */
   let sujets = [];
   let sujetsDeja = [];
+  const identiteDesComptesRendus = [];
   const unreachableCr = [];
   if (comptesRendus.length > 0) {
     const { sujetsDuCompteRendu } = await import("./sujets-du-cr.js");
@@ -242,6 +247,17 @@ export async function analyzeProposition({
         try {
           const lu = await lireUnDocument(row, downloadDocumentFile, `cr-${lisibles.length + 1}`);
           lisibles.push({ sourceId: lu.sourceId, nom: nomDuLivrable(row), pages: lu.pages ?? [] });
+          // **Qui est ce compte rendu.** Son numéro et le jour de la réunion,
+          // lus à la reconnaissance. Ils repartent avec le résultat : la fusion
+          // en a besoin pour écrire « pas de modification du compte rendu
+          // n° 15 », et l'analyse est le seul moment où on les a sous la main.
+          identiteDesComptesRendus.push({
+            sourceId: lu.sourceId,
+            documentId: lu.documentId ?? row?.id ?? "",
+            nom: nomDuLivrable(row),
+            numero: String(lu.recognition?.declaredReference ?? "").trim(),
+            tenueLe: String(lu.recognition?.issuedAt ?? "").trim().slice(0, 10)
+          });
         } catch (cause) {
           unreachableCr.push(row);
           carnet.echouer(`${nomDuLivrable(row)} : non rapatrié — ${String(cause?.message || cause)}`);
@@ -280,7 +296,9 @@ export async function analyzeProposition({
   // il n'y a aucun avis à relever. Les rendre malgré tout est la seule chose qui
   // compte — s'arrêter sur `vide` les perdrait après les avoir lus.
   if (corpus.length === 0) {
-    return { ...vide, unreachable: unreachableCr, sujets, sujetsDeja, steps, error: null };
+    return {
+      ...vide, unreachable: unreachableCr, sujets, sujetsDeja, identiteDesComptesRendus, steps, error: null
+    };
   }
 
   const reports = [];
@@ -425,6 +443,7 @@ export async function analyzeProposition({
     // des avis et des points de chantier, et l'écran les montre ensemble.
     sujets,
     sujetsDeja,
+    identiteDesComptesRendus,
     // Ce que chaque phase a réellement pris. L'appelant y ajoutera l'écriture,
     // qu'il est le seul à pouvoir mesurer.
     steps,

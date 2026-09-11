@@ -395,6 +395,88 @@ async function fetchProjectSubjectLinks(projectId) {
   return json;
 }
 
+/* ── Les reprises d'un sujet par les comptes rendus de chantier ──────────── */
+
+const CR_MENTION_COLUMNS = "id,subject_id,document_id,proposition_id,numero,tenue_le,etat,a_change,created_at";
+
+/**
+ * Ce que les comptes rendus ont redit de ces sujets, dans l'ordre du temps.
+ *
+ * **Rendre `[]` sur une erreur serait mentir.** Un sujet sans reprise et un
+ * sujet dont on n'a pas pu lire les reprises n'appellent pas la même ligne
+ * d'activité : le premier n'a rien à dire, le second a quelque chose qu'on ne
+ * sait pas. On rend donc `null` quand la base n'a pas répondu (règle 5).
+ *
+ * @param {string[]} subjectIds
+ * @returns {Promise<object[]|null>}
+ */
+export async function listSubjectCrMentions(subjectIds = []) {
+  const ids = (Array.isArray(subjectIds) ? subjectIds : []).map(normalizeUuid).filter(Boolean);
+  if (ids.length === 0) return [];
+
+  try {
+    const url = new URL(`${SUPABASE_URL}/rest/v1/subject_cr_mentions`);
+    url.searchParams.set("select", CR_MENTION_COLUMNS);
+    url.searchParams.set("subject_id", `in.(${ids.join(",")})`);
+    url.searchParams.set("order", "tenue_le.asc,created_at.asc");
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+      cache: "no-store"
+    });
+    if (!res.ok) return null;
+    const json = await res.json().catch(() => null);
+    return Array.isArray(json) ? json : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Enregistre les reprises d'un dépôt.
+ *
+ * `Prefer: resolution=ignore-duplicates` : rejouer une fusion ne doit rien
+ * dupliquer, et l'unicité (sujet, document) le garantit déjà côté base. Le
+ * refus silencieux du doublon est ici la bonne réponse — la reprise est déjà
+ * écrite, il n'y a rien à corriger.
+ *
+ * @returns {Promise<number|null>} le nombre de lignes écrites, ou `null` si la
+ *   base n'a pas répondu : la fusion, elle, est faite, et l'écran doit pouvoir
+ *   le dire sans prétendre que le suivi l'est aussi.
+ */
+export async function recordSubjectCrMentions(mentions = [], { propositionId = "" } = {}) {
+  const lignes = (Array.isArray(mentions) ? mentions : [])
+    .map((mention) => ({
+      subject_id: normalizeUuid(mention?.subjectId),
+      document_id: normalizeUuid(mention?.documentId),
+      proposition_id: normalizeUuid(propositionId) || null,
+      numero: String(mention?.numero ?? "").trim(),
+      tenue_le: String(mention?.tenueLe ?? "").trim() || null,
+      etat: String(mention?.etat ?? "").trim(),
+      a_change: mention?.aChange === true
+    }))
+    .filter((ligne) => ligne.subject_id && ligne.document_id);
+
+  if (lignes.length === 0) return 0;
+
+  try {
+    const url = new URL(`${SUPABASE_URL}/rest/v1/subject_cr_mentions`);
+    const res = await fetch(url.toString(), {
+      method: "POST",
+      headers: await getSupabaseAuthHeaders({
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Prefer: "resolution=ignore-duplicates,return=minimal"
+      }),
+      body: JSON.stringify(lignes)
+    });
+    return res.ok ? lignes.length : null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeUuid(value) {
   const normalized = String(value || "").trim();
   return normalized || "";

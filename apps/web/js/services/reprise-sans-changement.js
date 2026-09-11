@@ -47,6 +47,140 @@
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
+/* ── Ce qu'un dépôt de comptes rendus laisse comme reprises ──────────────── */
+
+/**
+ * Les reprises à enregistrer après une fusion.
+ *
+ * **Une reprise est un fait, pas une phrase.** On enregistre que ce compte
+ * rendu-là a repris ce sujet-là, avec l'état du point tel qu'il l'écrit. La
+ * ligne affichée se calcule ensuite, à la lecture : figer la phrase ferait que
+ * le jour où elle se dit mieux, les anciennes garderaient l'ancienne
+ * formulation (règle 4).
+ *
+ * ## Ce qui compte comme un mouvement
+ *
+ * Un sujet **ouvert** par ce compte rendu : c'est lui qui l'a fait apparaître,
+ * donc quelque chose a bougé — et la ligne des reprises suivantes repartira
+ * d'après lui.
+ *
+ * Un point **déjà suivi** dont l'état diffère de la dernière reprise connue :
+ * le point a évolué, et cela mérite d'être vu.
+ *
+ * ## Ce qu'on ne sait pas, et comment on le traite
+ *
+ * Un sujet qui existait **avant** qu'on suive les reprises n'a pas de reprise
+ * précédente à laquelle se comparer. On enregistre alors son état sans
+ * prétendre qu'il a bougé : du point de vue de ce compte rendu, le point est
+ * repris, et c'est tout ce qu'on peut dire. Le compte rendu suivant, lui, aura
+ * de quoi comparer. Annoncer un mouvement qu'on n'a pas constaté serait
+ * exactement ce que la règle 5 interdit.
+ *
+ * @param {object} options
+ * @param {{subjectId: string, point: object}[]} [options.ouverts] les sujets que
+ *   cette fusion vient d'ouvrir
+ * @param {object[]} [options.deja] les points déjà suivis, tels que
+ *   `sujetsDuCompteRendu` les rend — seuls ceux qui portent un `sujet` comptent
+ * @param {Map<string, {numero: string, tenueLe: string}>|object} [options.documents]
+ *   l'identité de chaque compte rendu, par `sourceId`
+ * @param {object[]} [options.connues] les reprises déjà en base, `{subject_id, etat}`
+ * @returns {{subjectId: string, documentId: string, numero: string, tenueLe: string, etat: string, aChange: boolean}[]}
+ */
+/**
+ * D'où vient un point — l'étiquette de lecture de son compte rendu.
+ *
+ * Elle est **dans sa provenance**, avec la page et la citation : c'est là que
+ * le serveur l'écrit. La chercher à la racine du point rend une chaîne vide, en
+ * silence, et tout ce qui en dépend disparaît sans erreur — le nom du document
+ * dans une description, et toutes les reprises de ce dépôt.
+ */
+export function sourceDuPoint(point = null) {
+  return texte(point?.provenance?.source_id ?? point?.sourceId);
+}
+
+export function reprisesAEnregistrer({
+  ouverts = [], deja = [], documents = null, connues = []
+} = {}) {
+  const identite = (sourceId) => {
+    const cle = texte(sourceId);
+    if (!cle) return null;
+    if (documents instanceof Map) return documents.get(cle) ?? null;
+    return documents && typeof documents === "object" ? documents[cle] ?? null : null;
+  };
+
+  // Le dernier état connu de chaque sujet : c'est à lui qu'une reprise se
+  // compare. Les lignes arrivent dans l'ordre du temps, la dernière gagne.
+  const dernierEtat = new Map();
+  for (const ligne of Array.isArray(connues) ? connues : []) {
+    const sujet = texte(ligne?.subject_id ?? ligne?.subjectId);
+    if (sujet) dernierEtat.set(sujet, texte(ligne?.etat));
+  }
+
+  const aEcrire = [];
+  const faits = new Set();
+
+  const ajouter = ({ subjectId, point, aChange }) => {
+    const sujet = texte(subjectId);
+    // **L'identité donne l'identifiant du document, pas le point.** Le `sourceId`
+    // d'un point est une étiquette de lecture — « cr-1 » —, pas une ligne de la
+    // base : l'écrire comme `document_id` poserait une reprise sur un document
+    // qui n'existe pas, et la ligne d'activité citerait le vide.
+    const source = identite(sourceDuPoint(point));
+    const documentId = texte(source?.documentId);
+    if (!sujet || !documentId) return;
+
+    // Un même compte rendu ne reprend pas deux fois le même point : deux points
+    // du même document rattachés au même sujet ne font qu'une reprise.
+    const couple = `${sujet}|${documentId}`;
+    if (faits.has(couple)) return;
+    faits.add(couple);
+
+    aEcrire.push({
+      subjectId: sujet,
+      documentId,
+      numero: texte(source?.numero),
+      tenueLe: texte(source?.tenueLe),
+      etat: texte(point?.etat),
+      aChange
+    });
+  };
+
+  for (const { subjectId, point } of Array.isArray(ouverts) ? ouverts : []) {
+    ajouter({ subjectId, point, aChange: true });
+  }
+
+  for (const point of Array.isArray(deja) ? deja : []) {
+    const subjectId = texte(point?.sujet?.id);
+    if (!subjectId) continue;
+
+    const avant = dernierEtat.get(subjectId);
+    // Pas de reprise précédente : on enregistre l'état sans prétendre qu'il a
+    // bougé. Le compte rendu suivant aura de quoi comparer.
+    const aChange = avant !== undefined && avant !== texte(point?.etat);
+    ajouter({ subjectId, point, aChange });
+  }
+
+  return aEcrire;
+}
+
+/**
+ * Les reprises telles que la ligne d'activité les attend.
+ *
+ * La base rend des colonnes, le service parle de mentions : la traduction vit
+ * ici, à un seul endroit, plutôt que chez chacun de ceux qui lisent.
+ */
+export function mentionsDesLignes(lignes = []) {
+  return (Array.isArray(lignes) ? lignes : [])
+    .map((ligne) => ({
+      numero: texte(ligne?.numero),
+      tenueLe: texte(ligne?.tenue_le ?? ligne?.tenueLe),
+      aChange: ligne?.a_change === true || ligne?.aChange === true
+    }))
+    // Dans l'ordre du temps : la ligne se lit de la première reprise à la
+    // dernière, et un tri par date manquante ne doit pas les mélanger.
+    .sort((gauche, droite) => texte(gauche.tenueLe).localeCompare(texte(droite.tenueLe)));
+}
+
 /**
  * Les comptes rendus qui ont repris le point **sans rien y changer depuis le
  * dernier mouvement**.
