@@ -128,11 +128,13 @@ function renderRaccourciCopilote(model = {}) {
   if (!projectId) return "";
 
   return `
-    <a class="gh-action gh-copilote-raccourci"
-      href="#project/${encodeURIComponent(projectId)}/${PROJECT_TAB_IDS.STUDIO}/${ATELIER_COPILOTE}"
-      title="Copilote" aria-label="Copilote">
-      ${svgIcon("copilot", { className: "octicon octicon-copilot" })}
-    </a>
+    <div class="gh-action gh-copilote-raccourci">
+      <a class="gh-copilote-raccourci__lien"
+        href="#project/${encodeURIComponent(projectId)}/${PROJECT_TAB_IDS.STUDIO}/${ATELIER_COPILOTE}"
+        title="Copilote" aria-label="Copilote">
+        ${svgIcon("copilot", { className: "octicon octicon-copilot" })}
+      </a>
+    </div>
   `;
 }
 

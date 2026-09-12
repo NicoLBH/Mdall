@@ -196,16 +196,18 @@ export function renderVitrineDeLatelier({
 function renderBandeau(recherche) {
   return `
     <section class="atelier-bandeau">
-      <h1 class="atelier-bandeau__titre">Les utilitaires de l'Atelier</h1>
-      <p class="atelier-bandeau__sous-titre">
-        Cherchez par domaine, par nom, par donnée d'entrée ou par variable produite.
-      </p>
-      <div class="atelier-bandeau__recherche">
-        ${svgIcon("search", { className: "octicon octicon-search" })}
-        <input type="search" id="atelierRecherche" class="atelier-bandeau__champ"
-          value="${escapeHtml(recherche)}" autocomplete="off"
-          placeholder="incendie · altitude · portance · spectre…"
-          aria-label="Chercher un utilitaire">
+      <div class="atelier-bandeau__dedans">
+        <h1 class="atelier-bandeau__titre">Bienvenue dans l'Atelier pour bricoler</h1>
+        <p class="atelier-bandeau__sous-titre">
+          Outils pour simplifier vos tâches et automatiser vos procédés
+        </p>
+        <div class="atelier-bandeau__recherche">
+          ${svgIcon("search", { className: "octicon octicon-search" })}
+          <input type="search" id="atelierRecherche" class="atelier-bandeau__champ"
+            value="${escapeHtml(recherche)}" autocomplete="off"
+            placeholder="incendie · altitude · portance · spectre…"
+            aria-label="Chercher un utilitaire">
+        </div>
       </div>
     </section>
   `;

@@ -2,6 +2,7 @@ import { svgIcon } from "../ui/icons.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
 import { bindSideNavPanels } from "./ui/side-nav-layout.js";
+import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import { RANGEMENT, renderVitrineDeLatelier } from "./atelier/vitrine-de-latelier.js";
 import { panneauDemandeParLaRoute } from "../services/route-de-latelier.js";
 import { utilitaireParCible } from "../services/catalogue-de-latelier.js";
@@ -27,6 +28,7 @@ import {
   transcrireLaDiscussion
 } from "./studio/copilote/copilote.js";
 import { conversationTitle } from "../services/copilote-conversations.js";
+import { PROJECT_TAB_IDS } from "../constants.js";
 import { store } from "../store.js";
 import {
   deleteConversation,
@@ -212,9 +214,9 @@ function getRouterHtml() {
             </section>
 
             <section class="project-studio-router__panel project-studio-router__panel--copilote"
-              data-side-nav-panel="studio-copilote">
-              <div class="project-rail-layout${railState.collapsed ? " project-rail-layout--collapsed" : ""}"
-                style="--project-rail-width:${railWidth(railState.width, railState.collapsed)}px">
+              data-side-nav-panel="studio-copilote"
+              style="--project-rail-width:${railWidth(railState.width, railState.collapsed)}px">
+              <div class="project-rail-layout${railState.collapsed ? " project-rail-layout--collapsed" : ""}">
                 ${renderProjectRail({
                   id: "studioRail",
                   label: "Discussions du Copilote",
@@ -411,11 +413,80 @@ export function renderProjectStudio(root) {
     marquerActif(root, targetId);
   });
 
+  brancherLeRetourALaccueil(root);
   brancherLaVitrine(root, vitrineRoot);
   brancherCopilote(root, copiloteRoot, getScrollSource);
   marquerActif(root, panneauCourant);
 
   registerProjectPrimaryScrollSource(getScrollSource());
+}
+
+/* ── Revenir à l'accueil par l'onglet ────────────────────────────────────── */
+
+/**
+ * **Recliquer l'onglet Atelier ramène à la vitrine.**
+ *
+ * C'est le geste que l'application a déjà — les Situations, les Documents et
+ * les Actions l'écoutent depuis longtemps — et c'est pour cela qu'aucune barre
+ * de retour ne le double dans l'Atelier.
+ *
+ * Sans cette écoute, il ne se passait rien : l'onglet est déjà actif, l'adresse
+ * ne change pas, donc le routeur ne redessine rien. Un onglet qu'on reclique et
+ * qui reste muet se lit comme un onglet cassé, pas comme un onglet déjà là.
+ */
+let retourALaccueilBranche = false;
+let racineDeLatelier = null;
+
+/**
+ * Effacer le panneau que l'adresse demandait.
+ *
+ * **Sans cela, on y retournerait tout seul.** L'adresse l'emporte sur le
+ * dernier panneau regardé — c'est ce qui fait marcher le raccourci du Copilote
+ * — donc tant que `…/atelier/copilote` reste dans la barre, le moindre redessin
+ * rouvrirait le Copilote. On reclique l'onglet, la vitrine s'affiche, une
+ * synchronisation passe, et l'on se retrouve ailleurs sans avoir rien fait.
+ *
+ * `replaceState` plutôt qu'écrire le `hash` : écrire déclencherait un
+ * `hashchange`, donc un rendu complet de l'onglet, pour un changement qu'on
+ * vient de faire à la main.
+ */
+function oublierLePanneauDeLaRoute() {
+  try {
+    const hash = String(window.location?.hash ?? "");
+    if (!panneauDemandeParLaRoute(hash)) return;
+
+    const garde = hash.replace(/^#/, "").split("/").slice(0, 3).join("/");
+    window.history.replaceState(null, "", `#${garde}`);
+  } catch {
+    // Un navigateur qui refuse l'historique garde son adresse : le panneau
+    // s'affiche quand même, et c'est le seul point qui compte ici.
+  }
+}
+
+function brancherLeRetourALaccueil(root) {
+  // La racine change à chaque rendu de l'onglet ; l'écoute, elle, se pose une
+  // seule fois. En poser une par rendu les empilerait, et le dixième passage
+  // dans l'Atelier redessinerait dix fois.
+  racineDeLatelier = root;
+  if (retourALaccueilBranche) return;
+  retourALaccueilBranche = true;
+
+  window.addEventListener(PROJECT_TAB_RESELECTED_EVENT, (evenement) => {
+    const detail = evenement?.detail || {};
+    if (String(detail.tabId || "").trim().toLowerCase() !== PROJECT_TAB_IDS.STUDIO) return;
+
+    // Un autre projet a reclicé son onglet : ce n'est pas le nôtre.
+    const projetCourant = String(store.currentProjectId || "").trim();
+    const projetDeLEvenement = String(detail.projectId || "").trim();
+    if (projetDeLEvenement && projetCourant && projetDeLEvenement !== projetCourant) return;
+
+    const root = racineDeLatelier;
+    if (!root || !root.isConnected) return;
+
+    oublierLePanneauDeLaRoute();
+    afficherPanneau(root, ACCUEIL);
+    marquerActif(root, ACCUEIL);
+  });
 }
 
 /**
