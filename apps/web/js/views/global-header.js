@@ -1,4 +1,5 @@
 import { PROJECT_TAB_IDS } from "../constants.js";
+import { ATELIER_COPILOTE } from "../services/route-de-latelier.js";
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
 import { signOut } from "../../assets/js/auth.js";
@@ -116,13 +117,19 @@ function getHeaderModel() {
  * Il ne paraît que **sur un projet**, parce qu'une discussion sans projet n'a
  * rien à lire — et un raccourci qui mène à un écran vide apprend à ne plus le
  * cliquer.
+ *
+ * **Il mène au Copilote, pas à l'Atelier.** Déposer sur la vitrine laisserait
+ * un second geste à faire, c'est-à-dire la moitié du péage qu'on voulait
+ * supprimer. Le quatrième segment de la route dit quel panneau ouvrir ; sans
+ * lui, l'Atelier ouvre sa vitrine comme d'habitude.
  */
 function renderRaccourciCopilote(model = {}) {
   const projectId = String(model?.projectId || "").trim();
   if (!projectId) return "";
 
   return `
-    <a class="gh-action gh-copilote-raccourci" href="#project/${encodeURIComponent(projectId)}/${PROJECT_TAB_IDS.STUDIO}"
+    <a class="gh-action gh-copilote-raccourci"
+      href="#project/${encodeURIComponent(projectId)}/${PROJECT_TAB_IDS.STUDIO}/${ATELIER_COPILOTE}"
       title="Copilote" aria-label="Copilote">
       ${svgIcon("copilot", { className: "octicon octicon-copilot" })}
     </a>

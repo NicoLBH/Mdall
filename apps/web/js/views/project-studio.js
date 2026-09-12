@@ -3,6 +3,7 @@ import { escapeHtml } from "../utils/escape-html.js";
 import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
 import { bindSideNavPanels } from "./ui/side-nav-layout.js";
 import { RANGEMENT, renderVitrineDeLatelier } from "./atelier/vitrine-de-latelier.js";
+import { panneauDemandeParLaRoute } from "../services/route-de-latelier.js";
 import { utilitaireParCible } from "../services/catalogue-de-latelier.js";
 import {
   renderNavList,
@@ -190,28 +191,19 @@ function lireReglages() {
  * barre — celle du Copilote — et elle est **dans** le Copilote, comme celle que
  * n'importe quel autre utilitaire pourra désormais se donner.
  *
- * ## La barre de retour
+ * ## Comment on revient à la vitrine
  *
- * Elle dit où l'on est et d'où l'on revient. Sans rail, un utilitaire ouvert
- * n'a plus rien autour de lui qui le nomme : on saurait ce qu'on regarde sans
- * savoir comment en sortir. Elle porte aussi **la version** de l'utilitaire,
- * parce que c'est en le regardant travailler qu'on veut la connaître.
+ * **Par l'onglet Atelier**, comme partout ailleurs dans l'application : on
+ * reclique l'onglet où l'on est et l'on revient à son accueil. Une barre de
+ * retour propre à cet écran ajouterait un second chemin pour un geste que
+ * l'application a déjà, et deux chemins finissent par se comporter
+ * différemment (règle 4).
  */
 function getRouterHtml() {
   return `
     <section class="project-simple-page project-simple-page--settings project-simple-page--studio project-simple-page--atelier">
-      <div class="project-simple-scroll project-simple-scroll--parametres" id="projectStudioRouterScroll">
+      <div class="project-simple-scroll project-simple-scroll--parametres project-simple-scroll--atelier" id="projectStudioRouterScroll">
         <div class="settings-shell settings-shell--parametres settings-shell--atelier">
-
-          <div class="atelier-retour" id="atelierRetour" hidden>
-            <button type="button" class="atelier-retour__lien" data-side-nav-target="${ACCUEIL}">
-              ${svgIcon("arrow-left", { className: "octicon" })}
-              <span>Atelier</span>
-            </button>
-            <span class="atelier-retour__sep" aria-hidden="true">/</span>
-            <span class="atelier-retour__nom" id="atelierRetourNom"></span>
-            <span class="atelier-retour__version mono-small" id="atelierRetourVersion"></span>
-          </div>
 
           <div class="project-studio-router__content">
 
@@ -295,7 +287,10 @@ export function renderProjectStudio(root) {
   brancherRail(root);
 
   const vitrineRoot = root.querySelector("#projectStudioVitrinePanel");
-  if (vitrineRoot) dessinerLaVitrine(vitrineRoot);
+  if (vitrineRoot) {
+    dessinerLaVitrine(vitrineRoot);
+    assurerLesOuvertures(vitrineRoot);
+  }
 
   const copiloteRoot = root.querySelector("#projectStudioCopilotePanel");
   const solidityClimateRoot = root.querySelector("#projectStudioSolidityClimatePanel");
@@ -344,6 +339,12 @@ export function renderProjectStudio(root) {
 
   const getScrollSource = () => root.querySelector("#projectStudioRouterScroll");
 
+  // **La route l'emporte sur le dernier panneau regardé.** On vient de cliquer
+  // un lien qui nomme un panneau : le lui refuser au profit d'où l'on était
+  // ferait un raccourci qui n'emmène nulle part.
+  const demande = panneauDemandeParLaRoute(window.location?.hash ?? "");
+  if (demande) panneauCourant = demande;
+
   // Le panneau retenu, s'il existe encore : un utilitaire retiré d'une version
   // à l'autre ne doit pas rendre l'Atelier vide au redessin.
   if (!root.querySelector(`[data-side-nav-panel="${CSS.escape(panneauCourant)}"]`)) {
@@ -384,6 +385,11 @@ export function renderProjectStudio(root) {
     // la bascule se fait donc ici, sur le DOM tel qu'il est maintenant.
     afficherPanneau(root, targetId);
 
+    // **On note après avoir ouvert, sans attendre.** Un utilitaire s'ouvre,
+    // qu'on ait pu le compter ou non : faire dépendre l'ouverture d'un
+    // compteur ferait payer l'essentiel par l'accessoire.
+    noterLOuvertureDe(targetId);
+
     if (targetId === "solidity-climate" && solidityClimateRoot) renderSolidityClimate(solidityClimateRoot, { force: true });
     // Le copilote se redessine à chaque venue : la conversation a pu avancer
     // dans un autre onglet, et un fil figé donnerait l'impression d'avoir
@@ -412,6 +418,23 @@ export function renderProjectStudio(root) {
   registerProjectPrimaryScrollSource(getScrollSource());
 }
 
+/**
+ * Compter une ouverture — mais seulement d'un utilitaire du catalogue.
+ *
+ * La vitrine elle-même n'est pas un utilitaire : la compter ferait d'elle la
+ * première des vedettes, et la rangée mettrait en avant l'écran depuis lequel
+ * on la regarde.
+ */
+function noterLOuvertureDe(targetId) {
+  if (!utilitaireParCible(targetId)) return;
+
+  import("../services/ouvertures-de-latelier-supabase.js")
+    .then(({ noterLOuverture }) => noterLOuverture(targetId))
+    .catch(() => {
+      // Un utilitaire s'ouvre, qu'on ait pu le compter ou non.
+    });
+}
+
 /* ── La vitrine ──────────────────────────────────────────────────────────── */
 
 /**
@@ -421,7 +444,46 @@ export function renderProjectStudio(root) {
  * l'Atelier se redessine entièrement à plusieurs occasions, et une recherche
  * perdue au redessin obligerait à la retaper sans qu'on comprenne pourquoi.
  */
-const vitrineEtat = { recherche: "", rayon: "", rangement: RANGEMENT.RECOMMANDE };
+const vitrineEtat = { recherche: "", rayon: "", rangement: RANGEMENT.RECOMMANDE, ouvertures: null };
+
+/**
+ * Les compteurs d'ouverture, lus une fois, puis gardés.
+ *
+ * `null` veut dire « pas encore lus » — la rangée se range alors par l'ordre du
+ * catalogue, ce qui est un ordre stable et non un classement inventé.
+ *
+ * **On ne les relit pas à chaque redessin** : ils bougent d'une unité par
+ * ouverture, et une rangée qui se réordonnerait sous le doigt cesserait d'être
+ * un repère. Ils se relisent au prochain passage dans l'Atelier.
+ */
+let ouverturesEnCours = false;
+
+function assurerLesOuvertures(hote) {
+  if (ouverturesEnCours || vitrineEtat.ouvertures !== null) return;
+  ouverturesEnCours = true;
+
+  (async () => {
+    try {
+      const { lireLesOuvertures } = await import("../services/ouvertures-de-latelier-supabase.js");
+      const lues = await lireLesOuvertures();
+      // `null` : la base n'a pas répondu. On ne retient rien, et la prochaine
+      // venue réessaiera — plutôt que de figer un classement qu'on n'a pas lu.
+      if (!lues) return;
+
+      vitrineEtat.ouvertures = lues;
+
+      // **On ne redessine que si la rangée est visible.** Les compteurs
+      // arrivent après coup ; si quelqu'un a commencé à taper entretemps, la
+      // rangée est déjà masquée — redessiner lui reprendrait le curseur pour
+      // changer un ordre que personne ne regarde.
+      if (!vitrineEtat.recherche && !vitrineEtat.rayon) dessinerLaVitrine(hote);
+    } catch {
+      // Un Atelier se parcourt, qu'on ait pu lire les compteurs ou non.
+    } finally {
+      ouverturesEnCours = false;
+    }
+  })();
+}
 
 function dessinerLaVitrine(hote) {
   if (!hote) return;
@@ -466,17 +528,19 @@ function brancherLaVitrine(root, hote) {
   });
 
   hote.addEventListener("click", (evenement) => {
-    const onglet = evenement.target.closest?.("[data-light-tab-target]");
-    // Une fiche : le routeur s'en charge, on ne s'en mêle pas.
-    if (!onglet || evenement.target.closest?.("[data-side-nav-target]")) return;
+    // Une fiche ou une vedette : le routeur s'en charge, on ne s'en mêle pas.
+    if (evenement.target.closest?.("[data-side-nav-target]")) return;
 
-    const valeur = onglet.dataset.lightTabTarget ?? "";
-    // Les deux barres portent le même attribut : c'est leur enveloppe qui dit
-    // laquelle on vient de toucher.
-    if (onglet.closest(".atelier-rayons")) vitrineEtat.rayon = valeur;
-    else if (onglet.closest(".atelier-rangement")) vitrineEtat.rangement = valeur || RANGEMENT.RECOMMANDE;
-    else return;
+    const rayon = evenement.target.closest?.("[data-atelier-rayon]");
+    if (rayon) {
+      vitrineEtat.rayon = rayon.dataset.atelierRayon ?? "";
+      dessinerLaVitrine(hote);
+      return;
+    }
 
+    const onglet = evenement.target.closest?.(".atelier-rangement [data-light-tab-target]");
+    if (!onglet) return;
+    vitrineEtat.rangement = onglet.dataset.lightTabTarget || RANGEMENT.RECOMMANDE;
     dessinerLaVitrine(hote);
   });
 }
@@ -500,8 +564,6 @@ function marquerActif(root, targetId) {
   root.querySelector(".project-simple-page--studio")
     ?.classList.toggle("project-simple-page--copilote", targetId === "studio-copilote");
 
-  majBarreDeRetour(root, targetId);
-
   const filCourant = copiloteConversationId();
   const historique = copiloteConversations().some((conversation) => conversation.id === filCourant);
 
@@ -515,37 +577,6 @@ function marquerActif(root, targetId) {
 
     item.setAttribute("data-active", actif ? "true" : "false");
   }
-}
-
-/**
- * La barre de retour : où l'on est, et comment en sortir.
- *
- * Sans rail, un utilitaire ouvert n'a plus rien autour de lui qui le nomme. On
- * saurait ce qu'on regarde sans savoir d'où l'on vient — et l'on repartirait par
- * l'onglet du projet, c'est-à-dire en quittant l'Atelier pour y revenir.
- *
- * Elle porte **la version**, parce que c'est en regardant l'utilitaire
- * travailler qu'on veut la connaître, pas en lisant sa fiche.
- *
- * Sur la vitrine, elle n'existe pas : on y est déjà.
- */
-function majBarreDeRetour(root, targetId) {
-  const barre = root.querySelector("#atelierRetour");
-  if (!barre) return;
-
-  const surLaVitrine = !targetId || targetId === ACCUEIL;
-  barre.hidden = surLaVitrine;
-  if (surLaVitrine) return;
-
-  const utilitaire = utilitaireParCible(targetId);
-  const nom = root.querySelector("#atelierRetourNom");
-  const version = root.querySelector("#atelierRetourVersion");
-
-  // Un utilitaire absent du catalogue garde sa barre, avec ce qu'on sait de
-  // lui : sans nom, elle serait un bouton de retour muet — mais un bouton de
-  // retour muet vaut mieux que pas de sortie du tout (règle 5).
-  if (nom) nom.textContent = utilitaire?.nom ?? "";
-  if (version) version.textContent = utilitaire?.version ? `v${utilitaire.version}` : "";
 }
 
 /** Afficher un panneau sans passer par un clic : rouvrir un fil en a besoin. */

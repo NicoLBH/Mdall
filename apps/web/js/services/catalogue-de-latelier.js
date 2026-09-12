@@ -29,6 +29,13 @@
  *    se voie.
  *  - **`mots`** — ce sous quoi on le cherche quand on ne connaît pas son nom :
  *    un domaine, une donnée d'entrée, une variable produite.
+ *  - **`ajouteLe`** — quand il est entré à l'Atelier. C'est ce qui range
+ *    « Ajouté récemment », et cela répond à une question qu'on se pose
+ *    vraiment : qu'est-ce qui est nouveau depuis la dernière fois ?
+ *
+ * **Ce qui n'est pas un champ : la mise en avant.** Elle se compte, dans
+ * `atelier_ouvertures`, sur tous les projets et tous les utilisateurs. Déclarée
+ * ici, elle vieillirait sans que personne ne s'en aperçoive.
  *
  * ## Ce qui n'est pas ici
  *
@@ -54,6 +61,23 @@ export const RAYONS = {
   DOCUMENTS: "documents",
   MEMOIRE: "memoire",
   DEVELOPPEMENT: "developpement"
+};
+
+/**
+ * L'icône de chaque rayon, dans la navigation verticale.
+ *
+ * Elle vit **avec le nom du rayon**, pas dans l'écran qui les dessine : ce sont
+ * deux faces d'une même chose, et les séparer ferait qu'un rayon ajouté
+ * arriverait sans icône ou avec celle du voisin (règle 10).
+ */
+export const ICONE_DU_RAYON = {
+  [RAYONS.EXPLORATION]: "beaker",
+  [RAYONS.SOLIDITE]: "gear",
+  [RAYONS.INCENDIE]: "fire",
+  [RAYONS.PARASISMIQUE]: "pulse",
+  [RAYONS.DOCUMENTS]: "file",
+  [RAYONS.MEMOIRE]: "memoire-vive",
+  [RAYONS.DEVELOPPEMENT]: "markdown-code"
 };
 
 export const NOM_DU_RAYON = {
@@ -84,7 +108,7 @@ export const UTILITAIRES = [
     intelligence: true,
     aussiALaMain: "Parcourir la mémoire et les documents par l'onglet Mémoire.",
     mots: ["question", "discussion", "recherche", "assistant"],
-    vedette: true
+    ajouteLe: "2025-10-10"
   },
   {
     cible: "exploration-variante",
@@ -97,7 +121,7 @@ export const UTILITAIRES = [
     intelligence: false,
     aussiALaMain: "Refaire les calculs dépendants un à un.",
     mots: ["simulation", "hypothèse", "rejeu", "et si"],
-    vedette: true
+    ajouteLe: "2026-02-06"
   },
   {
     cible: "exploration-impact",
@@ -109,7 +133,8 @@ export const UTILITAIRES = [
     version: "1.1",
     intelligence: false,
     aussiALaMain: "Remonter les lectures enregistrées de chaque règle.",
-    mots: ["dépendances", "propagation", "aval"]
+    mots: ["dépendances", "propagation", "aval"],
+    ajouteLe: "2025-06-20"
   },
   {
     cible: "exploration-audit",
@@ -121,7 +146,8 @@ export const UTILITAIRES = [
     version: "1.0",
     intelligence: false,
     aussiALaMain: "Relire la mémoire ligne à ligne.",
-    mots: ["lacunes", "contradictions", "qualité", "contrôle"]
+    mots: ["lacunes", "contradictions", "qualité", "contrôle"],
+    ajouteLe: "2025-07-25"
   },
   {
     cible: "solidity-climate",
@@ -134,7 +160,7 @@ export const UTILITAIRES = [
     intelligence: false,
     aussiALaMain: "Lire les cartes et annexes nationales.",
     mots: ["neige", "vent", "gel", "EC1", "climat", "altitude", "charges"],
-    vedette: true
+    ajouteLe: "2026-08-28"
   },
   {
     cible: "solidity-georisks",
@@ -146,7 +172,8 @@ export const UTILITAIRES = [
     version: "1.1",
     intelligence: false,
     aussiALaMain: "Consulter Géorisques commune par commune.",
-    mots: ["risques", "aléa", "argile", "inondation", "seveso", "géorisques"]
+    mots: ["risques", "aléa", "argile", "inondation", "seveso", "géorisques"],
+    ajouteLe: "2025-11-21"
   },
   {
     cible: "solidity-fondations",
@@ -159,7 +186,7 @@ export const UTILITAIRES = [
     intelligence: false,
     aussiALaMain: "Le calcul est posé en toutes lettres, il se refait à la main.",
     mots: ["fondation", "semelle", "ancrage", "portance", "EC7"],
-    vedette: true
+    ajouteLe: "2026-06-26"
   },
   {
     cible: "incendie-habitation",
@@ -172,7 +199,7 @@ export const UTILITAIRES = [
     intelligence: false,
     aussiALaMain: "Appliquer l'arrêté du 31 janvier 1986.",
     mots: ["incendie", "famille", "habitation", "1986", "désenfumage", "SSI"],
-    vedette: true
+    ajouteLe: "2026-04-03"
   },
   {
     cible: "seismic-general",
@@ -185,7 +212,7 @@ export const UTILITAIRES = [
     intelligence: false,
     aussiALaMain: "Construire le spectre selon l'EC8 et l'arrêté de 2010.",
     mots: ["sismique", "séisme", "spectre", "EC8", "zone", "sol", "accélération"],
-    vedette: true
+    ajouteLe: "2026-05-29"
   },
   {
     cible: "solidity-arkolia",
@@ -197,7 +224,8 @@ export const UTILITAIRES = [
     version: "0.9",
     intelligence: false,
     aussiALaMain: "Dérouler la trame à la main.",
-    mots: ["photovoltaïque", "hangar", "ENR", "agricole"]
+    mots: ["photovoltaïque", "hangar", "ENR", "agricole"],
+    ajouteLe: "2025-09-19"
   },
   {
     cible: "conflits-resolution",
@@ -209,7 +237,8 @@ export const UTILITAIRES = [
     version: "1.0",
     intelligence: false,
     aussiALaMain: "Comparer les versements deux à deux.",
-    mots: ["conflit", "contradiction", "divergence", "arbitrage"]
+    mots: ["conflit", "contradiction", "divergence", "arbitrage"],
+    ajouteLe: "2025-12-19"
   },
   {
     cible: "dev-ct-continuity-lab",
@@ -221,7 +250,8 @@ export const UTILITAIRES = [
     version: "0.6",
     intelligence: true,
     aussiALaMain: "Comparer les rapports avis par avis.",
-    mots: ["avis", "bureau de contrôle", "RICT", "continuité", "levée"]
+    mots: ["avis", "bureau de contrôle", "RICT", "continuité", "levée"],
+    ajouteLe: "2026-08-07"
   },
   {
     cible: "dev-variables",
@@ -233,7 +263,8 @@ export const UTILITAIRES = [
     version: "1.0",
     intelligence: false,
     aussiALaMain: "Lire les .ref.",
-    mots: ["variable", "ref", "langage", "mutualisé"]
+    mots: ["variable", "ref", "langage", "mutualisé"],
+    ajouteLe: "2026-03-13"
   }
 ];
 
@@ -297,16 +328,51 @@ export function chercherDansLatelier(recherche = "", utilitaires = UTILITAIRES) 
 /**
  * Ceux qu'on met en avant.
  *
- * Ce sont **ceux qu'on ouvre le plus**, pas les plus récents ni les mieux
- * finis. Six au plus : au-delà, la rangée redevient une liste à parcourir, et
- * elle ne met plus rien en avant.
+ * **Ils se comptent, ils ne se déclarent pas.** Une liste écrite à la main
+ * vieillit sans que personne ne s'en aperçoive : un utilitaire ajouté et
+ * beaucoup employé reste invisible, un utilitaire mis en avant et jamais ouvert
+ * garde sa place. Ce que la profession ouvre le plus est une donnée, pas une
+ * opinion — et elle se lit dans `atelier_ouvertures`, tous projets et tous
+ * utilisateurs confondus.
+ *
+ * Six au plus : au-delà, la rangée redevient une liste à parcourir et elle ne
+ * met plus rien en avant — elle déplace le problème d'un cran.
  */
 export const VEDETTES_AU_PLUS = 6;
 
-export function vedettesDeLatelier(utilitaires = UTILITAIRES) {
-  return (Array.isArray(utilitaires) ? utilitaires : [])
-    .filter((utilitaire) => utilitaire?.vedette === true)
-    .slice(0, VEDETTES_AU_PLUS);
+/**
+ * @param {object[]} utilitaires
+ * @param {Record<string, number>|Map<string, number>} ouvertures combien de fois
+ *   chaque cible a été ouverte
+ * @returns {object[]} les plus ouverts d'abord
+ */
+export function vedettesDeLatelier(utilitaires = UTILITAIRES, ouvertures = null) {
+  const liste = Array.isArray(utilitaires) ? utilitaires : [];
+  const combien = (cible) => {
+    if (ouvertures instanceof Map) return Number(ouvertures.get(cible) ?? 0);
+    return Number(ouvertures?.[cible] ?? 0);
+  };
+
+  return [...liste]
+    // **À égalité, l'ordre du catalogue tranche**, et non le hasard du tri : un
+    // Atelier neuf, où rien n'a encore été ouvert, doit montrer la même rangée
+    // à chaque ouverture. Une rangée qui se réordonne toute seule n'est plus un
+    // repère.
+    .map((utilitaire, rang) => ({ utilitaire, rang, vues: combien(utilitaire.cible) }))
+    .sort((gauche, droite) => (droite.vues - gauche.vues) || (gauche.rang - droite.rang))
+    .slice(0, VEDETTES_AU_PLUS)
+    .map((entree) => entree.utilitaire);
+}
+
+/**
+ * Les utilitaires du plus récemment ajouté au plus ancien.
+ *
+ * Un utilitaire sans date passe en dernier plutôt qu'en premier : ne pas savoir
+ * quand il est arrivé n'en fait pas une nouveauté (règle 5).
+ */
+export function ajoutsRecents(utilitaires = UTILITAIRES) {
+  return [...(Array.isArray(utilitaires) ? utilitaires : [])]
+    .sort((gauche, droite) => texte(droite?.ajouteLe).localeCompare(texte(gauche?.ajouteLe)));
 }
 
 /** Les rayons présents, dans l'ordre où ils sont déclarés. */

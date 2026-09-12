@@ -59,9 +59,16 @@ prend la place dont les utilitaires ont besoin.
 - Un **bandeau d'accueil** avec une recherche qui interroge le catalogue : par
   domaine, par nom, par type de fonctionnalité, par donnée d'entrée, par nom de
   variable produite.
-- Une **barre de navigation** — le composant existe, il se réutilise — et à
-  droite les utilitaires les plus employés, six en responsive : Copilote et
-  Variante en tête.
+- Une **navigation verticale des rayons**, celle de Paramètres, réutilisée : une
+  liste verticale tient trente rayons là où une rangée d'onglets en tient six
+  avant de déborder.
+- Les utilitaires **les plus employés**, six en cartes. **Ils se comptent, ils ne
+  se déclarent pas** : sur tous les projets et tous les utilisateurs. Une liste
+  écrite à la main vieillit sans que personne ne s'en aperçoive — un utilitaire
+  ajouté et beaucoup employé y reste invisible, un utilitaire mis en avant et
+  jamais ouvert y garde sa place. Le compteur ne retient **ni qui, ni quand, ni
+  sur quel projet** : ce serait une donnée de surveillance qu'il faudrait
+  ensuite protéger, et elle n'aide aucune décision de Mdall.
 - Une seconde barre, « Recommandé » / « Ajouté récemment », puis les
   utilitaires **sur deux colonnes**, chacun avec une **icône d'application**
   plutôt qu'un pictogramme : une image est plus facile à distinguer qu'un trait,
@@ -82,6 +89,13 @@ lisent tous.
 À gauche de l'avatar. Le Copilote est le point d'entrée de tout le reste ; le
 chercher dans un onglet à chaque fois est un péage qu'on paie cent fois par
 jour.
+
+Il mène **au Copilote**, pas à la vitrine : déposer sur l'accueil laisserait un
+second geste à faire, c'est-à-dire la moitié du péage qu'on voulait supprimer.
+
+**On revient à la vitrine par l'onglet Atelier**, comme partout ailleurs dans
+l'application. Une barre de retour propre à cet écran ajouterait un second
+chemin pour un geste que l'application a déjà (règle 4).
 
 ## Étape 3 — L'extraction devient visible
 

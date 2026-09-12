@@ -121,16 +121,22 @@ test("une fiche s'ouvre par le routeur de l'Atelier, pas par un chemin à elle",
 });
 
 /**
- * La barre d'onglets porte `data-light-tab-target` : lui ajouter un attribut à
- * nous ferait deux noms pour la même chose, et le composant n'en lirait qu'un.
+ * **Deux façons de restreindre, deux attributs distincts.**
+ *
+ * Le rangement reste une barre d'onglets et parle par `data-light-tab-target`,
+ * l'attribut de son composant ; les rayons sont passés en navigation verticale
+ * et parlent par `data-atelier-rayon`. Leur donner le même attribut ferait
+ * qu'un clic sur un rayon changerait le rangement — et l'inverse.
  */
-test("les deux barres se distinguent par leur enveloppe, pas par un attribut de plus", () => {
+test("le rangement et les rayons ne parlent pas par le même attribut", () => {
   const html = renderVitrineDeLatelier({ rangement: RANGEMENT.RECENT });
 
-  assert.match(html, /atelier-rayons/);
-  assert.match(html, /atelier-rangement/);
-  assert.match(html, /data-light-tab-target/);
-  assert.doesNotMatch(lis("./vitrine-de-latelier.js"), /dataAttributes/);
+  assert.match(html, /atelier-rangement[\s\S]*?data-light-tab-target/);
+  assert.match(html, /data-atelier-rayon/);
+
+  // Et le rangement n'est pas dans la colonne des rayons : c'est la question
+  // « comment ranger », pas « quoi montrer ».
+  assert.ok(html.indexOf("atelier-etals") < html.indexOf("atelier-rangement"));
 });
 
 /* ── Ce que la vitrine a remplacé ────────────────────────────────────────── */
@@ -197,4 +203,97 @@ test("la recherche repose le curseur là où il était", () => {
 
   assert.match(atelier, /selectionStart/);
   assert.match(atelier, /setSelectionRange/);
+});
+
+/* ── Les rayons, en navigation verticale ─────────────────────────────────── */
+
+/**
+ * **Comme dans Paramètres, et par le même composant.** Une seconde manière de
+ * ranger des sections verticalement se mettrait à diverger de la première au
+ * premier ajustement (règle 4) — et une liste verticale tient trente rayons là
+ * où une rangée d'onglets en tient six avant de déborder.
+ */
+test("les rayons se rangent verticalement, comme dans Paramètres", () => {
+  const html = renderVitrineDeLatelier();
+
+  assert.match(html, /side-nav-layout__item/);
+  assert.match(html, /settings-nav/);
+  assert.match(html, /data-atelier-rayon=""/);
+  for (const rayon of Object.values(RAYONS)) {
+    if (!UTILITAIRES.some((u) => u.rayon === rayon)) continue;
+    assert.ok(html.includes(`data-atelier-rayon="${rayon}"`), rayon);
+  }
+});
+
+/**
+ * Un rayon **ne porte pas** `data-side-nav-target` : dans l'Atelier, cet
+ * attribut veut dire « ouvre ce panneau ». Le lui donner ferait chercher un
+ * panneau qui n'existe pas, et le clic ne ferait rien qu'on sache expliquer.
+ */
+test("choisir un rayon n'est pas se rendre sur un panneau", () => {
+  const html = renderVitrineDeLatelier();
+  const rayonSolidite = html.slice(html.indexOf('data-atelier-rayon="solidite"') - 300, html.indexOf('data-atelier-rayon="solidite"'));
+
+  assert.doesNotMatch(rayonSolidite, /data-side-nav-target/);
+});
+
+/* ── Ajouté récemment ────────────────────────────────────────────────────── */
+
+test("« Ajouté récemment » range vraiment par date, pas comme « Recommandé »", () => {
+  const recommande = renderVitrineDeLatelier({ rangement: RANGEMENT.RECOMMANDE });
+  const recent = renderVitrineDeLatelier({ rangement: RANGEMENT.RECENT });
+
+  const premier = (html) => {
+    const debut = html.indexOf("atelier-grille");
+    return html.slice(debut).match(/data-side-nav-target="([^"]+)"/)?.[1];
+  };
+
+  assert.notEqual(premier(recommande), premier(recent));
+  // Le plus récemment ajouté du catalogue ouvre la liste.
+  const attendu = [...UTILITAIRES].sort((a, b) => b.ajouteLe.localeCompare(a.ajouteLe))[0];
+  assert.equal(premier(recent), attendu.cible);
+});
+
+/* ── On revient par l'onglet, pas par une barre à nous ───────────────────── */
+
+/**
+ * On revient à la vitrine **par l'onglet Atelier**, comme partout ailleurs dans
+ * l'application. Une barre de retour propre à cet écran ajouterait un second
+ * chemin pour un geste que l'application a déjà, et deux chemins finissent par
+ * se comporter différemment (règle 4).
+ */
+test("aucune barre de retour ne double l'onglet Atelier", () => {
+  const atelier = lis("../project-studio.js");
+
+  assert.doesNotMatch(atelier, /atelier-retour/);
+  assert.doesNotMatch(lis("../../../style.css"), /\.atelier-retour/);
+});
+
+/* ── Le raccourci du Copilote ────────────────────────────────────────────── */
+
+/**
+ * Il mène **au Copilote**, pas à la vitrine : déposer sur l'accueil laisserait
+ * un second geste à faire, c'est-à-dire la moitié du péage qu'on voulait
+ * supprimer.
+ */
+test("le raccourci de la barre du haut ouvre le Copilote", async () => {
+  const { ATELIER_COPILOTE, panneauDemandeParLaRoute } =
+    await import("../../services/route-de-latelier.js");
+
+  assert.equal(panneauDemandeParLaRoute(`#project/abc/atelier/${ATELIER_COPILOTE}`), "studio-copilote");
+  assert.match(lis("../global-header.js"), /ATELIER_COPILOTE/);
+});
+
+/**
+ * Une adresse sans quatrième segment, ou avec un segment inconnu, ramène à
+ * l'accueil — qui est toujours un endroit valable où se trouver. Une erreur
+ * laisserait un écran vide qu'on ne saurait pas expliquer (règle 5).
+ */
+test("une route inconnue ramène à la vitrine plutôt qu'à rien", async () => {
+  const { panneauDemandeParLaRoute } = await import("../../services/route-de-latelier.js");
+
+  assert.equal(panneauDemandeParLaRoute("#project/abc/atelier"), "");
+  assert.equal(panneauDemandeParLaRoute("#project/abc/atelier/inconnu"), "");
+  assert.equal(panneauDemandeParLaRoute(""), "");
+  assert.equal(panneauDemandeParLaRoute(), "");
 });
