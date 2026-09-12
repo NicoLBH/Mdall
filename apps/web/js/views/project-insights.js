@@ -7,7 +7,9 @@ import { store } from "../store.js";
 import {
   bornesDuMois, moisEnCours, moisEnFrancais, partDeLaPersonne
 } from "../services/consommation-ia.js";
-import { renderCarteDeConsommation, renderConsommation } from "./consommation/ecran-de-consommation.js";
+import {
+  renderAttente, renderCarteDeConsommation, renderConsommation
+} from "./consommation/ecran-de-consommation.js";
 
 function formatDuration(value) {
   const ms = Number(value);
@@ -324,7 +326,7 @@ function peindreLaConsommation(hote) {
   if (!hote?.isConnected) return;
 
   if (consommationDuProjetLue.enCours) {
-    hote.innerHTML = `<section class="conso-vide"><p>Lecture de la consommation du projet…</p></section>`;
+    hote.innerHTML = renderAttente("Lecture de la consommation du projet");
     return;
   }
 

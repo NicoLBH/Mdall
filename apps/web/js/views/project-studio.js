@@ -43,6 +43,7 @@ import { renderSeismicGeneral } from "./studio/seismic/seismic-general.js";
 import { renderCtContinuityLab } from "./studio/dev/ct-continuity-lab.js";
 import { copierDansLePressePapiers } from "./ui/bouton-copier.js";
 import { renderVariablesMutualisees } from "./studio/dev/variables-mutualisees.js";
+import { renderLectureDesCr } from "./studio/dev/lecture-des-cr.js";
 import { renderResolutionConflits } from "./studio/conflits/resolution-conflits.js";
 import {
   renderPanneauVariante,
@@ -262,6 +263,9 @@ function getRouterHtml() {
               <section class="project-studio-router__panel" data-side-nav-panel="dev-ct-continuity-lab">
                 <div id="projectStudioCtContinuityLabPanel"></div>
               </section>
+              <section class="project-studio-router__panel" data-side-nav-panel="dev-lecture-cr">
+                <div id="projectStudioLectureCrPanel"></div>
+              </section>
               <section class="project-studio-router__panel" data-side-nav-panel="dev-variables">
                 <div id="projectStudioVariablesPanel"></div>
               </section>
@@ -302,6 +306,7 @@ export function renderProjectStudio(root) {
   const solidityArkoliaRoot = root.querySelector("#projectStudioSolidityArkoliaPanel");
   const seismicGeneralRoot = root.querySelector("#projectStudioSeismicGeneralPanel");
   const ctContinuityLabRoot = root.querySelector("#projectStudioCtContinuityLabPanel");
+  const lectureCrRoot = root.querySelector("#projectStudioLectureCrPanel");
   const variablesRoot = root.querySelector("#projectStudioVariablesPanel");
   const conflitsRoot = root.querySelector("#projectStudioConflitsPanel");
 
@@ -336,6 +341,8 @@ export function renderProjectStudio(root) {
   if (solidityArkoliaRoot) renderSolidityArkolia(solidityArkoliaRoot);
   if (seismicGeneralRoot) renderSeismicGeneral(seismicGeneralRoot);
   if (ctContinuityLabRoot) renderCtContinuityLab(ctContinuityLabRoot);
+  // La lecture ne se dessine qu'à la venue : elle n'a rien à montrer tant
+  // qu'aucun document n'est déposé, et son état survit au redessin.
   if (variablesRoot) renderVariablesMutualisees(variablesRoot);
   if (conflitsRoot) renderResolutionConflits(conflitsRoot);
 
@@ -404,6 +411,10 @@ export function renderProjectStudio(root) {
     // Les variables se relisent à chaque venue : la mémoire a pu bouger, et
     // un nom qui n'existe plus se chercherait longtemps.
     if (targetId === "dev-variables" && variablesRoot) renderVariablesMutualisees(variablesRoot, { force: true });
+    // La lecture d'un compte rendu se redessine à la venue : son état vit au
+    // niveau du module, donc un document déjà lu se retrouve tel qu'on l'a
+    // laissé — redéposer serait repayer un appel.
+    if (targetId === "dev-lecture-cr" && lectureCrRoot) renderLectureDesCr(lectureCrRoot);
     // Les explorations se relisent à chaque venue : la mémoire a pu bouger
     // dans un autre onglet, et essayer une valeur sur un socle périmé
     // donnerait un raisonnement juste sur un projet qui n'existe plus.

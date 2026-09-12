@@ -27,6 +27,7 @@
  */
 
 import { escapeHtml } from "../../utils/escape-html.js";
+import { renderSpinnerHtml } from "../ui/spinner.js";
 import { getNiceChartTicks, renderSvgLineChart } from "../../utils/svg-line-chart.js";
 import {
   CHANGE, TARIFS, enEuros, enJetons, parJour, parNature, parProjet, tarifDuModele, totalDesAppels
@@ -281,6 +282,23 @@ export function renderLectureImpossible() {
     <section class="conso-vide conso-vide--echec">
       <p>La consommation n'a pas pu être lue.</p>
       <p class="conso-vide__aide">Ce n'est pas « aucune consommation » : on ne sait pas. Réessayez d'ici un instant.</p>
+    </section>
+  `;
+}
+
+/**
+ * L'attente, avec **le spinner de l'application**.
+ *
+ * Une phrase seule — « Lecture en cours… » — ne bouge pas : on ne sait pas si
+ * l'écran travaille ou s'il s'est arrêté là. Un rond qui tourne le dit sans
+ * qu'on ait à l'écrire, et c'est celui que le reste de Mdall emploie déjà :
+ * un second, dessiné pour cet écran, ne lui ressemblerait pas (règle 4).
+ */
+export function renderAttente(mot = "Lecture en cours") {
+  return `
+    <section class="conso-vide conso-vide--attente">
+      ${renderSpinnerHtml({ label: mot, size: "md" })}
+      <p>${escapeHtml(mot)}…</p>
     </section>
   `;
 }

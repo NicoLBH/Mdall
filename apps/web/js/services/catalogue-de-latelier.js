@@ -254,6 +254,19 @@ export const UTILITAIRES = [
     ajouteLe: "2026-08-07"
   },
   {
+    cible: "dev-lecture-cr",
+    nom: "Lecture des comptes rendus",
+    rayon: RAYONS.DEVELOPPEMENT,
+    resume: "Déposer un compte rendu de chantier et voir ce que le modèle en a compris.",
+    entrees: ["Un compte rendu de chantier, en PDF"],
+    sorties: ["Les points relevés, avec leur citation", "Ce qu'ils deviendraient face aux sujets du projet"],
+    version: "0.1",
+    intelligence: true,
+    aussiALaMain: "Lire le compte rendu et ouvrir les sujets un par un.",
+    mots: ["compte rendu", "CR", "chantier", "extraction", "pdf", "réunion", "points"],
+    ajouteLe: "2026-09-12"
+  },
+  {
     cible: "dev-variables",
     nom: "Variables mutualisées",
     rayon: RAYONS.DEVELOPPEMENT,
