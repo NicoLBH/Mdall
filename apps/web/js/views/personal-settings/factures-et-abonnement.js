@@ -19,7 +19,7 @@
  */
 
 import { store } from "../../store.js";
-import { renderConsommation } from "../consommation/ecran-de-consommation.js";
+import { renderAttente, renderConsommation } from "../consommation/ecran-de-consommation.js";
 import { bornesDuMois, moisEnCours, moisEnFrancais } from "../../services/consommation-ia.js";
 
 const PANNEAU = "personal-settings-facturation";
@@ -56,7 +56,7 @@ function renderPanneau() {
       </header>
 
       <div data-conso-corps>
-        ${lecture.enCours ? renderEnCours() : renderConsommation({
+        ${lecture.enCours ? renderAttente("Lecture de votre consommation") : renderConsommation({
           appels: lecture.echec ? null : (lecture.appels ?? []),
           bornes,
           parProjets: true,
@@ -69,9 +69,7 @@ function renderPanneau() {
   `;
 }
 
-function renderEnCours() {
-  return `<section class="conso-vide"><p>Lecture de votre consommation…</p></section>`;
-}
+
 
 /**
  * Le nom d'un projet, quand l'écran le connaît.
@@ -134,7 +132,7 @@ function redessiner(panneau) {
   if (!corps) return;
 
   const mois = moisRegarde();
-  corps.innerHTML = lecture.enCours ? renderEnCours() : renderConsommation({
+  corps.innerHTML = lecture.enCours ? renderAttente("Lecture de votre consommation") : renderConsommation({
     appels: lecture.echec ? null : (lecture.appels ?? []),
     bornes: bornesDuMois(mois),
     parProjets: true,

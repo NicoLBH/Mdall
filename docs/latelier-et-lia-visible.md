@@ -97,7 +97,26 @@ second geste à faire, c'est-à-dire la moitié du péage qu'on voulait supprime
 l'application. Une barre de retour propre à cet écran ajouterait un second
 chemin pour un geste que l'application a déjà (règle 4).
 
-## Étape 3 — L'extraction devient visible
+## Étape 3 — L'extraction devient visible *(commencée)*
+
+L'utilitaire **Lecture des comptes rendus** est dans l'Atelier, rayon
+Développements. On y dépose un PDF, et l'écran reconstruit ce que le modèle a
+compris : l'identité du document, ses rubriques, chaque point avec **la phrase
+d'où il sort** et si cette phrase se retrouve mot pour mot dans le document.
+
+Ce qui manque se voit — un point sans citation, une page qu'on ne retrouve pas,
+un intitulé qui revient sous trois lots. Les masquer donnerait une extraction
+qui a l'air parfaite et un résultat qui déçoit, sans rien pour relier les deux.
+
+Cinq nombres rendent les paliers comparables : points relevés, citations
+retrouvées, sans citation, sans lot, écartés au serveur. Sans eux, une
+amélioration se juge au ressenti.
+
+**La transformation en proposition n'est pas branchée** : l'écran sert d'abord à
+juger la lecture. Rien n'est ouvert ni écrit depuis lui — le chemin reste
+copilote → atelier → proposition → mémoire (règle 1).
+
+## Ce qu'il reste de l'étape 3
 
 **Un utilitaire de lecture de document**, avant toute exploitation. Il rend ce
 qu'il a lu : la structure, les rubriques imbriquées, les tableaux, le texte —

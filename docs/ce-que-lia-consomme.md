@@ -94,7 +94,7 @@ Le graphique est **celui qui existe déjà** (`utils/svg-line-chart.js`, celui d
 l'évolution des sujets). Un second composant de courbe divergerait du premier au
 premier ajustement.
 
-## Étape 4 — À la requête
+## Étape 4 — À la requête *(reste à faire)*
 
 Le décompte, à côté de la réponse, au moment où elle arrive. C'est la place la
 plus utile et la plus difficile : il doit se voir sans encombrer la lecture.

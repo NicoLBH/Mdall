@@ -23664,3 +23664,161 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   gap:10px;
   color:var(--muted);
 }
+
+/* L'attente porte le spinner de l'application : une phrase seule ne bouge pas,
+   et l'on ne sait pas si l'écran travaille ou s'il s'est arrêté là. */
+.conso-vide--attente{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  border-style:solid;
+}
+
+/* ── Lecture d'un compte rendu de chantier ───────────────────────────────── */
+
+.lecture-cr{display:flex;flex-direction:column;gap:20px;max-width:1100px;}
+.lecture-cr__entete{display:flex;flex-direction:column;gap:6px;}
+.lecture-cr__titre{margin:0;font-size:19px;font-weight:600;color:var(--text);}
+.lecture-cr__mot{margin:0;font-size:12.5px;line-height:1.5;color:var(--muted);max-width:82ch;}
+
+/* La zone de dépôt : le geste d'entrée de tout le parcours. */
+.lecture-cr__depot{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding:36px 24px;
+  border:1px dashed var(--border);
+  border-radius:var(--radius);
+  background:rgb(21, 27, 35);
+  text-align:center;
+}
+
+.lecture-cr__depot.is-dragover{border-color:var(--accent, #316dca);background:rgba(49,109,202,.08);}
+.lecture-cr__depot.is-occupee{border-style:solid;}
+.lecture-cr__depot-icone{color:var(--muted);}
+.lecture-cr__depot-mot{margin:0;color:var(--muted);font-size:13px;}
+.lecture-cr__depot-choix{cursor:pointer;}
+
+.lecture-cr__identite,
+.lecture-cr__mesure,
+.lecture-cr__ambigu,
+.lecture-cr__confrontation,
+.lecture-cr__rubriques,
+.lecture-cr__suite,
+.lecture-cr__echec{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  padding:20px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:rgb(21, 27, 35);
+}
+
+.lecture-cr h3{margin:0;font-size:14px;font-weight:600;color:var(--text);}
+.lecture-cr h4{margin:0;}
+
+.lecture-cr__faits{display:flex;flex-wrap:wrap;gap:24px;margin:0;}
+.lecture-cr__fait{display:flex;flex-direction:column;gap:2px;}
+.lecture-cr__fait dt{font-size:11.5px;color:var(--muted);}
+.lecture-cr__fait dd{margin:0;font-size:14px;font-weight:600;color:var(--text);}
+
+/* Ce qui n'a pas été lu se dit, plutôt que de laisser un champ vide qu'on
+   prendrait pour une absence dans le document. */
+.lecture-cr__reserve{margin:0;font-size:12.5px;color:var(--fgColor-attention, #d29922);}
+
+.lecture-cr__chiffres{display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:10px;}
+
+.lecture-cr__chiffre{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  padding:10px 12px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+}
+
+.lecture-cr__chiffre-intitule{font-size:11.5px;color:var(--muted);}
+.lecture-cr__chiffre-valeur{font-size:18px;font-weight:600;color:var(--text);}
+.lecture-cr__chiffre.est-bon{border-color:var(--fgColor-success, #238636);}
+.lecture-cr__chiffre.est-douteux{border-color:var(--fgColor-attention, #d29922);}
+
+/* Le contexte perdu, rendu visible : des points différents qui s'écrivent
+   pareil sont indiscernables une fois ouverts comme sujets. */
+.lecture-cr__ambigu{border-color:var(--fgColor-attention, #d29922);}
+.lecture-cr__ambigu-liste{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;}
+.lecture-cr__ambigu-liste li{display:flex;flex-direction:column;gap:2px;}
+.lecture-cr__ambigu-titre{font-size:13px;color:var(--text);}
+.lecture-cr__ambigu-lots{color:var(--muted);}
+
+.lecture-cr__rubrique{display:flex;flex-direction:column;gap:8px;padding-top:6px;}
+.lecture-cr__rubrique-titre{
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.lecture-cr__rubrique-compte{color:var(--muted);opacity:.7;}
+
+.lecture-cr__points{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
+
+.lecture-cr__point{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding:12px;
+  border:1px solid var(--border);
+  border-left:3px solid var(--border);
+  border-radius:var(--radius);
+}
+
+/* Un point dont la citation ne se retrouve pas dans le document : c'est là
+   qu'on regarde en premier quand une lecture déçoit. */
+.lecture-cr__point.est-douteux{border-left-color:var(--fgColor-attention, #d29922);}
+
+.lecture-cr__point-tete{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;}
+.lecture-cr__point-titre{flex:1 1 auto;min-width:0;font-size:13.5px;font-weight:600;color:var(--text);}
+.lecture-cr__point-dit{margin:0;font-size:12.5px;line-height:1.5;color:var(--muted);}
+.lecture-cr__point-faits{display:flex;flex-wrap:wrap;gap:12px;color:var(--muted);}
+
+.lecture-cr__sort{
+  flex:0 0 auto;
+  padding:2px 8px;
+  border:1px solid var(--border);
+  border-radius:999px;
+  font-size:11px;
+  color:var(--muted);
+}
+
+.lecture-cr__sort--nouveau{border-color:var(--fgColor-success, #238636);color:var(--fgColor-success, #3fb950);}
+.lecture-cr__sort--change{border-color:var(--fgColor-attention, #d29922);color:var(--fgColor-attention, #d29922);}
+
+/* La citation est la preuve : c'est elle qui distingue une lecture d'une
+   affirmation du modèle. */
+.lecture-cr__citation{
+  margin:0;
+  padding:8px 12px;
+  border-left:2px solid var(--border2, #3d444d);
+  font-size:12.5px;
+  font-style:italic;
+  color:var(--muted);
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
+.lecture-cr__citation.est-introuvable{border-left-color:var(--fgColor-attention, #d29922);}
+.lecture-cr__citation-etat{font-style:normal;opacity:.75;}
+.lecture-cr__manques{margin:0;color:var(--fgColor-attention, #d29922);}
+
+.lecture-cr__suite{flex-direction:row;flex-wrap:wrap;align-items:center;gap:12px;}
+.lecture-cr__bientot{color:var(--muted);}
+.lecture-cr__echec{border-color:var(--fgColor-attention, #d29922);}
+.lecture-cr__echec p{margin:0;}
+.lecture-cr__echec-aide{font-size:12px;color:var(--muted);}
