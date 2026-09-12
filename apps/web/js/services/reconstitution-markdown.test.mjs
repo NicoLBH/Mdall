@@ -2,8 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  LECTURE, NOMS_DE_LECTURE, QUOI_DE_LA_LECTURE, assemblerLeMarkdown, enPourcent,
-  fideliteDeLaPage, fideliteDeLaReconstitution, motsSignificatifs, tonDeLaPart
+  COMMENT_BRANCHER, LECTURE, NOMS_DE_LECTURE, PHRASES_DU_REFUS_DE_LOUTIL, QUOI_DE_LA_LECTURE,
+  REFUS_DE_LOUTIL, assemblerLeMarkdown, enPourcent, fideliteDeLaPage,
+  fideliteDeLaReconstitution, motsSignificatifs, pagesALire, tonDeLaPart
 } from "./reconstitution-markdown.js";
 
 /* ── L'assemblage ────────────────────────────────────────────────────────── */
@@ -156,4 +157,68 @@ test("chaque lecture a son nom et ce qu'elle montre", () => {
   assert.equal(NOMS_DE_LECTURE[LECTURE.APERCU], "Aperçu");
   assert.equal(NOMS_DE_LECTURE[LECTURE.CODE], "Code");
   assert.equal(NOMS_DE_LECTURE[LECTURE.ORIGINE], "Origine");
+});
+
+/* ── Sur quoi le relevé se fait ──────────────────────────────────────────── */
+
+/**
+ * **C'est la décision qui donne son sens à tout l'écran.** Le modèle relit un
+ * document qu'on a sous les yeux : on sait donc exactement sur quoi il s'est
+ * fondé. Lire les points sur le texte brut laisserait la question ouverte à
+ * chaque déception — mal lu, ou bien lu et mal exploité ?
+ */
+test("les points se relèvent sur la restitution, pas sur le texte brut", () => {
+  const brutes = [{ page: 1, text: "du texte de PDF" }];
+  const restitution = { phase: "fait", pages: [{ page: 1, markdown: "# Un titre" }] };
+
+  const { pages, lueSur } = pagesALire(brutes, restitution);
+
+  assert.equal(lueSur, "modele");
+  assert.deepEqual(pages, [{ page: 1, text: "# Un titre" }]);
+});
+
+/**
+ * Et quand elle n'a pas abouti, on lit sur le texte brut **plutôt que de ne
+ * rien lire** — mais l'appelant reçoit de quoi le dire. Se rabattre en silence
+ * rendrait la source du relevé indevinable (règle 5).
+ */
+test("sans restitution, on lit le texte brut et on le sait", () => {
+  const brutes = [{ page: 1, text: "du texte de PDF" }];
+
+  for (const restitution of [
+    null,
+    undefined,
+    { phase: "echec", pages: [] },
+    { phase: "fait", pages: [] },
+    { phase: "demande", pages: [{ page: 1, markdown: "pas encore" }] }
+  ]) {
+    const { pages, lueSur } = pagesALire(brutes, restitution);
+    assert.equal(lueSur, "brut", `restitution ${JSON.stringify(restitution)}`);
+    assert.deepEqual(pages, brutes);
+  }
+});
+
+/* ── Le vocabulaire de l'outil ───────────────────────────────────────────── */
+
+/**
+ * Les motifs vivent ici, dans le module pur : l'écran doit pouvoir les nommer,
+ * et il ne peut pas importer le service qui appelle — qui tire le réseau. Un
+ * code recopié des deux côtés finirait par ne plus dire la même chose
+ * (règle 10).
+ */
+test("chaque refus de l'outil a sa phrase", () => {
+  for (const motif of Object.values(REFUS_DE_LOUTIL)) {
+    assert.ok(PHRASES_DU_REFUS_DE_LOUTIL[motif], `le refus « ${motif} » n'a pas de phrase`);
+  }
+});
+
+/**
+ * Un « non branché » sans la marche à suivre laisse chercher, et c'est le genre
+ * de recherche qui se refait à chaque fois.
+ */
+test("la marche à suivre nomme la variable et le contrat", () => {
+  const marche = COMMENT_BRANCHER.join(" ");
+
+  assert.match(marche, /OPENDATALOADER_URL/);
+  assert.match(marche, /docs\/reconstituer-un-document\.md/);
 });

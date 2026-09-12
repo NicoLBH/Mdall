@@ -7,33 +7,83 @@ bibliothèques existantes font déjà mieux que ce qu'on écrirait nous-mêmes.
 
 ---
 
-## 1. Ce qu'on fait aujourd'hui
+## 1. Le procédé
 
-Le bouton **« Afficher .md »** de l'utilitaire *Lecture des comptes rendus* demande au
-modèle de refaire le document, page par page, en Markdown, et l'affiche en trois lectures
-— **Aperçu**, **Code**, **Origine** — les mêmes que celles de l'onglet Mémoire.
+    PDF  →  restitution en Markdown  →  un seul appel au modèle  →  les points
 
-C'est une **transcription**, pas une lecture : la consigne interdit de résumer, de
-reformuler et de compléter. Elle vit au serveur
-(`supabase/functions/reconstituer-en-markdown`), comme les autres.
+**La restitution vient d'abord, et c'est elle que le modèle relit.** Les points ne sont
+plus tirés du texte brut du PDF : ils sont tirés du document restitué, que l'on a sous les
+yeux dans l'onglet *Restitution*. On sait donc exactement sur quoi le modèle s'est fondé —
+et quand un relevé déçoit, on peut dire si le document a été mal lu, ou bien lu et mal
+exploité. Sans cela, les deux causes sont indiscernables et l'on corrige à l'aveugle.
 
-Deux garde-fous s'affichent au-dessus du document :
+Les citations sont vérifiées contre **ces mêmes pages** : une citation se vérifie contre ce
+que le modèle a eu sous les yeux, pas contre un autre texte.
 
-- **Les mots retrouvés** — ceux du PDF qui reparaissent dans la reconstitution. Ce qui
-  manque est du texte perdu en route.
-- **Les mots ajoutés** — ceux que le modèle a écrits et que le document ne portait pas.
-  C'est le chiffre qui compte : un document reformulé se lit parfaitement.
+Quand la restitution n'aboutit pas, le relevé se fait sur le texte brut **plutôt que de ne
+pas se faire** — et l'écran l'écrit en toutes lettres, au-dessus du relevé. Se rabattre en
+silence rendrait la source indevinable, c'est-à-dire exactement le défaut qu'on corrige.
+
+### L'écran, en deux onglets
+
+**Restitution** porte le document, **Analyse** porte ce qu'on en a tiré. C'est l'ordre du
+procédé : ce qu'on relève n'a de sens que sur ce qui a été lu.
+
+### Deux restitutions, côte à côte
+
+| | À gauche | À droite |
+| --- | --- | --- |
+| Qui | le modèle | un outil, sans modèle |
+| Ce que ça coûte | **un appel par document** | **rien** |
+| Aujourd'hui | marche | à brancher (§4) |
+
+**Pourquoi deux.** Un document refait par un modèle se lit très bien, même quand il est
+faux : c'est tout le problème. Le seul juge fiable serait le PDF, mais le relire ligne à
+ligne est exactement le travail qu'on cherche à éviter. Une seconde restitution, obtenue
+autrement, donne un juge praticable : **là où les deux s'accordent, il n'y a rien à
+vérifier ; là où elles divergent, l'une se trompe.** La comparaison ne dit pas laquelle a
+raison — elle dit où regarder.
+
+Et elle sert à décider quelque chose de précis : si l'outil vaut le modèle sur des documents
+réels, la colonne de gauche disparaît, et **lire un compte rendu ne coûte plus qu'un seul
+appel** — celui qui relève les points.
+
+Les lignes sont alignées page par page. Une ligne que l'une porte et que l'autre n'a pas est
+surlignée. Un même texte écrit autrement — un titre d'un côté, du gras de l'autre — n'est
+pas compté comme une divergence : il noierait les vraies.
+
+### Trois lectures, celles de la Mémoire
+
+**Aperçu** (mis en page) · **Code** (le Markdown tel quel) · **Origine** (chaque ligne en
+face de la page du PDF dont elle sort). Cette provenance est *calculée* à partir du
+découpage page par page : une page déclarée par celui qu'on vérifie ne vérifierait rien.
+
+### Deux chiffres par colonne
+
+- **Les mots retrouvés** — ceux du PDF qui reparaissent dans la restitution. Ce qui manque
+  est du texte perdu en route.
+- **Les mots ajoutés** — ceux que la restitution porte et que le PDF ne portait pas. C'est
+  le chiffre qui compte : un document reformulé se lit parfaitement.
 
 Ni l'un ni l'autre ne dit rien de **l'ordre** ni de la forme des tableaux : deux colonnes
 interverties gardent exactement les mêmes mots. Cela se juge à l'œil, et c'est pourquoi le
 document s'affiche.
 
-**Ce que ça coûte.** Un second appel sur le même document, à peu près au prix du premier.
-Il n'est donc jamais lancé au dépôt — seulement sur le bouton — et il se dépose au compteur
-sous sa propre nature, « Document refait en Markdown », visible dans *Factures et
-abonnements* (fondamental 13).
+### Ce qui n'a pas été couvert se dit
 
----
+Les pages qui n'ont pas tenu sous le plafond d'entrée, celles dont rien n'est revenu, une
+réponse coupée en cours de route : tout cela s'affiche **au-dessus** du document, avant
+qu'on se mette à le lire. Un document amputé se lit très bien, et rien dans ce qui reste ne
+dit que le reste manque.
+
+### Ce que ça coûte
+
+La restitution par le modèle se dépose au compteur sous sa propre nature, « Document refait
+en Markdown », visible dans *Factures et abonnements*. Elle n'est plus à la demande : elle
+est le premier temps du procédé, et c'est sur elle que les points sont relevés
+(fondamental 13).
+
+La restitution par l'outil ne consomme rien, et ne dépose donc rien.
 
 ## 2. Ce que d'autres font déjà
 
@@ -100,26 +150,55 @@ servie publiquement — et il casse les tableaux sans bordures.
 
 ---
 
-## 4. Ce qu'on ferait, si on décide de ne plus passer par le modèle
+## 4. Brancher l'outil
 
-Rien n'est engagé. Écrit ici pour qu'on n'ait pas à refaire la recherche.
+La colonne de droite est en place et attend une adresse. Elle n'en a **aucune par défaut**,
+et n'en aura pas : un défaut enverrait le PDF d'un chantier à une adresse que personne n'a
+choisie.
 
-1. **Un conteneur OpenDataLoader-Java**, appelé par une fonction Deno qui ne fait que
-   relayer. Sortie `--format markdown,json` : le Markdown pour l'affichage, le JSON pour la
-   page, la boîte et les fusions. Le reste de l'écran ne bouge pas — il reçoit déjà
-   `{page, markdown}`.
-2. **Comparer sur de vrais documents** avant de trancher : trois comptes rendus, un rapport
-   de contrôle, un CCTP. Les chiffres ci-dessus viennent de PDF fabriqués pour ressembler
-   aux nôtres, pas des nôtres.
-3. **Docling en renfort**, seulement si les CCTP à tableaux sans bordures posent
-   effectivement problème : il est le moteur du mode hybride d'OpenDataLoader, et s'ajoute
-   sans rien changer côté navigateur.
+### Le contrat
 
-**Le gain attendu n'est pas la qualité, c'est le prix et la stabilité** : zéro appel payant
-par reconstitution, et un résultat identique d'une fois sur l'autre — là où le modèle
-reformule différemment à chaque passage.
+Un service qui accepte un **PDF** en `POST` (corps brut, `Content-Type: application/pdf`) et
+rend ses pages en Markdown, sous l'une des deux formes :
 
----
+```json
+{ "pages": [ { "page": 1, "markdown": "# …" }, { "page": 2, "markdown": "…" } ] }
+```
+
+ou du Markdown découpé par des marqueurs de page — la même convention qu'à l'aller :
+
+```
+=== PAGE 1 ===
+# …
+```
+
+**Un document rendu sans pages n'est pas accepté** : il ne pourrait pas être aligné contre
+l'autre restitution, et l'écran afficherait « tout diverge » pour un document identique.
+
+### Le branchement
+
+1. Déployer le service. Pour OpenDataLoader, c'est un conteneur Java — un JRE et 24 Mo, ni
+   Python, ni PyTorch, ni GPU, ni modèle à télécharger. Sortie `--format markdown,json`,
+   avec `--markdown-page-separator` pour les numéros de page.
+2. Renseigner son adresse dans la variable **`OPENDATALOADER_URL`** du projet Supabase.
+3. La fonction `reconstituer-par-loutil` relaie — et **l'adresse ne descend jamais dans le
+   navigateur**. La porte reste celle de Mdall (`requireUser`).
+
+Tant que la variable est vide, l'écran l'écrit et affiche la marche à suivre. Il n'affiche
+pas « aucune différence » : **« rien à comparer » n'est pas « les deux sont d'accord »**.
+
+### Ce qu'on comparera
+
+Trois comptes rendus, un rapport de contrôle, un CCTP. Les chiffres du §2 viennent de PDF
+fabriqués pour ressembler aux nôtres, pas des nôtres. La décision se prend sur des documents
+réels, à l'écran, en regardant les lignes surlignées.
+
+### Ce qui reste après
+
+**Le `.md` en base.** Aujourd'hui la restitution vit le temps de l'écran : redéposer le même
+PDF la refait, et la repaie. Elle a sa place à côté du document, dans la chaîne Documents —
+c'est là qu'un identifiant de document existe, et l'utilitaire de l'Atelier n'en a pas. Ce
+sera une migration additive, et une lecture qui ne recommence pas.
 
 ## 5. Ce qui n'a pas été vérifié
 

@@ -103,7 +103,7 @@ export const NATURES = {
   },
   "reconstitution-markdown": {
     nom: "Document refait en Markdown",
-    quoi: "Refaire un document tel quel, pour juger de ce qui a été lu."
+    quoi: "Restituer un document tel quel, avant d'en relever les points."
   },
   "extraction-avis": {
     nom: "Lecture des rapports de contrôle",

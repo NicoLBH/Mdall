@@ -118,30 +118,39 @@ copilote → atelier → proposition → mémoire (règle 1).
 
 ## Ce qu'il reste de l'étape 3
 
-**Le document refait — fait.** Le bouton « Afficher .md », sur la ligne de titre
-de l'utilitaire, redemande le document au modèle **en transcription** — ni
-résumé, ni reformulation — et l'affiche en trois lectures : *Aperçu*, *Code*,
-*Origine*, les mêmes que celles de l'onglet Mémoire pour ses fichiers. La
-troisième met chaque ligne en face de la page du PDF dont elle sort, et cette
-provenance est **calculée** : une page déclarée par celui qu'on vérifie ne
-vérifie rien.
+**Le procédé a changé de sens — fait.**
 
-Deux chiffres l'encadrent. Les **mots retrouvés** disent ce qui a survécu ; les
-**mots ajoutés** disent ce que le modèle a écrit et que le document ne portait
-pas — et c'est celui-là qui compte, car un document reformulé se lit
-parfaitement. Aucun des deux ne dit rien de l'ordre ni de la forme des tableaux :
-deux colonnes interverties gardent les mêmes mots. Cela se juge à l'œil, et c'est
-pour cela que le document s'affiche.
+    PDF  →  restitution en Markdown  →  un seul appel au modèle  →  les points
 
-C'est un **second appel**, au prix du premier : il ne part que sur le bouton, et
-il se dépose au compteur sous sa propre nature.
+La restitution vient d'abord, et **c'est elle que le modèle relit**. Les points ne
+sortent plus du texte brut du PDF, mais du document qu'on a sous les yeux. On sait
+donc sur quoi le modèle s'est fondé, et une déception devient diagnosticable : mal
+lu, ou bien lu et mal exploité. Quand la restitution n'aboutit pas, le relevé se
+fait sur le texte brut plutôt que de ne pas se faire — et l'écran l'écrit.
+
+**L'écran se coupe en deux onglets — fait.** *Restitution* porte le document,
+*Analyse* porte ce qu'on en a tiré. C'est l'ordre du procédé.
+
+**Deux restitutions côte à côte — fait, et une des deux reste à brancher.** À
+gauche le modèle, qui coûte un appel par document. À droite un outil, qui ne coûte
+rien. Là où les deux s'accordent, il n'y a rien à vérifier ; là où elles divergent,
+l'une se trompe, et les lignes sont surlignées. **Si l'outil vaut le modèle sur des
+documents réels, la colonne de gauche disparaît** et lire un compte rendu ne coûte
+plus qu'un seul appel.
+
+La colonne de droite attend une adresse — `OPENDATALOADER_URL` — et le dit tant
+qu'elle n'en a pas, avec la marche à suivre. Elle n'affiche jamais « aucune
+différence » : *rien à comparer* n'est pas *les deux sont d'accord*.
 
 **La recherche — faite.** Voir [`reconstituer-un-document.md`](reconstituer-un-document.md) :
-ce qui existe déjà, gratuitement, pour restituer la structure d'un PDF, ce que
-cela vaut sur des tableaux de chantier, et ce qu'aucune de ces bibliothèques ne
-sait faire. En un mot : **OpenDataLoader PDF** (Apache-2.0, Java, sans GPU) est
-le candidat à essayer si l'on décide un jour de ne plus payer un appel par
-reconstitution. Rien n'est engagé.
+vingt bibliothèques relevées, quatre essayées, le contrat du service, et les trois
+choses qu'aucune ne sait faire.
+
+**Ce qui reste : le `.md` en base.** La restitution vit aujourd'hui le temps de
+l'écran — redéposer le même PDF la refait, et la repaie. Sa place est à côté du
+document, dans la chaîne Documents : c'est là qu'un identifiant de document existe,
+et l'utilitaire de l'Atelier n'en a pas. Migration additive, et une lecture qui ne
+recommence pas.
 
 **La version, à chaque palier.** L'extraction se juge à l'œil sur des documents
 réels ; chaque montée de qualité est une version, et l'on peut comparer.
