@@ -23,12 +23,13 @@ import assert from "node:assert/strict";
 
 import { renderLaLecture } from "./lecture-des-cr.js";
 import {
-  LECTURE, REFUS_DE_LOUTIL, assemblerLeMarkdown, fideliteDeLaReconstitution
+  LECTURE, assemblerLeMarkdown, fideliteDeLaReconstitution
 } from "../../../services/reconstitution-markdown.js";
-import { comparerLesReconstitutions } from "../../../services/comparaison-de-markdown.js";
 import { SORT, confrontation, lectureAssemblee } from "../../../services/lecture-du-cr.js";
 import { prixDeLAppel } from "../../../services/consommation-ia.js";
-import { degatsDeLaRestitution } from "../../../services/degats-de-la-restitution.js";
+import {
+  degatsDeLaRestitution, formeDeLaRestitution
+} from "../../../services/degats-de-la-restitution.js";
 
 const PAGES = [
   { page: 1, text: "Réunion de chantier n° 7. Lot 02 — GROS ŒUVRE. Reprise d'étanchéité en toiture." },
@@ -67,7 +68,7 @@ const REFAITES_MODELE = [
 /** Un côté au repos. La même forme que celle de l'écran. */
 function unCote(surcharge = {}) {
   return {
-    phase: "vide", texte: "", lignes: [], pages: [], fidelite: null, degats: null,
+    phase: "vide", texte: "", lignes: [], pages: [], fidelite: null, degats: null, forme: null,
     jetons: { entree: null, sortie: null }, modeleIA: "",
     coupee: false, horsPlafond: [], absentes: [], motif: "", ...surcharge
   };
@@ -80,15 +81,13 @@ function unCoteFait(refaites, surcharge = {}) {
     phase: "fait", pages: refaites, texte: assemble.texte, lignes: assemble.lignes,
     fidelite: fideliteDeLaReconstitution(PAGES, refaites),
     degats: degatsDeLaRestitution(refaites),
+    forme: formeDeLaRestitution(PAGES, refaites),
     jetons: { entree: 12000, sortie: 6000 }, modeleIA: "gpt-4.1-mini", ...surcharge
   });
 }
 
 function unEtat(surcharge = {}) {
-  const md = {
-    lecture: LECTURE.APERCU, modele: unCote(), outil: unCote(), comparaison: null,
-    ...(surcharge.md ?? {})
-  };
+  const md = { lecture: LECTURE.APERCU, modele: unCote(), ...(surcharge.md ?? {}) };
 
   return {
     phase: "vide", dit: "", lecture: null, pagesLues: [], fichier: null, confrontes: null,
@@ -98,16 +97,9 @@ function unEtat(surcharge = {}) {
   };
 }
 
-/** Les deux côtés faits, et leur comparaison — comme l'écran la calcule. */
-function deuxCotes(refaitesOutil = REFAITES_MODELE, surcharge = {}) {
-  const modele = unCoteFait(REFAITES_MODELE);
-  const outil = unCoteFait(refaitesOutil);
-
-  return {
-    lecture: LECTURE.APERCU, modele, outil,
-    comparaison: comparerLesReconstitutions(modele.lignes, outil.lignes),
-    ...surcharge
-  };
+/** La restitution faite, comme l'écran la tient. */
+function uneRestitution(surcharge = {}) {
+  return { lecture: LECTURE.APERCU, modele: unCoteFait(REFAITES_MODELE), ...surcharge };
 }
 
 /* ── Chaque phase se dessine ─────────────────────────────────────────────── */
@@ -118,7 +110,7 @@ test("l'écran se dessine dans chacune de ses phases", () => {
     unEtat({ phase: "lecture", dit: "Restitution des 2 pages en Markdown" }),
     unEtat({ phase: "echec", motif: "La lecture n'a pas abouti." }),
     unEtat({ phase: "lue", lecture: uneLecture(), pagesLues: PAGES }),
-    unEtat({ phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: deuxCotes() })
+    unEtat({ phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution() })
   ];
 
   for (const vue of phases) {
@@ -134,7 +126,7 @@ test("l'écran se dessine dans chacune de ses phases", () => {
  */
 test("l'écran se coupe en Restitution et Analyse, sous l'identité du document", () => {
   const restitution = renderLaLecture(unEtat({
-    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, onglet: "restitution", md: deuxCotes()
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, onglet: "restitution", md: uneRestitution()
   }));
 
   assert.match(restitution, /lecture-cr__identite/);
@@ -151,7 +143,7 @@ test("l'écran se coupe en Restitution et Analyse, sous l'identité du document"
 
 test("l'onglet Analyse porte le relevé, et pas la restitution", () => {
   const analyse = renderLaLecture(unEtat({
-    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, onglet: "analyse", md: deuxCotes()
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, onglet: "analyse", md: uneRestitution()
   }));
 
   assert.match(analyse, /Ce qui a été relevé/);
@@ -225,11 +217,9 @@ test("sans les sujets du projet, l'écran ne prétend pas que tout est nouveau",
 test("la restitution se dessine dans ses trois lectures", () => {
   for (const cle of Object.values(LECTURE)) {
     const html = renderLaLecture(unEtat({
-      phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: deuxCotes(REFAITES_MODELE, { lecture: cle })
+      phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution({ lecture: cle })
     }));
     assert.match(html, /lecture-cr__md-fichier/, `la lecture « ${cle} » n'a rien dessiné`);
-    assert.match(html, /Par le modèle/);
-    assert.match(html, /Par l&#39;outil/);
   }
 });
 
@@ -241,13 +231,13 @@ test("la restitution se dessine dans ses trois lectures", () => {
 test("l'aperçu met le Markdown en page, le code le montre tel quel", () => {
   const apercu = renderLaLecture(unEtat({
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
-    md: deuxCotes(REFAITES_MODELE, { lecture: LECTURE.APERCU })
+    md: uneRestitution({ lecture: LECTURE.APERCU })
   }));
   assert.match(apercu, /<h1[^>]*>Réunion de chantier n° 7<\/h1>/);
 
   const code = renderLaLecture(unEtat({
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
-    md: deuxCotes(REFAITES_MODELE, { lecture: LECTURE.CODE })
+    md: uneRestitution({ lecture: LECTURE.CODE })
   }));
   assert.match(code, /# Réunion de chantier n° 7/);
   assert.doesNotMatch(code, /<h1/);
@@ -256,92 +246,12 @@ test("l'aperçu met le Markdown en page, le code le montre tel quel", () => {
 test("la lecture Origine met chaque ligne en face de sa page", () => {
   const html = renderLaLecture(unEtat({
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
-    md: deuxCotes(REFAITES_MODELE, { lecture: LECTURE.ORIGINE })
+    md: uneRestitution({ lecture: LECTURE.ORIGINE })
   }));
 
   assert.match(html, /lecture-cr__md-page/);
-  assert.match(html, /lecture-cr__md-aligne--origine/);
-});
-
-/**
- * **Les divergences se surlignent**, parce que c'est la seule chose qu'on
- * cherche dans cet écran : là où les deux s'accordent, il n'y a rien à
- * vérifier ; là où elles divergent, l'une des deux se trompe.
- */
-test("une ligne qu'une seule restitution porte se surligne", () => {
-  const md = deuxCotes(
-    [
-      { page: 1, markdown: "# Réunion de chantier n° 7\n\n## Lot 02 — GROS ŒUVRE\n\nReprise d'étanchéité en toiture." },
-      { page: 2, markdown: "## Lot 05 — CHARPENTE" }
-    ],
-    { lecture: LECTURE.CODE }
-  );
-
-  const html = renderLaLecture(unEtat({
-    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md
-  }));
-
-  assert.match(html, /lecture-cr__md-rangee est-gauche/);
-  assert.match(html, /Lignes qui divergent/);
-  assert.match(html, /Les pages à relire d'abord/);
-});
-
-test("deux restitutions identiques n'affichent aucune divergence", () => {
-  const html = renderLaLecture(unEtat({
-    phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
-    md: deuxCotes(REFAITES_MODELE, { lecture: LECTURE.CODE })
-  }));
-
-  assert.doesNotMatch(html, /lecture-cr__md-rangee est-gauche/);
-  assert.doesNotMatch(html, /lecture-cr__md-rangee est-droite/);
-  assert.match(html, /Part d&#39;accord[\s\S]{0,200}100 %/);
-});
-
-/* ── Quand l'outil n'est pas branché ─────────────────────────────────────── */
-
-/**
- * **« Rien à comparer » n'est pas « les deux sont d'accord ».** Une comparaison
- * vide affichée comme un accord serait le mensonge le plus commode et le plus
- * coûteux (règle 5).
- */
-test("sans outil branché, l'écran le dit et explique comment le brancher", () => {
-  const html = renderLaLecture(unEtat({
-    phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
-    md: {
-      lecture: LECTURE.APERCU,
-      modele: unCoteFait(REFAITES_MODELE),
-      outil: unCote({ phase: "echec", motif: REFUS_DE_LOUTIL.NON_BRANCHE }),
-      comparaison: null
-    }
-  }));
-
-  assert.match(html, /Aucun outil de restitution n&#39;est branché/);
-  assert.match(html, /OPENDATALOADER_URL/);
-  assert.match(html, /il n'y a rien à comparer/);
-  // Aucun chiffre d'accord ne s'affiche : il n'y a rien dont on soit d'accord.
-  assert.doesNotMatch(html, /Part d&#39;accord/);
-  // Et la restitution du modèle reste lisible.
-  assert.match(html, /Réunion de chantier n° 7/);
-});
-
-/**
- * Une panne de l'outil et une absence de branchement ne se corrigent pas de la
- * même façon : les confondre ferait chercher une panne là où il n'y a qu'une
- * variable à renseigner.
- */
-test("un outil en panne ne se lit pas comme un outil non branché", () => {
-  const html = renderLaLecture(unEtat({
-    phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
-    md: {
-      lecture: LECTURE.APERCU,
-      modele: unCoteFait(REFAITES_MODELE),
-      outil: unCote({ phase: "echec", motif: REFUS_DE_LOUTIL.INJOIGNABLE }),
-      comparaison: null
-    }
-  }));
-
-  assert.match(html, /n&#39;a pas répondu/);
-  assert.doesNotMatch(html, /OPENDATALOADER_URL/);
+  assert.match(html, /lecture-cr__md-code--origine/);
+  assert.match(html, /p\. 1/);
 });
 
 /* ── Les réserves ────────────────────────────────────────────────────────── */
@@ -356,9 +266,7 @@ test("ce qu'une restitution n'a pas couvert se dit avant le document", () => {
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
     md: {
       lecture: LECTURE.APERCU,
-      modele: unCoteFait(REFAITES_MODELE, { horsPlafond: [9, 10], absentes: [2], coupee: true }),
-      outil: unCote(),
-      comparaison: null
+      modele: unCoteFait(REFAITES_MODELE, { horsPlafond: [9, 10], absentes: [2], coupee: true })
     }
   }));
 
@@ -379,9 +287,7 @@ test("les mots ajoutés par une restitution se disent", () => {
       modele: unCoteFait([
         { page: 1, markdown: "Reprise d'étanchéité en toiture. **Conclusion : reprise urgente nécessaire.**" },
         { page: 2, markdown: "Sondage réalisé sur linteaux bois, appui suffisant." }
-      ]),
-      outil: unCote(),
-      comparaison: null
+      ])
     }
   }));
 
@@ -399,8 +305,7 @@ test("la demande et l'échec d'une restitution se dessinent aussi", () => {
     phase: "lue", lecture: uneLecture(),
     md: {
       lecture: LECTURE.APERCU,
-      modele: unCote({ phase: "echec", motif: "la lecture a été refusée" }),
-      outil: unCote(), comparaison: null
+      modele: unCote({ phase: "echec", motif: "la lecture a été refusée" })
     }
   }));
   assert.match(echec, /la lecture a été refusée/);
@@ -423,7 +328,7 @@ test("les trois lectures parlent comme celles de la Mémoire", async () => {
   assert.match(memoire, /LECTURE\.BLAME, "Origine"/);
 
   const html = renderLaLecture(unEtat({
-    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: deuxCotes()
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution()
   }));
   assert.match(html, /memoire-fichier__lectures/);
   assert.match(html, />Aperçu</);
@@ -440,7 +345,7 @@ test("les trois lectures parlent comme celles de la Mémoire", async () => {
  */
 test("la colonne du modèle porte le prix de sa requête", () => {
   const html = renderLaLecture(unEtat({
-    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: deuxCotes()
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution()
   }));
 
   assert.match(html, /lecture-cr__md-prix/);
@@ -455,13 +360,12 @@ test("la colonne du modèle porte le prix de sa requête", () => {
  * **Une colonne qui ne consomme rien n'en porte pas.** Une pastille à
  * « 0,00 € » se lirait comme un prix mesuré, alors que c'est l'absence de prix.
  */
-test("la colonne de l'outil ne porte aucun prix", () => {
-  const md = deuxCotes();
+test("le prix ne s'affiche qu'une fois, et jamais à zéro", () => {
+  const md = uneRestitution();
   const html = renderLaLecture(unEtat({
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md
   }));
 
-  // Une seule pastille pour deux colonnes faites.
   assert.equal((html.match(/lecture-cr__md-prix/g) ?? []).length, 1);
   assert.doesNotMatch(html, /0,00 €/);
 });
@@ -475,8 +379,7 @@ test("un appel sans décompte annoncé le dit au lieu d'afficher zéro", () => {
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
     md: {
       lecture: LECTURE.APERCU,
-      modele: unCoteFait(REFAITES_MODELE, { jetons: { entree: null, sortie: null } }),
-      outil: unCote(), comparaison: null
+      modele: unCoteFait(REFAITES_MODELE, { jetons: { entree: null, sortie: null } })
     }
   }));
 
@@ -506,7 +409,7 @@ test("une restitution aux phrases découpées le dit, et nomme les pages", () =>
   const html = renderLaLecture(unEtat({
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
     md: {
-      lecture: LECTURE.APERCU, modele: unCoteFait(decoupee), outil: unCote(), comparaison: null
+      lecture: LECTURE.APERCU, modele: unCoteFait(decoupee)
     }
   }));
 
@@ -524,9 +427,85 @@ test("une restitution aux phrases découpées le dit, et nomme les pages", () =>
  */
 test("une restitution intacte n'affiche aucun verdict de découpage", () => {
   const html = renderLaLecture(unEtat({
-    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: deuxCotes()
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution()
   }));
 
   assert.doesNotMatch(html, /lecture-cr__md-degats/);
   assert.doesNotMatch(html, /découpées en colonnes/);
+});
+
+/* ── Les deux règles de la consigne, vérifiées à l'écran ─────────────────── */
+
+/**
+ * **Une consigne qu'on ne vérifie pas est une intention, pas une règle**
+ * (règle 12). Elle interdit d'inventer un titre ; l'écran doit dire quand elle
+ * n'est pas tenue, et lequel.
+ *
+ * Constaté sur un compte rendu réel : le modèle avait ajouté un en-tête de page
+ * absent du PDF. Le compteur de mots ajoutés ne le voyait pas — tous ces mots
+ * existaient ailleurs dans le document.
+ */
+test("un titre inventé se compte et se nomme", () => {
+  const refaites = [
+    { page: 1, markdown: "# Rapport du : 30/03/2026 Page 1\n\n## Lot 02 — GROS ŒUVRE\n\nReprise d'étanchéité en toiture." },
+    { page: 2, markdown: "## Lot 05 — CHARPENTE\n\nSondage réalisé sur linteaux bois, appui suffisant." }
+  ];
+
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
+    md: { lecture: LECTURE.APERCU, modele: unCoteFait(refaites) }
+  }));
+
+  assert.match(html, /Titres inventés/);
+  assert.match(html, /ne figure pas dans le document/);
+  assert.match(html, /Rapport du : 30\/03\/2026 Page 1/);
+});
+
+/**
+ * L'ordre d'un compte rendu n'est pas une opinion : **ce qui suit quoi dit ce
+ * qui répond à quoi.** Un bloc remonté se signale, avec sa page.
+ */
+test("un bloc déplacé se signale, avec sa page", () => {
+  const [un, deux] = PAGES;
+  // La même page, les deux phrases interverties.
+  const inverse = [{ page: 1, markdown: `Lot 02 — GROS ŒUVRE. Reprise d'étanchéité en toiture.\n\nRéunion de chantier n° 7.` }];
+
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: [un, deux],
+    md: { lecture: LECTURE.APERCU, modele: unCoteFait(inverse) }
+  }));
+
+  assert.match(html, /changé de place par rapport au document/);
+  assert.match(html, /ce qui suit quoi dit ce qui répond à quoi/);
+});
+
+/**
+ * **Une restitution qui tient les deux règles ne dit rien.** Une réserve à
+ * « 0 titre inventé » ferait du bruit là où il n'y a rien à signaler, et l'œil
+ * cesserait de lire les réserves quand elles comptent.
+ */
+test("une restitution qui tient les règles ne signale rien", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution()
+  }));
+
+  assert.doesNotMatch(html, /ne figure pas dans le document/);
+  assert.doesNotMatch(html, /changé de place/);
+  assert.doesNotMatch(html, /lecture-cr__md-reserve/);
+});
+
+/**
+ * **La colonne de droite est partie**, et avec elle tout ce qui la nommait. Une
+ * seconde restitution sans modèle a été construite, mesurée sur un compte rendu
+ * réel, et abandonnée : elle découpait les phrases sur un point daté sur cinq,
+ * aucun réglage ne le corrigeait, et elle demandait un hébergement — là où le
+ * modèle fait mieux pour deux centimes.
+ */
+test("plus rien ne parle d'un outil de restitution", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution()
+  }));
+
+  assert.doesNotMatch(html, /Par l&#39;outil|outil de restitution|OPENDATALOADER/);
+  assert.doesNotMatch(html, /Par le modèle/, "une seule restitution : plus besoin de la nommer");
 });

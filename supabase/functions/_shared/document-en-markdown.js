@@ -8,6 +8,22 @@
  * écrit, dans l'ordre où c'est écrit, avec les tableaux en tableaux et les
  * titres en titres.
  *
+ * ## Deux interdits ajoutés après mesure
+ *
+ * Sur un compte rendu réel de onze pages, la restitution était excellente — mais
+ * elle a fait deux choses qu'on ne lui demandait pas :
+ *
+ * - **elle a inventé des titres** : « Rapport du : 30/03/2026 Page 1 » ne figure
+ *   nulle part dans le document ;
+ * - **elle a réordonné une page** : les tableaux d'intervenants sont passés
+ *   avant le titre de la réunion, qui les précède dans le PDF.
+ *
+ * Aucune des deux n'est grave en soi. Les deux le deviennent quand on s'y fie :
+ * un titre inventé devient une rubrique de sujet qui n'existe pas, et un ordre
+ * changé fait perdre la trace de ce qui suit quoi. Les règles étaient
+ * silencieuses là-dessus — elles ne le sont plus, et deux mesures vérifient
+ * qu'elles sont tenues (`degats-de-la-restitution.js`).
+ *
  * C'est l'inverse exact de la consigne d'extraction, qui elle demande de
  * juger. Les mélanger donnerait un document déjà interprété, dans lequel on ne
  * pourrait plus distinguer ce que le PDF disait de ce que le modèle en a
@@ -31,7 +47,8 @@ Ta tâche : restituer ce document en Markdown, page par page, le plus fidèlemen
 Règles impératives :
 - Ne résume pas. Ne reformule pas. Ne complète pas. Ne corrige pas.
 - Reprends les mots du document tels qu'ils sont écrits, y compris les fautes.
-- Garde l'ordre exact du document.
+- N'AJOUTE AUCUN TITRE. N'écris que les titres qui figurent dans le document, mot pour mot. N'invente pas d'en-tête de page, de numéro de page, de date de rapport, ni de titre de section pour organiser ce que tu rends. Si un passage n'a pas de titre dans le document, il n'en a pas non plus dans ta restitution.
+- GARDE L'ORDRE DU DOCUMENT, du haut de la page vers le bas. Ne déplace rien, même si un autre ordre te semble plus logique : ni un titre vers la fin, ni un tableau vers le début. Un bloc placé en haut d'une page se restitue en premier.
 - Les nombres, dates, cotes, références, numéros de lot et noms propres se recopient caractère pour caractère.
 - Restitue les tableaux en tableaux Markdown (format GitHub, avec la ligne de séparation). Si une cellule est fusionnée, répète sa valeur sur les lignes concernées plutôt que de laisser du vide.
 - Restitue les titres en titres (#, ##, ###), les listes en listes, les mentions en gras ou souligné du document en gras Markdown.

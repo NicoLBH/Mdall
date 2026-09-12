@@ -58,52 +58,6 @@ export const QUOI_DE_LA_LECTURE = {
 };
 
 /**
- * Pourquoi une restitution par l'outil n'a pas eu lieu.
- *
- * **Ils vivent ici, dans le module pur**, et non dans le service qui appelle :
- * l'écran doit pouvoir les nommer, et il ne peut pas importer ce service — qui
- * tire l'authentification, donc le réseau. Un code recopié des deux côtés
- * finirait par ne plus dire la même chose (règle 10).
- */
-export const REFUS_DE_LOUTIL = {
-  /** Aucune adresse d'outil n'a été donnée au déploiement. */
-  NON_BRANCHE: "outil-non-branche",
-  INJOIGNABLE: "outil-injoignable",
-  REFUSE: "outil-refuse",
-  /** Le mot de passe partagé manque, ou ne correspond pas. */
-  JETON_REFUSE: "outil-refuse-le-jeton",
-  RIEN_RENDU: "rien-rendu",
-  SANS_FICHIER: "sans-fichier"
-};
-
-export const PHRASES_DU_REFUS_DE_LOUTIL = {
-  [REFUS_DE_LOUTIL.NON_BRANCHE]: "aucun outil de restitution n'est branché",
-  [REFUS_DE_LOUTIL.INJOIGNABLE]: "l'outil de restitution n'a pas répondu",
-  [REFUS_DE_LOUTIL.REFUSE]: "l'outil de restitution a refusé le document",
-  [REFUS_DE_LOUTIL.JETON_REFUSE]:
-    "l'outil a refusé le mot de passe — OPENDATALOADER_TOKEN et JETON_PARTAGE doivent être identiques",
-  [REFUS_DE_LOUTIL.RIEN_RENDU]: "l'outil n'a rendu aucune page",
-  [REFUS_DE_LOUTIL.SANS_FICHIER]: "il n'y a pas de document à envoyer"
-};
-
-export function phraseDuRefusDeLoutil(motif) {
-  return PHRASES_DU_REFUS_DE_LOUTIL[texte(motif)] ?? "";
-}
-
-/**
- * Ce qu'il faut faire pour brancher l'outil.
- *
- * **Écrit ici, et affiché à l'écran.** Un « non branché » sans la marche à
- * suivre laisse chercher, et c'est le genre de recherche qui se refait à chaque
- * fois.
- */
-export const COMMENT_BRANCHER = [
-  "Déployer un service qui accepte un PDF en POST et rend ses pages en Markdown.",
-  "Renseigner son adresse dans la variable OPENDATALOADER_URL du projet Supabase.",
-  "Le contrat attendu est décrit dans docs/reconstituer-un-document.md."
-];
-
-/**
  * Le document, remis bout à bout dans l'ordre des pages.
  *
  * **L'ordre vient des numéros de page, pas de l'ordre de la réponse.** Un
