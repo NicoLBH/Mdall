@@ -49,6 +49,10 @@ import {
   ETAT, NOMS_DES_ETATS, comparerLesReconstitutions, mesureDeLaComparaison, pagesQuiDivergent
 } from "../../../services/comparaison-de-markdown.js";
 import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
+import {
+  PHRASES_DU_VERDICT, TON_DU_VERDICT, VERDICT, degatsDeLaRestitution, pagesAbimees,
+  verdictDesDegats
+} from "../../../services/degats-de-la-restitution.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -143,6 +147,8 @@ function unCote() {
      */
     jetons: { entree: null, sortie: null },
     modeleIA: "",
+    /** Les phrases découpées en colonnes. Voir `degats-de-la-restitution.js`. */
+    degats: null,
     /** La réponse du modèle a-t-elle été coupée ? Sans objet pour l'outil. */
     coupee: false,
     /** Les pages qui ne sont pas parties, et celles dont rien n'est revenu. */
@@ -436,6 +442,7 @@ function renderTeteDeColonne(cote, quoi) {
       <span class="lecture-cr__md-colonne-nom">${escapeHtml(quoi.nom)}</span>
       <span class="lecture-cr__md-colonne-prix mono-small">${escapeHtml(quoi.prix)}</span>
       ${renderPastilleDuPrix(cote, quoi)}
+      ${renderVerdictDesDegats(cote)}
       ${cote.phase === "fait" && cote.fidelite ? `
         <span class="lecture-cr__md-colonne-part mono-small ${tonDeLaPart(cote.fidelite.part)}"
           title="Part des mots du PDF qu'on retrouve dans cette restitution">
@@ -478,6 +485,32 @@ const COTES = {
   modele: { nom: "Par le modèle", prix: "un appel par document", consomme: true },
   outil: { nom: "Par l'outil", prix: "gratuit, sans modèle", consomme: false }
 };
+
+/**
+ * Ce que cette restitution a abîmé, en un mot.
+ *
+ * **Le défaut le plus coûteux, et le moins visible.** Une phrase découpée à la
+ * verticale se lit encore à peu près — on devine le sens — mais la citation
+ * qu'on en tire ne se retrouvera jamais mot pour mot dans le document. Le
+ * garde-fou l'écartera, et le point disparaîtra sans que rien n'explique
+ * pourquoi (règle 5).
+ *
+ * Une restitution intacte ne porte rien : un « 0 phrase découpée » à côté de
+ * chaque colonne ferait du bruit là où il n'y a rien à dire.
+ */
+function renderVerdictDesDegats(cote) {
+  if (cote.phase !== "fait" || !cote.degats || cote.degats.abimes === 0) return "";
+
+  const verdict = verdictDesDegats(cote.degats);
+  if (verdict === VERDICT.INTACTE) return "";
+
+  return `
+    <span class="lecture-cr__md-degats mono-small ${escapeHtml(TON_DU_VERDICT[verdict])}"
+      title="${escapeHtml(PHRASES_DU_VERDICT[verdict])}">
+      ${escapeHtml(enPourcent(cote.degats.partDesPoints))} des points découpés
+    </span>
+  `;
+}
 
 /**
  * Les deux aperçus, côte à côte.
@@ -572,6 +605,17 @@ function renderReservesDuCote(cote) {
   if (cote.fidelite?.motsAjoutes > 0) {
     reserves.push(`${cote.fidelite.motsAjoutes} mot${cote.fidelite.motsAjoutes > 1 ? "s" : ""} ${
       cote.fidelite.motsAjoutes > 1 ? "figurent" : "figure"} dans cette restitution sans figurer dans le PDF.`);
+  }
+  // **Les phrases coupées à la verticale.** Un point pris dedans ne se
+  // retrouvera jamais mot pour mot dans le document : il sera écarté par le
+  // garde-fou des citations, et l'on ne saura pas pourquoi sans cette ligne.
+  if (cote.degats?.abimes > 0) {
+    const chaudes = pagesAbimees(cote.degats, 3).map((page) => page.page);
+    reserves.push(`${cote.degats.pointsAbimes} point${cote.degats.pointsAbimes > 1 ? "s" : ""} daté${
+      cote.degats.pointsAbimes > 1 ? "s" : ""} ${cote.degats.pointsAbimes > 1 ? "tombent" : "tombe"
+    } dans des phrases découpées en colonnes, et ${cote.degats.pointsAbimes > 1 ? "seront" : "sera"
+    } donc écarté${cote.degats.pointsAbimes > 1 ? "s" : ""} faute de citation vérifiable (pages ${
+      chaudes.join(", ")}).`);
   }
 
   if (!reserves.length) return "";
@@ -1274,6 +1318,10 @@ function garnirLeCote(cote, pages) {
   cote.texte = assemble.texte;
   cote.lignes = assemble.lignes;
   cote.fidelite = fideliteDeLaReconstitution(etat.pagesLues, pages);
+  // Les phrases découpées à la verticale. Mesuré sur les deux colonnes : ce
+  // défaut vient de l'analyse de mise en page, et le modèle n'en est pas
+  // exempt — le supposer réservé à l'outil serait une affirmation non vérifiée.
+  cote.degats = degatsDeLaRestitution(pages);
 }
 
 /**
