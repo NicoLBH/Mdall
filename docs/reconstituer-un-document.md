@@ -189,19 +189,33 @@ l'autre restitution, et l'écran afficherait « tout diverge » pour un document
 
 **Le service est écrit, dans [`services/opendataloader/`](../services/opendataloader/) :
 un serveur, un `Dockerfile`, et un pas-à-pas.** Il n'y a rien à écrire, seulement à
-déployer — voir [son README](../services/opendataloader/README.md).
+déployer — voir [son mode d'emploi](../services/opendataloader/README.md).
 
-En résumé : `npm start` pour l'essayer en local, `docker build` pour l'empaqueter, puis
-`OPENDATALOADER_URL` dans les secrets Supabase et `supabase functions deploy
-reconstituer-par-loutil`.
+**Le chemin retenu est Hugging Face Spaces** : gratuit, sans carte bancaire, et entièrement
+au navigateur — rien à installer sur sa machine, ce qui compte quand on travaille sur un
+poste dont on n'est pas administrateur. Le mode d'emploi est écrit pour ce chemin, et son
+entête `---` est celui du Space : c'est lui qui déclare le port.
 
-**Le service n'authentifie personne** : c'est la fonction Supabase qui tient la porte
-(`requireUser`), et l'adresse ne descend jamais dans le navigateur. Il ne doit donc jamais
-être exposé sur l'internet public — ce serait une conversion de PDF gratuite offerte au
-monde entier, sur votre facture.
+Deux secrets, et ils vont par paire :
 
-Tant que la variable est vide, l'écran l'écrit et affiche la marche à suivre. Il n'affiche
-pas « aucune différence » : **« rien à comparer » n'est pas « les deux sont d'accord »**.
+| Où | Quoi |
+| --- | --- |
+| Le Space | `JETON_PARTAGE` — un mot de passe long, tiré au hasard |
+| Supabase | `OPENDATALOADER_URL` et `OPENDATALOADER_TOKEN`, ce dernier identique au premier |
+
+**Pourquoi un mot de passe.** Un hébergement gratuit donne une adresse publique, et
+l'obscurité d'une adresse n'est pas une protection : sans lui, n'importe qui pourrait faire
+convertir ses PDF sur ce service. Il dit « cet appel vient de Mdall » — il ne dit pas *qui*,
+et n'a pas à le dire : la fonction Supabase a déjà vérifié l'utilisateur avant d'appeler.
+
+Le service n'en a **aucun par défaut**, et n'en aura pas : un mot de passe écrit dans le
+dépôt n'en est pas un. Sans lui il accepte tout le monde, et le crie à chaque démarrage —
+refuser dès le premier essai ferait passer une mise en service qui marche pour une mise en
+service qui échoue.
+
+Tant que `OPENDATALOADER_URL` est vide, l'écran l'écrit et affiche la marche à suivre. Il
+n'affiche pas « aucune différence » : **« rien à comparer » n'est pas « les deux sont
+d'accord »**.
 
 ### Ce qu'on comparera
 

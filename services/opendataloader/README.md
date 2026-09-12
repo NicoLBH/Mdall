@@ -1,148 +1,165 @@
-# Mettre l'outil de restitution en service
-
-Ce dossier contient **tout ce qu'il faut** : un serveur de cent cinquante lignes et un
-conteneur. Il n'y a rien à écrire, seulement à déployer.
-
+---
+title: Mdall OpenDataLoader
+emoji: 📄
+colorFrom: blue
+colorTo: gray
+sdk: docker
+app_port: 8080
+pinned: false
+short_description: Un PDF entre, ses pages en Markdown sortent.
 ---
 
-## Ce que ça fait, en une phrase
+# L'outil de restitution
 
 Un PDF entre, ses pages en Markdown sortent — **sans modèle, sans clé, sans jeton
 consommé**. C'est la colonne de droite de l'écran *Restitution*, celle qui sert à juger si
 l'appel payant de gauche est encore nécessaire.
 
----
-
-## Pourquoi un conteneur, et pas une fonction Supabase
-
-[OpenDataLoader PDF](https://github.com/opendataloader-project/opendataloader-pdf) est écrit
-en **Java**. Le paquet npm `@opendataloader/pdf` n'est qu'une enveloppe autour de son
-exécutable : il lui faut donc un JRE. Deno — le moteur des fonctions Supabase — n'en a pas,
-et GitHub Pages encore moins.
-
-C'est le seul morceau de Mdall qui demande un conteneur. Il est petit : un JRE, Node, et
-24 Mo de bibliothèque. Pas de Python, pas de PyTorch, pas de GPU, **aucun modèle à
-télécharger** — c'est pour cela qu'il démarre à froid en une seconde et peut dormir entre
-deux comptes rendus.
+> L'entête ci-dessus est celui d'un **Space Hugging Face**. Il est sans effet ailleurs :
+> gardez-le, il ne gêne aucun autre hébergeur.
 
 ---
 
-## Pas à pas
+## Mettre en service sur Hugging Face Spaces
 
-### 1. Essayer en local, avant tout déploiement
+Gratuit, sans carte bancaire, **entièrement au navigateur**. Rien à installer.
 
-Vérifiez d'abord que Java est là :
+### 1. Créer le Space
 
-```bash
-java -version      # il faut 11 ou plus
+Sur [huggingface.co](https://huggingface.co), créez un compte si vous n'en avez pas, puis
+**New → Space**.
+
+| Champ | Ce qu'il faut mettre |
+| --- | --- |
+| Space name | `mdall-opendataloader` |
+| License | `apache-2.0` |
+| Space SDK | **Docker** → *Blank* |
+| Hardware | **CPU basic**, le gratuit |
+| Visibilité | **Public** |
+
+> **Public, et c'est voulu.** Un Space privé n'accepte que les appels porteurs d'un jeton
+> Hugging Face, que Mdall n'envoie pas. La porte de ce service, c'est le mot de passe
+> partagé de l'étape 3 — pas la visibilité du Space.
+
+### 2. Y poser les quatre fichiers
+
+Onglet **Files → Add file → Create a new file**, puis recopiez depuis
+`services/opendataloader/` du dépôt Mdall :
+
+- `Dockerfile`
+- `package.json`
+- `serveur.mjs`
+- `README.md` — **celui-ci**, avec son entête `---` en tête. C'est lui qui dit à Hugging
+  Face d'écouter sur le port 8080 ; sans lui, le Space cherchera le 7860 et ne répondra
+  jamais.
+
+Le Space se construit tout seul. Comptez quelques minutes la première fois : il installe un
+JRE et la bibliothèque. L'onglet **Logs** montre l'avancement, et **App** l'état.
+
+### 3. Poser le mot de passe partagé
+
+Inventez une longue chaîne au hasard — quarante caractères, ni un mot ni une date.
+
+Dans le Space : **Settings → Variables and secrets → New secret**
+
+| | |
+| --- | --- |
+| Name | `JETON_PARTAGE` |
+| Value | votre chaîne |
+
+Le Space redémarre. Dans ses **Logs**, la ligne `AUCUN MOT DE PASSE` doit avoir disparu.
+
+> Sans ce secret, le service **accepte tout le monde** — et le crie au démarrage. C'est
+> délibéré : refuser dès le premier essai ferait passer une mise en service qui marche pour
+> une mise en service qui échoue. Mais le laisser ainsi, c'est offrir de la conversion de
+> PDF au monde entier.
+
+### 4. Relever l'adresse
+
+Elle se déduit de votre nom d'utilisateur et du nom du Space :
+
+```
+https://VOTRE-NOM-mdall-opendataloader.hf.space
 ```
 
-Puis :
+Pour la vérifier, ouvrez `https://VOTRE-NOM-mdall-opendataloader.hf.space/sante` dans un
+onglet. Vous devez voir `{"ok":true}`. **Si vous voyez ça, le service tourne.**
 
-```bash
-cd services/opendataloader
-npm install
-npm start
+### 5. Donner l'adresse et le mot de passe à Mdall
+
+Tableau de bord Supabase → votre projet → **Edge Functions → Secrets** (ou *Project
+Settings → Edge Functions*) :
+
+| Name | Value |
+| --- | --- |
+| `OPENDATALOADER_URL` | l'adresse de l'étape 4, **sans barre oblique finale** |
+| `OPENDATALOADER_TOKEN` | **exactement** la même chaîne qu'à l'étape 3 |
+
+Puis redéployez la fonction, pour qu'elle relise les secrets :
+
 ```
-
-Le serveur écoute sur le port 8080. Dans un autre terminal, envoyez-lui un vrai compte
-rendu :
-
-```bash
-curl -X POST --data-binary @CR_07.pdf \
-     -H "Content-Type: application/pdf" \
-     http://localhost:8080/ | head -c 600
-```
-
-Vous devez voir revenir :
-
-```json
-{"markdown":"=== PAGE 1 ===\n\n# COMPTE RENDU DE REUNION DE CHANTIER N 12\n\n|N|Lot|…"}
-```
-
-**Si vous voyez ça, tout le reste n'est que du déploiement.** Si vous ne voyez rien,
-regardez la sortie du serveur : elle dit ce qui a manqué.
-
-### 2. Construire le conteneur
-
-```bash
-cd services/opendataloader
-docker build -t mdall-opendataloader .
-docker run --rm -p 8080:8080 mdall-opendataloader
-```
-
-Refaites le `curl` de l'étape 1 pour vérifier que le conteneur répond comme le local.
-
-### 3. Le déployer quelque part
-
-N'importe quel hébergeur qui sait faire tourner une image Docker fait l'affaire. Le service
-tient dans le plus petit gabarit proposé : il n'a besoin ni de GPU, ni de mémoire
-particulière.
-
-Un exemple, avec Google Cloud Run :
-
-```bash
-gcloud run deploy mdall-opendataloader \
-  --source services/opendataloader \
-  --region europe-west1 \
-  --no-allow-unauthenticated \
-  --memory 1Gi \
-  --timeout 120
-```
-
-> **`--no-allow-unauthenticated`, ou son équivalent chez votre hébergeur.**
-> Le service **n'authentifie personne** : c'est la fonction Supabase qui tient la porte.
-> Exposé sur l'internet public, il serait une conversion de PDF gratuite offerte au monde
-> entier, sur votre facture.
->
-> Si votre hébergeur ne sait pas restreindre l'accès, mettez au minimum un jeton partagé
-> devant, et faites-le porter par la fonction Supabase.
-
-Notez l'adresse que l'hébergeur vous rend — quelque chose comme
-`https://mdall-opendataloader-xxxx.run.app`.
-
-### 4. Donner l'adresse à Mdall
-
-```bash
-supabase secrets set OPENDATALOADER_URL="https://mdall-opendataloader-xxxx.run.app"
-```
-
-Ou, dans l'interface Supabase : **Project Settings → Edge Functions → Secrets**.
-
-### 5. Déployer la fonction relais
-
-```bash
 supabase functions deploy reconstituer-par-loutil
 ```
+
+> C'est le piège le plus fréquent : on pose les secrets, on ne redéploie pas, et l'écran
+> continue de dire « aucun outil n'est branché ».
 
 ### 6. Vérifier à l'écran
 
 Atelier → **Lecture des comptes rendus** → déposez un PDF → onglet **Restitution**.
 
-La colonne de droite doit se remplir. Si elle affiche encore « Aucun outil de restitution
-n'est branché », c'est que `OPENDATALOADER_URL` n'est pas arrivée : redéployez la fonction
-après avoir posé le secret.
+La colonne de droite doit se remplir.
 
 ---
 
-## Ce que l'écran vous dira
+## Si ça ne marche pas
 
-| Ce qui s'affiche | Ce qui se passe |
+| Ce que l'écran dit | Ce qui se passe |
 | --- | --- |
-| « Aucun outil de restitution n'est branché » | `OPENDATALOADER_URL` est vide |
-| « L'outil n'a pas répondu » | l'adresse est mauvaise, le service dort, ou il a dépassé 60 s |
-| « L'outil a refusé le document » | le service a répondu en erreur — regardez ses journaux |
+| « Aucun outil de restitution n'est branché » | `OPENDATALOADER_URL` est vide, ou la fonction n'a pas été redéployée |
+| « L'outil a refusé le mot de passe » | `OPENDATALOADER_TOKEN` et `JETON_PARTAGE` diffèrent — un espace de trop suffit |
+| « L'outil n'a pas répondu » | l'adresse est mauvaise, ou le Space dormait : rouvrez sa page et réessayez |
+| « L'outil a refusé le document » | le service a répondu en erreur — ses **Logs** disent quoi |
 | « L'outil n'a rendu aucune page » | le Markdown est revenu sans marqueur de page |
+
+Un Space gratuit s'endort après plusieurs jours sans appel. Le premier appel au réveil peut
+dépasser les deux minutes que le relais accorde : ouvrez la page du Space, attendez qu'elle
+affiche *Running*, et redéposez le PDF.
+
+---
+
+## Ailleurs qu'à Hugging Face
+
+N'importe quel hébergeur d'images Docker fait l'affaire. Le service tient dans le plus
+petit gabarit : ni GPU, ni mémoire particulière.
+
+**Une mise en garde, apprise à mes dépens.** Sur Google Cloud Run, ne déployez pas avec
+`--no-allow-unauthenticated` : cette option exige un jeton d'identité Google dans chaque
+appel, et le relais de Mdall n'en envoie pas. Vous obtiendriez « l'outil a refusé le
+document » sans comprendre pourquoi. Déployez en accès ouvert, et laissez le mot de passe
+partagé tenir la porte.
+
+### Pour un essai sans rien déployer
+
+Si vous pouvez installer des choses sur votre machine :
+
+```
+cd services/opendataloader
+npm install
+npm start
+curl -X POST --data-binary @CR_07.pdf -H "Content-Type: application/pdf" http://localhost:8080/
+```
+
+Il faut Java 11 ou plus (`java -version`). Supabase ne sait pas joindre votre machine : pour
+l'y relier, il faut un tunnel qui fabrique une adresse publique temporaire.
 
 ---
 
 ## Le contrat, si vous voulez brancher autre chose
 
-Le service peut être remplacé par n'importe quoi qui respecte ceci :
-
 ```
 POST /     Content-Type: application/pdf     →  { "markdown": "=== PAGE 1 ===\n…" }
-                                             ou  { "pages": [ { "page": 1, "markdown": "…" } ] }
+           X-Mdall-Jeton: <le mot de passe>   ou  { "pages": [ { "page": 1, "markdown": "…" } ] }
 GET  /sante                                  →  { "ok": true }
 ```
 
@@ -175,7 +192,9 @@ que le mode libre donne sur de vrais CCTP.
 
 ## Ce qu'il ne fait pas
 
-- **Il n'authentifie personne.** Voir l'étape 3.
+- **Il ne connaît personne.** Le mot de passe dit « cet appel vient de Mdall » ; il ne dit
+  pas *qui*. Savoir qui reste le métier de la fonction Supabase, qui a vérifié
+  l'utilisateur avant d'appeler. Le service n'authentifie personne par lui-même.
 - **Il ne garde rien.** Le dossier temporaire est effacé après chaque conversion, réussie ou
   non.
 - **Il ne sait pas lire un scan.** Sans OCR, un PDF d'images rend un document vide.

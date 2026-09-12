@@ -194,7 +194,7 @@ test("le service ne découpe pas les pages lui-même", async () => {
  * l'internet public, il serait une conversion de PDF gratuite offerte au monde
  * entier, sur la facture de celui qui l'a déployé.
  */
-test("le service dit partout qu'il ne doit pas être exposé", async () => {
+test("le service dit partout qu'il n'authentifie personne par lui-même", async () => {
   const { readFileSync } = await import("node:fs");
   const { fileURLToPath } = await import("node:url");
 
@@ -212,4 +212,108 @@ test("le service dit partout qu'il ne doit pas être exposé", async () => {
   );
   // Et il ne consomme rien : aucun modèle, aucune clé.
   assert.doesNotMatch(serveur, /api\.openai\.com|OPENAI|API_KEY/);
+});
+
+/* ── Le mot de passe partagé ─────────────────────────────────────────────── */
+
+/**
+ * **L'obscurité d'une adresse n'est pas une protection.** Hébergé gratuitement,
+ * le service a une adresse publique : sans mot de passe, n'importe qui pourrait
+ * y faire convertir ses PDF.
+ *
+ * Il n'en a **aucun par défaut** : un mot de passe écrit dans le dépôt n'en est
+ * pas un, et celui qui l'y trouverait passerait la porte comme s'il n'y en
+ * avait pas.
+ */
+test("le service exige le mot de passe quand il en a un, et n'en invente aucun", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const serveur = readFileSync(
+    fileURLToPath(new URL("../../../services/opendataloader/serveur.mjs", import.meta.url)), "utf8"
+  );
+
+  assert.match(serveur, /process\.env\.JETON_PARTAGE \?\? ""/);
+  assert.match(serveur, /if \(JETON && requete\.headers\[EN_TETE_DU_JETON\] !== JETON\)/);
+  assert.match(serveur, /401/);
+  // Et sans mot de passe, il le crie plutôt que de laisser croire à une porte.
+  assert.match(serveur, /AUCUN MOT DE PASSE/);
+});
+
+/**
+ * **Le même en-tête des deux côtés.** Il traverse une frontière de processus et
+ * ne peut pas être une constante partagée : sans ce test, en renommer un
+ * laisserait l'autre muet, et l'écran dirait « l'outil a refusé le mot de
+ * passe » sur un mot de passe parfaitement bon (règle 4).
+ */
+test("le relais et le service emploient le même en-tête", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const serveur = readFileSync(
+    fileURLToPath(new URL("../../../services/opendataloader/serveur.mjs", import.meta.url)), "utf8"
+  );
+  const relais = readFileSync(
+    fileURLToPath(new URL("../reconstituer-par-loutil/index.ts", import.meta.url)), "utf8"
+  );
+
+  const chezLui = serveur.match(/const EN_TETE_DU_JETON = "([^"]+)"/);
+  const chezNous = relais.match(/const EN_TETE_DU_JETON = "([^"]+)"/);
+
+  assert.ok(chezLui && chezNous, "l'en-tête n'est plus déclaré des deux côtés");
+  // Node met les en-têtes reçus en minuscules : c'est sous cette forme que le
+  // service les lit, et c'est donc elle qui doit correspondre.
+  assert.equal(chezLui[1], chezNous[1].toLowerCase());
+});
+
+/**
+ * Un mot de passe refusé ne se corrige pas comme une panne : les confondre
+ * ferait chercher longtemps une adresse qui est bonne.
+ */
+test("un mot de passe refusé porte son propre motif", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const relais = readFileSync(
+    fileURLToPath(new URL("../reconstituer-par-loutil/index.ts", import.meta.url)), "utf8"
+  );
+  assert.match(relais, /appel\.status === 401 \? "outil-refuse-le-jeton"/);
+
+  const { PHRASES_DU_REFUS_DE_LOUTIL, REFUS_DE_LOUTIL } = await import(
+    "../../../apps/web/js/services/reconstitution-markdown.js"
+  );
+  assert.equal(REFUS_DE_LOUTIL.JETON_REFUSE, "outil-refuse-le-jeton");
+  assert.match(PHRASES_DU_REFUS_DE_LOUTIL[REFUS_DE_LOUTIL.JETON_REFUSE], /OPENDATALOADER_TOKEN/);
+});
+
+/* ── Le Space Hugging Face ───────────────────────────────────────────────── */
+
+/**
+ * **Le port se déclare, sinon rien ne répond.** Un Space Docker cherche le 7860
+ * par défaut ; le nôtre écoute le 8080. Sans `app_port` dans l'entête du mode
+ * d'emploi, le Space se construit, démarre, et ne répond jamais — sans la
+ * moindre erreur dans ses journaux.
+ */
+test("le mode d'emploi porte l'entête d'un Space, et le port qu'écoute le service", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const mode = readFileSync(
+    fileURLToPath(new URL("../../../services/opendataloader/README.md", import.meta.url)), "utf8"
+  );
+  const serveur = readFileSync(
+    fileURLToPath(new URL("../../../services/opendataloader/serveur.mjs", import.meta.url)), "utf8"
+  );
+  const image = readFileSync(
+    fileURLToPath(new URL("../../../services/opendataloader/Dockerfile", import.meta.url)), "utf8"
+  );
+
+  assert.match(mode, /^---\ntitle:/, "l'entête du Space doit être la toute première chose");
+  assert.match(mode, /sdk: docker/);
+
+  const declare = mode.match(/app_port: (\d+)/);
+  const parDefaut = serveur.match(/Number\(process\.env\.PORT\) \|\| (\d+)/);
+  assert.ok(declare && parDefaut, "le port n'est plus déclaré des deux côtés");
+  assert.equal(declare[1], parDefaut[1], "le Space écoute un port que le service n'ouvre pas");
+  assert.match(image, new RegExp(`EXPOSE ${parDefaut[1]}`));
 });

@@ -41,8 +41,29 @@ import { lireLaReponseDeLoutil } from "../_shared/markdown-de-loutil.js";
  */
 const URL_DE_LOUTIL = Deno.env.get("OPENDATALOADER_URL") ?? "";
 
-/** Le temps qu'on lui laisse. Au-delà, on le dit plutôt que de faire attendre. */
-const DELAI = 60000;
+/**
+ * Le mot de passe partagé avec l'outil, ou rien.
+ *
+ * Hébergé gratuitement, l'outil a une adresse **publique**, et l'obscurité
+ * d'une adresse n'est pas une protection. Ce mot de passe dit « cet appel vient
+ * de Mdall » ; il ne dit pas qui, et n'a pas à le dire — l'utilisateur a déjà
+ * été vérifié quelques lignes plus haut.
+ *
+ * Sans lui, l'appel part quand même : l'outil décide seul s'il l'accepte.
+ */
+const JETON = (Deno.env.get("OPENDATALOADER_TOKEN") ?? "").trim();
+
+/** L'en-tête qui le porte. Le même nom que du côté de l'outil. */
+const EN_TETE_DU_JETON = "X-Mdall-Jeton";
+
+/**
+ * Le temps qu'on lui laisse.
+ *
+ * Deux minutes, et non une : un service hébergé gratuitement s'endort, et son
+ * réveil prend parfois une minute à lui seul. Couper avant lui ferait passer un
+ * outil qui se réveille pour un outil en panne.
+ */
+const DELAI = 120000;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -86,7 +107,10 @@ serve(async (req) => {
     try {
       appel = await fetch(URL_DE_LOUTIL, {
         method: "POST",
-        headers: { "Content-Type": "application/pdf" },
+        headers: {
+          "Content-Type": "application/pdf",
+          ...(JETON ? { [EN_TETE_DU_JETON]: JETON } : {})
+        },
         body: pdf,
         signal: arret
       });
@@ -97,9 +121,11 @@ serve(async (req) => {
     }
 
     if (!appel.ok) {
-      return reponse({
-        error: "tool request failed", motif: "outil-refuse", details: await appel.text()
-      }, 502);
+      // 401 : le mot de passe manque ou ne correspond pas. Nommé à part — il ne
+      // se corrige pas comme une panne, et les confondre ferait chercher
+      // longtemps une adresse qui est bonne.
+      const motif = appel.status === 401 ? "outil-refuse-le-jeton" : "outil-refuse";
+      return reponse({ error: "tool request failed", motif, details: await appel.text() }, 502);
     }
 
     // L'outil rend du JSON ou du Markdown découpé en pages : les deux formes

@@ -23,6 +23,7 @@
  * ## Le contrat
  *
  *     POST /            Content-Type: application/pdf      →  { "markdown": "…" }
+ *                       X-Mdall-Jeton: <le mot de passe partagé>
  *     GET  /sante                                          →  { "ok": true }
  *
  * Le Markdown rendu porte ses marqueurs de page — `=== PAGE 1 ===` — et c'est
@@ -30,12 +31,25 @@
  * pour cela. Le découper **aussi** ici ferait deux analyseurs pour une seule
  * convention, et ils finiraient par ne plus dire la même chose (règle 4).
  *
- * ## Ce qu'il ne fait pas, et qu'il ne doit pas faire
+ * ## Sa porte : un mot de passe partagé
  *
- * Il n'authentifie personne. **Il ne doit donc jamais être exposé sur
- * l'internet public** : seule la fonction `reconstituer-par-loutil` l'appelle,
- * et c'est elle qui tient la porte. Un service ouvert serait une conversion de
- * PDF gratuite offerte au monde entier, sur votre facture.
+ * Hébergé gratuitement — sur un Space Hugging Face, par exemple — son adresse
+ * est **publique**, et l'obscurité d'une adresse n'est pas une protection. Le
+ * service exige donc un mot de passe, posé dans `JETON_PARTAGE` chez lui et
+ * dans `OPENDATALOADER_TOKEN` côté Supabase. Sans lui, n'importe qui pourrait y
+ * faire convertir ses PDF.
+ *
+ * **Sans `JETON_PARTAGE`, il accepte tout le monde** et le crie à chaque
+ * démarrage. C'est délibéré : refuser dès le premier essai ferait passer une
+ * mise en service qui marche pour une mise en service qui échoue, et l'on
+ * chercherait la panne pendant une heure. Mais le laisser ainsi durablement
+ * serait une conversion de PDF offerte au monde entier.
+ *
+ * ## Ce qu'il ne fait pas
+ *
+ * **Il n'authentifie personne par lui-même** : le mot de passe dit « cet appel
+ * vient de Mdall », il ne dit pas *qui*. Savoir qui reste le métier de la
+ * fonction Supabase, qui a déjà vérifié l'utilisateur avant d'arriver ici.
  */
 
 import { createServer } from "node:http";
@@ -45,6 +59,18 @@ import { join } from "node:path";
 import { convert } from "@opendataloader/pdf";
 
 const PORT = Number(process.env.PORT) || 8080;
+
+/**
+ * Le mot de passe partagé, ou rien.
+ *
+ * Pas de valeur par défaut : un mot de passe écrit dans le dépôt n'en est pas
+ * un, et celui qui l'y trouverait passerait la porte comme s'il n'y en avait
+ * pas.
+ */
+const JETON = String(process.env.JETON_PARTAGE ?? "").trim();
+
+/** L'en-tête qui le porte. Nommé une fois : le relais emploie le même. */
+const EN_TETE_DU_JETON = "x-mdall-jeton";
 
 /** Au-delà, on refuse plutôt que de remplir le disque du conteneur. */
 const POIDS_MAXIMUM = 40 * 1024 * 1024;
@@ -130,6 +156,12 @@ const serveur = createServer(async (requete, reponse) => {
       return json(reponse, { error: "Method not allowed" }, 405);
     }
 
+    // La porte. Un mot de passe absent des deux côtés laisse passer — voir
+    // l'en-tête du fichier — mais un mot de passe posé ici doit être présenté.
+    if (JETON && requete.headers[EN_TETE_DU_JETON] !== JETON) {
+      return json(reponse, { error: "unauthorized" }, 401);
+    }
+
     const pdf = await corpsDeLaRequete(requete);
     if (pdf === null) return json(reponse, { error: "pdf too large" }, 413);
     if (!pdf.length) return json(reponse, { error: "a pdf body is required" }, 400);
@@ -149,4 +181,13 @@ const serveur = createServer(async (requete, reponse) => {
 
 serveur.listen(PORT, () => {
   console.log(`[opendataloader] à l'écoute sur le port ${PORT}`);
+
+  // Crié, et non murmuré : un service ouvert qui marche ressemble exactement à
+  // un service fermé qui marche, et l'on ne s'aperçoit de rien.
+  if (!JETON) {
+    console.warn(
+      "[opendataloader] AUCUN MOT DE PASSE : ce service accepte tout le monde. " +
+      "Posez JETON_PARTAGE ici et OPENDATALOADER_TOKEN côté Supabase."
+    );
+  }
 });
