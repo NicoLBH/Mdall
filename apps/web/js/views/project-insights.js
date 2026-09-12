@@ -3,6 +3,11 @@ import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrol
 import { getRunMetrics } from "../services/project-automation.js";
 import { getProjectInsightsMetrics } from "../services/project-insights-metrics.js";
 import { renderSvgLineChart, getNiceChartTicks } from "../utils/svg-line-chart.js";
+import { store } from "../store.js";
+import {
+  bornesDuMois, moisEnCours, moisEnFrancais, partDeLaPersonne
+} from "../services/consommation-ia.js";
+import { renderCarteDeConsommation, renderConsommation } from "./consommation/ecran-de-consommation.js";
 
 function formatDuration(value) {
   const ms = Number(value);
@@ -245,8 +250,101 @@ export function renderProjectInsights(root) {
         ${renderExecutionInsightsCardsSection()}
         ${renderPilotageMetricStrip(insights.summary)}
         ${renderChartsSection(insights)}
+        <div id="projectInsightsConsommation"></div>
       </div>
     </section>
   `;
+
+  dessinerLaConsommation(root);
   debugProjectScrollPolicy("render-project-insights");
 }
+
+/* ── Ce que l'IA a consommé sur ce projet ────────────────────────────────── */
+
+/**
+ * Deux totaux, et c'est délibéré.
+ *
+ * **Le projet entier** répond à « combien ce chantier a-t-il coûté », qui est la
+ * question du projet. **Ma part** répond à « combien y ai-je dépensé », qui est
+ * la question de celui qui regarde. Ne montrer que le premier laisserait chacun
+ * deviner sa part ; ne montrer que le second cacherait le coût du chantier.
+ *
+ * On ne détaille **pas par collaborateur** : le total s'explique par le projet
+ * et par soi, et afficher qui a consommé quoi ferait du compteur un outil de
+ * surveillance — ce que sa table refuse déjà de rendre possible.
+ */
+const consommationDuProjetLue = { projetId: "", appels: null, enCours: false, echec: false };
+
+function dessinerLaConsommation(root) {
+  const hote = root?.querySelector?.("#projectInsightsConsommation");
+  if (!hote) return;
+
+  const projet = String(store.currentProjectId || "").trim();
+  if (!projet) return;
+
+  if (consommationDuProjetLue.projetId === projet && !consommationDuProjetLue.enCours) {
+    peindreLaConsommation(hote);
+    return;
+  }
+
+  if (consommationDuProjetLue.enCours) return;
+  consommationDuProjetLue.enCours = true;
+  consommationDuProjetLue.projetId = projet;
+  peindreLaConsommation(hote);
+
+  (async () => {
+    try {
+      const [{ consommationDuProjet }, { resolveCurrentBackendProjectId }] = await Promise.all([
+        import("../services/consommation-ia-supabase.js"),
+        import("../services/project-supabase-sync.js")
+      ]);
+
+      // **Deux identifiants, et il faut le bon.** La route porte celui du
+      // frontal, la base classe tout par un UUID : passer le premier rendrait
+      // une liste vide, qui ressemble à « rien n'a été consommé ».
+      const backendProjectId = await resolveCurrentBackendProjectId();
+      const bornes = bornesDuMois(moisEnCours());
+      const lues = backendProjectId
+        ? await consommationDuProjet({ projectId: backendProjectId, ...bornes })
+        : null;
+
+      consommationDuProjetLue.echec = lues === null;
+      consommationDuProjetLue.appels = lues;
+    } catch {
+      consommationDuProjetLue.echec = true;
+      consommationDuProjetLue.appels = null;
+    } finally {
+      consommationDuProjetLue.enCours = false;
+      peindreLaConsommation(hote);
+    }
+  })();
+}
+
+function peindreLaConsommation(hote) {
+  if (!hote?.isConnected) return;
+
+  if (consommationDuProjetLue.enCours) {
+    hote.innerHTML = `<section class="conso-vide"><p>Lecture de la consommation du projet…</p></section>`;
+    return;
+  }
+
+  const appels = consommationDuProjetLue.echec ? null : (consommationDuProjetLue.appels ?? []);
+  const mois = moisEnFrancais(moisEnCours());
+  const bornes = bornesDuMois(moisEnCours());
+  const moi = String(store.user?.id ?? "").trim();
+
+  hote.innerHTML = renderConsommation({
+    appels,
+    bornes,
+    parProjets: false,
+    titreDuTotal: `Ce projet — ${mois}`,
+    detailDuTotal: "Tous les collaborateurs de ce projet.",
+    enTeteHtml: appels === null || !moi ? "" : renderCarteDeConsommation({
+      total: partDeLaPersonne(appels, moi),
+      titre: "Ma part sur ce projet",
+      detail: "Vos appels uniquement."
+    })
+  });
+}
+
+

@@ -23327,9 +23327,9 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   flex-direction:column;
   align-items:center;
   justify-content:center;
-  gap:8px;
+  gap:0;
   min-width:0;
-  padding:12px;
+  padding:24px;
   border:1px solid var(--border);
   border-radius:var(--radius);
   background:rgb(21, 27, 35);
@@ -23344,14 +23344,14 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   display:flex;
   flex-direction:column;
   align-items:center;
-  gap:8px;
   min-width:0;
   max-width:100%;
 }
 
 .atelier-vedette__nom{
   max-width:100%;
-  font-size:13px;
+  margin-top:16px;
+  font-size:16px;
   font-weight:600;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -23360,6 +23360,7 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 
 .atelier-vedette__resume{
   max-width:100%;
+  margin-top:8px;
   color:var(--muted);
   font-size:12px;
   line-height:1.4;
@@ -23390,9 +23391,9 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .atelier-fiche{
   display:flex;
   align-items:flex-start;
-  gap:12px;
+  gap:16px;
   min-width:0;
-  padding:12px;
+  padding:16px;
   border:1px solid var(--border);
   border-radius:var(--radius);
   background:rgb(21, 27, 35);
@@ -23432,7 +23433,7 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   min-width:0;
 }
 
-.atelier-fiche__entete{display:flex;align-items:baseline;gap:8px;min-width:0;}
+.atelier-fiche__entete{display:flex;align-items:baseline;gap:8px;min-width:0;font-size:14px;padding-bottom:5px;}
 .atelier-fiche__nom{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .atelier-fiche__version{color:var(--muted);flex:0 0 auto;}
 .atelier-fiche__resume{color:var(--muted);font-size:12.5px;line-height:1.45;}
@@ -23479,4 +23480,129 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   .atelier-bandeau{height:auto;padding-block:24px;position:static;}
   .atelier-bandeau__dedans{padding-inline:20px;}
   .atelier-bandeau__titre{font-size:21px;}
+}
+
+/* ── Ce que l'IA a consommé ──────────────────────────────────────────────── */
+
+.conso-ecran{display:flex;flex-direction:column;gap:20px;}
+
+.conso-carte{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  padding:20px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:rgb(21, 27, 35);
+}
+
+.conso-carte__tete{display:flex;flex-direction:column;gap:4px;}
+.conso-carte__titre{margin:0;font-size:15px;font-weight:600;color:var(--text);}
+.conso-carte__detail{margin:0;font-size:12.5px;color:var(--muted);}
+
+.conso-carte__chiffres{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));
+  gap:12px;
+}
+
+.conso-chiffre{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+  padding:12px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+}
+
+.conso-chiffre__intitule{font-size:11.5px;color:var(--muted);}
+.conso-chiffre__valeur{font-size:19px;font-weight:600;color:var(--text);}
+
+/* Le montant est ce qu'on vient voir : il se détache des jetons qui l'expliquent. */
+.conso-chiffre--montant{border-color:var(--accent, #316dca);}
+.conso-chiffre--montant .conso-chiffre__valeur{color:var(--accent, #6ea8ff);}
+
+.conso-carte__pied{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  gap:10px;
+  font-size:12px;
+  color:var(--muted);
+}
+
+/* De combien on se trompe, quand on se trompe : un total qui tairait ses
+   manques donnerait un montant rond qu'on ne peut pas défendre. */
+.conso-carte__reserve{color:var(--fgColor-attention, #d29922);}
+
+.conso-courbe{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding:20px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:rgb(21, 27, 35);
+  overflow-x:auto;
+}
+
+.conso-courbe__titre,
+.conso-repartition__titre,
+.conso-tarif__titre{margin:0;font-size:14px;font-weight:600;color:var(--text);}
+
+.conso-repartition,
+.conso-tarif{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  padding:20px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:rgb(21, 27, 35);
+}
+
+.conso-repartition__liste{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;}
+
+/* Un tableau et non un camembert : on compare des montants, et l'œil compare
+   mal des angles. La jauge donne la proportion, les nombres donnent la valeur. */
+.conso-repartition__ligne{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) 120px auto auto;
+  align-items:center;
+  gap:12px;
+  font-size:13px;
+}
+
+.conso-repartition__nom{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.conso-repartition__jauge{height:6px;border-radius:999px;background:rgba(110,118,129,.25);overflow:hidden;}
+.conso-repartition__part{display:block;height:100%;background:var(--accent, #316dca);}
+.conso-repartition__jetons{color:var(--muted);text-align:right;}
+.conso-repartition__euros{color:var(--text);text-align:right;min-width:84px;}
+
+.conso-tarif__mot{margin:0;font-size:12.5px;color:var(--muted);max-width:78ch;}
+.conso-tarif__liste{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;color:var(--muted);}
+.conso-tarif__liste li{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;}
+.conso-tarif__modele{color:var(--text);min-width:120px;}
+.conso-tarif__releve{opacity:.7;}
+.conso-tarif__change{margin:0;color:var(--muted);max-width:78ch;}
+
+.conso-vide{
+  padding:24px;
+  border:1px dashed var(--border);
+  border-radius:var(--radius);
+  color:var(--muted);
+}
+
+.conso-vide p{margin:0 0 6px 0;}
+.conso-vide p:last-child{margin-bottom:0;}
+
+/* Ne pas avoir pu lire n'est pas « rien à lire » : la première est une question
+   ouverte, la seconde une réponse. */
+.conso-vide--echec{border-color:var(--fgColor-attention, #d29922);}
+.conso-vide__aide{font-size:12px;}
+
+@media (max-width: 760px){
+  .conso-repartition__ligne{grid-template-columns:minmax(0, 1fr) auto;row-gap:4px;}
+  .conso-repartition__jauge{grid-column:1 / -1;}
 }
