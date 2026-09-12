@@ -101,6 +101,10 @@ export const NATURES = {
     nom: "Lecture des comptes rendus",
     quoi: "Relever les points d'un compte rendu de chantier."
   },
+  "reconstitution-markdown": {
+    nom: "Document refait en Markdown",
+    quoi: "Refaire un document tel quel, pour juger de ce qui a été lu."
+  },
   "extraction-avis": {
     nom: "Lecture des rapports de contrôle",
     quoi: "Relever les avis d'un rapport de bureau de contrôle."

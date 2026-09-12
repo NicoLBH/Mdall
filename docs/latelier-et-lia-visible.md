@@ -118,13 +118,30 @@ copilote → atelier → proposition → mémoire (règle 1).
 
 ## Ce qu'il reste de l'étape 3
 
-**Un utilitaire de lecture de document**, avant toute exploitation. Il rend ce
-qu'il a lu : la structure, les rubriques imbriquées, les tableaux, le texte —
-et l'on peut en copier n'importe quel morceau.
+**Le document refait — fait.** Le bouton « Afficher .md », sur la ligne de titre
+de l'utilitaire, redemande le document au modèle **en transcription** — ni
+résumé, ni reformulation — et l'affiche en trois lectures : *Aperçu*, *Code*,
+*Origine*, les mêmes que celles de l'onglet Mémoire pour ses fichiers. La
+troisième met chaque ligne en face de la page du PDF dont elle sort, et cette
+provenance est **calculée** : une page déclarée par celui qu'on vérifie ne
+vérifie rien.
 
-**Ce qu'il faut chercher d'abord.** Une recherche approfondie sur ce qui existe
-déjà, gratuitement, pour restituer la structure d'un PDF. Écrire ce qui existe
-est le meilleur moyen de le maintenir moins bien.
+Deux chiffres l'encadrent. Les **mots retrouvés** disent ce qui a survécu ; les
+**mots ajoutés** disent ce que le modèle a écrit et que le document ne portait
+pas — et c'est celui-là qui compte, car un document reformulé se lit
+parfaitement. Aucun des deux ne dit rien de l'ordre ni de la forme des tableaux :
+deux colonnes interverties gardent les mêmes mots. Cela se juge à l'œil, et c'est
+pour cela que le document s'affiche.
+
+C'est un **second appel**, au prix du premier : il ne part que sur le bouton, et
+il se dépose au compteur sous sa propre nature.
+
+**La recherche — faite.** Voir [`reconstituer-un-document.md`](reconstituer-un-document.md) :
+ce qui existe déjà, gratuitement, pour restituer la structure d'un PDF, ce que
+cela vaut sur des tableaux de chantier, et ce qu'aucune de ces bibliothèques ne
+sait faire. En un mot : **OpenDataLoader PDF** (Apache-2.0, Java, sans GPU) est
+le candidat à essayer si l'on décide un jour de ne plus payer un appel par
+reconstitution. Rien n'est engagé.
 
 **La version, à chaque palier.** L'extraction se juge à l'œil sur des documents
 réels ; chaque montée de qualité est une version, et l'on peut comparer.
