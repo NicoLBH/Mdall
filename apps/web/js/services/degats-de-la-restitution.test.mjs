@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  PHRASES_DU_VERDICT, TON_DU_VERDICT, VERDICT, degatsDeLaRestitution, ligneAbimee,
-  pagesAbimees, verdictDesDegats
+  PHRASES_DU_VERDICT, TON_DU_VERDICT, VERDICT, degatsDeLaRestitution, deplacements,
+  formeDeLaRestitution, ligneAbimee, pagesAbimees, titresInventes, verdictDesDegats
 } from "./degats-de-la-restitution.js";
 
 /* ── Reconnaître une phrase découpée à la verticale ──────────────────────── */
@@ -132,4 +132,127 @@ test("chaque verdict a sa phrase et son ton", () => {
   }
   // Le verdict le plus grave ne dit pas « jetez », il dit « pas telle quelle ».
   assert.match(PHRASES_DU_VERDICT[VERDICT.ABIMEE], /telle quelle/);
+});
+
+/* ── Les titres inventés ─────────────────────────────────────────────────── */
+
+/**
+ * **Constaté sur un compte rendu réel** : le modèle avait ajouté un en-tête de
+ * page qui ne figure nulle part dans le PDF. Le compteur de mots ajoutés ne le
+ * voit pas — tous ces mots existent ailleurs dans le document.
+ *
+ * C'est pourtant le pire endroit où inventer : **un titre organise**. Il devient
+ * la rubrique d'un point, donc le titre d'un sujet, donc une ligne de la mémoire
+ * du projet — pour une section qui n'a jamais existé.
+ */
+test("un titre que le document ne porte pas se voit", () => {
+  const origine = "Réunion de chantier du 30/03/2026\nLot 03 – Terrassement\nReprise étanchéité.";
+
+  assert.deepEqual(
+    titresInventes(origine, "# Rapport du : 30/03/2026 Page 1\n\n## Lot 03 – Terrassement"),
+    ["Rapport du : 30/03/2026 Page 1"]
+  );
+});
+
+test("un titre qui figure dans le document ne se fait pas accuser", () => {
+  const origine = "Réunion de chantier du 30/03/2026\nLot 03 – Terrassement – MONT BLANC";
+
+  // Y compris quand le PDF l'a coupé sur deux lignes, ou l'a mis en gras.
+  assert.deepEqual(titresInventes(origine, "## Lot 03 – Terrassement – MONT BLANC"), []);
+  assert.deepEqual(titresInventes(origine, "## **Lot 03 – Terrassement**"), []);
+  assert.deepEqual(titresInventes("Lot 03\n– Terrassement", "## Lot 03 – Terrassement"), []);
+});
+
+test("ce qui n'est pas un titre n'est jamais accusé", () => {
+  const origine = "Rien de commun.";
+  assert.deepEqual(titresInventes(origine, "un paragraphe ordinaire\n|une|cellule|"), []);
+  assert.deepEqual(titresInventes(origine, "#pas-un-titre-sans-espace"), []);
+});
+
+/* ── Les blocs déplacés ──────────────────────────────────────────────────── */
+
+const UN = "Réunion de chantier numéro 3 du 30 mars 2026, à dix heures";
+const DEUX = "Maître d'ouvrage, SCCV du Pré Gaillard, présent et convoqué";
+const TROIS = "Lot 03 Terrassement, démarrage planifié au 20 avril, ne pas décaler";
+
+/**
+ * **Constaté sur un compte rendu réel** : les tableaux d'intervenants étaient
+ * passés avant le titre de la réunion, qui les précède dans le PDF. L'ordre d'un
+ * compte rendu n'est pas une opinion — ce qui suit quoi dit ce qui répond à quoi.
+ */
+test("un bloc remonté avant un autre se compte comme une inversion", () => {
+  const origine = `${UN}\n${DEUX}\n${TROIS}`;
+
+  const tenu = deplacements(origine, `${UN}\n${DEUX}\n${TROIS}`);
+  assert.equal(tenu.reperes, 3);
+  assert.equal(tenu.inversions, 0);
+  assert.equal(tenu.part, 0);
+
+  // Le deuxième bloc remonté en tête : il se croise avec les deux autres.
+  const croise = deplacements(origine, `${DEUX}\n${UN}\n${TROIS}`);
+  assert.equal(croise.inversions, 1);
+  assert.ok(croise.part > 0);
+});
+
+/**
+ * **Zéro inversion sur zéro repère ne prouve rien.** Une restitution dont on ne
+ * retrouve aucune ligne dans le document n'a pas un ordre parfait — elle n'a pas
+ * d'ordre vérifiable, et les deux ne se disent pas pareil (règle 5).
+ */
+test("le nombre de repères se rend, pour qu'un zéro ne se lise pas comme un succès", () => {
+  const rien = deplacements("un document", "une restitution sans aucun rapport");
+  assert.equal(rien.reperes, 0);
+  assert.equal(rien.inversions, 0);
+  assert.equal(rien.part, 0);
+});
+
+test("les lignes trop courtes ne font pas des repères", () => {
+  // « X », « 0 », « Statut » se retrouvent partout et ne disent rien de l'ordre.
+  assert.equal(deplacements("X 0 Statut ailleurs", "Statut\nX\n0").reperes, 0);
+});
+
+/* ── Les deux règles, vérifiées page par page ────────────────────────────── */
+
+/**
+ * Une consigne qu'on ne vérifie pas est une intention, pas une règle (règle 12).
+ */
+test("la forme se vérifie page par page, et nomme les pages déplacées", () => {
+  const origine = [
+    { page: 1, text: `Réunion du 30/03\n${UN}\n${DEUX}` },
+    { page: 2, text: `Lot 03\n${TROIS}` }
+  ];
+  const refaites = [
+    { page: 1, markdown: `# Rapport du : 30/03/2026 Page 1\n\n${DEUX}\n${UN}` },
+    { page: 2, markdown: `## Lot 03\n\n${TROIS}` }
+  ];
+
+  const forme = formeDeLaRestitution(origine, refaites);
+
+  assert.equal(forme.titresInventes, 1);
+  assert.deepEqual(forme.titres, ["Rapport du : 30/03/2026 Page 1"]);
+  assert.equal(forme.inversions, 1);
+  assert.deepEqual(forme.pagesDeplacees, [1]);
+  // La page 2 est en ordre et son titre existe : elle ne signale rien.
+  assert.equal(forme.pages.find((page) => page.page === 2).inversions, 0);
+});
+
+/**
+ * Une page dont on n'a pas l'original ne se vérifie pas — et ne se compte pas
+ * comme intacte pour autant : elle n'entre simplement pas (règle 5).
+ */
+test("une page sans original n'entre pas dans la mesure", () => {
+  const forme = formeDeLaRestitution(
+    [{ page: 1, text: UN }],
+    [{ page: 1, markdown: UN }, { page: 9, markdown: "# Un titre inventé de toutes pièces" }]
+  );
+
+  assert.equal(forme.pages.length, 1);
+  assert.equal(forme.titresInventes, 0);
+});
+
+test("une restitution vide ne divise pas par zéro", () => {
+  const forme = formeDeLaRestitution([], []);
+  assert.deepEqual(forme.pages, []);
+  assert.equal(forme.inversions, 0);
+  assert.equal(forme.reperes, 0);
 });

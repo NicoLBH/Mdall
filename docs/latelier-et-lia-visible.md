@@ -118,42 +118,40 @@ copilote → atelier → proposition → mémoire (règle 1).
 
 ## Ce qu'il reste de l'étape 3
 
-**Le procédé a changé de sens — fait.**
+**Le procédé — fait.**
 
     PDF  →  restitution en Markdown  →  un seul appel au modèle  →  les points
 
-La restitution vient d'abord, et **c'est elle que le modèle relit**. Les points ne
-sortent plus du texte brut du PDF, mais du document qu'on a sous les yeux. On sait
-donc sur quoi le modèle s'est fondé, et une déception devient diagnosticable : mal
-lu, ou bien lu et mal exploité. Quand la restitution n'aboutit pas, le relevé se
-fait sur le texte brut plutôt que de ne pas se faire — et l'écran l'écrit.
+La restitution vient d'abord, et **c'est elle que le modèle relit**. On sait donc sur
+quoi il s'est fondé, et une déception devient diagnosticable : mal lu, ou bien lu et
+mal exploité.
 
-**L'écran se coupe en deux onglets — fait.** *Restitution* porte le document,
-*Analyse* porte ce qu'on en a tiré. C'est l'ordre du procédé.
+**L'écran en deux onglets — fait.** *Restitution* porte le document, *Analyse* porte
+ce qu'on en a tiré.
 
-**Deux restitutions côte à côte — fait, et une des deux reste à brancher.** À
-gauche le modèle, qui coûte un appel par document. À droite un outil, qui ne coûte
-rien. Là où les deux s'accordent, il n'y a rien à vérifier ; là où elles divergent,
-l'une se trompe, et les lignes sont surlignées. **Si l'outil vaut le modèle sur des
-documents réels, la colonne de gauche disparaît** et lire un compte rendu ne coûte
-plus qu'un seul appel.
+**Cinq mesures sur la restitution — fait.** Mots retrouvés, mots ajoutés, titres
+inventés, phrases découpées en colonnes, blocs déplacés. Les deux dernières règles de
+la consigne — ne pas inventer de titre, ne pas déplacer — ont été ajoutées après
+mesure sur un compte rendu réel, et **elles sont vérifiées, pas seulement écrites**
+(règle 12).
 
-La colonne de droite attend une adresse — `OPENDATALOADER_URL` — et le dit tant
-qu'elle n'en a pas, avec la marche à suivre. Elle n'affiche jamais « aucune
-différence » : *rien à comparer* n'est pas *les deux sont d'accord*.
+**Le prix à la requête — fait.** Deux centimes pour onze pages, affichés sur la
+restitution elle-même, au moment où l'on décide si elle valait la peine.
 
-**La recherche — faite.** Voir [`reconstituer-un-document.md`](reconstituer-un-document.md) :
-vingt bibliothèques relevées, quatre essayées, le contrat du service, et les trois
-choses qu'aucune ne sait faire.
+**Une seconde restitution sans modèle — essayée, abandonnée.** Voir
+[`reconstituer-un-document.md`](reconstituer-un-document.md) : elle découpait les
+phrases sur un point daté sur cinq, aucun réglage ne le corrigeait, et elle demandait
+un hébergement — là où le modèle fait mieux pour deux centimes. Il en reste le
+détecteur de phrases découpées, qui mesure le modèle exactement pareil.
 
-**Ce qui reste : le `.md` en base.** La restitution vit aujourd'hui le temps de
-l'écran — redéposer le même PDF la refait, et la repaie. Sa place est à côté du
-document, dans la chaîne Documents : c'est là qu'un identifiant de document existe,
-et l'utilitaire de l'Atelier n'en a pas. Migration additive, et une lecture qui ne
-recommence pas.
+**Ce qui reste : le `.md` en base.** La restitution vit le temps de l'écran ;
+redéposer le même PDF la refait, et la repaie. Sa place est dans la chaîne Documents,
+où un identifiant de document existe.
 
-**La version, à chaque palier.** L'extraction se juge à l'œil sur des documents
-réels ; chaque montée de qualité est une version, et l'on peut comparer.
+**La version, à chaque palier.** L'extraction se juge à l'œil sur des documents réels ;
+chaque montée de qualité est une version, et l'on peut comparer. C'est aussi ce qui
+permettra de profiter des modèles à venir : une amélioration ne se constate pas au
+ressenti.
 
 ## Étape 4 — Le contexte perdu des rubriques
 

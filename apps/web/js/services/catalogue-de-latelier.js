@@ -264,7 +264,7 @@ export const UTILITAIRES = [
       "Les points relevés, avec leur citation",
       "Ce qu'ils deviendraient face aux sujets du projet"
     ],
-    version: "0.3",
+    version: "0.4",
     intelligence: true,
     aussiALaMain: "Lire le compte rendu et ouvrir les sujets un par un.",
     mots: ["compte rendu", "CR", "chantier", "extraction", "pdf", "réunion", "points", "markdown"],

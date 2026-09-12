@@ -23938,100 +23938,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    la taille du titre de l'écran et l'on ne saurait plus qui parle. */
 .lecture-cr__md-apercu{padding:16px 20px;max-height:70vh;overflow:auto;font-size:13px;line-height:1.6;color:var(--text);}
 
-/* Les deux colonnes. Elles se replient l'une sous l'autre en dessous de
-   1100px : deux documents à 300px de large ne se comparent pas, ils se
-   devinent. */
-.lecture-cr__md-deux{display:grid;grid-template-columns:1fr 1fr;}
-.lecture-cr__md-colonne{min-width:0;border-left:1px solid var(--border);}
-.lecture-cr__md-colonne:first-child{border-left:0;}
-.lecture-cr__md-colonne-tete{
-  display:flex;
-  align-items:baseline;
-  gap:8px;
-  padding:8px 12px;
-  border-bottom:1px solid var(--border);
-  background:rgba(110,118,129,.06);
-}
-.lecture-cr__md-colonne-nom{font-size:12.5px;font-weight:600;color:var(--text);}
-.lecture-cr__md-colonne-prix{color:var(--muted);}
-/* Ce que cette requête-ci a coûté, à côté de ce qu'elle coûte en général. */
-.lecture-cr__md-prix{
-  padding:1px 7px;
-  border:1px solid var(--border);
-  border-radius:999px;
-  background:rgba(110,118,129,.12);
-  color:var(--text);
-  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
-  font-size:11px;
-  font-variant-numeric:tabular-nums;
-  white-space:nowrap;
-  cursor:help;
-}
-.lecture-cr__md-prix.est-inconnu{color:var(--muted);font-style:italic;}
-.lecture-cr__md-colonne-part{margin-left:auto;color:var(--muted);}
-.lecture-cr__md-colonne-part.est-bon{color:var(--fgColor-success, #3fb950);}
-.lecture-cr__md-colonne-part.est-douteux{color:var(--fgColor-attention, #d29922);}
-.lecture-cr__md-colonne-part.est-mauvais{color:var(--fgColor-danger, #f85149);}
-/* Les phrases découpées à la verticale. Le défaut le plus coûteux et le moins
-   visible : une citation prise dedans sera écartée par le garde-fou. */
-.lecture-cr__md-degats{
-  padding:1px 7px;
-  border-radius:999px;
-  background:rgba(248,81,73,.12);
-  color:var(--fgColor-danger, #f85149);
-  white-space:nowrap;
-  cursor:help;
-}
-.lecture-cr__md-degats.est-douteux{
-  background:rgba(210,153,34,.14);
-  color:var(--fgColor-attention, #d29922);
-}
-
-/* Une colonne qu'on n'a pas pu remplir. Elle explique ce qui manque plutôt que
-   de rester vide — une colonne vide se lit « les deux sont d'accord ». */
+/* Une restitution qui n'a rien pu rendre. Elle explique ce qui manque plutôt
+   que de rester vide — un cadre vide se lit « le document était vide ». */
 .lecture-cr__md-absent{display:flex;flex-direction:column;gap:10px;padding:24px 20px;}
 .lecture-cr__md-absent-mot{margin:0;font-size:13px;font-weight:600;color:var(--text);}
 .lecture-cr__md-absent-aide{margin:0;font-size:12.5px;line-height:1.5;color:var(--muted);}
-.lecture-cr__md-absent-marche{margin:0;padding-left:20px;color:var(--muted);line-height:1.7;}
-.lecture-cr__md-absent.est-a-brancher{border-left:2px solid var(--fgColor-accent, #4493f8);}
-
-/* Les deux restitutions alignées ligne à ligne. */
-.lecture-cr__md-aligne{
-  max-height:70vh;
-  overflow:auto;
-  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
-  font-size:12px;
-  line-height:1.8;
-}
-.lecture-cr__md-aligne-tete,
-.lecture-cr__md-rangee{display:grid;grid-template-columns:1fr 1fr;gap:0;}
-.lecture-cr__md-aligne--origine .lecture-cr__md-aligne-tete,
-.lecture-cr__md-aligne--origine .lecture-cr__md-rangee{grid-template-columns:48px 1fr 1fr;}
-.lecture-cr__md-aligne-tete{
-  position:sticky;
-  top:0;
-  z-index:1;
-  border-bottom:1px solid var(--border);
-  background:var(--bg-canvas, rgb(13, 17, 23));
-}
-.lecture-cr__md-cote-tete{padding:6px 12px;font-weight:600;color:var(--text);}
-.lecture-cr__md-cote-tete + .lecture-cr__md-cote-tete{border-left:1px solid var(--border);}
-.lecture-cr__md-cote{padding:0 12px;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text);}
-.lecture-cr__md-cote + .lecture-cr__md-cote{border-left:1px solid var(--border);}
-
-/* Le surlignage. Seules les divergences se voient : teinter aussi les accords
-   ferait un écran entièrement coloré, où plus rien ne ressort. */
-.lecture-cr__md-rangee.est-forme{color:var(--muted);}
-.lecture-cr__md-rangee.est-gauche{background:rgba(248,81,73,.12);}
-.lecture-cr__md-rangee.est-droite{background:rgba(63,185,80,.12);}
-.lecture-cr__md-rangee.est-gauche .lecture-cr__md-cote:last-child,
-.lecture-cr__md-rangee.est-droite .lecture-cr__md-cote:first-child{background:rgba(110,118,129,.08);}
-
-@media (max-width: 1100px){
-  .lecture-cr__md-deux{grid-template-columns:1fr;}
-  .lecture-cr__md-colonne{border-left:0;border-top:1px solid var(--border);}
-  .lecture-cr__md-colonne:first-child{border-top:0;}
-}
 .lecture-cr__md-apercu h1{font-size:19px;margin:18px 0 8px;}
 .lecture-cr__md-apercu h2{font-size:16px;margin:16px 0 8px;}
 .lecture-cr__md-apercu h3{font-size:14px;margin:14px 0 6px;}

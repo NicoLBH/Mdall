@@ -15,6 +15,45 @@ se fera pas — et alors on écrit pourquoi.
 
 ---
 
+# Un second fournisseur de modèle, pour que la lecture ne s'arrête pas
+
+**Pourquoi c'est là.** Toute la lecture des documents passe par un seul
+fournisseur. Une panne, une clé révoquée, un changement de tarif, et Mdall ne
+sait plus lire un compte rendu — pas « moins bien », **plus du tout**.
+
+Un outil de restitution sans modèle a été essayé pour cela, puis abandonné : il
+changeait la qualité en même temps que le fournisseur, et il fallait l'héberger.
+Voir [`reconstituer-un-document.md`](reconstituer-un-document.md) §2.
+
+**Ce qui protégerait vraiment : un second modèle, chez un autre fournisseur.**
+Même consigne, même schéma de réponse, même vérification des citations — seule
+l'adresse change. On bascule quand le premier ne répond pas, et la qualité reste
+du même ordre au lieu de s'effondrer.
+
+## Ce qu'il faudrait vérifier d'abord
+
+**Que la consigne tienne chez l'autre.** Elle a été écrite et corrigée contre un
+modèle ; rien ne dit qu'un autre l'interprète pareil. Cela se mesure avec les
+cinq mesures de la restitution, sur les mêmes documents.
+
+**Que le schéma de réponse soit respecté.** Le format structuré n'a pas la même
+forme d'un fournisseur à l'autre, et la fonction en dépend.
+
+**Que le tarif soit relevé.** `TARIFS` dans `consommation-ia.js` n'a que des
+modèles d'un seul fournisseur. Un modèle sans tarif relevé affiche « tarif
+inconnu » — et c'est voulu : un prix inventé au milieu de prix réels serait pire
+que pas de prix.
+
+## Ce que ça coûte de ne pas le faire
+
+Rien, tant que le fournisseur tient. Tout, le jour où il ne tient plus — et ce
+jour-là, il sera tard pour écrire le second chemin.
+
+**Ce n'est pas urgent tant que Mdall n'est pas commercialisé.** Ça le devient le
+jour où quelqu'un d'autre que vous dépend de la lecture des comptes rendus.
+
+---
+
 # Un point qui progresse n'est plus le même point
 
 **Constaté sur deux comptes rendus réels du même chantier, n° 6 et n° 7.**

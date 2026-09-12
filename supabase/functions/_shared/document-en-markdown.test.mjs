@@ -25,6 +25,41 @@ test("la consigne interdit de résumer, de reformuler et de compléter", () => {
   assert.match(CONSIGNES_DE_RECONSTITUTION, /caractère pour caractère/);
 });
 
+/**
+ * **Deux interdits ajoutés après mesure.** Sur un compte rendu réel, la
+ * restitution avait inventé un en-tête de page absent du PDF, et remonté les
+ * tableaux d'intervenants avant le titre de la réunion qui les précède.
+ *
+ * Aucune des deux n'est grave en soi. Les deux le deviennent quand on s'y fie :
+ * un titre inventé devient une rubrique de sujet qui n'existe pas, et un ordre
+ * changé fait perdre la trace de ce qui suit quoi. La consigne était silencieuse
+ * là-dessus.
+ */
+test("la consigne interdit d'inventer un titre et de changer l'ordre", () => {
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /N'AJOUTE AUCUN TITRE/);
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /n'invente pas d'en-tête de page/i);
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /GARDE L'ORDRE DU DOCUMENT/);
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /Ne déplace rien/);
+});
+
+/**
+ * **Une consigne qu'on ne vérifie pas est une intention, pas une règle**
+ * (règle 12). Ces deux interdits sont mesurés, et le test le garde : les écrire
+ * sans les vérifier reviendrait à espérer qu'ils soient suivis.
+ */
+test("les deux interdits sont mesurés, pas seulement écrits", async () => {
+  const { formeDeLaRestitution } = await import(
+    "../../../apps/web/js/services/degats-de-la-restitution.js"
+  );
+
+  const origine = [{ page: 1, text: "Réunion de chantier du 30 mars 2026 à dix heures\nLot 03 Terrassement" }];
+  const fautive = [{ page: 1, markdown: "# Rapport du : 30/03/2026 Page 1\n\n## Lot 03 Terrassement" }];
+
+  const forme = formeDeLaRestitution(origine, fautive);
+  assert.equal(forme.titresInventes, 1);
+  assert.deepEqual(forme.titres, ["Rapport du : 30/03/2026 Page 1"]);
+});
+
 test("le schéma ne laisse rendre qu'une page et son Markdown", () => {
   const page = SCHEMA_DU_DOCUMENT.schema.properties.pages.items;
   assert.deepEqual(Object.keys(page.properties).sort(), ["markdown", "page"]);

@@ -41,17 +41,13 @@ import {
   confrontation, intitulesAmbigus, lectureAssemblee
 } from "../../../services/lecture-du-cr.js";
 import {
-  COMMENT_BRANCHER, LECTURE, NOMS_DE_LECTURE, QUOI_DE_LA_LECTURE, REFUS_DE_LOUTIL,
-  assemblerLeMarkdown, enPourcent, fideliteDeLaReconstitution, pagesALire,
-  phraseDuRefusDeLoutil, tonDeLaPart
+  LECTURE, NOMS_DE_LECTURE, QUOI_DE_LA_LECTURE, assemblerLeMarkdown, enPourcent,
+  fideliteDeLaReconstitution, pagesALire, tonDeLaPart
 } from "../../../services/reconstitution-markdown.js";
-import {
-  ETAT, NOMS_DES_ETATS, comparerLesReconstitutions, mesureDeLaComparaison, pagesQuiDivergent
-} from "../../../services/comparaison-de-markdown.js";
 import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
 import {
-  PHRASES_DU_VERDICT, TON_DU_VERDICT, VERDICT, degatsDeLaRestitution, pagesAbimees,
-  verdictDesDegats
+  PHRASES_DU_VERDICT, TON_DU_VERDICT, VERDICT, degatsDeLaRestitution,
+  formeDeLaRestitution, pagesAbimees, verdictDesDegats
 } from "../../../services/degats-de-la-restitution.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -105,11 +101,11 @@ const etat = {
    */
   descriptions: {},
   motif: "",
-  /** Le PDF déposé, gardé pour l'outil — qui refait sa propre extraction. */
+  /** Le PDF déposé, gardé le temps de la lecture. */
   fichier: null,
   /** L'onglet regardé. Voir `ONGLET`. */
   onglet: ONGLET.RESTITUTION,
-  /** Les deux reconstitutions et leur comparaison. Voir `renderRestitution`. */
+  /** Le document restitué. Voir `renderRestitution`. */
   md: etatDesReconstitutions()
 };
 
@@ -122,12 +118,8 @@ const etat = {
  */
 function etatDesReconstitutions() {
   return {
-    /** La même pour les deux colonnes : on compare ce qu'on regarde pareil. */
     lecture: LECTURE.APERCU,
-    modele: unCote(),
-    outil: unCote(),
-    /** `null` : on n'a pas les deux — ce qui n'est pas « aucune différence ». */
-    comparaison: null
+    modele: unCote()
   };
 }
 
@@ -142,14 +134,15 @@ function unCote() {
      * Ce que cet appel-ci a consommé, et par quel modèle.
      *
      * `null` de chaque côté quand le fournisseur n'a rien annoncé — un
-     * décompte manquant ne devient pas zéro, qui se lirait « gratuit ». Sans
-     * objet pour l'outil, qui ne consomme rien.
+     * décompte manquant ne devient pas zéro, qui se lirait « gratuit ».
      */
     jetons: { entree: null, sortie: null },
     modeleIA: "",
     /** Les phrases découpées en colonnes. Voir `degats-de-la-restitution.js`. */
     degats: null,
-    /** La réponse du modèle a-t-elle été coupée ? Sans objet pour l'outil. */
+    /** Les titres inventés et les blocs déplacés. Deux règles de la consigne. */
+    forme: null,
+    /** La réponse du modèle a-t-elle été coupée ? */
     coupee: false,
     /** Les pages qui ne sont pas parties, et celles dont rien n'est revenu. */
     horsPlafond: [],
@@ -293,7 +286,6 @@ function renderSurQuoiLaLecture(vue) {
 
   const dits = {
     modele: "le document restitué en Markdown — celui de l'onglet Restitution",
-    outil: "le document restitué par l'outil — celui de la colonne de droite",
     brut: "le texte brut du PDF, la restitution n'ayant pas abouti"
   };
 
@@ -334,76 +326,72 @@ function renderFait(intitule, valeur) {
   return `<div class="lecture-cr__fait"><dt>${escapeHtml(intitule)}</dt><dd>${escapeHtml(valeur)}</dd></div>`;
 }
 
-/* ── La restitution : deux reconstitutions, côte à côte ──────────────────── */
+/* ── La restitution : le document, refait ────────────────────────────────── */
 
 /**
- * Le document restitué, par deux chemins différents.
+ * Le document restitué en Markdown.
  *
- * ## Pourquoi deux
+ * ## C'est le premier temps du procédé, pas un extra
  *
- * Un document refait par un modèle se lit très bien, même quand il est faux :
- * c'est tout le problème. Le seul juge fiable serait le PDF, mais le relire
- * ligne à ligne est exactement le travail qu'on cherche à éviter.
+ * Le modèle relit ce document-là pour en tirer les points. On voit donc
+ * exactement sur quoi il s'est fondé, et une déception devient diagnosticable :
+ * mal lu, ou bien lu et mal exploité.
  *
- * Une **seconde reconstitution, obtenue autrement**, donne un juge praticable.
- * Là où les deux s'accordent, il n'y a rien à vérifier ; là où elles divergent,
- * l'une se trompe, et c'est là qu'on rouvre le PDF. La comparaison ne dit pas
- * laquelle a raison — elle dit **où regarder**.
+ * ## Ce qu'on a essayé, et pourquoi on ne l'a pas gardé
  *
- * ## Et ce qu'on cherche à décider
+ * Une seconde restitution, produite sans modèle par un outil de mise en page,
+ * a été construite et mesurée sur un compte rendu réel. Elle découpait les
+ * phrases à la verticale sur un point daté sur cinq, aucun réglage ne le
+ * corrigeait, et elle demandait un hébergement. Le modèle fait mieux pour deux
+ * centimes. Voir `docs/reconstituer-un-document.md`.
  *
- * À gauche, le modèle : il coûte un appel par document. À droite, un outil qui
- * n'en coûte aucun. Si les deux disent la même chose sur des documents réels,
- * la colonne de gauche peut disparaître — et la lecture d'un compte rendu ne
- * coûtera plus qu'un seul appel, celui qui relève les points.
- *
- * C'est pour cela que la restitution n'est plus à la demande : elle est le
- * premier temps du procédé, et c'est **sur elle** que les points sont relevés.
+ * Il en reste les **mesures**, et elles valent pour le modèle comme elles
+ * valaient pour l'outil : ce qui a survécu du PDF, ce qui a été ajouté, les
+ * phrases découpées, les titres inventés, les blocs déplacés.
  */
 function renderRestitution(vue) {
   const md = vue.md;
 
   return `
     <section class="lecture-cr__md">
-      ${renderResumeDeLaComparaison(md)}
+      ${renderMesureDeLaRestitution(md.modele)}
       <div class="lecture-cr__md-fichier">
         ${renderBarreDeLaRestitution(vue, md)}
-        ${md.lecture === LECTURE.APERCU ? renderApercusCoteACote(vue, md) : renderCotesAlignes(md)}
+        ${renderCorpsDeLaRestitution(md.modele, md.lecture)}
       </div>
     </section>
   `;
 }
 
 /**
- * Ce que les deux reconstitutions se disent l'une de l'autre.
+ * Ce que la restitution vaut, en nombres.
  *
- * **Tant qu'on n'a pas les deux, on ne dit rien de leur accord.** Afficher
- * « aucune différence » parce qu'il n'y a rien à comparer serait le mensonge le
- * plus commode et le plus coûteux (règle 5).
+ * **Les mots ajoutés sont le chiffre à surveiller.** Les mots retrouvés disent
+ * ce qui a survécu ; les ajoutés disent ce que le modèle a écrit et que le PDF
+ * ne portait pas — et un document reformulé se lit parfaitement.
  */
-function renderResumeDeLaComparaison(md) {
-  if (!md.comparaison) return "";
+function renderMesureDeLaRestitution(cote) {
+  if (cote.phase !== "fait" || !cote.fidelite) return "";
 
-  const mesure = mesureDeLaComparaison(md.comparaison.rangees);
-  const chaudes = pagesQuiDivergent(md.comparaison.rangees, 3);
+  const titres = cote.forme?.titresInventes ?? 0;
 
   return `
     <div class="lecture-cr__chiffres">
-      ${renderChiffre("Lignes d'accord", `${mesure[ETAT.PAREIL] + mesure[ETAT.FORME]} / ${mesure.total}`,
-        tonDeLaPart(mesure.part))}
-      ${renderChiffre("Part d'accord", enPourcent(mesure.part), tonDeLaPart(mesure.part))}
-      ${renderChiffre(NOMS_DES_ETATS[ETAT.FORME], String(mesure[ETAT.FORME]))}
-      ${renderChiffre("Lignes qui divergent", String(mesure.divergentes),
-        mesure.divergentes > 0 ? "est-douteux" : "est-bon")}
+      ${renderChiffre("Mots du PDF retrouvés",
+        `${cote.fidelite.motsRetrouves} / ${cote.fidelite.motsOrigine}`, tonDeLaPart(cote.fidelite.part))}
+      ${renderChiffre("Part retrouvée", enPourcent(cote.fidelite.part), tonDeLaPart(cote.fidelite.part))}
+      ${renderChiffre("Mots ajoutés", String(cote.fidelite.motsAjoutes),
+        cote.fidelite.motsAjoutes > 0 ? "est-douteux" : "est-bon")}
+      ${renderChiffre("Titres inventés", String(titres), titres > 0 ? "est-douteux" : "est-bon")}
+      ${renderChiffre("Pages refaites",
+        `${cote.fidelite.pages.filter((page) => page.rendue).length} / ${cote.fidelite.pages.length}`,
+        cote.fidelite.absentes.length ? "est-douteux" : "est-bon")}
     </div>
     <p class="lecture-cr__mot">
-      Une ligne « qui diverge » est une ligne que l'une des deux restitutions porte et que
-      l'autre n'a pas : <strong>l'une des deux se trompe</strong>, et c'est le seul endroit
-      où rouvrir le PDF sert à quelque chose. Un même texte écrit autrement — un titre d'un
-      côté, du gras de l'autre — ne compte pas comme une divergence.
-      ${chaudes.length ? `Les pages à relire d'abord : <strong>${
-        escapeHtml(chaudes.map((chaude) => `${chaude.page} (${chaude.divergentes})`).join(", "))
-      }</strong>.` : ""}
+      Un mot « retrouvé » est un mot du PDF qui reparaît dans la restitution. Les mots
+      <strong>ajoutés</strong> et les <strong>titres inventés</strong> sont ceux que le modèle a
+      écrits et que le document ne portait pas : ce sont les chiffres à surveiller. Aucun ne dit
+      si les tableaux ont tenu — cela se voit en lisant.
     </p>
   `;
 }
@@ -424,32 +412,16 @@ function renderBarreDeLaRestitution(vue, md) {
       </span>
       <span class="lecture-cr__md-nom mono-small">${escapeHtml(nom)}</span>
       <span class="memoire-fichier__mesure">${lignes} ligne${lignes > 1 ? "s" : ""} · ${md.modele.texte.length} caractères</span>
+      ${renderPastilleDuPrix(md.modele)}
+      ${renderVerdictDesDegats(md.modele)}
       <span class="memoire-fichier__espace"></span>
       ${renderBoutonCopier({
         cible: "document-refait",
         className: "memoire-fichier__copier",
-        titre: "Copier la restitution du modèle",
+        titre: "Copier la restitution",
         titreCopie: "Restitution copiée"
       })}
     </header>
-  `;
-}
-
-/** Le titre d'une colonne : qui l'a écrite, et ce que cela a coûté. */
-function renderTeteDeColonne(cote, quoi) {
-  return `
-    <div class="lecture-cr__md-colonne-tete">
-      <span class="lecture-cr__md-colonne-nom">${escapeHtml(quoi.nom)}</span>
-      <span class="lecture-cr__md-colonne-prix mono-small">${escapeHtml(quoi.prix)}</span>
-      ${renderPastilleDuPrix(cote, quoi)}
-      ${renderVerdictDesDegats(cote)}
-      ${cote.phase === "fait" && cote.fidelite ? `
-        <span class="lecture-cr__md-colonne-part mono-small ${tonDeLaPart(cote.fidelite.part)}"
-          title="Part des mots du PDF qu'on retrouve dans cette restitution">
-          ${escapeHtml(enPourcent(cote.fidelite.part))} des mots du PDF
-        </span>
-      ` : ""}
-    </div>
   `;
 }
 
@@ -457,34 +429,22 @@ function renderTeteDeColonne(cote, quoi) {
  * Ce que cette requête-ci a coûté.
  *
  * **À la requête, et pas seulement au mois.** Le compteur dit ce qu'un mois a
- * coûté ; il ne dit pas ce que *cette* lecture a coûté, au moment précis où
- * l'on décide si elle valait la peine. Un prix qu'il faut aller chercher dans
- * un autre écran n'entre jamais dans la décision, et l'habitude se prend sans
- * qu'on l'ait choisie (fondamental 13).
- *
- * Une colonne qui ne consomme rien n'en porte pas : une pastille à « 0,00 € »
- * se lirait comme un prix mesuré, alors que c'est l'absence de prix.
+ * coûté ; il ne dit pas ce que *cette* lecture a coûté, au moment précis où l'on
+ * décide si elle valait la peine. Un prix qu'il faut aller chercher dans un
+ * autre écran n'entre jamais dans la décision (fondamental 13).
  */
-function renderPastilleDuPrix(cote, quoi) {
-  if (!quoi.consomme || cote.phase !== "fait") return "";
+function renderPastilleDuPrix(cote) {
+  if (cote.phase !== "fait") return "";
 
-  const prix = prixDeLAppel({
-    model: cote.modeleIA, entree: cote.jetons?.entree, sortie: cote.jetons?.sortie
-  });
+  const quoi = { model: cote.modeleIA, entree: cote.jetons?.entree, sortie: cote.jetons?.sortie };
+  const prix = prixDeLAppel(quoi);
 
   return `
     <span class="lecture-cr__md-prix${prix.manque ? " est-inconnu" : ""}"
-      title="${escapeHtml(detailDeLAppel({
-        model: cote.modeleIA, entree: cote.jetons?.entree, sortie: cote.jetons?.sortie
-      }) || "Ce que cette requête a consommé")}">${escapeHtml(prix.dit)}</span>
+      title="${escapeHtml(detailDeLAppel(quoi) || "Ce que cette requête a consommé")}">${
+      escapeHtml(prix.dit)}</span>
   `;
 }
-
-/** Qui écrit chaque colonne. Nommé une fois : les deux vues le lisent. */
-const COTES = {
-  modele: { nom: "Par le modèle", prix: "un appel par document", consomme: true },
-  outil: { nom: "Par l'outil", prix: "gratuit, sans modèle", consomme: false }
-};
 
 /**
  * Ce que cette restitution a abîmé, en un mot.
@@ -495,8 +455,9 @@ const COTES = {
  * garde-fou l'écartera, et le point disparaîtra sans que rien n'explique
  * pourquoi (règle 5).
  *
- * Une restitution intacte ne porte rien : un « 0 phrase découpée » à côté de
- * chaque colonne ferait du bruit là où il n'y a rien à dire.
+ * Une restitution intacte ne porte rien : un « 0 phrase découpée » ferait du
+ * bruit là où il n'y a rien à dire, et l'œil cesserait de voir la pastille
+ * quand elle compte.
  */
 function renderVerdictDesDegats(cote) {
   if (cote.phase !== "fait" || !cote.degats || cote.degats.abimes === 0) return "";
@@ -512,28 +473,8 @@ function renderVerdictDesDegats(cote) {
   `;
 }
 
-/**
- * Les deux aperçus, côte à côte.
- *
- * Ils ne sont **pas alignés** : deux documents mis en page n'ont pas de lignes
- * à apparier. C'est la lecture où l'on juge la forme — un tableau qui tient, un
- * titre à sa place — et l'alignement se fait dans les deux autres.
- */
-function renderApercusCoteACote(vue, md) {
-  return `
-    <div class="lecture-cr__md-deux">
-      ${["modele", "outil"].map((nom) => `
-        <div class="lecture-cr__md-colonne">
-          ${renderTeteDeColonne(md[nom], COTES[nom])}
-          ${renderCorpsDuCote(md[nom], nom)}
-        </div>
-      `).join("")}
-    </div>
-  `;
-}
-
-/** Ce qu'une colonne montre, selon où elle en est. */
-function renderCorpsDuCote(cote, nom) {
+/** Ce que la restitution montre, selon où elle en est. */
+function renderCorpsDeLaRestitution(cote, lecture) {
   if (cote.phase === "demande") {
     return `
       <div class="lecture-cr__md-attente">
@@ -543,51 +484,38 @@ function renderCorpsDuCote(cote, nom) {
     `;
   }
 
-  if (cote.phase === "echec") return renderCoteEnEchec(cote, nom);
+  if (cote.phase === "echec") {
+    return `
+      <div class="lecture-cr__md-absent">
+        <p class="lecture-cr__md-absent-mot">${escapeHtml(
+          cote.motif || "La restitution n'a pas abouti.")}</p>
+        <p class="lecture-cr__md-absent-aide">
+          Ce n'est pas « le document était vide » : la restitution n'a pas eu lieu. Les points
+          ci-contre ont donc été relevés sur le texte brut du PDF.
+        </p>
+      </div>
+    `;
+  }
+
   if (cote.phase !== "fait") return `<div class="lecture-cr__md-attente mono-small">En attente.</div>`;
 
   return `
-    ${renderReservesDuCote(cote)}
-    <div class="lecture-cr__md-apercu md-body">${renderMarkdownToHtml(cote.texte)}</div>
+    ${renderReservesDeLaRestitution(cote)}
+    ${lecture === LECTURE.APERCU
+      ? `<div class="lecture-cr__md-apercu md-body">${renderMarkdownToHtml(cote.texte)}</div>`
+      : renderLignesDeLaRestitution(cote, lecture)}
   `;
 }
 
 /**
- * Une colonne qui n'a rien pu rendre.
- *
- * **« Pas branché » et « en panne » ne se corrigent pas de la même façon.** Les
- * confondre ferait chercher une panne là où il n'y a qu'une variable à
- * renseigner — c'est pourquoi la marche à suivre s'affiche.
- */
-function renderCoteEnEchec(cote, nom) {
-  const aBrancher = nom === "outil" && cote.motif === REFUS_DE_LOUTIL.NON_BRANCHE;
-
-  return `
-    <div class="lecture-cr__md-absent${aBrancher ? " est-a-brancher" : ""}">
-      <p class="lecture-cr__md-absent-mot">${escapeHtml(aBrancher
-        ? "Aucun outil de restitution n'est branché."
-        : phraseDuRefusDeLoutil(cote.motif) || cote.motif || "La restitution n'a pas abouti.")}</p>
-      ${aBrancher ? `
-        <p class="lecture-cr__md-absent-aide">
-          Cette colonne existe pour comparer la restitution du modèle à une restitution qui
-          ne coûte rien. Tant qu'elle est vide, <strong>il n'y a rien à comparer</strong> —
-          ce qui n'est pas la même chose que « les deux sont d'accord ».
-        </p>
-        <ol class="lecture-cr__md-absent-marche mono-small">
-          ${COMMENT_BRANCHER.map((etape) => `<li>${escapeHtml(etape)}</li>`).join("")}
-        </ol>
-      ` : ""}
-    </div>
-  `;
-}
-
-/**
- * Ce qu'une restitution n'a pas couvert.
+ * Ce que la restitution n'a pas couvert, et ce qu'elle s'est permis.
  *
  * **Au-dessus du document, avant qu'on se mette à lire.** Un document amputé se
  * lit très bien : rien, dans ce qui reste, ne dit que le reste manque (règle 5).
+ * Et un titre inventé se lit encore mieux — c'est le seul endroit où une
+ * invention se fait passer pour une structure.
  */
-function renderReservesDuCote(cote) {
+function renderReservesDeLaRestitution(cote) {
   const reserves = [];
 
   if (cote.horsPlafond.length) {
@@ -617,6 +545,18 @@ function renderReservesDuCote(cote) {
     } donc écarté${cote.degats.pointsAbimes > 1 ? "s" : ""} faute de citation vérifiable (pages ${
       chaudes.join(", ")}).`);
   }
+  // **Deux règles de la consigne, vérifiées plutôt que supposées.** Elle
+  // interdit d'inventer un titre et de changer l'ordre ; une consigne qu'on ne
+  // vérifie pas est une intention, pas une règle (règle 12).
+  if (cote.forme?.titresInventes > 0) {
+    reserves.push(`${cote.forme.titresInventes} titre${cote.forme.titresInventes > 1 ? "s" : ""} ${
+      cote.forme.titresInventes > 1 ? "ne figurent" : "ne figure"} pas dans le document : ${
+      cote.forme.titres.map((titre) => `« ${titre} »`).join(", ")}.`);
+  }
+  if (cote.forme?.inversions > 0) {
+    reserves.push(`Des blocs ont changé de place par rapport au document (pages ${
+      cote.forme.pagesDeplacees.join(", ")}) : ce qui suit quoi dit ce qui répond à quoi.`);
+  }
 
   if (!reserves.length) return "";
 
@@ -628,57 +568,11 @@ function renderReservesDuCote(cote) {
   `;
 }
 
-/**
- * Les deux restitutions, ligne à ligne et alignées.
- *
- * **L'alignement se fait page par page**, et les lignes qu'une seule des deux
- * porte restent en face du vide. Un simple rang à rang ferait tout diverger dès
- * qu'une des deux ajoute une ligne : le décalage se propagerait jusqu'en bas, et
- * l'écran signalerait quarante divergences pour une seule.
- */
-function renderCotesAlignes(md) {
-  if (!md.comparaison) {
-    // Sans les deux, on montre celle qu'on a — seule, et en le disant.
-    return `
-      <div class="lecture-cr__md-deux">
-        ${["modele", "outil"].map((nom) => `
-          <div class="lecture-cr__md-colonne">
-            ${renderTeteDeColonne(md[nom], COTES[nom])}
-            ${md[nom].phase === "fait"
-              ? renderLignesSeules(md[nom], md.lecture)
-              : renderCorpsDuCote(md[nom], nom)}
-          </div>
-        `).join("")}
-      </div>
-    `;
-  }
-
-  const avecPage = md.lecture === LECTURE.ORIGINE;
-
-  return `
-    <div class="lecture-cr__md-aligne${avecPage ? " lecture-cr__md-aligne--origine" : ""}">
-      <div class="lecture-cr__md-aligne-tete">
-        ${avecPage ? `<span class="lecture-cr__md-page">page</span>` : ""}
-        <span class="lecture-cr__md-cote-tete">${escapeHtml(COTES.modele.nom)}</span>
-        <span class="lecture-cr__md-cote-tete">${escapeHtml(COTES.outil.nom)}</span>
-      </div>
-      ${md.comparaison.rangees.map((rangee) => `
-        <div class="lecture-cr__md-rangee est-${escapeHtml(rangee.etat)}">
-          ${avecPage ? `<span class="lecture-cr__md-page">${rangee.page}</span>` : ""}
-          <span class="lecture-cr__md-cote">${escapeHtml(rangee.gauche?.texte ?? "") || "&nbsp;"}</span>
-          <span class="lecture-cr__md-cote">${escapeHtml(rangee.droite?.texte ?? "") || "&nbsp;"}</span>
-        </div>
-      `).join("")}
-    </div>
-  `;
-}
-
-/** Une restitution seule, quand l'autre manque. */
-function renderLignesSeules(cote, lecture) {
+/** La restitution, ligne à ligne — en Code, ou en Origine avec sa page. */
+function renderLignesDeLaRestitution(cote, lecture) {
   const avecPage = lecture === LECTURE.ORIGINE;
 
   return `
-    ${renderReservesDuCote(cote)}
     <div class="lecture-cr__md-code${avecPage ? " lecture-cr__md-code--origine" : ""}">
       ${cote.lignes.map((ligne) => `
         <div class="lecture-cr__md-ligne">
@@ -1139,10 +1033,6 @@ async function lire(hote, fichier) {
 
     etat.phase = "lue";
     redessiner(hote);
-
-    // L'outil ne coûte rien et ne bloque personne : il part en dernier, et
-    // l'écran s'affiche sans l'attendre.
-    void restituerParLoutil(hote);
   } catch (erreur) {
     echouer(hote, `La lecture n'a pas abouti : ${texte(erreur?.message) || "cause inconnue"}`);
   }
@@ -1255,53 +1145,6 @@ async function restituerParLeModele(hote) {
     cote.phase = "echec";
     cote.motif = texte(erreur?.message) || "cause inconnue";
   } finally {
-    comparerLesDeux();
-    redessiner(hote);
-  }
-}
-
-/**
- * La restitution par l'outil.
- *
- * Elle ne coûte **aucun jeton**, et c'est tout son intérêt : si elle vaut celle
- * du modèle sur des documents réels, l'appel de gauche disparaît et la lecture
- * d'un compte rendu ne coûte plus qu'un seul appel.
- *
- * Elle reçoit le **PDF**, pas le texte déjà extrait : l'outil fait sa propre
- * extraction, et c'est précisément ce qu'on veut comparer. Lui donner le texte
- * du modèle reviendrait à comparer deux lectures du même brouillon.
- */
-async function restituerParLoutil(hote) {
-  const cote = etat.md.outil;
-  if (!etat.fichier) {
-    cote.phase = "echec";
-    cote.motif = REFUS_DE_LOUTIL.SANS_FICHIER;
-    return redessiner(hote);
-  }
-
-  cote.phase = "demande";
-  cote.motif = "";
-  redessiner(hote);
-
-  try {
-    const { refaireParLoutil } = await import("../../../services/markdown-par-loutil.js");
-
-    const refait = await refaireParLoutil({ fichier: etat.fichier });
-    if (!refait?.ok) {
-      cote.phase = "echec";
-      // Le code, pas la phrase : l'écran distingue « pas branché » — qui
-      // demande une variable — de « en panne », qui demande autre chose.
-      cote.motif = texte(refait?.motif) || REFUS_DE_LOUTIL.REFUSE;
-      return;
-    }
-
-    garnirLeCote(cote, refait.pages);
-    cote.phase = "fait";
-  } catch (erreur) {
-    cote.phase = "echec";
-    cote.motif = texte(erreur?.message) || REFUS_DE_LOUTIL.INJOIGNABLE;
-  } finally {
-    comparerLesDeux();
     redessiner(hote);
   }
 }
@@ -1318,23 +1161,11 @@ function garnirLeCote(cote, pages) {
   cote.texte = assemble.texte;
   cote.lignes = assemble.lignes;
   cote.fidelite = fideliteDeLaReconstitution(etat.pagesLues, pages);
-  // Les phrases découpées à la verticale. Mesuré sur les deux colonnes : ce
-  // défaut vient de l'analyse de mise en page, et le modèle n'en est pas
-  // exempt — le supposer réservé à l'outil serait une affirmation non vérifiée.
   cote.degats = degatsDeLaRestitution(pages);
-}
-
-/**
- * L'alignement des deux, quand on a les deux.
- *
- * `comparerLesReconstitutions` rend `null` tant qu'il en manque une, et l'écran
- * l'écrit : « rien à comparer » n'est pas « les deux sont d'accord » (règle 5).
- */
-function comparerLesDeux() {
-  const { modele, outil } = etat.md;
-  etat.md.comparaison = modele.phase === "fait" && outil.phase === "fait"
-    ? comparerLesReconstitutions(modele.lignes, outil.lignes)
-    : null;
+  // Les deux règles que la consigne interdit d'enfreindre : inventer un titre,
+  // changer l'ordre. Une consigne qu'on ne vérifie pas est une intention, pas
+  // une règle (règle 12).
+  cote.forme = formeDeLaRestitution(etat.pagesLues, pages);
 }
 
 function echouer(hote, motif) {

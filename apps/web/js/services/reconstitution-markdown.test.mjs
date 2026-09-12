@@ -2,9 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  COMMENT_BRANCHER, LECTURE, NOMS_DE_LECTURE, PHRASES_DU_REFUS_DE_LOUTIL, QUOI_DE_LA_LECTURE,
-  REFUS_DE_LOUTIL, assemblerLeMarkdown, enPourcent, fideliteDeLaPage,
-  fideliteDeLaReconstitution, motsSignificatifs, pagesALire, tonDeLaPart
+  LECTURE, NOMS_DE_LECTURE, QUOI_DE_LA_LECTURE, assemblerLeMarkdown, enPourcent,
+  fideliteDeLaPage, fideliteDeLaReconstitution, motsSignificatifs, pagesALire, tonDeLaPart
 } from "./reconstitution-markdown.js";
 
 /* ── L'assemblage ────────────────────────────────────────────────────────── */
@@ -196,29 +195,4 @@ test("sans restitution, on lit le texte brut et on le sait", () => {
     assert.equal(lueSur, "brut", `restitution ${JSON.stringify(restitution)}`);
     assert.deepEqual(pages, brutes);
   }
-});
-
-/* ── Le vocabulaire de l'outil ───────────────────────────────────────────── */
-
-/**
- * Les motifs vivent ici, dans le module pur : l'écran doit pouvoir les nommer,
- * et il ne peut pas importer le service qui appelle — qui tire le réseau. Un
- * code recopié des deux côtés finirait par ne plus dire la même chose
- * (règle 10).
- */
-test("chaque refus de l'outil a sa phrase", () => {
-  for (const motif of Object.values(REFUS_DE_LOUTIL)) {
-    assert.ok(PHRASES_DU_REFUS_DE_LOUTIL[motif], `le refus « ${motif} » n'a pas de phrase`);
-  }
-});
-
-/**
- * Un « non branché » sans la marche à suivre laisse chercher, et c'est le genre
- * de recherche qui se refait à chaque fois.
- */
-test("la marche à suivre nomme la variable et le contrat", () => {
-  const marche = COMMENT_BRANCHER.join(" ");
-
-  assert.match(marche, /OPENDATALOADER_URL/);
-  assert.match(marche, /docs\/reconstituer-un-document\.md/);
 });

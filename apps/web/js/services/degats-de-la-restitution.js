@@ -137,6 +137,156 @@ export function degatsDeLaRestitution(pages = []) {
   };
 }
 
+/* ── Ce que la restitution a ajouté, et ce qu'elle a déplacé ─────────────── */
+
+/** Le texte, réduit à ce qui se compare : les espaces ne sont pas du contenu. */
+function aPlat(valeur = "") {
+  return String(valeur ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+/** Une ligne de titre — `## Lot 03` — et rien d'autre. */
+const TITRE = /^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/;
+
+/**
+ * Les titres que la restitution porte et que le document ne porte pas.
+ *
+ * **Constaté sur un compte rendu réel** : le modèle avait ajouté un en-tête de
+ * page — « Rapport du : … Page 1 » — qui ne figure nulle part dans le PDF. Ce
+ * n'est pas une invention de contenu, et le compteur de mots ajoutés ne le voit
+ * pas : tous ces mots existent ailleurs dans le document.
+ *
+ * C'est pourtant le pire endroit où inventer. **Un titre organise** : il devient
+ * la rubrique d'un point, donc le titre d'un sujet, donc une ligne de la mémoire
+ * du projet — pour une section qui n'a jamais existé.
+ *
+ * @param {string} origine le texte de la page, tel que sorti du PDF
+ * @param {string} markdown la page restituée
+ */
+export function titresInventes(origine = "", markdown = "") {
+  const dansLeDocument = aPlat(origine);
+  const inventes = [];
+
+  for (const ligne of String(markdown ?? "").split("\n")) {
+    const titre = ligne.match(TITRE);
+    if (!titre) continue;
+
+    // Le texte du titre, débarrassé de ce qui le met en forme.
+    const dit = aPlat(titre[2].replace(/\*\*|__|\*|_|`/g, ""));
+    if (!dit) continue;
+
+    if (!dansLeDocument.includes(dit)) inventes.push(titre[2].trim());
+  }
+
+  return inventes;
+}
+
+/**
+ * Les lignes qu'on retrouve dans le document, et où.
+ *
+ * Seules les lignes assez longues font des repères : « X », « 0 » ou « Statut »
+ * se retrouvent partout et ne disent rien de l'ordre.
+ */
+function reperes(origine, markdown, combien) {
+  const dansLeDocument = aPlat(origine);
+  const trouves = [];
+
+  for (const ligne of String(markdown ?? "").split("\n")) {
+    const dit = aPlat(ligne.replace(/^\s{0,3}#{1,6}\s+/, "").replace(/[|*_`>-]/g, " "));
+    if (dit.length < 25) continue;
+
+    const ou = dansLeDocument.indexOf(dit);
+    if (ou >= 0) trouves.push(ou);
+    if (trouves.length >= combien) break;
+  }
+
+  return trouves;
+}
+
+/**
+ * Les blocs que la restitution a déplacés.
+ *
+ * **Constaté sur un compte rendu réel** : les tableaux d'intervenants étaient
+ * passés avant le titre de la réunion, qui les précède dans le PDF. Le modèle
+ * avait sans doute trouvé cet ordre plus logique — mais l'ordre d'un compte
+ * rendu n'est pas une opinion, c'est une information : ce qui suit quoi dit ce
+ * qui répond à quoi.
+ *
+ * La mesure compte les **inversions** : deux repères qui se suivent dans la
+ * restitution et se croisent dans le document. Zéro inversion sur peu de
+ * repères ne prouve rien — c'est pourquoi leur nombre se rend aussi.
+ *
+ * @param {string} origine le texte de la page, tel que sorti du PDF
+ * @param {string} markdown la page restituée
+ */
+export function deplacements(origine = "", markdown = "", { maximum = 60 } = {}) {
+  const ou = reperes(origine, markdown, maximum);
+
+  let inversions = 0;
+  for (let i = 0; i < ou.length; i += 1) {
+    for (let j = i + 1; j < ou.length; j += 1) {
+      if (ou[i] > ou[j]) inversions += 1;
+    }
+  }
+
+  const paires = (ou.length * (ou.length - 1)) / 2;
+  return {
+    reperes: ou.length,
+    inversions,
+    /** La part des paires de repères qui se croisent. 0 : l'ordre est tenu. */
+    part: paires === 0 ? 0 : inversions / paires
+  };
+}
+
+/**
+ * La forme de la restitution, page par page : ce qu'elle a ajouté et déplacé.
+ *
+ * **Deux règles de la consigne, vérifiées plutôt que supposées.** Elle interdit
+ * d'inventer un titre et de changer l'ordre ; rien ne garantit qu'elle soit
+ * suivie, et une consigne qu'on ne vérifie pas est une intention, pas une règle
+ * (règle 12).
+ *
+ * @param {{page: number, text?: string, texte?: string}[]} pagesOrigine
+ * @param {{page: number, markdown: string}[]} pagesRefaites
+ */
+export function formeDeLaRestitution(pagesOrigine = [], pagesRefaites = []) {
+  const dOrigine = new Map(
+    (Array.isArray(pagesOrigine) ? pagesOrigine : [])
+      .map((page) => [Number(page?.page), String(page?.text ?? page?.texte ?? "")])
+  );
+
+  const pages = [];
+  let inventes = 0;
+  let inversions = 0;
+  let reperesEnTout = 0;
+
+  for (const page of Array.isArray(pagesRefaites) ? pagesRefaites : []) {
+    const numero = Number(page?.page);
+    // Une page dont on n'a pas l'original ne se vérifie pas. On ne la compte
+    // pas comme intacte pour autant : elle n'entre simplement pas (règle 5).
+    if (!dOrigine.has(numero)) continue;
+
+    const origine = dOrigine.get(numero);
+    const titres = titresInventes(origine, page?.markdown);
+    const ordre = deplacements(origine, page?.markdown);
+
+    pages.push({ page: numero, titres, ...ordre });
+    inventes += titres.length;
+    inversions += ordre.inversions;
+    reperesEnTout += ordre.reperes;
+  }
+
+  return {
+    pages,
+    /** Les titres inventés, tous pages confondues — au plus dix, pour l'écran. */
+    titres: pages.flatMap((page) => page.titres).slice(0, 10),
+    titresInventes: inventes,
+    inversions,
+    reperes: reperesEnTout,
+    /** Les pages où l'ordre s'est croisé, pour savoir lesquelles rouvrir. */
+    pagesDeplacees: pages.filter((page) => page.inversions > 0).map((page) => page.page)
+  };
+}
+
 /** Les pages les plus abîmées, pour savoir lesquelles rouvrir. */
 export function pagesAbimees(degats, combien = 3) {
   return (degats?.pages ?? [])
