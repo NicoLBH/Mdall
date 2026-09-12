@@ -23678,7 +23678,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 
 .lecture-cr{display:flex;flex-direction:column;gap:20px;max-width:1100px;}
 .lecture-cr__entete{display:flex;flex-direction:column;gap:6px;}
+/* Le titre à gauche, le bouton du document refait à droite : une commande qui
+   ne concerne que ce qu'on vient de lire se pose au bord de son titre. */
+.lecture-cr__entete-ligne{display:flex;align-items:center;justify-content:space-between;gap:16px;}
 .lecture-cr__titre{margin:0;font-size:19px;font-weight:600;color:var(--text);}
+.lecture-cr__md-bouton{flex:0 0 auto;}
 .lecture-cr__mot{margin:0;font-size:12.5px;line-height:1.5;color:var(--muted);max-width:82ch;}
 
 /* La zone de dépôt : le geste d'entrée de tout le parcours. */
@@ -23881,3 +23885,77 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .lecture-cr__echec{border-color:var(--fgColor-attention, #d29922);}
 .lecture-cr__echec p{margin:0;}
 .lecture-cr__echec-aide{font-size:12px;color:var(--muted);}
+
+/* ── Le document refait en Markdown ──────────────────────────────────────── */
+
+/* La présentation est celle d'un fichier de la Mémoire — même barre de
+   lectures, même mesure, même presse-papiers. Un fichier ne se regarde pas de
+   deux façons selon l'onglet où on l'ouvre. */
+.lecture-cr__md{display:flex;flex-direction:column;gap:12px;}
+.lecture-cr__md-attente{display:flex;flex-direction:column;align-items:center;gap:10px;padding:32px;}
+.lecture-cr__md-fichier{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+.lecture-cr__md-tete{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:8px 12px;
+  border-bottom:1px solid var(--border);
+  background:var(--bg-secondary, rgb(21, 27, 35));
+}
+.lecture-cr__md-nom{color:var(--text);font-weight:600;}
+.lecture-cr__md-reserve{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  margin:0;
+  padding:10px 12px;
+  border:1px solid var(--fgColor-attention, #d29922);
+  border-radius:var(--radius);
+  font-size:12.5px;
+  line-height:1.5;
+  color:var(--text);
+}
+/* L'aperçu se lit comme un document, pas comme un panneau de l'application :
+   ses titres ont leur propre échelle, sinon un « # » du compte rendu prendrait
+   la taille du titre de l'écran et l'on ne saurait plus qui parle. */
+.lecture-cr__md-apercu{padding:16px 20px;max-height:70vh;overflow:auto;font-size:13px;line-height:1.6;color:var(--text);}
+.lecture-cr__md-apercu h1{font-size:19px;margin:18px 0 8px;}
+.lecture-cr__md-apercu h2{font-size:16px;margin:16px 0 8px;}
+.lecture-cr__md-apercu h3{font-size:14px;margin:14px 0 6px;}
+.lecture-cr__md-apercu h4,
+.lecture-cr__md-apercu h5,
+.lecture-cr__md-apercu h6{font-size:13px;margin:12px 0 6px;}
+.lecture-cr__md-apercu > :first-child{margin-top:0;}
+.lecture-cr__md-apercu p{margin:0 0 10px;}
+.lecture-cr__md-apercu ul,
+.lecture-cr__md-apercu ol{margin:0 0 10px;padding-left:22px;}
+
+/* Le code : une ligne par ligne, les numéros à gauche, rien qui se replie —
+   ce n'est pas du code qu'on édite, c'est un document qu'on relit. */
+.lecture-cr__md-code{
+  padding:10px 0;
+  max-height:70vh;
+  overflow:auto;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12px;
+  line-height:1.8;
+}
+.lecture-cr__md-ligne{display:flex;gap:12px;padding:0 12px;white-space:pre-wrap;}
+.lecture-cr__md-ligne:hover{background:rgba(255,255,255,.03);}
+.lecture-cr__md-rang{
+  flex:0 0 44px;
+  text-align:right;
+  color:var(--muted);
+  user-select:none;
+  font-variant-numeric:tabular-nums;
+}
+/* La page d'où sort la ligne. Calculée, jamais déclarée par le modèle. */
+.lecture-cr__md-page{
+  flex:0 0 48px;
+  text-align:right;
+  color:var(--fgColor-accent, #4493f8);
+  user-select:none;
+  font-variant-numeric:tabular-nums;
+}
+.lecture-cr__md-texte{flex:1 1 auto;min-width:0;color:var(--text);}
+.lecture-cr__chiffre.est-mauvais{border-color:var(--fgColor-danger, #f85149);}

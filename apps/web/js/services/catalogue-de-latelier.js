@@ -259,11 +259,15 @@ export const UTILITAIRES = [
     rayon: RAYONS.DEVELOPPEMENT,
     resume: "Déposer un compte rendu de chantier et voir ce que le modèle en a compris.",
     entrees: ["Un compte rendu de chantier, en PDF"],
-    sorties: ["Les points relevés, avec leur citation", "Ce qu'ils deviendraient face aux sujets du projet"],
-    version: "0.1",
+    sorties: [
+      "Les points relevés, avec leur citation",
+      "Ce qu'ils deviendraient face aux sujets du projet",
+      "Le document refait en Markdown, sur demande"
+    ],
+    version: "0.2",
     intelligence: true,
     aussiALaMain: "Lire le compte rendu et ouvrir les sujets un par un.",
-    mots: ["compte rendu", "CR", "chantier", "extraction", "pdf", "réunion", "points"],
+    mots: ["compte rendu", "CR", "chantier", "extraction", "pdf", "réunion", "points", "markdown"],
     ajouteLe: "2026-09-12"
   },
   {
