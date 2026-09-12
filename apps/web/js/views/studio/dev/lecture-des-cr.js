@@ -41,14 +41,33 @@ import {
   confrontation, intitulesAmbigus, lectureAssemblee
 } from "../../../services/lecture-du-cr.js";
 import {
-  LECTURE, NOMS_DE_LECTURE, QUOI_DE_LA_LECTURE, assemblerLeMarkdown,
-  enPourcent, fideliteDeLaReconstitution, tonDeLaPart
+  COMMENT_BRANCHER, LECTURE, NOMS_DE_LECTURE, QUOI_DE_LA_LECTURE, REFUS_DE_LOUTIL,
+  assemblerLeMarkdown, enPourcent, fideliteDeLaReconstitution, pagesALire,
+  phraseDuRefusDeLoutil, tonDeLaPart
 } from "../../../services/reconstitution-markdown.js";
+import {
+  ETAT, NOMS_DES_ETATS, comparerLesReconstitutions, mesureDeLaComparaison, pagesQuiDivergent
+} from "../../../services/comparaison-de-markdown.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /** Ce que cet écran accepte. Nommé une fois : la zone et le champ le lisent. */
 const EST_UN_PDF = /\.pdf$/i;
+
+/**
+ * Les deux moitiés de l'écran.
+ *
+ * **La restitution d'abord, l'analyse ensuite** — c'est l'ordre du procédé. Ce
+ * qu'on relève n'a de sens que sur ce qui a été lu : juger des points sans
+ * avoir vu le document dont ils sortent, c'est ce qu'on faisait avant, et c'est
+ * ce qui rendait les déceptions inexplicables.
+ */
+const ONGLET = { RESTITUTION: "restitution", ANALYSE: "analyse" };
+
+const NOMS_DES_ONGLETS = {
+  [ONGLET.RESTITUTION]: "Restitution",
+  [ONGLET.ANALYSE]: "Analyse"
+};
 
 /**
  * L'état de l'écran.
@@ -81,26 +100,40 @@ const etat = {
    */
   descriptions: {},
   motif: "",
-  /** Le document refait. Voir `renderDocumentRefait`. */
-  markdown: etatDuMarkdown()
+  /** Le PDF déposé, gardé pour l'outil — qui refait sa propre extraction. */
+  fichier: null,
+  /** L'onglet regardé. Voir `ONGLET`. */
+  onglet: ONGLET.RESTITUTION,
+  /** Les deux reconstitutions et leur comparaison. Voir `renderRestitution`. */
+  md: etatDesReconstitutions()
 };
 
 /**
- * L'état du document refait, au repos.
+ * L'état des reconstitutions, au repos.
  *
  * Une fonction et non une constante : l'objet serait partagé entre deux
  * lectures, et le document du compte rendu précédent resterait affiché sous le
  * suivant.
  */
-function etatDuMarkdown() {
+function etatDesReconstitutions() {
+  return {
+    /** La même pour les deux colonnes : on compare ce qu'on regarde pareil. */
+    lecture: LECTURE.APERCU,
+    modele: unCote(),
+    outil: unCote(),
+    /** `null` : on n'a pas les deux — ce qui n'est pas « aucune différence ». */
+    comparaison: null
+  };
+}
+
+function unCote() {
   return {
     phase: "vide", // vide | demande | fait | echec
-    ouvert: false,
-    lecture: LECTURE.APERCU,
     texte: "",
     lignes: [],
+    pages: [],
     fidelite: null,
-    /** La réponse du modèle a-t-elle été coupée ? */
+    /** La réponse du modèle a-t-elle été coupée ? Sans objet pour l'outil. */
     coupee: false,
     /** Les pages qui ne sont pas parties, et celles dont rien n'est revenu. */
     horsPlafond: [],
@@ -130,33 +163,24 @@ export function renderLectureDesCr(hote) {
 export function renderLaLecture(vue = etat) {
   return `
     <div class="lecture-cr">
-      ${renderEntete(vue)}
+      ${renderEntete()}
       ${renderDepot(vue)}
       ${renderCorps(vue)}
     </div>
   `;
 }
 
-function renderEntete(vue) {
-  const lue = vue.phase === "lue" && vue.lecture;
-  const ouvert = Boolean(vue.markdown?.ouvert);
-
+function renderEntete() {
   return `
     <header class="lecture-cr__entete">
       <div class="lecture-cr__entete-ligne">
         <h2 class="lecture-cr__titre">Lecture d'un compte rendu de chantier</h2>
-        ${lue ? `
-          <button type="button" class="gh-btn gh-btn--sm lecture-cr__md-bouton${ouvert ? " is-active" : ""}"
-            data-lecture-cr-md aria-pressed="${ouvert}"
-            title="Refaire le document en Markdown, pour juger de ce qui a été lu">
-            ${ouvert ? "Masquer .md" : "Afficher .md"}
-          </button>
-        ` : ""}
       </div>
       <p class="lecture-cr__mot">
-        Déposez un compte rendu : l'écran montre <strong>ce que le modèle en a compris</strong>
-        — les rubriques, chaque point, et la phrase d'où il sort — avant d'en faire quoi que ce soit.
-        Rien n'est ouvert ni écrit : la suite passe par une proposition.
+        Déposez un compte rendu : l'écran le <strong>restitue d'abord en Markdown</strong> —
+        c'est ce document-là que le modèle relit pour en tirer les points. On voit donc
+        exactement sur quoi il s'est fondé. Rien n'est ouvert ni écrit : la suite passe par
+        une proposition.
       </p>
     </header>
   `;
@@ -198,12 +222,69 @@ function renderCorps(vue) {
 
   return `
     ${renderIdentite(vue.lecture)}
-    ${renderDocumentRefait(vue)}
+    ${renderOnglets(vue)}
+    ${vue.onglet === ONGLET.ANALYSE ? renderAnalyse(vue) : renderRestitution(vue)}
+  `;
+}
+
+/**
+ * Les deux moitiés, et le passage de l'une à l'autre.
+ *
+ * Elles ne sont pas deux vues du même objet : **la restitution est ce que le
+ * modèle a lu, l'analyse est ce qu'il en a tiré**. Les empiler sur une seule
+ * page faisait défiler l'une pour atteindre l'autre, alors qu'on passe son
+ * temps à faire l'aller-retour.
+ */
+function renderOnglets(vue) {
+  // Le dessin est celui des onglets de l'application — `light-tabs`. Deux
+  // barres d'onglets dessinées différemment se mettraient à diverger, et la
+  // seconde aurait l'air d'appartenir à un autre produit (règle 4).
+  return `
+    <nav class="light-tabs lecture-cr__onglets" aria-label="Restitution ou analyse">
+      ${Object.values(ONGLET).map((cle) => `
+        <button type="button" class="light-tabs__item${vue.onglet === cle ? " is-active" : ""}"
+          data-lecture-cr-onglet="${escapeHtml(cle)}" aria-pressed="${vue.onglet === cle}">
+          <span class="light-tabs__label">${escapeHtml(NOMS_DES_ONGLETS[cle])}</span>
+        </button>
+      `).join("")}
+    </nav>
+  `;
+}
+
+/** Ce que le modèle a tiré du document. */
+function renderAnalyse(vue) {
+  return `
+    ${renderSurQuoiLaLecture(vue)}
     ${renderMesure(vue.lecture.mesure, vue.lecture.ecartes)}
     ${renderAmbiguites(vue.lecture.points)}
     ${renderConfrontation(vue.confrontes)}
     ${renderRubriques(vue)}
     ${renderSuite()}
+  `;
+}
+
+/**
+ * Sur quoi les points ont été relevés.
+ *
+ * **C'est la question à laquelle tout le reste de l'écran répond.** Un relevé
+ * dont on ignore la source ne se corrige pas : on ne sait pas s'il faut
+ * reprendre la consigne de lecture ou la restitution qui la précède. La
+ * nommer, à chaque fois, coûte une ligne.
+ */
+function renderSurQuoiLaLecture(vue) {
+  const sur = vue.lecture?.lueSur;
+  if (!sur) return "";
+
+  const dits = {
+    modele: "le document restitué en Markdown — celui de l'onglet Restitution",
+    outil: "le document restitué par l'outil — celui de la colonne de droite",
+    brut: "le texte brut du PDF, la restitution n'ayant pas abouti"
+  };
+
+  return `
+    <p class="lecture-cr__source mono-small${sur === "brut" ? " est-douteux" : ""}">
+      Les points ci-dessous ont été relevés sur ${escapeHtml(dits[sur] ?? sur)}.
+    </p>
   `;
 }
 
@@ -237,96 +318,222 @@ function renderFait(intitule, valeur) {
   return `<div class="lecture-cr__fait"><dt>${escapeHtml(intitule)}</dt><dd>${escapeHtml(valeur)}</dd></div>`;
 }
 
-/* ── Le document refait ──────────────────────────────────────────────────── */
+/* ── La restitution : deux reconstitutions, côte à côte ──────────────────── */
 
 /**
- * Le document tel que le modèle le voit, en Markdown.
+ * Le document restitué, par deux chemins différents.
  *
- * ## Pourquoi cet écran dans l'écran
+ * ## Pourquoi deux
  *
- * Ce qu'on lit plus bas, ce sont les points **relevés** : ce que le modèle a
- * décidé de retenir. Quand ils déçoivent, deux causes sont possibles et
- * indiscernables — le document a été mal lu, ou bien lu et mal exploité. Le
- * document refait sépare les deux : s'il est fidèle, le défaut est dans
- * l'exploitation ; s'il est désarticulé, inutile de chercher ailleurs.
+ * Un document refait par un modèle se lit très bien, même quand il est faux :
+ * c'est tout le problème. Le seul juge fiable serait le PDF, mais le relire
+ * ligne à ligne est exactement le travail qu'on cherche à éviter.
  *
- * ## Il coûte un second appel, et c'est pourquoi il se demande
+ * Une **seconde reconstitution, obtenue autrement**, donne un juge praticable.
+ * Là où les deux s'accordent, il n'y a rien à vérifier ; là où elles divergent,
+ * l'une se trompe, et c'est là qu'on rouvre le PDF. La comparaison ne dit pas
+ * laquelle a raison — elle dit **où regarder**.
  *
- * Refaire un document coûte à peu près autant que de le lire. Le bouton ne se
- * presse donc que si l'on veut voir — jamais au dépôt — et l'appel se dépose au
- * compteur sous sa propre nature, visible dans Factures et abonnements
- * (fondamental 13).
+ * ## Et ce qu'on cherche à décider
  *
- * ## Les trois lectures
+ * À gauche, le modèle : il coûte un appel par document. À droite, un outil qui
+ * n'en coûte aucun. Si les deux disent la même chose sur des documents réels,
+ * la colonne de gauche peut disparaître — et la lecture d'un compte rendu ne
+ * coûtera plus qu'un seul appel, celui qui relève les points.
  *
- * Les mêmes que l'onglet Mémoire donne à ses fichiers : **Aperçu**, **Code**,
- * **Origine**. La troisième met chaque ligne en face de la page du PDF d'où
- * elle sort — et cette provenance est calculée, jamais demandée au modèle : une
- * provenance déclarée par celui qu'on vérifie ne vérifie rien.
+ * C'est pour cela que la restitution n'est plus à la demande : elle est le
+ * premier temps du procédé, et c'est **sur elle** que les points sont relevés.
  */
-function renderDocumentRefait(vue) {
-  const md = vue.markdown;
-  if (!md?.ouvert) return "";
-
-  if (md.phase === "demande") {
-    return `
-      <section class="lecture-cr__md">
-        <div class="lecture-cr__md-attente">
-          ${renderSpinnerHtml({ label: "Reconstitution du document", size: "lg" })}
-          <p class="lecture-cr__depot-mot">Reconstitution du document…</p>
-        </div>
-      </section>
-    `;
-  }
-
-  if (md.phase === "echec") {
-    return `
-      <section class="lecture-cr__md">
-        <div class="lecture-cr__echec">
-          <p>${escapeHtml(md.motif || "Le document n'a pas pu être refait.")}</p>
-          <p class="lecture-cr__echec-aide">
-            Ce n'est pas « le document était vide » : la reconstitution n'a pas eu lieu.
-          </p>
-        </div>
-      </section>
-    `;
-  }
-
-  if (md.phase !== "fait") return "";
+function renderRestitution(vue) {
+  const md = vue.md;
 
   return `
     <section class="lecture-cr__md">
-      ${renderReservesDuMarkdown(md)}
-      ${renderFideliteDuMarkdown(md.fidelite)}
+      ${renderResumeDeLaComparaison(md)}
       <div class="lecture-cr__md-fichier">
-        ${renderTeteDuMarkdown(vue, md)}
-        ${renderCorpsDuMarkdown(md)}
+        ${renderBarreDeLaRestitution(vue, md)}
+        ${md.lecture === LECTURE.APERCU ? renderApercusCoteACote(vue, md) : renderCotesAlignes(md)}
       </div>
     </section>
   `;
 }
 
 /**
- * Ce que la reconstitution n'a pas couvert.
+ * Ce que les deux reconstitutions se disent l'une de l'autre.
  *
- * **En haut, avant le document.** Un document amputé se lit très bien : rien,
- * dans ce qui reste, ne dit que le reste manque. C'est exactement le cas où se
- * taire trompe (règle 5).
+ * **Tant qu'on n'a pas les deux, on ne dit rien de leur accord.** Afficher
+ * « aucune différence » parce qu'il n'y a rien à comparer serait le mensonge le
+ * plus commode et le plus coûteux (règle 5).
  */
-function renderReservesDuMarkdown(md) {
+function renderResumeDeLaComparaison(md) {
+  if (!md.comparaison) return "";
+
+  const mesure = mesureDeLaComparaison(md.comparaison.rangees);
+  const chaudes = pagesQuiDivergent(md.comparaison.rangees, 3);
+
+  return `
+    <div class="lecture-cr__chiffres">
+      ${renderChiffre("Lignes d'accord", `${mesure[ETAT.PAREIL] + mesure[ETAT.FORME]} / ${mesure.total}`,
+        tonDeLaPart(mesure.part))}
+      ${renderChiffre("Part d'accord", enPourcent(mesure.part), tonDeLaPart(mesure.part))}
+      ${renderChiffre(NOMS_DES_ETATS[ETAT.FORME], String(mesure[ETAT.FORME]))}
+      ${renderChiffre("Lignes qui divergent", String(mesure.divergentes),
+        mesure.divergentes > 0 ? "est-douteux" : "est-bon")}
+    </div>
+    <p class="lecture-cr__mot">
+      Une ligne « qui diverge » est une ligne que l'une des deux restitutions porte et que
+      l'autre n'a pas : <strong>l'une des deux se trompe</strong>, et c'est le seul endroit
+      où rouvrir le PDF sert à quelque chose. Un même texte écrit autrement — un titre d'un
+      côté, du gras de l'autre — ne compte pas comme une divergence.
+      ${chaudes.length ? `Les pages à relire d'abord : <strong>${
+        escapeHtml(chaudes.map((chaude) => `${chaude.page} (${chaude.divergentes})`).join(", "))
+      }</strong>.` : ""}
+    </p>
+  `;
+}
+
+/** La barre du fichier : les trois lectures, la mesure, le presse-papiers. */
+function renderBarreDeLaRestitution(vue, md) {
+  const lignes = md.modele.lignes.length;
+  const nom = `${texte(vue.lecture?.nom).replace(/\.pdf$/i, "") || "document"}.md`;
+
+  return `
+    <header class="lecture-cr__md-tete">
+      <span class="memoire-fichier__lectures">
+        ${Object.values(LECTURE).map((cle) => `
+          <button type="button" class="memoire-lecture${md.lecture === cle ? " is-active" : ""}"
+            data-lecture-cr-md-lecture="${escapeHtml(cle)}" aria-pressed="${md.lecture === cle}"
+            title="${escapeHtml(QUOI_DE_LA_LECTURE[cle] ?? "")}">${escapeHtml(NOMS_DE_LECTURE[cle])}</button>
+        `).join("")}
+      </span>
+      <span class="lecture-cr__md-nom mono-small">${escapeHtml(nom)}</span>
+      <span class="memoire-fichier__mesure">${lignes} ligne${lignes > 1 ? "s" : ""} · ${md.modele.texte.length} caractères</span>
+      <span class="memoire-fichier__espace"></span>
+      ${renderBoutonCopier({
+        cible: "document-refait",
+        className: "memoire-fichier__copier",
+        titre: "Copier la restitution du modèle",
+        titreCopie: "Restitution copiée"
+      })}
+    </header>
+  `;
+}
+
+/** Le titre d'une colonne : qui l'a écrite, et ce que cela a coûté. */
+function renderTeteDeColonne(cote, quoi) {
+  return `
+    <div class="lecture-cr__md-colonne-tete">
+      <span class="lecture-cr__md-colonne-nom">${escapeHtml(quoi.nom)}</span>
+      <span class="lecture-cr__md-colonne-prix mono-small">${escapeHtml(quoi.prix)}</span>
+      ${cote.phase === "fait" && cote.fidelite ? `
+        <span class="lecture-cr__md-colonne-part mono-small ${tonDeLaPart(cote.fidelite.part)}"
+          title="Part des mots du PDF qu'on retrouve dans cette restitution">
+          ${escapeHtml(enPourcent(cote.fidelite.part))} des mots du PDF
+        </span>
+      ` : ""}
+    </div>
+  `;
+}
+
+/** Qui écrit chaque colonne. Nommé une fois : les deux vues le lisent. */
+const COTES = {
+  modele: { nom: "Par le modèle", prix: "un appel par document" },
+  outil: { nom: "Par l'outil", prix: "gratuit, sans modèle" }
+};
+
+/**
+ * Les deux aperçus, côte à côte.
+ *
+ * Ils ne sont **pas alignés** : deux documents mis en page n'ont pas de lignes
+ * à apparier. C'est la lecture où l'on juge la forme — un tableau qui tient, un
+ * titre à sa place — et l'alignement se fait dans les deux autres.
+ */
+function renderApercusCoteACote(vue, md) {
+  return `
+    <div class="lecture-cr__md-deux">
+      ${["modele", "outil"].map((nom) => `
+        <div class="lecture-cr__md-colonne">
+          ${renderTeteDeColonne(md[nom], COTES[nom])}
+          ${renderCorpsDuCote(md[nom], nom)}
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+/** Ce qu'une colonne montre, selon où elle en est. */
+function renderCorpsDuCote(cote, nom) {
+  if (cote.phase === "demande") {
+    return `
+      <div class="lecture-cr__md-attente">
+        ${renderSpinnerHtml({ label: "Restitution du document", size: "lg" })}
+        <p class="lecture-cr__depot-mot">Restitution du document…</p>
+      </div>
+    `;
+  }
+
+  if (cote.phase === "echec") return renderCoteEnEchec(cote, nom);
+  if (cote.phase !== "fait") return `<div class="lecture-cr__md-attente mono-small">En attente.</div>`;
+
+  return `
+    ${renderReservesDuCote(cote)}
+    <div class="lecture-cr__md-apercu md-body">${renderMarkdownToHtml(cote.texte)}</div>
+  `;
+}
+
+/**
+ * Une colonne qui n'a rien pu rendre.
+ *
+ * **« Pas branché » et « en panne » ne se corrigent pas de la même façon.** Les
+ * confondre ferait chercher une panne là où il n'y a qu'une variable à
+ * renseigner — c'est pourquoi la marche à suivre s'affiche.
+ */
+function renderCoteEnEchec(cote, nom) {
+  const aBrancher = nom === "outil" && cote.motif === REFUS_DE_LOUTIL.NON_BRANCHE;
+
+  return `
+    <div class="lecture-cr__md-absent${aBrancher ? " est-a-brancher" : ""}">
+      <p class="lecture-cr__md-absent-mot">${escapeHtml(aBrancher
+        ? "Aucun outil de restitution n'est branché."
+        : phraseDuRefusDeLoutil(cote.motif) || cote.motif || "La restitution n'a pas abouti.")}</p>
+      ${aBrancher ? `
+        <p class="lecture-cr__md-absent-aide">
+          Cette colonne existe pour comparer la restitution du modèle à une restitution qui
+          ne coûte rien. Tant qu'elle est vide, <strong>il n'y a rien à comparer</strong> —
+          ce qui n'est pas la même chose que « les deux sont d'accord ».
+        </p>
+        <ol class="lecture-cr__md-absent-marche mono-small">
+          ${COMMENT_BRANCHER.map((etape) => `<li>${escapeHtml(etape)}</li>`).join("")}
+        </ol>
+      ` : ""}
+    </div>
+  `;
+}
+
+/**
+ * Ce qu'une restitution n'a pas couvert.
+ *
+ * **Au-dessus du document, avant qu'on se mette à lire.** Un document amputé se
+ * lit très bien : rien, dans ce qui reste, ne dit que le reste manque (règle 5).
+ */
+function renderReservesDuCote(cote) {
   const reserves = [];
 
-  if (md.horsPlafond.length) {
-    reserves.push(`${md.horsPlafond.length} page${md.horsPlafond.length > 1 ? "s" : ""} n'${
-      md.horsPlafond.length > 1 ? "ont" : "a"} pas été envoyée${md.horsPlafond.length > 1 ? "s" : ""} :
-      le document dépasse ce qu'une relecture accepte (pages ${md.horsPlafond.join(", ")}).`);
+  if (cote.horsPlafond.length) {
+    reserves.push(`${cote.horsPlafond.length} page${cote.horsPlafond.length > 1 ? "s" : ""} n'${
+      cote.horsPlafond.length > 1 ? "ont" : "a"} pas été envoyée${cote.horsPlafond.length > 1 ? "s" : ""} :
+      le document dépasse ce qu'une restitution accepte (pages ${cote.horsPlafond.join(", ")}).`);
   }
-  if (md.absentes.length) {
-    reserves.push(`${md.absentes.length} page${md.absentes.length > 1 ? "s" : ""} envoyée${
-      md.absentes.length > 1 ? "s" : ""} dont rien n'est revenu (pages ${md.absentes.join(", ")}).`);
+  if (cote.absentes.length) {
+    reserves.push(`${cote.absentes.length} page${cote.absentes.length > 1 ? "s" : ""} envoyée${
+      cote.absentes.length > 1 ? "s" : ""} dont rien n'est revenu (pages ${cote.absentes.join(", ")}).`);
   }
-  if (md.coupee) {
+  if (cote.coupee) {
     reserves.push("La réponse du modèle a été coupée en cours de route : la fin du document manque.");
+  }
+  if (cote.fidelite?.motsAjoutes > 0) {
+    reserves.push(`${cote.fidelite.motsAjoutes} mot${cote.fidelite.motsAjoutes > 1 ? "s" : ""} ${
+      cote.fidelite.motsAjoutes > 1 ? "figurent" : "figure"} dans cette restitution sans figurer dans le PDF.`);
   }
 
   if (!reserves.length) return "";
@@ -340,77 +547,58 @@ function renderReservesDuMarkdown(md) {
 }
 
 /**
- * Ce que la reconstitution vaut, en mots.
+ * Les deux restitutions, ligne à ligne et alignées.
  *
- * **Deux chiffres, et ils ne disent pas la même chose.** Les mots *retrouvés*
- * disent ce qui a survécu au passage ; les mots *ajoutés* disent ce que le
- * modèle a écrit et que le document ne contenait pas — et c'est celui-là qui
- * compte, car un document reformulé se lit parfaitement.
- *
- * Ni l'un ni l'autre ne dit rien de l'**ordre** ni de la forme des tableaux :
- * deux colonnes interverties gardent exactement les mêmes mots. Cela se juge à
- * l'œil, et c'est pour cela que le document s'affiche en dessous.
+ * **L'alignement se fait page par page**, et les lignes qu'une seule des deux
+ * porte restent en face du vide. Un simple rang à rang ferait tout diverger dès
+ * qu'une des deux ajoute une ligne : le décalage se propagerait jusqu'en bas, et
+ * l'écran signalerait quarante divergences pour une seule.
  */
-function renderFideliteDuMarkdown(fidelite) {
-  if (!fidelite) return "";
-
-  return `
-    <div class="lecture-cr__chiffres">
-      ${renderChiffre("Mots du document retrouvés",
-        `${fidelite.motsRetrouves} / ${fidelite.motsOrigine}`, tonDeLaPart(fidelite.part))}
-      ${renderChiffre("Part retrouvée", enPourcent(fidelite.part), tonDeLaPart(fidelite.part))}
-      ${renderChiffre("Mots ajoutés", String(fidelite.motsAjoutes),
-        fidelite.motsAjoutes > 0 ? "est-douteux" : "est-bon")}
-      ${renderChiffre("Pages refaites",
-        `${fidelite.pages.filter((page) => page.rendue).length} / ${fidelite.pages.length}`,
-        fidelite.absentes.length ? "est-douteux" : "est-bon")}
-    </div>
-    <p class="lecture-cr__mot">
-      Un mot « retrouvé » est un mot du PDF qui reparaît dans le document refait. Les mots
-      <strong>ajoutés</strong> sont ceux que le modèle a écrits et que le document ne portait pas :
-      c'est le chiffre à surveiller. Aucun des deux ne dit si l'ordre et les tableaux ont tenu —
-      cela se voit en lisant.
-    </p>
-  `;
-}
-
-/** La barre du fichier : les trois lectures, la mesure, le presse-papiers. */
-function renderTeteDuMarkdown(vue, md) {
-  const lignes = md.lignes.length;
-  const nom = `${texte(vue.lecture?.nom).replace(/\.pdf$/i, "") || "document"}.md`;
-
-  return `
-    <header class="lecture-cr__md-tete">
-      <span class="memoire-fichier__lectures">
-        ${Object.values(LECTURE).map((cle) => `
-          <button type="button" class="memoire-lecture${md.lecture === cle ? " is-active" : ""}"
-            data-lecture-cr-md-lecture="${escapeHtml(cle)}" aria-pressed="${md.lecture === cle}"
-            title="${escapeHtml(QUOI_DE_LA_LECTURE[cle] ?? "")}">${escapeHtml(NOMS_DE_LECTURE[cle])}</button>
+function renderCotesAlignes(md) {
+  if (!md.comparaison) {
+    // Sans les deux, on montre celle qu'on a — seule, et en le disant.
+    return `
+      <div class="lecture-cr__md-deux">
+        ${["modele", "outil"].map((nom) => `
+          <div class="lecture-cr__md-colonne">
+            ${renderTeteDeColonne(md[nom], COTES[nom])}
+            ${md[nom].phase === "fait"
+              ? renderLignesSeules(md[nom], md.lecture)
+              : renderCorpsDuCote(md[nom], nom)}
+          </div>
         `).join("")}
-      </span>
-      <span class="lecture-cr__md-nom mono-small">${escapeHtml(nom)}</span>
-      <span class="memoire-fichier__mesure">${lignes} ligne${lignes > 1 ? "s" : ""} · ${md.texte.length} caractères</span>
-      <span class="memoire-fichier__espace"></span>
-      ${renderBoutonCopier({
-        cible: "document-refait",
-        className: "memoire-fichier__copier",
-        titre: "Copier le document refait",
-        titreCopie: "Document copié"
-      })}
-    </header>
-  `;
-}
-
-function renderCorpsDuMarkdown(md) {
-  if (md.lecture === LECTURE.APERCU) {
-    return `<div class="lecture-cr__md-apercu md-body">${renderMarkdownToHtml(md.texte)}</div>`;
+      </div>
+    `;
   }
 
   const avecPage = md.lecture === LECTURE.ORIGINE;
 
   return `
+    <div class="lecture-cr__md-aligne${avecPage ? " lecture-cr__md-aligne--origine" : ""}">
+      <div class="lecture-cr__md-aligne-tete">
+        ${avecPage ? `<span class="lecture-cr__md-page">page</span>` : ""}
+        <span class="lecture-cr__md-cote-tete">${escapeHtml(COTES.modele.nom)}</span>
+        <span class="lecture-cr__md-cote-tete">${escapeHtml(COTES.outil.nom)}</span>
+      </div>
+      ${md.comparaison.rangees.map((rangee) => `
+        <div class="lecture-cr__md-rangee est-${escapeHtml(rangee.etat)}">
+          ${avecPage ? `<span class="lecture-cr__md-page">${rangee.page}</span>` : ""}
+          <span class="lecture-cr__md-cote">${escapeHtml(rangee.gauche?.texte ?? "") || "&nbsp;"}</span>
+          <span class="lecture-cr__md-cote">${escapeHtml(rangee.droite?.texte ?? "") || "&nbsp;"}</span>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+/** Une restitution seule, quand l'autre manque. */
+function renderLignesSeules(cote, lecture) {
+  const avecPage = lecture === LECTURE.ORIGINE;
+
+  return `
+    ${renderReservesDuCote(cote)}
     <div class="lecture-cr__md-code${avecPage ? " lecture-cr__md-code--origine" : ""}">
-      ${md.lignes.map((ligne) => `
+      ${cote.lignes.map((ligne) => `
         <div class="lecture-cr__md-ligne">
           ${avecPage ? `<span class="lecture-cr__md-page">p. ${ligne.page}</span>` : ""}
           <span class="lecture-cr__md-rang">${ligne.rang}</span>
@@ -750,22 +938,24 @@ function brancher(hote) {
       return;
     }
 
-    if (cible.closest("[data-lecture-cr-md]")) {
-      basculerLeDocumentRefait(hote);
+    const onglet = cible.closest("[data-lecture-cr-onglet]");
+    if (onglet) {
+      etat.onglet = texte(onglet.dataset.lectureCrOnglet) || ONGLET.RESTITUTION;
+      redessiner(hote);
       return;
     }
 
     const lecture = cible.closest("[data-lecture-cr-md-lecture]");
     if (lecture) {
-      etat.markdown.lecture = texte(lecture.dataset.lectureCrMdLecture) || LECTURE.APERCU;
+      etat.md.lecture = texte(lecture.dataset.lectureCrMdLecture) || LECTURE.APERCU;
       redessiner(hote);
     }
   };
   hote.addEventListener("click", surLeClic);
 
-  // Le presse-papiers du document refait : le texte ne voyage pas dans un
+  // Le presse-papiers de la restitution : le texte ne voyage pas dans un
   // attribut HTML — un CCTP de quarante pages y tiendrait mal.
-  brancherLesBoutonsCopier(hote, { texteDe: () => etat.markdown.texte });
+  brancherLesBoutonsCopier(hote, { texteDe: () => etat.md.modele.texte });
 
   const detacherLaZone = brancherLaZoneDeDepot(zone, {
     // La zone se tait pendant une lecture : déposer un second document
@@ -800,11 +990,13 @@ async function lire(hote, fichier) {
   etat.dit = "Ouverture du document";
   etat.lecture = null;
   etat.pagesLues = [];
+  etat.fichier = fichier ?? null;
   etat.confrontes = null;
   etat.deplie = "";
-  // Le document refait appartient au compte rendu précédent : le garder
+  etat.onglet = ONGLET.RESTITUTION;
+  // Les restitutions appartiennent au compte rendu précédent : les garder
   // afficherait un document sous un autre.
-  etat.markdown = etatDuMarkdown();
+  etat.md = etatDesReconstitutions();
   redessiner(hote);
 
   try {
@@ -817,7 +1009,21 @@ async function lire(hote, fichier) {
     }
 
     etat.pagesLues = pages;
-    etat.dit = `Lecture des ${pages.length} pages par le modèle`;
+
+    // **La restitution d'abord, et les points ensuite, sur elle.** C'est tout
+    // le procédé : le modèle relit un document qu'on a sous les yeux, et l'on
+    // sait donc exactement sur quoi il s'est fondé. Lire les points sur le
+    // texte brut du PDF laisserait la question ouverte à chaque déception.
+    etat.dit = `Restitution des ${pages.length} pages en Markdown`;
+    redessiner(hote);
+    await restituerParLeModele(hote);
+
+    // Si elle n'a pas abouti, on lit sur le texte brut plutôt que de ne rien
+    // lire — mais l'écran le dit. La décision vit dans le service, avec son
+    // pourquoi : c'est elle qui donne son sens à l'écran entier.
+    const { pages: lues, lueSur } = pagesALire(pages, etat.md.modele);
+
+    etat.dit = `Relevé des points sur ${lueSur === "modele" ? "le document restitué" : "le texte du PDF"}`;
     redessiner(hote);
 
     const [{ lireLesSujets }, { identiteDuCompteRendu }] = await Promise.all([
@@ -825,21 +1031,25 @@ async function lire(hote, fichier) {
       import("../../../services/identite-du-compte-rendu.js")
     ]);
 
-    const lu = await lireLesSujets({ sourceId: "lecture-atelier", pages });
+    const lu = await lireLesSujets({ sourceId: "lecture-atelier", pages: lues });
     if (!lu?.ok) {
       const { phraseDuRefus } = await import("../../../services/sujets-par-le-modele.js");
       return echouer(hote, phraseDuRefus(lu?.motif) || "Le modèle n'a pas rendu de lecture exploitable.");
     }
 
-    const identite = identiteDuCompteRendu(pages.map((page) => texte(page?.text)).join("\n"));
+    const identite = identiteDuCompteRendu(lues.map((page) => texte(page?.text)).join("\n"));
 
     etat.lecture = lectureAssemblee({
       points: lu.sujets ?? [],
-      pages,
+      // **Les mêmes pages que celles qu'on a fait lire.** Une citation se
+      // vérifie contre ce que le modèle a eu sous les yeux : la chercher
+      // ailleurs déclarerait introuvables des citations parfaitement exactes.
+      pages: lues,
       identite,
       nom: texte(fichier?.name),
       ecartes: Number(lu.ecartes) || 0
     });
+    etat.lecture.lueSur = lueSur;
 
     etat.dit = "Confrontation aux sujets du projet";
     redessiner(hote);
@@ -847,6 +1057,10 @@ async function lire(hote, fichier) {
 
     etat.phase = "lue";
     redessiner(hote);
+
+    // L'outil ne coûte rien et ne bloque personne : il part en dernier, et
+    // l'écran s'affiche sans l'attendre.
+    void restituerParLoutil(hote);
   } catch (erreur) {
     echouer(hote, `La lecture n'a pas abouti : ${texte(erreur?.message) || "cause inconnue"}`);
   }
@@ -922,68 +1136,116 @@ async function lireLaDescription(hote, subjectId) {
 }
 
 /**
- * Afficher ou masquer le document refait.
+ * La restitution par le modèle.
  *
- * **Masquer ne jette pas le document** : il a coûté un appel, et le rouvrir ne
- * doit pas le repayer. Il n'est redemandé que pour un autre compte rendu.
+ * **Attendue, et non lancée en arrière-plan** : c'est elle que le relevé des
+ * points relira. La faire en parallèle ferait lire les points sur le texte
+ * brut une fois sur deux, selon qui finit le premier — et la source du relevé
+ * changerait d'un dépôt à l'autre sans que rien ne le dise.
  */
-function basculerLeDocumentRefait(hote) {
-  etat.markdown.ouvert = !etat.markdown.ouvert;
+async function restituerParLeModele(hote) {
+  const cote = etat.md.modele;
+  cote.phase = "demande";
+  cote.motif = "";
   redessiner(hote);
 
-  // On redemande aussi après un échec : c'est le seul geste qui permette de
-  // réessayer, et un panneau qui rouvrirait sur la même erreur passerait pour
-  // un bouton mort.
-  if (etat.markdown.ouvert && (etat.markdown.phase === "vide" || etat.markdown.phase === "echec")) {
-    void refaireLeDocument(hote);
+  try {
+    const { refaireLeDocument, phraseDuRefus } = await import(
+      "../../../services/markdown-par-le-modele.js"
+    );
+
+    const refait = await refaireLeDocument({ pages: etat.pagesLues });
+    if (!refait?.ok) {
+      cote.phase = "echec";
+      cote.motif = phraseDuRefus(refait?.motif) || "cause inconnue";
+      return;
+    }
+
+    garnirLeCote(cote, refait.pages);
+    cote.coupee = refait.coupee;
+    cote.horsPlafond = refait.horsPlafond;
+    cote.absentes = refait.absentes;
+    cote.phase = "fait";
+  } catch (erreur) {
+    cote.phase = "echec";
+    cote.motif = texte(erreur?.message) || "cause inconnue";
+  } finally {
+    comparerLesDeux();
+    redessiner(hote);
   }
 }
 
 /**
- * Demander le document refait, une fois.
+ * La restitution par l'outil.
  *
- * C'est un **second appel au modèle** sur le même document, et il n'est lancé
- * que sur ce geste : le faire au dépôt doublerait la facture de chaque lecture
- * pour une vérification qu'on ne demande pas toujours (fondamental 13).
+ * Elle ne coûte **aucun jeton**, et c'est tout son intérêt : si elle vaut celle
+ * du modèle sur des documents réels, l'appel de gauche disparaît et la lecture
+ * d'un compte rendu ne coûte plus qu'un seul appel.
+ *
+ * Elle reçoit le **PDF**, pas le texte déjà extrait : l'outil fait sa propre
+ * extraction, et c'est précisément ce qu'on veut comparer. Lui donner le texte
+ * du modèle reviendrait à comparer deux lectures du même brouillon.
  */
-async function refaireLeDocument(hote) {
-  if (etat.markdown.phase === "demande") return;
+async function restituerParLoutil(hote) {
+  const cote = etat.md.outil;
+  if (!etat.fichier) {
+    cote.phase = "echec";
+    cote.motif = REFUS_DE_LOUTIL.SANS_FICHIER;
+    return redessiner(hote);
+  }
 
-  etat.markdown.phase = "demande";
-  etat.markdown.motif = "";
+  cote.phase = "demande";
+  cote.motif = "";
   redessiner(hote);
 
   try {
-    const { refaireLeDocument: demander, phraseDuRefus } = await import(
-      "../../../services/markdown-par-le-modele.js"
-    );
+    const { refaireParLoutil } = await import("../../../services/markdown-par-loutil.js");
 
-    const refait = await demander({ pages: etat.pagesLues });
+    const refait = await refaireParLoutil({ fichier: etat.fichier });
     if (!refait?.ok) {
-      etat.markdown.phase = "echec";
-      etat.markdown.motif = `Le document n'a pas pu être refait : ${
-        phraseDuRefus(refait?.motif) || "cause inconnue"}.`;
+      cote.phase = "echec";
+      // Le code, pas la phrase : l'écran distingue « pas branché » — qui
+      // demande une variable — de « en panne », qui demande autre chose.
+      cote.motif = texte(refait?.motif) || REFUS_DE_LOUTIL.REFUSE;
       return;
     }
 
-    const assemble = assemblerLeMarkdown(refait.pages);
-    etat.markdown.texte = assemble.texte;
-    etat.markdown.lignes = assemble.lignes;
-    // La fidélité se mesure contre **les pages du PDF**, pas contre ce qui est
-    // parti : une page restée hors plafond est du document perdu, et elle doit
-    // peser dans la mesure comme telle.
-    etat.markdown.fidelite = fideliteDeLaReconstitution(etat.pagesLues, refait.pages);
-    etat.markdown.coupee = refait.coupee;
-    etat.markdown.horsPlafond = refait.horsPlafond;
-    etat.markdown.absentes = refait.absentes;
-    etat.markdown.phase = "fait";
+    garnirLeCote(cote, refait.pages);
+    cote.phase = "fait";
   } catch (erreur) {
-    etat.markdown.phase = "echec";
-    etat.markdown.motif = `Le document n'a pas pu être refait : ${
-      texte(erreur?.message) || "cause inconnue"}.`;
+    cote.phase = "echec";
+    cote.motif = texte(erreur?.message) || REFUS_DE_LOUTIL.INJOIGNABLE;
   } finally {
+    comparerLesDeux();
     redessiner(hote);
   }
+}
+
+/**
+ * Une restitution, mise en forme.
+ *
+ * **La fidélité se mesure contre les pages du PDF**, les mêmes pour les deux
+ * côtés : c'est ce qui rend les deux chiffres comparables entre eux.
+ */
+function garnirLeCote(cote, pages) {
+  const assemble = assemblerLeMarkdown(pages);
+  cote.pages = pages;
+  cote.texte = assemble.texte;
+  cote.lignes = assemble.lignes;
+  cote.fidelite = fideliteDeLaReconstitution(etat.pagesLues, pages);
+}
+
+/**
+ * L'alignement des deux, quand on a les deux.
+ *
+ * `comparerLesReconstitutions` rend `null` tant qu'il en manque une, et l'écran
+ * l'écrit : « rien à comparer » n'est pas « les deux sont d'accord » (règle 5).
+ */
+function comparerLesDeux() {
+  const { modele, outil } = etat.md;
+  etat.md.comparaison = modele.phase === "fait" && outil.phase === "fait"
+    ? comparerLesReconstitutions(modele.lignes, outil.lignes)
+    : null;
 }
 
 function echouer(hote, motif) {

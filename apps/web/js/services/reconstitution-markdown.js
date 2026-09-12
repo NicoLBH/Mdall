@@ -58,6 +58,48 @@ export const QUOI_DE_LA_LECTURE = {
 };
 
 /**
+ * Pourquoi une restitution par l'outil n'a pas eu lieu.
+ *
+ * **Ils vivent ici, dans le module pur**, et non dans le service qui appelle :
+ * l'écran doit pouvoir les nommer, et il ne peut pas importer ce service — qui
+ * tire l'authentification, donc le réseau. Un code recopié des deux côtés
+ * finirait par ne plus dire la même chose (règle 10).
+ */
+export const REFUS_DE_LOUTIL = {
+  /** Aucune adresse d'outil n'a été donnée au déploiement. */
+  NON_BRANCHE: "outil-non-branche",
+  INJOIGNABLE: "outil-injoignable",
+  REFUSE: "outil-refuse",
+  RIEN_RENDU: "rien-rendu",
+  SANS_FICHIER: "sans-fichier"
+};
+
+export const PHRASES_DU_REFUS_DE_LOUTIL = {
+  [REFUS_DE_LOUTIL.NON_BRANCHE]: "aucun outil de restitution n'est branché",
+  [REFUS_DE_LOUTIL.INJOIGNABLE]: "l'outil de restitution n'a pas répondu",
+  [REFUS_DE_LOUTIL.REFUSE]: "l'outil de restitution a refusé le document",
+  [REFUS_DE_LOUTIL.RIEN_RENDU]: "l'outil n'a rendu aucune page",
+  [REFUS_DE_LOUTIL.SANS_FICHIER]: "il n'y a pas de document à envoyer"
+};
+
+export function phraseDuRefusDeLoutil(motif) {
+  return PHRASES_DU_REFUS_DE_LOUTIL[texte(motif)] ?? "";
+}
+
+/**
+ * Ce qu'il faut faire pour brancher l'outil.
+ *
+ * **Écrit ici, et affiché à l'écran.** Un « non branché » sans la marche à
+ * suivre laisse chercher, et c'est le genre de recherche qui se refait à chaque
+ * fois.
+ */
+export const COMMENT_BRANCHER = [
+  "Déployer un service qui accepte un PDF en POST et rend ses pages en Markdown.",
+  "Renseigner son adresse dans la variable OPENDATALOADER_URL du projet Supabase.",
+  "Le contrat attendu est décrit dans docs/reconstituer-un-document.md."
+];
+
+/**
  * Le document, remis bout à bout dans l'ordre des pages.
  *
  * **L'ordre vient des numéros de page, pas de l'ordre de la réponse.** Un
@@ -204,6 +246,36 @@ export function fideliteDeLaReconstitution(pagesOrigine = [], pagesRefaites = []
     motsAjoutes,
     part: motsOrigine === 0 ? 1 : motsRetrouves / motsOrigine
   };
+}
+
+/**
+ * Sur quoi le relevé des points doit se faire.
+ *
+ * **C'est la décision qui donne son sens à tout l'écran.** Le modèle relit un
+ * document qu'on a sous les yeux, et l'on sait donc exactement sur quoi il
+ * s'est fondé. Lire les points sur le texte brut du PDF laisserait la question
+ * ouverte à chaque déception : mal lu, ou bien lu et mal exploité ?
+ *
+ * Quand la restitution n'a pas abouti, on lit sur le texte brut **plutôt que de
+ * ne rien lire** — mais l'appelant reçoit `lueSur` et doit l'afficher. Se
+ * rabattre en silence rendrait la source du relevé indevinable, ce qui est
+ * précisément le défaut qu'on corrige (règle 5).
+ *
+ * @param {object[]} pagesBrutes les pages sorties du PDF, `{page, text}`
+ * @param {{phase: string, pages: object[]}|null} restitution le document refait
+ * @returns {{pages: object[], lueSur: "modele"|"brut"}}
+ */
+export function pagesALire(pagesBrutes = [], restitution = null) {
+  const refaites = Array.isArray(restitution?.pages) ? restitution.pages : [];
+
+  if (restitution?.phase === "fait" && refaites.length > 0) {
+    return {
+      pages: refaites.map((page) => ({ page: Number(page?.page), text: String(page?.markdown ?? "") })),
+      lueSur: "modele"
+    };
+  }
+
+  return { pages: Array.isArray(pagesBrutes) ? pagesBrutes : [], lueSur: "brut" };
 }
 
 /**
