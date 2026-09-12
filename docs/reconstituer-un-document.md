@@ -85,6 +85,16 @@ est le premier temps du procédé, et c'est sur elle que les points sont relevé
 
 La restitution par l'outil ne consomme rien, et ne dépose donc rien.
 
+**Et le prix de la requête s'affiche sur la colonne**, en pastille, à côté de « un appel par
+document ». Le compteur dit ce qu'un mois a coûté ; il ne dit pas ce que *cette* lecture a
+coûté, au moment précis où l'on décide si elle valait la peine. Un prix qu'il faut aller
+chercher dans un autre écran n'entre jamais dans la décision. Le survol donne le détail :
+jetons d'entrée, jetons de sortie, modèle, date du tarif et du taux de change.
+
+Trois réponses possibles, et elles ne se confondent pas : un montant ; « coût non annoncé »
+quand le fournisseur n'a rien rendu ; « tarif inconnu » quand le modèle n'a pas de prix
+relevé. Aucune ne devient zéro — un zéro se lirait « gratuit ».
+
 ## 2. Ce que d'autres font déjà
 
 Relevé en septembre 2026. Les chiffres TEDS viennent des bancs cités ; ceux marqués
@@ -177,12 +187,18 @@ l'autre restitution, et l'écran afficherait « tout diverge » pour un document
 
 ### Le branchement
 
-1. Déployer le service. Pour OpenDataLoader, c'est un conteneur Java — un JRE et 24 Mo, ni
-   Python, ni PyTorch, ni GPU, ni modèle à télécharger. Sortie `--format markdown,json`,
-   avec `--markdown-page-separator` pour les numéros de page.
-2. Renseigner son adresse dans la variable **`OPENDATALOADER_URL`** du projet Supabase.
-3. La fonction `reconstituer-par-loutil` relaie — et **l'adresse ne descend jamais dans le
-   navigateur**. La porte reste celle de Mdall (`requireUser`).
+**Le service est écrit, dans [`services/opendataloader/`](../services/opendataloader/) :
+un serveur, un `Dockerfile`, et un pas-à-pas.** Il n'y a rien à écrire, seulement à
+déployer — voir [son README](../services/opendataloader/README.md).
+
+En résumé : `npm start` pour l'essayer en local, `docker build` pour l'empaqueter, puis
+`OPENDATALOADER_URL` dans les secrets Supabase et `supabase functions deploy
+reconstituer-par-loutil`.
+
+**Le service n'authentifie personne** : c'est la fonction Supabase qui tient la porte
+(`requireUser`), et l'adresse ne descend jamais dans le navigateur. Il ne doit donc jamais
+être exposé sur l'internet public — ce serait une conversion de PDF gratuite offerte au
+monde entier, sur votre facture.
 
 Tant que la variable est vide, l'écran l'écrit et affiche la marche à suivre. Il n'affiche
 pas « aucune différence » : **« rien à comparer » n'est pas « les deux sont d'accord »**.

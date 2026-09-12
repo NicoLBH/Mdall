@@ -23676,7 +23676,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 
 /* ── Lecture d'un compte rendu de chantier ───────────────────────────────── */
 
-.lecture-cr{display:flex;flex-direction:column;gap:20px;max-width:1100px;}
+/* **Pleine largeur.** Cet écran sert à comparer deux documents côte à côte :
+   bridé à 1100px, chaque colonne tombait sous 500px et l'on ne comparait plus
+   des documents mais des fragments. La prose, elle, garde sa largeur de
+   lecture — c'est `.lecture-cr__mot` qui s'en charge. */
+.lecture-cr{display:flex;flex-direction:column;gap:20px;max-width:none;width:100%;}
 .lecture-cr__entete{display:flex;flex-direction:column;gap:6px;}
 /* Le titre à gauche, le bouton du document refait à droite : une commande qui
    ne concerne que ce qu'on vient de lire se pose au bord de son titre. */
@@ -23732,7 +23736,14 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    prendrait pour une absence dans le document. */
 .lecture-cr__reserve{margin:0;font-size:12.5px;color:var(--fgColor-attention, #d29922);}
 
-.lecture-cr__chiffres{display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:10px;}
+/* Les cartes gardent leur taille au lieu de s'étirer : sur un grand écran,
+   quatre chiffres étalés sur deux mille pixels ne se lisent plus d'un coup. */
+.lecture-cr__chiffres{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(170px, 240px));
+  justify-content:start;
+  gap:10px;
+}
 
 .lecture-cr__chiffre{
   display:flex;
@@ -23943,6 +23954,20 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .lecture-cr__md-colonne-nom{font-size:12.5px;font-weight:600;color:var(--text);}
 .lecture-cr__md-colonne-prix{color:var(--muted);}
+/* Ce que cette requête-ci a coûté, à côté de ce qu'elle coûte en général. */
+.lecture-cr__md-prix{
+  padding:1px 7px;
+  border:1px solid var(--border);
+  border-radius:999px;
+  background:rgba(110,118,129,.12);
+  color:var(--text);
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:11px;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+  cursor:help;
+}
+.lecture-cr__md-prix.est-inconnu{color:var(--muted);font-style:italic;}
 .lecture-cr__md-colonne-part{margin-left:auto;color:var(--muted);}
 .lecture-cr__md-colonne-part.est-bon{color:var(--fgColor-success, #3fb950);}
 .lecture-cr__md-colonne-part.est-douteux{color:var(--fgColor-attention, #d29922);}

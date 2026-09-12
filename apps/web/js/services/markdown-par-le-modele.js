@@ -107,6 +107,13 @@ export async function refaireLeDocument({ pages = [] } = {}) {
     absentes: Array.isArray(rendu?.absentes) ? rendu.absentes : [],
     inconnues: Array.isArray(rendu?.inconnues) ? rendu.inconnues : [],
     coupee: Boolean(rendu?.coupee),
-    modele: texte(rendu?.modele)
+    modele: texte(rendu?.modele),
+    // Ce que cet appel-ci a consommé. `null` de chaque côté quand le
+    // fournisseur n'a rien annoncé : un décompte manquant ne devient pas zéro,
+    // qui se lirait « gratuit ».
+    jetons: {
+      entree: Number.isFinite(rendu?.jetons?.input_tokens) ? rendu.jetons.input_tokens : null,
+      sortie: Number.isFinite(rendu?.jetons?.output_tokens) ? rendu.jetons.output_tokens : null
+    }
   };
 }

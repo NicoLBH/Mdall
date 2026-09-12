@@ -48,6 +48,7 @@ import {
 import {
   ETAT, NOMS_DES_ETATS, comparerLesReconstitutions, mesureDeLaComparaison, pagesQuiDivergent
 } from "../../../services/comparaison-de-markdown.js";
+import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -133,6 +134,15 @@ function unCote() {
     lignes: [],
     pages: [],
     fidelite: null,
+    /**
+     * Ce que cet appel-ci a consommé, et par quel modèle.
+     *
+     * `null` de chaque côté quand le fournisseur n'a rien annoncé — un
+     * décompte manquant ne devient pas zéro, qui se lirait « gratuit ». Sans
+     * objet pour l'outil, qui ne consomme rien.
+     */
+    jetons: { entree: null, sortie: null },
+    modeleIA: "",
     /** La réponse du modèle a-t-elle été coupée ? Sans objet pour l'outil. */
     coupee: false,
     /** Les pages qui ne sont pas parties, et celles dont rien n'est revenu. */
@@ -425,6 +435,7 @@ function renderTeteDeColonne(cote, quoi) {
     <div class="lecture-cr__md-colonne-tete">
       <span class="lecture-cr__md-colonne-nom">${escapeHtml(quoi.nom)}</span>
       <span class="lecture-cr__md-colonne-prix mono-small">${escapeHtml(quoi.prix)}</span>
+      ${renderPastilleDuPrix(cote, quoi)}
       ${cote.phase === "fait" && cote.fidelite ? `
         <span class="lecture-cr__md-colonne-part mono-small ${tonDeLaPart(cote.fidelite.part)}"
           title="Part des mots du PDF qu'on retrouve dans cette restitution">
@@ -435,10 +446,37 @@ function renderTeteDeColonne(cote, quoi) {
   `;
 }
 
+/**
+ * Ce que cette requête-ci a coûté.
+ *
+ * **À la requête, et pas seulement au mois.** Le compteur dit ce qu'un mois a
+ * coûté ; il ne dit pas ce que *cette* lecture a coûté, au moment précis où
+ * l'on décide si elle valait la peine. Un prix qu'il faut aller chercher dans
+ * un autre écran n'entre jamais dans la décision, et l'habitude se prend sans
+ * qu'on l'ait choisie (fondamental 13).
+ *
+ * Une colonne qui ne consomme rien n'en porte pas : une pastille à « 0,00 € »
+ * se lirait comme un prix mesuré, alors que c'est l'absence de prix.
+ */
+function renderPastilleDuPrix(cote, quoi) {
+  if (!quoi.consomme || cote.phase !== "fait") return "";
+
+  const prix = prixDeLAppel({
+    model: cote.modeleIA, entree: cote.jetons?.entree, sortie: cote.jetons?.sortie
+  });
+
+  return `
+    <span class="lecture-cr__md-prix${prix.manque ? " est-inconnu" : ""}"
+      title="${escapeHtml(detailDeLAppel({
+        model: cote.modeleIA, entree: cote.jetons?.entree, sortie: cote.jetons?.sortie
+      }) || "Ce que cette requête a consommé")}">${escapeHtml(prix.dit)}</span>
+  `;
+}
+
 /** Qui écrit chaque colonne. Nommé une fois : les deux vues le lisent. */
 const COTES = {
-  modele: { nom: "Par le modèle", prix: "un appel par document" },
-  outil: { nom: "Par l'outil", prix: "gratuit, sans modèle" }
+  modele: { nom: "Par le modèle", prix: "un appel par document", consomme: true },
+  outil: { nom: "Par l'outil", prix: "gratuit, sans modèle", consomme: false }
 };
 
 /**
@@ -1165,6 +1203,9 @@ async function restituerParLeModele(hote) {
     cote.coupee = refait.coupee;
     cote.horsPlafond = refait.horsPlafond;
     cote.absentes = refait.absentes;
+    // Ce que cet appel a consommé, tel que le fournisseur l'a annoncé.
+    cote.jetons = refait.jetons ?? { entree: null, sortie: null };
+    cote.modeleIA = refait.modele;
     cote.phase = "fait";
   } catch (erreur) {
     cote.phase = "echec";

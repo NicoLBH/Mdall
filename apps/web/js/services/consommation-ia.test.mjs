@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 
 import { readdirSync } from "node:fs";
 import {
-  CHANGE, NATURES, TARIFS, appelPourLEcran, bornesDuMois, coutDeLAppel, enEuros, enJetons,
+  CHANGE, NATURES, TARIFS, appelPourLEcran, bornesDuMois, coutDeLAppel, detailDeLAppel,
+  enEuros, enJetons, prixDeLAppel,
   jourDeLAppel, moisEnCours, moisEnFrancais, nomDeLaNature, parJour, parNature, parProjet,
   partDeLaPersonne, quoiDeLaNature, tarifDuModele, totalDesAppels
 } from "./consommation-ia.js";
@@ -374,4 +375,67 @@ test("toute fonction qui appelle un modèle dépose sa consommation", async () =
 
   assert.deepEqual(manquantes, [],
     `ces fonctions appellent un modèle sans compter : ${manquantes.join(", ")}`);
+});
+
+/* ── Le prix d'une requête, à la requête ─────────────────────────────────── */
+
+/**
+ * **Le compteur dit ce qu'un mois a coûté ; il ne dit pas ce que cette
+ * lecture-ci a coûté**, au moment précis où l'on décide si elle valait la
+ * peine. Un prix qu'il faut aller chercher dans un autre écran n'entre jamais
+ * dans la décision, et l'habitude se prend sans qu'on l'ait choisie
+ * (fondamental 13).
+ */
+test("le prix d'un appel se dit à la requête", () => {
+  const prix = prixDeLAppel({ model: "gpt-4.1-mini", entree: 12000, sortie: 6000 });
+
+  assert.equal(prix.manque, null);
+  // 12000 × 0,40 + 6000 × 1,60, par million, puis en euros.
+  assert.ok(Math.abs(prix.euros - ((12000 * 0.40 + 6000 * 1.60) / 1e6) * CHANGE.taux) < 1e-12);
+  assert.match(prix.dit, /€$/);
+});
+
+/**
+ * **Aucune absence ne devient zéro.** Un zéro se lit « gratuit », et c'est la
+ * seule chose que ce n'est certainement pas (règle 5).
+ */
+test("un décompte manquant et un tarif inconnu ne se confondent pas, et ne valent pas zéro", () => {
+  const sansDecompte = prixDeLAppel({ model: "gpt-4.1-mini", entree: null, sortie: null });
+  assert.equal(sansDecompte.manque, "decompte");
+  assert.equal(sansDecompte.euros, null);
+  assert.doesNotMatch(sansDecompte.dit, /0,00/);
+
+  const sansTarif = prixDeLAppel({ model: "un-modele-de-demain", entree: 10, sortie: 10 });
+  assert.equal(sansTarif.manque, "tarif");
+  assert.equal(sansTarif.euros, null);
+  assert.doesNotMatch(sansTarif.dit, /0,00/);
+
+  // Les deux phrases sont différentes : elles ne se corrigent pas pareil.
+  assert.notEqual(sansDecompte.dit, sansTarif.dit);
+});
+
+/** Un seul des deux décomptes annoncés suffit à donner un prix. */
+test("un seul décompte annoncé donne quand même un prix", () => {
+  const prix = prixDeLAppel({ model: "gpt-4.1-mini", entree: 12000, sortie: null });
+
+  assert.equal(prix.manque, null);
+  assert.ok(prix.euros > 0);
+});
+
+/**
+ * Le montant seul ne se vérifie pas : c'est en voyant les jetons qu'on comprend
+ * pourquoi un document coûte trois fois un autre.
+ */
+test("le détail d'un appel dit les jetons, le modèle et la date du tarif", () => {
+  const detail = detailDeLAppel({ model: "gpt-4.1-mini", entree: 12000, sortie: 6000 });
+
+  assert.match(detail, /jetons d'entrée/);
+  assert.match(detail, /jetons de sortie/);
+  assert.match(detail, /gpt-4\.1-mini/);
+  assert.match(detail, new RegExp(TARIFS["gpt-4.1-mini"].releveLe));
+  assert.match(detail, new RegExp(String(CHANGE.taux).replace(".", "\\.")));
+});
+
+test("le détail d'un appel sans rien d'annoncé ne raconte rien", () => {
+  assert.equal(detailDeLAppel({ model: "", entree: null, sortie: null }), "");
 });

@@ -27,6 +27,7 @@ import {
 } from "../../../services/reconstitution-markdown.js";
 import { comparerLesReconstitutions } from "../../../services/comparaison-de-markdown.js";
 import { SORT, confrontation, lectureAssemblee } from "../../../services/lecture-du-cr.js";
+import { prixDeLAppel } from "../../../services/consommation-ia.js";
 
 const PAGES = [
   { page: 1, text: "Réunion de chantier n° 7. Lot 02 — GROS ŒUVRE. Reprise d'étanchéité en toiture." },
@@ -66,6 +67,7 @@ const REFAITES_MODELE = [
 function unCote(surcharge = {}) {
   return {
     phase: "vide", texte: "", lignes: [], pages: [], fidelite: null,
+    jetons: { entree: null, sortie: null }, modeleIA: "",
     coupee: false, horsPlafond: [], absentes: [], motif: "", ...surcharge
   };
 }
@@ -75,7 +77,8 @@ function unCoteFait(refaites, surcharge = {}) {
   const assemble = assemblerLeMarkdown(refaites);
   return unCote({
     phase: "fait", pages: refaites, texte: assemble.texte, lignes: assemble.lignes,
-    fidelite: fideliteDeLaReconstitution(PAGES, refaites), ...surcharge
+    fidelite: fideliteDeLaReconstitution(PAGES, refaites),
+    jetons: { entree: 12000, sortie: 6000 }, modeleIA: "gpt-4.1-mini", ...surcharge
   });
 }
 
@@ -424,4 +427,58 @@ test("les trois lectures parlent comme celles de la Mémoire", async () => {
   assert.match(html, />Aperçu</);
   assert.match(html, />Code</);
   assert.match(html, />Origine</);
+});
+
+/* ── Le prix de la requête, sur la colonne qui coûte ─────────────────────── */
+
+/**
+ * **Le compteur dit ce qu'un mois a coûté ; il ne dit pas ce que cette
+ * lecture-ci a coûté**, au moment précis où l'on décide si elle valait la
+ * peine (fondamental 13).
+ */
+test("la colonne du modèle porte le prix de sa requête", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: deuxCotes()
+  }));
+
+  assert.match(html, /lecture-cr__md-prix/);
+  // Le montant, calculé par le service de consommation — pas recopié ici.
+  const attendu = prixDeLAppel({ model: "gpt-4.1-mini", entree: 12000, sortie: 6000 });
+  assert.match(html, new RegExp(attendu.dit.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  // Et le détail au survol, pour que le montant se vérifie.
+  assert.match(html, /jetons d&#39;entrée/);
+});
+
+/**
+ * **Une colonne qui ne consomme rien n'en porte pas.** Une pastille à
+ * « 0,00 € » se lirait comme un prix mesuré, alors que c'est l'absence de prix.
+ */
+test("la colonne de l'outil ne porte aucun prix", () => {
+  const md = deuxCotes();
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md
+  }));
+
+  // Une seule pastille pour deux colonnes faites.
+  assert.equal((html.match(/lecture-cr__md-prix/g) ?? []).length, 1);
+  assert.doesNotMatch(html, /0,00 €/);
+});
+
+/**
+ * Un décompte que le fournisseur n'a pas annoncé se dit, et ne devient pas
+ * zéro — un zéro se lirait « gratuit » (règle 5).
+ */
+test("un appel sans décompte annoncé le dit au lieu d'afficher zéro", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
+    md: {
+      lecture: LECTURE.APERCU,
+      modele: unCoteFait(REFAITES_MODELE, { jetons: { entree: null, sortie: null } }),
+      outil: unCote(), comparaison: null
+    }
+  }));
+
+  assert.match(html, /coût non annoncé/);
+  assert.match(html, /est-inconnu/);
+  assert.doesNotMatch(html, /0,00 €/);
 });
