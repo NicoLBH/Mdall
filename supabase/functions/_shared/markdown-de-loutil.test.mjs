@@ -142,3 +142,74 @@ test("l'adresse de l'outil ne descend pas dans le navigateur", async () => {
   assert.doesNotMatch(service, /OPENDATALOADER_URL/);
   assert.match(service, /functions\/v1\/reconstituer-par-loutil/);
 });
+
+/* ── Le service, de l'autre côté du contrat ──────────────────────────────── */
+
+/**
+ * **Le marqueur traverse une frontière de processus.** Le service le passe à
+ * la ligne de commande, cet analyseur le relit ; les deux vivent dans des
+ * conteneurs différents et ne peuvent pas partager une constante. Ce test est
+ * donc le seul endroit où les deux se regardent — sans lui, changer l'un
+ * laisserait l'autre muet, et l'écran dirait « l'outil n'a rendu aucune page »
+ * sans qu'on devine pourquoi (règle 4).
+ */
+test("le séparateur du service est celui que cet analyseur sait relire", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const serveur = readFileSync(
+    fileURLToPath(new URL("../../../services/opendataloader/serveur.mjs", import.meta.url)), "utf8"
+  );
+
+  const declare = serveur.match(/const MARQUEUR = "([^"]+)"/);
+  assert.ok(declare, "le service ne déclare plus de marqueur de page");
+
+  // Ce que la ligne de commande écrira pour la page 7, relu par l'analyseur.
+  const ecrit = declare[1].replace("%page-number%", "7");
+  const pages = pagesDuMarkdown(`${ecrit}\nle contenu de la page`);
+
+  assert.deepEqual(pages, [{ page: 7, markdown: "le contenu de la page" }]);
+});
+
+/**
+ * Le service rend le Markdown tel quel : c'est ici, et nulle part ailleurs,
+ * qu'il se découpe. Deux analyseurs pour une même convention finiraient par ne
+ * plus dire la même chose.
+ */
+test("le service ne découpe pas les pages lui-même", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const serveur = readFileSync(
+    fileURLToPath(new URL("../../../services/opendataloader/serveur.mjs", import.meta.url)), "utf8"
+  );
+
+  assert.doesNotMatch(serveur, /function pagesDuMarkdown/);
+  assert.match(serveur, /json\(reponse, \{ markdown \}\)/);
+});
+
+/**
+ * **Le service n'authentifie personne**, et c'est écrit là où on le lit : dans
+ * son en-tête, dans son Dockerfile, et dans son mode d'emploi. Exposé sur
+ * l'internet public, il serait une conversion de PDF gratuite offerte au monde
+ * entier, sur la facture de celui qui l'a déployé.
+ */
+test("le service dit partout qu'il ne doit pas être exposé", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  for (const chemin of [
+    "../../../services/opendataloader/serveur.mjs",
+    "../../../services/opendataloader/Dockerfile",
+    "../../../services/opendataloader/README.md"
+  ]) {
+    const source = readFileSync(fileURLToPath(new URL(chemin, import.meta.url)), "utf8");
+    assert.match(source, /n.authentifie personne/i, `${chemin} ne prévient pas`);
+  }
+
+  const serveur = readFileSync(
+    fileURLToPath(new URL("../../../services/opendataloader/serveur.mjs", import.meta.url)), "utf8"
+  );
+  // Et il ne consomme rien : aucun modèle, aucune clé.
+  assert.doesNotMatch(serveur, /api\.openai\.com|OPENAI|API_KEY/);
+});

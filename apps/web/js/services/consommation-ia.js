@@ -69,6 +69,68 @@ export function coutDeLAppel({ model = "", inputTokens = 0, outputTokens = 0 } =
   return dollars * CHANGE.taux;
 }
 
+/**
+ * Le prix d'un appel, prêt à afficher — et ce qui manque quand il manque.
+ *
+ * ## Pourquoi à la requête, et pas seulement au mois
+ *
+ * Le compteur dit ce qu'un mois a coûté. Il ne dit pas ce que **cette
+ * lecture-ci** a coûté, au moment précis où l'on décide si elle valait la
+ * peine. Un prix qu'il faut aller chercher dans un autre écran n'entre jamais
+ * dans la décision — et l'habitude se prend sans qu'on l'ait choisie
+ * (fondamental 13).
+ *
+ * ## Trois réponses, et elles ne se confondent pas
+ *
+ * - un montant, quand on sait ;
+ * - `manque: "decompte"` quand le fournisseur n'a rien annoncé ;
+ * - `manque: "tarif"` quand le modèle n'a pas de prix relevé.
+ *
+ * Aucune des deux dernières ne devient zéro. Un zéro se lit « gratuit », et
+ * c'est la seule chose que ce n'est certainement pas (règle 5).
+ *
+ * @param {object} options
+ * @param {string} options.model le modèle, tel qu'il se nomme chez le fournisseur
+ * @param {number|null} options.entree les jetons d'entrée annoncés
+ * @param {number|null} options.sortie les jetons de sortie annoncés
+ * @returns {{euros: number|null, dit: string, manque: null|"decompte"|"tarif"}}
+ */
+export function prixDeLAppel({ model = "", entree = null, sortie = null } = {}) {
+  const sansDecompte = !Number.isFinite(entree) && !Number.isFinite(sortie);
+  if (sansDecompte) return { euros: null, dit: "coût non annoncé", manque: "decompte" };
+
+  const euros = coutDeLAppel({
+    model,
+    inputTokens: Number.isFinite(entree) ? entree : 0,
+    outputTokens: Number.isFinite(sortie) ? sortie : 0
+  });
+
+  if (euros === null) return { euros: null, dit: "tarif inconnu", manque: "tarif" };
+
+  return { euros, dit: enEuros(euros), manque: null };
+}
+
+/**
+ * Le détail d'un appel, pour l'info-bulle du prix.
+ *
+ * Le montant seul ne se vérifie pas : c'est en voyant les jetons qu'on
+ * comprend pourquoi un document coûte trois fois un autre.
+ */
+export function detailDeLAppel({ model = "", entree = null, sortie = null } = {}) {
+  const morceaux = [];
+
+  if (Number.isFinite(entree)) morceaux.push(`${enJetons(entree)} jetons d'entrée`);
+  if (Number.isFinite(sortie)) morceaux.push(`${enJetons(sortie)} jetons de sortie`);
+  if (texte(model)) morceaux.push(texte(model));
+
+  const tarif = tarifDuModele(model);
+  if (tarif) {
+    morceaux.push(`tarif du ${tarif.releveLe}, ${CHANGE.taux} $/€ du ${CHANGE.releveLe}`);
+  }
+
+  return morceaux.join(" · ");
+}
+
 /* ── Ce que chaque appel servait à faire ─────────────────────────────────── */
 
 /**

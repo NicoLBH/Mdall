@@ -118,9 +118,10 @@ serve(async (req) => {
     // Ce que cette relecture a coûté. On n'attend pas : elle ne dépend pas de
     // son compteur. Et l'on dépose même si la réponse est coupée — un appel
     // tronqué a été facturé comme un autre.
+    const jetons = jetonsDeLaReponse(rendu);
     void deposerLaConsommation({
       projectId, ownerId: garde.user.id, model: MODELE,
-      usageKind: "reconstitution-markdown", jetons: jetonsDeLaReponse(rendu)
+      usageKind: "reconstitution-markdown", jetons
     });
 
     const lu = lireLaReponse(rendu);
@@ -138,7 +139,19 @@ serve(async (req) => {
       inconnues,
       /** La réponse a-t-elle été coupée en cours de route ? */
       coupee: String(rendu?.status ?? "") === "incomplete",
-      modele: MODELE
+      modele: MODELE,
+      /**
+       * Ce que cet appel-ci a consommé.
+       *
+       * **Rendu, et pas seulement déposé.** Le compteur dit ce qu'un mois a
+       * coûté ; il ne dit pas ce que *cette* lecture a coûté, au moment où
+       * l'on décide si elle valait la peine. Un prix qu'il faut aller chercher
+       * dans un autre écran n'entre jamais dans la décision (fondamental 13).
+       *
+       * `null` quand le fournisseur n'a rien annoncé : un décompte manquant ne
+       * se remplace pas par zéro, qui se lirait « gratuit ».
+       */
+      jetons
     });
   } catch (error) {
     return reponse({ error: "Unexpected error", details: String(error) }, 500);

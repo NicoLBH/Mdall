@@ -1,0 +1,12 @@
+{
+  "name": "mdall-opendataloader",
+  "private": true,
+  "type": "module",
+  "description": "Un PDF entre, ses pages en Markdown sortent. Sans modèle, sans clé, sans jeton.",
+  "scripts": {
+    "start": "node serveur.mjs"
+  },
+  "dependencies": {
+    "@opendataloader/pdf": "^2.5.8"
+  }
+}
