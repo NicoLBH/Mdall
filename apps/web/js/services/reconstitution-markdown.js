@@ -70,6 +70,8 @@ export const REFUS_DE_LOUTIL = {
   NON_BRANCHE: "outil-non-branche",
   INJOIGNABLE: "outil-injoignable",
   REFUSE: "outil-refuse",
+  /** Le mot de passe partagé manque, ou ne correspond pas. */
+  JETON_REFUSE: "outil-refuse-le-jeton",
   RIEN_RENDU: "rien-rendu",
   SANS_FICHIER: "sans-fichier"
 };
@@ -78,6 +80,8 @@ export const PHRASES_DU_REFUS_DE_LOUTIL = {
   [REFUS_DE_LOUTIL.NON_BRANCHE]: "aucun outil de restitution n'est branché",
   [REFUS_DE_LOUTIL.INJOIGNABLE]: "l'outil de restitution n'a pas répondu",
   [REFUS_DE_LOUTIL.REFUSE]: "l'outil de restitution a refusé le document",
+  [REFUS_DE_LOUTIL.JETON_REFUSE]:
+    "l'outil a refusé le mot de passe — OPENDATALOADER_TOKEN et JETON_PARTAGE doivent être identiques",
   [REFUS_DE_LOUTIL.RIEN_RENDU]: "l'outil n'a rendu aucune page",
   [REFUS_DE_LOUTIL.SANS_FICHIER]: "il n'y a pas de document à envoyer"
 };
