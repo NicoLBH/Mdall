@@ -4681,18 +4681,34 @@ body.route--project .project-shell{
  * Blanc, et non de la couleur sourde des icônes voisines : c'est le point
  * d'entrée de tout le reste, et il doit se trouver sans être cherché.
  */
+/* Le bouton fait 32 px **bordure comprise** — `border-box`, sans quoi le filet
+   l'emmènerait à 34 et il ne s'alignerait plus sur l'avatar voisin. */
 .gh-copilote-raccourci{
+  box-sizing:border-box;
   display:inline-flex;
   align-items:center;
   justify-content:center;
   width:32px;
   height:32px;
+  border:1px solid var(--border);
   border-radius:var(--radius);
+}
+
+/* Le lien occupe l'intérieur du bouton, filet déduit : il est la surface
+   cliquable, et un lien plus petit laisserait un liseré mort tout autour. */
+.gh-copilote-raccourci__lien{
+  box-sizing:border-box;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:30px;
+  height:30px;
+  border-radius:calc(var(--radius) - 1px);
   color:#fff;
 }
 
-.gh-copilote-raccourci .octicon{width:32px;height:32px;fill:currentColor;}
-.gh-copilote-raccourci:hover{background:rgba(110,118,129,.16);}
+.gh-copilote-raccourci__lien .octicon{width:16px;height:16px;fill:currentColor;}
+.gh-copilote-raccourci__lien:hover{background:rgba(110,118,129,.16);}
 
 .gh-header--compact{
   height:var(--header-h-compact);
@@ -17133,13 +17149,50 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    rail n'a pas de fond, si bien que les deux se lisaient l'un à travers l'autre.
    Un écran de plus se réglera avec sa classe ajoutée ici, pas avec une seconde
    marge écrite ailleurs. */
-.project-simple-page--studio,
+/*
+ * **Cette marge vient du temps où le rail était devant tout l'Atelier.** Elle
+ * poussait la page de la largeur du rail pour lui faire de la place. La Mémoire
+ * a toujours son rail et la garde ; l'Atelier ne l'a plus — le sien vit dans le
+ * panneau du Copilote — et la garder rognait sa vitrine par la gauche.
+ */
 .project-simple-page--memory{ margin-left:var(--project-rail-width, 232px); }
+
+/*
+ * **La vitrine va d'un bord à l'autre de l'écran.**
+ *
+ * Deux choses la rognaient : la marge ci-dessus, et les 12 px de remplissage
+ * que `.project-shell__body` pose autour de tout onglet. On annule la seconde
+ * par une marge négative exacte — et non par des marges en `vw`, qui comptent
+ * la barre de défilement et débordent d'une dizaine de pixels.
+ *
+ * Le contenu, lui, reste centré et borné : c'est le corps qui s'en charge, plus
+ * bas, comme dans Paramètres.
+ */
+.project-simple-page--atelier{
+  margin-inline:-12px;
+}
 /* La coque de l'Atelier est un élément flex : sans largeur, elle se dimensionne
    sur son contenu, et un panneau vide la réduisait à trois cents pixels. On la
    fait tenir la colonne — sur cette page seulement, les Paramètres ayant leur
    propre mise en page. */
 .project-simple-page--studio .settings-shell--parametres{ width:100%; }
+
+/*
+ * **La place du rail se réserve au panneau qui en a un, plus à la page.**
+ *
+ * `.project-rail` est en `position:fixed` contre le bord gauche de la fenêtre :
+ * il ne pousse rien, c'est au contenu de s'écarter. Tant que l'Atelier avait un
+ * rail pour tout le monde, la page entière s'écartait. Maintenant que seul le
+ * Copilote en a un, c'est son panneau qui s'écarte — et la vitrine, qui n'en a
+ * pas, garde toute la largeur.
+ *
+ * Mettre la variable à zéro sur la page aurait été pire que de laisser la
+ * marge : le rail lui-même lit cette variable pour sa largeur, et il aurait
+ * disparu.
+ */
+.project-studio-router__panel--copilote{
+  margin-left:var(--project-rail-width, 232px);
+}
 .project-rail-layout{ display:block; }
 /* `width:100%` n'est pas superflu : sans lui le contenu se dimensionne sur ce
    qu'il porte, et l'Atelier — dont les panneaux sont vides tant qu'on n'a pas
@@ -17985,8 +18038,11 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
     position:static; width:auto; flex-direction:row; align-items:center; flex-wrap:wrap;
     border-right:0; border-bottom:1px solid var(--border); padding:0 0 8px;
   }
-  .project-simple-page--studio,
   .project-simple-page--memory{ margin-left:0; }
+  /* Au téléphone, la coquille n'a plus de remplissage à annuler, et le rail
+     passe en rangée au-dessus du contenu : plus rien à lui réserver. */
+  .project-simple-page--atelier{ margin-inline:0; }
+  .project-studio-router__panel--copilote{ margin-left:0; }
   .project-rail__scroll{ flex-direction:row; flex-wrap:wrap; gap:4px; overflow:visible; }
   .project-rail__group{ flex-direction:row; }
   .project-rail .side-nav-layout__separator{ display:none; }
@@ -23163,22 +23219,36 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
  * Un seul filet, celui du bas : les trois autres dessineraient une boîte, et
  * une boîte collée au sommet de l'écran se lit comme une fenêtre flottante.
  */
+/*
+ * **Sans filet.** Le dégradé s'éteint vers le bas : il se termine de lui-même,
+ * et un trait par-dessus redessinerait une limite que la couleur a déjà dite.
+ *
+ * Le contenu du bandeau est centré et borné comme le reste de la page — c'est
+ * le fond qui va d'un bord à l'autre, pas le texte.
+ */
 .atelier-bandeau{
   position:sticky;
   top:0;
   z-index:3;
   box-sizing:border-box;
   height:242px;
-  padding:0 32px;
   display:flex;
   flex-direction:column;
   justify-content:center;
-  gap:10px;
   border:0;
-  border-bottom:1px solid var(--border);
-  background:
-    radial-gradient(900px 260px at 15% 0%, rgba(110,118,129,.16), transparent 70%),
-    var(--bg, rgb(13, 17, 23));
+  background:linear-gradient(181deg, rgb(0, 2, 64) 1.83%, rgba(13, 17, 23, 0) 98.54%), none;
+}
+
+/* Le bandeau tient toute la largeur ; ce qu'il porte s'aligne sur le corps. */
+.atelier-bandeau__dedans{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  width:100%;
+  max-width:1400px;
+  margin:0 auto;
+  padding:0 32px;
+  box-sizing:border-box;
 }
 
 .atelier-bandeau__titre{margin:0;font-size:26px;font-weight:600;color:var(--text);}
@@ -23219,7 +23289,7 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   width:100%;
   max-width:1400px;
   margin:0 auto;
-  padding:20px 32px 40px 32px;
+  padding:40px 32px 40px 32px;
   box-sizing:border-box;
 }
 
@@ -23243,11 +23313,20 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   gap:12px;
 }
 
+/*
+ * **Une carte d'application : tout est centré, l'icône en haut.**
+ *
+ * La rangée sert à reconnaître d'un coup d'œil, pas à lire. Un bloc centré se
+ * balaye en diagonale ; une ligne de texte alignée à gauche se lit, ce qui est
+ * exactement l'effort qu'on voulait éviter à cet endroit de l'écran.
+ */
 .atelier-vedette{
   box-sizing:border-box;
   min-height:108px;
   display:flex;
   flex-direction:column;
+  align-items:center;
+  justify-content:center;
   gap:8px;
   min-width:0;
   padding:12px;
@@ -23256,13 +23335,22 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   background:rgb(21, 27, 35);
   color:var(--text);
   cursor:pointer;
-  text-align:left;
+  text-align:center;
 }
 
 .atelier-vedette:hover{border-color:var(--border2, #3d444d);}
-.atelier-vedette__tete{display:flex;align-items:center;gap:10px;min-width:0;}
-.atelier-vedette__nom{
+
+.atelier-vedette__tete{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:8px;
   min-width:0;
+  max-width:100%;
+}
+
+.atelier-vedette__nom{
+  max-width:100%;
   font-size:13px;
   font-weight:600;
   overflow:hidden;
@@ -23271,6 +23359,7 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 
 .atelier-vedette__resume{
+  max-width:100%;
   color:var(--muted);
   font-size:12px;
   line-height:1.4;
@@ -23325,11 +23414,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   align-items:center;
   justify-content:center;
   flex:0 0 auto;
-  width:32px;
-  height:32px;
-  border-radius:8px;
+  width:40px;
+  height:40px;
+  border-radius:10px;
   font-weight:700;
-  font-size:14px;
+  font-size:16px;
   color:#fff;
   background:linear-gradient(145deg,
     hsl(var(--atelier-teinte, 210) 55% 46%),
@@ -23387,6 +23476,7 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 @media (max-width: 760px){
   /* La hauteur fixe n'a plus de sens quand le titre passe sur trois lignes :
      le bandeau reprend la hauteur de ce qu'il porte. */
-  .atelier-bandeau{height:auto;padding:24px 16px;position:static;}
+  .atelier-bandeau{height:auto;padding-block:24px;position:static;}
+  .atelier-bandeau__dedans{padding-inline:20px;}
   .atelier-bandeau__titre{font-size:21px;}
 }

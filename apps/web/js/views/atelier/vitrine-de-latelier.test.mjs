@@ -269,6 +269,102 @@ test("aucune barre de retour ne double l'onglet Atelier", () => {
   assert.doesNotMatch(lis("../../../style.css"), /\.atelier-retour/);
 });
 
+/**
+ * **Et l'onglet ramène vraiment.**
+ *
+ * Il ne se passait rien : l'onglet est déjà actif, l'adresse ne change pas,
+ * donc le routeur ne redessine rien. Un onglet qu'on reclique et qui reste muet
+ * se lit comme un onglet cassé, pas comme un onglet déjà là — et comme la barre
+ * de retour venait d'être retirée, on se retrouvait enfermé dans l'utilitaire.
+ *
+ * L'application a déjà ce geste : les Situations, les Documents et les Actions
+ * l'écoutent depuis longtemps. L'Atelier ne l'écoutait pas.
+ */
+test("recliquer l'onglet Atelier ramène à la vitrine", () => {
+  const atelier = lis("../project-studio.js");
+
+  assert.match(atelier, /PROJECT_TAB_RESELECTED_EVENT/);
+  assert.match(atelier, /afficherPanneau\(root, ACCUEIL\)/);
+});
+
+/**
+ * **L'adresse doit oublier le panneau qu'elle demandait.**
+ *
+ * Elle l'emporte sur le dernier panneau regardé — c'est ce qui fait marcher le
+ * raccourci du Copilote. Tant que `…/atelier/copilote` reste dans la barre, le
+ * moindre redessin y retournerait : on reclique l'onglet, la vitrine s'affiche,
+ * une synchronisation passe, et l'on se retrouve ailleurs sans avoir rien fait.
+ */
+test("revenir à la vitrine efface le panneau demandé par l'adresse", () => {
+  const atelier = lis("../project-studio.js");
+
+  assert.match(atelier, /oublierLePanneauDeLaRoute\(\);\s*\n\s*afficherPanneau\(root, ACCUEIL\)/);
+  // `replaceState` et non une écriture du hash : écrire relancerait un rendu
+  // complet de l'onglet pour un changement qu'on vient de faire à la main.
+  assert.match(atelier, /history\.replaceState/);
+});
+
+/* ── La pleine largeur ───────────────────────────────────────────────────── */
+
+/**
+ * **Deux choses rognaient la vitrine**, et la seconde était un reste.
+ *
+ * La marge de la largeur du rail venait du temps où le rail se tenait devant
+ * tout l'Atelier ; il n'y est plus — le sien vit dans le panneau du Copilote.
+ * Et la coquille du projet pose 12 px autour de chaque onglet.
+ */
+test("la vitrine n'est plus rognée par le rail ni par la coquille", () => {
+  const css = lis("../../../style.css");
+
+  // La Mémoire garde sa marge : elle a toujours son rail.
+  assert.match(css, /\.project-simple-page--memory\{ margin-left:var\(--project-rail-width/);
+  // L'Atelier ne l'a plus, et annule les 12 px de la coquille.
+  assert.match(css, /\.project-simple-page--atelier\{[^}]*margin-inline:-12px/);
+});
+
+/**
+ * **Mais le Copilote garde sa place.**
+ *
+ * `.project-rail` est en `position:fixed` contre le bord gauche : il ne pousse
+ * rien, c'est au contenu de s'écarter. Retirer la marge de la page sans la
+ * rendre au panneau du Copilote l'aurait fait passer sous son propre rail — et
+ * mettre la variable à zéro aurait fait disparaître le rail lui-même, qui y lit
+ * sa largeur.
+ */
+test("le panneau du Copilote réserve la place de son rail, la vitrine non", () => {
+  const css = lis("../../../style.css");
+  const atelier = lis("../project-studio.js");
+
+  assert.match(css, /\.project-studio-router__panel--copilote\{\s*margin-left:var\(--project-rail-width/);
+  assert.doesNotMatch(css, /\.project-simple-page--atelier\{[^}]*--project-rail-width:0/);
+  // La largeur du rail se pose sur le panneau : le rail, en position fixe, la
+  // lit par héritage.
+  assert.match(atelier, /panel--copilote"[\s\S]{0,160}--project-rail-width:/);
+});
+
+/**
+ * Le fond va d'un bord à l'autre ; **ce qu'il porte reste centré et borné**,
+ * comme dans Paramètres. Un titre collé au bord gauche d'un écran large se
+ * désolidarise du contenu qu'il annonce.
+ */
+test("le bandeau tient toute la largeur, son contenu reste centré", () => {
+  const html = renderVitrineDeLatelier();
+  const css = lis("../../../style.css");
+
+  assert.match(html, /atelier-bandeau__dedans/);
+  assert.match(css, /\.atelier-bandeau__dedans\{[^}]*max-width:1400px/);
+  assert.match(css, /\.atelier-bandeau__dedans\{[^}]*margin:0 auto/);
+  // Sans filet : le dégradé s'éteint de lui-même vers le bas.
+  assert.doesNotMatch(css, /\.atelier-bandeau\{[^}]*border-bottom/);
+});
+
+test("le bandeau accueille par son nom", () => {
+  const html = renderVitrineDeLatelier();
+
+  assert.match(html, /Bienvenue dans l'Atelier pour bricoler/);
+  assert.match(html, /simplifier vos tâches/);
+});
+
 /* ── Le raccourci du Copilote ────────────────────────────────────────────── */
 
 /**
@@ -296,4 +392,47 @@ test("une route inconnue ramène à la vitrine plutôt qu'à rien", async () => 
   assert.equal(panneauDemandeParLaRoute("#project/abc/atelier/inconnu"), "");
   assert.equal(panneauDemandeParLaRoute(""), "");
   assert.equal(panneauDemandeParLaRoute(), "");
+});
+
+/* ── Le raccourci du Copilote, à ses dimensions ──────────────────────────── */
+
+/**
+ * Trois tailles emboîtées : le bouton à 32 px **bordure comprise**, le lien à
+ * 30 px — l'intérieur, filet déduit, pour que la surface cliquable ne laisse
+ * pas un liseré mort tout autour — et l'icône à 16 px.
+ *
+ * `border-box` n'est pas un détail : sans lui le filet emmène le bouton à
+ * 34 px, et il cesse de s'aligner sur l'avatar voisin.
+ */
+test("le raccourci du Copilote s'emboîte en 32, 30 et 16", () => {
+  const css = lis("../../../style.css");
+
+  assert.match(css, /\.gh-copilote-raccourci\{[^}]*box-sizing:border-box/);
+  assert.match(css, /\.gh-copilote-raccourci\{[^}]*width:32px;\s*height:32px/);
+  assert.match(css, /\.gh-copilote-raccourci\{[^}]*border:1px solid/);
+  assert.match(css, /\.gh-copilote-raccourci__lien\{[^}]*width:30px;\s*height:30px/);
+  assert.match(css, /\.gh-copilote-raccourci__lien \.octicon\{width:16px;height:16px/);
+});
+
+/* ── Les cartes ──────────────────────────────────────────────────────────── */
+
+/**
+ * **Une carte d'application : tout centré, l'icône en haut.** La rangée sert à
+ * reconnaître d'un coup d'œil, pas à lire ; un bloc centré se balaye en
+ * diagonale, une ligne alignée à gauche se lit — exactement l'effort qu'on
+ * voulait éviter à cet endroit de l'écran.
+ */
+test("une vedette se lit centrée, l'icône au-dessus du nom", () => {
+  const css = lis("../../../style.css");
+
+  assert.match(css, /\.atelier-vedette\{[^}]*text-align:center/);
+  assert.match(css, /\.atelier-vedette__tete\{[^}]*flex-direction:column/);
+  assert.match(css, /\.atelier-vedette__tete\{[^}]*align-items:center/);
+});
+
+test("les vignettes de toutes les cartes font 40 px", () => {
+  const css = lis("../../../style.css");
+  const regle = css.slice(css.indexOf(".atelier-fiche__vignette,"));
+
+  assert.match(regle.slice(0, 400), /width:40px;\s*height:40px/);
 });
