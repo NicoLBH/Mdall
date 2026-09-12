@@ -99,13 +99,31 @@ premier ajustement.
 Le décompte, à côté de la réponse, au moment où elle arrive. C'est la place la
 plus utile et la plus difficile : il doit se voir sans encombrer la lecture.
 
-## Étape 5 — Les autres appels de modèle
+## Étape 5 — Les autres appels de modèle *(faite)*
 
-Le copilote n'est pas le seul. L'extraction des sujets, celle des avis, la
-reconnaissance d'écriture et les notes de dépôt appellent tous un modèle. Chacun
-dépose sa ligne par le même module — ils s'ajoutent un par un, et tant qu'un
-appel ne dépose rien, **son absence se voit** plutôt que de fausser le total en
-silence.
+Onze natures d'appel déposent désormais leur ligne : le copilote, la lecture des
+comptes rendus, celle des rapports de contrôle, celle des figures, celle des
+notes de calcul, la transcription manuscrite, le relevé et la levée
+d'observations, la note de dépôt, le titre de proposition, l'échange dans un
+sujet.
+
+**Deux garde-fous, et ils mordent tous les deux.** Un test relit les fonctions
+et refuse qu'une seule appelle un modèle sans compter ; un autre refuse qu'une
+nature déposée n'ait pas son nom à l'écran — sans quoi elle s'afficherait sous
+son code brut, et personne ne saurait de quoi il s'agit.
+
+## Étape 6 — Où va l'argent *(faite)*
+
+**C'est la question qui fait décider**, et elle passe donc en premier sur les
+deux écrans. Un total par projet dit *combien*, jamais *pour quoi faire* : on ne
+change pas ses habitudes en apprenant qu'un chantier coûte douze euros, on les
+change en apprenant que dix de ces douze partent dans la lecture de PDF. Et
+l'inverse vaut autant — voir que la rédaction des titres coûte trois centimes
+dispense de s'en priver.
+
+Chaque ligne nomme **le geste**, pas la fonction : « Lecture des comptes
+rendus », et non « extract-sujets ». Le nom technique n'apprend rien sur ce
+qu'on pourrait faire autrement.
 
 ---
 

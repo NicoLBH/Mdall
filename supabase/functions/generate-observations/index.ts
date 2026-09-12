@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser } from "../_shared/require-user.ts";
+import { deposerLaConsommation, jetonsDeLaReponse } from "../_shared/consommation-ia.ts";
 
 type Observation = {
   title: string;
@@ -169,6 +170,13 @@ serve(async (req) => {
     }
 
     const openAiJson = await openAiResponse.json();
+
+    void deposerLaConsommation({
+      projectId: String(run.project_id ?? "") || null,
+      ownerId: garde.user.id, model: "gpt-4.1-mini",
+      usageKind: "observations", jetons: jetonsDeLaReponse(openAiJson)
+    });
+
     const llmText = extractTextFromOpenAiResponse(openAiJson);
     const parsed = parseLlmResponse(openAiJson, llmText);
 

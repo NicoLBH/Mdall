@@ -20,6 +20,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser } from "../_shared/require-user.ts";
+import { deposerLaConsommation, jetonsDeLaReponse } from "../_shared/consommation-ia.ts";
 import { redactionDuTexte, redactionRecevable, REFUS } from "./redaction.js";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -158,7 +159,16 @@ serve(async (req) => {
       return jsonResponse({ error: "LLM request failed", code: "LLM_REQUEST_FAILED" }, 502);
     }
 
-    const brut = extractText(await response.json());
+    // On garde la réponse entière : le décompte y est, et n'extraire que le
+    // texte le jetterait avec elle.
+    const rendu = await response.json();
+
+    void deposerLaConsommation({
+      projectId, ownerId: garde.user.id, model: MODEL,
+      usageKind: "titre-de-proposition", jetons: jetonsDeLaReponse(rendu)
+    });
+
+    const brut = extractText(rendu);
     if (!brut) return jsonResponse({ error: "LLM returned nothing", code: "LLM_EMPTY_RESPONSE" }, 502);
 
     const lu = redactionDuTexte(brut);

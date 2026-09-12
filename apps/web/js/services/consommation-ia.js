@@ -69,6 +69,118 @@ export function coutDeLAppel({ model = "", inputTokens = 0, outputTokens = 0 } =
   return dollars * CHANGE.taux;
 }
 
+/* ── Ce que chaque appel servait à faire ─────────────────────────────────── */
+
+/**
+ * Les natures d'appel, telles que les fonctions les écrivent.
+ *
+ * **C'est la question à laquelle l'écran doit répondre** : « où va mon argent
+ * d'IA ? ». Un total par projet dit *combien*, jamais *pour quoi faire* — et
+ * c'est « pour quoi faire » qui permet de décider. On ne change pas ses
+ * habitudes en apprenant qu'un chantier coûte douze euros ; on les change en
+ * apprenant que dix de ces douze partent dans la lecture de PDF.
+ *
+ * Chaque entrée dit **ce que l'utilisateur fait**, pas quelle fonction s'exécute :
+ * « Lecture des comptes rendus » et non « extract-sujets ». Le nom technique ne
+ * lui apprend rien sur le geste qu'il pourrait faire autrement.
+ *
+ * ## Le code vit côté serveur, le nom vit ici
+ *
+ * Le code est écrit par la fonction qui dépose ; il ne peut pas être importé
+ * d'ici — l'orchestration du serveur ne descend jamais dans le navigateur.
+ * Un test relit donc les fonctions et vérifie que chaque code déposé a bien son
+ * nom : sans lui, une fonction ajoutée demain afficherait son code brut dans la
+ * répartition, et personne ne saurait de quoi il s'agit.
+ */
+export const NATURES = {
+  "copilote": {
+    nom: "Copilote",
+    quoi: "Les questions posées au copilote sur un projet."
+  },
+  "extraction-sujets": {
+    nom: "Lecture des comptes rendus",
+    quoi: "Relever les points d'un compte rendu de chantier."
+  },
+  "extraction-avis": {
+    nom: "Lecture des rapports de contrôle",
+    quoi: "Relever les avis d'un rapport de bureau de contrôle."
+  },
+  "lecture-figure": {
+    nom: "Lecture des figures",
+    quoi: "Décrire une image d'un rapport pour pouvoir la citer."
+  },
+  "lecture-manuscrit": {
+    nom: "Lecture d'écriture manuscrite",
+    quoi: "Transcrire une note écrite à la main."
+  },
+  "lecture-note-de-calcul": {
+    nom: "Lecture des notes de calcul",
+    quoi: "Relever les valeurs d'une note de calcul jointe à un utilitaire."
+  },
+  "observations": {
+    nom: "Relevé d'observations",
+    quoi: "Tirer les observations d'un document versé."
+  },
+  "levee-observations": {
+    nom: "Levée d'observations",
+    quoi: "Décider si une observation est levée par ce qui vient d'arriver."
+  },
+  "note-de-depot": {
+    nom: "Note de dépôt",
+    quoi: "Rédiger ce qu'un versement apporte."
+  },
+  "titre-de-proposition": {
+    nom: "Titre de proposition",
+    quoi: "Proposer un titre à partir de ce que la proposition contient."
+  },
+  "echange-sujet": {
+    nom: "Échange dans un sujet",
+    quoi: "Répondre dans la discussion d'un sujet."
+  }
+};
+
+/**
+ * Le nom d'une nature.
+ *
+ * **Un code inconnu garde son code**, et ne devient pas « Autre ». Une fonction
+ * ajoutée demain sans son nom doit se voir : rangée sous « Autre », sa
+ * consommation serait invisible au milieu du reste, et l'on chercherait
+ * longtemps pourquoi les totaux ne s'expliquent pas (règle 5).
+ */
+export function nomDeLaNature(code) {
+  return NATURES[texte(code)]?.nom || texte(code) || "Sans nature";
+}
+
+export function quoiDeLaNature(code) {
+  return NATURES[texte(code)]?.quoi ?? "";
+}
+
+/**
+ * La répartition par nature, de la plus coûteuse à la moins.
+ *
+ * C'est **le classement qui sert à décider** : on lit la première ligne et l'on
+ * sait où porter l'effort. Un ordre alphabétique obligerait à comparer onze
+ * montants soi-même.
+ */
+export function parNature(appels = []) {
+  const parCode = new Map();
+
+  for (const appel of Array.isArray(appels) ? appels : []) {
+    const code = texte(appel?.nature) || "inconnu";
+    if (!parCode.has(code)) parCode.set(code, []);
+    parCode.get(code).push(appel);
+  }
+
+  return [...parCode.entries()]
+    .map(([code, liste]) => ({
+      code,
+      nom: nomDeLaNature(code),
+      quoi: quoiDeLaNature(code),
+      ...totalDesAppels(liste)
+    }))
+    .sort((gauche, droite) => (droite.euros - gauche.euros) || (droite.jetons - gauche.jetons));
+}
+
 /* ── Ce qu'une ligne de la base devient ──────────────────────────────────── */
 
 export function appelPourLEcran(ligne = {}) {

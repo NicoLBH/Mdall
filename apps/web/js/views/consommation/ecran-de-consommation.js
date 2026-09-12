@@ -29,7 +29,7 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { getNiceChartTicks, renderSvgLineChart } from "../../utils/svg-line-chart.js";
 import {
-  CHANGE, TARIFS, enEuros, enJetons, parJour, parProjet, tarifDuModele, totalDesAppels
+  CHANGE, TARIFS, enEuros, enJetons, parJour, parNature, parProjet, tarifDuModele, totalDesAppels
 } from "../../services/consommation-ia.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -175,6 +175,63 @@ export function renderRepartitionParProjet(lignes = [], { titre = "Par projet" }
 }
 
 /**
+ * La répartition **par nature d'appel** — ce qui permet de décider.
+ *
+ * Un total par projet dit *combien*, jamais *pour quoi faire*. Or on ne change
+ * pas ses habitudes en apprenant qu'un chantier coûte douze euros ; on les
+ * change en apprenant que dix de ces douze partent dans la lecture de PDF. Et
+ * l'inverse vaut autant : voir que la rédaction des titres coûte trois centimes
+ * dispense de s'en priver.
+ *
+ * C'est donc **le premier bloc de l'écran**, avant la courbe et avant les
+ * projets : c'est la seule question dont la réponse change quelque chose.
+ *
+ * Chaque ligne dit ce que l'appel **faisait**, pas quelle fonction s'exécutait :
+ * le nom technique n'apprend rien sur le geste qu'on pourrait faire autrement.
+ */
+export function renderRepartitionParNature(lignes = [], { titre = "Par usage" } = {}) {
+  const liste = Array.isArray(lignes) ? lignes : [];
+  if (liste.length === 0) return "";
+
+  const total = liste.reduce((somme, ligne) => somme + (Number(ligne?.euros) || 0), 0);
+
+  return `
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">${escapeHtml(titre)}</h3>
+      <p class="conso-usages__mot">
+        Du plus coûteux au moins. C'est ici qu'on voit quoi faire autrement — et quoi
+        continuer sans s'en priver.
+      </p>
+      <ul class="conso-usages__liste">
+        ${liste.map((ligne) => {
+          const part = total > 0 ? (Number(ligne.euros) || 0) / total : 0;
+          return `
+            <li class="conso-usage">
+              <div class="conso-usage__tete">
+                <span class="conso-usage__nom">${escapeHtml(ligne.nom)}</span>
+                <span class="conso-usage__euros mono-small">${escapeHtml(enEuros(ligne.euros))}</span>
+                <span class="conso-usage__part mono-small">${escapeHtml(
+                  total > 0 ? `${Math.round(part * 100)} %` : "—"
+                )}</span>
+              </div>
+              <div class="conso-usage__jauge" aria-hidden="true">
+                <span class="conso-usage__barre" style="width:${(part * 100).toFixed(1)}%"></span>
+              </div>
+              <div class="conso-usage__pied mono-small">
+                <span>${escapeHtml(ligne.quoi || "")}</span>
+                <span>${escapeHtml(
+                  `${ligne.appels === 1 ? "1 appel" : `${ligne.appels} appels`} · ${enJetons(ligne.jetons)} jetons`
+                )}</span>
+              </div>
+            </li>
+          `;
+        }).join("")}
+      </ul>
+    </section>
+  `;
+}
+
+/**
  * Le tarif retenu, en clair.
  *
  * **Un montant qu'on ne peut pas refaire est une rumeur** (c'est toute la
@@ -257,6 +314,7 @@ export function renderConsommation({
     <div class="conso-ecran">
       ${enTeteHtml}
       ${renderCarteDeConsommation({ total, titre: titreDuTotal, detail: detailDuTotal })}
+      ${renderRepartitionParNature(parNature(appels))}
       ${renderCourbeDesJours(jours, { titre: "Consommation par jour" })}
       ${parProjets ? renderRepartitionParProjet(parProjet(appels, nomDuProjet)) : ""}
       ${renderTarifApplique(modeles)}

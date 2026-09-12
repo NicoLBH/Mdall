@@ -842,7 +842,7 @@ export const OUTILS = [
       etape("Lecture de la note de calcul", piece.nom);
       let note;
       try {
-        note = await lireLaNoteDeCalcul(piece, { cle: contexte.cleDuModele });
+        note = await lireLaNoteDeCalcul(piece, { cle: contexte.cleDuModele, tracage: contexte.tracage });
       } catch (erreur) {
         return { ok: false, raison: erreur instanceof Error ? erreur.message : "La note n'a pas pu être lue." };
       }
@@ -1673,7 +1673,8 @@ export function comparerALaMemoire(outil, valeurs = {}, assertions = []) {
  */
 export async function executerOutil({
   id = "", entrees = {}, assertions = [], question = "", confirmees = [], piecesJointes = [],
-  acquises = {}, onEtape = null, cleDuModele = "", autorisation = "", etudeIncendie = null
+  acquises = {}, onEtape = null, cleDuModele = "", autorisation = "", etudeIncendie = null,
+  tracage = null
 } = {}) {
   const outil = outilParId(id);
   if (!outil) {
@@ -1820,7 +1821,7 @@ export async function executerOutil({
   // calcul déposée n'est pas une valeur, c'est une source. Elle ne passe donc
   // pas par le garde-fou des substitutions — il n'y a rien à y substituer.
   const resultat = await outil.executer(fournies, {
-    piecesJointes, onEtape: dire(onEtape), cleDuModele, autorisation, etudeIncendie
+    piecesJointes, onEtape: dire(onEtape), cleDuModele, autorisation, etudeIncendie, tracage
   });
   if (!resultat?.ok) {
     return {

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser } from "../_shared/require-user.ts";
+import { deposerLaConsommation, jetonsDeLaReponse } from "../_shared/consommation-ia.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -109,7 +110,10 @@ serve(async (req) => {
           situations
         );
 
-        const decision = await callLLM(prompt);
+        const decision = await callLLM(prompt, {
+          projectId: String(obs.project_id ?? "") || null,
+          ownerId: garde.user.id
+        });
 
         if (!decision) {
           errors.push({
@@ -196,7 +200,11 @@ async function callRPC(supabase: any, name: string, params: any) {
   return data ?? [];
 }
 
-async function callLLM(prompt: string) {
+/** Le modèle appelé. Nommé une fois : c'est lui qui décide du tarif au
+ *  compteur, et deux chaînes recopiées finiraient par ne plus se ressembler. */
+const MODELE = "gpt-4.1-mini";
+
+async function callLLM(prompt: string, tracage: { projectId: string | null; ownerId: string | null } = { projectId: null, ownerId: null }) {
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -204,12 +212,25 @@ async function callLLM(prompt: string) {
       ...jsonHeaders
     },
     body: JSON.stringify({
-      model: "gpt-4.1-mini",
+      model: MODELE,
       input: prompt
     })
   });
 
+  // Le décompte se lit sur le corps, qu'on relit ici parce que la réponse est
+  // consommée en texte plus bas : la relire en JSON après coup lèverait une
+  // erreur, un corps ne se lit qu'une fois.
   const rawText = await res.text();
+
+  try {
+    void deposerLaConsommation({
+      projectId: tracage.projectId, ownerId: tracage.ownerId, model: MODELE,
+      usageKind: "levee-observations", jetons: jetonsDeLaReponse(JSON.parse(rawText))
+    });
+  } catch {
+    // Un corps illisible n'a pas de décompte : l'appel a déjà son propre sort
+    // décidé quelques lignes plus bas.
+  }
 
   if (!res.ok) {
     throw new Error(`OpenAI error ${res.status}: ${rawText}`);

@@ -20,6 +20,26 @@
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 
+/**
+ * Le projet où l'on se trouve, pour le compteur de consommation.
+ *
+ * Résolu ici plutôt que passé de main en main : il traverserait sinon quatre
+ * signatures qui n'en ont aucun usage, et chacune pourrait l'oublier en chemin
+ * sans que rien ne le dise.
+ *
+ * **L'identifiant de la base, pas celui de la route.** Passer le second
+ * rattacherait la consommation à un projet qui n'existe pas côté base.
+ */
+async function projetCourant() {
+  try {
+    const { resolveCurrentBackendProjectId } = await import("./project-supabase-sync.js");
+    return (await resolveCurrentBackendProjectId()) || null;
+  } catch {
+    // Une lecture reste possible sans savoir où l'on est.
+    return null;
+  }
+}
+
 const URL_DE_LA_FONCTION = `${getSupabaseUrl()}/functions/v1/extract-avis`;
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -66,6 +86,11 @@ export async function relireLesAvis({ sourceId = "", pages = [] } = {}) {
       method: "POST",
       headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
+        // **Le projet ne sert qu'au compteur de consommation**, jamais à la
+        // lecture : le serveur ne voit que des pages. On l'envoie donc quand on
+        // le connaît, et son absence range l'appel hors projet plutôt que de
+        // l'attribuer au hasard.
+        project_id: await projetCourant(),
         source_id: texte(sourceId),
         pages: lisibles.map((page) => ({ page: Number(page?.page), text: texte(page?.text ?? page?.texte) }))
       })

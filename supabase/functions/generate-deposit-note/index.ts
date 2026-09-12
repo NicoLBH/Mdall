@@ -17,6 +17,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser } from "../_shared/require-user.ts";
+import { deposerLaConsommation, jetonsDeLaReponse } from "../_shared/consommation-ia.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -152,6 +153,13 @@ serve(async (req) => {
     }
 
     const payload = await response.json();
+
+    void deposerLaConsommation({
+      projectId: String(proposition.project_id ?? "") || null,
+      ownerId: garde.user.id, model: MODEL,
+      usageKind: "note-de-depot", jetons: jetonsDeLaReponse(payload)
+    });
+
     const markdown = extractText(payload);
 
     if (!markdown) {

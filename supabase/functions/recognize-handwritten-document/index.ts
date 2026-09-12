@@ -1,4 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { requireUser } from "../_shared/require-user.ts";
+import { deposerLaConsommation, jetonsDeLaReponse } from "../_shared/consommation-ia.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 type RecognizeRequest = {
@@ -122,13 +124,22 @@ serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization") || req.headers.get("authorization") || "";
-    if (!authHeader.toLowerCase().startsWith("bearer ")) {
-      return json({ error: "Missing Authorization bearer token", code: "AUTH_REQUIRED" }, 401);
-    }
+    // **On vérifie qui appelle, on ne se contente pas de constater un jeton.**
+    // Le contrôle d'avant regardait qu'un porteur soit présent : la clé anonyme
+    // du projet est elle-même un jeton signé, elle passait donc — et n'importe
+    // qui connaissant l'URL pouvait déclencher un appel payant. C'est
+    // exactement ce que `require-user.ts` existe pour empêcher, et cette
+    // fonction était la dernière à ne pas s'en servir.
+    const garde = await requireUser(req, corsHeaders);
+    if ("response" in garde) return garde.response;
 
     const body = (await req.json().catch(() => null)) as RecognizeRequest | null;
     const strokes = Array.isArray(body?.strokes) ? body.strokes : [];
+
+    // Le projet ne sert qu'au compteur : la reconnaissance ne voit que des
+    // traits. Facultatif, donc — sans lui l'appel se range hors projet plutôt
+    // que d'être attribué au hasard.
+    const projectId = String((body as { project_id?: string })?.project_id ?? "").trim() || null;
     const imageDataUrl = toString(body?.imageDataUrl);
     const canvasSize = body?.canvasSize && typeof body.canvasSize === "object"
       ? {
@@ -226,6 +237,12 @@ serve(async (req) => {
     }
 
     const openAiJson = await openAiResponse.json();
+
+    void deposerLaConsommation({
+      projectId, ownerId: garde.user.id, model: MODEL,
+      usageKind: "lecture-manuscrit", jetons: jetonsDeLaReponse(openAiJson)
+    });
+
     const markdown = cleanupMarkdown(extractOpenAiText(openAiJson));
 
     if (!markdown) {

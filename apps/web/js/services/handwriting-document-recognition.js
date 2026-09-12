@@ -24,6 +24,16 @@ $$
 
 Conclusion : \\( I = \\frac{1}{3} \\).`;
 
+/** Le projet où l'on se trouve, pour le compteur de consommation. */
+async function projetCourant() {
+  try {
+    const { resolveCurrentBackendProjectId } = await import("./project-supabase-sync.js");
+    return (await resolveCurrentBackendProjectId()) || null;
+  } catch {
+    return null;
+  }
+}
+
 async function buildSupabaseAuthHeaders(extra = {}) {
   if (typeof globalThis.__MDALL_TEST_BUILD_SUPABASE_AUTH_HEADERS__ === "function") {
     return await globalThis.__MDALL_TEST_BUILD_SUPABASE_AUTH_HEADERS__(extra);
@@ -72,6 +82,10 @@ async function callRecognitionEdgeFunction({ strokes = [], imageDataUrl = "", ca
     headers,
     cache: "no-store",
     body: JSON.stringify({
+      // Le projet ne sert qu'au compteur de consommation : la reconnaissance
+      // ne voit que des traits. Son absence range l'appel hors projet plutôt
+      // que de l'attribuer au hasard.
+      project_id: await projetCourant(),
       strokes: Array.isArray(strokes) ? strokes : [],
       imageDataUrl: String(imageDataUrl || ""),
       canvasSize: canvasSize && typeof canvasSize === "object" ? canvasSize : null,
