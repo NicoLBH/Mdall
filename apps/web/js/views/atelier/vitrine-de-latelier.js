@@ -40,8 +40,10 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
 import { renderLightTabs } from "../ui/light-tabs.js";
+import { renderSideNavGroup, renderSideNavItem } from "../ui/side-nav-layout.js";
 import {
-  NOM_DU_RAYON, chercherDansLatelier, rayonsDuCatalogue, vedettesDeLatelier
+  ICONE_DU_RAYON, NOM_DU_RAYON, ajoutsRecents, chercherDansLatelier,
+  rayonsDuCatalogue, vedettesDeLatelier
 } from "../../services/catalogue-de-latelier.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -126,16 +128,25 @@ function renderMarqueDIntelligence(utilitaire = {}) {
   `;
 }
 
-/** Un utilitaire mis en avant, en pastille. */
+/**
+ * Un utilitaire mis en avant, en carte.
+ *
+ * Elle porte son nom et ce qu'il fait, rien de plus : la rangée sert à
+ * reconnaître d'un coup d'œil, pas à comparer. Les entrées, les sorties et la
+ * version sont deux sections plus bas, sur la fiche — les redire ici ferait
+ * deux endroits où les lire, et l'un des deux finirait par mentir (règle 4).
+ */
 function renderVedette(utilitaire) {
   const { lettre, teinte } = vignetteDeLUtilitaire(utilitaire);
 
   return `
-    <button type="button" class="atelier-vedette" data-side-nav-target="${escapeHtml(utilitaire.cible)}"
-      title="${escapeHtml(utilitaire.resume ?? utilitaire.nom)}">
-      <span class="atelier-vedette__vignette" aria-hidden="true"
-        style="--atelier-teinte:${teinte};">${escapeHtml(lettre)}</span>
-      <span class="atelier-vedette__nom">${escapeHtml(utilitaire.nom)}</span>
+    <button type="button" class="atelier-vedette" data-side-nav-target="${escapeHtml(utilitaire.cible)}">
+      <span class="atelier-vedette__tete">
+        <span class="atelier-vedette__vignette" aria-hidden="true"
+          style="--atelier-teinte:${teinte};">${escapeHtml(lettre)}</span>
+        <span class="atelier-vedette__nom">${escapeHtml(utilitaire.nom)}</span>
+      </span>
+      <span class="atelier-vedette__resume">${escapeHtml(utilitaire.resume ?? "")}</span>
     </button>
   `;
 }
@@ -148,18 +159,29 @@ function renderVedette(utilitaire) {
  * @param {string} [etat.rayon] le rayon retenu, vide pour tous
  * @param {string} [etat.rangement] `RANGEMENT.*`
  */
-export function renderVitrineDeLatelier({ recherche = "", rayon = "", rangement = RANGEMENT.RECOMMANDE } = {}) {
+export function renderVitrineDeLatelier({
+  recherche = "", rayon = "", rangement = RANGEMENT.RECOMMANDE, ouvertures = null
+} = {}) {
   const cherche = texte(recherche);
   const trouves = chercherDansLatelier(cherche);
   const retenus = rayon ? trouves.filter((utilitaire) => utilitaire.rayon === rayon) : trouves;
+  const ranges = rangement === RANGEMENT.RECENT ? ajoutsRecents(retenus) : retenus;
 
   return `
     <div class="atelier-vitrine">
       ${renderBandeau(cherche)}
-      ${renderRayons(rayon)}
-      ${cherche || rayon ? "" : renderVedettes()}
-      ${renderRangement(rangement)}
-      ${renderGrille(retenus, cherche)}
+
+      <div class="atelier-corps">
+        <aside class="atelier-rayons settings-nav" aria-label="Rayons de l'Atelier">
+          ${renderRayons(rayon)}
+        </aside>
+
+        <div class="atelier-etals">
+          ${cherche || rayon ? "" : renderVedettes(ouvertures)}
+          ${renderRangement(rangement)}
+          ${renderGrille(ranges, cherche)}
+        </div>
+      </div>
     </div>
   `;
 }
@@ -189,27 +211,48 @@ function renderBandeau(recherche) {
   `;
 }
 
-/** Les rayons, en barre de navigation. */
+/**
+ * Les rayons, en navigation verticale.
+ *
+ * **Comme dans Paramètres, et par le même composant.** Une seconde manière de
+ * ranger des sections verticalement se mettrait à diverger de la première au
+ * premier ajustement (règle 4) — et surtout, une liste verticale tient
+ * trente rayons là où une rangée d'onglets en tient six avant de déborder.
+ *
+ * Les entrées ne portent **pas** `data-side-nav-target` : dans l'Atelier, cet
+ * attribut veut dire « ouvre ce panneau ». Un rayon ne se rend nulle part, il
+ * restreint ce qu'on voit ; lui donner le même attribut ferait chercher un
+ * panneau qui n'existe pas.
+ */
 function renderRayons(rayonRetenu) {
-  // La barre d'onglets porte déjà `data-light-tab-target` sur chaque bouton :
-  // c'est par là qu'on l'entend. Poser un second attribut à nous ferait deux
-  // noms pour la même chose, et le composant n'en lirait qu'un (règle 10).
-  // Ce qui distingue cette barre de l'autre, c'est la classe de son enveloppe.
-  const tabs = [
-    { id: "", label: "Tout" },
-    ...rayonsDuCatalogue().map((rayon) => ({ id: rayon, label: NOM_DU_RAYON[rayon] ?? rayon }))
-  ];
+  const retenu = texte(rayonRetenu);
 
-  return renderLightTabs({
-    tabs,
-    activeTabId: texte(rayonRetenu),
-    ariaLabel: "Rayons de l'Atelier",
-    className: "atelier-rayons"
+  const entree = (valeur, label, iconName) => renderSideNavItem({
+    label,
+    iconHtml: svgIcon(iconName, { className: "octicon" }),
+    isActive: valeur === retenu,
+    dataAttributes: { "data-atelier-rayon": valeur }
+  });
+
+  return renderSideNavGroup({
+    className: "settings-nav__group atelier-rayons__group",
+    items: [
+      entree("", "Tout", "grid-apps"),
+      ...rayonsDuCatalogue().map((rayon) => entree(
+        rayon,
+        NOM_DU_RAYON[rayon] ?? rayon,
+        ICONE_DU_RAYON[rayon] ?? "gear"
+      ))
+    ]
   });
 }
 
 /**
  * Les plus employés.
+ *
+ * **Ils se comptent, ils ne se déclarent pas** : ce que la profession ouvre le
+ * plus, sur tous les projets et tous les utilisateurs. Une liste écrite à la
+ * main vieillit sans que personne ne s'en aperçoive.
  *
  * **Ils s'effacent dès qu'on cherche ou qu'on choisit un rayon.** Ils répondent
  * à « que contient l'Atelier ? », pas à la question qu'on vient de poser : les
@@ -217,8 +260,8 @@ function renderRayons(rayonRetenu) {
  * et sur un rayon, ils montreraient des utilitaires d'un autre rayon, ce qui se
  * lit comme un filtre qui ne marche pas.
  */
-function renderVedettes() {
-  const vedettes = vedettesDeLatelier();
+function renderVedettes(ouvertures) {
+  const vedettes = vedettesDeLatelier(undefined, ouvertures);
   if (vedettes.length === 0) return "";
 
   return `

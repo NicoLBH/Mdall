@@ -1,9 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import {
-  NOM_DU_RAYON, RAYONS, UTILITAIRES, VEDETTES_AU_PLUS, chercherDansLatelier,
-  rayonsDuCatalogue, sansAccent, utilitaireParCible, vedettesDeLatelier
+  ICONE_DU_RAYON, NOM_DU_RAYON, RAYONS, UTILITAIRES, VEDETTES_AU_PLUS, ajoutsRecents,
+  chercherDansLatelier, rayonsDuCatalogue, sansAccent, utilitaireParCible, vedettesDeLatelier
 } from "./catalogue-de-latelier.js";
 
 /* ── Ce qu'on cherche, et comment ────────────────────────────────────────── */
@@ -77,10 +79,69 @@ test("on ne met pas en avant plus de six utilitaires", () => {
   assert.ok(vedettesDeLatelier().length <= VEDETTES_AU_PLUS);
 });
 
-test("le Copilote et la Variante sont parmi les vedettes", () => {
-  const noms = vedettesDeLatelier().map((u) => u.nom);
-  assert.ok(noms.includes("Copilote"));
-  assert.ok(noms.includes("Tester une variante"));
+/**
+ * **Elles se comptent, elles ne se déclarent pas.** Une liste écrite à la main
+ * vieillit sans que personne ne s'en aperçoive : un utilitaire ajouté et
+ * beaucoup employé reste invisible, un utilitaire mis en avant et jamais ouvert
+ * garde sa place.
+ */
+test("les vedettes sont les plus ouverts, pas une liste écrite à la main", () => {
+  const ouvertures = { "dev-variables": 900, "solidity-arkolia": 500, "exploration-audit": 100 };
+  const noms = vedettesDeLatelier(UTILITAIRES, ouvertures).map((u) => u.nom);
+
+  assert.deepEqual(noms.slice(0, 3), ["Variables mutualisées", "ENR — PV hangar neuf", "Auditer la mémoire"]);
+  assert.doesNotMatch(
+    readFileSync(fileURLToPath(new URL("./catalogue-de-latelier.js", import.meta.url)), "utf8"),
+    /vedette:\s*true/,
+    "une vedette est de nouveau déclarée au lieu d'être comptée"
+  );
+});
+
+/**
+ * **À égalité, l'ordre du catalogue tranche.** Un Atelier neuf, où rien n'a
+ * encore été ouvert, doit montrer la même rangée à chaque venue : une rangée
+ * qui se réordonne toute seule n'est plus un repère.
+ */
+test("sans aucune ouverture, la rangée reste la même d'une fois sur l'autre", () => {
+  const premiere = vedettesDeLatelier(UTILITAIRES, {}).map((u) => u.cible);
+  const seconde = vedettesDeLatelier(UTILITAIRES, {}).map((u) => u.cible);
+
+  assert.deepEqual(premiere, seconde);
+  assert.deepEqual(premiere, UTILITAIRES.slice(0, VEDETTES_AU_PLUS).map((u) => u.cible));
+});
+
+/** Les compteurs arrivent sous deux formes selon qui les a lus. */
+test("les compteurs se lisent en objet comme en Map", () => {
+  const parObjet = vedettesDeLatelier(UTILITAIRES, { "dev-variables": 9 })[0];
+  const parMap = vedettesDeLatelier(UTILITAIRES, new Map([["dev-variables", 9]]))[0];
+
+  assert.equal(parObjet.cible, "dev-variables");
+  assert.equal(parMap.cible, "dev-variables");
+});
+
+/* ── Ce qui vient d'arriver ──────────────────────────────────────────────── */
+
+test("« ajouté récemment » range du plus récent au plus ancien", () => {
+  const dates = ajoutsRecents().map((u) => u.ajouteLe);
+  assert.deepEqual(dates, [...dates].sort().reverse());
+});
+
+/**
+ * Un utilitaire sans date passe **en dernier**, pas en premier : ne pas savoir
+ * quand il est arrivé n'en fait pas une nouveauté (règle 5).
+ */
+test("un utilitaire sans date d'ajout ne passe pas pour une nouveauté", () => {
+  const range = ajoutsRecents([
+    { cible: "a", ajouteLe: "" },
+    { cible: "b", ajouteLe: "2026-01-01" }
+  ]);
+  assert.deepEqual(range.map((u) => u.cible), ["b", "a"]);
+});
+
+test("chaque utilitaire dit quand il est entré à l'Atelier", () => {
+  for (const utilitaire of UTILITAIRES) {
+    assert.match(utilitaire.ajouteLe ?? "", /^\d{4}-\d{2}-\d{2}$/, utilitaire.nom);
+  }
 });
 
 /* ── Ce qu'une entrée doit porter ────────────────────────────────────────── */
@@ -155,4 +216,47 @@ test("les rayons rendus sont ceux qui portent quelque chose", () => {
   const rayons = rayonsDuCatalogue();
   assert.ok(rayons.includes(RAYONS.SOLIDITE));
   assert.ok(rayons.every((rayon) => UTILITAIRES.some((u) => u.rayon === rayon)));
+});
+
+/**
+ * Chaque rayon a son icône, **au même endroit que son nom** : ce sont deux
+ * faces d'une même chose, et les séparer ferait qu'un rayon ajouté arriverait
+ * sans icône ou avec celle du voisin (règle 10).
+ */
+test("chaque rayon porte une icône qui existe", () => {
+  const icones = readFileSync(
+    fileURLToPath(new URL("../../assets/icons.svg", import.meta.url)), "utf8"
+  );
+
+  for (const rayon of rayonsDuCatalogue()) {
+    const nom = ICONE_DU_RAYON[rayon];
+    assert.ok(nom, `le rayon ${NOM_DU_RAYON[rayon]} n'a pas d'icône`);
+    assert.ok(icones.includes(`id="${nom}"`), `l'icône ${nom} n'existe pas`);
+  }
+  // Et « Tout », qui n'est pas un rayon mais en occupe la première place.
+  assert.ok(icones.includes('id="grid-apps"'));
+});
+
+/* ── Ce que la base garantit, et que l'écran ne refait pas ───────────────── */
+
+/**
+ * **Un compteur ne peut désigner personne.** Ni qui, ni quand, ni sur quel
+ * projet : savoir qui ouvre quoi n'est utile à aucune décision de Mdall, et ce
+ * serait une donnée de surveillance qu'il faudrait ensuite protéger.
+ */
+test("les compteurs d'ouverture ne gardent rien de personnel", () => {
+  const migration = readFileSync(
+    fileURLToPath(new URL("../../../../supabase/migrations/202609240001_atelier_ouvertures.sql", import.meta.url)),
+    "utf8"
+  );
+
+  assert.doesNotMatch(migration, /owner_id|auth\.uid\(\)|user_id|project_id/);
+  // L'incrément passe par une fonction : un `update` ouvert laisserait poser
+  // n'importe quelle valeur, et le classement ne voudrait plus rien dire.
+  assert.match(migration, /create or replace function public\.atelier_noter_ouverture/);
+  assert.match(migration, /ouvertures \+ 1/);
+  // Aucune politique d'écriture directe sur la table.
+  assert.doesNotMatch(migration, /for (insert|update|all)\b/);
+  // Additive : rien n'est supprimé ni renommé.
+  assert.doesNotMatch(migration, /\bdrop\s+(table|column)\b/i);
 });
