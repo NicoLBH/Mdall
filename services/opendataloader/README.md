@@ -198,14 +198,37 @@ dire la même chose.
 
 ---
 
-## Les réglages
+## Les réglages, et ce qu'ils ne peuvent pas
 
 Ils vivent dans [`reglages.mjs`](reglages.mjs), **à un seul endroit** : l'essai en local et
 le service en ligne les partagent. Juger la qualité sur d'autres réglages que ceux du
 service reviendrait à décider de garder ou de jeter l'outil sur un résultat qui n'est pas le
 sien.
 
-Ce fichier dit ce que chacun fait et pourquoi celui-là.
+La liste est courte, et c'est le résultat d'une mesure sur un compte rendu réel de onze
+pages :
+
+- **`tableMethod` ne sert à rien.** `default`, `cluster` et `--use-struct-tree` produisent
+  des fichiers **identiques au caractère près**. L'option a été retirée : la garder aurait
+  laissé croire qu'un réglage pouvait corriger le découpage des phrases en colonnes.
+- **`headingHierarchy` n'existe pas.** Elle est dans la documentation du projet, pas dans la
+  version 2.5.8 — elle était passée et ignorée en silence. Les titres sortent hiérarchisés
+  sans elle.
+- **`--markdown-with-html` est inutilisable** : même découpage, et les balises ouvrantes
+  sortent échappées (`&lt;th&gt;`) là où les fermantes sont correctes.
+
+### Ce qui viserait juste
+
+Le mode **hybride** (`--hybrid docling-fast`) remplace précisément l'analyse des tableaux,
+celle qui se trompe. Il demande un serveur Python dans le même conteneur :
+
+```
+pip install -U "opendataloader-pdf[hybrid]"
+opendataloader-pdf-hybrid --port 5002
+```
+
+**Non mesuré.** À essayer depuis un Codespace, qui a Python et le réseau, avant de décider
+de l'activer.
 
 ---
 

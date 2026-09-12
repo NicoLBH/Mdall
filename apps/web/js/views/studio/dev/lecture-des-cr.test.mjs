@@ -28,6 +28,7 @@ import {
 import { comparerLesReconstitutions } from "../../../services/comparaison-de-markdown.js";
 import { SORT, confrontation, lectureAssemblee } from "../../../services/lecture-du-cr.js";
 import { prixDeLAppel } from "../../../services/consommation-ia.js";
+import { degatsDeLaRestitution } from "../../../services/degats-de-la-restitution.js";
 
 const PAGES = [
   { page: 1, text: "Réunion de chantier n° 7. Lot 02 — GROS ŒUVRE. Reprise d'étanchéité en toiture." },
@@ -66,7 +67,7 @@ const REFAITES_MODELE = [
 /** Un côté au repos. La même forme que celle de l'écran. */
 function unCote(surcharge = {}) {
   return {
-    phase: "vide", texte: "", lignes: [], pages: [], fidelite: null,
+    phase: "vide", texte: "", lignes: [], pages: [], fidelite: null, degats: null,
     jetons: { entree: null, sortie: null }, modeleIA: "",
     coupee: false, horsPlafond: [], absentes: [], motif: "", ...surcharge
   };
@@ -78,6 +79,7 @@ function unCoteFait(refaites, surcharge = {}) {
   return unCote({
     phase: "fait", pages: refaites, texte: assemble.texte, lignes: assemble.lignes,
     fidelite: fideliteDeLaReconstitution(PAGES, refaites),
+    degats: degatsDeLaRestitution(refaites),
     jetons: { entree: 12000, sortie: 6000 }, modeleIA: "gpt-4.1-mini", ...surcharge
   });
 }
@@ -481,4 +483,50 @@ test("un appel sans décompte annoncé le dit au lieu d'afficher zéro", () => {
   assert.match(html, /coût non annoncé/);
   assert.match(html, /est-inconnu/);
   assert.doesNotMatch(html, /0,00 €/);
+});
+
+/* ── Les phrases découpées en colonnes ───────────────────────────────────── */
+
+/**
+ * **Le défaut le plus coûteux, et le moins visible.** Une phrase découpée à la
+ * verticale se lit encore à peu près — on devine le sens — mais la citation
+ * qu'on en tire ne se retrouvera jamais mot pour mot dans le document. Le
+ * garde-fou l'écartera, et le point disparaîtra sans que rien n'explique
+ * pourquoi (règle 5).
+ *
+ * Constaté sur un compte rendu réel : trois pages sur onze, et un point daté
+ * sur cinq.
+ */
+test("une restitution aux phrases découpées le dit, et nomme les pages", () => {
+  const decoupee = [
+    { page: 1, markdown: "# Lot 03\n\n|Remarques :  30/03 : Point travau|ux devant l'hôtel avec|c le voisin|" },
+    { page: 2, markdown: "## Lot 05 — CHARPENTE\n\nSans objet." }
+  ];
+
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
+    md: {
+      lecture: LECTURE.APERCU, modele: unCoteFait(decoupee), outil: unCote(), comparaison: null
+    }
+  }));
+
+  assert.match(html, /lecture-cr__md-degats/);
+  assert.match(html, /des points découpés/);
+  // La réserve dit le coût — l'écartement — et la page à rouvrir.
+  assert.match(html, /découpées en colonnes/);
+  assert.match(html, /citation vérifiable \(pages 1\)/);
+});
+
+/**
+ * **Une restitution intacte ne porte rien.** Un « 0 phrase découpée » à côté de
+ * chaque colonne ferait du bruit là où il n'y a rien à dire — et l'œil
+ * cesserait de voir la pastille quand elle compte.
+ */
+test("une restitution intacte n'affiche aucun verdict de découpage", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: deuxCotes()
+  }));
+
+  assert.doesNotMatch(html, /lecture-cr__md-degats/);
+  assert.doesNotMatch(html, /découpées en colonnes/);
 });

@@ -23972,6 +23972,20 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .lecture-cr__md-colonne-part.est-bon{color:var(--fgColor-success, #3fb950);}
 .lecture-cr__md-colonne-part.est-douteux{color:var(--fgColor-attention, #d29922);}
 .lecture-cr__md-colonne-part.est-mauvais{color:var(--fgColor-danger, #f85149);}
+/* Les phrases découpées à la verticale. Le défaut le plus coûteux et le moins
+   visible : une citation prise dedans sera écartée par le garde-fou. */
+.lecture-cr__md-degats{
+  padding:1px 7px;
+  border-radius:999px;
+  background:rgba(248,81,73,.12);
+  color:var(--fgColor-danger, #f85149);
+  white-space:nowrap;
+  cursor:help;
+}
+.lecture-cr__md-degats.est-douteux{
+  background:rgba(210,153,34,.14);
+  color:var(--fgColor-attention, #d29922);
+}
 
 /* Une colonne qu'on n'a pas pu remplir. Elle explique ce qui manque plutôt que
    de rester vide — une colonne vide se lit « les deux sont d'accord ». */

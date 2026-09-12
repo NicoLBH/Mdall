@@ -137,6 +137,101 @@ servie publiquement — et il casse les tableaux sans bordures.
 
 ---
 
+## 2 bis. Mesuré sur un compte rendu réel
+
+Onze pages, une réunion de chantier de réhabilitation : tableaux de contacts, tableaux de
+présence, généralités en prose, et un bloc de remarques par lot. OpenDataLoader, mode libre.
+
+### Ce qui tient
+
+| | |
+| --- | --- |
+| Les onze pages | séparées, dans l'ordre |
+| La hiérarchie des lots | `# Lot 03 – Terrassement – …` sur chaque bloc, sans exception |
+| Les tableaux de contacts et de présence | **corrects** — un intervenant par ligne, les croix dans les bonnes colonnes |
+| Les généralités en prose | intactes |
+| Les remarques de maîtrise d'œuvre | intactes, en listes à puces datées |
+
+### Ce qui casse
+
+Les blocs de remarques par lot, quand la cellule débordait. L'outil a cru voir six colonnes
+là où il n'y en avait qu'une, et **il a coupé les phrases à la verticale** :
+
+    |Remarques :  04/03 : Point travau|ux devant l'hôtel en lien avec|c le voisin :|
+
+Le texte n'est pas perdu : il est coupé au milieu des mots, et le caractère de la coupe se
+répète de part et d'autre.
+
+### L'ampleur, en chiffres
+
+    page  6 |  20 %  ██████
+    page  7 |  36 %  ███████████
+    page  8 |  41 %  ████████████
+    les huit autres pages : 0 %
+
+    10 % des caractères
+    20 % des points datés   ← le chiffre qui décide
+
+**Ce sont les points datés qui comptent, pas les caractères.** Les lots qui n'ont rien à
+dire écrivent « Sans objet » et se restituent parfaitement : ils gonflent le document de
+texte sain sans rien apporter. Dix pour cent de caractères abîmés valaient dix-sept points
+à suivre sur quatre-vingt-cinq.
+
+### Aucun réglage ne le corrige
+
+Vérifié, pas supposé :
+
+| Essai | Résultat |
+| --- | --- |
+| `--table-method default` | — |
+| `--table-method cluster` | **identique au caractère près** |
+| `--use-struct-tree` | **identique au caractère près** |
+| `--markdown-with-html` | même découpage, et les balises ouvrantes sortent échappées (`&lt;th&gt;`) |
+
+C'est l'analyse de mise en page qui se trompe, en amont de toute mise en forme. Les options
+qui promettaient de la reprendre ne la reprennent pas.
+
+### Recoudre ne marche pas
+
+Tentant : rejoindre les cellules en supprimant le caractère répété. Essayé — **54 coutures
+recousues sur un document, et un résultat encore faux**. La couture fait zéro, un ou deux
+caractères selon l'endroit où la coupe tombe :
+
+    travau|ux        →  1 caractère
+    voirie|ie entre  →  2 caractères
+    garage|30/03     →  0 caractère
+
+Et une coupe à zéro caractère **ne se distingue pas d'une vraie frontière de colonne**. On
+écrirait une règle par mise en page, pour une infinité de mises en page.
+
+### Ce qui se fait, en revanche : le mesurer
+
+Le défaut se **détecte** avec certitude, et c'est ce qui compte. Le signe : une cellule qui
+commence par une minuscule juste après une cellule qui finit par une lettre — aucune langue
+n'écrit cela dans deux colonnes voisines. Sur ce compte rendu, la règle a trouvé les trois
+pages abîmées et **aucune** des huit pages saines, tableaux de contacts compris.
+
+C'est `apps/web/js/services/degats-de-la-restitution.js`, et c'est ce qui rend l'architecture
+visée tenable : **une restitution abîmée se remplace par l'autre, document par document** et
+non une fois pour toutes. L'écran l'affiche sur chaque colonne, avec les pages à rouvrir et
+le coût — un point pris dans une phrase découpée n'a pas de citation vérifiable, donc il sera
+écarté.
+
+### Ce qui viserait juste, et reste à mesurer
+
+Le mode **hybride** (`--hybrid docling-fast`) remplace précisément l'analyse des tableaux,
+celle qui se trompe. Le banc d'OpenDataLoader annonce un saut de 0,489 à 0,928 en TEDS. Il
+demande un serveur Python dans le même conteneur :
+
+    pip install -U "opendataloader-pdf[hybrid]"
+    opendataloader-pdf-hybrid --port 5002
+
+**Non mesuré** : l'installation échoue dans l'environnement où cette page a été écrite, et
+les modèles de Docling viennent d'un domaine qui y est bloqué. À essayer depuis un Codespace,
+qui a Python et le réseau.
+
+---
+
 ## 3. Ce qu'aucune de ces bibliothèques ne fait
 
 1. **Les tableaux à cellules fusionnées, en Markdown : aucune, jamais.** Ce n'est pas un
