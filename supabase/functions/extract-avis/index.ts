@@ -29,6 +29,7 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { requireUser } from "../_shared/require-user.ts";
+import { deposerLaConsommation, jetonsDeLaReponse } from "../_shared/consommation-ia.ts";
 import {
   CONSIGNES, SCHEMA_DES_AVIS, avisAuFormatDuMoteur, pagesEnTexte, verifierLesAvis
 } from "../_shared/avis-du-modele.js";
@@ -72,6 +73,11 @@ serve(async (req) => {
     const pages = Array.isArray(body?.pages) ? body.pages : [];
     const sourceId = String(body?.source_id ?? "").trim();
 
+    // **Le projet ne sert qu'au compteur de consommation.** La relecture n'en a
+    // pas besoin : elle ne voit que des pages. Il est donc facultatif — sans
+    // lui, la consommation se range hors projet plutôt qu'au hasard.
+    const projectId = String(body?.project_id ?? "").trim() || null;
+
     if (!pages.length) return reponse({ error: "pages is required" }, 400);
 
     const texte = pagesEnTexte(pages, { maxCaracteres: MAX_CARACTERES });
@@ -94,6 +100,11 @@ serve(async (req) => {
     }
 
     const rendu = await appel.json();
+
+    void deposerLaConsommation({
+      projectId, ownerId: garde.user.id, model: MODELE,
+      usageKind: "extraction-avis", jetons: jetonsDeLaReponse(rendu)
+    });
     const lu = lireLaReponse(rendu);
     if (!lu) return reponse({ error: "No structured output returned", raw: rendu }, 502);
 

@@ -23606,3 +23606,61 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   .conso-repartition__ligne{grid-template-columns:minmax(0, 1fr) auto;row-gap:4px;}
   .conso-repartition__jauge{grid-column:1 / -1;}
 }
+
+/* ── Où va mon argent d'IA ───────────────────────────────────────────────── */
+
+/*
+ * La répartition par usage vient en premier, avant la courbe et avant les
+ * projets : c'est la seule question dont la réponse change quelque chose. On ne
+ * modifie pas ses habitudes en apprenant qu'un chantier coûte douze euros ; on
+ * les modifie en apprenant que dix de ces douze partent dans la lecture de PDF.
+ */
+.conso-usages{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  padding:20px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:rgb(21, 27, 35);
+}
+
+.conso-usages__titre{margin:0;font-size:14px;font-weight:600;color:var(--text);}
+.conso-usages__mot{margin:0;font-size:12.5px;color:var(--muted);max-width:78ch;}
+.conso-usages__liste{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px;}
+
+.conso-usage{display:flex;flex-direction:column;gap:6px;min-width:0;}
+
+.conso-usage__tete{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  min-width:0;
+}
+
+.conso-usage__nom{
+  flex:1 1 auto;
+  min-width:0;
+  font-size:13.5px;
+  font-weight:600;
+  color:var(--text);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.conso-usage__euros{color:var(--text);flex:0 0 auto;}
+.conso-usage__part{color:var(--muted);flex:0 0 auto;min-width:44px;text-align:right;}
+
+.conso-usage__jauge{height:8px;border-radius:999px;background:rgba(110,118,129,.22);overflow:hidden;}
+.conso-usage__barre{display:block;height:100%;background:var(--accent, #316dca);}
+
+/* Ce que l'appel faisait, et non quelle fonction s'exécutait : le nom technique
+   n'apprend rien sur le geste qu'on pourrait faire autrement. */
+.conso-usage__pied{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:space-between;
+  gap:10px;
+  color:var(--muted);
+}

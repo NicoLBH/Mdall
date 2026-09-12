@@ -7,7 +7,10 @@ import {
   renderCarteDeConsommation, renderConsommation, renderCourbeDesJours,
   renderLectureImpossible, renderRepartitionParProjet, renderTarifApplique
 } from "./ecran-de-consommation.js";
-import { bornesDuMois, parJour, parProjet, totalDesAppels } from "../../services/consommation-ia.js";
+import {
+  bornesDuMois, parJour, parNature, parProjet, totalDesAppels
+} from "../../services/consommation-ia.js";
+import { renderRepartitionParNature } from "./ecran-de-consommation.js";
 
 const lis = (chemin) => readFileSync(fileURLToPath(new URL(chemin, import.meta.url)), "utf8");
 
@@ -212,4 +215,73 @@ test("l'onglet Indicateurs montre le projet et ma part", () => {
 test("aucun écran ne détaille la consommation collaborateur par collaborateur", () => {
   const source = lis("./ecran-de-consommation.js");
   assert.doesNotMatch(source, /parCollaborateur|parPersonne\b/);
+});
+
+/* ── Où va l'argent ──────────────────────────────────────────────────────── */
+
+/**
+ * **C'est le premier bloc de l'écran**, avant la courbe et avant les projets :
+ * c'est la seule question dont la réponse change quelque chose. On ne modifie
+ * pas ses habitudes en apprenant qu'un chantier coûte douze euros ; on les
+ * modifie en apprenant que dix de ces douze partent dans la lecture de PDF.
+ */
+test("la répartition par usage vient avant la courbe et avant les projets", () => {
+  const html = renderConsommation({
+    appels: [appel({ nature: "extraction-sujets" })],
+    bornes: bornesDuMois("2026-09"),
+    parProjets: true
+  });
+
+  assert.ok(html.indexOf("conso-usages") < html.indexOf("conso-courbe"));
+  assert.ok(html.indexOf("conso-usages") < html.indexOf("conso-repartition"));
+});
+
+/**
+ * Chaque ligne dit ce que l'appel **faisait**, sa part, et son montant : c'est
+ * ce triplet qui permet de décider. Une barre sans montant fait comparer sans
+ * savoir combien ; un montant sans part fait comparer sans savoir par rapport
+ * à quoi.
+ */
+test("chaque usage donne son geste, sa part et son montant", () => {
+  const html = renderRepartitionParNature(parNature([
+    appel({ nature: "extraction-sujets", entree: 5_000_000, sortie: 100_000 }),
+    appel({ nature: "titre-de-proposition", entree: 2000, sortie: 200 })
+  ]));
+
+  assert.match(html, /Lecture des comptes rendus/);
+  assert.match(html, /compte rendu de chantier/i);
+  assert.match(html, /conso-usage__barre/);
+  assert.match(html, /%/);
+  assert.match(html, /€/);
+});
+
+/**
+ * Une nature inconnue garde son code plutôt que de disparaître sous « Autre » :
+ * une fonction ajoutée demain sans son nom doit se voir (règle 5).
+ */
+test("un usage inconnu s'affiche sous son code, jamais fondu dans « Autre »", () => {
+  const html = renderRepartitionParNature(parNature([appel({ nature: "tout-neuf" })]));
+
+  assert.match(html, /tout-neuf/);
+  assert.doesNotMatch(html, /Autre/);
+});
+
+test("sans appel, la répartition par usage ne dessine pas de cadre vide", () => {
+  assert.equal(renderRepartitionParNature([]), "");
+});
+
+/**
+ * L'onglet Indicateurs la montre aussi : « combien ce chantier coûte » appelle
+ * tout de suite « et en quoi ». La cacher là obligerait à passer par le profil
+ * pour une question qui se pose devant le projet.
+ */
+test("le projet montre aussi où va son argent", () => {
+  const html = renderConsommation({
+    appels: [appel({ nature: "extraction-avis" })],
+    bornes: bornesDuMois("2026-09"),
+    parProjets: false
+  });
+
+  assert.match(html, /conso-usages/);
+  assert.match(html, /Lecture des rapports de contrôle/);
 });

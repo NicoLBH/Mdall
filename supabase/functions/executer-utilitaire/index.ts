@@ -31,6 +31,7 @@
  */
 
 import { requireUser } from "../_shared/require-user.ts";
+import { deposerLaConsommation, jetonsDeLaReponse } from "../_shared/consommation-ia.ts";
 import { executerOutil, sansFigure } from "../_shared/utilitaires/catalogue.js";
 import { lireLEtudeIncendie } from "../_shared/utilitaires/etude-incendie.js";
 
@@ -117,6 +118,25 @@ Deno.serve(async (req: Request) => {
     // propre et ne doit pas en avoir — un calcul lancé pour quelqu'un se fait
     // avec ses droits, pas avec les nôtres.
     autorisation: req.headers.get("Authorization") ?? "",
+    // **De quoi compter ce qu'un utilitaire consomme.** L'orchestration ne
+    // connaît ni la base ni l'identité : on lui passe de quoi déposer, pas de
+    // quoi écrire. C'est ici que le savoir vit, et c'est ici qu'il reste.
+    tracage: {
+      // `reponse` et non `brut` : `brut` est déjà le corps de la requête,
+      // quelques lignes plus haut. Le masquer aurait fait compter les jetons
+      // d'une chaîne de caractères — c'est-à-dire zéro, sans rien pour le dire.
+      deposer: ({ model, reponse }: { model: string; reponse: unknown }) => {
+        void deposerLaConsommation({
+          // `charge.projet` porte déjà l'identifiant de la base : c'est celui
+          // que le navigateur résout avant d'appeler.
+          projectId: String(charge?.projet ?? "") || null,
+          ownerId: garde.user.id,
+          model,
+          usageKind: "lecture-note-de-calcul",
+          jetons: jetonsDeLaReponse(reponse)
+        });
+      }
+    },
     etudeIncendie
   };
 

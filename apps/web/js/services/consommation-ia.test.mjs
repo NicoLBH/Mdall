@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { readdirSync } from "node:fs";
 import {
-  CHANGE, TARIFS, appelPourLEcran, bornesDuMois, coutDeLAppel, enEuros, enJetons,
-  jourDeLAppel, moisEnCours, moisEnFrancais, parJour, parProjet, partDeLaPersonne,
-  tarifDuModele, totalDesAppels
+  CHANGE, NATURES, TARIFS, appelPourLEcran, bornesDuMois, coutDeLAppel, enEuros, enJetons,
+  jourDeLAppel, moisEnCours, moisEnFrancais, nomDeLaNature, parJour, parNature, parProjet,
+  partDeLaPersonne, quoiDeLaNature, tarifDuModele, totalDesAppels
 } from "./consommation-ia.js";
 
 const appel = (reste = {}) => ({
@@ -265,3 +266,112 @@ function lisLaMigration() {
     "utf8"
   );
 }
+
+/* ── Où va l'argent : la question qui fait décider ───────────────────────── */
+
+/**
+ * **Un total par projet dit *combien*, jamais *pour quoi faire*.** Or on ne
+ * change pas ses habitudes en apprenant qu'un chantier coûte douze euros ; on
+ * les change en apprenant que dix de ces douze partent dans la lecture de PDF.
+ */
+test("la répartition par usage range du plus coûteux au moins", () => {
+  const lignes = parNature([
+    appel({ nature: "titre-de-proposition", entree: 2000, sortie: 200 }),
+    appel({ nature: "extraction-sujets", entree: 5_000_000, sortie: 100_000 }),
+    appel({ nature: "copilote", entree: 100_000, sortie: 20_000 })
+  ]);
+
+  assert.deepEqual(lignes.map((ligne) => ligne.code),
+    ["extraction-sujets", "copilote", "titre-de-proposition"]);
+  assert.ok(lignes[0].euros > lignes[2].euros * 100, "l'écart doit sauter aux yeux");
+});
+
+/**
+ * Chaque ligne dit ce que l'appel **faisait**, pas quelle fonction s'exécutait :
+ * « extract-sujets » n'apprend rien sur le geste qu'on pourrait faire autrement.
+ */
+test("une nature se nomme par le geste, pas par la fonction", () => {
+  assert.equal(nomDeLaNature("extraction-sujets"), "Lecture des comptes rendus");
+  assert.match(quoiDeLaNature("extraction-sujets"), /compte rendu/i);
+
+  for (const [code, nature] of Object.entries(NATURES)) {
+    assert.ok(nature.nom, code);
+    assert.ok(nature.quoi, `${code} ne dit pas ce qu'il fait`);
+    assert.doesNotMatch(nature.nom, /extract-|generate-|recognize-|resolve-/,
+      `${code} porte un nom de fonction plutôt qu'un geste`);
+  }
+});
+
+/**
+ * **Un code inconnu garde son code**, et ne devient pas « Autre ». Une fonction
+ * ajoutée demain sans son nom doit se voir : rangée sous « Autre », sa
+ * consommation serait invisible au milieu du reste (règle 5).
+ */
+test("une nature inconnue se voit, elle ne se range pas sous « Autre »", () => {
+  assert.equal(nomDeLaNature("une-fonction-toute-neuve"), "une-fonction-toute-neuve");
+  assert.equal(nomDeLaNature(""), "Sans nature");
+  assert.doesNotMatch(JSON.stringify(NATURES), /"Autre"/);
+});
+
+/**
+ * **Le garde-fou de toute la répartition.**
+ *
+ * Le code d'une nature est écrit par la fonction de bord qui dépose ; le nom
+ * vit dans le navigateur. Les deux ne peuvent pas partager de module —
+ * l'orchestration du serveur ne descend jamais. Ce test relit donc les
+ * fonctions : sans lui, une fonction ajoutée demain afficherait son code brut
+ * dans la répartition, et personne ne saurait de quoi il s'agit.
+ */
+test("toute nature déposée par une fonction a son nom à l'écran", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const racine = fileURLToPath(new URL("../../../../supabase/functions/", import.meta.url));
+
+  const codes = new Set();
+  const parcourir = (dossier) => {
+    for (const entree of readdirSync(dossier, { withFileTypes: true })) {
+      const chemin = `${dossier}${entree.name}${entree.isDirectory() ? "/" : ""}`;
+      if (entree.isDirectory()) parcourir(chemin);
+      else if (/\.(ts|js)$/.test(entree.name)) {
+        for (const trouve of readFileSync(chemin, "utf8").matchAll(/usageKind:\s*"([^"]+)"/g)) {
+          codes.add(trouve[1]);
+        }
+      }
+    }
+  };
+  parcourir(racine);
+
+  assert.ok(codes.size >= 10, `trop peu de natures trouvées : ${[...codes].join(", ")}`);
+  for (const code of codes) {
+    assert.ok(NATURES[code], `la nature « ${code} » est déposée mais n'a pas de nom à l'écran`);
+  }
+});
+
+/**
+ * **Et l'inverse : tout appel de modèle dépose.** Une fonction qui appelle
+ * OpenAI sans compter rend le total faux en silence — et c'est exactement ce
+ * qu'on ne veut plus.
+ */
+test("toute fonction qui appelle un modèle dépose sa consommation", async () => {
+  const { readFileSync, existsSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const racine = fileURLToPath(new URL("../../../../supabase/functions/", import.meta.url));
+
+  const manquantes = [];
+  for (const entree of readdirSync(racine, { withFileTypes: true })) {
+    if (!entree.isDirectory() || entree.name === "_shared") continue;
+    const chemin = `${racine}${entree.name}/index.ts`;
+    if (!existsSync(chemin)) continue;
+
+    const source = readFileSync(chemin, "utf8");
+    const appelle = source.includes("api.openai.com");
+    // **Un appel, pas une mention.** Chercher le nom seul laissait passer une
+    // fonction dont il ne restait que l'import : le garde-fou se déclarait
+    // satisfait par la ligne qui ne fait rien.
+    const compte = /deposerLaConsommation\(\{/.test(source) || /tracage:\s*\{/.test(source);
+    if (appelle && !compte) manquantes.push(entree.name);
+  }
+
+  assert.deepEqual(manquantes, [],
+    `ces fonctions appellent un modèle sans compter : ${manquantes.join(", ")}`);
+});

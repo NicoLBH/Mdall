@@ -15,6 +15,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser } from "../_shared/require-user.ts";
+import { deposerLaConsommation, jetonsDeLaReponse } from "../_shared/consommation-ia.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -75,7 +76,11 @@ Deno.serve(async (req: Request) => {
       const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
       const { data: figure, error } = await supabase
         .from("avis_figures")
-        .select("id,storage_bucket,storage_path,avis_reference,caption,caption_model")
+        // `project_id` ne sert qu'au compteur de consommation : la lecture de
+        // la figure n'en a pas besoin. Il est lu ici parce que c'est la seule
+        // ligne de la base qu'on a sous la main, et qu'un appel rattaché au
+        // hasard fausserait la répartition par projet.
+        .select("id,project_id,storage_bucket,storage_path,avis_reference,caption,caption_model")
         .eq("id", figureId)
         .single();
 
@@ -127,6 +132,12 @@ Deno.serve(async (req: Request) => {
       }
 
       const payload = await response.json();
+
+      void deposerLaConsommation({
+        projectId: String((figure as { project_id?: string })?.project_id ?? "") || null,
+        ownerId: garde.user.id, model: MODEL,
+        usageKind: "lecture-figure", jetons: jetonsDeLaReponse(payload)
+      });
       const caption = String(payload?.output_text ?? "").trim() ||
         (Array.isArray(payload?.output)
           ? payload.output

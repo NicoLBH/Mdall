@@ -90,7 +90,12 @@ function lireLeTexte(brut) {
  * @param {{cle:string}} options la clé du modèle
  * @returns {Promise<object>} la note normalisée
  */
-export async function lireLaNoteDeCalcul(fichier, { cle = "", relire = false } = {}) {
+/**
+ * @param {object} [options.tracage] de quoi compter ce que cette lecture coûte
+ *   — le projet et la personne. Facultatif : une note se lit sans, et sa
+ *   consommation se range alors hors projet plutôt qu'au hasard.
+ */
+export async function lireLaNoteDeCalcul(fichier, { cle = "", relire = false, tracage = null } = {}) {
   const donnees = String(fichier?.donnees ?? "").trim();
   if (!donnees) throw new Error("Aucun fichier à lire.");
   if (donnees.length > TAILLE_MAX) {
@@ -132,6 +137,12 @@ export async function lireLaNoteDeCalcul(fichier, { cle = "", relire = false } =
   }
 
   const brut = await reponse.json();
+
+  // Ce que cette lecture a coûté. Déposé par celui qui nous l'a demandé : ce
+  // module ne connaît ni la base ni l'identité de l'appelant, et n'a pas à les
+  // connaître.
+  tracage?.deposer?.({ model: MODEL, reponse: brut });
+
   const contenu = lireLeTexte(brut).trim();
   if (!contenu) throw new Error("La note a été lue, mais rien n'en est revenu.");
 

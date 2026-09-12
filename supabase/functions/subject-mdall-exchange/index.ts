@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser } from "../_shared/require-user.ts";
+import { deposerLaConsommation, jetonsDeLaReponse } from "../_shared/consommation-ia.ts";
 
 type ExchangeRequest = {
   subject_id?: string;
@@ -191,6 +192,11 @@ serve(async (req) => {
     }
 
     const openAiJson = await openAiReply.json();
+
+    void deposerLaConsommation({
+      projectId: String(exchange.project_id), ownerId: garde.user.id, model: MODEL,
+      usageKind: "echange-sujet", jetons: jetonsDeLaReponse(openAiJson)
+    });
     const replyMarkdown = extractOpenAiText(openAiJson).trim();
 
     if (!replyMarkdown) {
