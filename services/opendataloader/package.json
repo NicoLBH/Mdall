@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Un PDF entre, ses pages en Markdown sortent. Sans modèle, sans clé, sans jeton.",
   "scripts": {
-    "start": "node serveur.mjs"
+    "start": "node serveur.mjs",
+    "essayer": "node essayer.mjs"
   },
   "dependencies": {
     "@opendataloader/pdf": "^2.5.8"

@@ -157,11 +157,11 @@ test("le séparateur du service est celui que cet analyseur sait relire", async 
   const { readFileSync } = await import("node:fs");
   const { fileURLToPath } = await import("node:url");
 
-  const serveur = readFileSync(
-    fileURLToPath(new URL("../../../services/opendataloader/serveur.mjs", import.meta.url)), "utf8"
+  const reglages = readFileSync(
+    fileURLToPath(new URL("../../../services/opendataloader/reglages.mjs", import.meta.url)), "utf8"
   );
 
-  const declare = serveur.match(/const MARQUEUR = "([^"]+)"/);
+  const declare = reglages.match(/const MARQUEUR = "([^"]+)"/);
   assert.ok(declare, "le service ne déclare plus de marqueur de page");
 
   // Ce que la ligne de commande écrira pour la page 7, relu par l'analyseur.
@@ -316,4 +316,67 @@ test("le mode d'emploi porte l'entête d'un Space, et le port qu'écoute le serv
   assert.ok(declare && parDefaut, "le port n'est plus déclaré des deux côtés");
   assert.equal(declare[1], parDefaut[1], "le Space écoute un port que le service n'ouvre pas");
   assert.match(image, new RegExp(`EXPOSE ${parDefaut[1]}`));
+});
+
+/**
+ * **Les mêmes réglages pour l'essai et pour le service.** Ils changent
+ * complètement ce qui sort — un tableau sans bordures rendu en liste à puces
+ * plutôt qu'en tableau, des titres à plat plutôt que hiérarchisés. Juger la
+ * qualité sur d'autres réglages que ceux du service reviendrait à décider de
+ * garder ou de jeter l'outil sur un résultat qui n'est pas le sien (règle 4).
+ */
+test("l'essai en local et le service partagent les mêmes réglages", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  for (const nom of ["serveur.mjs", "essayer.mjs"]) {
+    const source = readFileSync(
+      fileURLToPath(new URL(`../../../services/opendataloader/${nom}`, import.meta.url)), "utf8"
+    );
+    assert.match(source, /import \{ REGLAGES \} from "\.\/reglages\.mjs"/, `${nom} n'importe pas les réglages`);
+    assert.match(source, /convert\(\[[^\]]+\], \{ outputDir: [^,]+, \.\.\.REGLAGES \}\)/,
+      `${nom} ne convertit pas avec les réglages partagés`);
+  }
+});
+
+/**
+ * L'essai se fait sur de vrais documents, donc **hors du dépôt**. Un compte
+ * rendu de chantier porte des noms d'entreprises et de personnes : il n'a rien
+ * à faire dans Mdall, et le rappeler là où on le lit coûte deux lignes.
+ */
+test("le mode d'emploi rappelle de ne pas laisser les documents dans le dépôt", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  for (const chemin of [
+    "../../../services/opendataloader/README.md",
+    "../../../.devcontainer/README.md"
+  ]) {
+    const source = readFileSync(fileURLToPath(new URL(chemin, import.meta.url)), "utf8");
+    assert.match(source, /d.pôt/i);
+    assert.match(source, /commit/i, `${chemin} ne dit pas le risque`);
+  }
+});
+
+/**
+ * **Java n'est pas là par hasard.** Mdall n'en a pas besoin ; l'outil de
+ * restitution si — sa bibliothèque est écrite en Java. C'est ce qui permet de
+ * l'essayer depuis un navigateur, sur un poste dont on n'est pas
+ * administrateur. Le retirer de l'environnement rendrait l'essai impossible
+ * sans qu'on comprenne pourquoi.
+ */
+test("l'environnement du navigateur embarque Java, et installe le service", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const config = JSON.parse(readFileSync(
+    fileURLToPath(new URL("../../../.devcontainer/devcontainer.json", import.meta.url)), "utf8"
+  ));
+
+  const java = Object.keys(config.features ?? {}).find((nom) => nom.includes("/java"));
+  assert.ok(java, "l'environnement n'embarque plus Java : l'outil ne pourra pas tourner");
+  assert.ok(Number(config.features[java].version) >= 11, "OpenDataLoader demande Java 11 ou plus");
+
+  assert.match(config.postCreateCommand ?? "", /services\/opendataloader install/);
+  assert.ok((config.forwardPorts ?? []).includes(8080), "le port du service n'est plus proposé");
 });

@@ -12,88 +12,97 @@ short_description: Un PDF entre, ses pages en Markdown sortent.
 # L'outil de restitution
 
 Un PDF entre, ses pages en Markdown sortent — **sans modèle, sans clé, sans jeton
-consommé**. C'est la colonne de droite de l'écran *Restitution*, celle qui sert à juger si
-l'appel payant de gauche est encore nécessaire.
+consommé**.
 
-> L'entête ci-dessus est celui d'un **Space Hugging Face**. Il est sans effet ailleurs :
-> gardez-le, il ne gêne aucun autre hébergeur.
+Ce n'est pas un accessoire : c'est la **piste principale** visée pour la lecture des
+documents. Le modèle devient le secours, appelé quand l'outil échoue. Un service dont la
+lecture ne dépend pas d'un fournisseur payant est un service qui tient.
 
 ---
 
-## Mettre en service sur Hugging Face Spaces
+## 1. D'abord : est-il assez bon sur **vos** documents ?
 
-Gratuit, sans carte bancaire, **entièrement au navigateur**. Rien à installer.
+C'est la seule question qui décide, et elle n'a besoin **ni d'hébergeur, ni de compte, ni
+de serveur**. Un PDF et deux minutes.
 
-### 1. Créer le Space
+### Dans le navigateur, sans rien installer
 
-Sur [huggingface.co](https://huggingface.co), créez un compte si vous n'en avez pas, puis
-**New → Space**.
+Sur le dépôt Mdall : bouton **Code → Codespaces → Create codespace on main**. GitHub ouvre
+un VS Code complet dans un onglet, sur une machine à eux — Java et Node y sont déjà, et les
+dépendances s'installent toutes seules. **Rien ne touche votre ordinateur.**
 
-| Champ | Ce qu'il faut mettre |
-| --- | --- |
-| Space name | `mdall-opendataloader` |
-| License | `apache-2.0` |
-| Space SDK | **Docker** → *Blank* |
-| Hardware | **CPU basic**, le gratuit |
-| Visibilité | **Public** |
-
-> **Public, et c'est voulu.** Un Space privé n'accepte que les appels porteurs d'un jeton
-> Hugging Face, que Mdall n'envoie pas. La porte de ce service, c'est le mot de passe
-> partagé de l'étape 3 — pas la visibilité du Space.
-
-### 2. Y poser les quatre fichiers
-
-Onglet **Files → Add file → Create a new file**, puis recopiez depuis
-`services/opendataloader/` du dépôt Mdall :
-
-- `Dockerfile`
-- `package.json`
-- `serveur.mjs`
-- `README.md` — **celui-ci**, avec son entête `---` en tête. C'est lui qui dit à Hugging
-  Face d'écouter sur le port 8080 ; sans lui, le Space cherchera le 7860 et ne répondra
-  jamais.
-
-Le Space se construit tout seul. Comptez quelques minutes la première fois : il installe un
-JRE et la bibliothèque. L'onglet **Logs** montre l'avancement, et **App** l'état.
-
-### 3. Poser le mot de passe partagé
-
-Inventez une longue chaîne au hasard — quarante caractères, ni un mot ni une date.
-
-Dans le Space : **Settings → Variables and secrets → New secret**
-
-| | |
-| --- | --- |
-| Name | `JETON_PARTAGE` |
-| Value | votre chaîne |
-
-Le Space redémarre. Dans ses **Logs**, la ligne `AUCUN MOT DE PASSE` doit avoir disparu.
-
-> Sans ce secret, le service **accepte tout le monde** — et le crie au démarrage. C'est
-> délibéré : refuser dès le premier essai ferait passer une mise en service qui marche pour
-> une mise en service qui échoue. Mais le laisser ainsi, c'est offrir de la conversion de
-> PDF au monde entier.
-
-### 4. Relever l'adresse
-
-Elle se déduit de votre nom d'utilisateur et du nom du Space :
+Glissez un compte rendu dans l'explorateur de fichiers, puis, dans le terminal :
 
 ```
-https://VOTRE-NOM-mdall-opendataloader.hf.space
+cd services/opendataloader
+npm run essayer -- ../../mon-compte-rendu.pdf
 ```
 
-Pour la vérifier, ouvrez `https://VOTRE-NOM-mdall-opendataloader.hf.space/sante` dans un
-onglet. Vous devez voir `{"ok":true}`. **Si vous voyez ça, le service tourne.**
+Vous obtenez un `.md` à côté du PDF, et quelques nombres :
 
-### 5. Donner l'adresse et le mot de passe à Mdall
+```
+Écrit dans /workspaces/Mdall/mon-compte-rendu.md
+  12 pages
+  31 titres
+  4 tableaux
+  18 402 caractères
+```
 
-Tableau de bord Supabase → votre projet → **Edge Functions → Secrets** (ou *Project
-Settings → Edge Functions*) :
+**Ouvrez le `.md` en regard du PDF.** Les tableaux tiennent-ils ? L'ordre est-il le bon ?
+Les numéros de lot et les dates sont-ils intacts ? C'est à l'œil que ça se juge, et c'est là
+que se décide la suite.
+
+> Le document ne bouge pas : aucun réseau, aucun modèle, aucune clé. Un compte rendu réel
+> peut donc passer ici. **Ne le laissez pas dans l'arbre du dépôt** pour autant — un
+> Codespace tient un dépôt git, et un PDF glissé dedans peut finir dans un commit.
+> Supprimez-le une fois la restitution lue.
+
+Les comptes personnels ont un quota gratuit de Codespaces, sans carte bancaire. Le
+Codespace s'arrête tout seul après une demi-heure d'inactivité et se rouvre à l'identique.
+
+### Sur votre machine, si vous pouvez y installer des choses
+
+Il faut Java 11 ou plus (`java -version`), puis :
+
+```
+cd services/opendataloader
+npm install
+npm run essayer -- mon-compte-rendu.pdf
+```
+
+---
+
+## 2. Ensuite : le brancher à Mdall pour le voir en situation
+
+Toujours depuis le Codespace, sans rien déployer.
+
+### Lancer le service
+
+```
+cd services/opendataloader
+npm start
+```
+
+VS Code affiche un onglet **Ports** avec le 8080. Clic droit dessus → **Port Visibility →
+Public**. GitHub vous donne alors une adresse publique :
+
+```
+https://quelque-chose-8080.app.github.dev
+```
+
+Pour la vérifier, ouvrez-la avec `/sante` au bout : vous devez voir `{"ok":true}`.
+
+> Cette adresse est **publique et sans mot de passe** tant que vous n'en posez pas. Pour un
+> essai de quelques heures, avec une adresse tirée au hasard, c'est acceptable. Pour tenir
+> plus longtemps, posez le mot de passe partagé — voir §3.
+
+### Donner l'adresse à Mdall
+
+Tableau de bord Supabase → votre projet → **Edge Functions → Secrets** :
 
 | Name | Value |
 | --- | --- |
-| `OPENDATALOADER_URL` | l'adresse de l'étape 4, **sans barre oblique finale** |
-| `OPENDATALOADER_TOKEN` | **exactement** la même chaîne qu'à l'étape 3 |
+| `OPENDATALOADER_URL` | l'adresse, **sans barre oblique finale** |
 
 Puis redéployez la fonction, pour qu'elle relise les secrets :
 
@@ -101,14 +110,58 @@ Puis redéployez la fonction, pour qu'elle relise les secrets :
 supabase functions deploy reconstituer-par-loutil
 ```
 
-> C'est le piège le plus fréquent : on pose les secrets, on ne redéploie pas, et l'écran
+> C'est le piège le plus fréquent : on pose le secret, on ne redéploie pas, et l'écran
 > continue de dire « aucun outil n'est branché ».
 
-### 6. Vérifier à l'écran
+Enfin : Atelier → **Lecture des comptes rendus** → déposez un PDF → onglet **Restitution**.
+La colonne de droite doit se remplir, et les divergences avec le modèle se surligner.
 
-Atelier → **Lecture des comptes rendus** → déposez un PDF → onglet **Restitution**.
+---
 
-La colonne de droite doit se remplir.
+## 3. Le mot de passe partagé
+
+Dès que l'adresse vit plus de quelques heures, il en faut un : l'obscurité d'une adresse
+n'est pas une protection.
+
+Inventez une longue chaîne au hasard, puis posez-la **des deux côtés** :
+
+| Où | Nom |
+| --- | --- |
+| Le service (variable d'environnement) | `JETON_PARTAGE` |
+| Supabase (secret) | `OPENDATALOADER_TOKEN` |
+
+Elles doivent être **identiques** — un espace de trop suffit à les séparer.
+
+Sans `JETON_PARTAGE`, le service accepte tout le monde, et le crie à chaque démarrage :
+
+```
+[opendataloader] AUCUN MOT DE PASSE : ce service accepte tout le monde.
+```
+
+C'est délibéré : refuser dès le premier essai ferait passer une mise en service qui marche
+pour une mise en service qui échoue, et l'on chercherait la panne pendant une heure.
+
+**Il ne connaît personne pour autant.** Le mot de passe dit « cet appel vient de Mdall », il
+ne dit pas *qui* — savoir qui reste le métier de la fonction Supabase, qui a vérifié
+l'utilisateur avant d'appeler. Le service n'authentifie personne par lui-même.
+
+---
+
+## 4. Plus tard : un hébergement qui tient
+
+Quand l'outil aura fait ses preuves et qu'un service permanent aura du sens.
+
+| Hébergeur | Ce qu'il faut savoir |
+| --- | --- |
+| **Google Cloud Run** | Gratuit jusqu'à 2 millions de requêtes par mois, s'endort à zéro. Demande une carte bancaire à l'inscription, mais ne facture rien à ce volume. |
+| **Hugging Face Spaces** | L'entête de ce fichier est prêt pour un Space Docker — mais **ils sont réservés au plan PRO** (9 $/mois) depuis 2026. Un compte gratuit ne peut pas en faire tourner. |
+| N'importe quel autre | Le service tient dans le plus petit gabarit : ni GPU, ni mémoire particulière. |
+
+**Une mise en garde, apprise à mes dépens.** Sur Cloud Run, ne déployez pas avec
+`--no-allow-unauthenticated` : cette option exige un jeton d'identité Google dans chaque
+appel, et le relais de Mdall n'en envoie pas. Vous obtiendriez « l'outil a refusé le
+document » sans comprendre pourquoi. Déployez en accès ouvert, et laissez le mot de passe
+partagé tenir la porte.
 
 ---
 
@@ -117,41 +170,13 @@ La colonne de droite doit se remplir.
 | Ce que l'écran dit | Ce qui se passe |
 | --- | --- |
 | « Aucun outil de restitution n'est branché » | `OPENDATALOADER_URL` est vide, ou la fonction n'a pas été redéployée |
-| « L'outil a refusé le mot de passe » | `OPENDATALOADER_TOKEN` et `JETON_PARTAGE` diffèrent — un espace de trop suffit |
-| « L'outil n'a pas répondu » | l'adresse est mauvaise, ou le Space dormait : rouvrez sa page et réessayez |
-| « L'outil a refusé le document » | le service a répondu en erreur — ses **Logs** disent quoi |
+| « L'outil a refusé le mot de passe » | `OPENDATALOADER_TOKEN` et `JETON_PARTAGE` diffèrent |
+| « L'outil n'a pas répondu » | l'adresse est mauvaise, le port n'est pas public, ou le Codespace s'est arrêté |
+| « L'outil a refusé le document » | le service a répondu en erreur — ses journaux disent quoi |
 | « L'outil n'a rendu aucune page » | le Markdown est revenu sans marqueur de page |
 
-Un Space gratuit s'endort après plusieurs jours sans appel. Le premier appel au réveil peut
-dépasser les deux minutes que le relais accorde : ouvrez la page du Space, attendez qu'elle
-affiche *Running*, et redéposez le PDF.
-
----
-
-## Ailleurs qu'à Hugging Face
-
-N'importe quel hébergeur d'images Docker fait l'affaire. Le service tient dans le plus
-petit gabarit : ni GPU, ni mémoire particulière.
-
-**Une mise en garde, apprise à mes dépens.** Sur Google Cloud Run, ne déployez pas avec
-`--no-allow-unauthenticated` : cette option exige un jeton d'identité Google dans chaque
-appel, et le relais de Mdall n'en envoie pas. Vous obtiendriez « l'outil a refusé le
-document » sans comprendre pourquoi. Déployez en accès ouvert, et laissez le mot de passe
-partagé tenir la porte.
-
-### Pour un essai sans rien déployer
-
-Si vous pouvez installer des choses sur votre machine :
-
-```
-cd services/opendataloader
-npm install
-npm start
-curl -X POST --data-binary @CR_07.pdf -H "Content-Type: application/pdf" http://localhost:8080/
-```
-
-Il faut Java 11 ou plus (`java -version`). Supabase ne sait pas joindre votre machine : pour
-l'y relier, il faut un tunnel qui fabrique une adresse publique temporaire.
+Et `npm run essayer` qui ne produit rien : le PDF est probablement un **scan**. Sans OCR, il
+ne porte aucun texte à restituer.
 
 ---
 
@@ -173,28 +198,20 @@ dire la même chose.
 
 ---
 
-## Les réglages, et pourquoi ceux-là
+## Les réglages
 
-Dans `serveur.mjs` :
+Ils vivent dans [`reglages.mjs`](reglages.mjs), **à un seul endroit** : l'essai en local et
+le service en ligne les partagent. Juger la qualité sur d'autres réglages que ceux du
+service reviendrait à décider de garder ou de jeter l'outil sur un résultat qui n'est pas le
+sien.
 
-| Réglage | Pourquoi |
-| --- | --- |
-| `markdownPageSeparator: "=== PAGE %page-number% ==="` | la convention de Mdall, celle que le module partagé sait relire |
-| `tableMethod: "cluster"` | rattrape les tableaux sans bordures — imparfaitement, mais mieux qu'en liste à puces |
-| `headingHierarchy: true` | les titres gardent leur niveau, sans quoi tout devient du texte plat |
-| `imageOutput: "off"` | on compare du texte ; écrire les images remplirait le dossier temporaire pour rien |
-
-Le mode **hybride** (`--hybrid docling-fast`) améliore nettement les tableaux sans bordures,
-mais il demande un serveur Python à côté. Il n'est pas activé ici : on regarde d'abord ce
-que le mode libre donne sur de vrais CCTP.
+Ce fichier dit ce que chacun fait et pourquoi celui-là.
 
 ---
 
 ## Ce qu'il ne fait pas
 
-- **Il ne connaît personne.** Le mot de passe dit « cet appel vient de Mdall » ; il ne dit
-  pas *qui*. Savoir qui reste le métier de la fonction Supabase, qui a vérifié
-  l'utilisateur avant d'appeler. Le service n'authentifie personne par lui-même.
+- **Il n'authentifie personne par lui-même.** Voir §3.
 - **Il ne garde rien.** Le dossier temporaire est effacé après chaque conversion, réussie ou
   non.
 - **Il ne sait pas lire un scan.** Sans OCR, un PDF d'images rend un document vide.

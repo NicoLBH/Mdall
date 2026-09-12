@@ -162,66 +162,64 @@ servie publiquement — et il casse les tableaux sans bordures.
 
 ## 4. Brancher l'outil
 
-La colonne de droite est en place et attend une adresse. Elle n'en a **aucune par défaut**,
-et n'en aura pas : un défaut enverrait le PDF d'un chantier à une adresse que personne n'a
-choisie.
+**Le service est écrit, dans [`services/opendataloader/`](../services/opendataloader/)**, et
+son [mode d'emploi](../services/opendataloader/README.md) mène l'affaire pas à pas. Ce qui
+suit dit seulement dans quel ordre, et pourquoi cet ordre.
 
-### Le contrat
+### La visée : l'outil en piste principale, le modèle en secours
 
-Un service qui accepte un **PDF** en `POST` (corps brut, `Content-Type: application/pdf`) et
-rend ses pages en Markdown, sous l'une des deux formes :
+Ce n'est pas une colonne de comparaison qu'on ajoute par curiosité. **L'outil doit devenir
+la lecture ordinaire, et le modèle le secours** — appelé quand l'outil échoue, sur un scan
+ou une mise en page qu'il ne sait pas démêler.
 
-```json
-{ "pages": [ { "page": 1, "markdown": "# …" }, { "page": 2, "markdown": "…" } ] }
-```
+Deux raisons, et la seconde pèse plus que la première :
 
-ou du Markdown découpé par des marqueurs de page — la même convention qu'à l'aller :
+- **le prix** : un document lu ne coûte plus rien, et la facture d'IA de Mdall cesse de
+  croître avec le nombre de comptes rendus ;
+- **la solidité** : un service dont la lecture ne dépend pas d'un fournisseur payant est un
+  service qui tient. Une panne d'OpenAI, un changement de tarif, une clé révoquée — rien de
+  tout cela n'arrête plus la lecture des documents.
 
-```
-=== PAGE 1 ===
-# …
-```
+L'écran, lui, ne change pas encore : il compare les deux. **C'est la comparaison qui dira si
+le renversement est tenable**, document réel après document réel.
 
-**Un document rendu sans pages n'est pas accepté** : il ne pourrait pas être aligné contre
-l'autre restitution, et l'écran afficherait « tout diverge » pour un document identique.
+### L'ordre, et il n'est pas celui qu'on croit
 
-### Le branchement
+**1. Juger la qualité, sans rien héberger.** `npm run essayer -- un-compte-rendu.pdf` rend
+le `.md` à côté du PDF. On les met en regard, et l'on voit. C'est la seule question qui
+décide, et elle ne demande ni serveur, ni compte, ni carte bancaire. Dans un **Codespace**,
+elle ne demande même pas d'installer quoi que ce soit.
 
-**Le service est écrit, dans [`services/opendataloader/`](../services/opendataloader/) :
-un serveur, un `Dockerfile`, et un pas-à-pas.** Il n'y a rien à écrire, seulement à
-déployer — voir [son mode d'emploi](../services/opendataloader/README.md).
+**2. Le voir en situation**, toujours depuis le Codespace : lancer le service, rendre le
+port public, poser `OPENDATALOADER_URL` dans les secrets Supabase, redéployer
+`reconstituer-par-loutil`. L'écran *Restitution* se remplit à droite, et les divergences se
+surlignent.
 
-**Le chemin retenu est Hugging Face Spaces** : gratuit, sans carte bancaire, et entièrement
-au navigateur — rien à installer sur sa machine, ce qui compte quand on travaille sur un
-poste dont on n'est pas administrateur. Le mode d'emploi est écrit pour ce chemin, et son
-entête `---` est celui du Space : c'est lui qui déclare le port.
+**3. Héberger, seulement ensuite.** Quand l'outil aura fait ses preuves.
 
-Deux secrets, et ils vont par paire :
+### Sur l'hébergement, deux choses apprises à mes dépens
 
-| Où | Quoi |
-| --- | --- |
-| Le Space | `JETON_PARTAGE` — un mot de passe long, tiré au hasard |
-| Supabase | `OPENDATALOADER_URL` et `OPENDATALOADER_TOKEN`, ce dernier identique au premier |
+**Hugging Face Spaces ne convient pas à un compte gratuit** : les Spaces Docker sont
+réservés au plan PRO (9 $/mois) depuis 2026. L'entête du mode d'emploi reste prêt pour le
+jour où — il ne gêne aucun autre hébergeur.
 
-**Pourquoi un mot de passe.** Un hébergement gratuit donne une adresse publique, et
-l'obscurité d'une adresse n'est pas une protection : sans lui, n'importe qui pourrait faire
-convertir ses PDF sur ce service. Il dit « cet appel vient de Mdall » — il ne dit pas *qui*,
-et n'a pas à le dire : la fonction Supabase a déjà vérifié l'utilisateur avant d'appeler.
+**Sur Cloud Run, pas de `--no-allow-unauthenticated`** : cette option exige un jeton
+d'identité Google dans chaque appel, que le relais n'envoie pas. C'est le mot de passe
+partagé qui tient la porte, pas la configuration de l'hébergeur.
+
+### Le mot de passe partagé
+
+`JETON_PARTAGE` côté service, `OPENDATALOADER_TOKEN` côté Supabase, identiques. L'obscurité
+d'une adresse n'est pas une protection. Il dit « cet appel vient de Mdall » — il ne dit pas
+*qui*, et n'a pas à le dire : la fonction Supabase a déjà vérifié l'utilisateur.
 
 Le service n'en a **aucun par défaut**, et n'en aura pas : un mot de passe écrit dans le
-dépôt n'en est pas un. Sans lui il accepte tout le monde, et le crie à chaque démarrage —
-refuser dès le premier essai ferait passer une mise en service qui marche pour une mise en
-service qui échoue.
+dépôt n'en est pas un. Sans lui il accepte tout le monde, et le crie à chaque démarrage.
 
-Tant que `OPENDATALOADER_URL` est vide, l'écran l'écrit et affiche la marche à suivre. Il
-n'affiche pas « aucune différence » : **« rien à comparer » n'est pas « les deux sont
-d'accord »**.
+### Tant que rien n'est branché
 
-### Ce qu'on comparera
-
-Trois comptes rendus, un rapport de contrôle, un CCTP. Les chiffres du §2 viennent de PDF
-fabriqués pour ressembler aux nôtres, pas des nôtres. La décision se prend sur des documents
-réels, à l'écran, en regardant les lignes surlignées.
+L'écran l'écrit et affiche la marche à suivre. Il n'affiche pas « aucune différence » :
+**« rien à comparer » n'est pas « les deux sont d'accord »**.
 
 ### Ce qui reste après
 
@@ -229,6 +227,10 @@ réels, à l'écran, en regardant les lignes surlignées.
 PDF la refait, et la repaie. Elle a sa place à côté du document, dans la chaîne Documents —
 c'est là qu'un identifiant de document existe, et l'utilitaire de l'Atelier n'en a pas. Ce
 sera une migration additive, et une lecture qui ne recommence pas.
+
+**Le renversement.** Le jour où la comparaison aura tranché : l'outil d'abord, le modèle en
+secours, et la nature « Document refait en Markdown » disparaîtra de la plupart des
+factures.
 
 ## 5. Ce qui n'a pas été vérifié
 
