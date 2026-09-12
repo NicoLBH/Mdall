@@ -221,20 +221,34 @@ export function intitulesAmbigus(points = []) {
 
 /* ── Ce que ces points deviennent face aux sujets du projet ──────────────── */
 
-/** Ce qu'un point devient. */
+/**
+ * Ce qu'un point devient.
+ *
+ * **Un point qui retrouve son sujet n'ouvre rien : il le relance.** C'est une
+ * ligne d'activité de plus dans sa discussion — « ce compte rendu le redit » —
+ * et non un second sujet au même titre. Dire « reprend un sujet » laissait
+ * croire à un doublon ; c'est l'inverse, c'est ce qui l'évite.
+ */
 export const SORT = {
   /** Aucun sujet ne lui correspond : il en ouvrirait un. */
   NOUVEAU: "nouveau",
-  /** Un sujet existe, et le point le redit à l'identique. */
-  REPRIS: "repris",
+  /** Un sujet existe, et ce compte rendu le relance sans rien y changer. */
+  RELANCE: "relance",
   /** Un sujet existe, et le point en dit autre chose. */
   CHANGE: "change"
 };
 
 export const PHRASES_DU_SORT = {
   [SORT.NOUVEAU]: "Ouvrirait un sujet",
-  [SORT.REPRIS]: "Reprend un sujet, sans rien y changer",
-  [SORT.CHANGE]: "Reprend un sujet, et en dit autre chose"
+  [SORT.RELANCE]: "Relancerait un sujet",
+  [SORT.CHANGE]: "Ferait évoluer un sujet"
+};
+
+/** Ce que chaque sort ferait, en toutes lettres. */
+export const EFFETS_DU_SORT = {
+  [SORT.NOUVEAU]: "Aucun sujet ouvert ne lui correspond : il en ouvrirait un nouveau.",
+  [SORT.RELANCE]: "Ce compte rendu le redit sans rien y changer : une activité de relance s'ajoute à la discussion du sujet.",
+  [SORT.CHANGE]: "Ce compte rendu en dit autre chose : l'activité du sujet enregistre ce qui a bougé."
 };
 
 /**
@@ -254,7 +268,15 @@ export const PHRASES_DU_SORT = {
  * @param {(titre: string) => string} aplatir la mise à plat des titres — celle
  *   du triage, passée plutôt que recopiée, pour que les deux voient pareil
  */
-export function confrontation(points = [], sujetsDuProjet = [], aplatir = null) {
+export function confrontation(points = [], sujetsDuProjet = null, aplatir = null) {
+  // **`null` n'est pas « aucun sujet ».** La lecture des sujets du projet rend
+  // `null` quand elle n'a pas pu demander, et sa propre documentation le dit :
+  // ne pas savoir ce qui est ouvert n'autorise pas à prétendre que rien ne
+  // l'est. Aplati en liste vide, tout point devenait « ouvrirait un sujet » —
+  // un compte rendu déjà traité proposait vingt sujets de plus, en silence
+  // (règle 5).
+  if (sujetsDuProjet === null || sujetsDuProjet === undefined) return null;
+
   const mettreAPlat = typeof aplatir === "function"
     ? aplatir
     : (valeur) => texte(valeur).toLowerCase();
@@ -272,13 +294,13 @@ export function confrontation(points = [], sujetsDuProjet = [], aplatir = null) 
     // L'état diffère : le point dit autre chose de ce sujet.
     const avant = texte(sujet?.etat ?? sujet?.state);
     const change = Boolean(avant) && avant !== texte(point?.etat);
-    return { ...point, sort: change ? SORT.CHANGE : SORT.REPRIS, sujet };
+    return { ...point, sort: change ? SORT.CHANGE : SORT.RELANCE, sujet };
   });
 }
 
 /** Combien de points par sort, pour lire la confrontation d'un coup d'œil. */
 export function comptesDeLaConfrontation(confrontes = []) {
-  const comptes = { [SORT.NOUVEAU]: 0, [SORT.REPRIS]: 0, [SORT.CHANGE]: 0 };
+  const comptes = { [SORT.NOUVEAU]: 0, [SORT.RELANCE]: 0, [SORT.CHANGE]: 0 };
   for (const point of Array.isArray(confrontes) ? confrontes : []) {
     if (comptes[point?.sort] !== undefined) comptes[point.sort] += 1;
   }

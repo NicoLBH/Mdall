@@ -55,7 +55,17 @@ const etat = {
   phase: "vide", // vide | lecture | lue | echec
   dit: "",
   lecture: null,
-  confrontes: [],
+  /** `null` : on n'a pas pu lire les sujets du projet — différent de « aucun ». */
+  confrontes: null,
+  /** Le sujet dont on regarde le détail, pour juger si c'est bien le même. */
+  deplie: "",
+  /**
+   * Les descriptions lues, par sujet.
+   *
+   * Absent : pas encore demandée. `null` : la lecture a échoué — différent
+   * d'une description vide, qui est une réponse (règle 5).
+   */
+  descriptions: {},
   motif: ""
 };
 
@@ -253,9 +263,24 @@ function renderConfrontation(confrontes) {
   `;
 }
 
-/** Les points, rangés comme le document les range. */
+/**
+ * Les points, en tableau.
+ *
+ * **À gauche ce que le document dit, à droite le sujet qu'on retrouverait.**
+ * C'est la seule disposition qui permette de juger d'un coup d'œil si c'est
+ * bien le même sujet : l'un sous l'autre, il faudrait retenir le premier pour
+ * lire le second — et c'est précisément l'effort qu'on cherche à éviter.
+ *
+ * Le tableau reste rangé **par rubrique**, comme le document : un point sorti
+ * de sa rubrique perd ce qui le distingue de son homonyme.
+ */
 function renderRubriques(lecture) {
-  const parSort = new Map(etat.confrontes.map((point) => [point.rang, point]));
+  // `confrontes` vaut `null` quand on n'a pas pu lire les sujets du projet :
+  // le tableau se dessine quand même, sans la colonne de droite. Appeler
+  // `.map` dessus lèverait une exception qui viderait tout l'écran.
+  const parRang = new Map(
+    (Array.isArray(etat.confrontes) ? etat.confrontes : []).map((point) => [point.rang, point])
+  );
 
   return `
     <section class="lecture-cr__rubriques">
@@ -266,20 +291,115 @@ function renderRubriques(lecture) {
             ${escapeHtml(rubrique.lot)}
             <span class="lecture-cr__rubrique-compte mono-small">${rubrique.combien}</span>
           </h4>
-          <ul class="lecture-cr__points">
-            ${rubrique.points.map((point) => renderPoint(point, parSort.get(point.rang))).join("")}
-          </ul>
+          <table class="lecture-cr__table">
+            <thead>
+              <tr>
+                <th scope="col">Ce que le compte rendu dit</th>
+                <th scope="col">Le sujet qu'il retrouve</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rubrique.points.map((point) => renderLigne(point, parRang.get(point.rang))).join("")}
+            </tbody>
+          </table>
         </article>
       `).join("")}
     </section>
   `;
 }
 
-function renderPoint(point, confronte) {
-  const sort = confronte?.sort;
+function renderLigne(point, confronte) {
+  return `
+    <tr class="lecture-cr__ligne${point.retrouve ? "" : " est-douteux"}">
+      <td class="lecture-cr__cellule lecture-cr__cellule--point">${renderPoint(point, confronte?.sort)}</td>
+      <td class="lecture-cr__cellule lecture-cr__cellule--sujet">${
+        renderSujetRetrouve(confronte?.sujet ?? null, confronte?.sort)
+      }</td>
+    </tr>
+  `;
+}
+
+/**
+ * Le sujet que ce point retrouve, à droite.
+ *
+ * **Son titre et sa description, sur place.** C'est ce qui permet de dire « oui,
+ * c'est bien le même » ou « non, le rapprochement est faux » — et le second cas
+ * est celui qu'on cherche, puisqu'il dit où le rapprochement par le texte se
+ * trompe.
+ *
+ * Le titre déplie le détail dans la page plutôt que d'ouvrir la vue Sujets :
+ * partir comparer ailleurs fait perdre la colonne de gauche, c'est-à-dire ce
+ * avec quoi on comparait.
+ */
+function renderSujetRetrouve(sujet, sort) {
+  // Pas de sort : on n'a pas pu lire les sujets du projet. Ce n'est pas
+  // « aucun sujet ne correspond », et les deux ne s'écrivent pas pareil.
+  if (!sort) return `<span class="lecture-cr__sans-sujet mono-small">Comparaison impossible</span>`;
+
+  if (!sujet) {
+    return `
+      <span class="lecture-cr__sans-sujet mono-small">
+        Aucun sujet ouvert ne porte ce titre — ${escapeHtml(EFFETS_DU_SORT[sort] ?? "")}
+      </span>
+    `;
+  }
+
+  const id = texte(sujet.id);
+  const deplie = etat.deplie === id;
 
   return `
-    <li class="lecture-cr__point${point.retrouve ? "" : " est-douteux"}">
+    <div class="lecture-cr__sujet${deplie ? " est-deplie" : ""}">
+      <button type="button" class="lecture-cr__sujet-titre" data-lecture-cr-sujet="${escapeHtml(id)}"
+        aria-expanded="${deplie ? "true" : "false"}">
+        ${svgIcon(deplie ? "chevron-down" : "chevron-right", { className: "octicon" })}
+        <span>${escapeHtml(texte(sujet.title ?? sujet.titre) || "(sans titre)")}</span>
+      </button>
+
+      <div class="lecture-cr__sujet-faits mono-small">
+        ${sujet.subject_number ? `<span>#${escapeHtml(String(sujet.subject_number))}</span>` : ""}
+        ${sujet.status ? `<span>${escapeHtml(String(sujet.status))}</span>` : ""}
+        <span class="lecture-cr__sujet-effet">${escapeHtml(EFFETS_DU_SORT[sort] ?? "")}</span>
+      </div>
+
+      ${deplie ? renderDetailDuSujet(sujet) : ""}
+    </div>
+  `;
+}
+
+/**
+ * Le détail d'un sujet, déplié sur place.
+ *
+ * La description se lit **à la demande** : les charger toutes ferait trente
+ * requêtes pour un détail qu'on regarde une fois, et la colonne de droite doit
+ * s'afficher avant même qu'on clique.
+ */
+function renderDetailDuSujet(sujet) {
+  const lue = etat.descriptions[texte(sujet.id)];
+
+  if (lue === undefined) {
+    return `<div class="lecture-cr__sujet-detail">${renderSpinnerHtml({ label: "Lecture du sujet", size: "sm" })}</div>`;
+  }
+
+  // `null` : la lecture a échoué. Différent d'une description vide, qui est une
+  // réponse — les confondre ferait conclure que le sujet est nu.
+  if (lue === null) {
+    return `
+      <div class="lecture-cr__sujet-detail lecture-cr__sujet-detail--echec">
+        La description de ce sujet n'a pas pu être lue.
+      </div>
+    `;
+  }
+
+  return `
+    <div class="lecture-cr__sujet-detail">
+      ${lue ? escapeHtml(lue).replace(/\n/g, "<br>") : `<span class="mono-small">Ce sujet n'a pas de description.</span>`}
+    </div>
+  `;
+}
+
+function renderPoint(point, sort) {
+  return `
+    <div class="lecture-cr__point">
       <div class="lecture-cr__point-tete">
         <span class="lecture-cr__point-titre">${escapeHtml(point.titre || "(sans titre)")}</span>
         ${sort ? `<span class="lecture-cr__sort lecture-cr__sort--${escapeHtml(sort)}">${
@@ -312,7 +432,7 @@ function renderPoint(point, confronte) {
           point.manques.map((manque) => PHRASES_DU_MANQUE[manque] ?? manque).join(" · ")
         )}</p>
       ` : ""}
-    </li>
+    </div>
   `;
 }
 
@@ -341,17 +461,44 @@ function renderSuite() {
 
 /* ── Ce qui se passe quand on dépose ─────────────────────────────────────── */
 
+/**
+ * Ce qu'il faut détacher avant de rebrancher.
+ *
+ * **L'écran se redessine à chaque dépli, et `brancher` est rappelé à chaque
+ * fois.** Sans retirer l'écoute précédente, elles s'empilent : au cinquième
+ * dépli, un clic bascule cinq fois — donc ne bascule pas — et le bouton paraît
+ * mort pour une raison qu'on ne devine pas.
+ */
+let detacher = null;
+
 function brancher(hote) {
   const zone = hote.querySelector("[data-lecture-cr-zone]");
   if (!zone) return;
 
+  detacher?.();
+
   const champ = hote.querySelector("[data-lecture-cr-fichier]");
-  champ?.addEventListener("change", (evenement) => {
+  const surLeChamp = (evenement) => {
     const fichier = evenement.target?.files?.[0];
     if (fichier) void lire(hote, fichier);
-  });
+  };
+  champ?.addEventListener("change", surLeChamp);
 
-  brancherLaZoneDeDepot(zone, {
+  // **Déléguée sur l'hôte** : le tableau se réécrit à chaque dépli, donc des
+  // écouteurs posés sur les titres mourraient avec eux — le second clic ne
+  // ferait rien, sans erreur et sans rien pour le dire.
+  const surLeClic = (evenement) => {
+    const bouton = evenement.target.closest?.("[data-lecture-cr-sujet]");
+    if (!bouton || !hote.contains(bouton)) return;
+
+    const id = texte(bouton.dataset.lectureCrSujet);
+    etat.deplie = etat.deplie === id ? "" : id;
+    redessiner(hote);
+    if (etat.deplie) void lireLaDescription(hote, etat.deplie);
+  };
+  hote.addEventListener("click", surLeClic);
+
+  const detacherLaZone = brancherLaZoneDeDepot(zone, {
     // La zone se tait pendant une lecture : déposer un second document
     // pendant qu'on lit le premier abandonnerait un appel déjà payé.
     actif: () => etat.phase !== "lecture",
@@ -363,6 +510,13 @@ function brancher(hote) {
       if (retenus[0]) void lire(hote, retenus[0]);
     }
   });
+
+  detacher = () => {
+    champ?.removeEventListener("change", surLeChamp);
+    hote.removeEventListener("click", surLeClic);
+    detacherLaZone?.();
+    detacher = null;
+  };
 }
 
 /**
@@ -376,7 +530,8 @@ async function lire(hote, fichier) {
   etat.phase = "lecture";
   etat.dit = "Ouverture du document";
   etat.lecture = null;
-  etat.confrontes = [];
+  etat.confrontes = null;
+  etat.deplie = "";
   redessiner(hote);
 
   try {
@@ -440,18 +595,55 @@ async function confronterAuProjet(points) {
       ]);
 
     const projet = await resolveCurrentBackendProjectId();
-    if (!projet) return [];
+    // Sans projet, on ne sait rien des sujets : on ne confronte pas, et on le
+    // dit. Prétendre que tout est nouveau serait une affirmation qu'on n'a pas
+    // vérifiée (règle 5).
+    if (!projet) return null;
 
     // **Les mêmes titres que l'analyse d'une proposition.** C'est elle qui
     // décidera à la fusion : confronter ici sur une autre liste ferait dire à
     // l'écran autre chose que ce qui se passera (règle 4).
+    // **`null` n'est pas « aucun sujet ».** Cette lecture rend `null` quand
+    // elle n'a pas pu demander, et le dit dans sa propre documentation.
+    // L'aplatir en liste vide faisait afficher « ouvrirait un sujet » sur tous
+    // les points d'un compte rendu déjà traité — vingt sujets proposés en
+    // double, sans rien pour le dire.
     const sujets = await listProjectSubjectTitles(projet);
-    return confrontation(points, Array.isArray(sujets) ? sujets : [], titreAplati);
+    return confrontation(points, sujets, titreAplati);
   } catch {
     // Sans les sujets du projet, la lecture reste lisible : on ne confronte
-    // simplement rien, plutôt que de dire « tout est nouveau » — ce qui serait
-    // une affirmation qu'on n'a pas vérifiée (règle 5).
-    return [];
+    // simplement rien, plutôt que de dire « tout est nouveau ».
+    return null;
+  }
+}
+
+/**
+ * La description d'un sujet, lue à la demande.
+ *
+ * **Une par une, et seulement quand on l'ouvre.** Les charger toutes ferait
+ * trente requêtes pour un détail qu'on regarde une fois — et la colonne de
+ * droite doit s'afficher tout de suite, avant même qu'on clique.
+ *
+ * Elle vit dans ses versions, et la dernière fait foi : c'est la même porte que
+ * la vue Sujets emploie, pas une lecture parallèle qui finirait par montrer
+ * autre chose (règle 4).
+ */
+async function lireLaDescription(hote, subjectId) {
+  const id = texte(subjectId);
+  if (!id || etat.descriptions[id] !== undefined) return;
+
+  try {
+    const { loadSubjectDescriptionVersions } = await import(
+      "../../../services/project-subjects-supabase.js"
+    );
+    const versions = await loadSubjectDescriptionVersions(id, { limit: 1 });
+    etat.descriptions[id] = texte(versions?.[0]?.description_markdown);
+  } catch {
+    // `null` et non "" : ne pas avoir pu lire n'est pas « ce sujet n'a pas de
+    // description ». Les confondre ferait conclure que le sujet est vide.
+    etat.descriptions[id] = null;
+  } finally {
+    redessiner(hote);
   }
 }
 
