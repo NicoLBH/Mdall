@@ -2,9 +2,10 @@ import { svgIcon } from "../ui/icons.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
 import { bindSideNavPanels } from "./ui/side-nav-layout.js";
+import { RANGEMENT, renderVitrineDeLatelier } from "./atelier/vitrine-de-latelier.js";
+import { utilitaireParCible } from "../services/catalogue-de-latelier.js";
 import {
   renderNavList,
-  renderNavListDivider,
   renderNavListGroup,
   renderNavListItem
 } from "./ui/nav-list.js";
@@ -105,17 +106,28 @@ function renderCopiloteHistorique() {
   });
 }
 
+/**
+ * Ce que le rail porte encore, et pourquoi si peu.
+ *
+ * **Il portait tout l'Atelier ; il ne porte plus que le Copilote.** Le
+ * catalogue des utilitaires est passé dans la vitrine, pour trois raisons dites
+ * au long dans `atelier/vitrine-de-latelier.js` — dont la plus lourde : un rail
+ * à gauche de l'écran interdit à chaque utilitaire d'avoir le sien.
+ *
+ * Ce qui reste ici est **la barre latérale du Copilote**, et non celle de
+ * l'Atelier : l'historique de ses discussions, et de quoi en ouvrir une neuve.
+ * C'est exactement ce que la vitrine rend possible — un utilitaire qui a sa
+ * propre gauche.
+ */
 function renderStudioNav() {
   return [
     renderNavListGroup({
       items: [
         renderNavListItem({
-          label: "Copilote",
+          label: "Nouvelle discussion",
           dataAttributes: { "data-side-nav-target": "studio-copilote" },
           iconHtml: svgIcon("copilot", { className: "octicon octicon-copilot" }),
           isActive: true,
-          // L'action est à côté de l'entrée, pas dedans : ouvrir une discussion
-          // neuve n'est pas se rendre quelque part.
           actionHtml: `
             <button type="button" class="nav-list__action-btn" data-copilote-new
               aria-label="Nouvelle discussion" title="Nouvelle discussion">
@@ -125,116 +137,17 @@ function renderStudioNav() {
         })
       ]
     }),
-    renderCopiloteHistorique(),
-    renderNavListDivider(),
-    // Les explorations viennent avant les utilitaires parce qu'elles les
-    // englobent : une variante rejoue *tout* le projet, utilitaires compris.
-    // Les ranger sous Solidité ou sous Incendie en ferait un outil de domaine,
-    // ce qu'elles ne sont pas.
-    renderNavListGroup({
-      label: "Explorations",
-      items: [
-        renderNavListItem({
-          label: "Tester une variante",
-          dataAttributes: { "data-side-nav-target": "exploration-variante" },
-          iconHtml: svgIcon("beaker", { className: "octicon octicon-beaker" })
-        }),
-        renderNavListItem({
-          label: "Étude d'impact",
-          dataAttributes: { "data-side-nav-target": "exploration-impact" },
-          iconHtml: svgIcon("graph", { className: "octicon octicon-graph" })
-        }),
-        renderNavListItem({
-          label: "Auditer la mémoire",
-          dataAttributes: { "data-side-nav-target": "exploration-audit" },
-          iconHtml: svgIcon("checklist", { className: "octicon octicon-checklist" })
-        })
-      ]
-    }),
-    renderNavListDivider(),
-    renderNavListGroup({
-      label: "Solidité",
-      items: [
-        renderNavListItem({
-          label: "Neige, Vent & Gel",
-          dataAttributes: { "data-side-nav-target": "solidity-climate" },
-          iconHtml: svgIcon("climate-tools", { className: "octicon octicon-gear" })
-        }),
-        renderNavListItem({
-          label: "Risques Naturels & Technologiques",
-          dataAttributes: { "data-side-nav-target": "solidity-georisks" },
-          iconHtml: svgIcon("shield", { className: "octicon octicon-shield" })
-        }),
-        renderNavListItem({
-          label: "Fondations superficielles - calcul",
-          dataAttributes: { "data-side-nav-target": "solidity-fondations" },
-          iconHtml: svgIcon("gear", { className: "octicon octicon-gear" })
-        }),
-      ]
-    }),
-    renderNavListDivider(),
-    renderNavListGroup({
-      label: "Incendie",
-      items: [
-        renderNavListItem({
-          label: "Incendie Habitation",
-          dataAttributes: { "data-side-nav-target": "incendie-habitation" },
-          iconHtml: svgIcon("fire", { className: "octicon octicon-fire" })
-        })
-      ]
-    }),
-    renderNavListDivider(),
-    renderNavListGroup({
-      label: "Mémoire",
-      items: [
-        renderNavListItem({
-          label: "Résoudre les conflits",
-          dataAttributes: { "data-side-nav-target": "conflits-resolution" },
-          iconHtml: svgIcon("bug", { className: "octicon octicon-bug" })
-        })
-      ]
-    }),
-    renderNavListDivider(),
-    renderNavListGroup({
-      label: "Parasismique",
-      items: [
-        renderNavListItem({
-          label: "Spectre",
-          dataAttributes: { "data-side-nav-target": "seismic-general" },
-          iconHtml: svgIcon("pulse", { className: "octicon octicon-pulse" })
-        })
-      ]
-    }),
-    renderNavListDivider(),
-    renderNavListGroup({
-      label: "Socotec",
-      items: [
-        renderNavListItem({
-          label: "ENR - PV hangar neuf",
-          dataAttributes: { "data-side-nav-target": "solidity-arkolia" },
-          iconHtml: svgIcon("eye", { className: "octicon octicon-eye" })
-        })
-      ]
-    }),
-    renderNavListDivider(),
-    renderNavListGroup({
-      label: "Développements",
-      items: [
-        renderNavListItem({
-          label: "Suivi des avis BC",
-          dataAttributes: { "data-side-nav-target": "dev-ct-continuity-lab" },
-          iconHtml: svgIcon("history", { className: "octicon octicon-history" }),
-          trailing: "spike"
-        }),
-        renderNavListItem({
-          label: "Suivre les variables mutualisées",
-          dataAttributes: { "data-side-nav-target": "dev-variables" },
-          iconHtml: svgIcon("markdown-code", { className: "octicon octicon-code" })
-        })
-      ]
-    })
+    renderCopiloteHistorique()
   ].join("");
 }
+
+/**
+ * L'accueil de l'Atelier — sa vitrine.
+ *
+ * Un nom, pas une chaîne recopiée : le routeur de panneaux, la barre de retour
+ * et le panneau par défaut le désignent tous les trois (règle 10).
+ */
+const ACCUEIL = "atelier-vitrine";
 
 /**
  * L'écran de l'Atelier qu'on regarde.
@@ -245,7 +158,7 @@ function renderStudioNav() {
  * changeait d'écran. Le panneau courant se retient donc au même endroit que la
  * largeur du rail, et il est repris au redessin.
  */
-let panneauCourant = "studio-copilote";
+let panneauCourant = ACCUEIL;
 
 /** Où se retiennent le repli et la largeur du rail. Des réglages, pas un état. */
 const RAIL_COLLAPSED_KEY = "mdall.studioRailCollapsed.v1";
@@ -262,24 +175,66 @@ function lireReglages() {
   }
 }
 
+/**
+ * L'accueil de l'Atelier, et ce qui s'ouvre depuis lui.
+ *
+ * ## Deux mises en page, et pourquoi pas une
+ *
+ * **La vitrine** occupe la largeur pleine : c'est un écran de recherche, il n'a
+ * rien à mettre sur un côté.
+ *
+ * **Un utilitaire ouvert** occupe lui aussi la largeur pleine, et c'est là tout
+ * l'objet du changement. Le rail de l'Atelier prenait la gauche de l'écran pour
+ * tous ; chaque utilitaire héritait donc d'une largeur amputée et de
+ * l'interdiction d'avoir sa propre barre latérale. Il ne reste plus qu'une
+ * barre — celle du Copilote — et elle est **dans** le Copilote, comme celle que
+ * n'importe quel autre utilitaire pourra désormais se donner.
+ *
+ * ## La barre de retour
+ *
+ * Elle dit où l'on est et d'où l'on revient. Sans rail, un utilitaire ouvert
+ * n'a plus rien autour de lui qui le nomme : on saurait ce qu'on regarde sans
+ * savoir comment en sortir. Elle porte aussi **la version** de l'utilitaire,
+ * parce que c'est en le regardant travailler qu'on veut la connaître.
+ */
 function getRouterHtml() {
   return `
-    <section class="project-simple-page project-simple-page--settings project-simple-page--studio"
-      style="--project-rail-width:${railWidth(railState.width, railState.collapsed)}px">
+    <section class="project-simple-page project-simple-page--settings project-simple-page--studio project-simple-page--atelier">
       <div class="project-simple-scroll project-simple-scroll--parametres" id="projectStudioRouterScroll">
-        <div class="settings-shell settings-shell--parametres">
-          <div class="project-rail-layout${railState.collapsed ? " project-rail-layout--collapsed" : ""}">
-            ${renderProjectRail({
-              id: "studioRail",
-              label: "Utilitaires de l'Atelier",
-              collapsed: railState.collapsed,
-              navHtml: renderNavList({ label: "Utilitaires de l'Atelier", html: renderStudioNav() })
-            })}
-            <div class="project-rail-layout__content settings-content settings-content--parametres project-studio-router__content">
-              
-              <section class="project-studio-router__panel is-active" data-side-nav-panel="studio-copilote">
-                <div id="projectStudioCopilotePanel"></div>
-              </section>
+        <div class="settings-shell settings-shell--parametres settings-shell--atelier">
+
+          <div class="atelier-retour" id="atelierRetour" hidden>
+            <button type="button" class="atelier-retour__lien" data-side-nav-target="${ACCUEIL}">
+              ${svgIcon("arrow-left", { className: "octicon" })}
+              <span>Atelier</span>
+            </button>
+            <span class="atelier-retour__sep" aria-hidden="true">/</span>
+            <span class="atelier-retour__nom" id="atelierRetourNom"></span>
+            <span class="atelier-retour__version mono-small" id="atelierRetourVersion"></span>
+          </div>
+
+          <div class="project-studio-router__content">
+
+            <section class="project-studio-router__panel is-active" data-side-nav-panel="${ACCUEIL}">
+              <div id="projectStudioVitrinePanel"></div>
+            </section>
+
+            <section class="project-studio-router__panel project-studio-router__panel--copilote"
+              data-side-nav-panel="studio-copilote">
+              <div class="project-rail-layout${railState.collapsed ? " project-rail-layout--collapsed" : ""}"
+                style="--project-rail-width:${railWidth(railState.width, railState.collapsed)}px">
+                ${renderProjectRail({
+                  id: "studioRail",
+                  label: "Discussions du Copilote",
+                  collapsed: railState.collapsed,
+                  navHtml: renderNavList({ label: "Discussions du Copilote", html: renderStudioNav() })
+                })}
+                <div class="project-rail-layout__content">
+                  <div id="projectStudioCopilotePanel"></div>
+                </div>
+              </div>
+            </section>
+
               <section class="project-studio-router__panel" data-side-nav-panel="exploration-variante">
                 <div id="projectStudioVariantePanel"></div>
               </section>
@@ -316,9 +271,8 @@ function getRouterHtml() {
               <section class="project-studio-router__panel" data-side-nav-panel="dev-variables">
                 <div id="projectStudioVariablesPanel"></div>
               </section>
-            
+
             </div>
-          </div>
         </div>
       </div>
     </section>
@@ -339,6 +293,9 @@ export function renderProjectStudio(root) {
   lireReglages();
   root.innerHTML = getRouterHtml();
   brancherRail(root);
+
+  const vitrineRoot = root.querySelector("#projectStudioVitrinePanel");
+  if (vitrineRoot) dessinerLaVitrine(vitrineRoot);
 
   const copiloteRoot = root.querySelector("#projectStudioCopilotePanel");
   const solidityClimateRoot = root.querySelector("#projectStudioSolidityClimatePanel");
@@ -390,7 +347,7 @@ export function renderProjectStudio(root) {
   // Le panneau retenu, s'il existe encore : un utilitaire retiré d'une version
   // à l'autre ne doit pas rendre l'Atelier vide au redessin.
   if (!root.querySelector(`[data-side-nav-panel="${CSS.escape(panneauCourant)}"]`)) {
-    panneauCourant = "studio-copilote";
+    panneauCourant = ACCUEIL;
   }
 
   bindSideNavPanels(root, {
@@ -402,37 +359,126 @@ export function renderProjectStudio(root) {
   // « Tester une variante » ne doit pas rendre le panneau vide.
   rendreLExploration(panneauCourant);
 
-  root.querySelectorAll("[data-side-nav-target]").forEach((button) => {
-    button.addEventListener("click", () => {
-      registerProjectPrimaryScrollSource(getScrollSource());
+  /**
+   * **Une seule écoute, déléguée sur la racine.**
+   *
+   * Les entrées du rail ne bougent pas, mais les fiches de la vitrine se
+   * réécrivent à chaque frappe dans la recherche. Des écouteurs posés sur les
+   * fiches mourraient donc avec elles : on chercherait « incendie », on
+   * cliquerait la fiche trouvée, et rien ne se passerait — sans erreur, sans
+   * rien à quoi se raccrocher. C'est exactement le défaut qui a coûté six tours
+   * sur les filtres de sujets.
+   *
+   * La racine, elle, ne se réécrit pas tant qu'on est dans l'Atelier.
+   */
+  root.addEventListener("click", (evenement) => {
+    const button = evenement.target.closest?.("[data-side-nav-target]");
+    if (!button || !root.contains(button)) return;
 
-      const targetId = String(button.dataset.sideNavTarget || "").trim();
-      if (targetId === "solidity-climate" && solidityClimateRoot) renderSolidityClimate(solidityClimateRoot, { force: true });
-      // Le copilote se redessine à chaque venue : la conversation a pu avancer
-      // dans un autre onglet, et un fil figé donnerait l'impression d'avoir
-      // perdu l'échange.
-      if (targetId === "studio-copilote" && copiloteRoot) renderCopilote(copiloteRoot);
-      // Les conflits se relisent à chaque venue : la mémoire a pu bouger dans
-      // un autre onglet, et un écran d'arbitrage qui montre un état périmé est
-      // pire qu'un écran vide.
-      if (targetId === "conflits-resolution" && conflitsRoot) renderResolutionConflits(conflitsRoot, { force: true });
-      // Les variables se relisent à chaque venue : la mémoire a pu bouger, et
-      // un nom qui n'existe plus se chercherait longtemps.
-      if (targetId === "dev-variables" && variablesRoot) renderVariablesMutualisees(variablesRoot, { force: true });
-      // Les explorations se relisent à chaque venue : la mémoire a pu bouger
-      // dans un autre onglet, et essayer une valeur sur un socle périmé
-      // donnerait un raisonnement juste sur un projet qui n'existe plus.
-      rendreLExploration(targetId, { force: true });
+    registerProjectPrimaryScrollSource(getScrollSource());
 
-      panneauCourant = targetId || panneauCourant;
-      marquerActif(root, targetId);
-    });
+    const targetId = String(button.dataset.sideNavTarget || "").trim();
+    if (!targetId) return;
+
+    // Le routeur de panneaux n'entend que les boutons qu'il a vus au montage :
+    // la bascule se fait donc ici, sur le DOM tel qu'il est maintenant.
+    afficherPanneau(root, targetId);
+
+    if (targetId === "solidity-climate" && solidityClimateRoot) renderSolidityClimate(solidityClimateRoot, { force: true });
+    // Le copilote se redessine à chaque venue : la conversation a pu avancer
+    // dans un autre onglet, et un fil figé donnerait l'impression d'avoir
+    // perdu l'échange.
+    if (targetId === "studio-copilote" && copiloteRoot) renderCopilote(copiloteRoot);
+    // Les conflits se relisent à chaque venue : la mémoire a pu bouger dans
+    // un autre onglet, et un écran d'arbitrage qui montre un état périmé est
+    // pire qu'un écran vide.
+    if (targetId === "conflits-resolution" && conflitsRoot) renderResolutionConflits(conflitsRoot, { force: true });
+    // Les variables se relisent à chaque venue : la mémoire a pu bouger, et
+    // un nom qui n'existe plus se chercherait longtemps.
+    if (targetId === "dev-variables" && variablesRoot) renderVariablesMutualisees(variablesRoot, { force: true });
+    // Les explorations se relisent à chaque venue : la mémoire a pu bouger
+    // dans un autre onglet, et essayer une valeur sur un socle périmé
+    // donnerait un raisonnement juste sur un projet qui n'existe plus.
+    rendreLExploration(targetId, { force: true });
+
+    panneauCourant = targetId || panneauCourant;
+    marquerActif(root, targetId);
   });
 
+  brancherLaVitrine(root, vitrineRoot);
   brancherCopilote(root, copiloteRoot, getScrollSource);
   marquerActif(root, panneauCourant);
 
   registerProjectPrimaryScrollSource(getScrollSource());
+}
+
+/* ── La vitrine ──────────────────────────────────────────────────────────── */
+
+/**
+ * Ce qu'on a tapé, et comment on a rangé.
+ *
+ * Cela vit au niveau du module, comme le repli du rail et pour la même raison :
+ * l'Atelier se redessine entièrement à plusieurs occasions, et une recherche
+ * perdue au redessin obligerait à la retaper sans qu'on comprenne pourquoi.
+ */
+const vitrineEtat = { recherche: "", rayon: "", rangement: RANGEMENT.RECOMMANDE };
+
+function dessinerLaVitrine(hote) {
+  if (!hote) return;
+  hote.innerHTML = renderVitrineDeLatelier(vitrineEtat);
+}
+
+/**
+ * L'écoute de la vitrine.
+ *
+ * **Déléguée sur l'hôte, et non posée sur les boutons** : la grille se réécrit
+ * à chaque frappe, donc des écouteurs posés sur les fiches disparaîtraient avec
+ * elles — la première recherche tuerait la navigation.
+ *
+ * Les clics sur les fiches, eux, ne sont **pas** entendus ici : elles portent
+ * `data-side-nav-target`, et c'est le routeur de l'Atelier qui les ouvre, comme
+ * il ouvrait les entrées du rail. Un second chemin pour un seul geste finirait
+ * par diverger du premier (règle 4).
+ */
+function brancherLaVitrine(root, hote) {
+  if (!hote) return;
+
+  // Le curseur revient où il était : réécrire le champ à chaque frappe le
+  // renverrait en fin de ligne, et corriger une faute au milieu d'un mot
+  // deviendrait impossible.
+  hote.addEventListener("input", (evenement) => {
+    const champ = evenement.target.closest?.("#atelierRecherche");
+    if (!champ) return;
+
+    const ou = champ.selectionStart;
+    vitrineEtat.recherche = champ.value;
+    dessinerLaVitrine(hote);
+
+    const rendu = hote.querySelector("#atelierRecherche");
+    if (!rendu) return;
+    rendu.focus();
+    try {
+      rendu.setSelectionRange(ou, ou);
+    } catch {
+      // Un champ de type `search` refuse parfois la position : le curseur reste
+      // en fin de ligne, ce qui vaut mieux que de perdre le focus.
+    }
+  });
+
+  hote.addEventListener("click", (evenement) => {
+    const onglet = evenement.target.closest?.("[data-light-tab-target]");
+    // Une fiche : le routeur s'en charge, on ne s'en mêle pas.
+    if (!onglet || evenement.target.closest?.("[data-side-nav-target]")) return;
+
+    const valeur = onglet.dataset.lightTabTarget ?? "";
+    // Les deux barres portent le même attribut : c'est leur enveloppe qui dit
+    // laquelle on vient de toucher.
+    if (onglet.closest(".atelier-rayons")) vitrineEtat.rayon = valeur;
+    else if (onglet.closest(".atelier-rangement")) vitrineEtat.rangement = valeur || RANGEMENT.RECOMMANDE;
+    else return;
+
+    dessinerLaVitrine(hote);
+  });
 }
 
 /**
@@ -454,6 +500,8 @@ function marquerActif(root, targetId) {
   root.querySelector(".project-simple-page--studio")
     ?.classList.toggle("project-simple-page--copilote", targetId === "studio-copilote");
 
+  majBarreDeRetour(root, targetId);
+
   const filCourant = copiloteConversationId();
   const historique = copiloteConversations().some((conversation) => conversation.id === filCourant);
 
@@ -467,6 +515,37 @@ function marquerActif(root, targetId) {
 
     item.setAttribute("data-active", actif ? "true" : "false");
   }
+}
+
+/**
+ * La barre de retour : où l'on est, et comment en sortir.
+ *
+ * Sans rail, un utilitaire ouvert n'a plus rien autour de lui qui le nomme. On
+ * saurait ce qu'on regarde sans savoir d'où l'on vient — et l'on repartirait par
+ * l'onglet du projet, c'est-à-dire en quittant l'Atelier pour y revenir.
+ *
+ * Elle porte **la version**, parce que c'est en regardant l'utilitaire
+ * travailler qu'on veut la connaître, pas en lisant sa fiche.
+ *
+ * Sur la vitrine, elle n'existe pas : on y est déjà.
+ */
+function majBarreDeRetour(root, targetId) {
+  const barre = root.querySelector("#atelierRetour");
+  if (!barre) return;
+
+  const surLaVitrine = !targetId || targetId === ACCUEIL;
+  barre.hidden = surLaVitrine;
+  if (surLaVitrine) return;
+
+  const utilitaire = utilitaireParCible(targetId);
+  const nom = root.querySelector("#atelierRetourNom");
+  const version = root.querySelector("#atelierRetourVersion");
+
+  // Un utilitaire absent du catalogue garde sa barre, avec ce qu'on sait de
+  // lui : sans nom, elle serait un bouton de retour muet — mais un bouton de
+  // retour muet vaut mieux que pas de sortie du tout (règle 5).
+  if (nom) nom.textContent = utilitaire?.nom ?? "";
+  if (version) version.textContent = utilitaire?.version ? `v${utilitaire.version}` : "";
 }
 
 /** Afficher un panneau sans passer par un clic : rouvrir un fil en a besoin. */

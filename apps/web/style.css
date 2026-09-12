@@ -654,7 +654,7 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
   grid-template-columns:repeat(var(--subjects-pinned-colonnes, 3), minmax(0, 1fr));
   gap:12px;
   flex:0 0 auto;
-  padding:0 12px 12px 12px;
+  padding:0 0 12px 0;
 }
 
 /* Au téléphone, trois cartes côte à côte ne portent plus que des titres coupés :
@@ -737,7 +737,7 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 
 /* ── Le bouton qui épingle, dans le panneau de droite ────────────────────── */
 
-.subject-meta-field--epingle{padding:8px 0 0 0;}
+.subject-meta-field--epingle{padding:8px 0 10px 0;}
 
 .subject-epingle{
   display:inline-flex;
@@ -23085,3 +23085,234 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .run-graph__jalon--traverse{ color:#d29922; }
 .run-graph__jalon--a-revoir{ color:var(--muted); }
 .variante-chaine__jalons{ margin:0 0 8px; font-size:12px; color:#d29922; }
+
+/* ── La vitrine de l'Atelier ─────────────────────────────────────────────── */
+
+/*
+ * Un utilitaire ouvert occupe toute la largeur : c'est tout l'objet du
+ * changement. Le rail de l'Atelier prenait la gauche pour tous, et interdisait
+ * donc à chacun d'avoir la sienne.
+ */
+.settings-shell--atelier{
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+}
+
+.atelier-vitrine{
+  display:flex;
+  flex-direction:column;
+  gap:20px;
+  padding-block:8px 32px;
+}
+
+/* Le bandeau d'accueil : il dit sous quoi on peut chercher, parce qu'un champ
+   nu laisse essayer le nom, échouer, et conclure que l'outil n'existe pas. */
+.atelier-bandeau{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding:28px 24px 32px 24px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:
+    radial-gradient(900px 220px at 15% 0%, rgba(110,118,129,.16), transparent 70%),
+    var(--bg-elevated, transparent);
+}
+
+.atelier-bandeau__titre{margin:0;font-size:22px;font-weight:600;color:var(--text);}
+.atelier-bandeau__sous-titre{margin:0;color:var(--muted);font-size:13px;max-width:62ch;}
+
+.atelier-bandeau__recherche{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:6px;
+  max-width:560px;
+  padding:8px 12px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--bg, transparent);
+  color:var(--muted);
+}
+
+.atelier-bandeau__champ{
+  flex:1 1 auto;
+  min-width:0;
+  border:none;
+  background:transparent;
+  color:var(--text);
+  font:inherit;
+  outline:none;
+}
+
+/* Les plus employés : six au plus. Au-delà, la rangée redevient une liste à
+   parcourir et elle ne met plus rien en avant. */
+.atelier-vedettes{
+  display:grid;
+  grid-template-columns:repeat(6, minmax(0, 1fr));
+  gap:10px;
+}
+
+.atelier-vedette{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+  padding:10px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:transparent;
+  color:var(--text);
+  cursor:pointer;
+  text-align:left;
+}
+
+.atelier-vedette:hover{background:rgba(110,118,129,.10);}
+.atelier-vedette__nom{
+  min-width:0;
+  font-size:12px;
+  font-weight:600;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+/* Deux colonnes, comme demandé : une fiche par utilitaire, et de quoi juger
+   avant d'ouvrir. */
+.atelier-grille{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:12px;
+}
+
+.atelier-grille--vide{
+  display:block;
+  padding:24px;
+  border:1px dashed var(--border);
+  border-radius:var(--radius);
+  color:var(--muted);
+}
+
+.atelier-grille--vide p{margin:0 0 6px 0;}
+.atelier-grille__vide-aide{font-size:12px;}
+
+.atelier-fiche{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  min-width:0;
+  padding:14px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:transparent;
+  color:var(--text);
+  text-align:left;
+  cursor:pointer;
+}
+
+.atelier-fiche:hover{background:rgba(110,118,129,.08);border-color:var(--border2, var(--border));}
+
+/*
+ * Une lettre plutôt qu'un pictogramme, et c'est un choix : on peut en produire
+ * deux cents qui se distinguent, ce qui n'est vrai d'aucun jeu d'icônes. La
+ * teinte vient du nom, donc elle ne bouge jamais pour un même utilitaire.
+ */
+.atelier-fiche__vignette,
+.atelier-vedette__vignette{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  width:38px;
+  height:38px;
+  border-radius:10px;
+  font-weight:700;
+  font-size:16px;
+  color:#fff;
+  background:linear-gradient(145deg,
+    hsl(var(--atelier-teinte, 210) 55% 46%),
+    hsl(calc(var(--atelier-teinte, 210) + 28) 58% 38%));
+}
+
+.atelier-vedette__vignette{width:28px;height:28px;border-radius:8px;font-size:13px;}
+
+.atelier-fiche__corps{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  min-width:0;
+}
+
+.atelier-fiche__entete{display:flex;align-items:baseline;gap:8px;min-width:0;}
+.atelier-fiche__nom{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.atelier-fiche__version{color:var(--muted);flex:0 0 auto;}
+.atelier-fiche__resume{color:var(--muted);font-size:12.5px;line-height:1.45;}
+
+/* Ce qu'il prend et ce qu'il rend : la première question devant un utilitaire
+   inconnu, et la seule à laquelle son nom ne répond jamais. */
+.atelier-fiche__flux{display:flex;flex-direction:column;gap:2px;color:var(--muted);margin-top:2px;}
+.atelier-fiche__flux-part{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.atelier-fiche__flux-mot{
+  display:inline-block;
+  min-width:42px;
+  color:var(--text);
+  opacity:.55;
+}
+
+/* Qu'un utilitaire appelle un modèle se dit avant de cliquer : une requête
+   coûte, et son résultat ne se lit pas comme un calcul déterministe. */
+.atelier-fiche__ia{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  align-self:flex-start;
+  margin-top:4px;
+  padding:2px 7px;
+  border:1px solid var(--border);
+  border-radius:999px;
+  font-size:11px;
+  color:var(--muted);
+}
+
+/* La barre de retour : sans rail, un utilitaire ouvert n'a plus rien autour de
+   lui qui le nomme ni qui en sorte. */
+.atelier-retour{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex:0 0 auto;
+  padding:8px 0 12px 0;
+}
+
+.atelier-retour__lien{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 8px;
+  border:none;
+  border-radius:var(--radius);
+  background:transparent;
+  color:var(--muted);
+  font:inherit;
+  cursor:pointer;
+}
+
+.atelier-retour__lien:hover{background:rgba(110,118,129,.12);color:var(--text);}
+.atelier-retour__sep{color:var(--muted);opacity:.6;}
+.atelier-retour__nom{font-weight:600;color:var(--text);}
+.atelier-retour__version{color:var(--muted);}
+
+/* Le Copilote garde une barre latérale — mais c'est la sienne, dans son
+   panneau, et non celle de l'Atelier posée devant tout le monde. */
+.project-studio-router__panel--copilote .project-rail-layout{min-height:0;}
+
+@media (max-width: 1100px){
+  .atelier-vedettes{grid-template-columns:repeat(3, minmax(0, 1fr));}
+}
+
+@media (max-width: 760px){
+  .atelier-vedettes{grid-template-columns:repeat(2, minmax(0, 1fr));}
+  .atelier-grille{grid-template-columns:minmax(0, 1fr);}
+  .atelier-bandeau{padding:20px 16px 24px 16px;}
+}

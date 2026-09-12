@@ -1,3 +1,4 @@
+import { PROJECT_TAB_IDS } from "../constants.js";
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
 import { signOut } from "../../assets/js/auth.js";
@@ -102,6 +103,30 @@ function getHeaderModel() {
     href: "#dashboard",
     headerClass: "gh-header gh-header--global"
   };
+}
+
+/**
+ * Le Copilote, à portée de la barre du haut.
+ *
+ * **C'est le point d'entrée de tout le reste**, et l'atteindre demandait
+ * d'ouvrir l'Atelier puis de le retrouver dans son rail. Un péage de deux
+ * gestes qu'on paie cent fois par jour finit par décider de ce qu'on fait :
+ * on renonce à demander.
+ *
+ * Il ne paraît que **sur un projet**, parce qu'une discussion sans projet n'a
+ * rien à lire — et un raccourci qui mène à un écran vide apprend à ne plus le
+ * cliquer.
+ */
+function renderRaccourciCopilote(model = {}) {
+  const projectId = String(model?.projectId || "").trim();
+  if (!projectId) return "";
+
+  return `
+    <a class="gh-action gh-copilote-raccourci" href="#project/${encodeURIComponent(projectId)}/${PROJECT_TAB_IDS.STUDIO}"
+      title="Copilote" aria-label="Copilote">
+      ${svgIcon("copilot", { className: "octicon octicon-copilot" })}
+    </a>
+  `;
 }
 
 function renderUserMenu() {
@@ -221,6 +246,7 @@ export function renderGlobalHeader() {
 
       <div class="gh-header__right">
         <div id="globalHeaderActions" class="gh-header__actions">
+          ${renderRaccourciCopilote(model)}
           ${renderUserMenu()}
         </div>
       </div>
