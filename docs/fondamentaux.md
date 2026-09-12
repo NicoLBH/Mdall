@@ -636,3 +636,59 @@ quatre étapes.
 `apps/web/js/services/memoire-actes.js` — les actes sur une hypothèse, dont
 ceci est la généralisation : l'état déduit et jamais stocké, le dernier acte qui
 fait foi, et la répétition qui ne vaut pas validation.
+
+---
+
+## 13. L'IA accélère ; elle n'est jamais une boîte noire, ni le seul chemin
+
+Mdall a d'abord été fait d'utilitaires déterministes : on lit le calcul, on le
+refait, on le conteste. Ce n'est pas un accident de jeunesse, c'est ce qui rend
+la mémoire d'un projet opposable — un chiffre qu'on ne peut pas refaire n'est
+pas un constat, c'est une rumeur.
+
+L'IA entre maintenant dans l'application. Elle ne change pas cette exigence,
+elle la rend plus difficile à tenir. D'où la règle, en deux moitiés.
+
+### Tout ce que l'IA fait, un humain doit pouvoir le faire à la main
+
+Pas « en théorie » : **le chemin manuel doit être écrit, et accessible**. Lire
+un compte rendu, rapprocher deux avis, proposer un sujet — chacun de ces gestes
+a une version lente qu'une personne peut exécuter seule.
+
+L'IA fait gagner du temps et du confort. Elle ne devient jamais la seule porte,
+parce que le jour où elle se trompe, où elle coûte trop cher, ou simplement où
+elle ne répond pas, le projet doit continuer d'avancer.
+
+Conséquence pratique : **un utilitaire qui appelle un modèle déclare son chemin
+manuel**. Quand ce champ est vide, cela se voit à l'écran — ce n'est pas un
+oubli qu'on masque, c'est une dette qu'on montre.
+
+### Ce que l'IA produit s'affiche avant d'être exploité
+
+Une extraction qui rend directement des sujets est une boîte noire : quand le
+résultat déçoit, on ne sait pas si le document a été mal lu, mal structuré, ou
+bien lu et mal exploité. On corrige alors à l'aveugle, un maillon à la fois,
+sans jamais voir le résultat — ce qui a effectivement coûté plusieurs tours.
+
+On extrait, on structure, et **on reconstruit à l'écran** : la structure du
+document, ses tableaux, ses rubriques imbriquées. C'est la seule façon de faire
+monter la qualité par paliers comparables, et cela rend au passage possible de
+copier un extrait pour s'en servir ailleurs.
+
+### Et son coût se voit, à la requête près
+
+Une requête coûte. Un coût invisible est un coût qu'on subit : chaque appel
+montre ce qu'il a consommé, chaque projet le totalise, et l'utilisateur le
+retrouve sur une page à lui, sans rien d'arrondi.
+
+Ce n'est pas de la comptabilité, c'est la même exigence que le reste : on
+n'accepte pas d'un modèle ce qu'on n'accepterait pas d'un calcul — qu'il donne
+un résultat sans dire ce qu'il a coûté ni sur quoi il s'est fondé.
+
+### Où c'est écrit
+
+`docs/latelier-et-lia-visible.md` — le plan qui met ceci en place, étape par
+étape, et l'ordre choisi.
+
+`apps/web/js/services/catalogue-de-latelier.js` — les champs `intelligence` et
+`aussiALaMain` de chaque utilitaire, que la vitrine affiche.
