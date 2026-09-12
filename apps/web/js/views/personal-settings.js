@@ -6,6 +6,7 @@ import {
 } from "./ui/side-nav-layout.js";
 import { getPublicProfilePersonalSettingsTab } from "./personal-settings/public-profile.js";
 import { getAccountPersonalSettingsTab } from "./personal-settings/account.js";
+import { getFacturationPersonalSettingsTab } from "./personal-settings/factures-et-abonnement.js";
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
 import { escapeHtml } from "../utils/escape-html.js";
@@ -13,7 +14,8 @@ import { DEFAULT_PUBLIC_AVATAR } from "../services/profile-supabase-sync.js";
 
 const activePersonalSettingsTabs = [
   getPublicProfilePersonalSettingsTab(),
-  getAccountPersonalSettingsTab()
+  getAccountPersonalSettingsTab(),
+  getFacturationPersonalSettingsTab()
 ];
 
 const upcomingPersonalSettingsItems = [
@@ -22,8 +24,9 @@ const upcomingPersonalSettingsItems = [
   { label: "Notifications", icon: "bell" }
 ];
 
+// « Factures et abonnement » a quitté cette liste : ce n'est plus une entrée
+// grisée qui annonce ce qui viendra, c'est un onglet qui répond.
 const accessPersonalSettingsItems = [
-  { label: "Factures et abonnement", icon: "credit-card" },
   { label: "Emails", icon: "mail-16" },
   { label: "Mot de passe et authentification", icon: "shield-lock" }
 ];

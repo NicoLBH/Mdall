@@ -60,6 +60,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser } from "../_shared/require-user.ts";
+import { deposerLaConsommation } from "../_shared/consommation-ia.ts";
 import { declarationsPourModele } from "../_shared/utilitaires/catalogue.js";
 import {
   DECLARATION_VARIANTE, CONSIGNES_VARIANTE, OUTILS_DU_NAVIGATEUR
@@ -446,6 +447,21 @@ serve(async (req) => {
     const reply = extractOpenAiText(brut).trim();
     const usage = extractUsage(brut);
     const appels = extractToolCalls(brut);
+
+    // **Le décompte se dépose ici, et pas plus bas.** Un appel qui demande des
+    // utilitaires repart au navigateur sans réponse finale : le compter
+    // seulement quand une réponse arrive laisserait gratuits les tours les plus
+    // coûteux, ceux où le modèle travaille.
+    //
+    // On n'attend pas : la réponse de l'utilisateur ne dépend pas de son
+    // compteur.
+    void deposerLaConsommation({
+      projectId,
+      ownerId: garde.user.id,
+      model: MODEL,
+      usageKind: "copilote",
+      jetons: { input_tokens: usage.input_tokens, output_tokens: usage.output_tokens }
+    });
 
     // Le modèle demande un ou plusieurs utilitaires : on rend la main au
     // navigateur, qui seul sait les exécuter. La réponse viendra au tour
