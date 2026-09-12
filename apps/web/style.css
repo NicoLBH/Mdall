@@ -23766,21 +23766,80 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .lecture-cr__rubrique-compte{color:var(--muted);opacity:.7;}
 
-.lecture-cr__points{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
+/*
+ * À gauche ce que le document dit, à droite le sujet qu'on retrouverait.
+ * C'est la seule disposition qui permette de juger d'un coup d'œil si c'est
+ * bien le même sujet : l'un sous l'autre, il faudrait retenir le premier pour
+ * lire le second.
+ */
+.lecture-cr__table{width:100%;border-collapse:collapse;table-layout:fixed;}
 
-.lecture-cr__point{
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-  padding:12px;
-  border:1px solid var(--border);
-  border-left:3px solid var(--border);
-  border-radius:var(--radius);
+.lecture-cr__table th{
+  padding:6px 12px;
+  text-align:left;
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+  color:var(--muted);
+  border-bottom:1px solid var(--border);
 }
+
+.lecture-cr__table th:first-child{width:58%;}
+
+.lecture-cr__cellule{
+  padding:12px;
+  vertical-align:top;
+  border-bottom:1px solid var(--border);
+}
+
+.lecture-cr__cellule--sujet{border-left:1px solid var(--border);}
 
 /* Un point dont la citation ne se retrouve pas dans le document : c'est là
    qu'on regarde en premier quand une lecture déçoit. */
-.lecture-cr__point.est-douteux{border-left-color:var(--fgColor-attention, #d29922);}
+.lecture-cr__ligne.est-douteux .lecture-cr__cellule--point{
+  box-shadow:inset 3px 0 0 var(--fgColor-attention, #d29922);
+}
+
+.lecture-cr__point{display:flex;flex-direction:column;gap:6px;}
+
+/* Le sujet retrouvé, à droite. Son titre déplie le détail sur place : partir
+   comparer ailleurs ferait perdre la colonne avec laquelle on comparait. */
+.lecture-cr__sujet{display:flex;flex-direction:column;gap:6px;}
+
+.lecture-cr__sujet-titre{
+  display:flex;
+  align-items:flex-start;
+  gap:6px;
+  padding:0;
+  border:none;
+  background:transparent;
+  color:var(--text);
+  font:inherit;
+  font-weight:600;
+  font-size:13px;
+  text-align:left;
+  cursor:pointer;
+}
+
+.lecture-cr__sujet-titre:hover{color:var(--accent, #6ea8ff);}
+.lecture-cr__sujet-faits{display:flex;flex-wrap:wrap;gap:10px;color:var(--muted);}
+.lecture-cr__sujet-effet{flex:1 1 100%;}
+
+.lecture-cr__sujet-detail{
+  padding:10px 12px;
+  border-left:2px solid var(--border2, #3d444d);
+  font-size:12.5px;
+  line-height:1.5;
+  color:var(--muted);
+}
+
+.lecture-cr__sujet-detail--echec{border-left-color:var(--fgColor-attention, #d29922);}
+.lecture-cr__sans-sujet{color:var(--muted);}
+
+/* Ne pas avoir pu comparer n'est pas « aucun sujet ne correspond » : sans cette
+   distinction, un compte rendu déjà traité proposait vingt sujets de plus. */
+.lecture-cr__confrontation--inconnue{border-color:var(--fgColor-attention, #d29922);}
 
 .lecture-cr__point-tete{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;}
 .lecture-cr__point-titre{flex:1 1 auto;min-width:0;font-size:13.5px;font-weight:600;color:var(--text);}

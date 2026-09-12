@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  MANQUE, PHRASES_DU_MANQUE, SORT, citationRetrouvee, comptesDeLaConfrontation,
+  EFFETS_DU_SORT, MANQUE, PHRASES_DU_MANQUE, PHRASES_DU_SORT, SORT,
+  citationRetrouvee, comptesDeLaConfrontation,
   confrontation, intitulesAmbigus, lectureAssemblee, manquesDuPoint, mesureDeLaLecture,
   rubriquesDesPoints
 } from "./lecture-du-cr.js";
@@ -136,11 +137,11 @@ test("un point sans sujet correspondant ouvrirait un sujet", () => {
   assert.equal(confronte.sujet, null);
 });
 
-test("un point identique à un sujet ouvert le reprend sans rien y changer", () => {
+test("un point identique à un sujet ouvert le relance, il n'en ouvre pas un second", () => {
   const sujets = [{ id: "s-1", title: point().titre, etat: "en cours" }];
   const [confronte] = confrontation([point()], sujets, aplatir);
 
-  assert.equal(confronte.sort, SORT.REPRIS);
+  assert.equal(confronte.sort, SORT.RELANCE);
   assert.equal(confronte.sujet.id, "s-1");
 });
 
@@ -155,7 +156,7 @@ test("les sorts se comptent d'un coup d'œil", () => {
     confrontation([point(), point({ titre: "Tout neuf" })], sujets, aplatir)
   );
 
-  assert.deepEqual(comptes, { [SORT.NOUVEAU]: 1, [SORT.REPRIS]: 1, [SORT.CHANGE]: 0 });
+  assert.deepEqual(comptes, { [SORT.NOUVEAU]: 1, [SORT.RELANCE]: 1, [SORT.CHANGE]: 0 });
 });
 
 /**
@@ -167,7 +168,7 @@ test("la mise à plat des titres vient de l'appelant", async () => {
   const { titreAplati } = await import("./sujets-du-cr.js");
   const sujets = [{ id: "s-1", title: "  ÉTABLIR les PLANS de fabrication  ", etat: "en cours" }];
 
-  assert.equal(confrontation([point()], sujets, titreAplati)[0].sort, SORT.REPRIS);
+  assert.equal(confrontation([point()], sujets, titreAplati)[0].sort, SORT.RELANCE);
 });
 
 /* ── Ce que cet écran ne fait pas ────────────────────────────────────────── */
@@ -211,4 +212,96 @@ test("la lecture passe par le chemin compté, pas par un raccourci à elle", asy
     fileURLToPath(new URL("./sujets-par-le-modele.js", import.meta.url)), "utf8"
   );
   assert.match(service, /project_id: await projetCourant\(\)/);
+});
+
+/* ── Le défaut des vingt sujets en double ────────────────────────────────── */
+
+/**
+ * **`null` n'est pas « aucun sujet ».**
+ *
+ * La lecture des sujets du projet rend `null` quand elle n'a pas pu demander,
+ * et sa propre documentation le dit : ne pas savoir ce qui est ouvert
+ * n'autorise pas à prétendre que rien ne l'est. Aplatie en liste vide, tout
+ * point devenait « ouvrirait un sujet » — un compte rendu déjà traité proposait
+ * vingt sujets de plus, en silence (règle 5).
+ */
+test("ne pas connaître les sujets du projet ne rend pas tout nouveau", () => {
+  assert.equal(confrontation([point()], null, aplatir), null);
+  assert.equal(confrontation([point()], undefined, aplatir), null);
+
+  // Et une liste vraiment vide, elle, répond.
+  const [confronte] = confrontation([point()], [], aplatir);
+  assert.equal(confronte.sort, SORT.NOUVEAU);
+});
+
+/**
+ * Et l'écran ne l'aplatit pas non plus : c'est là que le défaut a vécu.
+ */
+test("l'écran ne transforme pas un échec de lecture en liste vide", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const ecran = readFileSync(
+    fileURLToPath(new URL("../views/studio/dev/lecture-des-cr.js", import.meta.url)), "utf8"
+  );
+
+  assert.doesNotMatch(ecran, /Array\.isArray\(sujets\) \? sujets : \[\]/);
+  assert.match(ecran, /confrontation\(points, sujets, titreAplati\)/);
+});
+
+/* ── Relancer n'est pas ouvrir ───────────────────────────────────────────── */
+
+/**
+ * **Un point qui retrouve son sujet n'ouvre rien : il le relance.** C'est une
+ * ligne d'activité de plus dans sa discussion, et non un second sujet au même
+ * titre. Dire « reprend un sujet » laissait croire à un doublon ; c'est
+ * l'inverse, c'est ce qui l'évite.
+ */
+test("le vocabulaire dit ce qui se passera, pas ce qui a été constaté", () => {
+  assert.equal(PHRASES_DU_SORT[SORT.RELANCE], "Relancerait un sujet");
+  assert.match(EFFETS_DU_SORT[SORT.RELANCE], /activité de relance s'ajoute/);
+  assert.match(EFFETS_DU_SORT[SORT.NOUVEAU], /ouvrirait un nouveau/);
+  assert.match(EFFETS_DU_SORT[SORT.CHANGE], /ce qui a bougé/);
+
+  // Aucun mot ne laisse croire à un doublon.
+  for (const phrase of Object.values(EFFETS_DU_SORT)) {
+    assert.doesNotMatch(phrase, /doublon|en double/i);
+  }
+});
+
+/* ── Le tableau, et le sujet à droite ────────────────────────────────────── */
+
+/**
+ * L'objectif de l'écran : **voir si c'est effectivement le même sujet**. Le
+ * titre et la description du sujet retrouvé s'affichent donc à côté du point,
+ * et non derrière un clic qui ferait perdre la colonne de gauche.
+ */
+test("le sujet retrouvé s'affiche à côté du point, pas ailleurs", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const ecran = readFileSync(
+    fileURLToPath(new URL("../views/studio/dev/lecture-des-cr.js", import.meta.url)), "utf8"
+  );
+
+  assert.match(ecran, /lecture-cr__table/);
+  assert.match(ecran, /Ce que le compte rendu dit/);
+  assert.match(ecran, /Le sujet qu'il retrouve/);
+  // La description se lit par la porte de la vue Sujets, pas par une lecture
+  // parallèle qui finirait par montrer autre chose.
+  assert.match(ecran, /loadSubjectDescriptionVersions/);
+});
+
+/**
+ * **L'écran se redessine à chaque dépli.** Sans retirer l'écoute précédente,
+ * elles s'empilent : au cinquième dépli, un clic bascule cinq fois — donc ne
+ * bascule pas — et le bouton paraît mort pour une raison qu'on ne devine pas.
+ */
+test("les écoutes se détachent avant de se reposer", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const ecran = readFileSync(
+    fileURLToPath(new URL("../views/studio/dev/lecture-des-cr.js", import.meta.url)), "utf8"
+  );
+
+  assert.match(ecran, /detacher\?\.\(\);/);
+  assert.match(ecran, /removeEventListener\("click"/);
 });
