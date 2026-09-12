@@ -57,6 +57,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { convert } from "@opendataloader/pdf";
+import { REGLAGES } from "./reglages.mjs";
 
 const PORT = Number(process.env.PORT) || 8080;
 
@@ -74,14 +75,6 @@ const EN_TETE_DU_JETON = "x-mdall-jeton";
 
 /** Au-delà, on refuse plutôt que de remplir le disque du conteneur. */
 const POIDS_MAXIMUM = 40 * 1024 * 1024;
-
-/**
- * Le marqueur de page.
- *
- * `%page-number%` est remplacé par la ligne de commande. La forme est celle
- * que Mdall emploie partout ailleurs pour découper un document en pages.
- */
-const MARQUEUR = "=== PAGE %page-number% ===";
 
 function json(reponse, corps, status = 200) {
   const dit = JSON.stringify(corps);
@@ -121,20 +114,10 @@ async function restituer(pdf) {
     const sortie = join(dossier, "sortie");
     await writeFile(entree, pdf);
 
-    await convert([entree], {
-      outputDir: sortie,
-      format: "markdown",
-      markdownPageSeparator: MARQUEUR,
-      // Les images ne servent à rien ici : on compare du texte, et les écrire
-      // remplirait le dossier temporaire pour rien.
-      imageOutput: "off",
-      // Les tableaux sont la moitié d'un compte rendu de chantier. `cluster`
-      // rattrape ceux qui n'ont pas de bordures — imparfaitement, mais mieux
-      // que de les rendre en liste à puces.
-      tableMethod: "cluster",
-      headingHierarchy: true,
-      quiet: true
-    });
+    // **Les mêmes réglages que l'essai en local.** Juger la qualité sur
+    // d'autres réglages que ceux du service reviendrait à décider de garder ou
+    // de jeter l'outil sur un résultat qui n'est pas le sien (règle 4).
+    await convert([entree], { outputDir: sortie, ...REGLAGES });
 
     const fichiers = await readdir(sortie);
     const markdown = fichiers.find((nom) => nom.endsWith(".md"));
