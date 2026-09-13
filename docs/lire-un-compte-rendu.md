@@ -369,6 +369,94 @@ Ni lot ajouté, ni label créé, ni label posé. Tout cela est une écriture, et
 par une proposition (règle 1). L'écran montre ce que la proposition porterait, et c'est
 quelqu'un qui la signe.
 
+#### Palier 4 — Les objectifs *(fait)*
+
+##### Une date fausse est pire qu'une date absente
+
+Le compte rendu écrit ce qu'il veut : « Pour le 30/04/2026 », « 30 avril », « sous 48 h »,
+« avant la prochaine réunion », « S15 ». Un objectif Mdall, lui, porte une date — il faut donc
+convertir, et **c'est là que tout se joue**.
+
+Un objectif daté du 30 mars quand le document dit fin avril fait courir une alerte un mois trop
+tôt ; daté de l'an prochain, il ne sonne jamais. Dans les deux cas, personne ne remontera
+jusqu'au compte rendu pour vérifier — on fera confiance au chiffre.
+
+##### Trois façons d'obtenir une date, et une quatrième qui n'en est pas une
+
+| | |
+| --- | --- |
+| **écrite** | le document donne le jour, le mois et l'année |
+| **complétée** | le document donne le jour et le mois ; l'année vient du compte rendu |
+| **comptée** | le document donne un délai — « sous 15 jours » — compté depuis la date de la réunion |
+| *(refus)* | tout le reste |
+
+La règle de « complétée » mérite d'être écrite : **une échéance est postérieure à la réunion qui
+la fixe.** C'est ce qu'échéance veut dire. On prend donc l'année du compte rendu, et l'année
+suivante si cela tomberait avant lui — « 15 janvier » dans un compte rendu de décembre est le
+15 janvier suivant.
+
+L'écran dit laquelle des trois a servi, et **la moins sûre d'un groupe l'emporte** : montrer la
+plus flatteuse ferait passer un calcul pour une lecture.
+
+##### Ce qu'on refuse, et pourquoi on le nomme
+
+« Avant la prochaine réunion » n'est pas une date : on ne sait pas quand elle est. « S15 » non
+plus : la numérotation des semaines varie d'un bureau à l'autre, et se tromper d'une semaine est
+exactement le genre d'erreur qu'on ne remarque pas. Le 31 février non plus — il existe en
+arithmétique, pas au calendrier.
+
+Ces échéances-là ne disparaissent pas : elles se comptent et s'affichent telles quelles. C'est
+la liste de ce qu'on ne sait pas encore convertir, et c'est elle qui dira s'il vaut la peine
+d'en convertir davantage (règle 5).
+
+**Sans la date de la réunion, on ne compte pas depuis aujourd'hui** : la lecture d'un compte
+rendu de mars faite en septembre daterait tout de six mois trop tard. On refuse, et l'écran dit
+pourquoi la liste est courte.
+
+##### Un objectif par date, et non par point
+
+Quarante points font quarante échéances, mais rarement quarante dates : un chantier travaille
+par jalons — « ce qui doit être fait pour le 30 avril ». Un objectif par point donnerait
+quarante objectifs dont aucun ne se lit.
+
+Et **la date décide, pas le nom** : un objectif du projet nommé « Livraison lot 02 » mais daté
+du même jour est ce jalon-là. En créer un second le doublerait.
+
+### L'écran, et ce qu'il dit quand ça casse
+
+#### Le parcours ne commence plus à la fin
+
+L'écran ne s'affichait qu'une fois tout terminé. Pendant une minute et demie, on voyait un rond
+tourner dans la zone de dépôt, sans savoir si le fichier avait été reçu, à quelle étape on en
+était, ni ce qui avançait — et l'on redéposait, ce qui relançait tout et repayait tout.
+
+Maintenant : le fichier se dit reçu avec son nom, les deux onglets apparaissent aussitôt, et
+chacun se remplit quand son tour arrive — Restitution d'abord, c'est l'ordre du procédé, puis
+Analyse. Un onglet qui attend le dit : **en attente n'est pas vide.**
+
+#### Une panne ne vide plus l'écran
+
+Une analyse qui tombait après une restitution réussie emportait la restitution avec elle : on
+avait payé un appel dont il ne restait rien. L'alerte se pose maintenant **au-dessus** des
+onglets, qui gardent ce qu'ils ont.
+
+#### « La lecture a été refusée » ne dit rien
+
+Ni à qui la lit, ni à qui doit la réparer. Le document était-il trop long, le modèle absent, la
+clé expirée, le schéma invalide ? Quatre pannes, une seule phrase, et chacune se corrige
+autrement — on en était réduit aux conjectures.
+
+Le serveur nomme donc sa panne en **trois champs** — type, code, message, coupés court — et
+l'écran la met dans le presse-papiers. Jamais le corps de l'erreur : il peut contenir un écho de
+la consigne, qui ne descend pas dans le navigateur.
+
+C'est ce diagnostic qui a nommé la panne réelle : **la réponse était coupée, pas refusée.** Le
+plafond de sortie de `extract-sujets` valait 8 000 jetons, et chaque point porte désormais ses
+labels, le sujet qu'il continue et la raison du rapprochement. Un compte rendu de onze pages
+dépassait, la réponse revenait tronquée au milieu du JSON, rien ne s'en lisait — et l'écran
+annonçait un refus. C'était faux : la lecture avait eu lieu, et elle avait été payée. Le plafond
+est passé à 24 000 jetons, et une réponse coupée se reconnaît désormais comme telle.
+
 ### Étape 4 — Fermer un sujet, et la question de fond
 
 **C'est le point le plus délicat de tout le plan**, et il mérite d'être traité à part.

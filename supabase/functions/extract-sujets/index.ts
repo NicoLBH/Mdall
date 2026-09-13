@@ -34,6 +34,7 @@ import {
   SCHEMA_DES_SUJETS,
   intervenantsAuFormatDuMoteur,
   pagesEnTexte,
+  panneDuFournisseur,
   sujetsAuFormatDuMoteur,
   sujetsDuProjetEnTexte,
   verifierLesIntervenants,
@@ -47,7 +48,22 @@ const openAiApiKey = Deno.env.get("OPENAI_API_KEY")!;
 /** Le même que les deux autres lectures : un seul fournisseur à exploiter. */
 const MODELE = "gpt-4.1-mini";
 const MAX_CARACTERES = 120000;
-const MAX_JETONS = 8000;
+
+/**
+ * Le plafond de sortie, relevé — et pourquoi il était trop bas.
+ *
+ * Chaque point rendu porte maintenant ses labels, le sujet qu'il continue et la
+ * raison du rapprochement. Un compte rendu de onze pages et quarante points
+ * dépassait 8 000 jetons, la réponse revenait **coupée au milieu du JSON**, et
+ * rien ne s'en lisait. L'écran annonçait alors « la lecture a été refusée » —
+ * ce qui était faux : elle avait eu lieu, elle avait été payée, et elle n'avait
+ * pas tenu dans la boîte qu'on lui avait donnée.
+ *
+ * C'est le genre de panne qu'on ne trouve pas en relisant le code : il a fallu
+ * que la réponse dise elle-même qu'elle était incomplète. Elle le dit
+ * maintenant, et l'écran aussi.
+ */
+const MAX_JETONS = 24000;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -117,10 +133,26 @@ serve(async (req) => {
     });
 
     if (!appel.ok) {
-      return reponse({ error: "OpenAI request failed", details: await appel.text() }, 502);
+      // **Nommée, et non recopiée.** Le corps d'une erreur du fournisseur peut
+      // contenir un écho de la consigne, qui ne descend pas dans le navigateur.
+      return reponse({
+        error: "OpenAI request failed",
+        panne: panneDuFournisseur(await appel.text().catch(() => ""), appel.status)
+      }, 502);
     }
 
     const rendu = await appel.json();
+
+    /**
+     * La réponse a-t-elle tenu dans le plafond ?
+     *
+     * **Coupée n'est pas refusée.** Une réponse tronquée au milieu du JSON ne
+     * se relit pas, et l'écran annonçait « la lecture a été refusée » : c'était
+     * faux, elle avait eu lieu et elle avait été payée. La distinction change
+     * ce qu'il y a à faire — un document trop long se recoupe, une lecture
+     * refusée se réessaie.
+     */
+    const coupee = String(rendu?.status ?? "") === "incomplete";
 
     // Ce que cette lecture a coûté. On n'attend pas : l'extraction ne dépend
     // pas de son compteur.
@@ -129,7 +161,20 @@ serve(async (req) => {
       usageKind: "extraction-sujets", jetons: jetonsDeLaReponse(rendu)
     });
     const lu = lireLaReponse(rendu);
-    if (!lu) return reponse({ error: "No structured output returned", raw: rendu }, 502);
+    if (!lu) {
+      return reponse({
+        error: "No structured output returned",
+        coupee,
+        panne: {
+          status: 200,
+          type: coupee ? "reponse_coupee" : "reponse_illisible",
+          code: String(rendu?.incomplete_details?.reason ?? ""),
+          message: coupee
+            ? `La réponse a dépassé ${MAX_JETONS} jetons et a été coupée au milieu : rien ne s'en relit.`
+            : "Le modèle n'a rien rendu de structuré."
+        }
+      }, 502);
+    }
 
     // **La porte.** Ce que le modèle n'a pas su citer ne sort pas d'ici.
     const { retenus, ecartes, pagesCorrigees } = verifierLesSujets({
@@ -162,6 +207,8 @@ serve(async (req) => {
       sujets: sujetsAuFormatDuMoteur(etiquetes.sujets, { sourceId }),
       /** Les labels que le modèle a proposés hors de la liste fermée. */
       labels_ecartes: etiquetes.ecartes,
+      /** La réponse a-t-elle été coupée ? Des points manquent alors, en silence. */
+      coupee,
       /** Combien de rapprochements pointaient vers un sujet qu'on n'a pas envoyé. */
       rapprochements_ecartes: rapproches.ecartes,
       /**

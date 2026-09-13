@@ -772,7 +772,15 @@ async function fetchProjectMilestoneSubjects(projectId, milestoneIds = []) {
   return Array.isArray(json) ? json : [];
 }
 
-async function loadObjectivesForProject(projectId) {
+/**
+ * Les objectifs d'un projet, et les sujets qu'ils portent.
+ *
+ * Exportée depuis que la lecture d'un compte rendu en a besoin : elle doit
+ * savoir quels objectifs existent déjà à la date d'une échéance, sans passer par
+ * l'écran des sujets. Deux lectures différentes des mêmes objectifs finiraient
+ * par n'en montrer pas les mêmes (règle 4).
+ */
+export async function loadObjectivesForProject(projectId) {
   const milestoneRows = await fetchProjectMilestones(projectId);
   const milestoneIds = milestoneRows.map((row) => normalizeUuid(row?.id)).filter(Boolean);
   const milestoneSubjectRows = await fetchProjectMilestoneSubjects(projectId, milestoneIds);

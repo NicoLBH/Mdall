@@ -63,6 +63,29 @@ export const REFUS = {
   RIEN_DE_VERIFIE: "rien-de-verifie"
 };
 
+/**
+ * Ce que le serveur a nommé de la panne, s'il l'a nommée.
+ *
+ * **Pour qu'on puisse la coller quelque part.** « La lecture a été refusée » ne
+ * dit rien : ni à qui la lit, ni à qui doit la réparer. Le document était-il
+ * trop long, le modèle absent, la clé expirée, le schéma invalide ? Quatre
+ * pannes, une seule phrase, et chacune se corrige autrement.
+ *
+ * Trois champs nommés, coupés court — jamais le corps de l'erreur, qui peut
+ * contenir un écho de la consigne.
+ */
+function panneLue(rendu, statutHttp) {
+  const panne = rendu?.panne ?? null;
+  const morceaux = [
+    `HTTP ${Number(statutHttp) || panne?.status || 0}`,
+    texte(panne?.type),
+    texte(panne?.code),
+    texte(panne?.message)
+  ].filter(Boolean);
+
+  return morceaux.length > 1 ? morceaux.join(" · ") : "";
+}
+
 export const PHRASES_DU_REFUS = {
   [REFUS.SANS_TEXTE]: "ce compte rendu ne porte aucun texte à lire",
   [REFUS.INJOIGNABLE]: "la lecture n'a pas pu être demandée",
@@ -116,12 +139,20 @@ export async function lireLesSujets({ sourceId = "", pages = [], sujetsDuProjet 
   }
 
   if (!reponse.ok) {
-    return { ok: false, motif: reponse.status === 404 ? REFUS.INJOIGNABLE : REFUS.REFUSE };
+    const refuse = await reponse.json().catch(() => null);
+    return {
+      ok: false,
+      motif: reponse.status === 404 ? REFUS.INJOIGNABLE : REFUS.REFUSE,
+      // Ce que le serveur a nommé de la panne. Vide quand il n'a rien nommé :
+      // on n'invente pas une explication vraisemblable (règle 5).
+      panne: panneLue(refuse, reponse.status),
+      coupee: Boolean(refuse?.coupee)
+    };
   }
 
   const rendu = await reponse.json().catch(() => null);
   const sujets = Array.isArray(rendu?.sujets) ? rendu.sujets : [];
-  if (!sujets.length) return { ok: false, motif: REFUS.RIEN_DE_VERIFIE };
+  if (!sujets.length) return { ok: false, motif: REFUS.RIEN_DE_VERIFIE, panne: "", coupee: false };
 
   return {
     ok: true,
@@ -142,7 +173,9 @@ export async function lireLesSujets({ sourceId = "", pages = [], sujetsDuProjet 
     /** A-t-on dit au modèle ce que le projet suit ? Sans cela, tout repart neuf. */
     rapprochementDemande: Boolean(rendu?.rapprochement_demande),
     pagesCorrigees: Number(rendu?.pages_corrigees) || 0,
-    modele: texte(rendu?.modele)
+    modele: texte(rendu?.modele),
+    /** La réponse a-t-elle été coupée ? Des points manquent alors, en silence. */
+    coupee: Boolean(rendu?.coupee)
   };
 }
 

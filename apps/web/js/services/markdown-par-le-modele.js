@@ -89,7 +89,19 @@ export async function refaireLeDocument({ pages = [] } = {}) {
   }
 
   if (!reponse.ok) {
-    return { ok: false, motif: reponse.status === 404 ? REFUS.INJOIGNABLE : REFUS.REFUSE };
+    const refuse = await reponse.json().catch(() => null);
+    const panne = refuse?.panne ?? null;
+    const morceaux = [
+      `HTTP ${reponse.status}`, texte(panne?.type), texte(panne?.code), texte(panne?.message)
+    ].filter(Boolean);
+
+    return {
+      ok: false,
+      motif: reponse.status === 404 ? REFUS.INJOIGNABLE : REFUS.REFUSE,
+      // Ce que le serveur a nommé de la panne — jamais le corps de l'erreur,
+      // qui peut contenir un écho de la consigne.
+      panne: morceaux.length > 1 ? morceaux.join(" · ") : ""
+    };
   }
 
   const rendu = await reponse.json().catch(() => null);

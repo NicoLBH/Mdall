@@ -31,6 +31,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { requireUser } from "../_shared/require-user.ts";
 import { deposerLaConsommation, jetonsDeLaReponse } from "../_shared/consommation-ia.ts";
 import { pagesEnTexte } from "../_shared/citation-verifiee.js";
+import { panneDuFournisseur } from "../_shared/sujets-du-modele.js";
 import {
   CONSIGNES_DE_RECONSTITUTION,
   SCHEMA_DU_DOCUMENT,
@@ -140,7 +141,12 @@ serve(async (req) => {
     });
 
     if (!appel.ok) {
-      return reponse({ error: "OpenAI request failed", details: await appel.text() }, 502);
+      // **Nommée, et non recopiée.** Le corps d'une erreur du fournisseur peut
+      // contenir un écho de la consigne, qui ne descend pas dans le navigateur.
+      return reponse({
+        error: "OpenAI request failed",
+        panne: panneDuFournisseur(await appel.text().catch(() => ""), appel.status)
+      }, 502);
     }
 
     const rendu = await appel.json();
@@ -155,7 +161,17 @@ serve(async (req) => {
     });
 
     const lu = lireLaReponse(rendu);
-    if (!lu) return reponse({ error: "No structured output returned", raw: rendu }, 502);
+    if (!lu) {
+      return reponse({
+        error: "No structured output returned",
+        panne: {
+          status: 200,
+          type: String(rendu?.status ?? "") === "incomplete" ? "reponse_coupee" : "reponse_illisible",
+          code: String(rendu?.incomplete_details?.reason ?? ""),
+          message: `La restitution a dépassé ${MAX_JETONS} jetons, ou n'a rien rendu de structuré.`
+        }
+      }, 502);
+    }
 
     const { pages: refaites, absentes, inconnues } = pagesRefaites(lu, envoyees);
 
