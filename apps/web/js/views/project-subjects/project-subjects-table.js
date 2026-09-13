@@ -3,8 +3,32 @@ import { getDisplayAuthorName } from "../ui/author-identity.js";
 import { findCollaboratorByAssigneeId, normalizeAssigneeIds } from "../../services/subject-assignees-service.js";
 import { normalizePaginationState, paginateItems, renderPaginationControls } from "../ui/pagination.js";
 import { videDeLaListeDesSujets } from "../../services/liste-vide-des-sujets.js";
+/**
+ * Les colonnes du tableau des sujets.
+ *
+ * La première est **la case à cocher**, et elle est en tête de ligne parce que
+ * c'est là qu'on la cherche : c'est l'ordre de lecture, et celui de tous les
+ * tableaux qui en portent une. `max-content` la réduit à sa taille — une
+ * colonne fixe laisserait un vide devant chaque titre.
+ */
 export function getSituationsTableGridTemplate() {
-  return "minmax(0, 1fr) 84px max-content";
+  return "max-content minmax(0, 1fr) 84px max-content";
+}
+
+/**
+ * Les colonnes de la tête, **écrites une fois**.
+ *
+ * Elles l'étaient à quatre endroits de ce fichier — chargement, vide, liste,
+ * accueil — et une colonne ajoutée à trois des quatre décale le tableau dans le
+ * quatrième, sans rien pour le dire (règle 10).
+ */
+function colonnesDeLaTete(deps) {
+  return [
+    { className: "cell cell-cocher-head", html: deps.renderCaseDeTeteDesSujetsHtml?.() ?? "" },
+    { className: "cell cell-theme", html: deps.renderSubjectsStatusHeadHtml() },
+    { className: "cell cell-messages-head", html: "" },
+    { className: "cell cell-assignees-head", html: deps.renderSubjectsAssigneesHeadHtml?.() ?? "Assignés" }
+  ];
 }
 
 export function renderSituationsTableHeadHtml(options = {}) {
@@ -60,11 +84,7 @@ function renderWelcomeHtml(deps) {
     gridTemplate: getSituationsTableGridTemplate(),
     headHtml: renderSituationsTableHeadHtml({
       deps,
-      columns: [
-        { className: "cell cell-theme", html: deps.renderSubjectsStatusHeadHtml() },
-        { className: "cell cell-messages-head", html: "" },
-        { className: "cell cell-assignees-head", html: deps.renderSubjectsAssigneesHeadHtml?.() ?? "Assignés" }
-      ]
+      columns: colonnesDeLaTete(deps)
     }),
     emptyTitle: "Aucune analyse disponible",
     emptyDescription: "Lancer une analyse pour générer des sujets."
@@ -202,13 +222,24 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
   const headVisibleBlockedBySubjects = Array.isArray(getHeadVisibleBlockedBySubjects?.(sujet.id))
     ? getHeadVisibleBlockedBySubjects(sujet.id)
     : (Array.isArray(getBlockedBySubjects?.(sujet.id)) ? getBlockedBySubjects(sujet.id) : []);
+  // La ligne se coche pour être rangée en lot. `estSujetCoche` vient de
+  // l'écran, qui tient la sélection : le tableau ne la retient pas, sinon deux
+  // endroits diraient ce qui est coché (règle 4).
+  const estCoche = typeof deps.estSujetCoche === "function" && deps.estSujetCoche(sujet.id);
   const isBlocked = headVisibleBlockedBySubjects.length > 0;
   const blockedBadge = isBlocked
     ? `<span class="issue-row-blocked-pill" aria-label="Sujet bloqué">${svgIcon("blocked", { className: "octicon octicon-blocked fgColor-danger" })}<span>Bloqué</span></span>`
     : "";
 
   return `
-    <div class="issue-row issue-row--pb click js-row-sujet${options.isSelectable === false ? "" : (options.rowSelectedClass ? options.rowSelectedClass("sujet", sujet.id) : "")}" data-sujet-id="${escapeHtml(sujet.id)}">
+    <div class="issue-row issue-row--pb click js-row-sujet${options.isSelectable === false ? "" : (options.rowSelectedClass ? options.rowSelectedClass("sujet", sujet.id) : "")}${estCoche ? " est-cochee" : ""}" data-sujet-id="${escapeHtml(sujet.id)}">
+      <div class="cell cell-cocher-value">
+        <span class="sujets-case">
+          <input type="checkbox" class="sujets-case__boite"
+            data-sujets-cocher="${escapeHtml(sujet.id)}" ${estCoche ? "checked" : ""}
+            aria-label="Sélectionner ${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "ce sujet"))}">
+        </span>
+      </div>
       <div class="cell cell-theme lvl0">
         <span class="issue-row-title-grid">
           <span class="issue-row-title-grid__status">
@@ -378,11 +409,7 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
       gridTemplate: getSituationsTableGridTemplate(),
       headHtml: renderSituationsTableHeadHtml({
         deps,
-        columns: [
-          { className: "cell cell-theme", html: deps.renderSubjectsStatusHeadHtml() },
-          { className: "cell cell-messages-head", html: "" },
-          { className: "cell cell-assignees-head", html: deps.renderSubjectsAssigneesHeadHtml?.() ?? "Assignés" }
-        ]
+        columns: colonnesDeLaTete(deps)
       }),
       state: "loading",
       loadingTitle: "Chargement des sujets…",
@@ -421,11 +448,7 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
       gridTemplate: getSituationsTableGridTemplate(),
       headHtml: renderSituationsTableHeadHtml({
         deps,
-        columns: [
-          { className: "cell cell-theme", html: deps.renderSubjectsStatusHeadHtml() },
-          { className: "cell cell-messages-head", html: "" },
-          { className: "cell cell-assignees-head", html: deps.renderSubjectsAssigneesHeadHtml?.() ?? "Assignés" }
-        ]
+        columns: colonnesDeLaTete(deps)
       }),
       ...vide
     });
@@ -435,11 +458,7 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
     gridTemplate: getSituationsTableGridTemplate(),
     headHtml: renderSituationsTableHeadHtml({
       deps,
-      columns: [
-        { className: "cell cell-theme", html: deps.renderSubjectsStatusHeadHtml() },
-        { className: "cell cell-messages-head", html: "" },
-        { className: "cell cell-assignees-head", html: deps.renderSubjectsAssigneesHeadHtml?.() ?? "Assignés" }
-      ]
+      columns: colonnesDeLaTete(deps)
     }),
     rowsHtml: rows.join(""),
     ...vide

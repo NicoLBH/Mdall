@@ -1,5 +1,8 @@
 import { store } from "../store.js";
-import { CLES_DE_LA_CHARGE, indexDesAssignes, indexDesLiens, indexDesMentions } from "./charge-des-sujets.js";
+import {
+  CLES_DE_LA_CHARGE, indexDesAssignes, indexDesDernieresDates, indexDesLiens,
+  indexDesMentions, indexDesTextes, laPlusRecente
+} from "./charge-des-sujets.js";
 import { buildSubjectHierarchyIndexes } from "./subject-hierarchy.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { loadSituationsForCurrentProject, loadSituationSubjectIdsMap } from "./project-situations-supabase.js";
@@ -338,13 +341,30 @@ async function fetchDescriptionAttachmentsBySubjectIds(subjectIds = []) {
 
 
 
-async function fetchProjectSubjectMessageCounts(projectId) {
+/**
+ * Les messages du projet : **une seule requête, trois usages**.
+ *
+ * Elle ne ramenait que `subject_id`, pour compter. Elle ramène aussi la date et
+ * le corps, parce que les deux servent et qu'aucun appel de plus n'est
+ * nécessaire :
+ *
+ *  - **compter** — ce qu'elle faisait déjà ;
+ *  - **dater l'activité** — un sujet commenté hier a bougé, et `updated_at` ne
+ *    le disait pas ;
+ *  - **lire les `@`** — une mention tapée au clavier, sans passer par la liste
+ *    de complétion, n'écrit aucune ligne dans `subject_message_mentions`, et
+ *    c'est le cas courant.
+ *
+ * Trois lectures d'une même chose se seraient payées trois appels et auraient
+ * fini par ne plus être d'accord (règle 4).
+ */
+async function fetchProjectSubjectMessages(projectId) {
   if (!projectId) {
-    return {};
+    return [];
   }
 
   const url = new URL(`${SUPABASE_URL}/rest/v1/subject_messages`);
-  url.searchParams.set("select", "subject_id");
+  url.searchParams.set("select", "subject_id,body_markdown,created_at");
   url.searchParams.set("project_id", `eq.${projectId}`);
   url.searchParams.set("deleted_at", "is.null");
 
@@ -362,8 +382,45 @@ async function fetchProjectSubjectMessageCounts(projectId) {
   }
 
   const rows = await res.json().catch(() => []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/**
+ * L'histoire métier du projet : **toute modification d'un sujet**, datée.
+ *
+ * `subject_history` porte les changements de statut, d'assignation, de labels,
+ * de situation, d'objectif, de parent, de blocage. C'est ce qu'il faut pour
+ * qu'« Activité récente » veuille dire ce qu'elle dit — et non « la ligne du
+ * sujet a changé », qui est beaucoup moins que ce qui arrive à un sujet.
+ *
+ * Deux colonnes seulement : on ne rapatrie pas des charges utiles d'événements
+ * pour en tirer une date.
+ */
+async function fetchProjectSubjectHistory(projectId) {
+  if (!projectId) return [];
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/subject_history`);
+  url.searchParams.set("select", "subject_id,created_at");
+  url.searchParams.set("project_id", `eq.${projectId}`);
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`subject_history fetch failed (${res.status}): ${txt}`);
+  }
+
+  const rows = await res.json().catch(() => []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+function compterLesMessages(lignes = []) {
   const countsBySubjectId = {};
-  for (const row of (Array.isArray(rows) ? rows : [])) {
+  for (const row of (Array.isArray(lignes) ? lignes : [])) {
     const subjectId = String(row?.subject_id || "").trim();
     if (!subjectId) continue;
     countsBySubjectId[subjectId] = Number(countsBySubjectId[subjectId] || 0) + 1;
@@ -1856,6 +1913,8 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
         relationOptionsById: {},
         [CLES_DE_LA_CHARGE.assignes]: {},
         [CLES_DE_LA_CHARGE.mentions]: {},
+        [CLES_DE_LA_CHARGE.derniereActivite]: {},
+        [CLES_DE_LA_CHARGE.textesDesMessages]: {},
         subjectMessageCountsBySubjectId: {},
         labels: [],
         labelsById: {},
@@ -1920,7 +1979,8 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
     const subjectLinks = await fetchProjectSubjectLinks(backendProjectId).catch(() => []);
     const subjectAssignees = await fetchProjectSubjectAssignees(backendProjectId).catch(() => []);
     const subjectMentions = await fetchProjectSubjectMentions(backendProjectId).catch(() => []);
-    const subjectMessageCountsBySubjectId = await fetchProjectSubjectMessageCounts(backendProjectId).catch(() => ({}));
+    const subjectMessages = await fetchProjectSubjectMessages(backendProjectId).catch(() => []);
+    const subjectHistory = await fetchProjectSubjectHistory(backendProjectId).catch(() => []);
     const situations = await loadSituationsForCurrentProject(backendProjectId).catch(() => []);
     const manualSituationIds = situations
       .filter((situation) => String(situation?.mode || "manual").trim().toLowerCase() === "manual")
@@ -1929,10 +1989,20 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
     const subjectIdsBySituationId = await loadSituationSubjectIdsMap(manualSituationIds).catch(() => ({}));
     const result = buildProjectFlatSubjectsResult(hydratedSubjects, subjectLinks, { runId: store.ui.runId || "" });
     result[CLES_DE_LA_CHARGE.assignes] = indexDesAssignes(subjectAssignees);
-    result.subjectMessageCountsBySubjectId = subjectMessageCountsBySubjectId && typeof subjectMessageCountsBySubjectId === "object"
-      ? subjectMessageCountsBySubjectId
-      : {};
+    result.subjectMessageCountsBySubjectId = compterLesMessages(subjectMessages);
     result[CLES_DE_LA_CHARGE.mentions] = indexDesMentions(subjectMentions);
+    // Les corps des messages, et la date de ce qui est arrivé au sujet : le
+    // filtre « Mentions » lit les uns, « Activité récente » lit l'autre, et les
+    // deux viennent des requêtes qu'on vient de faire.
+    result[CLES_DE_LA_CHARGE.textesDesMessages] = indexDesTextes(subjectMessages);
+    result[CLES_DE_LA_CHARGE.derniereActivite] = Object.fromEntries(
+      (() => {
+        const parMessage = indexDesDernieresDates(subjectMessages);
+        const parHistoire = indexDesDernieresDates(subjectHistory);
+        return [...new Set([...Object.keys(parMessage), ...Object.keys(parHistoire)])]
+          .map((cle) => [cle, laPlusRecente(parMessage[cle], parHistoire[cle])]);
+      })()
+    );
     result.situationsById = Object.fromEntries(situations.map((situation) => [String(situation?.id || ""), situation]).filter(([id]) => !!id));
     result.subjectIdsBySituationId = subjectIdsBySituationId;
     result.pagination = {

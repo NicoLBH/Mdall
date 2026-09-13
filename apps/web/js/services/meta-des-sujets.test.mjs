@@ -54,7 +54,14 @@ const CHARGE = chargeDesSujets({
   liens: [{ link_type: "blocked_by", source_subject_id: "s2", target_subject_id: "s1" }],
   labels: { s1: ["l-cr"], s2: ["l-cr", "l-urgent"] },
   objectifs: { s1: ["o-1"] },
-  sujetsParSituation: { "sit-1": ["s3"] }
+  sujetsParSituation: { "sit-1": ["s3"] },
+  // Un commentaire d'hier sur un sujet dont la ligne date de février, et un
+  // `@` tapé au clavier : les deux étaient invisibles.
+  messages: [{
+    subject_id: "s2", created_at: "2026-09-12T09:00:00Z",
+    body_markdown: "relancé, @benoit guyot doit passer lundi"
+  }],
+  histoire: [{ subject_id: "s3", created_at: "2026-09-11T09:00:00Z" }]
 });
 
 const laMeta = () => metaDesSujets({ sujets: SUJETS, raw: CHARGE, collaborateurs: COLLABORATEURS });
@@ -65,7 +72,8 @@ test("chaque sujet porte ce que la charge utile dit qu'il porte", () => {
   assert.deepEqual(meta.s1.assignes, ["p-moi"]);
   assert.deepEqual(meta.s1.labels, ["l-cr"]);
   assert.deepEqual(meta.s1.objectifs, ["o-1"]);
-  assert.deepEqual(meta.s2.mentions, ["p-moi"]);
+  // La table en porte un, le texte du commentaire en nomme un autre : les deux.
+  assert.deepEqual(meta.s2.mentions.sort(), ["p-benoit", "p-moi"]);
   assert.deepEqual(meta.s3.situations, ["sit-1"]);
   assert.equal(meta.s2.bloque, true, "s2 est la source du lien : c'est lui qui attend");
   assert.equal(meta.s1.bloque, false, "s1 est la cible : il bloque, il n'est pas bloqué");
@@ -142,8 +150,14 @@ test("sans personne connue, « moi » se dit au lieu de vider la liste", () => {
   assert.deepEqual(ignores, ["assigné"]);
 });
 
-/** Quatorze jours, comptés sur la dernière activité et non sur la création. */
-test("« activité récente » retient ce qui a bougé", () => {
+/**
+ * **Quatorze jours, comptés sur tout ce qui arrive au sujet.**
+ *
+ * `s2` porte une ligne datée de février et un commentaire d'hier : il a bougé,
+ * et c'est même celui qu'on cherche en demandant ce qui a bougé. `updated_at`
+ * seul ne le disait pas, et « Activité récente » le manquait.
+ */
+test("« activité récente » retient ce qui a bougé, commentaires compris", () => {
   const champs = champsDesSujets({ personnes: personnesDuProjet(COLLABORATEURS) });
   const maintenant = Date.parse("2026-09-13T00:00:00Z");
 
@@ -151,7 +165,64 @@ test("« activité récente » retient ce qui a bougé", () => {
     sujets: SUJETS, requete: "activité:récente", champs, meta: laMeta(), moi: "p-moi", maintenant
   }).sujets.map((sujet) => sujet.id);
 
-  assert.deepEqual(retenus, ["s1", "s3"], "s2 date de février : il n'a pas bougé");
+  assert.deepEqual(retenus, ["s1", "s2", "s3"]);
+});
+
+/** Une modification sans commentaire compte aussi : c'est arrivé au sujet. */
+test("une modification du sujet suffit à le dire récent", () => {
+  const meta = metaDesSujets({
+    sujets: [{ id: "s9", title: "Vieux", status: "open", updated_at: "2025-01-01T00:00:00Z" }],
+    raw: chargeDesSujets({ histoire: [{ subject_id: "s9", created_at: "2026-09-12T00:00:00Z" }] }),
+    collaborateurs: COLLABORATEURS
+  });
+
+  assert.equal(meta.s9.activite, "2026-09-12T00:00:00Z");
+});
+
+/** Sans aucune source datable, on ne prétend pas savoir quand (règle 5). */
+test("un sujet qu'on ne sait pas dater n'est pas récent", () => {
+  const meta = metaDesSujets({
+    sujets: [{ id: "s9", title: "Sans date", status: "open" }],
+    raw: chargeDesSujets({}), collaborateurs: COLLABORATEURS
+  });
+  const champs = champsDesSujets({ personnes: personnesDuProjet(COLLABORATEURS) });
+
+  assert.equal(meta.s9.activite, "");
+  assert.deepEqual(sujetsFiltres({
+    sujets: [{ id: "s9", title: "Sans date", status: "open" }],
+    requete: "activité:récente", champs, meta, moi: "p-moi"
+  }).sujets, []);
+});
+
+/**
+ * **Le `@` tapé au clavier compte.** La table des mentions ne porte que celles
+ * choisies dans la liste de complétion ; c'est le cas propre, et ce n'est pas
+ * le cas courant.
+ */
+test("une mention écrite dans un texte se retrouve", () => {
+  const champs = champsDesSujets({ personnes: personnesDuProjet(COLLABORATEURS) });
+  const meta = laMeta();
+
+  // Benoît n'a aucune ligne dans la table : il n'est nommé que dans un
+  // commentaire, au clavier.
+  assert.deepEqual(meta.s2.mentions.sort(), ["p-benoit", "p-moi"]);
+
+  const retenus = sujetsFiltres({
+    sujets: SUJETS, requete: "mention:moi", champs, meta, moi: "p-benoit"
+  }).sujets.map((sujet) => sujet.id);
+
+  assert.deepEqual(retenus, ["s2"]);
+});
+
+/** Le titre et la description comptent comme les commentaires. */
+test("une mention dans la description d'un sujet se retrouve", () => {
+  const sujets = [{
+    id: "s7", title: "Chape", status: "open",
+    description: "synthèse prévue avec @benoit guyot au droit des nourrices"
+  }];
+  const meta = metaDesSujets({ sujets, raw: chargeDesSujets({}), collaborateurs: COLLABORATEURS });
+
+  assert.deepEqual(meta.s7.mentions, ["p-benoit"]);
 });
 
 /* ── La sélection multiple ───────────────────────────────────────────────── */

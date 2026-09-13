@@ -9,9 +9,13 @@ import { filterValuesOf, toggleFilter, withFilter } from "../../services/query-b
 import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
 import { bindRailResizer, followRailScroll, railWidth } from "../ui/project-rail.js";
 import {
-  renderFiltreDenTeteHtml, renderFormulaireDeVueHtml, renderRailDesSujetsHtml,
-  renderRechercheDesSujetsHtml, renderTableauDesVuesHtml
+  renderActionsGroupeesHtml, renderFiltreDenTeteHtml, renderFormulaireDeVueHtml,
+  renderRailDesSujetsHtml, renderRechercheDesSujetsHtml, renderTableauDesVuesHtml
 } from "./project-subjects-recherche.js";
+import {
+  actionDuMarquage, etatDeLaCaseDeTete, GROUPE, selectionApresLeTout,
+  selectionApresUnClic, selectionVisible
+} from "../../services/selection-des-sujets.js";
 import { refusDeLaVue, vueAEcrire, vuePourLEcran } from "../../services/vues-des-sujets.js";
 import { sujetsFiltres } from "../../services/champs-des-sujets.js";
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
@@ -329,10 +333,17 @@ function renderDocumentRefsCard(selection) {
  */
 function renderSubjectsAssigneesHeadHtml() {
   const tri = getCurrentSubjectsSort();
+  const cochees = getSelectionDesSujets();
 
   return `
     <div class="cell-assignees-head">
-      ${renderSubjectsFiltresDenTeteHtml()}
+      ${cochees.length
+        // **Les actions de groupe prennent la place des filtres**, elles ne s'y
+        // ajoutent pas : c'est la même question posée dans l'autre sens, et
+        // l'on ne filtre pas pendant qu'on range — un filtre changé sous une
+        // sélection la viderait de ce qu'elle contient.
+        ? renderActionsGroupeesHtml({ combien: cochees.length, champs: getChampsDesSujets() })
+        : renderSubjectsFiltresDenTeteHtml()}
       ${renderBoutonDeTri({
         attribut: "subjects-sort",
         valeur: tri === TRI.DERNIERE_ACTIVITE ? TRI.PROJET : TRI.DERNIERE_ACTIVITE,
@@ -340,6 +351,39 @@ function renderSubjectsAssigneesHeadHtml() {
         titre: motDuTri(tri)
       })}
     </div>
+  `;
+}
+
+/**
+ * Les sujets cochés, **ramenés à ce que la liste montre**.
+ *
+ * On coche trois sujets, on change de filtre, ils sortent de la liste : agir
+ * sur eux ensuite modifierait des sujets qu'on n'a pas sous les yeux, sur la
+ * foi d'un clic d'il y a une minute. La sélection se ramène donc à chaque
+ * lecture, et c'est ici qu'elle se lit — nulle part ailleurs (règle 4).
+ */
+function getSelectionDesSujets() {
+  return selectionVisible({
+    selection: Array.isArray(store.projectSubjectsView?.selection)
+      ? store.projectSubjectsView.selection
+      : [],
+    visibles: getFilteredFlatSubjects().map((sujet) => String(sujet?.id || ""))
+  });
+}
+
+/** La case de tête : ce qu'elle coche, et ce qu'elle montre. */
+function renderCaseDeTeteDesSujetsHtml() {
+  const visibles = getFilteredFlatSubjects().map((sujet) => String(sujet?.id || ""));
+  const etat = etatDeLaCaseDeTete({ selection: getSelectionDesSujets(), visibles });
+
+  return `
+    <span class="sujets-case sujets-case--tete">
+      <input type="checkbox" class="sujets-case__boite"
+        data-sujets-cocher-tout="1"
+        ${etat === "toutes" ? "checked" : ""}
+        ${etat === "partielle" ? "data-partielle=\"true\"" : ""}
+        aria-label="Tout sélectionner — ${visibles.length} sujet${visibles.length > 1 ? "s" : ""}">
+    </span>
   `;
 }
 
@@ -658,6 +702,113 @@ function renderEcranDesVues() {
         deps: getSubjectsTableDeps()
       })}</div>`
   });
+}
+
+/* ── Cocher des sujets, et agir sur tous à la fois ───────────────────────── */
+
+function poserLaSelection(suivante) {
+  if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
+    store.projectSubjectsView = {};
+  }
+  store.projectSubjectsView.selection = suivante;
+  rerenderPanels();
+}
+
+/** Cocher ou décocher une ligne. */
+function cocherUnSujet(id) {
+  poserLaSelection(selectionApresUnClic({ selection: getSelectionDesSujets(), id }));
+}
+
+/**
+ * Cocher ou décocher **tout ce que la requête retient**.
+ *
+ * Pas la page affichée : c'est « ces sujets-là » qu'on demande après avoir
+ * filtré, et se limiter aux vingt-cinq lignes visibles ferait ranger un
+ * cinquième du lot sans que rien ne le dise.
+ */
+function cocherTousLesSujets() {
+  poserLaSelection(selectionApresLeTout({
+    selection: getSelectionDesSujets(),
+    visibles: getFilteredFlatSubjects().map((sujet) => String(sujet?.id || ""))
+  }));
+}
+
+/**
+ * Appliquer une action à tous les sujets cochés.
+ *
+ * ## Ce que fait chaque groupe, et pourquoi
+ *
+ * **Marquer** passe par l'action que l'écran connaît déjà pour un sujet seul :
+ * un lot n'a pas ses propres verbes, sans quoi fermer quarante sujets ne ferait
+ * pas la même chose que fermer quarante fois un sujet (règle 10).
+ *
+ * **Poser un label, un assigné, une situation, un objectif** *ajoute* à ce que
+ * le sujet porte déjà, et ne remplace pas : on coche quarante sujets pour leur
+ * donner un label de plus, jamais pour effacer les leurs. Un sujet qui le porte
+ * déjà est sauté — le réécrire ferait une ligne d'histoire pour rien.
+ *
+ * ## Rien n'est demandé en chemin
+ *
+ * Fermer un sujet seul demande ce qu'on a tranché, pour en faire une
+ * proposition. Poser la question quarante fois n'a pas de sens, et y répondre
+ * une fois pour quarante serait une décision qu'on n'a pas prise. **Le lot
+ * ferme donc sans rien conclure sur l'ouvrage** : les sujets sont fermés, et
+ * aucune décision n'entre en mémoire (règle 1). Ce qui mérite une décision se
+ * ferme un par un, là où la question se pose.
+ */
+async function appliquerAuGroupe(valeur) {
+  const dit = String(valeur ?? "");
+  const coupure = dit.indexOf(":");
+  const groupe = coupure > 0 ? dit.slice(0, coupure) : "";
+  const choisie = coupure > 0 ? dit.slice(coupure + 1) : "";
+
+  const cochees = getSelectionDesSujets();
+  if (!groupe || !choisie || !cochees.length) return;
+
+  store.projectSubjectsView.groupeEnCours = true;
+  rerenderPanels();
+
+  try {
+    if (groupe === GROUPE.MARQUAGE) {
+      const action = actionDuMarquage(choisie);
+      if (action) {
+        for (const id of cochees) {
+          const sujet = getNestedSujet(id);
+          if (!sujet) continue;
+          await persistSubjectIssueActionToSupabase(sujet, action);
+        }
+      }
+    } else {
+      const posesParGroupe = {
+        [GROUPE.LABELS]: ["labels", replaceSubjectLabelsInSupabase],
+        [GROUPE.ASSIGNES]: ["assignes", replaceSubjectAssigneesInSupabase],
+        [GROUPE.SITUATIONS]: ["situations", replaceSubjectSituationsInSupabase],
+        [GROUPE.OBJECTIFS]: ["objectifs", replaceSubjectObjectivesInSupabase]
+      };
+      const [champ, poser] = posesParGroupe[groupe] ?? [];
+
+      if (champ && typeof poser === "function") {
+        // Ce que chaque sujet porte déjà, lu **une fois** : le relire par sujet
+        // referait quarante fois le même assemblage.
+        const meta = getMetaDesSujets();
+        for (const id of cochees) {
+          const deja = Array.isArray(meta[id]?.[champ]) ? meta[id][champ] : [];
+          if (deja.includes(choisie)) continue;
+          await poser(id, [...deja, choisie]);
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("appliquerAuGroupe failed", error);
+  } finally {
+    store.projectSubjectsView.groupeEnCours = false;
+  }
+
+  // **On relit la base.** Ce qu'on vient d'écrire porte sur quarante lignes, et
+  // les redessiner depuis ce qu'on croit avoir écrit ferait afficher un
+  // résultat que la base n'a peut-être pas tout à fait pris.
+  await reloadSubjectsFromSupabase(getSubjectsCurrentRoot(), { rerender: true })
+    .catch(() => rerenderPanels());
 }
 
 /** Ouvrir le formulaire, vide ou sur une vue existante. */
@@ -1822,6 +1973,18 @@ function getSubjectsTableDeps() {
     renderSubjectsStatusHeadHtml,
     renderSubjectsAssigneesHeadHtml,
     renderSubjectsPriorityHeadHtml,
+    renderCaseDeTeteDesSujetsHtml,
+    // Ce qui est coché se lit à un seul endroit : le tableau demande, il ne
+    // retient pas (règle 4).
+    //
+    // **Et se lit une fois par tableau, pas une fois par ligne** : la sélection
+    // se ramène à ce qui est visible, ce qui coûte un filtrage complet de la
+    // liste. Le demander à chaque ligne ferait cinq cents filtrages pour cinq
+    // cents lignes, et l'écran s'arrêterait de répondre.
+    estSujetCoche: (() => {
+      const cochees = new Set(getSelectionDesSujets());
+      return (id) => cochees.has(String(id || ""));
+    })(),
     getCurrentSubjectsStatusFilter,
     getCurrentSubjectsPriorityFilter,
     // Les comptes servent à dire **pourquoi** la liste est vide : « aucun sujet
@@ -3624,11 +3787,19 @@ function rerenderPanels() {
 
       panelHost.innerHTML = `
         ${renderEcranDesSujets(`
-          ${renderRechercheDesSujetsHtml({ requete, champs, ignores })}
           ${renderSujetsEpinglesHtml({
             sujets: sujetsEpingles(getFlatSubjects(), getEpinglesDuProjet() ?? []),
             deps: tableDeps
           })}
+          ${/*
+            **La barre de recherche touche le tableau qu'elle filtre.**
+            Elle était au-dessus du bandeau des sujets épinglés — lequel ne
+            l'écoute pas : on tapait, les épingles ne bougeaient pas, et il
+            fallait descendre pour voir ce qui avait changé. Une barre séparée
+            de sa liste par un bloc qui lui est indifférent se lit comme une
+            recherche générale, et ce n'en est pas une.
+          */""}
+          ${renderRechercheDesSujetsHtml({ requete, champs, ignores })}
           <div id="situationsTableHost" class="project-table-host">${renderProjectSubjectsTable({
             filteredSituations,
             deps: tableDeps
@@ -4594,6 +4765,9 @@ function getObjectiveById(objectiveId) {
     epinglerLaVueAuRail,
     basculerLeMenuDeLaVue,
     fermerLeMenuDeLaVue,
+    cocherUnSujet,
+    cocherTousLesSujets,
+    appliquerAuGroupe,
     basculerLeRail,
     ouvrirLaFormeDeVue,
     poserDansLaFormeDeVue,

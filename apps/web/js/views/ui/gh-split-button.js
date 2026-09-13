@@ -2,7 +2,53 @@ import { svgIcon } from "../../ui/icons.js";
 
 let actionButtonGlobalBound = false;
 
+/**
+ * Le menu ouvert, **par son nom**, et non par son nœud.
+ *
+ * Un écran qui se redessine remplace son HTML : le nœud qui portait `is-open`
+ * disparaît, et le menu se referme au moment même où on l'ouvre. C'est ce qui
+ * arrivait à « Transformer » dans l'Atelier — l'ouverture déclenche une
+ * relecture des propositions ouvertes, la relecture redessine, et le menu
+ * n'existait plus. Retenir le **nom** permet de le rouvrir après coup, sur le
+ * nœud qui a pris la place.
+ */
+let menuOuvertId = "";
+
+/** Le nom du menu actuellement ouvert, ou `""`. */
+export function menuDActionOuvert() {
+  return menuOuvertId;
+}
+
+/**
+ * Faire quelque chose qui redessine, **sans perdre le menu ouvert**.
+ *
+ * À employer par ce qui provoque un redessin alors qu'un menu est déployé. Le
+ * rendu se refait de façon synchrone — c'est un `innerHTML` —, si bien qu'au
+ * retour le nouveau nœud est là et n'attend qu'à être rouvert.
+ */
+export function enGardantLeMenuOuvert(faire) {
+  const ouvert = menuOuvertId;
+  if (typeof faire === "function") faire();
+  if (ouvert) reouvrirLeMenu(ouvert);
+}
+
+/** Reposer `is-open` sur le menu qui porte ce nom, s'il est à l'écran. */
+export function reouvrirLeMenu(id = "") {
+  const nom = String(id || "");
+  if (!nom || typeof document === "undefined") return;
+
+  const root = document.querySelector(`.gh-action[data-action-id="${CSS.escape(nom)}"]`);
+  if (!root) return;
+
+  menuOuvertId = nom;
+  root.classList.add("is-open");
+  for (const bouton of root.querySelectorAll("[data-action-toggle], [aria-haspopup='menu']")) {
+    bouton.setAttribute("aria-expanded", "true");
+  }
+}
+
 function closeAllActionMenus(exceptId = "") {
+  menuOuvertId = String(exceptId || "");
   document.querySelectorAll(".gh-action").forEach((root) => {
     if (!exceptId || root.dataset.actionId !== exceptId) {
       root.classList.remove("is-open");

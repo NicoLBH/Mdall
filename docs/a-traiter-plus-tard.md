@@ -3565,23 +3565,19 @@ qu'il surveille.
 
 ---
 
-# « Activité récente » ne voit pas les commentaires
+# La charge des sujets grossit avec les messages du projet
 
-**Ce qui est vrai aujourd'hui.** La lecture retient les sujets dont la dernière
-date lisible remonte à moins de quatorze jours : `updated_at`, à défaut
-`last_activity_at`, à défaut `created_at`. C'est la ligne du sujet, et elle ne
-bouge que si la ligne bouge.
+**Ce qui a changé.** « Activité récente » et « Mentions » lisent désormais les
+commentaires : une requête ramène, pour tout le projet, le `subject_id`, la date
+et le **corps** de chaque message. La même requête servait déjà à les compter,
+donc il n'y a pas d'appel de plus — mais il y a des octets de plus, et ils
+croissent avec la discussion du projet, pas avec le nombre de sujets.
 
-**Ce qui manque.** Un sujet commenté hier, sans qu'aucun de ses champs ne change,
-n'a pas bougé au sens de la base — et sort donc de « Activité récente ». Or c'est
-exactement le sujet qu'on cherche en posant la question : celui dont on a parlé.
+**Ce qu'il faudrait :** que le filtre des mentions se pose côté base — une
+colonne calculée, ou une table d'index — plutôt que de rapatrier les textes pour
+les relire dans le navigateur. Et que `last_activity_at` vive sur le sujet,
+posée par un déclencheur, plutôt que d'être recalculée à chaque chargement.
 
-**Ce qu'il faudrait :** que `subject_messages` remonte au sujet, soit par un
-déclencheur qui pose `last_activity_at`, soit par un index chargé avec les
-autres — le même chemin que les mentions viennent de prendre
-(`charge-des-sujets.js`).
-
-**Ce que ça coûte de ne pas le faire :** une lecture qui rend beaucoup sur un
-projet qu'on vient de verser — tout y est récent —, et trop peu sur un projet
-installé, où l'activité est dans les fils de discussion et non dans les lignes.
-Elle ne ment pas, mais elle ne répond pas tout à fait à la question posée.
+**Ce que ça coûte de ne pas le faire :** sur un projet de plusieurs milliers de
+messages, un chargement de la liste des sujets plus lourd qu'il ne devrait. Rien
+ne ment, mais on paie une lecture complète pour deux filtres.

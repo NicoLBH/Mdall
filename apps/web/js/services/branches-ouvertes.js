@@ -50,6 +50,7 @@
 import { store } from "../store.js";
 import { branchesQuiAccueillent } from "./proposition-branche.js";
 import { TRANSFORMER } from "../views/ui/transformer.js";
+import { enGardantLeMenuOuvert } from "../views/ui/gh-split-button.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -207,6 +208,36 @@ async function lire(projet, quandCharge) {
   // précédent.
   if (projetAffiche() !== projet) return;
 
+  const avant = su.branches;
   su = { projet, branches, lue: true };
-  if (typeof quandCharge === "function") quandCharge();
+
+  // **On ne redessine que si la réponse a changé quelque chose.** La relecture
+  // a lieu à chaque ouverture du menu « Transformer » ; redessiner à chaque
+  // fois remplaçait le bouton — et le menu qui venait de s'ouvrir avec lui. Il
+  // se refermait donc à l'instant où on le déployait, et l'on ne pouvait plus
+  // rien proposer.
+  if (typeof quandCharge !== "function" || !lesBranchesOntChange(avant, branches)) return;
+
+  // Et quand elle a changé, le menu doit **survivre** au redessin : sa liste
+  // est précisément ce qui vient d'être corrigé, et la refermer au nez de qui
+  // la regardait ferait recliquer pour voir.
+  enGardantLeMenuOuvert(quandCharge);
+}
+
+/**
+ * Cette lecture change-t-elle ce que le menu montre ?
+ *
+ * Deux listes disent la même chose quand elles portent les mêmes propositions,
+ * dans le même ordre, sous les mêmes noms — c'est tout ce que le menu affiche.
+ * `null` — la base s'est tue — n'est **pas** la même chose qu'une liste vide :
+ * l'un dit « on ne sait pas », l'autre « il n'y en a aucune » (règle 5).
+ */
+export function lesBranchesOntChange(avant, apres) {
+  if (avant === null || apres === null) return avant !== apres;
+
+  const dit = (liste) => (Array.isArray(liste) ? liste : [])
+    .map((branche) => `${texte(branche?.id)}|${texte(branche?.title ?? branche?.titre)}`)
+    .join("\n");
+
+  return dit(avant) !== dit(apres);
 }

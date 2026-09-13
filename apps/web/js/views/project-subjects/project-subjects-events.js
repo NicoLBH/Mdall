@@ -1,6 +1,7 @@
 import { applyMarkdownComposerAction } from "../../utils/markdown-composer.js";
 import { dropOtherTokens, suggestAt, withFilter } from "../../services/query-bar.js";
 import { GESTE, gesteDesSujets } from "../../services/gestes-des-sujets.js";
+import { ecranApresUneLecture } from "../../services/rail-des-sujets.js";
 import { escapeHtml as echapper } from "../../utils/escape-html.js";
 import { brancherLaZoneDeDepot } from "../ui/zone-de-depot.js";
 import {
@@ -57,6 +58,11 @@ export function createProjectSubjectsEvents(config) {
     epinglerLaVueAuRail = () => {},
     basculerLeMenuDeLaVue = () => {},
     fermerLeMenuDeLaVue = () => {},
+    // Cocher des sujets, et agir sur tous à la fois. L'écran tient la
+    // sélection ; les gestes l'appellent, ils ne la refont pas.
+    cocherUnSujet = () => {},
+    cocherTousLesSujets = () => {},
+    appliquerAuGroupe = () => {},
     basculerLeRail = () => {},
     PROJECT_TAB_RESELECTED_EVENT,
     getSubjectsViewState,
@@ -5724,7 +5730,16 @@ export function createProjectSubjectsEvents(config) {
     if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
       store.projectSubjectsView = {};
     }
-    store.projectSubjectsView.requete = String(requete ?? "");
+    // **Poser une lecture, c'est revenir à la liste.** Ce que ce geste change
+    // se décide dans `rail-des-sujets.js`, où il s'exécute en test : l'écrire
+    // ici l'aurait laissé sans garde-fou, et c'est exactement ce qui a fait que
+    // cliquer « Sujets » depuis les Labels ne faisait rien.
+    const suivant = ecranApresUneLecture({ requete });
+    store.projectSubjectsView.requete = suivant.requete;
+    store.situationsView.subjectsSubview = suivant.sousVue;
+    store.situationsView.showTableOnly = suivant.tableauSeul;
+    store.projectSubjectsView.vueEnCours = suivant.vueEnCours;
+
     resetSubjectsPaginationPage();
     redessinerApresUnGeste();
   }
@@ -5969,6 +5984,23 @@ export function createProjectSubjectsEvents(config) {
 
         case GESTE.VUE_ENREGISTRER:
           enregistrerLaVue();
+          return;
+
+        case GESTE.COCHER:
+          // La case est **dans** la ligne qui ouvre le sujet : sans cela,
+          // cocher ouvrirait aussi ce qu'on voulait seulement désigner.
+          event.stopPropagation();
+          cocherUnSujet(valeur);
+          return;
+
+        case GESTE.COCHER_TOUT:
+          event.stopPropagation();
+          cocherTousLesSujets();
+          return;
+
+        case GESTE.GROUPE:
+          event.stopPropagation();
+          appliquerAuGroupe(valeur);
           return;
 
         case GESTE.VUE_MENU:

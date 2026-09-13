@@ -203,13 +203,23 @@ const listeDe = (valeur) => (Array.isArray(valeur) ? valeur.map(texte).filter(Bo
  * Ce sujet a-t-il bougé récemment ?
  *
  * **On lit la dernière activité, pas la création.** Un sujet ouvert il y a six
- * mois et commenté hier a bougé ; l'inverse n'est pas vrai. Sans date lisible,
- * il ne compte pas comme récent — supposer qu'il l'est ferait remonter tout ce
- * qu'on ne sait pas dater (règle 5).
+ * mois et commenté hier a bougé ; l'inverse n'est pas vrai.
+ *
+ * **Et « activité » veut dire tout ce qui lui arrive** : un commentaire, un
+ * changement de statut, une assignation, un label — pas seulement une
+ * modification de sa ligne. `updated_at` seul manquait tout ce qui se passe
+ * dans le fil de discussion, c'est-à-dire l'essentiel de la vie d'un sujet, et
+ * la lecture rendait alors la liste entière d'un projet fraîchement versé et
+ * presque rien d'un projet installé. C'est `meta-des-sujets.js` qui rassemble
+ * ces sources ; on lit ici ce qu'il a conclu, et la ligne du sujet à défaut.
+ *
+ * Sans date lisible, le sujet ne compte pas comme récent — supposer qu'il l'est
+ * ferait remonter tout ce qu'on ne sait pas dater (règle 5).
  */
-function estRecent(sujet, maintenant) {
+function estRecent(sujet, sien, maintenant) {
   const quand = Date.parse(
-    sujet?.updated_at ?? sujet?.updatedAt ?? sujet?.last_activity_at ?? sujet?.created_at ?? ""
+    sien?.activite
+      ?? sujet?.updated_at ?? sujet?.updatedAt ?? sujet?.last_activity_at ?? sujet?.created_at ?? ""
   );
   if (!Number.isFinite(quand)) return false;
 
@@ -307,7 +317,7 @@ export function sujetsFiltres({
       if (!porteLUneDe(listeDe(valeurs), cherchees)) return false;
     }
 
-    if (filters["activité"] === "recente" && !estRecent(sujet, maintenant)) return false;
+    if (filters["activité"] === "recente" && !estRecent(sujet, sien, maintenant)) return false;
 
     if (mots.length === 0) return true;
     const titre = repli(sujet?.title ?? sujet?.titre);

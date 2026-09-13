@@ -34,7 +34,8 @@
  * trombinoscope ; il rend une table. Rien ici n'appelle quoi que ce soit.
  */
 
-import { CLES_DE_LA_CHARGE } from "./charge-des-sujets.js";
+import { CLES_DE_LA_CHARGE, laPlusRecente } from "./charge-des-sujets.js";
+import { personnesMentionneesDans } from "./mentions-du-texte.js";
 import { normalizeAssigneeIds, resolveSubjectAssigneeIds } from "./subject-assignees-service.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -202,6 +203,9 @@ export function metaDesSujets({
   const objectifs = objet(charge[CLES_DE_LA_CHARGE.objectifs]);
   const assignes = objet(charge[CLES_DE_LA_CHARGE.assignes]);
   const mentions = objet(charge[CLES_DE_LA_CHARGE.mentions]);
+  const activites = objet(charge[CLES_DE_LA_CHARGE.derniereActivite]);
+  const textes = objet(charge[CLES_DE_LA_CHARGE.textesDesMessages]);
+  const nommables = personnesDuProjet(collaborateurs);
   const enAtelier = objet(assignesDeLAtelier);
 
   const parLot = lotsParPersonne(collaborateurs);
@@ -234,7 +238,25 @@ export function metaDesSujets({
       labels: identifiants(labels[cle]),
       objectifs: identifiants(objectifs[cle]),
       assignes: siens,
-      mentions: normalizeAssigneeIds(mentions[cle]),
+      // **Deux sources, et il en faut deux.** La table ne porte que les
+      // mentions choisies dans la liste de complétion ; le texte porte celles
+      // qu'on a tapées au clavier — dans un titre, dans une description, dans
+      // un commentaire —, et c'est le cas courant.
+      mentions: normalizeAssigneeIds([
+        ...(Array.isArray(mentions[cle]) ? mentions[cle] : []),
+        ...personnesMentionneesDans([
+          sujet?.title, sujet?.description,
+          ...(Array.isArray(textes[cle]) ? textes[cle] : [])
+        ], nommables)
+      ]),
+      // **La dernière fois que ce sujet a bougé**, quelle qu'en soit la forme :
+      // sa ligne modifiée, un commentaire, un changement de statut ou
+      // d'assignation. `updated_at` seul manquait tout ce qui se passe dans le
+      // fil de discussion — c'est-à-dire l'essentiel de la vie d'un sujet.
+      activite: laPlusRecente(
+        activites[cle],
+        sujet?.updated_at, sujet?.updatedAt, sujet?.last_activity_at, sujet?.created_at
+      ),
       // **L'auteur, et non l'assigné.** Les deux se confondent souvent et
       // divergent toujours au moment où ça compte : on cherche ce qu'on a
       // soi-même relevé, pas ce qu'on doit faire.

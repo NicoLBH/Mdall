@@ -11,8 +11,8 @@ import assert from "node:assert/strict";
 import { champsDesSujets } from "../../services/champs-des-sujets.js";
 import { LECTURE, NOMS_DE_LA_LECTURE } from "../../services/rail-des-sujets.js";
 import {
-  renderFiltreDenTeteHtml, renderFormulaireDeVueHtml, renderRailDesSujetsHtml,
-  renderRechercheDesSujetsHtml, renderTableauDesVuesHtml
+  renderActionsGroupeesHtml, renderFiltreDenTeteHtml, renderFormulaireDeVueHtml,
+  renderRailDesSujetsHtml, renderRechercheDesSujetsHtml, renderTableauDesVuesHtml
 } from "./project-subjects-recherche.js";
 import { ATTRIBUTS_ECOUTES, GESTE, gesteDesSujets } from "../../services/gestes-des-sujets.js";
 
@@ -664,4 +664,72 @@ test("un refus se dit là où on peut le corriger", () => {
 test("modifier une vue se dit autrement que la créer", () => {
   assert.match(renderFormulaireDeVueHtml({ vue: { id: "v1" }, champs }), /Modifier la vue/);
   assert.match(renderFormulaireDeVueHtml({ vue: {}, champs }), /Nouvelle vue/);
+});
+
+
+/* ── Les actions de groupe ───────────────────────────────────────────────── */
+
+/**
+ * **Ce que la sélection rend possible.** Un compte rendu versé ouvre quarante
+ * sujets d'un coup ; les ranger un par un se paie quarante fois trois clics, et
+ * personne ne le fait — on laisse les quarante sans label, et la recherche par
+ * label ne sert plus à rien.
+ */
+test("rien de coché : aucune action de groupe", () => {
+  assert.equal(renderActionsGroupeesHtml({ combien: 0, champs }), "");
+});
+
+test("des sujets cochés : cinq menus, et le compte", () => {
+  const html = renderActionsGroupeesHtml({ combien: 3, champs });
+
+  assert.match(html, /3 sujets sélectionnés/);
+  for (const nom of ["Marquer comme", "Labels", "Assigné à", "Objectifs"]) {
+    assert.ok(html.includes(nom), `« ${nom} » manque aux actions de groupe`);
+  }
+  // Le projet du décor n'a pas de situation : le menu ne se dessine pas vide.
+  assert.doesNotMatch(html, /Situations/);
+});
+
+/**
+ * Les marquages sont ceux qui existent déjà pour un sujet seul : un lot n'a pas
+ * ses propres verbes (règle 10).
+ */
+test("les trois marquages portent leur action", () => {
+  const html = renderActionsGroupeesHtml({ combien: 1, champs });
+
+  assert.match(html, /data-sujets-groupe="marquage:ouvert"/);
+  assert.match(html, /data-sujets-groupe="marquage:ferme"/);
+  assert.match(html, /data-sujets-groupe="marquage:non-planifie"/);
+});
+
+/**
+ * **« aucun » et « moi » ne se posent pas.** Ce sont des façons de chercher, pas
+ * des valeurs qu'on écrit : poser « aucun » sur quarante sujets ne veut rien
+ * dire, et poser « moi » écrirait un nom que la liste ne montre pas.
+ */
+test("on ne propose de poser que ce qui s'écrit", () => {
+  const html = renderActionsGroupeesHtml({ combien: 2, champs });
+
+  assert.match(html, /data-sujets-groupe="labels:l-cr"/);
+  assert.doesNotMatch(html, /data-sujets-groupe="labels:aucun"/);
+  assert.doesNotMatch(html, /data-sujets-groupe="assignes:@moi"/);
+  assert.match(html, /data-sujets-groupe="assignes:p-1"/);
+});
+
+test("chaque attribut des actions de groupe déclenche un geste", () => {
+  const html = renderActionsGroupeesHtml({ combien: 2, champs });
+
+  const poses = [...new Set(
+    [...html.matchAll(/(data-sujets-[a-z-]+)=/g)].map(([, attribut]) => attribut)
+  )];
+
+  assert.ok(poses.length >= 2, `les actions de groupe ne posent que ${poses.length} attributs`);
+
+  for (const attribut of poses) {
+    if (SANS_GESTE.includes(attribut)) continue;
+    assert.notEqual(
+      gesteDesSujets(unNoeud(attribut)).geste, GESTE.RIEN,
+      `les actions de groupe posent « ${attribut} » et rien ne l'écoute`
+    );
+  }
 });

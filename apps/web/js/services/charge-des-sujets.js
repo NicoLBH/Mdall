@@ -86,6 +86,73 @@ export function indexDesLiens(liens = []) {
 }
 
 /**
+ * La date la plus récente de chaque sujet, parmi des lignes datées.
+ *
+ * **Une activité n'est pas une modification de la ligne du sujet.** Un sujet
+ * commenté hier, dont aucun champ n'a changé, a bougé : c'est même celui-là
+ * qu'on cherche en demandant ce qui a bougé. `subjects.updated_at` ne le dit
+ * pas, et « Activité récente » le manquait.
+ *
+ * On rend donc, par sujet, la plus récente des dates qu'on lui connaît, quelle
+ * qu'en soit la source — un message, un changement de statut, une assignation.
+ * Une date illisible est **écartée** plutôt que ramenée à zéro : une ligne qu'on
+ * ne sait pas dater ne rajeunit ni ne vieillit le sujet (règle 5).
+ */
+export function indexDesDernieresDates(lignes = [], { sujet = "subject_id", date = "created_at" } = {}) {
+  const index = {};
+
+  for (const ligne of Array.isArray(lignes) ? lignes : []) {
+    const cle = texte(ligne?.[sujet]);
+    const quand = texte(ligne?.[date]);
+    if (!cle || !quand || !Number.isFinite(Date.parse(quand))) continue;
+
+    if (!index[cle] || Date.parse(quand) > Date.parse(index[cle])) index[cle] = quand;
+  }
+
+  return index;
+}
+
+/**
+ * La plus récente de plusieurs dates, ou `""`.
+ *
+ * Ce qu'on ne sait pas dater ne compte pas : une chaîne vide ou illisible n'est
+ * pas une date ancienne, c'est une absence de date.
+ */
+export function laPlusRecente(...dates) {
+  let retenue = "";
+
+  for (const date of dates.flat()) {
+    const quand = Date.parse(texte(date));
+    if (!Number.isFinite(quand)) continue;
+    if (!retenue || quand > Date.parse(retenue)) retenue = texte(date);
+  }
+
+  return retenue;
+}
+
+/**
+ * Les textes de chaque sujet où un `@` peut se trouver : ses commentaires.
+ *
+ * Le titre et la description viennent de la ligne du sujet, qui est déjà là. Ce
+ * qu'il faut aller chercher, ce sont les corps des messages — et la même
+ * requête sert à dater l'activité, donc elle ne coûte rien de plus.
+ */
+export function indexDesTextes(lignes = [], { sujet = "subject_id", corps = "body_markdown" } = {}) {
+  const index = {};
+
+  for (const ligne of Array.isArray(lignes) ? lignes : []) {
+    const cle = texte(ligne?.[sujet]);
+    const dit = texte(ligne?.[corps]);
+    if (!cle || !dit) continue;
+
+    if (!Array.isArray(index[cle])) index[cle] = [];
+    index[cle].push(dit);
+  }
+
+  return index;
+}
+
+/**
  * Les noms des index dans la charge utile.
  *
  * **Ils vivent ici**, et le chargeur comme le lecteur passent par eux. C'est ce
@@ -99,7 +166,9 @@ export const CLES_DE_LA_CHARGE = {
   labels: "labelIdsBySubjectId",
   objectifs: "objectiveIdsBySubjectId",
   sujetsParSituation: "subjectIdsBySituationId",
-  situationsDuSujet: "relationIdsBySubjectId"
+  situationsDuSujet: "relationIdsBySubjectId",
+  derniereActivite: "lastActivityAtBySubjectId",
+  textesDesMessages: "messageTextsBySubjectId"
 };
 
 /**
@@ -109,13 +178,23 @@ export const CLES_DE_LA_CHARGE = {
  * Les deux obtiennent les mêmes clés parce que c'est le même code.
  */
 export function chargeDesSujets({
-  assignes = [], mentions = [], liens = [],
+  assignes = [], mentions = [], liens = [], messages = [], histoire = [],
   labels = {}, objectifs = {}, sujetsParSituation = {}, situationsDuSujet = {}
 } = {}) {
+  // Une activité vient d'un commentaire **ou** d'une modification : les deux
+  // entrent dans le même index, et c'est la plus récente qui gagne.
+  const parMessage = indexDesDernieresDates(messages);
+  const parHistoire = indexDesDernieresDates(histoire);
+
   return {
     [CLES_DE_LA_CHARGE.assignes]: indexDesAssignes(assignes),
     [CLES_DE_LA_CHARGE.mentions]: indexDesMentions(mentions),
     [CLES_DE_LA_CHARGE.liens]: indexDesLiens(liens),
+    [CLES_DE_LA_CHARGE.derniereActivite]: Object.fromEntries(
+      [...new Set([...Object.keys(parMessage), ...Object.keys(parHistoire)])]
+        .map((cle) => [cle, laPlusRecente(parMessage[cle], parHistoire[cle])])
+    ),
+    [CLES_DE_LA_CHARGE.textesDesMessages]: indexDesTextes(messages),
     [CLES_DE_LA_CHARGE.labels]: labels && typeof labels === "object" ? labels : {},
     [CLES_DE_LA_CHARGE.objectifs]: objectifs && typeof objectifs === "object" ? objectifs : {},
     [CLES_DE_LA_CHARGE.sujetsParSituation]:
