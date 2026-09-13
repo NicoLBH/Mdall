@@ -300,8 +300,74 @@ une écriture, et une écriture passe par une proposition (règle 1).
 
 ##### Ce que ce palier ne fait pas encore
 
-Les lots manquants, les labels de qualification et les objectifs : paliers suivants. Et la
-fermeture reste entière à l'étape 4 — c'est le point le plus délicat du plan.
+Les objectifs : palier 4. Et la fermeture reste entière à l'étape 4 — c'est le point le plus
+délicat du plan.
+
+#### Palier 2 — Les lots qui manquent au projet *(fait)*
+
+**Un lot manquant ne se voit pas.** Ce qui se voit, c'est une poignée de points sans
+rattachement qu'on croit mal lus. Un compte rendu découpe tout par lot — c'est son ossature —
+et si le projet ne connaît pas un lot, ses points arrivent orphelins : on ne peut ni les
+grouper, ni les assigner, ni dire ce que ce lot doit.
+
+##### Le vrai problème : reconnaître que deux lots sont le même
+
+Le compte rendu écrit « 02 — GROS ŒUVRE ». Le projet a « Gros œuvre ». Le suivant dira
+« LOT 02 », « 02 GO » ou « Lot n° 2 - Gros oeuvre ». Les prendre pour quatre en créerait trois
+de trop, ce qui est **pire que de n'en créer aucun** — parce que personne ne nettoiera.
+
+| Dans cet ordre | |
+| --- | --- |
+| **Le numéro** | « 02 » identifie le lot dans ce marché, et survit à toutes les façons de l'écrire. Deux lots numérotés différemment sont deux lots, même si leurs noms se ressemblent — « 02 gros œuvre » et « 03 gros œuvre démolition » coexistent. |
+| **Le nom mis à plat** | accents, ponctuation et numéro ôtés, quand il n'y a pas de numéro des deux côtés |
+
+Un intitulé dont on n'a extrait ni numéro ni nom **portant des lettres** n'est pas proposé :
+« 12.02.1 » est une référence de point, et en faire un lot en créerait autant que le compte
+rendu a de points.
+
+Et **ne pas avoir pu lire les lots du projet n'est pas « le projet n'en a aucun »** : on ne
+propose alors rien du tout, plutôt que de proposer d'ajouter des lots qui sont peut-être déjà
+là (règle 5).
+
+#### Palier 3 — Les labels de qualification *(fait)*
+
+« CR chantier » dit d'où vient un sujet ; ceux-ci disent ce qu'il vaut. Un compte rendu ne les
+porte pas comme des étiquettes : il les dit en toutes lettres, et c'est cela que le modèle
+relève.
+
+| Label | Ce qu'il faut pour le poser |
+| --- | --- |
+| **Urgent** | le document le marque urgent, ou fixe une échéance immédiate — « sous 48 h », « avant la prochaine réunion », une mise en évidence en rouge sur le point |
+| **Rappel** | le point est redit d'un compte rendu à l'autre, ou porte « pour rappel », « relance », « déjà signalé » |
+| **Information générale** | le document l'écrit pour information : il n'attend d'action de personne |
+
+##### La liste est fermée, et c'est le point
+
+Un modèle libre d'inventer des labels en produit quinze en trois comptes rendus : « Urgent »,
+« Très urgent », « Prioritaire », « À traiter vite ». Le projet se remplit d'étiquettes qui
+disent la même chose, aucun filtre ne trouve plus rien, et **personne ne nettoiera**.
+
+Un label hors de la liste est donc écarté au serveur, comme une citation qu'on ne retrouve
+pas — et compté, pour que l'écran puisse le dire. La casse et les accents ne comptent pas
+(« urgent » est `Urgent`), mais le label retenu porte l'écriture officielle : sans quoi le
+projet finirait avec « Urgent » et « urgent », que la base compte pour deux.
+
+La consigne ajoute une interdiction qui compte autant : **ne pose jamais `Urgent` parce que le
+sujet te semble grave.** On relève ce qui est écrit, on ne juge pas le chantier.
+
+##### Les deux écritures de la liste, et ce qui les empêche de diverger
+
+Une fonction Edge ne peut pas importer hors de `supabase/functions/`, et aucun fichier servi au
+navigateur ne remonte vers le serveur — `scripts/verifie-cloison.test.mjs` y veille, tests
+compris. La liste est donc écrite deux fois, et **un test côté serveur compare les deux** : il
+tombe dès qu'elles divergent. C'est la seule façon, ici, d'avoir un nom qui vit à un seul
+endroit (règle 10).
+
+##### Rien n'est écrit
+
+Ni lot ajouté, ni label créé, ni label posé. Tout cela est une écriture, et une écriture passe
+par une proposition (règle 1). L'écran montre ce que la proposition porterait, et c'est
+quelqu'un qui la signe.
 
 ### Étape 4 — Fermer un sujet, et la question de fond
 

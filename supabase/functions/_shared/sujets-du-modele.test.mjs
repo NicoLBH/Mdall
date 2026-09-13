@@ -232,3 +232,91 @@ test("la consigne demande le rapprochement et interdit de l'inventer", async () 
   // Et le doute, qui penche du côté le moins coûteux.
   assert.match(CONSIGNES, /Dans le doute, laisse null/);
 });
+
+/* ── Les labels : une liste fermée, et une porte ─────────────────────────── */
+
+/**
+ * **Un label inventé n'est pas une étiquette de trop.** C'est une étiquette que
+ * le projet portera pour toujours, à côté de celle qui disait déjà la même
+ * chose — et personne ne nettoiera.
+ */
+test("un label hors de la liste est écarté, et se compte", async () => {
+  const { verifierLesLabels } = await import("./sujets-du-modele.js");
+
+  const { sujets, ecartes } = verifierLesLabels({
+    sujets: [
+      { titre: "a", labels: ["Urgent", "Prioritaire"] },
+      { titre: "b", labels: ["À traiter vite"] },
+      { titre: "c", labels: [] },
+      { titre: "d" }
+    ]
+  });
+
+  assert.deepEqual(sujets[0].labels, ["Urgent"]);
+  assert.deepEqual(sujets[1].labels, []);
+  assert.deepEqual(sujets[2].labels, []);
+  assert.deepEqual(sujets[3].labels, []);
+  assert.deepEqual(ecartes, ["Prioritaire", "À traiter vite"]);
+});
+
+/**
+ * La casse et les accents ne comptent pas — mais le label retenu porte
+ * l'écriture officielle : sans quoi le projet finirait avec « Urgent » et
+ * « urgent », que la base compte pour deux.
+ */
+test("un label mal capitalisé est retenu dans son écriture officielle", async () => {
+  const { verifierLesLabels } = await import("./sujets-du-modele.js");
+
+  const { sujets, ecartes } = verifierLesLabels({
+    sujets: [{ labels: ["urgent", "INFORMATION GENERALE", "rappel"] }]
+  });
+
+  assert.deepEqual(sujets[0].labels, ["Urgent", "Information générale", "Rappel"]);
+  assert.deepEqual(ecartes, []);
+});
+
+/** Un point qui porte deux fois le même label ne le porte qu'une fois. */
+test("un label répété ne se pose qu'une fois", async () => {
+  const { verifierLesLabels } = await import("./sujets-du-modele.js");
+
+  const { sujets } = verifierLesLabels({ sujets: [{ labels: ["Urgent", "urgent", "URGENT"] }] });
+  assert.deepEqual(sujets[0].labels, ["Urgent"]);
+});
+
+/** La consigne dit de ne pas juger : on relève ce qui est écrit. */
+test("la consigne interdit de qualifier au jugé", async () => {
+  const { CONSIGNES } = await import("./sujets-du-modele.js");
+
+  assert.match(CONSIGNES, /Ne pose jamais `Urgent` parce que le sujet te semble grave/);
+  assert.match(CONSIGNES, /Un point peut n'en porter aucun/);
+});
+
+/**
+ * **La liste est fermée, et ce n'est pas une limitation, c'est le point.** Un
+ * modèle libre d'inventer des labels en produit quinze en trois comptes rendus :
+ * « Urgent », « Très urgent », « Prioritaire », « À traiter vite ». Aucun filtre
+ * ne trouve plus rien, et personne ne nettoiera.
+ *
+ * Une fonction Edge ne peut pas importer hors de `supabase/functions/` : la
+ * liste y est donc écrite deux fois. Ce test est ce qui empêche les deux
+ * écritures de diverger — la seule façon, ici, d'avoir un nom qui vit à un seul
+ * endroit (règle 10).
+ *
+ * Il est de ce côté-ci, et pas de l'autre : aucun fichier servi au navigateur
+ * ne remonte vers le serveur, tests compris.
+ */
+test("les labels du serveur et ceux du navigateur sont les mêmes", async () => {
+  const { LABELS_DE_QUALIFICATION } = await import("./sujets-du-modele.js");
+  const site = await import("../../../apps/web/js/services/label-du-cr.js");
+
+  assert.deepEqual(LABELS_DE_QUALIFICATION, site.LABELS_DE_QUALIFICATION);
+
+  // Et la consigne explique chacun au modèle : une liste fermée dont un membre
+  // n'est pas défini est une liste que le modèle remplira au jugé.
+  const { CONSIGNES } = await import("./sujets-du-modele.js");
+  for (const nom of LABELS_DE_QUALIFICATION) {
+    assert.match(CONSIGNES, new RegExp(nom), `« ${nom} » n'est pas expliqué au modèle`);
+    assert.ok(site.QUOI_DU_LABEL[nom], `« ${nom} » n'a pas de définition à l'écran`);
+  }
+  assert.match(CONSIGNES, /N'invente AUCUN autre label/);
+});

@@ -35,6 +35,37 @@ const texte = (valeur) => String(valeur ?? "").trim();
 export const LABEL_DU_CR = "CR chantier";
 
 /**
+ * Les labels de qualification, et pourquoi la liste est **fermée**.
+ *
+ * « CR chantier » dit d'où vient un sujet ; ceux-ci disent ce qu'il vaut. Un
+ * compte rendu de chantier ne les porte pas comme des étiquettes : il les dit en
+ * toutes lettres — « urgent », « pour rappel », « pour information » — et c'est
+ * cela que le modèle relève.
+ *
+ * **La liste est fermée, et ce n'est pas une limitation, c'est le point.** Un
+ * modèle libre d'inventer des labels en produit quinze en trois comptes rendus :
+ * « Urgent », « Très urgent », « Prioritaire », « À traiter vite ». Le projet se
+ * remplit d'étiquettes qui disent la même chose, aucun filtre ne trouve plus
+ * rien, et personne ne nettoiera. Un label hors de cette liste est écarté au
+ * serveur, comme une citation qu'on ne retrouve pas.
+ *
+ * Trois suffisent, et elles correspondent à ce qu'un compte rendu distingue
+ * réellement : ce qui presse, ce qui se répète, et ce qui n'attend rien de
+ * personne.
+ */
+export const LABELS_DE_QUALIFICATION = ["Urgent", "Rappel", "Information générale"];
+
+/** Ce que chacun veut dire — la même phrase pour le modèle et pour l'écran. */
+export const QUOI_DU_LABEL = {
+  Urgent: "Le document le marque urgent, ou fixe une échéance immédiate.",
+  Rappel: "Le point est redit d'un compte rendu à l'autre, ou porte la mention « pour rappel ».",
+  "Information générale": "Le document l'écrit pour information : il n'attend d'action de personne."
+};
+
+/** Tous les labels qu'un compte rendu peut poser. */
+export const LABELS_DU_CR = [LABEL_DU_CR, ...LABELS_DE_QUALIFICATION];
+
+/**
  * Deux noms de label désignent-ils le même label ?
  *
  * La casse et les accents ne comptent pas : la base elle-même refuse deux
@@ -67,6 +98,54 @@ export function labelDuCrDansLeProjet(labels = null) {
   ) ?? null;
 
   return { connu: true, existe: Boolean(trouve), label: trouve };
+}
+
+/**
+ * Les labels que ce compte rendu poserait, et ceux qu'il faudrait créer.
+ *
+ * « CR chantier » y est toujours : c'est la marque d'origine, et tout sujet venu
+ * d'un compte rendu la porte. Les autres ne viennent que des points où le
+ * document les dit — et ils ont déjà été ramenés à la liste fermée au serveur.
+ *
+ * @param {object[]} points la lecture assemblée
+ * @param {object[]|null} labelsDuProjet — `null` quand on n'a pas pu les lire
+ * @returns {{connu: boolean, poses: {nom: string, points: number, existe: boolean}[],
+ *   aCreer: string[]}}
+ */
+export function labelsAProposer(points = [], labelsDuProjet = null) {
+  const comptes = new Map([[LABEL_DU_CR, 0]]);
+
+  for (const point of Array.isArray(points) ? points : []) {
+    comptes.set(LABEL_DU_CR, comptes.get(LABEL_DU_CR) + 1);
+
+    for (const nom of Array.isArray(point?.labels) ? point.labels : []) {
+      const propre = texte(nom);
+      // La liste est fermée : ce qui n'en est pas ne se compte pas. Le serveur
+      // l'écarte déjà — ceci est la seconde porte, pas la première.
+      if (!LABELS_DE_QUALIFICATION.some((connu) => memeLabel(connu, propre))) continue;
+
+      const officiel = LABELS_DE_QUALIFICATION.find((connu) => memeLabel(connu, propre));
+      comptes.set(officiel, (comptes.get(officiel) ?? 0) + 1);
+    }
+  }
+
+  const connu = labelsDuProjet !== null && labelsDuProjet !== undefined;
+  const duProjet = Array.isArray(labelsDuProjet) ? labelsDuProjet : [];
+  const existeDeja = (nom) =>
+    duProjet.some((label) => memeLabel(label?.name, nom) || memeLabel(label?.label_key, nom));
+
+  const poses = [...comptes]
+    .filter(([, points]) => points > 0)
+    .map(([nom, points]) => ({ nom, points, existe: connu ? existeDeja(nom) : false }));
+
+  return {
+    connu,
+    poses,
+    // **Vide quand on ne sait pas**, et non « tous à créer » : annoncer la
+    // création d'un label qui existe déjà ferait promettre ce qui n'aura pas
+    // lieu (règle 5).
+    aCreer: connu ? poses.filter((label) => !label.existe).map((label) => label.nom) : []
+  };
 }
 
 /**

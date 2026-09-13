@@ -47,6 +47,21 @@ import { verifierLesCitations } from "./citation-verifiee.js";
 export { ECART, PHRASES_DE_LECART, pagesEnTexte } from "./citation-verifiee.js";
 
 /** Ce que le modèle doit rendre, et rien d'autre. */
+/**
+ * Les labels de qualification, et pourquoi la liste est **fermée**.
+ *
+ * Un modèle libre d'inventer des labels en produit quinze en trois comptes
+ * rendus : « Urgent », « Très urgent », « Prioritaire », « À traiter vite ». Le
+ * projet se remplit d'étiquettes qui disent la même chose, aucun filtre ne
+ * trouve plus rien, et personne ne nettoiera.
+ *
+ * **Cette liste est le double de celle du navigateur**, et c'est délibéré : une
+ * fonction Edge ne peut pas importer hors de `supabase/functions/`. Un test
+ * compare les deux et tombe dès qu'elles divergent — la seule façon, ici,
+ * d'avoir un nom qui vit à un seul endroit (règle 10).
+ */
+export const LABELS_DE_QUALIFICATION = ["Urgent", "Rappel", "Information générale"];
+
 export const SCHEMA_DES_SUJETS = {
   name: "sujets_du_compte_rendu",
   strict: true,
@@ -99,13 +114,24 @@ export const SCHEMA_DES_SUJETS = {
              * qu'il lui a été donné, et rien d'autre : un identifiant qu'on ne
              * lui a pas envoyé est écarté avant de sortir d'ici.
              */
+            /**
+             * Ce que le document dit de ce point, en labels.
+             *
+             * Une liste fermée — voir `LABELS_DE_QUALIFICATION`. Le schéma ne
+             * l'impose pas au modèle, qui la respecte à peu près ; le serveur,
+             * lui, écarte ce qui n'en est pas.
+             *
+             * « CR chantier » n'y figure pas : il est posé sur tout sujet venu
+             * d'un compte rendu, sans que le modèle ait à le dire.
+             */
+            labels: { type: "array", items: { type: "string" } },
             sujet_existant: { anyOf: [{ type: "string" }, { type: "null" }] },
             /** Pourquoi ce point continue ce sujet-là. Une phrase, sinon null. */
             raison_du_rapprochement: { anyOf: [{ type: "string" }, { type: "null" }] }
           },
           required: [
             "lot", "reference", "titre", "description", "qui", "echeance", "etat", "page",
-            "citation", "sujet_existant", "raison_du_rapprochement"
+            "citation", "labels", "sujet_existant", "raison_du_rapprochement"
           ]
         }
       },
@@ -193,6 +219,15 @@ export const CONSIGNES = [
   "Une même entreprise citée trois fois ne se relève qu'une fois, avec le nom de personne le plus complet que le document en donne.",
   "",
   "",
+  "LES LABELS :",
+  "Pour chaque point, `labels` dit ce que LE DOCUMENT en dit. TU NE PEUX EN UTILISER QUE TROIS, écrits exactement ainsi :",
+  "- `Urgent` : le document le marque urgent, ou fixe une échéance immédiate — « urgent », « sous 48 h », « avant la prochaine réunion », une mise en évidence en rouge sur le point lui-même.",
+  "- `Rappel` : le point est redit d'un compte rendu à l'autre, ou porte la mention « pour rappel », « rappel », « relance », « déjà signalé ».",
+  "- `Information générale` : le document l'écrit pour information, il n'attend d'action de personne — les consignes générales de chantier reprises de réunion en réunion en sont.",
+  "N'invente AUCUN autre label. Pas de « Prioritaire », pas de « À traiter », pas de « Important » : ce qui n'est pas dans la liste ci-dessus est écarté. Un projet qui accumule quinze étiquettes disant la même chose n'a plus de filtre qui fonctionne, et personne ne le nettoiera.",
+  "Un point peut n'en porter aucun : `labels` vaut alors la liste vide. C'est le cas le plus fréquent, et c'est très bien — n'en pose un que si le document le dit.",
+  "Ne pose jamais `Urgent` parce que le sujet te semble grave : tu relèves ce qui est écrit, tu ne juges pas le chantier.",
+  "",
   "LE RAPPROCHEMENT AVEC CE QUE LE PROJET SUIT DÉJÀ :",
   "Un compte rendu de chantier REPORTE. La douzième réunion reprend les points de la onzième, qui reprenait ceux de la dixième : un point reste écrit tant qu'il n'est pas soldé. Si on ne reconnaît pas qu'un point continue un sujet déjà ouvert, la douzième réunion ouvre douze fois la même chose.",
   "Quand la liste « CE QUE LE PROJET SUIT DÉJÀ » t'est donnée, remplis pour chaque point :",
@@ -259,6 +294,50 @@ export function sujetsDuProjetEnTexte(sujets = []) {
  *
  * @returns {{sujets: object[], ecartes: number}}
  */
+/**
+ * Les labels rendus, ramenés à la liste fermée.
+ *
+ * **La même porte que les citations, et le même refus.** Ce qui n'est pas dans
+ * la liste ne sort pas d'ici : un label inventé n'est pas une étiquette de trop,
+ * c'est une étiquette que le projet devra porter pour toujours, à côté de celle
+ * qui disait déjà la même chose.
+ *
+ * La casse et les accents ne comptent pas — « urgent » est `Urgent` — mais le
+ * label rendu porte l'écriture officielle : sans quoi le projet finirait avec
+ * « Urgent » et « urgent », que la base compte pour deux.
+ *
+ * @returns {{sujets: object[], ecartes: string[]}}
+ */
+export function verifierLesLabels({ sujets = [] } = {}) {
+  const aplati = (valeur) =>
+    String(valeur ?? "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+
+  const officiels = new Map(LABELS_DE_QUALIFICATION.map((nom) => [aplati(nom), nom]));
+  const ecartes = [];
+
+  const verifies = (Array.isArray(sujets) ? sujets : []).map((sujet) => {
+    const retenus = [];
+
+    for (const propose of Array.isArray(sujet?.labels) ? sujet.labels : []) {
+      const officiel = officiels.get(aplati(propose));
+      if (!officiel) {
+        if (String(propose ?? "").trim()) ecartes.push(String(propose).trim());
+        continue;
+      }
+      // Un point qui porte deux fois le même label ne le porte qu'une fois.
+      if (!retenus.includes(officiel)) retenus.push(officiel);
+    }
+
+    return { ...sujet, labels: retenus };
+  });
+
+  return { sujets: verifies, ecartes };
+}
+
 export function verifierLesRapprochements({ sujets = [], connus = [] } = {}) {
   const permis = new Set(
     (Array.isArray(connus) ? connus : [])
@@ -391,6 +470,9 @@ export function sujetsAuFormatDuMoteur(retenus = [], { sourceId = "" } = {}) {
       qui: String(ligne?.qui ?? "").trim() || null,
       echeance: String(ligne?.echeance ?? "").trim() || null,
       etat: String(ligne?.etat ?? "").trim() || null,
+      // Les labels que le document pose sur ce point, **vérifiés** : ramenés à
+      // la liste fermée, dans leur écriture officielle.
+      labels: Array.isArray(ligne?.labels) ? ligne.labels : [],
       // Le sujet que ce point continue, **vérifié** : il figure dans la liste
       // qu'on a envoyée, ou il vaut null.
       sujet_existant: String(ligne?.sujet_existant ?? "").trim() || null,
