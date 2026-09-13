@@ -119,6 +119,21 @@ restitution d'un compte rendu en croyant lire celle d'un autre, sans rien pour s
 apercevoir (règle 5) ; confondu avec le premier, on écraserait silencieusement du travail
 rangé.
 
+#### Le rangement attend la fusion *(corrigé)*
+
+La restitution se rangeait au moment où le modèle la rendait — avant que
+quiconque ait rien décidé, et sur un document qu'on venait peut-être de déposer
+pour voir. **Déposer un fichier dans le projet est une écriture**, et une
+écriture passe par une proposition (règle 1).
+
+Elle attend donc la fusion, avec le reste : les sujets, les lots, les labels, les
+objectifs. Ce qu'il faut pour la ranger — le projet, l'empreinte, le document, le
+Markdown paginé — voyage avec la lecture, et la proposition le dira en toutes
+lettres.
+
+Ce qui ne change pas : une restitution **déjà rangée se relit**, et ne se repaie
+pas. Relire est une lecture, pas une écriture.
+
 #### La pagination survit au rangement
 
 Le fichier porte un `<!-- page 3 -->` entre deux pages. Sans lui, le document relu n'aurait

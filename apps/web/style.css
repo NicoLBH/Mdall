@@ -24061,16 +24061,8 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .lecture-cr__rapproche.est-juge{border-left-color:var(--fgColor-accent, #4493f8);}
 .lecture-cr__rapproche-raison{color:var(--text);}
 
-/* Le label qu'un compte rendu poserait sur ses sujets. */
-.lecture-cr__label{
-  display:inline-block;
-  margin-right:6px;
-  padding:1px 8px;
-  border:1px solid var(--fgColor-accent, #4493f8);
-  border-radius:999px;
-  color:var(--fgColor-accent, #4493f8);
-  white-space:nowrap;
-}
+/* Le label qu un compte rendu poserait : sa couleur vient du service. */
+.lecture-cr__label{margin-right:6px;}
 
 /* Ce qu'un compte rendu apporterait au projet, hors sujets. */
 .lecture-cr__apport{display:flex;flex-direction:column;gap:14px;}
@@ -24161,3 +24153,23 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .lecture-cr__objectif-compte{color:var(--muted);font-size:12.5px;}
 /* Une date comptée ou complétée n'est pas une date écrite : elle se dit. */
 .lecture-cr__objectif-sur{color:var(--fgColor-attention, #d29922);}
+
+/* Le titre de l'utilitaire et sa seule sortie, sur la même ligne. */
+.lecture-cr__entete-ligne{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.lecture-cr__titre{flex:1;min-width:0;}
+.lecture-cr__entete-actions{display:flex;align-items:center;gap:8px;margin-left:auto;}
+
+/* Les trois caractéristiques d'un apport, chacune avec son icône. */
+.lecture-cr__apport h4{display:flex;align-items:center;gap:6px;}
+
+/* Un label porte la couleur qu'il aura dans le projet. */
+.lecture-cr__label{
+  display:inline-flex;
+  align-items:center;
+  padding:1px 8px;
+  border:1px solid var(--border2);
+  border-radius:999px;
+  font-size:12px;
+  white-space:nowrap;
+}
+.lecture-cr__label.est-manquant{border-style:dashed;}

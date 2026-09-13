@@ -103,7 +103,8 @@ function unEtat(surcharge = {}) {
 
   return {
     phase: "vide", dit: "", lecture: null, pagesLues: [], fichier: null, confrontes: null,
-    labels: null, lots: null, objectifs: null, deplie: "", descriptions: {}, motif: "", panne: "",
+    labels: null, lots: null, objectifs: null, branches: [], deplie: "",
+    descriptions: {}, motif: "", panne: "",
     onglet: "restitution",
     ...surcharge,
     md
@@ -526,24 +527,29 @@ test("plus rien ne parle d'un outil de restitution", () => {
 /* ── Le rangement, tel qu'il se dit à l'écran ────────────────────────────── */
 
 /**
- * **C'est ce qui décide si l'on ose rouvrir l'écran.** Une restitution rangée
- * ne se refera pas au prochain dépôt, donc ne se repaiera pas. Le taire
- * laisserait croire que regarder coûte deux centimes à chaque fois.
+ * **Déposer un fichier est une écriture, et une écriture se signe.** La
+ * restitution se rangeait au moment où le modèle la rendait — avant que
+ * quiconque ait rien décidé, et sur un document qu'on venait peut-être de
+ * déposer pour voir. Elle attend maintenant la fusion, et l'écran le dit.
  */
-test("une restitution rangée le dit, et dit où", () => {
+test("une restitution à ranger annonce qu'elle attend la fusion", () => {
   const html = renderLaLecture(unEtat({
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
     md: uneRestitution({
       modele: unCoteFait(REFAITES_MODELE, {
-        rangement: { relue: false, etat: RANGEE.ABSENTE, range: true, dossier: "CR_07", motif: "" }
+        rangement: {
+          relue: false, etat: RANGEE.ABSENTE, range: false, dossier: "", motif: "",
+          aRanger: { projectId: "projet", empreinte: "abc", markdown: "# Réunion" }
+        }
       })
     })
   }));
 
   assert.match(html, /lecture-cr__rangement/);
-  assert.match(html, /rangée dans Fichiers/);
-  assert.match(html, /CR_07/);
-  assert.match(html, /ne la repaiera plus/);
+  assert.match(html, /sera rangée dans Fichiers.{0,40}à la fusion de la proposition/s);
+  assert.match(html, /une écriture se\s+signe/);
+  // Et ce n'est pas encore fait : le dire au passé serait faux.
+  assert.doesNotMatch(html, /a été rangée/);
 });
 
 /**
@@ -577,13 +583,16 @@ test("une restitution périmée explique pourquoi on a rappelé le modèle", () 
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
     md: uneRestitution({
       modele: unCoteFait(REFAITES_MODELE, {
-        rangement: { relue: false, etat: RANGEE.PERIMEE, range: true, dossier: "CR_07", motif: "" }
+        rangement: {
+          relue: false, etat: RANGEE.PERIMEE, range: false, dossier: "CR_07", motif: "",
+          aRanger: { projectId: "projet", empreinte: "zzz", markdown: "# Réunion" }
+        }
       })
     })
   }));
 
   assert.match(html, commeAffichee(PHRASES_DU_RANGEMENT[RANGEE.PERIMEE]));
-  assert.match(html, /rangée dans Fichiers/);
+  assert.match(html, /sera rangée dans Fichiers/);
 });
 
 /**
@@ -591,22 +600,21 @@ test("une restitution périmée explique pourquoi on a rappelé le modèle", () 
  * et le prochain dépôt la refera. C'est ennuyeux, pas grave — et il faut le
  * savoir avant de redéposer (règle 5).
  */
-test("un rangement raté se dit, avec son motif", () => {
+test("un document dont il n'y a rien à ranger le dit", () => {
   const html = renderLaLecture(unEtat({
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
     md: uneRestitution({
       modele: unCoteFait(REFAITES_MODELE, {
         rangement: {
           relue: false, etat: RANGEE.ABSENTE, range: false, dossier: "",
-          motif: "storage upload failed (403)"
+          motif: "aucun projet", aRanger: null
         }
       })
     })
   }));
 
-  assert.match(html, /n'a pas pu être rangée/);
-  assert.match(html, /403/);
-  assert.match(html, /la repaiera/);
+  assert.match(html, /rien à ranger pour ce document/);
+  assert.match(html, /aucun projet/);
 });
 
 /** Tant que la restitution n'est pas faite, il n'y a rien à dire du rangement. */
@@ -998,4 +1006,85 @@ test("aucune échéance, aucun bloc d'objectifs", () => {
 
   assert.doesNotMatch(html, /lecture-cr__objectifs/);
   assert.doesNotMatch(html, /Les objectifs/);
+});
+
+/* ── L'en-tête, sa sortie, et les couleurs ───────────────────────────────── */
+
+/**
+ * **Le bouton était tout en bas**, sous douze pages d'analyse, avec son propre
+ * dessin. Il est maintenant en haut à droite, et c'est le composant commun aux
+ * trois autres utilitaires — un écran qui écrirait le sien finirait par avoir
+ * une quatrième issue.
+ */
+test("la seule sortie de l'écran est en haut, et s'éteint tant qu'il n'y a rien", () => {
+  const vide = renderLaLecture(unEtat());
+  assert.match(vide, /lecture-cr__entete-actions/);
+  assert.match(vide, /lectureCrTransformer/);
+  assert.match(vide, /disabled/);
+
+  const lue = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution()
+  }));
+  // Allumé une fois l'analyse rendue — et plus de bouton en bas.
+  assert.doesNotMatch(lue, /data-lecture-cr-proposer/);
+  assert.doesNotMatch(lue, /En faire une proposition/);
+});
+
+/** Le bouton reste éteint tant que la lecture n'a pas abouti. */
+test("transformer reste éteint pendant la lecture et après une panne", () => {
+  for (const vue of [
+    unEtat({ phase: "lecture", dit: "Restitution", fichier: { name: "CR_07.pdf" } }),
+    unEtat({ phase: "echec", motif: "La lecture a été refusée.", fichier: { name: "CR_07.pdf" } })
+  ]) {
+    const html = renderLaLecture(vue);
+    // Le bouton principal suit l'ouverture du composant : on regarde ce qui
+    // vient après, et pas la page entière — « disabled » s'y trouve ailleurs.
+    const depart = html.indexOf("lectureCrTransformer");
+    assert.ok(depart > 0, "le bouton Transformer n'est pas dessiné");
+    const bouton = html.slice(depart, depart + 700);
+    assert.match(bouton, /disabled/, `« ${vue.phase} » allume Transformer`);
+  }
+});
+
+/**
+ * **Les couleurs viennent du service, pas de l'écran.** Ce sont elles que la
+ * proposition écrira en créant le label : les choisir ici et les réécrire
+ * là-bas ferait un label d'une teinte dans l'analyse et d'une autre dans le
+ * projet (règle 4).
+ */
+test("chaque label porte la couleur qu'il aura dans le projet", async () => {
+  const { COULEURS_DU_LABEL, LABEL_DU_CR } = await import("../../../services/label-du-cr.js");
+  const lecture = uneLecture();
+  lecture.points = lecture.points.map((point) => ({ ...point, labels: ["Urgent"] }));
+
+  const html = renderLaLecture(unEtat({
+    phase: "lue", pagesLues: PAGES, onglet: "analyse", md: uneRestitution(), lots: [], labels: [],
+    confrontes: lecture.points.map((point) => ({ ...point, sort: SORT.NOUVEAU, sujet: null, par: "" })),
+    lecture
+  }));
+
+  for (const nom of [LABEL_DU_CR, "Urgent"]) {
+    assert.ok(html.includes(COULEURS_DU_LABEL[nom].texte),
+      `« ${nom} » ne porte pas sa couleur`);
+  }
+});
+
+/** Les trois caractéristiques se repèrent à l'œil, pas à la lecture. */
+test("lots, labels et objectifs portent chacun leur icône", () => {
+  const lecture = uneLecture();
+  lecture.identite.tenueLe = "10/12/2025";
+  lecture.points = lecture.points.map((point) => ({
+    ...point, lot: "02 — GROS ŒUVRE", labels: ["Urgent"], echeance: "30/04/2026"
+  }));
+
+  const html = renderLaLecture(unEtat({
+    phase: "lue", pagesLues: PAGES, onglet: "analyse", md: uneRestitution(),
+    lots: [], labels: [], objectifs: [],
+    confrontes: lecture.points.map((point) => ({ ...point, sort: SORT.NOUVEAU, sujet: null, par: "" })),
+    lecture
+  }));
+
+  for (const icone of ["stack", "tag", "milestone"]) {
+    assert.match(html, new RegExp(`#${icone}"`), `l'icône « ${icone} » manque`);
+  }
 });

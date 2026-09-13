@@ -46,8 +46,10 @@ import {
 } from "../../../services/reconstitution-markdown.js";
 import { PHRASES_DU_RANGEMENT, RANGEE } from "../../../services/restitution-rangee.js";
 import {
-  LABEL_DU_CR, QUOI_DU_LABEL, labelDuCrDansLeProjet, labelsAProposer, phraseDuLabel
+  LABEL_DU_CR, QUOI_DU_LABEL, labelDuCrDansLeProjet, labelsAProposer, phraseDuLabel, styleDuLabel
 } from "../../../services/label-du-cr.js";
+import { TRANSFORMER, brancheDeLAction, renderTransformer } from "../../ui/transformer.js";
+import { branchesOuvertes } from "../../../services/branches-ouvertes.js";
 import { lotsAProposer, phraseDesLots } from "../../../services/lots-du-cr.js";
 import {
   PHRASES_DU_SUR, SUR, dateEnFrancais, objectifsAProposer, phraseDesObjectifs
@@ -121,6 +123,14 @@ const etat = {
    * n'est pas « il n'y en a aucun » (règle 5).
    */
   objectifs: null,
+  /**
+   * Les propositions ouvertes, pour le menu « Transformer ».
+   *
+   * `null` n'est pas « aucune » : le menu affiche alors une ligne éteinte qui
+   * le dit, plutôt que de faire ouvrir une seconde proposition à côté de celle
+   * qu'on ne voyait pas (règle 5).
+   */
+  branches: [],
   /** Le sujet dont on regarde le détail, pour juger si c'est bien le même. */
   deplie: "",
   /**
@@ -205,12 +215,41 @@ function unCote() {
      * `etat` : ce que le rangement portait avant cette lecture. Voir `RANGEE`.
      * `range` : a-t-elle été rangée à l'issue de celle-ci.
      */
-    rangement: { relue: false, etat: "", range: false, dossier: "", motif: "" }
+    rangement: {
+      relue: false, etat: "", range: false, dossier: "", motif: "",
+      /**
+       * Ce qu'il faudra pour la ranger, **à la fusion** — pas avant.
+       *
+       * `null` quand elle est déjà rangée : il n'y a alors rien à écrire.
+       */
+      aRanger: null
+    }
   };
 }
 
+/**
+ * Où dessiner — su au niveau du module, et non capturé.
+ *
+ * ## Le travail se perdait quand on partait
+ *
+ * Une lecture dure une minute et demie. Pendant ce temps, on va voir ailleurs,
+ * et c'est normal : obliger quelqu'un à rester devant son écran est un défaut,
+ * pas une contrainte technique.
+ *
+ * Or l'Atelier se redessine quand on y revient : le panneau devient un
+ * **nouvel élément**, vide. La lecture en cours, elle, continuait d'écrire dans
+ * l'ancien — détaché du document, invisible pour toujours. On avait payé deux
+ * appels dont il ne restait rien à l'écran.
+ *
+ * L'hôte courant vit donc ici : chaque redessin va là où l'écran est
+ * *maintenant*, quel que soit l'élément qui existait quand la lecture a
+ * commencé.
+ */
+let hoteCourant = null;
+
 export function renderLectureDesCr(hote) {
   if (!hote) return;
+  hoteCourant = hote;
   hote.innerHTML = renderLaLecture(etat);
   brancher(hote);
 }
@@ -230,18 +269,46 @@ export function renderLectureDesCr(hote) {
 export function renderLaLecture(vue = etat) {
   return `
     <div class="lecture-cr">
-      ${renderEntete()}
+      ${renderEntete(vue)}
       ${renderDepot(vue)}
       ${renderCorps(vue)}
     </div>
   `;
 }
 
-function renderEntete() {
+/**
+ * L'en-tête, et la seule sortie de cet écran.
+ *
+ * ## Pourquoi le bouton est ici, et non en bas
+ *
+ * Il était sous l'analyse, tout en bas, avec sa propre phrase et son propre
+ * dessin. Deux conséquences : il fallait faire défiler douze pages pour le
+ * trouver, et il ne ressemblait à aucun des trois autres utilitaires — qui
+ * portent tous « Transformer » en haut à droite, avec le même menu.
+ *
+ * C'est le composant commun qui est posé ici (`views/ui/transformer.js`) : ses
+ * trois issues — ouvrir un sujet, faire une proposition, ajouter à une
+ * proposition ouverte — sont les mêmes partout, et un écran qui écrirait les
+ * siennes finirait par en avoir une quatrième.
+ *
+ * **Éteint tant que l'analyse n'est pas rendue.** Transformer une lecture qui
+ * n'a pas eu lieu proposerait une liste vide, et il n'y a rien de plus difficile
+ * à comprendre qu'une proposition qui ne propose rien.
+ */
+function renderEntete(vue = etat) {
+  const pret = vue.phase === "lue" && Boolean(vue.lecture);
+
   return `
     <header class="lecture-cr__entete">
       <div class="lecture-cr__entete-ligne">
         <h2 class="lecture-cr__titre">Lecture d'un compte rendu de chantier</h2>
+        <div class="lecture-cr__entete-actions">
+          ${renderTransformer({
+            id: "lectureCrTransformer",
+            disabled: !pret,
+            ouvertes: vue.branches
+          })}
+        </div>
       </div>
       <p class="lecture-cr__mot">
         Déposez un compte rendu : l'écran le <strong>restitue d'abord en Markdown</strong> —
@@ -443,7 +510,7 @@ function renderAnalyse(vue) {
     ${renderConfrontation(vue.confrontes, vue.lecture, vue.labels)}
     ${renderCeQueLeCrApporte(vue)}
     ${renderRubriques(vue)}
-    ${renderSuite()}
+    ${renderSuite(vue)}
   `;
 }
 
@@ -599,17 +666,19 @@ function renderRangement(cote) {
     ? `${escapeHtml(PHRASES_DU_RANGEMENT[RANGEE.PERIMEE])} `
     : "";
 
-  if (rangement.range) {
-    return `<p class="lecture-cr__rangement est-bon">
-      ${avant}Restitution rangée dans Fichiers, à côté du PDF${ou} : redéposer ce document ne la
-      refera plus, et ne la repaiera plus.
+  if (rangement.aRanger) {
+    return `<p class="lecture-cr__rangement">
+      ${avant}Cette restitution <strong>sera rangée dans Fichiers à la fusion de la proposition</strong>,
+      à côté du PDF : déposer un fichier dans le projet est une écriture, et une écriture se
+      signe. Tant qu'elle n'est pas fusionnée, redéposer ce document la referait — et la
+      repaierait.
     </p>`;
   }
 
   return `<p class="lecture-cr__rangement est-douteux">
-    ${avant}La restitution n'a pas pu être rangée${
+    ${avant}Il n'y a rien à ranger pour ce document${
       rangement.motif ? ` (${escapeHtml(rangement.motif)})` : ""
-    } : elle est à l'écran, mais le prochain dépôt de ce document la refera — et la repaiera.
+    }.
   </p>`;
 }
 
@@ -906,7 +975,8 @@ function renderLabelDuCr(labels) {
 
   return `
     <p class="lecture-cr__mot${etat.connu ? "" : " est-douteux"}">
-      <span class="lecture-cr__label mono-small">${escapeHtml(LABEL_DU_CR)}</span>
+      <span class="lecture-cr__label mono-small"
+        style="${escapeHtml(styleDuLabel(LABEL_DU_CR))}">${escapeHtml(LABEL_DU_CR)}</span>
       ${escapeHtml(phraseDuLabel(etat))}
     </p>
   `;
@@ -966,7 +1036,7 @@ function renderLesLots(points, lotsDuProjetLus) {
 
   return `
     <div class="lecture-cr__apport-bloc">
-      <h4>Les lots</h4>
+      <h4>${svgIcon("stack", { className: "octicon" })} Les lots</h4>
       <p class="lecture-cr__mot${proposition.connu ? "" : " est-douteux"}">
         ${escapeHtml(phraseDesLots(proposition))}
       </p>
@@ -986,12 +1056,12 @@ function renderLesLabels(points, labelsDuProjetLus, lecture) {
 
   return `
     <div class="lecture-cr__apport-bloc">
-      <h4>Les labels</h4>
+      <h4>${svgIcon("tag", { className: "octicon" })} Les labels</h4>
       <div class="lecture-cr__lots">
         ${proposition.poses.map((label) => `
           <span class="lecture-cr__label${
             proposition.connu && !label.existe ? " est-manquant" : ""
-          }" title="${escapeHtml(
+          }" style="${escapeHtml(styleDuLabel(label.nom))}" title="${escapeHtml(
             `${QUOI_DU_LABEL[label.nom] ?? "La marque d'origine : tout sujet venu d'un compte rendu la porte."} — ${
               label.points} point${label.points > 1 ? "s" : ""}`
           )}">${escapeHtml(label.nom)}</span>
@@ -1047,7 +1117,7 @@ function renderLesObjectifs(points, objectifsDuProjet, lecture) {
 
   return `
     <div class="lecture-cr__apport-bloc">
-      <h4>Les objectifs</h4>
+      <h4>${svgIcon("milestone", { className: "octicon" })} Les objectifs</h4>
       <p class="lecture-cr__mot${proposition.connu ? "" : " est-douteux"}">
         ${escapeHtml(phraseDesObjectifs(proposition))}
       </p>
@@ -1348,17 +1418,29 @@ function renderPoint(point, sort) {
  * ligne par ligne. Un utilitaire qui ouvrirait les sujets lui-même court-
  * circuiterait la seule porte que Mdall possède (règle 1).
  */
-function renderSuite() {
+/**
+ * Ce que la suite fera, et ce qu'elle écrira.
+ *
+ * Le bouton est parti en haut à droite, avec les trois autres utilitaires. Reste
+ * ce qu'il faut savoir avant de cliquer — et notamment que **le fichier `.md`
+ * n'est pas encore rangé** : il le sera à la fusion, avec le reste.
+ */
+function renderSuite(vue = etat) {
+  const nom = texte(vue.fichier?.name) || texte(vue.lecture?.nom);
+
   return `
     <section class="lecture-cr__suite">
       <p class="lecture-cr__mot">
-        La suite — proposer d'ouvrir les nouveaux points et de compléter les sujets qu'ils
-        continuent — passe par une proposition. Rien n'est ouvert depuis cet écran.
+        La suite — ouvrir les nouveaux points, compléter les sujets qu'ils continuent, ajouter les
+        lots manquants, créer les labels et les objectifs — passe par <strong>Transformer</strong>,
+        en haut à droite. Rien n'est ouvert depuis cet écran.
       </p>
-      <button type="button" class="gh-btn gh-btn--primary" disabled data-lecture-cr-proposer>
-        En faire une proposition
-      </button>
-      <span class="lecture-cr__bientot mono-small">Pas encore branché : cet écran sert d'abord à juger la lecture.</span>
+      <p class="lecture-cr__mot">
+        ${svgIcon("file", { className: "octicon" })}
+        La restitution en Markdown${nom ? ` de <strong>${escapeHtml(nom)}</strong>` : ""} sera rangée
+        dans Fichiers <strong>à la fusion de la proposition</strong>, et pas avant : déposer un
+        fichier dans le projet est une écriture comme une autre. La proposition le dira.
+      </p>
     </section>
   `;
 }
@@ -1380,6 +1462,11 @@ function brancher(hote) {
   if (!zone) return;
 
   detacher?.();
+
+  // Les propositions ouvertes se relisent au premier dessin, et le rappel
+  // redessine quand la réponse arrive — le menu les nomme, il ne dit pas
+  // « une proposition ouverte » sans dire laquelle.
+  etat.branches = branchesOuvertes(() => redessiner(hote));
 
   const champ = hote.querySelector("[data-lecture-cr-fichier]");
   const surLeChamp = (evenement) => {
@@ -1419,6 +1506,23 @@ function brancher(hote) {
   };
   hote.addEventListener("click", surLeClic);
 
+  /**
+   * « Transformer » — la seule sortie de cet écran.
+   *
+   * Les trois issues sont celles des autres utilitaires : ouvrir un sujet,
+   * faire une proposition, ajouter à une proposition ouverte. Aucune n'écrit
+   * dans la mémoire du projet (règle 1) — et c'est aussi à la fusion que la
+   * restitution sera rangée dans Fichiers.
+   */
+  const surLAction = (evenement) => {
+    const quoi = evenement.detail?.action;
+    const branche = brancheDeLAction(quoi);
+    if (quoi === TRANSFORMER.SUJET || quoi === TRANSFORMER.PROPOSITION || branche) {
+      void transformer(hote, { sujet: quoi === TRANSFORMER.SUJET, branche });
+    }
+  };
+  hote.addEventListener("ghaction:action", surLAction);
+
   // Le presse-papiers de la restitution : le texte ne voyage pas dans un
   // attribut HTML — un CCTP de quarante pages y tiendrait mal.
   // Deux choses se copient à cet écran : la restitution, et le diagnostic d'une
@@ -1443,6 +1547,7 @@ function brancher(hote) {
   detacher = () => {
     champ?.removeEventListener("change", surLeChamp);
     hote.removeEventListener("click", surLeClic);
+    hote.removeEventListener("ghaction:action", surLAction);
     detacherLaZone?.();
     detacher = null;
   };
@@ -1740,9 +1845,9 @@ async function lireLaDescription(hote, subjectId) {
 async function restituerOuRelire(hote) {
   const cote = etat.md.modele;
 
-  const {
-    empreinteDesPages, rangerLaRestitution, relireLaRestitution, restitutionReutilisable
-  } = await import("../../../services/ranger-la-restitution.js");
+  const { empreinteDesPages, relireLaRestitution, restitutionReutilisable } = await import(
+    "../../../services/ranger-la-restitution.js"
+  );
 
   const empreinte = await empreinteDesPages(etat.pagesLues).catch(() => "");
   const projectId = await projetCourant();
@@ -1766,18 +1871,25 @@ async function restituerOuRelire(hote) {
   await restituerParLeModele(hote);
   if (cote.phase !== "fait") return;
 
-  etat.dit = "Rangement de la restitution dans Fichiers";
-  redessiner(hote);
-
-  const range = await rangerLaRestitution({
-    projectId, fichier: etat.fichier, empreinte, markdown: enFichierMarkdown(cote.pages)
-  });
-
+  /**
+   * **Le rangement n'a plus lieu ici.**
+   *
+   * Déposer un fichier dans le projet est une écriture, et une écriture passe
+   * par une proposition (règle 1). La restitution se rangeait au moment où le
+   * modèle la rendait — avant que quiconque ait rien décidé, et sur un document
+   * qu'on venait peut-être de déposer pour voir.
+   *
+   * Elle attend donc la fusion, avec le reste : les sujets, les lots, les
+   * labels, les objectifs. Ce qu'il faut pour la ranger — le projet,
+   * l'empreinte, le document, le Markdown paginé — voyage avec la lecture, et
+   * la proposition le dit en toutes lettres.
+   *
+   * Ce qui ne change pas : une restitution **déjà rangée** se relit, et ne se
+   * repaie pas. Relire est une lecture, pas une écriture.
+   */
   cote.rangement = {
     ...cote.rangement,
-    range: range.range,
-    dossier: texte(range.dossier?.name),
-    motif: range.range ? "" : range.motif
+    aRanger: { projectId, empreinte, markdown: enFichierMarkdown(cote.pages) }
   };
   redessiner(hote);
 }
@@ -1868,6 +1980,33 @@ function garnirLeCote(cote, pages) {
 }
 
 /**
+ * « Transformer » — et ce qu'il ne fait pas encore.
+ *
+ * ## Pourquoi il dit non, et pourquoi il le dit fort
+ *
+ * Le bouton est en place, à sa place, avec ses trois issues. Ce qui n'existe
+ * pas encore, c'est la **rédaction** de la proposition : quels items pour les
+ * sujets à ouvrir, pour ceux qu'on relance, pour les lots, les labels, les
+ * objectifs — et pour le fichier `.md` à ranger. C'est l'étape 8 du plan, et
+ * elle demande d'être écrite, pas bricolée.
+ *
+ * Un bouton qui ne ferait rien serait pire qu'un bouton absent : on cliquerait,
+ * il ne se passerait rien, et l'on croirait que la proposition est partie. Il
+ * le dit donc en toutes lettres, avec ce qu'elle portera quand elle existera.
+ */
+async function transformer(hote, { sujet = false, branche = "" } = {}) {
+  const quoi = sujet ? "Ouvrir un sujet" : (branche ? "Ajouter à cette proposition" : "Faire une proposition");
+
+  echouer(
+    hote,
+    `${quoi} : pas encore branché depuis cet écran.`,
+    "La rédaction de la proposition — sujets à ouvrir, sujets à relancer, lots manquants, "
+    + "labels à créer, objectifs, et le rangement du fichier .md dans Fichiers — reste à écrire. "
+    + "C'est l'étape 8 du plan de lecture d'un compte rendu."
+  );
+}
+
+/**
  * Une panne, dite — sans effacer ce qui est arrivé avant elle.
  *
  * **L'écran se vidait.** Une analyse qui tombait après une restitution réussie
@@ -1895,16 +2034,21 @@ function echouer(hote, motif, panne = "") {
  * console : c'est là qu'on la lira.
  */
 function redessiner(hote) {
-  if (!hote?.isConnected) return;
+  // **L'hôte courant l'emporte sur celui qu'on nous passe.** Celui-là a pu être
+  // remplacé pendant que la lecture tournait : l'Atelier se redessine quand on
+  // y revient, et continuer d'écrire dans l'ancien élément reviendrait à
+  // travailler pour personne.
+  const cible = hoteCourant?.isConnected ? hoteCourant : hote;
+  if (!cible?.isConnected) return;
 
   try {
-    hote.innerHTML = renderLaLecture(etat);
+    cible.innerHTML = renderLaLecture(etat);
   } catch (erreur) {
     console.error("[lecture-cr] l'écran n'a pas pu se dessiner", erreur);
-    hote.innerHTML = renderEcranEnPanne(erreur);
+    cible.innerHTML = renderEcranEnPanne(erreur);
   }
 
-  brancher(hote);
+  brancher(cible);
 }
 
 /**

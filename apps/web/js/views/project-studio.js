@@ -341,8 +341,12 @@ export function renderProjectStudio(root) {
   if (solidityArkoliaRoot) renderSolidityArkolia(solidityArkoliaRoot);
   if (seismicGeneralRoot) renderSeismicGeneral(seismicGeneralRoot);
   if (ctContinuityLabRoot) renderCtContinuityLab(ctContinuityLabRoot);
-  // La lecture ne se dessine qu'à la venue : elle n'a rien à montrer tant
-  // qu'aucun document n'est déposé, et son état survit au redessin.
+  // **La lecture se dessine au montage, comme les autres.** Elle ne le faisait
+  // qu'à la venue, au motif qu'elle n'a rien à montrer tant qu'aucun document
+  // n'est déposé. C'était faux dès qu'on revenait à l'Atelier pendant une
+  // lecture : le panneau était neuf et vide, et la lecture en cours écrivait
+  // dans l'ancien élément, détaché. On avait payé deux appels pour rien.
+  if (lectureCrRoot) renderLectureDesCr(lectureCrRoot);
   if (variablesRoot) renderVariablesMutualisees(variablesRoot);
   if (conflitsRoot) renderResolutionConflits(conflitsRoot);
 

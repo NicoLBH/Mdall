@@ -66,6 +66,45 @@ export const QUOI_DU_LABEL = {
 export const LABELS_DU_CR = [LABEL_DU_CR, ...LABELS_DE_QUALIFICATION];
 
 /**
+ * La couleur de chaque label, décidée ici et nulle part ailleurs.
+ *
+ * ## Pourquoi elles vivent avec les noms
+ *
+ * `project_labels` porte trois couleurs par label — texte, fond, bordure. Ce
+ * sont elles que la proposition écrira en créant le label, et ce sont elles que
+ * l'écran affiche avant. Les choisir à l'écran et les réécrire à la création
+ * ferait deux jeux de couleurs : le label apparaîtrait d'une teinte dans
+ * l'analyse et d'une autre dans le projet, sans que rien ne l'explique
+ * (règle 4).
+ *
+ * ## Pourquoi celles-là
+ *
+ * Elles disent ce que le label dit. Le rouge pour ce qui presse, l'ambre pour
+ * ce qui se répète, le gris pour ce qui n'attend rien de personne, le bleu pour
+ * la marque d'origine — qui n'est pas un jugement et ne doit pas crier.
+ */
+export const COULEURS_DU_LABEL = {
+  [LABEL_DU_CR]: { texte: "#4493f8", fond: "rgba(68, 147, 248, .12)", bordure: "rgba(68, 147, 248, .45)" },
+  Urgent: { texte: "#f85149", fond: "rgba(248, 81, 73, .12)", bordure: "rgba(248, 81, 73, .45)" },
+  Rappel: { texte: "#d29922", fond: "rgba(210, 153, 34, .12)", bordure: "rgba(210, 153, 34, .45)" },
+  "Information générale": { texte: "#8b949e", fond: "rgba(139, 148, 158, .12)", bordure: "rgba(139, 148, 158, .4)" }
+};
+
+/**
+ * La couleur d'un label, prête à poser sur un élément.
+ *
+ * Un label qu'on ne connaît pas rend "" : il ne se colore pas plutôt que de
+ * prendre une couleur au hasard, qui le ferait passer pour l'un des trois.
+ */
+export function styleDuLabel(nom = "") {
+  const couleurs = COULEURS_DU_LABEL[texte(nom)]
+    ?? COULEURS_DU_LABEL[LABELS_DU_CR.find((connu) => memeLabel(connu, nom))];
+
+  if (!couleurs) return "";
+  return `color:${couleurs.texte};background:${couleurs.fond};border-color:${couleurs.bordure};`;
+}
+
+/**
  * Deux noms de label désignent-ils le même label ?
  *
  * La casse et les accents ne comptent pas : la base elle-même refuse deux
