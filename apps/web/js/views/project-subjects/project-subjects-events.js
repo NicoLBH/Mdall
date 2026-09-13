@@ -38,6 +38,9 @@ export function createProjectSubjectsEvents(config) {
     // lisent pour poser un jeton, ils ne les recalculent pas.
     getChampsDesSujets = () => [],
     getRequeteDesSujets = () => "",
+    // L'onglet Situations est une page voisine, pas une sous-vue des Sujets :
+    // c'est l'écran qui sait comment y aller.
+    ouvrirLesSituations = () => {},
     // Les recherches épinglées et le repli du rail vivent avec l'écran : les
     // gestes les appellent, ils ne les refont pas.
     epinglerLaRechercheDesSujets = () => {},
@@ -5835,6 +5838,26 @@ export function createProjectSubjectsEvents(config) {
     });
 
     root.addEventListener("click", (event) => {
+      // **Les autres écrans du domaine**, depuis le rail. Ils ne filtrent
+      // rien : ils changent de page. Une sous-vue est une page des Sujets ;
+      // les Situations sont un onglet à part, et le lien y mène.
+      const sousVue = event.target.closest?.("[data-sujets-sousvue]");
+      if (sousVue) {
+        event.preventDefault();
+        resetObjectiveEditState();
+        store.situationsView.subjectsSubview = String(sousVue.dataset.sujetsSousvue || "subjects");
+        store.situationsView.selectedObjectiveId = "";
+        store.situationsView.showTableOnly = true;
+        rerenderPanels();
+        return;
+      }
+
+      if (event.target.closest?.("[data-sujets-ecran]")) {
+        event.preventDefault();
+        ouvrirLesSituations();
+        return;
+      }
+
       if (event.target.closest?.("[data-sujets-vider]")) {
         event.preventDefault();
         poserLaRequeteDesSujets("");

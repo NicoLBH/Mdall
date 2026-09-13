@@ -17,7 +17,8 @@ const VOCABULAIRE = {
   labels: [{ key: "l-1", name: "CR chantier" }, { key: "l-2", name: "Urgent" }],
   objectifs: [{ id: "o-1", title: "Livraison lot 3" }],
   lots: [{ id: "lot-3", name: "03 Gros œuvre" }],
-  personnes: [{ id: "p-1", name: "J. Dupanloup" }, { id: "p-2", name: "M. Cambuzat" }]
+  personnes: [{ id: "p-1", name: "J. Dupanloup" }, { id: "p-2", name: "M. Cambuzat" }],
+  situations: [{ id: "si-1", title: "Suivi du chantier" }]
 };
 
 const SUJETS = [
@@ -41,7 +42,60 @@ const retenus = (requete, options = {}) =>
 
 test("les champs couvrent ce que le projet porte", () => {
   assert.deepEqual(champs.map((champ) => champ.key),
-    ["statut", "priorité", "bloqué", "label", "objectif", "lot", "assigné"]);
+    ["statut", "priorité", "bloqué", "label", "objectif", "lot",
+      "assigné", "auteur", "mention", "situation", "activité"]);
+});
+
+/**
+ * **Qui a ouvert le sujet, et non qui le traite.** Les deux se confondent
+ * souvent et divergent toujours au moment où ça compte : on cherche ce qu'on a
+ * soi-même relevé, pas ce qu'on doit faire.
+ */
+test("l'auteur, la mention et l'assigné sont trois champs distincts", () => {
+  const sujets = [
+    { id: "a", title: "A" }, { id: "b", title: "B" }, { id: "c", title: "C" }
+  ];
+  const meta = {
+    a: { assignes: ["p-1"] }, b: { auteurs: ["p-1"] }, c: { mentions: ["p-1"] }
+  };
+  const par = (requete) => sujetsFiltres({ sujets, requete, champs, meta, moi: "p-1" })
+    .sujets.map((sujet) => sujet.id);
+
+  assert.deepEqual(par("assigné:moi"), ["a"]);
+  assert.deepEqual(par("auteur:moi"), ["b"]);
+  assert.deepEqual(par("mention:moi"), ["c"]);
+});
+
+/**
+ * **On lit la dernière activité, pas la création.** Un sujet ouvert il y a six
+ * mois et commenté hier a bougé ; l'inverse n'est pas vrai.
+ */
+test("l'activité récente se lit sur ce qui a bougé en dernier", () => {
+  const maintenant = Date.parse("2026-02-01T00:00:00Z");
+  const sujets = [
+    { id: "hier", title: "A", updated_at: "2026-01-31T00:00:00Z", created_at: "2020-01-01" },
+    { id: "vieux", title: "B", updated_at: "2025-06-01T00:00:00Z" },
+    { id: "neuf-mais-mort", title: "C", created_at: "2026-01-30T00:00:00Z", updated_at: "2025-01-01" }
+  ];
+
+  const retenus = sujetsFiltres({
+    sujets, requete: "activité:récente", champs, meta: {}, maintenant
+  }).sujets.map((sujet) => sujet.id);
+
+  assert.deepEqual(retenus, ["hier"]);
+});
+
+/**
+ * **Sans date lisible, un sujet ne compte pas comme récent.** Supposer qu'il
+ * l'est ferait remonter tout ce qu'on ne sait pas dater (règle 5).
+ */
+test("un sujet sans date ne passe pas pour récent", () => {
+  const retenus = sujetsFiltres({
+    sujets: [{ id: "x", title: "X" }, { id: "y", title: "Y", updated_at: "pas une date" }],
+    requete: "activité:récente", champs, meta: {}
+  }).sujets;
+
+  assert.deepEqual(retenus, []);
 });
 
 /**
@@ -50,9 +104,21 @@ test("les champs couvrent ce que le projet porte", () => {
  * chercherait ce qu'on a mal tapé.
  */
 test("un projet sans vocabulaire ne propose que ce qui existe partout", () => {
-  assert.deepEqual(champsDesSujets().map((champ) => champ.key), ["statut", "priorité", "bloqué"]);
+  // L'activité est du même ordre que le statut : elle ne dépend d'aucun
+  // vocabulaire, elle se lit sur le sujet lui-même.
+  assert.deepEqual(champsDesSujets().map((champ) => champ.key),
+    ["statut", "priorité", "bloqué", "activité"]);
   assert.deepEqual(champsDesSujets({ labels: [{ key: "", name: "" }] }).map((champ) => champ.key),
-    ["statut", "priorité", "bloqué"]);
+    ["statut", "priorité", "bloqué", "activité"]);
+});
+
+/** Les trois champs de personne apparaissent ensemble, ou pas du tout. */
+test("sans collaborateur, aucun des trois champs de personne n'est déclaré", () => {
+  const cles = champsDesSujets({ labels: [{ key: "l", name: "L" }] }).map((champ) => champ.key);
+
+  for (const cle of ["assigné", "auteur", "mention"]) {
+    assert.equal(cles.includes(cle), false, `« ${cle} » se propose sans personne à désigner`);
+  }
 });
 
 /** Les trois champs de partout ont leurs valeurs, et elles se tapent en français. */

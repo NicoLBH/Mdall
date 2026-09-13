@@ -28,7 +28,7 @@ const SUJETS = [
 const META = { s1: { labels: ["l-cr"], assignes: ["p-1"] }, s2: {}, s3: { labels: [] } };
 
 const rail = (surcharge = {}) => renderRailDesSujetsHtml({
-  sujets: SUJETS, champs, requete: "", meta: META, moi: "p-1", labelDuCr: "l-cr", ...surcharge
+  sujets: SUJETS, champs, requete: "", meta: META, moi: "p-1", ...surcharge
 });
 
 /* ── Le rail ─────────────────────────────────────────────────────────────── */
@@ -40,7 +40,29 @@ test("le rail montre chaque lecture, avec ce qu'elle rendra", () => {
     assert.ok(html.includes(nom), `« ${nom} » n'est pas au rail`);
   }
   // Le compte est celui qu'on obtiendra, pas un total.
-  assert.match(html, /Ouverts<\/span>\s*<span class="sujets-rail__compte mono-small">2</);
+  assert.match(html, /Assigné à moi<\/span>\s*<span class="nav-list__trailing">1</);
+  assert.match(html, /Tous les sujets<\/span>\s*<span class="nav-list__trailing">3</);
+});
+
+/**
+ * **Le rail porte aussi les autres écrans du domaine** : Situations, Objectifs
+ * et Labels. Ils ne filtrent rien, ils changent de page — et ils quittent la
+ * barre du haut, où ils voisinaient avec des boutons qui écrivent.
+ */
+test("le rail mène aux autres écrans du domaine", () => {
+  const html = rail();
+
+  assert.match(html, /data-sujets-ecran="situations"/);
+  assert.match(html, /data-sujets-sousvue="objectives"/);
+  assert.match(html, /data-sujets-sousvue="labels"/);
+});
+
+/** Sur une sous-vue, c'est elle qui est allumée — pas une lecture de la liste. */
+test("une sous-vue ouverte éteint les lectures", () => {
+  const html = rail({ sousVue: "labels" });
+
+  assert.match(html, /data-sujets-sousvue="labels" data-tooltip="" aria-current="page"/);
+  assert.doesNotMatch(html, /data-sujets-lecture="" data-tooltip="" aria-current="page"/);
 });
 
 /**
@@ -51,18 +73,19 @@ test("le rail montre chaque lecture, avec ce qu'elle rendra", () => {
 test("chaque lecture porte la requête qu'elle pose", () => {
   const html = rail();
 
-  assert.match(html, /data-sujets-lecture="statut:ouvert"/);
-  assert.match(html, /data-sujets-lecture="statut:ouvert assigné:moi"/);
-  assert.match(html, /data-sujets-lecture="statut:ouvert label:cr-chantier"/);
+  assert.match(html, /data-sujets-lecture="assigné:moi"/);
+  assert.match(html, /data-sujets-lecture="auteur:moi"/);
+  assert.match(html, /data-sujets-lecture="mention:moi"/);
+  assert.match(html, /data-sujets-lecture="activité:récente"/);
   // « Tous » pose la requête vide : c'est ce qui efface le filtrage.
   assert.match(html, /data-sujets-lecture=""/);
 });
 
 test("la lecture en cours est marquée, et une seule", () => {
-  const html = rail({ requete: "statut:fermé" });
+  const html = rail({ requete: "mention:moi" });
 
-  assert.equal((html.match(/sujets-rail__lecture est-active/g) ?? []).length, 1);
-  assert.match(html, /est-active[^>]*data-sujets-lecture="statut:fermé"/);
+  assert.equal((html.match(/aria-current="page"/g) ?? []).length, 1);
+  assert.match(html, /data-sujets-lecture="mention:moi" data-tooltip="" aria-current="page"/);
 });
 
 /**
@@ -73,7 +96,7 @@ test("un compte qu'on ne peut pas calculer ne s'affiche pas", () => {
   const html = rail({ moi: "" });
   const miens = html.slice(html.indexOf(NOMS_DE_LA_LECTURE[LECTURE.MIENS]));
 
-  assert.doesNotMatch(miens.slice(0, 200), /sujets-rail__compte/);
+  assert.doesNotMatch(miens.slice(0, 120), /nav-list__trailing/);
 });
 
 /* ── Les recherches épinglées ────────────────────────────────────────────── */
@@ -83,7 +106,7 @@ test("les épingles se posent sous les lectures, avec de quoi les retirer", () =
     epingles: [{ id: "e1", query: "priorité:haute", title: "Les urgences" }]
   });
 
-  assert.match(html, /Épinglées/);
+  assert.match(html, /Vues/);
   assert.match(html, /Les urgences/);
   assert.match(html, /data-sujets-lecture="priorité:haute"/);
   assert.match(html, /data-sujets-decrocher="e1"/);
@@ -94,16 +117,41 @@ test("les épingles se posent sous les lectures, avec de quoi les retirer", () =
  * section ne se dessine pas du tout — une rubrique vide ferait croire qu'on en
  * a perdu.
  */
-test("sans épingle, la section ne s'affiche pas", () => {
-  assert.doesNotMatch(rail(), /Épinglées/);
-  assert.doesNotMatch(rail({ epingles: [] }), /Épinglées/);
+/**
+ * **Sans vue épinglée, on dit comment en avoir une.** Une rubrique vide fait
+ * croire qu'on a perdu quelque chose ; une phrase dit quoi faire.
+ */
+test("sans épingle, la rubrique dit comment en poser une", () => {
+  assert.doesNotMatch(rail(), /data-sujets-decrocher/);
+  assert.match(rail(), /Aucune vue épinglée/);
+  assert.match(rail({ epingles: [] }), /Épinglez une recherche/);
 });
 
 test("le rail se replie, et le bouton dit dans quel sens", () => {
-  assert.match(rail(), /data-sujets-rail-repli/);
-  assert.match(rail(), /Replier le rail/);
-  assert.match(rail({ replie: true }), /sujets-rail est-replie/);
-  assert.match(rail({ replie: true }), /Déplier le rail/);
+  assert.match(rail(), /data-project-rail-collapse/);
+  assert.match(rail(), /Replier le panneau/);
+  assert.match(rail({ replie: true }), /project-rail is-collapsed/);
+  assert.match(rail({ replie: true }), /Déplier le panneau/);
+});
+
+/**
+ * **Replié, le libellé n'est plus lisible** : l'infobulle le redonne, et le
+ * compte avec lui. Un rail replié sans infobulle oblige à le déplier pour
+ * savoir ce qu'on va cliquer.
+ */
+test("replié, chaque entrée garde son libellé en infobulle", () => {
+  const html = rail({ replie: true });
+
+  assert.match(html, /data-tooltip="Tous les sujets \(3\)"/);
+  assert.match(html, /data-tooltip="Situations"/);
+});
+
+/** La coque vient du composant partagé : la poignée de largeur en fait partie. */
+test("le rail porte la poignée de largeur du composant partagé", () => {
+  assert.match(rail(), /data-project-rail="sujetsRail"/);
+  assert.match(rail(), /sujetsRailResizer/);
+  // Replié, la poignée s'en va : il n'y a plus de largeur à régler.
+  assert.doesNotMatch(rail({ replie: true }), /sujetsRailResizer/);
 });
 
 /* ── La barre ────────────────────────────────────────────────────────────── */

@@ -33,12 +33,10 @@ const texte = (valeur) => String(valeur ?? "").trim();
 
 export const LECTURE = {
   TOUS: "tous",
-  OUVERTS: "ouverts",
   MIENS: "miens",
-  BLOQUES: "bloques",
-  DU_CR: "du_cr",
-  SANS_LABEL: "sans_label",
-  FERMES: "fermes"
+  CREES: "crees",
+  MENTIONS: "mentions",
+  RECENTS: "recents"
 };
 
 /**
@@ -49,33 +47,27 @@ export const LECTURE = {
  */
 const FILTRES_DE_LA_LECTURE = {
   [LECTURE.TOUS]: {},
-  [LECTURE.OUVERTS]: { statut: "open" },
-  [LECTURE.MIENS]: { statut: "open", "assigné": MOI },
-  [LECTURE.BLOQUES]: { statut: "open", "bloqué": "bloques" },
-  [LECTURE.DU_CR]: { statut: "open", label: null },
-  [LECTURE.SANS_LABEL]: { statut: "open", label: "aucun" },
-  [LECTURE.FERMES]: { statut: "closed" }
+  [LECTURE.MIENS]: { "assigné": MOI },
+  [LECTURE.CREES]: { auteur: MOI },
+  [LECTURE.MENTIONS]: { mention: MOI },
+  [LECTURE.RECENTS]: { activité: "recente" }
 };
 
 export const NOMS_DE_LA_LECTURE = {
   [LECTURE.TOUS]: "Tous les sujets",
-  [LECTURE.OUVERTS]: "Ouverts",
-  [LECTURE.MIENS]: "Les miens",
-  [LECTURE.BLOQUES]: "Bloqués",
-  [LECTURE.DU_CR]: "Venus des comptes rendus",
-  [LECTURE.SANS_LABEL]: "Sans label",
-  [LECTURE.FERMES]: "Fermés"
+  [LECTURE.MIENS]: "Assigné à moi",
+  [LECTURE.CREES]: "Créé par moi",
+  [LECTURE.MENTIONS]: "Mentions",
+  [LECTURE.RECENTS]: "Activité récente"
 };
 
 /** L'icône de chaque lecture, dans le jeu de la maison. */
 export const ICONES_DE_LA_LECTURE = {
   [LECTURE.TOUS]: "list-unordered",
-  [LECTURE.OUVERTS]: "issue-opened",
   [LECTURE.MIENS]: "person",
-  [LECTURE.BLOQUES]: "blocked",
-  [LECTURE.DU_CR]: "file",
-  [LECTURE.SANS_LABEL]: "tag",
-  [LECTURE.FERMES]: "check-circle"
+  [LECTURE.CREES]: "pencil",
+  [LECTURE.MENTIONS]: "mention",
+  [LECTURE.RECENTS]: "history"
 };
 
 /**
@@ -94,20 +86,14 @@ export const ICONES_DE_LA_LECTURE = {
  * déclaré. Ce défaut a été trouvé par le test qui compare le compte annoncé au
  * compte obtenu.
  */
-function filtresDe(lecture, champs = [], { labelDuCr = "" } = {}) {
+function filtresDe(lecture, champs = []) {
   const bruts = FILTRES_DE_LA_LECTURE[lecture] ?? {};
   const declares = new Set((Array.isArray(champs) ? champs : []).map((champ) => texte(champ?.key)));
   const filtres = {};
 
-  for (const [cle, valeur] of Object.entries(bruts)) {
+  for (const cle of Object.keys(bruts)) {
     if (!declares.has(cle)) return null;
-
-    if (valeur !== null) { filtres[cle] = valeur; continue; }
-    // Le label du compte rendu n'existe pas dans tous les projets. Sans lui, la
-    // lecture ne se propose pas du tout — proposer un filtre qui ne filtre rien
-    // ferait chercher ce qu'on a mal tapé.
-    if (!texte(labelDuCr)) return null;
-    filtres[cle] = texte(labelDuCr);
+    filtres[cle] = bruts[cle];
   }
 
   return filtres;
@@ -117,8 +103,8 @@ function filtresDe(lecture, champs = [], { labelDuCr = "" } = {}) {
  * La requête d'une lecture, écrite comme la barre l'écrirait. `""` si la
  * lecture ne s'applique pas à ce projet.
  */
-export function requeteDeLaLecture(lecture, champs = [], contexte = {}) {
-  const filtres = filtresDe(lecture, champs, contexte);
+export function requeteDeLaLecture(lecture, champs = []) {
+  const filtres = filtresDe(lecture, champs);
   if (!filtres) return "";
   return formatQuery({ filters: filtres, text: "" }, champs);
 }
@@ -130,14 +116,14 @@ export function requeteDeLaLecture(lecture, champs = [], contexte = {}) {
  * plus « Les miens ». Allumer quand même la lecture ferait croire qu'on voit
  * tous ses sujets alors qu'on n'en voit qu'une partie.
  */
-export function lectureDe(requete = "", champs = [], contexte = {}) {
+export function lectureDe(requete = "", champs = []) {
   const { filters, text } = parseQuery(requete, champs);
   if (texte(text)) return LECTURE.TOUS;
 
   const cles = Object.keys(filters).sort();
 
   for (const lecture of Object.values(LECTURE)) {
-    const attendus = filtresDe(lecture, champs, contexte);
+    const attendus = filtresDe(lecture, champs);
     if (!attendus) continue;
 
     const voulues = Object.keys(attendus).sort();
@@ -165,19 +151,25 @@ export function lectureDe(requete = "", champs = [], contexte = {}) {
  * @param {string} [options.labelDuCr] la clé du label « CR chantier », s'il existe
  */
 export function railDesSujets({
-  sujets = [], champs = [], requete = "", meta = {}, moi = "", labelDuCr = ""
+  sujets = [], champs = [], requete = "", meta = {}, moi = "", maintenant = Date.now()
 } = {}) {
-  const contexte = { labelDuCr };
-  const active = lectureDe(requete, champs, contexte);
+  const active = lectureDe(requete, champs);
 
   const lectures = Object.values(LECTURE).map((lecture) => {
-    const laRequete = requeteDeLaLecture(lecture, champs, contexte);
-    // Une lecture dont aucun champ n'est déclaré ne se propose pas : sans
-    // labels dans le projet, « Sans label » n'a rien à dire.
-    if (!laRequete && lecture !== LECTURE.TOUS) return null;
+    // **Une seule vérification, et c'est `filtresDe` qui la porte.** Une
+    // lecture dont un champ n'est pas déclaré ne se propose pas : sans
+    // collaborateur dans le projet, « Assigné à moi » perdrait son filtre en
+    // silence et deviendrait « Tous ».
+    //
+    // Un second garde-fou existait ici — « requête vide, donc on écarte » — et
+    // il disait la même chose plus mal : il aurait aussi écarté une lecture
+    // légitimement sans filtre. Deux expressions d'une même règle divergent à
+    // la première qui bouge (règle 4).
+    if (!filtresDe(lecture, champs)) return null;
+    const laRequete = requeteDeLaLecture(lecture, champs);
 
     const { sujets: retenus, ignores } = sujetsFiltres({
-      sujets, requete: laRequete, champs, meta, moi
+      sujets, requete: laRequete, champs, meta, moi, maintenant
     });
 
     return {

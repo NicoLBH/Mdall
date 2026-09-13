@@ -6,6 +6,7 @@ import {
 } from "../../services/epingles-des-sujets.js";
 import { TRI, motDuTri } from "../../services/tri-des-sujets.js";
 import { filterValue, withFilter } from "../../services/query-bar.js";
+import { bindRailResizer, followRailScroll, railWidth } from "../ui/project-rail.js";
 import {
   renderFiltreDenTeteHtml, renderRailDesSujetsHtml, renderRechercheDesSujetsHtml
 } from "./project-subjects-recherche.js";
@@ -304,22 +305,38 @@ function renderDocumentRefsCard(selection) {
 }
 
 /**
- * La colonne des assignés, et le bouton qui range le tableau.
+ * Le bout droit de l'en-tête : les filtres, puis le bouton qui range.
  *
- * Le bouton est **à gauche de l'intitulé**, dans la colonne dont il change
- * l'ordre d'arrivée. Il répond à une question à laquelle aucun compteur ne
- * répond : est-ce que des sujets continuent d'arriver ? Un nombre qui ne bouge
- * pas ne dit pas si rien n'entre ou si ce qui entre se range au milieu de
- * soixante-treize lignes. Ce qui a bougé en dernier, en tête, le dit.
+ * ## Les filtres à gauche du tri, et les deux au même endroit
+ *
+ * Ils appartiennent au tableau qu'ils restreignent : posés au-dessus, dans la
+ * barre d'outils, ils flottaient sans dire sur quoi ils portaient. Le tri est
+ * déjà là — c'est la même famille de gestes, *ce que je regarde et dans quel
+ * ordre* — et les séparer ferait chercher l'un quand on a trouvé l'autre.
+ *
+ * L'ordre des filtres est celui de la question qu'on se pose : qui l'a ouvert,
+ * comment il est rangé, qui le traite.
+ *
+ * ## Le tri reste le dernier
+ *
+ * Il répond à une question à laquelle aucun filtre ne répond : est-ce que des
+ * sujets continuent d'arriver ? Un nombre qui ne bouge pas ne dit pas si rien
+ * n'entre ou si ce qui entre se range au milieu de soixante-treize lignes.
  */
 function renderSubjectsAssigneesHeadHtml() {
   const tri = getCurrentSubjectsSort();
-  return `${renderBoutonDeTri({
-    attribut: "subjects-sort",
-    valeur: tri === TRI.DERNIERE_ACTIVITE ? TRI.PROJET : TRI.DERNIERE_ACTIVITE,
-    actif: tri === TRI.DERNIERE_ACTIVITE,
-    titre: motDuTri(tri)
-  })}<span class="cell-assignees-head__label">Assignés</span>`;
+
+  return `
+    <div class="cell-assignees-head">
+      ${renderSubjectsFiltresDenTeteHtml()}
+      ${renderBoutonDeTri({
+        attribut: "subjects-sort",
+        valeur: tri === TRI.DERNIERE_ACTIVITE ? TRI.PROJET : TRI.DERNIERE_ACTIVITE,
+        actif: tri === TRI.DERNIERE_ACTIVITE,
+        titre: motDuTri(tri)
+      })}
+    </div>
+  `;
 }
 
 /* ── Les sujets qu'on garde sous les yeux ─────────────────────────────────── */
@@ -486,11 +503,36 @@ function labelDuCrDuProjet() {
   return String(trouve?.id ?? "").trim();
 }
 
-/** Le repli du rail : un réglage, pas un état de navigation. */
+/* ── Le rail : son repli, sa largeur, sa poignée ─────────────────────────── */
+
+/**
+ * Le repli et la largeur sont des **réglages**, pas des états de navigation :
+ * ils suivent la personne d'une session à l'autre, comme dans la Mémoire, et
+ * n'ont donc rien à faire dans le store de la page.
+ */
 const RAIL_REPLIE_CLE = "mdall.sujetsRailReplie.v1";
+const RAIL_LARGEUR_CLE = "mdall.sujetsRailLargeur.v1";
 
 function railReplie() {
   try { return window.localStorage.getItem(RAIL_REPLIE_CLE) === "1"; } catch { return false; }
+}
+
+function railLargeur() {
+  try {
+    const brut = Number(window.localStorage.getItem(RAIL_LARGEUR_CLE));
+    return Number.isFinite(brut) && brut > 0 ? railWidth(brut) : 248;
+  } catch {
+    return 248;
+  }
+}
+
+function retenirLaLargeur(largeur) {
+  try {
+    window.localStorage.setItem(RAIL_LARGEUR_CLE, String(largeur));
+  } catch {
+    // Un navigateur qui refuse le stockage garde la largeur par défaut : le
+    // geste marche, c'est la mémoire du geste qui manque.
+  }
 }
 
 function basculerLeRail() {
@@ -501,6 +543,58 @@ function basculerLeRail() {
     // qui perdrait la préférence, pas le geste.
   }
   rerenderPanels();
+}
+
+/**
+ * L'écran : le rail à gauche sur toute la hauteur, le reste à droite.
+ *
+ * La largeur passe par une variable CSS, comme dans la Mémoire : c'est elle que
+ * la poignée fait bouger pendant le glissé, sans redessiner quoi que ce soit.
+ * Redessiner à chaque pixel ferait clignoter le tableau entier.
+ */
+function renderEcranDesSujets(corps, { champs = [], requete = "" } = {}) {
+  const replie = railReplie();
+
+  return `
+    <div class="sujets-ecran project-simple-page project-simple-page--sujets"
+      style="--project-rail-width:${railWidth(railLargeur(), replie)}px">
+      ${renderRailDesSujetsHtml({
+        sujets: getFlatSubjects(),
+        champs,
+        requete,
+        meta: getMetaDesSujets(),
+        moi: String(store.user?.id || ""),
+        epingles: recherchesEpinglees ?? [],
+        replie,
+        sousVue: String(store.situationsView?.subjectsSubview || "subjects")
+      })}
+      <div class="sujets-ecran__corps">${corps}</div>
+    </div>
+  `;
+}
+
+/** De quoi retirer les écouteurs du rail précédent, et ceux de sa poignée. */
+let railDetacher = null;
+let poigneeDetacher = null;
+
+/**
+ * La poignée de largeur et le calage du haut au défilement.
+ *
+ * Les deux viennent du composant partagé : la Mémoire et l'Atelier font le même
+ * geste, et trois copies de ce calage divergeraient au premier changement.
+ */
+function brancherLeRailDesSujets(hote) {
+  if (poigneeDetacher) poigneeDetacher();
+  if (railDetacher) railDetacher();
+
+  railDetacher = followRailScroll(hote.querySelector(".project-rail"));
+  poigneeDetacher = bindRailResizer({
+    root: hote,
+    id: "sujetsRail",
+    pageSelector: ".project-simple-page--sujets",
+    getWidth: () => railLargeur(),
+    onEnd: retenirLaLargeur
+  });
 }
 
 /** Poser ou retirer une épingle, puis redessiner. */
@@ -673,7 +767,11 @@ function renderSubjectsFiltresDenTeteHtml() {
   const champs = getChampsDesSujets();
   const requete = getRequeteDesSujets();
 
-  return ["label", "objectif", "lot", "assigné"]
+  // **Cet ordre est celui de la question qu'on se pose**, pas celui du modèle :
+  // « qui l'a ouvert », puis « comment il est rangé », puis « qui le traite ».
+  // Le lot n'y est plus — il se déduit de l'assigné, et deux menus pour une
+  // même information font chercher lequel est le bon.
+  return ["auteur", "label", "situation", "objectif", "assigné"]
     .map((cle) => {
       const champ = champs.find((candidat) => candidat.key === cle);
       if (!champ) return "";
@@ -3273,9 +3371,6 @@ function rerenderPanels() {
   const filteredSituations = getFilteredSituations();
   const counts = getVisibleCounts(filteredSituations);
   const panelHost = document.getElementById("situationsPanelHost");
-  const searchInput = document.getElementById("situationsSearch");
-
-  if (searchInput) searchInput.value = store.situationsView.search || "";
 
   rerenderSubjectsToolbar();
   const createForm = store.situationsView.createSubjectForm || {};
@@ -3315,30 +3410,19 @@ function rerenderPanels() {
       });
 
       panelHost.innerHTML = `
-        <div class="sujets-ecran${railReplie() ? " est-replie" : ""}">
-          ${renderRailDesSujetsHtml({
-            sujets: getFlatSubjects(),
-            champs,
-            requete,
-            meta: getMetaDesSujets(),
-            moi: String(store.user?.id || ""),
-            labelDuCr: labelDuCrDuProjet(),
-            epingles: recherchesEpinglees ?? [],
-            replie: railReplie()
+        ${renderEcranDesSujets(`
+          ${renderRechercheDesSujetsHtml({ requete, champs, ignores })}
+          ${renderSujetsEpinglesHtml({
+            sujets: sujetsEpingles(getFlatSubjects(), getEpinglesDuProjet() ?? []),
+            deps: tableDeps
           })}
-          <div class="sujets-ecran__corps">
-            ${renderRechercheDesSujetsHtml({ requete, champs, ignores })}
-            ${renderSujetsEpinglesHtml({
-              sujets: sujetsEpingles(getFlatSubjects(), getEpinglesDuProjet() ?? []),
-              deps: tableDeps
-            })}
-            <div id="situationsTableHost" class="project-table-host">${renderProjectSubjectsTable({
-              filteredSituations,
-              deps: tableDeps
-            })}</div>
-          </div>
-        </div>
+          <div id="situationsTableHost" class="project-table-host">${renderProjectSubjectsTable({
+            filteredSituations,
+            deps: tableDeps
+          })}</div>
+        `, { champs, requete })}
       `;
+      brancherLeRailDesSujets(panelHost);
       syncSituationsPrimaryScrollSource();
     } else {
       const details = getProjectSubjectDetail().renderDetailsHtml(null, {
@@ -3941,24 +4025,6 @@ function renderObjectivesCreateAction() {
   });
 }
 
-function renderSubjectsLabelsAction() {
-  return renderSubjectsToolbarButton({
-    id: "subjectsLabelsAction",
-    label: "Labels",
-    icon: svgIcon("tag", { className: "octicon octicon-tag" }),
-    action: "open-labels"
-  });
-}
-
-function renderSubjectsObjectivesAction() {
-  return renderSubjectsToolbarButton({
-    id: "subjectsObjectivesAction",
-    label: "Objectifs",
-    icon: svgIcon("milestone", { className: "octicon octicon-milestone" }),
-    action: "open-objectives"
-  });
-}
-
 function compactLastName(fullName) {
   const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return "Utilisateur";
@@ -4216,22 +4282,17 @@ function renderSituationsViewHeaderHtml() {
     return getProjectSubjectMilestones().renderObjectivesViewHeaderHtml();
   }
 
+  // **Une seule recherche.** Celle-ci ne cherchait que dans les titres, sans
+  // grammaire et sans s'épingler ; la barre du tableau fait tout ce qu'elle
+  // faisait et le reste. En garder deux ferait taper dans l'une en regardant
+  // l'autre, et se demander pourquoi rien ne bouge.
+  //
+  // **Labels et Objectifs s'en vont aussi**, dans le rail : ce ne sont pas des
+  // actions mais d'autres façons de regarder le même domaine, et ils
+  // voisinaient ici avec des boutons qui écrivent.
   const rightHtml = [
     renderProjectTableToolbarGroup({
       html: renderBoutonDeConstat()
-    }),
-    renderProjectTableToolbarGroup({
-      html: renderProjectTableToolbarSearch({
-        id: "situationsSearch",
-        value: String(store.situationsView.search || ""),
-        placeholder: "topic / EC8 / mot-clé…"
-      })
-    }),
-    renderProjectTableToolbarGroup({
-      html: renderSubjectsLabelsAction()
-    }),
-    renderProjectTableToolbarGroup({
-      html: renderSubjectsObjectivesAction()
     }),
     renderProjectTableToolbarGroup({
       html: renderSituationsAddAction()
