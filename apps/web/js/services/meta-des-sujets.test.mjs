@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { chargeDesSujets, CLES_DE_LA_CHARGE, indexDesLiens } from "./charge-des-sujets.js";
+import { chargeDesSujets, CLES_DE_LA_CHARGE, indexDesLiens, indexDesSignaux } from "./charge-des-sujets.js";
 import { metaDesSujets, moiDansLeProjet, personnesDuProjet } from "./meta-des-sujets.js";
 import { champsDesSujets, sujetsFiltres } from "./champs-des-sujets.js";
 
@@ -55,13 +55,17 @@ const CHARGE = chargeDesSujets({
   labels: { s1: ["l-cr"], s2: ["l-cr", "l-urgent"] },
   objectifs: { s1: ["o-1"] },
   sujetsParSituation: { "sit-1": ["s3"] },
-  // Un commentaire d'hier sur un sujet dont la ligne date de février, et un
-  // `@` tapé au clavier : les deux étaient invisibles.
-  messages: [{
-    subject_id: "s2", created_at: "2026-09-12T09:00:00Z",
-    body_markdown: "relancé, @benoit guyot doit passer lundi"
-  }],
-  histoire: [{ subject_id: "s3", created_at: "2026-09-11T09:00:00Z" }]
+  // Ce que `project_subject_signals` rend : une ligne par sujet. `s2` porte une
+  // ligne datée de février et un commentaire d'hier — il a bougé —, et son
+  // texte nomme quelqu'un au clavier. Les deux étaient invisibles.
+  signaux: [
+    {
+      subject_id: "s2",
+      last_activity_at: "2026-09-12T09:00:00Z",
+      mention_person_ids: ["p-benoit"]
+    },
+    { subject_id: "s3", last_activity_at: "2026-09-11T09:00:00Z", mention_person_ids: [] }
+  ]
 });
 
 const laMeta = () => metaDesSujets({ sujets: SUJETS, raw: CHARGE, collaborateurs: COLLABORATEURS });
@@ -168,15 +172,54 @@ test("« activité récente » retient ce qui a bougé, commentaires compris", (
   assert.deepEqual(retenus, ["s1", "s2", "s3"]);
 });
 
-/** Une modification sans commentaire compte aussi : c'est arrivé au sujet. */
-test("une modification du sujet suffit à le dire récent", () => {
+/**
+ * **La base fait la somme, et elle compte tout** : la ligne du sujet, ses
+ * messages, ses événements métier. Ici la ligne date de 2025 et le signal de
+ * 2026 — c'est le signal qui dit quand le sujet a bougé.
+ */
+test("le signal de la base l'emporte sur la seule ligne du sujet", () => {
   const meta = metaDesSujets({
     sujets: [{ id: "s9", title: "Vieux", status: "open", updated_at: "2025-01-01T00:00:00Z" }],
-    raw: chargeDesSujets({ histoire: [{ subject_id: "s9", created_at: "2026-09-12T00:00:00Z" }] }),
+    raw: chargeDesSujets({
+      signaux: [{ subject_id: "s9", last_activity_at: "2026-09-12T00:00:00Z" }]
+    }),
     collaborateurs: COLLABORATEURS
   });
 
   assert.equal(meta.s9.activite, "2026-09-12T00:00:00Z");
+});
+
+/**
+ * **`null` n'est pas `[]`.** La base qui ne répond pas et le projet sans signal
+ * ne se disent pas pareil : sans réponse, les deux lectures qui en dépendent ne
+ * se proposent pas, plutôt que de rendre une liste vide (règle 5).
+ */
+test("sans réponse de la base, « Mentions » et « Activité » ne se proposent pas", () => {
+  const muette = chargeDesSujets({ signaux: null });
+  const repondue = chargeDesSujets({ signaux: [] });
+
+  assert.equal(muette[CLES_DE_LA_CHARGE.signauxLus], false);
+  assert.equal(repondue[CLES_DE_LA_CHARGE.signauxLus], true);
+
+  const cles = (signauxLus) => champsDesSujets({
+    personnes: personnesDuProjet(COLLABORATEURS), signauxLus
+  }).map((champ) => champ.key);
+
+  assert.ok(cles(true).includes("mention"));
+  assert.ok(cles(true).includes("activité"));
+  assert.ok(!cles(false).includes("mention"));
+  assert.ok(!cles(false).includes("activité"));
+});
+
+/** Une ligne de signal illisible ne vieillit ni ne rajeunit le sujet. */
+test("une date illisible est écartée, pas ramenée à zéro", () => {
+  const { derniereActivite } = indexDesSignaux([
+    { subject_id: "s1", last_activity_at: "pas une date" },
+    { subject_id: "s2", last_activity_at: "" },
+    { subject_id: "", last_activity_at: "2026-09-12T00:00:00Z" }
+  ]);
+
+  assert.deepEqual(derniereActivite, {});
 });
 
 /** Sans aucune source datable, on ne prétend pas savoir quand (règle 5). */
@@ -197,7 +240,8 @@ test("un sujet qu'on ne sait pas dater n'est pas récent", () => {
 /**
  * **Le `@` tapé au clavier compte.** La table des mentions ne porte que celles
  * choisies dans la liste de complétion ; c'est le cas propre, et ce n'est pas
- * le cas courant.
+ * le cas courant. Les autres sont relevées par la base, qui lit les textes là
+ * où ils sont — le navigateur les rapatriait tous.
  */
 test("une mention écrite dans un texte se retrouve", () => {
   const champs = champsDesSujets({ personnes: personnesDuProjet(COLLABORATEURS) });
@@ -214,15 +258,36 @@ test("une mention écrite dans un texte se retrouve", () => {
   assert.deepEqual(retenus, ["s2"]);
 });
 
-/** Le titre et la description comptent comme les commentaires. */
-test("une mention dans la description d'un sujet se retrouve", () => {
-  const sujets = [{
-    id: "s7", title: "Chape", status: "open",
-    description: "synthèse prévue avec @benoit guyot au droit des nourrices"
-  }];
-  const meta = metaDesSujets({ sujets, raw: chargeDesSujets({}), collaborateurs: COLLABORATEURS });
+/**
+ * Les deux sources se cumulent : celle qui a été cliquée dans la liste, et celle
+ * que la base a relevée dans le texte.
+ */
+test("les mentions cliquées et les mentions écrites se cumulent", () => {
+  const sujets = [{ id: "s7", title: "Chape", status: "open" }];
+  const meta = metaDesSujets({
+    sujets,
+    raw: chargeDesSujets({
+      mentions: [{ subject_id: "s7", mentioned_person_id: "p-moi" }],
+      signaux: [{ subject_id: "s7", mention_person_ids: ["p-benoit"] }]
+    }),
+    collaborateurs: COLLABORATEURS
+  });
 
-  assert.deepEqual(meta.s7.mentions, ["p-benoit"]);
+  assert.deepEqual(meta.s7.mentions.sort(), ["p-benoit", "p-moi"]);
+});
+
+/** La même personne des deux côtés ne compte qu'une. */
+test("une personne nommée des deux façons ne compte qu'une", () => {
+  const meta = metaDesSujets({
+    sujets: [{ id: "s8", title: "Chape", status: "open" }],
+    raw: chargeDesSujets({
+      mentions: [{ subject_id: "s8", mentioned_person_id: "p-benoit" }],
+      signaux: [{ subject_id: "s8", mention_person_ids: ["p-benoit"] }]
+    }),
+    collaborateurs: COLLABORATEURS
+  });
+
+  assert.deepEqual(meta.s8.mentions, ["p-benoit"]);
 });
 
 /* ── La sélection multiple ───────────────────────────────────────────────── */

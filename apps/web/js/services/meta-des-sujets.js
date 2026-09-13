@@ -35,7 +35,6 @@
  */
 
 import { CLES_DE_LA_CHARGE, laPlusRecente } from "./charge-des-sujets.js";
-import { personnesMentionneesDans } from "./mentions-du-texte.js";
 import { normalizeAssigneeIds, resolveSubjectAssigneeIds } from "./subject-assignees-service.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -204,8 +203,7 @@ export function metaDesSujets({
   const assignes = objet(charge[CLES_DE_LA_CHARGE.assignes]);
   const mentions = objet(charge[CLES_DE_LA_CHARGE.mentions]);
   const activites = objet(charge[CLES_DE_LA_CHARGE.derniereActivite]);
-  const textes = objet(charge[CLES_DE_LA_CHARGE.textesDesMessages]);
-  const nommables = personnesDuProjet(collaborateurs);
+  const nommees = objet(charge[CLES_DE_LA_CHARGE.mentionsDuTexte]);
   const enAtelier = objet(assignesDeLAtelier);
 
   const parLot = lotsParPersonne(collaborateurs);
@@ -241,18 +239,20 @@ export function metaDesSujets({
       // **Deux sources, et il en faut deux.** La table ne porte que les
       // mentions choisies dans la liste de complétion ; le texte porte celles
       // qu'on a tapées au clavier — dans un titre, dans une description, dans
-      // un commentaire —, et c'est le cas courant.
+      // un commentaire —, et c'est le cas courant. Les secondes sont relevées
+      // **par la base** (`project_subject_signals`) : relire les textes ici
+      // obligeait à les rapatrier tous.
       mentions: normalizeAssigneeIds([
         ...(Array.isArray(mentions[cle]) ? mentions[cle] : []),
-        ...personnesMentionneesDans([
-          sujet?.title, sujet?.description,
-          ...(Array.isArray(textes[cle]) ? textes[cle] : [])
-        ], nommables)
+        ...(Array.isArray(nommees[cle]) ? nommees[cle] : [])
       ]),
       // **La dernière fois que ce sujet a bougé**, quelle qu'en soit la forme :
       // sa ligne modifiée, un commentaire, un changement de statut ou
       // d'assignation. `updated_at` seul manquait tout ce qui se passe dans le
       // fil de discussion — c'est-à-dire l'essentiel de la vie d'un sujet.
+      //
+      // La base a déjà fait cette somme ; la ligne du sujet reste là en
+      // secours, pour un sujet créé depuis la dernière lecture des signaux.
       activite: laPlusRecente(
         activites[cle],
         sujet?.updated_at, sujet?.updatedAt, sujet?.last_activity_at, sujet?.created_at

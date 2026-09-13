@@ -86,30 +86,43 @@ export function indexDesLiens(liens = []) {
 }
 
 /**
- * La date la plus récente de chaque sujet, parmi des lignes datées.
+ * Ce que la base rend pour chaque sujet : **une date, et des personnes**.
  *
- * **Une activité n'est pas une modification de la ligne du sujet.** Un sujet
- * commenté hier, dont aucun champ n'a changé, a bougé : c'est même celui-là
- * qu'on cherche en demandant ce qui a bougé. `subjects.updated_at` ne le dit
- * pas, et « Activité récente » le manquait.
+ * ## Pourquoi c'est la base qui le calcule
  *
- * On rend donc, par sujet, la plus récente des dates qu'on lui connaît, quelle
- * qu'en soit la source — un message, un changement de statut, une assignation.
- * Une date illisible est **écartée** plutôt que ramenée à zéro : une ligne qu'on
- * ne sait pas dater ne rajeunit ni ne vieillit le sujet (règle 5).
+ * Le navigateur rapatriait le corps de tous les messages du projet pour les
+ * relire lui-même — la seule façon, de ce côté-ci, de savoir qu'un sujet avait
+ * été commenté hier et d'y trouver un `@nicolas LE BIHAN` tapé au clavier. Cela
+ * marchait sur un projet neuf et devenait intenable sur un projet installé :
+ * quelques milliers de messages, et l'on paie une lecture complète de la
+ * discussion pour en tirer une date et une poignée d'identifiants.
+ *
+ * `project_subject_signals` fait ce travail là où les textes sont déjà, et rend
+ * **une ligne par sujet**. Le texte des conversations ne traverse plus le
+ * réseau du tout — ce qui est aussi ce qu'on veut d'un fil de discussion qui
+ * n'a rien à faire dans un filtre.
+ *
+ * Ce qui reste ici est le rangement : des lignes entrent, deux index sortent.
  */
-export function indexDesDernieresDates(lignes = [], { sujet = "subject_id", date = "created_at" } = {}) {
-  const index = {};
+export function indexDesSignaux(lignes = []) {
+  const derniereActivite = {};
+  const mentions = {};
 
   for (const ligne of Array.isArray(lignes) ? lignes : []) {
-    const cle = texte(ligne?.[sujet]);
-    const quand = texte(ligne?.[date]);
-    if (!cle || !quand || !Number.isFinite(Date.parse(quand))) continue;
+    const cle = texte(ligne?.subject_id);
+    if (!cle) continue;
 
-    if (!index[cle] || Date.parse(quand) > Date.parse(index[cle])) index[cle] = quand;
+    // Une date illisible est **écartée** plutôt que ramenée à zéro : un sujet
+    // qu'on ne sait pas dater ne rajeunit ni ne vieillit (règle 5).
+    const quand = texte(ligne?.last_activity_at);
+    if (quand && Number.isFinite(Date.parse(quand))) derniereActivite[cle] = quand;
+
+    const nommees = (Array.isArray(ligne?.mention_person_ids) ? ligne.mention_person_ids : [])
+      .map(texte).filter(Boolean);
+    if (nommees.length) mentions[cle] = [...new Set(nommees)];
   }
 
-  return index;
+  return { derniereActivite, mentions };
 }
 
 /**
@@ -131,28 +144,6 @@ export function laPlusRecente(...dates) {
 }
 
 /**
- * Les textes de chaque sujet où un `@` peut se trouver : ses commentaires.
- *
- * Le titre et la description viennent de la ligne du sujet, qui est déjà là. Ce
- * qu'il faut aller chercher, ce sont les corps des messages — et la même
- * requête sert à dater l'activité, donc elle ne coûte rien de plus.
- */
-export function indexDesTextes(lignes = [], { sujet = "subject_id", corps = "body_markdown" } = {}) {
-  const index = {};
-
-  for (const ligne of Array.isArray(lignes) ? lignes : []) {
-    const cle = texte(ligne?.[sujet]);
-    const dit = texte(ligne?.[corps]);
-    if (!cle || !dit) continue;
-
-    if (!Array.isArray(index[cle])) index[cle] = [];
-    index[cle].push(dit);
-  }
-
-  return index;
-}
-
-/**
  * Les noms des index dans la charge utile.
  *
  * **Ils vivent ici**, et le chargeur comme le lecteur passent par eux. C'est ce
@@ -168,7 +159,14 @@ export const CLES_DE_LA_CHARGE = {
   sujetsParSituation: "subjectIdsBySituationId",
   situationsDuSujet: "relationIdsBySubjectId",
   derniereActivite: "lastActivityAtBySubjectId",
-  textesDesMessages: "messageTextsBySubjectId"
+  // **Les mentions lues dans les textes, par la base.** Elles vivent à part de
+  // celles de `subject_message_mentions` : celles-là ont été choisies dans une
+  // liste, celles-ci ont été tapées au clavier, et les deux comptent.
+  mentionsDuTexte: "textMentionPersonIdsBySubjectId",
+  // **A-t-on pu lire les signaux ?** `false` n'est pas « aucun signal » : c'est
+  // « on ne sait pas », et les lectures qui en dépendent ne se proposent pas
+  // plutôt que de rendre une liste vide (règle 5).
+  signauxLus: "subjectSignalsRead"
 };
 
 /**
@@ -178,23 +176,22 @@ export const CLES_DE_LA_CHARGE = {
  * Les deux obtiennent les mêmes clés parce que c'est le même code.
  */
 export function chargeDesSujets({
-  assignes = [], mentions = [], liens = [], messages = [], histoire = [],
+  assignes = [], mentions = [], liens = [], signaux = null,
   labels = {}, objectifs = {}, sujetsParSituation = {}, situationsDuSujet = {}
 } = {}) {
-  // Une activité vient d'un commentaire **ou** d'une modification : les deux
-  // entrent dans le même index, et c'est la plus récente qui gagne.
-  const parMessage = indexDesDernieresDates(messages);
-  const parHistoire = indexDesDernieresDates(histoire);
+  // `null` veut dire « la base n'a pas répondu », `[]` « elle a répondu et il
+  // n'y a rien ». Les confondre ferait afficher une liste vide là où l'on ne
+  // sait pas (règle 5).
+  const lus = Array.isArray(signaux);
+  const { derniereActivite, mentions: nommees } = indexDesSignaux(lus ? signaux : []);
 
   return {
     [CLES_DE_LA_CHARGE.assignes]: indexDesAssignes(assignes),
     [CLES_DE_LA_CHARGE.mentions]: indexDesMentions(mentions),
     [CLES_DE_LA_CHARGE.liens]: indexDesLiens(liens),
-    [CLES_DE_LA_CHARGE.derniereActivite]: Object.fromEntries(
-      [...new Set([...Object.keys(parMessage), ...Object.keys(parHistoire)])]
-        .map((cle) => [cle, laPlusRecente(parMessage[cle], parHistoire[cle])])
-    ),
-    [CLES_DE_LA_CHARGE.textesDesMessages]: indexDesTextes(messages),
+    [CLES_DE_LA_CHARGE.derniereActivite]: derniereActivite,
+    [CLES_DE_LA_CHARGE.mentionsDuTexte]: nommees,
+    [CLES_DE_LA_CHARGE.signauxLus]: lus,
     [CLES_DE_LA_CHARGE.labels]: labels && typeof labels === "object" ? labels : {},
     [CLES_DE_LA_CHARGE.objectifs]: objectifs && typeof objectifs === "object" ? objectifs : {},
     [CLES_DE_LA_CHARGE.sujetsParSituation]:

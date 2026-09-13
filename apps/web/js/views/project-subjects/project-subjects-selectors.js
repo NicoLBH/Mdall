@@ -1,6 +1,7 @@
 import { normaliserLeTri, trierLesSujets } from "../../services/tri-des-sujets.js";
 import { champsDesSujets, sujetsFiltres } from "../../services/champs-des-sujets.js";
 import { metaDesSujets, moiDansLeProjet, personnesDuProjet } from "../../services/meta-des-sujets.js";
+import { CLES_DE_LA_CHARGE } from "../../services/charge-des-sujets.js";
 import { withFilter } from "../../services/query-bar.js";
 import {
   getChildrenBySubjectIdMapFromRawResult,
@@ -376,7 +377,12 @@ export function createProjectSubjectsSelectors({
       situations: (Array.isArray(getViewState().data) ? getViewState().data : [])
         .map((situation) => ({
           id: String(situation?.id ?? "").trim(), title: String(situation?.title ?? "").trim()
-        }))
+        })),
+      // **« Mentions » et « Activité récente » se calculent en base.** Sans
+      // réponse, elles ne se proposent pas : un filtre qui ne rendrait jamais
+      // rien fait chercher ce qu'on a mal tapé plutôt que ce qui n'a pas
+      // répondu (règle 5).
+      signauxLus: raw[CLES_DE_LA_CHARGE.signauxLus] !== false
     });
   }
 

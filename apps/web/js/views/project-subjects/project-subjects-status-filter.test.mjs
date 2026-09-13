@@ -236,7 +236,11 @@ function unStoreGarni() {
           labels: { s1: ["l-cr"] },
           assignes: [{ subject_id: "s1", person_id: "p-1" }],
           mentions: [{ subject_id: "s2", mentioned_person_id: "p-1" }],
-          liens: [{ link_type: "blocked_by", source_subject_id: "s3", target_subject_id: "s1" }]
+          liens: [{ link_type: "blocked_by", source_subject_id: "s3", target_subject_id: "s1" }],
+          // `[]` et non `null` : la base a répondu, et ce projet n'a aucun
+          // signal. Sans cette distinction, « Mentions » et « Activité
+          // récente » ne se proposeraient pas (règle 5).
+          signaux: []
         })
       }
     }
