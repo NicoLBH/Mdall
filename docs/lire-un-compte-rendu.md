@@ -1018,6 +1018,57 @@ ordre* — et les séparer ferait chercher l'un quand on a trouvé l'autre.
 Le lot n'y est plus : il se déduit de l'assigné, et deux menus pour une même information font
 chercher lequel est le bon.
 
+#### Ce qui n'a pas marché, et pourquoi les tests ne l'ont pas vu
+
+Le rail, la barre et les menus d'en-tête ont été livrés complets — chaque entrée portant sa
+requête, chaque menu ses attributs — et **rien ne fonctionnait**. Le bouton de repli ne
+repliait pas, les entrées du rail ne filtraient pas, les menus ne s'ouvraient pas, et le
+tableau se retrouvait dans une bande de trois cents pixels.
+
+Trois causes, et une quatrième qui les a laissées passer.
+
+##### Les gestes ne pouvaient pas arriver
+
+`quandOnClique` n'écoute que `.data-table-shell__head` et `.project-table-toolbar` — c'est sa
+raison d'être, pour qu'un attribut homonyme d'un autre écran ne déclenche rien. **Le rail
+n'en fait pas partie.** Ses clics n'étaient donc lus par personne.
+
+Le bouton de repli vient du composant partagé, et son attribut aussi : c'est à l'écran qui
+pose le rail de le brancher, et il ne l'était pas. Les menus d'en-tête, eux, n'avaient aucun
+écouteur du tout : un menu sans son geste d'ouverture ne s'ouvre pas.
+
+##### La grille comptait le rail deux fois
+
+`.project-rail` est en **position fixe**. Ce n'est donc pas une colonne de grille : le contenu
+s'écarte par une marge, comme dans la Mémoire. Écrire une grille par-dessus réservait la
+largeur du rail une seconde fois, et le tableau tenait dans ce qui restait.
+
+La structure est maintenant celle de la Mémoire à l'identique — `project-simple-page` +
+`propositions-shell` + `project-rail-layout` — ce qui a supprimé les règles que j'avais
+écrites plutôt que d'en ajouter.
+
+##### Le test qui manquait
+
+Tous les tests passaient. Ils vérifiaient que le balisage porte les bons attributs, et
+c'était vrai. **Un balisage juste que nul ne lit a exactement l'air de marcher.**
+
+Le défaut était que la décision « ce clic demande quoi ? » vivait dans un gestionnaire
+d'événements, où elle ne s'exécute qu'avec un navigateur. Elle est sortie dans
+`gestes-des-sujets.js`, pure — c'est le patron de `gesteDeLaTete`, écrit pour le même
+problème —, et deux tests la confrontent au balisage : **chaque attribut que l'écran dessine
+doit rendre un geste**.
+
+Deux détails ont fait la différence entre un test qui attrape ça et un qui ne l'attrape pas :
+
+- ne pas **sauter** ce qui n'est pas dans la liste des attributs écoutés — c'est justement ce
+  qu'un renommage d'un seul côté produit ; ce qui n'est pas un geste est nommé, et tout le
+  reste doit en être un ;
+- chercher les attributs **sans le `=` final** : `data-project-rail-collapse` s'écrit nu,
+  et l'exiger faisait manquer au test exactement le bouton qui ne marchait pas.
+
+Les deux ont été trouvés en cassant : la première version du test ne tombait pas quand on
+débranchait le repli.
+
 #### Une seule recherche
 
 Celle de la barre d'outils ne cherchait que dans les titres, sans grammaire et sans

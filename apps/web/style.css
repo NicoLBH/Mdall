@@ -18082,7 +18082,8 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
     position:static; width:auto; flex-direction:row; align-items:center; flex-wrap:wrap;
     border-right:0; border-bottom:1px solid var(--border); padding:0 0 8px;
   }
-  .project-simple-page--memory{ margin-left:0; }
+  .project-simple-page--memory,
+  .project-simple-page--sujets{ margin-left:0; }
   /* Au téléphone, la coquille n'a plus de remplissage à annuler, et le rail
      passe en rangée au-dessus du contenu : plus rien à lui réserver. */
   .project-simple-page--atelier{ margin-inline:0; }
@@ -24246,12 +24247,17 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 
 /* ── L'écran des sujets : le rail, la barre, les filtres d'en-tête ───────── */
 
-/* Le rail est celui de la Mémoire et de l'Atelier — coque, calage du haut,
-   repli, poignée de largeur. Seule la grille est d'ici : le rail sur toute la
-   hauteur à gauche, la liste à droite. */
-.sujets-ecran{display:grid;grid-template-columns:var(--project-rail-width,248px) minmax(0,1fr);
-  gap:16px;align-items:start;}
-.sujets-ecran__corps{min-width:0;}
+/* **Le rail est en position fixe**, comme dans la Mémoire : ce n'est donc pas
+   une colonne de grille. Le contenu s'écarte par une marge, sans quoi il passe
+   dessous — et le rail n'a pas de fond, si bien que les deux se lisent l'un à
+   travers l'autre. Une grille ici comptait la largeur du rail deux fois, et le
+   tableau se retrouvait dans une bande de trois cents pixels. */
+.project-simple-page--sujets{ margin-left:var(--project-rail-width, 232px); }
+
+/* Le corps est borné et centré par `propositions-shell`, celle de la Mémoire :
+   un tableau qui s'étale sur deux mille pixels se lit deux fois par ligne.
+   Rien à écrire de plus ici — la coquille et la mise en colonne existent. */
+.project-simple-page--sujets .propositions-shell{ gap:16px; }
 
 /* Aucune vue épinglée : on dit comment en avoir une. Une rubrique vide fait
    croire qu'on a perdu quelque chose. */
@@ -24274,11 +24280,7 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .sujets-head-menu .issues-head-menu__btn:hover{color:var(--text);}
 .sujets-head-menu.est-posee .issues-head-menu__btn{color:var(--text);font-weight:600;}
 
-@media (max-width:900px){
-  /* Sous cette largeur le rail mangerait la liste : il passe au-dessus. */
-  .sujets-ecran{grid-template-columns:minmax(0,1fr);}
-  .sujets-ecran .project-rail{position:static;height:auto;}
-}
+
 
 /* ── Ce qui changerait, en tête d'une proposition ────────────────────────── */
 

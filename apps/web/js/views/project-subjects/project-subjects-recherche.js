@@ -197,19 +197,22 @@ export function renderFiltreDenTeteHtml({ id, champ, requete = "", enCours = "",
   const choisie = champ.values.find((valeur) => valeur.value === enCours) ?? null;
   const nom = choisie ? choisie.label : champ.label;
 
+  // **L'attribut qui ouvre le menu, et celui qui porte sa liste.** Ils sont
+  // nommés plutôt que déduits d'un identifiant : c'est ce que la délégation
+  // cherche, et un menu sans eux ne s'ouvre pas — ce qui est arrivé.
   return `
     <div class="issues-head-menu sujets-head-menu${choisie ? " est-posee" : ""}">
-      <button class="issues-head-menu__btn" id="${escapeHtml(id)}Btn" type="button"
+      <button class="issues-head-menu__btn" type="button" data-sujets-menu="${escapeHtml(id)}"
         aria-haspopup="true" aria-expanded="false">
         <span>${escapeHtml(nom)}</span>
         ${svgIcon("chevron-down", { className: "gh-chevron" })}
       </button>
 
-      <div class="gh-menu issues-head-menu__dropdown" id="${escapeHtml(id)}Dropdown">
+      <div class="gh-menu issues-head-menu__dropdown" data-sujets-menu-liste="${escapeHtml(id)}" role="menu">
         ${[{ value: "", label: `Tous — ${champ.label.toLowerCase()}` }, ...champ.values].map((valeur) => {
           const active = valeur.value === enCours;
           return `
-            <button class="gh-menu__item ${active ? "is-active" : ""}" type="button"
+            <button class="gh-menu__item ${active ? "is-active" : ""}" type="button" role="menuitem"
               data-sujets-lecture="${escapeHtml(poser(valeur.value))}">
               <span class="gh-menu__check">${active ? svgIcon("check", { className: "octicon" }) : ""}</span>
               ${escapeHtml(valeur.label)}
