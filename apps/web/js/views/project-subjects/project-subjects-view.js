@@ -555,21 +555,30 @@ function basculerLeRail() {
 function renderEcranDesSujets(corps, { champs = [], requete = "" } = {}) {
   const replie = railReplie();
 
+  // **La structure est celle de la Mémoire, à l'identique.** Le rail y est en
+  // position fixe — ce n'est donc pas une colonne de grille —, le contenu
+  // s'écarte par une marge, et `propositions-shell` le borne et le centre.
+  // Une grille écrite ici comptait la largeur du rail deux fois, et le tableau
+  // se retrouvait dans une bande de trois cents pixels.
   return `
-    <div class="sujets-ecran project-simple-page project-simple-page--sujets"
+    <section class="project-simple-page project-simple-page--sujets"
       style="--project-rail-width:${railWidth(railLargeur(), replie)}px">
-      ${renderRailDesSujetsHtml({
-        sujets: getFlatSubjects(),
-        champs,
-        requete,
-        meta: getMetaDesSujets(),
-        moi: String(store.user?.id || ""),
-        epingles: recherchesEpinglees ?? [],
-        replie,
-        sousVue: String(store.situationsView?.subjectsSubview || "subjects")
-      })}
-      <div class="sujets-ecran__corps">${corps}</div>
-    </div>
+      <div class="propositions-shell">
+        <div class="project-rail-layout${replie ? " project-rail-layout--collapsed" : ""}">
+          ${renderRailDesSujetsHtml({
+            sujets: getFlatSubjects(),
+            champs,
+            requete,
+            meta: getMetaDesSujets(),
+            moi: String(store.user?.id || ""),
+            epingles: recherchesEpinglees ?? [],
+            replie,
+            sousVue: String(store.situationsView?.subjectsSubview || "subjects")
+          })}
+          <div class="project-rail-layout__content">${corps}</div>
+        </div>
+      </div>
+    </section>
   `;
 }
 
@@ -777,7 +786,9 @@ function renderSubjectsFiltresDenTeteHtml() {
       if (!champ) return "";
 
       return renderFiltreDenTeteHtml({
-        id: `subjects${cle.replace(/[^a-z]/gi, "")}Head`,
+        // La clé sert de nom au menu : sans accent ni espace, parce qu'elle
+        // entre dans un sélecteur d'attribut.
+        id: `sujets-${cle.normalize("NFD").replace(/[^a-z]/gi, "")}`,
         champ,
         requete,
         enCours: filterValue(requete, champs, cle),

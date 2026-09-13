@@ -1,5 +1,6 @@
 import { applyMarkdownComposerAction } from "../../utils/markdown-composer.js";
 import { dropOtherTokens, suggestAt, withFilter } from "../../services/query-bar.js";
+import { GESTE, gesteDesSujets } from "../../services/gestes-des-sujets.js";
 import { escapeHtml as echapper } from "../../utils/escape-html.js";
 import { brancherLaZoneDeDepot } from "../ui/zone-de-depot.js";
 import {
@@ -5827,50 +5828,116 @@ export function createProjectSubjectsEvents(config) {
    * Ils sont posés sur la racine, en délégation : le panneau est reconstruit à
    * chaque rendu, et des écouteurs attachés aux boutons partiraient avec lui.
    */
+  /**
+   * Ouvrir ou fermer un menu de filtre de l'en-tête.
+   *
+   * **Un seul ouvert à la fois** : deux listes superposées se recouvrent, et
+   * l'on clique dans celle qu'on ne regarde pas.
+   */
+  function basculerUnMenuDenTete(root, cle) {
+    const id = String(cle || "").trim();
+    if (!id) return;
+
+    const bouton = root.querySelector(`[data-sujets-menu="${id}"]`);
+    const liste = root.querySelector(`[data-sujets-menu-liste="${id}"]`);
+    if (!bouton || !liste) return;
+
+    const ouvert = liste.classList.contains("gh-menu--open");
+    fermerLesMenusDenTete(root);
+    if (ouvert) return;
+
+    liste.classList.add("gh-menu--open");
+    bouton.setAttribute("aria-expanded", "true");
+  }
+
+  function fermerLesMenusDenTete(root) {
+    root.querySelectorAll?.("[data-sujets-menu-liste]").forEach((liste) => {
+      liste.classList.remove("gh-menu--open");
+    });
+    root.querySelectorAll?.("[data-sujets-menu]").forEach((bouton) => {
+      bouton.setAttribute("aria-expanded", "false");
+    });
+  }
+
   function ecouterLaBarreDesSujets(root) {
     root.addEventListener("mousedown", (event) => {
       // `mousedown` et non `click` : le champ perd le focus au premier, et la
-      // liste se serait refermée avant que le clic n'arrive.
-      const suggestion = event.target.closest?.("[data-sujets-suggestion]");
-      if (!suggestion) return;
+      // liste se serait refermée avant que le clic n'arrive. Le `click` qui
+      // suit retombe sur le même geste, et applique la même suggestion — sans
+      // conséquence, puisque la liste a déjà changé.
+      const { geste, valeur } = gesteDesSujets(event.target);
+      if (geste !== GESTE.SUGGESTION) return;
       event.preventDefault();
-      appliquerUneSuggestion(root, Number(suggestion.dataset.sujetsSuggestion) || 0);
+      appliquerUneSuggestion(root, Number(valeur) || 0);
     });
 
+    /**
+     * **Un seul écouteur, et une décision qui s'exécute en test.**
+     *
+     * Le rail, la barre et les menus d'en-tête ont été dessinés complets, avec
+     * tous leurs attributs, et rien ne marchait : chaque geste passait par une
+     * zone qui ne le couvrait pas, ou par aucun écouteur. `gesteDesSujets` dit
+     * ce qu'un clic demande, sans DOM et sans navigateur — c'est elle que les
+     * tests appellent, et c'est ce qui a manqué.
+     */
     root.addEventListener("click", (event) => {
-      // **Les autres écrans du domaine**, depuis le rail. Ils ne filtrent
-      // rien : ils changent de page. Une sous-vue est une page des Sujets ;
-      // les Situations sont un onglet à part, et le lien y mène.
-      const sousVue = event.target.closest?.("[data-sujets-sousvue]");
-      if (sousVue) {
-        event.preventDefault();
-        resetObjectiveEditState();
-        store.situationsView.subjectsSubview = String(sousVue.dataset.sujetsSousvue || "subjects");
-        store.situationsView.selectedObjectiveId = "";
-        store.situationsView.showTableOnly = true;
-        rerenderPanels();
-        return;
-      }
+      const { geste, valeur, noeud } = gesteDesSujets(event.target);
 
-      if (event.target.closest?.("[data-sujets-ecran]")) {
-        event.preventDefault();
-        ouvrirLesSituations();
-        return;
-      }
+      // Un clic ailleurs referme ce qui était ouvert : un menu qui reste ouvert
+      // derrière ce qu'on regarde se lit comme un défaut d'affichage.
+      if (geste !== GESTE.MENU) fermerLesMenusDenTete(root);
+      if (geste === GESTE.RIEN) return;
 
-      if (event.target.closest?.("[data-sujets-vider]")) {
-        event.preventDefault();
-        poserLaRequeteDesSujets("");
-        return;
-      }
-      if (event.target.closest?.("[data-sujets-epingler]")) {
-        event.preventDefault();
-        epinglerLaRechercheDesSujets();
-        return;
-      }
-      if (event.target.closest?.("[data-sujets-rail-repli]")) {
-        event.preventDefault();
-        basculerLeRail();
+      event.preventDefault();
+
+      switch (geste) {
+        case GESTE.LECTURE:
+          poserLaRequeteDesSujets(valeur);
+          return;
+
+        case GESTE.DECROCHER:
+          // La croix est **dans** l'entrée : sans cela, le clic poserait aussi
+          // la requête de l'épingle qu'on vient de retirer.
+          event.stopPropagation();
+          retirerLaRechercheEpinglee(valeur);
+          return;
+
+        case GESTE.REPLI:
+          basculerLeRail();
+          return;
+
+        case GESTE.MENU:
+          event.stopPropagation();
+          basculerUnMenuDenTete(root, valeur);
+          return;
+
+        case GESTE.SUGGESTION:
+          appliquerUneSuggestion(root, Number(valeur) || 0);
+          return;
+
+        case GESTE.VIDER:
+          poserLaRequeteDesSujets("");
+          return;
+
+        case GESTE.EPINGLER:
+          // Un bouton éteint ne fait rien : l'attribut reste, c'est `disabled`
+          // qui décide, et le vérifier ici évite d'épingler une barre vide.
+          if (!noeud?.disabled) epinglerLaRechercheDesSujets();
+          return;
+
+        case GESTE.SOUS_VUE:
+          resetObjectiveEditState();
+          store.situationsView.subjectsSubview = valeur || "subjects";
+          store.situationsView.selectedObjectiveId = "";
+          store.situationsView.showTableOnly = true;
+          rerenderPanels();
+          return;
+
+        case GESTE.ECRAN:
+          ouvrirLesSituations();
+          return;
+
+        default:
       }
     });
 
@@ -5924,13 +5991,11 @@ export function createProjectSubjectsEvents(config) {
       poserLaRequeteDesSujets(avecUnJeton("statut", demande === "closed" ? "closed" : "open"));
     });
 
-    // Le rail, les épingles et les menus d'en-tête posent tous une requête
-    // entière : un seul geste, un seul état.
-    quandOnClique("sujets-lecture", (requete) => {
-      poserLaRequeteDesSujets(String(requete ?? ""));
-    });
-
-    quandOnClique("sujets-decrocher", (id) => { retirerLaRechercheEpinglee(id); });
+    // **Le rail n'est pas dans la tête du tableau.** `quandOnClique` n'écoute
+    // que `.data-table-shell__head` et `.project-table-toolbar` — c'est sa
+    // raison d'être, pour qu'un attribut homonyme d'un autre écran ne
+    // déclenche rien ici. Les gestes du rail passent donc par la délégation
+    // sur la racine, avec ceux de la barre : voir `ecouterLaBarreDesSujets`.
 
     quandOnClique("subjects-sort", (valeur) => {
       if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {

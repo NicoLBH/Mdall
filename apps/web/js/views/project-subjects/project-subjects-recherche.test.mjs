@@ -13,6 +13,7 @@ import { LECTURE, NOMS_DE_LA_LECTURE } from "../../services/rail-des-sujets.js";
 import {
   renderFiltreDenTeteHtml, renderRailDesSujetsHtml, renderRechercheDesSujetsHtml
 } from "./project-subjects-recherche.js";
+import { ATTRIBUTS_ECOUTES, GESTE, gesteDesSujets } from "../../services/gestes-des-sujets.js";
 
 const champs = champsDesSujets({
   labels: [{ key: "l-cr", name: "CR chantier" }],
@@ -254,4 +255,150 @@ test("le filtre posé se voit sur le bouton, pas seulement dans la liste", () =>
 test("un champ absent ne dessine rien", () => {
   assert.equal(renderFiltreDenTeteHtml({ id: "x", champ: null, poser: () => "" }), "");
   assert.equal(renderFiltreDenTeteHtml({ id: "x", champ: champLabel }), "");
+});
+
+/* ── Ce qui permet à un geste d'arriver ──────────────────────────────────── */
+
+/**
+ * **Tous les tests passaient pendant que rien ne marchait.**
+ *
+ * Ils vérifiaient que le balisage porte les bons attributs, et c'était vrai ;
+ * mais personne ne les écoutait. Un rail dont chaque entrée porte sa requête
+ * et qu'aucun écouteur ne lit est exactement aussi inutile qu'un rail vide —
+ * et il a l'air de marcher.
+ *
+ * Ces tests-ci portent sur **le contrat entre le dessin et l'écoute** : les
+ * attributs que la délégation cherche. Ils ne prouvent pas que l'écoute est
+ * branchée — c'est le rôle du test des événements, plus bas — mais ils
+ * empêchent les deux moitiés de se perdre de vue.
+ */
+
+/**
+ * **Le test qui aurait attrapé la panne.**
+ *
+ * Chaque attribut que le rail dessine est passé à `gesteDesSujets`, la
+ * décision que l'écoute exécute. Si l'un d'eux ne rend aucun geste, il est
+ * dessiné pour rien — et il a exactement l'air de marcher.
+ */
+test("chaque attribut que le rail dessine déclenche un geste", () => {
+  const html = rail({ epingles: [{ id: "e1", query: "priorité:haute", title: "X" }] });
+
+  // **Sans le `=` final.** Un attribut booléen s'écrit nu —
+  // `data-project-rail-collapse` n'a pas de valeur —, et l'exiger faisait
+  // manquer au test exactement le bouton qui ne marchait pas.
+  const poses = [...new Set(
+    [...html.matchAll(/(data-(?:sujets|project)-[a-z-]+)/g)].map(([, nom]) => nom)
+  )];
+
+  // Le rail en pose une poignée ; s'il n'en pose aucun, c'est le test qui est
+  // cassé, pas l'écran.
+  assert.ok(poses.length >= 4, `le rail ne pose que ${poses.length} attributs`);
+
+  for (const attribut of poses) {
+    // **Le sens du test tient à ceci.** Sauter ce qui n'est pas dans la liste
+    // laisserait passer exactement la panne qu'on surveille : un attribut
+    // renommé d'un seul côté sortirait de la liste, et le test le sauterait au
+    // lieu de tomber. Ce qui n'est pas un geste est donc **nommé**, et tout le
+    // reste doit en être un.
+    if (SANS_GESTE.includes(attribut)) continue;
+
+    assert.notEqual(
+      gesteDesSujets(unNoeud(attribut)).geste, GESTE.RIEN,
+      `le rail pose « ${attribut} » et rien ne l'écoute`
+    );
+  }
+});
+
+/**
+ * Les attributs de dessin, qui ne déclenchent rien : l'infobulle du rail
+ * replié, le nom du rail pour sa poignée, et la liste d'un menu — que l'écoute
+ * cherche par son nom, pas par un clic dessus.
+ */
+const SANS_GESTE = ["data-tooltip", "data-project-rail", "data-sujets-menu-liste",
+  "data-sujets-recherche", "data-sujets-suggestions"];
+
+/** Et les menus d'en-tête, qui n'ont pas de geste depuis quatre heures. */
+test("chaque attribut d'un filtre d'en-tête déclenche un geste", () => {
+  const html = renderFiltreDenTeteHtml({
+    id: "sujets-label", champ: champLabel, poser: () => "label:x"
+  });
+
+  for (const [, attribut] of html.matchAll(/(data-sujets-[a-z-]+)/g)) {
+    if (SANS_GESTE.includes(attribut)) continue;
+    assert.notEqual(
+      gesteDesSujets(unNoeud(attribut)).geste, GESTE.RIEN,
+      `le menu pose « ${attribut} » et rien ne l'écoute`
+    );
+  }
+
+  // Le bouton ouvre, l'entrée pose : les deux gestes sont bien là.
+  assert.match(html, /data-sujets-menu=/);
+  assert.match(html, /data-sujets-lecture=/);
+});
+
+/** Un nœud minimal, juste de quoi que `closest` réponde. */
+function unNoeud(attribut) {
+  return {
+    getAttribute: (nom) => (nom === attribut ? "x" : null),
+    closest: (selecteur) => (selecteur === `[${attribut}]` ? unNoeud(attribut) : null)
+  };
+}
+
+test("le rail porte tous les attributs que l'écoute cherche", () => {
+  const html = rail({ epingles: [{ id: "e1", query: "priorité:haute", title: "X" }] });
+
+  for (const attribut of ["data-sujets-lecture", "data-sujets-decrocher",
+    "data-sujets-sousvue", "data-sujets-ecran", "data-project-rail-collapse"]) {
+    assert.ok(html.includes(attribut), `le rail ne porte pas « ${attribut} »`);
+  }
+});
+
+/**
+ * **Un menu sans son attribut d'ouverture ne s'ouvre pas.** C'est ce qui est
+ * arrivé : les filtres d'en-tête étaient dessinés, complets, et aucun clic ne
+ * les déployait. Le bouton et sa liste se nomment donc, et portent le **même**
+ * nom — c'est par lui que l'écoute les apparie.
+ */
+test("un filtre d'en-tête porte de quoi être ouvert", () => {
+  const html = renderFiltreDenTeteHtml({
+    id: "sujets-label", champ: champLabel, poser: () => ""
+  });
+
+  assert.match(html, /data-sujets-menu="sujets-label"/);
+  assert.match(html, /data-sujets-menu-liste="sujets-label"/);
+  assert.match(html, /aria-expanded="false"/);
+  assert.match(html, /aria-haspopup="true"/);
+});
+
+/** Le nom du menu entre dans un sélecteur d'attribut : il doit y survivre. */
+test("le nom d'un menu tient dans un sélecteur", () => {
+  const html = renderFiltreDenTeteHtml({
+    id: "sujets-assigne", champ: champLabel, poser: () => ""
+  });
+  const nom = html.match(/data-sujets-menu="([^"]+)"/)?.[1] ?? "";
+
+  assert.match(nom, /^[a-z-]+$/, `« ${nom} » ne tient pas dans un sélecteur`);
+});
+
+/**
+ * **Le contrat est écrit une fois, dans le service.** Une seconde liste ici
+ * aurait été la copie qui diverge — et c'est exactement ce genre d'écart qui a
+ * laissé le rail sans écoute.
+ */
+/** La barre a le même contrat que le rail et les menus. */
+test("chaque attribut que la barre dessine déclenche un geste", () => {
+  const html = renderRechercheDesSujetsHtml({ requete: "a", champs });
+
+  for (const [, attribut] of html.matchAll(/(data-sujets-[a-z-]+)/g)) {
+    if (SANS_GESTE.includes(attribut)) continue;
+    assert.notEqual(
+      gesteDesSujets(unNoeud(attribut)).geste, GESTE.RIEN,
+      `la barre pose « ${attribut} » et rien ne l'écoute`
+    );
+  }
+});
+
+test("le contrat des attributs est écrit une fois, et tenu", () => {
+  assert.equal(new Set(ATTRIBUTS_ECOUTES).size, ATTRIBUTS_ECOUTES.length);
+  assert.ok(ATTRIBUTS_ECOUTES.includes("data-sujets-lecture"));
 });
