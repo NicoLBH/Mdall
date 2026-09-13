@@ -26,6 +26,7 @@ import {
   LECTURE, assemblerLeMarkdown, fideliteDeLaReconstitution
 } from "../../../services/reconstitution-markdown.js";
 import { SORT, confrontation, lectureAssemblee } from "../../../services/lecture-du-cr.js";
+import { LIEN, NOMS_DU_LIEN, QUOI_DU_LIEN } from "../../../services/liens-du-cr.js";
 import { prixDeLAppel } from "../../../services/consommation-ia.js";
 import { PHRASES_DU_RANGEMENT, RANGEE } from "../../../services/restitution-rangee.js";
 
@@ -832,19 +833,57 @@ test("rien ne s'apporte avant la lecture", () => {
  * quelle étape on en était — et l'on redéposait, ce qui relançait tout et
  * repayait tout.
  */
-test("le fichier se dit reçu dès qu'il arrive, avec l'étape en cours", () => {
+test("le fichier se dit reçu dès qu'il arrive, avec les étapes cochées", () => {
   const html = renderLaLecture(unEtat({
-    phase: "lecture", dit: "Restitution des 2 pages en Markdown",
-    fichier: { name: "CR_07.pdf" }
+    phase: "lecture", etape: "restitution", fichier: { name: "CR_07.pdf" }
   }));
 
   assert.match(html, /lecture-cr__recu/);
   assert.match(html, /CR_07\.pdf/);
-  assert.match(html, /Restitution des 2 pages en Markdown…/);
   // Et les deux onglets sont déjà là, avant que quoi que ce soit arrive.
   assert.match(html, /lecture-cr__onglets/);
   assert.match(html, />Restitution</);
   assert.match(html, />Analyse</);
+});
+
+/**
+ * **Ce qui est fait, ce qui se fait, ce qui reste.** Une phrase à la fois ne
+ * disait aucune des trois : on ne savait ni combien d'étapes restaient, ni ce
+ * qui était acquis, ni pourquoi c'était long.
+ */
+test("les étapes se cochent à mesure, et disent laquelle est en cours", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lecture", etape: "restitution", fichier: { name: "CR_07.pdf" }
+  }));
+
+  assert.match(html, /lecture-cr__etapes/);
+  assert.match(html, /Reconnaissance de la structure/);
+  assert.match(html, /Restitution du document en Markdown…/);
+  assert.match(html, /Relevé des points sur le document restitué/);
+
+  // Deux étapes acquises avant celle-ci, et une seule en cours.
+  assert.equal((html.match(/lecture-cr__etape est-faite/g) ?? []).length, 2);
+  assert.equal((html.match(/est-ici/g) ?? []).length, 1);
+});
+
+/** Quand ça casse, la liste dit à quelle étape — ce qu'il fallait deviner. */
+test("une panne se pose sur l'étape où elle est arrivée", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "echec", etape: "sujets", motif: "La lecture a été refusée.",
+    fichier: { name: "CR_07.pdf" }
+  }));
+
+  assert.match(html, /est-ici est-cassee/);
+  assert.equal((html.match(/lecture-cr__etape est-faite/g) ?? []).length, 3);
+});
+
+/** Une lecture achevée a tout coché, et plus rien en cours. */
+test("une lecture achevée n'affiche plus d'étapes", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution()
+  }));
+
+  assert.doesNotMatch(html, /lecture-cr__etapes/);
 });
 
 /**
@@ -1199,22 +1238,22 @@ test("les points que le compte rendu ferme se disent, avec le mot qui les ferme"
 });
 
 /**
- * **La règle qui ne se négocie pas.** Un sujet qui n'apparaît plus pose une
- * question ; fermer sur ce signe ferait disparaître, sans trace, des points
- * qu'on suit depuis des mois.
+ * **La déduction s'affiche comme une déduction.** Le document n'a rien dit du
+ * sujet disparu ; c'est son silence qu'on interprète. L'écran ferme quand même,
+ * parce que la fermeture se défait toute seule au compte rendu suivant — et
+ * c'est cette réversibilité, dite à l'écran, qui la rend acceptable.
  */
-test("un sujet disparu pose une question, et ne se ferme jamais", () => {
+test("un sujet disparu se ferme, et la fermeture se dit déduite", () => {
   const html = renderLaLecture(unEtatFermetures({
     sujetsDuProjet: [{ id: "s-1", title: "Étanchéité toiture" }, { id: "s-2", title: "Linteaux" }],
     sujetsDuLabel: ["s-1", "s-2"]
   }));
 
   assert.match(html, /lecture-cr__fermeture est-question/);
-  assert.match(html, /est-il réglé \?/);
   assert.match(html, /Étanchéité toiture/);
-  // Phrase de service : elle passe par escapeHtml, l'apostrophe devient &#39;.
-  assert.match(html, commeAffichee("Ce n'est pas une réponse"));
-  assert.match(html, /Elle n'en fermera aucun\./);
+  // **Fermée, mais sur une déduction** — jamais sur une phrase du document.
+  assert.match(html, commeAffichee("sur cette déduction, et non sur une phrase du document"));
+  assert.match(html, commeAffichee("se rouvriront sur ce même sujet"));
 });
 
 /**
@@ -1237,4 +1276,90 @@ test("l'écran dit qu'un point barré n'est pas détecté", () => {
 
   assert.match(html, /Un point barré n'est pas détecté/);
   assert.match(html, /trait dessiné par-dessus/);
+});
+
+/* ── Les dépendances entre points ────────────────────────────────────────── */
+
+function unEtatLiens(liens = [], surcharge = {}) {
+  const lecture = uneLecture();
+  lecture.points = lecture.points.map((point, rang) => ({ ...point, liens: liens[rang] ?? [] }));
+
+  return unEtat({
+    phase: "lue", pagesLues: PAGES, onglet: "analyse", md: uneRestitution(),
+    lots: [], labels: [], objectifs: [],
+    confrontes: lecture.points.map((point) => ({ ...point, sort: SORT.NOUVEAU, sujet: null, par: "" })),
+    ...surcharge,
+    lecture: { ...lecture, ...(surcharge.lecture ?? {}) }
+  });
+}
+
+/**
+ * **C'est l'information qu'une réunion produit, et la seule qu'un tableau
+ * perd.** Versés sans leurs liens, quarante points deviennent quarante sujets
+ * indépendants : on ne voit plus qu'en débloquant un lot on en débloque trois.
+ */
+test("les dépendances se disent, avec ce qu'elles relient", () => {
+  const html = renderLaLecture(unEtatLiens([
+    [{ type: LIEN.BLOQUE_PAR, versPoint: "Sondage sur linteaux bois", raison: "après sondage" }]
+  ]));
+
+  assert.match(html, /lecture-cr__liens/);
+  assert.match(html, /Les dépendances/);
+  // D'où part le lien, ce qu'il dit, et où il va.
+  assert.match(html, /Reprise d&#39;étanchéité/);
+  assert.match(html, commeAffichee(NOMS_DU_LIEN[LIEN.BLOQUE_PAR]));
+  assert.match(html, /Sondage sur linteaux bois/);
+});
+
+/**
+ * **Un lien est le genre d'affirmation que personne ne vérifie.** La phrase du
+ * document qui l'établit est donc à côté : sans elle, on ne peut pas répondre
+ * « non, ça n'a rien à voir » — on peut seulement croire.
+ */
+test("chaque dépendance porte la phrase du document qui l'établit", () => {
+  const html = renderLaLecture(unEtatLiens([
+    [{ type: LIEN.BLOQUE_PAR, versPoint: "Sondage sur linteaux bois", raison: "après sondage sur linteaux" }]
+  ]));
+
+  assert.match(html, /lecture-cr__lien-raison/);
+  assert.match(html, /après sondage sur linteaux/);
+  // La prose du gabarit ne passe pas par `escapeHtml` : son apostrophe reste nue.
+  assert.match(html, /c'est elle qui permet de répondre/);
+});
+
+/** Ce qu'il faut avoir lu pour poser ce lien se dit au survol, pas en note. */
+test("le type de lien dit au survol ce qu'il faut avoir lu", () => {
+  const html = renderLaLecture(unEtatLiens([
+    [{ type: LIEN.BLOQUE_PAR, versPoint: "Sondage sur linteaux bois" }]
+  ]));
+
+  assert.match(html, new RegExp(`title="${commeAffichee(QUOI_DU_LIEN[LIEN.BLOQUE_PAR]).source}"`));
+});
+
+/**
+ * Les deux directions ne se résolvent pas à la même date : un lien vers un sujet
+ * déjà ouvert s'écrit à la fusion, un lien entre deux points attend que les deux
+ * sujets existent. L'écran les distingue.
+ */
+test("un lien vers un sujet déjà ouvert se distingue d'un lien interne", () => {
+  const html = renderLaLecture(unEtatLiens([
+    [{ type: LIEN.LIE_A, versSujet: "s-1" }],
+    [{ type: LIEN.BLOQUE_PAR, versPoint: "Reprise d'étanchéité" }]
+  ]));
+
+  assert.match(html, /lecture-cr__lien est-au-projet/);
+  assert.match(html, /1 vers un sujet déjà ouvert/);
+  assert.match(html, /1 entre des points de ce compte rendu/);
+});
+
+/**
+ * **Zéro dépendance est le cas le plus fréquent**, et ce n'est pas un échec :
+ * beaucoup de comptes rendus n'écrivent aucun lien. Un bloc vide, ou un bloc
+ * qui se plaint, ferait croire que la lecture a raté quelque chose.
+ */
+test("sans dépendance, le bloc ne s'affiche pas du tout", () => {
+  const html = renderLaLecture(unEtatLiens());
+
+  assert.doesNotMatch(html, /lecture-cr__liens/);
+  assert.doesNotMatch(html, /Les dépendances/);
 });

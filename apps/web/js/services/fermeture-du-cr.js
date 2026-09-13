@@ -9,9 +9,22 @@
  * oublié, parce que le lot n'était pas convoqué cette semaine, ou parce que le
  * document a changé de trame.
  *
- * **Fermer sur ce seul signe perdrait des points qu'on suit depuis des mois** —
- * et personne ne s'en apercevrait, puisque ce qui disparaît ne laisse rien à
- * voir.
+ * ## Pourquoi la disparition ferme quand même — et ce qui a changé d'avis
+ *
+ * La première version refusait de fermer là-dessus : trop de raisons de
+ * disparaître qui ne sont pas « c'est réglé ». L'argument tient, mais il
+ * oubliait l'autre côté de la balance.
+ *
+ * **Rouvrir coûte un clic.** Un point fermé à tort qui revient au compte rendu
+ * suivant se rouvre — et depuis que `SORT.REOUVRE` existe, il se rouvre sur le
+ * sujet d'origine, avec toute son histoire, au lieu d'en ouvrir un second.
+ * Pendant ce temps, ne jamais fermer laisse un projet où deux cents sujets
+ * restent ouverts pour trois qui le sont vraiment : la liste devient illisible,
+ * et plus personne ne la regarde.
+ *
+ * On ferme donc. Mais **on dit que c'est déduit**, et jamais que le document
+ * l'a dit : les deux justifications ne se valent pas, et la proposition doit
+ * porter la bonne.
  *
  * ## Trois signes, et ils ne se valent pas
  *
@@ -19,7 +32,7 @@
  * | --- | --- |
  * | Le document le dit — « fait », « soldé », une date de fermeture | **une réponse** |
  * | Le point est barré | une réponse, **si la mise en forme survit** — voir plus bas |
- * | Le point a disparu du compte rendu | **une question, pas une réponse** |
+ * | Le point a disparu du compte rendu | **une fermeture déduite**, et elle se dit comme telle |
  *
  * ## Ce qu'on ne sait pas détecter, et il faut le dire
  *
@@ -58,20 +71,31 @@ export const FERMETURE = {
   /** Le document dit explicitement que ce n'est pas fini. */
   RETENUE: "retenue",
   /** Le document n'en dit rien : le point reste ouvert. */
-  OUVERTE: "ouverte"
+  OUVERTE: "ouverte",
+  /**
+   * Le sujet n'apparaît plus. On ferme, **et l'on dit que c'est déduit**.
+   *
+   * Ce n'est pas « le document le dit » : c'est « le document n'en parle plus ».
+   * La différence ne change pas ce qu'on fait, elle change ce qu'on écrit — et
+   * c'est elle qui permettra, plus tard, de relire les fermetures déduites sans
+   * relire les autres.
+   */
+  DEDUITE: "deduite"
 };
 
 export const PHRASES_DE_LA_FERMETURE = {
   [FERMETURE.DITE]: "Le compte rendu marque ce point comme réglé.",
   [FERMETURE.RETENUE]: "Le compte rendu dit explicitement que ce point n'est pas fini.",
-  [FERMETURE.OUVERTE]: "Le compte rendu n'en dit rien : le point reste ouvert."
+  [FERMETURE.OUVERTE]: "Le compte rendu n'en dit rien : le point reste ouvert.",
+  [FERMETURE.DEDUITE]: "Ce sujet n'apparaît plus dans le compte rendu."
 };
 
 /** Ce que chaque verdict ferait, en toutes lettres. */
 export const EFFETS_DE_LA_FERMETURE = {
   [FERMETURE.DITE]: "La proposition fermerait ce sujet, avec la phrase qui le justifie.",
   [FERMETURE.RETENUE]: "Le sujet reste ouvert, et son activité enregistre où il en est.",
-  [FERMETURE.OUVERTE]: "Rien ne change pour ce sujet."
+  [FERMETURE.OUVERTE]: "Rien ne change pour ce sujet.",
+  [FERMETURE.DEDUITE]: "La proposition fermerait ce sujet — sur une déduction, et non sur une phrase du document. S'il revient au prochain compte rendu, il se rouvrira sur ce même sujet, avec son histoire."
 };
 
 /**
@@ -191,8 +215,9 @@ export function sujetsDisparus({
 /**
  * Ce qu'il faut dire des disparitions, en une phrase.
  *
- * Elle ne dit jamais « ces sujets sont réglés ». Elle pose la question, et c'est
- * quelqu'un qui répond.
+ * **Elle ne dit jamais « le document les a réglés ».** Elle dit qu'ils ne
+ * figurent plus, que c'est ce dont on déduit la fermeture, et qu'un retour les
+ * rouvrira. Les trois choses sont vraies ; la première seule ne le serait pas.
  */
 export function phraseDesDisparus(disparition = {}) {
   if (!disparition?.connu) {
@@ -207,6 +232,16 @@ export function phraseDesDisparus(disparition = {}) {
     return `Les ${disparition.suivis} sujets suivis depuis les comptes rendus figurent tous dans celui-ci.`;
   }
 
-  return `${combien} sujet${combien > 1 ? "s" : ""} suivi${combien > 1 ? "s" : ""} depuis les comptes rendus n'apparai${
-    combien > 1 ? "ssent" : "t"} pas dans celui-ci. Ce n'est pas une réponse : un point sort d'un compte rendu parce qu'il est réglé, parce qu'on l'a oublié, parce que le lot n'était pas convoqué, ou parce que le document a changé de trame.`;
+  const plusieurs = combien > 1;
+
+  const releve = `${combien} sujet${plusieurs ? "s" : ""} suivi${plusieurs ? "s" : ""} depuis les comptes rendus ${
+    plusieurs ? "n'apparaissent" : "n'apparaît"} pas dans celui-ci.`;
+  const deduction = `La proposition ${plusieurs ? "les" : "le"} fermerait — sur cette déduction, et non sur une phrase du document.`;
+  // L'échappatoire fait partie de la phrase : la déduction n'est acceptable que
+  // parce qu'elle se défait toute seule au compte rendu suivant.
+  const retour = plusieurs
+    ? "Ceux qui reviennent au prochain compte rendu se rouvriront sur ce même sujet, avec son histoire."
+    : "S'il revient au prochain compte rendu, il se rouvrira sur ce même sujet, avec son histoire.";
+
+  return `${releve} ${deduction} ${retour}`;
 }

@@ -249,11 +249,26 @@ function detectTable(lines = [], index = 0) {
   return { header: colonnes, alignments: alignements, rows: corps, lastIndex: dernier };
 }
 
+/**
+ * Un retour à la ligne dans une cellule.
+ *
+ * Un tableau Markdown ne sait pas en porter : la barre verticale sépare les
+ * cellules, et un vrai saut de ligne ouvre une nouvelle ligne de tableau. Les
+ * modèles écrivent donc `\n` en toutes lettres — et sans cela, la liste de
+ * diffusion d'un compte rendu se lisait
+ * « j.dupanloup@… \n 0629500461 », les deux caractères visibles au milieu du
+ * texte.
+ *
+ * On ne le fait **que dans les cellules** : ailleurs, un `\n` littéral est
+ * presque toujours du texte que quelqu'un a écrit.
+ */
+const RETOUR_EN_CELLULE = /\\n/g;
+
 function renderTable(table, options = {}) {
   const style = (rang) => (table.alignments[rang] ? ` style="text-align:${table.alignments[rang]}"` : "");
 
   const entete = table.header
-    .map((cell, rang) => `<th${style(rang)}>${renderInlineMarkdown(cell, options)}</th>`)
+    .map((cell, rang) => `<th${style(rang)}>${enCellule(cell, options)}</th>`)
     .join("");
 
   const corps = table.rows
@@ -262,12 +277,20 @@ function renderTable(table, options = {}) {
       // complète, on ne devine pas ce qui manquait.
       const cells = Array.from({ length: table.header.length }, (_, rang) => row[rang] ?? "");
       return `<tr>${cells
-        .map((cell, rang) => `<td${style(rang)}>${renderInlineMarkdown(cell, options)}</td>`)
+        .map((cell, rang) => `<td${style(rang)}>${enCellule(cell, options)}</td>`)
         .join("")}</tr>`;
     })
     .join("");
 
   return `<div class="md-table-scroll"><table class="md-table"><thead><tr>${entete}</tr></thead><tbody>${corps}</tbody></table></div>`;
+}
+
+/** Une cellule, avec ses retours à la ligne rendus. */
+function enCellule(cell = "", options = {}) {
+  return String(cell ?? "")
+    .split(RETOUR_EN_CELLULE)
+    .map((morceau) => renderInlineMarkdown(morceau, options))
+    .join("<br>");
 }
 
 function detectSingleLineMathBlock(line = "") {

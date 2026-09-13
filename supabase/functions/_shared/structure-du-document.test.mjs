@@ -155,6 +155,26 @@ test("les titres qui découpent le document deviennent des titres Markdown", () 
   assert.match(dit, /tu rouvres un tableau avec\s+EXACTEMENT les mêmes colonnes/);
 });
 
+/**
+ * **Un document de douze pages sans respiration se lit comme un seul bloc.** Le
+ * titre seul ne suffit pas à le montrer : dans un Markdown rendu, un `###` au
+ * milieu d'un flot de tableaux se remarque à peine. Le trait, lui, se voit — et
+ * c'est lui qui dit où un lot finit et où le suivant commence.
+ */
+test("les titres qui découpent sont précédés d'un trait", () => {
+  const dit = structureEnTexte(structureLue({
+    ...UNE_STRUCTURE,
+    chapitres: [{ motif: "Lot XX", niveau: 3, exemple: "", reconnaissance: "" }]
+  }));
+
+  assert.match(dit, /LIGNE DE SÉPARATION `---`/);
+  assert.match(dit, /NIVEAU 1, 2 OU 3/);
+  assert.match(dit, /ligne vide avant et après/);
+  // **Et pas plus profond** : ce qui se range SOUS un lot ne le découpe pas, et
+  // un trait devant chaque sous-titre redécouperait tout en confettis.
+  assert.match(dit, /Pas de trait devant les titres plus profonds/);
+});
+
 /** Hors des six niveaux de Markdown, un titre n'existe pas — on ramène. */
 test("un niveau de titre impossible est ramené, pas écarté", () => {
   const lue = structureLue({
@@ -167,6 +187,34 @@ test("un niveau de titre impossible est ramené, pas écarté", () => {
   });
 
   assert.deepEqual(lue.chapitres.map((chapitre) => chapitre.niveau), [6, 1]);
+});
+
+/**
+ * **Une case mise dans la mauvaise colonne ne se voit pas à la relecture** :
+ * elle se lit comme une donnée. Sur un vrai compte rendu, l'adresse postale de
+ * chaque entreprise atterrissait dans la colonne « Tél. / Mail », parce qu'elle
+ * est écrite sous le nom et que la ligne du tableau est haute.
+ *
+ * Ce n'est pas un problème de reconnaissance — un numéro de voie et un numéro de
+ * téléphone se distinguent sans peine — mais d'affectation : il faut dire au
+ * modèle ce que chaque colonne porte. Un appel dédié coûterait un document
+ * entier pour ne rien apprendre de plus.
+ */
+test("chaque valeur va dans sa colonne, et le multi-valeur reste dans la case", () => {
+  const dit = structureEnTexte(structureLue(UNE_STRUCTURE));
+
+  assert.match(dit, /METS CHAQUE VALEUR DANS SA COLONNE/);
+  assert.match(dit, /ne porte QUE des numéros de téléphone et des adresses électroniques/);
+  assert.match(dit, /Une adresse postale[^.]*appartient à la colonne qui porte le nom/);
+  // Et pas une ligne de plus : elle se désalignerait de toutes les autres.
+  assert.match(dit, /sépare-les par `\\n` À L'INTÉRIEUR de la case/);
+  assert.match(dit, /N'ouvre JAMAIS une ligne de tableau supplémentaire/);
+});
+
+/** Sans tableau reconnu, il n'y a pas de colonne à discipliner. */
+test("la discipline des colonnes ne s'énonce que s'il y a un tableau", () => {
+  const dit = structureEnTexte(structureLue({ ...UNE_STRUCTURE, tableaux: [] }));
+  assert.doesNotMatch(dit, /METS CHAQUE VALEUR DANS SA COLONNE/);
 });
 
 /**

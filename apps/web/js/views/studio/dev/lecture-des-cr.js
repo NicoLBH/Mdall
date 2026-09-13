@@ -56,6 +56,9 @@ import {
   phraseDesDisparus, sujetsDisparus
 } from "../../../services/fermeture-du-cr.js";
 import {
+  NOMS_DU_LIEN, QUOI_DU_LIEN, liensDeLaLecture, phraseDesLiens, verifierLesLiens
+} from "../../../services/liens-du-cr.js";
+import {
   PHRASES_DU_SUR, SUR, dateEnFrancais, objectifsAProposer, phraseDesObjectifs
 } from "../../../services/echeances-du-cr.js";
 import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
@@ -79,6 +82,31 @@ const EST_UN_PDF = /\.pdf$/i;
  */
 const ONGLET = { RESTITUTION: "restitution", ANALYSE: "analyse" };
 
+/**
+ * Les étapes d'une lecture, nommées et cochées.
+ *
+ * ## Pourquoi une liste plutôt qu'une phrase
+ *
+ * L'écran disait une phrase à la fois — « Restitution des 12 pages… » — puis une
+ * autre. On ne savait ni combien il en restait, ni ce qui était déjà acquis, ni
+ * pourquoi c'était long. Une minute et demie de rond qui tourne sans savoir où
+ * l'on en est, c'est une minute et demie qui paraît en durer trois.
+ *
+ * Cochée à mesure, la liste dit les trois choses : ce qui est fait, ce qui se
+ * fait, ce qui reste. Et quand ça casse, elle dit **à quelle étape** — ce qu'il
+ * fallait auparavant deviner.
+ *
+ * L'ordre est celui du procédé, et il n'est pas négociable : la structure décide
+ * des colonnes de la restitution, et la restitution est ce que le relevé lit.
+ */
+const ETAPES = [
+  { cle: "ouverture", dit: "Ouverture du document" },
+  { cle: "structure", dit: "Reconnaissance de la structure" },
+  { cle: "restitution", dit: "Restitution du document en Markdown" },
+  { cle: "sujets", dit: "Relevé des points sur le document restitué" },
+  { cle: "projet", dit: "Confrontation à ce que le projet suit déjà" }
+];
+
 const NOMS_DES_ONGLETS = {
   [ONGLET.RESTITUTION]: "Restitution",
   [ONGLET.ANALYSE]: "Analyse"
@@ -94,6 +122,14 @@ const NOMS_DES_ONGLETS = {
 const etat = {
   phase: "vide", // vide | lecture | lue | echec
   dit: "",
+  /**
+   * L'étape en cours, et donc celles qui sont faites.
+   *
+   * Un nom de `ETAPES` : tout ce qui le précède est acquis, tout ce qui le suit
+   * reste à faire. Un seul curseur plutôt qu'une case par étape — deux
+   * représentations du même avancement finiraient par ne plus s'accorder.
+   */
+  etape: "",
   lecture: null,
   /**
    * Les pages telles qu'elles sont sorties du PDF, texte compris.
@@ -424,10 +460,50 @@ function renderFichierRecu(vue) {
     <p class="lecture-cr__recu${enCours ? " est-en-cours" : ""}">
       ${svgIcon("file", { className: "octicon" })}
       <span class="lecture-cr__recu-nom">${escapeHtml(nom)}</span>
-      <span class="lecture-cr__recu-etat mono-small">${escapeHtml(
-        enCours ? `${vue.dit || "Lecture"}…` : "reçu"
-      )}</span>
+      <span class="lecture-cr__recu-etat mono-small">${escapeHtml(enCours ? "en cours de lecture" : "reçu")}</span>
     </p>
+    ${enCours || vue.phase === "echec" ? renderLesEtapes(vue) : ""}
+  `;
+}
+
+/**
+ * Les étapes, cochées à mesure.
+ *
+ * **Ce qui est fait, ce qui se fait, ce qui reste.** Une phrase à la fois ne
+ * disait aucune des trois : on ne savait ni combien il en restait, ni ce qui
+ * était acquis, ni pourquoi c'était long. Une minute et demie de rond qui
+ * tourne sans savoir où l'on en est en paraît trois.
+ *
+ * Et quand ça casse, la liste dit **à quelle étape** — ce qu'il fallait
+ * auparavant deviner.
+ */
+function renderLesEtapes(vue) {
+  const rang = ETAPES.findIndex((etape) => etape.cle === texte(vue.etape));
+  // Sans étape connue, on n'en coche aucune : afficher tout fait serait faux,
+  // et tout à faire le serait aussi (règle 5).
+  const courante = rang < 0 ? 0 : rang;
+  const casse = vue.phase === "echec";
+
+  return `
+    <ol class="lecture-cr__etapes">
+      ${ETAPES.map((etape, place) => {
+        const faite = place < courante || (!casse && vue.phase === "lue");
+        const ici = place === courante && !faite;
+
+        return `
+          <li class="lecture-cr__etape${faite ? " est-faite" : ""}${ici ? " est-ici" : ""}${
+            ici && casse ? " est-cassee" : ""}">
+            <span class="lecture-cr__etape-case" aria-hidden="true">${
+              faite ? svgIcon("check", { className: "octicon" })
+                : ici && casse ? svgIcon("alert", { className: "octicon" })
+                : ici ? renderSpinnerHtml({ label: etape.dit, size: "sm" })
+                : ""
+            }</span>
+            <span>${escapeHtml(etape.dit)}${ici && !casse ? "…" : ""}</span>
+          </li>
+        `;
+      }).join("")}
+    </ol>
   `;
 }
 
@@ -1119,6 +1195,7 @@ function renderCeQueLeCrApporte(vue) {
       ${renderLesLots(points, vue.lots)}
       ${renderLesLabels(points, vue.labels, vue.lecture)}
       ${renderLesObjectifs(points, vue.objectifs, vue.lecture)}
+      ${renderLesLiens(points)}
       ${renderLesFermetures(vue, points)}
       <p class="lecture-cr__mot">
         Rien de tout cela n'est écrit : ni lot ajouté, ni label créé, ni label posé. C'est ce que
@@ -1269,6 +1346,53 @@ function renderLesObjectifs(points, objectifsDuProjet, lecture) {
 }
 
 /**
+ * Les dépendances que le compte rendu écrit entre ses points.
+ *
+ * ## C'est ce qu'une réunion produit, et ce qu'un tableau perd
+ *
+ * « Cloison CF1H à réaliser dans niches dans bureau, **après implantation des
+ * nourrices par BENOIT GUYOT** » dit que le lot 03 attend le lot 13. Versés
+ * sans leurs liens, ces points deviennent quarante sujets indépendants : on ne
+ * voit plus qu'en débloquant un lot on en débloque trois, ni que deux
+ * entreprises parlent de la même chose sans le savoir.
+ *
+ * ## La raison s'affiche, et ce n'est pas décoratif
+ *
+ * Un lien est exactement le genre d'affirmation que personne ne vérifie : on le
+ * croit parce qu'il est là. La phrase du document qui l'établit est donc à côté,
+ * pour qu'on puisse répondre « non, ça n'a rien à voir ».
+ */
+function renderLesLiens(points) {
+  const mise = liensDeLaLecture(points);
+  if (mise.liens.length === 0) return "";
+
+  return `
+    <div class="lecture-cr__apport-bloc">
+      <h4>${svgIcon("git-branch", { className: "octicon" })} Les dépendances</h4>
+      <p class="lecture-cr__mot">${escapeHtml(phraseDesLiens(mise))}</p>
+
+      <ul class="lecture-cr__liens">
+        ${mise.liens.slice(0, 20).map((lien) => `
+          <li class="lecture-cr__lien${lien.versSujet ? " est-au-projet" : ""}">
+            <span class="lecture-cr__lien-depuis">${escapeHtml(lien.depuis)}</span>
+            <span class="lecture-cr__lien-type mono-small"
+              title="${escapeHtml(QUOI_DU_LIEN[lien.type] ?? "")}">${escapeHtml(NOMS_DU_LIEN[lien.type] ?? lien.type)}</span>
+            <span class="lecture-cr__lien-vers">${escapeHtml(lien.versPoint || lien.versSujet)}</span>
+            ${lien.raison ? `<span class="lecture-cr__lien-raison">${escapeHtml(lien.raison)}</span>` : ""}
+          </li>
+        `).join("")}
+      </ul>
+
+      <p class="lecture-cr__mot">
+        La phrase de droite est celle du document qui établit la dépendance. Un lien est le genre
+        d'affirmation que personne ne vérifie : c'est elle qui permet de répondre « non, ça n'a
+        rien à voir ».
+      </p>
+    </div>
+  `;
+}
+
+/**
  * Ce que ce compte rendu ferme — et ce qu'il se contente de ne plus dire.
  *
  * ## Les deux ne se ressemblent pas, et ne doivent pas y ressembler
@@ -1276,15 +1400,15 @@ function renderLesObjectifs(points, objectifsDuProjet, lecture) {
  * Un point que le document marque « Fait » est **une réponse** : la proposition
  * fermerait le sujet, avec la phrase qui le justifie.
  *
- * Un sujet qui n'apparaît plus est **une question**. Un point sort d'un compte
- * rendu parce qu'il est réglé, parce que le rédacteur l'a oublié, parce que le
- * lot n'était pas convoqué cette semaine, ou parce que le document a changé de
- * trame. Fermer sur ce signe ferait disparaître, sans trace, des points qu'on
- * suit depuis des mois — et personne ne s'en apercevrait, puisque ce qui
- * disparaît ne laisse rien à voir.
+ * Un sujet qui n'apparaît plus est **une déduction**. Le document n'a rien dit ;
+ * c'est son silence qu'on interprète. La proposition le fermerait quand même —
+ * parce qu'un point qui sort d'un compte rendu est, par principe, un point
+ * réglé, et parce que la déduction se défait toute seule : s'il revient au
+ * compte rendu suivant, il se rouvre sur ce même sujet, avec son histoire.
  *
- * Les deux blocs sont donc séparés, et le second ne porte aucun verbe de
- * fermeture : il pose la question, et c'est quelqu'un qui répond.
+ * **C'est cette réversibilité qui rend la déduction acceptable**, et rien
+ * d'autre. Les deux blocs restent donc séparés, et le second dit de quoi il est
+ * fait : d'une absence, pas d'une phrase.
  */
 function renderLesFermetures(vue, points) {
   const { fermes, retenus } = fermeturesDuCompteRendu(points);
@@ -1363,13 +1487,13 @@ function renderLesDisparus(disparition) {
       <ul class="lecture-cr__fermetures">
         ${disparus.slice(0, 12).map((sujet) => `
           <li class="lecture-cr__fermeture est-question">
-            <span class="lecture-cr__fermeture-signe mono-small">est-il réglé ?</span>
+            <span class="lecture-cr__fermeture-signe mono-small">n'y figure plus</span>
             <span>${escapeHtml(texte(sujet?.title ?? sujet?.titre) || "(sans titre)")}</span>
           </li>
         `).join("")}
       </ul>
       <p class="lecture-cr__mot">
-        La proposition posera la question, sujet par sujet. Elle n'en fermera aucun.
+        ${escapeHtml(EFFETS_DE_LA_FERMETURE[FERMETURE.DEDUITE])}
       </p>
     ` : ""}
   `;
@@ -1776,6 +1900,7 @@ function brancher(hote) {
 async function lire(hote, fichier) {
   etat.phase = "lecture";
   etat.dit = "Ouverture du document";
+  etat.etape = "ouverture";
   etat.lecture = null;
   etat.pagesLues = [];
   etat.fichier = fichier ?? null;
@@ -1820,6 +1945,7 @@ async function lire(hote, fichier) {
     const { pages: lues, lueSur } = pagesALire(pages, etat.md.modele);
 
     etat.dit = `Relevé des points sur ${lueSur === "modele" ? "le document restitué" : "le texte du PDF"}`;
+    etat.etape = "sujets";
     redessiner(hote);
 
     const [{ lireLesSujets }, { identiteDuCompteRendu }] = await Promise.all([
@@ -1858,6 +1984,13 @@ async function lire(hote, fichier) {
     });
     etat.lecture.lueSur = lueSur;
 
+    // **Les dépendances se vérifient ici, où l'on sait quels points existent.**
+    // Un lien vers un point qui n'existe pas n'est pas une ligne de trop : c'est
+    // une dépendance affichée entre deux choses qui n'ont rien à voir.
+    const relies = verifierLesLiens({ points: etat.lecture.points, connus: connus ?? [] });
+    etat.lecture.points = relies.points;
+    etat.lecture.liensEcartes = relies.ecartes;
+
     etat.lecture.rapprochementDemande = Boolean(lu.rapprochementDemande);
     etat.lecture.rapprochementsEcartes = Number(lu.rapprochementsEcartes) || 0;
     etat.lecture.labelsEcartes = Array.isArray(lu.labelsEcartes) ? lu.labelsEcartes : [];
@@ -1866,6 +1999,7 @@ async function lire(hote, fichier) {
     etat.lecture.coupee = Boolean(lu.coupee);
 
     etat.dit = "Confrontation aux sujets du projet";
+    etat.etape = "projet";
     redessiner(hote);
     etat.confrontes = await confronterAuProjet(etat.lecture.points, connus);
     // Gardés pour la comparaison des disparitions : ce sont ceux que le modèle
@@ -2182,6 +2316,7 @@ async function restituerParLeModele(hote) {
      * et l'écran dit que les tableaux peuvent diverger d'une page à l'autre.
      */
     etat.dit = "Reconnaissance de la structure du document";
+    etat.etape = "structure";
     redessiner(hote);
 
     const { reconnaitreLaStructure } = await import(
@@ -2192,6 +2327,7 @@ async function restituerParLeModele(hote) {
     if (!reconnue.ok && texte(reconnue.panne)) etat.panne = texte(reconnue.panne);
 
     etat.dit = `Restitution des ${posee.pages.length} pages en Markdown`;
+    etat.etape = "restitution";
     redessiner(hote);
 
     const refait = await refaireLeDocument({

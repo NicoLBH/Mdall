@@ -280,3 +280,37 @@ test("un lien existant ne reçoit pas de lien dans son lien", () => {
 test("une adresse dans du code n'est pas transformée", () => {
   assert.doesNotMatch(renderMarkdownToHtml("`code@exemple.fr`"), /md-courriel/);
 });
+
+/* ── Le retour à la ligne dans une cellule ───────────────────────────────── */
+
+/**
+ * **Une cellule de tableau ne peut pas contenir de vraie ligne :** le pipe
+ * refermerait la ligne du tableau. Un compte rendu, lui, met couramment deux
+ * choses dans la même case — une adresse et un téléphone, un nom et une
+ * société. Le modèle écrit alors `\n` littéral, faute de mieux ; sans cette
+ * lecture, la case affiche « a@b.fr\n0629500461 » d'un seul tenant.
+ */
+test("un \\n littéral devient un retour à la ligne, dans une cellule", () => {
+  const html = renderMarkdownToHtml("| Contact |\n|---|\n| a@b.fr\\n0629500461 |");
+
+  assert.match(html, /<br>/);
+  assert.doesNotMatch(html, /\\n/);
+  // Ce qui est autour du retour reste lu comme du markdown.
+  assert.match(html, /<a class="md-courriel" href="mailto:a@b\.fr">a@b\.fr<\/a><br>0629500461/);
+});
+
+/** L'en-tête a le même droit que le corps : une colonne se nomme sur deux lignes. */
+test("l'en-tête d'une colonne se coupe aussi", () => {
+  const html = renderMarkdownToHtml("| Tél.\\nMail |\n|---|\n| x |");
+  assert.match(html, /<th[^>]*>Tél\.<br>Mail<\/th>/);
+});
+
+/**
+ * **Et nulle part ailleurs.** Hors d'un tableau, `\n` est un antislash suivi
+ * d'un n — dans un chemin Windows, dans une consigne, dans du texte cité. Le
+ * transformer partout abîmerait du texte que personne n'a demandé de couper.
+ */
+test("hors d'une cellule, un antislash-n reste ce qu'il est", () => {
+  assert.match(renderMarkdownToHtml("Chemin : C:\\nouveau\\dossier"), /C:\\nouveau/);
+  assert.doesNotMatch(renderMarkdownToHtml("Hors cellule : a\\nb"), /<br>/);
+});

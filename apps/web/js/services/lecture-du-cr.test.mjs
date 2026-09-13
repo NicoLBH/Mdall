@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  EFFETS_DU_SORT, MANQUE, PAR, PHRASES_DU_MANQUE, PHRASES_DU_PAR, PHRASES_DU_SORT, SORT,
+  EFFETS_DU_SORT, MANQUE, PAR, PHRASES_DU_MANQUE, PHRASES_DU_PAR, PHRASES_DU_SORT, SORT, estFerme,
   citationRetrouvee, comptesDeLaConfrontation,
   confrontation, intitulesAmbigus, lectureAssemblee, manquesDuPoint, mesureDeLaLecture,
   rubriquesDesPoints
@@ -157,7 +157,81 @@ test("les sorts se comptent d'un coup d'œil", () => {
     confrontation([point(), point({ titre: "Tout neuf" })], sujets, aplatir)
   );
 
-  assert.deepEqual(comptes, { [SORT.NOUVEAU]: 1, [SORT.RELANCE]: 1, [SORT.CHANGE]: 0 });
+  assert.deepEqual(comptes, {
+    [SORT.NOUVEAU]: 1, [SORT.RELANCE]: 1, [SORT.CHANGE]: 0, [SORT.REOUVRE]: 0
+  });
+});
+
+/**
+ * **Tous les sorts sont comptés, même à zéro.** Un sort qu'on ajoute au service
+ * sans l'ajouter au compte disparaîtrait de l'écran sans rien casser : le point
+ * serait traité, et personne ne le verrait passer.
+ */
+test("aucun sort n'échappe au compte", () => {
+  const comptes = comptesDeLaConfrontation([]);
+  assert.deepEqual(Object.keys(comptes).sort(), Object.values(SORT).sort());
+});
+
+/* ── Le sujet fermé qui revient ──────────────────────────────────────────── */
+
+/**
+ * Un compte rendu qui reparle d'un point réglé il y a trois semaines ne demande
+ * pas un second sujet au même titre : il rouvre le premier, avec son histoire.
+ * **Sans ça, fermer devient dangereux** — et l'on n'ose plus fermer.
+ */
+test("un point qui vise un sujet fermé le rouvre, il n'en ouvre pas un second", () => {
+  for (const clos of ["closed", "ferme", "fermé", "done"]) {
+    const sujets = [{ id: "s-1", title: point().titre, status: clos }];
+    const [confronte] = confrontation([point()], sujets, aplatir);
+
+    assert.equal(confronte.sort, SORT.REOUVRE, `« ${clos} » ne rouvre pas`);
+    assert.equal(confronte.sujet.id, "s-1");
+  }
+});
+
+/** La réouverture précède la comparaison d'états : un sujet fermé est fermé. */
+test("la réouverture l'emporte sur ce que le point dit de son état", () => {
+  const sujets = [{ id: "s-1", title: point().titre, status: "closed", etat: "nouveau" }];
+  assert.equal(confrontation([point({ etat: "soldé" })], sujets, aplatir)[0].sort, SORT.REOUVRE);
+});
+
+/** Un sujet ouvert reste relancé : on ne rouvre pas ce qui n'a pas été fermé. */
+test("un sujet ouvert ne se rouvre pas", () => {
+  for (const ouvert of ["open", "en cours", "", undefined]) {
+    const sujets = [{ id: "s-1", title: point().titre, status: ouvert, etat: "en cours" }];
+    assert.equal(
+      confrontation([point()], sujets, aplatir)[0].sort, SORT.RELANCE,
+      `« ${ouvert} » rouvre`
+    );
+  }
+});
+
+/** Ce que la réouverture change se dit, sinon elle passe pour une relance. */
+test("la réouverture dit ce qu'elle fait du sujet fermé", () => {
+  assert.match(PHRASES_DU_SORT[SORT.REOUVRE], /fermé/);
+  assert.match(EFFETS_DU_SORT[SORT.REOUVRE], /son histoire/);
+  assert.match(EFFETS_DU_SORT[SORT.REOUVRE], /plutôt que d'en ouvrir un second/);
+});
+
+/** Le rapprochement par le modèle rouvre comme le rapprochement par le titre. */
+test("un sujet fermé rapproché par le modèle se rouvre aussi", () => {
+  const [confronte] = confrontation(
+    [{ titre: "Rien à voir", sujetExistant: "s-1" }],
+    [{ id: "s-1", title: "Étanchéité", status: "closed" }],
+    aplatir
+  );
+
+  assert.equal(confronte.sort, SORT.REOUVRE);
+  assert.equal(confronte.par, PAR.MODELE);
+});
+
+/** `estFerme` est pure et exportée : l'écran et la fusion lisent le même verdict. */
+test("l'état fermé se reconnaît sur les mots que la base écrit", () => {
+  assert.equal(estFerme({ status: "closed" }), true);
+  assert.equal(estFerme({ status: "CLOSED" }), true);
+  assert.equal(estFerme({ status: "open" }), false);
+  assert.equal(estFerme({}), false);
+  assert.equal(estFerme(), false);
 });
 
 /**

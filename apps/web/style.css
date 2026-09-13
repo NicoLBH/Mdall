@@ -3205,6 +3205,16 @@ body.is-resizing{
   border:1px solid var(--border);
   text-align:left;
   vertical-align:top;
+  /**
+   * **Le contenu se replie plutôt que d'élargir le tableau.**
+   *
+   * `width:100%` ne suffisait pas : une cellule au contenu insécable pousse le
+   * tableau au-delà de son cadre, et deux tableaux de la même restitution
+   * finissaient à deux largeurs différentes — ce qui donne, sur douze pages, une
+   * page qui tangue. Un mot trop long se coupe maintenant, et tous les tableaux
+   * tombent au même bord.
+   */
+  overflow-wrap:anywhere;
 }
 .md-table th{ background:var(--panel2); font-weight:600; }
 .md-table tbody tr:nth-child(even) td{ background:rgba(110,118,129,.06); }
