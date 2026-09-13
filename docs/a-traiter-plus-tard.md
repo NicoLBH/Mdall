@@ -3565,19 +3565,45 @@ qu'il surveille.
 
 ---
 
-# La charge des sujets grossit avec les messages du projet
+# Les signaux des sujets se recalculent à chaque ouverture
 
-**Ce qui a changé.** « Activité récente » et « Mentions » lisent désormais les
-commentaires : une requête ramène, pour tout le projet, le `subject_id`, la date
-et le **corps** de chaque message. La même requête servait déjà à les compter,
-donc il n'y a pas d'appel de plus — mais il y a des octets de plus, et ils
-croissent avec la discussion du projet, pas avec le nombre de sujets.
+**Ce qui a changé.** La dernière activité d'un sujet et les `@` qu'il porte sont
+calculés en base (`project_subject_signals`), et non plus dans le navigateur :
+le texte des conversations ne traverse plus le réseau. Ce qui remonte est une
+ligne par sujet.
 
-**Ce qu'il faudrait :** que le filtre des mentions se pose côté base — une
-colonne calculée, ou une table d'index — plutôt que de rapatrier les textes pour
-les relire dans le navigateur. Et que `last_activity_at` vive sur le sujet,
-posée par un déclencheur, plutôt que d'être recalculée à chaque chargement.
+**Ce qui reste.** La fonction relit les messages du projet **à chaque
+ouverture** de la liste des sujets. Le travail est du bon côté, mais il est
+refait à l'identique tant que rien ne bouge.
 
-**Ce que ça coûte de ne pas le faire :** sur un projet de plusieurs milliers de
-messages, un chargement de la liste des sujets plus lourd qu'il ne devrait. Rien
-ne ment, mais on paie une lecture complète pour deux filtres.
+**Ce qu'il faudrait :** que ces deux signaux soient **posés à l'écriture** plutôt
+que recalculés à la lecture — une colonne `last_activity_at` sur le sujet, tenue
+par un déclencheur, et une table des mentions du texte écrite au moment où le
+texte est enregistré. La fonction resterait comme recours pour les sujets
+antérieurs.
+
+**Ce que ça coûte de ne pas le faire :** un balayage des messages par ouverture
+d'écran. Sur un projet de plusieurs milliers de messages, cela se sentira — moins
+qu'avant, puisque rien ne voyage plus, mais cela se sentira.
+
+---
+
+# La fonction de la base est rejouée, mais son schéma est un décor
+
+**Ce qui est vrai aujourd'hui.** `scripts/signaux-des-sujets.test.mjs` démarre un
+PostgreSQL jetable, applique la migration telle quelle et appelle la fonction :
+la règle des `@` s'exécute vraiment, sur un vrai moteur.
+
+**Ce qui manque.** Les tables de ce test sont un **décor minimal**, écrit à la
+main dans `scripts/fixtures/`. Il ne porte que les colonnes que la fonction lit.
+Si le vrai schéma renomme une colonne, ou si `project_collaborators_view` cesse
+de rendre `full_name`, le décor continuera de marcher et la fonction cassera en
+production.
+
+**Ce qu'il faudrait :** appliquer **toutes** les migrations du dépôt sur le
+serveur jetable, dans l'ordre, plutôt qu'un décor. C'est la seule façon de
+vérifier que la fonction parle au schéma qui existe.
+
+**Ce que ça coûte de ne pas le faire :** un test qui prouve la règle mais pas son
+raccord au schéma. Le raccord au *client*, lui, est gardé par
+`verifie-signaux-des-sujets.test.mjs`.

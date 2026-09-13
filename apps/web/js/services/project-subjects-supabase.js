@@ -1,7 +1,6 @@
 import { store } from "../store.js";
 import {
-  CLES_DE_LA_CHARGE, indexDesAssignes, indexDesDernieresDates, indexDesLiens,
-  indexDesMentions, indexDesTextes, laPlusRecente
+  CLES_DE_LA_CHARGE, indexDesAssignes, indexDesLiens, indexDesMentions, indexDesSignaux
 } from "./charge-des-sujets.js";
 import { buildSubjectHierarchyIndexes } from "./subject-hierarchy.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
@@ -342,66 +341,25 @@ async function fetchDescriptionAttachmentsBySubjectIds(subjectIds = []) {
 
 
 /**
- * Les messages du projet : **une seule requête, trois usages**.
+ * Combien de messages porte chaque sujet.
  *
- * Elle ne ramenait que `subject_id`, pour compter. Elle ramène aussi la date et
- * le corps, parce que les deux servent et qu'aucun appel de plus n'est
- * nécessaire :
- *
- *  - **compter** — ce qu'elle faisait déjà ;
- *  - **dater l'activité** — un sujet commenté hier a bougé, et `updated_at` ne
- *    le disait pas ;
- *  - **lire les `@`** — une mention tapée au clavier, sans passer par la liste
- *    de complétion, n'écrit aucune ligne dans `subject_message_mentions`, et
- *    c'est le cas courant.
- *
- * Trois lectures d'une même chose se seraient payées trois appels et auraient
- * fini par ne plus être d'accord (règle 4).
+ * **Une seule colonne.** Elle a rapatrié les corps, le temps d'une version,
+ * pour que le navigateur y cherche les `@` et y lise les dates : c'était la
+ * seule façon de le faire de ce côté-ci, et cela voulait dire faire traverser
+ * au réseau toute la discussion du projet pour en tirer une poignée
+ * d'identifiants. Ce travail est descendu en base
+ * (`project_subject_signals`), et cette requête-ci ne compte plus que ce
+ * qu'elle comptait.
  */
-async function fetchProjectSubjectMessages(projectId) {
+async function fetchProjectSubjectMessageCounts(projectId) {
   if (!projectId) {
-    return [];
+    return {};
   }
 
   const url = new URL(`${SUPABASE_URL}/rest/v1/subject_messages`);
-  url.searchParams.set("select", "subject_id,body_markdown,created_at");
+  url.searchParams.set("select", "subject_id");
   url.searchParams.set("project_id", `eq.${projectId}`);
   url.searchParams.set("deleted_at", "is.null");
-
-  const headers = await getSupabaseAuthHeaders({ Accept: "application/json" });
-
-  const res = await fetch(url.toString(), {
-    method: "GET",
-    headers,
-    cache: "no-store"
-  });
-
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`subject_messages fetch failed (${res.status}): ${txt}`);
-  }
-
-  const rows = await res.json().catch(() => []);
-  return Array.isArray(rows) ? rows : [];
-}
-
-/**
- * L'histoire métier du projet : **toute modification d'un sujet**, datée.
- *
- * `subject_history` porte les changements de statut, d'assignation, de labels,
- * de situation, d'objectif, de parent, de blocage. C'est ce qu'il faut pour
- * qu'« Activité récente » veuille dire ce qu'elle dit — et non « la ligne du
- * sujet a changé », qui est beaucoup moins que ce qui arrive à un sujet.
- *
- * Deux colonnes seulement : on ne rapatrie pas des charges utiles d'événements
- * pour en tirer une date.
- */
-async function fetchProjectSubjectHistory(projectId) {
-  if (!projectId) return [];
-
-  const url = new URL(`${SUPABASE_URL}/rest/v1/subject_history`);
-  url.searchParams.set("select", "subject_id,created_at");
-  url.searchParams.set("project_id", `eq.${projectId}`);
 
   const res = await fetch(url.toString(), {
     method: "GET",
@@ -411,22 +369,46 @@ async function fetchProjectSubjectHistory(projectId) {
 
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
-    throw new Error(`subject_history fetch failed (${res.status}): ${txt}`);
+    throw new Error(`subject_messages fetch failed (${res.status}): ${txt}`);
   }
 
   const rows = await res.json().catch(() => []);
-  return Array.isArray(rows) ? rows : [];
-}
-
-function compterLesMessages(lignes = []) {
   const countsBySubjectId = {};
-  for (const row of (Array.isArray(lignes) ? lignes : [])) {
+  for (const row of (Array.isArray(rows) ? rows : [])) {
     const subjectId = String(row?.subject_id || "").trim();
     if (!subjectId) continue;
     countsBySubjectId[subjectId] = Number(countsBySubjectId[subjectId] || 0) + 1;
   }
   return countsBySubjectId;
 }
+
+/**
+ * Les signaux de chaque sujet : **quand il a bougé, et qui y est nommé**.
+ *
+ * Une ligne par sujet, calculée là où les textes sont déjà. Voir la migration
+ * `202609290001_signaux_des_sujets.sql`, qui porte le raisonnement en entier —
+ * y compris pourquoi la fonction est `security invoker` et pourquoi elle ignore
+ * les échanges avec le copilote.
+ *
+ * **`null` quand la base n'a pas répondu**, et jamais `[]` : les deux ne se
+ * disent pas pareil à l'écran. Sans réponse, « Mentions » et « Activité
+ * récente » ne se proposent pas, plutôt que de rendre une liste vide et de
+ * faire chercher ce qu'on aurait mal tapé (`docs/fondamentaux.md`, règle 5).
+ *
+ * @returns {Promise<object[]|null>}
+ */
+async function fetchProjectSubjectSignals(projectId) {
+  if (!projectId) return [];
+
+  try {
+    const rows = await rpcCall("project_subject_signals", { p_project_id: projectId });
+    return Array.isArray(rows) ? rows : null;
+  } catch (error) {
+    console.warn("[project-subjects] project_subject_signals failed", error);
+    return null;
+  }
+}
+
 async function fetchProjectSubjectLinks(projectId) {
   if (!projectId) {
     return [];
@@ -1914,7 +1896,7 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
         [CLES_DE_LA_CHARGE.assignes]: {},
         [CLES_DE_LA_CHARGE.mentions]: {},
         [CLES_DE_LA_CHARGE.derniereActivite]: {},
-        [CLES_DE_LA_CHARGE.textesDesMessages]: {},
+        [CLES_DE_LA_CHARGE.mentionsDuTexte]: {},
         subjectMessageCountsBySubjectId: {},
         labels: [],
         labelsById: {},
@@ -1979,8 +1961,8 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
     const subjectLinks = await fetchProjectSubjectLinks(backendProjectId).catch(() => []);
     const subjectAssignees = await fetchProjectSubjectAssignees(backendProjectId).catch(() => []);
     const subjectMentions = await fetchProjectSubjectMentions(backendProjectId).catch(() => []);
-    const subjectMessages = await fetchProjectSubjectMessages(backendProjectId).catch(() => []);
-    const subjectHistory = await fetchProjectSubjectHistory(backendProjectId).catch(() => []);
+    const subjectMessageCountsBySubjectId = await fetchProjectSubjectMessageCounts(backendProjectId).catch(() => ({}));
+    const subjectSignals = await fetchProjectSubjectSignals(backendProjectId);
     const situations = await loadSituationsForCurrentProject(backendProjectId).catch(() => []);
     const manualSituationIds = situations
       .filter((situation) => String(situation?.mode || "manual").trim().toLowerCase() === "manual")
@@ -1989,20 +1971,18 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
     const subjectIdsBySituationId = await loadSituationSubjectIdsMap(manualSituationIds).catch(() => ({}));
     const result = buildProjectFlatSubjectsResult(hydratedSubjects, subjectLinks, { runId: store.ui.runId || "" });
     result[CLES_DE_LA_CHARGE.assignes] = indexDesAssignes(subjectAssignees);
-    result.subjectMessageCountsBySubjectId = compterLesMessages(subjectMessages);
+    result.subjectMessageCountsBySubjectId = subjectMessageCountsBySubjectId && typeof subjectMessageCountsBySubjectId === "object"
+      ? subjectMessageCountsBySubjectId
+      : {};
     result[CLES_DE_LA_CHARGE.mentions] = indexDesMentions(subjectMentions);
-    // Les corps des messages, et la date de ce qui est arrivé au sujet : le
-    // filtre « Mentions » lit les uns, « Activité récente » lit l'autre, et les
-    // deux viennent des requêtes qu'on vient de faire.
-    result[CLES_DE_LA_CHARGE.textesDesMessages] = indexDesTextes(subjectMessages);
-    result[CLES_DE_LA_CHARGE.derniereActivite] = Object.fromEntries(
-      (() => {
-        const parMessage = indexDesDernieresDates(subjectMessages);
-        const parHistoire = indexDesDernieresDates(subjectHistory);
-        return [...new Set([...Object.keys(parMessage), ...Object.keys(parHistoire)])]
-          .map((cle) => [cle, laPlusRecente(parMessage[cle], parHistoire[cle])]);
-      })()
-    );
+
+    // Ce que la base a calculé : une date et des personnes par sujet. Les noms
+    // des index viennent de `charge-des-sujets.js`, qui les produit aussi pour
+    // les tests — un nom qu'on change se change des deux côtés à la fois.
+    const { derniereActivite, mentions: nommeesDansLeTexte } = indexDesSignaux(subjectSignals ?? []);
+    result[CLES_DE_LA_CHARGE.derniereActivite] = derniereActivite;
+    result[CLES_DE_LA_CHARGE.mentionsDuTexte] = nommeesDansLeTexte;
+    result[CLES_DE_LA_CHARGE.signauxLus] = Array.isArray(subjectSignals);
     result.situationsById = Object.fromEntries(situations.map((situation) => [String(situation?.id || ""), situation]).filter(([id]) => !!id));
     result.subjectIdsBySituationId = subjectIdsBySituationId;
     result.pagination = {

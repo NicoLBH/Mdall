@@ -107,7 +107,8 @@ export const ACTIVITES = [{ value: "recente", token: "récente", label: "Activit
  * @returns {object[]} des `QueryField` de `query-bar.js`
  */
 export function champsDesSujets({
-  labels = [], objectifs = [], lots = [], personnes = [], situations = []
+  labels = [], objectifs = [], lots = [], personnes = [], situations = [],
+  signauxLus = true
 } = {}) {
   const champs = [
     { key: "statut", label: "Statut", values: STATUTS },
@@ -165,10 +166,16 @@ export function champsDesSujets({
     // qu'on a soi-même relevé, pas ce qu'on doit faire.
     champs.push({ key: "auteur", label: "Auteur", values: avecMoi(), multiple: true });
 
-    // **Mentionné avec un `@` dans un commentaire.** C'est ce qui appelle une
-    // réponse, et c'est la seule lecture qui ne se déduit d'aucune colonne du
-    // sujet : elle vient de ses messages.
-    champs.push({ key: "mention", label: "Mentions", values: avecMoi(), multiple: true });
+    // **Mentionné avec un `@`** — dans un titre, une description, un
+    // commentaire. C'est ce qui appelle une réponse, et c'est la seule lecture
+    // qui ne se déduit d'aucune colonne du sujet : elle vient des textes.
+    //
+    // **Elle ne se propose que si la base a su les lire.** Sans les signaux,
+    // le filtre ne rendrait jamais rien, et l'on chercherait ce qu'on a mal
+    // tapé plutôt que ce qui n'a pas répondu (règle 5).
+    if (signauxLus) {
+      champs.push({ key: "mention", label: "Mentions", values: avecMoi(), multiple: true });
+    }
   }
 
   const desSituations = avecAucun(nommes(situations, "id", "title"));
@@ -178,7 +185,9 @@ export function champsDesSujets({
     });
   }
 
-  champs.push({ key: "activité", label: "Activité", values: ACTIVITES });
+  // Même règle : « ce qui a bougé » se calcule en base, avec les mentions. Sans
+  // réponse, on ne propose pas une lecture qu'on ne peut pas tenir.
+  if (signauxLus) champs.push({ key: "activité", label: "Activité", values: ACTIVITES });
 
   return champs;
 }
