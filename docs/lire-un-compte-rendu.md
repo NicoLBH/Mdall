@@ -250,6 +250,59 @@ Cette étape est **trop grosse pour un seul palier**. Elle se fait dans cet ordr
 livrable et vérifiable seul : les sujets et le label « CR chantier » ; puis les lots ; puis
 les labels de qualification ; puis les objectifs.
 
+#### Palier 1 — Le secrétariat sait ce que le projet suit déjà *(fait)*
+
+**Le rapprochement change de main.** Il se faisait dans le navigateur, par comparaison des
+titres mis à plat — ce qui ne reconnaît qu'une reprise mot pour mot. Or un compte rendu
+*reporte*, et un point qui avance se réécrit : « pose prévue demain » devient « pose
+réalisée », et repartait donc comme un point neuf. La moitié « a changé » était presque
+inatteignable, et c'était écrit dans `docs/a-traiter-plus-tard.md`.
+
+Le modèle reçoit maintenant la liste de ce que le projet suit — identifiant, numéro, état,
+titre, et rien de plus — et rend pour chaque point le sujet qu'il continue, avec la raison.
+
+| | |
+| --- | --- |
+| **Ce que le modèle reçoit** | une ligne par sujet : `- <id> #<numéro> [<état>] : <titre>` |
+| **Ce qu'il rend** | `sujet_existant` (l'identifiant, recopié) et `raison_du_rapprochement` |
+| **Ce qui est vérifié au serveur** | l'identifiant figure dans la liste envoyée, ou il est écarté |
+| **Ce que l'écran dit** | qui a rapproché — le modèle ou le titre — et pourquoi |
+
+##### Le garde-fou, et pourquoi il est plus dur que celui des citations
+
+Une citation inventée fait perdre un point : on le voit, il manque. **Un identifiant inventé
+fait pire** — il range un point réel dans la discussion d'un sujet qui n'a rien à voir, où
+personne n'ira le chercher. Le point n'est pas perdu, il est *égaré*, ce qui ne se voit jamais.
+
+On n'essaie donc pas de corriger : ce qui n'a pas été envoyé ne revient pas. Le point reste,
+son rapprochement tombe, et il repart comme un point neuf — l'erreur la moins coûteuse des
+deux. La consigne le dit aussi au modèle : « dans le doute, laisse null ».
+
+##### Les deux voix ne s'affichent pas pareil
+
+Le titre mis à plat est une **constatation** : il a trouvé les mêmes mots. Le modèle porte un
+**jugement**, et un jugement se relit. Chaque rapprochement dit donc lequel des deux l'a
+reconnu, et la raison que le modèle donne est là pour qu'on puisse répondre « non, ce n'est
+pas le même ».
+
+Et quand la liste n'a pas pu être lue, l'écran le dit : **« le modèle n'a pas su ce que le
+projet suit » n'est pas « rien ne correspondait »** (règle 5).
+
+##### Le label « CR chantier »
+
+Son nom vit à un seul endroit (`label-du-cr.js`), et nulle part ailleurs : recopié dans
+l'écran, dans le filtre et dans la situation, il existerait en trois versions et le filtre ne
+trouverait plus rien (règle 10).
+
+L'écran dit s'il existe déjà dans le projet, ou si la proposition le créerait — et ne dit ni
+l'un ni l'autre quand les labels n'ont pas pu être lus. **Rien n'est posé** : poser un label est
+une écriture, et une écriture passe par une proposition (règle 1).
+
+##### Ce que ce palier ne fait pas encore
+
+Les lots manquants, les labels de qualification et les objectifs : paliers suivants. Et la
+fermeture reste entière à l'étape 4 — c'est le point le plus délicat du plan.
+
 ### Étape 4 — Fermer un sujet, et la question de fond
 
 **C'est le point le plus délicat de tout le plan**, et il mérite d'être traité à part.

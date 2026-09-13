@@ -37,14 +37,15 @@ import { renderSpinnerHtml } from "../../ui/spinner.js";
 import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.js";
 import { brancherLesBoutonsCopier, renderBoutonCopier } from "../../ui/bouton-copier.js";
 import {
-  EFFETS_DU_SORT, MANQUE, PHRASES_DU_MANQUE, PHRASES_DU_SORT, SORT, comptesDeLaConfrontation,
-  confrontation, intitulesAmbigus, lectureAssemblee
+  EFFETS_DU_SORT, MANQUE, PAR, PHRASES_DU_MANQUE, PHRASES_DU_PAR, PHRASES_DU_SORT, SORT,
+  comptesDeLaConfrontation, confrontation, intitulesAmbigus, lectureAssemblee
 } from "../../../services/lecture-du-cr.js";
 import {
   LECTURE, NOMS_DE_LECTURE, QUOI_DE_LA_LECTURE, assemblerLeMarkdown, enFichierMarkdown,
   enPourcent, fideliteDeLaReconstitution, pagesALire, tonDeLaPart
 } from "../../../services/reconstitution-markdown.js";
 import { PHRASES_DU_RANGEMENT, RANGEE } from "../../../services/restitution-rangee.js";
+import { LABEL_DU_CR, labelDuCrDansLeProjet, phraseDuLabel } from "../../../services/label-du-cr.js";
 import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
 import {
   PHRASES_DU_VERDICT, TON_DU_VERDICT, VERDICT, degatsDeLaRestitution,
@@ -92,6 +93,13 @@ const etat = {
   pagesLues: [],
   /** `null` : on n'a pas pu lire les sujets du projet — différent de « aucun ». */
   confrontes: null,
+  /**
+   * Les labels du projet. `null` : on n'a pas pu les lire.
+   *
+   * Sert à dire si « CR chantier » existe déjà, ou si la proposition le
+   * créerait. Ne pas savoir n'est pas « il n'y est pas » (règle 5).
+   */
+  labels: null,
   /** Le sujet dont on regarde le détail, pour juger si c'est bien le même. */
   deplie: "",
   /**
@@ -288,7 +296,7 @@ function renderAnalyse(vue) {
     ${renderSurQuoiLaLecture(vue)}
     ${renderMesure(vue.lecture.mesure, vue.lecture.ecartes)}
     ${renderAmbiguites(vue.lecture.points)}
-    ${renderConfrontation(vue.confrontes)}
+    ${renderConfrontation(vue.confrontes, vue.lecture, vue.labels)}
     ${renderRubriques(vue)}
     ${renderSuite()}
   `;
@@ -737,10 +745,34 @@ function renderAmbiguites(points) {
   `;
 }
 
+/**
+ * Le label que porteraient les sujets de ce compte rendu.
+ *
+ * **C'est ce qui rendra le reste possible.** Sans marque d'origine, un projet
+ * mélange ce qui vient du bureau de contrôle, des réunions de chantier et de la
+ * main de quelqu'un — et l'on ne peut plus ni filtrer, ni compter, ni faire une
+ * situation sur « ce que le chantier doit ».
+ *
+ * Rien n'est posé ici : poser un label est une écriture, et une écriture passe
+ * par une proposition (règle 1).
+ */
+function renderLabelDuCr(labels) {
+  const etat = labelDuCrDansLeProjet(labels);
+
+  return `
+    <p class="lecture-cr__mot${etat.connu ? "" : " est-douteux"}">
+      <span class="lecture-cr__label mono-small">${escapeHtml(LABEL_DU_CR)}</span>
+      ${escapeHtml(phraseDuLabel(etat))}
+    </p>
+  `;
+}
+
 /** Ce que ces points deviendraient face aux sujets du projet. */
-function renderConfrontation(confrontes) {
+function renderConfrontation(confrontes, lecture = null, labels = null) {
   if (!Array.isArray(confrontes) || confrontes.length === 0) return "";
   const comptes = comptesDeLaConfrontation(confrontes);
+  const parLeModele = confrontes.filter((point) => point?.par === PAR.MODELE).length;
+  const ecartes = Number(lecture?.rapprochementsEcartes) || 0;
 
   return `
     <section class="lecture-cr__confrontation">
@@ -750,11 +782,34 @@ function renderConfrontation(confrontes) {
         ${renderChiffre(PHRASES_DU_SORT[SORT.CHANGE], String(comptes[SORT.CHANGE]))}
         ${renderChiffre(PHRASES_DU_SORT[SORT.RELANCE], String(comptes[SORT.RELANCE]))}
       </div>
-      <p class="lecture-cr__mot">
-        Le rapprochement se fait par le titre : un point qui a progressé se réécrit, et repart donc
-        comme un point neuf. Voir « ouvrirait un sujet » sur un point qui continue visiblement
-        un sujet ouvert, c'est mesurer ce que le rapprochement par le texte ne sait pas faire.
-      </p>
+      ${lecture && lecture.rapprochementDemande === false ? `
+        <p class="lecture-cr__mot est-douteux">
+          <strong>Le modèle n'a pas su ce que le projet suit.</strong> Le rapprochement s'est fait
+          sur le seul titre, mot pour mot : un point qui a progressé se réécrit, et repart donc
+          comme un point neuf. Ce n'est pas « rien ne correspondait ».
+        </p>
+      ` : `
+        <p class="lecture-cr__mot">
+          ${parLeModele > 0
+            ? `<strong>${parLeModele} point${parLeModele > 1 ? "s" : ""}</strong> ${
+                parLeModele > 1 ? "ont été rapprochés" : "a été rapproché"} par le modèle, qui a reçu
+              la liste de ce que le projet suit — il reconnaît un point qui a progressé, là où la
+              comparaison des titres ne voit qu'un point neuf. Le reste est rapproché sur le titre,
+              mot pour mot.`
+            : `Aucun point n'a été rapproché par le modèle : ceux qui le sont l'ont été sur le
+              titre, mot pour mot.`}
+          Chaque rapprochement dit lequel des deux l'a reconnu — un jugement se relit, un titre
+          identique se constate.
+        </p>
+      `}
+      ${renderLabelDuCr(labels)}
+      ${ecartes > 0 ? `
+        <p class="lecture-cr__mot est-douteux">
+          ${ecartes} rapprochement${ecartes > 1 ? "s" : ""} ${ecartes > 1 ? "pointaient" : "pointait"}
+          vers un sujet qu'on n'avait pas envoyé : ${ecartes > 1 ? "ils ont été écartés" : "il a été écarté"},
+          et ${ecartes > 1 ? "ces points repartent" : "ce point repart"} comme neuf${ecartes > 1 ? "s" : ""}.
+        </p>
+      ` : ""}
     </section>
   `;
 }
@@ -810,7 +865,7 @@ function renderLigne(vue, point, confronte) {
     <tr class="lecture-cr__ligne${point.retrouve ? "" : " est-douteux"}">
       <td class="lecture-cr__cellule lecture-cr__cellule--point">${renderPoint(point, confronte?.sort)}</td>
       <td class="lecture-cr__cellule lecture-cr__cellule--sujet">${
-        renderSujetRetrouve(vue, confronte?.sujet ?? null, confronte?.sort)
+        renderSujetRetrouve(vue, confronte?.sujet ?? null, confronte?.sort, confronte)
       }</td>
     </tr>
   `;
@@ -828,7 +883,7 @@ function renderLigne(vue, point, confronte) {
  * partir comparer ailleurs fait perdre la colonne de gauche, c'est-à-dire ce
  * avec quoi on comparait.
  */
-function renderSujetRetrouve(vue, sujet, sort) {
+function renderSujetRetrouve(vue, sujet, sort, confronte = null) {
   // Pas de sort : on n'a pas pu lire les sujets du projet. Ce n'est pas
   // « aucun sujet ne correspond », et les deux ne s'écrivent pas pareil.
   if (!sort) return `<span class="lecture-cr__sans-sujet mono-small">Comparaison impossible</span>`;
@@ -836,7 +891,7 @@ function renderSujetRetrouve(vue, sujet, sort) {
   if (!sujet) {
     return `
       <span class="lecture-cr__sans-sujet mono-small">
-        Aucun sujet ouvert ne porte ce titre — ${escapeHtml(EFFETS_DU_SORT[sort] ?? "")}
+        Aucun sujet ouvert ne lui correspond — ${escapeHtml(EFFETS_DU_SORT[sort] ?? "")}
       </span>
     `;
   }
@@ -858,8 +913,35 @@ function renderSujetRetrouve(vue, sujet, sort) {
         <span class="lecture-cr__sujet-effet">${escapeHtml(EFFETS_DU_SORT[sort] ?? "")}</span>
       </div>
 
+      ${renderQuiARapproche(confronte)}
       ${deplie ? renderDetailDuSujet(vue, sujet) : ""}
     </div>
+  `;
+}
+
+/**
+ * Qui a reconnu que ce point continue ce sujet.
+ *
+ * **Les deux ne se valent pas.** Le titre mis à plat est une constatation : il
+ * a trouvé les mêmes mots. Le modèle, lui, porte un jugement — « pose prévue
+ * demain » et « pose réalisée » sont le même point à deux semaines d'écart —
+ * et un jugement se relit. Les afficher pareil reviendrait à présenter une
+ * lecture comme un fait.
+ *
+ * La raison que le modèle donne est là pour cela : c'est elle qu'on lit quand
+ * on hésite, et c'est elle qui permet de dire « non, ce n'est pas le même ».
+ */
+function renderQuiARapproche(confronte) {
+  const par = texte(confronte?.par);
+  if (!par) return "";
+
+  const raison = texte(confronte?.raisonDuRapprochement);
+
+  return `
+    <p class="lecture-cr__rapproche mono-small${par === PAR.MODELE ? " est-juge" : ""}">
+      ${escapeHtml(PHRASES_DU_PAR[par] ?? "")}
+      ${raison ? `<span class="lecture-cr__rapproche-raison">${escapeHtml(raison)}</span>` : ""}
+    </p>
   `;
 }
 
@@ -1051,6 +1133,7 @@ async function lire(hote, fichier) {
   etat.pagesLues = [];
   etat.fichier = fichier ?? null;
   etat.confrontes = null;
+  etat.labels = null;
   etat.deplie = "";
   etat.onglet = ONGLET.RESTITUTION;
   // Les restitutions appartiennent au compte rendu précédent : les garder
@@ -1090,7 +1173,14 @@ async function lire(hote, fichier) {
       import("../../../services/identite-du-compte-rendu.js")
     ]);
 
-    const lu = await lireLesSujets({ sourceId: "lecture-atelier", pages: lues });
+    // Lus avant l'appel : le modèle les reçoit pour reconnaître un point
+    // reporté, et la confrontation s'en servira ensuite. Une seule lecture pour
+    // les deux, sinon l'écran dirait autre chose que ce que le modèle a vu.
+    const connus = await sujetsDuProjet();
+
+    const lu = await lireLesSujets({
+      sourceId: "lecture-atelier", pages: lues, sujetsDuProjet: connus
+    });
     if (!lu?.ok) {
       const { phraseDuRefus } = await import("../../../services/sujets-par-le-modele.js");
       return echouer(hote, phraseDuRefus(lu?.motif) || "Le modèle n'a pas rendu de lecture exploitable.");
@@ -1110,9 +1200,13 @@ async function lire(hote, fichier) {
     });
     etat.lecture.lueSur = lueSur;
 
+    etat.lecture.rapprochementDemande = Boolean(lu.rapprochementDemande);
+    etat.lecture.rapprochementsEcartes = Number(lu.rapprochementsEcartes) || 0;
+
     etat.dit = "Confrontation aux sujets du projet";
     redessiner(hote);
-    etat.confrontes = await confronterAuProjet(etat.lecture.points);
+    etat.confrontes = await confronterAuProjet(etat.lecture.points, connus);
+    etat.labels = await labelsDuProjet();
 
     etat.phase = "lue";
     redessiner(hote);
@@ -1128,30 +1222,71 @@ async function lire(hote, fichier) {
  * recopiée : deux mises à plat différentes rapprocheraient différemment, et
  * l'écran dirait autre chose que ce que la fusion fera (règle 4).
  */
-async function confronterAuProjet(points) {
+/**
+ * Les sujets du projet, lus **une fois**.
+ *
+ * Ils servent maintenant deux fois : le modèle les reçoit pour reconnaître un
+ * point reporté, et la confrontation s'en sert pour dire ce que chaque point
+ * ferait. Deux lectures pourraient rendre deux listes différentes, et l'écran
+ * dirait alors autre chose que ce que le modèle a vu (règle 4).
+ *
+ * **`null` n'est pas « aucun sujet ».** Cette lecture rend `null` quand elle
+ * n'a pas pu demander, et sa propre documentation le dit. L'aplatir en liste
+ * vide faisait afficher « ouvrirait un sujet » sur tous les points d'un compte
+ * rendu déjà traité — vingt sujets proposés en double, en silence (règle 5).
+ */
+async function sujetsDuProjet() {
   try {
-    const [{ titreAplati }, { listProjectSubjectTitles }, { resolveCurrentBackendProjectId }] =
-      await Promise.all([
-        import("../../../services/sujets-du-cr.js"),
-        import("../../../services/propositions-supabase.js"),
-        import("../../../services/project-supabase-sync.js")
-      ]);
+    const [{ listProjectSubjectTitles }, { resolveCurrentBackendProjectId }] = await Promise.all([
+      import("../../../services/propositions-supabase.js"),
+      import("../../../services/project-supabase-sync.js")
+    ]);
 
     const projet = await resolveCurrentBackendProjectId();
-    // Sans projet, on ne sait rien des sujets : on ne confronte pas, et on le
-    // dit. Prétendre que tout est nouveau serait une affirmation qu'on n'a pas
-    // vérifiée (règle 5).
     if (!projet) return null;
 
     // **Les mêmes titres que l'analyse d'une proposition.** C'est elle qui
     // décidera à la fusion : confronter ici sur une autre liste ferait dire à
     // l'écran autre chose que ce qui se passera (règle 4).
-    // **`null` n'est pas « aucun sujet ».** Cette lecture rend `null` quand
-    // elle n'a pas pu demander, et le dit dans sa propre documentation.
-    // L'aplatir en liste vide faisait afficher « ouvrirait un sujet » sur tous
-    // les points d'un compte rendu déjà traité — vingt sujets proposés en
-    // double, sans rien pour le dire.
-    const sujets = await listProjectSubjectTitles(projet);
+    return await listProjectSubjectTitles(projet);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Les labels du projet, pour savoir si « CR chantier » y est déjà.
+ *
+ * `null` quand on n'a pas pu demander : annoncer une création qui n'aura
+ * peut-être pas lieu serait une affirmation qu'on n'a pas vérifiée (règle 5).
+ */
+async function labelsDuProjet() {
+  try {
+    const [{ loadLabelsForProject }, { resolveCurrentBackendProjectId }] = await Promise.all([
+      import("../../../services/project-subjects-supabase.js"),
+      import("../../../services/project-supabase-sync.js")
+    ]);
+
+    const projet = await resolveCurrentBackendProjectId();
+    if (!projet) return null;
+
+    const charges = await loadLabelsForProject(projet);
+    return charges?.labelsHydrated === false ? null : (charges?.labels ?? null);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ce que chaque point ferait des sujets du projet.
+ *
+ * Le rapprochement du modèle passe devant celui du titre — il voit ce qu'une
+ * comparaison de chaînes ne peut pas voir — et chaque point dit lequel des deux
+ * l'a reconnu. Voir `confrontation`.
+ */
+async function confronterAuProjet(points, sujets) {
+  try {
+    const { titreAplati } = await import("../../../services/sujets-du-cr.js");
     return confrontation(points, sujets, titreAplati);
   } catch {
     // Sans les sujets du projet, la lecture reste lisible : on ne confronte

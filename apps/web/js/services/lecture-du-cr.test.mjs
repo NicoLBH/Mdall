@@ -2,11 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  EFFETS_DU_SORT, MANQUE, PHRASES_DU_MANQUE, PHRASES_DU_SORT, SORT,
+  EFFETS_DU_SORT, MANQUE, PAR, PHRASES_DU_MANQUE, PHRASES_DU_PAR, PHRASES_DU_SORT, SORT,
   citationRetrouvee, comptesDeLaConfrontation,
   confrontation, intitulesAmbigus, lectureAssemblee, manquesDuPoint, mesureDeLaLecture,
   rubriquesDesPoints
 } from "./lecture-du-cr.js";
+import { titreAplati } from "./sujets-du-cr.js";
 
 /** Un point tel que le modèle le rend. Textes inventés. */
 const point = (reste = {}) => ({
@@ -304,4 +305,109 @@ test("les écoutes se détachent avant de se reposer", async () => {
 
   assert.match(ecran, /detacher\?\.\(\);/);
   assert.match(ecran, /removeEventListener\("click"/);
+});
+
+/* ── Le rapprochement : deux voix, et on dit laquelle ────────────────────── */
+
+/**
+ * **C'est ce que la comparaison de titres ne sait pas voir.** Un point qui
+ * progresse se réécrit — « pose prévue demain » devient « pose réalisée » — et
+ * repartait donc comme un point neuf. Le modèle, lui, a la liste sous les yeux.
+ */
+test("le rapprochement du modèle rattrape un point qui a été réécrit", () => {
+  const [point] = confrontation(
+    [{ titre: "Pose réalisée sur linteaux bois", sujetExistant: "s-1", raisonDuRapprochement: "même ouvrage, deux semaines plus tard" }],
+    [{ id: "s-1", title: "Pose prévue demain sur linteaux bois" }],
+    titreAplati
+  );
+
+  assert.equal(point.sort, SORT.RELANCE);
+  assert.equal(point.sujet.id, "s-1");
+  assert.equal(point.par, PAR.MODELE);
+});
+
+/** Sans verdict du modèle, le titre reprend la main — et le dit. */
+test("le titre rapproche encore, quand le modèle n'a rien dit", () => {
+  const [point] = confrontation(
+    [{ titre: "Étanchéité toiture." }],
+    [{ id: "s-1", title: "étanchéité toiture" }],
+    titreAplati
+  );
+
+  assert.equal(point.sort, SORT.RELANCE);
+  assert.equal(point.par, PAR.TITRE);
+});
+
+/**
+ * Le modèle passe devant : il voit ce qu'une comparaison de chaînes ne peut pas
+ * voir. Un point dont le titre ressemble à un sujet mais que le modèle rattache
+ * à un autre suit le modèle.
+ */
+test("le verdict du modèle passe devant celui du titre", () => {
+  const [point] = confrontation(
+    [{ titre: "Étanchéité toiture", sujetExistant: "s-2" }],
+    [{ id: "s-1", title: "Étanchéité toiture" }, { id: "s-2", title: "Reprise d'étanchéité, angle nord" }],
+    titreAplati
+  );
+
+  assert.equal(point.sujet.id, "s-2");
+  assert.equal(point.par, PAR.MODELE);
+});
+
+/**
+ * **Un identifiant qu'on ne connaît pas ne rapproche rien.** Le serveur les
+ * vérifie déjà, mais un rapprochement vers un sujet absent de la liste d'ici
+ * n'a personne à désigner : le point repart neuf plutôt que d'être égaré.
+ */
+test("un rapprochement vers un sujet inconnu laisse le point neuf", () => {
+  const [point] = confrontation(
+    [{ titre: "Un point neuf", sujetExistant: "s-absent" }],
+    [{ id: "s-1", title: "Autre chose" }],
+    titreAplati
+  );
+
+  assert.equal(point.sort, SORT.NOUVEAU);
+  assert.equal(point.sujet, null);
+  assert.equal(point.par, "");
+});
+
+/**
+ * **Les deux ne se valent pas, donc ils ne se disent pas pareil.** Le titre mis
+ * à plat est une constatation ; le modèle porte un jugement, et un jugement se
+ * relit.
+ */
+test("chaque rapprochement a sa phrase, et elles diffèrent", () => {
+  assert.notEqual(PHRASES_DU_PAR[PAR.MODELE], PHRASES_DU_PAR[PAR.TITRE]);
+  for (const par of Object.values(PAR)) {
+    assert.ok(PHRASES_DU_PAR[par], `« ${par} » n'a pas de phrase`);
+  }
+});
+
+/** Le rapprochement du modèle traverse l'assemblage sans se perdre. */
+test("la lecture assemblée garde ce que le modèle a rapproché", () => {
+  const lecture = lectureAssemblee({
+    points: [{
+      titre: "Pose réalisée", description: "d", citation: "Pose réalisée",
+      sujet_existant: "s-1", raison_du_rapprochement: "même numéro"
+    }],
+    pages: [{ page: 1, text: "Pose réalisée" }]
+  });
+
+  assert.equal(lecture.points[0].sujetExistant, "s-1");
+  assert.equal(lecture.points[0].raisonDuRapprochement, "même numéro");
+});
+
+/**
+ * L'état d'un sujet Mdall (ouvert, fermé) n'est pas l'état que le compte rendu
+ * donne à son point (« nouveau », « soldé ») : les comparer ferait dire « a
+ * changé » de tous les points, à chaque dépôt.
+ */
+test("l'état du sujet ne se confond pas avec l'état du point", () => {
+  const [point] = confrontation(
+    [{ titre: "Étanchéité", sujetExistant: "s-1", etat: "en cours" }],
+    [{ id: "s-1", title: "Étanchéité", status: "open" }],
+    titreAplati
+  );
+
+  assert.equal(point.sort, SORT.RELANCE);
 });
