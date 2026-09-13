@@ -3562,3 +3562,26 @@ six mille.
 **Ce que ça coûte de ne pas le faire :** un garde-fou qui se casse sur l'ordre des
 lignes — il l'a fait cette fois-ci — et qui ne se casserait pas sur le défaut
 qu'il surveille.
+
+---
+
+# « Activité récente » ne voit pas les commentaires
+
+**Ce qui est vrai aujourd'hui.** La lecture retient les sujets dont la dernière
+date lisible remonte à moins de quatorze jours : `updated_at`, à défaut
+`last_activity_at`, à défaut `created_at`. C'est la ligne du sujet, et elle ne
+bouge que si la ligne bouge.
+
+**Ce qui manque.** Un sujet commenté hier, sans qu'aucun de ses champs ne change,
+n'a pas bougé au sens de la base — et sort donc de « Activité récente ». Or c'est
+exactement le sujet qu'on cherche en posant la question : celui dont on a parlé.
+
+**Ce qu'il faudrait :** que `subject_messages` remonte au sujet, soit par un
+déclencheur qui pose `last_activity_at`, soit par un index chargé avec les
+autres — le même chemin que les mentions viennent de prendre
+(`charge-des-sujets.js`).
+
+**Ce que ça coûte de ne pas le faire :** une lecture qui rend beaucoup sur un
+projet qu'on vient de verser — tout y est récent —, et trop peu sur un projet
+installé, où l'activité est dans les fils de discussion et non dans les lignes.
+Elle ne ment pas, mais elle ne répond pas tout à fait à la question posée.

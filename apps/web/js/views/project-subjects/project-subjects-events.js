@@ -52,6 +52,11 @@ export function createProjectSubjectsEvents(config) {
     // gestes les appellent, ils ne les refont pas.
     epinglerLaRechercheDesSujets = () => {},
     retirerLaRechercheEpinglee = () => {},
+    // Épingler une vue au rail, ou l'en retirer — deux sens d'un même geste,
+    // et jamais une suppression.
+    epinglerLaVueAuRail = () => {},
+    basculerLeMenuDeLaVue = () => {},
+    fermerLeMenuDeLaVue = () => {},
     basculerLeRail = () => {},
     PROJECT_TAB_RESELECTED_EVENT,
     getSubjectsViewState,
@@ -5892,6 +5897,9 @@ export function createProjectSubjectsEvents(config) {
       // Un clic ailleurs referme ce qui était ouvert : un menu qui reste ouvert
       // derrière ce qu'on regarde se lit comme un défaut d'affichage.
       if (geste !== GESTE.MENU) fermerLesMenusDenTete(root);
+      // Le menu d'une vue vit dans l'état, et non dans une classe : il faut
+      // donc le refermer là où il est écrit, sinon il survit au redessin.
+      if (geste !== GESTE.VUE_MENU) fermerLeMenuDeLaVue();
       if (geste === GESTE.RIEN) return;
 
       event.preventDefault();
@@ -5961,6 +5969,25 @@ export function createProjectSubjectsEvents(config) {
 
         case GESTE.VUE_ENREGISTRER:
           enregistrerLaVue();
+          return;
+
+        case GESTE.VUE_MENU:
+          // Le kebab est **dans** la ligne qui pose la requête de la vue :
+          // sans cela, ouvrir son menu ouvrirait aussi la vue.
+          event.stopPropagation();
+          basculerLeMenuDeLaVue(valeur);
+          return;
+
+        case GESTE.VUE_EPINGLER:
+          event.stopPropagation();
+          epinglerLaVueAuRail(valeur);
+          return;
+
+        case GESTE.DERAILLER:
+          // La croix est **dans** l'entrée du rail : sans cela, le clic
+          // poserait aussi la requête de la vue qu'on vient de ranger.
+          event.stopPropagation();
+          epinglerLaVueAuRail(valeur, false);
           return;
 
         default:

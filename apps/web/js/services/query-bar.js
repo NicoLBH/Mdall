@@ -90,6 +90,25 @@ function jetonDe(valeur) {
   return texte(valeur?.token) || texte(valeur?.value);
 }
 
+/** Un champ à choix multiple garde toutes ses valeurs ; les autres, la dernière. */
+function estMultiple(champ) {
+  return champ?.multiple === true;
+}
+
+/**
+ * Les valeurs d'un filtre, toujours comme une liste.
+ *
+ * `filters[clé]` vaut une chaîne pour un champ à choix simple et un tableau
+ * pour un champ à choix multiple. Tout ce qui lit un filtre passe par ici :
+ * deux façons de lire la même case finiraient par n'être pas d'accord
+ * (règle 4).
+ */
+export function filterValues(filters = {}, key = "") {
+  const brut = filters?.[texte(key)];
+  if (Array.isArray(brut)) return brut.map(texte).filter(Boolean);
+  return texte(brut) ? [texte(brut)] : [];
+}
+
 /**
  * Découpe une requête en filtres reconnus et en texte libre.
  *
@@ -97,7 +116,16 @@ function jetonDe(valeur) {
  * le retrouve donc dans la barre, et la recherche porte dessus comme sur
  * n'importe quel mot.
  *
- * @returns {{filters: Record<string,string>, text: string}}
+ * ## Un champ à choix multiple garde toutes ses valeurs
+ *
+ * `label:cr-chantier label:etancheite` cherche **l'un ou l'autre** : c'est ce
+ * qu'on attend en cochant deux labels dans un menu, et c'est ce qu'on écrit en
+ * les tapant. Sa case porte alors un tableau ; celle d'un champ à choix simple
+ * porte une chaîne, et la dernière valeur tapée gagne. Un statut ne peut pas
+ * être ouvert **et** fermé, et proposer d'en cocher deux promettrait une liste
+ * vide.
+ *
+ * @returns {{filters: Record<string,string|string[]>, text: string}}
  */
 export function parseQuery(query = "", fields = []) {
   const filtres = {};
@@ -118,9 +146,17 @@ export function parseQuery(query = "", fields = []) {
       continue;
     }
 
-    // Le dernier gagne : retaper un filtre le remplace, ce qui est ce qu'on
-    // attend en corrigeant sa propre requête.
-    filtres[champ.key] = valeur.value;
+    if (!estMultiple(champ)) {
+      // Le dernier gagne : retaper un filtre le remplace, ce qui est ce qu'on
+      // attend en corrigeant sa propre requête.
+      filtres[champ.key] = valeur.value;
+      continue;
+    }
+
+    // À choix multiple, on empile — sans doublon : `label:x label:x` est une
+    // répétition, pas deux conditions.
+    const deja = Array.isArray(filtres[champ.key]) ? filtres[champ.key] : [];
+    filtres[champ.key] = deja.includes(valeur.value) ? deja : [...deja, valeur.value];
   }
 
   return { filters: filtres, text: mots.join(" ") };
@@ -134,12 +170,11 @@ export function parseQuery(query = "", fields = []) {
  * frappe est illisible, et deux requêtes équivalentes doivent s'écrire pareil.
  */
 export function formatQuery({ filters = {}, text = "" } = {}, fields = []) {
-  const jetons = (fields ?? [])
-    .filter((champ) => texte(filters[champ.key]))
-    .map((champ) => {
-      const valeur = valeurPour(champ, filters[champ.key]);
-      return `${champ.key}:${valeur ? jetonDe(valeur) : texte(filters[champ.key])}`;
-    });
+  const jetons = (fields ?? []).flatMap((champ) => filterValues(filters, champ.key)
+    .map((brute) => {
+      const valeur = valeurPour(champ, brute);
+      return `${champ.key}:${valeur ? jetonDe(valeur) : brute}`;
+    }));
 
   return [...jetons, texte(text)].filter(Boolean).join(" ");
 }
@@ -162,9 +197,51 @@ export function withFilter(query = "", fields = [], key = "", value = "") {
   return formatQuery({ filters: suivant, text }, fields);
 }
 
-/** La valeur d'un filtre dans une requête, ou `""`. */
+/**
+ * La même requête, avec une valeur **ajoutée ou retirée** d'un champ.
+ *
+ * C'est le geste d'un menu qu'on coche : cliquer une valeur déjà posée la
+ * retire, cliquer une autre l'ajoute. Sur un champ à choix simple il n'y a
+ * rien à empiler — cocher remplace, recocher retire —, et `withFilter` dit
+ * exactement cela.
+ */
+export function toggleFilter(query = "", fields = [], key = "", value = "") {
+  const champ = champPour(fields, key);
+  const voulue = texte(value);
+  if (!champ || !voulue) return texte(query);
+
+  const { filters, text } = parseQuery(query, fields);
+  const posees = filterValues(filters, champ.key);
+
+  if (!estMultiple(champ)) {
+    return withFilter(query, fields, key, posees.includes(voulue) ? "" : voulue);
+  }
+
+  const suivantes = posees.includes(voulue)
+    ? posees.filter((posee) => posee !== voulue)
+    : [...posees, voulue];
+
+  const suivant = { ...filters };
+  if (suivantes.length) suivant[champ.key] = suivantes;
+  else delete suivant[champ.key];
+
+  return formatQuery({ filters: suivant, text }, fields);
+}
+
+/**
+ * La valeur d'un filtre dans une requête, ou `""`.
+ *
+ * Sur un champ à choix multiple, c'est la **première** posée : la seule réponse
+ * honnête à une question qui n'en attend qu'une. Qui veut les voir toutes
+ * appelle `filterValuesOf`.
+ */
 export function filterValue(query = "", fields = [], key = "") {
-  return parseQuery(query, fields).filters[texte(key)] ?? "";
+  return filterValues(parseQuery(query, fields).filters, key)[0] ?? "";
+}
+
+/** Toutes les valeurs d'un filtre dans une requête, dans l'ordre où elles sont posées. */
+export function filterValuesOf(query = "", fields = [], key = "") {
+  return filterValues(parseQuery(query, fields).filters, key);
 }
 
 /**
@@ -187,17 +264,18 @@ export function onlyFilters(query = "", fields = [], filters = {}) {
 export function describeFilters(query = "", fields = []) {
   const { filters } = parseQuery(query, fields);
 
-  return (fields ?? [])
-    .filter((champ) => texte(filters[champ.key]))
-    .map((champ) => {
-      const valeur = valeurPour(champ, filters[champ.key]);
+  // Une entrée **par valeur posée** : deux labels cochés se disent en deux
+  // morceaux, comme ils s'écrivent en deux jetons.
+  return (fields ?? []).flatMap((champ) => filterValues(filters, champ.key)
+    .map((brute) => {
+      const valeur = valeurPour(champ, brute);
       return {
         key: champ.key,
         label: champ.label,
-        value: filters[champ.key],
-        valueLabel: valeur?.label ?? filters[champ.key]
+        value: brute,
+        valueLabel: valeur?.label ?? brute
       };
-    });
+    }));
 }
 
 /**

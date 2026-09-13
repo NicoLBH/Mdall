@@ -95,7 +95,11 @@ export function vuePourLEcran(ligne = {}) {
     nom: texte(ligne.title ?? ligne.nom) || requete,
     description: texte(ligne.description),
     icone: iconeDeLaVue(ligne.icon ?? ligne.icone),
-    couleur: couleurDeLaVue(ligne.color ?? ligne.couleur)
+    couleur: couleurDeLaVue(ligne.color ?? ligne.couleur),
+    // **Enregistrée et épinglée sont deux choses.** Une vue vit sur son écran ;
+    // elle ne monte au rail que lorsqu'on l'y met. Le rail est court, et une
+    // vue de plus y coûte une place à celles qu'on regarde tous les jours.
+    auRail: (ligne.rail ?? ligne.auRail) === true
   };
 }
 

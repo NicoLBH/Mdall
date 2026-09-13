@@ -5,7 +5,8 @@ import {
   EPINGLES_AU_PLUS, estEpingle, motDeLEpingle, sujetsEpingles
 } from "../../services/epingles-des-sujets.js";
 import { TRI, motDuTri } from "../../services/tri-des-sujets.js";
-import { filterValue, withFilter } from "../../services/query-bar.js";
+import { filterValuesOf, toggleFilter, withFilter } from "../../services/query-bar.js";
+import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
 import { bindRailResizer, followRailScroll, railWidth } from "../ui/project-rail.js";
 import {
   renderFiltreDenTeteHtml, renderFormulaireDeVueHtml, renderRailDesSujetsHtml,
@@ -94,6 +95,7 @@ export function createProjectSubjectsView(deps) {
     getCurrentSubjectsSort,
     getChampsDesSujets,
     getMetaDesSujets,
+    getMoiDansLeProjet,
     getRequeteDesSujets,
     sujetMatchesStatusFilter,
     sujetMatchesPriorityFilter,
@@ -474,7 +476,57 @@ async function epinglerLaRechercheDesSujets() {
   }
 }
 
-/** Retirer une épingle du rail. */
+/**
+ * Épingler une vue au rail, ou l'en retirer.
+ *
+ * **Elle reste enregistrée dans les deux cas.** Ce qui change est sa place dans
+ * la barre de gauche, pas son existence : la supprimer est un autre geste, et
+ * c'est pourquoi le menu les sépare d'un filet.
+ */
+async function epinglerLaVueAuRail(id, auRail = true) {
+  const cle = String(id || "").trim();
+  if (!cle) return;
+
+  // Le menu se ferme avant l'aller-retour : le laisser ouvert par-dessus une
+  // ligne qui vient de changer d'état fait douter de ce qu'on lit.
+  store.projectSubjectsView.vueMenuOuvert = "";
+
+  try {
+    const { epinglerAuRail } = await import("../../services/memoire-recherches-supabase.js");
+    const changee = await epinglerAuRail(cle, auRail);
+    if (!changee) return;
+
+    recherchesEpinglees = (recherchesEpinglees ?? [])
+      .map((vue) => (vue.id === cle ? changee : vue));
+  } catch {
+    // Une vue qui ne s'épingle pas ne disparaît pas : elle reste où elle est.
+  }
+
+  rerenderPanels();
+}
+
+/** Ouvrir le menu d'une ligne du tableau des vues, ou le refermer. */
+function basculerLeMenuDeLaVue(id) {
+  const cle = String(id || "").trim();
+  const ouvert = String(store.projectSubjectsView?.vueMenuOuvert || "");
+  store.projectSubjectsView.vueMenuOuvert = ouvert === cle ? "" : cle;
+  rerenderPanels();
+}
+
+/**
+ * Refermer le menu d'une vue, s'il y en avait un d'ouvert.
+ *
+ * **Sans redessiner quand il n'y avait rien à fermer** : un clic n'importe où
+ * sur l'écran passe par ici, et reconstruire le panneau à chaque fois ferait
+ * perdre le curseur de la barre de recherche à la moindre frappe.
+ */
+function fermerLeMenuDeLaVue() {
+  if (!String(store.projectSubjectsView?.vueMenuOuvert || "")) return;
+  store.projectSubjectsView.vueMenuOuvert = "";
+  rerenderPanels();
+}
+
+/** Supprimer une vue enregistrée. Elle n'existe plus, au rail comme à l'écran. */
 async function retirerLaRechercheEpinglee(id) {
   const cle = String(id || "").trim();
   if (!cle) return;
@@ -582,11 +634,15 @@ function renderEcranDesVues() {
   const forme = store.projectSubjectsView?.vueEnCours ?? null;
   const vues = (recherchesEpinglees ?? []).map(vuePourLEcran);
 
-  if (!forme) return renderTableauDesVuesHtml({ vues });
+  if (!forme) {
+    return renderTableauDesVuesHtml({
+      vues, menuOuvert: String(store.projectSubjectsView?.vueMenuOuvert || "")
+    });
+  }
 
   const champs = getChampsDesSujets();
   const { ignores } = sujetsFiltres({
-    sujets: [], requete: forme.requete ?? "", champs, moi: String(store.user?.id || "")
+    sujets: [], requete: forme.requete ?? "", champs, moi: getMoiDansLeProjet()
   });
 
   return renderFormulaireDeVueHtml({
@@ -705,7 +761,7 @@ function renderEcranDesSujets(corps, { champs = [], requete = "" } = {}) {
             champs,
             requete,
             meta: getMetaDesSujets(),
-            moi: String(store.user?.id || ""),
+            moi: getMoiDansLeProjet(),
             epingles: recherchesEpinglees ?? [],
             replie,
             sousVue: String(store.situationsView?.subjectsSubview || "subjects")
@@ -926,8 +982,14 @@ function renderSubjectsFiltresDenTeteHtml() {
         id: `sujets-${cle.normalize("NFD").replace(/[^a-z]/gi, "")}`,
         champ,
         requete,
-        enCours: filterValue(requete, champs, cle),
-        poser: (valeur) => withFilter(requete, champs, cle, valeur)
+        // **Toutes les valeurs cochées, et non la première.** Le menu est à
+        // choix multiple ; n'en montrer qu'une ferait décocher sans le vouloir.
+        enCours: filterValuesOf(requete, champs, cle),
+        // Cliquer une valeur l'ajoute, la recliquer la retire — et « Tout »
+        // vide le champ.
+        poser: (valeur) => (valeur
+          ? toggleFilter(requete, champs, cle, valeur)
+          : withFilter(requete, champs, cle, ""))
       });
     })
     .join("");
@@ -3557,7 +3619,7 @@ function rerenderPanels() {
       // silencieusement sans effet donne une liste qui a l'air filtrée et ne
       // l'est pas.
       const { ignores } = sujetsFiltres({
-        sujets: [], requete, champs, moi: String(store.user?.id || "")
+        sujets: [], requete, champs, moi: getMoiDansLeProjet()
       });
 
       panelHost.innerHTML = `
@@ -4418,13 +4480,11 @@ function renderSituationsViewHeaderHtml() {
     return "";
   }
   if (String(store.situationsView.subjectsSubview || "subjects") === "labels") {
-    return renderProjectTableToolbar({
+    return renderTitreDEcranHtml({
+      titre: "Labels",
       className: "project-table-toolbar--situations project-table-toolbar--labels",
-      leftHtml: renderProjectTableToolbarGroup({
-        html: '<div class="project-table-toolbar__title">Labels</div>'
-      }),
-      rightHtml: renderProjectTableToolbarGroup({
-        html: renderSubjectsToolbarButton({ id: "labelsCreateAction", label: "Nouveau label", action: "add-label", tone: "primary" })
+      actionsHtml: renderSubjectsToolbarButton({
+        id: "labelsCreateAction", label: "Nouveau label", action: "add-label", tone: "primary"
       })
     });
   }
@@ -4432,6 +4492,13 @@ function renderSituationsViewHeaderHtml() {
   if (String(store.situationsView.subjectsSubview || "subjects") === "objectives") {
     return getProjectSubjectMilestones().renderObjectivesViewHeaderHtml();
   }
+
+  // **L'écran des vues porte son propre titre**, dans le contenu du rail, avec
+  // le bouton qui le concerne. Ce qui est ici — copier le tableau des sujets,
+  // créer un sujet — ne s'y applique pas : on y regarde des recherches
+  // enregistrées, pas des sujets, et ces deux boutons y proposaient des gestes
+  // qui portent sur autre chose que ce qu'on a sous les yeux.
+  if (String(store.situationsView.subjectsSubview || "subjects") === "views") return "";
 
   // **Une seule recherche.** Celle-ci ne cherchait que dans les titres, sans
   // grammaire et sans s'épingler ; la barre du tableau fait tout ce qu'elle
@@ -4524,6 +4591,9 @@ function getObjectiveById(objectiveId) {
     // événements les appellent, ils ne les refont pas.
     epinglerLaRechercheDesSujets,
     retirerLaRechercheEpinglee,
+    epinglerLaVueAuRail,
+    basculerLeMenuDeLaVue,
+    fermerLeMenuDeLaVue,
     basculerLeRail,
     ouvrirLaFormeDeVue,
     poserDansLaFormeDeVue,

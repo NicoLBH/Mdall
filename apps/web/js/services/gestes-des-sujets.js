@@ -27,8 +27,10 @@ export const GESTE = {
   RIEN: "rien",
   /** Poser une requête : le rail, une vue épinglée, une entrée de menu. */
   LECTURE: "lecture",
-  /** Retirer une recherche épinglée. */
+  /** Supprimer une recherche enregistrée — la vue n'existe plus. */
   DECROCHER: "decrocher",
+  /** Retirer une vue du rail. Elle reste enregistrée : on la range, on ne la perd pas. */
+  DERAILLER: "derailler",
   /** Aller à une sous-vue des Sujets : les objectifs, les labels. */
   SOUS_VUE: "sous_vue",
   /** Aller à un onglet voisin : les Situations. */
@@ -52,7 +54,11 @@ export const GESTE = {
   /** Fermer le formulaire sans rien écrire. */
   VUE_ANNULER: "vue_annuler",
   /** Enregistrer la vue. */
-  VUE_ENREGISTRER: "vue_enregistrer"
+  VUE_ENREGISTRER: "vue_enregistrer",
+  /** Ouvrir le menu d'une ligne du tableau des vues. */
+  VUE_MENU: "vue_menu",
+  /** Épingler cette vue au rail, ou l'en retirer. */
+  VUE_EPINGLER: "vue_epingler"
 };
 
 /**
@@ -64,6 +70,9 @@ export const GESTE = {
  */
 const ATTRIBUTS = [
   ["data-sujets-decrocher", GESTE.DECROCHER],
+  ["data-sujets-derailler", GESTE.DERAILLER],
+  ["data-sujets-vue-epingler", GESTE.VUE_EPINGLER],
+  ["data-sujets-vue-menu", GESTE.VUE_MENU],
   ["data-sujets-suggestion", GESTE.SUGGESTION],
   ["data-sujets-vider", GESTE.VIDER],
   ["data-sujets-epingler", GESTE.EPINGLER],

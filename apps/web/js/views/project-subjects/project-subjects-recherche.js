@@ -31,6 +31,8 @@ import { renderProjectRail } from "../ui/project-rail.js";
 import {
   renderNavList, renderNavListDivider, renderNavListGroup, renderNavListItem
 } from "../ui/nav-list.js";
+import { renderSelectMenuSection } from "../ui/select-menu.js";
+import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
 import { renderQueryMirror } from "../../services/query-bar.js";
 import { phraseDesIgnores } from "../../services/champs-des-sujets.js";
 import { epinglesDuRail, railDesSujets } from "../../services/rail-des-sujets.js";
@@ -88,9 +90,18 @@ export function renderRailDesSujetsHtml({
     }
   });
 
+  /**
+   * Une vue épinglée : **son icône, dans sa couleur**, et son nom.
+   *
+   * C'est à cela qu'on la reconnaît en descendant le rail — pas à sa requête,
+   * qui n'y tiendrait pas, ni à une épingle générique qui les rendrait toutes
+   * pareilles. C'est précisément ce que l'écran des vues sert à choisir.
+   */
   const uneEpingle = (epingle) => renderNavListItem({
     label: epingle.nom,
-    iconHtml: svgIcon("pin", { className: "octicon" }),
+    iconHtml: `<span class="sujets-rail__epingle-icone"
+      style="color:${escapeHtml(couleurDeLaVue(epingle.couleur).valeur)}">${
+      svgIcon(iconeDeLaVue(epingle.icone), { className: "octicon" })}</span>`,
     isActive: epingle.active && sousVue === "subjects",
     title: epingle.requete,
     dataAttributes: {
@@ -98,8 +109,8 @@ export function renderRailDesSujetsHtml({
       "data-tooltip": replie ? epingle.nom : ""
     },
     actionHtml: `<button type="button" class="bouton-discret sujets-rail__decrocher"
-      data-sujets-decrocher="${escapeHtml(epingle.id)}"
-      title="Retirer cette épingle" aria-label="Retirer cette épingle">
+      data-sujets-derailler="${escapeHtml(epingle.id)}"
+      title="Retirer du rail" aria-label="Retirer du rail">
       ${svgIcon("x", { className: "octicon" })}
     </button>`
   });
@@ -129,12 +140,15 @@ export function renderRailDesSujetsHtml({
             // et n'offrait rien à cliquer. L'entrée mène à leur écran, vide ou
             // non ; c'est là qu'on en crée une.
             unEcran("views", "Vues", "stack", "data-sujets-sousvue"),
-            ...posees.map(uneEpingle),
             unEcran("situations", "Situations", "table", "data-sujets-ecran"),
             unEcran("objectives", "Objectifs", "milestone", "data-sujets-sousvue"),
             unEcran("labels", "Labels", "tag", "data-sujets-sousvue")
           ]
         })}
+        ${posees.length === 0 ? "" : `
+          ${renderNavListDivider()}
+          ${renderNavListGroup({ label: "Épinglées", items: posees.map(uneEpingle) })}
+        `}
       `
     })
   });
@@ -193,38 +207,77 @@ export function renderRechercheDesSujetsHtml({ requete = "", champs = [], ignore
  * tout. Le menu n'a donc aucun état à lui, et ne peut pas contredire ce qui est
  * écrit.
  *
- * **Sans bordure.** Un filtre n'est pas une action : l'encadrer comme un bouton
- * en fait une chose à cliquer, alors qu'on ne le remarque que lorsqu'on cherche
- * à réduire la liste.
+ * ## Le bouton garde le nom du champ
+ *
+ * Il prenait le nom de la valeur choisie : « CR chantier » remplaçait
+ * « Labels ». On ne savait plus ce que le menu filtrait, et deux filtres posés
+ * côte à côte donnaient une ligne de noms propres qu'il fallait ouvrir un à un
+ * pour comprendre. Le champ garde donc son nom et son caret ; **ce qui est
+ * coché se compte à côté**, et se lit en toutes lettres dans la barre — qui est
+ * l'endroit où la requête se lit.
+ *
+ * ## Le même menu que la colonne de droite d'un sujet
+ *
+ * Celui qui sert à poser un assigné, un label, un objectif. Mêmes sections,
+ * mêmes entrées, même coche à droite (`select-menu.js`) : ce sont les mêmes
+ * listes et le même geste, et deux menus qui se ressemblent sans être les mêmes
+ * divergent au premier réglage (règle 10).
+ *
+ * ## On coche à plusieurs, et ça veut dire « ou »
+ *
+ * Deux labels cochés cherchent les sujets qui portent l'un **ou** l'autre :
+ * c'est la question qu'on se pose en ouvrant le menu. « Et » rendrait presque
+ * toujours zéro.
  */
-export function renderFiltreDenTeteHtml({ id, champ, requete = "", enCours = "", poser = null } = {}) {
+export function renderFiltreDenTeteHtml({ id, champ, requete = "", enCours = [], poser = null } = {}) {
   if (!champ || typeof poser !== "function") return "";
 
-  const choisie = champ.values.find((valeur) => valeur.value === enCours) ?? null;
-  const nom = choisie ? choisie.label : champ.label;
+  const cochees = (Array.isArray(enCours) ? enCours : [enCours]).map(texte).filter(Boolean);
+  const combien = cochees.length;
+
+  const entrees = champ.values.map((valeur) => {
+    const active = cochees.includes(valeur.value);
+    return {
+      key: `${champ.key}:${valeur.value}`,
+      title: valeur.label,
+      isSelected: active,
+      isActive: active,
+      // La coche à droite, comme dans la colonne d'un sujet : c'est là que
+      // l'œil la cherche une fois qu'il l'y a vue une fois.
+      rightHtml: active ? svgIcon("check", { className: "octicon" }) : "",
+      dataAttrs: { "sujets-lecture": poser(valeur.value) }
+    };
+  });
 
   // **L'attribut qui ouvre le menu, et celui qui porte sa liste.** Ils sont
   // nommés plutôt que déduits d'un identifiant : c'est ce que la délégation
   // cherche, et un menu sans eux ne s'ouvre pas — ce qui est arrivé.
   return `
-    <div class="issues-head-menu sujets-head-menu${choisie ? " est-posee" : ""}">
+    <div class="issues-head-menu sujets-head-menu${combien ? " est-posee" : ""}">
       <button class="issues-head-menu__btn" type="button" data-sujets-menu="${escapeHtml(id)}"
         aria-haspopup="true" aria-expanded="false">
-        <span>${escapeHtml(nom)}</span>
+        <span>${escapeHtml(champ.label)}</span>
+        ${combien ? `<span class="sujets-head-menu__compte">${combien}</span>` : ""}
         ${svgIcon("chevron-down", { className: "gh-chevron" })}
       </button>
 
-      <div class="gh-menu issues-head-menu__dropdown" data-sujets-menu-liste="${escapeHtml(id)}" role="menu">
-        ${[{ value: "", label: `Tous — ${champ.label.toLowerCase()}` }, ...champ.values].map((valeur) => {
-          const active = valeur.value === enCours;
-          return `
-            <button class="gh-menu__item ${active ? "is-active" : ""}" type="button" role="menuitem"
-              data-sujets-lecture="${escapeHtml(poser(valeur.value))}">
-              <span class="gh-menu__check">${active ? svgIcon("check", { className: "octicon" }) : ""}</span>
-              ${escapeHtml(valeur.label)}
-            </button>
-          `;
-        }).join("")}
+      <div class="gh-menu subject-meta-dropdown issues-head-menu__dropdown sujets-head-menu__liste"
+        data-sujets-menu-liste="${escapeHtml(id)}" role="dialog">
+        <div class="subject-meta-dropdown__title">${escapeHtml(champ.label)}</div>
+        <div class="subject-meta-dropdown__body">
+          ${renderSelectMenuSection({ items: entrees, emptyTitle: `Aucun ${champ.label.toLowerCase()}` })}
+        </div>
+        ${combien ? `
+          <div class="subject-kanban-dropdown__separator" aria-hidden="true"></div>
+          <button type="button" class="select-menu__item sujets-head-menu__vider"
+            data-sujets-lecture="${escapeHtml(poser(""))}">
+            <span class="select-menu__item-mainrow">
+              <span class="select-menu__item-content">
+                <span class="select-menu__item-title">Tout montrer</span>
+              </span>
+            </span>
+          </button>
+        ` : ""}
       </div>
     </div>
   `;
@@ -248,17 +301,43 @@ export function renderFiltreDenTeteHtml({ id, champ, requete = "", enCours = "",
  * fait, et le bouton est là. Un tableau vide sans rien à cliquer fait chercher
  * où l'on crée.
  */
-export function renderTableauDesVuesHtml({ vues = [] } = {}) {
+export function renderTableauDesVuesHtml({ vues = [], menuOuvert = "" } = {}) {
   const liste = Array.isArray(vues) ? vues : [];
+  const ouvert = texte(menuOuvert);
+
+  /**
+   * Le menu d'une ligne : épingler, et supprimer.
+   *
+   * **Les deux gestes ne se confondent pas**, et c'est pourquoi ils sont
+   * séparés par un filet et que le second est rouge : retirer une vue du rail
+   * la range, la supprimer la perd. Un seul bouton pour les deux aurait fait
+   * perdre des recherches à qui voulait seulement dégager sa barre de gauche.
+   */
+  const unMenu = (vue) => `
+    <div class="gh-menu sujets-vues__menu" data-sujets-vue-menu-liste="${escapeHtml(vue.id)}"
+      role="menu"${vue.id === ouvert ? "" : " hidden"}>
+      <button type="button" class="gh-menu__item" role="menuitem"
+        data-sujets-vue-epingler="${escapeHtml(vue.id)}">
+        ${svgIcon("pin", { className: "octicon" })}
+        <span>${vue.auRail ? "Retirer du rail" : "Épingler la vue"}</span>
+      </button>
+      <div class="gh-menu__separator" role="presentation"></div>
+      <button type="button" class="gh-menu__item gh-menu__item--danger" role="menuitem"
+        data-sujets-decrocher="${escapeHtml(vue.id)}">
+        ${svgIcon("trash", { className: "octicon" })}
+        <span>Supprimer</span>
+      </button>
+    </div>
+  `;
 
   return `
     <section class="sujets-vues">
-      <header class="sujets-vues__tete">
-        <h2 class="sujets-vues__titre">Vues</h2>
-        <button type="button" class="gh-btn gh-btn--primary" data-sujets-vue-nouvelle>
+      ${renderTitreDEcranHtml({
+        titre: "Vues",
+        actionsHtml: `<button type="button" class="gh-btn gh-btn--primary" data-sujets-vue-nouvelle>
           Nouvelle vue
-        </button>
-      </header>
+        </button>`
+      })}
 
       <div class="data-table-shell">
         <div class="data-table-shell__head">
@@ -286,11 +365,20 @@ export function renderTableauDesVuesHtml({ vues = [] } = {}) {
                     <span class="sujets-vues__requete mono-small">${escapeHtml(vue.requete)}</span>
                   </span>
                 </button>
-                <button type="button" class="bouton-discret sujets-vues__retirer"
-                  data-sujets-decrocher="${escapeHtml(vue.id)}"
-                  title="Retirer cette vue" aria-label="Retirer cette vue">
-                  ${svgIcon("x", { className: "octicon" })}
-                </button>
+                ${vue.auRail
+                  ? `<span class="sujets-vues__au-rail" title="Épinglée au rail"
+                      aria-label="Épinglée au rail">${svgIcon("pin", { className: "octicon" })}</span>`
+                  : ""}
+                <div class="sujets-vues__gestes">
+                  <button type="button" class="bouton-discret sujets-vues__kebab"
+                    data-sujets-vue-menu="${escapeHtml(vue.id)}"
+                    aria-haspopup="true" aria-expanded="${vue.id === ouvert}"
+                    title="Ce qu'on peut faire de cette vue"
+                    aria-label="Ce qu'on peut faire de cette vue">
+                    ${svgIcon("kebab-horizontal", { className: "octicon" })}
+                  </button>
+                  ${unMenu(vue)}
+                </div>
               </li>
             `).join("")}
           </ul>
@@ -323,9 +411,7 @@ export function renderFormulaireDeVueHtml({
 
   return `
     <section class="sujets-vue-forme">
-      <header class="sujets-vues__tete">
-        <h2 class="sujets-vues__titre">${vue.id ? "Modifier la vue" : "Nouvelle vue"}</h2>
-      </header>
+      ${renderTitreDEcranHtml({ titre: vue.id ? "Modifier la vue" : "Nouvelle vue" })}
 
       <div class="sujets-vue-forme__habit">
         <span class="sujets-vue-forme__apercu" style="color:${escapeHtml(couleur.valeur)}"

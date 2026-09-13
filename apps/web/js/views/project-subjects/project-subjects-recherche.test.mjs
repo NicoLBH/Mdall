@@ -103,15 +103,50 @@ test("un compte qu'on ne peut pas calculer ne s'affiche pas", () => {
 
 /* ── Les recherches épinglées ────────────────────────────────────────────── */
 
-test("les épingles se posent sous les lectures, avec de quoi les retirer", () => {
+/**
+ * **Enregistrée et épinglée sont deux choses.** Toutes les vues montaient au
+ * rail, si bien qu'enregistrer une recherche coûtait une place dans la barre de
+ * gauche — et qu'on finissait par ne plus en enregistrer.
+ */
+test("seules les vues épinglées montent au rail", () => {
   const html = rail({
-    epingles: [{ id: "e1", query: "priorité:haute", title: "Les urgences" }]
+    epingles: [
+      { id: "e1", query: "priorité:haute", title: "Les urgences", rail: true },
+      { id: "e2", query: "label:cr-chantier", title: "Rangée seulement" }
+    ]
   });
 
-  assert.match(html, /Vues/);
+  assert.match(html, /Épinglées/, "le sous-titre du groupe manque");
   assert.match(html, /Les urgences/);
+  assert.doesNotMatch(html, /Rangée seulement/, "une vue non épinglée s'est invitée au rail");
   assert.match(html, /data-sujets-lecture="priorité:haute"/);
-  assert.match(html, /data-sujets-decrocher="e1"/);
+  // La croix la **range**, elle ne la supprime pas : ce sont deux gestes.
+  assert.match(html, /data-sujets-derailler="e1"/);
+  assert.doesNotMatch(html, /data-sujets-decrocher="e1"/);
+});
+
+/** Les épinglées se posent **sous** Labels, qui reste la dernière destination. */
+test("les épinglées viennent après les écrans du domaine", () => {
+  const html = rail({
+    epingles: [{ id: "e1", query: "priorité:haute", title: "Les urgences", rail: true }]
+  });
+
+  assert.ok(html.indexOf("Labels") < html.indexOf("Épinglées"));
+  assert.ok(html.indexOf("Épinglées") < html.indexOf("Les urgences"));
+});
+
+/** On la reconnaît à son icône, dans sa couleur : c'est ce qu'on a choisi pour ça. */
+test("une vue épinglée porte son icône et sa couleur", () => {
+  const html = rail({
+    epingles: [{
+      id: "e1", query: "priorité:haute", title: "Les urgences",
+      rail: true, icon: "alert", color: "rouge"
+    }]
+  });
+
+  assert.match(html, /sujets-rail__epingle-icone/);
+  assert.match(html, /#f85149/);
+  assert.match(html, /#alert"/);
 });
 
 /**
@@ -216,7 +251,7 @@ test("un filtre non appliqué se dit sous la barre", () => {
 
 const champLabel = champs.find((champ) => champ.key === "label");
 
-test("un filtre d'en-tête propose chaque valeur, et de tout montrer", () => {
+test("un filtre d'en-tête propose chaque valeur", () => {
   const html = renderFiltreDenTeteHtml({
     id: "subjectslabelHead", champ: champLabel, requete: "",
     poser: (valeur) => `label:${valeur || ""}`
@@ -224,7 +259,8 @@ test("un filtre d'en-tête propose chaque valeur, et de tout montrer", () => {
 
   assert.match(html, /CR chantier/);
   assert.match(html, /Aucun/);
-  assert.match(html, /Tous — label/);
+  // Rien n'est coché : l'entrée qui vide le champ n'a rien à vider.
+  assert.doesNotMatch(html, /Tout montrer/);
 });
 
 /**
@@ -235,7 +271,7 @@ test("un filtre d'en-tête propose chaque valeur, et de tout montrer", () => {
 test("chaque entrée porte la requête entière qu'elle poserait", () => {
   const html = renderFiltreDenTeteHtml({
     id: "subjectslabelHead", champ: champLabel, requete: "statut:ouvert",
-    enCours: "l-cr",
+    enCours: ["l-cr"],
     poser: (valeur) => (valeur ? `statut:ouvert label:${valeur}` : "statut:ouvert")
   });
 
@@ -244,16 +280,41 @@ test("chaque entrée porte la requête entière qu'elle poserait", () => {
   assert.match(html, /data-sujets-lecture="statut:ouvert"/);
 });
 
-test("le filtre posé se voit sur le bouton, pas seulement dans la liste", () => {
+/**
+ * **Le bouton garde le nom du champ.** Il prenait celui de la valeur choisie —
+ * « CR chantier » remplaçait « Labels » — et l'on ne savait plus ce que le menu
+ * filtrait. Ce qui est coché se compte à côté ; ce qui est coché *en toutes
+ * lettres* se lit dans la barre, qui est l'endroit où la requête se lit.
+ */
+test("le bouton garde le nom du champ, et compte ce qui est coché", () => {
   const pose = renderFiltreDenTeteHtml({
-    id: "x", champ: champLabel, enCours: "l-cr", poser: () => ""
+    id: "x", champ: champLabel, enCours: ["l-cr", "aucun"], poser: () => ""
   });
   const libre = renderFiltreDenTeteHtml({ id: "x", champ: champLabel, poser: () => "" });
 
   assert.match(pose, /sujets-head-menu est-posee/);
-  assert.match(pose, /<span>CR chantier<\/span>/);
+  assert.match(pose, /<span>Labels<\/span>/, "le nom du champ a été remplacé par une valeur");
+  assert.match(pose, /sujets-head-menu__compte">2</, "on ne voit pas combien de valeurs sont cochées");
+  assert.match(pose, /Tout montrer/);
+
   assert.doesNotMatch(libre, /est-posee/);
-  assert.match(libre, /<span>Label<\/span>/);
+  assert.match(libre, /<span>Labels<\/span>/);
+  assert.doesNotMatch(libre, /sujets-head-menu__compte/);
+});
+
+/**
+ * Le menu est **celui de la colonne de droite d'un sujet** : mêmes sections,
+ * mêmes entrées, même coche. Deux menus qui se ressemblent sans être les mêmes
+ * divergent au premier réglage (règle 10).
+ */
+test("le menu réemploie celui qui sert à poser un label sur un sujet", () => {
+  const html = renderFiltreDenTeteHtml({
+    id: "x", champ: champLabel, enCours: ["l-cr"], poser: (valeur) => `label:${valeur}`
+  });
+
+  assert.match(html, /subject-meta-dropdown/);
+  assert.match(html, /select-menu__item[^"]*is-selected/);
+  assert.match(html, /aria-selected="true"/);
 });
 
 /** Un champ que le projet ne déclare pas ne dessine pas de menu vide. */
@@ -286,7 +347,7 @@ test("un champ absent ne dessine rien", () => {
  * dessiné pour rien — et il a exactement l'air de marcher.
  */
 test("chaque attribut que le rail dessine déclenche un geste", () => {
-  const html = rail({ epingles: [{ id: "e1", query: "priorité:haute", title: "X" }] });
+  const html = rail({ epingles: [{ id: "e1", query: "priorité:haute", title: "X", rail: true }] });
 
   // **Sans le `=` final.** Un attribut booléen s'écrit nu —
   // `data-project-rail-collapse` n'a pas de valeur —, et l'exiger faisait
@@ -320,6 +381,7 @@ test("chaque attribut que le rail dessine déclenche un geste", () => {
  * cherche par son nom, pas par un clic dessus.
  */
 const SANS_GESTE = ["data-tooltip", "data-project-rail", "data-sujets-menu-liste",
+  "data-sujets-vue-menu-liste",
   "data-sujets-recherche", "data-sujets-suggestions"];
 
 /** Et les menus d'en-tête, qui n'ont pas de geste depuis quatre heures. */
@@ -350,9 +412,9 @@ function unNoeud(attribut) {
 }
 
 test("le rail porte tous les attributs que l'écoute cherche", () => {
-  const html = rail({ epingles: [{ id: "e1", query: "priorité:haute", title: "X" }] });
+  const html = rail({ epingles: [{ id: "e1", query: "priorité:haute", title: "X", rail: true }] });
 
-  for (const attribut of ["data-sujets-lecture", "data-sujets-decrocher",
+  for (const attribut of ["data-sujets-lecture", "data-sujets-derailler",
     "data-sujets-sousvue", "data-sujets-ecran", "data-project-rail-collapse"]) {
     assert.ok(html.includes(attribut), `le rail ne porte pas « ${attribut} »`);
   }
@@ -399,6 +461,31 @@ test("chaque attribut que la barre dessine déclenche un geste", () => {
     assert.notEqual(
       gesteDesSujets(unNoeud(attribut)).geste, GESTE.RIEN,
       `la barre pose « ${attribut} » et rien ne l'écoute`
+    );
+  }
+});
+
+/**
+ * **Le tableau des vues a le même contrat.** Son menu a été ajouté tout fait —
+ * kebab, épingle, corbeille — et rien ne l'aurait écouté : c'est exactement la
+ * panne des quatre heures perdues sur le rail.
+ */
+test("chaque attribut du tableau des vues déclenche un geste", () => {
+  const html = renderTableauDesVuesHtml({
+    vues: [{ ...UNE_VUE, auRail: true }], menuOuvert: "v1"
+  });
+
+  const poses = [...new Set(
+    [...html.matchAll(/(data-sujets-[a-z-]+)=/g)].map(([, attribut]) => attribut)
+  )];
+
+  assert.ok(poses.length >= 4, `le tableau ne pose que ${poses.length} attributs`);
+
+  for (const attribut of poses) {
+    if (SANS_GESTE.includes(attribut)) continue;
+    assert.notEqual(
+      gesteDesSujets(unNoeud(attribut)).geste, GESTE.RIEN,
+      `le tableau des vues pose « ${attribut} » et rien ne l'écoute`
     );
   }
 });
@@ -453,7 +540,54 @@ test("le tableau des vues montre ce que chacune retient", () => {
   assert.match(html, /sujets-vues__requete mono-small">priorité:haute</);
   assert.match(html, /#f85149/);
   assert.match(html, /data-sujets-lecture="priorité:haute"/);
-  assert.match(html, /data-sujets-decrocher="v1"/);
+});
+
+/**
+ * **La même ligne de titre que les autres écrans.** Elle était écrite à la main
+ * ici — une taille de police, un espacement — et se recalibrait donc contre les
+ * Labels et les Objectifs à chaque changement. Elle vient du composant partagé
+ * (règle 10).
+ */
+test("le titre de l'écran est celui de tous les écrans", () => {
+  const html = renderTableauDesVuesHtml({ vues: [UNE_VUE] });
+
+  assert.match(html, /project-table-toolbar--titre/);
+  assert.match(html, /project-table-toolbar__title">Vues</);
+});
+
+/**
+ * **Épingler et supprimer ne se confondent pas**, et c'est pourquoi le menu les
+ * sépare : retirer une vue du rail la range, la supprimer la perd.
+ */
+test("chaque vue porte un menu : l'épingler, ou la supprimer", () => {
+  const html = renderTableauDesVuesHtml({ vues: [UNE_VUE], menuOuvert: "v1" });
+
+  assert.match(html, /data-sujets-vue-menu="v1"/);
+  assert.match(html, /data-sujets-vue-epingler="v1"/);
+  assert.match(html, /Épingler la vue/);
+  assert.match(html, /gh-menu__separator/);
+  assert.match(html, /gh-menu__item--danger[^>]*data-sujets-decrocher="v1"/);
+  assert.match(html, /Supprimer/);
+});
+
+/** Fermé, le menu ne se lit pas : sinon il serait toujours là. */
+test("le menu d'une vue ne s'ouvre que sur celle qu'on a cliquée", () => {
+  const ferme = renderTableauDesVuesHtml({ vues: [UNE_VUE] });
+  const ouvert = renderTableauDesVuesHtml({ vues: [UNE_VUE], menuOuvert: "v1" });
+
+  assert.match(ferme, /data-sujets-vue-menu-liste="v1"[^>]*hidden/);
+  assert.doesNotMatch(ouvert, /data-sujets-vue-menu-liste="v1"[^>]*hidden/);
+});
+
+/** Une vue déjà au rail le dit, et son menu propose de l'en retirer. */
+test("une vue épinglée se voit dans le tableau", () => {
+  const html = renderTableauDesVuesHtml({
+    vues: [{ ...UNE_VUE, auRail: true }], menuOuvert: "v1"
+  });
+
+  assert.match(html, /sujets-vues__au-rail/);
+  assert.match(html, /Retirer du rail/);
+  assert.doesNotMatch(html, /Épingler la vue/);
 });
 
 /** Le bouton de création est là, vide ou non : c'est de là qu'on en fait une. */

@@ -26,7 +26,7 @@
  * des lectures avec leurs comptes sortent.
  */
 
-import { formatQuery, parseQuery } from "./query-bar.js";
+import { filterValues, formatQuery, parseQuery } from "./query-bar.js";
 import { MOI, sujetsFiltres } from "./champs-des-sujets.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -135,7 +135,13 @@ export function lectureDe(requete = "", champs = []) {
 
     const voulues = Object.keys(attendus).sort();
     if (voulues.length !== cles.length) continue;
-    if (voulues.every((cle) => filters[cle] === attendus[cle])) return lecture;
+    // Un champ à choix multiple porte un tableau ; `filterValues` le lit comme
+    // le reste du code, et une lecture n'est la sienne que si elle pose
+    // **exactement** sa valeur — cocher un second label la quitte.
+    if (voulues.every((cle) => {
+      const posees = filterValues(filters, cle);
+      return posees.length === 1 && posees[0] === attendus[cle];
+    })) return lecture;
   }
 
   return LECTURE.TOUS;
@@ -204,10 +210,18 @@ export function epinglesDuRail(epingles = [], requete = "") {
   const courante = texte(requete);
 
   return (Array.isArray(epingles) ? epingles : [])
+    // **Seules celles qu'on a épinglées.** Une vue enregistrée vit sur son
+    // écran ; le rail est court, et toutes les y mettre revenait à faire payer
+    // chaque enregistrement d'une place dans la barre de gauche.
+    .filter((epingle) => (epingle?.rail ?? epingle?.auRail) === true)
     .map((epingle) => ({
       id: texte(epingle?.id),
       requete: texte(epingle?.query ?? epingle?.requete),
-      nom: texte(epingle?.title ?? epingle?.titre) || texte(epingle?.query ?? epingle?.requete)
+      nom: texte(epingle?.title ?? epingle?.titre) || texte(epingle?.query ?? epingle?.requete),
+      // De quoi la reconnaître d'un coup d'œil : c'est tout ce qu'une entrée de
+      // rail large de deux cents pixels peut porter.
+      icone: texte(epingle?.icon ?? epingle?.icone),
+      couleur: texte(epingle?.color ?? epingle?.couleur)
     }))
     .filter((epingle) => epingle.id && epingle.requete)
     .map((epingle) => ({ ...epingle, active: epingle.requete === courante }));

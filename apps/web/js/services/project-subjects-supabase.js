@@ -1,4 +1,5 @@
 import { store } from "../store.js";
+import { CLES_DE_LA_CHARGE, indexDesAssignes, indexDesLiens, indexDesMentions } from "./charge-des-sujets.js";
 import { buildSubjectHierarchyIndexes } from "./subject-hierarchy.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { loadSituationsForCurrentProject, loadSituationSubjectIdsMap } from "./project-situations-supabase.js";
@@ -191,7 +192,11 @@ async function fetchProjectFlatSubjects(projectId) {
     return [];
   }
 
-  const optionalColumns = ["document_ref_ids"];
+  // `created_by` est **facultative** ici, et le repli n'est pas de la prudence
+  // décorative : c'est ce qui dit la vérité quand la colonne manque. Sans
+  // auteur lisible, « créé par moi » ne trouve rien — et l'écran l'annonce au
+  // lieu de rendre une liste vide (`docs/fondamentaux.md`, règle 5).
+  const optionalColumns = ["document_ref_ids", "created_by"];
   const baseColumns = [
     "id", "subject_number", "project_id", "document_id", "analysis_run_id", "situation_id",
     "parent_subject_id", "parent_linked_at", "parent_child_order", "assignee_person_id",
@@ -886,6 +891,40 @@ async function fetchProjectSubjectAssignees(projectId) {
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error(`subject_assignees fetch failed (${res.status}): ${txt}`);
+  }
+
+  const rows = await res.json().catch(() => []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+
+/**
+ * Qui est nommé avec un `@` dans les messages de chaque sujet.
+ *
+ * **C'est la seule lecture qui ne se déduit d'aucune colonne du sujet** : elle
+ * vient de ses messages, et c'est précisément ce qui appelle une réponse. Elle
+ * n'était pas chargée du tout, et l'écran filtrait donc sur une table vide.
+ *
+ * Les identifiants rendus sont des **personnes** (`mentioned_person_id`),
+ * comme les assignations — jamais des comptes.
+ */
+async function fetchProjectSubjectMentions(projectId) {
+  if (!projectId) return [];
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/subject_message_mentions`);
+  url.searchParams.set("select", "subject_id,mentioned_person_id,created_at");
+  url.searchParams.set("project_id", `eq.${projectId}`);
+  url.searchParams.set("order", "created_at.asc");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`subject_message_mentions fetch failed (${res.status}): ${txt}`);
   }
 
   const rows = await res.json().catch(() => []);
@@ -1704,16 +1743,10 @@ function buildProjectFlatSubjectsResult(subjectRows = [], subjectLinks = [], opt
     rootSubjectIds
   } = buildSubjectHierarchyIndexes(subjectRows, subjectsById);
 
-  for (const link of subjectLinks || []) {
-    const sourceId = String(link?.source_subject_id || "");
-    const targetId = String(link?.target_subject_id || "");
-    if (!sourceId || !targetId) continue;
-    const normalizedLink = { ...link, source_subject_id: sourceId, target_subject_id: targetId };
-    if (!Array.isArray(linksBySubjectId[sourceId])) linksBySubjectId[sourceId] = [];
-    if (!Array.isArray(linksBySubjectId[targetId])) linksBySubjectId[targetId] = [];
-    linksBySubjectId[sourceId].push(normalizedLink);
-    linksBySubjectId[targetId].push(normalizedLink);
-  }
+  // **L'index des liens vient de `charge-des-sujets.js`**, qui le produit aussi
+  // pour les tests : c'est ce qui empêche l'écran de lire une clé que cette
+  // fonction n'écrit pas — ce qui est arrivé, en silence, à quatre d'entre elles.
+  Object.assign(linksBySubjectId, indexDesLiens(subjectLinks));
 
   const flatSubjects = Object.values(subjectsById).sort((left, right) => {
     const leftTs = Date.parse(left?.created_at || "") || 0;
@@ -1821,7 +1854,8 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
         linksBySubjectId: {},
         relationIdsBySubjectId: {},
         relationOptionsById: {},
-        assigneePersonIdsBySubjectId: {},
+        [CLES_DE_LA_CHARGE.assignes]: {},
+        [CLES_DE_LA_CHARGE.mentions]: {},
         subjectMessageCountsBySubjectId: {},
         labels: [],
         labelsById: {},
@@ -1885,6 +1919,7 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
     }
     const subjectLinks = await fetchProjectSubjectLinks(backendProjectId).catch(() => []);
     const subjectAssignees = await fetchProjectSubjectAssignees(backendProjectId).catch(() => []);
+    const subjectMentions = await fetchProjectSubjectMentions(backendProjectId).catch(() => []);
     const subjectMessageCountsBySubjectId = await fetchProjectSubjectMessageCounts(backendProjectId).catch(() => ({}));
     const situations = await loadSituationsForCurrentProject(backendProjectId).catch(() => []);
     const manualSituationIds = situations
@@ -1893,19 +1928,11 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
       .filter(Boolean);
     const subjectIdsBySituationId = await loadSituationSubjectIdsMap(manualSituationIds).catch(() => ({}));
     const result = buildProjectFlatSubjectsResult(hydratedSubjects, subjectLinks, { runId: store.ui.runId || "" });
-    result.assigneePersonIdsBySubjectId = {};
+    result[CLES_DE_LA_CHARGE.assignes] = indexDesAssignes(subjectAssignees);
     result.subjectMessageCountsBySubjectId = subjectMessageCountsBySubjectId && typeof subjectMessageCountsBySubjectId === "object"
       ? subjectMessageCountsBySubjectId
       : {};
-    for (const row of subjectAssignees) {
-      const subjectId = normalizeUuid(row?.subject_id);
-      const personId = normalizeUuid(row?.person_id);
-      if (!subjectId || !personId) continue;
-      if (!Array.isArray(result.assigneePersonIdsBySubjectId[subjectId])) result.assigneePersonIdsBySubjectId[subjectId] = [];
-      if (!result.assigneePersonIdsBySubjectId[subjectId].includes(personId)) {
-        result.assigneePersonIdsBySubjectId[subjectId].push(personId);
-      }
-    }
+    result[CLES_DE_LA_CHARGE.mentions] = indexDesMentions(subjectMentions);
     result.situationsById = Object.fromEntries(situations.map((situation) => [String(situation?.id || ""), situation]).filter(([id]) => !!id));
     result.subjectIdsBySituationId = subjectIdsBySituationId;
     result.pagination = {
