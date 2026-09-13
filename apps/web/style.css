@@ -24202,3 +24202,29 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .lecture-cr__structure-nom{margin:0;font-weight:600;color:var(--text);}
 .lecture-cr__structure-consignes{margin:0;padding-left:18px;color:var(--muted);font-size:12.5px;line-height:1.6;}
+
+/* Une adresse électronique se lit comme un lien : c'en est un. */
+.md-render .md-courriel{color:var(--fgColor-accent, #4493f8);text-decoration:none;}
+.md-render .md-courriel:hover{text-decoration:underline;}
+
+/* Ce qu'un compte rendu ferme, et ce qu'il se contente de ne plus dire. */
+.lecture-cr__fermetures{display:flex;flex-direction:column;gap:3px;margin:0;padding:0;list-style:none;}
+.lecture-cr__fermeture{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  padding:3px 8px;
+  border-left:2px solid var(--border2);
+  line-height:1.5;
+}
+.lecture-cr__fermeture.est-fermee{border-left-color:var(--fgColor-success, #3fb950);}
+/* Une disparition pose une question : elle n'a pas la couleur d'une réponse. */
+.lecture-cr__fermeture.est-question{border-left-color:var(--fgColor-attention, #d29922);border-left-style:dashed;}
+.lecture-cr__fermeture-signe{
+  flex:0 0 auto;
+  min-width:9ch;
+  color:var(--muted);
+  font-variant-numeric:tabular-nums;
+}
+.lecture-cr__fermeture.est-fermee .lecture-cr__fermeture-signe{color:var(--fgColor-success, #3fb950);}
+.lecture-cr__fermeture.est-question .lecture-cr__fermeture-signe{color:var(--fgColor-attention, #d29922);}

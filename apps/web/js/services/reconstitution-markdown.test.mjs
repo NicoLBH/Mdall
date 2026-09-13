@@ -246,3 +246,62 @@ test("un fichier sans marqueur ne s'invente pas une page", () => {
   assert.deepEqual(pagesDuFichierMarkdown(""), []);
   assert.deepEqual(enFichierMarkdown([{ page: 0, markdown: "sans place" }]), "");
 });
+
+/* ── Le mobilier de page ne compte pas comme perdu ───────────────────────── */
+
+/**
+ * **La mesure punissait ce qu'on venait de corriger.**
+ *
+ * On demande maintenant de ne pas restituer l'en-tête et le pied répétés : un
+ * Markdown n'a pas de pages, et « Page 9 sur 12 » n'est pas du contenu. Mais
+ * ces mots figurent dans le texte du PDF : comptés parmi les mots à retrouver,
+ * ils faisaient chuter la part retrouvée à chaque fois que le modèle obéissait.
+ */
+test("les mots du mobilier de page ne comptent pas parmi les mots perdus", async () => {
+  const { fideliteDeLaReconstitution, motsDuMobilier } = await import("./reconstitution-markdown.js");
+
+  const origine = [{
+    page: 1,
+    text: "CERES Architecte du Patrimoine. Reprise étanchéité toiture angle. Page 9 sur 12"
+  }];
+  const refaite = [{ page: 1, markdown: "Reprise étanchéité toiture angle." }];
+
+  const mobilier = motsDuMobilier({
+    entete_repete: "CERES Architecte du Patrimoine",
+    pied_repete: "Page 9 sur 12"
+  });
+
+  const compte = fideliteDeLaReconstitution(origine, refaite);
+  const retire = fideliteDeLaReconstitution(origine, refaite, { sansCesMots: mobilier });
+
+  assert.ok(retire.part > compte.part, "retirer le mobilier n'améliore pas la mesure");
+  assert.equal(retire.part, 1, "le document est pourtant restitué en entier");
+});
+
+/**
+ * Sans squelette reconnu, rien n'est retiré : la mesure compte tout, comme
+ * avant. Ne pas savoir ce qui est du mobilier n'autorise pas à en supposer
+ * (règle 5).
+ */
+test("sans squelette, aucun mot n'est retiré de la mesure", async () => {
+  const { motsDuMobilier } = await import("./reconstitution-markdown.js");
+
+  assert.equal(motsDuMobilier(null).size, 0);
+  assert.equal(motsDuMobilier({}).size, 0);
+  assert.ok(motsDuMobilier({ pied_repete: "Page 9 sur 12" }).size > 0);
+});
+
+/** Une page dont rien n'est revenu ne compte pas non plus son mobilier perdu. */
+test("une page absente ne compte pas le mobilier parmi ses mots perdus", async () => {
+  const { fideliteDeLaReconstitution, motsDuMobilier } = await import("./reconstitution-markdown.js");
+
+  const mesure = fideliteDeLaReconstitution(
+    [{ page: 1, text: "CERES Architecte Patrimoine. Reprise étanchéité." }],
+    [],
+    { sansCesMots: motsDuMobilier({ entete_repete: "CERES Architecte Patrimoine" }) }
+  );
+
+  assert.deepEqual(mesure.absentes, [1]);
+  // Deux mots restaient à retrouver, pas cinq.
+  assert.equal(mesure.motsOrigine, 2);
+});

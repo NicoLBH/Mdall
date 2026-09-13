@@ -42,7 +42,7 @@ import {
 } from "../../../services/lecture-du-cr.js";
 import {
   LECTURE, NOMS_DE_LECTURE, QUOI_DE_LA_LECTURE, assemblerLeMarkdown, enFichierMarkdown,
-  enPourcent, fideliteDeLaReconstitution, pagesALire, tonDeLaPart
+  enPourcent, fideliteDeLaReconstitution, motsDuMobilier, pagesALire, tonDeLaPart
 } from "../../../services/reconstitution-markdown.js";
 import { PHRASES_DU_RANGEMENT, RANGEE } from "../../../services/restitution-rangee.js";
 import {
@@ -51,6 +51,10 @@ import {
 import { TRANSFORMER, brancheDeLAction, renderTransformer } from "../../ui/transformer.js";
 import { branchesOuvertes } from "../../../services/branches-ouvertes.js";
 import { lotsAProposer, phraseDesLots } from "../../../services/lots-du-cr.js";
+import {
+  EFFETS_DE_LA_FERMETURE, FERMETURE, PHRASES_DE_LA_FERMETURE, fermeturesDuCompteRendu,
+  phraseDesDisparus, sujetsDisparus
+} from "../../../services/fermeture-du-cr.js";
 import {
   PHRASES_DU_SUR, SUR, dateEnFrancais, objectifsAProposer, phraseDesObjectifs
 } from "../../../services/echeances-du-cr.js";
@@ -140,6 +144,15 @@ const etat = {
    * (fondamental 13 — ce que l'IA produit s'affiche avant d'être exploité).
    */
   structure: null,
+  /**
+   * Les sujets du projet, et ceux qui portent le label du compte rendu.
+   *
+   * `null` de part et d'autre : on n'a pas pu lire. Sans eux, aucune
+   * disparition ne se relève — déclarer disparu un sujet dont on ne sait pas
+   * s'il vient d'un compte rendu poserait une question sur rien (règle 5).
+   */
+  sujetsDuProjet: null,
+  sujetsDuLabel: null,
   /** Le sujet dont on regarde le détail, pour juger si c'est bien le même. */
   deplie: "",
   /**
@@ -1106,6 +1119,7 @@ function renderCeQueLeCrApporte(vue) {
       ${renderLesLots(points, vue.lots)}
       ${renderLesLabels(points, vue.labels, vue.lecture)}
       ${renderLesObjectifs(points, vue.objectifs, vue.lecture)}
+      ${renderLesFermetures(vue, points)}
       <p class="lecture-cr__mot">
         Rien de tout cela n'est écrit : ni lot ajouté, ni label créé, ni label posé. C'est ce que
         la proposition porterait, et c'est quelqu'un qui la signe.
@@ -1251,6 +1265,113 @@ function renderLesObjectifs(points, objectifsDuProjet, lecture) {
         </p>
       ` : ""}
     </div>
+  `;
+}
+
+/**
+ * Ce que ce compte rendu ferme — et ce qu'il se contente de ne plus dire.
+ *
+ * ## Les deux ne se ressemblent pas, et ne doivent pas y ressembler
+ *
+ * Un point que le document marque « Fait » est **une réponse** : la proposition
+ * fermerait le sujet, avec la phrase qui le justifie.
+ *
+ * Un sujet qui n'apparaît plus est **une question**. Un point sort d'un compte
+ * rendu parce qu'il est réglé, parce que le rédacteur l'a oublié, parce que le
+ * lot n'était pas convoqué cette semaine, ou parce que le document a changé de
+ * trame. Fermer sur ce signe ferait disparaître, sans trace, des points qu'on
+ * suit depuis des mois — et personne ne s'en apercevrait, puisque ce qui
+ * disparaît ne laisse rien à voir.
+ *
+ * Les deux blocs sont donc séparés, et le second ne porte aucun verbe de
+ * fermeture : il pose la question, et c'est quelqu'un qui répond.
+ */
+function renderLesFermetures(vue, points) {
+  const { fermes, retenus } = fermeturesDuCompteRendu(points);
+  const disparition = sujetsDisparus({
+    confrontes: Array.isArray(vue.confrontes) ? vue.confrontes : [],
+    sujetsDuProjet: vue.sujetsDuProjet,
+    sujetsDuLabel: vue.sujetsDuLabel
+  });
+
+  if (fermes.length === 0 && retenus.length === 0 && !disparition.connu) return "";
+
+  return `
+    <div class="lecture-cr__apport-bloc">
+      <h4>${svgIcon("check-circle", { className: "octicon" })} Les fermetures</h4>
+
+      ${fermes.length > 0 ? `
+        <p class="lecture-cr__mot">
+          ${fermes.length} point${fermes.length > 1 ? "s" : ""} que ce compte rendu marque comme
+          réglé${fermes.length > 1 ? "s" : ""}. ${escapeHtml(EFFETS_DE_LA_FERMETURE[FERMETURE.DITE])}
+        </p>
+        <ul class="lecture-cr__fermetures">
+          ${fermes.map((point) => renderUnePoint(point, FERMETURE.DITE)).join("")}
+        </ul>
+      ` : `
+        <p class="lecture-cr__mot">Aucun point de ce compte rendu n'est marqué comme réglé.</p>
+      `}
+
+      ${retenus.length > 0 ? `
+        <p class="lecture-cr__mot">
+          ${retenus.length} point${retenus.length > 1 ? "s" : ""} que le document dit explicitement
+          non fini${retenus.length > 1 ? "s" : ""} — « en cours », « non achevé », « suspendu », un
+          pourcentage. ${escapeHtml(EFFETS_DE_LA_FERMETURE[FERMETURE.RETENUE])}
+        </p>
+        <ul class="lecture-cr__fermetures">
+          ${retenus.slice(0, 8).map((point) => renderUnePoint(point, FERMETURE.RETENUE)).join("")}
+        </ul>
+      ` : ""}
+
+      ${renderLesDisparus(disparition)}
+
+      <p class="lecture-cr__mot">
+        ${svgIcon("alert", { className: "octicon" })}
+        <strong>Un point barré n'est pas détecté.</strong> Une rature est un trait dessiné par-dessus
+        le texte, pas une propriété de la police : elle ne parvient pas jusqu'ici, et un point barré
+        arrive comme un point ordinaire.
+      </p>
+    </div>
+  `;
+}
+
+/** Un point, avec le mot du document qui décide de son sort. */
+function renderUnePoint(point, sort) {
+  return `
+    <li class="lecture-cr__fermeture${sort === FERMETURE.DITE ? " est-fermee" : ""}">
+      <span class="lecture-cr__fermeture-signe mono-small"
+        title="${escapeHtml(PHRASES_DE_LA_FERMETURE[sort] ?? "")}">${escapeHtml(point.signe)}</span>
+      <span>${escapeHtml(texte(point.titre) || "(sans titre)")}</span>
+    </li>
+  `;
+}
+
+/**
+ * Les sujets que ce compte rendu ne mentionne plus.
+ *
+ * **Aucun verbe de fermeture ici.** La phrase pose la question et nomme les
+ * quatre raisons possibles ; c'est quelqu'un qui répond, jamais l'écran.
+ */
+function renderLesDisparus(disparition) {
+  const disparus = disparition.disparus ?? [];
+
+  return `
+    <p class="lecture-cr__mot${disparition.connu && disparus.length > 0 ? " est-douteux" : ""}">
+      ${escapeHtml(phraseDesDisparus(disparition))}
+    </p>
+    ${disparus.length > 0 ? `
+      <ul class="lecture-cr__fermetures">
+        ${disparus.slice(0, 12).map((sujet) => `
+          <li class="lecture-cr__fermeture est-question">
+            <span class="lecture-cr__fermeture-signe mono-small">est-il réglé ?</span>
+            <span>${escapeHtml(texte(sujet?.title ?? sujet?.titre) || "(sans titre)")}</span>
+          </li>
+        `).join("")}
+      </ul>
+      <p class="lecture-cr__mot">
+        La proposition posera la question, sujet par sujet. Elle n'en fermera aucun.
+      </p>
+    ` : ""}
   `;
 }
 
@@ -1663,6 +1784,8 @@ async function lire(hote, fichier) {
   etat.lots = null;
   etat.objectifs = null;
   etat.structure = null;
+  etat.sujetsDuProjet = null;
+  etat.sujetsDuLabel = null;
   etat.deplie = "";
   etat.motif = "";
   etat.panne = "";
@@ -1745,6 +1868,9 @@ async function lire(hote, fichier) {
     etat.dit = "Confrontation aux sujets du projet";
     redessiner(hote);
     etat.confrontes = await confronterAuProjet(etat.lecture.points, connus);
+    // Gardés pour la comparaison des disparitions : ce sont ceux que le modèle
+    // a eus sous les yeux, et deux lectures en rendraient deux listes (règle 4).
+    etat.sujetsDuProjet = connus;
     [etat.labels, etat.lots, etat.objectifs] = await Promise.all([
       labelsDuProjet(), lotsDuProjet(), objectifsDuProjet()
     ]);
@@ -1812,7 +1938,24 @@ async function labelsDuProjet() {
     if (!projet) return null;
 
     const charges = await loadLabelsForProject(projet);
-    return charges?.labelsHydrated === false ? null : (charges?.labels ?? null);
+    if (charges?.labelsHydrated === false) return null;
+
+    // Les sujets qui portent le label du compte rendu : ce sont les seuls dont
+    // une disparition veut dire quelque chose.
+    const { labelDuCrDansLeProjet } = await import("../../../services/label-du-cr.js");
+    const duCr = labelDuCrDansLeProjet(charges?.labels ?? null);
+    const identifiant = texte(duCr.label?.id);
+
+    etat.sujetsDuLabel = identifiant
+      ? Object.entries(charges?.labelIdsBySubjectId ?? {})
+        .filter(([, labels]) => (Array.isArray(labels) ? labels : []).includes(identifiant))
+        .map(([sujet]) => sujet)
+      // Le label n'existe pas encore : aucun sujet ne vient d'un compte rendu,
+      // et c'est une réponse — non pas « on ne sait pas », mais « il n'y en a
+      // aucun ». La liste vide le dit.
+      : (duCr.connu ? [] : null);
+
+    return charges?.labels ?? null;
   } catch {
     return null;
   }
@@ -2091,7 +2234,12 @@ function garnirLeCote(cote, pages) {
   cote.pages = pages;
   cote.texte = assemble.texte;
   cote.lignes = assemble.lignes;
-  cote.fidelite = fideliteDeLaReconstitution(etat.pagesLues, pages);
+  // **Le mobilier de page ne compte pas comme perdu.** On demande maintenant de
+  // ne pas restituer l'en-tête et le pied répétés : les compter parmi les mots
+  // à retrouver ferait chuter la mesure à chaque fois qu'on obéit.
+  cote.fidelite = fideliteDeLaReconstitution(etat.pagesLues, pages, {
+    sansCesMots: motsDuMobilier(etat.structure?.structure)
+  });
   cote.degats = degatsDeLaRestitution(pages);
   // Les deux règles que la consigne interdit d'enfreindre : inventer un titre,
   // changer l'ordre. Une consigne qu'on ne vérifie pas est une intention, pas

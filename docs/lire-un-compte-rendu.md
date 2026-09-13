@@ -553,6 +553,44 @@ dépassait, la réponse revenait tronquée au milieu du JSON, rien ne s'en lisai
 annonçait un refus. C'était faux : la lecture avait eu lieu, et elle avait été payée. Le plafond
 est passé à 24 000 jetons, et une réponse coupée se reconnaît désormais comme telle.
 
+### Étape 2 quater — Le document perd ses bords, et retrouve ses titres *(faite)*
+
+Deux corrections tirées du CR 38, une fois la structure reconnue.
+
+#### Un Markdown n'a pas de pages
+
+« Page 9 sur 12 », le rappel d'affaire en tête de chaque feuille, le bloc de
+coordonnées en pied : ce ne sont pas du contenu, ce sont **les bords du papier**.
+La consigne disait « restitue-le une seule fois » ; elle dit maintenant **ne le
+restitue nulle part**.
+
+La mesure suivait mal : ces mots figurent dans le texte du PDF, et comptés parmi
+ceux à retrouver ils faisaient chuter la part retrouvée **à chaque fois que le
+modèle obéissait**. Les mots du mobilier — tirés du squelette reconnu — sont donc
+retirés de la mesure. Sans squelette, rien n'est retiré : ne pas savoir ce qui
+est du mobilier n'autorise pas à en supposer (règle 5).
+
+#### Un tableau n'est pas le document
+
+Un compte rendu s'écrit dans un unique tableau de quatre colonnes, page après
+page, et ses lots y sont rangés comme des lignes sans date. Restitué tel quel,
+c'est un tableau de deux cents lignes où plus rien ne se trouve : **le découpage
+qui portait toute l'information a disparu dans la forme.**
+
+La reconnaissance de structure relève donc aussi les **chapitres** — le motif du
+titre (« Lot XX – intitulé – ENTREPRISE »), son niveau, un exemple réel, et à
+quoi on le reconnaît. La transcription reçoit alors une règle sans ambiguïté :
+*quand un de ces titres apparaît au milieu d'un tableau, le tableau
+s'interrompt — tu le fermes, tu écris le titre, puis tu rouvres un tableau avec
+exactement les mêmes colonnes.*
+
+#### Les adresses se lisent comme des adresses
+
+Un compte rendu en porte trente. Le rendu Markdown en fait maintenant des liens
+`mailto:` — la liste de diffusion se lit d'un coup d'œil, et l'on écrit d'un clic
+à l'entreprise qui doit reprendre l'étanchéité. Une adresse déjà écrite en lien
+n'en reçoit pas un second, et une adresse citée dans du code reste du code.
+
 ### Étape 4 — Fermer un sujet, et la question de fond
 
 **C'est le point le plus délicat de tout le plan**, et il mérite d'être traité à part.
@@ -570,10 +608,50 @@ parce que le rédacteur l'a oublié, parce que le lot n'était pas convoqué cet
 parce que le document a changé de trame. **Fermer sur ce seul signe perdrait des points
 qu'on suit depuis des mois.**
 
-La règle sera donc : une disparition ne ferme rien, elle **pose une question**. Elle
-s'affiche comme telle dans la proposition — « ce sujet n'apparaît plus depuis deux comptes
-rendus, est-il réglé ? » — et c'est quelqu'un qui répond. Les deux autres signes proposent
-une fermeture, avec la phrase qui la justifie.
+La règle est donc : une disparition ne ferme rien, elle **pose une question**. Elle
+s'affiche comme telle dans la proposition — « ce sujet n'apparaît plus, est-il réglé ? » — et
+c'est quelqu'un qui répond. Les deux autres signes proposent une fermeture, avec la phrase qui
+la justifie.
+
+#### Ce qui a été fait *(fait)*
+
+##### Ce qui décide, c'est nous — pas le modèle
+
+Le modèle **rapporte** le contenu de la colonne de fermeture, mot pour mot : « Fait »,
+« 19/01/2026 », « 50% », « Non achevés », « Suspendu ». La lecture de ce mot se fait dans
+`fermeture-du-cr.js`, où elle se vérifie. Demander le verdict au modèle mettrait une décision
+de fermeture hors de portée de tout test.
+
+| Ce que la colonne porte | Ce qu'on en fait |
+| --- | --- |
+| une date, « Fait », « Soldé », « Levé », « 100% » | **fermeture dite** — la proposition fermerait le sujet, avec la phrase qui le justifie |
+| « En cours », « Non achevés », « Suspendu », « 50% » | **retenue** — le document dit explicitement que ce n'est pas fini |
+| rien | le point reste ouvert |
+
+**Ce qui retient l'emporte sur ce qui ferme** : « Fait à 50% » n'est pas fait, et
+« réalisé, non achevé » non plus. Le doute ne ferme pas.
+
+##### La disparition, et ce qu'on refuse d'en conclure
+
+Un sujet ouvert, portant le label « CR chantier », qu'aucun point de ce compte rendu ne
+rapproche : il a disparu. L'écran le relève dans un bloc **visuellement distinct** — trait
+pointillé, couleur d'attente, et la mention « est-il réglé ? » à la place d'une date. Aucun
+verbe de fermeture n'y figure.
+
+On ne compare que ce qui est comparable : un sujet ouvert à la main, ou venu d'un rapport de
+bureau de contrôle, n'a aucune raison de figurer dans un compte rendu de chantier. **Sans le
+label, on ne compare pas du tout** — et l'écran dit pourquoi la liste est vide.
+
+##### Le barré, qu'on ne sait pas détecter
+
+Une rature est un trait **dessiné par-dessus** le texte, pas une propriété de la police :
+`pdf.js` rend l'italique et le gras, jamais la rature. Un point barré arrive donc comme un
+point ordinaire.
+
+Il n'y a pas d'état « barré » dans le code : prétendre le détecter serait pire que de ne pas
+le détecter. L'écran le dit en toutes lettres, sous les fermetures. Le jour où la géométrie
+saura relever les traits qui traversent une ligne — c'est possible, la liste d'opérations les
+porte comme elle portait les couleurs — il en viendra un.
 
 ### Étape 5 — Les liens entre sujets
 

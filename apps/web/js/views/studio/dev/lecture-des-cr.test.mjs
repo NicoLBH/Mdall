@@ -103,7 +103,8 @@ function unEtat(surcharge = {}) {
 
   return {
     phase: "vide", dit: "", lecture: null, pagesLues: [], fichier: null, confrontes: null,
-    labels: null, lots: null, objectifs: null, branches: [], structure: null, deplie: "",
+    labels: null, lots: null, objectifs: null, branches: [], structure: null,
+    sujetsDuProjet: null, sujetsDuLabel: null, deplie: "",
     descriptions: {}, motif: "", panne: "",
     onglet: "restitution",
     ...surcharge,
@@ -1164,4 +1165,76 @@ test("le squelette ne s'affiche pas avant la restitution", () => {
     phase: "lecture", dit: "Reconnaissance", fichier: { name: "CR_38.pdf" }, structure: UNE_STRUCTURE
   }));
   assert.doesNotMatch(html, /lecture-cr__structure/);
+});
+
+/* ── Les fermetures, et les disparitions qui n'en sont pas ───────────────── */
+
+function unEtatFermetures(surcharge = {}) {
+  const lecture = uneLecture();
+  lecture.points = [
+    { ...lecture.points[0], titre: "Trappe métallique posée", faitLe: "23/01/2026" },
+    { ...lecture.points[1], titre: "Carrelage cuisine", faitLe: "En cours" }
+  ];
+
+  return unEtat({
+    phase: "lue", pagesLues: PAGES, onglet: "analyse", md: uneRestitution(),
+    lots: [], labels: [], objectifs: [],
+    confrontes: lecture.points.map((point) => ({ ...point, sort: SORT.NOUVEAU, sujet: null, par: "" })),
+    ...surcharge,
+    lecture: { ...lecture, ...(surcharge.lecture ?? {}) }
+  });
+}
+
+/** Ce que le document marque « Fait » est une réponse : elle se propose. */
+test("les points que le compte rendu ferme se disent, avec le mot qui les ferme", () => {
+  const html = renderLaLecture(unEtatFermetures());
+
+  assert.match(html, /lecture-cr__fermetures/);
+  assert.match(html, /lecture-cr__fermeture est-fermee/);
+  assert.match(html, /23\/01\/2026/);
+  assert.match(html, /Trappe métallique posée/);
+  // Et ce que le document dit non fini se distingue de ce qu'il ferme.
+  assert.match(html, /En cours/);
+  assert.match(html, /non fini/);
+});
+
+/**
+ * **La règle qui ne se négocie pas.** Un sujet qui n'apparaît plus pose une
+ * question ; fermer sur ce signe ferait disparaître, sans trace, des points
+ * qu'on suit depuis des mois.
+ */
+test("un sujet disparu pose une question, et ne se ferme jamais", () => {
+  const html = renderLaLecture(unEtatFermetures({
+    sujetsDuProjet: [{ id: "s-1", title: "Étanchéité toiture" }, { id: "s-2", title: "Linteaux" }],
+    sujetsDuLabel: ["s-1", "s-2"]
+  }));
+
+  assert.match(html, /lecture-cr__fermeture est-question/);
+  assert.match(html, /est-il réglé \?/);
+  assert.match(html, /Étanchéité toiture/);
+  // Phrase de service : elle passe par escapeHtml, l'apostrophe devient &#39;.
+  assert.match(html, commeAffichee("Ce n'est pas une réponse"));
+  assert.match(html, /Elle n'en fermera aucun\./);
+});
+
+/**
+ * **Ne pas savoir d'où viennent les sujets n'autorise pas à les déclarer
+ * disparus** : l'écran dit pourquoi la liste est vide.
+ */
+test("sans le label, aucune disparition n'est relevée — et l'écran le dit", () => {
+  const html = renderLaLecture(unEtatFermetures({ sujetsDuProjet: null, sujetsDuLabel: null }));
+
+  assert.match(html, /On ne sait pas quels sujets viennent de comptes rendus/);
+  assert.doesNotMatch(html, /est-question/);
+});
+
+/**
+ * **Le barré ne parvient pas jusqu'ici**, et le taire ferait croire qu'un point
+ * barré a été vu (règle 5).
+ */
+test("l'écran dit qu'un point barré n'est pas détecté", () => {
+  const html = renderLaLecture(unEtatFermetures());
+
+  assert.match(html, /Un point barré n'est pas détecté/);
+  assert.match(html, /trait dessiné par-dessus/);
 });

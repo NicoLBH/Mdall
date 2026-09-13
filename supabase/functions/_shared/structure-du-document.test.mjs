@@ -29,6 +29,7 @@ const UNE_STRUCTURE = {
       reconnaissance: "quatre colonnes, la deuxième large"
     }
   ],
+  chapitres: [],
   consignes: ["Le tableau se poursuit d'une page à l'autre sans redéclarer ses en-têtes."]
 };
 
@@ -73,7 +74,7 @@ test("les colonnes reconnues s'imposent à toutes les pages", () => {
   assert.match(dit, /Date \| Observations – Directives – Décisions \| Pour le \| Fait le/);
   assert.match(dit, /sur TOUTES les pages où le tableau se poursuit/);
   assert.match(dit, /compte rendu de réunion de chantier/);
-  assert.match(dit, /ne le restitue qu'une fois/);
+  assert.match(dit, /NE LE RESTITUE NULLE PART/);
   assert.match(dit, /PIÈGES RELEVÉS/);
 });
 
@@ -127,4 +128,56 @@ test("le schéma du squelette est complet", () => {
 
   verifier(SCHEMA_DE_LA_STRUCTURE.schema, "schema");
   assert.equal(SCHEMA_DE_LA_STRUCTURE.strict, true);
+});
+
+/* ── Les chapitres, qui découpent le document ────────────────────────────── */
+
+/**
+ * **Un tableau n'est pas le document.** Un compte rendu de chantier s'écrit
+ * dans un unique tableau de quatre colonnes, page après page, et ses lots y sont
+ * rangés comme des lignes sans date. Restitué tel quel, c'est un tableau de deux
+ * cents lignes où plus rien ne se trouve.
+ */
+test("les titres qui découpent le document deviennent des titres Markdown", () => {
+  const dit = structureEnTexte(structureLue({
+    ...UNE_STRUCTURE,
+    chapitres: [
+      { motif: "Lot XX – intitulé – ENTREPRISE", niveau: 3, exemple: "Lot 03 – Gros œuvre – LATHUILLE", reconnaissance: "centré, sans date" },
+      { motif: "ARCHITECTES / OPC", niveau: 4, exemple: "OPC", reconnaissance: "seul sur sa ligne" }
+    ]
+  }));
+
+  assert.match(dit, /### Lot XX – intitulé – ENTREPRISE/);
+  assert.match(dit, /#### ARCHITECTES \/ OPC/);
+  assert.match(dit, /Lot 03 – Gros œuvre – LATHUILLE/);
+  // Et la règle qui compte : le tableau s'interrompt pour laisser passer le titre.
+  assert.match(dit, /LE\s+TABLEAU S'INTERROMPT/);
+  assert.match(dit, /tu rouvres un tableau avec\s+EXACTEMENT les mêmes colonnes/);
+});
+
+/** Hors des six niveaux de Markdown, un titre n'existe pas — on ramène. */
+test("un niveau de titre impossible est ramené, pas écarté", () => {
+  const lue = structureLue({
+    ...UNE_STRUCTURE,
+    chapitres: [
+      { motif: "Trop profond", niveau: 9, exemple: "", reconnaissance: "" },
+      { motif: "Trop haut", niveau: 0, exemple: "", reconnaissance: "" },
+      { motif: "", niveau: 3, exemple: "", reconnaissance: "" }
+    ]
+  });
+
+  assert.deepEqual(lue.chapitres.map((chapitre) => chapitre.niveau), [6, 1]);
+});
+
+/**
+ * **Un Markdown n'a pas de pages.** « Page 9 sur 12 », le rappel d'affaire en
+ * tête de chaque feuille et le bloc de coordonnées en pied ne sont pas du
+ * contenu : ce sont les bords du papier.
+ */
+test("le mobilier de page ne se restitue nulle part", () => {
+  const dit = structureEnTexte(structureLue(UNE_STRUCTURE));
+
+  assert.match(dit, /NE LE RESTITUE NULLE PART/);
+  assert.match(dit, /ni une fois, ni au début, ni à la fin/);
+  assert.match(dit, /ce sont les bords du papier/);
 });

@@ -115,6 +115,8 @@ export function lectureAssemblee({
       qui: texte(point?.qui),
       echeance: texte(point?.echeance),
       etat: texte(point?.etat),
+      /** La colonne de fermeture du document, telle qu'elle est écrite. */
+      faitLe: texte(point?.fait_le),
       page: Number(point?.page) || null,
       citation: texte(point?.citation),
       /**

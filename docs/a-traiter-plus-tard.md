@@ -3520,3 +3520,20 @@ attend désormais la fusion.
 
 Il le dit en toutes lettres quand on clique, plutôt que de ne rien faire : un
 bouton qui reste muet laisse croire que la proposition est partie.
+
+### Le barré d'un compte rendu, qu'on ne sait pas lire
+
+Un point barré dans un compte rendu de chantier est une fermeture — le rédacteur
+raye ce qui est soldé. C'est l'un des trois signes de l'étape 4, et le seul qu'on
+ne relève pas.
+
+Une rature est un trait **dessiné par-dessus** le texte, pas une propriété de la
+police : `getTextContent()` rend l'italique et le gras, jamais la rature. Le point
+barré arrive donc comme un point ordinaire, et rien ne le distingue.
+
+La route existe, et c'est celle des couleurs : la liste d'opérations porte les
+traits comme elle portait les remplissages. Il faudrait relever les rectangles et
+les segments fins qui traversent une ligne de texte à mi-hauteur, et les recoller
+aux fragments — avec le même refus qu'ailleurs : au moindre doute sur la
+correspondance, aucune rature plutôt qu'une rature fausse. Un point fermé à tort
+disparaît sans laisser de trace.

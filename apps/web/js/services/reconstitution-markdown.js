@@ -207,8 +207,18 @@ export function motsSignificatifs(valeur = "") {
  * @param {string} origine le texte extrait du PDF
  * @param {string} refaite le Markdown rendu par le modèle
  */
-export function fideliteDeLaPage(origine = "", refaite = "") {
+export function fideliteDeLaPage(origine = "", refaite = "", { sansCesMots = null } = {}) {
   const dOrigine = motsSignificatifs(origine);
+
+  // **Le mobilier de page ne compte pas comme perdu.** « Page 9 sur 12 » et le
+  // bloc de coordonnées répété en pied de chaque feuille ne sont pas le
+  // document : on demande maintenant de ne pas les restituer. Les compter parmi
+  // les mots à retrouver ferait chuter la mesure à chaque fois qu'on obéit —
+  // et punirait précisément ce qu'on a corrigé.
+  if (sansCesMots instanceof Set) {
+    for (const mot of sansCesMots) dOrigine.delete(mot);
+  }
+
   const refaits = motsSignificatifs(refaite);
 
   let retrouves = 0;
@@ -238,7 +248,20 @@ export function fideliteDeLaPage(origine = "", refaite = "") {
  * @param {{page: number, text?: string, texte?: string}[]} pagesOrigine
  * @param {{page: number, markdown: string}[]} pagesRefaites
  */
-export function fideliteDeLaReconstitution(pagesOrigine = [], pagesRefaites = []) {
+/**
+ * Les mots du mobilier de page, qu'on a demandé de ne pas restituer.
+ *
+ * Ils viennent du squelette reconnu : l'en-tête et le pied répétés. Sans
+ * squelette, l'ensemble est vide — et la mesure compte tout, comme avant.
+ */
+export function motsDuMobilier(structure = null) {
+  const dit = [structure?.entete_repete, structure?.pied_repete]
+    .map((morceau) => texte(morceau)).filter(Boolean).join(" ");
+
+  return motsSignificatifs(dit);
+}
+
+export function fideliteDeLaReconstitution(pagesOrigine = [], pagesRefaites = [], options = {}) {
   const refaites = new Map(
     (Array.isArray(pagesRefaites) ? pagesRefaites : [])
       .map((page) => [Number(page?.page), String(page?.markdown ?? "")])
@@ -259,14 +282,18 @@ export function fideliteDeLaReconstitution(pagesOrigine = [], pagesRefaites = []
     if (!refaites.has(numero)) {
       // Une page du document dont rien n'est revenu. On la nomme : c'est le
       // seul défaut de reconstitution qui ne se voit pas en lisant le résultat.
-      const perdus = motsSignificatifs(origine).size;
+      const restants = motsSignificatifs(origine);
+      if (options?.sansCesMots instanceof Set) {
+        for (const mot of options.sansCesMots) restants.delete(mot);
+      }
+      const perdus = restants.size;
       absentes.push(numero);
       pages.push({ page: numero, rendue: false, motsOrigine: perdus, motsRetrouves: 0, motsAjoutes: 0, part: 0 });
       motsOrigine += perdus;
       continue;
     }
 
-    const mesure = fideliteDeLaPage(origine, refaites.get(numero));
+    const mesure = fideliteDeLaPage(origine, refaites.get(numero), options);
     pages.push({ page: numero, rendue: true, ...mesure });
     motsOrigine += mesure.motsOrigine;
     motsRetrouves += mesure.motsRetrouves;
