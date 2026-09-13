@@ -41,17 +41,26 @@ import {
 const openAiApiKey = Deno.env.get("OPENAI_API_KEY")!;
 
 /**
- * **Le modèle complet, et non le petit.**
+ * **Le meilleur modèle disponible, et c'est un choix assumé.**
  *
- * C'est le premier maillon : tout ce qui suit lit ce qu'il rend, et une erreur
- * de transcription se propage sans jamais se corriger. C'est aussi le seul
- * appel dont le travail se vérifie mot pour mot contre le document — on sait
- * donc ce qu'on achète.
+ * C'est le premier maillon : tout ce qui suit — le secrétariat, les liens entre
+ * sujets, les fermetures — lit ce qu'il rend, et une erreur de transcription se
+ * propage sans jamais se corriger. Un lot mal attribué ici devient un sujet mal
+ * rangé là-bas, et plus rien en aval ne peut le rattraper.
  *
- * Neuf centimes pour onze pages au lieu de deux. Le relevé des points, lui,
- * reste sur le petit modèle : il travaille sur un document déjà propre.
+ * Ce n'est pas non plus une simple recopie. Reposer un tableau déguisé, lire
+ * une cellule de gauche qui tient sur quatre lignes pendant qu'une date de
+ * droite n'en occupe qu'une, reconnaître qu'un décalage d'indentation est un
+ * regroupement : c'est du raisonnement sur la mise en page, et le petit modèle
+ * s'y trompe.
+ *
+ * C'est enfin le seul appel dont le travail se vérifie mot pour mot contre le
+ * document — on sait donc ce qu'on achète. Le relevé des points, lui, reste sur
+ * le petit modèle : il travaille sur un document déjà propre.
+ *
+ * Réglable sans redéploiement : le nom du modèle change plus vite que le code.
  */
-const MODELE = "gpt-4.1";
+const MODELE = Deno.env.get("OPENAI_TRANSCRIPTION_MODEL") || "gpt-5";
 
 /**
  * Le plafond d'entrée, calé sur ce qui peut **revenir**.
@@ -61,13 +70,16 @@ const MODELE = "gpt-4.1";
  * modèle. Au-delà, la réponse serait coupée au milieu : un document tronqué
  * sans que la coupure vienne du document.
  *
- * 110 000 caractères font environ 30 000 jetons, et autant au retour : c'est
- * la limite de ce que le modèle peut rendre d'un bloc. Ce qui dépasse est
- * nommé dans la réponse (`hors_plafond`) et affiché — un document amputé qui
- * s'afficherait entier serait le pire résultat possible (règle 5).
+ * Le plafond a doublé avec le modèle, et pour deux raisons qui s'ajoutent : il
+ * rend davantage d'un bloc, et le texte qui part est plus long qu'avant — une
+ * page reposée sur sa grille porte les espaces qui font ses colonnes.
+ *
+ * Ce qui dépasse est nommé dans la réponse (`hors_plafond`) et affiché — un
+ * document amputé qui s'afficherait entier serait le pire résultat possible
+ * (règle 5).
  */
-const MAX_CARACTERES = 110000;
-const MAX_JETONS = 32000;
+const MAX_CARACTERES = 180000;
+const MAX_JETONS = 64000;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -120,6 +132,9 @@ serve(async (req) => {
         instructions: CONSIGNES_DE_RECONSTITUTION,
         input: texte,
         max_output_tokens: MAX_JETONS,
+        // Assez pour reposer un tableau, pas assez pour se mettre à
+        // interpréter : la consigne demande une transcription, pas une lecture.
+        reasoning: { effort: "low" },
         text: { format: { type: "json_schema", ...SCHEMA_DU_DOCUMENT } }
       })
     });

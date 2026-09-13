@@ -172,6 +172,18 @@ export function pagesDuFichierMarkdown(fichier = "") {
 }
 
 /**
+ * Les marques de forme, qui ne sont pas des mots du document.
+ *
+ * `> [!ROUGE]` dit qu'un passage était rouge dans le PDF : c'est de la mise en
+ * forme, au même titre qu'un `#` ou qu'une barre de tableau. La compter comme
+ * un mot ajouté ferait grimper la mesure qui surveille précisément les mots que
+ * le modèle invente — et le chiffre à surveiller cesserait de se voir.
+ */
+const MARQUE_DENCADRE = /\[!\s*[A-Za-zÀ-ÿ ]{2,16}\s*\]/g;
+
+const sansMarquesDeForme = (valeur) => String(valeur ?? "").replace(MARQUE_DENCADRE, " ");
+
+/**
  * Les mots d'un texte, réduits à ce qui se compare.
  *
  * Quatre lettres au minimum : en dessous, on compte des articles et des restes
@@ -182,7 +194,7 @@ export function pagesDuFichierMarkdown(fichier = "") {
 export function motsSignificatifs(valeur = "") {
   const mots = new Set();
 
-  for (const mot of String(valeur ?? "").toLowerCase().split(/[^0-9a-zà-öø-ÿ]+/u)) {
+  for (const mot of sansMarquesDeForme(valeur).toLowerCase().split(/[^0-9a-zà-öø-ÿ]+/u)) {
     if (mot.length >= 4 || (mot.length >= 2 && /^[0-9]+$/.test(mot))) mots.add(mot);
   }
 

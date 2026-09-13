@@ -259,8 +259,15 @@ test("la transcription emploie le modèle complet, et son tarif est relevé", as
     fileURLToPath(new URL("../extract-sujets/index.ts", import.meta.url)), "utf8"
   );
 
-  const modeleDe = (source) => source.match(/const MODELE = "([^"]+)"/)?.[1];
-  assert.equal(modeleDe(transcription), "gpt-4.1");
+  // La transcription se règle par variable d'environnement — le nom d'un modèle
+  // change plus vite que le code — mais son défaut est écrit ici, et c'est lui
+  // qui sert au projet.
+  const modeleDe = (source) =>
+    source.match(/const MODELE = (?:Deno\.env\.get\("[^"]+"\) \|\| )?"([^"]+)"/)?.[1];
+
+  // **Le meilleur modèle pour le premier maillon.** Tout ce qui suit lit ce
+  // qu'il rend ; une erreur de transcription se propage sans se corriger.
+  assert.equal(modeleDe(transcription), "gpt-5");
   assert.equal(modeleDe(releve), "gpt-4.1-mini");
 
   // **Un modèle sans tarif relevé afficherait « tarif inconnu ».** C'est voulu —

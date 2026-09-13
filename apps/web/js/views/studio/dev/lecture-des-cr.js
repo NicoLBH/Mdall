@@ -148,6 +148,15 @@ function unCote() {
     /** Les pages qui ne sont pas parties, et celles dont rien n'est revenu. */
     horsPlafond: [],
     absentes: [],
+    /**
+     * Les pages parties en texte aplati, faute de géométrie lisible.
+     *
+     * Sur celles-là, les colonnes ne sont pas garanties : le modèle a reçu la
+     * date de droite au milieu de la phrase de gauche, comme avant. Le taire
+     * ferait juger la transcription sur une base qu'on est seul à connaître
+     * (règle 5).
+     */
+    aplaties: [],
     motif: "",
     /**
      * D'où vient cette restitution, et où elle est allée.
@@ -587,6 +596,15 @@ function renderReservesDeLaRestitution(cote) {
     reserves.push(`${cote.horsPlafond.length} page${cote.horsPlafond.length > 1 ? "s" : ""} n'${
       cote.horsPlafond.length > 1 ? "ont" : "a"} pas été envoyée${cote.horsPlafond.length > 1 ? "s" : ""} :
       le document dépasse ce qu'une restitution accepte (pages ${cote.horsPlafond.join(", ")}).`);
+  }
+  // **La géométrie n'a pas été lisible partout.** Sur ces pages-là, le modèle a
+  // reçu le texte aplati : la date de la colonne de droite tombe au milieu de
+  // la phrase de gauche, comme avant. Le taire ferait juger la transcription
+  // sur une base qu'on serait seul à connaître.
+  if (cote.aplaties?.length) {
+    reserves.push(`${cote.aplaties.length} page${cote.aplaties.length > 1 ? "s" : ""} ${
+      cote.aplaties.length > 1 ? "sont parties" : "est partie"} sans leur géométrie : les colonnes n'y
+      sont pas garanties (pages ${cote.aplaties.join(", ")}).`);
   }
   if (cote.absentes.length) {
     reserves.push(`${cote.absentes.length} page${cote.absentes.length > 1 ? "s" : ""} envoyée${
@@ -1279,7 +1297,16 @@ async function restituerParLeModele(hote) {
       "../../../services/markdown-par-le-modele.js"
     );
 
-    const refait = await refaireLeDocument({ pages: etat.pagesLues });
+    // **La page reposée sur sa grille, et non son texte aplati.** Un compte
+    // rendu est un tableau : dans le texte aplati, la date de la colonne de
+    // droite tombe au milieu de la phrase de gauche, et les deux perdent leur
+    // sens. Aucune consigne ne rattrape cela — on demanderait au modèle de
+    // deviner ce que l'extraction a déjà détruit.
+    const { pagesEnMiseEnPage } = await import("../../../services/page-en-grille.js");
+    const posee = pagesEnMiseEnPage(etat.pagesLues);
+    cote.aplaties = posee.aplaties;
+
+    const refait = await refaireLeDocument({ pages: posee.pages });
     if (!refait?.ok) {
       cote.phase = "echec";
       cote.motif = phraseDuRefus(refait?.motif) || "cause inconnue";

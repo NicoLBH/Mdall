@@ -43,6 +43,10 @@ export const CHANGE = { depuis: "USD", vers: "EUR", taux: 0.92, releveLe: "2026-
  * comparer à la page de tarifs.
  */
 export const TARIFS = {
+  // Relevé de mémoire et non sur la page de tarifs : à confirmer au tableau de
+  // bord OpenAI. Un prix affiché faux est pire qu'un prix absent — si le doute
+  // subsiste, retirer la ligne fait dire « tarif inconnu », ce qui est vrai.
+  "gpt-5": { entree: 1.25, sortie: 10.00, releveLe: "2026-09-13" },
   "gpt-4.1-mini": { entree: 0.40, sortie: 1.60, releveLe: "2026-09-01" },
   "gpt-4.1": { entree: 2.00, sortie: 8.00, releveLe: "2026-09-01" },
   "gpt-4o-mini": { entree: 0.15, sortie: 0.60, releveLe: "2026-09-01" },

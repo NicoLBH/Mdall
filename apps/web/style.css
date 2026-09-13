@@ -3153,6 +3153,40 @@ body.is-resizing{
 .md-render ul,.md-render ol{margin:0 0 10px 20px;padding:0;}
 .md-render li{margin:2px 0;}
 .md-render blockquote{margin:0 0 10px;padding:6px 10px;border-left:3px solid var(--border2);color:var(--muted);}
+
+/**
+ * Un encadré nommé par sa couleur : `> [!ROUGE]`.
+ *
+ * La couleur d'un compte rendu de chantier hiérarchise — « à faire » en bleu,
+ * « présence obligatoire » en rouge. La transcription la porte sans
+ * l'interpréter, et l'écran la rend telle quelle.
+ */
+.md-render .md-alerte{
+  --md-alerte-ton:var(--border2);
+  margin:0 0 10px;
+  padding:8px 12px;
+  border-left:3px solid var(--md-alerte-ton);
+  border-radius:0 var(--radius) var(--radius) 0;
+  background:color-mix(in srgb, var(--md-alerte-ton) 8%, transparent);
+  color:var(--text);
+}
+.md-render .md-alerte p{margin:0 0 4px;}
+.md-render .md-alerte p:last-child{margin-bottom:0;}
+.md-render .md-alerte__nom{
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--md-alerte-ton);
+}
+.md-render .md-alerte--rouge{--md-alerte-ton:var(--fgColor-danger, #f85149);}
+.md-render .md-alerte--bleu{--md-alerte-ton:var(--fgColor-accent, #4493f8);}
+.md-render .md-alerte--vert{--md-alerte-ton:var(--fgColor-success, #3fb950);}
+.md-render .md-alerte--orange{--md-alerte-ton:var(--fgColor-attention, #d29922);}
+.md-render .md-alerte--jaune{--md-alerte-ton:#e3b341;}
+.md-render .md-alerte--violet{--md-alerte-ton:#ab7df8;}
+.md-render .md-alerte--rose{--md-alerte-ton:#f778ba;}
+.md-render .md-alerte--gris{--md-alerte-ton:var(--muted);}
 .md-render code{background:rgba(110,118,129,.2);border-radius:4px;padding:1px 4px;font-size:12px;}
 .md-render h1,.md-render h3,.md-render h4,.md-render h5,.md-render h6{margin:0 0 10px;font-size:14px;}
 
