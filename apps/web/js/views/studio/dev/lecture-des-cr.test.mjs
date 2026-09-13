@@ -103,7 +103,7 @@ function unEtat(surcharge = {}) {
 
   return {
     phase: "vide", dit: "", lecture: null, pagesLues: [], fichier: null, confrontes: null,
-    deplie: "", descriptions: {}, motif: "", onglet: "restitution",
+    labels: null, deplie: "", descriptions: {}, motif: "", onglet: "restitution",
     ...surcharge,
     md
   };
@@ -612,4 +612,109 @@ test("un rangement raté se dit, avec son motif", () => {
 test("rien ne se dit du rangement avant la restitution", () => {
   const html = renderLaLecture(unEtat({ phase: "lecture", dit: "Restitution" }));
   assert.doesNotMatch(html, /lecture-cr__rangement/);
+});
+
+/* ── Le rapprochement, et qui l'a fait ───────────────────────────────────── */
+
+const UN_SUJET = { id: "s-1", subject_number: 12, title: "Étanchéité toiture", status: "open" };
+
+/**
+ * Une lecture confrontée. Le sort s'applique au premier point, les autres
+ * repartent neufs — un compte rendu réel mélange toujours les deux.
+ *
+ * `rang` vient de la lecture assemblée : c'est par lui que l'écran retrouve le
+ * rapprochement d'un point, et le recopier à la main ferait passer le test sur
+ * un alignement que l'écran n'a pas.
+ */
+function unEtatConfronte(confronte, surcharge = {}) {
+  const lecture = { ...uneLecture(), ...(surcharge.lecture ?? {}) };
+
+  return unEtat({
+    phase: "lue", lecture, pagesLues: PAGES, onglet: "analyse", md: uneRestitution(),
+    confrontes: lecture.points.map((point, rang) => (
+      rang === 0
+        ? { ...point, ...confronte }
+        : { ...point, sort: SORT.NOUVEAU, sujet: null, par: "" }
+    )),
+    ...surcharge,
+    lecture
+  });
+}
+
+/**
+ * **Les deux ne se valent pas, donc ils ne s'affichent pas pareil.** Le titre
+ * mis à plat est une constatation ; le modèle porte un jugement, et un jugement
+ * se relit. Les confondre présenterait une lecture comme un fait.
+ */
+test("un rapprochement dit qui l'a fait, et pourquoi", () => {
+  const parLeModele = renderLaLecture(unEtatConfronte({
+    sort: SORT.RELANCE, sujet: UN_SUJET, par: "modele",
+    raisonDuRapprochement: "même ouvrage, deux semaines plus tard"
+  }));
+
+  assert.match(parLeModele, /lecture-cr__rapproche/);
+  assert.match(parLeModele, /est-juge/);
+  assert.match(parLeModele, /même ouvrage, deux semaines plus tard/);
+
+  const parLeTitre = renderLaLecture(unEtatConfronte({
+    sort: SORT.RELANCE, sujet: UN_SUJET, par: "titre"
+  }));
+
+  assert.match(parLeTitre, /lecture-cr__rapproche/);
+  assert.doesNotMatch(parLeTitre, /est-juge/);
+});
+
+/**
+ * **« Le modèle n'a pas su » n'est pas « rien ne correspondait ».** Sans la
+ * liste de ce que le projet suit, tout repart neuf — et le taire ferait juger
+ * la lecture sur une base qu'on serait seul à connaître (règle 5).
+ */
+test("une lecture sans rapprochement demandé le dit", () => {
+  const html = renderLaLecture(unEtatConfronte(
+    { sort: SORT.NOUVEAU, sujet: null, par: "" },
+    { lecture: { rapprochementDemande: false } }
+  ));
+
+  // Prose du gabarit : elle ne passe pas par `escapeHtml`, l'apostrophe reste
+  // telle quelle. Voir les phrases de service, qui elles sont échappées.
+  assert.match(html, /n'a pas su ce que le projet suit/);
+  assert.match(html, /Ce n'est pas «\s*rien ne correspondait\s*»/);
+});
+
+/** Un rapprochement écarté au serveur se dit : le point repart comme neuf. */
+test("les rapprochements écartés se comptent à l'écran", () => {
+  const html = renderLaLecture(unEtatConfronte(
+    { sort: SORT.NOUVEAU, sujet: null, par: "" },
+    { lecture: { rapprochementDemande: true, rapprochementsEcartes: 2 } }
+  ));
+
+  assert.match(html, /2 rapprochements/);
+  assert.match(html, /repartent comme neufs/);
+});
+
+/* ── Le label du compte rendu ────────────────────────────────────────────── */
+
+/**
+ * **Ne pas savoir n'est pas « il n'y est pas ».** Annoncer une création qui
+ * n'aura peut-être pas lieu serait une affirmation qu'on n'a pas vérifiée.
+ */
+test("le label du compte rendu se dit, et son absence ne s'invente pas", async () => {
+  const { LABEL_DU_CR } = await import("../../../services/label-du-cr.js");
+  const confronte = { sort: SORT.NOUVEAU, sujet: null, par: "" };
+
+  const inconnu = renderLaLecture(unEtatConfronte(confronte, { labels: null }));
+  const absent = renderLaLecture(unEtatConfronte(confronte, { labels: [] }));
+  const present = renderLaLecture(unEtatConfronte(confronte, { labels: [{ id: "l-1", name: LABEL_DU_CR }] }));
+
+  for (const html of [inconnu, absent, present]) {
+    assert.match(html, /lecture-cr__label/);
+    assert.match(html, new RegExp(LABEL_DU_CR));
+  }
+
+  assert.match(inconnu, /n&#39;ont pas pu être lus/);
+  assert.match(absent, /créerait/);
+  assert.match(present, /existe déjà/);
+  // Rien n'est posé : poser un label est une écriture, elle passe par une
+  // proposition (règle 1).
+  assert.doesNotMatch(present, /label posé|label ajouté/);
 });

@@ -117,6 +117,12 @@ export function lectureAssemblee({
       etat: texte(point?.etat),
       page: Number(point?.page) || null,
       citation: texte(point?.citation),
+      /**
+       * Le sujet que le modèle dit continuer, **déjà vérifié au serveur** :
+       * l'identifiant figure dans la liste qu'on lui a envoyée, ou il vaut "".
+       */
+      sujetExistant: texte(point?.sujet_existant),
+      raisonDuRapprochement: texte(point?.raison_du_rapprochement),
       manques,
       retrouve: citationRetrouvee(point, pages)
     };
@@ -252,16 +258,46 @@ export const EFFETS_DU_SORT = {
 };
 
 /**
+ * Qui a reconnu que ce point continue un sujet.
+ *
+ * **Les deux ne se valent pas, donc ils ne s'affichent pas pareil.** Le titre
+ * mis à plat ne reconnaît qu'une reprise mot pour mot : il est sûr quand il
+ * trouve, et aveugle le reste du temps. Le modèle voit les deux textes et
+ * reconnaît un point qui a avancé — mais c'est un jugement, et un jugement se
+ * relit. Les confondre reviendrait à présenter une lecture comme une
+ * constatation.
+ */
+export const PAR = { MODELE: "modele", TITRE: "titre" };
+
+export const PHRASES_DU_PAR = {
+  [PAR.MODELE]: "Rapproché par le modèle, d'après ce que le projet suit déjà.",
+  [PAR.TITRE]: "Rapproché sur le titre, mot pour mot."
+};
+
+/**
  * La confrontation aux sujets du projet.
  *
- * **Elle se fait par le titre aplati, et c'est la limite connue.** Un point qui
- * progresse se réécrit — « pose prévue demain » devient « posé » — et repart
- * donc comme un point neuf. La moitié « a changé » est ainsi presque
- * inatteignable, et c'est écrit dans `docs/a-traiter-plus-tard.md`.
+ * ## Deux rapprochements, et le meilleur gagne
  *
- * On l'affiche quand même, et telle quelle : c'est en voyant « Ouvrirait un
- * sujet » sur un point qui continue visiblement un sujet ouvert qu'on mesure ce
- * que le rapprochement par le texte ne sait pas faire.
+ * **Le titre mis à plat ne reconnaît qu'une reprise mot pour mot.** Un point
+ * qui progresse se réécrit — « pose prévue demain » devient « posé » — et
+ * repartait donc comme un point neuf. La moitié « a changé » était presque
+ * inatteignable, et c'était écrit dans `docs/a-traiter-plus-tard.md`.
+ *
+ * Le modèle, lui, a reçu la liste de ce que le projet suit et rend
+ * l'identifiant du sujet qu'un point continue. Son verdict passe donc en
+ * premier — il voit ce que la comparaison de chaînes ne peut pas voir. Le titre
+ * reste derrière, pour les points sur lesquels le modèle n'a rien dit.
+ *
+ * ## Ce qui n'est pas négociable
+ *
+ * L'identifiant rendu par le modèle a été **vérifié au serveur** contre la
+ * liste envoyée. Un identifiant inventé n'arrive jamais jusqu'ici : il rangerait
+ * un point réel dans la discussion d'un sujet qui n'a rien à voir, où personne
+ * n'irait le chercher.
+ *
+ * Et chaque point dit **qui** l'a rapproché : présenter un jugement du modèle
+ * comme une constatation serait la même faute que de taire une lacune.
  *
  * @param {object[]} points la lecture assemblée
  * @param {object[]} sujetsDuProjet les sujets ouverts, `{id, title}`
@@ -281,20 +317,35 @@ export function confrontation(points = [], sujetsDuProjet = null, aplatir = null
     ? aplatir
     : (valeur) => texte(valeur).toLowerCase();
 
+  const connus = Array.isArray(sujetsDuProjet) ? sujetsDuProjet : [];
+
   const parTitre = new Map(
-    (Array.isArray(sujetsDuProjet) ? sujetsDuProjet : [])
-      .map((sujet) => [mettreAPlat(sujet?.title ?? sujet?.titre), sujet])
-      .filter(([cle]) => cle)
+    connus.map((sujet) => [mettreAPlat(sujet?.title ?? sujet?.titre), sujet]).filter(([cle]) => cle)
+  );
+  const parIdentifiant = new Map(
+    connus.map((sujet) => [texte(sujet?.id), sujet]).filter(([cle]) => cle)
   );
 
   return (Array.isArray(points) ? points : []).map((point) => {
-    const sujet = parTitre.get(mettreAPlat(point?.titre)) ?? null;
-    if (!sujet) return { ...point, sort: SORT.NOUVEAU, sujet: null };
+    // Le modèle d'abord : il voit ce que la comparaison de chaînes ne voit pas.
+    const rapproche = parIdentifiant.get(texte(point?.sujetExistant)) ?? null;
+    const sujet = rapproche ?? parTitre.get(mettreAPlat(point?.titre)) ?? null;
+
+    if (!sujet) return { ...point, sort: SORT.NOUVEAU, sujet: null, par: "" };
 
     // L'état diffère : le point dit autre chose de ce sujet.
+    // **Pas `status`.** L'état d'un sujet Mdall (ouvert, fermé) n'est pas l'état
+    // que le compte rendu donne à son point (« nouveau », « soldé ») : les
+    // comparer ferait dire « a changé » de tous les points, à chaque dépôt.
     const avant = texte(sujet?.etat ?? sujet?.state);
     const change = Boolean(avant) && avant !== texte(point?.etat);
-    return { ...point, sort: change ? SORT.CHANGE : SORT.RELANCE, sujet };
+
+    return {
+      ...point,
+      sort: change ? SORT.CHANGE : SORT.RELANCE,
+      sujet,
+      par: rapproche ? PAR.MODELE : PAR.TITRE
+    };
   });
 }
 

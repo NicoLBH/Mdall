@@ -35,7 +35,9 @@ import {
   intervenantsAuFormatDuMoteur,
   pagesEnTexte,
   sujetsAuFormatDuMoteur,
+  sujetsDuProjetEnTexte,
   verifierLesIntervenants,
+  verifierLesRapprochements,
   verifierLesSujets
 } from "../_shared/sujets-du-modele.js";
 
@@ -89,12 +91,24 @@ serve(async (req) => {
     const texte = pagesEnTexte(pages, { maxCaracteres: MAX_CARACTERES });
     if (!texte.trim()) return reponse({ error: "pages carry no text" }, 400);
 
+    /**
+     * Ce que le projet suit déjà.
+     *
+     * **Facultatif, et l'absence n'est pas le vide.** Sans cette liste, le
+     * modèle ne rapproche rien et tous les points repartent neufs — ce qui est
+     * l'erreur la moins coûteuse. Lui envoyer une liste vide en prétendant
+     * qu'elle est complète lui ferait conclure que le projet ne suit rien, ce
+     * qui n'est pas la même chose (règle 5).
+     */
+    const connus = Array.isArray(body?.sujets_du_projet) ? body.sujets_du_projet : [];
+    const deja = sujetsDuProjetEnTexte(connus);
+
     const appel = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: { Authorization: `Bearer ${openAiApiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: MODELE,
-        instructions: CONSIGNES,
+        instructions: deja ? `${CONSIGNES}\n${deja}` : CONSIGNES,
         input: texte,
         max_output_tokens: MAX_JETONS,
         text: { format: { type: "json_schema", ...SCHEMA_DES_SUJETS } }
@@ -122,6 +136,11 @@ serve(async (req) => {
       pages
     });
 
+    // **Un identifiant inventé égare un point, il ne le perd pas.** Rattaché à
+    // la discussion d'un sujet qui n'a rien à voir, personne n'ira le chercher
+    // — et rien ne le signalera. Ce qui n'a pas été envoyé ne revient pas.
+    const rapproches = verifierLesRapprochements({ sujets: retenus, connus });
+
     // Les intervenants passent le même garde-fou, et pour une raison plus forte
     // encore : un intervenant inventé est une entreprise qui n'existe pas sur
     // ce chantier, à qui l'on finirait par assigner des points.
@@ -134,7 +153,16 @@ serve(async (req) => {
       numero_de_reunion: lu.numero_de_reunion ?? null,
       tenue_le: lu.tenue_le ?? null,
       redige_par: lu.redige_par ?? null,
-      sujets: sujetsAuFormatDuMoteur(retenus, { sourceId }),
+      sujets: sujetsAuFormatDuMoteur(rapproches.sujets, { sourceId }),
+      /** Combien de rapprochements pointaient vers un sujet qu'on n'a pas envoyé. */
+      rapprochements_ecartes: rapproches.ecartes,
+      /**
+       * A-t-on dit au modèle ce que le projet suit ?
+       *
+       * Sans cela, tous les points repartent neufs — et l'écran doit pouvoir
+       * dire pourquoi, plutôt que de laisser croire que rien ne correspondait.
+       */
+      rapprochement_demande: Boolean(deja),
       intervenants: intervenantsAuFormatDuMoteur(gens.retenus, { sourceId }),
       // Ce qui a été jeté, et pourquoi. Se dit, se compte, ne se cache pas.
       ecartes: [

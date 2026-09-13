@@ -24,6 +24,7 @@
 
 import { sha256Hex } from "../utils/sha256.js";
 import { contentFingerprint } from "./document-identity.js";
+import { accorderLesCouleurs, enHexadecimal } from "./couleurs-du-pdf.js";
 
 const VENDOR_BASE = "../../vendor/unpdf";
 
@@ -116,32 +117,81 @@ export async function extractPdfPages(bytes, { unpdf = null } = {}) {
  */
 function createFontResolver() {
   const names = new Map();
-  const attempted = new Set();
 
-  return async function resolve(page, fontNames) {
-    const missing = fontNames.filter((name) => name && !names.has(name));
-    if (missing.length === 0) return names;
-
-    const key = page.pageNumber ?? page._pageIndex ?? Symbol();
-    if (attempted.has(key)) return names;
-    attempted.add(key);
-
-    try {
-      await page.getOperatorList();
-      for (const name of missing) {
-        try {
-          const info = page.commonObjs.get(name);
-          if (info?.name) names.set(name, String(info.name));
-        } catch {
-          // police non résolue sur cette page : une autre la portera peut-être
-        }
+  return function resolve(page, fontNames) {
+    for (const name of fontNames) {
+      if (!name || names.has(name)) continue;
+      try {
+        const info = page.commonObjs.get(name);
+        if (info?.name) names.set(name, String(info.name));
+      } catch {
+        // police non résolue sur cette page : une autre la portera peut-être
       }
-    } catch {
-      // page illisible : l'italique restera inconnu, il ne sera pas inventé
     }
-
     return names;
   };
+}
+
+/**
+ * Le texte d'un opérateur d'affichage, reconstruit glyphe par glyphe.
+ *
+ * Les nombres intercalés sont des crénages — un déplacement, pas un caractère.
+ * Les ignorer est sans conséquence : la correspondance des couleurs se fait
+ * espaces ôtés.
+ */
+function texteDesGlyphes(glyphes) {
+  let dit = "";
+  for (const glyphe of Array.isArray(glyphes) ? glyphes : []) {
+    if (glyphe && typeof glyphe === "object") dit += String(glyphe.unicode ?? "");
+  }
+  return dit;
+}
+
+/**
+ * Ce que la liste d'opérations montre, avec la couleur de chaque morceau.
+ *
+ * La couleur de remplissage est un **état** : elle se pose et vaut jusqu'à la
+ * suivante, `q`/`Q` la sauvegardant et la restaurant. On la suit donc, plutôt
+ * que de la lire au moment du texte — où elle n'est pas écrite.
+ *
+ * Cette lecture ne sert qu'à colorer : le texte et sa position viennent de
+ * `getTextContent()`, qui est la porte prévue pour cela. Les deux lectures se
+ * recollent dans `couleurs-du-pdf.js`, qui refuse plutôt que de deviner.
+ */
+function peintsDeLaListe(ops, OPS) {
+  const peints = [];
+  const pile = [];
+  let couleur = "#000000";
+
+  const fnArray = ops?.fnArray ?? [];
+  const argsArray = ops?.argsArray ?? [];
+
+  for (let rang = 0; rang < fnArray.length; rang += 1) {
+    const fn = fnArray[rang];
+    const args = argsArray[rang];
+
+    if (fn === OPS.save) {
+      pile.push(couleur);
+    } else if (fn === OPS.restore) {
+      couleur = pile.length ? pile.pop() : couleur;
+    } else if (
+      fn === OPS.setFillRGBColor || fn === OPS.setFillGray || fn === OPS.setFillCMYKColor
+      || fn === OPS.setFillColor || fn === OPS.setFillColorN
+    ) {
+      // pdf.js normalise le plus souvent en « #rrggbb » ; les autres formes
+      // passent par la même porte plutôt que par un second calcul (règle 4).
+      const lue = enHexadecimal(args?.[0]) || enHexadecimal(args);
+      if (lue) couleur = lue;
+    } else if (
+      fn === OPS.showText || fn === OPS.showSpacedText
+      || fn === OPS.nextLineShowText || fn === OPS.nextLineSetSpacingShowText
+    ) {
+      const dit = texteDesGlyphes(fn === OPS.nextLineSetSpacingShowText ? args?.[2] : args?.[0]);
+      if (dit) peints.push({ text: dit, couleur });
+    }
+  }
+
+  return peints;
 }
 
 const ITALIC = /italic|oblique/i;
@@ -167,17 +217,33 @@ export async function extractPositionedPages(bytes, { pdfjs = null } = {}) {
     const page = await pdfDocument.getPage(number);
     const content = await page.getTextContent();
 
+    // Une seule liste d'opérations par page, pour deux usages : les vrais noms
+    // de police, et la couleur de remplissage. La demander deux fois coûterait
+    // deux fois.
+    let ops = null;
+    try {
+      ops = await page.getOperatorList();
+    } catch {
+      // page illisible de ce côté : relief et couleur resteront inconnus, ils
+      // ne seront pas inventés
+      ops = null;
+    }
+
     const used = [...new Set((content.items ?? []).map((item) => item?.fontName).filter(Boolean))];
-    const fonts = await resolveFonts(page, used);
+    const fonts = ops ? resolveFonts(page, used) : new Map();
+
+    const lisibles = (content.items ?? []).filter((item) => String(item?.str ?? "").trim() !== "");
+    // `null` quand les deux lectures ne portent pas le même texte : une couleur
+    // mal recollée inverserait le sens d'une ligne sans rien pour le dire.
+    const couleurs = ops
+      ? accorderLesCouleurs(peintsDeLaListe(ops, engine.OPS), lisibles.map((item) => ({ text: item.str })))
+      : null;
 
     const items = [];
-    for (const item of content.items ?? []) {
-      const text = String(item?.str ?? "");
-      if (text.trim() === "") continue;
-
+    lisibles.forEach((item, rang) => {
       const realFont = fonts.get(item.fontName);
       items.push({
-        text,
+        text: String(item.str),
         // `transform` porte la position finale du fragment sur la page.
         x: Math.round(item.transform[4] * 10) / 10,
         y: Math.round(item.transform[5] * 10) / 10,
@@ -186,9 +252,11 @@ export async function extractPositionedPages(bytes, { pdfjs = null } = {}) {
         // `null` et non `false` : une police non résolue est une inconnue, pas
         // une police droite.
         italic: realFont ? ITALIC.test(realFont) : null,
-        bold: realFont ? BOLD.test(realFont) : null
+        bold: realFont ? BOLD.test(realFont) : null,
+        // "" quand la correspondance n'a pas pu être établie — pas « noir ».
+        couleur: couleurs ? (couleurs[rang] ?? "") : ""
       });
-    }
+    });
 
     pages.push({ page: number, items });
   }

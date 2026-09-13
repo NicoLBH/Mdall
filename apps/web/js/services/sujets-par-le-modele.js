@@ -82,7 +82,7 @@ export function phraseDuRefus(motif) {
  * @param {object[]} options.pages `{page, text}` — ce qu'on lui donne à lire
  * @returns {Promise<{ok: true, sujets: object[], ecartes: number}|{ok: false, motif: string}>}
  */
-export async function lireLesSujets({ sourceId = "", pages = [] } = {}) {
+export async function lireLesSujets({ sourceId = "", pages = [], sujetsDuProjet = null } = {}) {
   const lisibles = (Array.isArray(pages) ? pages : []).filter((page) => texte(page?.text ?? page?.texte));
   if (!lisibles.length) return { ok: false, motif: REFUS.SANS_TEXTE };
 
@@ -98,6 +98,16 @@ export async function lireLesSujets({ sourceId = "", pages = [] } = {}) {
         // l'attribuer au hasard.
         project_id: await projetCourant(),
         source_id: texte(sourceId),
+        /**
+         * Ce que le projet suit déjà, pour que le modèle reconnaisse un point
+         * reporté.
+         *
+         * **`null` n'est pas une liste vide.** Ne pas avoir pu lire les sujets
+         * du projet n'autorise pas à dire au modèle que le projet ne suit rien
+         * (règle 5) : on ne lui envoie alors rien, il ne rapproche rien, et
+         * tous les points repartent neufs — l'erreur la moins coûteuse.
+         */
+        ...(Array.isArray(sujetsDuProjet) ? { sujets_du_projet: sujetsDuProjet } : {}),
         pages: lisibles.map((page) => ({ page: Number(page?.page), text: texte(page?.text ?? page?.texte) }))
       })
     });
@@ -125,6 +135,10 @@ export async function lireLesSujets({ sourceId = "", pages = [] } = {}) {
     redigePar: texte(rendu?.redige_par),
     // Ce que le serveur a jeté faute de citation vérifiable. Se dit, se compte.
     ecartes: Array.isArray(rendu?.ecartes) ? rendu.ecartes.length : 0,
+    /** Les rapprochements qui pointaient vers un sujet qu'on n'avait pas envoyé. */
+    rapprochementsEcartes: Number(rendu?.rapprochements_ecartes) || 0,
+    /** A-t-on dit au modèle ce que le projet suit ? Sans cela, tout repart neuf. */
+    rapprochementDemande: Boolean(rendu?.rapprochement_demande),
     pagesCorrigees: Number(rendu?.pages_corrigees) || 0,
     modele: texte(rendu?.modele)
   };

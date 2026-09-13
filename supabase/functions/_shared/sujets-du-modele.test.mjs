@@ -140,3 +140,95 @@ test("le schéma ne demande aucun jugement", () => {
   assert.ok(champs.includes("lot"), "le lot, tel qu'écrit");
   assert.equal(SCHEMA_DES_SUJETS.strict, true);
 });
+
+/* ── Le rapprochement avec ce que le projet suit déjà ────────────────────── */
+
+/**
+ * **Un identifiant inventé égare un point, il ne le perd pas.** Rattaché à la
+ * discussion d'un sujet qui n'a rien à voir, personne n'ira le chercher — et
+ * rien ne le signalera. Le point n'est pas perdu, il est égaré, ce qui ne se
+ * voit jamais (règle 5).
+ */
+test("un rapprochement vers un sujet qu'on n'a pas envoyé est écarté", async () => {
+  const { verifierLesRapprochements } = await import("./sujets-du-modele.js");
+
+  const { sujets, ecartes } = verifierLesRapprochements({
+    sujets: [
+      { titre: "Étanchéité", sujet_existant: "s-1", raison_du_rapprochement: "même numéro" },
+      { titre: "Linteaux", sujet_existant: "s-inventé", raison_du_rapprochement: "au feeling" },
+      { titre: "Neuf", sujet_existant: null, raison_du_rapprochement: null }
+    ],
+    connus: [{ id: "s-1" }, { id: "s-2" }]
+  });
+
+  assert.equal(ecartes, 1);
+  assert.equal(sujets[0].sujet_existant, "s-1");
+  assert.equal(sujets[0].raison_du_rapprochement, "même numéro");
+
+  // Écarté, pas corrigé : le point reste, et il repart comme un point neuf.
+  assert.equal(sujets[1].titre, "Linteaux");
+  assert.equal(sujets[1].sujet_existant, null);
+  assert.equal(sujets[1].raison_du_rapprochement, null, "la raison d'un rapprochement faux resterait affichée");
+
+  assert.equal(sujets[2].sujet_existant, null);
+});
+
+/** Sans liste envoyée, aucun rapprochement ne peut être permis. */
+test("sans sujets envoyés, aucun rapprochement ne passe", async () => {
+  const { verifierLesRapprochements } = await import("./sujets-du-modele.js");
+
+  const { sujets, ecartes } = verifierLesRapprochements({
+    sujets: [{ titre: "x", sujet_existant: "s-1" }],
+    connus: []
+  });
+
+  assert.equal(ecartes, 1);
+  assert.equal(sujets[0].sujet_existant, null);
+});
+
+/**
+ * **Maigre, et c'est voulu.** Un identifiant, un numéro, un titre, un état : de
+ * quoi reconnaître, pas de quoi raisonner sur autre chose.
+ */
+test("ce que le projet suit se dit en une ligne par sujet", async () => {
+  const { sujetsDuProjetEnTexte } = await import("./sujets-du-modele.js");
+
+  const dit = sujetsDuProjetEnTexte([
+    { id: "s-1", subject_number: 12, title: "Étanchéité toiture", status: "open" },
+    { id: "s-2", title: "Linteaux bois" },
+    { id: "", title: "sans identifiant" },
+    { id: "s-3", title: "" }
+  ]);
+
+  assert.match(dit, /- s-1 #12 \[open\] : Étanchéité toiture/);
+  assert.match(dit, /- s-2 : Linteaux bois/);
+  // Un sujet sans identifiant ne peut pas être rapproché : l'envoyer ferait
+  // rendre au modèle un identifiant vide, donc écarté, sans qu'on sache pourquoi.
+  assert.doesNotMatch(dit, /sans identifiant/);
+  assert.doesNotMatch(dit, /s-3/);
+});
+
+/**
+ * **L'absence de liste n'est pas une liste vide.** Rendre un bloc vide dirait
+ * au modèle que le projet ne suit rien, ce qui n'est pas la même chose que de
+ * ne pas savoir (règle 5).
+ */
+test("sans sujets, on n'annonce pas que le projet n'en a aucun", async () => {
+  const { sujetsDuProjetEnTexte } = await import("./sujets-du-modele.js");
+
+  assert.equal(sujetsDuProjetEnTexte([]), "");
+  assert.equal(sujetsDuProjetEnTexte(null), "");
+});
+
+/** La consigne dit ce qu'il faut faire du rapprochement, et ce qu'il ne faut pas. */
+test("la consigne demande le rapprochement et interdit de l'inventer", async () => {
+  const { CONSIGNES } = await import("./sujets-du-modele.js");
+
+  assert.match(CONSIGNES, /sujet_existant/);
+  assert.match(CONSIGNES, /RECOPIÉ CARACTÈRE POUR CARACTÈRE/);
+  assert.match(CONSIGNES, /N'invente JAMAIS un identifiant/);
+  // Le cas que la comparaison de titres ne sait pas voir, nommé dans la consigne.
+  assert.match(CONSIGNES, /pose prévue demain/);
+  // Et le doute, qui penche du côté le moins coûteux.
+  assert.match(CONSIGNES, /Dans le doute, laisse null/);
+});

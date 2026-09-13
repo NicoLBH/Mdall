@@ -138,6 +138,99 @@ depuis ; **pas rangée**, avec son motif — on la repaiera, c'est ennuyeux, pas
 
 Un rangement raté n'arrête rien : la restitution est faite, elle est à l'écran.
 
+### Étape 2 bis — L'extraction voit enfin la page *(faite)*
+
+Avant de bâtir le secrétariat sur la transcription, il fallait que la transcription ait un sens.
+Elle n'en avait pas toujours, et la cause n'était pas la consigne.
+
+#### Le défaut : la page arrivait déjà détruite
+
+Un compte rendu de chantier est un tableau, déclaré ou déguisé : les remarques à gauche, et à
+droite des colonnes étroites — « Date » (entrée au compte rendu), « Pour le » (échéance),
+« Fait le » (fermeture). Une cellule de gauche tient sur trois lignes ; celle de droite sur une.
+
+Le texte aplati d'un PDF rend les fragments dans l'ordre du fichier. La date tombe donc **au
+milieu** de la phrase :
+
+```
+Reprise d'étanchéité en toiture, angle 12/03/2026 30/04/2026 nord-ouest, avant réception
+```
+
+La phrase n'a plus de sens, et les deux dates ont perdu la leur — on ne sait plus à quelle
+remarque elles se rapportent, ni laquelle est l'échéance. **Aucune consigne ne rattrape cela** :
+on demanderait au modèle de deviner ce que l'extraction a déjà détruit.
+
+#### Ce qui a changé : la page est reposée sur sa grille
+
+`extractPositionedPages` rendait déjà `x`, `y`, `width`, `height` et la police de chaque
+fragment — et personne ne s'en servait pour la transcription. Les fragments sont maintenant
+reposés à la colonne que leurs coordonnées réelles leur donnent, comme `pdftotext -layout` le
+fait depuis vingt ans, et pour la même raison : **la géométrie est l'information**.
+
+```
+Reprise d'étanchéité en toiture, angle        12/03/2026    30/04/2026
+nord-ouest, avant réception
+```
+
+Les colonnes redeviennent des colonnes, et les **listes crantées** redeviennent des listes :
+une liste de chantier est rarement numérotée, elle se tient par un décalage d'alignement. Sur
+la grille, le décalage se voit ; sur le texte aplati, il n'existe pas.
+
+Une page dont la géométrie ne se lit pas repart à plat, comme avant — et elle est **comptée**,
+l'écran disant que les colonnes n'y sont pas garanties (règle 5).
+
+#### Les couleurs, et pourquoi elles demandent un refus
+
+« à faire » en bleu, « présence obligatoire au prochain rendez-vous » en rouge : la couleur ne
+décore pas, elle hiérarchise. `getTextContent()` ne la rend pas ; elle ne vit que dans la liste
+d'opérations, où elle se pose et vaut jusqu'à la suivante.
+
+Il faut donc lire deux fois le même contenu et faire correspondre les deux lectures, qui ne
+découpent pas aux mêmes endroits. La règle est la prudence : on compare les **deux flux de
+caractères**, espaces ôtés ; s'ils diffèrent d'un seul caractère, **aucune couleur n'est rendue
+pour la page**. Une couleur mal recollée est bien pire que pas de couleur — un « fait » colorié
+en rouge inverse le sens d'une ligne, et rien à l'écran ne permettrait de s'en apercevoir.
+
+La couleur se transcrit en encadré nommé par la couleur, que le rendu Markdown de Mdall affiche
+dans cette couleur :
+
+```
+> [!ROUGE]
+> Présence obligatoire au prochain rendez-vous
+```
+
+**Le nom est la couleur, pas la gravité.** Traduire le rouge en « important » serait une lecture
+faite au moment de transcrire, et plus personne en aval ne pourrait la défaire.
+
+#### La consigne, complétée
+
+| | |
+| --- | --- |
+| **La structure d'abord** | identifier le tableau avant de transcrire ; reconstituer chaque cellule entière avant de passer à la colonne suivante |
+| **Le plan habituel** | référence du chantier, tableau des intervenants, généralités reprises de CR en CR, puis les remarques par lot |
+| **Les trois dates** | « Date », « Pour le », « Fait le » n'ont pas le même sens et ne se confondent pas |
+| **Les lots** | le titre du lot devient un titre Markdown, ses remarques se rangent dessous |
+| **Les listes crantées** | chaque cran de la grille devient un niveau de liste |
+| **Les flèches** | `->`, `→`, `=>` sont des liens de dépendance, pas de la ponctuation : recopiées telles quelles, sur la même ligne |
+| **Les couleurs** | encadré nommé par la couleur, jamais par la gravité |
+| **Toute la mise en page** | titres 1 à 6, gras, italique, listes imbriquées, tableaux, encadrés |
+
+#### Le modèle monte d'un cran
+
+`gpt-5` au lieu de `gpt-4.1`, réglable par `OPENAI_TRANSCRIPTION_MODEL` — le nom d'un modèle
+change plus vite que le code. Ce n'est pas une recopie : reposer un tableau déguisé, lire une
+cellule de gauche qui tient sur quatre lignes pendant qu'une date de droite n'en occupe qu'une,
+reconnaître qu'un décalage d'indentation est un regroupement, c'est du raisonnement sur la mise
+en page. Et c'est le premier maillon : une erreur ici se propage au secrétariat, aux liens et
+aux fermetures sans jamais se corriger.
+
+Le plafond double en conséquence — le modèle rend plus d'un bloc, et une page reposée est plus
+longue qu'une page à plat, puisqu'elle porte les espaces qui font ses colonnes.
+
+> **Le tarif de `gpt-5` est à confirmer.** Il a été relevé de mémoire, pas sur la page de tarifs
+> OpenAI. Un prix affiché faux est pire qu'un prix absent : si le doute subsiste, retirer la
+> ligne de `TARIFS` fait dire « tarif inconnu », ce qui est vrai.
+
 ### Étape 3 — Le secrétariat, sur le `.md` seul
 
 Deuxième appel, `gpt-4.1-mini`, nourri du `.md` et de **ce que le projet sait déjà** : ses
@@ -156,6 +249,59 @@ Il propose :
 Cette étape est **trop grosse pour un seul palier**. Elle se fait dans cet ordre, chacun
 livrable et vérifiable seul : les sujets et le label « CR chantier » ; puis les lots ; puis
 les labels de qualification ; puis les objectifs.
+
+#### Palier 1 — Le secrétariat sait ce que le projet suit déjà *(fait)*
+
+**Le rapprochement change de main.** Il se faisait dans le navigateur, par comparaison des
+titres mis à plat — ce qui ne reconnaît qu'une reprise mot pour mot. Or un compte rendu
+*reporte*, et un point qui avance se réécrit : « pose prévue demain » devient « pose
+réalisée », et repartait donc comme un point neuf. La moitié « a changé » était presque
+inatteignable, et c'était écrit dans `docs/a-traiter-plus-tard.md`.
+
+Le modèle reçoit maintenant la liste de ce que le projet suit — identifiant, numéro, état,
+titre, et rien de plus — et rend pour chaque point le sujet qu'il continue, avec la raison.
+
+| | |
+| --- | --- |
+| **Ce que le modèle reçoit** | une ligne par sujet : `- <id> #<numéro> [<état>] : <titre>` |
+| **Ce qu'il rend** | `sujet_existant` (l'identifiant, recopié) et `raison_du_rapprochement` |
+| **Ce qui est vérifié au serveur** | l'identifiant figure dans la liste envoyée, ou il est écarté |
+| **Ce que l'écran dit** | qui a rapproché — le modèle ou le titre — et pourquoi |
+
+##### Le garde-fou, et pourquoi il est plus dur que celui des citations
+
+Une citation inventée fait perdre un point : on le voit, il manque. **Un identifiant inventé
+fait pire** — il range un point réel dans la discussion d'un sujet qui n'a rien à voir, où
+personne n'ira le chercher. Le point n'est pas perdu, il est *égaré*, ce qui ne se voit jamais.
+
+On n'essaie donc pas de corriger : ce qui n'a pas été envoyé ne revient pas. Le point reste,
+son rapprochement tombe, et il repart comme un point neuf — l'erreur la moins coûteuse des
+deux. La consigne le dit aussi au modèle : « dans le doute, laisse null ».
+
+##### Les deux voix ne s'affichent pas pareil
+
+Le titre mis à plat est une **constatation** : il a trouvé les mêmes mots. Le modèle porte un
+**jugement**, et un jugement se relit. Chaque rapprochement dit donc lequel des deux l'a
+reconnu, et la raison que le modèle donne est là pour qu'on puisse répondre « non, ce n'est
+pas le même ».
+
+Et quand la liste n'a pas pu être lue, l'écran le dit : **« le modèle n'a pas su ce que le
+projet suit » n'est pas « rien ne correspondait »** (règle 5).
+
+##### Le label « CR chantier »
+
+Son nom vit à un seul endroit (`label-du-cr.js`), et nulle part ailleurs : recopié dans
+l'écran, dans le filtre et dans la situation, il existerait en trois versions et le filtre ne
+trouverait plus rien (règle 10).
+
+L'écran dit s'il existe déjà dans le projet, ou si la proposition le créerait — et ne dit ni
+l'un ni l'autre quand les labels n'ont pas pu être lus. **Rien n'est posé** : poser un label est
+une écriture, et une écriture passe par une proposition (règle 1).
+
+##### Ce que ce palier ne fait pas encore
+
+Les lots manquants, les labels de qualification et les objectifs : paliers suivants. Et la
+fermeture reste entière à l'étape 4 — c'est le point le plus délicat du plan.
 
 ### Étape 4 — Fermer un sujet, et la question de fond
 

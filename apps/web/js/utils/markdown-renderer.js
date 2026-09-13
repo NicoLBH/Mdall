@@ -23,6 +23,33 @@ const FENCE_PATTERN = /^```(.*)$/;
 const HTML_COMMENT_LINE = /^<!--(?:(?!-->)[\s\S])*-->$/;
 
 /**
+ * Un encadré nommé : `> [!ROUGE]`, puis ses lignes.
+ *
+ * ## Pourquoi des noms de couleur, et non des noms de gravité
+ *
+ * Un compte rendu de chantier hiérarchise à la couleur : « à faire » en bleu,
+ * « présence obligatoire au prochain rendez-vous » en rouge. La transcription
+ * doit porter cette couche — sans elle, tout se vaut.
+ *
+ * Elle la porte **sans l'interpréter**. `[!ROUGE]` dit que le document était
+ * rouge, rien de plus. Traduire le rouge en « important » serait une lecture,
+ * faite au moment où l'on transcrit, et plus personne en aval ne pourrait la
+ * défaire.
+ *
+ * Les cinq noms de GitHub sont acceptés en plus, pour qu'un texte venu
+ * d'ailleurs s'affiche correctement.
+ */
+const ALERT_OPEN = /^>\s*\[!([A-Za-zÀ-ÿ ]{2,16})\]\s*$/;
+
+const ALERTES = new Map([
+  ["rouge", "rouge"], ["bleu", "bleu"], ["vert", "vert"], ["orange", "orange"],
+  ["jaune", "jaune"], ["violet", "violet"], ["rose", "rose"],
+  ["gris", "gris"], ["gris clair", "gris"],
+  ["note", "bleu"], ["tip", "vert"], ["important", "violet"],
+  ["warning", "orange"], ["caution", "rouge"]
+]);
+
+/**
  * Un bloc de code.
  *
  * Chaque ligne est enveloppée, et non versée en bloc dans un `<pre>` : c'est ce
@@ -342,6 +369,31 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
       flushList(listState, html);
       const level = Math.min(6, headingMatch[1].length);
       html.push(`<h${level}>${renderInlineMarkdown(headingMatch[2], options)}</h${level}>`);
+      return;
+    }
+
+    const alerte = trimmed.match(ALERT_OPEN);
+    if (alerte && ALERTES.has(alerte[1].trim().toLowerCase())) {
+      flushParagraph(paragraphLines, html, options);
+      flushList(listState, html);
+
+      const nom = alerte[1].trim();
+      const corps = [];
+      let rang = index + 1;
+      for (; rang < lines.length; rang += 1) {
+        const suite = String(lines[rang] ?? "").match(BLOCKQUOTE_PATTERN);
+        if (!suite) break;
+        corps.push(suite[1]);
+      }
+      consumedUntil = rang - 1;
+
+      const ton = ALERTES.get(nom.toLowerCase());
+      html.push(
+        `<blockquote class="md-alerte md-alerte--${escapeHtml(ton)}">`
+        + `<p class="md-alerte__nom">${escapeHtml(nom)}</p>`
+        + corps.map((ligne) => `<p>${renderInlineMarkdown(ligne, options)}</p>`).join("")
+        + `</blockquote>`
+      );
       return;
     }
 

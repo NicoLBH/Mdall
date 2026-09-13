@@ -53,9 +53,26 @@
  * d'un document de chantier, et cela ne descend pas dans le navigateur.
  */
 
-export const CONSIGNES_DE_RECONSTITUTION = `Tu reçois le texte brut extrait d'un document PDF de chantier (compte rendu de réunion, rapport de bureau de contrôle, CCTP, notice). Il est découpé par des marqueurs "=== PAGE n ===".
+export const CONSIGNES_DE_RECONSTITUTION = `Tu reçois un document PDF de chantier (compte rendu de réunion, rapport de bureau de contrôle, CCTP, notice), page par page, découpé par des marqueurs "=== PAGE n ===".
+
+Le texte de chaque page t'est donné REPOSÉ SUR SA GRILLE : les fragments sont placés aux colonnes que leurs coordonnées réelles dans le PDF leur donnent. Ce qui est aligné verticalement dans ce que tu reçois était aligné verticalement dans le document. Les espaces entre deux blocs d'une même ligne sont des SÉPARATIONS DE COLONNES, pas des espaces de texte. Une ligne décalée vers la droite était indentée.
+
+Certaines pages peuvent arriver en texte simple, non reposé, quand la géométrie n'a pas pu être lue : elles se reconnaissent à l'absence d'alignement. Traite-les au mieux, sans inventer de colonnes.
+
+Une page peut être suivie d'un bloc "--- MISES EN ÉVIDENCE DE CETTE PAGE ---" qui donne les passages en gras, en italique et en couleur. Ils ne sont pas du texte en plus : ce sont les mêmes passages, avec ce que la grille ne peut pas montrer.
 
 Ta tâche : restituer ce document en Markdown, page par page, le plus fidèlement possible.
+
+COMMENCE PAR IDENTIFIER LA STRUCTURE DE LA PAGE, AVANT DE TRANSCRIRE QUOI QUE CE SOIT.
+
+Un compte rendu de chantier est presque toujours un tableau, déclaré ou déguisé. Il suit le plus souvent cet ordre : la référence du chantier, le tableau des intervenants, une série de généralités reprises de compte rendu en compte rendu (consignes pour le bon fonctionnement du chantier), puis les remarques regroupées par lot, sous forme d'un tableau plus ou moins formalisé.
+
+Les colonnes étroites de droite portent des dates, et chacune a un sens différent :
+- "Date" ou "Le" : la date à laquelle la remarque est entrée au compte rendu ;
+- "Pour le", "Échéance", "Délai" : la date à laquelle elle doit être traitée ;
+- "Fait le", "Levé le", "Soldé le" : la date à laquelle elle a été fermée.
+
+C'est là qu'est le piège principal, et il est grave. Une cellule de gauche tient souvent sur plusieurs lignes, pendant que la cellule de droite n'en occupe qu'une. Si tu lis ligne à ligne au lieu de lire colonne par colonne, tu insères la date au milieu de la phrase de gauche : la phrase perd son sens, et la date perd la sienne — on ne sait plus à quelle remarque elle se rapporte. RECONSTITUE CHAQUE CELLULE ENTIÈRE AVANT DE PASSER À LA COLONNE SUIVANTE.
 
 Règles impératives :
 - Ne résume pas. Ne reformule pas. Ne complète pas. Ne corrige pas.
@@ -67,6 +84,14 @@ Règles impératives :
 - Restitue les titres en titres (#, ##, ###), les listes en listes, les mentions en gras ou souligné du document en gras Markdown.
 - TU PEUX CLARIFIER LA MISE EN PAGE, JAMAIS LES MOTS. Tu peux ajouter des titres Markdown, des listes, des niveaux d'imbrication et des tableaux pour rendre visible une structure que le document porte sans la montrer. Tu ne peux pas ajouter, retirer ni changer un seul mot, et tu ne peux pas changer l'ordre.
 - FAIS ÉMERGER LA STRUCTURE IMPLICITE. Un compte rendu de chantier est une arborescence qui ne dit pas son nom : un lot, l'entreprise qui le tient, ses points à traiter, et sous chaque point les mises à jour des réunions suivantes. Quand un point daté est suivi de reprises datées plus récentes, imbrique les reprises sous le point. Quand des points appartiennent à un même lot, groupe-les sous le titre de ce lot. L'imbrication est un déplacement d'indentation, pas un déplacement de contenu : l'ordre de lecture reste celui du document.
+- REGROUPE LES REMARQUES PAR LOT. Un compte rendu découpe le chantier en lots, et chaque lot porte sa liste de remarques. Le titre du lot tel qu'il est écrit devient un titre Markdown, et ses remarques se rangent dessous.
+- LES LISTES CRANTÉES SONT DES LISTES. Une liste de chantier est rarement numérotée : elle se tient par un décalage d'alignement. Chaque niveau d'indentation que tu vois dans la grille devient un niveau de liste Markdown. Perdre ce décalage, c'est perdre le regroupement : une reprise indentée sous une remarque appartient à cette remarque, et remise à plat elle devient une remarque indépendante qui n'existe pas.
+- LES FLÈCHES SONT DES LIENS, PAS DE LA PONCTUATION. "->", "→", "=>" marquent une dépendance ou un renvoi entre deux points. Recopie-les telles quelles, sur la même ligne que ce qu'elles relient. Ne les remplace pas par un tiret et ne les mets pas à la ligne.
+- REPRODUIS LES COULEURS. Un passage en couleur est hiérarchisé par son auteur : "à faire" en bleu, "présence obligatoire au prochain rendez-vous" en rouge. Quand le bloc "MISES EN ÉVIDENCE" donne une couleur, rends le passage dans un encadré nommé par cette couleur, sur le modèle GitHub :
+> [!ROUGE]
+> Présence obligatoire au prochain rendez-vous
+  Les noms admis sont ROUGE, BLEU, VERT, ORANGE, JAUNE, VIOLET, ROSE, GRIS. N'invente pas de couleur : n'en écris une que si le bloc des mises en évidence la donne. Ne traduis pas la couleur en gravité — écris la couleur, pas "important" ni "urgent" : ce serait une interprétation, et elle serait irréversible. Un passage seulement en gras ou en italique se rend en gras ou en italique Markdown, pas en encadré.
+- SERS-TOI DE TOUTE LA MISE EN PAGE DU MARKDOWN : titres de niveaux 1 à 6, gras, italique, paragraphes, listes à puces, listes numérotées, listes imbriquées, tableaux, citations, encadrés. Un document de chantier est dense et hiérarchisé ; une transcription en paragraphes plats est illisible et perd la hiérarchie que le document portait.
 - Les en-têtes et pieds de page répétés à chaque page se restituent une seule fois, sur la page où ils apparaissent.
 - Si un passage est illisible ou incohérent dans le texte extrait, écris-le tel quel. N'invente pas ce qui manque, et ne signale rien : le document refait ne contient que le document.
 - Une page sans contenu lisible rend une chaîne vide.

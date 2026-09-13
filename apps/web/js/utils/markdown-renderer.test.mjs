@@ -212,3 +212,42 @@ test("un commentaire ne coupe pas une liste en deux", () => {
   assert.equal(html.match(/<ul>/g)?.length, 1);
   assert.match(html, /<li>un<\/li><li>deux<\/li>/);
 });
+
+/* ── Les encadrés nommés par leur couleur ────────────────────────────────── */
+
+/**
+ * Un compte rendu de chantier hiérarchise à la couleur : « à faire » en bleu,
+ * « présence obligatoire » en rouge. Sans elle, tout se vaut.
+ *
+ * **Le nom est la couleur, pas la gravité.** Traduire le rouge en « important »
+ * serait une lecture, faite au moment de transcrire, et plus personne en aval
+ * ne pourrait la défaire.
+ */
+test("un encadré nommé par sa couleur se rend dans cette couleur", () => {
+  const html = renderMarkdownToHtml("> [!ROUGE]\n> Présence **obligatoire** au rendez-vous\n> et au suivant\n\nSuite.");
+
+  assert.match(html, /md-alerte md-alerte--rouge/);
+  assert.match(html, /md-alerte__nom">ROUGE</);
+  // Les deux lignes tiennent dans le même encadré, pas dans deux.
+  assert.equal((html.match(/blockquote/g) ?? []).length, 2);
+  assert.match(html, /<strong>obligatoire<\/strong>/);
+  assert.match(html, /et au suivant/);
+  // Ce qui suit l'encadré n'y est pas entré.
+  assert.match(html, /<\/blockquote><p>Suite\.<\/p>/);
+});
+
+/** Les cinq noms de GitHub s'affichent aussi, pour un texte venu d'ailleurs. */
+test("un encadré GitHub prend une couleur", () => {
+  assert.match(renderMarkdownToHtml("> [!WARNING]\n> attention"), /md-alerte--orange/);
+  assert.match(renderMarkdownToHtml("> [!NOTE]\n> pour information"), /md-alerte--bleu/);
+});
+
+/** Une citation ordinaire reste une citation : rien ne change pour elle. */
+test("une citation qui n'est pas un encadré ne bouge pas", () => {
+  const html = renderMarkdownToHtml("> une citation ordinaire");
+  assert.match(html, /<blockquote>une citation ordinaire<\/blockquote>/);
+  assert.doesNotMatch(html, /md-alerte/);
+
+  // Un nom qu'on ne connaît pas n'invente pas de couleur.
+  assert.doesNotMatch(renderMarkdownToHtml("> [!TURQUOISE]\n> texte"), /md-alerte/);
+});

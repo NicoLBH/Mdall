@@ -85,9 +85,28 @@ export const SCHEMA_DES_SUJETS = {
             etat: { anyOf: [{ type: "string" }, { type: "null" }] },
             page: { anyOf: [{ type: "integer" }, { type: "null" }] },
             /** La ligne du document d'où le sujet sort. Sans elle, rien n'entre. */
-            citation: { type: "string" }
+            citation: { type: "string" },
+            /**
+             * Le sujet du projet que ce point continue, s'il en continue un.
+             *
+             * **C'est le rapprochement, et il change de main.** Il se faisait
+             * jusqu'ici par comparaison des titres mis à plat, dans le
+             * navigateur — ce qui ne reconnaît qu'une reprise mot pour mot. Or
+             * un point qui avance se réécrit : « pose prévue demain » devient
+             * « posé », et repartait donc comme un point neuf.
+             *
+             * Le modèle, lui, voit les deux textes. Il rend l'identifiant tel
+             * qu'il lui a été donné, et rien d'autre : un identifiant qu'on ne
+             * lui a pas envoyé est écarté avant de sortir d'ici.
+             */
+            sujet_existant: { anyOf: [{ type: "string" }, { type: "null" }] },
+            /** Pourquoi ce point continue ce sujet-là. Une phrase, sinon null. */
+            raison_du_rapprochement: { anyOf: [{ type: "string" }, { type: "null" }] }
           },
-          required: ["lot", "reference", "titre", "description", "qui", "echeance", "etat", "page", "citation"]
+          required: [
+            "lot", "reference", "titre", "description", "qui", "echeance", "etat", "page",
+            "citation", "sujet_existant", "raison_du_rapprochement"
+          ]
         }
       },
       /**
@@ -173,9 +192,95 @@ export const CONSIGNES = [
   "Ne relève pas de numéro de téléphone : il ne sert à rien ici et il n'a pas à voyager.",
   "Une même entreprise citée trois fois ne se relève qu'une fois, avec le nom de personne le plus complet que le document en donne.",
   "",
+  "",
+  "LE RAPPROCHEMENT AVEC CE QUE LE PROJET SUIT DÉJÀ :",
+  "Un compte rendu de chantier REPORTE. La douzième réunion reprend les points de la onzième, qui reprenait ceux de la dixième : un point reste écrit tant qu'il n'est pas soldé. Si on ne reconnaît pas qu'un point continue un sujet déjà ouvert, la douzième réunion ouvre douze fois la même chose.",
+  "Quand la liste « CE QUE LE PROJET SUIT DÉJÀ » t'est donnée, remplis pour chaque point :",
+  "- `sujet_existant` : l'identifiant du sujet que ce point continue, RECOPIÉ CARACTÈRE POUR CARACTÈRE depuis cette liste. Sinon null.",
+  "- `raison_du_rapprochement` : en une phrase, ce qui te fait dire que c'est le même point — le même numéro, le même ouvrage au même endroit, la suite visible de la même affaire. Sinon null.",
+  "Le numéro du compte rendu — « 12.02.1 » — est la reconnaissance la plus sûre : le même numéro désigne le même point d'une réunion à l'autre.",
+  "Un point qui a AVANCÉ continue son sujet : « pose prévue demain » et « pose réalisée » sont le même point à deux semaines d'écart, pas deux points. C'est exactement ce qu'une comparaison de titres ne sait pas voir, et c'est pour cela qu'on te le demande.",
+  "Un point qui parle du MÊME OUVRAGE mais d'AUTRE CHOSE est un point nouveau : « étanchéité toiture, angle nord-ouest » et « étanchéité toiture, relevé sud » ne sont pas le même point. Dans le doute, laisse null : reproposer un point déjà suivi se corrige d'un clic, alors qu'un point rattaché au mauvais sujet disparaît dans une discussion où personne ne le cherchera.",
+  "N'invente JAMAIS un identifiant. S'il ne figure pas mot pour mot dans la liste qu'on t'a donnée, écris null.",
+  "",
   "Ce qui n'est pas dans le document vaut null. N'invente jamais pour remplir un champ.",
   "N'invente surtout jamais un point : un point plausible que personne n'a écrit ferait ouvrir un sujet sur un chantier réel."
 ].join("\n");
+
+/**
+ * Ce que le projet suit déjà, mis en texte pour le modèle.
+ *
+ * **Maigre, et c'est voulu.** Un identifiant, un numéro, un titre, un état : de
+ * quoi reconnaître, pas de quoi raisonner sur autre chose. Verser la
+ * description de trente sujets ferait un contexte énorme, plus cher, et
+ * donnerait au modèle mille occasions de rapprocher deux points sur un détail
+ * qui n'a rien à voir.
+ *
+ * Rend "" quand la liste est vide ou absente. L'appelant n'ajoute alors rien à
+ * la consigne : le modèle ne doit pas croire que le projet ne suit rien —
+ * c'est une chose de ne rien avoir, c'en est une autre de ne pas savoir
+ * (règle 5).
+ */
+export function sujetsDuProjetEnTexte(sujets = []) {
+  const lignes = (Array.isArray(sujets) ? sujets : [])
+    .map((sujet) => ({
+      id: String(sujet?.id ?? "").trim(),
+      numero: String(sujet?.subject_number ?? sujet?.numero ?? "").trim(),
+      titre: String(sujet?.title ?? sujet?.titre ?? "").trim(),
+      etat: String(sujet?.status ?? sujet?.etat ?? "").trim()
+    }))
+    .filter((sujet) => sujet.id && sujet.titre)
+    .map((sujet) => {
+      const numero = sujet.numero ? ` #${sujet.numero}` : "";
+      const etat = sujet.etat ? ` [${sujet.etat}]` : "";
+      return `- ${sujet.id}${numero}${etat} : ${sujet.titre}`;
+    });
+
+  if (lignes.length === 0) return "";
+
+  return [
+    "",
+    "CE QUE LE PROJET SUIT DÉJÀ (identifiant, numéro, état, titre) :",
+    ...lignes
+  ].join("\n");
+}
+
+/**
+ * Les rapprochements rendus, confrontés à ce qu'on a envoyé.
+ *
+ * **Le même garde-fou que les citations, et pour une raison plus forte.** Une
+ * citation inventée fait perdre un point : on le voit, il manque. Un
+ * identifiant inventé fait pire — il range un point réel dans la discussion
+ * d'un sujet qui n'a rien à voir, où personne n'ira le chercher. Le point n'est
+ * pas perdu, il est **égaré**, ce qui ne se voit jamais.
+ *
+ * On ne corrige donc pas, on écarte : le point reste, son rapprochement tombe,
+ * et il repart comme un point neuf — l'erreur la moins coûteuse des deux.
+ *
+ * @returns {{sujets: object[], ecartes: number}}
+ */
+export function verifierLesRapprochements({ sujets = [], connus = [] } = {}) {
+  const permis = new Set(
+    (Array.isArray(connus) ? connus : [])
+      .map((sujet) => String(sujet?.id ?? "").trim())
+      .filter(Boolean)
+  );
+
+  let ecartes = 0;
+  const verifies = (Array.isArray(sujets) ? sujets : []).map((sujet) => {
+    const rapproche = String(sujet?.sujet_existant ?? "").trim();
+    if (!rapproche) return { ...sujet, sujet_existant: null, raison_du_rapprochement: null };
+
+    if (!permis.has(rapproche)) {
+      ecartes += 1;
+      return { ...sujet, sujet_existant: null, raison_du_rapprochement: null };
+    }
+
+    return { ...sujet, sujet_existant: rapproche };
+  });
+
+  return { sujets: verifies, ecartes };
+}
 
 /**
  * Ce que le modèle a rendu, confronté au document.
@@ -286,6 +391,10 @@ export function sujetsAuFormatDuMoteur(retenus = [], { sourceId = "" } = {}) {
       qui: String(ligne?.qui ?? "").trim() || null,
       echeance: String(ligne?.echeance ?? "").trim() || null,
       etat: String(ligne?.etat ?? "").trim() || null,
+      // Le sujet que ce point continue, **vérifié** : il figure dans la liste
+      // qu'on a envoyée, ou il vaut null.
+      sujet_existant: String(ligne?.sujet_existant ?? "").trim() || null,
+      raison_du_rapprochement: String(ligne?.raison_du_rapprochement ?? "").trim() || null,
       provenance: {
         source_id: sourceId,
         page: Number.isFinite(Number(ligne?.page)) ? Number(ligne.page) : null,
