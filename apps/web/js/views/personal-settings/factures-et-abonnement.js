@@ -121,14 +121,28 @@ function brancher(panneau) {
 }
 
 /**
- * Redessiner **le corps seul**, pas le panneau entier.
+ * Redessiner **le corps seul**, et dans le panneau qui est à l'écran.
  *
- * Réécrire le panneau remplacerait le nœud que l'appelant nous a passé, et le
- * second redessin écrirait dans un élément détaché du document — sans erreur, et
- * sans rien à l'écran.
+ * ## Le spinner qui ne s'arrêtait jamais
+ *
+ * Le panneau reçu au branchement peut être remplacé pendant la lecture : les
+ * réglages se redessinent, et le nœud qu'on tenait quitte le document. La
+ * lecture aboutissait, `redessiner` trouvait son panneau détaché, renonçait — et
+ * le rond tournait indéfiniment sur un écran dont les données étaient pourtant
+ * là. Partir et revenir les affichait, ce qui rendait le défaut incompréhensible
+ * : les mêmes données, deux comportements.
+ *
+ * On cherche donc le panneau **vivant** d'abord. Réécrire le corps seul reste la
+ * règle : remplacer le panneau entier détacherait à son tour le nœud que
+ * l'appelant tient.
  */
 function redessiner(panneau) {
-  const corps = panneau?.isConnected ? panneau.querySelector("[data-conso-corps]") : null;
+  const vivant = typeof document !== "undefined"
+    ? document.querySelector(`[data-side-nav-panel="${PANNEAU}"][data-conso-panneau]`)
+    : null;
+
+  const cible = vivant ?? (panneau?.isConnected ? panneau : null);
+  const corps = cible?.querySelector("[data-conso-corps]") ?? null;
   if (!corps) return;
 
   const mois = moisRegarde();

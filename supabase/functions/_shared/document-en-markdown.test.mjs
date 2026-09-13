@@ -304,3 +304,36 @@ test("le plafond d'entrée tient dans ce que le modèle peut rendre", async () =
   // Et ce qui n'est pas parti se dit, plutôt que de manquer en silence.
   assert.match(fonction, /hors_plafond/);
 });
+
+/* ── La couleur, là où elle est ──────────────────────────────────────────── */
+
+/**
+ * **L'erreur la plus grave que la transcription ait commise.**
+ *
+ * Les passages colorés étaient listés en légende de bas de page. Le modèle les
+ * a pris pour du contenu et les a recopiés là, à la fin : des encadrés entiers
+ * de fragments sans suite, hors de tout contexte, et le document doublé. La
+ * légende a disparu — la couleur se marque maintenant au bout de sa ligne — et
+ * la consigne l'interdit en toutes lettres.
+ */
+test("la consigne interdit de recopier les passages colorés à la fin", async () => {
+  const { CONSIGNES_DE_RECONSTITUTION } = await import("./document-en-markdown.js");
+
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /TU NE RECOPIES JAMAIS LES PASSAGES COLORÉS À LA FIN DE LA PAGE/);
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /La couleur se marque LÀ OÙ LE TEXTE EST/);
+  // Et elle explique la marque de fin de ligne, qui n'est pas du texte.
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /⟨rouge⟩/);
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /ne la recopie jamais telle quelle/);
+});
+
+/**
+ * Un tableau ne contient pas d'encadré : une cellule colorée reste une cellule.
+ * C'est ce qui sortait les dates de leur colonne.
+ */
+test("la consigne garde les cellules colorées dans leur tableau", async () => {
+  const { CONSIGNES_DE_RECONSTITUTION } = await import("./document-en-markdown.js");
+
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /un tableau ne contient pas d'encadré/);
+  // Et le bleu des adresses n'est pas une hiérarchisation : c'est un lien.
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /UNE COULEUR QUI N'EST QU'UN LIEN N'EST PAS UNE HIÉRARCHISATION/);
+});

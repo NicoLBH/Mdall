@@ -120,7 +120,11 @@ test("un PDF à deux colonnes se repose sans mélanger ses cellules", siLeMoteur
   const flechee = lignes.find((ligne) => ligne.includes("->"));
   assert.ok(flechee.startsWith(" "), "le cran de la flèche a disparu");
 
-  // Et les couleurs se disent, nommées.
-  assert.match(rendu, /ROUGE : « Presence obligatoire au prochain rendez-vous »/);
-  assert.match(rendu, /BLEU : « a faire »/);
+  // Et les couleurs se disent **au bout de leur propre ligne** : la légende de
+  // bas de page qu'il y avait ici est ce qui doublait le document.
+  const colorees = lignes.filter((ligne) => ligne.includes("⟨"));
+  assert.equal(colorees.length, 2, "les couleurs ne sont pas sur deux lignes");
+  assert.match(colorees[0], /^Presence obligatoire au prochain rendez-vous\s+⟨rouge⟩$/);
+  assert.match(colorees[1], /^a faire\s+⟨bleu⟩$/);
+  assert.doesNotMatch(rendu, /MISES EN ÉVIDENCE/);
 });

@@ -3495,3 +3495,28 @@ cours n'est ni un succès ni une panne : c'est un état intermédiaire, et c'est
 couleur que Mdall emploie déjà pour « pas encore tranché ». Ailleurs — le
 copilote — il garde la couleur du texte : là, l'attente est la seule chose qui
 se passe, et la souligner ne dirait rien de plus.
+
+## 42. Un utilitaire qui fabrique un compte rendu
+
+L'utilitaire de lecture sait défaire un compte rendu. Il manque celui qui en
+fabrique un : on filtre les sujets — par lot, par label, par échéance — on coche
+ce qu'on garde, et l'écran rend un `.md` et un PDF téléchargeable.
+
+Ce n'est pas une symétrie gratuite. Un maître d'œuvre passe sa semaine à
+recopier dans son compte rendu ce que le projet sait déjà ; et le compte rendu
+qui en sortirait serait, pour une fois, **exactement** ce que la mémoire porte —
+donc relisible par Mdall à la réunion suivante sans perte.
+
+Il viendra après l'étape 8 : tant que la proposition ne sait pas écrire ce
+qu'une lecture apporte, fabriquer le document inverse n'aurait rien à lire.
+
+### La rédaction de la proposition, qui manque encore
+
+Le bouton « Transformer » est en place sur l'écran de lecture, à côté des trois
+autres utilitaires. Ce qu'il ne fait pas encore, c'est écrire la proposition :
+les sujets à ouvrir, ceux qu'un point relance, les lots manquants, les labels à
+créer, les objectifs — **et le rangement du fichier `.md` dans Fichiers**, qui
+attend désormais la fusion.
+
+Il le dit en toutes lettres quand on clique, plutôt que de ne rien faire : un
+bouton qui reste muet laisse croire que la proposition est partie.

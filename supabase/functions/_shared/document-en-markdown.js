@@ -59,7 +59,7 @@ Le texte de chaque page t'est donné REPOSÉ SUR SA GRILLE : les fragments sont 
 
 Certaines pages peuvent arriver en texte simple, non reposé, quand la géométrie n'a pas pu être lue : elles se reconnaissent à l'absence d'alignement. Traite-les au mieux, sans inventer de colonnes.
 
-Une page peut être suivie d'un bloc "--- MISES EN ÉVIDENCE DE CETTE PAGE ---" qui donne les passages en gras, en italique et en couleur. Ils ne sont pas du texte en plus : ce sont les mêmes passages, avec ce que la grille ne peut pas montrer.
+Une ligne peut se terminer par une marque de couleur entre chevrons — ⟨rouge⟩, ⟨bleu⟩, ⟨bleu rouge⟩. Elle dit que cette ligne-là portait cette couleur dans le PDF. CE N'EST PAS DU TEXTE : ne la recopie jamais telle quelle, et ne la déplace pas. Elle appartient à sa ligne.
 
 Ta tâche : restituer ce document en Markdown, page par page, le plus fidèlement possible.
 
@@ -87,10 +87,14 @@ Règles impératives :
 - REGROUPE LES REMARQUES PAR LOT. Un compte rendu découpe le chantier en lots, et chaque lot porte sa liste de remarques. Le titre du lot tel qu'il est écrit devient un titre Markdown, et ses remarques se rangent dessous.
 - LES LISTES CRANTÉES SONT DES LISTES. Une liste de chantier est rarement numérotée : elle se tient par un décalage d'alignement. Chaque niveau d'indentation que tu vois dans la grille devient un niveau de liste Markdown. Perdre ce décalage, c'est perdre le regroupement : une reprise indentée sous une remarque appartient à cette remarque, et remise à plat elle devient une remarque indépendante qui n'existe pas.
 - LES FLÈCHES SONT DES LIENS, PAS DE LA PONCTUATION. "->", "→", "=>" marquent une dépendance ou un renvoi entre deux points. Recopie-les telles quelles, sur la même ligne que ce qu'elles relient. Ne les remplace pas par un tiret et ne les mets pas à la ligne.
-- REPRODUIS LES COULEURS. Un passage en couleur est hiérarchisé par son auteur : "à faire" en bleu, "présence obligatoire au prochain rendez-vous" en rouge. Quand le bloc "MISES EN ÉVIDENCE" donne une couleur, rends le passage dans un encadré nommé par cette couleur, sur le modèle GitHub :
+- REPRODUIS LES COULEURS, LÀ OÙ ELLES SONT. Un passage en couleur est hiérarchisé par son auteur : "à faire" en bleu, "présence obligatoire au prochain rendez-vous" en rouge.
+  TU NE RECOPIES JAMAIS LES PASSAGES COLORÉS À LA FIN DE LA PAGE. C'est l'erreur la plus grave que tu puisses commettre ici : elle double le document et sort les passages de leur contexte. La couleur se marque LÀ OÙ LE TEXTE EST, dans la cellule ou le paragraphe où il se trouve, et nulle part ailleurs.
+  Quand une ligne d'un TABLEAU porte une marque de couleur, garde son texte dans sa cellule : n'en fais pas un encadré, un tableau ne contient pas d'encadré. Tu peux mettre le passage en gras à l'intérieur de la cellule.
+  Quand un PARAGRAPHE entier, hors tableau, est coloré et que la couleur marque visiblement une consigne ou une alerte, tu peux le rendre en encadré nommé par sa couleur, sur le modèle GitHub :
 > [!ROUGE]
 > Présence obligatoire au prochain rendez-vous
-  Les noms admis sont ROUGE, BLEU, VERT, ORANGE, JAUNE, VIOLET, ROSE, GRIS. N'invente pas de couleur : n'en écris une que si le bloc des mises en évidence la donne. Ne traduis pas la couleur en gravité — écris la couleur, pas "important" ni "urgent" : ce serait une interprétation, et elle serait irréversible. Un passage seulement en gras ou en italique se rend en gras ou en italique Markdown, pas en encadré.
+  Les noms admis sont ROUGE, BLEU, VERT, ORANGE, JAUNE, VIOLET, ROSE, GRIS. N'invente pas de couleur : n'en écris une que si la marque de fin de ligne la donne. Ne traduis pas la couleur en gravité — écris la couleur, pas "important" ni "urgent" : ce serait une interprétation, et elle serait irréversible.
+  UNE COULEUR QUI N'EST QU'UN LIEN N'EST PAS UNE HIÉRARCHISATION. Les adresses électroniques et les adresses web sont bleues dans presque tous les documents : elles se rendent en texte ordinaire, ou en lien Markdown, jamais en encadré.
 - SERS-TOI DE TOUTE LA MISE EN PAGE DU MARKDOWN : titres de niveaux 1 à 6, gras, italique, paragraphes, listes à puces, listes numérotées, listes imbriquées, tableaux, citations, encadrés. Un document de chantier est dense et hiérarchisé ; une transcription en paragraphes plats est illisible et perd la hiérarchie que le document portait.
 - Les en-têtes et pieds de page répétés à chaque page se restituent une seule fois, sur la page où ils apparaissent.
 - Si un passage est illisible ou incohérent dans le texte extrait, écris-le tel quel. N'invente pas ce qui manque, et ne signale rien : le document refait ne contient que le document.

@@ -119,6 +119,21 @@ restitution d'un compte rendu en croyant lire celle d'un autre, sans rien pour s
 apercevoir (règle 5) ; confondu avec le premier, on écraserait silencieusement du travail
 rangé.
 
+#### Le rangement attend la fusion *(corrigé)*
+
+La restitution se rangeait au moment où le modèle la rendait — avant que
+quiconque ait rien décidé, et sur un document qu'on venait peut-être de déposer
+pour voir. **Déposer un fichier dans le projet est une écriture**, et une
+écriture passe par une proposition (règle 1).
+
+Elle attend donc la fusion, avec le reste : les sujets, les lots, les labels, les
+objectifs. Ce qu'il faut pour la ranger — le projet, l'empreinte, le document, le
+Markdown paginé — voyage avec la lecture, et la proposition le dira en toutes
+lettres.
+
+Ce qui ne change pas : une restitution **déjà rangée se relit**, et ne se repaie
+pas. Relire est une lecture, pas une écriture.
+
 #### La pagination survit au rangement
 
 Le fichier porte un `<!-- page 3 -->` entre deux pages. Sans lui, le document relu n'aurait
@@ -230,6 +245,87 @@ longue qu'une page à plat, puisqu'elle porte les espaces qui font ses colonnes.
 > **Le tarif de `gpt-5` est à confirmer.** Il a été relevé de mémoire, pas sur la page de tarifs
 > OpenAI. Un prix affiché faux est pire qu'un prix absent : si le doute subsiste, retirer la
 > ligne de `TARIFS` fait dire « tarif inconnu », ce qui est vrai.
+
+### Étape 2 ter — La structure d'abord, la transcription ensuite *(faite)*
+
+Un compte rendu réel de douze pages a montré deux défauts que la grille seule ne
+corrigeait pas. Ils étaient tous les deux de notre fait.
+
+#### Défaut 1 — la légende de couleurs doublait le document
+
+Les passages colorés étaient listés en bas de page, sous un titre « MISES EN
+ÉVIDENCE ». Le modèle les a pris pour du contenu et les a **recopiés là, à la
+fin** : des encadrés entiers de fragments sans suite, hors de tout contexte, et
+le document doublé. C'était le pire défaut de la restitution, et il venait de
+cette légende.
+
+Sur un compte rendu réel, elle contenait aussi quarante fragments en gras par
+page — des numéros, des tirets, des en-têtes — dont pas un ne disait rien de plus
+que ce que la grille montrait déjà.
+
+La couleur se marque désormais **au bout de sa propre ligne** :
+
+```
+29/01/2026   Raccord de chape à faire au droit des nourrices    Dès que   ⟨bleu⟩
+```
+
+Elle ne peut plus être déplacée sans que cela se voie, et la colonne n'a pas
+bougé — la marque est posée après tout ce que la ligne portait. Le gras n'est
+plus relevé du tout : les mentions qui comptent (« URGENT », « RETARD ») sont en
+capitales et se lisent telles quelles.
+
+La consigne ajoute deux règles que le document réel a rendues nécessaires : une
+cellule colorée **reste une cellule** — un tableau ne contient pas d'encadré —,
+et **une couleur qui n'est qu'un lien n'est pas une hiérarchisation** : les
+adresses électroniques sont bleues dans presque tous les documents.
+
+#### Défaut 2 — chaque page décidait pour elle-même
+
+Le tableau des présences est rendu avec « Présent / Excusé / Absent /
+Représenté » page 1, puis « R / E / Présent / Absent » page 2. **Deux tableaux là
+où le document n'en a qu'un.** Non parce que le modèle lit mal, mais parce qu'on
+lui faisait trancher douze fois une question qui n'a qu'une réponse.
+
+D'où une lecture en deux temps, et un troisième appel :
+
+```
+PDF reposé → [1. STRUCTURE]  le squelette, sur un échantillon de pages
+           → [2. TRANSCRIPTION]  les douze pages, sur ce squelette
+           → [3. SECRÉTARIAT]  les sujets, sur le .md
+```
+
+`supabase/functions/structure-du-document` **regarde et ne transcrit rien**. Elle
+rend la nature du document, son découpage, l'en-tête et le pied qui se répètent,
+les tableaux qui reviennent **avec leurs colonnes** — et deux à cinq consignes
+qu'elle écrit elle-même pour la transcription : les pièges qu'elle a vus dans ce
+document-là.
+
+Ce squelette entre dans la consigne de transcription, avec une instruction sans
+ambiguïté : *emploie exactement ces colonnes, dans cet ordre, sur toutes les
+pages où le tableau se poursuit — y compris quand la page ne redéclare pas ses
+en-têtes*.
+
+| | |
+| --- | --- |
+| **Ce qu'elle voit** | six pages au plus, prises **réparties** — la première, la dernière, et du milieu. Un document dont on ne verrait que le début rendrait la forme de son préambule. |
+| **Ce qu'elle coûte** | l'appel le moins cher des trois : quelques centaines de jetons en sortie, là où la transcription en rend des dizaines de milliers |
+| **Ce qu'elle décide** | le plus : les douze pages obéissent à sa réponse |
+
+C'est pour cela qu'elle **s'affiche**. Un squelette faux rend les douze pages
+fausses *de la même façon*, ce qui se voit bien moins qu'une page fausse sur
+douze (fondamental 13). L'écran nomme aussi les pages qu'elle a regardées : un
+tableau qui n'apparaît qu'à la page 7 d'un document de vingt a pu lui échapper.
+
+Et elle ne bloque rien : une reconnaissance qui échoue laisse la transcription se
+faire comme avant, page par page — l'écran disant alors que les tableaux peuvent
+diverger d'une page à l'autre.
+
+#### Pourquoi elle ne parle pas de chantier
+
+Un rapport de bureau de contrôle, un CCTP, une notice de sécurité ont tous le
+même défaut : ce sont des tableaux déguisés, répétés sur des dizaines de pages,
+dont la forme ne se devine qu'en voyant plusieurs pages à la fois. Rien dans
+cette lecture ne parle de compte rendu : elle rend ce qu'elle voit.
 
 ### Étape 3 — Le secrétariat, sur le `.md` seul
 
