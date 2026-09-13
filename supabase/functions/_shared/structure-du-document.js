@@ -218,7 +218,12 @@ export function structureEnTexte(structure = null) {
       + " TABLEAU S'INTERROMPT : tu le fermes, tu écris le titre, puis tu rouvres un tableau avec"
       + " EXACTEMENT les mêmes colonnes. Un titre laissé en ligne de tableau fait un tableau de"
       + " deux cents lignes où plus rien ne se trouve — et le découpage qui portait toute"
-      + " l'information disparaît dans la forme :"
+      + " l'information disparaît dans la forme."
+      + " FAIS PRÉCÉDER CHAQUE TITRE DE NIVEAU 1, 2 OU 3 D'UNE LIGNE DE SÉPARATION `---`, avec une"
+      + " ligne vide avant et après. Un document de douze pages sans respiration se lit comme un"
+      + " seul bloc : le trait est ce qui permet de voir où un lot finit et où le suivant"
+      + " commence. Pas de trait devant les titres plus profonds, qui se rangent SOUS le lot et"
+      + " n'ont pas à le découper :"
       + chapitres.map((chapitre) => (
         `\n- ${"#".repeat(chapitre.niveau)} ${chapitre.motif}`
         + (chapitre.exemple ? `  — par exemple : « ${chapitre.exemple} »` : "")
@@ -234,6 +239,23 @@ export function structureEnTexte(structure = null) {
         `\n- ${tableau.nom} : | ${tableau.colonnes.join(" | ")} |`
         + (tableau.reconnaissance ? `\n  On le reconnaît à : ${tableau.reconnaissance}` : "")
       )).join("")
+    );
+
+    // Le défaut vu sur un vrai document : l'adresse postale d'une entreprise
+    // atterrit dans la colonne « Tél. / Mail », parce qu'elle est écrite sous le
+    // nom et que la ligne du tableau est haute. Une case mise dans la mauvaise
+    // colonne ne se voit pas à la relecture — elle se lit comme une donnée.
+    morceaux.push(
+      "METS CHAQUE VALEUR DANS SA COLONNE, ET DANS ELLE SEULE. Une colonne de coordonnées"
+      + " (« Tél. », « Mail », « Téléphone / Courriel ») ne porte QUE des numéros de téléphone et"
+      + " des adresses électroniques. Une adresse postale — numéro de voie, rue, code postal,"
+      + " commune — appartient à la colonne qui porte le nom de l'entreprise, sous ce nom, et"
+      + " jamais à la colonne des coordonnées. Une valeur rangée dans la mauvaise colonne ne se"
+      + " voit pas à la relecture : elle se lit comme une donnée."
+      + " Quand une case porte plusieurs valeurs — un téléphone et une adresse électronique, un"
+      + " nom et une adresse —, sépare-les par `\\n` À L'INTÉRIEUR de la case. N'ouvre JAMAIS une"
+      + " ligne de tableau supplémentaire pour ça : la ligne se désalignerait de toutes les"
+      + " autres."
     );
   }
 

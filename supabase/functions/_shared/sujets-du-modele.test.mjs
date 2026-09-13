@@ -402,3 +402,51 @@ test("le plafond de sortie tient compte de ce qu'un point porte maintenant", asy
   assert.match(source, /incomplete/);
   assert.match(source, /reponse_coupee/);
 });
+
+/**
+ * **Le vocabulaire des liens est fermé par la base**, pas par la consigne :
+ * `subject_links` contraint `link_type`, et la hiérarchie vit dans
+ * `subjects.parent_subject_id`. Un type que la consigne proposerait sans que la
+ * base l'accepte produirait un lien qui disparaît à la fusion, sans trace ; un
+ * type accepté que la consigne ne nomme pas ne serait jamais rendu.
+ *
+ * Comme pour les labels, la liste est écrite des deux côtés de la cloison — une
+ * fonction Edge ne peut pas importer hors de `supabase/functions/`. Ce test est
+ * ce qui empêche les deux écritures de diverger (règle 10), et il est de ce
+ * côté-ci : aucun fichier servi au navigateur ne remonte vers le serveur.
+ */
+test("les types de lien du serveur et ceux du navigateur sont les mêmes", async () => {
+  const { CONSIGNES } = await import("./sujets-du-modele.js");
+  const { LIEN, QUOI_DU_LIEN } = await import("../../../apps/web/js/services/liens-du-cr.js");
+
+  for (const type of Object.values(LIEN)) {
+    assert.match(CONSIGNES, new RegExp(`\`${type}\``), `« ${type} » n'est pas expliqué au modèle`);
+    assert.ok(QUOI_DU_LIEN[type], `« ${type} » ne dit pas ce qu'il faut avoir lu`);
+  }
+
+  // Et la consigne n'en propose aucun de plus : chaque `x` en liste à puces
+  // sous les dépendances doit être un type que la base accepte.
+  const bloc = CONSIGNES.slice(CONSIGNES.indexOf("LES DÉPENDANCES ENTRE POINTS"));
+  const proposes = [...bloc.slice(0, bloc.indexOf("Chaque lien porte UNE cible")).matchAll(/^- `([a-z_]+)`/gm)]
+    .map(([, type]) => type);
+
+  assert.deepEqual(proposes.sort(), Object.values(LIEN).sort());
+});
+
+/**
+ * **Un lien inventé sera cru.** C'est le genre d'affirmation que personne ne
+ * vérifie : deux lignes reliées à l'écran ont l'air d'un fait. La consigne doit
+ * donc dire que la liste vide est le cas normal — sinon le modèle, cherchant à
+ * bien faire, remplit.
+ */
+test("la consigne interdit d'inventer une dépendance, et normalise la liste vide", async () => {
+  const { CONSIGNES } = await import("./sujets-du-modele.js");
+
+  assert.match(CONSIGNES, /N'invente AUCUNE dépendance/);
+  assert.match(CONSIGNES, /le cas le plus fréquent/);
+  assert.match(CONSIGNES, /Un point ne se lie jamais à lui-même/);
+  // Une cible, et une seule : les deux se résolvent différemment à la fusion.
+  assert.match(CONSIGNES, /Remplis l'un OU l'autre, jamais les deux/);
+  // Et la raison est recopiée du document, pas rédigée par le modèle.
+  assert.match(CONSIGNES, /la phrase du document qui établit la dépendance, recopiée/);
+});

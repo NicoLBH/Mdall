@@ -591,7 +591,67 @@ Un compte rendu en porte trente. Le rendu Markdown en fait maintenant des liens
 à l'entreprise qui doit reprendre l'étanchéité. Une adresse déjà écrite en lien
 n'en reçoit pas un second, et une adresse citée dans du code reste du code.
 
-### Étape 4 — Fermer un sujet, et la question de fond
+#### Un trait avant chaque lot
+
+Un titre seul ne suffit pas à montrer le découpage : dans un Markdown rendu, un
+`###` au milieu d'un flot de tableaux se remarque à peine, et douze pages sans
+respiration se lisent comme un seul bloc. La consigne fait donc **précéder
+chaque titre de niveau 1, 2 ou 3 d'une ligne `---`**. Pas de trait devant les
+titres plus profonds : ce qui se range *sous* un lot ne le découpe pas, et un
+trait partout redécouperait tout en confettis.
+
+#### Les coordonnées : pas d'appel de plus, une consigne de colonne
+
+Sur un vrai document, l'adresse postale de chaque entreprise atterrissait dans
+la colonne « Tél. / Mail », parce qu'elle est écrite sous le nom et que la ligne
+du tableau est haute. La tentation est d'ajouter un appel dédié à la
+reconnaissance des coordonnées.
+
+**Ce n'en est pas un bon usage.** Un numéro de téléphone, un code postal et un
+numéro de voie se reconnaissent par leur forme, et un appel qui les relit paie
+le document entier pour n'apprendre à personne ce qu'une expression régulière
+sait déjà. Surtout, ce n'était pas un problème de *reconnaissance* : le modèle
+avait parfaitement lu l'adresse, il l'avait mise dans la mauvaise colonne.
+
+La consigne de structure dit donc, dès qu'un tableau est reconnu, **ce que
+chaque colonne porte** : une colonne de coordonnées ne porte que des téléphones
+et des adresses électroniques ; une adresse postale appartient à la colonne du
+nom, sous ce nom. Et quand une case porte plusieurs valeurs, elle les sépare par
+un `\n` *dans* la case, sans jamais ouvrir une ligne de tableau de plus — c'est
+ce que le rendu Markdown sait maintenant lire.
+
+Le jour où il faudra vraiment *extraire* les coordonnées — pour créer un
+intervenant, pas pour l'afficher —, ce sera un service pur et testable, pas un
+appel.
+
+#### Les tableaux font tous la même largeur
+
+Chaque page décidait de la sienne, et la restitution donnait douze tableaux
+désalignés. Les cellules cassent maintenant les mots trop longs
+(`overflow-wrap: anywhere`) plutôt que de pousser la colonne : aucun tableau ne
+dépasse son conteneur, et ils atterrissent tous à la même largeur.
+
+#### Deux lignes dans une case
+
+Une cellule de tableau ne peut pas contenir de vraie ligne — le pipe refermerait
+la ligne. Un compte rendu, lui, met couramment deux choses dans la même case :
+une adresse et un téléphone, un nom et une société. Le modèle écrit alors `\n`
+littéral, faute de mieux ; **dans une cellule, et nulle part ailleurs**, ce `\n`
+devient un retour à la ligne. Ailleurs c'est un antislash suivi d'un n — dans un
+chemin Windows, dans une consigne — et le transformer partout abîmerait du texte
+que personne n'a demandé de couper.
+
+#### L'attente dit où elle en est
+
+Une phrase à la fois ne disait ni ce qui était acquis, ni combien d'étapes
+restaient, ni pourquoi c'était long — et l'on redéposait, ce qui relançait tout
+et repayait tout. L'écran affiche maintenant les cinq étapes en liste, cochées à
+mesure : ouverture du document, reconnaissance de la structure, restitution en
+Markdown, relevé des points, confrontation à ce que le projet suit déjà. Quand
+ça casse, la panne se pose **sur l'étape où elle est arrivée** — ce qu'il fallait
+deviner.
+
+### Étape 4 — Fermer un sujet, et la question de fond *(faite)*
 
 **C'est le point le plus délicat de tout le plan**, et il mérite d'être traité à part.
 
@@ -599,21 +659,36 @@ Comment sait-on qu'un point est réglé ? Trois signes, et ils ne se valent pas 
 
 | Signe | Ce qu'il vaut |
 | --- | --- |
-| Le point porte « fait », « soldé », « levé » | **une réponse** — le document le dit |
-| Le point est barré | **une réponse**, si la mise en forme a survécu à la transcription |
-| Le point a disparu du compte rendu | **une question, pas une réponse** |
+| Le point porte « fait », « soldé », « levé » | **fermeture dite** — le document l'écrit |
+| Le point est barré | rien : la rature ne parvient pas jusqu'ici |
+| Le point a disparu du compte rendu | **fermeture déduite** — et réversible |
 
-La disparition est traître. Un point peut sortir d'un compte rendu parce qu'il est réglé,
-parce que le rédacteur l'a oublié, parce que le lot n'était pas convoqué cette semaine, ou
-parce que le document a changé de trame. **Fermer sur ce seul signe perdrait des points
-qu'on suit depuis des mois.**
+#### Ce que la disparition vaut, et ce qui la rend acceptable
 
-La règle est donc : une disparition ne ferme rien, elle **pose une question**. Elle
-s'affiche comme telle dans la proposition — « ce sujet n'apparaît plus, est-il réglé ? » — et
-c'est quelqu'un qui répond. Les deux autres signes proposent une fermeture, avec la phrase qui
-la justifie.
+Un point sort d'un compte rendu parce qu'il est réglé, parce que le rédacteur l'a oublié,
+parce que le lot n'était pas convoqué cette semaine, ou parce que le document a changé de
+trame. La première lecture de ce plan en concluait qu'on ne pouvait rien fermer là-dessus, et
+posait une question à la place.
 
-#### Ce qui a été fait *(fait)*
+**C'est la réversibilité qui a tranché.** Un compte rendu de chantier dit « fait », puis le
+rappelle quelques semaines, puis l'enlève : la disparition *est* le signal normal de
+fermeture sur ce genre de document. Et si l'on se trompe, le prochain compte rendu qui en
+reparle rouvre le sujet — le même, avec toute son histoire, puisque la confrontation
+reconnaît un sujet fermé au lieu d'en ouvrir un second au même titre (voir plus bas).
+
+La règle est donc : **une disparition ferme, en le disant.** La proposition écrit « sur cette
+déduction, et non sur une phrase du document », et annonce la réouverture dans la même
+phrase. Les deux vont ensemble : la déduction n'est acceptable *que* parce qu'elle se défait
+toute seule.
+
+#### Un « nouveau » sujet peut être un ancien qui se rouvre
+
+Le corollaire, et il n'est pas facultatif : sans lui, fermer condamnerait à dupliquer. Un
+point qui retrouve un sujet **fermé** ne porte pas le sort « nouveau », mais `reouvre` — le
+quatrième sort de `lecture-du-cr.js`, à côté de `nouveau`, `relance` et `change`. Le
+rapprochement par le titre et le rapprochement par le modèle y mènent l'un comme l'autre.
+
+#### Ce que le document écrit *(fait)*
 
 ##### Ce qui décide, c'est nous — pas le modèle
 
@@ -631,12 +706,14 @@ de fermeture hors de portée de tout test.
 **Ce qui retient l'emporte sur ce qui ferme** : « Fait à 50% » n'est pas fait, et
 « réalisé, non achevé » non plus. Le doute ne ferme pas.
 
-##### La disparition, et ce qu'on refuse d'en conclure
+##### La disparition, et ce qu'on en conclut
 
 Un sujet ouvert, portant le label « CR chantier », qu'aucun point de ce compte rendu ne
 rapproche : il a disparu. L'écran le relève dans un bloc **visuellement distinct** — trait
-pointillé, couleur d'attente, et la mention « est-il réglé ? » à la place d'une date. Aucun
-verbe de fermeture n'y figure.
+pointillé, couleur d'attente — parce qu'une fermeture déduite ne se lit pas comme une
+fermeture écrite. Confondre les deux ferait passer une supposition pour une lecture, et l'on
+ne saurait plus, en relisant la proposition, laquelle des deux on a acceptée. D'où quatre
+états dans le code, et non trois : `dite`, `retenue`, `ouverte`, `deduite`.
 
 On ne compare que ce qui est comparable : un sujet ouvert à la main, ou venu d'un rapport de
 bureau de contrôle, n'a aucune raison de figurer dans un compte rendu de chantier. **Sans le
@@ -653,17 +730,80 @@ le détecter. L'écran le dit en toutes lettres, sous les fermetures. Le jour o�
 saura relever les traits qui traversent une ligne — c'est possible, la liste d'opérations les
 porte comme elle portait les couleurs — il en viendra un.
 
-### Étape 5 — Les liens entre sujets
+### Étape 5 — Les liens entre sujets *(faite)*
 
-Troisième appel, sur un modèle plus capable, et **seulement s'il y a de quoi raisonner**.
+#### Ce qu'on perdait sans eux
 
-- **La hiérarchie** : un compte rendu groupe ses points par lot et par entreprise. « Lot 10 —
-  Charpente — LP CHARPENTE » est un sujet père, les points de ce lot sont ses fils.
-- **Les liens fonctionnels** : « bloqué par », quand le document l'énonce — « en attente de
-  la dépose de la dalle » .
+Un compte rendu de chantier est plein de dépendances, et elles sont **explicites** — c'est
+même ce qu'une réunion de chantier sert à établir :
 
-Un appel à part, parce que raisonner sur des relations demande davantage que du secrétariat,
-et qu'on ne veut pas payer ce prix-là sur tout le document.
+- « cloison CF1H à réaliser dans niches dans bureau, **après implantation des nourrices par
+  l'entreprise de plomberie** » : le lot 03 attend le lot 13 ;
+- « cause retard du plombier : démarrage pose des carrelages reporté » : le lot 10 attend le
+  lot 13 ;
+- « raccord de chape au droit des nourrices — **synthèse prévue avec** » et, vingt pages plus
+  loin, « bien prévoir une synthèse au droit des nourrices » : la même affaire, vue des deux
+  côtés.
+
+Versés sans leurs liens, ces points deviennent quarante sujets indépendants. On ne voit plus
+qu'en débloquant le lot 13 on débloque trois lots, ni que deux entreprises parlent de la même
+chose sans le savoir. **C'est exactement l'information qu'une réunion produit, et la seule
+qu'un tableau perd.**
+
+#### Pas de quatrième appel
+
+Le plan prévoyait un appel séparé, sur un modèle plus capable. Il n'y en a pas eu : les liens
+sont demandés **dans l'appel de secrétariat**, comme un champ de plus du point. La raison est
+que le modèle a déjà le document sous les yeux à ce moment-là, et que ce sont ses propres
+titres de points qu'un lien doit désigner — un appel séparé aurait dû les lui redonner, et
+payer une seconde fois le même document.
+
+#### La liste des types est fermée, et c'est la base qui la ferme
+
+`subject_links` contraint `link_type`, et `subjects` porte la hiérarchie dans
+`parent_subject_id`. On ne réinvente ni l'une ni l'autre : un type hors de cette liste ne
+serait pas écrit par la base, et le lien disparaîtrait à la fusion sans que rien ne
+l'explique.
+
+| Type | Ce qu'il faut avoir lu |
+| --- | --- |
+| `blocked_by` | « après », « suite à », « sous réserve que », « cause retard de » |
+| `related_to` | une flèche « -> », « CF CR 31 », « idem », « synthèse prévue avec » |
+| `parent` | le document range ce point sous un autre, plus général |
+| `duplicate_of` | deux points disent la même chose, à deux endroits du document |
+| `contradicts` | le document dit ici l'inverse de ce qu'il dit là |
+| `replaces` | « annule et remplace », « la solution retenue au CR 31 est abandonnée » |
+
+La liste est écrite des deux côtés de la cloison — une fonction Edge ne peut pas importer
+hors de `supabase/functions/`. Un test **côté serveur** compare les deux écritures dans les
+deux sens : un type proposé au modèle que la base refuserait, comme un type accepté que la
+consigne ne nomme pas, fait tomber la suite (règle 10).
+
+#### Deux directions de cible, et elles ne se confondent pas
+
+Un lien vise soit **un autre point de ce compte rendu** — qui n'existe pas encore comme
+sujet —, soit **un sujet déjà ouvert dans le projet**. Les deux se résolvent différemment à
+la fusion : le premier attend que les deux sujets soient créés, le second peut être écrit
+tout de suite. Le modèle remplit l'un *ou* l'autre, jamais les deux, et l'écran les
+distingue.
+
+#### Ce qui empêche un lien de mentir
+
+**Un lien est exactement le genre d'affirmation que personne ne vérifie** : deux lignes
+reliées à l'écran ont l'air d'un fait. `verifierLesLiens` écarte donc, et compte :
+
+- un lien vers un sujet qu'on n'a pas envoyé au modèle ;
+- un lien vers un point qui n'est pas dans ce compte rendu ;
+- un point qui se lie à lui-même — la base le refuse aussi
+  (`subject_links_no_self_link_check`) ;
+- un type hors de la liste.
+
+Le point survit toujours à son lien : on n'écarte que la dépendance. Et l'écran affiche, à
+côté de chaque lien, **la phrase du document qui l'établit** — sans elle, on ne peut pas
+répondre « non, ça n'a rien à voir », on peut seulement croire.
+
+Zéro lien est une réponse, et c'est le cas le plus fréquent : le bloc ne s'affiche pas du
+tout plutôt que de se plaindre.
 
 ### Étape 6 — La situation qui se crée toute seule
 
@@ -704,7 +844,9 @@ d'un coup coûterait le prix du plus cher des trois sur la totalité du document
 résultat serait invérifiable : on ne saurait plus si une erreur vient de la lecture ou du
 jugement.
 
-**De fermer un sujet automatiquement.** Voir l'étape 4.
+**De fermer un sujet sans le dire.** L'étape 4 ferme sur une disparition, mais la proposition
+écrit que c'est une déduction, et que le prochain compte rendu la défera. Fermer en silence
+serait l'inverse.
 
 ---
 

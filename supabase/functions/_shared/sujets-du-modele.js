@@ -176,13 +176,36 @@ export const SCHEMA_DES_SUJETS = {
              * d'un compte rendu, sans que le modèle ait à le dire.
              */
             labels: { type: "array", items: { type: "string" } },
+            /**
+             * Les dépendances que le document écrit depuis ce point.
+             *
+             * **C'est ce qu'une réunion produit, et ce qu'un tableau perd.**
+             * « Cloison à réaliser après implantation des nourrices par BENOIT
+             * GUYOT » dit que le lot 03 attend le lot 13. Versé sans son lien,
+             * ce point devient un sujet indépendant, et l'on ne voit plus qu'en
+             * débloquant un lot on en débloque trois.
+             */
+            liens: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  type: { type: "string" },
+                  vers_point: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  vers_sujet: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  raison: { anyOf: [{ type: "string" }, { type: "null" }] }
+                },
+                required: ["type", "vers_point", "vers_sujet", "raison"]
+              }
+            },
             sujet_existant: { anyOf: [{ type: "string" }, { type: "null" }] },
             /** Pourquoi ce point continue ce sujet-là. Une phrase, sinon null. */
             raison_du_rapprochement: { anyOf: [{ type: "string" }, { type: "null" }] }
           },
           required: [
             "lot", "reference", "titre", "description", "qui", "echeance", "etat", "fait_le",
-            "page", "citation", "labels", "sujet_existant", "raison_du_rapprochement"
+            "page", "citation", "labels", "liens", "sujet_existant", "raison_du_rapprochement"
           ]
         }
       },
@@ -279,6 +302,23 @@ export const CONSIGNES = [
   "N'invente AUCUN autre label. Pas de « Prioritaire », pas de « À traiter », pas de « Important » : ce qui n'est pas dans la liste ci-dessus est écarté. Un projet qui accumule quinze étiquettes disant la même chose n'a plus de filtre qui fonctionne, et personne ne le nettoiera.",
   "Un point peut n'en porter aucun : `labels` vaut alors la liste vide. C'est le cas le plus fréquent, et c'est très bien — n'en pose un que si le document le dit.",
   "Ne pose jamais `Urgent` parce que le sujet te semble grave : tu relèves ce qui est écrit, tu ne juges pas le chantier.",
+  "",
+  "LES DÉPENDANCES ENTRE POINTS :",
+  "Un compte rendu de chantier est plein de dépendances, et elles sont écrites — c'est ce qu'une réunion sert à établir. « Cloison CF1H à réaliser dans niches dans bureau, APRÈS implantation des nourrices par BENOIT GUYOT » dit que le lot 03 attend le lot 13. « Cause retard du plombier : démarrage pose des carrelages reporté » dit la même chose du lot 10.",
+  "Pour chaque point, `liens` porte ce que LE DOCUMENT ÉCRIT. Six types, et pas un de plus :",
+  "- `blocked_by` : ce point attend un autre — « après », « suite à », « sous réserve que », « cause retard de ».",
+  "- `related_to` : le document renvoie d'un point à l'autre — une flèche « -> », « CF CR 31 », « idem », « synthèse prévue avec ».",
+  "- `parent` : le document range ce point sous un autre, plus général.",
+  "- `duplicate_of` : deux points disent la même chose, à deux endroits du document.",
+  "- `contradicts` : le document dit ici l'inverse de ce qu'il dit là.",
+  "- `replaces` : ce point annule et remplace un point antérieur — « annule et remplace », « la solution retenue au CR 31 est abandonnée ».",
+  "Chaque lien porte UNE cible, et une seule :",
+  "- `vers_point` : le titre EXACT d'un autre point DE CE MÊME COMPTE RENDU, recopié caractère pour caractère depuis le `titre` que tu lui as donné. Ou sa `reference` si tu lui en as donné une.",
+  "- `vers_sujet` : l'identifiant d'un sujet de la liste « CE QUE LE PROJET SUIT DÉJÀ », recopié caractère pour caractère.",
+  "Remplis l'un OU l'autre, jamais les deux, et mets null dans celui que tu n'emploies pas.",
+  "- `raison` : la phrase du document qui établit la dépendance, recopiée. Sinon null.",
+  "N'invente AUCUNE dépendance. Un lien affiché entre deux choses qui n'ont rien à voir sera cru : c'est exactement le genre d'affirmation que personne ne vérifie. Si le document ne l'écrit pas, il n'y a pas de lien — et `liens` vaut la liste vide, ce qui est le cas le plus fréquent.",
+  "Un point ne se lie jamais à lui-même.",
   "",
   "LE RAPPROCHEMENT AVEC CE QUE LE PROJET SUIT DÉJÀ :",
   "Un compte rendu de chantier REPORTE. La douzième réunion reprend les points de la onzième, qui reprenait ceux de la dixième : un point reste écrit tant qu'il n'est pas soldé. Si on ne reconnaît pas qu'un point continue un sujet déjà ouvert, la douzième réunion ouvre douze fois la même chose.",
@@ -528,6 +568,9 @@ export function sujetsAuFormatDuMoteur(retenus = [], { sourceId = "" } = {}) {
       // Les labels que le document pose sur ce point, **vérifiés** : ramenés à
       // la liste fermée, dans leur écriture officielle.
       labels: Array.isArray(ligne?.labels) ? ligne.labels : [],
+      // Les dépendances telles que le modèle les a rendues. Leur vérification
+      // se fait au navigateur, où l'on sait quels points existent (règle 4).
+      liens: Array.isArray(ligne?.liens) ? ligne.liens : [],
       // Le sujet que ce point continue, **vérifié** : il figure dans la liste
       // qu'on a envoyée, ou il vaut null.
       sujet_existant: String(ligne?.sujet_existant ?? "").trim() || null,

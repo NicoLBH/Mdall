@@ -79,12 +79,7 @@ const SUJETS = [
   { id: "s-3", title: "Ouvert à la main" }
 ];
 
-/**
- * **La règle qui ne se négocie pas.** Fermer sur une disparition ferait
- * disparaître, sans trace, des points qu'on suit depuis des mois — et personne
- * ne s'en apercevrait, puisque ce qui disparaît ne laisse rien à voir.
- */
-test("un sujet qui n'apparaît plus se relève, et ne se ferme pas", () => {
+test("un sujet qui n'apparaît plus se relève", () => {
   const disparition = sujetsDisparus({
     confrontes: [{ titre: "Étanchéité", sujet: { id: "s-1" } }],
     sujetsDuProjet: SUJETS,
@@ -94,13 +89,63 @@ test("un sujet qui n'apparaît plus se relève, et ne se ferme pas", () => {
   assert.equal(disparition.connu, true);
   assert.equal(disparition.suivis, 2);
   assert.deepEqual(disparition.disparus.map((sujet) => sujet.id), ["s-2"]);
+});
 
-  // La phrase pose la question et nomme les quatre raisons. Jamais un verbe de
-  // fermeture : ce n'est pas une réponse.
-  const dite = phraseDesDisparus(disparition);
-  assert.match(dite, /Ce n'est pas une réponse/);
-  assert.match(dite, /oublié/);
-  assert.doesNotMatch(dite, /ferme|réglés|soldé/i);
+/**
+ * **Ce que la phrase doit avouer.** Fermer sur une disparition est une
+ * déduction : le document n'a rien dit. La phrase le dit, et dit aussi
+ * l'échappatoire — un retour rouvre le sujet. Les deux vont ensemble : la
+ * déduction n'est acceptable que parce qu'elle se défait toute seule.
+ */
+test("la fermeture déduite s'annonce comme déduite, et réversible", () => {
+  const dite = phraseDesDisparus(sujetsDisparus({
+    confrontes: [{ sujet: { id: "s-1" } }],
+    sujetsDuProjet: SUJETS,
+    sujetsDuLabel: ["s-1", "s-2"]
+  }));
+
+  assert.match(dite, /fermerait/);
+  assert.match(dite, /sur cette déduction, et non sur une phrase du document/);
+  assert.match(dite, /rouvrira/);
+  assert.match(dite, /avec son histoire/);
+
+  // Jamais « le document les a réglés » : le document n'a rien dit du tout.
+  assert.doesNotMatch(dite, /le document (les|le) (a )?(réglé|soldé)/i);
+});
+
+/** La phrase s'accorde : un sujet disparu ne se dit pas comme trois. */
+test("la phrase des disparus s'accorde au nombre", () => {
+  const une = phraseDesDisparus(sujetsDisparus({
+    confrontes: [{ sujet: { id: "s-1" } }, { sujet: { id: "s-2" } }],
+    sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1", "s-2", "s-3"]
+  }));
+  const plusieurs = phraseDesDisparus(sujetsDisparus({
+    confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1", "s-2", "s-3"]
+  }));
+
+  assert.match(une, /1 sujet suivi depuis les comptes rendus n'apparaît pas/);
+  assert.match(une, /le fermerait/);
+  assert.match(une, /S'il revient/);
+
+  assert.match(plusieurs, /3 sujets suivis depuis les comptes rendus n'apparaissent pas/);
+  assert.match(plusieurs, /les fermerait/);
+  assert.match(plusieurs, /Ceux qui reviennent/);
+});
+
+/**
+ * **La déduction est un état à part entière.** Confondre la fermeture déduite
+ * avec celle que le document écrit ferait passer une supposition pour une
+ * lecture — et l'on ne saurait plus, en relisant la proposition, laquelle des
+ * deux on a acceptée.
+ */
+test("la fermeture déduite ne se confond pas avec la fermeture dite", () => {
+  assert.notEqual(FERMETURE.DEDUITE, FERMETURE.DITE);
+
+  assert.match(PHRASES_DE_LA_FERMETURE[FERMETURE.DEDUITE], /n'apparaît plus/);
+  assert.match(EFFETS_DE_LA_FERMETURE[FERMETURE.DEDUITE], /déduction/);
+
+  // Ce que le document écrit, lui, ne se dit pas déduit.
+  assert.doesNotMatch(EFFETS_DE_LA_FERMETURE[FERMETURE.DITE], /déduction/);
 });
 
 /**

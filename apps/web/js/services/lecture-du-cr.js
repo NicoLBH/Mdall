@@ -125,6 +125,8 @@ export function lectureAssemblee({
        */
       /** Ce que le document dit de ce point — déjà ramené à la liste fermée. */
       labels: Array.isArray(point?.labels) ? point.labels.map(texte).filter(Boolean) : [],
+      /** Les dépendances que le document écrit. Vérifiées par `liens-du-cr.js`. */
+      liens: Array.isArray(point?.liens) ? point.liens : [],
       sujetExistant: texte(point?.sujet_existant),
       raisonDuRapprochement: texte(point?.raison_du_rapprochement),
       manques,
@@ -245,21 +247,45 @@ export const SORT = {
   /** Un sujet existe, et ce compte rendu le relance sans rien y changer. */
   RELANCE: "relance",
   /** Un sujet existe, et le point en dit autre chose. */
-  CHANGE: "change"
+  CHANGE: "change",
+  /**
+   * Le sujet existe, **et il est fermé** : ce point le rouvre.
+   *
+   * ## Pourquoi ce sort a fallu exister
+   *
+   * Un chantier rouvre. Une reprise d'étanchéité soldée en octobre revient en
+   * février parce qu'il pleut dedans. Sans ce sort, le point repartait comme un
+   * point neuf : un second sujet au même titre, à côté du premier — et toute
+   * l'histoire d'octobre restait dans le sujet fermé, invisible à qui lit le
+   * nouveau.
+   *
+   * C'est la contrepartie de la fermeture : plus on ferme facilement, plus il
+   * faut savoir rouvrir. Sans quoi le projet se remplit de doublons, et chaque
+   * fermeture en fabrique un de plus.
+   */
+  REOUVRE: "reouvre"
 };
 
 export const PHRASES_DU_SORT = {
   [SORT.NOUVEAU]: "Ouvrirait un sujet",
   [SORT.RELANCE]: "Relancerait un sujet",
-  [SORT.CHANGE]: "Ferait évoluer un sujet"
+  [SORT.CHANGE]: "Ferait évoluer un sujet",
+  [SORT.REOUVRE]: "Rouvrirait un sujet fermé"
 };
 
 /** Ce que chaque sort ferait, en toutes lettres. */
 export const EFFETS_DU_SORT = {
   [SORT.NOUVEAU]: "Aucun sujet ouvert ne lui correspond : il en ouvrirait un nouveau.",
   [SORT.RELANCE]: "Ce compte rendu le redit sans rien y changer : une activité de relance s'ajoute à la discussion du sujet.",
-  [SORT.CHANGE]: "Ce compte rendu en dit autre chose : l'activité du sujet enregistre ce qui a bougé."
+  [SORT.CHANGE]: "Ce compte rendu en dit autre chose : l'activité du sujet enregistre ce qui a bougé.",
+  [SORT.REOUVRE]: "Ce sujet avait été fermé : le compte rendu le rouvre, avec toute son histoire, plutôt que d'en ouvrir un second au même titre."
 };
+
+/** Un sujet que le projet a fermé. Ce qui le rouvre ne l'ouvre pas. */
+export function estFerme(sujet = {}) {
+  const dit = texte(sujet?.status ?? sujet?.statut ?? sujet?.state).toLowerCase();
+  return dit === "closed" || dit === "ferme" || dit === "fermé" || dit === "done";
+}
 
 /**
  * Qui a reconnu que ce point continue un sujet.
@@ -337,6 +363,13 @@ export function confrontation(points = [], sujetsDuProjet = null, aplatir = null
 
     if (!sujet) return { ...point, sort: SORT.NOUVEAU, sujet: null, par: "" };
 
+    // **Un sujet fermé qui revient se rouvre, il ne se double pas.** Sans ce
+    // sort, le point repartait neuf : un second sujet au même titre, et toute
+    // l'histoire d'avant invisible à qui lit le nouveau.
+    if (estFerme(sujet)) {
+      return { ...point, sort: SORT.REOUVRE, sujet, par: rapproche ? PAR.MODELE : PAR.TITRE };
+    }
+
     // L'état diffère : le point dit autre chose de ce sujet.
     // **Pas `status`.** L'état d'un sujet Mdall (ouvert, fermé) n'est pas l'état
     // que le compte rendu donne à son point (« nouveau », « soldé ») : les
@@ -355,7 +388,7 @@ export function confrontation(points = [], sujetsDuProjet = null, aplatir = null
 
 /** Combien de points par sort, pour lire la confrontation d'un coup d'œil. */
 export function comptesDeLaConfrontation(confrontes = []) {
-  const comptes = { [SORT.NOUVEAU]: 0, [SORT.RELANCE]: 0, [SORT.CHANGE]: 0 };
+  const comptes = Object.fromEntries(Object.values(SORT).map((sort) => [sort, 0]));
   for (const point of Array.isArray(confrontes) ? confrontes : []) {
     if (comptes[point?.sort] !== undefined) comptes[point.sort] += 1;
   }
