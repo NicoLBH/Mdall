@@ -251,3 +251,32 @@ test("une citation qui n'est pas un encadré ne bouge pas", () => {
   // Un nom qu'on ne connaît pas n'invente pas de couleur.
   assert.doesNotMatch(renderMarkdownToHtml("> [!TURQUOISE]\n> texte"), /md-alerte/);
 });
+
+/* ── Les adresses électroniques ──────────────────────────────────────────── */
+
+/**
+ * Un compte rendu de chantier porte trente adresses. Recopiées telles quelles,
+ * elles se lisent en noir au milieu du texte et l'on ne voit plus lesquelles en
+ * sont — alors que la liste de diffusion est précisément ce qu'on vient
+ * chercher.
+ */
+test("une adresse nue devient un lien", () => {
+  const html = renderMarkdownToHtml("Écrire à mp.pernat@gmail.com avant lundi.");
+
+  assert.match(html, /<a class="md-courriel" href="mailto:mp\.pernat@gmail\.com">mp\.pernat@gmail\.com<\/a>/);
+  // Y compris dans une cellule de tableau, où elles vivent le plus souvent.
+  assert.match(renderMarkdownToHtml("| Mail |\n|---|\n| a.b@c-d.fr |"), /md-courriel/);
+});
+
+/** Une adresse déjà écrite en lien n'en reçoit pas un second à l'intérieur. */
+test("un lien existant ne reçoit pas de lien dans son lien", () => {
+  const html = renderMarkdownToHtml("[déjà un lien](mailto:x@y.fr)");
+
+  assert.equal((html.match(/<a /g) ?? []).length, 1);
+  assert.doesNotMatch(html, /md-courriel/);
+});
+
+/** Ce qui est du code reste du code : une adresse citée n'est pas cliquable. */
+test("une adresse dans du code n'est pas transformée", () => {
+  assert.doesNotMatch(renderMarkdownToHtml("`code@exemple.fr`"), /md-courriel/);
+});

@@ -47,13 +47,18 @@ On te donne un échantillon de pages, pas le document entier : décris ce qui se
 - \`nature\` : ce qu'est ce document, en quelques mots — « compte rendu de réunion de chantier », « rapport initial de contrôle technique », « CCTP », « notice de sécurité », « document technique non reconnu ».
 - \`decoupage\` : comment le corps du document est découpé, en une phrase. Par lot ? par chapitre numéroté ? par intervenant ? par ouvrage ?
 - \`entete_repete\` et \`pied_repete\` : les lignes qui reviennent en haut et en bas de CHAQUE page — nom de l'affaire, numéro de page, coordonnées du rédacteur. Recopie-les telles qu'elles sont écrites, sans le numéro de page variable. Vide si rien ne se répète.
+- \`chapitres\` : LES TITRES QUI DÉCOUPENT LE DOCUMENT. C'est aussi important que les tableaux, et plus facile à manquer. Un compte rendu de chantier s'écrit souvent dans un unique tableau de quatre colonnes, page après page, et ses lots y sont posés comme des lignes sans date — « Lot 03 – Gros œuvre – LATHUILLE FRERES », « ARCHITECTES », « OPC ». Ce ne sont pas des lignes de tableau : ce sont les titres qui portent tout le découpage du document. Pour chacun :
+  - \`motif\` : la forme du titre, en toutes lettres — « Lot XX – intitulé – ENTREPRISE », « ARTICLE X.Y – intitulé », « Chapitre N ».
+  - \`niveau\` : sa profondeur, de 1 à 6. Le titre du document est 1 ; une grande partie, 2 ; un lot ou un chapitre, 3 ; ce qui se range dessous, 4.
+  - \`exemple\` : un titre réel du document, recopié.
+  - \`reconnaissance\` : à quoi on le reconnaît — « centré sur toute la largeur, sans date », « en gras, seul sur sa ligne ».
 - \`tableaux\` : les tableaux qui reviennent. Pour chacun :
   - \`nom\` : comment l'appeler — « tableau des présences », « tableau des observations par lot ».
   - \`colonnes\` : ses en-têtes de colonne, DANS L'ORDRE, tels qu'ils sont écrits. C'est le champ qui compte le plus : c'est lui qui rendra les douze pages cohérentes. Si un en-tête n'est écrit qu'une fois, en tête du tableau, il vaut pour toutes les pages où le tableau se poursuit.
   - \`reconnaissance\` : à quoi on reconnaît ce tableau quand on tombe dessus, en une phrase.
 - \`consignes\` : deux à cinq règles de transcription PROPRES À CE DOCUMENT, que tu écris pour celui qui va le transcrire. Ce sont les pièges que tu as vus : une colonne qui n'a pas d'en-tête, un tableau qui se poursuit d'une page à l'autre sans se redéclarer, un bloc qui ressemble à un titre et n'en est pas. N'y écris pas de généralités — elles sont déjà dans sa consigne.
 
-N'invente aucun tableau. Un document sans tableau rend une liste vide : c'est une réponse.
+N'invente aucun tableau ni aucun chapitre. Un document sans tableau rend une liste vide : c'est une réponse.
 Ne recopie pas le contenu des cellules : on te demande la forme, pas le texte.`;
 
 /** Le squelette, et rien de plus. */
@@ -68,6 +73,32 @@ export const SCHEMA_DE_LA_STRUCTURE = {
       decoupage: { type: "string" },
       entete_repete: { type: "string" },
       pied_repete: { type: "string" },
+      /**
+       * Les titres qui découpent le document.
+       *
+       * **Un tableau n'est pas le document.** Un compte rendu de chantier
+       * s'écrit dans un unique tableau de quatre colonnes, page après page, et
+       * ses lots y sont rangés comme des lignes sans date. Restitué tel quel,
+       * c'est un tableau de deux cents lignes où plus rien ne se trouve : le
+       * découpage qui portait toute l'information a disparu dans la forme.
+       *
+       * Reconnus, ces titres redeviennent des titres — et le document reprend
+       * la forme qu'il avait sous les yeux de celui qui l'a écrit.
+       */
+      chapitres: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            motif: { type: "string" },
+            niveau: { type: "integer" },
+            exemple: { type: "string" },
+            reconnaissance: { type: "string" }
+          },
+          required: ["motif", "niveau", "exemple", "reconnaissance"]
+        }
+      },
       tableaux: {
         type: "array",
         items: {
@@ -83,11 +114,25 @@ export const SCHEMA_DE_LA_STRUCTURE = {
       },
       consignes: { type: "array", items: { type: "string" } }
     },
-    required: ["nature", "decoupage", "entete_repete", "pied_repete", "tableaux", "consignes"]
+    required: [
+      "nature", "decoupage", "entete_repete", "pied_repete", "chapitres", "tableaux", "consignes"
+    ]
   }
 };
 
 const texte = (valeur) => String(valeur ?? "").trim();
+
+/**
+ * La profondeur d'un titre, ramenée aux six niveaux de Markdown.
+ *
+ * **On ramène, on n'écarte pas.** Un titre au mauvais niveau reste un titre :
+ * le jeter perdrait le découpage qu'il portait, pour une question de forme.
+ */
+function niveauDeTitre(valeur) {
+  const lu = Number(valeur);
+  if (!Number.isFinite(lu)) return 3;
+  return Math.min(6, Math.max(1, Math.round(lu)));
+}
 
 /**
  * Les pages qu'on montre à la reconnaissance.
@@ -140,17 +185,46 @@ export function structureEnTexte(structure = null) {
     }))
     .filter((tableau) => tableau.nom && tableau.colonnes.length > 0);
 
+  const chapitres = (Array.isArray(structure?.chapitres) ? structure.chapitres : [])
+    .map((chapitre) => ({
+      motif: texte(chapitre?.motif),
+      niveau: niveauDeTitre(chapitre?.niveau),
+      exemple: texte(chapitre?.exemple),
+      reconnaissance: texte(chapitre?.reconnaissance)
+    }))
+    .filter((chapitre) => chapitre.motif);
+
   const consignes = (Array.isArray(structure?.consignes) ? structure.consignes : [])
     .map(texte).filter(Boolean);
 
   if (nature) morceaux.push(`Ce document est : ${nature}.`);
   if (decoupage) morceaux.push(`Son corps est découpé ainsi : ${decoupage}`);
 
-  if (entete) {
-    morceaux.push(`L'EN-TÊTE SUIVANT SE RÉPÈTE À CHAQUE PAGE — ne le restitue qu'une fois, sur la première page où il apparaît, et jamais ensuite :\n${entete}`);
+  if (entete || pied) {
+    morceaux.push(
+      "CE QUI SUIT EST DU MOBILIER DE PAGE, ET NON LE DOCUMENT. NE LE RESTITUE NULLE PART —"
+      + " ni une fois, ni au début, ni à la fin. Un Markdown n'a pas de pages : « Page 9 sur 12 »,"
+      + " un rappel d'affaire en tête de chaque feuille et un bloc de coordonnées en pied ne sont"
+      + " pas du contenu, ce sont les bords du papier."
+      + (entete ? `\nEn-tête répété :\n${entete}` : "")
+      + (pied ? `\nPied de page répété :\n${pied}` : "")
+    );
   }
-  if (pied) {
-    morceaux.push(`LE PIED DE PAGE SUIVANT SE RÉPÈTE À CHAQUE PAGE — même règle :\n${pied}`);
+
+  if (chapitres.length > 0) {
+    morceaux.push(
+      "LES TITRES SUIVANTS DÉCOUPENT CE DOCUMENT. Rends-les en titres Markdown du niveau indiqué,"
+      + " et non en lignes de tableau. QUAND UN DE CES TITRES APPARAÎT AU MILIEU D'UN TABLEAU, LE"
+      + " TABLEAU S'INTERROMPT : tu le fermes, tu écris le titre, puis tu rouvres un tableau avec"
+      + " EXACTEMENT les mêmes colonnes. Un titre laissé en ligne de tableau fait un tableau de"
+      + " deux cents lignes où plus rien ne se trouve — et le découpage qui portait toute"
+      + " l'information disparaît dans la forme :"
+      + chapitres.map((chapitre) => (
+        `\n- ${"#".repeat(chapitre.niveau)} ${chapitre.motif}`
+        + (chapitre.exemple ? `  — par exemple : « ${chapitre.exemple} »` : "")
+        + (chapitre.reconnaissance ? `\n  On le reconnaît à : ${chapitre.reconnaissance}` : "")
+      )).join("")
+    );
   }
 
   if (tableaux.length > 0) {
@@ -181,6 +255,16 @@ export function structureLue(payload = null) {
     decoupage: texte(payload?.decoupage),
     entete_repete: texte(payload?.entete_repete),
     pied_repete: texte(payload?.pied_repete),
+    chapitres: (Array.isArray(payload?.chapitres) ? payload.chapitres : [])
+      .map((chapitre) => ({
+        motif: texte(chapitre?.motif),
+        // Hors des six niveaux de Markdown, un titre n'existe pas. On ramène
+        // plutôt que d'écarter : un titre au mauvais niveau reste un titre.
+        niveau: niveauDeTitre(chapitre?.niveau),
+        exemple: texte(chapitre?.exemple),
+        reconnaissance: texte(chapitre?.reconnaissance)
+      }))
+      .filter((chapitre) => chapitre.motif),
     tableaux: (Array.isArray(payload?.tableaux) ? payload.tableaux : [])
       .map((tableau) => ({
         nom: texte(tableau?.nom),

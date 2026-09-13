@@ -163,6 +163,19 @@ function renderInlineMarkdown(source = "", options = {}) {
     return `<a href="${escapeHtml(href)}"${className}${external ? ' target="_blank" rel="noopener noreferrer"' : ""}>${label}</a>`;
   });
 
+  // **Les adresses nues deviennent des liens.** Un compte rendu de chantier en
+  // porte trente : recopiées telles quelles, elles se lisent en noir au milieu
+  // du texte, et l'on ne voit plus lesquelles sont des adresses. En bleu de
+  // lien, la liste de diffusion se lit d'un coup d'œil — et l'on écrit d'un
+  // clic à l'entreprise qui doit reprendre l'étanchéité.
+  //
+  // Après les liens Markdown, et jamais dedans : une adresse déjà écrite en
+  // `[x](mailto:x)` porterait sinon un second lien à l'intérieur du premier.
+  safe = safe.replace(
+    /(^|[\s(\[|>])([\w.+-]+@[\w-]+(?:\.[\w-]+)+)(?![^<]*<\/a>)/g,
+    (match, avant, adresse) => `${avant}<a class="md-courriel" href="mailto:${adresse}">${adresse}</a>`
+  );
+
   return restoreTokens(safe, codeTokens, mathTokens);
 }
 

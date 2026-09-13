@@ -138,6 +138,17 @@ export const SCHEMA_DES_SUJETS = {
             echeance: { anyOf: [{ type: "string" }, { type: "null" }] },
             /** « nouveau », « en cours », « soldé »… tel que le document le marque. */
             etat: { anyOf: [{ type: "string" }, { type: "null" }] },
+            /**
+             * La colonne de fermeture du document — « Fait le », « Levé le ».
+             *
+             * **Rapportée mot pour mot, et non interprétée.** C'est le seul
+             * signe qui ferme un point sans ambiguïté, et sa lecture — « Fait »
+             * ferme, « 50% » ne ferme pas, « Suspendu » encore moins — se fait
+             * dans `fermeture-du-cr.js`, où elle se vérifie. Demander le verdict
+             * au modèle mettrait une décision de fermeture hors de portée de
+             * tout test.
+             */
+            fait_le: { anyOf: [{ type: "string" }, { type: "null" }] },
             page: { anyOf: [{ type: "integer" }, { type: "null" }] },
             /** La ligne du document d'où le sujet sort. Sans elle, rien n'entre. */
             citation: { type: "string" },
@@ -170,8 +181,8 @@ export const SCHEMA_DES_SUJETS = {
             raison_du_rapprochement: { anyOf: [{ type: "string" }, { type: "null" }] }
           },
           required: [
-            "lot", "reference", "titre", "description", "qui", "echeance", "etat", "page",
-            "citation", "labels", "sujet_existant", "raison_du_rapprochement"
+            "lot", "reference", "titre", "description", "qui", "echeance", "etat", "fait_le",
+            "page", "citation", "labels", "sujet_existant", "raison_du_rapprochement"
           ]
         }
       },
@@ -243,6 +254,7 @@ export const CONSIGNES = [
   "- `qui` : à qui c'est demandé, tel qu'écrit — un lot, une entreprise, « MOE ». Jamais un nom de personne que tu supposes.",
   "- `echeance` : la date ou le délai annoncé, tel qu'écrit. Sinon null.",
   "- `etat` : « nouveau », « en cours », « soldé », « levé »… tel que le document le marque. Sinon null.",
+  "- `fait_le` : LE CONTENU DE LA COLONNE DE FERMETURE, RECOPIÉ MOT POUR MOT. C'est la dernière colonne des tableaux de suivi — « Fait le », « Levé le », « Soldé le ». Elle porte une date, une mention (« Fait », « En cours », « Non achevés », « Suspendu »), un pourcentage (« 50% »), ou rien. Recopie ce qu'elle porte, sans l'interpréter : ce n'est pas à toi de décider si le point est réglé. Vide ou absente : null.",
   "- `page` : la page où le point se lit.",
   "- `citation` : la ligne du document d'où le point sort, RECOPIÉE MOT POUR MOT. Elle sera recherchée dans le texte de la page : si elle ne s'y retrouve pas, le point sera écarté.",
   "",
@@ -510,6 +522,9 @@ export function sujetsAuFormatDuMoteur(retenus = [], { sourceId = "" } = {}) {
       qui: String(ligne?.qui ?? "").trim() || null,
       echeance: String(ligne?.echeance ?? "").trim() || null,
       etat: String(ligne?.etat ?? "").trim() || null,
+      // La colonne de fermeture, telle quelle. Sa lecture se fait au navigateur,
+      // dans `fermeture-du-cr.js`, où elle se vérifie.
+      fait_le: String(ligne?.fait_le ?? "").trim() || null,
       // Les labels que le document pose sur ce point, **vérifiés** : ramenés à
       // la liste fermée, dans leur écriture officielle.
       labels: Array.isArray(ligne?.labels) ? ligne.labels : [],
