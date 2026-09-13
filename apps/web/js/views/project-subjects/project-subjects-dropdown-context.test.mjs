@@ -49,6 +49,24 @@ test("setSubjectLabels écrit aussi pour un sujet persistant", () => {
   assert.match(actionsSource, /labels:\s*nextLabels/);
 });
 
-test("events reçoit DRAFT_SUBJECT_ID pour le contexte create-subject draft", () => {
-  assert.match(subjectsIndexSource, /createProjectSubjectsEvents\(\{\s*DRAFT_SUBJECT_ID,/s);
+/**
+ * **Un garde-fou faible, et qui s'assume.**
+ *
+ * `DRAFT_SUBJECT_ID` ne sert que dans `getDropdownContextSubject`, qui n'est pas
+ * exportée : rien, depuis l'extérieur du module, ne permet de vérifier qu'il est
+ * employé. Ce test lit donc la source — ce qu'on s'interdit partout ailleurs,
+ * parce qu'un test qui lit du texte passe alors même que la valeur ne sert à
+ * rien.
+ *
+ * Il est gardé parce qu'un appel qui perdrait cette clé ferait écrire des labels
+ * sur un sujet qui n'existe pas encore, et que le remplacer par un test qui
+ * n'assert rien serait pire que le garder tel quel. La cherchant **n'importe où**
+ * dans l'appel, il ne se casse plus sur l'ordre des clés — ce qu'il faisait.
+ *
+ * Ce qui le remplacerait vraiment : exporter la résolution du contexte, et
+ * l'exécuter. Noté dans `docs/a-traiter-plus-tard.md`.
+ */
+test("l'écran passe son DRAFT_SUBJECT_ID aux événements", () => {
+  const appel = subjectsIndexSource.slice(subjectsIndexSource.indexOf("createProjectSubjectsEvents({"));
+  assert.match(appel.slice(0, appel.indexOf("\n});")), /^\s*DRAFT_SUBJECT_ID,\s*$/m);
 });

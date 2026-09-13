@@ -905,14 +905,85 @@ Et sans la liste des situations du projet, on ne propose rien : ne pas savoir n'
 Aucune migration : `situations.mode` accepte déjà `automatic`, et `filter_definition` porte
 déjà `labelIds`.
 
-### Étape 7 — L'écran des sujets, pour s'y retrouver
+### Étape 7 — L'écran des sujets, pour s'y retrouver *(faite)*
 
 Rien de ce qui précède ne sert si le tableau des sujets ne sait pas filtrer.
 
-- des filtres dans le tableau : assigné à, labels, lot, objectif ;
-- un rail latéral avec les filtres les plus courants ;
-- des recherches qu'on épingle — **le même bouton et la même logique d'affichage que
-  l'onglet Mémoire**, qui les a déjà.
+#### Une barre plutôt que six menus
+
+`label:cr-chantier assigné:moi statut:ouvert étanchéité` — les filtres et les mots vivent au
+même endroit, et cet endroit est **le champ de saisie**. On lit ce qu'on regarde, on le
+corrige au clavier, on le copie, on le colle, on l'épingle. Six menus obligent à les ouvrir
+tous les six pour savoir ce qu'on regarde, et ne se copient pas.
+
+C'est la barre de la Mémoire, réemployée telle quelle : `query-bar.js` avait été écrit sans
+connaître aucun écran, précisément pour servir ici. Le miroir coloré, les suggestions au
+curseur, le bouton d'épingle — rien n'est réécrit. **Deux barres de recherche se
+ressembleraient assez pour qu'on ne remarque leurs différences qu'en se trompant.**
+
+Sept champs, déclarés sur le vocabulaire du projet : `statut`, `priorité`, `bloqué`, `label`,
+`objectif`, `lot`, `assigné`. Un champ sans valeur n'est pas déclaré — un projet sans
+objectif ne propose pas `objectif:`, parce que le filtre ne rendrait jamais rien et qu'on
+chercherait ce qu'on a mal tapé.
+
+Le lot d'un sujet est celui de qui le porte : la base range les **personnes** dans les lots,
+pas les sujets. L'écran le dit plutôt que de laisser croire à une colonne qui n'existe pas.
+
+#### Trois gestes, un seul état
+
+Le rail écrit une requête toute faite, la barre la modifie, les menus de l'en-tête y ajoutent
+ou en retirent un jeton. Il n'y a donc **qu'un seul état filtrant**, et c'est celui qu'on lit
+à l'écran.
+
+Ce n'était pas le cas : le statut et la priorité vivaient dans leurs propres cases, à côté de
+la recherche. Le menu pouvait dire « Fermés » pendant que la barre disait `statut:ouvert`, et
+l'on ne savait plus lequel commandait. **Ce filtre-là a déjà cassé deux fois pour cette
+raison** ; la troisième réparation ne déplace pas la case, elle la supprime (règle 4).
+
+#### Le rail : des requêtes toutes faites, avec leurs comptes
+
+« Tous », « Ouverts », « Les miens », « Bloqués », « Venus des comptes rendus », « Sans
+label », « Fermés ». Ce ne sont pas des modes : ce sont des requêtes, et la barre reste
+modifiable — on part des « Miens » et l'on ajoute `lot:03` sans rien apprendre de nouveau.
+
+La lecture active **se déduit, elle ne se retient pas** : on la reconnaît dans la requête.
+Ajouter un filtre à la main rebascule donc sur « Tous » sans que personne ait à y penser.
+Le texte libre compte : « Les miens » plus un mot cherché n'est plus « Les miens », et
+allumer quand même ferait croire qu'on voit tous ses sujets.
+
+Chaque lecture affiche **le nombre de sujets qu'elle rendra**, calculé en appliquant sa
+requête. Un compte qui diffère de ce qu'on voit après avoir cliqué est pire qu'aucun compte.
+Quand il ne peut pas se calculer — « Les miens » sans savoir qui regarde —, il ne s'affiche
+pas : zéro serait un mensonge (règle 5).
+
+#### Les épingles, dans la table de la Mémoire
+
+Le plan demandait « le même bouton et la même logique d'affichage que l'onglet Mémoire ».
+C'est allé plus loin : **la même table**. Une seconde table aurait dupliqué la politique de
+sécurité, l'index, la contrainte d'unicité et le raisonnement sur la vie privée — et c'est
+sur la sécurité que les deux écritures auraient fini par diverger (règle 10).
+
+Une colonne `surface` dit de quel écran vient l'épingle, pour que le rail des sujets
+n'affiche pas les requêtes de la Mémoire — dont la grammaire n'est pas la sienne, et qui ne
+rendraient rien. Elle range ; elle n'autorise pas. C'est toujours `owner_id` qui autorise, et
+la politique ne change pas d'un caractère.
+
+Migration **strictement additive** : la colonne a une valeur par défaut, et toutes les
+épingles déjà posées sont des épingles de la Mémoire — ce qui est vrai, puisque c'était le
+seul écran qui en posait.
+
+#### Deux défauts trouvés en cassant
+
+Le premier, dans le rail : un filtre dont le champ n'est pas déclaré **disparaît
+silencieusement** de la requête écrite. « Les miens » sur un projet sans collaborateur
+devenait donc `statut:ouvert` — le même que « Ouverts », deux lignes pour la même chose, dont
+l'une ment sur ce qu'elle montre. Une lecture n'est proposée que si chacun de ses filtres a
+un champ déclaré.
+
+Le second, dans la liste : le statut était filtré **deux fois**, une fois par le service sur
+le statut de la ligne, une fois par l'écran sur le statut *effectif*. Un sujet fermé par une
+décision non encore versée disparaissait des deux listes à la fois. Le statut est maintenant
+retiré de la requête avant d'être passé au service, qui ne connaît pas les décisions.
 
 ### Étape 8 — La proposition dit ce qui change vraiment
 

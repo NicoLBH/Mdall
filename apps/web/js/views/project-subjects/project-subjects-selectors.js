@@ -1,4 +1,6 @@
 import { normaliserLeTri, trierLesSujets } from "../../services/tri-des-sujets.js";
+import { champsDesSujets, sujetsFiltres } from "../../services/champs-des-sujets.js";
+import { withFilter } from "../../services/query-bar.js";
 import {
   getChildrenBySubjectIdMapFromRawResult,
   getParentBySubjectIdMapFromRawResult,
@@ -327,10 +329,111 @@ export function createProjectSubjectsSelectors({
    * toujours par faire : le clic écrivait l'original, le getter rendait la copie,
    * et le bouton ne faisait plus rien (`docs/fondamentaux.md`, règle 4).
    */
+  /**
+   * Le vocabulaire du projet, tel que la barre de recherche peut l'interroger.
+   *
+   * **Un champ sans valeur n'est pas déclaré** : un projet sans objectif ne
+   * propose pas `objectif:`, parce que le filtre ne rendrait jamais rien et
+   * qu'on chercherait ce qu'on a mal tapé.
+   */
+  function getChampsDesSujets() {
+    const raw = getRawSubjectsPayload(getViewState()) ?? {};
+
+    const personnes = new Map();
+    for (const liste of Object.values(raw.assigneesBySubjectId ?? {})) {
+      for (const personne of Array.isArray(liste) ? liste : []) {
+        const id = String(personne?.id ?? personne ?? "").trim();
+        if (id && !personnes.has(id)) {
+          personnes.set(id, { id, name: String(personne?.name ?? personne?.full_name ?? id).trim() });
+        }
+      }
+    }
+
+    return champsDesSujets({
+      labels: (Array.isArray(raw.labels) ? raw.labels : [])
+        .map((label) => ({ key: String(label?.id ?? "").trim(), name: String(label?.name ?? "").trim() })),
+      objectifs: (Array.isArray(raw.objectives) ? raw.objectives : [])
+        .map((objectif) => ({ id: String(objectif?.id ?? "").trim(), title: String(objectif?.title ?? "").trim() })),
+      lots: (Array.isArray(store.projectLots?.items) ? store.projectLots.items : [])
+        .map((lot) => ({ id: String(lot?.id ?? "").trim(), name: String(lot?.name ?? "").trim() })),
+      personnes: [...personnes.values()]
+    });
+  }
+
+  /** Ce que chaque sujet porte, pour que le filtre n'ait pas à le redemander. */
+  function getMetaDesSujets() {
+    const raw = getRawSubjectsPayload(getViewState()) ?? {};
+    const meta = {};
+
+    const poser = (source, champ) => {
+      for (const [sujet, valeurs] of Object.entries(source ?? {})) {
+        const cle = String(sujet || "").trim();
+        if (!cle) continue;
+        if (!meta[cle]) meta[cle] = {};
+        meta[cle][champ] = (Array.isArray(valeurs) ? valeurs : [])
+          .map((valeur) => String(valeur?.id ?? valeur ?? "").trim()).filter(Boolean);
+      }
+    };
+
+    poser(raw.labelIdsBySubjectId, "labels");
+    poser(raw.objectiveIdsBySubjectId, "objectifs");
+    poser(raw.assigneesBySubjectId, "assignes");
+
+    // Le lot d'un sujet est celui de qui le porte : la base range les
+    // **personnes** dans les lots, pas les sujets. L'écran le dit plutôt que de
+    // laisser croire à une colonne qui n'existe pas.
+    const lotParPersonne = new Map(
+      (Array.isArray(store.projectCollaborators?.items) ? store.projectCollaborators.items : [])
+        .map((personne) => [String(personne?.person_id ?? personne?.id ?? "").trim(),
+          String(personne?.project_lot_id ?? "").trim()])
+        .filter(([personne, lot]) => personne && lot)
+    );
+
+    // Bloqué : un lien `blocked_by` vise ce sujet. C'est une dépendance écrite,
+    // pas « en retard » ni « à l'arrêt ».
+    const bloques = new Set(
+      (Array.isArray(raw.subjectLinks) ? raw.subjectLinks : [])
+        .filter((lien) => String(lien?.link_type ?? "").trim().toLowerCase() === "blocked_by")
+        .map((lien) => String(lien?.source_subject_id ?? "").trim()).filter(Boolean)
+    );
+
+    for (const [cle, sien] of Object.entries(meta)) {
+      sien.lots = [...new Set((sien.assignes ?? []).map((personne) => lotParPersonne.get(personne)).filter(Boolean))];
+      sien.bloque = bloques.has(cle);
+    }
+    for (const cle of bloques) {
+      if (!meta[cle]) meta[cle] = { bloque: true };
+    }
+
+    return meta;
+  }
+
+  /**
+   * Ce qui est écrit dans la barre des sujets. Le seul état filtrant du tableau.
+   *
+   * **Sa propre case, et pas `search`.** `search` est la recherche de l'onglet
+   * Situations, recopiée d'un état à l'autre à chaque rendu : y écrire la
+   * requête des sujets l'aurait fait effacer au passage suivant, et aurait
+   * emporté `label:…` dans un onglet qui ne sait pas le lire.
+   */
+  function getRequeteDesSujets() {
+    const vue = getViewState();
+    return String(vue.requete || "");
+  }
+
+  /**
+   * Le statut demandé, **lu dans la requête**.
+   *
+   * Il vivait dans sa propre case, à côté de la recherche. Deux états filtrants
+   * pour un seul tableau : le menu disait « Fermés » pendant que la barre disait
+   * `statut:ouvert`, et l'on ne savait plus lequel commandait (règle 4). Il n'y
+   * en a plus qu'un, et c'est celui qu'on peut lire, corriger et épingler.
+   */
   function getCurrentSubjectsStatusFilter() {
-    const v = getViewState();
-    const value = String(v.subjectsStatusFilter || v.filters?.status || "open").toLowerCase();
-    return value === "closed" ? "closed" : "open";
+    const { filtres } = sujetsFiltres({
+      sujets: [], requete: getRequeteDesSujets(), champs: getChampsDesSujets()
+    });
+    return String(filtres.statut || "open").toLowerCase() === "closed" ? "closed" : "open";
   }
 
   /**
@@ -345,9 +448,12 @@ export function createProjectSubjectsSelectors({
   }
 
   /** Même règle : l'original d'abord, la copie à défaut. */
+  /** La priorité demandée, lue dans la requête — pour la même raison. */
   function getCurrentSubjectsPriorityFilter() {
-    const v = getViewState();
-    return normalizeBackendPriority(v.subjectsPriorityFilter || v.filters?.priority || "");
+    const { filtres } = sujetsFiltres({
+      sujets: [], requete: getRequeteDesSujets(), champs: getChampsDesSujets()
+    });
+    return normalizeBackendPriority(filtres["priorité"] || "");
   }
 
   function getSubjectsPaginationState(totalItems = 0) {
@@ -448,18 +554,42 @@ export function createProjectSubjectsSelectors({
    * ferait afficher un ordre que la pagination ne connaîtrait pas, et la page 2
    * ne montrerait pas ce qui suit la page 1.
    */
+  /**
+   * Les sujets retenus par la requête, **et rangés**.
+   *
+   * Le tri se pose ici et nulle part ailleurs — voir plus haut. Le filtrage,
+   * lui, passe par `champs-des-sujets.js` : les labels, les objectifs, les
+   * lots, les assignés et le blocage s'écrivent dans la barre, et c'est la
+   * barre qui décide. Refiltrer ici à partir d'autres cases ferait afficher
+   * autre chose que ce que la requête dit (règle 4).
+   *
+   * **Le statut garde son chemin.** Un sujet fermé par une décision non encore
+   * versée n'a pas le statut de sa ligne : `sujetMatchesStatusFilter` lit le
+   * statut *effectif*, ce que le service, qui ne connaît pas les décisions, ne
+   * peut pas faire.
+   */
   function getFilteredFlatSubjects() {
-    const query = String(getViewState().search || "").trim().toLowerCase();
-    const activeStatusFilter = getCurrentSubjectsStatusFilter();
-    const activePriorityFilter = getCurrentSubjectsPriorityFilter();
-    const flatSubjects = getFlatSubjects();
-    const retenus = flatSubjects.filter((subject) => {
-      if (!subjectMatchesFilters(subject, query)) return false;
-      if (!sujetMatchesStatusFilter(subject, activeStatusFilter)) return false;
-      if (!sujetMatchesPriorityFilter(subject, activePriorityFilter)) return false;
-      return true;
+    const requete = getRequeteDesSujets();
+    const champs = getChampsDesSujets();
+
+    // **Le statut est retiré de la requête avant de la passer au service**, et
+    // appliqué ensuite sur le statut *effectif*. Sans cela il filtrerait deux
+    // fois : le service sur le statut de la ligne, l'écran sur celui que la
+    // décision a changé — et un sujet fermé par une décision non encore versée
+    // disparaissait des deux listes à la fois.
+    const { sujets: retenus } = sujetsFiltres({
+      sujets: getFlatSubjects(),
+      requete: withFilter(requete, champs, "statut", ""),
+      champs,
+      meta: getMetaDesSujets(),
+      moi: String(store.user?.id || "")
     });
-    return trierLesSujets(retenus, getCurrentSubjectsSort());
+
+    const statut = getCurrentSubjectsStatusFilter();
+    return trierLesSujets(
+      retenus.filter((subject) => sujetMatchesStatusFilter(subject, statut)),
+      getCurrentSubjectsSort()
+    );
   }
 
   function getPaginatedFilteredFlatSubjects() {
@@ -517,6 +647,9 @@ export function createProjectSubjectsSelectors({
   }
 
   return {
+    getChampsDesSujets,
+    getMetaDesSujets,
+    getRequeteDesSujets,
     getFilteredSituations,
     getStandaloneCustomSubjects,
     getFilteredStandaloneSubjects,
