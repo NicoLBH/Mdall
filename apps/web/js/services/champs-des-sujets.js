@@ -37,7 +37,7 @@
  * champ sans valeurs ferait proposer un filtre qui ne filtre rien.
  */
 
-import { parseQuery } from "./query-bar.js";
+import { filterValues, parseQuery } from "./query-bar.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const repli = (valeur) => texte(valeur).toLowerCase()
@@ -129,14 +129,23 @@ export function champsDesSujets({
     ? [...valeurs, { value: AUCUN, token: AUCUN, label: "Aucun" }]
     : []);
 
+  // **Les champs de liste se cochent à plusieurs.** Un sujet porte deux labels,
+  // et l'on cherche « l'un ou l'autre » — c'est la question qu'on se pose en
+  // ouvrant le menu. Les trois premiers champs, eux, restent à choix simple :
+  // un sujet n'est pas ouvert **et** fermé, et proposer d'en cocher deux
+  // promettrait une liste vide.
   const desLabels = avecAucun(nommes(labels, "key", "name"));
-  if (desLabels.length > 0) champs.push({ key: "label", label: "Label", values: desLabels });
+  if (desLabels.length > 0) {
+    champs.push({ key: "label", label: "Labels", values: desLabels, multiple: true });
+  }
 
   const desObjectifs = avecAucun(nommes(objectifs, "id", "title"));
-  if (desObjectifs.length > 0) champs.push({ key: "objectif", label: "Objectif", values: desObjectifs });
+  if (desObjectifs.length > 0) {
+    champs.push({ key: "objectif", label: "Objectifs", values: desObjectifs, multiple: true });
+  }
 
   const desLots = avecAucun(nommes(lots, "id", "name"));
-  if (desLots.length > 0) champs.push({ key: "lot", label: "Lot", values: desLots });
+  if (desLots.length > 0) champs.push({ key: "lot", label: "Lots", values: desLots, multiple: true });
 
   const desPersonnes = nommes(personnes, "id", "name");
   if (desPersonnes.length > 0) {
@@ -147,24 +156,26 @@ export function champsDesSujets({
     ];
 
     champs.push({
-      key: "assigné", label: "Assignés",
+      key: "assigné", label: "Assignés", multiple: true,
       values: avecMoi([{ value: AUCUN, token: AUCUN, label: "Personne" }])
     });
 
     // **Qui a ouvert le sujet**, et non qui le traite. Les deux se confondent
     // souvent et divergent toujours au moment où ça compte : on cherche ce
     // qu'on a soi-même relevé, pas ce qu'on doit faire.
-    champs.push({ key: "auteur", label: "Auteur", values: avecMoi() });
+    champs.push({ key: "auteur", label: "Auteur", values: avecMoi(), multiple: true });
 
     // **Mentionné avec un `@` dans un commentaire.** C'est ce qui appelle une
     // réponse, et c'est la seule lecture qui ne se déduit d'aucune colonne du
     // sujet : elle vient de ses messages.
-    champs.push({ key: "mention", label: "Mentions", values: avecMoi() });
+    champs.push({ key: "mention", label: "Mentions", values: avecMoi(), multiple: true });
   }
 
   const desSituations = avecAucun(nommes(situations, "id", "title"));
   if (desSituations.length > 0) {
-    champs.push({ key: "situation", label: "Situations", values: desSituations });
+    champs.push({
+      key: "situation", label: "Situations", values: desSituations, multiple: true
+    });
   }
 
   champs.push({ key: "activité", label: "Activité", values: ACTIVITES });
@@ -212,6 +223,21 @@ function portePar(valeurs, cherche) {
 }
 
 /**
+ * Le sujet répond-il à **l'une** des valeurs cochées ?
+ *
+ * **« Ou », et non « et ».** Deux labels cochés cherchent les sujets qui
+ * portent l'un ou l'autre : c'est ce qu'on demande en cochant, et l'autre
+ * lecture rendrait presque toujours zéro — un sujet portant exactement ces
+ * deux labels-là est l'exception, pas la question.
+ *
+ * Aucune valeur cochée n'est **pas** un filtre : la liste passe entière.
+ */
+function porteLUneDe(valeurs, cherchees) {
+  if (cherchees.length === 0) return true;
+  return cherchees.some((cherche) => portePar(valeurs, cherche));
+}
+
+/**
  * Les sujets que cette requête retient.
  *
  * **Le texte libre cherche dans le titre.** Pas dans la description : une
@@ -251,10 +277,13 @@ export function sujetsFiltres({
       if (Boolean(sien.bloque) !== attendu) return false;
     }
 
-    if (filters.label && !portePar(listeDe(sien.labels), filters.label)) return false;
-    if (filters.objectif && !portePar(listeDe(sien.objectifs), filters.objectif)) return false;
-    if (filters.lot && !portePar(listeDe(sien.lots), filters.lot)) return false;
-    if (filters.situation && !portePar(listeDe(sien.situations), filters.situation)) return false;
+    // Les champs de liste se cochent à plusieurs, et se lisent en « ou ».
+    for (const [cle, valeurs] of [
+      ["label", sien.labels], ["objectif", sien.objectifs],
+      ["lot", sien.lots], ["situation", sien.situations]
+    ]) {
+      if (!porteLUneDe(listeDe(valeurs), filterValues(filters, cle))) return false;
+    }
 
     // Les trois champs qui peuvent désigner « moi » : sans savoir qui regarde,
     // ils sont annoncés et non appliqués. Une liste vide ferait croire qu'on
@@ -262,14 +291,20 @@ export function sujetsFiltres({
     for (const [cle, valeurs] of [
       ["assigné", sien.assignes], ["auteur", sien.auteurs], ["mention", sien.mentions]
     ]) {
-      if (!filters[cle]) continue;
+      const cochees = filterValues(filters, cle);
+      if (cochees.length === 0) continue;
 
-      const cherche = filters[cle] === MOI ? texte(moi) : filters[cle];
-      if (filters[cle] === MOI && !cherche) {
-        if (!ignores.includes(cle)) ignores.push(cle);
-        continue;
+      // `@moi` sans savoir qui regarde ne s'applique pas ; les autres valeurs
+      // cochées, si. Écarter le champ entier retirerait une condition que
+      // l'utilisateur a bel et bien posée.
+      const cherchees = [];
+      for (const cochee of cochees) {
+        if (cochee !== MOI) { cherchees.push(cochee); continue; }
+        if (texte(moi)) cherchees.push(texte(moi));
+        else if (!ignores.includes(cle)) ignores.push(cle);
       }
-      if (!portePar(listeDe(valeurs), cherche)) return false;
+
+      if (!porteLUneDe(listeDe(valeurs), cherchees)) return false;
     }
 
     if (filters["activité"] === "recente" && !estRecent(sujet, maintenant)) return false;

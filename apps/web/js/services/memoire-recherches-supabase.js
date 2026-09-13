@@ -30,7 +30,7 @@
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 
 const SUPABASE_URL = getSupabaseUrl();
-const COLUMNS = "id,project_id,query,title,description,icon,color,surface,created_at";
+const COLUMNS = "id,project_id,query,title,description,icon,color,surface,rail,created_at";
 
 /**
  * L'écran d'où vient une épingle.
@@ -95,7 +95,12 @@ export function recherchePourLEcran(ligne = {}) {
     // le ramène à ce que le jeu d'icônes connaît, et lui seul.
     description: texte(ligne.description),
     icone: texte(ligne.icon),
-    couleur: texte(ligne.color)
+    couleur: texte(ligne.color),
+    // **Enregistrée et épinglée sont deux choses.** Une vue vit sur son écran ;
+    // elle ne monte au rail que lorsqu'on l'y met, parce que le rail est court
+    // et qu'une vue de plus y coûte une place à celles qu'on regarde tous les
+    // jours.
+    auRail: ligne.rail === true
   };
 }
 
@@ -161,6 +166,33 @@ export async function epinglerLaRecherche({
 
     const posee = lignes?.[0];
     return posee ? recherchePourLEcran(posee) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Épingler une vue au rail, ou l'en retirer.
+ *
+ * Elle reste enregistrée dans les deux cas : c'est sa place dans la barre de
+ * gauche qui change, pas son existence. La retirer du rail ne la supprime pas —
+ * confondre les deux ferait perdre une recherche qu'on voulait seulement
+ * ranger.
+ */
+export async function epinglerAuRail(id, auRail = true) {
+  const cle = texte(id);
+  if (!cle) return null;
+
+  try {
+    const lignes = await request("memory_pinned_searches", {
+      method: "PATCH",
+      params: { select: COLUMNS, id: `eq.${cle}` },
+      headers: { Prefer: "return=representation" },
+      body: { rail: auRail === true, updated_at: new Date().toISOString() }
+    });
+
+    const changee = lignes?.[0];
+    return changee ? recherchePourLEcran(changee) : null;
   } catch {
     return null;
   }

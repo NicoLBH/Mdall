@@ -24292,8 +24292,7 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 
 /* ── Les vues : leur liste, et leur formulaire ───────────────────────────── */
 
-.sujets-vues__tete{display:flex;align-items:center;justify-content:space-between;gap:12px;}
-.sujets-vues__titre{margin:0;font-size:16px;font-weight:600;color:var(--text);}
+.sujets-vues{display:flex;flex-direction:column;}
 .sujets-vues__vide{margin:0;padding:24px 16px;color:var(--text-muted);font-size:13px;text-align:center;}
 
 .sujets-vues__liste{list-style:none;margin:0;padding:0;}
@@ -24310,8 +24309,27 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 /* La requête, en gris et en chasse fixe : c'est ce que la vue retient, et on
    doit pouvoir la relire sans l'ouvrir. */
 .sujets-vues__requete{color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.sujets-vues__retirer{flex:0 0 auto;opacity:0;}
-.sujets-vues__ligne:hover .sujets-vues__retirer{opacity:1;}
+/* Le menu d'une ligne : l'épingler, ou la supprimer. Le kebab reste discret
+   tant qu'on ne survole pas la ligne — une liste de douze vues avec douze
+   boutons visibles se lit comme une barre d'outils. */
+.sujets-vues__gestes{flex:0 0 auto;position:relative;}
+.sujets-vues__kebab{opacity:0;}
+.sujets-vues__ligne:hover .sujets-vues__kebab,
+.sujets-vues__kebab[aria-expanded="true"]{opacity:1;}
+/* `.gh-menu` est masqué par défaut : le menu d'une ligne s'affiche quand il
+   n'est pas `hidden`, et l'attribut suffit — une classe de plus dirait la même
+   chose une seconde fois (règle 4). */
+.sujets-vues__menu{position:absolute;top:calc(100% + 4px);right:0;left:auto;
+  min-width:190px;z-index:1000;display:block;padding:4px;}
+.sujets-vues__menu[hidden]{display:none;}
+.sujets-vues__menu .gh-menu__item{display:flex;align-items:center;gap:8px;width:100%;
+  border:0;background:none;color:inherit;font-size:13px;text-align:left;cursor:pointer;
+  padding:6px 8px;border-radius:6px;white-space:nowrap;}
+.sujets-vues__menu .gh-menu__item:hover{background:var(--surface-hover);}
+
+/* Une vue déjà au rail le dit sur sa ligne : sans cela, on ouvre son menu pour
+   savoir si elle y est. */
+.sujets-vues__au-rail{flex:0 0 auto;display:inline-flex;color:var(--text-muted);}
 
 .sujets-vue-forme{display:flex;flex-direction:column;gap:12px;}
 
@@ -24358,6 +24376,32 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .sujets-head-menu .issues-head-menu__btn:hover{color:var(--text);}
 .sujets-head-menu.est-posee .issues-head-menu__btn{color:var(--text);font-weight:600;}
 
+/* **Le bouton garde le nom du champ**, et ce qui est coché se compte à côté.
+   Le remplacer par le nom de la valeur choisie faisait perdre de vue ce que le
+   menu filtrait, et deux filtres posés donnaient une ligne de noms propres. */
+.sujets-head-menu__compte{display:inline-flex;align-items:center;justify-content:center;
+  min-width:16px;height:16px;padding:0 4px;margin-left:2px;border-radius:8px;
+  background:var(--accent, #1f6feb);color:#fff;font-size:11px;font-weight:600;line-height:1;}
+
+/* Le menu est celui de la colonne de droite d'un sujet — mêmes sections, mêmes
+   entrées, même coche. Seul son ancrage change : celui-là se pose au curseur,
+   celui-ci sous son bouton. */
+/* `.subject-meta-dropdown` se pose au curseur, en `fixed`, et reste affiché :
+   c'est son contrôleur qui le montre et le place. Ici il est **ancré sous son
+   bouton**, et c'est `gh-menu--open` qui l'ouvre — les deux règles viennent
+   après les siennes pour cette seule raison. */
+.sujets-head-menu__liste{position:absolute;top:calc(100% + 6px);left:0;right:auto;
+  width:280px;max-width:min(320px, calc(100vw - 24px));display:none;}
+.sujets-head-menu__liste.gh-menu--open{display:flex;}
+.sujets-head-menu__vider{width:100%;}
+
+/* Une vue épinglée porte son icône dans sa couleur : c'est ce qu'on a choisi
+   pour la reconnaître, et la repeindre en gris annulerait ce choix. */
+.project-rail[data-project-rail="sujetsRail"] .sujets-rail__epingle-icone{display:inline-flex;}
+.project-rail[data-project-rail="sujetsRail"] .nav-list__visual:has(.sujets-rail__epingle-icone){
+  color:inherit;
+}
+
 
 
 /* ── Ce qui changerait, en tête d'une proposition ────────────────────────── */
@@ -24381,3 +24425,21 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   .review-change__ligne{grid-template-columns:36px minmax(0,1fr);}
   .review-change__engage{grid-column:2;}
 }
+
+
+/* ── La ligne de titre d'un écran, partagée ──────────────────────────────── */
+
+/* Le `padding-bottom` fait partie du titre : c'est l'espace qui le sépare de ce
+   qu'il annonce, et il n'appartient pas au tableau qui suit. Chaque écran
+   l'ajoutait de son côté, avec sa propre valeur — et le suivant se recalibrait
+   contre les précédents (`docs/fondamentaux.md`, règle 10). */
+.project-table-toolbar--titre{
+  margin-bottom:0;
+  padding-bottom:16px;
+  border-bottom:1px solid transparent;
+}
+
+/* Supprimer n'est pas ranger : l'entrée qui perd la chose est rouge, et un
+   filet la sépare de celle qui la range. */
+.gh-menu__item--danger{color:var(--danger, #f85149);}
+.gh-menu__item--danger .ui-icon{color:inherit;}

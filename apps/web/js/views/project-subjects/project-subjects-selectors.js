@@ -1,5 +1,6 @@
 import { normaliserLeTri, trierLesSujets } from "../../services/tri-des-sujets.js";
 import { champsDesSujets, sujetsFiltres } from "../../services/champs-des-sujets.js";
+import { metaDesSujets, moiDansLeProjet, personnesDuProjet } from "../../services/meta-des-sujets.js";
 import { withFilter } from "../../services/query-bar.js";
 import {
   getChildrenBySubjectIdMapFromRawResult,
@@ -336,23 +337,33 @@ export function createProjectSubjectsSelectors({
    * propose pas `objectif:`, parce que le filtre ne rendrait jamais rien et
    * qu'on chercherait ce qu'on a mal tapé.
    */
+  /** Le trombinoscope du projet, là où il vit réellement. */
+  function getCollaborateursDuProjet() {
+    return Array.isArray(store.projectForm?.collaborators) ? store.projectForm.collaborators : [];
+  }
+
+  /**
+   * Qui regarde, **en identifiant de personne**.
+   *
+   * `store.user.id` est un compte Mdall ; les assignations et les mentions
+   * portent des identifiants de personne. Les deux sont des UUID et se
+   * comparaient sans erreur : « assigné:moi » ne rendait jamais rien.
+   */
+  function getMoiDansLeProjet() {
+    return moiDansLeProjet({
+      collaborateurs: getCollaborateursDuProjet(),
+      utilisateur: String(store.user?.id || "")
+    });
+  }
+
   function getChampsDesSujets() {
     const raw = getRawSubjectsPayload(getViewState()) ?? {};
 
-    const personnes = new Map();
-    // Qui regarde fait partie du vocabulaire, même seul sur le projet : sans
-    // lui, `assigné:`, `auteur:` et `mention:` ne seraient pas déclarés, et les
-    // trois lectures du rail disparaîtraient.
-    const moi = String(store.user?.id || "").trim();
-    if (moi) personnes.set(moi, { id: moi, name: String(store.user?.name || "Moi").trim() });
-    for (const liste of Object.values(raw.assigneesBySubjectId ?? {})) {
-      for (const personne of Array.isArray(liste) ? liste : []) {
-        const id = String(personne?.id ?? personne ?? "").trim();
-        if (id && !personnes.has(id)) {
-          personnes.set(id, { id, name: String(personne?.name ?? personne?.full_name ?? id).trim() });
-        }
-      }
-    }
+    // **Le vocabulaire des personnes vient du trombinoscope du projet.** Le
+    // tirer des assignations ne déclarerait que ceux à qui l'on a déjà donné
+    // quelque chose, et l'on ne pourrait pas chercher les sujets de quelqu'un
+    // qui n'en a pas encore.
+    const personnes = personnesDuProjet(getCollaborateursDuProjet());
 
     return champsDesSujets({
       labels: (Array.isArray(raw.labels) ? raw.labels : [])
@@ -361,7 +372,7 @@ export function createProjectSubjectsSelectors({
         .map((objectif) => ({ id: String(objectif?.id ?? "").trim(), title: String(objectif?.title ?? "").trim() })),
       lots: (Array.isArray(store.projectLots?.items) ? store.projectLots.items : [])
         .map((lot) => ({ id: String(lot?.id ?? "").trim(), name: String(lot?.name ?? "").trim() })),
-      personnes: [...personnes.values()],
+      personnes,
       situations: (Array.isArray(getViewState().data) ? getViewState().data : [])
         .map((situation) => ({
           id: String(situation?.id ?? "").trim(), title: String(situation?.title ?? "").trim()
@@ -369,68 +380,33 @@ export function createProjectSubjectsSelectors({
     });
   }
 
-  /** Ce que chaque sujet porte, pour que le filtre n'ait pas à le redemander. */
+  /**
+   * Ce que chaque sujet porte, pour que le filtre n'ait pas à le redemander.
+   *
+   * **L'assemblage vit dans `meta-des-sujets.js`, et s'exécute en test.** Il
+   * était écrit ici, et nommait quatre clés que la charge utile ne porte pas :
+   * `assigneesBySubjectId`, `situationIdsBySubjectId`, `mentionsBySubjectId`,
+   * `subjectLinks`. Rien ne le disait — une clé absente rend `undefined`,
+   * `undefined` devient une liste vide, et un sujet qui ne porte rien sort de
+   * tous les filtres. Trois lectures du rail étaient vides sans jamais
+   * échouer.
+   */
   function getMetaDesSujets() {
-    const raw = getRawSubjectsPayload(getViewState()) ?? {};
-    const meta = {};
+    const { bucket } = getRunBucket();
+    const metaMap = bucket?.subjectMeta?.sujet && typeof bucket.subjectMeta.sujet === "object"
+      ? bucket.subjectMeta.sujet
+      : {};
 
-    const poser = (source, champ) => {
-      for (const [sujet, valeurs] of Object.entries(source ?? {})) {
-        const cle = String(sujet || "").trim();
-        if (!cle) continue;
-        if (!meta[cle]) meta[cle] = {};
-        meta[cle][champ] = (Array.isArray(valeurs) ? valeurs : [])
-          .map((valeur) => String(valeur?.id ?? valeur ?? "").trim()).filter(Boolean);
-      }
-    };
-
-    poser(raw.labelIdsBySubjectId, "labels");
-    poser(raw.objectiveIdsBySubjectId, "objectifs");
-    poser(raw.assigneesBySubjectId, "assignes");
-    poser(raw.situationIdsBySubjectId, "situations");
-    // Ceux où l'on est nommé avec un `@` dans un commentaire. C'est la seule
-    // lecture qui ne se déduit d'aucune colonne du sujet : elle vient de ses
-    // messages, et c'est ce qui appelle une réponse.
-    poser(raw.mentionsBySubjectId, "mentions");
-
-    // **L'auteur, et non l'assigné.** Les deux se confondent souvent et
-    // divergent toujours au moment où ça compte : on cherche ce qu'on a
-    // soi-même relevé, pas ce qu'on doit faire.
-    for (const sujet of getFlatSubjects()) {
-      const cle = String(sujet?.id || "").trim();
-      if (!cle) continue;
-      const auteur = String(sujet?.created_by ?? sujet?.author_id ?? sujet?.createdBy ?? "").trim();
-      if (!meta[cle]) meta[cle] = {};
-      meta[cle].auteurs = auteur ? [auteur] : [];
-    }
-
-    // Le lot d'un sujet est celui de qui le porte : la base range les
-    // **personnes** dans les lots, pas les sujets. L'écran le dit plutôt que de
-    // laisser croire à une colonne qui n'existe pas.
-    const lotParPersonne = new Map(
-      (Array.isArray(store.projectCollaborators?.items) ? store.projectCollaborators.items : [])
-        .map((personne) => [String(personne?.person_id ?? personne?.id ?? "").trim(),
-          String(personne?.project_lot_id ?? "").trim()])
-        .filter(([personne, lot]) => personne && lot)
-    );
-
-    // Bloqué : un lien `blocked_by` vise ce sujet. C'est une dépendance écrite,
-    // pas « en retard » ni « à l'arrêt ».
-    const bloques = new Set(
-      (Array.isArray(raw.subjectLinks) ? raw.subjectLinks : [])
-        .filter((lien) => String(lien?.link_type ?? "").trim().toLowerCase() === "blocked_by")
-        .map((lien) => String(lien?.source_subject_id ?? "").trim()).filter(Boolean)
-    );
-
-    for (const [cle, sien] of Object.entries(meta)) {
-      sien.lots = [...new Set((sien.assignes ?? []).map((personne) => lotParPersonne.get(personne)).filter(Boolean))];
-      sien.bloque = bloques.has(cle);
-    }
-    for (const cle of bloques) {
-      if (!meta[cle]) meta[cle] = { bloque: true };
-    }
-
-    return meta;
+    return metaDesSujets({
+      sujets: getFlatSubjects(),
+      raw: getRawSubjectsPayload(getViewState()) ?? {},
+      collaborateurs: getCollaborateursDuProjet(),
+      // Ce que l'Atelier a posé sans que la base l'ait encore : il prime, comme
+      // partout ailleurs sur cet écran.
+      assignesDeLAtelier: Object.fromEntries(Object.entries(metaMap)
+        .map(([sujet, meta]) => [sujet, meta?.assignees])
+        .filter(([, assignes]) => Array.isArray(assignes)))
+    });
   }
 
   /**
@@ -607,7 +583,7 @@ export function createProjectSubjectsSelectors({
       requete: withFilter(requete, champs, "statut", ""),
       champs,
       meta: getMetaDesSujets(),
-      moi: String(store.user?.id || "")
+      moi: getMoiDansLeProjet()
     });
 
     const statut = getCurrentSubjectsStatusFilter();
@@ -674,6 +650,7 @@ export function createProjectSubjectsSelectors({
   return {
     getChampsDesSujets,
     getMetaDesSujets,
+    getMoiDansLeProjet,
     getRequeteDesSujets,
     getFilteredSituations,
     getStandaloneCustomSubjects,

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { chargeDesSujets } from "../../services/charge-des-sujets.js";
 import { createProjectSubjectsSelectors } from "./project-subjects-selectors.js";
 
 /**
@@ -184,18 +185,44 @@ test("un filtre inconnu se lit « ouverts », jamais autre chose", () => {
  * et elle ne l'est pas.
  */
 
-/** Un store avec de vrais sujets, et le vocabulaire du projet. */
+/**
+ * Un store avec de vrais sujets, et le vocabulaire du projet.
+ *
+ * ## Pourquoi la charge utile se monte avec `chargeDesSujets`
+ *
+ * Elle était écrite à la main, en nommant les clés — et elle nommait
+ * exactement celles que l'écran lisait : `assigneesBySubjectId`,
+ * `subjectLinks`. Aucune des deux n'existe dans ce que le chargeur produit. Le
+ * test passait donc en vert pendant que « Assigné à moi » ne rendait rien à
+ * l'écran : le décor était fait à l'image du code, pas de la base.
+ *
+ * La charge se monte désormais avec **le code de production**. Une clé qu'on
+ * renomme change des deux côtés à la fois, et le décor ne peut plus inventer
+ * une forme que la base ne rend pas.
+ *
+ * ## Deux identifiants, et ils ne se confondent pas
+ *
+ * `user.id` est un compte Mdall ; les assignations portent des identifiants de
+ * **personne**. Le trombinoscope fait le pont, et ce décor le porte parce que
+ * c'est la situation réelle : les deux valeurs y sont différentes, et une
+ * comparaison directe rendrait une liste vide sans lever la moindre erreur.
+ */
 function unStoreGarni() {
   const sujets = [
-    { id: "s1", title: "Reprise d'étanchéité", status: "open", priority: "high" },
+    { id: "s1", title: "Reprise d'étanchéité", status: "open", priority: "high", created_by: "u-1" },
     { id: "s2", title: "Carrelage cuisine", status: "closed", priority: "low" },
     { id: "s3", title: "Étanchéité du pignon", status: "open", priority: "low" }
   ];
 
   return {
-    user: { id: "p-1" },
+    user: { id: "u-1" },
     projectLots: { items: [] },
-    projectCollaborators: { items: [] },
+    projectForm: {
+      collaborators: [
+        { personId: "p-1", userId: "u-1", name: "Moi", projectLotId: "lot-3" },
+        { personId: "p-2", userId: "u-2", name: "Benoît" }
+      ]
+    },
     situationsView: {},
     projectSubjectsView: {
       requete: "",
@@ -204,10 +231,13 @@ function unStoreGarni() {
       rawSubjectsResult: {
         subjectsById: Object.fromEntries(sujets.map((sujet) => [sujet.id, sujet])),
         labels: [{ id: "l-cr", name: "CR chantier" }],
-        labelIdsBySubjectId: { s1: ["l-cr"] },
         objectives: [],
-        assigneesBySubjectId: { s1: [{ id: "p-1", name: "Moi" }] },
-        subjectLinks: [{ link_type: "blocked_by", source_subject_id: "s3" }]
+        ...chargeDesSujets({
+          labels: { s1: ["l-cr"] },
+          assignes: [{ subject_id: "s1", person_id: "p-1" }],
+          mentions: [{ subject_id: "s2", mentioned_person_id: "p-1" }],
+          liens: [{ link_type: "blocked_by", source_subject_id: "s3", target_subject_id: "s1" }]
+        })
       }
     }
   };

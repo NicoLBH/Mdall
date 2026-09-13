@@ -159,11 +159,26 @@ test("la lecture active est marquée, et une seule", () => {
 
 test("une épingle porte son nom, ou sa requête à défaut", () => {
   const posees = epinglesDuRail([
-    { id: "e1", query: "statut:ouvert label:cr-chantier", title: "Le chantier" },
-    { id: "e2", query: "priorité:critique", title: "" }
+    { id: "e1", query: "statut:ouvert label:cr-chantier", title: "Le chantier", rail: true },
+    { id: "e2", query: "priorité:critique", title: "", rail: true }
   ], "");
 
   assert.deepEqual(posees.map((epingle) => epingle.nom), ["Le chantier", "priorité:critique"]);
+});
+
+/**
+ * **Enregistrée et épinglée sont deux choses.** Toutes les vues montaient au
+ * rail : enregistrer une recherche coûtait donc une place dans la barre de
+ * gauche, et l'on finissait par ne plus en enregistrer — l'inverse de ce qu'on
+ * voulait.
+ */
+test("une vue enregistrée sans être épinglée ne monte pas au rail", () => {
+  const posees = epinglesDuRail([
+    { id: "e1", query: "priorité:critique", title: "Les urgences", rail: true },
+    { id: "e2", query: "label:cr-chantier", title: "Rangée seulement" }
+  ], "");
+
+  assert.deepEqual(posees.map((epingle) => epingle.id), ["e1"]);
 });
 
 /**
@@ -172,10 +187,10 @@ test("une épingle porte son nom, ou sa requête à défaut", () => {
  */
 test("une épingle ne s'allume que sur sa requête exacte", () => {
   const requete = "statut:ouvert label:cr-chantier";
-  const [epingle] = epinglesDuRail([{ id: "e1", query: requete }], requete);
+  const [epingle] = epinglesDuRail([{ id: "e1", query: requete, rail: true }], requete);
   assert.equal(epingle.active, true);
 
-  const [voisine] = epinglesDuRail([{ id: "e1", query: requete }], `${requete} étanchéité`);
+  const [voisine] = epinglesDuRail([{ id: "e1", query: requete, rail: true }], `${requete} étanchéité`);
   assert.equal(voisine.active, false);
 });
 
