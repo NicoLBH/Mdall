@@ -2,8 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  LECTURE, NOMS_DE_LECTURE, QUOI_DE_LA_LECTURE, assemblerLeMarkdown, enPourcent,
-  fideliteDeLaPage, fideliteDeLaReconstitution, motsSignificatifs, pagesALire, tonDeLaPart
+  LECTURE, NOMS_DE_LECTURE, QUOI_DE_LA_LECTURE, assemblerLeMarkdown, enFichierMarkdown,
+  enPourcent, fideliteDeLaPage, fideliteDeLaReconstitution, motsSignificatifs,
+  pagesALire, pagesDuFichierMarkdown, tonDeLaPart
 } from "./reconstitution-markdown.js";
 
 /* ── L'assemblage ────────────────────────────────────────────────────────── */
@@ -195,4 +196,53 @@ test("sans restitution, on lit le texte brut et on le sait", () => {
     assert.equal(lueSur, "brut", `restitution ${JSON.stringify(restitution)}`);
     assert.deepEqual(pages, brutes);
   }
+});
+
+/* ── Le fichier rangé, et ce qu'on en relit ──────────────────────────────── */
+
+/**
+ * **Sans les marqueurs, la pagination serait perdue au rangement.** Le document
+ * relu depuis Fichiers n'aurait plus de lecture « Origine », plus de mesure par
+ * page, et plus rien à quoi confronter le PDF ouvert à côté.
+ */
+test("ranger puis relire rend exactement les mêmes pages", () => {
+  const pages = [
+    { page: 1, markdown: "# Réunion n° 7\n\n|N|Lot|\n|---|---|\n|1|Gros œuvre|" },
+    { page: 2, markdown: "## Lot 05\n\nSondage réalisé." }
+  ];
+
+  assert.deepEqual(pagesDuFichierMarkdown(enFichierMarkdown(pages)), pages);
+});
+
+/**
+ * **Un commentaire, et non un titre.** Le fichier est fait pour être ouvert par
+ * un humain dans Fichiers : un marqueur visible s'ajouterait au document toutes
+ * les deux pages, alors qu'il n'appartient pas au document.
+ */
+test("le marqueur de page ne s'affiche pas dans le document", async () => {
+  const fichier = enFichierMarkdown([{ page: 1, markdown: "# Un titre" }]);
+  assert.match(fichier, /<!-- page 1 -->/);
+
+  const { renderMarkdownToHtml } = await import("../utils/markdown-renderer.js");
+  const rendu = renderMarkdownToHtml(fichier);
+  assert.doesNotMatch(rendu, /page 1/, "le marqueur ne doit pas se voir à l'aperçu");
+  assert.match(rendu, /Un titre/);
+});
+
+test("les pages se rangent dans l'ordre, quelles qu'elles soient à l'entrée", () => {
+  const fichier = enFichierMarkdown([
+    { page: 3, markdown: "trois" }, { page: 1, markdown: "un" }
+  ]);
+  assert.deepEqual(pagesDuFichierMarkdown(fichier).map((page) => page.page), [1, 3]);
+});
+
+/**
+ * Un fichier dont on ne sait pas comment il est paginé ne peut pas être
+ * confronté au PDF. Le présenter comme une page unique ferait croire à un
+ * document d'une page (règle 5).
+ */
+test("un fichier sans marqueur ne s'invente pas une page", () => {
+  assert.deepEqual(pagesDuFichierMarkdown("# Un document sans marqueur"), []);
+  assert.deepEqual(pagesDuFichierMarkdown(""), []);
+  assert.deepEqual(enFichierMarkdown([{ page: 0, markdown: "sans place" }]), "");
 });

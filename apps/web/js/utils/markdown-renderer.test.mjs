@@ -182,3 +182,33 @@ test("l'ancre rangée après la langue n'empêche pas de reconnaître la langue"
   assert.match(html, /md-code--mdall"/);
   assert.match(html, /md-code__line--ajoute/);
 });
+
+/* ── Les commentaires ────────────────────────────────────────────────────── */
+
+/**
+ * Échapper un commentaire revient à l'afficher. Le fichier `.md` rangé sous un
+ * PDF porte un `<!-- page 3 -->` entre deux pages : il se lisait tel quel au
+ * milieu du document, alors qu'un commentaire est ce qu'on écrit pour ne pas
+ * être lu.
+ */
+test("une ligne qui n'est qu'un commentaire ne s'affiche pas", () => {
+  const html = renderMarkdownToHtml("<!-- page 1 -->\n\n# Réunion\n\nUn point.");
+
+  assert.doesNotMatch(html, /page 1/);
+  assert.match(html, /<h1>Réunion<\/h1>/);
+  assert.match(html, /<p>Un point\.<\/p>/);
+});
+
+/** Le supprimer ailleurs changerait le texte que quelqu'un a écrit. */
+test("un commentaire au milieu d'une phrase reste échappé", () => {
+  assert.match(renderMarkdownToHtml("avant <!-- x --> après"), /&lt;!-- x --&gt;/);
+  assert.match(renderMarkdownToHtml("```\n<!-- x -->\n```"), /&lt;!-- x --&gt;/);
+});
+
+/** Un commentaire n'interrompt pas la liste qu'il traverse. */
+test("un commentaire ne coupe pas une liste en deux", () => {
+  const html = renderMarkdownToHtml("- un\n<!-- page 2 -->\n- deux");
+
+  assert.equal(html.match(/<ul>/g)?.length, 1);
+  assert.match(html, /<li>un<\/li><li>deux<\/li>/);
+});

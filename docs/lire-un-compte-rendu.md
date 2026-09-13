@@ -88,7 +88,7 @@ relevé, la pastille l'affiche.
 inventés, phrases découpées, blocs déplacés. La règle « la mise en page peut changer » ouvre
 une porte ; les mesures disent si le modèle en profite pour ajouter du texte.
 
-### Étape 2 — Le `.md` se range dans Fichiers
+### Étape 2 — Le `.md` se range dans Fichiers *(faite)*
 
 Un dossier portant le nom du PDF, contenant le PDF et le `.md`.
 
@@ -101,6 +101,42 @@ Un dossier portant le nom du PDF, contenant le PDF et le `.md`.
   rejouables sans le PDF.
 
 Aucune migration : `project_document_folders` existe.
+
+#### Ce qui identifie une restitution, c'est le texte — pas le nom du fichier
+
+Deux comptes rendus s'appellent `CR.pdf`. Le même compte rendu s'appelle `CR_07.pdf` chez
+l'un et `07 - CR.pdf` chez l'autre. C'est donc l'**empreinte du texte du PDF** qui est rangée
+avec la restitution, et qui décide. D'où trois états, et non deux :
+
+| | |
+| --- | --- |
+| **absente** | rien n'est rangé — on restitue |
+| **à jour** | une restitution de *ce texte-là* est rangée — on la relit, **aucun appel** |
+| **périmée** | une restitution est rangée sous ce nom, mais elle vient d'un autre texte — on restitue, et l'écran dit pourquoi |
+
+Le troisième cas est le piège de l'étape. Confondu avec le deuxième, on afficherait la
+restitution d'un compte rendu en croyant lire celle d'un autre, sans rien pour s'en
+apercevoir (règle 5) ; confondu avec le premier, on écraserait silencieusement du travail
+rangé.
+
+#### La pagination survit au rangement
+
+Le fichier porte un `<!-- page 3 -->` entre deux pages. Sans lui, le document relu n'aurait
+plus de lecture « Origine », plus de mesure par page, et plus rien à confronter au PDF ouvert
+à côté. En commentaire, et non en titre : le fichier est fait pour être ouvert par un humain.
+
+Le rendu Markdown affichait les commentaires — il les échappait, donc il les montrait. Il les
+laisse maintenant de côté quand ils occupent une ligne entière, et les garde partout ailleurs :
+les supprimer au milieu d'une phrase changerait le texte de celui qui l'a écrite.
+
+#### Ce que l'écran en dit
+
+Quatre phrases, et pas une de plus : **relue** — donc rien payé, et la pastille affiche
+`0 € — relue`, ce qui n'est pas la même chose que « coût non annoncé » ; **rangée** — donc le
+prochain dépôt ne la repaiera pas ; **rangée sous un autre texte** — le document a changé
+depuis ; **pas rangée**, avec son motif — on la repaiera, c'est ennuyeux, pas grave.
+
+Un rangement raté n'arrête rien : la restitution est faite, elle est à l'écran.
 
 ### Étape 3 — Le secrétariat, sur le `.md` seul
 

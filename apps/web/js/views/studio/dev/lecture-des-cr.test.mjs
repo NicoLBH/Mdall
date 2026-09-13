@@ -27,6 +27,16 @@ import {
 } from "../../../services/reconstitution-markdown.js";
 import { SORT, confrontation, lectureAssemblee } from "../../../services/lecture-du-cr.js";
 import { prixDeLAppel } from "../../../services/consommation-ia.js";
+import { PHRASES_DU_RANGEMENT, RANGEE } from "../../../services/restitution-rangee.js";
+
+/**
+ * Une phrase de service, telle qu'elle arrive à l'écran.
+ *
+ * `escapeHtml` transforme l'apostrophe en `&#39;` : chercher la phrase brute ne
+ * la trouverait jamais, et le test passerait pour un défaut de l'écran.
+ */
+const commeAffichee = (phrase) =>
+  new RegExp(String(phrase).replace(/'/g, "&#39;").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
 import {
   degatsDeLaRestitution, formeDeLaRestitution
 } from "../../../services/degats-de-la-restitution.js";
@@ -70,7 +80,9 @@ function unCote(surcharge = {}) {
   return {
     phase: "vide", texte: "", lignes: [], pages: [], fidelite: null, degats: null, forme: null,
     jetons: { entree: null, sortie: null }, modeleIA: "",
-    coupee: false, horsPlafond: [], absentes: [], motif: "", ...surcharge
+    coupee: false, horsPlafond: [], absentes: [], motif: "",
+    rangement: { relue: false, etat: "", range: false, dossier: "", motif: "" },
+    ...surcharge
   };
 }
 
@@ -508,4 +520,96 @@ test("plus rien ne parle d'un outil de restitution", () => {
 
   assert.doesNotMatch(html, /Par l&#39;outil|outil de restitution|OPENDATALOADER/);
   assert.doesNotMatch(html, /Par le modèle/, "une seule restitution : plus besoin de la nommer");
+});
+
+/* ── Le rangement, tel qu'il se dit à l'écran ────────────────────────────── */
+
+/**
+ * **C'est ce qui décide si l'on ose rouvrir l'écran.** Une restitution rangée
+ * ne se refera pas au prochain dépôt, donc ne se repaiera pas. Le taire
+ * laisserait croire que regarder coûte deux centimes à chaque fois.
+ */
+test("une restitution rangée le dit, et dit où", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
+    md: uneRestitution({
+      modele: unCoteFait(REFAITES_MODELE, {
+        rangement: { relue: false, etat: RANGEE.ABSENTE, range: true, dossier: "CR_07", motif: "" }
+      })
+    })
+  }));
+
+  assert.match(html, /lecture-cr__rangement/);
+  assert.match(html, /rangée dans Fichiers/);
+  assert.match(html, /CR_07/);
+  assert.match(html, /ne la repaiera plus/);
+});
+
+/**
+ * **Relue n'est pas « coût non annoncé ».** Une restitution reprise dans
+ * Fichiers n'a rien coûté, et c'est une information ; la pastille grise des
+ * décomptes manquants ferait croire à un prix qu'on ignore (règle 5).
+ */
+test("une restitution relue n'annonce aucun appel, ni prix inconnu", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
+    md: uneRestitution({
+      modele: unCoteFait(REFAITES_MODELE, {
+        jetons: { entree: null, sortie: null }, modeleIA: "",
+        rangement: { relue: true, etat: RANGEE.A_JOUR, range: true, dossier: "CR_07", motif: "" }
+      })
+    })
+  }));
+
+  assert.match(html, commeAffichee(PHRASES_DU_RANGEMENT[RANGEE.A_JOUR]));
+  assert.match(html, /0 € — relue/);
+  assert.doesNotMatch(html, /est-inconnu/);
+});
+
+/**
+ * Le cas où le nom trompe : une restitution est rangée sous ce nom, mais elle
+ * vient d'un autre texte. On l'a donc refaite — et l'écran dit pourquoi, sans
+ * quoi la dépense paraîtrait inexplicable.
+ */
+test("une restitution périmée explique pourquoi on a rappelé le modèle", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
+    md: uneRestitution({
+      modele: unCoteFait(REFAITES_MODELE, {
+        rangement: { relue: false, etat: RANGEE.PERIMEE, range: true, dossier: "CR_07", motif: "" }
+      })
+    })
+  }));
+
+  assert.match(html, commeAffichee(PHRASES_DU_RANGEMENT[RANGEE.PERIMEE]));
+  assert.match(html, /rangée dans Fichiers/);
+});
+
+/**
+ * Un rangement raté n'arrête rien, mais ne se tait pas : la restitution est là,
+ * et le prochain dépôt la refera. C'est ennuyeux, pas grave — et il faut le
+ * savoir avant de redéposer (règle 5).
+ */
+test("un rangement raté se dit, avec son motif", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
+    md: uneRestitution({
+      modele: unCoteFait(REFAITES_MODELE, {
+        rangement: {
+          relue: false, etat: RANGEE.ABSENTE, range: false, dossier: "",
+          motif: "storage upload failed (403)"
+        }
+      })
+    })
+  }));
+
+  assert.match(html, /n'a pas pu être rangée/);
+  assert.match(html, /403/);
+  assert.match(html, /la repaiera/);
+});
+
+/** Tant que la restitution n'est pas faite, il n'y a rien à dire du rangement. */
+test("rien ne se dit du rangement avant la restitution", () => {
+  const html = renderLaLecture(unEtat({ phase: "lecture", dit: "Restitution" }));
+  assert.doesNotMatch(html, /lecture-cr__rangement/);
 });

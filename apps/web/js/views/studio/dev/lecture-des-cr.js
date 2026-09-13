@@ -41,9 +41,10 @@ import {
   confrontation, intitulesAmbigus, lectureAssemblee
 } from "../../../services/lecture-du-cr.js";
 import {
-  LECTURE, NOMS_DE_LECTURE, QUOI_DE_LA_LECTURE, assemblerLeMarkdown, enPourcent,
-  fideliteDeLaReconstitution, pagesALire, tonDeLaPart
+  LECTURE, NOMS_DE_LECTURE, QUOI_DE_LA_LECTURE, assemblerLeMarkdown, enFichierMarkdown,
+  enPourcent, fideliteDeLaReconstitution, pagesALire, tonDeLaPart
 } from "../../../services/reconstitution-markdown.js";
+import { PHRASES_DU_RANGEMENT, RANGEE } from "../../../services/restitution-rangee.js";
 import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
 import {
   PHRASES_DU_VERDICT, TON_DU_VERDICT, VERDICT, degatsDeLaRestitution,
@@ -147,7 +148,19 @@ function unCote() {
     /** Les pages qui ne sont pas parties, et celles dont rien n'est revenu. */
     horsPlafond: [],
     absentes: [],
-    motif: ""
+    motif: "",
+    /**
+     * D'où vient cette restitution, et où elle est allée.
+     *
+     * `relue` : elle a été relue dans Fichiers, **sans appel au modèle**. C'est
+     * la différence entre « cette lecture n'a rien coûté » et « on ne sait pas
+     * ce qu'elle a coûté » — deux phrases qu'un écran honnête ne confond pas
+     * (règle 5).
+     *
+     * `etat` : ce que le rangement portait avant cette lecture. Voir `RANGEE`.
+     * `range` : a-t-elle été rangée à l'issue de celle-ci.
+     */
+    rangement: { relue: false, etat: "", range: false, dossier: "", motif: "" }
   };
 }
 
@@ -355,6 +368,7 @@ function renderRestitution(vue) {
   return `
     <section class="lecture-cr__md">
       ${renderMesureDeLaRestitution(md.modele)}
+      ${renderRangement(md.modele)}
       <div class="lecture-cr__md-fichier">
         ${renderBarreDeLaRestitution(vue, md)}
         ${renderCorpsDeLaRestitution(md.modele, md.lecture)}
@@ -396,6 +410,47 @@ function renderMesureDeLaRestitution(cote) {
   `;
 }
 
+/**
+ * Où est passée cette restitution, et d'où elle vient.
+ *
+ * **Quatre phrases, et pas une de plus.** Relue — donc rien payé. Rangée — donc
+ * le prochain dépôt ne la repaiera pas. Rangée sous un autre texte — le
+ * document a changé depuis, et c'est une information qui vaut d'être dite.
+ * Pas rangée — on la repaiera, et le motif est là.
+ *
+ * Rien ici n'est un détail d'intendance : c'est ce qui fait la différence entre
+ * un écran qu'on peut rouvrir et un écran qu'on hésite à rouvrir.
+ */
+function renderRangement(cote) {
+  if (cote.phase !== "fait") return "";
+
+  const rangement = cote.rangement ?? {};
+  const ou = rangement.dossier ? ` — dossier <strong>${escapeHtml(rangement.dossier)}</strong>` : "";
+
+  if (rangement.relue) {
+    return `<p class="lecture-cr__rangement est-bon">
+      ${escapeHtml(PHRASES_DU_RANGEMENT[RANGEE.A_JOUR])}${ou}
+    </p>`;
+  }
+
+  const avant = rangement.etat === RANGEE.PERIMEE
+    ? `${escapeHtml(PHRASES_DU_RANGEMENT[RANGEE.PERIMEE])} `
+    : "";
+
+  if (rangement.range) {
+    return `<p class="lecture-cr__rangement est-bon">
+      ${avant}Restitution rangée dans Fichiers, à côté du PDF${ou} : redéposer ce document ne la
+      refera plus, et ne la repaiera plus.
+    </p>`;
+  }
+
+  return `<p class="lecture-cr__rangement est-douteux">
+    ${avant}La restitution n'a pas pu être rangée${
+      rangement.motif ? ` (${escapeHtml(rangement.motif)})` : ""
+    } : elle est à l'écran, mais le prochain dépôt de ce document la refera — et la repaiera.
+  </p>`;
+}
+
 /** La barre du fichier : les trois lectures, la mesure, le presse-papiers. */
 function renderBarreDeLaRestitution(vue, md) {
   const lignes = md.modele.lignes.length;
@@ -435,6 +490,16 @@ function renderBarreDeLaRestitution(vue, md) {
  */
 function renderPastilleDuPrix(cote) {
   if (cote.phase !== "fait") return "";
+
+  // **Relue n'est pas « coût non annoncé ».** Une restitution reprise dans
+  // Fichiers n'a rien coûté, et c'est une information ; afficher la pastille
+  // grise des décomptes manquants ferait croire à un prix qu'on ignore.
+  if (cote.rangement?.relue) {
+    return `
+      <span class="lecture-cr__md-prix est-bon"
+        title="${escapeHtml(PHRASES_DU_RANGEMENT[RANGEE.A_JOUR])}">0 € — relue</span>
+    `;
+  }
 
   const quoi = { model: cote.modeleIA, entree: cote.jetons?.entree, sortie: cote.jetons?.sortie };
   const prix = prixDeLAppel(quoi);
@@ -992,7 +1057,7 @@ async function lire(hote, fichier) {
     // texte brut du PDF laisserait la question ouverte à chaque déception.
     etat.dit = `Restitution des ${pages.length} pages en Markdown`;
     redessiner(hote);
-    await restituerParLeModele(hote);
+    await restituerOuRelire(hote);
 
     // Si elle n'a pas abouti, on lit sur le texte brut plutôt que de ne rien
     // lire — mais l'écran le dit. La décision vit dans le service, avec son
@@ -1104,6 +1169,94 @@ async function lireLaDescription(hote, subjectId) {
     etat.descriptions[id] = null;
   } finally {
     redessiner(hote);
+  }
+}
+
+/**
+ * Restituer — ou relire ce qui est déjà rangé.
+ *
+ * ## Le second dépôt ne doit pas repayer le premier
+ *
+ * La restitution vivait le temps de l'écran. Redéposer le même compte rendu la
+ * refaisait à l'identique et la **repayait** : deux centimes à chaque fois qu'on
+ * revenait voir, ce qui revient à faire payer le fait de regarder.
+ *
+ * Rangée dans Fichiers à côté de son PDF, elle se relit. Trois cas, et ce sont
+ * les trois de `RANGEE` :
+ *
+ *  - **à jour** — une restitution de *ce texte-là* est rangée : on la relit,
+ *    aucun appel ;
+ *  - **périmée** — une restitution est rangée sous ce nom, mais elle vient d'un
+ *    autre texte. On restitue, et l'écran dit pourquoi ;
+ *  - **absente** — on restitue.
+ *
+ * ## Ce qui décide, c'est l'empreinte du texte, pas le nom du fichier
+ *
+ * Deux comptes rendus s'appellent `CR.pdf`. Le même compte rendu s'appelle
+ * `CR_07.pdf` chez l'un et `07 - CR.pdf` chez l'autre. Se fier au nom
+ * afficherait un compte rendu en croyant lire l'autre, sans rien pour s'en
+ * apercevoir.
+ *
+ * ## Un rangement raté n'arrête rien
+ *
+ * La restitution est faite, elle est à l'écran. Ne pas avoir su la ranger
+ * signifie qu'on la repaiera au prochain dépôt — ennuyeux, pas grave. L'écran
+ * le dit plutôt que de le taire.
+ */
+async function restituerOuRelire(hote) {
+  const cote = etat.md.modele;
+
+  const {
+    empreinteDesPages, rangerLaRestitution, relireLaRestitution, restitutionReutilisable
+  } = await import("../../../services/ranger-la-restitution.js");
+
+  const empreinte = await empreinteDesPages(etat.pagesLues).catch(() => "");
+  const projectId = await projetCourant();
+
+  const rangee = await relireLaRestitution({ projectId, fichier: etat.fichier, empreinte });
+  cote.rangement = { ...cote.rangement, etat: rangee.etat };
+
+  // La décision vit dans le service, avec son pourquoi — un fichier rangé sans
+  // marqueur de page ne se confronte plus au PDF, et se refait.
+  const reprise = restitutionReutilisable(rangee);
+  if (reprise.reutilisable) {
+    garnirLeCote(cote, reprise.pages);
+    cote.rangement = {
+      ...cote.rangement, relue: true, range: true, dossier: texte(rangee.dossier?.name)
+    };
+    cote.phase = "fait";
+    redessiner(hote);
+    return;
+  }
+
+  await restituerParLeModele(hote);
+  if (cote.phase !== "fait") return;
+
+  etat.dit = "Rangement de la restitution dans Fichiers";
+  redessiner(hote);
+
+  const range = await rangerLaRestitution({
+    projectId, fichier: etat.fichier, empreinte, markdown: enFichierMarkdown(cote.pages)
+  });
+
+  cote.rangement = {
+    ...cote.rangement,
+    range: range.range,
+    dossier: texte(range.dossier?.name),
+    motif: range.range ? "" : range.motif
+  };
+  redessiner(hote);
+}
+
+/** Le projet où ranger. Sans lui, on restitue quand même — on ne range pas. */
+async function projetCourant() {
+  try {
+    const { resolveCurrentBackendProjectId } = await import(
+      "../../../services/project-supabase-sync.js"
+    );
+    return (await resolveCurrentBackendProjectId()) || "";
+  } catch {
+    return "";
   }
 }
 
