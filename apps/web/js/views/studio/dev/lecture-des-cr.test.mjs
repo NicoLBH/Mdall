@@ -312,10 +312,10 @@ test("les mots ajoutés par une restitution se disent", () => {
 
 test("la demande et l'échec d'une restitution se dessinent aussi", () => {
   const demande = renderLaLecture(unEtat({
-    phase: "lue", lecture: uneLecture(),
+    phase: "lecture", etape: "restitution", lecture: uneLecture(),
     md: { lecture: LECTURE.APERCU, modele: unCote({ phase: "demande" }), outil: unCote(), comparaison: null }
   }));
-  assert.match(demande, /Restitution du document/);
+  assert.match(demande, /Restitution du document en Markdown…/);
 
   const echec = renderLaLecture(unEtat({
     phase: "lue", lecture: uneLecture(),
@@ -833,7 +833,7 @@ test("rien ne s'apporte avant la lecture", () => {
  * quelle étape on en était — et l'on redéposait, ce qui relançait tout et
  * repayait tout.
  */
-test("le fichier se dit reçu dès qu'il arrive, avec les étapes cochées", () => {
+test("le fichier se dit reçu dès qu'il arrive", () => {
   const html = renderLaLecture(unEtat({
     phase: "lecture", etape: "restitution", fichier: { name: "CR_07.pdf" }
   }));
@@ -857,13 +857,62 @@ test("les étapes se cochent à mesure, et disent laquelle est en cours", () => 
   }));
 
   assert.match(html, /lecture-cr__etapes/);
+  assert.match(html, /Ouverture du document/);
   assert.match(html, /Reconnaissance de la structure/);
   assert.match(html, /Restitution du document en Markdown…/);
-  assert.match(html, /Relevé des points sur le document restitué/);
 
   // Deux étapes acquises avant celle-ci, et une seule en cours.
   assert.equal((html.match(/lecture-cr__etape est-faite/g) ?? []).length, 2);
   assert.equal((html.match(/est-ici/g) ?? []).length, 1);
+});
+
+/**
+ * **On n'annonce pas ce qui n'a pas eu lieu.** Une liste complète cochée par le
+ * haut promet cinq étapes, et cette promesse est fausse : une restitution qui
+ * échoue n'en fait jamais que trois.
+ */
+test("les étapes qui restent ne s'affichent pas à l'avance", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lecture", etape: "restitution", fichier: { name: "CR_07.pdf" }
+  }));
+
+  assert.doesNotMatch(html, /Relevé des points sur le document restitué/);
+  assert.doesNotMatch(html, /Confrontation à ce que le projet suit déjà/);
+});
+
+/**
+ * **La roue et la liste sont le même objet.** Deux spinners, ou une roue à côté
+ * d'une liste, font deux affichages pour un seul état — et ils se contredisent
+ * dès que l'un des deux retarde.
+ */
+test("il n'y a qu'une roue à l'écran, et la liste est dessous", () => {
+  for (const onglet of ["restitution", "analyse"]) {
+    const html = renderLaLecture(unEtat({
+      phase: "lecture", etape: "structure", onglet, fichier: { name: "CR_07.pdf" },
+      md: { lecture: LECTURE.APERCU, modele: unCote({ phase: "demande" }) }
+    }));
+
+    assert.equal((html.match(/class="ui-spinner /g) ?? []).length, 1, `${onglet} : plus d'une roue`);
+    assert.match(html, /lecture-cr__attente/);
+    assert.match(html, /lecture-cr__etapes/);
+  }
+});
+
+/**
+ * **Une seule source d'avancement.** Une phrase tenue à côté du curseur s'en
+ * était désynchronisée : la liste disait « reconnaissance de la structure »
+ * pendant que l'onglet disait « restitution du document » (règle 4).
+ */
+test("les deux onglets disent la même étape au même moment", () => {
+  const etape = { phase: "lecture", etape: "structure", fichier: { name: "CR_07.pdf" },
+    md: { lecture: LECTURE.APERCU, modele: unCote({ phase: "demande" }) } };
+
+  const etapesDe = (html) => (html.match(/<li class="lecture-cr__etape[^"]*">/g) ?? []).join("|");
+
+  assert.equal(
+    etapesDe(renderLaLecture(unEtat({ ...etape, onglet: "restitution" }))),
+    etapesDe(renderLaLecture(unEtat({ ...etape, onglet: "analyse" })))
+  );
 });
 
 /** Quand ça casse, la liste dit à quelle étape — ce qu'il fallait deviner. */
@@ -892,17 +941,20 @@ test("une lecture achevée n'affiche plus d'étapes", () => {
  */
 test("chaque onglet attend son tour plutôt que de rester vide", () => {
   const enRestitution = renderLaLecture(unEtat({
-    phase: "lecture", dit: "Restitution", fichier: { name: "CR_07.pdf" },
+    phase: "lecture", etape: "restitution", fichier: { name: "CR_07.pdf" },
     md: { lecture: LECTURE.APERCU, modele: unCote({ phase: "demande" }) }
   }));
-  assert.match(enRestitution, /Restitution du document…/);
+  assert.match(enRestitution, /lecture-cr__attente/);
+  assert.match(enRestitution, /Restitution du document en Markdown…/);
 
   const enAnalyse = renderLaLecture(unEtat({
-    phase: "lecture", dit: "Relevé des points", fichier: { name: "CR_07.pdf" },
+    phase: "lecture", etape: "sujets", fichier: { name: "CR_07.pdf" },
     onglet: "analyse", md: uneRestitution()
   }));
   assert.match(enAnalyse, /lecture-cr__attente/);
-  assert.match(enAnalyse, /Relevé des points…/);
+  assert.match(enAnalyse, /Relevé des points sur le document restitué…/);
+  // L'aide reste : elle dit où regarder pendant qu'on attend.
+  assert.match(enAnalyse, /l'onglet Restitution montre déjà/);
 });
 
 /**
@@ -1362,4 +1414,186 @@ test("sans dépendance, le bloc ne s'affiche pas du tout", () => {
 
   assert.doesNotMatch(html, /lecture-cr__liens/);
   assert.doesNotMatch(html, /Les dépendances/);
+});
+
+/* ── Le découpage : qui a lâché, de la structure ou de la transcription ──── */
+
+function unEtatRestitue(markdown, structure, surcharge = {}) {
+  const refaites = [{ page: 1, markdown }];
+  return unEtat({
+    phase: "lue", pagesLues: PAGES, lecture: uneLecture(),
+    structure: structure ? { structure, pagesRegardees: [1, 2] } : null,
+    md: { lecture: LECTURE.APERCU, modele: unCoteFait(refaites) },
+    ...surcharge
+  });
+}
+
+const UN_CHAPITRE = {
+  nature: "CR", decoupage: "", entete_repete: "", pied_repete: "",
+  chapitres: [{ motif: "Lot XX", niveau: 3, exemple: "", reconnaissance: "" }],
+  tableaux: [], consignes: []
+};
+
+/**
+ * **« Le modèle n'obéit pas » est une conjecture, pas un diagnostic.** Deux
+ * causes très différentes donnent le même écran sans titres, et se corrigent à
+ * deux endroits opposés. Sans ce bloc on relance le même appel en espérant
+ * mieux.
+ */
+test("le découpage dit laquelle des deux moitiés a lâché", () => {
+  const ignore = renderLaLecture(unEtatRestitue("Lot 01 – VALGO\n- fait\n", UN_CHAPITRE));
+  assert.match(ignore, /Chapitres annoncés/);
+  assert.match(ignore, /Titres rendus/);
+  assert.match(ignore, commeAffichee("la restitution n'en a rendu aucun en titre"));
+  assert.match(ignore, commeAffichee("consigne de transcription"));
+
+  const rienDemande = renderLaLecture(unEtatRestitue(
+    "Lot 01 – VALGO\n", { ...UN_CHAPITRE, chapitres: [] }));
+  assert.match(rienDemande, commeAffichee("n'a relevé aucun chapitre"));
+  assert.match(rienDemande, commeAffichee("reconnaissance de structure qu'il faut reprendre"));
+});
+
+/** Les traits manquants se distinguent des titres manquants. */
+test("des titres sans traits se disent comme tels", () => {
+  const html = renderLaLecture(unEtatRestitue("### Lot 03\n\ntexte\n", UN_CHAPITRE));
+
+  assert.match(html, commeAffichee("Les titres sont là, les traits de séparation non."));
+  assert.match(html, /Traits devant un titre/);
+});
+
+/** Le découpage tenu se dit tenu, et ne demande rien. */
+test("un découpage tenu ne réclame rien", () => {
+  const html = renderLaLecture(unEtatRestitue(
+    "---\n\n### Lot 03\n\ntexte\n", UN_CHAPITRE));
+
+  assert.match(html, /lecture-cr__decoupage est-bon/);
+  assert.match(html, commeAffichee("se retrouve dans la restitution"));
+});
+
+/**
+ * **Ne pas savoir n'autorise pas à accuser** (règle 5) : sans squelette, on ne
+ * sait pas ce qu'on a demandé au modèle.
+ */
+test("sans squelette, le découpage ne juge rien", () => {
+  const html = renderLaLecture(unEtatRestitue("Lot 01\n", null));
+  assert.doesNotMatch(html, /lecture-cr__decoupage/);
+});
+
+/* ── La largeur du papier ────────────────────────────────────────────────── */
+
+/**
+ * **Un compte rendu est écrit pour une feuille.** Étalé sur deux mille pixels,
+ * chaque ligne se lit deux fois faute de retrouver l'origine de la suivante.
+ */
+test("l'aperçu se compose dans la largeur du papier", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), md: uneRestitution(),
+    pagesLues: [{ page: 1, text: "a", largeur: 595 }, { page: 2, text: "b", largeur: 595 }]
+  }));
+
+  assert.match(html, /--lecture-cr-papier:793px/);
+  // Rien à dire quand la mesure a marché : une phrase qui s'affiche toujours ne
+  // s'affiche plus.
+  assert.doesNotMatch(html, /lecture-cr__md-format/);
+});
+
+/** Une page paysage impose sa largeur : c'est là qu'elle compte le plus. */
+test("une page paysage élargit l'aperçu", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), md: uneRestitution(),
+    pagesLues: [{ page: 1, text: "a", largeur: 595 }, { page: 2, text: "b", largeur: 842 }]
+  }));
+
+  assert.match(html, /--lecture-cr-papier:1123px/);
+});
+
+/** Sans mesure, l'aperçu s'étale — et l'écran dit pourquoi (règle 5). */
+test("une page non mesurée ne fait pas supposer un A4", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), md: uneRestitution(), pagesLues: PAGES
+  }));
+
+  assert.doesNotMatch(html, /--lecture-cr-papier/);
+  assert.match(html, /lecture-cr__md-format/);
+  assert.match(html, commeAffichee("La taille des pages n'a pas pu être lue"));
+});
+
+/* ── La situation de suivi ───────────────────────────────────────────────── */
+
+const LABEL_CR = { id: "l-1", name: "CR chantier", label_key: "cr chantier" };
+
+function unEtatSituation(surcharge = {}) {
+  return unEtat({
+    phase: "lue", pagesLues: PAGES, onglet: "analyse", md: uneRestitution(),
+    lecture: uneLecture(), lots: [], objectifs: [], labels: [LABEL_CR],
+    confrontes: uneLecture().points.map((point) => ({ ...point, sort: SORT.NOUVEAU, sujet: null, par: "" })),
+    ...surcharge
+  });
+}
+
+/**
+ * **C'est le premier endroit où la chaîne rend quelque chose sans qu'on l'ait
+ * demandé.** Au troisième dépôt, quarante sujets venus des réunions se mêlent à
+ * ceux qui viennent d'ailleurs, et personne ne refait le filtre à chaque fois.
+ */
+test("une situation se propose dès que deux sujets viennent des comptes rendus", () => {
+  const html = renderLaLecture(unEtatSituation({
+    sujetsDuLabel: ["s-1", "s-2"], sujetsDuProjet: [{ id: "s-1" }, { id: "s-2" }], situations: []
+  }));
+
+  assert.match(html, /La situation de suivi/);
+  assert.match(html, /lecture-cr__situation/);
+  assert.match(html, /2 sujets ouverts viennent des comptes rendus/);
+  assert.match(html, commeAffichee("Elle se tient à jour seule"));
+});
+
+/**
+ * **« Toute seule » ne veut pas dire « sans personne ».** Une situation a un
+ * titre, elle apparaît dans la barre, on la partage : créée dans le dos de
+ * quelqu'un, elle serait la première chose du produit que personne n'a signée.
+ */
+test("la situation se propose, elle ne se crée pas", () => {
+  const html = renderLaLecture(unEtatSituation({
+    sujetsDuLabel: ["s-1", "s-2"], sujetsDuProjet: [{ id: "s-1" }, { id: "s-2" }], situations: []
+  }));
+
+  assert.match(html, /elle fait partie de la proposition/);
+  assert.match(html, /c'est quelqu'un qui la signe/);
+  assert.doesNotMatch(html, /situation créée|a été créée/i);
+});
+
+/** Un sujet fermé ne compte pas : le filtre de la base ne retient que les ouverts. */
+test("les sujets fermés ne font pas nombre pour la situation", () => {
+  const html = renderLaLecture(unEtatSituation({
+    sujetsDuLabel: ["s-1", "s-2"],
+    sujetsDuProjet: [{ id: "s-1" }, { id: "s-2", status: "closed" }],
+    situations: []
+  }));
+
+  assert.doesNotMatch(html, /lecture-cr__situation/);
+  assert.match(html, commeAffichee("il n'y a pas encore de quoi faire une situation"));
+});
+
+/**
+ * **Une seconde situation sur le même label serait une seconde vérité** sur le
+ * même ensemble, et l'on ne saurait plus laquelle regarder (règle 10).
+ */
+test("une situation qui suit déjà le label en interdit une seconde", () => {
+  const html = renderLaLecture(unEtatSituation({
+    sujetsDuLabel: ["s-1", "s-2", "s-3"],
+    sujetsDuProjet: [{ id: "s-1" }, { id: "s-2" }, { id: "s-3" }],
+    situations: [{ mode: "automatic", filter_definition: { labelIds: ["cr chantier"] } }]
+  }));
+
+  assert.match(html, commeAffichee("Une situation suit déjà ces sujets"));
+  assert.doesNotMatch(html, /lecture-cr__situation/);
+});
+
+/** Sans les situations du projet, on ne propose rien — et on ne dit rien. */
+test("sans les situations du projet, aucune n'est proposée", () => {
+  const html = renderLaLecture(unEtatSituation({
+    sujetsDuLabel: ["s-1", "s-2"], sujetsDuProjet: [{ id: "s-1" }, { id: "s-2" }], situations: null
+  }));
+
+  assert.doesNotMatch(html, /La situation de suivi/);
 });

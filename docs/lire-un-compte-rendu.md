@@ -591,14 +591,50 @@ Un compte rendu en porte trente. Le rendu Markdown en fait maintenant des liens
 à l'entreprise qui doit reprendre l'étanchéité. Une adresse déjà écrite en lien
 n'en reçoit pas un second, et une adresse citée dans du code reste du code.
 
-#### Un trait avant chaque lot
+#### Un trait avant chaque lot — et de quoi savoir qui n'obéit pas
 
-Un titre seul ne suffit pas à montrer le découpage : dans un Markdown rendu, un
-`###` au milieu d'un flot de tableaux se remarque à peine, et douze pages sans
-respiration se lisent comme un seul bloc. La consigne fait donc **précéder
-chaque titre de niveau 1, 2 ou 3 d'une ligne `---`**. Pas de trait devant les
-titres plus profonds : ce qui se range *sous* un lot ne le découpe pas, et un
-trait partout redécouperait tout en confettis.
+Un titre seul ne suffit pas à montrer le découpage : dans un Markdown rendu, un `###` au
+milieu d'un flot de tableaux se remarque à peine, et douze pages sans respiration se lisent
+comme un seul bloc. La consigne fait donc **précéder chaque titre de niveau 1, 2 ou 3 d'une
+ligne `---`**. Pas de trait devant les titres plus profonds : ce qui se range *sous* un lot ne
+le découpe pas.
+
+**Elle n'a rien produit.** Douze pages restituées sans un seul trait ni un seul titre. Deux
+corrections en sont sorties.
+
+##### La consigne est détachée, et porte un exemple
+
+Écrite à la suite de la règle du tableau interrompu, dans le même paragraphe, elle se lisait
+comme un commentaire. Elle est maintenant sa propre consigne, et montre exactement ce qui est
+attendu :
+
+```
+---
+
+### Lot 03 – Gros œuvre – ENTREPRISE
+```
+
+##### Et l'on mesure, au lieu de conjecturer
+
+« Le modèle n'obéit pas » est une conjecture, pas un diagnostic. **Deux causes très
+différentes donnent le même écran vide**, et se corrigent à deux endroits opposés :
+
+| Ce qu'on voit | Ce qui a lâché | Ce qu'il faut reprendre |
+| --- | --- | --- |
+| aucun chapitre annoncé, aucun titre rendu | la **reconnaissance** : la consigne sur les titres n'a jamais été écrite | l'échantillon de pages, ou ce qu'on demande de relever |
+| des chapitres annoncés, aucun titre rendu | la **transcription** : la structure a fait son travail | la consigne de transcription |
+| des titres, pas de traits | la moitié de la consigne a passé | détacher davantage la règle du trait |
+
+L'écran compte donc les chapitres annoncés, les titres rendus et les traits qui précèdent un
+titre, et dit laquelle des deux moitiés a lâché. Sans cela on relance le même appel en
+espérant mieux.
+
+Deux précautions dans la mesure : la ligne de séparation d'un tableau n'est pas un trait — sur
+un compte rendu qui en porte quarante, la confondre dirait quarante traits pour zéro
+découpage — et un trait perdu entre deux paragraphes ne compte pas : seul celui qui précède un
+titre découpe quelque chose. Sans squelette lu, aucun verdict n'est rendu : on ne peut pas
+accuser un modèle d'avoir ignoré une consigne dont on ignore si elle lui a été donnée
+(règle 5).
 
 #### Les coordonnées : pas d'appel de plus, une consigne de colonne
 
@@ -624,6 +660,22 @@ Le jour où il faudra vraiment *extraire* les coordonnées — pour créer un
 intervenant, pas pour l'afficher —, ce sera un service pur et testable, pas un
 appel.
 
+#### La restitution se compose dans la largeur de sa feuille
+
+Un compte rendu est écrit **pour une feuille** : ses tableaux et ses retours à la ligne ont
+été composés pour une largeur d'A4. Étalé sur un écran de deux mille pixels, le même document
+devient une bande de deux cents caractères où chaque ligne se lit deux fois, faute de
+retrouver l'origine de la suivante.
+
+La largeur vient de la **géométrie du PDF**, pas d'une constante : une constante ferait un A4
+portrait de tous les documents, y compris des plannings en paysage — et c'est là qu'elle
+compte le plus. Un point PostScript vaut 1/72 de pouce, un pixel CSS 1/96 : la conversion est
+un rapport, qui vaut donc aussi pour l'A3 et le Letter.
+
+Le document prend la largeur de sa page **la plus large**, et non la plus fréquente : douze
+pages portrait dont une est un planning paysage doivent pouvoir montrer ce planning. Sans
+mesure, l'aperçu s'étale — et l'écran dit pourquoi plutôt que de supposer un A4 (règle 5).
+
 #### Les tableaux font tous la même largeur
 
 Chaque page décidait de la sienne, et la restitution donnait douze tableaux
@@ -633,23 +685,34 @@ dépasse son conteneur, et ils atterrissent tous à la même largeur.
 
 #### Deux lignes dans une case
 
-Une cellule de tableau ne peut pas contenir de vraie ligne — le pipe refermerait
-la ligne. Un compte rendu, lui, met couramment deux choses dans la même case :
-une adresse et un téléphone, un nom et une société. Le modèle écrit alors `\n`
-littéral, faute de mieux ; **dans une cellule, et nulle part ailleurs**, ce `\n`
-devient un retour à la ligne. Ailleurs c'est un antislash suivi d'un n — dans un
-chemin Windows, dans une consigne — et le transformer partout abîmerait du texte
-que personne n'a demandé de couper.
+Une cellule de tableau ne peut pas contenir de vraie ligne — le pipe refermerait la ligne. Un
+compte rendu, lui, met couramment deux choses dans la même case : une adresse et un
+téléphone, un nom et une société.
 
-#### L'attente dit où elle en est
+Deux écritures arrivent, et les deux se lisent **dans une cellule, et nulle part ailleurs** :
+`<br>`, la convention de Markdown et ce que le modèle écrit spontanément, et `\n` littéral.
+La consigne demande maintenant `<br>` : c'était mon invention de demander `\n`, et elle
+donnait « COMMUNE DU REPOSOIR&lt;br&gt;37, route de Prariand » affiché tel quel dans la case.
 
-Une phrase à la fois ne disait ni ce qui était acquis, ni combien d'étapes
-restaient, ni pourquoi c'était long — et l'on redéposait, ce qui relançait tout
-et repayait tout. L'écran affiche maintenant les cinq étapes en liste, cochées à
-mesure : ouverture du document, reconnaissance de la structure, restitution en
-Markdown, relevé des points, confrontation à ce que le projet suit déjà. Quand
-ça casse, la panne se pose **sur l'étape où elle est arrivée** — ce qu'il fallait
-deviner.
+Ailleurs, `<br>` reste du HTML échappé et `\n` un antislash suivi d'un n — dans un chemin
+Windows, dans une consigne. Les transformer partout abîmerait du texte que personne n'a
+demandé de couper.
+
+#### Le spinner *est* la liste
+
+Une roue seule ne dit rien pendant une minute et demie, et l'on redépose — ce qui relance
+tout et repaie tout. Une roue **à côté** d'une liste en dit deux fois trop : deux objets pour
+un seul état, qui se contredisent dès que l'un des deux retarde. C'est ce qui est arrivé — la
+liste disait « reconnaissance de la structure » pendant que l'onglet disait « restitution du
+document ».
+
+Il n'y en a donc qu'un, dans l'un comme dans l'autre onglet : la roue tourne, et les étapes
+s'écrivent dessous à mesure qu'elles arrivent. **Celles qui restent ne s'affichent pas** —
+une liste complète cochée par le haut promet cinq étapes, et cette promesse est fausse : une
+restitution qui échoue n'en fait jamais que trois.
+
+Le décalage tenait à une phrase d'avancement tenue à côté du curseur d'étape. Elle n'existe
+plus : `etat.etape` décide seule, et le libellé vient de la table des étapes (règle 4).
 
 ### Étape 4 — Fermer un sujet, et la question de fond *(faite)*
 
@@ -805,13 +868,42 @@ répondre « non, ça n'a rien à voir », on peut seulement croire.
 Zéro lien est une réponse, et c'est le cas le plus fréquent : le bloc ne s'affiche pas du
 tout plutôt que de se plaindre.
 
-### Étape 6 — La situation qui se crée toute seule
+### Étape 6 — La situation qui se tient à jour toute seule *(faite)*
 
-Dès qu'au moins deux sujets ouverts portent le label « CR chantier », une situation se crée,
-fondée sur le filtre `label = CR chantier`.
+Au troisième dépôt, un projet porte quarante sujets venus des réunions, mêlés à ceux qui
+viennent d'ailleurs. Les retrouver demande de refaire le même filtre à chaque fois — et
+personne ne le refait. Une situation **automatique** fondée sur `label = CR chantier` les
+rassemble une fois pour toutes.
 
-C'est le premier endroit où la chaîne **rend quelque chose à l'humain sans qu'il l'ait
-demandé** : un tableau de suivi apparaît, tenu à jour par les dépôts suivants.
+C'est le premier endroit où la chaîne **rend quelque chose sans qu'on l'ait demandé**.
+
+#### « Toute seule » ne veut pas dire « sans personne »
+
+Le plan disait « la situation se crée toute seule ». **Elle ne se crée pas : elle se
+propose.** Rien n'entre directement dans la mémoire du projet, et une situation en fait
+partie — elle a un titre, elle apparaît dans la barre, on la partage. Créée dans le dos de
+quelqu'un, elle serait la première chose du produit que personne n'a signée.
+
+Ce qui est automatique, c'est **son contenu** : une fois acceptée, un sujet y entre dès qu'il
+reçoit le label et en sort dès qu'il est fermé. Personne n'a à la remplir.
+
+#### Trois règles, et elles tiennent toutes à la même idée
+
+| Règle | Pourquoi |
+| --- | --- |
+| **Deux sujets au moins** | une situation qui n'en rassemble qu'un ne rassemble rien : c'est un sujet avec une page de plus |
+| **Les sujets ouverts seulement** | c'est ce que le filtre de la base retiendra ; annoncer autre chose ferait dire à l'écran autre chose que ce qui se passera (règle 4) |
+| **Une seule, jamais deux** | une seconde situation sur le même label serait une seconde vérité sur le même ensemble, et l'on ne saurait plus laquelle regarder (règle 10) |
+
+Une situation **manuelle** du même nom ne compte pas comme couvrante : son contenu est une
+liste figée, pas un filtre. Croire qu'elle couvre priverait le projet de la seule qui se
+tient à jour.
+
+Et sans la liste des situations du projet, on ne propose rien : ne pas savoir n'autorise pas
+à créer (règle 5).
+
+Aucune migration : `situations.mode` accepte déjà `automatic`, et `filter_definition` porte
+déjà `labelIds`.
 
 ### Étape 7 — L'écran des sujets, pour s'y retrouver
 

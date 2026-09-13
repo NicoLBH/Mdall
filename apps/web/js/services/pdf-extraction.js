@@ -258,7 +258,20 @@ export async function extractPositionedPages(bytes, { pdfjs = null } = {}) {
       });
     });
 
-    pages.push({ page: number, items });
+    // La taille de la page, en points PostScript. C'est ce qui permet de
+    // rendre la restitution dans la largeur du papier dont elle vient : un
+    // compte rendu composé pour un A4 se lit mal étalé sur deux mille pixels.
+    let largeur = 0;
+    let hauteur = 0;
+    try {
+      const vue = page.getViewport({ scale: 1 });
+      largeur = Math.round(vue?.width ?? 0);
+      hauteur = Math.round(vue?.height ?? 0);
+    } catch {
+      // page sans géométrie lisible : 0, et non une taille supposée (règle 5)
+    }
+
+    pages.push({ page: number, items, largeur, hauteur });
   }
 
   try {
@@ -289,11 +302,21 @@ export async function extractPagesFromFile(file, options = {}) {
     positioned = null;
   }
 
-  const itemsByPage = new Map((positioned ?? []).map((page) => [page.page, page.items]));
+  const geometrieParPage = new Map((positioned ?? []).map((page) => [page.page, page]));
 
   return {
     ...extracted,
-    pages: extracted.pages.map((page) => ({ ...page, items: itemsByPage.get(page.page) ?? null })),
+    pages: extracted.pages.map((page) => {
+      const geo = geometrieParPage.get(page.page) ?? null;
+      return {
+        ...page,
+        items: geo?.items ?? null,
+        // 0, et non une taille supposée : une page non mesurée doit pouvoir se
+        // distinguer d'une page fine.
+        largeur: geo?.largeur ?? 0,
+        hauteur: geo?.hauteur ?? 0
+      };
+    }),
     filename: file.name,
     sizeBytes: file.size,
     lastModified: file.lastModified ?? null,

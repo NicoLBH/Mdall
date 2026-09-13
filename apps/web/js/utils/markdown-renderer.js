@@ -259,10 +259,16 @@ function detectTable(lines = [], index = 0) {
  * « j.dupanloup@… \n 0629500461 », les deux caractères visibles au milieu du
  * texte.
  *
+ * Deux écritures arrivent, et les deux se lisent : `<br>` — la convention de
+ * Markdown pour couper une cellule, et ce que le modèle écrit spontanément —
+ * et `\n` littéral. Sans cette lecture, `<br>` s'échappe et **s'affiche** :
+ * « COMMUNE DU REPOSOIR&lt;br&gt;37, route de Prariand » dans la case.
+ *
  * On ne le fait **que dans les cellules** : ailleurs, un `\n` littéral est
- * presque toujours du texte que quelqu'un a écrit.
+ * presque toujours du texte que quelqu'un a écrit, et un `<br>` du HTML qu'on
+ * a délibérément choisi d'échapper.
  */
-const RETOUR_EN_CELLULE = /\\n/g;
+const RETOUR_EN_CELLULE = /\\n|<br\s*\/?>/gi;
 
 function renderTable(table, options = {}) {
   const style = (rang) => (table.alignments[rang] ? ` style="text-align:${table.alignments[rang]}"` : "");

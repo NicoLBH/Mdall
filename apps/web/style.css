@@ -24005,6 +24005,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    ses titres ont leur propre échelle, sinon un « # » du compte rendu prendrait
    la taille du titre de l'écran et l'on ne saurait plus qui parle. */
 .lecture-cr__md-apercu{padding:16px 20px;max-height:70vh;overflow:auto;font-size:13px;line-height:1.6;color:var(--text);}
+/* La restitution se compose dans la largeur du papier dont elle vient : la
+   variable est posée par l'écran depuis la géométrie du PDF, et absente
+   quand la page n'a pas pu être mesurée — l'aperçu s'étale alors. */
+.lecture-cr__md-apercu > .md-render{max-width:var(--lecture-cr-papier,none);margin:0 auto;}
+.lecture-cr__md-format{padding:8px 20px 0;color:var(--text-muted);}
 
 /* Une restitution qui n'a rien pu rendre. Elle explique ce qui manque plutôt
    que de rester vide — un cadre vide se lit « le document était vide ». */

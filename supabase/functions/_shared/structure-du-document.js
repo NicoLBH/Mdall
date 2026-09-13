@@ -218,18 +218,28 @@ export function structureEnTexte(structure = null) {
       + " TABLEAU S'INTERROMPT : tu le fermes, tu écris le titre, puis tu rouvres un tableau avec"
       + " EXACTEMENT les mêmes colonnes. Un titre laissé en ligne de tableau fait un tableau de"
       + " deux cents lignes où plus rien ne se trouve — et le découpage qui portait toute"
-      + " l'information disparaît dans la forme."
-      + " FAIS PRÉCÉDER CHAQUE TITRE DE NIVEAU 1, 2 OU 3 D'UNE LIGNE DE SÉPARATION `---`, avec une"
-      + " ligne vide avant et après. Un document de douze pages sans respiration se lit comme un"
-      + " seul bloc : le trait est ce qui permet de voir où un lot finit et où le suivant"
-      + " commence. Pas de trait devant les titres plus profonds, qui se rangent SOUS le lot et"
-      + " n'ont pas à le découper :"
+      + " l'information disparaît dans la forme :"
       + chapitres.map((chapitre) => (
         `\n- ${"#".repeat(chapitre.niveau)} ${chapitre.motif}`
         + (chapitre.exemple ? `  — par exemple : « ${chapitre.exemple} »` : "")
         + (chapitre.reconnaissance ? `\n  On le reconnaît à : ${chapitre.reconnaissance}` : "")
       )).join("")
     );
+
+    // **Détachée, et non en fin de paragraphe.** Écrite à la suite de la règle
+    // du tableau interrompu, elle n'a rien produit sur un document réel : douze
+    // pages restituées sans un seul trait. Une consigne de forme noyée dans une
+    // consigne de fond se lit comme un commentaire.
+    if (chapitres.some((chapitre) => chapitre.niveau <= 3)) {
+      morceaux.push(
+        "ÉCRIS UNE LIGNE `---` SEULE, AVEC UNE LIGNE VIDE AVANT ET APRÈS, JUSTE AVANT CHAQUE TITRE"
+        + " DE NIVEAU 1, 2 OU 3. Exemple exact de ce qui est attendu :\n"
+        + "\n---\n\n### Lot 03 – Gros œuvre – ENTREPRISE\n"
+        + "\nUn document de douze pages sans respiration se lit comme un seul bloc : le trait est"
+        + " ce qui permet de voir où un lot finit et où le suivant commence. PAS de trait devant"
+        + " les titres de niveau 4 ou plus, qui se rangent SOUS le lot et n'ont pas à le découper."
+      );
+    }
   }
 
   if (tableaux.length > 0) {
@@ -253,7 +263,7 @@ export function structureEnTexte(structure = null) {
       + " jamais à la colonne des coordonnées. Une valeur rangée dans la mauvaise colonne ne se"
       + " voit pas à la relecture : elle se lit comme une donnée."
       + " Quand une case porte plusieurs valeurs — un téléphone et une adresse électronique, un"
-      + " nom et une adresse —, sépare-les par `\\n` À L'INTÉRIEUR de la case. N'ouvre JAMAIS une"
+      + " nom et une adresse —, sépare-les par `<br>` À L'INTÉRIEUR de la case. N'ouvre JAMAIS une"
       + " ligne de tableau supplémentaire pour ça : la ligne se désalignerait de toutes les"
       + " autres."
     );

@@ -167,12 +167,46 @@ test("les titres qui découpent sont précédés d'un trait", () => {
     chapitres: [{ motif: "Lot XX", niveau: 3, exemple: "", reconnaissance: "" }]
   }));
 
-  assert.match(dit, /LIGNE DE SÉPARATION `---`/);
-  assert.match(dit, /NIVEAU 1, 2 OU 3/);
-  assert.match(dit, /ligne vide avant et après/);
+  assert.match(dit, /ÉCRIS UNE LIGNE `---` SEULE/);
+  assert.match(dit, /AVANT CHAQUE TITRE DE NIVEAU 1, 2 OU 3/);
+  assert.match(dit, /LIGNE VIDE AVANT ET APRÈS/);
+  // **Un exemple, et pas seulement une règle.** La règle seule, écrite en fin
+  // de paragraphe, n'a produit aucun trait sur douze pages.
+  assert.match(dit, /\n---\n\n### Lot 03/);
   // **Et pas plus profond** : ce qui se range SOUS un lot ne le découpe pas, et
   // un trait devant chaque sous-titre redécouperait tout en confettis.
-  assert.match(dit, /Pas de trait devant les titres plus profonds/);
+  assert.match(dit, /PAS de trait devant les titres de niveau 4 ou plus/);
+});
+
+/**
+ * **Une consigne de forme noyée dans une consigne de fond se lit comme un
+ * commentaire.** Écrite à la suite de la règle du tableau interrompu, celle du
+ * trait n'a rien produit : douze pages restituées sans une seule séparation.
+ * Elle est donc son propre paragraphe.
+ */
+test("la consigne du trait est détachée de celle des titres", () => {
+  const dit = structureEnTexte(structureLue({
+    ...UNE_STRUCTURE,
+    chapitres: [{ motif: "Lot XX", niveau: 3, exemple: "", reconnaissance: "" }]
+  }));
+
+  const titres = dit.indexOf("LES TITRES SUIVANTS DÉCOUPENT");
+  const trait = dit.indexOf("ÉCRIS UNE LIGNE `---` SEULE");
+
+  assert.ok(titres >= 0 && trait > titres, "la consigne du trait ne suit pas celle des titres");
+  // Une ligne vide entre les deux : c'est ce qui en fait deux consignes.
+  assert.match(dit.slice(titres, trait), /\n\n$/);
+});
+
+/** Sans titre à découper, le trait n'a rien à précéder : on ne le demande pas. */
+test("le trait ne se demande pas devant des titres trop profonds", () => {
+  const dit = structureEnTexte(structureLue({
+    ...UNE_STRUCTURE,
+    chapitres: [{ motif: "Sous-point", niveau: 5, exemple: "", reconnaissance: "" }]
+  }));
+
+  assert.match(dit, /LES TITRES SUIVANTS DÉCOUPENT/);
+  assert.doesNotMatch(dit, /ÉCRIS UNE LIGNE `---` SEULE/);
 });
 
 /** Hors des six niveaux de Markdown, un titre n'existe pas — on ramène. */
@@ -207,7 +241,7 @@ test("chaque valeur va dans sa colonne, et le multi-valeur reste dans la case", 
   assert.match(dit, /ne porte QUE des numéros de téléphone et des adresses électroniques/);
   assert.match(dit, /Une adresse postale[^.]*appartient à la colonne qui porte le nom/);
   // Et pas une ligne de plus : elle se désalignerait de toutes les autres.
-  assert.match(dit, /sépare-les par `\\n` À L'INTÉRIEUR de la case/);
+  assert.match(dit, /sépare-les par `<br>` À L'INTÉRIEUR de la case/);
   assert.match(dit, /N'ouvre JAMAIS une ligne de tableau supplémentaire/);
 });
 
