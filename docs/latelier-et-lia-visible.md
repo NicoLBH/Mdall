@@ -144,9 +144,14 @@ phrases sur un point daté sur cinq, aucun réglage ne le corrigeait, et elle de
 un hébergement — là où le modèle fait mieux pour deux centimes. Il en reste le
 détecteur de phrases découpées, qui mesure le modèle exactement pareil.
 
-**Ce qui reste : le `.md` en base.** La restitution vit le temps de l'écran ;
+**La suite est écrite.** Le plan complet de la lecture d'un compte rendu — trois
+appels, huit étapes — est dans [`lire-un-compte-rendu.md`](lire-un-compte-rendu.md).
+L'étape 1 y est faite : la transcription passe sur le modèle complet, et la consigne
+lui demande de faire émerger la structure implicite du document.
+
+**Ce qui vient : le `.md` en base.** La restitution vit le temps de l'écran ;
 redéposer le même PDF la refait, et la repaie. Sa place est dans la chaîne Documents,
-où un identifiant de document existe.
+où un identifiant de document existe. C'est l'étape 2.
 
 **La version, à chaque palier.** L'extraction se juge à l'œil sur des documents réels ;
 chaque montée de qualité est une version, et l'on peut comparer. C'est aussi ce qui

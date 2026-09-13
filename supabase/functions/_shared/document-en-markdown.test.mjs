@@ -20,7 +20,7 @@ test("la consigne interdit de résumer, de reformuler et de compléter", () => {
   assert.match(CONSIGNES_DE_RECONSTITUTION, /Ne complète pas/);
   assert.match(CONSIGNES_DE_RECONSTITUTION, /N'invente pas/);
   // Les tableaux sont la moitié d'un compte rendu de chantier.
-  assert.match(CONSIGNES_DE_RECONSTITUTION, /tableaux Markdown/);
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /tableaux? Markdown/);
   // Et les nombres en sont la moitié qui coûte cher quand elle bouge.
   assert.match(CONSIGNES_DE_RECONSTITUTION, /caractère pour caractère/);
 });
@@ -203,4 +203,97 @@ test("la reconstitution n'écrit rien et n'ouvre rien", async () => {
     assert.doesNotMatch(source, /createManualSubject|createSubject|\.insert\(|\.upsert\(/,
       `${chemin} écrit quelque chose`);
   }
+});
+
+/* ── Ce que l'étape 1 a ajouté ───────────────────────────────────────────── */
+
+/**
+ * **Un tableau perdu est une information perdue.** Le tableau des contacts est
+ * le seul endroit d'un compte rendu où le nom, l'entreprise, le courriel et le
+ * téléphone d'un intervenant sont réunis. Rendu en liste à puces, on ne sait
+ * plus quelle adresse va avec quel nom.
+ */
+test("la consigne impose qu'un tableau reste un tableau", () => {
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /CE QUI EST UN TABLEAU RESTE UN TABLEAU/);
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /jamais en liste ni en paragraphe/);
+  // Le cas qui compte, nommé pour qu'il ne se perde pas dans le général.
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /tableau des contacts/);
+});
+
+/**
+ * **La mise en page peut bouger, les mots non.** Un compte rendu de chantier est
+ * une arborescence qui ne dit pas son nom : lot, entreprise, point, reprises des
+ * semaines suivantes. La rendre explicite ici évite aux appels suivants de la
+ * deviner — et ils devinent moins bien.
+ *
+ * C'est une porte ouverte, et elle reste étroite : l'autorisation porte sur la
+ * forme, l'interdiction sur le fond, et les deux sont dans la même phrase.
+ */
+test("la consigne autorise la mise en page et interdit toujours les mots", () => {
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /TU PEUX CLARIFIER LA MISE EN PAGE, JAMAIS LES MOTS/);
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /Tu ne peux pas ajouter, retirer ni changer un seul mot/);
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /FAIS ÉMERGER LA STRUCTURE IMPLICITE/);
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /imbrique les reprises sous le point/);
+
+  // L'ordre reste intouchable : l'imbrication déplace l'indentation, pas le
+  // contenu. Sans cette précision, la porte ouverte à la forme laisserait
+  // passer un réordonnancement — le défaut qu'on venait de corriger.
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /l'ordre de lecture reste celui du document/);
+  assert.match(CONSIGNES_DE_RECONSTITUTION, /GARDE L'ORDRE DU DOCUMENT/);
+});
+
+/**
+ * **Le premier maillon prend le modèle complet.** Tout ce qui suit lit ce qu'il
+ * rend, et une erreur de transcription se propage sans jamais se corriger. Le
+ * relevé des points, lui, reste sur le petit modèle : il travaille sur un
+ * document déjà propre.
+ */
+test("la transcription emploie le modèle complet, et son tarif est relevé", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const transcription = readFileSync(
+    fileURLToPath(new URL("../reconstituer-en-markdown/index.ts", import.meta.url)), "utf8"
+  );
+  const releve = readFileSync(
+    fileURLToPath(new URL("../extract-sujets/index.ts", import.meta.url)), "utf8"
+  );
+
+  const modeleDe = (source) => source.match(/const MODELE = "([^"]+)"/)?.[1];
+  assert.equal(modeleDe(transcription), "gpt-4.1");
+  assert.equal(modeleDe(releve), "gpt-4.1-mini");
+
+  // **Un modèle sans tarif relevé afficherait « tarif inconnu ».** C'est voulu —
+  // un prix inventé au milieu de prix réels serait pire que pas de prix — mais
+  // ce serait ici une négligence, pas une honnêteté.
+  const { TARIFS } = await import("../../../apps/web/js/services/consommation-ia.js");
+  for (const modele of [modeleDe(transcription), modeleDe(releve)]) {
+    assert.ok(TARIFS[modele], `le tarif de « ${modele} » n'est pas relevé`);
+  }
+});
+
+/**
+ * Le plafond d'entrée est calé sur ce qui peut **revenir** : une transcription
+ * rend autant de texte qu'elle en reçoit. Envoyer plus que ce que le modèle
+ * sait rendre d'un bloc garantirait une réponse coupée au milieu.
+ */
+test("le plafond d'entrée tient dans ce que le modèle peut rendre", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const fonction = readFileSync(
+    fileURLToPath(new URL("../reconstituer-en-markdown/index.ts", import.meta.url)), "utf8"
+  );
+
+  const caracteres = Number(fonction.match(/const MAX_CARACTERES = (\d+)/)?.[1]);
+  const jetons = Number(fonction.match(/const MAX_JETONS = (\d+)/)?.[1]);
+  assert.ok(caracteres > 0 && jetons > 0, "les deux plafonds doivent être déclarés");
+
+  // Un jeton vaut environ quatre caractères de français. Ce qui entre doit
+  // pouvoir ressortir — sinon la coupure vient de nous, pas du document.
+  assert.ok(caracteres / 4 <= jetons,
+    `${caracteres} caractères ne tiennent pas dans ${jetons} jetons de sortie`);
+
+  // Et ce qui n'est pas parti se dit, plutôt que de manquer en silence.
+  assert.match(fonction, /hors_plafond/);
 });
