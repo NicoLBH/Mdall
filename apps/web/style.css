@@ -24254,16 +24254,94 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    tableau se retrouvait dans une bande de trois cents pixels. */
 .project-simple-page--sujets{ margin-left:var(--project-rail-width, 232px); }
 
-/* Le corps est borné et centré par `propositions-shell`, celle de la Mémoire :
-   un tableau qui s'étale sur deux mille pixels se lit deux fois par ligne.
-   Rien à écrire de plus ici — la coquille et la mise en colonne existent. */
-.project-simple-page--sujets .propositions-shell{ gap:16px; }
+/* ── La largeur d'une page, écrite une fois pour toute l'application ─────── */
 
-/* Aucune vue épinglée : on dit comment en avoir une. Une rubrique vide fait
-   croire qu'on a perdu quelque chose. */
-.sujets-rail__vide{margin:0;padding:4px 12px 8px;font-size:12px;color:var(--text-muted);}
+/* **Le problème qu'elle règle.** Chaque écran choisissait sa largeur : 1012 px
+   ici, 1400 px là, rien ailleurs. Le tableau des sujets s'est retrouvé borné à
+   la largeur d'une page de texte, où il n'y avait plus la place pour ses
+   colonnes.
+
+   Une seule classe, donc, et les écrans l'emploient au lieu d'en inventer une.
+   Elle s'adapte : pleine largeur tant que l'écran est étroit, bornée au-delà
+   pour qu'une ligne ne traverse pas deux mille pixels. Les 1400 px sont ceux
+   que Paramètres employait déjà — on reprend la valeur existante plutôt que
+   d'en poser une neuvième. */
+.page-large{
+  width:100%;
+  max-width:1400px;
+  margin:0 auto;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+  padding:16px;
+}
+
+/* Sur un petit écran, le remplissage se resserre : seize pixels de chaque côté
+   d'un téléphone, c'est un dixième de la largeur. */
+@media (max-width:640px){
+  .page-large{ padding:12px 8px; }
+}
+
+/* L'icône d'une entrée de rail est grise, son texte reste blanc : c'est le
+   texte qu'on lit, l'icône ne fait que le repérer. Une icône de la couleur du
+   texte les met sur le même plan, et la ligne devient un bloc. */
 .sujets-rail__decrocher{opacity:0;}
 .nav-list__item:hover .sujets-rail__decrocher{opacity:1;}
+.project-rail[data-project-rail="sujetsRail"] .nav-list__visual{color:rgb(145, 152, 161);}
+
+/* ── Les vues : leur liste, et leur formulaire ───────────────────────────── */
+
+.sujets-vues__tete{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.sujets-vues__titre{margin:0;font-size:16px;font-weight:600;color:var(--text);}
+.sujets-vues__vide{margin:0;padding:24px 16px;color:var(--text-muted);font-size:13px;text-align:center;}
+
+.sujets-vues__liste{list-style:none;margin:0;padding:0;}
+.sujets-vues__ligne{display:flex;align-items:center;gap:4px;
+  border-top:1px solid var(--border);padding-right:8px;}
+.sujets-vues__ligne:first-child{border-top:0;}
+.sujets-vues__ouvrir{flex:1;min-width:0;display:flex;align-items:flex-start;gap:10px;
+  padding:10px 12px;border:0;background:transparent;color:var(--text);text-align:left;cursor:pointer;}
+.sujets-vues__ouvrir:hover{background:var(--surface-hover);}
+.sujets-vues__icone{flex:0 0 auto;display:inline-flex;padding-top:1px;}
+.sujets-vues__corps{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.sujets-vues__nom{font-weight:600;}
+.sujets-vues__mot{color:var(--text-muted);font-size:12px;}
+/* La requête, en gris et en chasse fixe : c'est ce que la vue retient, et on
+   doit pouvoir la relire sans l'ouvrir. */
+.sujets-vues__requete{color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sujets-vues__retirer{flex:0 0 auto;opacity:0;}
+.sujets-vues__ligne:hover .sujets-vues__retirer{opacity:1;}
+
+.sujets-vue-forme{display:flex;flex-direction:column;gap:12px;}
+
+/* L'aperçu à gauche, les choix à droite : on voit ce qu'on fabrique pendant
+   qu'on le choisit. */
+.sujets-vue-forme__habit{display:flex;gap:16px;align-items:flex-start;
+  padding:12px;border:1px solid var(--border);border-radius:8px;}
+.sujets-vue-forme__apercu{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+  width:40px;height:40px;border:1px solid var(--border);border-radius:8px;}
+.sujets-vue-forme__choix{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;}
+.sujets-vue-forme__intitule{margin:0;font-size:11px;text-transform:uppercase;
+  letter-spacing:.04em;color:var(--text-muted);}
+
+.sujets-vue-forme__icones{display:flex;flex-wrap:wrap;gap:4px;}
+.sujets-vue-forme__icone{display:inline-flex;align-items:center;justify-content:center;
+  width:28px;height:28px;border:1px solid transparent;border-radius:6px;
+  background:transparent;color:rgb(145, 152, 161);cursor:pointer;}
+.sujets-vue-forme__icone:hover{background:var(--surface-hover);color:var(--text);}
+.sujets-vue-forme__icone.est-choisie{border-color:var(--border);color:var(--text);background:var(--surface-hover);}
+
+.sujets-vue-forme__couleurs{display:flex;flex-wrap:wrap;gap:6px;}
+.sujets-vue-forme__couleur{width:20px;height:20px;border-radius:50%;cursor:pointer;
+  border:2px solid transparent;background:var(--sujets-vue-couleur);}
+/* Le choix se marque par un anneau, pas par une coche : une coche par-dessus
+   la couleur cache précisément ce qu'on est en train de choisir. */
+.sujets-vue-forme__couleur.est-choisie{border-color:var(--text);}
+
+.sujets-vue-forme__champ{display:flex;flex-direction:column;gap:4px;}
+.sujets-vue-forme__refus{margin:0;color:var(--danger, #f85149);font-size:13px;}
+.sujets-vue-forme__gestes{display:flex;justify-content:flex-end;gap:8px;}
 
 .sujets-search{margin-bottom:10px;}
 .sujets-search__reserve{margin:-4px 0 10px;color:var(--text-muted);}

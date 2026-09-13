@@ -1069,6 +1069,40 @@ Deux détails ont fait la différence entre un test qui attrape ça et un qui ne
 Les deux ont été trouvés en cassant : la première version du test ne tombait pas quand on
 débranchait le repli.
 
+#### Les vues : des recherches qu'on nomme et qu'on habille
+
+Une épingle garde une requête. Une **vue** lui donne un nom, une icône, une couleur et une
+phrase qui dit à quoi elle sert. La différence n'est pas cosmétique : une liste de douze
+requêtes brutes ne se parcourt pas — on relit chacune pour retrouver celle qu'on cherche, et
+l'on finit par n'en garder qu'une.
+
+Le rail portait une phrase à leur place : « aucune vue épinglée, épinglez une recherche… ».
+Elle occupait la place en permanence pour dire qu'il n'y avait rien, et n'offrait rien à
+cliquer. **« Vues » est maintenant un endroit**, comme Situations, Objectifs et Labels : une
+entrée qui mène à son écran, vide ou non, et c'est de là qu'on en crée une.
+
+L'écran montre ce que chaque vue retient — sa requête est lisible sans l'ouvrir —, et le
+formulaire met le **tableau des sujets sous lui** : on voit ce que la recherche rend pendant
+qu'on l'écrit. Enregistrer une vue sans avoir vu ce qu'elle montre, c'est enregistrer une
+promesse.
+
+Trois colonnes de plus dans la table des épingles — `description`, `icon`, `color` — toutes
+facultatives, et **aucune contrainte de base sur les noms d'icône ou de couleur** : ce sont
+des noms d'un jeu qui vit dans le code, et une contrainte ici obligerait à migrer la base
+chaque fois qu'on ajoute une icône. Le service les ramène à ce qu'il connaît — une valeur
+inconnue devient l'icône par défaut, pas une case vide.
+
+#### Une largeur de page, écrite une fois
+
+Chaque écran choisissait la sienne : 1012 px ici, 1400 px là, rien ailleurs. Le tableau des
+sujets s'est retrouvé borné à la largeur d'une page de texte, où il n'y avait plus la place
+pour ses colonnes.
+
+`.page-large` est cette largeur, et les écrans l'emploient au lieu d'en inventer une. Elle
+s'adapte : pleine largeur tant que l'écran est étroit, bornée au-delà pour qu'une ligne ne
+traverse pas deux mille pixels. Les 1400 px sont ceux que Paramètres employait déjà — on
+reprend la valeur existante plutôt que d'en poser une neuvième.
+
 #### Une seule recherche
 
 Celle de la barre d'outils ne cherchait que dans les titres, sans grammaire et sans

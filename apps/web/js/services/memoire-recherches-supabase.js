@@ -30,7 +30,7 @@
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 
 const SUPABASE_URL = getSupabaseUrl();
-const COLUMNS = "id,project_id,query,title,surface,created_at";
+const COLUMNS = "id,project_id,query,title,description,icon,color,surface,created_at";
 
 /**
  * L'écran d'où vient une épingle.
@@ -90,7 +90,12 @@ export function recherchePourLEcran(ligne = {}) {
     id: texte(ligne.id),
     titre: texte(ligne.title) || requete,
     requete,
-    surface: surfaceDe(ligne.surface)
+    surface: surfaceDe(ligne.surface),
+    // Ce qui habille une vue voyage tel quel : c'est `vues-des-sujets.js` qui
+    // le ramène à ce que le jeu d'icônes connaît, et lui seul.
+    description: texte(ligne.description),
+    icone: texte(ligne.icon),
+    couleur: texte(ligne.color)
   };
 }
 
@@ -133,7 +138,7 @@ export async function listerLesRecherches(projectId, { surface = SURFACE.MEMOIRE
  * @returns {Promise<object|null>} l'épingle posée, ou `null`
  */
 export async function epinglerLaRecherche({
-  projectId, requete, titre = "", surface = SURFACE.MEMOIRE
+  projectId, requete, titre = "", surface = SURFACE.MEMOIRE, habits = null
 } = {}) {
   const projet = texte(projectId);
   const dite = texte(requete);
@@ -146,7 +151,11 @@ export async function epinglerLaRecherche({
       headers: { Prefer: "return=representation,resolution=merge-duplicates" },
       body: [{
         project_id: projet, query: dite, title: texte(titre) || null,
-        surface: surfaceDe(surface)
+        surface: surfaceDe(surface),
+        // Ce qui habille une vue — description, icône, couleur — n'existe que
+        // là où on le donne. Une épingle de la Mémoire n'en a pas, et les
+        // colonnes restent nulles plutôt que de porter des valeurs vides.
+        ...(habits && typeof habits === "object" ? habits : {})
       }]
     });
 

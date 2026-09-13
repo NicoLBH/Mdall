@@ -42,7 +42,17 @@ export const GESTE = {
   /** Épingler ce qui est écrit dans la barre. */
   EPINGLER: "epingler",
   /** Appliquer une suggestion de complétion. */
-  SUGGESTION: "suggestion"
+  SUGGESTION: "suggestion",
+  /** Ouvrir le formulaire d'une nouvelle vue. */
+  VUE_NOUVELLE: "vue_nouvelle",
+  /** Choisir l'icône d'une vue. */
+  VUE_ICONE: "vue_icone",
+  /** Choisir sa couleur. */
+  VUE_COULEUR: "vue_couleur",
+  /** Fermer le formulaire sans rien écrire. */
+  VUE_ANNULER: "vue_annuler",
+  /** Enregistrer la vue. */
+  VUE_ENREGISTRER: "vue_enregistrer"
 };
 
 /**
@@ -58,6 +68,11 @@ const ATTRIBUTS = [
   ["data-sujets-vider", GESTE.VIDER],
   ["data-sujets-epingler", GESTE.EPINGLER],
   ["data-sujets-menu", GESTE.MENU],
+  ["data-sujets-vue-nouvelle", GESTE.VUE_NOUVELLE],
+  ["data-sujets-vue-icone", GESTE.VUE_ICONE],
+  ["data-sujets-vue-couleur", GESTE.VUE_COULEUR],
+  ["data-sujets-vue-annuler", GESTE.VUE_ANNULER],
+  ["data-sujets-vue-enregistrer", GESTE.VUE_ENREGISTRER],
   ["data-sujets-lecture", GESTE.LECTURE],
   ["data-sujets-sousvue", GESTE.SOUS_VUE],
   ["data-sujets-ecran", GESTE.ECRAN],

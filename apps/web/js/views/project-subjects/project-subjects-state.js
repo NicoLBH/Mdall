@@ -169,7 +169,11 @@ export function createProjectSubjectsState({ store }) {
     // La requête des sujets : le seul état filtrant du tableau. Statut,
     // priorité, labels, objectifs, lots, assignés et blocage s'y écrivent, et
     // c'est elle que le rail pose, que les menus modifient et qu'on épingle.
-    if (typeof v.requete !== "string") v.requete = "";
+
+    // Le formulaire d'une vue, quand il est ouvert. `null` : on regarde la
+    // liste. Un objet vide voudrait dire « un formulaire vierge est ouvert »,
+    // ce qui n'est pas la même chose.
+    if (!("vueEnCours" in v)) v.vueEnCours = null;
 
     if (typeof v.situationsStatusFilter !== "string") v.situationsStatusFilter = "open";
     if (typeof v.subjectsSubview !== "string") v.subjectsSubview = "subjects";
