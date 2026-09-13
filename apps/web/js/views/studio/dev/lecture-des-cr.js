@@ -49,6 +49,9 @@ import {
   LABEL_DU_CR, QUOI_DU_LABEL, labelDuCrDansLeProjet, labelsAProposer, phraseDuLabel
 } from "../../../services/label-du-cr.js";
 import { lotsAProposer, phraseDesLots } from "../../../services/lots-du-cr.js";
+import {
+  PHRASES_DU_SUR, SUR, dateEnFrancais, objectifsAProposer, phraseDesObjectifs
+} from "../../../services/echeances-du-cr.js";
 import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
 import {
   PHRASES_DU_VERDICT, TON_DU_VERDICT, VERDICT, degatsDeLaRestitution,
@@ -111,6 +114,13 @@ const etat = {
    * qui sont peut-être déjà là, et personne ne nettoierait (règle 5).
    */
   lots: null,
+  /**
+   * Les objectifs du projet. `null` : on n'a pas pu les lire.
+   *
+   * Sert à dire lesquels existent déjà à la date d'une échéance. Ne pas savoir
+   * n'est pas « il n'y en a aucun » (règle 5).
+   */
+  objectifs: null,
   /** Le sujet dont on regarde le détail, pour juger si c'est bien le même. */
   deplie: "",
   /**
@@ -121,6 +131,13 @@ const etat = {
    */
   descriptions: {},
   motif: "",
+  /**
+   * Ce que le serveur a nommé de la panne, s'il l'a nommée.
+   *
+   * Vide quand il n'a rien nommé : on n'invente pas une explication
+   * vraisemblable pour remplir le cadre (règle 5).
+   */
+  panne: "",
   /** Le PDF déposé, gardé le temps de la lecture. */
   fichier: null,
   /** L'onglet regardé. Voir `ONGLET`. */
@@ -236,14 +253,22 @@ function renderEntete() {
   `;
 }
 
+/**
+ * La zone de dépôt.
+ *
+ * **Elle ne porte plus l'attente.** Le rond tournait ici, pendant que rien ne
+ * disait si le fichier avait été reçu ni à quelle étape on en était. L'attente
+ * est passée dans les onglets, là où elle se remplit ; la zone se contente de
+ * rester ouverte, refermée le temps qu'un document est en cours pour qu'on
+ * n'en dépose pas un second par-dessus.
+ */
 function renderDepot(vue) {
   const enLecture = vue.phase === "lecture";
 
   return `
     <div class="lecture-cr__depot${enLecture ? " is-occupee" : ""}" data-lecture-cr-zone>
       ${enLecture ? `
-        ${renderSpinnerHtml({ label: vue.dit || "Lecture en cours", size: "lg" })}
-        <p class="lecture-cr__depot-mot">${escapeHtml(vue.dit || "Lecture en cours")}…</p>
+        <p class="lecture-cr__depot-mot">Un document est en cours de lecture.</p>
       ` : `
         <span class="lecture-cr__depot-icone" aria-hidden="true">${svgIcon("file", { className: "octicon" })}</span>
         <p class="lecture-cr__depot-mot">Déposez un compte rendu, ou choisissez-le.</p>
@@ -256,24 +281,113 @@ function renderDepot(vue) {
   `;
 }
 
+/**
+ * Le corps de l'écran, **dès que le fichier est là**.
+ *
+ * ## Pourquoi il ne commence plus à la fin
+ *
+ * Il ne s'affichait qu'une fois tout terminé. Pendant une minute et demie, on
+ * voyait un rond qui tourne dans la zone de dépôt, sans savoir si le fichier
+ * avait été reçu, à quelle étape on en était, ni ce qui avançait. Et si quoi
+ * que ce soit tombait, l'écran se vidait entièrement : la restitution déjà
+ * payée disparaissait avec le reste.
+ *
+ * Maintenant : le fichier se dit reçu, les deux onglets apparaissent aussitôt,
+ * et chacun se remplit quand son tour arrive. L'onglet « Restitution » d'abord
+ * — c'est l'ordre du procédé — puis « Analyse ». Ce qui est arrivé reste à
+ * l'écran, même quand la suite échoue.
+ *
+ * ## Une panne ne vide rien
+ *
+ * L'alerte se pose **au-dessus** des onglets, et les onglets gardent ce qu'ils
+ * ont. Une analyse qui échoue après une restitution réussie laisse voir la
+ * restitution : c'est elle qu'on a payée, et c'est elle qui dira peut-être
+ * pourquoi la suite n'a pas marché.
+ */
 function renderCorps(vue) {
-  if (vue.phase === "echec") {
-    return `
-      <section class="lecture-cr__echec">
-        <p>${escapeHtml(vue.motif || "La lecture n'a pas abouti.")}</p>
-        <p class="lecture-cr__echec-aide">
-          Ce n'est pas « le document ne dit rien » : la lecture n'a pas eu lieu. Redéposez-le pour réessayer.
-        </p>
-      </section>
-    `;
-  }
-
-  if (vue.phase !== "lue" || !vue.lecture) return "";
+  if (vue.phase === "vide") return "";
 
   return `
-    ${renderIdentite(vue.lecture)}
+    ${renderFichierRecu(vue)}
+    ${renderAlerte(vue)}
+    ${vue.lecture ? renderIdentite(vue.lecture) : ""}
     ${renderOnglets(vue)}
     ${vue.onglet === ONGLET.ANALYSE ? renderAnalyse(vue) : renderRestitution(vue)}
+  `;
+}
+
+/**
+ * Le fichier, dit reçu, avec l'étape en cours.
+ *
+ * **La première chose qui s'affiche.** Un dépôt qui ne répond rien laisse
+ * croire qu'il n'a pas été pris — et l'on redépose, ce qui relance tout et
+ * repaie tout.
+ */
+function renderFichierRecu(vue) {
+  const nom = texte(vue.fichier?.name) || texte(vue.lecture?.nom);
+  if (!nom) return "";
+
+  const enCours = vue.phase === "lecture";
+
+  return `
+    <p class="lecture-cr__recu${enCours ? " est-en-cours" : ""}">
+      ${svgIcon("file", { className: "octicon" })}
+      <span class="lecture-cr__recu-nom">${escapeHtml(nom)}</span>
+      <span class="lecture-cr__recu-etat mono-small">${escapeHtml(
+        enCours ? `${vue.dit || "Lecture"}…` : "reçu"
+      )}</span>
+    </p>
+  `;
+}
+
+/**
+ * Ce qui a échoué, nommé — et copiable.
+ *
+ * ## Pourquoi la phrase seule ne suffisait pas
+ *
+ * « La lecture a été refusée » ne dit rien : ni à qui la lit, ni à qui doit la
+ * réparer. Le document était-il trop long, le modèle absent, la clé expirée, le
+ * schéma invalide ? Quatre pannes, une seule phrase, et chacune se corrige
+ * autrement. On en était réduit aux conjectures.
+ *
+ * Le serveur nomme donc sa panne — trois champs, coupés court, jamais le corps
+ * de l'erreur, qui pourrait contenir un écho de la consigne — et le bouton la
+ * met dans le presse-papiers, pour qu'elle arrive telle quelle là où on la
+ * réparera.
+ */
+function renderAlerte(vue) {
+  const motif = texte(vue.motif);
+  if (!motif) return "";
+
+  const panne = texte(vue.panne);
+
+  return `
+    <section class="lecture-cr__alerte" role="alert">
+      <div class="lecture-cr__alerte-tete">
+        <span class="lecture-cr__alerte-icone" aria-hidden="true">${
+          svgIcon("alert", { className: "octicon" })}</span>
+        <p class="lecture-cr__alerte-mot">${escapeHtml(motif)}</p>
+        ${panne ? renderBoutonCopier({
+          cible: "panne-de-la-lecture",
+          className: "lecture-cr__alerte-copier",
+          titre: "Copier le diagnostic",
+          titreCopie: "Diagnostic copié"
+        }) : ""}
+      </div>
+      ${panne ? `
+        <pre class="lecture-cr__alerte-panne mono-small"
+          data-copier-source="panne-de-la-lecture">${escapeHtml(panne)}</pre>
+        <p class="lecture-cr__alerte-aide">
+          Ce diagnostic vient du serveur : il nomme la panne, il ne recopie pas la consigne.
+          Collez-le tel quel là où la panne se répare.
+        </p>
+      ` : `
+        <p class="lecture-cr__alerte-aide">
+          Le serveur n'a rien nommé de cette panne. Ce n'est pas « le document ne dit rien » :
+          la lecture n'a pas eu lieu.
+        </p>
+      `}
+    </section>
   `;
 }
 
@@ -303,6 +417,25 @@ function renderOnglets(vue) {
 
 /** Ce que le modèle a tiré du document. */
 function renderAnalyse(vue) {
+  // **En attente, et non vide.** Un onglet qui ne montre rien se lit « il n'y
+  // a rien à voir » ; ici il n'y a rien *encore*, et ce n'est pas pareil.
+  if (!vue.lecture) {
+    return `
+      <section class="lecture-cr__attente">
+        ${vue.phase === "echec"
+          ? `<p class="lecture-cr__attente-mot">L'analyse n'a pas eu lieu.</p>`
+          : `
+            ${renderSpinnerHtml({ label: "Relevé des points", size: "lg" })}
+            <p class="lecture-cr__attente-mot">${escapeHtml(vue.dit || "Relevé des points")}…</p>
+            <p class="lecture-cr__attente-aide">
+              Les points se relèvent sur le document restitué : l'onglet Restitution montre déjà
+              ce sur quoi ils seront lus.
+            </p>
+          `}
+      </section>
+    `;
+  }
+
   return `
     ${renderSurQuoiLaLecture(vue)}
     ${renderMesure(vue.lecture.mesure, vue.lecture.ecartes)}
@@ -810,6 +943,7 @@ function renderCeQueLeCrApporte(vue) {
       <h3>Ce que ce compte rendu apporterait</h3>
       ${renderLesLots(points, vue.lots)}
       ${renderLesLabels(points, vue.labels, vue.lecture)}
+      ${renderLesObjectifs(points, vue.objectifs, vue.lecture)}
       <p class="lecture-cr__mot">
         Rien de tout cela n'est écrit : ni lot ajouté, ni label créé, ni label posé. C'est ce que
         la proposition porterait, et c'est quelqu'un qui la signe.
@@ -877,6 +1011,81 @@ function renderLesLabels(points, labelsDuProjetLus, lecture) {
           hors de la liste ${ecartes.length > 1 ? "ont été écartés" : "a été écarté"} :
           ${escapeHtml(ecartes.slice(0, 6).join(", "))}. La liste est fermée — un projet qui accumule
           quinze étiquettes disant la même chose n'a plus de filtre qui fonctionne.
+        </p>
+      ` : ""}
+    </div>
+  `;
+}
+
+/**
+ * Les objectifs que les échéances du compte rendu porteraient.
+ *
+ * ## Une date fausse est pire qu'une date absente
+ *
+ * Un objectif daté du 30 mars quand le document dit fin avril fait courir une
+ * alerte un mois trop tôt ; daté de l'an prochain, il ne sonne jamais. Dans les
+ * deux cas personne ne remontera jusqu'au compte rendu pour vérifier — on fera
+ * confiance au chiffre.
+ *
+ * L'écran dit donc **comment chaque date a été obtenue** : écrite en toutes
+ * lettres, complétée de l'année du compte rendu, ou comptée depuis la réunion.
+ * Les trois ne se valent pas, et la moins sûre d'un groupe l'emporte.
+ *
+ * ## Les échéances qu'on n'a pas su lire s'affichent
+ *
+ * « Avant la prochaine réunion », « S15 » : ce n'est pas une date, et en
+ * inventer une serait fixer un délai que personne n'a fixé. Elles se comptent
+ * et s'affichent telles quelles — c'est la liste de ce qu'on ne sait pas encore
+ * convertir, et c'est elle qui dira s'il vaut la peine d'aller plus loin.
+ */
+function renderLesObjectifs(points, objectifsDuProjet, lecture) {
+  const proposition = objectifsAProposer(points, {
+    tenueLe: texte(lecture?.identite?.tenueLe), objectifsDuProjet
+  });
+
+  if (proposition.objectifs.length === 0 && proposition.sansDate.length === 0) return "";
+
+  return `
+    <div class="lecture-cr__apport-bloc">
+      <h4>Les objectifs</h4>
+      <p class="lecture-cr__mot${proposition.connu ? "" : " est-douteux"}">
+        ${escapeHtml(phraseDesObjectifs(proposition))}
+      </p>
+
+      ${proposition.objectifs.length > 0 ? `
+        <ul class="lecture-cr__objectifs">
+          ${proposition.objectifs.map((objectif) => `
+            <li class="lecture-cr__objectif${
+              proposition.connu && !objectif.existe ? " est-manquant" : ""
+            }">
+              <span class="lecture-cr__objectif-date mono-small">${escapeHtml(dateEnFrancais(objectif.date))}</span>
+              <span class="lecture-cr__objectif-compte">${objectif.points.length} point${
+                objectif.points.length > 1 ? "s" : ""}</span>
+              ${objectif.sur !== SUR.ECRITE ? `
+                <span class="lecture-cr__objectif-sur mono-small"
+                  title="${escapeHtml(PHRASES_DU_SUR[objectif.sur] ?? "")}">${escapeHtml(
+                    objectif.sur === SUR.COMPTEE ? "date comptée" : "année complétée")}</span>
+              ` : ""}
+            </li>
+          `).join("")}
+        </ul>
+      ` : ""}
+
+      ${!proposition.leJour ? `
+        <p class="lecture-cr__mot est-douteux">
+          La date de la réunion n'a pas été lue : les délais — « sous 15 jours » — et les dates
+          sans année ne peuvent pas être calculés. Compter depuis aujourd'hui daterait tout
+          d'autant de mois que le document a d'âge.
+        </p>
+      ` : ""}
+
+      ${proposition.sansDate.length > 0 ? `
+        <p class="lecture-cr__mot est-douteux">
+          ${proposition.sansDate.length} échéance${proposition.sansDate.length > 1 ? "s" : ""}
+          ${proposition.sansDate.length > 1 ? "n'ont" : "n'a"} pas de date exploitable et
+          ${proposition.sansDate.length > 1 ? "ne donnent" : "ne donne"} donc aucun objectif :
+          ${escapeHtml(proposition.sansDate.slice(0, 5).map((sans) => `« ${sans.echeance} »`).join(", "))}.
+          En inventer une daterait un délai que personne n'a fixé.
         </p>
       ` : ""}
     </div>
@@ -1212,7 +1421,11 @@ function brancher(hote) {
 
   // Le presse-papiers de la restitution : le texte ne voyage pas dans un
   // attribut HTML — un CCTP de quarante pages y tiendrait mal.
-  brancherLesBoutonsCopier(hote, { texteDe: () => etat.md.modele.texte });
+  // Deux choses se copient à cet écran : la restitution, et le diagnostic d'une
+  // panne. Une seule résolution pour les deux, aiguillée par la cible.
+  brancherLesBoutonsCopier(hote, {
+    texteDe: (cible) => (cible === "panne-de-la-lecture" ? etat.panne : etat.md.modele.texte)
+  });
 
   const detacherLaZone = brancherLaZoneDeDepot(zone, {
     // La zone se tait pendant une lecture : déposer un second document
@@ -1251,7 +1464,10 @@ async function lire(hote, fichier) {
   etat.confrontes = null;
   etat.labels = null;
   etat.lots = null;
+  etat.objectifs = null;
   etat.deplie = "";
+  etat.motif = "";
+  etat.panne = "";
   etat.onglet = ONGLET.RESTITUTION;
   // Les restitutions appartiennent au compte rendu précédent : les garder
   // afficherait un document sous un autre.
@@ -1300,7 +1516,11 @@ async function lire(hote, fichier) {
     });
     if (!lu?.ok) {
       const { phraseDuRefus } = await import("../../../services/sujets-par-le-modele.js");
-      return echouer(hote, phraseDuRefus(lu?.motif) || "Le modèle n'a pas rendu de lecture exploitable.");
+      return echouer(
+        hote,
+        phraseDuRefus(lu?.motif) || "Le modèle n'a pas rendu de lecture exploitable.",
+        lu?.panne
+      );
     }
 
     const identite = identiteDuCompteRendu(lues.map((page) => texte(page?.text)).join("\n"));
@@ -1320,11 +1540,16 @@ async function lire(hote, fichier) {
     etat.lecture.rapprochementDemande = Boolean(lu.rapprochementDemande);
     etat.lecture.rapprochementsEcartes = Number(lu.rapprochementsEcartes) || 0;
     etat.lecture.labelsEcartes = Array.isArray(lu.labelsEcartes) ? lu.labelsEcartes : [];
+    // **Coupée n'est pas « il n'y avait que ça ».** Une réponse tronquée rend
+    // moins de points qu'il n'y en a, et rien dans ce qui reste ne le dit.
+    etat.lecture.coupee = Boolean(lu.coupee);
 
     etat.dit = "Confrontation aux sujets du projet";
     redessiner(hote);
     etat.confrontes = await confronterAuProjet(etat.lecture.points, connus);
-    [etat.labels, etat.lots] = await Promise.all([labelsDuProjet(), lotsDuProjet()]);
+    [etat.labels, etat.lots, etat.objectifs] = await Promise.all([
+      labelsDuProjet(), lotsDuProjet(), objectifsDuProjet()
+    ]);
 
     etat.phase = "lue";
     redessiner(hote);
@@ -1405,6 +1630,29 @@ async function lotsDuProjet() {
   try {
     const { syncProjectLotsFromSupabase } = await import("../../../services/project-supabase-sync.js");
     return (await syncProjectLotsFromSupabase()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Les objectifs du projet, pour savoir lesquels existent déjà.
+ *
+ * `null` quand on n'a pas pu demander : annoncer la création d'un objectif qui
+ * existe déjà ferait promettre ce qui n'aura pas lieu (règle 5).
+ */
+async function objectifsDuProjet() {
+  try {
+    const [{ loadObjectivesForProject }, { resolveCurrentBackendProjectId }] = await Promise.all([
+      import("../../../services/project-subjects-supabase.js"),
+      import("../../../services/project-supabase-sync.js")
+    ]);
+
+    const projet = await resolveCurrentBackendProjectId();
+    if (!projet) return null;
+
+    const charges = await loadObjectivesForProject(projet);
+    return Array.isArray(charges?.objectives) ? charges.objectives : null;
   } catch {
     return null;
   }
@@ -1578,6 +1826,9 @@ async function restituerParLeModele(hote) {
     if (!refait?.ok) {
       cote.phase = "echec";
       cote.motif = phraseDuRefus(refait?.motif) || "cause inconnue";
+      // La panne nommée remonte à l'alerte : c'est le même diagnostic, au même
+      // endroit, quel que soit l'appel qui a échoué.
+      if (texte(refait?.panne)) etat.panne = texte(refait.panne);
       return;
     }
 
@@ -1616,9 +1867,18 @@ function garnirLeCote(cote, pages) {
   cote.forme = formeDeLaRestitution(etat.pagesLues, pages);
 }
 
-function echouer(hote, motif) {
+/**
+ * Une panne, dite — sans effacer ce qui est arrivé avant elle.
+ *
+ * **L'écran se vidait.** Une analyse qui tombait après une restitution réussie
+ * emportait la restitution avec elle : on avait payé un appel dont il ne restait
+ * rien à l'écran, et rien non plus pour comprendre la panne. Les onglets gardent
+ * maintenant ce qu'ils ont, et l'alerte se pose au-dessus.
+ */
+function echouer(hote, motif, panne = "") {
   etat.phase = "echec";
   etat.motif = motif;
+  etat.panne = texte(panne);
   redessiner(hote);
 }
 

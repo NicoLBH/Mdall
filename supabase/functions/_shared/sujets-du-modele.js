@@ -62,6 +62,46 @@ export { ECART, PHRASES_DE_LECART, pagesEnTexte } from "./citation-verifiee.js";
  */
 export const LABELS_DE_QUALIFICATION = ["Urgent", "Rappel", "Information générale"];
 
+/**
+ * Ce qu'on peut répéter d'une panne du fournisseur, et ce qu'on ne répète pas.
+ *
+ * ## Pourquoi ce filtre existe
+ *
+ * « La lecture a été refusée » ne dit rien. Ni à qui la lit, ni à qui doit la
+ * réparer : on ne sait pas si le document était trop long, si le modèle n'existe
+ * pas, si la clé a expiré ou si le schéma est invalide. Quatre pannes, une seule
+ * phrase, et chacune se corrige autrement.
+ *
+ * ## Pourquoi on ne renvoie pas le corps de l'erreur
+ *
+ * Le corps d'une erreur du fournisseur peut contenir un écho de ce qu'on lui a
+ * envoyé — c'est-à-dire la consigne. Elle décrit ce que Mdall sait lire d'un
+ * document de chantier, et elle ne descend pas dans le navigateur.
+ *
+ * On ne relaie donc que trois champs nommés, coupés court : le type, le code et
+ * le message. C'est ce qui nomme la panne, et c'est tout ce qui sert.
+ */
+export function panneDuFournisseur(corps = "", status = 0) {
+  const court = (valeur) => String(valeur ?? "").trim().slice(0, 300);
+
+  let lu = null;
+  try {
+    lu = JSON.parse(corps);
+  } catch {
+    lu = null;
+  }
+
+  const erreur = lu?.error ?? lu ?? {};
+  return {
+    status: Number(status) || 0,
+    type: court(erreur?.type),
+    code: court(erreur?.code),
+    // Sans message exploitable, on dit qu'il n'y en avait pas : inventer une
+    // explication vraisemblable serait pire que de n'en donner aucune (règle 5).
+    message: court(erreur?.message) || (corps ? "le fournisseur n'a pas nommé la panne" : "")
+  };
+}
+
 export const SCHEMA_DES_SUJETS = {
   name: "sujets_du_compte_rendu",
   strict: true,

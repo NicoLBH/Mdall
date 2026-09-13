@@ -24092,3 +24092,72 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   border-color:var(--fgColor-attention, #d29922);
   color:var(--fgColor-attention, #d29922);
 }
+
+/* Le fichier, dit reçu dès qu'il arrive. */
+.lecture-cr__recu{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:0;
+  padding:8px 12px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--bg-secondary, rgb(21, 27, 35));
+}
+.lecture-cr__recu-nom{font-weight:600;color:var(--text);}
+.lecture-cr__recu-etat{color:var(--muted);}
+.lecture-cr__recu.est-en-cours .lecture-cr__recu-etat{color:var(--fgColor-accent, #4493f8);}
+
+/* Une panne, nommée et copiable — au-dessus des onglets, qui gardent leur contenu. */
+.lecture-cr__alerte{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:12px;
+  border:1px solid var(--fgColor-danger, #f85149);
+  border-radius:var(--radius);
+  background:color-mix(in srgb, var(--fgColor-danger, #f85149) 8%, transparent);
+}
+.lecture-cr__alerte-tete{display:flex;align-items:center;gap:8px;}
+.lecture-cr__alerte-icone{display:inline-flex;color:var(--fgColor-danger, #f85149);}
+.lecture-cr__alerte-mot{margin:0;flex:1;font-weight:600;color:var(--text);}
+.lecture-cr__alerte-panne{
+  margin:0;
+  padding:8px 10px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--canvas-inset, rgb(13, 17, 23));
+  color:var(--text);
+  white-space:pre-wrap;
+  word-break:break-word;
+  overflow-x:auto;
+}
+.lecture-cr__alerte-aide{margin:0;font-size:12.5px;line-height:1.5;color:var(--muted);}
+
+/* Un onglet qui n'a pas encore son contenu : en attente, et non vide. */
+.lecture-cr__attente{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+  padding:36px 24px;
+  border:1px dashed var(--border);
+  border-radius:var(--radius);
+}
+.lecture-cr__attente-mot{margin:0;color:var(--text);}
+.lecture-cr__attente-aide{margin:0;max-width:62ch;text-align:center;font-size:12.5px;color:var(--muted);}
+
+/* Les objectifs qu'un compte rendu porterait, un par date d'échéance. */
+.lecture-cr__objectifs{display:flex;flex-direction:column;gap:4px;margin:0;padding:0;list-style:none;}
+.lecture-cr__objectif{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  padding:4px 8px;
+  border-left:2px solid var(--border2);
+}
+.lecture-cr__objectif.est-manquant{border-left-color:var(--fgColor-attention, #d29922);}
+.lecture-cr__objectif-date{font-weight:600;color:var(--text);}
+.lecture-cr__objectif-compte{color:var(--muted);font-size:12.5px;}
+/* Une date comptée ou complétée n'est pas une date écrite : elle se dit. */
+.lecture-cr__objectif-sur{color:var(--fgColor-attention, #d29922);}

@@ -103,7 +103,8 @@ function unEtat(surcharge = {}) {
 
   return {
     phase: "vide", dit: "", lecture: null, pagesLues: [], fichier: null, confrontes: null,
-    labels: null, lots: null, deplie: "", descriptions: {}, motif: "", onglet: "restitution",
+    labels: null, lots: null, objectifs: null, deplie: "", descriptions: {}, motif: "", panne: "",
+    onglet: "restitution",
     ...surcharge,
     md
   };
@@ -812,4 +813,189 @@ test("ce que le compte rendu apporterait n'est pas ce qu'il a fait", () => {
 /** Sans lecture, il n'y a rien à apporter — et rien ne s'affiche. */
 test("rien ne s'apporte avant la lecture", () => {
   assert.doesNotMatch(renderLaLecture(unEtat({ phase: "lecture" })), /lecture-cr__apport/);
+});
+
+/* ── Le parcours à l'écran : le fichier, puis chaque onglet à son tour ────── */
+
+/**
+ * **Le dépôt ne répondait rien.** Pendant une minute et demie on voyait un rond
+ * tourner dans la zone de dépôt, sans savoir si le fichier avait été reçu ni à
+ * quelle étape on en était — et l'on redéposait, ce qui relançait tout et
+ * repayait tout.
+ */
+test("le fichier se dit reçu dès qu'il arrive, avec l'étape en cours", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lecture", dit: "Restitution des 2 pages en Markdown",
+    fichier: { name: "CR_07.pdf" }
+  }));
+
+  assert.match(html, /lecture-cr__recu/);
+  assert.match(html, /CR_07\.pdf/);
+  assert.match(html, /Restitution des 2 pages en Markdown…/);
+  // Et les deux onglets sont déjà là, avant que quoi que ce soit arrive.
+  assert.match(html, /lecture-cr__onglets/);
+  assert.match(html, />Restitution</);
+  assert.match(html, />Analyse</);
+});
+
+/**
+ * **En attente, et non vide.** Un onglet qui ne montre rien se lit « il n'y a
+ * rien à voir » ; ici il n'y a rien *encore*, et ce n'est pas pareil (règle 5).
+ */
+test("chaque onglet attend son tour plutôt que de rester vide", () => {
+  const enRestitution = renderLaLecture(unEtat({
+    phase: "lecture", dit: "Restitution", fichier: { name: "CR_07.pdf" },
+    md: { lecture: LECTURE.APERCU, modele: unCote({ phase: "demande" }) }
+  }));
+  assert.match(enRestitution, /Restitution du document…/);
+
+  const enAnalyse = renderLaLecture(unEtat({
+    phase: "lecture", dit: "Relevé des points", fichier: { name: "CR_07.pdf" },
+    onglet: "analyse", md: uneRestitution()
+  }));
+  assert.match(enAnalyse, /lecture-cr__attente/);
+  assert.match(enAnalyse, /Relevé des points…/);
+});
+
+/**
+ * **L'écran se vidait.** Une analyse qui tombait après une restitution réussie
+ * emportait la restitution avec elle : on avait payé un appel dont il ne restait
+ * rien à l'écran.
+ */
+test("une panne n'efface pas la restitution déjà obtenue", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "echec", motif: "La lecture a été refusée.", fichier: { name: "CR_07.pdf" },
+    md: uneRestitution()
+  }));
+
+  assert.match(html, /lecture-cr__alerte/);
+  assert.match(html, /La lecture a été refusée\./);
+  // La restitution est toujours là, avec ses mesures.
+  assert.match(html, /lecture-cr__md-fichier/);
+  assert.match(html, /Mots du PDF retrouvés/);
+});
+
+/**
+ * **« La lecture a été refusée » ne dit rien** : ni à qui la lit, ni à qui doit
+ * la réparer. Le serveur nomme donc sa panne, et le bouton la met dans le
+ * presse-papiers pour qu'elle arrive telle quelle là où on la réparera.
+ */
+test("une panne nommée s'affiche et se copie", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "echec", motif: "La lecture a été refusée.",
+    panne: "HTTP 502 · reponse_coupee · La réponse a dépassé 24000 jetons",
+    fichier: { name: "CR_07.pdf" }
+  }));
+
+  assert.match(html, /HTTP 502 · reponse_coupee/);
+  assert.match(html, /data-copier="panne-de-la-lecture"/);
+  assert.match(html, /data-copier-source="panne-de-la-lecture"/);
+  // Le diagnostic nomme la panne, il ne recopie pas la consigne.
+  assert.match(html, /il ne recopie pas la consigne/);
+});
+
+/** Ne rien avoir à dire de la panne se dit aussi, et ne s'invente pas. */
+test("une panne que le serveur n'a pas nommée ne s'invente pas", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "echec", motif: "La lecture a été refusée.", panne: "",
+    fichier: { name: "CR_07.pdf" }
+  }));
+
+  assert.match(html, /n'a rien nommé de cette panne/);
+  assert.doesNotMatch(html, /data-copier="panne-de-la-lecture"/);
+});
+
+/** Rien ne s'affiche tant que rien n'a été déposé. */
+test("l'écran vide reste vide", () => {
+  const html = renderLaLecture(unEtat());
+  assert.doesNotMatch(html, /lecture-cr__recu/);
+  assert.doesNotMatch(html, /lecture-cr__onglets/);
+  assert.doesNotMatch(html, /lecture-cr__alerte/);
+});
+
+/* ── Les objectifs, à l'écran ────────────────────────────────────────────── */
+
+function unEtatEcheances(surcharge = {}) {
+  const lecture = uneLecture();
+  lecture.identite.tenueLe = "10/12/2025";
+  // Trois échéances : une écrite, une comptée, une qu'on ne sait pas lire — le
+  // mélange qu'un compte rendu réel porte.
+  lecture.points = [
+    { ...lecture.points[0], echeance: "30/04/2026" },
+    { ...lecture.points[1], echeance: "sous 15 jours" },
+    { ...lecture.points[1], rang: 2, titre: "Peinture", echeance: "avant la prochaine réunion" }
+  ];
+
+  return unEtat({
+    phase: "lue", pagesLues: PAGES, onglet: "analyse", md: uneRestitution(),
+    confrontes: lecture.points.map((point) => ({ ...point, sort: SORT.NOUVEAU, sujet: null, par: "" })),
+    lots: [], labels: [],
+    ...surcharge,
+    lecture: { ...lecture, ...(surcharge.lecture ?? {}) }
+  });
+}
+
+/**
+ * **Une date fausse est pire qu'une date absente.** L'écran dit donc comment
+ * chaque date a été obtenue : écrite, complétée, ou comptée depuis la réunion.
+ */
+test("les objectifs se disent par date, avec la façon dont elle a été obtenue", () => {
+  const html = renderLaLecture(unEtatEcheances({ objectifs: [] }));
+
+  assert.match(html, /lecture-cr__objectifs/);
+  assert.match(html, /30\/04\/2026/);
+  assert.match(html, /25\/12\/2025/);
+  // La date comptée se dit comme telle ; la date écrite ne porte aucune mention.
+  assert.match(html, /date comptée/);
+  assert.equal((html.match(/lecture-cr__objectif-sur/g) ?? []).length, 1);
+});
+
+/**
+ * « Avant la prochaine réunion » n'est pas une date. En inventer une daterait un
+ * délai que personne n'a fixé — et ces échéances-là s'affichent, parce que c'est
+ * la liste de ce qu'on ne sait pas encore convertir (règle 5).
+ */
+test("une échéance qu'on n'a pas su lire s'affiche telle quelle", () => {
+  const html = renderLaLecture(unEtatEcheances({ objectifs: [] }));
+
+  assert.match(html, /pas de date exploitable/);
+  assert.match(html, /« avant la prochaine réunion »/);
+  assert.match(html, /daterait un délai que personne n'a fixé/);
+});
+
+/** La date décide, pas le nom : un jalon déjà daté du même jour reste ce jalon. */
+test("un objectif déjà daté du même jour ne se propose pas deux fois", () => {
+  const html = renderLaLecture(unEtatEcheances({
+    objectifs: [{ id: "o-1", title: "Livraison lot 02", due_date: "2026-04-30" }]
+  }));
+
+  assert.equal((html.match(/lecture-cr__objectif est-manquant/g) ?? []).length, 1);
+  assert.match(html, /1 objectif serait créé/);
+});
+
+/**
+ * Sans la date de la réunion, ni les délais ni les dates sans année ne se
+ * calculent — et le dire explique pourquoi la liste est courte.
+ */
+test("sans la date de la réunion, l'écran dit ce qui ne peut pas se calculer", () => {
+  const html = renderLaLecture(unEtatEcheances({
+    objectifs: [], lecture: { identite: { numero: "7", tenueLe: "" } }
+  }));
+
+  assert.match(html, /La date de la réunion n'a pas été lue/);
+  assert.match(html, /daterait tout\s+d'autant de mois que le document a d'âge/);
+});
+
+/** Un compte rendu sans échéance n'affiche pas un bloc vide. */
+test("aucune échéance, aucun bloc d'objectifs", () => {
+  const lecture = uneLecture();
+  lecture.points = lecture.points.map((point) => ({ ...point, echeance: "" }));
+  const html = renderLaLecture(unEtat({
+    phase: "lue", pagesLues: PAGES, onglet: "analyse", md: uneRestitution(), lots: [], labels: [],
+    confrontes: lecture.points.map((point) => ({ ...point, sort: SORT.NOUVEAU, sujet: null, par: "" })),
+    lecture
+  }));
+
+  assert.doesNotMatch(html, /lecture-cr__objectifs/);
+  assert.doesNotMatch(html, /Les objectifs/);
 });

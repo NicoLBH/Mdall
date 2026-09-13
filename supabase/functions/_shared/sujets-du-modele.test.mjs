@@ -320,3 +320,85 @@ test("les labels du serveur et ceux du navigateur sont les mêmes", async () => 
   }
   assert.match(CONSIGNES, /N'invente AUCUN autre label/);
 });
+
+/* ── Nommer la panne, sans recopier la consigne ──────────────────────────── */
+
+/**
+ * **« La lecture a été refusée » ne dit rien** : ni à qui la lit, ni à qui doit
+ * la réparer. Le document était-il trop long, le modèle absent, la clé expirée,
+ * le schéma invalide ? Quatre pannes, une seule phrase, et chacune se corrige
+ * autrement.
+ */
+test("une panne du fournisseur se nomme en trois champs", async () => {
+  const { panneDuFournisseur } = await import("./sujets-du-modele.js");
+
+  const nommee = panneDuFournisseur(JSON.stringify({
+    error: { type: "invalid_request_error", code: "model_not_found", message: "The model does not exist" }
+  }), 404);
+
+  assert.deepEqual(nommee, {
+    status: 404,
+    type: "invalid_request_error",
+    code: "model_not_found",
+    message: "The model does not exist"
+  });
+});
+
+/**
+ * **On ne renvoie pas le corps de l'erreur.** Il peut contenir un écho de ce
+ * qu'on a envoyé — c'est-à-dire la consigne, qui décrit ce que Mdall sait lire
+ * d'un document de chantier et ne descend pas dans le navigateur.
+ */
+test("le corps de l'erreur ne remonte jamais tel quel", async () => {
+  const { panneDuFournisseur } = await import("./sujets-du-modele.js");
+
+  const corps = JSON.stringify({
+    error: { message: "Invalid value", type: "invalid_request_error" },
+    input: "Tu lis un compte rendu de réunion de chantier et tu en extrais les points à traiter."
+  });
+
+  const nommee = panneDuFournisseur(corps, 400);
+  const dit = Object.values(nommee).join(" ");
+
+  assert.doesNotMatch(dit, /compte rendu de réunion de chantier/);
+  assert.equal(nommee.message, "Invalid value");
+
+  // Et ce qui remonte reste court : une panne se nomme, elle ne se raconte pas.
+  for (const champ of ["type", "code", "message"]) {
+    assert.ok(nommee[champ].length <= 300, `« ${champ} » n'est pas coupé court`);
+  }
+});
+
+/**
+ * Ne pas savoir se dit. Inventer une explication vraisemblable serait pire que
+ * de n'en donner aucune (règle 5).
+ */
+test("une panne que le fournisseur n'a pas nommée se dit telle quelle", async () => {
+  const { panneDuFournisseur } = await import("./sujets-du-modele.js");
+
+  assert.equal(panneDuFournisseur("<html>502 Bad Gateway</html>", 502).message,
+    "le fournisseur n'a pas nommé la panne");
+  assert.deepEqual(panneDuFournisseur("", 0), { status: 0, type: "", code: "", message: "" });
+});
+
+/**
+ * **Coupée n'est pas refusée.** Une réponse tronquée au milieu du JSON ne se
+ * relit pas, et l'écran annonçait « la lecture a été refusée » : c'était faux,
+ * elle avait eu lieu et elle avait été payée. C'est cette panne-là qui a rendu
+ * tout ce diagnostic nécessaire.
+ */
+test("le plafond de sortie tient compte de ce qu'un point porte maintenant", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const source = readFileSync(
+    fileURLToPath(new URL("../extract-sujets/index.ts", import.meta.url)), "utf8"
+  );
+
+  const plafond = Number(source.match(/const MAX_JETONS = (\d+)/)?.[1]);
+  assert.ok(plafond >= 24000, `le plafond de sortie est retombé à ${plafond}`);
+
+  // Et une réponse coupée se reconnaît, au lieu de passer pour un refus.
+  assert.match(source, /incomplete/);
+  assert.match(source, /reponse_coupee/);
+});
