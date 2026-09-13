@@ -121,6 +121,8 @@ export function lectureAssemblee({
        * Le sujet que le modèle dit continuer, **déjà vérifié au serveur** :
        * l'identifiant figure dans la liste qu'on lui a envoyée, ou il vaut "".
        */
+      /** Ce que le document dit de ce point — déjà ramené à la liste fermée. */
+      labels: Array.isArray(point?.labels) ? point.labels.map(texte).filter(Boolean) : [],
       sujetExistant: texte(point?.sujet_existant),
       raisonDuRapprochement: texte(point?.raison_du_rapprochement),
       manques,

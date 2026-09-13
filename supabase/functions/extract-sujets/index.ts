@@ -37,6 +37,7 @@ import {
   sujetsAuFormatDuMoteur,
   sujetsDuProjetEnTexte,
   verifierLesIntervenants,
+  verifierLesLabels,
   verifierLesRapprochements,
   verifierLesSujets
 } from "../_shared/sujets-du-modele.js";
@@ -141,6 +142,11 @@ serve(async (req) => {
     // — et rien ne le signalera. Ce qui n'a pas été envoyé ne revient pas.
     const rapproches = verifierLesRapprochements({ sujets: retenus, connus });
 
+    // **La liste des labels est fermée, et la porte est ici.** Un label inventé
+    // n'est pas une étiquette de trop : c'est une étiquette que le projet
+    // portera pour toujours, à côté de celle qui disait déjà la même chose.
+    const etiquetes = verifierLesLabels({ sujets: rapproches.sujets });
+
     // Les intervenants passent le même garde-fou, et pour une raison plus forte
     // encore : un intervenant inventé est une entreprise qui n'existe pas sur
     // ce chantier, à qui l'on finirait par assigner des points.
@@ -153,7 +159,9 @@ serve(async (req) => {
       numero_de_reunion: lu.numero_de_reunion ?? null,
       tenue_le: lu.tenue_le ?? null,
       redige_par: lu.redige_par ?? null,
-      sujets: sujetsAuFormatDuMoteur(rapproches.sujets, { sourceId }),
+      sujets: sujetsAuFormatDuMoteur(etiquetes.sujets, { sourceId }),
+      /** Les labels que le modèle a proposés hors de la liste fermée. */
+      labels_ecartes: etiquetes.ecartes,
       /** Combien de rapprochements pointaient vers un sujet qu'on n'a pas envoyé. */
       rapprochements_ecartes: rapproches.ecartes,
       /**

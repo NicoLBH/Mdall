@@ -135,6 +135,8 @@ export async function lireLesSujets({ sourceId = "", pages = [], sujetsDuProjet 
     redigePar: texte(rendu?.redige_par),
     // Ce que le serveur a jeté faute de citation vérifiable. Se dit, se compte.
     ecartes: Array.isArray(rendu?.ecartes) ? rendu.ecartes.length : 0,
+    /** Les labels proposés hors de la liste fermée, et donc écartés. */
+    labelsEcartes: Array.isArray(rendu?.labels_ecartes) ? rendu.labels_ecartes : [],
     /** Les rapprochements qui pointaient vers un sujet qu'on n'avait pas envoyé. */
     rapprochementsEcartes: Number(rendu?.rapprochements_ecartes) || 0,
     /** A-t-on dit au modèle ce que le projet suit ? Sans cela, tout repart neuf. */

@@ -45,7 +45,10 @@ import {
   enPourcent, fideliteDeLaReconstitution, pagesALire, tonDeLaPart
 } from "../../../services/reconstitution-markdown.js";
 import { PHRASES_DU_RANGEMENT, RANGEE } from "../../../services/restitution-rangee.js";
-import { LABEL_DU_CR, labelDuCrDansLeProjet, phraseDuLabel } from "../../../services/label-du-cr.js";
+import {
+  LABEL_DU_CR, QUOI_DU_LABEL, labelDuCrDansLeProjet, labelsAProposer, phraseDuLabel
+} from "../../../services/label-du-cr.js";
+import { lotsAProposer, phraseDesLots } from "../../../services/lots-du-cr.js";
 import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
 import {
   PHRASES_DU_VERDICT, TON_DU_VERDICT, VERDICT, degatsDeLaRestitution,
@@ -100,6 +103,14 @@ const etat = {
    * créerait. Ne pas savoir n'est pas « il n'y est pas » (règle 5).
    */
   labels: null,
+  /**
+   * Les lots du projet. `null` : on n'a pas pu les lire.
+   *
+   * Sert à dire lesquels des lots du compte rendu manquent. Ne pas savoir n'est
+   * pas « le projet n'en a aucun » : on proposerait alors d'ajouter des lots
+   * qui sont peut-être déjà là, et personne ne nettoierait (règle 5).
+   */
+  lots: null,
   /** Le sujet dont on regarde le détail, pour juger si c'est bien le même. */
   deplie: "",
   /**
@@ -297,6 +308,7 @@ function renderAnalyse(vue) {
     ${renderMesure(vue.lecture.mesure, vue.lecture.ecartes)}
     ${renderAmbiguites(vue.lecture.points)}
     ${renderConfrontation(vue.confrontes, vue.lecture, vue.labels)}
+    ${renderCeQueLeCrApporte(vue)}
     ${renderRubriques(vue)}
     ${renderSuite()}
   `;
@@ -767,6 +779,110 @@ function renderLabelDuCr(labels) {
   `;
 }
 
+/**
+ * Ce que ce compte rendu apporterait au projet, hors sujets.
+ *
+ * ## Un lot manquant ne se voit pas
+ *
+ * Ce qui se voit, c'est une poignée de points sans rattachement qu'on croit mal
+ * lus. Un compte rendu découpe tout par lot — c'est son ossature — et si le
+ * projet ne connaît pas un lot, ses points arrivent orphelins : on ne peut ni
+ * les grouper, ni les assigner, ni dire ce que ce lot doit.
+ *
+ * ## Les labels disent ce qu'un point vaut
+ *
+ * « CR chantier » dit d'où il vient ; « Urgent », « Rappel » et « Information
+ * générale » disent ce que le document en dit. La liste est fermée : un modèle
+ * libre d'inventer en produit quinze en trois comptes rendus, et plus aucun
+ * filtre ne trouve rien.
+ *
+ * ## Rien n'est écrit
+ *
+ * Ni lot ajouté, ni label créé, ni label posé. Tout cela est une écriture, et
+ * une écriture passe par une proposition (règle 1).
+ */
+function renderCeQueLeCrApporte(vue) {
+  const points = Array.isArray(vue.lecture?.points) ? vue.lecture.points : [];
+  if (points.length === 0) return "";
+
+  return `
+    <section class="lecture-cr__apport">
+      <h3>Ce que ce compte rendu apporterait</h3>
+      ${renderLesLots(points, vue.lots)}
+      ${renderLesLabels(points, vue.labels, vue.lecture)}
+      <p class="lecture-cr__mot">
+        Rien de tout cela n'est écrit : ni lot ajouté, ni label créé, ni label posé. C'est ce que
+        la proposition porterait, et c'est quelqu'un qui la signe.
+      </p>
+    </section>
+  `;
+}
+
+/** Les lots que le compte rendu nomme, et ceux qui manquent au projet. */
+function renderLesLots(points, lotsDuProjetLus) {
+  const proposition = lotsAProposer(points, lotsDuProjetLus);
+  if (proposition.nommes.length === 0) return "";
+
+  const pastille = (lot, manquant) => `
+    <span class="lecture-cr__lot${manquant ? " est-manquant" : ""} mono-small"
+      title="${escapeHtml(`${lot.points} point${lot.points > 1 ? "s" : ""} dans ce compte rendu`)}">
+      ${escapeHtml(lot.intitule)}
+    </span>
+  `;
+
+  return `
+    <div class="lecture-cr__apport-bloc">
+      <h4>Les lots</h4>
+      <p class="lecture-cr__mot${proposition.connu ? "" : " est-douteux"}">
+        ${escapeHtml(phraseDesLots(proposition))}
+      </p>
+      <div class="lecture-cr__lots">
+        ${proposition.manquants.map((lot) => pastille(lot, true)).join("")}
+        ${proposition.presents.map((lot) => pastille(lot, false)).join("")}
+        ${proposition.connu ? "" : proposition.nommes.map((lot) => pastille(lot, false)).join("")}
+      </div>
+    </div>
+  `;
+}
+
+/** Les labels que le compte rendu poserait, et ceux qu'il faudrait créer. */
+function renderLesLabels(points, labelsDuProjetLus, lecture) {
+  const proposition = labelsAProposer(points, labelsDuProjetLus);
+  const ecartes = Array.isArray(lecture?.labelsEcartes) ? lecture.labelsEcartes : [];
+
+  return `
+    <div class="lecture-cr__apport-bloc">
+      <h4>Les labels</h4>
+      <div class="lecture-cr__lots">
+        ${proposition.poses.map((label) => `
+          <span class="lecture-cr__label${
+            proposition.connu && !label.existe ? " est-manquant" : ""
+          }" title="${escapeHtml(
+            `${QUOI_DU_LABEL[label.nom] ?? "La marque d'origine : tout sujet venu d'un compte rendu la porte."} — ${
+              label.points} point${label.points > 1 ? "s" : ""}`
+          )}">${escapeHtml(label.nom)}</span>
+        `).join("")}
+      </div>
+      <p class="lecture-cr__mot${proposition.connu ? "" : " est-douteux"}">
+        ${proposition.connu
+          ? (proposition.aCreer.length > 0
+            ? `${escapeHtml(proposition.aCreer.join(", "))} n'${proposition.aCreer.length > 1 ? "existent" : "existe"} pas
+               encore dans ce projet : la proposition ${proposition.aCreer.length > 1 ? "les" : "le"} créerait.`
+            : "Tous ces labels existent déjà dans ce projet.")
+          : "Les labels du projet n'ont pas pu être lus : on ne sait pas lesquels y sont déjà."}
+      </p>
+      ${ecartes.length > 0 ? `
+        <p class="lecture-cr__mot est-douteux">
+          ${ecartes.length} label${ecartes.length > 1 ? "s" : ""} proposé${ecartes.length > 1 ? "s" : ""}
+          hors de la liste ${ecartes.length > 1 ? "ont été écartés" : "a été écarté"} :
+          ${escapeHtml(ecartes.slice(0, 6).join(", "))}. La liste est fermée — un projet qui accumule
+          quinze étiquettes disant la même chose n'a plus de filtre qui fonctionne.
+        </p>
+      ` : ""}
+    </div>
+  `;
+}
+
 /** Ce que ces points deviendraient face aux sujets du projet. */
 function renderConfrontation(confrontes, lecture = null, labels = null) {
   if (!Array.isArray(confrontes) || confrontes.length === 0) return "";
@@ -1134,6 +1250,7 @@ async function lire(hote, fichier) {
   etat.fichier = fichier ?? null;
   etat.confrontes = null;
   etat.labels = null;
+  etat.lots = null;
   etat.deplie = "";
   etat.onglet = ONGLET.RESTITUTION;
   // Les restitutions appartiennent au compte rendu précédent : les garder
@@ -1202,11 +1319,12 @@ async function lire(hote, fichier) {
 
     etat.lecture.rapprochementDemande = Boolean(lu.rapprochementDemande);
     etat.lecture.rapprochementsEcartes = Number(lu.rapprochementsEcartes) || 0;
+    etat.lecture.labelsEcartes = Array.isArray(lu.labelsEcartes) ? lu.labelsEcartes : [];
 
     etat.dit = "Confrontation aux sujets du projet";
     redessiner(hote);
     etat.confrontes = await confronterAuProjet(etat.lecture.points, connus);
-    etat.labels = await labelsDuProjet();
+    [etat.labels, etat.lots] = await Promise.all([labelsDuProjet(), lotsDuProjet()]);
 
     etat.phase = "lue";
     redessiner(hote);
@@ -1272,6 +1390,21 @@ async function labelsDuProjet() {
 
     const charges = await loadLabelsForProject(projet);
     return charges?.labelsHydrated === false ? null : (charges?.labels ?? null);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Les lots du projet, pour savoir lesquels manquent.
+ *
+ * `null` quand on n'a pas pu demander : proposer d'ajouter des lots qui sont
+ * peut-être déjà là ferait doubler la liste du projet (règle 5).
+ */
+async function lotsDuProjet() {
+  try {
+    const { syncProjectLotsFromSupabase } = await import("../../../services/project-supabase-sync.js");
+    return (await syncProjectLotsFromSupabase()) ?? null;
   } catch {
     return null;
   }

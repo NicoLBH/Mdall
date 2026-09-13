@@ -103,7 +103,7 @@ function unEtat(surcharge = {}) {
 
   return {
     phase: "vide", dit: "", lecture: null, pagesLues: [], fichier: null, confrontes: null,
-    labels: null, deplie: "", descriptions: {}, motif: "", onglet: "restitution",
+    labels: null, lots: null, deplie: "", descriptions: {}, motif: "", onglet: "restitution",
     ...surcharge,
     md
   };
@@ -715,6 +715,101 @@ test("le label du compte rendu se dit, et son absence ne s'invente pas", async (
   assert.match(absent, /créerait/);
   assert.match(present, /existe déjà/);
   // Rien n'est posé : poser un label est une écriture, elle passe par une
-  // proposition (règle 1).
-  assert.doesNotMatch(present, /label posé|label ajouté/);
+  // proposition (règle 1). L'écran l'écrit comme une négation — chercher les
+  // mots seuls rendrait le test faux dès qu'on dit « ni label posé ».
+  assert.match(present, /ni lot ajouté, ni label créé, ni label posé/);
+  assert.doesNotMatch(present, /a été (posé|ajouté|créé)/);
+});
+
+/* ── Ce que le compte rendu apporterait : lots et labels ─────────────────── */
+
+/**
+ * Une lecture dont les points portent des lots et des labels. Les lots sont
+ * écrits de deux façons — c'est le cas réel : « 02 — GROS ŒUVRE » puis
+ * « Lot 02 » deux pages plus loin.
+ */
+function unEtatApport(surcharge = {}) {
+  const lecture = uneLecture();
+  lecture.points = lecture.points.map((point, rang) => ({
+    ...point,
+    lot: rang === 0 ? "02 — GROS ŒUVRE" : "05 — CHARPENTE",
+    labels: rang === 0 ? ["Urgent"] : []
+  }));
+
+  return unEtat({
+    phase: "lue", pagesLues: PAGES, onglet: "analyse", md: uneRestitution(),
+    confrontes: lecture.points.map((point) => ({ ...point, sort: SORT.NOUVEAU, sujet: null, par: "" })),
+    ...surcharge,
+    lecture: { ...lecture, ...(surcharge.lecture ?? {}) }
+  });
+}
+
+/**
+ * **Un lot manquant ne se voit pas.** Ce qui se voit, c'est une poignée de
+ * points sans rattachement qu'on croit mal lus.
+ */
+test("les lots du compte rendu se disent, et ceux qui manquent se distinguent", () => {
+  const html = renderLaLecture(unEtatApport({ lots: [{ code: "GO", label: "Gros oeuvre" }] }));
+
+  assert.match(html, /lecture-cr__apport/);
+  assert.match(html, /02 — GROS ŒUVRE/);
+  assert.match(html, /05 — CHARPENTE/);
+  // Un seul manque : celui que le projet ne connaît pas.
+  assert.equal((html.match(/lecture-cr__lot est-manquant/g) ?? []).length, 1);
+  assert.match(html, /1 lot de ce compte rendu manque au projet/);
+});
+
+/**
+ * **Ne pas savoir n'est pas « le projet n'en a aucun ».** Proposer d'ajouter
+ * des lots qui sont peut-être déjà là ferait doubler la liste du projet.
+ */
+test("sans les lots du projet, aucun lot n'est annoncé comme manquant", () => {
+  const html = renderLaLecture(unEtatApport({ lots: null }));
+
+  assert.match(html, /02 — GROS ŒUVRE/);
+  assert.doesNotMatch(html, /lecture-cr__lot est-manquant/);
+  assert.match(html, /les lots du projet n&#39;ont pas pu être lus/);
+});
+
+/** « CR chantier » sur tous les points, « Urgent » seulement où le document le dit. */
+test("les labels proposés se disent, avec ce qui reste à créer", async () => {
+  const { LABEL_DU_CR } = await import("../../../services/label-du-cr.js");
+  const html = renderLaLecture(unEtatApport({
+    lots: [], labels: [{ id: "l-1", name: LABEL_DU_CR }]
+  }));
+
+  assert.match(html, new RegExp(LABEL_DU_CR));
+  assert.match(html, />\s*Urgent\s*</);
+  // Le label d'origine existe déjà, « Urgent » non.
+  // Prose du gabarit : elle ne passe pas par escapeHtml, l'apostrophe reste telle quelle.
+  assert.match(html, /Urgent n'existe pas\s+encore dans ce projet/);
+  assert.equal((html.match(/lecture-cr__label est-manquant/g) ?? []).length, 1);
+});
+
+/**
+ * Un label hors de la liste fermée est écarté au serveur — et l'écran dit
+ * pourquoi, plutôt que de le faire disparaître en silence (règle 5).
+ */
+test("les labels écartés se disent, avec la raison", () => {
+  const html = renderLaLecture(unEtatApport({
+    lots: [], labels: [], lecture: { labelsEcartes: ["Prioritaire", "À traiter vite"] }
+  }));
+
+  assert.match(html, /2 labels proposés\s+hors de la liste ont été écartés/);
+  assert.match(html, /Prioritaire, À traiter vite/);
+  assert.match(html, /quinze étiquettes disant la même chose/);
+});
+
+/** Rien n'est écrit : ni lot ajouté, ni label créé (règle 1). */
+test("ce que le compte rendu apporterait n'est pas ce qu'il a fait", () => {
+  const html = renderLaLecture(unEtatApport({ lots: [], labels: [] }));
+
+  assert.match(html, /Ce que ce compte rendu apporterait/);
+  assert.match(html, /ni lot ajouté, ni label créé, ni label posé/);
+  assert.doesNotMatch(html, /a été (posé|ajouté|créé)/);
+});
+
+/** Sans lecture, il n'y a rien à apporter — et rien ne s'affiche. */
+test("rien ne s'apporte avant la lecture", () => {
+  assert.doesNotMatch(renderLaLecture(unEtat({ phase: "lecture" })), /lecture-cr__apport/);
 });
