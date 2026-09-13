@@ -290,6 +290,36 @@ test("une adresse dans du code n'est pas transformée", () => {
  * société. Le modèle écrit alors `\n` littéral, faute de mieux ; sans cette
  * lecture, la case affiche « a@b.fr\n0629500461 » d'un seul tenant.
  */
+/**
+ * **`<br>` est ce que le modèle écrit**, parce que c'est la convention de
+ * Markdown pour couper une cellule. Échappé comme le reste, il s'affichait :
+ * « COMMUNE DU REPOSOIR&lt;br&gt;37, route de Prariand » dans la case, sur
+ * toutes les lignes du tableau des intervenants.
+ */
+test("un <br> dans une cellule coupe la ligne au lieu de s'afficher", () => {
+  const html = renderMarkdownToHtml("| Nom |\n|---|\n| COMMUNE<br>37, route de Prariand |");
+
+  assert.match(html, /<td>COMMUNE<br>37, route de Prariand<\/td>/);
+  assert.doesNotMatch(html, /&lt;br/);
+});
+
+/** Les trois écritures du saut de ligne HTML se lisent. */
+test("les trois écritures de <br> se lisent", () => {
+  for (const saut of ["<br>", "<br/>", "<br />", "<BR>"]) {
+    const html = renderMarkdownToHtml(`| a |\n|---|\n| x${saut}y |`);
+    assert.match(html, /<td>x<br>y<\/td>/, `« ${saut} » ne coupe pas`);
+  }
+});
+
+/**
+ * **Et nulle part ailleurs.** Hors d'un tableau, `<br>` reste du HTML qu'on a
+ * délibérément choisi d'échapper : l'admettre dans le corps du texte ouvrirait
+ * la porte au reste.
+ */
+test("hors d'une cellule, un <br> reste échappé", () => {
+  assert.match(renderMarkdownToHtml("Hors cellule : a<br>b"), /a&lt;br&gt;b/);
+});
+
 test("un \\n littéral devient un retour à la ligne, dans une cellule", () => {
   const html = renderMarkdownToHtml("| Contact |\n|---|\n| a@b.fr\\n0629500461 |");
 

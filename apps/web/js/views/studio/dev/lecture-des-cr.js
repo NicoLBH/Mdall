@@ -38,7 +38,7 @@ import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.
 import { brancherLesBoutonsCopier, renderBoutonCopier } from "../../ui/bouton-copier.js";
 import {
   EFFETS_DU_SORT, MANQUE, PAR, PHRASES_DU_MANQUE, PHRASES_DU_PAR, PHRASES_DU_SORT, SORT,
-  comptesDeLaConfrontation, confrontation, intitulesAmbigus, lectureAssemblee
+  comptesDeLaConfrontation, confrontation, estFerme, intitulesAmbigus, lectureAssemblee
 } from "../../../services/lecture-du-cr.js";
 import {
   LECTURE, NOMS_DE_LECTURE, QUOI_DE_LA_LECTURE, assemblerLeMarkdown, enFichierMarkdown,
@@ -62,6 +62,13 @@ import {
   PHRASES_DU_SUR, SUR, dateEnFrancais, objectifsAProposer, phraseDesObjectifs
 } from "../../../services/echeances-du-cr.js";
 import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
+import { formatDuDocument, phraseDuFormat } from "../../../services/format-du-document.js";
+import {
+  SITUATION, phraseDeLaSituation, situationDuLabel
+} from "../../../services/situation-du-label.js";
+import {
+  A_REPRENDRE, DECOUPAGE, PHRASES_DU_DECOUPAGE, decoupageDeLaRestitution
+} from "../../../services/decoupage-de-la-restitution.js";
 import {
   PHRASES_DU_VERDICT, TON_DU_VERDICT, VERDICT, degatsDeLaRestitution,
   formeDeLaRestitution, pagesAbimees, verdictDesDegats
@@ -121,7 +128,6 @@ const NOMS_DES_ONGLETS = {
  */
 const etat = {
   phase: "vide", // vide | lecture | lue | echec
-  dit: "",
   /**
    * L'étape en cours, et donc celles qui sont faites.
    *
@@ -189,6 +195,13 @@ const etat = {
    */
   sujetsDuProjet: null,
   sujetsDuLabel: null,
+  /**
+   * Les situations du projet. `null` : on n'a pas pu les lire.
+   *
+   * Sans elles on ne peut pas affirmer qu'aucune ne suit déjà le label — et
+   * l'on en proposerait une seconde sur le même ensemble (règle 5).
+   */
+  situations: null,
   /** Le sujet dont on regarde le détail, pour juger si c'est bien le même. */
   deplie: "",
   /**
@@ -462,41 +475,56 @@ function renderFichierRecu(vue) {
       <span class="lecture-cr__recu-nom">${escapeHtml(nom)}</span>
       <span class="lecture-cr__recu-etat mono-small">${escapeHtml(enCours ? "en cours de lecture" : "reçu")}</span>
     </p>
-    ${enCours || vue.phase === "echec" ? renderLesEtapes(vue) : ""}
   `;
 }
 
 /**
- * Les étapes, cochées à mesure.
+ * L'attente : une roue, et sous elle ce qui s'est déjà passé.
  *
- * **Ce qui est fait, ce qui se fait, ce qui reste.** Une phrase à la fois ne
- * disait aucune des trois : on ne savait ni combien il en restait, ni ce qui
- * était acquis, ni pourquoi c'était long. Une minute et demie de rond qui
- * tourne sans savoir où l'on en est en paraît trois.
+ * ## Le spinner **est** la liste
  *
- * Et quand ça casse, la liste dit **à quelle étape** — ce qu'il fallait
- * auparavant deviner.
+ * Une roue seule ne dit rien pendant une minute et demie, et l'on redépose —
+ * ce qui relance tout et repaie tout. Une roue *à côté* d'une liste en dit deux
+ * fois trop : deux objets pour un seul état.
+ *
+ * Il n'y en a donc qu'un : la roue tourne, et les étapes s'écrivent dessous à
+ * mesure qu'elles arrivent.
+ *
+ * ## On n'annonce pas ce qui n'a pas eu lieu
+ *
+ * Les étapes qui restent ne s'affichent pas. Une liste complète cochée par le
+ * haut promet cinq étapes, et cette promesse est fausse : une restitution qui
+ * échoue n'en fait jamais que trois. On montre ce qui s'est passé, pas ce qu'on
+ * espère.
+ *
+ * ## Une seule source, sinon elles divergent
+ *
+ * `etat.etape` décide seule, et le libellé vient de `ETAPES`. Une phrase
+ * d'avancement tenue à côté du curseur s'en était déjà désynchronisée : la
+ * liste disait « reconnaissance de la structure » pendant que l'onglet disait
+ * « restitution du document » (règle 4).
  */
 function renderLesEtapes(vue) {
   const rang = ETAPES.findIndex((etape) => etape.cle === texte(vue.etape));
-  // Sans étape connue, on n'en coche aucune : afficher tout fait serait faux,
-  // et tout à faire le serait aussi (règle 5).
-  const courante = rang < 0 ? 0 : rang;
+  // Sans étape connue, on n'en montre aucune : en afficher une serait affirmer
+  // qu'elle a eu lieu (règle 5).
+  if (rang < 0) return "";
+
   const casse = vue.phase === "echec";
+  const finie = vue.phase === "lue";
 
   return `
     <ol class="lecture-cr__etapes">
-      ${ETAPES.map((etape, place) => {
-        const faite = place < courante || (!casse && vue.phase === "lue");
-        const ici = place === courante && !faite;
+      ${ETAPES.slice(0, rang + 1).map((etape, place) => {
+        const faite = place < rang || finie;
+        const ici = !faite;
 
         return `
           <li class="lecture-cr__etape${faite ? " est-faite" : ""}${ici ? " est-ici" : ""}${
             ici && casse ? " est-cassee" : ""}">
             <span class="lecture-cr__etape-case" aria-hidden="true">${
               faite ? svgIcon("check", { className: "octicon" })
-                : ici && casse ? svgIcon("alert", { className: "octicon" })
-                : ici ? renderSpinnerHtml({ label: etape.dit, size: "sm" })
+                : casse ? svgIcon("alert", { className: "octicon" })
                 : ""
             }</span>
             <span>${escapeHtml(etape.dit)}${ici && !casse ? "…" : ""}</span>
@@ -504,6 +532,25 @@ function renderLesEtapes(vue) {
         `;
       }).join("")}
     </ol>
+  `;
+}
+
+/**
+ * Ce qu'on montre pendant qu'on attend, dans l'un comme dans l'autre onglet.
+ *
+ * **En attente, et non vide.** Un onglet qui ne montre rien se lit « il n'y a
+ * rien à voir » ; ici il n'y a rien *encore*, et ce n'est pas pareil (règle 5).
+ *
+ * Les deux onglets appellent celle-ci : deux attentes écrites séparément
+ * finiraient par ne plus dire la même chose au même moment.
+ */
+function renderLattente(vue, aide = "") {
+  return `
+    <div class="lecture-cr__attente">
+      ${renderSpinnerHtml({ label: "Lecture du document", size: "lg" })}
+      ${renderLesEtapes(vue)}
+      ${aide ? `<p class="lecture-cr__attente-aide">${aide}</p>` : ""}
+    </div>
   `;
 }
 
@@ -587,20 +634,18 @@ function renderAnalyse(vue) {
   // **En attente, et non vide.** Un onglet qui ne montre rien se lit « il n'y
   // a rien à voir » ; ici il n'y a rien *encore*, et ce n'est pas pareil.
   if (!vue.lecture) {
-    return `
-      <section class="lecture-cr__attente">
-        ${vue.phase === "echec"
-          ? `<p class="lecture-cr__attente-mot">L'analyse n'a pas eu lieu.</p>`
-          : `
-            ${renderSpinnerHtml({ label: "Relevé des points", size: "lg" })}
-            <p class="lecture-cr__attente-mot">${escapeHtml(vue.dit || "Relevé des points")}…</p>
-            <p class="lecture-cr__attente-aide">
-              Les points se relèvent sur le document restitué : l'onglet Restitution montre déjà
-              ce sur quoi ils seront lus.
-            </p>
-          `}
-      </section>
-    `;
+    if (vue.phase === "echec") {
+      return `
+        <section class="lecture-cr__attente">
+          ${renderLesEtapes(vue)}
+          <p class="lecture-cr__attente-mot">L'analyse n'a pas eu lieu.</p>
+        </section>
+      `;
+    }
+
+    return renderLattente(vue,
+      "Les points se relèvent sur le document restitué : l'onglet Restitution montre déjà ce sur "
+      + "quoi ils seront lus.");
   }
 
   return `
@@ -697,11 +742,12 @@ function renderRestitution(vue) {
   return `
     <section class="lecture-cr__md">
       ${renderMesureDeLaRestitution(md.modele)}
+      ${renderLeDecoupage(vue)}
       ${renderLaStructure(vue)}
       ${renderRangement(md.modele)}
       <div class="lecture-cr__md-fichier">
         ${renderBarreDeLaRestitution(vue, md)}
-        ${renderCorpsDeLaRestitution(md.modele, md.lecture)}
+        ${renderCorpsDeLaRestitution(vue, md.modele, md.lecture)}
       </div>
     </section>
   `;
@@ -756,6 +802,59 @@ function renderMesureDeLaRestitution(cote) {
  * n'apparaît qu'à la page 7 d'un document de vingt a pu lui échapper. Laisser
  * croire qu'il a tout vu ferait prendre son silence pour une absence (règle 5).
  */
+/**
+ * Le découpage : ce qui a été annoncé, ce qui a été rendu.
+ *
+ * ## Pourquoi c'est à l'écran et pas dans un journal
+ *
+ * Sur le premier vrai document, la restitution n'a rendu ni titre ni trait.
+ * « Le modèle n'obéit pas » est une conjecture ; deux causes très différentes
+ * donnent le même écran, et se corrigent à deux endroits opposés :
+ *
+ *  - **la structure n'a relevé aucun chapitre** — la consigne sur les titres
+ *    n'a alors jamais été écrite, et le modèle a obéi à ce qu'on lui a donné ;
+ *  - **la restitution les a ignorés** — la structure, elle, a fait son travail.
+ *
+ * Le bloc dit laquelle, et ce qu'il faut reprendre. Sans lui on relance le même
+ * appel en espérant mieux.
+ *
+ * ## Ce qu'il ne dit pas
+ *
+ * Quand il n'y a pas de squelette, il ne dit rien : on ne peut pas accuser un
+ * modèle d'avoir ignoré une consigne dont on ignore si elle lui a été donnée
+ * (règle 5).
+ */
+function renderLeDecoupage(vue) {
+  if (vue.md.modele.phase !== "fait") return "";
+
+  const { verdict, rendu, annonce } = decoupageDeLaRestitution({
+    markdown: vue.md.modele.texte,
+    structure: vue.structure?.structure ?? null
+  });
+  if (verdict === DECOUPAGE.INCONNU) return "";
+
+  const tenu = verdict === DECOUPAGE.TENU;
+  const aReprendre = A_REPRENDRE[verdict] ?? "";
+
+  return `
+    <div class="lecture-cr__decoupage${tenu ? " est-bon" : " est-douteux"}">
+      <div class="lecture-cr__chiffres">
+        ${renderChiffre("Chapitres annoncés", String(annonce.chapitres),
+          annonce.chapitres > 0 ? "est-bon" : "est-douteux")}
+        ${renderChiffre("Titres rendus", String(rendu.titres),
+          rendu.titres > 0 ? "est-bon" : "est-douteux")}
+        ${renderChiffre("Traits devant un titre", String(rendu.traitsDevantUnTitre),
+          rendu.traitsDevantUnTitre > 0 ? "est-bon" : "est-douteux")}
+      </div>
+      <p class="lecture-cr__mot">
+        ${svgIcon(tenu ? "check-circle" : "alert", { className: "octicon" })}
+        ${escapeHtml(PHRASES_DU_DECOUPAGE[verdict] ?? "")}
+        ${aReprendre ? `<strong>${escapeHtml(aReprendre)}</strong>` : ""}
+      </p>
+    </div>
+  `;
+}
+
 function renderLaStructure(vue) {
   if (vue.md.modele.phase !== "fait") return "";
 
@@ -951,15 +1050,34 @@ function renderVerdictDesDegats(cote) {
 }
 
 /** Ce que la restitution montre, selon où elle en est. */
-function renderCorpsDeLaRestitution(cote, lecture) {
-  if (cote.phase === "demande") {
-    return `
-      <div class="lecture-cr__md-attente">
-        ${renderSpinnerHtml({ label: "Restitution du document", size: "lg" })}
-        <p class="lecture-cr__depot-mot">Restitution du document…</p>
-      </div>
-    `;
-  }
+/**
+ * L'aperçu, composé dans la largeur du papier dont il vient.
+ *
+ * **Un compte rendu est écrit pour une feuille.** Ses tableaux, ses colonnes et
+ * ses retours à la ligne ont été composés pour une largeur d'A4 ; étalés sur un
+ * écran de deux mille pixels, ils deviennent une bande de deux cents caractères
+ * où chaque ligne se lit deux fois, faute de retrouver l'origine de la suivante.
+ *
+ * La largeur vient de la géométrie du PDF, pas d'une constante : un planning en
+ * paysage doit pouvoir s'afficher en paysage, et c'est là que la largeur compte
+ * le plus. Quand la mesure manque, on ne la suppose pas — l'aperçu s'étale, et
+ * la ligne au-dessus dit pourquoi (règle 5).
+ */
+function renderLApercu(vue, cote) {
+  const format = formatDuDocument(vue.pagesLues);
+  const dite = phraseDuFormat(format);
+
+  return `
+    ${dite ? `<p class="lecture-cr__md-format mono-small">${escapeHtml(dite)}</p>` : ""}
+    <div class="lecture-cr__md-apercu md-body"${
+      format.largeur > 0 ? ` style="--lecture-cr-papier:${format.largeur}px"` : ""}>
+      ${renderMarkdownToHtml(cote.texte)}
+    </div>
+  `;
+}
+
+function renderCorpsDeLaRestitution(vue, cote, lecture) {
+  if (cote.phase === "demande") return renderLattente(vue);
 
   if (cote.phase === "echec") {
     return `
@@ -974,12 +1092,12 @@ function renderCorpsDeLaRestitution(cote, lecture) {
     `;
   }
 
-  if (cote.phase !== "fait") return `<div class="lecture-cr__md-attente mono-small">En attente.</div>`;
+  if (cote.phase !== "fait") return renderLattente(vue);
 
   return `
     ${renderReservesDeLaRestitution(cote)}
     ${lecture === LECTURE.APERCU
-      ? `<div class="lecture-cr__md-apercu md-body">${renderMarkdownToHtml(cote.texte)}</div>`
+      ? renderLApercu(vue, cote)
       : renderLignesDeLaRestitution(cote, lecture)}
   `;
 }
@@ -1197,6 +1315,7 @@ function renderCeQueLeCrApporte(vue) {
       ${renderLesObjectifs(points, vue.objectifs, vue.lecture)}
       ${renderLesLiens(points)}
       ${renderLesFermetures(vue, points)}
+      ${renderLaSituation(vue)}
       <p class="lecture-cr__mot">
         Rien de tout cela n'est écrit : ni lot ajouté, ni label créé, ni label posé. C'est ce que
         la proposition porterait, et c'est quelqu'un qui la signe.
@@ -1388,6 +1507,82 @@ function renderLesLiens(points) {
         d'affirmation que personne ne vérifie : c'est elle qui permet de répondre « non, ça n'a
         rien à voir ».
       </p>
+    </div>
+  `;
+}
+
+/**
+ * La situation qui rassemblerait les sujets venus des comptes rendus.
+ *
+ * ## Ce qu'elle apporte
+ *
+ * Au troisième dépôt, un projet porte quarante sujets venus des réunions, mêlés
+ * à ceux qui viennent d'ailleurs. Les retrouver demande de refaire le même
+ * filtre à chaque fois — et personne ne le refait. Une situation automatique
+ * fondée sur le label les rassemble une fois pour toutes, et **se tient à jour
+ * seule** : un sujet y entre dès qu'il reçoit le label, et en sort dès qu'il
+ * est fermé.
+ *
+ * ## « Toute seule » ne veut pas dire « sans personne »
+ *
+ * Elle ne se crée pas au dépôt : elle se propose, et c'est quelqu'un qui signe.
+ * Une situation a un titre, elle apparaît dans la barre, on la partage — créée
+ * dans le dos de quelqu'un, elle serait la première chose du produit que
+ * personne n'a acceptée. Ce qui est automatique, c'est **son contenu**.
+ *
+ * ## Ce qu'elle ne fait pas deux fois
+ *
+ * Dès qu'une situation automatique couvre le label, le bloc dit qu'elle est là
+ * et ne propose plus rien : une seconde vérité sur le même ensemble, et l'on ne
+ * saurait plus laquelle regarder (règle 10).
+ */
+function renderLaSituation(vue) {
+  const duCr = labelDuCrDansLeProjet(vue.labels);
+  const label = duCr.label;
+
+  // **Les sujets ouverts seulement.** Une situation qui rassemblerait les
+  // sujets fermés dirait « quarante points en cours » sur un chantier qui en a
+  // trois : le filtre de la base ne retient que `status: open`, et l'écran doit
+  // annoncer ce que la base fera (règle 4).
+  const fermes = new Set(
+    (Array.isArray(vue.sujetsDuProjet) ? vue.sujetsDuProjet : [])
+      .filter((sujet) => estFerme(sujet)).map((sujet) => texte(sujet?.id))
+  );
+  const ouvertsDuLabel = Array.isArray(vue.sujetsDuLabel)
+    ? vue.sujetsDuLabel.filter((sujet) => !fermes.has(texte(sujet)))
+    : null;
+
+  const verdict = situationDuLabel({
+    labelCle: texte(label?.label_key) || texte(label?.name),
+    labelNom: texte(label?.name) || LABEL_DU_CR,
+    sujetsDuLabel: ouvertsDuLabel,
+    situations: vue.situations
+  });
+
+  // Rien à dire tant qu'il n'y a rien à rassembler : un bloc qui s'affiche
+  // toujours ne s'affiche plus.
+  if (verdict.verdict === SITUATION.INCONNU && !Array.isArray(vue.situations)) return "";
+  if (verdict.verdict === SITUATION.TROP_TOT && verdict.combien === 0) return "";
+
+  const propose = verdict.verdict === SITUATION.A_PROPOSER;
+
+  return `
+    <div class="lecture-cr__apport-bloc">
+      <h4>${svgIcon("project", { className: "octicon" })} La situation de suivi</h4>
+      <p class="lecture-cr__mot">${escapeHtml(phraseDeLaSituation(verdict))}</p>
+
+      ${propose ? `
+        <div class="lecture-cr__situation">
+          <p class="lecture-cr__situation-titre">${escapeHtml(verdict.situation.title)}</p>
+          <p class="lecture-cr__mot">${escapeHtml(verdict.situation.description)}</p>
+          <p class="mono-small">sujets ouverts portant le label « ${escapeHtml(
+            verdict.situation.filter_definition.labelIds[0] ?? "")} »</p>
+        </div>
+        <p class="lecture-cr__mot">
+          Elle ne se crée pas au dépôt : <strong>elle fait partie de la proposition</strong>, et
+          c'est quelqu'un qui la signe. Ce qui est automatique, c'est son contenu.
+        </p>
+      ` : ""}
     </div>
   `;
 }
@@ -1899,7 +2094,6 @@ function brancher(hote) {
  */
 async function lire(hote, fichier) {
   etat.phase = "lecture";
-  etat.dit = "Ouverture du document";
   etat.etape = "ouverture";
   etat.lecture = null;
   etat.pagesLues = [];
@@ -1911,6 +2105,7 @@ async function lire(hote, fichier) {
   etat.structure = null;
   etat.sujetsDuProjet = null;
   etat.sujetsDuLabel = null;
+  etat.situations = null;
   etat.deplie = "";
   etat.motif = "";
   etat.panne = "";
@@ -1935,7 +2130,6 @@ async function lire(hote, fichier) {
     // le procédé : le modèle relit un document qu'on a sous les yeux, et l'on
     // sait donc exactement sur quoi il s'est fondé. Lire les points sur le
     // texte brut du PDF laisserait la question ouverte à chaque déception.
-    etat.dit = `Restitution des ${pages.length} pages en Markdown`;
     redessiner(hote);
     await restituerOuRelire(hote);
 
@@ -1944,7 +2138,6 @@ async function lire(hote, fichier) {
     // pourquoi : c'est elle qui donne son sens à l'écran entier.
     const { pages: lues, lueSur } = pagesALire(pages, etat.md.modele);
 
-    etat.dit = `Relevé des points sur ${lueSur === "modele" ? "le document restitué" : "le texte du PDF"}`;
     etat.etape = "sujets";
     redessiner(hote);
 
@@ -1998,15 +2191,14 @@ async function lire(hote, fichier) {
     // moins de points qu'il n'y en a, et rien dans ce qui reste ne le dit.
     etat.lecture.coupee = Boolean(lu.coupee);
 
-    etat.dit = "Confrontation aux sujets du projet";
     etat.etape = "projet";
     redessiner(hote);
     etat.confrontes = await confronterAuProjet(etat.lecture.points, connus);
     // Gardés pour la comparaison des disparitions : ce sont ceux que le modèle
     // a eus sous les yeux, et deux lectures en rendraient deux listes (règle 4).
     etat.sujetsDuProjet = connus;
-    [etat.labels, etat.lots, etat.objectifs] = await Promise.all([
-      labelsDuProjet(), lotsDuProjet(), objectifsDuProjet()
+    [etat.labels, etat.lots, etat.objectifs, etat.situations] = await Promise.all([
+      labelsDuProjet(), lotsDuProjet(), objectifsDuProjet(), situationsDuProjet()
     ]);
 
     etat.phase = "lue";
@@ -2090,6 +2282,30 @@ async function labelsDuProjet() {
       : (duCr.connu ? [] : null);
 
     return charges?.labels ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Les situations du projet, pour savoir si l'une suit déjà le label.
+ *
+ * `null` quand on n'a pas pu demander : proposer une situation sans savoir ce
+ * qui existe en ferait une seconde sur le même ensemble, et l'on ne saurait
+ * plus laquelle regarder (règle 10).
+ */
+async function situationsDuProjet() {
+  try {
+    const [{ loadSituationsForCurrentProject }, { resolveCurrentBackendProjectId }] =
+      await Promise.all([
+        import("../../../services/project-situations-supabase.js"),
+        import("../../../services/project-supabase-sync.js")
+      ]);
+
+    const projet = await resolveCurrentBackendProjectId();
+    if (!projet) return null;
+
+    return (await loadSituationsForCurrentProject(projet)) ?? null;
   } catch {
     return null;
   }
@@ -2315,7 +2531,6 @@ async function restituerParLeModele(hote) {
      * Une reconnaissance qui échoue ne bloque rien : on transcrit comme avant,
      * et l'écran dit que les tableaux peuvent diverger d'une page à l'autre.
      */
-    etat.dit = "Reconnaissance de la structure du document";
     etat.etape = "structure";
     redessiner(hote);
 
@@ -2326,7 +2541,6 @@ async function restituerParLeModele(hote) {
     etat.structure = reconnue.ok ? reconnue : null;
     if (!reconnue.ok && texte(reconnue.panne)) etat.panne = texte(reconnue.panne);
 
-    etat.dit = `Restitution des ${posee.pages.length} pages en Markdown`;
     etat.etape = "restitution";
     redessiner(hote);
 
