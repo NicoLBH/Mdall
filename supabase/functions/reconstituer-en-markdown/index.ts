@@ -40,19 +40,34 @@ import {
 
 const openAiApiKey = Deno.env.get("OPENAI_API_KEY")!;
 
-/** Le même que les autres lectures : un seul fournisseur à exploiter. */
-const MODELE = "gpt-4.1-mini";
+/**
+ * **Le modèle complet, et non le petit.**
+ *
+ * C'est le premier maillon : tout ce qui suit lit ce qu'il rend, et une erreur
+ * de transcription se propage sans jamais se corriger. C'est aussi le seul
+ * appel dont le travail se vérifie mot pour mot contre le document — on sait
+ * donc ce qu'on achète.
+ *
+ * Neuf centimes pour onze pages au lieu de deux. Le relevé des points, lui,
+ * reste sur le petit modèle : il travaille sur un document déjà propre.
+ */
+const MODELE = "gpt-4.1";
 
 /**
- * Le plafond d'entrée, plus bas que celui de l'extraction.
+ * Le plafond d'entrée, calé sur ce qui peut **revenir**.
  *
- * Refaire un document rend **autant de texte qu'il en reçoit**, là où une
- * extraction n'en rend qu'un résumé structuré. Envoyer 120 000 caractères
- * garantirait une réponse coupée au milieu, c'est-à-dire un document tronqué
+ * Une transcription rend autant de texte qu'elle en reçoit. Ce n'est donc pas
+ * la fenêtre d'entrée qui décide — elle est large — mais la sortie maximale du
+ * modèle. Au-delà, la réponse serait coupée au milieu : un document tronqué
  * sans que la coupure vienne du document.
+ *
+ * 110 000 caractères font environ 30 000 jetons, et autant au retour : c'est
+ * la limite de ce que le modèle peut rendre d'un bloc. Ce qui dépasse est
+ * nommé dans la réponse (`hors_plafond`) et affiché — un document amputé qui
+ * s'afficherait entier serait le pire résultat possible (règle 5).
  */
-const MAX_CARACTERES = 45000;
-const MAX_JETONS = 16000;
+const MAX_CARACTERES = 110000;
+const MAX_JETONS = 32000;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

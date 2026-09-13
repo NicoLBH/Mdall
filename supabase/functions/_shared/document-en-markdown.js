@@ -8,6 +8,19 @@
  * écrit, dans l'ordre où c'est écrit, avec les tableaux en tableaux et les
  * titres en titres.
  *
+ * ## Ce qu'elle autorise, et c'est nouveau
+ *
+ * La mise en page. Le modèle peut ajouter des titres, des listes, des niveaux
+ * d'imbrication — **pas un mot**. Car un compte rendu de chantier est une
+ * arborescence qui ne dit pas son nom : lot, entreprise, point, reprises des
+ * semaines suivantes. Le document l'écrit à plat ; la rendre explicite ici
+ * évite aux appels suivants de la deviner, et ils devinent moins bien.
+ *
+ * C'est un jugement, et donc un risque : la porte ouverte à la mise en page est
+ * une porte par laquelle du texte peut entrer. Les mesures de
+ * `degats-de-la-restitution.js` la surveillent — mots ajoutés, titres inventés,
+ * blocs déplacés.
+ *
  * ## Deux interdits ajoutés après mesure
  *
  * Sur un compte rendu réel de onze pages, la restitution était excellente — mais
@@ -50,8 +63,10 @@ Règles impératives :
 - N'AJOUTE AUCUN TITRE. N'écris que les titres qui figurent dans le document, mot pour mot. N'invente pas d'en-tête de page, de numéro de page, de date de rapport, ni de titre de section pour organiser ce que tu rends. Si un passage n'a pas de titre dans le document, il n'en a pas non plus dans ta restitution.
 - GARDE L'ORDRE DU DOCUMENT, du haut de la page vers le bas. Ne déplace rien, même si un autre ordre te semble plus logique : ni un titre vers la fin, ni un tableau vers le début. Un bloc placé en haut d'une page se restitue en premier.
 - Les nombres, dates, cotes, références, numéros de lot et noms propres se recopient caractère pour caractère.
-- Restitue les tableaux en tableaux Markdown (format GitHub, avec la ligne de séparation). Si une cellule est fusionnée, répète sa valeur sur les lignes concernées plutôt que de laisser du vide.
+- CE QUI EST UN TABLEAU RESTE UN TABLEAU. Restitue-le en tableau Markdown (format GitHub, avec la ligne de séparation), jamais en liste ni en paragraphe. C'est vrai en particulier du tableau des contacts et du tableau des présences : ce sont les seuls endroits où les coordonnées d'un intervenant sont réunies, et une colonne perdue est une information perdue. Si une cellule est fusionnée, répète sa valeur sur les lignes concernées plutôt que de laisser du vide. Si une cellule contient plusieurs informations (un nom, une entreprise, une adresse, un courriel, un téléphone), garde-les dans la même cellule, séparées par des retours à la ligne.
 - Restitue les titres en titres (#, ##, ###), les listes en listes, les mentions en gras ou souligné du document en gras Markdown.
+- TU PEUX CLARIFIER LA MISE EN PAGE, JAMAIS LES MOTS. Tu peux ajouter des titres Markdown, des listes, des niveaux d'imbrication et des tableaux pour rendre visible une structure que le document porte sans la montrer. Tu ne peux pas ajouter, retirer ni changer un seul mot, et tu ne peux pas changer l'ordre.
+- FAIS ÉMERGER LA STRUCTURE IMPLICITE. Un compte rendu de chantier est une arborescence qui ne dit pas son nom : un lot, l'entreprise qui le tient, ses points à traiter, et sous chaque point les mises à jour des réunions suivantes. Quand un point daté est suivi de reprises datées plus récentes, imbrique les reprises sous le point. Quand des points appartiennent à un même lot, groupe-les sous le titre de ce lot. L'imbrication est un déplacement d'indentation, pas un déplacement de contenu : l'ordre de lecture reste celui du document.
 - Les en-têtes et pieds de page répétés à chaque page se restituent une seule fois, sur la page où ils apparaissent.
 - Si un passage est illisible ou incohérent dans le texte extrait, écris-le tel quel. N'invente pas ce qui manque, et ne signale rien : le document refait ne contient que le document.
 - Une page sans contenu lisible rend une chaîne vide.
