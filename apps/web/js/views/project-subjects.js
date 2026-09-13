@@ -221,6 +221,9 @@ const {
   getCurrentSubjectsStatusFilter,
   getCurrentSubjectsPriorityFilter,
   getCurrentSubjectsSort,
+  getChampsDesSujets,
+  getMetaDesSujets,
+  getRequeteDesSujets,
   sujetMatchesPriorityFilter,
   getAvailableSubjectPriorities,
   sujetMatchesStatusFilter,
@@ -390,6 +393,11 @@ const {
 } = projectSubjectsTitle;
 
 const projectSubjectsEvents = createProjectSubjectsEvents({
+  getChampsDesSujets: (...args) => getChampsDesSujets(...args),
+  getRequeteDesSujets: (...args) => getRequeteDesSujets(...args),
+  epinglerLaRechercheDesSujets: (...args) => projectSubjectsView.epinglerLaRechercheDesSujets(...args),
+  retirerLaRechercheEpinglee: (...args) => projectSubjectsView.retirerLaRechercheEpinglee(...args),
+  basculerLeRail: (...args) => projectSubjectsView.basculerLeRail(...args),
   DRAFT_SUBJECT_ID,
   store,
   PROJECT_TAB_RESELECTED_EVENT,
@@ -918,6 +926,9 @@ const projectSubjectsView = createProjectSubjectsView({
   getCurrentSubjectsStatusFilter: (...args) => getCurrentSubjectsStatusFilter(...args),
   getCurrentSubjectsPriorityFilter: (...args) => getCurrentSubjectsPriorityFilter(...args),
   getCurrentSubjectsSort: (...args) => getCurrentSubjectsSort(...args),
+  getChampsDesSujets: (...args) => getChampsDesSujets(...args),
+  getMetaDesSujets: (...args) => getMetaDesSujets(...args),
+  getRequeteDesSujets: (...args) => getRequeteDesSujets(...args),
   sujetMatchesStatusFilter: (...args) => sujetMatchesStatusFilter(...args),
   sujetMatchesPriorityFilter: (...args) => sujetMatchesPriorityFilter(...args),
   getAvailableSubjectPriorities: (...args) => getAvailableSubjectPriorities(...args),

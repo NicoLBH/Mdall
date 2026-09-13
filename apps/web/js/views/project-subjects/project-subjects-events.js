@@ -1,4 +1,6 @@
 import { applyMarkdownComposerAction } from "../../utils/markdown-composer.js";
+import { dropOtherTokens, suggestAt, withFilter } from "../../services/query-bar.js";
+import { escapeHtml as echapper } from "../../utils/escape-html.js";
 import { brancherLaZoneDeDepot } from "../ui/zone-de-depot.js";
 import {
   applyMentionSuggestion,
@@ -32,6 +34,15 @@ export function createProjectSubjectsEvents(config) {
   const {
     DRAFT_SUBJECT_ID = "__draft_subject__",
     store,
+    // Le vocabulaire interrogeable et la requête courante : les gestes les
+    // lisent pour poser un jeton, ils ne les recalculent pas.
+    getChampsDesSujets = () => [],
+    getRequeteDesSujets = () => "",
+    // Les recherches épinglées et le repli du rail vivent avec l'écran : les
+    // gestes les appellent, ils ne les refont pas.
+    epinglerLaRechercheDesSujets = () => {},
+    retirerLaRechercheEpinglee = () => {},
+    basculerLeRail = () => {},
     PROJECT_TAB_RESELECTED_EVENT,
     getSubjectsViewState,
     getSubjectsTabResetState,
@@ -5686,24 +5697,217 @@ export function createProjectSubjectsEvents(config) {
    * chaque geste vit sous son nom, et le second enregistrement remplace le
    * premier (règle 10).
    */
+  /**
+   * Poser la requête des sujets, et redessiner.
+   *
+   * **Elle est le seul état filtrant du tableau.** Le rail, la barre et les
+   * menus d'en-tête passent tous par ici : trois gestes, un endroit. La
+   * pagination repart à la première page — rester à la page 4 d'une liste qui
+   * vient de changer montre un vide qu'on prend pour un résultat.
+   */
+  function poserLaRequeteDesSujets(requete) {
+    if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
+      store.projectSubjectsView = {};
+    }
+    store.projectSubjectsView.requete = String(requete ?? "");
+    resetSubjectsPaginationPage();
+    redessinerApresUnGeste();
+  }
+
+  /** La requête courante, un jeton posé ou retiré. */
+  function avecUnJeton(cle, valeur) {
+    const champs = getChampsDesSujets();
+    const requete = getRequeteDesSujets();
+    return withFilter(requete, champs, cle, String(valeur ?? ""));
+  }
+
+  /**
+   * Redessiner la liste sans perdre ce qu'on est en train de taper.
+   *
+   * Le panneau entier est reconstruit — c'est le seul redessin dont cet écran
+   * dispose —, et le champ de recherche part avec lui. **On rend donc le
+   * curseur là où il était** : sans cela, chaque caractère le renvoie à la fin,
+   * et l'on ne peut plus corriger le milieu d'une requête.
+   */
+  function redessinerLaListeDesSujets(root) {
+    const champ = root.querySelector("[data-sujets-recherche]");
+    const avait = champ === document.activeElement;
+    const debut = champ?.selectionStart ?? null;
+    const fin = champ?.selectionEnd ?? null;
+
+    rerenderPanels();
+
+    if (!avait) return;
+    const remis = root.querySelector("[data-sujets-recherche]");
+    if (!remis) return;
+
+    remis.focus();
+    if (debut !== null && fin !== null) remis.setSelectionRange(debut, fin);
+    synchroniserLesSuggestions(root);
+  }
+
+  /**
+   * Les suggestions sous le curseur.
+   *
+   * Elles ne s'ouvrent **qu'après un deux-points** : ailleurs on écrit du texte
+   * libre, et une liste qui s'ouvre à chaque mot gêne la frappe au lieu de
+   * l'aider. C'est `suggestAt` qui en décide, comme dans la Mémoire.
+   */
+  function synchroniserLesSuggestions(root) {
+    const champ = root.querySelector("[data-sujets-recherche]");
+    const hote = root.querySelector("[data-sujets-suggestions]");
+    if (!champ || !hote) return;
+
+    const propose = document.activeElement === champ
+      ? suggestAt(champ.value, getChampsDesSujets(), champ.selectionStart ?? champ.value.length)
+      : null;
+
+    if (!propose) {
+      hote.hidden = true;
+      hote.innerHTML = "";
+      return;
+    }
+
+    hote.innerHTML = propose.items.map((item, rang) => `
+      <button type="button" class="memory-search__suggestion${rang === 0 ? " is-active" : ""}"
+        role="option" aria-selected="${rang === 0 ? "true" : "false"}" data-sujets-suggestion="${rang}">
+        <span class="memory-search__suggestion-label">${echapper(item.label)}</span>
+        <span class="memory-search__suggestion-hint">${echapper(item.hint)}</span>
+      </button>
+    `).join("");
+    hote.hidden = false;
+  }
+
+  /**
+   * Applique une proposition **à la place du mot du curseur**, pas de toute la
+   * requête : compléter au milieu d'une recherche déjà écrite ne doit pas
+   * effacer le reste.
+   */
+  function appliquerUneSuggestion(root, rang) {
+    const champ = root.querySelector("[data-sujets-recherche]");
+    if (!champ) return;
+
+    const champs = getChampsDesSujets();
+    const propose = suggestAt(champ.value, champs, champ.selectionStart ?? champ.value.length);
+    const item = propose?.items?.[rang];
+    if (!item) return;
+
+    const avant = champ.value.slice(0, propose.start);
+    const apres = champ.value.slice(propose.end);
+    let curseur = avant.length + item.insert.length;
+    let requete = `${avant}${item.insert}${apres}`;
+
+    // Un champ à choix simple ne garde qu'une valeur : celle qu'on vient de
+    // poser. Laisser la précédente montrerait deux statuts pour un tableau qui
+    // n'en a qu'un, et la liste serait vide sans que rien ne l'explique.
+    if (item.replacesField) {
+      const nettoyee = dropOtherTokens(requete, champs, item.replacesField, curseur - 1);
+      curseur = Math.max(0, curseur - (requete.length - nettoyee.length));
+      requete = nettoyee;
+    }
+
+    champ.value = requete;
+    if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
+      store.projectSubjectsView = {};
+    }
+    store.projectSubjectsView.requete = requete;
+    champ.setSelectionRange(curseur, curseur);
+    resetSubjectsPaginationPage();
+
+    synchroniserLesSuggestions(root);
+    redessinerLaListeDesSujets(root);
+  }
+
+  /**
+   * Les gestes de la barre : compléter, épingler, vider, replier le rail.
+   *
+   * Ils sont posés sur la racine, en délégation : le panneau est reconstruit à
+   * chaque rendu, et des écouteurs attachés aux boutons partiraient avec lui.
+   */
+  function ecouterLaBarreDesSujets(root) {
+    root.addEventListener("mousedown", (event) => {
+      // `mousedown` et non `click` : le champ perd le focus au premier, et la
+      // liste se serait refermée avant que le clic n'arrive.
+      const suggestion = event.target.closest?.("[data-sujets-suggestion]");
+      if (!suggestion) return;
+      event.preventDefault();
+      appliquerUneSuggestion(root, Number(suggestion.dataset.sujetsSuggestion) || 0);
+    });
+
+    root.addEventListener("click", (event) => {
+      if (event.target.closest?.("[data-sujets-vider]")) {
+        event.preventDefault();
+        poserLaRequeteDesSujets("");
+        return;
+      }
+      if (event.target.closest?.("[data-sujets-epingler]")) {
+        event.preventDefault();
+        epinglerLaRechercheDesSujets();
+        return;
+      }
+      if (event.target.closest?.("[data-sujets-rail-repli]")) {
+        event.preventDefault();
+        basculerLeRail();
+      }
+    });
+
+    root.addEventListener("focusin", (event) => {
+      if (event.target.closest?.("[data-sujets-recherche]")) synchroniserLesSuggestions(root);
+    });
+
+    root.addEventListener("focusout", (event) => {
+      if (!event.target.closest?.("[data-sujets-recherche]")) return;
+      // Le temps que le `mousedown` d'une suggestion soit traité : la refermer
+      // tout de suite rendrait la liste inutilisable à la souris.
+      window.setTimeout(() => synchroniserLesSuggestions(root), 0);
+    });
+
+    root.addEventListener("keydown", (event) => {
+      const champ = event.target.closest?.("[data-sujets-recherche]");
+      if (!champ) return;
+
+      if (event.key === "Escape") {
+        const hote = root.querySelector("[data-sujets-suggestions]");
+        if (hote && !hote.hidden) {
+          event.preventDefault();
+          hote.hidden = true;
+          hote.innerHTML = "";
+          return;
+        }
+        // Deux échappements : le premier ferme la liste, le second vide la
+        // recherche. Vider dès le premier ferait perdre une requête longue pour
+        // un geste qui ne visait que la liste.
+        if (champ.value) { event.preventDefault(); poserLaRequeteDesSujets(""); }
+        return;
+      }
+
+      if (event.key !== "Enter") return;
+      const hote = root.querySelector("[data-sujets-suggestions]");
+      if (!hote || hote.hidden) return;
+      event.preventDefault();
+      appliquerUneSuggestion(root, 0);
+    });
+  }
+
   function ecouterLaTeteDesSujets() {
     quandOnClique("subjects-status-filter", (valeur) => {
       const demande = String(valeur || "open").toLowerCase() === "closed" ? "closed" : "open";
-      // **Un seul endroit**, celui que les sélecteurs lisent.
+      // **Un seul endroit**, et c'est la requête.
       //
-      // Le clic écrivait dans l'ancien état, qui partage son `filters.status`
-      // avec le filtre des Situations : la normalisation de l'autre onglet
-      // remettait « Ouverts » sans que rien ne le dise. Une valeur écrite à deux
-      // endroits finit par diverger (règle 4).
-      if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
-        store.projectSubjectsView = {};
-      }
-      store.projectSubjectsView.subjectsStatusFilter = demande;
-      // `filters.status` reste écrit **ici aussi**, pour ce qui le lit encore —
-      // mais il est désormais une copie, jamais une source.
-      if (store.projectSubjectsView.filters) store.projectSubjectsView.filters.status = demande;
-      redessinerApresUnGeste();
+      // Le clic a écrit successivement dans deux cases à lui, chacune disputée
+      // par un autre écrivain. La troisième réparation ne déplace pas la case :
+      // elle la supprime. Le statut est un jeton de la barre, comme les autres,
+      // et se lit donc à l'écran (règle 4).
+      poserLaRequeteDesSujets(avecUnJeton("statut", demande === "closed" ? "closed" : "open"));
     });
+
+    // Le rail, les épingles et les menus d'en-tête posent tous une requête
+    // entière : un seul geste, un seul état.
+    quandOnClique("sujets-lecture", (requete) => {
+      poserLaRequeteDesSujets(String(requete ?? ""));
+    });
+
+    quandOnClique("sujets-decrocher", (id) => { retirerLaRechercheEpinglee(id); });
 
     quandOnClique("subjects-sort", (valeur) => {
       if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
@@ -5724,6 +5928,10 @@ export function createProjectSubjectsEvents(config) {
   function bindSituationsEvents(root, headerRoot) {
     if (root?.dataset?.subjectsEventsBound === "1") return;
     if (root?.dataset) root.dataset.subjectsEventsBound = "1";
+    // La barre a besoin de la racine, et d'elle seule : le panneau qu'elle
+    // contient est reconstruit à chaque rendu, ses boutons avec — c'est
+    // pourquoi tout est en délégation.
+    ecouterLaBarreDesSujets(root);
     const toolbarRoot = document.getElementById("situationsToolbarHost");
     const projectSubjectMilestones = getProjectSubjectMilestones?.();
     const projectSubjectLabels = config.getProjectSubjectLabels?.();
@@ -5762,7 +5970,27 @@ export function createProjectSubjectsEvents(config) {
       rerenderPanels();
     });
 
+    /**
+     * La barre des sujets.
+     *
+     * **Le champ n'est pas redessiné à chaque frappe** : on écrit dans l'état,
+     * on redessine la liste, et le champ garde son curseur. Le remplacer à
+     * chaque caractère renverrait le curseur à la fin, et la correction au
+     * milieu d'une requête déjà écrite deviendrait impossible.
+     */
     root.addEventListener("input", (event) => {
+      const barre = event.target.closest?.("[data-sujets-recherche]");
+      if (barre) {
+        if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
+          store.projectSubjectsView = {};
+        }
+        store.projectSubjectsView.requete = String(barre.value || "");
+        resetSubjectsPaginationPage();
+        synchroniserLesSuggestions(root);
+        redessinerLaListeDesSujets(root);
+        return;
+      }
+
       const labelsSearchInput = event.target.closest?.("#labelsSearchInput");
       if (labelsSearchInput) {
         const labelsState = getLabelsUiState();

@@ -5,6 +5,11 @@ import {
   EPINGLES_AU_PLUS, estEpingle, motDeLEpingle, sujetsEpingles
 } from "../../services/epingles-des-sujets.js";
 import { TRI, motDuTri } from "../../services/tri-des-sujets.js";
+import { filterValue, withFilter } from "../../services/query-bar.js";
+import {
+  renderFiltreDenTeteHtml, renderRailDesSujetsHtml, renderRechercheDesSujetsHtml
+} from "./project-subjects-recherche.js";
+import { sujetsFiltres } from "../../services/champs-des-sujets.js";
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { formatObjectiveDueDateLabel } from "./project-subject-milestones.js";
 import {
@@ -84,6 +89,9 @@ export function createProjectSubjectsView(deps) {
     getCurrentSubjectsStatusFilter,
     getCurrentSubjectsPriorityFilter,
     getCurrentSubjectsSort,
+    getChampsDesSujets,
+    getMetaDesSujets,
+    getRequeteDesSujets,
     sujetMatchesStatusFilter,
     sujetMatchesPriorityFilter,
     getAvailableSubjectPriorities,
@@ -367,6 +375,134 @@ function assurerLesEpingles() {
   })();
 }
 
+/* ── Les recherches épinglées, et le repli du rail ───────────────────────── */
+
+/**
+ * Les recherches épinglées de qui regarde, sur cet écran.
+ *
+ * `null` tant qu'on n'a pas pu lire : le rail n'affiche alors aucune section
+ * « Épinglées » plutôt que d'en montrer zéro. Confondre les deux ferait croire
+ * à quelqu'un qui en a posé douze qu'il n'en a aucune (règle 5).
+ */
+let recherchesEpinglees = null;
+let recherchesEnCours = false;
+let recherchesProjectId = "";
+
+/** La surface dit **de quel écran** vient l'épingle, elle n'autorise rien. */
+const SURFACE_DES_SUJETS = "sujets";
+
+function assurerLesRecherchesEpinglees() {
+  const projet = String(store.currentProjectId || "").trim();
+  if (!projet || recherchesEnCours) return;
+  if (recherchesProjectId === projet && recherchesEpinglees !== null) return;
+
+  recherchesEnCours = true;
+  (async () => {
+    try {
+      const [{ listerLesRecherches }, { resolveCurrentBackendProjectId }] = await Promise.all([
+        import("../../services/memoire-recherches-supabase.js"),
+        import("../../services/project-supabase-sync.js")
+      ]);
+
+      // Le même piège que les épingles de sujets : la route porte l'identifiant
+      // du frontal, la base classe par UUID. Passer le premier rendrait une
+      // liste vide qui ressemble à « aucune épingle ».
+      const backendProjectId = await resolveCurrentBackendProjectId();
+      if (!backendProjectId) return;
+
+      const lues = await listerLesRecherches(backendProjectId, { surface: SURFACE_DES_SUJETS });
+      if (lues === null) return;
+
+      recherchesEpinglees = lues.map((recherche) => ({
+        id: recherche.id, query: recherche.requete, title: recherche.titre
+      }));
+      recherchesProjectId = projet;
+      rerenderPanels();
+    } catch {
+      // Rien n'est retenu : la prochaine ouverture réessaiera.
+    } finally {
+      recherchesEnCours = false;
+    }
+  })();
+}
+
+/** Épingler ce qui est écrit dans la barre. */
+async function epinglerLaRechercheDesSujets() {
+  const requete = getRequeteDesSujets().trim();
+  if (!requete) return;
+
+  try {
+    const [{ epinglerLaRecherche }, { resolveCurrentBackendProjectId }] = await Promise.all([
+      import("../../services/memoire-recherches-supabase.js"),
+      import("../../services/project-supabase-sync.js")
+    ]);
+
+    const backendProjectId = await resolveCurrentBackendProjectId();
+    if (!backendProjectId) return;
+
+    const posee = await epinglerLaRecherche({
+      projectId: backendProjectId, requete, surface: SURFACE_DES_SUJETS
+    });
+    if (!posee) return;
+
+    // Le doublon revient avec le même identifiant : on remplace plutôt que
+    // d'ajouter, sinon le rail montrerait deux fois la même chose.
+    const sans = (recherchesEpinglees ?? []).filter((epingle) => epingle.id !== posee.id);
+    recherchesEpinglees = [...sans, { id: posee.id, query: posee.requete, title: posee.titre }];
+    rerenderPanels();
+  } catch {
+    // Une épingle qui ne se pose pas n'empêche pas de chercher.
+  }
+}
+
+/** Retirer une épingle du rail. */
+async function retirerLaRechercheEpinglee(id) {
+  const cle = String(id || "").trim();
+  if (!cle) return;
+
+  try {
+    const { oublierLaRecherche } = await import("../../services/memoire-recherches-supabase.js");
+    if (!(await oublierLaRecherche(cle))) return;
+
+    recherchesEpinglees = (recherchesEpinglees ?? []).filter((epingle) => epingle.id !== cle);
+    rerenderPanels();
+  } catch {
+    // idem
+  }
+}
+
+/**
+ * Le label « CR chantier » de ce projet, s'il y est.
+ *
+ * Il sert à la lecture « Venus des comptes rendus ». Sans lui, elle ne se
+ * propose pas du tout — proposer un filtre qui ne filtre rien ferait chercher
+ * ce qu'on a mal tapé.
+ */
+function labelDuCrDuProjet() {
+  const raw = store.projectSubjectsView?.rawSubjectsResult ?? {};
+  const trouve = (Array.isArray(raw.labels) ? raw.labels : [])
+    .find((label) => String(label?.name ?? "").trim().toLowerCase().replace(/\s+/g, " ") === "cr chantier");
+
+  return String(trouve?.id ?? "").trim();
+}
+
+/** Le repli du rail : un réglage, pas un état de navigation. */
+const RAIL_REPLIE_CLE = "mdall.sujetsRailReplie.v1";
+
+function railReplie() {
+  try { return window.localStorage.getItem(RAIL_REPLIE_CLE) === "1"; } catch { return false; }
+}
+
+function basculerLeRail() {
+  try {
+    window.localStorage.setItem(RAIL_REPLIE_CLE, railReplie() ? "0" : "1");
+  } catch {
+    // Un refus de stockage n'empêche pas de replier : c'est le rendu suivant
+    // qui perdrait la préférence, pas le geste.
+  }
+  rerenderPanels();
+}
+
 /** Poser ou retirer une épingle, puis redessiner. */
 async function basculerLEpingle(subjectId) {
   const cle = String(subjectId || "").trim();
@@ -516,6 +652,41 @@ function renderSubjectsStatusHeadHtml() {
       { label: "Fermés", value: "closed", count: counts.closed, dataAttr: "subjects-status-filter" }
     ]
   });
+}
+
+/**
+ * Les filtres de l'en-tête : label, objectif, lot, assigné.
+ *
+ * **Ils appartiennent au tableau qu'ils restreignent.** Posés au-dessus, ils
+ * flottaient sans dire sur quoi ils portaient ; dans l'en-tête, la question ne
+ * se pose plus.
+ *
+ * Chacun **pose un jeton dans la requête** et ne retient rien : c'est la barre
+ * qui porte l'état, et le menu ne montre que ce qu'elle dit. Un menu avec sa
+ * propre case finirait par la contredire (règle 4) — c'est arrivé deux fois sur
+ * cet écran.
+ *
+ * Un champ que le projet ne déclare pas — pas d'objectifs, pas de lots — ne
+ * s'affiche pas : un menu vide fait chercher ce qu'on a mal réglé.
+ */
+function renderSubjectsFiltresDenTeteHtml() {
+  const champs = getChampsDesSujets();
+  const requete = getRequeteDesSujets();
+
+  return ["label", "objectif", "lot", "assigné"]
+    .map((cle) => {
+      const champ = champs.find((candidat) => candidat.key === cle);
+      if (!champ) return "";
+
+      return renderFiltreDenTeteHtml({
+        id: `subjects${cle.replace(/[^a-z]/gi, "")}Head`,
+        champ,
+        requete,
+        enCours: filterValue(requete, champs, cle),
+        poser: (valeur) => withFilter(requete, champs, cle, valeur)
+      });
+    })
+    .join("");
 }
 
 
@@ -3131,16 +3302,42 @@ function rerenderPanels() {
       // Les épingles se demandent dès qu'on regarde la liste, et elles arrivent
       // après : le bandeau se dessine alors, au-dessus du tableau.
       assurerLesEpingles();
+      assurerLesRecherchesEpinglees();
       const tableDeps = getSubjectsTableDeps();
+
+      const champs = getChampsDesSujets();
+      const requete = getRequeteDesSujets();
+      // Ce qui n'a pas pu s'appliquer se dit sous la barre : un filtre
+      // silencieusement sans effet donne une liste qui a l'air filtrée et ne
+      // l'est pas.
+      const { ignores } = sujetsFiltres({
+        sujets: [], requete, champs, moi: String(store.user?.id || "")
+      });
+
       panelHost.innerHTML = `
-        ${renderSujetsEpinglesHtml({
-          sujets: sujetsEpingles(getFlatSubjects(), getEpinglesDuProjet() ?? []),
-          deps: tableDeps
-        })}
-        <div id="situationsTableHost" class="project-table-host">${renderProjectSubjectsTable({
-          filteredSituations,
-          deps: tableDeps
-        })}</div>
+        <div class="sujets-ecran${railReplie() ? " est-replie" : ""}">
+          ${renderRailDesSujetsHtml({
+            sujets: getFlatSubjects(),
+            champs,
+            requete,
+            meta: getMetaDesSujets(),
+            moi: String(store.user?.id || ""),
+            labelDuCr: labelDuCrDuProjet(),
+            epingles: recherchesEpinglees ?? [],
+            replie: railReplie()
+          })}
+          <div class="sujets-ecran__corps">
+            ${renderRechercheDesSujetsHtml({ requete, champs, ignores })}
+            ${renderSujetsEpinglesHtml({
+              sujets: sujetsEpingles(getFlatSubjects(), getEpinglesDuProjet() ?? []),
+              deps: tableDeps
+            })}
+            <div id="situationsTableHost" class="project-table-host">${renderProjectSubjectsTable({
+              filteredSituations,
+              deps: tableDeps
+            })}</div>
+          </div>
+        </div>
       `;
       syncSituationsPrimaryScrollSource();
     } else {
@@ -4111,6 +4308,12 @@ function getObjectiveById(objectiveId) {
   quandOnCopie(CONSTAT_DU_SUIVI, constatDuSuivi);
 
   return {
+    // Les gestes de la barre et du rail appartiennent à l'écran : les
+    // événements les appellent, ils ne les refont pas.
+    epinglerLaRechercheDesSujets,
+    retirerLaRechercheEpinglee,
+    basculerLeRail,
+    renderSubjectsFiltresDenTeteHtml,
     dropdownController: subjectSelectDropdown,
     normalizeBackendPriority,
     priorityBadge,

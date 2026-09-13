@@ -30,7 +30,31 @@
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 
 const SUPABASE_URL = getSupabaseUrl();
-const COLUMNS = "id,project_id,query,title,created_at";
+const COLUMNS = "id,project_id,query,title,surface,created_at";
+
+/**
+ * L'écran d'où vient une épingle.
+ *
+ * **La Mémoire et les sujets partagent la table, pas les requêtes.** Les deux
+ * barres ont la même grammaire mais pas le même vocabulaire : `nature:hypothese`
+ * ne veut rien dire sur les sujets, et `label:cr-chantier` rien dans la Mémoire.
+ * Mélanger les épingles ferait un rail dont la moitié ne rend jamais rien.
+ *
+ * La surface range ; elle n'autorise pas. C'est `owner_id` qui autorise, et la
+ * politique de la table n'a pas changé d'un caractère.
+ */
+export const SURFACE = { MEMOIRE: "memoire", SUJETS: "sujets" };
+
+/**
+ * La surface demandée, ramenée à celles qui existent.
+ *
+ * **La Mémoire par défaut, et ce n'est pas arbitraire** : c'est la valeur que
+ * la base pose sur les lignes déjà écrites, qui viennent toutes de là.
+ */
+function surfaceDe(valeur) {
+  const dite = texte(valeur).toLowerCase();
+  return Object.values(SURFACE).includes(dite) ? dite : SURFACE.MEMOIRE;
+}
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -65,7 +89,8 @@ export function recherchePourLEcran(ligne = {}) {
   return {
     id: texte(ligne.id),
     titre: texte(ligne.title) || requete,
-    requete
+    requete,
+    surface: surfaceDe(ligne.surface)
   };
 }
 
@@ -74,13 +99,18 @@ export function recherchePourLEcran(ligne = {}) {
  *
  * @returns {Promise<object[]|null>} `null` si la lecture a échoué
  */
-export async function listerLesRecherches(projectId) {
+export async function listerLesRecherches(projectId, { surface = SURFACE.MEMOIRE } = {}) {
   const projet = texte(projectId);
   if (!projet) return [];
 
   try {
     const lignes = (await request("memory_pinned_searches", {
-      params: { select: COLUMNS, project_id: `eq.${projet}`, order: "created_at.asc" }
+      params: {
+        select: COLUMNS,
+        project_id: `eq.${projet}`,
+        surface: `eq.${surfaceDe(surface)}`,
+        order: "created_at.asc"
+      }
     })) ?? [];
 
     return lignes.map(recherchePourLEcran).filter((entree) => entree.id && entree.requete);
@@ -102,7 +132,9 @@ export async function listerLesRecherches(projectId) {
  *
  * @returns {Promise<object|null>} l'épingle posée, ou `null`
  */
-export async function epinglerLaRecherche({ projectId, requete, titre = "" } = {}) {
+export async function epinglerLaRecherche({
+  projectId, requete, titre = "", surface = SURFACE.MEMOIRE
+} = {}) {
   const projet = texte(projectId);
   const dite = texte(requete);
   if (!projet || !dite) return null;
@@ -110,9 +142,12 @@ export async function epinglerLaRecherche({ projectId, requete, titre = "" } = {
   try {
     const lignes = await request("memory_pinned_searches", {
       method: "POST",
-      params: { select: COLUMNS, on_conflict: "owner_id,project_id,query" },
+      params: { select: COLUMNS, on_conflict: "owner_id,project_id,surface,query" },
       headers: { Prefer: "return=representation,resolution=merge-duplicates" },
-      body: [{ project_id: projet, query: dite, title: texte(titre) || null }]
+      body: [{
+        project_id: projet, query: dite, title: texte(titre) || null,
+        surface: surfaceDe(surface)
+      }]
     });
 
     const posee = lignes?.[0];

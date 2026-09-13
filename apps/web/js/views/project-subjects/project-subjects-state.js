@@ -166,7 +166,11 @@ export function createProjectSubjectsState({ store }) {
     v.filters.priority = String(v.subjectsPriorityFilter || v.filters.priority || "");
     // L'ordre du tableau n'a qu'une case, et pas de copie dans `filters` :
     // c'est ce qui a manqué au filtre d'à côté pendant quatre tours.
-    if (typeof v.subjectsSort !== "string") v.subjectsSort = "";
+    // La requête des sujets : le seul état filtrant du tableau. Statut,
+    // priorité, labels, objectifs, lots, assignés et blocage s'y écrivent, et
+    // c'est elle que le rail pose, que les menus modifient et qu'on épingle.
+    if (typeof v.requete !== "string") v.requete = "";
+
     if (typeof v.situationsStatusFilter !== "string") v.situationsStatusFilter = "open";
     if (typeof v.subjectsSubview !== "string") v.subjectsSubview = "subjects";
     if (typeof v.objectivesStatusFilter !== "string") v.objectivesStatusFilter = "open";

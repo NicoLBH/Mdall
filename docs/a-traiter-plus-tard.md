@@ -44,6 +44,7 @@ modèles d'un seul fournisseur. Un modèle sans tarif relevé affiche « tarif
 inconnu » — et c'est voulu : un prix inventé au milieu de prix réels serait pire
 que pas de prix.
 
+
 ## Ce que ça coûte de ne pas le faire
 
 Rien, tant que le fournisseur tient. Tout, le jour où il ne tient plus — et ce
@@ -3537,3 +3538,27 @@ les segments fins qui traversent une ligne de texte à mi-hauteur, et les recoll
 aux fragments — avec le même refus qu'ailleurs : au moindre doute sur la
 correspondance, aucune rature plutôt qu'une rature fausse. Un point fermé à tort
 disparaît sans laisser de trace.
+
+---
+
+# Un garde-fou qui lit la source, faute de pouvoir exécuter
+
+**Pourquoi c'est là.** `DRAFT_SUBJECT_ID` ne sert que dans
+`getDropdownContextSubject` de `project-subjects-events.js`, qui n'est pas
+exportée : rien, depuis l'extérieur du module, ne permet de vérifier qu'il est
+employé. Le test qui le surveille lit donc la source comme du texte — ce qu'on
+s'interdit partout ailleurs, parce qu'un tel test passe alors même que la valeur
+ne sert à rien.
+
+Il est gardé plutôt que supprimé : un appel qui perdrait cette clé ferait écrire
+des labels sur un sujet qui n'existe pas encore. Et il a été remplacé par un test
+qui n'assertait rien, le temps d'une heure — ce qui était pire.
+
+**Ce qu'il faudrait :** exporter la résolution du contexte — elle est pure, elle
+ne lit que ce qu'on lui donne — et l'exécuter sur un contexte de brouillon et sur
+un contexte de sujet réel. Une vingtaine de lignes, dans un module qui en porte
+six mille.
+
+**Ce que ça coûte de ne pas le faire :** un garde-fou qui se casse sur l'ordre des
+lignes — il l'a fait cette fois-ci — et qui ne se casserait pas sur le défaut
+qu'il surveille.
