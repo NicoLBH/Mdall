@@ -83,6 +83,9 @@ import {
   resumeDuTableau,
   tableauAvantApres
 } from "../services/proposition-avant-apres.js";
+import {
+  changementsDeLaProposition, phraseDesChangements, phraseDesIndecis
+} from "../services/changements-de-la-proposition.js";
 import { renderAttenteSpinner } from "./ui/spinner.js";
 import { descriptionDuPoint, phraseDuDeja } from "../services/sujets-du-cr.js";
 import { reprisesAEnregistrer, sourceDuPoint } from "../services/reprise-sans-changement.js";
@@ -1807,6 +1810,83 @@ function renderDescriptionEnEdition(proposition) {
  * sujet sont la même chose, et deux rendus différents divergeraient au premier
  * ajustement.
  */
+/**
+ * Ce que cette proposition changerait, en tête de la discussion.
+ *
+ * ## Pourquoi c'est la première chose
+ *
+ * Une proposition de trente lignes ne se relit pas : on fait défiler, on
+ * regarde les trois premières, et on signe. **C'est exactement ce que le
+ * produit ne doit pas obtenir** — la proposition existe pour qu'une décision
+ * soit prise, pas pour qu'elle soit ratifiée.
+ *
+ * Le résumé est donc au-dessus de tout, avant même la description : on lit ce
+ * qui bouge, puis on descend dans le détail si le résumé surprend.
+ *
+ * ## L'ordre n'est pas celui des nombres
+ *
+ * Douze labels posés passent après une seule entreprise ajoutée, parce
+ * qu'ajouter une entreprise fait entrer des personnes réelles dans le projet et
+ * que poser un label ne fait que ranger. C'est le service qui range ; l'écran
+ * ne fait que dessiner.
+ *
+ * ## Ce qu'il dit de ce qu'on n'a pas lu
+ *
+ * Les lignes qu'on n'a pas encore regardées entrent au résumé — c'est ce que la
+ * fusion écrira si l'on signe maintenant — mais elles se comptent à part.
+ * **Signer sans avoir lu n'est pas signer**, et la phrase empêche de le faire
+ * sans le savoir. Elle ne bloque rien : c'est une décision, pas une règle.
+ */
+function renderCeQuiChange(review) {
+  const changements = changementsDeLaProposition({
+    items: review?.items ?? [],
+    apports: review?.apports ?? {}
+  });
+
+  const dite = phraseDesChangements(changements);
+  const reste = phraseDesIndecis(changements);
+
+  return `
+    <section class="review-block review-change">
+      <div class="review-panel">
+        <div class="review-block__head review-block__head--plain">
+          <div class="review-block__headbody">
+            <h3 class="review-block__title">
+              Ce qui changerait
+              ${changements.total > 0
+                ? `<span class="review-block__count">${changements.total}</span>`
+                : ""}
+            </h3>
+            <span class="review-block__state">${escapeHtml(dite)}</span>
+          </div>
+        </div>
+
+        ${changements.lignes.length > 0 ? `
+          <ul class="review-change__lignes">
+            ${changements.lignes.map((ligne) => `
+              <li class="review-change__ligne" title="${escapeHtml(ligne.engage)}">
+                <span class="review-change__combien mono-small">${ligne.combien}</span>
+                <span class="review-change__mot">${escapeHtml(
+                  ligne.mot.replace(/^\d+\s+/, ""))}</span>
+                <span class="review-change__engage">${escapeHtml(ligne.engage)}</span>
+              </li>
+            `).join("")}
+          </ul>
+        ` : ""}
+
+        ${reste ? `<p class="review-change__reste">${escapeHtml(reste)}</p>` : ""}
+        ${changements.refuses > 0 ? `
+          <p class="review-change__refuses mono-small">
+            ${changements.refuses} ligne${changements.refuses > 1 ? "s" : ""} refusée${
+              changements.refuses > 1 ? "s" : ""} : elle${changements.refuses > 1 ? "s ne comptent" : " ne compte"}
+            pas dans ce qui changerait.
+          </p>
+        ` : ""}
+      </div>
+    </section>
+  `;
+}
+
 function renderConversation(proposition, review) {
   const histoire = review.story ?? [];
   const ouverture = histoire.find((event) => event.kind === STORY.OPENED);
@@ -1879,6 +1959,7 @@ function renderConversation(proposition, review) {
   const fin = rangFin >= 0 ? histoire[rangFin] : null;
 
   return `
+    ${renderCeQuiChange(review)}
     <div class="review-thread-host">
       ${renderMessageThread({
         itemsHtml: `${premier}${suite}`,

@@ -972,6 +972,58 @@ Migration **strictement additive** : la colonne a une valeur par défaut, et tou
 épingles déjà posées sont des épingles de la Mémoire — ce qui est vrai, puisque c'était le
 seul écran qui en posait.
 
+#### Le rail est celui de la maison, et il porte les autres écrans
+
+Le premier rail était une coque à lui. `project-rail.js` en existait déjà une — celle de la
+Mémoire, reprise par l'Atelier — et elle porte le calage du haut au défilement, le repli calé
+en bas et la poignée de largeur. Trois copies de ce calage divergeraient au premier
+changement (règle 10). Le rail des sujets est donc sur cette coque : **pleine hauteur,
+redimensionnable, repliable**, comme celui de la Mémoire.
+
+Il porte trois groupes, séparés par un trait :
+
+| Groupe | Ce que c'est |
+| --- | --- |
+| **les lectures** | Tous les sujets, Assigné à moi, Créé par moi, Mentions, Activité récente — elles filtrent la liste |
+| **les vues** | les recherches qu'on a épinglées : les mêmes requêtes, écrites par qui regarde |
+| **les écrans** | Situations, Objectifs, Labels — ils ne filtrent rien, ils changent de page |
+
+Les trois derniers étaient dans la barre du haut, où ils voisinaient avec des boutons qui
+écrivent. Ils voisinent maintenant avec ce qu'ils sont : d'autres façons de regarder le même
+domaine.
+
+#### Trois champs de plus, et un qui manquait
+
+`auteur:`, `mention:` et `activité:` complètent la grammaire.
+
+**L'auteur n'est pas l'assigné.** Les deux se confondent souvent et divergent toujours au
+moment où ça compte : on cherche ce qu'on a soi-même relevé, pas ce qu'on doit faire.
+
+**La mention ne se déduit d'aucune colonne du sujet** : elle vient de ses messages. C'est la
+seule lecture du rail dans ce cas, et c'est celle qui appelle une réponse.
+
+**L'activité récente se lit sur ce qui a bougé en dernier**, pas sur la création : un sujet
+ouvert il y a six mois et commenté hier a bougé, l'inverse n'est pas vrai. Quatorze jours, et
+c'est un choix, pas une mesure — un chantier tient une réunion par semaine, deux semaines
+couvrent les deux derniers comptes rendus. Sans date lisible, un sujet ne compte pas comme
+récent : supposer qu'il l'est ferait remonter tout ce qu'on ne sait pas dater (règle 5).
+
+#### Les filtres au bout de l'en-tête, avec le tri
+
+Auteur, Labels, Situations, Objectifs, Assignés — dans l'ordre de la question qu'on se pose :
+qui l'a ouvert, comment il est rangé, qui le traite. Ils sont **à gauche du bouton de tri**,
+dans la même cellule : c'est la même famille de gestes — *ce que je regarde, et dans quel
+ordre* — et les séparer ferait chercher l'un quand on a trouvé l'autre.
+
+Le lot n'y est plus : il se déduit de l'assigné, et deux menus pour une même information font
+chercher lequel est le bon.
+
+#### Une seule recherche
+
+Celle de la barre d'outils ne cherchait que dans les titres, sans grammaire et sans
+s'épingler. La barre du tableau fait tout ce qu'elle faisait, et le reste. En garder deux
+ferait taper dans l'une en regardant l'autre, et se demander pourquoi rien ne bouge.
+
 #### Deux défauts trouvés en cassant
 
 Le premier, dans le rail : un filtre dont le champ n'est pas déclaré **disparaît
@@ -985,14 +1037,55 @@ le statut de la ligne, une fois par l'écran sur le statut *effectif*. Un sujet 
 décision non encore versée disparaissait des deux listes à la fois. Le statut est maintenant
 retiré de la requête avant d'être passé au service, qui ne connaît pas les décisions.
 
-### Étape 8 — La proposition dit ce qui change vraiment
+### Étape 8 — La proposition dit ce qui change vraiment *(faite)*
 
-Une proposition qui liste trente sujets ne se relit pas. Elle doit dire **ce qui bouge** :
-tant de sujets ouverts, tant fermés, tant de labels posés, un lot ajouté, deux objectifs
-datés — et le détail derrière.
+Une proposition qui liste trente sujets ne se relit pas : on fait défiler, on regarde les
+trois premières, et on signe. **C'est exactement ce que le produit ne doit pas obtenir** — la
+proposition existe pour qu'une décision soit prise, pas pour qu'elle soit ratifiée.
 
-C'est la dernière étape parce qu'elle a besoin de connaître toutes les natures de changement
-que les étapes précédentes produisent.
+Le résumé est donc en tête de la discussion, avant même la description : *cette proposition
+porterait : 2 sujets ouverts, 1 sujet fermé, 1 entreprise ajoutée, 12 labels posés*. Le détail
+reste derrière, et on l'ouvre quand le résumé surprend.
+
+#### L'ordre n'est pas celui des nombres
+
+Douze labels posés passent après **une seule** entreprise ajoutée. Ouvrir un sujet engage
+quelqu'un à le traiter ; ajouter une entreprise fait entrer des personnes réelles dans un
+projet ; poser un label ne fait que ranger. Un résumé rangé par nombre mettrait les labels en
+tête, et l'on signerait sans avoir vu la seule ligne qui compte.
+
+Chaque ligne porte donc aussi **ce qu'elle engage**, en clair à côté du compte : un chiffre
+sans conséquence se lit comme une statistique, et l'on ne se demande pas s'il est juste.
+
+#### Ce qui compte, et ce qui ne compte pas
+
+| | |
+| --- | --- |
+| **refusé** | ne compte pas — la ligne reste visible, c'est une décision, mais compter ce qu'on a refusé parmi ce qui va changer serait le contraire de ce qu'on cherche |
+| **pas encore décidé** | compte, et se dit **à part** — c'est ce que la fusion écrira si l'on signe maintenant, et le taire ferait annoncer « rien ne change » sur une proposition qu'on n'a pas parcourue |
+| **une nature inconnue** | compte comme une affirmation — la taire ferait annoncer moins de changements qu'il n'y en a (règle 5) |
+
+La phrase reste **au conditionnel**, toujours : rien n'est écrit tant que personne n'a signé,
+et un présent ferait croire que c'est fait.
+
+---
+
+---
+
+## Le plan est fait
+
+Les huit étapes sont écrites. Ce qui reste n'est plus du plan mais de l'usage : déposer des
+comptes rendus réels, regarder ce que les mesures disent, et corriger ce qu'elles montrent.
+
+Deux choses ont changé de nature en chemin, et méritent d'être retenues :
+
+- **une disparition ferme, au lieu de poser une question** — parce que la fermeture se défait
+  toute seule au compte rendu suivant, et que c'est cette réversibilité qui la rend
+  acceptable ;
+- **une situation se propose, au lieu de se créer** — parce que rien n'entre directement dans
+  la mémoire du projet, pas même ce qui ne fait que ranger.
+
+Les deux ont été trouvées en écrivant l'étape, pas en la planifiant.
 
 ---
 

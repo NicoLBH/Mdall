@@ -81,6 +81,18 @@ export const MOI = "@moi";
 export const AUCUN = "aucun";
 
 /**
+ * Depuis quand une activité est « récente ».
+ *
+ * **Quatorze jours, et c'est un choix, pas une mesure.** Un chantier tient une
+ * réunion par semaine : deux semaines couvrent les deux derniers comptes rendus,
+ * ce qu'on a en tête quand on demande « ce qui a bougé ». Sept jours en
+ * manqueraient un, trente en montreraient quatre.
+ */
+export const JOURS_RECENTS = 14;
+
+export const ACTIVITES = [{ value: "recente", token: "récente", label: "Activité récente" }];
+
+/**
  * Les champs, construits sur le vocabulaire du projet.
  *
  * **Un champ sans valeur n'est pas déclaré.** Un projet sans objectif ne doit
@@ -95,7 +107,7 @@ export const AUCUN = "aucun";
  * @returns {object[]} des `QueryField` de `query-bar.js`
  */
 export function champsDesSujets({
-  labels = [], objectifs = [], lots = [], personnes = []
+  labels = [], objectifs = [], lots = [], personnes = [], situations = []
 } = {}) {
   const champs = [
     { key: "statut", label: "Statut", values: STATUTS },
@@ -128,18 +140,34 @@ export function champsDesSujets({
 
   const desPersonnes = nommes(personnes, "id", "name");
   if (desPersonnes.length > 0) {
+    // `@moi` en tête : c'est la lecture la plus fréquente, et la seule qui ne
+    // dépende pas de savoir comment on s'appelle dans ce projet.
+    const avecMoi = (fin = []) => [
+      { value: MOI, token: "moi", label: "Moi" }, ...desPersonnes, ...fin
+    ];
+
     champs.push({
-      key: "assigné",
-      label: "Assigné à",
-      // `@moi` en tête : c'est la lecture la plus fréquente, et la seule qui ne
-      // dépende pas de savoir comment on s'appelle dans ce projet.
-      values: [
-        { value: MOI, token: "moi", label: "Moi" },
-        ...desPersonnes,
-        { value: AUCUN, token: AUCUN, label: "Personne" }
-      ]
+      key: "assigné", label: "Assignés",
+      values: avecMoi([{ value: AUCUN, token: AUCUN, label: "Personne" }])
     });
+
+    // **Qui a ouvert le sujet**, et non qui le traite. Les deux se confondent
+    // souvent et divergent toujours au moment où ça compte : on cherche ce
+    // qu'on a soi-même relevé, pas ce qu'on doit faire.
+    champs.push({ key: "auteur", label: "Auteur", values: avecMoi() });
+
+    // **Mentionné avec un `@` dans un commentaire.** C'est ce qui appelle une
+    // réponse, et c'est la seule lecture qui ne se déduit d'aucune colonne du
+    // sujet : elle vient de ses messages.
+    champs.push({ key: "mention", label: "Mentions", values: avecMoi() });
   }
+
+  const desSituations = avecAucun(nommes(situations, "id", "title"));
+  if (desSituations.length > 0) {
+    champs.push({ key: "situation", label: "Situations", values: desSituations });
+  }
+
+  champs.push({ key: "activité", label: "Activité", values: ACTIVITES });
 
   return champs;
 }
@@ -159,6 +187,23 @@ export function champsDesSujets({
  */
 
 const listeDe = (valeur) => (Array.isArray(valeur) ? valeur.map(texte).filter(Boolean) : []);
+
+/**
+ * Ce sujet a-t-il bougé récemment ?
+ *
+ * **On lit la dernière activité, pas la création.** Un sujet ouvert il y a six
+ * mois et commenté hier a bougé ; l'inverse n'est pas vrai. Sans date lisible,
+ * il ne compte pas comme récent — supposer qu'il l'est ferait remonter tout ce
+ * qu'on ne sait pas dater (règle 5).
+ */
+function estRecent(sujet, maintenant) {
+  const quand = Date.parse(
+    sujet?.updated_at ?? sujet?.updatedAt ?? sujet?.last_activity_at ?? sujet?.created_at ?? ""
+  );
+  if (!Number.isFinite(quand)) return false;
+
+  return maintenant - quand <= JOURS_RECENTS * 24 * 60 * 60 * 1000;
+}
 
 /** Le sujet répond-il à ce filtre de liste ? */
 function portePar(valeurs, cherche) {
@@ -184,7 +229,7 @@ function portePar(valeurs, cherche) {
  *   ignores: string[]}}
  */
 export function sujetsFiltres({
-  sujets = [], requete = "", champs = [], meta = {}, moi = ""
+  sujets = [], requete = "", champs = [], meta = {}, moi = "", maintenant = Date.now()
 } = {}) {
   const tous = Array.isArray(sujets) ? sujets : [];
   const { filters, text } = parseQuery(requete, champs);
@@ -209,15 +254,25 @@ export function sujetsFiltres({
     if (filters.label && !portePar(listeDe(sien.labels), filters.label)) return false;
     if (filters.objectif && !portePar(listeDe(sien.objectifs), filters.objectif)) return false;
     if (filters.lot && !portePar(listeDe(sien.lots), filters.lot)) return false;
+    if (filters.situation && !portePar(listeDe(sien.situations), filters.situation)) return false;
 
-    if (filters["assigné"]) {
-      const cherche = filters["assigné"] === MOI ? texte(moi) : filters["assigné"];
-      if (filters["assigné"] === MOI && !cherche) {
-        if (!ignores.includes("assigné")) ignores.push("assigné");
-      } else if (!portePar(listeDe(sien.assignes), cherche)) {
-        return false;
+    // Les trois champs qui peuvent désigner « moi » : sans savoir qui regarde,
+    // ils sont annoncés et non appliqués. Une liste vide ferait croire qu'on
+    // n'a aucun sujet.
+    for (const [cle, valeurs] of [
+      ["assigné", sien.assignes], ["auteur", sien.auteurs], ["mention", sien.mentions]
+    ]) {
+      if (!filters[cle]) continue;
+
+      const cherche = filters[cle] === MOI ? texte(moi) : filters[cle];
+      if (filters[cle] === MOI && !cherche) {
+        if (!ignores.includes(cle)) ignores.push(cle);
+        continue;
       }
+      if (!portePar(listeDe(valeurs), cherche)) return false;
     }
+
+    if (filters["activité"] === "recente" && !estRecent(sujet, maintenant)) return false;
 
     if (mots.length === 0) return true;
     const titre = repli(sujet?.title ?? sujet?.titre);

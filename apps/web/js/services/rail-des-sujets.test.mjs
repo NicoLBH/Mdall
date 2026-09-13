@@ -19,22 +19,24 @@ const champs = champsDesSujets({
   personnes: [{ id: "p-1", name: "Moi-même" }]
 });
 
+const MAINTENANT = Date.parse("2026-02-01T00:00:00Z");
+
 const SUJETS = [
-  { id: "s1", title: "A", status: "open" },
-  { id: "s2", title: "B", status: "closed" },
-  { id: "s3", title: "C", status: "open" },
-  { id: "s4", title: "D", status: "open" }
+  { id: "s1", title: "A", status: "open", updated_at: "2026-01-31T00:00:00Z" },
+  { id: "s2", title: "B", status: "closed", updated_at: "2025-01-01T00:00:00Z" },
+  { id: "s3", title: "C", status: "open", updated_at: "2025-06-01T00:00:00Z" },
+  { id: "s4", title: "D", status: "open", updated_at: "2026-01-28T00:00:00Z" }
 ];
 
 const META = {
-  s1: { labels: ["l-cr"], assignes: ["p-1"], bloque: true },
-  s2: { labels: ["l-cr"] },
+  s1: { labels: ["l-cr"], assignes: ["p-1"], auteurs: ["p-1"], bloque: true },
+  s2: { labels: ["l-cr"], mentions: ["p-1"] },
   s3: { labels: [] },
   s4: { labels: ["l-urg"], assignes: ["p-1"] }
 };
 
 const rail = (options = {}) => railDesSujets({
-  sujets: SUJETS, champs, requete: "", meta: META, moi: "p-1", labelDuCr: "l-cr", ...options
+  sujets: SUJETS, champs, requete: "", meta: META, moi: "p-1", maintenant: MAINTENANT, ...options
 });
 
 const par = (lectures, cle) => lectures.find((lecture) => lecture.cle === cle);
@@ -51,7 +53,8 @@ test("chaque lecture compte ce que sa requête rendra", () => {
   for (const lecture of lectures) {
     if (lecture.combien === null) continue;
     const { sujets } = sujetsFiltres({
-      sujets: SUJETS, requete: lecture.requete, champs, meta: META, moi: "p-1"
+      sujets: SUJETS, requete: lecture.requete, champs, meta: META, moi: "p-1",
+      maintenant: MAINTENANT
     });
     assert.equal(lecture.combien, sujets.length, `« ${lecture.nom} » annonce autre chose`);
   }
@@ -61,12 +64,10 @@ test("les comptes sont ceux du projet", () => {
   const { lectures } = rail();
 
   assert.equal(par(lectures, LECTURE.TOUS).combien, 4);
-  assert.equal(par(lectures, LECTURE.OUVERTS).combien, 3);
   assert.equal(par(lectures, LECTURE.MIENS).combien, 2);
-  assert.equal(par(lectures, LECTURE.BLOQUES).combien, 1);
-  assert.equal(par(lectures, LECTURE.DU_CR).combien, 1);
-  assert.equal(par(lectures, LECTURE.SANS_LABEL).combien, 1);
-  assert.equal(par(lectures, LECTURE.FERMES).combien, 1);
+  assert.equal(par(lectures, LECTURE.CREES).combien, 1);
+  assert.equal(par(lectures, LECTURE.MENTIONS).combien, 1);
+  assert.equal(par(lectures, LECTURE.RECENTS).combien, 2);
 });
 
 /**
@@ -77,33 +78,33 @@ test("un compte qu'on ne peut pas calculer ne s'affiche pas", () => {
   const { lectures } = rail({ moi: "" });
 
   assert.equal(par(lectures, LECTURE.MIENS).combien, null);
-  // Les autres comptent normalement : une inconnue n'en fait pas sept.
-  assert.equal(par(lectures, LECTURE.OUVERTS).combien, 3);
+  assert.equal(par(lectures, LECTURE.CREES).combien, null);
+  assert.equal(par(lectures, LECTURE.MENTIONS).combien, null);
+  // Les autres comptent normalement : une inconnue n'en fait pas cinq.
+  assert.equal(par(lectures, LECTURE.TOUS).combien, 4);
+  assert.equal(par(lectures, LECTURE.RECENTS).combien, 2);
 });
 
 /* ── Ce qui se propose ───────────────────────────────────────────────────── */
 
 /**
- * Sans label « CR chantier » dans le projet, la lecture qui s'y appuie ne se
- * propose pas : un filtre qui ne filtre rien ferait chercher ce qu'on a mal
- * tapé.
+ * Sans collaborateur dans le projet, les trois lectures qui désignent quelqu'un
+ * ne se proposent pas : leur champ n'est pas déclaré, et la requête écrite
+ * perdrait son filtre en silence — « Assigné à moi » deviendrait « Tous ».
  */
 test("une lecture sans vocabulaire ne se propose pas", () => {
-  const { lectures } = rail({ labelDuCr: "" });
-
-  assert.equal(par(lectures, LECTURE.DU_CR), undefined);
-  assert.ok(par(lectures, LECTURE.OUVERTS));
-});
-
-/** Et sans label du tout, celles qui parlent de labels s'en vont ensemble. */
-test("sans aucun label déclaré, les lectures de label disparaissent", () => {
   const nus = champsDesSujets({});
-  const { lectures } = railDesSujets({ sujets: SUJETS, champs: nus, meta: META, moi: "p-1" });
+  const { lectures } = railDesSujets({
+    sujets: SUJETS, champs: nus, meta: META, moi: "p-1", maintenant: MAINTENANT
+  });
 
-  assert.equal(par(lectures, LECTURE.SANS_LABEL), undefined);
-  assert.equal(par(lectures, LECTURE.DU_CR), undefined);
-  // « Tous » reste, toujours : c'est la lecture qui n'a besoin de rien.
+  for (const lecture of [LECTURE.MIENS, LECTURE.CREES, LECTURE.MENTIONS]) {
+    assert.equal(par(lectures, lecture), undefined, `« ${lecture} » se propose sans personne`);
+  }
+  // « Tous » et « Activité récente » restent : elles n'ont besoin d'aucun
+  // vocabulaire, elles se lisent sur le sujet lui-même.
   assert.ok(par(lectures, LECTURE.TOUS));
+  assert.ok(par(lectures, LECTURE.RECENTS));
 });
 
 test("chaque lecture a un nom et une requête qui se lit", () => {
@@ -113,7 +114,7 @@ test("chaque lecture a un nom et une requête qui se lit", () => {
     assert.equal(lecture.nom, NOMS_DE_LA_LECTURE[lecture.cle]);
     assert.ok(lecture.icone, `« ${lecture.cle} » n'a pas d'icône`);
   }
-  assert.equal(requeteDeLaLecture(LECTURE.MIENS, champs), "statut:ouvert assigné:moi");
+  assert.equal(requeteDeLaLecture(LECTURE.MIENS, champs), "assigné:moi");
   assert.equal(requeteDeLaLecture(LECTURE.TOUS, champs), "");
 });
 
@@ -125,18 +126,16 @@ test("chaque lecture a un nom et une requête qui se lit", () => {
  * (règle 4).
  */
 test("la lecture active se reconnaît dans la requête", () => {
-  assert.equal(rail({ requete: "statut:ouvert" }).active, LECTURE.OUVERTS);
-  assert.equal(rail({ requete: "statut:ouvert assigné:moi" }).active, LECTURE.MIENS);
+  assert.equal(rail({ requete: "assigné:moi" }).active, LECTURE.MIENS);
+  assert.equal(rail({ requete: "auteur:moi" }).active, LECTURE.CREES);
+  assert.equal(rail({ requete: "mention:moi" }).active, LECTURE.MENTIONS);
+  assert.equal(rail({ requete: "activité:récente" }).active, LECTURE.RECENTS);
   assert.equal(rail({ requete: "" }).active, LECTURE.TOUS);
-
-  // L'ordre des jetons ne compte pas : deux requêtes équivalentes sont la même
-  // lecture.
-  assert.equal(rail({ requete: "assigné:moi statut:ouvert" }).active, LECTURE.MIENS);
 });
 
 /** Un filtre ajouté à la main rebascule sur « Tous », et le filtrage reste. */
 test("ajouter un filtre à la main quitte la lecture", () => {
-  assert.equal(rail({ requete: "statut:ouvert priorité:haute" }).active, LECTURE.TOUS);
+  assert.equal(rail({ requete: "assigné:moi priorité:haute" }).active, LECTURE.TOUS);
 });
 
 /**
@@ -145,15 +144,15 @@ test("ajouter un filtre à la main quitte la lecture", () => {
  * qu'on n'en voit qu'une partie.
  */
 test("un mot cherché quitte la lecture aussi", () => {
-  assert.equal(rail({ requete: "statut:ouvert assigné:moi étanchéité" }).active, LECTURE.TOUS);
+  assert.equal(rail({ requete: "assigné:moi étanchéité" }).active, LECTURE.TOUS);
   assert.equal(lectureDe("étanchéité", champs), LECTURE.TOUS);
 });
 
 test("la lecture active est marquée, et une seule", () => {
-  const { lectures } = rail({ requete: "statut:fermé" });
+  const { lectures } = rail({ requete: "mention:moi" });
 
   assert.deepEqual(lectures.filter((lecture) => lecture.active).map((lecture) => lecture.cle),
-    [LECTURE.FERMES]);
+    [LECTURE.MENTIONS]);
 });
 
 /* ── Les recherches épinglées ────────────────────────────────────────────── */

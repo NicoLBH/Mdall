@@ -395,6 +395,13 @@ const {
 const projectSubjectsEvents = createProjectSubjectsEvents({
   getChampsDesSujets: (...args) => getChampsDesSujets(...args),
   getRequeteDesSujets: (...args) => getRequeteDesSujets(...args),
+  // L'onglet Situations est une page voisine : on y va par la route, comme
+  // partout ailleurs. Un rendu direct laisserait l'onglet du haut sur
+  // « Sujets », et l'on ne saurait plus où l'on est.
+  ouvrirLesSituations: () => {
+    const projet = String(store.currentProjectId || "").trim();
+    if (projet) window.location.hash = `#project/${projet}/situations`;
+  },
   epinglerLaRechercheDesSujets: (...args) => projectSubjectsView.epinglerLaRechercheDesSujets(...args),
   retirerLaRechercheEpinglee: (...args) => projectSubjectsView.retirerLaRechercheEpinglee(...args),
   basculerLeRail: (...args) => projectSubjectsView.basculerLeRail(...args),

@@ -340,6 +340,11 @@ export function createProjectSubjectsSelectors({
     const raw = getRawSubjectsPayload(getViewState()) ?? {};
 
     const personnes = new Map();
+    // Qui regarde fait partie du vocabulaire, même seul sur le projet : sans
+    // lui, `assigné:`, `auteur:` et `mention:` ne seraient pas déclarés, et les
+    // trois lectures du rail disparaîtraient.
+    const moi = String(store.user?.id || "").trim();
+    if (moi) personnes.set(moi, { id: moi, name: String(store.user?.name || "Moi").trim() });
     for (const liste of Object.values(raw.assigneesBySubjectId ?? {})) {
       for (const personne of Array.isArray(liste) ? liste : []) {
         const id = String(personne?.id ?? personne ?? "").trim();
@@ -356,7 +361,11 @@ export function createProjectSubjectsSelectors({
         .map((objectif) => ({ id: String(objectif?.id ?? "").trim(), title: String(objectif?.title ?? "").trim() })),
       lots: (Array.isArray(store.projectLots?.items) ? store.projectLots.items : [])
         .map((lot) => ({ id: String(lot?.id ?? "").trim(), name: String(lot?.name ?? "").trim() })),
-      personnes: [...personnes.values()]
+      personnes: [...personnes.values()],
+      situations: (Array.isArray(getViewState().data) ? getViewState().data : [])
+        .map((situation) => ({
+          id: String(situation?.id ?? "").trim(), title: String(situation?.title ?? "").trim()
+        }))
     });
   }
 
@@ -378,6 +387,22 @@ export function createProjectSubjectsSelectors({
     poser(raw.labelIdsBySubjectId, "labels");
     poser(raw.objectiveIdsBySubjectId, "objectifs");
     poser(raw.assigneesBySubjectId, "assignes");
+    poser(raw.situationIdsBySubjectId, "situations");
+    // Ceux où l'on est nommé avec un `@` dans un commentaire. C'est la seule
+    // lecture qui ne se déduit d'aucune colonne du sujet : elle vient de ses
+    // messages, et c'est ce qui appelle une réponse.
+    poser(raw.mentionsBySubjectId, "mentions");
+
+    // **L'auteur, et non l'assigné.** Les deux se confondent souvent et
+    // divergent toujours au moment où ça compte : on cherche ce qu'on a
+    // soi-même relevé, pas ce qu'on doit faire.
+    for (const sujet of getFlatSubjects()) {
+      const cle = String(sujet?.id || "").trim();
+      if (!cle) continue;
+      const auteur = String(sujet?.created_by ?? sujet?.author_id ?? sujet?.createdBy ?? "").trim();
+      if (!meta[cle]) meta[cle] = {};
+      meta[cle].auteurs = auteur ? [auteur] : [];
+    }
 
     // Le lot d'un sujet est celui de qui le porte : la base range les
     // **personnes** dans les lots, pas les sujets. L'écran le dit plutôt que de

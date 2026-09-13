@@ -27,6 +27,10 @@
 
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
+import { renderProjectRail } from "../ui/project-rail.js";
+import {
+  renderNavList, renderNavListDivider, renderNavListGroup, renderNavListItem
+} from "../ui/nav-list.js";
 import { renderQueryMirror } from "../../services/query-bar.js";
 import { phraseDesIgnores } from "../../services/champs-des-sujets.js";
 import { epinglesDuRail, railDesSujets } from "../../services/rail-des-sujets.js";
@@ -34,68 +38,100 @@ import { epinglesDuRail, railDesSujets } from "../../services/rail-des-sujets.js
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /**
- * Le rail : les lectures toutes faites, puis les recherches épinglées.
+ * Le rail : les lectures, puis les vues, puis les autres écrans du domaine.
  *
- * **Le compte est celui qu'on obtiendra**, calculé en appliquant la requête de
- * la lecture. Un compte qui diffère de ce qu'on voit après avoir cliqué est
- * pire qu'aucun compte. Quand il ne peut pas se calculer — « Les miens » sans
- * savoir qui regarde —, il ne s'affiche pas : zéro serait un mensonge.
+ * ## Trois groupes, et le trait les sépare
+ *
+ * **Les lectures** filtrent la liste qu'on regarde : tous, ce qui m'est
+ * assigné, ce que j'ai ouvert, où l'on m'a nommé, ce qui a bougé. Elles posent
+ * une requête dans la barre, et la barre reste modifiable.
+ *
+ * **Les vues** sont les recherches qu'on a épinglées : les mêmes requêtes, mais
+ * écrites par qui regarde plutôt que par le produit.
+ *
+ * **Les autres écrans** — Situations, Objectifs, Labels — ne filtrent rien :
+ * ils changent de page. Ils étaient dans la barre du haut, où ils voisinaient
+ * avec des boutons d'action ; ici, ils voisinent avec ce qu'ils sont, c'est-à-
+ * dire d'autres façons de regarder le même domaine.
+ *
+ * ## La coque vient du composant partagé
+ *
+ * `project-rail.js` porte le calage du haut au défilement, le repli calé en
+ * bas et la poignée de largeur. La Mémoire s'en sert, l'Atelier aussi. Une
+ * seconde coque aurait divergé au premier changement — et celle-ci porte assez
+ * de détails pour être fausse avant d'être finie (règle 10).
  */
 export function renderRailDesSujetsHtml({
-  sujets = [], champs = [], requete = "", meta = {}, moi = "", labelDuCr = "",
-  epingles = [], replie = false
+  sujets = [], champs = [], requete = "", meta = {}, moi = "", maintenant = Date.now(),
+  epingles = [], replie = false, sousVue = "subjects"
 } = {}) {
-  const { lectures } = railDesSujets({ sujets, champs, requete, meta, moi, labelDuCr });
+  const { lectures } = railDesSujets({ sujets, champs, requete, meta, moi, maintenant });
   const posees = epinglesDuRail(epingles, requete);
 
-  return `
-    <nav class="sujets-rail${replie ? " est-replie" : ""}" aria-label="Lectures des sujets">
-      <button type="button" class="sujets-rail__repli" data-sujets-rail-repli
-        title="${replie ? "Déplier le rail" : "Replier le rail"}"
-        aria-label="${replie ? "Déplier le rail" : "Replier le rail"}">
-        ${svgIcon(replie ? "sidebar-expand" : "sidebar-collapse", { className: "octicon" })}
-      </button>
+  const uneLecture = (lecture) => renderNavListItem({
+    label: lecture.nom,
+    iconHtml: svgIcon(lecture.icone, { className: "octicon" }),
+    // Un compte qu'on ne peut pas calculer ne s'affiche pas : zéro serait un
+    // mensonge (règle 5).
+    trailing: lecture.combien === null ? "" : String(lecture.combien),
+    isActive: lecture.active && sousVue === "subjects",
+    dataAttributes: {
+      "data-sujets-lecture": lecture.requete,
+      // Replié, le libellé n'est plus lisible : l'infobulle le redonne, et le
+      // compte avec lui.
+      "data-tooltip": replie
+        ? `${lecture.nom}${lecture.combien === null ? "" : ` (${lecture.combien})`}`
+        : ""
+    }
+  });
 
-      <ul class="sujets-rail__lectures">
-        ${lectures.map((lecture) => `
-          <li>
-            <button type="button" class="sujets-rail__lecture${lecture.active ? " est-active" : ""}"
-              data-sujets-lecture="${escapeHtml(lecture.requete)}"
-              aria-current="${lecture.active ? "true" : "false"}"
-              title="${escapeHtml(lecture.requete || "Tous les sujets")}">
-              <span class="sujets-rail__icone" aria-hidden="true">${svgIcon(lecture.icone, { className: "octicon" })}</span>
-              <span class="sujets-rail__nom">${escapeHtml(lecture.nom)}</span>
-              ${lecture.combien === null
-                ? ""
-                : `<span class="sujets-rail__compte mono-small">${lecture.combien}</span>`}
-            </button>
-          </li>
-        `).join("")}
-      </ul>
+  const uneEpingle = (epingle) => renderNavListItem({
+    label: epingle.nom,
+    iconHtml: svgIcon("pin", { className: "octicon" }),
+    isActive: epingle.active && sousVue === "subjects",
+    title: epingle.requete,
+    dataAttributes: {
+      "data-sujets-lecture": epingle.requete,
+      "data-tooltip": replie ? epingle.nom : ""
+    },
+    actionHtml: `<button type="button" class="bouton-discret sujets-rail__decrocher"
+      data-sujets-decrocher="${escapeHtml(epingle.id)}"
+      title="Retirer cette épingle" aria-label="Retirer cette épingle">
+      ${svgIcon("x", { className: "octicon" })}
+    </button>`
+  });
 
-      ${posees.length > 0 ? `
-        <p class="sujets-rail__titre">Épinglées</p>
-        <ul class="sujets-rail__lectures">
-          ${posees.map((epingle) => `
-            <li>
-              <button type="button" class="sujets-rail__lecture${epingle.active ? " est-active" : ""}"
-                data-sujets-lecture="${escapeHtml(epingle.requete)}"
-                aria-current="${epingle.active ? "true" : "false"}"
-                title="${escapeHtml(epingle.requete)}">
-                <span class="sujets-rail__icone" aria-hidden="true">${svgIcon("pin", { className: "octicon" })}</span>
-                <span class="sujets-rail__nom">${escapeHtml(epingle.nom)}</span>
-              </button>
-              <button type="button" class="bouton-discret sujets-rail__decrocher"
-                data-sujets-decrocher="${escapeHtml(epingle.id)}"
-                title="Retirer cette épingle" aria-label="Retirer cette épingle">
-                ${svgIcon("x", { className: "octicon" })}
-              </button>
-            </li>
-          `).join("")}
-        </ul>
-      ` : ""}
-    </nav>
-  `;
+  /** Un autre écran du domaine : il change de page, il ne filtre rien. */
+  const unEcran = (cle, nom, icone, attribut) => renderNavListItem({
+    label: nom,
+    iconHtml: svgIcon(icone, { className: "octicon" }),
+    isActive: sousVue === cle,
+    dataAttributes: { [attribut]: cle, "data-tooltip": replie ? nom : "" }
+  });
+
+  return renderProjectRail({
+    id: "sujetsRail",
+    label: "Lectures des sujets",
+    collapsed: replie,
+    navHtml: renderNavList({
+      label: "Lectures des sujets",
+      html: `
+        ${renderNavListGroup({ items: lectures.map(uneLecture) })}
+        ${renderNavListDivider()}
+        ${posees.length > 0
+          ? renderNavListGroup({ label: "Vues", items: posees.map(uneEpingle) })
+          : `<p class="sujets-rail__vide">Aucune vue épinglée. Épinglez une recherche pour la retrouver ici.</p>`}
+        ${renderNavListDivider()}
+        ${renderNavListGroup({
+          items: [
+            unEcran("situations", "Situations", "project", "data-sujets-ecran"),
+            unEcran("objectives", "Objectifs", "milestone", "data-sujets-sousvue"),
+            unEcran("labels", "Labels", "tag", "data-sujets-sousvue")
+          ]
+        })}
+      `
+    })
+  });
 }
 
 /**

@@ -295,9 +295,9 @@ test("les champs déclarés sont ceux du projet", () => {
   const selecteurs = selecteursGarnis(store);
 
   assert.deepEqual(selecteurs.getChampsDesSujets().map((champ) => champ.key),
-    ["statut", "priorité", "bloqué", "label", "assigné"]);
+    ["statut", "priorité", "bloqué", "label", "assigné", "auteur", "mention", "activité"]);
 
   store.projectSubjectsView.rawSubjectsResult.labels = [];
   assert.deepEqual(selecteurs.getChampsDesSujets().map((champ) => champ.key),
-    ["statut", "priorité", "bloqué", "assigné"]);
+    ["statut", "priorité", "bloqué", "assigné", "auteur", "mention", "activité"]);
 });
