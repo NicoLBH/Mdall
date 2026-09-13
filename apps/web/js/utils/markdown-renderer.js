@@ -10,6 +10,19 @@ const HEADING_PATTERN = /^\s{0,3}(#{1,6})\s+(.+)$/;
 const FENCE_PATTERN = /^```(.*)$/;
 
 /**
+ * Une ligne qui n'est qu'un commentaire HTML.
+ *
+ * Le rendu échappe tout le HTML — c'est ce qui empêche une note écrite par une
+ * machine d'exécuter quoi que ce soit. Mais échapper un commentaire revient à
+ * l'**afficher** : `<!-- page 1 -->` se lisait tel quel au milieu du document,
+ * alors qu'un commentaire est justement ce qu'on écrit pour ne pas être lu.
+ *
+ * On ne reconnaît que la ligne entière. Un commentaire au milieu d'une phrase
+ * reste échappé : le supprimer changerait le texte que quelqu'un a écrit.
+ */
+const HTML_COMMENT_LINE = /^<!--(?:(?!-->)[\s\S])*-->$/;
+
+/**
  * Un bloc de code.
  *
  * Chaque ligne est enveloppée, et non versée en bloc dans un `<pre>` : c'est ce
@@ -278,6 +291,10 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
       }
       return;
     }
+
+    // Un commentaire ne s'affiche pas : il ne ferme ni paragraphe ni liste,
+    // il n'est simplement pas là.
+    if (HTML_COMMENT_LINE.test(trimmed)) return;
 
     const fence = trimmed.match(FENCE_PATTERN);
     if (fence) {

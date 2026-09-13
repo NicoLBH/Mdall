@@ -106,6 +106,71 @@ export function assemblerLeMarkdown(pagesRefaites = []) {
   return { texte: morceaux.join("\n\n"), lignes, pages: rangees.length };
 }
 
+/* ── Le fichier qu'on range dans Fichiers ────────────────────────────────── */
+
+/**
+ * Le marqueur qui sépare deux pages dans le fichier rangé.
+ *
+ * **Un commentaire HTML, et non un titre.** Le fichier est destiné à être ouvert
+ * par un humain dans l'onglet Fichiers : un marqueur visible s'ajouterait au
+ * document toutes les deux pages, alors qu'il n'appartient pas au document. En
+ * commentaire, il disparaît de l'aperçu et reste dans le code — où il sert
+ * précisément à ceux qui le relisent : nous.
+ */
+const MARQUEUR_DE_PAGE = /^<!--\s*page\s+(\d+)\s*-->$/i;
+
+const marqueurDe = (page) => `<!-- page ${page} -->`;
+
+/**
+ * Le fichier à ranger : le document, et de quelle page vient chaque morceau.
+ *
+ * **Sans les marqueurs, la pagination serait perdue au rangement.** Le document
+ * relu depuis Fichiers n'aurait plus de lecture « Origine », plus de mesure par
+ * page, et plus rien à quoi confronter le PDF ouvert à côté.
+ */
+export function enFichierMarkdown(pages = []) {
+  return (Array.isArray(pages) ? pages : [])
+    .map((page) => ({ page: Number(page?.page), markdown: String(page?.markdown ?? "") }))
+    .filter((page) => Number.isFinite(page.page) && page.page > 0)
+    .sort((a, b) => a.page - b.page)
+    .map((page) => `${marqueurDe(page.page)}\n\n${page.markdown.replace(/\s+$/, "")}`)
+    .join("\n\n");
+}
+
+/**
+ * Les pages d'un fichier rangé.
+ *
+ * Un texte sans aucun marqueur rend une liste **vide**, et non une page unique :
+ * un fichier dont on ne sait pas comment il est paginé ne peut pas être
+ * confronté au PDF, et le présenter comme une page 1 ferait croire à un document
+ * d'une page (règle 5).
+ */
+export function pagesDuFichierMarkdown(fichier = "") {
+  const pages = [];
+  let courante = null;
+
+  for (const ligne of String(fichier ?? "").replace(/\r\n?/g, "\n").split("\n")) {
+    const marqueur = ligne.trim().match(MARQUEUR_DE_PAGE);
+
+    if (marqueur) {
+      if (courante) pages.push(courante);
+      courante = { page: Number(marqueur[1]), lignes: [] };
+      continue;
+    }
+
+    courante?.lignes.push(ligne);
+  }
+
+  if (courante) pages.push(courante);
+
+  return pages
+    .map((page) => ({
+      page: page.page,
+      markdown: page.lignes.join("\n").replace(/^\n+/, "").replace(/\s+$/, "")
+    }))
+    .sort((a, b) => a.page - b.page);
+}
+
 /**
  * Les mots d'un texte, réduits à ce qui se compare.
  *

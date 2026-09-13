@@ -23921,6 +23921,30 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   background:var(--bg-secondary, rgb(21, 27, 35));
 }
 .lecture-cr__md-nom{color:var(--text);font-weight:600;}
+
+/* Ce que cette requête a coûté, et d'où vient la restitution. */
+.lecture-cr__md-prix{
+  padding:1px 7px;
+  border:1px solid var(--border);
+  border-radius:999px;
+  font-size:11.5px;
+  font-variant-numeric:tabular-nums;
+  color:var(--muted);
+  white-space:nowrap;
+}
+.lecture-cr__md-prix.est-bon{color:var(--fgColor-success, #3fb950);border-color:rgba(63, 185, 80, .4);}
+.lecture-cr__md-prix.est-inconnu{border-style:dashed;}
+
+/* Rangée, relue, ou pas rangée : ce qui décide si on ose rouvrir l'écran. */
+.lecture-cr__rangement{
+  margin:0;
+  font-size:12.5px;
+  line-height:1.5;
+  color:var(--muted);
+  max-width:82ch;
+}
+.lecture-cr__rangement.est-bon{color:var(--fgColor-success, #3fb950);}
+.lecture-cr__rangement.est-douteux{color:var(--fgColor-attention, #d29922);}
 .lecture-cr__md-reserve{
   display:flex;
   flex-direction:column;
