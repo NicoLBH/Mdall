@@ -24173,3 +24173,32 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   white-space:nowrap;
 }
 .lecture-cr__label.est-manquant{border-style:dashed;}
+
+/* Le squelette reconnu : il décide des douze pages, il s'affiche donc. */
+.lecture-cr__structure{
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--bg-secondary, rgb(21, 27, 35));
+}
+.lecture-cr__structure > summary{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 12px;
+  cursor:pointer;
+  color:var(--text);
+}
+.lecture-cr__structure > summary .mono-small{margin-left:auto;color:var(--muted);}
+.lecture-cr__structure-corps{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding:0 12px 12px;
+  border-top:1px solid var(--border);
+}
+.lecture-cr__structure-tableau{
+  padding:8px 10px;
+  border-left:2px solid var(--border2);
+}
+.lecture-cr__structure-nom{margin:0;font-weight:600;color:var(--text);}
+.lecture-cr__structure-consignes{margin:0;padding-left:18px;color:var(--muted);font-size:12.5px;line-height:1.6;}

@@ -80,7 +80,7 @@ function unCote(surcharge = {}) {
   return {
     phase: "vide", texte: "", lignes: [], pages: [], fidelite: null, degats: null, forme: null,
     jetons: { entree: null, sortie: null }, modeleIA: "",
-    coupee: false, horsPlafond: [], absentes: [], motif: "",
+    coupee: false, surLaStructure: false, horsPlafond: [], absentes: [], aplaties: [], motif: "",
     rangement: { relue: false, etat: "", range: false, dossier: "", motif: "" },
     ...surcharge
   };
@@ -103,7 +103,7 @@ function unEtat(surcharge = {}) {
 
   return {
     phase: "vide", dit: "", lecture: null, pagesLues: [], fichier: null, confrontes: null,
-    labels: null, lots: null, objectifs: null, branches: [], deplie: "",
+    labels: null, lots: null, objectifs: null, branches: [], structure: null, deplie: "",
     descriptions: {}, motif: "", panne: "",
     onglet: "restitution",
     ...surcharge,
@@ -1087,4 +1087,81 @@ test("lots, labels et objectifs portent chacun leur icône", () => {
   for (const icone of ["stack", "tag", "milestone"]) {
     assert.match(html, new RegExp(`#${icone}"`), `l'icône « ${icone} » manque`);
   }
+});
+
+/* ── Le squelette reconnu, à l'écran ─────────────────────────────────────── */
+
+const UNE_STRUCTURE = {
+  structure: {
+    nature: "compte rendu de réunion de chantier",
+    decoupage: "par lot",
+    entete_repete: "CERES – Architecte",
+    pied_repete: "",
+    tableaux: [{
+      nom: "tableau des observations par lot",
+      colonnes: ["Date", "Observations", "Pour le", "Fait le"],
+      reconnaissance: "quatre colonnes, la deuxième large"
+    }],
+    consignes: ["Le tableau se poursuit sans redéclarer ses en-têtes."]
+  },
+  pagesRegardees: [1, 4, 8, 12]
+};
+
+/**
+ * **Il s'affiche parce qu'il décide.** C'est lui qui impose les colonnes des
+ * douze pages : un squelette faux les rend fausses *de la même façon*, ce qui
+ * se voit bien moins qu'une page fausse sur douze (fondamental 13).
+ */
+test("le squelette reconnu s'affiche, avec ses colonnes et ses limites", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
+    md: uneRestitution({ modele: unCoteFait(REFAITES_MODELE, { surLaStructure: true }) }),
+    structure: UNE_STRUCTURE
+  }));
+
+  assert.match(html, /lecture-cr__structure/);
+  assert.match(html, /compte rendu de réunion de chantier/);
+  assert.match(html, /Date \| Observations \| Pour le \| Fait le/);
+  assert.match(html, /Le tableau se poursuit sans redéclarer ses en-têtes\./);
+  // L'échantillon n'est pas le document, et l'écran le nomme.
+  assert.match(html, /les pages 1, 4, 8, 12/);
+  assert.match(html, /pas sur le document entier/);
+  assert.match(html, /imposées à toutes les pages/);
+});
+
+/**
+ * **Ne pas avoir reconnu n'est pas « ce document n'a pas de forme ».** Chaque
+ * page a été transcrite pour elle-même, et un même tableau peut donc n'avoir
+ * pas les mêmes colonnes d'une page à l'autre (règle 5).
+ */
+test("une structure non reconnue se dit, avec ce que ça coûte", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution(), structure: null
+  }));
+
+  assert.match(html, /structure du document n'a pas été reconnue/);
+  assert.match(html, /pas les mêmes colonnes d'une page à\s+l'autre/);
+});
+
+/**
+ * Reconnue mais pas transmise : le pire des deux, et il faut le dire. L'écran
+ * montrerait sinon un squelette que la transcription n'a jamais vu.
+ */
+test("un squelette reconnu mais non transmis le dit", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
+    md: uneRestitution({ modele: unCoteFait(REFAITES_MODELE, { surLaStructure: false }) }),
+    structure: UNE_STRUCTURE
+  }));
+
+  assert.match(html, /n'est pas parvenue à la transcription/);
+  assert.doesNotMatch(html, /imposées à toutes les pages/);
+});
+
+/** Rien ne se dit de la structure tant que la restitution n'est pas faite. */
+test("le squelette ne s'affiche pas avant la restitution", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lecture", dit: "Reconnaissance", fichier: { name: "CR_38.pdf" }, structure: UNE_STRUCTURE
+  }));
+  assert.doesNotMatch(html, /lecture-cr__structure/);
 });

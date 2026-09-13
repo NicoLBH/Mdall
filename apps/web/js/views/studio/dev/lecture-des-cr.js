@@ -131,6 +131,15 @@ const etat = {
    * qu'on ne voyait pas (règle 5).
    */
   branches: [],
+  /**
+   * Le squelette du document, tel qu'il a été reconnu. `null` : pas reconnu.
+   *
+   * Il s'affiche parce qu'il **décide** : c'est lui qui impose les colonnes des
+   * douze pages. Un squelette faux donnerait douze pages fausses de la même
+   * façon, ce qui se voit bien moins qu'une page fausse sur douze
+   * (fondamental 13 — ce que l'IA produit s'affiche avant d'être exploité).
+   */
+  structure: null,
   /** Le sujet dont on regarde le détail, pour juger si c'est bien le même. */
   deplie: "",
   /**
@@ -189,8 +198,10 @@ function unCote() {
     degats: null,
     /** Les titres inventés et les blocs déplacés. Deux règles de la consigne. */
     forme: null,
-    /** La réponse du modèle a-t-elle été coupée ? */
+      /** La réponse du modèle a-t-elle été coupée ? */
     coupee: false,
+    /** La transcription a-t-elle eu le squelette du document sous les yeux ? */
+    surLaStructure: false,
     /** Les pages qui ne sont pas parties, et celles dont rien n'est revenu. */
     horsPlafond: [],
     absentes: [],
@@ -597,6 +608,7 @@ function renderRestitution(vue) {
   return `
     <section class="lecture-cr__md">
       ${renderMesureDeLaRestitution(md.modele)}
+      ${renderLaStructure(vue)}
       ${renderRangement(md.modele)}
       <div class="lecture-cr__md-fichier">
         ${renderBarreDeLaRestitution(vue, md)}
@@ -636,6 +648,86 @@ function renderMesureDeLaRestitution(cote) {
       écrits et que le document ne portait pas : ce sont les chiffres à surveiller. Aucun ne dit
       si les tableaux ont tenu — cela se voit en lisant.
     </p>
+  `;
+}
+
+/**
+ * Le squelette du document, tel qu'il a été reconnu.
+ *
+ * ## Pourquoi il s'affiche
+ *
+ * Parce qu'il **décide**. C'est lui qui impose les colonnes des douze pages :
+ * un squelette juste les rend cohérentes, un squelette faux les rend fausses
+ * *de la même façon* — ce qui se voit bien moins qu'une page fausse sur douze.
+ * Ce que l'IA produit s'affiche avant d'être exploité (fondamental 13).
+ *
+ * ## Ce qu'il dit de ses limites
+ *
+ * Il n'a vu qu'un échantillon de pages, et l'écran le nomme : un tableau qui
+ * n'apparaît qu'à la page 7 d'un document de vingt a pu lui échapper. Laisser
+ * croire qu'il a tout vu ferait prendre son silence pour une absence (règle 5).
+ */
+function renderLaStructure(vue) {
+  if (vue.md.modele.phase !== "fait") return "";
+
+  const reconnue = vue.structure;
+  if (!reconnue?.structure) {
+    // **Ne pas avoir reconnu n'est pas « ce document n'a pas de forme ».** La
+    // transcription a décidé page par page, et les tableaux d'une même série
+    // ont pu diverger : le taire ferait juger la restitution sans savoir cela.
+    return `
+      <p class="lecture-cr__mot est-douteux">
+        ${svgIcon("stack", { className: "octicon" })}
+        La structure du document n'a pas été reconnue : chaque page a été transcrite pour
+        elle-même, et un même tableau peut donc n'avoir pas les mêmes colonnes d'une page à
+        l'autre.
+      </p>
+    `;
+  }
+
+  const { structure, pagesRegardees } = reconnue;
+  const tableaux = Array.isArray(structure.tableaux) ? structure.tableaux : [];
+  const consignes = Array.isArray(structure.consignes) ? structure.consignes : [];
+
+  return `
+    <details class="lecture-cr__structure">
+      <summary>
+        ${svgIcon("stack", { className: "octicon" })}
+        <span>Structure reconnue : <strong>${escapeHtml(structure.nature || "non nommée")}</strong></span>
+        <span class="mono-small">${tableaux.length} tableau${tableaux.length > 1 ? "x" : ""}</span>
+      </summary>
+
+      <div class="lecture-cr__structure-corps">
+        ${structure.decoupage ? `<p class="lecture-cr__mot">${escapeHtml(structure.decoupage)}</p>` : ""}
+
+        ${tableaux.map((tableau) => `
+          <div class="lecture-cr__structure-tableau">
+            <p class="lecture-cr__structure-nom">${escapeHtml(tableau.nom)}</p>
+            <p class="mono-small">| ${tableau.colonnes.map((colonne) => escapeHtml(colonne)).join(" | ")} |</p>
+            ${tableau.reconnaissance
+              ? `<p class="lecture-cr__mot">${escapeHtml(tableau.reconnaissance)}</p>`
+              : ""}
+          </div>
+        `).join("")}
+
+        ${consignes.length > 0 ? `
+          <p class="lecture-cr__structure-nom">Pièges relevés dans ce document</p>
+          <ul class="lecture-cr__structure-consignes">
+            ${consignes.map((consigne) => `<li>${escapeHtml(consigne)}</li>`).join("")}
+          </ul>
+        ` : ""}
+
+        <p class="lecture-cr__mot">
+          Reconnue sur ${pagesRegardees.length > 0
+            ? `les pages ${pagesRegardees.join(", ")}`
+            : "un échantillon de pages"} — pas sur le document entier. Un tableau qui n'apparaît
+          nulle part ailleurs a pu lui échapper.
+          ${vue.md.modele.surLaStructure
+            ? "Ces colonnes ont été imposées à toutes les pages."
+            : "<strong>Elle n'est pas parvenue à la transcription</strong> : les pages ont été transcrites chacune pour elle-même."}
+        </p>
+      </div>
+    </details>
   `;
 }
 
@@ -1570,6 +1662,7 @@ async function lire(hote, fichier) {
   etat.labels = null;
   etat.lots = null;
   etat.objectifs = null;
+  etat.structure = null;
   etat.deplie = "";
   etat.motif = "";
   etat.panne = "";
@@ -1934,7 +2027,33 @@ async function restituerParLeModele(hote) {
     const posee = pagesEnMiseEnPage(etat.pagesLues);
     cote.aplaties = posee.aplaties;
 
-    const refait = await refaireLeDocument({ pages: posee.pages });
+    /**
+     * **La structure d'abord, la transcription ensuite.**
+     *
+     * Une transcription page par page décide page par page : le même tableau
+     * gagne dix colonnes à la page 1, huit à la page 2 et d'autres en-têtes à
+     * la page 3. Non parce que le modèle lit mal, mais parce qu'on lui fait
+     * trancher douze fois une question qui n'a qu'une réponse.
+     *
+     * Une reconnaissance qui échoue ne bloque rien : on transcrit comme avant,
+     * et l'écran dit que les tableaux peuvent diverger d'une page à l'autre.
+     */
+    etat.dit = "Reconnaissance de la structure du document";
+    redessiner(hote);
+
+    const { reconnaitreLaStructure } = await import(
+      "../../../services/structure-par-le-modele.js"
+    );
+    const reconnue = await reconnaitreLaStructure({ pages: posee.pages });
+    etat.structure = reconnue.ok ? reconnue : null;
+    if (!reconnue.ok && texte(reconnue.panne)) etat.panne = texte(reconnue.panne);
+
+    etat.dit = `Restitution des ${posee.pages.length} pages en Markdown`;
+    redessiner(hote);
+
+    const refait = await refaireLeDocument({
+      pages: posee.pages, structure: reconnue.ok ? reconnue.structure : null
+    });
     if (!refait?.ok) {
       cote.phase = "echec";
       cote.motif = phraseDuRefus(refait?.motif) || "cause inconnue";
@@ -1948,6 +2067,7 @@ async function restituerParLeModele(hote) {
     cote.coupee = refait.coupee;
     cote.horsPlafond = refait.horsPlafond;
     cote.absentes = refait.absentes;
+    cote.surLaStructure = Boolean(refait.surLaStructure);
     // Ce que cet appel a consommé, tel que le fournisseur l'a annoncé.
     cote.jetons = refait.jetons ?? { entree: null, sortie: null };
     cote.modeleIA = refait.modele;

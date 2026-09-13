@@ -117,34 +117,59 @@ test("le pas se mesure, et ne dégénère jamais", () => {
 /* ── Les mises en évidence ───────────────────────────────────────────────── */
 
 /**
- * **En légende, et non dans le texte.** Entourer un fragment de `**` le
- * rallonge de quatre caractères et décale la colonne suivante : la mise en
- * évidence détruirait l'alignement qu'elle accompagne.
+ * **Au bout de sa ligne, et non en légende de page.**
+ *
+ * La première version listait les passages colorés en bas de page, sous un
+ * titre. Le modèle les a pris pour du contenu et les a recopiés là, à la fin,
+ * hors de tout contexte — le document doublé, et des encadrés entiers de
+ * fragments sans suite. C'était le pire défaut de la restitution.
  */
-test("le gras et la couleur se disent à côté, sans bouger la grille", () => {
+test("la couleur reste sur sa ligne, et ne bouge pas les colonnes", () => {
   const fragments = [
     { text: "LOT 02 — GROS ŒUVRE", x: 56, y: 750, width: 110, height: 11, bold: true },
     { text: "Présence obligatoire", x: 56, y: 700, width: 95, height: 10, couleur: "#c00000" },
     { text: "12/03/2026", x: 400, y: 700, width: 50, height: 10 }
   ];
 
-  const rendu = pageEnMiseEnPage(fragments);
-  const [grille] = rendu.split("\n\n--- MISES EN ÉVIDENCE");
+  const lignes = pageEnMiseEnPage(fragments).split("\n");
 
-  // La grille reste nue : la colonne de droite est à la même place qu'avant.
-  assert.doesNotMatch(grille, /\*\*/);
+  // La marque est au bout de la ligne colorée, et nulle part ailleurs.
+  assert.match(lignes[1], /⟨rouge⟩$/);
+  assert.doesNotMatch(lignes[0], /⟨/);
+  // Aucune légende de page : c'est elle qui doublait le document.
+  assert.doesNotMatch(pageEnMiseEnPage(fragments), /MISES EN ÉVIDENCE/);
+
+  // Et la colonne de droite n'a pas bougé d'un caractère.
   assert.equal(
-    grille.split("\n")[1].indexOf("12/03/2026"),
-    pageEnGrille(fragments.map((f) => ({ ...f, bold: false, couleur: "" }))).split("\n")[1].indexOf("12/03/2026")
+    lignes[1].indexOf("12/03/2026"),
+    pageEnGrille(fragments.map((f) => ({ ...f, couleur: "" }))).split("\n")[1].indexOf("12/03/2026")
   );
-
-  assert.match(rendu, /GRAS : « LOT 02 — GROS ŒUVRE »/);
-  assert.match(rendu, /ROUGE : « Présence obligatoire »/);
 });
 
-/** Une page sans relief ne porte pas de légende vide. */
-test("une page sans mise en évidence n'annonce rien", () => {
-  assert.doesNotMatch(pageEnMiseEnPage(TABLEAU_DEGUISE), /MISES EN ÉVIDENCE/);
+/**
+ * **Le gras n'est pas relevé.** Sur un compte rendu réel il y en a quarante
+ * fragments par page — des numéros, des tirets, des en-têtes — et pas un ne dit
+ * rien de plus que ce que la grille montre déjà. Les mentions qui comptent
+ * (« URGENT ») sont en capitales : elles se lisent telles quelles.
+ */
+test("le gras ne marque rien, et une page sans couleur ne porte aucune marque", () => {
+  const gras = pageEnMiseEnPage([
+    { text: "URGENT", x: 56, y: 700, width: 40, height: 10, bold: true }
+  ]);
+
+  assert.equal(gras, "URGENT");
+  assert.doesNotMatch(pageEnMiseEnPage(TABLEAU_DEGUISE), /⟨/);
+});
+
+/** Deux couleurs sur une même ligne se disent toutes les deux, une fois chacune. */
+test("une ligne à deux couleurs les nomme toutes les deux", () => {
+  const ligne = pageEnMiseEnPage([
+    { text: "à faire", x: 56, y: 700, width: 30, height: 10, couleur: "#0000ff" },
+    { text: "encore", x: 120, y: 700, width: 30, height: 10, couleur: "#0000ff" },
+    { text: "URGENT", x: 200, y: 700, width: 30, height: 10, couleur: "#ff0000" }
+  ]);
+
+  assert.match(ligne, /⟨bleu rouge⟩$/);
 });
 
 /**

@@ -167,6 +167,10 @@ export const NATURES = {
     nom: "Lecture des comptes rendus",
     quoi: "Relever les points d'un compte rendu de chantier."
   },
+  "structure-du-document": {
+    nom: "Structure d'un document",
+    quoi: "Reconnaître la forme d'un document avant de le transcrire : ses tableaux, leurs colonnes, ce qui se répète d'une page à l'autre."
+  },
   "reconstitution-markdown": {
     nom: "Document refait en Markdown",
     quoi: "Restituer un document tel quel, avant d'en relever les points."

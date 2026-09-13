@@ -154,9 +154,41 @@ export function pageEnGrille(fragments = [], { largeurMaximale = 240 } = {}) {
         else if (rendu.length > 0 && !rendu.endsWith(" ")) rendu += " ";
         rendu += fragment.text;
       }
-      return rendu.replace(/\s+$/, "");
+      return `${rendu.replace(/\s+$/, "")}${marqueDesCouleurs(ligne)}`;
     })
     .join("\n");
+}
+
+/**
+ * La couleur d'une ligne, marquée **au bout de cette ligne**.
+ *
+ * ## Pourquoi au bout, et pas en légende
+ *
+ * La première version listait les passages colorés en bas de page, sous un
+ * titre. Le modèle les a pris pour du contenu et les a recopiés là, à la fin,
+ * hors de tout contexte — des encadrés entiers de fragments sans suite, et le
+ * document doublé. C'était le pire défaut de la restitution, et il venait de
+ * cette légende.
+ *
+ * Au bout de la ligne, la couleur reste **où elle est**. Elle ne peut plus être
+ * déplacée sans que cela se voie, et la colonne n'a pas bougé : la marque est
+ * posée après tout ce que la ligne portait.
+ *
+ * ## Pourquoi la couleur seule
+ *
+ * Le gras n'est pas relevé. Sur un compte rendu réel, il y en a quarante
+ * fragments par page — des numéros, des tirets, des en-têtes — et pas un ne dit
+ * rien de plus que ce que la grille montre déjà. Les mentions qui comptent
+ * (« URGENT », « RETARD ») sont en capitales : elles se lisent telles quelles.
+ */
+function marqueDesCouleurs(ligne) {
+  const noms = [];
+  for (const fragment of ligne.fragments) {
+    const nom = nomDeLaCouleur(fragment.couleur);
+    if (nom && !noms.includes(nom)) noms.push(nom);
+  }
+
+  return noms.length > 0 ? `   ⟨${noms.join(" ")}⟩` : "";
 }
 
 /**
@@ -190,40 +222,16 @@ export function misesEnEvidence(fragments = []) {
   return relevees;
 }
 
-/** Une liste de fragments, dite en une ligne, sans se répéter ni s'étendre. */
-function enLigne(morceaux = [], maximum = 24) {
-  const vus = [];
-  for (const morceau of morceaux) {
-    if (!vus.includes(morceau)) vus.push(morceau);
-    if (vus.length >= maximum) break;
-  }
-  const suite = morceaux.length > vus.length ? ", …" : "";
-  return `${vus.map((morceau) => `« ${morceau} »`).join(", ")}${suite}`;
-}
-
 /**
- * La page, telle qu'elle part au modèle : la grille, puis ce qu'elle ne dit pas.
+ * La page, telle qu'elle part au modèle.
  *
- * Les deux blocs sont **nommés**, pour que le modèle sache ce qu'il lit. Un
- * texte aligné sans explication se lit comme de la poésie concrète : on lui
- * dit que ce sont des colonnes, et il les traite en colonnes.
+ * La grille, et rien d'autre : les couleurs sont marquées au bout de leur
+ * propre ligne, où elles ne peuvent pas être déplacées sans que cela se voie.
+ * Voir `marqueDesCouleurs` — la légende de bas de page qu'il y avait ici est
+ * précisément ce qui doublait le document.
  */
 export function pageEnMiseEnPage(fragments = [], { largeurMaximale = 240 } = {}) {
-  const grille = pageEnGrille(fragments, { largeurMaximale });
-  if (!grille) return "";
-
-  const { gras, italique, couleurs } = misesEnEvidence(fragments);
-  const notes = [];
-
-  if (gras.length) notes.push(`GRAS : ${enLigne(gras)}`);
-  if (italique.length) notes.push(`ITALIQUE : ${enLigne(italique)}`);
-  for (const [nom, morceaux] of couleurs) {
-    notes.push(`${nom.toUpperCase()} : ${enLigne(morceaux)}`);
-  }
-
-  if (notes.length === 0) return grille;
-
-  return `${grille}\n\n--- MISES EN ÉVIDENCE DE CETTE PAGE ---\n${notes.join("\n")}`;
+  return pageEnGrille(fragments, { largeurMaximale });
 }
 
 /**

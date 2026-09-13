@@ -70,7 +70,7 @@ export function phraseDuRefus(motif) {
  * @returns {Promise<{ok: true, pages: object[], horsPlafond: number[], absentes: number[],
  *   inconnues: number[], coupee: boolean, modele: string}|{ok: false, motif: string}>}
  */
-export async function refaireLeDocument({ pages = [] } = {}) {
+export async function refaireLeDocument({ pages = [], structure = null } = {}) {
   const lisibles = (Array.isArray(pages) ? pages : []).filter((page) => texte(page?.text ?? page?.texte));
   if (!lisibles.length) return { ok: false, motif: REFUS.SANS_TEXTE };
 
@@ -81,6 +81,9 @@ export async function refaireLeDocument({ pages = [] } = {}) {
       headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         project_id: await projetCourant(),
+        // Le squelette reconnu, s'il l'a été. Sans lui, la transcription décide
+        // page par page et les tableaux d'une même série peuvent diverger.
+        ...(structure ? { structure } : {}),
         pages: lisibles.map((page) => ({ page: Number(page?.page), text: texte(page?.text ?? page?.texte) }))
       })
     });
@@ -120,6 +123,8 @@ export async function refaireLeDocument({ pages = [] } = {}) {
     inconnues: Array.isArray(rendu?.inconnues) ? rendu.inconnues : [],
     coupee: Boolean(rendu?.coupee),
     modele: texte(rendu?.modele),
+    /** La transcription a-t-elle eu le squelette du document sous les yeux ? */
+    surLaStructure: Boolean(rendu?.sur_la_structure),
     // Ce que cet appel-ci a consommé. `null` de chaque côté quand le
     // fournisseur n'a rien annoncé : un décompte manquant ne devient pas zéro,
     // qui se lirait « gratuit ».

@@ -32,6 +32,7 @@ import { requireUser } from "../_shared/require-user.ts";
 import { deposerLaConsommation, jetonsDeLaReponse } from "../_shared/consommation-ia.ts";
 import { pagesEnTexte } from "../_shared/citation-verifiee.js";
 import { panneDuFournisseur } from "../_shared/sujets-du-modele.js";
+import { structureEnTexte } from "../_shared/structure-du-document.js";
 import {
   CONSIGNES_DE_RECONSTITUTION,
   SCHEMA_DU_DOCUMENT,
@@ -125,12 +126,22 @@ serve(async (req) => {
     // seule façon de savoir ce que le plafond a laissé dehors.
     const envoyees = pagesDuTexte(texte);
 
+    /**
+     * Le squelette reconnu, s'il l'a été.
+     *
+     * **Facultatif, et son absence ne se remplace pas.** Sans lui, la
+     * transcription décide page par page — comme avant — et les tableaux d'une
+     * même série peuvent diverger. C'est moins bon, ce n'est pas faux, et
+     * l'écran le dit.
+     */
+    const squelette = structureEnTexte(body?.structure ?? null);
+
     const appel = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: { Authorization: `Bearer ${openAiApiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: MODELE,
-        instructions: CONSIGNES_DE_RECONSTITUTION,
+        instructions: `${CONSIGNES_DE_RECONSTITUTION}${squelette}`,
         input: texte,
         max_output_tokens: MAX_JETONS,
         // Assez pour reposer un tableau, pas assez pour se mettre à
@@ -186,6 +197,8 @@ serve(async (req) => {
       /** La réponse a-t-elle été coupée en cours de route ? */
       coupee: String(rendu?.status ?? "") === "incomplete",
       modele: MODELE,
+      /** La transcription a-t-elle eu le squelette du document sous les yeux ? */
+      sur_la_structure: Boolean(squelette),
       /**
        * Ce que cet appel-ci a consommé.
        *
