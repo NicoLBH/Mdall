@@ -58,7 +58,13 @@ export const GESTE = {
   /** Ouvrir le menu d'une ligne du tableau des vues. */
   VUE_MENU: "vue_menu",
   /** Épingler cette vue au rail, ou l'en retirer. */
-  VUE_EPINGLER: "vue_epingler"
+  VUE_EPINGLER: "vue_epingler",
+  /** Cocher ou décocher une ligne du tableau. */
+  COCHER: "cocher",
+  /** Cocher ou décocher tout ce que la requête retient. */
+  COCHER_TOUT: "cocher_tout",
+  /** Appliquer une action à tous les sujets cochés : `groupe:valeur`. */
+  GROUPE: "groupe"
 };
 
 /**
@@ -70,6 +76,9 @@ export const GESTE = {
  */
 const ATTRIBUTS = [
   ["data-sujets-decrocher", GESTE.DECROCHER],
+  ["data-sujets-cocher-tout", GESTE.COCHER_TOUT],
+  ["data-sujets-cocher", GESTE.COCHER],
+  ["data-sujets-groupe", GESTE.GROUPE],
   ["data-sujets-derailler", GESTE.DERAILLER],
   ["data-sujets-vue-epingler", GESTE.VUE_EPINGLER],
   ["data-sujets-vue-menu", GESTE.VUE_MENU],

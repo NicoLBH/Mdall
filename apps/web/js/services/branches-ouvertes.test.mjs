@@ -11,7 +11,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { store } from "../store.js";
-import { branchesOuvertes, oublierLesBranches } from "./branches-ouvertes.js";
+import { branchesOuvertes, lesBranchesOntChange, oublierLesBranches } from "./branches-ouvertes.js";
 
 test("sans projet affiché, rien n'est proposé et rien n'est prétendu", () => {
   store.currentProjectId = null;
@@ -44,4 +44,43 @@ test("oublier remet le magasin à zéro", () => {
   oublierLesBranches();
   assert.deepEqual(branchesOuvertes(), []);
   store.currentProjectId = null;
+});
+
+/* ── Le menu qui se refermait en s'ouvrant ───────────────────────────────── */
+
+/**
+ * **Le défaut que ce test existe pour empêcher.**
+ *
+ * La liste se relit à chaque ouverture du menu « Transformer » — c'est voulu :
+ * proposer d'ajouter un lot à une proposition qu'un collègue vient de fusionner
+ * enverrait le lot dans une branche fermée. Mais la relecture redessinait
+ * l'écran **à tous les coups**, y compris quand elle n'avait rien appris : le
+ * bouton était remplacé, et le menu qui venait de s'ouvrir disparaissait avec
+ * lui. On cliquait, rien ne restait affiché, et l'on ne pouvait plus rien
+ * proposer.
+ */
+test("une relecture qui n'apprend rien ne redessine pas", () => {
+  const avant = [{ id: "p1", title: "Reprise des fondations" }];
+  const apres = [{ id: "p1", title: "Reprise des fondations" }];
+
+  assert.equal(lesBranchesOntChange(avant, apres), false);
+});
+
+test("une proposition de plus, de moins, ou renommée, redessine", () => {
+  const une = [{ id: "p1", title: "Reprise des fondations" }];
+
+  assert.equal(lesBranchesOntChange(une, [...une, { id: "p2", title: "Cloisons" }]), true);
+  assert.equal(lesBranchesOntChange(une, []), true);
+  assert.equal(lesBranchesOntChange(une, [{ id: "p1", title: "Reprise des semelles" }]), true);
+});
+
+/**
+ * `null` n'est pas `[]` : l'un dit qu'on n'a pas pu regarder, l'autre qu'il n'y
+ * a rien. Le menu ne les affiche pas pareil, donc le passage de l'un à l'autre
+ * doit redessiner (règle 5).
+ */
+test("« on ne sait pas » et « il n'y en a aucune » ne se confondent pas", () => {
+  assert.equal(lesBranchesOntChange(null, []), true);
+  assert.equal(lesBranchesOntChange([], null), true);
+  assert.equal(lesBranchesOntChange(null, null), false);
 });

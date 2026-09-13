@@ -24313,7 +24313,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    tant qu'on ne survole pas la ligne — une liste de douze vues avec douze
    boutons visibles se lit comme une barre d'outils. */
 .sujets-vues__gestes{flex:0 0 auto;position:relative;}
-.sujets-vues__kebab{opacity:0;}
+/* **Carré, et assez haut pour qu'on le vise.** Il tenait la hauteur de son
+   icône seule : une cible de seize pixels sur une ligne de quarante se rate. */
+.sujets-vues__kebab{opacity:0;width:28px;height:28px;padding:0;flex:0 0 auto;
+  display:inline-flex;align-items:center;justify-content:center;border-radius:6px;}
+.sujets-vues__kebab:hover{background:var(--surface-hover);}
 .sujets-vues__ligne:hover .sujets-vues__kebab,
 .sujets-vues__kebab[aria-expanded="true"]{opacity:1;}
 /* `.gh-menu` est masqué par défaut : le menu d'une ligne s'affiche quand il
@@ -24443,3 +24447,71 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    filet la sépare de celle qui la range. */
 .gh-menu__item--danger{color:var(--danger, #f85149);}
 .gh-menu__item--danger .ui-icon{color:inherit;}
+
+
+/* ── Le menu d'une vue sortait du cadre, et le cadre le coupait ──────────── */
+
+/* `.data-table-shell` masque ce qui dépasse — c'est ce qui lui donne ses coins
+   arrondis. Le menu d'une ligne s'ouvrait donc **sous** cette coupe : il
+   existait, il portait ses entrées, et rien ne s'affichait. La liste des vues
+   n'a pas besoin de cette coupe : elle ne défile pas, et ses lignes ne
+   débordent pas. */
+.sujets-vues .data-table-shell{overflow:visible;}
+
+/* ── Les filtres de l'en-tête tiennent sur une ligne ─────────────────────── */
+
+/* `.issues-head-menu` demande toute la largeur de son parent — c'est ce qu'il
+   faut là où il est seul dans sa colonne. Ici ils sont cinq côte à côte, et
+   cette largeur les empilait. Chacun prend donc la sienne, et la ligne ne se
+   casse pas : un filtre passé à la ligne suivante se lit comme un autre bloc. */
+.cell-assignees-head{
+  display:flex;
+  flex-direction:row;
+  flex-wrap:nowrap;
+  align-items:center;
+  gap:8px;
+  white-space:nowrap;
+}
+.cell-assignees-head .issues-head-menu{width:auto;flex:0 0 auto;}
+
+/* Sous neuf cents pixels, cinq filtres sur une ligne débordent la largeur de
+   l'écran — et le tableau masque ce qui dépasse. Ils repassent donc à la ligne
+   plutôt que de disparaître : une ligne de plus se lit, un filtre coupé non. */
+@media (max-width:900px){
+  .cell-assignees-head{flex-wrap:wrap;justify-content:flex-end;}
+}
+
+/* ── Cocher des sujets ───────────────────────────────────────────────────── */
+
+.cell-cocher-head,
+.cell-cocher-value{display:flex;align-items:center;justify-content:center;padding-right:4px;}
+
+.sujets-case{display:inline-flex;align-items:center;justify-content:center;
+  width:24px;height:24px;}
+.sujets-case__boite{width:14px;height:14px;margin:0;cursor:pointer;accent-color:var(--accent, #1f6feb);}
+
+/* La case de tête quand une partie seulement est cochée : un trait, pas une
+   coche. Une case vide sur une liste où trois sujets sont cochés dirait que
+   rien ne l'est, et l'on cliquerait pour tout cocher en croyant ne rien
+   défaire. */
+.sujets-case__boite[data-partielle="true"]{position:relative;}
+.sujets-case__boite[data-partielle="true"]::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:8px;
+  height:2px;
+  transform:translate(-50%, -50%);
+  background:var(--accent, #1f6feb);
+}
+
+/* Une ligne cochée se voit : sans cela, on ne sait plus sur quoi l'action de
+   groupe va porter — et c'est la seule chose qu'on regarde avant de cliquer. */
+.issue-row.est-cochee{background:rgba(31, 111, 235, .08);}
+
+/* ── Les actions de groupe, à la place des filtres ───────────────────────── */
+
+.sujets-groupe{display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:8px;}
+.sujets-groupe__compte{color:var(--text-muted);white-space:nowrap;}
+.sujets-head-menu--groupe .issues-head-menu__btn{color:var(--text);font-weight:600;}

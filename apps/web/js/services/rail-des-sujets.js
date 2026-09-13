@@ -199,6 +199,34 @@ export function railDesSujets({
 }
 
 /**
+ * Ce qu'une lecture du rail change à l'écran.
+ *
+ * ## Le défaut que ça répare
+ *
+ * Le rail reste affiché sur les Labels, les Objectifs et les Vues — c'est
+ * voulu : ce sont des écrans du même domaine, et le faire disparaître au moment
+ * où l'on y arrive oblige à revenir en arrière pour en sortir. Mais la requête
+ * qu'on y cliquait ne s'appliquait qu'à un tableau **qu'on ne voyait pas** : on
+ * cliquait « Sujets », l'écran des Labels restait, et rien ne disait pourquoi.
+ * Il ne restait qu'à recharger la page.
+ *
+ * **Poser une lecture, c'est donc revenir à la liste.** C'est le sens du geste :
+ * on ne clique pas « Assigné à moi » pour rester sur les Labels.
+ *
+ * Le formulaire d'une vue se ferme aussi : il tient le tableau sous lui, et
+ * l'écrasement de sa requête par celle qu'on vient de cliquer ferait enregistrer
+ * une vue qui ne retient pas ce qu'on y avait écrit.
+ */
+export function ecranApresUneLecture({ requete = "" } = {}) {
+  return {
+    requete: texte(requete),
+    sousVue: "subjects",
+    tableauSeul: true,
+    vueEnCours: null
+  };
+}
+
+/**
  * Une recherche épinglée, prête à dessiner.
  *
  * Elle porte son propre nom — ou sa requête, qui se lit et qu'on reconnaît — et

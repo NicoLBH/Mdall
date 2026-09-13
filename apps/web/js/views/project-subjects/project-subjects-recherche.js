@@ -32,6 +32,7 @@ import {
   renderNavList, renderNavListDivider, renderNavListGroup, renderNavListItem
 } from "../ui/nav-list.js";
 import { renderSelectMenuSection } from "../ui/select-menu.js";
+import { GROUPE, MARQUAGES, NOMS_DU_GROUPE, phraseDeLaSelection } from "../../services/selection-des-sujets.js";
 import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
 import { renderQueryMirror } from "../../services/query-bar.js";
 import { phraseDesIgnores } from "../../services/champs-des-sujets.js";
@@ -279,6 +280,110 @@ export function renderFiltreDenTeteHtml({ id, champ, requete = "", enCours = [],
           </button>
         ` : ""}
       </div>
+    </div>
+  `;
+}
+
+/**
+ * Un menu d'action de groupe, à la place d'un filtre.
+ *
+ * **Le même menu, au même endroit, et c'est voulu.** Quand rien n'est coché, la
+ * tête du tableau porte « Labels » et le menu filtre ; quand quelque chose est
+ * coché, elle porte « Labels » et le menu **pose** un label sur ce qui est
+ * coché. Le geste est le même, la liste est la même, et la sélection dit lequel
+ * des deux on fait. Deux rangées de boutons — une pour filtrer, une pour poser —
+ * auraient demandé de chercher la bonne à chaque fois.
+ *
+ * Il n'y a donc pas de menu vide : un champ que le projet ne déclare pas ne
+ * figure ni dans les filtres, ni ici.
+ */
+function renderMenuDeGroupeHtml({ id, nom, entrees = [], actif = false } = {}) {
+  return `
+    <div class="issues-head-menu sujets-head-menu sujets-head-menu--groupe${actif ? " est-posee" : ""}">
+      <button class="issues-head-menu__btn" type="button" data-sujets-menu="${escapeHtml(id)}"
+        aria-haspopup="true" aria-expanded="false">
+        <span>${escapeHtml(nom)}</span>
+        ${svgIcon("chevron-down", { className: "gh-chevron" })}
+      </button>
+
+      <div class="gh-menu subject-meta-dropdown issues-head-menu__dropdown sujets-head-menu__liste"
+        data-sujets-menu-liste="${escapeHtml(id)}" role="dialog">
+        <div class="subject-meta-dropdown__title">${escapeHtml(nom)}</div>
+        <div class="subject-meta-dropdown__body">
+          ${renderSelectMenuSection({ items: entrees, emptyTitle: `Aucun ${nom.toLowerCase()}` })}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Ce qu'on peut faire des sujets cochés.
+ *
+ * ## Pourquoi ça remplace les filtres, et ne s'ajoute pas à eux
+ *
+ * Un compte rendu versé ouvre quarante sujets d'un coup. Les ranger un par un
+ * se paie quarante fois trois clics, et personne ne le fait : on laisse les
+ * quarante sans label, et la recherche par label ne sert plus à rien. Ce qui
+ * manque n'est pas un raccourci, c'est ce qui rend le rangement possible.
+ *
+ * Les boutons prennent la place des filtres parce que c'est la même question,
+ * posée dans l'autre sens — « lesquels portent ce label » devient « pose ce
+ * label sur ceux-là » — et parce qu'on ne filtre pas pendant qu'on range : un
+ * filtre changé sous une sélection la viderait de ce qu'elle contient.
+ *
+ * @param {object} options
+ * @param {number} options.combien le nombre de sujets cochés
+ * @param {object[]} options.champs ceux de `champsDesSujets` — la liste des
+ *   labels, des personnes, des situations et des objectifs vient de là, et de
+ *   nulle part ailleurs (règle 10)
+ */
+export function renderActionsGroupeesHtml({ combien = 0, champs = [] } = {}) {
+  if (!combien) return "";
+
+  const champDe = (cle) => (Array.isArray(champs) ? champs : []).find((champ) => champ.key === cle);
+
+  /** Les valeurs d'un champ, moins celles qui ne se posent pas. */
+  const entreesDe = (cle, groupe) => (champDe(cle)?.values ?? [])
+    // « moi » et « aucun » désignent une recherche, pas une valeur qu'on écrit :
+    // poser « aucun » sur quarante sujets ne veut rien dire.
+    .filter((valeur) => valeur.value !== "aucun" && valeur.value !== "@moi")
+    .map((valeur) => ({
+      key: `${groupe}:${valeur.value}`,
+      title: valeur.label,
+      dataAttrs: { "sujets-groupe": `${groupe}:${valeur.value}` }
+    }));
+
+  const menus = [
+    renderMenuDeGroupeHtml({
+      id: "sujets-groupe-marquage",
+      nom: NOMS_DU_GROUPE[GROUPE.MARQUAGE],
+      entrees: MARQUAGES.map((marquage) => ({
+        key: `${GROUPE.MARQUAGE}:${marquage.cle}`,
+        title: marquage.nom,
+        iconHtml: svgIcon(marquage.icone, { className: "octicon" }),
+        dataAttrs: { "sujets-groupe": `${GROUPE.MARQUAGE}:${marquage.cle}` }
+      })),
+      actif: true
+    }),
+    ...[
+      ["label", GROUPE.LABELS],
+      ["assigné", GROUPE.ASSIGNES],
+      ["situation", GROUPE.SITUATIONS],
+      ["objectif", GROUPE.OBJECTIFS]
+    ].map(([cle, groupe]) => {
+      const entrees = entreesDe(cle, groupe);
+      if (!entrees.length) return "";
+      return renderMenuDeGroupeHtml({
+        id: `sujets-groupe-${groupe}`, nom: NOMS_DU_GROUPE[groupe], entrees, actif: true
+      });
+    })
+  ].filter(Boolean).join("");
+
+  return `
+    <div class="sujets-groupe">
+      <span class="sujets-groupe__compte mono-small">${escapeHtml(phraseDeLaSelection(combien))}</span>
+      ${menus}
     </div>
   `;
 }

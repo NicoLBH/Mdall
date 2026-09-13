@@ -10,7 +10,8 @@ import assert from "node:assert/strict";
 
 import { champsDesSujets } from "./champs-des-sujets.js";
 import {
-  LECTURE, NOMS_DE_LA_LECTURE, epinglesDuRail, lectureDe, railDesSujets, requeteDeLaLecture
+  LECTURE, NOMS_DE_LA_LECTURE, ecranApresUneLecture, epinglesDuRail, lectureDe,
+  railDesSujets, requeteDeLaLecture
 } from "./rail-des-sujets.js";
 import { sujetsFiltres } from "./champs-des-sujets.js";
 
@@ -198,4 +199,37 @@ test("une épingle ne s'allume que sur sa requête exacte", () => {
 test("une épingle vide est écartée", () => {
   assert.deepEqual(epinglesDuRail([{ id: "e1", query: "" }, { id: "", query: "x" }, null], ""), []);
   assert.deepEqual(epinglesDuRail(), []);
+});
+
+/* ── Ce qu'une lecture change à l'écran ──────────────────────────────────── */
+
+/**
+ * **Le défaut que ce test existe pour empêcher.**
+ *
+ * Le rail reste affiché sur les Labels, les Objectifs et les Vues — c'est
+ * voulu. Mais la requête qu'on y cliquait ne s'appliquait qu'à un tableau qu'on
+ * ne voyait pas : on cliquait « Sujets » depuis l'écran des Labels, la requête
+ * était bien posée, et l'écran ne bougeait pas. Rien ne le disait, et il ne
+ * restait qu'à recharger la page.
+ */
+test("cliquer une lecture ramène à la liste des sujets", () => {
+  const suivant = ecranApresUneLecture({ requete: "assigné:moi" });
+
+  assert.equal(suivant.requete, "assigné:moi");
+  assert.equal(suivant.sousVue, "subjects", "on reste sur l'écran des Labels");
+  assert.equal(suivant.tableauSeul, true);
+});
+
+/**
+ * Le formulaire d'une vue tient le tableau sous lui : le laisser ouvert ferait
+ * poser la requête dans une vue qu'on est en train d'écrire.
+ */
+test("cliquer une lecture ferme le formulaire d'une vue", () => {
+  assert.equal(ecranApresUneLecture({ requete: "" }).vueEnCours, null);
+});
+
+/** « Sujets » pose la requête vide : c'est ce qui efface tous les filtres. */
+test("« Sujets » remet la requête à zéro", () => {
+  assert.equal(ecranApresUneLecture({}).requete, "");
+  assert.equal(ecranApresUneLecture({ requete: "  " }).requete, "");
 });
