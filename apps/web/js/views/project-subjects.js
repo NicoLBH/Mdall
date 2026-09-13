@@ -405,6 +405,10 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   epinglerLaRechercheDesSujets: (...args) => projectSubjectsView.epinglerLaRechercheDesSujets(...args),
   retirerLaRechercheEpinglee: (...args) => projectSubjectsView.retirerLaRechercheEpinglee(...args),
   basculerLeRail: (...args) => projectSubjectsView.basculerLeRail(...args),
+  ouvrirLaFormeDeVue: (...args) => projectSubjectsView.ouvrirLaFormeDeVue(...args),
+  poserDansLaFormeDeVue: (...args) => projectSubjectsView.poserDansLaFormeDeVue(...args),
+  annulerLaFormeDeVue: (...args) => projectSubjectsView.annulerLaFormeDeVue(...args),
+  enregistrerLaVue: (...args) => projectSubjectsView.enregistrerLaVue(...args),
   DRAFT_SUBJECT_ID,
   store,
   PROJECT_TAB_RESELECTED_EVENT,
@@ -1255,9 +1259,15 @@ export function renderProjectSubjects(root) {
 
   root.className = "project-shell__content project-shell__content--subjects-document-scroll";
 
+  // **La barre de contexte s'en va.** Elle ne portait que le mot « Sujets »,
+  // déjà lisible dans l'onglet actif et maintenant dans le rail — et elle
+  // laissait une bande vide de trente pixels sous le rail, qu'on voyait sans
+  // pouvoir dire ce que c'était. Situations, Mémoire, Atelier et Propositions
+  // la masquent déjà pour la même raison.
   setProjectViewHeader({
     contextLabel: "Sujets",
     variant: "situations",
+    hideBar: true,
     toolbarHtml: ""
   });
 

@@ -42,6 +42,12 @@ export function createProjectSubjectsEvents(config) {
     // L'onglet Situations est une page voisine, pas une sous-vue des Sujets :
     // c'est l'écran qui sait comment y aller.
     ouvrirLesSituations = () => {},
+    // Les gestes de l'écran des vues appartiennent à l'écran : les événements
+    // les appellent, ils ne les refont pas.
+    ouvrirLaFormeDeVue = () => {},
+    poserDansLaFormeDeVue = () => {},
+    annulerLaFormeDeVue = () => {},
+    enregistrerLaVue = () => {},
     // Les recherches épinglées et le repli du rail vivent avec l'écran : les
     // gestes les appellent, ils ne les refont pas.
     epinglerLaRechercheDesSujets = () => {},
@@ -5937,6 +5943,26 @@ export function createProjectSubjectsEvents(config) {
           ouvrirLesSituations();
           return;
 
+        case GESTE.VUE_NOUVELLE:
+          ouvrirLaFormeDeVue("");
+          return;
+
+        case GESTE.VUE_ICONE:
+          poserDansLaFormeDeVue("icone", valeur);
+          return;
+
+        case GESTE.VUE_COULEUR:
+          poserDansLaFormeDeVue("couleur", valeur);
+          return;
+
+        case GESTE.VUE_ANNULER:
+          annulerLaFormeDeVue();
+          return;
+
+        case GESTE.VUE_ENREGISTRER:
+          enregistrerLaVue();
+          return;
+
         default:
       }
     });
@@ -6072,10 +6098,32 @@ export function createProjectSubjectsEvents(config) {
         if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
           store.projectSubjectsView = {};
         }
+        // **Une seule barre, deux destinations.** Sur le formulaire d'une vue,
+        // elle écrit la requête de *cette vue* — et le tableau dessous montre
+        // ce qu'elle rendra, parce qu'il lit la même case.
         store.projectSubjectsView.requete = String(barre.value || "");
+        if (store.projectSubjectsView.vueEnCours) {
+          store.projectSubjectsView.vueEnCours.requete = store.projectSubjectsView.requete;
+          store.projectSubjectsView.vueEnCours.refus = "";
+        }
         resetSubjectsPaginationPage();
         synchroniserLesSuggestions(root);
         redessinerLaListeDesSujets(root);
+        return;
+      }
+
+      // **Le nom et la description ne redessinent pas.** Les redessiner à chaque
+      // frappe renverrait le curseur à la fin — le même défaut que la barre de
+      // recherche, et il se règle de la même façon : on écrit dans l'état,
+      // l'écran se redessine à l'enregistrement.
+      const nomDeVue = event.target.closest?.("[data-sujets-vue-nom]");
+      if (nomDeVue) {
+        poserDansLaFormeDeVue("nom", nomDeVue.value, { redessiner: false });
+        return;
+      }
+      const motDeVue = event.target.closest?.("[data-sujets-vue-description]");
+      if (motDeVue) {
+        poserDansLaFormeDeVue("description", motDeVue.value, { redessiner: false });
         return;
       }
 

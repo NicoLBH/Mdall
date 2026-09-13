@@ -11,7 +11,8 @@ import assert from "node:assert/strict";
 import { champsDesSujets } from "../../services/champs-des-sujets.js";
 import { LECTURE, NOMS_DE_LA_LECTURE } from "../../services/rail-des-sujets.js";
 import {
-  renderFiltreDenTeteHtml, renderRailDesSujetsHtml, renderRechercheDesSujetsHtml
+  renderFiltreDenTeteHtml, renderFormulaireDeVueHtml, renderRailDesSujetsHtml,
+  renderRechercheDesSujetsHtml, renderTableauDesVuesHtml
 } from "./project-subjects-recherche.js";
 import { ATTRIBUTS_ECOUTES, GESTE, gesteDesSujets } from "../../services/gestes-des-sujets.js";
 
@@ -42,7 +43,7 @@ test("le rail montre chaque lecture, avec ce qu'elle rendra", () => {
   }
   // Le compte est celui qu'on obtiendra, pas un total.
   assert.match(html, /Assigné à moi<\/span>\s*<span class="nav-list__trailing">1</);
-  assert.match(html, /Tous les sujets<\/span>\s*<span class="nav-list__trailing">3</);
+  assert.match(html, /Sujets<\/span>\s*<span class="nav-list__trailing">3</);
 });
 
 /**
@@ -119,13 +120,17 @@ test("les épingles se posent sous les lectures, avec de quoi les retirer", () =
  * a perdu.
  */
 /**
- * **Sans vue épinglée, on dit comment en avoir une.** Une rubrique vide fait
- * croire qu'on a perdu quelque chose ; une phrase dit quoi faire.
+ * **« Vues » est un endroit, pas une rubrique.** Une phrase d'explication à sa
+ * place occupait le rail en permanence pour dire qu'il n'y avait rien, et
+ * n'offrait rien à cliquer. L'entrée mène à leur écran, vide ou non.
  */
-test("sans épingle, la rubrique dit comment en poser une", () => {
-  assert.doesNotMatch(rail(), /data-sujets-decrocher/);
-  assert.match(rail(), /Aucune vue épinglée/);
-  assert.match(rail({ epingles: [] }), /Épinglez une recherche/);
+test("sans vue enregistrée, l'entrée « Vues » reste et mène à leur écran", () => {
+  const html = rail();
+
+  assert.doesNotMatch(html, /data-sujets-decrocher/);
+  assert.doesNotMatch(html, /Aucune vue épinglée/);
+  assert.match(html, /data-sujets-sousvue="views"/);
+  assert.match(html, />Vues</);
 });
 
 test("le rail se replie, et le bouton dit dans quel sens", () => {
@@ -143,7 +148,7 @@ test("le rail se replie, et le bouton dit dans quel sens", () => {
 test("replié, chaque entrée garde son libellé en infobulle", () => {
   const html = rail({ replie: true });
 
-  assert.match(html, /data-tooltip="Tous les sujets \(3\)"/);
+  assert.match(html, /data-tooltip="Sujets \(3\)"/);
   assert.match(html, /data-tooltip="Situations"/);
 });
 
@@ -401,4 +406,128 @@ test("chaque attribut que la barre dessine déclenche un geste", () => {
 test("le contrat des attributs est écrit une fois, et tenu", () => {
   assert.equal(new Set(ATTRIBUTS_ECOUTES).size, ATTRIBUTS_ECOUTES.length);
   assert.ok(ATTRIBUTS_ECOUTES.includes("data-sujets-lecture"));
+});
+
+/* ── Les icônes du rail ──────────────────────────────────────────────────── */
+
+/**
+ * **Aucune icône n'est dessinée pour cet écran.** Elles viennent toutes du jeu
+ * de l'application ; en inventer une ici ferait une icône que nul autre ne peut
+ * employer, et la première divergence du jeu commence là.
+ */
+test("chaque icône du rail vient du jeu de l'application", async () => {
+  const { readFileSync } = await import("node:fs");
+  const jeu = readFileSync(new URL("../../../assets/icons.svg", import.meta.url), "utf8");
+
+  const posees = [...new Set(
+    [...rail().matchAll(/#([a-z0-9-]+)"/g)].map(([, nom]) => nom)
+  )];
+
+  assert.ok(posees.length >= 5, `le rail ne pose que ${posees.length} icônes`);
+  for (const nom of posees) {
+    assert.ok(jeu.includes(`id="${nom}"`), `« ${nom} » n'est pas dans le jeu d'icônes`);
+  }
+});
+
+/* ── L'écran des vues ────────────────────────────────────────────────────── */
+
+const UNE_VUE = {
+  id: "v1", requete: "priorité:haute", nom: "Les urgences",
+  description: "Ce qui ne peut pas attendre",
+  icone: "alert", couleur: { cle: "rouge", valeur: "#f85149", nom: "Rouge" }
+};
+
+/**
+ * **Une rubrique montre des noms ; un écran montre ce qu'ils valent.** La
+ * requête de chaque vue est lisible sans l'ouvrir — sans quoi une liste de
+ * douze vues oblige à les essayer une par une.
+ */
+test("le tableau des vues montre ce que chacune retient", () => {
+  const html = renderTableauDesVuesHtml({ vues: [UNE_VUE] });
+
+  assert.match(html, /Les urgences/);
+  assert.match(html, /Ce qui ne peut pas attendre/);
+  // **Lisible, et pas seulement portée par l'attribut.** Chercher la requête
+  // n'importe où dans le HTML la trouve dans `data-sujets-lecture` : le test
+  // passait alors que rien ne s'affichait.
+  assert.match(html, /sujets-vues__requete mono-small">priorité:haute</);
+  assert.match(html, /#f85149/);
+  assert.match(html, /data-sujets-lecture="priorité:haute"/);
+  assert.match(html, /data-sujets-decrocher="v1"/);
+});
+
+/** Le bouton de création est là, vide ou non : c'est de là qu'on en fait une. */
+test("le bouton « Nouvelle vue » est toujours là", () => {
+  assert.match(renderTableauDesVuesHtml({ vues: [] }), /data-sujets-vue-nouvelle/);
+  assert.match(renderTableauDesVuesHtml({ vues: [UNE_VUE] }), /data-sujets-vue-nouvelle/);
+});
+
+/**
+ * **Aucune vue est un état normal, pas une panne.** Un tableau vide sans rien
+ * à cliquer fait chercher où l'on crée.
+ */
+test("un écran sans vue dit ce qu'une vue ferait", () => {
+  const html = renderTableauDesVuesHtml({ vues: [] });
+
+  assert.match(html, /Aucune vue enregistrée/);
+  assert.match(html, /garde une recherche sous un nom/);
+  assert.doesNotMatch(html, /sujets-vues__ligne/);
+});
+
+/* ── Le formulaire d'une vue ─────────────────────────────────────────────── */
+
+test("le formulaire propose l'habit, le nom et la recherche", () => {
+  const html = renderFormulaireDeVueHtml({ vue: {}, champs });
+
+  assert.match(html, /Nouvelle vue/);
+  assert.match(html, /data-sujets-vue-icone=/);
+  assert.match(html, /data-sujets-vue-couleur=/);
+  assert.match(html, /data-sujets-vue-nom/);
+  assert.match(html, /data-sujets-vue-description/);
+  // La barre de recherche est celle du tableau : une seconde aurait sa propre
+  // grammaire.
+  assert.match(html, /data-sujets-recherche/);
+  assert.match(html, /data-sujets-vue-annuler/);
+  assert.match(html, /data-sujets-vue-enregistrer/);
+});
+
+/** Ce qu'on a choisi se voit : l'aperçu, l'icône cochée, la couleur cerclée. */
+test("le formulaire montre ce qui est choisi", () => {
+  const html = renderFormulaireDeVueHtml({
+    vue: { icone: "tag", couleur: "vert", nom: "X" }, champs
+  });
+
+  assert.match(html, /sujets-vue-forme__apercu" style="color:#3fb950/);
+  assert.match(html, /data-sujets-vue-icone="tag"[^>]*/);
+  assert.match(html, /est-choisie/);
+  assert.match(html, /value="X"/);
+});
+
+/**
+ * **On voit ce que la recherche rend pendant qu'on l'écrit.** Enregistrer une
+ * vue sans avoir vu ce qu'elle montre, c'est enregistrer une promesse.
+ */
+test("le tableau des sujets reste sous le formulaire", () => {
+  const html = renderFormulaireDeVueHtml({
+    vue: {}, champs, tableauHtml: '<div id="situationsTableHost"></div>'
+  });
+
+  assert.match(html, /situationsTableHost/);
+  // Et il vient après le formulaire, pas avant : on règle, puis on regarde.
+  assert.ok(html.indexOf("data-sujets-vue-enregistrer") < html.indexOf("situationsTableHost"));
+});
+
+/** Un refus se dit sous le formulaire, pas dans une fenêtre qui le recouvre. */
+test("un refus se dit là où on peut le corriger", () => {
+  const html = renderFormulaireDeVueHtml({ vue: { requete: "a" }, champs, refus: "sans_nom" });
+
+  assert.match(html, /sujets-vue-forme__refus/);
+  assert.match(html, /c&#39;est par lui qu&#39;on la retrouve/);
+  assert.doesNotMatch(renderFormulaireDeVueHtml({ vue: {}, champs }), /sujets-vue-forme__refus/);
+});
+
+/** Modifier une vue existante ne se dit pas comme en créer une. */
+test("modifier une vue se dit autrement que la créer", () => {
+  assert.match(renderFormulaireDeVueHtml({ vue: { id: "v1" }, champs }), /Modifier la vue/);
+  assert.match(renderFormulaireDeVueHtml({ vue: {}, champs }), /Nouvelle vue/);
 });

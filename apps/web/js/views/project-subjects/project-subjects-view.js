@@ -8,8 +8,10 @@ import { TRI, motDuTri } from "../../services/tri-des-sujets.js";
 import { filterValue, withFilter } from "../../services/query-bar.js";
 import { bindRailResizer, followRailScroll, railWidth } from "../ui/project-rail.js";
 import {
-  renderFiltreDenTeteHtml, renderRailDesSujetsHtml, renderRechercheDesSujetsHtml
+  renderFiltreDenTeteHtml, renderFormulaireDeVueHtml, renderRailDesSujetsHtml,
+  renderRechercheDesSujetsHtml, renderTableauDesVuesHtml
 } from "./project-subjects-recherche.js";
+import { refusDeLaVue, vueAEcrire, vuePourLEcran } from "../../services/vues-des-sujets.js";
 import { sujetsFiltres } from "../../services/champs-des-sujets.js";
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { formatObjectiveDueDateLabel } from "./project-subject-milestones.js";
@@ -545,6 +547,139 @@ function basculerLeRail() {
   rerenderPanels();
 }
 
+/** Les écrans du domaine qui vivent dans l'onglet Sujets, rail compris. */
+const SOUS_VUES = ["labels", "objectives", "views"];
+
+/**
+ * Ce qu'une sous-vue montre à droite du rail.
+ *
+ * Les trois portent la même coque : c'est le rail qui dit où l'on est, et
+ * trois châssis différents feraient croire à trois écrans sans rapport.
+ */
+function renderSousVueHtml() {
+  const sousVue = String(store.situationsView.subjectsSubview || "");
+
+  if (sousVue === "labels") {
+    return `<div id="labelsTableHost" class="project-table-host">${
+      getProjectSubjectLabels().renderLabelsTableHtml()}</div>`;
+  }
+  if (sousVue === "objectives") {
+    return `<div id="objectivesTableHost" class="project-table-host">${
+      getProjectSubjectMilestones().renderObjectivesTableHtml()}</div>`;
+  }
+
+  return renderEcranDesVues();
+}
+
+/**
+ * L'écran des vues : leur liste, ou le formulaire de l'une d'elles.
+ *
+ * **Un seul des deux à la fois.** Le formulaire porte déjà le tableau des
+ * sujets sous lui — on voit ce que la recherche rend pendant qu'on l'écrit —,
+ * et lui superposer la liste ferait deux tableaux sur un écran.
+ */
+function renderEcranDesVues() {
+  const forme = store.projectSubjectsView?.vueEnCours ?? null;
+  const vues = (recherchesEpinglees ?? []).map(vuePourLEcran);
+
+  if (!forme) return renderTableauDesVuesHtml({ vues });
+
+  const champs = getChampsDesSujets();
+  const { ignores } = sujetsFiltres({
+    sujets: [], requete: forme.requete ?? "", champs, moi: String(store.user?.id || "")
+  });
+
+  return renderFormulaireDeVueHtml({
+    vue: forme,
+    champs,
+    ignores,
+    refus: forme.refus ?? "",
+    // Le tableau, sous le formulaire : enregistrer une vue sans avoir vu ce
+    // qu'elle montre, c'est enregistrer une promesse.
+    tableauHtml: `<div id="situationsTableHost" class="project-table-host">${
+      renderProjectSubjectsTable({
+        filteredSituations: getFilteredSituations(),
+        deps: getSubjectsTableDeps()
+      })}</div>`
+  });
+}
+
+/** Ouvrir le formulaire, vide ou sur une vue existante. */
+function ouvrirLaFormeDeVue(id = "") {
+  const existante = (recherchesEpinglees ?? []).map(vuePourLEcran)
+    .find((vue) => vue.id === String(id || "").trim());
+
+  store.projectSubjectsView.vueEnCours = existante
+    ? { ...existante, couleur: existante.couleur.cle, refus: "" }
+    : { id: "", nom: "", description: "", icone: "", couleur: "", requete: getRequeteDesSujets(), refus: "" };
+
+  rerenderPanels();
+}
+
+/** Modifier un champ du formulaire, sans redessiner ce qu'on est en train de taper. */
+function poserDansLaFormeDeVue(quoi, valeur, { redessiner = true } = {}) {
+  const forme = store.projectSubjectsView?.vueEnCours;
+  if (!forme) return;
+
+  forme[quoi] = String(valeur ?? "");
+  // Le refus s'efface dès qu'on corrige : le laisser afficher une erreur qu'on
+  // vient de réparer fait douter de ce qu'on lit.
+  forme.refus = "";
+  if (redessiner) rerenderPanels();
+}
+
+/** Fermer le formulaire sans rien écrire. */
+function annulerLaFormeDeVue() {
+  store.projectSubjectsView.vueEnCours = null;
+  rerenderPanels();
+}
+
+/**
+ * Enregistrer la vue.
+ *
+ * **Le refus se décide dans le service**, qui s'exécute en test : un nom vide,
+ * une requête vide, un homonyme. L'écran le montre, il ne le juge pas.
+ */
+async function enregistrerLaVue() {
+  const forme = store.projectSubjectsView?.vueEnCours;
+  if (!forme) return;
+
+  const vues = (recherchesEpinglees ?? []).map(vuePourLEcran);
+  const refus = refusDeLaVue({
+    requete: forme.requete, nom: forme.nom, vues, id: forme.id
+  });
+  if (refus) {
+    forme.refus = refus;
+    rerenderPanels();
+    return;
+  }
+
+  try {
+    const [{ epinglerLaRecherche }, { resolveCurrentBackendProjectId }] = await Promise.all([
+      import("../../services/memoire-recherches-supabase.js"),
+      import("../../services/project-supabase-sync.js")
+    ]);
+
+    const backendProjectId = await resolveCurrentBackendProjectId();
+    if (!backendProjectId) return;
+
+    const { query, title, ...habits } = vueAEcrire(forme);
+    const posee = await epinglerLaRecherche({
+      projectId: backendProjectId, requete: query, titre: title,
+      surface: SURFACE_DES_SUJETS, habits
+    });
+    if (!posee) return;
+
+    const sans = (recherchesEpinglees ?? []).filter((vue) => vue.id !== posee.id);
+    recherchesEpinglees = [...sans, posee];
+    store.projectSubjectsView.vueEnCours = null;
+    rerenderPanels();
+  } catch {
+    // Une vue qui ne s'enregistre pas n'efface pas ce qu'on a écrit : le
+    // formulaire reste, et l'on peut réessayer.
+  }
+}
+
 /**
  * L'écran : le rail à gauche sur toute la hauteur, le reste à droite.
  *
@@ -563,7 +698,7 @@ function renderEcranDesSujets(corps, { champs = [], requete = "" } = {}) {
   return `
     <section class="project-simple-page project-simple-page--sujets"
       style="--project-rail-width:${railWidth(railLargeur(), replie)}px">
-      <div class="propositions-shell">
+      <div class="page-large">
         <div class="project-rail-layout${replie ? " project-rail-layout--collapsed" : ""}">
           ${renderRailDesSujetsHtml({
             sujets: getFlatSubjects(),
@@ -3398,11 +3533,16 @@ function rerenderPanels() {
       const createFormRoot = bumpInteractiveEpoch(panelHost.querySelector("[data-create-subject-form]"));
       wireDetailsInteractive(createFormRoot);
       syncSituationsPrimaryScrollSource();
-    } else if (String(store.situationsView.subjectsSubview || "subjects") === "labels") {
-      panelHost.innerHTML = `<div id="labelsTableHost" class="project-table-host">${getProjectSubjectLabels().renderLabelsTableHtml()}</div>`;
-      syncSituationsPrimaryScrollSource();
-    } else if (String(store.situationsView.subjectsSubview || "subjects") === "objectives") {
-      panelHost.innerHTML = `<div id="objectivesTableHost" class="project-table-host">${getProjectSubjectMilestones().renderObjectivesTableHtml()}</div>`;
+    } else if (SOUS_VUES.includes(String(store.situationsView.subjectsSubview || ""))) {
+      // **Le rail reste.** Les Labels, les Objectifs et les Vues sont des
+      // écrans du même domaine, atteints depuis le rail : le faire disparaître
+      // au moment où on y arrive oblige à revenir en arrière pour en sortir,
+      // et l'on ne sait plus où l'on est.
+      assurerLesRecherchesEpinglees();
+      panelHost.innerHTML = renderEcranDesSujets(renderSousVueHtml(), {
+        champs: getChampsDesSujets(), requete: getRequeteDesSujets()
+      });
+      brancherLeRailDesSujets(panelHost);
       syncSituationsPrimaryScrollSource();
     } else if (store.situationsView.showTableOnly) {
       // Les épingles se demandent dès qu'on regarde la liste, et elles arrivent
@@ -4385,6 +4525,10 @@ function getObjectiveById(objectiveId) {
     epinglerLaRechercheDesSujets,
     retirerLaRechercheEpinglee,
     basculerLeRail,
+    ouvrirLaFormeDeVue,
+    poserDansLaFormeDeVue,
+    annulerLaFormeDeVue,
+    enregistrerLaVue,
     renderSubjectsFiltresDenTeteHtml,
     dropdownController: subjectSelectDropdown,
     normalizeBackendPriority,

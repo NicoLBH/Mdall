@@ -54,20 +54,27 @@ const FILTRES_DE_LA_LECTURE = {
 };
 
 export const NOMS_DE_LA_LECTURE = {
-  [LECTURE.TOUS]: "Tous les sujets",
+  // « Sujets », et non « Tous les sujets » : c'est l'écran, pas un filtre de
+  // plus. Le rail nomme des endroits ; le premier est celui d'où l'on part.
+  [LECTURE.TOUS]: "Sujets",
   [LECTURE.MIENS]: "Assigné à moi",
   [LECTURE.CREES]: "Créé par moi",
   [LECTURE.MENTIONS]: "Mentions",
   [LECTURE.RECENTS]: "Activité récente"
 };
 
-/** L'icône de chaque lecture, dans le jeu de la maison. */
+/**
+ * L'icône de chaque lecture, **dans le jeu de la maison**.
+ *
+ * Aucune n'est dessinée ici : elles vivent dans `assets/icons.svg`, et en
+ * inventer une pour cet écran ferait une icône que nul autre ne peut employer.
+ */
 export const ICONES_DE_LA_LECTURE = {
-  [LECTURE.TOUS]: "list-unordered",
-  [LECTURE.MIENS]: "person",
-  [LECTURE.CREES]: "pencil",
+  [LECTURE.TOUS]: "issue-opened",
+  [LECTURE.MIENS]: "people",
+  [LECTURE.CREES]: "smiley",
   [LECTURE.MENTIONS]: "mention",
-  [LECTURE.RECENTS]: "history"
+  [LECTURE.RECENTS]: "clock-fill"
 };
 
 /**
