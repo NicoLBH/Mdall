@@ -1199,17 +1199,67 @@ C'est **l'empreinte du texte** qui retrouve le document, pas son nom : le même 
 s'appelle `CR_07.pdf` chez l'un et `07 - CR.pdf` chez l'autre, et deux comptes rendus
 différents s'appellent tous deux `CR.pdf`.
 
-#### Ce que la proposition porte, et ce qu'elle ne porte pas
+#### Ce que la proposition porte, et ce que la fusion en fait
 
-| | |
+Elle ne portait d'abord que deux natures : le document, et les points neufs. C'était honnête
+— la fusion ne savait rien faire des autres — mais cela vidait le procédé de son sens. Un
+compte rendu de quarante points en donnait trois : **un compte rendu reporte**, et les
+trente-sept autres n'allaient nulle part. Ni relance dans leur fil, ni label reposé, ni
+échéance remise à jour. Le travail de secrétariat ne se faisait pas.
+
+Les sept natures y sont maintenant, et chacune s'applique :
+
+| nature | ce que la ligne engage |
 | --- | --- |
 | **le document** | il entre au corpus — c'est par lui que tout le reste se vérifie |
+| **les lots** | ceux que le compte rendu nomme et que le projet n'a pas : ils s'ouvrent, ou s'activent |
+| **les intervenants** | les sociétés nommées, posées par l'analyse du dépôt — seule à connaître les collaborateurs déjà au projet |
+| **les labels** | `CR chantier` sur tout ce que le compte rendu touche, et les qualifications sur les points qui les portent |
+| **les objectifs** | un jalon par date d'échéance, quand le projet ne l'a pas |
 | **les points neufs** | un sujet chacun, avec son lot, son numéro, sa page et sa citation |
-| ~~les points relancés~~ | la fusion **ouvre** ce qu'on lui donne ; elle ne sait pas encore commenter un sujet qui existe, et le porter en créerait un second au même titre |
-| ~~labels, lots, objectifs~~ | calculés et affichés, mais la fusion ne sait pas les appliquer : les porter ferait signer des lignes dont rien n'arriverait, et l'on croirait le rangement fait (règle 5) |
+| **les points relancés** | une ligne d'activité dans le fil du sujet qui existe — datée, citée, avec sa page |
 
-Les porter sans pouvoir les appliquer serait exactement ce que ce plan cherche à éviter :
-une proposition qui dit avoir fait ce qu'elle n'a pas fait.
+#### L'ordre n'est pas cosmétique
+
+    les lots → les sociétés → les labels et les jalons → les sujets → les relances
+
+Un sujet ne porte un label qu'existant, ne s'accroche qu'à un jalon existant, et une société
+ne s'ajoute qu'à **un lot ouvert** — la base l'exige. Cet ordre obéit donc à des dépendances
+de données, et il est écrit à un seul endroit, `appliquer-le-cr.js`. Le déduire de l'ordre
+d'une liste d'affirmations — qui est un choix de présentation — ferait tenir une contrainte
+de base par une convention d'écran (règle 4).
+
+#### La relance est la nature qui manquait
+
+Elle est distincte de l'ouverture, et pas par souci d'exactitude : **la première ouvre un
+sujet, la seconde écrit dans un fil qui existe.** Les confondre ferait un second sujet au
+même titre, et toute l'histoire d'avant resterait dans le premier — invisible à qui lit le
+nouveau. C'est le défaut que la confrontation existe pour empêcher, et il se serait rejoué
+là.
+
+Ce qu'elle écrit est un **message**, pas un champ. Un sujet relancé n'a pas changé d'état :
+il était ouvert, il le reste. Ce qui a changé est qu'une réunion de plus l'a redit — et cela
+est une activité, datée et citée, qui se lit dans le fil à côté de ce que les gens en ont
+dit. Dans un champ, elle serait remplacée à chaque compte rendu, et l'on perdrait justement
+ce qu'on cherche : **depuis combien de réunions ce point est-il redit sans bouger.**
+
+Deux conséquences en chaîne, trouvées en écrivant :
+
+- **« Rien à ouvrir » n'est plus un refus.** Il barrait la route au cas le plus courant — la
+  douzième réunion, qui n'ouvre aucun sujet et en reporte quarante. Le suivi s'arrêtait dès
+  qu'il cessait d'être neuf.
+- **L'écran de la proposition affichait ce que l'analyse recalculait, et rien d'autre.** Les
+  affirmations déposées par l'Atelier n'y apparaissaient pas — et la fusion les appliquait
+  pourtant. Signer ce qu'on ne voit pas est exactement ce que cet écran existe pour
+  empêcher : il montre désormais les deux.
+
+#### Un échec ne défait pas une signature
+
+Les documents sont entrés, la mémoire est écrite : c'est fait. Un label qui ne se pose pas se
+**dit** et n'emporte pas les suivants — sur quarante relances, en perdre trente-neuf parce
+que la deuxième a échoué serait le pire des deux mondes. Et le silence est la bonne réponse
+quand tout s'est fait : une notification à chaque fusion finit par ne plus être lue, et celle
+qui compte se perd avec elle.
 
 ### Étape 10 — Le document se relit dans Fichiers *(à faire)*
 
@@ -1233,19 +1283,24 @@ doit se refaire à chaque version du procédé (règle 4).
 ## Où en est le plan
 
 Neuf étapes écrites : le procédé va maintenant du dépôt d'un PDF à une proposition qu'on
-signe, et les sujets s'ouvrent à la signature. La dixième — relire le document dans
-Fichiers — reste à faire, et c'est du confort, non plus du procédé.
+signe, et **tout ce que le compte rendu dit entre à la signature** — les lots, les sociétés,
+les labels, les jalons, les sujets neufs, et la ligne d'activité de chaque sujet reporté. La
+dixième — relire le document dans Fichiers — reste à faire, et c'est du confort, non plus du
+procédé.
 
 Le reste n'est plus du plan mais de l'usage : déposer des comptes rendus réels, regarder ce
 que les mesures disent, et corriger ce qu'elles montrent.
 
-Deux choses ont changé de nature en chemin, et méritent d'être retenues :
+Trois choses ont changé de nature en chemin, et méritent d'être retenues :
 
 - **une disparition ferme, au lieu de poser une question** — parce que la fermeture se défait
   toute seule au compte rendu suivant, et que c'est cette réversibilité qui la rend
   acceptable ;
 - **une situation se propose, au lieu de se créer** — parce que rien n'entre directement dans
-  la mémoire du projet, pas même ce qui ne fait que ranger.
+  la mémoire du projet, pas même ce qui ne fait que ranger ;
+- **un point reporté est une nature à lui seul** — parce qu'un compte rendu reporte, et qu'un
+  procédé qui ne traiterait que le neuf laisserait trente-sept points sur quarante sans trace
+  de la réunion qui vient de les redire.
 
 Les deux ont été trouvées en écrivant l'étape, pas en la planifiant.
 

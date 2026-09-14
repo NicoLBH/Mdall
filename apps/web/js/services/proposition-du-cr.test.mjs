@@ -6,7 +6,8 @@ import { ITEM_TYPE } from "./proposition-review.js";
 import { ITEM } from "./proposition-state.js";
 import {
   PHRASES_DU_REFUS, REFUS, cleDuPoint, introDuCompteRendu, itemsDuCompteRendu,
-  phraseDuRefus, pointsAOuvrir, refusDeLaProposition, titreDeLaProposition
+  labelItems, lotItems, objectifItems, phraseDuRefus, pointsAOuvrir, pointsARelancer,
+  refusDeLaProposition, relanceItems, titreDeLaProposition
 } from "./proposition-du-cr.js";
 
 /**
@@ -20,15 +21,55 @@ import {
 
 const UN_DOCUMENT = { id: "doc-1", original_filename: "CR_07.pdf" };
 
+/**
+ * Ce que les analyses du compte rendu rendent, telles qu'elles le rendent.
+ *
+ * **Elles sont recopiées, pas reconstruites.** Un jeu d'essai qui inventerait sa
+ * propre forme testerait l'accord du compositeur avec lui-même, et le jour où
+ * `lotsAProposer` changerait de forme, tout resterait vert.
+ */
+const LES_LOTS = {
+  connu: true,
+  nommes: [{ intitule: "03 — Cloisons", numero: "3", points: 2 }],
+  presents: [{ intitule: "02 — Gros œuvre", numero: "2", points: 1 }],
+  manquants: [{ intitule: "03 — Cloisons", numero: "3", points: 2 }]
+};
+
+const LES_LABELS = {
+  connu: true,
+  poses: [
+    { nom: "CR chantier", points: 5, existe: false },
+    { nom: "Urgent", points: 1, existe: true }
+  ],
+  aCreer: ["CR chantier"]
+};
+
+const LES_OBJECTIFS = {
+  connu: true,
+  leJour: "2025-05-02",
+  sansDate: [],
+  objectifs: [
+    { date: "2025-05-12", nom: "Échéance du 12/05/2025", points: [{ titre: "Cloison du hall" }], existe: false },
+    { date: "2025-05-17", nom: "Échéance du 17/05/2025", points: [{ titre: "Chape" }], existe: true }
+  ]
+};
+
 const CONFRONTES = [
   {
     sort: SORT.NOUVEAU, titre: "Cloison du hall", reference: "12.02.1", lot: "03 — Cloisons",
     description: "À reprendre", qui: "ENTREPRISE X", echeance: "12/05/2025", etat: "nouveau",
     page: 4, citation: "la cloison du hall reste à reprendre"
   },
-  { sort: SORT.RELANCE, titre: "Chape", reference: "12.03" },
-  { sort: SORT.CHANGE, titre: "Carrelage", reference: "12.04" },
-  { sort: SORT.REOUVRE, titre: "Étanchéité", reference: "12.05" },
+  // **Un point relancé porte le sujet que la confrontation lui a trouvé.** Sans
+  // lui, on ne saurait pas dans quel fil écrire — et un jeu d'essai qui
+  // l'omettrait testerait une confrontation qui n'existe pas.
+  {
+    sort: SORT.RELANCE, titre: "Chape", reference: "12.03", sujet: { id: "sujet-chape" },
+    echeance: "sous 15 jours", page: 6, citation: "la chape reste à couler",
+    labels: ["Urgent"]
+  },
+  { sort: SORT.CHANGE, titre: "Carrelage", reference: "12.04", sujet: { id: "sujet-carrelage" } },
+  { sort: SORT.REOUVRE, titre: "Étanchéité", reference: "12.05", sujet: { id: "sujet-etancheite" } },
   { sort: SORT.NOUVEAU, titre: "Purge second œuvre", reference: "12.06" }
 ];
 
@@ -95,10 +136,13 @@ test("un point sans clé, sans titre, ou en double est écarté", () => {
 test("la proposition porte le document, puis les sujets", () => {
   const items = itemsDuCompteRendu({ confrontes: CONFRONTES, document: UN_DOCUMENT });
 
-  assert.deepEqual(items.map((item) => item.itemType),
-    [ITEM_TYPE.DOCUMENT, ITEM_TYPE.SUJET, ITEM_TYPE.SUJET]);
+  assert.deepEqual(items.map((item) => item.itemType), [
+    ITEM_TYPE.DOCUMENT,
+    ITEM_TYPE.SUJET, ITEM_TYPE.SUJET,
+    ITEM_TYPE.RELANCE, ITEM_TYPE.RELANCE, ITEM_TYPE.RELANCE
+  ]);
   assert.equal(items[0].itemKey, "doc-1");
-  assert.deepEqual(items.slice(1).map((item) => item.itemKey), ["12.02.1", "12.06"]);
+  assert.deepEqual(items.slice(1, 3).map((item) => item.itemKey), ["12.02.1", "12.06"]);
 });
 
 /**
@@ -126,11 +170,33 @@ test("un sujet proposé porte ce que la fusion attend", () => {
   assert.equal(sujet.payload.evidence, "la cloison du hall reste à reprendre");
 });
 
+/**
+ * **Les labels voyagent avec le point, et pas seulement leur compte.** Le
+ * compte rendu écrit « urgent » sur trois points et rien sur les trente-sept
+ * autres : savoir qu'« Urgent » est posé trois fois ne dit pas *où*. Sans cette
+ * liste, la fusion ne saurait que poser le label sur tout ou sur rien — et
+ * « urgent » partout ne veut plus rien dire.
+ */
+test("un sujet proposé porte les labels que son point dit, et eux seuls", () => {
+  const items = itemsDuCompteRendu({
+    confrontes: [
+      { sort: SORT.NOUVEAU, titre: "Cloison", reference: "1", labels: ["Urgent"] },
+      { sort: SORT.NOUVEAU, titre: "Peinture", reference: "2" }
+    ],
+    document: UN_DOCUMENT
+  });
+
+  const sujets = items.filter((item) => item.itemType === ITEM_TYPE.SUJET);
+  assert.deepEqual(sujets[0].payload.labels, ["Urgent"]);
+  assert.deepEqual(sujets[1].payload.labels, []);
+});
+
 /** Sans document, la proposition ne porte que ce qui se vérifie — c'est-à-dire rien. */
 test("sans document, aucune affirmation de document", () => {
   const items = itemsDuCompteRendu({ confrontes: CONFRONTES, document: null });
 
-  assert.deepEqual(new Set(items.map((item) => item.itemType)), new Set([ITEM_TYPE.SUJET]));
+  assert.deepEqual(new Set(items.map((item) => item.itemType)),
+    new Set([ITEM_TYPE.SUJET, ITEM_TYPE.RELANCE]));
 });
 
 /* ── Ce qui empêche de proposer ──────────────────────────────────────────── */
@@ -145,6 +211,29 @@ test("sans confrontation, on ne propose pas", () => {
   assert.equal(refusDeLaProposition({ confrontes: null, documentId: "doc-1" }),
     REFUS.SANS_CONFRONTATION);
   assert.equal(refusDeLaProposition({}), REFUS.SANS_CONFRONTATION);
+});
+
+/**
+ * **« Rien à ouvrir » n'est pas « rien à faire ».** Ce refus barrait la route au
+ * cas le plus courant : la douzième réunion, qui n'ouvre aucun sujet et en
+ * reporte quarante. Il n'y avait alors rien à proposer — donc aucune relance
+ * écrite, aucune échéance remise à jour, et un suivi qui s'arrêtait dès qu'il
+ * cessait d'être neuf.
+ */
+test("un compte rendu qui ne fait que reporter se propose quand même", () => {
+  const quereporte = CONFRONTES.filter((point) => point.sort !== SORT.NOUVEAU);
+
+  assert.equal(refusDeLaProposition({ confrontes: quereporte, documentId: "doc-1" }), "");
+});
+
+/** Un compte rendu dont rien ne sort — ni sujet, ni relance — se refuse, lui. */
+test("un compte rendu dont rien ne sort se refuse", () => {
+  assert.equal(
+    refusDeLaProposition({
+      confrontes: [{ sort: SORT.RELANCE, titre: "", reference: "" }], documentId: "doc-1"
+    }),
+    REFUS.RIEN_A_OUVRIR
+  );
 });
 
 test("sans document rangé, on ne propose pas", () => {
@@ -200,7 +289,11 @@ test("l'introduction compte ce qu'elle porte, et ce qu'elle ne porte pas", () =>
   const dite = introDuCompteRendu({ confrontes: CONFRONTES, nom: "CR_07.pdf" });
 
   assert.match(dite, /ouvrirait 2 sujets sur les 5 points relevés/);
-  assert.match(dite, /Les 3 autres sont déjà suivis/);
+  assert.match(dite, /3 autres points sont déjà suivis/);
+  // **Et ce qu'elle en fera.** Dire qu'ils sont déjà suivis expliquait pourquoi
+  // la proposition était courte, sans dire ce qu'elle ferait de ces points-là :
+  // à l'époque, rien.
+  assert.match(dite, /écrirait dans chacun de leurs fils/);
   // **Au conditionnel** : rien n'est écrit tant que personne n'a signé, et un
   // présent ferait croire que c'est fait.
   assert.doesNotMatch(dite, /Cette proposition ouvre|a ouvert/);
@@ -210,12 +303,29 @@ test("l'introduction s'accorde au singulier", () => {
   const un = introDuCompteRendu({
     confrontes: [
       { sort: SORT.NOUVEAU, titre: "A", reference: "1" },
-      { sort: SORT.RELANCE, titre: "B", reference: "2" }
+      { sort: SORT.RELANCE, titre: "B", reference: "2", sujet: { id: "sujet-b" } }
     ]
   });
 
   assert.match(un, /ouvrirait 1 sujet sur les 2 points/);
-  assert.match(un, /L'autre est déjà suivi/);
+  assert.match(un, /Un autre point est déjà suivi/);
+});
+
+/**
+ * **Un point qu'on ne sait pas identifier n'est ni ouvert ni relancé**, et le
+ * taire ferait chercher une perte : on compterait cinq points relevés, deux
+ * ouverts, deux relancés, et le cinquième aurait disparu sans un mot (règle 5).
+ */
+test("un point qui n'entre nulle part se dit quand même", () => {
+  const dite = introDuCompteRendu({
+    confrontes: [
+      { sort: SORT.NOUVEAU, titre: "A", reference: "1" },
+      // Ni clé ni sujet : il n'ouvre rien, et on ne sait pas où le relancer.
+      { sort: SORT.RELANCE, titre: "", reference: "" }
+    ]
+  });
+
+  assert.match(dite, /1 point n'est ni ouvert ni relancé/);
 });
 
 /* ── Rien n'entre directement ────────────────────────────────────────────── */
@@ -244,16 +354,152 @@ test("composer une proposition n'écrit rien", async () => {
 });
 
 /**
- * **Ce qui ne sort pas se sait.** Les labels, les lots et les objectifs sont
- * calculés et affichés, mais la fusion ne sait pas encore les appliquer : les
- * porter quand même ferait signer des lignes dont rien n'arriverait, et l'on
- * croirait le rangement fait (règle 5).
+ * **Tout ce que la lecture a compris sort maintenant.**
+ *
+ * C'est le test qui disait l'inverse. Il constatait honnêtement que labels,
+ * lots et objectifs étaient calculés, affichés, et n'allaient nulle part — une
+ * proposition de trois lignes sortait d'un compte rendu de quarante points.
+ * Il garde désormais ce qui l'a remplacé.
  */
-test("la proposition ne porte que ce que la fusion sait appliquer", () => {
+test("la proposition porte toutes les natures que la lecture a comprises", () => {
   const natures = new Set(
-    itemsDuCompteRendu({ confrontes: CONFRONTES, document: UN_DOCUMENT })
-      .map((item) => item.itemType)
+    itemsDuCompteRendu({
+      confrontes: CONFRONTES, document: UN_DOCUMENT,
+      lots: LES_LOTS, labels: LES_LABELS, objectifs: LES_OBJECTIFS
+    }).map((item) => item.itemType)
   );
 
-  assert.deepEqual(natures, new Set([ITEM_TYPE.DOCUMENT, ITEM_TYPE.SUJET]));
+  assert.deepEqual(natures, new Set([
+    ITEM_TYPE.DOCUMENT, ITEM_TYPE.LOT, ITEM_TYPE.LABEL,
+    ITEM_TYPE.OBJECTIF, ITEM_TYPE.SUJET, ITEM_TYPE.RELANCE
+  ]));
+});
+
+/* ── Ce qu'un compte rendu reporte ───────────────────────────────────────── */
+
+/**
+ * **C'est la nature qui manquait, et son absence vidait le reste de son sens.**
+ * Un compte rendu reporte : la douzième réunion reprend les points de la
+ * onzième. N'en porter que les points neufs faisait entrer trois lignes sur
+ * quarante, et laissait trente-sept sujets sans trace de la réunion qui venait
+ * de les redire.
+ */
+test("les trois sorts qui désignent un sujet existant le relancent", () => {
+  assert.deepEqual(pointsARelancer(CONFRONTES).map((point) => point.sujetId),
+    ["sujet-chape", "sujet-carrelage", "sujet-etancheite"]);
+});
+
+/**
+ * **La clé est l'identifiant du sujet**, et non celle du point : c'est dans ce
+ * fil-là qu'on écrit, et lui seul ne bouge pas d'un compte rendu à l'autre.
+ */
+test("une relance est clée sur le sujet, pas sur le point", () => {
+  const [relance] = relanceItems(pointsARelancer(CONFRONTES));
+
+  assert.equal(relance.itemType, ITEM_TYPE.RELANCE);
+  assert.equal(relance.itemKey, "sujet-chape");
+  assert.equal(relance.payload.sort, SORT.RELANCE);
+  assert.equal(relance.payload.page, 6);
+  assert.equal(relance.payload.evidence, "la chape reste à couler");
+  assert.deepEqual(relance.payload.labels, ["Urgent"]);
+});
+
+/**
+ * **Sans identifiant de sujet, on ne sait pas dans quel fil écrire.** Le porter
+ * quand même ferait une ligne qu'on signerait et dont rien n'arriverait.
+ */
+test("un point relancé sans sujet n'entre pas", () => {
+  assert.deepEqual(pointsARelancer([{ sort: SORT.RELANCE, titre: "Chape" }]), []);
+});
+
+/** Deux points sur un même sujet ne font qu'une relance : deux messages diraient deux fois la même réunion. */
+test("deux points sur un même sujet ne font qu'une relance", () => {
+  const deux = pointsARelancer([
+    { sort: SORT.RELANCE, titre: "Chape", sujet: { id: "s-1" } },
+    { sort: SORT.CHANGE, titre: "Chape (suite)", sujet: { id: "s-1" } }
+  ]);
+
+  assert.equal(deux.length, 1);
+});
+
+/* ── L'échéance, résolue une seule fois ──────────────────────────────────── */
+
+/**
+ * **La date se résout à la lecture et voyage avec le point.** La fusion n'a
+ * plus la date de la réunion sous la main — la proposition a pu être relue trois
+ * jours plus tard. Refaire le calcul là-bas ferait exister deux résolutions de
+ * la même échéance, qui finiraient par diverger (règle 4).
+ */
+test("l'échéance d'un point est résolue en date avec le jour de la réunion", () => {
+  const [point] = pointsAOuvrir(CONFRONTES, { leJour: "2025-05-02" });
+  assert.equal(point.echeanceDate, "2025-05-12");
+
+  const [relance] = pointsARelancer(CONFRONTES, { leJour: "2025-05-02" });
+  // « sous 15 jours » ne se compte qu'à partir de la date de la réunion.
+  assert.equal(relance.echeanceDate, "2025-05-17");
+});
+
+/** Une échéance qu'on n'a pas su lire rend `null`, et non la date du jour. */
+test("une échéance illisible ne devient pas une date", () => {
+  const [point] = pointsAOuvrir(
+    [{ sort: SORT.NOUVEAU, titre: "A", reference: "1", echeance: "dès que possible" }],
+    { leJour: "2025-05-02" }
+  );
+
+  assert.equal(point.echeanceDate, null);
+});
+
+/* ── Les lots, les labels et les objectifs ───────────────────────────────── */
+
+/**
+ * **Seulement les manquants.** Un lot déjà ouvert n'est pas à ouvrir, et le
+ * proposer ferait une ligne qui ne changerait rien — ce qui fait douter de
+ * toutes les autres.
+ */
+test("seuls les lots que le projet n'a pas sont proposés", () => {
+  const items = lotItems(LES_LOTS);
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].itemType, ITEM_TYPE.LOT);
+  // Le numéro désigne le même lot qu'on l'écrive « Lot 03 — Cloisons » ou « 03 - CLOISONS ».
+  assert.equal(items[0].itemKey, "3");
+  assert.equal(items[0].payload.intitule, "03 — Cloisons");
+});
+
+/**
+ * **Sans les lots du projet, on n'en propose aucun.** Proposer d'ajouter des
+ * lots qui sont peut-être déjà là ferait doubler la liste, et personne ne la
+ * nettoiera (règle 5).
+ */
+test("sans les lots du projet, aucun lot n'est proposé", () => {
+  assert.deepEqual(lotItems({ connu: false, manquants: [{ intitule: "03 — Cloisons" }] }), []);
+});
+
+/**
+ * **Les labels qui existent déjà passent aussi.** La ligne ne dit pas « créer
+ * un label » mais « poser celui-ci sur ces points » : ne porter que les
+ * manquants laisserait les points du deuxième compte rendu sans label, parce
+ * que le premier l'avait créé.
+ */
+test("un label déjà au projet est quand même proposé à poser", () => {
+  const items = labelItems(LES_LABELS);
+
+  assert.deepEqual(items.map((item) => item.payload.nom), ["CR chantier", "Urgent"]);
+  assert.equal(items[1].payload.existe, true);
+});
+
+/**
+ * **La date décide, pas le nom.** Un objectif nommé autrement mais daté du même
+ * jour est le même jalon : en créer un second le doublerait.
+ */
+test("seuls les jalons que le projet n'a pas sont proposés, clés sur leur date", () => {
+  const items = objectifItems(LES_OBJECTIFS);
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].itemKey, "2025-05-12");
+  assert.equal(items[0].payload.points, 1);
+});
+
+test("sans les objectifs du projet, aucun jalon n'est proposé", () => {
+  assert.deepEqual(objectifItems({ ...LES_OBJECTIFS, connu: false }), []);
 });

@@ -93,6 +93,11 @@ import {
   aQuiRevientLePoint, lotDuProjetPour, nomPourLeRepertoire, phraseDuConnu
 } from "../services/intervenants-du-cr.js";
 import { depotDeLaProposition, resumeDuDepot } from "../services/proposition-depot.js";
+import {
+  appliquerLeCompteRendu,
+  ouvrirLesLotsRetenus,
+  phraseDeLApplication
+} from "../services/appliquer-le-cr.js";
 import { ETAT, arbreDesReperes, comparerDesReperes, lignesNumerotees, resumeDuDiff } from "../services/depot-reperes.js";
 import { aChange, reperesDuDepot } from "../services/depot-carburants.js";
 import { limiterAuDepot } from "../services/depot-portee.js";
@@ -888,6 +893,137 @@ function renderIntervenantItem(item) {
         // on coche sans savoir.
         [nom, courriel].filter(Boolean).length
           ? `<span class="review-item__meta">${[nom, courriel].filter(Boolean).map(escapeHtml).join(" · ")}</span>`
+          : ""
+      }
+    `
+  );
+}
+
+/**
+ * Un sujet **déjà ouvert** que ce compte rendu reporte.
+ *
+ * ## Pourquoi une ligne à part, et pas un point de plus
+ *
+ * Cocher n'ouvre rien : cela écrit dans le fil d'un sujet qui existe ce que le
+ * compte rendu en redit, daté et cité, et remet à jour ce qu'il porte. Le
+ * confondre avec une ouverture ferait un second sujet au même titre, et toute
+ * l'histoire d'avant resterait dans le premier.
+ *
+ * Le badge le dit donc en toutes lettres : **« Relancé »**, pas « À ouvrir ».
+ * C'est ce que la case engage, et c'est la seule chose qu'on lit avant de
+ * cocher.
+ */
+function renderRelanceItem(item) {
+  const { titre, description, lot, reference, qui, echeance, etat, page, labels } = item.payload;
+
+  const situe = [
+    lot ? escapeHtml(lot) : "",
+    reference ? `n° ${escapeHtml(reference)}` : "",
+    page ? `page ${escapeHtml(String(page))}` : ""
+  ].filter(Boolean).join(" · ");
+
+  const demande = [
+    qui ? `pour ${escapeHtml(qui)}` : "",
+    echeance ? `échéance ${escapeHtml(echeance)}` : "",
+    etat ? escapeHtml(etat) : "",
+    (labels ?? []).length ? (labels ?? []).map(escapeHtml).join(", ") : ""
+  ].filter(Boolean).join(" · ");
+
+  return renderReviewItem(
+    item,
+    `
+      <span class="review-item__title">
+        <span class="review-item__badge">Relancé</span>
+        ${escapeHtml(titre || "Point sans intitulé")}
+      </span>
+      ${situe ? `<span class="review-item__where">${situe}</span>` : ""}
+      ${demande ? `<span class="review-item__meta">${demande}</span>` : ""}
+      ${
+        description && description !== titre
+          ? `<span class="review-item__meta">${escapeHtml(description)}</span>`
+          : ""
+      }
+    `
+  );
+}
+
+/**
+ * Un lot du chantier que le compte rendu nomme et que le projet n'a pas.
+ *
+ * Cocher l'ouvre à la fusion — avant que les sociétés n'entrent, puisque la
+ * base exige un lot pour chacune. Le numéro du compte rendu s'affiche parce
+ * qu'il sert à retrouver la rubrique dans le document ; il ne devient pas le
+ * nom du lot.
+ */
+function renderLotItem(item) {
+  const { intitule, numero, points } = item.payload;
+
+  const situe = [
+    numero ? `n° ${escapeHtml(String(numero))}` : "",
+    points ? `${escapeHtml(String(points))} point${points > 1 ? "s" : ""}` : ""
+  ].filter(Boolean).join(" · ");
+
+  return renderReviewItem(
+    item,
+    `
+      <span class="review-item__title">
+        <span class="review-item__badge review-item__badge--added">À ouvrir</span>
+        ${escapeHtml(intitule || "Lot sans intitulé")}
+      </span>
+      ${situe ? `<span class="review-item__where">${situe}</span>` : ""}
+    `
+  );
+}
+
+/**
+ * Un label que ce compte rendu poserait sur les sujets qu'il touche.
+ *
+ * **Deux gestes sous une seule case, et la ligne les distingue.** Un label
+ * absent du projet est créé puis posé ; un label déjà là est seulement posé.
+ * Annoncer une création qui n'aura pas lieu ferait promettre ce qui ne se
+ * passera pas (règle 5).
+ */
+function renderLabelItem(item) {
+  const { nom, points, existe } = item.payload;
+
+  return renderReviewItem(
+    item,
+    `
+      <span class="review-item__title">
+        <span class="review-item__badge${existe ? "" : " review-item__badge--added"}">
+          ${existe ? "À poser" : "À créer"}
+        </span>
+        ${escapeHtml(nom || "Label sans nom")}
+      </span>
+      ${
+        points
+          ? `<span class="review-item__where">${escapeHtml(String(points))} point${points > 1 ? "s" : ""}</span>`
+          : ""
+      }
+    `
+  );
+}
+
+/**
+ * Un jalon daté que les échéances de ce compte rendu appellent.
+ *
+ * **La date est l'identité du jalon**, pas son nom : un objectif nommé
+ * autrement mais daté du même jour est le même, et en créer un second le
+ * doublerait. C'est donc elle qu'on lit en premier.
+ */
+function renderObjectifItem(item) {
+  const { date, nom, points } = item.payload;
+
+  return renderReviewItem(
+    item,
+    `
+      <span class="review-item__title">
+        <span class="review-item__badge review-item__badge--added">À poser</span>
+        ${escapeHtml(nom || date || "Jalon sans date")}
+      </span>
+      ${
+        points
+          ? `<span class="review-item__where">${escapeHtml(String(points))} point${points > 1 ? "s" : ""}</span>`
           : ""
       }
     `
@@ -3029,6 +3165,15 @@ function renderDepotLignes(proposition, review) {
         : "Aucun compte rendu de chantier dans ce dépôt : il n'y a pas de point à en tirer."
     )}
     ${renderReviewBlock(
+      ITEM_TYPE.RELANCE,
+      "Points relancés",
+      parType(ITEM_TYPE.RELANCE),
+      renderRelanceItem,
+      gele
+        ? "Aucun point relancé, ou l'état conservé ne le dit pas."
+        : "Ce compte rendu ne reporte aucun point déjà suivi."
+    )}
+    ${renderReviewBlock(
       ITEM_TYPE.INTERVENANT,
       "Intervenants",
       parType(ITEM_TYPE.INTERVENANT),
@@ -3036,6 +3181,33 @@ function renderDepotLignes(proposition, review) {
       gele
         ? "Aucun intervenant relevé, ou l'état conservé ne le dit pas."
         : "Aucune société nommée que le projet ne connaisse déjà."
+    )}
+    ${renderReviewBlock(
+      ITEM_TYPE.LOT,
+      "Lots",
+      parType(ITEM_TYPE.LOT),
+      renderLotItem,
+      gele
+        ? "Aucun lot à ouvrir, ou l'état conservé ne le dit pas."
+        : "Tous les lots que ce compte rendu nomme sont déjà dans le projet."
+    )}
+    ${renderReviewBlock(
+      ITEM_TYPE.LABEL,
+      "Labels",
+      parType(ITEM_TYPE.LABEL),
+      renderLabelItem,
+      gele
+        ? "Aucun label à poser, ou l'état conservé ne le dit pas."
+        : "Ce compte rendu ne pose aucun label."
+    )}
+    ${renderReviewBlock(
+      ITEM_TYPE.OBJECTIF,
+      "Objectifs",
+      parType(ITEM_TYPE.OBJECTIF),
+      renderObjectifItem,
+      gele
+        ? "Aucun jalon à poser, ou l'état conservé ne le dit pas."
+        : "Aucune échéance de ce compte rendu n'appelle un jalon que le projet n'a pas."
     )}
     ${renderSujetsDeja(review)}
     ${renderSilentAvis(review)}
@@ -5073,8 +5245,18 @@ async function merge(root) {
     // Les sociétés retenues entrent **avant** les sujets : un sujet ne peut
     // être assigné qu'à quelqu'un qui existe, et l'ordre inverse laisserait
     // chaque point du premier compte rendu sans destinataire.
+    // **Les lots d'abord.** La base refuse un collaborateur sans lot, et un lot
+    // qu'un compte rendu nomme n'est pas une hypothèse : l'entreprise était à
+    // la réunion. L'ordre inverse laisserait dehors la moitié des sociétés.
+    await ouvrirLesLotsDuCompteRendu(root, items);
     await ajouterLesIntervenantsRetenus(root, proposition, items);
-    await ouvrirLesSujetsRetenus(root, proposition, items);
+    const nes = await ouvrirLesSujetsRetenus(root, proposition, items);
+
+    // Puis tout ce que le compte rendu dit des sujets — les siens et ceux qu'il
+    // reporte : leur label, leur jalon, et la ligne d'activité qui dit que
+    // cette réunion les a redits. Sans cela, un compte rendu de quarante points
+    // n'en laissait voir que trois, et les trente-sept autres restaient muets.
+    await appliquerCeQueLeCompteRenduDit(root, proposition, items, nes);
 
     // L'histoire se refait maintenant : sans cela, le fil resterait celui d'une
     // proposition ouverte — sans acte de fusion, sans carte de fin — jusqu'au
@@ -5130,7 +5312,7 @@ async function ouvrirLesSujetsRetenus(root, proposition, items = []) {
   const retenus = items.filter(
     (entry) => entry.itemType === ITEM_TYPE.SUJET && entry.status !== ITEM.REFUSED
   );
-  if (retenus.length === 0) return;
+  if (retenus.length === 0) return [];
 
   view.review.step = `Ouverture de ${retenus.length} sujet(s)`;
   renderContent(root);
@@ -5182,6 +5364,95 @@ async function ouvrirLesSujetsRetenus(root, proposition, items = []) {
       view.review.notice,
       `${ouverts} sujet(s) ouvert(s), ${manques.length} n'ont pas pu l'être. ` +
         "La fusion est faite : ces points se rouvrent à la main depuis l'onglet Sujets."
+    ].filter(Boolean).join(" ");
+  }
+
+  // Ce qui vient de naître repart vers la fusion : c'est sur ces sujets-là
+  // qu'il reste à poser les labels et les jalons du compte rendu.
+  return nes;
+}
+
+/**
+ * Ouvre les lots du chantier que ce compte rendu nomme.
+ *
+ * **Avant les sociétés, et c'est tout l'enjeu.** La base exige un lot pour
+ * chaque collaborateur — quelqu'un dont on ne sait pas ce qu'il fait sur le
+ * chantier ne sert à rien dans une liste. Jusqu'ici, seules les sociétés
+ * ouvraient un lot au passage, et un lot nommé dans le document sans entreprise
+ * retenue n'entrait jamais.
+ */
+async function ouvrirLesLotsDuCompteRendu(root, items = []) {
+  const lots = items.filter(
+    (entry) => entry.itemType === ITEM_TYPE.LOT && entry.status !== ITEM.REFUSED
+  );
+  if (lots.length === 0) return;
+
+  view.review.step = `Ouverture de ${lots.length} lot(s)`;
+  renderContent(root);
+
+  try {
+    const rapport = await ouvrirLesLotsRetenus({ items });
+    const dit = phraseDeLApplication(rapport);
+    if (dit) view.review.notice = [view.review.notice, dit].filter(Boolean).join(" ");
+  } catch {
+    view.review.notice = [
+      view.review.notice,
+      "Les lots de ce compte rendu n'ont pas pu être ouverts. La fusion est faite : "
+        + "ils s'ajoutent à la main depuis les paramètres du projet."
+    ].filter(Boolean).join(" ");
+  }
+}
+
+/**
+ * Pose sur les sujets ce que le compte rendu en dit, et écrit les relances.
+ *
+ * ## Ce que ça répare
+ *
+ * Une proposition signée ouvrait des sujets nus : ni label, ni échéance. Aucun
+ * filtre « CR chantier » ne les retrouvait, aucune situation ne les comptait —
+ * et le label était pourtant la première chose que l'analyse avait établie.
+ *
+ * Pire : les sujets que le compte rendu **reporte** n'avaient rien du tout. Un
+ * point redit depuis huit réunions ne se distinguait pas d'un point que
+ * personne n'avait relu. C'est la seule chose qu'un suivi de chantier ne doit
+ * jamais confondre, et c'est ce que la ligne d'activité écrite dans leur fil
+ * rend enfin visible.
+ *
+ * ## Un échec ne défait pas la fusion
+ *
+ * Les documents sont entrés, les sujets sont ouverts : c'est fait. Un label qui
+ * ne s'est pas posé se dit et se repose à la main. Se taire serait pire — on
+ * croirait le compte rendu traité.
+ */
+async function appliquerCeQueLeCompteRenduDit(root, proposition, items = [], nes = []) {
+  const concerne = items.some(
+    (entry) =>
+      [ITEM_TYPE.LABEL, ITEM_TYPE.OBJECTIF, ITEM_TYPE.RELANCE].includes(entry.itemType)
+      && entry.status !== ITEM.REFUSED
+  );
+  if (!concerne && (nes?.length ?? 0) === 0) return;
+
+  view.review.step = "Application du compte rendu aux sujets";
+  renderContent(root);
+
+  try {
+    const rapport = await appliquerLeCompteRendu({
+      projectId: proposition.project_id,
+      items,
+      ouverts: nes ?? [],
+      // Le nom sous lequel ce compte rendu s'écrira dans le fil des sujets
+      // qu'il relance. C'est le titre de la proposition : « CR n° 12 du … »,
+      // c'est-à-dire la façon dont un chantier désigne une réunion.
+      compteRendu: String(proposition.title ?? "").trim()
+    });
+
+    const dit = phraseDeLApplication(rapport);
+    if (dit) view.review.notice = [view.review.notice, dit].filter(Boolean).join(" ");
+  } catch {
+    view.review.notice = [
+      view.review.notice,
+      "Ce que le compte rendu dit des sujets n'a pas pu être appliqué. "
+        + "La fusion est faite : les labels et les échéances se posent à la main."
     ].filter(Boolean).join(" ");
   }
 }
@@ -5656,7 +5927,7 @@ function mergeFigureAvis(root, { knownAvis = [], decisions = [], assumees = [], 
     documentIds: documents.map((row) => row.id),
     reports: analyse?.reports ?? []
   });
-  view.review.items = applyDecisions(
+  view.review.items = toutCeQueLaPropositionPorte(applyDecisions(
     [
       ...documentItems(documents),
       ...attachmentItems(analyse?.attachments ?? []),
@@ -5665,10 +5936,11 @@ function mergeFigureAvis(root, { knownAvis = [], decisions = [], assumees = [], 
       // **entière** : omettre les points de chantier les effacerait de l'écran
       // après qu'on les a lus. C'est le piège d'une reconstruction complète, et
       // il se referme ici.
-      ...sujetItems(analyse?.sujets ?? [])
+      ...sujetItems(analyse?.sujets ?? []),
+      ...intervenantItems(analyse?.intervenants ?? [])
     ],
     decisions
-  );
+  ), decisions);
   recalculerLeDiff(view.review);
   view.review.conflicts = findMemoryConflicts(view.review.items, assumees);
 
@@ -6346,7 +6618,14 @@ async function openProposition(root, propositionId) {
       // Qui est chaque compte rendu lu. La fusion en a besoin pour enregistrer
       // les reprises : c'est l'analyse qui les a sous la main, pas elle.
       identiteDesComptesRendus: analyse.identiteDesComptesRendus ?? [],
-      items: applyDecisions(
+      // **Ce que l'analyse a trouvé, et ce que la proposition porte déjà.**
+      // Une proposition venue de l'Atelier n'apporte aucun livrable : ses
+      // affirmations sont en base depuis son ouverture, et l'analyse ne les
+      // recalcule pas. L'écran n'affichait donc que ce qu'elle recalculait —
+      // les lots, les labels, les jalons et les points relancés restaient
+      // invisibles, et la fusion les appliquait pourtant. Signer ce qu'on ne
+      // voit pas est exactement ce que cet écran existe pour empêcher.
+      items: toutCeQueLaPropositionPorte(applyDecisions(
         [
           ...documentItems(documents),
           ...attachmentItems(analyse.attachments),
@@ -6361,7 +6640,7 @@ async function openProposition(root, propositionId) {
           ...intervenantItems(analyse.intervenants ?? [])
         ],
         decisions
-      )
+      ), decisions)
     };
     recalculerLeDiff(view.review);
 

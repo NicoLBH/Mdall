@@ -21,21 +21,31 @@
  * l'ancienne chaîne faisait, et ce pour quoi elle a été retirée
  * (`docs/fondamentaux.md`, règle 1). Ici, on **propose** ; quelqu'un signe.
  *
- * ## Ce qui sort, et ce qui ne sort pas encore
+ * ## Tout ce que la lecture a compris, et rien de plus
  *
- * Sortent : les points qui **ouvrent un sujet**, et le document lui-même, qui
- * entre au corpus.
+ * Le document qui entre au corpus ; les lots du chantier ; les labels ; les
+ * objectifs datés ; les points qui ouvrent un sujet ; et **les points qui en
+ * relancent un**. (Les entreprises nommées y sont aussi, mais posées par
+ * l'analyse du dépôt, qui seule connaît les collaborateurs déjà au projet.)
  *
- * Ne sortent pas : les labels, les lots et les objectifs. Ils sont calculés et
- * affichés, mais **la fusion ne sait pas encore les appliquer** — les porter
- * quand même ferait signer des lignes dont rien n'arriverait, ce qui est pire
- * que de ne pas les porter : on croirait le rangement fait (règle 5). L'écran
- * le dit, plutôt que de le taire.
+ * Cette dernière nature a manqué, et son absence vidait le reste de son sens :
+ * un compte rendu **reporte** — la douzième réunion reprend les points de la
+ * onzième. Ne porter que les points neufs faisait entrer trois lignes sur
+ * quarante, et le travail de secrétariat ne se faisait pas.
  *
- * Les points qui **relancent** ou **rouvrent** un sujet existant ne sortent pas
- * non plus. Ils ne sont pas oubliés — la confrontation les montre —, mais les
- * porter reviendrait à créer un second sujet au même titre : la fusion ouvre ce
- * qu'on lui donne, elle ne sait pas encore commenter un sujet qui est là.
+ * Une relance n'ouvre rien : elle écrit dans le fil du sujet ce que le compte
+ * rendu en redit, daté et cité, et remet à jour ce qu'il porte — son label, son
+ * échéance, à qui il revient. Les confondre avec une ouverture ferait un second
+ * sujet au même titre, et toute l'histoire d'avant resterait dans le premier.
+ *
+ * ## L'ordre d'application ne se décide pas ici
+ *
+ * Les lots d'abord, puis les entreprises, puis les labels et les objectifs,
+ * puis les sujets : un sujet ne s'assigne qu'à quelqu'un qui existe, et
+ * quelqu'un n'existe qu'avec un lot. Mais cet ordre-là est celui de la fusion,
+ * et il est écrit dans `appliquer-le-cr.js`. Le déduire de l'ordre de cette
+ * liste ferait dépendre une contrainte de base d'un choix de présentation
+ * (règle 4).
  *
  * ## Ce que ce module ne fait pas
  *
@@ -43,9 +53,12 @@
  * affirmations sortent.
  */
 
+import { dateDeLEcheance } from "./echeances-du-cr.js";
 import { SORT } from "./lecture-du-cr.js";
 import { titreAplati } from "./sujets-du-cr.js";
-import { documentItems, sujetItems } from "./proposition-review.js";
+import { documentItems, ITEM_TYPE, sujetItems } from "./proposition-review.js";
+import { ITEM } from "./proposition-state.js";
+import { numeroDuLot } from "./lots-du-cr.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -53,7 +66,7 @@ const texte = (valeur) => String(valeur ?? "").trim();
 export const REFUS = {
   /** La confrontation n'a pas eu lieu : on ne sait pas ce que le projet suit. */
   SANS_CONFRONTATION: "sans_confrontation",
-  /** Elle a eu lieu, et tout est déjà suivi. */
+  /** Elle a eu lieu, et il n'y a **rien à en tirer** — ni sujet, ni relance. */
   RIEN_A_OUVRIR: "rien_a_ouvrir",
   /** Le document n'a pas pu être rangé : sans lui, rien ne se vérifie. */
   SANS_DOCUMENT: "sans_document"
@@ -64,8 +77,7 @@ export const PHRASES_DU_REFUS = {
     "Les sujets du projet n'ont pas pu être lus : on ne sait pas lesquels de ces points sont "
     + "déjà suivis, et en proposer vingt qui le sont serait pire que de n'en proposer aucun.",
   [REFUS.RIEN_A_OUVRIR]:
-    "Tous les points de ce compte rendu sont déjà suivis par un sujet du projet. "
-    + "Il n'y a donc rien à ouvrir, et c'est une bonne nouvelle : le chantier est à jour.",
+    "Ce compte rendu ne relève aucun point : il n'y a ni sujet à ouvrir, ni sujet à relancer.",
   [REFUS.SANS_DOCUMENT]:
     "Le compte rendu n'a pas pu être rangé dans Fichiers. Une proposition qui porterait des "
     + "points sans le document d'où ils sortent ne se vérifierait pas."
@@ -86,7 +98,17 @@ export function phraseDuRefus(motif) {
 export function refusDeLaProposition({ confrontes = null, documentId = "" } = {}) {
   if (confrontes === null || confrontes === undefined) return REFUS.SANS_CONFRONTATION;
   if (!texte(documentId)) return REFUS.SANS_DOCUMENT;
-  if (pointsAOuvrir(confrontes).length === 0) return REFUS.RIEN_A_OUVRIR;
+
+  // **« Rien à ouvrir » n'est pas « rien à faire ».** Ce refus barrait la
+  // route au cas le plus courant : la douzième réunion, qui n'ouvre aucun sujet
+  // et en reporte quarante. Il n'y avait alors rien à proposer — donc aucune
+  // relance écrite, aucune échéance remise à jour, et un chantier dont le suivi
+  // s'arrêtait dès qu'il cessait d'être neuf. C'est exactement l'inverse de ce
+  // qu'on cherche : un point redit depuis huit réunions est ce qu'il y a de
+  // plus important à voir.
+  if (pointsAOuvrir(confrontes).length + pointsARelancer(confrontes).length === 0) {
+    return REFUS.RIEN_A_OUVRIR;
+  }
   return "";
 }
 
@@ -104,6 +126,30 @@ export function cleDuPoint(point = {}) {
 }
 
 /**
+ * La date que l'échéance d'un point désigne, résolue **une seule fois**.
+ *
+ * ## Pourquoi elle voyage avec le point
+ *
+ * Un compte rendu écrit « sous quinzaine », « avant le 15/10 », « semaine 42 ».
+ * Résoudre cela demande la date de la réunion, et c'est `echeances-du-cr.js`
+ * qui sait le faire. La fusion, elle, doit savoir sur quel jalon accrocher le
+ * sujet — et elle n'a plus la date de la réunion sous la main : la proposition
+ * a pu être relue trois jours plus tard, depuis un autre écran.
+ *
+ * Refaire le calcul là-bas demanderait de reporter la date de la réunion
+ * jusqu'à la fusion, et ferait exister deux résolutions de la même échéance,
+ * qui finiraient par diverger (règle 4). On la résout donc ici, au moment où
+ * l'on sait, et on la porte.
+ *
+ * Une échéance qu'on n'a pas su lire rend `null` — et non la date du jour.
+ */
+function dateDuPoint(point = {}, leJour = "") {
+  const echeance = texte(point?.echeance);
+  if (!echeance) return null;
+  return dateDeLEcheance(echeance, { leJour: texte(leJour) })?.date ?? null;
+}
+
+/**
  * Les points qui ouvrent un sujet, dans la forme qu'une proposition porte.
  *
  * **Seulement ceux-là.** Un point qui relance ou rouvre un sujet existant ne
@@ -113,7 +159,7 @@ export function cleDuPoint(point = {}) {
  * Un point sans clé est écarté : sans elle, il se reproposerait à chaque
  * réunion, et l'on redemanderait douze fois d'accepter la même chose.
  */
-export function pointsAOuvrir(confrontes = []) {
+export function pointsAOuvrir(confrontes = [], { leJour = "" } = {}) {
   const vus = new Set();
 
   return (Array.isArray(confrontes) ? confrontes : [])
@@ -127,6 +173,13 @@ export function pointsAOuvrir(confrontes = []) {
       qui: texte(point?.qui) || null,
       echeance: texte(point?.echeance) || null,
       etat: texte(point?.etat) || null,
+      // **Les labels voyagent avec le point, et pas seulement leur compte.**
+      // Le compte rendu écrit « urgent » sur trois points et rien sur les
+      // trente-sept autres. Savoir qu'« Urgent » est posé trois fois ne dit pas
+      // *où* : sans cette liste, la fusion ne saurait que poser le label sur
+      // tout ou sur rien, et « urgent » partout ne veut plus rien dire.
+      labels: Array.isArray(point?.labels) ? point.labels.map(texte).filter(Boolean) : [],
+      echeanceDate: dateDuPoint(point, leJour),
       // **La provenance voyage avec le point.** Un sujet ouvert par une lecture
       // automatique doit pouvoir se contester : sans sa page et sa citation, il
       // ne se remonte plus au document qui l'a produit.
@@ -146,16 +199,216 @@ export function pointsAOuvrir(confrontes = []) {
 }
 
 /**
- * Les affirmations que la proposition portera.
+ * Les affirmations que la proposition portera — **toutes**.
+ *
+ * ## Ce qui manquait, et ce que ça coûtait
+ *
+ * Cette fonction ne rendait que deux natures : le document, et les sujets à
+ * ouvrir. Tout le reste de ce que la lecture avait compris — les lots nommés,
+ * les entreprises présentes, les labels, les jalons datés, et surtout les
+ * quarante points que le compte rendu **reporte** — restait à l'écran de
+ * lecture et n'allait nulle part.
+ *
+ * Une proposition de trois lignes sortait d'un compte rendu de quarante points,
+ * et les trente-sept autres n'avaient pas de trace : ni relance dans leur fil,
+ * ni label reposé, ni échéance remise à jour. Le travail de secrétariat — celui
+ * qui fait qu'on sait, deux mois plus tard, qu'un point est redit depuis huit
+ * réunions — ne se faisait pas.
+ *
+ * ## L'ordre de la liste est celui de la relecture
  *
  * Le document d'abord : c'est lui qui permet de vérifier tout le reste, et
- * l'accepter est la première question qu'on se pose en relisant.
+ * l'accepter est la première question qu'on se pose. Puis ce qui donne au
+ * projet son vocabulaire — les lots, les sociétés, les labels, les jalons —,
+ * puis ce qui s'y range : les sujets ouverts, et les sujets relancés.
+ *
+ * **L'ordre d'application, lui, ne se lit pas ici** : il est arrêté par
+ * `appliquer-le-cr.js`, parce qu'il obéit à des dépendances (un sujet ne
+ * s'assigne qu'à quelqu'un qui existe, et quelqu'un n'existe qu'avec un lot)
+ * que l'ordre d'une liste ne saurait pas garantir. Les faire coïncider par
+ * convention serait un accord tacite entre deux fichiers, qui tiendrait jusqu'à
+ * ce que quelqu'un réordonne l'écran (règle 4).
+ *
+ * ## Les entreprises ne passent pas par ici
+ *
+ * Elles sont bien dans la proposition — mais posées par l'analyse, qui relit le
+ * compte rendu déposé et confronte ce qu'il nomme aux collaborateurs du projet
+ * (`proposition-analysis.js`). Les composer une seconde fois ici ferait deux
+ * sources pour la même liste, qui finiraient par ne plus dire la même chose
+ * (règle 4) — et la première a ce que celle-ci n'a pas : les collaborateurs
+ * déjà au projet, sans lesquels on reproposerait chaque réunion les mêmes
+ * douze sociétés.
+ *
+ * ## Ce qu'on ne sait pas ne se propose pas
+ *
+ * Lots, labels et objectifs sont rendus par des analyses qui distinguent « le
+ * projet n'en a aucun » de « on n'a pas pu les lire ». Le second cas ne propose
+ * rien : proposer d'ajouter des lots qui sont peut-être déjà là ferait doubler
+ * la liste du projet, et personne ne la nettoiera (règle 5).
+ *
+ * @param {object} options
+ * @param {object[]|null} [options.confrontes] la lecture confrontée aux sujets
+ * @param {object|null} [options.document] le compte rendu rangé dans Fichiers
+ * @param {object|null} [options.lots] ce que `lotsAProposer` a rendu
+ * @param {object|null} [options.labels] ce que `labelsAProposer` a rendu
+ * @param {object|null} [options.objectifs] ce que `objectifsAProposer` a rendu
  */
-export function itemsDuCompteRendu({ confrontes = [], document: doc = null } = {}) {
+export function itemsDuCompteRendu({
+  confrontes = [],
+  document: doc = null,
+  lots = null,
+  labels = null,
+  objectifs = null
+} = {}) {
   return [
     ...(doc?.id ? documentItems([doc]) : []),
-    ...sujetItems(pointsAOuvrir(confrontes))
+    ...lotItems(lots),
+    ...labelItems(labels),
+    ...objectifItems(objectifs),
+    ...sujetItems(pointsAOuvrir(confrontes, { leJour: objectifs?.leJour })),
+    ...relanceItems(pointsARelancer(confrontes, { leJour: objectifs?.leJour }))
   ];
+}
+
+/**
+ * Les points qui relancent un sujet déjà ouvert.
+ *
+ * ## Pourquoi ils comptent autant que les autres
+ *
+ * Un compte rendu **reporte** : un point reste écrit tant qu'il n'est pas
+ * soldé. Ne porter que les points neufs faisait entrer trois lignes sur
+ * quarante, et laissait quarante sujets sans trace de la réunion qui venait de
+ * les redire. Le secrétariat ne se faisait pas.
+ *
+ * ## Ce qu'une relance fait, et ce qu'elle ne fait pas
+ *
+ * Elle **écrit dans le fil** du sujet ce que le compte rendu en redit, avec sa
+ * page et sa citation, et remet à jour ce qu'il porte. Elle n'ouvre rien et ne
+ * ferme rien : le sujet était là, il y reste.
+ *
+ * Les trois sorts qui désignent un sujet existant y passent — relancé, changé,
+ * rouvert —, et le payload garde lequel : rouvrir n'est pas relancer, et la
+ * fusion doit pouvoir faire la différence.
+ */
+export function pointsARelancer(confrontes = [], { leJour = "" } = {}) {
+  const vus = new Set();
+
+  return (Array.isArray(confrontes) ? confrontes : [])
+    .filter((point) => [SORT.RELANCE, SORT.CHANGE, SORT.REOUVRE].includes(point?.sort))
+    .map((point) => ({
+      sujetId: texte(point?.sujet?.id),
+      sort: texte(point?.sort),
+      titre: texte(point?.titre),
+      description: texte(point?.description),
+      lot: texte(point?.lot) || null,
+      reference: texte(point?.reference) || null,
+      qui: texte(point?.qui) || null,
+      echeance: texte(point?.echeance) || null,
+      etat: texte(point?.etat) || null,
+      labels: Array.isArray(point?.labels) ? point.labels.map(texte).filter(Boolean) : [],
+      echeanceDate: dateDuPoint(point, leJour),
+      page: Number.isFinite(Number(point?.page)) ? Number(point.page) : null,
+      evidence: texte(point?.citation) || null
+    }))
+    .filter((point) => {
+      // Sans identifiant de sujet, on ne saurait pas dans quel fil écrire.
+      if (!point.sujetId) return false;
+      // Deux points du même compte rendu sur un même sujet : une seule relance.
+      // Deux messages diraient deux fois la même réunion.
+      if (vus.has(point.sujetId)) return false;
+      vus.add(point.sujetId);
+      return true;
+    });
+}
+
+/** Une affirmation de proposition, dans la forme que la revue attend. */
+function affirmation(type, cle, payload) {
+  return { itemType: type, itemKey: String(cle), payload, status: ITEM.PROPOSED, reason: null };
+}
+
+/**
+ * Les sujets que ce compte rendu relance.
+ *
+ * La clé est **l'identifiant du sujet** : il ne bouge pas, et deux comptes
+ * rendus qui relancent le même sujet ne se marchent pas dessus — chacun dans sa
+ * proposition.
+ */
+export function relanceItems(points = []) {
+  return (Array.isArray(points) ? points : [])
+    .map((point) => affirmation(ITEM_TYPE.RELANCE, point.sujetId, point));
+}
+
+/**
+ * Les labels que ce compte rendu pose.
+ *
+ * **Ceux qui existent déjà passent aussi.** La ligne ne dit pas « créer un
+ * label » mais « poser celui-ci sur ces points » : un label déjà au projet est
+ * toujours à poser sur les sujets que la proposition ouvre. Ne porter que les
+ * manquants laisserait les points du deuxième compte rendu sans label, parce
+ * que le premier l'avait créé.
+ *
+ * La clé est le nom du label, mis à plat : c'est ce que la base compare, et
+ * celui qui a créé « cr chantier » à la main ne doit pas s'en voir proposer un
+ * second.
+ */
+export function labelItems(labels = []) {
+  return (Array.isArray(labels?.poses) ? labels.poses : [])
+    .filter((label) => texte(label?.nom))
+    .map((label) => affirmation(ITEM_TYPE.LABEL, titreAplati(label.nom), {
+      nom: texte(label.nom),
+      points: Number(label?.points) || 0,
+      // Ce que la lecture savait au moment où elle a regardé. Il se revérifie à
+      // la fusion : le projet a pu changer entre les deux.
+      existe: label?.existe === true
+    }));
+}
+
+/**
+ * Les lots du chantier que ce compte rendu nomme et que le projet n'a pas.
+ *
+ * **Seulement les manquants.** Un lot déjà ouvert n'est pas à ouvrir, et le
+ * proposer ferait une ligne qui ne changerait rien — ce qui fait douter de
+ * toutes les autres.
+ *
+ * La clé est le numéro du lot quand il y en a un : « 03 » désigne le même lot
+ * qu'on l'écrive « Lot 03 — Cloisons » ou « 03 - CLOISONS ».
+ */
+export function lotItems(lots = []) {
+  if (!lots?.connu) return [];
+
+  return (Array.isArray(lots?.manquants) ? lots.manquants : [])
+    .filter((lot) => texte(lot?.intitule))
+    .map((lot) => affirmation(
+      ITEM_TYPE.LOT,
+      texte(lot?.numero) || numeroDuLot(lot.intitule) || titreAplati(lot.intitule),
+      {
+        intitule: texte(lot.intitule),
+        numero: texte(lot?.numero) || null,
+        nom: texte(lot?.nom) || null,
+        points: Number(lot?.points) || 0
+      }
+    ));
+}
+
+/**
+ * Les objectifs datés que ce compte rendu appelle et que le projet n'a pas.
+ *
+ * **La date décide, pas le nom.** Un objectif nommé autrement mais daté du même
+ * jour est le même jalon : en créer un second le doublerait. C'est donc la date
+ * qui sert de clé.
+ */
+export function objectifItems(objectifs = []) {
+  if (!objectifs?.connu) return [];
+
+  return (Array.isArray(objectifs?.objectifs) ? objectifs.objectifs : [])
+    .filter((objectif) => texte(objectif?.date) && objectif?.existe !== true)
+    .map((objectif) => affirmation(ITEM_TYPE.OBJECTIF, texte(objectif.date), {
+      date: texte(objectif.date),
+      nom: texte(objectif?.nom),
+      // `objectifsAProposer` rend les points eux-mêmes, pas leur nombre : c'est
+      // le nombre qu'on porte, la ligne n'ayant que lui à montrer.
+      points: Array.isArray(objectif?.points) ? objectif.points.length : Number(objectif?.points) || 0
+    }));
 }
 
 /**
@@ -186,8 +439,8 @@ export function titreDeLaProposition({ nom = "", identite = null } = {}) {
  */
 export function introDuCompteRendu({ confrontes = [], nom = "" } = {}) {
   const aOuvrir = pointsAOuvrir(confrontes).length;
+  const aRelancer = pointsARelancer(confrontes).length;
   const tous = Array.isArray(confrontes) ? confrontes.length : 0;
-  const suivis = Math.max(0, tous - aOuvrir);
 
   const lignes = [
     `Lecture de ${texte(nom) || "un compte rendu de chantier"}.`,
@@ -195,15 +448,31 @@ export function introDuCompteRendu({ confrontes = [], nom = "" } = {}) {
       + (tous === 1 ? " sur le seul point relevé." : ` sur les ${tous} points relevés.`)
   ];
 
-  if (suivis === 1) {
+  // **Ce qui est reporté se dit, et se dit pour ce que c'est.** La phrase
+  // d'avant — « ils sont déjà suivis » — était juste et ne servait à rien :
+  // elle expliquait pourquoi la proposition était courte, sans dire ce qu'elle
+  // ferait de ces points-là. Elle ne faisait rien : ils n'y entraient pas.
+  if (aRelancer === 1) {
     lignes.push(
-      "L'autre est déjà suivi par un sujet du projet : le compte rendu le reporte, "
-      + "il ne le rouvre pas."
+      "Un autre point est déjà suivi par un sujet du projet : ce compte rendu le reporte, "
+      + "et la proposition l'écrirait dans son fil — sans le rouvrir."
     );
-  } else if (suivis > 1) {
+  } else if (aRelancer > 1) {
     lignes.push(
-      `Les ${suivis} autres sont déjà suivis par des sujets du projet : le compte rendu les `
-      + "reporte, il ne les rouvre pas."
+      `${aRelancer} autres points sont déjà suivis par des sujets du projet : ce compte rendu `
+      + "les reporte, et la proposition l'écrirait dans chacun de leurs fils — sans les rouvrir."
+    );
+  }
+
+  // Un point déjà suivi dont on ne sait pas dans quel fil écrire — son sujet
+  // n'a pas d'identifiant — n'est ni ouvert ni relancé. Le taire ferait
+  // chercher une perte (règle 5).
+  const laisses = Math.max(0, tous - aOuvrir - aRelancer);
+  if (laisses > 0) {
+    lignes.push(
+      `${laisses} point${laisses > 1 ? "s ne sont" : " n'est"} ni ouvert${laisses > 1 ? "s" : ""}`
+      + ` ni relancé${laisses > 1 ? "s" : ""} : ${laisses > 1 ? "ils n'ont" : "il n'a"} pas de quoi `
+      + "être identifié d'une réunion à l'autre."
     );
   }
 

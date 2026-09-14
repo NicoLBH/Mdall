@@ -58,13 +58,23 @@ export const CHANGE = {
   OBJECTIF: "objectif",
   LABEL: "label",
   LIEN: "lien",
-  SITUATION: "situation"
+  SITUATION: "situation",
+  /**
+   * Un sujet déjà ouvert que le compte rendu reporte.
+   *
+   * **Ce n'est pas rien, et ce n'est pas un sujet de plus.** Un point reporté
+   * de la onzième réunion à la douzième dit que la question tient toujours :
+   * le fil du sujet le reçoit, daté et cité. Le compter parmi les sujets
+   * ouverts ferait annoncer douze ouvertures pour douze rappels.
+   */
+  SUJET_RELANCE: "sujet_relance"
 };
 
 /** L'ordre de lecture. Ce qui engage le plus vient en premier. */
 const ORDRE = [
   CHANGE.SUJET_OUVERT, CHANGE.SUJET_FERME, CHANGE.SUJET_ROUVERT,
   CHANGE.INTERVENANT, CHANGE.AVIS, CHANGE.AFFIRMATION,
+  CHANGE.SUJET_RELANCE,
   CHANGE.DOCUMENT, CHANGE.ATTACHMENT,
   CHANGE.SITUATION, CHANGE.LOT, CHANGE.OBJECTIF, CHANGE.LABEL, CHANGE.LIEN
 ];
@@ -80,6 +90,7 @@ export const MOTS_DU_CHANGE = {
   [CHANGE.SUJET_OUVERT]: ["sujet ouvert", "sujets ouverts"],
   [CHANGE.SUJET_FERME]: ["sujet fermé", "sujets fermés"],
   [CHANGE.SUJET_ROUVERT]: ["sujet rouvert", "sujets rouverts"],
+  [CHANGE.SUJET_RELANCE]: ["sujet relancé", "sujets relancés"],
   [CHANGE.INTERVENANT]: ["entreprise ajoutée", "entreprises ajoutées"],
   [CHANGE.AVIS]: ["avis", "avis"],
   [CHANGE.AFFIRMATION]: ["valeur en mémoire", "valeurs en mémoire"],
@@ -102,6 +113,7 @@ export const CE_QUE_CA_ENGAGE = {
   [CHANGE.SUJET_OUVERT]: "Un sujet ouvert engage quelqu'un à le traiter, et apparaît dans les listes de tout le monde.",
   [CHANGE.SUJET_FERME]: "Un sujet fermé sort des listes. Il se rouvrira si un prochain compte rendu en reparle.",
   [CHANGE.SUJET_ROUVERT]: "Un sujet fermé qui revient reprend son histoire, plutôt qu'un second sujet au même titre.",
+  [CHANGE.SUJET_RELANCE]: "Un sujet relancé reçoit dans son fil ce que le compte rendu en redit, daté et cité. Il ne se rouvre pas : il n'était pas fermé.",
   [CHANGE.INTERVENANT]: "Une entreprise ajoutée fait entrer des personnes réelles dans le projet, à qui du travail sera assigné.",
   [CHANGE.AVIS]: "Un avis change l'état d'un point de contrôle.",
   [CHANGE.AFFIRMATION]: "Une valeur en mémoire sert de base à tous les calculs qui la lisent.",
@@ -119,7 +131,15 @@ const NATURE_DE_LITEM = {
   [ITEM_TYPE.DOCUMENT]: CHANGE.DOCUMENT,
   [ITEM_TYPE.ATTACHMENT]: CHANGE.ATTACHMENT,
   [ITEM_TYPE.AVIS]: CHANGE.AVIS,
-  [ITEM_TYPE.INTERVENANT]: CHANGE.INTERVENANT
+  [ITEM_TYPE.INTERVENANT]: CHANGE.INTERVENANT,
+  // **Ils ont maintenant une ligne à eux.** Ils passaient par `apports`, un
+  // canal parallèle où l'écran de lecture annonçait ce qu'il avait relevé sans
+  // que rien ne puisse être refusé ligne à ligne. Ce sont des écritures : elles
+  // se cochent comme le reste (règle 1).
+  [ITEM_TYPE.RELANCE]: CHANGE.SUJET_RELANCE,
+  [ITEM_TYPE.LABEL]: CHANGE.LABEL,
+  [ITEM_TYPE.LOT]: CHANGE.LOT,
+  [ITEM_TYPE.OBJECTIF]: CHANGE.OBJECTIF
 };
 
 /**
@@ -154,9 +174,15 @@ export function natureDuChangement(item = {}) {
  * @param {object} options
  * @param {object[]} options.items les lignes de la proposition
  * @param {object} [options.apports] ce que l'écran de lecture a relevé et qui
- *   n'a pas de ligne à soi — labels, lots, objectifs, liens, situation. Ils
+ *   n'a **toujours pas** de ligne à soi : les liens et la situation. Ils
  *   entreront à la fusion avec le reste ; les taire ferait annoncer moins que
  *   ce qui va être écrit.
+ *
+ *   Labels, lots et objectifs n'y sont plus : ils ont maintenant leurs propres
+ *   lignes, et les compter une seconde fois ici annoncerait le double de ce qui
+ *   sera écrit. C'est exactement le défaut qu'une valeur portée à deux endroits
+ *   finit par produire (règle 4) — et il aurait été invisible, puisque les deux
+ *   comptes sont justes séparément.
  * @returns {{par: object, total: number, refuses: number, indecis: number,
  *   lignes: {cle: string, combien: number, mot: string, engage: string}[]}}
  */
@@ -176,10 +202,9 @@ export function changementsDeLaProposition({ items = [], apports = {} } = {}) {
 
   for (const item of retenus) ajouter(natureDuChangement(item));
 
-  // Les apports de l'écran de lecture, qui n'ont pas de ligne à eux.
-  ajouter(CHANGE.LABEL, Number(apports?.labels) || 0);
-  ajouter(CHANGE.LOT, Number(apports?.lots) || 0);
-  ajouter(CHANGE.OBJECTIF, Number(apports?.objectifs) || 0);
+  // Ce qui n'a **toujours pas** de ligne à soi. Les labels, les lots et les
+  // objectifs en ont une depuis qu'ils sont des affirmations : les rajouter ici
+  // les compterait deux fois.
   ajouter(CHANGE.LIEN, Number(apports?.liens) || 0);
   ajouter(CHANGE.SITUATION, Number(apports?.situations) || 0);
 

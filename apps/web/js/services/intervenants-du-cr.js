@@ -247,10 +247,16 @@ export function lotDuProjetPour(role = "", lots = []) {
  * « Lot 02 — GROS ŒUVRE » devient « Gros œuvre ». Le numéro appartient au
  * compte rendu, pas au projet — deux maîtres d'œuvre ne numérotent pas pareil,
  * et un lot nommé « 02 » ne se retrouverait plus au chantier suivant.
+ *
+ * **Le mot « lot » est facultatif**, et il l'était en pratique bien avant de
+ * l'être ici : un compte rendu écrit aussi bien « 03 — Cloisons » en tête de
+ * rubrique. L'exiger laissait ce cas intact, et l'on ouvrait un lot nommé
+ * « 03 — cloisons » — c'est-à-dire avec le numéro du compte rendu dedans, celui
+ * qu'on venait de retirer partout ailleurs.
  */
 export function libelleDuLot(role = "") {
   const dit = texte(role)
-    .replace(/^\s*lots?\s*n?[°ºo]?\s*\d{1,3}\s*[-—–:.]*\s*/i, "")
+    .replace(/^\s*(?:lots?\s*)?n?[°ºo]?\s*\d{1,3}\s*[-—–:.]*\s*/i, "")
     .replace(/\s+/g, " ")
     .trim();
 
