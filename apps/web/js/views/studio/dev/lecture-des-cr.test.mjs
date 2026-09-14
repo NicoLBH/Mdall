@@ -1659,3 +1659,52 @@ test("les réserves se rangent sous la carte qui porte leur chiffre", () => {
 test("une restitution sans réserve ne dit rien", () => {
   assert.deepEqual(reservesDeLaRestitution({}), { pages: [], titres: [] });
 });
+
+
+/* ── Ce qui se branche, et ce dont cela ne dépend pas ────────────────────── */
+
+/**
+ * **La zone de dépôt s'en va quand le document est là**, et c'est voulu : elle
+ * gardait un tiers de l'écran pour redire ce qu'on venait de faire.
+ */
+test("un document ouvert fait disparaître la zone de dépôt", () => {
+  const avec = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, fichier: { name: "1824_CR_17.pdf" }
+  }));
+  assert.doesNotMatch(avec, /data-lecture-cr-zone/);
+
+  const sans = renderLaLecture(unEtat({ phase: "vide" }));
+  assert.match(sans, /data-lecture-cr-zone/);
+});
+
+/**
+ * **Et plus rien ne se branchait.**
+ *
+ * `brancher` sortait quand il ne trouvait pas la zone de dépôt, au motif qu'un
+ * écran sans zone n'était pas encore dessiné. Le jour où la zone a disparu une
+ * fois le document ouvert, les onglets Restitution / Analyse, le bouton
+ * Transformer, les boutons copier et le dépli des sujets sont devenus muets
+ * d'un coup — sans la moindre erreur, et sans rien pour le dire.
+ *
+ * Ce test lit la source, et c'est le seul moyen : le défaut est une **absence**
+ * d'écouteur dans un écran qu'aucun test ne peut monter d'ici.
+ */
+test("le branchement ne dépend pas de la zone de dépôt", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const source = readFileSync(fileURLToPath(new URL("./lecture-des-cr.js", import.meta.url)), "utf8");
+  const debut = source.indexOf("function brancher(hote) {");
+  assert.ok(debut > 0, "brancher doit exister");
+  const corps = source.slice(debut, source.indexOf("\n/**", debut + 1));
+
+  // Le commentaire raconte l'histoire du défaut : l'ignorer, sans quoi le test
+  // se contenterait de sa propre explication.
+  const code = corps.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+
+  assert.doesNotMatch(code, /const zone = [^;]+;\s*if \(!zone\) return;/);
+  // Ce qui doit être vrai pour brancher, c'est qu'il y ait un hôte.
+  assert.match(code, /if \(!hote\) return;/);
+  // Et la zone se branche si elle est là.
+  assert.match(code, /zone\s*\n?\s*\?\s*brancherLaZoneDeDepot\(zone/);
+});

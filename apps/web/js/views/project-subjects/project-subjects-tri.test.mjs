@@ -71,9 +71,18 @@ test("trier ne change pas le nombre de sujets", () => {
   );
 });
 
-test("sans tri demandé, l'ordre du projet est celui qu'on rend", () => {
+/**
+ * **La liste s'ouvre sur ce qui vient de bouger.** Elle s'ouvrait dans l'ordre
+ * du projet — celui d'arrivée — et le plus récent se trouvait tout en bas,
+ * après quatre-vingt-treize lignes, alors que la question qu'on se pose en
+ * ouvrant cet écran est toujours la même.
+ */
+test("sans rien demander, la liste part de la dernière activité", () => {
   const selecteurs = selecteursSur(unStore(), LES_SUJETS);
-  assert.equal(selecteurs.getCurrentSubjectsSort(), TRI.PROJET);
+  assert.equal(selecteurs.getCurrentSubjectsSort(), TRI.DERNIERE_ACTIVITE);
+
+  // Et l'ordre du projet reste à un clic : il se choisit, et il est rendu.
+  assert.equal(selecteursSur(unStore(TRI.PROJET), LES_SUJETS).getCurrentSubjectsSort(), TRI.PROJET);
 });
 
 /**
@@ -91,7 +100,7 @@ test("l'ancien état des Situations ne peut pas défaire le tri", () => {
   assert.equal(selecteurs.getCurrentSubjectsSort(), TRI.DERNIERE_ACTIVITE);
 });
 
-test("un tri inconnu se lit comme l'ordre du projet", () => {
+test("un tri inconnu retombe sur le défaut, pas sur un ordre inventé", () => {
   const selecteurs = selecteursSur(unStore("par couleur"), LES_SUJETS);
-  assert.equal(selecteurs.getCurrentSubjectsSort(), TRI.PROJET);
+  assert.equal(selecteurs.getCurrentSubjectsSort(), TRI.DERNIERE_ACTIVITE);
 });

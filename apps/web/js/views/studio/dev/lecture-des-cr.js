@@ -2208,9 +2208,25 @@ function renderSuite(vue = etat) {
  */
 let detacher = null;
 
+/**
+ * Brancher l'écran.
+ *
+ * ## La zone de dépôt ne conditionne plus rien
+ *
+ * Cette fonction sortait quand elle ne trouvait pas la zone de dépôt, au motif
+ * qu'un écran sans zone n'était pas encore dessiné. Le jour où la zone a
+ * disparu une fois le document ouvert — elle gardait un tiers de l'écran pour
+ * redire ce qu'on venait de faire —, **plus rien ne se branchait** : les
+ * onglets Restitution / Analyse, le bouton Transformer, les boutons copier et
+ * le dépli des sujets sont devenus muets d'un coup, sans la moindre erreur.
+ *
+ * L'absence de la zone n'a jamais voulu dire ce qu'on lui faisait dire. Ce qui
+ * doit être vrai pour brancher, c'est qu'il y ait un hôte ; la zone, elle, se
+ * branche si elle est là.
+ */
 function brancher(hote) {
+  if (!hote) return;
   const zone = hote.querySelector("[data-lecture-cr-zone]");
-  if (!zone) return;
 
   detacher?.();
 
@@ -2282,18 +2298,22 @@ function brancher(hote) {
     texteDe: (cible) => (cible === "panne-de-la-lecture" ? etat.panne : etat.md.modele.texte)
   });
 
-  const detacherLaZone = brancherLaZoneDeDepot(zone, {
-    // La zone se tait pendant une lecture : déposer un second document
-    // pendant qu'on lit le premier abandonnerait un appel déjà payé.
-    actif: () => etat.phase !== "lecture",
-    onFichiers: (fichiers) => {
-      // `trierLesFichiers` rend `{retenus, ecartes}` et non un tableau : le
-      // déstructurer comme une liste aurait donné `undefined`, et un dépôt
-      // resté sans effet — sans erreur, et sans rien pour le dire.
-      const { retenus } = trierLesFichiers(fichiers, (candidat) => EST_UN_PDF.test(texte(candidat?.name)));
-      if (retenus[0]) void lire(hote, retenus[0]);
-    }
-  });
+  // Elle n'existe que tant qu'aucun document n'est ouvert : le reste de l'écran
+  // se branche sans elle.
+  const detacherLaZone = zone
+    ? brancherLaZoneDeDepot(zone, {
+      // La zone se tait pendant une lecture : déposer un second document
+      // pendant qu'on lit le premier abandonnerait un appel déjà payé.
+      actif: () => etat.phase !== "lecture",
+      onFichiers: (fichiers) => {
+        // `trierLesFichiers` rend `{retenus, ecartes}` et non un tableau : le
+        // déstructurer comme une liste aurait donné `undefined`, et un dépôt
+        // resté sans effet — sans erreur, et sans rien pour le dire.
+        const { retenus } = trierLesFichiers(fichiers, (candidat) => EST_UN_PDF.test(texte(candidat?.name)));
+        if (retenus[0]) void lire(hote, retenus[0]);
+      }
+    })
+    : null;
 
   detacher = () => {
     champ?.removeEventListener("change", surLeChamp);

@@ -981,15 +981,31 @@ export function createProjectSubjectsDescription(config = {}) {
           ${authorMetaLabel ? `<span class="gh-comment-author-meta">${escapeHtml(authorMetaLabel)}</span>` : ""}
         </div>
       `;
+    const displayIdentiteDeLEnTete = firstVersionIdentity || identity;
     const versionsTriggerHtml = entityType === "sujet" ? renderDescriptionVersionsTrigger(null, entityType, entityId) : "";
     const editButtonHtml = `
       <button class="icon-btn icon-btn--sm gh-comment-edit-btn" data-action="edit-description" type="button" aria-label="Modifier la description" title="Modifier la description">
         ${svgIcon("pencil")}
       </button>
     `;
+    // **L'avatar entre dans la ligne d'en-tête**, comme dans un commentaire.
+    //
+    // La description vivait dans une colonne de quarante pixels plus une
+    // gouttière, à côté d'un bloc de texte plus étroit que les commentaires qui
+    // le suivent : deux gabarits pour deux choses qui se lisent à la suite.
+    // C'est le même objet — quelqu'un a écrit quelque chose, à une date —, et
+    // c'est donc la même mise en page (règle 4).
+    const avatarHtml = displayIdentiteDeLEnTete.avatarHtml
+      ? `<div class="gh-avatar gh-avatar--enligne ${
+          displayIdentiteDeLEnTete.avatarType === "human" ? "gh-avatar--human" : ""
+        }" aria-hidden="true">${displayIdentiteDeLEnTete.avatarHtml}</div>`
+      : `<div class="gh-avatar gh-avatar--enligne" aria-hidden="true"><span class="gh-avatar-initial">${
+          escapeHtml(displayIdentiteDeLEnTete.avatarInitial || description.avatar_initial || "S")
+        }</span></div>`;
+
     const headerHtml = `
       <div class="gh-comment-header gh-comment-header--editable">
-        <div class="gh-comment-header-main">${authorHtml}</div>
+        <div class="gh-comment-header-main">${avatarHtml}${authorHtml}</div>
         <div class="gh-comment-header-actions">${versionsTriggerHtml}${editButtonHtml}</div>
       </div>
     `;
@@ -1065,13 +1081,9 @@ export function createProjectSubjectsDescription(config = {}) {
         </div>
       `;
 
-    const displayIdentity = firstVersionIdentity || identity;
     const footerActionsHtml = String(options.footerActionsHtml || "").trim();
     return `
       <div class="gh-comment gh-comment--description">
-        ${displayIdentity.avatarHtml
-          ? `<div class="gh-avatar ${displayIdentity.avatarType === "human" ? "gh-avatar--human" : ""}" aria-hidden="true">${displayIdentity.avatarHtml}</div>`
-          : `<div class="gh-avatar" aria-hidden="true"><span class="gh-avatar-initial">${escapeHtml(displayIdentity.avatarInitial || description.avatar_initial || "S")}</span></div>`}
         <div class="gh-comment-box">
           ${headerHtml}
           ${bodyHtml}

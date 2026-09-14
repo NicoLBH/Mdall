@@ -3449,7 +3449,12 @@ body.is-resizing{
 }
 .thread-comment-replies--github .message-thread__comment--reply-item .thread-comment-content-capsule {padding:4px 12px 16px;}
 /* ===== Right panel: Sub-issues table (below description) ===== */
-.details-subissues{margin-left:52px;width:calc(100% - 52px);margin-bottom:8px;margin-top:12px;border:1px solid var(--border);border-radius:6px;overflow:hidden;container-type:inline-size;}
+/* **Pleine largeur, comme le reste.** Les 52 px de retrait étaient la gouttière
+   de l'avatar de la description — quarante pixels et son écart. L'avatar est
+   entré dans la ligne d'en-tête ; le retrait ne s'alignait donc plus sur rien,
+   et le tableau des sous-sujets se retrouvait plus étroit que tout ce qui
+   l'entoure. */
+.details-subissues{margin-bottom:8px;margin-top:12px;border:1px solid var(--border);border-radius:6px;overflow:hidden;container-type:inline-size;}
 .subissues-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background: transparent;border-bottom: solid 1px var(--border2);}
 .subissues-head-left{display:flex;align-items:center;gap:10px;min-width:0;}
 .subissues-head-right{display:flex;align-items:center;gap:8px;flex:0 0 auto;min-width:0;}
