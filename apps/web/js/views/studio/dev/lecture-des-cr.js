@@ -91,6 +91,19 @@ const EST_UN_PDF = /\.pdf$/i;
 const ONGLET = { RESTITUTION: "restitution", ANALYSE: "analyse" };
 
 /**
+ * La version du procédé de lecture d'un compte rendu.
+ *
+ * **Elle voyage avec la proposition**, à côté du modèle qui a lu. Le modèle
+ * seul ne suffit pas : le même modèle, avec une consigne réécrite, ne lit pas
+ * la même chose — et c'est précisément ce qu'on veut pouvoir comparer d'une
+ * version à l'autre quand une lecture déçoit.
+ *
+ * Elle se relève à chaque changement de la chaîne : les pages qu'on envoie, la
+ * consigne du serveur, ce qu'on garde de la réponse.
+ */
+const LECTURE_DES_CR = "lecture de CR v1";
+
+/**
  * Les étapes d'une lecture, nommées et cochées.
  *
  * ## Pourquoi une liste plutôt qu'une phrase
@@ -385,6 +398,18 @@ function renderEntete(vue = etat) {
       <div class="lecture-cr__entete-ligne">
         <h2 class="lecture-cr__titre">Lecture d'un compte rendu de chantier</h2>
         <div class="lecture-cr__entete-actions">
+          ${
+            // **La porte d'entrée reste, la zone d'accueil s'en va.** Un
+            // rectangle en pointillés qui occupe un tiers de l'écran au-dessus
+            // d'un document déjà lu ne sert plus à rien — et il ne se laisse pas
+            // supprimer sans laisser de quoi en déposer un autre.
+            vue.fichier
+              ? `<label class="gh-btn gh-btn--sm lecture-cr__entete-fichier">
+                   ${svgIcon("file", { className: "octicon" })} Un autre PDF
+                   <input type="file" accept="application/pdf,.pdf" hidden data-lecture-cr-fichier>
+                 </label>`
+              : ""
+          }
           ${renderTransformer({
             id: "lectureCrTransformer",
             disabled: !pret || vue.versement?.enCours === true,
@@ -432,6 +457,12 @@ function renderVersement(versement = null) {
  */
 function renderDepot(vue) {
   const enLecture = vue.phase === "lecture";
+
+  // **Rien à accueillir quand le document est là.** La zone gardait un tiers de
+  // l'écran pour redire ce qu'on venait de faire, et repoussait la restitution
+  // sous la ligne de flottaison. Ce qu'elle portait — choisir un autre PDF —
+  // est passé dans l'en-tête, où les commandes vivent déjà.
+  if (vue.fichier) return "";
 
   return `
     <div class="lecture-cr__depot${enLecture ? " is-occupee" : ""}" data-lecture-cr-zone>
@@ -2213,6 +2244,11 @@ async function lire(hote, fichier) {
     etat.lecture.points = relies.points;
     etat.lecture.liensEcartes = relies.ecartes;
 
+    // **Par quoi ce compte rendu a été lu.** C'est le référentiel de tout ce que
+    // la proposition portera, et il voyage avec elle : sans lui, le contrôle
+    // « le référentiel de lecture est connu » se déclarait non vérifiable sur
+    // une information qu'on avait sous la main.
+    etat.lecture.luPar = [texte(lu.modele), LECTURE_DES_CR].filter(Boolean).join(" · ");
     etat.lecture.rapprochementDemande = Boolean(lu.rapprochementDemande);
     etat.lecture.rapprochementsEcartes = Number(lu.rapprochementsEcartes) || 0;
     etat.lecture.labelsEcartes = Array.isArray(lu.labelsEcartes) ? lu.labelsEcartes : [];
@@ -2742,6 +2778,16 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
         labels: labelsAProposer(points, etat.labels),
         objectifs: objectifsAProposer(points, {
           tenueLe: texte(etat.lecture?.identite?.tenueLe), objectifsDuProjet: etat.objectifs
+        }),
+        luPar: texte(etat.lecture?.luPar),
+        // Ce que l'écran annonce depuis le début — « la proposition les
+        // fermerait » — et qu'elle ne portait pas. La même source que le bloc
+        // « Les fermetures », sinon l'écran promettrait une chose et la
+        // proposition en porterait une autre (règle 4).
+        disparition: sujetsDisparus({
+          confrontes: Array.isArray(etat.confrontes) ? etat.confrontes : [],
+          sujetsDuProjet: etat.sujetsDuProjet,
+          sujetsDuLabel: etat.sujetsDuLabel
         })
       })
     });

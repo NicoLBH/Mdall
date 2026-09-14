@@ -7,8 +7,9 @@ import { ITEM } from "./proposition-state.js";
 import {
   PHRASES_DU_REFUS, REFUS, cleDuPoint, introDuCompteRendu, itemsDuCompteRendu,
   labelItems, lotItems, objectifItems, phraseDuRefus, pointsAOuvrir, pointsARelancer,
-  refusDeLaProposition, relanceItems, titreDeLaProposition
+  refusDeLaProposition, relanceItems, titreDeLaProposition, fermetureItems
 } from "./proposition-du-cr.js";
+import { FERMETURE } from "./fermeture-du-cr.js";
 
 /**
  * Ce qu'un compte rendu **propose**, une fois lu.
@@ -502,4 +503,128 @@ test("seuls les jalons que le projet n'a pas sont proposés, clés sur leur date
 
 test("sans les objectifs du projet, aucun jalon n'est proposé", () => {
   assert.deepEqual(objectifItems({ ...LES_OBJECTIFS, connu: false }), []);
+});
+
+/* ── Les fermetures ──────────────────────────────────────────────────────── */
+
+const DISPARITION = {
+  connu: true,
+  suivis: 12,
+  disparus: [
+    { id: "sujet-plans", title: "Établir vos plans fabrication" },
+    { id: "sujet-rict", title: "Mise à jour de votre RICT" }
+  ]
+};
+
+/**
+ * **L'écran l'annonçait, la proposition ne le portait pas.** « La proposition
+ * les fermerait » s'affichait sur trente-cinq sujets, et rien n'entrait dans la
+ * proposition : elle promettait ce qu'elle ne faisait pas.
+ */
+test("un point marqué réglé ferme son sujet", () => {
+  const items = fermetureItems({
+    confrontes: [{
+      sort: SORT.RELANCE, titre: "Chape", reference: "12.03",
+      sujet: { id: "sujet-chape" }, faitLe: "12/09/2025"
+    }]
+  });
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].itemType, ITEM_TYPE.FERMETURE);
+  // La clé est le sujet : c'est lui qu'on ferme, et il ne bouge pas.
+  assert.equal(items[0].itemKey, "sujet-chape");
+  assert.equal(items[0].payload.motif, FERMETURE.DITE);
+  assert.match(items[0].payload.signe, /12\/09/);
+});
+
+/**
+ * **Un point neuf ne se ferme pas.** Sans sujet du projet, il n'y a rien à
+ * fermer : le point ouvrira un sujet, et un sujet ouvert fermé n'a jamais
+ * existé.
+ */
+test("un point réglé qui n'a pas de sujet n'en ferme aucun", () => {
+  const items = fermetureItems({
+    confrontes: [{ sort: SORT.NOUVEAU, titre: "Chape", faitLe: "12/09/2025" }]
+  });
+
+  assert.deepEqual(items, []);
+});
+
+/**
+ * **Fermer sur une absence est le geste le plus lourd du procédé.** Le payload
+ * garde donc laquelle des deux fermetures c'est : la fusion écrit la
+ * justification dans le fil, et elle n'a pas le droit de dire « le compte rendu
+ * le dit » quand il n'en a rien dit (règle 5).
+ */
+test("un sujet qui n'apparaît plus se ferme, et la ligne dit que c'est déduit", () => {
+  const items = fermetureItems({ confrontes: [], disparition: DISPARITION });
+
+  assert.deepEqual(items.map((item) => item.itemKey), ["sujet-plans", "sujet-rict"]);
+  assert.ok(items.every((item) => item.payload.motif === FERMETURE.DEDUITE));
+  assert.equal(items[0].payload.titre, "Établir vos plans fabrication");
+  // Aucune phrase à citer : il n'y en a pas.
+  assert.equal(items[0].payload.signe, "");
+});
+
+/**
+ * **Ne pas savoir d'où viennent les sujets n'autorise pas à les déclarer
+ * disparus** (règle 5). On ne ferme alors rien du tout.
+ */
+test("sans savoir quels sujets viennent des comptes rendus, rien ne se ferme", () => {
+  assert.deepEqual(
+    fermetureItems({ confrontes: [], disparition: { connu: false, disparus: DISPARITION.disparus } }),
+    []
+  );
+});
+
+/** Un sujet à la fois réglé et disparu ne se ferme qu'une fois, sur ce qui est écrit. */
+test("un sujet ne se ferme pas deux fois", () => {
+  const items = fermetureItems({
+    confrontes: [{
+      sort: SORT.RELANCE, titre: "Plans", sujet: { id: "sujet-plans" }, faitLe: "Fait"
+    }],
+    disparition: DISPARITION
+  });
+
+  assert.equal(items.filter((item) => item.itemKey === "sujet-plans").length, 1);
+  assert.equal(items[0].payload.motif, FERMETURE.DITE);
+});
+
+/**
+ * **La proposition les porte, pas seulement le composeur.** Le test précédent
+ * vérifie `fermetureItems` ; celui-ci vérifie que la proposition l'appelle —
+ * c'est là qu'était le défaut : la fonction existait, personne ne s'en servait.
+ */
+test("la proposition porte les fermetures avec le reste", () => {
+  const natures = itemsDuCompteRendu({
+    confrontes: CONFRONTES, document: UN_DOCUMENT, disparition: DISPARITION
+  }).map((item) => item.itemType);
+
+  assert.equal(natures.filter((nature) => nature === ITEM_TYPE.FERMETURE).length, 2);
+  // **En dernier.** Un sujet se ferme après avoir reçu ce que ce compte rendu
+  // en dit, sans quoi sa dernière activité serait postérieure à sa fermeture.
+  assert.equal(natures.at(-1), ITEM_TYPE.FERMETURE);
+});
+
+/* ── Le référentiel de lecture ───────────────────────────────────────────── */
+
+/**
+ * **Le contrôle se déclarait « non vérifiable » sur ce qu'on savait.** Un compte
+ * rendu n'est pas relu par le moteur des avis : il est lu une fois, par un
+ * modèle nommé, et cette lecture est le référentiel de tout ce que la
+ * proposition porte.
+ */
+test("le document porte par quoi il a été lu", () => {
+  const [document] = itemsDuCompteRendu({
+    confrontes: CONFRONTES, document: UN_DOCUMENT, luPar: "un-modele · lecture de CR v1"
+  });
+
+  assert.equal(document.itemType, ITEM_TYPE.DOCUMENT);
+  assert.equal(document.payload.luPar, "un-modele · lecture de CR v1");
+});
+
+/** Sans référentiel, on n'en invente pas : le champ n'est pas là (règle 5). */
+test("sans référentiel connu, le document n'en annonce aucun", () => {
+  const [document] = itemsDuCompteRendu({ confrontes: CONFRONTES, document: UN_DOCUMENT });
+  assert.equal("luPar" in document.payload, false);
 });

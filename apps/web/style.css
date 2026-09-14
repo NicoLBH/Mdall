@@ -20590,21 +20590,61 @@ body.proposition-merge-open{ overflow:hidden; }
   font-size:12px;
 }
 
-/* ── Arbitrer ce qui retient la fusion ──────────────────────────────────────
-   Le châssis des contradictions avec la mémoire, et pour la même raison : ce
-   sont deux fois la même chose — un désaccord qu'un humain tranche en signant.
-   Deux issues côte à côte, jamais une croix qui ferme. */
-.arbitrage{
+/* ── Ce qui retient la fusion ───────────────────────────────────────────────
+   Le châssis d'un conflit de fusion GitHub, et pour la même raison : c'est le
+   vocabulaire que nos lecteurs ont déjà. Un compteur dans l'en-tête, deux
+   flèches pour passer d'un blocage à l'autre, un bouton de sortie gris tant
+   qu'il en reste un — et dans le corps, les lignes en cause marquées d'un trait
+   rouge, avec les deux choix juste au-dessus. */
+.arbitrages{
+  border:1px solid var(--ton-mauvais);
+  border-radius:12px;
+  overflow:hidden;
+  margin-bottom:16px;
+  background:var(--panel);
+}
+.arbitrages__tete{
   display:flex;
-  flex-direction:column;
+  align-items:center;
   gap:10px;
-  padding:14px 16px;
+  flex-wrap:wrap;
+  padding:10px 14px;
+  background:rgba(218,54,51,.08);
   border-bottom:1px solid var(--border2);
 }
-.arbitrage:last-child{ border-bottom:0; }
-.arbitrage.is-settled{ opacity:.85; }
+.arbitrages__icone{ display:inline-flex; color:var(--ton-mauvais-vif); }
+.arbitrages__titre{ font-size:13px; font-weight:600; color:var(--text); }
+.arbitrages__compte{ font-size:12px; color:var(--muted); }
+.arbitrages__compte.is-blocking{ color:var(--ton-mauvais-vif); font-weight:600; }
+/* Les deux flèches et le bouton de sortie vont à droite, comme chez GitHub :
+   la lecture va du constat vers la sortie. */
+.arbitrages__navette{ display:inline-flex; align-items:center; gap:4px; margin-left:auto; }
+.arbitrages__rang{ font-size:12px; color:var(--muted); min-width:34px; text-align:center; }
+.arbitrages__sortie:disabled{ opacity:.5; cursor:not-allowed; }
+.arbitrages__doctrine{
+  margin:0;
+  padding:10px 14px;
+  font-size:12px;
+  color:var(--muted);
+  border-bottom:1px solid var(--border2);
+}
 
-.arbitrage__head{ display:flex; align-items:flex-start; gap:10px; }
+.arbitrage{ border-bottom:1px solid var(--border2); }
+.arbitrage:last-child{ border-bottom:0; }
+/* Le blocage sur lequel la navette est posée. Un compteur qui avance sans que
+   rien ne bouge à l'écran ne sert à rien. */
+.arbitrage.is-courant{ background:rgba(210,153,34,.05); }
+.arbitrage.is-settled{ opacity:.9; }
+
+/* L'en-tête du « fichier » : ce qui est en cause, et combien de lignes. */
+.arbitrage__fichier{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  padding:10px 14px;
+  background:var(--panel2);
+}
 .arbitrage__pastille{
   display:inline-flex;
   align-items:center;
@@ -20612,7 +20652,6 @@ body.proposition-merge-open{ overflow:hidden; }
   flex:0 0 auto;
   width:18px;
   height:18px;
-  margin-top:1px;
   border-radius:50%;
   color:#fff;
 }
@@ -20620,57 +20659,61 @@ body.proposition-merge-open{ overflow:hidden; }
 .arbitrage__pastille--ton-mauvais{ background:var(--ton-mauvais); }
 .arbitrage__pastille--ton-assume{ background:var(--ton-assume); }
 .arbitrage__pastille--ton-doute{ background:var(--ton-doute); }
+.arbitrage__nom{ font-size:13px; font-weight:600; color:var(--text); }
+.arbitrage__dit{ font-size:12px; color:var(--muted); }
+.arbitrage__lignes-compte{
+  margin-left:auto;
+  font-size:11px;
+  color:var(--muted);
+  font-family:var(--mono, ui-monospace, monospace);
+}
 
-.arbitrage__corps{ display:flex; flex-direction:column; gap:2px; min-width:0; flex:1 1 auto; }
-.arbitrage__titre{ color:var(--text); font-size:13px; font-weight:600; }
-.arbitrage__phrase{ color:var(--muted); font-size:12px; }
+/* Les deux issues, en bleu, au-dessus de ce sur quoi elles portent. */
+.arbitrage__choix{ display:flex; gap:8px; padding:10px 14px; flex-wrap:wrap; }
+.arbitrage__choix-bouton{
+  border-color:rgba(31,111,235,.55);
+  color:var(--ton-assume-vif);
+}
+.arbitrage__choix-bouton.is-ouvert{ background:rgba(31,111,235,.14); }
+.arbitrage__choix-bouton:disabled{ opacity:.5; cursor:not-allowed; }
 
-/* Ce que le contrôle met en cause, nommé. « 27 affirmations » ne se corrige pas
-   et ne s'arbitre pas : on ne décide pas sur un nombre. */
-.arbitrage__lignes{
-  margin:0;
-  padding:8px 10px;
-  list-style:none;
+/* Le motif n'apparaît qu'au clic sur « Passer outre » : ouvert d'avance, il
+   ferait écrire avant d'avoir décidé. */
+.arbitrage__motif-boite{
   display:flex;
   flex-direction:column;
-  gap:4px;
-  border:1px solid var(--border2);
-  border-radius:8px;
-  background:var(--panel2);
-  max-height:200px;
+  gap:6px;
+  margin:0 14px 10px;
+  padding:10px 12px;
+  border:1px solid rgba(31,111,235,.35);
+  border-radius:10px;
+  background:rgba(31,111,235,.06);
+}
+.arbitrage__motif-titre{ font-size:12px; font-weight:600; color:var(--text); }
+.arbitrage__motif{ width:100%; resize:vertical; font-size:13px; }
+.arbitrage__motif-pied{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.arbitrage__aide{ color:var(--ton-doute-vif); font-size:11px; }
+
+/* Le corps : les lignes en cause, chacune sous son trait. « 27 affirmations »
+   ne se corrige pas et ne s'arbitre pas — on ne décide pas sur un nombre. */
+.arbitrage__corps{
+  padding:4px 0 10px;
+  max-height:260px;
   overflow-y:auto;
+  font-family:var(--mono, ui-monospace, monospace);
+  font-size:12px;
 }
 .arbitrage__ligne{
   display:flex;
   align-items:baseline;
-  gap:8px;
-  font-size:12px;
-  color:var(--text);
+  gap:10px;
+  padding:3px 14px 3px 11px;
+  border-left:3px solid var(--ton-mauvais);
+  background:rgba(218,54,51,.06);
 }
-.arbitrage__ligne-nature{
-  flex:0 0 auto;
-  color:var(--muted);
-  font-size:11px;
-  font-family:var(--mono, ui-monospace, monospace);
-}
-.arbitrage__ligne--reste{ color:var(--muted); font-style:italic; }
-
-.arbitrage__issues{ display:flex; gap:10px; flex-wrap:wrap; }
-.arbitrage__issue{
-  flex:1 1 240px;
-  min-width:0;
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-  padding:10px 12px;
-  border:1px solid var(--border);
-  border-radius:10px;
-}
-.arbitrage__issue b{ font-size:13px; }
-.arbitrage__issue p{ margin:0; color:var(--muted); font-size:12px; }
-.arbitrage__issue .gh-btn{ align-self:flex-start; }
-.arbitrage__motif{ width:100%; resize:vertical; font-size:13px; }
-.arbitrage__aide{ color:var(--ton-doute-vif); font-size:11px; }
+.arbitrage__ligne-nature{ flex:0 0 auto; color:var(--muted); }
+.arbitrage__ligne-dit{ color:var(--text); min-width:0; overflow-wrap:anywhere; }
+.arbitrage__ligne--reste{ border-left-color:transparent; background:transparent; color:var(--muted); font-style:italic; }
 
 .arbitrage__passe{
   display:flex;
@@ -20678,12 +20721,11 @@ body.proposition-merge-open{ overflow:hidden; }
   justify-content:space-between;
   gap:12px;
   flex-wrap:wrap;
-  padding:10px 12px;
-  border:1px solid rgba(68,147,248,.35);
-  border-radius:10px;
+  padding:10px 14px;
   background:rgba(68,147,248,.08);
 }
-.arbitrage__passe-dit{ margin:0; font-size:12px; color:var(--text); }
+.arbitrage__passe-dit{ margin:0; padding:0 14px 10px; font-size:12px; color:var(--text); }
+.arbitrage__passe .arbitrage__passe-dit{ padding:0; }
 
 .controle__issue{
   flex:0 0 auto;
@@ -23899,7 +23941,19 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    bridé à 1100px, chaque colonne tombait sous 500px et l'on ne comparait plus
    des documents mais des fragments. La prose, elle, garde sa largeur de
    lecture — c'est `.lecture-cr__mot` qui s'en charge. */
-.lecture-cr{display:flex;flex-direction:column;gap:20px;max-width:none;width:100%;}
+/* **La largeur normale du produit**, celle des Fichiers et des Sujets. L'écran
+   s'étalait sur toute la fenêtre : sur un écran large, une phrase de restitution
+   faisait deux cents caractères, et l'œil perdait sa ligne en revenant à gauche.
+   Une largeur de travail se décide une fois et se partage. */
+.lecture-cr{
+  display:flex;
+  flex-direction:column;
+  gap:20px;
+  width:min(100%, 1280px);
+  max-width:1280px;
+  margin:0 auto;
+}
+.lecture-cr__entete-fichier{flex:0 0 auto;}
 .lecture-cr__entete{display:flex;flex-direction:column;gap:6px;}
 /* Le titre à gauche, le bouton du document refait à droite : une commande qui
    ne concerne que ce qu'on vient de lire se pose au bord de son titre. */

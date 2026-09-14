@@ -114,7 +114,9 @@ const INTENDANCE = new Set([
   // Passer outre un contrôle est une décision sur la **proposition**, pas une
   // valeur du projet : il n'y a pas d'« avant » à lui comparer. Elle se relit
   // dans le bloc des arbitrages et dans le procès-verbal.
-  ITEM_TYPE.ARBITRAGE
+  ITEM_TYPE.ARBITRAGE,
+  // Fermer un sujet est un mouvement du suivi, pas une valeur du projet.
+  ITEM_TYPE.FERMETURE
 ]);
 
 /**
