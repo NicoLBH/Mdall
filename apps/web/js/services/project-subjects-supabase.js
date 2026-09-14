@@ -441,7 +441,8 @@ async function fetchProjectSubjectLinks(projectId) {
 
 /* ── Les reprises d'un sujet par les comptes rendus de chantier ──────────── */
 
-const CR_MENTION_COLUMNS = "id,subject_id,document_id,proposition_id,numero,tenue_le,etat,a_change,created_at";
+const CR_MENTION_COLUMNS =
+  "id,subject_id,document_id,proposition_id,numero,tenue_le,etat,observation,page,a_change,created_at";
 
 /**
  * Ce que les comptes rendus ont redit de ces sujets, dans l'ordre du temps.
@@ -498,6 +499,11 @@ export async function recordSubjectCrMentions(mentions = [], { propositionId = "
       numero: String(mention?.numero ?? "").trim(),
       tenue_le: String(mention?.tenueLe ?? "").trim() || null,
       etat: String(mention?.etat ?? "").trim(),
+      // Ce que le compte rendu en écrit, et où le vérifier : c'est ce que le
+      // commentaire de relance portait, et c'est la ligne d'activité qui le dit
+      // maintenant.
+      observation: String(mention?.observation ?? "").trim(),
+      page: Number.isFinite(Number(mention?.page)) && Number(mention.page) > 0 ? Number(mention.page) : null,
       a_change: mention?.aChange === true
     }))
     .filter((ligne) => ligne.subject_id && ligne.document_id);
@@ -1644,36 +1650,59 @@ export async function closeSubject({ subjectId, reason = "" } = {}) {
   const normalizedSubjectId = normalizeUuid(subjectId);
   if (!normalizedSubjectId) throw new Error("subjectId is required");
 
-  const url = new URL(`${SUPABASE_URL}/rest/v1/subjects`);
-  url.searchParams.set("id", `eq.${normalizedSubjectId}`);
-  // **Seulement s'il est encore ouvert.** Sans cette borne, rejouer une fusion
-  // remplacerait le motif d'une fermeture par un autre, et la date avec.
-  url.searchParams.set("status", "eq.open");
-  url.searchParams.set("select", "id,status,closed_at,closure_reason");
+  // **Par la même porte que le bouton « Close ».**
+  //
+  // On écrivait la ligne `subjects` à la main. Le sujet se fermait bien — et
+  // rien ne le disait : la ligne d'activité « a fermé le sujet » naît dans
+  // `subject_history`, que seule cette fonction alimente. On lisait donc un
+  // sujet clos, un commentaire qui expliquait pourquoi, et une timeline où il
+  // ne s'était jamais rien passé.
+  //
+  // Deux chemins pour un même geste finissent toujours par ne plus faire la
+  // même chose (règle 4) ; celui-ci avait déjà commencé.
+  const avant = await lireLeStatutDuSujet(normalizedSubjectId);
+  // Déjà fermé : ce n'est pas un échec — c'est l'état qu'on voulait, et le dire
+  // comme une panne ferait chercher un problème. Surtout, rejouer une fusion ne
+  // doit pas remplacer le motif d'une fermeture par un autre, ni sa date.
+  if (avant && avant !== "open") return { id: normalizedSubjectId, dejaFerme: true };
 
-  const res = await fetch(url.toString(), {
-    method: "PATCH",
-    headers: await getSupabaseAuthHeaders({
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Prefer: "return=representation"
-    }),
-    body: JSON.stringify({
-      status: "closed",
-      closed_at: new Date().toISOString(),
-      closure_reason: String(reason || "").trim() || null
-    })
+  const actorPersonId = normalizeUuid(await resolveCurrentUserDirectoryPersonId());
+  await rpcCall("update_subject_issue_status", {
+    p_subject_id: normalizedSubjectId,
+    // Fermé parce que c'est fait — c'est ce qu'un compte rendu de chantier
+    // constate. « Non pertinent » et « doublon » sont des jugements que
+    // personne n'a portés ici.
+    p_action: "issue:close:realized",
+    p_actor_person_id: actorPersonId || null
   });
 
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`subject close failed (${res.status}): ${txt}`);
-  }
+  // Le motif tel qu'il est écrit — « Fermé d'après CR n° 7 : … » — ne tient pas
+  // dans `closure_reason`, qui ne connaît que trois valeurs. Il s'écrit dans le
+  // fil, où il se lit à côté de ce que les gens en ont dit.
+  void reason;
 
-  const rows = await res.json().catch(() => []);
-  // Zéro ligne : il était déjà fermé. Ce n'est pas un échec — c'est l'état
-  // qu'on voulait, et le dire comme une panne ferait chercher un problème.
-  return { id: normalizedSubjectId, dejaFerme: (Array.isArray(rows) ? rows.length : 0) === 0 };
+  return { id: normalizedSubjectId, dejaFerme: false };
+}
+
+/** Le statut d'un sujet, ou `null` quand la base n'a pas répondu. */
+async function lireLeStatutDuSujet(subjectId) {
+  try {
+    const url = new URL(`${SUPABASE_URL}/rest/v1/subjects`);
+    url.searchParams.set("id", `eq.${subjectId}`);
+    url.searchParams.set("select", "status");
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+      cache: "no-store"
+    });
+    if (!res.ok) return null;
+
+    const rows = await res.json().catch(() => []);
+    return String(rows?.[0]?.status ?? "").trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 export async function loadSubjectDescriptionVersions(subjectId, options = {}) {

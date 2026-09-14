@@ -114,11 +114,15 @@ import {
 } from "../services/depot-controles.js";
 import {
   MOTIF_MIN,
+  MOTS_DU_VERDICT,
+  MOTS_DU_VERDICT_PASSE,
+  REPRENDRE,
   arbitrageARetirer,
   arbitrageAEcrire,
   arbitragesEnregistres,
   decisionsDuPasserOutre,
-  decisionsEnBloc,
+  lignesDuConflit,
+  lignesRetenues,
   motifRecevable,
   phraseDesArbitrages,
   phraseDuProcesVerbal,
@@ -314,6 +318,15 @@ function renderRow(proposition) {
   `;
 }
 
+/**
+ * Où l'on en était de sa lecture, entre deux rendus.
+ *
+ * Un objet plutôt qu'une variable du `view` : ce n'est pas un état de l'écran,
+ * c'est une position de la fenêtre, et elle ne doit rien changer à ce qui est
+ * rendu.
+ */
+const defilementGarde = { proposition: "" };
+
 function renderContent(root) {
   const all = view.propositions ?? [];
   const counts = {
@@ -326,6 +339,18 @@ function renderContent(root) {
       : all.filter((entry) => entry.status !== PROPOSITION.OPEN);
 
   if (view.open) {
+    // **Le défilement se garde d'un rendu à l'autre.**
+    //
+    // Trancher un conflit redessine l'écran, et l'écran repartait du haut : sur
+    // vingt-neuf blocs, chaque clic renvoyait à la première ligne et il fallait
+    // redescendre pour trouver le suivant. Ce n'est pas un confort — c'est ce
+    // qui rendait le travail impraticable.
+    //
+    // On ne restaure que sur **la même** proposition : ouvrir la suivante doit
+    // commencer par son début, pas au milieu de la précédente.
+    const memeProposition = defilementGarde.proposition === String(view.open.id ?? "");
+    const hauteur = memeProposition ? (window.scrollY || document.documentElement.scrollTop || 0) : 0;
+
     // La coque d'un détail, celle des sujets : c'est elle que
     // `bindOverlayChromeCompact` marque au défilement, et c'est sa classe qui
     // fait basculer le titre étendu vers le titre compact, en CSS.
@@ -336,6 +361,8 @@ function renderContent(root) {
         </div>
       </section>
     `;
+    defilementGarde.proposition = String(view.open.id ?? "");
+    if (hauteur > 0) window.scrollTo({ top: hauteur, behavior: "auto" });
     bindReview(root);
     // Le panneau vit hors de l'écran, sur `document.body` : il se resynchronise
     // après chaque rendu, sans quoi il porterait l'état d'avant.
@@ -343,8 +370,10 @@ function renderContent(root) {
     return;
   }
 
-  // Retour à la liste : le panneau n'a plus de proposition à fusionner.
+  // Retour à la liste : le panneau n'a plus de proposition à fusionner, et la
+  // position de lecture n'a plus d'objet.
   closeMergeDrawer();
+  defilementGarde.proposition = "";
 
   root.innerHTML = `
     <section class="project-simple-page project-simple-page--propositions">
@@ -3676,7 +3705,7 @@ function renderArbitrage(ligne, { gele = false, courant = false } = {}) {
           // passé.
           enConflit.length > 0
             ? `<span class="arbitrage__lignes-compte">${
-                enConflit.length - reste}/${enConflit.length} tranchée${enConflit.length > 1 ? "s" : ""}</span>`
+                enConflit.length - reste}/${enConflit.length} tranché${enConflit.length > 1 ? "s" : ""}</span>`
             : concerne.length > 0
               ? `<span class="arbitrage__lignes-compte">${concerne.length} ligne${
                   concerne.length > 1 ? "s" : ""}</span>`
@@ -3701,24 +3730,11 @@ function renderArbitrage(ligne, { gele = false, courant = false } = {}) {
           : gele
             ? `<p class="arbitrage__passe-dit">Cette proposition est close : plus rien ne s'arbitre.</p>`
             : enConflit.length > 0
-              ? `<div class="arbitrage__choix">
-                   <button type="button" class="gh-btn gh-btn--sm arbitrage__choix-bouton"
-                     data-arbitrage-tout="${escapeHtml(`${TRANCHE.GARDE}|${ligne.id}`)}"
-                     ${reste === 0 ? "disabled" : ""}
-                     title="${escapeHtml(
-                       reste === 0
-                         ? "Tout est tranché."
-                         : `Retenir ce que le projet disait sur les ${reste} ligne(s) restantes`
-                     )}">Tout garder</button>
-                   <button type="button" class="gh-btn gh-btn--sm arbitrage__choix-bouton"
-                     data-arbitrage-tout="${escapeHtml(`${TRANCHE.PRIS}|${ligne.id}`)}"
-                     ${reste === 0 ? "disabled" : ""}
-                     title="${escapeHtml(
-                       reste === 0
-                         ? "Tout est tranché."
-                         : `Retenir ce que la proposition apporte sur les ${reste} ligne(s) restantes`
-                     )}">Tout prendre</button>
-                 </div>`
+              // **Aucun geste d'ensemble ici.** « Tout garder » et « Tout
+              // prendre » faisaient la même chose que les boutons de chaque
+              // bloc : dans le même cadre, ils se lisaient comme un second
+              // mécanisme. Chaque conflit porte ses deux issues, et c'est tout.
+              ? ""
               : `<div class="arbitrage__choix">
                    <button type="button" class="gh-btn gh-btn--sm arbitrage__choix-bouton"
                      data-arbitrage-ecarter="${escapeHtml(ligne.id)}"
@@ -3757,74 +3773,99 @@ function renderArbitrage(ligne, { gele = false, courant = false } = {}) {
           : ""
       }
 
-      ${
-        concerne.length > 0 && !ligne.arbitre
-          ? `<div class="arbitrage__corps">
-               ${concerne.slice(0, 40).map((entree) => renderLigneEnCause(entree, gele)).join("")}
-               ${concerne.length > 40
-                 ? `<div class="arbitrage__ligne arbitrage__ligne--reste">et ${
-                     concerne.length - 40} autre(s)</div>`
-                 : ""}
-             </div>`
-          : ""
-      }
+      ${concerne.length > 0 && !ligne.arbitre ? renderFichierEnConflit(concerne, gele) : ""}
     </div>
   `;
 }
 
 /**
- * Une ligne mise en cause, et ce qu'on lui a répondu.
+ * Les lignes en cause, comme un fichier que Git aurait laissé en conflit.
  *
- * ## Elle reste après qu'on a tranché
+ * ## Pourquoi ce châssis-là, et pas une liste
  *
- * Elle disparaissait au clic. Sur vingt-neuf lignes, cela ne se voyait pas : la
- * liste raccourcissait d'un cran quelque part, et rien ne disait ce qu'on venait
- * de décider ni ce qu'il restait. On ne pouvait pas non plus se relire avant de
- * signer — ce qui est précisément ce qu'un procès-verbal suppose.
+ * La liste opposait deux résumés sur une ligne — l'un barré, l'autre pas — avec
+ * « Garder » et « Prendre » au bout. Impossible de savoir ce qu'on gardait :
+ * les deux côtés tenaient en quinze mots, sans dire d'où ils sortaient, et les
+ * verbes ne nommaient pas leur objet.
  *
- * Les deux boutons restent donc offerts, l'un marqué : se corriger est un clic,
- * et le verdict se lit sans avoir à s'en souvenir.
+ * Un fichier en conflit dit tout cela d'un coup d'œil, et tout le monde sait
+ * déjà le lire : **les deux versions en entier**, numérotées, séparées par les
+ * marqueurs, avec les deux issues posées au-dessus du bloc qu'elles tranchent.
+ *
+ * ## Les numéros comptent d'un bloc à l'autre
+ *
+ * C'est un fichier, pas vingt-neuf cartes : la numérotation est continue, et
+ * elle ne bouge pas quand on tranche. Un numéro qui saute ferait croire qu'on a
+ * perdu quelque chose.
  */
-function renderLigneEnCause(entree, gele = false) {
-  const cle = `${entree.itemType}|${entree.itemKey}`;
-  const tranche = entree.tranche ?? null;
-  const nature = entree.nature || entree.itemType || "";
+function renderFichierEnConflit(concerne, gele = false) {
+  let rang = 0;
 
-  const bouton = (verdict, mot, aide) => `
-    <button type="button" class="gh-btn gh-btn--sm arbitrage__geste${
-      tranche === verdict ? " is-choisi" : ""}"
-      ${tranche === verdict ? "disabled aria-pressed=\"true\"" : ""}
-      data-conflit-trancher="${escapeHtml(`${verdict}|${cle}`)}"
-      title="${escapeHtml(aide)}">${mot}</button>
-  `;
+  const blocs = concerne.slice(0, 40).map((entree) => {
+    const cle = `${entree.itemType}|${entree.itemKey}`;
+    const tranche = entree.tranche ?? null;
+    const toutes = entree.conflit
+      ? lignesDuConflit(entree, { dater: formatDate })
+      : [{ cote: "propose", texte: [entree.nature, entree.sujet || entree.itemKey].filter(Boolean).join(" — ") }];
+
+    // Les numéros suivent le fichier, pas ce qui reste affiché : ils sont posés
+    // sur toutes les lignes, et le côté écarté emporte les siens.
+    const numerotees = toutes.map((ligne) => ({ ...ligne, rang: (rang += 1) }));
+    const retenues = lignesRetenues(numerotees, tranche);
+
+    return `
+      <div class="conflit${tranche ? " est-tranche" : ""}">
+        ${entree.conflit && !gele ? renderConflitActions(cle, tranche) : ""}
+        <div class="conflit__lignes">
+          ${retenues.map((ligne) => `
+            <div class="conflit__ligne conflit__ligne--${escapeHtml(ligne.cote)}">
+              <span class="conflit__num">${ligne.rang}</span>
+              <span class="conflit__texte">${escapeHtml(ligne.texte)}</span>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  });
+
+  const reste = concerne.length - Math.min(concerne.length, 40);
 
   return `
-    <div class="arbitrage__ligne${tranche ? ` is-tranche is-${escapeHtml(tranche)}` : ""}">
-      <span class="arbitrage__ligne-nature">${escapeHtml(nature)}</span>
-      <span class="arbitrage__ligne-dit">
-        ${escapeHtml(entree.sujet || entree.itemKey || "")}
-        ${
-          // **L'écart, pas seulement la clé.** On tranche une contradiction en
-          // lisant les deux lectures, pas en cochant un identifiant.
-          entree.avant || entree.apres
-            ? `<span class="arbitrage__ecart">
-                 <span class="arbitrage__ecart-avant">${escapeHtml(entree.avant || "—")}${
-                   entree.quand ? ` (${escapeHtml(formatDate(entree.quand))})` : ""}</span>
-                 →
-                 <span class="arbitrage__ecart-apres">${escapeHtml(entree.apres || "—")}</span>
-               </span>`
-            : ""
-        }
-        ${entree.extrait ? `<span class="arbitrage__extrait">« ${escapeHtml(entree.extrait)} »</span>` : ""}
-      </span>
-      ${
-        entree.conflit && !gele
-          ? `<span class="arbitrage__ligne-gestes">
-               ${bouton(TRANCHE.GARDE, "Garder", "Retenir ce que le projet disait : cette ligne est écartée")}
-               ${bouton(TRANCHE.PRIS, "Prendre", "Retenir ce que cette proposition apporte")}
-             </span>`
-          : ""
-      }
+    <div class="arbitrage__corps">
+      ${blocs.join("")}
+      ${reste > 0 ? `<div class="conflit__reste">et ${reste} autre(s)</div>` : ""}
+    </div>
+  `;
+}
+
+/**
+ * Les deux issues d'un conflit, sur leur ligne.
+ *
+ * **Les verbes nomment leur objet.** « Garder » et « Prendre » demandaient de
+ * deviner quoi ; « Accepter le changement » et « Garder la version actuelle »
+ * se lisent sans avoir à reconstruire lequel des deux côtés est lequel.
+ */
+function renderConflitActions(cle, tranche) {
+  if (tranche) {
+    return `
+      <div class="conflit__actions conflit__actions--tranche">
+        <span class="conflit__verdict">${escapeHtml(MOTS_DU_VERDICT_PASSE[tranche] ?? "Tranché")}</span>
+        <button type="button" class="conflit__revenir"
+          data-conflit-trancher="${escapeHtml(`${REPRENDRE}|${cle}`)}"
+          title="Remettre ce conflit en question : les deux versions reviennent.">Revenir</button>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="conflit__actions">
+      <button type="button" class="conflit__geste"
+        data-conflit-trancher="${escapeHtml(`${TRANCHE.PRIS}|${cle}`)}">${
+        escapeHtml(MOTS_DU_VERDICT[TRANCHE.PRIS])}</button>
+      <span class="conflit__separateur" aria-hidden="true"></span>
+      <button type="button" class="conflit__geste"
+        data-conflit-trancher="${escapeHtml(`${TRANCHE.GARDE}|${cle}`)}">${
+        escapeHtml(MOTS_DU_VERDICT[TRANCHE.GARDE])}</button>
     </div>
   `;
 }
@@ -5184,16 +5225,10 @@ function bindReview(root) {
       if (!item) return;
 
       if (verdict === TRANCHE.GARDE) decide(root, [item], ITEM.REFUSED, "Ce que le projet retenait a été gardé.");
+      // **Revenir remet les deux versions.** Ce n'est pas un troisième verdict :
+      // c'est l'absence de verdict, retrouvée.
+      else if (verdict === REPRENDRE) decide(root, [item], ITEM.PROPOSED);
       else decide(root, [item], ITEM.ACCEPTED);
-    });
-  }
-
-  // Le même geste, sur tout ce qui reste. Deux boutons de moins à cliquer
-  // vingt-neuf fois, et pas une issue de plus.
-  for (const bouton of root.querySelectorAll("[data-arbitrage-tout]")) {
-    bouton.addEventListener("click", () => {
-      const [verdict, ...reste] = String(bouton.getAttribute("data-arbitrage-tout") ?? "").split("|");
-      trancherEnBloc(root, reste.join("|"), verdict);
     });
   }
 
@@ -5883,23 +5918,6 @@ async function passerOutre(root, id) {
     view.motifsDArbitrage = { ...(view.motifsDArbitrage ?? {}), [id]: "" };
     view.arbitrageEnCoursDeMotif = "";
   }
-}
-
-/**
- * Trancher d'un coup tout ce qui reste d'un contrôle.
- *
- * Le même geste que ligne à ligne, appliqué à ce qui n'a pas encore de réponse.
- * Ce qui a déjà été tranché n'est pas retouché : quelqu'un s'est prononcé.
- */
-async function trancherEnBloc(root, id, verdict) {
-  const controle = arbitragePar(id);
-  if (!controle) return;
-
-  const tranche = verdict === TRANCHE.GARDE ? TRANCHE.GARDE : TRANCHE.PRIS;
-  const decisions = decisionsEnBloc({ controle, items: view.review?.items ?? [], tranche });
-  if (decisions.length === 0) return;
-
-  await appliquerLesDecisions(root, decisions);
 }
 
 /**

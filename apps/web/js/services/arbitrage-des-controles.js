@@ -201,7 +201,7 @@ export function arbitrageAEcrire({ controle = null, motif = "" } = {}) {
  * Les lignes déjà tranchées, dans un sens ou dans l'autre, ne sont pas
  * retouchées : quelqu'un s'est déjà prononcé sur elles.
  */
-export function decisionsEnBloc({ controle = null, items = [], tranche = TRANCHE.PRIS } = {}) {
+function decisionsEnBloc({ controle = null, items = [], tranche = TRANCHE.PRIS } = {}) {
   const enCause = new Set(
     (controle?.concerne ?? [])
       .filter((entree) => entree?.conflit)
@@ -233,9 +233,140 @@ export function decisionsEnBloc({ controle = null, items = [], tranche = TRANCHE
     }));
 }
 
-/** Tout prendre, c'est ce que « passer outre » fait des lignes en cause. */
+/**
+ * Tout prendre, c'est ce que « passer outre » fait des lignes en cause.
+ *
+ * **C'est le seul geste d'ensemble qui reste.** Deux boutons « Tout garder » /
+ * « Tout prendre » vivaient à côté du choix ligne à ligne et faisaient
+ * exactement la même chose sur les mêmes lignes : dans le même cadre, ils se
+ * lisaient comme un second mécanisme. Ils sont partis. Passer outre, lui, n'est
+ * pas un raccourci : c'est une décision motivée sur un contrôle entier.
+ */
 export function decisionsDuPasserOutre({ controle = null, items = [] } = {}) {
   return decisionsEnBloc({ controle, items, tranche: TRANCHE.PRIS });
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Un conflit se lit comme Git l'écrit
+ *
+ * ## Deux étiquettes ne suffisaient pas
+ *
+ * La ligne disait « Garder » et « Prendre » à côté d'un titre et d'une flèche.
+ * Personne ne pouvait savoir ce qu'il gardait : les deux côtés tenaient sur une
+ * ligne, l'un barré, l'autre pas, sans dire d'où ils sortaient.
+ *
+ * Git a résolu ce problème une fois pour toutes, et tout le monde sait le lire :
+ * les deux versions **en entier**, l'une après l'autre, séparées par des
+ * marqueurs, dans un fichier numéroté. On n'arbitre pas sur une étiquette, on
+ * arbitre sur deux textes qu'on a sous les yeux.
+ *
+ * ## Ce que chaque côté porte
+ *
+ * Le côté proposé : ce que ce compte rendu affirme, et **la phrase du document**
+ * quand elle a été conservée — c'est elle qui prouve, et sans elle on croit.
+ * Le côté actuel : ce que le projet retenait, et le jour où il l'a décidé.
+ *
+ * ## Ce qui reste après le choix
+ *
+ * Les lignes qu'on ne retient pas disparaissent, marqueurs compris — exactement
+ * ce qu'on fait dans un fichier en conflit. Ce qui reste à l'écran est ce qui
+ * entrera, et rien d'autre.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** De quel côté d'un conflit une ligne se trouve. */
+export const COTE = {
+  /** Ce que ce compte rendu apporte. */
+  PROPOSE: "propose",
+  /** Ce que le projet retient aujourd'hui. */
+  ACTUEL: "actuel",
+  /** `<<<<<<<`, `=======`, `>>>>>>>`. */
+  MARQUEUR: "marqueur"
+};
+
+/**
+ * Les deux réponses, dites en toutes lettres.
+ *
+ * « Garder » et « Prendre » demandaient de deviner ce qu'on gardait et ce qu'on
+ * prenait. Les verbes nomment donc leur objet, et ils vivent ici : trois écrans
+ * qui les écriraient chacun de leur côté finiraient par ne plus dire la même
+ * chose (règle 10).
+ */
+export const MOTS_DU_VERDICT = {
+  [TRANCHE.PRIS]: "Accepter le changement",
+  [TRANCHE.GARDE]: "Garder la version actuelle"
+};
+
+/**
+ * Remettre un conflit en question.
+ *
+ * Ce n'est pas un troisième verdict : c'est l'absence de verdict, retrouvée.
+ * Sans elle, un clic de trop serait sans retour jusqu'à la signature — et la
+ * séance qu'on signe est précisément celle qu'on a pu relire et corriger.
+ */
+export const REPRENDRE = "reprendre";
+
+/** Ce qu'on relit une fois le choix fait. */
+export const MOTS_DU_VERDICT_PASSE = {
+  [TRANCHE.PRIS]: "Changement accepté",
+  [TRANCHE.GARDE]: "Version actuelle gardée"
+};
+
+/**
+ * Les lignes d'un conflit, telles qu'un fichier les porterait.
+ *
+ * @param {object} entree la ligne mise en cause, telle que le contrôle la rend
+ * @param {{dater?: function}} options `dater` met une date en clair ; sans lui,
+ *   la date s'écrit telle qu'elle est stockée plutôt que de disparaître.
+ * @returns {{cote: string, texte: string}[]}
+ */
+export function lignesDuConflit(entree = {}, { dater = null } = {}) {
+  const enClair = (valeur) => {
+    const dit = texte(valeur);
+    if (!dit) return "";
+    const mis = typeof dater === "function" ? texte(dater(dit)) : "";
+    return mis || dit;
+  };
+
+  const nature = texte(entree?.nature) || texte(entree?.itemType);
+  const nom = texte(entree?.sujet) || texte(entree?.itemKey);
+
+  const propose = [texte(entree?.apres)].filter(Boolean);
+  // La phrase du document, telle qu'elle a été lue. C'est la matière de la
+  // décision : sans elle on arbitre entre deux résumés.
+  const extrait = texte(entree?.extrait);
+  if (extrait) propose.push(`« ${extrait} »`);
+
+  const actuel = [texte(entree?.avant)].filter(Boolean);
+  const quand = enClair(entree?.quand);
+  if (quand) actuel.push(`Décidé le ${quand}`);
+
+  // Un côté vide se dit plutôt que de laisser un blanc : ne pas savoir n'est
+  // pas la même chose que ne rien avoir à dire (règle 5).
+  if (propose.length === 0) propose.push("Ce compte rendu le propose à nouveau.");
+  if (actuel.length === 0) actuel.push("Le projet n'en disait rien d'autre.");
+
+  return [
+    { cote: COTE.MARQUEUR, texte: `<<<<<<< ${[nature, nom].filter(Boolean).join(" — ")}` },
+    ...propose.map((ligne) => ({ cote: COTE.PROPOSE, texte: ligne })),
+    { cote: COTE.MARQUEUR, texte: "=======" },
+    ...actuel.map((ligne) => ({ cote: COTE.ACTUEL, texte: ligne })),
+    { cote: COTE.MARQUEUR, texte: ">>>>>>> version actuelle du projet" }
+  ];
+}
+
+/**
+ * Ce qui reste d'un conflit une fois tranché.
+ *
+ * Les marqueurs s'en vont avec le côté écarté : ce qui reste à l'écran est ce
+ * qui entrera. Tant que rien n'est tranché, tout est là — c'est en lisant les
+ * deux qu'on décide.
+ */
+export function lignesRetenues(lignes = [], tranche = null) {
+  const toutes = Array.isArray(lignes) ? lignes : [];
+  if (!tranche) return toutes;
+
+  const garde = tranche === TRANCHE.GARDE ? COTE.ACTUEL : COTE.PROPOSE;
+  return toutes.filter((ligne) => ligne?.cote === garde);
 }
 
 /* ────────────────────────────────────────────────────────────────────────────

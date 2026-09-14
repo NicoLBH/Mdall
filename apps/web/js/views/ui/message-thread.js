@@ -30,16 +30,23 @@ export function renderMessageCard({
   bodyClassName = "",
   headerRightHtml = ""
 } = {}) {
+  // **L'avatar est entré dans la ligne d'en-tête.**
+  //
+  // Il vivait à côté du message, dans une colonne de quarante pixels plus une
+  // gouttière : sur chaque commentaire, cinquante pixels de largeur perdus pour
+  // une vignette qu'on ne regarde qu'une fois. Posé devant le nom, il dit la
+  // même chose — qui parle — et rend la largeur au texte, qui est ce qu'on lit.
   return `
     <div class="gh-comment ${className}">
-      ${renderMessageAvatar({
-        type: avatarType,
-        avatarHtml,
-        initial: avatarInitial
-      })}
       <div class="gh-comment-box ${boxClassName}">
         <div class="gh-comment-header ${headerClassName}">
           <div class="gh-comment-header-main">
+            ${renderMessageAvatar({
+              type: avatarType,
+              avatarHtml,
+              initial: avatarInitial,
+              className: "gh-avatar--enligne"
+            })}
             <div class="gh-comment-author">${escapeHtml(author)}</div>
             ${tsHtml || ""}
           </div>

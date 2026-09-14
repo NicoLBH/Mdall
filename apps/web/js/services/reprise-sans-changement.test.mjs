@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  REPRISES_QUI_INTERPELLENT, mentionsDesLignes, repriseQuiInterpelle, repriseQuiTraine,
+  REPRISES_QUI_INTERPELLENT, mentionsDesLignes, observationsDesReprises, phraseDeLObservation,
+  repriseQuiInterpelle, repriseQuiTraine,
   repriseSansChangement, reprisesAEnregistrer, sourceDuPoint
 } from "./reprise-sans-changement.js";
 
@@ -154,8 +155,40 @@ test("un sujet ouvert par ce compte rendu compte comme un mouvement", () => {
 
   assert.deepEqual(aEcrire, [{
     subjectId: "sujet-1", documentId: "doc-14",
-    numero: "14", tenueLe: "2026-03-12", etat: "en cours", aChange: true
+    numero: "14", tenueLe: "2026-03-12", etat: "en cours", aChange: true,
+    // Ce que le compte rendu en écrit, et où le vérifier : c'est ce que le
+    // commentaire de relance portait, et la ligne d'activité le reprend.
+    observation: "…", page: 4
   }]);
+});
+
+/**
+ * **La citation se lit à deux endroits.** Le serveur l'écrit dans la
+ * provenance, la proposition la remonte à la racine. N'en lire qu'un revenait à
+ * n'en lire aucun — en silence, avec une ligne d'activité qui ne dirait rien.
+ */
+test("l'observation se lit où qu'elle soit écrite", () => {
+  const depuisLaRacine = reprisesAEnregistrer({
+    ouverts: [{
+      subjectId: "sujet-1",
+      point: { ...point({ sourceId: "cr-1" }), evidence: "Reprise du carrelage", page: 9 }
+    }],
+    documents: DOCUMENTS
+  });
+  assert.deepEqual(
+    [depuisLaRacine[0].observation, depuisLaRacine[0].page],
+    ["Reprise du carrelage", 9]
+  );
+
+  // Sans citation, ce qu'on sait du point plutôt qu'un blanc.
+  const sansCitation = reprisesAEnregistrer({
+    ouverts: [{
+      subjectId: "sujet-1",
+      point: { titre: "Étanchéité", provenance: { source_id: "cr-1" } }
+    }],
+    documents: DOCUMENTS
+  });
+  assert.deepEqual([sansCitation[0].observation, sansCitation[0].page], ["Étanchéité", null]);
 });
 
 test("un point déjà suivi dont l'état n'a pas bougé ne compte pas comme un mouvement", () => {
@@ -352,9 +385,12 @@ test("la discussion d'un sujet porte la ligne", async () => {
 
   assert.match(fil, /repriseSansChangement\(mentions, \{ dater: enFrancais \}\)/);
   assert.match(fil, /assurerLesReprises\(sujetRegarde\)/);
-  // Un sujet ouvert par un compte rendu n'a parfois aucun message : s'arrêter
-  // sur une discussion vide ferait disparaître ce qu'on cherchait à voir.
-  assert.match(fil, /if \(!thread\.length && !repriseHtml\) return "";/);
+  // Un sujet ouvert par un compte rendu n'a parfois aucun message, et sa seule
+  // activité est d'être repris de réunion en réunion : s'arrêter sur une
+  // discussion vide ferait disparaître ce qu'on cherchait à voir.
+  assert.match(fil, /if \(!thread\.length && !repriseHtml && !observationsHtml\) return "";/);
+  // Et ce que les comptes rendus en disent y est aussi, regroupé.
+  assert.match(fil, /observationsDesReprises\(mentionsDesLignes\(lignes\)\)/);
 });
 
 test("la table existe, et elle est additive", async () => {
@@ -370,4 +406,107 @@ test("la table existe, et elle est additive", async () => {
   // Strictement additive : rien n'est supprimé ni renommé.
   assert.doesNotMatch(migration, /\bdrop\s+(table|column)\b/i);
   assert.doesNotMatch(migration, /\balter\s+table\s+\S+\s+drop\b/i);
+});
+
+
+/* ── Ce que les comptes rendus disent, sans le répéter dix fois ──────────── */
+
+/**
+ * **Le défilé de commentaires.** Chaque reprise écrivait « CR n° 11 reporte ce
+ * point » dans le fil ; sur dix réunions, la discussion devient un journal de
+ * machine où l'on ne retrouve plus ce que les gens ont écrit. Et un compte
+ * rendu **reporte** : c'est mot pour mot la même phrase qui revient.
+ */
+test("dix fois la même observation ne se dit qu'une fois", () => {
+  const groupes = observationsDesReprises([
+    { numero: "8", tenueLe: "2026-01-08", observation: "Inspections communes à mettre en place", page: 4, documentId: "doc-8" },
+    { numero: "9", tenueLe: "2026-01-15", observation: "Inspections communes à mettre en place", page: 5, documentId: "doc-9" },
+    { numero: "10", tenueLe: "2026-01-22", observation: "Inspections communes à mettre en place", documentId: "doc-10" }
+  ]);
+
+  assert.equal(groupes.length, 1);
+  assert.deepEqual(groupes[0].numeros, ["8", "9", "10"]);
+  assert.equal(groupes[0].combien, 3);
+  // On va la vérifier là où on l'a lue la première fois : la dernière reprise
+  // n'est pas plus vraie que la première.
+  assert.deepEqual([groupes[0].page, groupes[0].documentId], [4, "doc-8"]);
+  assert.equal(
+    phraseDeLObservation(groupes[0]),
+    "Observation présente dans les comptes rendus n° 8, 9 et 10 — 3 réunions."
+  );
+});
+
+/**
+ * Une observation qui revient **après** en avoir remplacé une autre est un
+ * second groupe : le point a bougé entre les deux, et fondre les deux effacerait
+ * ce mouvement.
+ */
+test("une observation qui revient après une autre fait un second groupe", () => {
+  const groupes = observationsDesReprises([
+    { numero: "8", tenueLe: "2026-01-08", observation: "À faire" },
+    { numero: "9", tenueLe: "2026-01-15", observation: "En cours avec l'entreprise" },
+    { numero: "10", tenueLe: "2026-01-22", observation: "À faire" }
+  ]);
+
+  assert.deepEqual(groupes.map((groupe) => groupe.numeros), [["8"], ["9"], ["10"]]);
+});
+
+/** Une seule reprise se nomme, elle ne se compte pas : « 1 réunion » ne se dit pas. */
+test("un compte rendu seul nomme son numéro et son jour", () => {
+  const [groupe] = observationsDesReprises([
+    { numero: "11", tenueLe: "2025-08-06", observation: "Transmettre le plan S35" }
+  ]);
+
+  assert.equal(
+    phraseDeLObservation(groupe, { dater: enFrancais }),
+    "Le compte rendu n° 11 du 06/08/2025 reporte ce point."
+  );
+});
+
+/** Une reprise sans observation n'a rien à dire : le compte des reprises a sa ligne. */
+test("une reprise muette ne fait pas une ligne vide", () => {
+  assert.deepEqual(observationsDesReprises([
+    { numero: "8", tenueLe: "2026-01-08", observation: "" },
+    { numero: "9", tenueLe: "2026-01-15", observation: "   " }
+  ]), []);
+  assert.deepEqual(observationsDesReprises(), []);
+});
+
+/**
+ * Trente numéros ne se lisent plus : au-delà de ce qu'on embrasse d'un coup
+ * d'œil, ce qu'on veut est la borne et la durée.
+ */
+test("une longue suite donne ses bornes plutôt que sa liste", () => {
+  const mentions = Array.from({ length: 9 }, (_, rang) => ({
+    numero: String(8 + rang), tenueLe: `2026-01-0${(rang % 9) + 1}`, observation: "La même chose"
+  }));
+
+  const [groupe] = observationsDesReprises(mentions);
+  assert.equal(phraseDeLObservation(groupe), "Observation présente dans les comptes rendus n° 8 à 16 — 9 réunions.");
+});
+
+/** Un compte rendu qui ne se nommait pas se dit quand même (règle 5). */
+test("sans numéro, la durée se dit tout de même", () => {
+  const [groupe] = observationsDesReprises([
+    { numero: "", tenueLe: "2026-01-08", observation: "La même chose" },
+    { numero: "", tenueLe: "2026-01-15", observation: "La même chose" }
+  ]);
+
+  assert.equal(
+    phraseDeLObservation(groupe, { dater: enFrancais }),
+    "Observation reprise à 2 réunions depuis le 08/01/2026."
+  );
+});
+
+/** Les colonnes de la base deviennent des mentions, observation comprise. */
+test("la traduction des colonnes emporte l'observation et la page", () => {
+  const [mention] = mentionsDesLignes([{
+    numero: "8", tenue_le: "2026-01-08", document_id: "doc-8",
+    observation: "Inspections communes", page: 4, a_change: false
+  }]);
+
+  assert.deepEqual(
+    [mention.observation, mention.page, mention.documentId],
+    ["Inspections communes", 4, "doc-8"]
+  );
 });

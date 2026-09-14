@@ -98,6 +98,20 @@ export function sourceDuPoint(point = null) {
   return texte(point?.provenance?.source_id ?? point?.sourceId);
 }
 
+/** La page d'un point, à la racine ou dans sa provenance. */
+function pageDuPoint(point = null) {
+  const lue = Number(point?.page ?? point?.provenance?.page);
+  return Number.isFinite(lue) && lue > 0 ? lue : null;
+}
+
+/** Ce que le document écrit du point, mot pour mot — sinon ce qu'on en sait. */
+function citationDuPoint(point = null) {
+  return texte(point?.evidence)
+    || texte(point?.provenance?.excerpt)
+    || texte(point?.description)
+    || texte(point?.titre);
+}
+
 export function reprisesAEnregistrer({
   ouverts = [], deja = [], documents = null, connues = []
 } = {}) {
@@ -141,6 +155,18 @@ export function reprisesAEnregistrer({
       numero: texte(source?.numero),
       tenueLe: texte(source?.tenueLe),
       etat: texte(point?.etat),
+      // **Ce que le compte rendu en écrit, mot pour mot.** C'est ce que le
+      // commentaire de relance portait, et c'est la seule chose qui s'y lisait
+      // vraiment : sans elle, remplacer le commentaire par une ligne d'activité
+      // aurait perdu le fond pour ne garder que la forme.
+      //
+      // La citation se lit à deux endroits selon d'où le point vient — le
+      // serveur l'écrit dans la provenance, la proposition la remonte à la
+      // racine. N'en lire qu'un revenait à n'en lire aucun, en silence.
+      observation: citationDuPoint(point),
+      // Où le vérifier. Une ligne qu'on ne peut pas remonter à sa page finit par
+      // n'être plus crue du tout.
+      page: pageDuPoint(point),
       aChange
     });
   };
@@ -174,6 +200,9 @@ export function mentionsDesLignes(lignes = []) {
     .map((ligne) => ({
       numero: texte(ligne?.numero),
       tenueLe: texte(ligne?.tenue_le ?? ligne?.tenueLe),
+      documentId: texte(ligne?.document_id ?? ligne?.documentId),
+      observation: texte(ligne?.observation),
+      page: Number.isFinite(Number(ligne?.page)) && Number(ligne.page) > 0 ? Number(ligne.page) : null,
       aChange: ligne?.a_change === true || ligne?.aChange === true
     }))
     // Dans l'ordre du temps : la ligne se lit de la première reprise à la
@@ -274,4 +303,114 @@ export const REPRISES_QUI_INTERPELLENT = 5;
 
 export function repriseQuiInterpelle(mentions = []) {
   return repriseQuiTraine(mentions).length >= REPRISES_QUI_INTERPELLENT;
+}
+
+
+/* ── Ce que les comptes rendus disent, sans le répéter dix fois ──────────── */
+
+/**
+ * Les observations d'un sujet, regroupées quand elles se répètent.
+ *
+ * ## Le défilé de commentaires
+ *
+ * Chaque reprise écrivait un commentaire dans le fil : « CR n° 11 reporte ce
+ * point », puis le n° 13, puis le n° 15. Sur un point qui traîne depuis dix
+ * réunions, la discussion devient un journal de machine où l'on ne retrouve
+ * plus ce que les gens, eux, ont écrit.
+ *
+ * Un compte rendu qui reprend un point ne prend pas la parole : c'est un
+ * **fait**, et un fait se dit dans la ligne d'activité.
+ *
+ * ## Et dix fois la même phrase ne se dit qu'une fois
+ *
+ * Un compte rendu **reporte** : la même observation revient réunion après
+ * réunion, mot pour mot, tant que le point n'est pas soldé. La redire dix fois
+ * n'apprend rien qu'une seule ne dise mieux — « observation présente dans les
+ * comptes rendus n° 8, 9 et 10 » donne la phrase **et** la durée.
+ *
+ * Les groupes sont **consécutifs** : une observation qui revient après en avoir
+ * remplacé une autre est un second groupe, et c'est voulu. Le point a bougé
+ * entre les deux, et fondre les deux dans une même ligne effacerait ce
+ * mouvement.
+ *
+ * @param {object[]} mentions `{numero, tenueLe, observation, page, documentId}`
+ *   dans l'ordre du temps
+ * @returns {{observation: string, numeros: string[], depuis: string, jusqu: string,
+ *   page: number|null, documentId: string, combien: number}[]}
+ */
+export function observationsDesReprises(mentions = []) {
+  const groupes = [];
+
+  for (const mention of Array.isArray(mentions) ? mentions : []) {
+    const observation = texte(mention?.observation);
+    // Une reprise sans observation n'a rien à dire de plus que le compte des
+    // reprises, qui a sa propre ligne. En faire une ligne vide serait du bruit.
+    if (!observation) continue;
+
+    const numero = texte(mention?.numero);
+    const quand = texte(mention?.tenueLe).slice(0, 10);
+    const dernier = groupes[groupes.length - 1];
+
+    if (dernier && dernier.observation === observation) {
+      if (numero) dernier.numeros.push(numero);
+      if (quand) dernier.jusqu = quand;
+      dernier.combien += 1;
+      // La page et le document restent ceux de la **première** fois qu'on l'a
+      // lue : c'est là qu'on va la vérifier, et la dernière reprise n'est pas
+      // plus vraie que la première.
+      continue;
+    }
+
+    groupes.push({
+      observation,
+      numeros: numero ? [numero] : [],
+      depuis: quand,
+      jusqu: quand,
+      page: Number.isFinite(Number(mention?.page)) && Number(mention.page) > 0 ? Number(mention.page) : null,
+      documentId: texte(mention?.documentId),
+      combien: 1
+    });
+  }
+
+  return groupes;
+}
+
+/**
+ * Ce qu'un groupe d'observations dit, en une phrase.
+ *
+ * @param {object} groupe tel que `observationsDesReprises` le rend
+ * @param {{dater?: function}} [options] `dater` met une date en français — le
+ *   service ne connaît pas la locale de celui qui lit
+ */
+export function phraseDeLObservation(groupe = {}, { dater = null } = {}) {
+  const numeros = (Array.isArray(groupe?.numeros) ? groupe.numeros : []).filter(Boolean);
+  const enClair = (brut) => {
+    const dit = texte(brut).slice(0, 10);
+    if (!dit) return "";
+    return dater ? texte(dater(dit)) : dit;
+  };
+
+  // Une seule reprise : on nomme le compte rendu et son jour. « présente dans
+  // les comptes rendus n° 11 » se lirait comme un groupe qui n'en est pas un.
+  if ((Number(groupe?.combien) || 0) <= 1) {
+    const jour = enClair(groupe?.depuis);
+    const nom = numeros[0]
+      ? `Le compte rendu n° ${numeros[0]}`
+      : "Un compte rendu de chantier";
+    return `${nom}${jour ? ` du ${jour}` : ""} reporte ce point.`;
+  }
+
+  if (numeros.length === 0) {
+    const depuis = enClair(groupe?.depuis);
+    return `Observation reprise à ${groupe.combien} réunions${depuis ? ` depuis le ${depuis}` : ""}.`;
+  }
+
+  // « n° 8, 9 et 10 » : on les nomme tous tant qu'on peut les lire d'un coup
+  // d'œil, et l'on donne les bornes au-delà — une liste de trente numéros ne se
+  // lit plus, et ce qu'on veut alors est la durée.
+  const liste = numeros.length <= 6
+    ? numeros.slice(0, -1).join(", ") + ` et ${numeros[numeros.length - 1]}`
+    : `${numeros[0]} à ${numeros[numeros.length - 1]}`;
+
+  return `Observation présente dans les comptes rendus n° ${liste} — ${groupe.combien} réunions.`;
 }

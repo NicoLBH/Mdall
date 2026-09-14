@@ -220,3 +220,42 @@ test("lire une fermeture n'en ferme aucune", async () => {
   const source = readFileSync(fileURLToPath(new URL("./fermeture-du-cr.js", import.meta.url)), "utf8");
   assert.doesNotMatch(source, /fetch\(|closeSubject|updateSubject/);
 });
+
+
+/**
+ * **Le sujet se fermait, et rien ne le disait.**
+ *
+ * La fusion écrivait la ligne `subjects` à la main. Le sujet passait bien à
+ * « closed » — et la timeline restait muette : la ligne d'activité « a fermé le
+ * sujet » naît dans `subject_history`, que seule la fonction
+ * `update_subject_issue_status` alimente. On lisait donc un sujet clos, un
+ * commentaire qui expliquait pourquoi, et une histoire où il ne s'était jamais
+ * rien passé.
+ *
+ * Ce test lit la source, et c'est le seul moyen : ce qui manquait est une
+ * écriture **côté base**, qu'aucune fausse porte ne peut observer d'ici. Deux
+ * chemins pour un même geste finissent toujours par ne plus faire la même chose
+ * (`docs/fondamentaux.md`, règle 4) ; celui-ci avait déjà commencé.
+ */
+test("une fermeture passe par la même porte que le bouton de l'écran", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const source = readFileSync(
+    fileURLToPath(new URL("./project-subjects-supabase.js", import.meta.url)),
+    "utf8"
+  );
+
+  const debut = source.indexOf("export async function closeSubject");
+  assert.ok(debut > 0, "closeSubject doit exister");
+  const corps = source.slice(debut, source.indexOf("\nexport ", debut + 1));
+
+  // Les commentaires racontent l'histoire du défaut : les ignorer, sans quoi le
+  // test se contenterait de sa propre explication.
+  const code = corps.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+
+  assert.match(code, /rpcCall\("update_subject_issue_status"/);
+  assert.match(code, /issue:close:realized/);
+  // Et surtout : plus de PATCH direct sur la table.
+  assert.doesNotMatch(code, /method:\s*"PATCH"/);
+});
