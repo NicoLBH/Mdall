@@ -110,7 +110,11 @@ const INTENDANCE = new Set([
   ITEM_TYPE.INTERVENANT,
   ITEM_TYPE.LOT,
   ITEM_TYPE.LABEL,
-  ITEM_TYPE.OBJECTIF
+  ITEM_TYPE.OBJECTIF,
+  // Passer outre un contrôle est une décision sur la **proposition**, pas une
+  // valeur du projet : il n'y a pas d'« avant » à lui comparer. Elle se relit
+  // dans le bloc des arbitrages et dans le procès-verbal.
+  ITEM_TYPE.ARBITRAGE
 ]);
 
 /**

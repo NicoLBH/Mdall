@@ -7,6 +7,11 @@ import {
 
 const issueDe = (rendu, id) => rendu.lignes.find((ligne) => ligne.id === id).issue;
 
+// PROVISOIRE — le contrôle « essai » ne s'applique jamais hors essai, et se
+// retirera avec lui. Compter `CONTROLES.length` ferait échouer les deux tests
+// qui vérifient qu'un dépôt complet tient tout ce qui le concerne.
+const APPLICABLES = CONTROLES.filter((controle) => controle.id !== "essai").length;
+
 const CONTEXTE = {
   depot: { affirmations: 3, provenance: "verifie", pourquoi: "" },
   conflits: [],
@@ -21,7 +26,7 @@ const CONTEXTE = {
 
 test("un dépôt complet tient tous ses contrôles", () => {
   const rendu = passerLesControles(CONTEXTE);
-  assert.equal(rendu.bilan.tenu, CONTROLES.length);
+  assert.equal(rendu.bilan.tenu, APPLICABLES);
   assert.equal(rendu.bloque, false);
 });
 
@@ -87,7 +92,8 @@ test("un contrôle qui jette n'emporte pas les autres", () => {
   try {
     const rendu = passerLesControles(CONTEXTE);
     assert.equal(issueDe(rendu, "casse"), ISSUE.NON_VERIFIABLE);
-    assert.equal(rendu.bilan.tenu, CONTROLES.length - 1);
+    // Les autres passent quand même : c'est tout l'objet du test.
+    assert.equal(rendu.bilan.tenu, APPLICABLES);
   } finally {
     CONTROLES.pop();
   }

@@ -64,6 +64,18 @@ export function renderLightTabs({
           >
             ${iconHtml ? `<span class="light-tabs__icon-wrap" aria-hidden="true">${iconHtml}</span>` : ''}
             <span class="light-tabs__label">${escapeHtml(tab.label || '')}</span>
+            ${
+              // **Ce qui attend une décision sur cet onglet.** Distinct du
+              // compte que porte déjà le libellé : « Changements 3 » dit ce
+              // qu'il y a dedans, la pastille dit qu'il y a quelque chose à y
+              // faire. Sans elle, on cherche dans quatre onglets ce qui retient
+              // la fusion.
+              Number(tab.alerte) > 0
+                ? `<span class="light-tabs__alerte" title="${escapeHtml(
+                    `${Number(tab.alerte)} chose(s) à trancher ici`
+                  )}">${escapeHtml(String(Number(tab.alerte)))}</span>`
+                : ''
+            }
           </button>
         `;
       }).join('')}
