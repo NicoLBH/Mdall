@@ -5727,19 +5727,34 @@ export function createProjectSubjectsEvents(config) {
    * pagination repart à la première page — rester à la page 4 d'une liste qui
    * vient de changer montre un vide qu'on prend pour un résultat.
    */
-  function poserLaRequeteDesSujets(requete) {
+  function poserLaRequeteDesSujets(requete, { depuis = "rail" } = {}) {
     if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
       store.projectSubjectsView = {};
     }
-    // **Poser une lecture, c'est revenir à la liste.** Ce que ce geste change
-    // se décide dans `rail-des-sujets.js`, où il s'exécute en test : l'écrire
-    // ici l'aurait laissé sans garde-fou, et c'est exactement ce qui a fait que
-    // cliquer « Sujets » depuis les Labels ne faisait rien.
-    const suivant = ecranApresUneLecture({ requete });
+    // **Le rail change d'écran, l'en-tête précise la requête en cours.** Ce que
+    // ce geste change se décide dans `rail-des-sujets.js`, où il s'exécute en
+    // test : l'écrire ici l'aurait laissé sans garde-fou, et c'est exactement
+    // ce qui a fait que cliquer « Sujets » depuis les Labels ne faisait rien.
+    const forme = store.projectSubjectsView.vueEnCours ?? null;
+    const suivant = ecranApresUneLecture({
+      requete,
+      depuis,
+      sousVue: String(store.situationsView.subjectsSubview || "subjects"),
+      formeOuverte: !!forme
+    });
+
     store.projectSubjectsView.requete = suivant.requete;
     store.situationsView.subjectsSubview = suivant.sousVue;
     store.situationsView.showTableOnly = suivant.tableauSeul;
-    store.projectSubjectsView.vueEnCours = suivant.vueEnCours;
+
+    if (suivant.fermerLaForme) {
+      store.projectSubjectsView.vueEnCours = null;
+    } else if (forme) {
+      // La barre du formulaire et la requête de l'écran sont la même case,
+      // comme quand on y tape : le tableau dessous montre ce que la vue rendra.
+      forme.requete = suivant.requete;
+      forme.refus = "";
+    }
 
     resetSubjectsPaginationPage();
     redessinerApresUnGeste();
@@ -5973,7 +5988,12 @@ export function createProjectSubjectsEvents(config) {
 
       switch (geste) {
         case GESTE.LECTURE:
-          poserLaRequeteDesSujets(valeur);
+          // **D'où vient le clic, et rien d'autre.** Le rail et les menus de
+          // l'en-tête posent la même valeur par le même attribut ; ce qui les
+          // sépare est l'endroit où l'on a cliqué.
+          poserLaRequeteDesSujets(valeur, {
+            depuis: event.target.closest?.(".project-rail") ? "rail" : "tableau"
+          });
           return;
 
         case GESTE.DECROCHER:
@@ -5997,7 +6017,9 @@ export function createProjectSubjectsEvents(config) {
           return;
 
         case GESTE.VIDER:
-          poserLaRequeteDesSujets("");
+          // La croix de la barre de recherche : elle vide la requête là où l'on
+          // est, formulaire d'une vue compris.
+          poserLaRequeteDesSujets("", { depuis: "tableau" });
           return;
 
         case GESTE.EPINGLER:

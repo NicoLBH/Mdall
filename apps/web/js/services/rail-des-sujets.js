@@ -210,19 +210,53 @@ export function railDesSujets({
  * cliquait « Sujets », l'écran des Labels restait, et rien ne disait pourquoi.
  * Il ne restait qu'à recharger la page.
  *
- * **Poser une lecture, c'est donc revenir à la liste.** C'est le sens du geste :
- * on ne clique pas « Assigné à moi » pour rester sur les Labels.
+ * **Poser une lecture depuis le rail, c'est donc revenir à la liste.** C'est le
+ * sens du geste : on ne clique pas « Assigné à moi » pour rester sur les
+ * Labels. Le formulaire d'une vue se ferme avec le reste — il tient le tableau
+ * sous lui, et l'écrasement de sa requête par celle qu'on vient de cliquer
+ * ferait enregistrer une vue qui ne retient pas ce qu'on y avait écrit.
  *
- * Le formulaire d'une vue se ferme aussi : il tient le tableau sous lui, et
- * l'écrasement de sa requête par celle qu'on vient de cliquer ferait enregistrer
- * une vue qui ne retient pas ce qu'on y avait écrit.
+ * ## Et le défaut que celui-là avait créé
+ *
+ * Les menus de filtre de l'en-tête posent leur valeur **par le même geste** :
+ * cocher « CR chantier » écrit `label:cr-chantier` dans la requête. Traité
+ * comme une lecture du rail, il refermait le formulaire qu'on était en train de
+ * remplir et renvoyait à la liste de tous les sujets — au moment précis où l'on
+ * composait la requête de sa vue, c'est-à-dire là où ces menus servent le plus.
+ *
+ * Les deux gestes ne disent donc pas la même chose : **le rail change d'écran,
+ * l'en-tête précise la requête en cours**. C'est d'où vient le clic qui les
+ * sépare, et rien d'autre — la valeur posée est la même.
+ *
+ * @param {object} options
+ * @param {string} options.requete la requête à poser
+ * @param {"rail"|"tableau"} [options.depuis] d'où vient le clic
+ * @param {string} [options.sousVue] celle qu'on regarde — elle ne sert que
+ *   pour rester dessus
+ * @param {boolean} [options.formeOuverte] un formulaire de vue est ouvert
  */
-export function ecranApresUneLecture({ requete = "" } = {}) {
+export function ecranApresUneLecture({
+  requete = "", depuis = "rail", sousVue = "subjects", formeOuverte = false
+} = {}) {
+  const laRequete = texte(requete);
+
+  // Un filtre posé sous un formulaire de vue **reste dans le formulaire** : le
+  // tableau qu'il tient dessous montre ce que la requête rend, et c'est
+  // exactement ce qu'on regarde en la composant.
+  if (depuis !== "rail" && formeOuverte) {
+    return {
+      requete: laRequete,
+      sousVue: texte(sousVue) || "subjects",
+      tableauSeul: false,
+      fermerLaForme: false
+    };
+  }
+
   return {
-    requete: texte(requete),
+    requete: laRequete,
     sousVue: "subjects",
     tableauSeul: true,
-    vueEnCours: null
+    fermerLaForme: true
   };
 }
 

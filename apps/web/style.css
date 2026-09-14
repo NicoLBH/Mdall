@@ -24277,11 +24277,17 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .sujets-vues__ouvrir:hover{background:var(--surface-hover);}
 .sujets-vues__icone{flex:0 0 auto;display:inline-flex;padding-top:1px;}
 .sujets-vues__corps{display:flex;flex-direction:column;gap:2px;min-width:0;}
-.sujets-vues__nom{font-weight:600;}
+/* **Le titre porte les classes du tableau des sujets** — graisse, couleur,
+   coupe, et le bleu souligné au survol. Seule sa taille lui appartient : une
+   liste de vues se parcourt, celle des sujets se lit. */
+.sujets-vues__nom{font-size:14px;}
+
 .sujets-vues__mot{color:var(--text-muted);font-size:12px;}
-/* La requête, en gris et en chasse fixe : c'est ce que la vue retient, et on
-   doit pouvoir la relire sans l'ouvrir. */
-.sujets-vues__requete{color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* La ligne grise : de qui vient la vue, quand elle a bougé, et si elle est au
+   rail. Elle reprend `issue-row-meta-text` — la même ligne que sous le titre
+   d'un sujet — parce que c'est le même geste de lecture. */
+.sujets-vues__ligne-grise{display:flex;align-items:center;gap:6px;}
 /* Le menu d'une ligne : l'épingler, ou la supprimer. Le kebab reste discret
    tant qu'on ne survole pas la ligne — une liste de douze vues avec douze
    boutons visibles se lit comme une barre d'outils. */
@@ -24305,8 +24311,9 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .sujets-vues__menu .gh-menu__item:hover{background:var(--surface-hover);}
 
 /* Une vue déjà au rail le dit sur sa ligne : sans cela, on ouvre son menu pour
-   savoir si elle y est. */
-.sujets-vues__au-rail{flex:0 0 auto;display:inline-flex;color:var(--text-muted);}
+   savoir si elle y est. **L'icône porte son mot** — une épingle seule en bout
+   de ligne se devine, et sur une liste qu'on parcourt on ne devine pas. */
+.sujets-vues__au-rail{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;}
 
 .sujets-vue-forme{display:flex;flex-direction:column;gap:12px;}
 
@@ -24317,19 +24324,49 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 /* L'habit et le titre sur une ligne : c'est ce qu'on verra dans le rail, et le
    choisir loin du nom qu'on écrit fait composer l'un sans regarder l'autre. */
 .sujets-vue-forme__ligne{display:flex;gap:12px;align-items:flex-end;}
-.sujets-vue-forme__habit{position:relative;display:flex;flex-direction:column;gap:4px;}
+
+/* **Un intitulé, quatre pixels, son contrôle.** Le même écart partout : icône,
+   titre, description, requête. Sans cette règle, le titre et son champ
+   flottaient à une distance que rien ne fixait, et chaque champ tombait à une
+   hauteur différente de son voisin. */
+.sujets-vue-forme__champ,
+.sujets-vue-forme__habit{display:flex;flex-direction:column;gap:4px;}
+.sujets-vue-forme__habit{position:relative;}
+
+/* **Carré, et de la hauteur des champs.** Le bouton d'habit et les saisies sont
+   sur la même ligne : deux hauteurs y font un décrochement qu'aucun alignement
+   ne rattrape. Trente pixels pour tout le monde. */
 .sujets-vue-forme__habit-bouton{display:inline-flex;align-items:center;justify-content:center;
-  width:36px;height:34px;padding:0;}
+  width:30px;height:30px;min-height:30px;padding:0;}
 .sujets-vue-forme__champ--titre{flex:1;min-width:0;}
 
-.sujets-vue-forme__intitule{margin:0;font-size:12px;color:var(--text);}
+/* Les saisies du formulaire prennent la hauteur du bouton, et **le fond de la
+   barre de recherche** : ce sont les trois champs d'un même écran, et un fond
+   plus clair sur deux d'entre eux les faisait lire comme d'une autre famille.
+   `--bg` est le fond de l'application, celui que `.memory-search` laisse voir. */
+/* Le descendant direct, et lui seul : la barre de recherche de la requête porte
+   elle aussi `.gh-input`, mais elle vit dans un cadre qui a ses propres
+   réglages — l'englober ici ferait déborder le champ de deux pixels. */
+.sujets-vue-forme__champ > .gh-input{
+  height:30px;
+  min-height:30px;
+  padding-block:0;
+  background:var(--bg);
+}
+
+.sujets-vue-forme__intitule{margin:0;font-size:14px;color:var(--text);}
 
 /* L'étoile d'un champ obligatoire : elle se voit, et elle se dit. */
 .sujets-vue-forme__requis{color:var(--danger, #f85149);text-decoration:none;margin-left:2px;}
 
 /* La recherche et les deux gestes sur une seule ligne. */
 .sujets-vue-forme__requete{display:flex;align-items:flex-start;gap:8px;}
-.sujets-vue-forme__requete .memory-search{flex:1;min-width:0;}
+.sujets-vue-forme__requete .memory-search{flex:1;min-width:0;height:30px;}
+/* **Le champ et son calque de jetons se règlent ensemble.** Le calque double le
+   texte du champ exactement au même endroit : un retrait changé d'un seul côté
+   décalerait les jetons colorés de ce qu'on tape. */
+.sujets-vue-forme__requete .memory-search__input,
+.sujets-vue-forme__requete .memory-search__mirror{padding-block:4px;}
 
 .sujets-vue-forme__gestes{display:flex;justify-content:flex-end;gap:8px;}
 
@@ -24425,6 +24462,24 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    n'a pas besoin de cette coupe : elle ne défile pas, et ses lignes ne
    débordent pas. */
 .sujets-vues .data-table-shell{overflow:visible;}
+
+/* ── L'en-tête du tableau des sujets fait toujours la même hauteur ───────── */
+
+/* **Quarante-huit pixels, filtres ou actions.** Cette ligne change de contenu
+   selon qu'on filtre ou qu'on range : des intitulés discrets d'un côté, des
+   boutons bordés de l'autre. Les deux ne font pas la même hauteur naturelle, et
+   cocher une case faisait donc sauter le tableau de quelques pixels sous le
+   curseur — ce qui est laid, et ce qui fait rater la case suivante.
+
+   La hauteur est posée une fois, le contenu se centre dedans, et le mode n'y
+   change plus rien. `padding-block` plutôt que le raccourci : le retrait
+   horizontal reste celui des autres en-têtes, et une valeur inventée ici
+   décalerait les colonnes de leur contenu. */
+.data-table-shell__head.sujets-tete{
+  height:48px;
+  min-height:48px;
+  padding-block:8px;
+}
 
 /* ── Les filtres de l'en-tête tiennent sur une ligne ─────────────────────── */
 
@@ -24546,6 +24601,100 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .sujets-head-menu--groupe{width:auto;flex:0 0 auto;}
 
 
+
+
+/* ── La notification d'avancée d'un lot ──────────────────────────────────── */
+
+/* **Une attente qui ne se voit pas se lit comme une panne.** Poser un label sur
+   quarante sujets, c'est quarante écritures en base puis une relecture complète
+   de la liste : plusieurs secondes pendant lesquelles l'écran ne bougeait pas.
+   On recliquait, on doutait d'avoir cliqué, on changeait de filtre au milieu.
+
+   En bas à gauche : elle accompagne une action déclenchée en haut du tableau,
+   et là elle est dans le champ sans être dans le chemin. */
+.avancee-lot{
+  position:fixed;
+  left:16px;
+  bottom:16px;
+  z-index:1200;
+  display:flex;
+  align-items:stretch;
+  min-height:40px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:var(--bg-input);
+  box-shadow:0 8px 24px rgba(1,4,9,.6);
+  overflow:hidden;
+  font-size:13px;
+  animation:avancee-lot-entre .18s ease-out;
+}
+
+@keyframes avancee-lot-entre{
+  from{ opacity:0; transform:translateY(8px); }
+  to{ opacity:1; transform:none; }
+}
+
+/* Le carré de gauche porte la couleur, et elle seule dit l'état : bleu pendant,
+   vert après, orange si quelque chose n'est pas passé. La transition est là
+   pour qu'on voie le changement plutôt que de le retrouver. */
+.avancee-lot__marque{
+  flex:0 0 auto;
+  width:40px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  background:var(--avancee-fond);
+  transition:background-color .28s ease;
+}
+
+.avancee-lot--cours{ --avancee-fond:rgb(31, 111, 235); }
+.avancee-lot--fini{ --avancee-fond:rgb(35, 134, 54); }
+.avancee-lot--souci{ --avancee-fond:rgb(219, 109, 40); }
+
+/* Le cercle se remplit à la progression : on sait **combien c'est fait** sans
+   avoir à lire le compte. Un sablier qui tourne ne dit rien de plus
+   qu'« attends », et ne distingue pas une écriture lente d'une écriture
+   bloquée. */
+.avancee-lot__cercle{
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  background:conic-gradient(#fff var(--avancee-part, 0%), rgba(255,255,255,.3) 0);
+}
+
+/* **La coche prend la place du cercle, à sa taille.** Un symbole plus petit
+   ferait sursauter le bloc au moment où il change d'état. */
+.avancee-lot__signe{
+  width:18px;
+  height:18px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  animation:avancee-lot-signe .24s ease-out;
+}
+.avancee-lot__signe .octicon{ width:18px; height:18px; }
+
+@keyframes avancee-lot-signe{
+  from{ transform:scale(.5); opacity:0; }
+  to{ transform:none; opacity:1; }
+}
+
+.avancee-lot__mot{
+  display:inline-flex;
+  align-items:center;
+  padding:0 12px;
+  color:var(--text);
+  white-space:nowrap;
+}
+
+/* Elle ne doit pas être la seule chose qui bouge pour qui a demandé moins
+   d'animation : la couleur et le compte suffisent à la lire. */
+@media (prefers-reduced-motion:reduce){
+  .avancee-lot,
+  .avancee-lot__signe{ animation:none; }
+  .avancee-lot__marque{ transition:none; }
+}
 
 
 /* ── Le menu de sélection : la même forme partout ────────────────────────── */

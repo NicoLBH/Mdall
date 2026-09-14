@@ -41,7 +41,8 @@ import { renderQueryMirror } from "../../services/query-bar.js";
 import { phraseDesIgnores } from "../../services/champs-des-sujets.js";
 import { epinglesDuRail, railDesSujets } from "../../services/rail-des-sujets.js";
 import {
-  COULEURS_DE_VUE, ICONES_DE_VUE, couleurDeLaVue, iconeDeLaVue, phraseDesVues, phraseDuRefus
+  COULEURS_DE_VUE, ICONES_DE_VUE, couleurDeLaVue, iconeDeLaVue, motsDeLaVue,
+  phraseDesVues, phraseDuRefus
 } from "../../services/vues-des-sujets.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -450,10 +451,31 @@ export function renderActionsGroupeesHtml({ combien = 0, champs = [] } = {}) {
 
   return `
     <div class="sujets-groupe">
-      <span class="sujets-groupe__compte mono-small">${escapeHtml(phraseDeLaSelection(combien))}</span>
       ${menus}
     </div>
   `;
+}
+
+/**
+ * Combien de sujets sont cochés, sur combien.
+ *
+ * ## Pourquoi c'est ici, et pas dans la rangée des boutons
+ *
+ * Le compte **prend la place du filtre ouverts/fermés**, à l'autre bout de
+ * l'en-tête. Deux raisons, et la seconde est la vraie : on ne filtre pas
+ * pendant qu'on range — un filtre changé sous une sélection la viderait de ce
+ * qu'elle contient —, et la rangée des actions a besoin de toute sa largeur.
+ * Écrit au milieu des boutons, il les poussait hors de la ligne.
+ *
+ * Il n'est écrit qu'**une fois** : la phrase vit dans `selection-des-sujets.js`,
+ * et deux endroits qui comptent la même chose finissent par ne plus dire la
+ * même (règle 4).
+ */
+export function renderCompteDeLaSelectionHtml({ combien = 0, total = 0 } = {}) {
+  const dit = phraseDeLaSelection({ combien, total });
+  if (!dit) return "";
+
+  return `<span class="sujets-groupe__compte mono-small">${escapeHtml(dit)}</span>`;
 }
 
 /* ── Les vues : leur liste, et leur création ─────────────────────────────── */
@@ -474,6 +496,46 @@ export function renderActionsGroupeesHtml({ combien = 0, champs = [] } = {}) {
  * fait, et le bouton est là. Un tableau vide sans rien à cliquer fait chercher
  * où l'on crée.
  */
+/**
+ * La ligne grise d'une vue : de qui elle vient, quand elle a bougé, et si elle
+ * est au rail.
+ *
+ * ## Pourquoi ces trois-là, et plus la requête
+ *
+ * La requête y était, et elle ne servait à rien : on la relit pour retrouver ce
+ * qu'on a déjà nommé juste au-dessus. Ce qu'on cherche sur cette ligne, c'est de
+ * qui elle vient, si elle est à jour, et si elle est dans le rail — les trois
+ * choses qui décident si on l'ouvre, si on la modifie ou si on la supprime.
+ *
+ * ## L'épingle est un mot, pas seulement une icône
+ *
+ * Elle était une icône seule, en bout de ligne. Une icône seule se devine ; sur
+ * une liste qu'on parcourt, on ne devine pas — on ouvrait le menu pour savoir
+ * si la vue était déjà au rail. Elle porte donc son mot.
+ *
+ * Ce qui manque ne s'invente pas : un compte qu'on ne sait pas nommer et une
+ * date qu'on n'a pas sont **passés**, pas remplacés par un tiret (règle 5).
+ */
+export function renderSousLigneDeVueHtml(vue = {}) {
+  const mots = motsDeLaVue({
+    auteur: vue?.auteur, miseAJour: vue?.miseAJour, auRail: vue?.auRail
+  });
+
+  const morceaux = [
+    mots.auteur ? escapeHtml(mots.auteur) : "",
+    mots.miseAJour ? escapeHtml(mots.miseAJour) : "",
+    mots.epinglee
+      ? `<span class="sujets-vues__au-rail">${
+        svgIcon("pin", { className: "octicon" })}Épinglée</span>`
+      : ""
+  ].filter(Boolean);
+
+  if (!morceaux.length) return "";
+
+  return `<span class="sujets-vues__ligne-grise issue-row-meta-text mono-small">${
+    morceaux.join(" • ")}</span>`;
+}
+
 export function renderTableauDesVuesHtml({ vues = [], menuOuvert = "" } = {}) {
   const liste = Array.isArray(vues) ? vues : [];
   const ouvert = texte(menuOuvert);
@@ -531,17 +593,24 @@ export function renderTableauDesVuesHtml({ vues = [], menuOuvert = "" } = {}) {
                   <span class="sujets-vues__icone" style="color:${escapeHtml(vue.couleur.valeur)}"
                     aria-hidden="true">${svgIcon(vue.icone, { className: "octicon" })}</span>
                   <span class="sujets-vues__corps">
-                    <span class="sujets-vues__nom">${escapeHtml(vue.nom)}</span>
+                    ${/*
+                      **Les classes du tableau des sujets, telles quelles.** Un
+                      titre et sa ligne grise se présentent pareil partout : les
+                      redessiner ici avec d'autres noms ferait deux écritures du
+                      même dessin, et la seconde divergerait au premier réglage
+                      (règle 10). Seule la taille du titre est propre à cette
+                      liste, et elle tient en une déclaration.
+                    */""}
+                    <span class="issue-row-title-grid__title issue-row-subject-title-line">
+                      <span class="sujets-vues__nom row-title-trigger theme-text">${
+                        escapeHtml(vue.nom)}</span>
+                    </span>
                     ${vue.description
                       ? `<span class="sujets-vues__mot">${escapeHtml(vue.description)}</span>`
                       : ""}
-                    <span class="sujets-vues__requete mono-small">${escapeHtml(vue.requete)}</span>
+                    ${renderSousLigneDeVueHtml(vue)}
                   </span>
                 </button>
-                ${vue.auRail
-                  ? `<span class="sujets-vues__au-rail" title="Épinglée au rail"
-                      aria-label="Épinglée au rail">${svgIcon("pin", { className: "octicon" })}</span>`
-                  : ""}
                 <div class="sujets-vues__gestes">
                   <button type="button" class="bouton-discret sujets-vues__kebab"
                     data-sujets-vue-menu="${escapeHtml(vue.id)}"

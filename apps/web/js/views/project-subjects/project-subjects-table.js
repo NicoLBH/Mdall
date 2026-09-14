@@ -31,6 +31,35 @@ function colonnesDeLaTete(deps) {
   ];
 }
 
+/**
+ * La classe de l'en-tête du tableau des sujets.
+ *
+ * **Elle existe pour une hauteur, et une seule.** Cette ligne change de contenu
+ * selon qu'on filtre ou qu'on range — des intitulés discrets d'un côté, des
+ * boutons d'action de l'autre —, et les deux ne font pas la même hauteur
+ * naturelle : cocher une case faisait sauter le tableau de quelques pixels.
+ * La hauteur est donc posée, et le contenu se centre dedans.
+ */
+export const CLASSE_DE_LA_TETE_DES_SUJETS = "sujets-tete";
+
+/**
+ * Le tableau des sujets, **monté au même endroit** quel que soit son état.
+ *
+ * Chargement, vide, accueil, liste : quatre appels qui répétaient la grille,
+ * l'en-tête et ses colonnes. Un réglage posé sur trois des quatre laissait le
+ * quatrième différent, sans rien pour le dire (règle 10).
+ */
+function tableauDesSujets(deps, reste = {}) {
+  // `renderIssuesTable` vient des dépendances, comme partout dans ce module :
+  // ce fichier ne l'importe pas.
+  return deps.renderIssuesTable({
+    gridTemplate: getSituationsTableGridTemplate(),
+    headHtml: renderSituationsTableHeadHtml({ deps, columns: colonnesDeLaTete(deps) }),
+    headClassName: CLASSE_DE_LA_TETE_DES_SUJETS,
+    ...reste
+  });
+}
+
 export function renderSituationsTableHeadHtml(options = {}) {
   const { renderDataTableHead, renderSubjectsStatusHeadHtml, renderSubjectsPriorityHeadHtml } = options.deps || options;
   const columns = Array.isArray(options.columns) && options.columns.length
@@ -87,14 +116,7 @@ function renderSubjectChildrenCounterHtml(sujet, deps) {
  * « undefined » à la place de son écran d'accueil.
  */
 function renderWelcomeHtml(deps) {
-  const { renderIssuesTable } = deps;
-
-  return renderIssuesTable({
-    gridTemplate: getSituationsTableGridTemplate(),
-    headHtml: renderSituationsTableHeadHtml({
-      deps,
-      columns: colonnesDeLaTete(deps)
-    }),
+  return tableauDesSujets(deps, {
     emptyTitle: "Aucune analyse disponible",
     emptyDescription: "Lancer une analyse pour générer des sujets."
   });
@@ -374,7 +396,6 @@ function renderCarteEpinglee(sujet, deps = {}) {
 export function renderProjectSubjectsTable({ filteredSituations, deps }) {
   const {
     store,
-    renderIssuesTable,
     getFilteredFlatSubjects,
     getSubjectsPaginationState,
     getCurrentSubjectsStatusFilter,
@@ -412,12 +433,7 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
   const isLoading = !!store.projectSubjectsView?.loading;
 
   if (isLoading && !hasAnySubjects) {
-    return renderIssuesTable({
-      gridTemplate: getSituationsTableGridTemplate(),
-      headHtml: renderSituationsTableHeadHtml({
-        deps,
-        columns: colonnesDeLaTete(deps)
-      }),
+    return tableauDesSujets(deps, {
       state: "loading",
       loadingTitle: "Chargement des sujets…",
       loadingDescription: "Récupération des sujets du projet en cours."
@@ -451,25 +467,10 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
   const vide = { emptyTitle: dit.titre, emptyDescription: dit.explication };
 
   if (!rows.length) {
-    return renderIssuesTable({
-      gridTemplate: getSituationsTableGridTemplate(),
-      headHtml: renderSituationsTableHeadHtml({
-        deps,
-        columns: colonnesDeLaTete(deps)
-      }),
-      ...vide
-    });
+    return tableauDesSujets(deps, vide);
   }
 
-  const tableHtml = renderIssuesTable({
-    gridTemplate: getSituationsTableGridTemplate(),
-    headHtml: renderSituationsTableHeadHtml({
-      deps,
-      columns: colonnesDeLaTete(deps)
-    }),
-    rowsHtml: rows.join(""),
-    ...vide
-  });
+  const tableHtml = tableauDesSujets(deps, { rowsHtml: rows.join(""), ...vide });
   const paginationHtml = renderPaginationControls(pagination, { entity: "subjects" });
   return `${tableHtml}${paginationHtml}`;
 }
