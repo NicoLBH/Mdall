@@ -33,9 +33,9 @@ const texte = (valeur) => String(valeur ?? "").trim();
  * divergence du jeu commence là.
  */
 export const ICONES_DE_VUE = [
-  "issue-opened", "person", "people", "mention", "clock-fill", "stack",
-  "tag", "milestone", "table", "alert", "check-circle", "blocked",
-  "file", "search", "pin", "smiley", "pencil", "history"
+  "bookmark", "issue-opened", "person", "people", "mention", "clock-fill",
+  "stack", "tag", "milestone", "table", "alert", "check-circle",
+  "blocked", "file", "search", "pin", "smiley", "pencil", "history"
 ];
 
 /**
@@ -56,8 +56,14 @@ export const COULEURS_DE_VUE = [
   { cle: "orange", valeur: "#db6d28", nom: "Orange" }
 ];
 
-/** Celle qu'on prend quand on n'a pas choisi : le gris du rail. */
-export const ICONE_PAR_DEFAUT = "stack";
+/**
+ * Celle qu'on prend quand on n'a pas choisi.
+ *
+ * **Le marque-page**, parce que c'est ce qu'une vue est : un endroit où l'on
+ * revient. L'ancienne — la pile — disait « plusieurs choses », ce qui est vrai
+ * de n'importe quelle liste et ne distingue donc rien.
+ */
+export const ICONE_PAR_DEFAUT = "bookmark";
 export const COULEUR_PAR_DEFAUT = "gris";
 
 /**

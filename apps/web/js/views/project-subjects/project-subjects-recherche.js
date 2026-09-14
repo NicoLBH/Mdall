@@ -576,7 +576,7 @@ export function renderTableauDesVuesHtml({ vues = [], menuOuvert = "" } = {}) {
  * vue sans avoir vu ce qu'elle montre, c'est enregistrer une promesse.
  */
 export function renderFormulaireDeVueHtml({
-  vue = {}, champs = [], ignores = [], refus = "", tableauHtml = ""
+  vue = {}, champs = [], ignores = [], refus = "", tableauHtml = "", habitOuvert = false
 } = {}) {
   const icone = iconeDeLaVue(vue.icone);
   const couleur = couleurDeLaVue(vue.couleur);
@@ -586,41 +586,27 @@ export function renderFormulaireDeVueHtml({
     <section class="sujets-vue-forme">
       ${renderTitreDEcranHtml({ titre: vue.id ? "Modifier la vue" : "Nouvelle vue" })}
 
-      <div class="sujets-vue-forme__habit">
-        <span class="sujets-vue-forme__apercu" style="color:${escapeHtml(couleur.valeur)}"
-          aria-hidden="true">${svgIcon(icone, { className: "octicon" })}</span>
-
-        <div class="sujets-vue-forme__choix">
-          <p class="sujets-vue-forme__intitule">Icône</p>
-          <div class="sujets-vue-forme__icones" role="radiogroup" aria-label="Icône de la vue">
-            ${ICONES_DE_VUE.map((nom) => `
-              <button type="button" class="sujets-vue-forme__icone${nom === icone ? " est-choisie" : ""}"
-                role="radio" aria-checked="${nom === icone}" aria-label="${escapeHtml(nom)}"
-                data-sujets-vue-icone="${escapeHtml(nom)}">
-                ${svgIcon(nom, { className: "octicon" })}
-              </button>
-            `).join("")}
-          </div>
-
-          <p class="sujets-vue-forme__intitule">Couleur</p>
-          <div class="sujets-vue-forme__couleurs" role="radiogroup" aria-label="Couleur de la vue">
-            ${COULEURS_DE_VUE.map((choix) => `
-              <button type="button" class="sujets-vue-forme__couleur${
-                  choix.cle === couleur.cle ? " est-choisie" : ""}"
-                role="radio" aria-checked="${choix.cle === couleur.cle}"
-                style="--sujets-vue-couleur:${escapeHtml(choix.valeur)}"
-                title="${escapeHtml(choix.nom)}" aria-label="${escapeHtml(choix.nom)}"
-                data-sujets-vue-couleur="${escapeHtml(choix.cle)}"></button>
-            `).join("")}
-          </div>
+      <!-- **L'habit à gauche du titre**, sur la même ligne : c'est ce qu'on
+           verra dans le rail, et le choisir loin du nom qu'on écrit fait
+           composer l'un sans regarder l'autre. -->
+      <div class="sujets-vue-forme__ligne">
+        <div class="sujets-vue-forme__habit">
+          <p class="sujets-vue-forme__intitule" id="sujetsVueHabit">Icône</p>
+          <button type="button" class="gh-btn sujets-vue-forme__habit-bouton"
+            data-sujets-vue-habit="1" aria-haspopup="dialog"
+            aria-expanded="${habitOuvert ? "true" : "false"}" aria-labelledby="sujetsVueHabit"
+            style="color:${escapeHtml(couleur.valeur)}">
+            ${svgIcon(icone, { className: "octicon" })}
+          </button>
+          ${habitOuvert ? renderChoixDeLHabitHtml({ icone, couleur }) : ""}
         </div>
-      </div>
 
-      <label class="sujets-vue-forme__champ">
-        <span class="sujets-vue-forme__intitule">Nom</span>
-        <input type="text" class="gh-input" data-sujets-vue-nom
-          placeholder="Les urgences du lot 03" value="${escapeHtml(vue.nom ?? "")}">
-      </label>
+        <label class="sujets-vue-forme__champ sujets-vue-forme__champ--titre">
+          <span class="sujets-vue-forme__intitule">Titre ${MARQUE_OBLIGATOIRE}</span>
+          <input type="text" class="gh-input" data-sujets-vue-nom required
+            placeholder="Les urgences du lot 03" value="${escapeHtml(vue.nom ?? "")}">
+        </label>
+      </div>
 
       <label class="sujets-vue-forme__champ">
         <span class="sujets-vue-forme__intitule">Description</span>
@@ -629,18 +615,93 @@ export function renderFormulaireDeVueHtml({
           value="${escapeHtml(vue.description ?? "")}">
       </label>
 
-      ${renderRechercheDesSujetsHtml({ requete: vue.requete ?? "", champs, ignores })}
+      <div class="sujets-vue-forme__champ">
+        <span class="sujets-vue-forme__intitule">Requête ${MARQUE_OBLIGATOIRE}</span>
+        <!-- La recherche et les deux gestes sur une seule ligne : on écrit la
+             requête, on voit le tableau dessous, on enregistre. -->
+        <div class="sujets-vue-forme__requete">
+          ${renderRechercheDesSujetsHtml({ requete: vue.requete ?? "", champs, ignores })}
+          <div class="sujets-vue-forme__gestes">
+            <button type="button" class="gh-btn" data-sujets-vue-annuler>Annuler</button>
+            <button type="button" class="gh-btn gh-btn--primary" data-sujets-vue-enregistrer>
+              Enregistrer la vue
+            </button>
+          </div>
+        </div>
+      </div>
 
       ${dit ? `<p class="sujets-vue-forme__refus">${escapeHtml(dit)}</p>` : ""}
 
-      <div class="sujets-vue-forme__gestes">
-        <button type="button" class="gh-btn" data-sujets-vue-annuler>Annuler</button>
-        <button type="button" class="gh-btn gh-btn--primary" data-sujets-vue-enregistrer>
-          Enregistrer la vue
-        </button>
-      </div>
-
       ${tableauHtml}
     </section>
+  `;
+}
+
+/**
+ * Ce qui marque un champ obligatoire.
+ *
+ * **Une étoile, et elle est dite.** Un astérisque muet se lit comme une note de
+ * bas de page qu'on cherche ; celui-ci porte son titre, et le lecteur d'écran
+ * l'annonce.
+ */
+const MARQUE_OBLIGATOIRE = '<abbr class="sujets-vue-forme__requis" title="Champ obligatoire">*</abbr>';
+
+/**
+ * Le choix de l'habit : une couleur, une icône.
+ *
+ * ## Pourquoi un menu, et pas deux rangées dans le formulaire
+ *
+ * Dix-neuf icônes et huit couleurs occupaient la moitié de l'écran en
+ * permanence, pour un choix qu'on fait une fois. Elles vivent donc sous le
+ * bouton qui les porte — celui-là même qui montre le résultat —, et le
+ * formulaire retrouve sa ligne.
+ *
+ * ## Des cercles, et un disque quand c'est pris
+ *
+ * Une couleur non choisie est un **contour** : la rangée se lit comme un choix
+ * ouvert. Celle qu'on a prise devient un disque plein, avec une coche dedans et
+ * un fond gris autour — trois marques pour une, parce que c'est la seule
+ * information de cette rangée et qu'une nuance de couleur ne se distingue pas
+ * d'une autre au premier regard.
+ */
+export function renderChoixDeLHabitHtml({ icone = "", couleur = null } = {}) {
+  const prise = couleur ?? couleurDeLaVue("");
+
+  return `
+    <div class="gh-menu sujets-vue-habit" role="dialog" aria-label="Icône et couleur de la vue">
+      <p class="sujets-vue-habit__intitule">Couleur</p>
+      <div class="sujets-vue-habit__couleurs" role="radiogroup" aria-label="Couleur de la vue">
+        ${COULEURS_DE_VUE.map((choix) => {
+          const choisie = choix.cle === prise.cle;
+          return `
+            <button type="button" class="sujets-vue-habit__couleur${choisie ? " est-choisie" : ""}"
+              role="radio" aria-checked="${choisie}"
+              style="--sujets-vue-couleur:${escapeHtml(choix.valeur)}"
+              title="${escapeHtml(choix.nom)}" aria-label="${escapeHtml(choix.nom)}"
+              data-sujets-vue-couleur="${escapeHtml(choix.cle)}">
+              ${choisie ? svgIcon("check", { className: "octicon" }) : ""}
+            </button>
+          `;
+        }).join("")}
+      </div>
+
+      <p class="sujets-vue-habit__intitule">Icône</p>
+      <div class="sujets-vue-habit__icones" role="radiogroup" aria-label="Icône de la vue">
+        ${ICONES_DE_VUE.map((nom) => `
+          <button type="button" class="sujets-vue-habit__icone${nom === icone ? " est-choisie" : ""}"
+            role="radio" aria-checked="${nom === icone}" aria-label="${escapeHtml(nom)}"
+            data-sujets-vue-icone="${escapeHtml(nom)}">
+            ${svgIcon(nom, { className: "octicon" })}
+          </button>
+        `).join("")}
+      </div>
+
+      <div class="sujets-vue-habit__gestes">
+        <button type="button" class="gh-btn" data-sujets-vue-habit-annuler="1">Annuler</button>
+        <button type="button" class="gh-btn gh-btn--primary" data-sujets-vue-habit-appliquer="1">
+          Appliquer
+        </button>
+      </div>
+    </div>
   `;
 }

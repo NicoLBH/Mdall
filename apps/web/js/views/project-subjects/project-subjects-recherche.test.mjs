@@ -11,7 +11,8 @@ import assert from "node:assert/strict";
 import { champsDesSujets } from "../../services/champs-des-sujets.js";
 import { LECTURE, NOMS_DE_LA_LECTURE } from "../../services/rail-des-sujets.js";
 import {
-  renderActionsGroupeesHtml, renderFiltreDenTeteHtml, renderFormulaireDeVueHtml,
+  renderActionsGroupeesHtml, renderChoixDeLHabitHtml, renderFiltreDenTeteHtml,
+  renderFormulaireDeVueHtml,
   renderRailDesSujetsHtml, renderRechercheDesSujetsHtml, renderTableauDesVuesHtml
 } from "./project-subjects-recherche.js";
 import { ATTRIBUTS_ECOUTES, GESTE, gesteDesSujets } from "../../services/gestes-des-sujets.js";
@@ -454,7 +455,9 @@ const SANS_GESTE = ["data-tooltip", "data-project-rail", "data-sujets-menu-liste
   // Les deux champs de saisie : ce qu'on y tape arrive par `input`, pas par un
   // clic. Cliquer dedans ne doit rien déclencher — sinon le menu se refermerait
   // au moment où l'on commence à écrire.
-  "data-sujets-recherche", "data-sujets-filtre-recherche", "data-sujets-suggestions"];
+  "data-sujets-recherche", "data-sujets-filtre-recherche", "data-sujets-suggestions",
+  // Les deux champs du formulaire d'une vue : mêmes raisons.
+  "data-sujets-vue-nom", "data-sujets-vue-description"];
 
 /** Et les menus d'en-tête, qui n'ont pas de geste depuis quatre heures. */
 test("chaque attribut d'un filtre d'en-tête déclenche un geste", () => {
@@ -558,6 +561,33 @@ test("chaque attribut du tableau des vues déclenche un geste", () => {
     assert.notEqual(
       gesteDesSujets(unNoeud(attribut)).geste, GESTE.RIEN,
       `le tableau des vues pose « ${attribut} » et rien ne l'écoute`
+    );
+  }
+});
+
+/**
+ * **Le formulaire d'une vue a le même contrat.** Son choix d'habit a été ajouté
+ * tout fait — un bouton, un menu, deux gestes — et il aurait pu n'être écouté
+ * par personne : c'est exactement ce qui est arrivé six fois ce tour-ci, du
+ * côté des dépendances.
+ */
+test("chaque attribut du formulaire d'une vue déclenche un geste", () => {
+  const html = renderFormulaireDeVueHtml({ vue: {}, champs, habitOuvert: true });
+
+  // **Sans le `=`** : `data-sujets-vue-nom` s'écrit nu, et un motif qui exige
+  // une valeur le sauterait — c'est-à-dire sauterait exactement ce qu'il
+  // surveille.
+  const poses = [...new Set(
+    [...html.matchAll(/(data-sujets-[a-z-]+)/g)].map(([, attribut]) => attribut)
+  )];
+
+  assert.ok(poses.length >= 8, `le formulaire ne pose que ${poses.length} attributs`);
+
+  for (const attribut of poses) {
+    if (SANS_GESTE.includes(attribut)) continue;
+    assert.notEqual(
+      gesteDesSujets(unNoeud(attribut)).geste, GESTE.RIEN,
+      `le formulaire pose « ${attribut} » et rien ne l'écoute`
     );
   }
 });
@@ -686,8 +716,7 @@ test("le formulaire propose l'habit, le nom et la recherche", () => {
   const html = renderFormulaireDeVueHtml({ vue: {}, champs });
 
   assert.match(html, /Nouvelle vue/);
-  assert.match(html, /data-sujets-vue-icone=/);
-  assert.match(html, /data-sujets-vue-couleur=/);
+  assert.match(html, /data-sujets-vue-habit=/);
   assert.match(html, /data-sujets-vue-nom/);
   assert.match(html, /data-sujets-vue-description/);
   // La barre de recherche est celle du tableau : une seconde aurait sa propre
@@ -697,16 +726,71 @@ test("le formulaire propose l'habit, le nom et la recherche", () => {
   assert.match(html, /data-sujets-vue-enregistrer/);
 });
 
-/** Ce qu'on a choisi se voit : l'aperçu, l'icône cochée, la couleur cerclée. */
+/**
+ * **Dix-neuf icônes et huit couleurs ne restent pas à l'écran** pour un choix
+ * qu'on fait une fois : elles vivent sous le bouton qui les porte, et c'est ce
+ * bouton qui montre le résultat.
+ */
+test("l'habit ne se déploie que lorsqu'on le demande", () => {
+  const ferme = renderFormulaireDeVueHtml({ vue: {}, champs });
+  const ouvert = renderFormulaireDeVueHtml({ vue: {}, champs, habitOuvert: true });
+
+  assert.doesNotMatch(ferme, /data-sujets-vue-icone=/);
+  assert.doesNotMatch(ferme, /data-sujets-vue-couleur=/);
+  assert.match(ferme, /aria-expanded="false"/);
+
+  assert.match(ouvert, /data-sujets-vue-icone=/);
+  assert.match(ouvert, /data-sujets-vue-couleur=/);
+  assert.match(ouvert, /data-sujets-vue-habit-annuler=/);
+  assert.match(ouvert, /data-sujets-vue-habit-appliquer=/);
+  assert.match(ouvert, /aria-expanded="true"/);
+});
+
+/** Ce qu'on a choisi se voit : sur le bouton, et dans le menu. */
 test("le formulaire montre ce qui est choisi", () => {
   const html = renderFormulaireDeVueHtml({
-    vue: { icone: "tag", couleur: "vert", nom: "X" }, champs
+    vue: { icone: "tag", couleur: "vert", nom: "X" }, champs, habitOuvert: true
   });
 
-  assert.match(html, /sujets-vue-forme__apercu" style="color:#3fb950/);
-  assert.match(html, /data-sujets-vue-icone="tag"[^>]*/);
+  assert.match(html, /sujets-vue-forme__habit-bouton"[^>]*style="color:#3fb950/);
+  assert.match(html, /data-sujets-vue-icone="tag"/);
+  assert.match(html, /data-sujets-vue-couleur="vert"[^>]*/);
   assert.match(html, /est-choisie/);
   assert.match(html, /value="X"/);
+});
+
+/**
+ * **L'habit est à gauche du titre**, sur la même ligne : c'est ce qu'on verra
+ * dans le rail, et le choisir loin du nom qu'on écrit fait composer l'un sans
+ * regarder l'autre.
+ */
+test("l'habit précède le titre", () => {
+  const html = renderFormulaireDeVueHtml({ vue: {}, champs });
+
+  assert.ok(html.indexOf("data-sujets-vue-habit=") < html.indexOf("data-sujets-vue-nom"));
+});
+
+/** Les deux champs qu'on ne peut pas laisser vides le disent. */
+test("le titre et la requête s'annoncent obligatoires", () => {
+  const html = renderFormulaireDeVueHtml({ vue: {}, champs });
+
+  assert.match(html, /Titre <abbr[^>]*title="Champ obligatoire">\*<\/abbr>/);
+  assert.match(html, /Requête <abbr[^>]*title="Champ obligatoire">\*<\/abbr>/);
+});
+
+/**
+ * **Un contour tant qu'on n'a pas choisi, un disque ensuite.** Une nuance de
+ * couleur ne se distingue pas d'une autre au premier regard : celle qui est
+ * prise porte donc trois marques — le fond gris, le disque plein, la coche.
+ */
+test("la couleur prise se marque, les autres restent des cercles", () => {
+  const html = renderChoixDeLHabitHtml({ icone: "tag", couleur: { cle: "vert", valeur: "#3fb950" } });
+
+  assert.match(html, /data-sujets-vue-couleur="vert" *>\s*<svg/,
+    "la couleur prise ne porte pas sa coche");
+  assert.match(html, /class="sujets-vue-habit__couleur est-choisie"[^>]*data-sujets-vue-couleur="vert"/);
+  assert.match(html, /class="sujets-vue-habit__couleur"[^>]*data-sujets-vue-couleur="bleu"[^>]*>\s*<\/button>/,
+    "une couleur non prise porte quelque chose dedans");
 });
 
 /**

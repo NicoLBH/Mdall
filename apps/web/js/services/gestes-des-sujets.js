@@ -64,7 +64,13 @@ export const GESTE = {
   /** Cocher ou décocher tout ce que la requête retient. */
   COCHER_TOUT: "cocher_tout",
   /** Appliquer une action à tous les sujets cochés : `groupe:valeur`. */
-  GROUPE: "groupe"
+  GROUPE: "groupe",
+  /** Ouvrir le choix de l'icône et de la couleur d'une vue, ou le refermer. */
+  VUE_HABIT: "vue_habit",
+  /** Refermer ce choix en remettant l'habit d'avant. */
+  VUE_HABIT_ANNULER: "vue_habit_annuler",
+  /** Le refermer en gardant ce qu'on vient de choisir. */
+  VUE_HABIT_APPLIQUER: "vue_habit_appliquer"
 };
 
 /**
@@ -87,6 +93,9 @@ const ATTRIBUTS = [
   ["data-sujets-epingler", GESTE.EPINGLER],
   ["data-sujets-menu", GESTE.MENU],
   ["data-sujets-vue-nouvelle", GESTE.VUE_NOUVELLE],
+  ["data-sujets-vue-habit-annuler", GESTE.VUE_HABIT_ANNULER],
+  ["data-sujets-vue-habit-appliquer", GESTE.VUE_HABIT_APPLIQUER],
+  ["data-sujets-vue-habit", GESTE.VUE_HABIT],
   ["data-sujets-vue-icone", GESTE.VUE_ICONE],
   ["data-sujets-vue-couleur", GESTE.VUE_COULEUR],
   ["data-sujets-vue-annuler", GESTE.VUE_ANNULER],

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import {
   COULEURS_DE_VUE, COULEUR_PAR_DEFAUT, ICONES_DE_VUE, ICONE_PAR_DEFAUT, PHRASES_DU_REFUS, REFUS,
   couleurDeLaVue, iconeDeLaVue, phraseDesVues, phraseDuRefus, refusDeLaVue, vueAEcrire, vuePourLEcran
+
 } from "./vues-des-sujets.js";
 
 /* ── L'habit ─────────────────────────────────────────────────────────────── */
@@ -160,4 +161,17 @@ test("l'absence de vue dit ce qu'une vue ferait", () => {
 test("le compte des vues s'accorde", () => {
   assert.equal(phraseDesVues([{}]), "1 vue");
   assert.equal(phraseDesVues([{}, {}]), "2 vues");
+});
+
+/**
+ * **Le marque-page**, parce que c'est ce qu'une vue est : un endroit où l'on
+ * revient. L'ancienne icône par défaut — la pile — disait « plusieurs choses »,
+ * ce qui est vrai de n'importe quelle liste et ne distingue donc rien.
+ */
+test("une vue sans icône prend le marque-page", () => {
+  assert.equal(ICONE_PAR_DEFAUT, "bookmark");
+  assert.equal(iconeDeLaVue(""), "bookmark");
+  assert.equal(iconeDeLaVue("une-icone-inventee"), "bookmark");
+  assert.ok(ICONES_DE_VUE.includes("bookmark"));
+  assert.equal(ICONES_DE_VUE[0], "bookmark", "la première proposée est celle par défaut");
 });

@@ -47,6 +47,7 @@ export function createProjectSubjectsEvents(config) {
     // les appellent, ils ne les refont pas.
     ouvrirLaFormeDeVue = () => {},
     poserDansLaFormeDeVue = () => {},
+    basculerLHabitDeLaVue = () => {},
     annulerLaFormeDeVue = () => {},
     enregistrerLaVue = () => {},
     // Les recherches épinglées et le repli du rail vivent avec l'écran : les
@@ -6021,11 +6022,30 @@ export function createProjectSubjectsEvents(config) {
           ouvrirLaFormeDeVue("");
           return;
 
+        case GESTE.VUE_HABIT:
+          // Le bouton est **dans** le formulaire : sans l'arrêter, le clic
+          // irait aussi au champ de nom et lui prendrait le focus.
+          event.stopPropagation();
+          basculerLHabitDeLaVue();
+          return;
+
+        case GESTE.VUE_HABIT_ANNULER:
+          event.stopPropagation();
+          basculerLHabitDeLaVue({ garder: false });
+          return;
+
+        case GESTE.VUE_HABIT_APPLIQUER:
+          event.stopPropagation();
+          basculerLHabitDeLaVue({ garder: true });
+          return;
+
         case GESTE.VUE_ICONE:
+          event.stopPropagation();
           poserDansLaFormeDeVue("icone", valeur);
           return;
 
         case GESTE.VUE_COULEUR:
+          event.stopPropagation();
           poserDansLaFormeDeVue("couleur", valeur);
           return;
 
