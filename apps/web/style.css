@@ -14505,20 +14505,19 @@ circle.situation-trajectory__hierarchy-link--blocked,
 /* Ce qui attend une décision sur un onglet. Distinct du compte que porte déjà
    le libellé : « Changements 3 » dit ce qu'il y a dedans, la pastille dit qu'il
    y a quelque chose à y faire. */
+/* **Un disque, pas un nombre.** L'onglet porte déjà un compte — « Changements
+   30 » — et la pastille en posait un second juste à côté : deux nombres accolés
+   se lisent comme un seul. Le rouge, lui, faisait une alarme de ce qui est le
+   travail ordinaire de l'écran. Il reste un point orange : il y a quelque
+   chose ici, le compte se lit dedans. */
 .light-tabs__alerte{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  min-width:16px;
-  height:16px;
-  padding:0 4px;
+  display:inline-block;
+  width:7px;
+  height:7px;
   margin-left:6px;
   border-radius:999px;
-  background:var(--ton-mauvais);
-  color:#fff;
-  font-size:11px;
-  font-weight:600;
-  line-height:16px;
+  background:var(--ton-doute-vif);
+  vertical-align:middle;
 }
 
 .light-tabs__label{
@@ -20425,9 +20424,15 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
 }
 .merge-state__pastille .octicon{ width:11px; height:11px; }
 .merge-state--ton-bon .merge-state__pastille{ background:var(--ton-bon); }
-/* Rouge, et non plus orange : « À arbitrer » veut dire que la fusion est
-   retenue, pas qu'elle est imparfaite. */
+/* Le rouge ne reste que pour ce qui ne se tranche pas : une analyse qui n'a
+   pas abouti. Là, il n'y a rien à décider, il y a quelque chose à réparer. */
 .merge-state--ton-mauvais .merge-state__pastille{ background:var(--ton-mauvais); }
+
+/* **Ni cercle ni rouge sur ce qui se tranche.** Une pastille rouge à cet
+   endroit fait croire à une panne, alors qu'un compte rendu contredit la
+   mémoire du projet à chaque réunion : c'est le travail, pas un incident.
+   L'icône reste, nue et orange. */
+.merge-state--a-trancher .octicon{ color:var(--ton-doute-vif); }
 .merge-state--ton-doute .merge-state__pastille{ background:var(--ton-doute); }
 .merge-state--ton-assume .merge-state__pastille{ background:var(--ton-assume); }
 .merge-state--ton-attente .merge-state__pastille{ background:var(--panel2); color:var(--muted); }
@@ -20693,12 +20698,10 @@ body.proposition-merge-open{ overflow:hidden; }
    flèches pour passer d'un blocage à l'autre, un bouton de sortie gris tant
    qu'il en reste un — et dans le corps, les lignes en cause marquées d'un trait
    rouge, avec les deux choix juste au-dessus. */
-.arbitrages{
-  border-left:solid 1px var(--ton-doute-vif);
-  overflow:hidden;
-  margin-bottom:16px;
-  background:var(--panel);
-}
+/* **Plus de filet, plus de fond.** Le cadre enveloppait des cartes qui ont
+   maintenant le leur — celui d'un fichier Mdall —, et deux cadres emboîtés se
+   lisent comme deux niveaux là où il n'y en a qu'un. */
+.arbitrages{ margin-bottom:16px; }
 .arbitrages__tete{
   display:flex;
   align-items:center;
@@ -20728,30 +20731,21 @@ body.proposition-merge-open{ overflow:hidden; }
   color:var(--muted);
   cursor:not-allowed;
 }
-.arbitrages__doctrine{
-  margin:0;
-  padding:10px 14px;
-  font-size:12px;
-  color:var(--muted);
-  border-bottom:1px solid var(--border2);
-}
 
-.arbitrage{ border-bottom:1px solid var(--border2); }
-.arbitrage:last-child{ border-bottom:0; }
+/* **Le châssis d'un fichier Mdall**, repris tel quel : `.mdall-fichier` porte
+   la bordure, le coin et l'en-tête, et l'on ne recalibre rien d'un écran à
+   l'autre. Ne restent ici que l'espacement entre deux blocages et les deux ou
+   trois choses que cet en-tête porte en plus. */
+.arbitrage{ margin-bottom:12px; }
+.arbitrage:last-child{ margin-bottom:0; }
 /* Le blocage sur lequel la navette est posée. Un compteur qui avance sans que
    rien ne bouge à l'écran ne sert à rien. */
-.arbitrage.is-courant{ background:rgba(210,153,34,.05); }
+.arbitrage.is-courant{ border-color:var(--ton-doute); }
 .arbitrage.is-settled{ opacity:.9; }
 
-/* L'en-tête du « fichier » : ce qui est en cause, et combien de lignes. */
-.arbitrage__fichier{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  flex-wrap:wrap;
-  padding:10px 14px;
-  background:var(--panel2);
-}
+/* L'en-tête du fichier accueille aussi le bouton qui signe : il s'aligne avec
+   ce qu'il clôt plutôt que de flotter au-dessus. */
+.arbitrage__fichier{ align-items:center; }
 .arbitrage__pastille{
   display:inline-flex;
   align-items:center;
@@ -20766,14 +20760,29 @@ body.proposition-merge-open{ overflow:hidden; }
 .arbitrage__pastille--ton-mauvais{ background:var(--ton-mauvais); }
 .arbitrage__pastille--ton-assume{ background:var(--ton-assume); }
 .arbitrage__pastille--ton-doute{ background:var(--ton-doute); }
-.arbitrage__nom{ font-size:13px; font-weight:600; color:var(--text); }
+/* Le nom d'un contrôle est une phrase, pas un chemin de fichier : il garde la
+   police de l'interface là où `mdall-fichier__nom` met de la chasse fixe. Tout
+   le reste du châssis est celui d'un fichier Mdall, et c'est voulu. */
+.arbitrage__nom{ font-family:inherit; font-size:13px; }
 .arbitrage__dit{ font-size:12px; color:var(--muted); }
 .arbitrage__lignes-compte{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
   margin-left:auto;
   font-size:11px;
   color:var(--muted);
   font-family:var(--mono, ui-monospace, monospace);
 }
+/* Combien il y en a — le seul rouge qui reste ici, et il ne juge pas : il
+   compte. */
+.arbitrage__conflits{ color:var(--ton-mauvais-vif); font-weight:600; }
+/* Et combien sont tranchés, avec l'anneau des sous-sujets. Gris : trancher
+   n'est pas achever, et le violet de la progression dirait autre chose. */
+.arbitrage__tranches .subissues-problems-icon__shade,
+.arbitrage__tranches .subissues-problems-icon__progress{ stroke:var(--muted); }
+.arbitrage__tranches .subissues-problems-icon__completed-ring,
+.arbitrage__tranches .subissues-problems-icon__completed-check{ color:var(--muted); }
 
 /* Les deux issues, en bleu, au-dessus de ce sur quoi elles portent. */
 .arbitrage__choix{ display:flex; gap:8px; padding:10px 14px; flex-wrap:wrap; }
@@ -20818,11 +20827,27 @@ body.proposition-merge-open{ overflow:hidden; }
 /* **Orange, et lui seul.** Le rouge disait « danger » sur un geste qui n'en est
    pas un : arbitrer est le travail ordinaire de cet écran. L'orange dit ce
    qu'il faut — de l'attention, pas de la peur. */
-.conflit{
-  border-left:1px solid var(--ton-doute-vif);
-  margin:0 0 12px;
-}
+/* **Le filet n'entoure que le code.** Il partait du haut du bloc et englobait
+   les deux boutons : on ne voyait plus ce qu'il délimitait. Il tient désormais
+   aux seules lignes, et ses retours horizontaux marquent les trois marqueurs —
+   c'est la forme d'une accolade, et elle dit d'un coup d'œil où commence
+   chaque version. */
+.conflit{ margin:0 0 12px; }
 .conflit:last-child{ margin-bottom:0; }
+.conflit__lignes{
+  position:relative;
+  border-left:1px solid var(--ton-doute-vif);
+}
+.conflit__ligne--marqueur{ position:relative; }
+.conflit__ligne--marqueur::before{
+  content:"";
+  position:absolute;
+  left:0;
+  top:50%;
+  width:9px;
+  height:1px;
+  background:var(--ton-doute-vif);
+}
 
 /* Les deux issues, sur leur ligne, séparées par un filet : c'est la lecture
    d'un conflit Git, et elle se fait sans quitter le bloc qu'elle tranche. */
@@ -24147,7 +24172,18 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .lecture-cr__depot-mot{margin:0;color:var(--muted);font-size:13px;}
 .lecture-cr__depot-choix{cursor:pointer;}
 
-.lecture-cr__identite,
+/* **Sans fond.** « Le document » n'est pas un panneau de plus : ce sont quatre
+   faits lus dans le fichier, et un aplat les mettait au même rang que les blocs
+   de mesure qui, eux, concluent. */
+.lecture-cr__identite{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  padding:20px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+}
+
 .lecture-cr__mesure,
 .lecture-cr__ambigu,
 .lecture-cr__confrontation,
@@ -24174,16 +24210,6 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 /* Ce qui n'a pas été lu se dit, plutôt que de laisser un champ vide qu'on
    prendrait pour une absence dans le document. */
 .lecture-cr__reserve{margin:0;font-size:12.5px;color:var(--fgColor-attention, #d29922);}
-.lecture-cr__md-reserve-icone{display:inline-flex;margin-top:2px;color:var(--fgColor-attention, #d29922);}
-.lecture-cr__md-reserve-corps{
-  display:flex;
-  flex-direction:column;
-  gap:4px;
-  min-width:0;
-  border-left:solid 1px var(--fgColor-attention, #d29922);
-  padding-left:10px;
-}
-.lecture-cr__md-reserve-corps p{margin:0;}
 /* Le verdict du découpage passe au-dessus de ses trois chiffres : on lit la
    conclusion, puis ce qui la fonde. */
 .lecture-cr__verdict{display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;}
@@ -24418,17 +24444,6 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    réserves suivaient l'icône : la première ligne commençait après elle, les
    suivantes revenaient au bord, et le bloc n'avait plus l'air d'un seul
    avertissement. */
-.lecture-cr__md-reserve{
-  display:grid;
-  grid-template-columns:auto 1fr;
-  align-items:start;
-  gap:4px 10px;
-  margin:0;
-  padding:10px 12px;
-  font-size:12.5px;
-  line-height:1.5;
-  color:var(--text);
-}
 /* L'aperçu se lit comme un document, pas comme un panneau de l'application :
    ses titres ont leur propre échelle, sinon un « # » du compte rendu prendrait
    la taille du titre de l'écran et l'on ne saurait plus qui parle. */

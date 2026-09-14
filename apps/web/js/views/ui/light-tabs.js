@@ -70,10 +70,17 @@ export function renderLightTabs({
               // qu'il y a dedans, la pastille dit qu'il y a quelque chose à y
               // faire. Sans elle, on cherche dans quatre onglets ce qui retient
               // la fusion.
+              // **Un point, pas un nombre.** L'onglet portait déjà un compte —
+              // « Changements 30 » — et la pastille en posait un second à côté :
+              // deux nombres accolés se lisent comme un seul, et le rouge en
+              // faisait une alarme sur ce qui est le travail ordinaire. Un
+              // disque orange dit ce qu'il faut : il y a quelque chose ici.
               Number(tab.alerte) > 0
-                ? `<span class="light-tabs__alerte" title="${escapeHtml(
+                ? `<span class="light-tabs__alerte" role="img" aria-label="${escapeHtml(
                     `${Number(tab.alerte)} chose(s) à trancher ici`
-                  )}">${escapeHtml(String(Number(tab.alerte)))}</span>`
+                  )}" title="${escapeHtml(
+                    `${Number(tab.alerte)} chose(s) à trancher ici`
+                  )}"></span>`
                 : ''
             }
           </button>

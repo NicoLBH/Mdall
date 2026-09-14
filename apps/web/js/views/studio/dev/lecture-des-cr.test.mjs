@@ -21,7 +21,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { renderLaLecture } from "./lecture-des-cr.js";
+import { renderLaLecture, reservesDeLaRestitution } from "./lecture-des-cr.js";
 import {
   LECTURE, assemblerLeMarkdown, fideliteDeLaReconstitution
 } from "../../../services/reconstitution-markdown.js";
@@ -311,7 +311,13 @@ test("les mots ajoutés par une restitution se disent", () => {
     }
   }));
 
-  assert.match(html, /sans figurer dans le PDF/);
+  // **La carte dit le nombre, et son aide dit ce qu'il vaut.** Une alerte qui
+  // répétait « 33 mots figurent dans cette restitution sans figurer dans le
+  // PDF » sous une carte « Mots ajoutés : 33 » prenait un quart de l'écran pour
+  // redire un chiffre.
+  assert.match(html, /Mots ajoutés/);
+  assert.match(html, /C'est le chiffre à/);
+  assert.doesNotMatch(html, /lecture-cr__md-reserve/);
 });
 
 test("la demande et l'échec d'une restitution se dessinent aussi", () => {
@@ -477,7 +483,9 @@ test("un titre inventé se compte et se nomme", () => {
   }));
 
   assert.match(html, /Titres inventés/);
-  assert.match(html, /ne figure pas dans le document/);
+  // Le **nom** du titre inventé est ce que la carte ne compte pas : il descend
+  // donc dans son aide, là où on le cherche quand le chiffre surprend.
+  assert.match(html, /Ce que le document ne porte pas/);
   assert.match(html, /Rapport du : 30\/03\/2026 Page 1/);
 });
 
@@ -1607,4 +1615,47 @@ test("sans les situations du projet, aucune n'est proposée", () => {
   }));
 
   assert.doesNotMatch(html, /La situation de suivi/);
+});
+
+
+/* ── Ce qui reste à dire quand les cartes ont compté ─────────────────────── */
+
+/**
+ * **Une alerte qui dit zéro.** La condition portait sur le nombre de pages
+ * abîmées, la phrase sur le nombre de points : l'écran annonçait « 0 point daté
+ * tombe dans des phrases découpées en colonnes ». Une réserve qui ne réserve
+ * rien apprend à ne plus lire les réserves.
+ */
+test("aucun point abîmé, aucune réserve", () => {
+  const dites = reservesDeLaRestitution({
+    horsPlafond: [], aplaties: [], absentes: [], coupee: false,
+    degats: { abimes: 2, pointsAbimes: 0, pages: [] }
+  });
+
+  assert.deepEqual(dites.pages, []);
+});
+
+/** Ce que les cartes ne comptent pas : le nom du titre, les pages qui manquent. */
+test("les réserves se rangent sous la carte qui porte leur chiffre", () => {
+  const dites = reservesDeLaRestitution({
+    horsPlafond: [12, 13],
+    aplaties: [],
+    absentes: [4],
+    coupee: true,
+    forme: { titresInventes: 1, titres: ["Lot n° 12 : VENTILATION"], inversions: 2, pagesDeplacees: [3, 4] }
+  });
+
+  assert.equal(dites.pages.length, 3);
+  assert.match(dites.pages[0], /2 pages n'ont pas été envoyées.*12, 13/);
+  assert.match(dites.pages[1], /1 page envoyée dont rien n'est revenu/);
+  assert.match(dites.pages[2], /coupée en cours de route/);
+
+  assert.equal(dites.titres.length, 2);
+  assert.match(dites.titres[0], /« Lot n° 12 : VENTILATION »/);
+  assert.match(dites.titres[1], /pages 3, 4/);
+});
+
+/** Rien à redire : rien n'est dit. Une réserve vide finit par ne plus être lue. */
+test("une restitution sans réserve ne dit rien", () => {
+  assert.deepEqual(reservesDeLaRestitution({}), { pages: [], titres: [] });
 });

@@ -27,6 +27,7 @@ import { bindOverlayChromeCompact, renderOverlayChromeHead } from "./ui/overlay-
 import { brancherLesBoutonsCopier, renderBoutonCopier } from "./ui/bouton-copier.js";
 import { bindGhActionButtons, renderGhActionButton } from "./ui/gh-split-button.js";
 import { bindLightTabs, renderLightTabs } from "./ui/light-tabs.js";
+import { renderProblemsCountsIconHtml } from "./ui/subissues-counts.js";
 import {
   renderMessageThread,
   renderMessageThreadActivity,
@@ -124,7 +125,6 @@ import {
   lignesDuConflit,
   lignesRetenues,
   motifRecevable,
-  phraseDesArbitrages,
   phraseDuProcesVerbal,
   procesVerbalAEcrire,
   procesVerbalARetirer,
@@ -525,23 +525,42 @@ function renderMergeStateButton(proposition, review) {
     `;
   }
 
-  const blocage = describeBlocking(review?.conflicts ?? []);
   const empeche = fusionRetenue(review ?? {});
+  // Une analyse qui n'a pas abouti n'est pas un arbitrage en attente : il n'y a
+  // rien à trancher, il y a quelque chose à réparer. C'est le seul rouge qui
+  // reste ici.
+  const panne = review?.error ? true : false;
 
-  // La pastille porte la couleur, le bouton reste gris : c'est la lecture de
-  // GitHub, et elle vaut mieux qu'un bouton entier coloré — le vert d'un bouton
-  // dit « appuyez ici », celui d'une pastille dit « c'est prêt ».
-  // **Rouge quand ça ne passe pas.** La pastille était orange, c'est-à-dire la
-  // couleur de « ce n'est pas parfait, mais ça passe » — et l'onglet
-  // Vérifications mettait une croix rouge sur le même fait. L'attente, elle,
-  // n'arrive jamais ici : elle a son propre bouton, plus haut.
-  const ton = empeche ? TON.MAUVAIS : TON.BON;
+  // **Ni cercle ni rouge sur ce qui se tranche.** Le bouton portait une pastille
+  // rouge et le mot « À arbitrer » : un cercle d'alerte à cet endroit fait
+  // croire à une panne, alors qu'un compte rendu contredit la mémoire du projet
+  // à chaque réunion. C'est le travail, pas un incident. L'icône reste, nue et
+  // orange, et le mot dit ce qu'il y a à faire.
+  const ton = panne ? TON.MAUVAIS : empeche ? TON.DOUTE : TON.BON;
 
   return `
-    <button type="button" class="gh-btn gh-btn--sm merge-state merge-state--ton-${escapeHtml(ton)}"
-      data-merge-open>
-      <span class="merge-state__pastille">${svgIcon(empeche ? "alert" : "check", { className: "octicon" })}</span>
-      <span>${escapeHtml(empeche ? "À arbitrer" : "Prêt à fusionner")}</span>
+    <button type="button" class="gh-btn gh-btn--sm merge-state merge-state--ton-${escapeHtml(ton)}${
+      empeche && !panne ? " merge-state--a-trancher" : ""}"
+      ${
+        // **Et il emmène là où l'on tranche.** Il ouvrait le panneau de fusion,
+        // qui annonçait les conditions d'une fusion impossible : on lisait le
+        // blocage sans pouvoir le lever, et il fallait trouver l'onglet seul.
+        empeche && !panne ? `data-merge-arbitrer` : `data-merge-open`
+      }
+      title="${escapeHtml(
+        panne ? "L'analyse n'a pas abouti : il n'y a rien à trancher, il y a quelque chose à reprendre."
+          : empeche ? (describeBlocking(review?.conflicts ?? []) || "Ouvre l'onglet Changements, là où l'on tranche.")
+          : "Ouvre le panneau de fusion."
+      )}">
+      ${
+        empeche && !panne
+          ? svgIcon("alert", { className: "octicon" })
+          : `<span class="merge-state__pastille">${
+              svgIcon(panne ? "alert" : "check", { className: "octicon" })}</span>`
+      }
+      <span>${escapeHtml(
+        panne ? "L'analyse n'a pas abouti" : empeche ? "Conflits à résoudre" : "Prêt à fusionner"
+      )}</span>
     </button>
   `;
 }
@@ -3613,20 +3632,19 @@ function renderArbitrages(review) {
     `;
   }
 
+  // **Plus de bandeau au-dessus.** Il portait un titre — « Ce qui retient la
+  // fusion » —, un compte, et un paragraphe de doctrine : trois lignes qui
+  // disaient ce que l'en-tête de chaque contrôle dit déjà, juste en dessous, en
+  // nommant le contrôle. On payait le haut de l'onglet pour une redite.
+  //
+  // Ne restent que la navette, quand il y a plusieurs blocages à parcourir, et
+  // les contrôles eux-mêmes.
   return `
     <section class="arbitrages" data-arbitrages>
-      <div class="arbitrages__tete">
-        <span class="arbitrages__icone">${svgIcon(restants > 0 ? "alert" : "check", { className: "octicon" })}</span>
-        <span class="arbitrages__titre">${
-          restants > 0 ? "Ce qui retient la fusion" : "Ce qui retenait la fusion"
-        }</span>
-        <span class="arbitrages__compte${restants > 0 ? " is-blocking" : ""}">
-          ${escapeHtml(phraseDesArbitrages({ arbitrages, restants, signe: false }))}
-        </span>
-
-        ${
-          arbitrages.length > 1
-            ? `<span class="arbitrages__navette">
+      ${
+        arbitrages.length > 1
+          ? `<div class="arbitrages__tete">
+               <span class="arbitrages__navette">
                  <button type="button" class="gh-btn gh-btn--sm" data-arbitrage-aller="-1"
                    ${courant === 0 ? "disabled" : ""} aria-label="Blocage précédent">
                    ${svgIcon("chevron-up", { className: "octicon" })}
@@ -3636,50 +3654,45 @@ function renderArbitrages(review) {
                    ${courant === arbitrages.length - 1 ? "disabled" : ""} aria-label="Blocage suivant">
                    ${svgIcon("chevron-down", { className: "octicon" })}
                  </button>
-               </span>`
-            : ""
-        }
+               </span>
+             </div>`
+          : ""
+      }
 
-        <button type="button" class="gh-btn gh-btn--sm gh-btn--primary arbitrages__sortie"
-          ${restants > 0 || gele ? "disabled" : ""}
-          title="${escapeHtml(
-            restants > 0
-              ? `${restants} décision(s) à prendre avant de pouvoir signer`
-              : "Signer le procès-verbal de cet arbitrage. C'est lui qui ouvre la fusion."
-          )}"
-          data-arbitrages-resolus>
-          Marquer comme résolus
-        </button>
-      </div>
-
-      <p class="arbitrages__doctrine">
-        On a le droit de fusionner sans tout savoir : un chantier n'attend pas qu'un rapport
-        arrive. Ce qu'on ne peut plus faire, c'est le faire sans le dire. Tranchez, relisez,
-        puis signez : la fusion vient après, et c'est une autre décision.
-      </p>
-
-      ${arbitrages.map((ligne, rang) => renderArbitrage(ligne, { gele, courant: rang === courant })).join("")}
+      ${arbitrages.map((ligne, rang) => renderArbitrage(ligne, {
+        gele,
+        courant: rang === courant,
+        // **La signature ne se pose qu'une fois.** Le procès-verbal clôt la
+        // séance entière, pas un contrôle : la porter sur chaque en-tête ferait
+        // croire qu'on signe chacun à part. Elle va sur le premier, là où l'œil
+        // arrive.
+        signer: rang === 0 ? { restants, gele } : null
+      })).join("")}
     </section>
   `;
 }
 
 /**
- * Un blocage, dans le corps du « fichier ».
+ * Un blocage, présenté comme un fichier Mdall.
  *
- * Les lignes en cause portent **un trait vertical rouge** — le marqueur d'un
- * côté de conflit —, et les issues sont posées juste au-dessus : on décide en
- * regardant ce sur quoi on décide, sans avoir à remonter.
+ * ## Le même cadre que le code du projet
  *
- * ## Deux paires de boutons faisaient le même geste
+ * Une carte à soi, avec son propre fond et son propre filet, faisait un
+ * quatrième châssis dans un écran qui en avait déjà trois. C'est un fichier
+ * qu'on lit — numéroté, en chasse fixe, avec un nom en tête —, exactement comme
+ * les fichiers de la mémoire : il reprend donc `mdall-fichier`, ses classes
+ * comprises. Mutualiser le châssis est la seule façon qu'ils ne divergent pas
+ * (règle 4), et c'est la raison pour laquelle on ne recalibre pas d'un écran à
+ * l'autre.
  *
- * « Écarter / Passer outre » agissait sur toutes les lignes du contrôle, et
- * « Garder / Prendre » sur chacune. Empilés dans le même cadre, ils se lisaient
- * comme deux mécanismes concurrents alors qu'ils font exactement la même chose
- * — l'un en gros, l'autre au détail. Quand les lignes se tranchent une à une,
- * les boutons d'ensemble le disent donc : **Tout garder**, **Tout prendre**. Le
- * couple d'origine ne reste que là où il n'y a rien à trancher ligne à ligne.
+ * ## L'en-tête porte tout ce qui se décide
+ *
+ * Le nom du contrôle — c'est-à-dire, quand il tombe, **ce qu'il a trouvé** —,
+ * le bouton qui signe la séance, le compte des conflits et celui de ce qui est
+ * tranché. Un bandeau les portait au-dessus, en redisant la même chose sans
+ * nommer le contrôle : il est parti.
  */
-function renderArbitrage(ligne, { gele = false, courant = false } = {}) {
+function renderArbitrage(ligne, { gele = false, courant = false, signer = null } = {}) {
   const concerne = ligne.concerne ?? [];
   const enConflit = concerne.filter((entree) => entree?.conflit);
   const reste = resteAArbitrer(ligne);
@@ -3688,24 +3701,32 @@ function renderArbitrage(ligne, { gele = false, courant = false } = {}) {
   const recevable = motifRecevable(motif);
 
   return `
-    <div class="arbitrage${ligne.arbitre ? " is-settled" : ""}${courant ? " is-courant" : ""}"
+    <div class="arbitrage mdall-fichier${ligne.arbitre ? " is-settled" : ""}${
+      courant ? " is-courant" : ""}"
       data-arbitrage-carte="${escapeHtml(ligne.id)}">
 
-      <div class="arbitrage__fichier">
+      <div class="arbitrage__fichier mdall-fichier__tete">
         <span class="arbitrage__pastille arbitrage__pastille--ton-${escapeHtml(ligne.ton)}">
           ${svgIcon(ligne.icone, { className: "octicon" })}
         </span>
-        <span class="arbitrage__nom">${escapeHtml(ligne.label)}</span>
+        <span class="arbitrage__nom mdall-fichier__nom">${escapeHtml(ligne.label)}</span>
         <span class="arbitrage__dit">${escapeHtml(
           [ligne.phrase, ligne.detail].filter(Boolean).join(" ")
         )}</span>
+
+        ${signer && !gele ? renderBoutonDeSignature(signer.restants) : ""}
+
         ${
-          // **Le compte bouge à chaque clic.** Il disait « 29 lignes » et ne
-          // changeait jamais : on tranchait sans voir que quelque chose s'était
-          // passé.
+          // **Deux nombres, et ils ne disent pas la même chose.** Combien de
+          // conflits ce contrôle met en cause, et combien sont tranchés. Le
+          // second bougeait sans que le premier soit jamais dit : on ne savait
+          // pas de combien on partait.
           enConflit.length > 0
-            ? `<span class="arbitrage__lignes-compte">${
-                enConflit.length - reste}/${enConflit.length} tranché${enConflit.length > 1 ? "s" : ""}</span>`
+            ? `<span class="arbitrage__lignes-compte">
+                 <b class="arbitrage__conflits">${enConflit.length} conflit${
+                   enConflit.length > 1 ? "s" : ""}</b>
+                 ${renderCompteTranche(enConflit.length - reste, enConflit.length)}
+               </span>`
             : concerne.length > 0
               ? `<span class="arbitrage__lignes-compte">${concerne.length} ligne${
                   concerne.length > 1 ? "s" : ""}</span>`
@@ -3775,6 +3796,46 @@ function renderArbitrage(ligne, { gele = false, courant = false } = {}) {
 
       ${concerne.length > 0 && !ligne.arbitre ? renderFichierEnConflit(concerne, gele) : ""}
     </div>
+  `;
+}
+
+/**
+ * Le bouton qui signe la séance, sur l'en-tête du contrôle.
+ *
+ * Il vivait dans un bandeau au-dessus, séparé de ce qu'il clôt. Posé à côté du
+ * compte, il se lit avec lui : il reste gris tant qu'il reste une décision, et
+ * passe au vert quand il n'en reste aucune.
+ */
+function renderBoutonDeSignature(restants = 0) {
+  return `
+    <button type="button" class="gh-btn gh-btn--sm gh-btn--primary arbitrages__sortie"
+      ${restants > 0 ? "disabled" : ""}
+      title="${escapeHtml(
+        restants > 0
+          ? `${restants} décision(s) à prendre avant de pouvoir signer`
+          : "Signer le procès-verbal de cet arbitrage. C'est lui qui ouvre la fusion."
+      )}"
+      data-arbitrages-resolus>
+      Marquer comme résolus
+    </button>
+  `;
+}
+
+/**
+ * Où en est la séance, avec l'anneau des sous-sujets.
+ *
+ * **Le même composant, et pas un second.** « 12 / 29 » avec son anneau de
+ * progression existe depuis les sous-sujets ; en écrire une variante ici aurait
+ * fait deux compteurs qui se ressemblent sans se ressembler tout à fait — et
+ * c'est celui qu'on ne regarde pas qui aurait fini par avoir raison (règle 4).
+ * Seule la teinte change : gris, parce que trancher n'est pas achever.
+ */
+function renderCompteTranche(tranches, total) {
+  return `
+    <span class="subissues-counts subissues-counts--problems subissues-counts--head arbitrage__tranches"
+      aria-label="${escapeHtml(`${tranches} conflit(s) tranché(s) sur ${total}`)}">
+      ${renderProblemsCountsIconHtml(tranches, total)}<span>${tranches} / ${total}</span>
+    </span>
   `;
 }
 
@@ -5328,6 +5389,17 @@ function bindReview(root) {
   root.querySelector("[data-merge-open]")?.addEventListener("click", () => {
     view.mergeDrawer = true;
     view.review.confirming = false;
+    renderContent(root);
+  });
+
+  // **Tant que ça bloque, il emmène là où l'on tranche.** Il ouvrait le panneau
+  // de fusion, qui énonçait posément les conditions d'une fusion impossible :
+  // on lisait le blocage sans pouvoir le lever, et il fallait trouver l'onglet
+  // tout seul.
+  root.querySelector("[data-merge-arbitrer]")?.addEventListener("click", () => {
+    view.mergeDrawer = false;
+    view.review.confirming = false;
+    view.tab = "changes";
     renderContent(root);
   });
 

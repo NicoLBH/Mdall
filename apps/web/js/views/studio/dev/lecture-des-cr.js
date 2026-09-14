@@ -508,7 +508,13 @@ function renderCorps(vue) {
   if (vue.phase === "vide") return "";
 
   return `
-    ${renderFichierRecu(vue)}
+    ${
+      // **Le nom du fichier ne se dit qu'une fois.** « Le document » le porte
+      // dès que la lecture a abouti, avec son numéro et son jour ; garder la
+      // ligne de réception au-dessus faisait deux fois le même nom, l'un sans
+      // rien de plus que l'autre.
+      vue.lecture ? "" : renderFichierRecu(vue)
+    }
     ${renderAlerte(vue)}
     ${vue.lecture ? renderIdentite(vue.lecture) : ""}
     ${renderOnglets(vue)}
@@ -830,6 +836,9 @@ function renderMesureDeLaRestitution(cote) {
   if (cote.phase !== "fait" || !cote.fidelite) return "";
 
   const titres = cote.forme?.titresInventes ?? 0;
+  // Ce que les cartes ne comptent pas : le nom du titre inventé, les pages qui
+  // ne sont pas revenues. Cela vit dans l'aide de la carte qui porte le chiffre.
+  const reserves = reservesDeLaRestitution(cote);
 
   return `
     <div class="lecture-cr__chiffres">
@@ -845,14 +854,20 @@ function renderMesureDeLaRestitution(cote) {
         "Ce que le modèle a écrit et que le document ne portait pas. <strong>C'est le chiffre à "
         + "surveiller</strong> : un document reformulé se lit parfaitement, et se lit faux.")}
       ${renderChiffre("Titres inventés", String(titres), titres > 0 ? "est-douteux" : "est-bon",
-        "Des titres que le document ne porte pas. Ils changent le découpage, donc ce qui suit "
-        + "quoi — et un point rangé sous un titre inventé change de destinataire.")}
+        aideAvecReserves(
+          "Des titres que le document ne porte pas. Ils changent le découpage, donc ce qui suit "
+          + "quoi — et un point rangé sous un titre inventé change de destinataire.",
+          reserves.titres
+        ))}
       ${renderChiffre("Pages refaites",
         `${cote.fidelite.pages.filter((page) => page.rendue).length} / ${cote.fidelite.pages.length}`,
         cote.fidelite.absentes.length ? "est-douteux" : "est-bon",
-        "Les pages que la restitution rend. Une page absente n'a pas été lue : ce qu'elle "
-        + "contenait n'est ni confirmé ni infirmé.<br><br>Aucun de ces chiffres ne dit si les "
-        + "tableaux ont tenu — cela se voit en lisant.")}
+        aideAvecReserves(
+          "Les pages que la restitution rend. Une page absente n'a pas été lue : ce qu'elle "
+          + "contenait n'est ni confirmé ni infirmé.<br><br>Aucun de ces chiffres ne dit si les "
+          + "tableaux ont tenu — cela se voit en lisant.",
+          reserves.pages
+        ))}
     </div>
   `;
 }
@@ -1170,7 +1185,6 @@ function renderCorpsDeLaRestitution(vue, cote, lecture) {
   if (cote.phase !== "fait") return renderLattente(vue);
 
   return `
-    ${renderReservesDeLaRestitution(cote)}
     ${lecture === LECTURE.APERCU
       ? renderLApercu(vue, cote)
       : renderLignesDeLaRestitution(cote, lecture)}
@@ -1180,77 +1194,93 @@ function renderCorpsDeLaRestitution(vue, cote, lecture) {
 /**
  * Ce que la restitution n'a pas couvert, et ce qu'elle s'est permis.
  *
- * **Au-dessus du document, avant qu'on se mette à lire.** Un document amputé se
- * lit très bien : rien, dans ce qui reste, ne dit que le reste manque (règle 5).
- * Et un titre inventé se lit encore mieux — c'est le seul endroit où une
- * invention se fait passer pour une structure.
+ * ## Le bloc d'alerte est parti dans les infobulles
+ *
+ * Il s'affichait au-dessus du document, systématiquement, sur cinq lignes — et
+ * il redisait ce que les cartes venaient de compter deux centimètres plus haut :
+ * « 33 mots figurent dans cette restitution sans figurer dans le PDF » sous une
+ * carte « Mots ajoutés : 33 ». On payait un quart de l'écran pour une répétition.
+ *
+ * Ce qui n'était **pas** redit, en revanche, comptait : le nom du titre inventé,
+ * les pages qui n'ont pas été envoyées, celles dont la géométrie s'est perdue.
+ * Cela descend donc dans l'infobulle de la carte qui porte le chiffre — là où on
+ * le cherche quand le chiffre surprend.
+ *
+ * ## Pourquoi c'est une fonction pure
+ *
+ * Parce qu'elle décide ce qu'on dit d'une lecture, et que cela doit pouvoir se
+ * vérifier sans écran. Le rendu ne fait que coller ces phrases sous l'aide de
+ * la carte.
+ *
+ * @returns {{pages: string[], titres: string[]}} par carte, ce qui reste à dire
  */
-function renderReservesDeLaRestitution(cote) {
-  const reserves = [];
+export function reservesDeLaRestitution(cote = {}) {
+  const pages = [];
+  const titres = [];
 
-  if (cote.horsPlafond.length) {
-    reserves.push(`${cote.horsPlafond.length} page${cote.horsPlafond.length > 1 ? "s" : ""} n'${
-      cote.horsPlafond.length > 1 ? "ont" : "a"} pas été envoyée${cote.horsPlafond.length > 1 ? "s" : ""} :
-      le document dépasse ce qu'une restitution accepte (pages ${cote.horsPlafond.join(", ")}).`);
+  const combien = (liste) => (Array.isArray(liste) ? liste.length : 0);
+
+  if (combien(cote.horsPlafond)) {
+    pages.push(`${cote.horsPlafond.length} page${cote.horsPlafond.length > 1 ? "s" : ""} n'${
+      cote.horsPlafond.length > 1 ? "ont" : "a"} pas été envoyée${cote.horsPlafond.length > 1 ? "s" : ""} : `
+      + `le document dépasse ce qu'une restitution accepte (pages ${cote.horsPlafond.join(", ")}).`);
   }
+
   // **La géométrie n'a pas été lisible partout.** Sur ces pages-là, le modèle a
   // reçu le texte aplati : la date de la colonne de droite tombe au milieu de
-  // la phrase de gauche, comme avant. Le taire ferait juger la transcription
-  // sur une base qu'on serait seul à connaître.
-  if (cote.aplaties?.length) {
-    reserves.push(`${cote.aplaties.length} page${cote.aplaties.length > 1 ? "s" : ""} ${
-      cote.aplaties.length > 1 ? "sont parties" : "est partie"} sans leur géométrie : les colonnes n'y
-      sont pas garanties (pages ${cote.aplaties.join(", ")}).`);
+  // la phrase de gauche. Le taire ferait juger la transcription sur une base
+  // qu'on serait seul à connaître.
+  if (combien(cote.aplaties)) {
+    pages.push(`${cote.aplaties.length} page${cote.aplaties.length > 1 ? "s" : ""} ${
+      cote.aplaties.length > 1 ? "sont parties" : "est partie"} sans leur géométrie : les colonnes `
+      + `n'y sont pas garanties (pages ${cote.aplaties.join(", ")}).`);
   }
-  if (cote.absentes.length) {
-    reserves.push(`${cote.absentes.length} page${cote.absentes.length > 1 ? "s" : ""} envoyée${
+
+  if (combien(cote.absentes)) {
+    pages.push(`${cote.absentes.length} page${cote.absentes.length > 1 ? "s" : ""} envoyée${
       cote.absentes.length > 1 ? "s" : ""} dont rien n'est revenu (pages ${cote.absentes.join(", ")}).`);
   }
+
   if (cote.coupee) {
-    reserves.push("La réponse du modèle a été coupée en cours de route : la fin du document manque.");
+    pages.push("La réponse du modèle a été coupée en cours de route : la fin du document manque.");
   }
-  if (cote.fidelite?.motsAjoutes > 0) {
-    reserves.push(`${cote.fidelite.motsAjoutes} mot${cote.fidelite.motsAjoutes > 1 ? "s" : ""} ${
-      cote.fidelite.motsAjoutes > 1 ? "figurent" : "figure"} dans cette restitution sans figurer dans le PDF.`);
-  }
+
   // **Les phrases coupées à la verticale.** Un point pris dedans ne se
   // retrouvera jamais mot pour mot dans le document : il sera écarté par le
   // garde-fou des citations, et l'on ne saura pas pourquoi sans cette ligne.
-  if (cote.degats?.abimes > 0) {
+  //
+  // Le compte est celui des **points abîmés**, pas celui des pages : la
+  // condition portait sur les secondes, et l'écran annonçait « 0 point daté
+  // tombe dans des phrases découpées » — une alerte qui dit zéro.
+  const abimes = Number(cote.degats?.pointsAbimes) || 0;
+  if (abimes > 0) {
     const chaudes = pagesAbimees(cote.degats, 3).map((page) => page.page);
-    reserves.push(`${cote.degats.pointsAbimes} point${cote.degats.pointsAbimes > 1 ? "s" : ""} daté${
-      cote.degats.pointsAbimes > 1 ? "s" : ""} ${cote.degats.pointsAbimes > 1 ? "tombent" : "tombe"
-    } dans des phrases découpées en colonnes, et ${cote.degats.pointsAbimes > 1 ? "seront" : "sera"
-    } donc écarté${cote.degats.pointsAbimes > 1 ? "s" : ""} faute de citation vérifiable (pages ${
-      chaudes.join(", ")}).`);
+    pages.push(`${abimes} point${abimes > 1 ? "s" : ""} daté${abimes > 1 ? "s" : ""} ${
+      abimes > 1 ? "tombent" : "tombe"} dans des phrases découpées en colonnes, et ${
+      abimes > 1 ? "seront" : "sera"} donc écarté${abimes > 1 ? "s" : ""} faute de citation `
+      + `vérifiable (pages ${chaudes.join(", ")}).`);
   }
+
   // **Deux règles de la consigne, vérifiées plutôt que supposées.** Elle
   // interdit d'inventer un titre et de changer l'ordre ; une consigne qu'on ne
   // vérifie pas est une intention, pas une règle (règle 12).
-  if (cote.forme?.titresInventes > 0) {
-    reserves.push(`${cote.forme.titresInventes} titre${cote.forme.titresInventes > 1 ? "s" : ""} ${
-      cote.forme.titresInventes > 1 ? "ne figurent" : "ne figure"} pas dans le document : ${
-      cote.forme.titres.map((titre) => `« ${titre} »`).join(", ")}.`);
-  }
-  if (cote.forme?.inversions > 0) {
-    reserves.push(`Des blocs ont changé de place par rapport au document (pages ${
-      cote.forme.pagesDeplacees.join(", ")}) : ce qui suit quoi dit ce qui répond à quoi.`);
+  if (Number(cote.forme?.titresInventes) > 0) {
+    titres.push(`Ce que le document ne porte pas : ${
+      (cote.forme.titres ?? []).map((titre) => `« ${titre} »`).join(", ")}.`);
   }
 
-  if (!reserves.length) return "";
+  if (Number(cote.forme?.inversions) > 0) {
+    titres.push(`Des blocs ont changé de place par rapport au document (pages ${
+      (cote.forme.pagesDeplacees ?? []).join(", ")}) : ce qui suit quoi dit ce qui répond à quoi.`);
+  }
 
-  // **L'icône dans sa colonne, le texte dans la sienne.** Les réserves
-  // s'écrivaient à la suite de l'icône : la première ligne commençait après
-  // elle, les suivantes revenaient au bord, et l'on ne voyait plus que le bloc
-  // portait un seul avertissement.
-  return `
-    <div class="lecture-cr__md-reserve">
-      <span class="lecture-cr__md-reserve-icone">${svgIcon("alert", { className: "octicon" })}</span>
-      <div class="lecture-cr__md-reserve-corps">
-        ${reserves.map((reserve) => `<p>${escapeHtml(reserve)}</p>`).join("")}
-      </div>
-    </div>
-  `;
+  return { pages, titres };
+}
+
+/** Ce qu'une carte ajoute à son aide : le constat, sous l'explication. */
+function aideAvecReserves(aide, reserves = []) {
+  if (reserves.length === 0) return aide;
+  return `${aide}<br><br>${reserves.map((reserve) => escapeHtml(reserve)).join("<br>")}`;
 }
 
 /** La restitution, ligne à ligne — en Code, ou en Origine avec sa page. */

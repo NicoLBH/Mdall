@@ -118,12 +118,12 @@ test("le résumé met ce qui ne va pas en tête", () => {
  * Le ton se décide donc ici, une fois, et il dépend de **deux** choses : ce que
  * le contrôle a répondu, et s'il retient la fusion.
  */
-test("le rouge est réservé à ce qui retient la fusion", () => {
-  assert.equal(tonDuControle({ issue: ISSUE.NON_TENU, bloquant: true }), TON.MAUVAIS);
-
-  // Le même « non tenu », sur un contrôle qui n'empêche rien, reste orange :
-  // le peindre en rouge ferait chercher un blocage qui n'existe pas, et
-  // l'utilisateur cesserait de croire au rouge le jour où il en aurait besoin.
+test("un contrôle non tenu porte l'orange, qu'il retienne la fusion ou non", () => {
+  // **Le rouge ne convient pas ici.** Un compte rendu contredit la mémoire du
+  // projet à chaque réunion : c'est le travail ordinaire de cet écran, on
+  // tranche et l'on avance. Un cercle rouge à cet endroit fait croire à une
+  // panne, et l'on cesse de croire au rouge le jour où il y en a une.
+  assert.equal(tonDuControle({ issue: ISSUE.NON_TENU, bloquant: true }), TON.DOUTE);
   assert.equal(tonDuControle({ issue: ISSUE.NON_TENU, bloquant: false }), TON.DOUTE);
 });
 
@@ -158,8 +158,8 @@ test("chaque ligne passée porte son ton", () => {
 
   const ton = (id) => rendu.lignes.find((ligne) => ligne.id === id).ton;
 
-  // Requis et non tenu : c'est lui qui retient la fusion.
-  assert.equal(ton("provenance"), TON.MAUVAIS);
+  // Requis et non tenu : il retient la fusion, et cela se tranche — orange.
+  assert.equal(ton("provenance"), TON.DOUTE);
   // Non vérifiable, et il n'empêche rien.
   assert.equal(ton("lecture"), TON.DOUTE);
   assert.equal(ton("memoire"), TON.BON);
@@ -281,4 +281,29 @@ test("tout tranché, le contrôle reste là pour être relu et signé", () => {
 test("un contrôle tenu ne nomme aucune ligne", () => {
   const rendu = passerLesControles(CONTEXTE);
   assert.deepEqual(rendu.lignes.find((entree) => entree.id === "memoire").concerne, []);
+});
+
+
+/**
+ * **Une croix sur « Rien ne contredit la mémoire du projet ».**
+ *
+ * Le nom du contrôle dit ce qu'il garantit ; coiffé d'une croix, il se lit
+ * comme un démenti, et l'on relit deux fois pour comprendre que c'est
+ * l'inverse qui est constaté. Un contrôle qui tombe se nomme donc par ce qu'il
+ * a trouvé — et la phrase, elle, dit combien.
+ */
+test("un contrôle qui tombe se nomme par ce qu'il a trouvé", () => {
+  const tenu = passerLesControles(CONTEXTE).lignes.find((ligne) => ligne.id === "memoire");
+  assert.equal(tenu.label, "Rien ne contredit la mémoire du projet");
+
+  const tombe = passerLesControles({
+    ...CONTEXTE,
+    conflits: [{ item: { itemType: "base-datum", itemKey: "a", status: "proposed" }, before: "1", after: "2" }],
+    blocage: "1 contradiction avec la mémoire du projet doit être arbitrée avant de fusionner."
+  }).lignes.find((ligne) => ligne.id === "memoire");
+
+  assert.equal(tombe.label, "La mémoire du projet est contredite");
+  // La phrase ne redit pas le nom : elle dit combien.
+  assert.match(tombe.phrase, /1 contradiction/);
+  assert.doesNotMatch(tombe.phrase, /La mémoire du projet est contredite/);
 });
