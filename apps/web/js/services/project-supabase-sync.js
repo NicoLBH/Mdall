@@ -857,6 +857,74 @@ function mapRunRowToLogEntry(row = {}) {
 }
 
 /**
+ * Une exécution du projet — une fusion — telle qu'elle s'affiche dans Actions.
+ *
+ * ## Pourquoi elle ne passe pas par le mappage des analyses
+ *
+ * Parce qu'elle ne dit pas la même chose. Une analyse rend compte d'un lot relu
+ * par un moteur : des avis, une empreinte de corpus, des packs. Une fusion rend
+ * compte de ce qui a été **écrit** dans le projet, étape par étape. Lui prêter
+ * les colonnes de l'autre reviendrait à annoncer « 0 avis suivis » sur un geste
+ * qui n'en a jamais compté (règle 4).
+ *
+ * Ce qu'elles partagent est la seule chose qui compte pour l'écran : la forme
+ * des étapes, `{id, label, ms, statut, lignes}`. Un même graphe les lit.
+ */
+function mapProjectRunRowToLogEntry(row = {}) {
+  const debut = row.started_at || row.created_at || new Date().toISOString();
+  const fin = row.finished_at || debut;
+  const statut = safeString(row.statut || "ok");
+  const geste = safeString(row.geste || "fusion");
+
+  const triggerLabel = row.proposition_id ? "Fusion d'une proposition" : "Exécution du projet";
+
+  return {
+    id: safeString(row.id),
+    name: safeString(row.titre) || "Fusion",
+    kind: geste,
+    agentKey: geste,
+    lifecycleStatus: "completed",
+    // Une fusion dont une étape n'a pas tenu s'affiche en anomalie : les
+    // documents sont entrés, mais quelque chose n'a pas été écrit, et c'est
+    // cela qu'on doit voir sans ouvrir le détail.
+    outcomeStatus: statut === "echec" ? "error" : "success",
+    status: "completed",
+    triggerType: geste,
+    triggerLabel,
+    trigger: { type: geste, label: triggerLabel },
+    origine: "projet",
+    privee: false,
+    documentName: "",
+    subject: { documentName: "" },
+    startedAt: debut,
+    endedAt: fin,
+    durationMs: Number.isFinite(Number(row.duration_ms)) ? Number(row.duration_ms) : null,
+    summary: safeString(row.resume),
+    details: {
+      corpus: {
+        // Ce qui dit au graphe de quel genre d'exécution il s'agit : ses nœuds
+        // se construisent alors à partir des étapes, et non d'une liste fixe.
+        geste,
+        proposition: safeString(row.titre) || null,
+        steps: (Array.isArray(row.steps) ? row.steps : [])
+          .map((step) => ({
+            id: safeString(step?.id || ""),
+            label: safeString(step?.label || ""),
+            // `null` n'est pas zéro : une étape non chronométrée n'a pas duré
+            // « 0 ms », et l'écran affiche un tiret.
+            ms: step?.ms === null || step?.ms === undefined || step?.ms === "" ? null : Number(step.ms) || 0,
+            statut: safeString(step?.statut || "ok"),
+            lignes: Array.isArray(step?.lignes) ? step.lignes : null
+          }))
+          .filter((step) => step.id)
+      }
+    },
+    createdAt: debut,
+    updatedAt: fin
+  };
+}
+
+/**
  * Une analyse du suivi des avis, telle qu'elle s'affiche dans les Actions.
  *
  * C'est l'exécution du nouveau parcours : elle ne porte pas sur un document
@@ -1313,16 +1381,37 @@ export async function syncProjectActionsFromSupabase(options = {}) {
     return [];
   };
 
-  // Deux pipelines, un seul journal. Ne pas savoir lire l'un n'autorise pas
-  // à taire l'autre.
-  const [rows, ctRows] = await Promise.all([
+  // **Ce que le projet a fait**, par opposition à ce qu'il a calculé : les
+  // fusions. Une table qui n'existerait pas encore ne doit pas emporter le
+  // reste du journal — on rend une liste vide et l'on continue.
+  const lireLesGestes = async () => {
+    try {
+      const gestes = new URLSearchParams();
+      gestes.set(
+        "select",
+        "id,geste,proposition_id,titre,resume,statut,started_at,finished_at,duration_ms,steps,created_at"
+      );
+      gestes.set("project_id", `eq.${backendProjectId}`);
+      gestes.set("order", "started_at.desc");
+      return await restFetch("project_runs", gestes);
+    } catch (erreur) {
+      console.warn("[actions] project_runs illisible", erreur);
+      return [];
+    }
+  };
+
+  // Trois pipelines, un seul journal. Ne pas savoir lire l'un n'autorise pas
+  // à taire les autres.
+  const [rows, ctRows, gesteRows] = await Promise.all([
     restFetch("analysis_runs", params).catch(() => []),
-    lireLesCourses()
+    lireLesCourses(),
+    lireLesGestes()
   ]);
 
   const nextItems = [
     ...(Array.isArray(rows) ? rows : []).map(mapRunRowToLogEntry),
-    ...(Array.isArray(ctRows) ? ctRows : []).map(mapCtRunRowToLogEntry)
+    ...(Array.isArray(ctRows) ? ctRows : []).map(mapCtRunRowToLogEntry),
+    ...(Array.isArray(gesteRows) ? gesteRows : []).map(mapProjectRunRowToLogEntry)
   ].sort((left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime());
 
   store.projectAutomation.runLog = nextItems;

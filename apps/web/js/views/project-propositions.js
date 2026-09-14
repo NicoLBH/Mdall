@@ -29,6 +29,14 @@ import { bindGhActionButtons, renderGhActionButton } from "./ui/gh-split-button.
 import { bindLightTabs, renderLightTabs } from "./ui/light-tabs.js";
 import { renderProblemsCountsIconHtml } from "./ui/subissues-counts.js";
 import {
+  GESTE as GESTE_DU_PROJET,
+  chronoDeLaFusion,
+  nomDeLaFusion,
+  resumeDeLaFusion,
+  statutDeLaFusion
+} from "../services/journal-de-la-fusion.js";
+import { finishRunLogEntry, startRunLogEntry } from "../services/project-automation.js";
+import {
   renderMessageThread,
   renderMessageThreadActivity,
   renderMessageThreadComment
@@ -3714,8 +3722,6 @@ function renderArbitrage(ligne, { gele = false, courant = false, signer = null }
           [ligne.phrase, ligne.detail].filter(Boolean).join(" ")
         )}</span>
 
-        ${signer && !gele ? renderBoutonDeSignature(signer.restants) : ""}
-
         ${
           // **Deux nombres, et ils ne disent pas la même chose.** Combien de
           // conflits ce contrôle met en cause, et combien sont tranchés. Le
@@ -3732,6 +3738,8 @@ function renderArbitrage(ligne, { gele = false, courant = false, signer = null }
                   concerne.length > 1 ? "s" : ""}</span>`
               : ""
         }
+
+        ${signer && !gele ? renderBoutonDeSignature(signer.restants) : ""}
       </div>
 
       ${
@@ -6143,6 +6151,16 @@ async function merge(root) {
   view.review.notice = null;
   renderContent(root);
 
+  // **Ce que la fusion fait, étape par étape, et ce que chacune prend.**
+  //
+  // Fusionner n'est pas un geste : c'en est une douzaine, et cela dure une
+  // minute et demie sur un compte rendu de chantier. Pendant ce temps l'écran
+  // montrait une roue ; après, plus rien — aucune trace de ce qui avait eu lieu
+  // ni de ce qui avait échoué en chemin. Le chemin d'exécution s'écrit donc, et
+  // il se relit dans l'onglet Actions, comme une analyse (règle 12).
+  const chrono = chronoDeLaFusion();
+  const enCours = commencerLaCourseDeFusion(proposition);
+
   try {
     const [propositions, { rememberProjectMarkers }, { markersToRemember }] = await Promise.all([
       import("../services/propositions-supabase.js"),
@@ -6154,15 +6172,21 @@ async function merge(root) {
     // n'aurait pas été écrit serait précisément le procès-verbal manquant
     // qu'on cherche à ne plus produire — et rien ne permettrait de le
     // reconstituer après coup.
+    const etapeDuGel = chrono.etape("gel");
     const gele = await freeze(propositions, proposition);
     if (!gele) {
+      etapeDuGel.rate("L'état de la proposition n'a pas pu être conservé.");
+      await fermerLaCourseDeFusion(enCours, proposition, chrono);
       view.review.merging = false;
       view.review.notice = "L'état de la proposition n'a pas pu être conservé. Rien n'a été fusionné.";
       renderContent(root);
       return;
     }
+    etapeDuGel.dire(`${items.length} ligne(s) figées avec la proposition`);
+    etapeDuGel.fini();
 
     const documents = items.filter((entry) => entry.itemType === ITEM_TYPE.DOCUMENT);
+    const etapeDuCorpus = chrono.etape("corpus");
     const applique = await propositions.mergeProposition({
       proposition,
       acceptedDocumentIds: documents.filter((entry) => entry.status !== ITEM.REFUSED).map((entry) => entry.itemKey),
@@ -6174,11 +6198,20 @@ async function merge(root) {
     });
 
     if (!applique) {
+      etapeDuCorpus.rate("La base a refusé la fusion.");
+      await fermerLaCourseDeFusion(enCours, proposition, chrono);
       view.review.merging = false;
       view.review.notice = "La fusion n'a pas abouti. La proposition reste ouverte : rien n'a été perdu.";
       renderContent(root);
       return;
     }
+
+    const retenus = documents.filter((entry) => entry.status !== ITEM.REFUSED).length;
+    etapeDuCorpus.dire(`${retenus} livrable(s) entrés au corpus`);
+    if (documents.length - retenus > 0) {
+      etapeDuCorpus.dire(`${documents.length - retenus} livrable(s) écartés`);
+    }
+    etapeDuCorpus.fini();
 
     view.review.merging = false;
     view.review.confirming = false;
@@ -6223,12 +6256,19 @@ async function merge(root) {
     // Les rattachements tranchés deviennent la mémoire du projet, avec leur
     // signe : accepté rattache l'affaire, refusé l'écarte pour de bon.
     const rattachements = items.filter((entry) => entry.itemType === ITEM_TYPE.ATTACHMENT);
-    for (const entry of rattachements) {
-      const rejected = entry.status === ITEM.REFUSED;
-      await rememberProjectMarkers(
-        proposition.project_id,
-        markersToRemember(entry.payload.markers ?? [], [], { rejected })
-      );
+    const etapeDesRattachements = chrono.etape("rattachements");
+    try {
+      for (const entry of rattachements) {
+        const rejected = entry.status === ITEM.REFUSED;
+        await rememberProjectMarkers(
+          proposition.project_id,
+          markersToRemember(entry.payload.markers ?? [], [], { rejected })
+        );
+      }
+      etapeDesRattachements.dire(`${rattachements.length} rattachement(s) versés`);
+      etapeDesRattachements.fini();
+    } catch (erreur) {
+      etapeDesRattachements.rate(erreur);
     }
 
     // Ce que la proposition fait entrer devient la mémoire du projet : des
@@ -6239,15 +6279,21 @@ async function merge(root) {
     // L'échec ne défait pas la fusion : les documents sont entrés, le suivi
     // sera réécrit, et la mémoire se rattrape depuis l'onglet Mémoire. Le taire
     // serait pire — on croirait la mémoire à jour.
+    const etapeDeLaMemoire = chrono.etape("memoire");
     try {
       const memoire = await import("../services/project-memory-supabase.js");
       const verse = await memoire.rememberProposition({ proposition: view.open, items });
       if (!verse) {
+        etapeDeLaMemoire.rate("La mémoire du projet n'a pas pu être mise à jour.");
         view.review.notice =
           "Les documents sont entrés, mais la mémoire du projet n'a pas pu être mise à jour. " +
           "Elle se rattrape depuis l'onglet Mémoire.";
+      } else {
+        etapeDeLaMemoire.dire(`${items.length} ligne(s) versées, refus compris`);
+        etapeDeLaMemoire.fini();
       }
-    } catch {
+    } catch (erreur) {
+      etapeDeLaMemoire.rate(erreur);
       view.review.notice =
         "Les documents sont entrés, mais la mémoire du projet n'a pas pu être mise à jour. " +
         "Elle se rattrape depuis l'onglet Mémoire.";
@@ -6264,15 +6310,31 @@ async function merge(root) {
     // **Les lots d'abord.** La base refuse un collaborateur sans lot, et un lot
     // qu'un compte rendu nomme n'est pas une hypothèse : l'entreprise était à
     // la réunion. L'ordre inverse laisserait dehors la moitié des sociétés.
+    const etapeDesLots = chrono.etape("lots");
     await ouvrirLesLotsDuCompteRendu(root, items);
+    etapeDesLots.dire(`${retenus_(items, ITEM_TYPE.LOT)} lot(s) retenus`);
+    etapeDesLots.fini();
+
+    const etapeDesIntervenants = chrono.etape("intervenants");
     await ajouterLesIntervenantsRetenus(root, proposition, items);
+    etapeDesIntervenants.dire(`${retenus_(items, ITEM_TYPE.INTERVENANT)} société(s) retenues`);
+    etapeDesIntervenants.fini();
+
+    const etapeDesSujets = chrono.etape("sujets");
     const nes = await ouvrirLesSujetsRetenus(root, proposition, items);
+    etapeDesSujets.dire(`${nes.length} sujet(s) ouverts sur ${retenus_(items, ITEM_TYPE.SUJET)} retenus`);
+    if (nes.length < retenus_(items, ITEM_TYPE.SUJET)) {
+      etapeDesSujets.avertir("Des sujets retenus n'ont pas pu être ouverts : ils se rouvrent à la main.");
+    }
+    etapeDesSujets.fini();
 
     // Puis tout ce que le compte rendu dit des sujets — les siens et ceux qu'il
     // reporte : leur label, leur jalon, et la ligne d'activité qui dit que
     // cette réunion les a redits. Sans cela, un compte rendu de quarante points
     // n'en laissait voir que trois, et les trente-sept autres restaient muets.
-    await appliquerCeQueLeCompteRenduDit(root, proposition, items, nes);
+    const etapeDuSecretariat = chrono.etape("secretariat");
+    await appliquerCeQueLeCompteRenduDit(root, proposition, items, nes, etapeDuSecretariat);
+    etapeDuSecretariat.fini();
 
     // L'histoire se refait maintenant : sans cela, le fil resterait celui d'une
     // proposition ouverte — sans acte de fusion, sans carte de fin — jusqu'au
@@ -6287,20 +6349,138 @@ async function merge(root) {
     if (ligne) Object.assign(ligne, view.open);
     store.projectPropositionsView = { openCount: getOpenPropositionCount() };
 
+    const etapeDuSuivi = chrono.etape("suivi");
     await recomputeAfterMerge(root, proposition);
+    etapeDuSuivi.dire("Le dossier d'avis a été relu sur le corpus d'après la fusion");
+    etapeDuSuivi.fini();
 
     // Le tableau avant / après se relit sur ce que la fusion a écrit : « avant »
     // n'est plus l'état d'aujourd'hui mais ce que la proposition a remplacé.
+    const etapeDuTableau = chrono.etape("tableau");
     await relireLeTableau(proposition);
+    etapeDuTableau.dire("« Avant » est désormais ce que cette proposition a remplacé");
+    etapeDuTableau.fini();
+
     view.review.finishing = false;
     view.review.step = "";
-  } catch {
+  } catch (erreur) {
+    chrono.etape("fusion").rate(erreur);
     view.review.merging = false;
     view.review.finishing = false;
     view.review.notice = "La fusion n'a pas abouti. La proposition reste ouverte : rien n'a été perdu.";
   }
 
+  // **Le journal se ferme quoi qu'il arrive.** Une fusion qui casse au milieu
+  // est précisément celle dont on veut lire le chemin : s'arrêter d'écrire au
+  // premier échec reviendrait à ne garder que les fusions qui se sont bien
+  // passées, c'est-à-dire celles dont on n'a pas besoin.
+  await fermerLaCourseDeFusion(enCours, proposition, chrono);
+
+  // Les compteurs de la barre d'onglets ont bougé : une fusion ferme des sujets
+  // et en ouvre d'autres. Sans ce rappel, l'onglet continuait d'annoncer le
+  // compte d'avant la fusion, et le tableau celui d'après — l'utilisateur
+  // n'ayant aucun moyen de savoir lequel mentait.
+  try {
+    const sync = await import("../services/project-supabase-sync.js");
+    await sync.syncProjectSubjectCountersFromSupabase({ force: true });
+    const entete = await import("./project-header.js");
+    entete.rafraichirLesOngletsDuProjet();
+  } catch {
+    // La fusion est faite : un compteur en retard n'est pas une raison de le dire.
+  }
+
   renderContent(root);
+}
+
+/** Combien de lignes d'une nature la signature a retenues. */
+function retenus_(items, nature) {
+  return (Array.isArray(items) ? items : [])
+    .filter((entree) => entree?.itemType === nature && entree?.status !== ITEM.REFUSED).length;
+}
+
+/**
+ * Ouvre l'exécution dans l'onglet Actions, pendant qu'elle a lieu.
+ *
+ * **Le sablier trouve sa place ici.** Il tournait dans la proposition, qui est
+ * l'écran d'une décision, pas celui d'une exécution. Actions est l'endroit où
+ * l'on regarde ce que la machine fait — et une fusion d'une minute et demie y
+ * appartient au même titre qu'une analyse.
+ */
+function commencerLaCourseDeFusion(proposition) {
+  try {
+    return startRunLogEntry({
+      name: nomDeLaFusion(proposition),
+      kind: GESTE_DU_PROJET.FUSION,
+      agentKey: GESTE_DU_PROJET.FUSION,
+      triggerType: GESTE_DU_PROJET.FUSION,
+      triggerLabel: "Fusion d'une proposition",
+      status: "running",
+      summary: "La proposition est en cours de fusion."
+    });
+  } catch {
+    // Un journal qui ferait échouer la fusion qu'il observe serait pire que pas
+    // de journal du tout.
+    return null;
+  }
+}
+
+/**
+ * Ferme l'exécution : à l'écran d'abord, en base ensuite.
+ *
+ * L'ordre compte. L'entrée vive est ce que l'onglet Actions montre déjà ; la
+ * ligne écrite est ce qu'il montrera au prochain rechargement. Attendre la base
+ * pour retirer le sablier ferait tourner une roue sur un geste terminé.
+ */
+async function fermerLaCourseDeFusion(enCours, proposition, chrono) {
+  const etapes = chrono.etapes();
+  const statut = statutDeLaFusion(etapes);
+  const resume = resumeDeLaFusion(etapes);
+  const details = {
+    corpus: {
+      geste: GESTE_DU_PROJET.FUSION,
+      proposition: nomDeLaFusion(proposition),
+      steps: etapes
+    }
+  };
+
+  try {
+    if (enCours) {
+      finishRunLogEntry(enCours.id, {
+        status: "completed",
+        outcomeStatus: statut === "echec" ? "error" : "success",
+        durationMs: chrono.ms(),
+        summary: resume,
+        details
+      });
+    }
+  } catch {
+    // Rien à réparer ici : l'écran se rattrapera au prochain rechargement.
+  }
+
+  try {
+    const { enregistrerUneCourse } = await import("../services/project-runs-supabase.js");
+    const ecrite = await enregistrerUneCourse({
+      projectId: proposition?.project_id,
+      geste: GESTE_DU_PROJET.FUSION,
+      propositionId: proposition?.id,
+      titre: nomDeLaFusion(proposition),
+      resume,
+      statut,
+      durationMs: chrono.ms(),
+      steps: etapes
+    });
+
+    if (!ecrite && view.review) {
+      view.review.notice = [
+        view.review.notice,
+        "Le journal de cette fusion n'a pas pu être conservé : la fusion est faite, "
+          + "mais l'onglet Actions ne la retrouvera pas après un rechargement."
+      ].filter(Boolean).join(" ");
+    }
+  } catch {
+    // Même chose : la fusion est faite, et son journal n'est que ce qu'on en
+    // raconte.
+  }
 }
 
 /**
@@ -6440,13 +6620,18 @@ async function ouvrirLesLotsDuCompteRendu(root, items = []) {
  * ne s'est pas posé se dit et se repose à la main. Se taire serait pire — on
  * croirait le compte rendu traité.
  */
-async function appliquerCeQueLeCompteRenduDit(root, proposition, items = [], nes = []) {
+async function appliquerCeQueLeCompteRenduDit(root, proposition, items = [], nes = [], carnet = null) {
   const concerne = items.some(
     (entry) =>
       [ITEM_TYPE.LABEL, ITEM_TYPE.OBJECTIF, ITEM_TYPE.RELANCE].includes(entry.itemType)
       && entry.status !== ITEM.REFUSED
   );
-  if (!concerne && (nes?.length ?? 0) === 0) return;
+  if (!concerne && (nes?.length ?? 0) === 0) {
+    // **Rien à faire se dit.** Une étape vide au journal se lirait comme une
+    // étape qui a échoué sans le dire (règle 5).
+    carnet?.dire("Ce dépôt ne dit rien des sujets du projet : rien à appliquer.");
+    return;
+  }
 
   view.review.step = "Application du compte rendu aux sujets";
   renderContent(root);
@@ -6467,6 +6652,16 @@ async function appliquerCeQueLeCompteRenduDit(root, proposition, items = [], nes
     // ne dit pas si c'est le chiffre attendu ; « 5 sur 34 — 29 écartés » le dit.
     view.review.bilanDeLaFusion = bilanDeLaFusion({ items, rapport });
 
+    // Ce que l'étape a fait, dans son journal : c'est le détail qu'on vient
+    // chercher quand un chiffre du bilan surprend.
+    carnet?.dire(`${rapport.poses?.labels ?? 0} label(s) posés`);
+    carnet?.dire(`${rapport.poses?.objectifs ?? 0} sujet(s) rattachés à un jalon`);
+    carnet?.dire(`${rapport.relances ?? 0} sujet(s) relancés par ce compte rendu`);
+    carnet?.dire(`${rapport.fermetures ?? 0} sujet(s) fermés`);
+    for (const manque of (rapport.manques ?? []).slice(0, 40)) {
+      carnet?.avertir(`${String(manque?.quoi ?? "")} — ${String(manque?.sujet ?? "")}`.trim());
+    }
+
     view.review.manquesDeLApplication = rapport.manques ?? [];
     if ((rapport.manques ?? []).length > 0) {
       view.review.noticeTitre = "La fusion est faite, une partie des écritures non";
@@ -6476,6 +6671,7 @@ async function appliquerCeQueLeCompteRenduDit(root, proposition, items = [], nes
     // devant un problème qu'on lui a nommé sans lui donner de quoi le résoudre.
     view.review.repriseDuCr = reprisesDuRapport(rapport);
   } catch (erreur) {
+    carnet?.echouer(String(erreur?.message ?? erreur) || "L'application a été interrompue.");
     view.review.notice = [
       view.review.notice,
       "Ce que le compte rendu dit des sujets n'a pas pu être appliqué"

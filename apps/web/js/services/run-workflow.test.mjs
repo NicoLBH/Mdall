@@ -165,3 +165,46 @@ test("une étape conservée pour son journal n'affiche pas « 0 ms »", () => {
   assert.equal(parId.corpus.duration, 120);
   assert.equal(parId.gardes.duration, null);
 });
+
+
+/* ── Un geste du projet : le graphe se lit dans son journal ──────────────── */
+
+/**
+ * **Le chemin d'une fusion n'est pas écrit d'avance.** Ce qu'elle fait dépend
+ * de ce que la proposition porte : un compte rendu de chantier ouvre des lots
+ * et des sujets, un dépôt de fiches d'avis n'en ouvre aucun. Le graphe se
+ * construit donc de ses propres étapes — une de plus dans le code apparaît
+ * toute seule, et une qui n'a pas eu lieu ne s'invente pas (règle 5).
+ */
+test("une fusion se dessine à partir de ses étapes", () => {
+  const nodes = buildRunGraph({
+    id: "fusion-1",
+    details: {
+      corpus: {
+        geste: "fusion",
+        proposition: "Fusion de la proposition #16",
+        steps: [
+          { id: "gel", label: "Proposition gelée", ms: 120, statut: "ok", lignes: [{ texte: "125 lignes figées", niveau: "info" }] },
+          { id: "memoire", label: "Mémoire du projet écrite", ms: 8_400, statut: "echec", lignes: [{ texte: "coupé", niveau: "echec" }] },
+          { id: "suivi", label: "Suivi des avis réécrit", ms: null, statut: "ok", lignes: [] }
+        ]
+      }
+    }
+  });
+
+  assert.deepEqual(nodes.map((entree) => entree.id), ["proposition", "gel", "memoire", "suivi"]);
+  // La durée vient de l'étape : personne ne la recalcule.
+  assert.deepEqual(nodes.map((entree) => entree.duration), [null, 120, 8_400, null]);
+  // Une étape qui n'a pas tenu se voit sans ouvrir le détail.
+  assert.equal(nodes[2].tone, NODE.WARN);
+  assert.equal(nodes[2].detail, "coupé");
+  // Et une étape muette le dit : « rien d'écrit » n'est pas « rien à écrire ».
+  assert.equal(nodes[3].detail, "aucun journal");
+});
+
+/** Sans geste, c'est une analyse : le graphe reste celui qu'on connaît. */
+test("une analyse garde son graphe écrit d'avance", () => {
+  const nodes = buildRunGraph(EXECUTION);
+  assert.ok(nodes.some((entree) => entree.id === "avis"));
+  assert.ok(!nodes.some((entree) => entree.id === "gel"));
+});
