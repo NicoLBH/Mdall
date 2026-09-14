@@ -32,6 +32,9 @@ import {
   renderNavList, renderNavListDivider, renderNavListGroup, renderNavListItem
 } from "../ui/nav-list.js";
 import { renderSelectMenuSection } from "../ui/select-menu.js";
+import {
+  entreeDeSelection, ORDRE_DES_GROUPES, sectionsParGroupe
+} from "./entrees-de-selection.js";
 import { GROUPE, MARQUAGES, NOMS_DU_GROUPE, phraseDeLaSelection } from "../../services/selection-des-sujets.js";
 import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
 import { renderQueryMirror } from "../../services/query-bar.js";
@@ -42,6 +45,13 @@ import {
 } from "../../services/vues-des-sujets.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
+
+/** Le groupe de « Moi » : il n'existe que dans un filtre, et passe en tête. */
+export const NOM_DU_GROUPE_MOI = "Moi";
+
+/** Sans accent ni casse : on ne tape ni l'un ni l'autre dans un champ de filtre. */
+const repli = (valeur) => texte(valeur)
+  .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 /**
  * Le rail : les lectures, puis les vues, puis les autres écrans du domaine.
@@ -230,25 +240,52 @@ export function renderRechercheDesSujetsHtml({ requete = "", champs = [], ignore
  * c'est la question qu'on se pose en ouvrant le menu. « Et » rendrait presque
  * toujours zéro.
  */
-export function renderFiltreDenTeteHtml({ id, champ, requete = "", enCours = [], poser = null } = {}) {
+export function renderFiltreDenTeteHtml({
+  id, champ, requete = "", enCours = [], poser = null, cherche = "", decorDe = null
+} = {}) {
   if (!champ || typeof poser !== "function") return "";
 
   const cochees = (Array.isArray(enCours) ? enCours : [enCours]).map(texte).filter(Boolean);
   const combien = cochees.length;
+  const multiple = champ.multiple === true;
 
-  const entrees = champ.values.map((valeur) => {
-    const active = cochees.includes(valeur.value);
+  // Ce qu'on tape dans le champ de recherche restreint la liste, et rien
+  // d'autre : on cherche une valeur, on ne cherche pas des sujets.
+  const retenu = repli(cherche);
+  const proposees = champ.values.filter((valeur) => !retenu
+    || repli(valeur.label).includes(retenu) || repli(valeur.token ?? valeur.value).includes(retenu));
+
+  const entrees = proposees.map((valeur) => {
+    // **La décoration vient de l'écran**, qui seul connaît les avatars, les
+    // couleurs des labels et les dates des objectifs. Ce module dessine la
+    // forme ; il ne va rien chercher.
+    const decor = (typeof decorDe === "function" ? decorDe(valeur) : null) ?? {};
+
     return {
-      key: `${champ.key}:${valeur.value}`,
-      title: valeur.label,
-      isSelected: active,
-      isActive: active,
-      // La coche à droite, comme dans la colonne d'un sujet : c'est là que
-      // l'œil la cherche une fois qu'il l'y a vue une fois.
-      rightHtml: active ? svgIcon("check", { className: "octicon" }) : "",
-      dataAttrs: { "sujets-lecture": poser(valeur.value) }
+      ...entreeDeSelection({
+        cle: `${champ.key}:${valeur.value}`,
+        titre: valeur.label,
+        sousTitre: texte(decor.sousTitre),
+        choisie: cochees.includes(valeur.value),
+        decorHtml: texte(decor.decorHtml),
+        attribut: "sujets-lecture",
+        valeur: poser(valeur.value)
+      }),
+      // Le groupe range le trombinoscope — maîtrise d'ouvrage, entreprises.
+      // Les labels et les objectifs n'en ont pas.
+      groupLabel: texte(decor.groupe)
     };
   });
+
+  // Un trombinoscope se range par groupe — maîtrise d'ouvrage, entreprises. Les
+  // labels et les objectifs n'en ont pas, et une section unique sans titre vaut
+  // mieux qu'un titre inventé.
+  const sections = entrees.some((entree) => entree.groupLabel)
+    // **« Moi » en tête.** C'est la valeur la plus fréquente, et la seule qui ne
+    // dépende pas de savoir comment on s'appelle dans ce projet. Rangée par
+    // ordre alphabétique, elle finissait sous les entreprises.
+    ? sectionsParGroupe(entrees, { ordre: [NOM_DU_GROUPE_MOI, ...ORDRE_DES_GROUPES] })
+    : [{ title: "", items: entrees }];
 
   // **L'attribut qui ouvre le menu, et celui qui porte sa liste.** Ils sont
   // nommés plutôt que déduits d'un identifiant : c'est ce que la délégation
@@ -258,16 +295,33 @@ export function renderFiltreDenTeteHtml({ id, champ, requete = "", enCours = [],
       <button class="issues-head-menu__btn" type="button" data-sujets-menu="${escapeHtml(id)}"
         aria-haspopup="true" aria-expanded="false">
         <span>${escapeHtml(champ.label)}</span>
-        ${combien ? `<span class="sujets-head-menu__compte">${combien}</span>` : ""}
+        ${combien && multiple ? `<span class="sujets-head-menu__compte">${combien}</span>` : ""}
         ${svgIcon("chevron-down", { className: "gh-chevron" })}
       </button>
 
       <div class="gh-menu subject-meta-dropdown issues-head-menu__dropdown sujets-head-menu__liste"
         data-sujets-menu-liste="${escapeHtml(id)}" role="dialog">
-        <div class="subject-meta-dropdown__title">${escapeHtml(champ.label)}</div>
-        <div class="subject-meta-dropdown__body">
-          ${renderSelectMenuSection({ items: entrees, emptyTitle: `Aucun ${champ.label.toLowerCase()}` })}
+        <div class="subject-meta-dropdown__title">${escapeHtml(titreDuFiltre(champ))}</div>
+
+        <div class="subject-meta-dropdown__search">
+          <span class="subject-meta-dropdown__search-icon" aria-hidden="true">${
+            svgIcon("search", { className: "octicon octicon-search" })}</span>
+          <input type="search" class="subject-meta-dropdown__search-input"
+            data-sujets-filtre-recherche="${escapeHtml(champ.key)}"
+            value="${escapeHtml(cherche)}"
+            placeholder="Filtrer ${escapeHtml(champ.label.toLowerCase())}" autocomplete="off">
         </div>
+        <div class="subject-kanban-dropdown__separator" aria-hidden="true"></div>
+
+        <div class="subject-meta-dropdown__body">
+          ${sections.map((section) => renderSelectMenuSection({
+            title: section.title,
+            items: section.items,
+            emptyTitle: `Aucun ${champ.label.toLowerCase()}`,
+            emptyHint: retenu ? "Aucun résultat pour cette recherche." : ""
+          })).join("")}
+        </div>
+
         ${combien ? `
           <div class="subject-kanban-dropdown__separator" aria-hidden="true"></div>
           <button type="button" class="select-menu__item sujets-head-menu__vider"
@@ -285,6 +339,19 @@ export function renderFiltreDenTeteHtml({ id, champ, requete = "", enCours = [],
 }
 
 /**
+ * Le titre du menu : le même verbe que dans la colonne d'un sujet.
+ *
+ * « Sélectionner des assignés » y dit ce qu'on est en train de faire ; ici on
+ * ne sélectionne pas, on restreint. Le titre le dit, et c'est la seule chose
+ * qui distingue les deux menus.
+ */
+function titreDuFiltre(champ) {
+  return champ.multiple === true
+    ? `Filtrer par ${champ.label.toLowerCase()}`
+    : `Choisir ${champ.label.toLowerCase()}`;
+}
+
+/**
  * Un menu d'action de groupe, à la place d'un filtre.
  *
  * **Le même menu, au même endroit, et c'est voulu.** Quand rien n'est coché, la
@@ -297,11 +364,12 @@ export function renderFiltreDenTeteHtml({ id, champ, requete = "", enCours = [],
  * Il n'y a donc pas de menu vide : un champ que le projet ne déclare pas ne
  * figure ni dans les filtres, ni ici.
  */
-function renderMenuDeGroupeHtml({ id, nom, entrees = [], actif = false } = {}) {
+function renderMenuDeGroupeHtml({ id, nom, icone = "", entrees = [] } = {}) {
   return `
-    <div class="issues-head-menu sujets-head-menu sujets-head-menu--groupe${actif ? " est-posee" : ""}">
-      <button class="issues-head-menu__btn" type="button" data-sujets-menu="${escapeHtml(id)}"
-        aria-haspopup="true" aria-expanded="false">
+    <div class="issues-head-menu sujets-head-menu sujets-head-menu--groupe">
+      <button class="gh-btn gh-btn--sm sujets-groupe__bouton" type="button"
+        data-sujets-menu="${escapeHtml(id)}" aria-haspopup="true" aria-expanded="false">
+        ${icone ? svgIcon(icone, { className: "octicon" }) : ""}
         <span>${escapeHtml(nom)}</span>
         ${svgIcon("chevron-down", { className: "gh-chevron" })}
       </button>
@@ -358,24 +426,24 @@ export function renderActionsGroupeesHtml({ combien = 0, champs = [] } = {}) {
     renderMenuDeGroupeHtml({
       id: "sujets-groupe-marquage",
       nom: NOMS_DU_GROUPE[GROUPE.MARQUAGE],
+      icone: "check-circle",
       entrees: MARQUAGES.map((marquage) => ({
         key: `${GROUPE.MARQUAGE}:${marquage.cle}`,
         title: marquage.nom,
         iconHtml: svgIcon(marquage.icone, { className: "octicon" }),
         dataAttrs: { "sujets-groupe": `${GROUPE.MARQUAGE}:${marquage.cle}` }
-      })),
-      actif: true
+      }))
     }),
     ...[
-      ["label", GROUPE.LABELS],
-      ["assigné", GROUPE.ASSIGNES],
-      ["situation", GROUPE.SITUATIONS],
-      ["objectif", GROUPE.OBJECTIFS]
-    ].map(([cle, groupe]) => {
+      ["label", GROUPE.LABELS, "tag"],
+      ["assigné", GROUPE.ASSIGNES, "people"],
+      ["situation", GROUPE.SITUATIONS, "table"],
+      ["objectif", GROUPE.OBJECTIFS, "milestone"]
+    ].map(([cle, groupe, icone]) => {
       const entrees = entreesDe(cle, groupe);
       if (!entrees.length) return "";
       return renderMenuDeGroupeHtml({
-        id: `sujets-groupe-${groupe}`, nom: NOMS_DU_GROUPE[groupe], entrees, actif: true
+        id: `sujets-groupe-${groupe}`, nom: NOMS_DU_GROUPE[groupe], icone, entrees
       });
     })
   ].filter(Boolean).join("");

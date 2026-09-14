@@ -5777,6 +5777,53 @@ export function createProjectSubjectsEvents(config) {
   }
 
   /**
+   * Ce qu'on tape dans le champ de recherche d'un menu de filtre.
+   *
+   * **Le menu doit survivre au redessin, et le curseur avec.** Le panneau
+   * entier est reconstruit — c'est le seul redessin dont cet écran dispose —,
+   * et le menu ouvert part avec lui : on taperait une lettre, le menu se
+   * refermerait, et l'on ne pourrait jamais taper la deuxième. C'est exactement
+   * ce qui est arrivé au menu « Transformer » de l'Atelier.
+   */
+  function poserLaRechercheDunFiltre(cle, dit) {
+    const nom = String(cle || "").trim();
+    if (!nom) return;
+
+    const racine = config.getSubjectsCurrentRoot?.() ?? document;
+    const ouvert = racine?.querySelector?.("[data-sujets-menu-liste].gh-menu--open");
+    const nomDuMenu = String(ouvert?.getAttribute("data-sujets-menu-liste") || "");
+    const champ = racine?.querySelector?.(`[data-sujets-filtre-recherche="${nom}"]`);
+    const debut = champ?.selectionStart ?? null;
+    const fin = champ?.selectionEnd ?? null;
+
+    poserLaRechercheDuFiltreDansLEtat(nom, dit);
+    rerenderPanels();
+
+    if (nomDuMenu) {
+      const remisMenu = racine?.querySelector?.(`[data-sujets-menu-liste="${nomDuMenu}"]`);
+      const remisBouton = racine?.querySelector?.(`[data-sujets-menu="${nomDuMenu}"]`);
+      remisMenu?.classList?.add("gh-menu--open");
+      remisBouton?.setAttribute("aria-expanded", "true");
+    }
+
+    const remis = racine?.querySelector?.(`[data-sujets-filtre-recherche="${nom}"]`);
+    if (!remis) return;
+    remis.focus();
+    if (debut !== null && fin !== null) remis.setSelectionRange(debut, fin);
+  }
+
+  function poserLaRechercheDuFiltreDansLEtat(cle, dit) {
+    if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
+      store.projectSubjectsView = {};
+    }
+    const cherches = store.projectSubjectsView.filtreCherche;
+    store.projectSubjectsView.filtreCherche = {
+      ...(cherches && typeof cherches === "object" ? cherches : {}),
+      [cle]: String(dit ?? "")
+    };
+  }
+
+  /**
    * Les suggestions sous le curseur.
    *
    * Elles ne s'ouvrent **qu'après un deux-points** : ailleurs on écrit du texte
@@ -5917,7 +5964,11 @@ export function createProjectSubjectsEvents(config) {
       if (geste !== GESTE.VUE_MENU) fermerLeMenuDeLaVue();
       if (geste === GESTE.RIEN) return;
 
-      event.preventDefault();
+      // **Une case à cocher garde son geste natif.** L'empêcher laissait la
+      // case décochée jusqu'au redessin ; et si quoi que ce soit empêchait ce
+      // redessin, elle ne se cochait jamais. Le navigateur la coche, l'état
+      // suit, et le rendu suivant confirme — dans cet ordre.
+      if (geste !== GESTE.COCHER && geste !== GESTE.COCHER_TOUT) event.preventDefault();
 
       switch (geste) {
         case GESTE.LECTURE:
@@ -6152,6 +6203,19 @@ export function createProjectSubjectsEvents(config) {
      * milieu d'une requête déjà écrite deviendrait impossible.
      */
     root.addEventListener("input", (event) => {
+      // Le champ de recherche d'un menu de filtre : il restreint la liste des
+      // valeurs, et rien d'autre. Il vit dans l'état plutôt que dans le DOM —
+      // le panneau se reconstruit à chaque rendu, et ce qu'on avait tapé
+      // partirait avec lui.
+      const chercheDuFiltre = event.target.closest?.("[data-sujets-filtre-recherche]");
+      if (chercheDuFiltre) {
+        poserLaRechercheDunFiltre(
+          String(chercheDuFiltre.dataset.sujetsFiltreRecherche || ""),
+          String(chercheDuFiltre.value || "")
+        );
+        return;
+      }
+
       const barre = event.target.closest?.("[data-sujets-recherche]");
       if (barre) {
         if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {

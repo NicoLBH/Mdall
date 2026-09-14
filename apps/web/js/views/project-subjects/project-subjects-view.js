@@ -7,17 +7,21 @@ import {
 import { TRI, motDuTri } from "../../services/tri-des-sujets.js";
 import { filterValuesOf, toggleFilter, withFilter } from "../../services/query-bar.js";
 import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
+import {
+  entreeDeSelection, jalonDObjectif, pastilleDeLabel, sectionsParGroupe, tableDeSituation
+} from "./entrees-de-selection.js";
 import { bindRailResizer, followRailScroll, railWidth } from "../ui/project-rail.js";
 import {
-  renderActionsGroupeesHtml, renderFiltreDenTeteHtml, renderFormulaireDeVueHtml,
-  renderRailDesSujetsHtml, renderRechercheDesSujetsHtml, renderTableauDesVuesHtml
+  NOM_DU_GROUPE_MOI, renderActionsGroupeesHtml, renderFiltreDenTeteHtml,
+  renderFormulaireDeVueHtml, renderRailDesSujetsHtml, renderRechercheDesSujetsHtml,
+  renderTableauDesVuesHtml
 } from "./project-subjects-recherche.js";
 import {
   actionDuMarquage, etatDeLaCaseDeTete, GROUPE, selectionApresLeTout,
   selectionApresUnClic, selectionVisible
 } from "../../services/selection-des-sujets.js";
 import { refusDeLaVue, vueAEcrire, vuePourLEcran } from "../../services/vues-des-sujets.js";
-import { sujetsFiltres } from "../../services/champs-des-sujets.js";
+import { MOI, sujetsFiltres } from "../../services/champs-des-sujets.js";
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { formatObjectiveDueDateLabel } from "./project-subject-milestones.js";
 import {
@@ -100,6 +104,7 @@ export function createProjectSubjectsView(deps) {
     getChampsDesSujets,
     getMetaDesSujets,
     getMoiDansLeProjet,
+    getSituationsDuProjet,
     getRequeteDesSujets,
     sujetMatchesStatusFilter,
     sujetMatchesPriorityFilter,
@@ -377,13 +382,11 @@ function renderCaseDeTeteDesSujetsHtml() {
   const etat = etatDeLaCaseDeTete({ selection: getSelectionDesSujets(), visibles });
 
   return `
-    <span class="sujets-case sujets-case--tete">
-      <input type="checkbox" class="sujets-case__boite"
-        data-sujets-cocher-tout="1"
-        ${etat === "toutes" ? "checked" : ""}
-        ${etat === "partielle" ? "data-partielle=\"true\"" : ""}
-        aria-label="Tout sélectionner — ${visibles.length} sujet${visibles.length > 1 ? "s" : ""}">
-    </span>
+    <input type="checkbox" class="sujets-case sujets-case--tete"
+      data-sujets-cocher-tout="1"
+      ${etat === "toutes" ? "checked" : ""}
+      ${etat === "partielle" ? "data-partielle=\"true\"" : ""}
+      aria-label="Tout sélectionner — ${visibles.length} sujet${visibles.length > 1 ? "s" : ""}">
   `;
 }
 
@@ -1114,6 +1117,68 @@ function renderSubjectsStatusHeadHtml() {
  * Un champ que le projet ne déclare pas — pas d'objectifs, pas de lots — ne
  * s'affiche pas : un menu vide fait chercher ce qu'on a mal réglé.
  */
+/**
+ * Ce qui décore une valeur dans le menu d'un filtre.
+ *
+ * **Les mêmes repères que dans la colonne de droite d'un sujet** : l'avatar et
+ * le rôle d'une personne, la pastille et la description d'un label, le jalon et
+ * la date d'un objectif, le tableau d'une situation. Sans eux, la liste des
+ * assignés et celle des labels se ressemblent trait pour trait, et l'on ouvre
+ * le mauvais menu une fois sur deux.
+ *
+ * La forme est dans `entrees-de-selection.js` ; ce qu'on y met vient d'ici,
+ * parce que c'est l'écran qui connaît les avatars et les couleurs.
+ */
+function decorDuFiltre(cle, valeur, { parPersonne = new Map() } = {}) {
+  const id = String(valeur?.value || "");
+
+  if (cle === "assigné" || cle === "auteur" || cle === "mention") {
+    // « Moi » ne désigne personne en particulier : c'est la question posée du
+    // point de vue de qui regarde, et elle se range en tête plutôt qu'au milieu
+    // du trombinoscope.
+    if (id === MOI) return { groupe: NOM_DU_GROUPE_MOI };
+
+    const collaborateur = parPersonne.get(id);
+    if (!collaborateur) return {};
+    return {
+      decorHtml: renderCollaboratorAvatar(collaborateur),
+      sousTitre: collaborateur.role,
+      groupe: getCollaboratorGroupLabel(collaborateur)
+    };
+  }
+
+  if (cle === "label") {
+    const labelDef = getSubjectLabelDefinition(id);
+    if (!labelDef) return {};
+    return {
+      decorHtml: pastilleDeLabel(labelDef.textColor || labelDef.borderColor || labelDef.color),
+      sousTitre: labelDef.description
+    };
+  }
+
+  if (cle === "objectif") {
+    const objectif = getObjectiveById(id);
+    return {
+      decorHtml: jalonDObjectif(),
+      sousTitre: objectif ? formatObjectiveDueDateLabel(objectif) : ""
+    };
+  }
+
+  if (cle === "situation") {
+    const situation = getSituationsDuProjet().find((sienne) => String(sienne?.id || "") === id);
+    const statut = String(getEffectiveSituationStatus(id) || situation?.status || "open").toLowerCase();
+    return { decorHtml: tableDeSituation({ fermee: statut !== "open" }) };
+  }
+
+  return {};
+}
+
+/** Ce qui est tapé dans le champ de recherche d'un menu de filtre. */
+function chercheDuFiltre(cle) {
+  const cherches = store.projectSubjectsView?.filtreCherche;
+  return String((cherches && typeof cherches === "object" ? cherches[cle] : "") || "");
+}
+
 function renderSubjectsFiltresDenTeteHtml() {
   const champs = getChampsDesSujets();
   const requete = getRequeteDesSujets();
@@ -1122,6 +1187,10 @@ function renderSubjectsFiltresDenTeteHtml() {
   // « qui l'a ouvert », puis « comment il est rangé », puis « qui le traite ».
   // Le lot n'y est plus — il se déduit de l'assigné, et deux menus pour une
   // même information font chercher lequel est le bon.
+  // Le trombinoscope est indexé **une fois par rendu** : le parcourir pour
+  // chaque valeur de chaque menu referait le même balayage cent fois.
+  const parPersonne = new Map(getActiveProjectCollaborators().map((sien) => [sien.id, sien]));
+
   return ["auteur", "label", "situation", "objectif", "assigné"]
     .map((cle) => {
       const champ = champs.find((candidat) => candidat.key === cle);
@@ -1136,8 +1205,11 @@ function renderSubjectsFiltresDenTeteHtml() {
         // **Toutes les valeurs cochées, et non la première.** Le menu est à
         // choix multiple ; n'en montrer qu'une ferait décocher sans le vouloir.
         enCours: filterValuesOf(requete, champs, cle),
+        cherche: chercheDuFiltre(cle),
+        decorDe: (valeur) => decorDuFiltre(cle, valeur, { parPersonne }),
         // Cliquer une valeur l'ajoute, la recliquer la retire — et « Tout »
-        // vide le champ.
+        // vide le champ. Sur un champ à choix simple, `toggleFilter` remplace
+        // au lieu d'empiler : c'est le service qui le sait, pas l'écran.
         poser: (valeur) => (valeur
           ? toggleFilter(requete, champs, cle, valeur)
           : withFilter(requete, champs, cle, ""))
@@ -2642,20 +2714,17 @@ function getExistingSubissueSuggestions(subject, query = "") {
 
 function buildRelationSelectItem(candidate, { dropdownState, isSelected = false, dataAttr }) {
   const candidateId = String(candidate?.id || "");
-  return {
-    key: candidateId,
-    isActive: String(dropdownState?.activeKey || "") === candidateId,
-    isSelected,
-    iconHtml: `
-      <span class="select-menu__situation-iconset" aria-hidden="true">
-        <span class="select-menu__checkbox ${isSelected ? "is-checked" : ""}">${svgIcon("check", { className: "octicon octicon-check" })}</span>
-        <span class="select-menu__situation-icon">${issueIcon(getEffectiveSujetStatus(candidateId))}</span>
-      </span>
-    `,
-    title: firstNonEmpty(candidate?.title, candidateId, "Sujet"),
-    metaHtml: escapeHtml(getEntityDisplayRef("sujet", candidateId)),
-    dataAttrs: { [dataAttr]: candidateId }
-  };
+  return entreeDeSelection({
+    cle: candidateId,
+    titre: firstNonEmpty(candidate?.title, candidateId, "Sujet"),
+    sousTitre: getEntityDisplayRef("sujet", candidateId),
+    choisie: isSelected,
+    active: String(dropdownState?.activeKey || "") === candidateId,
+    decorHtml: `<span class="select-menu__situation-icon">${
+      issueIcon(getEffectiveSujetStatus(candidateId))}</span>`,
+    attribut: dataAttr,
+    valeur: candidateId
+  });
 }
 
 function buildSubjectMetaMenuItems(subject, field) {
@@ -2668,42 +2737,27 @@ function buildSubjectMetaMenuItems(subject, field) {
       .filter((collaborator) => matchSearch([collaborator.name, collaborator.role, collaborator.roleGroupLabel, collaborator.email], query));
     const isLoadingAssignees = collaboratorsHydrationInFlight && collaborators.length === 0;
 
+    // **La même forme que le filtre d'en-tête**, et c'est voulu : les deux
+    // posent la même question, et deux menus qui ne se ressemblent pas
+    // obligent à réapprendre le second (règle 10).
     const items = collaborators.map((collaborator) => ({
-      key: collaborator.id,
-      isActive: String(dropdownState.activeKey || "") === collaborator.id,
-      isSelected: selectedAssigneeIds.has(collaborator.id),
-      iconHtml: `
-        <span class="select-menu__assignee-iconset" aria-hidden="true">
-          <span class="select-menu__checkbox ${selectedAssigneeIds.has(collaborator.id) ? "is-checked" : ""}">${svgIcon("check", { className: "octicon octicon-check" })}</span>
-          ${renderCollaboratorAvatar(collaborator)}
-        </span>
-      `,
-      title: collaborator.name,
-      metaHtml: escapeHtml(collaborator.role),
-      dataAttrs: { "subject-assignee-toggle": collaborator.id },
+      ...entreeDeSelection({
+        cle: collaborator.id,
+        titre: collaborator.name,
+        sousTitre: collaborator.role,
+        choisie: selectedAssigneeIds.has(collaborator.id),
+        active: String(dropdownState.activeKey || "") === collaborator.id,
+        decorHtml: renderCollaboratorAvatar(collaborator),
+        attribut: "subject-assignee-toggle",
+        valeur: collaborator.id
+      }),
       groupLabel: getCollaboratorGroupLabel(collaborator)
     }));
 
-    const groupedItemsMap = new Map();
-    for (const item of items) {
-      const groupLabel = String(item.groupLabel || "Divers");
-      if (!groupedItemsMap.has(groupLabel)) groupedItemsMap.set(groupLabel, []);
-      groupedItemsMap.get(groupLabel).push(item);
-    }
-    const preferredOrder = ["Maîtrise d'ouvrage", "Maîtrise d'œuvre", "Entreprises", "Divers"];
-    const groupedSections = Array.from(groupedItemsMap.entries())
-      .sort((left, right) => {
-        const leftIndex = preferredOrder.indexOf(left[0]);
-        const rightIndex = preferredOrder.indexOf(right[0]);
-        const safeLeft = leftIndex >= 0 ? leftIndex : Number.MAX_SAFE_INTEGER;
-        const safeRight = rightIndex >= 0 ? rightIndex : Number.MAX_SAFE_INTEGER;
-        if (safeLeft !== safeRight) return safeLeft - safeRight;
-        return String(left[0]).localeCompare(String(right[0]), "fr");
-      })
-      .map(([title, groupItems]) => ({ title, items: groupItems }));
-
+    // L'ordre des groupes est celui du chantier — qui décide, qui conçoit, qui
+    // exécute —, et il vit avec la forme des entrées.
     return {
-      groupedSections,
+      groupedSections: sectionsParGroupe(items),
       items,
       isLoadingAssignees
     };
@@ -2715,20 +2769,16 @@ function buildSubjectMetaMenuItems(subject, field) {
     const matches = (objective) => matchSearch([objective.title, formatObjectiveDueDateLabel(objective), objective.id], query);
     const toItem = (objective) => {
       const isSelected = selectedObjectiveIds.has(String(objective.id || ""));
-      return {
-        key: String(objective.id || ""),
-        isActive: String(dropdownState.activeKey || "") === String(objective.id || ""),
-        isSelected,
-        iconHtml: `
-          <span class="select-menu__objective-iconset" aria-hidden="true">
-            <span class="select-menu__objective-check ${isSelected ? "is-visible" : ""}">${svgIcon("check", { className: "octicon octicon-check" })}</span>
-            <span class="select-menu__objective-milestone">${svgIcon("milestone", { className: "octicon octicon-milestone" })}</span>
-          </span>
-        `,
-        title: objective.title,
-        metaHtml: escapeHtml(formatObjectiveDueDateLabel(objective)),
-        dataAttrs: { "objective-select": String(objective.id || "") }
-      };
+      return entreeDeSelection({
+        cle: String(objective.id || ""),
+        titre: objective.title,
+        sousTitre: formatObjectiveDueDateLabel(objective),
+        choisie: isSelected,
+        active: String(dropdownState.activeKey || "") === String(objective.id || ""),
+        decorHtml: jalonDObjectif(),
+        attribut: "objective-select",
+        valeur: String(objective.id || "")
+      });
     };
     return {
       openItems: objectives.filter((objective) => !objective.closed && matches(objective)).map(toItem),
@@ -2746,20 +2796,19 @@ function buildSubjectMetaMenuItems(subject, field) {
     const situations = situationSource.filter((situation) => matchSearch([situation.title, situation.id], query));
     const toItem = (situation) => {
       const isSelected = selectedSituationIds.has(String(situation.id || ""));
-      return {
-        key: String(situation.id || ""),
-        isActive: String(dropdownState.activeKey || "") === String(situation.id || ""),
-        isSelected,
-        iconHtml: `
-          <span class="select-menu__situation-iconset" aria-hidden="true">
-            <span class="select-menu__checkbox ${isSelected ? "is-checked" : ""}">${svgIcon("check", { className: "octicon octicon-check" })}</span>
-            <span class="select-menu__situation-icon">${svgIcon(String(getEffectiveSituationStatus(situation.id) || situation.status || "open").toLowerCase() === "open" ? "table" : "table-check", { className: "ui-icon octicon octicon-table" })}</span>
-          </span>
-        `,
-        title: firstNonEmpty(situation.title, situation.id, "Situation"),
-        metaHtml: escapeHtml(situation.id),
-        dataAttrs: { "situation-toggle": String(situation.id || "") }
-      };
+      return entreeDeSelection({
+        cle: String(situation.id || ""),
+        titre: firstNonEmpty(situation.title, situation.id, "Situation"),
+        sousTitre: situation.id,
+        choisie: isSelected,
+        active: String(dropdownState.activeKey || "") === String(situation.id || ""),
+        decorHtml: tableDeSituation({
+          fermee: String(getEffectiveSituationStatus(situation.id) || situation.status || "open")
+            .toLowerCase() !== "open"
+        }),
+        attribut: "situation-toggle",
+        valeur: String(situation.id || "")
+      });
     };
     return {
       openItems: situations.filter((situation) => String(getEffectiveSituationStatus(situation.id) || situation.status || "open").toLowerCase() === "open").map(toItem),
@@ -2771,19 +2820,15 @@ function buildSubjectMetaMenuItems(subject, field) {
     const selectedLabelKeys = new Set(getSubjectSidebarMeta(subject.id).labels.map((label) => normalizeSubjectLabelKey(label)));
     const items = getProjectSubjectLabels().getSubjectLabelDefinitions()
       .filter((labelDef) => matchSearch([labelDef.label, labelDef.description, labelDef.key], query))
-      .map((labelDef) => ({
-        key: String(labelDef.key || ""),
-        isActive: String(dropdownState.activeKey || "") === String(labelDef.key || ""),
-        isSelected: selectedLabelKeys.has(normalizeSubjectLabelKey(labelDef.key)),
-        iconHtml: `
-          <span class="select-menu__label-iconset" aria-hidden="true">
-            <span class="select-menu__checkbox ${selectedLabelKeys.has(normalizeSubjectLabelKey(labelDef.key)) ? "is-checked" : ""}">${svgIcon("check", { className: "octicon octicon-check" })}</span>
-            <span class="select-menu__label-dot" style="--select-menu-label-dot:${escapeHtml(labelDef.textColor || labelDef.borderColor || labelDef.color || '#8b949e')};"></span>
-          </span>
-        `,
-        title: labelDef.label,
-        metaHtml: escapeHtml(labelDef.description),
-        dataAttrs: { "subject-label-toggle": String(labelDef.key || "") }
+      .map((labelDef) => entreeDeSelection({
+        cle: String(labelDef.key || ""),
+        titre: labelDef.label,
+        sousTitre: labelDef.description,
+        choisie: selectedLabelKeys.has(normalizeSubjectLabelKey(labelDef.key)),
+        active: String(dropdownState.activeKey || "") === String(labelDef.key || ""),
+        decorHtml: pastilleDeLabel(labelDef.textColor || labelDef.borderColor || labelDef.color),
+        attribut: "subject-label-toggle",
+        valeur: String(labelDef.key || "")
       }));
     return {
       items,

@@ -1197,14 +1197,7 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
   margin-top:2px;
 }
 
-.select-menu__objective-iconset,
-.select-menu__situation-iconset,
-.select-menu__assignee-iconset{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  color:var(--muted);
-}
+
 
 .subject-kanban-menu__iconset{
   display:inline-grid;
@@ -1245,19 +1238,6 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
   background:var(--border);
 }
 
-.select-menu__objective-check{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  width:12px;
-  opacity:0;
-}
-
-.select-menu__objective-check.is-visible{
-  opacity:1;
-  color:currentColor;
-}
-
 .select-menu__objective-milestone,
 .select-menu__situation-icon{
   display:inline-flex;
@@ -1283,13 +1263,6 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
   color:#fff;
 }
 
-
-.select-menu__label-iconset{
-  display:inline-grid;
-  grid-template-columns:16px 10px;
-  align-items:center;
-  gap:8px;
-}
 
 .select-menu__label-dot{
   width:10px;
@@ -24483,27 +24456,69 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 
 /* ── Cocher des sujets ───────────────────────────────────────────────────── */
 
+/* **La case est sur la première ligne, à hauteur de l'icône ouvert/fermé.**
+   Une ligne de sujet en fait deux — le titre, puis sa provenance en gris —, et
+   une case centrée sur les deux flottait entre elles, sans rien à quoi
+   s'aligner. Le `padding-top` est celui qui met son centre sur celui de
+   l'icône de statut. */
 .cell-cocher-head,
-.cell-cocher-value{display:flex;align-items:center;justify-content:center;padding-right:4px;}
+.cell-cocher-value{
+  display:flex;
+  align-self:stretch;
+  align-items:flex-start;
+  justify-content:center;
+  padding-right:8px;
+}
+.cell-cocher-value{padding-top:1px;}
+.cell-cocher-head{align-items:center;}
 
-.sujets-case{display:inline-flex;align-items:center;justify-content:center;
-  width:24px;height:24px;}
-.sujets-case__boite{width:14px;height:14px;margin:0;cursor:pointer;accent-color:var(--accent, #1f6feb);}
+/* Dessinée plutôt qu'empruntée au système : la case native ne prend ni le fond
+   ni la bordure du thème, et l'on ne la voyait pas sur ce noir-là. */
+.sujets-case{
+  appearance:none;
+  -webkit-appearance:none;
+  flex:0 0 auto;
+  position:relative;
+  width:16px;
+  height:16px;
+  margin:0;
+  padding:0;
+  border-radius:4px;
+  background:rgb(13, 17, 23);
+  border:solid 1px rgb(101, 108, 118);
+  cursor:pointer;
+}
+.sujets-case:hover{border-color:rgb(139, 148, 158);}
+.sujets-case:focus-visible{outline:2px solid var(--accent, #1f6feb);outline-offset:1px;}
+
+.sujets-case:checked{background:var(--accent, #1f6feb);border-color:var(--accent, #1f6feb);}
+.sujets-case:checked::after{
+  content:"";
+  position:absolute;
+  left:5px;
+  top:1px;
+  width:4px;
+  height:9px;
+  border:solid #fff;
+  border-width:0 2px 2px 0;
+  transform:rotate(45deg);
+}
 
 /* La case de tête quand une partie seulement est cochée : un trait, pas une
    coche. Une case vide sur une liste où trois sujets sont cochés dirait que
    rien ne l'est, et l'on cliquerait pour tout cocher en croyant ne rien
    défaire. */
-.sujets-case__boite[data-partielle="true"]{position:relative;}
-.sujets-case__boite[data-partielle="true"]::after{
+.sujets-case[data-partielle="true"]{background:var(--accent, #1f6feb);border-color:var(--accent, #1f6feb);}
+.sujets-case[data-partielle="true"]::after{
   content:"";
   position:absolute;
   left:50%;
   top:50%;
   width:8px;
   height:2px;
+  border:0;
   transform:translate(-50%, -50%);
-  background:var(--accent, #1f6feb);
+  background:#fff;
 }
 
 /* Une ligne cochée se voit : sans cela, on ne sait plus sur quoi l'action de
@@ -24512,6 +24527,44 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 
 /* ── Les actions de groupe, à la place des filtres ───────────────────────── */
 
+/* **Quand des sujets sont cochés, ce ne sont plus des filtres : ce sont des
+   actions.** Un filtre se lit comme un intitulé — sans bordure, discret ; une
+   action s'annonce comme un bouton, parce qu'elle écrit. Leur donner la même
+   apparence ferait cliquer « Labels » en croyant restreindre la liste, et
+   poserait un label sur quarante sujets. */
 .sujets-groupe{display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:8px;}
 .sujets-groupe__compte{color:var(--text-muted);white-space:nowrap;}
-.sujets-head-menu--groupe .issues-head-menu__btn{color:var(--text);font-weight:600;}
+.sujets-groupe__bouton{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  white-space:nowrap;
+}
+.sujets-head-menu--groupe{width:auto;flex:0 0 auto;}
+
+
+
+
+/* ── Le menu de sélection : la même forme partout ────────────────────────── */
+
+/* Celui de la colonne de droite d'un sujet et celui d'un filtre d'en-tête sont
+   le même : une case, une décoration, un titre, une ligne de dessous. La forme
+   vit dans `entrees-de-selection.js` ; ceci l'habille.
+
+   **Il n'y a plus qu'une règle.** Il y en avait quatre — une par champ —, dont
+   l'une posait une grille à colonnes fixes et les autres une rangée : la case
+   ne tombait pas au même endroit d'un menu à l'autre, et l'œil qui descend la
+   colonne des cases perdait le fil. */
+.select-menu__iconset{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  flex:0 0 auto;
+  color:var(--muted);
+}
+
+
+/* Le menu d'une action de groupe s'ancre par la droite : ces boutons sont en
+   bout de ligne, et un menu calé à gauche sortirait de l'écran. La règle vient
+   après celle des filtres pour cette seule raison. */
+.sujets-head-menu--groupe .sujets-head-menu__liste{left:auto;right:0;}

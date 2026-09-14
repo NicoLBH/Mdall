@@ -303,8 +303,9 @@ test("le bouton garde le nom du champ, et compte ce qui est coché", () => {
 });
 
 /**
- * Le menu est **celui de la colonne de droite d'un sujet** : mêmes sections,
- * mêmes entrées, même coche. Deux menus qui se ressemblent sans être les mêmes
+ * Le menu est **celui de la colonne de droite d'un sujet** : même coque, même
+ * champ de recherche, mêmes entrées, même case. Deux menus qui posent la même
+ * question et ne se ressemblent pas obligent à réapprendre le second, et
  * divergent au premier réglage (règle 10).
  */
 test("le menu réemploie celui qui sert à poser un label sur un sujet", () => {
@@ -313,8 +314,76 @@ test("le menu réemploie celui qui sert à poser un label sur un sujet", () => {
   });
 
   assert.match(html, /subject-meta-dropdown/);
-  assert.match(html, /select-menu__item[^"]*is-selected/);
+  assert.match(html, /subject-meta-dropdown__search/);
+  assert.match(html, /data-sujets-filtre-recherche="label"/);
+  assert.match(html, /select-menu__checkbox is-checked/);
   assert.match(html, /aria-selected="true"/);
+});
+
+/**
+ * **Les mêmes repères que dans la colonne d'un sujet.** Sans eux, la liste des
+ * assignés et celle des labels se ressemblent trait pour trait, et l'on ouvre
+ * le mauvais menu une fois sur deux.
+ */
+test("chaque valeur porte sa décoration et sa ligne de dessous", () => {
+  const html = renderFiltreDenTeteHtml({
+    id: "x", champ: champLabel, poser: (valeur) => `label:${valeur}`,
+    decorDe: (valeur) => (valeur.value === "l-cr"
+      ? { decorHtml: '<span class="pastille"></span>', sousTitre: "Venus des comptes rendus" }
+      : {})
+  });
+
+  assert.match(html, /<span class="pastille"><\/span>/);
+  assert.match(html, /Venus des comptes rendus/);
+});
+
+/** Un trombinoscope se range par groupe ; un catalogue de labels n'en a pas. */
+test("les groupes n'apparaissent que là où il y en a", () => {
+  const groupes = renderFiltreDenTeteHtml({
+    id: "x", champ: champLabel, poser: () => "",
+    decorDe: () => ({ groupe: "Entreprises" })
+  });
+  const sans = renderFiltreDenTeteHtml({ id: "x", champ: champLabel, poser: () => "" });
+
+  assert.match(groupes, /select-menu__section-title">Entreprises</);
+  assert.doesNotMatch(sans, /select-menu__section-title/);
+});
+
+/** Ce qu'on tape restreint la liste, et rien d'autre : on cherche une valeur. */
+test("le champ de recherche restreint les valeurs proposées", () => {
+  const html = renderFiltreDenTeteHtml({
+    id: "x", champ: champLabel, cherche: "zoiseau", poser: () => ""
+  });
+
+  assert.doesNotMatch(html, /CR chantier/);
+  assert.match(html, /Aucun résultat pour cette recherche/);
+  // Et le champ garde ce qu'on y a tapé : il vit dans l'état, pas dans le DOM.
+  assert.match(html, /value="zoiseau"/);
+});
+
+/** Les accents ne se tapent pas dans un champ de filtre. */
+test("la recherche se fait sans accent ni casse", () => {
+  const champ = champsDesSujets({ labels: [{ key: "l-e", name: "Étanchéité" }] })
+    .find((candidat) => candidat.key === "label");
+  const html = renderFiltreDenTeteHtml({ id: "x", champ, cherche: "ETANCH", poser: () => "" });
+
+  assert.match(html, /Étanchéité/);
+});
+
+/**
+ * **Un sujet n'a qu'un auteur** : `subjects.created_by` est une colonne, pas
+ * une liste. Compter les valeurs cochées d'un champ à choix simple ferait
+ * croire qu'on peut en cocher deux.
+ */
+test("un champ à choix simple ne compte pas ses valeurs", () => {
+  const auteur = champsDesSujets({ personnes: [{ id: "p-1", name: "Moi-même" }] })
+    .find((champ) => champ.key === "auteur");
+
+  assert.notEqual(auteur.multiple, true, "l'auteur est redevenu un choix multiple");
+  assert.doesNotMatch(
+    renderFiltreDenTeteHtml({ id: "x", champ: auteur, enCours: ["p-1"], poser: () => "" }),
+    /sujets-head-menu__compte/
+  );
 });
 
 /** Un champ que le projet ne déclare pas ne dessine pas de menu vide. */
@@ -382,7 +451,10 @@ test("chaque attribut que le rail dessine déclenche un geste", () => {
  */
 const SANS_GESTE = ["data-tooltip", "data-project-rail", "data-sujets-menu-liste",
   "data-sujets-vue-menu-liste",
-  "data-sujets-recherche", "data-sujets-suggestions"];
+  // Les deux champs de saisie : ce qu'on y tape arrive par `input`, pas par un
+  // clic. Cliquer dedans ne doit rien déclencher — sinon le menu se refermerait
+  // au moment où l'on commence à écrire.
+  "data-sujets-recherche", "data-sujets-filtre-recherche", "data-sujets-suggestions"];
 
 /** Et les menus d'en-tête, qui n'ont pas de geste depuis quatre heures. */
 test("chaque attribut d'un filtre d'en-tête déclenche un geste", () => {
@@ -732,4 +804,23 @@ test("chaque attribut des actions de groupe déclenche un geste", () => {
       `les actions de groupe posent « ${attribut} » et rien ne l'écoute`
     );
   }
+});
+
+/**
+ * **« Moi » en tête.** C'est la valeur la plus fréquente, et la seule qui ne
+ * dépende pas de savoir comment on s'appelle dans ce projet. Rangée par ordre
+ * alphabétique, elle finissait sous les entreprises.
+ */
+test("« Moi » passe devant les groupes du chantier", () => {
+  const champ = champsDesSujets({ personnes: [{ id: "p-1", name: "Camille ROUX" }] })
+    .find((candidat) => candidat.key === "assigné");
+
+  const html = renderFiltreDenTeteHtml({
+    id: "x", champ, poser: () => "",
+    decorDe: (valeur) => (valeur.value === "@moi"
+      ? { groupe: "Moi" }
+      : { groupe: "Entreprises" })
+  });
+
+  assert.ok(html.indexOf(">Moi<") < html.indexOf(">Entreprises<"));
 });

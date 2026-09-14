@@ -357,6 +357,31 @@ export function createProjectSubjectsSelectors({
     });
   }
 
+  /**
+   * Les situations du projet, **là où elles sont réellement**.
+   *
+   * Elles vivaient pour le filtre dans `store.situationsView.data`, que seul
+   * l'onglet Situations remplit : sur l'écran des sujets, la liste était vide,
+   * le champ n'était pas déclaré, et le filtre « Situations » n'existait pas.
+   *
+   * La colonne de droite d'un sujet, elle, savait déjà où regarder — trois
+   * sources, dans cet ordre. C'est la même question, et elle n'a qu'une réponse
+   * (règle 10).
+   */
+  function getSituationsDuProjet() {
+    const raw = getRawSubjectsPayload(getViewState()) ?? {};
+    const parId = raw.situationsById && typeof raw.situationsById === "object" ? raw.situationsById : {};
+    if (Object.keys(parId).length) return Object.values(parId);
+
+    const onglet = Array.isArray(getViewState().data) ? getViewState().data : [];
+    if (onglet.length) return onglet;
+
+    const options = raw.relationOptionsById && typeof raw.relationOptionsById === "object"
+      ? raw.relationOptionsById
+      : {};
+    return Object.values(options);
+  }
+
   function getChampsDesSujets() {
     const raw = getRawSubjectsPayload(getViewState()) ?? {};
 
@@ -374,9 +399,10 @@ export function createProjectSubjectsSelectors({
       lots: (Array.isArray(store.projectLots?.items) ? store.projectLots.items : [])
         .map((lot) => ({ id: String(lot?.id ?? "").trim(), name: String(lot?.name ?? "").trim() })),
       personnes,
-      situations: (Array.isArray(getViewState().data) ? getViewState().data : [])
+      situations: getSituationsDuProjet()
         .map((situation) => ({
-          id: String(situation?.id ?? "").trim(), title: String(situation?.title ?? "").trim()
+          id: String(situation?.id ?? "").trim(),
+          title: String(situation?.title ?? situation?.id ?? "").trim()
         })),
       // **« Mentions » et « Activité récente » se calculent en base.** Sans
       // réponse, elles ne se proposent pas : un filtre qui ne rendrait jamais
@@ -655,6 +681,7 @@ export function createProjectSubjectsSelectors({
 
   return {
     getChampsDesSujets,
+    getSituationsDuProjet,
     getMetaDesSujets,
     getMoiDansLeProjet,
     getRequeteDesSujets,
