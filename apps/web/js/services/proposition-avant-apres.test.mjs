@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  tableauAvantApres, affirmationsDUneProposition, resumeDuTableau, CHANGEMENT
+  tableauAvantApres, affirmationsDUneProposition, resumeDuTableau, CHANGEMENT,
+  NATURES_DINTENDANCE
 } from "./proposition-avant-apres.js";
+import { ITEM_TYPE } from "./proposition-review.js";
 
 const OUVERTE = { id: "p1", number: 4, title: "Incendie habitation", status: "open" };
 
@@ -35,6 +37,59 @@ test("l'intendance ne s'y compare pas : un fichier n'a pas de valeur d'avant", (
 
   assert.equal(garde.length, 1);
   assert.equal(garde[0].item_key, "degre-coupe-feu");
+});
+
+/**
+ * **Un compte rendu n'affirme rien sur le projet : il le range.**
+ *
+ * C'est le défaut qui a bloqué une fusion sans laisser de geste pour la lever.
+ * Un compte rendu apportant huit relances, treize lots, quatre objectifs et
+ * deux labels produisait vingt-sept « affirmations » — et vingt-sept
+ * affirmations qui n'ont rien à citer font échouer le contrôle « chaque
+ * affirmation dit d'où elle vient ». Le contrôle avait raison ; on lui
+ * soumettait des lignes qui ne le concernaient pas.
+ */
+test("ce qu'un compte rendu range n'est pas une affirmation sur le projet", () => {
+  const garde = affirmationsDUneProposition([
+    item("degre-coupe-feu", "CF 1 h"),
+    { item_type: ITEM_TYPE.SUJET, item_key: "12.02.1", payload: {} },
+    { item_type: ITEM_TYPE.RELANCE, item_key: "sujet-chape", payload: {} },
+    { item_type: ITEM_TYPE.INTERVENANT, item_key: "intervenant:alpha", payload: {} },
+    { item_type: ITEM_TYPE.LOT, item_key: "3", payload: {} },
+    { item_type: ITEM_TYPE.LABEL, item_key: "cr chantier", payload: {} },
+    { item_type: ITEM_TYPE.OBJECTIF, item_key: "2025-05-12", payload: {} }
+  ]);
+
+  assert.deepEqual(garde.map((ligne) => ligne.item_key), ["degre-coupe-feu"]);
+});
+
+/**
+ * **L'invariant, et pourquoi il vaut un test à lui seul.**
+ *
+ * `ITEM_TYPE` nomme les **mouvements** qu'une proposition sait appliquer : un
+ * document qui entre, un sujet qui s'ouvre, un lot qu'on ouvre. Les
+ * affirmations sur le projet, elles, ne s'y déclarent pas — elles arrivent de
+ * l'Atelier avec le type de leur chemin de mémoire (`base-datum`, …). Tout ce
+ * que `ITEM_TYPE` nomme relève donc de l'intendance, sans exception.
+ *
+ * Le tri se fait par liste close, et son défaut est **silencieux** : une nature
+ * de plus tombe du mauvais côté sans que rien ne le dise, et le symptôme
+ * apparaît trois écrans plus loin, sous la forme d'un contrôle requis qui
+ * bloque une fusion sans laisser de geste pour la lever. C'est exactement ce
+ * qui vient d'arriver.
+ *
+ * Ce test transforme ce silence en échec. Une nature qui affirmerait vraiment
+ * quelque chose sur le projet fera tomber ce test : ce sera à elle de dire ici,
+ * en toutes lettres, qu'elle n'est pas de l'intendance.
+ */
+test("toute nature nommée relève de l'intendance", () => {
+  const oubliees = Object.values(ITEM_TYPE).filter((nature) => !NATURES_DINTENDANCE.has(nature));
+
+  assert.deepEqual(
+    oubliees, [],
+    `natures non rangées : ${oubliees.join(", ")} — ce qui n'est pas de l'intendance est pris `
+    + "pour une affirmation sur le projet, et doit alors citer sa source."
+  );
 });
 
 test("une ligne sans valeur d'avant est une entrée nouvelle", () => {

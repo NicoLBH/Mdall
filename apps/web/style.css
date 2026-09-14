@@ -16895,9 +16895,37 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   line-height:0;
 }
 .merge-box__icon .ui-icon{ width:14px; height:14px; }
-.merge-box__row--ok .merge-box__icon{ background:var(--fgColor-open); color:#fff; }
-.merge-box__row--warn .merge-box__icon{ background:#d29922; color:#fff; }
-.merge-box__row--warn b{ color:#d29922; }
+
+/* ── Les quatre tons d'un contrôle ──────────────────────────────────────────
+   Une couleur est une phrase. Le rouge dit « ça ne passe pas », l'orange « ce
+   n'est pas parfait, et ça passe ». Ce pavé peignait en orange un contrôle
+   requis qui n'était pas tenu, pendant que l'onglet Vérifications lui mettait
+   une croix rouge : deux promesses contraires sur le même fait.
+
+   Les tons sont décidés dans `depot-controles.js` — `tonDuControle()` — et
+   nommés ici une seule fois. Le pavé de fusion, le tiroir, la liste des
+   contrôles, le sceau du dépôt et la pastille d'en-tête lisent les mêmes
+   jetons : c'est ce qui les empêche de se contredire. */
+:root{
+  --ton-bon:rgb(35,134,54);
+  --ton-bon-vif:rgb(63,185,80);
+  --ton-mauvais:rgb(218,54,51);
+  --ton-mauvais-vif:rgb(248,81,73);
+  --ton-doute:rgb(158,106,3);
+  --ton-doute-vif:rgb(210,153,34);
+}
+
+.merge-box__row--bon .merge-box__icon{ background:var(--fgColor-open); color:#fff; }
+.merge-box__row--mauvais .merge-box__icon{ background:var(--ton-mauvais); color:#fff; }
+.merge-box__row--mauvais b{ color:var(--ton-mauvais-vif); }
+.merge-box__row--doute .merge-box__icon{ background:var(--ton-doute); color:#fff; }
+.merge-box__row--doute b{ color:var(--ton-doute-vif); }
+.merge-box__row--neutre .merge-box__icon{
+  background:transparent;
+  border:1px solid var(--border);
+  color:var(--muted);
+}
+.merge-box__row--attente .merge-box__icon{ background:var(--panel2); color:var(--muted); }
 .merge-box__icon--plain{ background:transparent; color:var(--muted); }
 .merge-box__note{ display:block; color:var(--muted); font-size:12px; margin-top:2px; }
 
@@ -18670,7 +18698,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    en tête, et se voit. */
 
 .review-panel--conflict{ border-color:#d29922; }
-.review-block__state.is-blocking{ color:#d29922; font-weight:600; }
+.review-block__state.is-blocking{ color:var(--ton-mauvais-vif); font-weight:600; }
 
 /* Une contradiction se tranche sur des sources, pas sur des étiquettes : deux
    colonnes, l'avant à gauche, l'après à droite, chacune avec son extrait, sa
@@ -20327,8 +20355,12 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
   color:#fff;
 }
 .merge-state__pastille .octicon{ width:11px; height:11px; }
-.merge-state--ready .merge-state__pastille{ background:rgb(35,134,54); }
-.merge-state--held .merge-state__pastille{ background:rgb(158,106,3); }
+.merge-state--ton-bon .merge-state__pastille{ background:var(--ton-bon); }
+/* Rouge, et non plus orange : « À arbitrer » veut dire que la fusion est
+   retenue, pas qu'elle est imparfaite. */
+.merge-state--ton-mauvais .merge-state__pastille{ background:var(--ton-mauvais); }
+.merge-state--ton-doute .merge-state__pastille{ background:var(--ton-doute); }
+.merge-state--ton-attente .merge-state__pastille{ background:var(--panel2); color:var(--muted); }
 
 /* Le pavé de fusion pendant l'analyse : gris, sans promesse. */
 /* L'avatar ne tourne pas : c'est le visage du pavé, pas un indicateur. Une
@@ -20458,9 +20490,15 @@ body.proposition-merge-open{ overflow:hidden; }
   line-height:18px;
   color:var(--muted);
 }
-.depot-carte__sceau--verifie{ border-color:rgba(35,134,54,.5); color:rgb(63,185,80); }
-.depot-carte__sceau--partiel{ border-color:rgba(210,153,34,.5); color:rgb(210,153,34); }
-.depot-carte__sceau--vide{ border-style:dashed; }
+/* Le sceau prend le ton du contrôle qui porte sur la provenance — le même que
+   celui de l'onglet Vérifications, puisque c'est le même fait. Il était orange
+   quoi qu'il arrive, y compris quand la provenance manquante retenait la
+   fusion. */
+.depot-carte__sceau--ton-bon{ border-color:rgba(35,134,54,.5); color:var(--ton-bon-vif); }
+.depot-carte__sceau--ton-mauvais{ border-color:rgba(218,54,51,.5); color:var(--ton-mauvais-vif); }
+.depot-carte__sceau--ton-doute{ border-color:rgba(210,153,34,.5); color:var(--ton-doute-vif); }
+.depot-carte__sceau--ton-neutre{ border-style:dashed; }
+.depot-carte__sceau--ton-attente{ border-style:dashed; }
 
 /* ── Les contrôles d'un dépôt ───────────────────────────────────────────────
    La liste de checks d'une pull request. Quatre issues, pas trois : « non
@@ -20488,10 +20526,16 @@ body.proposition-merge-open{ overflow:hidden; }
   background:var(--border);
 }
 .controle__pastille .octicon{ width:11px; height:11px; }
-.controle--tenu .controle__pastille{ background:rgb(35,134,54); }
-.controle--non-tenu .controle__pastille{ background:rgb(218,54,51); }
-.controle--non-verifiable .controle__pastille{ background:rgb(158,106,3); }
-.controle--sans-objet .controle__pastille{ background:transparent; border:1px solid var(--border); color:var(--muted); }
+/* La couleur vient du **ton**, pas de l'issue : un « non tenu » qui ne retient
+   pas la fusion n'est pas rouge. Voir `tonDuControle()`. */
+.controle--ton-bon .controle__pastille{ background:var(--ton-bon); }
+.controle--ton-mauvais .controle__pastille{ background:var(--ton-mauvais); }
+.controle--ton-doute .controle__pastille{ background:var(--ton-doute); }
+.controle--ton-neutre .controle__pastille{
+  background:transparent;
+  border:1px solid var(--border);
+  color:var(--muted);
+}
 .controle--en-cours .controle__pastille{
   background:transparent;
   color:var(--muted);
@@ -20514,8 +20558,8 @@ body.proposition-merge-open{ overflow:hidden; }
   font-size:11px;
   white-space:nowrap;
 }
-.controle--non-tenu .controle__issue{ color:rgb(248,81,73); }
-.controle--non-verifiable .controle__issue{ color:rgb(210,153,34); }
+.controle--ton-mauvais .controle__issue{ color:var(--ton-mauvais-vif); }
+.controle--ton-doute .controle__issue{ color:var(--ton-doute-vif); }
 /* « requis » ne colore rien : il dit seulement que ce contrôle retient la
    fusion. C'est son issue qui porte la couleur, pas son statut. */
 .controle__requis{

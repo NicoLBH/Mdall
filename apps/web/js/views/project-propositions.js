@@ -92,7 +92,7 @@ import { reprisesAEnregistrer, sourceDuPoint } from "../services/reprise-sans-ch
 import {
   aQuiRevientLePoint, lotDuProjetPour, nomPourLeRepertoire, phraseDuConnu
 } from "../services/intervenants-du-cr.js";
-import { depotDeLaProposition, resumeDuDepot } from "../services/proposition-depot.js";
+import { PROVENANCE, depotDeLaProposition, resumeDuDepot } from "../services/proposition-depot.js";
 import {
   appliquerLeCompteRendu,
   ouvrirLesLotsRetenus,
@@ -101,7 +101,7 @@ import {
 import { ETAT, arbreDesReperes, comparerDesReperes, lignesNumerotees, resumeDuDiff } from "../services/depot-reperes.js";
 import { aChange, reperesDuDepot } from "../services/depot-carburants.js";
 import { limiterAuDepot } from "../services/depot-portee.js";
-import { ISSUE, passerLesControles, resumeDesControles } from "../services/depot-controles.js";
+import { ISSUE, TON, passerLesControles, resumeDesControles } from "../services/depot-controles.js";
 import { bindSideResizer, renderSideResizer } from "./ui/side-resizer.js";
 import { cheminDeFichier, enClair, nomDeFichier } from "../services/memoire-en-texte.js";
 import { jetonsDeLaLigne as jetonsDuTexte } from "../services/memoire-en-lecture.js";
@@ -477,8 +477,14 @@ function renderMergeStateButton(proposition, review) {
   // La pastille porte la couleur, le bouton reste gris : c'est la lecture de
   // GitHub, et elle vaut mieux qu'un bouton entier coloré — le vert d'un bouton
   // dit « appuyez ici », celui d'une pastille dit « c'est prêt ».
+  // **Rouge quand ça ne passe pas.** La pastille était orange, c'est-à-dire la
+  // couleur de « ce n'est pas parfait, mais ça passe » — et l'onglet
+  // Vérifications mettait une croix rouge sur le même fait. L'attente, elle,
+  // n'arrive jamais ici : elle a son propre bouton, plus haut.
+  const ton = empeche ? TON.MAUVAIS : TON.BON;
+
   return `
-    <button type="button" class="gh-btn gh-btn--sm merge-state merge-state--${empeche ? "held" : "ready"}"
+    <button type="button" class="gh-btn gh-btn--sm merge-state merge-state--ton-${escapeHtml(ton)}"
       data-merge-open>
       <span class="merge-state__pastille">${svgIcon(empeche ? "alert" : "check", { className: "octicon" })}</span>
       <span>${escapeHtml(empeche ? "À arbitrer" : "Prêt à fusionner")}</span>
@@ -2149,6 +2155,22 @@ const STORY_ICON = {
  * au moment du commit pour cette raison exacte — c'est le seul instant où
  * l'auteur peut dire pourquoi, et l'instant où il s'en souvient encore.
  */
+/**
+ * Le ton d'un groupe de contrôles qui ne retiennent rien.
+ *
+ * **Le plus sombre décide, et le rouge est exclu.** Une ligne qui résume « 3
+ * autres contrôles » doit dire s'il y a quelque chose à y regarder — la peindre
+ * en vert alors qu'un contrôle n'est pas vérifiable ferait passer une ignorance
+ * pour une vérification (règle 5). Mais elle ne peut pas être rouge : aucun de
+ * ces contrôles n'empêche de fusionner, et l'utilisateur chercherait un blocage
+ * qui n'existe pas.
+ */
+function tonDuResume(lignes = []) {
+  if (lignes.some((ligne) => ligne.ton === TON.DOUTE || ligne.ton === TON.MAUVAIS)) return TON.DOUTE;
+  if (lignes.some((ligne) => ligne.ton === TON.ATTENTE)) return TON.ATTENTE;
+  return TON.BON;
+}
+
 /** Le bilan d'un sous-ensemble de contrôles, pour en écrire le résumé. */
 function bilanDe(lignes = []) {
   const bilan = { tenu: 0, "non-tenu": 0, "sans-objet": 0, "non-verifiable": 0, "en-cours": 0 };
@@ -2262,7 +2284,10 @@ function renderMergeConditions(review, empeche, blocage = "") {
 
   const conditions = [
     {
-      tone: review.error ? "warn" : "ok",
+      // L'analyse n'aboutit pas : la fusion est retenue, comme un contrôle
+      // requis. Elle porte donc le même rouge — l'orange d'avant promettait
+      // que ça passerait quand même.
+      ton: review.error ? TON.MAUVAIS : TON.BON,
       // Le disque porte déjà la couleur : l'icône n'a plus qu'à être un signe.
       // `check-circle-fill` dessinerait un second cercle dans le premier.
       icon: review.error ? "alert" : "check",
@@ -2271,14 +2296,21 @@ function renderMergeConditions(review, empeche, blocage = "") {
     },
     // Un contrôle requis se lit en toutes lettres : c'est lui qui retient, et
     // « la fusion est bloquée » sans dire par quoi n'est qu'un mur.
+    //
+    // **Sa couleur n'est plus choisie ici.** Ce pavé peignait en orange un
+    // contrôle requis non tenu, pendant que l'onglet Vérifications lui mettait
+    // une croix rouge : deux promesses contraires sur le même fait, et l'orange
+    // — « ce n'est pas parfait, ça passe » — était la fausse.
     ...requis.map((ligne) => ({
-      tone: ligne.issue === ISSUE.TENU || ligne.issue === ISSUE.SANS_OBJET ? "ok" : "warn",
+      ton: ligne.ton,
       icon: ligne.icone,
       text: ligne.label,
       note: [ligne.phrase, ligne.detail].filter(Boolean).join(" ")
     })),
     {
-      tone: "ok",
+      // Les autres contrôles ne retiennent rien : la ligne prend le ton du plus
+      // sombre d'entre eux, et jamais le rouge — il est réservé à ce qui bloque.
+      ton: tonDuResume(autres),
       icon: "checklist",
       text: `${autres.length} autre${autres.length > 1 ? "s contrôles" : " contrôle"}`,
       note: resumeDesControles({ lignes: autres, bilan: bilanDe(autres) })
@@ -2301,7 +2333,7 @@ function renderMergeConditions(review, empeche, blocage = "") {
       ${conditions
         .map(
           (ligne) => `
-            <div class="merge-box__row merge-box__row--${ligne.tone}">
+            <div class="merge-box__row merge-box__row--${ligne.ton}">
               <span class="merge-box__icon">${svgIcon(ligne.icon, { className: "octicon" })}</span>
               <div>
                 <b>${escapeHtml(ligne.text)}</b>
@@ -2732,6 +2764,25 @@ export function renderDeposits(review) {
  * La carte se clique et mène aux Changements, comme un commit mène à son diff :
  * on lit ici *qu'*il y a eu un dépôt, on lit là-bas *ce qu'*il change.
  */
+/**
+ * La couleur du sceau d'un dépôt.
+ *
+ * **Elle ne se déduit pas de l'état du dépôt**, et c'est le point. « Provenance
+ * incomplète » sur un dépôt sans aucune affirmation n'empêche rien : le
+ * contrôle se déclare alors sans objet, et une pastille rouge ferait chercher
+ * un blocage qui n'existe pas. Le sceau lit donc le ton du contrôle qui porte
+ * sur la provenance — le même que celui de l'onglet Vérifications, puisque
+ * c'est le même fait.
+ */
+function tonDuSceau(depot, review) {
+  if (depot?.provenance === PROVENANCE.VERIFIE) return TON.BON;
+
+  const provenance = passerLesControles(contexteDesControles(view.open ?? {}, review))
+    .lignes.find((ligne) => ligne.id === "provenance");
+
+  return provenance?.ton ?? TON.DOUTE;
+}
+
 function renderDepotDeLaProposition(review) {
   const depot = depotDeLaProposition({
     proposition: view.open,
@@ -2761,7 +2812,7 @@ function renderDepotDeLaProposition(review) {
               · ${escapeHtml(resumeDuDepot(depot))}
             </span>
           </span>
-          <span class="depot-carte__sceau depot-carte__sceau--${escapeHtml(depot.provenance)}"
+          <span class="depot-carte__sceau depot-carte__sceau--ton-${escapeHtml(tonDuSceau(depot, review))}"
             title="${escapeHtml(depot.pourquoi)}">${escapeHtml(depot.provenanceLabel)}</span>
         </button>
       </div>
@@ -2859,7 +2910,7 @@ function renderControles(proposition, review) {
           ${rendu.lignes
             .map(
               (ligne) => `
-                <li class="controle controle--${escapeHtml(ligne.issue)}">
+                <li class="controle controle--${escapeHtml(ligne.issue)} controle--ton-${escapeHtml(ligne.ton)}">
                   <span class="controle__pastille">${svgIcon(ligne.icone, { className: "octicon" })}</span>
                   <div class="controle__corps">
                     <span class="controle__label">${escapeHtml(ligne.label)}</span>
