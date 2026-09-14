@@ -658,13 +658,29 @@ const SOUS_VUES = ["labels", "objectives", "views"];
 function renderSousVueHtml() {
   const sousVue = String(store.situationsView.subjectsSubview || "");
 
+  // **Le titre est dans le contenu, pas dans la barre du haut.** Il vivait dans
+  // `situationsToolbarHost`, qui est hors de la mise en page du rail : il
+  // s'alignait donc sur le bord gauche de la page, et le tableau sur le bord
+  // droit du rail — deux alignements pour une seule colonne. Il descend là où
+  // est ce qu'il annonce, comme celui des Vues.
   if (sousVue === "labels") {
-    return `<div id="labelsTableHost" class="project-table-host">${
-      getProjectSubjectLabels().renderLabelsTableHtml()}</div>`;
+    return `
+      ${renderTitreDEcranHtml({
+        titre: "Labels",
+        actionsHtml: renderSubjectsToolbarButton({
+          id: "labelsCreateAction", label: "Nouveau label", action: "add-label", tone: "primary"
+        })
+      })}
+      <div id="labelsTableHost" class="project-table-host">${
+        getProjectSubjectLabels().renderLabelsTableHtml()}</div>
+    `;
   }
   if (sousVue === "objectives") {
-    return `<div id="objectivesTableHost" class="project-table-host">${
-      getProjectSubjectMilestones().renderObjectivesTableHtml()}</div>`;
+    return `
+      ${getProjectSubjectMilestones().renderObjectivesViewHeaderHtml()}
+      <div id="objectivesTableHost" class="project-table-host">${
+        getProjectSubjectMilestones().renderObjectivesTableHtml()}</div>
+    `;
   }
 
   return renderEcranDesVues();
@@ -697,6 +713,7 @@ function renderEcranDesVues() {
     champs,
     ignores,
     refus: forme.refus ?? "",
+    habitOuvert: forme.habitOuvert === true,
     // Le tableau, sous le formulaire : enregistrer une vue sans avoir vu ce
     // qu'elle montre, c'est enregistrer une promesse.
     tableauHtml: `<div id="situationsTableHost" class="project-table-host">${
@@ -836,6 +853,34 @@ function poserDansLaFormeDeVue(quoi, valeur, { redessiner = true } = {}) {
   // vient de réparer fait douter de ce qu'on lit.
   forme.refus = "";
   if (redessiner) rerenderPanels();
+}
+
+/**
+ * Ouvrir le choix de l'habit d'une vue, ou le refermer.
+ *
+ * **Annuler remet ce qu'on avait en ouvrant.** Le choix se voit tout de suite
+ * sur le bouton — c'est ce qui permet de comparer deux couleurs —, mais
+ * renoncer doit rendre l'état d'avant, sinon le mot « Annuler » ne veut rien
+ * dire. On retient donc l'habit à l'ouverture, et on le repose au besoin.
+ */
+function basculerLHabitDeLaVue({ garder = true } = {}) {
+  const forme = store.projectSubjectsView?.vueEnCours;
+  if (!forme) return;
+
+  if (!forme.habitOuvert) {
+    forme.habitAvant = { icone: forme.icone ?? "", couleur: forme.couleur ?? "" };
+    forme.habitOuvert = true;
+    rerenderPanels();
+    return;
+  }
+
+  if (!garder && forme.habitAvant) {
+    forme.icone = forme.habitAvant.icone;
+    forme.couleur = forme.habitAvant.couleur;
+  }
+  forme.habitOuvert = false;
+  forme.habitAvant = null;
+  rerenderPanels();
 }
 
 /** Fermer le formulaire sans rien écrire. */
@@ -4695,26 +4740,13 @@ function renderSituationsViewHeaderHtml() {
   if (store.situationsView.createSubjectForm?.isOpen) {
     return "";
   }
-  if (String(store.situationsView.subjectsSubview || "subjects") === "labels") {
-    return renderTitreDEcranHtml({
-      titre: "Labels",
-      className: "project-table-toolbar--situations project-table-toolbar--labels",
-      actionsHtml: renderSubjectsToolbarButton({
-        id: "labelsCreateAction", label: "Nouveau label", action: "add-label", tone: "primary"
-      })
-    });
-  }
-
-  if (String(store.situationsView.subjectsSubview || "subjects") === "objectives") {
-    return getProjectSubjectMilestones().renderObjectivesViewHeaderHtml();
-  }
-
-  // **L'écran des vues porte son propre titre**, dans le contenu du rail, avec
-  // le bouton qui le concerne. Ce qui est ici — copier le tableau des sujets,
-  // créer un sujet — ne s'y applique pas : on y regarde des recherches
-  // enregistrées, pas des sujets, et ces deux boutons y proposaient des gestes
-  // qui portent sur autre chose que ce qu'on a sous les yeux.
-  if (String(store.situationsView.subjectsSubview || "subjects") === "views") return "";
+  // **Les trois sous-vues portent leur titre dans le contenu du rail**, avec
+  // le bouton qui les concerne. Ici, la barre du haut est hors de la mise en
+  // page du rail : un titre posé là s'aligne sur le bord gauche de la page, et
+  // le tableau qu'il annonce sur le bord droit du rail. Ce qui reste dans
+  // cette barre — copier le tableau des sujets, créer un sujet — ne s'applique
+  // à aucune des trois.
+  if (SOUS_VUES.includes(String(store.situationsView.subjectsSubview || "subjects"))) return "";
 
   // **Une seule recherche.** Celle-ci ne cherchait que dans les titres, sans
   // grammaire et sans s'épingler ; la barre du tableau fait tout ce qu'elle
@@ -4816,6 +4848,7 @@ function getObjectiveById(objectiveId) {
     basculerLeRail,
     ouvrirLaFormeDeVue,
     poserDansLaFormeDeVue,
+    basculerLHabitDeLaVue,
     annulerLaFormeDeVue,
     enregistrerLaVue,
     renderSubjectsFiltresDenTeteHtml,

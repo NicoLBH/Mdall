@@ -406,9 +406,21 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   },
   epinglerLaRechercheDesSujets: (...args) => projectSubjectsView.epinglerLaRechercheDesSujets(...args),
   retirerLaRechercheEpinglee: (...args) => projectSubjectsView.retirerLaRechercheEpinglee(...args),
+  // **Les gestes de la sélection et des vues.** Ils étaient écrits, écoutés et
+  // dessinés — et jamais branchés : la fabrique les déstructure avec un
+  // `() => {}` par défaut, si bien que cocher un sujet et ouvrir le menu d'une
+  // vue ne faisaient rien du tout, sans la moindre erreur.
+  epinglerLaVueAuRail: (...args) => projectSubjectsView.epinglerLaVueAuRail(...args),
+  basculerLeMenuDeLaVue: (...args) => projectSubjectsView.basculerLeMenuDeLaVue(...args),
+  fermerLeMenuDeLaVue: (...args) => projectSubjectsView.fermerLeMenuDeLaVue(...args),
+  cocherUnSujet: (...args) => projectSubjectsView.cocherUnSujet(...args),
+  cocherTousLesSujets: (...args) => projectSubjectsView.cocherTousLesSujets(...args),
+  appliquerAuGroupe: (...args) => projectSubjectsView.appliquerAuGroupe(...args),
+  getInlineReplyUiState: (...args) => getInlineReplyUiState(...args),
   basculerLeRail: (...args) => projectSubjectsView.basculerLeRail(...args),
   ouvrirLaFormeDeVue: (...args) => projectSubjectsView.ouvrirLaFormeDeVue(...args),
   poserDansLaFormeDeVue: (...args) => projectSubjectsView.poserDansLaFormeDeVue(...args),
+  basculerLHabitDeLaVue: (...args) => projectSubjectsView.basculerLHabitDeLaVue(...args),
   annulerLaFormeDeVue: (...args) => projectSubjectsView.annulerLaFormeDeVue(...args),
   enregistrerLaVue: (...args) => projectSubjectsView.enregistrerLaVue(...args),
   DRAFT_SUBJECT_ID,

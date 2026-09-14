@@ -78,9 +78,18 @@ function renderSubjectChildrenCounterHtml(sujet, deps) {
   `;
 }
 
+/**
+ * Ce qu'on montre à un projet qui n'a encore aucun sujet.
+ *
+ * **Elle ne rendait rien.** Le tableau était bien assemblé, dans une variable
+ * que personne ne lisait : la fonction rendait `undefined`, et l'appelant
+ * l'écrivait tel quel dans la page. Un projet neuf affichait donc le mot
+ * « undefined » à la place de son écran d'accueil.
+ */
 function renderWelcomeHtml(deps) {
   const { renderIssuesTable } = deps;
-  const tableHtml = renderIssuesTable({
+
+  return renderIssuesTable({
     gridTemplate: getSituationsTableGridTemplate(),
     headHtml: renderSituationsTableHeadHtml({
       deps,

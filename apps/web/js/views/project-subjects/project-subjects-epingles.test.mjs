@@ -166,24 +166,64 @@ test("le bandeau est branché de bout en bout", () => {
  * ressemble à tout autre chose. Ici la vérification est possible sans exécuter
  * l'écran, alors on la fait.
  */
-test("tout ce que la vue attend, la racine le fournit", () => {
-  const vue = lis("./project-subjects-view.js");
-  const racine = lis("../project-subjects.js");
+/**
+ * Ce qu'une fabrique déstructure, et ce que la racine lui donne.
+ *
+ * Le nom qui manque **ne lève rien** : il vaut `undefined`, ou le `() => {}`
+ * qu'un paramètre par défaut lui prête — et le geste ne fait rien, en silence,
+ * jusqu'à ce que quelqu'un s'en aperçoive à l'écran.
+ */
+function manquantsDeLaFabrique({ source, racine, fabrique, fin }) {
+  const debut = source.indexOf(fabrique);
+  assert.ok(debut >= 0, `la fabrique a changé de nom : ${fabrique}`);
+  const bloc = source.slice(debut, source.indexOf(fin, debut));
 
-  const debut = vue.indexOf("export function createProjectSubjectsView(deps) {");
-  assert.ok(debut >= 0, "la fabrique a changé de nom");
-  const bloc = vue.slice(debut, vue.indexOf("} = deps;", debut));
-  const attendus = [...bloc.matchAll(/^ {4}([A-Za-z_$][\w$]*),?\s*$/gm)].map((trouve) => trouve[1]);
+  // `nom,` et `nom = valeur,` : un paramètre par défaut est exactement celui
+  // qui se tait quand personne ne le fournit.
+  const attendus = [...bloc.matchAll(/^ {4}([A-Za-z_$][\w$]*)\s*(?:=[^,]*)?,?\s*$/gm)]
+    .map((trouve) => trouve[1]);
 
-  assert.ok(attendus.length > 20, "la liste des dépendances n'a pas été relue");
+  assert.ok(attendus.length > 20, `la liste des dépendances de ${fabrique} n'a pas été relue`);
 
-  const ouvre = racine.indexOf("createProjectSubjectsView({");
+  const ouvre = racine.indexOf(fabrique.replace(/\(.*$/, "({"));
   assert.ok(ouvre >= 0, "la fabrique n'est plus appelée avec un objet littéral");
   const config = racine.slice(ouvre, racine.indexOf("\n});", ouvre));
 
-  const manquants = attendus.filter(
-    (nom) => !new RegExp(`(^|[\\s{,])${nom}\\s*[:,]`, "m").test(config)
-  );
+  return attendus.filter((nom) => !new RegExp(`(^|[\\s{,])${nom}\\s*[:,]`, "m").test(config));
+}
+
+test("tout ce que la vue attend, la racine le fournit", () => {
+  const manquants = manquantsDeLaFabrique({
+    source: lis("./project-subjects-view.js"),
+    racine: lis("../project-subjects.js"),
+    fabrique: "createProjectSubjectsView(deps)",
+    fin: "} = deps;"
+  });
 
   assert.deepEqual(manquants, [], `la vue attend des dépendances que personne ne lui donne : ${manquants.join(", ")}`);
+});
+
+/**
+ * **Le même trou, de l'autre côté — et il a coûté ce tour-ci.**
+ *
+ * Six gestes ont été écrits, écoutés et dessinés sans jamais être branchés :
+ * cocher un sujet, cocher toute la sélection, appliquer une action de groupe,
+ * ouvrir le menu d'une vue, le refermer, épingler une vue au rail. La fabrique
+ * les déstructure avec un `() => {}` par défaut ; la racine ne les passait pas.
+ * Rien n'échouait — les cases se cochaient à l'écran, les boutons d'action ne
+ * venaient jamais, et le kebab d'une vue n'ouvrait rien.
+ *
+ * Le garde-fou existait pour la vue. Il manquait pour les gestes, c'est-à-dire
+ * pour la moitié où un oubli ne se voit pas du tout.
+ */
+test("tout ce que les gestes attendent, la racine le fournit", () => {
+  const manquants = manquantsDeLaFabrique({
+    source: lis("./project-subjects-events.js"),
+    racine: lis("../project-subjects.js"),
+    fabrique: "createProjectSubjectsEvents(config)",
+    fin: "} = config;"
+  });
+
+  assert.deepEqual(manquants, [],
+    `les gestes attendent des dépendances que personne ne leur donne : ${manquants.join(", ")}`);
 });

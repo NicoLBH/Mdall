@@ -1,4 +1,5 @@
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
+import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
 export function formatObjectiveDueDateLabel(objective) {
   if (!objective?.dueDate) return "Pas de date définie";
   const parsed = new Date(objective.dueDate);
@@ -673,19 +674,21 @@ export function createProjectSubjectMilestonesController(config) {
     });
   }
 
+  /**
+   * La ligne de titre de l'écran des objectifs.
+   *
+   * C'est celle de tous les écrans (`titre-decran.js`) : elle était écrite à la
+   * main ici, et se recalibrait contre les autres à chaque changement
+   * (`docs/fondamentaux.md`, règle 10).
+   */
   function renderObjectivesViewHeaderHtml() {
     const selectedObjective = getObjectiveById(store.situationsView.selectedObjectiveId || "");
     if (selectedObjective) return "";
-    const leftHtml = renderProjectTableToolbarGroup({
-      html: '<div class="project-table-toolbar__title">Objectifs</div>'
-    });
-    const rightHtml = renderProjectTableToolbarGroup({
-      html: renderObjectivesCreateAction()
-    });
-    return renderProjectTableToolbar({
+
+    return renderTitreDEcranHtml({
+      titre: "Objectifs",
       className: "project-table-toolbar--situations project-table-toolbar--objectives",
-      leftHtml,
-      rightHtml
+      actionsHtml: renderObjectivesCreateAction()
     });
   }
 

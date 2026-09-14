@@ -24312,30 +24312,25 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 
 /* L'aperçu à gauche, les choix à droite : on voit ce qu'on fabrique pendant
    qu'on le choisit. */
-.sujets-vue-forme__habit{display:flex;gap:16px;align-items:flex-start;
-  padding:12px;border:1px solid var(--border);border-radius:8px;}
-.sujets-vue-forme__apercu{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
-  width:40px;height:40px;border:1px solid var(--border);border-radius:8px;}
-.sujets-vue-forme__choix{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;}
-.sujets-vue-forme__intitule{margin:0;font-size:11px;text-transform:uppercase;
-  letter-spacing:.04em;color:var(--text-muted);}
+/* ── Le formulaire d'une vue ─────────────────────────────────────────────── */
 
-.sujets-vue-forme__icones{display:flex;flex-wrap:wrap;gap:4px;}
-.sujets-vue-forme__icone{display:inline-flex;align-items:center;justify-content:center;
-  width:28px;height:28px;border:1px solid transparent;border-radius:6px;
-  background:transparent;color:rgb(145, 152, 161);cursor:pointer;}
-.sujets-vue-forme__icone:hover{background:var(--surface-hover);color:var(--text);}
-.sujets-vue-forme__icone.est-choisie{border-color:var(--border);color:var(--text);background:var(--surface-hover);}
+/* L'habit et le titre sur une ligne : c'est ce qu'on verra dans le rail, et le
+   choisir loin du nom qu'on écrit fait composer l'un sans regarder l'autre. */
+.sujets-vue-forme__ligne{display:flex;gap:12px;align-items:flex-end;}
+.sujets-vue-forme__habit{position:relative;display:flex;flex-direction:column;gap:4px;}
+.sujets-vue-forme__habit-bouton{display:inline-flex;align-items:center;justify-content:center;
+  width:36px;height:34px;padding:0;}
+.sujets-vue-forme__champ--titre{flex:1;min-width:0;}
 
-.sujets-vue-forme__couleurs{display:flex;flex-wrap:wrap;gap:6px;}
-.sujets-vue-forme__couleur{width:20px;height:20px;border-radius:50%;cursor:pointer;
-  border:2px solid transparent;background:var(--sujets-vue-couleur);}
-/* Le choix se marque par un anneau, pas par une coche : une coche par-dessus
-   la couleur cache précisément ce qu'on est en train de choisir. */
-.sujets-vue-forme__couleur.est-choisie{border-color:var(--text);}
+.sujets-vue-forme__intitule{margin:0;font-size:12px;color:var(--text);}
 
-.sujets-vue-forme__champ{display:flex;flex-direction:column;gap:4px;}
-.sujets-vue-forme__refus{margin:0;color:var(--danger, #f85149);font-size:13px;}
+/* L'étoile d'un champ obligatoire : elle se voit, et elle se dit. */
+.sujets-vue-forme__requis{color:var(--danger, #f85149);text-decoration:none;margin-left:2px;}
+
+/* La recherche et les deux gestes sur une seule ligne. */
+.sujets-vue-forme__requete{display:flex;align-items:flex-start;gap:8px;}
+.sujets-vue-forme__requete .memory-search{flex:1;min-width:0;}
+
 .sujets-vue-forme__gestes{display:flex;justify-content:flex-end;gap:8px;}
 
 .sujets-search{margin-bottom:10px;}
@@ -24491,7 +24486,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .sujets-case:hover{border-color:rgb(139, 148, 158);}
 .sujets-case:focus-visible{outline:2px solid var(--accent, #1f6feb);outline-offset:1px;}
 
-.sujets-case:checked{background:var(--accent, #1f6feb);border-color:var(--accent, #1f6feb);}
+.sujets-case:checked{
+  background:rgb(31, 111, 235);
+  border:solid 1px rgb(31, 111, 235);
+  border-radius:3px;
+}
 .sujets-case:checked::after{
   content:"";
   position:absolute;
@@ -24508,7 +24507,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    coche. Une case vide sur une liste où trois sujets sont cochés dirait que
    rien ne l'est, et l'on cliquerait pour tout cocher en croyant ne rien
    défaire. */
-.sujets-case[data-partielle="true"]{background:var(--accent, #1f6feb);border-color:var(--accent, #1f6feb);}
+.sujets-case[data-partielle="true"]{
+  background:rgb(31, 111, 235);
+  border:solid 1px rgb(31, 111, 235);
+  border-radius:3px;
+}
 .sujets-case[data-partielle="true"]::after{
   content:"";
   position:absolute;
@@ -24568,3 +24571,92 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    bout de ligne, et un menu calé à gauche sortirait de l'écran. La règle vient
    après celle des filtres pour cette seule raison. */
 .sujets-head-menu--groupe .sujets-head-menu__liste{left:auto;right:0;}
+
+
+/* ── Le choix de l'habit d'une vue ───────────────────────────────────────── */
+
+.sujets-vue-habit{
+  display:block;
+  position:absolute;
+  top:calc(100% + 6px);
+  left:0;
+  z-index:1000;
+  width:420px;
+  max-width:calc(100vw - 24px);
+  padding:12px;
+}
+
+.sujets-vue-habit__intitule{
+  margin:0 0 6px;
+  font-size:12px;
+  font-weight:600;
+  color:var(--text);
+}
+
+.sujets-vue-habit__couleurs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+
+/* **Un cercle tant qu'on n'a pas choisi, un disque ensuite.** Une rangée de
+   pastilles pleines se lit comme une décoration ; une rangée de contours se lit
+   comme un choix ouvert. Celle qui est prise porte trois marques — le fond
+   gris, le disque plein, la coche — parce qu'une nuance de couleur ne se
+   distingue pas d'une autre au premier regard. */
+.sujets-vue-habit__couleur{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:28px;
+  height:28px;
+  padding:0;
+  border:0;
+  border-radius:50%;
+  background:transparent;
+  color:#fff;
+  cursor:pointer;
+  position:relative;
+}
+.sujets-vue-habit__couleur::before{
+  content:"";
+  position:absolute;
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  border:2px solid var(--sujets-vue-couleur, var(--muted));
+  background:transparent;
+}
+.sujets-vue-habit__couleur:hover{background:var(--surface-hover);}
+.sujets-vue-habit__couleur.est-choisie{background:rgba(110, 118, 129, .25);}
+.sujets-vue-habit__couleur.est-choisie::before{background:var(--sujets-vue-couleur, var(--muted));}
+.sujets-vue-habit__couleur .ui-icon{position:relative;width:12px;height:12px;}
+
+.sujets-vue-habit__icones{
+  display:grid;
+  grid-template-columns:repeat(10, 1fr);
+  gap:4px;
+  margin-bottom:12px;
+}
+.sujets-vue-habit__icone{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:30px;
+  height:30px;
+  padding:0;
+  border:1px solid transparent;
+  border-radius:6px;
+  background:transparent;
+  color:var(--text-muted);
+  cursor:pointer;
+}
+.sujets-vue-habit__icone:hover{background:var(--surface-hover);color:var(--text);}
+.sujets-vue-habit__icone.est-choisie{
+  border-color:var(--border);
+  background:rgba(110, 118, 129, .25);
+  color:var(--text);
+}
+
+.sujets-vue-habit__gestes{display:flex;justify-content:flex-end;gap:8px;}
+
+@media (max-width:640px){
+  .sujets-vue-habit{width:min(420px, calc(100vw - 24px));}
+  .sujets-vue-habit__icones{grid-template-columns:repeat(6, 1fr);}
+}
