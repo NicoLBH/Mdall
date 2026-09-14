@@ -159,6 +159,12 @@ export function natureDuChangement(item = {}) {
   const type = texte(item?.itemType ?? item?.item_type);
   if (type === ITEM_TYPE.SUJET) return natureDuSujet(item?.payload ?? {});
 
+  // **Un arbitrage ne change rien au projet.** C'est une décision sur la
+  // proposition — passer outre un contrôle qui la retenait —, et la compter
+  // parmi ce qui changerait annoncerait « 1 valeur en mémoire » là où rien
+  // n'entre. Elle se lit dans son propre bloc, et dans le procès-verbal.
+  if (type === ITEM_TYPE.ARBITRAGE) return "";
+
   const connue = NATURE_DE_LITEM[type];
   if (connue) return connue;
 

@@ -115,7 +115,21 @@ export const ITEM_TYPE = {
    * **La date décide, pas le nom.** Un objectif nommé autrement mais daté du
    * même jour est le même jalon : en créer un second le doublerait.
    */
-  OBJECTIF: "objectif"
+  OBJECTIF: "objectif",
+  /**
+   * Ce qu'on a décidé d'assumer, faute de pouvoir le vérifier.
+   *
+   * Une ligne comme les autres, et c'est délibéré : passer outre un contrôle
+   * qui retient la fusion est une **décision**, elle porte un auteur, une date
+   * et un motif, elle se relit dans le procès-verbal et elle se gèle avec le
+   * reste. Un drapeau posé ailleurs se serait perdu au premier rechargement, et
+   * l'on ne saurait plus, six mois après, ce qu'on avait vérifié et ce qu'on
+   * avait cru (règle 12).
+   *
+   * Sa clé est l'identifiant du contrôle passé outre : un contrôle, un
+   * arbitrage, et le second remplace le premier plutôt que de s'ajouter.
+   */
+  ARBITRAGE: "arbitrage"
 };
 
 function item(type, key, payload) {

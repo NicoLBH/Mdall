@@ -195,6 +195,13 @@ export function assertionsFromProposition({ proposition = {}, items = [], decide
 
   return (Array.isArray(items) ? items : [])
     .filter((item) => item?.itemType && item?.itemKey)
+    // **Un arbitrage n'entre pas en mémoire.** C'est une décision sur la
+    // proposition, pas une affirmation sur le projet : sa clé est
+    // l'identifiant d'un contrôle, et deux propositions qui passent outre le
+    // même contrôle écriraient deux fois la même clé — la seconde périmerait
+    // la première, alors que ce sont deux décisions indépendantes. Elle se
+    // relit là où elle a été prise, dans le procès-verbal de sa proposition.
+    .filter((item) => item.itemType !== ITEM_TYPE.ARBITRAGE)
     .map((item) => {
       const status = item.status === ITEM.REFUSED ? MEMORY.REJECTED : MEMORY.ASSUMED;
 

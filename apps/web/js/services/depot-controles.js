@@ -99,6 +99,8 @@ export const TON = {
   MAUVAIS: "mauvais",
   /** Orange. On ne sait pas, ou c'est imparfait — mais ça n'empêche pas. */
   DOUTE: "doute",
+  /** Bleu. Ça ne se vérifie pas, et quelqu'un a signé pour l'assumer. */
+  ASSUME: "assume",
   /** Gris. Ça ne s'applique pas ici. */
   NEUTRE: "neutre",
   /** Ça tourne encore. */
@@ -110,7 +112,14 @@ export const TON = {
  *
  * @param {{issue: string, bloquant: boolean}} ligne
  */
-export function tonDuControle({ issue = "", bloquant = false } = {}) {
+export function tonDuControle({ issue = "", bloquant = false, arbitre = null } = {}) {
+  // **Ni vert ni rouge : bleu.** Un contrôle passé outre n'est pas tenu — le
+  // fait qu'il constate n'a pas changé —, et il ne retient plus la fusion. Lui
+  // donner le vert ferait passer une décision pour une vérification, et c'est
+  // exactement la distinction que le procès-verbal existe pour garder
+  // (règle 12).
+  if (arbitre) return TON.ASSUME;
+
   if (issue === ISSUE.TENU) return TON.BON;
   if (issue === ISSUE.SANS_OBJET) return TON.NEUTRE;
   if (issue === ISSUE.EN_COURS) return TON.ATTENTE;
@@ -155,6 +164,10 @@ export const CONTROLES = [
     id: "provenance",
     label: "Chaque affirmation dit d'où elle vient",
     bloquant: true,
+    // Ce que ce contrôle met en cause, ligne par ligne. On ne décide pas sur un
+    // nombre : « 27 affirmations » ne se corrige pas, et ne s'arbitre pas
+    // davantage, tant qu'on ne sait pas lesquelles.
+    concerne: ({ depot }) => depot?.sansProvenance ?? [],
     verifier: ({ depot }) => {
       if (!depot || depot.affirmations === 0) return sansObjet("Ce dépôt ne porte aucune affirmation.");
       if (depot.provenance === "verifie") {
@@ -167,6 +180,10 @@ export const CONTROLES = [
     id: "memoire",
     label: "Rien ne contredit la mémoire du projet",
     bloquant: true,
+    // Les contradictions ont leur propre bloc, qui les tranche une par une avec
+    // les deux extraits en face. Les redire ici en ferait deux endroits où
+    // arbitrer la même chose.
+    concerne: () => [],
     verifier: ({ conflits = [], blocage = "" }) => {
       if (texte(blocage)) return nonTenu("La mémoire du projet est contredite.", blocage);
       if (conflits.length === 0) return tenu("Aucune décision passée n'est remise en cause par ce dépôt.");
@@ -194,6 +211,40 @@ export const CONTROLES = [
     verifier: ({ pile = "" }) => {
       if (!texte(pile)) return nonVerifiable("On ne sait pas avec quel vocabulaire ce dépôt a été lu.");
       return tenu(texte(pile));
+    }
+  },
+  {
+    /* ── PROVISOIRE — à retirer ────────────────────────────────────────────
+     * Un contrôle qui échoue sur commande, pour voir l'arbitrage fonctionner.
+     *
+     * ## Pourquoi il a fallu l'écrire
+     *
+     * Depuis que les natures d'un compte rendu sont rangées dans l'intendance,
+     * **un compte rendu ne fait plus échouer aucun contrôle requis** — et c'est
+     * la bonne nouvelle. Mais il ne restait alors plus aucun moyen de voir un
+     * arbitrage à l'écran : le seul cas réel (une valeur versée à la main dans
+     * l'Atelier, sans texte ni utilitaire à citer) demande de fabriquer une
+     * proposition d'Atelier pour chaque essai.
+     *
+     * Il n'est **jamais actif par défaut** : il faut poser `essai: true` dans le
+     * contexte, ce que seul le bouton « Simuler un blocage » de l'onglet
+     * Vérifications fait, et pour la durée d'une session. Il n'écrit rien ; ce
+     * qui s'écrit est l'arbitrage qu'on lui donne, et c'est bien ce qu'on veut
+     * éprouver.
+     *
+     * **Se retire en supprimant cette entrée et le bouton qui la pose.**
+     * ───────────────────────────────────────────────────────────────────── */
+    id: "essai",
+    label: "Contrôle d'essai",
+    bloquant: true,
+    concerne: ({ lignesDEssai = [] }) => lignesDEssai,
+    verifier: ({ essai = false }) => {
+      if (essai !== true) return sansObjet("Aucun essai en cours.");
+      return nonTenu(
+        "Ce contrôle d'essai échoue exprès.",
+        "Il sert à éprouver l'arbitrage. Écartez les lignes qu'il met en cause, ou passez outre "
+        + "en disant pourquoi."
+      );
     }
   },
   {
@@ -225,6 +276,12 @@ export const CONTROLES = [
  */
 export function passerLesControles(contexte = {}) {
   const enCours = contexte.enCours === true;
+  // Ce qui a déjà été assumé, par contrôle. Lu ici plutôt que plaqué après
+  // coup : un contrôle passé outre ne doit à aucun moment se présenter comme
+  // bloquant, sous peine que l'écran et la fusion ne lisent pas le même état.
+  const assumes = contexte.arbitrages instanceof Map
+    ? contexte.arbitrages
+    : new Map(Object.entries(contexte.arbitrages ?? {}));
 
   const lignes = CONTROLES.map((controle) => {
     const rendu = enCours
@@ -233,19 +290,33 @@ export function passerLesControles(contexte = {}) {
 
     const bloquant = controle.bloquant === true;
 
+    // **Un arbitrage ne s'applique qu'à un contrôle qui bloque vraiment.** Un
+    // arbitrage resté en base après que la cause a disparu — le PDF est
+    // finalement arrivé, la valeur cite enfin son texte — ne doit pas peindre
+    // en bleu un contrôle redevenu tenu : on lirait « assumé » sur ce qui a été
+    // vérifié.
+    const arbitre = bloquant && rendu.issue === ISSUE.NON_TENU
+      ? (assumes.get(controle.id) ?? null)
+      : null;
+
     return {
       id: controle.id,
       label: controle.label,
       bloquant,
       issue: rendu.issue,
-      issueLabel: ISSUE_LABELS[rendu.issue] ?? rendu.issue,
-      icone: ISSUE_ICONES[rendu.issue] ?? "question",
+      issueLabel: arbitre ? "Passé outre" : (ISSUE_LABELS[rendu.issue] ?? rendu.issue),
+      icone: arbitre ? "shield" : (ISSUE_ICONES[rendu.issue] ?? "question"),
       // La couleur se décide ici, et l'écran la lit. Trois écrans qui la
       // choisiraient chacun de leur côté finiraient par se contredire — c'est
       // ce qui s'est passé.
-      ton: tonDuControle({ issue: rendu.issue, bloquant }),
+      ton: tonDuControle({ issue: rendu.issue, bloquant, arbitre }),
       phrase: texte(rendu.phrase),
-      detail: texte(rendu.detail)
+      detail: texte(rendu.detail),
+      // Ce que ce contrôle met en cause. Vide sur un contrôle tenu : il n'y a
+      // rien à écarter de ce qui passe.
+      concerne: rendu.issue === ISSUE.NON_TENU ? (safe(() => controle.concerne?.(contexte)) ?? []) : [],
+      // Qui a assumé, quand, et pourquoi — ou `null`.
+      arbitre
     };
   });
 
@@ -255,11 +326,24 @@ export function passerLesControles(contexte = {}) {
   return {
     lignes,
     bilan,
-    // Ce qui retient la fusion : un contrôle bloquant qui n'est pas tenu. Un
-    // contrôle non vérifiable ne bloque pas — il s'affiche, et c'est à
-    // l'humain de décider s'il signe sans savoir.
-    bloque: lignes.some((ligne) => ligne.bloquant && ligne.issue === ISSUE.NON_TENU)
+    // Ce qui reste à trancher avant de pouvoir fusionner.
+    arbitrages: lignes.filter(estAArbitrer),
+    // Ce qui retient la fusion : un contrôle bloquant qui n'est pas tenu **et
+    // que personne n'a assumé**. Un contrôle non vérifiable ne bloque pas — il
+    // s'affiche, et c'est à l'humain de décider s'il signe sans savoir.
+    bloque: lignes.some((ligne) => estAArbitrer(ligne) && !ligne.arbitre)
   };
+}
+
+/**
+ * Un contrôle qui appelle une décision.
+ *
+ * Requis, pas tenu. Passé outre, il reste dans la liste — c'est même tout
+ * l'objet : on doit pouvoir relire ce qu'on a assumé, et revenir dessus tant
+ * que la proposition est ouverte.
+ */
+export function estAArbitrer(ligne = {}) {
+  return ligne?.bloquant === true && ligne?.issue === ISSUE.NON_TENU;
 }
 
 /** Ce que le tableau dit en une phrase. */

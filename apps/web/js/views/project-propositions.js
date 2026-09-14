@@ -102,6 +102,15 @@ import { ETAT, arbreDesReperes, comparerDesReperes, lignesNumerotees, resumeDuDi
 import { aChange, reperesDuDepot } from "../services/depot-carburants.js";
 import { limiterAuDepot } from "../services/depot-portee.js";
 import { ISSUE, TON, passerLesControles, resumeDesControles } from "../services/depot-controles.js";
+import {
+  MOTIF_MIN,
+  arbitrageARetirer,
+  arbitrageAEcrire,
+  arbitragesEnregistres,
+  motifRecevable,
+  phraseDesArbitrages,
+  refusDesLignesMisesEnCause
+} from "../services/arbitrage-des-controles.js";
 import { bindSideResizer, renderSideResizer } from "./ui/side-resizer.js";
 import { cheminDeFichier, enClair, nomDeFichier } from "../services/memoire-en-texte.js";
 import { jetonsDeLaLigne as jetonsDuTexte } from "../services/memoire-en-lecture.js";
@@ -1511,6 +1520,11 @@ function renderDiffStat(review) {
 }
 
 function reviewTabs(review) {
+  // Ce qui retient la fusion se compte à part, et se voit sans ouvrir l'onglet :
+  // un arbitrage en attente est la seule chose qui empêche de signer.
+  const retient = (passerLesControles(contexteDesControles(view.open ?? {}, review)).arbitrages ?? [])
+    .filter((ligne) => !ligne.arbitre).length;
+
   const compte = {
     // La proposition est elle-même un dépôt — c'est la carte de tête —, et les
     // lots de documents s'ajoutent à elle.
@@ -1523,7 +1537,9 @@ function reviewTabs(review) {
 
   return REVIEW_TABS.map((tab) => ({
     ...tab,
-    label: compte[tab.id] > 0 ? `${tab.label} ${compte[tab.id]}` : tab.label
+    label: compte[tab.id] > 0 ? `${tab.label} ${compte[tab.id]}` : tab.label,
+    // Le nombre d'arbitrages en attente, sur l'onglet où on les tranche.
+    alerte: tab.id === "changes" ? retient : 0
   }));
 }
 
@@ -2926,8 +2942,46 @@ function renderControles(proposition, review) {
             )
             .join("")}
         </ul>
+        ${renderEssaiDeBlocage(review)}
       </div>
     </section>
+  `;
+}
+
+/* ── PROVISOIRE — à retirer ───────────────────────────────────────────────────
+ * De quoi voir un arbitrage sans attendre qu'un vrai blocage se présente.
+ *
+ * Depuis que les natures d'un compte rendu sont rangées dans l'intendance, un
+ * compte rendu ne fait plus échouer aucun contrôle requis — et c'est la bonne
+ * nouvelle. Le seul cas réel qui reste (une valeur versée à la main dans
+ * l'Atelier, sans texte ni utilitaire à citer) demanderait de fabriquer une
+ * proposition d'Atelier pour chaque essai.
+ *
+ * Ce bouton pose un drapeau **de session** : rien n'est écrit, rien ne survit à
+ * un rechargement, et aucune autre proposition n'est touchée. Ce qui s'écrit,
+ * c'est l'arbitrage qu'on lui donne — et c'est précisément ce qu'on veut
+ * éprouver.
+ *
+ * Il ne s'affiche que sur une proposition ouverte : sur un procès-verbal, il
+ * n'y a plus rien à arbitrer.
+ *
+ * **Se retire en supprimant cette fonction, son appel, et l'entrée « essai » de
+ * `depot-controles.js`.**
+ * ─────────────────────────────────────────────────────────────────────────── */
+function renderEssaiDeBlocage(review) {
+  if (review.frozen === true || review.running === true) return "";
+  const actif = view.essaiDeBlocage === true;
+
+  return `
+    <div class="controles__essai">
+      <span>
+        <b>Essai</b> — simuler un contrôle requis qui tombe, pour voir l'arbitrage.
+        ${actif ? "Il est en cours : l'arbitrage se tranche dans les Changements." : ""}
+      </span>
+      <button type="button" class="gh-btn gh-btn--sm" data-essai-blocage>
+        ${actif ? "Arrêter l'essai" : "Simuler un blocage"}
+      </button>
+    </div>
   `;
 }
 
@@ -2943,6 +2997,21 @@ function contexteDesControles(proposition, review) {
 
   return {
     enCours: review.running === true,
+    // Ce que quelqu'un a déjà assumé sur cette proposition. Lu depuis ses
+    // lignes, pas depuis un drapeau d'écran : un arbitrage est une décision, et
+    // une décision qui ne survit pas au rechargement n'en est pas une.
+    arbitrages: arbitragesEnregistres(review.decisionRows ?? []),
+    // PROVISOIRE — voir le contrôle « essai » dans `depot-controles.js`.
+    essai: view.essaiDeBlocage === true,
+    lignesDEssai: (review.items ?? [])
+      .filter((entree) => entree.status !== ITEM.REFUSED)
+      .slice(0, 3)
+      .map((entree) => ({
+        itemType: entree.itemType,
+        itemKey: entree.itemKey,
+        sujet: String(entree.payload?.titre ?? entree.payload?.nom ?? entree.payload?.name
+          ?? entree.itemKey ?? "").trim()
+      })),
     depot: depotDeLaProposition({
       proposition,
       affirmations: affirmationsDUneProposition(review.decisionRows ?? []),
@@ -3278,18 +3347,162 @@ function renderDepotLignes(proposition, review) {
  * et un carburant de plus n'ajoute pas une ligne ici.
  * ──────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * Ce qui retient la fusion, et les deux façons de le lever.
+ *
+ * ## Pourquoi c'est ici, et en tête
+ *
+ * Un contrôle requis qui tombe bloquait sans laisser de geste : on lisait une
+ * phrase rouge dans Vérifications, on cliquait « À arbitrer », et le tiroir
+ * redisait la même phrase avec un bouton inerte. Ce bloc est la réponse, et il
+ * est **en tête des Changements** parce que c'est là qu'on décide de ce qui
+ * entre — le reste de l'onglet ne sert à rien tant que celui-ci n'est pas
+ * réglé.
+ *
+ * ## Deux issues, jamais trois
+ *
+ * Écarter ce que le contrôle met en cause, ou passer outre en disant pourquoi.
+ * Il n'y a pas de croix qui ferme : un blocage qu'on peut faire disparaître
+ * sans rien écrire ne vaut pas mieux que pas de blocage du tout.
+ *
+ * Le châssis est celui des contradictions avec la mémoire — deux côtés, un
+ * compte, une phrase de doctrine —, et c'est délibéré : ce sont deux fois la
+ * même chose, un désaccord qu'un humain tranche en signant.
+ */
+function renderArbitrages(review) {
+  const rendu = passerLesControles(contexteDesControles(view.open ?? {}, review));
+  const arbitrages = rendu.arbitrages ?? [];
+  if (arbitrages.length === 0) return "";
+
+  const restants = arbitrages.filter((ligne) => !ligne.arbitre).length;
+  const gele = review.frozen === true;
+
+  return `
+    <section class="review-block">
+      <div class="review-panel review-panel--conflict">
+        <div class="review-block__head review-block__head--plain">
+          <div class="review-block__headbody">
+            <h3 class="review-block__title">
+              Ce qui retient la fusion
+              <span class="review-block__count">${arbitrages.length}</span>
+            </h3>
+            <span class="review-block__state${restants > 0 ? " is-blocking" : ""}">
+              ${escapeHtml(phraseDesArbitrages(arbitrages))}
+            </span>
+          </div>
+        </div>
+        <p class="conflict__doctrine">
+          On a le droit de fusionner sans tout savoir : un chantier n'attend pas qu'un rapport
+          arrive. Ce qu'on ne peut plus faire, c'est le faire sans le dire.
+        </p>
+        <ul class="conflict-list">
+          ${arbitrages.map((ligne) => renderArbitrage(ligne, gele)).join("")}
+        </ul>
+      </div>
+    </section>
+  `;
+}
+
+/** Un contrôle à arbitrer, avec ce qu'il met en cause et les deux issues. */
+function renderArbitrage(ligne, gele) {
+  const concerne = ligne.concerne ?? [];
+  const motif = String(view.motifsDArbitrage?.[ligne.id] ?? "").trim();
+  const recevable = motifRecevable(motif);
+
+  return `
+    <li class="arbitrage${ligne.arbitre ? " is-settled" : ""}">
+      <div class="arbitrage__head">
+        <span class="arbitrage__pastille arbitrage__pastille--ton-${escapeHtml(ligne.ton)}">
+          ${svgIcon(ligne.icone, { className: "octicon" })}
+        </span>
+        <div class="arbitrage__corps">
+          <span class="arbitrage__titre">${escapeHtml(ligne.label)}</span>
+          <span class="arbitrage__phrase">${escapeHtml(
+            [ligne.phrase, ligne.detail].filter(Boolean).join(" ")
+          )}</span>
+        </div>
+        <span class="controle__requis">requis</span>
+      </div>
+
+      ${
+        // **Ce qu'il met en cause, nommé.** « 27 affirmations » ne se corrige
+        // pas et ne s'arbitre pas : on ne décide pas sur un nombre.
+        concerne.length > 0
+          ? `<ul class="arbitrage__lignes">
+               ${concerne.slice(0, 12).map((entree) => `
+                 <li class="arbitrage__ligne">
+                   <span class="arbitrage__ligne-nature">${escapeHtml(entree.itemType ?? "")}</span>
+                   ${escapeHtml(entree.sujet || entree.itemKey || "")}
+                 </li>
+               `).join("")}
+               ${concerne.length > 12
+                 ? `<li class="arbitrage__ligne arbitrage__ligne--reste">et ${
+                     concerne.length - 12} autre(s)</li>`
+                 : ""}
+             </ul>`
+          : ""
+      }
+
+      ${
+        ligne.arbitre
+          ? `<div class="arbitrage__passe">
+               <p class="arbitrage__passe-dit">
+                 <b>Passé outre</b>${ligne.arbitre.quand
+                   ? ` le ${escapeHtml(formatDate(ligne.arbitre.quand))}` : ""} —
+                 « ${escapeHtml(ligne.arbitre.motif)} »
+               </p>
+               ${gele ? "" : `
+                 <button type="button" class="gh-btn gh-btn--sm" data-arbitrage-retirer="${escapeHtml(ligne.id)}">
+                   Revenir dessus
+                 </button>
+               `}
+             </div>`
+          : gele
+            ? `<p class="arbitrage__passe-dit">Cette proposition est close : plus rien ne s'arbitre.</p>`
+            : `<div class="arbitrage__issues">
+                 <div class="arbitrage__issue">
+                   <b>Écarter ce qui est en cause</b>
+                   <p>
+                     ${concerne.length > 0
+                       ? `${concerne.length} ligne(s) sortent de la proposition. Le contrôle passe sur ce qui reste.`
+                       : "Ce contrôle ne met aucune ligne en cause : il n'y a rien à écarter."}
+                   </p>
+                   <button type="button" class="gh-btn gh-btn--sm" data-arbitrage-ecarter="${escapeHtml(ligne.id)}"
+                     ${concerne.length === 0 ? "disabled" : ""}>Écarter</button>
+                 </div>
+                 <div class="arbitrage__issue">
+                   <b>Passer outre</b>
+                   <p>On fusionne en l'assumant. Le motif entre au procès-verbal.</p>
+                   <textarea class="gh-input arbitrage__motif" rows="2"
+                     data-arbitrage-motif="${escapeHtml(ligne.id)}"
+                     placeholder="Pourquoi passer outre ? (${MOTIF_MIN} caractères au moins)"
+                   >${escapeHtml(motif)}</textarea>
+                   ${recevable.pourquoi
+                     ? `<span class="arbitrage__aide">${escapeHtml(recevable.pourquoi)}</span>`
+                     : ""}
+                   <button type="button" class="gh-btn gh-btn--sm gh-btn--primary"
+                     data-arbitrage-passer="${escapeHtml(ligne.id)}"
+                     ${recevable.ok ? "" : "disabled"}>Passer outre</button>
+                 </div>
+               </div>`
+      }
+    </li>
+  `;
+}
+
 function renderChanges(proposition, review) {
   const diff = review.diffDuDepot ?? { lignes: [], compte: {} };
   const lignes = diff.lignes ?? [];
+  const arbitrages = renderArbitrages(review);
 
   if (review.running && lignes.length === 0) {
-    return `<p class="review-empty-note">${escapeHtml(
+    return `${arbitrages}<p class="review-empty-note">${escapeHtml(
       review.step || "Les écarts se calculent au fur et à mesure de la lecture des livrables."
     )}</p>`;
   }
 
   if (lignes.length === 0) {
-    return `<div class="propositions-empty"><b>Rien à comparer</b><p>Ce dépôt n'apporte aucun repère identifié.</p></div>`;
+    return `${arbitrages}<div class="propositions-empty"><b>Rien à comparer</b><p>Ce dépôt n'apporte aucun repère identifié.</p></div>`;
   }
 
   const groupes = arbreDesReperes(lignes);
@@ -3297,6 +3510,7 @@ function renderChanges(proposition, review) {
   const largeur = ouverte ? Math.max(220, Math.min(520, Number(view.diffTreeWidth) || 280)) : 0;
 
   return `
+    ${arbitrages}
     <div class="diff-barre">
       ${renderDiffReplieBouton()}
       <span class="diff-barre__resume">${escapeHtml(resumeDuDiff(diff.compte))}</span>
@@ -4568,6 +4782,42 @@ function bindReview(root) {
     });
   }
 
+  // ── Arbitrer ce qui retient la fusion ───────────────────────────────────
+  //
+  // Le motif se garde à l'écran tant qu'il s'écrit — sans quoi le bouton
+  // resterait inerte, puisque c'est sa longueur qui le débloque. Rien n'est
+  // enregistré à la frappe : ce qui s'écrit en base est une décision, et on ne
+  // décide pas une lettre à la fois.
+  for (const champ of root.querySelectorAll("[data-arbitrage-motif]")) {
+    champ.addEventListener("input", () => {
+      const id = champ.getAttribute("data-arbitrage-motif");
+      view.motifsDArbitrage = { ...(view.motifsDArbitrage ?? {}), [id]: champ.value };
+      // On ne redessine que le bouton et l'aide : refaire l'écran à chaque
+      // frappe ferait perdre le curseur au milieu d'une phrase.
+      rafraichirLArbitrage(root, id, champ);
+    });
+  }
+
+  for (const bouton of root.querySelectorAll("[data-arbitrage-ecarter]")) {
+    bouton.addEventListener("click", () => ecarterCeQuiBloque(root, bouton.getAttribute("data-arbitrage-ecarter")));
+  }
+
+  for (const bouton of root.querySelectorAll("[data-arbitrage-passer]")) {
+    bouton.addEventListener("click", () => passerOutre(root, bouton.getAttribute("data-arbitrage-passer")));
+  }
+
+  for (const bouton of root.querySelectorAll("[data-arbitrage-retirer]")) {
+    bouton.addEventListener("click", () => retirerLArbitrage(root, bouton.getAttribute("data-arbitrage-retirer")));
+  }
+
+  // PROVISOIRE — voir le contrôle « essai » dans `depot-controles.js`.
+  for (const bouton of root.querySelectorAll("[data-essai-blocage]")) {
+    bouton.addEventListener("click", () => {
+      view.essaiDeBlocage = view.essaiDeBlocage !== true;
+      renderContent(root);
+    });
+  }
+
   // Trancher une contradiction, c'est décider de l'affirmation elle-même :
   // garder ce qui avait été décidé, c'est refuser ce que l'analyse propose.
   for (const bouton of root.querySelectorAll("[data-conflict-keep]")) {
@@ -5145,6 +5395,149 @@ async function decide(root, items, status, reason = null) {
   }
   view.review.notice = null;
   renderContent(root);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Arbitrer ce qui retient la fusion
+ *
+ * Deux issues, jamais trois — voir `arbitrage-des-controles.js` pour ce qui a
+ * mené là. Les deux passent par `decidePropositionItems`, comme toutes les
+ * autres décisions de cet écran : écarter refuse des lignes, passer outre en
+ * écrit une. Une troisième porte d'écriture aurait vécu sa propre vie.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Le contrôle nommé, tel que les contrôles viennent de le rendre. */
+function arbitragePar(id) {
+  return (passerLesControles(contexteDesControles(view.open ?? {}, view.review ?? {})).arbitrages ?? [])
+    .find((ligne) => ligne.id === String(id ?? "")) ?? null;
+}
+
+/**
+ * Le bouton et l'aide suivent la frappe, l'écran ne bouge pas.
+ *
+ * Redessiner tout à chaque caractère ferait perdre le curseur au milieu d'une
+ * phrase — et c'est une phrase qu'on demande, précisément.
+ */
+function rafraichirLArbitrage(root, id, champ) {
+  const recevable = motifRecevable(champ.value);
+  const carte = champ.closest(".arbitrage");
+
+  const bouton = carte?.querySelector(`[data-arbitrage-passer="${CSS.escape(String(id))}"]`);
+  if (bouton) bouton.disabled = !recevable.ok;
+
+  const aide = carte?.querySelector(".arbitrage__aide");
+  if (aide) {
+    aide.textContent = recevable.pourquoi;
+    aide.hidden = recevable.ok;
+  }
+}
+
+/**
+ * Écarter ce qu'un contrôle met en cause.
+ *
+ * Les lignes sont **refusées**, et c'est tout : le contrôle se repasse ensuite
+ * sur ce qui reste et s'ouvre de lui-même. Rien à enregistrer de plus — un
+ * refus est déjà une décision datée et signée, et en écrire une seconde
+ * par-dessus ferait deux traces pour un seul geste.
+ */
+async function ecarterCeQuiBloque(root, id) {
+  const controle = arbitragePar(id);
+  if (!controle) return;
+
+  const decisions = refusDesLignesMisesEnCause({ controle, items: view.review?.items ?? [] });
+  if (decisions.length === 0) {
+    view.review.notice =
+      "Ce contrôle ne met aucune ligne de cette proposition en cause : il n'y a rien à écarter. "
+      + "Passez outre en disant pourquoi, ou corrigez ce qui manque.";
+    renderContent(root);
+    return;
+  }
+
+  await appliquerLesDecisions(root, decisions);
+}
+
+/**
+ * Passer outre, et écrire pourquoi.
+ *
+ * **Le motif est la décision.** Sans lui, le geste serait un « ignorer », et un
+ * blocage qu'on fait disparaître sans rien laisser ne vaut pas mieux que pas de
+ * blocage du tout (règle 12).
+ */
+async function passerOutre(root, id) {
+  const controle = arbitragePar(id);
+  if (!controle) return;
+
+  const motif = String(view.motifsDArbitrage?.[id] ?? "");
+  const decision = arbitrageAEcrire({ controle, motif });
+  if (!decision) {
+    view.review.notice = motifRecevable(motif).pourquoi;
+    renderContent(root);
+    return;
+  }
+
+  const ecrit = await appliquerLesDecisions(root, [decision]);
+  if (ecrit) view.motifsDArbitrage = { ...(view.motifsDArbitrage ?? {}), [id]: "" };
+}
+
+/**
+ * Revenir sur ce qu'on a assumé.
+ *
+ * La ligne **reste**, refusée : une décision qui a eu lieu ne s'efface pas, on
+ * dit seulement qu'elle ne vaut plus. La fusion redevient retenue, ce qui est
+ * exactement ce qu'on demande en revenant dessus.
+ */
+async function retirerLArbitrage(root, id) {
+  const controle = arbitragePar(id);
+  const decision = arbitrageARetirer({ controle });
+  if (decision) await appliquerLesDecisions(root, [decision]);
+}
+
+/**
+ * Écrire des décisions qui n'ont pas encore de ligne à l'écran.
+ *
+ * `decide()` ne sait travailler que sur des lignes déjà affichées : il leur
+ * repose leur statut à la main. Un arbitrage, lui, **crée** sa ligne — elle
+ * n'existe qu'en base, et l'écran la relit au tour suivant. D'où cette porte,
+ * qui recharge les lignes de la proposition plutôt que de les supposer.
+ */
+async function appliquerLesDecisions(root, decisions) {
+  if (!view.open || decisions.length === 0) return false;
+
+  try {
+    const propositions = await import("../services/propositions-supabase.js");
+    const ok = await propositions.decidePropositionItems({
+      propositionId: view.open.id,
+      projectId: view.open.project_id,
+      decisions
+    });
+
+    if (!ok) {
+      view.review.notice = "La décision n'a pas pu être enregistrée. Elle sera redemandée.";
+      renderContent(root);
+      return false;
+    }
+
+    // Ce qui vient d'être écrit doit se relire : l'arbitrage n'existe que là-bas,
+    // et le supposer ici ferait afficher un état que la base ne porte peut-être
+    // pas.
+    const relues = await propositions.listPropositionItems(view.open.id);
+    if (Array.isArray(relues)) {
+      view.review.decisionRows = relues;
+      view.review.items = toutCeQueLaPropositionPorte(
+        applyDecisions(view.review.items ?? [], relues),
+        relues
+      );
+      recalculerLeDiff(view.review);
+    }
+
+    view.review.notice = null;
+    renderContent(root);
+    return true;
+  } catch {
+    view.review.notice = "La décision n'a pas pu être enregistrée. Elle sera redemandée.";
+    renderContent(root);
+    return false;
+  }
 }
 
 /**

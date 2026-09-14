@@ -106,6 +106,19 @@ export function depotDeLaProposition({
     quand: proposition?.created_at ?? null,
     affirmations: lignes.length,
     livrables: fichiers.length,
+    // **Les lignes elles-mêmes, et pas seulement leur compte.** Un contrôle qui
+    // retient la fusion doit pouvoir nommer ce qu'il met en cause : « 27
+    // affirmations » sans dire lesquelles ne se corrige pas, et ne s'arbitre
+    // pas davantage — on ne décide pas sur un nombre.
+    sansProvenance: sansProvenance.map((ligne) => ({
+      itemType: texte(ligne?.itemType ?? ligne?.item_type),
+      itemKey: texte(ligne?.itemKey ?? ligne?.item_key),
+      sujet: texte(ligne?.payload?.subject) || texte(ligne?.statement)
+        || texte(ligne?.itemKey ?? ligne?.item_key)
+    })),
+    livrablesIllisibles: illisibles.map(
+      (fichier) => texte(fichier?.original_filename) || texte(fichier?.filename) || "Un livrable"
+    ),
     provenance,
     provenanceLabel: PROVENANCE_LABELS[provenance],
     // Ce qui manque, écrit pour être lu au survol de la pastille. Une pastille

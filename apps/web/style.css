@@ -14465,6 +14465,25 @@ circle.situation-trajectory__hierarchy-link--blocked,
   color:var(--text);
 }
 
+/* Ce qui attend une décision sur un onglet. Distinct du compte que porte déjà
+   le libellé : « Changements 3 » dit ce qu'il y a dedans, la pastille dit qu'il
+   y a quelque chose à y faire. */
+.light-tabs__alerte{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:16px;
+  height:16px;
+  padding:0 4px;
+  margin-left:6px;
+  border-radius:999px;
+  background:var(--ton-mauvais);
+  color:#fff;
+  font-size:11px;
+  font-weight:600;
+  line-height:16px;
+}
+
 .light-tabs__label{
   position:relative;
   z-index:1;
@@ -16913,6 +16932,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   --ton-mauvais-vif:rgb(248,81,73);
   --ton-doute:rgb(158,106,3);
   --ton-doute-vif:rgb(210,153,34);
+  /* Assumé : ni vérifié ni en échec. Quelqu'un a signé pour passer outre, et le
+     procès-verbal garde la différence entre les deux. */
+  --ton-assume:rgb(31,111,235);
+  --ton-assume-vif:rgb(68,147,248);
 }
 
 .merge-box__row--bon .merge-box__icon{ background:var(--fgColor-open); color:#fff; }
@@ -16920,6 +16943,8 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .merge-box__row--mauvais b{ color:var(--ton-mauvais-vif); }
 .merge-box__row--doute .merge-box__icon{ background:var(--ton-doute); color:#fff; }
 .merge-box__row--doute b{ color:var(--ton-doute-vif); }
+.merge-box__row--assume .merge-box__icon{ background:var(--ton-assume); color:#fff; }
+.merge-box__row--assume b{ color:var(--ton-assume-vif); }
 .merge-box__row--neutre .merge-box__icon{
   background:transparent;
   border:1px solid var(--border);
@@ -20360,6 +20385,7 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
    retenue, pas qu'elle est imparfaite. */
 .merge-state--ton-mauvais .merge-state__pastille{ background:var(--ton-mauvais); }
 .merge-state--ton-doute .merge-state__pastille{ background:var(--ton-doute); }
+.merge-state--ton-assume .merge-state__pastille{ background:var(--ton-assume); }
 .merge-state--ton-attente .merge-state__pastille{ background:var(--panel2); color:var(--muted); }
 
 /* Le pavé de fusion pendant l'analyse : gris, sans promesse. */
@@ -20497,6 +20523,7 @@ body.proposition-merge-open{ overflow:hidden; }
 .depot-carte__sceau--ton-bon{ border-color:rgba(35,134,54,.5); color:var(--ton-bon-vif); }
 .depot-carte__sceau--ton-mauvais{ border-color:rgba(218,54,51,.5); color:var(--ton-mauvais-vif); }
 .depot-carte__sceau--ton-doute{ border-color:rgba(210,153,34,.5); color:var(--ton-doute-vif); }
+.depot-carte__sceau--ton-assume{ border-color:rgba(68,147,248,.5); color:var(--ton-assume-vif); }
 .depot-carte__sceau--ton-neutre{ border-style:dashed; }
 .depot-carte__sceau--ton-attente{ border-style:dashed; }
 
@@ -20531,6 +20558,7 @@ body.proposition-merge-open{ overflow:hidden; }
 .controle--ton-bon .controle__pastille{ background:var(--ton-bon); }
 .controle--ton-mauvais .controle__pastille{ background:var(--ton-mauvais); }
 .controle--ton-doute .controle__pastille{ background:var(--ton-doute); }
+.controle--ton-assume .controle__pastille{ background:var(--ton-assume); }
 .controle--ton-neutre .controle__pastille{
   background:transparent;
   border:1px solid var(--border);
@@ -20549,6 +20577,114 @@ body.proposition-merge-open{ overflow:hidden; }
 .controle__detail{ color:var(--muted); font-size:11px; font-style:italic; }
 .controle--sans-objet .controle__label{ color:var(--muted); font-weight:400; }
 
+/* PROVISOIRE — la ligne d'essai, à retirer avec le contrôle qu'elle pose. */
+.controles__essai{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  padding:10px 16px;
+  border-top:1px dashed var(--border);
+  color:var(--muted);
+  font-size:12px;
+}
+
+/* ── Arbitrer ce qui retient la fusion ──────────────────────────────────────
+   Le châssis des contradictions avec la mémoire, et pour la même raison : ce
+   sont deux fois la même chose — un désaccord qu'un humain tranche en signant.
+   Deux issues côte à côte, jamais une croix qui ferme. */
+.arbitrage{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding:14px 16px;
+  border-bottom:1px solid var(--border2);
+}
+.arbitrage:last-child{ border-bottom:0; }
+.arbitrage.is-settled{ opacity:.85; }
+
+.arbitrage__head{ display:flex; align-items:flex-start; gap:10px; }
+.arbitrage__pastille{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  width:18px;
+  height:18px;
+  margin-top:1px;
+  border-radius:50%;
+  color:#fff;
+}
+.arbitrage__pastille .octicon{ width:11px; height:11px; }
+.arbitrage__pastille--ton-mauvais{ background:var(--ton-mauvais); }
+.arbitrage__pastille--ton-assume{ background:var(--ton-assume); }
+.arbitrage__pastille--ton-doute{ background:var(--ton-doute); }
+
+.arbitrage__corps{ display:flex; flex-direction:column; gap:2px; min-width:0; flex:1 1 auto; }
+.arbitrage__titre{ color:var(--text); font-size:13px; font-weight:600; }
+.arbitrage__phrase{ color:var(--muted); font-size:12px; }
+
+/* Ce que le contrôle met en cause, nommé. « 27 affirmations » ne se corrige pas
+   et ne s'arbitre pas : on ne décide pas sur un nombre. */
+.arbitrage__lignes{
+  margin:0;
+  padding:8px 10px;
+  list-style:none;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  border:1px solid var(--border2);
+  border-radius:8px;
+  background:var(--panel2);
+  max-height:200px;
+  overflow-y:auto;
+}
+.arbitrage__ligne{
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+  font-size:12px;
+  color:var(--text);
+}
+.arbitrage__ligne-nature{
+  flex:0 0 auto;
+  color:var(--muted);
+  font-size:11px;
+  font-family:var(--mono, ui-monospace, monospace);
+}
+.arbitrage__ligne--reste{ color:var(--muted); font-style:italic; }
+
+.arbitrage__issues{ display:flex; gap:10px; flex-wrap:wrap; }
+.arbitrage__issue{
+  flex:1 1 240px;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding:10px 12px;
+  border:1px solid var(--border);
+  border-radius:10px;
+}
+.arbitrage__issue b{ font-size:13px; }
+.arbitrage__issue p{ margin:0; color:var(--muted); font-size:12px; }
+.arbitrage__issue .gh-btn{ align-self:flex-start; }
+.arbitrage__motif{ width:100%; resize:vertical; font-size:13px; }
+.arbitrage__aide{ color:var(--ton-doute-vif); font-size:11px; }
+
+.arbitrage__passe{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  padding:10px 12px;
+  border:1px solid rgba(68,147,248,.35);
+  border-radius:10px;
+  background:rgba(68,147,248,.08);
+}
+.arbitrage__passe-dit{ margin:0; font-size:12px; color:var(--text); }
+
 .controle__issue{
   flex:0 0 auto;
   display:flex;
@@ -20560,6 +20696,7 @@ body.proposition-merge-open{ overflow:hidden; }
 }
 .controle--ton-mauvais .controle__issue{ color:var(--ton-mauvais-vif); }
 .controle--ton-doute .controle__issue{ color:var(--ton-doute-vif); }
+.controle--ton-assume .controle__issue{ color:var(--ton-assume-vif); }
 /* « requis » ne colore rien : il dit seulement que ce contrôle retient la
    fusion. C'est son issue qui porte la couleur, pas son statut. */
 .controle__requis{

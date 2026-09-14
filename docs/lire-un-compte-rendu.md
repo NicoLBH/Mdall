@@ -1312,20 +1312,87 @@ pastille d'en-tête lisent le même `ligne.ton`. Aucun écran ne choisit plus sa
 couleur : trois écrans qui la choisiraient chacun de leur côté finiraient par se
 contredire, et c'est celui qu'on ne regarde pas qui aurait raison (règle 4).
 
-#### Ce qui reste ouvert : lever un blocage
+#### Lever un blocage, et en garder la trace
 
-Un contrôle requis qui tombe n'a toujours **aucun geste** pour être levé. Ce
-n'était pas visible tant que le seul cas était un bug de classement ; il le
-redeviendra le jour où un compte rendu n'aura aucun numéro de point, ou qu'un PDF
-ne sera pas rapatrié.
+Un contrôle requis qui tombait retenait la fusion **sans laisser de geste pour le
+lever** : une phrase rouge dans Vérifications, un clic sur « À arbitrer », et le
+tiroir redisait la même phrase avec un bouton inerte. Un blocage qu'on ne sait pas
+lever n'est pas une vérification, c'est un mur.
 
-Le modèle est déjà dans l'application — le bloc des contradictions avec la
-mémoire : un compte, « N à arbitrer », deux côtés explicites, une phrase de
-doctrine. Un contrôle requis non tenu ouvrira un **arbitrage** du même patron, avec
-deux issues et jamais trois : *écarter les lignes concernées*, ou *passer outre en
-disant pourquoi*. Le second est permis — on a le droit de fusionner sans tout
-savoir — mais il s'écrit : le contrôle passera alors à « tenu par arbitrage », et
-le procès-verbal gardera la différence entre **vérifié** et **assumé** (règle 12).
+Le bloc **« Ce qui retient la fusion »** est la réponse. Il est en tête de l'onglet
+Changements — c'est là qu'on décide de ce qui entre, et le reste de l'onglet ne
+sert à rien tant que celui-ci n'est pas réglé —, et son châssis est celui des
+contradictions avec la mémoire, parce que ce sont deux fois la même chose : un
+désaccord qu'un humain tranche en signant.
+
+**Deux issues, jamais trois.**
+
+| issue | ce qu'elle fait |
+| --- | --- |
+| **Écarter ce qui est en cause** | les lignes que le contrôle nomme sont refusées ; il se repasse sur ce qui reste |
+| **Passer outre** | on fusionne en l'assumant, et le motif s'écrit |
+
+Il n'y a pas de croix qui ferme. Un blocage qu'on fait disparaître sans rien
+laisser ne vaut pas mieux que pas de blocage du tout.
+
+**Le contrôle nomme ce qu'il met en cause.** « 27 affirmations » ne se corrige pas,
+et ne s'arbitre pas davantage : on ne décide pas sur un nombre. Chaque contrôle
+bloquant rend donc la liste des lignes qu'il vise, et c'est elle qu'on écarte.
+
+**Passé outre, un contrôle ne devient pas vert.** Le fait qu'il constate n'a pas
+changé ; quelqu'un l'a assumé. Il passe au **bleu** — « Passé outre » —, avec la
+date et le motif, et le procès-verbal garde la différence entre *vérifié* et
+*assumé* (règle 12). On peut revenir dessus tant que la proposition est ouverte :
+la ligne reste, refusée, parce qu'une décision qui a eu lieu ne s'efface pas.
+
+**Un arbitrage est une ligne de proposition**, de nature `arbitrage`, clée sur
+l'identifiant du contrôle. Il se gèle avec le reste, entre au procès-verbal et
+s'exporte. Deux choses qu'il n'est pas : un changement du projet — le compter
+parmi eux annoncerait « 1 valeur en mémoire » là où rien n'entre — et une
+affirmation versée en mémoire : sa clé est celle d'un contrôle, et deux
+propositions qui passent outre le même contrôle périmeraient l'une l'autre alors
+que ce sont deux décisions indépendantes.
+
+##### Le cas courant : une valeur qu'on n'a pas encore par écrit
+
+Depuis que les natures d'un compte rendu sont rangées dans l'intendance, **un
+compte rendu ne fait plus échouer aucun contrôle requis** : il cite toujours son
+document. L'arbitrage sert ailleurs — à l'Atelier, où des valeurs entrent sans
+source.
+
+Le géotechnicien dicte au téléphone : contrainte de sol 0,2 MPa, nappe à −2,40 m.
+Le rapport arrivera dans trois semaines ; le dimensionnement, lui, part demain. On
+verse les deux valeurs depuis l'Atelier, et le contrôle tombe : elles ne citent ni
+texte, ni article, ni utilitaire.
+
+Trois réponses possibles, et une seule est bonne selon le jour :
+
+- **écarter** si l'on peut attendre le rapport — les deux lignes sortent, la
+  proposition passe avec le reste ;
+- **passer outre** en écrivant « Valeurs dictées par le géotechnicien le 12/09,
+  rapport attendu fin septembre » — le dimensionnement part, et six mois plus tard
+  la mémoire du projet sait que ces deux valeurs étaient *assumées* ;
+- **corriger** en rattachant la source si elle existe déjà quelque part.
+
+C'est cette distinction qui fait tout l'intérêt du contrôle : sans arbitrage, on
+aurait supprimé le contrôle ; avec un arbitrage muet, on aurait cliqué sans rien
+apprendre à personne.
+
+##### Un bouton d'essai, provisoire
+
+Le corollaire de la bonne nouvelle : **aucun compte rendu ne produit plus
+d'arbitrage**, et le seul cas réel demande de fabriquer une proposition d'Atelier
+pour chaque essai.
+
+Un contrôle « Contrôle d'essai » échoue donc sur commande, et le bouton
+« Simuler un blocage » en bas de l'onglet Vérifications le déclenche. Il pose un
+drapeau **de session** : rien n'est écrit, rien ne survit à un rechargement,
+aucune autre proposition n'est touchée. Ce qui s'écrit, c'est l'arbitrage qu'on lui
+donne — et c'est précisément ce qu'on veut éprouver.
+
+Il se retire en supprimant trois choses : l'entrée `essai` de
+`depot-controles.js`, `renderEssaiDeBlocage()` et son appel, et la ligne
+`.controles__essai` du CSS.
 
 ---
 
