@@ -116,7 +116,10 @@ const INTENDANCE = new Set([
   // dans le bloc des arbitrages et dans le procès-verbal.
   ITEM_TYPE.ARBITRAGE,
   // Fermer un sujet est un mouvement du suivi, pas une valeur du projet.
-  ITEM_TYPE.FERMETURE
+  ITEM_TYPE.FERMETURE,
+  // Le procès-verbal dit ce qui a été tranché sur la **proposition** : il n'y a
+  // pas d'« avant » du projet à lui comparer.
+  ITEM_TYPE.PROCES_VERBAL
 ]);
 
 /**

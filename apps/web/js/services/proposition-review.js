@@ -144,8 +144,104 @@ export const ITEM_TYPE = {
    * fermerait » — et la proposition ne les portait pas : elle promettait ce
    * qu'elle ne faisait pas.
    */
-  FERMETURE: "fermeture"
+  FERMETURE: "fermeture",
+  /**
+   * Le procès-verbal de l'arbitrage : ce qui a été tranché, et par qui.
+   *
+   * **Trancher et fusionner sont deux gestes, pas un seul.** On passe en revue
+   * ce qui retient la fusion, on garde ou l'on prend ligne à ligne — puis on
+   * signe. La signature n'est pas un accusé de lecture : c'est elle qui arrête
+   * la série de choix et qui ouvre la fusion. Sans elle, on fusionnait au
+   * moment où la dernière ligne basculait, c'est-à-dire sans jamais relire
+   * l'ensemble.
+   *
+   * Une ligne, donc, comme l'arbitrage : elle porte un auteur, une date et le
+   * compte de ce qui a été gardé, pris, assumé. Un drapeau d'écran se serait
+   * perdu au premier rechargement, et rien n'aurait dit six mois après qui
+   * avait arrêté quoi (règle 12).
+   *
+   * Sa clé est fixe : il n'y a qu'un procès-verbal par proposition, et le
+   * second remplace le premier.
+   */
+  PROCES_VERBAL: "proces_verbal"
 };
+
+/**
+ * Les mots d'une nature, au singulier et au pluriel.
+ *
+ * **Ici, et nulle part ailleurs.** Ils servaient au bilan de la fusion ; les
+ * lignes d'arbitrage, elles, affichaient la nature brute — `fermeture`,
+ * `relance` — faute d'y avoir accès. Deux vocabulaires pour les mêmes natures
+ * finissent par diverger, et c'est celui qu'on ne regarde pas qui a raison
+ * (règle 4). Ils vivent donc à côté des natures qu'ils nomment.
+ */
+export const MOTS_DE_LA_NATURE = {
+  [ITEM_TYPE.DOCUMENT]: ["document", "documents"],
+  [ITEM_TYPE.ATTACHMENT]: ["rattachement", "rattachements"],
+  [ITEM_TYPE.AVIS]: ["avis", "avis"],
+  [ITEM_TYPE.SUJET]: ["sujet à ouvrir", "sujets à ouvrir"],
+  [ITEM_TYPE.RELANCE]: ["sujet à relancer", "sujets à relancer"],
+  [ITEM_TYPE.FERMETURE]: ["sujet à fermer", "sujets à fermer"],
+  [ITEM_TYPE.INTERVENANT]: ["société à ajouter", "sociétés à ajouter"],
+  [ITEM_TYPE.LOT]: ["lot à ouvrir", "lots à ouvrir"],
+  [ITEM_TYPE.LABEL]: ["label à poser", "labels à poser"],
+  [ITEM_TYPE.OBJECTIF]: ["jalon à poser", "jalons à poser"]
+};
+
+/** Le mot d'une nature, accordé. Une nature inconnue se dit telle quelle. */
+export function motDeLaNature(nature = "", combien = 1) {
+  const [singulier, pluriel] = MOTS_DE_LA_NATURE[nature] ?? [nature, nature];
+  return combien > 1 ? pluriel : singulier;
+}
+
+/**
+ * Le nom d'une ligne de proposition, en clair.
+ *
+ * ## Pourquoi cette fonction existe
+ *
+ * Le bloc d'arbitrage listait vingt-neuf contradictions ainsi :
+ * `fermeture c0700a98-c591-4bff-8809-3eaaa4ee3961`. On demandait de garder ou
+ * de prendre sans dire de quoi il s'agissait — et un identifiant ne se lit pas.
+ * Chaque écran qui avait besoin d'un nom allait le chercher sous une clé
+ * différente (`payload.subject` ici, `payload.name` là), si bien que la moitié
+ * des natures n'en avaient aucun.
+ *
+ * Le nom d'une ligne vit donc **à un seul endroit** (règle 10), et il connaît
+ * les clés que chaque nature emploie réellement.
+ *
+ * @returns {string} le nom lisible, ou la clé quand la ligne n'en porte pas —
+ *   jamais une chaîne vide : mieux vaut un identifiant qu'un blanc.
+ */
+export function nomDeLaLigne(ligne = {}) {
+  const payload = ligne?.payload ?? {};
+  const dit = (valeur) => String(valeur ?? "").trim();
+  const cle = dit(ligne?.itemKey ?? ligne?.item_key);
+  const nature = dit(ligne?.itemType ?? ligne?.item_type);
+
+  // Un lot se désigne par son numéro, et son nom le précise quand on l'a : le
+  // numéro seul se retrouve sur le chantier, le nom seul ne se retrouve pas.
+  if (nature === ITEM_TYPE.LOT) {
+    const numero = dit(payload.numero);
+    const nom = dit(payload.nom);
+    if (numero) return nom ? `Lot ${numero} — ${nom}` : `Lot ${numero}`;
+    if (nom) return nom;
+  }
+
+  // Un avis se désigne par le numéro que le bureau de contrôle lui a donné.
+  if (nature === ITEM_TYPE.AVIS) {
+    const reference = dit(payload.reference);
+    if (reference) return `Avis n° ${reference}`;
+  }
+
+  return dit(payload.titre)
+    || dit(payload.nom)
+    || dit(payload.name)
+    || dit(payload.label)
+    || dit(payload.subject)
+    || dit(payload.title)
+    || dit(payload.societe)
+    || cle;
+}
 
 function item(type, key, payload) {
   return { itemType: type, itemKey: String(key), payload, status: ITEM.PROPOSED, reason: null };

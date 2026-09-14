@@ -8579,7 +8579,7 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 }
 
 .discussion-empty-state__text{
-  max-width:680px;
+  max-width:var(--largeur-de-lecture);
   margin:0;
   color:var(--muted);
   font-size:16px;
@@ -16936,6 +16936,13 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
      procès-verbal garde la différence entre les deux. */
   --ton-assume:rgb(31,111,235);
   --ton-assume-vif:rgb(68,147,248);
+
+  /* La largeur d'un texte qu'on lit, et d'un champ où l'on écrit une phrase.
+     Elle était écrite en clair à trois endroits — le vide d'une discussion, la
+     zone du motif, et maintenant la liste des lignes en cause. Une valeur
+     écrite à trois endroits finit par diverger (règle 4) : elle se nomme ici, et
+     tout écran qui en a besoin la lit. */
+  --largeur-de-lecture:680px;
 }
 
 .merge-box__row--bon .merge-box__icon{ background:var(--fgColor-open); color:#fff; }
@@ -20739,7 +20746,7 @@ body.proposition-merge-open{ overflow:hidden; }
   gap:6px;
   /* La largeur d'une zone de commentaire : un champ qui traverse l'écran invite
      à écrire une ligne de deux cents caractères qu'on ne relit pas. */
-  max-width:680px;
+  max-width:var(--largeur-de-lecture);
   margin:0 14px 10px;
   padding:10px 12px;
   border:1px solid rgba(31,111,235,.35);
@@ -20754,7 +20761,7 @@ body.proposition-merge-open{ overflow:hidden; }
 /* Le corps : les lignes en cause, chacune sous son trait. « 27 affirmations »
    ne se corrige pas et ne s'arbitre pas — on ne décide pas sur un nombre. */
 .arbitrage__corps{
-  padding:4px 0 10px;
+  padding:4px 10px 4px 10px;
   max-height:260px;
   overflow-y:auto;
   font-family:var(--mono, ui-monospace, monospace);
@@ -20762,22 +20769,39 @@ body.proposition-merge-open{ overflow:hidden; }
 }
 .arbitrage__ligne{
   display:flex;
-  align-items:baseline;
+  align-items:center;
   gap:10px;
   padding:3px 14px 3px 11px;
-  border-left:3px solid var(--ton-mauvais);
+  /* La largeur de lecture, mutualisée : une ligne qui traverse l'écran met ses
+     deux boutons à un mètre de ce sur quoi ils portent. */
+  max-width:var(--largeur-de-lecture);
+  border-left:1px solid var(--ton-mauvais-vif);
   background:rgba(218,54,51,.06);
 }
 .arbitrage__ligne-nature{ flex:0 0 auto; color:var(--muted); }
 /* L'écart qu'on tranche : ce que le projet disait, ce que la proposition
    apporte. On ne décide pas sur un identifiant. */
 .arbitrage__ecart{ display:inline-flex; flex-wrap:wrap; gap:6px; margin-left:8px; color:var(--muted); }
-.arbitrage__ecart-avant{ text-decoration:line-through; }
 .arbitrage__ecart-apres{ color:var(--text); }
+/* La phrase du document, quand elle a été conservée. Sans elle, on arbitre
+   entre deux étiquettes. */
+.arbitrage__extrait{ display:block; margin-top:2px; color:var(--muted); font-style:italic; }
 .arbitrage__ligne-gestes{ display:inline-flex; gap:4px; margin-left:auto; flex:0 0 auto; }
-.arbitrage__ligne{ align-items:center; }
 .arbitrage__ligne-dit{ color:var(--text); min-width:0; overflow-wrap:anywhere; }
 .arbitrage__ligne--reste{ border-left-color:transparent; background:transparent; color:var(--muted); font-style:italic; }
+
+/* **Ce qu'on vient de décider se voit.** La ligne disparaissait au clic : sur
+   vingt-neuf, cela ne se lisait pas. Elle reste, elle change de couleur, et le
+   bouton retenu est marqué. */
+.arbitrage__ligne.is-tranche{ background:transparent; border-left-color:var(--border); }
+.arbitrage__ligne.is-tranche .arbitrage__ligne-dit{ color:var(--muted); }
+.arbitrage__ligne.is-garde{ border-left-color:var(--ton-doute-vif); }
+.arbitrage__ligne.is-pris{ border-left-color:var(--ton-bon-vif); }
+.arbitrage__geste.is-choisi{ border-color:var(--fgColor-accent, var(--ton-assume-vif)); color:var(--text); opacity:1; }
+.arbitrage__geste.is-choisi:disabled{ opacity:1; cursor:default; }
+
+/* Signée, la séance se replie sur son procès-verbal : elle ne demande plus rien. */
+.arbitrages--signe{ border-left-color:var(--ton-assume-vif); }
 
 .arbitrage__passe{
   display:flex;

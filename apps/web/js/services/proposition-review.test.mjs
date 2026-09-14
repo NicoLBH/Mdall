@@ -11,6 +11,8 @@ import {
   describeAvisChange,
   diffAvis,
   documentItems,
+  motDeLaNature,
+  nomDeLaLigne,
   summarizeReview
 } from "./proposition-review.js";
 
@@ -311,4 +313,43 @@ test("appreciationMoved ne compare que ce qui est connu des deux côtés", () =>
   assert.equal(appreciationMoved(null, "S"), true);
   assert.equal(appreciationMoved("S", "D"), true);
   assert.equal(appreciationMoved("S", "S"), false);
+});
+
+
+/**
+ * **« fermeture c0700a98-c591-4bff-8809-3eaaa4ee3961 ».**
+ *
+ * Le nom d'une ligne se cherchait sous `payload.subject` chez les uns, sous
+ * `payload.name` chez les autres : la moitié des natures n'en avaient donc
+ * aucun, et l'écran d'arbitrage demandait de trancher sur un identifiant. Un
+ * nom vit à un seul endroit (règle 10), et il connaît les clés que chaque
+ * nature emploie réellement.
+ */
+test("chaque nature se nomme en clair, jamais par sa clé", () => {
+  const nom = (itemType, itemKey, payload) => nomDeLaLigne({ itemType, itemKey, payload });
+
+  assert.equal(nom(ITEM_TYPE.FERMETURE, "c0700a98", { titre: "Reprise du carrelage" }), "Reprise du carrelage");
+  assert.equal(nom(ITEM_TYPE.SUJET, "cr12-4", { titre: "Étanchéité toiture" }), "Étanchéité toiture");
+  assert.equal(nom(ITEM_TYPE.DOCUMENT, "d1", { name: "1824_CR_10.pdf" }), "1824_CR_10.pdf");
+  assert.equal(nom(ITEM_TYPE.LABEL, "urgent", { nom: "urgent" }), "urgent");
+  assert.equal(nom(ITEM_TYPE.ATTACHMENT, "affaire:13861", { label: "Affaire 13861" }), "Affaire 13861");
+  assert.equal(nom(ITEM_TYPE.INTERVENANT, "gil", { societe: "Entreprise du lot 3" }), "Entreprise du lot 3");
+  // Un lot se retrouve sur le chantier par son numéro ; le nom le précise.
+  assert.equal(nom(ITEM_TYPE.LOT, "3", { numero: "3", nom: "Gros œuvre" }), "Lot 3 — Gros œuvre");
+  assert.equal(nom(ITEM_TYPE.LOT, "3", { numero: "3" }), "Lot 3");
+  // Un avis se désigne par le numéro que le bureau de contrôle lui a donné.
+  assert.equal(nom(ITEM_TYPE.AVIS, "abc", { reference: "S12" }), "Avis n° S12");
+
+  // **Jamais un blanc.** Faute de nom, la clé : un identifiant se cherche, un
+  // vide ne dit rien du tout.
+  assert.equal(nom(ITEM_TYPE.FERMETURE, "c0700a98", {}), "c0700a98");
+  assert.equal(nomDeLaLigne(), "");
+});
+
+/** Les mots accordés, lus par le bilan comme par les lignes d'arbitrage. */
+test("une nature se dit en français, et s'accorde", () => {
+  assert.equal(motDeLaNature(ITEM_TYPE.FERMETURE, 1), "sujet à fermer");
+  assert.equal(motDeLaNature(ITEM_TYPE.FERMETURE, 3), "sujets à fermer");
+  // Une nature qu'on ne connaît pas se dit telle quelle plutôt que de disparaître.
+  assert.equal(motDeLaNature("base-datum", 1), "base-datum");
 });
