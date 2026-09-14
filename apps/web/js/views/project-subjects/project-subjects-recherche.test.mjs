@@ -1105,3 +1105,22 @@ test("la liste des épinglées s'ouvre et se ferme", () => {
 test("sans vue épinglée, l'épingle du rail replié ne paraît pas", () => {
   assert.doesNotMatch(rail({ epingles: [], replie: true }), /sujets-rail__epingles/);
 });
+
+/**
+ * **L'épingle s'allume à la place de la vue qu'elle cache.** Replié, rien
+ * n'était marqué dans la colonne d'icônes quand on regardait une vue — et,
+ * pire, « Sujets » l'était, une requête que le rail ne nomme pas y retombant.
+ */
+test("replié, l'épingle s'allume quand on regarde une vue épinglée", () => {
+  const html = rail({ epingles: DEUX_EPINGLES, replie: true, requete: "label:bug" });
+
+  assert.match(html, /sujets-rail__epingles" data-active="true"/);
+  // Et « Sujets » ne l'est plus : on ne regarde pas la liste entière.
+  assert.doesNotMatch(html, /data-sujets-lecture="" data-tooltip="[^"]*" aria-current="page"/);
+});
+
+test("replié, l'épingle reste éteinte sur une lecture du rail", () => {
+  const html = rail({ epingles: DEUX_EPINGLES, replie: true, requete: "mention:moi" });
+
+  assert.match(html, /sujets-rail__epingles" data-active="false"/);
+});

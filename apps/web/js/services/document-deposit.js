@@ -88,6 +88,39 @@ export async function insertDocumentRow(row, select = "id,project_id,storage_buc
   return Array.isArray(rows) ? (rows[0] ?? null) : rows;
 }
 
+/**
+ * Complète une ligne `documents` déjà écrite, et rend ce qu'elle est devenue.
+ *
+ * **Pour ce qui appartient au document et arrive après lui** : sa
+ * transcription, par exemple, faite une fois le fichier déposé. Écrire un
+ * second fichier à côté aurait fait deux entrées dans l'arbre pour un seul
+ * document, et il aurait fallu savoir laquelle ouvrir.
+ */
+export async function updateDocumentRow(id, patch, select = "id,filename,content_fingerprint,folder_id,transcription_markdown") {
+  const cle = String(id ?? "").trim();
+  if (!cle) return null;
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/documents`);
+  url.searchParams.set("id", `eq.${cle}`);
+  if (select) url.searchParams.set("select", select);
+
+  const res = await fetch(url.toString(), {
+    method: "PATCH",
+    headers: await buildSupabaseAuthHeaders({
+      "Content-Type": "application/json",
+      Prefer: "return=representation"
+    }),
+    body: JSON.stringify(patch)
+  });
+
+  if (!res.ok) {
+    throw new Error(`documents update failed (${res.status}): ${await res.text().catch(() => "")}`);
+  }
+
+  const rows = await res.json();
+  return Array.isArray(rows) ? (rows[0] ?? null) : rows;
+}
+
 async function selectDocuments(projectId, columns, extra = {}) {
   if (!projectId) return [];
 

@@ -34,7 +34,7 @@
 import { contentFingerprint } from "./document-identity.js";
 import { pagesDuFichierMarkdown } from "./reconstitution-markdown.js";
 import {
-  DOSSIER_DES_CR, RANGEE, nomDeLaRestitution, restitutionRangee, sourceRangee
+  DOSSIER_DES_CR, RANGEE, sourceRangee, transcriptionRangee
 } from "./restitution-rangee.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -58,7 +58,9 @@ async function portesParDefaut() {
     listerLeDossier: sync.listDocumentDirectory,
     televerser: depot.uploadDocumentToStorage,
     ecrireLaLigne: depot.insertDocumentRow,
-    telecharger: depot.downloadDocumentFile,
+    // La transcription se pose **sur la ligne du document**, et non dans un
+    // second fichier : un document, un endroit.
+    poserLaTranscription: depot.updateDocumentRow,
     qui: depot.currentUserId
   };
 }
@@ -85,40 +87,37 @@ async function fichiersDuDossier(portes, projectId, folderId) {
 }
 
 /**
- * La restitution déjà rangée pour ce document, s'il y en a une.
+ * La transcription déjà rangée pour ce document, s'il y en a une.
  *
  * **C'est ce qui évite de repayer.** Rend le Markdown et l'état du rangement —
- * `PERIMEE` quand le dossier porte une restitution d'un autre texte, ce qui
+ * `PERIMEE` quand le document porte une transcription d'un autre texte, ce qui
  * n'est pas la même chose que de n'en avoir aucune.
  *
- * @returns {Promise<{etat: string, markdown: string, dossier: object|null}>}
+ * @returns {Promise<{etat: string, markdown: string, document: object|null}>}
  */
 export async function relireLaRestitution({
   projectId = "", fichier = null, empreinte = "", portes = null
 } = {}) {
-  if (!projectId || !fichier?.name) return { etat: RANGEE.ABSENTE, markdown: "", dossier: null };
+  const vide = { etat: RANGEE.ABSENTE, markdown: "", document: null };
+  if (!projectId || !fichier?.name) return vide;
 
   try {
     const portails = portes ?? (await portesParDefaut());
 
     const dossier = await dossierNomme(portails, projectId, DOSSIER_DES_CR);
-    if (!dossier?.id) return { etat: RANGEE.ABSENTE, markdown: "", dossier: null };
+    if (!dossier?.id) return vide;
 
-    const fichiers = await fichiersDuDossier(portails, projectId, dossier.id);
-    const trouvee = restitutionRangee(fichiers, {
-      nom: nomDeLaRestitution(fichier.name), empreinte
-    });
+    // **C'est l'empreinte qui retrouve le document, pas son nom.** Le même
+    // compte rendu s'appelle `CR_07.pdf` chez l'un et `07 - CR.pdf` chez
+    // l'autre ; deux comptes rendus différents s'appellent tous deux `CR.pdf`.
+    const range = sourceRangee(await fichiersDuDossier(portails, projectId, dossier.id), { empreinte });
+    if (!range) return vide;
 
-    if (trouvee.etat !== RANGEE.A_JOUR) {
-      return { etat: trouvee.etat, markdown: "", dossier };
-    }
-
-    const lu = await portails.telecharger(trouvee.document);
-    return { etat: RANGEE.A_JOUR, markdown: await lu.text(), dossier };
+    return { ...transcriptionRangee(range, { empreinte }), document: range };
   } catch {
     // Ne pas savoir ce qui est rangé n'empêche pas de restituer : on refait,
     // et l'on repaie. C'est ennuyeux, pas grave.
-    return { etat: RANGEE.ABSENTE, markdown: "", dossier: null };
+    return vide;
   }
 }
 
@@ -144,7 +143,7 @@ export function restitutionReutilisable(rangee = {}) {
 }
 
 /**
- * Dépose un fichier dans le dossier, et écrit sa ligne.
+ * Dépose le compte rendu dans le dossier, avec sa transcription sur sa ligne.
  *
  * **L'empreinte entre dans le chemin de stockage, pas seulement dans la ligne.**
  * Le stockage refuse d'écraser (`x-upsert: false`), et deux versions d'un même
@@ -152,7 +151,7 @@ export function restitutionReutilisable(rangee = {}) {
  * échouerait sur un conflit, et l'écran annoncerait « la restitution n'a pas pu
  * être rangée » sans que rien ne dise que c'est le nom qui était pris.
  */
-async function deposer(portes, projectId, folderId, fichier, { empreinte, kind }) {
+async function deposer(portes, projectId, folderId, fichier, { empreinte, markdown }) {
   const scope = `${folderId}/${texte(empreinte).slice(0, 16) || "sans-empreinte"}`;
   const stockage = await portes.televerser(fichier, { projectId, scope });
 
@@ -167,59 +166,65 @@ async function deposer(portes, projectId, folderId, fichier, { empreinte, kind }
     storage_path: stockage.storage_path,
     file_size_bytes: fichier.size || null,
     upload_status: "uploaded",
-    document_kind: kind,
-    // **L'empreinte du texte du PDF, sur les deux fichiers.** C'est elle qui
-    // dira plus tard si la restitution rangée correspond au document déposé.
-    content_fingerprint: empreinte || null
-  }, "id,filename,content_fingerprint,folder_id");
+    document_kind: "source_pdf",
+    // **L'empreinte du texte du PDF.** C'est elle qui dira plus tard si la
+    // transcription rangée correspond au document déposé.
+    content_fingerprint: empreinte || null,
+    // **Un document, un endroit.** La transcription n'est pas un second
+    // fichier : elle est sur la ligne de celui qu'elle transcrit.
+    transcription_markdown: texte(markdown) || null,
+    transcribed_at: texte(markdown) ? new Date().toISOString() : null
+  }, "id,filename,content_fingerprint,folder_id,transcription_markdown");
 }
 
 /**
- * Ranger le compte rendu et sa restitution.
+ * Ranger le compte rendu et sa transcription.
  *
- * Le PDF n'est déposé que s'il n'est pas déjà là : le redéposer en ferait un
- * second exemplaire du même document, dans le dossier qui porte son nom.
+ * Le PDF n'est déposé que s'il n'est pas déjà là ; s'il l'est, c'est sa ligne
+ * qui reçoit la transcription. Le redéposer en ferait un second exemplaire du
+ * même document dans le dossier des comptes rendus.
  *
- * @returns {Promise<{range: boolean, dossier: object|null, motif: string}>}
+ * @returns {Promise<{range: boolean, document: object|null, dossier: object|null, motif: string}>}
  */
 export async function rangerLaRestitution({
   projectId = "", fichier = null, markdown = "", empreinte = "", portes = null
 } = {}) {
-  if (!projectId) return { range: false, dossier: null, motif: "aucun projet" };
-  if (!fichier?.name || !texte(markdown)) {
-    return { range: false, dossier: null, motif: "rien à ranger" };
-  }
+  const rate = (motif) => ({ range: false, document: null, dossier: null, motif });
+
+  if (!projectId) return rate("aucun projet");
+  if (!fichier?.name || !texte(markdown)) return rate("rien à ranger");
 
   try {
     const portails = portes ?? (await portesParDefaut());
 
     // **Un dossier pour tous les comptes rendus**, et non un dossier par
     // compte rendu : quarante réunions faisaient quarante dossiers à la racine
-    // de Documents, et l'arbre devenait illisible au vingtième. C'est le nom
-    // du fichier qui réunit un PDF et sa restitution, pas le dossier.
+    // de Documents, et l'arbre devenait illisible au vingtième.
     const dossier = (await dossierNomme(portails, projectId, DOSSIER_DES_CR))
       ?? (await portails.creerLeDossier(projectId, null, DOSSIER_DES_CR));
-    if (!dossier?.id) return { range: false, dossier: null, motif: "le dossier n'a pas pu être créé" };
+    if (!dossier?.id) return rate("le dossier n'a pas pu être créé");
 
     const fichiers = await fichiersDuDossier(portails, projectId, dossier.id);
-    const enMd = nomDeLaRestitution(fichier.name);
+    const deja = sourceRangee(fichiers, { empreinte });
 
-    // Déjà rangée pour ce texte-là : la redéposer n'ajouterait qu'un doublon.
-    if (restitutionRangee(fichiers, { nom: enMd, empreinte }).etat === RANGEE.A_JOUR) {
-      return { range: true, dossier, motif: "" };
+    // Déjà rangé, transcription à jour : rien à réécrire.
+    if (deja && transcriptionRangee(deja, { empreinte }).etat === RANGEE.A_JOUR) {
+      return { range: true, document: deja, dossier, motif: "" };
     }
 
-    if (!sourceRangee(fichiers, { empreinte })) {
-      await deposer(portails, projectId, dossier.id, fichier, { empreinte, kind: "source_pdf" });
-    }
+    // Le document est là, sa transcription manque ou vient d'un autre texte :
+    // c'est sa ligne qu'on complète, pas un second exemplaire qu'on dépose.
+    const document = deja
+      ? await portails.poserLaTranscription(deja.id, {
+        transcription_markdown: texte(markdown),
+        transcribed_at: new Date().toISOString(),
+        content_fingerprint: empreinte || null
+      })
+      : await deposer(portails, projectId, dossier.id, fichier, { empreinte, markdown });
 
-    const enMarkdown = new File([markdown], enMd, { type: "text/markdown" });
-    await deposer(portails, projectId, dossier.id, enMarkdown, {
-      empreinte, kind: "restitution_markdown"
-    });
-
-    return { range: true, dossier, motif: "" };
+    if (!document?.id) return rate("le document n'a pas pu être écrit");
+    return { range: true, document, dossier, motif: "" };
   } catch (erreur) {
-    return { range: false, dossier: null, motif: texte(erreur?.message) || "cause inconnue" };
+    return rate(texte(erreur?.message) || "cause inconnue");
   }
 }

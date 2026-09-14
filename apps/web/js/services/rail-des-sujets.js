@@ -94,11 +94,12 @@ export const NOMS_DE_LECRAN = {
 export const TITRE_QUELCONQUE = "Sujets";
 
 export function titreDeLaListe({ requete = "", champs = [] } = {}) {
-  const dite = texte(requete);
-  if (!dite) return NOMS_DE_LECRAN[LECTURE.TOUS];
-
-  const lecture = lectureDe(dite, champs);
-  return lecture === LECTURE.TOUS ? TITRE_QUELCONQUE : NOMS_DE_LECRAN[lecture];
+  // **La même décision que pour allumer le rail**, et elle n'est écrite qu'une
+  // fois : deux façons de répondre à « quelle lecture regarde-t-on ? »
+  // finiraient par ne plus s'accorder, et l'on aurait un titre qui dit une
+  // chose et une entrée allumée qui en dit une autre (règle 4).
+  const lecture = lectureQuOnRegarde(requete, champs);
+  return lecture ? NOMS_DE_LECRAN[lecture] : TITRE_QUELCONQUE;
 }
 
 /**
@@ -203,6 +204,29 @@ export function lectureDe(requete = "", champs = []) {
 }
 
 /**
+ * La lecture qu'on regarde — ou `""` quand ce n'en est aucune.
+ *
+ * ## Pourquoi ce n'est pas `lectureDe`
+ *
+ * `lectureDe` retombe sur « tous » pour tout ce qu'elle ne reconnaît pas : elle
+ * répond « laquelle, au plus près », ce qui convient pour poser une requête.
+ * Pour **allumer** une entrée, c'est faux — et visiblement faux : on regarde une
+ * vue, on tape `label:sensible` à la main, et « Sujets » s'allume comme si l'on
+ * voyait la liste entière alors qu'on en voit deux lignes. L'entrée allumée dit
+ * alors où l'on est, et se trompe (règle 5).
+ *
+ * Aucune allumée est une réponse : on est ailleurs, dans quelque chose que le
+ * rail ne nomme pas.
+ */
+export function lectureQuOnRegarde(requete = "", champs = []) {
+  const dite = texte(requete);
+  if (!dite) return LECTURE.TOUS;
+
+  const lecture = lectureDe(dite, champs);
+  return lecture === LECTURE.TOUS ? "" : lecture;
+}
+
+/**
  * Le rail, prêt à dessiner : chaque lecture, sa requête, son compte, et si elle
  * est celle qu'on regarde.
  *
@@ -221,7 +245,7 @@ export function lectureDe(requete = "", champs = []) {
 export function railDesSujets({
   sujets = [], champs = [], requete = "", meta = {}, moi = "", maintenant = Date.now()
 } = {}) {
-  const active = lectureDe(requete, champs);
+  const active = lectureQuOnRegarde(requete, champs);
 
   const lectures = Object.values(LECTURE).map((lecture) => {
     // **Une seule vérification, et c'est `filtresDe` qui la porte.** Une
