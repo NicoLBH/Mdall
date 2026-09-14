@@ -5,6 +5,7 @@ import {
   EPINGLES_AU_PLUS, bandeauDesEpingles, estEpingle, motDeLEpingle, sujetsEpingles
 } from "../../services/epingles-des-sujets.js";
 import { TRI, motDuTri } from "../../services/tri-des-sujets.js";
+import { lecturesReservees, titreDeLaListe } from "../../services/rail-des-sujets.js";
 import { filterValuesOf, toggleFilter, withFilter } from "../../services/query-bar.js";
 import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
 import { avanceeDunLot, COMBIEN_RESTE_LAVANCEE } from "../../services/avancee-dun-lot.js";
@@ -24,7 +25,7 @@ import {
   selectionApresUnClic, selectionVisible
 } from "../../services/selection-des-sujets.js";
 import {
-  refusDeLaVue, vueAEcrire, vuePourLEcran, vueRegardee
+  laLectureDoublee, refusDeLaVue, vueAEcrire, vuePourLEcran, vueRegardee
 } from "../../services/vues-des-sujets.js";
 import { nomDuCompte } from "../../services/meta-des-sujets.js";
 import { MOI, sujetsFiltres } from "../../services/champs-des-sujets.js";
@@ -574,6 +575,25 @@ async function epinglerLaVueAuRail(id) {
   rerenderPanels();
 }
 
+/**
+ * Ouvrir la liste des vues épinglées du rail replié, ou la refermer.
+ *
+ * Elle n'existe que replié : le déplier redonne les lignes, et un état resté
+ * ouvert rouvrirait le menu la prochaine fois qu'on replie, par-dessus une
+ * barre qu'on venait de ranger.
+ */
+function basculerLeMenuDesEpingles() {
+  store.projectSubjectsView.epinglesMenuOuvert = !store.projectSubjectsView?.epinglesMenuOuvert;
+  rerenderPanels();
+}
+
+/** Refermer cette liste, s'il y en avait une d'ouverte. */
+function fermerLeMenuDesEpingles() {
+  if (!store.projectSubjectsView?.epinglesMenuOuvert) return;
+  store.projectSubjectsView.epinglesMenuOuvert = false;
+  rerenderPanels();
+}
+
 /** Ouvrir le menu d'une ligne du tableau des vues, ou le refermer. */
 function basculerLeMenuDeLaVue(id) {
   const cle = String(id || "").trim();
@@ -659,6 +679,9 @@ function retenirLaLargeur(largeur) {
 }
 
 function basculerLeRail() {
+  // Déplier redonne les lignes : la liste n'a plus de bouton qui la porte, et
+  // la laisser ouverte la ferait reparaître au prochain repli.
+  store.projectSubjectsView.epinglesMenuOuvert = false;
   try {
     window.localStorage.setItem(RAIL_REPLIE_CLE, railReplie() ? "0" : "1");
   } catch {
@@ -755,6 +778,10 @@ function renderEcranDesVues() {
     champs,
     ignores,
     refus: forme.refus ?? "",
+    // Laquelle des cinq lectures du rail cette requête double, s'il y a lieu.
+    lectureDoublee: laLectureDoublee({
+      requete: forme.requete ?? "", lectures: lecturesReservees(champs)
+    })?.nom ?? "",
     habitOuvert: forme.habitOuvert === true,
     // Le tableau, sous le formulaire : enregistrer une vue sans avoir vu ce
     // qu'elle montre, c'est enregistrer une promesse.
@@ -1037,6 +1064,7 @@ function renderEcranDesSujets(corps, { champs = [], requete = "" } = {}) {
             moi: getMoiDansLeProjet(),
             epingles: recherchesEpinglees ?? [],
             replie,
+            menuDesEpingles: replie && store.projectSubjectsView?.epinglesMenuOuvert === true,
             sousVue: String(store.situationsView?.subjectsSubview || "subjects")
           })}
           <div class="project-rail-layout__content">${corps}</div>
@@ -4027,6 +4055,7 @@ function rerenderPanels() {
 
       panelHost.innerHTML = `
         ${renderEcranDesSujets(`
+          ${renderTitreDeLaListeHtml()}
           ${/*
             **Les épinglés ne coiffent que la liste de tous les sujets.** Ce
             sont trois sujets qu'on garde sous la main dans le projet entier ;
@@ -4895,48 +4924,6 @@ function renderCreateSubissueModalHtml() {
   });
 }
 
-function renderSituationsViewHeaderHtml() {
-  if (store.situationsView.createSubjectForm?.isOpen) {
-    return "";
-  }
-  // **Les trois sous-vues portent leur titre dans le contenu du rail**, avec
-  // le bouton qui les concerne. Ici, la barre du haut est hors de la mise en
-  // page du rail : un titre posé là s'aligne sur le bord gauche de la page, et
-  // le tableau qu'il annonce sur le bord droit du rail. Ce qui reste dans
-  // cette barre — copier le tableau des sujets, créer un sujet — ne s'applique
-  // à aucune des trois.
-  if (SOUS_VUES.includes(String(store.situationsView.subjectsSubview || "subjects"))) return "";
-
-  // **Une seule recherche.** Celle-ci ne cherchait que dans les titres, sans
-  // grammaire et sans s'épingler ; la barre du tableau fait tout ce qu'elle
-  // faisait et le reste. En garder deux ferait taper dans l'une en regardant
-  // l'autre, et se demander pourquoi rien ne bouge.
-  //
-  // **Labels et Objectifs s'en vont aussi**, dans le rail : ce ne sont pas des
-  // actions mais d'autres façons de regarder le même domaine, et ils
-  // voisinaient ici avec des boutons qui écrivent.
-  // **Dans quelle vue on est.** Une vue est une requête enregistrée : une fois
-  // cliquée, l'écran ressemble trait pour trait à n'importe quelle liste
-  // filtrée, et l'on recliquait dans le rail pour savoir où l'on était. Son
-  // habit et son nom viennent donc en face des gestes qu'elle autorise.
-  const vue = laVueRegardee();
-
-  const rightHtml = [
-    renderProjectTableToolbarGroup({
-      html: renderBoutonDeConstat()
-    }),
-    renderProjectTableToolbarGroup({
-      html: `${renderSituationsAddAction()}${vue ? renderKebabDeLaVueHtml(vue) : ""}`
-    })
-  ].join("");
-
-  return renderProjectTableToolbar({
-    className: "project-table-toolbar--situations",
-    leftHtml: renderTitreDeLaVueHtml(vue),
-    rightHtml
-  });
-}
-
 /**
  * La vue qu'on regarde, ou `null`.
  *
@@ -4945,7 +4932,14 @@ function renderSituationsViewHeaderHtml() {
  * alors qu'on regarde autre chose (règle 5).
  */
 function laVueRegardee() {
-  return vueRegardee({ vues: vuesDuProjet(), requete: getRequeteDesSujets() });
+  const requete = getRequeteDesSujets();
+
+  // **Une lecture du rail l'emporte sur une vue qui la double.** Enregistrer
+  // une telle vue est refusé depuis, mais celles d'avant existent encore : sans
+  // cette garde, cliquer « Mentions » afficherait le nom de la vue.
+  if (laLectureDoublee({ requete, lectures: lecturesReservees(getChampsDesSujets()) })) return null;
+
+  return vueRegardee({ vues: vuesDuProjet(), requete });
 }
 
 /**
@@ -4972,27 +4966,58 @@ function renderKebabDeLaVueHtml(vue) {
   `;
 }
 
+/**
+ * La ligne de titre de la liste des sujets — **dans la colonne du tableau**.
+ *
+ * ## Trois défauts d'un coup, et ils avaient la même cause
+ *
+ * Elle vivait dans `situationsToolbarHost`, une bande posée **hors de la mise
+ * en page du rail**, sur toute la largeur de la fenêtre et au-dessus de lui.
+ * Trois choses en découlaient :
+ *
+ * - le rail passait dessous, et son premier bouton — « Sujets » — n'était plus
+ *   cliquable : on cliquait dans une bande vide qui le recouvrait ;
+ * - le titre s'alignait sur le bord gauche de la page et le tableau sur le bord
+ *   droit du rail : deux alignements pour une seule colonne ;
+ * - cette bande est **hors de la racine qui écoute les clics**, si bien que le
+ *   kebab d'une vue posé là n'ouvrait aucun menu.
+ *
+ * Elle descend donc là où est ce qu'elle annonce, comme celles des Labels, des
+ * Objectifs et des Vues. La bande du haut ne porte plus rien sur cet écran.
+ *
+ * ## Ce qu'elle écrit
+ *
+ * Le nom de la vue quand on en regarde une — son icône, sa couleur, son
+ * épingle —, sinon celui de la lecture : « Tous les sujets », « Assigné à
+ * moi », « Mentions ». Le rail nomme des endroits, le titre dit ce qu'on
+ * regarde ; « Sujets » au-dessus du tableau répéterait le nom de l'onglet.
+ */
+function renderTitreDeLaListeHtml() {
+  const vue = laVueRegardee();
+
+  return renderTitreDEcranHtml({
+    titre: vue ? "" : titreDeLaListe({
+      requete: getRequeteDesSujets(), champs: getChampsDesSujets()
+    }),
+    titreHtml: vue ? renderTitreDeLaVueHtml(vue) : "",
+    actionsHtml: `${renderBoutonDeConstat()}${renderSituationsAddAction()}${
+      vue ? renderKebabDeLaVueHtml(vue) : ""}`
+  });
+}
+
+/**
+ * La bande du haut, **vidée** sur l'écran des sujets.
+ *
+ * Elle est hors de la mise en page du rail et le recouvrait : son premier
+ * bouton n'était plus cliquable. Elle est aussi hors de la racine qui écoute
+ * les clics, si bien que rien de ce qu'on y posait ne répondait. Tout ce
+ * qu'elle portait est descendu dans la colonne du tableau ; il ne reste qu'à la
+ * laisser vide — et `:empty` lui retire alors sa boîte, donc son ombre sur le
+ * rail.
+ */
 function rerenderSubjectsToolbar() {
   const toolbarHost = document.getElementById("situationsToolbarHost");
-  if (!toolbarHost) return;
-  if (toolbarHost.dataset.toolbarOwner === "situations") {
-    toolbarHost.innerHTML = "";
-    return;
-  }
-  if (!store.situationsView?.showTableOnly) {
-    toolbarHost.innerHTML = "";
-    return;
-  }
-  const headerHtml = renderSituationsViewHeaderHtml();
-  if (!String(headerHtml || "").trim()) {
-    toolbarHost.innerHTML = "";
-    return;
-  }
-  toolbarHost.innerHTML = `
-    <div class="project-situations__table-toolbar project-page-shell project-page-shell--toolbar">
-      ${headerHtml}
-    </div>
-  `;
+  if (toolbarHost) toolbarHost.innerHTML = "";
 }
 
 function formatObjectiveMeta(objective) {
@@ -5041,6 +5066,8 @@ function getObjectiveById(objectiveId) {
     retirerLaRechercheEpinglee,
     epinglerLaVueAuRail,
     basculerLeMenuDeLaVue,
+    basculerLeMenuDesEpingles,
+    fermerLeMenuDesEpingles,
     fermerLeMenuDeLaVue,
     cocherUnSujet,
     cocherTousLesSujets,

@@ -27,16 +27,23 @@ import { renderProjectTableToolbar, renderProjectTableToolbarGroup } from "./pro
 /**
  * @param {object} options
  * @param {string} options.titre le nom de l'écran
+ * @param {string} [options.titreHtml] un titre qui porte plus que son nom — une
+ *   icône, une couleur, une épingle. Il **remplace** `titre` plutôt que de s'y
+ *   ajouter : deux titres sur une ligne ne se lisent pas. Ce qui vient par là
+ *   n'est pas échappé, et n'a donc à venir que du code.
  * @param {string} [options.actionsHtml] ce qui se pose à droite — un bouton, souvent
  * @param {string} [options.className] de quoi distinguer un écran, jamais de quoi
  *   le recalibrer : la taille et les espacements viennent d'ici
  */
-export function renderTitreDEcranHtml({ titre = "", actionsHtml = "", className = "" } = {}) {
+export function renderTitreDEcranHtml({
+  titre = "", titreHtml = "", actionsHtml = "", className = ""
+} = {}) {
+  const dit = String(titreHtml || "").trim()
+    || (titre ? `<div class="project-table-toolbar__title">${escapeHtml(titre)}</div>` : "");
+
   return renderProjectTableToolbar({
     className: `project-table-toolbar--titre ${className}`.trim(),
-    leftHtml: renderProjectTableToolbarGroup({
-      html: `<div class="project-table-toolbar__title">${escapeHtml(titre)}</div>`
-    }),
+    leftHtml: dit ? renderProjectTableToolbarGroup({ html: dit }) : "",
     rightHtml: actionsHtml ? renderProjectTableToolbarGroup({ html: actionsHtml }) : ""
   });
 }

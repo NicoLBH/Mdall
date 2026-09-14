@@ -244,14 +244,19 @@ export function gestesDeLaVue(vue = {}, { avecModifier = false } = {}) {
 export const REFUS = {
   SANS_REQUETE: "sans_requete",
   SANS_NOM: "sans_nom",
-  DEJA_LA: "deja_la"
+  DEJA_LA: "deja_la",
+  /** Cette recherche est déjà une entrée du rail — « Mentions », « Créé par moi »… */
+  DEJA_UNE_LECTURE: "deja_une_lecture"
 };
 
 export const PHRASES_DU_REFUS = {
   [REFUS.SANS_REQUETE]: "Une vue sans recherche ne montrerait rien : écrivez ce qu'elle doit retenir.",
   [REFUS.SANS_NOM]: "Donnez-lui un nom : c'est par lui qu'on la retrouve dans le rail.",
-  [REFUS.DEJA_LA]: "Une vue porte déjà ce nom. Deux vues du même nom ne se distinguent plus."
+  [REFUS.DEJA_LA]: "Une vue porte déjà ce nom. Deux vues du même nom ne se distinguent plus.",
+  [REFUS.DEJA_UNE_LECTURE]: "Le rail fait déjà cette recherche."
 };
+
+
 
 /**
  * Ce qui empêche d'enregistrer cette vue, ou `""`.
@@ -260,9 +265,16 @@ export const PHRASES_DU_REFUS = {
  * rail ; la description ne se lit que sur l'écran des vues, et l'exiger ferait
  * inventer une phrase pour passer.
  */
-export function refusDeLaVue({ requete = "", nom = "", vues = [], id = "" } = {}) {
+export function refusDeLaVue({ requete = "", nom = "", vues = [], id = "", lectures = [] } = {}) {
   if (!texte(requete)) return REFUS.SANS_REQUETE;
   if (!texte(nom)) return REFUS.SANS_NOM;
+
+  // **Une vue qui double une lecture du rail n'ajoute rien, et prend quelque
+  // chose.** Enregistrer `mention:moi` sous un autre nom fabrique une seconde
+  // entrée qui fait exactement ce que « Mentions » fait déjà — et comme une vue
+  // se reconnaît à sa requête, l'écran affichait ensuite le nom de la vue quand
+  // on cliquait « Mentions ». Deux noms pour une chose, c'est la règle 10.
+  if (laLectureDoublee({ requete, lectures })) return REFUS.DEJA_UNE_LECTURE;
 
   const replie = texte(nom).toLowerCase();
   const homonyme = (Array.isArray(vues) ? vues : [])
@@ -271,9 +283,41 @@ export function refusDeLaVue({ requete = "", nom = "", vues = [], id = "" } = {}
   return homonyme ? REFUS.DEJA_LA : "";
 }
 
-/** La phrase d'un refus, ou `""` quand il n'y en a pas. */
-export function phraseDuRefus(motif) {
-  return PHRASES_DU_REFUS[texte(motif)] ?? "";
+/**
+ * La lecture du rail que cette requête double, ou `null`.
+ *
+ * **Exactement la même requête**, et pas une qui la contient : `mention:moi
+ * label:cr-chantier` est une autre question, et la refuser interdirait de
+ * partir d'une lecture pour en affiner une vue — ce qui est le geste normal.
+ *
+ * La requête vide est écartée avant d'arriver ici (une vue sans recherche est
+ * déjà refusée) ; sans cela, « Sujets », dont la requête est vide, doublerait
+ * tout.
+ */
+export function laLectureDoublee({ requete = "", lectures = [] } = {}) {
+  const dite = texte(requete);
+  if (!dite) return null;
+
+  return (Array.isArray(lectures) ? lectures : [])
+    .find((lecture) => texte(lecture?.requete) === dite) ?? null;
+}
+
+/**
+ * La phrase d'un refus, ou `""` quand il n'y en a pas.
+ *
+ * **Le motif seul ne suffit pas pour un doublon de lecture.** « Le rail fait
+ * déjà cette recherche » fait chercher laquelle parmi cinq ; la nommer met le
+ * doigt dessus. Le nom est facultatif — on ne prétend pas le connaître quand
+ * on ne l'a pas (règle 5).
+ */
+export function phraseDuRefus(motif, { lecture = "" } = {}) {
+  const dite = PHRASES_DU_REFUS[texte(motif)] ?? "";
+  if (!dite) return "";
+
+  const nom = texte(lecture);
+  return nom && texte(motif) === REFUS.DEJA_UNE_LECTURE
+    ? `${dite} C'est « ${nom} », dans le rail.`
+    : dite;
 }
 
 /**

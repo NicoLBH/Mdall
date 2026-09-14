@@ -496,11 +496,25 @@ function unNoeud(attribut) {
 }
 
 test("le rail porte tous les attributs que l'écoute cherche", () => {
-  const html = rail({ epingles: [recherchePourLEcran({ id: "e1", query: "priorité:haute", title: "X", rail: true })] });
+  const epingles = [recherchePourLEcran({ id: "e1", query: "priorité:haute", title: "X", rail: true })];
+
+  // **Les deux états du rail.** Replié, il ne dessine pas les mêmes choses :
+  // l'attribut qui ouvre la liste des épinglées n'existe que là, et ne serait
+  // donc vérifié dans aucun des deux si l'on n'en regardait qu'un.
+  const html = `${rail({ epingles })}${rail({ epingles, replie: true })}`;
 
   for (const attribut of ["data-sujets-lecture", "data-sujets-derailler",
-    "data-sujets-sousvue", "data-sujets-ecran", "data-project-rail-collapse"]) {
+    "data-sujets-sousvue", "data-sujets-ecran", "data-project-rail-collapse",
+    "data-sujets-epingles-menu"]) {
     assert.ok(html.includes(attribut), `le rail ne porte pas « ${attribut} »`);
+  }
+
+  // Et chacun déclenche un geste : un attribut que rien n'écoute est un bouton
+  // mort, ce qui est déjà arrivé sur cet écran.
+  for (const attribut of new Set([...html.matchAll(/(data-sujets-[a-z-]+)/g)].map(([, a]) => a))) {
+    if (SANS_GESTE.includes(attribut)) continue;
+    assert.notEqual(gesteDesSujets(unNoeud(attribut)).geste, GESTE.RIEN,
+      `le rail pose « ${attribut} » et rien ne l'écoute`);
   }
 });
 
@@ -1034,4 +1048,60 @@ test("une vue rangée ne porte pas d'épingle, et rien ne s'écrit sans vue", ()
   assert.doesNotMatch(renderTitreDeLaVueHtml({ ...LA_VUE, auRail: false }), /sujets-vue-titre__rail/);
   assert.equal(renderTitreDeLaVueHtml(null), "");
   assert.equal(renderTitreDeLaVueHtml({}), "");
+});
+
+/* ── Les épinglées quand le rail est replié ──────────────────────────────── */
+
+const DEUX_EPINGLES = [
+  recherchePourLEcran({
+    id: "e1", query: "priorité:haute", title: "Bloquants", rail: true, icon: "alert", color: "rouge"
+  }),
+  recherchePourLEcran({
+    id: "e2", query: "label:bug", title: "Liste des bugs", rail: true, icon: "tag", color: "bleu"
+  })
+];
+
+/**
+ * **Replié, une liste de noms ne tient pas.** Les entrées y étaient réduites à
+ * leur icône : douze vues faisaient douze pastilles de couleur sans un mot, et
+ * l'on cliquait au hasard pour retrouver la sienne — ce qui coûte un clic *et*
+ * une navigation à annuler.
+ */
+test("replié, les vues épinglées tiennent sous une seule épingle", () => {
+  const html = rail({ epingles: DEUX_EPINGLES, replie: true });
+
+  assert.match(html, /data-sujets-epingles-menu="1"/);
+  // Les lignes ne sont plus là : ni leur croix de retrait, ni leur requête.
+  assert.doesNotMatch(html, /data-sujets-derailler/);
+});
+
+/** Déplié, elles reprennent leurs lignes : c'est là qu'on les lit. */
+test("déplié, les vues épinglées gardent leurs lignes", () => {
+  const html = rail({ epingles: DEUX_EPINGLES, replie: false });
+
+  assert.doesNotMatch(html, /data-sujets-epingles-menu/);
+  assert.match(html, /data-sujets-derailler="e1"/);
+  assert.match(html, /Bloquants/);
+});
+
+/** Fermé, le menu ne se lit pas ; ouvert, il les nomme toutes. */
+test("la liste des épinglées s'ouvre et se ferme", () => {
+  const ferme = rail({ epingles: DEUX_EPINGLES, replie: true });
+  const ouvert = rail({ epingles: DEUX_EPINGLES, replie: true, menuDesEpingles: true });
+
+  assert.match(ferme, /sujets-rail__epingles-liste" role="menu" hidden/);
+  assert.doesNotMatch(ouvert, /sujets-rail__epingles-liste" role="menu" hidden/);
+
+  for (const nom of ["Bloquants", "Liste des bugs"]) {
+    assert.ok(ouvert.includes(nom), `« ${nom} » manque à la liste des épinglées`);
+  }
+  // Chacune mène à sa requête, et porte son habit : c'est à cela qu'on la
+  // reconnaît.
+  assert.match(ouvert, /data-sujets-lecture="priorité:haute"/);
+  assert.match(ouvert, /#f85149/);
+});
+
+/** Aucune épinglée : ni épingle, ni menu — il n'y aurait rien dedans. */
+test("sans vue épinglée, l'épingle du rail replié ne paraît pas", () => {
+  assert.doesNotMatch(rail({ epingles: [], replie: true }), /sujets-rail__epingles/);
 });
