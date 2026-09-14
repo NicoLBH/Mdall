@@ -49,7 +49,34 @@
  * raison — on fabrique le moteur, pas un écran de plus par type de dépôt.
  */
 
+import { describeConflict } from "./memory-conflict.js";
+import { ITEM } from "./proposition-state.js";
+import { motDeLaNature, nomDeLaLigne } from "./proposition-review.js";
+
 const texte = (valeur) => String(valeur ?? "").trim();
+
+/**
+ * Ce qu'on a répondu à une ligne mise en cause.
+ *
+ * Deux réponses, et elles disent la même chose des deux côtés : on retient
+ * **celle-ci**. Garder, c'est refuser la ligne que la proposition apporte ;
+ * prendre, c'est l'accepter. Le vocabulaire est celui de l'écran, et il vit
+ * ici parce que c'est ici qu'on sait ce qu'une ligne porte.
+ */
+export const TRANCHE = {
+  /** Ce que le projet retenait a été gardé. */
+  GARDE: "garde",
+  /** Ce que cette proposition apporte a été pris. */
+  PRIS: "pris"
+};
+
+/** Ce qui a été répondu à une ligne, ou `null` si personne ne s'est prononcé. */
+function trancheDe(item) {
+  const statut = texte(item?.status);
+  if (statut === ITEM.REFUSED) return TRANCHE.GARDE;
+  if (statut === ITEM.ACCEPTED) return TRANCHE.PRIS;
+  return null;
+}
 
 /** L'issue d'un contrôle. */
 export const ISSUE = {
@@ -185,18 +212,42 @@ export const CONTROLES = [
     // « 29 contradictions doivent être arbitrées » sans en voir une seule, avec
     // pour seule issue un « Passer outre » global — c'est-à-dire assumer en bloc
     // vingt-neuf décisions qu'on n'avait pas lues.
-    concerne: ({ conflits = [] }) => (Array.isArray(conflits) ? conflits : [])
-      .filter((conflit) => conflit?.item?.status === "proposed")
-      .map((conflit) => ({
+    //
+    // **Elles restent listées une fois tranchées.** Elles disparaissaient au
+    // clic, si bien qu'on ne voyait pas ce qu'on venait de décider : la liste
+    // raccourcissait, et c'est tout. On garde donc chaque ligne avec sa réponse,
+    // et le compte dit où l'on en est.
+    concerne: ({ conflits = [] }) => (Array.isArray(conflits) ? conflits : []).map((conflit) => {
+      // **La même description que le panneau des Dépôts.** Elle sait nommer
+      // chaque nature et dire ce que chaque côté affirme ; la recopier ici en
+      // plus court aurait fait deux lectures du même conflit, et c'est celle
+      // qu'on ne regarde pas qui aurait eu raison (règle 4).
+      const dit = safe(() => describeConflict(conflit)) ?? {};
+
+      return {
         itemType: texte(conflit?.item?.itemType),
         itemKey: texte(conflit?.item?.itemKey),
-        sujet: texte(conflit?.item?.payload?.subject) || texte(conflit?.item?.itemKey),
-        // Ce que le projet retenait, et ce que la proposition apporte : c'est
-        // l'écart qu'on tranche, pas une ligne de plus à cocher.
-        avant: texte(conflit?.before),
-        apres: texte(conflit?.after),
-        conflit: true
-      })),
+        nature: motDeLaNature(conflit?.item?.itemType, 1),
+        // Le nom, pas l'identifiant : on lisait « fermeture c0700a98-c591… » et
+        // l'on demandait de trancher là-dessus.
+        sujet: texte(dit.title) || nomDeLaLigne(conflit?.item ?? {}),
+        // Ce que le projet retenait, et ce que ce lot en dit : c'est l'écart
+        // qu'on tranche, pas une ligne de plus à cocher.
+        //
+        // **La valeur quand il y en a une, la phrase sinon.** Une altitude qui
+        // passe de 300 à 320 se lit d'un coup d'œil ; un sujet à fermer, lui,
+        // n'affirme aucune valeur — sa contradiction est qu'il avait été écarté
+        // et que ce rapport le redit, et cela ne se dit qu'en toutes lettres.
+        avant: texte(conflit?.before) || texte(dit.before?.statement),
+        apres: texte(conflit?.after) || texte(dit.after?.statement),
+        // La phrase du document, quand elle a été conservée. Sans elle, on
+        // arbitre entre deux étiquettes.
+        extrait: texte(dit.after?.excerpt) || texte(dit.before?.excerpt),
+        quand: conflit?.decidedAt ?? null,
+        conflit: true,
+        tranche: trancheDe(conflit?.item)
+      };
+    }),
     verifier: ({ conflits = [], blocage = "" }) => {
       if (texte(blocage)) return nonTenu("La mémoire du projet est contredite.", blocage);
       if (conflits.length === 0) return tenu("Aucune décision passée n'est remise en cause par ce dépôt.");
@@ -291,9 +342,11 @@ export function passerLesControles(contexte = {}) {
       ton: tonDuControle({ issue: rendu.issue, bloquant, arbitre }),
       phrase: texte(rendu.phrase),
       detail: texte(rendu.detail),
-      // Ce que ce contrôle met en cause. Vide sur un contrôle tenu : il n'y a
-      // rien à écarter de ce qui passe.
-      concerne: rendu.issue === ISSUE.NON_TENU ? (safe(() => controle.concerne?.(contexte)) ?? []) : [],
+      // Ce que ce contrôle met en cause — **tenu ou non**, dès lors qu'il
+      // bloque. Ne le calculer que sur un contrôle non tenu faisait disparaître
+      // le bloc d'arbitrage à la seconde où la dernière ligne basculait : on ne
+      // pouvait plus relire ce qu'on venait de trancher, ni le signer.
+      concerne: bloquant ? (safe(() => controle.concerne?.(contexte)) ?? []) : [],
       // Qui a assumé, quand, et pourquoi — ou `null`.
       arbitre
     };
@@ -302,16 +355,88 @@ export function passerLesControles(contexte = {}) {
   const bilan = { tenu: 0, "non-tenu": 0, "sans-objet": 0, "non-verifiable": 0, "en-cours": 0 };
   for (const ligne of lignes) bilan[ligne.issue] += 1;
 
+  // Ce sur quoi il y a eu, ou il y a encore, quelque chose à trancher. Un
+  // contrôle redevenu tenu y reste tant qu'il porte des lignes qu'on a
+  // tranchées une à une : c'est là qu'on les relit avant de signer.
+  const arbitrages = lignes.filter(
+    (ligne) => estAArbitrer(ligne) || (ligne.bloquant && ligne.concerne.some((entree) => entree?.conflit))
+  );
+
+  const restants = arbitrages.reduce((compte, ligne) => compte + resteAArbitrer(ligne), 0);
+  // Il n'y a de procès-verbal à signer que s'il y a eu quelque chose à arbitrer.
+  // Faire signer une proposition que rien ne retenait ajouterait un clic à
+  // chaque fusion pour n'attester de rien.
+  const aSigner = arbitrages.length > 0;
+
+  // **Une signature vaut pour ce qu'elle a signé.** Revenir sur une décision
+  // après coup — depuis l'autre onglet, depuis la liste des contradictions — ne
+  // doit pas laisser courir un procès-verbal qui décrit autre chose. Les
+  // comptes sont dans la ligne signée : il suffit de les comparer.
+  const compte = comptesDeLArbitrage(arbitrages);
+  const signature = contexte.signature ?? null;
+  const signe = Boolean(signature)
+    && signature.gardees === compte.gardees
+    && signature.prises === compte.prises
+    && signature.assumes === compte.assumes;
+
   return {
     lignes,
     bilan,
-    // Ce qui reste à trancher avant de pouvoir fusionner.
-    arbitrages: lignes.filter(estAArbitrer),
-    // Ce qui retient la fusion : un contrôle bloquant qui n'est pas tenu **et
-    // que personne n'a assumé**. Un contrôle non vérifiable ne bloque pas — il
-    // s'affiche, et c'est à l'humain de décider s'il signe sans savoir.
-    bloque: lignes.some((ligne) => estAArbitrer(ligne) && !ligne.arbitre)
+    arbitrages,
+    /** Combien de décisions restent à prendre, lignes comprises. */
+    restants,
+    aSigner,
+    signe,
+    /** Le procès-verbal tel qu'il a été signé, s'il vaut encore. */
+    signature: signe ? signature : null,
+    /**
+     * Ce qui retient la fusion.
+     *
+     * **Trancher n'est pas signer.** La dernière ligne basculée, l'écran passait
+     * à « Prêt à fusionner » sans qu'on ait rien arrêté : on fusionnait au clic
+     * qui suivait, sans avoir relu l'ensemble. Le procès-verbal est l'acte qui
+     * clôt la série de choix ; la fusion vient après, et c'est un autre geste.
+     *
+     * Un contrôle non vérifiable, lui, ne bloque toujours pas : ne pas savoir
+     * n'est pas un échec, et c'est à l'humain de décider s'il signe sans savoir.
+     */
+    bloque: restants > 0 || (aSigner && !signe)
   };
+}
+
+/**
+ * Ce qui a été tranché, par verdict.
+ *
+ * C'est ce que le procès-verbal enregistre, et c'est aussi ce qui permet de
+ * savoir s'il vaut encore : une signature qui annonce douze gardées sur un
+ * arbitrage qui en compte onze ne décrit plus la séance qu'elle a close.
+ */
+export function comptesDeLArbitrage(arbitrages = []) {
+  const lignes = Array.isArray(arbitrages) ? arbitrages : [];
+  const enConflit = lignes.flatMap((ligne) => (ligne?.concerne ?? []).filter((entree) => entree?.conflit));
+
+  return {
+    gardees: enConflit.filter((entree) => entree.tranche === TRANCHE.GARDE).length,
+    prises: enConflit.filter((entree) => entree.tranche === TRANCHE.PRIS).length,
+    assumes: lignes.filter((ligne) => ligne?.arbitre).length
+  };
+}
+
+/**
+ * Combien de décisions un contrôle attend encore.
+ *
+ * Zéro quand il a été passé outre : quelqu'un a signé pour l'assumer, et c'est
+ * une décision. Zéro aussi quand toutes ses lignes ont été tranchées. Sinon :
+ * le nombre de lignes en attente, ou une seule décision quand il n'y a rien à
+ * trancher ligne à ligne — on ne peut alors que l'écarter ou passer outre.
+ */
+export function resteAArbitrer(ligne = {}) {
+  if (ligne?.arbitre) return 0;
+
+  const enConflit = (ligne?.concerne ?? []).filter((entree) => entree?.conflit);
+  if (enConflit.length > 0) return enConflit.filter((entree) => !entree.tranche).length;
+
+  return estAArbitrer(ligne) ? 1 : 0;
 }
 
 /**

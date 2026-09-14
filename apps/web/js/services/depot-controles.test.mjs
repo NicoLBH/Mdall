@@ -2,8 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  passerLesControles, resumeDesControles, tonDuControle, CONTROLES, ISSUE, TON
+  passerLesControles, resteAArbitrer, resumeDesControles, tonDuControle,
+  CONTROLES, ISSUE, TON, TRANCHE
 } from "./depot-controles.js";
+import { CONFLICT } from "./memory-conflict.js";
+import { ITEM_TYPE } from "./proposition-review.js";
 
 const issueDe = (rendu, id) => rendu.lignes.find((ligne) => ligne.id === id).issue;
 
@@ -186,19 +189,92 @@ test("le contrôle de la mémoire nomme les contradictions qu'il met en cause", 
         payload: { subject: "Zone de neige" } },
       before: "A1", after: "A2"
     },
-    // Une contradiction déjà tranchée ne se repropose pas.
+    // Une contradiction déjà tranchée **reste listée**, avec ce qu'on lui a
+    // répondu : elle disparaissait au clic, et l'on ne voyait pas ce qu'on
+    // venait de décider ni ce qu'il restait.
     { item: { itemType: "base-datum", itemKey: "altitude", status: "accepted" }, before: "300", after: "320" }
   ];
 
   const rendu = passerLesControles({ ...CONTEXTE, conflits, blocage: "1 contradiction." });
   const ligne = rendu.lignes.find((entree) => entree.id === "memoire");
 
-  assert.equal(ligne.concerne.length, 1);
+  assert.equal(ligne.concerne.length, 2);
   assert.equal(ligne.concerne[0].sujet, "Zone de neige");
   // **L'écart, pas seulement la clé** : on tranche en lisant les deux lectures.
   assert.equal(ligne.concerne[0].avant, "A1");
   assert.equal(ligne.concerne[0].apres, "A2");
   assert.equal(ligne.concerne[0].conflit, true);
+
+  // Celle qui n'a pas de réponse, et celle qui en a une.
+  assert.equal(ligne.concerne[0].tranche, null);
+  assert.equal(ligne.concerne[1].tranche, TRANCHE.PRIS);
+  // Et le contrôle n'attend plus qu'une décision, pas deux.
+  assert.equal(resteAArbitrer(ligne), 1);
+});
+
+/**
+ * **« fermeture c0700a98-c591-4bff-8809-3eaaa4ee3961 ».**
+ *
+ * Vingt-neuf lignes ainsi, et deux boutons pour trancher. Le nom se cherchait
+ * sous `payload.subject`, que la moitié des natures n'emploient pas : on
+ * demandait de décider sur un identifiant, et la nature s'affichait en jargon.
+ */
+test("une contradiction sans valeur se nomme et se dit quand même", () => {
+  const conflits = [{
+    kind: CONFLICT.REFUSED_REAFFIRMED,
+    reason: "Déjà traité en réunion 9.",
+    decidedAt: "2026-03-12T09:00:00Z",
+    item: {
+      itemType: ITEM_TYPE.FERMETURE,
+      itemKey: "c0700a98-c591-4bff-8809-3eaaa4ee3961",
+      status: "proposed",
+      payload: { titre: "Reprise du carrelage hall B" }
+    },
+    // Une fermeture n'affirme aucune valeur : les deux côtés sont vides.
+    before: "",
+    after: "",
+    beforePayload: {}
+  }];
+
+  const rendu = passerLesControles({ ...CONTEXTE, conflits, blocage: "1 contradiction." });
+  const [entree] = rendu.lignes.find((ligne) => ligne.id === "memoire").concerne;
+
+  assert.equal(entree.sujet, "Reprise du carrelage hall B");
+  assert.equal(entree.nature, "sujet à fermer");
+  // Ce qui fait la contradiction, faute de valeurs à opposer.
+  assert.match(entree.avant, /avait été écarté.*Déjà traité/);
+  assert.match(entree.apres, /à nouveau/);
+  assert.equal(entree.quand, "2026-03-12T09:00:00Z");
+});
+
+/**
+ * **Le bloc disparaissait à la seconde où la dernière ligne basculait.**
+ *
+ * Les lignes en cause n'étaient calculées que sur un contrôle non tenu : la
+ * dernière contradiction tranchée, le contrôle redevenait tenu et tout s'en
+ * allait — la liste qu'on venait de remplir, et le bouton qui sert à la signer.
+ * On ne pouvait donc ni se relire ni signer, alors que c'est exactement le
+ * moment où l'on fait les deux.
+ */
+test("tout tranché, le contrôle reste là pour être relu et signé", () => {
+  const conflits = [
+    { item: { itemType: "base-datum", itemKey: "zone-de-neige", status: "refused" }, before: "A1", after: "A2" },
+    { item: { itemType: "base-datum", itemKey: "altitude", status: "accepted" }, before: "300", after: "320" }
+  ];
+
+  // Plus rien ne bloque : toutes les contradictions ont une réponse.
+  const rendu = passerLesControles({ ...CONTEXTE, conflits, blocage: "" });
+  const ligne = rendu.lignes.find((entree) => entree.id === "memoire");
+
+  assert.equal(ligne.issue, ISSUE.TENU);
+  assert.equal(ligne.concerne.length, 2);
+  assert.deepEqual(ligne.concerne.map((entree) => entree.tranche), [TRANCHE.GARDE, TRANCHE.PRIS]);
+
+  // Il reste donc à l'écran, sans rien demander d'autre que la signature.
+  assert.deepEqual(rendu.arbitrages.map((entree) => entree.id), ["memoire"]);
+  assert.equal(rendu.restants, 0);
+  assert.equal(rendu.aSigner, true);
+  assert.equal(rendu.bloque, true);
 });
 
 /** Un contrôle tenu ne met rien en cause : il n'y a rien à écarter de ce qui passe. */

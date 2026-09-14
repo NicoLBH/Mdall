@@ -40,32 +40,25 @@
  * Rien ici n'appelle quoi que ce soit : des lignes entrent, des comptes sortent.
  */
 
-import { ITEM_TYPE } from "./proposition-review.js";
+import { ITEM_TYPE, MOTS_DE_LA_NATURE, motDeLaNature } from "./proposition-review.js";
 import { ITEM } from "./proposition-state.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
-/** Comment chaque nature se nomme quand on la compte. */
-export const MOTS_DE_LA_NATURE = {
-  [ITEM_TYPE.DOCUMENT]: ["document", "documents"],
-  [ITEM_TYPE.ATTACHMENT]: ["rattachement", "rattachements"],
-  [ITEM_TYPE.AVIS]: ["avis", "avis"],
-  [ITEM_TYPE.SUJET]: ["sujet à ouvrir", "sujets à ouvrir"],
-  [ITEM_TYPE.RELANCE]: ["sujet à relancer", "sujets à relancer"],
-  [ITEM_TYPE.FERMETURE]: ["sujet à fermer", "sujets à fermer"],
-  [ITEM_TYPE.INTERVENANT]: ["société à ajouter", "sociétés à ajouter"],
-  [ITEM_TYPE.LOT]: ["lot à ouvrir", "lots à ouvrir"],
-  [ITEM_TYPE.LABEL]: ["label à poser", "labels à poser"],
-  [ITEM_TYPE.OBJECTIF]: ["jalon à poser", "jalons à poser"]
-};
+/**
+ * Comment chaque nature se nomme quand on la compte.
+ *
+ * **Elle a déménagé auprès des natures elle-même**, et se relit d'ici : les
+ * lignes d'arbitrage en avaient besoin aussi et n'y avaient pas accès, si bien
+ * qu'elles affichaient `fermeture` là où le bilan écrivait « sujet à fermer ».
+ * Un mot vit à un seul endroit (règle 10).
+ */
+export { MOTS_DE_LA_NATURE };
 
 /** Les natures qui n'ont rien à annoncer : elles ne sont pas un geste sur le projet. */
-const SANS_ANNONCE = new Set([ITEM_TYPE.ARBITRAGE]);
+const SANS_ANNONCE = new Set([ITEM_TYPE.ARBITRAGE, ITEM_TYPE.PROCES_VERBAL]);
 
-const mot = (nature, combien) => {
-  const [singulier, pluriel] = MOTS_DE_LA_NATURE[nature] ?? [nature, nature];
-  return combien > 1 ? pluriel : singulier;
-};
+const mot = (nature, combien) => motDeLaNature(nature, combien);
 
 /**
  * Ce que la proposition porte, par nature, avec ce qui est écarté.

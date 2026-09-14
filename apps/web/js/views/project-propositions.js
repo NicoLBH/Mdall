@@ -104,15 +104,27 @@ import {
 import { ETAT, arbreDesReperes, comparerDesReperes, lignesNumerotees, resumeDuDiff } from "../services/depot-reperes.js";
 import { aChange, reperesDuDepot } from "../services/depot-carburants.js";
 import { limiterAuDepot } from "../services/depot-portee.js";
-import { ISSUE, TON, passerLesControles, resumeDesControles } from "../services/depot-controles.js";
+import {
+  ISSUE,
+  TON,
+  TRANCHE,
+  passerLesControles,
+  resteAArbitrer,
+  resumeDesControles
+} from "../services/depot-controles.js";
 import {
   MOTIF_MIN,
   arbitrageARetirer,
   arbitrageAEcrire,
   arbitragesEnregistres,
   decisionsDuPasserOutre,
+  decisionsEnBloc,
   motifRecevable,
   phraseDesArbitrages,
+  phraseDuProcesVerbal,
+  procesVerbalAEcrire,
+  procesVerbalARetirer,
+  procesVerbalEnregistre,
   refusDesLignesMisesEnCause
 } from "../services/arbitrage-des-controles.js";
 import { bindSideResizer, renderSideResizer } from "./ui/side-resizer.js";
@@ -1671,10 +1683,11 @@ function renderDiffStat(review) {
 }
 
 function reviewTabs(review) {
-  // Ce qui retient la fusion se compte à part, et se voit sans ouvrir l'onglet :
-  // un arbitrage en attente est la seule chose qui empêche de signer.
-  const retient = (passerLesControles(contexteDesControles(view.open ?? {}, review)).arbitrages ?? [])
-    .filter((ligne) => !ligne.arbitre).length;
+  // Ce qui retient la fusion se compte à part, et se voit sans ouvrir l'onglet.
+  // La séance non signée compte pour un : c'est un geste qui manque, et il est
+  // sur cet onglet-là.
+  const rendu = passerLesControles(contexteDesControles(view.open ?? {}, review));
+  const retient = (rendu.restants ?? 0) + (rendu.aSigner && !rendu.signe ? 1 : 0);
 
   const compte = {
     // La proposition est elle-même un dépôt — c'est la carte de tête —, et les
@@ -3147,6 +3160,9 @@ function contexteDesControles(proposition, review) {
     // lignes, pas depuis un drapeau d'écran : un arbitrage est une décision, et
     // une décision qui ne survit pas au rechargement n'en est pas une.
     arbitrages: arbitragesEnregistres(review.decisionRows ?? []),
+    // Le procès-verbal, s'il a été signé. Lu depuis les lignes, comme le reste :
+    // une signature qui ne survit pas au rechargement n'en est pas une.
+    signature: procesVerbalEnregistre(review.decisionRows ?? []),
     depot: depotDeLaProposition({
       proposition,
       affirmations: affirmationsDUneProposition(review.decisionRows ?? []),
@@ -3514,6 +3530,20 @@ function renderDepotLignes(proposition, review) {
  * quelqu'un qui a résolu un conflit Git sait lire cet écran sans qu'on le lui
  * explique.
  *
+ * ## Le bouton de sortie signe, il ne replie pas
+ *
+ * « Marquer comme résolus » ne faisait que refermer le bloc : l'écran passait à
+ * « Prêt à fusionner » au clic qui réglait la dernière ligne, et l'on fusionnait
+ * sans avoir relu l'ensemble. C'est désormais le **procès-verbal** de la
+ * séance — une ligne de la proposition, avec sa date et son compte —, et c'est
+ * lui qui ouvre la fusion. Trancher et fusionner sont deux décisions.
+ *
+ * ## Deux compteurs, parce qu'ils ne disent pas la même chose
+ *
+ * Celui de l'en-tête dit où en est la séance ; celui de chaque contrôle dit
+ * combien de ses lignes sont tranchées. Le second manquait, et l'on cliquait
+ * vingt-neuf fois sans voir que quoi que ce soit avançait.
+ *
  * ## Le champ n'apparaît qu'au moment où il sert
  *
  * « Passer outre » ouvre la zone de motif ; tant qu'on n'a pas cliqué, elle
@@ -3525,22 +3555,44 @@ function renderArbitrages(review) {
   const arbitrages = rendu.arbitrages ?? [];
   if (arbitrages.length === 0) return "";
 
-  const restants = arbitrages.filter((ligne) => !ligne.arbitre).length;
-  // **Replié quand on l'a dit résolu.** Un bloc qui reste ouvert après qu'on a
-  // tout tranché occupe le haut de l'écran pour ne plus rien demander. Il
-  // rouvre de lui-même si un blocage revient.
-  if (restants === 0 && view.arbitragesReplies === true) return "";
-
   const gele = review.frozen === true;
+  const restants = rendu.restants ?? 0;
+  const signature = rendu.signature ?? null;
   const courant = Math.min(Math.max(Number(view.arbitrageCourant) || 0, 0), arbitrages.length - 1);
+
+  // **Signé, le bloc se replie sur son procès-verbal.** Rouvert, tout revient :
+  // la séance n'est close que tant qu'on ne revient pas dessus.
+  if (signature) {
+    return `
+      <section class="arbitrages arbitrages--signe" data-arbitrages>
+        <div class="arbitrages__tete">
+          <span class="arbitrages__icone">${svgIcon("shield", { className: "octicon" })}</span>
+          <span class="arbitrages__titre">Arbitrage signé</span>
+          <span class="arbitrages__compte">${escapeHtml(
+            [
+              phraseDuProcesVerbal(signature),
+              signature.quand ? `Le ${formatDate(signature.quand)}` : ""
+            ].filter(Boolean).join(" ")
+          )}</span>
+          ${gele ? "" : `
+            <button type="button" class="gh-btn gh-btn--sm arbitrages__sortie"
+              title="Rouvrir la séance : les décisions restent, la fusion redevient retenue."
+              data-arbitrages-rouvrir>Revenir dessus</button>
+          `}
+        </div>
+      </section>
+    `;
+  }
 
   return `
     <section class="arbitrages" data-arbitrages>
       <div class="arbitrages__tete">
-        <span class="arbitrages__icone">${svgIcon("alert", { className: "octicon" })}</span>
-        <span class="arbitrages__titre">Ce qui retient la fusion</span>
+        <span class="arbitrages__icone">${svgIcon(restants > 0 ? "alert" : "check", { className: "octicon" })}</span>
+        <span class="arbitrages__titre">${
+          restants > 0 ? "Ce qui retient la fusion" : "Ce qui retenait la fusion"
+        }</span>
         <span class="arbitrages__compte${restants > 0 ? " is-blocking" : ""}">
-          ${escapeHtml(phraseDesArbitrages(arbitrages))}
+          ${escapeHtml(phraseDesArbitrages({ arbitrages, restants, signe: false }))}
         </span>
 
         ${
@@ -3563,8 +3615,8 @@ function renderArbitrages(review) {
           ${restants > 0 || gele ? "disabled" : ""}
           title="${escapeHtml(
             restants > 0
-              ? `${restants} blocage(s) à trancher avant de pouvoir marquer comme résolus`
-              : "Tous les blocages sont tranchés : ceci referme le bloc. La fusion est déjà possible."
+              ? `${restants} décision(s) à prendre avant de pouvoir signer`
+              : "Signer le procès-verbal de cet arbitrage. C'est lui qui ouvre la fusion."
           )}"
           data-arbitrages-resolus>
           Marquer comme résolus
@@ -3573,7 +3625,8 @@ function renderArbitrages(review) {
 
       <p class="arbitrages__doctrine">
         On a le droit de fusionner sans tout savoir : un chantier n'attend pas qu'un rapport
-        arrive. Ce qu'on ne peut plus faire, c'est le faire sans le dire.
+        arrive. Ce qu'on ne peut plus faire, c'est le faire sans le dire. Tranchez, relisez,
+        puis signez : la fusion vient après, et c'est une autre décision.
       </p>
 
       ${arbitrages.map((ligne, rang) => renderArbitrage(ligne, { gele, courant: rang === courant })).join("")}
@@ -3585,11 +3638,22 @@ function renderArbitrages(review) {
  * Un blocage, dans le corps du « fichier ».
  *
  * Les lignes en cause portent **un trait vertical rouge** — le marqueur d'un
- * côté de conflit —, et les deux issues sont posées juste au-dessus, en bleu :
- * on décide en regardant ce sur quoi on décide, sans avoir à remonter.
+ * côté de conflit —, et les issues sont posées juste au-dessus : on décide en
+ * regardant ce sur quoi on décide, sans avoir à remonter.
+ *
+ * ## Deux paires de boutons faisaient le même geste
+ *
+ * « Écarter / Passer outre » agissait sur toutes les lignes du contrôle, et
+ * « Garder / Prendre » sur chacune. Empilés dans le même cadre, ils se lisaient
+ * comme deux mécanismes concurrents alors qu'ils font exactement la même chose
+ * — l'un en gros, l'autre au détail. Quand les lignes se tranchent une à une,
+ * les boutons d'ensemble le disent donc : **Tout garder**, **Tout prendre**. Le
+ * couple d'origine ne reste que là où il n'y a rien à trancher ligne à ligne.
  */
 function renderArbitrage(ligne, { gele = false, courant = false } = {}) {
   const concerne = ligne.concerne ?? [];
+  const enConflit = concerne.filter((entree) => entree?.conflit);
+  const reste = resteAArbitrer(ligne);
   const ouvertePourMotif = view.arbitrageEnCoursDeMotif === ligne.id;
   const motif = String(view.motifsDArbitrage?.[ligne.id] ?? "");
   const recevable = motifRecevable(motif);
@@ -3607,10 +3671,16 @@ function renderArbitrage(ligne, { gele = false, courant = false } = {}) {
           [ligne.phrase, ligne.detail].filter(Boolean).join(" ")
         )}</span>
         ${
-          concerne.length > 0
-            ? `<span class="arbitrage__lignes-compte">${concerne.length} ligne${
-                concerne.length > 1 ? "s" : ""}</span>`
-            : ""
+          // **Le compte bouge à chaque clic.** Il disait « 29 lignes » et ne
+          // changeait jamais : on tranchait sans voir que quelque chose s'était
+          // passé.
+          enConflit.length > 0
+            ? `<span class="arbitrage__lignes-compte">${
+                enConflit.length - reste}/${enConflit.length} tranchée${enConflit.length > 1 ? "s" : ""}</span>`
+            : concerne.length > 0
+              ? `<span class="arbitrage__lignes-compte">${concerne.length} ligne${
+                  concerne.length > 1 ? "s" : ""}</span>`
+              : ""
         }
       </div>
 
@@ -3630,19 +3700,38 @@ function renderArbitrage(ligne, { gele = false, courant = false } = {}) {
              </div>`
           : gele
             ? `<p class="arbitrage__passe-dit">Cette proposition est close : plus rien ne s'arbitre.</p>`
-            : `<div class="arbitrage__choix">
-                 <button type="button" class="gh-btn gh-btn--sm arbitrage__choix-bouton"
-                   data-arbitrage-ecarter="${escapeHtml(ligne.id)}"
-                   ${concerne.length === 0 ? "disabled" : ""}
-                   title="${escapeHtml(
-                     concerne.length === 0
-                       ? "Ce contrôle ne met aucune ligne en cause : il n'y a rien à écarter."
-                       : `${concerne.length} ligne(s) sortent de la proposition`
-                   )}">Écarter</button>
-                 <button type="button" class="gh-btn gh-btn--sm arbitrage__choix-bouton${
-                   ouvertePourMotif ? " is-ouvert" : ""}"
-                   data-arbitrage-ouvrir-motif="${escapeHtml(ligne.id)}">Passer outre</button>
-               </div>`
+            : enConflit.length > 0
+              ? `<div class="arbitrage__choix">
+                   <button type="button" class="gh-btn gh-btn--sm arbitrage__choix-bouton"
+                     data-arbitrage-tout="${escapeHtml(`${TRANCHE.GARDE}|${ligne.id}`)}"
+                     ${reste === 0 ? "disabled" : ""}
+                     title="${escapeHtml(
+                       reste === 0
+                         ? "Tout est tranché."
+                         : `Retenir ce que le projet disait sur les ${reste} ligne(s) restantes`
+                     )}">Tout garder</button>
+                   <button type="button" class="gh-btn gh-btn--sm arbitrage__choix-bouton"
+                     data-arbitrage-tout="${escapeHtml(`${TRANCHE.PRIS}|${ligne.id}`)}"
+                     ${reste === 0 ? "disabled" : ""}
+                     title="${escapeHtml(
+                       reste === 0
+                         ? "Tout est tranché."
+                         : `Retenir ce que la proposition apporte sur les ${reste} ligne(s) restantes`
+                     )}">Tout prendre</button>
+                 </div>`
+              : `<div class="arbitrage__choix">
+                   <button type="button" class="gh-btn gh-btn--sm arbitrage__choix-bouton"
+                     data-arbitrage-ecarter="${escapeHtml(ligne.id)}"
+                     ${concerne.length === 0 ? "disabled" : ""}
+                     title="${escapeHtml(
+                       concerne.length === 0
+                         ? "Ce contrôle ne met aucune ligne en cause : il n'y a rien à écarter."
+                         : `${concerne.length} ligne(s) sortent de la proposition`
+                     )}">Écarter</button>
+                   <button type="button" class="gh-btn gh-btn--sm arbitrage__choix-bouton${
+                     ouvertePourMotif ? " is-ouvert" : ""}"
+                     data-arbitrage-ouvrir-motif="${escapeHtml(ligne.id)}">Passer outre</button>
+                 </div>`
       }
 
       ${
@@ -3671,46 +3760,69 @@ function renderArbitrage(ligne, { gele = false, courant = false } = {}) {
       ${
         concerne.length > 0 && !ligne.arbitre
           ? `<div class="arbitrage__corps">
-               ${concerne.slice(0, 40).map((entree) => `
-                 <div class="arbitrage__ligne">
-                   <span class="arbitrage__ligne-nature">${escapeHtml(entree.itemType ?? "")}</span>
-                   <span class="arbitrage__ligne-dit">
-                     ${escapeHtml(entree.sujet || entree.itemKey || "")}
-                     ${
-                       // **L'écart, pas seulement la clé.** On tranche une
-                       // contradiction en lisant les deux lectures, pas en
-                       // cochant un identifiant.
-                       entree.avant || entree.apres
-                         ? `<span class="arbitrage__ecart">
-                              <span class="arbitrage__ecart-avant">${escapeHtml(entree.avant || "—")}</span>
-                              →
-                              <span class="arbitrage__ecart-apres">${escapeHtml(entree.apres || "—")}</span>
-                            </span>`
-                         : ""
-                     }
-                   </span>
-                   ${
-                     // **Chacune se tranche.** Un « Passer outre » global sur
-                     // vingt-neuf contradictions revient à assumer en bloc
-                     // vingt-neuf décisions qu'on n'a pas lues.
-                     entree.conflit && !gele
-                       ? `<span class="arbitrage__ligne-gestes">
-                            <button type="button" class="gh-btn gh-btn--sm"
-                              data-conflit-garder="${escapeHtml(`${entree.itemType}|${entree.itemKey}`)}"
-                              title="Retenir ce que le projet disait : cette ligne est écartée">Garder</button>
-                            <button type="button" class="gh-btn gh-btn--sm"
-                              data-conflit-prendre="${escapeHtml(`${entree.itemType}|${entree.itemKey}`)}"
-                              title="Retenir ce que cette proposition apporte">Prendre</button>
-                          </span>`
-                       : ""
-                   }
-                 </div>
-               `).join("")}
+               ${concerne.slice(0, 40).map((entree) => renderLigneEnCause(entree, gele)).join("")}
                ${concerne.length > 40
                  ? `<div class="arbitrage__ligne arbitrage__ligne--reste">et ${
                      concerne.length - 40} autre(s)</div>`
                  : ""}
              </div>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+/**
+ * Une ligne mise en cause, et ce qu'on lui a répondu.
+ *
+ * ## Elle reste après qu'on a tranché
+ *
+ * Elle disparaissait au clic. Sur vingt-neuf lignes, cela ne se voyait pas : la
+ * liste raccourcissait d'un cran quelque part, et rien ne disait ce qu'on venait
+ * de décider ni ce qu'il restait. On ne pouvait pas non plus se relire avant de
+ * signer — ce qui est précisément ce qu'un procès-verbal suppose.
+ *
+ * Les deux boutons restent donc offerts, l'un marqué : se corriger est un clic,
+ * et le verdict se lit sans avoir à s'en souvenir.
+ */
+function renderLigneEnCause(entree, gele = false) {
+  const cle = `${entree.itemType}|${entree.itemKey}`;
+  const tranche = entree.tranche ?? null;
+  const nature = entree.nature || entree.itemType || "";
+
+  const bouton = (verdict, mot, aide) => `
+    <button type="button" class="gh-btn gh-btn--sm arbitrage__geste${
+      tranche === verdict ? " is-choisi" : ""}"
+      ${tranche === verdict ? "disabled aria-pressed=\"true\"" : ""}
+      data-conflit-trancher="${escapeHtml(`${verdict}|${cle}`)}"
+      title="${escapeHtml(aide)}">${mot}</button>
+  `;
+
+  return `
+    <div class="arbitrage__ligne${tranche ? ` is-tranche is-${escapeHtml(tranche)}` : ""}">
+      <span class="arbitrage__ligne-nature">${escapeHtml(nature)}</span>
+      <span class="arbitrage__ligne-dit">
+        ${escapeHtml(entree.sujet || entree.itemKey || "")}
+        ${
+          // **L'écart, pas seulement la clé.** On tranche une contradiction en
+          // lisant les deux lectures, pas en cochant un identifiant.
+          entree.avant || entree.apres
+            ? `<span class="arbitrage__ecart">
+                 <span class="arbitrage__ecart-avant">${escapeHtml(entree.avant || "—")}${
+                   entree.quand ? ` (${escapeHtml(formatDate(entree.quand))})` : ""}</span>
+                 →
+                 <span class="arbitrage__ecart-apres">${escapeHtml(entree.apres || "—")}</span>
+               </span>`
+            : ""
+        }
+        ${entree.extrait ? `<span class="arbitrage__extrait">« ${escapeHtml(entree.extrait)} »</span>` : ""}
+      </span>
+      ${
+        entree.conflit && !gele
+          ? `<span class="arbitrage__ligne-gestes">
+               ${bouton(TRANCHE.GARDE, "Garder", "Retenir ce que le projet disait : cette ligne est écartée")}
+               ${bouton(TRANCHE.PRIS, "Prendre", "Retenir ce que cette proposition apporte")}
+             </span>`
           : ""
       }
     </div>
@@ -5050,14 +5162,14 @@ function bindReview(root) {
     });
   }
 
-  // Rien à écrire : c'est une sortie, pas une décision. Elle n'est offerte que
-  // lorsque tout est tranché, et elle referme le bloc.
+  // **Signer la séance.** Ce n'est pas un pli qu'on referme : c'est l'acte qui
+  // arrête la série de choix, et c'est lui qui ouvre la fusion.
   for (const bouton of root.querySelectorAll("[data-arbitrages-resolus]")) {
-    bouton.addEventListener("click", () => {
-      view.arbitragesReplies = true;
-      view.arbitrageEnCoursDeMotif = "";
-      renderContent(root);
-    });
+    bouton.addEventListener("click", () => signerLArbitrage(root));
+  }
+
+  for (const bouton of root.querySelectorAll("[data-arbitrages-rouvrir]")) {
+    bouton.addEventListener("click", () => rouvrirLArbitrage(root));
   }
 
   for (const bouton of root.querySelectorAll("[data-application-reprendre]")) {
@@ -5065,17 +5177,23 @@ function bindReview(root) {
   }
 
   // Trancher une contradiction, ligne à ligne, depuis le bloc d'arbitrage.
-  for (const bouton of root.querySelectorAll("[data-conflit-garder]")) {
+  for (const bouton of root.querySelectorAll("[data-conflit-trancher]")) {
     bouton.addEventListener("click", () => {
-      const item = findItem(bouton.getAttribute("data-conflit-garder"));
-      if (item) decide(root, [item], ITEM.REFUSED, "Ce que le projet retenait a été gardé.");
+      const [verdict, ...reste] = String(bouton.getAttribute("data-conflit-trancher") ?? "").split("|");
+      const item = findItem(reste.join("|"));
+      if (!item) return;
+
+      if (verdict === TRANCHE.GARDE) decide(root, [item], ITEM.REFUSED, "Ce que le projet retenait a été gardé.");
+      else decide(root, [item], ITEM.ACCEPTED);
     });
   }
 
-  for (const bouton of root.querySelectorAll("[data-conflit-prendre]")) {
+  // Le même geste, sur tout ce qui reste. Deux boutons de moins à cliquer
+  // vingt-neuf fois, et pas une issue de plus.
+  for (const bouton of root.querySelectorAll("[data-arbitrage-tout]")) {
     bouton.addEventListener("click", () => {
-      const item = findItem(bouton.getAttribute("data-conflit-prendre"));
-      if (item) decide(root, [item], ITEM.ACCEPTED);
+      const [verdict, ...reste] = String(bouton.getAttribute("data-arbitrage-tout") ?? "").split("|");
+      trancherEnBloc(root, reste.join("|"), verdict);
     });
   }
 
@@ -5768,6 +5886,58 @@ async function passerOutre(root, id) {
 }
 
 /**
+ * Trancher d'un coup tout ce qui reste d'un contrôle.
+ *
+ * Le même geste que ligne à ligne, appliqué à ce qui n'a pas encore de réponse.
+ * Ce qui a déjà été tranché n'est pas retouché : quelqu'un s'est prononcé.
+ */
+async function trancherEnBloc(root, id, verdict) {
+  const controle = arbitragePar(id);
+  if (!controle) return;
+
+  const tranche = verdict === TRANCHE.GARDE ? TRANCHE.GARDE : TRANCHE.PRIS;
+  const decisions = decisionsEnBloc({ controle, items: view.review?.items ?? [], tranche });
+  if (decisions.length === 0) return;
+
+  await appliquerLesDecisions(root, decisions);
+}
+
+/**
+ * Signer le procès-verbal de l'arbitrage.
+ *
+ * **C'est lui qui ouvre la fusion.** Avant, l'écran passait à « Prêt à
+ * fusionner » au clic qui réglait la dernière ligne : on fusionnait sans avoir
+ * relu l'ensemble, et « Marquer comme résolus » ne faisait que replier un bloc.
+ * Trancher et fusionner sont deux gestes, et la signature est celui qui sépare
+ * les deux.
+ */
+async function signerLArbitrage(root) {
+  const rendu = passerLesControles(contexteDesControles(view.open ?? {}, view.review ?? {}));
+  const decision = procesVerbalAEcrire({ arbitrages: rendu.arbitrages ?? [] });
+
+  if (!decision) {
+    view.review.notice = `Il reste ${rendu.restants} décision(s) à prendre : on ne signe pas `
+      + "le procès-verbal d'une séance qui n'est pas finie.";
+    renderContent(root);
+    return;
+  }
+
+  const ecrit = await appliquerLesDecisions(root, [decision]);
+  if (ecrit) view.arbitrageEnCoursDeMotif = "";
+}
+
+/**
+ * Rouvrir la séance.
+ *
+ * La signature **reste**, refusée : un acte qui a eu lieu ne s'efface pas, on
+ * dit seulement qu'il ne vaut plus. La fusion redevient retenue, ce qui est
+ * exactement ce qu'on demande en revenant dessus.
+ */
+async function rouvrirLArbitrage(root) {
+  await appliquerLesDecisions(root, [procesVerbalARetirer()]);
+}
+
+/**
  * Revenir sur ce qu'on a assumé.
  *
  * La ligne **reste**, refusée : une décision qui a eu lieu ne s'efface pas, on
@@ -5858,13 +6028,21 @@ async function merge(root) {
   // « Confirmer la fusion », rien ne se passait, et rien n'expliquait pourquoi :
   // le bouton paraissait cassé. Un logiciel qui refuse sans le dire est pire
   // qu'un logiciel qui refuse.
-  const restants = unresolvedConflicts(view.review.conflicts ?? []).length;
-  if (restants > 0) {
+  //
+  // **Et la règle est celle des contrôles, pas une seconde écrite ici.** Le
+  // garde-fou ne comptait que les contradictions ; il ignorait donc la
+  // signature, et un écran qui exigeait le procès-verbal se serait heurté à une
+  // fusion qui ne le demandait pas. Une valeur écrite à deux endroits finit par
+  // diverger (règle 4).
+  const controles = passerLesControles(contexteDesControles(proposition, view.review));
+  if (controles.bloque) {
     view.review.noticeTitre = "La fusion attend une décision";
-    view.review.notice = `${restants} contradiction${restants > 1 ? "s" : ""} avec la mémoire du `
-      + `projet ${restants > 1 ? "restent" : "reste"} à trancher. ${restants > 1 ? "Elles sont" : "Elle est"} `
-      + "listée dans l'onglet Changements, en tête : retenez ce que le projet disait, ou ce que "
-      + "cette proposition apporte.";
+    view.review.notice = controles.restants > 0
+      ? `Il reste ${controles.restants} décision${controles.restants > 1 ? "s" : ""} à prendre sur ce `
+        + "qui retient la fusion. C'est en tête de l'onglet Changements : gardez ce que le projet "
+        + "disait, ou prenez ce que cette proposition apporte."
+      : "Tout est tranché, mais le procès-verbal n'est pas signé. « Marquer comme résolus », en "
+        + "tête de l'onglet Changements : c'est lui qui arrête l'arbitrage, et la fusion vient après.";
     view.review.confirming = false;
     view.tab = "changes";
     renderContent(root);

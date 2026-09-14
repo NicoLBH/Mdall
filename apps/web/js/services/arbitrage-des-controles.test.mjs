@@ -12,10 +12,12 @@ import assert from "node:assert/strict";
 
 import {
   MOTIF_MIN, VERDICT, arbitrageAEcrire, arbitrageARetirer, arbitragesEnregistres,
-  decisionsDuPasserOutre, motifRecevable, phraseDesArbitrages, refusDesLignesMisesEnCause
+  decisionsDuPasserOutre, decisionsEnBloc, motifRecevable, phraseDesArbitrages,
+  procesVerbalAEcrire, procesVerbalARetirer, procesVerbalEnregistre,
+  refusDesLignesMisesEnCause
 } from "./arbitrage-des-controles.js";
 import { unresolvedConflicts } from "./memory-conflict.js";
-import { passerLesControles, ISSUE, TON } from "./depot-controles.js";
+import { passerLesControles, ISSUE, TON, TRANCHE } from "./depot-controles.js";
 import { ITEM_TYPE } from "./proposition-review.js";
 import { ITEM } from "./proposition-state.js";
 
@@ -185,13 +187,174 @@ test("un blocage se lève en écrivant pourquoi, et la fusion redevient possible
     }])
   });
 
-  assert.equal(apres.bloque, false);
+  // Plus rien à trancher — mais la fusion reste retenue tant que la séance
+  // n'est pas signée : trancher et fusionner sont deux gestes.
+  assert.equal(apres.restants, 0);
+  assert.equal(apres.bloque, true);
+
   const ligne = apres.lignes.find((l) => l.id === "provenance");
   // **Ni vert ni rouge.** Le fait n'a pas changé ; quelqu'un l'a assumé.
   assert.equal(ligne.issue, ISSUE.NON_TENU);
   assert.equal(ligne.ton, TON.ASSUME);
   assert.equal(ligne.issueLabel, "Passé outre");
   assert.match(ligne.arbitre.motif, /géotechnicien/);
+
+  // Signé, et seulement alors.
+  const pv = procesVerbalAEcrire({ arbitrages: apres.arbitrages });
+  const signe = passerLesControles({
+    ...CONTEXTE,
+    arbitrages: new Map([["provenance", ligne.arbitre]]),
+    signature: procesVerbalEnregistre([{
+      item_type: pv.item.itemType, item_key: pv.item.itemKey,
+      payload: pv.item.payload, status: pv.status, decided_at: "2026-09-14T11:00:00Z"
+    }])
+  });
+
+  assert.equal(signe.bloque, false);
+});
+
+/**
+ * **Un écran qui disait oui, et une fusion qui ne le demandait pas.**
+ *
+ * « Marquer comme résolus » ne faisait que replier un bloc : l'écran passait à
+ * « Prêt à fusionner » au clic qui réglait la dernière ligne. On fusionnait donc
+ * sans avoir jamais relu l'ensemble, et la signature n'attestait de rien.
+ */
+test("on ne signe pas une séance qui n'est pas finie", () => {
+  const rendu = passerLesControles(CONTEXTE);
+  assert.equal(rendu.restants, 1);
+  assert.equal(procesVerbalAEcrire({ arbitrages: rendu.arbitrages }), null);
+});
+
+/** Rien à arbitrer, rien à signer : un clic de plus à chaque fusion pour rien. */
+test("sans arbitrage, aucun procès-verbal n'est demandé", () => {
+  const rendu = passerLesControles({
+    ...CONTEXTE,
+    depot: { affirmations: 2, provenance: "verifie", pourquoi: "", sansProvenance: [] }
+  });
+
+  assert.equal(rendu.aSigner, false);
+  assert.equal(rendu.bloque, false);
+  assert.equal(procesVerbalAEcrire({ arbitrages: rendu.arbitrages }), null);
+});
+
+/**
+ * Le procès-verbal dit **ce qui a été arrêté**, pas ce que le contrôle dirait
+ * aujourd'hui : il se relit des mois après, quand les contrôles ont changé.
+ */
+test("le procès-verbal compte ce qui a été gardé, pris et assumé", () => {
+  const controle = {
+    id: "memoire",
+    label: "Rien ne contredit la mémoire du projet",
+    concerne: [
+      { itemType: "base-datum", itemKey: "a", conflit: true, tranche: TRANCHE.GARDE },
+      { itemType: "base-datum", itemKey: "b", conflit: true, tranche: TRANCHE.PRIS },
+      { itemType: "base-datum", itemKey: "c", conflit: true, tranche: TRANCHE.PRIS }
+    ]
+  };
+
+  const decision = procesVerbalAEcrire({ arbitrages: [controle] });
+
+  assert.equal(decision.item.itemType, ITEM_TYPE.PROCES_VERBAL);
+  assert.equal(decision.status, ITEM.ACCEPTED);
+  assert.deepEqual(
+    { gardees: decision.item.payload.gardees, prises: decision.item.payload.prises },
+    { gardees: 1, prises: 2 }
+  );
+  assert.match(decision.reason, /1 gardée, 2 prises/);
+
+  // Et il se relit tel qu'il a été signé.
+  const relu = procesVerbalEnregistre([{
+    item_type: decision.item.itemType, item_key: decision.item.itemKey,
+    payload: decision.item.payload, status: decision.status, decided_at: "2026-09-14T11:00:00Z"
+  }]);
+  assert.deepEqual([relu.gardees, relu.prises, relu.quand], [1, 2, "2026-09-14T11:00:00Z"]);
+
+  // Rouvert, il ne vaut plus — mais la ligne reste : un acte qui a eu lieu ne
+  // s'efface pas.
+  const retrait = procesVerbalARetirer();
+  assert.equal(procesVerbalEnregistre([{
+    item_type: retrait.item.itemType, item_key: retrait.item.itemKey,
+    payload: retrait.item.payload, status: retrait.status
+  }]), null);
+});
+
+/**
+ * **Une signature vaut pour ce qu'elle a signé.**
+ *
+ * On peut revenir sur une décision après avoir signé — depuis l'autre onglet,
+ * depuis la liste des contradictions. Le procès-verbal décrirait alors une
+ * séance qui n'a pas eu lieu, et la fusion s'appuierait dessus. Ses comptes
+ * disent s'il tient encore.
+ */
+test("revenir sur une décision périme le procès-verbal", () => {
+  const lignes = (tranche) => [{
+    id: "memoire",
+    label: "Rien ne contredit la mémoire du projet",
+    bloquant: true,
+    issue: ISSUE.TENU,
+    arbitre: null,
+    concerne: [
+      { itemType: "base-datum", itemKey: "a", conflit: true, tranche: TRANCHE.GARDE },
+      { itemType: "base-datum", itemKey: "b", conflit: true, tranche }
+    ]
+  }];
+
+  const pv = procesVerbalAEcrire({ arbitrages: lignes(TRANCHE.PRIS) });
+  const signature = procesVerbalEnregistre([{
+    item_type: pv.item.itemType, item_key: pv.item.itemKey,
+    payload: pv.item.payload, status: pv.status, decided_at: "2026-09-14T11:00:00Z"
+  }]);
+
+  // Tel qu'il a été signé : la séance tient.
+  const conflitsDe = (statutB) => [
+    { item: { itemType: "base-datum", itemKey: "a", status: "refused" }, before: "1", after: "2" },
+    { item: { itemType: "base-datum", itemKey: "b", status: statutB }, before: "3", after: "4" }
+  ];
+
+  // Une provenance établie : seul l'arbitrage de la mémoire est en jeu ici.
+  const SAIN = { ...CONTEXTE, depot: { affirmations: 2, provenance: "verifie", pourquoi: "", sansProvenance: [] } };
+
+  const tel = passerLesControles({ ...SAIN, conflits: conflitsDe("accepted"), blocage: "", signature });
+  assert.equal(tel.signe, true);
+  assert.equal(tel.bloque, false);
+
+  // La même ligne gardée plutôt que prise : le compte ne correspond plus.
+  const autre = passerLesControles({ ...SAIN, conflits: conflitsDe("refused"), blocage: "", signature });
+  assert.equal(autre.signe, false);
+  assert.equal(autre.signature, null);
+  assert.equal(autre.bloque, true);
+});
+
+/**
+ * **Deux paires de boutons pour un seul geste.** « Écarter / Passer outre »
+ * agissait sur toutes les lignes, « Garder / Prendre » sur chacune : dans le
+ * même cadre, ils se lisaient comme deux mécanismes concurrents. Le geste
+ * d'ensemble est donc le geste de ligne, appliqué à ce qui reste.
+ */
+test("trancher en bloc ne touche que ce qui n'a pas de réponse", () => {
+  const controle = {
+    id: "memoire",
+    concerne: [
+      { itemType: "base-datum", itemKey: "contrainte-de-sol", conflit: true },
+      { itemType: "base-datum", itemKey: "nappe", conflit: true }
+    ]
+  };
+
+  const items = [
+    { itemType: "base-datum", itemKey: "contrainte-de-sol", payload: { value: "0,2 MPa" }, status: ITEM.PROPOSED },
+    // Déjà tranchée : quelqu'un s'est prononcé, un geste d'ensemble n'y revient pas.
+    { itemType: "base-datum", itemKey: "nappe", payload: { value: "-2,40 m" }, status: ITEM.ACCEPTED }
+  ];
+
+  const gardees = decisionsEnBloc({ controle, items, tranche: TRANCHE.GARDE });
+  assert.deepEqual(gardees.map((d) => [d.item.itemKey, d.status]), [["contrainte-de-sol", ITEM.REFUSED]]);
+  // Refuser est un `upsert` : le payload doit survivre, sans quoi la ligne perd
+  // ce qu'elle disait.
+  assert.deepEqual(gardees[0].item.payload, { value: "0,2 MPa" });
+
+  const prises = decisionsEnBloc({ controle, items, tranche: TRANCHE.PRIS });
+  assert.deepEqual(prises.map((d) => [d.item.itemKey, d.status]), [["contrainte-de-sol", ITEM.ACCEPTED]]);
 });
 
 /**
@@ -213,11 +376,20 @@ test("un arbitrage devenu sans objet ne peint plus rien", () => {
   assert.equal(rendu.arbitrages.length, 0);
 });
 
-/** Le silence quand il n'y a rien à trancher : un bloc à zéro finit par ne plus être lu. */
+/**
+ * Le silence quand il n'y a rien à trancher : un bloc à zéro finit par ne plus
+ * être lu. Et trois états qui ne se confondent pas — il reste à trancher, tout
+ * est tranché mais rien n'est signé, la séance est signée. Le deuxième se disait
+ * comme le troisième, « la fusion est possible », alors qu'elle ne l'était pas.
+ */
 test("sans blocage, il n'y a rien à dire", () => {
-  assert.equal(phraseDesArbitrages([]), "");
-  assert.equal(phraseDesArbitrages([{ arbitre: null }]), "1 à arbitrer");
-  assert.match(phraseDesArbitrages([{ arbitre: { motif: "x" } }]), /ce qui a été assumé est écrit/);
+  const bloquant = { arbitre: null, bloquant: true, issue: ISSUE.NON_TENU, concerne: [] };
+  const assume = { arbitre: { motif: "x" }, bloquant: true, issue: ISSUE.NON_TENU, concerne: [] };
+
+  assert.equal(phraseDesArbitrages({ arbitrages: [] }), "");
+  assert.equal(phraseDesArbitrages({ arbitrages: [bloquant] }), "1 à trancher");
+  assert.match(phraseDesArbitrages({ arbitrages: [assume] }), /il reste à signer/);
+  assert.match(phraseDesArbitrages({ arbitrages: [assume], signe: true }), /Procès-verbal signé/);
 });
 
 /** Les deux issues sont nommées, et il n'y en a pas de troisième. */

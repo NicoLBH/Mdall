@@ -35,7 +35,7 @@
  */
 
 import { ITEM } from "./proposition-state.js";
-import { ITEM_TYPE, STATUS_LABELS } from "./proposition-review.js";
+import { ITEM_TYPE, STATUS_LABELS, motDeLaNature, nomDeLaLigne } from "./proposition-review.js";
 
 /** Les deux formes de contradiction. */
 export const CONFLICT = {
@@ -333,22 +333,33 @@ export function describeConflict(conflict = {}, { memoire = null } = {}) {
     };
   }
 
+  // **Toutes les autres natures, nommées pour ce qu'elles sont.** Cette branche
+  // était écrite pour les documents et le disait — « Ce document avait été
+  // écarté » —, alors qu'y passent aussi les sujets à fermer, les relances, les
+  // lots et les labels. On lisait donc, sur un sujet du chantier, un titre réduit
+  // à son identifiant et une phrase qui parlait d'un document. Arbitrer là-dessus
+  // revient à deviner.
+  const quoi = motDeLaNature(item.itemType, 1);
+  const ecarte = kind === CONFLICT.REFUSED_REAFFIRMED;
+
   return {
-    title: payload.name ?? String(item.itemKey ?? ""),
+    title: nomDeLaLigne(item) || nomDeLaLigne({ ...item, payload: beforePayload }),
     before: {
-      heading: "Ce que vous aviez écarté",
-      statement: `Ce document avait été écarté${conflict.reason ? ` : ${conflict.reason}` : ""}`,
+      heading: ecarte ? "Ce que vous aviez écarté" : "Ce que le projet retient",
+      statement: ecarte
+        ? `Ce ${quoi} avait été écarté${conflict.reason ? ` : ${conflict.reason}` : ""}`
+        : `Ce ${quoi} avait été retenu.`,
       excerpt: excerptOf(beforePayload),
       ...sourceOf(beforePayload)
     },
     after: {
-      heading: "Ce que ce lot propose",
-      statement: "Il est proposé à nouveau.",
+      heading: ecarte ? "Ce que ce lot réaffirme" : "Ce que ce lot propose",
+      statement: ecarte ? "Ce lot le propose à nouveau." : "Ce lot le propose autrement.",
       excerpt: excerptOf(payload),
       ...sourceOf(payload)
     },
-    keep: "le refus a été maintenu",
-    take: "le document a finalement été accepté"
+    keep: ecarte ? "le refus a été maintenu" : "ce que le projet retenait a été gardé",
+    take: "la lecture de ce lot a été retenue"
   };
 }
 
