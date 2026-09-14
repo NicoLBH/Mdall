@@ -164,7 +164,12 @@ export function champsDesSujets({
     // **Qui a ouvert le sujet**, et non qui le traite. Les deux se confondent
     // souvent et divergent toujours au moment où ça compte : on cherche ce
     // qu'on a soi-même relevé, pas ce qu'on doit faire.
-    champs.push({ key: "auteur", label: "Auteur", values: avecMoi(), multiple: true });
+    //
+    // **Un seul, et c'est la base qui le dit** : `subjects.created_by` est une
+    // colonne, pas une liste. Proposer d'en cocher deux promettrait les sujets
+    // ouverts par l'un **ou** l'autre — ce qu'on ne demande jamais — et ferait
+    // surtout croire qu'un sujet peut avoir deux auteurs.
+    champs.push({ key: "auteur", label: "Auteur", values: avecMoi() });
 
     // **Mentionné avec un `@`** — dans un titre, une description, un
     // commentaire. C'est ce qui appelle une réponse, et c'est la seule lecture
