@@ -20740,7 +20740,7 @@ body.proposition-merge-open{ overflow:hidden; }
 .arbitrage:last-child{ margin-bottom:0; }
 /* Le blocage sur lequel la navette est posée. Un compteur qui avance sans que
    rien ne bouge à l'écran ne sert à rien. */
-.arbitrage.is-courant{ border-color:var(--ton-doute); }
+.arbitrage.is-courant{ padding-left:10px; }
 .arbitrage.is-settled{ opacity:.9; }
 
 /* L'en-tête du fichier accueille aussi le bouton qui signe : il s'aligne avec
@@ -20834,11 +20834,27 @@ body.proposition-merge-open{ overflow:hidden; }
    chaque version. */
 .conflit{ margin:0 0 12px; }
 .conflit:last-child{ margin-bottom:0; }
-.conflit__lignes{
-  position:relative;
-  border-left:1px solid var(--ton-doute-vif);
+.conflit__lignes{ position:relative; }
+
+/* **Chaque ligne porte son bout de trait.** Une bordure sur le cadre entier
+   dépassait des deux retours — le trait montait au-dessus du premier marqueur
+   et descendait sous le dernier, et cela ne faisait pas un `[`. Les deux lignes
+   du bord n'en portent donc que la moitié, celle qui part du retour : le trait
+   commence et s'arrête exactement là où le retour le prend. */
+.conflit__ligne{ position:relative; }
+.conflit__ligne::after{
+  content:"";
+  position:absolute;
+  left:0;
+  top:0;
+  bottom:0;
+  width:1px;
+  background:var(--ton-doute-vif);
 }
-.conflit__ligne--marqueur{ position:relative; }
+.conflit__ligne--marqueur:first-child::after{ top:50%; }
+.conflit__ligne--marqueur:last-child::after{ bottom:50%; }
+
+/* Le retour horizontal, sur chacun des trois marqueurs. */
 .conflit__ligne--marqueur::before{
   content:"";
   position:absolute;

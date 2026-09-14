@@ -17,6 +17,14 @@ function dispatchProjectTabReselected({ projectId, tabId }) {
   }));
 }
 
+/**
+ * Remettre les compteurs de la barre à jour.
+ *
+ * **On redessine plutôt que d'écrire dans le nœud.** L'ancienne version posait
+ * le nombre dans la pastille existante : elle ne savait donc ni en créer une
+ * quand il y a de nouveau quelque chose, ni la retirer quand il n'y a plus
+ * rien — et un compte tombé à zéro restait affiché « 0 ».
+ */
 function updateSubjectsTabCounterDom() {
   const header = document.querySelector(".project-context-header");
   if (!header) return;
@@ -24,13 +32,7 @@ function updateSubjectsTabCounterDom() {
   const projectId = String(header.dataset.projectId || "");
   if (projectId && projectId !== String(store.currentProjectId || "")) return;
 
-  const subjectsTab = header.querySelector('.project-tabs a[data-project-tab-id="sujets"] .project-tabs__counter');
-  if (!subjectsTab) return;
-
-  const counters = getProjectTabCounters();
-  const value = Number(counters?.openSujets || 0);
-  subjectsTab.textContent = String(value);
-  subjectsTab.setAttribute("aria-label", `${value} élément(s)`);
+  rafraichirLesOngletsDuProjet();
 }
 
 export function bindProjectHeaderNavigation() {
@@ -86,51 +88,28 @@ export function bindProjectHeaderNavigation() {
 
 export { PROJECT_TAB_RESELECTED_EVENT };
 
-function getEffectiveSujetStatus(sujet) {
-  const decisions = Array.isArray(store.situationsView?.rawResult?.decisions)
-    ? store.situationsView.rawResult.decisions
-    : [];
-
-  const sujetId = String(sujet?.id || "");
-
-  const decision = decisions.find((d) => {
-    const entityType = String(d?.entity_type || d?.type || "").toLowerCase();
-    const entityId = String(d?.entity_id || d?.problem_id || d?.id || "");
-    return entityType === "sujet" && entityId === sujetId;
-  });
-
-  const d = String(decision?.decision || "").toUpperCase();
-  if (d === "CLOSED") return "closed";
-  if (d === "REOPENED") return "open";
-
-  return String(sujet?.status || "open").toLowerCase();
-}
-
+/**
+ * Les comptes de la barre d'onglets.
+ *
+ * ## Deux comptes, et l'un des deux mentait
+ *
+ * La barre annonçait 48 sujets ouverts pendant que le tableau en montrait 45.
+ * Les deux comptaient, chacun de son côté : la barre recomptait un cache de la
+ * liste des sujets en y superposant les décisions de situation, le tableau
+ * comptait ce qu'il affiche, et la base disait encore autre chose. Trois
+ * lectures du même fait — et celle qu'on regardait le moins avait raison.
+ *
+ * **La barre lit la base, et elle seule.** C'est le compte qu'une fusion met à
+ * jour, celui qu'un autre collaborateur ferait bouger, et celui qui survit à un
+ * rechargement. Le tableau, lui, dit ce que sa requête retient : les deux
+ * peuvent légitimement différer sous un filtre, mais ils ne peuvent plus se
+ * contredire sur le même lot (`docs/fondamentaux.md`, règle 4).
+ */
 function getProjectTabCounters() {
-  const rawSubjectsResult = store.projectSubjectsView?.rawSubjectsResult && typeof store.projectSubjectsView.rawSubjectsResult === "object"
-    ? store.projectSubjectsView.rawSubjectsResult
-    : (store.projectSubjectsView?.rawResult && typeof store.projectSubjectsView.rawResult === "object"
-      ? store.projectSubjectsView.rawResult
-      : null);
-  const rawSubjectsById = rawSubjectsResult?.subjectsById && typeof rawSubjectsResult.subjectsById === "object"
-    ? rawSubjectsResult.subjectsById
-    : null;
-
-  if (rawSubjectsById && Object.keys(rawSubjectsById).length && store.projectSubjectsView?.projectScopeId === String(store.currentProjectId || "")) {
-    let openSujets = 0;
-    let totalSujets = 0;
-
-    for (const sujet of Object.values(rawSubjectsById)) {
-      totalSujets += 1;
-      if (getEffectiveSujetStatus(sujet) === "open") {
-        openSujets += 1;
-      }
-    }
-
-    return { openSujets, totalSujets, openPropositions: store.projectPropositionsView?.openCount };
-  }
-
-  return { ...getCurrentProjectSubjectCounters(), openPropositions: store.projectPropositionsView?.openCount };
+  return {
+    ...getCurrentProjectSubjectCounters(),
+    openPropositions: store.projectPropositionsView?.openCount
+  };
 }
 
 function renderTabCount(tab, counters) {
@@ -139,6 +118,10 @@ function renderTabCount(tab, counters) {
   // regardé serait affirmer qu'il n'y a rien, ce qu'on ne sait pas.
   if (counters?.[tab.countKey] === undefined || counters?.[tab.countKey] === null) return "";
   const value = Number(counters[tab.countKey] || 0);
+  // **Zéro ne se porte pas.** Une pastille « 0 » sur Propositions dit qu'il n'y
+  // a rien à voir, en prenant la place de quelque chose à voir. L'absence de
+  // pastille le dit mieux, et sans bruit.
+  if (value <= 0) return "";
   return renderCountBadge(value, {
     className: "project-tabs__counter",
     ariaLabel: `${value} élément(s)`

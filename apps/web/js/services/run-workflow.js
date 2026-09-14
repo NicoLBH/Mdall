@@ -105,10 +105,65 @@ export function describeReadingStack(engineVersion, packs = []) {
   return [...new Set(morceaux)].join(" · ");
 }
 
+/**
+ * Le chemin d'exécution d'un geste, construit de ses propres étapes.
+ *
+ * ## Pourquoi celui-ci ne ressemble pas aux autres
+ *
+ * Le graphe d'une analyse est écrit d'avance : on sait qu'elle relit un corpus,
+ * qu'elle relève des avis, qu'elle écrit un suivi. Une fusion, non : ce qu'elle
+ * fait dépend de ce que la proposition porte — un compte rendu de chantier
+ * ouvre des lots et des sujets, un dépôt de fiches d'avis n'en ouvre aucun.
+ *
+ * Le graphe se lit donc **dans le journal** plutôt que dans une liste fixe.
+ * Une étape de plus dans le code de la fusion apparaît toute seule ici, et une
+ * étape qui n'a pas eu lieu ne s'invente pas (règle 5).
+ */
+function grapheDunGeste(corpus) {
+  const etapes = Array.isArray(corpus?.steps) ? corpus.steps : [];
+
+  const nodes = [];
+  if (corpus.proposition) {
+    nodes.push(node("proposition", "Proposition", corpus.proposition, {
+      tone: NODE.NEUTRAL,
+      icon: "git-pull-request"
+    }));
+  }
+
+  for (const etape of etapes) {
+    const rate = String(etape?.statut || "ok") === "echec";
+    const lignes = Array.isArray(etape?.lignes) ? etape.lignes : [];
+    nodes.push({
+      ...node(String(etape?.id || ""), String(etape?.label || ""), resumeDuneEtape(lignes, rate), {
+        tone: rate ? NODE.WARN : NODE.OK,
+        icon: rate ? "alert" : "check-circle-fill"
+      }),
+      // La durée vient de l'étape elle-même : elle l'a mesurée, personne ne la
+      // recalcule.
+      duration: etape?.ms === null || etape?.ms === undefined ? null : Number(etape.ms)
+    });
+  }
+
+  return nodes.filter((entree) => entree.id);
+}
+
+/** Ce qu'une étape dit d'elle-même, sous son nom : sa première ligne de journal. */
+function resumeDuneEtape(lignes, rate) {
+  const premier = lignes.find((ligne) => (rate ? ligne?.niveau === "echec" : true));
+  const dit = String(premier?.texte ?? premier?.groupe ?? "").trim();
+  // Une étape qui n'a rien consigné se dit muette plutôt que vide : « rien
+  // d'écrit » et « rien à écrire » ne sont pas la même chose (règle 5).
+  return dit || (lignes.length === 0 ? "aucun journal" : "");
+}
+
 export function buildRunGraph(entry = {}) {
   const corpus = entry?.details?.corpus ?? null;
 
   if (!corpus) return legacyGraph(entry);
+
+  // Un geste du projet — une fusion — porte son propre chemin : ses étapes sont
+  // le graphe, et les colonnes d'une analyse ne s'y appliquent pas.
+  if (String(corpus.geste || "").trim()) return grapheDunGeste(corpus);
 
   const nodes = [];
 
