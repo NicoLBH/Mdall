@@ -16,7 +16,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  GESTE, appliquerLeCompteRendu, labelsDuSujet, messageDeRelance, motifDeLaFermeture,
+  GESTE, appliquerLeCompteRendu, labelsDuSujet, motifDeLaFermeture,
   ouvrirLesLotsRetenus, phraseDeLApplication, reprendreCeQuiAEchoue, reprisesDuRapport,
   retenus, sujetsTouches
 } from "./appliquer-le-cr.js";
@@ -310,25 +310,30 @@ test("un sujet sans date d'échéance ne s'accroche à rien", async () => {
 /* ── La relance, qui est tout l'objet ────────────────────────────────────── */
 
 /**
- * **C'est ce qui manquait, et son absence vidait le reste de son sens.** Sans
- * ligne dans le fil, un point redit depuis huit réunions ne se distinguait pas
- * d'un point que personne n'avait relu.
+ * **Une relance n'écrit plus de commentaire.**
+ *
+ * Chaque reprise en écrivait un — « CR n° 11 reporte ce point » —, puis le
+ * n° 13, puis le n° 15. Sur un point qui traîne depuis dix réunions, la
+ * discussion devient un journal de machine où l'on ne retrouve plus ce que les
+ * gens, eux, ont écrit.
+ *
+ * Un compte rendu qui reprend un point ne prend pas la parole : c'est un fait,
+ * il s'enregistre dans `subject_cr_mentions`, et le fil le dit en une ligne
+ * d'activité — dix reprises de la même phrase en une ligne au lieu de dix
+ * messages identiques.
  */
-test("un sujet relancé reçoit une ligne dans son fil, et lui seul", async () => {
+test("un sujet relancé ne reçoit aucun commentaire, et se compte quand même", async () => {
   const { journal, portes } = portesFeintes({ lots: [], labels: [], objectifs: [] });
 
-  await appliquerLeCompteRendu({
+  const rapport = await appliquerLeCompteRendu({
     projectId: "p-1", items: LES_LIGNES, ouverts: [UN_SUJET_NEUF],
     compteRendu: "CR n° 12 du 02/05/2025", portes
   });
 
-  assert.equal(journal.messages.length, 1);
-  const [message] = journal.messages;
-  assert.equal(message.subjectId, "sujet-chape");
-  assert.equal(message.projectId, "p-1");
-  assert.match(message.bodyMarkdown, /CR n° 12 du 02\/05\/2025/);
-  assert.match(message.bodyMarkdown, /la chape reste à couler/);
-  assert.match(message.bodyMarkdown, /page 6/);
+  assert.deepEqual(journal.messages, []);
+  // Le compte reste : c'est lui que le bilan de la fusion annonce, et une
+  // relance qui ne se compterait plus se lirait comme une relance perdue.
+  assert.equal(rapport.relances, 1);
 });
 
 /**
@@ -346,20 +351,26 @@ test("un sujet ouvert par cette même proposition ne reçoit pas de relance", ()
   assert.equal(touches[0].relance, false);
 });
 
-/** Le message porte de quoi se vérifier, et ne dit que ce qui est écrit. */
-test("le message de relance ne dit que ce que le document écrit", () => {
-  const dit = messageDeRelance({
-    point: { titre: "Chape", reference: "12.03", page: 6, evidence: "la chape reste à couler" },
-    compteRendu: "CR n° 12"
+/**
+ * **Le seul commentaire qu'un compte rendu écrit est celui d'une fermeture.**
+ * Fermer engage : la phrase qui le justifie se lit à côté de ce que les gens en
+ * ont dit. Reprendre n'engage rien — c'est une activité, pas une parole.
+ */
+test("seule une fermeture écrit encore dans le fil", async () => {
+  const { journal, portes } = portesFeintes({ lots: [], labels: [], objectifs: [] });
+
+  await appliquerLeCompteRendu({
+    projectId: "p-1",
+    items: [
+      ligne(ITEM_TYPE.RELANCE, { sujetId: "sujet-chape", titre: "Chape", evidence: "reste à couler" }),
+      ligne(ITEM_TYPE.FERMETURE, { sujetId: "sujet-cloison", titre: "Cloison", motif: FERMETURE.DITE })
+    ],
+    compteRendu: "CR n° 12",
+    portes
   });
 
-  assert.match(dit, /\*\*CR n° 12\*\* reporte ce point\./);
-  assert.match(dit, /> la chape reste à couler/);
-  assert.match(dit, /Point 12\.03/);
-  // Rien sur ce que le document ne dit pas : une ligne « échéance : — » ferait
-  // lire une absence comme une décision.
-  assert.doesNotMatch(dit, /échéance/);
-  assert.doesNotMatch(dit, /revient à/);
+  assert.equal(journal.messages.length, 1);
+  assert.match(journal.messages[0].bodyMarkdown, /Fermé d'après/);
 });
 
 /* ── Un échec ne défait pas une signature ────────────────────────────────── */
@@ -378,7 +389,7 @@ test("un label qui ne se pose pas n'emporte pas la relance", async () => {
     projectId: "p-1", items: LES_LIGNES, ouverts: [UN_SUJET_NEUF], portes
   });
 
-  assert.equal(journal.messages.length, 1);
+  assert.equal(rapport.relances, 1);
   assert.equal(rapport.poses.labels, 0);
   assert.ok(rapport.manques.length > 0);
 
@@ -446,8 +457,8 @@ test("reprendre ne refait que les gestes ratés", async () => {
     projectId: "p-1", items: LES_LIGNES, ouverts: [UN_SUJET_NEUF], portes
   });
 
-  // La relance est passée ; c'est l'accrochage au jalon qui a échoué.
-  assert.equal(journal.messages.length, 1);
+  // La relance est comptée ; c'est l'accrochage au jalon qui a échoué.
+  assert.equal(rapport.relances, 1);
   const reprises = reprisesDuRapport(rapport);
   assert.equal(reprises.length, 2);
   assert.ok(reprises.every((reprise) => reprise.geste === GESTE.OBJECTIF));
@@ -458,7 +469,7 @@ test("reprendre ne refait que les gestes ratés", async () => {
 
   assert.equal(repris.repris, 2);
   assert.deepEqual(repris.manques, []);
-  // **Aucun second message.** C'est tout l'objet d'une reprise ciblée.
+  // **Rien d'autre n'est refait.** C'est tout l'objet d'une reprise ciblée.
   assert.deepEqual(seconde.journal.messages, []);
 });
 
@@ -583,10 +594,10 @@ test("un sujet déjà fermé ne se compte pas, et ne se plaint pas", async () =>
  * activité après sa fermeture, et l'on lirait un fil qui continue sur un sujet
  * clos.
  */
-test("un sujet relancé puis fermé reçoit sa relance avant sa fermeture", async () => {
+test("un sujet relancé puis fermé reçoit ce que ce compte rendu en dit, puis se ferme", async () => {
   const { journal, portes } = portesFeintes({ lots: [], labels: [], objectifs: [] });
 
-  await appliquerLeCompteRendu({
+  const rapport = await appliquerLeCompteRendu({
     projectId: "p-1",
     items: [
       ligne(ITEM_TYPE.RELANCE, { sujetId: "sujet-chape", titre: "Chape", evidence: "reste à couler" }),
@@ -596,7 +607,10 @@ test("un sujet relancé puis fermé reçoit sa relance avant sa fermeture", asyn
     portes
   });
 
-  assert.equal(journal.messages.length, 2);
-  assert.match(journal.messages[0].bodyMarkdown, /reporte ce point/);
-  assert.match(journal.messages[1].bodyMarkdown, /Fermé d'après/);
+  // **L'ordre tient toujours** : un sujet reçoit d'abord ce que ce compte rendu
+  // en dit — son label, sa reprise —, et se ferme ensuite.
+  assert.equal(rapport.relances, 1);
+  assert.equal(journal.messages.length, 1);
+  assert.match(journal.messages[0].bodyMarkdown, /Fermé d'après/);
+  assert.deepEqual(journal.fermes.map((ferme) => ferme.subjectId), ["sujet-chape"]);
 });

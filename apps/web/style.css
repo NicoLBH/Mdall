@@ -2680,6 +2680,8 @@ body.is-resizing{
   align-items:flex-start;
   margin-top:10px;
 }
+/* Plus de colonne d'avatar à gauche : le message occupe la ligne entière. */
+.gh-comment > .gh-comment-box{ flex:1 1 auto; min-width:0; }
 .gh-avatar{
   width:40px;
   height:40px;
@@ -9337,8 +9339,23 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 .gh-comment-header-main{
   display:flex;
   align-items:center;
+  gap:8px;
   min-width:0;
 }
+
+/* **L'avatar dans la ligne d'en-tête.**
+   Il vivait à côté du message, dans une colonne de quarante pixels plus une
+   gouttière : cinquante pixels de largeur perdus sur chaque commentaire pour
+   une vignette qu'on ne regarde qu'une fois. Posé devant le nom, il dit la
+   même chose et rend la largeur au texte. */
+.gh-avatar--enligne{
+  width:24px;
+  height:24px;
+  flex:0 0 24px;
+}
+.gh-avatar--enligne .gh-avatar-initial{ font-size:11px; }
+.gh-avatar--enligne svg,
+.gh-avatar--enligne img{ width:100%; height:100%; object-fit:cover; }
 .gh-comment-header-actions{
   display:flex;
   align-items:center;
@@ -9633,6 +9650,26 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 .thread-item--reprise-longue .thread-reprise__texte{
   color:var(--fgColor-attention, #d29922);
   font-weight:500;
+}
+
+/* Ce qu'un compte rendu dit du point : une ligne d'activité, pas un message.
+   La phrase d'abord — « observation présente dans les comptes rendus n° 8, 9 et
+   10 » —, puis l'observation elle-même, citée, et la page pour la vérifier. */
+.thread-item--observation .thread-observation__dit{ color:var(--muted); font-size:12px; }
+.thread-item--observation .thread-observation__texte{
+  display:block;
+  margin-top:3px;
+  padding-left:10px;
+  border-left:solid 1px var(--fgColor-attention, #d29922);
+  color:var(--text);
+  font-size:12px;
+  line-height:1.5;
+}
+.thread-item--observation .thread-observation__source{
+  display:block;
+  margin-top:3px;
+  color:var(--muted);
+  font-size:11px;
 }
 
 .project-page-shell{
@@ -20657,7 +20694,7 @@ body.proposition-merge-open{ overflow:hidden; }
    qu'il en reste un — et dans le corps, les lignes en cause marquées d'un trait
    rouge, avec les deux choix juste au-dessus. */
 .arbitrages{
-  border-left:solid 1px var(--ton-mauvais-vif);
+  border-left:solid 1px var(--ton-doute-vif);
   overflow:hidden;
   margin-bottom:16px;
   background:var(--panel);
@@ -20668,13 +20705,13 @@ body.proposition-merge-open{ overflow:hidden; }
   gap:10px;
   flex-wrap:wrap;
   padding:10px 14px;
-  background:rgba(218,54,51,.08);
+  background:rgba(210,153,34,.08);
   border-bottom:1px solid var(--border2);
 }
-.arbitrages__icone{ display:inline-flex; color:var(--ton-mauvais-vif); }
+.arbitrages__icone{ display:inline-flex; color:var(--ton-doute-vif); }
 .arbitrages__titre{ font-size:13px; font-weight:600; color:var(--text); }
 .arbitrages__compte{ font-size:12px; color:var(--muted); }
-.arbitrages__compte.is-blocking{ color:var(--ton-mauvais-vif); font-weight:600; }
+.arbitrages__compte.is-blocking{ color:var(--ton-doute-vif); font-weight:600; }
 /* Les deux flèches et le bouton de sortie vont à droite, comme chez GitHub :
    la lecture va du constat vers la sortie. */
 .arbitrages__navette{ display:inline-flex; align-items:center; gap:4px; margin-left:auto; }
@@ -20682,7 +20719,15 @@ body.proposition-merge-open{ overflow:hidden; }
 .arbitrages__tete > .arbitrages__sortie{ margin-left:auto; }
 .arbitrages__navette ~ .arbitrages__sortie{ margin-left:0; }
 .arbitrages__rang{ font-size:12px; color:var(--muted); min-width:34px; text-align:center; }
-.arbitrages__sortie:disabled{ opacity:.5; cursor:not-allowed; }
+/* **Le vert n'arrive qu'à zéro.** Un bouton vert translucide se lit comme un
+   bouton vert : on croyait pouvoir signer, et le clic ne faisait rien. Tant
+   qu'il reste une décision, il est gris comme n'importe quel bouton inerte. */
+.arbitrages__sortie:disabled{
+  background:var(--panel2);
+  border-color:var(--border);
+  color:var(--muted);
+  cursor:not-allowed;
+}
 .arbitrages__doctrine{
   margin:0;
   padding:10px 14px;
@@ -20760,47 +20805,80 @@ body.proposition-merge-open{ overflow:hidden; }
 
 /* Le corps : les lignes en cause, chacune sous son trait. « 27 affirmations »
    ne se corrige pas et ne s'arbitre pas — on ne décide pas sur un nombre. */
+/* Le fichier en conflit : pleine largeur, numéroté, et rien qui le rétrécisse.
+   Une liste de résumés tenait dans une colonne de lecture ; deux versions
+   entières, non — et les couper pour tenir ferait arbitrer sur des phrases
+   tronquées. */
 .arbitrage__corps{
-  padding:4px 10px 4px 10px;
-  max-height:260px;
-  overflow-y:auto;
+  padding:4px 0 10px;
   font-family:var(--mono, ui-monospace, monospace);
   font-size:12px;
 }
-.arbitrage__ligne{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:3px 14px 3px 11px;
-  /* La largeur de lecture, mutualisée : une ligne qui traverse l'écran met ses
-     deux boutons à un mètre de ce sur quoi ils portent. */
-  max-width:var(--largeur-de-lecture);
-  border-left:1px solid var(--ton-mauvais-vif);
-  background:rgba(218,54,51,.06);
+
+/* **Orange, et lui seul.** Le rouge disait « danger » sur un geste qui n'en est
+   pas un : arbitrer est le travail ordinaire de cet écran. L'orange dit ce
+   qu'il faut — de l'attention, pas de la peur. */
+.conflit{
+  border-left:1px solid var(--ton-doute-vif);
+  margin:0 0 12px;
 }
-.arbitrage__ligne-nature{ flex:0 0 auto; color:var(--muted); }
-/* L'écart qu'on tranche : ce que le projet disait, ce que la proposition
-   apporte. On ne décide pas sur un identifiant. */
-.arbitrage__ecart{ display:inline-flex; flex-wrap:wrap; gap:6px; margin-left:8px; color:var(--muted); }
-.arbitrage__ecart-apres{ color:var(--text); }
-/* La phrase du document, quand elle a été conservée. Sans elle, on arbitre
-   entre deux étiquettes. */
-.arbitrage__extrait{ display:block; margin-top:2px; color:var(--muted); font-style:italic; }
-.arbitrage__ligne-gestes{ display:inline-flex; gap:4px; margin-left:auto; flex:0 0 auto; }
-.arbitrage__ligne-dit{ color:var(--text); min-width:0; overflow-wrap:anywhere; }
-.arbitrage__ligne--reste{ border-left-color:transparent; background:transparent; color:var(--muted); font-style:italic; }
+.conflit:last-child{ margin-bottom:0; }
 
-/* **Ce qu'on vient de décider se voit.** La ligne disparaissait au clic : sur
-   vingt-neuf, cela ne se lisait pas. Elle reste, elle change de couleur, et le
-   bouton retenu est marqué. */
-.arbitrage__ligne.is-tranche{ background:transparent; border-left-color:var(--border); }
-.arbitrage__ligne.is-tranche .arbitrage__ligne-dit{ color:var(--muted); }
-.arbitrage__ligne.is-garde{ border-left-color:var(--ton-doute-vif); }
-.arbitrage__ligne.is-pris{ border-left-color:var(--ton-bon-vif); }
-.arbitrage__geste.is-choisi{ border-color:var(--fgColor-accent, var(--ton-assume-vif)); color:var(--text); opacity:1; }
-.arbitrage__geste.is-choisi:disabled{ opacity:1; cursor:default; }
+/* Les deux issues, sur leur ligne, séparées par un filet : c'est la lecture
+   d'un conflit Git, et elle se fait sans quitter le bloc qu'elle tranche. */
+.conflit__actions{
+  display:flex;
+  align-items:stretch;
+  gap:0;
+  padding:2px 0 2px 10px;
+}
+.conflit__geste{
+  padding:3px 12px;
+  border:0;
+  background:transparent;
+  color:var(--fgColor-accent, #4493f8);
+  font:inherit;
+  cursor:pointer;
+}
+.conflit__geste:hover{ text-decoration:underline; }
+.conflit__separateur{ width:1px; background:var(--border); margin:4px 0; }
 
-/* Signée, la séance se replie sur son procès-verbal : elle ne demande plus rien. */
+.conflit__actions--tranche{ align-items:center; gap:10px; color:var(--muted); }
+.conflit__verdict{ padding:3px 0 3px 2px; }
+.conflit__revenir{
+  border:0;
+  background:transparent;
+  color:var(--fgColor-accent, #4493f8);
+  font:inherit;
+  cursor:pointer;
+  padding:0;
+}
+.conflit__revenir:hover{ text-decoration:underline; }
+
+.conflit__ligne{ display:flex; gap:14px; padding:1px 10px 1px 0; }
+/* La gouttière des numéros : elle ne se sélectionne pas, comme dans un diff —
+   copier un extrait ne doit pas emporter les numéros de ligne. */
+.conflit__num{
+  flex:0 0 auto;
+  min-width:42px;
+  padding-left:10px;
+  text-align:right;
+  color:var(--muted);
+  opacity:.7;
+  user-select:none;
+}
+.conflit__texte{ min-width:0; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--text); }
+
+/* Vert ce que ce dépôt apporte, bleu ce que le projet retient : deux lectures,
+   et aucune des deux n'est une faute. */
+.conflit__ligne--propose{ background:rgba(63,185,80,.08); }
+.conflit__ligne--actuel{ background:rgba(68,147,248,.08); }
+.conflit__ligne--marqueur .conflit__texte{ color:var(--muted); font-weight:600; }
+
+/* Tranché, il ne reste que ce qui entrera. */
+.conflit.est-tranche{ border-left-color:var(--border); }
+.conflit__reste{ padding:4px 10px; color:var(--muted); font-style:italic; }
+
 .arbitrages--signe{ border-left-color:var(--ton-assume-vif); }
 
 .arbitrage__passe{

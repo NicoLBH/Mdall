@@ -76,7 +76,6 @@ const texte = (valeur) => String(valeur ?? "").trim();
 export const GESTE = {
   LABEL: "label",
   OBJECTIF: "objectif",
-  RELANCE: "relance",
   FERMETURE: "fermeture"
 };
 
@@ -113,65 +112,6 @@ export function labelsDuSujet(point = {}) {
   );
 
   return [LABEL_DU_CR, ...qualifications];
-}
-
-/**
- * Ce qu'on écrit dans le fil d'un sujet que ce compte rendu relance.
- *
- * ## Pourquoi un message, et pas un champ
- *
- * Un sujet relancé n'a pas changé d'état : il était ouvert, il le reste. Ce qui
- * a changé est qu'une réunion de plus l'a redit — et cela est une **activité**,
- * datée, citée, qui se lit dans le fil à côté de ce que les gens en ont dit.
- * L'écrire dans un champ le remplacerait à chaque compte rendu, et l'on
- * perdrait justement ce qu'on cherche : depuis combien de réunions ce point
- * est-il redit sans bouger.
- *
- * ## Ce que le message porte, et pourquoi
- *
- * Le compte rendu qui le redit ; ce qu'il en écrit, mot pour mot ; sa page.
- * Sans la citation et la page, la ligne se conteste sans pouvoir se vérifier —
- * et une ligne qu'on ne peut pas remonter à son document finit par n'être plus
- * crue du tout.
- *
- * Puis ce que le compte rendu remet à jour : l'échéance, à qui il revient, ce
- * qu'il en dit. Seulement ce qui est écrit : une ligne « échéance : — » ferait
- * lire une absence comme une décision.
- */
-export function messageDeRelance({ point = {}, compteRendu = "" } = {}) {
-  const nom = texte(compteRendu) || "Un compte rendu de chantier";
-  const lignes = [`**${nom}** reporte ce point.`];
-
-  const citation = texte(point?.evidence);
-  if (citation) lignes.push("", `> ${citation.replace(/\n+/g, " ")}`);
-
-  const dit = texte(point?.description);
-  // La description n'est reprise que si elle apporte autre chose que la
-  // citation : les redire toutes les deux ferait un message deux fois long qui
-  // dit une fois la même chose.
-  if (dit && dit !== citation) lignes.push("", dit);
-
-  const precisions = [];
-  const reference = texte(point?.reference);
-  if (reference) precisions.push(`Point ${reference}`);
-  const lot = texte(point?.lot);
-  if (lot) precisions.push(lot);
-  if (Number.isFinite(Number(point?.page)) && Number(point.page) > 0) {
-    precisions.push(`page ${Number(point.page)}`);
-  }
-
-  const etat = texte(point?.etat);
-  if (etat) precisions.push(`état : ${etat}`);
-  const qui = texte(point?.qui);
-  if (qui) precisions.push(`revient à : ${qui}`);
-
-  const echeance = texte(point?.echeance);
-  const date = dateEnFrancais(texte(point?.echeanceDate));
-  if (echeance) precisions.push(`échéance : ${echeance}${date && date !== echeance ? ` (${date})` : ""}`);
-
-  if (precisions.length > 0) lignes.push("", `*${precisions.join(" · ")}*`);
-
-  return lignes.join("\n");
 }
 
 /**
@@ -486,23 +426,19 @@ async function appliquerAuxSujets({ projectId, sujets, labels, objectifs, compte
       }
     }
 
-    if (!relance) continue;
-
-    const bodyMarkdown = messageDeRelance({ point, compteRendu });
-    try {
-      await portes.ecrireDansLeFil({ projectId, subjectId, bodyMarkdown });
-      rapport.relances += 1;
-    } catch (erreur) {
-      manque(rapport, {
-        quoi: "La relance n'a pas pu être écrite",
-        sujet: nomDuSujet,
-        cause: erreur,
-        // Le message est **celui qu'on a tenté d'écrire**, pas un message
-        // recomposé : le recomposer à la reprise ferait dépendre le texte d'un
-        // état qui a pu bouger entre-temps (règle 4).
-        reprise: { geste: GESTE.RELANCE, subjectId, projectId, bodyMarkdown, sujet: nomDuSujet }
-      });
-    }
+    // **Une relance n'écrit plus de commentaire.**
+    //
+    // Chaque reprise en écrivait un — « CR n° 11 du 06/08 reporte ce point » —,
+    // puis le n° 13, puis le n° 15. Sur un point qui traîne depuis dix
+    // réunions, la discussion devient un journal de machine où l'on ne retrouve
+    // plus ce que les gens, eux, ont écrit.
+    //
+    // Un compte rendu qui reprend un point ne prend pas la parole : c'est un
+    // **fait**, et un fait se dit dans la ligne d'activité. Il s'enregistre dans
+    // `subject_cr_mentions` avec ce que le document en écrit, et le fil le lit
+    // — dix reprises de la même phrase en une ligne au lieu de dix messages
+    // identiques (`services/reprise-sans-changement.js`).
+    if (relance) rapport.relances += 1;
   }
 }
 
@@ -728,12 +664,6 @@ export async function reprendreCeQuiAEchoue({ reprises = [], portes = null } = {
         await ouvertes.poserUnObjectif(reprise.objectifId, reprise.subjectId);
       } else if (reprise.geste === GESTE.FERMETURE) {
         await ouvertes.fermerUnSujet({ subjectId: reprise.subjectId, reason: reprise.motif });
-      } else if (reprise.geste === GESTE.RELANCE) {
-        await ouvertes.ecrireDansLeFil({
-          projectId: reprise.projectId,
-          subjectId: reprise.subjectId,
-          bodyMarkdown: reprise.bodyMarkdown
-        });
       } else {
         continue;
       }

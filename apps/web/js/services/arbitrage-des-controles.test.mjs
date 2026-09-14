@@ -12,7 +12,8 @@ import assert from "node:assert/strict";
 
 import {
   MOTIF_MIN, VERDICT, arbitrageAEcrire, arbitrageARetirer, arbitragesEnregistres,
-  decisionsDuPasserOutre, decisionsEnBloc, motifRecevable, phraseDesArbitrages,
+  COTE, MOTS_DU_VERDICT, decisionsDuPasserOutre, lignesDuConflit, lignesRetenues,
+  motifRecevable, phraseDesArbitrages,
   procesVerbalAEcrire, procesVerbalARetirer, procesVerbalEnregistre,
   refusDesLignesMisesEnCause
 } from "./arbitrage-des-controles.js";
@@ -327,12 +328,12 @@ test("revenir sur une décision périme le procès-verbal", () => {
 });
 
 /**
- * **Deux paires de boutons pour un seul geste.** « Écarter / Passer outre »
- * agissait sur toutes les lignes, « Garder / Prendre » sur chacune : dans le
- * même cadre, ils se lisaient comme deux mécanismes concurrents. Le geste
- * d'ensemble est donc le geste de ligne, appliqué à ce qui reste.
+ * **Passer outre est le seul geste d'ensemble qui reste.** « Tout garder » et
+ * « Tout prendre » vivaient à côté du choix ligne à ligne et faisaient la même
+ * chose sur les mêmes lignes : dans le même cadre, ils se lisaient comme un
+ * second mécanisme. Ce qui a déjà une réponse n'est de toute façon pas retouché.
  */
-test("trancher en bloc ne touche que ce qui n'a pas de réponse", () => {
+test("passer outre ne touche que ce qui n'a pas de réponse", () => {
   const controle = {
     id: "memoire",
     concerne: [
@@ -347,14 +348,63 @@ test("trancher en bloc ne touche que ce qui n'a pas de réponse", () => {
     { itemType: "base-datum", itemKey: "nappe", payload: { value: "-2,40 m" }, status: ITEM.ACCEPTED }
   ];
 
-  const gardees = decisionsEnBloc({ controle, items, tranche: TRANCHE.GARDE });
-  assert.deepEqual(gardees.map((d) => [d.item.itemKey, d.status]), [["contrainte-de-sol", ITEM.REFUSED]]);
-  // Refuser est un `upsert` : le payload doit survivre, sans quoi la ligne perd
-  // ce qu'elle disait.
-  assert.deepEqual(gardees[0].item.payload, { value: "0,2 MPa" });
-
-  const prises = decisionsEnBloc({ controle, items, tranche: TRANCHE.PRIS });
+  const prises = decisionsDuPasserOutre({ controle, items });
   assert.deepEqual(prises.map((d) => [d.item.itemKey, d.status]), [["contrainte-de-sol", ITEM.ACCEPTED]]);
+});
+
+/**
+ * **On n'arbitre pas sur une étiquette.** La ligne opposait deux résumés, l'un
+ * barré, l'autre pas, sans dire d'où ils sortaient : personne ne pouvait savoir
+ * ce qu'il gardait. Le conflit s'écrit donc comme Git l'écrit — les deux
+ * versions en entier, séparées par des marqueurs.
+ */
+test("un conflit s'écrit avec ses deux versions et ses marqueurs", () => {
+  const lignes = lignesDuConflit({
+    nature: "sujet à fermer",
+    itemKey: "c0700a98",
+    sujet: "Reprise du carrelage hall B",
+    avant: "Ce sujet à fermer avait été écarté : déjà traité en réunion 9.",
+    apres: "Ce lot le propose à nouveau.",
+    extrait: "Le carrelage du hall B a été repris le 12/09.",
+    quand: "2026-03-12T09:00:00Z"
+  }, { dater: (iso) => iso.slice(0, 10) });
+
+  assert.deepEqual(lignes.map((ligne) => ligne.cote), [
+    COTE.MARQUEUR, COTE.PROPOSE, COTE.PROPOSE, COTE.MARQUEUR, COTE.ACTUEL, COTE.ACTUEL, COTE.MARQUEUR
+  ]);
+  assert.equal(lignes[0].texte, "<<<<<<< sujet à fermer — Reprise du carrelage hall B");
+  assert.equal(lignes[3].texte, "=======");
+  assert.match(lignes[6].texte, /^>>>>>>>/);
+  // La phrase du document est la matière de la décision : elle est du côté qui
+  // l'apporte, citée.
+  assert.match(lignes[2].texte, /« Le carrelage du hall B a été repris le 12\/09. »/);
+  // La date se met en clair quand on sait la mettre.
+  assert.equal(lignes[5].texte, "Décidé le 2026-03-12");
+});
+
+/** Un côté vide se dit : ne pas savoir n'est pas n'avoir rien à dire (règle 5). */
+test("un conflit sans valeurs garde ses deux côtés", () => {
+  const lignes = lignesDuConflit({ sujet: "Un point", avant: "", apres: "", extrait: "", quand: null });
+
+  assert.equal(lignes.filter((ligne) => ligne.cote === COTE.PROPOSE).length, 1);
+  assert.equal(lignes.filter((ligne) => ligne.cote === COTE.ACTUEL).length, 1);
+});
+
+/** Tranché, ce qui reste à l'écran est ce qui entrera — marqueurs compris. */
+test("le côté écarté disparaît, et les marqueurs avec lui", () => {
+  const lignes = lignesDuConflit({ sujet: "Un point", avant: "hier", apres: "aujourd'hui" });
+
+  assert.deepEqual(lignesRetenues(lignes, TRANCHE.PRIS).map((l) => l.texte), ["aujourd'hui"]);
+  assert.deepEqual(lignesRetenues(lignes, TRANCHE.GARDE).map((l) => l.texte), ["hier"]);
+  // Tant que rien n'est tranché, les deux versions sont là : c'est en les
+  // lisant qu'on décide.
+  assert.equal(lignesRetenues(lignes, null).length, lignes.length);
+});
+
+/** Les verbes nomment leur objet : « Garder » seul faisait deviner quoi. */
+test("les deux réponses se disent en toutes lettres", () => {
+  assert.equal(MOTS_DU_VERDICT[TRANCHE.PRIS], "Accepter le changement");
+  assert.equal(MOTS_DU_VERDICT[TRANCHE.GARDE], "Garder la version actuelle");
 });
 
 /**

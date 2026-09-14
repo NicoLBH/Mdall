@@ -4,6 +4,8 @@ import { shouldShowHandwritingButton } from "../../utils/input-capabilities.js";
 import { renderSubjectAttachmentTile } from "./project-subjects-attachments-ui.js";
 import {
   mentionsDesLignes,
+  observationsDesReprises,
+  phraseDeLObservation,
   repriseQuiInterpelle,
   repriseSansChangement
 } from "../../services/reprise-sans-changement.js";
@@ -125,6 +127,55 @@ export function createProjectSubjectsThread(config = {}) {
       iconHtml: `<span class="tl-icon" aria-hidden="true">${svgIcon("history", { className: "octicon" })}</span>`,
       textHtml: `<span class="thread-reprise__texte">${escapeHtml(dit.texte)}</span>`
     });
+  }
+
+  /**
+   * Ce que les comptes rendus ont **dit** de ce point.
+   *
+   * ## Le défilé de commentaires
+   *
+   * Chaque reprise écrivait un commentaire dans le fil : « CR n° 11 du
+   * 2025-08-06 reporte ce point », puis le n° 13, puis le n° 15. Sur un point
+   * qui traîne depuis dix réunions, la discussion devient un journal de machine
+   * où l'on ne retrouve plus ce que les gens, eux, ont écrit.
+   *
+   * Un compte rendu qui reprend un point ne prend pas la parole : c'est un
+   * **fait**, et un fait se dit dans la ligne d'activité.
+   *
+   * ## Et dix fois la même phrase ne se dit qu'une fois
+   *
+   * Un compte rendu **reporte** : la même observation revient mot pour mot tant
+   * que le point n'est pas soldé. Les reprises qui la redisent sont donc
+   * regroupées — « observation présente dans les comptes rendus n° 8, 9 et 10 »
+   * —, et la phrase se donne une fois, en dessous.
+   */
+  function renderObservationsDesCr(subjectId, depuis) {
+    const lignes = reprisesParSujet.get(normalizeId(subjectId));
+    if (!Array.isArray(lignes) || lignes.length === 0) return { html: "", combien: 0 };
+
+    const groupes = observationsDesReprises(mentionsDesLignes(lignes));
+    if (groupes.length === 0) return { html: "", combien: 0 };
+
+    const html = groupes.map((groupe, rang) => renderMessageThreadActivity({
+      idx: depuis + rang,
+      className: "thread-item--observation",
+      iconHtml: `<span class="tl-icon" aria-hidden="true">${svgIcon("book", { className: "octicon" })}</span>`,
+      textHtml: `
+        <span class="thread-observation__dit">${escapeHtml(phraseDeLObservation(groupe, { dater: enFrancais }))}</span>
+        <span class="thread-observation__texte">${escapeHtml(groupe.observation)}</span>
+        ${
+          // **Où le vérifier, sans promettre de l'ouvrir.** Cet écran ne sait
+          // pas encore emmener au document à sa page ; annoncer un lien qui ne
+          // mène nulle part serait pire que de ne rien promettre. La page se dit
+          // donc, et le lien viendra avec la visionneuse.
+          groupe.page
+            ? `<span class="thread-observation__source">page ${escapeHtml(String(groupe.page))}</span>`
+            : ""
+        }
+      `
+    })).join("");
+
+    return { html, combien: groupes.length };
   }
 
   const subjectTimelineCache = new Map();
@@ -1583,13 +1634,15 @@ priority=${firstNonEmpty(subject.priority, "")}`
       // après : la discussion se redessine alors avec sa dernière ligne.
       const sujetRegarde = normalizeId(resolvedSelection?.item?.id);
       if (sujetRegarde) assurerLesReprises(sujetRegarde);
-      const repriseHtml = renderRepriseSansChangement(sujetRegarde, thread.length);
+      const observations = renderObservationsDesCr(sujetRegarde, thread.length);
+      const observationsHtml = observations.html;
+      const repriseHtml = renderRepriseSansChangement(sujetRegarde, thread.length + observations.combien);
 
       // Un sujet ouvert par un compte rendu n'a parfois aucun message, et sa
       // seule activité est d'être repris de réunion en réunion. S'arrêter sur
       // une discussion vide ferait disparaître précisément ce qu'on cherchait
       // à voir.
-      if (!thread.length && !repriseHtml) return "";
+      if (!thread.length && !repriseHtml && !observationsHtml) return "";
       const scopeHost = String(options.scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
       debugThreadScope("render", {
         host: scopeHost,
@@ -1915,7 +1968,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       // un événement de plus.
       return `
         <div class="gh-timeline-title gh-timeline-title--hidden mono">Discussion</div>
-        ${renderMessageThread({ itemsHtml: `${itemsHtml}${repriseHtml}` })}
+        ${renderMessageThread({ itemsHtml: `${itemsHtml}${observationsHtml}${repriseHtml}` })}
       `;
     } finally {
       threadRenderDepth = Math.max(0, threadRenderDepth - 1);
