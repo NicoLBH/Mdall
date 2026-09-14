@@ -109,9 +109,24 @@ test("le bouton met le tri, puis le retire", () => {
   assert.equal(triSuivant(TRI.DERNIERE_ACTIVITE), TRI.PROJET);
 });
 
-test("un tri inconnu se lit comme l'ordre du projet", () => {
-  assert.equal(normaliserLeTri("par couleur"), TRI.PROJET);
-  assert.equal(normaliserLeTri(undefined), TRI.PROJET);
+/**
+ * **La liste s'ouvre sur ce qui vient de bouger.**
+ *
+ * Elle s'ouvrait dans l'ordre du projet — celui d'arrivée —, et le plus récent
+ * se trouvait donc tout en bas, après quatre-vingt-treize lignes. La question
+ * qu'on se pose en ouvrant cet écran est pourtant toujours la même : qu'est-ce
+ * qui a bougé ? L'ordre du projet reste à un clic ; il n'est plus celui par
+ * lequel on commence.
+ */
+test("rien de choisi, c'est la dernière activité", () => {
+  assert.equal(normaliserLeTri(undefined), TRI.DERNIERE_ACTIVITE);
+  assert.equal(normaliserLeTri(""), TRI.DERNIERE_ACTIVITE);
+  assert.equal(normaliserLeTri("par couleur"), TRI.DERNIERE_ACTIVITE);
+
+  // Et l'ordre du projet se choisit, donc il se distingue de l'absence de
+  // choix : c'est pour cela qu'il porte une valeur à lui.
+  assert.equal(normaliserLeTri(TRI.PROJET), TRI.PROJET);
+  assert.notEqual(TRI.PROJET, "");
 });
 
 /**

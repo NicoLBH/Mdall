@@ -37,13 +37,28 @@ const texte = (valeur) => String(valeur ?? "").trim();
 
 /** Les ordres possibles. `PROJET` est l'ordre d'origine, qu'on ne touche pas. */
 export const TRI = {
-  PROJET: "",
+  PROJET: "projet",
   DERNIERE_ACTIVITE: "derniere-activite"
 };
 
-/** Un ordre lu depuis l'état, ramené à ce qui existe. */
+/**
+ * Un ordre lu depuis l'état, ramené à ce qui existe.
+ *
+ * ## Le défaut est la dernière activité
+ *
+ * La liste s'ouvrait dans l'ordre du projet — celui des identifiants, qui est
+ * l'ordre d'arrivée — et le plus récent se trouvait donc tout en bas, après
+ * quatre-vingt-treize lignes. Or la question qu'on se pose en ouvrant l'écran
+ * est toujours la même : **qu'est-ce qui a bougé ?** Y répondre demandait de
+ * dérouler, ou de cliquer un bouton qu'on ne voyait pas.
+ *
+ * L'ordre du projet reste accessible d'un clic ; il n'est simplement plus celui
+ * par lequel on commence. `PROJET` porte pour cela une valeur à lui : un ordre
+ * choisi et un ordre jamais choisi ne se distinguaient pas quand le premier
+ * valait la chaîne vide.
+ */
 export function normaliserLeTri(tri) {
-  return texte(tri) === TRI.DERNIERE_ACTIVITE ? TRI.DERNIERE_ACTIVITE : TRI.PROJET;
+  return texte(tri) === TRI.PROJET ? TRI.PROJET : TRI.DERNIERE_ACTIVITE;
 }
 
 /** Le bouton est une bascule : un clic met le tri, un autre le retire. */
