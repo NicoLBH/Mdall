@@ -30,6 +30,7 @@
  * relier les deux (règle 5).
  */
 
+import { store } from "../../../store.js";
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { svgIcon } from "../../../ui/icons.js";
 import { renderMarkdownToHtml } from "../../../utils/markdown-renderer.js";
@@ -49,7 +50,7 @@ import {
   LABEL_DU_CR, QUOI_DU_LABEL, labelDuCrDansLeProjet, labelsAProposer, phraseDuLabel, styleDuLabel
 } from "../../../services/label-du-cr.js";
 import { TRANSFORMER, brancheDeLAction, renderTransformer } from "../../ui/transformer.js";
-import { branchesOuvertes } from "../../../services/branches-ouvertes.js";
+import { branchesOuvertes, oublierLesBranches } from "../../../services/branches-ouvertes.js";
 import { lotsAProposer, phraseDesLots } from "../../../services/lots-du-cr.js";
 import {
   EFFETS_DE_LA_FERMETURE, FERMETURE, PHRASES_DE_LA_FERMETURE, fermeturesDuCompteRendu,
@@ -177,6 +178,14 @@ const etat = {
    * qu'on ne voyait pas (règle 5).
    */
   branches: [],
+  /**
+   * Où en est « Transformer », ou `null` : `{enCours, dit}`.
+   *
+   * **Une sortie qui ne dit rien ne se distingue pas d'un bouton mort.** Ranger
+   * le document et rédiger la proposition prennent plusieurs secondes ; sans
+   * cette ligne, on recliquait, puis on changeait d'écran au milieu.
+   */
+  versement: null,
   /**
    * Le squelette du document, tel qu'il a été reconnu. `null` : pas reconnu.
    *
@@ -378,11 +387,12 @@ function renderEntete(vue = etat) {
         <div class="lecture-cr__entete-actions">
           ${renderTransformer({
             id: "lectureCrTransformer",
-            disabled: !pret,
+            disabled: !pret || vue.versement?.enCours === true,
             ouvertes: vue.branches
           })}
         </div>
       </div>
+      ${renderVersement(vue.versement)}
       <p class="lecture-cr__mot">
         Déposez un compte rendu : l'écran le <strong>restitue d'abord en Markdown</strong> —
         c'est ce document-là que le modèle relit pour en tirer les points. On voit donc
@@ -390,6 +400,24 @@ function renderEntete(vue = etat) {
         une proposition.
       </p>
     </header>
+  `;
+}
+
+/**
+ * Où en est « Transformer ».
+ *
+ * **Rien tant qu'on n'a rien demandé.** Une ligne d'état permanente en dirait
+ * autant quand il n'y a rien à dire, et l'on cesserait de la lire — c'est-à-dire
+ * qu'on ne la lirait pas non plus le jour où elle porte un refus.
+ */
+function renderVersement(versement = null) {
+  if (!versement?.dit) return "";
+
+  return `
+    <p class="lecture-cr__versement${versement.enCours ? " est-en-cours" : ""}" role="status">
+      ${versement.enCours ? renderSpinnerHtml({ label: "", size: "sm" }) : ""}
+      <span>${escapeHtml(texte(versement.dit))}</span>
+    </p>
   `;
 }
 
@@ -2447,7 +2475,11 @@ async function restituerOuRelire(hote) {
   if (reprise.reutilisable) {
     garnirLeCote(cote, reprise.pages);
     cote.rangement = {
-      ...cote.rangement, relue: true, range: true, dossier: texte(rangee.dossier?.name)
+      ...cote.rangement, relue: true, range: true, dossier: texte(rangee.dossier?.name),
+      // **Le document, gardé.** C'est lui que la proposition portera : sans son
+      // identifiant, les points qu'on propose ne se remonteraient plus au
+      // compte rendu d'où ils sortent.
+      document: rangee.document ?? null
     };
     cote.phase = "fait";
     redessiner(hote);
@@ -2598,35 +2630,134 @@ function garnirLeCote(cote, pages) {
 }
 
 /**
- * « Transformer » — et ce qu'il ne fait pas encore.
+ * « Transformer » — la sortie de cet écran.
  *
- * ## Pourquoi il dit non, et pourquoi il le dit fort
+ * ## Le chemin, et pourquoi il est celui-là
  *
- * Le bouton est en place, à sa place, avec ses trois issues. Ce qui n'existe
- * pas encore, c'est la **rédaction** de la proposition : quels items pour les
- * sujets à ouvrir, pour ceux qu'on relance, pour les lots, les labels, les
- * objectifs — et pour le fichier `.md` à ranger. C'est l'étape 8 du plan, et
- * elle demande d'être écrite, pas bricolée.
+ *     ranger le document → rédiger la proposition → aller la signer
  *
- * Un bouton qui ne ferait rien serait pire qu'un bouton absent : on cliquerait,
- * il ne se passerait rien, et l'on croirait que la proposition est partie. Il
- * le dit donc en toutes lettres, avec ce qu'elle portera quand elle existera.
+ * **Le document d'abord.** Un point de chantier se vérifie en ouvrant la page
+ * d'où il sort ; une proposition qui porterait des points sans leur compte
+ * rendu ne se relirait pas. Déposer un fichier n'est pas verser en mémoire —
+ * c'est la matière première, et l'onglet Fichiers en dépose déjà directement.
+ *
+ * **Ensuite, on propose, et rien de plus.** Ouvrir un sujet engage quelqu'un à
+ * le traiter : c'est une décision, elle se signe (règle 1). L'ancienne chaîne
+ * les ouvrait au dépôt, sans que personne ait rien dit — c'est ce qu'on a
+ * retiré, et ce qu'on ne réintroduit pas par la porte de derrière.
+ *
+ * ## Ce qui n'est pas encore branché, et se dit
+ *
+ * « Ouvrir un sujet » — l'issue de gauche — reste à écrire : elle ouvrirait un
+ * sujet de discussion sur la lecture elle-même, ce qui n'est pas la même chose
+ * que d'ouvrir les points du compte rendu.
  */
 async function transformer(hote, { sujet = false, branche = "" } = {}) {
-  const quoi = sujet ? "Ouvrir un sujet" : (branche ? "Ajouter à cette proposition" : "Faire une proposition");
+  if (sujet) {
+    echouer(
+      hote,
+      "Ouvrir un sujet : pas encore branché depuis cet écran.",
+      "« Faire une proposition » l'est : elle porte le compte rendu et les points qui "
+      + "ouvriraient un sujet, et c'est en la signant qu'ils s'ouvrent."
+    );
+    return;
+  }
 
-  // **Ce qui manque se dit, et se dit précisément.** « Pas encore branché »
-  // ferait chercher une panne ; ce qui suit nomme les trois pièces absentes,
-  // pour qu'on sache ce qu'on attend (règle 5).
-  echouer(
-    hote,
-    `${quoi} : pas encore branché depuis cet écran.`,
-    "Tout ce que l'écran a compris est prêt — sujets à ouvrir, à relancer, à fermer, labels, "
-    + "lots, objectifs, liens — mais trois pièces manquent pour le faire sortir : composer les "
-    + "lignes de la proposition, les appliquer à la fusion, et ranger le PDF et son .md. "
-    + "Le rangement du PDF dans « Documents / CR de chantier » est écrit et vérifié ; il lui "
-    + "manque cet appelant. C'est l'étape 9 du plan de lecture d'un compte rendu."
-  );
+  const cote = etat.md?.modele;
+  const aRanger = cote?.rangement?.aRanger ?? null;
+  const dejaRange = cote?.rangement?.document ?? null;
+
+  if (!aRanger && !dejaRange) {
+    echouer(
+      hote,
+      "Il n'y a rien à proposer pour l'instant.",
+      "Le document doit d'abord avoir été relu : c'est lui que la proposition porte, et "
+      + "c'est par lui que chaque point se vérifie."
+    );
+    return;
+  }
+
+  etat.versement = { enCours: true, dit: "Rangement du compte rendu…" };
+  redessiner(hote);
+
+  try {
+    const [{ rangerLaRestitution }, cr, { preparerUneProposition }] = await Promise.all([
+      import("../../../services/ranger-la-restitution.js"),
+      import("../../../services/proposition-du-cr.js"),
+      import("../../../services/atelier-proposition.js")
+    ]);
+
+    // Déjà rangé : on ne redépose pas. Sinon, c'est maintenant — et non à la
+    // lecture, où personne n'avait encore rien décidé.
+    const range = dejaRange
+      ? { range: true, document: dejaRange, motif: "" }
+      : await rangerLaRestitution({ ...aRanger, fichier: etat.fichier });
+
+    if (!range.range || !range.document?.id) {
+      etat.versement = null;
+      echouer(
+        hote,
+        "Le compte rendu n'a pas pu être rangé dans Fichiers.",
+        `${cr.phraseDuRefus(cr.REFUS.SANS_DOCUMENT)}${
+          range.motif ? ` (${range.motif})` : ""}`
+      );
+      return;
+    }
+
+    cote.rangement = { ...cote.rangement, range: true, document: range.document, aRanger: null };
+
+    const refus = cr.refusDeLaProposition({
+      confrontes: etat.confrontes, documentId: range.document.id
+    });
+    if (refus) {
+      etat.versement = { enCours: false, dit: cr.phraseDuRefus(refus) };
+      redessiner(hote);
+      return;
+    }
+
+    etat.versement = { enCours: true, dit: "Rédaction de la proposition…" };
+    redessiner(hote);
+
+    const rendu = await preparerUneProposition({
+      projectId: aRanger?.projectId || (await projetCourant()),
+      propositionId: branche,
+      titre: cr.titreDeLaProposition({ nom: etat.lecture?.nom, identite: etat.lecture?.identite }),
+      intro: cr.introDuCompteRendu({ confrontes: etat.confrontes, nom: etat.lecture?.nom }),
+      source: texte(etat.lecture?.nom) || "compte rendu de chantier",
+      affirmations: cr.itemsDuCompteRendu({
+        confrontes: etat.confrontes, document: range.document
+      })
+    });
+
+    if (!rendu.ok) {
+      etat.versement = { enCours: false, dit: rendu.raison };
+      redessiner(hote);
+      return;
+    }
+
+    etat.versement = {
+      enCours: false,
+      dit: `Proposition « ${rendu.proposition.title} » ${branche ? "enrichie" : "ouverte"}`
+        + " — elle attend d'être signée."
+    };
+    redessiner(hote);
+
+    // La liste des propositions ouvertes vient de changer.
+    oublierLesBranches();
+
+    // On va où la signature se donne, **et sur celle qu'on vient d'ouvrir** :
+    // la liste obligerait à retrouver à la main celle qu'on vient de préparer.
+    store.pendingPropositionId = rendu.proposition.id;
+    const projet = texte(store.currentProjectId);
+    if (projet) window.location.hash = `#project/${projet}/propositions`;
+  } catch (erreur) {
+    etat.versement = null;
+    echouer(
+      hote,
+      "La proposition n'a pas pu être préparée.",
+      texte(erreur?.message) || "cause inconnue"
+    );
+  }
 }
 
 /**

@@ -165,7 +165,14 @@ export function renderRailDesSujetsHtml({
             // couleurs, sans un mot, et l'on cliquait au hasard pour retrouver
             // la sienne. Une seule épingle les tient toutes, et les nomme quand
             // on l'ouvre.
-            ? renderEpinglesRepliees(posees, { ouvert: menuDesEpingles })
+            ? renderEpinglesRepliees(posees, {
+              ouvert: menuDesEpingles,
+              // **L'épingle s'allume à la place de la vue qu'elle cache.**
+              // Sans cela rien n'était marqué dans la colonne d'icônes — et,
+              // pire, « Sujets » l'était, parce qu'une requête que le rail ne
+              // nomme pas y retombait.
+              active: sousVue === "subjects" && posees.some((posee) => posee.active)
+            })
             : renderNavListGroup({ label: "Épinglées", items: posees.map(uneEpingle) })}
         `}
       `
@@ -187,12 +194,12 @@ export function renderRailDesSujetsHtml({
  * Une épingle les tient donc toutes, avec un chevron qui dit qu'il y a quelque
  * chose dessous, et le menu les nomme.
  */
-function renderEpinglesRepliees(posees = [], { ouvert = false } = {}) {
+function renderEpinglesRepliees(posees = [], { ouvert = false, active = false } = {}) {
   return `
-    <div class="sujets-rail__epingles">
+    <div class="sujets-rail__epingles" data-active="${active}">
       <button type="button" class="sujets-rail__epingles-bouton${ouvert ? " est-ouvert" : ""}"
         data-sujets-epingles-menu="1" aria-haspopup="true" aria-expanded="${ouvert}"
-        data-tooltip="Vues épinglées"
+        ${active ? 'aria-current="page" ' : ""}data-tooltip="Vues épinglées"
         aria-label="Vues épinglées">
         ${svgIcon("pin", { className: "octicon" })}
         ${svgIcon("chevron-right", { className: "octicon sujets-rail__epingles-caret" })}

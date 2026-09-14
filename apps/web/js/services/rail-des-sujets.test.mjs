@@ -12,7 +12,7 @@ import { champsDesSujets } from "./champs-des-sujets.js";
 import { recherchePourLEcran } from "./recherche-epinglee.js";
 import {
   LECTURE, NOMS_DE_LA_LECTURE, NOMS_DE_LECRAN, TITRE_QUELCONQUE, ecranApresUneLecture,
-  epinglesDuRail, lectureDe, lecturesReservees, titreDeLaListe,
+  epinglesDuRail, lectureDe, lectureQuOnRegarde, lecturesReservees, titreDeLaListe,
   railDesSujets, requeteDeLaLecture
 } from "./rail-des-sujets.js";
 import { sujetsFiltres } from "./champs-des-sujets.js";
@@ -136,9 +136,20 @@ test("la lecture active se reconnaît dans la requête", () => {
   assert.equal(rail({ requete: "" }).active, LECTURE.TOUS);
 });
 
-/** Un filtre ajouté à la main rebascule sur « Tous », et le filtrage reste. */
-test("ajouter un filtre à la main quitte la lecture", () => {
-  assert.equal(rail({ requete: "assigné:moi priorité:haute" }).active, LECTURE.TOUS);
+/**
+ * **Un filtre ajouté à la main n'allume plus rien**, et c'est la suite du
+ * raisonnement ci-dessous : on quittait « Assigné à moi » pour retomber sur
+ * « Sujets », qui prétendait alors montrer la liste entière alors qu'on en
+ * voyait deux lignes. Aucune allumée est une réponse : on est ailleurs, dans
+ * quelque chose que le rail ne nomme pas (règle 5).
+ *
+ * `lectureDe` garde son défaut : elle répond « laquelle, au plus près », ce qui
+ * convient pour poser une requête et non pour allumer une entrée.
+ */
+test("ajouter un filtre à la main n'allume plus aucune lecture", () => {
+  assert.equal(rail({ requete: "assigné:moi priorité:haute" }).active, "");
+  assert.equal(lectureQuOnRegarde("assigné:moi priorité:haute", champs), "");
+  assert.equal(lectureDe("assigné:moi priorité:haute", champs), LECTURE.TOUS);
 });
 
 /**
@@ -147,8 +158,14 @@ test("ajouter un filtre à la main quitte la lecture", () => {
  * qu'on n'en voit qu'une partie.
  */
 test("un mot cherché quitte la lecture aussi", () => {
-  assert.equal(rail({ requete: "assigné:moi étanchéité" }).active, LECTURE.TOUS);
+  assert.equal(rail({ requete: "assigné:moi étanchéité" }).active, "");
   assert.equal(lectureDe("étanchéité", champs), LECTURE.TOUS);
+});
+
+/** La liste entière, elle, s'allume : c'est bien elle qu'on regarde. */
+test("la requête vide allume « Sujets »", () => {
+  assert.equal(lectureQuOnRegarde("", champs), LECTURE.TOUS);
+  assert.equal(lectureQuOnRegarde("   ", champs), LECTURE.TOUS);
 });
 
 test("la lecture active est marquée, et une seule", () => {

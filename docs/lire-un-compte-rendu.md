@@ -1164,39 +1164,67 @@ et un présent ferait croire que c'est fait.
 
 ---
 
-### Étape 9 — « Transformer » écrit enfin la proposition *(à faire)*
+### Étape 9 — « Transformer » écrit la proposition *(faite)*
 
-Le bouton est là, son menu s'ouvre, et les trois issues répondent — par une phrase qui dit
-que ce n'est pas branché. Tout ce qui précède est prêt : l'écran sait quels sujets ouvrir,
-lesquels relancer, lesquels fermer, quels labels créer, quels lots manquent, quels objectifs
-poser, quels liens tirer. **Rien de tout cela ne sort de l'écran.**
+Le bouton fait maintenant ce qu'il annonce :
 
-#### Ce qui manque, précisément
+    ranger le document → rédiger la proposition → aller la signer
 
-1. **Composer les lignes.** `ITEM_TYPE.SUJET` et `ITEM_TYPE.INTERVENANT` existent et furent
-   écrits pour ça ; les labels, les lots et les objectifs n'ont pas encore de nature. Le type
-   est un texte libre en base — aucune migration — mais chaque nature nouvelle doit dire ce
-   qu'elle engage, sans quoi le résumé de l'étape 8 la comptera sans savoir la nommer.
-2. **Appliquer à la fusion.** `mergeProposition` ne sait aujourd'hui qu'une chose : marquer
-   des documents acceptés ou refusés. Une proposition qui porterait trente sujets serait
-   signée sans que rien ne s'ouvre — le pire des deux mondes, puisqu'elle dirait que c'est
-   fait.
-3. **Ranger les deux fichiers**, ce qui est *le geste d'écriture* de cette étape :
-   - le PDF dans `Documents / CR de chantier /` — **la règle est écrite et vérifiée**
-     (`restitution-rangee.js`), il ne lui manque qu'un appelant ;
-   - le `.md` dans le corpus de la Mémoire. Voir ci-dessous : ce n'est pas un rangement.
+**Le document d'abord.** Un point de chantier se vérifie en ouvrant la page d'où il sort ;
+une proposition qui porterait des points sans leur compte rendu ne se relirait pas. Déposer
+un fichier n'est pas verser en mémoire — c'est la matière première.
 
-#### Le `.md` dans la Mémoire n'est pas un déplacement de fichier
+**Ensuite on propose, et rien de plus.** Ouvrir un sujet engage quelqu'un à le traiter :
+c'est une décision, elle se signe (règle 1). La fusion ouvre ensuite ce qui a été coché,
+ligne à ligne — ce qu'elle savait déjà faire pour `sujet` et `intervenant`.
 
-`Mémoire/` n'est pas un dossier où l'on dépose : c'est **ce que le projet sait**, écrit en
-mdall, et son arborescence est calculée à partir de la mémoire — `corpus.crp` y est la nature
-« intendance », pas un répertoire. Y mettre le `.md` d'un compte rendu, c'est **le faire
-entrer au corpus**, c'est-à-dire écrire en mémoire. Par la règle 1, cela ne se fait que par
-une proposition, et donc à la fusion — avec le reste.
+#### Un document, un endroit
 
-C'est pourquoi les trois points ci-dessus ne se découpent pas : composer sans appliquer
-donnerait une proposition qu'on signe pour rien, et ranger sans proposer contournerait
-exactement ce que la règle 1 protège.
+La transcription était déposée comme un **second fichier** — `CR_07.md` à côté de
+`CR_07.pdf`. Commode à écrire, faux à lire : l'arbre des Fichiers montrait deux entrées pour
+un seul document, et il fallait savoir laquelle ouvrir.
+
+Le pas suivant l'aurait rangée dans `Mémoire/`, ce qui aurait été pire. `Mémoire/` n'est pas
+un dossier où l'on dépose : c'est ce que le projet **sait**, calculé à partir de ses
+affirmations. On aurait fini par confondre « garder un document » et « savoir quelque
+chose » — les deux étant de la mémoire au sens courant du mot, et pas du tout au sens de
+l'application.
+
+Il n'y a donc qu'un endroit : **le document lui-même**. Le PDF est dans
+`Documents / CR de chantier /`, sa transcription est sur sa ligne
+(`documents.transcription_markdown`), et la politique de sécurité des documents s'applique
+inchangée — qui peut lire le PDF peut lire sa transcription.
+
+C'est **l'empreinte du texte** qui retrouve le document, pas son nom : le même compte rendu
+s'appelle `CR_07.pdf` chez l'un et `07 - CR.pdf` chez l'autre, et deux comptes rendus
+différents s'appellent tous deux `CR.pdf`.
+
+#### Ce que la proposition porte, et ce qu'elle ne porte pas
+
+| | |
+| --- | --- |
+| **le document** | il entre au corpus — c'est par lui que tout le reste se vérifie |
+| **les points neufs** | un sujet chacun, avec son lot, son numéro, sa page et sa citation |
+| ~~les points relancés~~ | la fusion **ouvre** ce qu'on lui donne ; elle ne sait pas encore commenter un sujet qui existe, et le porter en créerait un second au même titre |
+| ~~labels, lots, objectifs~~ | calculés et affichés, mais la fusion ne sait pas les appliquer : les porter ferait signer des lignes dont rien n'arriverait, et l'on croirait le rangement fait (règle 5) |
+
+Les porter sans pouvoir les appliquer serait exactement ce que ce plan cherche à éviter :
+une proposition qui dit avoir fait ce qu'elle n'a pas fait.
+
+### Étape 10 — Le document se relit dans Fichiers *(à faire)*
+
+La transcription est rangée, relue, et ne se repaie pas. **Elle ne s'affiche nulle part.**
+
+Ce qu'il faut : ouvrir un PDF dans Fichiers donne le cadre de l'Atelier — *Aperçu*, *Code*,
+*Origine* — plus un onglet **PDF** qui rend la main au lecteur existant, avec son zoom et sa
+rotation. Tout est là pour l'écrire : le Markdown porte ses marqueurs `<!-- page 3 -->`, donc
+la lecture « Origine » tient ; `pagesDuFichierMarkdown` les relit déjà ; le lecteur de PDF
+existe.
+
+Ce qui ne sera **pas** là : les mesures de l'Atelier — mots retrouvés, titres inventés,
+pages refaites. Elles se calculent en comparant au PDF au moment de la lecture, et ne sont
+pas rangées. Les afficher demanderait de les ranger aussi, ce qui figerait une mesure qui
+doit se refaire à chaque version du procédé (règle 4).
 
 ---
 
@@ -1204,10 +1232,12 @@ exactement ce que la règle 1 protège.
 
 ## Où en est le plan
 
-Les huit premières étapes sont écrites ; la neuvième — la sortie par une proposition — ne
-l'est pas, et c'est elle qui manque pour que le procédé aille jusqu'au bout. Le reste n'est
-plus du plan mais de l'usage : déposer des comptes rendus réels, regarder ce que les mesures
-disent, et corriger ce qu'elles montrent.
+Neuf étapes écrites : le procédé va maintenant du dépôt d'un PDF à une proposition qu'on
+signe, et les sujets s'ouvrent à la signature. La dixième — relire le document dans
+Fichiers — reste à faire, et c'est du confort, non plus du procédé.
+
+Le reste n'est plus du plan mais de l'usage : déposer des comptes rendus réels, regarder ce
+que les mesures disent, et corriger ce qu'elles montrent.
 
 Deux choses ont changé de nature en chemin, et méritent d'être retenues :
 

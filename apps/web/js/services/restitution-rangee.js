@@ -67,69 +67,58 @@ export const PHRASES_DU_RANGEMENT = {
 export const DOSSIER_DES_CR = "CR de chantier";
 
 /**
- * Le nom du fichier de restitution — `CR_07.md`.
+ * Le document déjà rangé pour ce texte, s'il y en a un.
  *
- * **Celui du PDF, l'extension près.** C'était déjà la règle ; elle devient
- * essentielle maintenant que les comptes rendus partagent un dossier : c'est le
- * nom qui réunit un PDF et sa restitution, et plus le dossier qui les contient.
- */
-export function nomDeLaRestitution(nomDuFichier = "") {
-  const nom = texte(nomDuFichier).replace(/\.[^.]+$/, "");
-  // Un nom vide ferait un fichier sans nom, que la base refuse. Mieux vaut un
-  // nom générique qu'un dépôt qui échoue.
-  return `${nom || "document"}.md`;
-}
-
-/** Reconnaît-on ce fichier comme une restitution ? */
-export function estUneRestitution(document = {}) {
-  const nom = texte(document?.filename ?? document?.original_filename);
-  return /\.md$/i.test(nom);
-}
-
-/**
- * La restitution rangée pour ce texte, si elle existe.
- *
- * **L'empreinte décide, pas le nom.** Le nom dit seulement où chercher.
- *
- * @param {object[]} documents les fichiers du dossier
- * @param {object} options
- * @param {string} options.nom le nom attendu — `CR_07.md`
- * @param {string} options.empreinte l'empreinte du texte du PDF déposé
- * @returns {{etat: string, document: object|null}}
- */
-export function restitutionRangee(documents = [], { nom = "", empreinte = "" } = {}) {
-  const attendu = texte(nom).toLowerCase();
-  const signe = texte(empreinte);
-
-  const trouvee = (Array.isArray(documents) ? documents : []).find((document) =>
-    estUneRestitution(document)
-    && texte(document?.filename ?? document?.original_filename).toLowerCase() === attendu);
-
-  if (!trouvee) return { etat: RANGEE.ABSENTE, document: null };
-
-  // **Sans empreinte, on ne conclut pas qu'elle est à jour.** Ne pas savoir de
-  // quel texte vient une restitution n'autorise pas à la servir comme si elle
-  // venait de celui-ci (règle 5).
-  const rangee = texte(trouvee?.content_fingerprint);
-  if (!signe || !rangee || rangee !== signe) {
-    return { etat: RANGEE.PERIMEE, document: trouvee };
-  }
-
-  return { etat: RANGEE.A_JOUR, document: trouvee };
-}
-
-/**
- * Le PDF déjà rangé dans ce dossier, si c'est le même.
- *
- * Le redéposer en ferait un second exemplaire du même document, dans le dossier
- * qui porte son nom. On réemploie donc celui qui est là — mais seulement si son
- * texte est le même, pour la raison ci-dessus.
+ * **L'empreinte décide, pas le nom.** Deux comptes rendus peuvent s'appeler
+ * `CR.pdf`, et le même compte rendu s'appeler `CR_07.pdf` chez l'un et
+ * `07 - CR.pdf` chez l'autre. Le redéposer en ferait un second exemplaire du
+ * même document dans le dossier des comptes rendus.
  */
 export function sourceRangee(documents = [], { empreinte = "" } = {}) {
   const signe = texte(empreinte);
   if (!signe) return null;
 
-  return (Array.isArray(documents) ? documents : []).find((document) =>
-    !estUneRestitution(document)
-    && texte(document?.content_fingerprint) === signe) ?? null;
+  return (Array.isArray(documents) ? documents : [])
+    .find((document) => texte(document?.content_fingerprint) === signe) ?? null;
+}
+
+/**
+ * L'état de la transcription rangée avec un document.
+ *
+ * ## Elle est **sur la ligne du document**, et non à côté
+ *
+ * Elle était déposée comme un second fichier — `CR_07.md` à côté de
+ * `CR_07.pdf`. L'arbre des Fichiers montrait alors deux entrées pour un seul
+ * document, et il fallait savoir laquelle ouvrir. Il n'y a plus qu'un endroit :
+ * le document lui-même.
+ *
+ * ## Trois états, et le troisième est le piège
+ *
+ * - `ABSENTE` — rien n'est rangé : il faut transcrire ;
+ * - `A_JOUR` — une transcription de **ce texte-là** est rangée : on la relit ;
+ * - `PERIMEE` — le document porte une transcription, mais elle vient d'un autre
+ *   texte. Le fichier a été remplacé depuis.
+ *
+ * Confondre le troisième avec le deuxième afficherait la transcription d'un
+ * compte rendu en croyant lire celle d'un autre — sans rien pour s'en
+ * apercevoir (règle 5). Le confondre avec le premier écraserait du travail
+ * rangé.
+ *
+ * @param {object|null} document la ligne du document, ou `null`
+ * @param {object} options
+ * @param {string} options.empreinte l'empreinte du texte du PDF déposé
+ * @returns {{etat: string, markdown: string}}
+ */
+export function transcriptionRangee(document = null, { empreinte = "" } = {}) {
+  const markdown = texte(document?.transcription_markdown);
+  if (!document || !markdown) return { etat: RANGEE.ABSENTE, markdown: "" };
+
+  // **Sans empreinte, on ne conclut pas qu'elle est à jour.** Ne pas savoir de
+  // quel texte vient une transcription n'autorise pas à la servir comme si elle
+  // venait de celui-ci (règle 5).
+  const signe = texte(empreinte);
+  const rangee = texte(document?.content_fingerprint);
+  if (!signe || !rangee || rangee !== signe) return { etat: RANGEE.PERIMEE, markdown: "" };
+
+  return { etat: RANGEE.A_JOUR, markdown };
 }

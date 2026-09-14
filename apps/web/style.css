@@ -17238,6 +17238,14 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   display:flex; flex-direction:column; flex:1 1 auto; min-height:0;
   overflow-y:auto; overflow-x:hidden;
 }
+/* **Replié, rien ne déborde — et quelque chose doit sortir.** La coupe existe
+   pour les libellés longs d'un rail large ; réduit à une colonne d'icônes, il
+   n'a plus rien à couper, et il coupait le seul menu qui doit en sortir : celui
+   des vues épinglées, ancré à droite de son épingle. `overflow-x:visible` avec
+   `overflow-y:auto` se calcule en `auto` — c'est ce qui le clipait —, alors on
+   rend les deux visibles. Le prix : une colonne d'icônes trop haute pour la
+   fenêtre ne défilerait plus. Elle en compte onze au plus. */
+.project-rail.is-collapsed .project-rail__scroll{ overflow:visible; }
 .project-rail__group{ display:flex; flex-direction:column; gap:2px; }
 /* Le séparateur partagé déborde de 8 px de chaque côté pour aller au bord d'un
    panneau ; dans un rail qui coupe son débordement, ce débord se transforme en
@@ -24491,6 +24499,7 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   height:48px;
   min-height:48px;
   padding-block:8px;
+  padding-left:16px;
 }
 
 /* ── Les filtres de l'en-tête tiennent sur une ligne ─────────────────────── */
@@ -24666,12 +24675,29 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    pour tout le monde et s'apprennent une fois ; celles des vues sont choisies
    par qui les crée, et douze vues faisaient douze pastilles de couleur sans un
    mot. Une épingle les tient toutes, et le menu les nomme. */
-.sujets-rail__epingles{ position:relative; display:flex; justify-content:center; padding:2px 0; }
+/* **Alignée sur les autres icônes de la colonne.** Elle prend le même retrait
+   qu'une entrée du rail — la gouttière, puis le remplissage du contenu — sans
+   quoi elle flotterait de quelques pixels à côté d'une colonne parfaitement
+   droite, ce qui se voit plus qu'un décalage franc. */
+.sujets-rail__epingles{
+  position:relative;
+  display:flex;
+  padding-left:var(--nav-list-gutter, 10px);
+}
+/* Le trait bleu de l'entrée active, comme sur les autres : c'est lui qui dit où
+   l'on est quand la colonne n'a plus que des icônes. */
+.sujets-rail__epingles[data-active="true"]::before{
+  content:""; position:absolute; left:0; top:50%; transform:translateY(-50%);
+  width:4px; height:24px;
+  background:var(--borderColor-accent-emphasis); border-radius:var(--radius);
+}
+.sujets-rail__epingles[data-active="true"] .sujets-rail__epingles-bouton{ color:var(--text); }
 .sujets-rail__epingles-bouton{
   display:inline-flex;
   align-items:center;
   gap:2px;
-  padding:6px 4px;
+  min-height:32px;
+  padding:6px 12px;
   border:0;
   border-radius:6px;
   background:transparent;
@@ -24719,6 +24745,20 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .sujets-rail__epingles-liste .gh-menu__item:hover{ background:var(--surface-hover); }
 .sujets-rail__epingles-liste .gh-menu__item.est-active{ color:var(--accent); }
+
+
+/* Où en est « Transformer », sous le bouton qui l'a déclenché : ranger le
+   document et rédiger la proposition prennent plusieurs secondes, et une sortie
+   qui ne dit rien ne se distingue pas d'un bouton mort. */
+.lecture-cr__versement{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:8px 0 0;
+  color:var(--text-muted);
+  font-size:13px;
+}
+.lecture-cr__versement.est-en-cours{ color:var(--text); }
 
 
 /* ── La notification d'avancée d'un lot ──────────────────────────────────── */
