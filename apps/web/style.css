@@ -20650,8 +20650,7 @@ body.proposition-merge-open{ overflow:hidden; }
    qu'il en reste un — et dans le corps, les lignes en cause marquées d'un trait
    rouge, avec les deux choix juste au-dessus. */
 .arbitrages{
-  border:1px solid var(--ton-mauvais);
-  border-radius:12px;
+  border-left:solid 1px var(--ton-mauvais-vif);
   overflow:hidden;
   margin-bottom:16px;
   background:var(--panel);
@@ -20672,6 +20671,9 @@ body.proposition-merge-open{ overflow:hidden; }
 /* Les deux flèches et le bouton de sortie vont à droite, comme chez GitHub :
    la lecture va du constat vers la sortie. */
 .arbitrages__navette{ display:inline-flex; align-items:center; gap:4px; margin-left:auto; }
+/* Sans navette — un seul blocage —, c'est la sortie qui prend la droite. */
+.arbitrages__tete > .arbitrages__sortie{ margin-left:auto; }
+.arbitrages__navette ~ .arbitrages__sortie{ margin-left:0; }
 .arbitrages__rang{ font-size:12px; color:var(--muted); min-width:34px; text-align:center; }
 .arbitrages__sortie:disabled{ opacity:.5; cursor:not-allowed; }
 .arbitrages__doctrine{
@@ -20723,11 +20725,10 @@ body.proposition-merge-open{ overflow:hidden; }
 
 /* Les deux issues, en bleu, au-dessus de ce sur quoi elles portent. */
 .arbitrage__choix{ display:flex; gap:8px; padding:10px 14px; flex-wrap:wrap; }
-.arbitrage__choix-bouton{
-  border-color:rgba(31,111,235,.55);
-  color:var(--ton-assume-vif);
-}
-.arbitrage__choix-bouton.is-ouvert{ background:rgba(31,111,235,.14); }
+/* **Gris, comme tout bouton qui n'est pas l'action principale.** Deux boutons
+   bleus côte à côte se disputaient l'attention alors qu'aucun des deux n'est un
+   défaut : c'est une décision, pas une suggestion. */
+.arbitrage__choix-bouton.is-ouvert{ background:var(--panel2); }
 .arbitrage__choix-bouton:disabled{ opacity:.5; cursor:not-allowed; }
 
 /* Le motif n'apparaît qu'au clic sur « Passer outre » : ouvert d'avance, il
@@ -20736,6 +20737,9 @@ body.proposition-merge-open{ overflow:hidden; }
   display:flex;
   flex-direction:column;
   gap:6px;
+  /* La largeur d'une zone de commentaire : un champ qui traverse l'écran invite
+     à écrire une ligne de deux cents caractères qu'on ne relit pas. */
+  max-width:680px;
   margin:0 14px 10px;
   padding:10px 12px;
   border:1px solid rgba(31,111,235,.35);
@@ -20765,6 +20769,13 @@ body.proposition-merge-open{ overflow:hidden; }
   background:rgba(218,54,51,.06);
 }
 .arbitrage__ligne-nature{ flex:0 0 auto; color:var(--muted); }
+/* L'écart qu'on tranche : ce que le projet disait, ce que la proposition
+   apporte. On ne décide pas sur un identifiant. */
+.arbitrage__ecart{ display:inline-flex; flex-wrap:wrap; gap:6px; margin-left:8px; color:var(--muted); }
+.arbitrage__ecart-avant{ text-decoration:line-through; }
+.arbitrage__ecart-apres{ color:var(--text); }
+.arbitrage__ligne-gestes{ display:inline-flex; gap:4px; margin-left:auto; flex:0 0 auto; }
+.arbitrage__ligne{ align-items:center; }
 .arbitrage__ligne-dit{ color:var(--text); min-width:0; overflow-wrap:anywhere; }
 .arbitrage__ligne--reste{ border-left-color:transparent; background:transparent; color:var(--muted); font-style:italic; }
 
@@ -24012,7 +24023,7 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    ne concerne que ce qu'on vient de lire se pose au bord de son titre. */
 .lecture-cr__entete-ligne{display:flex;align-items:center;justify-content:space-between;gap:16px;}
 .lecture-cr__titre{margin:0;font-size:19px;font-weight:600;color:var(--text);}
-.lecture-cr__mot{margin:0;font-size:12.5px;line-height:1.5;color:var(--muted);max-width:82ch;}
+.lecture-cr__mot{margin:0;padding:10px 5px 5px 5px;font-size:12.5px;line-height:1.5;color:var(--muted);}
 
 /* La zone de dépôt : le geste d'entrée de tout le parcours. */
 .lecture-cr__depot{
@@ -24062,7 +24073,14 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    prendrait pour une absence dans le document. */
 .lecture-cr__reserve{margin:0;font-size:12.5px;color:var(--fgColor-attention, #d29922);}
 .lecture-cr__md-reserve-icone{display:inline-flex;margin-top:2px;color:var(--fgColor-attention, #d29922);}
-.lecture-cr__md-reserve-corps{display:flex;flex-direction:column;gap:4px;min-width:0;}
+.lecture-cr__md-reserve-corps{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+  border-left:solid 1px var(--fgColor-attention, #d29922);
+  padding-left:10px;
+}
 .lecture-cr__md-reserve-corps p{margin:0;}
 /* Le verdict du découpage passe au-dessus de ses trois chiffres : on lit la
    conclusion, puis ce qui la fonde. */
@@ -24305,8 +24323,6 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   gap:4px 10px;
   margin:0;
   padding:10px 12px;
-  border:1px solid var(--fgColor-attention, #d29922);
-  border-radius:var(--radius);
   font-size:12.5px;
   line-height:1.5;
   color:var(--text);
@@ -25384,7 +25400,7 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   padding:10px 12px;
   border:1px solid var(--border);
   border-radius:12px;
-  background:var(--panel);
+  background:var(--bgAssistPanel);
   box-shadow:0 8px 24px rgba(0,0,0,.35);
   font-size:12px;
   line-height:1.55;

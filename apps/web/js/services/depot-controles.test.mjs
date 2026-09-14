@@ -168,3 +168,41 @@ test("pendant l'analyse, aucun ton ne promet quoi que ce soit", () => {
 
   assert.ok(rendu.lignes.every((ligne) => ligne.ton === TON.ATTENTE));
 });
+
+/* ── Les contradictions se nomment ───────────────────────────────────────── */
+
+/**
+ * **« 29 contradictions doivent être arbitrées » sans en montrer une seule.**
+ *
+ * Le bloc qui les détaillait vit dans l'onglet Dépôts ; l'arbitrage, dans les
+ * Changements. On lisait donc le nombre, et la seule issue offerte était un
+ * « Passer outre » global — c'est-à-dire assumer en bloc vingt-neuf décisions
+ * qu'on n'avait pas lues.
+ */
+test("le contrôle de la mémoire nomme les contradictions qu'il met en cause", () => {
+  const conflits = [
+    {
+      item: { itemType: "base-datum", itemKey: "zone-de-neige", status: "proposed",
+        payload: { subject: "Zone de neige" } },
+      before: "A1", after: "A2"
+    },
+    // Une contradiction déjà tranchée ne se repropose pas.
+    { item: { itemType: "base-datum", itemKey: "altitude", status: "accepted" }, before: "300", after: "320" }
+  ];
+
+  const rendu = passerLesControles({ ...CONTEXTE, conflits, blocage: "1 contradiction." });
+  const ligne = rendu.lignes.find((entree) => entree.id === "memoire");
+
+  assert.equal(ligne.concerne.length, 1);
+  assert.equal(ligne.concerne[0].sujet, "Zone de neige");
+  // **L'écart, pas seulement la clé** : on tranche en lisant les deux lectures.
+  assert.equal(ligne.concerne[0].avant, "A1");
+  assert.equal(ligne.concerne[0].apres, "A2");
+  assert.equal(ligne.concerne[0].conflit, true);
+});
+
+/** Un contrôle tenu ne met rien en cause : il n'y a rien à écarter de ce qui passe. */
+test("un contrôle tenu ne nomme aucune ligne", () => {
+  const rendu = passerLesControles(CONTEXTE);
+  assert.deepEqual(rendu.lignes.find((entree) => entree.id === "memoire").concerne, []);
+});

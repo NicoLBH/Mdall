@@ -163,6 +163,45 @@ export function arbitrageAEcrire({ controle = null, motif = "" } = {}) {
   };
 }
 
+/**
+ * Ce qu'il faut trancher pour que « passer outre » lève vraiment le blocage.
+ *
+ * ## Un écran qui disait oui, un bouton qui disait non
+ *
+ * Écrire l'arbitrage suffisait à ce que le contrôle cesse de bloquer : la
+ * pastille passait à « Prêt à fusionner ». Mais les contradictions qu'il mettait
+ * en cause restaient au statut « proposé », et la fusion refusait ensuite **sans
+ * un mot** — le bouton « Confirmer la fusion » paraissait cassé.
+ *
+ * Le motif n'était donc pas une décision : c'était une phrase à côté d'un état
+ * inchangé.
+ *
+ * ## Assumer, c'est retenir
+ *
+ * Passer outre une contradiction avec la mémoire veut dire : je sais que cette
+ * ligne contredit une décision passée, et je retiens quand même ce que cette
+ * proposition apporte. Les lignes passent donc en **acceptées** — et le motif de
+ * l'arbitrage dit pourquoi, une fois pour toutes.
+ *
+ * Les lignes déjà tranchées, dans un sens ou dans l'autre, ne sont pas
+ * retouchées : quelqu'un s'est déjà prononcé sur elles.
+ */
+export function decisionsDuPasserOutre({ controle = null, items = [] } = {}) {
+  const enCause = new Set(
+    (controle?.concerne ?? [])
+      .filter((entree) => entree?.conflit)
+      .map((entree) => `${texte(entree?.itemType)}|${texte(entree?.itemKey)}`)
+  );
+  if (enCause.size === 0) return [];
+
+  return (Array.isArray(items) ? items : [])
+    .filter((item) => {
+      const cle = `${texte(item?.itemType ?? item?.item_type)}|${texte(item?.itemKey ?? item?.item_key)}`;
+      return enCause.has(cle) && texte(item?.status) === ITEM.PROPOSED;
+    })
+    .map((item) => ({ item, status: ITEM.ACCEPTED, reason: null }));
+}
+
 /** La décision qui annule un arbitrage : la ligne reste, elle ne vaut plus. */
 export function arbitrageARetirer({ controle = null } = {}) {
   const id = texte(controle?.id);

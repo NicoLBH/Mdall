@@ -110,6 +110,7 @@ import {
   arbitrageARetirer,
   arbitrageAEcrire,
   arbitragesEnregistres,
+  decisionsDuPasserOutre,
   motifRecevable,
   phraseDesArbitrages,
   refusDesLignesMisesEnCause
@@ -3563,7 +3564,7 @@ function renderArbitrages(review) {
           title="${escapeHtml(
             restants > 0
               ? `${restants} blocage(s) à trancher avant de pouvoir marquer comme résolus`
-              : "Tous les blocages sont tranchés"
+              : "Tous les blocages sont tranchés : ceci referme le bloc. La fusion est déjà possible."
           )}"
           data-arbitrages-resolus>
           Marquer comme résolus
@@ -3670,15 +3671,44 @@ function renderArbitrage(ligne, { gele = false, courant = false } = {}) {
       ${
         concerne.length > 0 && !ligne.arbitre
           ? `<div class="arbitrage__corps">
-               ${concerne.slice(0, 20).map((entree) => `
+               ${concerne.slice(0, 40).map((entree) => `
                  <div class="arbitrage__ligne">
                    <span class="arbitrage__ligne-nature">${escapeHtml(entree.itemType ?? "")}</span>
-                   <span class="arbitrage__ligne-dit">${escapeHtml(entree.sujet || entree.itemKey || "")}</span>
+                   <span class="arbitrage__ligne-dit">
+                     ${escapeHtml(entree.sujet || entree.itemKey || "")}
+                     ${
+                       // **L'écart, pas seulement la clé.** On tranche une
+                       // contradiction en lisant les deux lectures, pas en
+                       // cochant un identifiant.
+                       entree.avant || entree.apres
+                         ? `<span class="arbitrage__ecart">
+                              <span class="arbitrage__ecart-avant">${escapeHtml(entree.avant || "—")}</span>
+                              →
+                              <span class="arbitrage__ecart-apres">${escapeHtml(entree.apres || "—")}</span>
+                            </span>`
+                         : ""
+                     }
+                   </span>
+                   ${
+                     // **Chacune se tranche.** Un « Passer outre » global sur
+                     // vingt-neuf contradictions revient à assumer en bloc
+                     // vingt-neuf décisions qu'on n'a pas lues.
+                     entree.conflit && !gele
+                       ? `<span class="arbitrage__ligne-gestes">
+                            <button type="button" class="gh-btn gh-btn--sm"
+                              data-conflit-garder="${escapeHtml(`${entree.itemType}|${entree.itemKey}`)}"
+                              title="Retenir ce que le projet disait : cette ligne est écartée">Garder</button>
+                            <button type="button" class="gh-btn gh-btn--sm"
+                              data-conflit-prendre="${escapeHtml(`${entree.itemType}|${entree.itemKey}`)}"
+                              title="Retenir ce que cette proposition apporte">Prendre</button>
+                          </span>`
+                       : ""
+                   }
                  </div>
                `).join("")}
-               ${concerne.length > 20
+               ${concerne.length > 40
                  ? `<div class="arbitrage__ligne arbitrage__ligne--reste">et ${
-                     concerne.length - 20} autre(s)</div>`
+                     concerne.length - 40} autre(s)</div>`
                  : ""}
              </div>`
           : ""
@@ -5034,6 +5064,21 @@ function bindReview(root) {
     bouton.addEventListener("click", () => reprendreLApplication(root));
   }
 
+  // Trancher une contradiction, ligne à ligne, depuis le bloc d'arbitrage.
+  for (const bouton of root.querySelectorAll("[data-conflit-garder]")) {
+    bouton.addEventListener("click", () => {
+      const item = findItem(bouton.getAttribute("data-conflit-garder"));
+      if (item) decide(root, [item], ITEM.REFUSED, "Ce que le projet retenait a été gardé.");
+    });
+  }
+
+  for (const bouton of root.querySelectorAll("[data-conflit-prendre]")) {
+    bouton.addEventListener("click", () => {
+      const item = findItem(bouton.getAttribute("data-conflit-prendre"));
+      if (item) decide(root, [item], ITEM.ACCEPTED);
+    });
+  }
+
   for (const bouton of root.querySelectorAll("[data-arbitrage-ecarter]")) {
     bouton.addEventListener("click", () => ecarterCeQuiBloque(root, bouton.getAttribute("data-arbitrage-ecarter")));
   }
@@ -5703,7 +5748,19 @@ async function passerOutre(root, id) {
     return;
   }
 
-  const ecrit = await appliquerLesDecisions(root, [decision]);
+  // **Passer outre tranche vraiment ce qui bloquait.**
+  //
+  // Écrire l'arbitrage suffisait à ce que le contrôle cesse de bloquer, et la
+  // pastille passait à « Prêt à fusionner » — mais les contradictions restaient
+  // au statut « proposé », et la fusion refusait ensuite sans un mot. On avait
+  // donc un écran qui disait oui et un bouton qui disait non.
+  //
+  // Assumer une contradiction, c'est retenir ce que la proposition apporte : les
+  // lignes passent donc en acceptées, avec le motif pour raison. C'est une
+  // décision, elle est écrite, et elle se relit.
+  const aTrancher = decisionsDuPasserOutre({ controle, items: view.review?.items ?? [] });
+
+  const ecrit = await appliquerLesDecisions(root, [decision, ...aTrancher]);
   if (ecrit) {
     view.motifsDArbitrage = { ...(view.motifsDArbitrage ?? {}), [id]: "" };
     view.arbitrageEnCoursDeMotif = "";
@@ -5794,9 +5851,25 @@ async function merge(root) {
   // légitimement quarante-huit nouveautés puisqu'il n'y avait rien à comparer.
   const items = toutCeQueLaPropositionPorte(view.review?.items ?? [], view.review?.decisionRows ?? []);
 
-  // Le bouton est déjà désactivé ; la règle est répétée ici parce qu'elle n'a
-  // pas à dépendre de l'état d'un bouton pour tenir.
-  if (unresolvedConflicts(view.review.conflicts ?? []).length > 0) return;
+  // **Et si quelque chose retient, on le dit.**
+  //
+  // Cette garde existait pour la bonne raison — la règle ne doit pas dépendre de
+  // l'état d'un bouton —, et elle sortait **en silence**. Quelqu'un cliquait
+  // « Confirmer la fusion », rien ne se passait, et rien n'expliquait pourquoi :
+  // le bouton paraissait cassé. Un logiciel qui refuse sans le dire est pire
+  // qu'un logiciel qui refuse.
+  const restants = unresolvedConflicts(view.review.conflicts ?? []).length;
+  if (restants > 0) {
+    view.review.noticeTitre = "La fusion attend une décision";
+    view.review.notice = `${restants} contradiction${restants > 1 ? "s" : ""} avec la mémoire du `
+      + `projet ${restants > 1 ? "restent" : "reste"} à trancher. ${restants > 1 ? "Elles sont" : "Elle est"} `
+      + "listée dans l'onglet Changements, en tête : retenez ce que le projet disait, ou ce que "
+      + "cette proposition apporte.";
+    view.review.confirming = false;
+    view.tab = "changes";
+    renderContent(root);
+    return;
+  }
 
   view.review.merging = true;
   view.review.notice = null;

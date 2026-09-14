@@ -12,8 +12,9 @@ import assert from "node:assert/strict";
 
 import {
   MOTIF_MIN, VERDICT, arbitrageAEcrire, arbitrageARetirer, arbitragesEnregistres,
-  motifRecevable, phraseDesArbitrages, refusDesLignesMisesEnCause
+  decisionsDuPasserOutre, motifRecevable, phraseDesArbitrages, refusDesLignesMisesEnCause
 } from "./arbitrage-des-controles.js";
+import { unresolvedConflicts } from "./memory-conflict.js";
 import { passerLesControles, ISSUE, TON } from "./depot-controles.js";
 import { ITEM_TYPE } from "./proposition-review.js";
 import { ITEM } from "./proposition-state.js";
@@ -263,4 +264,56 @@ test("un arbitrage ne se verse pas dans la mémoire du projet", async () => {
   });
 
   assert.deepEqual(lignes.map((ligne) => ligne.kind), ["base-datum"]);
+});
+
+/* ── Passer outre doit vraiment lever ce qui bloquait ────────────────────── */
+
+/**
+ * **Un écran qui disait oui, un bouton qui disait non.**
+ *
+ * Écrire l'arbitrage suffisait à ce que le contrôle cesse de bloquer : la
+ * pastille passait à « Prêt à fusionner ». Mais les contradictions restaient au
+ * statut « proposé », et la fusion refusait ensuite sans un mot — le bouton
+ * « Confirmer la fusion » paraissait cassé.
+ *
+ * Assumer une contradiction, c'est retenir ce que la proposition apporte.
+ */
+test("passer outre tranche les contradictions qu'il assume", () => {
+  const items = [
+    { itemType: "base-datum", itemKey: "zone-de-neige", payload: { value: "A2" }, status: ITEM.PROPOSED },
+    { itemType: "base-datum", itemKey: "altitude", payload: { value: "320" }, status: ITEM.PROPOSED },
+    // Déjà tranchée : quelqu'un s'est prononcé, on n'y revient pas.
+    { itemType: "base-datum", itemKey: "nappe", payload: { value: "-2,4" }, status: ITEM.REFUSED }
+  ];
+  const controle = {
+    id: "memoire",
+    concerne: [
+      { itemType: "base-datum", itemKey: "zone-de-neige", conflit: true },
+      { itemType: "base-datum", itemKey: "altitude", conflit: true },
+      { itemType: "base-datum", itemKey: "nappe", conflit: true }
+    ]
+  };
+
+  const decisions = decisionsDuPasserOutre({ controle, items });
+
+  assert.deepEqual(decisions.map((d) => d.item.itemKey), ["zone-de-neige", "altitude"]);
+  assert.ok(decisions.every((d) => d.status === ITEM.ACCEPTED));
+
+  // **Et c'est ce qui lève le blocage.** Sans cela, la fusion refuse ensuite.
+  const apres = items.map((item) => {
+    const prise = decisions.find((d) => d.item.itemKey === item.itemKey);
+    return prise ? { ...item, status: prise.status } : item;
+  });
+  assert.equal(unresolvedConflicts(apres.map((item) => ({ item }))).length, 0);
+});
+
+/**
+ * Un contrôle qui ne met aucune contradiction en cause — la provenance, par
+ * exemple — n'a rien à trancher : son arbitrage se suffit à lui-même.
+ */
+test("passer outre sur un contrôle sans contradiction ne tranche rien", () => {
+  assert.deepEqual(
+    decisionsDuPasserOutre({ controle: CONTROLE, items: LIGNES }),
+    []
+  );
 });

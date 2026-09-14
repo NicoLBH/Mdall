@@ -180,10 +180,23 @@ export const CONTROLES = [
     id: "memoire",
     label: "Rien ne contredit la mémoire du projet",
     bloquant: true,
-    // Les contradictions ont leur propre bloc, qui les tranche une par une avec
-    // les deux extraits en face. Les redire ici en ferait deux endroits où
-    // arbitrer la même chose.
-    concerne: () => [],
+    // **Elles se nomment, et se tranchent ici.** Le bloc qui les détaillait vit
+    // dans l'onglet Dépôts ; l'arbitrage, dans les Changements. On lisait donc
+    // « 29 contradictions doivent être arbitrées » sans en voir une seule, avec
+    // pour seule issue un « Passer outre » global — c'est-à-dire assumer en bloc
+    // vingt-neuf décisions qu'on n'avait pas lues.
+    concerne: ({ conflits = [] }) => (Array.isArray(conflits) ? conflits : [])
+      .filter((conflit) => conflit?.item?.status === "proposed")
+      .map((conflit) => ({
+        itemType: texte(conflit?.item?.itemType),
+        itemKey: texte(conflit?.item?.itemKey),
+        sujet: texte(conflit?.item?.payload?.subject) || texte(conflit?.item?.itemKey),
+        // Ce que le projet retenait, et ce que la proposition apporte : c'est
+        // l'écart qu'on tranche, pas une ligne de plus à cocher.
+        avant: texte(conflit?.before),
+        apres: texte(conflit?.after),
+        conflit: true
+      })),
     verifier: ({ conflits = [], blocage = "" }) => {
       if (texte(blocage)) return nonTenu("La mémoire du projet est contredite.", blocage);
       if (conflits.length === 0) return tenu("Aucune décision passée n'est remise en cause par ce dépôt.");
