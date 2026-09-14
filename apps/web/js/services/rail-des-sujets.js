@@ -263,6 +263,11 @@ export function ecranApresUneLecture({
 /**
  * Une recherche épinglée, prête à dessiner.
  *
+ * **Une seule forme en entrée** : celle que `recherche-epinglee.js` rend. On
+ * acceptait ici aussi la graphie des colonnes de la base, et deviner une
+ * graphie ne rate pas bruyamment — ça rend `undefined`, qui prend la valeur de
+ * repli. C'est ainsi que le nom d'une vue est devenu sa requête (règle 10).
+ *
  * Elle porte son propre nom — ou sa requête, qui se lit et qu'on reconnaît — et
  * s'allume quand la barre porte exactement la sienne. **Exactement** : une
  * épingle qui s'allumerait sur une requête voisine ferait croire qu'on regarde
@@ -275,15 +280,15 @@ export function epinglesDuRail(epingles = [], requete = "") {
     // **Seules celles qu'on a épinglées.** Une vue enregistrée vit sur son
     // écran ; le rail est court, et toutes les y mettre revenait à faire payer
     // chaque enregistrement d'une place dans la barre de gauche.
-    .filter((epingle) => (epingle?.rail ?? epingle?.auRail) === true)
+    .filter((epingle) => epingle?.auRail === true)
     .map((epingle) => ({
       id: texte(epingle?.id),
-      requete: texte(epingle?.query ?? epingle?.requete),
-      nom: texte(epingle?.title ?? epingle?.titre) || texte(epingle?.query ?? epingle?.requete),
+      requete: texte(epingle?.requete),
+      nom: texte(epingle?.titre) || texte(epingle?.requete),
       // De quoi la reconnaître d'un coup d'œil : c'est tout ce qu'une entrée de
       // rail large de deux cents pixels peut porter.
-      icone: texte(epingle?.icon ?? epingle?.icone),
-      couleur: texte(epingle?.color ?? epingle?.couleur)
+      icone: texte(epingle?.icone),
+      couleur: texte(epingle?.couleur)
     }))
     .filter((epingle) => epingle.id && epingle.requete)
     .map((epingle) => ({ ...epingle, active: epingle.requete === courante }));

@@ -28,6 +28,12 @@
  */
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
+// **La traduction de cette table vit ailleurs, et elle est pure.** Enfermée ici,
+// derrière un import de réseau, aucun test ne pouvait l'exécuter — et le titre
+// qu'elle rend n'arrivait pas jusqu'à l'écran des vues sans que rien ne le dise.
+import { SURFACE, recherchePourLEcran, surfaceDe } from "./recherche-epinglee.js";
+
+export { SURFACE, recherchePourLEcran };
 
 const SUPABASE_URL = getSupabaseUrl();
 // `owner_id` et `updated_at` sont **lus, jamais écrits d'ici** : la base les
@@ -35,30 +41,6 @@ const SUPABASE_URL = getSupabaseUrl();
 // besoin pour dire de qui vient une vue et quand elle a bougé — sans quoi une
 // liste de douze vues ne se distingue plus que par son nom.
 const COLUMNS = "id,project_id,owner_id,query,title,description,icon,color,surface,rail,created_at,updated_at";
-
-/**
- * L'écran d'où vient une épingle.
- *
- * **La Mémoire et les sujets partagent la table, pas les requêtes.** Les deux
- * barres ont la même grammaire mais pas le même vocabulaire : `nature:hypothese`
- * ne veut rien dire sur les sujets, et `label:cr-chantier` rien dans la Mémoire.
- * Mélanger les épingles ferait un rail dont la moitié ne rend jamais rien.
- *
- * La surface range ; elle n'autorise pas. C'est `owner_id` qui autorise, et la
- * politique de la table n'a pas changé d'un caractère.
- */
-export const SURFACE = { MEMOIRE: "memoire", SUJETS: "sujets" };
-
-/**
- * La surface demandée, ramenée à celles qui existent.
- *
- * **La Mémoire par défaut, et ce n'est pas arbitraire** : c'est la valeur que
- * la base pose sur les lignes déjà écrites, qui viennent toutes de là.
- */
-function surfaceDe(valeur) {
-  const dite = texte(valeur).toLowerCase();
-  return Object.values(SURFACE).includes(dite) ? dite : SURFACE.MEMOIRE;
-}
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -79,38 +61,6 @@ async function request(path, { method = "GET", body = null, headers = {}, params
 
   if (!response.ok) throw new Error(`${path} (${response.status})`);
   return response.status === 204 ? null : response.json().catch(() => null);
-}
-
-/**
- * Ce qu'une ligne de la base devient à l'écran.
- *
- * Le titre se recalcule quand il est vide : la requête fait office de nom, et
- * c'est elle qu'on reconnaît. La recopier en base à la création la laisserait
- * diverger de la requête qu'elle résume.
- */
-export function recherchePourLEcran(ligne = {}) {
-  const requete = texte(ligne.query);
-  return {
-    id: texte(ligne.id),
-    titre: texte(ligne.title) || requete,
-    requete,
-    surface: surfaceDe(ligne.surface),
-    // Ce qui habille une vue voyage tel quel : c'est `vues-des-sujets.js` qui
-    // le ramène à ce que le jeu d'icônes connaît, et lui seul.
-    description: texte(ligne.description),
-    icone: texte(ligne.icon),
-    couleur: texte(ligne.color),
-    // **Enregistrée et épinglée sont deux choses.** Une vue vit sur son écran ;
-    // elle ne monte au rail que lorsqu'on l'y met, parce que le rail est court
-    // et qu'une vue de plus y coûte une place à celles qu'on regarde tous les
-    // jours.
-    auRail: ligne.rail === true,
-    // Le compte qui l'a écrite et la dernière fois qu'elle a bougé, tels quels :
-    // c'est l'écran qui met un nom sur un compte, lui seul connaissant le
-    // trombinoscope du projet.
-    creePar: texte(ligne.owner_id),
-    miseAJour: texte(ligne.updated_at)
-  };
 }
 
 /**

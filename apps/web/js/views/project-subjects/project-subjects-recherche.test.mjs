@@ -12,10 +12,17 @@ import { champsDesSujets } from "../../services/champs-des-sujets.js";
 import { LECTURE, NOMS_DE_LA_LECTURE } from "../../services/rail-des-sujets.js";
 import {
   renderActionsGroupeesHtml, renderChoixDeLHabitHtml, renderCompteDeLaSelectionHtml,
-  renderFiltreDenTeteHtml, renderFormulaireDeVueHtml, renderRailDesSujetsHtml,
-  renderRechercheDesSujetsHtml, renderTableauDesVuesHtml
+  renderFiltreDenTeteHtml, renderFormulaireDeVueHtml, renderMenuDeLaVueHtml,
+  renderRailDesSujetsHtml, renderRechercheDesSujetsHtml, renderTableauDesVuesHtml,
+  renderTitreDeLaVueHtml
 } from "./project-subjects-recherche.js";
 import { ATTRIBUTS_ECOUTES, GESTE, gesteDesSujets } from "../../services/gestes-des-sujets.js";
+/**
+ * **Les épingles arrivent par la base.** Le décor les y fabrique donc, plutôt
+ * que d'écrire à la main la forme que le rail attend : une fixture qui recopie
+ * les hypothèses du code ne teste que lui-même.
+ */
+import { recherchePourLEcran } from "../../services/recherche-epinglee.js";
 
 const champs = champsDesSujets({
   labels: [{ key: "l-cr", name: "CR chantier" }],
@@ -112,8 +119,8 @@ test("un compte qu'on ne peut pas calculer ne s'affiche pas", () => {
 test("seules les vues épinglées montent au rail", () => {
   const html = rail({
     epingles: [
-      { id: "e1", query: "priorité:haute", title: "Les urgences", rail: true },
-      { id: "e2", query: "label:cr-chantier", title: "Rangée seulement" }
+      recherchePourLEcran({ id: "e1", query: "priorité:haute", title: "Les urgences", rail: true }),
+      recherchePourLEcran({ id: "e2", query: "label:cr-chantier", title: "Rangée seulement" })
     ]
   });
 
@@ -129,7 +136,9 @@ test("seules les vues épinglées montent au rail", () => {
 /** Les épinglées se posent **sous** Labels, qui reste la dernière destination. */
 test("les épinglées viennent après les écrans du domaine", () => {
   const html = rail({
-    epingles: [{ id: "e1", query: "priorité:haute", title: "Les urgences", rail: true }]
+    epingles: [recherchePourLEcran({
+      id: "e1", query: "priorité:haute", title: "Les urgences", rail: true
+    })]
   });
 
   assert.ok(html.indexOf("Labels") < html.indexOf("Épinglées"));
@@ -139,10 +148,10 @@ test("les épinglées viennent après les écrans du domaine", () => {
 /** On la reconnaît à son icône, dans sa couleur : c'est ce qu'on a choisi pour ça. */
 test("une vue épinglée porte son icône et sa couleur", () => {
   const html = rail({
-    epingles: [{
+    epingles: [recherchePourLEcran({
       id: "e1", query: "priorité:haute", title: "Les urgences",
       rail: true, icon: "alert", color: "rouge"
-    }]
+    })]
   });
 
   assert.match(html, /sujets-rail__epingle-icone/);
@@ -417,7 +426,7 @@ test("un champ absent ne dessine rien", () => {
  * dessiné pour rien — et il a exactement l'air de marcher.
  */
 test("chaque attribut que le rail dessine déclenche un geste", () => {
-  const html = rail({ epingles: [{ id: "e1", query: "priorité:haute", title: "X", rail: true }] });
+  const html = rail({ epingles: [recherchePourLEcran({ id: "e1", query: "priorité:haute", title: "X", rail: true })] });
 
   // **Sans le `=` final.** Un attribut booléen s'écrit nu —
   // `data-project-rail-collapse` n'a pas de valeur —, et l'exiger faisait
@@ -487,7 +496,7 @@ function unNoeud(attribut) {
 }
 
 test("le rail porte tous les attributs que l'écoute cherche", () => {
-  const html = rail({ epingles: [{ id: "e1", query: "priorité:haute", title: "X", rail: true }] });
+  const html = rail({ epingles: [recherchePourLEcran({ id: "e1", query: "priorité:haute", title: "X", rail: true })] });
 
   for (const attribut of ["data-sujets-lecture", "data-sujets-derailler",
     "data-sujets-sousvue", "data-sujets-ecran", "data-project-rail-collapse"]) {
@@ -729,8 +738,11 @@ test("une vue épinglée se voit dans le tableau", () => {
   });
 
   assert.match(html, /sujets-vues__au-rail/);
-  assert.match(html, /Retirer du rail/);
-  assert.doesNotMatch(html, /Épingler la vue/);
+  // Le menu dit **ce que le clic va faire** : une entrée qui dirait « épinglée »
+  // alors qu'elle va désépingler se lit à l'envers une fois sur deux.
+  assert.match(html, /Désépingler la vue/);
+  assert.match(html, /icons\.svg#pin-slash/);
+  assert.doesNotMatch(html, />Épingler la vue</);
 });
 
 /** Le bouton de création est là, vide ou non : c'est de là qu'on en fait une. */
@@ -962,4 +974,64 @@ test("« Moi » passe devant les groupes du chantier", () => {
   });
 
   assert.ok(html.indexOf(">Moi<") < html.indexOf(">Entreprises<"));
+});
+
+/* ── Le menu d'une vue, et le titre de celle qu'on regarde ───────────────── */
+
+const LA_VUE = {
+  id: "v1", requete: "objectif:permis", nom: "Les urgences du lot 03",
+  icone: "milestone", couleur: { cle: "jaune", valeur: "#d29922", nom: "Jaune" }, auRail: true
+};
+
+/**
+ * **Le même menu partout où on l'ouvre.** Le tableau des vues le porte sur
+ * chaque ligne, l'écran d'une vue à côté de « Nouveau sujet » : ce sont les
+ * mêmes gestes sur le même objet, et deux écritures auraient deux libellés au
+ * bout de six mois (règle 10).
+ */
+test("le menu d'une vue porte ses gestes, et le filet", () => {
+  const html = renderMenuDeLaVueHtml({ vue: LA_VUE, ouvert: true, avecModifier: true });
+
+  assert.match(html, /data-sujets-vue-modifier="v1"/);
+  assert.match(html, /Modifier la vue/);
+  assert.match(html, /data-sujets-vue-epingler="v1"/);
+  assert.match(html, /Désépingler la vue/);
+  assert.match(html, /gh-menu__separator/);
+  assert.match(html, /gh-menu__item--danger[^>]*data-sujets-decrocher="v1"/);
+  assert.doesNotMatch(html, / hidden/);
+});
+
+test("fermé, le menu d'une vue ne se lit pas", () => {
+  assert.match(renderMenuDeLaVueHtml({ vue: LA_VUE }), /role="menu" hidden/);
+});
+
+/** Chaque entrée du menu déclenche un geste que la délégation écoute. */
+test("chaque attribut du menu d'une vue est écouté", () => {
+  const html = renderMenuDeLaVueHtml({ vue: LA_VUE, avecModifier: true });
+
+  for (const attribut of new Set([...html.matchAll(/(data-sujets-[a-z-]+)=/g)].map(([, a]) => a))) {
+    if (SANS_GESTE.includes(attribut)) continue;
+    assert.notEqual(gesteDesSujets(unNoeud(attribut)).geste, GESTE.RIEN,
+      `le menu d'une vue pose « ${attribut} » et rien ne l'écoute`);
+  }
+});
+
+/**
+ * Une vue est une requête enregistrée : une fois cliquée, l'écran ressemble à
+ * n'importe quelle liste filtrée. Son habit et son nom disent laquelle.
+ */
+test("le titre d'une vue porte son habit, et son épingle", () => {
+  const html = renderTitreDeLaVueHtml(LA_VUE);
+
+  assert.match(html, /Les urgences du lot 03/);
+  assert.match(html, /#d29922/);
+  assert.match(html, /icons\.svg#milestone/);
+  assert.match(html, /icons\.svg#pin/);
+});
+
+/** L'épingle ne se dit que si la vue est au rail : toujours là, elle ne dirait rien. */
+test("une vue rangée ne porte pas d'épingle, et rien ne s'écrit sans vue", () => {
+  assert.doesNotMatch(renderTitreDeLaVueHtml({ ...LA_VUE, auRail: false }), /sujets-vue-titre__rail/);
+  assert.equal(renderTitreDeLaVueHtml(null), "");
+  assert.equal(renderTitreDeLaVueHtml({}), "");
 });

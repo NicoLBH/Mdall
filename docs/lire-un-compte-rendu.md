@@ -90,7 +90,16 @@ une porte ; les mesures disent si le modèle en profite pour ajouter du texte.
 
 ### Étape 2 — Le `.md` se range dans Fichiers *(faite)*
 
-Un dossier portant le nom du PDF, contenant le PDF et le `.md`.
+**`Documents / CR de chantier /`**, le PDF et son `.md` côte à côte, le second portant le
+nom du premier à l'extension près.
+
+> **Corrigé.** C'était un dossier *par compte rendu*, nommé comme son PDF. Sur un chantier
+> qui tient deux ans, cela fait quarante dossiers à la racine de Documents — un par réunion,
+> deux fichiers dedans. L'arbre devient illisible au vingtième, et l'on ne retrouve plus un
+> compte rendu qu'en connaissant déjà le nom de son fichier. Ils se rangent donc là où on les
+> cherche : un dossier, celui de leur nature. C'est alors le **nom du fichier** qui réunit un
+> PDF et sa restitution, et plus le dossier qui les contient — d'où l'importance de la règle
+> de nommage ci-dessous.
 
 **Ce que ça débloque, et c'est plus que du rangement :**
 
@@ -1155,12 +1164,50 @@ et un présent ferait croire que c'est fait.
 
 ---
 
+### Étape 9 — « Transformer » écrit enfin la proposition *(à faire)*
+
+Le bouton est là, son menu s'ouvre, et les trois issues répondent — par une phrase qui dit
+que ce n'est pas branché. Tout ce qui précède est prêt : l'écran sait quels sujets ouvrir,
+lesquels relancer, lesquels fermer, quels labels créer, quels lots manquent, quels objectifs
+poser, quels liens tirer. **Rien de tout cela ne sort de l'écran.**
+
+#### Ce qui manque, précisément
+
+1. **Composer les lignes.** `ITEM_TYPE.SUJET` et `ITEM_TYPE.INTERVENANT` existent et furent
+   écrits pour ça ; les labels, les lots et les objectifs n'ont pas encore de nature. Le type
+   est un texte libre en base — aucune migration — mais chaque nature nouvelle doit dire ce
+   qu'elle engage, sans quoi le résumé de l'étape 8 la comptera sans savoir la nommer.
+2. **Appliquer à la fusion.** `mergeProposition` ne sait aujourd'hui qu'une chose : marquer
+   des documents acceptés ou refusés. Une proposition qui porterait trente sujets serait
+   signée sans que rien ne s'ouvre — le pire des deux mondes, puisqu'elle dirait que c'est
+   fait.
+3. **Ranger les deux fichiers**, ce qui est *le geste d'écriture* de cette étape :
+   - le PDF dans `Documents / CR de chantier /` — **la règle est écrite et vérifiée**
+     (`restitution-rangee.js`), il ne lui manque qu'un appelant ;
+   - le `.md` dans le corpus de la Mémoire. Voir ci-dessous : ce n'est pas un rangement.
+
+#### Le `.md` dans la Mémoire n'est pas un déplacement de fichier
+
+`Mémoire/` n'est pas un dossier où l'on dépose : c'est **ce que le projet sait**, écrit en
+mdall, et son arborescence est calculée à partir de la mémoire — `corpus.crp` y est la nature
+« intendance », pas un répertoire. Y mettre le `.md` d'un compte rendu, c'est **le faire
+entrer au corpus**, c'est-à-dire écrire en mémoire. Par la règle 1, cela ne se fait que par
+une proposition, et donc à la fusion — avec le reste.
+
+C'est pourquoi les trois points ci-dessus ne se découpent pas : composer sans appliquer
+donnerait une proposition qu'on signe pour rien, et ranger sans proposer contournerait
+exactement ce que la règle 1 protège.
+
 ---
 
-## Le plan est fait
+---
 
-Les huit étapes sont écrites. Ce qui reste n'est plus du plan mais de l'usage : déposer des
-comptes rendus réels, regarder ce que les mesures disent, et corriger ce qu'elles montrent.
+## Où en est le plan
+
+Les huit premières étapes sont écrites ; la neuvième — la sortie par une proposition — ne
+l'est pas, et c'est elle qui manque pour que le procédé aille jusqu'au bout. Le reste n'est
+plus du plan mais de l'usage : déposer des comptes rendus réels, regarder ce que les mesures
+disent, et corriger ce qu'elles montrent.
 
 Deux choses ont changé de nature en chemin, et méritent d'être retenues :
 

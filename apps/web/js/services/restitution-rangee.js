@@ -50,22 +50,34 @@ export const PHRASES_DU_RANGEMENT = {
 };
 
 /**
- * Le nom du dossier qui abrite un document et sa restitution.
+ * Le dossier des comptes rendus de chantier, dans Documents.
  *
- * Celui du PDF, sans son extension. Le dossier est donc reconnaissable d'un
- * coup d'œil dans l'arbre des fichiers, et un second dépôt du même document
- * retombe dessus au lieu d'en créer un jumeau.
+ * ## Un dossier par nature, et non un dossier par document
+ *
+ * Chaque compte rendu ouvrait **son propre dossier**, nommé comme son PDF. Sur
+ * un chantier qui tient deux ans, cela fait quarante dossiers à la racine de
+ * Documents, un par réunion, chacun contenant deux fichiers. L'arbre devient
+ * illisible au vingtième, et l'on ne retrouve plus un compte rendu qu'en
+ * connaissant déjà le nom de son fichier.
+ *
+ * Ils se rangent donc **là où on les cherche** : un dossier, celui de leur
+ * nature, et quarante fichiers dedans — qui portent des dates dans leur nom et
+ * se trient donc tout seuls.
  */
-export function nomDuDossier(nomDuFichier = "") {
-  const nom = texte(nomDuFichier).replace(/\.[^.]+$/, "");
-  // Un nom vide ferait un dossier sans nom, que la base refuse. Mieux vaut un
-  // nom générique qu'un dépôt qui échoue.
-  return nom || "document";
-}
+export const DOSSIER_DES_CR = "CR de chantier";
 
-/** Le nom du fichier de restitution — `CR_07.md`. */
+/**
+ * Le nom du fichier de restitution — `CR_07.md`.
+ *
+ * **Celui du PDF, l'extension près.** C'était déjà la règle ; elle devient
+ * essentielle maintenant que les comptes rendus partagent un dossier : c'est le
+ * nom qui réunit un PDF et sa restitution, et plus le dossier qui les contient.
+ */
 export function nomDeLaRestitution(nomDuFichier = "") {
-  return `${nomDuDossier(nomDuFichier)}.md`;
+  const nom = texte(nomDuFichier).replace(/\.[^.]+$/, "");
+  // Un nom vide ferait un fichier sans nom, que la base refuse. Mieux vaut un
+  // nom générique qu'un dépôt qui échoue.
+  return `${nom || "document"}.md`;
 }
 
 /** Reconnaît-on ce fichier comme une restitution ? */

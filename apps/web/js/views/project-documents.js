@@ -241,8 +241,16 @@ function syncDocumentsSelectedPhase() {
   }
 }
 
+/**
+ * L'icône d'un fichier.
+ *
+ * **La couleur vient de la feuille de style, et d'un seul endroit** :
+ * `--fichiers-icone`. Elle était demandée ici par une classe — `color-fg-muted`
+ * — qui n'existe nulle part, et le gris venait donc, ou ne venait pas, d'une
+ * règle écrite ailleurs.
+ */
 function getDocumentIconSvg() {
-  return svgIcon("file", { className: "octicon octicon-file color-fg-muted" });
+  return svgIcon("file", { className: "octicon octicon-file" });
 }
 
 function getPlusIconSvg() {
@@ -254,11 +262,7 @@ function getPlusIconSvg() {
 }
 
 function getLargeDocumentIconSvg() {
-  return svgIcon("file", {
-    className: "octicon octicon-file mb-2 color-fg-muted",
-    width: 32,
-    height: 32
-  });
+  return svgIcon("file", { className: "octicon octicon-file mb-2", width: 32, height: 32 });
 }
 
 function getCommitIconSvg() {
@@ -1435,7 +1439,7 @@ function renderRepoFolderRow(folder) {
   return `
     <div class="documents-repo__row documents-repo__row--folder is-clickable" data-folder-id="${escapeHtml(folder.id || "")}" role="button" tabindex="0" aria-label="Ouvrir le dossier">
       <div class="documents-repo__cell documents-repo__cell--name">
-        <span class="documents-repo__icon documents-repo__icon--folder">${getFolderClosedIconSvg()}</span>
+        <span class="documents-repo__icon">${getFolderClosedIconSvg()}</span>
         <button type="button" class="documents-repo__name documents-repo__name-trigger js-folder-open-trigger" data-folder-id="${escapeHtml(folder.id || "")}">${escapeHtml(folder.name || "Dossier")}</button>
       </div>
       <div class="documents-repo__cell documents-repo__cell--message"><div class="documents-repo__message-main">Dossier</div></div>
@@ -1471,7 +1475,7 @@ function renderRepoDocumentRow(doc) {
       ${isPreviewablePdf ? 'role="button" tabindex="0" aria-label="Ouvrir l’aperçu du PDF"' : ""}
     >
       <div class="documents-repo__cell documents-repo__cell--name">
-        <span class="documents-repo__icon documents-repo__icon--document">${getDocumentIconSvg()}</span>
+        <span class="documents-repo__icon">${getDocumentIconSvg()}</span>
         <button type="button" class="documents-repo__name documents-repo__name-trigger js-document-title-trigger" data-document-id="${escapeHtml(decoratedDoc.id || "")}">${escapeHtml(decoratedDoc.name)}</button>
         ${
           etiquette

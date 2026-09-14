@@ -9,6 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { champsDesSujets } from "./champs-des-sujets.js";
+import { recherchePourLEcran } from "./recherche-epinglee.js";
 import {
   LECTURE, NOMS_DE_LA_LECTURE, ecranApresUneLecture, epinglesDuRail, lectureDe,
   railDesSujets, requeteDeLaLecture
@@ -158,10 +159,18 @@ test("la lecture active est marquée, et une seule", () => {
 
 /* ── Les recherches épinglées ────────────────────────────────────────────── */
 
+/**
+ * **Les épingles arrivent par la base**, et le décor les y fabrique — il ne les
+ * écrit pas à la main. Une fixture qui recopierait la forme attendue par le
+ * code testerait le décor, pas le raccord : c'est exactement ainsi que le nom
+ * d'une vue est devenu sa requête, sans qu'aucun test ne bronche.
+ */
+const enBase = (ligne) => recherchePourLEcran(ligne);
+
 test("une épingle porte son nom, ou sa requête à défaut", () => {
   const posees = epinglesDuRail([
-    { id: "e1", query: "statut:ouvert label:cr-chantier", title: "Le chantier", rail: true },
-    { id: "e2", query: "priorité:critique", title: "", rail: true }
+    enBase({ id: "e1", query: "statut:ouvert label:cr-chantier", title: "Le chantier", rail: true }),
+    enBase({ id: "e2", query: "priorité:critique", title: "", rail: true })
   ], "");
 
   assert.deepEqual(posees.map((epingle) => epingle.nom), ["Le chantier", "priorité:critique"]);
@@ -175,8 +184,8 @@ test("une épingle porte son nom, ou sa requête à défaut", () => {
  */
 test("une vue enregistrée sans être épinglée ne monte pas au rail", () => {
   const posees = epinglesDuRail([
-    { id: "e1", query: "priorité:critique", title: "Les urgences", rail: true },
-    { id: "e2", query: "label:cr-chantier", title: "Rangée seulement" }
+    enBase({ id: "e1", query: "priorité:critique", title: "Les urgences", rail: true }),
+    enBase({ id: "e2", query: "label:cr-chantier", title: "Rangée seulement" })
   ], "");
 
   assert.deepEqual(posees.map((epingle) => epingle.id), ["e1"]);
@@ -188,17 +197,34 @@ test("une vue enregistrée sans être épinglée ne monte pas au rail", () => {
  */
 test("une épingle ne s'allume que sur sa requête exacte", () => {
   const requete = "statut:ouvert label:cr-chantier";
-  const [epingle] = epinglesDuRail([{ id: "e1", query: requete, rail: true }], requete);
-  assert.equal(epingle.active, true);
+  const posee = enBase({ id: "e1", query: requete, rail: true });
 
-  const [voisine] = epinglesDuRail([{ id: "e1", query: requete, rail: true }], `${requete} étanchéité`);
-  assert.equal(voisine.active, false);
+  assert.equal(epinglesDuRail([posee], requete)[0].active, true);
+  assert.equal(epinglesDuRail([posee], `${requete} étanchéité`)[0].active, false);
 });
 
 /** Une épingle sans requête ne se dessine pas : elle ne mènerait nulle part. */
 test("une épingle vide est écartée", () => {
-  assert.deepEqual(epinglesDuRail([{ id: "e1", query: "" }, { id: "", query: "x" }, null], ""), []);
+  assert.deepEqual(epinglesDuRail([
+    enBase({ id: "e1", query: "", rail: true }), enBase({ id: "", query: "x", rail: true }), null
+  ], ""), []);
   assert.deepEqual(epinglesDuRail(), []);
+});
+
+/**
+ * **L'icône et la couleur traversent aussi.** Elles sont tout ce qui distingue
+ * douze entrées de rail les unes des autres ; perdues au passage, la barre de
+ * gauche devient une colonne de marque-pages gris identiques.
+ */
+test("l'habit d'une vue arrive jusqu'au rail", () => {
+  const [epingle] = epinglesDuRail([enBase({
+    id: "e1", query: "objectif:permis", title: "Les urgences du lot 03",
+    icon: "milestone", color: "jaune", rail: true
+  })], "");
+
+  assert.equal(epingle.nom, "Les urgences du lot 03");
+  assert.equal(epingle.icone, "milestone");
+  assert.equal(epingle.couleur, "jaune");
 });
 
 /* ── Ce qu'une lecture change à l'écran ──────────────────────────────────── */

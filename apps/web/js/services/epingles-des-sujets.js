@@ -119,6 +119,27 @@ export function sujetsEpingles(sujets = [], epingles = []) {
 }
 
 /**
+ * Montre-t-on le bandeau des sujets épinglés ?
+ *
+ * ## Seulement sur la liste de tous les sujets
+ *
+ * Les épinglés sont **ce qu'on garde sous la main dans le projet entier** :
+ * trois sujets qu'on suit, indépendamment de la question qu'on se pose. Une vue
+ * pose une question précise — « les urgences du lot 03 » —, et coiffer sa
+ * réponse de trois sujets qui n'y répondent pas fait lire les trois comme
+ * faisant partie du lot. On regarde alors une liste de vingt lignes en croyant
+ * qu'elle en a vingt-trois.
+ *
+ * Le bandeau n'apparaît donc que là où sa promesse est vraie : **requête vide**,
+ * c'est-à-dire tous les sujets. Tout filtre, épinglé ou non, le fait
+ * disparaître — ce qui est aussi la seule règle qu'on puisse énoncer sans avoir
+ * à se demander, entrée par entrée du rail, si celle-ci compte.
+ */
+export function bandeauDesEpingles(requete = "") {
+  return texte(requete) === "";
+}
+
+/**
  * Ce que le bouton dit, selon qu'on peut épingler ou non.
  *
  * Il annonce **ce que le clic va faire**, pas l'état courant : un bouton qui

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  PHRASES_DU_RANGEMENT, RANGEE, estUneRestitution, nomDeLaRestitution, nomDuDossier,
+  DOSSIER_DES_CR, PHRASES_DU_RANGEMENT, RANGEE, estUneRestitution, nomDeLaRestitution,
   restitutionRangee, sourceRangee
 } from "./restitution-rangee.js";
 import {
@@ -11,18 +11,30 @@ import {
 
 /* ── Les noms ────────────────────────────────────────────────────────────── */
 
-test("le dossier porte le nom du PDF, sans son extension", () => {
-  assert.equal(nomDuDossier("CR_07.pdf"), "CR_07");
-  assert.equal(nomDuDossier("1824_CR_09.PDF"), "1824_CR_09");
-  assert.equal(nomDuDossier("compte rendu n° 12.pdf"), "compte rendu n° 12");
-  // Un nom vide ferait un dossier sans nom, que la base refuse.
-  assert.equal(nomDuDossier(""), "document");
-  assert.equal(nomDuDossier(".pdf"), "document");
+/**
+ * **Un dossier par nature, et non un dossier par document.** Chaque compte
+ * rendu ouvrait le sien, nommé comme son PDF : sur un chantier qui tient deux
+ * ans, quarante dossiers à la racine de Documents, un par réunion, deux
+ * fichiers dedans. On ne retrouvait plus un compte rendu qu'en connaissant déjà
+ * le nom de son fichier.
+ */
+test("les comptes rendus se rangent tous au même endroit", () => {
+  assert.equal(DOSSIER_DES_CR, "CR de chantier");
 });
 
-test("la restitution porte le même nom, en .md", () => {
+/**
+ * Le nom du PDF, l'extension près. C'était déjà la règle ; elle devient
+ * essentielle maintenant que les comptes rendus partagent un dossier — c'est le
+ * nom qui réunit un PDF et sa restitution, et plus le dossier qui les contient.
+ */
+test("la restitution porte le même nom que le PDF, en .md", () => {
   assert.equal(nomDeLaRestitution("CR_07.pdf"), "CR_07.md");
+  assert.equal(nomDeLaRestitution("1824_CR_09.PDF"), "1824_CR_09.md");
+  assert.equal(nomDeLaRestitution("compte rendu n° 12.pdf"), "compte rendu n° 12.md");
   assert.equal(nomDeLaRestitution("CR_07"), "CR_07.md");
+  // Un nom vide ferait un fichier sans nom, que la base refuse.
+  assert.equal(nomDeLaRestitution(""), "document.md");
+  assert.equal(nomDeLaRestitution(".pdf"), "document.md");
 });
 
 test("une restitution se reconnaît à son extension", () => {
@@ -203,7 +215,7 @@ function baseEnMemoire({ dossiers = [], fichiers = [], contenus = new Map(), che
 
 const unPdf = (nom = "CR_07.pdf") => new File(["%PDF"], nom, { type: "application/pdf" });
 
-test("ranger dépose le PDF et sa restitution dans un dossier à son nom", async () => {
+test("ranger dépose le PDF et sa restitution dans le dossier des comptes rendus", async () => {
   const { portes, journal } = baseEnMemoire();
 
   const range = await rangerLaRestitution({
@@ -211,7 +223,7 @@ test("ranger dépose le PDF et sa restitution dans un dossier à son nom", async
   });
 
   assert.equal(range.range, true);
-  assert.deepEqual(journal.dossiersCrees, ["CR_07"]);
+  assert.deepEqual(journal.dossiersCrees, [DOSSIER_DES_CR]);
   assert.deepEqual(journal.deposes.map((ligne) => ligne.filename), ["CR_07.pdf", "CR_07.md"]);
   assert.deepEqual(journal.deposes.map((ligne) => ligne.document_kind),
     ["source_pdf", "restitution_markdown"]);
@@ -367,4 +379,60 @@ test("on ne reprend une restitution rangée que si elle est à jour et paginée"
   // Le servir donnerait un document d'une seule page, ce qu'il n'est pas.
   assert.equal(restitutionReutilisable({ etat: RANGEE.A_JOUR, markdown: "# Réunion" }).reutilisable, false);
   assert.equal(restitutionReutilisable().reutilisable, false);
+});
+
+/**
+ * **Le dossier ne se crée qu'une fois.** Deux comptes rendus, un dossier, quatre
+ * fichiers : c'est tout l'objet du changement. Un second dossier créé au second
+ * dépôt remettrait la racine de Documents dans l'état qu'on vient de quitter.
+ */
+test("deux comptes rendus partagent le dossier", async () => {
+  const base = baseEnMemoire();
+
+  await rangerLaRestitution({
+    projectId: "projet", fichier: unPdf("CR_07.pdf"), markdown: "# Réunion 7",
+    empreinte: "abc", portes: base.portes
+  });
+  await rangerLaRestitution({
+    projectId: "projet", fichier: unPdf("CR_08.pdf"), markdown: "# Réunion 8",
+    empreinte: "def", portes: base.portes
+  });
+
+  assert.deepEqual(base.journal.dossiersCrees, [DOSSIER_DES_CR]);
+  assert.deepEqual(base.journal.deposes.map((ligne) => ligne.filename),
+    ["CR_07.pdf", "CR_07.md", "CR_08.pdf", "CR_08.md"]);
+  assert.equal(new Set(base.journal.deposes.map((ligne) => ligne.folder_id)).size, 1);
+});
+
+/**
+ * Et le second se relit sans rappeler le modèle, alors qu'il voisine avec le
+ * premier : c'est le nom **et** l'empreinte qui le retrouvent, pas le dossier.
+ */
+test("le second compte rendu se relit sans rappeler le modèle", async () => {
+  const base = baseEnMemoire();
+
+  for (const [nom, markdown, empreinte] of [
+    ["CR_07.pdf", "# Réunion 7", "abc"], ["CR_08.pdf", "# Réunion 8", "def"]
+  ]) {
+    await rangerLaRestitution({
+      projectId: "projet", fichier: unPdf(nom), markdown, empreinte, portes: base.portes
+    });
+  }
+
+  // Le décor rend le contenu par identifiant : on le pose comme la base le ferait.
+  for (const ligne of base.journal.deposes) {
+    if (ligne.filename.endsWith(".md")) {
+      base.portes.telecharger = async (row) => new File(
+        [row.filename === "CR_08.md" ? "# Réunion 8" : "# Réunion 7"], row.filename,
+        { type: "text/markdown" }
+      );
+    }
+  }
+
+  const relue = await relireLaRestitution({
+    projectId: "projet", fichier: unPdf("CR_08.pdf"), empreinte: "def", portes: base.portes
+  });
+
+  assert.equal(relue.etat, RANGEE.A_JOUR);
+  assert.equal(relue.markdown, "# Réunion 8");
 });
