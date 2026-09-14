@@ -2,7 +2,7 @@ import { getDisplayAuthorName, getAuthorIdentity } from "../ui/author-identity.j
 import { renderBoutonCopier } from "../ui/bouton-copier.js";
 import { quandOnClique, quandOnCopie, renderBoutonDeTri } from "../ui/tete-de-tableau.js";
 import {
-  EPINGLES_AU_PLUS, estEpingle, motDeLEpingle, sujetsEpingles
+  EPINGLES_AU_PLUS, bandeauDesEpingles, estEpingle, motDeLEpingle, sujetsEpingles
 } from "../../services/epingles-des-sujets.js";
 import { TRI, motDuTri } from "../../services/tri-des-sujets.js";
 import { filterValuesOf, toggleFilter, withFilter } from "../../services/query-bar.js";
@@ -15,14 +15,17 @@ import {
 import { bindRailResizer, followRailScroll, railWidth } from "../ui/project-rail.js";
 import {
   NOM_DU_GROUPE_MOI, renderActionsGroupeesHtml, renderCompteDeLaSelectionHtml,
-  renderFiltreDenTeteHtml, renderFormulaireDeVueHtml, renderRailDesSujetsHtml,
-  renderRechercheDesSujetsHtml, renderTableauDesVuesHtml
+  renderFiltreDenTeteHtml, renderFormulaireDeVueHtml, renderMenuDeLaVueHtml,
+  renderRailDesSujetsHtml, renderRechercheDesSujetsHtml, renderTableauDesVuesHtml,
+  renderTitreDeLaVueHtml
 } from "./project-subjects-recherche.js";
 import {
   actionDuMarquage, etatDeLaCaseDeTete, GROUPE, selectionApresLeTout,
   selectionApresUnClic, selectionVisible
 } from "../../services/selection-des-sujets.js";
-import { refusDeLaVue, vueAEcrire, vuePourLEcran } from "../../services/vues-des-sujets.js";
+import {
+  refusDeLaVue, vueAEcrire, vuePourLEcran, vueRegardee
+} from "../../services/vues-des-sujets.js";
 import { nomDuCompte } from "../../services/meta-des-sujets.js";
 import { MOI, sujetsFiltres } from "../../services/champs-des-sujets.js";
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
@@ -491,9 +494,11 @@ function assurerLesRecherchesEpinglees() {
       const lues = await listerLesRecherches(backendProjectId, { surface: SURFACE_DES_SUJETS });
       if (lues === null) return;
 
-      recherchesEpinglees = lues.map((recherche) => ({
-        id: recherche.id, query: recherche.requete, title: recherche.titre
-      }));
+      // **Telles quelles.** On n'en gardait que trois champs sur neuf — et
+      // l'icône, la couleur, l'épingle au rail, l'auteur et la date restaient
+      // sur le quai : une vue relue après rechargement perdait tout son habit
+      // et ne se distinguait plus des autres (règle 10).
+      recherchesEpinglees = lues;
       recherchesProjectId = projet;
       rerenderPanels();
     } catch {
@@ -526,7 +531,7 @@ async function epinglerLaRechercheDesSujets() {
     // Le doublon revient avec le même identifiant : on remplace plutôt que
     // d'ajouter, sinon le rail montrerait deux fois la même chose.
     const sans = (recherchesEpinglees ?? []).filter((epingle) => epingle.id !== posee.id);
-    recherchesEpinglees = [...sans, { id: posee.id, query: posee.requete, title: posee.titre }];
+    recherchesEpinglees = [...sans, posee];
     rerenderPanels();
   } catch {
     // Une épingle qui ne se pose pas n'empêche pas de chercher.
@@ -539,10 +544,17 @@ async function epinglerLaRechercheDesSujets() {
  * **Elle reste enregistrée dans les deux cas.** Ce qui change est sa place dans
  * la barre de gauche, pas son existence : la supprimer est un autre geste, et
  * c'est pourquoi le menu les sépare d'un filet.
+ *
+ * **C'est une bascule, et ça ne l'était pas.** Le menu écrivait « Retirer du
+ * rail » sur une vue déjà épinglée, et le clic la réépinglait : le mot disait
+ * une chose, le geste en faisait une autre, et l'on ne pouvait plus dégager sa
+ * barre de gauche. L'état courant décide, et lui seul.
  */
-async function epinglerLaVueAuRail(id, auRail = true) {
+async function epinglerLaVueAuRail(id) {
   const cle = String(id || "").trim();
   if (!cle) return;
+
+  const auRail = (recherchesEpinglees ?? []).find((vue) => vue.id === cle)?.auRail !== true;
 
   // Le menu se ferme avant l'aller-retour : le laisser ouvert par-dessus une
   // ligne qui vient de changer d'état fait douter de ce qu'on lit.
@@ -883,7 +895,13 @@ async function appliquerAuGroupe(valeur) {
     .catch(() => rerenderPanels());
 }
 
-/** Ouvrir le formulaire, vide ou sur une vue existante. */
+/**
+ * Ouvrir le formulaire, vide ou sur une vue existante.
+ *
+ * **On va là où le formulaire se dessine.** Il vit sur l'écran des vues ;
+ * appelé depuis la liste des sujets — le kebab d'une vue qu'on regarde —, il
+ * n'aurait rien affiché du tout, et le clic serait resté sans effet.
+ */
 function ouvrirLaFormeDeVue(id = "") {
   const existante = vuesDuProjet()
     .find((vue) => vue.id === String(id || "").trim());
@@ -891,6 +909,10 @@ function ouvrirLaFormeDeVue(id = "") {
   store.projectSubjectsView.vueEnCours = existante
     ? { ...existante, couleur: existante.couleur.cle, refus: "" }
     : { id: "", nom: "", description: "", icone: "", couleur: "", requete: getRequeteDesSujets(), refus: "" };
+
+  store.projectSubjectsView.vueMenuOuvert = "";
+  store.situationsView.subjectsSubview = "views";
+  store.situationsView.showTableOnly = false;
 
   rerenderPanels();
 }
@@ -4005,10 +4027,19 @@ function rerenderPanels() {
 
       panelHost.innerHTML = `
         ${renderEcranDesSujets(`
-          ${renderSujetsEpinglesHtml({
-            sujets: sujetsEpingles(getFlatSubjects(), getEpinglesDuProjet() ?? []),
-            deps: tableDeps
-          })}
+          ${/*
+            **Les épinglés ne coiffent que la liste de tous les sujets.** Ce
+            sont trois sujets qu'on garde sous la main dans le projet entier ;
+            posés au-dessus de la réponse d'une vue, ils se lisent comme en
+            faisant partie, et l'on regarde vingt lignes en croyant qu'il y en
+            a vingt-trois. La décision est dans `epingles-des-sujets.js`.
+          */""}
+          ${bandeauDesEpingles(requete)
+            ? renderSujetsEpinglesHtml({
+              sujets: sujetsEpingles(getFlatSubjects(), getEpinglesDuProjet() ?? []),
+              deps: tableDeps
+            })
+            : ""}
           ${/*
             **La barre de recherche touche le tableau qu'elle filtre.**
             Elle était au-dessus du bandeau des sujets épinglés — lequel ne
@@ -4884,20 +4915,61 @@ function renderSituationsViewHeaderHtml() {
   // **Labels et Objectifs s'en vont aussi**, dans le rail : ce ne sont pas des
   // actions mais d'autres façons de regarder le même domaine, et ils
   // voisinaient ici avec des boutons qui écrivent.
+  // **Dans quelle vue on est.** Une vue est une requête enregistrée : une fois
+  // cliquée, l'écran ressemble trait pour trait à n'importe quelle liste
+  // filtrée, et l'on recliquait dans le rail pour savoir où l'on était. Son
+  // habit et son nom viennent donc en face des gestes qu'elle autorise.
+  const vue = laVueRegardee();
+
   const rightHtml = [
     renderProjectTableToolbarGroup({
       html: renderBoutonDeConstat()
     }),
     renderProjectTableToolbarGroup({
-      html: renderSituationsAddAction()
+      html: `${renderSituationsAddAction()}${vue ? renderKebabDeLaVueHtml(vue) : ""}`
     })
   ].join("");
 
   return renderProjectTableToolbar({
     className: "project-table-toolbar--situations",
-    leftHtml: "",
+    leftHtml: renderTitreDeLaVueHtml(vue),
     rightHtml
   });
+}
+
+/**
+ * La vue qu'on regarde, ou `null`.
+ *
+ * Elle se reconnaît à sa requête, **exactement** : une vue qui s'annoncerait
+ * sur une requête voisine ferait croire qu'on regarde ce qu'on a enregistré
+ * alors qu'on regarde autre chose (règle 5).
+ */
+function laVueRegardee() {
+  return vueRegardee({ vues: vuesDuProjet(), requete: getRequeteDesSujets() });
+}
+
+/**
+ * Le kebab de la vue, à droite de « Nouveau sujet ».
+ *
+ * Le menu est celui du tableau des vues, à l'entrée « Modifier la vue » près :
+ * ce sont les mêmes gestes sur le même objet, et deux écritures auraient deux
+ * libellés au bout de six mois (règle 10).
+ */
+function renderKebabDeLaVueHtml(vue) {
+  const ouvert = String(store.projectSubjectsView?.vueMenuOuvert || "") === vue.id;
+
+  return `
+    <span class="sujets-vue-gestes">
+      <button type="button" class="gh-btn gh-btn--md sujets-vue-gestes__kebab"
+        data-sujets-vue-menu="${escapeHtml(vue.id)}"
+        aria-haspopup="true" aria-expanded="${ouvert}"
+        title="Ce qu'on peut faire de cette vue"
+        aria-label="Ce qu'on peut faire de cette vue">
+        ${svgIcon("kebab-horizontal", { className: "octicon" })}
+      </button>
+      ${renderMenuDeLaVueHtml({ vue, ouvert, avecModifier: true })}
+    </span>
+  `;
 }
 
 function rerenderSubjectsToolbar() {

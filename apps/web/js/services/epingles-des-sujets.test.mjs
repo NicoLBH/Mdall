@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   EPINGLES_AU_PLUS, REFUS, estEpingle, idsEpingles, motDeLEpingle, peutEpingler, phraseDuRefus,
-  refusDEpingler, sujetsEpingles
+  bandeauDesEpingles, refusDEpingler, sujetsEpingles
 } from "./epingles-des-sujets.js";
 
 const epingle = (subjectId) => ({ id: `pin-${subjectId}`, subjectId });
@@ -165,4 +165,22 @@ test("le nombre maximum ne vit pas dans la base", async () => {
   );
 
   assert.doesNotMatch(migration, /count\(\*\)\s*<=?\s*3/);
+});
+
+/* ── Où le bandeau se montre ─────────────────────────────────────────────── */
+
+/**
+ * **Les épinglés sont ce qu'on garde sous la main dans le projet entier.** Posés
+ * au-dessus de la réponse d'une vue — « les urgences du lot 03 » —, ils se
+ * lisent comme en faisant partie : on regarde vingt lignes en croyant qu'il y
+ * en a vingt-trois.
+ */
+test("le bandeau ne coiffe que la liste de tous les sujets", () => {
+  assert.equal(bandeauDesEpingles(""), true);
+  assert.equal(bandeauDesEpingles("   "), true, "une barre blanche, c'est une barre vide");
+  assert.equal(bandeauDesEpingles(), true);
+
+  assert.equal(bandeauDesEpingles("label:cr-chantier"), false);
+  assert.equal(bandeauDesEpingles("assigné:moi"), false);
+  assert.equal(bandeauDesEpingles("objectif:permis-de-construire"), false);
 });

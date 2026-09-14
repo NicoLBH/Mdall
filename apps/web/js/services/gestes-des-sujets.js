@@ -59,6 +59,8 @@ export const GESTE = {
   VUE_MENU: "vue_menu",
   /** Épingler cette vue au rail, ou l'en retirer. */
   VUE_EPINGLER: "vue_epingler",
+  /** Rouvrir le formulaire d'une vue enregistrée, pour la modifier. */
+  VUE_MODIFIER: "vue_modifier",
   /** Cocher ou décocher une ligne du tableau. */
   COCHER: "cocher",
   /** Cocher ou décocher tout ce que la requête retient. */
@@ -87,6 +89,7 @@ const ATTRIBUTS = [
   ["data-sujets-groupe", GESTE.GROUPE],
   ["data-sujets-derailler", GESTE.DERAILLER],
   ["data-sujets-vue-epingler", GESTE.VUE_EPINGLER],
+  ["data-sujets-vue-modifier", GESTE.VUE_MODIFIER],
   ["data-sujets-vue-menu", GESTE.VUE_MENU],
   ["data-sujets-suggestion", GESTE.SUGGESTION],
   ["data-sujets-vider", GESTE.VIDER],

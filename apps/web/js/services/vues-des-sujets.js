@@ -86,31 +86,44 @@ export function couleurDeLaVue(valeur) {
 }
 
 /**
- * Ce qu'une ligne de la base devient à l'écran.
+ * Ce qu'une recherche épinglée devient sur l'écran des vues.
+ *
+ * ## Une seule forme en entrée, et c'est le défaut que ça répare
+ *
+ * On acceptait **deux graphies** — celle des colonnes de la base et celle de
+ * l'écran — en espérant couvrir les deux appelants. Aucune des deux n'était
+ * celle qui arrivait : `recherche-epinglee.js` rend `titre`, on lisait `title`,
+ * et le nom d'une vue retombait donc sur sa requête. La liste affichait
+ * `objectif:permis-de-construire` là où le rail, qui lit l'autre graphie,
+ * affichait « Les urgences du lot 03 ».
+ *
+ * Deviner la graphie ne rate pas bruyamment : ça rend `undefined`, et
+ * `undefined` prend la valeur de repli. **On ne devine donc plus** : l'entrée
+ * est ce que `recherchePourLEcran` rend, et rien d'autre (règle 10).
  *
  * Le nom se recalcule quand il est vide : la requête fait office, et c'est elle
  * qu'on reconnaît. La recopier en base la laisserait diverger de la requête
  * qu'elle résume (règle 4).
  */
-export function vuePourLEcran(ligne = {}) {
-  const requete = texte(ligne.query ?? ligne.requete);
+export function vuePourLEcran(recherche = {}) {
+  const requete = texte(recherche.requete);
 
   return {
-    id: texte(ligne.id),
+    id: texte(recherche.id),
     requete,
-    nom: texte(ligne.title ?? ligne.nom) || requete,
-    description: texte(ligne.description),
-    icone: iconeDeLaVue(ligne.icon ?? ligne.icone),
-    couleur: couleurDeLaVue(ligne.color ?? ligne.couleur),
+    nom: texte(recherche.titre) || requete,
+    description: texte(recherche.description),
+    icone: iconeDeLaVue(recherche.icone),
+    couleur: couleurDeLaVue(recherche.couleur),
     // **Enregistrée et épinglée sont deux choses.** Une vue vit sur son écran ;
     // elle ne monte au rail que lorsqu'on l'y met. Le rail est court, et une
     // vue de plus y coûte une place à celles qu'on regarde tous les jours.
-    auRail: (ligne.rail ?? ligne.auRail) === true,
+    auRail: recherche.auRail === true,
     // Le compte qui l'a écrite, et la dernière fois qu'elle a bougé. Ce sont
-    // des identifiants et une date brute : c'est l'écran qui sait mettre un nom
+    // un identifiant et une date brute : c'est l'écran qui sait mettre un nom
     // sur un compte, parce que lui seul connaît le trombinoscope du projet.
-    creePar: texte(ligne.owner_id ?? ligne.creePar),
-    miseAJour: texte(ligne.updated_at ?? ligne.miseAJour)
+    creePar: texte(recherche.creePar),
+    miseAJour: texte(recherche.miseAJour)
   };
 }
 
@@ -165,6 +178,67 @@ export function motsDeLaVue({ auteur = "", miseAJour = "", auRail = false } = {}
     miseAJour: quand ? `Dernière mise à jour le ${quand}` : "",
     epinglee: auRail === true
   };
+}
+
+/**
+ * La vue qu'on est en train de regarder, ou `null`.
+ *
+ * ## Pourquoi l'écran a besoin de le savoir
+ *
+ * Une vue est une requête enregistrée : une fois cliquée, l'écran ressemble
+ * trait pour trait à n'importe quelle liste filtrée. On ne sait plus dans
+ * laquelle on est, et l'on reclique dans le rail pour vérifier. Le nom et
+ * l'habit reviennent donc au-dessus du tableau — c'est la seule chose qui
+ * distingue cet écran-là d'un autre.
+ *
+ * **Exactement la même requête.** Une vue qui s'annoncerait sur une requête
+ * voisine ferait croire qu'on regarde ce qu'on a enregistré alors qu'on
+ * regarde autre chose — la même raison qui allume une épingle du rail, et le
+ * même mot : exactement (règle 5).
+ */
+export function vueRegardee({ vues = [], requete = "" } = {}) {
+  const dite = texte(requete);
+  if (!dite) return null;
+
+  return (Array.isArray(vues) ? vues : []).find((vue) => texte(vue?.requete) === dite) ?? null;
+}
+
+/**
+ * Ce que le menu d'une vue propose.
+ *
+ * **Épingler et supprimer ne se confondent pas**, et c'est pourquoi un filet
+ * les sépare et que la seconde est rouge : retirer une vue du rail la range,
+ * la supprimer la perd. Un seul bouton pour les deux aurait fait perdre des
+ * recherches à qui voulait seulement dégager sa barre de gauche.
+ *
+ * L'épingle dit **ce que le clic va faire**, pas l'état courant : une entrée
+ * qui dirait « épinglée » alors qu'elle va désépingler se lit à l'envers une
+ * fois sur deux.
+ *
+ * @param {object} vue celle dont on ouvre le menu
+ * @param {object} [options]
+ * @param {boolean} [options.avecModifier] l'entrée « Modifier la vue ». Elle
+ *   n'a pas de sens dans le tableau des vues, où l'on est déjà sur l'écran qui
+ *   les modifie.
+ */
+export function gestesDeLaVue(vue = {}, { avecModifier = false } = {}) {
+  const auRail = vue?.auRail === true;
+
+  return [
+    ...(avecModifier
+      ? [{ cle: "modifier", nom: "Modifier la vue", icone: "pencil", attribut: "sujets-vue-modifier" }]
+      : []),
+    {
+      cle: "epingler",
+      nom: auRail ? "Désépingler la vue" : "Épingler la vue",
+      // L'épingle barrée dit qu'on va la retirer. La même icône dans les deux
+      // sens obligerait à lire le mot pour savoir dans quel état on est.
+      icone: auRail ? "pin-slash" : "pin",
+      attribut: "sujets-vue-epingler"
+    },
+    { separateur: true },
+    { cle: "supprimer", nom: "Supprimer", icone: "trash", attribut: "sujets-decrocher", danger: true }
+  ];
 }
 
 export const REFUS = {

@@ -6,6 +6,12 @@
   --headbgtight:rgb(21,27,35);
   --text:#ffff;
   --muted:#8b949e;
+  /* **Le gris des icônes de fichier et de dossier, partout dans Fichiers.**
+     L'arbre, la liste des Documents et celle de la Mémoire portaient trois
+     valeurs — dont une `var(--fg)` qui n'existe pas et retombait donc sur le
+     blanc du texte. Une moitié de l'onglet avait des icônes blanches et
+     l'autre des grises, ce qui fait lire les deux comme deux écrans. */
+  --fichiers-icone:rgb(145, 152, 161);
   --btn-muted:rgba(255, 255, 255, 0.4);
   --border:#30363d;
   --border2:#21262d;
@@ -6584,21 +6590,17 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   text-overflow:ellipsis;
 }
 
+/* **Un seul gris, dossier comme fichier.** Le fichier prenait `var(--fg)` —
+   une variable qui n'existe pas —, donc héritait du blanc de sa ligne : les
+   Documents avaient des icônes blanches là où la Mémoire les a grises, et les
+   deux moitiés de l'onglet se lisaient comme deux écrans. Le bleu d'avant
+   disait « ceci est un lien » là où chaque ligne l'est déjà. */
 .documents-repo__icon{
   flex:0 0 auto;
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  color:var(--muted);
-}
-.documents-repo__icon--document{
-  color:var(--fg);
-}
-/* Un dossier est gris, dans le dépôt comme dans la Mémoire. Le bleu disait
-   « ceci est un lien » là où tout l'est déjà, et les deux moitiés de l'onglet
-   ne se ressemblaient plus. */
-.documents-repo__icon--folder{
-  color:rgb(145, 152, 161);
+  color:var(--fichiers-icone);
 }
 .documents-breadcrumb{
   display:flex;
@@ -6902,9 +6904,9 @@ body.route--project.documents-pdf-sticky-mode.documents-local-chrome-compact #ap
    est un lien » là où chaque ligne l'est déjà, et distinguait deux moitiés qui
    n'ont pas à se distinguer. */
 .documents-tree .documents-tree__icon-slot,
-.documents-tree .documents-repo__icon--folder,
+.documents-tree .documents-repo__icon,
 .documents-tree .octicon-file-directory-fill,
-.documents-tree .octicon-file-directory-open-fill{fill:rgb(145, 152, 161);color:rgb(145, 152, 161);}
+.documents-tree .octicon-file-directory-open-fill{fill:var(--fichiers-icone);color:var(--fichiers-icone);}
 .documents-tree__resize-handle{position:absolute;top:0;right:-6px;width:12px;height:100%;cursor:col-resize;}
 .documents-tree__resize-guide{position:absolute;top:0;bottom:0;width:2px;background:#2f81f7;display:none;pointer-events:none;}
 .documents-repo {height:auto;}
@@ -21967,7 +21969,7 @@ body.route--project.project-shell-compact.documents-local-chrome-compact #global
 }
 .memoire-entree:last-child{ border-bottom:0; }
 .memoire-entree:hover{ background:rgba(110,118,129,.08); }
-.memoire-entree__icone{ flex:0 0 auto; color:var(--muted); display:inline-flex; }
+.memoire-entree__icone{ flex:0 0 auto; color:var(--fichiers-icone); display:inline-flex; }
 .memoire-entree__corps{ display:flex; flex-direction:column; gap:2px; min-width:0; flex:1 1 auto; }
 .memoire-entree__nom{ color:var(--text); font-size:15px; font-weight:600; }
 /* Ce que l'extension contient, à côté du nom : `.ctr` et `.ddb` se ressemblent
@@ -24601,6 +24603,45 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .sujets-head-menu--groupe{width:auto;flex:0 0 auto;}
 
 
+
+
+/* ── Dans quelle vue on est ──────────────────────────────────────────────── */
+
+/* Une vue est une requête enregistrée : une fois cliquée, l'écran ressemble
+   trait pour trait à n'importe quelle liste filtrée. On ne savait plus dans
+   laquelle on était, et l'on recliquait dans le rail pour vérifier. Son habit
+   et son nom viennent donc sur la ligne du bouton, en face des gestes qu'elle
+   autorise. */
+.sujets-vue-titre{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+.sujets-vue-titre__icone{ display:inline-flex; flex:0 0 auto; }
+.sujets-vue-titre__nom{
+  font-size:16px;
+  font-weight:600;
+  color:var(--text);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+/* L'épingle n'est dite que si la vue est au rail : une icône toujours présente
+   ne distinguerait rien. */
+.sujets-vue-titre__rail{ display:inline-flex; flex:0 0 auto; color:var(--text-muted); }
+
+/* Le kebab jouxte « Nouveau sujet », et son menu s'ancre par la droite : il est
+   en bout de ligne, et un menu calé à gauche sortirait de l'écran. */
+.sujets-vue-gestes{ position:relative; display:inline-flex; margin-left:8px; }
+.sujets-vue-gestes__kebab{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:32px;
+  padding:0;
+}
+.sujets-vue-gestes .sujets-vues__menu{ top:calc(100% + 6px); right:0; left:auto; }
 
 
 /* ── La notification d'avancée d'un lot ──────────────────────────────────── */

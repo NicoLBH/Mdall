@@ -6105,7 +6105,17 @@ export function createProjectSubjectsEvents(config) {
 
         case GESTE.VUE_EPINGLER:
           event.stopPropagation();
+          // **Une bascule.** L'état courant décide ; le menu dit déjà ce que le
+          // clic va faire, et le lui repasser en argument ferait deux endroits
+          // qui décident de la même chose (règle 4).
           epinglerLaVueAuRail(valeur);
+          return;
+
+        case GESTE.VUE_MODIFIER:
+          // Le kebab est **dans** la barre de la vue qu'on regarde : sans
+          // l'arrêter, le clic irait aussi au bouton qu'il jouxte.
+          event.stopPropagation();
+          ouvrirLaFormeDeVue(valeur);
           return;
 
         case GESTE.DERAILLER:

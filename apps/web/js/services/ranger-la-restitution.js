@@ -34,7 +34,7 @@
 import { contentFingerprint } from "./document-identity.js";
 import { pagesDuFichierMarkdown } from "./reconstitution-markdown.js";
 import {
-  RANGEE, nomDeLaRestitution, nomDuDossier, restitutionRangee, sourceRangee
+  DOSSIER_DES_CR, RANGEE, nomDeLaRestitution, restitutionRangee, sourceRangee
 } from "./restitution-rangee.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -101,7 +101,7 @@ export async function relireLaRestitution({
   try {
     const portails = portes ?? (await portesParDefaut());
 
-    const dossier = await dossierNomme(portails, projectId, nomDuDossier(fichier.name));
+    const dossier = await dossierNomme(portails, projectId, DOSSIER_DES_CR);
     if (!dossier?.id) return { etat: RANGEE.ABSENTE, markdown: "", dossier: null };
 
     const fichiers = await fichiersDuDossier(portails, projectId, dossier.id);
@@ -192,12 +192,13 @@ export async function rangerLaRestitution({
 
   try {
     const portails = portes ?? (await portesParDefaut());
-    const nom = nomDuDossier(fichier.name);
 
-    // **À la racine, et nommé comme le PDF.** Un second dépôt du même document
-    // retombe dessus au lieu de créer un jumeau.
-    const dossier = (await dossierNomme(portails, projectId, nom))
-      ?? (await portails.creerLeDossier(projectId, null, nom));
+    // **Un dossier pour tous les comptes rendus**, et non un dossier par
+    // compte rendu : quarante réunions faisaient quarante dossiers à la racine
+    // de Documents, et l'arbre devenait illisible au vingtième. C'est le nom
+    // du fichier qui réunit un PDF et sa restitution, pas le dossier.
+    const dossier = (await dossierNomme(portails, projectId, DOSSIER_DES_CR))
+      ?? (await portails.creerLeDossier(projectId, null, DOSSIER_DES_CR));
     if (!dossier?.id) return { range: false, dossier: null, motif: "le dossier n'a pas pu être créé" };
 
     const fichiers = await fichiersDuDossier(portails, projectId, dossier.id);

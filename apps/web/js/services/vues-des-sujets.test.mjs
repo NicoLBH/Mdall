@@ -7,9 +7,17 @@ import assert from "node:assert/strict";
 
 import {
   COULEURS_DE_VUE, COULEUR_PAR_DEFAUT, ICONES_DE_VUE, ICONE_PAR_DEFAUT, PHRASES_DU_REFUS, REFUS,
-  couleurDeLaVue, dateEnFrancais, iconeDeLaVue, motsDeLaVue, phraseDesVues, phraseDuRefus,
-  refusDeLaVue, vueAEcrire, vuePourLEcran
+  couleurDeLaVue, dateEnFrancais, gestesDeLaVue, iconeDeLaVue, motsDeLaVue, phraseDesVues,
+  phraseDuRefus, refusDeLaVue, vueAEcrire, vuePourLEcran, vueRegardee
 } from "./vues-des-sujets.js";
+/**
+ * **Une vue arrive par la base, jamais à la main.** Le décor la fabrique donc
+ * comme la base la rend : une ligne de `memory_pinned_searches` traduite par
+ * `recherchePourLEcran`. Écrire ici la forme que `vuePourLEcran` attend
+ * testerait le décor, pas le raccord — et c'est exactement ainsi que le nom
+ * d'une vue est devenu sa requête sans qu'aucun test ne bronche.
+ */
+import { recherchePourLEcran } from "./recherche-epinglee.js";
 
 /* ── L'habit ─────────────────────────────────────────────────────────────── */
 
@@ -57,7 +65,7 @@ test("le jeu d'icônes proposé ne se répète pas", () => {
  * qu'on reconnaît. La recopier en base la laisserait diverger (règle 4).
  */
 test("une vue sans nom porte sa requête", () => {
-  const vue = vuePourLEcran({ id: "v1", query: "label:bloquant", title: "" });
+  const vue = vuePourLEcran(recherchePourLEcran({ id: "v1", query: "label:bloquant", title: "" }));
 
   assert.equal(vue.nom, "label:bloquant");
   assert.equal(vue.requete, "label:bloquant");
@@ -66,10 +74,10 @@ test("une vue sans nom porte sa requête", () => {
 });
 
 test("une vue habillée garde son habit", () => {
-  const vue = vuePourLEcran({
+  const vue = vuePourLEcran(recherchePourLEcran({
     id: "v1", query: "priorité:haute", title: "Les urgences",
     description: "Ce qui ne peut pas attendre", icon: "alert", color: "rouge"
-  });
+  }));
 
   assert.equal(vue.nom, "Les urgences");
   assert.equal(vue.description, "Ce qui ne peut pas attendre");
@@ -139,7 +147,11 @@ test("ce qu'on écrit se relit à l'identique", () => {
   const ecrit = vueAEcrire({
     requete: "label:x", nom: "X", description: "d", icone: "tag", couleur: "vert"
   });
-  const relu = vuePourLEcran({ id: "v1", ...ecrit });
+  // **L'aller-retour complet** : ce que le formulaire écrit, ce que la base
+  // rend, ce que l'écran lit. Le raccourci — donner directement à
+  // `vuePourLEcran` les colonnes de la base — sautait la traduction, c'est-à-
+  // dire l'endroit précis où le titre se perdait.
+  const relu = vuePourLEcran(recherchePourLEcran({ id: "v1", ...ecrit }));
 
   assert.equal(relu.nom, "X");
   assert.equal(relu.description, "d");
@@ -222,11 +234,128 @@ test("ce qu'on ne sait pas ne se dit pas", () => {
  * un compte, lui seul connaissant le trombinoscope du projet.
  */
 test("une ligne de la base porte son compte et sa date", () => {
-  const vue = vuePourLEcran({
+  const vue = vuePourLEcran(recherchePourLEcran({
     id: "v1", query: "priorité:haute",
     owner_id: "u-1", updated_at: "2026-03-12T09:30:00Z"
-  });
+  }));
 
   assert.equal(vue.creePar, "u-1");
   assert.equal(vue.miseAJour, "2026-03-12T09:30:00Z");
+});
+
+/* ── Le raccord avec la base ─────────────────────────────────────────────── */
+
+/**
+ * **Le défaut que cette garde existe pour empêcher.**
+ *
+ * La table rend `title`, `icon`, `color`, `rail` ; la traduction rend `titre`,
+ * `icone`, `couleur`, `auRail` ; et l'écran des vues lisait la première
+ * graphie. Rien n'échouait — un nom de champ absent rend `undefined`,
+ * `undefined` prend la valeur de repli, et le nom d'une vue devenait sa
+ * requête. La liste affichait `objectif:permis-de-construire` là où le rail,
+ * qui lit l'autre graphie, affichait « Les urgences du lot 03 ».
+ *
+ * On vérifie donc **tout ce qui doit traverser**, depuis une ligne de la base.
+ */
+test("rien ne se perd entre la base et l'écran des vues", () => {
+  const vue = vuePourLEcran(recherchePourLEcran({
+    id: "v1",
+    query: "objectif:permis-de-construire",
+    title: "Les urgences du lot 03",
+    description: "Ce qui tient le permis",
+    icon: "milestone",
+    color: "jaune",
+    rail: true,
+    owner_id: "u-1",
+    updated_at: "2026-03-12T09:30:00Z"
+  }));
+
+  assert.deepEqual(vue, {
+    id: "v1",
+    requete: "objectif:permis-de-construire",
+    nom: "Les urgences du lot 03",
+    description: "Ce qui tient le permis",
+    icone: "milestone",
+    couleur: couleurDeLaVue("jaune"),
+    auRail: true,
+    creePar: "u-1",
+    miseAJour: "2026-03-12T09:30:00Z"
+  });
+});
+
+/* ── Dans quelle vue on est ──────────────────────────────────────────────── */
+
+const UNE_VUE = vuePourLEcran(recherchePourLEcran({
+  id: "v1", query: "objectif:permis", title: "Les urgences du lot 03", rail: true
+}));
+
+/**
+ * Une vue est une requête enregistrée : une fois cliquée, l'écran ressemble
+ * trait pour trait à n'importe quelle liste filtrée. On ne savait plus dans
+ * laquelle on était, et l'on recliquait dans le rail pour vérifier.
+ */
+test("on reconnaît la vue qu'on regarde à sa requête", () => {
+  assert.equal(vueRegardee({ vues: [UNE_VUE], requete: "objectif:permis" })?.id, "v1");
+});
+
+/**
+ * **Exactement.** Une vue qui s'annoncerait sur une requête voisine ferait
+ * croire qu'on regarde ce qu'on a enregistré alors qu'on regarde autre chose.
+ */
+test("une requête voisine n'est pas la vue", () => {
+  assert.equal(vueRegardee({ vues: [UNE_VUE], requete: "objectif:permis statut:ouvert" }), null);
+  assert.equal(vueRegardee({ vues: [UNE_VUE], requete: "" }), null);
+  assert.equal(vueRegardee(), null);
+});
+
+/* ── Ce que le menu d'une vue propose ────────────────────────────────────── */
+
+/**
+ * **Le menu dit ce que le clic va faire**, pas l'état courant : une entrée qui
+ * dirait « épinglée » alors qu'elle va désépingler se lit à l'envers une fois
+ * sur deux. L'icône suit le mot — l'épingle barrée quand on va retirer.
+ */
+test("l'épingle annonce le geste, pas l'état", () => {
+  const auRail = gestesDeLaVue({ auRail: true }).find((geste) => geste.cle === "epingler");
+  const rangee = gestesDeLaVue({ auRail: false }).find((geste) => geste.cle === "epingler");
+
+  assert.equal(auRail.nom, "Désépingler la vue");
+  assert.equal(auRail.icone, "pin-slash");
+  assert.equal(rangee.nom, "Épingler la vue");
+  assert.equal(rangee.icone, "pin");
+});
+
+/**
+ * **Épingler et supprimer ne se confondent pas** : un filet les sépare, et la
+ * seconde est rouge. Retirer une vue du rail la range, la supprimer la perd —
+ * un seul bouton pour les deux aurait fait perdre des recherches à qui voulait
+ * seulement dégager sa barre de gauche.
+ */
+test("supprimer est séparé du reste, et se voit", () => {
+  const gestes = gestesDeLaVue({});
+  const supprimer = gestes.at(-1);
+
+  assert.equal(supprimer.cle, "supprimer");
+  assert.equal(supprimer.danger, true);
+  assert.equal(gestes.at(-2).separateur, true);
+});
+
+/**
+ * « Modifier la vue » n'a pas de sens dans le tableau des vues : on y est déjà
+ * sur l'écran qui les modifie. Elle n'apparaît que là où elle mène quelque part.
+ */
+test("« Modifier la vue » ne s'invite que là où on la demande", () => {
+  assert.deepEqual(gestesDeLaVue({}).map((geste) => geste.cle).filter(Boolean),
+    ["epingler", "supprimer"]);
+  assert.deepEqual(gestesDeLaVue({}, { avecModifier: true }).map((geste) => geste.cle).filter(Boolean),
+    ["modifier", "epingler", "supprimer"]);
+});
+
+/** Chaque entrée déclenche un geste : une entrée sans attribut ne fait rien. */
+test("chaque entrée du menu porte l'attribut que l'écoute cherche", () => {
+  for (const geste of gestesDeLaVue({}, { avecModifier: true })) {
+    if (geste.separateur) continue;
+    assert.ok(geste.attribut, `« ${geste.nom} » ne porte aucun attribut`);
+    assert.ok(geste.icone, `« ${geste.nom} » n'a pas d'icône`);
+  }
 });

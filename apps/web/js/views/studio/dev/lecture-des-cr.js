@@ -2615,12 +2615,17 @@ function garnirLeCote(cote, pages) {
 async function transformer(hote, { sujet = false, branche = "" } = {}) {
   const quoi = sujet ? "Ouvrir un sujet" : (branche ? "Ajouter à cette proposition" : "Faire une proposition");
 
+  // **Ce qui manque se dit, et se dit précisément.** « Pas encore branché »
+  // ferait chercher une panne ; ce qui suit nomme les trois pièces absentes,
+  // pour qu'on sache ce qu'on attend (règle 5).
   echouer(
     hote,
     `${quoi} : pas encore branché depuis cet écran.`,
-    "La rédaction de la proposition — sujets à ouvrir, sujets à relancer, lots manquants, "
-    + "labels à créer, objectifs, et le rangement du fichier .md dans Fichiers — reste à écrire. "
-    + "C'est l'étape 8 du plan de lecture d'un compte rendu."
+    "Tout ce que l'écran a compris est prêt — sujets à ouvrir, à relancer, à fermer, labels, "
+    + "lots, objectifs, liens — mais trois pièces manquent pour le faire sortir : composer les "
+    + "lignes de la proposition, les appliquer à la fusion, et ranger le PDF et son .md. "
+    + "Le rangement du PDF dans « Documents / CR de chantier » est écrit et vérifié ; il lui "
+    + "manque cet appelant. C'est l'étape 9 du plan de lecture d'un compte rendu."
   );
 }
 

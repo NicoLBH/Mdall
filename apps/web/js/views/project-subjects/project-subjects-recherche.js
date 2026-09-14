@@ -41,7 +41,7 @@ import { renderQueryMirror } from "../../services/query-bar.js";
 import { phraseDesIgnores } from "../../services/champs-des-sujets.js";
 import { epinglesDuRail, railDesSujets } from "../../services/rail-des-sujets.js";
 import {
-  COULEURS_DE_VUE, ICONES_DE_VUE, couleurDeLaVue, iconeDeLaVue, motsDeLaVue,
+  COULEURS_DE_VUE, ICONES_DE_VUE, couleurDeLaVue, gestesDeLaVue, iconeDeLaVue, motsDeLaVue,
   phraseDesVues, phraseDuRefus
 } from "../../services/vues-des-sujets.js";
 
@@ -497,6 +497,75 @@ export function renderCompteDeLaSelectionHtml({ combien = 0, total = 0 } = {}) {
  * où l'on crée.
  */
 /**
+ * Le menu d'une vue — **le même partout où on l'ouvre**.
+ *
+ * Le tableau des vues le porte sur chaque ligne ; l'écran d'une vue le porte à
+ * côté de « Nouveau sujet ». Ce sont les mêmes gestes sur le même objet :
+ * écrits deux fois, ils auraient deux libellés au bout de six mois, et l'un des
+ * deux oublierait le filet qui sépare « retirer du rail » de « supprimer »
+ * (règle 10).
+ *
+ * Ce qu'il contient se décide dans `vues-des-sujets.js`, qui s'exécute en test.
+ * Ici, on l'habille.
+ *
+ * @param {object} options
+ * @param {object} options.vue
+ * @param {boolean} [options.ouvert]
+ * @param {boolean} [options.avecModifier] « Modifier la vue » — inutile dans le
+ *   tableau des vues, où l'on est déjà sur l'écran qui les modifie.
+ */
+export function renderMenuDeLaVueHtml({ vue = {}, ouvert = false, avecModifier = false } = {}) {
+  const id = texte(vue?.id);
+
+  return `
+    <div class="gh-menu sujets-vues__menu" data-sujets-vue-menu-liste="${escapeHtml(id)}"
+      role="menu"${ouvert ? "" : " hidden"}>
+      ${gestesDeLaVue(vue, { avecModifier }).map((geste) => (geste.separateur
+        ? '<div class="gh-menu__separator" role="presentation"></div>'
+        : `
+          <button type="button" class="gh-menu__item${geste.danger ? " gh-menu__item--danger" : ""}"
+            role="menuitem" data-${escapeHtml(geste.attribut)}="${escapeHtml(id)}">
+            ${svgIcon(geste.icone, { className: "octicon" })}
+            <span>${escapeHtml(geste.nom)}</span>
+          </button>
+        `)).join("")}
+    </div>
+  `;
+}
+
+/**
+ * Dans quelle vue on est, au-dessus du tableau.
+ *
+ * ## Pourquoi cette ligne existe
+ *
+ * Une vue est une requête enregistrée : une fois cliquée, l'écran ressemble
+ * trait pour trait à n'importe quelle liste filtrée. On ne savait plus dans
+ * laquelle on était, et l'on recliquait dans le rail pour vérifier. Son habit
+ * et son nom reviennent donc là où l'on regarde — sur la ligne du bouton, à
+ * gauche, en face des gestes qu'elle autorise.
+ *
+ * L'épingle n'est dite que si la vue est au rail : une icône toujours présente
+ * ne distingue plus rien.
+ */
+export function renderTitreDeLaVueHtml(vue = null) {
+  if (!vue?.id) return "";
+
+  const couleur = couleurDeLaVue(vue.couleur?.cle ?? vue.couleur);
+
+  return `
+    <span class="sujets-vue-titre">
+      <span class="sujets-vue-titre__icone" style="color:${escapeHtml(couleur.valeur)}"
+        aria-hidden="true">${svgIcon(iconeDeLaVue(vue.icone), { className: "octicon" })}</span>
+      <span class="sujets-vue-titre__nom">${escapeHtml(texte(vue.nom))}</span>
+      ${vue.auRail === true
+        ? `<span class="sujets-vue-titre__rail" title="Épinglée au rail"
+            aria-label="Épinglée au rail">${svgIcon("pin", { className: "octicon" })}</span>`
+        : ""}
+    </span>
+  `;
+}
+
+/**
  * La ligne grise d'une vue : de qui elle vient, quand elle a bougé, et si elle
  * est au rail.
  *
@@ -539,31 +608,6 @@ export function renderSousLigneDeVueHtml(vue = {}) {
 export function renderTableauDesVuesHtml({ vues = [], menuOuvert = "" } = {}) {
   const liste = Array.isArray(vues) ? vues : [];
   const ouvert = texte(menuOuvert);
-
-  /**
-   * Le menu d'une ligne : épingler, et supprimer.
-   *
-   * **Les deux gestes ne se confondent pas**, et c'est pourquoi ils sont
-   * séparés par un filet et que le second est rouge : retirer une vue du rail
-   * la range, la supprimer la perd. Un seul bouton pour les deux aurait fait
-   * perdre des recherches à qui voulait seulement dégager sa barre de gauche.
-   */
-  const unMenu = (vue) => `
-    <div class="gh-menu sujets-vues__menu" data-sujets-vue-menu-liste="${escapeHtml(vue.id)}"
-      role="menu"${vue.id === ouvert ? "" : " hidden"}>
-      <button type="button" class="gh-menu__item" role="menuitem"
-        data-sujets-vue-epingler="${escapeHtml(vue.id)}">
-        ${svgIcon("pin", { className: "octicon" })}
-        <span>${vue.auRail ? "Retirer du rail" : "Épingler la vue"}</span>
-      </button>
-      <div class="gh-menu__separator" role="presentation"></div>
-      <button type="button" class="gh-menu__item gh-menu__item--danger" role="menuitem"
-        data-sujets-decrocher="${escapeHtml(vue.id)}">
-        ${svgIcon("trash", { className: "octicon" })}
-        <span>Supprimer</span>
-      </button>
-    </div>
-  `;
 
   return `
     <section class="sujets-vues">
@@ -619,7 +663,7 @@ export function renderTableauDesVuesHtml({ vues = [], menuOuvert = "" } = {}) {
                     aria-label="Ce qu'on peut faire de cette vue">
                     ${svgIcon("kebab-horizontal", { className: "octicon" })}
                   </button>
-                  ${unMenu(vue)}
+                  ${renderMenuDeLaVueHtml({ vue, ouvert: vue.id === ouvert })}
                 </div>
               </li>
             `).join("")}
