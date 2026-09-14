@@ -60,6 +60,9 @@ export function reperesDAvis(items = []) {
     // Un avis est un constat : observé, à une date, par quelqu'un. Il suit la
     // même politique de rangement que le reste.
     const chemin = cheminDeRangement({ nature: "constat", domain: payload.domain });
+    // Sans extension, `cheminDeFichier` retombe sur `.mdall` — le fichier
+    // s'annoncerait d'un nom que la mémoire ne lui donne pas.
+    const extension = extensionDeRangement({ nature: "constat" });
     const titre = texte(payload.reference)
       ? `Avis ${texte(payload.reference)}${texte(payload.title) ? ` — ${texte(payload.title)}` : ""}`
       : texte(payload.title) || "Avis relevé sur une fiche";
@@ -68,6 +71,7 @@ export function reperesDAvis(items = []) {
       id: `avis:${texte(item.itemKey)}`,
       famille: "avis",
       chemin,
+      extension,
       titre,
       provenance: {
         documentId: payload.sourceId ?? null,
@@ -260,16 +264,25 @@ export function reperesDeDocuments(items = []) {
 
   for (const item of documents) {
     const payload = item.payload ?? {};
+    const nom = texte(payload.name) || texte(item.itemKey) || "Document";
+    const refuse = texte(item.status) === "refused";
+
+    // **Le fichier se nomme, comme les autres.** Sans extension,
+    // `cheminDeFichier` retombe sur `.mdall` — « personne ne s'est prononcé » —
+    // et le corpus s'annonçait `memoire/corpus.mdall` d'un fichier que la
+    // mémoire nomme `.crp`. La même fonction que le reste de la mémoire décide.
     const repere = {
       id: `document:${texte(item.itemKey)}`,
       famille: "document",
       chemin: cheminDeRangement({ nature: "intendance" }),
-      titre: texte(payload.name) || texte(item.itemKey) || "Document",
-      champs: {
-        "Nature": texte(payload.kindLabel) || "non reconnue",
-        "Auteur": texte(payload.author),
-        "Émis le": texte(payload.issuedAt)
-      },
+      extension: extensionDeRangement({ nature: "intendance" }),
+      titre: `Document au corpus : ${nom}`,
+      // **Une ligne d'en-tête, puis le statut** — la forme de tout le reste de
+      // la mémoire. Le document s'écrivait `Nature = non reconnue` : un compte
+      // rendu de chantier n'a pas de nature détectée, et la seule ligne du
+      // fichier annonçait donc une absence, sans même dire de quel document il
+      // s'agissait.
+      champs: champsDuDocument({ nom, payload, refuse }),
       provenance: { documentId: texte(item.itemKey) || null }
     };
 
@@ -280,6 +293,34 @@ export function reperesDeDocuments(items = []) {
   }
 
   return { avant, apres };
+}
+
+/**
+ * Ce qu'un document écrit dans le corpus.
+ *
+ * La tête nomme le document ; les lignes suivantes disent ce qu'on en sait. Ce
+ * qu'on ne sait pas ne s'écrit pas : un compte rendu de chantier n'a ni nature
+ * détectée ni auteur reconnu, et écrire « non reconnue » en guise de seule
+ * ligne annonçait une absence au lieu d'un document (règle 5).
+ */
+function champsDuDocument({ nom = "", payload = {}, refuse = false } = {}) {
+  const champs = {};
+  const poser = (cle, jetons) => { if (jetons) champs[cle] = enClair(jetons); };
+
+  // La tête : l'identité du document, comme une affirmation porte la sienne.
+  poser("", ligneDAffirmation({ sujet: "Document au corpus", valeur: nom }));
+  poser("statut", ligneDeStatut(refuse ? "écarté" : "retenu"));
+
+  const nature = texte(payload.kindLabel);
+  if (nature) poser("nature", ligneDAffirmation({ sujet: "  nature", valeur: nature }));
+  const auteur = texte(payload.author);
+  if (auteur) poser("auteur", ligneDAffirmation({ sujet: "  auteur", valeur: auteur }));
+  const emisLe = texte(payload.issuedAt);
+  if (emisLe) poser("émis le", ligneDeDate(emisLe));
+  const luPar = texte(payload.luPar);
+  if (luPar) poser("lu par", ligneDAffirmation({ sujet: "  lu par", valeur: luPar }));
+
+  return champs;
 }
 
 /**
@@ -297,6 +338,7 @@ export function reperesDeRattachements(items = []) {
         id: `rattachement:${texte(item.itemKey)}`,
         famille: "rattachement",
         chemin: cheminDeRangement({ nature: "intendance" }),
+        extension: extensionDeRangement({ nature: "intendance" }),
         titre: texte(payload.label) || texte(item.itemKey) || "Affaire",
         champs: { "Verdict": texte(payload.verdict), "Raison": texte(payload.reason) },
         provenance: null

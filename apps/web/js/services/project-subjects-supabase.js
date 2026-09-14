@@ -703,7 +703,20 @@ export async function addSubjectToObjective(objectiveId, subjectId) {
   if (!normalizedObjectiveId) throw new Error("objectiveId is required");
   if (!normalizedSubjectId) throw new Error("subjectId is required");
 
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/milestone_subjects`, {
+  // **`on_conflict` sans quoi `merge-duplicates` ne fusionne rien.** PostgREST a
+  // besoin qu'on lui nomme la contrainte : sans elle, il insère, la base refuse
+  // sur `milestone_subjects_milestone_id_subject_id_key`, et l'on reçoit un 409
+  // — c'est-à-dire une panne pour un sujet **déjà rattaché à ce jalon**, donc
+  // pour l'état exact qu'on voulait.
+  //
+  // C'est ce qui rendait la reprise impuissante : on rejouait un geste qui ne
+  // pouvait pas réussir, huit fois de suite, sur trois sujets déjà accrochés.
+  // `addLabelToSubject` pose ce paramètre depuis toujours ; celui-ci l'avait
+  // perdu, et rien ne le disait.
+  const url = new URL(`${SUPABASE_URL}/rest/v1/milestone_subjects`);
+  url.searchParams.set("on_conflict", "milestone_id,subject_id");
+
+  const res = await fetch(url.toString(), {
     method: "POST",
     headers: await getSupabaseAuthHeaders({
       Accept: "application/json",

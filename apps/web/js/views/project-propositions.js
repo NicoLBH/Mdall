@@ -93,6 +93,7 @@ import {
   aQuiRevientLePoint, lotDuProjetPour, nomPourLeRepertoire, phraseDuConnu
 } from "../services/intervenants-du-cr.js";
 import { PROVENANCE, depotDeLaProposition, resumeDuDepot } from "../services/proposition-depot.js";
+import { bilanDeLaFusion, phraseDeCeQuOnEcarte, phraseDuBilan } from "../services/bilan-de-la-fusion.js";
 import {
   appliquerLeCompteRendu,
   ouvrirLesLotsRetenus,
@@ -1348,6 +1349,114 @@ export function renderConflicts(conflicts = []) {
  * Un bloc vide se dit, il ne se cache pas : savoir qu'aucun avis ne change est
  * une information, pas une absence d'information.
  */
+/**
+ * Ce que la fusion a fait, et ce qu'elle n'a pas pu faire.
+ *
+ * ## Pourquoi un tableau
+ *
+ * C'était un paragraphe. Trois échecs y devenaient un mur de quinze lignes, la
+ * même cause recopiée trois fois et les titres de sujets noyés au milieu — on ne
+ * pouvait ni compter, ni comparer, ni retrouver un nom. Ce qu'on lit ici est une
+ * liste de faits de même forme : c'est un tableau.
+ *
+ * Le bouton de reprise est sur **la ligne du titre**, à droite : c'est la seule
+ * action du bandeau, et la chercher sous quinze lignes de constat la fait rater.
+ *
+ * ## Deux tableaux, et ils ne disent pas la même chose
+ *
+ * Le **bilan** rapproche ce que la proposition portait de ce que la fusion a
+ * fait. Il ne s'affiche que lorsque les deux diffèrent — une fusion qui fait
+ * exactement ce qu'elle annonçait n'a rien à expliquer.
+ *
+ * Les **manques** listent ce qui n'a pas abouti, avec la cause de la base.
+ * « Écarté » est une décision qu'on a prise ; « raté » est une écriture qui a
+ * échoué. Les mêler ferait chercher une panne là où il y a eu un choix.
+ */
+function renderBandeauDeFusion(review) {
+  const reprises = review.repriseDuCr ?? [];
+  const bilan = review.bilanDeLaFusion ?? null;
+  const ditDuBilan = phraseDuBilan(bilan);
+  if (!review.notice && !ditDuBilan) return "";
+
+  const manques = groupesDesManques(review.manquesDeLApplication ?? []);
+
+  return `
+    <div class="propositions-empty propositions-empty--warn fusion-bandeau">
+      <div class="fusion-bandeau__tete">
+        <b>${escapeHtml(review.noticeTitre || "Réponse non conservée")}</b>
+        ${
+          reprises.length > 0 && !review.finishing
+            ? `<button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-application-reprendre>
+                 Reprendre ${escapeHtml(String(reprises.length))} geste${reprises.length > 1 ? "s" : ""}
+               </button>`
+            : ""
+        }
+      </div>
+
+      ${
+        bilan && ditDuBilan
+          ? `<table class="fusion-bilan">
+               <thead>
+                 <tr><th>Ce que la proposition portait</th><th>Porté</th><th>Écarté</th><th>Fait</th></tr>
+               </thead>
+               <tbody>
+                 ${bilan.lignes.filter((ligne) => ligne.ecartees > 0 || ligne.faites !== null).map((ligne) => `
+                   <tr>
+                     <td>${escapeHtml(ligne.mot)}</td>
+                     <td class="fusion-bilan__nombre">${escapeHtml(String(ligne.portees))}</td>
+                     <td class="fusion-bilan__nombre${ligne.ecartees > 0 ? " est-ecarte" : ""}">${
+                       escapeHtml(String(ligne.ecartees))}</td>
+                     <td class="fusion-bilan__nombre">${escapeHtml(String(
+                       ligne.faites === null ? ligne.retenues : ligne.faites))}</td>
+                   </tr>
+                 `).join("")}
+               </tbody>
+             </table>
+             <p class="fusion-bandeau__mot">${escapeHtml(ditDuBilan)}</p>`
+          : ""
+      }
+
+      ${
+        manques.length > 0
+          ? `<table class="fusion-manques">
+               <thead><tr><th>Ce qui n'a pas abouti</th><th>Sur</th><th>Pourquoi</th></tr></thead>
+               <tbody>
+                 ${manques.map((groupe) => `
+                   <tr>
+                     <td>${escapeHtml(groupe.quoi)}${groupe.combien > 1
+                       ? ` <span class="fusion-manques__fois">×${escapeHtml(String(groupe.combien))}</span>` : ""}</td>
+                     <td>${escapeHtml(groupe.sujets.join(" · "))}</td>
+                     <td class="fusion-manques__cause">${escapeHtml(groupe.cause)}</td>
+                   </tr>
+                 `).join("")}
+               </tbody>
+             </table>`
+          : review.notice
+            ? `<p class="fusion-bandeau__mot">${escapeHtml(review.notice)}</p>`
+            : ""
+      }
+    </div>
+  `;
+}
+
+/** Les manques regroupés par nature : trois fois la même cause ne se lit qu'une. */
+function groupesDesManques(manques = []) {
+  const par = new Map();
+
+  for (const manque of Array.isArray(manques) ? manques : []) {
+    if (!manque?.quoi) continue;
+    const cle = `${manque.quoi}|${manque.cause ?? ""}`;
+    if (!par.has(cle)) {
+      par.set(cle, { quoi: manque.quoi, cause: String(manque.cause ?? ""), sujets: [], combien: 0 });
+    }
+    const groupe = par.get(cle);
+    groupe.combien += 1;
+    if (manque.sujet) groupe.sujets.push(manque.sujet);
+  }
+
+  return [...par.values()];
+}
+
 function renderReviewBlock(type, titre, items, renderer, vide) {
   const ecartes = items.filter((entry) => entry.status === ITEM.REFUSED).length;
   const tous = items.length > 0 && ecartes === 0;
@@ -2452,8 +2561,25 @@ function renderMergeAction(review, empeche, blocage = "") {
  * savoir qui doit se lire au moment où on le devient.
  */
 function renderMergeForm(proposition, review) {
+  // **Ce qui n'entrera pas, dit pendant qu'on peut encore changer d'avis.**
+  // Une proposition annonçait trente-quatre sujets à fermer et n'en a fermé
+  // cinq : les vingt-neuf autres avaient été écartés, c'était juste, et rien ne
+  // l'a dit — ni ici, où la question se posait encore, ni après. Du dehors,
+  // « on a décidé de ne pas le faire » et « ça n'a pas marché » se ressemblent.
+  const ecarte = phraseDeCeQuOnEcarte(
+    toutCeQueLaPropositionPorte(review.items ?? [], review.decisionRows ?? [])
+  );
+
   return `
     <div class="merge-form">
+      ${
+        ecarte
+          ? `<p class="merge-form__ecarte">
+               ${svgIcon("alert", { className: "octicon" })}
+               <span>${escapeHtml(ecarte)}</span>
+             </p>`
+          : ""
+      }
       <label class="merge-form__label" for="propositionMergeTitle">Message de la fusion</label>
       <input
         type="text"
@@ -2983,46 +3109,8 @@ function renderControles(proposition, review) {
             )
             .join("")}
         </ul>
-        ${renderEssaiDeBlocage(review)}
       </div>
     </section>
-  `;
-}
-
-/* ── PROVISOIRE — à retirer ───────────────────────────────────────────────────
- * De quoi voir un arbitrage sans attendre qu'un vrai blocage se présente.
- *
- * Depuis que les natures d'un compte rendu sont rangées dans l'intendance, un
- * compte rendu ne fait plus échouer aucun contrôle requis — et c'est la bonne
- * nouvelle. Le seul cas réel qui reste (une valeur versée à la main dans
- * l'Atelier, sans texte ni utilitaire à citer) demanderait de fabriquer une
- * proposition d'Atelier pour chaque essai.
- *
- * Ce bouton pose un drapeau **de session** : rien n'est écrit, rien ne survit à
- * un rechargement, et aucune autre proposition n'est touchée. Ce qui s'écrit,
- * c'est l'arbitrage qu'on lui donne — et c'est précisément ce qu'on veut
- * éprouver.
- *
- * Il ne s'affiche que sur une proposition ouverte : sur un procès-verbal, il
- * n'y a plus rien à arbitrer.
- *
- * **Se retire en supprimant cette fonction, son appel, et l'entrée « essai » de
- * `depot-controles.js`.**
- * ─────────────────────────────────────────────────────────────────────────── */
-function renderEssaiDeBlocage(review) {
-  if (review.frozen === true || review.running === true) return "";
-  const actif = view.essaiDeBlocage === true;
-
-  return `
-    <div class="controles__essai">
-      <span>
-        <b>Essai</b> — simuler un contrôle requis qui tombe, pour voir l'arbitrage.
-        ${actif ? "Il est en cours : l'arbitrage se tranche dans les Changements." : ""}
-      </span>
-      <button type="button" class="gh-btn gh-btn--sm" data-essai-blocage>
-        ${actif ? "Arrêter l'essai" : "Simuler un blocage"}
-      </button>
-    </div>
   `;
 }
 
@@ -3058,17 +3146,6 @@ function contexteDesControles(proposition, review) {
     // lignes, pas depuis un drapeau d'écran : un arbitrage est une décision, et
     // une décision qui ne survit pas au rechargement n'en est pas une.
     arbitrages: arbitragesEnregistres(review.decisionRows ?? []),
-    // PROVISOIRE — voir le contrôle « essai » dans `depot-controles.js`.
-    essai: view.essaiDeBlocage === true,
-    lignesDEssai: (review.items ?? [])
-      .filter((entree) => entree.status !== ITEM.REFUSED)
-      .slice(0, 3)
-      .map((entree) => ({
-        itemType: entree.itemType,
-        itemKey: entree.itemKey,
-        sujet: String(entree.payload?.titre ?? entree.payload?.nom ?? entree.payload?.name
-          ?? entree.itemKey ?? "").trim()
-      })),
     depot: depotDeLaProposition({
       proposition,
       affirmations: affirmationsDUneProposition(review.decisionRows ?? []),
@@ -4177,23 +4254,7 @@ function renderReview(root) {
   // y compris une fusion parfaitement enregistrée dont trois écritures de suite
   // avaient échoué : on lisait qu'on avait perdu sa réponse, ce qui était faux
   // et alarmant. Celui qui écrit la notice dit maintenant ce qu'elle annonce.
-  const reprises = review.repriseDuCr ?? [];
-  const avertissement = review.notice
-    ? `<div class="propositions-empty propositions-empty--warn">
-         <b>${escapeHtml(review.noticeTitre || "Réponse non conservée")}</b>
-         <p>${escapeHtml(review.notice)}</p>
-         ${
-           // De quoi recommencer. Un constat d'échec sans bouton laisse
-           // quelqu'un devant un problème qu'on lui a nommé sans lui donner de
-           // quoi le résoudre.
-           reprises.length > 0 && !review.finishing
-             ? `<p><button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-application-reprendre>
-                  Reprendre ${escapeHtml(String(reprises.length))} geste${reprises.length > 1 ? "s" : ""}
-                </button></p>`
-             : ""
-         }
-       </div>`
-    : "";
+  const avertissement = renderBandeauDeFusion(review);
 
   // Ce qui continue après la fusion.
   //
@@ -4983,14 +5044,6 @@ function bindReview(root) {
 
   for (const bouton of root.querySelectorAll("[data-arbitrage-retirer]")) {
     bouton.addEventListener("click", () => retirerLArbitrage(root, bouton.getAttribute("data-arbitrage-retirer")));
-  }
-
-  // PROVISOIRE — voir le contrôle « essai » dans `depot-controles.js`.
-  for (const bouton of root.querySelectorAll("[data-essai-blocage]")) {
-    bouton.addEventListener("click", () => {
-      view.essaiDeBlocage = view.essaiDeBlocage !== true;
-      renderContent(root);
-    });
   }
 
   // Trancher une contradiction, c'est décider de l'affirmation elle-même :
@@ -6069,10 +6122,14 @@ async function appliquerCeQueLeCompteRenduDit(root, proposition, items = [], nes
       compteRendu: String(proposition.title ?? "").trim()
     });
 
-    const dit = phraseDeLApplication(rapport);
-    if (dit) {
+    // **Ce qui a été fait, rapproché de ce qui était porté.** « 5 sujets fermés »
+    // ne dit pas si c'est le chiffre attendu ; « 5 sur 34 — 29 écartés » le dit.
+    view.review.bilanDeLaFusion = bilanDeLaFusion({ items, rapport });
+
+    view.review.manquesDeLApplication = rapport.manques ?? [];
+    if ((rapport.manques ?? []).length > 0) {
       view.review.noticeTitre = "La fusion est faite, une partie des écritures non";
-      view.review.notice = [view.review.notice, dit].filter(Boolean).join(" ");
+      view.review.notice = phraseDeLApplication(rapport);
     }
     // **De quoi recommencer.** Un constat d'échec sans bouton laisse quelqu'un
     // devant un problème qu'on lui a nommé sans lui donner de quoi le résoudre.
@@ -6109,12 +6166,10 @@ async function reprendreLApplication(root) {
     view.review.repriseDuCr = restant;
 
     view.review.noticeTitre = restant.length === 0 ? "Repris" : "Repris en partie";
+    view.review.manquesDeLApplication = rapport.manques ?? [];
     view.review.notice = restant.length === 0
       ? `${rapport.repris} geste(s) repris : tout ce qui manquait est écrit.`
-      : [
-          `${rapport.repris} geste(s) repris.`,
-          phraseDeLApplication(rapport)
-        ].filter(Boolean).join(" ");
+      : `${rapport.repris} geste(s) repris ; ${restant.length} n'aboutissent toujours pas.`;
   } catch (erreur) {
     view.review.notice = "La reprise n'a pas abouti"
       + `${String(erreur?.message ?? "").trim() ? ` — ${String(erreur.message).trim()}` : ""}.`;

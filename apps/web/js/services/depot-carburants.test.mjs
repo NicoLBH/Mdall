@@ -56,3 +56,53 @@ test("le diff nomme le fichier que la mémoire crée, pas un autre", () => {
   assert.deepEqual(repere.chemin, ["Mémoire", "Structure"]);
   assert.equal(repere.extension, "ctr");
 });
+
+/* ── Le document au corpus ───────────────────────────────────────────────── */
+
+/**
+ * **Un fichier de mémoire se nomme comme la mémoire le nomme.**
+ *
+ * Sans extension, `cheminDeFichier` retombe sur `.mdall` — « personne ne s'est
+ * prononcé » —, et le corpus s'annonçait `memoire/corpus.mdall` d'un fichier que
+ * la mémoire appelle `.crp`.
+ */
+test("le corpus s'annonce sous le nom que la mémoire lui donne", async () => {
+  const { reperesDeDocuments } = await import("./depot-carburants.js");
+  const { apres } = reperesDeDocuments([
+    { itemType: "document", itemKey: "doc-1", status: "accepted", payload: { name: "1824_CR_10.pdf" } }
+  ]);
+
+  assert.deepEqual(apres[0].chemin, ["Mémoire", "Corpus"]);
+  assert.equal(apres[0].extension, "crp");
+});
+
+/**
+ * **Le document se nomme, et dit ce qu'on en fait.**
+ *
+ * Sa seule ligne était « Nature = non reconnue » : un compte rendu de chantier
+ * n'a pas de nature détectée, et le diff annonçait donc une absence au lieu
+ * d'un document. On ne savait même pas duquel il s'agissait.
+ */
+test("le document au corpus se lit, et ce qu'on ignore ne s'écrit pas", async () => {
+  const { reperesDeDocuments } = await import("./depot-carburants.js");
+  const { apres } = reperesDeDocuments([
+    { itemType: "document", itemKey: "doc-1", status: "accepted", payload: { name: "1824_CR_10.pdf" } }
+  ]);
+
+  assert.equal(apres[0].titre, "Document au corpus : 1824_CR_10.pdf");
+  assert.match(apres[0].champs[""], /1824_CR_10\.pdf/);
+  assert.match(apres[0].champs["statut"], /retenu/);
+  // Ce qu'on ne sait pas ne s'écrit pas : pas de « non reconnue » (règle 5).
+  assert.equal("nature" in apres[0].champs, false);
+  assert.doesNotMatch(Object.values(apres[0].champs).join(" "), /non reconnue/);
+});
+
+/** Un livrable refusé sort au lieu d'entrer, et sa ligne le dit. */
+test("un document écarté le dit dans son statut", async () => {
+  const { reperesDeDocuments } = await import("./depot-carburants.js");
+  const { avant } = reperesDeDocuments([
+    { itemType: "document", itemKey: "doc-1", status: "refused", payload: { name: "R.pdf" } }
+  ]);
+
+  assert.match(avant[0].champs["statut"], /écarté/);
+});
