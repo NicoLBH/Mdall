@@ -1476,6 +1476,41 @@ non refusées » à chaque rendu : cliquer dix fois sur « Écarter » refusait 
 lignes différentes. Il a détruit une proposition, ce qui est exactement ce qu'un
 bouton d'essai ne doit pas pouvoir faire.
 
+##### « Confirmer la fusion » ne faisait rien
+
+Le plus grave des trois, et il expliquait les deux autres.
+
+`merge()` portait cette garde :
+
+    if (unresolvedConflicts(...).length > 0) return;
+
+Elle existait pour une bonne raison — la règle ne doit pas dépendre de l'état
+d'un bouton — et elle **sortait en silence**. Quelqu'un cliquait, rien ne se
+passait, rien n'expliquait pourquoi. Un logiciel qui refuse sans le dire est pire
+qu'un logiciel qui refuse.
+
+En amont, deux choses l'avaient rendue atteignable :
+
+**Les vingt-neuf contradictions ne se voyaient pas.** Le bloc qui les détaille
+vit dans l'onglet Dépôts ; l'arbitrage, dans les Changements. On lisait donc
+« 29 contradictions doivent être arbitrées » sans en voir une seule, avec pour
+seule issue un « Passer outre » global — c'est-à-dire assumer en bloc
+vingt-neuf décisions qu'on n'avait pas lues. Le contrôle les **nomme**
+maintenant, chacune avec l'écart qu'elle porte (`A1 → A2`) et deux boutons :
+*Garder* ce que le projet disait, ou *Prendre* ce que la proposition apporte.
+
+**Passer outre ne tranchait rien.** L'arbitrage écrit suffisait à ce que le
+contrôle cesse de bloquer, et la pastille passait à « Prêt à fusionner » — mais
+les contradictions restaient au statut « proposé ». On avait un écran qui disait
+oui et un bouton qui disait non. Assumer une contradiction, c'est **retenir ce
+que la proposition apporte** : les lignes passent donc en acceptées, et le motif
+dit pourquoi.
+
+Reste une chose à savoir : **« Marquer comme résolus » ne conditionne pas la
+fusion**, et ne l'a jamais fait. La fusion se débloque quand les blocages sont
+tranchés — c'est le fait qui compte, pas un bouton. Ce bouton referme le bloc
+quand on a fini, et son infobulle le dit désormais.
+
 ##### L'écran de lecture, allégé
 
 Les explications quittent le fil du texte pour un **« ? »** — elles sont justes
