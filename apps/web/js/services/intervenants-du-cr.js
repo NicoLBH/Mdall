@@ -330,10 +330,14 @@ export function nomPourLeRepertoire({ nom = "", societe = "" } = {}) {
  * @returns {object|null}
  */
 export function aQuiRevientLePoint(point = null, collaborateurs = []) {
-  const dit = `${texte(point?.qui)} ${texte(point?.lot)}`.trim();
-  if (!dit) return null;
-
-  const cherche = aplati(dit);
+  // **Ce que le document désigne prime sur le contexte.** « Demandé à Entreprise
+  // GILETTO » nomme quelqu'un ; le lot dit seulement sous quelle rubrique le
+  // point est rangé. Mélanger les deux dans une même chaîne de recherche
+  // ajoutait des candidats que le document n'avait pas désignés — et c'est ce
+  // qui a assigné à un maître d'ouvrage un point explicitement demandé à une
+  // entreprise. On ne se rabat sur le lot que lorsque personne n'est nommé.
+  const qui = texte(point?.qui);
+  const cherche = aplati(qui || texte(point?.lot));
   if (!cherche) return null;
 
   const actifs = (Array.isArray(collaborateurs) ? collaborateurs : [])
@@ -342,12 +346,15 @@ export function aQuiRevientLePoint(point = null, collaborateurs = []) {
   const trouves = actifs.filter((personne) => {
     const societe = societeAplatie(personne?.company);
     // Le rôle d'un collaborateur **est** son lot : son libellé (« gros œuvre »)
-    // et son code (« 02 »). Un compte rendu écrit indifféremment l'un ou
-    // l'autre, et ne chercher que le libellé perdrait la moitié des points.
+    // et son code. Un compte rendu écrit indifféremment l'un ou l'autre, et ne
+    // chercher que le libellé perdrait la moitié des points.
     const libelle = aplati(personne?.projectLotLabel ?? personne?.role);
     const code = aplati(personne?.roleCode);
 
     // Le mot doit être **entier** : « SA » ne doit pas reconnaître « SANITAIRE ».
+    // Le code du rôle ne se cherche plus que dans le lot — jamais dans une
+    // phrase qui nomme quelqu'un —, sans quoi le « 1 » de « Lot n° 1 » désigne
+    // le collaborateur dont le rôle porte le code « 1 ».
     return (societe && contientLeMot(cherche, societe))
       || (libelle && contientLeMot(cherche, libelle))
       || (code && contientLeMot(cherche, code));
@@ -355,6 +362,7 @@ export function aQuiRevientLePoint(point = null, collaborateurs = []) {
 
   return trouves.length === 1 ? trouves[0] : null;
 }
+
 
 /** Le groupe de mots, entier, dans une phrase aplatie. */
 function contientLeMot(phrase, mot) {

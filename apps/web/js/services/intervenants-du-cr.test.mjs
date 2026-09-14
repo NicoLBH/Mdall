@@ -301,6 +301,45 @@ test("un point qui n'écrit que le numéro de lot trouve quand même", () => {
   assert.equal(aQuiRevientLePoint({ qui: "", lot: "Lot 02" }, equipe)?.id, "c-1");
 });
 
+/**
+ * **Ce que le document désigne prime sur le contexte.**
+ *
+ * Un point demandé à une entreprise a été assigné au maître d'ouvrage. La
+ * recherche mêlait `qui` et `lot` dans une seule chaîne : « Demandé à Entreprise
+ * GILETTO · Lot n° 1 » contenait « 1 », le maître d'ouvrage portait le code de
+ * rôle « 1 », il était le seul à correspondre — et il a été désigné.
+ *
+ * Le lot dit sous quelle rubrique le point est rangé ; il ne dit pas à qui il
+ * revient. Quand quelqu'un est nommé, on ne cherche que là.
+ */
+test("un point demandé à quelqu'un ne s'assigne pas d'après son numéro de lot", () => {
+  const equipe = [
+    { id: "moa", company: "Commune", role: "Maîtrise d'ouvrage", roleCode: "1", status: "Actif" },
+    { id: "gros-oeuvre", company: "Bêta", role: "Gros œuvre", roleCode: "02", status: "Actif" }
+  ];
+
+  // L'entreprise nommée n'est pas encore au projet : personne ne correspond, et
+  // c'est la bonne réponse. Un sujet sans assigné se corrige en un clic ; un
+  // sujet assigné au mauvais se découvre trois semaines plus tard.
+  assert.equal(
+    aQuiRevientLePoint({ qui: "Entreprise Gamma", lot: "Lot n° 1 : Démolition / Gros Œuvre" }, equipe),
+    null
+  );
+});
+
+/** Quand le document nomme quelqu'un du projet, il le trouve — et lui seul. */
+test("un point nommé trouve l'entreprise qu'il nomme", () => {
+  const equipe = [
+    { id: "moa", company: "Commune", role: "Maîtrise d'ouvrage", roleCode: "1", status: "Actif" },
+    { id: "beta", company: "Bêta", role: "Gros œuvre", roleCode: "02", status: "Actif" }
+  ];
+
+  assert.equal(
+    aQuiRevientLePoint({ qui: "Entreprise Bêta", lot: "Lot n° 1 : Démolition" }, equipe)?.id,
+    "beta"
+  );
+});
+
 /* ── La chaîne, d'un bout à l'autre ──────────────────────────────────────── */
 
 const lire = async (chemin) => {

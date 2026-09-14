@@ -7,10 +7,7 @@ import {
 
 const issueDe = (rendu, id) => rendu.lignes.find((ligne) => ligne.id === id).issue;
 
-// PROVISOIRE — le contrôle « essai » ne s'applique jamais hors essai, et se
-// retirera avec lui. Compter `CONTROLES.length` ferait échouer les deux tests
-// qui vérifient qu'un dépôt complet tient tout ce qui le concerne.
-const APPLICABLES = CONTROLES.filter((controle) => controle.id !== "essai").length;
+const APPLICABLES = CONTROLES.length;
 
 const CONTEXTE = {
   depot: { affirmations: 3, provenance: "verifie", pourquoi: "" },

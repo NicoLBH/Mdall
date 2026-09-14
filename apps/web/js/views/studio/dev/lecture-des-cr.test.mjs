@@ -172,18 +172,22 @@ test("l'onglet Analyse porte le relevé, et pas la restitution", () => {
  * source ne se corrige pas : on ne sait pas s'il faut reprendre la consigne de
  * lecture ou la restitution qui la précède.
  */
-test("l'analyse dit sur quoi les points ont été relevés", () => {
-  const surLaRestitution = renderLaLecture(unEtat({
-    phase: "lue", lecture: uneLecture("modele"), onglet: "analyse"
+test("l'analyse ne dit sur quoi elle a lu que lorsque ce n'est pas le cas normal", () => {
+  // **On ne dit que l'anormal.** Que les points viennent de la restitution est
+  // la règle, redite à chaque lecture : la phrase occupait une ligne pour
+  // confirmer ce qui va de soi.
+  const normal = renderLaLecture(unEtat({
+    phase: "lue", lecture: { ...uneLecture(), lueSur: "modele" }, pagesLues: PAGES,
+    onglet: "analyse", md: uneRestitution()
   }));
-  assert.match(surLaRestitution, /relevés sur le document restitué en Markdown/);
+  assert.doesNotMatch(normal, /Les points ci-dessous ont été relevés/);
 
-  // Et le repli sur le texte brut ne se tait pas : c'est une autre source.
-  const surLeBrut = renderLaLecture(unEtat({
-    phase: "lue", lecture: uneLecture("brut"), onglet: "analyse"
+  // Lire sur le texte brut change ce qu'on peut attendre — et se dit.
+  const brut = renderLaLecture(unEtat({
+    phase: "lue", lecture: { ...uneLecture(), lueSur: "brut" }, pagesLues: PAGES,
+    onglet: "analyse", md: uneRestitution()
   }));
-  assert.match(surLeBrut, /texte brut du PDF/);
-  assert.match(surLeBrut, /est-douteux/);
+  assert.match(brut, /relevés sur le texte brut du PDF/);
 });
 
 /* ── Le défaut qui a vidé l'écran deux fois ──────────────────────────────── */
@@ -534,7 +538,13 @@ test("plus rien ne parle d'un outil de restitution", () => {
  * quiconque ait rien décidé, et sur un document qu'on venait peut-être de
  * déposer pour voir. Elle attend maintenant la fusion, et l'écran le dit.
  */
-test("une restitution à ranger annonce qu'elle attend la fusion", () => {
+/**
+ * **Le cas nominal ne se dit plus.** Que la restitution soit rangée à la fusion
+ * est la règle, et elle occupait quatre lignes à chaque lecture. L'écran de la
+ * proposition la porte comme une ligne qu'on coche : c'est là que la question
+ * se pose.
+ */
+test("une restitution à ranger n'annonce plus la règle générale", () => {
   const html = renderLaLecture(unEtat({
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES,
     md: uneRestitution({
@@ -547,10 +557,8 @@ test("une restitution à ranger annonce qu'elle attend la fusion", () => {
     })
   }));
 
-  assert.match(html, /lecture-cr__rangement/);
-  assert.match(html, /sera rangée dans Fichiers.{0,40}à la fusion de la proposition/s);
-  assert.match(html, /une écriture se\s+signe/);
-  // Et ce n'est pas encore fait : le dire au passé serait faux.
+  assert.doesNotMatch(html, /sera rangée dans Fichiers/);
+  // Et surtout pas au passé : elle n'est pas rangée non plus.
   assert.doesNotMatch(html, /a été rangée/);
 });
 
@@ -593,8 +601,10 @@ test("une restitution périmée explique pourquoi on a rappelé le modèle", () 
     })
   }));
 
+  // La péremption se dit — c'est elle qui explique la dépense. La règle
+  // générale, non : elle se lit sur la proposition, où on la coche.
   assert.match(html, commeAffichee(PHRASES_DU_RANGEMENT[RANGEE.PERIMEE]));
-  assert.match(html, /sera rangée dans Fichiers/);
+  assert.doesNotMatch(html, /sera rangée dans Fichiers/);
 });
 
 /**
@@ -709,25 +719,23 @@ test("les rapprochements écartés se comptent à l'écran", () => {
  * **Ne pas savoir n'est pas « il n'y est pas ».** Annoncer une création qui
  * n'aura peut-être pas lieu serait une affirmation qu'on n'a pas vérifiée.
  */
-test("le label du compte rendu se dit, et son absence ne s'invente pas", async () => {
+/**
+ * **La phrase du label a quitté l'analyse.** « Chaque sujet porterait le label
+ * CR chantier, qui existe déjà » se redisait à chaque lecture pour annoncer une
+ * règle invariable. Le label est une **ligne de la proposition** depuis qu'il se
+ * coche : c'est là qu'on le voit, et qu'on le refuse si on n'en veut pas.
+ *
+ * Ce qui reste ici est la seule chose que l'analyse a à dire : rien n'est écrit
+ * tant que personne n'a signé.
+ */
+test("l'analyse n'annonce plus la règle du label, et continue de dire qu'elle n'écrit rien", async () => {
   const { LABEL_DU_CR } = await import("../../../services/label-du-cr.js");
   const confronte = { sort: SORT.NOUVEAU, sujet: null, par: "" };
-
-  const inconnu = renderLaLecture(unEtatConfronte(confronte, { labels: null }));
-  const absent = renderLaLecture(unEtatConfronte(confronte, { labels: [] }));
   const present = renderLaLecture(unEtatConfronte(confronte, { labels: [{ id: "l-1", name: LABEL_DU_CR }] }));
 
-  for (const html of [inconnu, absent, present]) {
-    assert.match(html, /lecture-cr__label/);
-    assert.match(html, new RegExp(LABEL_DU_CR));
-  }
-
-  assert.match(inconnu, /n&#39;ont pas pu être lus/);
-  assert.match(absent, /créerait/);
-  assert.match(present, /existe déjà/);
+  assert.doesNotMatch(present, /Chaque sujet ouvert ou relancé/);
   // Rien n'est posé : poser un label est une écriture, elle passe par une
-  // proposition (règle 1). L'écran l'écrit comme une négation — chercher les
-  // mots seuls rendrait le test faux dès qu'on dit « ni label posé ».
+  // proposition (règle 1).
   assert.match(present, /ni lot ajouté, ni label créé, ni label posé/);
   assert.doesNotMatch(present, /a été (posé|ajouté|créé)/);
 });
@@ -1301,7 +1309,10 @@ test("un sujet disparu se ferme, et la fermeture se dit déduite", () => {
     sujetsDuLabel: ["s-1", "s-2"]
   }));
 
-  assert.match(html, /lecture-cr__fermeture est-question/);
+  // Les sujets disparus se lisent en tableau : trente-quatre titres à la suite
+  // ne se lisent pas, et un numéro dit duquel on parle.
+  assert.match(html, /lecture-cr__sujets-table/);
+  assert.match(html, /n&#39;y figure plus/);
   assert.match(html, /Étanchéité toiture/);
   // **Fermée, mais sur une déduction** — jamais sur une phrase du document.
   assert.match(html, commeAffichee("sur cette déduction, et non sur une phrase du document"));

@@ -20577,18 +20577,71 @@ body.proposition-merge-open{ overflow:hidden; }
 .controle__detail{ color:var(--muted); font-size:11px; font-style:italic; }
 .controle--sans-objet .controle__label{ color:var(--muted); font-weight:400; }
 
-/* PROVISOIRE — la ligne d'essai, à retirer avec le contrôle qu'elle pose. */
-.controles__essai{
+/* ── Le bandeau de fin de fusion ────────────────────────────────────────────
+   C'était un paragraphe : trois échecs y devenaient un mur de quinze lignes,
+   la même cause recopiée trois fois. Deux tableaux, et l'action sur la ligne du
+   titre — c'est la seule du bandeau, et la chercher sous le constat la fait
+   rater. */
+.fusion-bandeau{ text-align:left; }
+.fusion-bandeau__tete{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:12px;
   flex-wrap:wrap;
-  padding:10px 16px;
-  border-top:1px dashed var(--border);
-  color:var(--muted);
-  font-size:12px;
+  margin-bottom:10px;
 }
+.fusion-bandeau__mot{ margin:8px 0 0; font-size:12px; color:var(--muted); }
+
+.fusion-bilan,
+.fusion-manques{
+  width:100%;
+  border-collapse:collapse;
+  font-size:12px;
+  margin-top:6px;
+}
+.fusion-bilan th,
+.fusion-manques th{
+  text-align:left;
+  font-weight:600;
+  color:var(--muted);
+  padding:4px 8px;
+  border-bottom:1px solid var(--border2);
+}
+.fusion-bilan td,
+.fusion-manques td{
+  padding:5px 8px;
+  border-bottom:1px solid var(--border2);
+  vertical-align:top;
+  color:var(--text);
+}
+.fusion-bilan tr:last-child td,
+.fusion-manques tr:last-child td{ border-bottom:0; }
+.fusion-bilan__nombre{ text-align:right; font-variant-numeric:tabular-nums; width:64px; }
+/* Écarté n'est pas raté : la couleur dit « quelqu'un l'a voulu », pas « panne ». */
+.fusion-bilan__nombre.est-ecarte{ color:var(--ton-doute-vif); font-weight:600; }
+.fusion-manques__fois{ color:var(--muted); font-variant-numeric:tabular-nums; }
+.fusion-manques__cause{
+  font-family:var(--mono, ui-monospace, monospace);
+  font-size:11px;
+  color:var(--muted);
+  overflow-wrap:anywhere;
+}
+
+/* Ce qui n'entrera pas, dit pendant qu'on peut encore changer d'avis. */
+.merge-form__ecarte{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  margin:0 0 12px;
+  padding:8px 10px;
+  border:1px solid rgba(210,153,34,.45);
+  border-radius:8px;
+  background:rgba(210,153,34,.08);
+  font-size:12px;
+  color:var(--text);
+}
+.merge-form__ecarte .octicon{ flex:0 0 auto; margin-top:1px; color:var(--ton-doute-vif); }
 
 /* ── Ce qui retient la fusion ───────────────────────────────────────────────
    Le châssis d'un conflit de fusion GitHub, et pour la même raison : c'est le
@@ -24008,6 +24061,13 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 /* Ce qui n'a pas été lu se dit, plutôt que de laisser un champ vide qu'on
    prendrait pour une absence dans le document. */
 .lecture-cr__reserve{margin:0;font-size:12.5px;color:var(--fgColor-attention, #d29922);}
+.lecture-cr__md-reserve-icone{display:inline-flex;margin-top:2px;color:var(--fgColor-attention, #d29922);}
+.lecture-cr__md-reserve-corps{display:flex;flex-direction:column;gap:4px;min-width:0;}
+.lecture-cr__md-reserve-corps p{margin:0;}
+/* Le verdict du découpage passe au-dessus de ses trois chiffres : on lit la
+   conclusion, puis ce qui la fonde. */
+.lecture-cr__verdict{display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;}
+.lecture-cr__verdict .octicon{flex:0 0 auto;margin-top:2px;}
 
 /* Les cartes gardent leur taille au lieu de s'étirer : sur un grand écran,
    quatre chiffres étalés sur deux mille pixels ne se lisent plus d'un coup. */
@@ -24027,10 +24087,26 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   border-radius:var(--radius);
 }
 
-.lecture-cr__chiffre-intitule{font-size:11.5px;color:var(--muted);}
+.lecture-cr__chiffre-intitule{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:6px;
+  font-size:11.5px;
+  color:var(--muted);
+}
 .lecture-cr__chiffre-valeur{font-size:18px;font-weight:600;color:var(--text);}
-.lecture-cr__chiffre.est-bon{border-color:var(--fgColor-success, #238636);}
-.lecture-cr__chiffre.est-douteux{border-color:var(--fgColor-attention, #d29922);}
+/* **La couleur est sur le nombre, pas sur le cadre.** Huit cadres bordés de
+   vert et d'orange faisaient une grille bariolée où plus rien ne ressortait —
+   et une bordure sur « 788 / 799 » laissait croire que tout le cadre posait
+   problème, alors qu'un seul des deux nombres vaut jugement. */
+.lecture-cr__chiffre-nombre{font-weight:600;}
+.lecture-cr__chiffre-nombre.est-bon{color:var(--fgColor-success, #3fb950);}
+.lecture-cr__chiffre-nombre.est-douteux{color:var(--fgColor-attention, #d29922);}
+.lecture-cr__chiffre-nombre.est-mauvais{color:var(--ton-mauvais-vif, #f85149);}
+/* Le second terme d'un rapport n'est pas un résultat : ce sont les données. */
+.lecture-cr__chiffre-sur{font-size:14px;font-weight:400;color:var(--muted);}
+.lecture-cr__chiffre-aide{margin:-4px -4px -4px 0;}
 
 /* Le contexte perdu, rendu visible : des points différents qui s'écrivent
    pareil sont indiscernables une fois ouverts comme sujets. */
@@ -24218,10 +24294,15 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .lecture-cr__rangement.est-bon{color:var(--fgColor-success, #3fb950);}
 .lecture-cr__rangement.est-douteux{color:var(--fgColor-attention, #d29922);}
+/* L'icône dans sa colonne, alignée en haut ; le texte dans la sienne. Les
+   réserves suivaient l'icône : la première ligne commençait après elle, les
+   suivantes revenaient au bord, et le bloc n'avait plus l'air d'un seul
+   avertissement. */
 .lecture-cr__md-reserve{
-  display:flex;
-  flex-direction:column;
-  gap:4px;
+  display:grid;
+  grid-template-columns:auto 1fr;
+  align-items:start;
+  gap:4px 10px;
   margin:0;
   padding:10px 12px;
   border:1px solid var(--fgColor-attention, #d29922);
@@ -24311,7 +24392,42 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 /* Ce qu'un compte rendu apporterait au projet, hors sujets. */
 .lecture-cr__apport{display:flex;flex-direction:column;gap:14px;}
 .lecture-cr__apport h4{margin:0 0 6px;font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+/* Les blocs d'apport se plient : sur un compte rendu de quarante points, les
+   lots, les labels, les objectifs et les fermetures font quatre écrans qu'on
+   traverse pour arriver au bouton. `<details>` parce que le navigateur sait
+   déjà ouvrir, fermer, et l'annoncer. */
 .lecture-cr__apport-bloc{display:flex;flex-direction:column;gap:6px;}
+.lecture-cr__apport-titre{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:0;
+  font-size:13.5px;
+  font-weight:600;
+  color:var(--text);
+  cursor:pointer;
+  list-style:none;
+}
+.lecture-cr__apport-titre::-webkit-details-marker{display:none;}
+/* Le caret, dessiné avant le titre et tourné par l'état du bloc. */
+.lecture-cr__apport-titre::before{
+  content:"";
+  flex:0 0 auto;
+  width:0;
+  height:0;
+  border-left:5px solid currentColor;
+  border-top:4px solid transparent;
+  border-bottom:4px solid transparent;
+  transform:rotate(0deg);
+  transition:transform .12s ease;
+  color:var(--muted);
+}
+.lecture-cr__apport-bloc[open] > .lecture-cr__apport-titre::before{transform:rotate(90deg);}
+@media (prefers-reduced-motion:reduce){ .lecture-cr__apport-titre::before{transition:none;} }
+
+/* Le titre d'un bloc et son « ? » : la question à droite, au bord. */
+.lecture-cr__bloc-tete{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.lecture-cr__bloc-tete h3{margin:0;}
 .lecture-cr__lots{display:flex;flex-wrap:wrap;gap:6px;}
 
 /* Un lot que le projet ne connaît pas se distingue de ceux qu'il connaît. */
@@ -24453,6 +24569,40 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 
 /* Ce qu'un compte rendu ferme, et ce qu'il se contente de ne plus dire. */
 .lecture-cr__fermetures{display:flex;flex-direction:column;gap:3px;margin:0;padding:0;list-style:none;}
+
+/* Des sujets en tableau, dont chaque ligne se déplie. Trente-quatre titres à la
+   suite ne se lisent pas : un numéro et un état disent duquel on parle. */
+.lecture-cr__sujets-table{
+  display:flex;
+  flex-direction:column;
+  border:1px solid var(--border2);
+  border-radius:var(--radius);
+  overflow:hidden;
+  max-height:320px;
+  overflow-y:auto;
+}
+.lecture-cr__sujets-ligne{border-bottom:1px solid var(--border2);}
+.lecture-cr__sujets-ligne:last-child{border-bottom:0;}
+.lecture-cr__sujets-tete{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  padding:6px 10px;
+  cursor:pointer;
+  list-style:none;
+  font-size:12.5px;
+}
+.lecture-cr__sujets-tete::-webkit-details-marker{display:none;}
+.lecture-cr__sujets-tete:hover{background:var(--panel2);}
+.lecture-cr__sujets-numero{flex:0 0 auto;color:var(--muted);width:46px;}
+.lecture-cr__sujets-titre{flex:1 1 auto;min-width:0;color:var(--text);}
+.lecture-cr__sujets-detail{
+  display:flex;
+  flex-wrap:wrap;
+  gap:14px;
+  padding:2px 10px 8px 66px;
+  color:var(--muted);
+}
 .lecture-cr__fermeture{
   display:flex;
   align-items:baseline;
@@ -25202,3 +25352,45 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   .sujets-vue-habit{width:min(420px, calc(100vw - 24px));}
   .sujets-vue-habit__icones{grid-template-columns:repeat(6, 1fr);}
 }
+
+/* ── Le « ? » qui explique ──────────────────────────────────────────────────
+   L'explication reste disponible et cesse d'être imposée : les phrases qui
+   disent ce qu'est un mot retrouvé ou ce que vaut une citation sont justes la
+   première fois, et occupent le tiers de l'écran à la dixième. `<details>`
+   parce que le navigateur sait déjà ouvrir, fermer, au clavier, et l'annoncer.
+*/
+.aide{ position:relative; display:inline-flex; }
+.aide__bouton{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  color:var(--muted);
+  cursor:pointer;
+  list-style:none;
+}
+.aide__bouton::-webkit-details-marker{ display:none; }
+.aide__bouton:hover,
+.aide[open] .aide__bouton{ color:var(--text); background:var(--panel2); }
+.aide__bouton .octicon{ width:14px; height:14px; }
+.aide__panneau{
+  position:absolute;
+  top:calc(100% + 6px);
+  right:0;
+  z-index:40;
+  width:min(360px, 78vw);
+  padding:10px 12px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:var(--panel);
+  box-shadow:0 8px 24px rgba(0,0,0,.35);
+  font-size:12px;
+  line-height:1.55;
+  color:var(--muted);
+  text-align:left;
+  white-space:normal;
+}
+.aide__titre{ display:block; margin-bottom:4px; color:var(--text); font-size:12.5px; }
+.aide__corps strong{ color:var(--text); }

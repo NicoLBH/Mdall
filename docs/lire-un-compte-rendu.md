@@ -1435,23 +1435,68 @@ On reprend ce vocabulaire parce que c'est celui que nos lecteurs ont déjà :
 quelqu'un qui a résolu un conflit Git sait lire cet écran sans qu'on le lui
 explique.
 
-##### Un bouton d'essai, provisoire
+##### Ce que le second essai a montré : quatre pannes, un mensonge
 
-Le corollaire de la bonne nouvelle : **aucun compte rendu ne produit plus
-d'arbitrage**, et le seul cas réel demande de fabriquer une proposition d'Atelier
-pour chaque essai.
+**Le 409 qui ne pouvait pas être repris.** `addSubjectToObjective` posait
+`resolution=merge-duplicates` **sans `on_conflict`**. PostgREST a besoin qu'on
+lui nomme la contrainte ; sans elle il insère, la base refuse sur
+`milestone_subjects_milestone_id_subject_id_key`, et l'on reçoit un 409 — une
+panne pour un sujet **déjà rattaché à son jalon**, c'est-à-dire pour l'état exact
+qu'on voulait. Le bouton « Reprendre » rejouait donc huit fois un geste qui ne
+pouvait pas réussir. Un test lit désormais le fichier et refuse toute écriture
+qui fusionne les doublons sans nommer sa contrainte.
 
-Un contrôle « Contrôle d'essai » échoue donc sur commande, et le bouton
-« Simuler un blocage » en bas de l'onglet Vérifications le déclenche. Il pose un
-drapeau **de session** : rien n'est écrit, rien ne survit à un rechargement,
-aucune autre proposition n'est touchée. Ce qui s'écrit, c'est l'arbitrage qu'on lui
-donne — et c'est précisément ce qu'on veut éprouver.
+**Trente-quatre fermetures promises, cinq faites, rien de dit.** Les
+vingt-neuf autres avaient été écartées — c'était une décision, et elle était
+juste. Mais du dehors, « on a décidé de ne pas le faire » et « ça n'a pas
+marché » se ressemblent, et c'est la seconde qu'on croit. Deux phrases répondent
+désormais : l'une **avant** de signer, sous le formulaire de fusion, où l'on peut
+encore changer d'avis ; l'autre **après**, en tableau, qui rapproche le porté du
+fait. Écarté n'est pas raté : les confondre ferait chercher une panne là où il y
+a eu un choix.
 
-Il se retire en supprimant trois choses : l'entrée `essai` de
-`depot-controles.js`, `renderEssaiDeBlocage()` et son appel, et la ligne
-`.controles__essai` du CSS.
+**Un point assigné au mauvais destinataire.** La recherche mêlait `qui` et `lot`
+dans une seule chaîne : « Demandé à Entreprise GILETTO · Lot n° 1 » contenait
+« 1 », le maître d'ouvrage portait le code de rôle « 1 », il était le seul à
+correspondre — et il a été désigné. Le lot dit sous quelle rubrique le point est
+rangé ; il ne dit pas à qui il revient. Quand quelqu'un est nommé, on ne cherche
+que là.
 
----
+**Le corpus s'annonçait `memoire/corpus.mdall`, avec pour seule ligne
+« non reconnue ».** Sans extension, `cheminDeFichier` retombe sur `.mdall` — le
+nom de ce sur quoi personne ne s'est prononcé. Et le document s'écrivait
+`Nature = non reconnue` : un compte rendu de chantier n'a pas de nature détectée,
+si bien que la seule ligne du fichier annonçait une absence au lieu d'un
+document. Il se lit maintenant `Mémoire/Corpus/corpus.crp`, avec
+`Document au corpus = "1824_CR_10.pdf"` et son statut — et ce qu'on ignore ne
+s'écrit pas.
+
+**Le bouton d'essai a été retiré.** Il recalculait « les trois premières lignes
+non refusées » à chaque rendu : cliquer dix fois sur « Écarter » refusait trente
+lignes différentes. Il a détruit une proposition, ce qui est exactement ce qu'un
+bouton d'essai ne doit pas pouvoir faire.
+
+##### L'écran de lecture, allégé
+
+Les explications quittent le fil du texte pour un **« ? »** — elles sont justes
+la première fois et occupent le tiers de l'écran à la dixième. La couleur passe
+du cadre au **nombre** : huit cadres bordés de vert et d'orange faisaient une
+grille bariolée où plus rien ne ressortait, et une bordure sur « 788 / 799 »
+laissait croire que tout le cadre posait problème alors qu'un seul des deux
+nombres vaut jugement.
+
+Disparaissent aussi : ce qui redit la règle générale à chaque lecture (« la
+restitution sera rangée à la fusion », « chaque sujet porterait le label CR
+chantier », « les points ci-dessous ont été relevés sur la restitution »), et les
+manques recopiés sous chaque point — « sans citation · sans page » s'écrivait
+sous quarante points sur quarante-deux, cessait d'être un avertissement, et ne
+disait rien qu'on puisse corriger. Leur compte reste dans « Ce que la lecture
+vaut », qui est le bon endroit pour en juger.
+
+Les blocs d'apport se plient. Les sujets fermés passent en tableau, chaque ligne
+dépliant son numéro et son état — trente-quatre titres à la suite ne se lisent
+pas. Et « Face aux sujets du projet » gagne le cadre qui manquait : **ce qu'on
+fermerait**, à l'endroit même où l'on compare le document au projet.
 
 ### Étape 10 — Le document se relit dans Fichiers *(à faire)*
 

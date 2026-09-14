@@ -214,40 +214,6 @@ export const CONTROLES = [
     }
   },
   {
-    /* ── PROVISOIRE — à retirer ────────────────────────────────────────────
-     * Un contrôle qui échoue sur commande, pour voir l'arbitrage fonctionner.
-     *
-     * ## Pourquoi il a fallu l'écrire
-     *
-     * Depuis que les natures d'un compte rendu sont rangées dans l'intendance,
-     * **un compte rendu ne fait plus échouer aucun contrôle requis** — et c'est
-     * la bonne nouvelle. Mais il ne restait alors plus aucun moyen de voir un
-     * arbitrage à l'écran : le seul cas réel (une valeur versée à la main dans
-     * l'Atelier, sans texte ni utilitaire à citer) demande de fabriquer une
-     * proposition d'Atelier pour chaque essai.
-     *
-     * Il n'est **jamais actif par défaut** : il faut poser `essai: true` dans le
-     * contexte, ce que seul le bouton « Simuler un blocage » de l'onglet
-     * Vérifications fait, et pour la durée d'une session. Il n'écrit rien ; ce
-     * qui s'écrit est l'arbitrage qu'on lui donne, et c'est bien ce qu'on veut
-     * éprouver.
-     *
-     * **Se retire en supprimant cette entrée et le bouton qui la pose.**
-     * ───────────────────────────────────────────────────────────────────── */
-    id: "essai",
-    label: "Contrôle d'essai",
-    bloquant: true,
-    concerne: ({ lignesDEssai = [] }) => lignesDEssai,
-    verifier: ({ essai = false }) => {
-      if (essai !== true) return sansObjet("Aucun essai en cours.");
-      return nonTenu(
-        "Ce contrôle d'essai échoue exprès.",
-        "Il sert à éprouver l'arbitrage. Écartez les lignes qu'il met en cause, ou passez outre "
-        + "en disant pourquoi."
-      );
-    }
-  },
-  {
     id: "avis",
     label: "Les avis relevés sont rattachés à leur livrable",
     bloquant: false,

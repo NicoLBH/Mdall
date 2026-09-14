@@ -47,7 +47,7 @@ import {
 } from "../../../services/reconstitution-markdown.js";
 import { PHRASES_DU_RANGEMENT, RANGEE } from "../../../services/restitution-rangee.js";
 import {
-  LABEL_DU_CR, QUOI_DU_LABEL, labelDuCrDansLeProjet, labelsAProposer, phraseDuLabel, styleDuLabel
+  LABEL_DU_CR, QUOI_DU_LABEL, labelDuCrDansLeProjet, labelsAProposer, styleDuLabel
 } from "../../../services/label-du-cr.js";
 import { TRANSFORMER, brancheDeLAction, renderTransformer } from "../../ui/transformer.js";
 import { branchesOuvertes, oublierLesBranches } from "../../../services/branches-ouvertes.js";
@@ -64,6 +64,7 @@ import {
 } from "../../../services/echeances-du-cr.js";
 import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
 import { formatDuDocument, phraseDuFormat } from "../../../services/format-du-document.js";
+import { renderBoutonAide } from "../../ui/bouton-aide.js";
 import {
   SITUATION, phraseDeLaSituation, situationDuLabel
 } from "../../../services/situation-du-label.js";
@@ -711,7 +712,7 @@ function renderAnalyse(vue) {
     ${renderSurQuoiLaLecture(vue)}
     ${renderMesure(vue.lecture.mesure, vue.lecture.ecartes)}
     ${renderAmbiguites(vue.lecture.points)}
-    ${renderConfrontation(vue.confrontes, vue.lecture, vue.labels)}
+    ${renderConfrontation(vue.confrontes, vue.lecture, vue.labels, vue)}
     ${renderCeQueLeCrApporte(vue)}
     ${renderRubriques(vue)}
     ${renderSuite(vue)}
@@ -735,8 +736,14 @@ function renderSurQuoiLaLecture(vue) {
     brut: "le texte brut du PDF, la restitution n'ayant pas abouti"
   };
 
+  // **On ne dit que l'anormal.** Que les points viennent de la restitution est
+  // le cas nominal, redit à chaque lecture : la phrase occupait une ligne pour
+  // confirmer ce qui va de soi. Lire sur le texte brut, en revanche, change ce
+  // qu'on peut attendre — et se dit.
+  if (sur !== "brut") return "";
+
   return `
-    <p class="lecture-cr__source mono-small${sur === "brut" ? " est-douteux" : ""}">
+    <p class="lecture-cr__source mono-small est-douteux">
       Les points ci-dessous ont été relevés sur ${escapeHtml(dits[sur] ?? sur)}.
     </p>
   `;
@@ -827,21 +834,26 @@ function renderMesureDeLaRestitution(cote) {
   return `
     <div class="lecture-cr__chiffres">
       ${renderChiffre("Mots du PDF retrouvés",
-        `${cote.fidelite.motsRetrouves} / ${cote.fidelite.motsOrigine}`, tonDeLaPart(cote.fidelite.part))}
-      ${renderChiffre("Part retrouvée", enPourcent(cote.fidelite.part), tonDeLaPart(cote.fidelite.part))}
+        `${cote.fidelite.motsRetrouves} / ${cote.fidelite.motsOrigine}`, tonDeLaPart(cote.fidelite.part),
+        "Un mot <strong>retrouvé</strong> est un mot du PDF qui reparaît dans la restitution. "
+        + "Le second nombre est ce que le PDF portait : c'est la donnée, pas un résultat.")}
+      ${renderChiffre("Part retrouvée", enPourcent(cote.fidelite.part), tonDeLaPart(cote.fidelite.part),
+        "La proportion du document qui a survécu à la restitution. Une part faible ne dit pas que "
+        + "le reste est faux : elle dit qu'il a été reformulé, et qu'il faut le lire.")}
       ${renderChiffre("Mots ajoutés", String(cote.fidelite.motsAjoutes),
-        cote.fidelite.motsAjoutes > 0 ? "est-douteux" : "est-bon")}
-      ${renderChiffre("Titres inventés", String(titres), titres > 0 ? "est-douteux" : "est-bon")}
+        cote.fidelite.motsAjoutes > 0 ? "est-douteux" : "est-bon",
+        "Ce que le modèle a écrit et que le document ne portait pas. <strong>C'est le chiffre à "
+        + "surveiller</strong> : un document reformulé se lit parfaitement, et se lit faux.")}
+      ${renderChiffre("Titres inventés", String(titres), titres > 0 ? "est-douteux" : "est-bon",
+        "Des titres que le document ne porte pas. Ils changent le découpage, donc ce qui suit "
+        + "quoi — et un point rangé sous un titre inventé change de destinataire.")}
       ${renderChiffre("Pages refaites",
         `${cote.fidelite.pages.filter((page) => page.rendue).length} / ${cote.fidelite.pages.length}`,
-        cote.fidelite.absentes.length ? "est-douteux" : "est-bon")}
+        cote.fidelite.absentes.length ? "est-douteux" : "est-bon",
+        "Les pages que la restitution rend. Une page absente n'a pas été lue : ce qu'elle "
+        + "contenait n'est ni confirmé ni infirmé.<br><br>Aucun de ces chiffres ne dit si les "
+        + "tableaux ont tenu — cela se voit en lisant.")}
     </div>
-    <p class="lecture-cr__mot">
-      Un mot « retrouvé » est un mot du PDF qui reparaît dans la restitution. Les mots
-      <strong>ajoutés</strong> et les <strong>titres inventés</strong> sont ceux que le modèle a
-      écrits et que le document ne portait pas : ce sont les chiffres à surveiller. Aucun ne dit
-      si les tableaux ont tenu — cela se voit en lisant.
-    </p>
   `;
 }
 
@@ -897,19 +909,26 @@ function renderLeDecoupage(vue) {
 
   return `
     <div class="lecture-cr__decoupage${tenu ? " est-bon" : " est-douteux"}">
+      <p class="lecture-cr__mot lecture-cr__verdict">
+        ${svgIcon(tenu ? "check-circle" : "alert", { className: "octicon" })}
+        <span>
+          ${escapeHtml(PHRASES_DU_DECOUPAGE[verdict] ?? "")}
+          ${aReprendre ? `<strong>${escapeHtml(aReprendre)}</strong>` : ""}
+        </span>
+      </p>
       <div class="lecture-cr__chiffres">
         ${renderChiffre("Chapitres annoncés", String(annonce.chapitres),
-          annonce.chapitres > 0 ? "est-bon" : "est-douteux")}
+          annonce.chapitres > 0 ? "est-bon" : "est-douteux",
+          "Ce que la lecture de structure a annoncé : les chapitres du document.")}
         ${renderChiffre("Titres rendus", String(rendu.titres),
-          rendu.titres > 0 ? "est-bon" : "est-douteux")}
+          rendu.titres > 0 ? "est-bon" : "est-douteux",
+          "Les titres que la restitution porte réellement. Un écart avec les chapitres annoncés "
+          + "dit que le découpage n'a pas tenu — et ce qui suit quoi en dépend.")}
         ${renderChiffre("Traits devant un titre", String(rendu.traitsDevantUnTitre),
-          rendu.traitsDevantUnTitre > 0 ? "est-bon" : "est-douteux")}
+          rendu.traitsDevantUnTitre > 0 ? "est-bon" : "est-douteux",
+          "Les séparateurs qui ouvrent une section. Ils marquent où un chapitre commence : sans "
+          + "eux, un point se range sous le titre précédent.")}
       </div>
-      <p class="lecture-cr__mot">
-        ${svgIcon(tenu ? "check-circle" : "alert", { className: "octicon" })}
-        ${escapeHtml(PHRASES_DU_DECOUPAGE[verdict] ?? "")}
-        ${aReprendre ? `<strong>${escapeHtml(aReprendre)}</strong>` : ""}
-      </p>
     </div>
   `;
 }
@@ -1005,14 +1024,11 @@ function renderRangement(cote) {
     ? `${escapeHtml(PHRASES_DU_RANGEMENT[RANGEE.PERIMEE])} `
     : "";
 
-  if (rangement.aRanger) {
-    return `<p class="lecture-cr__rangement">
-      ${avant}Cette restitution <strong>sera rangée dans Fichiers à la fusion de la proposition</strong>,
-      à côté du PDF : déposer un fichier dans le projet est une écriture, et une écriture se
-      signe. Tant qu'elle n'est pas fusionnée, redéposer ce document la referait — et la
-      repaierait.
-    </p>`;
-  }
+  // **Le cas nominal ne se dit plus.** Que la restitution soit rangée à la
+  // fusion est la règle, redite à chaque lecture en quatre lignes. L'écran de la
+  // proposition la porte déjà comme une ligne qu'on coche : c'est là que la
+  // question se pose. Seul ce qui sort de l'ordinaire reste écrit.
+  if (rangement.aRanger) return avant ? `<p class="lecture-cr__rangement">${avant}</p>` : "";
 
   return `<p class="lecture-cr__rangement est-douteux">
     ${avant}Il n'y a rien à ranger pour ce document${
@@ -1223,11 +1239,17 @@ function renderReservesDeLaRestitution(cote) {
 
   if (!reserves.length) return "";
 
+  // **L'icône dans sa colonne, le texte dans la sienne.** Les réserves
+  // s'écrivaient à la suite de l'icône : la première ligne commençait après
+  // elle, les suivantes revenaient au bord, et l'on ne voyait plus que le bloc
+  // portait un seul avertissement.
   return `
-    <p class="lecture-cr__md-reserve">
-      ${svgIcon("alert", { className: "octicon" })}
-      ${reserves.map((reserve) => `<span>${escapeHtml(reserve)}</span>`).join("")}
-    </p>
+    <div class="lecture-cr__md-reserve">
+      <span class="lecture-cr__md-reserve-icone">${svgIcon("alert", { className: "octicon" })}</span>
+      <div class="lecture-cr__md-reserve-corps">
+        ${reserves.map((reserve) => `<p>${escapeHtml(reserve)}</p>`).join("")}
+      </div>
+    </div>
   `;
 }
 
@@ -1259,27 +1281,61 @@ function renderMesure(mesure, ecartes) {
     <section class="lecture-cr__mesure">
       <h3>Ce que la lecture vaut</h3>
       <div class="lecture-cr__chiffres">
-        ${renderChiffre("Points relevés", String(mesure.points))}
+        ${renderChiffre("Points relevés", String(mesure.points), "",
+          "Ce que le modèle a relevé dans le document, après que le serveur a écarté ce qu'il "
+          + "ne pouvait pas vérifier.")}
         ${renderChiffre("Citations retrouvées", `${mesure.retrouves} / ${mesure.points}`,
-          mesure.retrouves === mesure.points ? "est-bon" : "est-douteux")}
+          mesure.retrouves === mesure.points ? "est-bon" : "est-douteux",
+          "Une citation <strong>retrouvée</strong> est une phrase que l'on relit mot pour mot "
+          + "dans le document. C'est la seule vérification qui ne dépende pas du modèle.")}
         ${renderChiffre("Sans citation", String(mesure.sansCitation),
-          mesure.sansCitation > 0 ? "est-douteux" : "")}
-        ${renderChiffre("Sans lot", String(mesure.sansLot), mesure.sansLot > 0 ? "est-douteux" : "")}
-        ${renderChiffre("Écartés au serveur", String(ecartes), ecartes > 0 ? "est-douteux" : "")}
+          mesure.sansCitation > 0 ? "est-douteux" : "est-bon",
+          "Des points dont la phrase n'a pas été retrouvée dans le document. Ils restent "
+          + "proposés, mais rien ne les rattache à un passage précis.")}
+        ${renderChiffre("Sans lot", String(mesure.sansLot), mesure.sansLot > 0 ? "est-douteux" : "est-bon",
+          "Des points qu'aucun lot ne porte. Ils ne se rattachent à aucune entreprise, et ne "
+          + "trouveront donc pas d'assigné.")}
+        ${renderChiffre("Écartés au serveur", String(ecartes), ecartes > 0 ? "est-douteux" : "est-bon",
+          "Ce que le serveur a refusé faute de citation vérifiable. Ils ne sont pas dans la "
+          + "liste ci-dessous : les compter ici est ce qui empêche de croire la lecture complète.")}
       </div>
-      <p class="lecture-cr__mot">
-        Une citation « retrouvée » est une phrase que l'on relit mot pour mot dans le document.
-        C'est la seule vérification qui ne dépende pas du modèle.
-      </p>
     </section>
   `;
 }
 
-function renderChiffre(intitule, valeur, ton = "") {
+/**
+ * Un chiffre, et ce qu'il vaut.
+ *
+ * ## La couleur est sur le nombre, pas sur le cadre
+ *
+ * Huit cadres bordés de vert et d'orange faisaient une grille bariolée où plus
+ * rien ne ressortait — et une bordure orange sur « Mots du PDF retrouvés :
+ * 788 / 799 » laissait croire que tout le cadre posait problème, alors que
+ * c'est **un seul des deux nombres** qui vaut jugement. Le cadre reprend donc
+ * la bordure ordinaire, et c'est la valeur qui porte la couleur.
+ *
+ * Un rapport garde son second terme en gris : « 788 / 799 » se lit « 788 sur
+ * 799 », et les 799 ne sont pas un résultat, ce sont les données.
+ *
+ * @param {string} [aide] l'explication, derrière un « ? ». Rien ne s'affiche
+ *   sans elle : un bouton qui n'explique pas est un bouton de plus.
+ */
+function renderChiffre(intitule, valeur, ton = "", aide = "") {
+  const dit = texte(valeur);
+  // Le premier nombre porte le jugement ; ce qui suit — « / 799 », « % » — est
+  // le contexte qui le rend lisible.
+  const coupe = dit.match(/^(\S+)(\s*\/.*)$/);
+
   return `
-    <div class="lecture-cr__chiffre ${ton}">
-      <span class="lecture-cr__chiffre-intitule">${escapeHtml(intitule)}</span>
-      <span class="lecture-cr__chiffre-valeur">${escapeHtml(valeur)}</span>
+    <div class="lecture-cr__chiffre">
+      <span class="lecture-cr__chiffre-intitule">
+        ${escapeHtml(intitule)}
+        ${aide ? renderBoutonAide({ titre: intitule, corps: aide, className: "lecture-cr__chiffre-aide" }) : ""}
+      </span>
+      <span class="lecture-cr__chiffre-valeur">
+        <b class="lecture-cr__chiffre-nombre ${ton}">${escapeHtml(coupe ? coupe[1] : dit)}</b>
+        ${coupe ? `<span class="lecture-cr__chiffre-sur">${escapeHtml(coupe[2])}</span>` : ""}
+      </span>
     </div>
   `;
 }
@@ -1317,28 +1373,6 @@ function renderAmbiguites(points) {
   `;
 }
 
-/**
- * Le label que porteraient les sujets de ce compte rendu.
- *
- * **C'est ce qui rendra le reste possible.** Sans marque d'origine, un projet
- * mélange ce qui vient du bureau de contrôle, des réunions de chantier et de la
- * main de quelqu'un — et l'on ne peut plus ni filtrer, ni compter, ni faire une
- * situation sur « ce que le chantier doit ».
- *
- * Rien n'est posé ici : poser un label est une écriture, et une écriture passe
- * par une proposition (règle 1).
- */
-function renderLabelDuCr(labels) {
-  const etat = labelDuCrDansLeProjet(labels);
-
-  return `
-    <p class="lecture-cr__mot${etat.connu ? "" : " est-douteux"}">
-      <span class="lecture-cr__label mono-small"
-        style="${escapeHtml(styleDuLabel(LABEL_DU_CR))}">${escapeHtml(LABEL_DU_CR)}</span>
-      ${escapeHtml(phraseDuLabel(etat))}
-    </p>
-  `;
-}
 
 /**
  * Ce que ce compte rendu apporterait au projet, hors sujets.
@@ -1375,6 +1409,7 @@ function renderCeQueLeCrApporte(vue) {
       ${renderLesLiens(points)}
       ${renderLesFermetures(vue, points)}
       ${renderLaSituation(vue)}
+      ${""}
       <p class="lecture-cr__mot">
         Rien de tout cela n'est écrit : ni lot ajouté, ni label créé, ni label posé. C'est ce que
         la proposition porterait, et c'est quelqu'un qui la signe.
@@ -1396,8 +1431,8 @@ function renderLesLots(points, lotsDuProjetLus) {
   `;
 
   return `
-    <div class="lecture-cr__apport-bloc">
-      <h4>${svgIcon("stack", { className: "octicon" })} Les lots</h4>
+    <details class="lecture-cr__apport-bloc" open>
+      <summary class="lecture-cr__apport-titre">${svgIcon("stack", { className: "octicon" })} Les lots</summary>
       <p class="lecture-cr__mot${proposition.connu ? "" : " est-douteux"}">
         ${escapeHtml(phraseDesLots(proposition))}
       </p>
@@ -1406,7 +1441,7 @@ function renderLesLots(points, lotsDuProjetLus) {
         ${proposition.presents.map((lot) => pastille(lot, false)).join("")}
         ${proposition.connu ? "" : proposition.nommes.map((lot) => pastille(lot, false)).join("")}
       </div>
-    </div>
+    </details>
   `;
 }
 
@@ -1416,8 +1451,8 @@ function renderLesLabels(points, labelsDuProjetLus, lecture) {
   const ecartes = Array.isArray(lecture?.labelsEcartes) ? lecture.labelsEcartes : [];
 
   return `
-    <div class="lecture-cr__apport-bloc">
-      <h4>${svgIcon("tag", { className: "octicon" })} Les labels</h4>
+    <details class="lecture-cr__apport-bloc" open>
+      <summary class="lecture-cr__apport-titre">${svgIcon("tag", { className: "octicon" })} Les labels</summary>
       <div class="lecture-cr__lots">
         ${proposition.poses.map((label) => `
           <span class="lecture-cr__label${
@@ -1444,7 +1479,7 @@ function renderLesLabels(points, labelsDuProjetLus, lecture) {
           quinze étiquettes disant la même chose n'a plus de filtre qui fonctionne.
         </p>
       ` : ""}
-    </div>
+    </details>
   `;
 }
 
@@ -1477,8 +1512,8 @@ function renderLesObjectifs(points, objectifsDuProjet, lecture) {
   if (proposition.objectifs.length === 0 && proposition.sansDate.length === 0) return "";
 
   return `
-    <div class="lecture-cr__apport-bloc">
-      <h4>${svgIcon("milestone", { className: "octicon" })} Les objectifs</h4>
+    <details class="lecture-cr__apport-bloc" open>
+      <summary class="lecture-cr__apport-titre">${svgIcon("milestone", { className: "octicon" })} Les objectifs</summary>
       <p class="lecture-cr__mot${proposition.connu ? "" : " est-douteux"}">
         ${escapeHtml(phraseDesObjectifs(proposition))}
       </p>
@@ -1519,7 +1554,7 @@ function renderLesObjectifs(points, objectifsDuProjet, lecture) {
           En inventer une daterait un délai que personne n'a fixé.
         </p>
       ` : ""}
-    </div>
+    </details>
   `;
 }
 
@@ -1545,8 +1580,8 @@ function renderLesLiens(points) {
   if (mise.liens.length === 0) return "";
 
   return `
-    <div class="lecture-cr__apport-bloc">
-      <h4>${svgIcon("git-branch", { className: "octicon" })} Les dépendances</h4>
+    <details class="lecture-cr__apport-bloc" open>
+      <summary class="lecture-cr__apport-titre">${svgIcon("git-branch", { className: "octicon" })} Les dépendances</summary>
       <p class="lecture-cr__mot">${escapeHtml(phraseDesLiens(mise))}</p>
 
       <ul class="lecture-cr__liens">
@@ -1566,7 +1601,7 @@ function renderLesLiens(points) {
         d'affirmation que personne ne vérifie : c'est elle qui permet de répondre « non, ça n'a
         rien à voir ».
       </p>
-    </div>
+    </details>
   `;
 }
 
@@ -1626,8 +1661,8 @@ function renderLaSituation(vue) {
   const propose = verdict.verdict === SITUATION.A_PROPOSER;
 
   return `
-    <div class="lecture-cr__apport-bloc">
-      <h4>${svgIcon("project", { className: "octicon" })} La situation de suivi</h4>
+    <details class="lecture-cr__apport-bloc" open>
+      <summary class="lecture-cr__apport-titre">${svgIcon("project", { className: "octicon" })} La situation de suivi</summary>
       <p class="lecture-cr__mot">${escapeHtml(phraseDeLaSituation(verdict))}</p>
 
       ${propose ? `
@@ -1642,7 +1677,7 @@ function renderLaSituation(vue) {
           c'est quelqu'un qui la signe. Ce qui est automatique, c'est son contenu.
         </p>
       ` : ""}
-    </div>
+    </details>
   `;
 }
 
@@ -1675,8 +1710,8 @@ function renderLesFermetures(vue, points) {
   if (fermes.length === 0 && retenus.length === 0 && !disparition.connu) return "";
 
   return `
-    <div class="lecture-cr__apport-bloc">
-      <h4>${svgIcon("check-circle", { className: "octicon" })} Les fermetures</h4>
+    <details class="lecture-cr__apport-bloc" open>
+      <summary class="lecture-cr__apport-titre">${svgIcon("check-circle", { className: "octicon" })} Les fermetures</summary>
 
       ${fermes.length > 0 ? `
         <p class="lecture-cr__mot">
@@ -1709,11 +1744,59 @@ function renderLesFermetures(vue, points) {
         le texte, pas une propriété de la police : elle ne parvient pas jusqu'ici, et un point barré
         arrive comme un point ordinaire.
       </p>
-    </div>
+    </details>
   `;
 }
 
 /** Un point, avec le mot du document qui décide de son sort. */
+/**
+ * Des sujets en tableau, dont chaque ligne se déplie.
+ *
+ * ## Pourquoi un tableau, et pourquoi le détail au clic
+ *
+ * Trente-quatre titres à la suite ne se lisent pas : ce sont trente-quatre
+ * phrases de longueurs différentes, et l'on ne sait pas duquel on parle. Un
+ * tableau leur donne un numéro, un état, une date — de quoi se dire « ah oui, je
+ * vois, c'est celui-là ».
+ *
+ * Le détail ne s'affiche qu'au clic : trente-quatre blocs dépliés seraient pires
+ * que trente-quatre titres. Et il ne porte que **ce qu'on a déjà** — le numéro,
+ * l'état, la dernière mise à jour. Aller chercher le dernier commentaire de
+ * chaque sujet demanderait trente-quatre requêtes sur un écran qui n'écrit rien.
+ */
+function renderTableauDesSujets(sujets = [], signe = "") {
+  if (sujets.length === 0) return "";
+
+  return `
+    <div class="lecture-cr__sujets-table">
+      ${sujets.map((sujet) => {
+        const numero = Number(sujet?.subject_number ?? sujet?.number);
+        const titre = texte(sujet?.title ?? sujet?.titre) || "(sans titre)";
+        const etat = texte(sujet?.status ?? sujet?.statut ?? sujet?.state);
+        const quand = texte(sujet?.updated_at ?? sujet?.created_at);
+
+        return `
+          <details class="lecture-cr__sujets-ligne">
+            <summary class="lecture-cr__sujets-tete">
+              <span class="lecture-cr__sujets-numero mono-small">${
+                Number.isFinite(numero) && numero > 0 ? `#${numero}` : "—"}</span>
+              <span class="lecture-cr__sujets-titre">${escapeHtml(titre)}</span>
+              ${signe ? `<span class="lecture-cr__fermeture-signe mono-small">${escapeHtml(signe)}</span>` : ""}
+            </summary>
+            <div class="lecture-cr__sujets-detail mono-small">
+              ${etat ? `<span>état : ${escapeHtml(etat)}</span>` : ""}
+              ${quand ? `<span>dernière activité : ${escapeHtml(quand.slice(0, 10))}</span>` : ""}
+              ${Number.isFinite(numero) && numero > 0
+                ? `<span>ouvrir le sujet #${numero} dans l'onglet Sujets</span>` : ""}
+              ${!etat && !quand ? "<span>Rien d'autre n'est connu de ce sujet depuis cet écran.</span>" : ""}
+            </div>
+          </details>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
 function renderUnePoint(point, sort) {
   return `
     <li class="lecture-cr__fermeture${sort === FERMETURE.DITE ? " est-fermee" : ""}">
@@ -1738,14 +1821,7 @@ function renderLesDisparus(disparition) {
       ${escapeHtml(phraseDesDisparus(disparition))}
     </p>
     ${disparus.length > 0 ? `
-      <ul class="lecture-cr__fermetures">
-        ${disparus.slice(0, 12).map((sujet) => `
-          <li class="lecture-cr__fermeture est-question">
-            <span class="lecture-cr__fermeture-signe mono-small">n'y figure plus</span>
-            <span>${escapeHtml(texte(sujet?.title ?? sujet?.titre) || "(sans titre)")}</span>
-          </li>
-        `).join("")}
-      </ul>
+      ${renderTableauDesSujets(disparus, "n'y figure plus")}
       <p class="lecture-cr__mot">
         ${escapeHtml(EFFETS_DE_LA_FERMETURE[FERMETURE.DEDUITE])}
       </p>
@@ -1754,19 +1830,38 @@ function renderLesDisparus(disparition) {
 }
 
 /** Ce que ces points deviendraient face aux sujets du projet. */
-function renderConfrontation(confrontes, lecture = null, labels = null) {
+function renderConfrontation(confrontes, lecture = null, labels = null, vue = etat) {
   if (!Array.isArray(confrontes) || confrontes.length === 0) return "";
   const comptes = comptesDeLaConfrontation(confrontes);
   const parLeModele = confrontes.filter((point) => point?.par === PAR.MODELE).length;
   const ecartes = Number(lecture?.rapprochementsEcartes) || 0;
 
+  // L'explication du rapprochement passe derrière un « ? » : elle est juste la
+  // première fois, et occupe six lignes à la dixième.
+  const commentOnRapproche = parLeModele > 0
+    ? `<strong>${parLeModele} point${parLeModele > 1 ? "s" : ""}</strong> ${
+        parLeModele > 1 ? "ont été rapprochés" : "a été rapproché"} par le modèle, qui a reçu la `
+      + "liste de ce que le projet suit — il reconnaît un point qui a progressé, là où la "
+      + "comparaison des titres ne voit qu'un point neuf. Le reste est rapproché sur le titre, "
+      + "mot pour mot.<br><br>Chaque rapprochement dit lequel des deux l'a reconnu : un jugement "
+      + "se relit, un titre identique se constate."
+    : "Aucun point n'a été rapproché par le modèle : ceux qui le sont l'ont été sur le titre, "
+      + "mot pour mot. Chaque rapprochement dit lequel des deux l'a reconnu — un jugement se "
+      + "relit, un titre identique se constate.";
+
   return `
     <section class="lecture-cr__confrontation">
-      <h3>Face aux sujets du projet</h3>
+      <div class="lecture-cr__bloc-tete">
+        <h3>Face aux sujets du projet</h3>
+        ${renderBoutonAide({ titre: "Comment les points sont rapprochés", corps: commentOnRapproche })}
+      </div>
       <div class="lecture-cr__chiffres">
-        ${renderChiffre(PHRASES_DU_SORT[SORT.NOUVEAU], String(comptes[SORT.NOUVEAU]))}
-        ${renderChiffre(PHRASES_DU_SORT[SORT.CHANGE], String(comptes[SORT.CHANGE]))}
-        ${renderChiffre(PHRASES_DU_SORT[SORT.RELANCE], String(comptes[SORT.RELANCE]))}
+        ${renderChiffre(PHRASES_DU_SORT[SORT.NOUVEAU], String(comptes[SORT.NOUVEAU]), "",
+          "Aucun sujet du projet ne correspond : la proposition en ouvrirait un.")}
+        ${renderChiffre(PHRASES_DU_SORT[SORT.CHANGE], String(comptes[SORT.CHANGE]), "",
+          "Le point désigne un sujet du projet, et son état a bougé depuis.")}
+        ${renderChiffre(PHRASES_DU_SORT[SORT.RELANCE], String(comptes[SORT.RELANCE]), "",
+          "Le point désigne un sujet du projet et n'a pas bougé : le compte rendu le reporte.")}
       </div>
       ${lecture && lecture.rapprochementDemande === false ? `
         <p class="lecture-cr__mot est-douteux">
@@ -1774,29 +1869,55 @@ function renderConfrontation(confrontes, lecture = null, labels = null) {
           sur le seul titre, mot pour mot : un point qui a progressé se réécrit, et repart donc
           comme un point neuf. Ce n'est pas « rien ne correspondait ».
         </p>
-      ` : `
-        <p class="lecture-cr__mot">
-          ${parLeModele > 0
-            ? `<strong>${parLeModele} point${parLeModele > 1 ? "s" : ""}</strong> ${
-                parLeModele > 1 ? "ont été rapprochés" : "a été rapproché"} par le modèle, qui a reçu
-              la liste de ce que le projet suit — il reconnaît un point qui a progressé, là où la
-              comparaison des titres ne voit qu'un point neuf. Le reste est rapproché sur le titre,
-              mot pour mot.`
-            : `Aucun point n'a été rapproché par le modèle : ceux qui le sont l'ont été sur le
-              titre, mot pour mot.`}
-          Chaque rapprochement dit lequel des deux l'a reconnu — un jugement se relit, un titre
-          identique se constate.
-        </p>
-      `}
-      ${renderLabelDuCr(labels)}
+      ` : ""}
+      ${renderCeQuOnFermerait(vue)}
       ${ecartes > 0 ? `
         <p class="lecture-cr__mot est-douteux">
           ${ecartes} rapprochement${ecartes > 1 ? "s" : ""} ${ecartes > 1 ? "pointaient" : "pointait"}
           vers un sujet qu'on n'avait pas envoyé : ${ecartes > 1 ? "ils ont été écartés" : "il a été écarté"},
           et ${ecartes > 1 ? "ces points repartent" : "ce point repart"} comme neuf${ecartes > 1 ? "s" : ""}.
+          <strong>Il n'y a rien à faire</strong> : ${ecartes > 1 ? "ils apparaîtront" : "il apparaîtra"}
+          dans la proposition comme ${ecartes > 1 ? "des sujets à ouvrir" : "un sujet à ouvrir"}, et
+          c'est là qu'on décide — les ouvrir, ou les refuser s'ils doublent un sujet existant.
         </p>
       ` : ""}
     </section>
+  `;
+}
+
+/**
+ * Les sujets que ce compte rendu fermerait, face à ceux du projet.
+ *
+ * **Ils manquaient là où on les cherche.** Les fermetures se lisaient en bas de
+ * l'écran, dans « Ce que ce compte rendu apporterait » — c'est-à-dire loin du
+ * seul endroit où l'on compare le document au projet. Or fermer est le geste le
+ * plus lourd du procédé : il doit se voir au moment où l'on regarde ce que le
+ * projet suit.
+ */
+function renderCeQuOnFermerait(vue) {
+  const points = Array.isArray(vue?.lecture?.points) ? vue.lecture.points : [];
+  const { fermes } = fermeturesDuCompteRendu(points);
+  const disparition = sujetsDisparus({
+    confrontes: Array.isArray(vue?.confrontes) ? vue.confrontes : [],
+    sujetsDuProjet: vue?.sujetsDuProjet,
+    sujetsDuLabel: vue?.sujetsDuLabel
+  });
+  const disparus = disparition.connu ? disparition.disparus ?? [] : [];
+  if (fermes.length === 0 && disparus.length === 0) return "";
+
+  return `
+    <div class="lecture-cr__chiffres">
+      ${renderChiffre("Sujets réglés", String(fermes.length),
+        fermes.length > 0 ? "est-bon" : "",
+        "Des points que le document marque comme faits — il y a une phrase à citer, et la "
+        + "fermeture se justifie.")}
+      ${renderChiffre("Sujets qui n'y figurent plus", String(disparus.length),
+        disparus.length > 0 ? "est-douteux" : "",
+        "Des sujets suivis que ce compte rendu ne mentionne plus. <strong>La fermeture est "
+        + "déduite d'une absence</strong>, non d'une phrase : c'est le geste le plus lourd du "
+        + "procédé, et chacun se coche séparément dans la proposition. Un sujet qui revient au "
+        + "prochain compte rendu se rouvre de lui-même, avec son histoire.")}
+    </div>
   `;
 }
 
@@ -1992,11 +2113,19 @@ function renderPoint(point, sort) {
         </blockquote>
       ` : ""}
 
-      ${point.manques.length > 0 ? `
-        <p class="lecture-cr__manques mono-small">${escapeHtml(
-          point.manques.map((manque) => PHRASES_DU_MANQUE[manque] ?? manque).join(" · ")
-        )}</p>
-      ` : ""}
+      ${
+        // **Ce qui manque se compte, il ne se répète pas sur chaque ligne.**
+        // « sans citation : rien ne prouve que ce point vient du document · sans
+        // page : on ne peut pas aller vérifier » s'écrivait sous quarante points
+        // sur quarante-deux. L'avertissement cessait d'être un avertissement, et
+        // il ne disait rien qu'on puisse corriger : c'est le document qui est
+        // ainsi. Le bloc « Ce que la lecture vaut » en donne le compte, avec ce
+        // que cela coûte, et c'est le bon endroit pour en juger.
+        //
+        // Le seul manque qui se voit encore sur la ligne est la citation
+        // introuvable, juste au-dessus : elle, on peut la vérifier.
+        ""
+      }
     </div>
   `;
 }
