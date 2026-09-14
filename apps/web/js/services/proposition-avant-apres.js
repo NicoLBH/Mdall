@@ -74,11 +74,52 @@ export const CHANGEMENT_LABELS = {
  * Ce qui relève de l'intendance, et n'a pas sa place dans ce tableau.
  *
  * Un document qui entre au corpus, une affaire rattachée, un avis relevé, un
- * point de chantier proposé : ce sont des mouvements, pas des affirmations sur
- * le projet, et ils ont déjà leurs blocs. Les mêler ici ferait comparer un nom
- * de fichier à une valeur — ou un point de chantier à une zone de neige.
+ * point de chantier ouvert ou relancé, une société ajoutée, un lot ouvert, un
+ * label posé, un jalon daté : ce sont des **mouvements**, pas des affirmations
+ * sur le projet, et ils ont déjà leurs blocs. Les mêler ici ferait comparer un
+ * nom de fichier à une valeur — ou un point de chantier à une zone de neige.
+ *
+ * ## Ce que le mauvais côté coûtait
+ *
+ * Cette liste ne portait que quatre natures, et tout ce qui n'y était pas était
+ * **pris pour une affirmation**. Un compte rendu qui apportait huit relances,
+ * treize lots, quatre objectifs et deux labels produisait donc vingt-sept
+ * affirmations de mémoire — des affirmations qui, n'ayant rien à citer,
+ * faisaient échouer le contrôle « chaque affirmation dit d'où elle vient ». La
+ * fusion était retenue par un contrôle juste, sur des lignes qui n'auraient
+ * jamais dû lui être soumises, et **aucun geste n'existait pour le lever**.
+ *
+ * Trois écrans mentaient de la même cause : la pastille « Provenance
+ * incomplète » du dépôt, le contrôle requis en rouge, et un avant/après qui
+ * fabriquait une ligne de mémoire à partir d'un lot de chantier.
+ *
+ * Les sociétés y manquaient déjà, avant même ces quatre-là : le défaut
+ * attendait le premier compte rendu qui nommerait une entreprise.
+ *
+ * **Le tri se fait donc par liste close, et l'invariant est tenu par un test**
+ * (`toute nature de ITEM_TYPE est d'un côté ou de l'autre`). Une nature de plus
+ * ne peut plus tomber du mauvais côté en silence — c'est exactement ce qui
+ * vient d'arriver, et rien ne l'avait dit.
  */
-const INTENDANCE = new Set([ITEM_TYPE.DOCUMENT, ITEM_TYPE.ATTACHMENT, ITEM_TYPE.AVIS, ITEM_TYPE.SUJET]);
+const INTENDANCE = new Set([
+  ITEM_TYPE.DOCUMENT,
+  ITEM_TYPE.ATTACHMENT,
+  ITEM_TYPE.AVIS,
+  ITEM_TYPE.SUJET,
+  ITEM_TYPE.RELANCE,
+  ITEM_TYPE.INTERVENANT,
+  ITEM_TYPE.LOT,
+  ITEM_TYPE.LABEL,
+  ITEM_TYPE.OBJECTIF
+]);
+
+/**
+ * Les natures qui relèvent de l'intendance, pour qui veut le vérifier.
+ *
+ * Exportée pour le test d'invariant, et pour lui seul : ce qui compte est que
+ * la liste soit **close** et qu'on puisse le prouver.
+ */
+export const NATURES_DINTENDANCE = INTENDANCE;
 
 const typeDe = (item) => texte(item?.itemType ?? item?.item_type);
 const cleDe = (item) => texte(item?.itemKey ?? item?.item_key);

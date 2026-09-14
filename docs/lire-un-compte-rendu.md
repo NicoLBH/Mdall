@@ -1261,6 +1261,74 @@ que la deuxième a échoué serait le pire des deux mondes. Et le silence est la
 quand tout s'est fait : une notification à chaque fusion finit par ne plus être lue, et celle
 qui compte se perd avec elle.
 
+#### Ce qu'un compte rendu range n'est pas ce qu'il affirme
+
+Le premier compte rendu réel a bloqué sur un contrôle requis : *« 27 affirmations
+ne disent pas d'où elles viennent »*. Le compte tombait juste — 8 relances, 13 lots,
+4 objectifs, 2 labels — et le contrôle avait raison de bloquer. Ce n'étaient
+simplement pas des affirmations.
+
+`proposition-avant-apres.js` trie par **liste close** : ce qui n'est pas nommé
+*intendance* est pris pour une affirmation sur le projet, avec une valeur d'avant
+et une source à citer. Les quatre natures neuves n'y étaient pas. Les sociétés non
+plus, depuis plus longtemps encore.
+
+Trois écrans mentaient de la même cause :
+
+| écran | ce qu'il disait |
+| --- | --- |
+| Vérifications | un contrôle requis en rouge, sur des lignes qui ne le concernaient pas |
+| Dépôts | une pastille « Provenance incomplète » |
+| Changements | un avant/après qui fabriquait une ligne de mémoire à partir d'un lot de chantier |
+
+Un lot, un label, un jalon, une relance, une société **rangent** le projet ; ils
+n'affirment rien sur lui. Ils rejoignent donc l'intendance — et l'invariant est
+désormais tenu par un test : *toute nature nommée dans `ITEM_TYPE` relève de
+l'intendance*. Le défaut était silencieux, et c'est ce qui l'a rendu coûteux : une
+nature de plus tombait du mauvais côté sans que rien ne le dise, et le symptôme
+apparaissait trois écrans plus loin sous la forme d'une fusion impossible.
+
+#### Une couleur est une phrase
+
+Le même blocage se lisait **orange** dans le tiroir de fusion et **rouge** dans
+l'onglet Vérifications. Dans l'esprit de qui lit, l'orange dit « ce n'est pas
+parfait, et ça passe » ; le rouge dit « ça ne passe pas ». Deux promesses
+contraires sur le même fait, et c'est la fausse qu'on croyait.
+
+Le ton se décide maintenant dans `depot-controles.js`, à côté des icônes, et il
+dépend de **deux** choses — ce que le contrôle a répondu, et s'il retient la
+fusion :
+
+| état | ton | ce que l'utilisateur lit |
+| --- | --- | --- |
+| non tenu **et requis** | rouge | ça ne passe pas |
+| non tenu, non requis | orange | c'est imparfait, ça passe |
+| non vérifiable | orange | on ne sait pas |
+| tenu | vert | |
+| sans objet | gris | |
+
+Le pavé de fusion, le tiroir, la liste des contrôles, le sceau du dépôt et la
+pastille d'en-tête lisent le même `ligne.ton`. Aucun écran ne choisit plus sa
+couleur : trois écrans qui la choisiraient chacun de leur côté finiraient par se
+contredire, et c'est celui qu'on ne regarde pas qui aurait raison (règle 4).
+
+#### Ce qui reste ouvert : lever un blocage
+
+Un contrôle requis qui tombe n'a toujours **aucun geste** pour être levé. Ce
+n'était pas visible tant que le seul cas était un bug de classement ; il le
+redeviendra le jour où un compte rendu n'aura aucun numéro de point, ou qu'un PDF
+ne sera pas rapatrié.
+
+Le modèle est déjà dans l'application — le bloc des contradictions avec la
+mémoire : un compte, « N à arbitrer », deux côtés explicites, une phrase de
+doctrine. Un contrôle requis non tenu ouvrira un **arbitrage** du même patron, avec
+deux issues et jamais trois : *écarter les lignes concernées*, ou *passer outre en
+disant pourquoi*. Le second est permis — on a le droit de fusionner sans tout
+savoir — mais il s'écrit : le contrôle passera alors à « tenu par arbitrage », et
+le procès-verbal gardera la différence entre **vérifié** et **assumé** (règle 12).
+
+---
+
 ### Étape 10 — Le document se relit dans Fichiers *(à faire)*
 
 La transcription est rangée, relue, et ne se repaie pas. **Elle ne s'affiche nulle part.**

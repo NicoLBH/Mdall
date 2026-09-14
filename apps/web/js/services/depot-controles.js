@@ -69,6 +69,63 @@ export const ISSUE_LABELS = {
   [ISSUE.EN_COURS]: "En cours"
 };
 
+/**
+ * Le **ton** d'un contrôle : ce que sa couleur promet à qui la lit.
+ *
+ * ## Pourquoi il ne se déduit pas de l'issue seule
+ *
+ * Une couleur est une phrase. L'orange dit « ce n'est pas parfait, et ça
+ * passe » ; le rouge dit « ça ne passe pas ». Le tiroir de fusion peignait en
+ * orange un contrôle **requis** qui n'était pas tenu, pendant que l'onglet
+ * Vérifications lui mettait une croix rouge : deux écrans, deux promesses
+ * contraires sur le même fait, et l'utilisateur croyait pouvoir fusionner
+ * jusqu'à ce que le bouton refuse.
+ *
+ * Le ton dépend donc de **deux** choses — l'issue, et le fait que le contrôle
+ * retienne la fusion. Le même « non tenu » vaut rouge sur un contrôle requis et
+ * orange sur un contrôle qui se contente d'informer.
+ *
+ * ## Un seul endroit, comme les icônes
+ *
+ * Il vit ici, à côté de `ISSUE_ICONES`, et pour la même raison : trois écrans
+ * qui choisiraient chacun leur couleur finiraient par ne plus dire la même
+ * chose, et c'est celui qu'on ne regarde pas qui aurait raison (règle 4).
+ * L'écran ne décide d'aucune couleur — il lit `ligne.ton`.
+ */
+export const TON = {
+  /** Vert. C'est fait, ou ça n'avait pas lieu d'être fait. */
+  BON: "bon",
+  /** Rouge. Ça ne passe pas : un contrôle requis n'est pas tenu. */
+  MAUVAIS: "mauvais",
+  /** Orange. On ne sait pas, ou c'est imparfait — mais ça n'empêche pas. */
+  DOUTE: "doute",
+  /** Gris. Ça ne s'applique pas ici. */
+  NEUTRE: "neutre",
+  /** Ça tourne encore. */
+  ATTENTE: "attente"
+};
+
+/**
+ * Le ton d'un contrôle passé.
+ *
+ * @param {{issue: string, bloquant: boolean}} ligne
+ */
+export function tonDuControle({ issue = "", bloquant = false } = {}) {
+  if (issue === ISSUE.TENU) return TON.BON;
+  if (issue === ISSUE.SANS_OBJET) return TON.NEUTRE;
+  if (issue === ISSUE.EN_COURS) return TON.ATTENTE;
+
+  // **Le seul rouge de la table**, et il dit exactement une chose : la fusion
+  // est retenue. Un contrôle non tenu qui n'empêche rien reste orange — le
+  // peindre en rouge ferait chercher un blocage qui n'existe pas, et
+  // l'utilisateur cesserait de croire au rouge le jour où il en aurait besoin.
+  if (issue === ISSUE.NON_TENU) return bloquant === true ? TON.MAUVAIS : TON.DOUTE;
+
+  // Non vérifiable : ne pas savoir n'est ni un succès ni un échec, et cela ne
+  // bloque pas — c'est à l'humain de décider s'il signe sans savoir.
+  return TON.DOUTE;
+}
+
 export const ISSUE_ICONES = {
   [ISSUE.TENU]: "check",
   [ISSUE.NON_TENU]: "x",
@@ -174,13 +231,19 @@ export function passerLesControles(contexte = {}) {
       ? { issue: ISSUE.EN_COURS, phrase: "En attente de la lecture des livrables.", detail: "" }
       : (safe(() => controle.verifier(contexte)) ?? nonVerifiable("Ce contrôle n'a pas pu être passé."));
 
+    const bloquant = controle.bloquant === true;
+
     return {
       id: controle.id,
       label: controle.label,
-      bloquant: controle.bloquant === true,
+      bloquant,
       issue: rendu.issue,
       issueLabel: ISSUE_LABELS[rendu.issue] ?? rendu.issue,
       icone: ISSUE_ICONES[rendu.issue] ?? "question",
+      // La couleur se décide ici, et l'écran la lit. Trois écrans qui la
+      // choisiraient chacun de leur côté finiraient par se contredire — c'est
+      // ce qui s'est passé.
+      ton: tonDuControle({ issue: rendu.issue, bloquant }),
       phrase: texte(rendu.phrase),
       detail: texte(rendu.detail)
     };
