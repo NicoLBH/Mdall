@@ -56,8 +56,11 @@ test("une ligne d'une nature inconnue compte quand même", () => {
  */
 test("le résumé range par ce que ça engage, pas par le nombre", () => {
   const { lignes } = changementsDeLaProposition({
-    items: [item("intervenant")],
-    apports: { labels: 12, lots: 3 }
+    items: [
+      item("intervenant"),
+      ...Array.from({ length: 12 }, () => item("label")),
+      item("lot"), item("lot"), item("lot")
+    ]
   });
 
   assert.deepEqual(lignes.map((ligne) => ligne.cle),
@@ -126,29 +129,63 @@ test("une seule ligne indécise se dit au singulier", () => {
   assert.match(phraseDesIndecis(changements), /^1 ligne n'a pas encore été regardée : elle entrera telle quelle/);
 });
 
-/* ── Les apports sans ligne à eux ────────────────────────────────────────── */
+/* ── Les natures qui ont enfin une ligne ─────────────────────────────────── */
 
 /**
- * Labels, lots, objectifs, liens et situation n'ont pas de ligne dans la
- * proposition, mais entreront à la fusion avec le reste. **Les taire ferait
- * annoncer moins que ce qui va être écrit.**
+ * Labels, lots, objectifs et relances sont des **lignes** de la proposition
+ * depuis qu'ils s'y cochent. Ce test tient la place qu'ils y ont : une nature
+ * qui retomberait dans le fourre-tout des affirmations se compterait toujours,
+ * mais sous un mot qui ne dit rien de ce qu'elle engage.
+ */
+test("chaque nature du compte rendu porte son propre mot", () => {
+  const { par } = changementsDeLaProposition({
+    items: [item("label"), item("lot"), item("objectif"), item("relance")]
+  });
+
+  assert.equal(par[CHANGE.LABEL], 1);
+  assert.equal(par[CHANGE.LOT], 1);
+  assert.equal(par[CHANGE.OBJECTIF], 1);
+  assert.equal(par[CHANGE.SUJET_RELANCE], 1);
+  assert.equal(par[CHANGE.AFFIRMATION], undefined);
+});
+
+/**
+ * **Le compte ne se fait pas deux fois.** Labels, lots et objectifs passaient
+ * par `apports`, un canal parallèle où l'écran de lecture annonçait ce qu'il
+ * avait relevé. Depuis qu'ils ont des lignes, les garder des deux côtés
+ * annoncerait le double de ce qui sera écrit — et le défaut aurait été
+ * invisible, puisque les deux comptes sont justes séparément (règle 4).
+ */
+test("ce qui a une ligne ne se compte pas une seconde fois par les apports", () => {
+  const { par, total } = changementsDeLaProposition({
+    items: [item("label"), item("lot"), item("objectif")],
+    apports: { labels: 4, lots: 1, objectifs: 2 }
+  });
+
+  assert.equal(par[CHANGE.LABEL], 1);
+  assert.equal(par[CHANGE.LOT], 1);
+  assert.equal(par[CHANGE.OBJECTIF], 1);
+  assert.equal(total, 3);
+});
+
+/**
+ * Les liens et la situation, eux, n'ont **toujours pas** de ligne : ils
+ * entreront à la fusion avec le reste, et les taire ferait annoncer moins que
+ * ce qui va être écrit.
  */
 test("ce qui n'a pas de ligne compte quand même", () => {
   const { par, total } = changementsDeLaProposition({
-    items: [], apports: { labels: 4, lots: 1, objectifs: 2, liens: 3, situations: 1 }
+    items: [], apports: { liens: 3, situations: 1 }
   });
 
-  assert.equal(par[CHANGE.LABEL], 4);
-  assert.equal(par[CHANGE.LOT], 1);
-  assert.equal(par[CHANGE.OBJECTIF], 2);
   assert.equal(par[CHANGE.LIEN], 3);
   assert.equal(par[CHANGE.SITUATION], 1);
-  assert.equal(total, 11);
+  assert.equal(total, 4);
 });
 
 test("un apport à zéro ou absent ne fait pas de ligne", () => {
   const { lignes } = changementsDeLaProposition({
-    items: [], apports: { labels: 0, lots: null, objectifs: "deux" }
+    items: [], apports: { liens: 0, situations: null }
   });
   assert.deepEqual(lignes, []);
 });
@@ -161,7 +198,7 @@ test("un apport à zéro ou absent ne fait pas de ligne", () => {
  */
 test("la phrase reste au conditionnel", () => {
   const dite = phraseDesChangements(changementsDeLaProposition({
-    items: [item("sujet"), item("intervenant")], apports: { labels: 2 }
+    items: [item("sujet"), item("intervenant"), item("label"), item("label")]
   }));
 
   assert.match(dite, /porterait/);

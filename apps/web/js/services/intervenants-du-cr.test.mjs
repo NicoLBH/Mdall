@@ -243,6 +243,11 @@ test("sans rôle, rien à chercher et rien à ouvrir", () => {
 test("le numéro du compte rendu ne devient pas le nom du lot", () => {
   assert.equal(libelleDuLot("Lot 14 — ASCENSEURS"), "Ascenseurs");
   assert.equal(libelleDuLot("LOT N° 3 : Charpente bois"), "Charpente bois");
+  // **Sans le mot « lot ».** Un compte rendu écrit aussi bien « 03 — Cloisons »
+  // en tête de rubrique, et l'exiger faisait ouvrir un lot nommé
+  // « 03 — cloisons », numéro du compte rendu compris.
+  assert.equal(libelleDuLot("03 — Cloisons"), "Cloisons");
+  assert.equal(libelleDuLot("02 GROS ŒUVRE"), "Gros œuvre");
 });
 
 test("un rôle sans numéro garde ses mots", () => {

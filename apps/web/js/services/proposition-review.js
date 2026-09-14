@@ -83,7 +83,39 @@ export const ITEM_TYPE = {
    * comme les autres, acceptées ou refusées une par une, et qui entrent à la
    * fusion avec le reste.
    */
-  INTERVENANT: "intervenant"
+  INTERVENANT: "intervenant",
+  /**
+   * Un sujet **déjà ouvert** que ce compte rendu reporte.
+   *
+   * Distinct de `SUJET`, et pas par souci d'exactitude : le premier en ouvre un,
+   * le second écrit dans un fil qui existe. Les confondre ferait un second sujet
+   * au même titre, et toute l'histoire d'avant resterait dans le premier —
+   * invisible à qui lit le nouveau. C'est le défaut que la confrontation existe
+   * pour empêcher, et il se rejouerait ici.
+   */
+  RELANCE: "relance",
+  /**
+   * Un label du projet, à créer s'il n'y est pas.
+   *
+   * Il est proposé comme le reste : un label est un vocabulaire partagé, et en
+   * ajouter un au projet parce qu'un document l'a écrit est une écriture.
+   */
+  LABEL: "label",
+  /**
+   * Un lot du chantier, à ouvrir ou à activer.
+   *
+   * Un lot qu'un compte rendu nomme n'est pas une hypothèse : l'entreprise est
+   * sur le chantier, elle était à la réunion, et ses points sont dans le
+   * document. Cela reste une écriture, et elle se signe.
+   */
+  LOT: "lot",
+  /**
+   * Un jalon daté, à poser.
+   *
+   * **La date décide, pas le nom.** Un objectif nommé autrement mais daté du
+   * même jour est le même jalon : en créer un second le doublerait.
+   */
+  OBJECTIF: "objectif"
 };
 
 function item(type, key, payload) {
@@ -204,6 +236,13 @@ export function sujetItems(points = []) {
       qui: point.qui ?? null,
       echeance: point.echeance ?? null,
       etat: point.etat ?? null,
+      // Ce que le compte rendu dit de ce point-là, et de lui seul : « urgent »,
+      // « pour rappel ». C'est ce qui permet à la fusion de poser le label sur
+      // les trois points qui le portent, et non sur les quarante.
+      labels: Array.isArray(point.labels) ? point.labels : [],
+      // La date que l'échéance désigne, résolue à la lecture — quand elle l'a
+      // été. C'est par elle que la fusion accroche le sujet au bon jalon.
+      echeanceDate: point.echeanceDate ?? null,
       // La provenance voyage avec la proposition : un point se vérifie en
       // ouvrant sa page, et un sujet qu'on ne peut pas remonter à son compte
       // rendu ne se conteste plus.

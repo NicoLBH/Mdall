@@ -1991,9 +1991,10 @@ function renderSuite(vue = etat) {
   return `
     <section class="lecture-cr__suite">
       <p class="lecture-cr__mot">
-        La suite — ouvrir les nouveaux points, compléter les sujets qu'ils continuent, ajouter les
-        lots manquants, créer les labels et les objectifs — passe par <strong>Transformer</strong>,
-        en haut à droite. Rien n'est ouvert depuis cet écran.
+        La suite — ouvrir les nouveaux points, relancer les sujets que ce compte rendu reporte,
+        ajouter les lots manquants, poser les labels et les objectifs — passe par
+        <strong>Transformer</strong>, en haut à droite : la proposition les porte tous, ligne à
+        ligne, et c'est en la signant qu'ils entrent. Rien n'est ouvert depuis cet écran.
       </p>
       <p class="lecture-cr__mot">
         ${svgIcon("file", { className: "octicon" })}
@@ -2718,14 +2719,30 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
     etat.versement = { enCours: true, dit: "Rédaction de la proposition…" };
     redessiner(hote);
 
+    // Les mêmes points que ceux dont l'écran a tiré « Ce que ce compte rendu
+    // apporterait ». Les recalculer depuis une autre liste ferait promettre une
+    // chose et en proposer une autre (règle 4).
+    const points = Array.isArray(etat.lecture?.points) ? etat.lecture.points : [];
+
     const rendu = await preparerUneProposition({
       projectId: aRanger?.projectId || (await projetCourant()),
       propositionId: branche,
       titre: cr.titreDeLaProposition({ nom: etat.lecture?.nom, identite: etat.lecture?.identite }),
       intro: cr.introDuCompteRendu({ confrontes: etat.confrontes, nom: etat.lecture?.nom }),
       source: texte(etat.lecture?.nom) || "compte rendu de chantier",
+      // **Tout ce que l'écran vient de montrer**, et à partir des mêmes
+      // sources. La proposition ne portait que le document et les points neufs :
+      // les lots manquants, les labels, les objectifs et les trente-sept points
+      // reportés restaient à l'écran, sous une phrase qui promettait qu'ils
+      // entreraient. Ils n'entraient pas.
       affirmations: cr.itemsDuCompteRendu({
-        confrontes: etat.confrontes, document: range.document
+        confrontes: etat.confrontes,
+        document: range.document,
+        lots: lotsAProposer(points, etat.lots),
+        labels: labelsAProposer(points, etat.labels),
+        objectifs: objectifsAProposer(points, {
+          tenueLe: texte(etat.lecture?.identite?.tenueLe), objectifsDuProjet: etat.objectifs
+        })
       })
     });
 
