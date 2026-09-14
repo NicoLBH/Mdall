@@ -139,7 +139,7 @@ export const TON = {
  *
  * @param {{issue: string, bloquant: boolean}} ligne
  */
-export function tonDuControle({ issue = "", bloquant = false, arbitre = null } = {}) {
+export function tonDuControle({ issue = "", arbitre = null } = {}) {
   // **Ni vert ni rouge : bleu.** Un contrôle passé outre n'est pas tenu — le
   // fait qu'il constate n'a pas changé —, et il ne retient plus la fusion. Lui
   // donner le vert ferait passer une décision pour une vérification, et c'est
@@ -151,11 +151,17 @@ export function tonDuControle({ issue = "", bloquant = false, arbitre = null } =
   if (issue === ISSUE.SANS_OBJET) return TON.NEUTRE;
   if (issue === ISSUE.EN_COURS) return TON.ATTENTE;
 
-  // **Le seul rouge de la table**, et il dit exactement une chose : la fusion
-  // est retenue. Un contrôle non tenu qui n'empêche rien reste orange — le
-  // peindre en rouge ferait chercher un blocage qui n'existe pas, et
-  // l'utilisateur cesserait de croire au rouge le jour où il en aurait besoin.
-  if (issue === ISSUE.NON_TENU) return bloquant === true ? TON.MAUVAIS : TON.DOUTE;
+  // **Orange, même quand il retient la fusion.**
+  //
+  // Le rouge disait « danger » sur le travail ordinaire de cet écran : un
+  // compte rendu contredit la mémoire du projet à chaque réunion, et c'est
+  // normal — on tranche, et l'on avance. Un cercle rouge à cet endroit fait
+  // croire à une panne, et l'on cesse de croire au rouge le jour où il y en a
+  // une.
+  //
+  // Le rouge reste pour ce qui **ne se tranche pas** : une analyse qui n'a pas
+  // abouti. Là, il n'y a rien à décider, il y a quelque chose à réparer.
+  if (issue === ISSUE.NON_TENU) return TON.DOUTE;
 
   // Non vérifiable : ne pas savoir n'est ni un succès ni un échec, et cela ne
   // bloque pas — c'est à l'humain de décider s'il signe sans savoir.
@@ -190,6 +196,12 @@ export const CONTROLES = [
   {
     id: "provenance",
     label: "Chaque affirmation dit d'où elle vient",
+    // **Le nom d'un contrôle qui tombe dit ce qui ne va pas.** « Chaque
+    // affirmation dit d'où elle vient » sous une croix se lit comme un
+    // démenti : on relit deux fois pour comprendre que c'est l'inverse qui est
+    // constaté. Un contrôle tenu se nomme par ce qu'il garantit, un contrôle
+    // qui tombe par ce qu'il a trouvé.
+    labelNonTenu: "La provenance de ce dépôt n'est pas établie",
     bloquant: true,
     // Ce que ce contrôle met en cause, ligne par ligne. On ne décide pas sur un
     // nombre : « 27 affirmations » ne se corrige pas, et ne s'arbitre pas
@@ -200,12 +212,15 @@ export const CONTROLES = [
       if (depot.provenance === "verifie") {
         return tenu(`${depot.affirmations} affirmation${depot.affirmations > 1 ? "s citent" : " cite"} sa source.`);
       }
-      return nonTenu("La provenance de ce dépôt n'est pas établie.", depot.pourquoi);
+      // Le constat est dans le nom ; la phrase dit **lesquelles**, sans quoi
+      // l'écran redirait deux fois la même chose.
+      return nonTenu(texte(depot.pourquoi) || "On ne sait pas d'où viennent ses affirmations.");
     }
   },
   {
     id: "memoire",
     label: "Rien ne contredit la mémoire du projet",
+    labelNonTenu: "La mémoire du projet est contredite",
     bloquant: true,
     // **Elles se nomment, et se tranchent ici.** Le bloc qui les détaillait vit
     // dans l'onglet Dépôts ; l'arbitrage, dans les Changements. On lisait donc
@@ -249,7 +264,7 @@ export const CONTROLES = [
       };
     }),
     verifier: ({ conflits = [], blocage = "" }) => {
-      if (texte(blocage)) return nonTenu("La mémoire du projet est contredite.", blocage);
+      if (texte(blocage)) return nonTenu(blocage);
       if (conflits.length === 0) return tenu("Aucune décision passée n'est remise en cause par ce dépôt.");
       return tenu(`${conflits.length} contradiction${conflits.length > 1 ? "s ont été tranchées" : " a été tranchée"}.`);
     }
@@ -331,7 +346,12 @@ export function passerLesControles(contexte = {}) {
 
     return {
       id: controle.id,
-      label: controle.label,
+      // Un contrôle tenu se nomme par ce qu'il garantit ; un contrôle qui tombe,
+      // par ce qu'il a trouvé. Sans quoi une croix rouge coiffe la phrase
+      // « Rien ne contredit la mémoire du projet », et l'on relit deux fois.
+      label: rendu.issue === ISSUE.NON_TENU && texte(controle.labelNonTenu)
+        ? texte(controle.labelNonTenu)
+        : controle.label,
       bloquant,
       issue: rendu.issue,
       issueLabel: arbitre ? "Passé outre" : (ISSUE_LABELS[rendu.issue] ?? rendu.issue),
@@ -339,7 +359,7 @@ export function passerLesControles(contexte = {}) {
       // La couleur se décide ici, et l'écran la lit. Trois écrans qui la
       // choisiraient chacun de leur côté finiraient par se contredire — c'est
       // ce qui s'est passé.
-      ton: tonDuControle({ issue: rendu.issue, bloquant, arbitre }),
+      ton: tonDuControle({ issue: rendu.issue, arbitre }),
       phrase: texte(rendu.phrase),
       detail: texte(rendu.detail),
       // Ce que ce contrôle met en cause — **tenu ou non**, dès lors qu'il
