@@ -1218,10 +1218,15 @@ Les sept natures y sont maintenant, et chacune s'applique :
 | **les objectifs** | un jalon par date d'échéance, quand le projet ne l'a pas |
 | **les points neufs** | un sujet chacun, avec son lot, son numéro, sa page et sa citation |
 | **les points relancés** | une ligne d'activité dans le fil du sujet qui existe — datée, citée, avec sa page |
+| **les sujets fermés** | ceux que le document marque réglés, et ceux qui n'y figurent plus — deux lignes distinctes, parce que la seconde ferme sur une absence |
 
 #### L'ordre n'est pas cosmétique
 
-    les lots → les sociétés → les labels et les jalons → les sujets → les relances
+    les lots → les sociétés → les labels et les jalons → les sujets → les relances → les fermetures
+
+Les fermetures en dernier, et ce n'est pas cosmétique : un sujet reçoit d'abord ce que ce
+compte rendu en dit, puis se ferme. L'ordre inverse mettrait sa dernière activité après sa
+fermeture, et l'on lirait un fil qui continue sur un sujet clos.
 
 Un sujet ne porte un label qu'existant, ne s'accroche qu'à un jalon existant, et une société
 ne s'ajoute qu'à **un lot ouvert** — la base l'exige. Cet ordre obéit donc à des dépendances
@@ -1377,6 +1382,58 @@ Trois réponses possibles, et une seule est bonne selon le jour :
 C'est cette distinction qui fait tout l'intérêt du contrôle : sans arbitrage, on
 aurait supprimé le contrôle ; avec un arbitrage muet, on aurait cliqué sans rien
 apprendre à personne.
+
+##### Ce que le premier vrai compte rendu a montré
+
+Cinq défauts, tous du même genre : **on informait sans permettre d'agir.**
+
+**Un échec ne se nommait pas.** Le rapport d'application ne portait que des
+phrases, et trois échecs identiques donnaient trois fois « Un sujet n'a pas pu
+être rattaché à son échéance. » — sans dire lesquels, ni pourquoi, avec pour seul
+conseil « reprenez à la main » des points qu'on ne nommait pas. C'était pire que
+le silence : cela donnait l'apparence d'avoir informé. Un manque porte désormais
+le **sujet**, la **cause** telle que la base l'a écrite, et de quoi **refaire le
+geste** — les échecs se regroupent par nature, et un bouton *Reprendre* rejoue ce
+qui a raté, et rien d'autre. Rejouer l'application entière écrirait une seconde
+relance dans chaque fil où la première a réussi.
+
+**Le bandeau s'intitulait « Réponse non conservée »** sur une fusion parfaitement
+enregistrée : on lisait qu'on avait perdu sa réponse, ce qui était faux et
+alarmant. Celui qui écrit la notice dit maintenant ce qu'elle annonce.
+
+**Les fermetures étaient promises et pas portées.** L'écran de lecture affichait
+« la proposition les fermerait » sur trente-cinq sujets, et la proposition ne les
+portait pas. Elles sont maintenant une nature à elles, avec la distinction qui
+compte : *dite* quand le document l'écrit, *déduite* quand le sujet n'y figure
+plus. Deux badges, deux cases, et deux justifications différentes écrites dans le
+fil — dire « le compte rendu le dit » sur une absence serait affirmer ce qu'on
+n'a pas lu (règle 5).
+
+**Le référentiel de lecture se déclarait « non vérifiable »** alors qu'on le
+connaissait : le modèle qui a lu, et la version du procédé. Il voyage désormais
+avec l'affirmation de document, et le contrôle le lit.
+
+**L'écran de lecture prenait toute la fenêtre**, et gardait sa zone de dépôt
+au-dessus d'un document déjà lu. Il passe à la largeur normale du produit, et la
+zone laisse la place à un bouton dans l'en-tête.
+
+##### Le bloc d'arbitrage, refait comme un conflit de fusion
+
+Le premier essai empilait deux panneaux côte à côte avec un champ de texte
+toujours ouvert : lisible sur un blocage, illisible sur trois — et le champ vide
+invitait à écrire avant d'avoir décidé.
+
+GitHub résout ce problème depuis dix ans, et sa réponse tient en trois gestes :
+un **compteur dans l'en-tête du fichier**, **précédent / suivant** pour passer
+d'un conflit à l'autre, et un bouton **Marquer comme résolus** qui reste gris
+tant qu'il en reste un. Le corps porte les lignes en cause, chacune sous un
+**trait vertical rouge**, avec les deux choix en bleu juste au-dessus. « Passer
+outre » **ouvre** la zone de motif ; tant qu'on n'a pas cliqué, elle n'existe
+pas.
+
+On reprend ce vocabulaire parce que c'est celui que nos lecteurs ont déjà :
+quelqu'un qui a résolu un conflit Git sait lire cet écran sans qu'on le lui
+explique.
 
 ##### Un bouton d'essai, provisoire
 

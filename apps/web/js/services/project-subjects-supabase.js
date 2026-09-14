@@ -1606,6 +1606,63 @@ export async function updateSubjectTitle({ subjectId, title } = {}) {
   };
 }
 
+/**
+ * Ferme un sujet, avec ce qui le justifie.
+ *
+ * ## Pourquoi cette porte n'existait pas
+ *
+ * Rien ne fermait un sujet **par le code** : les fermetures se faisaient à
+ * l'écran, une par une. Un compte rendu de chantier en solde dix à chaque
+ * réunion, et l'écran de lecture l'annonçait déjà — « la proposition les
+ * fermerait » — sans que rien ne puisse le faire.
+ *
+ * ## Le motif n'est pas décoratif
+ *
+ * `closure_reason` porte **pourquoi** le sujet s'est fermé, et surtout si
+ * c'était dit ou déduit. Un sujet fermé parce qu'un document ne le mentionne
+ * plus n'est pas dans le même état qu'un sujet marqué « fait le 12/09 », et
+ * confondre les deux rendrait impossible de relire les fermetures déduites sans
+ * relire toutes les autres.
+ *
+ * Un sujet déjà fermé n'est pas retouché : le refermer écraserait le motif de
+ * la première fermeture par celui de la seconde.
+ */
+export async function closeSubject({ subjectId, reason = "" } = {}) {
+  const normalizedSubjectId = normalizeUuid(subjectId);
+  if (!normalizedSubjectId) throw new Error("subjectId is required");
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/subjects`);
+  url.searchParams.set("id", `eq.${normalizedSubjectId}`);
+  // **Seulement s'il est encore ouvert.** Sans cette borne, rejouer une fusion
+  // remplacerait le motif d'une fermeture par un autre, et la date avec.
+  url.searchParams.set("status", "eq.open");
+  url.searchParams.set("select", "id,status,closed_at,closure_reason");
+
+  const res = await fetch(url.toString(), {
+    method: "PATCH",
+    headers: await getSupabaseAuthHeaders({
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Prefer: "return=representation"
+    }),
+    body: JSON.stringify({
+      status: "closed",
+      closed_at: new Date().toISOString(),
+      closure_reason: String(reason || "").trim() || null
+    })
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`subject close failed (${res.status}): ${txt}`);
+  }
+
+  const rows = await res.json().catch(() => []);
+  // Zéro ligne : il était déjà fermé. Ce n'est pas un échec — c'est l'état
+  // qu'on voulait, et le dire comme une panne ferait chercher un problème.
+  return { id: normalizedSubjectId, dejaFerme: (Array.isArray(rows) ? rows.length : 0) === 0 };
+}
+
 export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
   const logPrefix = "[subject-description-versions]";
   const debugEnabled = isSubjectDescriptionDebugEnabled();

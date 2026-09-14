@@ -57,10 +57,28 @@ import { dateEnFrancais, nomDeLObjectif } from "./echeances-du-cr.js";
 import { libelleDuLot, groupeDuRole } from "./intervenants-du-cr.js";
 import { COULEURS_DU_LABEL, LABEL_DU_CR, LABELS_DE_QUALIFICATION, memeLabel } from "./label-du-cr.js";
 import { memeLot } from "./lots-du-cr.js";
+import { FERMETURE } from "./fermeture-du-cr.js";
 import { ITEM_TYPE } from "./proposition-review.js";
 import { ITEM } from "./proposition-state.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
+
+/**
+ * Les gestes qu'une reprise sait refaire.
+ *
+ * **Seulement ceux qui sont rejouables sans rien doubler.** Poser un label et
+ * accrocher un jalon sont des écritures idempotentes — la base les fusionne sur
+ * la clé. Écrire dans un fil ne l'est pas : rejouer une relance qui a réussi
+ * ferait un second message disant la même réunion. C'est pour cela qu'une
+ * reprise ne rejoue **que ce qui a échoué**, geste par geste, et jamais
+ * l'application entière.
+ */
+export const GESTE = {
+  LABEL: "label",
+  OBJECTIF: "objectif",
+  RELANCE: "relance",
+  FERMETURE: "fermeture"
+};
 
 /**
  * Les lignes d'une nature que la signature a retenues.
@@ -215,13 +233,40 @@ export async function portesParDefaut() {
       (await sujets.loadObjectivesForProject(projectId))?.objectives ?? [],
     creerUnObjectif: (projectId, objectif) => sujets.createObjective(projectId, objectif),
     poserUnObjectif: (objectifId, subjectId) => sujets.addSubjectToObjective(objectifId, subjectId),
-    ecrireDansLeFil: (message) => fil.createMessage(message)
+    ecrireDansLeFil: (message) => fil.createMessage(message),
+    fermerUnSujet: (fermeture) => sujets.closeSubject(fermeture)
   };
 }
 
-/** Ce qu'on n'a pas su faire, dit une fois, sans faire tomber le reste. */
-function manque(rapport, phrase) {
-  if (phrase) rapport.manques.push(phrase);
+/**
+ * Ce qu'on n'a pas su faire — nommé, expliqué, et **rejouable**.
+ *
+ * ## Trois fois la même phrase, et aucune information
+ *
+ * Le rapport ne portait que des phrases. Trois échecs identiques donnaient
+ * « Un sujet n'a pas pu être rattaché à son échéance. » trois fois de suite,
+ * sans dire **quels** sujets, ni **quelles** échéances, ni **pourquoi** — et
+ * sans rien pour recommencer. On laissait quelqu'un devant un constat qu'il ne
+ * pouvait ni comprendre ni corriger, avec pour seul conseil « reprenez à la
+ * main » sur des points qu'on ne nommait pas.
+ *
+ * Un manque porte donc trois choses de plus :
+ *
+ * - **`sujet`** — ce dont il s'agit, en clair ;
+ * - **`cause`** — ce que la base a répondu, mot pour mot. Une erreur qu'on
+ *   remplace par une phrase polie ne se diagnostique plus (règle 5) ;
+ * - **`reprise`** — de quoi refaire le geste, et lui seul. C'est ce qui rend le
+ *   bouton « Reprendre » possible : rejouer toute l'application écrirait une
+ *   seconde fois les relances déjà écrites.
+ */
+function manque(rapport, { quoi = "", sujet = "", cause = "", reprise = null } = {}) {
+  if (!quoi) return;
+  rapport.manques.push({
+    quoi,
+    sujet: texte(sujet),
+    cause: texte(cause?.message ?? cause),
+    reprise
+  });
 }
 
 /**
@@ -259,7 +304,10 @@ async function appliquerLesLots(lignes, portes, rapport) {
   // **Sans les lots du projet, on n'en ouvre aucun.** En ouvrir un par ligne
   // doublerait ceux qui existent, et personne ne nettoiera (règle 5).
   if (!Array.isArray(connus)) {
-    manque(rapport, `${lignes.length} lot(s) n'ont pas pu être ouverts : les lots du projet n'ont pas pu être lus.`);
+    manque(rapport, {
+      quoi: "Les lots du projet n'ont pas pu être lus : aucun lot n'a été ouvert.",
+      sujet: lignes.map((ligne) => texte(ligne?.payload?.intitule)).filter(Boolean).join(", ")
+    });
     return;
   }
 
@@ -285,8 +333,8 @@ async function appliquerLesLots(lignes, portes, rapport) {
         if (ouvert?.id) lots = [...lots, ouvert];
         rapport.lots.ouverts.push(intitule);
       }
-    } catch {
-      manque(rapport, `Le lot « ${intitule} » n'a pas pu être ouvert.`);
+    } catch (erreur) {
+      manque(rapport, { quoi: "Un lot n'a pas pu être ouvert", sujet: intitule, cause: erreur });
     }
   }
 }
@@ -307,7 +355,7 @@ async function appliquerLesLabels(projectId, items, portes, rapport) {
 
   const connus = (await portes.lireLesLabels?.(projectId).catch(() => null)) ?? null;
   if (!Array.isArray(connus)) {
-    manque(rapport, "Les labels du projet n'ont pas pu être lus : aucun label n'a été posé.");
+    manque(rapport, { quoi: "Les labels du projet n'ont pas pu être lus : aucun label n'a été posé." });
     return parNom;
   }
 
@@ -330,8 +378,8 @@ async function appliquerLesLabels(projectId, items, portes, rapport) {
         parNom.set(nom, cree.id);
         rapport.labels.crees.push(nom);
       }
-    } catch {
-      manque(rapport, `Le label « ${nom} » n'a pas pu être créé.`);
+    } catch (erreur) {
+      manque(rapport, { quoi: "Un label n'a pas pu être créé", sujet: nom, cause: erreur });
     }
   }
 
@@ -354,7 +402,7 @@ async function appliquerLesObjectifs(projectId, items, portes, rapport) {
 
   const connus = (await portes.lireLesObjectifs?.(projectId).catch(() => null)) ?? null;
   if (!Array.isArray(connus)) {
-    manque(rapport, "Les objectifs du projet n'ont pas pu être lus : aucun jalon n'a été posé.");
+    manque(rapport, { quoi: "Les objectifs du projet n'ont pas pu être lus : aucun jalon n'a été posé." });
     return parDate;
   }
 
@@ -376,8 +424,12 @@ async function appliquerLesObjectifs(projectId, items, portes, rapport) {
         parDate.set(date, cree.id);
         rapport.objectifs.crees.push(date);
       }
-    } catch {
-      manque(rapport, `L'objectif du ${dateEnFrancais(date) || date} n'a pas pu être créé.`);
+    } catch (erreur) {
+      manque(rapport, {
+        quoi: "Un jalon n'a pas pu être créé",
+        sujet: dateEnFrancais(date) || date,
+        cause: erreur
+      });
     }
   }
 
@@ -396,6 +448,11 @@ async function appliquerLesObjectifs(projectId, items, portes, rapport) {
  */
 async function appliquerAuxSujets({ projectId, sujets, labels, objectifs, compteRendu, portes, rapport }) {
   for (const { subjectId, point, relance } of sujets) {
+    // Le nom du sujet, pour tout ce qui pourrait échouer en dessous. Un échec
+    // qui ne nomme pas ce qu'il a raté ne se reprend pas à la main : on ne sait
+    // pas sur quoi revenir.
+    const nomDuSujet = texte(point?.titre) || subjectId;
+
     for (const nom of labelsDuSujet(point)) {
       const labelId = labels.get(nom);
       if (!labelId) continue;
@@ -403,32 +460,114 @@ async function appliquerAuxSujets({ projectId, sujets, labels, objectifs, compte
       try {
         await portes.poserUnLabel(subjectId, labelId);
         rapport.poses.labels += 1;
-      } catch {
-        manque(rapport, `Le label « ${nom} » n'a pas pu être posé sur un sujet.`);
+      } catch (erreur) {
+        manque(rapport, {
+          quoi: `Le label « ${nom} » n'a pas pu être posé`,
+          sujet: nomDuSujet,
+          cause: erreur,
+          reprise: { geste: GESTE.LABEL, subjectId, labelId, nom, sujet: nomDuSujet }
+        });
       }
     }
 
-    const objectifId = objectifs.get(texte(point?.echeanceDate));
+    const date = texte(point?.echeanceDate);
+    const objectifId = objectifs.get(date);
     if (objectifId) {
       try {
         await portes.poserUnObjectif(objectifId, subjectId);
         rapport.poses.objectifs += 1;
-      } catch {
-        manque(rapport, "Un sujet n'a pas pu être rattaché à son échéance.");
+      } catch (erreur) {
+        manque(rapport, {
+          quoi: `Un sujet n'a pas pu être rattaché à l'échéance du ${dateEnFrancais(date) || date}`,
+          sujet: nomDuSujet,
+          cause: erreur,
+          reprise: { geste: GESTE.OBJECTIF, subjectId, objectifId, date, sujet: nomDuSujet }
+        });
       }
     }
 
     if (!relance) continue;
 
+    const bodyMarkdown = messageDeRelance({ point, compteRendu });
     try {
-      await portes.ecrireDansLeFil({
-        projectId,
-        subjectId,
-        bodyMarkdown: messageDeRelance({ point, compteRendu })
-      });
+      await portes.ecrireDansLeFil({ projectId, subjectId, bodyMarkdown });
       rapport.relances += 1;
-    } catch {
-      manque(rapport, `La relance de « ${texte(point?.titre) || "un sujet"} » n'a pas pu être écrite.`);
+    } catch (erreur) {
+      manque(rapport, {
+        quoi: "La relance n'a pas pu être écrite",
+        sujet: nomDuSujet,
+        cause: erreur,
+        // Le message est **celui qu'on a tenté d'écrire**, pas un message
+        // recomposé : le recomposer à la reprise ferait dépendre le texte d'un
+        // état qui a pu bouger entre-temps (règle 4).
+        reprise: { geste: GESTE.RELANCE, subjectId, projectId, bodyMarkdown, sujet: nomDuSujet }
+      });
+    }
+  }
+}
+
+/**
+ * Ce qu'on écrit dans le fil d'un sujet qu'on ferme.
+ *
+ * **Dite ou déduite, la phrase n'est pas la même — et c'est tout l'objet.** Un
+ * sujet fermé parce que le document l'écrit se justifie par cette phrase ; un
+ * sujet fermé parce qu'il n'y figure plus se justifie par une absence. Dire
+ * « le compte rendu le dit » dans le second cas serait affirmer ce qu'on n'a
+ * pas lu (règle 5) — et c'est exactement ce qu'on ne pourrait plus démêler six
+ * mois après.
+ */
+export function motifDeLaFermeture({ payload = {}, compteRendu = "" } = {}) {
+  const nom = texte(compteRendu) || "un compte rendu de chantier";
+  const signe = texte(payload?.signe);
+
+  if (payload?.motif === FERMETURE.DEDUITE) {
+    return `Fermé d'après ${nom} : ce sujet n'y figure plus. La fermeture est déduite de son `
+      + "absence, non d'une phrase du document — il se rouvrira s'il revient.";
+  }
+
+  return `Fermé d'après ${nom}${signe ? ` : « ${signe} »` : ""}.`;
+}
+
+/**
+ * Ferme les sujets que ce compte rendu solde.
+ *
+ * **En dernier, et ce n'est pas cosmétique.** Un sujet reçoit d'abord ce que ce
+ * compte rendu en dit — son label, sa relance —, et se ferme ensuite. L'ordre
+ * inverse mettrait la dernière activité du sujet après sa fermeture, et l'on
+ * lirait un fil qui continue sur un sujet clos.
+ *
+ * La justification s'écrit **dans le fil** avant la fermeture, pour la même
+ * raison : c'est la dernière chose qu'on lira en ouvrant le sujet, et elle doit
+ * dire pourquoi il s'est fermé. Si elle échoue, on ferme quand même — le motif
+ * est aussi porté par `closure_reason`, et un sujet resté ouvert par excès de
+ * prudence est un sujet que personne ne referme.
+ */
+async function fermerLesSujets({ projectId, items, compteRendu, portes, rapport }) {
+  const lignes = retenus(items, ITEM_TYPE.FERMETURE);
+  if (lignes.length === 0) return;
+
+  for (const ligne of lignes) {
+    const payload = ligne.payload ?? {};
+    const subjectId = texte(payload?.sujetId) || texte(ligne?.itemKey);
+    const nomDuSujet = texte(payload?.titre) || subjectId;
+    if (!subjectId) continue;
+
+    const dit = motifDeLaFermeture({ payload, compteRendu });
+
+    // La justification d'abord, la fermeture ensuite : un sujet fermé dont le
+    // fil ne dirait pas pourquoi se rouvrirait à la main, faute de savoir.
+    await portes.ecrireDansLeFil({ projectId, subjectId, bodyMarkdown: dit }).catch(() => {});
+
+    try {
+      const ferme = await portes.fermerUnSujet({ subjectId, reason: dit });
+      if (ferme?.dejaFerme !== true) rapport.fermetures += 1;
+    } catch (erreur) {
+      manque(rapport, {
+        quoi: "Un sujet n'a pas pu être fermé",
+        sujet: nomDuSujet,
+        cause: erreur,
+        reprise: { geste: GESTE.FERMETURE, subjectId, motif: dit, sujet: nomDuSujet }
+      });
     }
   }
 }
@@ -459,6 +598,7 @@ export async function appliquerLeCompteRendu({
     objectifs: { crees: [] },
     poses: { labels: 0, objectifs: 0 },
     relances: 0,
+    fermetures: 0,
     manques: []
   };
 
@@ -481,23 +621,133 @@ export async function appliquerLeCompteRendu({
     rapport
   });
 
+  // Les fermetures en dernier : un sujet reçoit ce que ce compte rendu en dit,
+  // puis se ferme. L'inverse mettrait sa dernière activité après sa fermeture.
+  await fermerLesSujets({ projectId, items, compteRendu, portes: ouvertes, rapport });
+
   return rapport;
 }
 
 /**
  * Ce qu'il faut dire de l'application, quand il y a quelque chose à en dire.
  *
- * **Le silence est la bonne réponse quand tout s'est fait.** Une notification
+ * ## Ce que disait la phrase d'avant
+ *
+ * « Un sujet n'a pas pu être rattaché à son échéance. Un sujet n'a pas pu être
+ * rattaché à son échéance. Un sujet n'a pas pu être rattaché à son échéance. La
+ * fusion est faite : ces points se reprennent à la main. »
+ *
+ * Trois fois la même phrase, aucun nom, aucune cause, et un conseil
+ * inapplicable : **on ne peut pas reprendre à la main des points qu'on ne
+ * nomme pas.** C'était pire que le silence, parce que cela donnait l'apparence
+ * d'avoir informé.
+ *
+ * ## Ce qu'elle dit maintenant
+ *
+ * Les échecs se **regroupent par nature**, chacun nomme les sujets qu'il
+ * touche, et la cause de la base est reprise mot pour mot — c'est elle qui
+ * permet de diagnostiquer, et la remplacer par une phrase polie la perdrait
+ * (règle 5).
+ *
+ * **Le silence reste la bonne réponse quand tout s'est fait.** Une notification
  * qui annonce le succès à chaque fusion finit par ne plus être lue, et celle
- * qui compte — celle qui dit qu'il manque quelque chose — se perd avec elle.
+ * qui compte se perd avec elle.
  */
 export function phraseDeLApplication(rapport = null) {
   const manques = Array.isArray(rapport?.manques) ? rapport.manques : [];
   if (manques.length === 0) return "";
 
+  const parNature = new Map();
+  for (const manque of manques) {
+    const cle = `${manque.quoi}|${manque.cause}`;
+    if (!parNature.has(cle)) parNature.set(cle, { ...manque, sujets: [] });
+    if (manque.sujet) parNature.get(cle).sujets.push(manque.sujet);
+  }
+
+  const phrases = [...parNature.values()].map((groupe) => {
+    const combien = groupe.sujets.length;
+    // Trois noms suffisent à savoir de quoi on parle ; au-delà, on compte.
+    const nommes = groupe.sujets.slice(0, 3).map((nom) => `« ${nom} »`).join(", ");
+    const reste = combien > 3 ? ` et ${combien - 3} autre${combien - 3 > 1 ? "s" : ""}` : "";
+
+    return [
+      combien > 1 ? `${groupe.quoi} (${combien} fois)` : groupe.quoi,
+      nommes ? ` : ${nommes}${reste}` : "",
+      groupe.cause ? ` — ${groupe.cause}` : "",
+      "."
+    ].join("");
+  });
+
+  const rejouables = reprisesDuRapport(rapport).length;
+
   return [
-    ...manques.slice(0, 3),
-    manques.length > 3 ? `Et ${manques.length - 3} autre(s).` : "",
-    "La fusion est faite : ces points se reprennent à la main."
+    ...phrases,
+    "La fusion est faite ; rien n'est perdu.",
+    rejouables > 0
+      ? `${rejouables} de ces gestes peuvent être rejoués tels quels : « Reprendre » les refait, et eux seuls.`
+      : ""
   ].filter(Boolean).join(" ");
+}
+
+/** Les gestes qu'une reprise saurait refaire, dans l'ordre où ils ont échoué. */
+export function reprisesDuRapport(rapport = null) {
+  return (Array.isArray(rapport?.manques) ? rapport.manques : [])
+    .map((manque) => manque?.reprise)
+    .filter((reprise) => reprise && Object.values(GESTE).includes(reprise.geste));
+}
+
+/**
+ * Refaire ce qui a échoué, et **rien d'autre**.
+ *
+ * ## Pourquoi ce n'est pas « rejouer l'application »
+ *
+ * Rejouer tout écrirait une seconde relance dans chaque fil où la première a
+ * réussi : le sujet porterait deux fois la même réunion, et c'est précisément
+ * ce que le suivi doit distinguer. Une reprise ne refait donc que les gestes
+ * que le rapport a marqués comme ratés, un par un.
+ *
+ * Elle peut échouer de nouveau — la base peut refuser une seconde fois —, et
+ * elle le dit de la même façon : un rapport, avec les mêmes noms et les mêmes
+ * causes. On peut reprendre autant de fois qu'on veut ; ce qui a réussi ne se
+ * rejoue pas.
+ *
+ * @returns {Promise<{repris: number, manques: object[]}>}
+ */
+export async function reprendreCeQuiAEchoue({ reprises = [], portes = null } = {}) {
+  const rapport = { repris: 0, manques: [] };
+  const aFaire = Array.isArray(reprises) ? reprises : [];
+  if (aFaire.length === 0) return rapport;
+
+  const ouvertes = portes ?? (await portesParDefaut());
+
+  for (const reprise of aFaire) {
+    try {
+      if (reprise.geste === GESTE.LABEL) {
+        await ouvertes.poserUnLabel(reprise.subjectId, reprise.labelId);
+      } else if (reprise.geste === GESTE.OBJECTIF) {
+        await ouvertes.poserUnObjectif(reprise.objectifId, reprise.subjectId);
+      } else if (reprise.geste === GESTE.FERMETURE) {
+        await ouvertes.fermerUnSujet({ subjectId: reprise.subjectId, reason: reprise.motif });
+      } else if (reprise.geste === GESTE.RELANCE) {
+        await ouvertes.ecrireDansLeFil({
+          projectId: reprise.projectId,
+          subjectId: reprise.subjectId,
+          bodyMarkdown: reprise.bodyMarkdown
+        });
+      } else {
+        continue;
+      }
+      rapport.repris += 1;
+    } catch (erreur) {
+      manque(rapport, {
+        quoi: "Le geste a de nouveau échoué",
+        sujet: texte(reprise?.sujet) || texte(reprise?.subjectId),
+        cause: erreur,
+        // Il reste rejouable : la cause peut être passagère.
+        reprise
+      });
+    }
+  }
+
+  return rapport;
 }

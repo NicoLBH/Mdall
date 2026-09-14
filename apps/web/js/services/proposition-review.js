@@ -129,7 +129,22 @@ export const ITEM_TYPE = {
    * Sa clé est l'identifiant du contrôle passé outre : un contrôle, un
    * arbitrage, et le second remplace le premier plutôt que de s'ajouter.
    */
-  ARBITRAGE: "arbitrage"
+  ARBITRAGE: "arbitrage",
+  /**
+   * Un sujet que ce compte rendu ferme.
+   *
+   * **Deux façons de fermer, et la ligne dit laquelle.** Le document l'écrit
+   * — « fait le 12/09 » —, ou bien le sujet n'y figure plus et l'on en déduit
+   * qu'il est réglé. La seconde est une déduction, et elle se coche séparément :
+   * fermer trente-cinq sujets parce qu'un document ne les mentionne plus est le
+   * geste le plus lourd de tout ce procédé, et le seul qu'on ne puisse pas
+   * justifier par une phrase.
+   *
+   * L'écran de lecture les annonçait depuis le début — « la proposition les
+   * fermerait » — et la proposition ne les portait pas : elle promettait ce
+   * qu'elle ne faisait pas.
+   */
+  FERMETURE: "fermeture"
 };
 
 function item(type, key, payload) {
@@ -142,9 +157,15 @@ function item(type, key, payload) {
  * La clé est l'identifiant du document : il ne bouge pas, et c'est le seul
  * élément dont on soit certain qu'il désigne toujours la même chose.
  */
-export function documentItems(documents = []) {
+export function documentItems(documents = [], { luPar = "" } = {}) {
   return documents.map((document) =>
     item(ITEM_TYPE.DOCUMENT, document.id, {
+      // **Par quoi ce document a été lu.** Un compte rendu n'est pas relu par
+      // le moteur du suivi : il est lu une fois, par un modèle nommé, et cette
+      // lecture est le référentiel de tout ce que la proposition porte. Sans
+      // elle, le contrôle se déclarait « non vérifiable » sur une information
+      // qu'on avait sous la main.
+      ...(String(luPar ?? "").trim() ? { luPar: String(luPar).trim() } : {}),
       name: document.original_filename ?? document.filename ?? "Document",
       kindLabel: document.detected_kind_label ?? null,
       author: document.detected_author ?? null,

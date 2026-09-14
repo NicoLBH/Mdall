@@ -137,6 +137,7 @@ const NATURE_DE_LITEM = {
   // que rien ne puisse être refusé ligne à ligne. Ce sont des écritures : elles
   // se cochent comme le reste (règle 1).
   [ITEM_TYPE.RELANCE]: CHANGE.SUJET_RELANCE,
+  [ITEM_TYPE.FERMETURE]: CHANGE.SUJET_FERME,
   [ITEM_TYPE.LABEL]: CHANGE.LABEL,
   [ITEM_TYPE.LOT]: CHANGE.LOT,
   [ITEM_TYPE.OBJECTIF]: CHANGE.OBJECTIF

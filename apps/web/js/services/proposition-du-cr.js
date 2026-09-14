@@ -54,6 +54,7 @@
  */
 
 import { dateDeLEcheance } from "./echeances-du-cr.js";
+import { FERMETURE, fermeturesDuCompteRendu } from "./fermeture-du-cr.js";
 import { SORT } from "./lecture-du-cr.js";
 import { titreAplati } from "./sujets-du-cr.js";
 import { documentItems, ITEM_TYPE, sujetItems } from "./proposition-review.js";
@@ -250,6 +251,11 @@ export function pointsAOuvrir(confrontes = [], { leJour = "" } = {}) {
  * @param {object[]|null} [options.confrontes] la lecture confrontée aux sujets
  * @param {object|null} [options.document] le compte rendu rangé dans Fichiers
  * @param {object|null} [options.lots] ce que `lotsAProposer` a rendu
+ * @param {object|null} [options.disparition] ce que `sujetsDisparus` a rendu
+ * @param {string} [options.luPar] le vocabulaire de lecture — le modèle qui a
+ *   lu ce compte rendu, et la version du procédé. Sans lui, le contrôle « le
+ *   référentiel de lecture est connu » se déclare **non vérifiable**, ce qui
+ *   est faux : on le sait, on ne le portait simplement pas.
  * @param {object|null} [options.labels] ce que `labelsAProposer` a rendu
  * @param {object|null} [options.objectifs] ce que `objectifsAProposer` a rendu
  */
@@ -258,15 +264,21 @@ export function itemsDuCompteRendu({
   document: doc = null,
   lots = null,
   labels = null,
-  objectifs = null
+  objectifs = null,
+  disparition = null,
+  luPar = ""
 } = {}) {
   return [
-    ...(doc?.id ? documentItems([doc]) : []),
+    ...(doc?.id ? documentItems([doc], { luPar: texte(luPar) }) : []),
     ...lotItems(lots),
     ...labelItems(labels),
     ...objectifItems(objectifs),
     ...sujetItems(pointsAOuvrir(confrontes, { leJour: objectifs?.leJour })),
-    ...relanceItems(pointsARelancer(confrontes, { leJour: objectifs?.leJour }))
+    ...relanceItems(pointsARelancer(confrontes, { leJour: objectifs?.leJour })),
+    // Les fermetures en dernier : un sujet se ferme après avoir reçu ce que ce
+    // compte rendu en dit, sans quoi la dernière chose écrite dans son fil
+    // serait antérieure à sa fermeture.
+    ...fermetureItems({ confrontes, disparition })
   ];
 }
 
@@ -409,6 +421,81 @@ export function objectifItems(objectifs = []) {
       // le nombre qu'on porte, la ligne n'ayant que lui à montrer.
       points: Array.isArray(objectif?.points) ? objectif.points.length : Number(objectif?.points) || 0
     }));
+}
+
+/**
+ * Les sujets que ce compte rendu ferme.
+ *
+ * ## Ce que l'écran promettait et que la proposition ne faisait pas
+ *
+ * L'analyse annonçait « la proposition fermerait ces sujets », et la
+ * proposition ne les portait pas. Un compte rendu de chantier solde des points
+ * à chaque réunion ; les laisser ouverts fait grossir la liste sans fin, et
+ * l'on finit par ne plus la lire du tout.
+ *
+ * ## Deux façons de fermer, et elles ne se cochent pas ensemble
+ *
+ * **Dite** : le document l'écrit — « fait le 12/09 », « soldé ». Il y a une
+ * phrase à citer, et la fermeture se justifie.
+ *
+ * **Déduite** : le sujet n'apparaît plus dans ce compte rendu. Ce n'est pas
+ * « le document le dit », c'est « le document n'en parle plus » — et la
+ * différence est tout. Fermer trente-cinq sujets sur une absence est le geste
+ * le plus lourd de ce procédé, et le seul qu'aucune phrase ne justifie. Chacun
+ * est donc une ligne à part, qu'on coche ou qu'on refuse, et le payload garde
+ * **laquelle des deux** : la fusion écrit la justification dans le fil du
+ * sujet, et elle n'a pas le droit de dire « le compte rendu le dit » quand il
+ * n'en a rien dit (règle 5).
+ *
+ * Un sujet fermé par déduction se rouvrira de lui-même s'il revient au prochain
+ * compte rendu — sur le même sujet, avec toute son histoire. C'est cette
+ * réversibilité qui rend la déduction acceptable.
+ *
+ * @param {object} options
+ * @param {object[]} [options.confrontes] la lecture confrontée, pour les
+ *   fermetures que le document écrit
+ * @param {object} [options.disparition] ce que `sujetsDisparus` a rendu — on
+ *   n'en prend rien quand `connu` est faux : ne pas savoir d'où viennent les
+ *   sujets n'autorise pas à les déclarer disparus
+ */
+export function fermetureItems({ confrontes = [], disparition = null } = {}) {
+  const { fermes } = fermeturesDuCompteRendu(Array.isArray(confrontes) ? confrontes : []);
+  const vus = new Set();
+
+  const dites = fermes
+    .map((point) => ({ point, sujetId: texte(point?.sujet?.id) }))
+    // Sans sujet du projet, il n'y a rien à fermer : le point ouvrira un sujet,
+    // et un sujet qu'on ouvre fermé n'a jamais existé.
+    .filter(({ sujetId }) => sujetId && !vus.has(sujetId) && vus.add(sujetId))
+    .map(({ point, sujetId }) => affirmation(ITEM_TYPE.FERMETURE, sujetId, {
+      sujetId,
+      titre: texte(point?.titre),
+      motif: FERMETURE.DITE,
+      // La phrase du document, mot pour mot. C'est elle qui justifie la
+      // fermeture, et c'est elle qu'on écrira dans le fil du sujet.
+      signe: texte(point?.signe),
+      reference: texte(point?.reference) || null,
+      page: Number.isFinite(Number(point?.page)) ? Number(point.page) : null,
+      evidence: texte(point?.citation) || null
+    }));
+
+  const deduites = (disparition?.connu ? disparition.disparus ?? [] : [])
+    .map((sujet) => texte(sujet?.id))
+    .filter((sujetId) => sujetId && !vus.has(sujetId) && vus.add(sujetId))
+    .map((sujetId) => {
+      const sujet = (disparition.disparus ?? []).find((entree) => texte(entree?.id) === sujetId);
+      return affirmation(ITEM_TYPE.FERMETURE, sujetId, {
+        sujetId,
+        titre: texte(sujet?.title ?? sujet?.titre),
+        motif: FERMETURE.DEDUITE,
+        signe: "",
+        reference: null,
+        page: null,
+        evidence: null
+      });
+    });
+
+  return [...dites, ...deduites];
 }
 
 /**

@@ -16,9 +16,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  appliquerLeCompteRendu, labelsDuSujet, messageDeRelance, ouvrirLesLotsRetenus,
-  phraseDeLApplication, retenus, sujetsTouches
+  GESTE, appliquerLeCompteRendu, labelsDuSujet, messageDeRelance, motifDeLaFermeture,
+  ouvrirLesLotsRetenus, phraseDeLApplication, reprendreCeQuiAEchoue, reprisesDuRapport,
+  retenus, sujetsTouches
 } from "./appliquer-le-cr.js";
+import { FERMETURE } from "./fermeture-du-cr.js";
 import { LABEL_DU_CR } from "./label-du-cr.js";
 import { ITEM_TYPE } from "./proposition-review.js";
 import { ITEM } from "./proposition-state.js";
@@ -38,7 +40,7 @@ const ligne = (itemType, payload = {}, status = ITEM.PROPOSED) => ({
 function portesFeintes({ lots = [], labels = [], objectifs = [], casse = new Set() } = {}) {
   const journal = {
     lotsActives: [], lotsOuverts: [], labelsCrees: [], objectifsCrees: [],
-    labelsPoses: [], objectifsPoses: [], messages: []
+    labelsPoses: [], objectifsPoses: [], messages: [], fermes: []
   };
 
   let compteur = 0;
@@ -85,6 +87,11 @@ function portesFeintes({ lots = [], labels = [], objectifs = [], casse = new Set
       ecrireDansLeFil: async (message) => {
         peutCasser("ecrireDansLeFil");
         journal.messages.push(message);
+      },
+      fermerUnSujet: async (fermeture) => {
+        peutCasser("fermerUnSujet");
+        journal.fermes.push(fermeture);
+        return { id: fermeture.subjectId, dejaFerme: false };
       }
     }
   };
@@ -203,7 +210,7 @@ test("sans les lots du projet, aucun lot n'est ouvert, et on le dit", async () =
 
   assert.deepEqual(journal.lotsOuverts, []);
   assert.equal(rapport.manques.length, 1);
-  assert.match(rapport.manques[0], /n'ont pas pu être lus/);
+  assert.match(rapport.manques[0].quoi, /n'ont pas pu être lus/);
 });
 
 /* ── Les labels ──────────────────────────────────────────────────────────── */
@@ -374,7 +381,99 @@ test("un label qui ne se pose pas n'emporte pas la relance", async () => {
   assert.equal(journal.messages.length, 1);
   assert.equal(rapport.poses.labels, 0);
   assert.ok(rapport.manques.length > 0);
-  assert.match(phraseDeLApplication(rapport), /se reprennent à la main/);
+
+  // **La phrase nomme, explique, et propose une suite.** Celle d'avant répétait
+  // trois fois « Un sujet n'a pas pu être rattaché à son échéance. » sans dire
+  // lequel, ni pourquoi, et conseillait de « reprendre à la main » des points
+  // qu'elle ne nommait pas.
+  const dite = phraseDeLApplication(rapport);
+  assert.match(dite, /« Cloison du hall »/);
+  assert.match(dite, /la base refuse : poserUnLabel/);
+  assert.match(dite, /« Reprendre » les refait/);
+});
+
+/* ── Nommer, expliquer, reprendre ────────────────────────────────────────── */
+
+/**
+ * **Trois fois la même phrase, et aucune information.**
+ *
+ * C'est ce que le rapport rendait. Un échec se regroupe désormais par nature,
+ * nomme les sujets qu'il touche, et reprend la cause de la base mot pour mot :
+ * c'est elle qui permet de diagnostiquer, et la remplacer par une phrase polie
+ * la perdrait (règle 5).
+ */
+test("les échecs se regroupent, se nomment et disent leur cause", () => {
+  const dite = phraseDeLApplication({
+    manques: [
+      { quoi: "Un sujet n'a pas pu être rattaché à l'échéance du 12/05/2025",
+        sujet: "Chape", cause: "milestone_subject create failed (409)" },
+      { quoi: "Un sujet n'a pas pu être rattaché à l'échéance du 12/05/2025",
+        sujet: "Carrelage", cause: "milestone_subject create failed (409)" },
+      { quoi: "Un sujet n'a pas pu être rattaché à l'échéance du 12/05/2025",
+        sujet: "Étanchéité", cause: "milestone_subject create failed (409)" }
+    ]
+  });
+
+  // Une seule phrase pour les trois, et les trois noms.
+  assert.match(dite, /\(3 fois\) : « Chape », « Carrelage », « Étanchéité »/);
+  assert.match(dite, /milestone_subject create failed \(409\)/);
+  // Et jamais l'ancienne, qui conseillait de reprendre des points sans les nommer.
+  assert.doesNotMatch(dite, /ces points se reprennent à la main/);
+});
+
+/** Au-delà de trois noms, on compte : une phrase de quarante titres ne se lit pas. */
+test("au-delà de trois sujets, les autres se comptent", () => {
+  const dite = phraseDeLApplication({
+    manques: ["A", "B", "C", "D", "E"].map((sujet) => ({ quoi: "Raté", sujet, cause: "" }))
+  });
+
+  assert.match(dite, /« A », « B », « C » et 2 autres/);
+});
+
+/**
+ * **Une reprise refait ce qui a échoué, et rien d'autre.**
+ *
+ * Rejouer l'application entière écrirait une seconde relance dans chaque fil où
+ * la première a réussi : le sujet porterait deux fois la même réunion, et c'est
+ * précisément ce que le suivi doit distinguer.
+ */
+test("reprendre ne refait que les gestes ratés", async () => {
+  const { journal, portes } = portesFeintes({
+    lots: [], labels: [], objectifs: [], casse: new Set(["poserUnObjectif"])
+  });
+
+  const rapport = await appliquerLeCompteRendu({
+    projectId: "p-1", items: LES_LIGNES, ouverts: [UN_SUJET_NEUF], portes
+  });
+
+  // La relance est passée ; c'est l'accrochage au jalon qui a échoué.
+  assert.equal(journal.messages.length, 1);
+  const reprises = reprisesDuRapport(rapport);
+  assert.equal(reprises.length, 2);
+  assert.ok(reprises.every((reprise) => reprise.geste === GESTE.OBJECTIF));
+
+  // Cette fois la base accepte.
+  const seconde = portesFeintes({ lots: [], labels: [], objectifs: [] });
+  const repris = await reprendreCeQuiAEchoue({ reprises, portes: seconde.portes });
+
+  assert.equal(repris.repris, 2);
+  assert.deepEqual(repris.manques, []);
+  // **Aucun second message.** C'est tout l'objet d'une reprise ciblée.
+  assert.deepEqual(seconde.journal.messages, []);
+});
+
+/** Une reprise peut échouer de nouveau, et elle le dit de la même façon. */
+test("une reprise qui échoue reste rejouable", async () => {
+  const { portes } = portesFeintes({ casse: new Set(["poserUnObjectif"]) });
+
+  const repris = await reprendreCeQuiAEchoue({
+    reprises: [{ geste: GESTE.OBJECTIF, subjectId: "s-1", objectifId: "j-1", sujet: "Chape" }],
+    portes
+  });
+
+  assert.equal(repris.repris, 0);
+  assert.equal(repris.manques[0].sujet, "Chape");
+  assert.equal(reprisesDuRapport(repris).length, 1);
 });
 
 /**
@@ -392,4 +491,112 @@ test("quand tout s'est fait, il n'y a rien à dire", async () => {
   assert.deepEqual(rapport.manques, []);
   assert.equal(phraseDeLApplication(rapport), "");
   assert.equal(rapport.relances, 1);
+});
+
+/* ── Fermer un sujet ─────────────────────────────────────────────────────── */
+
+/**
+ * **L'écran l'annonçait, la proposition ne le faisait pas.**
+ *
+ * « La proposition les fermerait » s'affichait sur trente-cinq sujets depuis le
+ * premier jour, et rien ne les fermait. Un compte rendu solde des points à
+ * chaque réunion ; les laisser ouverts fait grossir la liste sans fin, et l'on
+ * finit par ne plus la lire du tout.
+ */
+test("un sujet soldé se ferme, avec ce qui le justifie", async () => {
+  const { journal, portes } = portesFeintes({ lots: [], labels: [], objectifs: [] });
+
+  const rapport = await appliquerLeCompteRendu({
+    projectId: "p-1",
+    items: [ligne(ITEM_TYPE.FERMETURE, {
+      sujetId: "sujet-chape", titre: "Chape", motif: FERMETURE.DITE, signe: "Fait le 12/09"
+    })],
+    compteRendu: "CR n° 12",
+    portes
+  });
+
+  assert.equal(rapport.fermetures, 1);
+  assert.equal(journal.fermes[0].subjectId, "sujet-chape");
+  assert.match(journal.fermes[0].reason, /Fait le 12\/09/);
+  // La justification est écrite dans le fil : c'est la dernière chose qu'on lit
+  // en ouvrant le sujet, et elle doit dire pourquoi il s'est fermé.
+  assert.match(journal.messages[0].bodyMarkdown, /CR n° 12/);
+});
+
+/**
+ * **Dite n'est pas déduite, et la phrase ne peut pas mentir.** Dire « le compte
+ * rendu le dit » sur un sujet qui n'y figure plus serait affirmer ce qu'on n'a
+ * pas lu (règle 5) — et c'est ce qu'on ne pourrait plus démêler six mois après.
+ */
+test("une fermeture déduite ne se justifie pas comme une fermeture écrite", () => {
+  const dite = motifDeLaFermeture({
+    payload: { motif: FERMETURE.DITE, signe: "Soldé" }, compteRendu: "CR n° 12"
+  });
+  const deduite = motifDeLaFermeture({
+    payload: { motif: FERMETURE.DEDUITE }, compteRendu: "CR n° 12"
+  });
+
+  assert.match(dite, /« Soldé »/);
+  assert.match(deduite, /n'y figure plus/);
+  assert.match(deduite, /se rouvrira s'il revient/);
+  // Jamais « le document le dit » sur une absence.
+  assert.doesNotMatch(deduite, /« /);
+});
+
+/** Une fermeture refusée ne ferme rien : c'est le sens même de la case. */
+test("une fermeture refusée ne ferme pas le sujet", async () => {
+  const { journal, portes } = portesFeintes({ lots: [], labels: [], objectifs: [] });
+
+  await appliquerLeCompteRendu({
+    projectId: "p-1",
+    items: [ligne(ITEM_TYPE.FERMETURE,
+      { sujetId: "sujet-chape", titre: "Chape", motif: FERMETURE.DEDUITE }, ITEM.REFUSED)],
+    portes
+  });
+
+  assert.deepEqual(journal.fermes, []);
+});
+
+/**
+ * **Un sujet déjà fermé n'est pas un échec.** Le refermer écraserait le motif de
+ * la première fermeture ; le signaler comme une panne ferait chercher un
+ * problème là où l'état voulu est atteint.
+ */
+test("un sujet déjà fermé ne se compte pas, et ne se plaint pas", async () => {
+  const feintes = portesFeintes({ lots: [], labels: [], objectifs: [] });
+  feintes.portes.fermerUnSujet = async ({ subjectId }) => ({ id: subjectId, dejaFerme: true });
+
+  const rapport = await appliquerLeCompteRendu({
+    projectId: "p-1",
+    items: [ligne(ITEM_TYPE.FERMETURE,
+      { sujetId: "sujet-chape", titre: "Chape", motif: FERMETURE.DITE })],
+    portes: feintes.portes
+  });
+
+  assert.equal(rapport.fermetures, 0);
+  assert.deepEqual(rapport.manques, []);
+});
+
+/**
+ * **Les fermetures viennent en dernier.** Un sujet reçoit d'abord ce que ce
+ * compte rendu en dit, puis se ferme : l'ordre inverse mettrait sa dernière
+ * activité après sa fermeture, et l'on lirait un fil qui continue sur un sujet
+ * clos.
+ */
+test("un sujet relancé puis fermé reçoit sa relance avant sa fermeture", async () => {
+  const { journal, portes } = portesFeintes({ lots: [], labels: [], objectifs: [] });
+
+  await appliquerLeCompteRendu({
+    projectId: "p-1",
+    items: [
+      ligne(ITEM_TYPE.RELANCE, { sujetId: "sujet-chape", titre: "Chape", evidence: "reste à couler" }),
+      ligne(ITEM_TYPE.FERMETURE, { sujetId: "sujet-chape", titre: "Chape", motif: FERMETURE.DITE })
+    ],
+    compteRendu: "CR n° 12",
+    portes
+  });
+
+  assert.equal(journal.messages.length, 2);
+  assert.match(journal.messages[0].bodyMarkdown, /reporte ce point/);
+  assert.match(journal.messages[1].bodyMarkdown, /Fermé d'après/);
 });
