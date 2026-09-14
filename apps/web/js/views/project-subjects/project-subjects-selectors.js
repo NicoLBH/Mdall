@@ -681,6 +681,7 @@ export function createProjectSubjectsSelectors({
 
   return {
     getChampsDesSujets,
+    getCollaborateursDuProjet,
     getSituationsDuProjet,
     getMetaDesSujets,
     getMoiDansLeProjet,

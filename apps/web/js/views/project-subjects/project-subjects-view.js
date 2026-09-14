@@ -7,20 +7,23 @@ import {
 import { TRI, motDuTri } from "../../services/tri-des-sujets.js";
 import { filterValuesOf, toggleFilter, withFilter } from "../../services/query-bar.js";
 import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
+import { avanceeDunLot, COMBIEN_RESTE_LAVANCEE } from "../../services/avancee-dun-lot.js";
+import { renderAvanceeDunLotHtml } from "../ui/avancee-dun-lot.js";
 import {
   entreeDeSelection, jalonDObjectif, pastilleDeLabel, sectionsParGroupe, tableDeSituation
 } from "./entrees-de-selection.js";
 import { bindRailResizer, followRailScroll, railWidth } from "../ui/project-rail.js";
 import {
-  NOM_DU_GROUPE_MOI, renderActionsGroupeesHtml, renderFiltreDenTeteHtml,
-  renderFormulaireDeVueHtml, renderRailDesSujetsHtml, renderRechercheDesSujetsHtml,
-  renderTableauDesVuesHtml
+  NOM_DU_GROUPE_MOI, renderActionsGroupeesHtml, renderCompteDeLaSelectionHtml,
+  renderFiltreDenTeteHtml, renderFormulaireDeVueHtml, renderRailDesSujetsHtml,
+  renderRechercheDesSujetsHtml, renderTableauDesVuesHtml
 } from "./project-subjects-recherche.js";
 import {
   actionDuMarquage, etatDeLaCaseDeTete, GROUPE, selectionApresLeTout,
   selectionApresUnClic, selectionVisible
 } from "../../services/selection-des-sujets.js";
 import { refusDeLaVue, vueAEcrire, vuePourLEcran } from "../../services/vues-des-sujets.js";
+import { nomDuCompte } from "../../services/meta-des-sujets.js";
 import { MOI, sujetsFiltres } from "../../services/champs-des-sujets.js";
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { formatObjectiveDueDateLabel } from "./project-subject-milestones.js";
@@ -102,6 +105,7 @@ export function createProjectSubjectsView(deps) {
     getCurrentSubjectsPriorityFilter,
     getCurrentSubjectsSort,
     getChampsDesSujets,
+    getCollaborateursDuProjet,
     getMetaDesSujets,
     getMoiDansLeProjet,
     getSituationsDuProjet,
@@ -349,12 +353,18 @@ function renderSubjectsAssigneesHeadHtml() {
         // sélection la viderait de ce qu'elle contient.
         ? renderActionsGroupeesHtml({ combien: cochees.length, champs: getChampsDesSujets() })
         : renderSubjectsFiltresDenTeteHtml()}
-      ${renderBoutonDeTri({
-        attribut: "subjects-sort",
-        valeur: tri === TRI.DERNIERE_ACTIVITE ? TRI.PROJET : TRI.DERNIERE_ACTIVITE,
-        actif: tri === TRI.DERNIERE_ACTIVITE,
-        titre: motDuTri(tri)
-      })}
+      ${cochees.length
+        // **Le tri s'en va aussi.** Il range la liste, et ranger la liste sous
+        // une sélection déplace sous les yeux les lignes qu'on va modifier :
+        // on ne saurait plus lesquelles sont cochées sans redescendre la
+        // colonne des cases. Et la rangée des actions a besoin de la place.
+        ? ""
+        : renderBoutonDeTri({
+          attribut: "subjects-sort",
+          valeur: tri === TRI.DERNIERE_ACTIVITE ? TRI.PROJET : TRI.DERNIERE_ACTIVITE,
+          actif: tri === TRI.DERNIERE_ACTIVITE,
+          titre: motDuTri(tri)
+        })}
     </div>
   `;
 }
@@ -693,9 +703,29 @@ function renderSousVueHtml() {
  * sujets sous lui — on voit ce que la recherche rend pendant qu'on l'écrit —,
  * et lui superposer la liste ferait deux tableaux sur un écran.
  */
+/**
+ * Les vues du projet, **avec le nom de qui les a écrites**.
+ *
+ * La base rend un `owner_id` : un compte, pas une personne. Mettre un nom
+ * dessus demande le trombinoscope du projet, que seul l'écran connaît — c'est
+ * pourquoi la traduction se fait ici, et le service se contente de porter
+ * l'identifiant tel quel.
+ *
+ * Un compte qu'on ne sait pas nommer laisse la mention absente plutôt que
+ * d'écrire « créée par » suivi d'un identifiant (règle 5).
+ */
+function vuesDuProjet() {
+  const collaborateurs = getCollaborateursDuProjet();
+
+  return (recherchesEpinglees ?? []).map(vuePourLEcran).map((vue) => ({
+    ...vue,
+    auteur: nomDuCompte({ collaborateurs, utilisateur: vue.creePar })
+  }));
+}
+
 function renderEcranDesVues() {
   const forme = store.projectSubjectsView?.vueEnCours ?? null;
-  const vues = (recherchesEpinglees ?? []).map(vuePourLEcran);
+  const vues = vuesDuProjet();
 
   if (!forme) {
     return renderTableauDesVuesHtml({
@@ -785,8 +815,20 @@ async function appliquerAuGroupe(valeur) {
   const cochees = getSelectionDesSujets();
   if (!groupe || !choisie || !cochees.length) return;
 
-  store.projectSubjectsView.groupeEnCours = true;
+  // **On dit où l'on en est.** Quarante écritures prennent plusieurs secondes,
+  // et pendant ces secondes l'écran ne bougeait pas : on recliquait, on doutait
+  // d'avoir cliqué. Une attente qui ne se voit pas se lit comme une panne.
+  const total = cochees.length;
+  let faits = 0;
+  let souci = "";
+
+  montrerLAvancee({ faits, total });
   rerenderPanels();
+
+  const unDePlus = () => {
+    faits += 1;
+    montrerLAvancee({ faits, total });
+  };
 
   try {
     if (groupe === GROUPE.MARQUAGE) {
@@ -794,8 +836,8 @@ async function appliquerAuGroupe(valeur) {
       if (action) {
         for (const id of cochees) {
           const sujet = getNestedSujet(id);
-          if (!sujet) continue;
-          await persistSubjectIssueActionToSupabase(sujet, action);
+          if (sujet) await persistSubjectIssueActionToSupabase(sujet, action);
+          unDePlus();
         }
       }
     } else {
@@ -813,16 +855,26 @@ async function appliquerAuGroupe(valeur) {
         const meta = getMetaDesSujets();
         for (const id of cochees) {
           const deja = Array.isArray(meta[id]?.[champ]) ? meta[id][champ] : [];
-          if (deja.includes(choisie)) continue;
-          await poser(id, [...deja, choisie]);
+          // Un sujet qui le porte déjà est passé, mais il est **fait** : le
+          // compter à part ferait une barre qui n'atteint jamais son bout.
+          if (!deja.includes(choisie)) await poser(id, [...deja, choisie]);
+          unDePlus();
         }
       }
     }
   } catch (error) {
     console.warn("appliquerAuGroupe failed", error);
-  } finally {
-    store.projectSubjectsView.groupeEnCours = false;
+    // **Ce qui a échoué se dit, et dit où ça s'est arrêté.** Se taire
+    // afficherait « terminé » sur un rangement fait à moitié, qu'on ne
+    // découvrirait qu'en cherchant, des semaines plus tard, pourquoi douze
+    // sujets n'ont pas le label qu'on croyait leur avoir posé (règle 5).
+    souci = `Arrêté après ${faits} sujet${faits > 1 ? "s" : ""} sur ${total}`;
   }
+
+  montrerLAvancee(
+    { faits, total, souci, fini: true },
+    souci ? COMBIEN_RESTE_LAVANCEE.SOUCI : COMBIEN_RESTE_LAVANCEE.FINI
+  );
 
   // **On relit la base.** Ce qu'on vient d'écrire porte sur quarante lignes, et
   // les redessiner depuis ce qu'on croit avoir écrit ferait afficher un
@@ -833,7 +885,7 @@ async function appliquerAuGroupe(valeur) {
 
 /** Ouvrir le formulaire, vide ou sur une vue existante. */
 function ouvrirLaFormeDeVue(id = "") {
-  const existante = (recherchesEpinglees ?? []).map(vuePourLEcran)
+  const existante = vuesDuProjet()
     .find((vue) => vue.id === String(id || "").trim());
 
   store.projectSubjectsView.vueEnCours = existante
@@ -899,7 +951,7 @@ async function enregistrerLaVue() {
   const forme = store.projectSubjectsView?.vueEnCours;
   if (!forme) return;
 
-  const vues = (recherchesEpinglees ?? []).map(vuePourLEcran);
+  const vues = vuesDuProjet();
   const refus = refusDeLaVue({
     requete: forme.requete, nom: forme.nom, vues, id: forme.id
   });
@@ -968,8 +1020,65 @@ function renderEcranDesSujets(corps, { champs = [], requete = "" } = {}) {
           <div class="project-rail-layout__content">${corps}</div>
         </div>
       </div>
+
+      ${/*
+        **La notification d'avancée a son propre hôte.** Une modification de lot
+        écrit quarante fois en base ; redessiner l'écran entier à chaque
+        écriture pour faire avancer un cercle emporterait le curseur de la barre
+        de recherche et le défilement du tableau. On n'écrit donc que dans ce
+        bloc-là, et le rendu suivant le retrouve tel que l'état le dit.
+      */""}
+      <div id="sujetsAvanceeHost">${
+        renderAvanceeDunLotHtml(laOuEnEstLeLot())}</div>
     </section>
   `;
+}
+
+/**
+ * Où en est la modification de lot en cours, ou `null`.
+ *
+ * L'état vit dans le store — ce qui se dessine ne se déduit pas de la minuterie
+ * (règle 4) —, et `avanceeDunLot` en tire ce qu'il y a à montrer.
+ */
+function laOuEnEstLeLot() {
+  const ou = store.projectSubjectsView?.avancee ?? null;
+  return ou ? avanceeDunLot(ou) : null;
+}
+
+/** De quoi effacer la notification quand elle a fini de servir. */
+let minuterieDeLAvancee = null;
+
+/**
+ * Montrer où en est le lot — **sans redessiner l'écran**.
+ *
+ * Elle est appelée une fois par sujet écrit. Passer par `rerenderPanels` ferait
+ * quarante reconstructions du panneau, et emporterait à chaque fois ce qu'on
+ * était en train de taper.
+ *
+ * @param {object|null} etat `{faits, total, souci, fini}`, ou `null` pour effacer
+ * @param {number} [efface] au bout de combien de millisecondes elle s'en va ;
+ *   `0` pour qu'elle reste
+ */
+function montrerLAvancee(etat, efface = 0) {
+  if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
+    store.projectSubjectsView = {};
+  }
+  store.projectSubjectsView.avancee = etat ?? null;
+
+  if (minuterieDeLAvancee) {
+    clearTimeout(minuterieDeLAvancee);
+    minuterieDeLAvancee = null;
+  }
+
+  const hote = document.getElementById("sujetsAvanceeHost");
+  if (hote) hote.innerHTML = renderAvanceeDunLotHtml(laOuEnEstLeLot());
+
+  if (efface > 0) {
+    minuterieDeLAvancee = setTimeout(() => {
+      minuterieDeLAvancee = null;
+      montrerLAvancee(null);
+    }, efface);
+  }
 }
 
 /** De quoi retirer les écouteurs du rail précédent, et ceux de sa poignée. */
@@ -1134,7 +1243,26 @@ async function constatDuSuivi() {
   }
 }
 
+/**
+ * Le filtre ouverts/fermés — **ou le compte de la sélection**.
+ *
+ * Les deux ne cohabitent pas. On ne filtre pas pendant qu'on range : cliquer
+ * « Fermés » sous une sélection la viderait de ce qu'elle contient, sans rien
+ * pour le dire. La colonne dit donc, à ce moment-là, la seule chose qu'on
+ * regarde avant d'agir — combien de sujets vont être modifiés, sur combien.
+ */
 function renderSubjectsStatusHeadHtml() {
+  const cochees = getSelectionDesSujets();
+  if (cochees.length) {
+    return renderCompteDeLaSelectionHtml({
+      combien: cochees.length,
+      // Le total est **ce que la requête retient**, pas la page affichée :
+      // c'est le lot dans lequel on coche, et c'est lui que « tout cocher »
+      // prendrait.
+      total: getFilteredFlatSubjects().length
+    });
+  }
+
   const current = getCurrentSubjectsStatusFilter();
   const query = String(store.situationsView.search || "").trim().toLowerCase();
   const counts = getSubjectsStatusCounts(query);

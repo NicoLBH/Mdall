@@ -224,8 +224,38 @@ test("cliquer une lecture ramène à la liste des sujets", () => {
  * Le formulaire d'une vue tient le tableau sous lui : le laisser ouvert ferait
  * poser la requête dans une vue qu'on est en train d'écrire.
  */
-test("cliquer une lecture ferme le formulaire d'une vue", () => {
-  assert.equal(ecranApresUneLecture({ requete: "" }).vueEnCours, null);
+test("cliquer une lecture du rail ferme le formulaire d'une vue", () => {
+  assert.equal(ecranApresUneLecture({ requete: "", formeOuverte: true }).fermerLaForme, true);
+});
+
+/**
+ * **Le défaut que celui-là avait créé.** Les menus de filtre de l'en-tête
+ * posent leur valeur par le même geste que le rail : cocher « CR chantier »
+ * écrit `label:cr-chantier` dans la requête. Traité comme une lecture du rail,
+ * il refermait le formulaire qu'on remplissait et renvoyait à la liste de tous
+ * les sujets — au moment précis où l'on composait la requête de sa vue.
+ */
+test("un filtre posé sous le formulaire d'une vue l'y laisse", () => {
+  const suivant = ecranApresUneLecture({
+    requete: "label:cr-chantier", depuis: "tableau", sousVue: "vues", formeOuverte: true
+  });
+
+  assert.equal(suivant.requete, "label:cr-chantier");
+  assert.equal(suivant.sousVue, "vues", "le formulaire d'une vue a été quitté");
+  assert.equal(suivant.tableauSeul, false);
+  assert.equal(suivant.fermerLaForme, false);
+});
+
+/**
+ * Hors formulaire, un filtre de l'en-tête se pose sur la liste : c'est déjà là
+ * qu'on est, et rien ne change d'écran.
+ */
+test("un filtre posé sans formulaire ouvert ne change pas d'écran", () => {
+  const suivant = ecranApresUneLecture({ requete: "label:cr", depuis: "tableau" });
+
+  assert.equal(suivant.sousVue, "subjects");
+  assert.equal(suivant.tableauSeul, true);
+  assert.equal(suivant.fermerLaForme, true);
 });
 
 /** « Sujets » pose la requête vide : c'est ce qui efface tous les filtres. */

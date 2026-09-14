@@ -137,11 +137,26 @@ export function selectionVisible({ selection = [], visibles = [] } = {}) {
 /**
  * Ce qu'on dit d'une sélection, en une phrase.
  *
- * Le nombre est **ce qui va être modifié** : c'est la seule chose qu'on
- * regarde avant de cliquer une action de groupe.
+ * ## Pourquoi le total y est, et pourquoi la phrase est courte
+ *
+ * Le nombre coché est **ce qui va être modifié** : c'est la seule chose qu'on
+ * regarde avant de cliquer une action de groupe. Seul, il ne dit pas s'il
+ * couvre la liste ou une poignée de lignes — « 2 sujets sélectionnés » se lit
+ * pareil sur trois sujets et sur deux cents. Le total le dit d'un coup.
+ *
+ * La forme est condensée parce que la place est celle d'un filtre d'en-tête :
+ * la phrase longue y poussait les boutons d'action hors de la ligne.
+ *
+ * L'accord suit le nombre coché, pas le total : c'est de lui qu'on parle.
  */
-export function phraseDeLaSelection(combien = 0) {
-  const nombre = Math.max(0, Number(combien) || 0);
+export function phraseDeLaSelection({ combien = 0, total = 0 } = {}) {
+  const nombre = Math.max(0, Math.trunc(Number(combien) || 0));
   if (nombre === 0) return "";
-  return `${nombre} sujet${nombre > 1 ? "s" : ""} sélectionné${nombre > 1 ? "s" : ""}`;
+
+  // **Le total ne peut pas être plus petit que ce qui est coché.** Il arrive
+  // que la liste ait déjà changé sous la sélection ; écrire « 3/1 » ferait
+  // douter du compte entier plutôt que de la seconde qui manque.
+  const enTout = Math.max(nombre, Math.trunc(Number(total) || 0));
+
+  return `${nombre}/${enTout} sélectionné${nombre > 1 ? "s" : ""}`;
 }

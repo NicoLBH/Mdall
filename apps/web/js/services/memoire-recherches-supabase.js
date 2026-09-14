@@ -30,7 +30,11 @@
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 
 const SUPABASE_URL = getSupabaseUrl();
-const COLUMNS = "id,project_id,query,title,description,icon,color,surface,rail,created_at";
+// `owner_id` et `updated_at` sont **lus, jamais écrits d'ici** : la base les
+// pose elle-même (`default auth.uid()`, `default now()`). L'écran des vues en a
+// besoin pour dire de qui vient une vue et quand elle a bougé — sans quoi une
+// liste de douze vues ne se distingue plus que par son nom.
+const COLUMNS = "id,project_id,owner_id,query,title,description,icon,color,surface,rail,created_at,updated_at";
 
 /**
  * L'écran d'où vient une épingle.
@@ -100,7 +104,12 @@ export function recherchePourLEcran(ligne = {}) {
     // elle ne monte au rail que lorsqu'on l'y met, parce que le rail est court
     // et qu'une vue de plus y coûte une place à celles qu'on regarde tous les
     // jours.
-    auRail: ligne.rail === true
+    auRail: ligne.rail === true,
+    // Le compte qui l'a écrite et la dernière fois qu'elle a bougé, tels quels :
+    // c'est l'écran qui met un nom sur un compte, lui seul connaissant le
+    // trombinoscope du projet.
+    creePar: texte(ligne.owner_id),
+    miseAJour: texte(ligne.updated_at)
   };
 }
 

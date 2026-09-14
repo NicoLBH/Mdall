@@ -105,7 +105,65 @@ export function vuePourLEcran(ligne = {}) {
     // **Enregistrée et épinglée sont deux choses.** Une vue vit sur son écran ;
     // elle ne monte au rail que lorsqu'on l'y met. Le rail est court, et une
     // vue de plus y coûte une place à celles qu'on regarde tous les jours.
-    auRail: (ligne.rail ?? ligne.auRail) === true
+    auRail: (ligne.rail ?? ligne.auRail) === true,
+    // Le compte qui l'a écrite, et la dernière fois qu'elle a bougé. Ce sont
+    // des identifiants et une date brute : c'est l'écran qui sait mettre un nom
+    // sur un compte, parce que lui seul connaît le trombinoscope du projet.
+    creePar: texte(ligne.owner_id ?? ligne.creePar),
+    miseAJour: texte(ligne.updated_at ?? ligne.miseAJour)
+  };
+}
+
+/**
+ * Les mois, écrits.
+ *
+ * **En toutes lettres, et pas en chiffres.** « 03/04 » se lit comme le 3 avril
+ * d'un côté de l'Atlantique et le 4 mars de l'autre ; sur une liste qu'on
+ * parcourt des yeux, la confusion ne se remarque même pas.
+ */
+export const MOIS = [
+  "janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre"
+];
+
+/**
+ * Une date de la base, écrite en français — ou `""` si ce n'en est pas une.
+ *
+ * `""` et non « date inconnue » : la ligne se contente alors de ne pas la dire.
+ * Inventer une date, même vague, ferait croire à une mise à jour qui n'a pas eu
+ * lieu (`docs/fondamentaux.md`, règle 5).
+ */
+export function dateEnFrancais(quand) {
+  const dite = texte(quand);
+  if (!dite) return "";
+
+  const date = new Date(dite);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return `${date.getDate()} ${MOIS[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+/**
+ * Ce que la ligne grise d'une vue dit d'elle.
+ *
+ * ## Pourquoi ces trois-là, et pas la requête
+ *
+ * La requête y était, et elle ne servait à rien : on la relit pour retrouver ce
+ * qu'on a déjà nommé au-dessus. Ce qu'on cherche sur cette ligne, c'est **de
+ * qui elle vient, si elle est à jour, et si elle est dans le rail** — les trois
+ * choses qui décident si on l'ouvre, si on la modifie ou si on la supprime.
+ *
+ * Chaque morceau manque plutôt que de mentir : un compte qu'on ne sait pas
+ * nommer, une date qu'on n'a pas, et la ligne les passe (règle 5).
+ */
+export function motsDeLaVue({ auteur = "", miseAJour = "", auRail = false } = {}) {
+  const quand = dateEnFrancais(miseAJour);
+  const nom = texte(auteur);
+
+  return {
+    auteur: nom ? `créée par ${nom}` : "",
+    miseAJour: quand ? `Dernière mise à jour le ${quand}` : "",
+    epinglee: auRail === true
   };
 }
 

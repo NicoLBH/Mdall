@@ -81,8 +81,24 @@ test("chaque marquage porte l'action que l'écran connaît déjà", () => {
   assert.equal(actionDuMarquage("effacer"), "", "un marquage inventé n'a pas d'action");
 });
 
-test("le nombre sélectionné se dit, et rien ne se dit à zéro", () => {
-  assert.equal(phraseDeLaSelection(0), "");
-  assert.equal(phraseDeLaSelection(1), "1 sujet sélectionné");
-  assert.equal(phraseDeLaSelection(12), "12 sujets sélectionnés");
+/**
+ * **Le coché sur le total, et l'accord sur le coché.** Le nombre seul se lit
+ * pareil sur trois sujets et sur deux cents ; ce qu'on veut savoir avant de
+ * cliquer une action de groupe, c'est la part de la liste qu'on va modifier.
+ */
+test("le nombre sélectionné se dit sur le total, et rien ne se dit à zéro", () => {
+  assert.equal(phraseDeLaSelection({ combien: 0, total: 23 }), "");
+  assert.equal(phraseDeLaSelection({ combien: 1, total: 23 }), "1/23 sélectionné");
+  assert.equal(phraseDeLaSelection({ combien: 2, total: 23 }), "2/23 sélectionnés");
+  assert.equal(phraseDeLaSelection({ combien: 23, total: 23 }), "23/23 sélectionnés");
+  assert.equal(phraseDeLaSelection(), "");
+});
+
+/**
+ * La liste peut avoir changé sous la sélection entre deux rendus. Écrire
+ * « 3/1 » ferait douter du compte entier plutôt que de la seconde qui manque.
+ */
+test("le total ne descend jamais sous ce qui est coché", () => {
+  assert.equal(phraseDeLaSelection({ combien: 3, total: 1 }), "3/3 sélectionnés");
+  assert.equal(phraseDeLaSelection({ combien: 3, total: 0 }), "3/3 sélectionnés");
 });

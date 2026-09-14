@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 
 import {
   COULEURS_DE_VUE, COULEUR_PAR_DEFAUT, ICONES_DE_VUE, ICONE_PAR_DEFAUT, PHRASES_DU_REFUS, REFUS,
-  couleurDeLaVue, iconeDeLaVue, phraseDesVues, phraseDuRefus, refusDeLaVue, vueAEcrire, vuePourLEcran
-
+  couleurDeLaVue, dateEnFrancais, iconeDeLaVue, motsDeLaVue, phraseDesVues, phraseDuRefus,
+  refusDeLaVue, vueAEcrire, vuePourLEcran
 } from "./vues-des-sujets.js";
 
 /* ── L'habit ─────────────────────────────────────────────────────────────── */
@@ -174,4 +174,59 @@ test("une vue sans icône prend le marque-page", () => {
   assert.equal(iconeDeLaVue("une-icone-inventee"), "bookmark");
   assert.ok(ICONES_DE_VUE.includes("bookmark"));
   assert.equal(ICONES_DE_VUE[0], "bookmark", "la première proposée est celle par défaut");
+});
+
+/* ── Qui l'a écrite, et quand elle a bougé ───────────────────────────────── */
+
+/**
+ * **En toutes lettres, et pas en chiffres.** « 03/04 » se lit comme le 3 avril
+ * d'un côté de l'Atlantique et le 4 mars de l'autre ; sur une liste qu'on
+ * parcourt des yeux, la confusion ne se remarque même pas.
+ */
+test("une date de la base s'écrit en français", () => {
+  assert.equal(dateEnFrancais("2026-03-12T09:30:00Z"), "12 mars 2026");
+  assert.equal(dateEnFrancais("2026-08-01T00:00:00Z"), "1 août 2026");
+});
+
+/**
+ * `""` et non « date inconnue » : inventer une date, même vague, ferait croire
+ * à une mise à jour qui n'a pas eu lieu (règle 5).
+ */
+test("ce qui n'est pas une date ne rend rien", () => {
+  assert.equal(dateEnFrancais(""), "");
+  assert.equal(dateEnFrancais("un jour"), "");
+  assert.equal(dateEnFrancais(null), "");
+});
+
+test("la ligne grise dit qui, quand, et l'épingle", () => {
+  const mots = motsDeLaVue({
+    auteur: "Camille ROUX", miseAJour: "2026-03-12T09:30:00Z", auRail: true
+  });
+
+  assert.equal(mots.auteur, "créée par Camille ROUX");
+  assert.equal(mots.miseAJour, "Dernière mise à jour le 12 mars 2026");
+  assert.equal(mots.epinglee, true);
+});
+
+/** Chaque morceau manque plutôt que de mentir. */
+test("ce qu'on ne sait pas ne se dit pas", () => {
+  const mots = motsDeLaVue({});
+
+  assert.equal(mots.auteur, "");
+  assert.equal(mots.miseAJour, "");
+  assert.equal(mots.epinglee, false);
+});
+
+/**
+ * Le compte et la date voyagent tels quels : c'est l'écran qui met un nom sur
+ * un compte, lui seul connaissant le trombinoscope du projet.
+ */
+test("une ligne de la base porte son compte et sa date", () => {
+  const vue = vuePourLEcran({
+    id: "v1", query: "priorité:haute",
+    owner_id: "u-1", updated_at: "2026-03-12T09:30:00Z"
+  });
+
+  assert.equal(vue.creePar, "u-1");
+  assert.equal(vue.miseAJour, "2026-03-12T09:30:00Z");
 });

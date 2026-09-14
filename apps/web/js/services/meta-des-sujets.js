@@ -94,6 +94,30 @@ export function moiDansLeProjet({ collaborateurs = [], utilisateur = "" } = {}) 
 }
 
 /**
+ * Comment s'appelle un compte, **dans ce projet**.
+ *
+ * `""` quand on ne sait pas — le trombinoscope n'est pas encore chargé, ou ce
+ * compte n'y figure pas. C'est une réponse, et l'écran passe la mention plutôt
+ * que d'écrire « créée par » suivi d'un identifiant que personne ne reconnaît
+ * (`docs/fondamentaux.md`, règle 5).
+ *
+ * **Deux espaces d'identifiants, et c'est ici qu'ils se rejoignent.** Un compte
+ * (`owner_id`, `auth.uid()`) n'est pas une personne du trombinoscope
+ * (`directory_people.id`) : c'est le lien du collaborateur qui les rapproche, et
+ * les confondre a déjà vidé des filtres entiers.
+ */
+export function nomDuCompte({ collaborateurs = [], utilisateur = "" } = {}) {
+  const compte = texte(utilisateur);
+  if (!compte) return "";
+
+  const trouve = (Array.isArray(collaborateurs) ? collaborateurs : [])
+    .map(personne)
+    .find((sien) => sien.utilisateur === compte);
+
+  return trouve ? trouve.nom : "";
+}
+
+/**
  * Les personnes du projet, pour le vocabulaire de la barre.
  *
  * **Elles viennent du trombinoscope, et non des sujets.** Les tirer des

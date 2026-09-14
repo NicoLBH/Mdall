@@ -11,9 +11,9 @@ import assert from "node:assert/strict";
 import { champsDesSujets } from "../../services/champs-des-sujets.js";
 import { LECTURE, NOMS_DE_LA_LECTURE } from "../../services/rail-des-sujets.js";
 import {
-  renderActionsGroupeesHtml, renderChoixDeLHabitHtml, renderFiltreDenTeteHtml,
-  renderFormulaireDeVueHtml,
-  renderRailDesSujetsHtml, renderRechercheDesSujetsHtml, renderTableauDesVuesHtml
+  renderActionsGroupeesHtml, renderChoixDeLHabitHtml, renderCompteDeLaSelectionHtml,
+  renderFiltreDenTeteHtml, renderFormulaireDeVueHtml, renderRailDesSujetsHtml,
+  renderRechercheDesSujetsHtml, renderTableauDesVuesHtml
 } from "./project-subjects-recherche.js";
 import { ATTRIBUTS_ECOUTES, GESTE, gesteDesSujets } from "../../services/gestes-des-sujets.js";
 
@@ -623,7 +623,8 @@ test("chaque icône du rail vient du jeu de l'application", async () => {
 const UNE_VUE = {
   id: "v1", requete: "priorité:haute", nom: "Les urgences",
   description: "Ce qui ne peut pas attendre",
-  icone: "alert", couleur: { cle: "rouge", valeur: "#f85149", nom: "Rouge" }
+  icone: "alert", couleur: { cle: "rouge", valeur: "#f85149", nom: "Rouge" },
+  auteur: "Camille ROUX", miseAJour: "2026-03-12T09:30:00Z"
 };
 
 /**
@@ -636,12 +637,52 @@ test("le tableau des vues montre ce que chacune retient", () => {
 
   assert.match(html, /Les urgences/);
   assert.match(html, /Ce qui ne peut pas attendre/);
-  // **Lisible, et pas seulement portée par l'attribut.** Chercher la requête
-  // n'importe où dans le HTML la trouve dans `data-sujets-lecture` : le test
-  // passait alors que rien ne s'affichait.
-  assert.match(html, /sujets-vues__requete mono-small">priorité:haute</);
   assert.match(html, /#f85149/);
   assert.match(html, /data-sujets-lecture="priorité:haute"/);
+});
+
+/**
+ * **Le titre reprend les classes du tableau des sujets.** Un titre et sa ligne
+ * grise se présentent pareil partout ; les redessiner ici sous d'autres noms
+ * ferait deux écritures du même dessin, et la seconde divergerait au premier
+ * réglage (règle 10).
+ */
+test("le titre d'une vue porte les classes de titre du tableau des sujets", () => {
+  const html = renderTableauDesVuesHtml({ vues: [UNE_VUE] });
+
+  assert.match(html, /class="sujets-vues__nom row-title-trigger theme-text">Les urgences</);
+  assert.match(html, /issue-row-title-grid__title issue-row-subject-title-line/);
+});
+
+/**
+ * **Ce qu'on cherche sur la ligne grise** : de qui vient la vue, si elle est à
+ * jour, et si elle est au rail. La requête y était et ne servait à rien — on la
+ * relisait pour retrouver ce qui est nommé juste au-dessus.
+ */
+test("la ligne grise dit qui, quand, et l'épingle", () => {
+  const html = renderTableauDesVuesHtml({ vues: [{ ...UNE_VUE, auRail: true }] });
+
+  assert.match(html, /créée par Camille ROUX/);
+  assert.match(html, /Dernière mise à jour le 12 mars 2026/);
+  assert.match(html, /icons\.svg#pin/);
+  assert.match(html, /Épinglée/);
+  assert.match(html, /issue-row-meta-text mono-small/);
+  assert.doesNotMatch(html, /sujets-vues__requete/, "la requête a quitté la ligne grise");
+});
+
+/**
+ * Un compte qu'on ne sait pas nommer et une date qu'on n'a pas sont **passés**,
+ * pas remplacés par un tiret : inventer une mise à jour ferait croire à une
+ * modification qui n'a pas eu lieu (règle 5).
+ */
+test("ce qu'on ne sait pas ne s'écrit pas", () => {
+  const html = renderTableauDesVuesHtml({
+    vues: [{ ...UNE_VUE, auteur: "", miseAJour: "", auRail: false }]
+  });
+
+  assert.doesNotMatch(html, /créée par/);
+  assert.doesNotMatch(html, /Dernière mise à jour/);
+  assert.doesNotMatch(html, /sujets-vues__ligne-grise/);
 });
 
 /**
@@ -835,15 +876,29 @@ test("rien de coché : aucune action de groupe", () => {
   assert.equal(renderActionsGroupeesHtml({ combien: 0, champs }), "");
 });
 
-test("des sujets cochés : cinq menus, et le compte", () => {
+test("des sujets cochés : les menus, et rien que les menus", () => {
   const html = renderActionsGroupeesHtml({ combien: 3, champs });
 
-  assert.match(html, /3 sujets sélectionnés/);
   for (const nom of ["Marquer comme", "Labels", "Assigné à", "Objectifs"]) {
     assert.ok(html.includes(nom), `« ${nom} » manque aux actions de groupe`);
   }
   // Le projet du décor n'a pas de situation : le menu ne se dessine pas vide.
   assert.doesNotMatch(html, /Situations/);
+  // **Le compte n'est pas ici.** Il prend la place du filtre ouverts/fermés, à
+  // l'autre bout de l'en-tête : écrit au milieu des boutons, il les poussait
+  // hors de la ligne.
+  assert.doesNotMatch(html, /sélectionné/);
+});
+
+/**
+ * Le compte prend la place du filtre ouverts/fermés : on ne filtre pas pendant
+ * qu'on range, et c'est la seule chose qu'on regarde avant d'agir — combien de
+ * sujets vont être modifiés, sur combien.
+ */
+test("le compte de la sélection se dit sur le total", () => {
+  assert.match(renderCompteDeLaSelectionHtml({ combien: 1, total: 23 }), /1\/23 sélectionné</);
+  assert.match(renderCompteDeLaSelectionHtml({ combien: 2, total: 23 }), /2\/23 sélectionnés</);
+  assert.equal(renderCompteDeLaSelectionHtml({ combien: 0, total: 23 }), "");
 });
 
 /**
