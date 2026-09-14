@@ -4786,11 +4786,21 @@ body.route--project .project-shell{
 .project-view-header-host{
   flex:0 0 auto;
 }
+/* **Vide, elle n'a pas de boîte.**
+   Cette bande est posée hors de la mise en page du rail, sur toute la largeur
+   de la fenêtre, et au-dessus de lui : le rail passait dessous, et son premier
+   bouton — « Sujets » — n'était plus cliquable. On cliquait dans une bande sans
+   rien dedans qui le recouvrait.
+   L'écran des sujets a descendu tout ce qu'elle portait dans la colonne du
+   tableau ; `:empty` lui retire alors sa boîte, donc son ombre sur le rail. Un
+   écran qui y remettrait quelque chose devra d'abord se demander où passe le
+   rail. */
 .project-situations-toolbar-host{
   flex:0 0 auto;
   position:relative;
   z-index:30;
 }
+.project-situations-toolbar-host:empty{ display:none; }
 .project-shell__content{
   flex:1 1 auto;
   min-height:0;
@@ -24619,8 +24629,14 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   min-width:0;
 }
 .sujets-vue-titre__icone{ display:inline-flex; flex:0 0 auto; }
+.sujets-vue-titre__icone .octicon{ width:20px; height:20px; }
+/* **La même taille que les autres titres d'écran.** Une vue s'annonce comme
+   « Labels » ou « Objectifs » s'annoncent : c'est le nom de ce qu'on regarde,
+   et lui donner sa propre taille ferait deux façons de titrer un écran. Seule
+   l'icône colorée la distingue — c'est ce qu'elle est là pour faire. */
 .sujets-vue-titre__nom{
-  font-size:16px;
+  font-size:20px;
+  line-height:1.2;
   font-weight:600;
   color:var(--text);
   overflow:hidden;
@@ -24642,6 +24658,67 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   padding:0;
 }
 .sujets-vue-gestes .sujets-vues__menu{ top:calc(100% + 6px); right:0; left:auto; }
+
+
+/* ── Les vues épinglées quand le rail est replié ─────────────────────────── */
+
+/* Replié, le rail ne montre que des icônes. Celles des lectures sont les mêmes
+   pour tout le monde et s'apprennent une fois ; celles des vues sont choisies
+   par qui les crée, et douze vues faisaient douze pastilles de couleur sans un
+   mot. Une épingle les tient toutes, et le menu les nomme. */
+.sujets-rail__epingles{ position:relative; display:flex; justify-content:center; padding:2px 0; }
+.sujets-rail__epingles-bouton{
+  display:inline-flex;
+  align-items:center;
+  gap:2px;
+  padding:6px 4px;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+}
+.sujets-rail__epingles-bouton:hover,
+.sujets-rail__epingles-bouton.est-ouvert{ background:rgba(110,118,129,.16); color:var(--text); }
+/* Le chevron dit qu'il y a quelque chose dessous — sans lui, l'épingle se lit
+   comme un bouton qui épingle. */
+.sujets-rail__epingles-caret{ width:10px; height:10px; opacity:.7; }
+
+/* Les bords plus arrondis que les autres menus : celui-ci sort d'un rail
+   étroit, et flotte seul au milieu de l'écran. */
+.sujets-rail__epingles-liste{
+  position:absolute;
+  top:0;
+  left:calc(100% + 6px);
+  min-width:200px;
+  z-index:1000;
+  display:block;
+  padding:8px;
+  border-radius:12px;
+}
+.sujets-rail__epingles-liste[hidden]{ display:none; }
+.sujets-rail__epingles-intitule{
+  margin:2px 8px 6px;
+  font-size:12px;
+  color:var(--muted);
+}
+.sujets-rail__epingles-liste .gh-menu__item{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  width:100%;
+  padding:6px 8px;
+  border:0;
+  border-radius:8px;
+  background:none;
+  color:inherit;
+  font-size:13px;
+  text-align:left;
+  white-space:nowrap;
+  cursor:pointer;
+}
+.sujets-rail__epingles-liste .gh-menu__item:hover{ background:var(--surface-hover); }
+.sujets-rail__epingles-liste .gh-menu__item.est-active{ color:var(--accent); }
 
 
 /* ── La notification d'avancée d'un lot ──────────────────────────────────── */

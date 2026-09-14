@@ -57,6 +57,8 @@ export const GESTE = {
   VUE_ENREGISTRER: "vue_enregistrer",
   /** Ouvrir le menu d'une ligne du tableau des vues. */
   VUE_MENU: "vue_menu",
+  /** Rail replié : ouvrir la liste des vues épinglées, ou la refermer. */
+  EPINGLES_MENU: "epingles_menu",
   /** Épingler cette vue au rail, ou l'en retirer. */
   VUE_EPINGLER: "vue_epingler",
   /** Rouvrir le formulaire d'une vue enregistrée, pour la modifier. */
@@ -88,6 +90,7 @@ const ATTRIBUTS = [
   ["data-sujets-cocher", GESTE.COCHER],
   ["data-sujets-groupe", GESTE.GROUPE],
   ["data-sujets-derailler", GESTE.DERAILLER],
+  ["data-sujets-epingles-menu", GESTE.EPINGLES_MENU],
   ["data-sujets-vue-epingler", GESTE.VUE_EPINGLER],
   ["data-sujets-vue-modifier", GESTE.VUE_MODIFIER],
   ["data-sujets-vue-menu", GESTE.VUE_MENU],

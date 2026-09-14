@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 
 import {
   COULEURS_DE_VUE, COULEUR_PAR_DEFAUT, ICONES_DE_VUE, ICONE_PAR_DEFAUT, PHRASES_DU_REFUS, REFUS,
-  couleurDeLaVue, dateEnFrancais, gestesDeLaVue, iconeDeLaVue, motsDeLaVue, phraseDesVues,
-  phraseDuRefus, refusDeLaVue, vueAEcrire, vuePourLEcran, vueRegardee
+  couleurDeLaVue, dateEnFrancais, gestesDeLaVue, iconeDeLaVue, laLectureDoublee, motsDeLaVue,
+  phraseDesVues, phraseDuRefus, refusDeLaVue, vueAEcrire, vuePourLEcran, vueRegardee
 } from "./vues-des-sujets.js";
 /**
  * **Une vue arrive par la base, jamais à la main.** Le décor la fabrique donc
@@ -358,4 +358,65 @@ test("chaque entrée du menu porte l'attribut que l'écoute cherche", () => {
     assert.ok(geste.attribut, `« ${geste.nom} » ne porte aucun attribut`);
     assert.ok(geste.icone, `« ${geste.nom} » n'a pas d'icône`);
   }
+});
+
+/* ── Une vue ne double pas une lecture du rail ───────────────────────────── */
+
+const LECTURES = [
+  { cle: "tous", nom: "Sujets", requete: "" },
+  { cle: "mentions", nom: "Mentions", requete: "mention:moi" },
+  { cle: "crees", nom: "Créé par moi", requete: "auteur:moi" }
+];
+
+/**
+ * **Le défaut que ce refus existe pour empêcher.** On pouvait enregistrer une
+ * vue sur `mention:moi` : elle fabriquait une seconde entrée qui fait exactement
+ * ce que « Mentions » fait déjà, et comme une vue se reconnaît à sa requête,
+ * cliquer « Mentions » dans le rail affichait ensuite le nom de la vue.
+ */
+test("une vue qui double une lecture du rail est refusée", () => {
+  assert.equal(
+    refusDeLaVue({ requete: "mention:moi", nom: "Où l'on me nomme", lectures: LECTURES }),
+    REFUS.DEJA_UNE_LECTURE
+  );
+});
+
+/**
+ * **Exactement la même requête, et pas une qui la contient.** `mention:moi
+ * label:cr-chantier` est une autre question ; la refuser interdirait de partir
+ * d'une lecture pour en affiner une vue, ce qui est le geste normal.
+ */
+test("une requête qui part d'une lecture sans l'égaler reste permise", () => {
+  assert.equal(
+    refusDeLaVue({ requete: "mention:moi label:cr", nom: "Mes CR", lectures: LECTURES }),
+    ""
+  );
+});
+
+/**
+ * « Sujets » a une requête vide : sans cette précaution, il doublerait tout.
+ * Une vue sans recherche est de toute façon refusée avant d'arriver là.
+ */
+test("la lecture sans requête ne double rien", () => {
+  assert.equal(laLectureDoublee({ requete: "", lectures: LECTURES }), null);
+  assert.equal(refusDeLaVue({ requete: "label:x", nom: "X", lectures: LECTURES }), "");
+});
+
+test("on sait laquelle on double, et on le dit", () => {
+  assert.equal(laLectureDoublee({ requete: "auteur:moi", lectures: LECTURES })?.nom, "Créé par moi");
+  assert.equal(laLectureDoublee(), null);
+
+  const dite = phraseDuRefus(REFUS.DEJA_UNE_LECTURE, { lecture: "Mentions" });
+  assert.match(dite, /Le rail fait déjà cette recherche/);
+  assert.match(dite, /« Mentions »/);
+});
+
+/** Ne pas savoir laquelle n'autorise pas à en nommer une (règle 5). */
+test("sans nom de lecture, le refus reste général", () => {
+  assert.equal(phraseDuRefus(REFUS.DEJA_UNE_LECTURE), "Le rail fait déjà cette recherche.");
+  // Le nom ne s'invite pas sur les autres refus.
+  assert.equal(
+    phraseDuRefus(REFUS.SANS_NOM, { lecture: "Mentions" }),
+    PHRASES_DU_REFUS[REFUS.SANS_NOM]
+  );
 });

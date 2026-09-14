@@ -11,7 +11,8 @@ import assert from "node:assert/strict";
 import { champsDesSujets } from "./champs-des-sujets.js";
 import { recherchePourLEcran } from "./recherche-epinglee.js";
 import {
-  LECTURE, NOMS_DE_LA_LECTURE, ecranApresUneLecture, epinglesDuRail, lectureDe,
+  LECTURE, NOMS_DE_LA_LECTURE, NOMS_DE_LECRAN, TITRE_QUELCONQUE, ecranApresUneLecture,
+  epinglesDuRail, lectureDe, lecturesReservees, titreDeLaListe,
   railDesSujets, requeteDeLaLecture
 } from "./rail-des-sujets.js";
 import { sujetsFiltres } from "./champs-des-sujets.js";
@@ -288,4 +289,55 @@ test("un filtre posé sans formulaire ouvert ne change pas d'écran", () => {
 test("« Sujets » remet la requête à zéro", () => {
   assert.equal(ecranApresUneLecture({}).requete, "");
   assert.equal(ecranApresUneLecture({ requete: "  " }).requete, "");
+});
+
+/* ── Ce qu'on écrit au-dessus du tableau ─────────────────────────────────── */
+
+/**
+ * **Le rail nomme des endroits, le titre dit ce qu'on regarde.** « Sujets »
+ * au-dessus du tableau répéterait le nom de l'onglet, écrit deux fois plus
+ * haut ; au long, il dit la chose.
+ */
+test("la liste entière s'annonce « Tous les sujets »", () => {
+  assert.equal(titreDeLaListe({}), "Tous les sujets");
+  assert.equal(titreDeLaListe({ requete: "   ", champs }), "Tous les sujets");
+  assert.equal(NOMS_DE_LA_LECTURE[LECTURE.TOUS], "Sujets", "le rail, lui, garde le sien");
+  assert.equal(NOMS_DE_LECRAN[LECTURE.TOUS], "Tous les sujets");
+});
+
+test("chaque lecture du rail porte son nom au-dessus du tableau", () => {
+  for (const lecture of [LECTURE.MIENS, LECTURE.CREES, LECTURE.MENTIONS, LECTURE.RECENTS]) {
+    assert.equal(
+      titreDeLaListe({ requete: requeteDeLaLecture(lecture, champs), champs }),
+      NOMS_DE_LA_LECTURE[lecture]
+    );
+  }
+});
+
+/**
+ * **`lectureDe` retombe sur `TOUS` pour tout ce qu'elle ne reconnaît pas** —
+ * le bon défaut pour allumer une entrée du rail, le mauvais pour titrer : une
+ * liste filtrée par un label s'annoncerait comme la liste entière.
+ */
+test("une requête quelconque ne s'annonce pas comme la liste entière", () => {
+  assert.equal(titreDeLaListe({ requete: "label:cr-chantier", champs }), TITRE_QUELCONQUE);
+  assert.notEqual(TITRE_QUELCONQUE, "Tous les sujets");
+});
+
+/* ── Les lectures que le rail se réserve ─────────────────────────────────── */
+
+/**
+ * Une vue enregistrée sur `mention:moi` fabriquerait une seconde entrée qui
+ * fait exactement ce que « Mentions » fait déjà — et comme une vue se reconnaît
+ * à sa requête, l'écran affichait ensuite le nom de la vue quand on cliquait
+ * « Mentions ».
+ */
+test("les lectures du rail se donnent avec leur requête", () => {
+  const reservees = lecturesReservees(champs);
+
+  assert.deepEqual(reservees.map((lecture) => lecture.cle), Object.values(LECTURE));
+  assert.equal(reservees.find((lecture) => lecture.cle === LECTURE.MENTIONS).requete, "mention:moi");
+  assert.equal(reservees.find((lecture) => lecture.cle === LECTURE.MENTIONS).nom, "Mentions");
+  // « Sujets » n'a pas de requête : c'est la liste entière, pas un filtre.
+  assert.equal(reservees.find((lecture) => lecture.cle === LECTURE.TOUS).requete, "");
 });

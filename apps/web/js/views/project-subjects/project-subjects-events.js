@@ -58,6 +58,8 @@ export function createProjectSubjectsEvents(config) {
     // et jamais une suppression.
     epinglerLaVueAuRail = () => {},
     basculerLeMenuDeLaVue = () => {},
+    basculerLeMenuDesEpingles = () => {},
+    fermerLeMenuDesEpingles = () => {},
     fermerLeMenuDeLaVue = () => {},
     // Cocher des sujets, et agir sur tous à la fois. L'écran tient la
     // sélection ; les gestes l'appellent, ils ne la refont pas.
@@ -5978,6 +5980,9 @@ export function createProjectSubjectsEvents(config) {
       // Le menu d'une vue vit dans l'état, et non dans une classe : il faut
       // donc le refermer là où il est écrit, sinon il survit au redessin.
       if (geste !== GESTE.VUE_MENU) fermerLeMenuDeLaVue();
+      // La liste des épinglées du rail replié se referme au premier clic
+      // ailleurs — y compris sur une de ses entrées, qui change d'écran.
+      if (geste !== GESTE.EPINGLES_MENU) fermerLeMenuDesEpingles();
       if (geste === GESTE.RIEN) return;
 
       // **Une case à cocher garde son geste natif.** L'empêcher laissait la
@@ -6094,6 +6099,13 @@ export function createProjectSubjectsEvents(config) {
         case GESTE.GROUPE:
           event.stopPropagation();
           appliquerAuGroupe(valeur);
+          return;
+
+        case GESTE.EPINGLES_MENU:
+          // Le bouton est **dans** le rail : sans l'arrêter, le clic irait
+          // aussi à l'entrée qui le porte.
+          event.stopPropagation();
+          basculerLeMenuDesEpingles();
           return;
 
         case GESTE.VUE_MENU:

@@ -80,7 +80,7 @@ const repli = (valeur) => texte(valeur)
  */
 export function renderRailDesSujetsHtml({
   sujets = [], champs = [], requete = "", meta = {}, moi = "", maintenant = Date.now(),
-  epingles = [], replie = false, sousVue = "subjects"
+  epingles = [], replie = false, sousVue = "subjects", menuDesEpingles = false
 } = {}) {
   const { lectures } = railDesSujets({ sujets, champs, requete, meta, moi, maintenant });
   const posees = epinglesDuRail(epingles, requete);
@@ -159,11 +159,60 @@ export function renderRailDesSujetsHtml({
         })}
         ${posees.length === 0 ? "" : `
           ${renderNavListDivider()}
-          ${renderNavListGroup({ label: "Épinglées", items: posees.map(uneEpingle) })}
+          ${replie
+            // **Replié, une liste de noms ne tient pas.** Les entrées y sont
+            // réduites à leur icône : douze vues faisaient douze icônes de
+            // couleurs, sans un mot, et l'on cliquait au hasard pour retrouver
+            // la sienne. Une seule épingle les tient toutes, et les nomme quand
+            // on l'ouvre.
+            ? renderEpinglesRepliees(posees, { ouvert: menuDesEpingles })
+            : renderNavListGroup({ label: "Épinglées", items: posees.map(uneEpingle) })}
         `}
       `
     })
   });
+}
+
+/**
+ * Les vues épinglées quand le rail est replié : **une épingle, et leur liste**.
+ *
+ * ## Pourquoi elles ne restent pas visibles
+ *
+ * Replié, le rail ne montre que des icônes. Celles des lectures sont les mêmes
+ * pour tout le monde et s'apprennent une fois ; celles des vues sont choisies
+ * par qui les crée, et douze vues font douze pastilles de couleur sans un mot.
+ * On cliquait au hasard pour retrouver la sienne, ce qui est pire que de ne
+ * rien montrer : cela coûte un clic **et** une navigation à annuler.
+ *
+ * Une épingle les tient donc toutes, avec un chevron qui dit qu'il y a quelque
+ * chose dessous, et le menu les nomme.
+ */
+function renderEpinglesRepliees(posees = [], { ouvert = false } = {}) {
+  return `
+    <div class="sujets-rail__epingles">
+      <button type="button" class="sujets-rail__epingles-bouton${ouvert ? " est-ouvert" : ""}"
+        data-sujets-epingles-menu="1" aria-haspopup="true" aria-expanded="${ouvert}"
+        data-tooltip="Vues épinglées"
+        aria-label="Vues épinglées">
+        ${svgIcon("pin", { className: "octicon" })}
+        ${svgIcon("chevron-right", { className: "octicon sujets-rail__epingles-caret" })}
+      </button>
+
+      <div class="gh-menu sujets-rail__epingles-liste" role="menu"${ouvert ? "" : " hidden"}>
+        <p class="sujets-rail__epingles-intitule">Épinglées</p>
+        ${posees.map((epingle) => `
+          <button type="button" class="gh-menu__item${epingle.active ? " est-active" : ""}"
+            role="menuitem" data-sujets-lecture="${escapeHtml(epingle.requete)}"
+            title="${escapeHtml(epingle.requete)}">
+            <span class="sujets-rail__epingle-icone"
+              style="color:${escapeHtml(couleurDeLaVue(epingle.couleur).valeur)}">${
+              svgIcon(iconeDeLaVue(epingle.icone), { className: "octicon" })}</span>
+            <span>${escapeHtml(epingle.nom)}</span>
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
 }
 
 /**
@@ -689,11 +738,14 @@ export function renderTableauDesVuesHtml({ vues = [], menuOuvert = "" } = {}) {
  * vue sans avoir vu ce qu'elle montre, c'est enregistrer une promesse.
  */
 export function renderFormulaireDeVueHtml({
-  vue = {}, champs = [], ignores = [], refus = "", tableauHtml = "", habitOuvert = false
+  vue = {}, champs = [], ignores = [], refus = "", lectureDoublee = "",
+  tableauHtml = "", habitOuvert = false
 } = {}) {
   const icone = iconeDeLaVue(vue.icone);
   const couleur = couleurDeLaVue(vue.couleur);
-  const dit = phraseDuRefus(refus);
+  // Le refus nomme la lecture qu'on double : « le rail fait déjà cette
+  // recherche » fait chercher laquelle parmi cinq.
+  const dit = phraseDuRefus(refus, { lecture: lectureDoublee });
 
   return `
     <section class="sujets-vue-forme">

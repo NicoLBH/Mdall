@@ -64,6 +64,61 @@ export const NOMS_DE_LA_LECTURE = {
 };
 
 /**
+ * Le titre que porte l'écran d'une lecture.
+ *
+ * ## Pourquoi ce n'est pas le nom du rail
+ *
+ * Le rail nomme des **endroits** : « Sujets » est celui d'où l'on part, et le
+ * mettre au long y ferait une entrée plus large que les autres pour ne rien
+ * dire de plus. Au-dessus du tableau, la question n'est pas où l'on est mais
+ * **ce qu'on regarde** : « Sujets » y répondrait par le nom de l'onglet, qui
+ * est déjà écrit deux fois plus haut. « Tous les sujets » dit la chose.
+ *
+ * Les quatre autres se nomment pareil des deux côtés : elles disent déjà ce
+ * qu'elles retiennent.
+ */
+export const NOMS_DE_LECRAN = {
+  ...NOMS_DE_LA_LECTURE,
+  [LECTURE.TOUS]: "Tous les sujets"
+};
+
+/**
+ * Ce qu'on écrit au-dessus du tableau, quand ce n'est pas une vue.
+ *
+ * **Une requête quelconque n'est pas « tous les sujets ».** `lectureDe` retombe
+ * sur `TOUS` pour tout ce qu'elle ne reconnaît pas — c'est le bon défaut pour
+ * allumer une entrée du rail, et le mauvais pour titrer un écran : une liste
+ * filtrée par `label:cr-chantier` s'annoncerait comme la liste entière. On
+ * distingue donc les deux, et l'inconnu se dit sobrement.
+ */
+export const TITRE_QUELCONQUE = "Sujets";
+
+export function titreDeLaListe({ requete = "", champs = [] } = {}) {
+  const dite = texte(requete);
+  if (!dite) return NOMS_DE_LECRAN[LECTURE.TOUS];
+
+  const lecture = lectureDe(dite, champs);
+  return lecture === LECTURE.TOUS ? TITRE_QUELCONQUE : NOMS_DE_LECRAN[lecture];
+}
+
+/**
+ * Les lectures du rail, réduites à ce qui les identifie : leur nom et leur
+ * requête.
+ *
+ * **De quoi refuser une vue qui en serait le double.** Enregistrer une vue sur
+ * `mention:moi` fabrique une seconde entrée qui fait exactement ce que
+ * « Mentions » fait déjà — et l'écran, qui reconnaît une vue à sa requête,
+ * affichait ensuite le nom de la vue quand on cliquait « Mentions ».
+ */
+export function lecturesReservees(champs = []) {
+  return Object.values(LECTURE).map((lecture) => ({
+    cle: lecture,
+    nom: NOMS_DE_LA_LECTURE[lecture],
+    requete: requeteDeLaLecture(lecture, champs)
+  }));
+}
+
+/**
  * L'icône de chaque lecture, **dans le jeu de la maison**.
  *
  * Aucune n'est dessinée ici : elles vivent dans `assets/icons.svg`, et en
