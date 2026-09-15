@@ -1136,6 +1136,29 @@ function renderRangementItem(item) {
   );
 }
 
+/**
+ * Une vue que cette proposition ajoute au projet.
+ *
+ * **La requête s'affiche**, parce que c'est elle qu'on accepte : une vue est ce
+ * qu'elle cherche, et un nom seul ne dit pas ce qu'on va voir.
+ */
+function renderVueItem(item) {
+  const { nom, requete, description } = item.payload;
+
+  return renderReviewItem(
+    item,
+    `
+      <span class="review-item__title">
+        <span class="review-item__badge review-item__badge--added">À ajouter</span>
+        ${escapeHtml(nom || requete || "Vue sans nom")}
+      </span>
+      <span class="review-item__where">
+        <code>${escapeHtml(String(requete))}</code>${description ? ` · ${escapeHtml(String(description))}` : ""}
+      </span>
+    `
+  );
+}
+
 function renderLotItem(item) {
   const { intitule, numero, points } = item.payload;
 
@@ -3603,6 +3626,15 @@ function renderDepotLignes(proposition, review) {
       gele
         ? "Aucun lot à ouvrir, ou l'état conservé ne le dit pas."
         : "Tous les lots que ce compte rendu nomme sont déjà dans le projet."
+    )}
+    ${renderReviewBlock(
+      ITEM_TYPE.VUE,
+      "Vues",
+      parType(ITEM_TYPE.VUE),
+      renderVueItem,
+      gele
+        ? "Aucune vue à ajouter, ou l'état conservé ne le dit pas."
+        : "Ce dépôt n'appelle aucune vue que le projet n'ait déjà."
     )}
     ${renderReviewBlock(
       ITEM_TYPE.LABEL,
@@ -6401,15 +6433,6 @@ async function merge(root) {
     }
     etapeDesSujets.fini();
 
-    // **Les pères, une fois les fils ouverts.** Un sujet père est un contenant :
-    // « Lot n° 1 : Gros Œuvre » n'est demandé à personne, c'est le titre sous
-    // lequel une douzaine de demandes se rangent. L'ouvrir avant ses fils le
-    // laisserait vide, et vingt lots vides dans la liste des sujets seraient
-    // exactement ce que ce rangement existe pour éviter.
-    const etapeDesPeres = chrono.etape("peres");
-    await rangerSousLesPeres(root, proposition, items, nes, etapeDesPeres);
-    etapeDesPeres.fini();
-
     // Puis tout ce que le compte rendu dit des sujets — les siens et ceux qu'il
     // reporte : leur label, leur jalon, et la ligne d'activité qui dit que
     // cette réunion les a redits. Sans cela, un compte rendu de quarante points
@@ -6417,6 +6440,30 @@ async function merge(root) {
     const etapeDuSecretariat = chrono.etape("secretariat");
     await appliquerCeQueLeCompteRenduDit(root, proposition, items, nes, etapeDuSecretariat);
     etapeDuSecretariat.fini();
+
+    // **Les pères en dernier, et c'est une correction.**
+    //
+    // Un sujet père est un contenant : « Lot n° 1 : Gros Œuvre » n'est demandé
+    // à personne, c'est le titre sous lequel une douzaine de demandes se
+    // rangent. Il faut donc ses fils d'abord — l'ouvrir avant eux le laisserait
+    // vide, et vingt lots vides dans la liste des sujets seraient exactement ce
+    // que ce rangement existe pour éviter.
+    //
+    // Mais il lui faut aussi **son label**, et c'est le secrétariat qui crée
+    // les labels du projet. Ouvert entre les deux, le père cherchait « LOT »
+    // dans un projet qui ne l'avait pas encore : il naissait sans, la vue
+    // `label:LOT` ne rendait rien, et la seule trace était un avertissement au
+    // fond du journal.
+    //
+    // Il vient donc après les deux. Sa fermeture d'après ses fils y gagne au
+    // passage : les points que ce compte rendu solde le sont déjà, et un lot
+    // entièrement soldé naît fermé plutôt que de se refermer au geste suivant.
+    const etapeDesPeres = chrono.etape("peres");
+    await rangerSousLesPeres(root, proposition, items, nes, etapeDesPeres);
+    // L'endroit d'où on les regardera, une fois qu'il y a quelque chose à y
+    // voir. Créée avant les lots, la vue serait vide à l'ouverture.
+    await ajouterLesVuesRetenues(proposition, items, etapeDesPeres);
+    etapeDesPeres.fini();
 
     // L'histoire se refait maintenant : sans cela, le fil resterait celui d'une
     // proposition ouverte — sans acte de fusion, sans carte de fin — jusqu'au
@@ -6701,6 +6748,59 @@ async function rangerSousLesPeres(root, proposition, items = [], nes = [], carne
       "Les sujets de ce compte rendu n'ont pas pu être rangés sous leurs lots. La fusion est "
         + "faite : ils restent à la racine, et le prochain compte rendu les rangera."
     ].filter(Boolean).join(" ");
+  }
+}
+
+/**
+ * Ajoute au projet les vues retenues.
+ *
+ * **Elle est personnelle, et cela se dit.** Une vue enregistrée appartient à
+ * qui l'a posée — la base la range par propriétaire. Celle-ci sera donc celle
+ * de la personne qui a signé la fusion ; les autres la retrouveront proposée
+ * dans leur écran des vues, où elles la prendront si elles veulent.
+ *
+ * Un échec ne défait rien : les lots sont ouverts et les sujets rangés. La vue
+ * se repose d'un clic depuis l'écran des vues, qui la propose.
+ */
+async function ajouterLesVuesRetenues(proposition, items = [], carnet = null) {
+  const retenues = items.filter(
+    (entry) => entry.itemType === ITEM_TYPE.VUE && entry.status !== ITEM.REFUSED
+  );
+  if (retenues.length === 0) return;
+
+  try {
+    const [{ epinglerLaRecherche }, { SURFACE }] = await Promise.all([
+      import("../services/memoire-recherches-supabase.js"),
+      import("../services/recherche-epinglee.js")
+    ]);
+
+    let posees = 0;
+    for (const entree of retenues) {
+      const vue = entree.payload ?? {};
+      // `merge-duplicates` sur la requête : reposer la même vue ne la double
+      // pas, elle se met à jour. Rejouer une fusion est donc sans effet.
+      const posee = await epinglerLaRecherche({
+        projectId: proposition.project_id,
+        requete: String(vue.requete ?? ""),
+        titre: String(vue.nom ?? ""),
+        // Le nom de la surface vit dans `recherche-epinglee.js` : le recopier
+        // ici ferait une vue rangée dans un écran où personne ne la cherche.
+        surface: SURFACE.SUJETS,
+        habits: {
+          description: String(vue.description ?? "") || null,
+          icon: String(vue.icone ?? "") || null,
+          color: String(vue.couleur ?? "") || null
+        }
+      });
+      if (posee) posees += 1;
+    }
+
+    carnet?.dire(`${posees} vue(s) ajoutées sur ${retenues.length} retenues`);
+    if (posees < retenues.length) {
+      carnet?.avertir("Une vue n'a pas pu être ajoutée : elle se repose depuis l'écran des vues.");
+    }
+  } catch (erreur) {
+    carnet?.avertir(`Les vues n'ont pas pu être ajoutées : ${String(erreur?.message ?? erreur)}`);
   }
 }
 

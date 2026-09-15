@@ -3651,3 +3651,30 @@ un document deux fois plus long.
 des citations retrouvées. C'est ce couple qui dit si un modèle plus rapide a
 coûté en exactitude — et c'est lui qui préviendra que la limite se rapproche à
 nouveau, plutôt qu'un `504` un jour de dépôt.
+
+---
+
+## 44. Le chemin d'une fusion ne progresse pas sous les yeux
+
+**Ce qui marche maintenant.** On clique « Fusionner », une ligne apparaît au
+journal des actions avec son sablier, et elle y reste — elle ne disparaît plus
+quand on ouvre l'onglet pour la regarder. Son détail montre le chemin
+d'exécution tel qu'il est au moment où on l'ouvre.
+
+**Ce qui manque.** Il ne **progresse pas** : les étapes ne passent pas au vert
+l'une après l'autre sous les yeux. Il faut refermer et rouvrir pour voir où
+l'on en est.
+
+**Pourquoi.** Deux choses, et la seconde est la vraie.
+
+1. L'entrée vive ne porte ses étapes qu'à la fin : `finishRunLogEntry` les
+   écrit d'un coup. Il faudrait les y verser à chaque `fini()` — c'est onze
+   appels, ou un `chrono` qui rafraîchit tout seul.
+2. **L'écran des actions ne se redessine pas quand le journal change.** Il lit
+   le store au montage et à la venue sur l'onglet, et rien ne lui dit qu'une
+   ligne a bougé. C'est ce qu'il faudrait d'abord : sans lui, verser les étapes
+   n'aurait aucun effet visible.
+
+**Ce que ça coûte de ne pas le faire.** On voit qu'une fusion est en cours, et
+non où elle en est. Sur un geste qui dure une minute et demie, c'est la
+différence entre attendre et se demander si c'est bloqué.

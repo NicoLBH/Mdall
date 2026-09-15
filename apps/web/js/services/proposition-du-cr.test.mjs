@@ -7,7 +7,7 @@ import { ITEM } from "./proposition-state.js";
 import {
   PHRASES_DU_REFUS, REFUS, cleDuPoint, introDuCompteRendu, itemsDuCompteRendu,
   labelItems, lotItems, objectifItems, phraseDuRefus, pointsAOuvrir, pointsARelancer,
-  rangementItems, refusDeLaProposition, relanceItems, rubriqueItems, titreDeLaProposition,
+  rangementItems, refusDeLaProposition, vueItems, relanceItems, rubriqueItems, titreDeLaProposition,
   fermetureItems
 } from "./proposition-du-cr.js";
 import { LABEL_DES_DISPOSITIONS, LABEL_DU_LOT } from "./label-du-cr.js";
@@ -861,4 +861,46 @@ test("la proposition range les sujets juste après les rubriques", () => {
 
   assert.ok(natures.indexOf(ITEM_TYPE.RUBRIQUE) < natures.indexOf(ITEM_TYPE.RANGEMENT));
   assert.ok(natures.indexOf(ITEM_TYPE.RANGEMENT) < natures.indexOf(ITEM_TYPE.SUJET));
+});
+
+/**
+ * **La vue vient avec les lots, et seulement avec eux.**
+ *
+ * Sans elle, les sujets pères sont un classement que personne ne peut ouvrir :
+ * on range quatre-vingt-treize sujets sous quinze lots, et l'écran continue
+ * d'afficher quatre-vingt-treize lignes.
+ */
+test("une proposition qui range des lots ajoute la vue qui les ouvre", async () => {
+  const { VUE_DES_LOTS } = await import("./vue-des-lots.js");
+
+  const items = itemsDuCompteRendu({
+    confrontes: CONFRONTES, document: UN_DOCUMENT, rubriques: LES_RUBRIQUES
+  });
+  const vues = items.filter((item) => item.itemType === ITEM_TYPE.VUE);
+
+  assert.equal(vues.length, 1);
+  assert.equal(vues[0].itemKey, VUE_DES_LOTS.requete);
+  assert.equal(vues[0].payload.nom, "Lots");
+  assert.equal(vues[0].status, ITEM.PROPOSED);
+});
+
+/**
+ * **Sans lot, pas de vue.** Une vue qui ne rendrait rien ferait croire que le
+ * chantier n'a pas de lots, alors qu'il n'a pas encore été rangé (règle 5).
+ */
+test("un compte rendu sans rubrique ne propose pas de vue", () => {
+  const items = itemsDuCompteRendu({ confrontes: CONFRONTES, document: UN_DOCUMENT });
+  assert.equal(items.filter((item) => item.itemType === ITEM_TYPE.VUE).length, 0);
+});
+
+/** Une vue est ce qu'elle cherche : c'est sa clé, et deux noms ne la doublent pas. */
+test("une vue s'identifie par sa requête", () => {
+  const items = rangementItems ? vueItems([
+    { requete: "label:LOT", nom: "Lots" },
+    { requete: "label:LOT", nom: "Les lots du chantier" },
+    { requete: "", nom: "Sans requête" }
+  ]) : [];
+
+  assert.deepEqual(items.map((item) => item.itemKey), ["label:LOT", "label:LOT"]);
+  assert.equal(items.length, 2, "une vue sans requête ne se propose pas");
 });

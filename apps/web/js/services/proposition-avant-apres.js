@@ -116,6 +116,9 @@ const INTENDANCE = new Set([
   // Ranger un sujet sous son lot ne change rien à ce qu'il dit : il n'y a pas
   // d'« avant » du projet à comparer, seulement un endroit où le trouver.
   ITEM_TYPE.RANGEMENT,
+  // Une vue est un endroit où regarder, pas une valeur du projet : il n'y a pas
+  // d'« avant » à lui comparer.
+  ITEM_TYPE.VUE,
   ITEM_TYPE.LOT,
   ITEM_TYPE.LABEL,
   ITEM_TYPE.OBJECTIF,

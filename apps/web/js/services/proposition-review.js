@@ -137,6 +137,23 @@ export const ITEM_TYPE = {
    */
   RANGEMENT: "rangement",
   /**
+   * Une vue enregistrée, à ajouter au projet.
+   *
+   * **Une recherche qui devient un endroit.** Ouvrir un projet et voir
+   * quatre-vingt-treize sujets ne se parcourt pas ; voir la quinzaine de lots,
+   * chacun avec le compte de ce qu'il porte, se parcourt. La vue « Lots » est
+   * ce qui rend le rangement utilisable — et sans elle, les sujets pères sont
+   * un classement que personne ne peut ouvrir.
+   *
+   * Elle se coche comme le reste : une vue porte un nom, une icône et une place
+   * dans un rail qui est court, et en créer une d'office dans le projet de
+   * quelqu'un est une écriture (règle 1).
+   *
+   * Sa clé est la requête : une vue est **ce qu'elle cherche**, et deux vues
+   * qui cherchent la même chose sous deux noms sont la même vue.
+   */
+  VUE: "vue",
+  /**
    * Un lot du chantier, à ouvrir ou à activer.
    *
    * Un lot qu'un compte rendu nomme n'est pas une hypothèse : l'entreprise est
@@ -220,6 +237,7 @@ export const MOTS_DE_LA_NATURE = {
   [ITEM_TYPE.INTERVENANT]: ["société à ajouter", "sociétés à ajouter"],
   [ITEM_TYPE.RUBRIQUE]: ["rubrique du compte rendu", "rubriques du compte rendu"],
   [ITEM_TYPE.RANGEMENT]: ["sujet à ranger", "sujets à ranger"],
+  [ITEM_TYPE.VUE]: ["vue à ajouter", "vues à ajouter"],
   [ITEM_TYPE.LOT]: ["lot à ouvrir", "lots à ouvrir"],
   [ITEM_TYPE.LABEL]: ["label à poser", "labels à poser"],
   [ITEM_TYPE.OBJECTIF]: ["jalon à poser", "jalons à poser"]
