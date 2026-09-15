@@ -6,6 +6,8 @@ import { renderSideNavGroup, renderSideNavItem } from "../ui/side-nav-layout.js"
 import { renderLightTabs } from "../ui/light-tabs.js";
 import { renderSvgLineChart } from "../../utils/svg-line-chart.js";
 import { renderSituationForm } from "./project-situations-form.js";
+import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
+import { NOM_DU_CARNET } from "../../services/mon-carnet.js";
 import { renderSituationGridView } from "./project-situations-view-grid.js";
 import { renderSituationRoadmapView } from "./project-situations-view-roadmap.js";
 
@@ -472,16 +474,14 @@ export function createProjectSituationsView({
               ? `${uiState.insightsPanelOpen ? renderSituationInsightsPanel() : (uiState.editPanelOpen ? renderEditSituationPanel() : renderSelectedSituationDetails())}`
               : `
                 <div class="project-situations__table-toolbar project-page-shell project-page-shell--toolbar">
-                  <div class="project-table-toolbar project-table-toolbar--situations">
-                    <div class="project-table-toolbar__left"></div>
-                    <div class="project-table-toolbar__right">
-                      <div class="project-table-toolbar__group">
-                        <div class="gh-action gh-action--single">
-                          <button type="button" class="gh-btn gh-action__main gh-btn--primary gh-btn--md" id="openCreateSituationButton">Nouvelle situation</button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  ${renderTitreDEcranHtml({
+                    titre: NOM_DU_CARNET,
+                    className: "project-table-toolbar--situations",
+                    actionsHtml: `<div class="gh-action gh-action--single">
+                      <button type="button" class="gh-btn gh-action__main gh-btn--primary gh-btn--md" id="openCreateSituationButton">Nouvelle situation</button>
+                    </div>`
+                  })}
+                  ${renderRechercheDesSituations()}
                 </div>
                 <section class="gh-panel gh-panel--results" aria-label="Results">
                   ${renderSituationsTable()}
@@ -491,6 +491,43 @@ export function createProjectSituationsView({
         </div>
         ${renderCreateSituationModal()}
       </section>
+    `;
+  }
+
+  /**
+   * Chercher une situation.
+   *
+   * **Le même champ que celui des sujets**, aux mêmes classes : `memory-search`
+   * et ses gestes. En dessiner un autre ici obligerait à recalibrer les deux à
+   * chaque retouche, et l'un des deux finirait en retard sur l'autre.
+   *
+   * Pas de miroir de requête : un carnet ne se filtre pas par `statut:` ou
+   * `label:` — on y cherche un mot, celui qu'on a écrit en le rangeant.
+   */
+  function renderRechercheDesSituations() {
+    const requete = String(store.situationsView?.search || "");
+    const remplie = Boolean(requete.trim());
+
+    return `
+      <div class="memory-search situations-search gh-field-focus">
+        <div class="memory-search__field">
+          <input
+            type="search"
+            class="gh-input memory-search__input"
+            placeholder="Chercher une situation — un mot du titre ou de sa description"
+            value="${escapeHtml(requete)}"
+            aria-label="Chercher une situation"
+            data-situations-recherche
+          >
+          <div class="memory-search__gestes">
+            <button type="button" class="bouton-discret memory-search__geste" data-situations-vider
+              title="Effacer la recherche" aria-label="Effacer la recherche"
+              ${remplie ? "" : "disabled"}>
+              ${svgIcon("x", { className: "octicon" })}
+            </button>
+          </div>
+        </div>
+      </div>
     `;
   }
 

@@ -135,3 +135,28 @@ test("le carnet est atteignable : une route, et une entrée de menu", () => {
     "le menu doit porter un lien vers le carnet, nommé d'après le seul endroit où il est écrit"
   );
 });
+
+/**
+ * **Le raccourci ramène à la liste, même quand on y est déjà.**
+ *
+ * C'est le défaut relevé à l'écran : dans une situation, recliquer sur
+ * « Situations » ne faisait rien. L'adresse ne change pas — on est déjà sur
+ * `#situations` —, donc le navigateur ne prévient personne, et rien ne se
+ * redessine. Le clic doit refermer la sélection lui-même.
+ *
+ * Cette vérification lit du texte, et c'est assumé : **une écoute absente ne
+ * lève pas.** On ne peut pas non plus cliquer ici — il n'y a pas de document.
+ */
+test("le raccourci des situations referme la situation ouverte", () => {
+  const entete = readFileSync(join(VUES, "global-header.js"), "utf8");
+
+  assert.match(entete, /marque:\s*"situations"/, "le raccourci doit se laisser reconnaître");
+  assert.match(
+    entete,
+    /closest\?\.\('\[data-raccourci="situations"\]'\)/,
+    "et l'écoute doit le reconnaître"
+  );
+  // Le même geste que le fil d'Ariane, au même endroit : deux façons de revenir
+  // à la liste finiraient par ne plus se ressembler (règle 10).
+  assert.match(entete, /globalHeaderSituationsBack[\s\S]{0,200}data-raccourci="situations"/);
+});

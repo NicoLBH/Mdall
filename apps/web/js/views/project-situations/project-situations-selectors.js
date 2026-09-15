@@ -1,4 +1,5 @@
 import { COMPTE_INCONNU } from "../../services/mon-carnet.js";
+import { situationsQuiRepondent } from "../../services/recherche-des-situations.js";
 
 export function createProjectSituationsSelectors({ store, uiState }) {
   function safeArray(value) {
@@ -107,7 +108,12 @@ export function createProjectSituationsSelectors({ store, uiState }) {
 
   function getSituations() {
     const current = getCurrentSituationsStatusFilter();
-    return getAllSituations().filter((situation) => situation.status === current);
+    const ouvertesOuFermees = getAllSituations().filter((situation) => situation.status === current);
+
+    // La recherche vient après le statut : on cherche dans ce qu'on regarde,
+    // et non dans l'ensemble du carnet — sinon un résultat s'afficherait sous
+    // un onglet qui ne le contient pas.
+    return situationsQuiRepondent(ouvertesOuFermees, store.situationsView?.search || "");
   }
 
   function getPaginatedSituations() {

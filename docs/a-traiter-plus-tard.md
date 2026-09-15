@@ -3700,3 +3700,26 @@ est un fait, pas un jugement : c'est son icône qui le dit, et elle tourne.
 
 Ce qui n'est jamais versé en route : ni durée, ni verdict. Une ligne vive dit
 ce qu'elle fait, pas comment ça s'est terminé — elle ne le sait pas encore.
+
+---
+
+## 45. Le défilement du kanban replie des onglets qui n'existent plus
+
+**Ce qu'on voit.** Dans la vue kanban des situations, le défilement déclenche
+encore le repliement de la barre d'onglets — celle du projet. Elle n'est plus
+là : les situations ont quitté le projet, et le carnet n'a pas de barre.
+
+**Pourquoi c'est resté.** Le repliement au défilement (`setProjectCompactEnabled`,
+`syncProjectShellCompactFromScrollSource`) est monté par la coquille du projet,
+que le carnet réutilise — c'est ce qui évite d'en dessiner une seconde. Il
+emporte donc un geste qui n'a plus d'objet ici.
+
+**Ce que ça coûte.** Rien de visible aujourd'hui, et c'est précisément ce qui
+rend la chose désagréable : du travail fait à chaque défilement pour replier
+une barre absente, plus une classe posée sur un nœud que personne ne regarde.
+Le jour où le carnet aura un en-tête à lui, ce geste se réveillera sur le
+mauvais élément.
+
+**Ce qu'il faudrait.** Que la coquille sache si elle a une barre à replier, et
+ne monte le geste que dans ce cas — plutôt que de le monter toujours et de
+compter sur l'absence du nœud pour qu'il ne fasse rien.

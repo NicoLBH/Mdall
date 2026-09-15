@@ -1,6 +1,23 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 
 /**
+ * ## Ce qu'on demande à la création, et ce qu'on demande après
+ *
+ * La fenêtre de création demandait d'abord un **type** — « Manuelle » ou
+ * « Automatique » — avant même qu'on ait écrit un titre. C'est une question de
+ * mécanique posée au moment où l'on a une intention : on sait qu'on veut « ma
+ * semaine », on ne sait pas encore si on la remplira à la main.
+ *
+ * Elle ne demande donc plus que ce qu'on a en tête : un titre, une description.
+ * **Une situation naît en retenant les sujets qu'on y met**, ce qui est le cas
+ * ordinaire et ne se décide pas.
+ *
+ * Le choix reste, mais à sa place : dans la fenêtre de modification, une fois
+ * la situation ouverte et qu'on sait ce qu'on veut en faire. Il y est dit en
+ * français plutôt qu'en jargon — « les sujets que j'y mets » contre « ceux qui
+ * répondent à une recherche » — et il n'est plus figé à la création : une
+ * situation qu'on a commencée à la main peut devenir une recherche.
+ *
  * Sur quels chantiers la requête porte.
  *
  * **Des noms, pas des identifiants.** Les autres champs de ce formulaire se
@@ -56,7 +73,6 @@ export function renderSituationForm({
   const resolvedMode = mode === "edit" ? "edit" : "create";
   const automaticMode = normalizeSituationMode(form?.mode) === "automatic";
   const submitDisabled = submitting || !String(form?.title || "").trim();
-  const modeDisabledAttr = resolvedMode === "edit" ? "disabled" : "";
 
   return `
     <label class="settings-modal__field">
@@ -80,20 +96,21 @@ export function renderSituationForm({
       >${escapeHtml(form?.description || "")}</textarea>
     </label>
 
-    <div class="settings-modal__field">
-      <span class="settings-modal__label">Type</span>
-      <div class="project-lot-modal__groups" role="radiogroup" aria-label="Type de situation">
-        <label class="project-lot-modal__radio ${resolvedMode === "edit" ? "project-lot-modal__radio--readonly" : ""}">
-          <input type="radio" name="situation${resolvedMode}Mode" value="manual" ${automaticMode ? "" : "checked"} ${modeDisabledAttr}>
-          <span>Manuelle</span>
-        </label>
-        <label class="project-lot-modal__radio ${resolvedMode === "edit" ? "project-lot-modal__radio--readonly" : ""}">
-          <input type="radio" name="situation${resolvedMode}Mode" value="automatic" ${automaticMode ? "checked" : ""} ${modeDisabledAttr}>
-          <span>Automatique</span>
-        </label>
+    ${resolvedMode === "edit" ? `
+      <div class="settings-modal__field">
+        <span class="settings-modal__label">Ce qu'elle retient</span>
+        <div class="project-lot-modal__groups" role="radiogroup" aria-label="Ce que la situation retient">
+          <label class="project-lot-modal__radio">
+            <input type="radio" name="situation${resolvedMode}Mode" value="manual" ${automaticMode ? "" : "checked"}>
+            <span>Les sujets que j'y mets</span>
+          </label>
+          <label class="project-lot-modal__radio">
+            <input type="radio" name="situation${resolvedMode}Mode" value="automatic" ${automaticMode ? "checked" : ""}>
+            <span>Ceux qui répondent à une recherche</span>
+          </label>
+        </div>
       </div>
-      ${resolvedMode === "edit" ? '<div class="settings-empty-note" style="margin-top:8px;">Le mode n est pas modifiable après la création.</div>' : ''}
-    </div>
+    ` : ""}
 
     ${resolvedMode === "edit" ? `
       <div class="settings-modal__field">

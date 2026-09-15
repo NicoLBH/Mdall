@@ -116,18 +116,28 @@ export function adresseDunAncienLien(parties = []) {
  * @param {object|null} situationOuverte la situation qu'on regarde, s'il y en
  *   a une : le fil d'Ariane la nomme, et c'est la seule chose qui s'y ajoute.
  */
-export function enTeteDuCarnet(situationOuverte = null) {
+export function enTeteDuCarnet(situationOuverte = null, personne = "") {
   const titre = situationOuverte ? String(situationOuverte.title || "Situation") : "";
+  const nom = String(personne ?? "").trim();
 
   return {
-    primary: NOM_DU_CARNET,
+    // **Le nom de la personne, pas celui de l'écran.** La barre du haut dit à
+    // qui l'on est, puis où l'on est : « Untel / Situations / Ma semaine ».
+    primary: nom || NOM_DU_CARNET,
     secondary: "",
     // Aucun chantier au-dessus du carnet : on est sorti du projet.
     showSecondary: false,
     href: ROUTE_DU_CARNET,
     headerClass: "gh-header gh-header--global",
-    breadcrumbTabLabel: titre ? NOM_DU_CARNET : "",
+    // **Le nom de l'écran vit dans le fil, et une seule fois.** Il était à la
+    // fois en tête et dans le fil, ce qui donnait « Situations / Situations /
+    // Ma semaine » — le même mot deux fois, dont l'un ne renseignait sur rien.
+    //
+    // Dans le fil, il porte en plus ce qu'on attend de lui : **le retour à la
+    // liste**. C'est le même bouton que celui qui manquait quand on était
+    // dans une situation et qu'on recliquait sur « Situations ».
+    breadcrumbTabLabel: nom ? NOM_DU_CARNET : "",
     breadcrumbCurrentLabel: titre,
-    showSituationBreadcrumb: !!titre
+    showSituationBreadcrumb: Boolean(nom)
   };
 }
