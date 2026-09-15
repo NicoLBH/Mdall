@@ -508,10 +508,21 @@ un retour à l'état d'avant : un partage qu'on accorde, qu'on voit, et qu'on
 retire. Rien dans ce plan ne l'empêche, et rien ne le prépare non plus — c'est
 délibéré, on ne construit pas pour un besoin qu'on suppose.
 
-**Les situations créées d'office.** Le projet en crée par défaut
-(`ensure_default_project_situations`). Une situation sans propriétaire n'a plus
-de sens ; il faudra décider si elle disparaît, ou si elle devient celle de qui
-ouvre le projet. À trancher à l'étape 3, quand l'écran dira ce qu'il montre.
+**Les situations créées d'office.** ~~Le projet en crée par défaut.~~
+**Tranché : il n'en crée plus** (`202610060001_plus_de_situation_doffice.sql`).
+
+Depuis l'étape 1, `owner_id` se remplit avec `auth.uid()` : la situation d'office
+était devenue celle de la personne qui a créé le projet, et d'elle seule. Elle
+apparaissait dans son carnet sans qu'elle l'ait demandé.
+
+**Un carnet est à quelqu'un.** Y verser une ligne au nom d'un geste qui n'a rien
+à voir — créer un projet — c'est décider à sa place de ce qu'elle a à faire. La
+rendre publique n'était pas une option : il n'y a plus d'écran de projet pour la
+montrer, et une situation sans propriétaire ne se modifie par personne. Elle
+aurait été une ligne que tout le monde voit et que personne ne peut ranger.
+
+Celles qui existent restent (règle 6) : on arrête d'en créer, on ne réécrit pas
+le passé.
 
 **Le coût d'un périmètre large.** « Tous mes projets » sur quinze chantiers
 demande une requête qui les traverse tous. Rien ne dit aujourd'hui ce qu'elle

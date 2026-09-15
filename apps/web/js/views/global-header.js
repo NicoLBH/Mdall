@@ -88,7 +88,7 @@ function getHeaderModel() {
       ? store.situationsView.data.find((situation) => String(situation?.id || "") === selectedSituationId)
       : null;
 
-    return enTeteDuCarnet(selectedSituation);
+    return enTeteDuCarnet(selectedSituation, getUserDisplayIdentity().fullLabel || store.user?.name || "");
   }
 
   if (parts[0] === "projects") {
@@ -144,10 +144,11 @@ function getHeaderModel() {
  * raccourci obligerait à les recalibrer ensemble à chaque retouche, et l'un des
  * trois finirait d'une autre taille que ses voisins.
  */
-function renderRaccourci({ href, icone, nom }) {
+function renderRaccourci({ href, icone, nom, marque = "" }) {
   return `
     <div class="gh-action gh-raccourci">
-      <a class="gh-raccourci__lien" href="${href}" title="${escapeHtml(nom)}" aria-label="${escapeHtml(nom)}">
+      <a class="gh-raccourci__lien" href="${href}" title="${escapeHtml(nom)}" aria-label="${escapeHtml(nom)}"
+        ${marque ? `data-raccourci="${escapeHtml(marque)}"` : ""}>
         ${icone}
       </a>
     </div>
@@ -187,7 +188,12 @@ function renderRaccourcisGlobaux() {
     renderRaccourci({
       href: ROUTE_DU_CARNET,
       icone: svgIcon("table", { className: "octicon octicon-table" }),
-      nom: NOM_DU_CARNET
+      nom: NOM_DU_CARNET,
+      // **Il ramène à la liste, même quand on y est déjà.** L'adresse ne change
+      // pas quand une situation est ouverte — on est déjà sur `#situations` —,
+      // donc le navigateur ne prévient personne et l'écran reste sur la
+      // situation. Le clic doit donc **refermer la sélection** lui-même.
+      marque: "situations"
     })
   ].join("");
 }
@@ -298,8 +304,10 @@ export function renderGlobalHeader() {
             <span class="gh-brand__trail">
               <span class="gh-brand__sep">/</span>
               <button type="button" class="gh-brand__trail-btn" id="globalHeaderSituationsBack">${model.breadcrumbTabLabel}</button>
-              <span class="gh-brand__sep">/</span>
-              <span class="gh-brand__trail-current">${model.breadcrumbCurrentLabel}</span>
+              ${model.breadcrumbCurrentLabel ? `
+                <span class="gh-brand__sep">/</span>
+                <span class="gh-brand__trail-current">${model.breadcrumbCurrentLabel}</span>
+              ` : ""}
             </span>
           ` : ""}
         </div>
@@ -326,7 +334,10 @@ export function bindGlobalHeader() {
   document.addEventListener("click", (event) => {
     const trigger = event.target.closest?.("#ghUserMenuBtn");
     const logoutBtn = event.target.closest?.("#ghUserMenuLogout");
-    const situationsBackBtn = event.target.closest?.("#globalHeaderSituationsBack");
+    // Le fil d'Ariane et le raccourci de la barre font la même chose : revenir à
+    // la liste. Deux façons de le faire finiraient par ne plus se ressembler.
+    const situationsBackBtn = event.target.closest?.("#globalHeaderSituationsBack")
+      || event.target.closest?.('[data-raccourci="situations"]');
     const menu = document.getElementById("ghUserMenu");
     const dropdown = document.getElementById("ghUserMenuDropdown");
     const btn = document.getElementById("ghUserMenuBtn");

@@ -72,39 +72,58 @@ test("les autres onglets d'un projet ne sont pas détournés", () => {
 /* ── Tout en haut ────────────────────────────────────────────────────────── */
 
 /**
- * **L'en-tête ne nomme aucun chantier dans le carnet.**
+ * **La barre du haut dit à qui l'on est, puis où l'on est.**
  *
- * La barre du haut portait « Untel / Résidence Bertrand ». Garder ce nom
- * au-dessus du carnet ferait croire qu'on est encore dans ce chantier, et qu'on
- * y lit ses situations à lui. On en est sorti.
+ * Elle portait « Situations » en tête **et** dans le fil : « Situations /
+ * Situations / Ma semaine ». Le même mot deux fois, dont l'un ne renseignait
+ * sur rien. Le nom de l'écran vit maintenant dans le fil, et une seule fois.
  */
-test("dans le carnet, aucun chantier n'est écrit tout en haut", () => {
-  const entete = enTeteDuCarnet();
+test("la barre du haut porte le nom de la personne, puis celui de l'écran", () => {
+  const entete = enTeteDuCarnet(null, "Manoa Le Bihan");
 
-  assert.equal(entete.primary, NOM_DU_CARNET);
-  assert.equal(entete.showSecondary, false, "aucun chantier au-dessus du carnet");
+  assert.equal(entete.primary, "Manoa Le Bihan");
+  assert.equal(entete.breadcrumbTabLabel, NOM_DU_CARNET);
+  assert.equal(entete.breadcrumbCurrentLabel, "", "aucune situation ouverte : rien après");
+  assert.equal(entete.showSituationBreadcrumb, true, "le fil existe dès qu'on est dans le carnet");
+});
+
+/** Aucun chantier au-dessus du carnet : on est sorti du projet. */
+test("dans le carnet, aucun chantier n'est écrit tout en haut", () => {
+  const entete = enTeteDuCarnet(null, "Manoa Le Bihan");
+
+  assert.equal(entete.showSecondary, false);
   assert.equal(entete.secondary, "");
   assert.equal(entete.href, ROUTE_DU_CARNET);
-  assert.equal(entete.headerClass, "gh-header gh-header--global", "l'en-tête d'un écran qui n'est pas un projet");
+  assert.equal(entete.headerClass, "gh-header gh-header--global");
 });
 
-/** Une situation ouverte se nomme dans le fil, avec de quoi revenir en arrière. */
-test("une situation ouverte porte son fil d'Ariane", () => {
-  const entete = enTeteDuCarnet({ id: "s-1", title: "Ma semaine" });
+/**
+ * **Le même mot ne se dit pas deux fois.** C'est le défaut relevé à l'écran :
+ * « Situations / Situations / Ma semaine ».
+ */
+test("une situation ouverte se nomme une fois, après l'écran", () => {
+  const entete = enTeteDuCarnet({ id: "s-1", title: "Ma semaine" }, "Manoa Le Bihan");
 
-  assert.equal(entete.showSituationBreadcrumb, true);
-  assert.equal(entete.breadcrumbTabLabel, NOM_DU_CARNET, "le retour mène au carnet");
-  assert.equal(entete.breadcrumbCurrentLabel, "Ma semaine");
-  assert.equal(entete.showSecondary, false, "et toujours aucun chantier");
+  assert.deepEqual(
+    [entete.primary, entete.breadcrumbTabLabel, entete.breadcrumbCurrentLabel],
+    ["Manoa Le Bihan", NOM_DU_CARNET, "Ma semaine"]
+  );
+  assert.notEqual(entete.primary, entete.breadcrumbTabLabel, "plus de « Situations / Situations »");
 });
 
-/** Une situation sans titre ne laisse pas un fil d'Ariane muet. */
+/** Une situation sans titre ne laisse pas un fil muet. */
 test("une situation sans titre se nomme quand même", () => {
-  assert.equal(enTeteDuCarnet({ id: "s-1" }).breadcrumbCurrentLabel, "Situation");
+  assert.equal(enTeteDuCarnet({ id: "s-1" }, "Untel").breadcrumbCurrentLabel, "Situation");
 });
 
-/** Et sans situation ouverte, pas de fil : il n'y a rien à remonter. */
-test("sans situation ouverte, il n'y a pas de fil à remonter", () => {
-  assert.equal(enTeteDuCarnet(null).showSituationBreadcrumb, false);
-  assert.equal(enTeteDuCarnet().breadcrumbTabLabel, "");
+/**
+ * Sans personne connue, le nom de l'écran reprend la tête — et le fil se tait,
+ * sinon on retomberait exactement sur le doublon qu'on vient de défaire.
+ */
+test("sans personne connue, l'écran prend la tête et le fil se tait", () => {
+  const entete = enTeteDuCarnet(null, "");
+
+  assert.equal(entete.primary, NOM_DU_CARNET);
+  assert.equal(entete.showSituationBreadcrumb, false);
+  assert.equal(entete.breadcrumbTabLabel, "");
 });

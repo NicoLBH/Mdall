@@ -784,7 +784,13 @@ export async function updateSituation(situationId, patch = {}) {
   const nextStatus = Object.prototype.hasOwnProperty.call(patch, "status")
     ? normalizeSituationStatus(patch.status)
     : current.status;
-  const nextMode = current.mode;
+  // **Ce qu'une situation retient peut changer d'avis.** Le mode restait celui
+  // de la création, si bien qu'une situation commencée à la main ne pouvait
+  // jamais devenir une recherche — et qu'on devait donc choisir la mécanique
+  // avant d'avoir l'intention.
+  const nextMode = Object.prototype.hasOwnProperty.call(patch, "mode")
+    ? normalizeSituationMode(patch.mode)
+    : current.mode;
 
   const body = {};
 
@@ -798,6 +804,15 @@ export async function updateSituation(situationId, patch = {}) {
     body.status = nextStatus;
     body.closed_at = nextStatus === "closed" ? new Date().toISOString() : null;
   }
+  if (Object.prototype.hasOwnProperty.call(patch, "mode") && nextMode !== current.mode) {
+    body.mode = nextMode;
+    // Une situation qui cesse d'être une recherche n'en garde pas la requête :
+    // elle resterait écrite en base sans plus rien vouloir dire, et le jour où
+    // l'on rebasculerait, une vieille requête qu'on ne se rappelle pas avoir
+    // posée reprendrait la main.
+    if (nextMode === "manual") body.filter_definition = null;
+  }
+
   if (Object.prototype.hasOwnProperty.call(patch, "perimetre")) {
     // Une seule porte d'écriture : un périmètre mal formé partirait en 400, et
     // un périmètre vide ne regarderait rien. On ne touche pas à la colonne

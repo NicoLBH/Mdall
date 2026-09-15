@@ -1750,6 +1750,7 @@ export function createProjectSituationsEvents({
       title: String(form.title || "").trim(),
       description: String(form.description || "").trim(),
       status: String(form.status || "open") === "closed" ? "closed" : "open",
+      mode,
       filter_definition: mode === "automatic"
         ? {
             status,
@@ -2011,6 +2012,18 @@ export function createProjectSituationsEvents({
       });
     });
 
+    // **Ce qu'une situation retient peut changer d'avis.** Le mode était figé à
+    // la création — « Le mode n'est pas modifiable après la création » — si bien
+    // qu'une situation commencée à la main ne pouvait jamais devenir une
+    // recherche. On décidait donc de la mécanique avant d'avoir l'intention.
+    root.querySelectorAll('input[name="situationEditMode"]').forEach((field) => {
+      field.addEventListener("change", (event) => {
+        uiState.editForm.mode = event.currentTarget.value === "automatic" ? "automatic" : "manual";
+        uiState.editError = "";
+        rerender(root);
+      });
+    });
+
     root.querySelectorAll('input[name="situationEditStatus"]').forEach((field) => {
       field.addEventListener("change", (event) => {
         uiState.editForm.status = event.currentTarget.value === "closed" ? "closed" : "open";
@@ -2126,6 +2139,33 @@ export function createProjectSituationsEvents({
     const openButton = root.querySelector("#openCreateSituationButton");
     if (openButton) {
       openButton.onclick = () => openCreateModal(root);
+    }
+
+    // **La recherche du carnet.** On redessine à chaque frappe, et l'on rend le
+    // curseur là où il était : sans cela, taper le deuxième caractère le
+    // renverrait au début du champ, ce qui rend la saisie impossible.
+    const champDeRecherche = root.querySelector("[data-situations-recherche]");
+    if (champDeRecherche) {
+      champDeRecherche.oninput = (event) => {
+        store.situationsView.search = String(event.target.value || "");
+        store.situationsView.page = 1;
+        rerender(root);
+
+        const remis = root.querySelector("[data-situations-recherche]");
+        if (!remis) return;
+        remis.focus();
+        const fin = remis.value.length;
+        remis.setSelectionRange(fin, fin);
+      };
+    }
+
+    const videRecherche = root.querySelector("[data-situations-vider]");
+    if (videRecherche) {
+      videRecherche.onclick = () => {
+        store.situationsView.search = "";
+        store.situationsView.page = 1;
+        rerender(root);
+      };
     }
 
     root.querySelectorAll("[data-open-situation-drilldown]").forEach((node) => {

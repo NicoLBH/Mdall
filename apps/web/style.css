@@ -24951,7 +24951,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 
 .sujets-vue-forme__gestes{display:flex;justify-content:flex-end;gap:8px;}
 
-.sujets-search{margin-bottom:10px;}
+/* La recherche du carnet porte le même espacement que celle des sujets : deux
+   valeurs pour la même chose finiraient par différer d'un pixel, et c'est
+   exactement le genre d'écart qu'on passe ensuite une heure à retrouver. */
+.sujets-search,
+.situations-search{margin-bottom:10px;}
 .sujets-search__reserve{margin:-4px 0 10px;color:var(--text-muted);}
 
 /* Les filtres et le tri au même endroit, au bout de l'en-tête : c'est la même
