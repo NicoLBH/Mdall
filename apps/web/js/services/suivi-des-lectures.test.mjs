@@ -203,3 +203,27 @@ test("la lecture se conserve, et ses écarts atteignent les chiffres", async () 
     assert.match(source, new RegExp(`de\\("${cle}"\\)`), `le chiffre « ${cle} » ne reçoit pas son écart`);
   }
 });
+
+/**
+ * **La durée se suit comme le reste, et c'est elle qui juge un changement de
+ * modèle.** Plus vite est mieux — mais à lire à côté des citations retrouvées,
+ * parce qu'aller plus vite peut coûter en exactitude, et c'est justement pour
+ * le voir que les deux se lisent côte à côte.
+ */
+test("le temps de lecture se compare, et baisser est un progrès", () => {
+  const plusVite = ecartDuChiffre("dureeMs", { dureeMs: 52_000 }, { dureeMs: 91_000 });
+  assert.deepEqual(plusVite, { ecart: -39_000, sens: SENS.BAISSER, mieux: true });
+
+  assert.equal(ecartDuChiffre("dureeMs", { dureeMs: 91_000 }, { dureeMs: 52_000 }).mieux, false);
+  assert.ok(CHIFFRES_SUIVIS.some(([cle]) => cle === "dureeMs"));
+});
+
+/**
+ * **`null` n'est pas zéro.** Une lecture qu'on n'a pas chronométrée n'a pas duré
+ * « 0 ms » : annoncer « −91 s » parce que la version d'avant ne mesurait rien
+ * ferait croire à un gain qui n'a pas eu lieu.
+ */
+test("une lecture non chronométrée ne fait pas d'écart de temps", () => {
+  assert.equal(ecartDuChiffre("dureeMs", { dureeMs: 52_000 }, { dureeMs: null }), null);
+  assert.equal(ecartDuChiffre("dureeMs", { dureeMs: null }, { dureeMs: 91_000 }), null);
+});

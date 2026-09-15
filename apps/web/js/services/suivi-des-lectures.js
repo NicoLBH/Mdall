@@ -51,7 +51,12 @@ export const CHIFFRES_SUIVIS = [
   ["sansLot", "Sans lot", SENS.BAISSER],
   ["rubriques", "Rubriques reconnues", SENS.MONTER],
   ["rattaches", "Points rangés", SENS.MONTER],
-  ["orphelins", "Sans rubrique", SENS.BAISSER]
+  ["orphelins", "Sans rubrique", SENS.BAISSER],
+  // **La durée se suit comme le reste**, et c'est elle qui dit ce qu'un autre
+  // modèle a vraiment changé. Plus vite est mieux — jusqu'au jour où l'on verra
+  // qu'aller plus vite a coûté des citations, et c'est justement pour le voir
+  // que les deux se lisent côte à côte.
+  ["dureeMs", "Temps de lecture", SENS.BAISSER]
 ];
 
 const SENS_PAR_CLE = new Map(CHIFFRES_SUIVIS.map(([cle, , sens]) => [cle, sens]));

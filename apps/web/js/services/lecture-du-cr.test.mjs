@@ -88,7 +88,10 @@ test("la lecture se mesure en nombres comparables", () => {
     // Aucune rubrique n'a été rendue : les trois points sont donc orphelins, et
     // cela se dit plutôt que de se présenter comme un document sans rangement.
     rubriques: 0, rattaches: 0, orphelins: 3,
-    pages: 1, caracteres: PAGES[0].text.length
+    pages: 1, caracteres: PAGES[0].text.length,
+    // Non chronométrée : `null` n'est pas « 0 ms », et la confusion se lirait
+    // comme une performance.
+    dureeMs: null
   });
 });
 
@@ -599,4 +602,21 @@ test("sans rubrique lue, le tableau se rabat sur le lot", () => {
   assert.deepEqual(groupesDeLaLecture(lu).map((groupe) => groupe.titre),
     ["02 — GROS ŒUVRE", "(sans lot)"]);
   assert.deepEqual(groupesDeLaLecture(null), []);
+});
+
+/**
+ * **La durée vient du serveur, et elle traverse la lecture.**
+ *
+ * Mesurée au navigateur, elle porterait le temps du réseau et celui d'un onglet
+ * en arrière-plan : on comparerait deux modèles sur le débit de la connexion.
+ */
+test("la lecture porte ce qu'elle a pris au serveur", () => {
+  const lu = lectureAssemblee({ points: [point()], pages: PAGES, dureeMs: 52_000 });
+  assert.equal(lu.mesure.dureeMs, 52_000);
+
+  // Non chronométrée : `null`, et non « 0 ms » — la confusion se lirait comme
+  // une performance.
+  for (const rien of [null, undefined, "", "vite"]) {
+    assert.equal(lectureAssemblee({ points: [point()], pages: PAGES, dureeMs: rien }).mesure.dureeMs, null);
+  }
 });

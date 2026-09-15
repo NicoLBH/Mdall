@@ -48,8 +48,34 @@ import {
 
 const openAiApiKey = Deno.env.get("OPENAI_API_KEY")!;
 
-/** Le même que les deux autres lectures : un seul fournisseur à exploiter. */
-const MODELE = "gpt-4.1-mini";
+/**
+ * Le modèle qui relit le compte rendu — et **un réglage, pas une constante**.
+ *
+ * ## Pourquoi il se change sans toucher au code
+ *
+ * Cette lecture est la plus lourde du procédé : elle rend jusqu'à
+ * `MAX_JETONS` jetons d'un coup, et c'est ce débit-là qui décide si elle tient
+ * dans le temps imparti. Le jour où elle n'a plus tenu, la seule chose à
+ * essayer était un autre modèle — et cela demandait un changement de code, une
+ * relecture et un déploiement pour chaque candidat.
+ *
+ * C'est la convention que quatre autres fonctions suivent déjà
+ * (`OPENAI_TRANSCRIPTION_MODEL`, `OPENAI_STRUCTURE_MODEL`…) : le nom vit dans
+ * l'environnement, et l'on compare deux candidats en changeant une variable.
+ *
+ * ## Comment on sait lequel est le bon
+ *
+ * Pas au ressenti : l'écran de l'Atelier conserve ce que chaque lecture a valu
+ * et l'affiche comparé à la précédente — sa durée comprise. On change le
+ * modèle, on relit le même compte rendu, et l'on voit d'un coup d'œil ce que
+ * l'on a gagné en temps et ce que l'on a perdu en exactitude.
+ *
+ * **Le défaut ne bouge pas.** Un modèle plus gros n'est pas plus rapide, et en
+ * changer à l'aveugle pourrait ralentir la lecture qu'on essaie d'accélérer.
+ * Le défaut reste donc celui qui a fonctionné jusqu'ici, et c'est la mesure qui
+ * décide de le remplacer.
+ */
+const MODELE = Deno.env.get("OPENAI_SUJETS_MODEL") || "gpt-4.1-mini";
 const MAX_CARACTERES = 120000;
 
 /**
@@ -67,6 +93,21 @@ const MAX_CARACTERES = 120000;
  * maintenant, et l'écran aussi.
  */
 const MAX_JETONS = 24000;
+
+/**
+ * Le temps qu'on laisse au modèle, et pourquoi il est plafonné **ici**.
+ *
+ * Sans budget, on attendait la réponse indéfiniment — et c'est la passerelle qui
+ * finissait par couper, avec un `504` qui ne porte aucune cause. L'écran
+ * affichait alors « la lecture a été refusée · le serveur n'a rien nommé de
+ * cette panne » : deux phrases fausses pour un fait simple, on a cessé
+ * d'attendre.
+ *
+ * On coupe donc **avant** elle, pour répondre soi-même et nommer ce qui s'est
+ * passé. Ce plafond ne fait pas tenir une lecture qui ne tenait pas : il fait la
+ * différence entre un échec qu'on diagnostique et un échec muet.
+ */
+const MAX_SECONDES = 110;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -108,6 +149,10 @@ serve(async (req) => {
 
     if (!pages.length) return reponse({ error: "pages is required" }, 400);
 
+    // Le chronomètre part **avant** l'appel au modèle : c'est lui qu'on mesure,
+    // et non ce que la fonction fait de sa réponse.
+    const commenceA = Date.now();
+
     const texte = pagesEnTexte(pages, { maxCaracteres: MAX_CARACTERES });
     if (!texte.trim()) return reponse({ error: "pages carry no text" }, 400);
 
@@ -123,17 +168,44 @@ serve(async (req) => {
     const connus = Array.isArray(body?.sujets_du_projet) ? body.sujets_du_projet : [];
     const deja = sujetsDuProjetEnTexte(connus);
 
-    const appel = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${openAiApiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: MODELE,
-        instructions: deja ? `${CONSIGNES}\n${deja}` : CONSIGNES,
-        input: texte,
-        max_output_tokens: MAX_JETONS,
-        text: { format: { type: "json_schema", ...SCHEMA_DES_SUJETS } }
-      })
-    });
+    // Le budget est tenu par un signal plutôt que par une course de promesses :
+    // une course laisserait l'appel continuer dans le vide, et il serait payé.
+    const horloge = AbortSignal.timeout(MAX_SECONDES * 1000);
+
+    let appel: Response;
+    try {
+      appel = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${openAiApiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: MODELE,
+          instructions: deja ? `${CONSIGNES}\n${deja}` : CONSIGNES,
+          input: texte,
+          max_output_tokens: MAX_JETONS,
+          text: { format: { type: "json_schema", ...SCHEMA_DES_SUJETS } }
+        }),
+        signal: horloge
+      });
+    } catch (erreur) {
+      // **Un dépassement n'est pas un refus.** On le dit avec le code qui le
+      // dit — 504 — et une cause nommée, pour que l'écran cesse d'annoncer une
+      // panne que personne n'a déclarée.
+      const coupe = (erreur as Error)?.name === "TimeoutError"
+        || (erreur as Error)?.name === "AbortError";
+
+      return reponse({
+        error: coupe ? "OpenAI request timed out" : "OpenAI request failed",
+        panne: {
+          status: coupe ? 504 : 502,
+          type: coupe ? "delai_depasse" : "fournisseur_injoignable",
+          code: String((erreur as Error)?.name ?? ""),
+          message: coupe
+            ? `Le modèle n'a pas répondu en ${MAX_SECONDES} secondes. Le document est peut-être `
+              + "trop long pour une seule lecture."
+            : String((erreur as Error)?.message ?? "").slice(0, 300)
+        }
+      }, coupe ? 504 : 502);
+    }
 
     if (!appel.ok) {
       // **Nommée, et non recopiée.** Le corps d'une erreur du fournisseur peut
@@ -245,7 +317,15 @@ serve(async (req) => {
         ...gens.ecartes.map((ecart: { motif: string }) => ecart.motif)
       ],
       pages_corrigees: pagesCorrigees + sections.pagesCorrigees + gens.pagesCorrigees,
-      modele: MODELE
+      modele: MODELE,
+      /**
+       * Ce que cette lecture a pris, en millisecondes.
+       *
+       * **Mesuré ici, et pas au navigateur.** Le temps du réseau et celui de
+       * l'attente d'un onglet en arrière-plan s'y ajouteraient, et l'on
+       * comparerait deux modèles sur le débit de la connexion.
+       */
+      duree_ms: Date.now() - commenceA
     });
   } catch (error) {
     return reponse({ error: "Unexpected error", details: String(error) }, 500);

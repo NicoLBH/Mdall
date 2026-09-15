@@ -59,6 +59,18 @@ export const REFUS = {
   INJOIGNABLE: "injoignable",
   /** Le serveur a répondu qu'il ne pouvait pas. */
   REFUSE: "refuse",
+  /**
+   * La lecture n'a pas tenu dans le temps imparti.
+   *
+   * **Ce n'est pas un refus, et les confondre envoie chercher ce qui n'existe
+   * pas.** Un refus a une cause nommée — une clé expirée, un schéma invalide —
+   * et l'écran affichait « le serveur n'a rien nommé de cette panne » sur une
+   * passerelle qui n'a rien à nommer : elle a simplement cessé d'attendre.
+   *
+   * Un dépassement se corrige autrement : un document plus court, ou une
+   * lecture qui rend moins. Le dire permet de le savoir.
+   */
+  TROP_LONG: "trop-long",
   /** Il a répondu, et rien de ce qu'il a lu ne se retrouve dans le document. */
   RIEN_DE_VERIFIE: "rien-de-verifie"
 };
@@ -90,11 +102,50 @@ export const PHRASES_DU_REFUS = {
   [REFUS.SANS_TEXTE]: "ce compte rendu ne porte aucun texte à lire",
   [REFUS.INJOIGNABLE]: "la lecture n'a pas pu être demandée",
   [REFUS.REFUSE]: "la lecture a été refusée",
+  [REFUS.TROP_LONG]: "la lecture a dépassé le temps imparti",
   [REFUS.RIEN_DE_VERIFIE]: "rien de ce qui a été lu ne se retrouve dans le compte rendu"
 };
 
 export function phraseDuRefus(motif) {
   return PHRASES_DU_REFUS[texte(motif)] ?? "";
+}
+
+/**
+ * Ce qu'il y a à faire, quand il y a quelque chose à faire.
+ *
+ * **Deux phrases, pas une.** La première dit ce qui s'est passé, la seconde ce
+ * qu'on peut en faire. Les mêler donnerait un paragraphe qu'on ne relit pas ; et
+ * une panne sans suite à donner n'en reçoit pas d'inventée (règle 5).
+ */
+export const QUE_FAIRE = {
+  [REFUS.TROP_LONG]:
+    "Le modèle n'a pas fini dans le temps imparti. Un compte rendu plus court passe ; "
+    + "le même, relu, peut passer aussi — la durée d'une lecture n'est pas la même deux fois.",
+  [REFUS.INJOIGNABLE]:
+    "La fonction de lecture n'a pas répondu. Elle est peut-être en cours de déploiement.",
+  [REFUS.SANS_TEXTE]:
+    "Ce PDF ne porte que des images. Il faut d'abord le passer par la reconnaissance."
+};
+
+export function queFaire(motif) {
+  return QUE_FAIRE[texte(motif)] ?? "";
+}
+
+/**
+ * Les codes qui disent « on a cessé d'attendre », et non « je refuse ».
+ *
+ * `408` vient du serveur lui-même, `504` et `524` d'une passerelle entre les
+ * deux. Aucun des trois ne porte de cause : il n'y a rien à nommer, et
+ * l'afficher comme un refus muet fait chercher un problème ailleurs.
+ */
+const DELAIS_DEPASSES = new Set([408, 504, 524]);
+
+/** Ce qu'un code de réponse dit de la lecture. */
+export function motifDuStatut(statut = 0) {
+  const code = Number(statut) || 0;
+  if (code === 404) return REFUS.INJOIGNABLE;
+  if (DELAIS_DEPASSES.has(code)) return REFUS.TROP_LONG;
+  return REFUS.REFUSE;
 }
 
 /**
@@ -142,7 +193,7 @@ export async function lireLesSujets({ sourceId = "", pages = [], sujetsDuProjet 
     const refuse = await reponse.json().catch(() => null);
     return {
       ok: false,
-      motif: reponse.status === 404 ? REFUS.INJOIGNABLE : REFUS.REFUSE,
+      motif: motifDuStatut(reponse.status),
       // Ce que le serveur a nommé de la panne. Vide quand il n'a rien nommé :
       // on n'invente pas une explication vraisemblable (règle 5).
       panne: panneLue(refuse, reponse.status),
@@ -184,6 +235,14 @@ export async function lireLesSujets({ sourceId = "", pages = [], sujetsDuProjet 
     rapprochementDemande: Boolean(rendu?.rapprochement_demande),
     pagesCorrigees: Number(rendu?.pages_corrigees) || 0,
     modele: texte(rendu?.modele),
+    /**
+     * Ce que la lecture a pris au serveur, en millisecondes.
+     *
+     * **Mesurée là-bas, pas ici.** Le temps du réseau et celui d'un onglet en
+     * arrière-plan s'ajouteraient à la mesure, et l'on comparerait deux modèles
+     * sur le débit de la connexion.
+     */
+    dureeMs: Number.isFinite(Number(rendu?.duree_ms)) ? Number(rendu.duree_ms) : null,
     /** La réponse a-t-elle été coupée ? Des points manquent alors, en silence. */
     coupee: Boolean(rendu?.coupee)
   };
