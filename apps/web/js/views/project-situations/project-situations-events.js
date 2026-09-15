@@ -13,6 +13,10 @@ import { buildSubjectHierarchyIndexes } from "../../services/subject-hierarchy.j
 import { getExpandedSubjectIdsSet, resolveSituationTreeData } from "./project-situations-tree-data.js";
 import { identifiantsDesProjets, phraseDesProjetsIncertains } from "../../services/projets-du-filtre.js";
 import { situationsDeLecture } from "../../services/lectures-du-carnet.js";
+import { estMonCarnet } from "../../services/mon-carnet.js";
+import {
+  compositionNeuve, refusDeLaComposition, situationAEcrire
+} from "../../services/situation-en-composition.js";
 import { requeteDeLaSituation } from "../../services/situation-comme-une-vue.js";
 
 function syncSubmitButtonState(button, { submitting = false, title = "" } = {}) {
@@ -1786,6 +1790,116 @@ export function createProjectSituationsEvents({
     };
   }
 
+  /**
+   * « Nouvelle situation » : le formulaire d'une vue, dans le carnet.
+   *
+   * **La fenêtre d'avant demandait une mécanique avant une intention.** Elle
+   * proposait « manuelle » ou « automatique » — deux mots qui disent comment la
+   * base s'y prendra, pas ce qu'on veut suivre —, et son mode automatique ne
+   * savait produire qu'une liste de tous les sujets ouverts. On ouvre donc le
+   * formulaire d'une vue : un habit, un nom, une phrase, une requête, et le
+   * tableau de ce qu'elle retient, dessous (étape 3).
+   *
+   * Sur l'écran d'un projet, la fenêtre reste : la requête n'y a pas encore de
+   * vocabulaire, et l'étape 4 l'y amènera.
+   */
+  function ouvrirLaComposition(root) {
+    uiState.situationEnCours = compositionNeuve();
+    uiState.situationEnCoursErreur = "";
+    rerender(root);
+  }
+
+  /** Fermer le formulaire sans rien écrire. */
+  function annulerLaComposition(root) {
+    uiState.situationEnCours = null;
+    uiState.situationEnCoursErreur = "";
+    rerender(root);
+  }
+
+  /**
+   * Poser une valeur dans la forme en cours.
+   *
+   * **Le nom et la description ne redessinent pas.** Redessiner à chaque frappe
+   * renverrait le curseur à la fin du champ ; on écrit dans l'état, et l'écran
+   * se redessine au prochain geste qui le demande. C'est la règle de la barre
+   * de recherche, et elle vaut ici pour la même raison.
+   */
+  function poserDansLaComposition(champ, valeur, { redessiner = true, root = null } = {}) {
+    const forme = uiState.situationEnCours;
+    if (!forme) return;
+
+    forme[champ] = valeur;
+    // Ce qu'on vient de corriger n'est plus un refus : le laisser affiché
+    // ferait relire un reproche auquel on a déjà répondu.
+    uiState.situationEnCoursErreur = "";
+    if (redessiner && root) rerender(root);
+  }
+
+  /**
+   * Ouvrir le choix de l'habit, ou le refermer.
+   *
+   * **Annuler remet ce qu'on avait en ouvrant.** Le choix se voit tout de suite
+   * sur le bouton — c'est ce qui permet de comparer deux couleurs —, mais
+   * renoncer doit rendre l'état d'avant, sinon le mot « Annuler » ne veut rien
+   * dire. Même geste que sur le formulaire d'une vue.
+   */
+  function basculerLHabitDeLaComposition(root, { garder = true } = {}) {
+    const forme = uiState.situationEnCours;
+    if (!forme) return;
+
+    if (!forme.habitOuvert) {
+      forme.habitAvant = { icone: forme.icone ?? "", couleur: forme.couleur ?? "" };
+      forme.habitOuvert = true;
+      rerender(root);
+      return;
+    }
+
+    if (!garder && forme.habitAvant) {
+      forme.icone = forme.habitAvant.icone;
+      forme.couleur = forme.habitAvant.couleur;
+    }
+    forme.habitOuvert = false;
+    forme.habitAvant = null;
+    rerender(root);
+  }
+
+  /**
+   * Enregistrer la situation qu'on vient d'écrire.
+   *
+   * **Le refus se décide dans le service**, qui s'exécute en test : une requête
+   * vide, un nom vide, un homonyme, une lecture du rail déjà en place. L'écran
+   * le montre, il ne le juge pas.
+   */
+  async function enregistrerLaComposition(root) {
+    const forme = uiState.situationEnCours;
+    if (!forme) return;
+
+    const refus = refusDeLaComposition({
+      composition: forme,
+      situations: safeArray(store.situationsView?.data),
+      lectures: situationsDeLecture(champsDuCarnet())
+    });
+    if (refus) {
+      uiState.situationEnCoursErreur = refus;
+      rerender(root);
+      return;
+    }
+
+    try {
+      const created = await createSituationRecord(situationAEcrire(forme));
+      uiState.situationEnCours = null;
+      uiState.situationEnCoursErreur = "";
+      setSelectedSituationId(created?.id || null);
+      await refreshSituationsData(root, { forceSubjects: false });
+    } catch (error) {
+      console.error("createSituation failed", error);
+      // Une situation qui ne s'enregistre pas n'efface pas ce qu'on a écrit :
+      // le formulaire reste, et l'on peut réessayer.
+      uiState.createError = error instanceof Error ? error.message : "La création de la situation a échoué.";
+      rerender(root);
+    }
+  }
+
   function openCreateModal(root) {
     uiState.createModalOpen = true;
     uiState.createSubmitting = false;
@@ -2159,8 +2273,79 @@ export function createProjectSituationsEvents({
 
     const openButton = root.querySelector("#openCreateSituationButton");
     if (openButton) {
-      openButton.onclick = () => openCreateModal(root);
+      openButton.onclick = () => (estMonCarnet(store)
+        ? ouvrirLaComposition(root)
+        : openCreateModal(root));
     }
+
+    // **Les gestes du formulaire d'une situation.** Ce sont ceux du formulaire
+    // d'une vue, aux mêmes attributs : le dessin est partagé, l'écoute suit.
+    root.querySelector("[data-sujets-vue-annuler]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      annulerLaComposition(root);
+    });
+    root.querySelector("[data-sujets-vue-enregistrer]")?.addEventListener("click", async (event) => {
+      event.preventDefault();
+      await enregistrerLaComposition(root);
+    });
+    root.querySelector("[data-sujets-vue-habit]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      basculerLHabitDeLaComposition(root);
+    });
+    root.querySelector("[data-sujets-vue-habit-annuler]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      basculerLHabitDeLaComposition(root, { garder: false });
+    });
+    root.querySelector("[data-sujets-vue-habit-appliquer]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      basculerLHabitDeLaComposition(root, { garder: true });
+    });
+    root.querySelectorAll("[data-sujets-vue-couleur]").forEach((choix) => {
+      choix.addEventListener("click", (event) => {
+        event.preventDefault();
+        poserDansLaComposition("couleur", String(choix.getAttribute("data-sujets-vue-couleur") || ""), { root });
+      });
+    });
+    root.querySelectorAll("[data-sujets-vue-icone]").forEach((choix) => {
+      choix.addEventListener("click", (event) => {
+        event.preventDefault();
+        poserDansLaComposition("icone", String(choix.getAttribute("data-sujets-vue-icone") || ""), { root });
+      });
+    });
+
+    const nomDeLaSituation = root.querySelector("[data-sujets-vue-nom]");
+    if (nomDeLaSituation) {
+      nomDeLaSituation.oninput = (event) => {
+        poserDansLaComposition("nom", String(event.target.value || ""), { redessiner: false });
+      };
+    }
+    const motDeLaSituation = root.querySelector("[data-sujets-vue-description]");
+    if (motDeLaSituation) {
+      motDeLaSituation.oninput = (event) => {
+        poserDansLaComposition("description", String(event.target.value || ""), { redessiner: false });
+      };
+    }
+
+    // **La requête redessine**, elle : c'est tout l'intérêt du tableau dessous.
+    // Le curseur est remis là où il était, sinon le deuxième caractère le
+    // renverrait au début du champ et la saisie deviendrait impossible.
+    const champDeLaRequete = root.querySelector("[data-sujets-recherche]");
+    if (champDeLaRequete) {
+      champDeLaRequete.oninput = (event) => {
+        const position = event.target.selectionStart;
+        poserDansLaComposition("requete", String(event.target.value || ""), { root });
+
+        const remis = root.querySelector("[data-sujets-recherche]");
+        if (!remis) return;
+        remis.focus();
+        const ou = Number.isFinite(position) ? position : remis.value.length;
+        remis.setSelectionRange(ou, ou);
+      };
+    }
+    root.querySelector("[data-sujets-vider]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      poserDansLaComposition("requete", "", { root });
+    });
 
     // **Le rail du carnet.** Chaque entrée porte la requête de ce qu'elle
     // ouvre : les lectures comme mes situations. Cliquer l'une ou l'autre fait
@@ -2169,6 +2354,13 @@ export function createProjectSituationsEvents({
       entree.addEventListener("click", async (event) => {
         event.preventDefault();
         const requete = String(entree.getAttribute("data-sujets-lecture") || "");
+
+        // **Le rail est une navigation, et elle referme ce qu'on écrivait.**
+        // Laisser la forme en place ferait réapparaître le formulaire en
+        // revenant sur « Situations », à la place de la liste qu'on venait
+        // chercher — et l'on croirait la liste perdue.
+        uiState.situationEnCours = null;
+        uiState.situationEnCoursErreur = "";
 
         store.situationsView.requeteDuCarnet = requete;
         // Sans requête, c'est la première entrée : la liste des situations
@@ -2423,6 +2615,9 @@ export function createProjectSituationsEvents({
   return {
     openCreateModal,
     closeCreateModal,
+    ouvrirLaComposition,
+    annulerLaComposition,
+    enregistrerLaComposition,
     submitCreateSituation,
     bindEvents
   };

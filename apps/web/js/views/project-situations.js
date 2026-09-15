@@ -186,6 +186,7 @@ const {
   getSituationById,
   loadSituationSelection,
   refreshSituationsData: refreshSituationsDataInternal,
+  sujetsQueRetient,
   createSituationRecord,
   updateSituationRecord
 } = createProjectSituationsPersistence({
@@ -235,6 +236,7 @@ const {
   normalizeSituationMode,
   renderSituationsTable,
   getSituationById,
+  sujetsQueRetient,
   renderSituationKanban: (...args) => kanbanView.renderSituationKanban(...args)
 });
 

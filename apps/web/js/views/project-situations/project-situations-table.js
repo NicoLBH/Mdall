@@ -8,7 +8,102 @@ import { normalizePaginationState, renderPaginationControls } from "../ui/pagina
 import { motDeLAppartenance, pourquoiPasModifiable } from "../../services/situations-privees.js";
 import { phraseDuPerimetre, projetsRegardes, regardeToutMonTravail } from "../../services/perimetre-dune-situation.js";
 import { detailDeLAvancement, phraseDeLAvancement } from "../../services/avancement-dune-situation.js";
-import { couleurDeLaSituation, iconeDeLaSituation } from "../../services/situation-comme-une-vue.js";
+import { couleurDeLaSituation, iconeDeLaSituation, seDitParUneRequete } from "../../services/situation-comme-une-vue.js";
+
+/**
+ * Le tableau des sujets qu'une requête retient, sous le formulaire.
+ *
+ * ## Pourquoi il est là
+ *
+ * **On voit ce que la recherche rend pendant qu'on l'écrit.** Enregistrer une
+ * situation sans avoir vu ce qu'elle montre, c'est enregistrer une promesse —
+ * c'est déjà la raison d'être du tableau sous le formulaire d'une vue, et c'est
+ * la même ici (étape 3).
+ *
+ * ## Le chantier est une colonne, et il n'est pas décoratif
+ *
+ * Une situation du carnet traverse les projets : deux sujets du même nom dans
+ * deux chantiers différents sont deux lignes qu'on ne distingue plus si l'on ne
+ * dit pas d'où elles viennent. Sur l'écran d'un projet, la colonne dit la même
+ * chose et ne coûte rien — un chantier unique se lit d'un coup d'œil.
+ *
+ * ## Ne pas savoir n'est pas « rien »
+ *
+ * `sujets` vaut `null` tant que la charge n'a pas été lue. Rendre un tableau
+ * vide ferait croire que la requête ne retient rien, alors qu'on n'a pas encore
+ * regardé (règle 5) — le tableau dit donc qu'il charge.
+ *
+ * Aucune classe nouvelle : la coquille de tableau des autres écrans, ses
+ * cellules et sa pastille de statut, au même calibrage.
+ */
+export function renderTableauDesSujetsRetenusHtml({
+  sujets = null, nomsDesProjets = {}, requete = ""
+} = {}) {
+  const dite = String(requete ?? "").trim();
+  const noms = nomsDesProjets && typeof nomsDesProjets === "object" ? nomsDesProjets : {};
+  const lus = Array.isArray(sujets) ? sujets : null;
+  const combien = lus ? lus.length : 0;
+
+  const headHtml = renderDataTableHead({
+    columns: [
+      { className: "cell cell-theme", label: lus ? `${combien} sujet${combien > 1 ? "s" : ""}` : "Sujets" },
+      { className: "cell", label: "Chantier" }
+    ]
+  });
+
+  if (!lus) {
+    return renderIssuesTable({
+      gridTemplate: TABLEAU_DES_SUJETS_RETENUS,
+      headHtml,
+      state: "loading",
+      loadingTitle: "Lecture des sujets…",
+      loadingDescription: "On ne sait pas encore ce que cette recherche retient."
+    });
+  }
+
+  return renderIssuesTable({
+    gridTemplate: TABLEAU_DES_SUJETS_RETENUS,
+    headHtml,
+    rowsHtml: lus.map((sujet) => renderSujetRetenuHtml(sujet, noms)).join(""),
+    emptyTitle: dite ? "Aucun sujet ne répond à cette recherche" : "Aucun sujet retenu",
+    emptyDescription: dite
+      ? "Élargissez la requête : une situation qui ne retient rien ne montrera rien."
+      : "Écrivez une requête : c'est elle qui dit ce que la situation retient."
+  });
+}
+
+/** La largeur des deux colonnes, écrite une fois pour l'en-tête et les lignes. */
+const TABLEAU_DES_SUJETS_RETENUS = "minmax(360px, 1.6fr) 200px";
+
+/**
+ * Une ligne de ce tableau.
+ *
+ * **Le chantier est nommé, ou son identifiant est montré tel quel.** Rendre une
+ * cellule vide quand on ne sait pas nommer le projet ferait croire que le sujet
+ * n'appartient à aucun chantier, ce qui n'arrive pas (règle 5).
+ */
+function renderSujetRetenuHtml(sujet, noms) {
+  const ouvert = String(sujet?.status || "open") !== "closed";
+  const chantier = String(sujet?.project_id ?? sujet?.projectId ?? "").trim();
+
+  return `
+    <div class="issue-row">
+      <div class="cell cell-theme lvl0">
+        <span class="issue-row-title-grid">
+          <span class="issue-row-title-grid__status" aria-hidden="true">${
+            svgIcon(ouvert ? "issue-opened" : "check-circle", { className: "octicon" })}</span>
+          <span class="issue-row-title-grid__title">${escapeHtml(String(sujet?.title || "Sujet"))}</span>
+          <span class="issue-row-title-grid__meta">${
+            renderStatusBadge({
+              label: ouvert ? "Ouvert" : "Fermé",
+              tone: ouvert ? "success" : "muted"
+            })}</span>
+        </span>
+      </div>
+      <div class="cell mono-small">${escapeHtml(noms[chantier] || chantier || "—")}</div>
+    </div>
+  `;
+}
 
 export function createProjectSituationsTable({
   store,
@@ -109,10 +204,27 @@ export function createProjectSituationsTable({
     return `<span title="${escapeHtml(detailDeLAvancement(avancement))}">${renderStatusBadge({ label: phrase })}</span>`;
   }
 
-  function renderModePill(mode) {
+  /**
+   * « Manuelle » ou « Automatique » — et seulement quand ça veut encore dire
+   * quelque chose.
+   *
+   * **Une situation qui porte une requête ne se lit pas par son mode.** Elle
+   * retient ce que sa recherche retient, et le mode reste en base à la valeur
+   * qu'il avait à la création : une situation écrite au formulaire s'affichait
+   * « Manuelle » alors qu'elle ne tient aucune liste à la main. Deux façons de
+   * dire ce qu'une situation retient, dont l'une est fausse (règle 4).
+   *
+   * C'est la même règle que sur le panneau de détail, et c'est pour cela
+   * qu'elle est écrite une fois : `seDitParUneRequete`. L'étape 4 retirera le
+   * mode et cette pastille avec lui.
+   */
+  function renderModePill(situation) {
+    if (seDitParUneRequete(situation)) return "";
+
+    const automatique = normalizeSituationMode(situation?.mode) === "automatic";
     return renderStatusBadge({
-      label: normalizeSituationMode(mode) === "automatic" ? "Automatique" : "Manuelle",
-      tone: normalizeSituationMode(mode) === "automatic" ? "accent" : "default"
+      label: automatique ? "Automatique" : "Manuelle",
+      tone: automatique ? "accent" : "default"
     });
   }
 
@@ -149,7 +261,7 @@ export function createProjectSituationsTable({
             <span class="issue-row-title-grid__title">
               <span class="project-situations-table__title-inline">
                 <button type="button" class="row-title-trigger theme-text theme-text--sit project-situations-table__title-trigger" data-open-situation="${escapeHtml(situation.id)}">${title}</button>
-                ${renderModePill(situation.mode)}
+                ${renderModePill(situation)}
                 ${renderAvancementPill(situation)}
                 ${renderPerimetrePill(situation)}
                 ${renderAppartenancePill(situation)}

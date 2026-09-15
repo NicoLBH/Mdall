@@ -18,9 +18,13 @@ import { fileURLToPath } from "node:url";
 
 import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
 import { NOM_DU_CARNET } from "../../services/mon-carnet.js";
+import { renderFormulaireDeVueHtml } from "../project-subjects/project-subjects-recherche.js";
+import { champsDesSujets } from "../../services/champs-des-sujets.js";
+import { situationAEcrire } from "../../services/situation-en-composition.js";
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const source = readFileSync(resolve(ICI, "./project-situations-view.js"), "utf8");
+const tableau = readFileSync(resolve(ICI, "./project-situations-table.js"), "utf8");
 
 test("la ligne de titre partagée porte la structure des autres écrans", () => {
   const html = renderTitreDEcranHtml({
@@ -182,9 +186,97 @@ test("une lecture n'offre pas de crayon", () => {
 });
 
 /**
- * **Et elle ne dit pas « Automatique ».** C'est un mot de mécanique ; sur
- * « Assigné à moi » il ne renseigne sur rien que le titre ne dise déjà.
+ * **Et elle ne dit pas « Automatique ».** C'est un mot de mécanique ; sur une
+ * situation qui porte une requête — une lecture du rail, ou l'une de celles
+ * qu'on écrit au formulaire — il ne renseigne sur rien que le titre et la
+ * requête ne disent déjà. Pire, il est faux : le mode reste en base à la valeur
+ * qu'il avait à la création, si bien qu'une situation composée à l'étape 3
+ * s'annonçait « Manuelle » sans tenir aucune liste à la main.
+ *
+ * **La même question, posée une seule fois** : le panneau de détail et le
+ * tableau la posent à `seDitParUneRequete`. Deux formulations d'une même règle
+ * finiraient par ne plus dire la même chose (règle 4), et l'on verrait la
+ * pastille d'un côté et pas de l'autre.
  */
-test("une lecture ne porte pas de pastille de mécanique", () => {
-  assert.match(source, /const modeBadge = estUneLecture\(selectedSituation\) \? ""/);
+test("une situation qui porte une requête ne montre pas de pastille de mécanique", () => {
+  assert.match(source, /const modeBadge = seDitParUneRequete\(selectedSituation\) \? ""/);
+  assert.match(tableau, /if \(seDitParUneRequete\(situation\)\) return ""/,
+    "le tableau pose la même question que le panneau de détail");
+});
+
+/* ── « Nouvelle situation » ouvre le formulaire d'une vue ────────────────── */
+
+/**
+ * **Le dessin est partagé, l'écoute doit suivre.**
+ *
+ * Le carnet monte `renderFormulaireDeVueHtml`, qui pose les attributs de
+ * l'écran des Sujets. Un attribut écouté d'un seul côté est la panne type :
+ * le formulaire porte tout ce qu'il faut, et rien ne l'entend — le bouton
+ * « Enregistrer la situation » ne fait alors rien du tout, sans la moindre
+ * erreur nulle part.
+ *
+ * On ne relit donc pas une liste écrite à la main : **on rend le formulaire**,
+ * on en extrait les attributs qu'il porte réellement, et l'on vérifie que
+ * l'écran des situations les nomme. Renommer un attribut dans le dessin casse
+ * ce test, ce qui est exactement ce qu'on lui demande.
+ */
+test("tous les gestes du formulaire sont écoutés par le carnet", () => {
+  const html = renderFormulaireDeVueHtml({
+    champs: champsDesSujets({}), mot: "situation", habitOuvert: true
+  });
+  const poses = [...new Set([...html.matchAll(/data-sujets-vue[\w-]*/g)].map(([nom]) => nom))];
+
+  assert.ok(poses.length >= 8, `le formulaire doit porter ses gestes (vu : ${poses.length})`);
+  for (const attribut of poses) {
+    assert.ok(evenements.includes(attribut), `${attribut} est posé mais personne ne l'écoute`);
+  }
+  // La barre de recherche du formulaire porte les attributs des Sujets : c'est
+  // par elle qu'on écrit la requête, et par elle qu'on l'efface.
+  assert.match(evenements, /data-sujets-recherche/);
+  assert.match(evenements, /data-sujets-vider/);
+});
+
+/**
+ * **Le bouton ouvre le formulaire dans le carnet, la fenêtre ailleurs.**
+ *
+ * Sur l'écran d'un projet, la requête n'a pas encore de vocabulaire — les
+ * labels, les gens et les chantiers ne sont chargés que par le carnet —, et un
+ * champ de recherche qui ne reconnaîtrait aucun mot ferait chercher la panne
+ * dans la requête qu'on écrit (règle 5). L'étape 4 l'y amènera.
+ */
+test("le carnet ouvre le formulaire, le projet garde sa fenêtre", () => {
+  assert.match(evenements, /estMonCarnet\(store\)\s*\n?\s*\?\s*ouvrirLaComposition\(root\)/);
+  assert.match(evenements, /:\s*openCreateModal\(root\)/);
+  assert.match(source, /renderCompositionDeLaSituation\(\)/, "et l'écran le rend");
+  assert.match(source, /renderFormulaireDeVueHtml\(\{/, "en montant celui des Sujets, pas un second");
+});
+
+/**
+ * **Ce qu'on compose doit arriver en base.**
+ *
+ * Les colonnes `icon`, `color` et `requete` existaient depuis l'étape 1 et
+ * personne ne les écrivait : une situation créée au formulaire revenait grise,
+ * sans icône, ne retenant rien — et l'on aurait cherché la panne dans la
+ * requête. C'est le défaut qu'aucun rendu ne montre : un champ absent d'un
+ * corps de requête ne lève nulle part.
+ *
+ * La liste n'est pas recopiée ici : elle vient de ce que `situationAEcrire`
+ * produit vraiment. Ajouter une colonne au service sans l'écrire casse ce test.
+ */
+test("tout ce que le formulaire compose part vers la base", () => {
+  const service = readFileSync(resolve(ICI, "../../services/project-situations-supabase.js"), "utf8");
+  const depart = service.indexOf("export async function createSituation");
+  const fin = service.indexOf("export async function updateSituation");
+  assert.ok(depart > 0 && fin > depart, "la création doit se trouver dans le service");
+
+  const creation = service.slice(depart, fin);
+  const compose = situationAEcrire({
+    nom: "Les urgences", description: "x", requete: "priorite:haute",
+    icone: "alert", couleur: "rouge"
+  });
+
+  for (const colonne of Object.keys(compose)) {
+    assert.match(creation, new RegExp(`\\n\\s*${colonne}:`),
+      `${colonne} est composé au formulaire mais n'est pas écrit à la création`);
+  }
 });

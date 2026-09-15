@@ -69,12 +69,43 @@ export function createProjectSituationsPersistence({
     const requete = requeteDeLaSituation(situation);
     if (!requete) return loadSubjectsForSituation(situation, sujets).catch(() => null);
 
-    const charge = sujets?.rawSubjectsResult ?? {};
-    const tous = Array.isArray(charge.subjects) ? charge.subjects : safeArray(sujets?.subjectsData);
+    return sujetsQueRetient(requete, sujets);
+  }
+
+  /**
+   * Ce qu'une requête retient, ici et maintenant.
+   *
+   * ## Une seule résolution, deux appelants
+   *
+   * Une situation enregistrée et une situation qu'on est en train d'écrire
+   * posent exactement la même question à la même charge. L'écran de composition
+   * pourrait la reposer lui-même — il a la charge sous la main —, mais il
+   * devrait alors redire quels champs, quelle surcouche et quel « moi »
+   * s'appliquent, et c'est là que les deux lectures se mettraient à diverger
+   * (règle 4). Le tableau du formulaire montrerait autre chose que la situation
+   * une fois enregistrée, ce qui est précisément ce qu'on lui demande de ne pas
+   * faire.
+   *
+   * **Synchrone, parce que tout est déjà là.** La charge a été lue en ouvrant
+   * l'écran ; rendre une promesse obligerait le dessin à attendre, et la barre
+   * de recherche perdrait le curseur à chaque frappe.
+   *
+   * @param {string} requete ce qu'on demande
+   * @param {object} sujets la charge — celle de l'écran courant par défaut
+   * @returns {object[]|null} `null` quand on n'a pas de charge à interroger, et
+   *   non une liste vide, qui se lirait comme « rien ne répond » (règle 5)
+   */
+  function sujetsQueRetient(requete, sujets = sujetsDeReference()) {
+    const dite = String(requete ?? "").trim();
+    const charge = sujets?.rawSubjectsResult ?? null;
+    const tous = Array.isArray(charge?.subjects) ? charge.subjects : safeArray(sujets?.subjectsData);
+
+    // Pas de charge du tout : on ne sait pas, et l'écran le dira.
+    if (!charge && !tous.length) return null;
 
     const { sujets: retenus } = sujetsFiltres({
       sujets: tous,
-      requete,
+      requete: dite,
       champs: champsDuCarnet(),
       meta: metaDuCarnet(),
       moi: moiDuCarnet()
@@ -230,6 +261,7 @@ export function createProjectSituationsPersistence({
     getSituationById,
     loadSituationSelection,
     refreshSituationsData,
+    sujetsQueRetient,
     createSituationRecord,
     updateSituationRecord
   };

@@ -9,7 +9,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createProjectSituationsTable } from "./project-situations-table.js";
+import {
+  createProjectSituationsTable, renderTableauDesSujetsRetenusHtml
+} from "./project-situations-table.js";
 
 /**
  * Le tableau, tel qu'il est monté sur l'écran d'un projet.
@@ -250,4 +252,116 @@ test("fermer une situation n'efface pas l'icône choisie", () => {
 
   assert.match(html, /milestone/);
   assert.ok(!html.includes("table-check"), "l'ancien pictogramme d'état a disparu du titre");
+});
+
+/* ── Le tableau des sujets qu'une requête retient ────────────────────────── */
+
+const DEUX_SUJETS = [
+  { id: "u1", title: "Reprise d'étanchéité toiture", status: "open", project_id: "p-nova" },
+  { id: "u2", title: "Calepinage façade nord", status: "closed", project_id: "p-verifas" }
+];
+const NOMS = { "p-nova": "NOVACLIM", "p-verifas": "VERIFAS" };
+
+/**
+ * **On voit ce que la recherche rend pendant qu'on l'écrit.** Enregistrer une
+ * situation sans avoir vu ce qu'elle montre, c'est enregistrer une promesse.
+ */
+test("le tableau montre les sujets retenus, et d'où ils viennent", () => {
+  const html = renderTableauDesSujetsRetenusHtml({
+    sujets: DEUX_SUJETS, nomsDesProjets: NOMS, requete: "toiture"
+  });
+
+  assert.match(html, /Reprise d&#39;étanchéité toiture|Reprise d&#x27;étanchéité toiture/);
+  assert.match(html, /Calepinage façade nord/);
+  assert.match(html, /NOVACLIM/, "le chantier de chacun est nommé");
+  assert.match(html, /VERIFAS/);
+  assert.match(html, /2 sujets/, "et l'on sait combien la requête en retient");
+});
+
+/**
+ * **Une situation du carnet traverse les projets.** Deux sujets du même nom
+ * dans deux chantiers différents sont deux lignes qu'on ne distingue plus si
+ * l'on ne dit pas d'où elles viennent.
+ */
+test("un chantier qu'on ne sait pas nommer se montre quand même", () => {
+  const html = renderTableauDesSujetsRetenusHtml({
+    sujets: [{ id: "u3", title: "Un sujet", project_id: "p-inconnu" }],
+    nomsDesProjets: NOMS,
+    requete: "a"
+  });
+
+  assert.match(html, /p-inconnu/, "son identifiant plutôt qu'une cellule vide (règle 5)");
+});
+
+/** Un seul sujet ne se dit pas au pluriel. */
+test("le compte s'accorde", () => {
+  const html = renderTableauDesSujetsRetenusHtml({
+    sujets: [DEUX_SUJETS[0]], nomsDesProjets: NOMS, requete: "toiture"
+  });
+
+  assert.match(html, /1 sujet</);
+});
+
+/**
+ * **Ne pas savoir n'est pas « rien ».**
+ *
+ * Tant que la charge n'a pas été lue, rendre un tableau vide ferait croire que
+ * la requête ne retient rien alors qu'on n'a pas encore regardé (règle 5) —
+ * et l'on irait chercher la faute dans la requête qu'on vient d'écrire.
+ */
+test("sans charge lue, le tableau dit qu'il charge et ne dit pas « aucun »", () => {
+  const html = renderTableauDesSujetsRetenusHtml({ sujets: null, requete: "toiture" });
+
+  assert.match(html, /data-table-shell--loading/);
+  assert.match(html, /Lecture des sujets/);
+  assert.ok(!html.includes("Aucun sujet"), "on ne prétend pas que rien ne répond");
+});
+
+/** Une requête qui ne retient rien le dit, et dit quoi faire. */
+test("une requête sans résultat propose de l'élargir", () => {
+  const html = renderTableauDesSujetsRetenusHtml({ sujets: [], requete: "zoiseau" });
+
+  assert.match(html, /Aucun sujet ne répond à cette recherche/);
+  assert.match(html, /Élargissez la requête/);
+});
+
+/** Sans requête du tout, on n'a rien élargi : on n'a rien écrit. */
+test("sans requête, le tableau demande d'en écrire une", () => {
+  const html = renderTableauDesSujetsRetenusHtml({ sujets: [], requete: "" });
+
+  assert.match(html, /Écrivez une requête/);
+  assert.ok(!html.includes("Élargissez la requête"));
+});
+
+/* ── « Manuelle » ne se dit plus quand une requête parle ─────────────────── */
+
+/**
+ * **Une situation qui porte une requête ne se lit pas par son mode.**
+ *
+ * Elle retient ce que sa recherche retient ; le mode, lui, reste en base à la
+ * valeur qu'il avait à la création. Une situation écrite au formulaire de
+ * l'étape 3 s'affichait donc « Manuelle » alors qu'elle ne tient aucune liste à
+ * la main : deux façons de dire ce qu'une situation retient, dont l'une est
+ * fausse (règle 4).
+ */
+test("une situation qui porte une requête ne dit pas « Manuelle »", () => {
+  const html = tableau().renderSituationTitleCell({
+    ...SITUATION,
+    owner_id: "22222222-2222-4222-8222-222222222222",
+    requete: "priorite:haute statut:ouvert"
+  });
+
+  assert.match(html, /Ma semaine/);
+  assert.ok(!html.includes("Manuelle"), "le mot de mécanique ne s'affiche plus");
+  assert.ok(!html.includes("Automatique"));
+  assert.equal(html.match(/class="badge/g)?.length ?? 0, 0, "et pas de pastille vide à la place");
+});
+
+/** Tant qu'elle n'en porte pas, le mode reste la seule chose qu'on sache dire. */
+test("une situation sans requête garde sa pastille de mécanique", () => {
+  const html = tableau().renderSituationTitleCell({
+    ...SITUATION, owner_id: "22222222-2222-4222-8222-222222222222", mode: "automatic"
+  });
+
+  assert.match(html, /Automatique/);
 });
