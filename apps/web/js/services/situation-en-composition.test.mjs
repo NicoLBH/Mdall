@@ -10,7 +10,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  MOT_DE_LA_SITUATION, compositionNeuve, refusDeLaComposition, situationAEcrire
+  MOT_DE_LA_SITUATION, STATUT, compositionDepuisLaSituation, compositionNeuve,
+  refusDeLaComposition, situationAEcrire, statutDe
 } from "./situation-en-composition.js";
 import { REFUS, phrasesDuRefus } from "./vues-des-sujets.js";
 
@@ -161,4 +162,87 @@ test("une icône et une couleur inconnues retombent sur le jeu", () => {
 
   assert.ok(ecrit.icon && ecrit.icon !== "zoiseau");
   assert.ok(ecrit.color && ecrit.color !== "chartreuse");
+});
+
+/* ── Rouvrir une situation pour la modifier ──────────────────────────────── */
+
+const EN_BASE = {
+  id: "s-1",
+  title: "Les urgences du lot 03",
+  description: "Ce qui ne peut pas attendre",
+  icon: "alert",
+  color: "rouge",
+  status: "closed",
+  requete: "priorite:haute"
+};
+
+/**
+ * **Le crayon ouvre le même formulaire, rempli** (étape 4). Un second
+ * formulaire de modification aurait été un endroit de plus où oublier une
+ * colonne (règle 10).
+ */
+test("une situation en base revient sous la forme du formulaire", () => {
+  const forme = compositionDepuisLaSituation(EN_BASE, { requete: EN_BASE.requete });
+
+  assert.equal(forme.id, "s-1");
+  assert.equal(forme.nom, "Les urgences du lot 03");
+  assert.equal(forme.description, "Ce qui ne peut pas attendre");
+  assert.equal(forme.icone, "alert");
+  assert.equal(forme.couleur, "rouge");
+  assert.equal(forme.statut, STATUT.FERMEE);
+  assert.equal(forme.requete, "priorite:haute");
+  assert.equal(forme.habitOuvert, false, "on rouvre le formulaire, pas le choix de l'habit");
+});
+
+/**
+ * **La requête se donne, elle ne se devine pas.**
+ *
+ * Reprendre un ancien `filter_definition` est une affirmation qui peut échouer,
+ * et c'est `requete-dun-filtre.js` qui la fait et qui dit quand elle n'aboutit
+ * pas. Ce module ne la referait pas mieux : sans requête donnée, il n'en
+ * invente pas — et une requête vide est refusée à l'enregistrement, si bien
+ * qu'on ne peut pas remplacer un filtre par moins que lui par mégarde.
+ */
+test("sans requête donnée, le formulaire n'en invente pas", () => {
+  // La situation en porte une en base, et on ne la lui demande pas : c'est
+  // l'appelant qui décide de ce qu'on préremplit, parce que lui seul sait si la
+  // reprise a abouti.
+  const forme = compositionDepuisLaSituation(EN_BASE);
+
+  assert.equal(forme.requete, "");
+  assert.equal(
+    refusDeLaComposition({ composition: forme }), "sans_requete",
+    "et elle ne s'enregistre pas en l'état"
+  );
+});
+
+/** Un habit que le jeu ne connaît pas retombe dessus, comme partout. */
+test("une situation sans habit revient avec celui par défaut", () => {
+  const forme = compositionDepuisLaSituation({ id: "s-2", title: "X" });
+
+  assert.equal(forme.icone, compositionNeuve().icone);
+  assert.equal(forme.couleur, compositionNeuve().couleur);
+  assert.equal(forme.statut, STATUT.OUVERTE);
+});
+
+/* ── L'état, qui n'est pas une recherche ─────────────────────────────────── */
+
+/**
+ * **Une situation fermée retiendrait les mêmes sujets.** C'est pourquoi son
+ * état ne s'écrit pas dans la requête, et pourquoi le formulaire le demande à
+ * part — et pourquoi il part en base avec le reste.
+ */
+test("l'état part en base avec ce qu'on écrit", () => {
+  assert.equal(situationAEcrire({ nom: "X", requete: "a" }).status, STATUT.OUVERTE);
+  assert.equal(
+    situationAEcrire({ nom: "X", requete: "a", statut: STATUT.FERMEE }).status,
+    STATUT.FERMEE
+  );
+});
+
+/** Tout ce qui n'est pas « fermée » est ouverte : on ne range pas par accident. */
+test("un état inconnu laisse la situation ouverte", () => {
+  assert.equal(statutDe("zoiseau"), STATUT.OUVERTE);
+  assert.equal(statutDe(null), STATUT.OUVERTE);
+  assert.equal(statutDe("CLOSED"), STATUT.FERMEE);
 });

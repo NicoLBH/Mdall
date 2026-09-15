@@ -223,11 +223,74 @@ la panne dans la requête qu'on écrit (règle 5). C'est l'étape 4 qui l'y amè
 au formulaire suppose de savoir rouvrir ce que `mode` et `filter_definition`
 disent — ce qui est précisément la question de l'étape 4.
 
-### Étape 4 — `mode` et `filter_definition` s'effacent
+### Étape 4 — `mode` et `filter_definition` s'effacent · *faite*
 
 Quand la requête sait dire ce qu'ils disaient, on les retire. Pas avant : une
 situation qui perdrait son filtre sans que sa requête le reprenne changerait de
 contenu sans que personne l'ait demandé.
+
+#### On ne prétend pas : on relit
+
+Traduire un filtre en requête, c'est affirmer que les deux retiennent les mêmes
+sujets. Une affirmation pareille ne se fait pas sur parole : un champ que
+l'écran ne déclare pas, un label supprimé, une priorité partielle que la barre
+ne sait pas écrire, et la situation change de contenu en silence.
+
+`requete-dun-filtre.js` écrit donc la requête, **puis la relit avec le même
+analyseur que la barre**, et compare. Ce qui ne revient pas identique est nommé.
+Aucune règle de correspondance n'est réécrite : c'est `parseQuery` qui juge, et
+c'est lui qui filtrera ensuite (règle 4).
+
+Perdu ne veut pas dire faux : cela veut dire que cette requête-là n'en dit pas
+autant. La situation continue alors de passer par l'ancienne correspondance, et
+le formulaire ne préremplit rien — il dit ce qu'il n'a pas su reprendre (règle
+5). Comme une requête vide est refusée à l'enregistrement, on ne peut pas
+remplacer un filtre par moins que lui par mégarde.
+
+#### Toutes les cases cochées, ce n'est pas une condition
+
+Le filtre proposait quatre cases de priorité ; les quatre cochées ne retiraient
+rien. Les écrire aurait transformé un « tout » en une énumération que la barre
+ne sait pas porter — `priorité` est à choix simple, le dernier jeton gagne — et
+la liste aurait perdu trois priorités sur quatre.
+
+#### Une situation manuelle n'a pas de filtre, et n'en reçoit pas un
+
+Elle tient une liste à la main. Traduire son `filter_definition` — vide —
+donnerait une requête vide, c'est-à-dire **tous les sujets** : quatre sujets
+choisis deviendraient la liste entière du chantier. C'est le mode qui distingue
+les deux, et c'est la dernière chose qu'il sert à faire.
+
+#### Ce qui disparaît de l'écran
+
+Le panneau de réglages avec ses cases, ses « IDs séparés par des virgules » et
+son choix de mécanique : le crayon ouvre désormais le formulaire de l'étape 3,
+rempli, avec le tableau dessous. La fenêtre de création aussi — « Nouvelle
+situation » ouvre ce même formulaire sur les **deux** écrans.
+
+« Manuelle » et « Automatique » quittent le tableau et le panneau de détail.
+C'était un mot de mécanique là où l'on attend une intention, et il ne disait
+plus rien de vrai.
+
+#### Chaque écran a son vocabulaire, et il va le chercher là où il est
+
+L'étape 3 réservait le formulaire au carnet, faute de grammaire ailleurs. Le
+carnet connaît les labels et les gens de tous mes chantiers ; l'écran d'un
+projet connaît en plus **ses lots et ses situations**. Prendre celui du carnet
+sur l'écran d'un projet y ferait disparaître `lot:` — la même requête retiendrait
+deux choses selon l'onglet d'où on la regarde (règle 4). Le choix se fait à un
+seul endroit, et les trois portes vont ensemble : les champs disent ce qui
+s'écrit, la surcouche ce que chaque sujet porte, « moi » qui regarde.
+
+#### Les colonnes restent en base
+
+Elles portent ce que des situations retiennent aujourd'hui, et un constat ne
+devient jamais faux (règle 6). Un `drop column` est irréversible et immédiat :
+la version du navigateur déjà ouverte chez quelqu'un tomberait en 400 au milieu
+de sa journée. La migration écrit donc ce que la base sait d'elle-même — deux
+commentaires de colonne, strictement additifs. Plus rien ne les écrit, et une
+seule écriture de `mode` subsiste, qui va dans le bon sens : enregistrer une
+requête **efface** l'ancien filtre, parce qu'elle le reprend.
 
 ---
 

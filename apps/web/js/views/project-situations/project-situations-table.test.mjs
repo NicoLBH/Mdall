@@ -56,7 +56,7 @@ test("une situation à moi ne porte aucune mention", () => {
   assert.ok(!html.includes("cloisonnement"), "rien à signaler ne se signale pas");
   // Une seule pastille : celle du mode. Une pastille vide n'est pas « rien »,
   // c'est un rectangle gris dont personne ne saura quoi penser.
-  assert.equal(html.match(/class="badge/g)?.length, 1, "aucune pastille en trop, même vide");
+  assert.equal(html.match(/class="badge/g)?.length ?? 0, 0, "aucune pastille en trop, même vide");
 });
 
 /**
@@ -71,7 +71,7 @@ test("une situation d'avant le cloisonnement le dit, et dit quoi faire", () => {
   assert.match(html, /Reprenez-la/, "l'infobulle dit la suite, pas seulement l'empêchement");
   // La pastille des autres écrans, pas une largeur inventée pour l'occasion.
   assert.match(html, /class="badge"/);
-  assert.equal(html.match(/class="badge/g)?.length, 2, "celle du mode, et celle-ci");
+  assert.equal(html.match(/class="badge/g)?.length, 1, "celle-ci, et elle seule");
 });
 
 /* ── Ce que la situation regarde ─────────────────────────────────────────── */
@@ -93,7 +93,7 @@ test("une situation qui ne regarde que ce projet ne le dit pas", () => {
   });
 
   assert.ok(!html.includes("projet"), "rien à signaler ne se signale pas");
-  assert.equal(html.match(/class="badge/g)?.length, 1, "celle du mode, et rien d'autre");
+  assert.equal(html.match(/class="badge/g)?.length ?? 0, 0, "rien à signaler ne se signale pas");
 });
 
 /** Une situation qui en regarde plusieurs se distingue au premier coup d'œil. */
@@ -105,7 +105,7 @@ test("une situation qui traverse les projets le dit", () => {
   });
 
   assert.match(html, /2 projets/);
-  assert.equal(html.match(/class="badge/g)?.length, 2);
+  assert.equal(html.match(/class="badge/g)?.length, 1, "celle du périmètre, et elle seule");
 });
 
 /**
@@ -127,7 +127,7 @@ test("tout mon travail se voit, bien qu'il ne nomme aucun projet", () => {
 test("sans périmètre écrit, rien de nouveau ne s'affiche", () => {
   const html = tableau().renderSituationTitleCell({ ...SITUATION, owner_id: BERTRAND, project_id: BERTRAND });
 
-  assert.equal(html.match(/class="badge/g)?.length, 1);
+  assert.equal(html.match(/class="badge/g)?.length ?? 0, 0);
 });
 
 /* ── Le même tableau, monté dans le carnet ───────────────────────────────── */
@@ -159,7 +159,7 @@ test("la même ligne se tait sur l'écran de son projet", () => {
   });
 
   assert.ok(!html.includes("Résidence Bertrand"));
-  assert.equal(html.match(/class="badge/g)?.length, 1);
+  assert.equal(html.match(/class="badge/g)?.length ?? 0, 0);
 });
 
 /**
@@ -198,7 +198,7 @@ test("une situation dont on ignore l'avancement n'affiche pas « 0 % »", () => 
   const html = tableau().renderSituationTitleCell({ ...SITUATION, owner_id: BERTRAND });
 
   assert.ok(!html.includes("%"), "rien plutôt qu'un chiffre inventé");
-  assert.equal(html.match(/class="badge/g)?.length, 1, "seule la pastille du mode");
+  assert.equal(html.match(/class="badge/g)?.length ?? 0, 0, "aucune, et surtout pas « 0 % »");
 });
 
 /** Et une situation vide ne met pas un pourcentage sur zéro sujet. */
@@ -336,15 +336,13 @@ test("sans requête, le tableau demande d'en écrire une", () => {
 /* ── « Manuelle » ne se dit plus quand une requête parle ─────────────────── */
 
 /**
- * **Une situation qui porte une requête ne se lit pas par son mode.**
+ * **Le mot de mécanique a quitté l'écran** (étape 4).
  *
- * Elle retient ce que sa recherche retient ; le mode, lui, reste en base à la
- * valeur qu'il avait à la création. Une situation écrite au formulaire de
- * l'étape 3 s'affichait donc « Manuelle » alors qu'elle ne tient aucune liste à
- * la main : deux façons de dire ce qu'une situation retient, dont l'une est
- * fausse (règle 4).
+ * Une situation dit ce qu'elle retient par sa requête ; « Manuelle » restait
+ * pourtant sur chaque ligne, à la valeur que le mode avait à la création. Deux
+ * façons de dire ce qu'une situation retient, dont l'une est fausse (règle 4).
  */
-test("une situation qui porte une requête ne dit pas « Manuelle »", () => {
+test("aucune situation ne dit plus « Manuelle » ni « Automatique »", () => {
   const html = tableau().renderSituationTitleCell({
     ...SITUATION,
     owner_id: "22222222-2222-4222-8222-222222222222",
@@ -357,11 +355,19 @@ test("une situation qui porte une requête ne dit pas « Manuelle »", () => {
   assert.equal(html.match(/class="badge/g)?.length ?? 0, 0, "et pas de pastille vide à la place");
 });
 
-/** Tant qu'elle n'en porte pas, le mode reste la seule chose qu'on sache dire. */
-test("une situation sans requête garde sa pastille de mécanique", () => {
+/**
+ * **Y compris celles d'avant, qui en portaient encore un vrai.**
+ *
+ * L'étape 3 masquait la pastille sur les situations qui portent une requête ;
+ * elle restait sur les autres, où elle ne disait pas mieux la vérité — le mode
+ * y est celui de la création, et plus personne ne le modifie. C'est un mot de
+ * mécanique là où l'on attend une intention (étape 4).
+ */
+test("une situation d'avant, sans requête, n'en dit pas davantage", () => {
   const html = tableau().renderSituationTitleCell({
     ...SITUATION, owner_id: "22222222-2222-4222-8222-222222222222", mode: "automatic"
   });
 
-  assert.match(html, /Automatique/);
+  assert.ok(!html.includes("Automatique"));
+  assert.ok(!html.includes("Manuelle"));
 });

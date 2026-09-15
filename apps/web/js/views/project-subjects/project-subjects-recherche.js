@@ -773,7 +773,7 @@ export function renderTableauDesVuesHtml({ vues = [], menuOuvert = "", lots = 0 
  */
 export function renderFormulaireDeVueHtml({
   vue = {}, champs = [], ignores = [], refus = "", lectureDoublee = "",
-  tableauHtml = "", habitOuvert = false, mot = MOT_DE_LA_VUE
+  tableauHtml = "", habitOuvert = false, mot = MOT_DE_LA_VUE, champsEnPlusHtml = ""
 } = {}) {
   const icone = iconeDeLaVue(vue.icone);
   const couleur = couleurDeLaVue(vue.couleur);
@@ -813,6 +813,15 @@ export function renderFormulaireDeVueHtml({
           placeholder="À quoi elle sert — facultatif"
           value="${escapeHtml(vue.description ?? "")}">
       </label>
+
+      ${/*
+        **Ce que la chose a en plus d'une recherche.** Une vue n'est qu'une
+        recherche nommée ; une situation est de surcroît ouverte ou fermée, ce
+        qui ne se dit pas dans une requête — une situation fermée retiendrait
+        les mêmes sujets. Plutôt que d'ajouter ici un champ dont l'écran des
+        Sujets n'a que faire, la place est laissée à qui monte le formulaire.
+      */""}
+      ${champsEnPlusHtml}
 
       <div class="sujets-vue-forme__champ">
         <span class="sujets-vue-forme__intitule">Requête ${MARQUE_OBLIGATOIRE}</span>
