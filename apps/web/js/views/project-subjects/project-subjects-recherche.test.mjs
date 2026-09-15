@@ -1124,3 +1124,77 @@ test("replié, l'épingle reste éteinte sur une lecture du rail", () => {
 
   assert.match(html, /sujets-rail__epingles" data-active="false"/);
 });
+
+/* ── Le formulaire compose une vue, ou une situation ─────────────────────── */
+
+/**
+ * **Le carnet écrit des situations avec ce formulaire-ci.**
+ *
+ * Icône, couleur, titre, description, requête, et le tableau dessous : c'est
+ * mot pour mot ce qu'une situation demande. En dessiner un second pour l'écran
+ * des situations, c'est accepter qu'ils diffèrent d'un pixel, puis d'un
+ * comportement — et deux formulaires à recalibrer à chaque retouche.
+ *
+ * Seul le **nom de la chose** change, et il se donne. Le rendu s'exécute ici :
+ * un mot oublié dans un titre ou sur un bouton se verrait à l'écran, pas dans
+ * une lecture de source.
+ */
+test("le formulaire prend le mot de ce qu'il compose", () => {
+  const vue = renderFormulaireDeVueHtml({ champs: champsDesSujets({}) });
+  const situation = renderFormulaireDeVueHtml({
+    champs: champsDesSujets({}), mot: "situation"
+  });
+
+  assert.match(vue, /Nouvelle vue/);
+  assert.match(vue, /Enregistrer la vue/);
+  assert.match(situation, /Nouvelle situation/);
+  assert.match(situation, /Enregistrer la situation/);
+  assert.ok(!situation.includes("Nouvelle vue"), "l'écran des situations ne parle pas de vues");
+  assert.ok(!situation.includes("Enregistrer la vue"));
+});
+
+/** Et à la modification, le titre suit le même mot. */
+test("modifier une situation ne s'annonce pas comme modifier une vue", () => {
+  const html = renderFormulaireDeVueHtml({
+    vue: { id: "s1", nom: "Les urgences" }, champs: champsDesSujets({}), mot: "situation"
+  });
+
+  assert.match(html, /Modifier la situation/);
+  assert.ok(!html.includes("Modifier la vue"));
+});
+
+/** Le refus aussi : il nomme ce qu'on est en train d'écrire. */
+test("le refus affiché parle de la chose qu'on compose", () => {
+  const html = renderFormulaireDeVueHtml({
+    champs: champsDesSujets({}), mot: "situation", refus: "sans_requete"
+  });
+
+  assert.match(html, /Une situation sans recherche ne montrerait rien/);
+});
+
+/**
+ * **L'épingle n'a rien à faire dans le formulaire.**
+ *
+ * Épingler la recherche et enregistrer ce qu'on est en train d'écrire sont deux
+ * gestes pour une seule chose — et celui du haut ne garderait ni le nom ni
+ * l'habit qu'on vient de choisir (règle 10). Le bouton reste sur la barre
+ * ordinaire, où il est le seul moyen de garder une recherche.
+ */
+test("la barre du formulaire n'offre pas d'épingler, la barre ordinaire si", () => {
+  const ordinaire = renderRechercheDesSujetsHtml({ champs: champsDesSujets({}) });
+  const dansLeFormulaire = renderFormulaireDeVueHtml({ champs: champsDesSujets({}) });
+
+  assert.match(ordinaire, /data-sujets-epingler/);
+  assert.ok(!dansLeFormulaire.includes("data-sujets-epingler"));
+  // Effacer reste offert : c'est le geste de la requête qu'on écrit.
+  assert.match(dansLeFormulaire, /data-sujets-vider/);
+});
+
+/** Le choix de l'habit nomme la chose lui aussi, pour qui l'écoute. */
+test("le menu de l'habit nomme la situation quand c'est une situation", () => {
+  const html = renderChoixDeLHabitHtml({ icone: "alert", couleur: null, mot: "situation" });
+
+  assert.match(html, /aria-label="Icône et couleur de la situation"/);
+  assert.match(html, /aria-label="Couleur de la situation"/);
+  assert.match(html, /aria-label="Icône de la situation"/);
+});

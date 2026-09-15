@@ -6,7 +6,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  COULEURS_DE_VUE, COULEUR_PAR_DEFAUT, ICONES_DE_VUE, ICONE_PAR_DEFAUT, PHRASES_DU_REFUS, REFUS,
+  COULEURS_DE_VUE, COULEUR_PAR_DEFAUT, ICONES_DE_VUE, ICONE_PAR_DEFAUT, MOT_DE_LA_VUE,
+  PHRASES_DU_REFUS, REFUS, phrasesDuRefus,
   couleurDeLaVue, dateEnFrancais, gestesDeLaVue, iconeDeLaVue, laLectureDoublee, motsDeLaVue,
   phraseDesVues, phraseDuRefus, refusDeLaVue, vueAEcrire, vuePourLEcran, vueRegardee
 } from "./vues-des-sujets.js";
@@ -419,4 +420,37 @@ test("sans nom de lecture, le refus reste général", () => {
     phraseDuRefus(REFUS.SANS_NOM, { lecture: "Mentions" }),
     PHRASES_DU_REFUS[REFUS.SANS_NOM]
   );
+});
+
+/* ── Le mot de la chose qu'on compose ────────────────────────────────────── */
+
+/**
+ * **Une seule rédaction, deux écrans.**
+ *
+ * Le carnet compose des situations avec ce formulaire et ces refus-là. Recopier
+ * les quatre phrases pour elles ferait deux jeux qui divergeraient au premier
+ * réglage (règle 10) — et c'est celui qu'on ne relit pas qui resterait faux.
+ * Seul le nom de la chose change, et il se donne.
+ */
+test("les phrases du refus prennent le mot de ce qu'on compose", () => {
+  const dites = phrasesDuRefus("situation");
+
+  assert.match(dites[REFUS.SANS_REQUETE], /Une situation sans recherche/);
+  assert.match(dites[REFUS.DEJA_LA], /Deux situations du même nom/);
+  assert.equal(phraseDuRefus(REFUS.SANS_REQUETE, { mot: "situation" }), dites[REFUS.SANS_REQUETE]);
+});
+
+/** Sans mot donné, c'est une vue : cet écran-ci n'a rien à préciser. */
+test("par défaut, ce sont les phrases d'une vue", () => {
+  assert.equal(MOT_DE_LA_VUE, "vue");
+  assert.deepEqual(phrasesDuRefus(), PHRASES_DU_REFUS);
+  assert.deepEqual(phrasesDuRefus("  "), PHRASES_DU_REFUS, "un mot vide ne fabrique pas « Une  sans recherche »");
+});
+
+/** Chaque jeu reste complet : un mot donné ne fait pas disparaître un refus. */
+test("le jeu de phrases reste complet quel que soit le mot", () => {
+  const dites = Object.values(REFUS).map((motif) => phrasesDuRefus("situation")[motif]);
+
+  assert.equal(dites.filter(Boolean).length, Object.values(REFUS).length);
+  assert.equal(new Set(dites).size, dites.length);
 });

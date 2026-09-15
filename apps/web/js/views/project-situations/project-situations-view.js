@@ -7,12 +7,18 @@ import { renderLightTabs } from "../ui/light-tabs.js";
 import { renderSvgLineChart } from "../../utils/svg-line-chart.js";
 import { renderSituationForm } from "./project-situations-form.js";
 import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
-import { NOM_DU_CARNET } from "../../services/mon-carnet.js";
-import { renderRailDesSujetsHtml } from "../project-subjects/project-subjects-recherche.js";
+import { NOM_DU_CARNET, estMonCarnet } from "../../services/mon-carnet.js";
+import {
+  renderFormulaireDeVueHtml, renderRailDesSujetsHtml
+} from "../project-subjects/project-subjects-recherche.js";
+import { MOT_DE_LA_SITUATION } from "../../services/situation-en-composition.js";
+import { laLectureDoublee } from "../../services/vues-des-sujets.js";
+import { sujetsFiltres } from "../../services/champs-des-sujets.js";
+import { renderTableauDesSujetsRetenusHtml } from "./project-situations-table.js";
 import { railWidth } from "../ui/project-rail.js";
 import { champsDuCarnet } from "../../services/vocabulaire-du-carnet.js";
 import { NOM_DES_SITUATIONS, estUneLecture, situationsDeLecture } from "../../services/lectures-du-carnet.js";
-import { situationCommeUneEpingle } from "../../services/situation-comme-une-vue.js";
+import { situationCommeUneEpingle, seDitParUneRequete } from "../../services/situation-comme-une-vue.js";
 import { moiDansLeProjet } from "../../services/meta-des-sujets.js";
 import { renderSituationGridView } from "./project-situations-view-grid.js";
 import { renderSituationRoadmapView } from "./project-situations-view-roadmap.js";
@@ -25,6 +31,10 @@ export function createProjectSituationsView({
   normalizeSituationMode,
   renderSituationsTable,
   getSituationById,
+  /** Ce qu'une requête retient — la même résolution que pour une situation
+   *  enregistrée, sans quoi le tableau du formulaire montrerait autre chose
+   *  que ce qu'on est en train d'écrire (règle 4). */
+  sujetsQueRetient = () => null,
   renderSituationKanban
 }) {
   /**
@@ -49,13 +59,37 @@ export function createProjectSituationsView({
    * La première entrée s'appelle « Situations » et non « Sujets » : dans le
    * carnet, c'est la liste des situations qu'elle ouvre, pas une situation.
    */
-  function renderRailDuCarnet() {
-    const charge = store.situationsView?.sujetsDuCarnet?.rawSubjectsResult ?? {};
-    const champs = champsDuCarnet({
-      charge,
+  /**
+   * Ce que le carnet a chargé : les sujets de tous mes chantiers.
+   *
+   * Demandé ici plutôt que recopié dans chaque rendu : le rail, le formulaire
+   * et son tableau posent la même question, et trois lectures de la même case
+   * finissent par ne plus dire la même chose (règle 4).
+   */
+  function chargeDuCarnet() {
+    return store.situationsView?.sujetsDuCarnet?.rawSubjectsResult ?? {};
+  }
+
+  /** La grammaire des requêtes du carnet : ses labels, ses gens, ses chantiers. */
+  function vocabulaireDuCarnet() {
+    return champsDuCarnet({
+      charge: chargeDuCarnet(),
       personnes: store.situationsView?.personnesDuCarnet ?? [],
       nomsDesProjets: store.situationsView?.nomsDesProjets ?? {}
     });
+  }
+
+  /** Qui regarde. « assigné:moi » ne veut rien dire sans lui. */
+  function moiDansLeCarnet() {
+    return moiDansLeProjet({
+      collaborateurs: store.situationsView?.personnesDuCarnet ?? [],
+      utilisateur: store.user?.id ?? ""
+    });
+  }
+
+  function renderRailDuCarnet() {
+    const charge = chargeDuCarnet();
+    const champs = vocabulaireDuCarnet();
     const requete = String(store.situationsView?.requeteDuCarnet || "");
     const replie = store.situationsView?.railReplie === true;
 
@@ -71,10 +105,7 @@ export function createProjectSituationsView({
       champs,
       requete,
       meta: {},
-      moi: moiDansLeProjet({
-        collaborateurs: store.situationsView?.personnesDuCarnet ?? [],
-        utilisateur: store.user?.id ?? ""
-      }),
+      moi: moiDansLeCarnet(),
       epingles,
       replie,
       sousVue: "subjects"
@@ -375,6 +406,52 @@ export function createProjectSituationsView({
     });
   }
 
+  /**
+   * Le formulaire d'une situation qu'on écrit, et ce qu'elle retient.
+   *
+   * ## C'est celui d'une vue, et ce n'est pas une ressemblance
+   *
+   * `renderFormulaireDeVueHtml` porte l'habit, le nom, la description et la
+   * requête, avec le tableau dessous. Il ne connaît rien des projets ni des
+   * situations : on lui donne le mot de ce qu'on compose, et il dit
+   * « Nouvelle situation » et « Enregistrer la situation ». En dessiner un
+   * second pour cet écran-ci, c'est accepter qu'ils diffèrent d'un pixel, puis
+   * d'un comportement (étape 3).
+   *
+   * ## Le tableau montre ce que la requête retient, pendant qu'on l'écrit
+   *
+   * Et il le demande à la **même** résolution que celle d'une situation
+   * enregistrée : ce qu'on voit ici est ce qu'on verra après avoir enregistré,
+   * sans quoi le formulaire promettrait autre chose que ce qu'il fabrique.
+   */
+  function renderCompositionDeLaSituation() {
+    const forme = uiState.situationEnCours;
+    const champs = vocabulaireDuCarnet();
+    const requete = String(forme?.requete || "");
+    const { ignores } = sujetsFiltres({
+      sujets: [], requete, champs, moi: moiDansLeCarnet()
+    });
+
+    return renderFormulaireDeVueHtml({
+      vue: forme ?? {},
+      mot: MOT_DE_LA_SITUATION,
+      champs,
+      ignores,
+      refus: String(uiState.situationEnCoursErreur || ""),
+      // Laquelle des lectures du rail cette requête double, s'il y a lieu : « le
+      // rail fait déjà cette recherche » fait chercher laquelle parmi cinq.
+      lectureDoublee: laLectureDoublee({
+        requete, lectures: situationsDeLecture(champs)
+      })?.nom ?? "",
+      habitOuvert: forme?.habitOuvert === true,
+      tableauHtml: `<div class="project-table-host">${renderTableauDesSujetsRetenusHtml({
+        sujets: sujetsQueRetient(requete),
+        nomsDesProjets: store.situationsView?.nomsDesProjets ?? {},
+        requete
+      })}</div>`
+    });
+  }
+
   function renderSelectedSituationDetails() {
     const selectedSituationId = String(store.situationsView?.selectedSituationId || "").trim();
     const selectedSituation = getSituationById(selectedSituationId);
@@ -388,10 +465,13 @@ export function createProjectSituationsView({
       `;
     }
 
-    // **Une lecture dit ce qu'elle retient, pas comment.** « Automatique » est
-    // un mot de mécanique ; sur « Assigné à moi », il ne renseigne sur rien que
-    // le titre ne dise déjà.
-    const modeBadge = estUneLecture(selectedSituation) ? "" : renderStatusBadge({
+    // **Une situation qui porte une requête dit ce qu'elle retient, pas
+    // comment.** « Automatique » est un mot de mécanique ; sur « Assigné à
+    // moi » comme sur une situation écrite au formulaire, il ne renseigne sur
+    // rien que le titre et la requête ne disent déjà — et il est faux, le mode
+    // restant celui qu'on n'a jamais choisi. Même règle que dans le tableau, et
+    // c'est la même question qu'on pose (règle 4).
+    const modeBadge = seDitParUneRequete(selectedSituation) ? "" : renderStatusBadge({
       label: normalizeSituationMode(selectedSituation.mode) === "automatic" ? "Automatique" : "Manuelle",
       tone: normalizeSituationMode(selectedSituation.mode) === "automatic" ? "accent" : "default"
     });
@@ -549,6 +629,8 @@ export function createProjectSituationsView({
           <div class="project-rail-layout__content settings-content project-page-shell project-page-shell--content${hasSelectedSituation ? ` project-page-shell--situation-view project-page-shell--situation-${layoutClassSuffix}` : ""}">
             ${hasSelectedSituation
               ? `${uiState.insightsPanelOpen ? renderSituationInsightsPanel() : (uiState.editPanelOpen ? renderEditSituationPanel() : renderSelectedSituationDetails())}`
+              : enCoursDEcriture()
+              ? renderCompositionDeLaSituation()
               : `
                 <div class="project-situations__table-toolbar project-page-shell project-page-shell--toolbar">
                   ${renderTitreDEcranHtml({
@@ -609,9 +691,23 @@ export function createProjectSituationsView({
     `;
   }
 
+  /**
+   * Écrit-on une situation en ce moment ?
+   *
+   * **Seulement dans le carnet.** Sur l'écran d'un projet, la requête n'a pas
+   * encore de vocabulaire — les labels, les gens et les chantiers ne sont
+   * chargés que par le carnet —, et un formulaire de recherche qui ne reconnaît
+   * aucun mot ferait chercher la panne dans la requête qu'on écrit (règle 5).
+   * C'est l'étape 4 qui l'y amènera, quand le mode et le filtre disparaîtront.
+   */
+  function enCoursDEcriture() {
+    return Boolean(uiState.situationEnCours) && estMonCarnet(store);
+  }
+
   function bindViewEvents() {}
 
   return {
+    renderCompositionDeLaSituation,
     renderCreateSituationModal,
     renderSelectedSituationDetails,
     renderEditSituationPanel,

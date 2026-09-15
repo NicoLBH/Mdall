@@ -249,12 +249,42 @@ export const REFUS = {
   DEJA_UNE_LECTURE: "deja_une_lecture"
 };
 
-export const PHRASES_DU_REFUS = {
-  [REFUS.SANS_REQUETE]: "Une vue sans recherche ne montrerait rien : écrivez ce qu'elle doit retenir.",
-  [REFUS.SANS_NOM]: "Donnez-lui un nom : c'est par lui qu'on la retrouve dans le rail.",
-  [REFUS.DEJA_LA]: "Une vue porte déjà ce nom. Deux vues du même nom ne se distinguent plus.",
-  [REFUS.DEJA_UNE_LECTURE]: "Le rail fait déjà cette recherche."
-};
+/**
+ * Le mot de la chose qu'on compose dans ce formulaire.
+ *
+ * ## Pourquoi il se donne au lieu d'être écrit
+ *
+ * Le carnet compose des **situations** avec le même formulaire, la même
+ * grammaire de requête et les mêmes refus : c'est deux fois la même chose, et
+ * en écrire une seconde copie ferait deux jeux de phrases qui divergeraient au
+ * premier réglage (règle 10). Seul le nom de la chose change, et c'est donc la
+ * seule chose qui se donne.
+ *
+ * Le mot est féminin dans les deux cas — « une vue », « une situation » —, ce
+ * qui n'est pas un hasard : les phrases parlent d'une recherche qu'on nomme.
+ */
+export const MOT_DE_LA_VUE = "vue";
+
+/**
+ * Les phrases d'un refus, pour la chose qu'on compose.
+ *
+ * **Une seule rédaction, deux écrans.** Les refus disent ce qui manque et ce
+ * qu'il faut en faire ; rien là-dedans n'appartient aux vues plutôt qu'aux
+ * situations, sauf le nom de ce qu'on est en train d'écrire.
+ */
+export function phrasesDuRefus(mot = MOT_DE_LA_VUE) {
+  const chose = texte(mot) || MOT_DE_LA_VUE;
+
+  return {
+    [REFUS.SANS_REQUETE]: `Une ${chose} sans recherche ne montrerait rien : écrivez ce qu'elle doit retenir.`,
+    [REFUS.SANS_NOM]: "Donnez-lui un nom : c'est par lui qu'on la retrouve dans le rail.",
+    [REFUS.DEJA_LA]: `Une ${chose} porte déjà ce nom. Deux ${chose}s du même nom ne se distinguent plus.`,
+    [REFUS.DEJA_UNE_LECTURE]: "Le rail fait déjà cette recherche."
+  };
+}
+
+/** Celles d'une vue — ce que cet écran-ci compose. */
+export const PHRASES_DU_REFUS = phrasesDuRefus();
 
 
 
@@ -310,8 +340,8 @@ export function laLectureDoublee({ requete = "", lectures = [] } = {}) {
  * doigt dessus. Le nom est facultatif — on ne prétend pas le connaître quand
  * on ne l'a pas (règle 5).
  */
-export function phraseDuRefus(motif, { lecture = "" } = {}) {
-  const dite = PHRASES_DU_REFUS[texte(motif)] ?? "";
+export function phraseDuRefus(motif, { lecture = "", mot = MOT_DE_LA_VUE } = {}) {
+  const dite = phrasesDuRefus(mot)[texte(motif)] ?? "";
   if (!dite) return "";
 
   const nom = texte(lecture);

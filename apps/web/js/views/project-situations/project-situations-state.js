@@ -80,6 +80,12 @@ export function createProjectSituationsState({ store }) {
     createSubmitting: false,
     createError: "",
     createForm: getDefaultCreateForm(),
+    // La situation qu'on est en train d'écrire — habit, nom, description,
+    // requête —, ou `null` quand on regarde la liste. C'est l'écran, pas la
+    // donnée : elle n'existe nulle part tant qu'on n'a pas enregistré.
+    situationEnCours: null,
+    // Ce que sa requête refuse d'enregistrer, dit par le service.
+    situationEnCoursErreur: "",
     editPanelOpen: false,
     editSubmitting: false,
     editError: "",
@@ -154,6 +160,8 @@ export function createProjectSituationsState({ store }) {
     uiState.createSubmitting = false;
     uiState.createError = "";
     uiState.createForm = getDefaultCreateForm();
+    uiState.situationEnCours = null;
+    uiState.situationEnCoursErreur = "";
   }
 
   function resetEditState() {

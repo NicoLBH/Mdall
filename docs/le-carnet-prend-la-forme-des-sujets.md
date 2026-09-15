@@ -169,12 +169,59 @@ Elle ne porte pas non plus la pastille « Automatique » : c'est un mot de
 mécanique, et sur « Assigné à moi » il ne renseigne sur rien que le titre ne
 dise déjà.
 
-### Étape 3 — Le formulaire d'une vue
+### Étape 3 — Le formulaire d'une vue · *faite*
 
 « Nouvelle situation » ouvre le formulaire d'une vue : icône, couleur, titre,
 description, requête, et le tableau des sujets dessous — celui qu'on est en
 train de composer. C'est `project-subjects-recherche.js` qui le porte, et il ne
 connaît rien des projets.
+
+**La fenêtre d'avant demandait une mécanique avant une intention.** Elle
+proposait « manuelle » ou « automatique » — deux mots qui disent comment la base
+s'y prendra, pas ce qu'on veut suivre — et son mode automatique ne savait
+produire qu'une liste de tous les sujets ouverts.
+
+**Un seul formulaire, et il ne sait pas ce qu'il compose.** `renderFormulaireDeVueHtml`
+prend le **mot** de la chose : il dit « Nouvelle situation » et « Enregistrer la
+situation » parce qu'on le lui donne, et rien d'autre ne change. Les refus
+suivent le même chemin : `phrasesDuRefus(mot)` rédige une seule fois « Une
+situation sans recherche ne montrerait rien ». Recopier quatre phrases pour un
+second écran aurait fait deux jeux qui divergent au premier réglage (règle 10).
+
+**Le tableau dessous demande à la même résolution que la situation enregistrée.**
+`sujetsQueRetient` sert les deux : ce qu'on voit pendant qu'on écrit est ce
+qu'on verra après avoir enregistré. Une seconde lecture, avec ses propres champs
+et son propre « moi », aurait fini par montrer autre chose (règle 4) — c'est-à-dire
+exactement ce que ce tableau existe pour empêcher.
+
+**Tant qu'on n'a pas lu la charge, le tableau ne dit pas « aucun ».** Il dit
+qu'il lit. Une liste vide se serait lue comme « votre requête ne retient rien »,
+et l'on aurait corrigé une requête qui n'avait rien (règle 5).
+
+**L'épingle disparaît de la barre, dans le formulaire.** Épingler la recherche
+et enregistrer ce qu'on écrit sont deux gestes pour une seule chose — et celui
+du haut ne garderait ni le nom ni l'habit qu'on vient de choisir.
+
+**Ce qu'on compose arrive en base.** `icon`, `color` et `requete` existaient
+depuis l'étape 1 et personne ne les écrivait : une situation créée au formulaire
+serait revenue grise, sans icône, ne retenant rien.
+
+**Et « Manuelle » ne s'affiche plus sur une situation qui porte une requête.**
+Le mode reste en base à la valeur qu'il avait à la création ; l'afficher aurait
+donné deux façons de dire ce qu'une situation retient, dont l'une est fausse
+(règle 4). La règle est écrite une fois — `seDitParUneRequete` — et le tableau
+comme le panneau de détail la posent.
+
+#### Ce que l'étape 3 ne fait pas
+
+**L'écran d'un projet garde sa fenêtre.** La requête n'y a pas encore de
+vocabulaire : les labels, les gens et les chantiers ne sont chargés que par le
+carnet, et un champ de recherche qui ne reconnaîtrait aucun mot ferait chercher
+la panne dans la requête qu'on écrit (règle 5). C'est l'étape 4 qui l'y amènera.
+
+**Le crayon ouvre encore l'ancien panneau de réglages.** Modifier une situation
+au formulaire suppose de savoir rouvrir ce que `mode` et `filter_definition`
+disent — ce qui est précisément la question de l'étape 4.
 
 ### Étape 4 — `mode` et `filter_definition` s'effacent
 

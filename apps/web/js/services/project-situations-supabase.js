@@ -740,6 +740,15 @@ export async function createSituation(projectId, payload = {}) {
       || (depuisLeCarnet ? perimetreDeToutMonTravail() : perimetrePourEcriture([resolvedProjectId])),
     title: firstNonEmpty(payload.title, "Nouvelle situation"),
     description: firstNonEmpty(payload.description, "") || null,
+    // **Ce qu'elle retient, et à quoi on la reconnaît.** Les trois colonnes
+    // existaient depuis l'étape 1 et personne ne les écrivait : une situation
+    // créée au formulaire perdait en route son habit et sa requête, et
+    // revenait grise, sans icône, ne retenant rien. Ramenées par
+    // `situation-en-composition.js` avant d'arriver ici — ce module n'a pas à
+    // refaire ce travail, sans quoi il y en aurait deux versions (règle 10).
+    icon: firstNonEmpty(payload.icon, "") || null,
+    color: firstNonEmpty(payload.color, "") || null,
+    requete: firstNonEmpty(payload.requete, payload.query, "") || null,
     status: normalizeSituationStatus(payload.status),
     mode: normalizeSituationMode(payload.mode),
     filter_definition: normalizeSituationMode(payload.mode) === "automatic"

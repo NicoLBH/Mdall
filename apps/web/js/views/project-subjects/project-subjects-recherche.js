@@ -44,8 +44,8 @@ import { renderQueryMirror } from "../../services/query-bar.js";
 import { phraseDesIgnores } from "../../services/champs-des-sujets.js";
 import { epinglesDuRail, railDesSujets } from "../../services/rail-des-sujets.js";
 import {
-  COULEURS_DE_VUE, ICONES_DE_VUE, couleurDeLaVue, gestesDeLaVue, iconeDeLaVue, motsDeLaVue,
-  phraseDesVues, phraseDuRefus
+  COULEURS_DE_VUE, ICONES_DE_VUE, MOT_DE_LA_VUE, couleurDeLaVue, gestesDeLaVue, iconeDeLaVue,
+  motsDeLaVue, phraseDesVues, phraseDuRefus
 } from "../../services/vues-des-sujets.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -233,7 +233,9 @@ function renderEpinglesRepliees(posees = [], { ouvert = false, active = false } 
  * reconnus — c'est ce qui distingue d'un coup d'œil `label:cr-chantier`, qui
  * filtre, de `label:zoiseau`, qui cherche le mot.
  */
-export function renderRechercheDesSujetsHtml({ requete = "", champs = [], ignores = [] } = {}) {
+export function renderRechercheDesSujetsHtml({
+  requete = "", champs = [], ignores = [], epingler = true
+} = {}) {
   const dite = phraseDesIgnores(ignores);
   const remplie = Boolean(texte(requete));
 
@@ -250,11 +252,19 @@ export function renderRechercheDesSujetsHtml({ requete = "", champs = [], ignore
           data-sujets-recherche
         >
         <div class="memory-search__gestes">
+          ${/*
+            **L'épingle disparaît dans le formulaire.** Épingler une recherche
+            et enregistrer la vue qu'on est en train d'écrire, ce sont deux
+            gestes pour une seule chose — et celui du haut ne garderait ni le
+            nom ni l'habit qu'on vient de choisir (règle 10).
+          */""}
+          ${epingler ? `
           <button type="button" class="bouton-discret memory-search__geste" data-sujets-epingler
             title="Épingler cette recherche" aria-label="Épingler cette recherche"
             ${remplie ? "" : "disabled"}>
             ${svgIcon("pin", { className: "octicon" })}
           </button>
+          ` : ""}
           <button type="button" class="bouton-discret memory-search__geste" data-sujets-vider
             title="Effacer la recherche" aria-label="Effacer la recherche"
             ${remplie ? "" : "disabled"}>
@@ -763,17 +773,17 @@ export function renderTableauDesVuesHtml({ vues = [], menuOuvert = "", lots = 0 
  */
 export function renderFormulaireDeVueHtml({
   vue = {}, champs = [], ignores = [], refus = "", lectureDoublee = "",
-  tableauHtml = "", habitOuvert = false
+  tableauHtml = "", habitOuvert = false, mot = MOT_DE_LA_VUE
 } = {}) {
   const icone = iconeDeLaVue(vue.icone);
   const couleur = couleurDeLaVue(vue.couleur);
   // Le refus nomme la lecture qu'on double : « le rail fait déjà cette
   // recherche » fait chercher laquelle parmi cinq.
-  const dit = phraseDuRefus(refus, { lecture: lectureDoublee });
+  const dit = phraseDuRefus(refus, { lecture: lectureDoublee, mot });
 
   return `
     <section class="sujets-vue-forme">
-      ${renderTitreDEcranHtml({ titre: vue.id ? "Modifier la vue" : "Nouvelle vue" })}
+      ${renderTitreDEcranHtml({ titre: `${vue.id ? "Modifier la" : "Nouvelle"} ${mot}` })}
 
       <!-- **L'habit à gauche du titre**, sur la même ligne : c'est ce qu'on
            verra dans le rail, et le choisir loin du nom qu'on écrit fait
@@ -787,7 +797,7 @@ export function renderFormulaireDeVueHtml({
             style="color:${escapeHtml(couleur.valeur)}">
             ${svgIcon(icone, { className: "octicon" })}
           </button>
-          ${habitOuvert ? renderChoixDeLHabitHtml({ icone, couleur }) : ""}
+          ${habitOuvert ? renderChoixDeLHabitHtml({ icone, couleur, mot }) : ""}
         </div>
 
         <label class="sujets-vue-forme__champ sujets-vue-forme__champ--titre">
@@ -809,11 +819,13 @@ export function renderFormulaireDeVueHtml({
         <!-- La recherche et les deux gestes sur une seule ligne : on écrit la
              requête, on voit le tableau dessous, on enregistre. -->
         <div class="sujets-vue-forme__requete">
-          ${renderRechercheDesSujetsHtml({ requete: vue.requete ?? "", champs, ignores })}
+          ${renderRechercheDesSujetsHtml({
+            requete: vue.requete ?? "", champs, ignores, epingler: false
+          })}
           <div class="sujets-vue-forme__gestes">
             <button type="button" class="gh-btn" data-sujets-vue-annuler>Annuler</button>
             <button type="button" class="gh-btn gh-btn--primary" data-sujets-vue-enregistrer>
-              Enregistrer la vue
+              Enregistrer la ${escapeHtml(mot)}
             </button>
           </div>
         </div>
@@ -853,13 +865,14 @@ const MARQUE_OBLIGATOIRE = '<abbr class="sujets-vue-forme__requis" title="Champ 
  * information de cette rangée et qu'une nuance de couleur ne se distingue pas
  * d'une autre au premier regard.
  */
-export function renderChoixDeLHabitHtml({ icone = "", couleur = null } = {}) {
+export function renderChoixDeLHabitHtml({ icone = "", couleur = null, mot = MOT_DE_LA_VUE } = {}) {
   const prise = couleur ?? couleurDeLaVue("");
+  const chose = escapeHtml(mot);
 
   return `
-    <div class="gh-menu sujets-vue-habit" role="dialog" aria-label="Icône et couleur de la vue">
+    <div class="gh-menu sujets-vue-habit" role="dialog" aria-label="Icône et couleur de la ${chose}">
       <p class="sujets-vue-habit__intitule">Couleur</p>
-      <div class="sujets-vue-habit__couleurs" role="radiogroup" aria-label="Couleur de la vue">
+      <div class="sujets-vue-habit__couleurs" role="radiogroup" aria-label="Couleur de la ${chose}">
         ${COULEURS_DE_VUE.map((choix) => {
           const choisie = choix.cle === prise.cle;
           return `
@@ -875,7 +888,7 @@ export function renderChoixDeLHabitHtml({ icone = "", couleur = null } = {}) {
       </div>
 
       <p class="sujets-vue-habit__intitule">Icône</p>
-      <div class="sujets-vue-habit__icones" role="radiogroup" aria-label="Icône de la vue">
+      <div class="sujets-vue-habit__icones" role="radiogroup" aria-label="Icône de la ${chose}">
         ${ICONES_DE_VUE.map((nom) => `
           <button type="button" class="sujets-vue-habit__icone${nom === icone ? " est-choisie" : ""}"
             role="radio" aria-checked="${nom === icone}" aria-label="${escapeHtml(nom)}"
