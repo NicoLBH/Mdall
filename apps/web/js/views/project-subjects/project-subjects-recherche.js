@@ -26,6 +26,9 @@
  */
 
 import { escapeHtml } from "../../utils/escape-html.js";
+import {
+  REQUETE_DES_LOTS, laVueDesLotsSePropose, phraseDeLaVueDesLots
+} from "../../services/vue-des-lots.js";
 import { svgIcon } from "../../ui/icons.js";
 import { renderProjectRail } from "../ui/project-rail.js";
 import {
@@ -661,9 +664,15 @@ export function renderSousLigneDeVueHtml(vue = {}) {
     morceaux.join(" • ")}</span>`;
 }
 
-export function renderTableauDesVuesHtml({ vues = [], menuOuvert = "" } = {}) {
+export function renderTableauDesVuesHtml({ vues = [], menuOuvert = "", lots = 0 } = {}) {
   const liste = Array.isArray(vues) ? vues : [];
   const ouvert = texte(menuOuvert);
+
+  // **La vue des lots se propose, elle ne se crée pas.** Un clic ouvre la
+  // recherche ; c'est la personne qui décide de l'enregistrer. Le rail est
+  // court, et une vue de plus y coûte une place à celles qu'on regarde tous les
+  // jours (règle 1).
+  const proposeLesLots = laVueDesLotsSePropose(vues, lots);
 
   return `
     <section class="sujets-vues">
@@ -673,6 +682,14 @@ export function renderTableauDesVuesHtml({ vues = [], menuOuvert = "" } = {}) {
           Nouvelle vue
         </button>`
       })}
+
+      ${proposeLesLots ? `
+        <p class="review-empty-note">
+          ${escapeHtml(phraseDeLaVueDesLots(lots))}
+          <button type="button" class="bouton-discret"
+            data-sujets-lecture="${escapeHtml(REQUETE_DES_LOTS)}">Voir les lots</button>
+        </p>
+      ` : ""}
 
       <div class="data-table-shell">
         <div class="data-table-shell__head">

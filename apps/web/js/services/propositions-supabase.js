@@ -229,6 +229,38 @@ export async function listProjectSubjectTitles(projectId) {
   }
 }
 
+/**
+ * Les sujets d'un projet, avec de quoi reconnaître leur lot.
+ *
+ * **La description vient avec, et c'est tout l'objet de cette lecture.** C'est
+ * elle qui porte la provenance qu'un sujet ouvert depuis un compte rendu a
+ * reçue — « Relevé dans 1824_CR_12.pdf · lot 02 — GROS ŒUVRE · … » —, et c'est
+ * là-dedans que le lot se relit. `listProjectSubjectTitles` ne la rend pas
+ * exprès : elle sert à donner au modèle de quoi reconnaître un point, et lui
+ * verser quatre-vingt-treize descriptions ferait un contexte énorme pour rien.
+ *
+ * @returns {Promise<object[]|null>} `null` quand on n'a pas pu demander. Un
+ *   projet sans sujet et un projet qu'on n'a pas su lire n'appellent pas le même
+ *   écran (règle 5).
+ */
+export async function listProjectSubjectsARanger(projectId) {
+  if (!projectId) return [];
+
+  try {
+    return (
+      (await request("subjects", {
+        params: {
+          select: "id,subject_number,title,description,status,parent_subject_id",
+          project_id: `eq.${projectId}`,
+          order: "subject_number.asc"
+        }
+      })) ?? []
+    );
+  } catch {
+    return null;
+  }
+}
+
 /** Les documents rattachés à une proposition. */
 export async function listPropositionDocuments(propositionId) {
   if (!propositionId) return [];

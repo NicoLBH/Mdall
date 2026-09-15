@@ -133,9 +133,11 @@ export function filsDesPeres({ items = [], nes = [] } = {}) {
     ajouter(texte(ne?.subjectId), ne?.point ?? {});
   }
 
-  // Un sujet relancé porte déjà son identifiant : c'est la clé de sa ligne.
+  // Un sujet relancé porte déjà son identifiant : c'est la clé de sa ligne. Un
+  // sujet rattrapé aussi — il était ouvert bien avant cette proposition.
+  const DEJA_OUVERTS = [ITEM_TYPE.RELANCE, ITEM_TYPE.RANGEMENT];
   for (const entree of Array.isArray(items) ? items : []) {
-    if (entree?.itemType !== ITEM_TYPE.RELANCE || entree?.status === ITEM.REFUSED) continue;
+    if (!DEJA_OUVERTS.includes(entree?.itemType) || entree?.status === ITEM.REFUSED) continue;
     ajouter(texte(entree.itemKey), entree.payload ?? {});
   }
 

@@ -271,6 +271,23 @@ export const UTILITAIRES = [
     ajouteLe: "2026-09-12"
   },
   {
+    cible: "dev-ranger-sujets",
+    nom: "Ranger les sujets par lot",
+    rayon: RAYONS.DEVELOPPEMENT,
+    resume: "Les sujets ouverts avant le rangement par lot, remis sous le leur.",
+    entrees: ["Les sujets du projet, avec leur provenance"],
+    sorties: [
+      "Les lots reconnus, et les sujets qui iraient dessous",
+      "Ceux dont le lot ne se lit pas, comptés",
+      "Une proposition à cocher et à signer"
+    ],
+    version: "0.1",
+    intelligence: false,
+    aussiALaMain: "Ouvrir chaque sujet et lui choisir un sujet parent.",
+    mots: ["lot", "rangement", "hiérarchie", "sous-sujet", "père", "rattrapage"],
+    ajouteLe: "2026-09-15"
+  },
+  {
     cible: "dev-variables",
     nom: "Variables mutualisées",
     rayon: RAYONS.DEVELOPPEMENT,

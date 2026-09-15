@@ -113,6 +113,9 @@ const INTENDANCE = new Set([
   // La ranger du côté de la mémoire en ferait une affirmation sans valeur, qui
   // ferait échouer le contrôle « chaque affirmation dit d'où elle vient ».
   ITEM_TYPE.RUBRIQUE,
+  // Ranger un sujet sous son lot ne change rien à ce qu'il dit : il n'y a pas
+  // d'« avant » du projet à comparer, seulement un endroit où le trouver.
+  ITEM_TYPE.RANGEMENT,
   ITEM_TYPE.LOT,
   ITEM_TYPE.LABEL,
   ITEM_TYPE.OBJECTIF,

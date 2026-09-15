@@ -44,6 +44,7 @@ import { renderCtContinuityLab } from "./studio/dev/ct-continuity-lab.js";
 import { copierDansLePressePapiers } from "./ui/bouton-copier.js";
 import { renderVariablesMutualisees } from "./studio/dev/variables-mutualisees.js";
 import { renderLectureDesCr } from "./studio/dev/lecture-des-cr.js";
+import { renderRangerLesSujets } from "./studio/dev/ranger-les-sujets.js";
 import { renderResolutionConflits } from "./studio/conflits/resolution-conflits.js";
 import {
   renderPanneauVariante,
@@ -266,6 +267,9 @@ function getRouterHtml() {
               <section class="project-studio-router__panel" data-side-nav-panel="dev-lecture-cr">
                 <div id="projectStudioLectureCrPanel"></div>
               </section>
+              <section class="project-studio-router__panel" data-side-nav-panel="dev-ranger-sujets">
+                <div id="projectStudioRangerSujetsPanel"></div>
+              </section>
               <section class="project-studio-router__panel" data-side-nav-panel="dev-variables">
                 <div id="projectStudioVariablesPanel"></div>
               </section>
@@ -308,6 +312,7 @@ export function renderProjectStudio(root) {
   const ctContinuityLabRoot = root.querySelector("#projectStudioCtContinuityLabPanel");
   const lectureCrRoot = root.querySelector("#projectStudioLectureCrPanel");
   const variablesRoot = root.querySelector("#projectStudioVariablesPanel");
+  const rangerSujetsRoot = root.querySelector("#projectStudioRangerSujetsPanel");
   const conflitsRoot = root.querySelector("#projectStudioConflitsPanel");
 
   /**
@@ -348,6 +353,7 @@ export function renderProjectStudio(root) {
   // dans l'ancien élément, détaché. On avait payé deux appels pour rien.
   if (lectureCrRoot) renderLectureDesCr(lectureCrRoot);
   if (variablesRoot) renderVariablesMutualisees(variablesRoot);
+  if (rangerSujetsRoot) renderRangerLesSujets(rangerSujetsRoot);
   if (conflitsRoot) renderResolutionConflits(conflitsRoot);
 
   const getScrollSource = () => root.querySelector("#projectStudioRouterScroll");
@@ -415,6 +421,10 @@ export function renderProjectStudio(root) {
     // Les variables se relisent à chaque venue : la mémoire a pu bouger, et
     // un nom qui n'existe plus se chercherait longtemps.
     if (targetId === "dev-variables" && variablesRoot) renderVariablesMutualisees(variablesRoot, { force: true });
+    // Les sujets se relisent à chaque venue : une proposition a pu être
+    // fusionnée entre-temps, et proposer de ranger ce qui l'est déjà
+    // demanderait de confirmer deux fois le même déplacement.
+    if (targetId === "dev-ranger-sujets" && rangerSujetsRoot) renderRangerLesSujets(rangerSujetsRoot, { force: true });
     // La lecture d'un compte rendu se redessine à la venue : son état vit au
     // niveau du module, donc un document déjà lu se retrouve tel qu'on l'a
     // laissé — redéposer serait repayer un appel.

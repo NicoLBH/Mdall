@@ -1113,6 +1113,29 @@ function renderRubriqueItem(item) {
   );
 }
 
+/**
+ * Un sujet déjà ouvert qu'on range sous son lot.
+ *
+ * **La ligne dit d'où vient le rangement**, et c'est ce qui permet de le
+ * contester : « lot 02 — GROS ŒUVRE » est ce qui était écrit dans le sujet, et
+ * c'est là-dessus qu'il a été reconnu. Sans cette mention, on demanderait
+ * d'accepter un déplacement sans dire pourquoi.
+ */
+function renderRangementItem(item) {
+  const { titre, lot } = item.payload;
+
+  return renderReviewItem(
+    item,
+    `
+      <span class="review-item__title">
+        <span class="review-item__badge review-item__badge--added">À ranger</span>
+        ${escapeHtml(titre || "Sujet sans titre")}
+      </span>
+      ${lot ? `<span class="review-item__where">reconnu par « ${escapeHtml(String(lot))} »</span>` : ""}
+    `
+  );
+}
+
 function renderLotItem(item) {
   const { intitule, numero, points } = item.payload;
 
@@ -3526,6 +3549,15 @@ function renderDepotLignes(proposition, review) {
       gele
         ? "Aucune rubrique relevée, ou l'état conservé ne le dit pas."
         : "Ce compte rendu range ses points d'un seul tenant : il n'y a pas de rubrique à en tirer."
+    )}
+    ${renderReviewBlock(
+      ITEM_TYPE.RANGEMENT,
+      "Sujets à ranger sous leur lot",
+      parType(ITEM_TYPE.RANGEMENT),
+      renderRangementItem,
+      gele
+        ? "Aucun sujet à ranger, ou l'état conservé ne le dit pas."
+        : "Aucun sujet du projet n'attend d'être rangé sous son lot."
     )}
     ${renderReviewBlock(
       ITEM_TYPE.SUJET,
