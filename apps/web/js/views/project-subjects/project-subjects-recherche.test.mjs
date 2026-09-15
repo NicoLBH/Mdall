@@ -1237,3 +1237,41 @@ test("sans champ en plus, le formulaire d'une vue est celui d'avant", () => {
   assert.match(html, /data-sujets-vue-description/);
   assert.match(html, /data-sujets-recherche/);
 });
+
+/* ── Le rail d'un projet ne bouge pas ────────────────────────────────────── */
+
+/**
+ * **Le carnet a changé son rail ; celui d'un projet reste intact.**
+ *
+ * Les deux montent le même composant, et c'est tout l'intérêt — mais un
+ * paramètre ajouté pour l'un se lit aussi chez l'autre. Sans valeur par défaut
+ * juste, la première entrée d'un projet perdrait son nom et ses quatre écrans
+ * disparaîtraient, sans que rien ne le dise.
+ */
+test("par défaut, le rail part de « Sujets » et garde ses quatre écrans", () => {
+  const html = rail({});
+
+  assert.match(html, /nav-list__label">Sujets</, "l'endroit d'où l'on part");
+  for (const ecran of ["Vues", "Situations", "Objectifs", "Labels"]) {
+    assert.ok(html.includes(`nav-list__label">${ecran}<`), `« ${ecran} » doit rester`);
+  }
+  assert.match(html, /data-sujets-sousvue="views"/, "et les gestes qui y mènent");
+});
+
+/** Le nom du départ se donne ; le reste des lectures ne bouge pas avec lui. */
+test("renommer le départ ne renomme que lui", () => {
+  const html = rail({ nomDuDepart: "Situations" });
+
+  assert.match(html, /nav-list__label">Situations</);
+  assert.ok(!html.includes('nav-list__label">Sujets<'));
+  assert.ok(html.includes('nav-list__label">Assigné à moi<'), "les autres gardent leur nom");
+});
+
+/** Et les écrans d'un projet se retirent sans emporter le trait qui les précède. */
+test("sans les autres écrans, le rail garde ses lectures et ses épinglées", () => {
+  const html = rail({ epingles: DEUX_EPINGLES, autresEcrans: false });
+
+  assert.ok(!html.includes('nav-list__label">Objectifs<'));
+  assert.match(html, /nav-list__label">Assigné à moi</, "les lectures restent");
+  assert.match(html, /Épinglées/, "et les épinglées aussi");
+});
