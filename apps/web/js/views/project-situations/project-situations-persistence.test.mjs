@@ -40,6 +40,10 @@ function monter({ currentProjectId = null, situationsDuProjet = [], mesSituation
       appels.push("mes-situations");
       return mesSituations;
     },
+    chargerLesPersonnesDesChantiers: async (chantiers) => {
+      appels.push(`personnes-des-chantiers:${chantiers.join("+")}`);
+      return [{ personId: "u-1", name: "Manoa" }];
+    },
     chargerLesSujetsDesChantiers: async (chantiers) => {
       appels.push(`sujets-des-chantiers:${chantiers.join("+")}`);
       if (chargeIllisible) throw new Error("chantiers illisibles");
@@ -184,4 +188,29 @@ test("sans charge, aucune situation ne reçoit un avancement nul", async () => {
   await portes.refreshSituationsData();
 
   assert.deepEqual(uiState.avancementParSituationId, {});
+});
+
+/**
+ * **Les personnes vont avec les sujets.** Sans elles, `champsDesSujets` ne
+ * déclare ni « assigné », ni « auteur », ni « mention » — et trois des quatre
+ * lectures du rail disparaissent sans que rien ne dise pourquoi (règle 5).
+ */
+test("le carnet charge aussi les personnes de ses chantiers", async () => {
+  const { portes, appels, store } = monter({
+    mesSituations: [{ ...MANUELLE, perimetre: { portee: "projet", projets: ["chantier-a"] } }]
+  });
+
+  await portes.refreshSituationsData();
+
+  assert.ok(appels.includes("personnes-des-chantiers:chantier-a"));
+  assert.deepEqual(store.situationsView.personnesDuCarnet, [{ personId: "u-1", name: "Manoa" }]);
+});
+
+/** Sur l'écran d'un projet, on ne va rien chercher de tel : il a les siennes. */
+test("l'écran d'un projet ne recharge pas les personnes", async () => {
+  const { portes, appels } = monter({ currentProjectId: "projet-1", situationsDuProjet: [MANUELLE] });
+
+  await portes.refreshSituationsData();
+
+  assert.ok(!appels.some((appel) => appel.startsWith("personnes-des-chantiers")));
 });

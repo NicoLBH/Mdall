@@ -65,6 +65,19 @@ function createSituationsViewState() {
     // encore lu », et ce qui en dépend se tait plutôt que de compter zéro.
     sujetsDuCarnet: null,
 
+    // Qui travaille sur les chantiers que mon carnet regarde. Sans elles,
+    // « Assigné à moi », « Créé par moi » et « Mentions » ne se déclarent pas.
+    personnesDuCarnet: [],
+
+    // Ce que le rail du carnet regarde — la requête d'une lecture, ou vide
+    // pour la liste des situations elle-même.
+    requeteDuCarnet: "",
+
+    // La largeur du rail, et son repliement. Mêmes bornes que partout ailleurs :
+    // c'est `project-rail.js` qui les tient.
+    railLargeur: 248,
+    railReplie: false,
+
     expandedSituations: new Set(),
     expandedSujets: new Set(),
     expandedSubjectIds: new Set(),
