@@ -11,7 +11,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  descriptionDuPere, filsDesPeres, ouvrirLesPeresRetenus, pereDejaLa, peresRetenus, phraseDesPeres
+  ETAT, accorderLePereAuxFils, descriptionDuPere, etatDuPere, filsDesPeres, ouvrirLesPeresRetenus,
+  pereDejaLa, peresRetenus, phraseDesPeres, societeDuPereDuPoint, societesDesPeres
 } from "./peres-du-cr.js";
 import { ITEM_TYPE } from "./proposition-review.js";
 import { ITEM } from "./proposition-state.js";
@@ -139,13 +140,24 @@ test("un père se retrouve malgré une entreprise mal recopiée", () => {
 /* ── Le chemin complet ───────────────────────────────────────────────────── */
 
 /** Des portes qui notent ce qu'on leur demande, au lieu de l'écrire. */
-function portesFeintes({ sujets = [], labels = [], creerRate = null, rattacherRate = null } = {}) {
-  const journal = { crees: [], decrits: [], labels: [], rattaches: [] };
+function portesFeintes({
+  sujets = [], labels = [], creerRate = null, rattacherRate = null,
+  fils = new Map(), etats = new Map()
+} = {}) {
+  const journal = { crees: [], decrits: [], labels: [], rattaches: [], etats: [] };
   let suivant = 0;
 
   return {
     journal,
     portes: {
+      // Un père qu'on vient d'ouvrir n'a pas encore de sous-sujet connu : c'est
+      // l'état que la base rendrait entre le rattachement et la relecture.
+      lireLesFils: async (parentSubjectId) => fils.get(parentSubjectId) ?? [],
+      lireLEtat: async (subjectId) => etats.get(subjectId) ?? ETAT.OUVERT,
+      changerLEtat: async ({ subjectId, ouvrir }) => {
+        journal.etats.push({ subjectId, ouvrir });
+        etats.set(subjectId, ouvrir ? ETAT.OUVERT : ETAT.FERME);
+      },
       lireLesSujets: async () => sujets,
       lireLesLabels: async () => labels,
       creerUnSujet: async ({ projectId, titre }) => {
@@ -332,4 +344,156 @@ test("un père dit ce qu'il est, et qu'il n'attend rien de personne", () => {
   assert.match(dite, /Lot n° 1 : Gros Œuvre/);
   assert.match(dite, /n'est demandé à personne/);
   assert.match(descriptionDuPere(), /Rubrique du compte rendu/);
+});
+
+/* ── L'état d'un père se déduit de ses fils ──────────────────────────────── */
+
+/**
+ * **Ouvert dès qu'un fils est ouvert.** Un père est un contenant : il n'y a
+ * personne pour décider qu'il est réglé en dehors de ce qu'il contient. C'est
+ * ce qui ferme le lot dont un compte rendu ne dit rien, et le rouvre à la
+ * réunion où il reçoit un point.
+ */
+test("un père est ouvert dès qu'un de ses fils l'est", () => {
+  assert.equal(etatDuPere([{ status: "closed" }, { status: "open" }]), ETAT.OUVERT);
+  assert.equal(etatDuPere([{ status: "closed" }, { status: "closed" }]), ETAT.FERME);
+
+  // **Un père sans fils est fermé.** C'est le lot dont le compte rendu ne dit
+  // rien — son contenu se réduit à « / » : il existe, et il n'attend rien.
+  assert.equal(etatDuPere([]), ETAT.FERME);
+
+  // Un état qu'on ne sait pas lire n'est pas « fermé » : il compte comme ouvert,
+  // parce que fermer un lot par ignorance ferait disparaître ses points.
+  assert.equal(etatDuPere([{ status: "" }]), ETAT.OUVERT);
+});
+
+/**
+ * **Ne pas savoir n'est pas « aucun fils ».** Fermer un lot parce qu'une requête
+ * a échoué ferait disparaître quinze points d'un chantier sans que personne
+ * l'ait demandé (règle 5).
+ */
+test("une liste de fils qu'on n'a pas pu lire ne conclut rien", () => {
+  assert.equal(etatDuPere(null), null);
+  assert.equal(etatDuPere(), null);
+  assert.equal(etatDuPere("trois"), null);
+});
+
+test("le père se ferme quand son dernier fils se ferme", async () => {
+  const { journal, portes } = portesFeintes({
+    fils: new Map([["pere-1", [{ id: "a", status: "closed" }, { id: "b", status: "closed" }]]]),
+    etats: new Map([["pere-1", ETAT.OUVERT]])
+  });
+
+  const accord = await accorderLePereAuxFils({ parentSubjectId: "pere-1", portes });
+
+  assert.deepEqual(accord, { change: true, etat: ETAT.FERME });
+  assert.deepEqual(journal.etats, [{ subjectId: "pere-1", ouvrir: false }]);
+});
+
+test("le père rouvre quand un fils s'ouvre", async () => {
+  const { journal, portes } = portesFeintes({
+    fils: new Map([["pere-1", [{ id: "a", status: "closed" }, { id: "b", status: "open" }]]]),
+    etats: new Map([["pere-1", ETAT.FERME]])
+  });
+
+  await accorderLePereAuxFils({ parentSubjectId: "pere-1", portes });
+  assert.deepEqual(journal.etats, [{ subjectId: "pere-1", ouvrir: true }]);
+});
+
+/**
+ * **Rien ne s'écrit quand l'état ne change pas.** Rejouer une fusion ne doit pas
+ * refermer un lot qu'on venait de rouvrir à la main, ni écrire une ligne
+ * d'activité pour un état qui était déjà le bon.
+ */
+test("un père déjà dans le bon état ne se réécrit pas", async () => {
+  const { journal, portes } = portesFeintes({
+    fils: new Map([["pere-1", [{ id: "a", status: "open" }]]]),
+    etats: new Map([["pere-1", ETAT.OUVERT]])
+  });
+
+  const accord = await accorderLePereAuxFils({ parentSubjectId: "pere-1", portes });
+
+  assert.deepEqual(accord, { change: false, etat: ETAT.OUVERT });
+  assert.deepEqual(journal.etats, []);
+});
+
+/** Ne pas savoir ce qu'un père contient, ou où il en est, n'autorise rien. */
+test("sans les fils ou sans l'état, on ne touche à rien", async () => {
+  const sansFils = portesFeintes({ etats: new Map([["pere-1", ETAT.OUVERT]]) });
+  sansFils.portes.lireLesFils = async () => null;
+  await accorderLePereAuxFils({ parentSubjectId: "pere-1", portes: sansFils.portes });
+  assert.deepEqual(sansFils.journal.etats, []);
+
+  const sansEtat = portesFeintes({ fils: new Map([["pere-1", []]]) });
+  sansEtat.portes.lireLEtat = async () => null;
+  await accorderLePereAuxFils({ parentSubjectId: "pere-1", portes: sansEtat.portes });
+  assert.deepEqual(sansEtat.journal.etats, []);
+
+  // Sans père, rien à accorder — et rien à demander.
+  assert.deepEqual(await accorderLePereAuxFils({ portes: sansEtat.portes }),
+    { change: false, etat: null });
+});
+
+/** À la fusion, le lot vide se ferme et le lot peuplé reste ouvert. */
+test("la fusion ferme le lot dont ce compte rendu ne dit rien", async () => {
+  const { journal, portes } = portesFeintes({
+    labels: LES_LABELS,
+    // Le premier père reçoit le sujet ouvert ; le second n'a rien.
+    fils: new Map([["pere-1", [{ id: "neuf-1", status: "open" }]], ["pere-2", []]]),
+    etats: new Map([["pere-1", ETAT.OUVERT], ["pere-2", ETAT.OUVERT]])
+  });
+
+  const rapport = await ouvrirLesPeresRetenus({
+    projectId: "projet-1",
+    items: [
+      uneRubrique("lot:1", "Lot n° 1 : Gros Œuvre", { ordres: [8] }),
+      uneRubrique("lot:12", "Lot n° 12 : Ventilation", { ordres: [12] })
+    ],
+    nes: LES_NES,
+    portes
+  });
+
+  assert.deepEqual(journal.etats, [{ subjectId: "pere-2", ouvrir: false }]);
+  assert.equal(rapport.accordes, 1);
+  assert.match(phraseDesPeres(rapport), /ouverts ou fermés d'après leurs sujets/);
+});
+
+/* ── L'assignation descend du père ───────────────────────────────────────── */
+
+/**
+ * **L'entreprise est lue dans un titre, pas devinée d'une phrase.** « Lot n° 1 :
+ * Gros Œuvre : Entreprise BERTRAND » nomme celle qui reçoit les points que le
+ * document n'adresse à personne en particulier.
+ */
+test("la société du père se retrouve par le rang de la rubrique", () => {
+  const societes = societesDesPeres([
+    uneRubrique("lot:1", "Lot n° 1", { ordres: [8, 21], societe: "BERTRAND" }),
+    uneRubrique("rubrique:marche", "1. Marché de travaux", { ordres: [1] }),
+    { ...uneRubrique("lot:2", "Lot n° 2", { ordres: [9], societe: "REFUSEE" }), status: ITEM.REFUSED }
+  ]);
+
+  assert.equal(societeDuPereDuPoint({ rubrique: 8 }, societes), "BERTRAND");
+  // Une rubrique écrite deux fois nomme la même entreprise aux deux rangs.
+  assert.equal(societeDuPereDuPoint({ rubrique: 21 }, societes), "BERTRAND");
+  // Une rubrique qui ne nomme personne n'en invente pas.
+  assert.equal(societeDuPereDuPoint({ rubrique: 1 }, societes), "");
+  // Une rubrique refusée n'assigne rien : refuser voulait dire cela.
+  assert.equal(societeDuPereDuPoint({ rubrique: 9 }, societes), "");
+});
+
+/**
+ * **`Number(null)` vaut zéro**, et zéro est un rang comme un autre : un point
+ * sans rubrique hériterait de l'entreprise de la rubrique n° 0.
+ */
+test("un point sans rubrique n'hérite d'aucune entreprise", () => {
+  const societes = societesDesPeres([
+    uneRubrique("rubrique:ouverture", "Ouverture", { ordres: [0], societe: "BERTRAND" })
+  ]);
+
+  assert.equal(societeDuPereDuPoint({ rubrique: null }, societes), "");
+  assert.equal(societeDuPereDuPoint({}, societes), "");
+  assert.equal(societeDuPereDuPoint({ rubrique: "" }, societes), "");
+  // Et le rang zéro reste un rang.
+  assert.equal(societeDuPereDuPoint({ rubrique: 0 }, societes), "BERTRAND");
+  assert.equal(societeDuPereDuPoint({ rubrique: 8 }, null), "");
 });

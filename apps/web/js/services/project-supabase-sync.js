@@ -2308,6 +2308,16 @@ export async function persistSubjectIssueActionToSupabase(subject = {}, action =
     }
   }
 
+  // **Le lot suit ses sous-sujets.** Un sujet père est un contenant : « Lot n° 1 :
+  // Gros Œuvre » n'est demandé à personne, et il n'y a donc personne pour
+  // décider qu'il est réglé — c'est ce qu'il contient qui le décide. Fermer le
+  // dernier point d'un lot le ferme ; en rouvrir un le rouvre.
+  //
+  // Le calcul vit dans `peres-du-cr.js`, et il est le même ici, à la fermeture
+  // d'un fils, et à la fusion. Trois copies finiraient par ne plus dire la même
+  // chose (règle 4).
+  await accorderLePereDuSujet(subject, updatedSubject);
+
   const frontendProjectId = getFrontendProjectKey();
   const projectBucket = getProjectSyncBucket(frontendProjectId);
   projectBucket.subjectsCountLoaded = false;
@@ -2322,6 +2332,31 @@ export async function persistSubjectIssueActionToSupabase(subject = {}, action =
   });
 
   return updatedSubject;
+}
+
+/**
+ * Met le père d'un sujet d'accord avec ses fils, s'il en a un.
+ *
+ * **Un échec ne défait rien.** Le sujet a bien changé d'état ; son lot en
+ * retard d'un état se rattrape au prochain geste, et refuser la fermeture d'un
+ * point parce que son lot n'a pas suivi serait payer l'essentiel par
+ * l'accessoire.
+ */
+async function accorderLePereDuSujet(subject = {}, updatedSubject = {}) {
+  const parentSubjectId = safeString(
+    updatedSubject?.parent_subject_id
+    || subject?.raw?.parent_subject_id
+    || subject?.parent_subject_id
+    || subject?.parentSubjectId
+  );
+  if (!parentSubjectId) return;
+
+  try {
+    const { accorderLePereAuxFils } = await import("./peres-du-cr.js");
+    await accorderLePereAuxFils({ parentSubjectId });
+  } catch (error) {
+    console.warn("[sujets] le lot n'a pas suivi ses sous-sujets", error);
+  }
 }
 
 export function getCurrentProjectSubjectCounters() {

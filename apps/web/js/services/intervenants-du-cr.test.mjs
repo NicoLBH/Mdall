@@ -400,9 +400,14 @@ test("le serveur lit les intervenants, et les vérifie comme le reste", async ()
 test("le sujet ouvert se voit assigner son entreprise", async () => {
   const vue = await lire("../views/project-propositions.js");
 
-  assert.match(vue, /await assignerLesSujets\(nes\)/);
-  assert.match(vue, /aQuiRevientLePoint\(point, collaborateurs\)/);
+  assert.match(vue, /await assignerLesSujets\(nes, items\)/);
   assert.match(vue, /addSubjectAssignee\(subjectId, personId\)/);
+
+  // **L'entreprise du lot est le second recours, et la fusion doit la fournir.**
+  // Sans elle, les points qu'un compte rendu n'adresse à personne restent sans
+  // assigné — et c'est le cas de la moitié d'entre eux.
+  assert.match(vue, /societeDuPere: societeDuPereDuPoint\(point, societes\)/);
+  assert.match(vue, /const societes = societesDesPeres\(items\)/);
 });
 
 /**
@@ -505,4 +510,79 @@ test("le lot s'active ou s'ouvre à la fusion, pour une ligne cochée", async ()
   // Toujours à la fusion, jamais au dépôt : c'est ce qui le distingue d'un
   // effet de bord.
   assert.match(vue, /await ajouterLesIntervenantsRetenus\(root, proposition, items\)/);
+});
+
+/* ── L'assignation descend du père ───────────────────────────────────────── */
+
+/** Un chantier, en petit. Les entreprises sont inventées. */
+const LE_CHANTIER = [
+  { id: "c1", personId: "p1", company: "BERTRAND", projectLotLabel: "Gros œuvre", roleCode: "1" },
+  { id: "c2", personId: "p2", company: "MUFFAT", projectLotLabel: "Plomberie", roleCode: "11" },
+  { id: "c3", personId: "p3", company: "Maîtrise d'ouvrage", projectLotLabel: "MOA", roleCode: "" }
+];
+
+/**
+ * **Ce que le point dit l'emporte sur tout.** « Confirmer à LABEVIERE la
+ * position des attentes », écrit sous le lot du gros œuvre mais demandé à
+ * MUFFAT, revient à MUFFAT.
+ */
+test("un point qui nomme quelqu'un lui revient, quel que soit son lot", () => {
+  const point = { qui: "MUFFAT", lot: "01 — Gros œuvre" };
+  const trouve = aQuiRevientLePoint(point, LE_CHANTIER, { societeDuPere: "BERTRAND" });
+
+  assert.equal(trouve?.personId, "p2");
+});
+
+/**
+ * **La société du père, quand le point ne nomme personne.** C'est le cas de la
+ * moitié des points d'un compte rendu : ils sont écrits sous « Lot n° 1 : Gros
+ * Œuvre : Entreprise BERTRAND », et le document n'a pas à répéter à qui il
+ * s'adresse.
+ */
+test("un point qui ne nomme personne revient à l'entreprise de son lot", () => {
+  const trouve = aQuiRevientLePoint(
+    { qui: "", lot: "" }, LE_CHANTIER, { societeDuPere: "BERTRAND" }
+  );
+
+  assert.equal(trouve?.personId, "p1");
+});
+
+/**
+ * **Le lot du point reste le dernier recours.** C'est la même information que
+ * la société du père, lue moins sûrement : elle ne sert qu'aux comptes rendus
+ * dont les rubriques n'ont pas été relevées, et la retirer les laisserait tous
+ * sans assigné.
+ */
+test("sans père, le lot du point sert encore", () => {
+  assert.equal(aQuiRevientLePoint({ qui: "", lot: "01 — Gros œuvre" }, LE_CHANTIER)?.personId, "p1");
+  assert.equal(aQuiRevientLePoint({ qui: "", lot: "" }, LE_CHANTIER), null);
+  assert.equal(aQuiRevientLePoint(null, LE_CHANTIER), null);
+});
+
+/**
+ * **Deux candidats ne font pas un choix, et n'ouvrent pas le recours suivant.**
+ * Le document a désigné quelque chose ; c'est le projet qui ne sait pas qui
+ * c'est. Se rabattre sur le lot assignerait alors à l'entreprise du lot un
+ * point que le document adressait à quelqu'un d'autre.
+ */
+test("un « qui » ambigu ne se rabat pas sur le lot", () => {
+  const deuxFoisBertrand = [
+    ...LE_CHANTIER,
+    { id: "c4", personId: "p4", company: "BERTRAND", projectLotLabel: "Charpente", roleCode: "2" }
+  ];
+
+  assert.equal(aQuiRevientLePoint({ qui: "BERTRAND" }, deuxFoisBertrand), null);
+  // Et l'on ne repart pas sur le père pour trancher ce que le document a dit.
+  assert.equal(
+    aQuiRevientLePoint({ qui: "BERTRAND" }, deuxFoisBertrand, { societeDuPere: "MUFFAT" }),
+    null
+  );
+});
+
+/** Un collaborateur retiré du projet ne reçoit plus de point. */
+test("un collaborateur retiré ne se voit rien assigner", () => {
+  const partis = LE_CHANTIER.map((personne) =>
+    personne.personId === "p1" ? { ...personne, status: "Retiré" } : personne);
+
+  assert.equal(aQuiRevientLePoint({ qui: "" }, partis, { societeDuPere: "BERTRAND" }), null);
 });

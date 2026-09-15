@@ -143,6 +143,50 @@ export function filsDesPeres({ items = [], nes = [] } = {}) {
 }
 
 /**
+ * L'entreprise que nomme le titre du père de chaque point, par rang de rubrique.
+ *
+ * **Lue dans un titre, pas devinée d'une phrase.** « Lot n° 1 : Gros Œuvre :
+ * Entreprise BERTRAND » nomme l'entreprise du lot ; c'est elle qui reçoit les
+ * points que le document n'adresse à personne en particulier — et c'est ce qui
+ * remplace la devinette sur le champ `lot`, qui vaut parfois « 1 ».
+ *
+ * @returns {Map<number, string>} le rang de la rubrique → la société
+ */
+export function societesDesPeres(items = []) {
+  const parOrdre = new Map();
+
+  for (const entree of Array.isArray(items) ? items : []) {
+    if (entree?.itemType !== ITEM_TYPE.RUBRIQUE || entree?.status === ITEM.REFUSED) continue;
+
+    const societe = texte(entree.payload?.societe);
+    if (!societe) continue;
+
+    for (const ordre of Array.isArray(entree.payload?.ordres) ? entree.payload.ordres : []) {
+      const rang = Number(ordre);
+      if (Number.isFinite(rang)) parOrdre.set(rang, societe);
+    }
+  }
+
+  return parOrdre;
+}
+
+/**
+ * L'entreprise du père d'un point, ou "".
+ *
+ * `Number(null)` vaut zéro, et zéro est un rang comme un autre : un point sans
+ * rubrique hériterait de l'entreprise de la rubrique n° 0.
+ */
+export function societeDuPereDuPoint(point = null, societes = null) {
+  const vise = point?.rubrique;
+  if (vise === null || vise === undefined || vise === "") return "";
+
+  const rang = Number(vise);
+  if (!Number.isFinite(rang)) return "";
+
+  return texte(societes instanceof Map ? societes.get(rang) : null);
+}
+
+/**
  * Le sujet du projet qui **est déjà** ce père, ou `null`.
  *
  * L'identité se relit du titre : « Lot n° 1 : Gros Œuvre : Entreprise BERTRAND »
@@ -156,6 +200,86 @@ export function pereDejaLa(cle = "", sujetsDuProjet = []) {
   return (Array.isArray(sujetsDuProjet) ? sujetsDuProjet : []).find(
     (sujet) => identiteDeLaRubrique({ intitule: texte(sujet?.title ?? sujet?.titre) }) === cherche
   ) ?? null;
+}
+
+/** L'état d'un sujet, dans le vocabulaire de la base. */
+export const ETAT = { OUVERT: "open", FERME: "closed" };
+
+/**
+ * L'état d'un père, déduit de ses fils.
+ *
+ * ## Pourquoi c'est une exception, et la seule
+ *
+ * Fermer un sujet est une décision : quelqu'un dit que c'est fait, et cela se
+ * signe. Un père n'est pas un sujet comme les autres — c'est un **contenant**.
+ * « Lot n° 1 : Gros Œuvre » n'est demandé à personne, et il n'y a donc personne
+ * pour décider qu'il est réglé. Ce qui le décide est ce qu'il contient.
+ *
+ * C'est aussi ce qui fait qu'un lot dont un compte rendu ne dit rien — son
+ * contenu se réduit à « / » — se ferme, et **rouvre tout seul** à la réunion où
+ * il reçoit un point. Personne n'a à y penser, et c'est naturel.
+ *
+ * ## Ne pas savoir n'est pas « aucun fils »
+ *
+ * Une liste qu'on n'a pas pu lire rend `null`, et l'appelant ne touche à rien :
+ * fermer un lot parce qu'on n'a pas su lire ses sous-sujets ferait disparaître
+ * quinze points d'un chantier sans que personne l'ait demandé (règle 5).
+ *
+ * @param {object[]|null} fils `{status}` — `null` quand on n'a pas pu les lire
+ * @returns {"open"|"closed"|null}
+ */
+export function etatDuPere(fils = null) {
+  if (!Array.isArray(fils)) return null;
+
+  const ouvert = fils.some(
+    (enfant) => texte(enfant?.status).toLowerCase() !== ETAT.FERME
+  );
+  return ouvert ? ETAT.OUVERT : ETAT.FERME;
+}
+
+/**
+ * Met l'état d'un père d'accord avec ses fils.
+ *
+ * **Une seule implémentation, appelée à trois moments** : à la fusion, quand un
+ * fils se ferme, quand un fils s'ouvre. Trois copies de ce calcul finiraient
+ * par ne plus dire la même chose, et c'est celle qu'on ne regarde pas qui
+ * aurait raison (règle 4).
+ *
+ * Rien n'est écrit quand l'état ne change pas : rejouer une fusion ne doit pas
+ * refermer un lot qu'on venait de rouvrir à la main, ni écrire une ligne
+ * d'activité pour un état qui était déjà le bon.
+ *
+ * @returns {Promise<{change: boolean, etat: string|null}>}
+ */
+export async function accorderLePereAuxFils({ parentSubjectId = "", portes = null } = {}) {
+  const pere = texte(parentSubjectId);
+  if (!pere) return { change: false, etat: null };
+
+  const p = portes ?? (await portesParDefaut());
+
+  let fils = null;
+  try {
+    fils = await p.lireLesFils(pere);
+  } catch {
+    fils = null;
+  }
+
+  const voulu = etatDuPere(fils);
+  // Ne pas savoir ce qu'il contient n'autorise pas à le fermer.
+  if (voulu === null) return { change: false, etat: null };
+
+  let actuel = null;
+  try {
+    actuel = texte(await p.lireLEtat(pere)).toLowerCase() || null;
+  } catch {
+    actuel = null;
+  }
+  // Ne pas savoir où il en est n'autorise pas à le déplacer : on écrirait une
+  // fermeture là où il y en avait déjà une, avec sa date et son auteur.
+  if (actuel === null || actuel === voulu) return { change: false, etat: voulu };
+
+  await p.changerLEtat({ subjectId: pere, ouvrir: voulu === ETAT.OUVERT });
+  return { change: true, etat: voulu };
 }
 
 /**
@@ -202,7 +326,16 @@ export async function portesParDefaut() {
         subjectId,
         parentSubjectId,
         rawSubjectsResult: { subjectsById: hierarchie }
-      })
+      }),
+    lireLesFils: (parentSubjectId) => sujets.listSubjectChildren(parentSubjectId),
+    lireLEtat: (subjectId) => sujets.lireLeStatutDUnSujet(subjectId),
+    /**
+     * Par la même porte que le bouton « Close » : la ligne d'activité « a fermé
+     * le sujet » naît de cette procédure, et écrire la colonne à la main
+     * laisserait un lot clos dans une chronologie où il ne s'est rien passé.
+     */
+    changerLEtat: ({ subjectId, ouvrir }) =>
+      sujets.changerLEtatDUnSujet({ subjectId, ouvrir })
   };
 }
 
@@ -219,7 +352,7 @@ export async function ouvrirLesPeresRetenus({
   nes = [],
   portes = null
 } = {}) {
-  const rapport = { ouverts: [], retrouves: [], rattaches: 0, manques: [], lu: true };
+  const rapport = { ouverts: [], retrouves: [], rattaches: 0, accordes: 0, manques: [], lu: true };
   const peres = peresRetenus(items);
   if (peres.length === 0) return rapport;
 
@@ -328,6 +461,21 @@ export async function ouvrirLesPeresRetenus({
     }
   }
 
+  // **Le père se met d'accord avec ses fils.** Un lot dont ce compte rendu ne
+  // dit rien se ferme ; celui qui reçoit un point rouvre. C'est ce qui rend le
+  // rangement vivant plutôt qu'une photographie du premier compte rendu.
+  for (const parentSubjectId of new Set(parCle.values())) {
+    try {
+      const accord = await accorderLePereAuxFils({ parentSubjectId, portes: p });
+      if (accord.change) rapport.accordes += 1;
+    } catch (erreur) {
+      manque(rapport, {
+        quoi: "L'état d'un lot n'a pas pu être mis d'accord avec ses sous-sujets.",
+        sujet: parentSubjectId, cause: erreur
+      });
+    }
+  }
+
   return rapport;
 }
 
@@ -385,6 +533,7 @@ export function phraseDesPeres(rapport = null) {
   if (rapport.ouverts?.length) dits.push(`${rapport.ouverts.length} lot(s) ouverts`);
   if (rapport.retrouves?.length) dits.push(`${rapport.retrouves.length} déjà au projet`);
   if (rapport.rattaches) dits.push(`${rapport.rattaches} sujet(s) rangés`);
+  if (rapport.accordes) dits.push(`${rapport.accordes} lot(s) ouverts ou fermés d'après leurs sujets`);
 
   return dits.length > 0 ? `${dits.join(", ")}.` : "";
 }

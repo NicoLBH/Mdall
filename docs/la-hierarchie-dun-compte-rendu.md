@@ -120,7 +120,9 @@ Presque rien à créer. Il s'agit d'alimenter ce qui est là.
 | Une rubrique comme objet de lecture | `rubriques-du-cr.js`, `SCHEMA_DES_SUJETS.rubriques` | ✅ étape 2 |
 | Un sujet père **proposé** | `ITEM_TYPE.RUBRIQUE`, `rubriqueItems` | ✅ étape 3 |
 | Un sujet père **ouvert, et ses fils rattachés** | `peres-du-cr.js` | ✅ étape 4 |
-| **L'état d'un père déduit de ses fils** | — | ❌ à faire |
+| L'état d'un père déduit de ses fils | `etatDuPere`, `accorderLePereAuxFils` | ✅ étape 5 |
+| L'assignation qui descend du père | `aQuiRevientLePoint`, `societesDesPeres` | ✅ étape 6 |
+| **Les sujets déjà à plat, rattrapés** | — | ❌ à faire |
 
 Autrement dit : **le modèle voit déjà le rangement, et la base sait déjà le porter.** Ce qui
 manque est entre les deux.
@@ -275,7 +277,7 @@ rangement serait faire payer l'essentiel par l'accessoire.
 
 ---
 
-### Étape 5 — L'état d'un père se déduit de ses fils
+### Étape 5 — L'état d'un père se déduit de ses fils · *faite*
 
 Une fonction pure : `etatDuPere(fils)` → ouvert dès qu'un fils est ouvert.
 
@@ -283,19 +285,46 @@ Elle se calcule à trois moments : à la fusion, à la fermeture d'un fils, à l
 fils. C'est ce qui ferme le Lot n° 12 le jour où il ne porte que « / », et le rouvre à la
 réunion suivante.
 
-**Comment on le vérifie :** deux comptes rendus successifs sur le même projet, dont le second
-rouvre un lot resté vide. Cela se joue dans l'Atelier sans rien écrire.
+**C'est la seule exception au principe « fermer est une décision »**, et elle se justifie de ce
+qu'un père est : un contenant. « Lot n° 1 : Gros Œuvre » n'est demandé à personne, et il n'y a
+donc personne pour décider qu'il est réglé. Ce qui le décide est ce qu'il contient.
+
+**Une seule implémentation, appelée aux trois moments.** `accorderLePereAuxFils` lit les fils,
+calcule l'état voulu, et n'écrit que s'il diffère de l'état actuel. Trois copies de ce calcul
+finiraient par ne plus dire la même chose, et c'est celle qu'on ne regarde pas qui aurait
+raison (règle 4).
+
+**Deux refus, tous deux par règle 5.** Des fils qu'on n'a pas pu lire ne concluent rien —
+fermer un lot parce qu'une requête a échoué ferait disparaître quinze points d'un chantier.
+Un état actuel qu'on n'a pas pu lire non plus : on réécrirait une fermeture par-dessus une
+fermeture, avec une autre date et un autre auteur.
+
+**Rien ne s'écrit quand l'état ne change pas.** Rejouer une fusion ne doit pas refermer un lot
+qu'on venait de rouvrir à la main, ni poser une ligne d'activité pour un état qui était déjà le
+bon.
 
 ---
 
-### Étape 6 — L'assignation descend du père
+### Étape 6 — L'assignation descend du père · *faite*
 
-`aQuiRevientLePoint` gagne un troisième recours, **et il passe devant les deux autres quand le
-point ne nomme personne** : la société du père.
+`aQuiRevientLePoint` gagne un recours entre les deux autres : la société du père.
 
-L'ordre devient : ce que le point dit (`qui`) → la société de la rubrique → rien. Le lot
-numérique disparaît de la chaîne : c'était lui qui assignait « demandé à l'entreprise
-GILETTO » au maître d'ouvrage.
+L'ordre devient : ce que le point dit (`qui`) → **la société de la rubrique** → le lot du point.
+
+**Le lot n'a pas disparu de la chaîne, contrairement à ce que prévoyait ce plan.** Le retirer
+aurait laissé sans assigné tous les points de tout compte rendu dont les rubriques n'ont pas
+été relevées — c'est-à-dire tous ceux lus avant l'étape 2. C'est la même information que la
+société du père, lue moins sûrement : elle passe donc en dernier plutôt que de s'en aller.
+
+Le défaut que ce plan lui reprochait est ailleurs, et il est traité : **chaque recours est
+essayé seul**. Les mélanger dans une même chaîne de recherche ajoutait des candidats que le
+document n'avait pas désignés, et c'est cela qui assignait à un maître d'ouvrage un point
+explicitement demandé à une entreprise.
+
+**Deux candidats ne font pas un choix, et n'ouvrent pas le recours suivant.** Le document a bien
+désigné quelque chose ; c'est le projet qui ne sait pas qui c'est. Se rabattre alors sur le lot
+assignerait à l'entreprise du lot un point adressé à quelqu'un d'autre — précisément l'erreur
+qu'on cherche à ne plus commettre.
 
 **Comment on le vérifie :** le compte rendu n° 19, où les points du Lot 1 doivent tous revenir
 à GILETTO, et « Confirmer à LABEVIERE la position des attentes » — écrit sous le Lot 11 —
