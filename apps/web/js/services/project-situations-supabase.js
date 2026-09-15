@@ -66,6 +66,11 @@ function normalizeFilterDefinition(value) {
     objectiveIds: normalizeArrayOfStrings(value.objectiveIds),
     labelIds: normalizeArrayOfStrings(value.labelIds).map((entry) => entry.toLowerCase()),
     assigneeIds: normalizeArrayOfStrings(value.assigneeIds),
+    // **Où chercher.** Depuis que les situations traversent les projets, une
+    // requête doit pouvoir dire sur quels chantiers elle porte : sans cela,
+    // « les sujets bloqués » d'un carnet qui en regarde quatre les mêle tous
+    // (étape 4). Vide veut dire « partout dans mon périmètre ».
+    projectIds: normalizeArrayOfStrings(value.projectIds),
     blockedOnly: Boolean(value.blockedOnly)
   };
 
@@ -393,6 +398,14 @@ function subjectMatchesAutomaticFilter(subject, filterDefinition, projectSubject
   if (normalizedFilter.objectiveIds?.length && !normalizedFilter.objectiveIds.some((id) => subjectObjectiveIds.includes(id))) return false;
   if (normalizedFilter.labelIds?.length && !normalizedFilter.labelIds.some((id) => subjectLabelIds.includes(id))) return false;
   if (normalizedFilter.assigneeIds?.length && !normalizedFilter.assigneeIds.some((id) => subjectAssigneeIds.includes(id))) return false;
+
+  // **Le chantier du sujet, pas celui de la situation.** Une situation peut en
+  // regarder quatre ; ce filtre-là dit sur lequel des quatre porter. Aucun
+  // chantier coché n'est pas un filtre : la requête porte sur tout le périmètre.
+  if (normalizedFilter.projectIds?.length) {
+    const chantierDuSujet = normalizeUuid(subject?.project_id ?? subject?.projectId);
+    if (!chantierDuSujet || !normalizedFilter.projectIds.includes(chantierDuSujet)) return false;
+  }
   if (normalizedFilter.blockedOnly && !isSubjectBlocked(subjectId, projectSubjectsState)) return false;
 
   return true;

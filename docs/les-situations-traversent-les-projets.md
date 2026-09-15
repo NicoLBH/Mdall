@@ -338,7 +338,7 @@ existe à deux endroits finit par différer d'un des deux.
 
 ---
 
-### Étape 4 — Chercher un projet dans le filtre
+### Étape 4 — Chercher un projet dans le filtre · *faite*
 
 Un filtre trans-projets a besoin d'un champ que la grammaire n'a pas :
 `projet:`. Et il a besoin de le **chercher**, parce qu'on ne retient pas les
@@ -352,6 +352,64 @@ identifiants de quinze chantiers.
 C'est cette étape que vous avez nommée en premier, et elle vient après les
 autres pour une raison : chercher un projet n'a de sens qu'une fois qu'une
 situation peut en regarder plusieurs.
+
+**Ce qui a été livré :**
+
+| Où | Quoi |
+| --- | --- |
+| `apps/web/js/services/projets-du-filtre.js` | chercher un chantier par son nom, et dire ce qu'on n'a pas reconnu |
+| `project-situations-supabase.js` | `filter_definition.projectIds`, et le filtre qui l'applique |
+| `project-situations-form.js` · `-state.js` · `-events.js` | le champ « Chantiers », en noms, proposé à la frappe |
+| `query-bar.js` · `champs-des-sujets.js` | le champ `projet:` dans la grammaire, et les valeurs inconnues qui remontent |
+
+**Des noms, pas des identifiants.** Les autres champs du formulaire se
+saisissent en identifiants ; celui-ci ne le peut pas — on ne retient pas les
+identifiants de quinze chantiers. Les noms se retraduisent à l'enregistrement.
+
+**La liste se propose à la frappe** par une `datalist` : c'est le navigateur qui
+filtre, et rien de neuf n'est dessiné. Inventer un menu ici aurait obligé à le
+recalibrer à côté des autres champs, qui sont des `input` ordinaires.
+
+**Un chantier qu'on ne sait plus nommer reste écrit tel quel.** L'effacer
+retirerait du filtre une condition que personne n'a retirée, et la situation
+changerait de contenu sans que rien ne le dise (règle 6).
+
+#### Ce qui ne désigne rien se dit — et c'est plus large que les chantiers
+
+Un nom mal tapé donne un filtre qui ne retient aucun sujet, et **une situation
+vide se lit comme un chantier sans travail**, pas comme une faute de frappe. On
+chercherait la panne dans le filtre, dans les sujets, partout sauf là où elle
+est (règle 5).
+
+Deux endroits en tiennent compte :
+
+- **Le formulaire refuse d'enregistrer** tant qu'un nom n'est pas reconnu. Le
+  nom fautif est sous les yeux, dans le champ : le corriger est immédiat.
+  Enregistrer en l'ignorant donnerait une situation qui ne retient rien.
+- **La barre de recherche le dit.** `parseQuery` garde sa règle — un jeton non
+  reconnu reste du texte, il n'est ni ignoré ni corrigé — mais elle nomme
+  désormais les valeurs qu'un champ **déclaré** n'admet pas. Un champ inconnu ne
+  compte pas : `http://exemple.fr` n'est pas une faute de frappe.
+
+Cela vaut pour tous les champs, pas seulement `projet:` : `label:etancheitee` se
+taisait de la même façon.
+
+#### Un nom porté par deux chantiers ne se tranche pas tout seul
+
+Rien n'interdit à deux chantiers de s'appeler pareil. Choisir le premier serait
+un tirage au sort silencieux : on filtrerait sur un chantier sans savoir lequel.
+L'ambiguïté se dit, et rien n'est retenu.
+
+#### Où le champ `projet:` apparaît
+
+Il ne se déclare que si la liste filtrée couvre **plusieurs** chantiers — et
+seulement ceux qui y sont réellement présents. Proposer d'en filtrer un qui n'y
+est pas promettrait un résultat vide, ce que le fichier interdit déjà pour les
+autres champs. Sur l'écran d'un projet il ne paraît donc pas ; dans une liste
+qui traverse les chantiers, si.
+
+Son jeton est le nom en traits d'union, comme pour les labels : la barre coupe
+sur les espaces, et « Résidence Bertrand » ne s'y écrit pas tel quel.
 
 ---
 

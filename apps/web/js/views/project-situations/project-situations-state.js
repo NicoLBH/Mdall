@@ -1,3 +1,5 @@
+import { nomsDesProjets } from "../../services/projets-du-filtre.js";
+
 export function getDefaultSituationForm() {
   return {
     title: "",
@@ -13,7 +15,8 @@ export function getDefaultSituationForm() {
     automaticBlockedOnly: false,
     automaticObjectiveIds: "",
     automaticLabelIds: "",
-    automaticAssigneeIds: ""
+    automaticAssigneeIds: "",
+    automaticProjectNames: ""
   };
 }
 
@@ -25,7 +28,15 @@ function toCsv(value) {
   return Array.isArray(value) ? value.filter(Boolean).join(", ") : "";
 }
 
-export function getSituationEditForm(situation) {
+/**
+ * Le formulaire d'une situation qu'on rouvre.
+ *
+ * @param {object} situation
+ * @param {object|object[]} [projetsConnus] les chantiers qu'on sait nommer, pour
+ *   réécrire le filtre en noms. Ce qu'on ne sait pas nommer reste tel quel :
+ *   l'effacer retirerait du filtre une condition que personne n'a retirée.
+ */
+export function getSituationEditForm(situation, projetsConnus = {}) {
   const filter = situation?.filter_definition && typeof situation.filter_definition === "object"
     ? situation.filter_definition
     : {};
@@ -45,7 +56,12 @@ export function getSituationEditForm(situation) {
     automaticBlockedOnly: Boolean(filter.blockedOnly),
     automaticObjectiveIds: toCsv(filter.objectiveIds),
     automaticLabelIds: toCsv(filter.labelIds),
-    automaticAssigneeIds: toCsv(filter.assigneeIds)
+    automaticAssigneeIds: toCsv(filter.assigneeIds),
+    // **Des noms, pas des identifiants.** On ne retient pas les identifiants de
+    // quinze chantiers ; on retient « Résidence Bertrand ». Les noms se
+    // retraduisent à l'enregistrement, et ce qui ne se reconnaît pas se dit
+    // plutôt que de disparaître (étape 4).
+    automaticProjectNames: nomsDesProjets(filter.projectIds, projetsConnus)
   };
 }
 
