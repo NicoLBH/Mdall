@@ -6369,6 +6369,15 @@ async function merge(root) {
     }
     etapeDesSujets.fini();
 
+    // **Les pères, une fois les fils ouverts.** Un sujet père est un contenant :
+    // « Lot n° 1 : Gros Œuvre » n'est demandé à personne, c'est le titre sous
+    // lequel une douzaine de demandes se rangent. L'ouvrir avant ses fils le
+    // laisserait vide, et vingt lots vides dans la liste des sujets seraient
+    // exactement ce que ce rangement existe pour éviter.
+    const etapeDesPeres = chrono.etape("peres");
+    await rangerSousLesPeres(root, proposition, items, nes, etapeDesPeres);
+    etapeDesPeres.fini();
+
     // Puis tout ce que le compte rendu dit des sujets — les siens et ceux qu'il
     // reporte : leur label, leur jalon, et la ligne d'activité qui dit que
     // cette réunion les a redits. Sans cela, un compte rendu de quarante points
@@ -6607,6 +6616,60 @@ async function ouvrirLesSujetsRetenus(root, proposition, items = []) {
   // Ce qui vient de naître repart vers la fusion : c'est sur ces sujets-là
   // qu'il reste à poser les labels et les jalons du compte rendu.
   return nes;
+}
+
+/**
+ * Ouvre les sujets pères retenus, et y range ce que la fusion vient d'ouvrir.
+ *
+ * **Ce que ça change pour qui tient le chantier.** Quatre-vingt-treize sujets à
+ * plat ne se parcourent pas. Rangés sous une quinzaine de lots, ils se
+ * parcourent : une entreprise épingle son lot et voit ses points, un maître
+ * d'œuvre ouvre la vue des lots et navigue sans se perdre.
+ *
+ * **Un échec ne défait pas la fusion.** Les sujets sont ouverts, leur contenu
+ * est juste : un fils qui n'a pas trouvé son père reste un sujet racine, et
+ * cela se dit. Refuser la fusion pour un rangement ferait payer l'essentiel par
+ * l'accessoire.
+ */
+async function rangerSousLesPeres(root, proposition, items = [], nes = [], carnet = null) {
+  const retenus = retenus_(items, ITEM_TYPE.RUBRIQUE);
+  if (retenus === 0) {
+    // **Rien à faire se dit.** Une étape vide au journal se lirait comme une
+    // étape qui a échoué sans le dire (règle 5).
+    carnet?.dire("Ce compte rendu ne range ses points sous aucune rubrique.");
+    return;
+  }
+
+  view.review.step = `Rangement sous ${retenus} lot(s)`;
+  renderContent(root);
+
+  try {
+    const { ouvrirLesPeresRetenus, phraseDesPeres } = await import("../services/peres-du-cr.js");
+    const rapport = await ouvrirLesPeresRetenus({
+      projectId: proposition.project_id, items, nes
+    });
+
+    carnet?.dire(`${rapport.ouverts.length} lot(s) ouverts sur ${retenus} retenus`);
+    if (rapport.retrouves.length > 0) {
+      carnet?.dire(`${rapport.retrouves.length} lot(s) déjà au projet`);
+    }
+    carnet?.dire(`${rapport.rattaches} sujet(s) rangés sous leur lot`);
+    for (const manque of rapport.manques) {
+      carnet?.avertir([manque.quoi, manque.sujet, manque.cause].filter(Boolean).join(" — "));
+    }
+
+    const dit = phraseDesPeres(rapport);
+    if (dit && rapport.manques.length > 0) {
+      view.review.notice = [view.review.notice, dit].filter(Boolean).join(" ");
+    }
+  } catch (erreur) {
+    carnet?.echouer(String(erreur?.message ?? erreur) || "Le rangement n'a pas abouti.");
+    view.review.notice = [
+      view.review.notice,
+      "Les sujets de ce compte rendu n'ont pas pu être rangés sous leurs lots. La fusion est "
+        + "faite : ils restent à la racine, et le prochain compte rendu les rangera."
+    ].filter(Boolean).join(" ");
+  }
 }
 
 /**

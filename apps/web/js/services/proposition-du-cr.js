@@ -172,6 +172,12 @@ export function pointsAOuvrir(confrontes = [], { leJour = "" } = {}) {
       titre: texte(point?.titre),
       description: texte(point?.description),
       lot: texte(point?.lot) || null,
+      // **La rubrique sous laquelle le point a été lu.** C'est par elle que la
+      // fusion saura sous quel père le ranger ; sans elle, le père s'ouvrirait
+      // sans fils et la liste s'allongerait au lieu de se raccourcir.
+      rubrique: Number.isFinite(Number(point?.rubrique)) && point?.rubrique !== null
+        ? Number(point.rubrique)
+        : null,
       reference: texte(point?.reference) || null,
       qui: texte(point?.qui) || null,
       echeance: texte(point?.echeance) || null,
@@ -323,6 +329,12 @@ export function pointsARelancer(confrontes = [], { leJour = "" } = {}) {
       titre: texte(point?.titre),
       description: texte(point?.description),
       lot: texte(point?.lot) || null,
+      // **La rubrique sous laquelle le point a été lu.** C'est par elle que la
+      // fusion saura sous quel père le ranger ; sans elle, le père s'ouvrirait
+      // sans fils et la liste s'allongerait au lieu de se raccourcir.
+      rubrique: Number.isFinite(Number(point?.rubrique)) && point?.rubrique !== null
+        ? Number(point.rubrique)
+        : null,
       reference: texte(point?.reference) || null,
       qui: texte(point?.qui) || null,
       echeance: texte(point?.echeance) || null,
@@ -410,6 +422,10 @@ export function rubriqueItems(rubriques = []) {
       // sujet père, et celui sous lequel on ira le chercher.
       intitule: rubrique.nom,
       genre: rubrique.genre,
+      // **Les rangs que cette rubrique occupe dans le document.** Un point dit
+      // sous quel rang il a été lu ; c'est par là, et pas par l'intitulé, qu'il
+      // retrouve son père. Une rubrique écrite deux fois en porte deux.
+      ordres: Array.isArray(rubrique.ordres) ? rubrique.ordres : [],
       numero: rubrique.numero || null,
       societe: rubrique.societe || null,
       // Le label que le père portera. Décidé dans `label-du-cr.js`, lu ici :
