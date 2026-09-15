@@ -394,7 +394,7 @@ test("une route inconnue ramène à la vitrine plutôt qu'à rien", async () => 
   assert.equal(panneauDemandeParLaRoute(), "");
 });
 
-/* ── Le raccourci du Copilote, à ses dimensions ──────────────────────────── */
+/* ── Les raccourcis de la barre du haut, à leurs dimensions ──────────────── */
 
 /**
  * Trois tailles emboîtées : le bouton à 32 px **bordure comprise**, le lien à
@@ -403,15 +403,19 @@ test("une route inconnue ramène à la vitrine plutôt qu'à rien", async () => 
  *
  * `border-box` n'est pas un détail : sans lui le filet emmène le bouton à
  * 34 px, et il cesse de s'aligner sur l'avatar voisin.
+ *
+ * **Le bouton est celui de tous les raccourcis**, et non celui du Copilote :
+ * ils sont trois côte à côte — Copilote, Projets, Situations — et en dessiner
+ * un par raccourci les ferait diverger de taille au premier réglage.
  */
-test("le raccourci du Copilote s'emboîte en 32, 30 et 16", () => {
+test("un raccourci de la barre du haut s'emboîte en 32, 30 et 16", () => {
   const css = lis("../../../style.css");
 
-  assert.match(css, /\.gh-copilote-raccourci\{[^}]*box-sizing:border-box/);
-  assert.match(css, /\.gh-copilote-raccourci\{[^}]*width:32px;\s*height:32px/);
-  assert.match(css, /\.gh-copilote-raccourci\{[^}]*border:1px solid/);
-  assert.match(css, /\.gh-copilote-raccourci__lien\{[^}]*width:30px;\s*height:30px/);
-  assert.match(css, /\.gh-copilote-raccourci__lien \.octicon\{width:16px;height:16px/);
+  assert.match(css, /\.gh-raccourci\{[^}]*box-sizing:border-box/);
+  assert.match(css, /\.gh-raccourci\{[^}]*width:32px;\s*height:32px/);
+  assert.match(css, /\.gh-raccourci\{[^}]*border:1px solid/);
+  assert.match(css, /\.gh-raccourci__lien\{[^}]*width:30px;\s*height:30px/);
+  assert.match(css, /\.gh-raccourci__lien \.octicon\{width:16px;height:16px/);
 });
 
 /* ── Les cartes ──────────────────────────────────────────────────────────── */

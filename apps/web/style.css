@@ -4713,7 +4713,11 @@ body.route--project .project-shell{
  */
 /* Le bouton fait 32 px **bordure comprise** — `border-box`, sans quoi le filet
    l'emmènerait à 34 et il ne s'alignerait plus sur l'avatar voisin. */
-.gh-copilote-raccourci{
+/* **Le bouton d'un raccourci de la barre du haut.** Copilote, Projets,
+   Situations : trois portes de même nature, donc un seul bouton. En dessiner un
+   par raccourci obligerait à les recalibrer ensemble à chaque retouche, et l'un
+   des trois finirait d'une autre taille que ses voisins. */
+.gh-raccourci{
   box-sizing:border-box;
   display:inline-flex;
   align-items:center;
@@ -4726,7 +4730,7 @@ body.route--project .project-shell{
 
 /* Le lien occupe l'intérieur du bouton, filet déduit : il est la surface
    cliquable, et un lien plus petit laisserait un liseré mort tout autour. */
-.gh-copilote-raccourci__lien{
+.gh-raccourci__lien{
   box-sizing:border-box;
   display:inline-flex;
   align-items:center;
@@ -4737,8 +4741,8 @@ body.route--project .project-shell{
   color:#fff;
 }
 
-.gh-copilote-raccourci__lien .octicon{width:16px;height:16px;fill:currentColor;}
-.gh-copilote-raccourci__lien:hover{background:rgba(110,118,129,.16);}
+.gh-raccourci__lien .octicon{width:16px;height:16px;fill:currentColor;}
+.gh-raccourci__lien:hover{background:rgba(110,118,129,.16);}
 
 .gh-header--compact{
   height:var(--header-h-compact);

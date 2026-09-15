@@ -1,5 +1,6 @@
 import { estMonCarnet } from "../../services/mon-carnet.js";
 import { projetsDeCesSituations } from "../../services/perimetre-dune-situation.js";
+import { avancementDe } from "../../services/avancement-dune-situation.js";
 
 export function createProjectSituationsPersistence({
   store,
@@ -90,15 +91,27 @@ export function createProjectSituationsPersistence({
    * la colonne dira « — » plutôt que « 0 », parce qu'on ne sait pas.
    */
   async function compterLesSujets(situations, sujets) {
-    if (!sujets) return {};
+    if (!sujets) return { comptes: {}, avancements: {} };
 
     const entrees = await Promise.all(situations.map(async (situation) => {
       const id = String(situation?.id || "");
       const subjects = await loadSubjectsForSituation(situation, sujets).catch(() => null);
-      return subjects ? [id, safeArray(subjects).length] : null;
+      return subjects ? [id, safeArray(subjects)] : null;
     }));
 
-    return Object.fromEntries(entrees.filter(Boolean));
+    const comptes = {};
+    const avancements = {};
+
+    for (const [id, subjects] of entrees.filter(Boolean)) {
+      comptes[id] = subjects.length;
+      // **Sur ce que la situation retient**, et non sur `progress_percent` :
+      // cette colonne compte l'ancienne `subjects.situation_id`, que personne
+      // n'écrit plus, et qu'une situation automatique ne porte pas du tout
+      // (étape 5). Une seule vérité, celle qu'on affiche (règle 4).
+      avancements[id] = avancementDe(subjects);
+    }
+
+    return { comptes, avancements };
   }
 
   async function refreshSituationsData({ forceSubjects = false } = {}) {
@@ -112,7 +125,9 @@ export function createProjectSituationsPersistence({
 
     // Les sujets d'abord : sans eux, compter revient à compter zéro.
     const sujets = await sujetsContreLesquelsResoudre(situations);
-    uiState.countsBySituationId = await compterLesSujets(situations, sujets);
+    const { comptes, avancements } = await compterLesSujets(situations, sujets);
+    uiState.countsBySituationId = comptes;
+    uiState.avancementParSituationId = avancements;
 
     const selectedSituationId = String(store.situationsView?.selectedSituationId || "").trim();
     const selectedSituationExists = selectedSituationId

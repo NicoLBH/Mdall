@@ -12,8 +12,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { renderCarnetHeader, renderCarnetShell } from "./mon-carnet-coquille.js";
-import { NOM_DU_CARNET, ROUTE_DU_CARNET } from "../services/mon-carnet.js";
+import { renderCarnetShell } from "./mon-carnet-coquille.js";
+import { ROUTE_DU_CARNET } from "../services/mon-carnet.js";
 import { PROJECT_TABS } from "../constants.js";
 
 const VUES = dirname(fileURLToPath(import.meta.url));
@@ -59,49 +59,44 @@ test("le bandeau se pose sans que la coquille sache d'où il vient", () => {
   assert.ok(html.indexOf("essai-banniere") < html.indexOf("project-content"));
 });
 
-/* ── L'en-tête ───────────────────────────────────────────────────────────── */
-
 /**
- * Mêmes classes que la barre d'onglets d'un projet : même hauteur, même
- * calibrage, même repère pour l'œil. Un seul onglet, parce qu'un carnet n'a
- * rien à côté de quoi se ranger.
+ * **Le carnet n'a pas de barre d'onglets.**
+ *
+ * Une barre qui ne porterait qu'une seule entrée, toujours active, n'offre
+ * aucun choix : elle répète le nom de l'écran qu'on regarde déjà, et prend la
+ * place d'une ligne de contenu pour le dire.
  */
-test("l'en-tête reprend la barre d'onglets, avec une seule entrée", () => {
-  const html = renderCarnetHeader();
+test("le carnet ne porte pas de barre d'onglets à une seule entrée", () => {
+  const html = renderCarnetShell();
 
-  assert.ok(html.includes("project-context-header"));
-  assert.ok(html.includes("project-tabs"));
-  assert.ok(html.includes("project-tabs__label"));
-  assert.equal(html.match(/<a\s/g)?.length, 1, "un carnet n'a qu'un onglet");
-  assert.ok(html.includes(`href="${ROUTE_DU_CARNET}"`));
-  assert.ok(html.includes(NOM_DU_CARNET));
+  assert.ok(!html.includes("project-tabs"), "aucune barre d'onglets");
+  assert.ok(!html.includes("project-context-header"), "ni son en-tête");
 });
 
 /* ── Le déménagement a bien eu lieu ──────────────────────────────────────── */
 
 /**
- * **Une porte, pas un onglet.**
+ * **Les situations ne sont pas un onglet du projet, et n'y reviennent pas.**
  *
- * L'entrée « Situations » se tient dans la barre du projet parce que c'est d'un
- * chantier qu'on pense à son carnet. Mais si elle menait à une vue de ce projet,
- * on aurait deux listes des situations — celle du projet, qui filtre, et le
- * carnet, qui ne filtre pas — et un écran qui existe à deux endroits finit par
- * différer d'un des deux. C'est exactement ce que l'étape 3 défait.
+ * Une situation est au-dessus des projets : la ranger parmi leurs onglets
+ * brouille exactement ce que tout ce plan installe. Un onglet qui menait dehors
+ * avait été essayé — il disait la bonne adresse et le mauvais rang.
  *
- * Son adresse est donc celle du carnet, et non `#project/<id>/situations`.
+ * On y va par la barre du haut, qui ne dit rien sur l'endroit où l'on se trouve.
  */
-test("l'entrée Situations mène dehors, et non à une vue du projet", () => {
-  const situations = PROJECT_TABS.filter((onglet) => onglet.id === "situations");
-
-  assert.equal(situations.length, 1, "une entrée, et une seule");
-  assert.equal(situations[0].href, ROUTE_DU_CARNET, "elle doit mener au carnet, pas à un onglet");
+test("les situations ne sont pas un onglet du projet", () => {
+  assert.deepEqual(PROJECT_TABS.filter((onglet) => onglet.id === "situations"), []);
 });
 
-/** Et elle se tient juste après Actions, là où on la cherche. */
-test("elle se tient à droite d'Actions", () => {
-  const ordre = PROJECT_TABS.map((onglet) => onglet.id);
+/** Et la barre du haut y mène, à côté des projets. */
+test("la barre du haut mène au carnet et aux projets", () => {
+  const entete = readFileSync(join(VUES, "global-header.js"), "utf8");
 
-  assert.equal(ordre[ordre.indexOf("actions") + 1], "situations");
+  assert.match(entete, /href:\s*ROUTE_DU_CARNET/, "le raccourci du carnet");
+  assert.match(entete, /href:\s*"#projects"/, "et celui des projets");
+  // Le même bouton pour les trois : en dessiner un par raccourci les ferait
+  // diverger de taille.
+  assert.equal(entete.match(/gh-raccourci/g)?.length >= 2, true);
 });
 
 /**

@@ -18,10 +18,10 @@ import { createProjectSituationsTable } from "./project-situations-table.js";
  * d'un projet ; nul, c'est le carnet, qui n'est la liste d'aucun. Le laisser
  * nul par défaut ici ferait passer chaque test pour un test du carnet.
  */
-function tableau({ projectScopeId = "projet-courant", nomsDesProjets = {} } = {}) {
+function tableau({ projectScopeId = "projet-courant", nomsDesProjets = {}, avancements = {} } = {}) {
   return createProjectSituationsTable({
     store: { situationsView: { selectedSituationId: null, projectScopeId, nomsDesProjets } },
-    uiState: {},
+    uiState: { avancementParSituationId: avancements },
     getSituations: () => [],
     getPaginatedSituations: () => [],
     getSituationsPaginationState: () => null,
@@ -174,4 +174,36 @@ test("dans le carnet sans les noms, on compte plutôt que d'accuser", () => {
 
   assert.match(html, /2 projets/);
   assert.ok(!html.includes("introuvable"));
+});
+
+/* ── Où en est la situation ──────────────────────────────────────────────── */
+
+test("l'avancement se lit sur la ligne, et se détaille au survol", () => {
+  const html = tableau({
+    avancements: { [SITUATION.id]: { total: 4, clos: 1, pourcentage: 25 } }
+  }).renderSituationTitleCell({ ...SITUATION, owner_id: BERTRAND });
+
+  assert.match(html, /25 %/);
+  assert.match(html, /1 sujet clos sur 4/);
+});
+
+/**
+ * **Ne pas savoir n'est pas zéro.** Une situation dont les sujets n'ont pas pu
+ * être lus n'est pas à 0 % : « 0 % » se lirait comme « rien n'a avancé », et
+ * l'on irait chercher pourquoi le chantier dort (règle 5).
+ */
+test("une situation dont on ignore l'avancement n'affiche pas « 0 % »", () => {
+  const html = tableau().renderSituationTitleCell({ ...SITUATION, owner_id: BERTRAND });
+
+  assert.ok(!html.includes("%"), "rien plutôt qu'un chiffre inventé");
+  assert.equal(html.match(/class="badge/g)?.length, 1, "seule la pastille du mode");
+});
+
+/** Et une situation vide ne met pas un pourcentage sur zéro sujet. */
+test("une situation vide ne porte pas de pourcentage", () => {
+  const html = tableau({
+    avancements: { [SITUATION.id]: { total: 0, clos: 0, pourcentage: 0 } }
+  }).renderSituationTitleCell({ ...SITUATION, owner_id: BERTRAND });
+
+  assert.ok(!html.includes("%"));
 });

@@ -7,6 +7,7 @@ import { renderIssuesTable } from "../ui/issues-table.js";
 import { normalizePaginationState, renderPaginationControls } from "../ui/pagination.js";
 import { motDeLAppartenance, pourquoiPasModifiable } from "../../services/situations-privees.js";
 import { phraseDuPerimetre, projetsRegardes, regardeToutMonTravail } from "../../services/perimetre-dune-situation.js";
+import { detailDeLAvancement, phraseDeLAvancement } from "../../services/avancement-dune-situation.js";
 
 export function createProjectSituationsTable({
   store,
@@ -66,6 +67,26 @@ export function createProjectSituationsTable({
     return phrase ? renderStatusBadge({ label: phrase, tone: "accent" }) : "";
   }
 
+  /**
+   * Où en est la situation.
+   *
+   * **Rien ne s'affiche quand on ne sait pas.** Une situation dont les sujets
+   * n'ont pas pu être lus n'est pas à 0 % : « 0 % » se lirait comme « rien n'a
+   * avancé », et l'on irait chercher pourquoi le chantier dort (règle 5).
+   *
+   * Rien non plus sur une situation vide : un pourcentage sur zéro sujet ne
+   * dit rien qu'on ne voie déjà dans la colonne du compte.
+   *
+   * Aucune classe nouvelle : la pastille des autres écrans, au même calibrage.
+   */
+  function renderAvancementPill(situation) {
+    const avancement = uiState.avancementParSituationId?.[String(situation?.id || "")];
+    const phrase = phraseDeLAvancement(avancement);
+    if (!phrase) return "";
+
+    return `<span title="${escapeHtml(detailDeLAvancement(avancement))}">${renderStatusBadge({ label: phrase })}</span>`;
+  }
+
   function renderModePill(mode) {
     return renderStatusBadge({
       label: normalizeSituationMode(mode) === "automatic" ? "Automatique" : "Manuelle",
@@ -107,6 +128,7 @@ export function createProjectSituationsTable({
               <span class="project-situations-table__title-inline">
                 <button type="button" class="row-title-trigger theme-text theme-text--sit project-situations-table__title-trigger" data-open-situation="${escapeHtml(situation.id)}">${title}</button>
                 ${renderModePill(situation.mode)}
+                ${renderAvancementPill(situation)}
                 ${renderPerimetrePill(situation)}
                 ${renderAppartenancePill(situation)}
               </span>

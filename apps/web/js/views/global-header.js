@@ -2,8 +2,9 @@ import { PROJECT_TAB_IDS } from "../constants.js";
 import { ATELIER_COPILOTE } from "../services/route-de-latelier.js";
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
+import { escapeHtml } from "../utils/escape-html.js";
 import { signOut } from "../../assets/js/auth.js";
-import { enTeteDuCarnet } from "../services/mon-carnet.js";
+import { NOM_DU_CARNET, ROUTE_DU_CARNET, enTeteDuCarnet } from "../services/mon-carnet.js";
 
 function parseHash() {
   const hash = String(location.hash || "").replace(/^#/, "").trim();
@@ -136,19 +137,59 @@ function getHeaderModel() {
  * supprimer. Le quatrième segment de la route dit quel panneau ouvrir ; sans
  * lui, l'Atelier ouvre sa vitrine comme d'habitude.
  */
+/**
+ * Un raccourci de la barre du haut.
+ *
+ * **Trois portes de même nature, donc un seul bouton.** En dessiner un par
+ * raccourci obligerait à les recalibrer ensemble à chaque retouche, et l'un des
+ * trois finirait d'une autre taille que ses voisins.
+ */
+function renderRaccourci({ href, icone, nom }) {
+  return `
+    <div class="gh-action gh-raccourci">
+      <a class="gh-raccourci__lien" href="${href}" title="${escapeHtml(nom)}" aria-label="${escapeHtml(nom)}">
+        ${icone}
+      </a>
+    </div>
+  `;
+}
+
+/** Le copilote. Il vit dans l'Atelier d'un projet : hors projet, il n'y a pas où aller. */
 function renderRaccourciCopilote(model = {}) {
   const projectId = String(model?.projectId || "").trim();
   if (!projectId) return "";
 
-  return `
-    <div class="gh-action gh-copilote-raccourci">
-      <a class="gh-copilote-raccourci__lien"
-        href="#project/${encodeURIComponent(projectId)}/${PROJECT_TAB_IDS.STUDIO}/${ATELIER_COPILOTE}"
-        title="Copilote" aria-label="Copilote">
-        ${svgIcon("copilot", { className: "octicon octicon-copilot" })}
-      </a>
-    </div>
-  `;
+  return renderRaccourci({
+    href: `#project/${encodeURIComponent(projectId)}/${PROJECT_TAB_IDS.STUDIO}/${ATELIER_COPILOTE}`,
+    icone: svgIcon("copilot", { className: "octicon octicon-copilot" }),
+    nom: "Copilote"
+  });
+}
+
+/**
+ * Mes chantiers, et mon carnet.
+ *
+ * **Ils sont dans la barre du haut, et non dans les onglets d'un projet.** Une
+ * situation est au-dessus des projets : la ranger parmi leurs onglets brouille
+ * exactement le message que tout ce plan installe. La barre du haut, elle, ne
+ * dit rien sur l'endroit où l'on se trouve — c'est sa place.
+ *
+ * L'ordre est celui de la lecture : le copilote, les chantiers, le carnet, puis
+ * soi. Du plus général au plus personnel.
+ */
+function renderRaccourcisGlobaux() {
+  return [
+    renderRaccourci({
+      href: "#projects",
+      icone: svgIcon("repo", { className: "octicon octicon-repo" }),
+      nom: "Projets"
+    }),
+    renderRaccourci({
+      href: ROUTE_DU_CARNET,
+      icone: svgIcon("table", { className: "octicon octicon-table" }),
+      nom: NOM_DU_CARNET
+    })
+  ].join("");
 }
 
 function renderUserMenu() {
@@ -269,6 +310,7 @@ export function renderGlobalHeader() {
       <div class="gh-header__right">
         <div id="globalHeaderActions" class="gh-header__actions">
           ${renderRaccourciCopilote(model)}
+          ${renderRaccourcisGlobaux()}
           ${renderUserMenu()}
         </div>
       </div>
