@@ -1053,6 +1053,36 @@ const renderSubjectsPriorityHeadHtml = (...args) => projectSubjectsView.renderSu
 const getSubjectsTableDeps = (...args) => projectSubjectsView.getSubjectsTableDeps(...args);
 const syncCommentPreview = (...args) => projectSubjectsView.syncCommentPreview(...args);
 
+/**
+ * Le vocabulaire du projet ouvert, pour qui a besoin de relire une requête.
+ *
+ * ## Pourquoi il sort d'ici
+ *
+ * L'écran des situations relit les requêtes de ses situations, et une requête
+ * relue avec d'autres champs que ceux qui l'ont écrite ne rend pas la même
+ * chose (règle 4). Sur l'écran d'un projet, ces champs-là sont **ceux-ci** :
+ * ses labels, ses objectifs, ses lots, ses gens, ses situations. En
+ * reconstruire un jeu voisin dans l'écran des situations aurait fait deux
+ * vocabulaires qui se ressemblent assez pour qu'on les croie identiques —
+ * `lot:` déclaré d'un côté, pas de l'autre, et la même requête retenant deux
+ * choses selon l'onglet d'où on la regarde.
+ *
+ * Trois portes, pas une : les champs disent ce qui s'écrit, la surcouche dit ce
+ * que chaque sujet porte, et « moi » dit qui regarde. Aucune des trois ne se
+ * déduit des autres.
+ */
+export function champsDuProjetOuvert(...args) {
+  return getChampsDesSujets(...args);
+}
+
+export function metaDuProjetOuvert(...args) {
+  return getMetaDesSujets(...args);
+}
+
+export function moiDansLeProjetOuvert(...args) {
+  return getMoiDansLeProjet(...args);
+}
+
 export function getEffectiveSujetStatus(...args) {
   return projectSubjectsView.getEffectiveSujetStatus(...args);
 }

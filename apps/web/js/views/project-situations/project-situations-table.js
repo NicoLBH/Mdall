@@ -8,7 +8,7 @@ import { normalizePaginationState, renderPaginationControls } from "../ui/pagina
 import { motDeLAppartenance, pourquoiPasModifiable } from "../../services/situations-privees.js";
 import { phraseDuPerimetre, projetsRegardes, regardeToutMonTravail } from "../../services/perimetre-dune-situation.js";
 import { detailDeLAvancement, phraseDeLAvancement } from "../../services/avancement-dune-situation.js";
-import { couleurDeLaSituation, iconeDeLaSituation, seDitParUneRequete } from "../../services/situation-comme-une-vue.js";
+import { couleurDeLaSituation, iconeDeLaSituation } from "../../services/situation-comme-une-vue.js";
 
 /**
  * Le tableau des sujets qu'une requête retient, sous le formulaire.
@@ -111,7 +111,6 @@ export function createProjectSituationsTable({
   getSituations,
   getPaginatedSituations,
   getSituationsPaginationState,
-  normalizeSituationMode,
   normalizeSituationStatus,
   renderSituationCount,
   formatSituationUpdatedLabel,
@@ -204,30 +203,6 @@ export function createProjectSituationsTable({
     return `<span title="${escapeHtml(detailDeLAvancement(avancement))}">${renderStatusBadge({ label: phrase })}</span>`;
   }
 
-  /**
-   * « Manuelle » ou « Automatique » — et seulement quand ça veut encore dire
-   * quelque chose.
-   *
-   * **Une situation qui porte une requête ne se lit pas par son mode.** Elle
-   * retient ce que sa recherche retient, et le mode reste en base à la valeur
-   * qu'il avait à la création : une situation écrite au formulaire s'affichait
-   * « Manuelle » alors qu'elle ne tient aucune liste à la main. Deux façons de
-   * dire ce qu'une situation retient, dont l'une est fausse (règle 4).
-   *
-   * C'est la même règle que sur le panneau de détail, et c'est pour cela
-   * qu'elle est écrite une fois : `seDitParUneRequete`. L'étape 4 retirera le
-   * mode et cette pastille avec lui.
-   */
-  function renderModePill(situation) {
-    if (seDitParUneRequete(situation)) return "";
-
-    const automatique = normalizeSituationMode(situation?.mode) === "automatic";
-    return renderStatusBadge({
-      label: automatique ? "Automatique" : "Manuelle",
-      tone: automatique ? "accent" : "default"
-    });
-  }
-
   function getSituationsTableHeadHtml() {
     const current = getCurrentSituationsStatusFilter();
     const counts = getSituationsStatusCounts();
@@ -261,7 +236,6 @@ export function createProjectSituationsTable({
             <span class="issue-row-title-grid__title">
               <span class="project-situations-table__title-inline">
                 <button type="button" class="row-title-trigger theme-text theme-text--sit project-situations-table__title-trigger" data-open-situation="${escapeHtml(situation.id)}">${title}</button>
-                ${renderModePill(situation)}
                 ${renderAvancementPill(situation)}
                 ${renderPerimetrePill(situation)}
                 ${renderAppartenancePill(situation)}
@@ -310,7 +284,6 @@ export function createProjectSituationsTable({
   }
 
   return {
-    renderModePill,
     getSituationsTableHeadHtml,
     renderSituationTitleCell,
     renderSituationsTable

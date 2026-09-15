@@ -1198,3 +1198,42 @@ test("le menu de l'habit nomme la situation quand c'est une situation", () => {
   assert.match(html, /aria-label="Couleur de la situation"/);
   assert.match(html, /aria-label="Icône de la situation"/);
 });
+
+/**
+ * **La place de ce que la chose a en plus d'une recherche.**
+ *
+ * Une vue n'est qu'une recherche nommée ; une situation est de surcroît ouverte
+ * ou fermée, ce qui ne se dit pas dans une requête — une situation fermée
+ * retiendrait les mêmes sujets. Plutôt qu'un champ dont l'écran des Sujets n'a
+ * que faire, le formulaire laisse la place à qui le monte (étape 4).
+ *
+ * **Et elle est entre la description et la requête** : après ce qui nomme la
+ * chose, avant ce qui la remplit. Poser l'état sous le tableau le ferait
+ * chercher.
+ */
+test("le formulaire rend ce qu'on lui ajoute, entre la description et la requête", () => {
+  const html = renderFormulaireDeVueHtml({
+    champs: champsDesSujets({}),
+    mot: "situation",
+    champsEnPlusHtml: '<div data-un-champ-en-plus="1">Statut</div>'
+  });
+
+  assert.match(html, /data-un-champ-en-plus="1"/, "ce qu'on ajoute doit être rendu");
+  assert.ok(
+    html.indexOf("data-un-champ-en-plus") > html.indexOf("data-sujets-vue-description"),
+    "après ce qui nomme la chose"
+  );
+  assert.ok(
+    html.indexOf("data-un-champ-en-plus") < html.indexOf("data-sujets-recherche"),
+    "et avant ce qui la remplit"
+  );
+});
+
+/** Sans rien à ajouter, rien ne s'ajoute : l'écran des Sujets ne change pas. */
+test("sans champ en plus, le formulaire d'une vue est celui d'avant", () => {
+  const html = renderFormulaireDeVueHtml({ champs: champsDesSujets({}) });
+
+  assert.ok(!html.includes("undefined"), "pas de trou là où il n'y a rien à mettre");
+  assert.match(html, /data-sujets-vue-description/);
+  assert.match(html, /data-sujets-recherche/);
+});

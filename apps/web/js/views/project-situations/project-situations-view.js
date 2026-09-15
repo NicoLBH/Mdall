@@ -1,40 +1,39 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
-import { renderSettingsModal } from "../ui/settings-modal.js";
 import { renderStatusBadge } from "../ui/status-badges.js";
 import { renderSideNavGroup, renderSideNavItem } from "../ui/side-nav-layout.js";
 import { renderLightTabs } from "../ui/light-tabs.js";
 import { renderSvgLineChart } from "../../utils/svg-line-chart.js";
-import { renderSituationForm } from "./project-situations-form.js";
 import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
-import { NOM_DU_CARNET, estMonCarnet } from "../../services/mon-carnet.js";
+import { NOM_DU_CARNET } from "../../services/mon-carnet.js";
 import {
   renderFormulaireDeVueHtml, renderRailDesSujetsHtml
 } from "../project-subjects/project-subjects-recherche.js";
-import { MOT_DE_LA_SITUATION } from "../../services/situation-en-composition.js";
+import { MOT_DE_LA_SITUATION, STATUT, statutDe } from "../../services/situation-en-composition.js";
 import { laLectureDoublee } from "../../services/vues-des-sujets.js";
 import { sujetsFiltres } from "../../services/champs-des-sujets.js";
 import { renderTableauDesSujetsRetenusHtml } from "./project-situations-table.js";
 import { railWidth } from "../ui/project-rail.js";
-import { champsDuCarnet } from "../../services/vocabulaire-du-carnet.js";
 import { NOM_DES_SITUATIONS, estUneLecture, situationsDeLecture } from "../../services/lectures-du-carnet.js";
-import { situationCommeUneEpingle, seDitParUneRequete } from "../../services/situation-comme-une-vue.js";
-import { moiDansLeProjet } from "../../services/meta-des-sujets.js";
+import { situationCommeUneEpingle } from "../../services/situation-comme-une-vue.js";
 import { renderSituationGridView } from "./project-situations-view-grid.js";
 import { renderSituationRoadmapView } from "./project-situations-view-roadmap.js";
 
 export function createProjectSituationsView({
   store,
   uiState,
-  getDefaultCreateForm,
-  getSituationEditForm,
-  normalizeSituationMode,
   renderSituationsTable,
   getSituationById,
   /** Ce qu'une requête retient — la même résolution que pour une situation
    *  enregistrée, sans quoi le tableau du formulaire montrerait autre chose
    *  que ce qu'on est en train d'écrire (règle 4). */
   sujetsQueRetient = () => null,
+  /** La grammaire de l'écran courant : celle du carnet, ou celle du projet
+   *  ouvert. Elle se demande plutôt qu'elle ne se reconstruit — deux
+   *  vocabulaires voisins feraient deux lectures d'une même requête (règle 4). */
+  champsDeLEcran = () => [],
+  /** Qui regarde. « assigné:moi » ne veut rien dire sans lui. */
+  moiDeLEcran = () => "",
   renderSituationKanban
 }) {
   /**
@@ -70,26 +69,9 @@ export function createProjectSituationsView({
     return store.situationsView?.sujetsDuCarnet?.rawSubjectsResult ?? {};
   }
 
-  /** La grammaire des requêtes du carnet : ses labels, ses gens, ses chantiers. */
-  function vocabulaireDuCarnet() {
-    return champsDuCarnet({
-      charge: chargeDuCarnet(),
-      personnes: store.situationsView?.personnesDuCarnet ?? [],
-      nomsDesProjets: store.situationsView?.nomsDesProjets ?? {}
-    });
-  }
-
-  /** Qui regarde. « assigné:moi » ne veut rien dire sans lui. */
-  function moiDansLeCarnet() {
-    return moiDansLeProjet({
-      collaborateurs: store.situationsView?.personnesDuCarnet ?? [],
-      utilisateur: store.user?.id ?? ""
-    });
-  }
-
   function renderRailDuCarnet() {
     const charge = chargeDuCarnet();
-    const champs = vocabulaireDuCarnet();
+    const champs = champsDeLEcran();
     const requete = String(store.situationsView?.requeteDuCarnet || "");
     const replie = store.situationsView?.railReplie === true;
 
@@ -105,17 +87,11 @@ export function createProjectSituationsView({
       champs,
       requete,
       meta: {},
-      moi: moiDansLeCarnet(),
+      moi: moiDeLEcran(),
       epingles,
       replie,
       sousVue: "subjects"
     });
-  }
-
-  function chantiersConnus() {
-    const noms = store.situationsView?.nomsDesProjets;
-    if (!noms || typeof noms !== "object") return [];
-    return Object.entries(noms).map(([id, name]) => ({ id, name }));
   }
 
   function renderSituationInsightsBarChart({ labels = [], values = [], yTicks = [0, 1], yMax = 1 } = {}) {
@@ -382,30 +358,6 @@ export function createProjectSituationsView({
     `;
   }
 
-  function renderCreateSituationModal() {
-    if (!uiState.createModalOpen) return "";
-
-    const form = uiState.createForm || getDefaultCreateForm();
-
-    return renderSettingsModal({
-      modalId: "projectCreateSituationModal",
-      title: "Nouvelle situation",
-      subtitle: "Crée une vraie situation projet stockée dans Supabase.",
-      closeDataAttribute: "data-close-project-situation-modal",
-      bodyHtml: renderSituationForm({
-        projets: chantiersConnus(),
-        form,
-        mode: "create",
-        normalizeSituationMode,
-        error: uiState.createError,
-        submitting: uiState.createSubmitting,
-        submitButtonId: "projectCreateSituationSubmit",
-        submitLabel: "Créer la situation",
-        submitPendingLabel: "Création…"
-      })
-    });
-  }
-
   /**
    * Le formulaire d'une situation qu'on écrit, et ce qu'elle retient.
    *
@@ -423,13 +375,19 @@ export function createProjectSituationsView({
    * Et il le demande à la **même** résolution que celle d'une situation
    * enregistrée : ce qu'on voit ici est ce qu'on verra après avoir enregistré,
    * sans quoi le formulaire promettrait autre chose que ce qu'il fabrique.
+   *
+   * ## Le même formulaire pour écrire et pour modifier
+   *
+   * Le crayon l'ouvre rempli (étape 4). Un second formulaire de modification
+   * aurait été un endroit de plus où oublier une colonne — c'est ainsi que
+   * l'habit et la requête ne partaient pas à la création (règle 10).
    */
   function renderCompositionDeLaSituation() {
     const forme = uiState.situationEnCours;
-    const champs = vocabulaireDuCarnet();
+    const champs = champsDeLEcran();
     const requete = String(forme?.requete || "");
     const { ignores } = sujetsFiltres({
-      sujets: [], requete, champs, moi: moiDansLeCarnet()
+      sujets: [], requete, champs, moi: moiDeLEcran()
     });
 
     return renderFormulaireDeVueHtml({
@@ -444,12 +402,56 @@ export function createProjectSituationsView({
         requete, lectures: situationsDeLecture(champs)
       })?.nom ?? "",
       habitOuvert: forme?.habitOuvert === true,
+      champsEnPlusHtml: renderCeQueLaSituationAEnPlus(forme),
       tableauHtml: `<div class="project-table-host">${renderTableauDesSujetsRetenusHtml({
         sujets: sujetsQueRetient(requete),
         nomsDesProjets: store.situationsView?.nomsDesProjets ?? {},
         requete
       })}</div>`
     });
+  }
+
+  /**
+   * Ce qu'une situation a de plus qu'une recherche nommée.
+   *
+   * ## Son état
+   *
+   * Ouverte ou fermée. Cela ne se dit pas dans une requête — une situation
+   * fermée retiendrait exactement les mêmes sujets —, et c'est pourtant par là
+   * qu'on la range. Le choix n'apparaît qu'à la modification : une situation
+   * qu'on vient d'écrire est ouverte, et demander son état avant de l'avoir
+   * écrite serait la même faute que demander une mécanique avant une intention.
+   *
+   * ## Et, s'il y a lieu, l'ancien filtre qu'on n'a pas su reprendre
+   *
+   * Il reste en place et continue de s'appliquer ; la phrase le dit. Se taire
+   * laisserait croire que cette situation ne retient rien, puisque le
+   * formulaire montrerait une requête vide (règle 5).
+   *
+   * Aucune classe nouvelle : les boutons radio des autres formulaires, au même
+   * calibrage.
+   */
+  function renderCeQueLaSituationAEnPlus(forme) {
+    const garde = String(uiState.situationEnCoursGarde || "");
+    const fermee = statutDe(forme?.statut) === STATUT.FERMEE;
+
+    const etat = forme?.id ? `
+      <div class="sujets-vue-forme__champ">
+        <span class="sujets-vue-forme__intitule">Statut</span>
+        <div class="project-lot-modal__groups" role="radiogroup" aria-label="Statut de la situation">
+          <label class="project-lot-modal__radio">
+            <input type="radio" name="situationStatut" value="${STATUT.OUVERTE}" ${fermee ? "" : "checked"}>
+            <span>Ouverte</span>
+          </label>
+          <label class="project-lot-modal__radio">
+            <input type="radio" name="situationStatut" value="${STATUT.FERMEE}" ${fermee ? "checked" : ""}>
+            <span>Fermée</span>
+          </label>
+        </div>
+      </div>
+    ` : "";
+
+    return `${etat}${garde ? `<p class="sujets-vue-forme__refus">${escapeHtml(garde)}</p>` : ""}`;
   }
 
   function renderSelectedSituationDetails() {
@@ -465,16 +467,10 @@ export function createProjectSituationsView({
       `;
     }
 
-    // **Une situation qui porte une requête dit ce qu'elle retient, pas
-    // comment.** « Automatique » est un mot de mécanique ; sur « Assigné à
-    // moi » comme sur une situation écrite au formulaire, il ne renseigne sur
-    // rien que le titre et la requête ne disent déjà — et il est faux, le mode
-    // restant celui qu'on n'a jamais choisi. Même règle que dans le tableau, et
-    // c'est la même question qu'on pose (règle 4).
-    const modeBadge = seDitParUneRequete(selectedSituation) ? "" : renderStatusBadge({
-      label: normalizeSituationMode(selectedSituation.mode) === "automatic" ? "Automatique" : "Manuelle",
-      tone: normalizeSituationMode(selectedSituation.mode) === "automatic" ? "accent" : "default"
-    });
+    // **« Manuelle » et « Automatique » ont quitté l'écran** (étape 4). C'était
+    // un mot de mécanique là où l'on attend une intention, et il ne disait plus
+    // rien de vrai : une situation dit ce qu'elle retient par sa requête, et
+    // celles d'avant par un filtre que personne ne modifie plus.
     const statusBadge = renderStatusBadge({
       label: String(selectedSituation.status || "open") === "closed" ? "Fermée" : "Ouverte",
       tone: String(selectedSituation.status || "open") === "closed" ? "muted" : "success"
@@ -507,7 +503,7 @@ export function createProjectSituationsView({
                   `}
                 </div>
                 <div class="project-situation-title-row__right">
-                  <div class="project-situation-detail-head__meta">${statusBadge}${modeBadge}<span class="mono-small">${uiState.selectedSituationSubjects.length} sujet(s)</span></div>
+                  <div class="project-situation-detail-head__meta">${statusBadge}<span class="mono-small">${uiState.selectedSituationSubjects.length} sujet(s)</span></div>
                   <div class="project-situation-title-row__actions">
                     <button type="button" class="gh-btn gh-action__main gh-btn--default gh-btn--md" data-open-situation-insights>
                       ${svgIcon("graph", { className: "octicon octicon-graph" })}<span>Indicateurs</span>
@@ -538,72 +534,6 @@ export function createProjectSituationsView({
     `;
   }
 
-  function renderEditSituationPanel() {
-    const selectedSituationId = String(store.situationsView?.selectedSituationId || "").trim();
-    const selectedSituation = getSituationById(selectedSituationId);
-    const form = uiState.editForm || getSituationEditForm(selectedSituation, chantiersConnus());
-
-    if (!selectedSituation) {
-      return renderSelectedSituationDetails();
-    }
-
-    const navHtml = renderSideNavGroup({
-      className: "settings-nav__group settings-nav__group--project",
-      items: [renderSideNavItem({
-        label: "Paramètres de la situation",
-        targetId: "situation-settings-panel",
-        iconHtml: svgIcon("gear", { className: "octicon octicon-gear" }),
-        isActive: true,
-        isPrimary: true
-      })]
-    });
-
-    return `
-      <div class="settings-shell settings-shell--parametres settings-shell--situation-edit">
-        <div class="project-situation-edit">
-          <div class="project-situation-edit__header">
-            <button type="button" class="project-situation-edit__back" data-close-situation-edit>
-              <span class="project-situation-edit__back-icon">${svgIcon("arrow-left", { className: "octicon octicon-arrow-left route-title-module__Octicon__vxu4r", width: 24, height: 24 })}</span>
-            </button>
-            <h1 class="project-situation-edit__title">Paramètres</h1>
-            <div class="project-situation-edit__header-actions">
-              <button type="button" class="gh-btn gh-action__main gh-btn--default gh-btn--md" data-open-situation-insights>
-                ${svgIcon("graph", { className: "octicon octicon-graph" })}<span>Indicateurs</span>
-              </button>
-            </div>
-          </div>
-          <div class="project-situation-edit__main">
-            <aside class="project-situation-edit__aside settings-nav settings-nav--parametres settings-nav--situation-edit">
-              ${navHtml}
-            </aside>
-            <div class="project-situation-edit__content settings-content settings-content--parametres settings-content--situation-edit" data-side-nav-panel="situation-settings-panel">
-              <section class="gh-panel gh-panel--details project-situation-edit__panel">
-                <div class="gh-panel__head gh-panel__head--tight">
-                  <div>
-                    <div class="details-title">Paramètres de la situation</div>
-                  </div>
-                </div>
-                <div class="details-body project-situation-edit__body">
-                  ${renderSituationForm({
-        projets: chantiersConnus(),
-                    form,
-                    mode: "edit",
-                    normalizeSituationMode,
-                    error: uiState.editError,
-                    submitting: uiState.editSubmitting,
-                    submitButtonId: "projectEditSituationSubmit",
-                    submitLabel: "Mettre à jour les paramètres",
-                    submitPendingLabel: "Mise à jour…"
-                  })}
-                </div>
-              </section>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
   function renderPage() {
     const hasSelectedSituation = !!String(store.situationsView?.selectedSituationId || "").trim();
     const selectedLayout = getSelectedSituationLayout();
@@ -627,10 +557,16 @@ export function createProjectSituationsView({
           <div class="project-rail-layout${store.situationsView?.railReplie === true ? " project-rail-layout--collapsed" : ""}">
           ${renderRailDuCarnet()}
           <div class="project-rail-layout__content settings-content project-page-shell project-page-shell--content${hasSelectedSituation ? ` project-page-shell--situation-view project-page-shell--situation-${layoutClassSuffix}` : ""}">
-            ${hasSelectedSituation
-              ? `${uiState.insightsPanelOpen ? renderSituationInsightsPanel() : (uiState.editPanelOpen ? renderEditSituationPanel() : renderSelectedSituationDetails())}`
-              : enCoursDEcriture()
+            ${/*
+              **Écrire une situation prend l'écran, d'où qu'on vienne.** Le
+              crayon s'ouvre depuis le détail d'une situation ; laisser le
+              détail passer devant ferait cliquer sur un crayon qui ne change
+              rien à l'écran.
+            */""}
+            ${enCoursDEcriture()
               ? renderCompositionDeLaSituation()
+              : hasSelectedSituation
+              ? `${uiState.insightsPanelOpen ? renderSituationInsightsPanel() : renderSelectedSituationDetails()}`
               : `
                 <div class="project-situations__table-toolbar project-page-shell project-page-shell--toolbar">
                   ${renderTitreDEcranHtml({
@@ -649,7 +585,6 @@ export function createProjectSituationsView({
           </div>
           </div>
         </div>
-        ${renderCreateSituationModal()}
       </section>
     `;
   }
@@ -694,23 +629,19 @@ export function createProjectSituationsView({
   /**
    * Écrit-on une situation en ce moment ?
    *
-   * **Seulement dans le carnet.** Sur l'écran d'un projet, la requête n'a pas
-   * encore de vocabulaire — les labels, les gens et les chantiers ne sont
-   * chargés que par le carnet —, et un formulaire de recherche qui ne reconnaît
-   * aucun mot ferait chercher la panne dans la requête qu'on écrit (règle 5).
-   * C'est l'étape 4 qui l'y amènera, quand le mode et le filtre disparaîtront.
+   * **Sur les deux écrans désormais.** L'étape 3 l'avait réservé au carnet,
+   * faute de vocabulaire ailleurs : l'écran d'un projet a le sien, et c'est
+   * `champsDeLEcran` qui va le chercher là où il est (étape 4).
    */
   function enCoursDEcriture() {
-    return Boolean(uiState.situationEnCours) && estMonCarnet(store);
+    return Boolean(uiState.situationEnCours);
   }
 
   function bindViewEvents() {}
 
   return {
     renderCompositionDeLaSituation,
-    renderCreateSituationModal,
     renderSelectedSituationDetails,
-    renderEditSituationPanel,
     renderPage,
     bindViewEvents
   };

@@ -31,11 +31,11 @@ import {
 } from "../services/project-situations-supabase.js";
 import { chargerLesSujetsDesChantiers } from "../services/project-subjects-supabase.js";
 import { chargerLesPersonnesDesChantiers } from "../services/profile-supabase-sync.js";
+import { estMonCarnet } from "../services/mon-carnet.js";
 import { champsDuCarnet as construireLesChampsDuCarnet } from "../services/vocabulaire-du-carnet.js";
 import { metaDesSujets, moiDansLeProjet } from "../services/meta-des-sujets.js";
-import { identifiantsDesProjets, phraseDesProjetsIncertains } from "../services/projets-du-filtre.js";
 import { loadProjectSituationsTrajectoryHistory } from "../services/project-situations-trajectory-service.js";
-import { createProjectSituationsState, getDefaultCreateForm, getSituationEditForm } from "./project-situations/project-situations-state.js";
+import { createProjectSituationsState } from "./project-situations/project-situations-state.js";
 import { createProjectSituationsSelectors } from "./project-situations/project-situations-selectors.js";
 import { createProjectSituationsSelection } from "./project-situations/project-situations-selection.js";
 import { createProjectSituationsPersistence } from "./project-situations/project-situations-persistence.js";
@@ -63,7 +63,10 @@ import {
   toggleSubjectLabelFromSharedDropdown,
   toggleSubjectObjectiveFromSharedDropdown,
   openSharedCreateSubissueModal,
-  linkExistingSubjectAsSubissueFromSharedDropdown
+  linkExistingSubjectAsSubissueFromSharedDropdown,
+  champsDuProjetOuvert,
+  metaDuProjetOuvert,
+  moiDansLeProjetOuvert
 } from "./project-subjects.js";
 
 const { uiState, ensureSituationsViewState } = createProjectSituationsState({ store });
@@ -71,7 +74,6 @@ const { uiState, ensureSituationsViewState } = createProjectSituationsState({ st
 const {
   safeArray,
   firstNonEmpty,
-  normalizeSituationMode,
   normalizeSituationStatus,
   getSituations,
   getCurrentSituationsStatusFilter,
@@ -187,6 +189,7 @@ const {
   loadSituationSelection,
   refreshSituationsData: refreshSituationsDataInternal,
   sujetsQueRetient,
+  repriseDeLAncienFiltre,
   createSituationRecord,
   updateSituationRecord
 } = createProjectSituationsPersistence({
@@ -198,9 +201,9 @@ const {
   loadMesSituations,
   chargerLesSujetsDesChantiers,
   chargerLesPersonnesDesChantiers,
-  champsDuCarnet,
-  metaDuCarnet,
-  moiDuCarnet,
+  champsDeLEcran,
+  metaDeLEcran,
+  moiDeLEcran,
   loadSubjectsForSituation,
   ensureTrajectoryHistory,
   loadSituationKanbanStatusMap,
@@ -217,7 +220,6 @@ const {
   getPaginatedSituations,
   getSituationsPaginationState,
   getSituationsDataSourceInfo,
-  normalizeSituationMode,
   normalizeSituationStatus,
   renderSituationCount,
   formatSituationUpdatedLabel,
@@ -231,12 +233,11 @@ const {
 } = createProjectSituationsView({
   store,
   uiState,
-  getDefaultCreateForm,
-  getSituationEditForm,
-  normalizeSituationMode,
   renderSituationsTable,
   getSituationById,
   sujetsQueRetient,
+  champsDeLEcran,
+  moiDeLEcran,
   renderSituationKanban: (...args) => kanbanView.renderSituationKanban(...args)
 });
 
@@ -294,36 +295,31 @@ function syncSituationsToolbar() {
   toolbarHost.innerHTML = "";
 }
 
-function parseCsvList(value) {
-  return [...new Set(String(value || "")
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean))];
-}
-
 /**
- * Les chantiers qu'on sait nommer, tels que le carnet les a demandés à la base.
+ * Le vocabulaire de l'écran, et ce qu'il faut pour relire une requête.
  *
- * Lus ici et dans le formulaire au même endroit : deux listes de chantiers
- * finiraient par ne plus contenir les mêmes, et c'est celle qu'on ne regarde
- * pas qui trancherait un nom (règle 4).
- */
-function chantiersDuMagasin() {
-  const noms = store.situationsView?.nomsDesProjets;
-  return noms && typeof noms === "object" ? noms : {};
-}
-
-/**
- * Le vocabulaire du carnet, et ce qu'il faut pour relire une requête.
+ * ## Deux écrans, deux vocabulaires, une seule porte
  *
- * Les trois se lisent au même endroit : une requête relue avec d'autres champs
- * que ceux qui l'ont écrite ne rendrait pas la même chose (règle 4).
+ * Le même tableau de situations se monte à deux endroits, et leurs requêtes ne
+ * parlent pas de la même chose : le carnet connaît les labels et les gens de
+ * tous mes chantiers, l'écran d'un projet connaît en plus **ses lots et ses
+ * situations**. Prendre le vocabulaire du carnet sur l'écran d'un projet y
+ * ferait disparaître `lot:` — la même requête retiendrait deux choses selon
+ * l'onglet d'où on la regarde (règle 4).
+ *
+ * Chacun a donc le sien, construit par l'écran à qui il appartient, et le choix
+ * se fait ici, une fois. Les trois vont ensemble : les champs disent ce qui
+ * s'écrit, la surcouche dit ce que chaque sujet porte, « moi » dit qui regarde.
+ * Une requête relue avec les champs d'un écran et la surcouche d'un autre ne
+ * rendrait pas la même chose.
  */
 function chargeDuCarnet() {
   return store.situationsView?.sujetsDuCarnet?.rawSubjectsResult ?? {};
 }
 
-function champsDuCarnet() {
+function champsDeLEcran() {
+  if (!estMonCarnet(store)) return champsDuProjetOuvert();
+
   return construireLesChampsDuCarnet({
     charge: chargeDuCarnet(),
     personnes: store.situationsView?.personnesDuCarnet ?? [],
@@ -331,7 +327,9 @@ function champsDuCarnet() {
   });
 }
 
-function metaDuCarnet() {
+function metaDeLEcran() {
+  if (!estMonCarnet(store)) return metaDuProjetOuvert();
+
   const charge = chargeDuCarnet();
   return metaDesSujets({
     sujets: Array.isArray(charge.subjects) ? charge.subjects : [],
@@ -347,44 +345,13 @@ function metaDuCarnet() {
  * portent des identifiants de personne. Les deux sont des UUID et se comparent
  * sans erreur : « assigné:moi » ne rendrait jamais rien.
  */
-function moiDuCarnet() {
+function moiDeLEcran() {
+  if (!estMonCarnet(store)) return moiDansLeProjetOuvert();
+
   return moiDansLeProjet({
     collaborateurs: store.situationsView?.personnesDuCarnet ?? [],
     utilisateur: store.user?.id ?? ""
   });
-}
-
-function buildCreateSituationPayload() {
-  const form = uiState.createForm || getDefaultCreateForm();
-  const mode = normalizeSituationMode(form.mode);
-  const status = [
-    form.automaticStatusOpen ? "open" : "",
-    form.automaticStatusClosed ? "closed" : ""
-  ].filter(Boolean);
-  const priorities = [
-    form.automaticPriorityLow ? "low" : "",
-    form.automaticPriorityMedium ? "medium" : "",
-    form.automaticPriorityHigh ? "high" : "",
-    form.automaticPriorityCritical ? "critical" : ""
-  ].filter(Boolean);
-
-  return {
-    title: firstNonEmpty(form.title, "Nouvelle situation"),
-    description: firstNonEmpty(form.description, ""),
-    status: "open",
-    mode,
-    filter_definition: mode === "automatic"
-      ? {
-          status,
-          priorities,
-          objectiveIds: parseCsvList(form.automaticObjectiveIds),
-          labelIds: parseCsvList(form.automaticLabelIds),
-          assigneeIds: parseCsvList(form.automaticAssigneeIds),
-          projectIds: identifiantsDesProjets(form.automaticProjectNames, chantiersDuMagasin()).ids,
-          blockedOnly: Boolean(form.automaticBlockedOnly)
-        }
-      : null
-  };
 }
 
 function syncProjectHeader(root) {
@@ -601,17 +568,14 @@ async function refreshSituationsData(root, { forceSubjects = false } = {}) {
 }
 
 const { bindEvents } = createProjectSituationsEvents({
-  champsDuCarnet,
+  champsDeLEcran,
   store,
   uiState,
-  getDefaultCreateForm,
-  getSituationEditForm,
-  normalizeSituationMode,
-  buildCreateSituationPayload,
   rerender,
   refreshSituationsData,
   createSituationRecord,
   updateSituationRecord,
+  repriseDeLAncienFiltre,
   setSelectedSituationId,
   getSituationById,
   loadSituationSelection,

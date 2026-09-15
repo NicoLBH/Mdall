@@ -32,7 +32,7 @@
  */
 
 import {
-  COULEUR_PAR_DEFAUT, ICONE_PAR_DEFAUT, refusDeLaVue, vueAEcrire
+  COULEUR_PAR_DEFAUT, ICONE_PAR_DEFAUT, couleurDeLaVue, iconeDeLaVue, refusDeLaVue, vueAEcrire
 } from "./vues-des-sujets.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -61,6 +61,7 @@ export function compositionNeuve() {
     requete: "",
     icone: ICONE_PAR_DEFAUT,
     couleur: COULEUR_PAR_DEFAUT,
+    statut: STATUT.OUVERTE,
     habitOuvert: false,
     habitAvant: null,
     refus: ""
@@ -100,6 +101,48 @@ export function refusDeLaComposition({ composition = {}, situations = [], lectur
 }
 
 /**
+ * Les deux états d'une situation.
+ *
+ * **Ce n'est pas une recherche.** Une situation fermée est rangée ; sa requête
+ * continuerait pourtant de retenir les mêmes sujets. C'est pour cela que l'état
+ * ne s'écrit pas dans la requête, et que le formulaire le demande à part.
+ */
+export const STATUT = { OUVERTE: "open", FERMEE: "closed" };
+
+export function statutDe(valeur) {
+  return texte(valeur).toLowerCase() === STATUT.FERMEE ? STATUT.FERMEE : STATUT.OUVERTE;
+}
+
+/**
+ * La forme d'une situation qu'on rouvre pour la modifier.
+ *
+ * ## La requête se donne, elle ne se devine pas
+ *
+ * Une situation d'aujourd'hui porte sa requête. Une situation d'avant portait
+ * un `filter_definition`, et le reprendre en requête est une affirmation qui
+ * peut échouer — c'est `requete-dun-filtre.js` qui la fait et qui dit quand
+ * elle n'aboutit pas. Ce module ne la referait pas mieux : il prend ce qu'on
+ * lui donne, et **rien quand on ne lui donne rien**.
+ *
+ * Une requête vide est refusée à l'enregistrement. C'est voulu : mieux vaut
+ * empêcher d'enregistrer que laisser remplacer un filtre par une requête qui
+ * n'en dirait pas autant, ce qui changerait le contenu d'une liste que
+ * quelqu'un regarde tous les jours.
+ */
+export function compositionDepuisLaSituation(situation = null, { requete = "" } = {}) {
+  return {
+    ...compositionNeuve(),
+    id: texte(situation?.id),
+    nom: texte(situation?.title) || texte(situation?.nom),
+    description: texte(situation?.description),
+    requete: texte(requete),
+    icone: iconeDeLaVue(situation?.icon ?? situation?.icone),
+    couleur: couleurDeLaVue(situation?.color ?? situation?.couleur).cle,
+    statut: statutDe(situation?.status)
+  };
+}
+
+/**
  * Ce qu'on enverra en base, une fois la situation acceptée.
  *
  * **La colonne s'appelle `requete`, pas `query`.** Les vues vivent dans la
@@ -118,5 +161,5 @@ export function situationAEcrire(composition = {}) {
     couleur: composition.couleur
   });
 
-  return { ...reste, requete: query };
+  return { ...reste, requete: query, status: statutDe(composition.statut) };
 }

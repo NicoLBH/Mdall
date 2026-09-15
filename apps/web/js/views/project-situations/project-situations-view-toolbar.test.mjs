@@ -12,7 +12,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,6 +24,7 @@ import { situationAEcrire } from "../../services/situation-en-composition.js";
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const source = readFileSync(resolve(ICI, "./project-situations-view.js"), "utf8");
+const evenements = readFileSync(resolve(ICI, "./project-situations-events.js"), "utf8");
 const tableau = readFileSync(resolve(ICI, "./project-situations-table.js"), "utf8");
 
 test("la ligne de titre partagée porte la structure des autres écrans", () => {
@@ -64,49 +65,63 @@ test("la recherche du carnet reprend le champ des sujets", () => {
   assert.match(css, /\.sujets-search,\s*\.situations-search\{/, "un seul espacement pour les deux");
 });
 
-/* ── Ce qu'on demande à la création ──────────────────────────────────────── */
-
-const formulaire = readFileSync(resolve(ICI, "./project-situations-form.js"), "utf8");
+/* ── Le mode et le filtre ont quitté l'écran ─────────────────────────────── */
 
 /**
- * **La création ne demande plus un « type ».**
+ * **Trois tests sont morts avec le formulaire qu'ils gardaient.**
  *
- * « Manuelle » ou « Automatique » était une question de mécanique posée avant
- * même qu'on ait écrit un titre — au moment où l'on a une intention, pas une
- * méthode. On sait qu'on veut « ma semaine » ; on ne sait pas encore si on la
- * remplira à la main.
+ * Ils vérifiaient que « Manuelle » et « Automatique » étaient posés au bon
+ * moment, en français, et que le choix partait bien vers la base. La question
+ * n'existe plus : une situation dit ce qu'elle retient par sa requête, et le
+ * panneau de réglages avec ses cases et ses « IDs séparés par des virgules » a
+ * été retiré (étape 4). Ce qui les remplace est ci-dessous : plus rien n'écrit
+ * ces deux colonnes, et plus rien ne les montre.
  */
-test("la fenêtre de création ne pose plus de question de mécanique", () => {
-  // Le bloc du choix est désormais dans une branche réservée à la modification.
-  assert.ok(!formulaire.includes("situation${resolvedMode}Mode\" value=\"manual\" ${automaticMode ? \"\" : \"checked\"} ${modeDisabledAttr}"));
-  assert.ok(!formulaire.includes("modeDisabledAttr"), "plus de champ désactivé : il n'y a plus de champ");
-  assert.ok(!formulaire.includes("Le mode n est pas modifiable"), "il l'est devenu");
+test("le formulaire de réglages n'existe plus", () => {
+  assert.equal(
+    existsSync(resolve(ICI, "./project-situations-form.js")), false,
+    "le fichier doit être supprimé, pas seulement débranché"
+  );
+  assert.ok(!source.includes("renderSituationForm"), "et l'écran ne le monte plus");
+  assert.ok(!evenements.includes("data-situation-edit-field"), "ni ses champs");
+  assert.ok(!evenements.includes("situationEditMode"), "ni son choix de mécanique");
 });
 
 /**
- * **Et il est dit en français, à sa place.** Le choix reste — sans lui, une
- * situation ne pourrait plus jamais suivre une recherche — mais dans la fenêtre
- * de modification, une fois qu'on sait ce qu'on veut en faire.
+ * **Plus rien n'écrit `mode` ni `filter_definition`.**
+ *
+ * Ils restent en base — des situations d'avant y gardent ce qu'elles
+ * retiennent, et un constat ne devient pas faux (règle 6) — mais une écriture
+ * oubliée quelque part les ferait renaître à moitié : une situation neuve avec
+ * un filtre vide et une requête, qui retiendrait l'intersection de deux règles
+ * dont une seule est visible (règle 4).
+ *
+ * L'exception est nommée et elle va dans le bon sens : écrire une requête
+ * **efface** l'ancien filtre, parce que la requête le reprend.
  */
-test("le choix se pose à la modification, en français", () => {
-  assert.match(formulaire, /Ce qu'elle retient/);
-  assert.match(formulaire, /Les sujets que j'y mets/);
-  assert.match(formulaire, /Ceux qui répondent à une recherche/);
-  assert.ok(!formulaire.includes(">Manuelle<"), "plus de jargon à l'écran");
-  assert.ok(!formulaire.includes(">Automatique<"));
-});
-
-/**
- * **Un choix qui ne mène nulle part n'est pas un choix.** Le mode restait celui
- * de la création : les boutons auraient tourné sans rien changer.
- */
-test("le mode choisi part bien vers la base", () => {
-  const evenements = readFileSync(resolve(ICI, "./project-situations-events.js"), "utf8");
+test("la création n'écrit ni mode ni filtre", () => {
   const service = readFileSync(resolve(ICI, "../../services/project-situations-supabase.js"), "utf8");
+  const depart = service.indexOf("export async function createSituation");
+  const fin = service.indexOf("export async function updateSituation");
+  const creation = service.slice(depart, fin);
 
-  assert.match(evenements, /input\[name="situationEditMode"\]/, "le choix doit être écouté");
-  assert.match(evenements, /status: String\(form\.status[\s\S]{0,120}mode,/, "et voyager dans la modification");
-  assert.match(service, /hasOwnProperty\.call\(patch, "mode"\)/, "et la base doit l'accepter");
+  assert.ok(!/\n\s*mode:/.test(creation), "le mode part à sa valeur par défaut");
+  assert.ok(!/\n\s*filter_definition:/.test(creation), "et aucun filtre n'est posé");
+  assert.match(creation, /\n\s*requete:/, "c'est la requête qui dit ce qu'elle retient");
+});
+
+test("la modification n'écrit le mode que pour effacer l'ancien filtre", () => {
+  const service = readFileSync(resolve(ICI, "../../services/project-situations-supabase.js"), "utf8");
+  const depart = service.indexOf("export async function updateSituation");
+  const fin = service.indexOf("export async function closeSituation");
+  const modification = service.slice(depart, fin);
+
+  assert.ok(!modification.includes('hasOwnProperty.call(patch, "mode")'), "on ne lui envoie plus de mode");
+  assert.ok(
+    !modification.includes('hasOwnProperty.call(patch, "filter_definition")'),
+    "ni de filtre"
+  );
+  assert.match(modification, /body\.filter_definition = null/, "écrire une requête efface celui d'avant");
 });
 
 /* ── Le rail du carnet ───────────────────────────────────────────────────── */
@@ -146,13 +161,13 @@ test("les lectures et mes situations peuplent le même rail", () => {
 test("le rail reçoit les personnes de tous mes chantiers", () => {
   const persistance = readFileSync(resolve(ICI, "./project-situations-persistence.js"), "utf8");
 
-  assert.match(source, /personnes: store\.situationsView\?\.personnesDuCarnet/);
+  const ecran = readFileSync(resolve(ICI, "../project-situations.js"), "utf8");
+
+  assert.match(ecran, /personnes: store\.situationsView\?\.personnesDuCarnet/);
   assert.match(persistance, /chargerLesPersonnesDesChantiers\(chantiers\)/, "et on va les chercher");
 });
 
 /* ── Le rail tient ce qu'il promet ───────────────────────────────────────── */
-
-const evenements = readFileSync(resolve(ICI, "./project-situations-events.js"), "utf8");
 
 /**
  * **Le rail promettait sans tenir.** Ses entrées s'allumaient et rien ne
@@ -186,22 +201,22 @@ test("une lecture n'offre pas de crayon", () => {
 });
 
 /**
- * **Et elle ne dit pas « Automatique ».** C'est un mot de mécanique ; sur une
- * situation qui porte une requête — une lecture du rail, ou l'une de celles
- * qu'on écrit au formulaire — il ne renseigne sur rien que le titre et la
- * requête ne disent déjà. Pire, il est faux : le mode reste en base à la valeur
- * qu'il avait à la création, si bien qu'une situation composée à l'étape 3
- * s'annonçait « Manuelle » sans tenir aucune liste à la main.
+ * **Et « Automatique » a quitté l'écran pour de bon** (étape 4).
  *
- * **La même question, posée une seule fois** : le panneau de détail et le
- * tableau la posent à `seDitParUneRequete`. Deux formulations d'une même règle
- * finiraient par ne plus dire la même chose (règle 4), et l'on verrait la
- * pastille d'un côté et pas de l'autre.
+ * L'étape 3 l'avait caché sur les situations qui portent une requête ; il
+ * restait sur les autres, où il ne disait pas mieux la vérité — le mode y est
+ * celui de la création, et plus personne ne le modifie. C'est un mot de
+ * mécanique là où l'on attend une intention.
+ *
+ * **Nulle part** : ni dans le tableau, ni sur le panneau de détail. Le laisser
+ * d'un seul côté ferait deux réponses à la même question (règle 4).
  */
-test("une situation qui porte une requête ne montre pas de pastille de mécanique", () => {
-  assert.match(source, /const modeBadge = seDitParUneRequete\(selectedSituation\) \? ""/);
-  assert.match(tableau, /if \(seDitParUneRequete\(situation\)\) return ""/,
-    "le tableau pose la même question que le panneau de détail");
+test("« Manuelle » et « Automatique » ne s'affichent plus nulle part", () => {
+  for (const [nom, fichier] of [["l'écran", source], ["le tableau", tableau]]) {
+    assert.ok(!fichier.includes('"Automatique"'), `${nom} ne dit plus « Automatique »`);
+    assert.ok(!fichier.includes('"Manuelle"'), `${nom} ne dit plus « Manuelle »`);
+    assert.ok(!fichier.includes("renderModePill"), `${nom} n'a plus de pastille de mécanique`);
+  }
 });
 
 /* ── « Nouvelle situation » ouvre le formulaire d'une vue ────────────────── */
@@ -244,11 +259,57 @@ test("tous les gestes du formulaire sont écoutés par le carnet", () => {
  * champ de recherche qui ne reconnaîtrait aucun mot ferait chercher la panne
  * dans la requête qu'on écrit (règle 5). L'étape 4 l'y amènera.
  */
-test("le carnet ouvre le formulaire, le projet garde sa fenêtre", () => {
-  assert.match(evenements, /estMonCarnet\(store\)\s*\n?\s*\?\s*ouvrirLaComposition\(root\)/);
-  assert.match(evenements, /:\s*openCreateModal\(root\)/);
+test("les deux écrans ouvrent le même formulaire", () => {
+  assert.match(evenements, /openButton\.onclick = \(\) => ouvrirLaComposition\(root\)/);
+  assert.ok(!evenements.includes("openCreateModal"), "plus de fenêtre à côté (étape 4)");
   assert.match(source, /renderCompositionDeLaSituation\(\)/, "et l'écran le rend");
   assert.match(source, /renderFormulaireDeVueHtml\(\{/, "en montant celui des Sujets, pas un second");
+});
+
+/**
+ * **Le crayon ouvre le même formulaire, rempli.**
+ *
+ * Il ouvrait un panneau de réglages où l'on modifiait un filtre sans jamais
+ * voir ce qu'il retenait. Deux formulaires pour une même chose, dont un seul
+ * montrait le résultat (règle 10).
+ */
+test("le crayon rouvre la situation dans ce formulaire", () => {
+  assert.match(evenements, /data-open-situation-edit[\s\S]{0,200}ouvrirLaCompositionDeLaSituation\(root, situationId\)/);
+  assert.match(evenements, /compositionDepuisLaSituation\(situation, \{/);
+  assert.ok(!evenements.includes("openEditPanel"), "l'ancien panneau n'est plus ouvert");
+  assert.ok(!source.includes("renderEditSituationPanel"), "ni rendu");
+});
+
+/**
+ * **L'état d'une situation, qui n'est pas une recherche.**
+ *
+ * Ouverte ou fermée : une situation fermée retiendrait les mêmes sujets, et
+ * c'est pourtant par là qu'on la range. C'est la seule chose que le formulaire
+ * demande en plus, et elle passe par la place que le formulaire partagé lui
+ * laisse — un champ posé et jamais écouté ferait tourner deux boutons sans rien
+ * changer.
+ */
+test("le statut se pose dans le formulaire et part vers la base", () => {
+  assert.match(source, /champsEnPlusHtml: renderCeQueLaSituationAEnPlus\(forme\)/,
+    "l'écran doit occuper la place que le formulaire lui laisse");
+  assert.match(source, /name="situationStatut"/, "et y poser l'état");
+  assert.match(evenements, /input\[name="situationStatut"\]/, "qui doit être écouté");
+  assert.match(evenements, /poserDansLaComposition\("statut"/, "et atterrir dans la forme");
+});
+
+/**
+ * **Une situation d'avant arrive avec sa requête reprise, ou vide.**
+ *
+ * Reprendre un `filter_definition` en requête est une affirmation qui peut
+ * échouer : un champ que l'écran ne déclare pas, un label supprimé, une
+ * priorité partielle. Préremplir quand même ferait enregistrer une requête qui
+ * en dit moins — des sujets disparaîtraient d'une liste que quelqu'un regarde
+ * tous les jours, et rien ne l'expliquerait (règle 5).
+ */
+test("une reprise incomplète ne préremplit rien, et se dit", () => {
+  assert.match(evenements, /reprise && !reprise\.perdus\.length/);
+  assert.match(evenements, /phraseDesPerdus\(reprise\?\.perdus \?\? \[\]\)/);
+  assert.match(source, /situationEnCoursGarde/, "et l'écran la montre");
 });
 
 /**

@@ -11,25 +11,13 @@ import {
 } from "./project-situations-view-grid.js";
 import { buildSubjectHierarchyIndexes } from "../../services/subject-hierarchy.js";
 import { getExpandedSubjectIdsSet, resolveSituationTreeData } from "./project-situations-tree-data.js";
-import { identifiantsDesProjets, phraseDesProjetsIncertains } from "../../services/projets-du-filtre.js";
 import { situationsDeLecture } from "../../services/lectures-du-carnet.js";
-import { estMonCarnet } from "../../services/mon-carnet.js";
 import {
-  compositionNeuve, refusDeLaComposition, situationAEcrire
+  compositionDepuisLaSituation, compositionNeuve, refusDeLaComposition, situationAEcrire
 } from "../../services/situation-en-composition.js";
+import { phraseDesPerdus } from "../../services/requete-dun-filtre.js";
 import { requeteDeLaSituation } from "../../services/situation-comme-une-vue.js";
 
-function syncSubmitButtonState(button, { submitting = false, title = "" } = {}) {
-  if (!button) return;
-  button.disabled = submitting || !String(title || "").trim();
-}
-
-function parseCsvList(value) {
-  return [...new Set(String(value || "")
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean))];
-}
 
 const SITUATION_GRID_KANBAN_OPTIONS = [
   { key: "non_active", label: "Non activé", hint: "Hors de la pile active." },
@@ -96,19 +84,17 @@ function flattenVisibleSubjectIds({
 export function createProjectSituationsEvents({
   store,
   uiState,
-  getDefaultCreateForm,
-  getSituationEditForm,
-  normalizeSituationMode,
-  buildCreateSituationPayload,
   rerender,
   refreshSituationsData,
   createSituationRecord,
   updateSituationRecord,
+  /** L'ancien filtre d'une situation, repris en requête — ou `null`. */
+  repriseDeLAncienFiltre = () => null,
   setSelectedSituationId,
   getSituationById,
   loadSituationSelection,
   /** Le vocabulaire du carnet : sans lui, aucune requête du rail ne se relit. */
-  champsDuCarnet = () => [],
+  champsDeLEcran = () => [],
   loadSituationInsightsData,
   openSituationDrilldownFromSelection,
   openSubjectDrilldown,
@@ -1733,65 +1719,14 @@ export function createProjectSituationsEvents({
     const cherche = String(requete || "").trim();
     if (!cherche) return null;
 
-    const champs = champsDuCarnet();
+    const champs = champsDeLEcran();
     const toutes = [...situationsDeLecture(champs), ...safeArray(store.situationsView?.data)];
 
     return toutes.find((situation) => requeteDeLaSituation(situation) === cherche) || null;
   }
 
-  function chantiersDuMagasin() {
-    const noms = store.situationsView?.nomsDesProjets;
-    return noms && typeof noms === "object" ? noms : {};
-  }
-
   /**
-   * Ce qui n'a pas été reconnu dans le champ des chantiers, ou `""`.
-   *
-   * **On refuse d'enregistrer tant qu'un nom n'est pas reconnu.** Enregistrer
-   * en l'ignorant donnerait une situation qui ne retient rien, et une situation
-   * vide se lit comme un chantier sans travail — pas comme une faute de frappe.
-   * Le nom fautif est sous les yeux, dans le champ : le corriger est immédiat.
-   */
-  function incertitudeDesChantiers(form) {
-    if (normalizeSituationMode(form?.mode) !== "automatic") return "";
-    return phraseDesProjetsIncertains(identifiantsDesProjets(form?.automaticProjectNames, chantiersDuMagasin()));
-  }
-
-  function buildEditSituationPayload() {
-    const form = uiState.editForm || getDefaultCreateForm();
-    const mode = normalizeSituationMode(form.mode);
-    const status = [
-      form.automaticStatusOpen ? "open" : "",
-      form.automaticStatusClosed ? "closed" : ""
-    ].filter(Boolean);
-    const priorities = [
-      form.automaticPriorityLow ? "low" : "",
-      form.automaticPriorityMedium ? "medium" : "",
-      form.automaticPriorityHigh ? "high" : "",
-      form.automaticPriorityCritical ? "critical" : ""
-    ].filter(Boolean);
-
-    return {
-      title: String(form.title || "").trim(),
-      description: String(form.description || "").trim(),
-      status: String(form.status || "open") === "closed" ? "closed" : "open",
-      mode,
-      filter_definition: mode === "automatic"
-        ? {
-            status,
-            priorities,
-            objectiveIds: parseCsvList(form.automaticObjectiveIds),
-            labelIds: parseCsvList(form.automaticLabelIds),
-            assigneeIds: parseCsvList(form.automaticAssigneeIds),
-            projectIds: identifiantsDesProjets(form.automaticProjectNames, chantiersDuMagasin()).ids,
-            blockedOnly: Boolean(form.automaticBlockedOnly)
-          }
-        : null
-    };
-  }
-
-  /**
-   * « Nouvelle situation » : le formulaire d'une vue, dans le carnet.
+   * « Nouvelle situation » : le formulaire d'une vue.
    *
    * **La fenêtre d'avant demandait une mécanique avant une intention.** Elle
    * proposait « manuelle » ou « automatique » — deux mots qui disent comment la
@@ -1800,12 +1735,48 @@ export function createProjectSituationsEvents({
    * formulaire d'une vue : un habit, un nom, une phrase, une requête, et le
    * tableau de ce qu'elle retient, dessous (étape 3).
    *
-   * Sur l'écran d'un projet, la fenêtre reste : la requête n'y a pas encore de
-   * vocabulaire, et l'étape 4 l'y amènera.
+   * Sur les deux écrans depuis l'étape 4 : chacun a son vocabulaire, et
+   * `champsDeLEcran` va le chercher là où il est.
    */
   function ouvrirLaComposition(root) {
     uiState.situationEnCours = compositionNeuve();
     uiState.situationEnCoursErreur = "";
+    uiState.situationEnCoursGarde = "";
+    rerender(root);
+  }
+
+  /**
+   * Rouvrir une situation pour la modifier — le même formulaire, rempli.
+   *
+   * ## Ce que le crayon ouvrait avant
+   *
+   * Un panneau de réglages avec des cases à cocher, des champs
+   * « IDs séparés par des virgules » et un choix de mécanique. On y modifiait
+   * un filtre sans jamais voir ce qu'il retenait. C'est le même formulaire que
+   * la création qui s'ouvre désormais, avec le tableau dessous (étape 4).
+   *
+   * ## Une situation d'avant arrive avec sa requête reprise
+   *
+   * Tant que la reprise dit tout ce que l'ancien filtre disait. Sinon la
+   * requête reste **vide** et l'écran le dit : enregistrer une requête qui en
+   * dirait moins ferait disparaître des sujets d'une liste que quelqu'un
+   * regarde tous les jours, et rien ne l'expliquerait. Une requête vide est
+   * refusée à l'enregistrement — on ne peut donc pas le faire par mégarde.
+   */
+  function ouvrirLaCompositionDeLaSituation(root, situationId) {
+    const situation = getSituationById(situationId || store.situationsView?.selectedSituationId);
+    if (!situation) return;
+
+    const sienne = requeteDeLaSituation(situation);
+    const reprise = sienne ? null : repriseDeLAncienFiltre(situation);
+    const reprenable = reprise && !reprise.perdus.length;
+
+    uiState.insightsPanelOpen = false;
+    uiState.situationEnCours = compositionDepuisLaSituation(situation, {
+      requete: sienne || (reprenable ? reprise.requete : "")
+    });
+    uiState.situationEnCoursErreur = "";
+    uiState.situationEnCoursGarde = phraseDesPerdus(reprise?.perdus ?? []);
     rerender(root);
   }
 
@@ -1813,6 +1784,7 @@ export function createProjectSituationsEvents({
   function annulerLaComposition(root) {
     uiState.situationEnCours = null;
     uiState.situationEnCoursErreur = "";
+    uiState.situationEnCoursGarde = "";
     rerender(root);
   }
 
@@ -1877,7 +1849,7 @@ export function createProjectSituationsEvents({
     const refus = refusDeLaComposition({
       composition: forme,
       situations: safeArray(store.situationsView?.data),
-      lectures: situationsDeLecture(champsDuCarnet())
+      lectures: situationsDeLecture(champsDeLEcran())
     });
     if (refus) {
       uiState.situationEnCoursErreur = refus;
@@ -1886,10 +1858,19 @@ export function createProjectSituationsEvents({
     }
 
     try {
-      const created = await createSituationRecord(situationAEcrire(forme));
+      const ecrite = situationAEcrire(forme);
+      // **Modifier et créer écrivent la même chose.** Un formulaire qui
+      // enverrait deux jeux de colonnes selon le bouton finirait par en oublier
+      // une d'un côté — c'est ainsi que l'habit et la requête ne partaient pas
+      // à la création (règle 4).
+      const enregistree = forme.id
+        ? await updateSituationRecord(forme.id, ecrite)
+        : await createSituationRecord(ecrite);
+
       uiState.situationEnCours = null;
       uiState.situationEnCoursErreur = "";
-      setSelectedSituationId(created?.id || null);
+      uiState.situationEnCoursGarde = "";
+      setSelectedSituationId(enregistree?.id || forme.id || null);
       await refreshSituationsData(root, { forceSubjects: false });
     } catch (error) {
       console.error("createSituation failed", error);
@@ -1900,47 +1881,9 @@ export function createProjectSituationsEvents({
     }
   }
 
-  function openCreateModal(root) {
-    uiState.createModalOpen = true;
-    uiState.createSubmitting = false;
-    uiState.createError = "";
-    uiState.createForm = getDefaultCreateForm();
-    rerender(root);
-    syncSubmitButtonState(document.getElementById("projectCreateSituationSubmit"), {
-      submitting: uiState.createSubmitting,
-      title: uiState.createForm.title
-    });
-  }
-
-  function closeCreateModal(root) {
-    uiState.createModalOpen = false;
-    uiState.createSubmitting = false;
-    uiState.createError = "";
-    rerender(root);
-  }
-
-  function openEditPanel(root, situationId) {
-    const selectedSituation = getSituationById(situationId || store.situationsView?.selectedSituationId);
-    if (!selectedSituation) return;
-    uiState.editPanelOpen = true;
-    uiState.insightsPanelOpen = false;
-    uiState.editSubmitting = false;
-    uiState.editError = "";
-    uiState.editForm = getSituationEditForm(selectedSituation, chantiersDuMagasin());
-    rerender(root);
-  }
-
-  function closeEditPanel(root) {
-    uiState.editPanelOpen = false;
-    uiState.editSubmitting = false;
-    uiState.editError = "";
-    rerender(root);
-  }
-
   function openInsightsPanel(root) {
     const situationId = String(store.situationsView?.selectedSituationId || "").trim();
     uiState.insightsPanelOpen = true;
-    uiState.editPanelOpen = false;
     const hasFreshData = Boolean(uiState.insightsData && uiState.insightsSituationId === situationId);
     uiState.insightsLoading = !hasFreshData;
     if (!hasFreshData) {
@@ -1959,140 +1902,12 @@ export function createProjectSituationsEvents({
     rerender(root);
   }
 
-  async function submitCreateSituation(root) {
-    const payload = buildCreateSituationPayload();
-    if (!String(payload.title || "").trim()) {
-      uiState.createError = "Le titre est obligatoire.";
-      rerender(root);
-      return;
-    }
-
-    const incertitude = incertitudeDesChantiers(uiState.createForm);
-    if (incertitude) {
-      uiState.createError = incertitude;
-      rerender(root);
-      return;
-    }
-
-    uiState.createSubmitting = true;
-    uiState.createError = "";
-    rerender(root);
-
-    try {
-      const created = await createSituationRecord(payload);
-      setSelectedSituationId(created?.id || null);
-      uiState.createModalOpen = false;
-      uiState.createSubmitting = false;
-      uiState.createForm = getDefaultCreateForm();
-      await refreshSituationsData(root, { forceSubjects: false });
-    } catch (error) {
-      console.error("createSituation failed", error);
-      uiState.createSubmitting = false;
-      uiState.createError = error instanceof Error ? error.message : "La création de la situation a échoué.";
-      rerender(root);
-    }
-  }
-
-  async function submitEditSituation(root) {
-    const situationId = String(store.situationsView?.selectedSituationId || "").trim();
-    const payload = buildEditSituationPayload();
-
-    if (!String(payload.title || "").trim()) {
-      uiState.editError = "Le titre est obligatoire.";
-      rerender(root);
-      return;
-    }
-    if (!situationId) {
-      uiState.editError = "Impossible d'identifier la situation à modifier.";
-      rerender(root);
-      return;
-    }
-
-    const incertitude = incertitudeDesChantiers(uiState.editForm);
-    if (incertitude) {
-      uiState.editError = incertitude;
-      rerender(root);
-      return;
-    }
-
-    uiState.editSubmitting = true;
-    uiState.editError = "";
-    rerender(root);
-
-    try {
-      await updateSituationRecord(situationId, payload);
-      await refreshSituationsData(root, { forceSubjects: false });
-      uiState.editPanelOpen = false;
-      uiState.editSubmitting = false;
-      uiState.editError = "";
-      await loadSituationSelection(situationId);
-      rerender(root);
-    } catch (error) {
-      console.error("updateSituation failed", error);
-      uiState.editSubmitting = false;
-      uiState.editError = error instanceof Error ? error.message : "La mise à jour de la situation a échoué.";
-      rerender(root);
-    }
-  }
-
-  function bindCreateModalEvents(root) {
-    const modal = document.getElementById("projectCreateSituationModal");
-    if (!modal) return;
-
-    modal.querySelectorAll("[data-close-project-situation-modal]").forEach((node) => {
-      node.addEventListener("click", () => closeCreateModal(root));
-    });
-
-    modal.querySelectorAll("[data-situation-create-field]").forEach((field) => {
-      field.addEventListener("input", (event) => {
-        const key = String(event.currentTarget?.getAttribute("data-situation-create-field") || "").trim();
-        if (!key) return;
-        uiState.createForm[key] = event.currentTarget.value;
-        uiState.createError = "";
-        syncSubmitButtonState(modal.querySelector("#projectCreateSituationSubmit"), {
-          submitting: uiState.createSubmitting,
-          title: uiState.createForm.title
-        });
-      });
-    });
-
-    modal.querySelectorAll('input[name="situationCreateMode"]').forEach((field) => {
-      field.addEventListener("change", (event) => {
-        uiState.createForm.mode = event.currentTarget.value === "automatic" ? "automatic" : "manual";
-        uiState.createError = "";
-        rerender(root);
-      });
-    });
-
-    modal.querySelectorAll("[data-situation-create-checkbox]").forEach((field) => {
-      field.addEventListener("change", (event) => {
-        const key = String(event.currentTarget?.getAttribute("data-situation-create-checkbox") || "").trim();
-        if (!key) return;
-        uiState.createForm[key] = !!event.currentTarget.checked;
-        uiState.createError = "";
-      });
-    });
-
-    modal.querySelector("#projectCreateSituationSubmit")?.addEventListener("click", async () => {
-      await submitCreateSituation(root);
-    });
-
-    modal.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      await submitCreateSituation(root);
-    });
-  }
-
   function bindEditPanelEvents(root) {
     root.querySelectorAll("[data-open-situation-edit]").forEach((node) => {
       node.addEventListener("click", () => {
         const situationId = String(node.getAttribute("data-open-situation-edit") || "").trim();
-        openEditPanel(root, situationId);
+        ouvrirLaCompositionDeLaSituation(root, situationId);
       });
-    });
-
-    root.querySelectorAll("[data-close-situation-edit]").forEach((node) => {
-      node.addEventListener("click", () => closeEditPanel(root));
     });
 
     root.querySelectorAll("[data-open-situation-insights]").forEach((node) => {
@@ -2134,50 +1949,6 @@ export function createProjectSituationsEvents({
       });
     });
 
-    root.querySelectorAll("[data-situation-edit-field]").forEach((field) => {
-      field.addEventListener("input", (event) => {
-        const key = String(event.currentTarget?.getAttribute("data-situation-edit-field") || "").trim();
-        if (!key) return;
-        uiState.editForm[key] = event.currentTarget.value;
-        uiState.editError = "";
-        syncSubmitButtonState(root.querySelector("#projectEditSituationSubmit"), {
-          submitting: uiState.editSubmitting,
-          title: uiState.editForm.title
-        });
-      });
-    });
-
-    // **Ce qu'une situation retient peut changer d'avis.** Le mode était figé à
-    // la création — « Le mode n'est pas modifiable après la création » — si bien
-    // qu'une situation commencée à la main ne pouvait jamais devenir une
-    // recherche. On décidait donc de la mécanique avant d'avoir l'intention.
-    root.querySelectorAll('input[name="situationEditMode"]').forEach((field) => {
-      field.addEventListener("change", (event) => {
-        uiState.editForm.mode = event.currentTarget.value === "automatic" ? "automatic" : "manual";
-        uiState.editError = "";
-        rerender(root);
-      });
-    });
-
-    root.querySelectorAll('input[name="situationEditStatus"]').forEach((field) => {
-      field.addEventListener("change", (event) => {
-        uiState.editForm.status = event.currentTarget.value === "closed" ? "closed" : "open";
-        uiState.editError = "";
-      });
-    });
-
-    root.querySelectorAll("[data-situation-edit-checkbox]").forEach((field) => {
-      field.addEventListener("change", (event) => {
-        const key = String(event.currentTarget?.getAttribute("data-situation-edit-checkbox") || "").trim();
-        if (!key) return;
-        uiState.editForm[key] = !!event.currentTarget.checked;
-        uiState.editError = "";
-      });
-    });
-
-    root.querySelector("#projectEditSituationSubmit")?.addEventListener("click", async () => {
-      await submitEditSituation(root);
-    });
   }
 
   function ensureSituationsPaginationState() {
@@ -2273,9 +2044,7 @@ export function createProjectSituationsEvents({
 
     const openButton = root.querySelector("#openCreateSituationButton");
     if (openButton) {
-      openButton.onclick = () => (estMonCarnet(store)
-        ? ouvrirLaComposition(root)
-        : openCreateModal(root));
+      openButton.onclick = () => ouvrirLaComposition(root);
     }
 
     // **Les gestes du formulaire d'une situation.** Ce sont ceux du formulaire
@@ -2345,6 +2114,15 @@ export function createProjectSituationsEvents({
     root.querySelector("[data-sujets-vider]")?.addEventListener("click", (event) => {
       event.preventDefault();
       poserDansLaComposition("requete", "", { root });
+    });
+
+    // **L'état d'une situation, qui n'est pas une recherche.** Une situation
+    // fermée retiendrait les mêmes sujets ; c'est pourtant par là qu'on la
+    // range, et c'est la seule chose que le formulaire demande en plus.
+    root.querySelectorAll('input[name="situationStatut"]').forEach((bouton) => {
+      bouton.addEventListener("change", (event) => {
+        poserDansLaComposition("statut", String(event.currentTarget.value || ""), { redessiner: false });
+      });
     });
 
     // **Le rail du carnet.** Chaque entrée porte la requête de ce qu'elle
@@ -2424,7 +2202,7 @@ export function createProjectSituationsEvents({
         });
 
         drilldownBody.querySelector(".project-situation-drilldown__section-action")?.addEventListener("click", () => {
-          openEditPanel(root, selectedSituationId);
+          ouvrirLaCompositionDeLaSituation(root, selectedSituationId);
         });
       });
     });
@@ -2434,8 +2212,7 @@ export function createProjectSituationsEvents({
         const situationId = String(node.getAttribute("data-open-situation") || "").trim();
         if (!situationId) return;
         setSelectedSituationId(situationId);
-        uiState.editPanelOpen = false;
-        uiState.insightsPanelOpen = false;
+            uiState.insightsPanelOpen = false;
         uiState.insightsLoading = false;
         uiState.insightsError = "";
         uiState.insightsData = null;
@@ -2608,17 +2385,14 @@ export function createProjectSituationsEvents({
     bindSituationGridEditableCells(root);
     bindSituationGridDnd(root);
 
-    bindCreateModalEvents(root);
     bindEditPanelEvents(root);
   }
 
   return {
-    openCreateModal,
-    closeCreateModal,
     ouvrirLaComposition,
+    ouvrirLaCompositionDeLaSituation,
     annulerLaComposition,
     enregistrerLaComposition,
-    submitCreateSituation,
     bindEvents
   };
 }

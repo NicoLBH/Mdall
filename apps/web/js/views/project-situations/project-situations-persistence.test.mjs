@@ -11,6 +11,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createProjectSituationsPersistence } from "./project-situations-persistence.js";
+import { champsDesSujets } from "../../services/champs-des-sujets.js";
+
+/**
+ * Deux sujets, et c'est ce que la charge d'un écran rend.
+ *
+ * Une situation automatique sans filtre les retient tous les deux : son filtre
+ * ne disait rien, et « rien » n'a jamais retiré personne. C'est ce que faisait
+ * l'ancienne correspondance, et c'est ce que fait la requête vide qui la
+ * reprend (étape 4).
+ */
+const DEUX_SUJETS = [{ id: "x" }, { id: "y" }];
 
 const MANUELLE = { id: "s-manuelle", mode: "manual", title: "Ma semaine" };
 const AUTOMATIQUE = { id: "s-auto", mode: "automatic", title: "Tous les sujets ouverts" };
@@ -30,7 +41,15 @@ function monter({ currentProjectId = null, situationsDuProjet = [], mesSituation
     safeArray: (valeur) => (Array.isArray(valeur) ? valeur : []),
     loadFlatSubjectsForCurrentProject: async () => {
       appels.push("sujets-du-projet");
-      return [];
+      // **Elle range la charge dans le magasin**, comme la vraie : c'est
+      // là-dedans qu'une requête va chercher ses sujets. Une fausse porte qui
+      // ne rangerait rien ferait passer « on ne sait pas » pour un défaut du
+      // code, alors que ce serait un défaut du décor.
+      store.projectSubjectsView = {
+        subjectsData: DEUX_SUJETS,
+        rawSubjectsResult: { subjects: DEUX_SUJETS }
+      };
+      return DEUX_SUJETS;
     },
     loadSituationsForCurrentProject: async () => {
       appels.push("situations-du-projet");
@@ -47,7 +66,7 @@ function monter({ currentProjectId = null, situationsDuProjet = [], mesSituation
     chargerLesSujetsDesChantiers: async (chantiers) => {
       appels.push(`sujets-des-chantiers:${chantiers.join("+")}`);
       if (chargeIllisible) throw new Error("chantiers illisibles");
-      return { subjectsData: [{ id: "x" }], rawSubjectsResult: { subjects: [{ id: "x" }] } };
+      return { subjectsData: DEUX_SUJETS, rawSubjectsResult: { subjects: DEUX_SUJETS } };
     },
     loadSubjectsForSituation: async (situation, sujets) => {
       appels.push(`sujets-de:${situation.id}`);
@@ -217,12 +236,17 @@ test("l'écran d'un projet ne recharge pas les personnes", async () => {
 
 /* ── Ouvrir une lecture du rail ──────────────────────────────────────────── */
 
-const CHAMPS_DU_CARNET = [
-  { key: "assigné", label: "Assignés", values: [{ value: "@moi", token: "moi" }], multiple: true },
-  { key: "auteur", label: "Auteur", values: [{ value: "@moi", token: "moi" }] },
-  { key: "mention", label: "Mentions", values: [{ value: "@moi", token: "moi" }], multiple: true },
-  { key: "activité", label: "Activité", values: [{ value: "recente", token: "récente" }] }
-];
+/**
+ * Le vocabulaire de l'écran, **construit par le vrai constructeur**.
+ *
+ * Il était écrit à la main ici — quatre champs recopiés à la forme que le code
+ * attend. Une fixture qui recopie les hypothèses du code ne teste que
+ * elle-même : elle déclarait `assigné` sans `statut`, si bien qu'une requête
+ * `statut:ouvert` s'y serait perdue sans que rien ne le montre.
+ */
+const CHAMPS_DE_L_ECRAN = champsDesSujets({
+  personnes: [{ id: "u-1", name: "A. Martin" }, { id: "u-2", name: "B. Rivière" }]
+});
 
 function monterLeCarnet({ sujets = [], meta = {}, moi = "u-1" } = {}) {
   const store = {
@@ -244,11 +268,14 @@ function monterLeCarnet({ sujets = [], meta = {}, moi = "u-1" } = {}) {
       rawSubjectsResult: { subjects: sujets }
     }),
     chargerLesPersonnesDesChantiers: async () => [],
-    champsDuCarnet: () => CHAMPS_DU_CARNET,
-    metaDuCarnet: () => meta,
-    moiDuCarnet: () => moi,
+    champsDeLEcran: () => CHAMPS_DE_L_ECRAN,
+    metaDeLEcran: () => meta,
+    moiDeLEcran: () => moi,
     loadSubjectsForSituation: async () => {
-      throw new Error("une lecture ne doit pas passer par la porte des situations écrites");
+      // **La porte d'avant lève ici**, et c'est le test : une requête qui
+      // repasserait par la correspondance des filtres le dirait bruyamment
+      // plutôt que de rendre discrètement autre chose.
+      throw new Error("cette situation ne doit pas passer par l'ancienne porte");
     },
     ensureTrajectoryHistory: async () => {},
     loadSituationKanbanStatusMap: async () => ({}),
@@ -329,4 +356,102 @@ test("le compte d'une lecture vient de la même résolution", async () => {
   await portes.loadSituationSelection("lecture:miens");
 
   assert.equal(uiState.selectedSituationSubjects.length, 1);
+});
+
+/* ── L'ancien filtre, repris en requête ──────────────────────────────────── */
+
+/**
+ * Une situation d'avant : un mode « automatique » et un `filter_definition`.
+ *
+ * Le décor la fabrique telle qu'elle est en base — c'est la forme qu'on doit
+ * savoir relire, pas une forme commode.
+ */
+const AVANT = {
+  id: "s-avant",
+  mode: "automatic",
+  title: "Les miens, encore ouverts",
+  filter_definition: { status: ["open"], assigneeIds: ["u-1"], priorities: [], labelIds: [] }
+};
+
+/**
+ * **`mode` et `filter_definition` ne se lisent plus qu'ici** (étape 4).
+ *
+ * Une situation d'avant garde son filtre en base ; ce qu'elle retient se calcule
+ * désormais par la requête qui le reprend, avec le même analyseur que la barre.
+ * Deux façons de dire ce qu'une situation retient finissaient par ne plus dire
+ * la même chose (règle 4).
+ */
+test("un ancien filtre se relit comme une requête", async () => {
+  const { portes, uiState, store } = monterLeCarnet({
+    sujets: [
+      { id: "s-1", title: "Étanchéité", status: "open" },
+      { id: "s-2", title: "Chaufferie", status: "open" },
+      { id: "s-3", title: "Sol", status: "closed" }
+    ],
+    meta: {
+      "s-1": { assignes: ["u-1"] },
+      "s-2": { assignes: ["u-2"] },
+      "s-3": { assignes: ["u-1"] }
+    },
+    moi: "u-1"
+  });
+
+  await portes.refreshSituationsData();
+  store.situationsView.data = [AVANT];
+  // La porte d'avant lève dans ce montage : si elle était prise, on le saurait.
+  await portes.loadSituationSelection("s-avant");
+
+  assert.deepEqual(uiState.selectedSituationSubjects.map((sujet) => sujet.id), ["s-1"]);
+});
+
+/**
+ * **Une situation manuelle n'a pas de filtre, et n'en reçoit pas un.**
+ *
+ * Traduire son `filter_definition` — vide — donnerait une requête vide,
+ * c'est-à-dire **tous les sujets** : une liste de quatre sujets choisis à la
+ * main deviendrait la liste entière du chantier. C'est le mode qui distingue
+ * les deux, et c'est la dernière chose qu'il sert à faire.
+ */
+test("une situation manuelle garde sa liste, elle ne devient pas tout", () => {
+  const { portes } = monterLeCarnet();
+
+  assert.equal(portes.repriseDeLAncienFiltre({ id: "s", mode: "manual" }), null);
+  assert.equal(portes.repriseDeLAncienFiltre({ id: "s" }), null);
+  assert.ok(portes.repriseDeLAncienFiltre(AVANT), "celle d'avant, elle, se reprend");
+});
+
+/**
+ * **Ce que la requête ne sait pas dire est nommé, et l'ancienne porte reste
+ * ouverte.**
+ *
+ * Le vocabulaire du carnet de ce montage ne déclare pas `label:` : une requête
+ * écrite sans lui retiendrait tous les sujets ouverts au lieu des seuls CR de
+ * chantier — un élargissement silencieux que personne n'a demandé (règle 5).
+ */
+test("un filtre que la requête ne sait pas dire n'est pas repris", () => {
+  const { portes } = monterLeCarnet();
+
+  const reprise = portes.repriseDeLAncienFiltre({
+    id: "s", mode: "automatic", filter_definition: { labelIds: ["cr-chantier"] }
+  });
+
+  assert.ok(reprise.perdus.length, "on ne prétend pas savoir le dire");
+  assert.equal(reprise.perdus[0].champ, "label");
+});
+
+/** Et dans ce cas, c'est la porte d'avant qui répond. */
+test("une reprise incomplète repasse par l'ancienne correspondance", async () => {
+  const { portes, uiState, store } = monterLeCarnet({ sujets: [{ id: "s-1", status: "open" }] });
+
+  await portes.refreshSituationsData();
+  store.situationsView.data = [{
+    id: "s-partielle", mode: "automatic", title: "X",
+    filter_definition: { labelIds: ["cr-chantier"] }
+  }];
+
+  await portes.loadSituationSelection("s-partielle");
+
+  // La fausse porte d'avant lève : on le voit dans l'erreur, et la liste reste
+  // vide plutôt que de rendre une liste élargie qui passerait inaperçue.
+  assert.deepEqual(uiState.selectedSituationSubjects, []);
 });

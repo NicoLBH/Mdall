@@ -750,10 +750,12 @@ export async function createSituation(projectId, payload = {}) {
     color: firstNonEmpty(payload.color, "") || null,
     requete: firstNonEmpty(payload.requete, payload.query, "") || null,
     status: normalizeSituationStatus(payload.status),
-    mode: normalizeSituationMode(payload.mode),
-    filter_definition: normalizeSituationMode(payload.mode) === "automatic"
-      ? normalizeFilterDefinition(payload.filter_definition) || {}
-      : null,
+    // **Plus de mode, plus de filtre.** Une situation dit ce qu'elle retient
+    // par sa requête, et par elle seule (étape 4). Les deux colonnes restent en
+    // base — elles portent ce que des situations d'avant retiennent, et un
+    // constat ne devient pas faux (règle 6) — mais plus rien ne les écrit.
+    // `mode` part à sa valeur par défaut, « manuelle » : une situation neuve ne
+    // tient aucune liste à la main, et c'est ce que sa requête dira.
     closed_at: normalizeSituationStatus(payload.status) === "closed" ? new Date().toISOString() : null
   };
 
@@ -799,14 +801,6 @@ export async function updateSituation(situationId, patch = {}) {
   const nextStatus = Object.prototype.hasOwnProperty.call(patch, "status")
     ? normalizeSituationStatus(patch.status)
     : current.status;
-  // **Ce qu'une situation retient peut changer d'avis.** Le mode restait celui
-  // de la création, si bien qu'une situation commencée à la main ne pouvait
-  // jamais devenir une recherche — et qu'on devait donc choisir la mécanique
-  // avant d'avoir l'intention.
-  const nextMode = Object.prototype.hasOwnProperty.call(patch, "mode")
-    ? normalizeSituationMode(patch.mode)
-    : current.mode;
-
   const body = {};
 
   if (Object.prototype.hasOwnProperty.call(patch, "title")) {
@@ -819,13 +813,25 @@ export async function updateSituation(situationId, patch = {}) {
     body.status = nextStatus;
     body.closed_at = nextStatus === "closed" ? new Date().toISOString() : null;
   }
-  if (Object.prototype.hasOwnProperty.call(patch, "mode") && nextMode !== current.mode) {
-    body.mode = nextMode;
-    // Une situation qui cesse d'être une recherche n'en garde pas la requête :
-    // elle resterait écrite en base sans plus rien vouloir dire, et le jour où
-    // l'on rebasculerait, une vieille requête qu'on ne se rappelle pas avoir
-    // posée reprendrait la main.
-    if (nextMode === "manual") body.filter_definition = null;
+  // **Ce qu'elle retient, et à quoi on la reconnaît.** Trois colonnes, écrites
+  // par le formulaire et par lui seul : c'est la requête qui dit désormais ce
+  // qu'une situation retient, et l'habit qui la distingue dans le rail.
+  if (Object.prototype.hasOwnProperty.call(patch, "icon")) {
+    body.icon = firstNonEmpty(patch.icon, "") || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "color")) {
+    body.color = firstNonEmpty(patch.color, "") || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "requete")) {
+    body.requete = firstNonEmpty(patch.requete, "") || null;
+    // **La requête reprend l'ancien filtre, elle ne s'y ajoute pas.** Les deux
+    // ensemble retiendraient l'intersection de deux règles dont une seule est
+    // visible à l'écran (règle 4) — et l'écran ne montre plus que la requête.
+    // C'est la seule écriture de `mode` qui reste, et elle en sort.
+    if (body.requete) {
+      body.mode = "manual";
+      body.filter_definition = null;
+    }
   }
 
   if (Object.prototype.hasOwnProperty.call(patch, "perimetre")) {
@@ -835,10 +841,6 @@ export async function updateSituation(situationId, patch = {}) {
     const perimetre = perimetrePourEcriture(patch.perimetre);
     if (perimetre) body.perimetre = perimetre;
   }
-  if (Object.prototype.hasOwnProperty.call(patch, "filter_definition") && nextMode === "automatic") {
-    body.filter_definition = normalizeFilterDefinition(patch.filter_definition) || {};
-  }
-
   const res = await fetch(`${SUPABASE_URL}/rest/v1/situations?id=eq.${normalizedSituationId}`, {
     method: "PATCH",
     headers: await getSupabaseAuthHeaders({

@@ -4,6 +4,7 @@ import { avancementDe } from "../../services/avancement-dune-situation.js";
 import { requeteDeLaSituation } from "../../services/situation-comme-une-vue.js";
 import { situationsDeLecture } from "../../services/lectures-du-carnet.js";
 import { sujetsFiltres } from "../../services/champs-des-sujets.js";
+import { requeteDunFiltre } from "../../services/requete-dun-filtre.js";
 
 export function createProjectSituationsPersistence({
   store,
@@ -15,11 +16,11 @@ export function createProjectSituationsPersistence({
   chargerLesSujetsDesChantiers,
   chargerLesPersonnesDesChantiers,
   /** Le vocabulaire du carnet — sans lui, aucune requête ne se relit. */
-  champsDuCarnet = () => [],
+  champsDeLEcran = () => [],
   /** Ce que chaque sujet porte, pour que la requête n'ait pas à le redemander. */
-  metaDuCarnet = () => ({}),
+  metaDeLEcran = () => ({}),
   /** Qui regarde : « assigné:moi » ne veut rien dire sans lui. */
-  moiDuCarnet = () => "",
+  moiDeLEcran = () => "",
   loadSubjectsForSituation,
   ensureTrajectoryHistory,
   loadSituationKanbanStatusMap,
@@ -46,7 +47,7 @@ export function createProjectSituationsPersistence({
       .find((situation) => String(situation?.id || "") === normalizedId);
     if (ecrite) return ecrite;
 
-    return situationsDeLecture(champsDuCarnet()).find((situation) => situation.id === normalizedId) || null;
+    return situationsDeLecture(champsDeLEcran()).find((situation) => situation.id === normalizedId) || null;
   }
 
   /**
@@ -67,9 +68,40 @@ export function createProjectSituationsPersistence({
    */
   async function sujetsDeLaSituation(situation, sujets) {
     const requete = requeteDeLaSituation(situation);
-    if (!requete) return loadSubjectsForSituation(situation, sujets).catch(() => null);
+    if (requete) return sujetsQueRetient(requete, sujets);
 
-    return sujetsQueRetient(requete, sujets);
+    const reprise = repriseDeLAncienFiltre(situation);
+    if (reprise && !reprise.perdus.length) return sujetsQueRetient(reprise.requete, sujets);
+
+    return loadSubjectsForSituation(situation, sujets).catch(() => null);
+  }
+
+  /**
+   * L'ancien filtre d'une situation, repris en requête — ou `null`.
+   *
+   * ## Pourquoi on le reprend plutôt que de le garder
+   *
+   * `filter_definition` et la requête disent la même chose de deux façons, et
+   * deux façons de dire une chose finissent par ne plus dire la même (règle 4).
+   * La requête est celle qu'on garde : elle s'écrit, elle se relit, elle est la
+   * même sur les deux écrans. Personne n'en écrit plus de nouveaux depuis cette
+   * étape ; ceux d'avant se relisent ainsi.
+   *
+   * ## Une situation manuelle n'a pas de filtre, et n'en reçoit pas un
+   *
+   * Elle tient une liste à la main. Traduire son `filter_definition` — vide —
+   * donnerait une requête vide, c'est-à-dire **tous les sujets** : une liste de
+   * quatre sujets choisis deviendrait la liste entière du chantier. C'est le
+   * mode qui distingue les deux, et c'est la dernière chose qu'il sert à faire.
+   *
+   * @returns {{requete: string, perdus: object[]}|null} `null` quand il n'y a
+   *   pas d'ancien filtre du tout. `perdus` non vide veut dire que la requête
+   *   n'en dirait pas autant, et l'ancienne porte reste ouverte.
+   */
+  function repriseDeLAncienFiltre(situation) {
+    if (String(situation?.mode || "").trim().toLowerCase() !== "automatic") return null;
+
+    return requeteDunFiltre(situation?.filter_definition, champsDeLEcran());
   }
 
   /**
@@ -106,9 +138,9 @@ export function createProjectSituationsPersistence({
     const { sujets: retenus } = sujetsFiltres({
       sujets: tous,
       requete: dite,
-      champs: champsDuCarnet(),
-      meta: metaDuCarnet(),
-      moi: moiDuCarnet()
+      champs: champsDeLEcran(),
+      meta: metaDeLEcran(),
+      moi: moiDeLEcran()
     });
 
     return retenus;
@@ -262,6 +294,7 @@ export function createProjectSituationsPersistence({
     loadSituationSelection,
     refreshSituationsData,
     sujetsQueRetient,
+    repriseDeLAncienFiltre,
     createSituationRecord,
     updateSituationRecord
   };
