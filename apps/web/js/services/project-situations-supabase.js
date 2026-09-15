@@ -1,7 +1,11 @@
 import { store } from "../store.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
-import { perimetrePourEcriture } from "./perimetre-dune-situation.js";
+import {
+  perimetreDeToutMonTravail,
+  perimetrePourEcriture,
+  projetsDeCesSituations
+} from "./perimetre-dune-situation.js";
 import { clauseDesSituations } from "./colonnes-dune-situation.js";
 
 const SUPABASE_URL = getSupabaseUrl();
@@ -163,6 +167,76 @@ async function fetchSituationsByProject(projectId) {
   }
 
   return safeArray(await res.json()).map(normalizeSituationRow);
+}
+
+/**
+ * Mes situations, toutes affaires confondues.
+ *
+ * **Aucun filtre de projet, et c'est le point.** Un carnet traverse les
+ * chantiers ; le restreindre ici en rendrait la moitié invisible. Ce qui revient
+ * est décidé par la base : les miennes, et celles d'avant le cloisonnement qui
+ * n'appartiennent à personne.
+ *
+ * Un écran qui filtrerait ne serait qu'une politesse d'affichage — il suffirait
+ * d'une requête oubliée pour que la séparation ne tienne plus. Elle ne tient
+ * qu'à la règle de lecture (étape 1).
+ */
+async function fetchMesSituations() {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/situations`);
+  url.searchParams.set("select", getSituationsSelectClause());
+  url.searchParams.set("order", "created_at.asc");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`situations fetch failed (${res.status}): ${text}`);
+  }
+
+  return safeArray(await res.json()).map(normalizeSituationRow);
+}
+
+/**
+ * Les noms des projets qu'un carnet cite, demandés à la base.
+ *
+ * **Pas au navigateur.** Celui-ci ne connaît que les projets ouverts ici ;
+ * un carnet en cite qu'on n'a jamais ouverts sur cette machine, et les chercher
+ * dans ce qu'on a sous la main ferait passer pour disparus des chantiers qui se
+ * portent bien.
+ *
+ * Ce qui ne revient pas ne revient vraiment pas : le projet a été supprimé, ou
+ * l'on n'y est plus. L'écran a alors quelque chose de vrai à dire (règle 5).
+ *
+ * @returns {Promise<object>} `{ [id]: nom }` — vide plutôt que faux si la
+ *   requête échoue : ne pas savoir ne justifie pas d'inventer.
+ */
+async function fetchNomsDesProjets(projectIds = []) {
+  const ids = [...new Set(safeArray(projectIds).map(normalizeUuid).filter(Boolean))];
+  if (!ids.length) return {};
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/projects`);
+  url.searchParams.set("select", "id,name");
+  url.searchParams.set("id", `in.(${ids.join(",")})`);
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) return {};
+
+  const noms = {};
+  for (const row of safeArray(await res.json())) {
+    const id = normalizeUuid(row?.id);
+    const nom = firstNonEmpty(row?.name, "");
+    if (id && nom) noms[id] = nom;
+  }
+  return noms;
 }
 
 async function fetchSituationById(situationId) {
@@ -550,16 +624,65 @@ export async function loadSituationsForCurrentProject(projectId) {
   return syncSituationsStore(resolvedProjectId, situations);
 }
 
+/**
+ * Charger mon carnet : mes situations, et le nom des chantiers qu'elles citent.
+ *
+ * `projectScopeId` reste nul, et ce n'est pas un oubli : cette liste n'est celle
+ * d'aucun projet. Lui en donner un ferait croire à un écran de projet, et le
+ * premier code qui s'y fierait recommencerait à filtrer.
+ */
+export async function loadMesSituations() {
+  const situations = await fetchMesSituations();
+  const noms = await fetchNomsDesProjets(projetsDeCesSituations(situations)).catch(() => ({}));
+
+  store.situationsView.data = situations;
+  store.situationsView.nomsDesProjets = noms;
+  store.situationsView.projectScopeId = null;
+  store.situationsView.pagination = {
+    mode: "full",
+    pageSize: null,
+    currentPage: 1,
+    totalItems: situations.length,
+    loadedItems: situations.length,
+    hasNextPage: false,
+    nextCursor: null,
+    sourceComplete: true
+  };
+  store.situationsView.page = 1;
+
+  return situations;
+}
+
+/**
+ * Créer une situation, depuis un projet ou depuis le carnet.
+ *
+ * ## Depuis un projet
+ *
+ * Elle naît en regardant celui d'où on l'a créée. Sans périmètre écrit, elle
+ * naîtrait en ne regardant nulle part, et personne ne le verrait.
+ *
+ * ## Depuis le carnet
+ *
+ * Il n'y a pas de projet courant, et il ne faut surtout pas en inventer un :
+ * la clé du navigateur retomberait sur le dernier projet ouvert, et l'on
+ * rangerait le carnet de quelqu'un dans un chantier au hasard.
+ *
+ * Elle naît donc **en regardant tout** — ce que le périmètre sait dire depuis
+ * l'étape 2, et ce que `project_id`, devenu facultatif, permet d'écrire. C'est
+ * aussi l'intention la plus probable : on ouvre son carnet pour suivre ce qu'on
+ * a à faire, pas ce qui se passe à un endroit. Le restreindre se fera à
+ * l'étape 4, quand on saura choisir un chantier.
+ */
 export async function createSituation(projectId, payload = {}) {
   const resolvedProjectId = await getResolvedProjectId(projectId);
-  if (!resolvedProjectId) throw new Error("projectId is required");
+  const depuisLeCarnet = !String(projectId ?? "").trim();
+
+  if (!resolvedProjectId && !depuisLeCarnet) throw new Error("projectId is required");
 
   const body = {
-    project_id: resolvedProjectId,
-    // Elle naît en regardant le projet d'où on l'a créée. Sans périmètre écrit,
-    // elle naîtrait en ne regardant nulle part, et personne ne le verrait avant
-    // que l'écran ne quitte le projet.
-    perimetre: perimetrePourEcriture(payload.perimetre) || perimetrePourEcriture([resolvedProjectId]),
+    project_id: depuisLeCarnet ? null : resolvedProjectId,
+    perimetre: perimetrePourEcriture(payload.perimetre)
+      || (depuisLeCarnet ? perimetreDeToutMonTravail() : perimetrePourEcriture([resolvedProjectId])),
     title: firstNonEmpty(payload.title, "Nouvelle situation"),
     description: firstNonEmpty(payload.description, "") || null,
     status: normalizeSituationStatus(payload.status),
@@ -596,7 +719,11 @@ export async function createSituation(projectId, payload = {}) {
   }
 
   const created = normalizeSituationRow((safeArray(parsed)[0]) || {});
-  await loadSituationsForCurrentProject(resolvedProjectId);
+  // On relit la liste qu'on regardait, pas une autre : recharger celle d'un
+  // projet depuis le carnet ferait disparaître de l'écran ce qu'on vient d'y
+  // créer.
+  if (depuisLeCarnet) await loadMesSituations();
+  else await loadSituationsForCurrentProject(resolvedProjectId);
   return created;
 }
 

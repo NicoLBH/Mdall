@@ -40,24 +40,30 @@ export function createProjectSituationsTable({
   }
 
   /**
-   * Ce que la situation regarde, quand ce n'est pas seulement ce projet-ci.
+   * Ce que la situation regarde — et quand cela vaut la peine d'être dit.
    *
-   * **Le cas normal ne se commente pas.** Sur l'écran d'un projet, une situation
-   * qui ne regarde que ce projet est la règle : nommer le chantier sur chacune
+   * **Sur l'écran d'un projet, le cas normal ne se commente pas.** Une situation
+   * qui ne regarde que ce projet y est la règle : nommer le chantier sur chacune
    * des quinze lignes ferait un bruit qu'on cesse de lire au bout de trois, et
    * la seule qui compte — celle qui en regarde quatre — s'y noierait.
    *
-   * On ne compare pas au projet courant : l'écran ne connaît que la clé du
-   * navigateur, et la situation porte l'identifiant de la base. Une seule
-   * lecture suffit ici, parce que cet écran ne montre que les situations de ce
-   * projet — ce qui en regarde plus d'un en regarde forcément un autre.
+   * **Dans le carnet, tout se dit.** Là, rien n'est acquis : les situations
+   * viennent de partout, et une ligne qui ne nomme pas son chantier oblige à
+   * l'ouvrir pour savoir de quoi elle parle.
+   *
+   * On ne compare pas au projet courant — l'écran ne connaît que la clé du
+   * navigateur, la situation porte l'identifiant de la base. `projectScopeId`
+   * dit lequel des deux écrans on regarde, et il est nul dans le carnet parce
+   * que ce n'est la liste d'aucun projet.
    *
    * Aucune classe nouvelle : la pastille des autres écrans, au même calibrage.
    */
   function renderPerimetrePill(situation) {
-    if (!regardeToutMonTravail(situation) && projetsRegardes(situation).length <= 1) return "";
+    const dansLeCarnet = !store.situationsView?.projectScopeId;
+    if (!dansLeCarnet && !regardeToutMonTravail(situation) && projetsRegardes(situation).length <= 1) return "";
 
-    return renderStatusBadge({ label: phraseDuPerimetre(situation), tone: "accent" });
+    const phrase = phraseDuPerimetre(situation, store.situationsView?.nomsDesProjets || {});
+    return phrase ? renderStatusBadge({ label: phrase, tone: "accent" }) : "";
   }
 
   function renderModePill(mode) {

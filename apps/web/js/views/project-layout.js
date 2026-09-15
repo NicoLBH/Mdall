@@ -11,7 +11,6 @@ import { renderProjectPropositions } from "./project-propositions.js";
 import { renderProjectMemory } from "./project-memory.js";
 import { renderProjectActions } from "./project-actions.js";
 import { renderProjectStudio } from "./project-studio.js";
-import { renderProjectSituations } from "./project-situations.js";
 import { renderProjectInsights } from "./project-insights.js";
 import { renderProjectParametres } from "./project-parametres.js";
 
@@ -32,7 +31,6 @@ function normalizeProjectTab(tab) {
     case PROJECT_TAB_IDS.MEMOIRE:
     case PROJECT_TAB_IDS.STUDIO:
     case PROJECT_TAB_IDS.ACTIONS:
-    case PROJECT_TAB_IDS.SITUATIONS:
     case PROJECT_TAB_IDS.INSIGHTS:
     case PROJECT_TAB_IDS.PARAMETRES:
       resolvedTab = normalized;
@@ -62,7 +60,6 @@ export function renderProjectLayout(root, projectId, tab) {
   // onglet ferait exactement ce qu'on veut interdire — lire une valeur fausse
   // sur une page qui n'a pas l'air d'être en variante.
   if (normalizedTab !== PROJECT_TAB_IDS.MEMOIRE) abandonnerLaVariante();
-  const shellBodyClassName = `project-shell__body${normalizedTab === PROJECT_TAB_IDS.SITUATIONS ? " project-shell__body--situations" : ""}`;
 
   bindProjectHeaderNavigation();
 
@@ -70,9 +67,8 @@ export function renderProjectLayout(root, projectId, tab) {
     <div class="project-shell" id="projectShell" data-project-id="${projectId}">
       ${renderProjectHeader(projectId, normalizedTab)}
 
-      <div class="${shellBodyClassName}">
+      <div class="project-shell__body">
         ${renderProjectSituationsTopBanner()}
-        <div id="situationsToolbarHost" class="project-situations-toolbar-host"></div>
         <div id="project-content" class="project-shell__content"></div>
       </div>
     </div>
@@ -107,10 +103,6 @@ export function renderProjectLayout(root, projectId, tab) {
 
     case PROJECT_TAB_IDS.ACTIONS:
       renderProjectActions(content);
-      break;
-    
-    case PROJECT_TAB_IDS.SITUATIONS:
-      renderProjectSituations(content);
       break;
     
     case PROJECT_TAB_IDS.INSIGHTS:

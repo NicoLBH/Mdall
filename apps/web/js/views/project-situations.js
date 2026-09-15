@@ -20,6 +20,8 @@ import {
 } from "../services/subject-parent-relation-service.js";
 import {
   loadSituationsForCurrentProject,
+  loadMesSituations,
+  loadManualSituationSubjectIds,
   createSituation,
   updateSituation,
   loadSubjectsForSituation,
@@ -188,6 +190,8 @@ const {
   safeArray,
   loadFlatSubjectsForCurrentProject,
   loadSituationsForCurrentProject,
+  loadMesSituations,
+  loadManualSituationSubjectIds,
   loadSubjectsForSituation,
   ensureTrajectoryHistory,
   loadSituationKanbanStatusMap,

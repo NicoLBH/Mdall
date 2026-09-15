@@ -11,9 +11,16 @@ import assert from "node:assert/strict";
 
 import { createProjectSituationsTable } from "./project-situations-table.js";
 
-function tableau() {
+/**
+ * Le tableau, tel qu'il est monté sur l'écran d'un projet.
+ *
+ * `projectScopeId` dit lequel des deux écrans on regarde : posé, c'est la liste
+ * d'un projet ; nul, c'est le carnet, qui n'est la liste d'aucun. Le laisser
+ * nul par défaut ici ferait passer chaque test pour un test du carnet.
+ */
+function tableau({ projectScopeId = "projet-courant", nomsDesProjets = {} } = {}) {
   return createProjectSituationsTable({
-    store: { situationsView: { selectedSituationId: null } },
+    store: { situationsView: { selectedSituationId: null, projectScopeId, nomsDesProjets } },
     uiState: {},
     getSituations: () => [],
     getPaginatedSituations: () => [],
@@ -119,4 +126,52 @@ test("sans périmètre écrit, rien de nouveau ne s'affiche", () => {
   const html = tableau().renderSituationTitleCell({ ...SITUATION, owner_id: BERTRAND, project_id: BERTRAND });
 
   assert.equal(html.match(/class="badge/g)?.length, 1);
+});
+
+/* ── Le même tableau, monté dans le carnet ───────────────────────────────── */
+
+/**
+ * **Dans le carnet, rien n'est acquis.** Les situations viennent de partout, et
+ * une ligne qui ne nomme pas son chantier oblige à l'ouvrir pour savoir de quoi
+ * elle parle. Ce que l'écran d'un projet tait par évidence, celui-ci le dit.
+ */
+test("dans le carnet, une situation nomme son chantier", () => {
+  const html = tableau({
+    projectScopeId: null,
+    nomsDesProjets: { [BERTRAND]: "Résidence Bertrand" }
+  }).renderSituationTitleCell({
+    ...SITUATION,
+    owner_id: BERTRAND,
+    perimetre: { portee: "projet", projets: [BERTRAND] }
+  });
+
+  assert.match(html, /Résidence Bertrand/);
+});
+
+/** Et sur l'écran d'un projet, la même situation ne dit toujours rien. */
+test("la même ligne se tait sur l'écran de son projet", () => {
+  const html = tableau({ nomsDesProjets: { [BERTRAND]: "Résidence Bertrand" } }).renderSituationTitleCell({
+    ...SITUATION,
+    owner_id: BERTRAND,
+    perimetre: { portee: "projet", projets: [BERTRAND] }
+  });
+
+  assert.ok(!html.includes("Résidence Bertrand"));
+  assert.equal(html.match(/class="badge/g)?.length, 1);
+});
+
+/**
+ * Un chantier qu'on ne sait pas nommer se dit — mais seulement quand on a
+ * cherché. Un carnet dont les noms n'ont pas été chargés compte, il n'accuse
+ * pas la base d'avoir perdu un chantier.
+ */
+test("dans le carnet sans les noms, on compte plutôt que d'accuser", () => {
+  const html = tableau({ projectScopeId: null }).renderSituationTitleCell({
+    ...SITUATION,
+    owner_id: BERTRAND,
+    perimetre: { portee: "choisis", projets: [BERTRAND, NOVACLIM] }
+  });
+
+  assert.match(html, /2 projets/);
+  assert.ok(!html.includes("introuvable"));
 });

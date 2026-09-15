@@ -7,6 +7,12 @@ export const PROJECT_TAB_IDS = {
   MEMOIRE: "memoire",
   ACTIONS: "actions",
   STUDIO: "atelier",
+  /**
+   * Les situations ne sont plus un onglet du projet : elles ont leur écran, qui
+   * est celui d'une personne (étape 3). L'identifiant reste pour que les
+   * anciens liens `#project/<id>/situations` soient reconnus et renvoyés là où
+   * l'écran a déménagé, plutôt que de retomber en silence sur Fichiers.
+   */
   SITUATIONS: "situations",
   INSIGHTS: "insights",
   PARAMETRES: "parametres",
@@ -21,12 +27,10 @@ export const PROJECT_TAB_ROUTE_ALIASES = {
 
 export const PROJECT_TABS_TOGGLEABLE = [
   PROJECT_TAB_IDS.STUDIO,
-  PROJECT_TAB_IDS.SITUATIONS,
 ];
 
 export const DEFAULT_PROJECT_TABS_VISIBILITY = {
   [PROJECT_TAB_IDS.STUDIO]: true,
-  [PROJECT_TAB_IDS.SITUATIONS]: true,
 };
 
 export function normalizeProjectTabId(tab) {
@@ -81,11 +85,6 @@ export const PROJECT_TABS = [
     id: PROJECT_TAB_IDS.ACTIONS,
     label: "Actions",
     icon: svgIcon("play", { className: "octicon octicon-play" })
-  },
-  {
-    id: PROJECT_TAB_IDS.SITUATIONS,
-    label: "Situations",
-    icon: svgIcon("table", { className: "octicon octicon-table" })
   },
   {
     id: PROJECT_TAB_IDS.INSIGHTS,

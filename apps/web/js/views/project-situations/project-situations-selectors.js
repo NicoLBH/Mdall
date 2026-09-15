@@ -1,3 +1,5 @@
+import { COMPTE_INCONNU } from "../../services/mon-carnet.js";
+
 export function createProjectSituationsSelectors({ store, uiState }) {
   function safeArray(value) {
     return Array.isArray(value) ? value : [];
@@ -118,10 +120,20 @@ export function createProjectSituationsSelectors({ store, uiState }) {
     return getAllSituations().find((situation) => situation.id === selectedId) || null;
   }
 
+  /**
+   * Combien de sujets cette situation porte — quand on le sait.
+   *
+   * **Zéro serait un mensonge.** Une situation dont personne n'a compté les
+   * sujets n'en a pas zéro : on ne sait pas. La colonne affichait « 0 », qui se
+   * lit comme un chantier sans travail, et l'on serait allé chercher la panne
+   * ailleurs (règle 5). Dans le carnet, les situations automatiques sont
+   * précisément dans ce cas : leurs sujets vivent dans des chantiers qui ne sont
+   * pas chargés ici.
+   */
   function renderSituationCount(situationId) {
     const count = uiState.countsBySituationId[String(situationId || "")];
     if (Number.isFinite(count)) return String(count);
-    return uiState.loading ? "…" : "0";
+    return uiState.loading ? "…" : COMPTE_INCONNU;
   }
 
   function formatSituationUpdatedLabel(ts) {
