@@ -1602,6 +1602,11 @@ ce que le document sous-entend. C'est un jugement, pas une transcription — et 
 actuelles ne le vérifient pas. Il faudra sans doute une mesure de plus : le nombre de niveaux
 d'imbrication, comparé d'une version à l'autre.
 
+**Le rangement du document, perdu à l'arrivée.** Un compte rendu range ses points par lot et
+par intervenant ; la chaîne décrite ici rend cinquante sujets côte à côte. Le plan de
+fabrication qui redonne ce rangement — rubriques, sujets pères, label `LOT` — est dans
+[`la-hierarchie-dun-compte-rendu.md`](la-hierarchie-dun-compte-rendu.md).
+
 **Le second fournisseur.** Trois appels, un seul fournisseur : voir
 [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
