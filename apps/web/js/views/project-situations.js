@@ -31,6 +31,8 @@ import {
 } from "../services/project-situations-supabase.js";
 import { chargerLesSujetsDesChantiers } from "../services/project-subjects-supabase.js";
 import { chargerLesPersonnesDesChantiers } from "../services/profile-supabase-sync.js";
+import { champsDuCarnet as construireLesChampsDuCarnet } from "../services/vocabulaire-du-carnet.js";
+import { metaDesSujets, moiDansLeProjet } from "../services/meta-des-sujets.js";
 import { identifiantsDesProjets, phraseDesProjetsIncertains } from "../services/projets-du-filtre.js";
 import { loadProjectSituationsTrajectoryHistory } from "../services/project-situations-trajectory-service.js";
 import { createProjectSituationsState, getDefaultCreateForm, getSituationEditForm } from "./project-situations/project-situations-state.js";
@@ -195,6 +197,9 @@ const {
   loadMesSituations,
   chargerLesSujetsDesChantiers,
   chargerLesPersonnesDesChantiers,
+  champsDuCarnet,
+  metaDuCarnet,
+  moiDuCarnet,
   loadSubjectsForSituation,
   ensureTrajectoryHistory,
   loadSituationKanbanStatusMap,
@@ -304,6 +309,47 @@ function parseCsvList(value) {
 function chantiersDuMagasin() {
   const noms = store.situationsView?.nomsDesProjets;
   return noms && typeof noms === "object" ? noms : {};
+}
+
+/**
+ * Le vocabulaire du carnet, et ce qu'il faut pour relire une requête.
+ *
+ * Les trois se lisent au même endroit : une requête relue avec d'autres champs
+ * que ceux qui l'ont écrite ne rendrait pas la même chose (règle 4).
+ */
+function chargeDuCarnet() {
+  return store.situationsView?.sujetsDuCarnet?.rawSubjectsResult ?? {};
+}
+
+function champsDuCarnet() {
+  return construireLesChampsDuCarnet({
+    charge: chargeDuCarnet(),
+    personnes: store.situationsView?.personnesDuCarnet ?? [],
+    nomsDesProjets: store.situationsView?.nomsDesProjets ?? {}
+  });
+}
+
+function metaDuCarnet() {
+  const charge = chargeDuCarnet();
+  return metaDesSujets({
+    sujets: Array.isArray(charge.subjects) ? charge.subjects : [],
+    raw: charge,
+    collaborateurs: store.situationsView?.personnesDuCarnet ?? []
+  });
+}
+
+/**
+ * Qui regarde, **en identifiant de personne**.
+ *
+ * `store.user.id` est un compte Mdall ; les assignations et les mentions
+ * portent des identifiants de personne. Les deux sont des UUID et se comparent
+ * sans erreur : « assigné:moi » ne rendrait jamais rien.
+ */
+function moiDuCarnet() {
+  return moiDansLeProjet({
+    collaborateurs: store.situationsView?.personnesDuCarnet ?? [],
+    utilisateur: store.user?.id ?? ""
+  });
 }
 
 function buildCreateSituationPayload() {
@@ -553,6 +599,7 @@ async function refreshSituationsData(root, { forceSubjects = false } = {}) {
 }
 
 const { bindEvents } = createProjectSituationsEvents({
+  champsDuCarnet,
   store,
   uiState,
   getDefaultCreateForm,

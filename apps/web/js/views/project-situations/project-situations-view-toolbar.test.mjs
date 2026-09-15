@@ -145,3 +145,46 @@ test("le rail reçoit les personnes de tous mes chantiers", () => {
   assert.match(source, /personnes: store\.situationsView\?\.personnesDuCarnet/);
   assert.match(persistance, /chargerLesPersonnesDesChantiers\(chantiers\)/, "et on va les chercher");
 });
+
+/* ── Le rail tient ce qu'il promet ───────────────────────────────────────── */
+
+const evenements = readFileSync(resolve(ICI, "./project-situations-events.js"), "utf8");
+
+/**
+ * **Le rail promettait sans tenir.** Ses entrées s'allumaient et rien ne
+ * s'ouvrait. Chacune porte la requête de ce qu'elle ouvre — lecture ou
+ * situation à moi — et le clic ouvre la situation qui la porte.
+ */
+test("cliquer une entrée du rail ouvre la situation qu'elle porte", () => {
+  assert.match(evenements, /\[data-sujets-lecture\]/, "l'écoute du rail doit exister");
+  assert.match(evenements, /situationQuiPorte\(requete\)/, "et mener à une situation");
+  assert.match(evenements, /loadSituationSelection\(store\.situationsView\.selectedSituationId\)/,
+    "dont on charge les sujets");
+});
+
+/**
+ * **On la retrouve par sa requête, pas par son rang.** Le rail mêle les
+ * lectures et mes situations ; compter les entrées ferait dépendre le clic de
+ * l'ordre d'affichage (règle 4).
+ */
+test("la situation se retrouve par sa requête, pas par sa place", () => {
+  assert.match(evenements, /requeteDeLaSituation\(situation\) === cherche/);
+});
+
+/**
+ * **Une lecture ne se modifie pas.** Elle n'est pas en base : laisser le crayon
+ * ouvrirait un formulaire qui n'aurait rien à enregistrer — un geste qui échoue
+ * en silence, et l'on chercherait la panne ailleurs.
+ */
+test("une lecture n'offre pas de crayon", () => {
+  assert.match(source, /estUneLecture\(selectedSituation\) \? "" : `/,
+    "le crayon ne se rend que pour une situation écrite");
+});
+
+/**
+ * **Et elle ne dit pas « Automatique ».** C'est un mot de mécanique ; sur
+ * « Assigné à moi » il ne renseigne sur rien que le titre ne dise déjà.
+ */
+test("une lecture ne porte pas de pastille de mécanique", () => {
+  assert.match(source, /const modeBadge = estUneLecture\(selectedSituation\) \? ""/);
+});

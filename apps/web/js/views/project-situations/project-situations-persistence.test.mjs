@@ -214,3 +214,119 @@ test("l'écran d'un projet ne recharge pas les personnes", async () => {
 
   assert.ok(!appels.some((appel) => appel.startsWith("personnes-des-chantiers")));
 });
+
+/* ── Ouvrir une lecture du rail ──────────────────────────────────────────── */
+
+const CHAMPS_DU_CARNET = [
+  { key: "assigné", label: "Assignés", values: [{ value: "@moi", token: "moi" }], multiple: true },
+  { key: "auteur", label: "Auteur", values: [{ value: "@moi", token: "moi" }] },
+  { key: "mention", label: "Mentions", values: [{ value: "@moi", token: "moi" }], multiple: true },
+  { key: "activité", label: "Activité", values: [{ value: "recente", token: "récente" }] }
+];
+
+function monterLeCarnet({ sujets = [], meta = {}, moi = "u-1" } = {}) {
+  const store = {
+    currentProjectId: null,
+    situationsView: { data: [], selectedSituationId: null },
+    projectSubjectsView: {}
+  };
+  const uiState = { countsBySituationId: {} };
+
+  const portes = createProjectSituationsPersistence({
+    store,
+    uiState,
+    safeArray: (valeur) => (Array.isArray(valeur) ? valeur : []),
+    loadFlatSubjectsForCurrentProject: async () => [],
+    loadSituationsForCurrentProject: async () => [],
+    loadMesSituations: async () => [],
+    chargerLesSujetsDesChantiers: async () => ({
+      subjectsData: sujets,
+      rawSubjectsResult: { subjects: sujets }
+    }),
+    chargerLesPersonnesDesChantiers: async () => [],
+    champsDuCarnet: () => CHAMPS_DU_CARNET,
+    metaDuCarnet: () => meta,
+    moiDuCarnet: () => moi,
+    loadSubjectsForSituation: async () => {
+      throw new Error("une lecture ne doit pas passer par la porte des situations écrites");
+    },
+    ensureTrajectoryHistory: async () => {},
+    loadSituationKanbanStatusMap: async () => ({}),
+    createSituation: async () => ({}),
+    updateSituation: async () => ({})
+  });
+
+  return { portes, store, uiState };
+}
+
+/**
+ * **Le rail promettait sans tenir.** Cliquer « Assigné à moi » ne trouvait rien
+ * à ouvrir : `getSituationById` ne connaissait que les situations écrites, et
+ * les lectures n'en sont pas — elles existent parce que la question se pose à
+ * tout le monde, pas parce qu'on les a rangées quelque part.
+ */
+test("une lecture du rail se retrouve comme une situation", () => {
+  const { portes } = monterLeCarnet();
+
+  assert.equal(portes.getSituationById("lecture:miens")?.title, "Assigné à moi");
+  assert.equal(portes.getSituationById("lecture:recents")?.title, "Activité récente");
+  assert.equal(portes.getSituationById("lecture:zoiseau"), null);
+});
+
+/**
+ * **Une situation qui porte une requête se relit avec la grammaire des
+ * sujets**, et non par la porte des situations écrites — celle-ci lève dans ce
+ * montage, ce qui est exactement ce qu'on veut vérifier.
+ *
+ * « Assigné à moi » ne retient que les miens : c'est tout ce qu'elle promet, et
+ * une lecture qui rendrait la liste entière serait pire qu'absente.
+ */
+test("les sujets d'une lecture se résolvent par sa requête", async () => {
+  const { portes, uiState } = monterLeCarnet({
+    sujets: [
+      { id: "s-1", title: "Étanchéité", status: "open" },
+      { id: "s-2", title: "Chaufferie", status: "open" }
+    ],
+    meta: { "s-1": { assignes: ["u-1"] }, "s-2": { assignes: ["u-2"] } },
+    moi: "u-1"
+  });
+
+  // La liste doit être chargée avant qu'on ouvre quoi que ce soit.
+  await portes.refreshSituationsData();
+  await portes.loadSituationSelection("lecture:miens");
+
+  assert.deepEqual(uiState.selectedSituationSubjects.map((sujet) => sujet.id), ["s-1"]);
+});
+
+/**
+ * **Sans savoir qui regarde, « assigné:moi » ne s'applique pas** — et la liste
+ * passe entière plutôt que de se vider. Une liste vide ferait croire qu'on n'a
+ * aucun sujet, alors qu'on ne sait pas de qui il s'agit (règle 5).
+ */
+test("sans savoir qui regarde, la lecture ne vide pas la liste", async () => {
+  const { portes, uiState } = monterLeCarnet({
+    sujets: [{ id: "s-1", status: "open" }, { id: "s-2", status: "open" }],
+    meta: { "s-1": { assignes: ["u-1"] } },
+    moi: ""
+  });
+
+  await portes.refreshSituationsData();
+  await portes.loadSituationSelection("lecture:miens");
+
+  assert.deepEqual(uiState.selectedSituationSubjects.map((sujet) => sujet.id), ["s-1", "s-2"]);
+});
+
+/** Et son compte suit le même chemin : un seul calcul, pas deux (règle 4). */
+test("le compte d'une lecture vient de la même résolution", async () => {
+  const { portes, uiState, store } = monterLeCarnet({
+    sujets: [{ id: "s-1", status: "open" }, { id: "s-2", status: "open" }],
+    meta: { "s-1": { assignes: ["u-1"] }, "s-2": { assignes: ["u-2"] } },
+    moi: "u-1"
+  });
+
+  store.situationsView.data = [];
+  await portes.refreshSituationsData();
+  await portes.loadSituationSelection("lecture:miens");
+
+  assert.equal(uiState.selectedSituationSubjects.length, 1);
+});

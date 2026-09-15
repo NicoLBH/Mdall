@@ -1,6 +1,9 @@
 import { estMonCarnet } from "../../services/mon-carnet.js";
 import { projetsDeCesSituations } from "../../services/perimetre-dune-situation.js";
 import { avancementDe } from "../../services/avancement-dune-situation.js";
+import { requeteDeLaSituation } from "../../services/situation-comme-une-vue.js";
+import { situationsDeLecture } from "../../services/lectures-du-carnet.js";
+import { sujetsFiltres } from "../../services/champs-des-sujets.js";
 
 export function createProjectSituationsPersistence({
   store,
@@ -11,16 +14,73 @@ export function createProjectSituationsPersistence({
   loadMesSituations,
   chargerLesSujetsDesChantiers,
   chargerLesPersonnesDesChantiers,
+  /** Le vocabulaire du carnet — sans lui, aucune requête ne se relit. */
+  champsDuCarnet = () => [],
+  /** Ce que chaque sujet porte, pour que la requête n'ait pas à le redemander. */
+  metaDuCarnet = () => ({}),
+  /** Qui regarde : « assigné:moi » ne veut rien dire sans lui. */
+  moiDuCarnet = () => "",
   loadSubjectsForSituation,
   ensureTrajectoryHistory,
   loadSituationKanbanStatusMap,
   createSituation,
   updateSituation
 }) {
+  /**
+   * Une situation par son identifiant — écrite, ou lue.
+   *
+   * **Les lectures du rail sont des situations**, et elles ne sont pas en base :
+   * « Assigné à moi » existe parce que la question se pose à tout le monde, pas
+   * parce qu'on l'a rangée quelque part. Sans ce détour, cliquer une entrée du
+   * rail ne trouvait rien à ouvrir — le rail promettait sans tenir.
+   *
+   * Les écrites d'abord : une situation qu'on a créée l'emporte sur une lecture
+   * qui porterait le même identifiant, ce qui n'arrive pas — leurs
+   * identifiants n'ont pas la même forme — mais l'ordre dit laquelle compte.
+   */
   function getSituationById(situationId) {
     const normalizedId = String(situationId || "").trim();
     if (!normalizedId) return null;
-    return safeArray(store.situationsView?.data).find((situation) => String(situation?.id || "") === normalizedId) || null;
+
+    const ecrite = safeArray(store.situationsView?.data)
+      .find((situation) => String(situation?.id || "") === normalizedId);
+    if (ecrite) return ecrite;
+
+    return situationsDeLecture(champsDuCarnet()).find((situation) => situation.id === normalizedId) || null;
+  }
+
+  /**
+   * Les sujets d'une situation, selon ce qu'elle dit retenir.
+   *
+   * ## Deux façons de le dire, et une seule à la fois
+   *
+   * Une situation qui porte une **requête** se relit avec la grammaire des
+   * sujets — c'est le cas des lectures du rail, et de toute situation depuis
+   * que l'étape 1 leur a donné une requête. Les autres passent par la porte
+   * d'avant : leur liste manuelle, ou leur `filter_definition`.
+   *
+   * **Jamais les deux ensemble** : une situation retiendrait l'intersection de
+   * deux règles dont une seule est visible à l'écran (règle 4).
+   *
+   * @returns {object[]|null} `null` quand on n'a pas su lire — et non une liste
+   *   vide, qui se lirait comme « cette situation ne retient rien ».
+   */
+  async function sujetsDeLaSituation(situation, sujets) {
+    const requete = requeteDeLaSituation(situation);
+    if (!requete) return loadSubjectsForSituation(situation, sujets).catch(() => null);
+
+    const charge = sujets?.rawSubjectsResult ?? {};
+    const tous = Array.isArray(charge.subjects) ? charge.subjects : safeArray(sujets?.subjectsData);
+
+    const { sujets: retenus } = sujetsFiltres({
+      sujets: tous,
+      requete,
+      champs: champsDuCarnet(),
+      meta: metaDuCarnet(),
+      moi: moiDuCarnet()
+    });
+
+    return retenus;
   }
 
   async function loadSituationSelection(situationId) {
@@ -37,7 +97,7 @@ export function createProjectSituationsPersistence({
     }
 
     try {
-      const subjects = await loadSubjectsForSituation(selectedSituation, sujetsDeReference());
+      const subjects = await sujetsDeLaSituation(selectedSituation, sujetsDeReference());
       uiState.selectedSituationSubjects = safeArray(subjects);
       if (typeof ensureTrajectoryHistory === "function") {
         await ensureTrajectoryHistory({
@@ -102,7 +162,7 @@ export function createProjectSituationsPersistence({
 
     const entrees = await Promise.all(situations.map(async (situation) => {
       const id = String(situation?.id || "");
-      const subjects = await loadSubjectsForSituation(situation, sujets).catch(() => null);
+      const subjects = await sujetsDeLaSituation(situation, sujets);
       return subjects ? [id, safeArray(subjects)] : null;
     }));
 
