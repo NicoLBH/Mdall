@@ -106,7 +106,7 @@ export function citationRetrouvee(point = {}, pages = []) {
  * @param {number} [options.ecartes] combien le serveur a déjà écartés
  */
 export function lectureAssemblee({
-  points = [], pages = [], identite = null, nom = "", ecartes = 0, rubriques = []
+  points = [], pages = [], identite = null, nom = "", ecartes = 0, rubriques = [], dureeMs = null
 } = {}) {
   // Relues ici plutôt que par l'écran : le genre d'une rubrique et son identité
   // se décident à un seul endroit, et le tableau, la mesure et la proposition
@@ -167,7 +167,7 @@ export function lectureAssemblee({
     groupesParLot: groupesParLot(lus),
     points: lus,
     ecartes: Number(ecartes) || 0,
-    mesure: mesureDeLaLecture(lus, pages, rangement)
+    mesure: mesureDeLaLecture(lus, pages, rangement, dureeMs)
   };
 }
 
@@ -178,7 +178,7 @@ export function lectureAssemblee({
  * amélioration se juge au ressenti — « ça a l'air mieux » — et l'on ne sait
  * jamais si le palier suivant a progressé ou reculé.
  */
-export function mesureDeLaLecture(points = [], pages = [], rubriques = []) {
+export function mesureDeLaLecture(points = [], pages = [], rubriques = [], dureeMs = null) {
   const lus = Array.isArray(points) ? points : [];
   const caracteres = (Array.isArray(pages) ? pages : [])
     .reduce((total, page) => total + texte(page?.text ?? page?.texte).length, 0);
@@ -199,7 +199,13 @@ export function mesureDeLaLecture(points = [], pages = [], rubriques = []) {
     rattaches: range.rattaches,
     orphelins: range.orphelins,
     pages: Array.isArray(pages) ? pages.length : 0,
-    caracteres
+    caracteres,
+    // **Ce que la lecture a pris.** `null` n'est pas zéro : une lecture qu'on
+    // n'a pas chronométrée n'a pas duré « 0 ms », et l'écran affiche un tiret
+    // plutôt qu'un chiffre faux.
+    dureeMs: dureeMs === null || dureeMs === undefined || dureeMs === ""
+      ? null
+      : (Number.isFinite(Number(dureeMs)) ? Number(dureeMs) : null)
   };
 }
 

@@ -3607,3 +3607,47 @@ vérifier que la fonction parle au schéma qui existe.
 **Ce que ça coûte de ne pas le faire :** un test qui prouve la règle mais pas son
 raccord au schéma. Le raccord au *client*, lui, est gardé par
 `verifie-signaux-des-sujets.test.mjs`.
+
+---
+
+## 43. Les très longs documents ne tiennent pas dans une lecture
+
+**Ce qui est arrivé.** Le vingtième compte rendu d'un chantier n'a pas pu être
+lu : la passerelle a coupé au bout de son délai, et la lecture est revenue par
+un `504`. Ce n'était pas un incident isolé — c'était la limite, atteinte.
+
+**Pourquoi.** Cette lecture rend jusqu'à 24 000 jetons **d'un seul coup** : un
+compte rendu de cinquante points porte, pour chacun, son titre, sa description,
+son lot, sa rubrique, son numéro, son assigné, son échéance, son état, sa
+colonne de fermeture, sa page, sa citation, ses labels, ses liens et son
+rapprochement. Générer cela prend des minutes, et la durée croît avec le
+document.
+
+Elle vivait déjà au bord : le dix-neuvième passait de justesse. Les rubriques
+de l'étape 2 ont ajouté leur part, et cela a basculé.
+
+**Ce qui a été fait, et qui ne suffit pas.** Le dépassement se nomme au lieu de
+se dire « refusé » ; la fonction coupe elle-même avant la passerelle, avec une
+cause lisible ; le modèle est devenu un réglage, et la durée de chaque lecture
+se conserve et se compare à la précédente. **On sait donc mesurer le problème,
+et changer de modèle sans changer le code.** Aucun de ces gestes ne fait tenir
+un document deux fois plus long.
+
+**Les deux directions, et ce qu'elles coûtent.**
+
+1. **Lire le document en plusieurs passes parallèles.** C'est ce qui divise
+   vraiment le temps, et c'est la seule chose qui tienne à mesure que les
+   documents grandissent. La difficulté est le raccord : les rubriques sont
+   numérotées par `ordre`, et chaque point vise son rang. Deux moitiés lues
+   séparément rendent deux numérotations qui commencent à 1, et il faut les
+   recoudre sans qu'un point change de lot en chemin. C'est là qu'est le risque,
+   et c'est là qu'il faudra des tests sérieux.
+
+2. **Rendre moins par point.** Aucun champ n'est décoratif aujourd'hui : chacun
+   sert à quelque chose qui est livré. Ce serait donc retirer une
+   fonctionnalité, et il faudrait dire laquelle.
+
+**Ce qu'on surveillera d'ici là.** Le temps de lecture, dans l'Atelier, à côté
+des citations retrouvées. C'est ce couple qui dit si un modèle plus rapide a
+coûté en exactitude — et c'est lui qui préviendra que la limite se rapproche à
+nouveau, plutôt qu'un `504` un jour de dépôt.

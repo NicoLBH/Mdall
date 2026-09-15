@@ -36,6 +36,10 @@ import { svgIcon } from "../../../ui/icons.js";
 import { renderMarkdownToHtml } from "../../../utils/markdown-renderer.js";
 import { renderSpinnerHtml } from "../../ui/spinner.js";
 import { motDeLEcart } from "../../../services/suivi-des-lectures.js";
+// Le même formatage de durée que le journal des actions : deux écritures d'une
+// durée finiraient par ne plus s'accorder, et « 1 min 30 » ici contre « 90 s »
+// là ferait douter du chiffre (règle 10).
+import { formatStepDuration } from "../../../services/run-workflow.js";
 import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.js";
 import { brancherLesBoutonsCopier, renderBoutonCopier } from "../../ui/bouton-copier.js";
 import {
@@ -162,6 +166,14 @@ const etat = {
    * « +0 » qui prétendraient que rien n'a bougé (règle 5).
    */
   suivi: null,
+  /**
+   * Ce qu'il y a à faire après une panne, **quand il y a quelque chose à faire**.
+   *
+   * Un dépassement de délai se rattrape — un document plus court, ou la même
+   * lecture relancée. Un refus du fournisseur, non : on n'invente pas une suite
+   * pour les pannes qui n'en ont pas (règle 5).
+   */
+  queFaire: "",
   /**
    * Les pages telles qu'elles sont sorties du PDF, texte compris.
    *
@@ -650,6 +662,10 @@ function renderAlerte(vue) {
   if (!motif) return "";
 
   const panne = texte(vue.panne);
+  // **Ce qu'il y a à faire, quand il y a quelque chose à faire.** Une panne
+  // nommée sans suite à donner laisse devant un constat ; et l'on n'en invente
+  // pas une pour les pannes qui n'en ont pas (règle 5).
+  const suite = texte(vue.queFaire);
 
   return `
     <section class="lecture-cr__alerte" role="alert">
@@ -671,12 +687,13 @@ function renderAlerte(vue) {
           Ce diagnostic vient du serveur : il nomme la panne, il ne recopie pas la consigne.
           Collez-le tel quel là où la panne se répare.
         </p>
-      ` : `
+      ` : suite ? "" : `
         <p class="lecture-cr__alerte-aide">
           Le serveur n'a rien nommé de cette panne. Ce n'est pas « le document ne dit rien » :
           la lecture n'a pas eu lieu.
         </p>
       `}
+      ${suite ? `<p class="lecture-cr__alerte-aide">${escapeHtml(suite)}</p>` : ""}
     </section>
   `;
 }
@@ -1361,6 +1378,11 @@ function renderMesure(mesure, ecartes, suivi = null) {
           "Des points qu'aucun titre ne porte. Quelques-uns sont normaux — l'ouverture de "
           + "séance n'est sous aucune rubrique. <strong>C'est sa variation d'un compte rendu "
           + "à l'autre qu'il faut surveiller</strong> : elle dit que la lecture a dérivé.", de("orphelins"))}
+        ${renderChiffre("Temps de lecture", formatStepDuration(mesure.dureeMs) || "—", "",
+          "Ce que le modèle a pris pour relire ce document, mesuré au serveur. C'est le "
+          + "chiffre qui dit ce qu'un autre modèle a vraiment changé — à lire à côté des "
+          + "citations retrouvées, parce qu'aller plus vite peut coûter en exactitude.",
+          de("dureeMs"))}
         ${renderChiffre("Écartés au serveur", String(ecartes), ecartes > 0 ? "est-douteux" : "est-bon",
           "Ce que le serveur a refusé faute de citation vérifiable. Ils ne sont pas dans la "
           + "liste ci-dessous : les compter ici est ce qui empêche de croire la lecture complète.")}
@@ -2385,6 +2407,7 @@ async function lire(hote, fichier) {
   etat.etape = "ouverture";
   etat.lecture = null;
   etat.suivi = null;
+  etat.queFaire = "";
   etat.pagesLues = [];
   etat.fichier = fichier ?? null;
   etat.confrontes = null;
@@ -2444,11 +2467,12 @@ async function lire(hote, fichier) {
       sourceId: "lecture-atelier", pages: lues, sujetsDuProjet: connus
     });
     if (!lu?.ok) {
-      const { phraseDuRefus } = await import("../../../services/sujets-par-le-modele.js");
+      const { phraseDuRefus, queFaire } = await import("../../../services/sujets-par-le-modele.js");
       return echouer(
         hote,
         phraseDuRefus(lu?.motif) || "Le modèle n'a pas rendu de lecture exploitable.",
-        lu?.panne
+        lu?.panne,
+        queFaire(lu?.motif)
       );
     }
 
@@ -2463,6 +2487,9 @@ async function lire(hote, fichier) {
       identite,
       nom: texte(fichier?.name),
       ecartes: Number(lu.ecartes) || 0,
+      // Ce que la lecture a pris au serveur : c'est par elle qu'on verra ce
+      // qu'un autre modèle a changé.
+      dureeMs: lu.dureeMs,
       // **Sous quels titres le document range ses points.** Sans ce report, tout
       // ce que le modèle a lu des en-têtes reste au serveur, et le tableau se
       // rabat sur le champ `lot` — qui ne dit rien des rubriques
@@ -3119,10 +3146,11 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
  * rien à l'écran, et rien non plus pour comprendre la panne. Les onglets gardent
  * maintenant ce qu'ils ont, et l'alerte se pose au-dessus.
  */
-function echouer(hote, motif, panne = "") {
+function echouer(hote, motif, panne = "", queFaire = "") {
   etat.phase = "echec";
   etat.motif = motif;
   etat.panne = texte(panne);
+  etat.queFaire = texte(queFaire);
   redessiner(hote);
 }
 
