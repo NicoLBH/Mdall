@@ -1660,11 +1660,13 @@ export async function closeSubject({ subjectId, reason = "" } = {}) {
   //
   // Deux chemins pour un même geste finissent toujours par ne plus faire la
   // même chose (règle 4) ; celui-ci avait déjà commencé.
-  const avant = await lireLeStatutDuSujet(normalizedSubjectId);
+  const avant = await lireLeSujetEnBref(normalizedSubjectId);
   // Déjà fermé : ce n'est pas un échec — c'est l'état qu'on voulait, et le dire
   // comme une panne ferait chercher un problème. Surtout, rejouer une fusion ne
   // doit pas remplacer le motif d'une fermeture par un autre, ni sa date.
-  if (avant && avant !== "open") return { id: normalizedSubjectId, dejaFerme: true };
+  if (avant?.status && avant.status !== "open") {
+    return { id: normalizedSubjectId, dejaFerme: true };
+  }
 
   const actorPersonId = normalizeUuid(await resolveCurrentUserDirectoryPersonId());
   await rpcCall("update_subject_issue_status", {
@@ -1681,15 +1683,97 @@ export async function closeSubject({ subjectId, reason = "" } = {}) {
   // fil, où il se lit à côté de ce que les gens en ont dit.
   void reason;
 
+  // **Le lot suit ses sous-sujets.** Fermer le dernier point d'un lot le ferme :
+  // un père est un contenant, et il n'y a personne pour décider qu'il est réglé
+  // en dehors de ce qu'il contient. Le calcul est celui de `peres-du-cr.js`, le
+  // même ici, au changement d'état d'un sujet, et à la fusion (règle 4).
+  if (avant?.parentSubjectId) {
+    try {
+      const { accorderLePereAuxFils } = await import("./peres-du-cr.js");
+      await accorderLePereAuxFils({ parentSubjectId: avant.parentSubjectId });
+    } catch {
+      // Le sujet est fermé : son lot en retard d'un état se rattrape au geste
+      // suivant, et refuser la fermeture pour cela serait faire payer
+      // l'essentiel par l'accessoire.
+    }
+  }
+
   return { id: normalizedSubjectId, dejaFerme: false };
 }
 
-/** Le statut d'un sujet, ou `null` quand la base n'a pas répondu. */
-async function lireLeStatutDuSujet(subjectId) {
+/**
+ * Les sous-sujets d'un sujet — leur identifiant et leur état.
+ *
+ * **`null` quand la base n'a pas répondu**, et non `[]`. Un lot sans sous-sujet
+ * et un lot dont on n'a pas pu lire les sous-sujets n'appellent pas le même
+ * geste : le premier se ferme, le second ne se touche pas. Les confondre
+ * fermerait un lot de quinze points parce qu'une requête a échoué (règle 5).
+ */
+export async function listSubjectChildren(parentSubjectId) {
+  const parent = normalizeUuid(parentSubjectId);
+  if (!parent) return [];
+
+  try {
+    const url = new URL(`${SUPABASE_URL}/rest/v1/subjects`);
+    url.searchParams.set("parent_subject_id", `eq.${parent}`);
+    url.searchParams.set("select", "id,status");
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+      cache: "no-store"
+    });
+    if (!res.ok) return null;
+
+    const rows = await res.json().catch(() => null);
+    return Array.isArray(rows) ? rows : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Le statut d'un sujet, pour qui en a besoin hors de ce module. */
+export async function lireLeStatutDUnSujet(subjectId) {
+  return lireLeStatutDuSujet(normalizeUuid(subjectId));
+}
+
+/**
+ * Ouvre ou ferme un sujet.
+ *
+ * **Par la même procédure que le bouton « Close ».** La ligne d'activité « a
+ * fermé le sujet » naît de `update_subject_issue_status` ; écrire la colonne à
+ * la main laisserait un sujet clos dans une chronologie où il ne s'est rien
+ * passé — le défaut que `closeSubject` a déjà eu à réparer.
+ */
+export async function changerLEtatDUnSujet({ subjectId, ouvrir = true } = {}) {
+  const id = normalizeUuid(subjectId);
+  if (!id) throw new Error("subjectId is required");
+
+  const actorPersonId = normalizeUuid(await resolveCurrentUserDirectoryPersonId());
+  await rpcCall("update_subject_issue_status", {
+    p_subject_id: id,
+    // « Réalisé » parce que c'est ce qu'un lot vide veut dire : tout ce qu'il
+    // contenait est soldé. « Non pertinent » et « doublon » sont des jugements
+    // que personne n'a portés.
+    p_action: ouvrir ? "issue:reopen" : "issue:close:realized",
+    p_actor_person_id: actorPersonId || null
+  });
+
+  return { id, ouvert: Boolean(ouvrir) };
+}
+
+/**
+ * Un sujet en bref : son état et son père. `null` quand la base n'a pas répondu.
+ *
+ * Les deux d'un seul appel : le second sert à mettre le lot d'accord avec ce
+ * qu'il contient, et aller le chercher séparément ferait un aller-retour de plus
+ * à chaque fermeture.
+ */
+async function lireLeSujetEnBref(subjectId) {
   try {
     const url = new URL(`${SUPABASE_URL}/rest/v1/subjects`);
     url.searchParams.set("id", `eq.${subjectId}`);
-    url.searchParams.set("select", "status");
+    url.searchParams.set("select", "status,parent_subject_id");
 
     const res = await fetch(url.toString(), {
       method: "GET",
@@ -1699,10 +1783,21 @@ async function lireLeStatutDuSujet(subjectId) {
     if (!res.ok) return null;
 
     const rows = await res.json().catch(() => []);
-    return String(rows?.[0]?.status ?? "").trim() || null;
+    const ligne = rows?.[0];
+    if (!ligne) return null;
+
+    return {
+      status: String(ligne.status ?? "").trim() || null,
+      parentSubjectId: String(ligne.parent_subject_id ?? "").trim() || null
+    };
   } catch {
     return null;
   }
+}
+
+/** Le statut d'un sujet, ou `null` quand la base n'a pas répondu. */
+async function lireLeStatutDuSujet(subjectId) {
+  return (await lireLeSujetEnBref(subjectId))?.status ?? null;
 }
 
 export async function loadSubjectDescriptionVersions(subjectId, options = {}) {

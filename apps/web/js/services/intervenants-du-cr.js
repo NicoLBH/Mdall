@@ -325,42 +325,69 @@ export function nomPourLeRepertoire({ nom = "", societe = "" } = {}) {
  * clic ; un sujet assigné à la mauvaise entreprise se découvre trois semaines
  * plus tard.
  *
+ * ## Trois recours, dans cet ordre
+ *
+ * 1. **Ce que le point dit** — « demandé à Entreprise BERTRAND », « MOE ». Un
+ *    nom écrit dans le document l'emporte sur tout : c'est une désignation.
+ * 2. **La société du père** — l'entreprise que nomme le titre de la rubrique
+ *    sous laquelle le point est écrit : « Lot n° 1 : Gros Œuvre : Entreprise
+ *    BERTRAND ». Elle est lue dans un **titre**, pas devinée d'une phrase, et
+ *    c'est ce qui la rend sûre.
+ * 3. **Le lot du point**, en dernier — le champ libre que le modèle a rendu.
+ *    C'est la même information que la deuxième, lue moins sûrement : elle ne
+ *    sert qu'aux comptes rendus dont les rubriques n'ont pas été relevées, et
+ *    la retirer les laisserait tous sans assigné.
+ *
+ * ## Ce qu'elle refuse de faire, encore
+ *
+ * **Chercher dans les trois à la fois.** Mélanger les candidats dans une même
+ * chaîne ajoutait ceux que le document n'avait pas désignés — et c'est ce qui a
+ * assigné à un maître d'ouvrage un point explicitement demandé à une
+ * entreprise. Chaque recours est essayé seul, et le premier qui désigne
+ * quelqu'un arrête la recherche.
+ *
  * @param {object} point le point à traiter, avec son `qui` et son `lot`
  * @param {object[]} collaborateurs `{id, personId, company, projectLotLabel}`
+ * @param {{societeDuPere?: string}} [options] l'entreprise que nomme le titre de
+ *   la rubrique sous laquelle ce point est écrit
  * @returns {object|null}
  */
-export function aQuiRevientLePoint(point = null, collaborateurs = []) {
-  // **Ce que le document désigne prime sur le contexte.** « Demandé à Entreprise
-  // GILETTO » nomme quelqu'un ; le lot dit seulement sous quelle rubrique le
-  // point est rangé. Mélanger les deux dans une même chaîne de recherche
-  // ajoutait des candidats que le document n'avait pas désignés — et c'est ce
-  // qui a assigné à un maître d'ouvrage un point explicitement demandé à une
-  // entreprise. On ne se rabat sur le lot que lorsque personne n'est nommé.
-  const qui = texte(point?.qui);
-  const cherche = aplati(qui || texte(point?.lot));
-  if (!cherche) return null;
+export function aQuiRevientLePoint(point = null, collaborateurs = [], { societeDuPere = "" } = {}) {
+  const recours = [texte(point?.qui), texte(societeDuPere), texte(point?.lot)]
+    .map(aplati)
+    .filter(Boolean);
+  if (recours.length === 0) return null;
 
   const actifs = (Array.isArray(collaborateurs) ? collaborateurs : [])
     .filter((personne) => texte(personne?.status || "Actif").toLowerCase() !== "retiré");
 
-  const trouves = actifs.filter((personne) => {
-    const societe = societeAplatie(personne?.company);
-    // Le rôle d'un collaborateur **est** son lot : son libellé (« gros œuvre »)
-    // et son code. Un compte rendu écrit indifféremment l'un ou l'autre, et ne
-    // chercher que le libellé perdrait la moitié des points.
-    const libelle = aplati(personne?.projectLotLabel ?? personne?.role);
-    const code = aplati(personne?.roleCode);
+  for (const cherche of recours) {
+    const trouves = actifs.filter((personne) => {
+      const societe = societeAplatie(personne?.company);
+      // Le rôle d'un collaborateur **est** son lot : son libellé (« gros œuvre »)
+      // et son code. Un compte rendu écrit indifféremment l'un ou l'autre, et ne
+      // chercher que le libellé perdrait la moitié des points.
+      const libelle = aplati(personne?.projectLotLabel ?? personne?.role);
+      const code = aplati(personne?.roleCode);
 
-    // Le mot doit être **entier** : « SA » ne doit pas reconnaître « SANITAIRE ».
-    // Le code du rôle ne se cherche plus que dans le lot — jamais dans une
-    // phrase qui nomme quelqu'un —, sans quoi le « 1 » de « Lot n° 1 » désigne
-    // le collaborateur dont le rôle porte le code « 1 ».
-    return (societe && contientLeMot(cherche, societe))
-      || (libelle && contientLeMot(cherche, libelle))
-      || (code && contientLeMot(cherche, code));
-  });
+      // Le mot doit être **entier** : « SA » ne doit pas reconnaître « SANITAIRE ».
+      // Le code du rôle ne se cherche plus que dans le lot — jamais dans une
+      // phrase qui nomme quelqu'un —, sans quoi le « 1 » de « Lot n° 1 » désigne
+      // le collaborateur dont le rôle porte le code « 1 ».
+      return (societe && contientLeMot(cherche, societe))
+        || (libelle && contientLeMot(cherche, libelle))
+        || (code && contientLeMot(cherche, code));
+    });
 
-  return trouves.length === 1 ? trouves[0] : null;
+    // **Deux candidats ne font pas un choix, et n'autorisent pas le recours
+    // suivant.** Le document a bien désigné quelque chose ; c'est le projet qui
+    // ne sait pas qui c'est. Se rabattre sur le lot assignerait alors à
+    // l'entreprise du lot un point que le document adressait à quelqu'un
+    // d'autre — précisément l'erreur qu'on cherche à ne plus commettre.
+    if (trouves.length > 0) return trouves.length === 1 ? trouves[0] : null;
+  }
+
+  return null;
 }
 
 

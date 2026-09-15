@@ -6603,7 +6603,7 @@ async function ouvrirLesSujetsRetenus(root, proposition, items = []) {
   }
 
   await enregistrerLesReprises(proposition, nes);
-  await assignerLesSujets(nes);
+  await assignerLesSujets(nes, items);
 
   if (manques.length > 0) {
     view.review.notice = [
@@ -6957,7 +6957,7 @@ async function ajouterLesIntervenantsRetenus(root, proposition, items = []) {
  * Un échec n'annule rien : le sujet est ouvert, et son assignation se pose à la
  * main comme n'importe quelle autre.
  */
-async function assignerLesSujets(nes = []) {
+async function assignerLesSujets(nes = [], items = []) {
   if (nes.length === 0) return;
 
   const collaborateurs = Array.isArray(store.projectForm?.collaborators)
@@ -6966,10 +6966,22 @@ async function assignerLesSujets(nes = []) {
   if (collaborateurs.length === 0) return;
 
   try {
-    const { addSubjectAssignee } = await import("../services/project-subjects-supabase.js");
+    const [{ addSubjectAssignee }, { societeDuPereDuPoint, societesDesPeres }] = await Promise.all([
+      import("../services/project-subjects-supabase.js"),
+      import("../services/peres-du-cr.js")
+    ]);
+
+    // **L'entreprise que nomme le titre du lot.** Un compte rendu range ses
+    // points sous « Lot n° 1 : Gros Œuvre : Entreprise BERTRAND » et n'écrit
+    // « qui » que lorsqu'il s'adresse à quelqu'un d'autre. Sans ce recours, la
+    // moitié des points d'un compte rendu n'ont pas d'assigné — et l'autre
+    // moitié est devinée sur un champ `lot` qui vaut parfois « 1 ».
+    const societes = societesDesPeres(items);
 
     for (const { subjectId, point } of nes) {
-      const personne = aQuiRevientLePoint(point, collaborateurs);
+      const personne = aQuiRevientLePoint(point, collaborateurs, {
+        societeDuPere: societeDuPereDuPoint(point, societes)
+      });
       const personId = String(personne?.personId ?? "").trim();
       if (!personId) continue;
 
