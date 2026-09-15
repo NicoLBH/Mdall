@@ -30,6 +30,7 @@ import {
   reorderSituationKanbanSubjects
 } from "../services/project-situations-supabase.js";
 import { chargerLesSujetsDesChantiers } from "../services/project-subjects-supabase.js";
+import { chargerLesPersonnesDesChantiers } from "../services/profile-supabase-sync.js";
 import { identifiantsDesProjets, phraseDesProjetsIncertains } from "../services/projets-du-filtre.js";
 import { loadProjectSituationsTrajectoryHistory } from "../services/project-situations-trajectory-service.js";
 import { createProjectSituationsState, getDefaultCreateForm, getSituationEditForm } from "./project-situations/project-situations-state.js";
@@ -193,6 +194,7 @@ const {
   loadSituationsForCurrentProject,
   loadMesSituations,
   chargerLesSujetsDesChantiers,
+  chargerLesPersonnesDesChantiers,
   loadSubjectsForSituation,
   ensureTrajectoryHistory,
   loadSituationKanbanStatusMap,

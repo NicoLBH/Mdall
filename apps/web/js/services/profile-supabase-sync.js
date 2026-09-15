@@ -1834,3 +1834,52 @@ export function getCurrentProjectSubjectCounters() {
     totalSujets: Number(bucket.subjectCounters?.totalSujets || 0)
   };
 }
+
+/* ── Les personnes de tous mes chantiers ─────────────────────────────────── */
+
+/**
+ * Qui travaille sur les chantiers que mon carnet regarde.
+ *
+ * ## Pourquoi le carnet en a besoin
+ *
+ * « Assigné à moi », « Créé par moi » et « Mentions » sont des **champs de la
+ * grammaire des sujets**, et `champsDesSujets` ne déclare un champ que s'il a
+ * des valeurs : sans personne connue, ces trois lectures **disparaissent en
+ * silence** — un rail qui ne montre qu'une entrée sur quatre, sans que rien ne
+ * dise pourquoi (règle 5).
+ *
+ * Le chargeur d'un projet ne sait lire qu'un chantier à la fois, et range dans
+ * `store.projectForm` — celui du projet courant, que le carnet n'a pas. On lit
+ * donc les mêmes lignes pour plusieurs chantiers, avec la même transformation.
+ *
+ * Voir `docs/le-carnet-prend-la-forme-des-sujets.md`, étape 2.
+ *
+ * @param {string[]} projectIds les chantiers à lire
+ * @returns {Promise<object[]>} les personnes, sans doublon — quelqu'un qui
+ *   travaille sur trois chantiers est une personne, pas trois.
+ */
+export async function chargerLesPersonnesDesChantiers(projectIds = []) {
+  const ids = [...new Set((Array.isArray(projectIds) ? projectIds : [])
+    .map((id) => safeString(id))
+    .filter(Boolean))];
+  if (!ids.length) return [];
+
+  const params = new URLSearchParams();
+  params.set("select", "*");
+  params.set("project_id", `in.(${ids.join(",")})`);
+  params.set("order", "created_at.asc");
+
+  const rows = await restFetch("project_collaborators_view", params).catch(() => []);
+  const items = Array.isArray(rows) ? await Promise.all(rows.map((row) => mapProjectCollaboratorRow(row))) : [];
+
+  // La même personne sur deux chantiers n'en fait pas deux : le rail
+  // proposerait deux fois le même nom, et l'on se demanderait lequel choisir.
+  const vues = new Map();
+  for (const personne of items) {
+    const cle = safeString(personne?.personId || personne?.person_id || personne?.id);
+    if (!cle || vues.has(cle)) continue;
+    vues.set(cle, personne);
+  }
+
+  return [...vues.values()];
+}

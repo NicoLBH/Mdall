@@ -10,6 +10,7 @@ export function createProjectSituationsPersistence({
   loadSituationsForCurrentProject,
   loadMesSituations,
   chargerLesSujetsDesChantiers,
+  chargerLesPersonnesDesChantiers,
   loadSubjectsForSituation,
   ensureTrajectoryHistory,
   loadSituationKanbanStatusMap,
@@ -72,6 +73,12 @@ export function createProjectSituationsPersistence({
 
     const chantiers = projetsDeCesSituations(situations);
     const charge = await chargerLesSujetsDesChantiers(chantiers).catch(() => null);
+
+    // **Les personnes vont avec.** Sans elles, `champsDesSujets` ne déclare ni
+    // « assigné », ni « auteur », ni « mention » — et trois des quatre lectures
+    // du rail disparaissent sans que rien ne dise pourquoi (règle 5).
+    store.situationsView.personnesDuCarnet =
+      await chargerLesPersonnesDesChantiers(chantiers).catch(() => []);
 
     // Gardée pour la sélection : ouvrir une situation ne doit pas tout relire.
     store.situationsView.sujetsDuCarnet = charge;

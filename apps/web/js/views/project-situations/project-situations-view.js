@@ -8,6 +8,12 @@ import { renderSvgLineChart } from "../../utils/svg-line-chart.js";
 import { renderSituationForm } from "./project-situations-form.js";
 import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
 import { NOM_DU_CARNET } from "../../services/mon-carnet.js";
+import { renderRailDesSujetsHtml } from "../project-subjects/project-subjects-recherche.js";
+import { railWidth } from "../ui/project-rail.js";
+import { champsDuCarnet } from "../../services/vocabulaire-du-carnet.js";
+import { NOM_DES_SITUATIONS, situationsDeLecture } from "../../services/lectures-du-carnet.js";
+import { situationCommeUneEpingle } from "../../services/situation-comme-une-vue.js";
+import { moiDansLeProjet } from "../../services/meta-des-sujets.js";
 import { renderSituationGridView } from "./project-situations-view-grid.js";
 import { renderSituationRoadmapView } from "./project-situations-view-roadmap.js";
 
@@ -29,6 +35,52 @@ export function createProjectSituationsView({
    * jamais ouverts sur cette machine — c'est-à-dire précisément ceux qu'on ne
    * sait pas nommer de tête (étape 4).
    */
+  /**
+   * Le rail du carnet : celui des sujets, nourri de ce que le carnet sait.
+   *
+   * **Rien n'est dessiné de neuf.** `renderRailDesSujetsHtml` produit déjà les
+   * lectures, le trait et les épinglées ; en écrire un second pour cet écran,
+   * c'est accepter qu'ils diffèrent d'un pixel, puis d'un comportement.
+   *
+   * Deux choses changent, et elles se donnent en paramètre : les sujets sont
+   * ceux de tous mes chantiers, et **les épinglées sont mes situations** — ce
+   * que `situationCommeUneEpingle` sait présenter depuis l'étape 1.
+   *
+   * La première entrée s'appelle « Situations » et non « Sujets » : dans le
+   * carnet, c'est la liste des situations qu'elle ouvre, pas une situation.
+   */
+  function renderRailDuCarnet() {
+    const charge = store.situationsView?.sujetsDuCarnet?.rawSubjectsResult ?? {};
+    const champs = champsDuCarnet({
+      charge,
+      personnes: store.situationsView?.personnesDuCarnet ?? [],
+      nomsDesProjets: store.situationsView?.nomsDesProjets ?? {}
+    });
+    const requete = String(store.situationsView?.requeteDuCarnet || "");
+    const replie = store.situationsView?.railReplie === true;
+
+    // Mes situations sous « Épinglées », et les lectures juste au-dessus : les
+    // unes et les autres ouvrent une situation, ce qui est tout l'intérêt.
+    const epingles = [
+      ...situationsDeLecture(champs),
+      ...safeArray(store.situationsView?.data)
+    ].map((situation) => situationCommeUneEpingle(situation, requete));
+
+    return renderRailDesSujetsHtml({
+      sujets: Array.isArray(charge.subjects) ? charge.subjects : [],
+      champs,
+      requete,
+      meta: {},
+      moi: moiDansLeProjet({
+        collaborateurs: store.situationsView?.personnesDuCarnet ?? [],
+        utilisateur: store.user?.id ?? ""
+      }),
+      epingles,
+      replie,
+      sousVue: "subjects"
+    });
+  }
+
   function chantiersConnus() {
     const noms = store.situationsView?.nomsDesProjets;
     if (!noms || typeof noms !== "object") return [];
@@ -466,10 +518,22 @@ export function createProjectSituationsView({
       ? (selectedLayout === "tableau" ? "kanban" : selectedLayout)
       : "";
 
+    // **La structure du rail est celle des Sujets et de la Mémoire.** Le rail
+    // est en position fixe, le contenu s'écarte par une marge, et la largeur
+    // passe par une variable CSS — c'est elle que la poignée fait bouger sans
+    // rien redessiner. Une grille écrite ici compterait la largeur deux fois.
+    const largeurDuRail = railWidth(
+      store.situationsView?.railLargeur,
+      store.situationsView?.railReplie === true
+    );
+
     return `
-      <section class="project-simple-page project-simple-page--settings${hasSelectedSituation ? " project-simple-page--situation-view" : ""}">
+      <section class="project-simple-page project-simple-page--settings${hasSelectedSituation ? " project-simple-page--situation-view" : ""}"
+        style="--project-rail-width:${largeurDuRail}px">
         <div class="project-simple-scroll${hasSelectedSituation ? ` project-simple-scroll--situation-view project-simple-scroll--situation-${layoutClassSuffix}` : ""}" id="projectSituationsScroll">
-          <div class="settings-content project-page-shell project-page-shell--content${hasSelectedSituation ? ` project-page-shell--situation-view project-page-shell--situation-${layoutClassSuffix}` : ""}">
+          <div class="project-rail-layout${store.situationsView?.railReplie === true ? " project-rail-layout--collapsed" : ""}">
+          ${renderRailDuCarnet()}
+          <div class="project-rail-layout__content settings-content project-page-shell project-page-shell--content${hasSelectedSituation ? ` project-page-shell--situation-view project-page-shell--situation-${layoutClassSuffix}` : ""}">
             ${hasSelectedSituation
               ? `${uiState.insightsPanelOpen ? renderSituationInsightsPanel() : (uiState.editPanelOpen ? renderEditSituationPanel() : renderSelectedSituationDetails())}`
               : `
@@ -487,6 +551,7 @@ export function createProjectSituationsView({
                   ${renderSituationsTable()}
                 </section>
               `}
+          </div>
           </div>
         </div>
         ${renderCreateSituationModal()}

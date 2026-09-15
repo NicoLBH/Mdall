@@ -104,3 +104,44 @@ test("le mode choisi part bien vers la base", () => {
   assert.match(evenements, /status: String\(form\.status[\s\S]{0,120}mode,/, "et voyager dans la modification");
   assert.match(service, /hasOwnProperty\.call\(patch, "mode"\)/, "et la base doit l'accepter");
 });
+
+/* ── Le rail du carnet ───────────────────────────────────────────────────── */
+
+/**
+ * **Rien n'est dessiné de neuf.** `renderRailDesSujetsHtml` produit déjà les
+ * lectures, le trait et les épinglées ; en écrire un second pour cet écran,
+ * c'est accepter qu'ils diffèrent d'un pixel, puis d'un comportement.
+ *
+ * Cette vérification lit du texte, et c'est assumé : le rail se monte dans un
+ * document, et il n'y en a pas ici. Ce qu'elle garde est **une chose absente** —
+ * un appel remplacé par un balisage écrit à la main ne lèverait nulle part.
+ */
+test("le carnet monte le rail des sujets, il n'en dessine pas un second", () => {
+  assert.match(source, /renderRailDesSujetsHtml\(\{/, "le rail des sujets, appelé");
+  assert.match(source, /project-rail-layout/, "dans la mise en page de la Mémoire et des Sujets");
+  assert.match(source, /--project-rail-width:\$\{largeurDuRail\}px/, "et sa largeur par la même variable");
+  assert.match(source, /railWidth\(/, "bornée par le même calcul, pas par un autre");
+});
+
+/**
+ * **Les épinglées du carnet sont mes situations**, et les lectures sont des
+ * situations aussi : cliquer l'une ou l'autre fait la même chose — ouvrir une
+ * situation et voir ses sujets.
+ */
+test("les lectures et mes situations peuplent le même rail", () => {
+  assert.match(source, /situationsDeLecture\(champs\)/);
+  assert.match(source, /situationCommeUneEpingle\(situation, requete\)/);
+  assert.match(source, /epingles/, "toutes passent par les épinglées du rail");
+});
+
+/**
+ * **Les personnes commandent trois lectures.** Sans elles, « Assigné à moi »,
+ * « Créé par moi » et « Mentions » ne se déclarent pas : le rail n'aurait
+ * qu'une entrée sur quatre, sans que rien ne dise pourquoi.
+ */
+test("le rail reçoit les personnes de tous mes chantiers", () => {
+  const persistance = readFileSync(resolve(ICI, "./project-situations-persistence.js"), "utf8");
+
+  assert.match(source, /personnes: store\.situationsView\?\.personnesDuCarnet/);
+  assert.match(persistance, /chargerLesPersonnesDesChantiers\(chantiers\)/, "et on va les chercher");
+});

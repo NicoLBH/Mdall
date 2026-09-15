@@ -83,16 +83,56 @@ devenues des vues de la même façon (`202609270001_pinned_searches_vues.sql`).
 remplacera quand elle saura tout dire ; d'ici là elle est ce qu'on lit en
 premier, et le reste sert de repli.
 
-### Étape 2 — Le rail, à gauche
+### Étape 2 — Le rail, à gauche · *posé, pas encore branché*
 
 `renderRailDesSujetsHtml` dans la coquille du carnet, avec `project-rail-layout`
 — la même structure que la Mémoire et les Sujets, poignée et repliement
 compris. Les lectures se calculent sur les sujets de tous mes chantiers ; mes
 situations prennent la place des vues épinglées.
 
-**Le piège :** une lecture du rail change ce que le tableau montre. Le carnet
-n'a aujourd'hui qu'un tableau de situations ; il lui faut celui des sujets,
-qui est le même composant (`renderIssuesTable`) nourri d'une autre liste.
+**Le piège :** une lecture du rail change ce que le tableau montre.
+
+**Ce qui a été livré :**
+
+| Où | Quoi |
+| --- | --- |
+| `apps/web/js/services/lectures-du-carnet.js` | les lectures, présentées comme des situations |
+| `apps/web/js/services/vocabulaire-du-carnet.js` | la grammaire du carnet, à partir de la charge de mes chantiers |
+| `profile-supabase-sync.js` | les personnes de tous mes chantiers |
+| `project-situations-view.js` | le rail, dans la mise en page de la Mémoire et des Sujets |
+
+**Une lecture est une situation.** « Assigné à moi » n'est pas un filtre posé
+sur une liste : c'est une situation dont le nom est « Assigné à moi » et dont
+les sujets sont ceux qui répondent à `assigné:moi`, sur tous mes chantiers.
+C'est ce qui rend l'écran homogène — cliquer une lecture ou une situation qu'on
+a créée fait la même chose.
+
+Elles ne s'écrivent pas en base : les créer au premier passage reviendrait à
+verser dans le carnet de quelqu'un des lignes qu'il n'a pas demandées, ce qu'on
+vient de retirer à la création d'un projet.
+
+**Les personnes commandent trois lectures sur quatre.** `champsDesSujets` ne
+déclare un champ que s'il a des valeurs : sans personne connue, « Assigné à
+moi », « Créé par moi » et « Mentions » disparaissent — un rail qui ne montre
+qu'une entrée sur quatre, sans que rien ne dise pourquoi (règle 5). C'est pour
+cela que le carnet charge désormais les personnes de ses chantiers.
+
+#### Ce qui reste à faire : le clic
+
+Le rail est **dessiné et peuplé**, mais cliquer une de ses entrées ne change
+pas encore ce que l'écran montre. Il y faut deux choses, et elles ne sont pas
+petites :
+
+1. **Ouvrir une situation de lecture.** `getSituationById` ne connaît que les
+   situations écrites ; il lui faut aussi les lectures, et
+   `loadSubjectsForSituation` doit résoudre leur requête contre la charge du
+   carnet — ce qu'il sait déjà faire pour une situation automatique.
+2. **Le détail d'une situation sans propriétaire ni base.** Une lecture ne se
+   modifie pas, ne se ferme pas, ne se supprime pas : le panneau de détail doit
+   le dire plutôt que de proposer des gestes qui échoueraient.
+
+C'est l'étape 2 bis. La séparer est délibéré : un rail dont les entrées
+s'allument sans rien ouvrir serait pire qu'un rail absent — il promettrait.
 
 ### Étape 3 — Le formulaire d'une vue
 
