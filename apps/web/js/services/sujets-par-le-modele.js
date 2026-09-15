@@ -161,6 +161,16 @@ export async function lireLesSujets({ sourceId = "", pages = [], sujetsDuProjet 
     // rendu qui ne nomme personne existe, et il ne faut pas le confondre avec
     // un serveur qui n'aurait rien rendu.
     intervenants: Array.isArray(rendu?.intervenants) ? rendu.intervenants : [],
+    /**
+     * Sous quels titres le document range ses points.
+     *
+     * Une liste vide est une réponse : un compte rendu écrit d'un seul tenant
+     * existe, et il ne faut pas le confondre avec un serveur qui n'aurait rien
+     * rendu — le second se répare, le premier se lit tel quel.
+     */
+    rubriques: Array.isArray(rendu?.rubriques) ? rendu.rubriques : [],
+    /** Combien de points visaient une rubrique qui n'a pas franchi la porte. */
+    rattachementsDetaches: Number(rendu?.rattachements_detaches) || 0,
     numeroDeReunion: texte(rendu?.numero_de_reunion),
     tenueLe: texte(rendu?.tenue_le),
     redigePar: texte(rendu?.redige_par),

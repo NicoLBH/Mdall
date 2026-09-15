@@ -112,6 +112,59 @@ export const SCHEMA_DES_SUJETS = {
       numero_de_reunion: { anyOf: [{ type: "string" }, { type: "null" }] },
       tenue_le: { anyOf: [{ type: "string" }, { type: "null" }] },
       redige_par: { anyOf: [{ type: "string" }, { type: "null" }] },
+      /**
+       * Sous quels titres le compte rendu range ses points.
+       *
+       * **C'est la moitié de son information, et elle se perdait entièrement.**
+       * Un compte rendu de chantier ne fait pas une liste : il fait des
+       * sections — « 2. Installation de chantier », « Lot n° 1 : Démolition /
+       * Gros Œuvre : Entreprise BERTRAND », « DIVERS ». Lu à plat, il rend
+       * cinquante points côte à côte dont on ne sait plus ni de quel lot ils
+       * relèvent, ni à qui ils reviennent.
+       *
+       * **Ce n'est pas un raisonnement, c'est une lecture.** Le document porte
+       * ces titres en toutes lettres ; on demande de les recopier, pas de les
+       * déduire.
+       */
+      rubriques: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            /**
+             * Le rang de la rubrique dans le document, à partir de 1.
+             *
+             * **C'est par lui qu'un point retrouve sa rubrique**, et non par
+             * son intitulé : un intitulé recopié deux fois finit par différer
+             * d'un espace, et le rattachement se perdrait sans rien dire
+             * (règle 10).
+             */
+            ordre: { type: "integer" },
+            /** Le titre de la section, recopié tel qu'écrit. */
+            intitule: { type: "string" },
+            /**
+             * `lot`, `intervenant` ou `administrative`. Trois, et pas deux.
+             *
+             * Un lot porte un numéro et une entreprise. Une rubrique
+             * d'intervenant en désigne un sans numéro de lot — le
+             * coordonnateur SPS, le contrôle technique, l'architecte de la
+             * section « DIVERS ». Une rubrique administrative ne désigne
+             * personne : « Échange de documents » n'est à personne en
+             * particulier, et l'y assigner des points en ferait une tâche.
+             */
+            genre: { type: "string" },
+            /** Le numéro du lot, quand la rubrique en est un. Sinon null. */
+            numero: { anyOf: [{ type: "string" }, { type: "null" }] },
+            /** L'entreprise que le titre nomme, telle qu'écrite. Sinon null. */
+            societe: { anyOf: [{ type: "string" }, { type: "null" }] },
+            page: { anyOf: [{ type: "integer" }, { type: "null" }] },
+            /** La ligne du document d'où la rubrique sort. Sans elle, rien n'entre. */
+            citation: { type: "string" }
+          },
+          required: ["ordre", "intitule", "genre", "numero", "societe", "page", "citation"]
+        }
+      },
       sujets: {
         type: "array",
         items: {
@@ -120,6 +173,15 @@ export const SCHEMA_DES_SUJETS = {
           properties: {
             /** Le lot tel qu'écrit — « 02 — GROS ŒUVRE ». Il ne se traduit pas en code. */
             lot: { anyOf: [{ type: "string" }, { type: "null" }] },
+            /**
+             * L'`ordre` de la rubrique sous laquelle ce point est écrit.
+             *
+             * `null` quand le point n'est sous aucune — l'ouverture d'un compte
+             * rendu en produit. **Un point sans rubrique reste un point** : on
+             * ne lui en invente pas une, parce que ne pas savoir n'autorise pas
+             * à ranger au hasard (règle 5).
+             */
+            rubrique: { anyOf: [{ type: "integer" }, { type: "null" }] },
             /**
              * Le numéro que le compte rendu donne au point — « 12.02.1 ».
              *
@@ -204,8 +266,9 @@ export const SCHEMA_DES_SUJETS = {
             raison_du_rapprochement: { anyOf: [{ type: "string" }, { type: "null" }] }
           },
           required: [
-            "lot", "reference", "titre", "description", "qui", "echeance", "etat", "fait_le",
-            "page", "citation", "labels", "liens", "sujet_existant", "raison_du_rapprochement"
+            "lot", "rubrique", "reference", "titre", "description", "qui", "echeance", "etat",
+            "fait_le", "page", "citation", "labels", "liens", "sujet_existant",
+            "raison_du_rapprochement"
           ]
         }
       },
@@ -258,7 +321,9 @@ export const SCHEMA_DES_SUJETS = {
         }
       }
     },
-    required: ["numero_de_reunion", "tenue_le", "redige_par", "sujets", "intervenants"]
+    required: [
+      "numero_de_reunion", "tenue_le", "redige_par", "rubriques", "sujets", "intervenants"
+    ]
   }
 };
 
@@ -273,6 +338,7 @@ export const CONSIGNES = [
   "- `titre` : ce qu'il y a à traiter, en une ligne, DANS LES MOTS DU DOCUMENT. Ne reformule pas et n'ajoute pas de verbe d'action qui n'y est pas.",
   "- `description` : ce que le compte rendu en dit, recopié. Si le document n'en dit pas plus que le titre, reprends le titre.",
   "- `lot` : le lot sous lequel le point est écrit, tel qu'écrit — « 02 — GROS ŒUVRE ». Sinon null.",
+  "- `rubrique` : l'`ordre` de la rubrique sous laquelle le point est écrit (voir plus bas). Sinon null.",
   "- `reference` : le numéro que le compte rendu donne au point — « 12.02.1 », « 4.3 ». Sinon null.",
   "- `qui` : à qui c'est demandé, tel qu'écrit — un lot, une entreprise, « MOE ». Jamais un nom de personne que tu supposes.",
   "- `echeance` : la date ou le délai annoncé, tel qu'écrit. Sinon null.",
@@ -302,6 +368,23 @@ export const CONSIGNES = [
   "N'invente AUCUN autre label. Pas de « Prioritaire », pas de « À traiter », pas de « Important » : ce qui n'est pas dans la liste ci-dessus est écarté. Un projet qui accumule quinze étiquettes disant la même chose n'a plus de filtre qui fonctionne, et personne ne le nettoiera.",
   "Un point peut n'en porter aucun : `labels` vaut alors la liste vide. C'est le cas le plus fréquent, et c'est très bien — n'en pose un que si le document le dit.",
   "Ne pose jamais `Urgent` parce que le sujet te semble grave : tu relèves ce qui est écrit, tu ne juges pas le chantier.",
+  "",
+  "LES RUBRIQUES — SOUS QUELS TITRES LE DOCUMENT RANGE SES POINTS :",
+  "Un compte rendu de chantier ne fait pas une liste : il fait des sections, et ce découpage est la moitié de son information. Relève-les dans `rubriques`, dans l'ordre où elles se présentent.",
+  "Tu les RECOPIES, tu ne les déduis pas : elles sont écrites en toutes lettres dans les titres du document.",
+  "- `ordre` : le rang de la rubrique dans le document, à partir de 1. C'est ce numéro que chaque point reprend dans son champ `rubrique`.",
+  "- `intitule` : le titre de la section, RECOPIÉ TEL QU'ÉCRIT — « 2. Installation de chantier », « Lot n° 1 : Démolition / Gros Œuvre : Entreprise BERTRAND », « Maître d'Ouvrage ».",
+  "- `genre` : `lot`, `intervenant` ou `administrative`. TROIS, et pas deux :",
+  "  · `lot` : la section est un lot du marché — elle porte un numéro de lot et, presque toujours, le nom d'une entreprise.",
+  "  · `intervenant` : la section désigne quelqu'un sans être un lot — le coordonnateur SPS, le contrôle technique, le maître d'ouvrage, l'architecte, un bureau d'études. C'est le cas des sections de la partie « DIVERS ».",
+  "  · `administrative` : la section ne désigne personne — « Marché de travaux », « Installation de chantier », « Échange de documents », « Documents d'exécution ». Ne lui attribue PAS d'entreprise : une procédure n'est pas un intervenant, et lui assigner des points en ferait une tâche que personne ne traitera.",
+  "- `numero` : le numéro DU LOT, quand la rubrique est un lot — « 1 », « 12 ». Sinon null. Attention : le « 2 » de « 2. Installation de chantier » est un numéro de paragraphe, PAS un numéro de lot ; cette rubrique-là porte `numero` à null.",
+  "- `societe` : l'entreprise que le titre nomme, RECOPIÉE telle qu'écrite — « BERTRAND », « NOVACLIM ». Sinon null. Ne la déduis jamais du contenu des points : c'est le TITRE qui la nomme, ou personne.",
+  "- `page` : la page où le titre se lit.",
+  "- `citation` : la ligne du titre, RECOPIÉE MOT POUR MOT. Elle sera recherchée dans le texte de la page : si elle ne s'y retrouve pas, la rubrique sera écartée.",
+  "Une rubrique qui ne porte AUCUN point se relève quand même : un lot sans observation à cette réunion — son contenu se réduit à « / » ou « néant » — est une information, pas un vide.",
+  "N'invente AUCUNE rubrique et n'en regroupe aucune : si le document ne l'écrit pas comme un titre, elle n'existe pas.",
+  "Un point qui n'est sous aucune rubrique — l'ouverture, un préambule — porte `rubrique` à null. Ne lui en attribue pas une qui serait « la plus proche » : mal rangé est pire que pas rangé.",
   "",
   "LES DÉPENDANCES ENTRE POINTS :",
   "Un compte rendu de chantier est plein de dépendances, et elles sont écrites — c'est ce qu'une réunion sert à établir. « Cloison CF1H à réaliser dans niches dans bureau, APRÈS implantation des nourrices par BENOIT GUYOT » dit que le lot 03 attend le lot 13. « Cause retard du plombier : démarrage pose des carrelages reporté » dit la même chose du lot 10.",
@@ -489,6 +572,83 @@ export function verifierLesIntervenants({ intervenants = [], pages = [] } = {}) 
   };
 }
 
+/**
+ * Les rubriques rendues, confrontées au document.
+ *
+ * Le même garde-fou que les sujets et les intervenants : une section dont le
+ * titre ne se retrouve pas dans le document n'a pas été lue. Et le risque est
+ * du même ordre qu'un intervenant inventé — une rubrique inventée deviendrait
+ * un **sujet père** dans le projet, sous lequel on rangerait des points réels.
+ *
+ * Ce qui fait qu'une ligne n'est pas une rubrique : pas d'intitulé.
+ */
+/**
+ * Un entier, ou `null`.
+ *
+ * **`Number(null)` vaut zéro**, et zéro est un ordre comme un autre : sans ce
+ * filtre, un point qui ne vise aucune rubrique viserait la rubrique n° 0, et
+ * une rubrique sans ordre l'y accueillerait. Deux absences se seraient
+ * rencontrées et auraient fait un rangement.
+ */
+function entier(valeur) {
+  if (valeur === null || valeur === undefined || valeur === "") return null;
+  const nombre = Number(valeur);
+  return Number.isFinite(nombre) ? nombre : null;
+}
+
+export function verifierLesRubriques({ rubriques = [], pages = [] } = {}) {
+  const { retenus, ecartes, pagesCorrigees } = verifierLesCitations({
+    lignes: rubriques,
+    pages,
+    estVide: (ligne) => !String(ligne?.intitule ?? "").trim()
+  });
+
+  return {
+    retenus,
+    ecartes: ecartes.map(({ ligne, motif }) => ({ rubrique: ligne, motif })),
+    pagesCorrigees
+  };
+}
+
+/**
+ * Les rattachements rendus, confrontés aux rubriques qui ont survécu.
+ *
+ * **Le même refus que pour les rapprochements, et pour la même raison.** Un
+ * point qui pointe vers une rubrique qui n'existe pas — parce que le modèle l'a
+ * inventée, ou parce qu'elle n'a pas su citer le document — serait rangé sous
+ * un père qui n'a rien à voir, ou sous aucun sans qu'on le sache.
+ *
+ * On ne corrige pas, on détache : le point reste, entier, et redevient un point
+ * **sans rubrique** — ce qui se compte et se voit, là où un mauvais rangement
+ * ne se verrait jamais (règle 5).
+ *
+ * @returns {{sujets: object[], detaches: number}}
+ */
+export function rattacherAuxRubriques({ sujets = [], rubriques = [] } = {}) {
+  const connus = new Set(
+    (Array.isArray(rubriques) ? rubriques : [])
+      .map((rubrique) => entier(rubrique?.ordre))
+      .filter((ordre) => ordre !== null)
+  );
+
+  let detaches = 0;
+  const rattaches = (Array.isArray(sujets) ? sujets : []).map((sujet) => {
+    const vise = entier(sujet?.rubrique);
+    // Ne viser aucune rubrique n'est pas se tromper de rubrique : cela ne se
+    // compte pas comme un détachement.
+    if (vise === null) return { ...sujet, rubrique: null };
+
+    if (!connus.has(vise)) {
+      detaches += 1;
+      return { ...sujet, rubrique: null };
+    }
+
+    return { ...sujet, rubrique: vise };
+  });
+
+  return { sujets: rattaches, detaches };
+}
+
 export function verifierLesSujets({ sujets = [], pages = [] } = {}) {
   const { retenus, ecartes, pagesCorrigees } = verifierLesCitations({
     lignes: sujets,
@@ -549,6 +709,37 @@ function aplati(valeur) {
     .trim();
 }
 
+/**
+ * Les rubriques, dans la forme qu'une proposition attend.
+ *
+ * **La clé porte l'ordre, pas l'intitulé.** C'est par l'ordre que les points de
+ * ce même document la retrouvent ; son identité d'un compte rendu au suivant —
+ * le numéro du lot — se décide au navigateur, dans `rubriques-du-cr.js`, où
+ * elle se vérifie.
+ */
+export function rubriquesAuFormatDuMoteur(retenus = [], { sourceId = "" } = {}) {
+  return (Array.isArray(retenus) ? retenus : []).map((ligne) => {
+    const ordre = entier(ligne?.ordre);
+
+    return {
+      key: `rubrique:${sourceId}:${ordre ?? "sans-ordre"}`,
+      ordre,
+      intitule: String(ligne?.intitule ?? "").trim(),
+      // Le genre tel que le modèle l'a dit. Il n'est pas cru sur parole : le
+      // navigateur le relit de l'intitulé, et l'écrit y départage.
+      genre: String(ligne?.genre ?? "").trim() || null,
+      numero: String(ligne?.numero ?? "").trim() || null,
+      societe: String(ligne?.societe ?? "").trim() || null,
+      provenance: {
+        source_id: sourceId,
+        page: Number.isFinite(Number(ligne?.page)) ? Number(ligne.page) : null,
+        excerpt: String(ligne?.citation ?? "").trim()
+      },
+      lu_par: "modele"
+    };
+  });
+}
+
 export function sujetsAuFormatDuMoteur(retenus = [], { sourceId = "" } = {}) {
   return (Array.isArray(retenus) ? retenus : []).map((ligne, rang) => {
     const reference = String(ligne?.reference ?? "").trim();
@@ -558,6 +749,9 @@ export function sujetsAuFormatDuMoteur(retenus = [], { sourceId = "" } = {}) {
       titre: String(ligne?.titre ?? "").trim(),
       description: String(ligne?.description ?? "").trim(),
       lot: String(ligne?.lot ?? "").trim() || null,
+      // La rubrique sous laquelle ce point a été lu, **vérifiée** : elle figure
+      // parmi celles qui ont cité le document, ou elle vaut null.
+      rubrique: entier(ligne?.rubrique),
       reference: reference || null,
       qui: String(ligne?.qui ?? "").trim() || null,
       echeance: String(ligne?.echeance ?? "").trim() || null,

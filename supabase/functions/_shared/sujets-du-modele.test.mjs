@@ -450,3 +450,129 @@ test("la consigne interdit d'inventer une dépendance, et normalise la liste vid
   // Et la raison est recopiée du document, pas rédigée par le modèle.
   assert.match(CONSIGNES, /la phrase du document qui établit la dépendance, recopiée/);
 });
+
+/* ── Les rubriques : sous quels titres le document range ses points ──────── */
+
+/**
+ * La même porte que les points, et un enjeu plus grand : une rubrique inventée
+ * ne serait pas une ligne de trop, ce serait un **sujet père** dans le projet,
+ * sous lequel on rangerait des points réels.
+ */
+test("une rubrique qui ne cite pas le document n'entre pas", async () => {
+  const { verifierLesRubriques } = await import("./sujets-du-modele.js");
+
+  const { retenus, ecartes } = verifierLesRubriques({
+    rubriques: [
+      { ordre: 1, intitule: "LOT 02 — GROS ŒUVRE", genre: "lot", numero: "2", page: 3, citation: "LOT 02 — GROS ŒUVRE" },
+      { ordre: 2, intitule: "LOT 09 — MENUISERIES", genre: "lot", numero: "9", page: 3, citation: "LOT 09 — MENUISERIES" },
+      { ordre: 3, intitule: "", genre: "administrative", page: 3, citation: "LOT 02 — GROS ŒUVRE" }
+    ],
+    pages: PAGES
+  });
+
+  assert.deepEqual(retenus.map((rubrique) => rubrique.ordre), [1]);
+  assert.deepEqual(ecartes.map((ecart) => ecart.motif).sort(), [ECART.INTROUVABLE, ECART.VIDE].sort());
+  // Ce qui est écarté se dit avec la ligne qu'on a refusée, pas seulement un compte.
+  assert.equal(ecartes[0].rubrique.ordre, 2);
+});
+
+/**
+ * **Un point qui vise une rubrique disparue se détache.** Le laisser pointer
+ * vers un ordre qui n'existe plus le rangerait sous un père au hasard — ou sous
+ * aucun, sans que rien ne le dise. Détaché, il se compte (règle 5).
+ */
+test("un point qui vise une rubrique écartée redevient sans rubrique", async () => {
+  const { rattacherAuxRubriques } = await import("./sujets-du-modele.js");
+
+  const { sujets, detaches } = rattacherAuxRubriques({
+    sujets: [
+      { titre: "Ferraillage", rubrique: 1 },
+      { titre: "Étanchéité", rubrique: 2 },
+      { titre: "Ouverture de séance", rubrique: null },
+      { titre: "Préambule" }
+    ],
+    rubriques: [{ ordre: 1, intitule: "LOT 02 — GROS ŒUVRE" }]
+  });
+
+  assert.deepEqual(sujets.map((sujet) => sujet.rubrique), [1, null, null, null]);
+  // Un seul a été détaché : les deux derniers n'en visaient aucune.
+  assert.equal(detaches, 1);
+});
+
+/** Ce qui est rendu au navigateur porte l'ordre, pas l'intitulé, comme clé. */
+test("une rubrique lue prend la forme d'une proposition", async () => {
+  const { rubriquesAuFormatDuMoteur } = await import("./sujets-du-modele.js");
+
+  const [rubrique] = rubriquesAuFormatDuMoteur(
+    [{
+      ordre: 8, intitule: "LOT 02 — GROS ŒUVRE", genre: "lot", numero: "2",
+      societe: "BERTRAND", page: 3, citation: "LOT 02 — GROS ŒUVRE"
+    }],
+    { sourceId: "doc-1" }
+  );
+
+  assert.deepEqual(rubrique, {
+    key: "rubrique:doc-1:8",
+    ordre: 8,
+    intitule: "LOT 02 — GROS ŒUVRE",
+    genre: "lot",
+    numero: "2",
+    societe: "BERTRAND",
+    provenance: { source_id: "doc-1", page: 3, excerpt: "LOT 02 — GROS ŒUVRE" },
+    lu_par: "modele"
+  });
+});
+
+/**
+ * Le point emporte sa rubrique jusqu'à la proposition, sinon rien ne la range.
+ *
+ * **Et l'absence reste une absence.** `Number(null)` vaut zéro : un point sans
+ * rubrique se serait présenté comme visant la rubrique n° 0, et se serait rangé
+ * sous elle le jour où une rubrique arriverait sans ordre.
+ */
+test("un point lu emporte la rubrique sous laquelle il a été lu", () => {
+  const [avec] = sujetsAuFormatDuMoteur([lu({ rubrique: 8 })], { sourceId: "doc-1" });
+  assert.equal(avec.rubrique, 8);
+
+  for (const rien of [undefined, null, ""]) {
+    const [sans] = sujetsAuFormatDuMoteur([lu({ rubrique: rien })], { sourceId: "doc-1" });
+    assert.equal(sans.rubrique, null, `rubrique: ${JSON.stringify(rien)}`);
+  }
+});
+
+/**
+ * **Le schéma doit demander les rubriques**, et le point doit pouvoir n'en
+ * avoir aucune : sans `null` possible, le modèle en attribuerait une à
+ * l'ouverture de séance pour remplir le champ.
+ */
+test("le schéma demande le rangement, et tolère de ne pas savoir", () => {
+  const document = SCHEMA_DES_SUJETS.schema.properties;
+  assert.ok(document.rubriques, "le document rend ses rubriques");
+  assert.deepEqual(
+    Object.keys(document.rubriques.items.properties).sort(),
+    ["citation", "genre", "intitule", "numero", "ordre", "page", "societe"]
+  );
+  assert.ok(SCHEMA_DES_SUJETS.schema.required.includes("rubriques"));
+
+  const point = document.sujets.items.properties.rubrique;
+  assert.deepEqual(point.anyOf, [{ type: "integer" }, { type: "null" }]);
+  assert.ok(document.sujets.items.required.includes("rubrique"));
+});
+
+/**
+ * **Le piège du paragraphe numéroté doit être dit au modèle.** Les sept
+ * rubriques administratives d'un compte rendu sont numérotées de 1 à 7 ; sans
+ * l'avertissement, il en fait sept lots que le marché ne connaît pas.
+ */
+test("la consigne distingue un numéro de lot d'un numéro de paragraphe", async () => {
+  const { CONSIGNES } = await import("./sujets-du-modele.js");
+
+  assert.match(CONSIGNES, /numéro de paragraphe, PAS un numéro de lot/);
+  // Les trois genres sont nommés, et l'administrative est dite sans personne.
+  assert.match(CONSIGNES, /TROIS, et pas deux/);
+  assert.match(CONSIGNES, /une procédure n'est pas un intervenant/);
+  // Une rubrique vide se relève : c'est ce qui fait qu'un lot s'ouvre et se ferme.
+  assert.match(CONSIGNES, /Une rubrique qui ne porte AUCUN point se relève quand même/);
+  // Et l'on ne range pas au plus proche.
+  assert.match(CONSIGNES, /mal rangé est pire que pas rangé/);
+});

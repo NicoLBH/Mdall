@@ -25,6 +25,10 @@
  * proposition → mémoire. Rien n'entre directement (règle 1).
  */
 
+import {
+  GENRE, MOTS_DU_GENRE, mesuresDesRubriques, rangerLesPoints, rubriquesDuCompteRendu
+} from "./rubriques-du-cr.js";
+
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /* ── Ce qu'une lecture rend, mis en forme ────────────────────────────────── */
@@ -102,13 +106,26 @@ export function citationRetrouvee(point = {}, pages = []) {
  * @param {number} [options.ecartes] combien le serveur a déjà écartés
  */
 export function lectureAssemblee({
-  points = [], pages = [], identite = null, nom = "", ecartes = 0
+  points = [], pages = [], identite = null, nom = "", ecartes = 0, rubriques = []
 } = {}) {
+  // Relues ici plutôt que par l'écran : le genre d'une rubrique et son identité
+  // se décident à un seul endroit, et le tableau, la mesure et la proposition
+  // doivent en lire la même (règle 4).
+  const rangement = rubriquesDuCompteRendu(rubriques);
   const lus = (Array.isArray(points) ? points : []).map((point, rang) => {
     const manques = manquesDuPoint(point);
     return {
       rang,
       lot: texte(point?.lot),
+      /**
+       * L'`ordre` de la rubrique sous laquelle ce point a été lu, ou `null`.
+       *
+       * `Number(null)` valant zéro, l'absence se dit explicitement : sans quoi
+       * un point sans rubrique viserait la rubrique n° 0.
+       */
+      rubrique: point?.rubrique === null || point?.rubrique === undefined || point?.rubrique === ""
+        ? null
+        : (Number.isFinite(Number(point.rubrique)) ? Number(point.rubrique) : null),
       reference: texte(point?.reference),
       titre: texte(point?.titre),
       description: texte(point?.description),
@@ -144,10 +161,13 @@ export function lectureAssemblee({
       page: Number(page?.page) || 0,
       caracteres: texte(page?.text ?? page?.texte).length
     })),
-    rubriques: rubriquesDesPoints(lus),
+    /** Sous quels titres le document range ses points, relus et dédoublonnés. */
+    rubriques: rangement,
+    /** Le rangement de repli, quand le document n'en a rendu aucun. */
+    groupesParLot: groupesParLot(lus),
     points: lus,
     ecartes: Number(ecartes) || 0,
-    mesure: mesureDeLaLecture(lus, pages)
+    mesure: mesureDeLaLecture(lus, pages, rangement)
   };
 }
 
@@ -158,7 +178,7 @@ export function lectureAssemblee({
  * amélioration se juge au ressenti — « ça a l'air mieux » — et l'on ne sait
  * jamais si le palier suivant a progressé ou reculé.
  */
-export function mesureDeLaLecture(points = [], pages = []) {
+export function mesureDeLaLecture(points = [], pages = [], rubriques = []) {
   const lus = Array.isArray(points) ? points : [];
   const caracteres = (Array.isArray(pages) ? pages : [])
     .reduce((total, page) => total + texte(page?.text ?? page?.texte).length, 0);
@@ -166,32 +186,38 @@ export function mesureDeLaLecture(points = [], pages = []) {
   const retrouves = lus.filter((point) => point.retrouve).length;
   const sansCitation = lus.filter((point) => point.manques.includes(MANQUE.CITATION)).length;
   const sansLot = lus.filter((point) => point.manques.includes(MANQUE.LOT)).length;
+  // Ce que le rangement du document a pris, et ce qu'il a laissé. L'orphelin
+  // est le chiffre à surveiller : sa variation dit que la lecture a dérivé.
+  const range = mesuresDesRubriques(lus, rubriques);
 
   return {
     points: lus.length,
     retrouves,
     sansCitation,
     sansLot,
+    rubriques: range.rubriques,
+    rattaches: range.rattaches,
+    orphelins: range.orphelins,
     pages: Array.isArray(pages) ? pages.length : 0,
     caracteres
   };
 }
 
 /**
- * Les rubriques, telles que le document les écrit.
+ * Les points groupés par le lot qu'ils portent — **le rangement de repli**.
  *
- * **C'est un seul niveau, et c'est le défaut connu.** Un rapport range ses avis
- * sous `structure métallique > dimensionnement` et sous `béton armé >
- * dimensionnement` ; un compte rendu range `contrôle technique > assister au
- * prochain rendez-vous` et `charpente > assister au prochain rendez-vous`. Le
- * modèle ne rend aujourd'hui qu'un `lot` plat : les deux deviennent le même
- * intitulé, illisible et faux.
+ * C'est un seul niveau, et c'est ce qui manquait : un compte rendu range ses
+ * points sous des titres — sept rubriques administratives, puis un titre par
+ * lot, puis une section par intervenant —, et grouper par le champ `lot` d'un
+ * point perd tout ce qui n'en est pas un.
  *
- * On regroupe donc par ce qu'on a, **et l'écran le dit** : voir deux points
- * identiques sous deux lots différents est précisément ce qui fait comprendre
- * ce qui manque.
+ * Ce groupement sert désormais quand la lecture n'a rendu **aucune** rubrique :
+ * un document d'un seul tenant, ou un modèle qui n'a pas su les lire. Il ne
+ * s'appelle plus « rubriques » — ce nom désigne maintenant le rangement du
+ * document lui-même, et deux choses du même nom finissent par être prises l'une
+ * pour l'autre (règle 10).
  */
-export function rubriquesDesPoints(points = []) {
+export function groupesParLot(points = []) {
   const parLot = new Map();
 
   for (const point of Array.isArray(points) ? points : []) {
@@ -393,4 +419,60 @@ export function comptesDeLaConfrontation(confrontes = []) {
     if (comptes[point?.sort] !== undefined) comptes[point.sort] += 1;
   }
   return comptes;
+}
+
+/**
+ * Ce que le tableau « Ce qui a été relevé » affiche, groupe par groupe.
+ *
+ * **Le rangement du document d'abord, le lot en repli.** Quand la lecture a
+ * rendu des rubriques, ce sont elles qui font les groupes : c'est le rangement
+ * que le compte rendu écrit lui-même, et celui sous lequel la personne qui tient
+ * le chantier ira chercher. Sans rubrique — un document d'un seul tenant, ou un
+ * modèle qui n'a pas su les lire —, on se rabat sur le champ `lot`, qui ne dit
+ * rien des rubriques administratives ni des intervenants.
+ *
+ * **Les orphelins font un groupe, en dernier, et qui se nomme.** Les noyer dans
+ * « (sans lot) » les rendrait indiscernables d'un point mal rangé ; les taire
+ * les ferait disparaître du tableau alors qu'ils seront proposés.
+ *
+ * Pur et exporté : c'est ce qui permet de le vérifier sans dessiner l'écran.
+ *
+ * @returns {{titre: string, precision: string, combien: number, points: object[]}[]}
+ */
+export function groupesDeLaLecture(lecture = null) {
+  const points = Array.isArray(lecture?.points) ? lecture.points : [];
+  const rubriques = Array.isArray(lecture?.rubriques) ? lecture.rubriques : [];
+
+  if (rubriques.length === 0) {
+    return (Array.isArray(lecture?.groupesParLot) ? lecture.groupesParLot : []).map((groupe) => ({
+      titre: texte(groupe?.lot),
+      precision: "",
+      combien: Array.isArray(groupe?.points) ? groupe.points.length : 0,
+      points: Array.isArray(groupe?.points) ? groupe.points : []
+    }));
+  }
+
+  const { groupes, orphelins } = rangerLesPoints(points, rubriques);
+
+  const ranges = groupes.map(({ rubrique, points: dedans }) => ({
+    titre: texte(rubrique?.nom),
+    // Ce que la rubrique désigne, et qui : c'est ce qui distingue « 5. Contrôle
+    // technique » d'un lot du marché, et le dire évite d'avoir à le deviner.
+    precision: [
+      MOTS_DU_GENRE[rubrique?.genre] ?? "",
+      rubrique?.genre === GENRE.LOT && rubrique?.numero ? `n° ${rubrique.numero}` : "",
+      texte(rubrique?.societe)
+    ].filter(Boolean).join(" · "),
+    combien: dedans.length,
+    points: dedans
+  }));
+
+  if (orphelins.length === 0) return ranges;
+
+  return [...ranges, {
+    titre: "Sous aucune rubrique",
+    precision: "",
+    combien: orphelins.length,
+    points: orphelins
+  }];
 }

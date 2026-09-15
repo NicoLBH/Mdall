@@ -45,6 +45,20 @@ test("le nom d'un lot se compare sans son numéro ni ses accents", () => {
 });
 
 /**
+ * **Un lot nommé sans numéro.** Un compte rendu écrit « Lot Gros Œuvre » là où
+ * le projet a « Gros œuvre » : garder le mot en ferait deux lots, ce que cette
+ * mise à plat existe précisément pour empêcher.
+ */
+test("le mot « lot » en tête s'ôte, avec ou sans numéro", () => {
+  assert.equal(nomDuLot("Lot Gros Œuvre"), "gros oeuvre");
+  assert.equal(nomDuLot("LOT : CHARPENTE"), "charpente");
+  assert.equal(memeLot("Lot Gros Œuvre", "Gros œuvre"), true);
+
+  // Un mot qui commence par « lot » n'est pas le mot « lot ».
+  assert.equal(nomDuLot("Lotissement sud"), "lotissement sud");
+});
+
+/**
  * **Le numéro tranche quand les deux en ont un.** « 02 gros œuvre » et « 03
  * gros œuvre démolition » existent sur les mêmes chantiers.
  */

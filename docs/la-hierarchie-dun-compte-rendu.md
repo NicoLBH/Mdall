@@ -9,24 +9,14 @@ PDF à la proposition. Cette chaîne est faite ; ce qui suit porte sur ce qu'ell
 
 ---
 
-## 0. Avant tout : pourquoi le journal de la fusion ne s'affiche pas
+## 0. Le journal de la fusion : fausse alerte
 
-Le code est en place — `journal-de-la-fusion.js`, `project-runs-supabase.js`, la lecture dans
-`syncProjectActionsFromSupabase`. Il manque donc une des deux choses suivantes, et il faut
-savoir laquelle **avant** de chercher ailleurs :
+Il s'affiche. Le code était en place des deux côtés — l'écriture dans
+`project-propositions.js`, la lecture dans `lireLesGestes` —, et la migration était passée.
+Rien à réparer.
 
-1. **La migration `202610020001_project_runs.sql` n'a pas été appliquée.** C'est le cas le
-   plus probable. La table n'existe pas, l'écriture échoue en silence — et la fusion affiche
-   alors la phrase prévue pour ce cas : « Le journal de cette fusion n'a pas pu être conservé :
-   la fusion est faite, mais l'onglet Actions ne la retrouvera pas après un rechargement. » Si
-   cette phrase est apparue, c'est elle.
-
-2. **La lecture est refusée.** `project_runs` porte une politique ouverte en lecture ; si la
-   requête tombe, la console du navigateur porte `[actions] project_runs illisible`.
-
-Rien à réparer dans le code tant que l'un des deux n'est pas constaté. Ce point est en tête du
-plan parce qu'il **bloque la vérification de tout le reste** : sans le journal, on ne voit pas
-ce qu'une fusion a fait.
+Ce paragraphe reste parce que l'ordre du plan en dépendait : c'est le journal qui permet de
+voir ce qu'une fusion a fait, et donc de vérifier les étapes qui suivent. Il est là.
 
 ---
 
@@ -127,7 +117,7 @@ Presque rien à créer. Il s'agit d'alimenter ce qui est là.
 | Le compteur de fils | `views/ui/subissues-counts.js` | ✅ composant partagé |
 | L'épingle | `subject_pins`, `epingles-des-sujets.js` | ✅ |
 | Les vues enregistrées | `vues-des-sujets.js`, recherches épinglées | ✅ |
-| **Une rubrique comme objet de lecture** | — | ❌ à faire |
+| Une rubrique comme objet de lecture | `rubriques-du-cr.js`, `SCHEMA_DES_SUJETS.rubriques` | ✅ étape 2 |
 | **Un sujet père proposé, puis appliqué** | — | ❌ à faire |
 
 Autrement dit : **le modèle voit déjà le rangement, et la base sait déjà le porter.** Ce qui
@@ -139,16 +129,14 @@ manque est entre les deux.
 
 Une étape par livraison. Chacune se vérifie seule, et aucune ne suppose la suivante.
 
-### Étape 1 — Le journal de la fusion s'affiche
+### Étape 1 — Le journal de la fusion s'affiche · *sans objet*
 
-Constater lequel des deux cas du § 0 s'applique, et le corriger. Rien d'autre.
-
-**Comment on le vérifie :** on fusionne, on va dans Actions, on lit les onze étapes et leurs
-durées. Tant que ce n'est pas vrai, les étapes qui suivent ne se vérifient qu'à l'œil.
+Il s'affichait déjà : voir le § 0. On fusionne, on va dans Actions, on lit les étapes et leurs
+durées.
 
 ---
 
-### Étape 2 — La lecture rend des rubriques
+### Étape 2 — La lecture rend des rubriques · *faite*
 
 Le schéma de `extract-sujets` gagne un tableau `rubriques`, et chaque point dit **sous
 laquelle** il a été lu.
@@ -179,6 +167,23 @@ deux fois finit par différer d'un espace, et le rattachement se perd sans rien 
 **Ce qui se vérifie sans modèle :** `rubriques-du-cr.js`, pur et testé — l'identité d'une
 rubrique (le numéro pour un lot, l'intitulé aplati sinon), la reconnaissance du genre, le
 rattachement d'un point à sa rubrique, et le compte des **orphelins**.
+
+**Le piège qu'on n'avait pas vu.** Les sept rubriques administratives d'un compte rendu sont
+numérotées de 1 à 7. Les lire comme des numéros de lot créerait sept lots que le marché ne
+connaît pas, et l'on y rangerait les points d'installation de chantier. C'est **le mot
+« lot »** qui fait un lot, pas le chiffre — et sans ce mot, il faut que le modèle ait rendu un
+numéro de lot explicite, ce que la consigne lui interdit de faire sur un numéro de paragraphe.
+
+**Ce que l'étape a livré en plus, et pourquoi.** L'écran de l'Atelier range désormais
+« Ce qui a été relevé » par rubrique du document, avec le genre et la société en regard, et se
+rabat sur le champ `lot` quand aucune rubrique n'a été lue. Sans cela, une étape entièrement
+serveur n'aurait été vérifiable par personne. Les trois chiffres de l'étape 9 — rubriques
+reconnues, points rangés, sans rubrique — sont venus avec, dans le composant qui porte déjà les
+autres.
+
+**Un nom rendu à ce qu'il désigne.** `lectureAssemblee` portait déjà un champ `rubriques` qui
+groupait les points par leur champ `lot` — c'est-à-dire exactement le rangement à plat qu'on
+remplace. Il s'appelle maintenant `groupesParLot`, ce qu'il est (règle 10).
 
 > **Un point sans rubrique reste un sujet racine**, et il se compte. La section A —
 > « observations sur compte rendu précédent » — n'en produit d'ailleurs aucun. Ce qui compte
@@ -284,6 +289,9 @@ Rien à inventer, trois branchements.
 ---
 
 ### Étape 9 — Les mesures
+
+*Les trois chiffres sont posés depuis l'étape 2 : une étape entièrement serveur n'aurait été
+vérifiable par personne. Ce qui reste ici est leur suivi d'une version à l'autre.*
 
 L'écran de lecture de l'Atelier gagne trois chiffres, à côté de ceux de la restitution :
 

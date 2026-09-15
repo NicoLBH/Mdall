@@ -5,7 +5,8 @@ import {
   EFFETS_DU_SORT, MANQUE, PAR, PHRASES_DU_MANQUE, PHRASES_DU_PAR, PHRASES_DU_SORT, SORT, estFerme,
   citationRetrouvee, comptesDeLaConfrontation,
   confrontation, intitulesAmbigus, lectureAssemblee, manquesDuPoint, mesureDeLaLecture,
-  rubriquesDesPoints
+  groupesDeLaLecture,
+  groupesParLot
 } from "./lecture-du-cr.js";
 import { titreAplati } from "./sujets-du-cr.js";
 
@@ -83,7 +84,11 @@ test("la lecture se mesure en nombres comparables", () => {
   });
 
   assert.deepEqual(lu.mesure, {
-    points: 3, retrouves: 1, sansCitation: 1, sansLot: 0, pages: 1, caracteres: PAGES[0].text.length
+    points: 3, retrouves: 1, sansCitation: 1, sansLot: 0,
+    // Aucune rubrique n'a été rendue : les trois points sont donc orphelins, et
+    // cela se dit plutôt que de se présenter comme un document sans rangement.
+    rubriques: 0, rattaches: 0, orphelins: 3,
+    pages: 1, caracteres: PAGES[0].text.length
   });
 });
 
@@ -123,8 +128,52 @@ test("un intitulé qui ne revient que sous un lot n'est pas ambigu", () => {
 
 /** Un point sans lot se range quand même, sous un intitulé qui le dit. */
 test("les points sans lot se rangent sous un intitulé qui l'avoue", () => {
-  const rubriques = rubriquesDesPoints([point({ lot: "" })]);
-  assert.equal(rubriques[0].lot, "(sans lot)");
+  const groupes = groupesParLot([point({ lot: "" })]);
+  assert.equal(groupes[0].lot, "(sans lot)");
+});
+
+/* ── Le rangement du document ────────────────────────────────────────────── */
+
+/**
+ * **La lecture porte le rangement du document, et chaque point sa rubrique.**
+ * Sans ce report, tout ce que le modèle a lu des titres resterait au serveur, et
+ * le tableau se rabattrait éternellement sur le champ `lot` — qui ne dit rien
+ * des rubriques administratives ni des intervenants.
+ */
+test("la lecture porte les rubriques du document, et ce qu'elles ont pris", () => {
+  const lu = lectureAssemblee({
+    points: [
+      point({ titre: "Coffrage", rubrique: 8 }),
+      point({ titre: "Inspections communes", rubrique: 4 }),
+      point({ titre: "Ouverture de séance", rubrique: null })
+    ],
+    pages: PAGES,
+    rubriques: [
+      { ordre: 4, intitule: "4. Coordonnateur SPS", genre: "intervenant" },
+      { ordre: 8, intitule: "Lot n° 1 : Démolition / Gros Œuvre" }
+    ]
+  });
+
+  assert.deepEqual(lu.rubriques.map((rubrique) => rubrique.identite),
+    ["rubrique:coordonnateur sps", "lot:1"]);
+  assert.deepEqual(lu.points.map((point) => point.rubrique), [8, 4, null]);
+  assert.equal(lu.mesure.rubriques, 2);
+  assert.equal(lu.mesure.rattaches, 2);
+  assert.equal(lu.mesure.orphelins, 1);
+});
+
+/**
+ * **`Number(null)` vaut zéro.** Sans filtre explicite, un point sans rubrique se
+ * présenterait comme visant la rubrique n° 0 et s'y rangerait le jour où une
+ * rubrique arriverait sans ordre.
+ */
+test("un point sans rubrique n'en vise pas une", () => {
+  const lu = lectureAssemblee({
+    points: [point({ rubrique: null }), point({ rubrique: "" }), point()],
+    pages: PAGES
+  });
+
+  assert.deepEqual(lu.points.map((point) => point.rubrique), [null, null, null]);
 });
 
 /* ── La confrontation aux sujets du projet ───────────────────────────────── */
@@ -484,4 +533,70 @@ test("l'état du sujet ne se confond pas avec l'état du point", () => {
   );
 
   assert.equal(point.sort, SORT.RELANCE);
+});
+
+/* ── Ce que le tableau affiche ───────────────────────────────────────────── */
+
+/**
+ * **Le rangement du document d'abord.** C'est celui que le compte rendu écrit
+ * lui-même, et celui sous lequel la personne qui tient le chantier ira
+ * chercher — pas le champ `lot`, qui ne dit rien des rubriques administratives
+ * ni des intervenants.
+ */
+test("le tableau se range par rubrique du document quand il y en a", () => {
+  const lu = lectureAssemblee({
+    points: [
+      point({ titre: "Coffrage", lot: "02 — GROS ŒUVRE", rubrique: 8 }),
+      point({ titre: "Embrasure", lot: "02 — GROS ŒUVRE", rubrique: 8 }),
+      point({ titre: "Inspections communes", lot: "", rubrique: 4 })
+    ],
+    pages: PAGES,
+    rubriques: [
+      { ordre: 4, intitule: "4. Coordonnateur SPS", genre: "intervenant" },
+      { ordre: 8, intitule: "Lot n° 1 : Démolition / Gros Œuvre : Entreprise BERTRAND" }
+    ]
+  });
+
+  const groupes = groupesDeLaLecture(lu);
+  assert.deepEqual(groupes.map((groupe) => [groupe.titre, groupe.combien]), [
+    ["4. Coordonnateur SPS", 1],
+    ["Lot n° 1 : Démolition / Gros Œuvre : Entreprise BERTRAND", 2]
+  ]);
+
+  // Ce que la rubrique désigne se dit, pour ne pas avoir à le deviner.
+  assert.equal(groupes[0].precision, "Intervenant");
+  assert.equal(groupes[1].precision, "Lot · n° 1 · BERTRAND");
+});
+
+/**
+ * **Les orphelins font un groupe, en dernier, et qui se nomme.** Les taire les
+ * ferait disparaître du tableau alors qu'ils seront proposés ; les noyer dans
+ * « (sans lot) » les rendrait indiscernables d'un point mal rangé.
+ */
+test("les points sans rubrique font leur propre groupe, à la fin", () => {
+  const lu = lectureAssemblee({
+    points: [point({ titre: "Ouverture", rubrique: null }), point({ titre: "Coffrage", rubrique: 8 })],
+    pages: PAGES,
+    rubriques: [{ ordre: 8, intitule: "Lot n° 1 : Gros Œuvre" }]
+  });
+
+  const groupes = groupesDeLaLecture(lu);
+  assert.equal(groupes.at(-1).titre, "Sous aucune rubrique");
+  assert.equal(groupes.at(-1).combien, 1);
+});
+
+/**
+ * **Sans rubrique, on se rabat sur le lot** — et non sur rien. Un document d'un
+ * seul tenant, ou un modèle qui n'a pas su lire les titres, doit quand même
+ * afficher ses points : un tableau vide se lirait comme une lecture ratée.
+ */
+test("sans rubrique lue, le tableau se rabat sur le lot", () => {
+  const lu = lectureAssemblee({
+    points: [point({ lot: "02 — GROS ŒUVRE" }), point({ titre: "Autre", lot: "" })],
+    pages: PAGES
+  });
+
+  assert.deepEqual(groupesDeLaLecture(lu).map((groupe) => groupe.titre),
+    ["02 — GROS ŒUVRE", "(sans lot)"]);
+  assert.deepEqual(groupesDeLaLecture(null), []);
 });
