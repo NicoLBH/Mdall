@@ -24273,6 +24273,13 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .lecture-cr__chiffre-nombre.est-mauvais{color:var(--ton-mauvais-vif, #f85149);}
 /* Le second terme d'un rapport n'est pas un résultat : ce sont les données. */
 .lecture-cr__chiffre-sur{font-size:14px;font-weight:400;color:var(--muted);}
+/* L'écart avec la lecture précédente. Il reprend les couleurs du nombre — un
+   seul jeu pour « ça va » et « attention », sinon deux vocabulaires de couleur
+   cohabitent et l'on cesse de les lire. Plus petit que la valeur : c'est un
+   commentaire du chiffre, pas un second chiffre. */
+.lecture-cr__chiffre-ecart{font-size:12px;font-weight:600;margin-left:4px;}
+.lecture-cr__chiffre-ecart.est-bon{color:var(--fgColor-success, #3fb950);}
+.lecture-cr__chiffre-ecart.est-douteux{color:var(--fgColor-attention, #d29922);}
 .lecture-cr__chiffre-aide{margin:-4px -4px -4px 0;}
 
 /* Le contexte perdu, rendu visible : des points différents qui s'écrivent

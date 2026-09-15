@@ -125,6 +125,7 @@ Presque rien à créer. Il s'agit d'alimenter ce qui est là.
 | Les sujets déjà à plat, rattrapés | `rattrapage-des-sujets.js`, `ITEM_TYPE.RANGEMENT` | ✅ étape 7 |
 | Le compteur de sous-sujets sur la ligne | `renderSubjectChildrenCounterHtml` | ✅ déjà là |
 | La vue « Lots », proposée | `vue-des-lots.js` | ✅ étape 8 |
+| Le suivi des mesures d'une lecture à l'autre | `suivi-des-lectures.js`, `cr_lectures` | ✅ étape 9 |
 | **L'épingle depuis la ligne d'un lot** | — | ❌ à faire |
 
 Autrement dit : **le modèle voit déjà le rangement, et la base sait déjà le porter.** Ce qui
@@ -384,12 +385,12 @@ Rien à inventer, trois branchements.
 
 ---
 
-### Étape 9 — Les mesures
+### Étape 9 — Les mesures · *faite*
 
 *Les trois chiffres sont posés depuis l'étape 2 : une étape entièrement serveur n'aurait été
-vérifiable par personne. Ce qui reste ici est leur suivi d'une version à l'autre.*
+vérifiable par personne. Ce qui restait ici — leur suivi d'une version à l'autre — est fait.*
 
-L'écran de lecture de l'Atelier gagne trois chiffres, à côté de ceux de la restitution :
+L'écran de lecture de l'Atelier porte trois chiffres, à côté de ceux de la restitution :
 
 | Chiffre | Ce qu'il dit | Ce qu'on surveille |
 | --- | --- | --- |
@@ -400,6 +401,30 @@ L'écran de lecture de l'Atelier gagne trois chiffres, à côté de ceux de la r
 Un orphelin n'est pas une faute : la section A n'en produit pas, et « DIVERS » peut en
 produire. Ce qu'on surveille est sa **variation** d'un compte rendu à l'autre : elle dit que
 la lecture a dérivé.
+
+**Chaque chiffre porte donc son écart avec la lecture précédente** — « +2 », « −1 » —, et la
+phrase au-dessus nomme à quoi l'on compare. Un écart sans terme de comparaison ne se juge pas :
+« +2 orphelins » depuis quoi ?
+
+**Ce qui monte n'est pas toujours bon**, et le sens de chaque chiffre est écrit une fois, dans
+`suivi-des-lectures.js`. Deux rubriques de plus est un progrès ; deux orphelins de plus est une
+dérive. Les peindre pareil vaudrait autant que ne rien peindre.
+
+**Un écart nul ne s'affiche pas.** « +0 » sur chaque chiffre stable ferait du bruit là où l'on
+cherche justement ce qui a bougé.
+
+**« Première lecture » n'est pas « rien n'a bougé ».** Les confondre ferait croire qu'une
+lecture est stable alors qu'on n'a rien à quoi la comparer (règle 5). De même, ne pas avoir pu
+lire les lectures d'avant n'affiche aucun écart plutôt que des zéros.
+
+**Une table, et elle est privée.** `cr_lectures` conserve une ligne par lecture, jamais mise à
+jour (règle 6) — relire le même document est une seconde lecture, et c'est précisément ce qu'on
+veut comparer quand on ajuste une consigne. La règle de lecture ne rend que les lectures de qui
+demande : dans l'Atelier on essaie, on relance dix fois pour comprendre un écart, et publier ce
+brouillon ferait cesser d'essayer. La séparation est tenue **par la base**, pas par l'écran.
+
+**Un échec ne coûte rien à la lecture.** Elle a eu lieu, elle est à l'écran, elle se transforme
+en proposition : le suivi n'est que ce qu'on en garde pour la fois suivante.
 
 ---
 

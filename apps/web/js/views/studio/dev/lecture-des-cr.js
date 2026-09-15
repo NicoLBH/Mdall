@@ -35,6 +35,7 @@ import { escapeHtml } from "../../../utils/escape-html.js";
 import { svgIcon } from "../../../ui/icons.js";
 import { renderMarkdownToHtml } from "../../../utils/markdown-renderer.js";
 import { renderSpinnerHtml } from "../../ui/spinner.js";
+import { motDeLEcart } from "../../../services/suivi-des-lectures.js";
 import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.js";
 import { brancherLesBoutonsCopier, renderBoutonCopier } from "../../ui/bouton-copier.js";
 import {
@@ -153,6 +154,14 @@ const etat = {
    */
   etape: "",
   lecture: null,
+  /**
+   * Ce que cette lecture vaut **par rapport à la précédente**.
+   *
+   * `null` tant qu'on n'a pas comparé — et aussi quand on n'a pas pu lire les
+   * lectures d'avant : l'écran n'affiche alors aucun écart, plutôt que des
+   * « +0 » qui prétendraient que rien n'a bougé (règle 5).
+   */
+  suivi: null,
   /**
    * Les pages telles qu'elles sont sorties du PDF, texte compris.
    *
@@ -717,7 +726,7 @@ function renderAnalyse(vue) {
 
   return `
     ${renderSurQuoiLaLecture(vue)}
-    ${renderMesure(vue.lecture.mesure, vue.lecture.ecartes)}
+    ${renderMesure(vue.lecture.mesure, vue.lecture.ecartes, vue.suivi ?? null)}
     ${renderAmbiguites(vue.lecture.points)}
     ${renderConfrontation(vue.confrontes, vue.lecture, vue.labels, vue)}
     ${renderCeQueLeCrApporte(vue)}
@@ -1307,39 +1316,51 @@ function renderLignesDeLaRestitution(cote, lecture) {
  * Sans eux, une amélioration se juge au ressenti — « ça a l'air mieux » — et
  * l'on ne sait jamais si le palier suivant a progressé ou reculé.
  */
-function renderMesure(mesure, ecartes) {
+function renderMesure(mesure, ecartes, suivi = null) {
+  // Les écarts avec la lecture précédente. Une Map vide quand il n'y a rien à
+  // comparer : aucun chiffre ne porte alors de variation, et la phrase le dit.
+  const ecarts = suivi?.ecarts instanceof Map ? suivi.ecarts : new Map();
+  const de = (cle) => ecarts.get(cle) ?? null;
+
   return `
     <section class="lecture-cr__mesure">
       <h3>Ce que la lecture vaut</h3>
+      ${/*
+        **À quoi l'on compare, nommé.** Un écart sans terme de comparaison ne se
+        juge pas : « +2 orphelins » depuis quoi ? Et « première lecture » n'est
+        pas « rien n'a bougé » — les confondre ferait croire qu'une lecture est
+        stable alors qu'on n'a rien à quoi la comparer (règle 5).
+      */""}
+      ${suivi ? `<p class="review-empty-note">${escapeHtml(suivi.phrase)}</p>` : ""}
       <div class="lecture-cr__chiffres">
         ${renderChiffre("Points relevés", String(mesure.points), "",
           "Ce que le modèle a relevé dans le document, après que le serveur a écarté ce qu'il "
-          + "ne pouvait pas vérifier.")}
+          + "ne pouvait pas vérifier.", de("points"))}
         ${renderChiffre("Citations retrouvées", `${mesure.retrouves} / ${mesure.points}`,
           mesure.retrouves === mesure.points ? "est-bon" : "est-douteux",
           "Une citation <strong>retrouvée</strong> est une phrase que l'on relit mot pour mot "
-          + "dans le document. C'est la seule vérification qui ne dépende pas du modèle.")}
+          + "dans le document. C'est la seule vérification qui ne dépende pas du modèle.", de("retrouves"))}
         ${renderChiffre("Sans citation", String(mesure.sansCitation),
           mesure.sansCitation > 0 ? "est-douteux" : "est-bon",
           "Des points dont la phrase n'a pas été retrouvée dans le document. Ils restent "
-          + "proposés, mais rien ne les rattache à un passage précis.")}
+          + "proposés, mais rien ne les rattache à un passage précis.", de("sansCitation"))}
         ${renderChiffre("Sans lot", String(mesure.sansLot), mesure.sansLot > 0 ? "est-douteux" : "est-bon",
           "Des points qu'aucun lot ne porte. Ils ne se rattachent à aucune entreprise, et ne "
-          + "trouveront donc pas d'assigné.")}
+          + "trouveront donc pas d'assigné.", de("sansLot"))}
         ${renderChiffre("Rubriques reconnues", String(mesure.rubriques),
           mesure.rubriques > 0 ? "est-bon" : "est-douteux",
           "Les titres sous lesquels le document range ses points : les rubriques "
           + "administratives, un titre par lot, une section par intervenant. Aucune reconnue "
-          + "veut dire que le tableau ci-dessous se rabat sur le champ « lot ».")}
+          + "veut dire que le tableau ci-dessous se rabat sur le champ « lot ».", de("rubriques"))}
         ${renderChiffre("Points rangés", `${mesure.rattaches} / ${mesure.points}`,
           mesure.orphelins === 0 ? "est-bon" : "est-douteux",
           "Des points rattachés à la rubrique sous laquelle ils sont écrits. C'est ce "
-          + "rattachement qui donnera un sujet père, et l'assignation qui va avec.")}
+          + "rattachement qui donnera un sujet père, et l'assignation qui va avec.", de("rattaches"))}
         ${renderChiffre("Sans rubrique", String(mesure.orphelins),
           mesure.orphelins > 0 ? "est-douteux" : "est-bon",
           "Des points qu'aucun titre ne porte. Quelques-uns sont normaux — l'ouverture de "
           + "séance n'est sous aucune rubrique. <strong>C'est sa variation d'un compte rendu "
-          + "à l'autre qu'il faut surveiller</strong> : elle dit que la lecture a dérivé.")}
+          + "à l'autre qu'il faut surveiller</strong> : elle dit que la lecture a dérivé.", de("orphelins"))}
         ${renderChiffre("Écartés au serveur", String(ecartes), ecartes > 0 ? "est-douteux" : "est-bon",
           "Ce que le serveur a refusé faute de citation vérifiable. Ils ne sont pas dans la "
           + "liste ci-dessous : les compter ici est ce qui empêche de croire la lecture complète.")}
@@ -1365,7 +1386,7 @@ function renderMesure(mesure, ecartes) {
  * @param {string} [aide] l'explication, derrière un « ? ». Rien ne s'affiche
  *   sans elle : un bouton qui n'explique pas est un bouton de plus.
  */
-function renderChiffre(intitule, valeur, ton = "", aide = "") {
+function renderChiffre(intitule, valeur, ton = "", aide = "", ecart = null) {
   const dit = texte(valeur);
   // Le premier nombre porte le jugement ; ce qui suit — « / 799 », « % » — est
   // le contexte qui le rend lisible.
@@ -1380,6 +1401,16 @@ function renderChiffre(intitule, valeur, ton = "", aide = "") {
       <span class="lecture-cr__chiffre-valeur">
         <b class="lecture-cr__chiffre-nombre ${ton}">${escapeHtml(coupe ? coupe[1] : dit)}</b>
         ${coupe ? `<span class="lecture-cr__chiffre-sur">${escapeHtml(coupe[2])}</span>` : ""}
+        ${/*
+          **L'écart avec la lecture précédente, s'il y en a un.** Un écart nul ne
+          s'affiche pas : « +0 » sur chaque chiffre stable ferait du bruit là où
+          l'on cherche justement ce qui a bougé. Et c'est le sens du chiffre —
+          écrit dans `suivi-des-lectures.js` — qui décide de la couleur : deux
+          orphelins de plus est une dérive, deux rubriques de plus est un
+          progrès, et les peindre pareil vaudrait autant que ne rien peindre.
+        */""}
+        ${ecart ? `<span class="lecture-cr__chiffre-ecart ${ecart.mieux ? "est-bon" : "est-douteux"}"
+          title="par rapport à la lecture précédente">${escapeHtml(motDeLEcart(ecart))}</span>` : ""}
       </span>
     </div>
   `;
@@ -2353,6 +2384,7 @@ async function lire(hote, fichier) {
   etat.phase = "lecture";
   etat.etape = "ouverture";
   etat.lecture = null;
+  etat.suivi = null;
   etat.pagesLues = [];
   etat.fichier = fichier ?? null;
   etat.confrontes = null;
@@ -2458,6 +2490,12 @@ async function lire(hote, fichier) {
     // moins de points qu'il n'y en a, et rien dans ce qui reste ne le dit.
     etat.lecture.coupee = Boolean(lu.coupee);
 
+    // **Ce que cette lecture vaut par rapport à la précédente.** Les chiffres
+    // seuls ne disent rien : « 3 orphelins » n'est ni bon ni mauvais, et c'est
+    // leur variation d'un compte rendu à l'autre qui dit que la lecture a
+    // dérivé. On conserve donc celle-ci, et l'on compare à celle d'avant.
+    etat.suivi = await suivreCetteLecture(etat.lecture);
+
     etat.etape = "projet";
     redessiner(hote);
     etat.confrontes = await confronterAuProjet(etat.lecture.points, connus);
@@ -2495,6 +2533,50 @@ async function lire(hote, fichier) {
  * vide faisait afficher « ouvrirait un sujet » sur tous les points d'un compte
  * rendu déjà traité — vingt sujets proposés en double, en silence (règle 5).
  */
+/**
+ * Conserve cette lecture, et la compare à la précédente.
+ *
+ * ## L'ordre compte
+ *
+ * On lit **d'abord** les lectures d'avant, on écrit **ensuite**. L'ordre
+ * inverse ferait comparer la lecture à elle-même, puisqu'elle serait déjà la
+ * plus récente.
+ *
+ * ## Un échec ne coûte rien à la lecture
+ *
+ * Elle a eu lieu, elle est à l'écran, elle se transforme en proposition : le
+ * suivi n'est que ce qu'on en garde pour la fois suivante. On rend alors `null`,
+ * et l'écran n'affiche simplement pas d'écart.
+ *
+ * **Ne pas avoir pu lire les précédentes n'est pas « c'est la première ».** La
+ * première dit qu'il n'y a rien à comparer ; l'autre qu'on ne sait pas (règle 5).
+ *
+ * @returns {Promise<{ecarts: Map, phrase: string}|null>}
+ */
+async function suivreCetteLecture(lecture) {
+  try {
+    const [suivi, base, { resolveCurrentBackendProjectId }] = await Promise.all([
+      import("../../../services/suivi-des-lectures.js"),
+      import("../../../services/lectures-du-cr-supabase.js"),
+      import("../../../services/project-supabase-sync.js")
+    ]);
+
+    const projet = await resolveCurrentBackendProjectId();
+    if (!projet) return null;
+
+    const avant = suivi.laLecturePrecedente(await base.listerLesLectures(projet));
+
+    // L'écriture ne conditionne pas l'affichage : une lecture qu'on n'a pas su
+    // conserver se compare quand même à celle d'avant.
+    void base.conserverUneLecture(suivi.lectureAConserver(lecture, { projectId: projet }));
+
+    const ecarts = suivi.ecartsDeLaLecture(lecture?.mesure, avant?.mesures);
+    return { ecarts, phrase: suivi.phraseDuSuivi(avant, ecarts) };
+  } catch {
+    return null;
+  }
+}
+
 async function sujetsDuProjet() {
   try {
     const [{ listProjectSubjectTitles }, { resolveCurrentBackendProjectId }] = await Promise.all([
