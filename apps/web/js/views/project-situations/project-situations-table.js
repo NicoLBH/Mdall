@@ -8,6 +8,7 @@ import { normalizePaginationState, renderPaginationControls } from "../ui/pagina
 import { motDeLAppartenance, pourquoiPasModifiable } from "../../services/situations-privees.js";
 import { phraseDuPerimetre, projetsRegardes, regardeToutMonTravail } from "../../services/perimetre-dune-situation.js";
 import { detailDeLAvancement, phraseDeLAvancement } from "../../services/avancement-dune-situation.js";
+import { couleurDeLaSituation, iconeDeLaSituation } from "../../services/situation-comme-une-vue.js";
 
 export function createProjectSituationsTable({
   store,
@@ -68,6 +69,27 @@ export function createProjectSituationsTable({
   }
 
   /**
+   * L'icône d'une situation, dans sa couleur.
+   *
+   * **C'est à cela qu'on la reconnaît en descendant la liste**, comme une vue
+   * dans le rail des sujets — et c'est précisément ce que le choix d'une icône
+   * sert à faire. Toutes portaient le même pictogramme de tableau, ce qui
+   * revenait à n'en porter aucun.
+   *
+   * Une situation fermée garde son icône : son état se lit à la colonne des
+   * statuts, et lui en changer ferait deux façons de dire la même chose — dont
+   * l'une effacerait le choix qu'on a fait (règle 4).
+   *
+   * Le jeu d'icônes et celui des couleurs sont ceux des vues : rien n'est
+   * redéclaré ici.
+   */
+  function renderIconeDeLaSituation(situation) {
+    const couleur = couleurDeLaSituation(situation).valeur;
+    return `<span style="color:${escapeHtml(couleur)}">${
+      svgIcon(iconeDeLaSituation(situation), { className: "octicon" })}</span>`;
+  }
+
+  /**
    * Où en est la situation.
    *
    * **Rien ne s'affiche quand on ne sait pas.** Une situation dont les sujets
@@ -123,7 +145,7 @@ export function createProjectSituationsTable({
       <div class="issue-row issue-row--sit${selectedClass}">
         <div class="cell cell-theme lvl0">
           <span class="issue-row-title-grid">
-            <span class="issue-row-title-grid__status" aria-hidden="true">${svgIcon(normalizeSituationStatus(situation.status) === "closed" ? "table-check" : "table", { className: "octicon" })}</span>
+            <span class="issue-row-title-grid__status" aria-hidden="true">${renderIconeDeLaSituation(situation)}</span>
             <span class="issue-row-title-grid__title">
               <span class="project-situations-table__title-inline">
                 <button type="button" class="row-title-trigger theme-text theme-text--sit project-situations-table__title-trigger" data-open-situation="${escapeHtml(situation.id)}">${title}</button>

@@ -39,6 +39,9 @@ const INDISPENSABLES = {
   mode: "manuelle ou automatique, et la pastille le dit",
   filter_definition: "une situation automatique n'est que ça",
   title: "le nom qu'on lit",
+  icon: "une situation est une vue : on la reconnaît à son icône",
+  color: "et à sa couleur",
+  requete: "ce qu'elle retient, dans la grammaire des sujets",
   updated_at: "« mis à jour hier » se calcule dessus"
 };
 

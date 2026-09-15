@@ -39,6 +39,11 @@ export const COLONNES_DUNE_SITUATION = Object.freeze([
   "perimetre",
   "title",
   "description",
+  // Une situation est une vue : son icône, sa couleur, sa requête (plan
+  // `le-carnet-prend-la-forme-des-sujets.md`, étape 1).
+  "icon",
+  "color",
+  "requete",
   "objective_text",
   "status",
   "progress_percent",
