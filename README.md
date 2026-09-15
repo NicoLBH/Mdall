@@ -24,6 +24,14 @@ Comment Mdall sait ce qu'un changement fait tomber — et pourquoi il ne sera
 jamais un outil de gestion de visas :
 [`docs/ce-qui-couvre-une-valeur.md`](docs/ce-qui-couvre-une-valeur.md).
 
+## L'objet de la connaissance
+
+Les calculs et les sujets ne se parlent pas, et un pont entre les deux serait la
+mauvaise réponse : il manque **un objet auquel les deux se rattachent**. Ce que
+le projet sait, les trois manières dont il l'apprend — un document, un calcul,
+une décision —, et pourquoi une décision ne remplace jamais une conclusion sans
+le dire : [`docs/lobjet-de-la-connaissance.md`](docs/lobjet-de-la-connaissance.md).
+
 ## À traiter plus tard
 
 Les chantiers vus, compris, et repoussés — avec la raison, ce qu'ils
