@@ -2,6 +2,7 @@ import { store } from "../store.js";
 import {
   CLES_DE_LA_CHARGE, indexDesAssignes, indexDesLiens, indexDesMentions, indexDesSignaux
 } from "./charge-des-sujets.js";
+import { fusionnerLesCharges } from "./charge-du-perimetre.js";
 import { buildSubjectHierarchyIndexes } from "./subject-hierarchy.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { loadSituationsForCurrentProject, loadSituationSubjectIdsMap } from "./project-situations-supabase.js";
@@ -2361,4 +2362,88 @@ export function resetFlatSubjectsForCurrentProject() {
   store.projectSubjectsView.search = "";
   store.projectSubjectsView.page = 1;
   store.projectSubjectsView.lastLoadRequestId = Number(store.projectSubjectsView.lastLoadRequestId || 0);
+}
+
+/* ── Les sujets d'un périmètre ───────────────────────────────────────────── */
+
+/**
+ * La charge d'un seul chantier, montée comme l'écran des sujets la monte.
+ *
+ * C'est le même assemblage que `loadFlatSubjectsForCurrentProject`, **sans rien
+ * de ce qui appartient à l'écran d'un projet** : ni pagination, ni sélection, ni
+ * relecture du magasin. Le carnet n'a pas d'écran de projet à tenir ; il a
+ * besoin de savoir ce que chaque sujet porte, et de rien d'autre.
+ *
+ * Voir `docs/les-situations-traversent-les-projets.md`, étape 3 bis.
+ */
+async function chargeDunChantier(backendProjectId) {
+  const projectId = normalizeUuid(backendProjectId);
+  if (!projectId) return null;
+
+  const subjects = await fetchProjectFlatSubjects(projectId).catch(() => []);
+  const subjectLinks = await fetchProjectSubjectLinks(projectId).catch(() => []);
+  const subjectAssignees = await fetchProjectSubjectAssignees(projectId).catch(() => []);
+
+  const result = buildProjectFlatSubjectsResult(subjects, subjectLinks, { runId: store.ui?.runId || "" });
+  result[CLES_DE_LA_CHARGE.assignes] = indexDesAssignes(subjectAssignees);
+
+  try {
+    const labelsResult = await loadLabelsForProject(projectId);
+    result[CLES_DE_LA_CHARGE.labels] = labelsResult?.labelIdsBySubjectId && typeof labelsResult.labelIdsBySubjectId === "object"
+      ? labelsResult.labelIdsBySubjectId
+      : {};
+    result.labels = Array.isArray(labelsResult?.labels) ? labelsResult.labels : [];
+    result.labelsById = labelsResult?.labelsById && typeof labelsResult.labelsById === "object" ? labelsResult.labelsById : {};
+    result.labelsHydrated = true;
+  } catch {
+    // On ne prétend pas qu'il n'y a pas de labels : on dit qu'on n'a pas su
+    // les lire, et la fusion emporte ce doute (règle 5).
+    result[CLES_DE_LA_CHARGE.labels] = {};
+    result.labels = [];
+    result.labelsById = {};
+    result.labelsHydrated = false;
+  }
+
+  try {
+    const objectivesResult = await loadObjectivesForProject(projectId);
+    result[CLES_DE_LA_CHARGE.objectifs] = objectivesResult?.objectiveIdsBySubjectId && typeof objectivesResult.objectiveIdsBySubjectId === "object"
+      ? objectivesResult.objectiveIdsBySubjectId
+      : {};
+    result.objectives = Array.isArray(objectivesResult?.objectives) ? objectivesResult.objectives : [];
+    result.objectivesById = objectivesResult?.objectivesById && typeof objectivesResult.objectivesById === "object" ? objectivesResult.objectivesById : {};
+    result.objectivesHydrated = true;
+  } catch {
+    result[CLES_DE_LA_CHARGE.objectifs] = {};
+    result.objectives = [];
+    result.objectivesById = {};
+    result.objectivesHydrated = false;
+  }
+
+  return result;
+}
+
+/**
+ * Les sujets de plusieurs chantiers, sous la forme qu'attend une situation.
+ *
+ * Le carnet s'en sert pour répondre à ses propres situations : une manuelle
+ * résout les identifiants de sa liste, une automatique rejoue sa requête. Sans
+ * cette charge, les deux rendaient une liste vide — ce qui se lit comme un
+ * chantier sans travail, alors que c'était un écran sans données.
+ *
+ * @param {string[]} projectIds les chantiers à lire
+ * @returns {Promise<{subjectsData: object[], rawSubjectsResult: object}>} un
+ *   état de la même forme que celui de l'écran des sujets, à passer tel quel à
+ *   `loadSubjectsForSituation`.
+ */
+export async function chargerLesSujetsDesChantiers(projectIds = []) {
+  const ids = [...new Set((Array.isArray(projectIds) ? projectIds : []).map(normalizeUuid).filter(Boolean))];
+
+  const charges = (await Promise.all(ids.map((id) => chargeDunChantier(id).catch(() => null)))).filter(Boolean);
+  const rawSubjectsResult = fusionnerLesCharges(charges);
+
+  return {
+    rawSubjectsResult,
+    rawResult: rawSubjectsResult,
+    subjectsData: Array.isArray(rawSubjectsResult.subjects) ? rawSubjectsResult.subjects : []
+  };
 }

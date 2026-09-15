@@ -7,6 +7,8 @@ import {
   projetsDeCesSituations
 } from "./perimetre-dune-situation.js";
 import { clauseDesSituations } from "./colonnes-dune-situation.js";
+import { CLES_DE_LA_CHARGE } from "./charge-des-sujets.js";
+import { assignesDuSujet, labelsDuSujet, objectifsDuSujet } from "./ce-que-porte-un-sujet.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
@@ -306,19 +308,53 @@ function getSubjectsByIdMap(projectSubjectsState = store.projectSubjectsView) {
   return fallback;
 }
 
+/**
+ * Ce qu'un sujet porte, lu là où c'est écrit.
+ *
+ * ## La panne
+ *
+ * Ces trois lectures n'interrogeaient que `bucket.subjectMeta.sujet` — la
+ * **surcouche de l'écran**, où l'on note ce qu'on vient de changer avant que la
+ * base ne le confirme. Aucun chargeur ne la remplit : tant qu'on n'avait rien
+ * modifié à la main, elle était vide.
+ *
+ * Une situation automatique filtrant par label, par objectif ou par assigné ne
+ * trouvait donc **aucun sujet**, et s'affichait vide. Vide se lit comme « rien
+ * à faire ici », et l'on va chercher la panne dans le filtre — pas dans la
+ * lecture (règle 5).
+ *
+ * Ce que la base sait est dans la charge, sous les noms que `charge-des-sujets`
+ * produit. La surcouche reste devant, parce qu'un label coché doit se voir sans
+ * attendre le rechargement ; c'est déjà l'ordre des assignés ailleurs.
+ */
+function getChargeIndex(projectSubjectsState, cle) {
+  const charge = projectSubjectsState?.rawSubjectsResult;
+  const index = charge && typeof charge === "object" ? charge[cle] : null;
+  return index && typeof index === "object" ? index : {};
+}
+
 function getSubjectObjectiveIds(subjectId, projectSubjectsState = store.projectSubjectsView) {
-  const meta = getSubjectMetaMap(projectSubjectsState)[normalizeUuid(subjectId)] || {};
-  return normalizeArrayOfStrings(meta.objectiveIds);
+  return objectifsDuSujet({
+    index: getChargeIndex(projectSubjectsState, CLES_DE_LA_CHARGE.objectifs),
+    surcouche: getSubjectMetaMap(projectSubjectsState),
+    sujet: normalizeUuid(subjectId)
+  });
 }
 
 function getSubjectLabelKeys(subjectId, projectSubjectsState = store.projectSubjectsView) {
-  const meta = getSubjectMetaMap(projectSubjectsState)[normalizeUuid(subjectId)] || {};
-  return normalizeArrayOfStrings(meta.labels).map((entry) => entry.toLowerCase());
+  return labelsDuSujet({
+    index: getChargeIndex(projectSubjectsState, CLES_DE_LA_CHARGE.labels),
+    surcouche: getSubjectMetaMap(projectSubjectsState),
+    sujet: normalizeUuid(subjectId)
+  });
 }
 
 function getSubjectAssigneeIds(subjectId, projectSubjectsState = store.projectSubjectsView) {
-  const meta = getSubjectMetaMap(projectSubjectsState)[normalizeUuid(subjectId)] || {};
-  return normalizeArrayOfStrings(meta.assignees);
+  return assignesDuSujet({
+    index: getChargeIndex(projectSubjectsState, CLES_DE_LA_CHARGE.assignes),
+    surcouche: getSubjectMetaMap(projectSubjectsState),
+    sujet: normalizeUuid(subjectId)
+  });
 }
 
 function getSubjectEffectiveStatus(subject, projectSubjectsState = store.projectSubjectsView) {

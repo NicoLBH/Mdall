@@ -60,6 +60,11 @@ function createSituationsViewState() {
     // Vide n'est pas « aucun » — c'est « pas encore demandé ».
     nomsDesProjets: {},
 
+    // Les sujets des chantiers que mes situations désignent, montés comme ceux
+    // d'un projet le sont. `null` n'est pas « aucun sujet » : c'est « pas
+    // encore lu », et ce qui en dépend se tait plutôt que de compter zéro.
+    sujetsDuCarnet: null,
+
     expandedSituations: new Set(),
     expandedSujets: new Set(),
     expandedSubjectIds: new Set(),

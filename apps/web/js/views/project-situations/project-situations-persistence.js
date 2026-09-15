@@ -1,4 +1,5 @@
 import { estMonCarnet } from "../../services/mon-carnet.js";
+import { projetsDeCesSituations } from "../../services/perimetre-dune-situation.js";
 
 export function createProjectSituationsPersistence({
   store,
@@ -7,7 +8,7 @@ export function createProjectSituationsPersistence({
   loadFlatSubjectsForCurrentProject,
   loadSituationsForCurrentProject,
   loadMesSituations,
-  loadManualSituationSubjectIds,
+  chargerLesSujetsDesChantiers,
   loadSubjectsForSituation,
   ensureTrajectoryHistory,
   loadSituationKanbanStatusMap,
@@ -34,7 +35,7 @@ export function createProjectSituationsPersistence({
     }
 
     try {
-      const subjects = await loadSubjectsForSituation(selectedSituation, store.projectSubjectsView);
+      const subjects = await loadSubjectsForSituation(selectedSituation, sujetsDeReference());
       uiState.selectedSituationSubjects = safeArray(subjects);
       if (typeof ensureTrajectoryHistory === "function") {
         await ensureTrajectoryHistory({
@@ -54,35 +55,47 @@ export function createProjectSituationsPersistence({
   }
 
   /**
+   * Les sujets contre lesquels les situations se résolvent.
+   *
+   * Sur l'écran d'un projet, ce sont ceux du projet. Dans le carnet, ce sont
+   * ceux des chantiers que les situations désignent — et il faut aller les
+   * chercher, sinon manuelles comme automatiques rendent une liste vide, ce qui
+   * se lit comme un chantier sans travail alors que c'est un écran sans données
+   * (règle 5, étape 3 bis).
+   *
+   * Une situation qui regarde **tout** ne nomme aucun chantier : il n'y a rien à
+   * charger pour elle, et ce n'est pas une absence à combler.
+   */
+  async function sujetsContreLesquelsResoudre(situations) {
+    if (!estMonCarnet(store)) return store.projectSubjectsView;
+
+    const chantiers = projetsDeCesSituations(situations);
+    const charge = await chargerLesSujetsDesChantiers(chantiers).catch(() => null);
+
+    // Gardée pour la sélection : ouvrir une situation ne doit pas tout relire.
+    store.situationsView.sujetsDuCarnet = charge;
+    return charge;
+  }
+
+  /** Les sujets d'une situation, cherchés là où l'écran courant les a rangés. */
+  function sujetsDeReference() {
+    return estMonCarnet(store) ? store.situationsView?.sujetsDuCarnet : store.projectSubjectsView;
+  }
+
+  /**
    * Combien de sujets chaque situation porte.
    *
-   * ## Deux écrans, deux choses connues
-   *
-   * Sur l'écran d'un projet, les sujets du projet sont chargés : on résout
-   * chaque situation contre eux, manuelle comme automatique.
-   *
-   * Dans le carnet, non — les sujets vivent dans des chantiers qu'on n'a pas
-   * ouverts. Une situation **manuelle** se compte quand même : sa liste est
-   * écrite en base, et la longueur d'une liste ne demande pas de connaître ce
-   * qu'elle contient. Une situation **automatique** est une requête ; sans les
-   * sujets, elle n'a pas de réponse.
-   *
-   * **Celles-là n'entrent donc pas dans le compte**, et la colonne dit « — ».
-   * Leur donner zéro les ferait passer pour vides, ce qui est une affirmation,
-   * pas une absence (règle 5).
+   * Le même calcul sur les deux écrans, contre des sujets différents. Une
+   * situation dont la charge n'a pas pu être lue n'entre pas dans le compte —
+   * la colonne dira « — » plutôt que « 0 », parce qu'on ne sait pas.
    */
-  async function compterLesSujets(situations) {
+  async function compterLesSujets(situations, sujets) {
+    if (!sujets) return {};
+
     const entrees = await Promise.all(situations.map(async (situation) => {
       const id = String(situation?.id || "");
-
-      if (estMonCarnet(store)) {
-        if (String(situation?.mode || "manual") !== "manual") return null;
-        const ids = await loadManualSituationSubjectIds(id).catch(() => null);
-        return ids ? [id, safeArray(ids).length] : null;
-      }
-
-      const subjects = await loadSubjectsForSituation(situation, store.projectSubjectsView).catch(() => []);
-      return [id, safeArray(subjects).length];
+      const subjects = await loadSubjectsForSituation(situation, sujets).catch(() => null);
+      return subjects ? [id, safeArray(subjects).length] : null;
     }));
 
     return Object.fromEntries(entrees.filter(Boolean));
@@ -96,7 +109,10 @@ export function createProjectSituationsPersistence({
 
     const situations = carnet ? await loadMesSituations() : await loadSituationsForCurrentProject();
     store.situationsView.kanbanStatusBySituationId = await loadSituationKanbanStatusMap(situations.map((situation) => String(situation?.id || ""))).catch(() => ({}));
-    uiState.countsBySituationId = await compterLesSujets(situations);
+
+    // Les sujets d'abord : sans eux, compter revient à compter zéro.
+    const sujets = await sujetsContreLesquelsResoudre(situations);
+    uiState.countsBySituationId = await compterLesSujets(situations, sujets);
 
     const selectedSituationId = String(store.situationsView?.selectedSituationId || "").trim();
     const selectedSituationExists = selectedSituationId

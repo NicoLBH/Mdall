@@ -1,4 +1,5 @@
 import { svgIcon } from "./ui/icons.js";
+import { ROUTE_DU_CARNET } from "./services/mon-carnet.js";
 
 export const PROJECT_TAB_IDS = {
   DOCUMENTS: "documents",
@@ -85,6 +86,23 @@ export const PROJECT_TABS = [
     id: PROJECT_TAB_IDS.ACTIONS,
     label: "Actions",
     icon: svgIcon("play", { className: "octicon octicon-play" })
+  },
+  {
+    /**
+     * **Une porte, pas un onglet.**
+     *
+     * Les situations ne sont plus du projet — c'est tout l'objet de l'étape 3.
+     * Mais c'est d'un chantier qu'on pense à son carnet, et l'y chercher dans un
+     * menu qu'on n'ouvre jamais revient à ne pas l'avoir.
+     *
+     * Elle se tient donc dans la barre, à sa place, et **elle mène dehors** :
+     * son adresse n'est pas celle d'un onglet de ce projet. On sort du projet en
+     * la franchissant, et l'en-tête cesse d'en nommer un.
+     */
+    id: PROJECT_TAB_IDS.SITUATIONS,
+    label: "Situations",
+    href: ROUTE_DU_CARNET,
+    icon: svgIcon("table", { className: "octicon octicon-table" })
   },
   {
     id: PROJECT_TAB_IDS.INSIGHTS,
