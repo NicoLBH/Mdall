@@ -12,6 +12,8 @@ import {
 import { buildSubjectHierarchyIndexes } from "../../services/subject-hierarchy.js";
 import { getExpandedSubjectIdsSet, resolveSituationTreeData } from "./project-situations-tree-data.js";
 import { identifiantsDesProjets, phraseDesProjetsIncertains } from "../../services/projets-du-filtre.js";
+import { situationsDeLecture } from "../../services/lectures-du-carnet.js";
+import { requeteDeLaSituation } from "../../services/situation-comme-une-vue.js";
 
 function syncSubmitButtonState(button, { submitting = false, title = "" } = {}) {
   if (!button) return;
@@ -101,6 +103,8 @@ export function createProjectSituationsEvents({
   setSelectedSituationId,
   getSituationById,
   loadSituationSelection,
+  /** Le vocabulaire du carnet : sans lui, aucune requête du rail ne se relit. */
+  champsDuCarnet = () => [],
   loadSituationInsightsData,
   openSituationDrilldownFromSelection,
   openSubjectDrilldown,
@@ -1714,6 +1718,23 @@ export function createProjectSituationsEvents({
     }
   }
   /** Les chantiers qu'on sait nommer — la même liste que partout (règle 4). */
+  /**
+   * La situation qu'une requête désigne — une lecture, ou l'une des miennes.
+   *
+   * **On la retrouve par sa requête et non par son rang** : le rail mêle les
+   * lectures et mes situations, et compter les entrées ferait dépendre le clic
+   * de l'ordre d'affichage (règle 4).
+   */
+  function situationQuiPorte(requete) {
+    const cherche = String(requete || "").trim();
+    if (!cherche) return null;
+
+    const champs = champsDuCarnet();
+    const toutes = [...situationsDeLecture(champs), ...safeArray(store.situationsView?.data)];
+
+    return toutes.find((situation) => requeteDeLaSituation(situation) === cherche) || null;
+  }
+
   function chantiersDuMagasin() {
     const noms = store.situationsView?.nomsDesProjets;
     return noms && typeof noms === "object" ? noms : {};
@@ -2140,6 +2161,29 @@ export function createProjectSituationsEvents({
     if (openButton) {
       openButton.onclick = () => openCreateModal(root);
     }
+
+    // **Le rail du carnet.** Chaque entrée porte la requête de ce qu'elle
+    // ouvre : les lectures comme mes situations. Cliquer l'une ou l'autre fait
+    // donc la même chose — ouvrir une situation et voir ses sujets.
+    root.querySelectorAll("[data-sujets-lecture]").forEach((entree) => {
+      entree.addEventListener("click", async (event) => {
+        event.preventDefault();
+        const requete = String(entree.getAttribute("data-sujets-lecture") || "");
+
+        store.situationsView.requeteDuCarnet = requete;
+        // Sans requête, c'est la première entrée : la liste des situations
+        // elle-même, et non une situation.
+        store.situationsView.selectedSituationId = requete
+          ? (situationQuiPorte(requete)?.id || null)
+          : null;
+
+        rerender(root);
+        if (store.situationsView.selectedSituationId) {
+          await loadSituationSelection(store.situationsView.selectedSituationId);
+          rerender(root);
+        }
+      });
+    });
 
     // **La recherche du carnet.** On redessine à chaque frappe, et l'on rend le
     // curseur là où il était : sans cela, taper le deuxième caractère le

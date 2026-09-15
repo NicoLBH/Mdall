@@ -83,7 +83,7 @@ devenues des vues de la même façon (`202609270001_pinned_searches_vues.sql`).
 remplacera quand elle saura tout dire ; d'ici là elle est ce qu'on lit en
 premier, et le reste sert de repli.
 
-### Étape 2 — Le rail, à gauche · *posé, pas encore branché*
+### Étape 2 — Le rail, à gauche · *faite*
 
 `renderRailDesSujetsHtml` dans la coquille du carnet, avec `project-rail-layout`
 — la même structure que la Mémoire et les Sujets, poignée et repliement
@@ -133,6 +133,41 @@ petites :
 
 C'est l'étape 2 bis. La séparer est délibéré : un rail dont les entrées
 s'allument sans rien ouvrir serait pire qu'un rail absent — il promettrait.
+
+---
+
+### Étape 2 bis — Le rail tient ce qu'il promet · *faite*
+
+**Cliquer une entrée ouvre la situation qu'elle porte.** Chaque entrée du rail
+— lecture ou situation à moi — porte la requête de ce qu'elle ouvre, et c'est
+par cette requête qu'on la retrouve : compter les entrées ferait dépendre le
+clic de l'ordre d'affichage (règle 4).
+
+**`getSituationById` connaît les lectures.** Les écrites d'abord, les lues
+ensuite. Sans ce détour, cliquer « Assigné à moi » ne trouvait rien à ouvrir.
+
+**Une requête se relit avec la grammaire des sujets.** Une situation qui en
+porte une — les lectures, et toute situation depuis l'étape 1 — se résout par
+`sujetsFiltres` sur la charge du carnet. Les autres passent par la porte
+d'avant : leur liste manuelle, ou leur `filter_definition`. **Jamais les deux
+ensemble** : une situation retiendrait l'intersection de deux règles dont une
+seule est visible à l'écran.
+
+**Et sans savoir qui regarde, « assigné:moi » ne s'applique pas** — la liste
+passe entière plutôt que de se vider. Une liste vide ferait croire qu'on n'a
+aucun sujet, alors qu'on ne sait pas de qui il s'agit (règle 5). C'est déjà la
+règle de `sujetsFiltres` ; elle vaut ici sans qu'on ait à la réécrire.
+
+#### Ce qu'une lecture ne fait pas, et le dit
+
+Elle n'est pas en base : elle ne se modifie pas, ne se ferme pas, ne se
+supprime pas. Le crayon ne s'affiche donc pas sur son détail — laisser le
+bouton ouvrirait un formulaire qui n'aurait rien à enregistrer, c'est-à-dire un
+geste qui échoue en silence.
+
+Elle ne porte pas non plus la pastille « Automatique » : c'est un mot de
+mécanique, et sur « Assigné à moi » il ne renseigne sur rien que le titre ne
+dise déjà.
 
 ### Étape 3 — Le formulaire d'une vue
 

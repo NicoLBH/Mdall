@@ -11,7 +11,7 @@ import { NOM_DU_CARNET } from "../../services/mon-carnet.js";
 import { renderRailDesSujetsHtml } from "../project-subjects/project-subjects-recherche.js";
 import { railWidth } from "../ui/project-rail.js";
 import { champsDuCarnet } from "../../services/vocabulaire-du-carnet.js";
-import { NOM_DES_SITUATIONS, situationsDeLecture } from "../../services/lectures-du-carnet.js";
+import { NOM_DES_SITUATIONS, estUneLecture, situationsDeLecture } from "../../services/lectures-du-carnet.js";
 import { situationCommeUneEpingle } from "../../services/situation-comme-une-vue.js";
 import { moiDansLeProjet } from "../../services/meta-des-sujets.js";
 import { renderSituationGridView } from "./project-situations-view-grid.js";
@@ -388,7 +388,10 @@ export function createProjectSituationsView({
       `;
     }
 
-    const modeBadge = renderStatusBadge({
+    // **Une lecture dit ce qu'elle retient, pas comment.** « Automatique » est
+    // un mot de mécanique ; sur « Assigné à moi », il ne renseigne sur rien que
+    // le titre ne dise déjà.
+    const modeBadge = estUneLecture(selectedSituation) ? "" : renderStatusBadge({
       label: normalizeSituationMode(selectedSituation.mode) === "automatic" ? "Automatique" : "Manuelle",
       tone: normalizeSituationMode(selectedSituation.mode) === "automatic" ? "accent" : "default"
     });
@@ -405,6 +408,15 @@ export function createProjectSituationsView({
               <div class="project-situation-title-row">
                 <div class="project-situation-title-row__group">
                   <h2 class="project-situation-title-row__title">${escapeHtml(selectedSituation.title || "Situation")}</h2>
+                  ${/*
+                    **Une lecture ne se modifie pas.** « Assigné à moi » n'est
+                    pas en base : elle existe parce que la question se pose à
+                    tout le monde. Laisser le crayon ouvrirait un formulaire qui
+                    n'aurait rien à enregistrer — un geste qui échoue en silence,
+                    et l'on chercherait la panne ailleurs.
+                    Qui veut la sienne la crée, et elle portera son nom.
+                  */""}
+                  ${estUneLecture(selectedSituation) ? "" : `
                   <button
                     type="button"
                     class="project-situation-title-row__edit"
@@ -412,6 +424,7 @@ export function createProjectSituationsView({
                     aria-label="Modifier la situation"
                     title="Modifier la situation"
                   >${svgIcon("pencil", { className: "octicon octicon-pencil" })}</button>
+                  `}
                 </div>
                 <div class="project-situation-title-row__right">
                   <div class="project-situation-detail-head__meta">${statusBadge}${modeBadge}<span class="mono-small">${uiState.selectedSituationSubjects.length} sujet(s)</span></div>
