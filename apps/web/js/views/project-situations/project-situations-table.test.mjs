@@ -207,3 +207,47 @@ test("une situation vide ne porte pas de pourcentage", () => {
 
   assert.ok(!html.includes("%"));
 });
+
+/* ── On la reconnaît à son icône ─────────────────────────────────────────── */
+
+/**
+ * **C'est à cela qu'on la reconnaît en descendant la liste**, comme une vue
+ * dans le rail des sujets. Toutes portaient le même pictogramme de tableau, ce
+ * qui revenait à n'en porter aucun.
+ */
+test("une situation porte son icône, dans sa couleur", () => {
+  const html = tableau().renderSituationTitleCell({
+    ...SITUATION,
+    owner_id: BERTRAND,
+    icon: "clock-fill",
+    color: "bleu"
+  });
+
+  assert.match(html, /octicon-clock-fill|clock-fill/);
+  assert.match(html, /style="color:#4493f8"/, "sa couleur, celle de la liste des vues");
+});
+
+/** Sans choix, elle prend celles par défaut — et non rien du tout. */
+test("une situation sans icône en porte quand même une", () => {
+  const html = tableau().renderSituationTitleCell({ ...SITUATION, owner_id: BERTRAND });
+
+  assert.match(html, /issue-row-title-grid__status/);
+  assert.match(html, /style="color:#/, "une couleur par défaut, pas l'absence de couleur");
+});
+
+/**
+ * **Une situation fermée garde son icône.** Son état se lit à la colonne des
+ * statuts ; lui en changer ferait deux façons de dire la même chose, dont l'une
+ * effacerait le choix qu'on a fait (règle 4).
+ */
+test("fermer une situation n'efface pas l'icône choisie", () => {
+  const html = tableau().renderSituationTitleCell({
+    ...SITUATION,
+    owner_id: BERTRAND,
+    status: "closed",
+    icon: "milestone"
+  });
+
+  assert.match(html, /milestone/);
+  assert.ok(!html.includes("table-check"), "l'ancien pictogramme d'état a disparu du titre");
+});

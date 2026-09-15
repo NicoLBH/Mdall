@@ -94,6 +94,12 @@ function normalizeSituationRow(row = {}) {
       ? row.perimetre
       : null,
     title: firstNonEmpty(row.title, "Situation"),
+    // Rendues telles quelles : c'est `situation-comme-une-vue.js` qui les lit,
+    // avec le vocabulaire des vues. Une seconde lecture ici finirait par ne
+    // plus dire la même chose (règle 10).
+    icon: firstNonEmpty(row.icon, ""),
+    color: firstNonEmpty(row.color, ""),
+    requete: firstNonEmpty(row.requete, ""),
     description: firstNonEmpty(row.description, ""),
     status: normalizeSituationStatus(row.status),
     mode: normalizeSituationMode(row.mode),
