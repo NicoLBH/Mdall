@@ -258,7 +258,7 @@ cache des sujets, c'est-à-dire tout autre chose que déménager un écran.
 
 ---
 
-### Étape 3 bis — Les sujets d'un périmètre
+### Étape 3 bis — Les sujets d'un périmètre · *faite*
 
 Le carnet montre les situations ; il ne montre pas encore ce qu'elles
 contiennent. Les sujets sont chargés **par projet courant**, et le carnet n'en a
@@ -276,6 +276,65 @@ lequel des deux a cassé quoi.
 Cette étape est séparée pour cette raison, et non parce qu'elle serait
 secondaire : tant qu'elle n'est pas faite, le carnet **dit** ce qu'il ne sait
 pas, ce qui est tenable — mais il ne le sait pas.
+
+**Ce qui a été livré :**
+
+| Où | Quoi |
+| --- | --- |
+| `apps/web/js/services/charge-du-perimetre.js` | réunir les charges de plusieurs chantiers en une |
+| `apps/web/js/services/project-subjects-supabase.js` | `chargerLesSujetsDesChantiers` — le chargeur, une fois par chantier |
+| `apps/web/js/services/ce-que-porte-un-sujet.js` | ce qu'un sujet porte, lu là où c'est écrit |
+| `project-situations-persistence.js` | les situations se résolvent contre ces sujets, dans le carnet comme dans un projet |
+
+Le chargeur n'a pas été élargi : il tourne **une fois par chantier**, et les
+résultats se réunissent. Aucune règle nouvelle n'est écrite — recalculer les
+index aurait fait une seconde façon de les produire, qui aurait fini par ne plus
+dire la même chose que la première (règle 10). Et rien de ce qui appartient à
+l'écran d'un projet — pagination, sélection, cache — n'a été touché : c'était la
+raison de séparer cette étape.
+
+#### La panne qu'on a trouvée en chemin
+
+Pour répondre à une situation automatique, il faut savoir ce que chaque sujet
+porte : ses labels, ses objectifs, ses assignés. **On le lisait au mauvais
+endroit** — dans `bucket.subjectMeta.sujet`, la surcouche où l'écran note ce
+qu'on vient de changer avant que la base ne le confirme.
+
+Aucun chargeur ne la remplit. Tant qu'on n'avait rien modifié à la main, elle
+était vide : une situation automatique filtrant par label, par objectif ou par
+assigné ne trouvait **aucun sujet**, et s'affichait vide. **Sur l'écran d'un
+projet aussi**, depuis toujours.
+
+Ce que la base sait est dans la charge. La surcouche reste devant — un label
+coché doit se voir sans attendre le rechargement —, mais elle n'est plus la
+seule consultée. Et une surcouche absente n'est pas une liste vide : elle dit
+« rien n'a changé ici ».
+
+#### Une lecture qui a échoué n'est pas une absence
+
+Si les labels d'un chantier n'ont pas pu être lus, son index revient vide.
+Fusionné sans précaution, ce vide devient indiscernable d'un chantier sans
+labels — et la situation s'affiche vide, ce qui se lit comme « rien à faire
+ici ». `labelsHydrated` et `objectivesHydrated` ne valent donc vrai que si
+**tous** les chantiers ont répondu (règle 5).
+
+---
+
+### L'onglet Situations, une porte dans la barre du projet
+
+Les situations ne sont plus du projet — c'est tout l'objet de l'étape 3. Mais
+c'est **d'un chantier** qu'on pense à son carnet, et l'y chercher dans un menu
+qu'on n'ouvre jamais revient à ne pas l'avoir.
+
+Une entrée « Situations » se tient donc dans la barre, à droite d'« Actions »,
+et **elle mène dehors** : son adresse est celle du carnet, pas
+`#project/<id>/situations`. On sort du projet en la franchissant, et l'en-tête
+cesse d'en nommer un — garder « Untel / Résidence Bertrand » au-dessus du carnet
+ferait croire qu'on y lit les situations de ce chantier-là.
+
+Si elle menait à une vue de ce projet, on aurait deux listes des situations —
+celle du projet, qui filtre, et le carnet, qui ne filtre pas — et un écran qui
+existe à deux endroits finit par différer d'un des deux.
 
 ---
 

@@ -100,3 +100,34 @@ export function adresseDunAncienLien(parties = []) {
   if (chemin[2] !== "situations") return null;
   return ROUTE_DU_CARNET;
 }
+
+/**
+ * Ce que l'en-tête, tout en haut, dit quand on est dans le carnet.
+ *
+ * **Il ne nomme aucun chantier, et c'est le point.** La barre du haut portait
+ * « Untel / Résidence Bertrand » ; garder ce nom au-dessus du carnet ferait
+ * croire qu'on est encore dedans, et qu'on y lit les situations de ce
+ * chantier-là. On en est sorti : le fil d'Ariane le montre.
+ *
+ * Écrit ici plutôt que dans l'en-tête pour la même raison que le reste : trois
+ * endroits disent le nom de cet écran, et un nom vit à un seul endroit
+ * (règle 10).
+ *
+ * @param {object|null} situationOuverte la situation qu'on regarde, s'il y en
+ *   a une : le fil d'Ariane la nomme, et c'est la seule chose qui s'y ajoute.
+ */
+export function enTeteDuCarnet(situationOuverte = null) {
+  const titre = situationOuverte ? String(situationOuverte.title || "Situation") : "";
+
+  return {
+    primary: NOM_DU_CARNET,
+    secondary: "",
+    // Aucun chantier au-dessus du carnet : on est sorti du projet.
+    showSecondary: false,
+    href: ROUTE_DU_CARNET,
+    headerClass: "gh-header gh-header--global",
+    breadcrumbTabLabel: titre ? NOM_DU_CARNET : "",
+    breadcrumbCurrentLabel: titre,
+    showSituationBreadcrumb: !!titre
+  };
+}

@@ -80,16 +80,42 @@ test("l'en-tête reprend la barre d'onglets, avec une seule entrée", () => {
 /* ── Le déménagement a bien eu lieu ──────────────────────────────────────── */
 
 /**
- * **Un écran qui existe à deux endroits finit par différer d'un des deux.**
+ * **Une porte, pas un onglet.**
  *
- * Si l'onglet du projet restait, on aurait deux listes des situations : celle
- * du projet, qui filtre, et le carnet, qui ne filtre pas. C'est exactement ce
- * que l'étape 3 défait.
+ * L'entrée « Situations » se tient dans la barre du projet parce que c'est d'un
+ * chantier qu'on pense à son carnet. Mais si elle menait à une vue de ce projet,
+ * on aurait deux listes des situations — celle du projet, qui filtre, et le
+ * carnet, qui ne filtre pas — et un écran qui existe à deux endroits finit par
+ * différer d'un des deux. C'est exactement ce que l'étape 3 défait.
+ *
+ * Son adresse est donc celle du carnet, et non `#project/<id>/situations`.
  */
-test("les situations ne sont plus un onglet du projet", () => {
+test("l'entrée Situations mène dehors, et non à une vue du projet", () => {
   const situations = PROJECT_TABS.filter((onglet) => onglet.id === "situations");
 
-  assert.deepEqual(situations, [], "l'onglet doit avoir déménagé, pas être dupliqué");
+  assert.equal(situations.length, 1, "une entrée, et une seule");
+  assert.equal(situations[0].href, ROUTE_DU_CARNET, "elle doit mener au carnet, pas à un onglet");
+});
+
+/** Et elle se tient juste après Actions, là où on la cherche. */
+test("elle se tient à droite d'Actions", () => {
+  const ordre = PROJECT_TABS.map((onglet) => onglet.id);
+
+  assert.equal(ordre[ordre.indexOf("actions") + 1], "situations");
+});
+
+/**
+ * **Le projet ne se rend pas sur cette adresse.** Une porte qui rendrait aussi
+ * une vue de projet ramènerait la duplication par l'autre bout : `project-layout`
+ * ne connaît plus les situations, et c'est ce qui le garantit.
+ */
+test("la mise en page d'un projet ne sait plus dessiner les situations", () => {
+  const layout = readFileSync(join(VUES, "project-layout.js"), "utf8");
+
+  assert.ok(
+    !/renderProjectSituations\s*\(/.test(layout),
+    "le projet ne doit plus monter cet écran : il a déménagé"
+  );
 });
 
 /**

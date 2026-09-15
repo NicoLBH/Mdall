@@ -21,7 +21,6 @@ import {
 import {
   loadSituationsForCurrentProject,
   loadMesSituations,
-  loadManualSituationSubjectIds,
   createSituation,
   updateSituation,
   loadSubjectsForSituation,
@@ -30,6 +29,7 @@ import {
   loadSituationKanbanStatusMap,
   reorderSituationKanbanSubjects
 } from "../services/project-situations-supabase.js";
+import { chargerLesSujetsDesChantiers } from "../services/project-subjects-supabase.js";
 import { loadProjectSituationsTrajectoryHistory } from "../services/project-situations-trajectory-service.js";
 import { createProjectSituationsState, getDefaultCreateForm, getSituationEditForm } from "./project-situations/project-situations-state.js";
 import { createProjectSituationsSelectors } from "./project-situations/project-situations-selectors.js";
@@ -191,7 +191,7 @@ const {
   loadFlatSubjectsForCurrentProject,
   loadSituationsForCurrentProject,
   loadMesSituations,
-  loadManualSituationSubjectIds,
+  chargerLesSujetsDesChantiers,
   loadSubjectsForSituation,
   ensureTrajectoryHistory,
   loadSituationKanbanStatusMap,

@@ -142,8 +142,15 @@ function isTabVisible(tabId) {
   return true;
 }
 
-function getTabHref(projectId, tabId) {
-  return `#project/${projectId}/${tabId}`;
+/**
+ * L'adresse d'un onglet.
+ *
+ * Presque tous mènent à une vue de ce projet. Un onglet peut porter sa propre
+ * adresse et **mener dehors** : c'est le cas des situations, qui ne sont plus du
+ * projet mais se cherchent depuis un chantier (étape 3).
+ */
+function getTabHref(projectId, tab) {
+  return tab?.href || `#project/${projectId}/${tab?.id}`;
 }
 
 /**
@@ -183,7 +190,7 @@ export function renderProjectHeader(projectId, activeTab) {
           const visible = isTabVisible(t.id);
           return `
             <a
-              href="${getTabHref(projectId, t.id)}"
+              href="${getTabHref(projectId, t)}"
               class="${t.id === activeTab ? "active" : ""}"
               data-project-tab-id="${t.id}"
               style="${visible ? "" : "display:none;"}"
