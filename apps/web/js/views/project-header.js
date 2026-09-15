@@ -142,15 +142,8 @@ function isTabVisible(tabId) {
   return true;
 }
 
-/**
- * L'adresse d'un onglet.
- *
- * Presque tous mènent à une vue de ce projet. Un onglet peut porter sa propre
- * adresse et **mener dehors** : c'est le cas des situations, qui ne sont plus du
- * projet mais se cherchent depuis un chantier (étape 3).
- */
 function getTabHref(projectId, tab) {
-  return tab?.href || `#project/${projectId}/${tab?.id}`;
+  return `#project/${projectId}/${tab?.id}`;
 }
 
 /**

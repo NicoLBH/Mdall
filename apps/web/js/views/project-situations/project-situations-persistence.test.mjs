@@ -152,3 +152,36 @@ test("une sélection qui n'existe plus est abandonnée", async () => {
 
   assert.equal(store.situationsView.selectedSituationId, null);
 });
+
+/* ── Où en est chaque situation ──────────────────────────────────────────── */
+
+/**
+ * **L'avancement se calcule sur ce que la situation retient**, et non sur
+ * `progress_percent` : cette colonne compte l'ancienne `subjects.situation_id`,
+ * que personne n'écrit plus, et qu'une situation automatique ne porte pas du
+ * tout (étape 5).
+ */
+test("l'avancement se calcule en même temps que le compte", async () => {
+  const { portes, uiState } = monter({
+    currentProjectId: "projet-1",
+    situationsDuProjet: [MANUELLE]
+  });
+
+  await portes.refreshSituationsData();
+
+  // Les deux faux sujets rendus par la porte sont ouverts : rien de clos.
+  assert.deepEqual(uiState.avancementParSituationId["s-manuelle"], { total: 2, clos: 0, pourcentage: 0 });
+});
+
+/**
+ * **Ne pas savoir n'est pas zéro.** Une situation dont les sujets n'ont pas pu
+ * être lus n'a pas d'entrée — et l'écran n'affiche rien plutôt que « 0 % », qui
+ * se lirait comme « rien n'a avancé » (règle 5).
+ */
+test("sans charge, aucune situation ne reçoit un avancement nul", async () => {
+  const { portes, uiState } = monter({ mesSituations: [MANUELLE], chargeIllisible: true });
+
+  await portes.refreshSituationsData();
+
+  assert.deepEqual(uiState.avancementParSituationId, {});
+});

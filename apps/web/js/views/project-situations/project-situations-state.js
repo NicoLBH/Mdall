@@ -70,6 +70,9 @@ export function createProjectSituationsState({ store }) {
     loading: false,
     error: "",
     countsBySituationId: {},
+    // Où en est chaque situation, calculé sur les sujets qu'elle retient.
+    // Une entrée absente veut dire « on ne sait pas », et surtout pas « 0 % ».
+    avancementParSituationId: {},
     selectedSituationLoading: false,
     selectedSituationError: "",
     selectedSituationSubjects: [],

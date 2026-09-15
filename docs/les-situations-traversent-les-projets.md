@@ -320,7 +320,7 @@ ici ». `labelsHydrated` et `objectivesHydrated` ne valent donc vrai que si
 
 ---
 
-### L'onglet Situations, une porte dans la barre du projet
+### ~~L'onglet Situations, une porte dans la barre du projet~~ · *repris*
 
 Les situations ne sont plus du projet — c'est tout l'objet de l'étape 3. Mais
 c'est **d'un chantier** qu'on pense à son carnet, et l'y chercher dans un menu
@@ -335,6 +335,20 @@ ferait croire qu'on y lit les situations de ce chantier-là.
 Si elle menait à une vue de ce projet, on aurait deux listes des situations —
 celle du projet, qui filtre, et le carnet, qui ne filtre pas — et un écran qui
 existe à deux endroits finit par différer d'un des deux.
+
+> **Repris le lendemain.** L'onglet disait la bonne adresse et le mauvais rang :
+> une situation est **au-dessus** des projets, et la ranger parmi leurs onglets
+> brouille exactement ce que tout ce plan installe. La porte était juste ; sa
+> place ne l'était pas.
+>
+> Les raccourcis vivent désormais dans **la barre du haut**, qui ne dit rien sur
+> l'endroit où l'on se trouve : `Copilote | Projets | Situations | avatar`. Ils
+> partagent un seul bouton — trois portes de même nature, et en dessiner un par
+> raccourci les ferait diverger de taille au premier réglage.
+>
+> Le carnet, lui, a perdu sa barre d'onglets : une barre qui ne porte qu'une
+> entrée, toujours active, n'offre aucun choix — elle répète le nom de l'écran
+> qu'on regarde déjà et prend la place d'une ligne de contenu pour le dire.
 
 ---
 
@@ -413,7 +427,7 @@ sur les espaces, et « Résidence Bertrand » ne s'y écrit pas tel quel.
 
 ---
 
-### Étape 5 — Les compteurs et l'avancement se recalculent sur le périmètre
+### Étape 5 — Les compteurs et l'avancement se recalculent sur le périmètre · *faite*
 
 `progress_percent` se calcule aujourd'hui sur les sujets d'un projet. Il devra
 se calculer sur ceux du périmètre — et `refresh_situation_progress` avec lui.
@@ -421,6 +435,47 @@ se calculer sur ceux du périmètre — et `refresh_situation_progress` avec lui
 **Le piège :** un sujet que je ne peux plus voir. Si je quitte un projet, les
 sujets qu'il portait sortent de mon périmètre ; l'avancement doit alors baisser
 plutôt que de compter des choses que je ne peux plus ouvrir.
+
+**Ce qui a été livré :**
+
+| Où | Quoi |
+| --- | --- |
+| `apps/web/js/services/avancement-dune-situation.js` | où en est une situation, d'après les sujets qu'elle retient |
+| `project-situations-persistence.js` | calculé en même temps que le compte, sur les deux écrans |
+| `project-situations-table.js` | la pastille sur la ligne, et son détail au survol |
+
+**Ce n'est pas `refresh_situation_progress` qui a été élargi**, et il faut dire
+pourquoi. Cette fonction compte les sujets portant `subjects.situation_id` — la
+colonne de l'ancien modèle. Elle ignore la table de liaison d'une situation
+manuelle, et **une situation automatique n'a rien à y porter du tout** : c'est
+une requête, pas une liste. Son avancement valait donc zéro quoi qu'on y fasse.
+
+L'élargir aurait voulu dire évaluer un `filter_definition` jsonb en SQL — une
+seconde implémentation du filtre, à côté de celle que l'écran exécute déjà.
+Deux façons de répondre à la même question finissent par ne plus dire pareil
+(règle 4), et c'est celle qu'on ne regarde pas qui aurait tort.
+
+L'avancement se calcule donc **sur ce que la situation retient**, c'est-à-dire
+sur les sujets que l'écran a déjà résolus — manuelles comme automatiques, et à
+travers les chantiers depuis l'étape 3 bis.
+
+**Le piège se règle tout seul, et c'est le signe que le calcul est au bon
+endroit :** il ne connaît que ce qu'on lui donne. Les sujets d'un chantier que
+j'ai quitté ne lui parviennent pas, donc l'avancement baisse — on n'a pas eu à
+le lui demander.
+
+**Et ne pas savoir n'est pas zéro.** Une situation dont les sujets n'ont pas pu
+être lus n'a pas d'avancement : rien ne s'affiche. « 0 % » se lirait comme
+« rien n'a avancé », et l'on irait chercher pourquoi le chantier dort (règle 5).
+
+**Un doublon ne compte ni d'un côté ni de l'autre.** Le laisser au total ferait
+baisser l'avancement à chaque doublon repéré — c'est-à-dire punirait le
+rangement. C'est déjà la règle de la base ; elle se dit maintenant à un seul
+endroit.
+
+**`progress_percent` reste en base et n'est plus lu par l'écran.** Un constat ne
+devient pas faux (règle 6) : la colonne dit ce que la base a compté sur
+l'ancien modèle, et ce qu'on affiche dit ce que la situation retient aujourd'hui.
 
 ---
 
