@@ -70,6 +70,9 @@ function normalizeSituationRow(row = {}) {
     ...row,
     id: normalizeUuid(row.id),
     project_id: normalizeUuid(row.project_id),
+    // Vide plutôt qu'absent : `situations-privees.js` lit une chaîne, et
+    // « pas de propriétaire » y a un sens précis (voir l'exception nommée).
+    owner_id: normalizeUuid(row.owner_id),
     title: firstNonEmpty(row.title, "Situation"),
     description: firstNonEmpty(row.description, ""),
     status: normalizeSituationStatus(row.status),
@@ -120,8 +123,17 @@ async function getResolvedProjectId(projectId) {
   return resolvedProjectId;
 }
 
+/**
+ * Les colonnes qu'on demande, écrites à un seul endroit.
+ *
+ * `owner_id` en fait partie **parce que l'écran en dépend** : sans elle, toute
+ * situation revient sans propriétaire et se lit « créée avant le
+ * cloisonnement » — y compris celle qu'on vient d'écrire. Une colonne oubliée
+ * dans une chaîne de `select` ne lève rien et ne casse rien : elle ment
+ * doucement. C'est `situations-privees.test.mjs` qui monte la garde.
+ */
 function getSituationsSelectClause() {
-  return "id,project_id,title,description,status,mode,filter_definition,created_at,updated_at,closed_at";
+  return "id,project_id,owner_id,title,description,status,mode,filter_definition,created_at,updated_at,closed_at";
 }
 
 async function fetchSituationsByProject(projectId) {

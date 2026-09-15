@@ -246,3 +246,93 @@ test("les lots se rangent après les sujets et après le secrétariat", async ()
   const ids = ETAPES_DE_LA_FUSION.map(([id]) => id);
   assert.ok(ids.indexOf("peres") > ids.indexOf("secretariat"));
 });
+
+/* ── Le chemin progresse sous les yeux ───────────────────────────────────── */
+
+/**
+ * **Une étape ouverte est « en cours », pas « ok ».**
+ *
+ * Elle portait « ok » en attendant mieux : le graphe la peignait en vert avec
+ * sa coche, et l'on lisait une fusion terminée alors qu'elle en était à sa
+ * troisième étape sur onze. Dire « c'est fait » de ce qui est en train de se
+ * faire est le mensonge le plus facile à commettre, et le plus difficile à
+ * remarquer.
+ */
+test("une étape ouverte se dit en cours, et non aboutie", () => {
+  const chrono = chronoDeLaFusion({ horloge: horlogeFeinte().horloge });
+  const gel = chrono.etape("gel");
+
+  assert.equal(chrono.etapes()[0].statut, STATUT.EN_COURS);
+
+  gel.fini();
+  assert.equal(chrono.etapes()[0].statut, STATUT.OK);
+});
+
+/** Une fusion dont une étape court n'est ni réussie ni ratée : elle court. */
+test("une fusion en cours ne se dit pas aboutie", () => {
+  assert.equal(statutDeLaFusion([{ statut: STATUT.OK }, { statut: STATUT.EN_COURS }]), STATUT.EN_COURS);
+  // L'échec l'emporte : une étape ratée ne devient pas « en cours » parce
+  // qu'une autre n'a pas fini.
+  assert.equal(
+    statutDeLaFusion([{ statut: STATUT.ECHEC }, { statut: STATUT.EN_COURS }]),
+    STATUT.ECHEC
+  );
+});
+
+/**
+ * **Le journal prévient à chaque mouvement**, à l'ouverture comme à la fin.
+ *
+ * Sans cela, les onze étapes arrivaient d'un coup à la fin, et une fusion d'une
+ * minute et demie ressemblait à une attente sans nouvelles.
+ */
+test("chaque ouverture et chaque fin d'étape se signalent", () => {
+  const vus = [];
+  const chrono = chronoDeLaFusion({
+    horloge: horlogeFeinte().horloge,
+    surChangement: (etapes) => vus.push(etapes.map((etape) => [etape.id, etape.statut]))
+  });
+
+  const gel = chrono.etape("gel");
+  gel.fini();
+  chrono.etape("corpus");
+
+  assert.deepEqual(vus, [
+    [["gel", STATUT.EN_COURS]],
+    [["gel", STATUT.OK]],
+    [["gel", STATUT.OK], ["corpus", STATUT.EN_COURS]]
+  ]);
+});
+
+/**
+ * **Ce qu'on donne est une copie.** L'écran garde ce qu'il reçoit ; lui passer
+ * les objets vivants le ferait changer sous lui à l'étape suivante, et il
+ * afficherait un état qu'il n'a jamais dessiné.
+ */
+test("ce que le journal donne ne bouge plus derrière lui", () => {
+  let dernier = null;
+  const chrono = chronoDeLaFusion({
+    horloge: horlogeFeinte().horloge,
+    surChangement: (etapes) => { dernier = etapes; }
+  });
+
+  const gel = chrono.etape("gel");
+  const vuALOuverture = dernier;
+  gel.fini();
+
+  assert.equal(vuALOuverture[0].statut, STATUT.EN_COURS, "la vue d'avant n'a pas bougé");
+  assert.equal(dernier[0].statut, STATUT.OK);
+});
+
+/**
+ * **Un observateur ne peut pas faire échouer la fusion qu'il observe.** Ce
+ * serait pire que pas de journal du tout.
+ */
+test("un observateur qui jette n'arrête pas la fusion", () => {
+  const chrono = chronoDeLaFusion({
+    horloge: horlogeFeinte().horloge,
+    surChangement: () => { throw new Error("l'écran a cassé"); }
+  });
+
+  assert.doesNotThrow(() => chrono.etape("gel").fini());
+  assert.equal(chrono.etapes().length, 1);
+});

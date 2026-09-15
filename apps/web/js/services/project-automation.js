@@ -457,6 +457,55 @@ export function startRunLogEntry(payload = {}) {
   });
 
   store.projectAutomation.runLog.unshift(entry);
+  direQueLeJournalABouge(entry.id);
+  return entry;
+}
+
+/**
+ * Ce qui prévient l'écran qu'une exécution a bougé.
+ *
+ * **Sans lui, une fusion d'une minute et demie ressemble à une attente sans
+ * nouvelles.** Le journal des actions lit le store au montage et à la venue sur
+ * l'onglet : rien ne lui disait qu'une ligne venait de changer, et le chemin
+ * n'avançait que si l'on refermait et rouvrait le détail.
+ */
+export const RUN_LOG_CHANGED_EVENT = "mdall:run-log-change";
+
+/**
+ * Dit que le journal a bougé. Silencieux hors navigateur, et incapable de
+ * casser ce qu'il observe.
+ */
+function direQueLeJournalABouge(runId = "") {
+  try {
+    globalThis.window?.dispatchEvent?.(
+      new CustomEvent(RUN_LOG_CHANGED_EVENT, { detail: { runId: String(runId ?? "") } })
+    );
+  } catch {
+    // Un journal qui ferait échouer le geste qu'il observe serait pire que pas
+    // de journal du tout.
+  }
+}
+
+/**
+ * Une exécution en cours avance : ses étapes changent, et l'écran le voit.
+ *
+ * **Elle n'est pas finie**, et rien ici ne prétend le contraire : ni durée, ni
+ * statut d'aboutissement. On remplace ce que le détail montre — le chemin — et
+ * on dit que ça a bougé.
+ */
+export function avancerRunLogEntry(runId, { details = null, summary = "" } = {}) {
+  ensureProjectAutomationDefaults();
+
+  const entry = store.projectAutomation.runLog.find((item) => item.id === runId);
+  if (!entry) return null;
+
+  if (details && typeof details === "object") {
+    entry.details = { ...(entry.details ?? {}), ...details };
+  }
+  if (String(summary ?? "").trim()) entry.summary = String(summary).trim();
+  entry.updatedAt = Date.now();
+
+  direQueLeJournalABouge(runId);
   return entry;
 }
 
@@ -509,6 +558,9 @@ export function finishRunLogEntry(runId, patch = {}) {
   if (patch.agentKey != null) entry.agentKey = patch.agentKey;
   if (patch.details !== undefined) entry.details = cloneDetails(patch.details);
 
+  // La ligne passe de « en cours » à son verdict : l'écran doit le voir sans
+  // qu'on ait à quitter l'onglet et à y revenir.
+  direQueLeJournalABouge(runId);
   return entry;
 }
 

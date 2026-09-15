@@ -5,6 +5,7 @@ import { renderTableHeadFilterToggle } from "../ui/table-head-filter-toggle.js";
 import { renderDataTableHead } from "../ui/data-table-shell.js";
 import { renderIssuesTable } from "../ui/issues-table.js";
 import { normalizePaginationState, renderPaginationControls } from "../ui/pagination.js";
+import { motDeLAppartenance, pourquoiPasModifiable } from "../../services/situations-privees.js";
 
 export function createProjectSituationsTable({
   store,
@@ -19,6 +20,24 @@ export function createProjectSituationsTable({
   getCurrentSituationsStatusFilter,
   getSituationsStatusCounts
 }) {
+  /**
+   * L'exception, dite à voix haute.
+   *
+   * Une situation écrite avant le cloisonnement n'appartient à personne : son
+   * projet la voyait hier et rien ne justifie de la lui retirer, mais la base
+   * refuse de la réécrire au nom d'un autre. Se taire là-dessus laisserait
+   * devant un geste qui échoue sans raison visible.
+   *
+   * Aucune classe nouvelle : c'est la pastille des autres écrans, avec le même
+   * calibrage.
+   */
+  function renderAppartenancePill(situation) {
+    const mot = motDeLAppartenance(situation);
+    if (!mot) return "";
+
+    return `<span title="${escapeHtml(pourquoiPasModifiable(situation))}">${renderStatusBadge({ label: mot })}</span>`;
+  }
+
   function renderModePill(mode) {
     return renderStatusBadge({
       label: normalizeSituationMode(mode) === "automatic" ? "Automatique" : "Manuelle",
@@ -60,6 +79,7 @@ export function createProjectSituationsTable({
               <span class="project-situations-table__title-inline">
                 <button type="button" class="row-title-trigger theme-text theme-text--sit project-situations-table__title-trigger" data-open-situation="${escapeHtml(situation.id)}">${title}</button>
                 ${renderModePill(situation.mode)}
+                ${renderAppartenancePill(situation)}
               </span>
             </span>
             <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${updatedLabel}</span>

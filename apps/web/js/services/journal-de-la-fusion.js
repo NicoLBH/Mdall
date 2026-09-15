@@ -79,11 +79,31 @@ const LIBELLES = new Map(ETAPES_DE_LA_FUSION);
 /**
  * Un chronomètre qui tient un carnet par étape.
  *
- * @param {{horloge?: () => number}} [options] `horloge` rend des millisecondes.
- *   Injectée pour que la mesure se vérifie sans attendre : un test qui
- *   dormirait pour mesurer une durée mesurerait le sommeil.
+ * @param {object} [options]
+ * @param {() => number} [options.horloge] rend des millisecondes. Injectée pour
+ *   que la mesure se vérifie sans attendre : un test qui dormirait pour mesurer
+ *   une durée mesurerait le sommeil.
+ * @param {(etapes: object[]) => void} [options.surChangement] prévenu **à chaque
+ *   ouverture et à chaque fin d'étape**, avec l'état complet du journal.
+ *
+ *   C'est ce qui permet au chemin de progresser sous les yeux : sans lui, les
+ *   étapes n'arrivaient à l'écran qu'à la fin, toutes vertes d'un coup, et une
+ *   fusion d'une minute et demie ressemblait à une attente sans nouvelles.
+ *
+ *   **Il ne peut pas faire échouer la fusion.** Un journal qui casserait le
+ *   geste qu'il observe serait pire que pas de journal : ce qu'il jette est
+ *   avalé ici.
  */
-export function chronoDeLaFusion({ horloge = () => Date.now() } = {}) {
+export function chronoDeLaFusion({ horloge = () => Date.now(), surChangement = null } = {}) {
+  const prevenir = (etapes) => {
+    if (typeof surChangement !== "function") return;
+    try {
+      surChangement(etapes.map((ligne) => ({ ...ligne })));
+    } catch {
+      // Voir plus haut : observer ne doit jamais empêcher.
+    }
+  };
+
   const etapes = [];
   const debutTotal = horloge();
 
@@ -105,10 +125,13 @@ export function chronoDeLaFusion({ horloge = () => Date.now() } = {}) {
       // `null` n'est pas zéro : tant qu'elle n'est pas finie, elle n'a pas de
       // durée, et l'écran affiche un tiret plutôt qu'un « 0 ms » faux.
       ms: null,
-      statut: STATUT.OK,
+      // **Ouverte, donc en cours.** « ok » en attendant mieux faisait peindre en
+      // vert une étape qui n'avait pas commencé à rendre quoi que ce soit.
+      statut: STATUT.EN_COURS,
       lignes: null
     };
     etapes.push(ligne);
+    prevenir(etapes);
 
     const fini = (statut = STATUT.OK) => {
       ligne.ms = Math.max(0, horloge() - debut);
@@ -116,6 +139,7 @@ export function chronoDeLaFusion({ horloge = () => Date.now() } = {}) {
       // Le statut se déduit de ce qui a été écrit, comme pour un groupe : une
       // étape qui a consigné un échec est en échec, quoi qu'en dise l'appelant.
       ligne.statut = ligne.lignes.some((l) => l?.niveau === NIVEAU.ECHEC) ? STATUT.ECHEC : statut;
+      prevenir(etapes);
       return ligne;
     };
 
@@ -151,7 +175,10 @@ export function chronoDeLaFusion({ horloge = () => Date.now() } = {}) {
  */
 export function statutDeLaFusion(etapes = []) {
   const toutes = Array.isArray(etapes) ? etapes : [];
-  return toutes.some((etape) => etape?.statut === STATUT.ECHEC) ? STATUT.ECHEC : STATUT.OK;
+  if (toutes.some((etape) => etape?.statut === STATUT.ECHEC)) return STATUT.ECHEC;
+  // Une étape restée ouverte veut dire que la fusion court encore. La dire
+  // « ok » ferait afficher une coche verte sur un geste qui n'a pas fini.
+  return toutes.some((etape) => etape?.statut === STATUT.EN_COURS) ? STATUT.EN_COURS : STATUT.OK;
 }
 
 /**

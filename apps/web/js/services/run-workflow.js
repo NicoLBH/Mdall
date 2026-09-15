@@ -131,13 +131,31 @@ function grapheDunGeste(corpus) {
   }
 
   for (const etape of etapes) {
-    const rate = String(etape?.statut || "ok") === "echec";
+    const statut = String(etape?.statut || "ok");
+    const rate = statut === "echec";
+    // **En cours n'est pas fait.** Une étape ouverte portait « ok » en attendant
+    // mieux, et le graphe la peignait en vert avec sa coche : on lisait une
+    // fusion terminée alors qu'elle en était à sa troisième étape sur onze.
+    const court = statut === "en-cours";
     const lignes = Array.isArray(etape?.lignes) ? etape.lignes : [];
     nodes.push({
-      ...node(String(etape?.id || ""), String(etape?.label || ""), resumeDuneEtape(lignes, rate), {
-        tone: rate ? NODE.WARN : NODE.OK,
-        icon: rate ? "alert" : "check-circle-fill"
-      }),
+      ...node(
+        String(etape?.id || ""),
+        String(etape?.label || ""),
+        court ? "en cours…" : resumeDuneEtape(lignes, rate),
+        {
+          // **L'orange reste celui de l'échec.** Peindre en orange ce qui
+          // travaille et ce qui a échoué les rendrait indiscernables d'un coup
+          // d'œil ; ce qui court est un fait, pas un jugement. C'est son icône
+          // qui le dit, et elle tourne.
+          tone: rate ? NODE.WARN : court ? NODE.NEUTRAL : NODE.OK,
+          icon: rate ? "alert" : court ? "sync" : "check-circle-fill"
+        }
+      ),
+      // L'écran en fait une icône qui tourne. Le dire ici plutôt que de laisser
+      // l'écran relire le statut évite qu'un troisième endroit décide de ce
+      // qu'est « en cours » (règle 10).
+      enCours: court,
       // La durée vient de l'étape elle-même : elle l'a mesurée, personne ne la
       // recalcule.
       duration: etape?.ms === null || etape?.ms === undefined ? null : Number(etape.ms)

@@ -1,6 +1,6 @@
 import { escapeHtml } from "../utils/escape-html.js";
 import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrollPolicy } from "./project-shell-chrome.js";
-import { getRunLogEntries, getRunMetrics } from "../services/project-automation.js";
+import { RUN_LOG_CHANGED_EVENT, getRunLogEntries, getRunMetrics } from "../services/project-automation.js";
 import { syncProjectActionsFromSupabase } from "../services/project-supabase-sync.js";
 import { svgIcon } from "../ui/icons.js";
 import { renderEnchainement } from "./ui/enchainement.js";
@@ -890,6 +890,35 @@ function renderProjectActionsContent(root) {
  */
 let tabResetBound = false;
 let mountedRoot = null;
+let ecouteDuJournal = null;
+
+/**
+ * Le journal se redessine quand une exécution bouge.
+ *
+ * ## Ce que ça répare
+ *
+ * Une fusion dure une minute et demie et passe par onze étapes. L'écran les
+ * lisait **au montage**, et rien ne lui disait qu'une venait de finir : le
+ * chemin restait figé sur l'état de l'instant où l'on était arrivé, et il
+ * fallait quitter l'onglet et y revenir pour voir où l'on en était. Sur un
+ * geste qui dure, c'est la différence entre attendre et se demander si c'est
+ * bloqué.
+ *
+ * **Une seule écoute, posée une fois.** Deux écrans qui en poseraient chacune
+ * une redessineraient deux fois par changement, et celui qui n'est plus monté
+ * écrirait dans un élément détaché.
+ */
+function ecouterLeJournal() {
+  if (ecouteDuJournal) return;
+
+  ecouteDuJournal = () => {
+    // Monté ailleurs, ou plus monté du tout : on ne dessine pas dans le vide.
+    if (!mountedRoot?.isConnected) return;
+    renderProjectActionsContent(mountedRoot);
+  };
+
+  globalThis.window?.addEventListener?.(RUN_LOG_CHANGED_EVENT, ecouteDuJournal);
+}
 
 function bindTabReset() {
   if (tabResetBound) return;
@@ -911,6 +940,7 @@ export function renderProjectActions(root) {
   clearProjectActiveScrollSource();
   mountedRoot = root;
   bindTabReset();
+  ecouterLeJournal();
 
   // Entrer dans l'onglet, c'est ouvrir le journal — jamais retomber sur
   // l'exécution qu'on lisait la dernière fois.

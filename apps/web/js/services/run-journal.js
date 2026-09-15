@@ -48,6 +48,16 @@ export const NIVEAU = {
 
 /** Ce qu'une étape peut valoir, une fois finie. */
 export const STATUT = {
+  /**
+   * Elle est ouverte et n'a pas encore fini.
+   *
+   * **Un troisième état, et il manquait.** Une étape ouverte portait « ok » en
+   * attendant mieux : le graphe la peignait en vert avec sa coche, et l'on
+   * lisait une fusion terminée alors qu'elle en était à sa troisième étape sur
+   * onze. Dire « c'est fait » de ce qui est en train de se faire est le
+   * mensonge le plus facile à commettre, et le plus difficile à remarquer.
+   */
+  EN_COURS: "en-cours",
   /** Elle est allée au bout. */
   OK: "ok",
   /** Elle s'est arrêtée là. */
