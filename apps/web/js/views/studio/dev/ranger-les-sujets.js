@@ -219,20 +219,43 @@ async function proposer(root) {
   dessiner(root);
 
   try {
-    const [cr, { preparerUneProposition }, { resolveCurrentBackendProjectId }] = await Promise.all([
-      import("../../../services/proposition-du-cr.js"),
-      import("../../../services/atelier-proposition.js"),
-      import("../../../services/project-supabase-sync.js")
-    ]);
+    const [cr, { preparerUneProposition }, projet, { labelsAProposer }, { VUE_DES_LOTS }, sujets] =
+      await Promise.all([
+        import("../../../services/proposition-du-cr.js"),
+        import("../../../services/atelier-proposition.js"),
+        import("../../../services/project-supabase-sync.js"),
+        import("../../../services/label-du-cr.js"),
+        import("../../../services/vue-des-lots.js"),
+        import("../../../services/project-subjects-supabase.js")
+      ]);
+
+    const projectId = await projet.resolveCurrentBackendProjectId();
+
+    /**
+     * Les labels du projet. **`null` quand on n'a pas pu les lire**, et le
+     * service s'en sert pour ne rien annoncer qu'il ne sache : proposer de créer
+     * un label qui est peut-être déjà là ferait promettre ce qui n'aura pas lieu
+     * (règle 5).
+     */
+    const labelsDuProjet = await sujets.loadLabelsForProject(projectId)
+      .then((lus) => lus?.labels ?? null)
+      .catch(() => null);
 
     const rendu = await preparerUneProposition({
-      projectId: await resolveCurrentBackendProjectId(),
+      projectId,
       titre: "Ranger les sujets sous leur lot",
       intro: phraseDuRattrapage(rattrapage),
       source: "rangement des sujets",
       affirmations: [
         ...cr.rubriqueItems(rattrapage.rubriques),
-        ...cr.rangementItems(rattrapage.rangements)
+        ...cr.rangementItems(rattrapage.rangements),
+        // **Le label et la vue viennent avec.** Sans le label, la fusion ouvre
+        // des lots qui ne le portent pas — et la vue `label:LOT` ne rend rien.
+        // Sans la vue, le rangement existe en base et nulle part à l'écran.
+        // Les proposer séparément reviendrait à demander deux fois la même
+        // chose, une fois sur deux écrans différents.
+        ...cr.labelItems(labelsAProposer([], labelsDuProjet, rattrapage.rubriques)),
+        ...cr.vueItems([VUE_DES_LOTS])
       ]
     });
 

@@ -213,3 +213,36 @@ test("la fusion n'ouvre que des étapes nommées", async () => {
   // échec ne garderait que les fusions dont on n'a pas besoin.
   assert.match(source, /await fermerLaCourseDeFusion\(enCours, proposition, chrono\)/);
 });
+
+/**
+ * **Les lots se rangent après le secrétariat, et l'ordre est une correction.**
+ *
+ * Un sujet père a besoin de deux choses qui n'arrivent pas en même temps : ses
+ * fils, ouverts à l'étape des sujets, et son label, créé par le secrétariat.
+ * Ouvert entre les deux, il cherchait « LOT » dans un projet qui ne l'avait pas
+ * encore : il naissait sans, la vue `label:LOT` ne rendait rien, et la seule
+ * trace était un avertissement au fond du journal.
+ *
+ * Cet ordre ne se relit nulle part ailleurs : si quelqu'un remonte l'étape des
+ * pères un jour, ce test est ce qui le dira.
+ */
+test("les lots se rangent après les sujets et après le secrétariat", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const source = readFileSync(
+    fileURLToPath(new URL("../views/project-propositions.js", import.meta.url)),
+    "utf8"
+  );
+
+  const rang = (id) => source.indexOf(`chrono.etape("${id}")`);
+
+  assert.ok(rang("sujets") > 0 && rang("secretariat") > 0 && rang("peres") > 0);
+  assert.ok(rang("peres") > rang("sujets"), "un lot se remplit de ce qui vient d'être ouvert");
+  assert.ok(rang("peres") > rang("secretariat"), "un lot porte un label que le secrétariat crée");
+
+  // Et la liste nommée dit la même chose : deux ordres finiraient par ne plus
+  // s'accorder, et c'est celui qu'on ne regarde pas qui aurait raison.
+  const ids = ETAPES_DE_LA_FUSION.map(([id]) => id);
+  assert.ok(ids.indexOf("peres") > ids.indexOf("secretariat"));
+});

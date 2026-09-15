@@ -120,8 +120,58 @@ function affirmeQuelqueChose(itemType, payload = {}) {
   return String(payload?.status ?? "") !== "NO_NEWS";
 }
 
+/**
+ * La dernière décision prise sur chaque affirmation.
+ *
+ * ## Le défaut que ceci répare
+ *
+ * On construisait la table d'un `new Map(decisions.map(…))`, et une `Map` bâtie
+ * ainsi garde **la dernière** ligne rencontrée pour une clé. La base rendait
+ * `decided_at.desc` : la dernière rencontrée était donc **la plus ancienne**.
+ *
+ * Conséquence, et elle a coûté cher : une ligne refusée en mars, puis acceptée
+ * en juin, restait « refusée » pour toujours. Chaque nouvelle proposition
+ * reposait les mêmes vingt-neuf contradictions — on les tranchait, on
+ * fusionnait, et elles revenaient à l'identique la fois suivante. On avait beau
+ * accepter, la mémoire consultée était celle d'avant.
+ *
+ * ## Pourquoi la date décide ici, et pas l'ordre du SQL
+ *
+ * Se fier à l'ordre de la requête est un accord tacite entre deux fichiers : il
+ * tient jusqu'au jour où quelqu'un change un `order` pour un écran qui n'a rien
+ * à voir, et plus rien ne le dit (règle 4). La règle vit donc là où elle
+ * s'applique — **la plus récente l'emporte** —, et la lecture peut rendre ses
+ * lignes dans l'ordre qui l'arrange.
+ *
+ * Sans date des deux côtés, on garde la première vue : ne pas savoir laquelle
+ * est la plus récente n'autorise pas à trancher au hasard (règle 5).
+ */
+export function derniereDecisionParCle(decisions = []) {
+  const parCle = new Map();
+
+  for (const row of Array.isArray(decisions) ? decisions : []) {
+    const cle = `${row?.item_type}|${row?.item_key}`;
+    const deja = parCle.get(cle);
+    if (!deja) {
+      parCle.set(cle, row);
+      continue;
+    }
+
+    const quand = Date.parse(row?.decided_at ?? "");
+    const avant = Date.parse(deja?.decided_at ?? "");
+    if (Number.isFinite(quand) && (!Number.isFinite(avant) || quand > avant)) {
+      parCle.set(cle, row);
+    }
+  }
+
+  return parCle;
+}
+
 export function findMemoryConflicts(items = [], decisions = []) {
-  const memoire = new Map(decisions.map((row) => [`${row.item_type}|${row.item_key}`, row]));
+  // **La plus récente l'emporte**, quel que soit l'ordre dans lequel la base
+  // rend ses lignes. Voir `derniereDecisionParCle` : c'est le défaut qui
+  // reposait vingt-neuf fois les mêmes contradictions.
+  const memoire = derniereDecisionParCle(decisions);
 
   const conflicts = [];
   for (const item of items) {

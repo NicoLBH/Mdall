@@ -62,6 +62,7 @@ import { ITEM } from "./proposition-state.js";
 import { numeroDuLot } from "./lots-du-cr.js";
 import { labelDeLaRubrique } from "./label-du-cr.js";
 import { rubriquesDuCompteRendu } from "./rubriques-du-cr.js";
+import { VUE_DES_LOTS } from "./vue-des-lots.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -292,6 +293,9 @@ export function itemsDuCompteRendu({
     // Les sujets qu'on range juste après les rubriques qui les accueillent :
     // c'est le même geste, vu depuis le sujet plutôt que depuis le lot.
     ...rangementItems(rangements),
+    // L'endroit d'où on les regardera. Il vient avec eux : proposer un
+    // rangement sans la vue qui l'ouvre laisse un classement invisible.
+    ...vueItems(vuesDeLaProposition(rubriques)),
     ...lotItems(lots),
     ...labelItems(labels),
     ...objectifItems(objectifs),
@@ -470,6 +474,41 @@ export function rangementItems(rangements = []) {
       // vérifier que le rangement proposé est le bon.
       lot: texte(rangement?.lot) || null
     }));
+}
+
+/**
+ * Les vues que cette proposition ajoute au projet.
+ *
+ * **Une vue est ce qu'elle cherche**, et c'est sa clé : deux vues qui cherchent
+ * la même chose sous deux noms sont la même vue, et la proposer deux fois
+ * demanderait de confirmer deux fois le même endroit.
+ */
+export function vueItems(vues = []) {
+  return (Array.isArray(vues) ? vues : [])
+    .filter((vue) => texte(vue?.requete))
+    .map((vue) => affirmation(ITEM_TYPE.VUE, texte(vue.requete), {
+      requete: texte(vue.requete),
+      nom: texte(vue?.nom),
+      description: texte(vue?.description),
+      icone: texte(vue?.icone),
+      couleur: texte(vue?.couleur)
+    }));
+}
+
+/**
+ * La vue « Lots », quand ce compte rendu range ses points sous des lots.
+ *
+ * **Sans elle, les sujets pères sont un classement que personne ne peut
+ * ouvrir.** On range quatre-vingt-treize sujets sous quinze lots, et l'écran
+ * continue d'afficher quatre-vingt-treize lignes : le rangement existe en base
+ * et nulle part ailleurs.
+ *
+ * Elle ne se propose **que lorsqu'il y a des lots** : une vue qui ne rendrait
+ * rien ferait croire que le chantier n'en a pas, alors qu'il n'a pas encore été
+ * rangé (règle 5).
+ */
+function vuesDeLaProposition(rubriques = []) {
+  return rubriquesDuCompteRendu(rubriques).length > 0 ? [VUE_DES_LOTS] : [];
 }
 
 /**

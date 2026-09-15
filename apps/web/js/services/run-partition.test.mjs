@@ -100,3 +100,51 @@ test("les exécutions déjà écrites ne disparaissent pas du journal", () => {
   // vues hier, sans que personne l'ait demandé.
   assert.match(MIGRATION, /owner_id is null/);
 });
+
+/* ── Une fusion en cours ne disparaît pas quand on va la regarder ────────── */
+
+/**
+ * **Le défaut qui a fait croire que le journal ne marchait pas.**
+ *
+ * On cliquait « Fusionner », la ligne apparaissait avec son sablier — et elle
+ * disparaissait dès qu'on ouvrait l'onglet Actions. L'onglet relit la base à
+ * chaque venue, et la relecture remplaçait la liste entière : une fusion qui
+ * dure une minute et demie n'est écrite en base qu'à la fin.
+ */
+test("une exécution en cours survit à la relecture de la base", async () => {
+  const { executionsAGarder } = await import("./run-partition.js");
+
+  const vivantes = [
+    { id: "vive-1", status: "running" },
+    { id: "finie-1", status: "completed" }
+  ];
+  const lues = [{ id: "ancienne-1", status: "completed" }];
+
+  assert.deepEqual(executionsAGarder(vivantes, lues).map((e) => e.id), ["vive-1"]);
+});
+
+/**
+ * **La version écrite l'emporte dès qu'elle existe.** Elle est complète ;
+ * garder la vive à côté ferait deux lignes pour un seul geste (règle 4).
+ */
+test("une exécution que la base porte déjà ne se double pas", async () => {
+  const { executionsAGarder } = await import("./run-partition.js");
+
+  const gardees = executionsAGarder(
+    [{ id: "vive-1", status: "running" }],
+    [{ id: "vive-1", status: "completed" }]
+  );
+
+  assert.deepEqual(gardees, []);
+});
+
+/** Rien en mémoire, rien à garder — et aucune exception sur des listes absentes. */
+test("sans exécution vive, il n'y a rien à garder", async () => {
+  const { executionsAGarder } = await import("./run-partition.js");
+
+  assert.deepEqual(executionsAGarder([], []), []);
+  assert.deepEqual(executionsAGarder(null, null), []);
+  assert.deepEqual(executionsAGarder(), []);
+  // Une exécution finie n'est pas vive : elle vient de la base ou elle n'existe pas.
+  assert.deepEqual(executionsAGarder([{ id: "x", status: "completed" }], []), []);
+});

@@ -1,4 +1,5 @@
 import { store } from "../store.js";
+import { executionsAGarder } from "./run-partition.js";
 import { ensureProjectDocumentsState } from "./project-documents-store.js";
 import { ensureProjectAutomationDefaults } from "./project-automation.js";
 import { supabase, buildSupabaseAuthHeaders, getCurrentUser, getSupabaseUrl, getSupabaseAnonKey } from "../../assets/js/auth.js";
@@ -1315,6 +1316,16 @@ export function essaisDeColonnes(socle, recentes = []) {
   return essais;
 }
 
+/**
+ * Les exécutions en cours que la relecture ne doit pas effacer.
+ *
+ * La règle vit dans `run-partition.js`, où elle s'exécute en test ; ici on ne
+ * fait que lui donner ce que la page a en mémoire.
+ */
+function executionsEnCours(lues = []) {
+  return executionsAGarder(store.projectAutomation?.runLog, lues);
+}
+
 export async function syncProjectActionsFromSupabase(options = {}) {
   const force = Boolean(options.force);
   const frontendProjectId = getFrontendProjectKey();
@@ -1324,7 +1335,10 @@ export async function syncProjectActionsFromSupabase(options = {}) {
   ensureProjectAutomationDefaults();
 
   if (!backendProjectId) {
-    store.projectAutomation.runLog = [];
+    // Même sans projet résolu, une fusion en cours ne s'efface pas : elle a
+    // bien lieu, et la faire disparaître ferait douter du geste qu'on vient de
+    // signer.
+    store.projectAutomation.runLog = executionsEnCours([]);
     projectBucket.actionsLoaded = true;
     dispatchProjectSupabaseSync({ section: "actions", actionsCount: 0 });
     return [];
@@ -1408,11 +1422,14 @@ export async function syncProjectActionsFromSupabase(options = {}) {
     lireLesGestes()
   ]);
 
-  const nextItems = [
+  const lues = [
     ...(Array.isArray(rows) ? rows : []).map(mapRunRowToLogEntry),
     ...(Array.isArray(ctRows) ? ctRows : []).map(mapCtRunRowToLogEntry),
     ...(Array.isArray(gesteRows) ? gesteRows : []).map(mapProjectRunRowToLogEntry)
-  ].sort((left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime());
+  ];
+
+  const nextItems = [...executionsEnCours(lues), ...lues]
+    .sort((left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime());
 
   store.projectAutomation.runLog = nextItems;
   projectBucket.backendProjectId = backendProjectId;

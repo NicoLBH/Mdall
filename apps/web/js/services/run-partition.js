@@ -94,3 +94,40 @@ export function decrireVisibilite(entry = {}) {
     note: "antérieure au cloisonnement"
   };
 }
+
+/**
+ * Les exécutions **vives** qu'une relecture ne doit pas effacer.
+ *
+ * ## Ce que ça répare
+ *
+ * On cliquait « Fusionner », la ligne apparaissait au journal avec son sablier —
+ * et elle disparaissait dès qu'on ouvrait l'onglet Actions pour la regarder.
+ * L'onglet relit la base à chaque venue, et la relecture remplaçait la liste
+ * **entière** : une fusion qui dure une minute et demie n'est écrite en base
+ * qu'à la fin, donc elle n'était dans aucune des deux listes.
+ *
+ * On avait donc une roue dans l'écran des propositions, rien dans le journal,
+ * et une ligne qui apparaissait quatre-vingt-dix secondes plus tard comme si de
+ * rien n'était. C'est ce qui a fait croire que le journal ne marchait pas.
+ *
+ * ## Comment on reconnaît une exécution vive
+ *
+ * **À son absence en base**, et c'est précisément ce qui la définit : elle n'est
+ * pas finie, donc rien ne l'a encore écrite. Dès que la base en porte une, la
+ * version écrite l'emporte — elle est complète, et garder la vive ferait deux
+ * lignes pour un seul geste (règle 4).
+ *
+ * @param {object[]} vivantes ce que la page a en mémoire
+ * @param {object[]} lues ce que la base vient de rendre
+ */
+export function executionsAGarder(vivantes = [], lues = []) {
+  const enCours = (Array.isArray(vivantes) ? vivantes : [])
+    .filter((entree) => String(entree?.status ?? "").trim() === "running");
+  if (enCours.length === 0) return [];
+
+  const ecrites = new Set(
+    (Array.isArray(lues) ? lues : []).map((entree) => String(entree?.id ?? "").trim()).filter(Boolean)
+  );
+
+  return enCours.filter((entree) => !ecrites.has(String(entree?.id ?? "").trim()));
+}

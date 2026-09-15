@@ -330,3 +330,79 @@ test("le suivi accepte une Map comme un objet : les appelants n'ont pas à s'acc
   const dit = describeConflict(conflitDAvis({ status: "open" }, { status: "resolved" }), { memoire: objet });
   assert.equal(dit.before.excerpt, attendu);
 });
+
+/* ── La décision la plus récente l'emporte ───────────────────────────────── */
+
+/**
+ * **Vingt-neuf contradictions reposées à chaque proposition.**
+ *
+ * Une ligne refusée en mars, puis acceptée en juin, restait « refusée » pour
+ * toujours : la table des décisions se construisait d'un `new Map(...)`, qui
+ * garde la **dernière** ligne rencontrée — et la base les rendait de la plus
+ * récente à la plus ancienne. C'était donc celle d'avant qui gagnait.
+ *
+ * On avait beau accepter et fusionner, la fois suivante reposait la même
+ * question. Ce test tient la règle : la plus récente décide.
+ */
+test("une décision plus récente efface la précédente", async () => {
+  const { derniereDecisionParCle, findMemoryConflicts } = await import("./memory-conflict.js");
+
+  const item = {
+    itemType: ITEM_TYPE.SUJET, itemKey: "cr:12.02.1", status: ITEM.PROPOSED, payload: { titre: "Voile V12" }
+  };
+
+  // L'ordre de la base : la plus récente d'abord. C'est celui qui faisait
+  // gagner la plus ancienne.
+  const decisions = [
+    { item_type: ITEM_TYPE.SUJET, item_key: "cr:12.02.1", status: ITEM.ACCEPTED, payload: {}, decided_at: "2026-06-01T10:00:00Z" },
+    { item_type: ITEM_TYPE.SUJET, item_key: "cr:12.02.1", status: ITEM.REFUSED, payload: {}, decided_at: "2026-03-01T10:00:00Z" }
+  ];
+
+  assert.equal(derniereDecisionParCle(decisions).get(`${ITEM_TYPE.SUJET}|cr:12.02.1`).status, ITEM.ACCEPTED);
+  assert.deepEqual(findMemoryConflicts([item], decisions), []);
+
+  // Et dans l'autre sens : la règle ne dépend pas de l'ordre de la requête.
+  assert.deepEqual(findMemoryConflicts([item], [...decisions].reverse()), []);
+});
+
+/** Un refus plus récent qu'une acceptation reste un refus : la règle va aux deux sens. */
+test("une décision plus ancienne ne réveille pas une contradiction", async () => {
+  const { findMemoryConflicts } = await import("./memory-conflict.js");
+
+  const item = {
+    itemType: ITEM_TYPE.SUJET, itemKey: "cr:12.02.1", status: ITEM.PROPOSED, payload: { titre: "Voile V12" }
+  };
+
+  const conflits = findMemoryConflicts([item], [
+    { item_type: ITEM_TYPE.SUJET, item_key: "cr:12.02.1", status: ITEM.REFUSED, payload: {}, decided_at: "2026-06-01T10:00:00Z" },
+    { item_type: ITEM_TYPE.SUJET, item_key: "cr:12.02.1", status: ITEM.ACCEPTED, payload: {}, decided_at: "2026-03-01T10:00:00Z" }
+  ]);
+
+  assert.equal(conflits.length, 1);
+  assert.equal(conflits[0].kind, CONFLICT.REFUSED_REAFFIRMED);
+});
+
+/**
+ * **Sans date, on garde la première vue.** Ne pas savoir laquelle est la plus
+ * récente n'autorise pas à trancher au hasard (règle 5).
+ */
+test("deux décisions sans date ne se départagent pas au hasard", async () => {
+  const { derniereDecisionParCle } = await import("./memory-conflict.js");
+
+  const gardee = derniereDecisionParCle([
+    { item_type: ITEM_TYPE.SUJET, item_key: "k", status: ITEM.REFUSED, decided_at: null },
+    { item_type: ITEM_TYPE.SUJET, item_key: "k", status: ITEM.ACCEPTED, decided_at: null }
+  ]).get(`${ITEM_TYPE.SUJET}|k`);
+
+  assert.equal(gardee.status, ITEM.REFUSED);
+
+  // Mais une ligne datée l'emporte sur une ligne qui ne l'est pas : elle est la
+  // seule dont on sache quand elle a été prise.
+  const datee = derniereDecisionParCle([
+    { item_type: ITEM_TYPE.SUJET, item_key: "k", status: ITEM.REFUSED, decided_at: null },
+    { item_type: ITEM_TYPE.SUJET, item_key: "k", status: ITEM.ACCEPTED, decided_at: "2026-06-01T10:00:00Z" }
+  ]).get(`${ITEM_TYPE.SUJET}|k`);
+
+  assert.equal(datee.status, ITEM.ACCEPTED);
+  assert.equal(derniereDecisionParCle().size, 0);
+});
