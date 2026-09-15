@@ -102,6 +102,24 @@ export const ITEM_TYPE = {
    */
   LABEL: "label",
   /**
+   * Une rubrique du compte rendu, retenue pour en faire un sujet père.
+   *
+   * **Ce n'est pas un point à traiter, c'est un contenant.** « Lot n° 1 :
+   * Démolition / Gros Œuvre » n'est demandé à personne : c'est le titre sous
+   * lequel le document range une douzaine de demandes. En faire un point de
+   * plus ajouterait une ligne à la liste que cette nature existe pour raccourcir.
+   *
+   * Elle se coche comme les autres, et pour la même raison : une rubrique
+   * refusée ne crée pas de père, et ses points restent des sujets racines.
+   * Ranger le chantier de quelqu'un sans le lui demander est une écriture
+   * (règle 1).
+   *
+   * Sa clé est l'identité de la rubrique — le numéro du lot, l'intitulé aplati
+   * sinon. C'est elle qui fait qu'une rubrique retrouvée au compte rendu suivant
+   * est la même, et non un second père au nom mal recopié.
+   */
+  RUBRIQUE: "rubrique",
+  /**
    * Un lot du chantier, à ouvrir ou à activer.
    *
    * Un lot qu'un compte rendu nomme n'est pas une hypothèse : l'entreprise est
@@ -183,6 +201,7 @@ export const MOTS_DE_LA_NATURE = {
   [ITEM_TYPE.RELANCE]: ["sujet à relancer", "sujets à relancer"],
   [ITEM_TYPE.FERMETURE]: ["sujet à fermer", "sujets à fermer"],
   [ITEM_TYPE.INTERVENANT]: ["société à ajouter", "sociétés à ajouter"],
+  [ITEM_TYPE.RUBRIQUE]: ["rubrique du compte rendu", "rubriques du compte rendu"],
   [ITEM_TYPE.LOT]: ["lot à ouvrir", "lots à ouvrir"],
   [ITEM_TYPE.LABEL]: ["label à poser", "labels à poser"],
   [ITEM_TYPE.OBJECTIF]: ["jalon à poser", "jalons à poser"]
@@ -233,7 +252,15 @@ export function nomDeLaLigne(ligne = {}) {
     if (reference) return `Avis n° ${reference}`;
   }
 
+  // Une rubrique se désigne par le titre que le document lui donne — c'est sous
+  // celui-là que la personne qui tient le chantier ira la chercher.
+  if (nature === ITEM_TYPE.RUBRIQUE) {
+    const intitule = dit(payload.intitule);
+    if (intitule) return intitule;
+  }
+
   return dit(payload.titre)
+    || dit(payload.intitule)
     || dit(payload.nom)
     || dit(payload.name)
     || dit(payload.label)

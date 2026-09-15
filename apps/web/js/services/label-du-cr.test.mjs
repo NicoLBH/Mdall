@@ -129,3 +129,58 @@ test("sans les labels du projet, on n'annonce aucune création", async () => {
   assert.equal(connu.connu, true);
   assert.deepEqual(connu.aCreer, [LABEL_DU_CR]);
 });
+
+/* ── Les labels que porte un sujet père ──────────────────────────────────── */
+
+/**
+ * **`LOT` y compris sur le contrôle technique et le SPS.** La question que la
+ * vue pose n'est pas « quels sont les lots du marché » mais « qui a quelque
+ * chose à faire » — et ceux-là en ont. Une rubrique administrative, elle, ne
+ * désigne personne : la marquer `LOT` ferait croire qu'une procédure a du
+ * travail en retard.
+ */
+test("une rubrique porte le label de ce qu'elle désigne", async () => {
+  const { LABEL_DES_DISPOSITIONS, LABEL_DU_LOT, labelDeLaRubrique } =
+    await import("./label-du-cr.js");
+
+  assert.equal(labelDeLaRubrique("lot"), LABEL_DU_LOT);
+  assert.equal(labelDeLaRubrique("intervenant"), LABEL_DU_LOT);
+  assert.equal(labelDeLaRubrique("administrative"), LABEL_DES_DISPOSITIONS);
+
+  // Un genre qu'on ne connaît pas désigne quelqu'un plutôt que personne : une
+  // rubrique perdue dans une vue est moins coûteuse qu'un père jamais trouvé.
+  assert.equal(labelDeLaRubrique(""), LABEL_DU_LOT);
+});
+
+/**
+ * **Les labels des pères se proposent comme les autres.** Sans cela, la fusion
+ * poserait sur les pères un label que le projet n'a pas, et la vue `label:LOT`
+ * ne rendrait rien — sans que rien ne le dise.
+ */
+test("les labels des rubriques entrent dans ce qui est proposé", async () => {
+  const { LABEL_DES_DISPOSITIONS, LABEL_DU_LOT, labelsAProposer } =
+    await import("./label-du-cr.js");
+
+  const { poses, aCreer } = labelsAProposer(
+    [{ titre: "Un point", labels: [] }],
+    [],
+    [
+      { genre: "lot" },
+      { genre: "intervenant" },
+      { genre: "administrative" }
+    ]
+  );
+
+  const compte = Object.fromEntries(poses.map((label) => [label.nom, label.points]));
+  assert.equal(compte[LABEL_DU_LOT], 2);
+  assert.equal(compte[LABEL_DES_DISPOSITIONS], 1);
+  assert.ok(aCreer.includes(LABEL_DU_LOT) && aCreer.includes(LABEL_DES_DISPOSITIONS));
+});
+
+/** Sans rubrique, aucun label de père n'est proposé : on n'en invente pas. */
+test("sans rubrique, les labels des pères ne se proposent pas", async () => {
+  const { LABEL_DU_LOT, labelsAProposer } = await import("./label-du-cr.js");
+
+  const { poses } = labelsAProposer([{ titre: "Un point", labels: [] }], []);
+  assert.equal(poses.some((label) => label.nom === LABEL_DU_LOT), false);
+});

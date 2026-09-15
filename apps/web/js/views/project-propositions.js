@@ -85,6 +85,7 @@ import {
   intervenantItems,
   sujetItems
 } from "../services/proposition-review.js";
+import { MOTS_DU_GENRE } from "../services/rubriques-du-cr.js";
 import {
   CHANGEMENT,
   CHANGEMENT_LABELS,
@@ -1081,6 +1082,37 @@ function renderFermetureItem(item) {
  * qu'il sert à retrouver la rubrique dans le document ; il ne devient pas le
  * nom du lot.
  */
+/**
+ * Une rubrique du compte rendu, retenue pour en faire un sujet père.
+ *
+ * **Ce qu'elle dit, et ce qu'elle ne dit pas.** Elle annonce un contenant, pas
+ * une tâche : « Lot n° 1 : Gros Œuvre » n'est demandé à personne. La ligne dit
+ * donc ce qu'elle range — le genre, l'entreprise quand le titre la nomme, le
+ * label que le père portera — et non une échéance ni un assigné, qui
+ * laisseraient croire que quelqu'un doit la traiter.
+ */
+function renderRubriqueItem(item) {
+  const { intitule, genre, societe, label, page } = item.payload;
+
+  const situe = [
+    MOTS_DU_GENRE[genre] ?? "",
+    societe ? escapeHtml(String(societe)) : "",
+    label ? `label ${escapeHtml(String(label))}` : "",
+    page ? `page ${escapeHtml(String(page))}` : ""
+  ].filter(Boolean).join(" · ");
+
+  return renderReviewItem(
+    item,
+    `
+      <span class="review-item__title">
+        <span class="review-item__badge review-item__badge--added">Retenue</span>
+        ${escapeHtml(intitule || "Rubrique sans titre")}
+      </span>
+      ${situe ? `<span class="review-item__where">${situe}</span>` : ""}
+    `
+  );
+}
+
 function renderLotItem(item) {
   const { intitule, numero, points } = item.payload;
 
@@ -3485,6 +3517,15 @@ function renderDepotLignes(proposition, review) {
         : gele
           ? "Aucun avis ne changeait, ou l'état conservé ne le dit pas."
           : "Aucun livrable exploitable : il n'y a pas d'avis à en tirer."
+    )}
+    ${renderReviewBlock(
+      ITEM_TYPE.RUBRIQUE,
+      "Rubriques du compte rendu",
+      parType(ITEM_TYPE.RUBRIQUE),
+      renderRubriqueItem,
+      gele
+        ? "Aucune rubrique relevée, ou l'état conservé ne le dit pas."
+        : "Ce compte rendu range ses points d'un seul tenant : il n'y a pas de rubrique à en tirer."
     )}
     ${renderReviewBlock(
       ITEM_TYPE.SUJET,

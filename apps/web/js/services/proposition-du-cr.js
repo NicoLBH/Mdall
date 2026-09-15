@@ -60,6 +60,8 @@ import { titreAplati } from "./sujets-du-cr.js";
 import { documentItems, ITEM_TYPE, sujetItems } from "./proposition-review.js";
 import { ITEM } from "./proposition-state.js";
 import { numeroDuLot } from "./lots-du-cr.js";
+import { labelDeLaRubrique } from "./label-du-cr.js";
+import { rubriquesDuCompteRendu } from "./rubriques-du-cr.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -258,6 +260,8 @@ export function pointsAOuvrir(confrontes = [], { leJour = "" } = {}) {
  *   est faux : on le sait, on ne le portait simplement pas.
  * @param {object|null} [options.labels] ce que `labelsAProposer` a rendu
  * @param {object|null} [options.objectifs] ce que `objectifsAProposer` a rendu
+ * @param {object[]} [options.rubriques] les rubriques du compte rendu, telles
+ *   que la lecture les a rendues
  */
 export function itemsDuCompteRendu({
   confrontes = [],
@@ -266,10 +270,16 @@ export function itemsDuCompteRendu({
   labels = null,
   objectifs = null,
   disparition = null,
+  rubriques = [],
   luPar = ""
 } = {}) {
   return [
     ...(doc?.id ? documentItems([doc], { luPar: texte(luPar) }) : []),
+    // **Les rubriques en tête.** C'est l'ordre dans lequel on décide : les
+    // points qu'elles contiennent en dépendent, et refuser une rubrique après
+    // avoir accepté ses points laisserait ceux-ci sans le père qu'on leur avait
+    // annoncé.
+    ...rubriqueItems(rubriques),
     ...lotItems(lots),
     ...labelItems(labels),
     ...objectifItems(objectifs),
@@ -373,6 +383,47 @@ export function labelItems(labels = []) {
       // la fusion : le projet a pu changer entre les deux.
       existe: label?.existe === true
     }));
+}
+
+/**
+ * Les rubriques sous lesquelles ce compte rendu range ses points.
+ *
+ * **Toutes, y compris celles qui ne portent rien.** Un lot dont le document ne
+ * dit rien à cette réunion — son contenu se réduit à « / » — existe quand même,
+ * et c'est ce qui lui permet d'être ouvert puis fermé, et de rouvrir à la
+ * réunion où il reçoit un point. Ne proposer que les rubriques peuplées ferait
+ * apparaître les lots au compte-gouttes, chacun à la réunion où il a parlé.
+ *
+ * **La clé est l'identité de la rubrique**, pas son intitulé : le numéro du lot
+ * quand il y en a un, l'intitulé aplati sinon. C'est elle qui fait qu'un lot
+ * retrouvé au compte rendu suivant est le même, quand bien même le nom de son
+ * entreprise aurait changé d'orthographe.
+ *
+ * Ce module ne crée rien : la ligne se coche, et le père s'ouvre à la fusion.
+ */
+export function rubriqueItems(rubriques = []) {
+  return rubriquesDuCompteRendu(rubriques).map((rubrique) => affirmation(
+    ITEM_TYPE.RUBRIQUE,
+    rubrique.identite,
+    {
+      // L'intitulé tel que le document l'écrit : c'est le titre que portera le
+      // sujet père, et celui sous lequel on ira le chercher.
+      intitule: rubrique.nom,
+      genre: rubrique.genre,
+      numero: rubrique.numero || null,
+      societe: rubrique.societe || null,
+      // Le label que le père portera. Décidé dans `label-du-cr.js`, lu ici :
+      // un label posé à la fusion mais cherché autrement par la vue rendrait
+      // une vue vide sans rien dire (règle 10).
+      label: labelDeLaRubrique(rubrique.genre),
+      // La provenance voyage avec la proposition : une rubrique se vérifie en
+      // ouvrant la page, et un père qu'on ne peut pas remonter au document ne
+      // se conteste plus.
+      sourceId: rubrique.provenance?.source_id ?? null,
+      page: rubrique.provenance?.page ?? null,
+      evidence: rubrique.provenance?.excerpt ?? null
+    }
+  ));
 }
 
 /**
