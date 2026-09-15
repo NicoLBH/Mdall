@@ -7,7 +7,8 @@ import { ITEM } from "./proposition-state.js";
 import {
   PHRASES_DU_REFUS, REFUS, cleDuPoint, introDuCompteRendu, itemsDuCompteRendu,
   labelItems, lotItems, objectifItems, phraseDuRefus, pointsAOuvrir, pointsARelancer,
-  refusDeLaProposition, relanceItems, rubriqueItems, titreDeLaProposition, fermetureItems
+  rangementItems, refusDeLaProposition, relanceItems, rubriqueItems, titreDeLaProposition,
+  fermetureItems
 } from "./proposition-du-cr.js";
 import { LABEL_DES_DISPOSITIONS, LABEL_DU_LOT } from "./label-du-cr.js";
 import { FERMETURE } from "./fermeture-du-cr.js";
@@ -775,6 +776,7 @@ test("chaque nature d'un compte rendu a son bloc dans l'écran de la proposition
       lots: LES_LOTS,
       labels: LES_LABELS,
       rubriques: LES_RUBRIQUES,
+      rangements: [{ subjectId: "s-1", titre: "Un vieux sujet", rubrique: 8 }],
       objectifs: LES_OBJECTIFS,
       disparition: DISPARITION
     }).map((item) => item.itemType)
@@ -823,4 +825,40 @@ test("un point ouvert ou relancé emporte la rubrique sous laquelle il a été l
   const sansRubrique = itemsDuCompteRendu({ confrontes: CONFRONTES, document: UN_DOCUMENT })
     .find((item) => item.itemType === ITEM_TYPE.SUJET);
   assert.equal(sansRubrique.payload.rubrique, null);
+});
+
+/**
+ * **Un sujet déjà ouvert qu'on range sous son lot.** La ligne ne change rien à
+ * ce qu'il dit — elle change l'endroit où on le trouve. Sa clé est
+ * l'identifiant du sujet : un sujet ne se range qu'une fois.
+ */
+test("un sujet à rattraper devient une ligne, identifiée par son sujet", () => {
+  const items = rangementItems([
+    { subjectId: "s-1", titre: "Le ferraillage du voile V12", rubrique: 1, lot: "Lot 02 — GROS ŒUVRE" },
+    { subjectId: "", titre: "Sans identifiant", rubrique: 1 }
+  ]);
+
+  assert.equal(items.length, 1, "une ligne sans sujet ne se propose pas");
+  assert.equal(items[0].itemType, ITEM_TYPE.RANGEMENT);
+  assert.equal(items[0].itemKey, "s-1");
+  assert.deepEqual(items[0].payload, {
+    titre: "Le ferraillage du voile V12",
+    rubrique: 1,
+    // Ce qui a fait reconnaître le lot : c'est là-dessus qu'on conteste.
+    lot: "Lot 02 — GROS ŒUVRE"
+  });
+  assert.equal(items[0].status, ITEM.PROPOSED);
+});
+
+/** Les rangements suivent les rubriques qui les accueillent. */
+test("la proposition range les sujets juste après les rubriques", () => {
+  const natures = itemsDuCompteRendu({
+    confrontes: CONFRONTES,
+    document: UN_DOCUMENT,
+    rubriques: LES_RUBRIQUES,
+    rangements: [{ subjectId: "s-1", titre: "Un vieux sujet", rubrique: 8 }]
+  }).map((item) => item.itemType);
+
+  assert.ok(natures.indexOf(ITEM_TYPE.RUBRIQUE) < natures.indexOf(ITEM_TYPE.RANGEMENT));
+  assert.ok(natures.indexOf(ITEM_TYPE.RANGEMENT) < natures.indexOf(ITEM_TYPE.SUJET));
 });

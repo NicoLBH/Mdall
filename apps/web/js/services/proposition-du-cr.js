@@ -268,6 +268,8 @@ export function pointsAOuvrir(confrontes = [], { leJour = "" } = {}) {
  * @param {object|null} [options.objectifs] ce que `objectifsAProposer` a rendu
  * @param {object[]} [options.rubriques] les rubriques du compte rendu, telles
  *   que la lecture les a rendues
+ * @param {object[]} [options.rangements] les sujets déjà ouverts à ranger sous
+ *   leur lot — ce que `rattrapageAProposer` a rendu
  */
 export function itemsDuCompteRendu({
   confrontes = [],
@@ -277,6 +279,7 @@ export function itemsDuCompteRendu({
   objectifs = null,
   disparition = null,
   rubriques = [],
+  rangements = [],
   luPar = ""
 } = {}) {
   return [
@@ -286,6 +289,9 @@ export function itemsDuCompteRendu({
     // avoir accepté ses points laisserait ceux-ci sans le père qu'on leur avait
     // annoncé.
     ...rubriqueItems(rubriques),
+    // Les sujets qu'on range juste après les rubriques qui les accueillent :
+    // c'est le même geste, vu depuis le sujet plutôt que depuis le lot.
+    ...rangementItems(rangements),
     ...lotItems(lots),
     ...labelItems(labels),
     ...objectifItems(objectifs),
@@ -440,6 +446,30 @@ export function rubriqueItems(rubriques = []) {
       evidence: rubrique.provenance?.excerpt ?? null
     }
   ));
+}
+
+/**
+ * Les sujets déjà ouverts qu'on range sous leur lot.
+ *
+ * **Ils étaient là avant.** Ce ne sont pas des points d'un compte rendu : ce
+ * sont les sujets que le projet portait quand le rangement par lot n'existait
+ * pas encore. La ligne ne change rien à ce qu'ils disent — elle change
+ * l'endroit où on les trouve.
+ *
+ * La clé est l'identifiant du sujet : un sujet ne se range qu'une fois.
+ */
+export function rangementItems(rangements = []) {
+  return (Array.isArray(rangements) ? rangements : [])
+    .filter((rangement) => texte(rangement?.subjectId))
+    .map((rangement) => affirmation(ITEM_TYPE.RANGEMENT, texte(rangement.subjectId), {
+      titre: texte(rangement?.titre),
+      // Le rang de la rubrique sous laquelle il va : la même jointure que pour
+      // les points d'un compte rendu, et la fusion n'en connaît qu'une.
+      rubrique: Number.isFinite(Number(rangement?.rubrique)) ? Number(rangement.rubrique) : null,
+      // Le lot tel qu'il était écrit dans le sujet : c'est ce qu'on relit pour
+      // vérifier que le rangement proposé est le bon.
+      lot: texte(rangement?.lot) || null
+    }));
 }
 
 /**

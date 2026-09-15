@@ -120,6 +120,23 @@ export const ITEM_TYPE = {
    */
   RUBRIQUE: "rubrique",
   /**
+   * Un sujet **déjà ouvert** qu'on range sous son lot.
+   *
+   * **Il ne change rien à ce que le sujet dit.** Ni son titre, ni son contenu,
+   * ni son état : il change l'endroit où on le trouve. C'est le rattrapage des
+   * sujets ouverts avant que le rangement par lot n'existe — et, comme tout le
+   * reste, il se coche et il se signe.
+   *
+   * Distinct de `RUBRIQUE`, qui ouvre le lot : celui-ci y met quelqu'un. Les
+   * confondre ferait d'une ligne deux gestes, dont l'un s'annulerait à
+   * refuser l'autre.
+   *
+   * Sa clé est l'identifiant du sujet : un sujet ne se range qu'une fois, et
+   * reproposer le même déplacement deux fois demanderait de le confirmer deux
+   * fois.
+   */
+  RANGEMENT: "rangement",
+  /**
    * Un lot du chantier, à ouvrir ou à activer.
    *
    * Un lot qu'un compte rendu nomme n'est pas une hypothèse : l'entreprise est
@@ -202,6 +219,7 @@ export const MOTS_DE_LA_NATURE = {
   [ITEM_TYPE.FERMETURE]: ["sujet à fermer", "sujets à fermer"],
   [ITEM_TYPE.INTERVENANT]: ["société à ajouter", "sociétés à ajouter"],
   [ITEM_TYPE.RUBRIQUE]: ["rubrique du compte rendu", "rubriques du compte rendu"],
+  [ITEM_TYPE.RANGEMENT]: ["sujet à ranger", "sujets à ranger"],
   [ITEM_TYPE.LOT]: ["lot à ouvrir", "lots à ouvrir"],
   [ITEM_TYPE.LABEL]: ["label à poser", "labels à poser"],
   [ITEM_TYPE.OBJECTIF]: ["jalon à poser", "jalons à poser"]

@@ -122,7 +122,10 @@ Presque rien à créer. Il s'agit d'alimenter ce qui est là.
 | Un sujet père **ouvert, et ses fils rattachés** | `peres-du-cr.js` | ✅ étape 4 |
 | L'état d'un père déduit de ses fils | `etatDuPere`, `accorderLePereAuxFils` | ✅ étape 5 |
 | L'assignation qui descend du père | `aQuiRevientLePoint`, `societesDesPeres` | ✅ étape 6 |
-| **Les sujets déjà à plat, rattrapés** | — | ❌ à faire |
+| Les sujets déjà à plat, rattrapés | `rattrapage-des-sujets.js`, `ITEM_TYPE.RANGEMENT` | ✅ étape 7 |
+| Le compteur de sous-sujets sur la ligne | `renderSubjectChildrenCounterHtml` | ✅ déjà là |
+| La vue « Lots », proposée | `vue-des-lots.js` | ✅ étape 8 |
+| **L'épingle depuis la ligne d'un lot** | — | ❌ à faire |
 
 Autrement dit : **le modèle voit déjà le rangement, et la base sait déjà le porter.** Ce qui
 manque est entre les deux.
@@ -332,7 +335,7 @@ rester chez MUFFAT, puisque c'est lui qui doit confirmer.
 
 ---
 
-### Étape 7 — Rattraper les sujets déjà à plat
+### Étape 7 — Rattraper les sujets déjà à plat · *faite*
 
 Le projet porte déjà quatre-vingt-treize sujets ouverts sans père. Les laisser ainsi ferait
 deux moitiés de liste, l'une rangée et l'autre pas.
@@ -344,18 +347,40 @@ au père correspondant. On coche, on signe, ils entrent.
 **Ce qui ne se rattrape pas se dit** : les sujets dont le lot ne se lit pas restent racines, et
 leur nombre s'affiche. C'est une lacune connue, pas un trou.
 
+**Où le lot se lit.** Dans la provenance qu'un sujet ouvert depuis un compte rendu porte déjà :
+« Relevé dans 1824_CR_12.pdf · lot 02 — GROS ŒUVRE · point n° 12.02.1 · page 3 ». C'est Mdall
+qui l'a écrite, dans une forme qu'il connaît. À défaut, le titre — et c'est tout : on ne cherche
+pas le nom d'une entreprise dans le corps d'un sujet, parce qu'un point qui *mentionne* une
+entreprise n'est pas un point qui lui *revient*.
+
+**Une nature de plus, `ITEM_TYPE.RANGEMENT`.** Elle ne change rien à ce qu'un sujet dit — ni son
+titre, ni son contenu, ni son état : elle change l'endroit où on le trouve. Distincte de
+`RUBRIQUE`, qui ouvre le lot : celle-là y met quelqu'un. La proposition porte les deux, et une
+rubrique refusée laisse ses sujets à la racine.
+
+**Un sujet qui a déjà un père n'est pas à rattraper** : le reproposer demanderait de confirmer
+un rangement déjà fait, et ferait douter de tous les autres.
+
 ---
 
-### Étape 8 — L'écran : le compteur, l'épingle, la vue
+### Étape 8 — L'écran : le compteur, l'épingle, la vue · *deux tiers*
 
 Rien à inventer, trois branchements.
 
-- **Le compteur de fils** sur la ligne d'un père : `renderProblemsCountsIconHtml`, celui des
-  sous-sujets. Il existe, il est partagé, on ne le refait pas.
-- **L'épingle** : `subject_pins` est là. Ce qui manque est de la proposer d'un clic depuis la
-  ligne d'un père.
-- **La vue « Lots »** : une recherche `label:LOT`, enregistrée. Elle se **propose** comme tout
-  le reste — une situation ne se crée pas d'office (règle 1).
+- **Le compteur de fils** sur la ligne d'un père · *déjà là*. `renderSubjectChildrenCounterHtml`
+  le pose depuis longtemps sur toute ligne qui porte des sous-sujets ; un lot en est une. Rien à
+  faire, et c'était le bon constat : on ne le refait pas.
+- **La vue « Lots »** · *faite*. `vue-des-lots.js` nomme la requête une fois — `label:LOT`,
+  composée du nom du label, jamais recopiée — et l'écran des vues la **propose** d'un clic :
+  la recherche s'ouvre, et c'est la personne qui décide de l'enregistrer. Trois refus : la vue
+  existe déjà, on n'a pas pu lire celles du projet (règle 5), ou **aucun lot n'est encore
+  ouvert** — une vue qui ne rendrait rien ferait croire que le chantier n'a pas de lots alors
+  qu'il n'a pas encore été rangé.
+- **L'épingle depuis la ligne d'un père** · *reste à faire*. `subject_pins` est là et le geste
+  existe, mais à deux endroits seulement : le bouton du panneau de droite et la croix d'une
+  carte épinglée. Les deux lisent l'état des épingles, que le tableau ne reçoit pas — l'y faire
+  descendre est du câblage à travers `deps`, et un bouton à moitié branché est un bouton qui
+  paraît sourd. À faire proprement, pas en passant.
 
 ---
 

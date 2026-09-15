@@ -497,3 +497,19 @@ test("un point sans rubrique n'hérite d'aucune entreprise", () => {
   assert.equal(societeDuPereDuPoint({ rubrique: 0 }, societes), "BERTRAND");
   assert.equal(societeDuPereDuPoint({ rubrique: 8 }, null), "");
 });
+
+/**
+ * **Un sujet rattrapé se range comme un sujet relancé.** Il était ouvert bien
+ * avant cette proposition : on ne le rouvre pas, on lui donne un père.
+ */
+test("un sujet rattrapé devient le fils de son lot", () => {
+  const items = [
+    uneRubrique("lot:1", "Lot n° 1 : Gros Œuvre", { ordres: [1] }),
+    { itemType: ITEM_TYPE.RANGEMENT, itemKey: "vieux-1", status: ITEM.ACCEPTED,
+      payload: { titre: "Un sujet de la douzième réunion", rubrique: 1 } },
+    { itemType: ITEM_TYPE.RANGEMENT, itemKey: "vieux-2", status: ITEM.REFUSED,
+      payload: { titre: "Celui qu'on a refusé de ranger", rubrique: 1 } }
+  ];
+
+  assert.deepEqual(filsDesPeres({ items }), [{ cle: "lot:1", subjectId: "vieux-1" }]);
+});

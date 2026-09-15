@@ -27,6 +27,7 @@ import {
 import {
   laLectureDoublee, refusDeLaVue, vueAEcrire, vuePourLEcran, vueRegardee
 } from "../../services/vues-des-sujets.js";
+import { LABEL_DU_LOT } from "../../services/label-du-cr.js";
 import { nomDuCompte } from "../../services/meta-des-sujets.js";
 import { MOI, sujetsFiltres } from "../../services/champs-des-sujets.js";
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
@@ -758,13 +759,32 @@ function vuesDuProjet() {
   }));
 }
 
+/**
+ * Combien de sujets de ce projet sont des lots.
+ *
+ * **Zéro n'ouvre rien.** Une vue « Lots » sur un projet qui n'en a pas encore
+ * rendrait une liste vide, et ferait croire que le chantier n'a pas de lots
+ * alors qu'il n'a pas encore été rangé.
+ */
+function combienDeLots() {
+  const sujets = store.projectSubjectsView?.subjectsData;
+  if (!Array.isArray(sujets)) return 0;
+
+  return sujets.filter((sujet) =>
+    (Array.isArray(sujet?.labels) ? sujet.labels : [])
+      .some((label) => String(label?.name ?? label ?? "").trim() === LABEL_DU_LOT)
+  ).length;
+}
+
 function renderEcranDesVues() {
   const forme = store.projectSubjectsView?.vueEnCours ?? null;
   const vues = vuesDuProjet();
 
   if (!forme) {
     return renderTableauDesVuesHtml({
-      vues, menuOuvert: String(store.projectSubjectsView?.vueMenuOuvert || "")
+      vues,
+      menuOuvert: String(store.projectSubjectsView?.vueMenuOuvert || ""),
+      lots: combienDeLots()
     });
   }
 
