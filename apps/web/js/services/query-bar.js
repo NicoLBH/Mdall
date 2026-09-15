@@ -125,11 +125,15 @@ export function filterValues(filters = {}, key = "") {
  * être ouvert **et** fermé, et proposer d'en cocher deux promettrait une liste
  * vide.
  *
- * @returns {{filters: Record<string,string|string[]>, text: string}}
+ * @returns {{filters: Record<string,string|string[]>, text: string,
+ *   inconnus: {champ: string, valeur: string}[]}} `inconnus` nomme les valeurs
+ *   qu'un champ **déclaré** n'admet pas : ce sont des fautes de frappe, et une
+ *   liste vide ne les distingue pas d'un filtre légitimement sans résultat.
  */
 export function parseQuery(query = "", fields = []) {
   const filtres = {};
   const mots = [];
+  const inconnus = [];
 
   for (const morceau of texte(query).split(/\s+/).filter(Boolean)) {
     const coupure = morceau.indexOf(":");
@@ -143,6 +147,16 @@ export function parseQuery(query = "", fields = []) {
 
     if (!champ || !valeur) {
       mots.push(morceau);
+      // **Un champ connu, une valeur qui ne l'est pas : c'est une faute de
+      // frappe, et elle se dit.** Le jeton reste du texte — la règle du fichier
+      // ne bouge pas —, mais la recherche porte alors sur `projet:Bertrnad`
+      // comme sur un mot, ne trouve rien, et la liste vide se lit comme un
+      // chantier sans travail. On ne corrige pas ; on prévient (règle 5).
+      //
+      // Un champ **inconnu** ne compte pas : `http://x` n'est pas une faute.
+      if (champ && !inconnus.some((entree) => entree.champ === champ.key && entree.valeur === morceau.slice(coupure + 1))) {
+        inconnus.push({ champ: champ.key, valeur: morceau.slice(coupure + 1) });
+      }
       continue;
     }
 
@@ -159,7 +173,22 @@ export function parseQuery(query = "", fields = []) {
     filtres[champ.key] = deja.includes(valeur.value) ? deja : [...deja, valeur.value];
   }
 
-  return { filters: filtres, text: mots.join(" ") };
+  return { filters: filtres, text: mots.join(" "), inconnus };
+}
+
+/**
+ * Ce qu'on n'a pas su reconnaître, dit en une phrase. `""` quand tout va bien.
+ *
+ * La barre garde le jeton tel quel — on le relit, on le corrige. Mais sans
+ * cette phrase, rien ne distingue « ce filtre ne retient rien » de « ce filtre
+ * n'existe pas » : dans les deux cas la liste est vide.
+ */
+export function phraseDesValeursInconnues(inconnus = []) {
+  const entrees = (Array.isArray(inconnus) ? inconnus : []).filter((entree) => entree?.champ && entree?.valeur);
+  if (!entrees.length) return "";
+
+  const dits = entrees.map((entree) => `« ${entree.valeur} » pour ${entree.champ}`);
+  return `${dits.join(", ")} : valeur inconnue. Le filtre n'est pas posé, et le texte est cherché tel quel.`;
 }
 
 /**

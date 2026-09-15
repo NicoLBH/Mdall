@@ -30,6 +30,7 @@ import {
   reorderSituationKanbanSubjects
 } from "../services/project-situations-supabase.js";
 import { chargerLesSujetsDesChantiers } from "../services/project-subjects-supabase.js";
+import { identifiantsDesProjets, phraseDesProjetsIncertains } from "../services/projets-du-filtre.js";
 import { loadProjectSituationsTrajectoryHistory } from "../services/project-situations-trajectory-service.js";
 import { createProjectSituationsState, getDefaultCreateForm, getSituationEditForm } from "./project-situations/project-situations-state.js";
 import { createProjectSituationsSelectors } from "./project-situations/project-situations-selectors.js";
@@ -291,6 +292,18 @@ function parseCsvList(value) {
     .filter(Boolean))];
 }
 
+/**
+ * Les chantiers qu'on sait nommer, tels que le carnet les a demandés à la base.
+ *
+ * Lus ici et dans le formulaire au même endroit : deux listes de chantiers
+ * finiraient par ne plus contenir les mêmes, et c'est celle qu'on ne regarde
+ * pas qui trancherait un nom (règle 4).
+ */
+function chantiersDuMagasin() {
+  const noms = store.situationsView?.nomsDesProjets;
+  return noms && typeof noms === "object" ? noms : {};
+}
+
 function buildCreateSituationPayload() {
   const form = uiState.createForm || getDefaultCreateForm();
   const mode = normalizeSituationMode(form.mode);
@@ -317,6 +330,7 @@ function buildCreateSituationPayload() {
           objectiveIds: parseCsvList(form.automaticObjectiveIds),
           labelIds: parseCsvList(form.automaticLabelIds),
           assigneeIds: parseCsvList(form.automaticAssigneeIds),
+          projectIds: identifiantsDesProjets(form.automaticProjectNames, chantiersDuMagasin()).ids,
           blockedOnly: Boolean(form.automaticBlockedOnly)
         }
       : null

@@ -242,3 +242,96 @@ test("un sujet sans méta se comporte comme un sujet vide", () => {
   assert.deepEqual(
     sujetsFiltres({ sujets: seul, requete: "label:cr-chantier", champs }).sujets, []);
 });
+
+/* ── Sur quel chantier ───────────────────────────────────────────────────── */
+
+const CHANTIERS = [
+  { id: "p-bertrand", name: "Résidence Bertrand" },
+  { id: "p-novaclim", name: "Novaclim — chaufferie" }
+];
+
+/**
+ * **Le champ ne se déclare que là où il y a plusieurs chantiers à distinguer.**
+ *
+ * Sur l'écran d'un seul projet, il n'aurait qu'une valeur et ne retirerait
+ * jamais rien : un filtre sans effet fait chercher ce qu'on a mal tapé. C'est
+ * la règle du fichier, appliquée ici comme aux autres champs.
+ */
+test("« projet » ne se propose que quand il y a plusieurs chantiers", () => {
+  const avecUn = champsDesSujets({ projets: [CHANTIERS[0]] }).map((champ) => champ.key);
+  const avecDeux = champsDesSujets({ projets: CHANTIERS }).map((champ) => champ.key);
+
+  assert.ok(!avecUn.includes("projet"), "un seul chantier : rien à distinguer");
+  assert.ok(avecDeux.includes("projet"));
+});
+
+/** La barre coupe sur les espaces : le jeton porte le nom en traits d'union. */
+test("un chantier s'écrit dans la barre sans espace", () => {
+  const champ = champsDesSujets({ projets: CHANTIERS }).find((entree) => entree.key === "projet");
+
+  assert.deepEqual(
+    champ.values.map((valeur) => valeur.token),
+    ["résidence-bertrand", "novaclim-—-chaufferie"]
+  );
+  assert.equal(champ.multiple, true, "on cherche sur l'un ou l'autre");
+});
+
+/**
+ * **Le chantier est une colonne du sujet**, pas une chose qu'il porte : un
+ * sujet appartient à un chantier et à un seul.
+ */
+test("le filtre par chantier lit la colonne du sujet", () => {
+  const champs = champsDesSujets({ projets: CHANTIERS });
+  const sujets = [
+    { id: "s-1", title: "Étanchéité", project_id: "p-bertrand" },
+    { id: "s-2", title: "Chaufferie", project_id: "p-novaclim" }
+  ];
+
+  const { sujets: retenus } = sujetsFiltres({ sujets, requete: "projet:residence-bertrand", champs });
+  assert.deepEqual(retenus.map((sujet) => sujet.id), ["s-1"]);
+});
+
+/** Deux chantiers cochés cherchent l'un **ou** l'autre, comme les labels. */
+test("deux chantiers cochés se lisent en « ou »", () => {
+  const champs = champsDesSujets({ projets: CHANTIERS });
+  const sujets = [
+    { id: "s-1", title: "a", project_id: "p-bertrand" },
+    { id: "s-2", title: "b", project_id: "p-novaclim" },
+    { id: "s-3", title: "c", project_id: "p-verifas" }
+  ];
+
+  const { sujets: retenus } = sujetsFiltres({
+    sujets,
+    requete: "projet:residence-bertrand projet:novaclim-—-chaufferie",
+    champs
+  });
+  assert.deepEqual(retenus.map((sujet) => sujet.id), ["s-1", "s-2"]);
+});
+
+/** Un sujet sans chantier ne répond à aucun filtre de chantier. */
+test("un sujet sans chantier ne se glisse pas dans un filtre de chantier", () => {
+  const champs = champsDesSujets({ projets: CHANTIERS });
+  const { sujets: retenus } = sujetsFiltres({
+    sujets: [{ id: "s-1", title: "a" }],
+    requete: "projet:residence-bertrand",
+    champs
+  });
+
+  assert.deepEqual(retenus, []);
+});
+
+/**
+ * **Un nom mal tapé se dit.** Sans cela, la liste vide se lit comme un chantier
+ * sans travail, et l'on cherche la panne dans les sujets (règle 5).
+ */
+test("un chantier mal tapé remonte plutôt que de se taire", () => {
+  const champs = champsDesSujets({ projets: CHANTIERS });
+  const { inconnus, sujets: retenus } = sujetsFiltres({
+    sujets: [{ id: "s-1", title: "a", project_id: "p-bertrand" }],
+    requete: "projet:residence-bertrnad",
+    champs
+  });
+
+  assert.deepEqual(inconnus, [{ champ: "projet", valeur: "residence-bertrnad" }]);
+  assert.deepEqual(retenus, [], "le jeton reste du texte, et ne se trouve pas dans le titre");
+});

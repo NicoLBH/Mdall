@@ -171,3 +171,81 @@ test("le calque n'habille que ce qui est reconnu", () => {
 test("le calque échappe ce qu'on lui donne", () => {
   assert.match(renderQueryMirror("<script>", CHAMPS), /&lt;script&gt;/);
 });
+
+/* ── Une valeur inconnue sur un champ connu ──────────────────────────────── */
+
+/**
+ * **Le jeton reste du texte — la règle du fichier ne bouge pas.** Mais sans le
+ * dire, rien ne distingue « ce filtre ne retient rien » de « ce filtre n'existe
+ * pas » : dans les deux cas la liste est vide, et l'on cherche la panne dans
+ * les données plutôt que dans sa propre frappe (règle 5).
+ */
+test("une valeur inconnue sur un champ connu est nommée", async () => {
+  const { parseQuery, phraseDesValeursInconnues } = await import("./query-bar.js");
+  const champs = [{ key: "projet", label: "Chantier", values: [{ value: "p-1", label: "Résidence Bertrand" }] }];
+
+  const { filters, text, inconnus } = parseQuery("projet:Bertrnad", champs);
+
+  assert.deepEqual(filters, {}, "aucun filtre posé");
+  assert.equal(text, "projet:Bertrnad", "le jeton reste du texte, comme avant");
+  assert.deepEqual(inconnus, [{ champ: "projet", valeur: "Bertrnad" }]);
+  assert.match(phraseDesValeursInconnues(inconnus), /« Bertrnad » pour projet/);
+});
+
+/**
+ * **Un champ inconnu n'est pas une faute.** `http://exemple.fr` porte deux
+ * points sans être un filtre raté, et l'annoncer ferait crier l'écran sur une
+ * adresse parfaitement valable.
+ */
+test("un champ inconnu ne se signale pas : ce n'est pas une faute de frappe", async () => {
+  const { parseQuery } = await import("./query-bar.js");
+  const champs = [{ key: "projet", label: "Chantier", values: [{ value: "p-1", label: "Résidence" }] }];
+
+  assert.deepEqual(parseQuery("http://exemple.fr", champs).inconnus, []);
+  assert.deepEqual(parseQuery("zoiseau:bleu", champs).inconnus, []);
+});
+
+/**
+ * Une valeur reconnue ne se signale évidemment pas.
+ *
+ * **Un nom à espaces s'écrit avec des traits d'union.** La barre coupe sur les
+ * espaces : c'est pour cela que chaque valeur porte un `token`, et que les
+ * labels s'y écrivent déjà ainsi. Un chantier ne fait pas exception.
+ */
+test("ce qui est reconnu ne se signale pas", async () => {
+  const { parseQuery, phraseDesValeursInconnues } = await import("./query-bar.js");
+  const champs = [{
+    key: "projet",
+    label: "Chantier",
+    values: [{ value: "p-1", token: "résidence-bertrand", label: "Résidence Bertrand" }]
+  }];
+
+  const { filters, inconnus } = parseQuery("projet:residence-bertrand", champs);
+
+  assert.equal(filters.projet, "p-1", "l'accent n'est pas obligatoire");
+  assert.deepEqual(inconnus, []);
+  assert.equal(phraseDesValeursInconnues([]), "");
+});
+
+/** Et le même nom tapé avec ses espaces ne passe pas — il se dit. */
+test("un nom tapé avec ses espaces se signale plutôt que de se taire", async () => {
+  const { parseQuery } = await import("./query-bar.js");
+  const champs = [{
+    key: "projet",
+    label: "Chantier",
+    values: [{ value: "p-1", token: "résidence-bertrand", label: "Résidence Bertrand" }]
+  }];
+
+  const { filters, inconnus } = parseQuery("projet:Résidence Bertrand", champs);
+
+  assert.deepEqual(filters, {});
+  assert.deepEqual(inconnus.map((entree) => entree.valeur), ["Résidence"]);
+});
+
+/** La même faute tapée deux fois ne se dit qu'une. */
+test("une faute répétée ne se dit qu'une fois", async () => {
+  const { parseQuery } = await import("./query-bar.js");
+  const champs = [{ key: "projet", label: "Chantier", values: [{ value: "p-1", label: "Résidence" }] }];
+
+  assert.equal(parseQuery("projet:zz projet:zz", champs).inconnus.length, 1);
+});

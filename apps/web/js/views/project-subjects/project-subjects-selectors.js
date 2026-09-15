@@ -3,6 +3,7 @@ import { champsDesSujets, sujetsFiltres } from "../../services/champs-des-sujets
 import { metaDesSujets, moiDansLeProjet, personnesDuProjet } from "../../services/meta-des-sujets.js";
 import { CLES_DE_LA_CHARGE } from "../../services/charge-des-sujets.js";
 import { withFilter } from "../../services/query-bar.js";
+import { chantiersDeCesSujets } from "../../services/projets-du-filtre.js";
 import {
   getChildrenBySubjectIdMapFromRawResult,
   getParentBySubjectIdMapFromRawResult,
@@ -404,6 +405,11 @@ export function createProjectSubjectsSelectors({
           id: String(situation?.id ?? "").trim(),
           title: String(situation?.title ?? situation?.id ?? "").trim()
         })),
+      // **Les chantiers présents dans la liste, et eux seuls.** Proposer d'en
+      // filtrer un qui n'y est pas promettrait un résultat vide. Le champ ne se
+      // déclare donc que si la liste en couvre plusieurs — ce qui n'arrive pas
+      // sur l'écran d'un projet, et arrivera dans le carnet (étape 4).
+      projets: chantiersDeCesSujets(getFlatSubjects(), store.situationsView?.nomsDesProjets || {}),
       // **« Mentions » et « Activité récente » se calculent en base.** Sans
       // réponse, elles ne se proposent pas : un filtre qui ne rendrait jamais
       // rien fait chercher ce qu'on a mal tapé plutôt que ce qui n'a pas

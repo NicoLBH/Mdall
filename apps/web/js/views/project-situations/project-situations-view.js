@@ -19,6 +19,20 @@ export function createProjectSituationsView({
   getSituationById,
   renderSituationKanban
 }) {
+  /**
+   * Les chantiers qu'on sait nommer, pour les proposer dans le filtre.
+   *
+   * Ils viennent du carnet, qui les a demandés à la base en chargeant ses
+   * situations. Les chercher dans le navigateur ferait manquer ceux qu'on n'a
+   * jamais ouverts sur cette machine — c'est-à-dire précisément ceux qu'on ne
+   * sait pas nommer de tête (étape 4).
+   */
+  function chantiersConnus() {
+    const noms = store.situationsView?.nomsDesProjets;
+    if (!noms || typeof noms !== "object") return [];
+    return Object.entries(noms).map(([id, name]) => ({ id, name }));
+  }
+
   function renderSituationInsightsBarChart({ labels = [], values = [], yTicks = [0, 1], yMax = 1 } = {}) {
     const safeLabels = Array.isArray(labels) ? labels : [];
     const safeValues = Array.isArray(values) ? values : [];
@@ -294,6 +308,7 @@ export function createProjectSituationsView({
       subtitle: "Crée une vraie situation projet stockée dans Supabase.",
       closeDataAttribute: "data-close-project-situation-modal",
       bodyHtml: renderSituationForm({
+        projets: chantiersConnus(),
         form,
         mode: "create",
         normalizeSituationMode,
@@ -379,7 +394,7 @@ export function createProjectSituationsView({
   function renderEditSituationPanel() {
     const selectedSituationId = String(store.situationsView?.selectedSituationId || "").trim();
     const selectedSituation = getSituationById(selectedSituationId);
-    const form = uiState.editForm || getSituationEditForm(selectedSituation);
+    const form = uiState.editForm || getSituationEditForm(selectedSituation, chantiersConnus());
 
     if (!selectedSituation) {
       return renderSelectedSituationDetails();
@@ -423,6 +438,7 @@ export function createProjectSituationsView({
                 </div>
                 <div class="details-body project-situation-edit__body">
                   ${renderSituationForm({
+        projets: chantiersConnus(),
                     form,
                     mode: "edit",
                     normalizeSituationMode,

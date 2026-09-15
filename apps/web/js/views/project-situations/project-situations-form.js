@@ -1,5 +1,42 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 
+/**
+ * Sur quels chantiers la requête porte.
+ *
+ * **Des noms, pas des identifiants.** Les autres champs de ce formulaire se
+ * saisissent en identifiants ; celui-ci ne le peut pas — on ne retient pas les
+ * identifiants de quinze chantiers, on retient « Résidence Bertrand ».
+ *
+ * **La liste se propose à la frappe**, par une `datalist` : c'est le navigateur
+ * qui filtre, et rien de neuf n'est dessiné. Inventer un menu ici obligerait à
+ * le recalibrer à côté des autres champs, qui sont des `input` ordinaires.
+ *
+ * Aucun chantier écrit n'est pas un filtre : la requête porte sur tout le
+ * périmètre de la situation (étape 4).
+ */
+function renderChantiersField(mode, form, projets = []) {
+  const liste = `situationChantiers-${mode}`;
+  const options = (Array.isArray(projets) ? projets : [])
+    .map((projet) => `<option value="${escapeHtml(String(projet?.name ?? projet?.nom ?? ""))}"></option>`)
+    .join("");
+
+  return `
+    <label class="settings-modal__field">
+      <span class="settings-modal__label">Chantiers (noms séparés par des virgules)</span>
+      <input
+        type="text"
+        class="gh-input settings-modal__input"
+        data-situation-${mode}-field="automaticProjectNames"
+        value="${escapeHtml(form?.automaticProjectNames || "")}"
+        list="${escapeHtml(liste)}"
+        placeholder="Tous ceux de la situation"
+        autocomplete="off"
+        spellcheck="false">
+      <datalist id="${escapeHtml(liste)}">${options}</datalist>
+    </label>
+  `;
+}
+
 function renderCheckboxField(key, label, checked, dataAttr) {
   return `<label class="project-lot-modal__radio"><input type="checkbox" ${dataAttr}="${escapeHtml(key)}" ${checked ? "checked" : ""}><span>${escapeHtml(label)}</span></label>`;
 }
@@ -7,6 +44,8 @@ function renderCheckboxField(key, label, checked, dataAttr) {
 export function renderSituationForm({
   form,
   mode = "create",
+  /** Les chantiers qu'on sait nommer, proposés à la frappe. */
+  projets = [],
   normalizeSituationMode,
   error = "",
   submitting = false,
@@ -100,6 +139,8 @@ export function renderSituationForm({
         <span class="settings-modal__label">Assignés (IDs séparés par des virgules)</span>
         <input type="text" class="gh-input settings-modal__input" data-situation-${resolvedMode}-field="automaticAssigneeIds" value="${escapeHtml(form?.automaticAssigneeIds || "")}" autocomplete="off" spellcheck="false">
       </label>
+
+      ${renderChantiersField(resolvedMode, form, projets)}
     ` : ""}
 
     ${error ? `<div class="gh-alert gh-alert--error settings-modal__feedback">${escapeHtml(error)}</div>` : ""}

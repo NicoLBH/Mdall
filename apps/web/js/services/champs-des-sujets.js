@@ -108,7 +108,7 @@ export const ACTIVITES = [{ value: "recente", token: "récente", label: "Activit
  */
 export function champsDesSujets({
   labels = [], objectifs = [], lots = [], personnes = [], situations = [],
-  signauxLus = true
+  projets = [], signauxLus = true
 } = {}) {
   const champs = [
     { key: "statut", label: "Statut", values: STATUTS },
@@ -181,6 +181,19 @@ export function champsDesSujets({
     if (signauxLus) {
       champs.push({ key: "mention", label: "Mentions", values: avecMoi(), multiple: true });
     }
+  }
+
+  // **Sur quel chantier.** Depuis que les situations traversent les projets, une
+  // liste peut mêler quatre chantiers, et « les sujets bloqués » ne veut plus
+  // dire grand-chose sans dire où. Le champ ne se déclare que là où il y a
+  // plusieurs chantiers à distinguer : sur l'écran d'un seul projet, il
+  // n'aurait qu'une valeur et ne retirerait jamais rien.
+  //
+  // Son jeton est le nom en traits d'union, comme pour les labels : la barre
+  // coupe sur les espaces, et « Résidence Bertrand » ne s'y écrit pas tel quel.
+  const desProjets = nommes(projets, "id", "name");
+  if (desProjets.length > 1) {
+    champs.push({ key: "projet", label: "Chantiers", values: desProjets, multiple: true });
   }
 
   const desSituations = avecAucun(nommes(situations, "id", "title"));
@@ -282,7 +295,7 @@ export function sujetsFiltres({
   sujets = [], requete = "", champs = [], meta = {}, moi = "", maintenant = Date.now()
 } = {}) {
   const tous = Array.isArray(sujets) ? sujets : [];
-  const { filters, text } = parseQuery(requete, champs);
+  const { filters, text, inconnus } = parseQuery(requete, champs);
 
   const mots = repli(text).split(/\s+/).filter(Boolean);
   // Un filtre qu'on ne peut pas appliquer est **annoncé**, pas appliqué de
@@ -331,6 +344,15 @@ export function sujetsFiltres({
       if (!porteLUneDe(listeDe(valeurs), cherchees)) return false;
     }
 
+    // **Le chantier est une colonne du sujet**, pas une chose qu'il porte : on
+    // le lit sur lui, et non dans sa méta. Un sujet appartient à un chantier et
+    // à un seul.
+    const chantiers = filterValues(filters, "projet");
+    if (chantiers.length) {
+      const sien2 = texte(sujet?.project_id ?? sujet?.projectId);
+      if (!sien2 || !chantiers.includes(sien2)) return false;
+    }
+
     if (filters["activité"] === "recente" && !estRecent(sujet, sien, maintenant)) return false;
 
     if (mots.length === 0) return true;
@@ -338,7 +360,9 @@ export function sujetsFiltres({
     return mots.every((mot) => titre.includes(mot));
   });
 
-  return { sujets: retenus, filtres: filters, texte: text, ignores };
+  // Ce qu'un champ déclaré n'a pas reconnu remonte tel quel : une liste vide
+  // ne distingue pas « ce filtre ne retient rien » de « j'ai mal tapé ».
+  return { sujets: retenus, filtres: filters, texte: text, ignores, inconnus };
 }
 
 /**

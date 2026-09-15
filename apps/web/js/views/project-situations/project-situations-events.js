@@ -11,6 +11,7 @@ import {
 } from "./project-situations-view-grid.js";
 import { buildSubjectHierarchyIndexes } from "../../services/subject-hierarchy.js";
 import { getExpandedSubjectIdsSet, resolveSituationTreeData } from "./project-situations-tree-data.js";
+import { identifiantsDesProjets, phraseDesProjetsIncertains } from "../../services/projets-du-filtre.js";
 
 function syncSubmitButtonState(button, { submitting = false, title = "" } = {}) {
   if (!button) return;
@@ -1712,6 +1713,25 @@ export function createProjectSituationsEvents({
       rerender(root);
     }
   }
+  /** Les chantiers qu'on sait nommer — la même liste que partout (règle 4). */
+  function chantiersDuMagasin() {
+    const noms = store.situationsView?.nomsDesProjets;
+    return noms && typeof noms === "object" ? noms : {};
+  }
+
+  /**
+   * Ce qui n'a pas été reconnu dans le champ des chantiers, ou `""`.
+   *
+   * **On refuse d'enregistrer tant qu'un nom n'est pas reconnu.** Enregistrer
+   * en l'ignorant donnerait une situation qui ne retient rien, et une situation
+   * vide se lit comme un chantier sans travail — pas comme une faute de frappe.
+   * Le nom fautif est sous les yeux, dans le champ : le corriger est immédiat.
+   */
+  function incertitudeDesChantiers(form) {
+    if (normalizeSituationMode(form?.mode) !== "automatic") return "";
+    return phraseDesProjetsIncertains(identifiantsDesProjets(form?.automaticProjectNames, chantiersDuMagasin()));
+  }
+
   function buildEditSituationPayload() {
     const form = uiState.editForm || getDefaultCreateForm();
     const mode = normalizeSituationMode(form.mode);
@@ -1737,6 +1757,7 @@ export function createProjectSituationsEvents({
             objectiveIds: parseCsvList(form.automaticObjectiveIds),
             labelIds: parseCsvList(form.automaticLabelIds),
             assigneeIds: parseCsvList(form.automaticAssigneeIds),
+            projectIds: identifiantsDesProjets(form.automaticProjectNames, chantiersDuMagasin()).ids,
             blockedOnly: Boolean(form.automaticBlockedOnly)
           }
         : null
@@ -1769,7 +1790,7 @@ export function createProjectSituationsEvents({
     uiState.insightsPanelOpen = false;
     uiState.editSubmitting = false;
     uiState.editError = "";
-    uiState.editForm = getSituationEditForm(selectedSituation);
+    uiState.editForm = getSituationEditForm(selectedSituation, chantiersDuMagasin());
     rerender(root);
   }
 
@@ -1810,6 +1831,13 @@ export function createProjectSituationsEvents({
       return;
     }
 
+    const incertitude = incertitudeDesChantiers(uiState.createForm);
+    if (incertitude) {
+      uiState.createError = incertitude;
+      rerender(root);
+      return;
+    }
+
     uiState.createSubmitting = true;
     uiState.createError = "";
     rerender(root);
@@ -1840,6 +1868,13 @@ export function createProjectSituationsEvents({
     }
     if (!situationId) {
       uiState.editError = "Impossible d'identifier la situation à modifier.";
+      rerender(root);
+      return;
+    }
+
+    const incertitude = incertitudeDesChantiers(uiState.editForm);
+    if (incertitude) {
+      uiState.editError = incertitude;
       rerender(root);
       return;
     }
