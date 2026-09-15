@@ -243,7 +243,19 @@ export function lectureQuOnRegarde(requete = "", champs = []) {
  * @param {string} [options.labelDuCr] la clé du label « CR chantier », s'il existe
  */
 export function railDesSujets({
-  sujets = [], champs = [], requete = "", meta = {}, moi = "", maintenant = Date.now()
+  sujets = [], champs = [], requete = "", meta = {}, moi = "", maintenant = Date.now(),
+  /**
+   * Le nom de l'endroit d'où l'on part, quand ce n'est pas « Sujets ».
+   *
+   * **Le rail nomme des endroits**, et l'endroit d'où l'on part n'est pas le
+   * même selon l'écran : sur l'onglet Sujets d'un projet on part de ses sujets,
+   * dans le carnet on part de **la liste de ses situations**. Le reste ne
+   * bouge pas — « Assigné à moi » désigne les mêmes sujets des deux côtés.
+   *
+   * Il se donne plutôt qu'il ne se devine : un rail qui lirait l'écran courant
+   * pour choisir son premier mot serait un rail qui connaît les écrans.
+   */
+  nomDuDepart = ""
 } = {}) {
   const active = lectureQuOnRegarde(requete, champs);
 
@@ -266,7 +278,7 @@ export function railDesSujets({
 
     return {
       cle: lecture,
-      nom: NOMS_DE_LA_LECTURE[lecture],
+      nom: (lecture === LECTURE.TOUS && texte(nomDuDepart)) || NOMS_DE_LA_LECTURE[lecture],
       icone: ICONES_DE_LA_LECTURE[lecture],
       requete: laRequete,
       combien: ignores.length > 0 ? null : retenus.length,

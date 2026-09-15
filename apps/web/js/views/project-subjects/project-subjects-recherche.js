@@ -83,9 +83,28 @@ const repli = (valeur) => texte(valeur)
  */
 export function renderRailDesSujetsHtml({
   sujets = [], champs = [], requete = "", meta = {}, moi = "", maintenant = Date.now(),
-  epingles = [], replie = false, sousVue = "subjects", menuDesEpingles = false
+  epingles = [], replie = false, sousVue = "subjects", menuDesEpingles = false,
+  /**
+   * Le nom de l'endroit d'où l'on part, quand ce n'est pas « Sujets ».
+   *
+   * Le carnet part de la liste de ses situations ; l'onglet Sujets d'un projet
+   * part de ses sujets. Le reste du rail ne bouge pas.
+   */
+  nomDuDepart = "",
+  /**
+   * Les autres écrans du domaine — Vues, Situations, Objectifs, Labels.
+   *
+   * **Ils appartiennent à l'onglet Sujets d'un projet, et à lui seul.** Dans le
+   * carnet, ils ouvraient des écrans qui n'existent pas là où l'on est : un
+   * rail qui propose quatre endroits dont aucun n'est atteignable depuis
+   * celui-ci n'oriente pas, il égare. À leur place, les situations épinglées —
+   * qui sont, elles, ce que le carnet contient.
+   */
+  autresEcrans = true
 } = {}) {
-  const { lectures } = railDesSujets({ sujets, champs, requete, meta, moi, maintenant });
+  const { lectures } = railDesSujets({
+    sujets, champs, requete, meta, moi, maintenant, nomDuDepart
+  });
   const posees = epinglesDuRail(epingles, requete);
 
   const uneLecture = (lecture) => renderNavListItem({
@@ -146,6 +165,7 @@ export function renderRailDesSujetsHtml({
       label: "Lectures des sujets",
       html: `
         ${renderNavListGroup({ items: lectures.map(uneLecture) })}
+        ${autresEcrans ? `
         ${renderNavListDivider()}
         ${renderNavListGroup({
           items: [
@@ -160,6 +180,7 @@ export function renderRailDesSujetsHtml({
             unEcran("labels", "Labels", "tag", "data-sujets-sousvue")
           ]
         })}
+        ` : ""}
         ${posees.length === 0 ? "" : `
           ${renderNavListDivider()}
           ${replie

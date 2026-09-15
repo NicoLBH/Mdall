@@ -571,6 +571,7 @@ const { bindEvents } = createProjectSituationsEvents({
   champsDeLEcran,
   store,
   uiState,
+  safeArray,
   rerender,
   refreshSituationsData,
   createSituationRecord,

@@ -14,7 +14,7 @@ import { laLectureDoublee } from "../../services/vues-des-sujets.js";
 import { sujetsFiltres } from "../../services/champs-des-sujets.js";
 import { renderTableauDesSujetsRetenusHtml } from "./project-situations-table.js";
 import { railWidth } from "../ui/project-rail.js";
-import { estUneLecture, situationsDeLecture } from "../../services/lectures-du-carnet.js";
+import { NOM_DES_SITUATIONS, estUneLecture, situationsDeLecture } from "../../services/lectures-du-carnet.js";
 import { situationCommeUneEpingle } from "../../services/situation-comme-une-vue.js";
 import { renderSituationGridView } from "./project-situations-view-grid.js";
 import { renderSituationRoadmapView } from "./project-situations-view-roadmap.js";
@@ -95,7 +95,14 @@ export function createProjectSituationsView({
       moi: moiDeLEcran(),
       epingles,
       replie,
-      sousVue: "subjects"
+      sousVue: "subjects",
+      // **On part de la liste de ses situations, pas de ses sujets.** C'est ce
+      // que la première entrée ouvre ici, et le mot doit le dire.
+      nomDuDepart: NOM_DES_SITUATIONS,
+      // Vues, Situations, Objectifs, Labels sont les écrans de l'onglet Sujets
+      // d'un projet. Le carnet n'en a aucun : les proposer ferait quatre portes
+      // qui ne mènent nulle part.
+      autresEcrans: false
     });
   }
 

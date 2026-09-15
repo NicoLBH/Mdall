@@ -199,6 +199,42 @@ Le test de la forme ne la décrit plus : il la fait **traverser** `epinglesDuRai
 et regarde ce qui en ressort. Une fixture qui recopie les hypothèses du code ne
 teste que elle-même.
 
+### Le rail du carnet n'est pas celui d'un projet
+
+Il montait le rail des Sujets tel quel, et en héritait deux choses qui ne sont
+pas les siennes.
+
+**La première entrée s'appelait « Sujets »** et ouvrait pourtant le tableau des
+situations : le rail nommait un endroit qui n'était pas celui où le clic menait.
+Elle s'appelle « Situations », et le nom se **donne** — `nomDuDepart` — plutôt
+que de se deviner : un rail qui lirait l'écran courant pour choisir son premier
+mot serait un rail qui connaît les écrans.
+
+**Vues, Situations, Objectifs et Labels** sont les écrans de l'onglet Sujets
+d'un projet. Dans le carnet, ils ouvraient des écrans qui n'existent pas là où
+l'on est : quatre portes qui ne mènent nulle part n'orientent pas, elles
+égarent. À leur place, les situations épinglées — qui sont, elles, ce que le
+carnet contient.
+
+Les quatre lectures restent des deux côtés : « Assigné à moi » désigne les mêmes
+sujets, et c'est un raccourci vers la situation qui les retient.
+
+Un test garde l'onglet Sujets d'un projet contre ces deux paramètres : sans
+valeur par défaut juste, il perdrait son premier nom et ses quatre écrans sans
+que rien ne le dise.
+
+### Le même nom libre, une seconde fois
+
+`safeArray` était employé sans être ni déclaré ni importé dans les **événements**
+aussi — au clic sur une entrée du rail, et au moment d'enregistrer une
+situation. Deux gestes morts, la même cause, recopiée d'un module voisin où le
+nom est une dépendance.
+
+Il en est devenu une ici aussi : un nom déclaré dans la signature ne se prend
+plus dans le vide. Et `project-situations-events.test.mjs` **exécute** les
+gestes qui n'ont pas besoin d'un document — c'est la seule chose qui voit un
+nom libre.
+
 ### Étape 3 — Le formulaire d'une vue · *faite*
 
 « Nouvelle situation » ouvre le formulaire d'une vue : icône, couleur, titre,

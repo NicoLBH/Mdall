@@ -84,6 +84,16 @@ function flattenVisibleSubjectIds({
 export function createProjectSituationsEvents({
   store,
   uiState,
+  /**
+   * Ce qui rend une liste quoi qu'on lui donne.
+   *
+   * **Déclaré ici parce qu'il était employé sans l'être.** Deux appels le
+   * prenaient dans le vide — `ReferenceError` au clic sur une entrée du rail,
+   * et au moment d'enregistrer une situation. Le nom venait d'un module voisin
+   * où il est une dépendance ; recopié sans sa porte, il ne ratait pas
+   * bruyamment : il ne ratait qu'à l'exécution, chez quelqu'un.
+   */
+  safeArray = (valeur) => (Array.isArray(valeur) ? valeur : []),
   rerender,
   refreshSituationsData,
   createSituationRecord,
@@ -2389,6 +2399,7 @@ export function createProjectSituationsEvents({
   }
 
   return {
+    situationQuiPorte,
     ouvrirLaComposition,
     ouvrirLaCompositionDeLaSituation,
     annulerLaComposition,

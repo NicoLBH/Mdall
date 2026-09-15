@@ -248,3 +248,49 @@ test("le rail replié ne fait pas tomber la page", () => {
 
   assert.match(html, /project-rail-layout/);
 });
+
+/* ── Le rail du carnet n'est pas celui d'un projet ───────────────────────── */
+
+/**
+ * **On part de la liste de ses situations, pas de ses sujets.**
+ *
+ * La première entrée s'appelait « Sujets » et ouvrait pourtant le tableau des
+ * situations : le rail nommait un endroit qui n'était pas celui où le clic
+ * menait.
+ */
+test("la première entrée du carnet s'appelle Situations", () => {
+  const html = ecran({ situations: [MA_SITUATION] }).renderPage();
+
+  assert.match(html, /nav-list__label">Situations</, "l'endroit d'où l'on part");
+  assert.ok(!html.includes('nav-list__label">Sujets<'), "et ce n'est pas « Sujets »");
+  assert.match(html, /data-sujets-lecture=""/, "elle pose une requête vide : toute la liste");
+});
+
+/**
+ * **Vues, Situations, Objectifs, Labels appartiennent à l'onglet Sujets d'un
+ * projet.** Dans le carnet, ils ouvraient des écrans qui n'existent pas là où
+ * l'on est : quatre portes qui ne mènent nulle part n'orientent pas, elles
+ * égarent. À leur place, les situations épinglées.
+ */
+test("le carnet ne propose pas les écrans d'un projet", () => {
+  const html = ecran({ situations: [MA_SITUATION] }).renderPage();
+
+  for (const ecranDunProjet of ["Vues", "Objectifs", "Labels"]) {
+    assert.ok(
+      !html.includes(`nav-list__label">${ecranDunProjet}<`),
+      `« ${ecranDunProjet} » n'a rien à faire dans le carnet`
+    );
+  }
+  assert.ok(!html.includes("data-sujets-sousvue"), "ni les gestes qui y mèneraient");
+  assert.match(html, /Ma semaine/, "à leur place, mes situations");
+});
+
+/** Les quatre lectures restent : ce sont des raccourcis vers des situations. */
+test("les lectures du rail restent, et elles portent leur requête", () => {
+  const html = ecran({ situations: [] }).renderPage();
+
+  for (const lecture of ["Assigné à moi", "Créé par moi", "Mentions", "Activité récente"]) {
+    assert.ok(html.includes(`nav-list__label">${lecture}<`), `« ${lecture} » doit rester`);
+  }
+  assert.match(html, /data-sujets-lecture="assigné:moi"/, "et ouvrir la situation qu'elle désigne");
+});
