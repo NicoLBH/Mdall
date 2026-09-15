@@ -14,7 +14,7 @@ import { laLectureDoublee } from "../../services/vues-des-sujets.js";
 import { sujetsFiltres } from "../../services/champs-des-sujets.js";
 import { renderTableauDesSujetsRetenusHtml } from "./project-situations-table.js";
 import { railWidth } from "../ui/project-rail.js";
-import { NOM_DES_SITUATIONS, estUneLecture, situationsDeLecture } from "../../services/lectures-du-carnet.js";
+import { estUneLecture, situationsDeLecture } from "../../services/lectures-du-carnet.js";
 import { situationCommeUneEpingle } from "../../services/situation-comme-une-vue.js";
 import { renderSituationGridView } from "./project-situations-view-grid.js";
 import { renderSituationRoadmapView } from "./project-situations-view-roadmap.js";
@@ -75,12 +75,17 @@ export function createProjectSituationsView({
     const requete = String(store.situationsView?.requeteDuCarnet || "");
     const replie = store.situationsView?.railReplie === true;
 
-    // Mes situations sous « Épinglées », et les lectures juste au-dessus : les
-    // unes et les autres ouvrent une situation, ce qui est tout l'intérêt.
-    const epingles = [
-      ...situationsDeLecture(champs),
-      ...safeArray(store.situationsView?.data)
-    ].map((situation) => situationCommeUneEpingle(situation, requete));
+    // **Mes situations sous « Épinglées », et elles seules.**
+    //
+    // Les lectures y étaient jointes, et elles n'ont rien à y faire : le rail
+    // les monte déjà lui-même, en tête, depuis ses propres champs. Les ajouter
+    // ici les aurait affichées **deux fois** le jour où les épinglées
+    // fonctionnent — ce qui n'était jamais arrivé, un second défaut masquant le
+    // premier.
+    const mesSituations = Array.isArray(store.situationsView?.data)
+      ? store.situationsView.data
+      : [];
+    const epingles = mesSituations.map(situationCommeUneEpingle);
 
     return renderRailDesSujetsHtml({
       sujets: Array.isArray(charge.subjects) ? charge.subjects : [],

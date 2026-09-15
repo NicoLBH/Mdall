@@ -9,6 +9,7 @@ import {
   situationCommeUneEpingle
 } from "./situation-comme-une-vue.js";
 import { COULEURS_DE_VUE, ICONES_DE_VUE } from "./vues-des-sujets.js";
+import { epinglesDuRail } from "./rail-des-sujets.js";
 
 /**
  * **Le jeu d'icônes est celui des vues.** En redéclarer un pour les situations
@@ -58,43 +59,71 @@ test("une situation sans requête ne se lit pas comme « tous les sujets »", ()
 /* ── Sous « Épinglées » ──────────────────────────────────────────────────── */
 
 /**
- * C'est la forme que le rail des sujets consomme déjà pour ses vues : de quoi
- * y poser mes situations sans écrire un second rail (étape 2).
+ * **La forme se vérifie en la faisant traverser le rail**, pas en la décrivant.
+ *
+ * Le test d'avant décrivait un objet — `nom`, `active` — et passait, pendant
+ * que le rail lisait `titre` et `auRail` et écartait **toutes** mes situations
+ * en silence. Une fixture qui recopie les hypothèses du code ne teste que
+ * elle-même ; celle-ci donne la forme à `epinglesDuRail` et regarde ce qui en
+ * ressort.
  */
-test("une situation se présente comme une vue épinglée", () => {
-  const epingle = situationCommeUneEpingle(
-    { id: "s-1", title: "Ma semaine", icon: "clock-fill", color: "bleu", requete: "assigné:moi" },
+test("une situation traverse le rail et en ressort avec son nom", () => {
+  const [epingle] = epinglesDuRail(
+    [situationCommeUneEpingle({
+      id: "s-1", title: "Ma semaine", icon: "clock-fill", color: "bleu", requete: "assigné:moi"
+    })],
     "assigné:moi"
   );
 
-  assert.deepEqual(epingle, {
-    id: "s-1",
-    nom: "Ma semaine",
-    icone: "clock-fill",
-    couleur: "bleu",
-    requete: "assigné:moi",
-    active: true
-  });
+  assert.ok(epingle, "elle ne doit pas être écartée du rail");
+  assert.equal(epingle.nom, "Ma semaine", "son nom, et non sa requête");
+  assert.equal(epingle.requete, "assigné:moi");
+  assert.equal(epingle.icone, "clock-fill");
+  assert.equal(epingle.couleur, "bleu");
+  assert.equal(epingle.active, true, "et c'est le rail qui dit laquelle on regarde");
 });
 
+/**
+ * **Dans le carnet, le rail est la liste de mes situations.**
+ *
+ * Sur l'écran des Sujets, une vue doit être épinglée pour y occuper une place :
+ * le rail est court et la vue a son propre écran. Ici il n'y a pas de second
+ * endroit — une situation que le rail n'afficherait pas serait une situation
+ * qu'on ne retrouve plus.
+ */
+test("mes situations sont toutes au rail", () => {
+  const trois = ["s-1", "s-2", "s-3"].map((id, rang) => situationCommeUneEpingle({
+    id, title: `Situation ${rang}`, requete: `label:l${rang}`
+  }));
+
+  assert.equal(epinglesDuRail(trois, "").length, 3);
+});
+
+/** Celle qu'on ne regarde pas ne s'allume pas — et c'est le rail qui le décide. */
 test("celle qu'on ne regarde pas ne s'allume pas", () => {
-  const epingle = situationCommeUneEpingle({ id: "s-1", title: "Ma semaine", requete: "auteur:moi" }, "assigné:moi");
+  const [epingle] = epinglesDuRail(
+    [situationCommeUneEpingle({ id: "s-1", title: "Ma semaine", requete: "auteur:moi" })],
+    "assigné:moi"
+  );
 
   assert.equal(epingle.active, false);
 });
 
 /**
- * **Deux situations muettes se croiraient toutes deux actives.** Sans requête,
- * aucune ne peut être celle qu'on regarde — et allumer deux entrées du rail
- * ferait croire à deux listes ouvertes en même temps.
+ * **Une situation sans requête n'entre pas au rail**, et c'est juste : une
+ * entrée du rail pose une requête, et une entrée muette ne ferait rien au clic.
+ * C'est le cas des situations d'avant l'étape 4, qui portent un filtre et pas
+ * encore de requête.
  */
-test("sans requête, aucune situation ne s'allume", () => {
-  assert.equal(situationCommeUneEpingle({ id: "s-1", title: "Ma semaine" }, "").active, false);
-  assert.equal(situationCommeUneEpingle({ id: "s-2", title: "Autre" }, "").active, false);
+test("une situation sans requête n'occupe pas le rail", () => {
+  assert.deepEqual(
+    epinglesDuRail([situationCommeUneEpingle({ id: "s-1", title: "Ma semaine" })], ""),
+    []
+  );
 });
 
 /** Une situation sans titre se nomme quand même : une entrée muette ne se clique pas. */
 test("une situation sans titre porte un nom", () => {
-  assert.equal(situationCommeUneEpingle({ id: "s-1" }).nom, "Situation");
-  assert.equal(situationCommeUneEpingle(null).nom, "Situation");
+  assert.equal(situationCommeUneEpingle({ id: "s-1" }).titre, "Situation");
+  assert.equal(situationCommeUneEpingle(null).titre, "Situation");
 });

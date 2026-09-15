@@ -73,20 +73,42 @@ export function seDitParUneRequete(situation = null) {
 /**
  * Une situation sous la forme que le rail attend d'une vue épinglée.
  *
- * C'est la forme que `renderRailDesSujetsHtml` consomme déjà : de quoi poser
- * mes situations sous « Épinglées » sans écrire un second rail (étape 2).
+ * ## La forme est celle que `epinglesDuRail` consomme, et pas une qui lui
+ * ressemble
+ *
+ * Elle rendait `nom` et `active`, et le rail lit `titre` et `auRail`. Résultat :
+ * **aucune de mes situations n'est jamais apparue dans le rail** — le filtre
+ * `auRail === true` les écartait toutes en silence, et le nom serait de toute
+ * façon retombé sur la requête. C'est exactement le défaut que `vuePourLEcran`
+ * porte écrit au-dessus d'elle, rencontré une seconde fois : deviner la graphie
+ * ne rate pas bruyamment, ça rend `undefined`, et `undefined` prend la valeur
+ * de repli.
+ *
+ * Un test fait donc traverser cette forme par `epinglesDuRail` plutôt que de
+ * décrire à quoi elle ressemble : une fixture qui recopie les hypothèses du
+ * code ne teste que elle-même.
+ *
+ * ## `auRail` est vrai, et ce n'est pas une facilité
+ *
+ * Sur l'écran des Sujets, une vue doit être épinglée pour occuper le rail : il
+ * est court, partagé avec les lectures, et la vue a son propre écran où la
+ * retrouver. Dans le carnet, **le rail est la liste de mes situations** : il
+ * n'y a pas de second endroit où elles vivraient, et une situation qu'il
+ * n'afficherait pas serait une situation qu'on ne retrouve plus.
+ *
+ * ## Ce qu'elle ne calcule pas
+ *
+ * Laquelle on regarde. `epinglesDuRail` le déduit déjà de la requête courante ;
+ * le faire ici aussi ferait deux réponses à une même question, et c'est celle
+ * qu'on ne regarde pas qui finirait par avoir raison (règle 4).
  */
-export function situationCommeUneEpingle(situation = null, requeteRegardee = "") {
-  const requete = requeteDeLaSituation(situation);
-
+export function situationCommeUneEpingle(situation = null) {
   return {
     id: texte(situation?.id),
-    nom: texte(situation?.title) || "Situation",
+    titre: texte(situation?.title) || "Situation",
     icone: iconeDeLaSituation(situation),
     couleur: couleurDeLaSituation(situation).cle,
-    requete,
-    // Sans requête, aucune ne peut être celle qu'on regarde : deux situations
-    // muettes se croiraient toutes deux actives.
-    active: Boolean(requete) && requete === texte(requeteRegardee)
+    requete: requeteDeLaSituation(situation),
+    auRail: true
   };
 }

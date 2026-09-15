@@ -127,31 +127,18 @@ test("la modification n'écrit le mode que pour effacer l'ancien filtre", () => 
 /* ── Le rail du carnet ───────────────────────────────────────────────────── */
 
 /**
- * **Rien n'est dessiné de neuf.** `renderRailDesSujetsHtml` produit déjà les
- * lectures, le trait et les épinglées ; en écrire un second pour cet écran,
- * c'est accepter qu'ils diffèrent d'un pixel, puis d'un comportement.
+ * **Le rail ne se vérifie plus en lisant du texte.**
  *
- * Cette vérification lit du texte, et c'est assumé : le rail se monte dans un
- * document, et il n'y en a pas ici. Ce qu'elle garde est **une chose absente** —
- * un appel remplacé par un balisage écrit à la main ne lèverait nulle part.
+ * Deux tests vivaient ici : « le carnet monte le rail des sujets » et « les
+ * lectures et mes situations peuplent le même rail ». Ils lisaient le code
+ * comme du texte, et le second **décrivait exactement le défaut** — les
+ * lectures jointes aux épinglées, où elles n'ont rien à faire, et un appel dont
+ * la forme de sortie n'était celle de personne.
+ *
+ * Le module est importable ; on l'avait cru inimportable sans vérifier. Le rail
+ * se monte donc pour de vrai dans `project-situations-page.test.mjs`, et ce
+ * qu'il porte s'y lit dans le HTML qui sort.
  */
-test("le carnet monte le rail des sujets, il n'en dessine pas un second", () => {
-  assert.match(source, /renderRailDesSujetsHtml\(\{/, "le rail des sujets, appelé");
-  assert.match(source, /project-rail-layout/, "dans la mise en page de la Mémoire et des Sujets");
-  assert.match(source, /--project-rail-width:\$\{largeurDuRail\}px/, "et sa largeur par la même variable");
-  assert.match(source, /railWidth\(/, "bornée par le même calcul, pas par un autre");
-});
-
-/**
- * **Les épinglées du carnet sont mes situations**, et les lectures sont des
- * situations aussi : cliquer l'une ou l'autre fait la même chose — ouvrir une
- * situation et voir ses sujets.
- */
-test("les lectures et mes situations peuplent le même rail", () => {
-  assert.match(source, /situationsDeLecture\(champs\)/);
-  assert.match(source, /situationCommeUneEpingle\(situation, requete\)/);
-  assert.match(source, /epingles/, "toutes passent par les épinglées du rail");
-});
 
 /**
  * **Les personnes commandent trois lectures.** Sans elles, « Assigné à moi »,
