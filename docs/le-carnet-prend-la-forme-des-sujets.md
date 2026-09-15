@@ -169,6 +169,36 @@ Elle ne porte pas non plus la pastille « Automatique » : c'est un mot de
 mécanique, et sur « Assigné à moi » il ne renseigne sur rien que le titre ne
 dise déjà.
 
+### Ce que l'étape 2 avait cassé, et qu'on n'a vu qu'après l'étape 4
+
+Le carnet ne s'affichait plus du tout : `ReferenceError: safeArray is not
+defined`, dans le rail, à la première ligne de rendu. Le nom était employé sans
+être ni déclaré ni importé, depuis l'étape 2.
+
+**Aucun test ne pouvait le voir, parce que les tests de cet écran lisaient son
+code comme du texte.** Un nom libre ne se voit pas dans une lecture de texte —
+le mot est là, il ressemble à un appel, la recherche le trouve. `node --check`
+ne le voit pas non plus : la syntaxe est correcte. Seule l'exécution le voit.
+
+On lisait le texte parce qu'on croyait le module inimportable en test. **Ce
+n'était pas vrai**, et la croyance n'a jamais été vérifiée. `project-situations-page.test.mjs`
+monte désormais les trois formes de l'écran et regarde le HTML sortir.
+
+Deux autres défauts sont tombés avec, que l'exécution a montrés du premier coup :
+
+- **Aucune de mes situations n'apparaissait dans le rail.** `situationCommeUneEpingle`
+  rendait `nom` et `active` ; `epinglesDuRail` lit `titre` et `auRail`, et
+  écartait donc tout en silence. C'est le défaut que `vuePourLEcran` porte écrit
+  au-dessus d'elle, rencontré une seconde fois : deviner la graphie ne rate pas
+  bruyamment, ça rend `undefined`.
+- **Les lectures étaient jointes aux épinglées**, alors que le rail les monte
+  déjà en tête : elles se seraient affichées deux fois le jour où les épinglées
+  marchent. Le premier défaut masquait le second.
+
+Le test de la forme ne la décrit plus : il la fait **traverser** `epinglesDuRail`
+et regarde ce qui en ressort. Une fixture qui recopie les hypothèses du code ne
+teste que elle-même.
+
 ### Étape 3 — Le formulaire d'une vue · *faite*
 
 « Nouvelle situation » ouvre le formulaire d'une vue : icône, couleur, titre,
