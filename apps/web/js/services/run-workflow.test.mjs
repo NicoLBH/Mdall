@@ -208,3 +208,47 @@ test("une analyse garde son graphe écrit d'avance", () => {
   assert.ok(nodes.some((entree) => entree.id === "avis"));
   assert.ok(!nodes.some((entree) => entree.id === "gel"));
 });
+
+/**
+ * **En cours n'est pas fait.** Une étape ouverte portait « ok » en attendant
+ * mieux, et le graphe la peignait en vert avec sa coche : on lisait une fusion
+ * terminée alors qu'elle en était à sa troisième étape sur onze.
+ *
+ * L'orange reste celui de l'échec : peindre en orange ce qui travaille et ce
+ * qui a échoué les rendrait indiscernables d'un coup d'œil. Ce qui court est un
+ * fait, pas un jugement — c'est son icône qui le dit, et elle tourne.
+ */
+test("une étape en cours ne se dessine ni verte ni orange", async () => {
+  const { buildRunGraph } = await import("./run-workflow.js");
+
+  const noeuds = buildRunGraph({
+    id: "fusion-2",
+    details: {
+      corpus: {
+        geste: "fusion",
+        steps: [
+          { id: "gel", label: "Proposition gelée", statut: "ok", ms: 120, lignes: [] },
+          { id: "corpus", label: "Documents entrés", statut: "en-cours", ms: null, lignes: null },
+          { id: "memoire", label: "Mémoire écrite", statut: "echec", ms: 40, lignes: [] }
+        ]
+      }
+    }
+  });
+
+  const par = new Map(noeuds.map((noeud) => [noeud.id, noeud]));
+
+  assert.equal(par.get("gel").tone, "ok");
+  assert.equal(par.get("gel").icon, "check-circle-fill");
+  assert.notEqual(par.get("gel").enCours, true);
+
+  assert.equal(par.get("corpus").tone, "neutral");
+  assert.equal(par.get("corpus").icon, "sync");
+  assert.equal(par.get("corpus").enCours, true);
+  assert.match(par.get("corpus").detail, /en cours/);
+  // Pas de durée : elle n'a pas fini, et « 0 ms » se lirait comme une performance.
+  assert.equal(par.get("corpus").duration, null);
+
+  // L'échec garde ce qu'il avait : on n'a rien déplacé au passage.
+  assert.equal(par.get("memoire").tone, "warn");
+  assert.equal(par.get("memoire").icon, "alert");
+});

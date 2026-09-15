@@ -18,7 +18,7 @@
  * ## Ce qu'une étape porte
  *
  * ```js
- * { id, label, detail, tone, icon, duration, rang, entrees: [], sorties: [] }
+ * { id, label, detail, tone, icon, enCours, duration, rang, entrees: [], sorties: [] }
  * ```
  *
  * `entrees` et `sorties` sont ce qu'une étape **lit** et ce qu'elle **écrit** :
@@ -143,7 +143,8 @@ function renderEtape(noeud, { attributDuLien = "", consultables = null } = {}) {
       rang === null ? "" : ` data-run-graph-rang="${rang}" style="--run-graph-rang:${rang}"`
     }>
       <span class="run-graph__head">
-        <span class="run-graph__icon">${svgIcon(texte(noeud?.icon) || "dot-fill-pending", { className: "octicon" })}</span>
+        <span class="run-graph__icon${noeud?.enCours === true ? " run-graph__icon--court" : ""}">${
+          svgIcon(texte(noeud?.icon) || "dot-fill-pending", { className: "octicon" })}</span>
         ${
           ouvrable
             ? `<button type="button" class="run-graph__label run-graph__label--lien"

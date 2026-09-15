@@ -35,7 +35,7 @@ import {
   resumeDeLaFusion,
   statutDeLaFusion
 } from "../services/journal-de-la-fusion.js";
-import { finishRunLogEntry, startRunLogEntry } from "../services/project-automation.js";
+import { avancerRunLogEntry, finishRunLogEntry, startRunLogEntry } from "../services/project-automation.js";
 import {
   renderMessageThread,
   renderMessageThreadActivity,
@@ -6263,8 +6263,17 @@ async function merge(root) {
   // montrait une roue ; après, plus rien — aucune trace de ce qui avait eu lieu
   // ni de ce qui avait échoué en chemin. Le chemin d'exécution s'écrit donc, et
   // il se relit dans l'onglet Actions, comme une analyse (règle 12).
-  const chrono = chronoDeLaFusion();
+  // **La ligne vive d'abord, le chronomètre ensuite** : le chronomètre la
+  // nourrit, et il ne peut pas la nourrir avant qu'elle existe.
   const enCours = commencerLaCourseDeFusion(proposition);
+  const chrono = chronoDeLaFusion({
+    // **Le chemin progresse sous les yeux.** Chaque ouverture et chaque fin
+    // d'étape reverse le journal dans la ligne du tableau des actions, qui se
+    // redessine. Sans cela, les onze étapes arrivaient d'un coup à la fin, et
+    // une fusion d'une minute et demie ressemblait à une attente sans
+    // nouvelles.
+    surChangement: (etapes) => avancerLaCourseDeFusion(enCours, proposition, etapes)
+  });
 
   try {
     const [propositions, { rememberProjectMarkers }, { markersToRemember }] = await Promise.all([
@@ -6550,6 +6559,40 @@ function commencerLaCourseDeFusion(proposition) {
     // Un journal qui ferait échouer la fusion qu'il observe serait pire que pas
     // de journal du tout.
     return null;
+  }
+}
+
+/**
+ * Reverse le journal dans la ligne vive, à chaque étape.
+ *
+ * **Ce qu'elle ne fait pas : conclure.** Elle ne pose ni durée ni verdict — la
+ * fusion n'a pas fini, et l'annoncer finie serait le mensonge que cette étape
+ * existe pour éviter. Elle remplace ce que le détail montre, et rien d'autre.
+ *
+ * Elle ne va pas en base : une fusion qui écrirait onze fois pendant qu'elle
+ * travaille paierait onze allers-retours pour un affichage.
+ */
+function avancerLaCourseDeFusion(enCours, proposition, etapes = []) {
+  if (!enCours?.id) return;
+
+  try {
+    const faites = etapes.filter((etape) => etape?.statut && etape.statut !== "en-cours").length;
+    const court = etapes.find((etape) => etape?.statut === "en-cours");
+
+    avancerRunLogEntry(enCours.id, {
+      details: {
+        geste: GESTE_DU_PROJET.FUSION,
+        proposition: nomDeLaFusion(proposition),
+        steps: etapes
+      },
+      // Ce qu'on lit dans la liste sans ouvrir le détail : où l'on en est.
+      summary: court
+        ? `${court.label} — ${faites} étape${faites > 1 ? "s" : ""} sur ${etapes.length} faite${faites > 1 ? "s" : ""}.`
+        : ""
+    });
+  } catch {
+    // Un journal qui ferait échouer la fusion qu'il observe serait pire que pas
+    // de journal du tout.
   }
 }
 

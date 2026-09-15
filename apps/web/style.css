@@ -24278,6 +24278,17 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    cohabitent et l'on cesse de les lire. Plus petit que la valeur : c'est un
    commentaire du chiffre, pas un second chiffre. */
 .lecture-cr__chiffre-ecart{font-size:12px;font-weight:600;margin-left:4px;}
+
+/* L'étape qui travaille : son icône tourne, en orange. Le nœud reste neutre —
+   l'orange du cadre est celui de l'échec, et les confondre rendrait un geste en
+   cours indiscernable d'un geste raté. */
+.run-graph__icon--court .octicon{color:var(--fgColor-attention, #d29922);animation:run-graph-tourne 1.2s linear infinite;}
+@keyframes run-graph-tourne{to{transform:rotate(360deg);}}
+@media (prefers-reduced-motion: reduce){
+  /* Une icône qui tourne sans fin est une gêne pour qui y est sensible. Elle
+     garde sa couleur : c'est elle qui porte l'information. */
+  .run-graph__icon--court .octicon{animation:none;}
+}
 .lecture-cr__chiffre-ecart.est-bon{color:var(--fgColor-success, #3fb950);}
 .lecture-cr__chiffre-ecart.est-douteux{color:var(--fgColor-attention, #d29922);}
 .lecture-cr__chiffre-aide{margin:-4px -4px -4px 0;}

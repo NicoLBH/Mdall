@@ -3654,7 +3654,7 @@ nouveau, plutôt qu'un `504` un jour de dépôt.
 
 ---
 
-## 44. Le chemin d'une fusion ne progresse pas sous les yeux
+## 44. Le chemin d'une fusion ne progresse pas sous les yeux · *fait*
 
 **Ce qui marche maintenant.** On clique « Fusionner », une ligne apparaît au
 journal des actions avec son sablier, et elle y reste — elle ne disparaît plus
@@ -3678,3 +3678,25 @@ l'on en est.
 **Ce que ça coûte de ne pas le faire.** On voit qu'une fusion est en cours, et
 non où elle en est. Sur un geste qui dure une minute et demie, c'est la
 différence entre attendre et se demander si c'est bloqué.
+
+**Comment ça a été fait.** Les deux dans cet ordre, la seconde d'abord.
+
+Le journal des actions prévient maintenant qu'une ligne a bougé
+(`mdall:run-log-change`), et l'écran des actions se redessine — s'il est encore
+là : un écran démonté ne se redessine pas, sinon on écrirait dans le vide.
+
+Le chrono de la fusion prévient à chaque ouverture et à chaque fermeture
+d'étape, et ce qu'il tend est **une copie** — un observateur qui modifierait
+les étapes réécrirait le journal de ce qui s'est passé. Il continue si
+l'observateur lève : la fusion n'a pas à s'arrêter parce qu'un écran s'est mal
+dessiné.
+
+Une étape ouverte porte désormais son propre état, `en-cours`. Elle portait
+« ok » en attendant mieux, et le graphe la peignait en vert avec sa coche : on
+lisait une fusion terminée alors qu'elle en était à sa troisième étape sur
+onze. **L'orange reste celui de l'échec** — peindre en orange ce qui travaille
+et ce qui a échoué les rendrait indiscernables d'un coup d'œil. Ce qui court
+est un fait, pas un jugement : c'est son icône qui le dit, et elle tourne.
+
+Ce qui n'est jamais versé en route : ni durée, ni verdict. Une ligne vive dit
+ce qu'elle fait, pas comment ça s'est terminé — elle ne le sait pas encore.
