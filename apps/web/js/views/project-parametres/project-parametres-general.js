@@ -21,13 +21,10 @@ function renderProjectTabsFeatureCard(projectTabs) {
       key: PROJECT_TAB_IDS.STUDIO,
       label: "Atelier",
       description: "Affiche l’onglet Atelier et ses vues métier de travail projet."
-    },
-    {
-      id: "tabVisibilitySituations",
-      key: PROJECT_TAB_IDS.SITUATIONS,
-      label: "Situations",
-      description: "Affiche l’onglet Situations pour suivre les jalons et points clés du projet."
     }
+    // Les situations ne sont plus un onglet de ce projet : elles ont leur écran,
+    // qui est celui d'une personne. Un interrupteur de projet n'a rien à dire
+    // sur le carnet de quelqu'un (étape 3).
   ];
 
   return `

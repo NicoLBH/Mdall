@@ -191,7 +191,7 @@ reconstruirait la sienne casse la construction.
 
 ---
 
-### Étape 3 — L'écran des situations quitte le projet
+### Étape 3 — L'écran des situations quitte le projet · *faite*
 
 L'onglet Situations d'un projet disparaît. Il est remplacé par un écran à moi,
 atteignable de partout, qui montre **toutes** mes situations, chacune avec les
@@ -200,6 +200,82 @@ projets qu'elle regarde.
 **Ce qui se perd, et qu'il faut remplacer.** Depuis un sujet, on voyait « ce
 sujet est dans telle situation ». Cela reste vrai, mais seulement pour moi : la
 ligne dit « vous l'avez mis dans *Ma semaine* », et personne d'autre ne la voit.
+
+**Ce qui a été livré :**
+
+| Où | Quoi |
+| --- | --- |
+| `apps/web/js/services/mon-carnet.js` | d'où l'on regarde, le nom de l'écran, son adresse, et ce qu'un sujet en dit |
+| `apps/web/js/views/mon-carnet.js` · `mon-carnet-coquille.js` | l'écran, et sa mise en page — celle du projet, sans projet |
+| `apps/web/js/router.js` · `global-nav.js` · `global-header.js` | la route `#situations`, l'entrée de menu, l'en-tête et son fil d'Ariane |
+| `apps/web/js/constants.js` · `project-layout.js` · `project-parametres-general.js` | l'onglet du projet, et son interrupteur, retirés |
+| `project-situations-persistence.js` | ce que l'écran va chercher, selon d'où on le regarde |
+
+**Le même tableau, monté ailleurs.** Ce n'est pas un second écran des
+situations : c'est le même, avec les classes de la coquille d'un projet. En
+refaire une obligerait à recalibrer les deux à chaque retouche, et l'une des
+deux finirait en retard sur l'autre.
+
+**Ce qui décide, c'est la route.** `currentProjectId` nul veut dire « pas
+d'écran de projet à regarder », donc le carnet. `projectScopeId`, posé par le
+chargement, pouvait répondre à la même question : les laisser répondre toutes
+les deux, c'était accepter qu'elles se contredisent le jour où l'une est mise à
+jour et pas l'autre (règle 4).
+
+**Un ancien lien ne se perd pas en silence.** `#project/<id>/situations` mène au
+carnet. Sans cela, il retombait sur Fichiers sans rien dire — on aurait demandé
+ses situations et obtenu autre chose (règle 5).
+
+**Créer depuis le carnet.** Il n'y a pas de projet courant, et il ne faut
+surtout pas en inventer un : la clé du navigateur retomberait sur le dernier
+chantier ouvert, et l'on rangerait le carnet de quelqu'un au hasard. Une
+situation créée là naît donc **en regardant tout** — ce que le périmètre sait
+dire depuis l'étape 2. La restreindre se fera à l'étape 4.
+
+---
+
+#### Ce que cette étape ne fait pas encore : les sujets ne traversent pas
+
+Les sujets d'une situation sont résolus contre **les sujets du projet courant**,
+et le carnet n'en a pas. La suite en découle, et elle est dite plutôt que
+maquillée :
+
+- une situation **manuelle** se compte quand même : sa liste est écrite en base,
+  et la longueur d'une liste ne demande pas de savoir ce qu'elle contient ;
+- une situation **automatique** est une requête ; sans les sujets, elle n'a pas
+  de réponse. Elle n'entre donc pas dans le compte, et la colonne dit « — ».
+
+**Zéro aurait été un mensonge** — une situation dont personne n'a compté les
+sujets n'en a pas zéro : on ne sait pas. « 0 » se lit comme un chantier sans
+travail, et l'on va chercher la panne dans le filtre, dans la base, partout sauf
+là où elle est (règle 5). Le tableau affichait « 0 » dans ce cas, **sur les deux
+écrans** ; il dit maintenant « — ».
+
+Ouvrir une situation dans le carnet montre pour la même raison une liste de
+sujets vide. **Charger les sujets d'un périmètre est l'étape suivante**, et elle
+n'appartient pas à celle-ci : elle touche la pagination, la sélection et le
+cache des sujets, c'est-à-dire tout autre chose que déménager un écran.
+
+---
+
+### Étape 3 bis — Les sujets d'un périmètre
+
+Le carnet montre les situations ; il ne montre pas encore ce qu'elles
+contiennent. Les sujets sont chargés **par projet courant**, et le carnet n'en a
+pas.
+
+Ce qu'il faut : charger les sujets des projets qu'un périmètre désigne, pour que
+le compte d'une situation automatique soit un chiffre plutôt qu'un tiret, et
+qu'ouvrir une situation dans le carnet montre ses sujets.
+
+**Le piège :** ce chargement porte aujourd'hui la pagination, la sélection et le
+cache des sujets d'un projet. L'élargir sans y toucher est le travail ; le
+refaire au passage serait deux changements dans le même, et l'on ne saurait plus
+lequel des deux a cassé quoi.
+
+Cette étape est séparée pour cette raison, et non parce qu'elle serait
+secondaire : tant qu'elle n'est pas faite, le carnet **dit** ce qu'il ne sait
+pas, ce qui est tenable — mais il ne le sait pas.
 
 ---
 

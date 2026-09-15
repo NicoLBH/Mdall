@@ -55,6 +55,11 @@ function createSituationsViewState() {
     rawResult: null,
     projectScopeId: null,
 
+    // Le nom des chantiers qu'un carnet cite, demandé à la base et non deviné
+    // ici : on cite des projets qu'on n'a jamais ouverts sur cette machine.
+    // Vide n'est pas « aucun » — c'est « pas encore demandé ».
+    nomsDesProjets: {},
+
     expandedSituations: new Set(),
     expandedSujets: new Set(),
     expandedSubjectIds: new Set(),

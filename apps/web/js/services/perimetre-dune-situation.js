@@ -144,6 +144,27 @@ export function perimetrePourEcriture(valeur = null) {
 }
 
 /**
+ * Tous les projets que ces situations regardent, à nommer une seule fois.
+ *
+ * **À demander à la base, pas au navigateur.** L'écran connaît les projets
+ * qu'on a ouverts ici ; un carnet traverse les chantiers, et il en cite qu'on
+ * n'a jamais ouverts sur cette machine. Les chercher dans ce qu'on a sous la
+ * main ferait passer pour disparus des chantiers qui se portent bien.
+ *
+ * Une situation qui regarde tout n'apporte rien à cette liste : elle ne nomme
+ * personne, et ce n'est pas une absence à combler.
+ *
+ * @returns {string[]} des identifiants, sans doublon
+ */
+export function projetsDeCesSituations(situations = []) {
+  const vus = new Set();
+  for (const situation of Array.isArray(situations) ? situations : []) {
+    for (const projet of projetsRegardes(situation)) vus.add(projet);
+  }
+  return [...vus];
+}
+
+/**
  * Ce qu'on en dit à l'écran.
  *
  * Un projet qu'on ne sait pas nommer **se dit** : un périmètre qui s'afficherait

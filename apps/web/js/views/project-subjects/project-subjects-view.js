@@ -57,6 +57,7 @@ import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 import { renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
 import { renderSettingsModal } from "../ui/settings-modal.js";
 import { renderSubjectTreeGrid } from "../shared/subject-tree-grid.js";
+import { DANS_MON_CARNET, PAS_DANS_MON_CARNET } from "../../services/mon-carnet.js";
 export function createProjectSubjectsView(deps) {
   const {
     store,
@@ -2519,7 +2520,9 @@ function renderSubjectSituationCard(situation, subjectId) {
 
 function renderSubjectSituationsValue(subjectId) {
   const situations = getSubjectSituations(subjectId);
-  if (!situations.length) return renderSubjectMetaButtonValue("Aucune situation");
+  // « Aucune situation » se lisait comme un manque du sujet. C'est une absence
+  // dans **mon** carnet, et personne d'autre ne la voit.
+  if (!situations.length) return renderSubjectMetaButtonValue(PAS_DANS_MON_CARNET);
 
   const openSituations = situations.filter((situation) => String(getEffectiveSituationStatus(situation?.id) || situation?.status || "open").toLowerCase() === "open");
   const closedSituations = situations.filter((situation) => String(getEffectiveSituationStatus(situation?.id) || situation?.status || "open").toLowerCase() !== "open");
@@ -3459,7 +3462,7 @@ function renderSubjectMetaControls(subject) {
       })}
       ${renderSubjectMetaField({
         field: "situations",
-        label: "Situation",
+        label: DANS_MON_CARNET,
         valueHtml: renderSubjectSituationsValue(subject.id),
         subjectId,
         scope: "main",
@@ -4804,9 +4807,9 @@ function renderCreateSubjectMetaControls() {
       })}
       ${renderSubjectMetaField({
         field: "situations",
-        label: "Project",
+        label: DANS_MON_CARNET,
         valueHtml: situationsValueHtml,
-        emptyState: isSubissueMode ? { isEmpty: !situationsValueHtml, icon: "table", text: "Situation" } : null,
+        emptyState: isSubissueMode ? { isEmpty: !situationsValueHtml, icon: "table", text: PAS_DANS_MON_CARNET } : null,
         subjectId,
         scope,
         scopeHost,

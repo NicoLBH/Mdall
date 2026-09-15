@@ -7,6 +7,7 @@ import {
   perimetreDeToutMonTravail,
   perimetrePourLesProjets,
   phraseDuPerimetre,
+  projetsDeCesSituations,
   projetsRegardes,
   regardeLeProjet,
   regardeToutMonTravail
@@ -228,4 +229,33 @@ test("sans aucun nom en main, on compte et on n'accuse personne", () => {
   assert.equal(phraseDuPerimetre(deux, new Map()), "2 projets");
   assert.equal(phraseDuPerimetre(deux, {}), "2 projets");
   assert.equal(phraseDuPerimetre({ perimetre: { portee: "projet", projets: [BERTRAND] } }, {}), "1 projet");
+});
+
+/* ── Les projets à nommer ────────────────────────────────────────────────── */
+
+/**
+ * L'écran d'un carnet cite des chantiers qu'on n'a jamais ouverts sur cette
+ * machine. Les noms se demandent donc à la base, et cette liste dit lesquels —
+ * une seule fois chacun, parce qu'une situation par chantier ferait quinze fois
+ * la même question.
+ */
+test("les projets à nommer sont ceux que ces situations regardent, sans doublon", () => {
+  const ids = projetsDeCesSituations([
+    { perimetre: { portee: "projet", projets: [BERTRAND] } },
+    { perimetre: { portee: "choisis", projets: [BERTRAND, NOVACLIM] } },
+    { project_id: VERIFAS }
+  ]);
+
+  assert.deepEqual(ids, [BERTRAND, NOVACLIM, VERIFAS]);
+});
+
+/**
+ * **Une situation qui regarde tout ne nomme personne**, et ce n'est pas une
+ * absence à combler : lui chercher des projets à nommer reviendrait à demander
+ * à la base la liste de tout, pour ne rien en afficher.
+ */
+test("celle qui regarde tout n'ajoute aucun nom à chercher", () => {
+  assert.deepEqual(projetsDeCesSituations([{ perimetre: { portee: "tous" } }]), []);
+  assert.deepEqual(projetsDeCesSituations([]), []);
+  assert.deepEqual(projetsDeCesSituations(), []);
 });

@@ -3,6 +3,7 @@ import { ATELIER_COPILOTE } from "../services/route-de-latelier.js";
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
 import { signOut } from "../../assets/js/auth.js";
+import { NOM_DU_CARNET, ROUTE_DU_CARNET } from "../services/mon-carnet.js";
 
 function parseHash() {
   const hash = String(location.hash || "").replace(/^#/, "").trim();
@@ -74,6 +75,27 @@ function getHeaderModel() {
       breadcrumbCurrentLabel: selectedSituation ? String(selectedSituation.title || "Situation") : "",
       showSituationBreadcrumb: !!selectedSituation,
       projectId: parts[1]
+    };
+  }
+
+  // Mon carnet. Le fil d'Ariane d'une situation ouverte y vit aussi : il naissait
+  // dans la branche « projet » avec l'onglet, et sans ceci une situation ouverte
+  // dans le carnet n'aurait plus de chemin de retour (étape 3).
+  if (parts[0] === "situations") {
+    const selectedSituationId = String(store.situationsView?.selectedSituationId || "").trim();
+    const selectedSituation = selectedSituationId && Array.isArray(store.situationsView?.data)
+      ? store.situationsView.data.find((situation) => String(situation?.id || "") === selectedSituationId)
+      : null;
+
+    return {
+      primary: NOM_DU_CARNET,
+      secondary: "",
+      showSecondary: false,
+      href: ROUTE_DU_CARNET,
+      headerClass: "gh-header gh-header--global",
+      breadcrumbTabLabel: selectedSituation ? NOM_DU_CARNET : "",
+      breadcrumbCurrentLabel: selectedSituation ? String(selectedSituation.title || "Situation") : "",
+      showSituationBreadcrumb: !!selectedSituation
     };
   }
 
