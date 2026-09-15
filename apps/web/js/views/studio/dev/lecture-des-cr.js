@@ -39,7 +39,8 @@ import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.
 import { brancherLesBoutonsCopier, renderBoutonCopier } from "../../ui/bouton-copier.js";
 import {
   EFFETS_DU_SORT, MANQUE, PAR, PHRASES_DU_MANQUE, PHRASES_DU_PAR, PHRASES_DU_SORT, SORT,
-  comptesDeLaConfrontation, confrontation, estFerme, intitulesAmbigus, lectureAssemblee
+  comptesDeLaConfrontation, confrontation, estFerme, groupesDeLaLecture, intitulesAmbigus,
+  lectureAssemblee
 } from "../../../services/lecture-du-cr.js";
 import {
   LECTURE, NOMS_DE_LECTURE, QUOI_DE_LA_LECTURE, assemblerLeMarkdown, enFichierMarkdown,
@@ -1325,6 +1326,20 @@ function renderMesure(mesure, ecartes) {
         ${renderChiffre("Sans lot", String(mesure.sansLot), mesure.sansLot > 0 ? "est-douteux" : "est-bon",
           "Des points qu'aucun lot ne porte. Ils ne se rattachent à aucune entreprise, et ne "
           + "trouveront donc pas d'assigné.")}
+        ${renderChiffre("Rubriques reconnues", String(mesure.rubriques),
+          mesure.rubriques > 0 ? "est-bon" : "est-douteux",
+          "Les titres sous lesquels le document range ses points : les rubriques "
+          + "administratives, un titre par lot, une section par intervenant. Aucune reconnue "
+          + "veut dire que le tableau ci-dessous se rabat sur le champ « lot ».")}
+        ${renderChiffre("Points rangés", `${mesure.rattaches} / ${mesure.points}`,
+          mesure.orphelins === 0 ? "est-bon" : "est-douteux",
+          "Des points rattachés à la rubrique sous laquelle ils sont écrits. C'est ce "
+          + "rattachement qui donnera un sujet père, et l'assignation qui va avec.")}
+        ${renderChiffre("Sans rubrique", String(mesure.orphelins),
+          mesure.orphelins > 0 ? "est-douteux" : "est-bon",
+          "Des points qu'aucun titre ne porte. Quelques-uns sont normaux — l'ouverture de "
+          + "séance n'est sous aucune rubrique. <strong>C'est sa variation d'un compte rendu "
+          + "à l'autre qu'il faut surveiller</strong> : elle dit que la lecture a dérivé.")}
         ${renderChiffre("Écartés au serveur", String(ecartes), ecartes > 0 ? "est-douteux" : "est-bon",
           "Ce que le serveur a refusé faute de citation vérifiable. Ils ne sont pas dans la "
           + "liste ci-dessous : les compter ici est ce qui empêche de croire la lecture complète.")}
@@ -1971,14 +1986,17 @@ function renderRubriques(vue) {
     (Array.isArray(vue.confrontes) ? vue.confrontes : []).map((point) => [point.rang, point])
   );
 
+  // **Le rangement du document, le lot en repli.** Le choix se fait dans
+  // `groupesDeLaLecture`, qui est pur et testé : ici on ne fait que dessiner.
   return `
     <section class="lecture-cr__rubriques">
       <h3>Ce qui a été relevé</h3>
-      ${lecture.rubriques.map((rubrique) => `
+      ${groupesDeLaLecture(lecture).map((groupe) => `
         <article class="lecture-cr__rubrique">
           <h4 class="lecture-cr__rubrique-titre">
-            ${escapeHtml(rubrique.lot)}
-            <span class="lecture-cr__rubrique-compte mono-small">${rubrique.combien}</span>
+            ${escapeHtml(groupe.titre)}
+            <span class="lecture-cr__rubrique-compte mono-small">${
+              groupe.precision ? `${escapeHtml(groupe.precision)} · ` : ""}${groupe.combien}</span>
           </h4>
           <table class="lecture-cr__table">
             <thead>
@@ -1988,7 +2006,7 @@ function renderRubriques(vue) {
               </tr>
             </thead>
             <tbody>
-              ${rubrique.points.map((point) => renderLigne(vue, point, parRang.get(point.rang))).join("")}
+              ${groupe.points.map((point) => renderLigne(vue, point, parRang.get(point.rang))).join("")}
             </tbody>
           </table>
         </article>
@@ -2412,7 +2430,12 @@ async function lire(hote, fichier) {
       pages: lues,
       identite,
       nom: texte(fichier?.name),
-      ecartes: Number(lu.ecartes) || 0
+      ecartes: Number(lu.ecartes) || 0,
+      // **Sous quels titres le document range ses points.** Sans ce report, tout
+      // ce que le modèle a lu des en-têtes reste au serveur, et le tableau se
+      // rabat sur le champ `lot` — qui ne dit rien des rubriques
+      // administratives ni des intervenants.
+      rubriques: Array.isArray(lu.rubriques) ? lu.rubriques : []
     });
     etat.lecture.lueSur = lueSur;
 

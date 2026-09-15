@@ -68,10 +68,16 @@ export function numeroDuLot(intitule = "") {
  *
  * Le numéro en tête s'ôte : c'est l'autre reconnaissance, et le garder ferait
  * échouer la comparaison de « 02 — GROS ŒUVRE » avec « Gros œuvre ».
+ *
+ * **Le mot « lot » en tête s'ôte aussi**, numéro ou pas. Un compte rendu écrit
+ * « Lot Gros Œuvre » là où le projet a « Gros œuvre » ; garder le mot ferait
+ * deux lots de celui-là, et c'est justement ce que cette mise à plat existe
+ * pour empêcher.
  */
 export function nomDuLot(intitule = "") {
   return texte(intitule)
     .replace(/^\s*(?:lot\s*)?n?[°o]?\s*\d{1,3}\s*(?:[-–—:.)]|\s)\s*/i, "")
+    .replace(/^\s*lots?\b\s*(?:[-–—:.)]\s*)?/i, "")
     .replace(/[œŒ]/g, "oe")
     .normalize("NFD").replace(/[̀-ͯ]/g, "")
     .replace(/[^a-zA-Z0-9]+/g, " ")

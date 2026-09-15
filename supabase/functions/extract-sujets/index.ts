@@ -35,11 +35,14 @@ import {
   intervenantsAuFormatDuMoteur,
   pagesEnTexte,
   panneDuFournisseur,
+  rattacherAuxRubriques,
+  rubriquesAuFormatDuMoteur,
   sujetsAuFormatDuMoteur,
   sujetsDuProjetEnTexte,
   verifierLesIntervenants,
   verifierLesLabels,
   verifierLesRapprochements,
+  verifierLesRubriques,
   verifierLesSujets
 } from "../_shared/sujets-du-modele.js";
 
@@ -182,10 +185,22 @@ serve(async (req) => {
       pages
     });
 
+    // Les rubriques passent la même porte : une section inventée deviendrait un
+    // sujet père, sous lequel on rangerait des points réels.
+    const sections = verifierLesRubriques({
+      rubriques: (lu.rubriques as unknown[]) ?? [],
+      pages
+    });
+
+    // **Un point qui vise une rubrique disparue se détache plutôt que de se
+    // tromper de père.** Il redevient un point sans rubrique : cela se compte,
+    // là où un mauvais rangement ne se verrait jamais.
+    const ranges = rattacherAuxRubriques({ sujets: retenus, rubriques: sections.retenus });
+
     // **Un identifiant inventé égare un point, il ne le perd pas.** Rattaché à
     // la discussion d'un sujet qui n'a rien à voir, personne n'ira le chercher
     // — et rien ne le signalera. Ce qui n'a pas été envoyé ne revient pas.
-    const rapproches = verifierLesRapprochements({ sujets: retenus, connus });
+    const rapproches = verifierLesRapprochements({ sujets: ranges.sujets, connus });
 
     // **La liste des labels est fermée, et la porte est ici.** Un label inventé
     // n'est pas une étiquette de trop : c'est une étiquette que le projet
@@ -204,6 +219,10 @@ serve(async (req) => {
       numero_de_reunion: lu.numero_de_reunion ?? null,
       tenue_le: lu.tenue_le ?? null,
       redige_par: lu.redige_par ?? null,
+      /** Sous quels titres le document range ses points. */
+      rubriques: rubriquesAuFormatDuMoteur(sections.retenus, { sourceId }),
+      /** Combien de points visaient une rubrique qui n'a pas franchi la porte. */
+      rattachements_detaches: ranges.detaches,
       sujets: sujetsAuFormatDuMoteur(etiquetes.sujets, { sourceId }),
       /** Les labels que le modèle a proposés hors de la liste fermée. */
       labels_ecartes: etiquetes.ecartes,
@@ -222,9 +241,10 @@ serve(async (req) => {
       // Ce qui a été jeté, et pourquoi. Se dit, se compte, ne se cache pas.
       ecartes: [
         ...ecartes.map((ecart: { motif: string }) => ecart.motif),
+        ...sections.ecartes.map((ecart: { motif: string }) => ecart.motif),
         ...gens.ecartes.map((ecart: { motif: string }) => ecart.motif)
       ],
-      pages_corrigees: pagesCorrigees + gens.pagesCorrigees,
+      pages_corrigees: pagesCorrigees + sections.pagesCorrigees + gens.pagesCorrigees,
       modele: MODELE
     });
   } catch (error) {
