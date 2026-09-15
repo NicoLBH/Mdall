@@ -214,7 +214,11 @@ export async function listProjectSubjectTitles(projectId) {
     return (
       (await request("subjects", {
         params: {
-          select: "id,subject_number,title,status",
+          // `parent_subject_id` vient avec : c'est ce qui permet de vérifier
+          // qu'un rattachement à un sujet père ne referme pas une boucle. Sans
+          // lui, la vérification se ferait sur une hiérarchie vide, donc sur
+          // rien.
+          select: "id,subject_number,title,status,parent_subject_id",
           project_id: `eq.${projectId}`,
           order: "subject_number.asc"
         }

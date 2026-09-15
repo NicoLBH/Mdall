@@ -119,7 +119,8 @@ Presque rien à créer. Il s'agit d'alimenter ce qui est là.
 | Les vues enregistrées | `vues-des-sujets.js`, recherches épinglées | ✅ |
 | Une rubrique comme objet de lecture | `rubriques-du-cr.js`, `SCHEMA_DES_SUJETS.rubriques` | ✅ étape 2 |
 | Un sujet père **proposé** | `ITEM_TYPE.RUBRIQUE`, `rubriqueItems` | ✅ étape 3 |
-| **Un sujet père appliqué à la fusion** | — | ❌ à faire |
+| Un sujet père **ouvert, et ses fils rattachés** | `peres-du-cr.js` | ✅ étape 4 |
+| **L'état d'un père déduit de ses fils** | — | ❌ à faire |
 
 Autrement dit : **le modèle voit déjà le rangement, et la base sait déjà le porter.** Ce qui
 manque est entre les deux.
@@ -235,7 +236,7 @@ vaut mieux que de ne rien vérifier.
 
 ---
 
-### Étape 4 — Le père s'ouvre à la fusion, et les fils s'y rattachent
+### Étape 4 — Le père s'ouvre à la fusion, et les fils s'y rattachent · *faite*
 
 Deux écritures, dans cet ordre.
 
@@ -245,8 +246,28 @@ Deux écritures, dans cet ordre.
    ferait deux lots n° 1.
 2. **Les fils.** `parent_subject_id` sur chaque sujet ouvert ou relancé sous cette rubrique.
 
-Le journal de la fusion gagne une étape — `rubriques`, « Pères ouverts » —, et l'étape
-`sujets` dit combien de fils ont été rattachés.
+Le journal de la fusion gagne une étape — `peres`, « Lots rangés » —, **après les sujets** : un
+père se remplit de ce qui vient d'être ouvert, et l'ordre inverse lui donnerait un contenu d'une
+réunion de retard. Elle dit combien de lots ont été ouverts, combien étaient déjà au projet, et
+combien de sujets s'y sont rangés.
+
+**Les fils sont ceux qu'on ouvre et ceux qu'on relance.** Un compte rendu reporte : la douzième
+réunion redit trente-sept points déjà ouverts. Ne rattacher que les sujets neufs laisserait les
+trente-sept à plat, et le rangement ne se verrait qu'au premier compte rendu d'un chantier.
+
+**Ne pas savoir ce que le projet suit arrête tout.** Si la liste des sujets n'a pas pu être lue,
+aucun père ne s'ouvre : ouvrir sans pouvoir vérifier ce qui existe déjà créerait des doublons,
+et un doublon de père reste — là où un père manquant se rattrape au compte rendu suivant
+(règle 5).
+
+**Le père se retrouve par son titre**, sans colonne de plus : `identiteDeLaRubrique` relit
+`lot:1` de « Lot n° 1 : … : Entreprise BERTRAND » comme de « Lot n°01 : GROS OEUVRE : Entreprise
+BERTAND ». C'est pour cela que l'identité avait été posée dès l'étape 2, et qu'elle n'a jamais
+compté le nom de l'entreprise.
+
+**La description du père dit ce qu'il est** : une rubrique du compte rendu, dont ce qu'il y a à
+traiter est dans les sous-sujets, et qui n'est demandée à personne. Sans elle, un père ouvert par
+une fusion ressemble à un point qu'on aurait oublié de remplir.
 
 **Ce qu'un échec coûte :** un fils qui ne se rattache pas reste racine. Le sujet existe, son
 contenu est juste, il est mal rangé. On le dit et l'on continue — refuser la fusion pour un

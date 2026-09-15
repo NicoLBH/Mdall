@@ -390,6 +390,9 @@ export function sujetItems(points = []) {
       titre: point.titre ?? "",
       description: point.description ?? "",
       lot: point.lot ?? null,
+      // Sous quelle rubrique du document ce point a été lu. C'est par elle que
+      // la fusion le range sous son père.
+      rubrique: point.rubrique ?? null,
       reference: point.reference ?? null,
       qui: point.qui ?? null,
       echeance: point.echeance ?? null,

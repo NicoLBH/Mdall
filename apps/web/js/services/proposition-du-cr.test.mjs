@@ -670,6 +670,10 @@ test("la ligne porte le titre du document, ce qu'il désigne, et d'où il sort",
   assert.deepEqual(lot.payload, {
     intitule: "Lot n° 1 : Démolition / Gros Œuvre : Entreprise BERTRAND",
     genre: "lot",
+    // **Les rangs que la rubrique occupe dans le document.** C'est par là qu'un
+    // point retrouve son père à la fusion ; sans eux, le père s'ouvrirait sans
+    // fils et la liste s'allongerait au lieu de se raccourcir.
+    ordres: [8],
     numero: "1",
     societe: "BERTRAND",
     label: LABEL_DU_LOT,
@@ -790,4 +794,33 @@ test("chaque nature d'un compte rendu a son bloc dans l'écran de la proposition
       `la nature « ${nature} » est proposée mais n'a aucun bloc à l'écran`
     );
   }
+});
+
+/**
+ * **Le point emporte sa rubrique jusqu'à sa ligne.**
+ *
+ * C'est la jointure de tout le rangement : la ligne de rubrique porte les rangs
+ * qu'elle occupe, le point porte le rang sous lequel il a été lu. Perdre l'un
+ * des deux ouvrirait des pères sans fils — et vingt lots vides dans la liste
+ * des sujets sont exactement ce que ce rangement existe pour éviter.
+ */
+test("un point ouvert ou relancé emporte la rubrique sous laquelle il a été lu", () => {
+  const confrontes = [
+    { ...CONFRONTES[0], rubrique: 8 },
+    { ...CONFRONTES.find((point) => point.sort === SORT.RELANCE), rubrique: 4 }
+  ];
+
+  const items = itemsDuCompteRendu({ confrontes, document: UN_DOCUMENT });
+  const sujet = items.find((item) => item.itemType === ITEM_TYPE.SUJET);
+  const relance = items.find((item) => item.itemType === ITEM_TYPE.RELANCE);
+
+  assert.equal(sujet?.payload?.rubrique, 8);
+  assert.ok(relance, "le jeu d'essai doit porter une relance");
+  assert.equal(relance.payload.rubrique, 4);
+
+  // Et l'absence reste une absence : `Number(null)` vaut zéro, et zéro est un
+  // rang comme un autre.
+  const sansRubrique = itemsDuCompteRendu({ confrontes: CONFRONTES, document: UN_DOCUMENT })
+    .find((item) => item.itemType === ITEM_TYPE.SUJET);
+  assert.equal(sansRubrique.payload.rubrique, null);
 });

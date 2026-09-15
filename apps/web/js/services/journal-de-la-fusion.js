@@ -62,6 +62,9 @@ export const ETAPES_DE_LA_FUSION = [
   ["lots", "Lots ouverts"],
   ["intervenants", "Sociétés ajoutées"],
   ["sujets", "Sujets ouverts"],
+  // Après les sujets : un père se remplit de ce qui vient d'être ouvert, et
+  // l'ordre inverse lui donnerait un contenu d'une réunion de retard.
+  ["peres", "Lots rangés"],
   // Les reprises d'un compte rendu s'écrivent avec les sujets qu'elles
   // concernent : elles n'ont pas d'étape à elles, et en inventer une qui ne se
   // produit jamais ferait un chemin d'exécution plus long que le vrai.
