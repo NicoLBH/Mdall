@@ -96,13 +96,17 @@ test("le refus nomme l'empêchement et la suite", () => {
 /* ── Le garde-fou, là où il tient vraiment ───────────────────────────────── */
 
 /**
- * Les trois vérifications qui suivent lisent du texte, et c'est assumé.
+ * Les vérifications qui suivent lisent du texte, et c'est assumé.
  *
  * Elles ne remplacent pas les précédentes : elles couvrent le seul défaut
- * qu'aucune exécution ne révèle — **une chose absente**. Une colonne oubliée
- * dans une chaîne de `select`, une règle de base restée ouverte, une clé
- * glissée dans un corps de requête : rien ne lève, rien ne rougit, et l'on
- * découvre la fuite le jour où quelqu'un lit le carnet d'un autre.
+ * qu'aucune exécution ne révèle — **une chose absente**. Une règle de base
+ * restée ouverte, une clé glissée dans un corps de requête : rien ne lève, rien
+ * ne rougit, et l'on découvre la fuite le jour où quelqu'un lit le carnet d'un
+ * autre.
+ *
+ * La colonne `owner_id` elle-même est gardée ailleurs, avec les autres :
+ * `colonnes-dune-situation.test.mjs`. Deux lecteurs écrivaient leur propre
+ * liste, et c'est ce qui l'avait fait disparaître de l'un des deux.
  *
  * Voir `docs/les-situations-traversent-les-projets.md`, § 3.
  */
@@ -119,25 +123,6 @@ const lire = (chemin) => readFileSync(chemin, "utf8");
 
 /** La migration qui ferme la porte. Ce qui vient après elle doit la respecter. */
 const CLOISONNEMENT = "202610040001_situations_privees.sql";
-
-/**
- * **`owner_id` doit être demandé pour arriver.**
- *
- * PostgREST ne rend que les colonnes nommées. Absente de la chaîne, la colonne
- * ne lève rien : chaque situation revient sans propriétaire, et l'écran
- * annonce « créée avant le cloisonnement » sur celle qu'on vient d'écrire —
- * en désactivant son bouton de modification par-dessus le marché.
- */
-test("la lecture demande le propriétaire", () => {
-  const source = lire(join(SERVICES, "project-situations-supabase.js"));
-  const clause = source.match(/function getSituationsSelectClause\(\) \{\s*return "([^"]+)"/);
-
-  assert.ok(clause, "la chaîne des colonnes doit rester écrite à un seul endroit");
-  assert.ok(
-    clause[1].split(",").includes("owner_id"),
-    `owner_id manque dans « ${clause?.[1]} » : tout reviendrait sans propriétaire`
-  );
-});
 
 /**
  * **Le propriétaire est posé par la base, jamais envoyé.**

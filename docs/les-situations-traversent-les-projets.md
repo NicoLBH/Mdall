@@ -97,8 +97,8 @@ jamais lire la situation elle-même.
 | Un filtre écrit, qui se rejoue | `filter_definition` jsonb | ✅ déjà une requête |
 | La grammaire de recherche des sujets | `sujets-filtres.js` | ✅ champs, opérateurs |
 | Le cloisonnement par propriétaire | `ct_analysis_runs`, `cr_lectures` | ✅ **le modèle à suivre** |
-| **Un propriétaire sur une situation** | — | ❌ à faire |
-| **Un périmètre de projets** | — | ❌ à faire |
+| Un propriétaire sur une situation | `situations.owner_id` | ✅ étape 1 |
+| Un périmètre de projets | `perimetre` jsonb | ✅ étape 2 |
 | **Chercher un projet dans un filtre** | — | ❌ à faire |
 
 ---
@@ -142,7 +142,7 @@ on peut toujours décider de le faire, plus distraitement.
 
 ---
 
-### Étape 2 — Le périmètre remplace le projet
+### Étape 2 — Le périmètre remplace le projet · *faite*
 
 `project_id` devient facultatif, et une colonne dit ce que la situation
 regarde :
@@ -161,6 +161,33 @@ la première suit une personne, la seconde une affaire.
 `{portee: "projet", projets: [leur project_id]}`. Rien ne change pour elles, et
 c'est le but : une migration qui déplacerait du travail au passage serait
 impossible à contrôler.
+
+**Ce qui a été livré :**
+
+| Où | Quoi |
+| --- | --- |
+| `supabase/migrations/202610050001_situations_perimetre.sql` | la colonne, son remplissage, la contrainte de forme, l'index, et `project_id` qui cesse d'être obligatoire |
+| `apps/web/js/services/perimetre-dune-situation.js` | ce qu'une situation regarde : le lire, l'écrire, le dire |
+| `apps/web/js/services/colonnes-dune-situation.js` | la liste des colonnes, pour tout le monde |
+| `apps/web/js/views/project-situations/project-situations-table.js` | ce que la situation regarde, quand ce n'est pas seulement ce projet-ci |
+
+**Le piège, nommé une fois pour toutes :** `tous` ne liste aucun projet, et cela
+ne veut pas dire « aucun ». Qui compterait la liste pour savoir ce qu'une
+situation regarde lirait « zéro » sur celle qui regarde le plus large — la seule
+qu'il fallait montrer (règle 5). C'est pour cela que `regardeToutMonTravail`
+existe : personne n'a à tester une longueur.
+
+**Et une valeur écrite deux fois : `portee` et la longueur de la liste disent la
+même chose.** Quand elles se contredisent, c'est la liste qui a raison — elle
+nomme des projets, la portée ne fait que la résumer (règle 4). Seul `tous` est
+une intention que la liste ne peut pas porter.
+
+**Un trou d'étape 1 refermé au passage.** Deux modules lisaient les situations,
+chacun avec sa propre chaîne de `select` — et un seul avait reçu `owner_id`.
+L'écran servi par l'autre affichait « créée avant le cloisonnement » sur chacune
+de ses situations, y compris celles écrites la veille. Rien n'avait levé. La
+liste des colonnes vit désormais à un seul endroit, et un lecteur qui
+reconstruirait la sienne casse la construction.
 
 ---
 

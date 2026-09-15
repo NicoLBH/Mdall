@@ -6,6 +6,7 @@ import { renderDataTableHead } from "../ui/data-table-shell.js";
 import { renderIssuesTable } from "../ui/issues-table.js";
 import { normalizePaginationState, renderPaginationControls } from "../ui/pagination.js";
 import { motDeLAppartenance, pourquoiPasModifiable } from "../../services/situations-privees.js";
+import { phraseDuPerimetre, projetsRegardes, regardeToutMonTravail } from "../../services/perimetre-dune-situation.js";
 
 export function createProjectSituationsTable({
   store,
@@ -36,6 +37,27 @@ export function createProjectSituationsTable({
     if (!mot) return "";
 
     return `<span title="${escapeHtml(pourquoiPasModifiable(situation))}">${renderStatusBadge({ label: mot })}</span>`;
+  }
+
+  /**
+   * Ce que la situation regarde, quand ce n'est pas seulement ce projet-ci.
+   *
+   * **Le cas normal ne se commente pas.** Sur l'écran d'un projet, une situation
+   * qui ne regarde que ce projet est la règle : nommer le chantier sur chacune
+   * des quinze lignes ferait un bruit qu'on cesse de lire au bout de trois, et
+   * la seule qui compte — celle qui en regarde quatre — s'y noierait.
+   *
+   * On ne compare pas au projet courant : l'écran ne connaît que la clé du
+   * navigateur, et la situation porte l'identifiant de la base. Une seule
+   * lecture suffit ici, parce que cet écran ne montre que les situations de ce
+   * projet — ce qui en regarde plus d'un en regarde forcément un autre.
+   *
+   * Aucune classe nouvelle : la pastille des autres écrans, au même calibrage.
+   */
+  function renderPerimetrePill(situation) {
+    if (!regardeToutMonTravail(situation) && projetsRegardes(situation).length <= 1) return "";
+
+    return renderStatusBadge({ label: phraseDuPerimetre(situation), tone: "accent" });
   }
 
   function renderModePill(mode) {
@@ -79,6 +101,7 @@ export function createProjectSituationsTable({
               <span class="project-situations-table__title-inline">
                 <button type="button" class="row-title-trigger theme-text theme-text--sit project-situations-table__title-trigger" data-open-situation="${escapeHtml(situation.id)}">${title}</button>
                 ${renderModePill(situation.mode)}
+                ${renderPerimetrePill(situation)}
                 ${renderAppartenancePill(situation)}
               </span>
             </span>

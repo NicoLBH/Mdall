@@ -64,3 +64,59 @@ test("une situation d'avant le cloisonnement le dit, et dit quoi faire", () => {
   assert.match(html, /class="badge"/);
   assert.equal(html.match(/class="badge/g)?.length, 2, "celle du mode, et celle-ci");
 });
+
+/* ── Ce que la situation regarde ─────────────────────────────────────────── */
+
+const BERTRAND = "aaaaaaaa-1111-4111-8111-111111111111";
+const NOVACLIM = "bbbbbbbb-2222-4222-8222-222222222222";
+
+/**
+ * **Sur l'écran d'un projet, regarder ce projet est la règle.** Nommer le
+ * chantier sur chacune des quinze lignes ferait un bruit qu'on cesse de lire au
+ * bout de trois, et la seule qui compte — celle qui en regarde quatre — s'y
+ * noierait.
+ */
+test("une situation qui ne regarde que ce projet ne le dit pas", () => {
+  const html = tableau().renderSituationTitleCell({
+    ...SITUATION,
+    owner_id: BERTRAND,
+    perimetre: { portee: "projet", projets: [BERTRAND] }
+  });
+
+  assert.ok(!html.includes("projet"), "rien à signaler ne se signale pas");
+  assert.equal(html.match(/class="badge/g)?.length, 1, "celle du mode, et rien d'autre");
+});
+
+/** Une situation qui en regarde plusieurs se distingue au premier coup d'œil. */
+test("une situation qui traverse les projets le dit", () => {
+  const html = tableau().renderSituationTitleCell({
+    ...SITUATION,
+    owner_id: BERTRAND,
+    perimetre: { portee: "choisis", projets: [BERTRAND, NOVACLIM] }
+  });
+
+  assert.match(html, /2 projets/);
+  assert.equal(html.match(/class="badge/g)?.length, 2);
+});
+
+/**
+ * **« Tous » ne liste rien, et ce n'est pas « aucun ».** Un écran qui compterait
+ * la liste n'afficherait rien sur la situation qui regarde le plus large — la
+ * seule qu'il fallait montrer (règle 5).
+ */
+test("tout mon travail se voit, bien qu'il ne nomme aucun projet", () => {
+  const html = tableau().renderSituationTitleCell({
+    ...SITUATION,
+    owner_id: BERTRAND,
+    perimetre: { portee: "tous" }
+  });
+
+  assert.match(html, /Tous mes projets/);
+});
+
+/** Une situation d'avant l'étape 2 n'a pas de périmètre : elle regarde le sien. */
+test("sans périmètre écrit, rien de nouveau ne s'affiche", () => {
+  const html = tableau().renderSituationTitleCell({ ...SITUATION, owner_id: BERTRAND, project_id: BERTRAND });
+
+  assert.equal(html.match(/class="badge/g)?.length, 1);
+});

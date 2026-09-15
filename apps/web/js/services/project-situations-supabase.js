@@ -1,6 +1,8 @@
 import { store } from "../store.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
+import { perimetrePourEcriture } from "./perimetre-dune-situation.js";
+import { clauseDesSituations } from "./colonnes-dune-situation.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
@@ -73,6 +75,13 @@ function normalizeSituationRow(row = {}) {
     // Vide plutôt qu'absent : `situations-privees.js` lit une chaîne, et
     // « pas de propriétaire » y a un sens précis (voir l'exception nommée).
     owner_id: normalizeUuid(row.owner_id),
+    // Rendu tel quel : c'est `perimetre-dune-situation.js` qui le lit, et une
+    // deuxième lecture ici finirait par ne plus dire la même chose (règle 10).
+    // Ce qui n'est pas un objet n'est pas un périmètre — et son absence a un
+    // sens : la situation n'a pas encore migré, son projet parle pour elle.
+    perimetre: row.perimetre && typeof row.perimetre === "object" && !Array.isArray(row.perimetre)
+      ? row.perimetre
+      : null,
     title: firstNonEmpty(row.title, "Situation"),
     description: firstNonEmpty(row.description, ""),
     status: normalizeSituationStatus(row.status),
@@ -124,16 +133,14 @@ async function getResolvedProjectId(projectId) {
 }
 
 /**
- * Les colonnes qu'on demande, écrites à un seul endroit.
+ * Les colonnes qu'on demande — celles de tout le monde.
  *
- * `owner_id` en fait partie **parce que l'écran en dépend** : sans elle, toute
- * situation revient sans propriétaire et se lit « créée avant le
- * cloisonnement » — y compris celle qu'on vient d'écrire. Une colonne oubliée
- * dans une chaîne de `select` ne lève rien et ne casse rien : elle ment
- * doucement. C'est `situations-privees.test.mjs` qui monte la garde.
+ * Cet écran a eu la sienne, et un autre la sienne : le jour où `owner_id` est
+ * arrivée, un seul des deux l'a demandée, et l'autre affichait des situations
+ * sans propriétaire. Voir `colonnes-dune-situation.js`.
  */
 function getSituationsSelectClause() {
-  return "id,project_id,owner_id,title,description,status,mode,filter_definition,created_at,updated_at,closed_at";
+  return clauseDesSituations();
 }
 
 async function fetchSituationsByProject(projectId) {
@@ -549,6 +556,10 @@ export async function createSituation(projectId, payload = {}) {
 
   const body = {
     project_id: resolvedProjectId,
+    // Elle naît en regardant le projet d'où on l'a créée. Sans périmètre écrit,
+    // elle naîtrait en ne regardant nulle part, et personne ne le verrait avant
+    // que l'écran ne quitte le projet.
+    perimetre: perimetrePourEcriture(payload.perimetre) || perimetrePourEcriture([resolvedProjectId]),
     title: firstNonEmpty(payload.title, "Nouvelle situation"),
     description: firstNonEmpty(payload.description, "") || null,
     status: normalizeSituationStatus(payload.status),
@@ -610,6 +621,13 @@ export async function updateSituation(situationId, patch = {}) {
   if (Object.prototype.hasOwnProperty.call(patch, "status")) {
     body.status = nextStatus;
     body.closed_at = nextStatus === "closed" ? new Date().toISOString() : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "perimetre")) {
+    // Une seule porte d'écriture : un périmètre mal formé partirait en 400, et
+    // un périmètre vide ne regarderait rien. On ne touche pas à la colonne
+    // plutôt que d'y écrire l'un ou l'autre.
+    const perimetre = perimetrePourEcriture(patch.perimetre);
+    if (perimetre) body.perimetre = perimetre;
   }
   if (Object.prototype.hasOwnProperty.call(patch, "filter_definition") && nextMode === "automatic") {
     body.filter_definition = normalizeFilterDefinition(patch.filter_definition) || {};

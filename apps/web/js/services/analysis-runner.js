@@ -16,6 +16,7 @@ import {
   uploadDocumentToStorage
 } from "./document-deposit.js";
 import { ensureBackendProject, mappedBackendProjectId } from "./backend-project.js";
+import { clauseDesSituations } from "./colonnes-dune-situation.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const SUPABASE_ANON_KEY = getSupabaseAnonKey();
@@ -299,10 +300,10 @@ async function fetchSituationsByProject(projectId) {
   if (!projectId) return [];
 
   const url = new URL(`${SUPABASE_URL}/rest/v1/situations`);
-  url.searchParams.set(
-    "select",
-    "id,project_id,title,description,objective_text,progress_percent,status,mode,filter_definition,created_at,updated_at,closed_at"
-  );
+  // La liste de tout le monde : celle d'ici ignorait `owner_id`, et les
+  // situations chargées par ce chemin s'affichaient toutes comme créées avant
+  // le cloisonnement. Voir `colonnes-dune-situation.js`.
+  url.searchParams.set("select", clauseDesSituations());
   url.searchParams.set("project_id", `eq.${projectId}`);
   url.searchParams.set("order", "created_at.asc");
 
