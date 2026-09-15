@@ -2977,7 +2977,11 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
         confrontes: etat.confrontes,
         document: range.document,
         lots: lotsAProposer(points, etat.lots),
-        labels: labelsAProposer(points, etat.labels),
+        // **Les mêmes rubriques que celles que le tableau vient de montrer.**
+        // Les relire ailleurs ferait promettre un rangement et en proposer un
+        // autre (règle 4).
+        rubriques: Array.isArray(etat.lecture?.rubriques) ? etat.lecture.rubriques : [],
+        labels: labelsAProposer(points, etat.labels, etat.lecture?.rubriques ?? []),
         objectifs: objectifsAProposer(points, {
           tenueLe: texte(etat.lecture?.identite?.tenueLe), objectifsDuProjet: etat.objectifs
         }),

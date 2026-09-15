@@ -35,6 +35,43 @@ const texte = (valeur) => String(valeur ?? "").trim();
 export const LABEL_DU_CR = "CR chantier";
 
 /**
+ * Le label que porte une rubrique qui désigne quelqu'un.
+ *
+ * **C'est le mot du métier, et c'est lui qui fera la vue.** Un maître d'œuvre
+ * demande « montre-moi les lots », pas « montre-moi les rubriques de niveau
+ * supérieur ». La vue sera une recherche `label:LOT`, et elle rendra la
+ * quinzaine de lignes sous lesquelles tout le reste se range.
+ *
+ * **Y compris sur le contrôle technique et le coordonnateur SPS**, qui ne sont
+ * pas des lots du marché. La question que la vue pose n'est pas « quels sont
+ * les lots » mais « qui a quelque chose à faire » — et ceux-là en ont. C'est un
+ * abus de langage assumé : si l'usage montre qu'il faut les distinguer, un
+ * second label le fera sans rien casser, un label s'ajoutant sans se migrer.
+ */
+export const LABEL_DU_LOT = "LOT";
+
+/**
+ * Le label des rubriques qui ne désignent personne.
+ *
+ * « Marché de travaux », « Installation de chantier », « Échange de
+ * documents » : elles rangent des points sans que quiconque en réponde. Les
+ * marquer `LOT` les ferait apparaître dans une vue où l'on cherche des
+ * entreprises, et l'on croirait qu'une procédure a du travail en retard.
+ */
+export const LABEL_DES_DISPOSITIONS = "Dispositions générales";
+
+/**
+ * Le label d'une rubrique, d'après ce qu'elle désigne.
+ *
+ * Un seul endroit décide (règle 10) : l'écran de la proposition, la fusion et
+ * la vue lisent tous celui-ci, et un label posé ici mais cherché autrement
+ * rendrait une vue vide sans rien dire.
+ */
+export function labelDeLaRubrique(genre = "") {
+  return texte(genre) === "administrative" ? LABEL_DES_DISPOSITIONS : LABEL_DU_LOT;
+}
+
+/**
  * Les labels de qualification, et pourquoi la liste est **fermée**.
  *
  * « CR chantier » dit d'où vient un sujet ; ceux-ci disent ce qu'il vaut. Un
@@ -146,13 +183,24 @@ export function labelDuCrDansLeProjet(labels = null) {
  * d'un compte rendu la porte. Les autres ne viennent que des points où le
  * document les dit — et ils ont déjà été ramenés à la liste fermée au serveur.
  *
+ * **Les rubriques y viennent aussi.** Un sujet père porte `LOT` ou
+ * « Dispositions générales » : ces labels doivent être créés au projet comme
+ * les autres, sinon la fusion poserait sur les pères un label qui n'existe pas,
+ * et la vue `label:LOT` ne rendrait rien.
+ *
  * @param {object[]} points la lecture assemblée
  * @param {object[]|null} labelsDuProjet — `null` quand on n'a pas pu les lire
+ * @param {object[]} [rubriques] les rubriques relues du compte rendu
  * @returns {{connu: boolean, poses: {nom: string, points: number, existe: boolean}[],
  *   aCreer: string[]}}
  */
-export function labelsAProposer(points = [], labelsDuProjet = null) {
+export function labelsAProposer(points = [], labelsDuProjet = null, rubriques = []) {
   const comptes = new Map([[LABEL_DU_CR, 0]]);
+
+  for (const rubrique of Array.isArray(rubriques) ? rubriques : []) {
+    const nom = labelDeLaRubrique(rubrique?.genre);
+    comptes.set(nom, (comptes.get(nom) ?? 0) + 1);
+  }
 
   for (const point of Array.isArray(points) ? points : []) {
     comptes.set(LABEL_DU_CR, comptes.get(LABEL_DU_CR) + 1);

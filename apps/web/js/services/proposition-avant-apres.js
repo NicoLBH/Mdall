@@ -108,6 +108,11 @@ const INTENDANCE = new Set([
   ITEM_TYPE.SUJET,
   ITEM_TYPE.RELANCE,
   ITEM_TYPE.INTERVENANT,
+  // Une rubrique est un **contenant** du suivi, pas une valeur du projet :
+  // « Lot n° 1 : Gros Œuvre » n'affirme rien qu'on puisse comparer à un avant.
+  // La ranger du côté de la mémoire en ferait une affirmation sans valeur, qui
+  // ferait échouer le contrôle « chaque affirmation dit d'où elle vient ».
+  ITEM_TYPE.RUBRIQUE,
   ITEM_TYPE.LOT,
   ITEM_TYPE.LABEL,
   ITEM_TYPE.OBJECTIF,

@@ -7,8 +7,9 @@ import { ITEM } from "./proposition-state.js";
 import {
   PHRASES_DU_REFUS, REFUS, cleDuPoint, introDuCompteRendu, itemsDuCompteRendu,
   labelItems, lotItems, objectifItems, phraseDuRefus, pointsAOuvrir, pointsARelancer,
-  refusDeLaProposition, relanceItems, titreDeLaProposition, fermetureItems
+  refusDeLaProposition, relanceItems, rubriqueItems, titreDeLaProposition, fermetureItems
 } from "./proposition-du-cr.js";
+import { LABEL_DES_DISPOSITIONS, LABEL_DU_LOT } from "./label-du-cr.js";
 import { FERMETURE } from "./fermeture-du-cr.js";
 
 /**
@@ -627,4 +628,166 @@ test("le document porte par quoi il a été lu", () => {
 test("sans référentiel connu, le document n'en annonce aucun", () => {
   const [document] = itemsDuCompteRendu({ confrontes: CONFRONTES, document: UN_DOCUMENT });
   assert.equal("luPar" in document.payload, false);
+});
+
+/* ── Les rubriques : ce sous quoi le compte rendu range ses points ────────── */
+
+/**
+ * La forme d'un compte rendu de chantier, en petit. Les rubriques arrivent
+ * telles que la lecture les rend — brutes, pas déjà relues : c'est ce que
+ * l'écran passe, et un jeu d'essai qui les pré-normaliserait testerait l'accord
+ * du compositeur avec lui-même.
+ */
+const LES_RUBRIQUES = [
+  { ordre: 1, intitule: "1. Marché de travaux", genre: "administrative",
+    provenance: { source_id: "doc-1", page: 1, excerpt: "1. Marché de travaux" } },
+  { ordre: 4, intitule: "4. Coordonnateur SPS", genre: "intervenant",
+    provenance: { source_id: "doc-1", page: 1, excerpt: "4. Coordonnateur SPS" } },
+  { ordre: 8, intitule: "Lot n° 1 : Démolition / Gros Œuvre : Entreprise BERTRAND",
+    genre: "lot", numero: "1", societe: "BERTRAND",
+    provenance: { source_id: "doc-1", page: 2, excerpt: "Lot n° 1 : Démolition" } }
+];
+
+/**
+ * **La clé est l'identité de la rubrique, pas son intitulé.** C'est elle qui
+ * fait qu'un lot retrouvé au compte rendu suivant est le même, quand bien même
+ * le nom de son entreprise aurait changé d'orthographe.
+ */
+test("une rubrique devient une ligne, identifiée par son numéro de lot", () => {
+  const items = rubriqueItems(LES_RUBRIQUES);
+
+  assert.deepEqual(items.map((item) => item.itemKey),
+    ["rubrique:marche de travaux", "rubrique:coordonnateur sps", "lot:1"]);
+  assert.ok(items.every((item) => item.itemType === ITEM_TYPE.RUBRIQUE));
+  // Proposée, jamais acceptée d'office : ranger le chantier de quelqu'un sans
+  // le lui demander est une écriture (règle 1).
+  assert.ok(items.every((item) => item.status === ITEM.PROPOSED));
+});
+
+test("la ligne porte le titre du document, ce qu'il désigne, et d'où il sort", () => {
+  const [, sps, lot] = rubriqueItems(LES_RUBRIQUES);
+
+  assert.deepEqual(lot.payload, {
+    intitule: "Lot n° 1 : Démolition / Gros Œuvre : Entreprise BERTRAND",
+    genre: "lot",
+    numero: "1",
+    societe: "BERTRAND",
+    label: LABEL_DU_LOT,
+    sourceId: "doc-1",
+    page: 2,
+    evidence: "Lot n° 1 : Démolition"
+  });
+
+  // Un intervenant sans société nommée porte le même label : la question que
+  // pose la vue est « qui a quelque chose à faire », pas « quels sont les lots ».
+  assert.equal(sps.payload.label, LABEL_DU_LOT);
+  assert.equal(sps.payload.societe, null);
+});
+
+/**
+ * **Une rubrique administrative ne désigne personne.** La marquer `LOT` la ferait
+ * apparaître dans une vue où l'on cherche des entreprises, et l'on croirait
+ * qu'une procédure a du travail en retard.
+ */
+test("une rubrique qui ne désigne personne ne porte pas le label des lots", () => {
+  const [administrative] = rubriqueItems(LES_RUBRIQUES);
+  assert.equal(administrative.payload.label, LABEL_DES_DISPOSITIONS);
+  assert.equal(administrative.payload.genre, "administrative");
+});
+
+/**
+ * **Une rubrique vide se propose quand même.** Un lot dont le compte rendu ne
+ * dit rien à cette réunion existe, et c'est ce qui lui permet d'être ouvert puis
+ * fermé, et de rouvrir à la réunion où il reçoit un point.
+ */
+test("un lot dont le compte rendu ne dit rien se propose aussi", () => {
+  const items = rubriqueItems([
+    { ordre: 12, intitule: "Lot n° 12 : VENTILATION : Entreprise NOVACLIM", genre: "lot", numero: "12" }
+  ]);
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].itemKey, "lot:12");
+  assert.equal(items[0].payload.societe, "NOVACLIM");
+});
+
+/** Une rubrique qu'on ne saurait ni nommer ni numéroter ne se propose pas. */
+test("une rubrique illisible ne devient pas une ligne", () => {
+  assert.deepEqual(rubriqueItems([{ ordre: 3, intitule: "/" }, { ordre: 4, intitule: "" }]), []);
+  assert.deepEqual(rubriqueItems(), []);
+});
+
+/**
+ * **Les rubriques en tête.** C'est l'ordre dans lequel on décide : les points
+ * qu'elles contiennent en dépendent, et refuser une rubrique après avoir accepté
+ * ses points laisserait ceux-ci sans le père qu'on leur avait annoncé.
+ */
+test("la proposition montre les rubriques avant tout le reste du compte rendu", () => {
+  const items = itemsDuCompteRendu({
+    confrontes: CONFRONTES, document: UN_DOCUMENT, lots: LES_LOTS, rubriques: LES_RUBRIQUES
+  });
+
+  const natures = items.map((item) => item.itemType);
+  const premiereRubrique = natures.indexOf(ITEM_TYPE.RUBRIQUE);
+
+  assert.ok(premiereRubrique >= 0, "la proposition porte les rubriques");
+  // Le document d'abord — il est ce sur quoi tout le reste s'appuie —, les
+  // rubriques ensuite, et tout ce qu'elles rangent après.
+  assert.equal(natures.indexOf(ITEM_TYPE.DOCUMENT), 0);
+  assert.ok(premiereRubrique < natures.indexOf(ITEM_TYPE.SUJET));
+  assert.ok(premiereRubrique < natures.indexOf(ITEM_TYPE.LOT));
+});
+
+/** Sans rubrique lue, la proposition n'en invente pas. */
+test("un compte rendu sans rubrique n'en propose aucune", () => {
+  const items = itemsDuCompteRendu({ confrontes: CONFRONTES, document: UN_DOCUMENT });
+  assert.equal(items.filter((item) => item.itemType === ITEM_TYPE.RUBRIQUE).length, 0);
+});
+
+/**
+ * **Toute nature qu'un compte rendu produit a son bloc à l'écran.**
+ *
+ * C'est le cas précis où lire la source vaut mieux que de ne rien vérifier :
+ * l'écran de la proposition charge l'authentification et aucun test ne peut
+ * l'importer. Une nature ajoutée ici sans bloc là-bas ne casserait rien —
+ * les lignes seraient écrites, conservées, comptées dans « ce qui reste à
+ * trancher », et **invisibles** : personne ne pourrait ni les accepter ni les
+ * refuser, et rien ne dirait pourquoi.
+ *
+ * C'est exactement ce qui vient d'être ajouté, et rien ne l'aurait dit.
+ */
+test("chaque nature d'un compte rendu a son bloc dans l'écran de la proposition", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const source = readFileSync(
+    fileURLToPath(new URL("../views/project-propositions.js", import.meta.url)),
+    "utf8"
+  );
+
+  const produites = new Set(
+    itemsDuCompteRendu({
+      confrontes: CONFRONTES,
+      document: UN_DOCUMENT,
+      lots: LES_LOTS,
+      labels: LES_LABELS,
+      rubriques: LES_RUBRIQUES,
+      objectifs: LES_OBJECTIFS,
+      disparition: DISPARITION
+    }).map((item) => item.itemType)
+  );
+
+  assert.ok(produites.size >= 5, `un compte rendu produit plusieurs natures (${produites.size})`);
+
+  // Le nom de la constante, pas sa valeur : c'est ainsi que l'écran l'écrit.
+  const parNom = Object.fromEntries(Object.entries(ITEM_TYPE).map(([nom, valeur]) => [valeur, nom]));
+  const affichees = new Set(
+    [...source.matchAll(/renderReviewBlock\(\s*ITEM_TYPE\.([A-Z_]+)/g)].map((trouve) => trouve[1])
+  );
+
+  for (const nature of produites) {
+    assert.ok(
+      affichees.has(parNom[nature]),
+      `la nature « ${nature} » est proposée mais n'a aucun bloc à l'écran`
+    );
+  }
 });

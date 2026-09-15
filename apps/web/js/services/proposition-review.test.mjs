@@ -339,6 +339,12 @@ test("chaque nature se nomme en clair, jamais par sa clé", () => {
   assert.equal(nom(ITEM_TYPE.LOT, "3", { numero: "3" }), "Lot 3");
   // Un avis se désigne par le numéro que le bureau de contrôle lui a donné.
   assert.equal(nom(ITEM_TYPE.AVIS, "abc", { reference: "S12" }), "Avis n° S12");
+  // Une rubrique se désigne par le titre que le document lui donne : c'est sous
+  // celui-là qu'on ira la chercher, pas sous « lot:1 ».
+  assert.equal(
+    nom(ITEM_TYPE.RUBRIQUE, "lot:1", { intitule: "Lot n° 1 : Gros Œuvre", genre: "lot" }),
+    "Lot n° 1 : Gros Œuvre"
+  );
 
   // **Jamais un blanc.** Faute de nom, la clé : un identifiant se cherche, un
   // vide ne dit rien du tout.

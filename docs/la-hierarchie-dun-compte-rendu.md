@@ -118,7 +118,8 @@ Presque rien à créer. Il s'agit d'alimenter ce qui est là.
 | L'épingle | `subject_pins`, `epingles-des-sujets.js` | ✅ |
 | Les vues enregistrées | `vues-des-sujets.js`, recherches épinglées | ✅ |
 | Une rubrique comme objet de lecture | `rubriques-du-cr.js`, `SCHEMA_DES_SUJETS.rubriques` | ✅ étape 2 |
-| **Un sujet père proposé, puis appliqué** | — | ❌ à faire |
+| Un sujet père **proposé** | `ITEM_TYPE.RUBRIQUE`, `rubriqueItems` | ✅ étape 3 |
+| **Un sujet père appliqué à la fusion** | — | ❌ à faire |
 
 Autrement dit : **le modèle voit déjà le rangement, et la base sait déjà le porter.** Ce qui
 manque est entre les deux.
@@ -192,10 +193,19 @@ remplace. Il s'appelle maintenant `groupesParLot`, ce qu'il est (règle 10).
 
 ---
 
-### Étape 3 — Une rubrique devient une ligne de la proposition
+### Étape 3 — Une rubrique devient une ligne de la proposition · *faite*
 
 Nouvelle nature `ITEM_TYPE.RUBRIQUE`. Elle porte l'intitulé tel que le document l'écrit, son
 genre, son numéro et sa société le cas échéant, sa citation et sa page.
+
+**Sa clé est l'identité de la rubrique**, jamais son intitulé : `lot:1`,
+`rubrique:installation de chantier`. C'est elle qui fera qu'un lot retrouvé au compte rendu
+suivant est le même, quand bien même le nom de son entreprise aurait changé d'orthographe.
+
+**Toutes les rubriques se proposent, y compris celles qui ne portent aucun point.** Un lot dont
+le document ne dit rien à cette réunion existe, et c'est ce qui lui permet d'être ouvert puis
+fermé, puis de rouvrir à la réunion où il reçoit un point. N'en proposer que les peuplées ferait
+apparaître les lots au compte-gouttes, chacun à la réunion où il a parlé.
 
 Elle se coche comme les autres : **rien n'entre directement dans la mémoire** (règle 1). Une
 rubrique refusée ne crée pas de père, et ses points restent racines.
@@ -211,6 +221,17 @@ labels se proposent comme les autres, par `labelsAProposer`.
 > pas « quels sont les lots du marché » mais « qui a quelque chose à faire ». Le SPS et le
 > bureau de contrôle en ont. Si l'usage montre que les deux doivent se distinguer, un second
 > label les séparera sans rien casser — un label s'ajoute, il ne se migre pas.
+
+**Ce que la ligne dit, et ce qu'elle ne dit pas.** Elle est marquée « Retenue », et non
+« À ouvrir » : le père s'ouvre à l'étape 4. Annoncer une ouverture qui n'a pas encore lieu
+serait le défaut que la nature `FERMETURE` a été créée pour réparer — un écran qui promet ce
+que la proposition ne fait pas.
+
+**Une garde générale est venue avec.** Une nature proposée sans bloc à l'écran ne casse rien :
+ses lignes sont écrites, conservées, comptées dans ce qui reste à trancher, et **invisibles** —
+personne ne peut ni les accepter ni les refuser. Un test lit désormais l'écran et vérifie que
+toute nature qu'un compte rendu produit y a son bloc. C'est le cas précis où lire la source
+vaut mieux que de ne rien vérifier.
 
 ---
 
