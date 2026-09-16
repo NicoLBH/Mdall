@@ -77,6 +77,11 @@ maintenant un geste, et non un effet de bord de la saisie.
 Une question vide n'ouvre rien : Entrée sur un champ blanc changerait d'écran
 sans rien emporter, et l'on se retrouverait ailleurs sans savoir pourquoi.
 
+**Et la question part.** Elle n'arrivait qu'en brouillon dans le champ du
+Copilote : il fallait refaire Entrée, et pendant la seconde où l'on ne
+comprenait pas, la question paraissait perdue. On ne quitte l'accueil qu'en
+envoyant — le Copilote pose donc la question au lieu de la déposer.
+
 La question passe par `services/question-de-laccueil.js`, et **ni par l'adresse,
 ni par le brouillon du Copilote** :
 

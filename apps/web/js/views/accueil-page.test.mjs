@@ -306,3 +306,27 @@ test("la bascule se fait sur Entrée, jamais à la frappe", async () => {
   // pourquoi.
   assert.match(source, /function envoyer\(question\) \{[\s\S]{0,400}if \(!String\(question \?\? ""\)\.trim\(\)\) return;/);
 });
+
+/**
+ * **La question posée est posée, pas recopiée dans un champ.**
+ *
+ * Elle n'arrivait qu'en brouillon : il fallait refaire Entrée à l'arrivée, et
+ * pendant la seconde où l'on ne comprenait pas, la question paraissait perdue.
+ * Défaut invisible d'ici — le Copilote parle à la base et ne s'importe pas — et
+ * qu'aucune erreur ne lève.
+ */
+test("la question posée à l'accueil part à l'arrivée sur le Copilote", async () => {
+  const source = await readFile(
+    new URL("./studio/copilote/copilote.js", import.meta.url), "utf8"
+  );
+
+  assert.match(source, /const reprise = reprendreLaQuestion\(\);/);
+  // Après le rendu : `envoyer` lit le champ de saisie, qui n'existe qu'une fois
+  // le fil dessiné.
+  const apresLeRendu = source.slice(source.indexOf("const reprise = reprendreLaQuestion()"));
+  const rendu = apresLeRendu.indexOf("render(root);");
+  const envoi = apresLeRendu.indexOf("envoyerTexte(root, reprise)");
+
+  assert.ok(envoi > 0, "la question part");
+  assert.ok(rendu >= 0 && envoi > rendu, "et elle part après le rendu");
+});

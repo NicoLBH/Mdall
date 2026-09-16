@@ -25819,3 +25819,28 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .accueil-actualite__projet{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .accueil-actualite__quand{ flex:0 0 auto; }
+
+/* La courbe d'activité d'un projet : douze mois, au pas de la semaine.
+
+   Verte, comme sur toutes les listes de dépôts : c'est la couleur de « ça
+   bouge », et elle est déjà celle des états ouverts (`--success`). En inventer
+   une seconde pour cet écran ferait deux verts à retoucher ensemble.
+
+   Le trait est en `currentColor` : la couleur se décide ici, sur le conteneur,
+   et le SVG n'en connaît aucune. */
+.courbe-activite{
+  display:block;
+  width:100%; height:28px;
+  color:var(--success);
+}
+/* `preserveAspectRatio:none` étire le dessin à la cellule ; sans hauteur
+   explicite, le SVG prendrait la hauteur par défaut de 150 px et pousserait la
+   ligne du tableau. */
+.courbe-activite__dessin{ display:block; width:100%; height:100%; overflow:visible; }
+
+/* **Rien plutôt qu'une ligne à zéro.** Une courbe plate dirait « ce projet n'a
+   rien vécu de l'année » : c'est une information, et on ne l'a pas. La cellule
+   garde sa place pour que la ligne ne saute pas à l'arrivée de la lecture. */
+.courbe-activite--inconnue{ height:28px; }
+
+.projects-repo__cell--activite{ display:flex; align-items:center; min-width:0; }

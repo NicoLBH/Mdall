@@ -17,16 +17,24 @@
  * choix du projet a servi à quelque chose — et nulle part on n'aurait vu
  * pourquoi.
  *
+ * ## Elle est **posée**, pas commencée
+ *
+ * On ne quitte l'accueil qu'en appuyant sur Entrée ou sur le bouton d'envoi :
+ * la question qui arrive ici a donc été **envoyée**, et le Copilote la pose au
+ * lieu de la déposer dans le champ. La reposer à la main était un second
+ * Entrée pour rien — et, pendant la seconde où l'on ne comprenait pas, la
+ * discussion paraissait perdue.
+ *
  * ## Une fois, et une seule
  *
  * `reprendre()` rend la question **et l'oublie**. Sans cela, revenir sur le
- * Copilote une heure plus tard ferait réapparaître une question qu'on croyait
- * abandonnée, par-dessus ce qu'on est en train d'écrire.
+ * Copilote une heure plus tard reposerait une question qu'on croyait
+ * abandonnée — et celle-là partirait vraiment.
  */
 
 let enAttente = "";
 
-/** Déposer ce qui vient d'être tapé à l'accueil. */
+/** Confier la question posée à l'accueil. */
 export function deposerLaQuestion(question = "") {
   enAttente = String(question ?? "");
 }
@@ -35,7 +43,7 @@ export function deposerLaQuestion(question = "") {
  * Reprendre la question, et l'oublier.
  *
  * @returns {string} `""` quand il n'y en a pas — et c'est alors au Copilote de
- *   garder le brouillon qu'il avait déjà.
+ *   garder le brouillon qu'il avait déjà, sans rien envoyer.
  */
 export function reprendreLaQuestion() {
   const question = enAttente;

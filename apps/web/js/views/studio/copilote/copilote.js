@@ -239,7 +239,23 @@ async function chargerConversations(root) {
 
   try {
     const projet = await projetEnBase();
-    etat.conversations = projet === "" ? [] : await listConversations(projet);
+    const lues = projet === "" ? [] : await listConversations(projet);
+
+    /**
+     * **Ce que la base rend, plus ce qu'elle n'a pas encore vu.**
+     *
+     * La lecture part au montage de l'écran ; une question posée depuis
+     * l'accueil crée sa discussion dans la même seconde. Si la lecture revient
+     * après l'insertion, elle écrasait la liste locale — et la discussion qu'on
+     * venait d'ouvrir disparaissait du rail jusqu'au rechargement suivant.
+     *
+     * Celles que la base connaît font foi ; les autres sont gardées.
+     */
+    const connues = new Set(lues.map((conversation) => conversation.id));
+    etat.conversations = [
+      ...lues,
+      ...etat.conversations.filter((conversation) => !connues.has(conversation.id))
+    ];
   } catch (error) {
     // Une lecture qui échoue n'efface rien : on garde ce qu'on avait, et on le
     // dit. Afficher une liste vide ferait croire qu'il n'y a jamais rien eu.
@@ -2577,26 +2593,21 @@ export function renderCopilote(root, { reload = false, garderLeDefilement = fals
   const etat = ensureState();
 
   /**
-   * **La question commencée à l'accueil.**
+   * **La question posée à l'accueil.**
    *
    * Elle se reprend **après** `ensureState`, et c'est tout l'intérêt : changer
    * de projet remet le brouillon à zéro, et l'écrire avant se serait effacé
    * soi-même dans le seul cas où l'on a choisi un projet à l'accueil.
+   *
+   * On ne quitte l'accueil qu'en appuyant sur Entrée : la question a donc été
+   * **envoyée**, et elle part. La déposer dans le champ obligeait à refaire
+   * Entrée — et, pendant la seconde où l'on ne comprenait pas, la question
+   * paraissait perdue.
    */
   const reprise = reprendreLaQuestion();
   if (reprise) etat.draft = reprise;
 
   render(root);
-
-  // Le curseur suit la question : on continue de taper là où l'on avait
-  // commencé, sans avoir à cliquer dans un champ qui contient déjà du texte.
-  if (reprise) {
-    const saisie = root.querySelector("#copiloteInput");
-    if (saisie) {
-      saisie.focus();
-      saisie.setSelectionRange(saisie.value.length, saisie.value.length);
-    }
-  }
 
   caler(root);
   if (calage) window.removeEventListener("resize", calage);
@@ -2613,4 +2624,8 @@ export function renderCopilote(root, { reload = false, garderLeDefilement = fals
   if (reload || (etat.conversations.length === 0 && !etat.chargement)) {
     void chargerConversations(root);
   }
+
+  // **La question part après le rendu**, et pas avant : `envoyer` lit le champ
+  // de saisie, qui n'existe qu'une fois le fil dessiné.
+  if (reprise) void envoyerTexte(root, reprise);
 }
