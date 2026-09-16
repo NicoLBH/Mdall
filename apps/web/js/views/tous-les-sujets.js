@@ -29,7 +29,11 @@
 
 import { mountProjectShellChrome, setProjectViewHeader } from "./project-shell-chrome.js";
 import { renderCoquilleTransversale } from "./mon-carnet-coquille.js";
-import { renderPageDeTousLesSujets } from "./tous-les-sujets-page.js";
+import {
+  GESTES_DES_SUJETS, renderPageDeTousLesSujets, requeteAvecLeStatut
+} from "./tous-les-sujets-page.js";
+import { quandOnClique } from "./ui/tete-de-tableau.js";
+import { normaliserLeTri, triSuivant, TRI } from "../services/tri-des-sujets.js";
 import {
   BLOC_DES_FILTRES, basculerUnMenuDenTete, dansUnBlocDeFiltres,
   fermerLesMenusDenTete, ouvrirUnMenuDenTete
@@ -50,8 +54,58 @@ import { brancherLaPagination } from "./ui/pagination-transversale.js";
  */
 const vue = {
   charge: null, personnes: [], nomsDesProjets: {}, requete: "", cherchesDesFiltres: {},
-  erreur: "", page: 1
+  erreur: "", page: 1,
+  /**
+   * L'ordre demandé — **une seule case**, et volontairement : le filtre d'à
+   * côté a coûté quatre tours pour avoir vécu dans quatre (règle 4). Le statut,
+   * lui, n'a pas de case du tout : il est un jeton de la requête.
+   */
+  tri: TRI.DERNIERE_ACTIVITE
 };
+
+/**
+ * Ce que la tête du tableau demande.
+ *
+ * **L'écoute est posée une fois pour toutes**, au chargement du module, et non
+ * à chaque rendu : `quandOnClique` écoute le document et range ce qu'on lui
+ * déclare dans une table à lui — la déclarer à chaque redessin n'ajouterait
+ * rien et la ferait tenir dans deux endroits.
+ *
+ * Les noms des attributs sont **à cet écran** : l'onglet des sujets d'un projet
+ * déclare les siens, et deux écrans qui partageraient un nom se voleraient leur
+ * geste — le dernier monté gagnerait, sans que rien ne le dise.
+ */
+function ecouterLaTete() {
+  quandOnClique(GESTES_DES_SUJETS.statut, (valeur) => {
+    if (!hote) return;
+    vue.requete = requeteAvecLeStatut(vue, valeur);
+    // Changer ce que la liste retient change ce qu'est « la première page ».
+    vue.page = 1;
+    redessiner(hote);
+  });
+
+  quandOnClique(GESTES_DES_SUJETS.tri, (valeur) => {
+    if (!hote) return;
+    // Le bouton porte déjà ce qu'il demande ; on ne le recalcule que s'il ne
+    // porte rien, pour que la bascule reste vraie même sans attribut.
+    vue.tri = valeur === TRI.PROJET || valeur === TRI.DERNIERE_ACTIVITE
+      ? normaliserLeTri(valeur)
+      : triSuivant(vue.tri);
+    // Retourner la liste change sa première page : y rester montrerait son
+    // milieu.
+    vue.page = 1;
+    redessiner(hote);
+  });
+}
+
+/**
+ * Le contenu qu'on redessine.
+ *
+ * L'écoute de la tête est posée sur le document, et non sur lui : elle lui
+ * survit d'un rendu à l'autre, et doit donc savoir où écrire. On le garde ici
+ * plutôt que de le rechercher — l'écran n'en a qu'un.
+ */
+let hote = null;
 
 export function renderTousLesSujets(root) {
   if (!root) return;
@@ -63,6 +117,8 @@ export function renderTousLesSujets(root) {
   const contenu = document.getElementById("project-content");
   if (!contenu) return;
 
+  hote = contenu;
+  ecouterLaTete();
   vue.charge = null;
   vue.erreur = "";
   redessiner(contenu);

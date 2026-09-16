@@ -161,3 +161,98 @@ que de rendre une liste vide (règle 5).
 
 Cela touche aussi l'écran des situations, qui emploie la même charge : le défaut
 y était depuis le début.
+
+---
+
+## Ranger, couper en deux, et nommer les états
+
+### Le même en-tête que dans un projet
+
+Les deux tableaux transversaux montraient une liste, et rien pour la prendre par
+un bout. L'onglet Sujets d'un projet, lui, a depuis longtemps ce qu'il faut : un
+filtre **ouverts / fermés** à gauche de l'en-tête, et un **bouton de tri** dans
+sa dernière colonne.
+
+Rien n'a été redessiné. Ce sont les mêmes composants
+(`ui/table-head-filter-toggle.js`, `ui/tete-de-tableau.js`), les mêmes classes
+(`table-head-filter-group`, `table-head-sort`, `cell-assignees-head`,
+`situations-sujets-tete`) et le même service d'ordre (`tri-des-sujets.js`). Une
+seconde mise en forme aurait divergé au premier réglage, et il aurait fallu
+recalibrer deux écrans à chaque retouche.
+
+Le tableau des sujets reçoit ces deux morceaux **tout dessinés**
+(`statutHtml`, `triHtml`), comme il recevait déjà les menus de filtre : c'est
+l'écran qui sait ce qu'un clic doit écrire chez lui, et le tableau ne retient
+aucun état filtrant. Sous le formulaire d'une situation, il n'en reçoit aucun —
+on y regarde ce que la requête retient pendant qu'on l'écrit, et un bouton qui
+couperait ou rangerait la liste ferait croire que la situation retiendra ce
+qu'on voit.
+
+### Le filtre n'a pas de case à lui
+
+Cliquer « Ouverts » **écrit `statut:ouvert` dans la barre**. Il n'y a donc qu'un
+seul état filtrant — la requête —, et le bouton ne peut pas dire autre chose
+qu'elle (règle 4). C'est la troisième réparation du même filtre dans l'onglet
+d'un projet qui a tranché : la case y a été supprimée plutôt que déplacée une
+fois de plus.
+
+Deux conséquences se voient à l'écran :
+
+- **les comptes sont ceux des listes qu'ils ouvrent.** Ils sont obtenus en posant
+  le jeton et en filtrant pour de vrai. Un compte pris à côté — « tout ce qui
+  n'est pas fermé » — annoncerait deux ouverts là où le clic n'en montre qu'un :
+  la grammaire compare le statut mot pour mot, et un sujet clos comme doublon
+  n'est ni dans l'une ni dans l'autre ;
+- **rien n'est allumé tant que rien n'est demandé.** Sans jeton, la liste montre
+  tout ; prétendre qu'on regarde les ouverts ferait chercher où sont passés les
+  autres (règle 5). Recliquer le bouton allumé l'éteint, et l'on revoit tout.
+
+Les propositions n'ont pas de grammaire : leur filtre tient donc dans l'écran,
+avec la même coupe que l'onglet d'un projet — **fusionnée et refusée sont toutes
+deux closes**, parce que la question posée est « qu'est-ce qui attend encore une
+décision ? ».
+
+### Le tri, et le nom de l'ordre d'origine
+
+La liste s'ouvre sur **ce qui a bougé en dernier**, comme dans un projet : c'est
+la question qu'on se pose en arrivant, et l'ordre d'arrivée y répondait en
+dernier, après quatre-vingt-treize lignes. L'ordre d'origine reste à un clic.
+
+`motDuTri` prend maintenant le **nom de cet ordre**. « Revenir à l'ordre du
+projet » est juste dans un projet ; sur un écran qui les traverse, la même phrase
+promettrait un rangement par projet que le bouton ne fait pas. Ici, c'est
+« l'ordre d'arrivée ».
+
+Les gestes de la tête portent des noms **à chaque écran** (`sujets-tous-tri`,
+`propositions-toutes-etat`…). `quandOnClique` range ce qu'on lui déclare dans une
+table unique pour toute l'application : deux écrans qui partageraient un nom se
+voleraient leur geste, et le dernier monté gagnerait — sans que rien ne le dise.
+
+### Un sujet abandonné n'est pas un sujet fait
+
+Trois tableaux montrent des sujets, et chacun dessinait son icône. Deux d'entre
+eux ne connaissaient que deux états. Un sujet **abandonné** — clos parce qu'il ne
+tenait pas, ou parce qu'il faisait double emploi — y prenait donc la coche verte
+de ce qui est fait : le contraire de ce qui s'est passé, et c'est justement le
+signe qu'on regarde en parcourant soixante lignes.
+
+`ui/etats-des-lignes.js` est maintenant le seul endroit qui dise l'état d'une
+ligne et le signe qui va avec — pour les sujets comme pour les propositions.
+`issueIcon`, dans l'onglet d'un projet, ne fait plus que traduire ce que ses
+appels lui passent.
+
+L'abandon s'écrit de **trois façons** selon d'où vient la ligne : le statut de la
+base (`closed_invalid`, `closed_duplicate`), le motif de fermeture
+(`non_pertinent`, `duplicate`), et l'état de relecture (`rejected`, `dismissed`)
+que l'écran d'un projet tient de son côté. Les trois disent la même chose et
+n'arrivent pas ensemble — la charge transversale lit les colonnes de la base,
+l'écran d'un projet lit ce que le geste vient d'écrire. N'en regarder qu'une
+revient à ne voir l'abandon que sur l'écran qui l'a provoqué.
+
+### Un titre de ligne ne se souligne pas
+
+`row-title-trigger` est née sur un bouton, qui n'a pas de soulignement. Les
+écrans qui traversent les projets en ont fait un lien, et le navigateur souligne
+les liens : le même titre se lisait donc autrement selon l'écran, et le
+soulignement — qui est ici le signe du survol — ne disait plus rien. La classe le
+dit maintenant une fois, pour tout le monde.

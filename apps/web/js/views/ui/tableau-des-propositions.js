@@ -31,31 +31,32 @@ import { svgIcon } from "../../ui/icons.js";
 import { renderStatusBadge } from "../ui/status-badges.js";
 import { renderDataTableHead } from "../ui/data-table-shell.js";
 import { renderIssuesTable } from "../ui/issues-table.js";
+import { renderTableHeadFilterToggle } from "../ui/table-head-filter-toggle.js";
+import { renderBoutonDeTri } from "../ui/tete-de-tableau.js";
 import { paginateItems, renderPaginationControls } from "../ui/pagination.js";
+import { etatDeLaProposition, renderIconeDetat } from "../ui/etats-des-lignes.js";
+import {
+  TRI, motDuTri, normaliserLeTri, trierLesSujets, triSuivant
+} from "../../services/tri-des-sujets.js";
 import { PROPOSITION } from "../../services/proposition-state.js";
+
+/**
+ * L'état d'une proposition vit avec celui d'un sujet, dans un seul fichier
+ * (`ui/etats-des-lignes.js`). Il continue de se lire d'ici, où il est né et où
+ * les appels le nomment.
+ */
+export { etatDeLaProposition };
+
+/** Les attributs que la tête porte, et que l'écran écoute. Un seul endroit. */
+export const GESTES_DES_PROPOSITIONS = {
+  etat: "propositions-toutes-etat",
+  tri: "propositions-toutes-tri"
+};
 
 /** Les colonnes, écrites une fois pour l'en-tête et pour les lignes (règle 4). */
 const GRILLE = "minmax(0, 1fr) 84px 200px";
 
 const texte = (valeur) => String(valeur ?? "").trim();
-
-/**
- * Ce qu'on dit de l'état d'une proposition.
- *
- * **Refusée est une demande close, pas une alerte.** Quelqu'un a décidé ; il
- * n'y a rien à surveiller. C'est le même signe que dans l'onglet d'un projet.
- */
-export function etatDeLaProposition(proposition = null) {
-  const statut = texte(proposition?.status) || PROPOSITION.OPEN;
-
-  if (statut === PROPOSITION.MERGED) {
-    return { mot: "Fusionnée", ton: "done", icone: "git-compare" };
-  }
-  if (statut === PROPOSITION.CLOSED) {
-    return { mot: "Refusée", ton: "muted", icone: "git-pull-request-closed" };
-  }
-  return { mot: "Ouverte", ton: "success", icone: "git-pull-request" };
-}
 
 /**
  * Les propositions que cette recherche retient.
@@ -83,6 +84,19 @@ function repli(valeur) {
 }
 
 /**
+ * Ouverte, ou close ?
+ *
+ * **Fusionnée et refusée sont toutes deux closes**, et c'est la coupe de
+ * l'onglet d'un projet : la question qu'on se pose devant la liste est « qu'est
+ * -ce qui attend encore une décision ? ». Distinguer ici les deux façons de ne
+ * plus attendre ferait trois onglets là où il y a deux questions — et l'état
+ * exact reste écrit sur chaque ligne.
+ */
+function ouverte(proposition) {
+  return etatDeLaProposition(proposition).cle === PROPOSITION.OPEN;
+}
+
+/**
  * Le tableau entier.
  *
  * @param {object} options
@@ -92,6 +106,20 @@ function repli(valeur) {
  */
 export function renderTableauDesPropositionsHtml({
   propositions = null, nomsDesProjets = {}, cherche = "",
+  /**
+   * Ouvertes, closes, ou les deux.
+   *
+   * **`""` n'est pas « ouvertes ».** C'est « on n'a rien restreint », et la
+   * liste les montre toutes. Allumer « Ouvertes » par défaut dirait que la
+   * liste est coupée alors qu'elle ne l'est pas, et l'on chercherait où sont
+   * passées les autres (règle 5).
+   */
+  etat = "",
+  /**
+   * L'ordre. Celui des sujets, et le même bouton — une proposition porte les
+   * mêmes dates, et « qu'est-ce qui a bougé ? » est la même question.
+   */
+  tri = "",
   /**
    * La page qu'on regarde, et sa taille.
    *
@@ -103,22 +131,69 @@ export function renderTableauDesPropositionsHtml({
 } = {}) {
   const noms = nomsDesProjets && typeof nomsDesProjets === "object" ? nomsDesProjets : {};
   const lues = Array.isArray(propositions) ? propositions : null;
-  const retenues = lues ? propositionsRetenues({ propositions: lues, cherche, nomsDesProjets: noms }) : [];
-  const combien = retenues.length;
+  const cherchees = lues ? propositionsRetenues({ propositions: lues, cherche, nomsDesProjets: noms }) : [];
+
+  // **Les comptes se prennent avant la coupe**, sur ce que la recherche retient.
+  // Les prendre après rendrait « Closes : 0 » chaque fois qu'on regarde les
+  // ouvertes, et le filtre dirait que l'autre moitié n'existe pas.
+  const comptes = {
+    open: cherchees.filter(ouverte).length,
+    closed: cherchees.filter((proposition) => !ouverte(proposition)).length
+  };
+
+  const demande = texte(etat).toLowerCase();
+  const retenues = demande === PROPOSITION.OPEN
+    ? cherchees.filter(ouverte)
+    : (demande === "closed" ? cherchees.filter((proposition) => !ouverte(proposition)) : cherchees);
+  const rangees = trierLesSujets(retenues, tri);
+  const combien = rangees.length;
+  const range = normaliserLeTri(tri);
 
   const headHtml = renderDataTableHead({
     columns: [
       {
         className: "cell cell-theme",
-        // **Le compte est celui de tout ce que la recherche retient**, et non
-        // celui de la page : « 25 propositions » au-dessus d'une liste qui en
-        // retient mille deux cents ferait croire que la recherche a tout écarté.
-        label: lues ? `${combien} proposition${combien > 1 ? "s" : ""}` : "Propositions"
+        // **Le filtre d'abord, à gauche**, puis le compte : c'est l'ordre de
+        // l'en-tête du tableau des sujets d'un projet, et les deux écrans se
+        // lisent sans réapprendre où regarder.
+        //
+        // **Tant qu'on n'a pas lu, il n'y a pas de filtre.** « Ouvertes 0 »
+        // pendant la lecture dit qu'il n'y en a aucune, alors qu'on n'a pas
+        // encore regardé (règle 5).
+        html: `<span class="situations-sujets-tete">
+          ${lues ? renderTableHeadFilterToggle({
+            activeValue: demande,
+            items: [
+              { label: "Ouvertes", value: PROPOSITION.OPEN, count: comptes.open, dataAttr: GESTES_DES_PROPOSITIONS.etat },
+              { label: "Closes", value: "closed", count: comptes.closed, dataAttr: GESTES_DES_PROPOSITIONS.etat }
+            ]
+          }) : ""}
+          <span class="situations-sujets-tete__compte">${escapeHtml(lues
+            // **Le compte est celui de tout ce que la recherche retient**, et
+            // non celui de la page : « 25 propositions » au-dessus d'une liste
+            // qui en retient mille deux cents ferait croire que la recherche a
+            // tout écarté.
+            ? `${combien} proposition${combien > 1 ? "s" : ""}`
+            : "Propositions")}</span>
+        </span>`
       },
       // La colonne des documents n'a pas d'intitulé : l'icône le dit sur chaque
       // ligne, et un mot au-dessus de quatre-vingts pixels tiendrait mal.
       { className: "cell cell-messages-head", html: "" },
-      { className: "cell", label: "Projet" }
+      {
+        className: "cell",
+        // Le tri est dans la dernière colonne de la tête, comme dans l'onglet
+        // des sujets : c'est là qu'on va le chercher.
+        html: `<span class="cell-assignees-head">
+          <span>Projet</span>
+          ${renderBoutonDeTri({
+            attribut: GESTES_DES_PROPOSITIONS.tri,
+            valeur: triSuivant(range),
+            actif: range === TRI.DERNIERE_ACTIVITE,
+            titre: motDuTri(range, "l'ordre d'arrivée")
+          })}
+        </span>`
+      }
     ]
   });
 
@@ -133,7 +208,7 @@ export function renderTableauDesPropositionsHtml({
   }
 
   const dite = texte(cherche);
-  const page = pagination ? paginateItems(retenues, pagination) : { items: retenues, totalPages: 1 };
+  const page = pagination ? paginateItems(rangees, pagination) : { items: rangees, totalPages: 1 };
 
   const tableau = renderIssuesTable({
     gridTemplate: GRILLE,
@@ -177,8 +252,7 @@ function renderLigneHtml(proposition, noms) {
     <div class="issue-row issue-row--pb">
       <div class="cell cell-theme lvl0">
         <span class="issue-row-title-grid">
-          <span class="issue-row-title-grid__status" aria-hidden="true">${
-            svgIcon(etat.icone, { className: "octicon" })}</span>
+          <span class="issue-row-title-grid__status">${renderIconeDetat(etat)}</span>
           <span class="issue-row-title-grid__title">
             <a class="row-title-trigger theme-text theme-text--pb"
               href="#project/${escapeHtml(projet)}/propositions/${escapeHtml(texte(proposition?.id))}"

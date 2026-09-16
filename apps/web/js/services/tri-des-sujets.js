@@ -72,10 +72,21 @@ export function triSuivant(tri) {
  * Elle annonce **ce que le clic va faire**, pas l'état courant : un bouton qui
  * dit « trié par dernière activité » alors qu'il va défaire ce tri se lit à
  * l'envers une fois sur deux.
+ *
+ * ## Pourquoi l'ordre d'origine se nomme
+ *
+ * `TRI.PROJET` est l'ordre d'arrivée des lignes. Dans un projet, c'est bien
+ * « l'ordre du projet ». Sur un écran qui traverse les projets, la même phrase
+ * promettrait un rangement par projet — que le bouton ne fait pas. L'appelant
+ * dit donc comment s'appelle, chez lui, l'ordre auquel on revient.
+ *
+ * @param {string} tri
+ * @param {string} [ordreDorigine] le nom de l'ordre d'origine, tel qu'il se dit
+ *   sur cet écran-là
  */
-export function motDuTri(tri) {
+export function motDuTri(tri, ordreDorigine = "l'ordre du projet") {
   return normaliserLeTri(tri) === TRI.DERNIERE_ACTIVITE
-    ? "Revenir à l'ordre du projet"
+    ? `Revenir à ${String(ordreDorigine || "l'ordre du projet")}`
     : "Trier par dernière activité";
 }
 
