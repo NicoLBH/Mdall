@@ -24,7 +24,11 @@ import { TOUTES_LES_PROPOSITIONS } from "../services/ecrans-transversaux.js";
  * @param {string} options.erreur ce qu'on n'a pas su lire
  */
 export function renderPageDeToutesLesPropositions({
-  propositions = null, nomsDesProjets = {}, cherche = "", erreur = "", page = 1
+  propositions = null, nomsDesProjets = {}, cherche = "", erreur = "", page = 1,
+  /** Ouvertes, closes, ou les deux — `""` étant les deux. */
+  etat = "",
+  /** L'ordre demandé. */
+  tri = ""
 } = {}) {
   return `
     <section class="project-simple-page project-simple-page--settings">
@@ -49,7 +53,7 @@ export function renderPageDeToutesLesPropositions({
           </div>
           <section class="gh-panel gh-panel--results" aria-label="Propositions">
             ${renderTableauDesPropositionsHtml({
-              propositions, nomsDesProjets, cherche,
+              propositions, nomsDesProjets, cherche, etat, tri,
               // **La page se donne, la taille est celle de partout.** Mille deux
               // cents propositions ne se feuillettent pas.
               pagination: { currentPage: page }

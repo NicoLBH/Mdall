@@ -31,6 +31,9 @@ import { fetchMesChantiers } from "../services/project-situations-supabase.js";
 import { listPropositionsDesProjets } from "../services/propositions-supabase.js";
 import { TOUTES_LES_PROPOSITIONS } from "../services/ecrans-transversaux.js";
 import { brancherLaPagination } from "./ui/pagination-transversale.js";
+import { quandOnClique } from "./ui/tete-de-tableau.js";
+import { GESTES_DES_PROPOSITIONS } from "./ui/tableau-des-propositions.js";
+import { normaliserLeTri, triSuivant, TRI } from "../services/tri-des-sujets.js";
 
 /**
  * Ce que l'écran sait, entre deux rendus.
@@ -38,7 +41,54 @@ import { brancherLaPagination } from "./ui/pagination-transversale.js";
  * `propositions` vaut `null` tant qu'on n'a pas lu : ce n'est pas « aucune »,
  * et le tableau le dit plutôt que de rendre une liste vide (règle 5).
  */
-const vue = { propositions: null, nomsDesProjets: {}, cherche: "", erreur: "", page: 1 };
+const vue = {
+  propositions: null, nomsDesProjets: {}, cherche: "", erreur: "", page: 1,
+  /**
+   * Ouvertes, closes, ou les deux — **`""` étant « les deux »**, qui est l'état
+   * d'où l'on part. Allumer « Ouvertes » d'emblée dirait que la liste est
+   * coupée alors qu'elle ne l'est pas.
+   */
+  etat: "",
+  /** L'ordre demandé. Une seule case. */
+  tri: TRI.DERNIERE_ACTIVITE
+};
+
+/**
+ * Le contenu qu'on redessine.
+ *
+ * L'écoute de la tête est posée sur le document et lui survit d'un rendu à
+ * l'autre : elle doit donc savoir où écrire. L'écran n'a qu'un contenu.
+ */
+let hote = null;
+
+/**
+ * Ce que la tête du tableau demande.
+ *
+ * Les noms des attributs sont **à cet écran** : `quandOnClique` range ce qu'on
+ * lui déclare dans une table à lui, et deux écrans qui partageraient un nom se
+ * voleraient leur geste — le dernier monté gagnerait, sans un mot.
+ */
+function ecouterLaTete() {
+  quandOnClique(GESTES_DES_PROPOSITIONS.etat, (valeur) => {
+    if (!hote) return;
+    const voulu = String(valeur || "").toLowerCase() === "closed" ? "closed" : "open";
+    // **Recliquer celui qui est allumé l'éteint**, et l'on revoit tout. Sans
+    // cela, le premier clic enfermait dans une moitié de la liste.
+    vue.etat = vue.etat === voulu ? "" : voulu;
+    // Changer ce que la liste retient change ce qu'est « la première page ».
+    vue.page = 1;
+    redessiner(hote);
+  });
+
+  quandOnClique(GESTES_DES_PROPOSITIONS.tri, (valeur) => {
+    if (!hote) return;
+    vue.tri = valeur === TRI.PROJET || valeur === TRI.DERNIERE_ACTIVITE
+      ? normaliserLeTri(valeur)
+      : triSuivant(vue.tri);
+    vue.page = 1;
+    redessiner(hote);
+  });
+}
 
 export function renderToutesLesPropositions(root) {
   if (!root) return;
@@ -52,6 +102,8 @@ export function renderToutesLesPropositions(root) {
   const contenu = document.getElementById("project-content");
   if (!contenu) return;
 
+  hote = contenu;
+  ecouterLaTete();
   vue.propositions = null;
   vue.erreur = "";
   redessiner(contenu);

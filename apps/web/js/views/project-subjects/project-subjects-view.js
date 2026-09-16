@@ -1,6 +1,7 @@
 import { getDisplayAuthorName, getAuthorIdentity } from "../ui/author-identity.js";
 import { renderBoutonCopier } from "../ui/bouton-copier.js";
 import { quandOnClique, quandOnCopie, renderBoutonDeTri } from "../ui/tete-de-tableau.js";
+import { etatDunSujet, renderIconeDetat } from "../ui/etats-des-lignes.js";
 import {
   EPINGLES_AU_PLUS, bandeauDesEpingles, estEpingle, motDeLEpingle, sujetsEpingles
 } from "../../services/epingles-des-sujets.js";
@@ -159,25 +160,21 @@ export function createProjectSubjectsView(deps) {
 
   let collaboratorsHydrationInFlight = false;
 
+/**
+ * Le signe de l'état d'un sujet.
+ *
+ * **Le dessin est ailleurs, et il est le même partout** : l'onglet d'un projet,
+ * le formulaire d'une situation et l'écran de tous les sujets montraient trois
+ * icônes écrites trois fois, dont deux ne connaissaient pas l'abandon
+ * (`ui/etats-des-lignes.js`, règle 10). Cette fonction reste pour les dizaines
+ * d'appels qui la nomment ici, et ne fait plus que traduire ce qu'ils passent.
+ *
+ * `entityType` et `isSeen` n'ont jamais servi à choisir l'icône ; ils restent
+ * acceptés pour ne pas toucher aux appels, et sont ignorés.
+ */
 function issueIcon(status = "open", options = {}) {
-  const {
-    reviewState = "pending",
-    entityType = "",
-    isSeen = false
-  } = options;
-
-  const normalizedReview = normalizeReviewState(reviewState);
-  if (normalizedReview === "rejected" || normalizedReview === "dismissed") {
-    const svg = svgIcon("skip", { style: "color: rgb(145, 152, 161)" });
-    return `<span class="issue-status-icon" aria-hidden="true">${svg}</span>`;
-  }
-
-  const isOpen = normalizeIssueLifecycleStatus(status) !== "closed";
-  const svg = isOpen
-    ? svgIcon("issue-opened", { style: "color: var(--fgColor-open)" })
-    : svgIcon("check-circle", { style: "color: var(--fgColor-done)" });
-
-  return `<span class="issue-status-icon" aria-hidden="true">${svg}</span>`;
+  const { reviewState = "pending" } = options;
+  return renderIconeDetat(etatDunSujet({ status, review_state: reviewState }));
 }
 
 function normalizeBackendPriority(priority = "") {

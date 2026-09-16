@@ -14,6 +14,7 @@ import { couleurDeLaSituation, iconeDeLaSituation } from "../../services/situati
 import { definitionDeLabel, renderPastilleDeLabel } from "../ui/pastille-de-label.js";
 import { renderKebabDeLaSituation } from "./kebab-dune-situation.js";
 import { personnesDuProjet } from "../../services/meta-des-sujets.js";
+import { etatDunSujet, renderIconeDetat } from "../ui/etats-des-lignes.js";
 
 /**
  * Le tableau des sujets qu'une requête retient, sous le formulaire.
@@ -53,6 +54,23 @@ export function renderTableauDesSujetsRetenusHtml({
    * et corrigeable au clavier.
    */
   filtresHtml = "",
+  /**
+   * Le filtre ouverts/fermés, **à gauche de l'en-tête**.
+   *
+   * Il est donné tout dessiné, comme les menus : c'est l'écran qui sait ce que
+   * le clic doit écrire — un jeton dans la requête ici, rien du tout sous le
+   * formulaire d'une situation, où la requête est celle qu'on est en train
+   * d'écrire. Le tableau, lui, ne retient aucun état filtrant (règle 4).
+   */
+  statutHtml = "",
+  /**
+   * Le bouton qui range, dans la dernière colonne de la tête.
+   *
+   * Même raison : le tableau reçoit la liste **déjà rangée** et ne range rien.
+   * Un tableau qui trierait de son côté et un écran qui compte sur son propre
+   * ordre finiraient par ne plus montrer la même première ligne.
+   */
+  triHtml = "",
   /**
    * Une situation qui se remplit à la main n'a pas de requête, et ne retient
    * donc **rien pour l'instant** — surtout pas tout. Montrer les six cent
@@ -116,7 +134,11 @@ export function renderTableauDesSujetsRetenusHtml({
     columns: [
       {
         className: "cell cell-theme",
+        // **Ouverts/fermés d'abord, à gauche**, puis le compte, puis les menus :
+        // c'est l'ordre de l'en-tête du tableau des sujets d'un projet, et les
+        // deux écrans se lisent sans réapprendre où regarder.
         html: `<span class="situations-sujets-tete">
+          ${statutHtml}
           <span class="situations-sujets-tete__compte">${escapeHtml(compte)}</span>
           ${filtresHtml}
         </span>`
@@ -125,8 +147,14 @@ export function renderTableauDesSujetsRetenusHtml({
       // et un mot au-dessus de quatre-vingts pixels tiendrait mal.
       { className: "cell cell-messages-head", html: "" },
       // « Projet » : un projet en conception n'est pas encore un chantier, et la
-      // colonne le nomme comme le filtre le nomme.
-      { className: "cell", label: "Projet" }
+      // colonne le nomme comme le filtre le nomme. Le bouton de tri est dans
+      // cette dernière colonne, comme dans l'onglet des sujets.
+      {
+        className: "cell",
+        html: triHtml
+          ? `<span class="cell-assignees-head"><span>Projet</span>${triHtml}</span>`
+          : "Projet"
+      }
     ]
   });
 
@@ -220,7 +248,11 @@ function indexDesPersonnes(personnes = []) {
  */
 function renderSujetRetenuHtml(sujet, noms, decor = {}, ouvrable = false) {
   const id = String(sujet?.id ?? "").trim();
-  const ouvert = String(sujet?.status || "open") !== "closed";
+  // **Trois états, et non deux.** Un sujet clos parce qu'il ne tenait pas ou
+  // parce qu'il faisait double emploi n'est pas un sujet fait : il prenait ici
+  // la coche verte de ce qui est réglé. Le signe est celui de l'onglet d'un
+  // projet, et il vit à un seul endroit (`ui/etats-des-lignes.js`).
+  const etat = etatDunSujet(sujet);
   const chantier = String(sujet?.project_id ?? sujet?.projectId ?? "").trim();
   const sien = decor.meta?.[id] ?? {};
 
@@ -243,8 +275,7 @@ function renderSujetRetenuHtml(sujet, noms, decor = {}, ouvrable = false) {
     <div class="issue-row issue-row--pb">
       <div class="cell cell-theme lvl0">
         <span class="issue-row-title-grid">
-          <span class="issue-row-title-grid__status" aria-hidden="true">${
-            svgIcon(ouvert ? "issue-opened" : "check-circle", { className: "octicon" })}</span>
+          <span class="issue-row-title-grid__status">${renderIconeDetat(etat)}</span>
           <span class="issue-row-title-grid__title issue-row-subject-title-line">
             ${/*
               **Le titre mène au sujet, dans son projet.** Un sujet se lit avec
@@ -267,10 +298,7 @@ function renderSujetRetenuHtml(sujet, noms, decor = {}, ouvrable = false) {
                 svgIcon("blocked", { className: "octicon octicon-blocked fgColor-danger" })
                 }<span>Bloqué</span></span>`
               : ""}
-            ${renderStatusBadge({
-              label: ouvert ? "Ouvert" : "Fermé",
-              tone: ouvert ? "success" : "muted"
-            })}
+            ${renderStatusBadge({ label: etat.mot, tone: etat.ton })}
             ${auteur ? `<span class="issue-row-author-name">${escapeHtml(auteur)}</span>` : ""}
           </span>
         </span>
