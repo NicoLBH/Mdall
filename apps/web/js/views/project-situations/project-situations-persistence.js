@@ -1,5 +1,5 @@
 import { estMonCarnet } from "../../services/mon-carnet.js";
-import { projetsDeCesSituations } from "../../services/perimetre-dune-situation.js";
+import { chantiersDuCarnet } from "../../services/perimetre-dune-situation.js";
 import { avancementDe } from "../../services/avancement-dune-situation.js";
 import { requeteDeLaSituation } from "../../services/situation-comme-une-vue.js";
 import { situationsDeLecture } from "../../services/lectures-du-carnet.js";
@@ -194,7 +194,18 @@ export function createProjectSituationsPersistence({
   async function sujetsContreLesquelsResoudre(situations) {
     if (!estMonCarnet(store)) return store.projectSubjectsView;
 
-    const chantiers = projetsDeCesSituations(situations);
+    // **Tous mes chantiers, et non ceux que mes situations citent.** Une
+    // situation qui regarde tout mon travail n'en nomme aucun : un carnet dont
+    // toutes les situations regardent tout ne lisait rien. Et écrire une
+    // situation neuve ne pouvait atteindre que les chantiers déjà nommés par
+    // les anciennes.
+    //
+    // Les noms viennent d'être lus par `loadMesSituations`, qui les range ici.
+    // Les relire serait une seconde source pour une même question (règle 4).
+    const chantiers = chantiersDuCarnet({
+      miens: store.situationsView?.nomsDesProjets ?? {},
+      situations
+    });
     const charge = await chargerLesSujetsDesChantiers(chantiers).catch(() => null);
 
     // **Les personnes vont avec.** Sans elles, `champsDesSujets` ne déclare ni

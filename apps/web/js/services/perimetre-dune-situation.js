@@ -200,3 +200,44 @@ export function phraseDuPerimetre(situation = null, noms = new Map()) {
   const introuvables = perimetre.projets.filter((id) => !nommer(id)).length;
   return introuvables ? `${compte} · ${introuvables} introuvable${introuvables > 1 ? "s" : ""}` : compte;
 }
+
+/**
+ * Les chantiers que le carnet doit lire.
+ *
+ * ## Le défaut qu'il répare
+ *
+ * L'horizon du carnet était **l'union des chantiers que ses situations
+ * citent**. Écrire une situation neuve ne pouvait donc atteindre que les
+ * chantiers déjà nommés par les anciennes : on ne pouvait pas demander « les
+ * sujets urgents de la maison de Chamonix » tant qu'aucune situation ne parlait
+ * déjà de ce chantier-là. Le filtre « Chantiers » ne se déclarait même pas —
+ * `champsDesSujets` ne déclare un champ que s'il a plus d'une valeur, et il n'y
+ * en avait souvent qu'une.
+ *
+ * Pire : une situation qui regarde **tout mon travail** ne nomme aucun chantier
+ * (c'est sa définition), et n'en apportait donc aucun. Un carnet dont toutes
+ * les situations regardent tout ne lisait **rien**.
+ *
+ * ## Mes chantiers d'abord, les cités ensuite
+ *
+ * Les miens viennent de la base, en une lecture, et ils sont l'horizon. Un
+ * chantier cité par une situation sans être des miens est gardé quand même :
+ * il peut avoir été partagé, ou avoir changé de main, et le taire ferait
+ * disparaître d'un coup les sujets d'une situation qui marchait hier (règle 5).
+ * S'il n'est plus lisible, la lecture rendra vide — ce qui est une réponse, pas
+ * un mensonge.
+ *
+ * @param {object|object[]} miens mes chantiers : `{id: nom}` ou `[{id, name}]`
+ * @param {object[]} situations mes situations, telles qu'elles sortent de la base
+ * @returns {string[]} des identifiants, sans doublon, les miens en tête
+ */
+export function chantiersDuCarnet({ miens = {}, situations = [] } = {}) {
+  const ids = Array.isArray(miens)
+    ? miens.map((projet) => texte(projet?.id))
+    : Object.keys(miens ?? {}).map(texte);
+
+  const vus = new Set(ids.filter(Boolean));
+  for (const cite of projetsDeCesSituations(situations)) vus.add(cite);
+
+  return [...vus];
+}

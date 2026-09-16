@@ -563,3 +563,71 @@ venait de l'y mettre**. Elle y entre par son repère, `#situation:<id>` : un
 dièse, que la grammaire des sujets n'emploie nulle part et ne peut donc jamais
 produire. Il se lit à un seul endroit, le clic d'une entrée du rail du carnet,
 qui ouvre la situation par son identifiant.
+
+---
+
+## 6. L'horizon du carnet, et ce qu'une ligne montre
+
+Quatre choses de plus, du même tour d'usage.
+
+### Le carnet ne voyait que les chantiers que ses situations citaient
+
+C'est le plus important des quatre. L'horizon du carnet était **l'union des
+chantiers nommés par ses situations** : écrire une situation neuve ne pouvait
+donc atteindre aucun chantier nouveau. « Les sujets urgents de la maison de
+Chamonix » était hors de portée tant qu'aucune situation ne parlait déjà de ce
+chantier-là — et le filtre « Chantiers » ne se déclarait même pas, faute d'avoir
+plus d'une valeur à proposer.
+
+Pire : une situation qui regarde **tout mon travail** ne nomme aucun chantier,
+c'est sa définition. Un carnet dont toutes les situations regardent tout ne
+lisait donc **rien**, et chaque ligne affichait « — ».
+
+`chantiersDuCarnet` pose l'horizon : mes chantiers, lus en une fois
+(`fetchMesChantiers` — la politique de la base fait le tri, `projects` ne rend
+que les miens), plus ceux qu'une situation cite sans être des miens, qu'on garde
+parce qu'un chantier partagé ou passé de main ne doit pas faire disparaître d'un
+coup les sujets d'une situation qui marchait hier (règle 5).
+
+**Ce que cela coûte.** Les sujets se lisent toujours **un chantier à la fois**,
+en parallèle : l'horizon plus large multiplie donc les lectures par le nombre de
+chantiers. C'est le même coût par chantier qu'avant, appliqué à plus de
+chantiers ; le réduire est un autre sujet, et il touche le chargeur, pas le
+carnet.
+
+### Le tableau de la recherche rendait une liste de titres nus
+
+Un titre, un état, un chantier. L'onglet Sujets d'un projet montre en plus les
+**labels**, l'**auteur**, le **blocage** et la longueur du **fil** — et c'est
+sur ces quatre-là qu'on reconnaît un sujet dans une liste de soixante. On
+écrivait une requête et il fallait ouvrir les sujets un par un pour savoir ce
+qu'on regardait.
+
+Rien n'est recalculé : les labels, l'auteur et le blocage viennent de la
+**surcouche** que l'écran lit déjà pour filtrer (`metaDesSujets`), et les fils du
+même index que le tableau d'un projet. Les quatre se demandent **ensemble**,
+par une seule porte (`decorDesSujets`) : séparées, trois auraient un jour le
+carnet et la quatrième le projet ouvert, et la ligne dirait deux choses à la
+fois (règle 4).
+
+La pastille d'un label, elle, vivait dans une fermeture du contrôleur des labels
+d'un projet — qui lit le magasin de cet écran-là, et que le carnet n'a pas. Elle
+est dans `views/ui/pastille-de-label.js`, avec la lecture d'une définition ; le
+contrôleur y délègue. La recopier aurait fait deux pastilles qui divergent à la
+première couleur de repli (règle 10).
+
+### Les filtres d'en-tête s'empilaient en colonne
+
+`.issues-head-menu` fait `width:100%`, et c'est juste là où il est né : dans le
+tableau des sujets d'un projet, chaque menu occupe **sa** colonne d'en-tête et la
+remplit. Dans le formulaire d'une situation, cinq menus partagent une seule
+cellule : chacun réclamait la largeur entière, et `flex-wrap` les empilait. Le
+bandeau lève la règle, comme `--groupe` le fait ailleurs pour le même conflit.
+
+### L'épingle du rail replié n'ouvrait rien
+
+Replié, le rail ne montre que des icônes, et les épinglées se rangent sous une
+seule — sinon vingt-six situations font vingt-six pastilles de couleur sans un
+mot. Le rail dessinait déjà ce bouton ; l'écran des situations ne disait pas si
+la liste est ouverte, et rien ne l'ouvrait. On cliquait, il ne se passait rien,
+et les épinglées devenaient inatteignables dès qu'on repliait le rail.

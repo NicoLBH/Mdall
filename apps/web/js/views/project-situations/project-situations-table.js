@@ -16,6 +16,8 @@ import {
 import { MOT_DE_LA_SITUATION } from "../../services/situation-en-composition.js";
 import { renderMenuDeLaVueHtml } from "../project-subjects/project-subjects-recherche.js";
 import { estUneLecture } from "../../services/lectures-du-carnet.js";
+import { definitionDeLabel, renderPastilleDeLabel } from "../ui/pastille-de-label.js";
+import { personnesDuProjet } from "../../services/meta-des-sujets.js";
 
 /**
  * Le tableau des sujets qu'une requête retient, sous le formulaire.
@@ -60,10 +62,30 @@ export function renderTableauDesSujetsRetenusHtml({
    * donc **rien pour l'instant** — surtout pas tout. Montrer les six cent
    * quatre-vingt-dix-huit sujets du carnet ferait croire qu'elle les prend.
    */
-  aLaMain = false
+  aLaMain = false,
+  /**
+   * Ce que chaque sujet porte — labels, auteur, blocage —, par identifiant.
+   *
+   * **La même surcouche que l'écran lit pour filtrer.** La recalculer ici
+   * ferait une seconde lecture des mêmes colonnes, et c'est celle qu'on ne
+   * regarde pas qui finirait par avoir raison (règle 4).
+   */
+  meta = {},
+  /** Les définitions des labels, pour les nommer et les colorer. */
+  labels = [],
+  /** Qui travaille sur ces chantiers, pour nommer l'auteur. */
+  personnes = [],
+  /** La longueur du fil de discussion de chaque sujet, par identifiant. */
+  messages = {}
 } = {}) {
   const dite = String(requete ?? "").trim();
   const noms = nomsDesProjets && typeof nomsDesProjets === "object" ? nomsDesProjets : {};
+  const decor = {
+    meta: meta && typeof meta === "object" ? meta : {},
+    labels: indexDesLabels(labels),
+    personnes: indexDesPersonnes(personnes),
+    messages: messages && typeof messages === "object" ? messages : {}
+  };
   const lus = Array.isArray(sujets) ? sujets : null;
   const combien = lus ? lus.length : 0;
 
@@ -77,6 +99,9 @@ export function renderTableauDesSujetsRetenusHtml({
           ${filtresHtml}
         </span>`
       },
+      // La colonne du fil n'a pas d'intitulé : l'icône le dit sur chaque ligne,
+      // et un mot au-dessus de quatre-vingts pixels tiendrait mal.
+      { className: "cell cell-messages-head", html: "" },
       { className: "cell", label: "Chantier" }
     ]
   });
@@ -104,7 +129,7 @@ export function renderTableauDesSujetsRetenusHtml({
   return renderIssuesTable({
     gridTemplate: TABLEAU_DES_SUJETS_RETENUS,
     headHtml,
-    rowsHtml: lus.map((sujet) => renderSujetRetenuHtml(sujet, noms)).join(""),
+    rowsHtml: lus.map((sujet) => renderSujetRetenuHtml(sujet, noms, decor)).join(""),
     emptyTitle: dite ? "Aucun sujet ne répond à cette recherche" : "Aucun sujet retenu",
     emptyDescription: dite
       ? "Élargissez la requête : une situation qui ne retient rien ne montrera rien."
@@ -112,34 +137,108 @@ export function renderTableauDesSujetsRetenusHtml({
   });
 }
 
-/** La largeur des deux colonnes, écrite une fois pour l'en-tête et les lignes. */
-const TABLEAU_DES_SUJETS_RETENUS = "minmax(360px, 1.6fr) 200px";
+/**
+ * La largeur des colonnes, écrite une fois pour l'en-tête et les lignes.
+ *
+ * **Celles du tableau des sujets d'un projet, plus le chantier.** Le carnet
+ * traverse les chantiers : deux sujets du même nom dans deux chantiers
+ * différents sont deux lignes qu'on ne distingue plus sans dire d'où elles
+ * viennent — c'est la colonne que cet écran a de plus, et la seule.
+ */
+const TABLEAU_DES_SUJETS_RETENUS = "minmax(0, 1fr) 84px 180px";
+
+/** Les labels par identifiant **et par clé** : la surcouche range par les deux. */
+function indexDesLabels(labels = []) {
+  const index = new Map();
+
+  for (const brut of Array.isArray(labels) ? labels : []) {
+    const definition = definitionDeLabel(brut);
+    if (definition.id) index.set(definition.id, definition);
+    if (definition.key) index.set(definition.key, definition);
+  }
+
+  return index;
+}
+
+/** Les personnes par identifiant, pour nommer un auteur. */
+function indexDesPersonnes(personnes = []) {
+  return new Map(personnesDuProjet(personnes).map((sien) => [sien.id, sien.name]));
+}
 
 /**
  * Une ligne de ce tableau.
  *
- * **Le chantier est nommé, ou son identifiant est montré tel quel.** Rendre une
- * cellule vide quand on ne sait pas nommer le projet ferait croire que le sujet
- * n'appartient à aucun chantier, ce qui n'arrive pas (règle 5).
+ * ## Ce qu'elle montrait, et ce qui manquait
+ *
+ * Un titre, une pastille d'état, un chantier. L'onglet Sujets d'un projet, lui,
+ * montre les **labels**, l'**auteur**, le **blocage** et la longueur du **fil**
+ * — et c'est sur ces quatre-là qu'on reconnaît un sujet dans une liste de
+ * soixante. On écrivait une requête dans le carnet et l'on obtenait une liste
+ * de titres nus, qu'il fallait ouvrir un par un pour savoir ce qu'on regardait.
+ *
+ * ## Rien n'est recalculé ici
+ *
+ * Les labels, l'auteur et le blocage viennent de la **surcouche** que l'écran
+ * lit déjà pour filtrer (`metaDesSujets`), et la pastille est celle des labels
+ * d'un projet. Une seconde lecture des mêmes colonnes finirait par ne plus dire
+ * la même chose que la première (règles 4 et 10).
+ *
+ * ## Le chantier est nommé, ou son identifiant est montré tel quel
+ *
+ * Rendre une cellule vide quand on ne sait pas nommer le projet ferait croire
+ * que le sujet n'appartient à aucun chantier, ce qui n'arrive pas (règle 5).
  */
-function renderSujetRetenuHtml(sujet, noms) {
+function renderSujetRetenuHtml(sujet, noms, decor = {}) {
+  const id = String(sujet?.id ?? "").trim();
   const ouvert = String(sujet?.status || "open") !== "closed";
   const chantier = String(sujet?.project_id ?? sujet?.projectId ?? "").trim();
+  const sien = decor.meta?.[id] ?? {};
+
+  const pastilles = (Array.isArray(sien.labels) ? sien.labels : [])
+    .map((cle) => decor.labels?.get(String(cle)))
+    .filter(Boolean)
+    .map((definition) => renderPastilleDeLabel(definition))
+    .join("");
+
+  // **L'auteur, et non l'assigné.** Les deux se confondent souvent et divergent
+  // toujours au moment où ça compte. Un auteur qu'on ne sait pas nommer se dit
+  // par son identifiant plutôt que de disparaître (règle 5).
+  const qui = String((Array.isArray(sien.auteurs) ? sien.auteurs : [])[0] ?? "").trim();
+  const auteur = qui ? (decor.personnes?.get(qui) || qui) : "";
+
+  const combienDeMessages = Number(decor.messages?.[id] ?? 0);
+  const fil = Number.isFinite(combienDeMessages) && combienDeMessages > 0 ? combienDeMessages : 0;
 
   return `
-    <div class="issue-row">
+    <div class="issue-row issue-row--pb">
       <div class="cell cell-theme lvl0">
         <span class="issue-row-title-grid">
           <span class="issue-row-title-grid__status" aria-hidden="true">${
             svgIcon(ouvert ? "issue-opened" : "check-circle", { className: "octicon" })}</span>
-          <span class="issue-row-title-grid__title">${escapeHtml(String(sujet?.title || "Sujet"))}</span>
-          <span class="issue-row-title-grid__meta">${
-            renderStatusBadge({
+          <span class="issue-row-title-grid__title issue-row-subject-title-line">
+            <span class="theme-text theme-text--pb">${
+              escapeHtml(String(sujet?.title || "Sujet"))}</span>
+            ${pastilles ? `<span class="issue-row-subject-labels">${pastilles}</span>` : ""}
+          </span>
+          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">
+            ${sien.bloque === true
+              ? `<span class="issue-row-blocked-pill" aria-label="Sujet bloqué">${
+                svgIcon("blocked", { className: "octicon octicon-blocked fgColor-danger" })
+                }<span>Bloqué</span></span>`
+              : ""}
+            ${renderStatusBadge({
               label: ouvert ? "Ouvert" : "Fermé",
               tone: ouvert ? "success" : "muted"
-            })}</span>
+            })}
+            ${auteur ? `<span class="issue-row-author-name">${escapeHtml(auteur)}</span>` : ""}
+          </span>
         </span>
       </div>
+      <div class="cell cell-messages-value">${fil
+        ? `<span class="issue-row-messages-count" aria-label="${escapeHtml(`${fil} message(s)`)}">
+            ${svgIcon("message")}<span>${escapeHtml(String(fil))}</span>
+          </span>`
+        : '<span class="issue-row-messages-empty" aria-hidden="true"></span>'}</div>
       <div class="cell mono-small">${escapeHtml(noms[chantier] || chantier || "—")}</div>
     </div>
   `;

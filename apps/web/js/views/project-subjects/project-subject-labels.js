@@ -1,3 +1,5 @@
+import { definitionDeLabel, renderPastilleDeLabel } from "../ui/pastille-de-label.js";
+
 export function createProjectSubjectLabelsController(config) {
   const {
     store,
@@ -39,37 +41,14 @@ export function createProjectSubjectLabelsController(config) {
         : {});
   }
 
-  function normalizeLabelDef(labelDef = {}) {
-    const id = String(labelDef.id || "").trim();
-    const key = String(labelDef.label_key || labelDef.labelKey || labelDef.key || labelDef.name || id).trim();
-    const label = String(labelDef.name || labelDef.label || key || "Label").trim() || "Label";
-    const hexColor = String(labelDef.hex_color || labelDef.hexColor || labelDef.text_color || labelDef.textColor || "#8b949e").trim() || "#8b949e";
-    const textColor = String(labelDef.text_color || labelDef.textColor || hexColor).trim() || hexColor;
-    const backgroundColor = String(labelDef.background_color || labelDef.backgroundColor || labelDef.color || `${hexColor}22`).trim() || `${hexColor}22`;
-    const borderColor = String(labelDef.border_color || labelDef.borderColor || `${hexColor}66`).trim() || `${hexColor}66`;
-    const description = String(labelDef.description || "").trim();
-    return {
-      ...labelDef,
-      id,
-      key,
-      label_key: key,
-      labelKey: key,
-      label,
-      name: label,
-      description,
-      color: backgroundColor,
-      background_color: backgroundColor,
-      backgroundColor,
-      text_color: textColor,
-      textColor,
-      border_color: borderColor,
-      borderColor,
-      hex_color: hexColor,
-      hexColor,
-      sort_order: Number.isFinite(Number(labelDef.sort_order)) ? Number(labelDef.sort_order) : 0,
-      sortOrder: Number.isFinite(Number(labelDef.sort_order)) ? Number(labelDef.sort_order) : 0
-    };
-  }
+  /**
+   * **Ces deux-là vivent dans `views/ui/pastille-de-label.js`.** Le carnet
+   * montre les mêmes labels sur les sujets qu'une situation retient, et il n'a
+   * pas ce magasin : les recopier là-bas aurait fait deux pastilles qui
+   * divergent à la première couleur de repli (règle 10).
+   */
+  const normalizeLabelDef = definitionDeLabel;
+  const renderSubjectLabelBadge = renderPastilleDeLabel;
 
   function getSubjectLabelDefinitions() {
     const raw = getRawLabelsResult();
@@ -101,11 +80,6 @@ export function createProjectSubjectLabelsController(config) {
       counts.set(normalizeSubjectLabelKey(labelDef.key), count);
     });
     return counts;
-  }
-
-  function renderSubjectLabelBadge(labelDef) {
-    const normalized = normalizeLabelDef(labelDef);
-    return `<span class="subject-label-badge" style="--subject-label-bg:${escapeHtml(normalized.color)};--subject-label-fg:${escapeHtml(normalized.textColor || '#ffffff')};--subject-label-border:${escapeHtml(normalized.borderColor || normalized.color)};">${escapeHtml(normalized.label)}</span>`;
   }
 
   function getFilteredSortedLabels() {

@@ -417,3 +417,29 @@ test("le rail du carnet a un fond, celui d'un projet non", () => {
   assert.match(css, /\.project-simple-page--situations \.project-rail\{ background:/);
   assert.doesNotMatch(css, /^\.project-rail\{[^}]*background:/m);
 });
+
+/**
+ * **Les menus de filtre se posent en ligne, pas en colonne.**
+ *
+ * `.issues-head-menu` fait `width:100%`, et c'est juste là où il est né : dans
+ * le tableau des sujets d'un projet, chaque menu occupe **sa** colonne
+ * d'en-tête et la remplit. Dans le formulaire d'une situation, cinq menus
+ * partagent une seule cellule : chacun réclamait la largeur entière, et
+ * `flex-wrap` les empilait — une colonne de cinq lignes au-dessus de la liste.
+ *
+ * Deux choses se vérifient ici, parce qu'aucune ne suffit : que la règle de
+ * base soit bien celle qu'on croit — si elle changeait, cette exception
+ * deviendrait du bruit —, et que le bandeau la lève.
+ */
+test("les filtres du formulaire d'une situation tiennent sur une ligne", () => {
+  const css = readFileSync(resolve(ICI, "../../../style.css"), "utf8");
+
+  assert.match(
+    css, /^\.issues-head-menu\{[^}]*width:100%/m,
+    "la règle de base est bien celle qui empilait"
+  );
+  assert.match(
+    css, /\.situations-sujets-tete__filtres \.issues-head-menu\{[^}]*width:auto/,
+    "et le bandeau des filtres la lève"
+  );
+});

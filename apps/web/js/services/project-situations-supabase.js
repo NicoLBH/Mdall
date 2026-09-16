@@ -255,6 +255,40 @@ async function fetchNomsDesProjets(projectIds = []) {
   return noms;
 }
 
+/**
+ * Mes chantiers, tous.
+ *
+ * **L'horizon du carnet, et non ce que ses situations citent.** On ne lisait
+ * que les chantiers déjà nommés par une situation : écrire une situation neuve
+ * ne pouvait donc atteindre aucun autre chantier, et le filtre « Chantiers »
+ * ne se déclarait même pas faute d'avoir plus d'une valeur.
+ *
+ * Une seule lecture, et la politique de la base fait le tri : `projects` ne
+ * rend que les miens. Ni filtre écrit ici, ni liste tenue dans le navigateur —
+ * le second dirait un jour autre chose que la première (règle 4).
+ *
+ * @returns {Promise<{id: string, name: string}[]>} vide si la lecture échoue :
+ *   l'appelant garde alors les chantiers que les situations citent, et le
+ *   carnet fonctionne comme avant plutôt que de disparaître.
+ */
+export async function fetchMesChantiers() {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/projects`);
+  url.searchParams.set("select", "id,name");
+  url.searchParams.set("order", "name.asc");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) return [];
+
+  return safeArray(await res.json())
+    .map((row) => ({ id: normalizeUuid(row?.id), name: firstNonEmpty(row?.name, "") }))
+    .filter((projet) => projet.id && projet.name);
+}
+
 async function fetchSituationById(situationId) {
   const normalizedSituationId = normalizeUuid(situationId);
   if (!normalizedSituationId) throw new Error("situationId is required");
@@ -691,10 +725,24 @@ export async function loadSituationsForCurrentProject(projectId) {
  */
 export async function loadMesSituations() {
   const situations = await fetchMesSituations();
-  const noms = await fetchNomsDesProjets(projetsDeCesSituations(situations)).catch(() => ({}));
+
+  // **Mes chantiers, et non ceux que mes situations citent.** L'horizon du
+  // carnet ne peut pas dépendre de ce que les situations d'hier ont nommé :
+  // sans cela, une situation neuve ne peut atteindre aucun chantier nouveau,
+  // et le filtre « Chantiers » ne se déclare même pas.
+  const miens = await fetchMesChantiers().catch(() => []);
+  const nomsDesMiens = Object.fromEntries(miens.map((projet) => [projet.id, projet.name]));
+
+  // Un chantier cité sans être des miens garde son nom s'il est lisible : le
+  // taire ferait disparaître les sujets d'une situation qui marchait hier
+  // (règle 5).
+  const cites = projetsDeCesSituations(situations).filter((id) => !nomsDesMiens[id]);
+  const nomsDesCites = cites.length
+    ? await fetchNomsDesProjets(cites).catch(() => ({}))
+    : {};
 
   store.situationsView.data = situations;
-  store.situationsView.nomsDesProjets = noms;
+  store.situationsView.nomsDesProjets = { ...nomsDesMiens, ...nomsDesCites };
   store.situationsView.projectScopeId = null;
   store.situationsView.pagination = {
     mode: "full",

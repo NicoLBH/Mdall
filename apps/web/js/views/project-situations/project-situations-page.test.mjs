@@ -65,7 +65,10 @@ function ecran({
   situations = [],
   selectedSituationId = null,
   situationEnCours = null,
-  sujets = [{ id: "s-1", title: "Étanchéité", status: "open", project_id: "p-1" }]
+  replie = false,
+  menuDesEpinglesDuCarnet = false,
+  sujets = [{ id: "s-1", title: "Étanchéité", status: "open", project_id: "p-1" }],
+  decor = null
 } = {}) {
   const store = {
     currentProjectId,
@@ -90,12 +93,17 @@ function ecran({
     selectedSituationError: "",
     insightsPanelOpen: false,
     avancementParSituationId: {},
-    countsBySituationId: {}
+    countsBySituationId: {},
+    menuDesEpinglesDuCarnet
   };
 
-  return createProjectSituationsView(portesDeLEcran({
-    store, uiState, situations: Array.isArray(situations) ? situations : [], sujets
-  }));
+  return createProjectSituationsView({
+    ...portesDeLEcran({
+      store, uiState, situations: Array.isArray(situations) ? situations : [], sujets
+    }),
+    railReplie: () => replie,
+    ...(decor ? { decorDesSujets: () => decor } : {})
+  });
 }
 
 /** Les portes de l'écran, avec un décor minimal quand on n'en donne pas. */
@@ -473,4 +481,90 @@ test("la requête d'une situation n'est pas marquée obligatoire", () => {
 
   assert.ok(!requete.includes("sujets-vue-forme__requis"), "pas d'étoile");
   assert.match(requete, /laissez-la vide/, "mais une phrase qui dit pourquoi");
+});
+
+/* ── Ce que le tableau de la recherche montre, et le rail replié ─────────── */
+
+/**
+ * **Le tableau du formulaire montre ce que l'onglet Sujets montre.**
+ *
+ * Il rendait un titre, un état et un chantier : une liste de titres nus, qu'il
+ * fallait ouvrir un par un pour savoir ce qu'on regardait. Les labels, l'auteur,
+ * le blocage et la longueur du fil sont ce sur quoi on reconnaît un sujet dans
+ * une liste de soixante.
+ *
+ * Le décor est **donné à l'écran**, comme les champs et « moi » : la surcouche,
+ * les labels, les personnes et les fils vont ensemble, et ce test les fait
+ * traverser le rendu plutôt que de décrire ce qu'il devrait produire.
+ */
+test("une ligne du tableau porte ses labels, son auteur, son blocage et son fil", () => {
+  const forme = { ...compositionNeuve(), nom: "Les urgences", requete: "priorité:haute" };
+  const html = ecran({
+    situationEnCours: forme,
+    sujets: [{ id: "s-1", title: "Étanchéité", status: "open", project_id: "p-1" }],
+    decor: {
+      meta: { "s-1": { labels: ["cr-chantier"], auteurs: ["pers-1"], bloque: true } },
+      labels: [{ id: "cr-chantier", name: "CR chantier", hex_color: "#1d76db" }],
+      // **Un nom qu'on ne trouve nulle part ailleurs sur la page.** Le
+      // trombinoscope du décor nourrit aussi le menu « Assignés » du bandeau :
+      // un nom partagé entre les deux ferait passer le test alors que la ligne
+      // ne montrerait rien — ce qui est arrivé.
+      personnes: [{ personId: "pers-1", name: "Ourdine Ferrand" }],
+      messages: { "s-1": 4 }
+    }
+  }).renderPage();
+
+  // La ligne se découpe : le reste de la page porte les mêmes mots — le menu
+  // des labels, celui des chantiers — et les y chercher ne dirait rien d'elle.
+  const ligne = html.slice(html.indexOf('<div class="issue-row issue-row--pb">'));
+
+  assert.match(ligne, /subject-label-badge/, "la pastille du label");
+  assert.match(ligne, /CR chantier/, "avec son nom");
+  assert.match(ligne, /Ourdine Ferrand/, "l'auteur est nommé");
+  assert.match(ligne, /issue-row-blocked-pill/, "le blocage se voit");
+  assert.match(ligne, /issue-row-messages-count/, "et la longueur du fil");
+  assert.match(ligne, /NOVACLIM/, "le chantier reste, c'est ce que cet écran a de plus");
+});
+
+/**
+ * **Un sujet qui ne porte rien n'affiche rien**, et surtout pas une pastille
+ * vide ou un « undefined ». Ne rien savoir d'un sujet est fréquent — la charge
+ * d'un chantier dont les labels n'ont pas répondu en donne une liste entière.
+ */
+test("un sujet sans label, sans auteur et sans fil n'invente rien", () => {
+  const forme = { ...compositionNeuve(), nom: "Les urgences", requete: "priorité:haute" };
+  const html = ecran({
+    situationEnCours: forme,
+    sujets: [{ id: "s-1", title: "Étanchéité", status: "open", project_id: "p-1" }],
+    decor: { meta: {}, labels: [], personnes: [], messages: {} }
+  }).renderPage();
+
+  assert.match(html, /Étanchéité/, "le sujet est là");
+  assert.ok(!html.includes("subject-label-badge"), "pas de pastille");
+  assert.ok(!html.includes("issue-row-blocked-pill"), "pas de blocage affirmé");
+  assert.ok(!html.includes("issue-row-messages-count"), "pas de fil compté");
+  assert.ok(!html.includes("undefined"), "et rien à la place d'une absence");
+});
+
+/**
+ * **Replié, le rail range les épinglées sous une seule icône**, et cette icône
+ * ouvre leur liste. Le bouton était dessiné et rien ne l'écoutait : on cliquait,
+ * il ne se passait rien, et les épinglées devenaient inatteignables dès qu'on
+ * repliait le rail.
+ */
+test("le rail replié porte l'épingle, et elle ouvre la liste", () => {
+  const ferme = ecran({ situations: [MA_SITUATION], replie: true }).renderPage();
+  const ouvert = ecran({
+    situations: [MA_SITUATION], replie: true, menuDesEpinglesDuCarnet: true
+  }).renderPage();
+
+  // L'attribut se lit **sur ce bouton-là** : la page en porte d'autres, et un
+  // `aria-expanded="false"` trouvé ailleurs ne dirait rien de l'épingle.
+  const epingle = (html) => html.slice(html.indexOf("data-sujets-epingles-menu"), html.indexOf("data-sujets-epingles-menu") + 200);
+
+  assert.notEqual(ferme.indexOf("data-sujets-epingles-menu"), -1, "l'épingle est là");
+  assert.match(epingle(ferme), /aria-expanded="false"/, "et sa liste est fermée");
+
+  assert.match(epingle(ouvert), /aria-expanded="true"/, "ouverte, elle le dit");
+  assert.match(ouvert, /Ma semaine/, "et elle nomme les épinglées");
 });

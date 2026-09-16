@@ -347,3 +347,21 @@ test("les menus de filtre du formulaire sont branchés", async () => {
     "le bouton ouvre son menu"
   );
 });
+
+/**
+ * **L'épingle du rail replié est écoutée.** Le bouton était dessiné et rien ne
+ * le branchait : on cliquait, il ne se passait rien, et les épinglées
+ * devenaient inatteignables dès qu'on repliait le rail. Même classe de défaut
+ * que ci-dessus — muet, invisible à l'exécution sans document.
+ */
+test("l'épingle du rail replié bascule sa liste", async () => {
+  const source = await readFile(
+    new URL("./project-situations-events.js", import.meta.url), "utf8"
+  );
+
+  assert.match(source, /\[data-sujets-epingles-menu\]/, "le bouton est écouté");
+  assert.match(
+    source, /uiState\.menuDesEpinglesDuCarnet = uiState\.menuDesEpinglesDuCarnet !== true;/,
+    "et le clic bascule l'état que le rail lit"
+  );
+});

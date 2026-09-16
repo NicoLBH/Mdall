@@ -2354,6 +2354,20 @@ export function createProjectSituationsEvents({
 
     brancherLesFiltresDuFormulaire(root);
 
+    // **L'épingle du rail replié ouvre la liste des épinglées.**
+    //
+    // Replié, le rail ne montre que des icônes, et les épinglées se rangent
+    // sous une seule — sinon vingt-six situations font vingt-six pastilles de
+    // couleur sans un mot. Le bouton était dessiné et rien ne l'écoutait : on
+    // cliquait, il ne se passait rien, et les épinglées devenaient
+    // inatteignables dès qu'on repliait le rail.
+    root.querySelector("[data-sujets-epingles-menu]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      uiState.menuDesEpinglesDuCarnet = uiState.menuDesEpinglesDuCarnet !== true;
+      rerender(root);
+    });
+
     // **Le rail du carnet.** Chaque entrée porte la requête de ce qu'elle
     // ouvre : les lectures comme mes situations. Cliquer l'une ou l'autre fait
     // donc la même chose — ouvrir une situation et voir ses sujets.
@@ -2374,6 +2388,9 @@ export function createProjectSituationsEvents({
         // chercher — et l'on croirait la liste perdue.
         uiState.situationEnCours = null;
         uiState.situationEnCoursErreur = "";
+        // La liste du rail replié se referme au clic : elle vient de changer
+        // d'écran, et un menu resté ouvert derrière se lit comme un défaut.
+        uiState.menuDesEpinglesDuCarnet = false;
 
         store.situationsView.requeteDuCarnet = requete;
         // **Une situation qu'on remplit à la main n'a pas de requête**, et son

@@ -25059,6 +25059,18 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .situations-sujets-tete__filtres{display:flex; align-items:center; gap:2px; flex-wrap:wrap;
   min-width:0;}
 
+/* **Les menus se posent en ligne, pas en colonne.**
+
+   `.issues-head-menu` fait `width:100%`, et c'est juste là où il est né : dans
+   le tableau des sujets d'un projet, chaque menu occupe **sa** colonne
+   d'en-tête, et il la remplit. Ici, cinq menus partagent une seule cellule :
+   chacun réclamait la largeur entière, et `flex-wrap` les empilait — une
+   colonne de cinq lignes au-dessus de la liste.
+
+   Même remède que `--groupe`, qui règle le même conflit ailleurs : dans ce
+   bandeau, un menu prend la largeur de son libellé. */
+.situations-sujets-tete__filtres .issues-head-menu{width:auto; flex:0 0 auto;}
+
 /* Un filtre n'est pas une action : il se signale au survol, pas au repos. Celui
    qui est posé, lui, se voit — sinon on ne sait plus pourquoi la liste est
    courte. */
