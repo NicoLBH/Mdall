@@ -36,6 +36,11 @@ export function createProjectSituationsView({
   champsDeLEcran = () => [],
   /** Qui regarde. « assigné:moi » ne veut rien dire sans lui. */
   moiDeLEcran = () => "",
+  /** De quoi dessiner une ligne de sujet comme l'onglet Sujets la dessine :
+   *  la surcouche, les labels, les personnes, les fils. Les quatre se
+   *  demandent ensemble — séparées, trois auraient un jour le carnet et la
+   *  quatrième le projet ouvert (règle 4). */
+  decorDesSujets = () => ({}),
   /** Le repli et la largeur du rail : des réglages, pas un état de page — ils
    *  suivent la personne d'une session à l'autre, et l'écran les demande
    *  plutôt que de les lire dans un magasin que personne n'écrit. */
@@ -102,6 +107,12 @@ export function createProjectSituationsView({
       moi: moiDeLEcran(),
       epingles,
       replie,
+      // **Replié, le rail ne montre que des icônes**, et les épinglées se
+      // rangent sous une seule — sans quoi vingt-six situations feraient
+      // vingt-six pastilles de couleur sans un mot. Le rail les dessinait
+      // déjà ; personne ne disait si la liste est ouverte, et rien ne
+      // l'ouvrait : on cliquait l'épingle, il ne se passait rien.
+      menuDesEpingles: uiState.menuDesEpinglesDuCarnet === true,
       sousVue: "subjects",
       // **On part de la liste de ses situations, pas de ses sujets.** C'est ce
       // que la première entrée ouvre ici, et le mot doit le dire.
@@ -429,6 +440,10 @@ export function createProjectSituationsView({
         sujets: sujetsQueRetient(requete),
         nomsDesProjets: store.situationsView?.nomsDesProjets ?? {},
         requete,
+        // **Ce qu'il faut pour que la ligne dise ce qu'elle dit ailleurs.**
+        // Sans eux, le tableau rendait une liste de titres nus, qu'il fallait
+        // ouvrir un par un pour savoir ce qu'on regardait.
+        ...decorDesSujets(),
         filtresHtml: renderFiltresDeLaComposition({ requete, champs }),
         // Sans requête, la situation ne retient pas « tout » : elle retiendra
         // les sujets qu'on y mettra un par un, et le tableau le dit plutôt que

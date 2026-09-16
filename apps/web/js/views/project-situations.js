@@ -241,6 +241,7 @@ const {
   sujetsQueRetient,
   champsDeLEcran,
   moiDeLEcran,
+  decorDesSujets,
   railReplie: railReplieDuCarnet,
   railLargeur: railLargeurDuCarnet,
   renderSituationKanban: (...args) => kanbanView.renderSituationKanban(...args)
@@ -330,6 +331,55 @@ function champsDeLEcran() {
     personnes: store.situationsView?.personnesDuCarnet ?? [],
     nomsDesProjets: store.situationsView?.nomsDesProjets ?? {}
   });
+}
+
+/**
+ * La charge de l'écran courant : celle du carnet, ou celle du projet ouvert.
+ *
+ * Les deux ont la même forme — c'est `fusionnerLesCharges` qui s'en assure —,
+ * et tout ce qui la lit (labels, fils de discussion) la demande ici plutôt que
+ * d'aller la chercher dans l'un des deux magasins (règle 4).
+ */
+function chargeDeLEcran() {
+  if (estMonCarnet(store)) return chargeDuCarnet();
+
+  return store.projectSubjectsView?.rawSubjectsResult
+    ?? store.projectSubjectsView?.rawResult
+    ?? {};
+}
+
+/**
+ * De quoi dessiner une ligne de sujet **comme l'onglet Sujets la dessine**.
+ *
+ * ## Le défaut qu'il répare
+ *
+ * Le tableau du formulaire d'une situation montrait un titre, un état et un
+ * chantier. L'onglet Sujets d'un projet montre en plus les **labels**,
+ * l'**auteur**, le **blocage** et la longueur du **fil** — et c'est sur ces
+ * quatre-là qu'on reconnaît un sujet dans une liste de soixante. On écrivait
+ * une requête et l'on obtenait une liste de titres nus.
+ *
+ * ## Les quatre vont ensemble, et se demandent une fois
+ *
+ * La surcouche dit ce que chaque sujet porte ; les labels les nomment et les
+ * colorent ; les personnes nomment l'auteur ; les fils se comptent. Séparés en
+ * quatre portes, trois auraient un jour le carnet et la quatrième le projet
+ * ouvert — et la ligne dirait deux choses à la fois (règle 4).
+ */
+function decorDesSujets() {
+  const charge = chargeDeLEcran();
+
+  return {
+    meta: metaDeLEcran(),
+    labels: Array.isArray(charge.labels) ? charge.labels : [],
+    personnes: estMonCarnet(store)
+      ? (store.situationsView?.personnesDuCarnet ?? [])
+      : (Array.isArray(store.projectForm?.collaborators) ? store.projectForm.collaborators : []),
+    messages: charge.subjectMessageCountsBySubjectId
+      && typeof charge.subjectMessageCountsBySubjectId === "object"
+      ? charge.subjectMessageCountsBySubjectId
+      : {}
+  };
 }
 
 function metaDeLEcran() {

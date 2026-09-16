@@ -26,11 +26,21 @@ const DEUX_SUJETS = [{ id: "x" }, { id: "y" }];
 const MANUELLE = { id: "s-manuelle", mode: "manual", title: "Ma semaine" };
 const AUTOMATIQUE = { id: "s-auto", mode: "automatic", title: "Tous les sujets ouverts" };
 
-function monter({ currentProjectId = null, situationsDuProjet = [], mesSituations = [], chargeIllisible = false } = {}) {
+function monter({
+  currentProjectId = null, situationsDuProjet = [], mesSituations = [], chargeIllisible = false,
+  /**
+   * Mes chantiers, comme `loadMesSituations` vient de les ranger.
+   *
+   * **C'est l'horizon du carnet**, et c'est ici qu'il se donne : un décor qui
+   * ne les poserait pas ferait passer pour du code ce qui serait un manque de
+   * décor.
+   */
+  nomsDesProjets = {}
+} = {}) {
   const appels = [];
   const store = {
     currentProjectId,
-    situationsView: { data: [], selectedSituationId: null },
+    situationsView: { data: [], selectedSituationId: null, nomsDesProjets },
     projectSubjectsView: {}
   };
   const uiState = { countsBySituationId: {} };
@@ -120,8 +130,9 @@ test("le carnet charge mes situations, et ne réclame pas les sujets d'un projet
  * — ce qui se lit comme un chantier sans travail, alors que c'était un écran
  * sans données (règle 5).
  */
-test("le carnet charge les sujets des chantiers de ses situations", async () => {
+test("le carnet charge les sujets de tous mes chantiers", async () => {
   const { portes, appels, uiState } = monter({
+    nomsDesProjets: { "chantier-a": "NOVACLIM", "chantier-b": "VERIFAS" },
     mesSituations: [
       { ...MANUELLE, perimetre: { portee: "projet", projets: ["chantier-a"] } },
       { ...AUTOMATIQUE, perimetre: { portee: "choisis", projets: ["chantier-a", "chantier-b"] } }
@@ -136,16 +147,43 @@ test("le carnet charge les sujets des chantiers de ses situations", async () => 
 });
 
 /**
- * **Une situation qui regarde tout ne nomme aucun chantier**, et ce n'est pas
- * une absence à combler : lui chercher des chantiers reviendrait à demander à
- * la base la liste de tout.
+ * **Un chantier à moi dont aucune situation ne parle est lu quand même.**
+ *
+ * C'est le défaut que l'usage a montré : l'horizon du carnet était l'union des
+ * chantiers cités, et écrire une situation neuve ne pouvait donc atteindre
+ * aucun chantier nouveau. « Les sujets urgents de la maison de Chamonix » était
+ * hors de portée tant qu'aucune situation ne parlait déjà de ce chantier-là.
  */
-test("celle qui regarde tout n'envoie chercher aucun chantier", async () => {
-  const { portes, appels } = monter({ mesSituations: [{ ...MANUELLE, perimetre: { portee: "tous" } }] });
+test("un chantier dont aucune situation ne parle est lu quand même", async () => {
+  const { portes, appels } = monter({
+    nomsDesProjets: { "chantier-a": "NOVACLIM", "chantier-chamonix": "Maison de Chamonix" },
+    mesSituations: [{ ...MANUELLE, perimetre: { portee: "projet", projets: ["chantier-a"] } }]
+  });
 
   await portes.refreshSituationsData();
 
-  assert.ok(appels.includes("sujets-des-chantiers:"), "on demande, mais sans nommer de chantier");
+  assert.ok(
+    appels.includes("sujets-des-chantiers:chantier-a+chantier-chamonix"),
+    "l'horizon est celui de mes chantiers, pas celui de mes situations"
+  );
+});
+
+/**
+ * **Une situation qui regarde tout mon travail ne nomme aucun chantier** —
+ * c'est sa définition. On n'allait donc chercher **rien**, et un carnet dont
+ * toutes les situations regardent tout ne lisait aucun sujet : chaque situation
+ * affichait « — », ce qui se lit comme une panne.
+ */
+test("celle qui regarde tout reçoit tous mes chantiers", async () => {
+  const { portes, appels } = monter({
+    nomsDesProjets: { "chantier-a": "NOVACLIM" },
+    mesSituations: [{ ...MANUELLE, perimetre: { portee: "tous" } }]
+  });
+
+  await portes.refreshSituationsData();
+
+  assert.ok(appels.includes("sujets-des-chantiers:chantier-a"));
+  assert.ok(!appels.includes("sujets-des-chantiers:"), "et non la demande vide d'avant");
 });
 
 /**

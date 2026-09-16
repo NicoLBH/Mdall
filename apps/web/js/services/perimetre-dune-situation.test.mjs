@@ -7,6 +7,7 @@ import {
   perimetreDeToutMonTravail,
   perimetrePourLesProjets,
   phraseDuPerimetre,
+  chantiersDuCarnet,
   projetsDeCesSituations,
   projetsRegardes,
   regardeLeProjet,
@@ -258,4 +259,71 @@ test("celle qui regarde tout n'ajoute aucun nom à chercher", () => {
   assert.deepEqual(projetsDeCesSituations([{ perimetre: { portee: "tous" } }]), []);
   assert.deepEqual(projetsDeCesSituations([]), []);
   assert.deepEqual(projetsDeCesSituations(), []);
+});
+
+/* ── L'horizon du carnet ─────────────────────────────────────────────────── */
+
+/**
+ * **Le carnet voit mes chantiers, et non ceux que ses situations citent.**
+ *
+ * C'était l'inverse : l'horizon était l'union des chantiers nommés par les
+ * situations existantes. Écrire une situation neuve ne pouvait donc atteindre
+ * aucun chantier nouveau — « les sujets urgents de la maison de Chamonix »
+ * était hors de portée tant qu'aucune situation ne parlait déjà de ce
+ * chantier-là. Et le filtre « Chantiers » ne se déclarait même pas, faute
+ * d'avoir plus d'une valeur.
+ */
+test("l'horizon du carnet, ce sont mes chantiers", () => {
+  const miens = { "p-nova": "NOVACLIM", "p-chamonix": "Maison de Chamonix" };
+
+  assert.deepEqual(
+    chantiersDuCarnet({ miens, situations: [] }),
+    ["p-nova", "p-chamonix"],
+    "même sans aucune situation, et surtout dans ce cas-là"
+  );
+});
+
+/**
+ * **Une situation qui regarde tout mon travail ne nomme aucun chantier** —
+ * c'est sa définition. Un carnet dont toutes les situations regardent tout ne
+ * lisait donc rien du tout.
+ */
+test("une situation qui regarde tout ne rétrécit pas l'horizon", () => {
+  const miens = { "p-nova": "NOVACLIM" };
+  const situations = [{ perimetre: perimetreDeToutMonTravail() }];
+
+  assert.deepEqual(chantiersDuCarnet({ miens, situations }), ["p-nova"]);
+});
+
+/**
+ * **Un chantier cité sans être des miens est gardé.** Il peut avoir été
+ * partagé, ou avoir changé de main ; le taire ferait disparaître d'un coup les
+ * sujets d'une situation qui marchait hier (règle 5).
+ */
+test("un chantier cité qui n'est pas des miens reste lisible", () => {
+  const chantiers = chantiersDuCarnet({
+    miens: { "p-nova": "NOVACLIM" },
+    situations: [{ perimetre: perimetrePourLesProjets(["p-ailleurs"]) }]
+  });
+
+  assert.deepEqual(chantiers, ["p-nova", "p-ailleurs"]);
+});
+
+/** Un chantier à la fois mien et cité ne compte qu'une fois. */
+test("mes chantiers et les cités ne font pas de doublon", () => {
+  const chantiers = chantiersDuCarnet({
+    miens: { "p-nova": "NOVACLIM" },
+    situations: [{ perimetre: perimetrePourLesProjets(["p-nova"]) }]
+  });
+
+  assert.deepEqual(chantiers, ["p-nova"]);
+});
+
+/** Mes chantiers se donnent aussi en liste, comme la base les rend. */
+test("mes chantiers se donnent par noms ou par lignes", () => {
+  assert.deepEqual(
+    chantiersDuCarnet({ miens: [{ id: "p-nova", name: "NOVACLIM" }], situations: [] }),
+    ["p-nova"]
+  );
+  assert.deepEqual(chantiersDuCarnet(), [], "et rien ne fait rien, sans lever");
 });
