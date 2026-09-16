@@ -31,6 +31,7 @@ import { createProjectSituationsView } from "./project-situations-view.js";
 import { champsDesSujets } from "../../services/champs-des-sujets.js";
 import { compositionNeuve } from "../../services/situation-en-composition.js";
 import { BLOC_DES_FILTRES } from "../ui/menus-den-tete.js";
+import { ICONE_DU_CARNET } from "../../services/mon-carnet.js";
 
 const MOI = "u-1";
 
@@ -567,4 +568,26 @@ test("le rail replié porte l'épingle, et elle ouvre la liste", () => {
 
   assert.match(epingle(ouvert), /aria-expanded="true"/, "ouverte, elle le dit");
   assert.match(ouvert, /Ma semaine/, "et elle nomme les épinglées");
+});
+
+/**
+ * **La première entrée du rail ouvre la liste des situations**, et elle portait
+ * le cercle des sujets ouverts — celui de l'onglet Sujets d'un projet. Le menu
+ * de gauche, lui, montre une autre icône pour la même destination : on cherchait
+ * l'une en regardant l'autre.
+ *
+ * L'icône se donne à l'écran comme le nom, et vient du même endroit
+ * (`mon-carnet.js`) : recopiée, elle aurait fini par différer de celle du menu.
+ */
+test("la première entrée du rail porte l'icône des situations", () => {
+  const html = ecran({ situations: [MA_SITUATION] }).renderPage();
+
+  // La première entrée est celle qui ne porte aucune requête : elle ouvre la
+  // liste elle-même. Son icône se lit juste après.
+  const debut = html.indexOf('data-sujets-lecture=""');
+  const entree = html.slice(debut, debut + 500);
+
+  assert.notEqual(debut, -1, "la première entrée est là");
+  assert.match(entree, new RegExp(`icons\\.svg#${ICONE_DU_CARNET}`), "celle du menu de gauche");
+  assert.ok(!entree.includes("icons.svg#issue-opened"), "et non celle des sujets");
 });

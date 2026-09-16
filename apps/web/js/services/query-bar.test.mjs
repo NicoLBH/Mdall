@@ -10,6 +10,7 @@ import {
   onlyFilters,
   parseQuery,
   suggestAt,
+  toggleFilter,
   withFilter
 } from "./query-bar.js";
 
@@ -248,4 +249,86 @@ test("une faute répétée ne se dit qu'une fois", async () => {
   const champs = [{ key: "projet", label: "Chantier", values: [{ value: "p-1", label: "Résidence" }] }];
 
   assert.equal(parseQuery("projet:zz projet:zz", champs).inconnus.length, 1);
+});
+
+/* ── Un nom qui désigne plusieurs valeurs ────────────────────────────────── */
+
+/**
+ * **Deux projets, deux labels du même nom, un seul mot pour les écrire.**
+ *
+ * C'est le défaut qu'un écran qui traverse les projets révèle : « Critique »
+ * existe dans quatre chantiers, sous quatre identifiants. La barre ne sait
+ * écrire que le nom ; on n'en retenait que le **premier**, et les sujets des
+ * trois autres chantiers disparaissaient sans un mot. Cocher « Critique »
+ * rendait une liste vide, et l'on cherchait la faute dans la requête.
+ */
+const DEUX_CRITIQUES = [{
+  key: "label",
+  label: "Labels",
+  multiple: true,
+  values: [
+    { value: "lab-a", token: "critique", label: "Critique" },
+    { value: "lab-b", token: "critique", label: "Critique" },
+    { value: "lab-c", token: "etancheite", label: "Étanchéité" }
+  ]
+}];
+
+test("un jeton qui nomme deux valeurs les pose toutes les deux", () => {
+  const { filters } = parseQuery("label:critique", DEUX_CRITIQUES);
+
+  assert.deepEqual(filters.label, ["lab-a", "lab-b"]);
+});
+
+/** Et un jeton qui n'en nomme qu'une n'en pose qu'une. */
+test("un jeton qui n'a pas d'homonyme reste seul", () => {
+  assert.deepEqual(parseQuery("label:etancheite", DEUX_CRITIQUES).filters.label, ["lab-c"]);
+});
+
+/**
+ * **La barre reste lisible.** Quatre identifiants pour un nom s'écrivent une
+ * fois : les répéter ferait `label:critique label:critique` pour une seule
+ * condition.
+ */
+test("deux valeurs du même nom ne s'écrivent qu'une fois", () => {
+  assert.equal(
+    formatQuery({ filters: { label: ["lab-a", "lab-b"] } }, DEUX_CRITIQUES),
+    "label:critique"
+  );
+});
+
+/**
+ * **On coche un nom, pas un identifiant.** Ne retirer que celui qu'on a cliqué
+ * laissait le jeton en place — un filtre qu'on ne peut plus décocher.
+ */
+test("cocher puis recocher un nom le pose puis le retire entièrement", () => {
+  const pose = toggleFilter("", DEUX_CRITIQUES, "label", "lab-a");
+  assert.equal(pose, "label:critique");
+  assert.deepEqual(parseQuery(pose, DEUX_CRITIQUES).filters.label, ["lab-a", "lab-b"]);
+
+  assert.equal(toggleFilter(pose, DEUX_CRITIQUES, "label", "lab-a"), "");
+  assert.equal(
+    toggleFilter(pose, DEUX_CRITIQUES, "label", "lab-b"), "",
+    "depuis l'un ou depuis l'autre, c'est le même nom qu'on décoche"
+  );
+});
+
+/**
+ * **Une valeur réservée ne se confond avec aucune autre.**
+ *
+ * `@moi` s'écrit « moi », et quelqu'un peut s'appeler Moi. Les réunir ferait
+ * appliquer le filtre sur cette personne-là quand on ne sait pas qui regarde,
+ * au lieu de l'annoncer sans l'appliquer (règle 5).
+ */
+test("une valeur réservée ne se réunit pas avec son homonyme", () => {
+  const champs = [{
+    key: "assigné",
+    label: "Assignés",
+    multiple: true,
+    values: [
+      { value: "@moi", token: "moi", label: "Moi", seule: true },
+      { value: "p-moi", token: "moi", label: "Moi" }
+    ]
+  }];
+
+  assert.deepEqual(parseQuery("assigné:moi", champs).filters["assigné"], ["@moi"]);
 });

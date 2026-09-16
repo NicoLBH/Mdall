@@ -126,8 +126,13 @@ export function champsDesSujets({
 
   // « aucun » n'a de sens que là où l'absence se cherche : un sujet sans label
   // est une chose qu'on veut trouver, un sujet sans statut n'existe pas.
+  // **`seule` marque une valeur réservée.** « aucun » et « @moi » s'écrivent
+  // comme un nom que quelqu'un peut porter — un label « Aucun », une personne
+  // qui s'appelle Moi. Un jeton qui nomme plusieurs valeurs les désigne toutes
+  // (`query-bar.js`) ; celles-ci font exception, sinon « assigné:moi » se
+  // poserait sur cette personne-là quand on ne sait pas qui regarde.
   const avecAucun = (valeurs) => (valeurs.length > 0
-    ? [...valeurs, { value: AUCUN, token: AUCUN, label: "Aucun" }]
+    ? [...valeurs, { value: AUCUN, token: AUCUN, label: "Aucun", seule: true }]
     : []);
 
   // **Les champs de liste se cochent à plusieurs.** Un sujet porte deux labels,
@@ -153,12 +158,12 @@ export function champsDesSujets({
     // `@moi` en tête : c'est la lecture la plus fréquente, et la seule qui ne
     // dépende pas de savoir comment on s'appelle dans ce projet.
     const avecMoi = (fin = []) => [
-      { value: MOI, token: "moi", label: "Moi" }, ...desPersonnes, ...fin
+      { value: MOI, token: "moi", label: "Moi", seule: true }, ...desPersonnes, ...fin
     ];
 
     champs.push({
       key: "assigné", label: "Assignés", multiple: true,
-      values: avecMoi([{ value: AUCUN, token: AUCUN, label: "Personne" }])
+      values: avecMoi([{ value: AUCUN, token: AUCUN, label: "Personne", seule: true }])
     });
 
     // **Qui a ouvert le sujet**, et non qui le traite. Les deux se confondent
@@ -193,7 +198,11 @@ export function champsDesSujets({
   // coupe sur les espaces, et « Résidence Bertrand » ne s'y écrit pas tel quel.
   const desProjets = nommes(projets, "id", "name");
   if (desProjets.length > 1) {
-    champs.push({ key: "projet", label: "Chantiers", values: desProjets, multiple: true });
+    // **« Projets », et non « Chantiers ».** Un projet en phase de conception
+    // n'est pas encore un chantier : le mot excluait la moitié de ce qu'on
+    // range ici, et il n'y a aucune raison d'en employer deux — la clé du champ
+    // dit « projet » depuis toujours, et la base aussi (règle 10).
+    champs.push({ key: "projet", label: "Projets", values: desProjets, multiple: true });
   }
 
   const desSituations = avecAucun(nommes(situations, "id", "title"));

@@ -24,6 +24,17 @@
 /** Le nom de l'écran, partout le même. */
 export const NOM_DU_CARNET = "Situations";
 
+/**
+ * L'icône de l'écran, partout la même.
+ *
+ * **Le rail portait celle des sujets.** Sa première entrée ouvre la liste des
+ * situations — pas une liste de sujets —, et elle affichait le cercle des
+ * sujets ouverts : deux endroits de l'application montraient deux icônes pour
+ * la même destination, et l'on cherchait l'une en regardant l'autre. Le nom
+ * vivait déjà ici ; l'icône le rejoint (règle 10).
+ */
+export const ICONE_DU_CARNET = "table";
+
 /** L'adresse du carnet. */
 export const ROUTE_DU_CARNET = "#situations";
 
@@ -43,22 +54,36 @@ export function estMonCarnet(store = null) {
 /**
  * Ce qu'un sujet dit des situations où on l'a mis.
  *
- * **« Situations » ne disait pas à qui.** Un sujet est du projet, et tout le
- * monde le lit ; la ligne qui le range dans une situation, elle, ne parle qu'à
- * une personne — la base ne rend les situations qu'à leur propriétaire. Un
- * libellé qui n'en dit rien laisse croire qu'on publie son organisation en
- * cochant une case, et c'est précisément ce qui fait qu'on ne coche rien.
+ * ## Le mot, et pourquoi il a changé
  *
- * La garantie est tenue par la base, pas par ces mots. Ce qu'ils font, c'est
- * la rendre lisible.
+ * C'était « Dans mon carnet ». Le carnet était un mot de fabrication : on
+ * l'avait pris pour dire « mes situations à moi, où qu'elles regardent », et il
+ * s'est retrouvé à l'écran, à côté de « Situations » qui désigne la même chose.
+ * Deux mots pour une chose, c'est la règle 10 — et celui-là n'existe nulle part
+ * sur un projet.
+ *
+ * **L'application ne parle plus que de situations** : des regroupements de
+ * sujets. Le mot est dans le rail, dans le fil d'Ariane, dans l'écran ; il est
+ * donc aussi ici.
+ *
+ * ## Ce que la discrétion doit quand même dire
+ *
+ * Un sujet est du projet, et tout le monde le lit ; la ligne qui le range dans
+ * une situation, elle, ne parle qu'à une personne — la base ne rend les
+ * situations qu'à leur propriétaire. C'est ce que l'infobulle dit, parce qu'un
+ * libellé muet laisse croire qu'on publie son organisation en cochant une case,
+ * et c'est précisément ce qui fait qu'on ne coche rien.
+ *
+ * La garantie est tenue par la base, pas par ces mots. Ce qu'ils font, c'est la
+ * rendre lisible.
  */
-export const DANS_MON_CARNET = "Dans mon carnet";
+export const DANS_MES_SITUATIONS = "Situations";
 
-/** Et quand il n'y est pas. « Aucune situation » se lisait comme un manque. */
-export const PAS_DANS_MON_CARNET = "Pas dans mon carnet";
+/** Et quand il n'y est pas. « Aucune » tout court se lirait comme un manque. */
+export const SANS_SITUATION = "Dans aucune situation";
 
 /** Pourquoi personne d'autre ne le voit, dit une fois, au survol. */
-export const CARNET_PRIVE = "Vous seul voyez ce que vous mettez dans votre carnet.";
+export const SITUATIONS_PRIVEES = "Vous seul voyez les situations où vous rangez un sujet.";
 
 /**
  * Ce qu'on affiche quand on ne sait pas combien de sujets une situation porte.

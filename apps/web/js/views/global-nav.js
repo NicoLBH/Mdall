@@ -1,5 +1,5 @@
 import { svgIcon } from "../ui/icons.js";
-import { NOM_DU_CARNET, ROUTE_DU_CARNET } from "../services/mon-carnet.js";
+import { ICONE_DU_CARNET, NOM_DU_CARNET, ROUTE_DU_CARNET } from "../services/mon-carnet.js";
 
 function parseHash() {
   const hash = String(location.hash || "").replace(/^#/, "").trim();
@@ -55,7 +55,7 @@ export function renderGlobalNav() {
         <div class="global-nav__group settings-nav__group settings-nav__group--project">
           ${renderNavLink({ href: "#dashboard", icon: svgIcon("home", { className: "octicon octicon-home" }), label: "Accueil", isActive: model.activeDashboard })}
           ${renderNavLink({ href: "#projects", icon: repoIcon(), label: "Projets", isActive: model.activeProjects })}
-          ${renderNavLink({ href: ROUTE_DU_CARNET, icon: svgIcon("table", { className: "octicon octicon-table" }), label: NOM_DU_CARNET, isActive: model.activeSituations })}
+          ${renderNavLink({ href: ROUTE_DU_CARNET, icon: svgIcon(ICONE_DU_CARNET, { className: `octicon octicon-${ICONE_DU_CARNET}` }), label: NOM_DU_CARNET, isActive: model.activeSituations })}
         </div>
       </div>
     </div>

@@ -443,3 +443,45 @@ test("les filtres du formulaire d'une situation tiennent sur une ligne", () => {
     "et le bandeau des filtres la lève"
   );
 });
+
+/**
+ * **Le rail passe devant le contenu, et la liste de ses épinglées avec lui.**
+ *
+ * `position:fixed` avec un `z-index` chiffré crée un **contexte
+ * d'empilement** : tout ce qui est dedans y reste enfermé. La liste des
+ * épinglées du rail replié porte `z-index:1000` et passait pourtant **sous** le
+ * tableau — le rail était à `z-index:0`, le contenu vient après dans le
+ * document, et il gagnait.
+ *
+ * Deux bornes, et il faut les deux : au-dessus de l'en-tête collé d'un tableau,
+ * qui la recouvrait à son tour, et sous l'en-tête de l'application, que le rail
+ * doit continuer de laisser passer.
+ */
+test("le rail passe devant les tableaux et derrière l'en-tête", () => {
+  const css = readFileSync(resolve(ICI, "../../../style.css"), "utf8");
+
+  const duRail = Number(css.match(/\.project-rail\{[\s\S]*?z-index:(\d+);/)?.[1] ?? 0);
+  const deLaTete = Number(css.match(/\.data-table-shell__head\{[\s\S]*?z-index:(\d+);/)?.[1] ?? 0);
+  const deLEnTete = Number(css.match(/--z-header:\s*(\d+);/)?.[1] ?? 0);
+
+  assert.ok(deLaTete > 0 && deLEnTete > 0, "les deux bornes existent bien");
+  assert.ok(duRail > deLaTete, `le rail (${duRail}) passe devant l'en-tête d'un tableau (${deLaTete})`);
+  assert.ok(duRail < deLEnTete, `et derrière celui de l'application (${deLEnTete})`);
+});
+
+/**
+ * **Les menus de filtre s'ouvrent vers le bas, et le tableau est en haut de la
+ * page.** La liste dépassait le bas de la fenêtre et s'y coupait net : on ne
+ * voyait que les trois premières valeurs, sans rien pour dire qu'il y en avait
+ * vingt. La coupe vient de la boîte qui défile — ce qu'il faut, c'est qu'il y
+ * ait où défiler.
+ */
+test("le formulaire d'une situation garde de la place sous lui", () => {
+  const css = readFileSync(resolve(ICI, "../../../style.css"), "utf8");
+
+  const dessous = Number(
+    css.match(/\.project-simple-page--situations \.sujets-vue-forme\{[^}]*padding-bottom:(\d+)px/)?.[1] ?? 0
+  );
+
+  assert.ok(dessous >= 200, `il en reste ${dessous}px, et un menu ouvert en fait davantage`);
+});

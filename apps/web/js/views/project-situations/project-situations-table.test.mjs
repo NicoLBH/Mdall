@@ -511,3 +511,13 @@ test("la grille, l'en-tête et les lignes comptent le même nombre de colonnes",
   assert.equal(ligne.match(/class="cell[ "]/g)?.length, 3, "trois cellules");
   assert.equal(pistes, 3, "et trois pistes dans la grille");
 });
+
+/** La colonne le nomme comme le filtre le nomme : un projet, pas un chantier. */
+test("la colonne des projets s'appelle par son nom", () => {
+  const html = renderTableauDesSujetsRetenusHtml({
+    sujets: DEUX_SUJETS, nomsDesProjets: NOMS, requete: "toiture"
+  });
+
+  assert.match(html, />Projet</);
+  assert.ok(!html.includes("Chantier"));
+});

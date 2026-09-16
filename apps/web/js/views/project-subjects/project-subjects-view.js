@@ -57,7 +57,7 @@ import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 import { renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
 import { renderSettingsModal } from "../ui/settings-modal.js";
 import { renderSubjectTreeGrid } from "../shared/subject-tree-grid.js";
-import { DANS_MON_CARNET, PAS_DANS_MON_CARNET } from "../../services/mon-carnet.js";
+import { DANS_MES_SITUATIONS, SANS_SITUATION } from "../../services/mon-carnet.js";
 export function createProjectSubjectsView(deps) {
   const {
     store,
@@ -2522,7 +2522,7 @@ function renderSubjectSituationsValue(subjectId) {
   const situations = getSubjectSituations(subjectId);
   // « Aucune situation » se lisait comme un manque du sujet. C'est une absence
   // dans **mon** carnet, et personne d'autre ne la voit.
-  if (!situations.length) return renderSubjectMetaButtonValue(PAS_DANS_MON_CARNET);
+  if (!situations.length) return renderSubjectMetaButtonValue(SANS_SITUATION);
 
   const openSituations = situations.filter((situation) => String(getEffectiveSituationStatus(situation?.id) || situation?.status || "open").toLowerCase() === "open");
   const closedSituations = situations.filter((situation) => String(getEffectiveSituationStatus(situation?.id) || situation?.status || "open").toLowerCase() !== "open");
@@ -3462,7 +3462,7 @@ function renderSubjectMetaControls(subject) {
       })}
       ${renderSubjectMetaField({
         field: "situations",
-        label: DANS_MON_CARNET,
+        label: DANS_MES_SITUATIONS,
         valueHtml: renderSubjectSituationsValue(subject.id),
         subjectId,
         scope: "main",
@@ -4807,9 +4807,9 @@ function renderCreateSubjectMetaControls() {
       })}
       ${renderSubjectMetaField({
         field: "situations",
-        label: DANS_MON_CARNET,
+        label: DANS_MES_SITUATIONS,
         valueHtml: situationsValueHtml,
-        emptyState: isSubissueMode ? { isEmpty: !situationsValueHtml, icon: "table", text: PAS_DANS_MON_CARNET } : null,
+        emptyState: isSubissueMode ? { isEmpty: !situationsValueHtml, icon: "table", text: SANS_SITUATION } : null,
         subjectId,
         scope,
         scopeHost,

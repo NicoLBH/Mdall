@@ -335,3 +335,21 @@ test("un chantier mal tapé remonte plutôt que de se taire", () => {
   assert.deepEqual(inconnus, [{ champ: "projet", valeur: "residence-bertrnad" }]);
   assert.deepEqual(retenus, [], "le jeton reste du texte, et ne se trouve pas dans le titre");
 });
+
+/**
+ * **« Projets », et non « Chantiers ».**
+ *
+ * Un projet en phase de conception n'est pas encore un chantier : le mot
+ * excluait la moitié de ce qu'on range ici. La clé du champ dit « projet »
+ * depuis toujours, et la base aussi — deux mots pour une chose, c'est la
+ * règle 10.
+ */
+test("le champ des projets s'appelle par son nom", () => {
+  const champs = champsDesSujets({
+    projets: [{ id: "p-a", name: "NOVACLIM" }, { id: "p-b", name: "VERIFAS" }]
+  });
+  const champ = champs.find((candidat) => candidat.key === "projet");
+
+  assert.equal(champ?.label, "Projets");
+  assert.ok(!JSON.stringify(champs).includes("Chantier"), "le mot ne reste nulle part");
+});

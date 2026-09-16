@@ -631,3 +631,82 @@ seule — sinon vingt-six situations font vingt-six pastilles de couleur sans un
 mot. Le rail dessinait déjà ce bouton ; l'écran des situations ne disait pas si
 la liste est ouverte, et rien ne l'ouvrait. On cliquait, il ne se passait rien,
 et les épinglées devenaient inatteignables dès qu'on repliait le rail.
+
+---
+
+## 7. Un nom qui désigne plusieurs valeurs, et cinq réglages
+
+### Le défaut qui comptait : `label:critique` ne retenait qu'un label sur quatre
+
+**Une barre de recherche écrit des noms ; une base range des identifiants.** Tant
+qu'un écran ne regardait qu'un projet, c'était sans conséquence : deux labels
+n'y portent pas le même nom. Un écran qui traverse les projets, lui, voit quatre
+labels « Critique » — un par projet, quatre identifiants.
+
+`query-bar.js` n'en retenait que **le premier**. Cocher « Critique » dans le
+menu posait `label:critique`, qui se relisait en un seul identifiant : les
+sujets des trois autres projets disparaissaient sans un mot, et la liste rendue
+vide se lisait comme une panne. Le menu, lui, affichait quatre entrées
+« Critique » indiscernables, dont trois sans effet.
+
+Quatre endroits changent, et il faut les quatre :
+
+- **`parseQuery`** — un jeton pose **toutes** les valeurs qu'il nomme. Ce n'est
+  pas « deviner au plus proche » (ce module refuse de le faire) : les quatre
+  valeurs *portent le même nom*, et l'écrire les désigne toutes exactement.
+- **`formatQuery`** — un jeton par nom, et non un par identifiant, sinon la
+  barre affiche `label:critique` quatre fois pour une seule condition.
+- **`toggleFilter`** — on coche un **nom**. Ne retirer que l'identifiant cliqué
+  laissait le jeton en place : un filtre qu'on ne pouvait plus décocher.
+- **le menu** — une entrée par nom.
+
+**Une exception, et elle est nommée.** `@moi` s'écrit « moi », et quelqu'un peut
+s'appeler Moi. Les réunir ferait appliquer le filtre sur cette personne-là quand
+on ne sait pas qui regarde, au lieu de l'annoncer sans l'appliquer (règle 5).
+Les valeurs réservées — `@moi`, `aucun` — portent donc `seule: true`, et ne se
+confondent avec rien.
+
+### Les menus passaient sous le contenu
+
+`position:fixed` avec un `z-index` chiffré crée un **contexte d'empilement** :
+tout ce qui est dedans y reste enfermé, quel que soit son propre `z-index`. Le
+rail était à `z-index:0` ; la liste de ses épinglées porte `z-index:1000` et
+passait pourtant sous le tableau, parce que le contenu vient après dans le
+document et gagne au même niveau. Le rail passe à `10` — au-dessus de l'en-tête
+collé d'un tableau (`5`), qui la recouvrait à son tour, et sous l'en-tête de
+l'application (`--z-header`, 100), que le rail doit continuer de laisser passer.
+
+### Les menus de filtre étaient coupés en bas de page
+
+Ils s'ouvrent vers le bas, et le tableau est en haut de la page : la liste
+dépassait la fenêtre et s'y coupait net. La coupe vient de la boîte qui défile,
+pas de la coquille du tableau — ce qu'il faut, c'est **qu'il y ait où défiler**.
+Le formulaire garde donc 280 px sous lui.
+
+### « Chantiers » devient « Projets »
+
+Un projet en phase de conception n'est pas encore un chantier : le mot excluait
+la moitié de ce qu'on range. La clé du champ dit `projet` depuis toujours, et la
+base aussi — deux mots pour une chose (règle 10).
+
+*« Compte rendu de chantier »* reste : c'est le nom du document, et il en est un.
+
+### « Carnet » ne s'écrit plus à l'écran
+
+C'était un mot de fabrication — « mes situations à moi, où qu'elles regardent » —
+et il s'est retrouvé dans le panneau d'un sujet, *« Dans mon carnet »*, à côté de
+« Situations » qui désigne la même chose. **L'application ne parle plus que de
+situations** : des regroupements de sujets.
+
+Les noms de modules gardent le mot : c'est du vocabulaire de fabrication, il ne
+sort pas, et le renommer déplacerait soixante imports pour zéro pixel. Un
+garde-fou lit la source de tous les écrans à la fois — un mot qu'on remet un
+jour dans un panneau qu'aucun test ne monte passerait sans bruit, et c'est
+exactement ce qui est arrivé.
+
+### L'icône du rail
+
+Sa première entrée ouvre la liste des situations, et elle portait le cercle des
+sujets ouverts. Le menu de gauche montre une autre icône pour la même
+destination : on cherchait l'une en regardant l'autre. Elle vient désormais du
+même endroit que le nom.

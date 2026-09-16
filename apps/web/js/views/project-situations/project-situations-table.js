@@ -102,7 +102,9 @@ export function renderTableauDesSujetsRetenusHtml({
       // La colonne du fil n'a pas d'intitulé : l'icône le dit sur chaque ligne,
       // et un mot au-dessus de quatre-vingts pixels tiendrait mal.
       { className: "cell cell-messages-head", html: "" },
-      { className: "cell", label: "Chantier" }
+      // « Projet » : un projet en conception n'est pas encore un chantier, et la
+      // colonne le nomme comme le filtre le nomme.
+      { className: "cell", label: "Projet" }
     ]
   });
 
