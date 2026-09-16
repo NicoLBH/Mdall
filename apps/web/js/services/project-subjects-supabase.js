@@ -2383,9 +2383,42 @@ async function chargeDunChantier(backendProjectId) {
   const subjects = await fetchProjectFlatSubjects(projectId).catch(() => []);
   const subjectLinks = await fetchProjectSubjectLinks(projectId).catch(() => []);
   const subjectAssignees = await fetchProjectSubjectAssignees(projectId).catch(() => []);
+  const subjectMentions = await fetchProjectSubjectMentions(projectId).catch(() => []);
+  const subjectMessageCounts = await fetchProjectSubjectMessageCounts(projectId).catch(() => ({}));
+  const subjectSignals = await fetchProjectSubjectSignals(projectId).catch(() => null);
 
   const result = buildProjectFlatSubjectsResult(subjects, subjectLinks, { runId: store.ui?.runId || "" });
   result[CLES_DE_LA_CHARGE.assignes] = indexDesAssignes(subjectAssignees);
+
+  /**
+   * **Les fils et les signaux manquaient à cette charge.**
+   *
+   * L'écran d'un projet les lit, celle-ci ne les lisait pas — et rien ne
+   * l'échouait. Trois choses s'en trouvaient fausses, en silence :
+   *
+   * - le **compteur de fils** restait vide sur toutes les lignes, ce qui se lit
+   *   comme « aucune discussion » alors que c'est « je n'ai pas demandé » ;
+   * - **« Mentions »** se déclarait et ne retenait jamais rien : l'index était
+   *   absent, `undefined` devient une liste vide, et un sujet qui ne porte rien
+   *   sort de tous les filtres — exactement la panne que
+   *   `charge-des-sujets.js` porte écrite au-dessus d'elle ;
+   * - **« Activité récente »** retombait sur `updated_at`, et manquait donc
+   *   tout ce qui se passe dans le fil de discussion, c'est-à-dire l'essentiel
+   *   de la vie d'un sujet.
+   *
+   * `signauxLus` dit enfin la vérité : `false` n'est pas « aucun signal », c'est
+   * « on ne sait pas », et les lectures qui en dépendent ne se proposent alors
+   * pas plutôt que de rendre une liste vide (règle 5).
+   */
+  result.subjectMessageCountsBySubjectId = subjectMessageCounts && typeof subjectMessageCounts === "object"
+    ? subjectMessageCounts
+    : {};
+  result[CLES_DE_LA_CHARGE.mentions] = indexDesMentions(subjectMentions);
+
+  const { derniereActivite, mentions: nommeesDansLeTexte } = indexDesSignaux(subjectSignals ?? []);
+  result[CLES_DE_LA_CHARGE.derniereActivite] = derniereActivite;
+  result[CLES_DE_LA_CHARGE.mentionsDuTexte] = nommeesDansLeTexte;
+  result[CLES_DE_LA_CHARGE.signauxLus] = Array.isArray(subjectSignals);
 
   try {
     const labelsResult = await loadLabelsForProject(projectId);

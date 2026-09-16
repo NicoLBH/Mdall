@@ -8265,7 +8265,14 @@ function bindTabReset() {
   });
 }
 
-export function renderProjectPropositions(root) {
+/**
+ * @param {object} [options]
+ * @param {string} [options.ouvrir] la proposition à ouvrir en arrivant. Elle
+ *   vient de l'adresse — `#project/<projet>/propositions/<proposition>` —, et
+ *   c'est ce qui permet à un écran qui traverse les projets de mener quelque
+ *   part. Vide, l'onglet s'ouvre sur sa liste.
+ */
+export function renderProjectPropositions(root, { ouvrir = "" } = {}) {
   if (!root) return;
   root.className = "project-shell__content";
 
@@ -8316,7 +8323,11 @@ export function renderProjectPropositions(root) {
     // Une proposition citée depuis un sujet s'ouvre en arrivant : cliquer un
     // lien qui se contenterait d'afficher la liste ferait chercher à la main ce
     // qu'on venait de désigner.
-    const attendue = String(store.pendingPropositionId || "");
+    // **L'adresse d'abord, le passage de main ensuite.** `pendingPropositionId`
+    // sert depuis un sujet qui cite une proposition, à l'intérieur de
+    // l'application ; l'adresse, elle, se copie et se partage. Les deux mènent
+    // au même geste, et c'est le même endroit qui l'exécute (règle 4).
+    const attendue = String(ouvrir || store.pendingPropositionId || "");
     if (attendue) {
       store.pendingPropositionId = "";
       if (root.isConnected && (view.propositions ?? []).some((entry) => entry.id === attendue)) {

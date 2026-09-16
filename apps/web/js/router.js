@@ -98,7 +98,14 @@ function route() {
 
     store.currentProjectId = projectId || null;
     syncCurrentProjectFromRoute(projectId);
-    renderProjectLayout(root, projectId, tab);
+    // **Un quatrième morceau dit quoi ouvrir en arrivant.**
+    //
+    // `#project/<projet>/sujets/<sujet>` ouvre ce sujet-là ; sans lui, l'onglet
+    // s'ouvre sur sa liste, comme avant. C'est ce qui permet à un écran qui
+    // traverse les projets de mener quelque part : une ligne y désigne un sujet
+    // précis, et l'ouvrir dans son projet est la seule façon de le montrer
+    // entier — avec son fil, ses pièces et son arborescence.
+    renderProjectLayout(root, projectId, tab, { ouvrir: parts[3] || "" });
     return;
   }
 

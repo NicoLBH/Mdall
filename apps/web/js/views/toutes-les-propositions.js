@@ -30,6 +30,7 @@ import { renderPageDeToutesLesPropositions } from "./toutes-les-propositions-pag
 import { fetchMesChantiers } from "../services/project-situations-supabase.js";
 import { listPropositionsDesProjets } from "../services/propositions-supabase.js";
 import { TOUTES_LES_PROPOSITIONS } from "../services/ecrans-transversaux.js";
+import { brancherLaPagination } from "./ui/pagination-transversale.js";
 
 /**
  * Ce que l'écran sait, entre deux rendus.
@@ -37,7 +38,7 @@ import { TOUTES_LES_PROPOSITIONS } from "../services/ecrans-transversaux.js";
  * `propositions` vaut `null` tant qu'on n'a pas lu : ce n'est pas « aucune »,
  * et le tableau le dit plutôt que de rendre une liste vide (règle 5).
  */
-const vue = { propositions: null, nomsDesProjets: {}, cherche: "", erreur: "" };
+const vue = { propositions: null, nomsDesProjets: {}, cherche: "", erreur: "", page: 1 };
 
 export function renderToutesLesPropositions(root) {
   if (!root) return;
@@ -84,12 +85,21 @@ function redessiner(contenu) {
  * défaut qu'on répare une fois par écran qui redessine à la frappe.
  */
 function brancher(contenu) {
+  brancherLaPagination(contenu, "propositions-transversales", (page) => {
+    vue.page = page;
+    redessiner(contenu);
+  });
+
   const champ = contenu.querySelector("[data-propositions-recherche]");
   if (!champ) return;
 
   champ.oninput = (event) => {
     const ou = event.target.selectionStart;
     vue.cherche = String(event.target.value || "");
+    // **Chercher ramène à la première page.** Rester à la page douze d'une
+    // liste qui n'en fait plus trois montre un tableau vide, et l'on croit que
+    // la recherche ne retient rien.
+    vue.page = 1;
     redessiner(contenu);
 
     const remis = contenu.querySelector("[data-propositions-recherche]");

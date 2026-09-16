@@ -1293,7 +1293,14 @@ if (typeof window !== "undefined") {
    Public render
 ========================================================= */
 
-export function renderProjectSubjects(root) {
+/**
+ * @param {object} [options]
+ * @param {string} [options.ouvrir] le sujet à ouvrir en arrivant. Il vient de
+ *   l'adresse — `#project/<projet>/sujets/<sujet>` —, et c'est ce qui permet à
+ *   un écran qui traverse les projets de mener quelque part. Vide, l'onglet
+ *   s'ouvre sur sa liste.
+ */
+export function renderProjectSubjects(root, { ouvrir = "" } = {}) {
   ensureSubjectsCollaboratorsLoaded();
   ensurePropositionRefsLoaded();
   clearProjectActiveScrollSource();
@@ -1364,7 +1371,16 @@ export function renderProjectSubjects(root) {
   reloadSubjectsFromSupabase(root, {
     rerender: true,
     updateModal: true
-  }).catch(() => undefined);
+  })
+    // **On ouvre après la lecture, et pas avant.** `selectSubject` cherche le
+    // sujet dans ce que l'écran a chargé : appelé tout de suite, il ne trouve
+    // rien et s'arrête sans un mot — la ligne cliquée sur l'écran transversal
+    // mènerait alors à la liste, ce qui se lit comme un lien mort.
+    .then(() => {
+      const sien = String(ouvrir || "").trim();
+      if (sien) selectSubject(sien);
+    })
+    .catch(() => undefined);
   bindProjectSituationsRunbar(toolbarHost || root || document);
 
   syncProjectSituationsRunbar({

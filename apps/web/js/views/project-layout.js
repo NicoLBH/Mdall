@@ -48,7 +48,12 @@ function normalizeProjectTab(tab) {
   return resolvedTab;
 }
 
-export function renderProjectLayout(root, projectId, tab) {
+/**
+ * @param {object} [options]
+ * @param {string} [options.ouvrir] ce que l'onglet doit ouvrir en arrivant —
+ *   un sujet, une proposition. Vide, il s'ouvre sur sa liste.
+ */
+export function renderProjectLayout(root, projectId, tab, { ouvrir = "" } = {}) {
   const normalizedTab = normalizeProjectTab(tab);
 
   // Une variante est une **lecture de la mémoire** : elle vit tant qu'on la lit,
@@ -86,11 +91,11 @@ export function renderProjectLayout(root, projectId, tab) {
 
 
     case PROJECT_TAB_IDS.SUBJECTS:
-      renderProjectSubjects(content);
+      renderProjectSubjects(content, { ouvrir });
       break;
 
     case PROJECT_TAB_IDS.PROPOSITIONS:
-      renderProjectPropositions(content);
+      renderProjectPropositions(content, { ouvrir });
       break;
 
     case PROJECT_TAB_IDS.MEMOIRE:
