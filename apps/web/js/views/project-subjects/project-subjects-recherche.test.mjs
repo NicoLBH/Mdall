@@ -1275,3 +1275,32 @@ test("sans les autres écrans, le rail garde ses lectures et ses épinglées", (
   assert.match(html, /nav-list__label">Assigné à moi</, "les lectures restent");
   assert.match(html, /Épinglées/, "et les épinglées aussi");
 });
+
+/**
+ * **Une entrée par nom, et non par identifiant.**
+ *
+ * Un écran qui traverse les projets voit quatre labels « Critique », un par
+ * chantier. Le menu en affichait quatre, indiscernables, et l'on cliquait au
+ * hasard — alors que la barre ne sait écrire que le nom, et que ce nom les
+ * désigne tous les quatre (`query-bar.js`).
+ */
+test("deux valeurs du même nom ne font qu'une entrée de menu", () => {
+  const champ = {
+    key: "label",
+    label: "Labels",
+    multiple: true,
+    values: [
+      { value: "lab-a", token: "critique", label: "Critique" },
+      { value: "lab-b", token: "critique", label: "Critique" },
+      { value: "lab-c", token: "etancheite", label: "Étanchéité" }
+    ]
+  };
+
+  const html = renderFiltreDenTeteHtml({
+    id: "sujets-label", champ, requete: "", poser: (valeur) => `label:${valeur}`
+  });
+
+  const combien = html.split("Critique").length - 1;
+  assert.equal(combien, 1, "une seule fois dans la liste");
+  assert.match(html, /Étanchéité/, "et les autres valeurs sont là");
+});

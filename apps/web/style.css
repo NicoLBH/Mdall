@@ -17266,7 +17266,19 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .project-rail{
   --nav-list-gutter:10px;
   position:fixed; left:0; top:var(--project-rail-top, var(--app-top)); bottom:0;
-  width:var(--project-rail-width, 232px); z-index:0;
+  /* **Au-dessus du contenu, et sous l'en-tête.**
+   *
+   * C'était `z-index:0`, et un `position:fixed` avec un `z-index` chiffré crée
+   * un **contexte d'empilement** : tout ce qui est dedans y reste enfermé, quel
+   * que soit son propre `z-index`. La liste des épinglées du rail replié porte
+   * `z-index:1000` et passait pourtant **sous** le tableau — le contenu vient
+   * après dans le document, au même niveau, et gagne.
+   *
+   * Dix, et non trois : l'en-tête collé d'un tableau est à `z-index:5`, et il
+   * recouvrait la liste à son tour. Le chiffre reste bas — l'en-tête de
+   * l'application est à `--z-header` (100), et le rail doit continuer de passer
+   * dessous quand la page défile. */
+  width:var(--project-rail-width, 232px); z-index:10;
   display:flex; flex-direction:column; gap:4px;
   padding:12px 8px;
   /* Pas de fond : le contenu est décalé de la largeur du rail, rien ne passe
@@ -25012,6 +25024,19 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 /* **Ce qui n'est pas exigé le dit.** Une situation sans requête se remplit à la
    main ; sans cette phrase, un champ sans étoile se lit comme un oubli. */
 .sujets-vue-forme__facultatif{color:var(--text-muted);font-weight:400;}
+
+/* **De la place sous le formulaire, pour que ses menus tiennent.**
+ *
+ * Les menus de filtre de l'en-tête s'ouvrent vers le bas, et le tableau est
+ * tout en haut de la page : la liste dépassait le bas de la fenêtre et s'y
+ * coupait net — on ne voyait que les trois premières valeurs, sans rien pour
+ * dire qu'il y en avait vingt.
+ *
+ * La coupe vient de la boîte qui défile, pas de la coquille du tableau (celle-là
+ * est déjà levée plus haut) : ce qu'il faut, c'est **qu'il y ait où défiler**.
+ * Le remplissage ne se voit pas — il n'y a rien dessous — et il vaut la hauteur
+ * d'un menu ouvert. */
+.project-simple-page--situations .sujets-vue-forme{ padding-bottom:280px; }
 
 /* **Un menu amputé dit pourquoi.** Sans épingler ni supprimer et sans un mot,
    il se lit comme un défaut d'affichage. La phrase est étroite : un menu qui

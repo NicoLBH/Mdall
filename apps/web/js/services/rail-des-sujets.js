@@ -255,7 +255,17 @@ export function railDesSujets({
    * Il se donne plutôt qu'il ne se devine : un rail qui lirait l'écran courant
    * pour choisir son premier mot serait un rail qui connaît les écrans.
    */
-  nomDuDepart = ""
+  nomDuDepart = "",
+  /**
+   * L'icône de cette première entrée, quand ce n'est pas celle des sujets.
+   *
+   * **Le rail des situations portait le cercle des sujets ouverts.** Sa
+   * première entrée ouvre la liste des situations, et le menu de gauche montre
+   * une autre icône pour la même destination : on cherchait l'une en regardant
+   * l'autre. Elle se donne comme le nom, et pour la même raison — un rail qui
+   * lirait l'écran courant serait un rail qui connaît les écrans.
+   */
+  iconeDuDepart = ""
 } = {}) {
   const active = lectureQuOnRegarde(requete, champs);
 
@@ -279,7 +289,7 @@ export function railDesSujets({
     return {
       cle: lecture,
       nom: (lecture === LECTURE.TOUS && texte(nomDuDepart)) || NOMS_DE_LA_LECTURE[lecture],
-      icone: ICONES_DE_LA_LECTURE[lecture],
+      icone: (lecture === LECTURE.TOUS && texte(iconeDuDepart)) || ICONES_DE_LA_LECTURE[lecture],
       requete: laRequete,
       combien: ignores.length > 0 ? null : retenus.length,
       active: lecture === active

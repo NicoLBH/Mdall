@@ -5,7 +5,7 @@ import { renderSideNavGroup, renderSideNavItem } from "../ui/side-nav-layout.js"
 import { renderLightTabs } from "../ui/light-tabs.js";
 import { renderSvgLineChart } from "../../utils/svg-line-chart.js";
 import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
-import { NOM_DU_CARNET } from "../../services/mon-carnet.js";
+import { ICONE_DU_CARNET, NOM_DU_CARNET } from "../../services/mon-carnet.js";
 import {
   renderFiltreDenTeteHtml, renderFormulaireDeVueHtml, renderRailDesSujetsHtml
 } from "../project-subjects/project-subjects-recherche.js";
@@ -117,6 +117,10 @@ export function createProjectSituationsView({
       // **On part de la liste de ses situations, pas de ses sujets.** C'est ce
       // que la première entrée ouvre ici, et le mot doit le dire.
       nomDuDepart: NOM_DES_SITUATIONS,
+      // **Celle du menu de gauche**, pour la même destination. Le rail portait
+      // le cercle des sujets ouverts, et l'on cherchait l'une en regardant
+      // l'autre.
+      iconeDuDepart: ICONE_DU_CARNET,
       // Vues, Situations, Objectifs, Labels sont les écrans de l'onglet Sujets
       // d'un projet. Le carnet n'en a aucun : les proposer ferait quatre portes
       // qui ne mènent nulle part.

@@ -28,9 +28,15 @@
  * @typedef {object} QueryField
  * @property {string} key le mot avant les deux-points, tel qu'on le tape
  * @property {string} label son nom pour l'écran
- * @property {{value: string, label: string, token?: string}[]} values les valeurs
- *   admises. `token` est ce qui s'écrit dans la barre — accentué, lisible — quand
- *   il diffère de la valeur interne.
+ * @property {{value: string, label: string, token?: string, seule?: boolean}[]} values
+ *   les valeurs admises. `token` est ce qui s'écrit dans la barre — accentué,
+ *   lisible — quand il diffère de la valeur interne.
+ *
+ *   **Deux valeurs peuvent s'écrire pareil.** Un écran qui traverse les projets
+ *   voit quatre labels « Critique », un par chantier : la barre ne sait écrire
+ *   que le nom, et ce nom les désigne donc **toutes**. `seule: true` fait
+ *   exception — c'est ce qu'il faut pour une valeur réservée comme `@moi`, qui
+ *   s'écrit « moi » alors que quelqu'un peut s'appeler Moi.
  * @property {boolean} [multiple] plusieurs valeurs peuvent coexister. Par défaut
  *   non : reposer deux fois le même champ **remplace**, parce qu'une affirmation
  *   n'a qu'une nature et qu'offrir d'en cocher deux promet un résultat vide.
@@ -70,13 +76,63 @@ function champPour(fields, mot) {
  * fois la même casse.
  */
 function valeurPour(champ, mot) {
+  return valeursPour(champ, mot)[0] ?? null;
+}
+
+/**
+ * **Toutes** les valeurs admises que ce mot désigne.
+ *
+ * ## Le défaut qu'elle répare
+ *
+ * `valeurPour` rendait la **première**, et c'était juste tant qu'un écran ne
+ * regardait qu'un projet : deux labels n'y portent pas le même nom. Un écran
+ * qui traverse les projets, lui, en voit autant que de projets — « Critique »
+ * existe dans quatre chantiers, sous quatre identifiants.
+ *
+ * Or la barre ne sait écrire qu'un **nom** : `label:critique`. Elle ne
+ * retenait donc que le premier des quatre, et les sujets des trois autres
+ * disparaissaient sans un mot. Cocher « Critique » dans le menu rendait une
+ * liste vide — on cherchait la faute dans la requête, dans les labels, partout
+ * sauf là où elle était.
+ *
+ * ## Pourquoi ce n'est pas « deviner au plus proche »
+ *
+ * Ce module refuse d'interpréter : `nature:zoiseau` reste du texte. Ici rien
+ * n'est deviné — les quatre valeurs **portent le même nom**, et l'écrire les
+ * désigne toutes les quatre, exactement. C'est la question qu'on pose en
+ * cochant « Critique » : les sujets critiques, où qu'ils soient.
+ */
+function valeursPour(champ, mot) {
   const cherche = pli(mot);
-  return (champ?.values ?? []).find(
+  const admises = (champ?.values ?? []).filter(
     (valeur) =>
       pli(valeur.value) === cherche ||
       pli(valeur.label) === cherche ||
       pli(jetonDe(valeur)) === cherche
-  ) ?? null;
+  );
+
+  // **Une valeur réservée ne se confond avec aucune autre.** `@moi` s'écrit
+  // « moi », et quelqu'un peut s'appeler Moi : les réunir ferait appliquer le
+  // filtre sur cette personne-là quand on ne sait pas qui regarde, au lieu de
+  // l'annoncer sans l'appliquer (règle 5). La première réservée gagne, comme
+  // avant ce changement.
+  const reservee = admises.find((valeur) => valeur.seule === true);
+  return reservee ? [reservee] : admises;
+}
+
+/**
+ * Les valeurs qui s'écrivent comme celle-ci — elle comprise.
+ *
+ * Deux projets portent un label du même nom : la barre ne peut écrire que ce
+ * nom, et les deux identifiants vont donc **ensemble**. Cocher les pose tous
+ * les deux, décocher les retire tous les deux ; les séparer ferait un filtre
+ * qu'on ne peut plus décocher.
+ */
+function memesJetons(champ, valeur) {
+  const sienne = (champ?.values ?? []).find((candidate) => pli(candidate.value) === pli(valeur));
+  if (!sienne) return [texte(valeur)];
+
+  return valeursPour(champ, jetonDe(sienne)).map((autre) => texte(autre.value)).filter(Boolean);
 }
 
 /**
@@ -143,7 +199,12 @@ export function parseQuery(query = "", fields = []) {
     }
 
     const champ = champPour(fields, morceau.slice(0, coupure));
-    const valeur = champ ? valeurPour(champ, morceau.slice(coupure + 1)) : null;
+    // **Toutes celles que ce mot nomme.** Un écran qui traverse les projets
+    // voit quatre labels « Critique », un par chantier ; la barre ne sait
+    // écrire que le nom, et n'en retenir qu'un faisait disparaître les sujets
+    // des trois autres sans un mot.
+    const valeurs = champ ? valeursPour(champ, morceau.slice(coupure + 1)) : [];
+    const valeur = valeurs[0] ?? null;
 
     if (!champ || !valeur) {
       mots.push(morceau);
@@ -168,9 +229,13 @@ export function parseQuery(query = "", fields = []) {
     }
 
     // À choix multiple, on empile — sans doublon : `label:x label:x` est une
-    // répétition, pas deux conditions.
+    // répétition, pas deux conditions. Les homonymes entrent **ensemble** :
+    // c'est la question qu'on pose en cochant « Critique ».
     const deja = Array.isArray(filtres[champ.key]) ? filtres[champ.key] : [];
-    filtres[champ.key] = deja.includes(valeur.value) ? deja : [...deja, valeur.value];
+    filtres[champ.key] = [
+      ...deja,
+      ...valeurs.map((admise) => admise.value).filter((sienne) => !deja.includes(sienne))
+    ];
   }
 
   return { filters: filtres, text: mots.join(" "), inconnus };
@@ -199,11 +264,18 @@ export function phraseDesValeursInconnues(inconnus = []) {
  * frappe est illisible, et deux requêtes équivalentes doivent s'écrire pareil.
  */
 export function formatQuery({ filters = {}, text = "" } = {}, fields = []) {
-  const jetons = (fields ?? []).flatMap((champ) => filterValues(filters, champ.key)
-    .map((brute) => {
-      const valeur = valeurPour(champ, brute);
-      return `${champ.key}:${valeur ? jetonDe(valeur) : brute}`;
-    }));
+  const jetons = (fields ?? []).flatMap((champ) => {
+    const dits = filterValues(filters, champ.key)
+      .map((brute) => {
+        const valeur = valeurPour(champ, brute);
+        return `${champ.key}:${valeur ? jetonDe(valeur) : brute}`;
+      });
+
+    // **Un jeton par nom, et non un par identifiant.** Quatre labels
+    // « Critique » s'écrivent tous `label:critique` : les répéter quatre fois
+    // rendrait une barre illisible pour une seule condition.
+    return [...new Set(dits)];
+  });
 
   return [...jetons, texte(text)].filter(Boolean).join(" ");
 }
@@ -246,9 +318,14 @@ export function toggleFilter(query = "", fields = [], key = "", value = "") {
     return withFilter(query, fields, key, posees.includes(voulue) ? "" : voulue);
   }
 
-  const suivantes = posees.includes(voulue)
-    ? posees.filter((posee) => posee !== voulue)
-    : [...posees, voulue];
+  // **On coche un nom, pas un identifiant.** Quatre chantiers portent un label
+  // « Critique » : la barre ne sait écrire que `label:critique`, et les quatre
+  // identifiants vont donc ensemble. Ne retirer que celui qu'on a cliqué
+  // laissait le jeton en place — un filtre qu'on ne peut plus décocher.
+  const soeurs = memesJetons(champ, voulue);
+  const suivantes = soeurs.some((soeur) => posees.includes(soeur))
+    ? posees.filter((posee) => !soeurs.includes(posee))
+    : [...posees, ...soeurs.filter((soeur) => !posees.includes(soeur))];
 
   const suivant = { ...filters };
   if (suivantes.length) suivant[champ.key] = suivantes;

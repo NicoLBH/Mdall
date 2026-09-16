@@ -91,6 +91,8 @@ export function renderRailDesSujetsHtml({
    * part de ses sujets. Le reste du rail ne bouge pas.
    */
   nomDuDepart = "",
+  /** Son icône, quand ce n'est pas celle des sujets : celle des situations. */
+  iconeDuDepart = "",
   /**
    * Les autres écrans du domaine — Vues, Situations, Objectifs, Labels.
    *
@@ -103,7 +105,7 @@ export function renderRailDesSujetsHtml({
   autresEcrans = true
 } = {}) {
   const { lectures } = railDesSujets({
-    sujets, champs, requete, meta, moi, maintenant, nomDuDepart
+    sujets, champs, requete, meta, moi, maintenant, nomDuDepart, iconeDuDepart
   });
   const posees = epinglesDuRail(epingles, requete);
 
@@ -331,6 +333,27 @@ export function renderRechercheDesSujetsHtml({
  * c'est la question qu'on se pose en ouvrant le menu. « Et » rendrait presque
  * toujours zéro.
  */
+/**
+ * Les valeurs d'un champ, une seule par jeton écrit.
+ *
+ * **Deux valeurs qui s'écrivent pareil sont une seule entrée de menu.** Elles
+ * existent — quatre chantiers, quatre labels « Critique » —, mais la barre ne
+ * sait écrire qu'un nom, et `query-bar.js` fait de ce nom une condition qui les
+ * désigne toutes. En montrer quatre ferait choisir entre des entrées
+ * indiscernables dont trois seraient sans effet.
+ */
+function dedoubleesParJeton(valeurs = []) {
+  const vues = new Map();
+
+  for (const valeur of Array.isArray(valeurs) ? valeurs : []) {
+    const jeton = repli(valeur?.token ?? valeur?.value);
+    if (!jeton || vues.has(jeton)) continue;
+    vues.set(jeton, valeur);
+  }
+
+  return [...vues.values()];
+}
+
 export function renderFiltreDenTeteHtml({
   id, champ, requete = "", enCours = [], poser = null, cherche = "", decorDe = null
 } = {}) {
@@ -343,7 +366,12 @@ export function renderFiltreDenTeteHtml({
   // Ce qu'on tape dans le champ de recherche restreint la liste, et rien
   // d'autre : on cherche une valeur, on ne cherche pas des sujets.
   const retenu = repli(cherche);
-  const proposees = champ.values.filter((valeur) => !retenu
+  // **Une entrée par nom, et non par identifiant.** Un écran qui traverse les
+  // projets voit quatre labels « Critique », un par chantier : le menu en
+  // affichait quatre, indiscernables, et l'on cliquait au hasard. La barre ne
+  // sait écrire que le nom, et ce nom les désigne tous les quatre — une entrée
+  // suffit donc, et elle les pose tous.
+  const proposees = dedoubleesParJeton(champ.values).filter((valeur) => !retenu
     || repli(valeur.label).includes(retenu) || repli(valeur.token ?? valeur.value).includes(retenu));
 
   const entrees = proposees.map((valeur) => {
