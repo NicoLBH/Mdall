@@ -18,7 +18,7 @@
  * La mise en page est dans `mon-carnet-coquille.js`, pour qu'un test l'exécute.
  */
 
-import { renderCarnetShell } from "./mon-carnet-coquille.js";
+import { renderCoquilleTransversale } from "./mon-carnet-coquille.js";
 import { renderProjectSituations } from "./project-situations.js";
 import { renderProjectSituationsTopBanner } from "./project-situations-runbar.js";
 import { mountProjectShellChrome } from "./project-shell-chrome.js";
@@ -26,7 +26,7 @@ import { mountProjectShellChrome } from "./project-shell-chrome.js";
 export function renderMonCarnet(root) {
   if (!root) return;
 
-  root.innerHTML = renderCarnetShell({ banniere: renderProjectSituationsTopBanner() });
+  root.innerHTML = renderCoquilleTransversale({ banniere: renderProjectSituationsTopBanner() });
 
   // La coquille du projet, sans projet. `mountProjectShellChrome` ne tient que
   // l'en-tête de vue et le repliement au défilement : ni l'un ni l'autre ne

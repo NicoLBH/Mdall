@@ -1,5 +1,8 @@
 import { svgIcon } from "../ui/icons.js";
 import { ICONE_DU_CARNET, NOM_DU_CARNET, ROUTE_DU_CARNET } from "../services/mon-carnet.js";
+import {
+  TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
+} from "../services/ecrans-transversaux.js";
 
 function parseHash() {
   const hash = String(location.hash || "").replace(/^#/, "").trim();
@@ -13,8 +16,13 @@ function getNavModel() {
 
   return {
     activeDashboard: active === "dashboard",
-    activeProjects: active === "projects" || active === "project",
-    activeSituations: active === "situations"
+    // **Un projet ouvert allume « Tous les projets ».** On y est arrivé par
+    // cette liste ; l'entrée est le chemin du retour, et l'éteindre ferait
+    // croire qu'on a quitté la branche.
+    activeProjects: active === cheminDe(TOUS_LES_PROJETS) || active === "project",
+    activeSituations: active === "situations",
+    activeSujets: active === cheminDe(TOUS_LES_SUJETS),
+    activePropositions: active === cheminDe(TOUTES_LES_PROPOSITIONS)
   };
 }
 
@@ -54,7 +62,29 @@ export function renderGlobalNav() {
 
         <div class="global-nav__group settings-nav__group settings-nav__group--project">
           ${renderNavLink({ href: "#dashboard", icon: svgIcon("home", { className: "octicon octicon-home" }), label: "Accueil", isActive: model.activeDashboard })}
-          ${renderNavLink({ href: "#projects", icon: repoIcon(), label: "Projets", isActive: model.activeProjects })}
+          ${/*
+            **Les trois façons de tout regarder, sous l'accueil.** Mdall range
+            presque tout par projet ; on ne travaille pourtant pas un projet à
+            la fois. Ces entrées ouvrent la même matière sans la cloisonner.
+          */""}
+          ${renderNavLink({
+            href: TOUS_LES_SUJETS.route,
+            icon: svgIcon(TOUS_LES_SUJETS.icone, { className: `octicon octicon-${TOUS_LES_SUJETS.icone}` }),
+            label: TOUS_LES_SUJETS.nom,
+            isActive: model.activeSujets
+          })}
+          ${renderNavLink({
+            href: TOUTES_LES_PROPOSITIONS.route,
+            icon: svgIcon(TOUTES_LES_PROPOSITIONS.icone, {
+              className: `octicon octicon-${TOUTES_LES_PROPOSITIONS.icone}`
+            }),
+            label: TOUTES_LES_PROPOSITIONS.nom,
+            isActive: model.activePropositions
+          })}
+          ${renderNavLink({
+            href: TOUS_LES_PROJETS.route, icon: repoIcon(),
+            label: TOUS_LES_PROJETS.nom, isActive: model.activeProjects
+          })}
           ${renderNavLink({ href: ROUTE_DU_CARNET, icon: svgIcon(ICONE_DU_CARNET, { className: `octicon octicon-${ICONE_DU_CARNET}` }), label: NOM_DU_CARNET, isActive: model.activeSituations })}
         </div>
       </div>

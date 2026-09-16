@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { renderCarnetShell } from "./mon-carnet-coquille.js";
+import { renderCoquilleTransversale } from "./mon-carnet-coquille.js";
 import { ROUTE_DU_CARNET } from "../services/mon-carnet.js";
 import { PROJECT_TABS } from "../constants.js";
 
@@ -31,7 +31,7 @@ const JS = join(VUES, "..");
  * qu'elle remplit.
  */
 test("la coquille du carnet est celle du projet", () => {
-  const html = renderCarnetShell();
+  const html = renderCoquilleTransversale();
 
   for (const classe of [
     "project-shell",
@@ -52,7 +52,7 @@ test("la coquille du carnet est celle du projet", () => {
  * sait où le poser, pas comment le fabriquer.
  */
 test("le bandeau se pose sans que la coquille sache d'où il vient", () => {
-  const html = renderCarnetShell({ banniere: "<div id=\"essai-banniere\"></div>" });
+  const html = renderCoquilleTransversale({ banniere: "<div id=\"essai-banniere\"></div>" });
 
   assert.match(html, /id="essai-banniere"/);
   // Avant le contenu, comme dans la coquille d'un projet.
@@ -67,7 +67,7 @@ test("le bandeau se pose sans que la coquille sache d'où il vient", () => {
  * place d'une ligne de contenu pour le dire.
  */
 test("le carnet ne porte pas de barre d'onglets à une seule entrée", () => {
-  const html = renderCarnetShell();
+  const html = renderCoquilleTransversale();
 
   assert.ok(!html.includes("project-tabs"), "aucune barre d'onglets");
   assert.ok(!html.includes("project-context-header"), "ni son en-tête");

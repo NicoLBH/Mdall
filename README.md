@@ -32,6 +32,15 @@ le projet sait, les trois manières dont il l'apprend — un document, un calcul
 une décision —, et pourquoi une décision ne remplace jamais une conclusion sans
 le dire : [`docs/lobjet-de-la-connaissance.md`](docs/lobjet-de-la-connaissance.md).
 
+## Les écrans qui traversent les projets
+
+Mdall range presque tout par projet, et l'on ne travaille pourtant pas un projet
+à la fois : « qu'est-ce qui est bloqué ? » ne s'y répond pas en ouvrant quinze
+onglets. Les trois façons de tout regarder — tous les projets, tous les sujets,
+toutes les propositions —, ce qu'elles partagent et ce qu'elles refusent de
+faire :
+[`docs/les-ecrans-qui-traversent-les-projets.md`](docs/les-ecrans-qui-traversent-les-projets.md).
+
 ## À traiter plus tard
 
 Les chantiers vus, compris, et repoussés — avec la raison, ce qu'ils

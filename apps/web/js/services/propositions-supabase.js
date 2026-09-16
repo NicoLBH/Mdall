@@ -86,6 +86,60 @@ export async function listPropositions(projectId, { status = null } = {}) {
   }
 }
 
+/**
+ * Les propositions de plusieurs projets, la plus récente d'abord.
+ *
+ * ## Pourquoi ce n'est pas `listPropositions` en boucle
+ *
+ * Le carnet lit les sujets **un projet à la fois** parce que leur charge
+ * assemble cinq lectures — les labels, les objectifs, les assignés, les liens,
+ * les signaux. Une proposition, elle, est une ligne : `in.(…)` les prend toutes
+ * d'un coup, et le compte des documents avec. Quinze projets font deux requêtes,
+ * pas trente.
+ *
+ * ## Vide n'est pas « aucune »
+ *
+ * `null` quand la lecture échoue, comme `listPropositions` : l'écran distingue
+ * une liste vide d'une base injoignable, et le dit (règle 5). Sans projet à
+ * lire, en revanche, il n'y a réellement aucune proposition — c'est `[]`.
+ *
+ * @param {string[]} projectIds les projets à lire
+ * @returns {Promise<object[]|null>} des lignes portant `documentCount`
+ */
+export async function listPropositionsDesProjets(projectIds = []) {
+  const ids = [...new Set((Array.isArray(projectIds) ? projectIds : [])
+    .map((valeur) => String(valeur ?? "").trim())
+    .filter(Boolean))];
+  if (!ids.length) return [];
+
+  const dans = `in.(${ids.join(",")})`;
+
+  try {
+    const [rows, documents] = await Promise.all([
+      request("propositions", {
+        params: { select: COLUMNS, project_id: dans, order: "created_at.desc" }
+      }),
+      request("documents", {
+        params: {
+          select: "id,proposition_id",
+          project_id: dans,
+          proposition_id: "not.is.null",
+          deleted_at: "is.null"
+        }
+      })
+    ]);
+
+    const counts = new Map();
+    for (const document of documents ?? []) {
+      counts.set(document.proposition_id, (counts.get(document.proposition_id) ?? 0) + 1);
+    }
+
+    return (rows ?? []).map((row) => ({ ...row, documentCount: counts.get(row.id) ?? 0 }));
+  } catch {
+    return null;
+  }
+}
+
 /** Une proposition et ses documents. */
 export async function loadProposition(propositionId) {
   if (!propositionId) return null;

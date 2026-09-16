@@ -570,6 +570,14 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 .badge--p3,.badge--medium{color:#c7f0d8;border-color:rgba(63,185,80,.45);background:rgba(63,185,80,.12);}
 .badge--low{color:#d2e4ff;border-color:rgba(56,139,253,.45);background:rgba(56,139,253,.12);}
 
+/* **Les trois tons d'un état.** `success` et `muted` étaient déjà demandés par
+   le tableau des situations, et n'existaient pas : les pastilles sortaient au
+   ton neutre, et « Ouvert » se lisait comme « Fermé ». `done` est celui d'une
+   proposition fusionnée — ni en cours, ni abandonnée. */
+.badge--success{color:#c7f0d8;border-color:rgba(63,185,80,.45);background:rgba(63,185,80,.12);}
+.badge--done{color:#e2d5ff;border-color:rgba(163,113,247,.45);background:rgba(163,113,247,.12);}
+.badge--muted{color:var(--muted);border-color:var(--border);background:rgba(110,118,129,.12);}
+
 
 
 
