@@ -38,6 +38,7 @@
  */
 
 import { store } from "../../../store.js";
+import { reprendreLaQuestion } from "../../../services/question-de-laccueil.js";
 import { messageQuiADemande } from "./fil.js";
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { copierDansLePressePapiers, marquerCopie, ICONES } from "../../ui/bouton-copier.js";
@@ -206,8 +207,22 @@ function ensureState() {
   return store.ui.assistant;
 }
 
-/** L'identifiant du projet en base — celui auquel les discussions se rattachent. */
+/**
+ * L'identifiant du projet en base — celui auquel les discussions se rattachent.
+ *
+ * Trois réponses, et elles ne se confondent pas :
+ *
+ *  - un identifiant : ce projet-là ;
+ *  - `null` : **aucun projet**, l'écran est celui du Copilote transverse. Il y
+ *    a des discussions à lire, elles n'en portent simplement aucun ;
+ *  - `""` : on est dans un projet, et on n'a pas su le relier à la base. Il n'y
+ *    a rien à lire, et rien à écrire non plus.
+ *
+ * Confondre les deux derniers ferait un écran transverse éternellement vide —
+ * sans jamais dire pourquoi.
+ */
 async function projetEnBase() {
+  if (!String(store.currentProjectId || "").trim()) return null;
   return (await resolveCurrentBackendProjectId().catch(() => "")) || "";
 }
 
@@ -224,7 +239,7 @@ async function chargerConversations(root) {
 
   try {
     const projet = await projetEnBase();
-    etat.conversations = projet ? await listConversations(projet) : [];
+    etat.conversations = projet === "" ? [] : await listConversations(projet);
   } catch (error) {
     // Une lecture qui échoue n'efface rien : on garde ce qu'on avait, et on le
     // dit. Afficher une liste vide ferait croire qu'il n'y a jamais rien eu.
@@ -245,7 +260,7 @@ async function enregistrer(etat, message) {
   try {
     if (!etat.conversationId) {
       const projet = await projetEnBase();
-      if (!projet) throw new Error("Ce projet n'est pas encore relié à la base.");
+      if (projet === "") throw new Error("Ce projet n'est pas encore relié à la base.");
       const creee = await createConversation(projet);
       etat.conversationId = creee.id;
       etat.conversations = [creee, ...etat.conversations];
@@ -352,7 +367,7 @@ export async function transcrireLaDiscussion(id) {
   const { versionLisible } = await import("../../../services/version-du-site.js");
   const lignes = [
     `# ${entete?.title || "Discussion sans titre"}`,
-    `Projet : ${cleProjet()} — ${messages.length} message${messages.length > 1 ? "s" : ""}`,
+    `Projet : ${cleProjet() || "aucun (discussion transverse)"} — ${messages.length} message${messages.length > 1 ? "s" : ""}`,
     `Version servie : ${await versionLisible().catch(() => "inconnue")}`,
     // D'où sort ce texte, et ce qu'il porte encore.
     //
@@ -1253,13 +1268,23 @@ function renderJetons(msg, index) {
  * première réponse ; celle-ci dit d'où elle parle, donc sur quoi la juger.
  */
 function renderAccueil() {
+  // **Sans projet, il ne faut pas promettre une mémoire.** Cette invite dit
+  // d'où le copilote parle, donc sur quoi le juger : la recopier telle quelle
+  // sur l'écran transverse annoncerait une mémoire qui n'y est pas, et la
+  // première réponse passerait pour un oubli plutôt que pour une limite dite.
+  const transversal = !cleProjet();
+
   return `
     <div class="copilote-empty" id="copiloteAccueil">
       <span class="copilote-empty__mark" aria-hidden="true">${svgIcon("copilot", { width: 32, height: 32 })}</span>
-      <p class="copilote-empty__title">Le copilote de ce projet</p>
-      <p class="copilote-empty__sub">
-        Il lit la mémoire de ce projet — données de base, contraintes, hypothèses, constats —
-        avant de répondre. Ce qui n'y figure pas, il le dira plutôt que de l'inventer.
+      <p class="copilote-empty__title">${
+        transversal ? "Le copilote, tous projets confondus" : "Le copilote de ce projet"}</p>
+      <p class="copilote-empty__sub">${transversal
+        ? `Cette discussion ne porte sur aucun chantier : il connaît vos projets et
+           votre façon de travailler, pas leurs valeurs. Pour une altitude ou un
+           classement, il dira lequel ouvrir.`
+        : `Il lit la mémoire de ce projet — données de base, contraintes, hypothèses, constats —
+           avant de répondre. Ce qui n'y figure pas, il le dira plutôt que de l'inventer.`}
       </p>
     </div>
   `;
@@ -1606,7 +1631,9 @@ function render(root) {
                 class="copilote-input"
                 rows="3"
                 ${etat.isSending ? "disabled" : ""}
-                placeholder="${etat.isSending ? "Le copilote réfléchit…" : "Posez une question sur ce projet…"}"
+                placeholder="${etat.isSending
+                  ? "Le copilote réfléchit…"
+                  : (cleProjet() ? "Posez une question sur ce projet…" : "Posez une question, tous projets confondus…")}"
               >${escapeHtml(etat.draft || "")}</textarea>
 
               <div class="copilote-compose__bar">
@@ -2518,7 +2545,12 @@ function bind(root) {
  * redimensionnement.
  */
 function caler(root) {
-  const page = root.closest(".project-simple-page--studio");
+  // **La coque, et non l'écran qui la porte.** Cette ligne nommait
+  // `--studio` : le Copilote transverse a la même mise en page et la même
+  // classe de base, mais pas ce suffixe-là, et la hauteur n'y aurait jamais été
+  // écrite — le fil aurait poussé la page, sans un mot. On cherche donc la
+  // classe que les deux écrans ont, et qu'un troisième aura.
+  const page = root.closest(".project-simple-page");
   if (!page) return;
 
   const haut = page.getBoundingClientRect().top;
@@ -2543,7 +2575,28 @@ export function renderCopilote(root, { reload = false, garderLeDefilement = fals
   if (!root) return;
 
   const etat = ensureState();
+
+  /**
+   * **La question commencée à l'accueil.**
+   *
+   * Elle se reprend **après** `ensureState`, et c'est tout l'intérêt : changer
+   * de projet remet le brouillon à zéro, et l'écrire avant se serait effacé
+   * soi-même dans le seul cas où l'on a choisi un projet à l'accueil.
+   */
+  const reprise = reprendreLaQuestion();
+  if (reprise) etat.draft = reprise;
+
   render(root);
+
+  // Le curseur suit la question : on continue de taper là où l'on avait
+  // commencé, sans avoir à cliquer dans un champ qui contient déjà du texte.
+  if (reprise) {
+    const saisie = root.querySelector("#copiloteInput");
+    if (saisie) {
+      saisie.focus();
+      saisie.setSelectionRange(saisie.value.length, saisie.value.length);
+    }
+  }
 
   caler(root);
   if (calage) window.removeEventListener("resize", calage);

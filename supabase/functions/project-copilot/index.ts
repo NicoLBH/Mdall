@@ -298,7 +298,16 @@ serve(async (req) => {
   const projectId = texte(payload.project_id);
   const question = texte(payload.question);
 
-  if (!projectId) return json({ error: "project_id est requis." }, 400);
+  // **Une discussion peut n'être d'aucun projet.** « Où en suis-je ? »,
+  // « comment je m'y prends pour une descente de charges ? » n'appartiennent à
+  // aucun chantier, et les poser obligeait à en ouvrir un au hasard — la
+  // réponse arrivait alors chargée d'une mémoire qui n'avait rien à y voir.
+  //
+  // Ce que le navigateur envoie à la place de la mémoire est une **façon de
+  // travailler** (`profil-de-travail.js`), qui dit en toutes lettres qu'elle ne
+  // porte aucune valeur de projet. Ici, rien à vérifier de plus : il n'y a pas
+  // de projet à relire, donc rien à autoriser — et la politique des
+  // discussions, elle, n'a jamais regardé le projet.
   if (!question) return json({ error: "La question est vide." }, 400);
 
   const authHeader = req.headers.get("Authorization") ?? req.headers.get("authorization") ?? "";
@@ -310,14 +319,19 @@ serve(async (req) => {
     global: { headers: { Authorization: authHeader } }
   });
 
-  const { data: projet, error: projetError } = await authClient
-    .from("projects")
-    .select("id,name")
-    .eq("id", projectId)
-    .maybeSingle();
+  let projet: { id?: string; name?: string } | null = null;
 
-  if (projetError) return json({ error: "Forbidden", details: projetError.message }, 403);
-  if (!projet?.id) return json({ error: "Forbidden" }, 403);
+  if (projectId) {
+    const { data, error: projetError } = await authClient
+      .from("projects")
+      .select("id,name")
+      .eq("id", projectId)
+      .maybeSingle();
+
+    if (projetError) return json({ error: "Forbidden", details: projetError.message }, 403);
+    if (!data?.id) return json({ error: "Forbidden" }, 403);
+    projet = data;
+  }
 
   if (!openAiApiKey) {
     return json({ error: "Le copilote n'est pas configuré (clé du modèle absente)." }, 503);
@@ -342,8 +356,12 @@ serve(async (req) => {
     .filter((entree) => entree.titre);
 
   const contexte = [
-    `# Projet\n\n${texte(projet.name) || "sans nom"}`,
-    memoire || "# Mémoire du projet\n\n(aucune mémoire transmise)",
+    projet
+      ? `# Projet\n\n${texte(projet.name) || "sans nom"}`
+      : "# Aucun projet\n\nCette discussion ne porte sur aucun chantier en particulier.",
+    memoire || (projet
+      ? "# Mémoire du projet\n\n(aucune mémoire transmise)"
+      : "# Façon de travailler\n\n(rien n'a été transmis)"),
     `# Ce que l'utilisateur regarde\n\nCeci dit ce qui est affiché, jamais ce qui est vrai. N'en tire aucune affirmation sur le projet.\n\n\`\`\`json\n${ecran}\n\`\`\``,
     history.length
       ? `# La conversation jusqu'ici\n\n${history.map((message) => `**${message.role === "user" ? "Utilisateur" : "Toi"}** : ${message.content}`).join("\n\n")}`

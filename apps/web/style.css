@@ -25727,3 +25727,95 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .aide__titre{ display:block; margin-bottom:4px; color:var(--text); font-size:12.5px; }
 .aide__corps strong{ color:var(--text); }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   L'écran d'accueil.
+
+   Il répond à trois questions, et chacune a sa colonne : où je travaille en ce
+   moment (le rail), ce que je veux demander (le Copilote), ce qui vient de se
+   passer (les actualités).
+
+   Rien n'est redessiné de neuf : le rail est celui de tous les rails, le bouton
+   vert est `gh-btn--primary`, le champ de recherche est `gh-input`, la saisie
+   reprend les classes du Copilote. Ce qui suit ne fait que les **poser** — une
+   largeur inventée ici serait à recalibrer à chaque retouche des originaux, et
+   finirait en retard sur eux.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Le bouton et le champ s'alignent sur les entrées du rail : même gouttière à
+   gauche, même retrait. Les décaler d'un pixel se voit tout de suite, parce que
+   la liste des projets est juste dessous. */
+.accueil-rail__nouveau,
+.accueil-rail__recherche{
+  margin:0 var(--nav-list-gutter, 10px) 6px;
+}
+.accueil-rail__nouveau{ display:flex; width:auto; }
+.accueil-rail__vide{
+  margin:6px var(--nav-list-gutter, 10px);
+  color:var(--muted); font-size:12px; line-height:18px;
+}
+/* Replié, le rail n'a plus la place d'un libellé ni d'un champ : il ne reste
+   que les icônes, et un bouton vert qui dirait « Nouveau » sur 66 px déborderait
+   sur le trait. */
+.project-rail.is-collapsed .accueil-rail__recherche,
+.project-rail.is-collapsed .accueil-rail__vide,
+.project-rail.is-collapsed .accueil-rail__nouveau span{ display:none; }
+.project-rail.is-collapsed .accueil-rail__nouveau{ justify-content:center; padding:6px; }
+
+/* Deux colonnes : la question au centre, ce qui vient de se passer à droite.
+   La colonne de droite est fixe — une liste de dates qui s'étire sur la moitié
+   de l'écran se lit plus mal, pas mieux. */
+.accueil-colonnes{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) 300px;
+  gap:24px;
+  align-items:start;
+  padding:24px 0;
+}
+/* Sous 1080 px, la colonne de droite passe dessous plutôt que de rétrécir : à
+   240 px, un titre de proposition tient sur quatre lignes. */
+@media (max-width: 1080px){
+  .accueil-colonnes{ grid-template-columns:minmax(0, 1fr); }
+}
+
+.accueil-copilote{
+  display:flex; flex-direction:column; gap:16px;
+  max-width:720px; margin:0 auto; width:100%;
+}
+/* L'invite est centrée, comme sur l'écran du Copilote quand rien n'a encore été
+   dit : c'est la même situation, et la même figure. */
+.accueil-copilote .copilote-empty{ margin:0 auto; }
+.accueil-copilote__compose{ width:100%; }
+
+.accueil-actualites{
+  display:flex; flex-direction:column; gap:8px;
+  padding:16px;
+  border:1px solid var(--border); border-radius:12px;
+  background:var(--bg-elev, transparent);
+}
+.accueil-actualites__titre{
+  margin:0; color:var(--text); font-size:13px; font-weight:600;
+}
+.accueil-actualites__vide{ margin:0; color:var(--muted); font-size:12px; }
+.accueil-actualites__liste{
+  list-style:none; margin:0; padding:0;
+  display:flex; flex-direction:column; gap:12px;
+}
+
+.accueil-actualite{ display:flex; align-items:flex-start; gap:8px; }
+.accueil-actualite__icone{ display:inline-flex; flex:0 0 auto; margin-top:2px; color:var(--muted); }
+.accueil-actualite__corps{ min-width:0; }
+/* Le titre ne se souligne pas — ni ici, ni dans les tableaux : c'est une ligne
+   qu'on parcourt, et une page de soulignés se lit comme un formulaire. */
+.accueil-actualite__quoi{
+  display:block; color:var(--text); font-size:13px; font-weight:600;
+  line-height:18px; text-decoration:none;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.accueil-actualite__quoi:hover{ color:var(--accent); }
+.accueil-actualite__ou{
+  margin:2px 0 0; display:flex; gap:6px; align-items:baseline;
+  color:var(--muted); font-size:12px; line-height:18px;
+}
+.accueil-actualite__projet{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.accueil-actualite__quand{ flex:0 0 auto; }

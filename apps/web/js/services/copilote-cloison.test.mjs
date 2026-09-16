@@ -58,7 +58,11 @@ function fichiersJs(dossier, acc = []) {
 const LECTEURS_AUTORISES = new Map([
   ["apps/web/assets/js/auth.js", "efface tout à la déconnexion"],
   ["apps/web/js/services/copilote-service.js", "envoie les titres des autres discussions, jamais leur contenu"],
-  ["apps/web/js/views/project-studio.js", "affiche les titres dans le rail"],
+  // Le rail des discussions a quitté l'Atelier : le Copilote transverse montre
+  // le même, et deux copies d'un menu qui **efface sans retour** divergent au
+  // premier correctif. Il n'en lit que les titres, comme avant.
+  ["apps/web/js/views/ui/rail-des-discussions.js", "affiche les titres dans le rail, dans les deux écrans"],
+  ["apps/web/js/views/ui/rail-des-discussions-rendu.js", "écrit ces mêmes titres dans le balisage"],
   ["apps/web/js/views/studio/copilote/copilote.js", "l'écran du copilote lui-même"],
   // Il n'en lit que le **titre**, pour nommer le sujet qu'on ouvre à partir
   // d'une discussion : le nom du sujet doit être celui de la discussion, sans

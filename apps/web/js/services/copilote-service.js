@@ -43,6 +43,7 @@
 
 import { store } from "../store.js";
 import { buildAssistContext } from "./copilote-context.js";
+import { contexteTransversal } from "./copilote-contexte-transversal.js";
 import { executerUtilitaire } from "./utilitaires-service.js";
 import { executerLaVariante } from "./copilote-variante.js";
 import { conversationTitle } from "./copilote-conversations.js";
@@ -177,20 +178,47 @@ export async function sendAssistMessage(message, {
     "Content-Type": "application/json"
   });
 
+  /**
+   * **Une discussion peut n'être d'aucun projet.**
+   *
+   * « Où en suis-je ? », « comment je m'y prends pour une descente de
+   * charges ? » n'appartiennent à aucun chantier, et les poser obligeait à en
+   * ouvrir un au hasard — la réponse arrivait chargée d'une mémoire qui n'avait
+   * rien à y voir.
+   *
+   * C'est l'écran qui le dit, et il le dit d'une seule façon :
+   * `store.currentProjectId` nul est la marque des écrans sans projet, depuis
+   * le carnet. Un second drapeau dirait un jour autre chose que le premier
+   * (règle 4).
+   */
+  const transversal = !String(store.currentProjectId || "").trim();
+
   // L'identifiant de route n'est pas celui de la base : les confondre ferait
   // refuser l'appel côté serveur, ce qui est au moins visible.
-  const projectId = (await resolveCurrentBackendProjectId().catch(() => "")) || "";
-  if (!projectId) {
+  const projectId = transversal
+    ? null
+    : (await resolveCurrentBackendProjectId().catch(() => "")) || "";
+  if (!transversal && !projectId) {
     throw new Error("Ce projet n'est pas encore relié à la base : le copilote ne peut pas savoir de quoi vous parlez.");
   }
 
   // La mémoire se lit à chaque envoi : gardée en cache, elle répondrait avec la
   // valeur d'avant la correction qu'on vient justement de verser.
-  const context = await buildAssistContext();
+  //
+  // **Sans projet, il n'y a pas de mémoire à lire** — et ce n'est pas une
+  // mémoire vide qu'on envoie, c'est autre chose : une façon de travailler, qui
+  // dit en toutes lettres qu'elle ne porte aucune valeur de projet
+  // (`profil-de-travail.js`). Un assistant sans matière répond quand même ;
+  // c'est là qu'il invente.
+  const context = transversal ? await contexteTransversal() : await buildAssistContext();
 
-  const assertions = context.memoire?.assertions ?? [];
-  etape(onEtape, "Lecture de la mémoire du projet",
-    assertions.length ? `${assertions.length} affirmation${assertions.length > 1 ? "s" : ""} en vigueur` : "rien en mémoire");
+  if (transversal) {
+    etape(onEtape, "Lecture de votre façon de travailler", "aucune mémoire de projet");
+  } else {
+    const assertions = context.memoire?.assertions ?? [];
+    etape(onEtape, "Lecture de la mémoire du projet",
+      assertions.length ? `${assertions.length} affirmation${assertions.length > 1 ? "s" : ""} en vigueur` : "rien en mémoire");
+  }
   const echanges = [...toolExchanges];
   const executions = [];
   let usage = { inputTokens: null, outputTokens: null, totalTokens: null };
@@ -205,6 +233,9 @@ export async function sendAssistMessage(message, {
       // sur ce qu'il fait, et la réponse arriverait dans le fil suivant.
       signal,
       body: JSON.stringify({
+        // `null` dit « aucun projet », et le serveur ne relit alors aucun
+        // chantier : il n'y a rien à autoriser, et la discussion reste
+        // propriétaire seul comme toutes les autres.
         project_id: projectId,
         question: piecesJointes.length
           ? `${content}\n\n[Une note de calcul est jointe à cette conversation : ${

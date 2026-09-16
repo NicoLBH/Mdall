@@ -44,6 +44,23 @@ export const TOUTES_LES_PROPOSITIONS = {
   icone: "git-pull-request"
 };
 
+/**
+ * Le Copilote, sans projet.
+ *
+ * **Il est l'exception qui confirme la règle des deux autres.** Tous les sujets
+ * et toutes les propositions rassemblent ce qui existe dans chaque projet ; ici,
+ * il n'y a rien à rassembler — les discussions de cet écran n'appartiennent à
+ * aucun chantier, et c'est ce qui les définit. « Où en suis-je ? », « comment je
+ * m'y prends pour une descente de charges ? » ne sont d'aucun projet, et les
+ * poser obligeait à en ouvrir un au hasard.
+ */
+export const LE_COPILOTE = {
+  nom: "Copilote",
+  route: "#copilote",
+  /** La sienne, celle de l'entrée du rail dans l'Atelier. */
+  icone: "copilot"
+};
+
 /** La liste des projets eux-mêmes. */
 export const TOUS_LES_PROJETS = {
   nom: "Tous les projets",
