@@ -295,8 +295,10 @@ function porteLUneDe(valeurs, cherchees) {
  * @param {string} options.requete ce qui est écrit dans la barre
  * @param {object[]} options.champs ceux de `champsDesSujets`
  * @param {Record<string, MetaDuSujet>} [options.meta] par identifiant de sujet
- * @param {string} [options.moi] l'identifiant de qui regarde — sans lui,
- *   `assigné:moi` ne filtre rien plutôt que de rendre la liste vide
+ * @param {string|string[]} [options.moi] qui regarde, **en identifiants de
+ *   personne**. Plusieurs sur un écran qui traverse les projets : un compte a
+ *   une ligne de trombinoscope par projet. Sans aucun, `assigné:moi` ne filtre
+ *   rien plutôt que de rendre la liste vide
  * @returns {{sujets: object[], filtres: Record<string,string>, texte: string,
  *   ignores: string[]}}
  */
@@ -304,6 +306,10 @@ export function sujetsFiltres({
   sujets = [], requete = "", champs = [], meta = {}, moi = "", maintenant = Date.now()
 } = {}) {
   const tous = Array.isArray(sujets) ? sujets : [];
+  // **Qui regarde peut être plusieurs personnes.** Une par projet, puisque
+  // c'est le trombinoscope de chaque projet qui relie un compte à une personne.
+  // Une chaîne reste acceptée : l'écran d'un projet n'en a qu'une.
+  const miennes = Array.isArray(moi) ? listeDe(moi) : [texte(moi)].filter(Boolean);
   const { filters, text, inconnus } = parseQuery(requete, champs);
 
   const mots = repli(text).split(/\s+/).filter(Boolean);
@@ -346,7 +352,11 @@ export function sujetsFiltres({
       const cherchees = [];
       for (const cochee of cochees) {
         if (cochee !== MOI) { cherchees.push(cochee); continue; }
-        if (texte(moi)) cherchees.push(texte(moi));
+        // **« Moi » est plusieurs personnes**, une par projet regardé : un
+        // compte n'est pas une personne, et c'est le trombinoscope de chaque
+        // projet qui fait le lien. N'en retenir qu'une comptait les sujets d'un
+        // seul projet — et zéro quand ce projet-là ne m'assignait rien.
+        if (miennes.length) cherchees.push(...miennes);
         else if (!ignores.includes(cle)) ignores.push(cle);
       }
 

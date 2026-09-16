@@ -78,6 +78,18 @@ function createSituationsViewState() {
     railLargeur: 248,
     railReplie: false,
 
+    /**
+     * Le panneau latéral du détail d'une situation : ouvert, ou non.
+     *
+     * **Il n'existait pas, et trois endroits l'écrivaient déjà.** Le panneau
+     * pose `isOpen` ici en s'ouvrant, le retire en se fermant, et l'écran des
+     * Sujets le lit — mais tous trois se gardaient d'un objet absent, si bien
+     * que personne n'a jamais rien écrit ni rien lu. Le bouton qui l'ouvre ne
+     * pouvait donc pas savoir qu'il était déjà ouvert, et ne le refermait pas.
+     */
+
+    drilldown: { isOpen: false },
+
     expandedSituations: new Set(),
     expandedSujets: new Set(),
     expandedSubjectIds: new Set(),

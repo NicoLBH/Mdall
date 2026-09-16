@@ -710,3 +710,66 @@ Sa première entrée ouvre la liste des situations, et elle portait le cercle de
 sujets ouverts. Le menu de gauche montre une autre icône pour la même
 destination : on cherchait l'une en regardant l'autre. Elle vient désormais du
 même endroit que le nom.
+
+---
+
+## 8. Un compte est plusieurs personnes, et le détail reçoit ses gestes
+
+### Le compteur qui disait zéro
+
+**« Assigné à moi : 0 »**, alors qu'il y en avait. Et « Créé par moi », et
+« Mentions ».
+
+Un compte Mdall n'est pas une personne : c'est le trombinoscope d'un projet qui
+fait le lien, et **chaque projet a le sien**. Une même personne qui travaille sur
+quatre projets porte donc quatre identifiants de personne, un par projet.
+`moiDansLeProjet` n'en rendait qu'un — le premier trouvé —, et c'était juste tant
+qu'un écran ne regardait qu'un projet.
+
+Sur un écran qui les traverse, « assigné:moi » ne comptait donc que les sujets du
+projet dont l'identifiant avait été tiré, et **zéro** quand celui-là ne
+m'assignait rien. « Activité récente » marchait, elle, parce qu'elle ne demande
+l'identité de personne.
+
+`mesPersonnes` rend la liste, et `sujetsFiltres` la lit — une chaîne reste
+acceptée, l'écran d'un projet n'a qu'une identité. C'est **la même cause** que le
+défaut des labels de la section 7 : un nom, plusieurs identifiants, et un
+`.find` qui n'en garde qu'un.
+
+### Le panneau latéral ne s'ouvrait plus
+
+Le bouton à droite d'« Indicateurs » appelle le panneau des Sujets, qui cherche
+la situation dans **le magasin de l'onglet Sujets d'un projet**. L'écran des
+situations tient les siennes ailleurs : la sélection échouait, `openDrilldown`
+n'était jamais appelé, le panneau n'était même pas créé — et le second garde-fou
+du clic (`if (!drilldownBody) return`) refermait la porte sans un mot.
+
+L'appelant qui a la ligne en main la donne. Aller la chercher dans l'autre
+magasin depuis le module des Sujets aurait fait lire à ce module l'état d'un
+écran qu'il ne connaît pas, et le prochain écran serait repassé par la même
+panne.
+
+**Et le bouton referme.** Il ne savait qu'ouvrir. Son état vivait dans
+`store.situationsView.drilldown` — que trois endroits écrivaient déjà en se
+gardant d'un objet **qui n'existait pas**. Personne n'écrivait rien, personne ne
+lisait rien, et le bouton ne pouvait pas savoir qu'il était déjà ouvert.
+
+### Le titre d'une situation dit ce qu'elle est, et porte ses gestes
+
+**L'épingle se lit sans rien ouvrir.** Seul le menu disait « Désépingler » : on
+ouvrait un menu pour connaître un état, ce qui est l'inverse de son rôle.
+
+**Le kebab passe à côté d'« Indicateurs ».** Les gestes n'étaient que sur la
+ligne du tableau : ouvrir une situation, c'était perdre le moyen de l'épingler ou
+de l'effacer, et il fallait revenir en arrière pour un geste qui porte sur ce
+qu'on a sous les yeux. C'est le **même** menu — `kebab-dune-situation.js`, que le
+tableau emploie aussi — avec une entrée de plus : « Modifier la situation », qui
+ouvre le formulaire de création, rempli, avec son bouton vert.
+
+Le tableau ne la porte pas : chaque ligne a déjà son crayon, et deux chemins pour
+un même geste font que l'un des deux finit par ne plus marcher.
+
+Au passage, « Supprimer » devient « Supprimer la vue » / « Supprimer la
+situation » : le mot seul, sous deux entrées qui nomment la chose, laissait se
+demander ce qu'il supprimait — la vue, ou ce qu'elle retient. C'est la question
+qu'il ne faut pas se poser devant un bouton rouge.

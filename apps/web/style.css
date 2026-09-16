@@ -15138,6 +15138,14 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   max-width:100%;
 }
 
+/* **L'épingle se lit sans rien ouvrir.** Seul le menu disait « Désépingler »,
+   et l'on ouvrait un menu pour connaître un état — l'inverse de son rôle.
+   Discrète : elle se lit d'un coup d'œil sans disputer le titre. */
+.project-situation-title-row__pin{
+  display:inline-flex; align-items:center; flex:0 0 auto;
+  color:var(--muted);
+}
+
 .project-situation-title-row__title{
   margin:0;
   font-size:20px;
@@ -15165,6 +15173,13 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   opacity:1;
   pointer-events:auto;
 }
+
+/* **Le kebab du détail se voit au repos.** Celui d'une ligne de tableau
+   n'apparaît qu'au survol — quinze lignes, quinze kebabs, c'est du bruit. Ici il
+   n'y en a qu'un, sur la ligne qu'on regarde, à côté de deux boutons visibles :
+   le cacher ferait chercher les gestes de la situation ouverte. */
+.project-situation-title-row__actions .sujets-vues__kebab{ opacity:1; pointer-events:auto; }
+.project-situation-title-row__actions .sujets-vues__gestes{ position:relative; }
 
 .project-situation-title-row__edit:hover,
 .project-situation-title-row__edit:focus-visible{

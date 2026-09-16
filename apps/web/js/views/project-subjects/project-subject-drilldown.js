@@ -326,7 +326,10 @@ export function createProjectSubjectDrilldownController(config) {
 
   function openDrilldownFromSituation(situationId, options = {}) {
     ensureViewUiState();
-    const selection = openDrilldownFromSituationSelection(situationId);
+    // **Les options passent jusqu'à la sélection.** L'écran des situations tient
+    // ses lignes ailleurs que l'onglet Sujets d'un projet : il donne la sienne,
+    // et sans ce passage elle n'arrivait jamais — le panneau ne s'ouvrait pas.
+    const selection = openDrilldownFromSituationSelection(situationId, options);
     if (!selection) return;
     openDrilldown(options);
   }

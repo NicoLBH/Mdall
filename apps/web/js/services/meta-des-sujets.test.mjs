@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { chargeDesSujets, CLES_DE_LA_CHARGE, indexDesLiens, indexDesSignaux } from "./charge-des-sujets.js";
-import { metaDesSujets, moiDansLeProjet, personnesDuProjet } from "./meta-des-sujets.js";
+import { mesPersonnes, metaDesSujets, moiDansLeProjet, personnesDuProjet } from "./meta-des-sujets.js";
 import { champsDesSujets, sujetsFiltres } from "./champs-des-sujets.js";
 
 /**
@@ -321,4 +321,67 @@ test("les index se rangent sous les noms que les deux côtés partagent", () => 
   // « est bloqué par » sans reparcourir la liste.
   const liens = indexDesLiens([{ source_subject_id: "a", target_subject_id: "b" }]);
   assert.deepEqual(Object.keys(liens).sort(), ["a", "b"]);
+});
+
+/* ── Un compte est plusieurs personnes ───────────────────────────────────── */
+
+/**
+ * **Un compte Mdall n'est pas une personne.** C'est le trombinoscope d'un
+ * projet qui fait le lien, et chaque projet a le sien : la même personne, sur
+ * quatre projets, porte quatre identifiants.
+ *
+ * `moiDansLeProjet` n'en rendait qu'un. Sur un écran qui traverse les projets,
+ * « Assigné à moi » ne comptait donc que les sujets d'**un** projet — et zéro
+ * quand celui tiré au sort ne m'assignait rien. Le rail affichait 0 à côté de
+ * « Assigné à moi », et l'on croyait n'avoir rien à faire.
+ */
+const MOI_PARTOUT = [
+  { personId: "pers-a", userId: "u-moi", name: "Nicolas" },
+  { personId: "pers-b", userId: "u-moi", name: "Nicolas" },
+  { personId: "pers-autre", userId: "u-benoit", name: "Benoît" }
+];
+
+test("un compte rend toutes ses personnes, une par projet", () => {
+  assert.deepEqual(
+    mesPersonnes({ collaborateurs: MOI_PARTOUT, utilisateur: "u-moi" }),
+    ["pers-a", "pers-b"]
+  );
+});
+
+/** Sans compte connu, la liste est vide : c'est une réponse (règle 5). */
+test("sans compte, aucune personne", () => {
+  assert.deepEqual(mesPersonnes({ collaborateurs: MOI_PARTOUT, utilisateur: "" }), []);
+  assert.deepEqual(mesPersonnes(), []);
+});
+
+/**
+ * **Et le filtre les emploie toutes.** C'est là que le compteur se jouait :
+ * le service peut bien rendre deux identifiants, si `sujetsFiltres` n'en lit
+ * qu'un, la liste reste amputée.
+ */
+test("« assigné:moi » retient les sujets de tous mes projets", () => {
+  const sujets = [
+    { id: "s-a", title: "Fissure", status: "open" },
+    { id: "s-b", title: "Étanchéité", status: "open" },
+    { id: "s-c", title: "Carrelage", status: "open" }
+  ];
+  const charge = {
+    subjects: sujets,
+    [CLES_DE_LA_CHARGE.assignes]: {
+      "s-a": ["pers-a"], "s-b": ["pers-b"], "s-c": ["pers-autre"]
+    }
+  };
+  const champs = champsDesSujets({ personnes: personnesDuProjet(MOI_PARTOUT) });
+  const meta = metaDesSujets({ sujets, raw: charge, collaborateurs: MOI_PARTOUT });
+
+  const toutes = sujetsFiltres({
+    sujets, requete: "assigné:moi", champs, meta,
+    moi: mesPersonnes({ collaborateurs: MOI_PARTOUT, utilisateur: "u-moi" })
+  });
+  assert.deepEqual(toutes.sujets.map((sujet) => sujet.id), ["s-a", "s-b"]);
+
+  // Une seule identité ne voyait qu'un projet — le défaut, tel qu'il se lisait.
+  const une = sujetsFiltres({ sujets, requete: "assigné:moi", champs, meta, moi: "pers-a" });
+  assert.deepEqual(une.sujets.map((sujet) => sujet.id), ["s-a"],
+    "une chaîne reste acceptée : l'écran d'un projet n'a qu'une identité");
 });

@@ -18,6 +18,7 @@ import { railWidth } from "../ui/project-rail.js";
 import { BLOC_DES_FILTRES } from "../ui/menus-den-tete.js";
 import { NOM_DES_SITUATIONS, estUneLecture, situationsDeLecture } from "../../services/lectures-du-carnet.js";
 import { situationCommeUneEpingle } from "../../services/situation-comme-une-vue.js";
+import { renderEpingleDuTitreHtml, renderKebabDeLaSituation } from "./kebab-dune-situation.js";
 import { renderSituationGridView } from "./project-situations-view-grid.js";
 import { renderSituationRoadmapView } from "./project-situations-view-roadmap.js";
 
@@ -603,6 +604,13 @@ export function createProjectSituationsView({
                 <div class="project-situation-title-row__group">
                   <h2 class="project-situation-title-row__title">${escapeHtml(selectedSituation.title || "Situation")}</h2>
                   ${/*
+                    **L'épingle se lit sans rien ouvrir.** Le menu dit
+                    « Désépingler », et c'était le seul endroit qui le disait :
+                    on ouvrait le menu pour savoir dans quel état on était, ce
+                    qui est l'inverse de son rôle.
+                  */""}
+                  ${renderEpingleDuTitreHtml(selectedSituation)}
+                  ${/*
                     **Une lecture ne se modifie pas.** « Assigné à moi » n'est
                     pas en base : elle existe parce que la question se pose à
                     tout le monde. Laisser le crayon ouvrirait un formulaire qui
@@ -630,11 +638,27 @@ export function createProjectSituationsView({
                       type="button"
                       class="gh-btn gh-action__main gh-btn--default gh-btn--md"
                       data-open-situation-drilldown
-                      aria-label="Étendre la barre latérale"
-                      title="Étendre la barre latérale"
+                      aria-label="Déplier ou replier la barre latérale"
+                      title="Déplier ou replier la barre latérale"
                     >
                       ${svgIcon("sidebar-expand", { className: "octicon octicon-sidebar-expand" })}
                     </button>
+                    ${/*
+                      **Les gestes de la situation, là où on la regarde.** Ils
+                      n'étaient que sur sa ligne du tableau : ouvrir une
+                      situation, c'était perdre le moyen de l'épingler ou de
+                      l'effacer, et il fallait revenir en arrière pour un geste
+                      qui porte sur ce qu'on a sous les yeux.
+
+                      C'est le **même** menu que celui du tableau, avec une
+                      entrée de plus : « Modifier la situation ». Le crayon à
+                      côté du titre ouvre le même formulaire — il reste, parce
+                      qu'un geste d'un seul clic vaut mieux qu'un menu.
+                    */""}
+                    ${renderKebabDeLaSituation(selectedSituation, {
+                      ouvert: String(uiState.menuDeLaSituation || "") === String(selectedSituation.id || ""),
+                      avecModifier: true
+                    })}
                   </div>
                 </div>
               </div>

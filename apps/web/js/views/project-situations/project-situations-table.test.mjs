@@ -521,3 +521,17 @@ test("la colonne des projets s'appelle par son nom", () => {
   assert.match(html, />Projet</);
   assert.ok(!html.includes("Chantier"));
 });
+
+/**
+ * **Le tableau n'offre pas « Modifier ».** Chaque ligne porte déjà son crayon :
+ * une entrée de plus dans le menu ferait deux chemins pour un même geste, et
+ * l'un des deux finirait par ne plus marcher. C'est le détail d'une situation
+ * qui la porte — là, il n'y a pas de crayon sur une ligne.
+ */
+test("le kebab d'une ligne reste sans « Modifier »", () => {
+  const html = tableau({ menuOuvert: SITUATION.id })
+    .renderSituationTitleCell({ ...SITUATION, owner_id: MOI });
+
+  assert.match(html, /Épingler la situation/, "le menu est bien ouvert");
+  assert.ok(!html.includes("data-sujets-vue-modifier"), "et il n'offre pas de modifier");
+});

@@ -35,7 +35,7 @@ import { chargerLesSujetsDesChantiers } from "../services/project-subjects-supab
 import { chargerLesPersonnesDesChantiers } from "../services/profile-supabase-sync.js";
 import { estMonCarnet } from "../services/mon-carnet.js";
 import { champsDuCarnet as construireLesChampsDuCarnet } from "../services/vocabulaire-du-carnet.js";
-import { metaDesSujets, moiDansLeProjet } from "../services/meta-des-sujets.js";
+import { mesPersonnes, metaDesSujets } from "../services/meta-des-sujets.js";
 import { loadProjectSituationsTrajectoryHistory } from "../services/project-situations-trajectory-service.js";
 import { createProjectSituationsState } from "./project-situations/project-situations-state.js";
 import { createProjectSituationsSelectors } from "./project-situations/project-situations-selectors.js";
@@ -56,6 +56,7 @@ import {
   getSujetKanbanStatusForSituation,
   setSujetKanbanStatusForSituation,
   openSubjectDrilldownFromSituation,
+  closeSituationDrilldown,
   openSituationDrilldownFromSelection,
   openSharedSubjectMetaDropdown,
   openSharedSubjectKanbanDropdown,
@@ -403,7 +404,12 @@ function metaDeLEcran() {
 function moiDeLEcran() {
   if (!estMonCarnet(store)) return moiDansLeProjetOuvert();
 
-  return moiDansLeProjet({
+  // **Toutes mes identités, et non l'une d'elles.** Un compte n'est pas une
+  // personne : c'est le trombinoscope de chaque projet qui fait le lien, et
+  // j'ai donc autant d'identifiants de personne que de projets. N'en retenir
+  // qu'un comptait les sujets d'un seul projet — et zéro quand celui-là ne
+  // m'assignait rien, ce que le rail affichait à côté de « Assigné à moi ».
+  return mesPersonnes({
     collaborateurs: store.situationsView?.personnesDuCarnet ?? [],
     utilisateur: store.user?.id ?? ""
   });
@@ -712,6 +718,7 @@ const { bindEvents } = createProjectSituationsEvents({
   getSituationById,
   loadSituationSelection,
   loadSituationInsightsData,
+  closeSituationDrilldown,
   openSituationDrilldownFromSelection,
   openSubjectDrilldown: (...args) => openSubjectDrilldownFromSituation(...args),
   openSharedSubjectMetaDropdown: (...args) => openSharedSubjectMetaDropdown(...args),

@@ -1108,6 +1108,11 @@ export function openSituationDrilldownFromSelection(...args) {
   return projectSubjectDrilldown.openDrilldownFromSituation(...args);
 }
 
+/** Refermer ce même panneau. Le bouton qui l'ouvre le referme : c'est une bascule. */
+export function closeSituationDrilldown() {
+  return projectSubjectDrilldown.closeDrilldown();
+}
+
 export function openSharedSubjectMetaDropdown({
   root = document,
   field = "",

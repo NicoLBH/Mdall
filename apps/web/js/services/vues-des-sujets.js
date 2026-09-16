@@ -238,7 +238,11 @@ export function gestesDeLaVue(vue = {}, { avecModifier = false, mot = MOT_DE_LA_
       attribut: "sujets-vue-epingler"
     },
     { separateur: true },
-    { cle: "supprimer", nom: "Supprimer", icone: "trash", attribut: "sujets-decrocher", danger: true }
+    // **« Supprimer la vue », et non « Supprimer ».** Le mot seul, sous deux
+    // entrées qui nomment la chose, laisse se demander ce qu'il supprime —
+    // la vue, ou ce qu'elle retient. C'est la question qu'il ne faut pas se
+    // poser devant un bouton rouge.
+    { cle: "supprimer", nom: `Supprimer la ${chose}`, icone: "trash", attribut: "sujets-decrocher", danger: true }
   ];
 }
 

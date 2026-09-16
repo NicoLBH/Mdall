@@ -591,3 +591,46 @@ test("la première entrée du rail porte l'icône des situations", () => {
   assert.match(entree, new RegExp(`icons\\.svg#${ICONE_DU_CARNET}`), "celle du menu de gauche");
   assert.ok(!entree.includes("icons.svg#issue-opened"), "et non celle des sujets");
 });
+
+/* ── Le titre d'une situation ouverte, et ses gestes ─────────────────────── */
+
+/**
+ * **L'épingle se lit sans rien ouvrir.**
+ *
+ * Le menu dit « Désépingler », et c'était le seul endroit qui le disait : on
+ * ouvrait un menu pour connaître un état, ce qui est l'inverse de son rôle.
+ */
+test("le titre d'une situation épinglée porte son épingle", () => {
+  const epinglee = ecran({
+    situations: [MA_SITUATION], selectedSituationId: MA_SITUATION.id
+  }).renderPage();
+  const rangee = ecran({
+    situations: [NON_EPINGLEE], selectedSituationId: NON_EPINGLEE.id
+  }).renderPage();
+
+  assert.match(epinglee, /project-situation-title-row__pin/, "elle le dit");
+  assert.ok(!rangee.includes("project-situation-title-row__pin"),
+    "et celle qui n'y est pas ne porte rien — une icône toujours là ne distingue rien");
+});
+
+/**
+ * **Les gestes de la situation, là où on la regarde.**
+ *
+ * Ils n'étaient que sur sa ligne du tableau : ouvrir une situation, c'était
+ * perdre le moyen de l'épingler ou de l'effacer, et il fallait revenir en
+ * arrière pour un geste qui porte sur ce qu'on a sous les yeux.
+ */
+test("le détail d'une situation porte son kebab, avec « Modifier »", () => {
+  const html = ecran({
+    situations: [MA_SITUATION], selectedSituationId: MA_SITUATION.id
+  }).renderPage();
+
+  const actions = html.slice(html.indexOf("project-situation-title-row__actions"));
+
+  assert.match(actions, /data-situations-menu="11111111/, "le kebab est là");
+  assert.match(actions, /Modifier la situation/, "on peut la modifier");
+  assert.match(actions, /Désépingler la situation/, "elle est épinglée : on la retire");
+  assert.match(actions, /Supprimer la situation/, "et on peut la supprimer");
+  assert.match(actions, /data-sujets-vue-modifier="11111111/, "et l'entrée porte son identifiant");
+});
+
