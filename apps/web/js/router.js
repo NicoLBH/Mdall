@@ -3,7 +3,12 @@ import { renderProjectsList } from "./views/projects-list.js";
 import { renderProjectLayout } from "./views/project-layout.js";
 import { renderPersonalSettings } from "./views/personal-settings.js";
 import { renderMonCarnet } from "./views/mon-carnet.js";
+import { renderTousLesSujets } from "./views/tous-les-sujets.js";
+import { renderToutesLesPropositions } from "./views/toutes-les-propositions.js";
 import { ROUTE_DU_CARNET, adresseDunAncienLien } from "./services/mon-carnet.js";
+import {
+  TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
+} from "./services/ecrans-transversaux.js";
 import { unmountProjectShellChrome } from "./views/project-shell-chrome.js";
 import { store } from "./store.js";
 import { syncCurrentProjectFromRoute } from "./demo-context.js";
@@ -46,6 +51,28 @@ function route() {
     store.currentProjectId = null;
     unmountProjectShellChrome();
     renderMonCarnet(root);
+    return;
+  }
+
+  /**
+   * **Les deux écrans qui traversent les projets.**
+   *
+   * Ils se reconnaissent à la même chose que le carnet : `currentProjectId` nul.
+   * C'est la seule marque qui distingue « tous mes projets » de « celui-ci », et
+   * elle vit dans le magasin — un second drapeau dirait un jour autre chose que
+   * le premier (règle 4).
+   */
+  if (parts[0] === cheminDe(TOUS_LES_SUJETS)) {
+    store.currentProjectId = null;
+    unmountProjectShellChrome();
+    renderTousLesSujets(root);
+    return;
+  }
+
+  if (parts[0] === cheminDe(TOUTES_LES_PROPOSITIONS)) {
+    store.currentProjectId = null;
+    unmountProjectShellChrome();
+    renderToutesLesPropositions(root);
     return;
   }
 

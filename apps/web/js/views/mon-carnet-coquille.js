@@ -23,17 +23,28 @@
 /**
  * La coquille entière.
  *
+ * **Elle sert les trois écrans qui ne sont d'aucun projet** : les situations,
+ * tous les sujets, toutes les propositions. C'est la même mise en page — une
+ * coquille de projet, sans projet —, et en écrire une seconde pour les deux
+ * nouveaux aurait fait deux calages à retoucher ensemble, dont l'un finirait en
+ * retard sur l'autre (règle 10).
+ *
  * @param {object} options
  * @param {string} options.banniere le bandeau du haut, fourni par l'appelant —
  *   il vient d'un module qui parle à la base, et la coquille n'a pas à le
  *   connaître pour savoir où le poser.
+ * @param {string} options.hoteDOutils l'identifiant de l'hôte de barre
+ *   d'outils. Chaque écran a le sien : deux écrans qui s'écriraient dans le
+ *   même y laisseraient les boutons de l'autre.
  */
-export function renderCarnetShell({ banniere = "" } = {}) {
+export function renderCoquilleTransversale({
+  banniere = "", hoteDOutils = "situationsToolbarHost"
+} = {}) {
   return `
-    <div class="project-shell" id="projectShell" data-carnet="1">
+    <div class="project-shell" id="projectShell" data-sans-projet="1">
       <div class="project-shell__body project-shell__body--situations">
         ${banniere}
-        <div id="situationsToolbarHost" class="project-situations-toolbar-host"></div>
+        <div id="${hoteDOutils}" class="project-situations-toolbar-host"></div>
         <div id="project-content" class="project-shell__content"></div>
       </div>
     </div>
