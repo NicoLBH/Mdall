@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import {
   createProjectSituationsTable, renderTableauDesSujetsRetenusHtml
 } from "./project-situations-table.js";
+import { REPRENDRE } from "../../services/situations-privees.js";
 
 /**
  * Le tableau, tel qu'il est monté sur l'écran d'un projet.
@@ -414,15 +415,37 @@ test("une lecture du rail n'offre aucun geste", () => {
 });
 
 /**
- * **Une situation d'avant le cloisonnement non plus.** La base refuse de la
- * réécrire au nom d'un autre ; la pastille le dit déjà, et un menu actif ferait
- * cliquer sur un geste qui échoue sans raison visible.
+ * **Une situation d'avant le cloisonnement n'offre qu'un geste : la reprendre.**
+ *
+ * L'écran le promet depuis l'étape 1 — *« Reprenez-la pour pouvoir la
+ * modifier »* — et rien ne permettait de le faire. Sur un carnet qui ne
+ * contient que des situations d'avant, cela voulait dire **aucun geste du
+ * tout** : ni épingler, ni effacer, ni modifier.
+ *
+ * Et surtout pas les autres : la base refuse de la réécrire au nom d'un autre,
+ * et un « Épingler » actif ferait cliquer sur un geste qui échoue sans raison
+ * visible.
  */
-test("une situation qui n'appartient à personne n'offre aucun geste", () => {
+test("une situation qui n'appartient à personne se reprend, et rien d'autre", () => {
   const html = tableau().renderSituationTitleCell({ ...SITUATION, owner_id: null });
 
   assert.match(html, /créée avant le cloisonnement/, "elle le dit toujours");
-  assert.ok(!html.includes("data-situations-menu"), "mais elle ne propose rien");
+  assert.match(html, /data-situations-reprendre/, "et elle offre de la reprendre");
+  assert.match(html, /Reprendre cette situation/);
+  assert.ok(!html.includes("data-sujets-vue-epingler"), "mais pas de l'épingler");
+  assert.ok(!html.includes("data-sujets-decrocher"), "ni de l'effacer");
+});
+
+/**
+ * **Le mot du menu est celui de l'infobulle.** Deux formulations du même geste
+ * — « Reprendre » ici, « Reprenez-la » là — finiraient par ne plus se répondre
+ * (règle 10).
+ */
+test("le menu et l'infobulle promettent le même geste", () => {
+  const html = tableau().renderSituationTitleCell({ ...SITUATION, owner_id: null });
+
+  assert.match(html, /Reprenez-la/, "l'infobulle le promet");
+  assert.match(html, new RegExp(REPRENDRE), "et le menu le porte");
 });
 
 /** Le menu ne s'ouvre que sur la ligne qu'on a cliquée. */

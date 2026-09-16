@@ -217,6 +217,58 @@ mises en page qui portent un rail l'ont en premier enfant ; un cinquième écran
 la reçoit en naissant. Un test compte les occurrences : deux marges
 compteraient la largeur du rail deux fois.
 
+### Le rail était dessiné et personne ne l'écoutait
+
+Son bouton de repli et sa poignée de largeur sont là depuis l'étape 2 : le
+composant partagé les dessine. **Rien ne les branchait.** Cliquer ne faisait
+rien, tirer ne faisait rien — et un bouton présent qui n'obéit pas est pire
+qu'un bouton absent : on croit avoir mal cliqué, et l'on recommence.
+
+Tout vient du composant partagé, comme dans la Mémoire, l'Atelier et les Sujets.
+Le repli et la largeur sont des **réglages** : ils suivent la personne d'une
+session à l'autre, et ce sont ceux de cet écran — replier le rail des Sujets
+d'un projet n'a aucune raison de replier celui du carnet. L'écran ne les lit
+plus dans un magasin que personne n'écrivait : il les demande.
+
+### Le contenu passait derrière le rail en défilant
+
+La marge règle la **position de départ**, pas ce qui passe derrière quand la
+boîte défile horizontalement. Le rail est fixé à la fenêtre ; le contenu
+glissait dessous, et les deux se lisaient l'un à travers l'autre.
+
+Le rail du carnet a donc un fond, et lui seul. Les écrans de projet le gardent
+transparent : le trait de l'onglet actif doit rester lisible dessous — c'est la
+raison d'origine, et elle ne vaut pas ici, le carnet n'ayant pas d'onglets.
+
+### Le menu du kebab se faisait couper
+
+La coquille de tableau coupe son débordement, et le menu d'une ligne s'ouvre
+vers le bas : il était tronqué net. L'écran des vues porte déjà cette exception ;
+le tableau des situations la reçoit à sa classe.
+
+### La promesse de l'étape 1, enfin tenue
+
+L'écran dit depuis ce jour-là, sur toute situation sans propriétaire :
+*« Reprenez-la pour pouvoir la modifier. »* **Il n'y avait aucun moyen de le
+faire.** La règle de modification exige `owner_id = auth.uid()` *avant*
+l'écriture : une ligne sans propriétaire n'était modifiable par personne, pas
+même pour se l'attribuer.
+
+Sur un carnet qui ne contient que des situations d'avant — le cas d'un vrai
+projet —, cela voulait dire **aucun geste du tout** : ni épingler, ni effacer,
+ni modifier, et un kebab invisible sur chaque ligne.
+
+`reprendre_la_situation` n'autorise qu'**une transition** : de personne à moi.
+Ni le titre, ni la requête, ni l'état ne voyagent avec. On aurait pu relâcher la
+règle de modification — « les miennes, ou celles sans propriétaire » —, mais
+elle aurait alors autorisé toutes les écritures sur une ligne orpheline du
+moment qu'on la marque sienne au passage. Reprendre est une décision, pas une
+occasion.
+
+Le menu d'une situation d'avant n'offre donc que ce geste-là, et ni l'épingle ni
+l'effacement : la base les refuserait, et un bouton actif ferait cliquer sur un
+geste qui échoue sans raison visible.
+
 ### Le rail garde ce qu'on y met
 
 Il montrait **toutes** mes situations. Sur un carnet qui en compte vingt-six, la

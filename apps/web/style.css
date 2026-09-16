@@ -17274,6 +17274,17 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
      actif — le problème qu'on a mis trois versions à contourner. */
   border-right:1px solid var(--border);
 }
+/* **Sauf dans le carnet, qui n'a pas d'onglets.**
+ *
+ * La raison ci-dessus est celle d'un écran de projet : le trait de l'onglet
+ * actif doit rester lisible sous le rail. Le carnet n'a pas de barre d'onglets
+ * — on l'a retirée —, et il a en revanche une boîte qui **défile
+ * horizontalement** : le rail est fixé à la fenêtre, le contenu glisse
+ * dessous, et les deux se lisaient l'un à travers l'autre.
+ *
+ * Écarter le contenu ne suffit pas pour ce cas-là : la marge règle la position
+ * de départ, pas ce qui passe derrière quand on fait défiler. */
+.project-simple-page--situations .project-rail{ background:var(--bg); }
 /* Le contenu s'écarte du rail au lieu de passer dessous. Il se recentre dans ce
    qui reste, et retrouve donc sa largeur habituelle.
 
@@ -25080,6 +25091,10 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    n'a pas besoin de cette coupe : elle ne défile pas, et ses lignes ne
    débordent pas. */
 .sujets-vues .data-table-shell{overflow:visible;}
+/* Même raison dans le tableau des situations : son kebab ouvre un menu qui
+   sort de la ligne, et la coquille le coupait net. */
+.project-situations-table.data-table-shell,
+.project-situations-table .data-table-shell__body{overflow:visible;}
 
 /* ── L'en-tête du tableau des sujets fait toujours la même hauteur ───────── */
 

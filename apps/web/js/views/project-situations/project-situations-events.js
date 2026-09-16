@@ -100,6 +100,8 @@ export function createProjectSituationsEvents({
   updateSituationRecord,
   /** Effacer une situation. Sans retour : l'écran demande avant, pas après. */
   supprimerLaSituation = async () => undefined,
+  /** Marquer sienne une situation d'avant le cloisonnement. */
+  reprendreLaSituation = async () => "",
   /** L'ancien filtre d'une situation, repris en requête — ou `null`. */
   repriseDeLAncienFiltre = () => null,
   setSelectedSituationId,
@@ -1818,6 +1820,38 @@ export function createProjectSituationsEvents({
   }
 
   /**
+   * Reprendre une situation que personne n'a.
+   *
+   * **La promesse de l'étape 1, enfin tenue.** L'écran disait « Reprenez-la
+   * pour pouvoir la modifier » et rien ne permettait de le faire : sur un
+   * carnet qui ne contient que des situations d'avant, aucun geste n'était
+   * possible — ni épingler, ni effacer, ni modifier.
+   *
+   * La base n'autorise qu'une transition : de personne à moi. Si elle rend
+   * vide, c'est que quelqu'un l'a prise entre-temps, et on le **dit** plutôt
+   * que de laisser croire au succès (règle 5).
+   */
+  async function reprendreLaSienne(root, situationId) {
+    const situation = getSituationById(situationId);
+    if (!situation) return;
+
+    uiState.menuDeLaSituation = "";
+    try {
+      const reprise = await reprendreLaSituation(situation.id);
+      if (!reprise) {
+        uiState.error = "Cette situation appartient déjà à quelqu'un : elle n'a pas été reprise.";
+        rerender(root);
+        return;
+      }
+      await refreshSituationsData(root, { forceSubjects: false });
+    } catch (error) {
+      console.error("reprendre la situation failed", error);
+      uiState.error = error instanceof Error ? error.message : "La situation n'a pas pu être reprise.";
+      rerender(root);
+    }
+  }
+
+  /**
    * Effacer une situation.
    *
    * **On demande avant, en nommant ce qui part.** Il n'y a pas d'effacement
@@ -2139,6 +2173,12 @@ export function createProjectSituationsEvents({
       entree.addEventListener("click", async (event) => {
         event.preventDefault();
         await basculerLEpingle(root, String(entree.getAttribute("data-sujets-vue-epingler") || ""));
+      });
+    });
+    root.querySelectorAll("[data-situations-reprendre]").forEach((entree) => {
+      entree.addEventListener("click", async (event) => {
+        event.preventDefault();
+        await reprendreLaSienne(root, String(entree.getAttribute("data-situations-reprendre") || ""));
       });
     });
     root.querySelectorAll("[data-sujets-decrocher]").forEach((entree) => {
@@ -2493,6 +2533,7 @@ export function createProjectSituationsEvents({
     situationQuiPorte,
     basculerLEpingle,
     effacerLaSituation,
+    reprendreLaSienne,
     ouvrirLaComposition,
     ouvrirLaCompositionDeLaSituation,
     annulerLaComposition,

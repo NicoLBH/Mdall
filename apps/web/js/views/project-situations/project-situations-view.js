@@ -34,6 +34,11 @@ export function createProjectSituationsView({
   champsDeLEcran = () => [],
   /** Qui regarde. « assigné:moi » ne veut rien dire sans lui. */
   moiDeLEcran = () => "",
+  /** Le repli et la largeur du rail : des réglages, pas un état de page — ils
+   *  suivent la personne d'une session à l'autre, et l'écran les demande
+   *  plutôt que de les lire dans un magasin que personne n'écrit. */
+  railReplie = () => false,
+  railLargeur = () => 248,
   renderSituationKanban
 }) {
   /**
@@ -73,7 +78,7 @@ export function createProjectSituationsView({
     const charge = chargeDuCarnet();
     const champs = champsDeLEcran();
     const requete = String(store.situationsView?.requeteDuCarnet || "");
-    const replie = store.situationsView?.railReplie === true;
+    const replie = railReplie();
 
     // **Mes situations sous « Épinglées », et elles seules.**
     //
@@ -557,16 +562,13 @@ export function createProjectSituationsView({
     // est en position fixe, le contenu s'écarte par une marge, et la largeur
     // passe par une variable CSS — c'est elle que la poignée fait bouger sans
     // rien redessiner. Une grille écrite ici compterait la largeur deux fois.
-    const largeurDuRail = railWidth(
-      store.situationsView?.railLargeur,
-      store.situationsView?.railReplie === true
-    );
+    const largeurDuRail = railWidth(railLargeur(), railReplie());
 
     return `
-      <section class="project-simple-page project-simple-page--settings${hasSelectedSituation ? " project-simple-page--situation-view" : ""}"
+      <section class="project-simple-page project-simple-page--settings project-simple-page--situations${hasSelectedSituation ? " project-simple-page--situation-view" : ""}"
         style="--project-rail-width:${largeurDuRail}px">
         <div class="project-simple-scroll${hasSelectedSituation ? ` project-simple-scroll--situation-view project-simple-scroll--situation-${layoutClassSuffix}` : ""}" id="projectSituationsScroll">
-          <div class="project-rail-layout${store.situationsView?.railReplie === true ? " project-rail-layout--collapsed" : ""}">
+          <div class="project-rail-layout${railReplie() ? " project-rail-layout--collapsed" : ""}">
           ${renderRailDuCarnet()}
           <div class="project-rail-layout__content settings-content project-page-shell project-page-shell--content${hasSelectedSituation ? ` project-page-shell--situation-view project-page-shell--situation-${layoutClassSuffix}` : ""}">
             ${/*
