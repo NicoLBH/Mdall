@@ -17,7 +17,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 import { renderGlobalNav } from "./global-nav.js";
-import { renderPageDeTousLesSujets, requeteAvecLeStatut } from "./tous-les-sujets-page.js";
+import {
+  renderPageDeTousLesSujets, requeteAvecLeStatut, requeteDeDepart
+} from "./tous-les-sujets-page.js";
 import { renderPageDeToutesLesPropositions } from "./toutes-les-propositions-page.js";
 import {
   TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
@@ -25,6 +27,7 @@ import {
 import { CLES_DE_LA_CHARGE } from "../services/charge-des-sujets.js";
 import { PROPOSITION } from "../services/proposition-state.js";
 import { renderTableauDesSujetsRetenusHtml } from "./project-situations/project-situations-table.js";
+import { FILTRES_DES_PROJETS, renderRailDesProjets } from "./tous-les-projets-rail.js";
 
 /* ── Le menu général ─────────────────────────────────────────────────────── */
 
@@ -850,4 +853,221 @@ test("tous les sujets : le statut n'est demandé qu'une fois", () => {
     "et le menu du même nom n'y est plus"
   );
   assert.match(html, /data-sujets-menu="sujets-tous-projet"/, "les autres menus restent");
+});
+
+/* ── On part des ouverts, et le jeton se lit dans la barre ───────────────── */
+
+/**
+ * **La requête de départ retient les ouverts.**
+ *
+ * On arrive ici pour savoir ce qu'il reste à faire ; tout montrer d'un coup y
+ * mêle des années de sujets réglés, et la liste répond à une question qu'on ne
+ * pose jamais.
+ *
+ * Elle est **écrite dans la barre**, et c'est tout le point : qui veut voir les
+ * ouverts *et* les fermés efface le jeton au clavier. Un filtre par défaut qu'on
+ * ne voit nulle part est un écran qui ment sur ce qu'il montre, et l'on cherche
+ * dans la base des sujets qui étaient là depuis le début.
+ */
+test("tous les sujets : on part des ouverts, et le jeton est dans la barre", () => {
+  const depart = requeteDeDepart();
+  assert.equal(depart, "statut:ouvert", "produit par la grammaire, pas recopié à la main");
+
+  const html = etats({ requete: depart });
+
+  // Le champ de recherche porte la requête : elle se lit, et elle s'efface.
+  assert.match(html, /value="statut:ouvert"/, "la barre la montre");
+  assert.match(html, /aria-pressed="true" data-sujets-tous-statut="open"/, "le bouton est allumé");
+
+  assert.match(html, /1 sujet</, "et la liste ne montre que l'ouvert");
+  assert.ok(!html.includes("Calfeutrement des joints"), "le fermé n'y est pas");
+});
+
+/** Effacer le jeton rend la liste entière : c'est la sortie, et elle est au clavier. */
+test("tous les sujets : effacer le jeton rend tout", () => {
+  const html = etats({ requete: "" });
+
+  assert.match(html, /3 sujets/);
+  assert.ok(
+    !html.includes('aria-pressed="true" data-sujets-tous-statut'),
+    "et plus rien n'est allumé"
+  );
+});
+
+/** Les propositions partent aussi des ouvertes, comme l'onglet d'un projet. */
+test("toutes les propositions : l'écran part des ouvertes", async () => {
+  const source = await readFile(new URL("./toutes-les-propositions.js", import.meta.url), "utf8");
+  assert.match(source, /etat: "open"/, "l'état de départ");
+
+  // **Recliquer l'éteint** : c'est la seule sortie, une proposition n'ayant pas
+  // de grammaire où effacer un jeton.
+  assert.match(source, /vue\.etat = vue\.etat === voulu \? "" : voulu;/);
+});
+
+/* ── Le rail de « Tous les sujets » ──────────────────────────────────────── */
+
+const CHARGE_AVEC_DU_MONDE = {
+  ...CHARGE_DES_ETATS,
+  // L'auteur se lit sur la ligne du sujet, l'assigné dans son index : les deux
+  // se confondent souvent et divergent toujours au moment où ça compte.
+  subjects: CHARGE_DES_ETATS.subjects.map((sujet) => (
+    sujet.id === "e-1" ? { ...sujet, created_by: "u-1" } : sujet
+  )),
+  [CLES_DE_LA_CHARGE.assignes]: { "e-1": [MOI] }
+};
+
+const avecDuMonde = (reste = {}) => renderPageDeTousLesSujets({
+  charge: CHARGE_AVEC_DU_MONDE, personnes: PERSONNES, nomsDesProjets: NOMS, moi: [MOI], ...reste
+});
+
+/**
+ * **Le même rail que l'onglet Sujets d'un projet, et les mêmes lectures.**
+ *
+ * « Assigné à moi », « Créé par moi », « Mentions », « Activité récente » ne
+ * disent rien d'un projet : elles disent qui regarde, et qui regarde est le même
+ * d'un chantier à l'autre. En redessiner d'autres pour cet écran aurait fait
+ * deux colonnes à recalibrer ensemble (règle 10).
+ */
+test("tous les sujets : le rail porte les lectures de l'onglet d'un projet", () => {
+  const html = avecDuMonde({ requete: requeteDeDepart() });
+
+  assert.match(html, /class="project-rail/, "la coque partagée");
+  for (const nom of ["Sujets", "Assigné à moi", "Créé par moi", "Mentions", "Activité récente"]) {
+    assert.match(html, new RegExp(`nav-list__label">${nom}<`), `« ${nom} » est là`);
+  }
+});
+
+/**
+ * **Une lecture emporte l'état qu'on regarde.** Cliquer « Assigné à moi »
+ * pendant qu'on regarde les ouverts donne *mes sujets ouverts*, et non tout ce
+ * qui m'est assigné depuis trois ans : sans cela le filtre de l'en-tête sautait
+ * à chaque clic du rail, et il fallait le reposer.
+ */
+test("tous les sujets : une lecture du rail garde le filtre d'état", () => {
+  const html = avecDuMonde({ requete: requeteDeDepart() });
+
+  assert.match(html, /data-sujets-lecture="statut:ouvert assigné:moi"/);
+  assert.match(html, /data-sujets-lecture="statut:ouvert"/, "et la première entrée ne pose que l'état");
+});
+
+/**
+ * **L'entrée d'où l'on part est allumée dès l'arrivée.** Une requête qui ne dit
+ * que l'état reste la liste entière ; l'éteindre ouvrirait l'écran sur un rail
+ * où l'on n'est nulle part.
+ */
+test("tous les sujets : le rail dit où l'on est, dès l'arrivée", () => {
+  const html = avecDuMonde({ requete: requeteDeDepart() });
+  const premiere = html.slice(html.indexOf("nav-list__item"), html.indexOf("Assigné à moi"));
+
+  assert.match(premiere, /data-active="true"/, "« Sujets » est allumé");
+});
+
+/**
+ * **Les vues épinglées et les autres écrans restent dans leur projet.**
+ *
+ * Une vue est enregistrée dans un projet et son vocabulaire est le sien : en
+ * montrer une ici promettrait une requête qui ne retiendrait pas la même chose
+ * (règle 5). Vues, Objectifs et Labels, eux, sont des écrans qui n'existent pas
+ * ici — trois portes qui ne mèneraient nulle part.
+ */
+test("tous les sujets : le rail ne propose pas les écrans d'un projet", () => {
+  const html = avecDuMonde();
+
+  assert.ok(!html.includes('nav-list__label">Objectifs<'), "pas d'Objectifs");
+  assert.ok(!html.includes('nav-list__label">Labels<'), "pas de Labels");
+  assert.ok(!html.includes("Épinglées"), "pas de vues épinglées");
+});
+
+/**
+ * **La largeur passe par la variable**, et le repli par la classe : c'est la
+ * structure des quatre autres écrans qui portent un rail. Une grille écrite ici
+ * compterait la largeur deux fois.
+ */
+test("tous les sujets : le rail se règle et se replie", () => {
+  const large = avecDuMonde({ railLargeur: 320 });
+  assert.match(large, /--project-rail-width:320px/);
+  assert.match(large, /id="sujetsRailResizer"/, "la poignée est là");
+
+  const replie = avecDuMonde({ railReplie: true });
+  assert.match(replie, /project-rail-layout--collapsed/);
+  assert.match(replie, /project-rail is-collapsed/);
+  assert.match(replie, /--project-rail-width:66px/, "replié, il ne reste que les icônes");
+  assert.match(replie, /data-project-rail-collapse/, "et le bouton pour le rouvrir");
+});
+
+/**
+ * **Un rail dessiné que personne n'écoute est muet.** C'est arrivé au carnet :
+ * son bouton de repli et sa poignée étaient là depuis deux étapes, et rien ne
+ * les branchait — on croyait avoir mal cliqué, et l'on recommençait. Aucune
+ * exécution ne le montre ici : l'écran parle à la base et ne s'importe pas.
+ */
+test("les rails des écrans transversaux sont branchés", async () => {
+  const sujets = await readFile(new URL("./tous-les-sujets.js", import.meta.url), "utf8");
+  const projets = await readFile(new URL("./projects-list.js", import.meta.url), "utf8");
+
+  assert.match(sujets, /brancherLeRail\(\{/, "tous les sujets");
+  assert.match(sujets, /reglagesDuRail\("tousLesSujets"\)/, "avec ses réglages à lui");
+  assert.match(projets, /brancherLeRail\(\{/, "tous les projets");
+  assert.match(projets, /reglagesDuRail\("tousLesProjets"\)/, "avec les siens");
+
+  // **Les entrées du rail sont écoutées avec celles des menus**, et par la même
+  // écoute : elles écrivent le même attribut, et deux écoutes pour un même
+  // geste auraient fini par ne plus faire la même chose (règle 4).
+  assert.match(
+    sujets, /contenu\.querySelectorAll\("\[data-sujets-lecture\]"\)/,
+    "sur tout le contenu, et non dans le seul bloc des filtres"
+  );
+});
+
+/* ── Le rail de « Tous les projets » ─────────────────────────────────────── */
+
+/**
+ * **La même coque que partout ailleurs.**
+ *
+ * C'était un `<aside>` large de 296 px, ni réglable ni repliable, quand les
+ * quatre autres écrans à colonne — la Mémoire, l'Atelier, les Sujets d'un
+ * projet, le carnet — portent tous le même rail. Arriver ici faisait perdre les
+ * deux gestes sans que rien ne l'explique.
+ */
+test("tous les projets : le rail est celui des autres écrans", () => {
+  const html = renderRailDesProjets(FILTRES_DES_PROJETS.contributions.id);
+
+  assert.match(html, /class="project-rail"/, "la coque partagée");
+  assert.match(html, /id="projetsRailResizer"/, "la poignée de largeur");
+  assert.match(html, /data-project-rail-collapse/, "et le bouton de repli, calé en bas");
+});
+
+/** Ses deux entrées mènent où elles disent, et l'on voit laquelle on regarde. */
+test("tous les projets : les deux entrées, et celle qu'on regarde", () => {
+  const html = renderRailDesProjets(FILTRES_DES_PROJETS.mine.id);
+
+  assert.match(html, /href="#projects"[^>]*aria-current="false"/);
+  assert.match(html, /href="#projects\/mine"[^>]*aria-current="page"/);
+  assert.match(html, /nav-list__label">Mes contributions</);
+  assert.match(html, /nav-list__label">Mes projets</);
+});
+
+/**
+ * **Replié, il ne reste que les icônes** — et deux ronds gris se ressemblent
+ * trait pour trait. L'infobulle redonne le libellé, sinon on clique au hasard.
+ */
+test("tous les projets : replié, les entrées se nomment en infobulle", () => {
+  const deplie = renderRailDesProjets("", false);
+  const replie = renderRailDesProjets("", true);
+
+  assert.match(replie, /project-rail is-collapsed/);
+  assert.match(replie, /data-tooltip="Mes projets"/);
+  assert.ok(!deplie.includes('data-tooltip="Mes projets"'), "déplié, le libellé suffit");
+});
+
+/**
+ * **L'écran lit ces deux entrées, il ne les définit pas.** Il les redéclarait
+ * chez lui : le rail les aurait nommées d'un côté et l'adresse les aurait
+ * filtrées de l'autre, jusqu'au jour où l'une des deux change (règle 10).
+ */
+test("tous les projets : les entrées vivent avec le rail qui les montre", async () => {
+  const ecran = await readFile(new URL("./projects-list.js", import.meta.url), "utf8");
+
+  assert.match(ecran, /const PROJECT_LIST_FILTERS = FILTRES_DES_PROJETS;/);
+  assert.ok(!ecran.includes('href: "#projects/mine"'), "et l'écran ne les réécrit pas");
 });

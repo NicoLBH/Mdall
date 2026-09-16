@@ -358,3 +358,58 @@ test("les lectures du rail se donnent avec leur requête", () => {
   // « Sujets » n'a pas de requête : c'est la liste entière, pas un filtre.
   assert.equal(reservees.find((lecture) => lecture.cle === LECTURE.TOUS).requete, "");
 });
+
+/* ── L'état voyage avec la lecture ───────────────────────────────────────── */
+
+/**
+ * **Le rail dit ce qu'on regarde, l'en-tête dans quel état.**
+ *
+ * Les deux questions sont indépendantes, et les mêler coûtait deux choses à la
+ * fois : cliquer « Fermés » éteignait toute la colonne de gauche — on ne savait
+ * plus où l'on était pour avoir dit dans quel état on voulait le voir —, et
+ * cliquer une lecture faisait sauter le filtre qu'on venait de poser.
+ *
+ * C'est devenu visible quand les écrans qui traversent les projets se sont
+ * ouverts sur `statut:ouvert` : le rail y était éteint dès la première seconde.
+ */
+test("une requête qui ne dit que l'état reste la liste entière", () => {
+  assert.equal(lectureQuOnRegarde("statut:ouvert", champs), LECTURE.TOUS);
+  assert.equal(lectureQuOnRegarde("statut:fermé", champs), LECTURE.TOUS);
+
+  // Et une lecture reste la sienne quand on en regarde un état.
+  assert.equal(lectureQuOnRegarde("statut:ouvert assigné:moi", champs), LECTURE.MIENS);
+  assert.equal(lectureQuOnRegarde("assigné:moi", champs), LECTURE.MIENS);
+
+  // Ce qui n'est pas une lecture ne le devient pas pour autant.
+  assert.equal(lectureQuOnRegarde("statut:ouvert label:cr-chantier", champs), "");
+});
+
+test("une lecture emporte l'état qu'on regarde, et son compte avec", () => {
+  const { lectures } = rail({ requete: "statut:ouvert" });
+
+  for (const lecture of lectures) {
+    assert.match(lecture.requete, /statut:ouvert/, `${lecture.nom} garde l'état regardé`);
+  }
+
+  // Le compte est celui de **cette** requête : `s2` est fermé et m'a nommé, et
+  // « Mentions » ne doit donc pas le compter tant qu'on regarde les ouverts.
+  assert.equal(par(lectures, LECTURE.MENTIONS).combien, 0);
+  assert.equal(par(lectures, LECTURE.TOUS).combien, 3, "trois sujets ouverts sur quatre");
+
+  // Sans état demandé, rien ne s'ajoute et l'on retrouve les comptes d'avant.
+  const sansEtat = rail().lectures;
+  assert.equal(par(sansEtat, LECTURE.MENTIONS).combien, 1);
+  assert.equal(par(sansEtat, LECTURE.TOUS).combien, 4);
+  for (const lecture of sansEtat) {
+    assert.doesNotMatch(lecture.requete, /statut:/, `${lecture.nom} n'invente pas d'état`);
+  }
+});
+
+/** Et l'entrée d'où l'on part s'allume bien quand la requête n'est que l'état. */
+test("la première entrée s'allume sous le seul filtre d'état", () => {
+  const { lectures, active } = rail({ requete: "statut:ouvert" });
+
+  assert.equal(active, LECTURE.TOUS);
+  assert.equal(par(lectures, LECTURE.TOUS).active, true);
+  assert.equal(par(lectures, LECTURE.MIENS).active, false);
+});

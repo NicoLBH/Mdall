@@ -388,13 +388,20 @@ test("l'épingle et l'effacement atteignent la base", () => {
  */
 test("le carnet branche le repli et la poignée de son rail", () => {
   const ecranDuCarnet = readFileSync(resolve(ICI, "../project-situations.js"), "utf8");
+  const partage = readFileSync(resolve(ICI, "../ui/reglages-du-rail.js"), "utf8");
 
-  assert.match(ecranDuCarnet, /bindRailResizer\(\{/, "la poignée vient du composant partagé");
-  assert.match(ecranDuCarnet, /followRailScroll\(/, "le calage au défilement aussi");
-  assert.match(ecranDuCarnet, /data-project-rail-collapse[\s\S]{0,300}RAIL_REPLIE_CLE/,
+  // **Le branchement a quitté l'écran**, parce que deux écrans transversaux ont
+  // demandé le même rail : trois copies de ce calage auraient divergé.
+  assert.match(partage, /bindRailResizer\(\{/, "la poignée vient du composant partagé");
+  assert.match(partage, /followRailScroll\(/, "le calage au défilement aussi");
+  assert.match(partage, /data-project-rail-collapse[\s\S]{0,400}basculerLeRepli\(\)/,
     "et le bouton de repli retient son réglage");
+
+  assert.match(ecranDuCarnet, /brancherLeRail\(\{/, "le carnet s'en sert");
   assert.match(ecranDuCarnet, /pageSelector: "\.project-simple-page--situations"/,
     "la poignée pose la largeur sur la page, que l'écran nomme");
+  assert.match(ecranDuCarnet, /reglagesDuRail\("situations"\)/,
+    "et ses réglages sont les siens : replier le rail d'un projet ne replie pas le sien");
 });
 
 /**
@@ -421,7 +428,9 @@ test("le menu du kebab n'est pas coupé par la coquille", () => {
 test("le rail du carnet a un fond, celui d'un projet non", () => {
   const css = readFileSync(resolve(ICI, "../../../style.css"), "utf8");
 
-  assert.match(css, /\.project-simple-page--situations \.project-rail\{ background:/);
+  // La liste des projets a rejoint le carnet : elle non plus n'a pas d'onglets,
+  // et son tableau peut glisser sous le rail.
+  assert.match(css, /\.project-simple-page--situations \.project-rail,\n\.projects-page--listing \.project-rail\{ background:/);
   assert.doesNotMatch(css, /^\.project-rail\{[^}]*background:/m);
 });
 

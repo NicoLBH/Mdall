@@ -30,9 +30,10 @@
 import { mountProjectShellChrome, setProjectViewHeader } from "./project-shell-chrome.js";
 import { renderCoquilleTransversale } from "./mon-carnet-coquille.js";
 import {
-  GESTES_DES_SUJETS, renderPageDeTousLesSujets, requeteAvecLeStatut
+  GESTES_DES_SUJETS, renderPageDeTousLesSujets, requeteAvecLeStatut, requeteDeDepart
 } from "./tous-les-sujets-page.js";
 import { quandOnClique } from "./ui/tete-de-tableau.js";
+import { brancherLeRail, reglagesDuRail } from "./ui/reglages-du-rail.js";
 import { normaliserLeTri, triSuivant, TRI } from "../services/tri-des-sujets.js";
 import {
   BLOC_DES_FILTRES, basculerUnMenuDenTete, dansUnBlocDeFiltres,
@@ -53,7 +54,16 @@ import { brancherLaPagination } from "./ui/pagination-transversale.js";
  * et le tableau le dit plutôt que de rendre une liste vide (règle 5).
  */
 const vue = {
-  charge: null, personnes: [], nomsDesProjets: {}, requete: "", cherchesDesFiltres: {},
+  charge: null, personnes: [], nomsDesProjets: {},
+  /**
+   * **On part des sujets ouverts**, et le jeton est dans la barre.
+   *
+   * On arrive ici pour savoir ce qu'il reste à faire ; tout montrer d'un coup y
+   * mêle des années de sujets réglés. Le filtre se **lit** donc à l'écran et
+   * s'efface au clavier — un défaut qu'on ne voit nulle part fait chercher dans
+   * la base des sujets qui étaient là depuis le début.
+   */
+  requete: requeteDeDepart(), cherchesDesFiltres: {},
   erreur: "", page: 1,
   /**
    * L'ordre demandé — **une seule case**, et volontairement : le filtre d'à
@@ -107,6 +117,17 @@ function ecouterLaTete() {
  */
 let hote = null;
 
+/**
+ * Le repli et la largeur du rail : **des réglages à cet écran**.
+ *
+ * Replier celui de l'onglet Sujets d'un projet n'a aucune raison de replier
+ * celui-ci — on ne les regarde pas dans la même intention.
+ */
+const reglagesDuRailDesSujets = reglagesDuRail("tousLesSujets");
+
+/** De quoi débrancher le rail : ses écoutes sont sur le document. */
+let detacherLeRail = null;
+
 export function renderTousLesSujets(root) {
   if (!root) return;
 
@@ -151,7 +172,12 @@ function redessiner(contenu) {
   if (!contenu || !contenu.isConnected) return;
 
   contenu.className = "project-shell__content";
-  contenu.innerHTML = renderPageDeTousLesSujets({ ...vue, moi: moi() });
+  contenu.innerHTML = renderPageDeTousLesSujets({
+    ...vue,
+    moi: moi(),
+    railReplie: reglagesDuRailDesSujets.replie(),
+    railLargeur: reglagesDuRailDesSujets.largeur()
+  });
   brancher(contenu);
 }
 
@@ -182,20 +208,38 @@ function brancher(contenu) {
     redessiner(contenu);
   });
 
-  const bloc = contenu.querySelector(`[${BLOC_DES_FILTRES}]`);
-  if (!bloc) return;
-
-  bloc.querySelectorAll("[data-sujets-menu]").forEach((bouton) => {
-    bouton.addEventListener("click", (event) => {
-      event.preventDefault();
-      basculerUnMenuDenTete(contenu, String(bouton.getAttribute("data-sujets-menu") || ""));
-    });
+  // La poignée de largeur, le calage au défilement, le bouton de repli. On
+  // débranche d'abord : `followRailScroll` écoute le document, et un rendu de
+  // plus ajouterait une paire d'écouteurs qui mesurent un rail disparu.
+  detacherLeRail?.();
+  detacherLeRail = brancherLeRail({
+    racine: contenu,
+    id: "sujetsRail",
+    pageSelector: ".project-simple-page--situations",
+    reglages: reglagesDuRailDesSujets,
+    redessiner: () => redessiner(contenu)
   });
 
-  // **Un clic pose un jeton, il ne navigue pas.** Chaque entrée porte la requête
-  // complète qu'elle produirait ; on la recopie telle quelle, et la barre reste
-  // l'endroit où la requête se lit et se corrige au clavier.
-  bloc.querySelectorAll("[data-sujets-lecture]").forEach((entree) => {
+  // Un clic ailleurs referme ce qui était ouvert : un menu resté ouvert derrière
+  // ce qu'on regarde se lit comme un défaut d'affichage.
+  contenu.addEventListener("click", (event) => {
+    if (!dansUnBlocDeFiltres(event.target)) fermerLesMenusDenTete(contenu);
+  });
+
+  /**
+   * **Un clic pose une requête, il ne navigue pas.**
+   *
+   * Le rail et les menus de l'en-tête écrivent le même attribut, et pour la
+   * même raison : chaque entrée porte la **requête complète** qu'elle
+   * produirait, on la recopie telle quelle, et la barre reste l'endroit où elle
+   * se lit et se corrige au clavier.
+   *
+   * L'écoute est donc posée sur tout le contenu, et non dans le seul bloc des
+   * filtres : le rail est ailleurs dans la page, et une seconde écoute pour lui
+   * aurait fait deux gestes à corriger ensemble (règle 4). Ce qui les distingue
+   * est ce qu'on fait **après** — un menu se rouvre, un rail n'a rien à rouvrir.
+   */
+  contenu.querySelectorAll("[data-sujets-lecture]").forEach((entree) => {
     entree.addEventListener("click", (event) => {
       event.preventDefault();
       const nomDuMenu = nomDuMenuDe(entree);
@@ -204,8 +248,19 @@ function brancher(contenu) {
       redessiner(contenu);
       // Le menu part avec le redessin, et l'on recliquerait le bouton entre deux
       // valeurs d'un champ à choix multiple — où l'on en coche justement
-      // plusieurs d'affilée.
+      // plusieurs d'affilée. Une entrée du rail n'est pas dans un menu :
+      // `nomDuMenuDe` rend `""`, et il n'y a rien à rouvrir.
       ouvrirUnMenuDenTete(contenu, nomDuMenu);
+    });
+  });
+
+  const bloc = contenu.querySelector(`[${BLOC_DES_FILTRES}]`);
+  if (!bloc) return;
+
+  bloc.querySelectorAll("[data-sujets-menu]").forEach((bouton) => {
+    bouton.addEventListener("click", (event) => {
+      event.preventDefault();
+      basculerUnMenuDenTete(contenu, String(bouton.getAttribute("data-sujets-menu") || ""));
     });
   });
 
@@ -229,11 +284,6 @@ function brancher(contenu) {
     });
   });
 
-  // Un clic ailleurs referme ce qui était ouvert : un menu resté ouvert derrière
-  // ce qu'on regarde se lit comme un défaut d'affichage.
-  contenu.addEventListener("click", (event) => {
-    if (!dansUnBlocDeFiltres(event.target)) fermerLesMenusDenTete(contenu);
-  });
 }
 
 function nomDuMenuDe(noeud) {
