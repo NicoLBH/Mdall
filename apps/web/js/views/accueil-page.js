@@ -37,7 +37,7 @@ import { renderNavList, renderNavListGroup, renderNavListItem } from "./ui/nav-l
 import { renderGhSelectMenu } from "./ui/gh-split-button.js";
 import { renderActionsAVenirHtml } from "./ui/actions-du-copilote.js";
 import { renderTitreDEcranHtml } from "./ui/titre-decran.js";
-import { GENRE, phraseDesJours } from "../services/projets-actifs.js";
+import { GENRE } from "../services/projets-actifs.js";
 import { LE_COPILOTE } from "../services/ecrans-transversaux.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -112,7 +112,10 @@ export function depuisQuand(quand = "", maintenant = Date.now()) {
  *   `null` tant qu'on n'a pas lu
  * @param {{id: string, nom: string, jours: number}[]} options.actifs
  * @param {string} options.cherche ce qui est tapé
- * @returns {{id: string, nom: string, detail: string}[]}
+ * @returns {{id: string, nom: string}[]} un nom, et rien d'autre. **Le nombre de
+ *   jours ne s'affiche pas** : c'est ce qui range la liste, ce n'est pas ce
+ *   qu'on vient y chercher. Un compte à côté de chaque nom se lit comme une
+ *   note, et l'on se met à comparer des chantiers plutôt qu'à en ouvrir un.
  */
 export function projetsDuRail({
   projets = null, actifs = [], cherche = "", combien = TOP_PROJETS
@@ -120,22 +123,16 @@ export function projetsDuRail({
   const demande = texte(cherche).toLowerCase();
 
   if (!demande) {
-    // **Le plus travaillé en bas.** Le rail se lit en montant depuis la zone de
-    // saisie, qui est ce qu'on regarde en arrivant : le projet qu'on a le plus
-    // dans les mains est donc le plus près d'elle, et non tout en haut contre le
-    // titre. Le classement, lui, ne change pas — c'est l'ordre d'affichage.
-    return (Array.isArray(actifs) ? actifs : []).slice(0, combien).reverse().map((projet) => ({
+    // **Le plus travaillé en tête**, comme le dit le titre du rail.
+    return (Array.isArray(actifs) ? actifs : []).slice(0, combien).map((projet) => ({
       id: texte(projet?.id),
-      nom: texte(projet?.nom) || texte(projet?.id),
-      // Le compte s'affiche avec son unité : un score sans unité ne se vérifie
-      // pas, et l'on soupçonne un classement qu'on ne sait pas expliquer.
-      detail: phraseDesJours(projet?.jours)
+      nom: texte(projet?.nom) || texte(projet?.id)
     }));
   }
 
   return (Array.isArray(projets) ? projets : [])
     .filter((projet) => texte(projet?.name).toLowerCase().includes(demande))
-    .map((projet) => ({ id: texte(projet?.id), nom: texte(projet?.name), detail: "" }));
+    .map((projet) => ({ id: texte(projet?.id), nom: texte(projet?.name) }));
 }
 
 /** Le rail : le titre, le bouton vert, la recherche, et les projets. */
@@ -184,7 +181,6 @@ function renderRailHtml({ projets, actifs, cherche, replie, lu }) {
             label: projet.nom,
             title: projet.nom,
             className: "nav-list__item--sub",
-            trailing: projet.detail,
             iconHtml: svgIcon("repo", { className: "octicon octicon-repo" })
           }))
         })}

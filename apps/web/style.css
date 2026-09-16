@@ -4547,11 +4547,10 @@ body.route--project #app{
 body.route--projects-list #app{
   padding:0;
 }
-body.route--projects-list .gh-header{
-  height:var(--header-h-compact);
-  padding:16px 0px;
-  border-bottom: solid 1px var(--border);
-}
+/* La liste des projets n'a plus de réglage à elle : elle porte
+   `gh-header--global`, comme tous les écrans sans projet, et c'est lui qui cale
+   l'en-tête. Deux réglages pour la même barre finissaient par ne plus dire la
+   même chose (règle 4). */
 
 body.route--project{
   --app-top:var(--header-h);
@@ -4938,7 +4937,32 @@ body.route--project:not(.project-shell-compact) [data-chrome-visibility="compact
 
 
 
-.gh-header--global{border-bottom:1px solid var(--border);}
+/* **L'en-tête d'un écran sans projet respire autant que celui d'un projet.**
+
+   Dans un projet, l'en-tête n'a pas de bordure : c'est la barre d'onglets, plus
+   bas, qui porte le trait — les icônes ont donc quarante-quatre pixels devant
+   elles. Sans projet, il n'y a pas d'onglets, et le trait se posait à quatre
+   pixels sous les icônes : la même barre paraissait serrée d'un écran à
+   l'autre, sans qu'on sache pourquoi.
+
+   Le retrait devient symétrique, en haut comme en bas, et la barre prend la
+   hauteur qu'elle avait déjà sur la liste des projets — qui était, elle, calée
+   depuis longtemps. C'est donc un réglage qu'on généralise, pas un qu'on
+   invente. */
+.gh-header--global{
+  height:var(--header-h-compact);
+  padding:16px 0;
+  border-bottom:1px solid var(--border);
+}
+/* **Et le contenu descend d'autant.** `#app` se cale sur `--app-top` ; le
+   laisser à la hauteur d'avant ferait passer le haut de la page sous la barre.
+
+   La condition est l'en-tête lui-même, et non la route : les écrans sans projet
+   ne partagent aucune classe sur le corps — certains posent même
+   `route--project`, parce qu'ils empruntent sa coque. Une liste de routes écrite
+   ici serait juste le jour où on l'écrit, et fausse au premier écran de plus. */
+body:has(.gh-header--global){ --app-top:var(--header-h-compact); }
+
 .gh-header--project{border-bottom:none;}
 .gh-header--project .gh-brand__name{font-weight:400;font-size:14px;}
 .gh-header--project .gh-brand__repo{opacity:.92;}
@@ -25746,7 +25770,10 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    le bouton vert n'a rien à annoncer qui mérite la sienne. */
 .accueil-rail__tete{
   display:flex; align-items:center; justify-content:space-between; gap:8px;
-  padding-right:var(--nav-list-gutter, 10px);
+  /* Le titre et le bouton forment un bloc ; ce qui suit — la recherche, puis la
+     liste — en est séparé. L'espace appartient donc à la tête, et non au champ
+     qui la suit : un champ posé ailleurs emporterait sa marge. */
+  padding:0 var(--nav-list-gutter, 10px) 20px 0;
 }
 /* Le titre garde sa marge du haut, celle de tous les intitulés de groupe ;
    c'est elle qui sépare le rail de ce qui le surmonte. */
@@ -25772,6 +25799,10 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    la liste du titre qui la surmonte. Scopé à `--accueil` : les autres rails
    gardent leur trait. */
 .nav-list--accueil .nav-list__item{ padding-left:0; }
+/* Et le retrait du contenu lui-même : ailleurs il écarte le libellé du fond
+   arrondi, ici il n'y a rien à sa gauche dont on doive l'écarter — le rail
+   commence là. */
+.nav-list--accueil .nav-list__content{ padding-left:0; }
 /* Le nom peut être coupé ; le compte, jamais. « 11 jours » passait sur deux
    lignes dans un rail étroit, et un compte cassé en deux ne se lit plus comme un
    compte. */

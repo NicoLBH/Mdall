@@ -88,22 +88,31 @@ test("le bouton « Nouveau » emploie la classe des boutons primaires", () => {
   assert.match(bouton, /Nouveau/);
 });
 
-/**
- * **Le plus travaillé en bas.** Le rail se lit en montant depuis la zone de
- * saisie, qui est ce qu'on regarde en arrivant : le projet qu'on a le plus dans
- * les mains est donc le plus près d'elle. C'est l'ordre d'affichage qui
- * s'inverse, pas le classement — les cinq retenus restent les cinq plus actifs.
- */
-test("le rail montre les cinq plus actifs, le plus travaillé en bas", () => {
+/** Le plus travaillé en tête, comme le dit le titre du rail. */
+test("le rail montre les cinq plus actifs, le plus travaillé en tête", () => {
   const retenus = projetsDuRail({ projets: PROJETS, actifs: ACTIFS });
 
   assert.equal(retenus.length, TOP_PROJETS);
   assert.deepEqual(retenus.map((projet) => projet.nom), [
-    "MARENNES", "ORVAULT", "BERTRAND", "VERIFAS", "NOVACLIM"
+    "NOVACLIM", "VERIFAS", "BERTRAND", "ORVAULT", "MARENNES"
   ]);
-  assert.equal(retenus.at(-1).detail, "12 jours", "le compte s'affiche avec son unité");
-  assert.equal(retenus[0].detail, "1 jour");
   assert.ok(!retenus.some((projet) => projet.nom === "TALENCE"), "et TALENCE reste dehors");
+});
+
+/**
+ * **Le nombre de jours ne s'affiche pas.**
+ *
+ * C'est ce qui range la liste, ce n'est pas ce qu'on vient y chercher. Un compte
+ * à côté de chaque nom se lit comme une note — on se met à comparer des
+ * chantiers plutôt qu'à en ouvrir un —, et « 11 jours » se lit tout aussi bien
+ * comme le délai depuis la dernière activité, qui est l'inverse.
+ */
+test("le rail ne montre pas le compte de jours", () => {
+  const html = rendu();
+
+  assert.match(html, /NOVACLIM/, "les noms, oui");
+  assert.doesNotMatch(html, /\d+ jours?/, "le compte, non");
+  assert.doesNotMatch(html, /nav-list__trailing/);
 });
 
 /**

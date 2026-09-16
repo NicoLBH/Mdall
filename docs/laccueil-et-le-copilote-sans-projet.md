@@ -20,15 +20,18 @@ Trois questions, et une par colonne.
 
 **Où je travaille en ce moment** — le rail, à gauche : le titre et le bouton vert
 sur une ligne (dans un rail, chaque ligne compte), un champ pour chercher un
-projet, et les cinq plus actifs. **Le plus travaillé est en bas** : le rail se lit
-en montant depuis la zone de saisie, qui est ce qu'on regarde en arrivant, et le
-projet qu'on a le plus dans les mains est donc le plus près d'elle. C'est l'ordre
-d'affichage qui s'inverse, pas le classement.
+projet, et les cinq plus actifs, **le plus travaillé en tête**.
 
-Cette liste-là n'a pas de gouttière à gauche. Ailleurs, le retrait fait la place
-du trait bleu de l'entrée courante ; ici aucune entrée n'est « celle qu'on
-regarde » — ce sont des destinations —, et le retrait ne faisait que décaler la
-liste du titre qui la surmonte.
+**Le nombre de jours ne s'affiche pas.** C'est ce qui range la liste, ce n'est
+pas ce qu'on vient y chercher : un compte à côté de chaque nom se lit comme une
+note — on se met à comparer des chantiers plutôt qu'à en ouvrir un — et
+« 11 jours » se lit tout aussi bien comme le délai depuis la dernière activité,
+qui est l'inverse de ce que le nombre veut dire.
+
+Cette liste-là n'a pas de gouttière à gauche, ni de retrait sur son contenu.
+Ailleurs, le retrait fait la place du trait bleu de l'entrée courante ; ici
+aucune entrée n'est « celle qu'on regarde » — ce sont des destinations —, et le
+retrait ne faisait que décaler la liste du titre qui la surmonte.
 
 **Ce que je veux demander** — le Copilote, au centre, avec le choix du projet.
 Par défaut, aucun.
@@ -57,6 +60,28 @@ l'autre se lisent comme une liste.
 La barre du haut nomme **où l'on est** dans l'application ; le titre de la page
 nomme **ce qu'on y fait**. Le même mot aux deux endroits se lisait comme une
 répétition, et n'apprenait rien la seconde fois.
+
+Et « Tableau de bord » ne vaut **que pour l'accueil**. Les autres écrans
+transverses tombaient dans le même cas par défaut : la barre annonçait « Tableau
+de bord » sur le Copilote, sur Tous les sujets et sur Toutes les propositions. On
+arrivait donc sur un écran que la barre appelait autrement, et le premier réflexe
+est de croire qu'on a mal cliqué. Chacun prend son nom dans
+`services/ecrans-transversaux.js`, là où le menu et la route le prennent déjà.
+
+## La barre du haut respire autant sans projet qu'avec
+
+Dans un projet, l'en-tête n'a pas de bordure : c'est la barre d'onglets, plus
+bas, qui porte le trait. Sans projet, il n'y a pas d'onglets, et le trait se
+posait à quatre pixels sous les icônes — la même barre paraissait serrée d'un
+écran à l'autre, sans qu'on sache pourquoi.
+
+Le retrait devient symétrique et la barre prend la hauteur qu'elle avait déjà sur
+la liste des projets, qui était calée depuis longtemps : c'est un réglage qu'on
+généralise, pas un qu'on invente. Le contenu descend d'autant, et la condition
+est **l'en-tête lui-même** plutôt que la route — les écrans sans projet ne
+partagent aucune classe sur le corps, certains posent même `route--project` parce
+qu'ils empruntent sa coque. Une liste de routes écrite dans la feuille de style
+serait juste le jour où on l'écrit, et fausse au premier écran de plus.
 
 ## Comment se calcule « le plus actif »
 

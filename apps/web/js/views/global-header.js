@@ -5,6 +5,9 @@ import { svgIcon } from "../ui/icons.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { signOut } from "../../assets/js/auth.js";
 import { NOM_DU_CARNET, ROUTE_DU_CARNET, enTeteDuCarnet } from "../services/mon-carnet.js";
+import {
+  LE_COPILOTE, TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
+} from "../services/ecrans-transversaux.js";
 
 function parseHash() {
   const hash = String(location.hash || "").replace(/^#/, "").trim();
@@ -91,12 +94,26 @@ function getHeaderModel() {
     return enTeteDuCarnet(selectedSituation, getUserDisplayIdentity().fullLabel || store.user?.name || "");
   }
 
-  if (parts[0] === "projects") {
+  /**
+   * **Les écrans qui traversent les projets se nomment eux-mêmes.**
+   *
+   * Les trois derniers tombaient dans le cas par défaut, et la barre annonçait
+   * « Tableau de bord » sur le Copilote, sur Tous les sujets et sur Toutes les
+   * propositions. On arrivait donc sur un écran que la barre appelait autrement
+   * — et le premier réflexe est de croire qu'on a mal cliqué.
+   *
+   * Le nom vient de `ecrans-transversaux.js`, là où le menu et la route le
+   * prennent déjà : recopié ici, il aurait fini par différer de l'entrée qui y
+   * mène (règle 10).
+   */
+  for (const ecran of [TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, LE_COPILOTE, TOUS_LES_PROJETS]) {
+    if (parts[0] !== cheminDe(ecran)) continue;
+
     return {
-      primary: "Projets",
+      primary: ecran.nom,
       secondary: "",
       showSecondary: false,
-      href: "#projects",
+      href: ecran.route,
       headerClass: "gh-header gh-header--global"
     };
   }
