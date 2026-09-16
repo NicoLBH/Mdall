@@ -17285,6 +17285,19 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
  * Écarter le contenu ne suffit pas pour ce cas-là : la marge règle la position
  * de départ, pas ce qui passe derrière quand on fait défiler. */
 .project-simple-page--situations .project-rail{ background:var(--bg); }
+
+/* **Les menus de filtre sortent de l'en-tête, et la coquille les coupait.**
+   `.data-table-shell` coupe à `overflow:hidden` pour que les lignes respectent
+   ses coins arrondis ; la liste d'un menu est en position absolue et sort donc
+   du cadre — elle n'apparaissait que par sa première ligne. Même défaut, et même
+   remède, que le kebab d'une ligne du tableau des situations.
+
+   La coupe est levée sur l'en-tête et sur la coquille du seul formulaire, et
+   non partout : le corps du tableau, lui, doit continuer de défiler. */
+.project-simple-page--situations .sujets-vue-forme .data-table-shell,
+.project-simple-page--situations .sujets-vue-forme .data-table-shell__head{
+  overflow:visible;
+}
 /* Le contenu s'écarte du rail au lieu de passer dessous. Il se recentre dans ce
    qui reste, et retrouve donc sa largeur habituelle.
 
@@ -24996,6 +25009,18 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 /* L'étoile d'un champ obligatoire : elle se voit, et elle se dit. */
 .sujets-vue-forme__requis{color:var(--danger, #f85149);text-decoration:none;margin-left:2px;}
 
+/* **Ce qui n'est pas exigé le dit.** Une situation sans requête se remplit à la
+   main ; sans cette phrase, un champ sans étoile se lit comme un oubli. */
+.sujets-vue-forme__facultatif{color:var(--text-muted);font-weight:400;}
+
+/* **Un menu amputé dit pourquoi.** Sans épingler ni supprimer et sans un mot,
+   il se lit comme un défaut d'affichage. La phrase est étroite : un menu qui
+   s'élargit à la longueur de son explication n'est plus un menu. */
+.sujets-vues__menu-note{
+  margin:0; padding:8px 12px; max-width:280px;
+  color:var(--text-muted); font-size:12px; line-height:1.45; white-space:normal;
+}
+
 /* La recherche et les deux gestes sur une seule ligne. */
 .sujets-vue-forme__requete{display:flex;align-items:flex-start;gap:8px;}
 .sujets-vue-forme__requete .memory-search{flex:1;min-width:0;height:30px;}
@@ -25018,6 +25043,21 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    famille de gestes — ce que je regarde, et dans quel ordre. Les séparer ferait
    chercher l'un quand on a trouvé l'autre. */
 .cell-assignees-head{display:flex;align-items:center;gap:2px;flex-wrap:wrap;justify-content:flex-end;}
+
+/* **L'en-tête du tableau d'une situation qu'on écrit : le compte, puis les
+   menus.** Le formulaire demandait une requête sans dire un mot de la grammaire
+   qui la lit ; les menus sont ceux de l'onglet Sujets, posés là où l'on regarde
+   déjà le résultat.
+
+   `flex-wrap` parce que la colonne se resserre quand le rail est déplié : cinq
+   menus sur une ligne trop courte débordaient de la cellule, et la coquille de
+   tableau les coupait. Ils passent à la ligne. */
+.situations-sujets-tete{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width:0; width:100%;
+}
+.situations-sujets-tete__compte{flex:0 0 auto;}
+.situations-sujets-tete__filtres{display:flex; align-items:center; gap:2px; flex-wrap:wrap;
+  min-width:0;}
 
 /* Un filtre n'est pas une action : il se signale au survol, pas au repos. Celui
    qui est posé, lui, se voit — sinon on ne sait plus pourquoi la liste est

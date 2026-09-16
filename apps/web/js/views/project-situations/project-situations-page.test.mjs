@@ -30,6 +30,7 @@ import assert from "node:assert/strict";
 import { createProjectSituationsView } from "./project-situations-view.js";
 import { champsDesSujets } from "../../services/champs-des-sujets.js";
 import { compositionNeuve } from "../../services/situation-en-composition.js";
+import { BLOC_DES_FILTRES } from "../ui/menus-den-tete.js";
 
 const MOI = "u-1";
 
@@ -371,4 +372,105 @@ test("la page des situations se nomme, pour que la poignée la trouve", () => {
   const html = ecran({ situations: [MA_SITUATION] }).renderPage();
 
   assert.match(html, /project-simple-page--situations/);
+});
+
+/* ── La gouttière, les filtres d'en-tête, et la situation qu'on remplit à la main ── */
+
+/**
+ * **Le contenu s'écarte du rail par le cadre des autres écrans.**
+ *
+ * Le rail est en position fixe et le contenu s'en écarte d'une marge exacte : il
+ * commençait donc au pixel où le rail finit, collé, sans un blanc entre les
+ * deux. L'onglet Sujets d'un projet ne connaît pas ce défaut parce qu'il pose
+ * son rail dans `page-large` — le cadre de l'application, borné et rempli de
+ * 16 px. C'est celui-là qu'on emploie, et non une largeur de plus.
+ *
+ * Le test regarde **l'emboîtement**, et non la présence de la classe : posée à
+ * côté du rail plutôt qu'autour, elle n'écarterait rien.
+ */
+test("le rail du carnet est posé dans le cadre des autres écrans", () => {
+  const html = ecran({ situations: [MA_SITUATION] }).renderPage();
+
+  const cadre = html.indexOf('class="page-large"');
+  const railLayout = html.indexOf('class="project-rail-layout');
+
+  assert.notEqual(cadre, -1, "le cadre partagé est là");
+  assert.ok(cadre < railLayout, "et le rail est dedans, sans quoi rien ne l'écarte");
+});
+
+/**
+ * **Les menus de filtre de l'en-tête, pendant qu'on écrit une situation.**
+ *
+ * Le formulaire demandait une requête sans dire un mot de la grammaire qui la
+ * lit : on tapait « fondations », le tableau rendait zéro, et rien n'indiquait
+ * qu'il fallait écrire `label:` — ni quelles valeurs existaient.
+ *
+ * On vérifie ce qu'une entrée **porte**, et pas seulement qu'un menu est
+ * dessiné : c'est la requête complète qui doit s'y trouver, faute de quoi le
+ * clic recopierait du vide dans la barre.
+ */
+test("le tableau d'une situation qu'on écrit porte ses menus de filtre", () => {
+  const forme = { ...compositionNeuve(), nom: "Les urgences", requete: "priorité:haute" };
+  const html = ecran({ situationEnCours: forme }).renderPage();
+
+  assert.match(
+    html, new RegExp(BLOC_DES_FILTRES),
+    "le bloc porte le repère que l’écoute cherche, pour ne pas naviguer au clic"
+  );
+  assert.match(html, /data-sujets-menu="situation-label"/, "le menu des labels est là");
+  assert.match(html, /data-sujets-menu-liste="situation-label"/, "avec sa liste");
+  assert.match(
+    html, /data-sujets-lecture="[^"]*label:cr-chantier[^"]*"/,
+    "et l'entrée porte la requête qu'elle poserait"
+  );
+  assert.match(
+    html, /data-sujets-lecture="[^"]*priorité:haute[^"]*label:cr-chantier[^"]*"/,
+    "par-dessus ce qui est déjà écrit, et non à sa place"
+  );
+});
+
+/**
+ * **La liste des situations, elle, n'a pas ces menus.** Ils appartiennent au
+ * formulaire : posés sur le tableau des situations, ils filtreraient des sujets
+ * dans un tableau qui n'en montre pas.
+ */
+test("la liste des situations ne porte pas les menus du formulaire", () => {
+  const html = ecran({ situations: [MA_SITUATION] }).renderPage();
+
+  assert.ok(!html.includes(BLOC_DES_FILTRES));
+});
+
+/**
+ * **Une situation sans requête ne retient pas « tout ».**
+ *
+ * Elle se remplit à la main : on y met les sujets un par un. Montrer ce que
+ * `sujetsQueRetient` rend pour une requête vide — c'est-à-dire le carnet entier
+ * — ferait croire qu'elle les prend tous, et l'on enregistrerait une situation
+ * de six cent quatre-vingt-dix-huit sujets en croyant en faire une vide.
+ *
+ * La porte rend ici un sujet **quoi qu'on lui demande** : si le tableau le
+ * listait, c'est qu'il l'a demandé, et le test le voit.
+ */
+test("sans requête, le tableau dit que la situation se remplit à la main", () => {
+  const forme = { ...compositionNeuve(), nom: "À la main" };
+  const html = ecran({ situationEnCours: forme }).renderPage();
+
+  assert.match(html, /se remplit à la main/, "le tableau le dit");
+  assert.ok(!html.includes("Étanchéité"), "et ne liste pas les sujets du carnet");
+  assert.match(html, /un par un/, "il dit aussi comment on l'y mettra");
+});
+
+/**
+ * **Et l'étoile du champ suit.** Une requête marquée obligatoire au-dessus d'un
+ * formulaire qui l'accepte vide fait chercher ce qui manque ; le champ dit donc
+ * ce qu'il fait d'un vide.
+ */
+test("la requête d'une situation n'est pas marquée obligatoire", () => {
+  const forme = { ...compositionNeuve(), nom: "À la main" };
+  const html = ecran({ situationEnCours: forme }).renderPage();
+
+  const requete = html.slice(html.indexOf("Requête"), html.indexOf("Requête") + 400);
+
+  assert.ok(!requete.includes("sujets-vue-forme__requis"), "pas d'étoile");
+  assert.match(requete, /laissez-la vide/, "mais une phrase qui dit pourquoi");
 });

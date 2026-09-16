@@ -16,7 +16,11 @@ import {
   compositionDepuisLaSituation, compositionNeuve, refusDeLaComposition, situationAEcrire
 } from "../../services/situation-en-composition.js";
 import { phraseDesPerdus } from "../../services/requete-dun-filtre.js";
-import { requeteDeLaSituation } from "../../services/situation-comme-une-vue.js";
+import { requeteDeLaSituation, situationDuRepere } from "../../services/situation-comme-une-vue.js";
+import {
+  BLOC_DES_FILTRES, basculerUnMenuDenTete, dansUnBlocDeFiltres,
+  fermerLesMenusDenTete, ouvrirUnMenuDenTete
+} from "../ui/menus-den-tete.js";
 
 
 const SITUATION_GRID_KANBAN_OPTIONS = [
@@ -1918,6 +1922,88 @@ export function createProjectSituationsEvents({
   }
 
   /**
+   * Les menus de filtre de l'en-tête du tableau, pendant qu'on écrit.
+   *
+   * ## Le défaut qu'ils réparent
+   *
+   * Le formulaire demandait une requête sans dire un mot de la grammaire qui la
+   * lit : on tapait un mot, le tableau rendait zéro, et rien n'indiquait qu'il
+   * fallait écrire `label:` ou `projet:` — ni quelles valeurs existaient.
+   *
+   * ## Un clic pose un jeton, il ne navigue pas
+   *
+   * Chaque entrée porte la requête complète qu'elle produirait. On la recopie
+   * donc dans la composition, telle quelle : la barre reste l'endroit où la
+   * requête se lit et se corrige au clavier, et le menu n'a aucun état à lui.
+   *
+   * ## Le menu se rouvre après le redessin
+   *
+   * Poser un filtre redessine le tableau — c'est tout l'intérêt. Le menu part
+   * avec, et l'on se retrouvait à recliquer le bouton entre deux valeurs d'un
+   * champ à choix multiple, où l'on en coche justement plusieurs d'affilée.
+   */
+  function brancherLesFiltresDuFormulaire(root) {
+    const bloc = root?.querySelector?.(`[${BLOC_DES_FILTRES}]`);
+    if (!bloc) return;
+
+    bloc.querySelectorAll("[data-sujets-menu]").forEach((bouton) => {
+      bouton.addEventListener("click", (event) => {
+        event.preventDefault();
+        basculerUnMenuDenTete(root, String(bouton.getAttribute("data-sujets-menu") || ""));
+      });
+    });
+
+    bloc.querySelectorAll("[data-sujets-lecture]").forEach((entree) => {
+      entree.addEventListener("click", (event) => {
+        event.preventDefault();
+        const nomDuMenu = String(
+          entree.closest("[data-sujets-menu-liste]")?.getAttribute("data-sujets-menu-liste") || ""
+        );
+        poserDansLaComposition(
+          "requete", String(entree.getAttribute("data-sujets-lecture") || ""), { root }
+        );
+        ouvrirUnMenuDenTete(root, nomDuMenu);
+      });
+    });
+
+    // **La recherche à l'intérieur d'un menu** restreint la liste des valeurs,
+    // et rien d'autre : on cherche un label, on ne cherche pas des sujets. Le
+    // curseur est remis là où il était, sinon le deuxième caractère le
+    // renverrait au début du champ.
+    bloc.querySelectorAll("[data-sujets-filtre-recherche]").forEach((champ) => {
+      champ.addEventListener("input", (event) => {
+        const cle = String(champ.getAttribute("data-sujets-filtre-recherche") || "");
+        const nomDuMenu = String(
+          champ.closest("[data-sujets-menu-liste]")?.getAttribute("data-sujets-menu-liste") || ""
+        );
+        const debut = event.target.selectionStart;
+        const fin = event.target.selectionEnd;
+
+        uiState.chercheDansLesFiltres = {
+          ...(uiState.chercheDansLesFiltres && typeof uiState.chercheDansLesFiltres === "object"
+            ? uiState.chercheDansLesFiltres
+            : {}),
+          [cle]: String(event.target.value || "")
+        };
+        rerender(root);
+        ouvrirUnMenuDenTete(root, nomDuMenu);
+
+        const remis = root.querySelector(`[data-sujets-filtre-recherche="${cle}"]`);
+        if (!remis) return;
+        remis.focus();
+        if (Number.isFinite(debut) && Number.isFinite(fin)) remis.setSelectionRange(debut, fin);
+      });
+    });
+
+    // Un clic ailleurs dans le formulaire referme ce qui était ouvert : un menu
+    // resté ouvert derrière ce qu'on regarde se lit comme un défaut
+    // d'affichage. Le rail, lui, redessine tout.
+    root.querySelector(".sujets-vue-forme")?.addEventListener("click", (event) => {
+      if (!dansUnBlocDeFiltres(event.target)) fermerLesMenusDenTete(root);
+    });
+  }
+
+  /**
    * Ouvrir le choix de l'habit, ou le refermer.
    *
    * **Annuler remet ce qu'on avait en ouvrant.** Le choix se voit tout de suite
@@ -2266,11 +2352,19 @@ export function createProjectSituationsEvents({
       });
     });
 
+    brancherLesFiltresDuFormulaire(root);
+
     // **Le rail du carnet.** Chaque entrée porte la requête de ce qu'elle
     // ouvre : les lectures comme mes situations. Cliquer l'une ou l'autre fait
     // donc la même chose — ouvrir une situation et voir ses sujets.
     root.querySelectorAll("[data-sujets-lecture]").forEach((entree) => {
       entree.addEventListener("click", async (event) => {
+        // **Les menus de filtre du formulaire portent le même attribut**, et
+        // ils ne changent pas d'écran : ils écrivent dans la requête qu'on
+        // compose. Sans ce garde-fou, cliquer un label refermait la situation
+        // qu'on était en train d'écrire et affichait la liste à la place.
+        if (dansUnBlocDeFiltres(entree)) return;
+
         event.preventDefault();
         const requete = String(entree.getAttribute("data-sujets-lecture") || "");
 
@@ -2282,11 +2376,15 @@ export function createProjectSituationsEvents({
         uiState.situationEnCoursErreur = "";
 
         store.situationsView.requeteDuCarnet = requete;
+        // **Une situation qu'on remplit à la main n'a pas de requête**, et son
+        // entrée du rail porte donc son repère. On l'ouvre par son identifiant
+        // au lieu de chercher qui porte cette recherche — sans quoi elle
+        // n'aurait rien à porter, et l'épingler ne faisait rien.
+        const epinglee = situationDuRepere(requete);
         // Sans requête, c'est la première entrée : la liste des situations
         // elle-même, et non une situation.
-        store.situationsView.selectedSituationId = requete
-          ? (situationQuiPorte(requete)?.id || null)
-          : null;
+        store.situationsView.selectedSituationId = epinglee
+          || (requete ? (situationQuiPorte(requete)?.id || null) : null);
 
         rerender(root);
         if (store.situationsView.selectedSituationId) {

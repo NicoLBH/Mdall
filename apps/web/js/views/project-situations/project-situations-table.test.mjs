@@ -437,6 +437,32 @@ test("une situation qui n'appartient à personne se reprend, et rien d'autre", (
 });
 
 /**
+ * **Et le menu dit pourquoi il est court.**
+ *
+ * Le kebab s'ouvrait sur une seule ligne, sans épingler ni supprimer, et sans
+ * un mot : on le lisait comme un défaut d'affichage, et l'on cherchait la panne
+ * dans le code. La phrase est celle de l'infobulle du badge — elle nomme
+ * l'empêchement **et la suite** —, prise au même endroit qu'elle.
+ */
+test("le menu d'une situation qui n'appartient à personne dit pourquoi", () => {
+  const ouvert = tableau({ menuOuvert: SITUATION.id })
+    .renderSituationTitleCell({ ...SITUATION, owner_id: null });
+  const menu = ouvert.slice(ouvert.indexOf("sujets-vues__menu"));
+
+  assert.match(menu, /sujets-vues__menu-note/, "la note est dans le menu");
+  assert.match(menu, /elle n&#39;appartient à personne|elle n'appartient à personne/);
+  assert.match(menu, /Reprenez-la pour pouvoir la modifier/, "et elle dit la suite");
+});
+
+/** Une situation à moi n'a rien à expliquer : le menu reste un menu. */
+test("le menu d'une situation à moi ne porte pas de note", () => {
+  const ouvert = tableau({ menuOuvert: SITUATION.id })
+    .renderSituationTitleCell({ ...SITUATION, owner_id: MOI });
+
+  assert.ok(!ouvert.includes("sujets-vues__menu-note"));
+});
+
+/**
  * **Le mot du menu est celui de l'infobulle.** Deux formulations du même geste
  * — « Reprendre » ici, « Reprenez-la » là — finiraient par ne plus se répondre
  * (règle 10).

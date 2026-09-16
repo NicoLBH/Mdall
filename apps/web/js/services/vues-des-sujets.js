@@ -296,8 +296,19 @@ export const PHRASES_DU_REFUS = phrasesDuRefus();
  * rail ; la description ne se lit que sur l'écran des vues, et l'exiger ferait
  * inventer une phrase pour passer.
  */
-export function refusDeLaVue({ requete = "", nom = "", vues = [], id = "", lectures = [] } = {}) {
-  if (!texte(requete)) return REFUS.SANS_REQUETE;
+export function refusDeLaVue({
+  requete = "", nom = "", vues = [], id = "", lectures = [],
+  /**
+   * Faut-il une recherche pour enregistrer ?
+   *
+   * **Oui pour une vue** : une vue *est* une recherche nommée, et sans elle il
+   * ne resterait rien. **Non pour une situation** : celle qu'on remplit à la
+   * main n'a pas de recherche, elle a des sujets qu'on y met un par un — et
+   * c'est précisément ce que le formulaire refusait d'enregistrer.
+   */
+  requeteObligatoire = true
+} = {}) {
+  if (requeteObligatoire && !texte(requete)) return REFUS.SANS_REQUETE;
   if (!texte(nom)) return REFUS.SANS_NOM;
 
   // **Une vue qui double une lecture du rail n'ajoute rien, et prend quelque

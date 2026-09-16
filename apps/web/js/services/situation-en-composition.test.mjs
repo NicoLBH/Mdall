@@ -13,7 +13,7 @@ import {
   MOT_DE_LA_SITUATION, STATUT, compositionDepuisLaSituation, compositionNeuve,
   refusDeLaComposition, situationAEcrire, statutDe
 } from "./situation-en-composition.js";
-import { REFUS, phrasesDuRefus } from "./vues-des-sujets.js";
+import { REFUS, phrasesDuRefus, refusDeLaVue } from "./vues-des-sujets.js";
 
 /* ── La forme neuve ──────────────────────────────────────────────────────── */
 
@@ -42,11 +42,27 @@ test("chaque composition est la sienne", () => {
 
 /* ── Ce qui empêche d'enregistrer ────────────────────────────────────────── */
 
-test("une situation sans requête ne s'enregistre pas", () => {
+/**
+ * **Une situation sans requête s'enregistre**, et c'est le seul refus des vues
+ * qui ne vaut pas ici. Une vue *est* une recherche nommée ; une situation est
+ * un endroit où l'on range des sujets, et celle qu'on remplit à la main les
+ * reçoit un par un. Le formulaire la refusait, et il n'y avait donc aucun moyen
+ * d'en créer une.
+ */
+test("une situation sans requête s'enregistre : elle se remplit à la main", () => {
   assert.equal(
     refusDeLaComposition({ composition: { ...compositionNeuve(), nom: "Cette semaine" } }),
-    REFUS.SANS_REQUETE
+    ""
   );
+});
+
+/**
+ * **Et une vue, elle, continue de la refuser.** Les deux passent par
+ * `refusDeLaVue` : lever le refus pour l'une l'aurait levé pour l'autre, et une
+ * vue sans recherche ne montrerait rien.
+ */
+test("une vue sans requête reste refusée", () => {
+  assert.equal(refusDeLaVue({ nom: "Cette semaine" }), REFUS.SANS_REQUETE);
 });
 
 test("une situation sans nom ne s'enregistre pas", () => {
@@ -200,8 +216,11 @@ test("une situation en base revient sous la forme du formulaire", () => {
  * Reprendre un ancien `filter_definition` est une affirmation qui peut échouer,
  * et c'est `requete-dun-filtre.js` qui la fait et qui dit quand elle n'aboutit
  * pas. Ce module ne la referait pas mieux : sans requête donnée, il n'en
- * invente pas — et une requête vide est refusée à l'enregistrement, si bien
- * qu'on ne peut pas remplacer un filtre par moins que lui par mégarde.
+ * invente pas.
+ *
+ * **Enregistrée ainsi, la situation devient une situation qu'on remplit à la
+ * main** — ce qui se voit dans le formulaire, dont le tableau le dit, plutôt
+ * que de se subir comme un refus.
  */
 test("sans requête donnée, le formulaire n'en invente pas", () => {
   // La situation en porte une en base, et on ne la lui demande pas : c'est
@@ -210,9 +229,9 @@ test("sans requête donnée, le formulaire n'en invente pas", () => {
   const forme = compositionDepuisLaSituation(EN_BASE);
 
   assert.equal(forme.requete, "");
-  assert.equal(
-    refusDeLaComposition({ composition: forme }), "sans_requete",
-    "et elle ne s'enregistre pas en l'état"
+  assert.notEqual(
+    forme.requete, EN_BASE.requete,
+    "et surtout pas celle de la base, qu'on n'a pas demandée"
   );
 });
 

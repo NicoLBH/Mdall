@@ -605,7 +605,17 @@ export function renderCompteDeLaSelectionHtml({ combien = 0, total = 0 } = {}) {
  *   tableau des vues, où l'on est déjà sur l'écran qui les modifie.
  */
 export function renderMenuDeLaVueHtml({
-  vue = {}, ouvert = false, avecModifier = false, mot = MOT_DE_LA_VUE, gestes = null
+  vue = {}, ouvert = false, avecModifier = false, mot = MOT_DE_LA_VUE, gestes = null,
+  /**
+   * Pourquoi la liste est plus courte que d'habitude.
+   *
+   * **Un menu amputé sans un mot se lit comme une panne.** Une situation qui
+   * n'appartient à personne n'offre que « la reprendre » : on ouvrait le menu,
+   * on n'y trouvait ni épingler ni supprimer, et rien ne disait qu'ils
+   * reviendraient une fois la situation reprise. Nommer l'empêchement **et la
+   * suite** — un refus qui ne dit pas quoi faire laisse devant un bouton gris.
+   */
+  note = ""
 } = {}) {
   const id = texte(vue?.id);
   // **Les gestes se donnent quand ils ne sont pas ceux d'une vue.** Une
@@ -626,6 +636,10 @@ export function renderMenuDeLaVueHtml({
             <span>${escapeHtml(geste.nom)}</span>
           </button>
         `)).join("")}
+      ${texte(note) ? `
+        <div class="gh-menu__separator" role="presentation"></div>
+        <p class="sujets-vues__menu-note">${escapeHtml(texte(note))}</p>
+      ` : ""}
     </div>
   `;
 }
@@ -801,7 +815,15 @@ export function renderTableauDesVuesHtml({ vues = [], menuOuvert = "", lots = 0 
  */
 export function renderFormulaireDeVueHtml({
   vue = {}, champs = [], ignores = [], refus = "", lectureDoublee = "",
-  tableauHtml = "", habitOuvert = false, mot = MOT_DE_LA_VUE, champsEnPlusHtml = ""
+  tableauHtml = "", habitOuvert = false, mot = MOT_DE_LA_VUE, champsEnPlusHtml = "",
+  /**
+   * La recherche est-elle exigée ?
+   *
+   * **Une vue en a besoin** : elle *est* une recherche nommée. **Une situation
+   * non** : celle qu'on remplit à la main reçoit ses sujets un par un. L'étoile
+   * du champ suit — la poser quand rien ne l'exige fait chercher ce qui manque.
+   */
+  requeteObligatoire = true
 } = {}) {
   const icone = iconeDeLaVue(vue.icone);
   const couleur = couleurDeLaVue(vue.couleur);
@@ -852,7 +874,12 @@ export function renderFormulaireDeVueHtml({
       ${champsEnPlusHtml}
 
       <div class="sujets-vue-forme__champ">
-        <span class="sujets-vue-forme__intitule">Requête ${MARQUE_OBLIGATOIRE}</span>
+        <span class="sujets-vue-forme__intitule">
+          Requête ${requeteObligatoire ? MARQUE_OBLIGATOIRE : ""}
+          ${requeteObligatoire ? "" : `<span class="sujets-vue-forme__facultatif">
+            — laissez-la vide pour y mettre les sujets un par un
+          </span>`}
+        </span>
         <!-- La recherche et les deux gestes sur une seule ligne : on écrit la
              requête, on voit le tableau dessous, on enregistre. -->
         <div class="sujets-vue-forme__requete">
