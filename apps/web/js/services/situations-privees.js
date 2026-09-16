@@ -93,6 +93,15 @@ export function peutEtreModifiee(situation = null) {
  * Nommer l'empêchement **et la suite** : un refus qui ne dit pas quoi faire
  * laisse devant un bouton gris.
  */
+/**
+ * Ce que le seul geste possible s'appelle, quand elle n'appartient à personne.
+ *
+ * Il vit ici, avec la phrase qui le promet : deux formulations du même geste —
+ * « Reprendre » dans le menu, « Reprenez-la » dans l'infobulle — finiraient par
+ * ne plus se répondre (règle 10).
+ */
+export const REPRENDRE = "Reprendre cette situation";
+
 export function pourquoiPasModifiable(situation = null) {
   return peutEtreModifiee(situation)
     ? ""

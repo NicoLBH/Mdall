@@ -605,14 +605,19 @@ export function renderCompteDeLaSelectionHtml({ combien = 0, total = 0 } = {}) {
  *   tableau des vues, où l'on est déjà sur l'écran qui les modifie.
  */
 export function renderMenuDeLaVueHtml({
-  vue = {}, ouvert = false, avecModifier = false, mot = MOT_DE_LA_VUE
+  vue = {}, ouvert = false, avecModifier = false, mot = MOT_DE_LA_VUE, gestes = null
 } = {}) {
   const id = texte(vue?.id);
+  // **Les gestes se donnent quand ils ne sont pas ceux d'une vue.** Une
+  // situation qui n'appartient à personne n'en offre qu'un — la reprendre —, et
+  // ce n'est pas un cas que l'écran des Sujets connaît. Le menu reste le même ;
+  // c'est sa liste qui change.
+  const offerts = Array.isArray(gestes) ? gestes : gestesDeLaVue(vue, { avecModifier, mot });
 
   return `
     <div class="gh-menu sujets-vues__menu" data-sujets-vue-menu-liste="${escapeHtml(id)}"
       role="menu"${ouvert ? "" : " hidden"}>
-      ${gestesDeLaVue(vue, { avecModifier, mot }).map((geste) => (geste.separateur
+      ${offerts.map((geste) => (geste.separateur
         ? '<div class="gh-menu__separator" role="presentation"></div>'
         : `
           <button type="button" class="gh-menu__item${geste.danger ? " gh-menu__item--danger" : ""}"

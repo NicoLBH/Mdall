@@ -905,6 +905,48 @@ export async function deleteSituation(situationId) {
   return normalizedSituationId;
 }
 
+/**
+ * Reprendre une situation que personne n'a.
+ *
+ * ## La promesse de l'étape 1, enfin tenue
+ *
+ * L'écran dit depuis ce jour-là : *« elle n'appartient à personne. Reprenez-la
+ * pour pouvoir la modifier. »* Il n'y avait aucun moyen de le faire — la règle
+ * de modification exige `owner_id = auth.uid()` **avant** l'écriture, et une
+ * ligne sans propriétaire n'était modifiable par personne, pas même pour se
+ * l'attribuer.
+ *
+ * ## La base tranche, et elle n'autorise qu'une transition
+ *
+ * `reprendre_la_situation` ne change que le propriétaire, et seulement s'il
+ * n'y en a pas. Ni le titre, ni la requête, ni l'état ne peuvent voyager avec :
+ * reprendre est une décision, pas une occasion.
+ *
+ * @returns {string} l'identifiant repris, ou `""` si rien n'a été repris —
+ *   parce qu'elle appartenait déjà à quelqu'un. On le **dit** plutôt que de
+ *   laisser croire au succès (règle 5).
+ */
+export async function reprendreLaSituation(situationId) {
+  const normalizedSituationId = normalizeUuid(situationId);
+  if (!normalizedSituationId) throw new Error("situationId is required");
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/reprendre_la_situation`, {
+    method: "POST",
+    headers: await getSupabaseAuthHeaders({
+      Accept: "application/json",
+      "Content-Type": "application/json"
+    }),
+    body: JSON.stringify({ situation: normalizedSituationId })
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`situation reprise failed (${res.status}): ${text}`);
+  }
+
+  return normalizeUuid(await res.json().catch(() => null));
+}
+
 export async function closeSituation(situationId) {
   return updateSituation(situationId, { status: "closed" });
 }

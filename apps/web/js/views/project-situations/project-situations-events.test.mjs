@@ -32,7 +32,7 @@ const MA_SITUATION = {
 };
 
 /** Les portes sont fausses et comptées : on voit ce qui est appelé. */
-function gestes({ situations = [MA_SITUATION], creation = { id: "neuve" } } = {}) {
+function gestes({ situations = [MA_SITUATION], creation = { id: "neuve" }, reprise = "" } = {}) {
   const appels = [];
   const store = {
     currentProjectId: null,
@@ -56,6 +56,10 @@ function gestes({ situations = [MA_SITUATION], creation = { id: "neuve" } } = {}
       return { id };
     },
     supprimerLaSituation: async (id) => appels.push(`effacer:${id}`),
+    reprendreLaSituation: async (id) => {
+      appels.push(`reprendre:${id}`);
+      return reprise;
+    },
     repriseDeLAncienFiltre: () => null,
     setSelectedSituationId: (id) => appels.push(`selection:${id}`),
     getSituationById: (id) => situations.find((situation) => situation.id === id) || null,
@@ -236,4 +240,48 @@ test("un geste sur une situation inconnue ne fait rien", async () => {
   await portes.effacerLaSituation({}, "zoiseau");
 
   assert.deepEqual(appels, []);
+});
+
+/* ── Reprendre une situation que personne n'a ────────────────────────────── */
+
+const ORPHELINE = { id: "s-avant", title: "Tous les sujets ouverts", owner_id: "", status: "open" };
+
+/**
+ * **La promesse de l'étape 1, enfin tenue.** L'écran disait « Reprenez-la pour
+ * pouvoir la modifier » et rien ne permettait de le faire : sur un carnet qui
+ * ne contient que des situations d'avant, aucun geste n'était possible.
+ */
+test("reprendre une situation la marque sienne, puis relit la liste", async () => {
+  const monte = gestes({ situations: [ORPHELINE], reprise: "s-avant" });
+
+  await monte.portes.reprendreLaSienne({}, "s-avant");
+
+  assert.ok(monte.appels.includes("reprendre:s-avant"));
+  assert.ok(monte.appels.includes("refresh"), "la liste se relit : elle est à moi maintenant");
+  assert.equal(monte.uiState.error, undefined, "et rien à signaler");
+});
+
+/**
+ * **Une reprise qui ne reprend rien se dit.** La base ne rend l'identifiant que
+ * si elle a écrit ; vide veut dire que quelqu'un l'a prise entre-temps, et
+ * laisser croire au succès ferait chercher plus tard pourquoi le crayon reste
+ * gris (règle 5).
+ */
+test("une reprise refusée est dite, pas tue", async () => {
+  const monte = gestes({ situations: [ORPHELINE], reprise: "" });
+
+  await monte.portes.reprendreLaSienne({}, "s-avant");
+
+  assert.match(monte.uiState.error, /appartient déjà à quelqu'un/);
+  assert.ok(!monte.appels.includes("refresh"), "rien n'a changé, rien à relire");
+});
+
+/** Le menu se referme, comme pour les deux autres gestes. */
+test("le menu se referme quand on reprend", async () => {
+  const monte = gestes({ situations: [ORPHELINE], reprise: "s-avant" });
+  monte.uiState.menuDeLaSituation = "s-avant";
+
+  await monte.portes.reprendreLaSienne({}, "s-avant");
+
+  assert.equal(monte.uiState.menuDeLaSituation, "");
 });

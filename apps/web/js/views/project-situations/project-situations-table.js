@@ -6,7 +6,7 @@ import { renderDataTableHead } from "../ui/data-table-shell.js";
 import { renderIssuesTable } from "../ui/issues-table.js";
 import { normalizePaginationState, renderPaginationControls } from "../ui/pagination.js";
 import {
-  motDeLAppartenance, peutEtreModifiee, pourquoiPasModifiable
+  REPRENDRE, motDeLAppartenance, peutEtreModifiee, pourquoiPasModifiable
 } from "../../services/situations-privees.js";
 import { phraseDuPerimetre, projetsRegardes, regardeToutMonTravail } from "../../services/perimetre-dune-situation.js";
 import { detailDeLAvancement, phraseDeLAvancement } from "../../services/avancement-dune-situation.js";
@@ -241,9 +241,19 @@ export function createProjectSituationsTable({
    * sans raison visible.
    */
   function renderKebabDeLaSituation(situation) {
-    if (estUneLecture(situation) || !peutEtreModifiee(situation)) return "";
+    // **Une lecture du rail n'est pas en base** : elle ne s'épingle pas — elle
+    // y est déjà — et ne s'efface pas. Un menu qui l'offrirait ouvrirait deux
+    // gestes qui échouent en silence.
+    if (estUneLecture(situation)) return "";
 
     const id = String(situation?.id || "");
+    // **Celle qui n'appartient à personne n'offre qu'un geste : la reprendre.**
+    // L'écran le promet depuis l'étape 1 — « Reprenez-la pour pouvoir la
+    // modifier » — et il n'y avait rien pour le faire. Un carnet qui ne
+    // contient que des situations d'avant n'avait donc aucun geste du tout.
+    const gestes = peutEtreModifiee(situation)
+      ? null
+      : [{ cle: "reprendre", nom: REPRENDRE, icone: "person", attribut: "situations-reprendre" }];
     const ouvert = String(uiState.menuDeLaSituation || "") === id;
 
     return `
@@ -258,7 +268,8 @@ export function createProjectSituationsTable({
         ${renderMenuDeLaVueHtml({
           vue: situationCommeUneEpingle(situation),
           ouvert,
-          mot: MOT_DE_LA_SITUATION
+          mot: MOT_DE_LA_SITUATION,
+          gestes
         })}
       </div>
     `;
@@ -338,6 +349,11 @@ export function createProjectSituationsTable({
     }
 
     const tableHtml = renderIssuesTable({
+      // **La coquille doit laisser sortir le menu du kebab.** Elle coupe son
+      // débordement par défaut, et le menu d'une ligne s'ouvre vers le bas :
+      // il était tronqué net. L'écran des vues porte déjà cette exception, à
+      // la même classe près.
+      className: "issues-table project-situations-table",
       gridTemplate: GRILLE_DES_SITUATIONS,
       headHtml: getSituationsTableHeadHtml(),
       rowsHtml: situations.map((situation) => renderSituationTitleCell(situation)).join(""),

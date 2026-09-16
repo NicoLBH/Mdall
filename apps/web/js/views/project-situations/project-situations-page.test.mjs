@@ -92,7 +92,24 @@ function ecran({
     countsBySituationId: {}
   };
 
-  return createProjectSituationsView({
+  return createProjectSituationsView(portesDeLEcran({
+    store, uiState, situations: Array.isArray(situations) ? situations : [], sujets
+  }));
+}
+
+/** Les portes de l'écran, avec un décor minimal quand on n'en donne pas. */
+function portesDeLEcran({
+  store = { currentProjectId: null, user: { id: MOI }, projectSubjectsView: {},
+    situationsView: { data: [], selectedSituationId: null, nomsDesProjets: {},
+      personnesDuCarnet: [], sujetsDuCarnet: { rawSubjectsResult: { subjects: [] } },
+      selectedSituationLayout: "tableau" } },
+  uiState = { situationEnCours: null, situationEnCoursErreur: "", situationEnCoursGarde: "",
+    selectedSituationSubjects: [], selectedSituationLoading: false, selectedSituationError: "",
+    insightsPanelOpen: false, avancementParSituationId: {}, countsBySituationId: {} },
+  situations = [],
+  sujets = []
+} = {}) {
+  return {
     store,
     uiState,
     renderSituationsTable: () => '<div id="le-tableau-des-situations"></div>',
@@ -101,7 +118,7 @@ function ecran({
     champsDeLEcran: () => CHAMPS,
     moiDeLEcran: () => MOI,
     renderSituationKanban: () => '<div id="le-kanban"></div>'
-  });
+  };
 }
 
 /* ── Les trois formes de l'écran ─────────────────────────────────────────── */
@@ -310,4 +327,48 @@ test("les lectures du rail restent, et elles portent leur requête", () => {
     assert.ok(html.includes(`nav-list__label">${lecture}<`), `« ${lecture} » doit rester`);
   }
   assert.match(html, /data-sujets-lecture="assigné:moi"/, "et ouvrir la situation qu'elle désigne");
+});
+
+/* ── Le rail obéit ───────────────────────────────────────────────────────── */
+
+/**
+ * **Le rail était dessiné et personne ne l'écoutait.** Son bouton de repli et
+ * sa poignée de largeur sont là depuis l'étape 2 ; rien ne les branchait.
+ *
+ * L'écran ne lit plus ces réglages dans un magasin que personne n'écrit : il
+ * les **demande**, et ce qui les retient d'une session à l'autre vit là où
+ * vivent les réglages.
+ */
+test("le repli et la largeur viennent de ce qu'on donne à l'écran", () => {
+  const large = createProjectSituationsView({
+    ...portesDeLEcran(), railReplie: () => false, railLargeur: () => 320
+  }).renderPage();
+  const replie = createProjectSituationsView({
+    ...portesDeLEcran(), railReplie: () => true, railLargeur: () => 320
+  }).renderPage();
+
+  assert.match(large, /--project-rail-width:320px/);
+  assert.ok(!large.includes("project-rail-layout--collapsed"));
+
+  assert.match(replie, /project-rail-layout--collapsed/);
+  assert.ok(!replie.includes("--project-rail-width:320px"), "replié, c'est la largeur des icônes");
+});
+
+/** Le bouton de repli et la poignée sont posés : c'est ce que l'écran branche. */
+test("le rail porte son bouton de repli et sa poignée", () => {
+  const html = ecran({ situations: [MA_SITUATION] }).renderPage();
+
+  assert.match(html, /data-project-rail-collapse/, "le bouton est là");
+  assert.match(html, /id="sujetsRailResizer"/, "et la poignée aussi");
+});
+
+/**
+ * **La page porte son propre nom.** La poignée écrit la largeur sur elle, et le
+ * fond du rail s'y accroche : sans cette classe, la poignée ne trouve pas où
+ * poser sa variable et le glissé ne change rien.
+ */
+test("la page des situations se nomme, pour que la poignée la trouve", () => {
+  const html = ecran({ situations: [MA_SITUATION] }).renderPage();
+
+  assert.match(html, /project-simple-page--situations/);
 });

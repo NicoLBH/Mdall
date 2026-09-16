@@ -344,6 +344,11 @@ test("les gestes du kebab sont posés et écoutés", () => {
   assert.match(evenements, /data-situations-menu/, "et il est écouté");
   assert.match(evenements, /data-sujets-vue-epingler[\s\S]{0,240}basculerLEpingle/);
   assert.match(evenements, /data-sujets-decrocher[\s\S]{0,240}effacerLaSituation/);
+  // Le menu partagé compose l'attribut : `data-${geste.attribut}`. C'est donc
+  // le nom qu'on compare, et c'est lui qui doit se retrouver dans l'écoute.
+  assert.match(tableau, /attribut: "situations-reprendre"/, "la reprise est posée");
+  assert.match(evenements, /data-situations-reprendre[\s\S]{0,240}reprendreLaSienne/,
+    "et elle est écoutée — c'est le seul geste d'une situation d'avant");
 });
 
 /**
@@ -360,4 +365,55 @@ test("l'épingle et l'effacement atteignent la base", () => {
 
   const colonnes = readFileSync(resolve(ICI, "../../services/colonnes-dune-situation.js"), "utf8");
   assert.match(colonnes, /"au_rail"/, "et la colonne se relit, sans quoi le rail serait toujours vide");
+});
+
+/* ── Le rail obéit, et le menu ne se fait plus couper ────────────────────── */
+
+/**
+ * **Le rail était dessiné et personne ne l'écoutait.** Son bouton de repli et
+ * sa poignée sont là depuis l'étape 2 ; rien ne les branchait. Un bouton
+ * présent qui n'obéit pas est pire qu'un bouton absent : on croit avoir mal
+ * cliqué, et l'on recommence.
+ *
+ * Tout vient du composant partagé, comme dans la Mémoire, l'Atelier et les
+ * Sujets — une quatrième copie de ce calage aurait divergé au premier
+ * changement.
+ */
+test("le carnet branche le repli et la poignée de son rail", () => {
+  const ecranDuCarnet = readFileSync(resolve(ICI, "../project-situations.js"), "utf8");
+
+  assert.match(ecranDuCarnet, /bindRailResizer\(\{/, "la poignée vient du composant partagé");
+  assert.match(ecranDuCarnet, /followRailScroll\(/, "le calage au défilement aussi");
+  assert.match(ecranDuCarnet, /data-project-rail-collapse[\s\S]{0,300}RAIL_REPLIE_CLE/,
+    "et le bouton de repli retient son réglage");
+  assert.match(ecranDuCarnet, /pageSelector: "\.project-simple-page--situations"/,
+    "la poignée pose la largeur sur la page, que l'écran nomme");
+});
+
+/**
+ * **La coquille de tableau coupe son débordement**, et le menu d'une ligne
+ * s'ouvre vers le bas : il était tronqué net. L'écran des vues porte déjà cette
+ * exception ; le tableau des situations la reçoit à sa classe.
+ */
+test("le menu du kebab n'est pas coupé par la coquille", () => {
+  const css = readFileSync(resolve(ICI, "../../../style.css"), "utf8");
+
+  assert.match(tableau, /className: "issues-table project-situations-table"/);
+  assert.match(css, /\.project-situations-table\.data-table-shell,[\s\S]{0,120}overflow:visible/);
+});
+
+/**
+ * **Le rail du carnet a un fond, et lui seul.** Il est fixé à la fenêtre, et la
+ * boîte du carnet défile horizontalement : le contenu glissait dessous, et les
+ * deux se lisaient l'un à travers l'autre. Écarter le contenu règle la position
+ * de départ, pas ce qui passe derrière quand on fait défiler.
+ *
+ * Les écrans de projet le gardent transparent : le trait de l'onglet actif doit
+ * rester lisible dessous.
+ */
+test("le rail du carnet a un fond, celui d'un projet non", () => {
+  const css = readFileSync(resolve(ICI, "../../../style.css"), "utf8");
+
+  assert.match(css, /\.project-simple-page--situations \.project-rail\{ background:/);
+  assert.doesNotMatch(css, /^\.project-rail\{[^}]*background:/m);
 });
