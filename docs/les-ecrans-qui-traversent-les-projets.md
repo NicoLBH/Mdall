@@ -84,3 +84,80 @@ ligne. Le **dessin** de chaque écran vit donc à part (`*-page.js`), précisém
 pour qu'un test le monte et regarde ce qui sort. C'est la leçon du carnet, où un
 nom employé sans être déclaré est passé trois tours sans bruit : seule
 l'exécution le voit.
+
+---
+
+## Ouvrir, paginer, et ce qui manquait à la charge
+
+### Une ligne mène quelque part
+
+Les deux écrans listaient sans ouvrir : une ligne menait à l'onglet du projet,
+et il fallait y retrouver à la main ce qu'on venait de désigner. C'était un lien
+à moitié mort.
+
+L'adresse porte maintenant l'identifiant :
+`#project/<projet>/sujets/<sujet>` et `#project/<projet>/propositions/<proposition>`.
+Elle se copie, elle se partage, et elle survit à un rechargement.
+
+Trois modules se passent la main, et **explicitement** : le routeur lit le
+quatrième morceau, la mise en page le transmet à l'onglet, l'onglet l'ouvre. Une
+boîte aux lettres partagée aurait été un canal caché ; trois paramètres se lisent.
+
+**On ouvre après la lecture, et pas avant.** `selectSubject` cherche le sujet
+dans ce que l'écran a chargé : appelé tout de suite, il ne trouve rien et
+s'arrête sans un mot — la ligne cliquée mènerait alors à la liste, ce qui se lit
+comme un lien mort. Côté propositions, le mécanisme existait déjà
+(`pendingPropositionId`, pour un sujet qui cite une proposition) : l'adresse
+passe devant, et c'est le même endroit qui exécute le geste (règle 4).
+
+### Le tableau sous un formulaire ne mène nulle part
+
+C'est la même fonction de rendu, et elle sert à deux choses différentes. Sous le
+formulaire d'une situation, on regarde ce que la requête retient **pendant qu'on
+l'écrit** : un lien y ferait quitter une page non enregistrée, et l'on perdrait
+ce qu'on venait de composer.
+
+`ouvrable` tranche, et il vaut `false` par défaut — un appelant qui n'y pense pas
+ne casse rien.
+
+### Paginer
+
+Huit cents sujets et mille deux cents propositions ne tiennent pas sur une page :
+le navigateur met une seconde à poser le document, et l'on ne le parcourt pas de
+toute façon — on cherche, on ne feuillette pas. Vingt-cinq par page, la taille
+qu'emploient déjà les autres tableaux.
+
+Deux choses importent, et toutes deux se lisent dans l'en-tête :
+
+- **le compte est celui de tout ce que la recherche retient**, pas celui de la
+  page. « 25 sujets » au-dessus d'une liste qui en retient huit cents ferait
+  croire que la recherche a tout écarté ;
+- **changer la recherche ramène à la première page.** Rester à la page douze
+  d'une liste qui n'en fait plus trois montre un tableau vide, et l'on croit que
+  la recherche ne retient rien.
+
+Sans pagination demandée, tout est rendu : c'est le cas du formulaire, où la
+liste est courte par construction.
+
+### Ce qui manquait à la charge transversale
+
+`chargeDunChantier` lisait les liens, les assignés, les labels et les objectifs.
+Elle ne lisait **ni le compte des fils, ni les signaux** — et rien ne
+l'échouait. Trois choses s'en trouvaient fausses, en silence :
+
+- le **compteur de fils** restait vide sur toutes les lignes, ce qui se lit comme
+  « aucune discussion » alors que c'est « je n'ai pas demandé » ;
+- **« Mentions »** se déclarait et ne retenait jamais rien : l'index était absent,
+  `undefined` devient une liste vide, et un sujet qui ne porte rien sort de tous
+  les filtres — exactement la panne que `charge-des-sujets.js` porte écrite
+  au-dessus d'elle ;
+- **« Activité récente »** retombait sur `updated_at`, et manquait donc tout ce
+  qui se passe dans le fil de discussion, c'est-à-dire l'essentiel de la vie d'un
+  sujet.
+
+`signauxLus` dit enfin la vérité : `false` n'est pas « aucun signal », c'est « on
+ne sait pas », et les lectures qui en dépendent ne se proposent alors pas plutôt
+que de rendre une liste vide (règle 5).
+
+Cela touche aussi l'écran des situations, qui emploie la même charge : le défaut
+y était depuis le début.

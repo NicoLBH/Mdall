@@ -31,6 +31,7 @@ import { svgIcon } from "../../ui/icons.js";
 import { renderStatusBadge } from "../ui/status-badges.js";
 import { renderDataTableHead } from "../ui/data-table-shell.js";
 import { renderIssuesTable } from "../ui/issues-table.js";
+import { paginateItems, renderPaginationControls } from "../ui/pagination.js";
 import { PROPOSITION } from "../../services/proposition-state.js";
 
 /** Les colonnes, écrites une fois pour l'en-tête et pour les lignes (règle 4). */
@@ -90,7 +91,15 @@ function repli(valeur) {
  * @param {string} options.cherche ce qui est écrit dans la barre
  */
 export function renderTableauDesPropositionsHtml({
-  propositions = null, nomsDesProjets = {}, cherche = ""
+  propositions = null, nomsDesProjets = {}, cherche = "",
+  /**
+   * La page qu'on regarde, et sa taille.
+   *
+   * **Mille deux cents propositions ne tiennent pas sur une page.** Les rendre
+   * toutes fait un document que le navigateur met une seconde à poser, et qu'on
+   * ne parcourt pas — on cherche, on ne feuillette pas. `null` rend tout.
+   */
+  pagination = null
 } = {}) {
   const noms = nomsDesProjets && typeof nomsDesProjets === "object" ? nomsDesProjets : {};
   const lues = Array.isArray(propositions) ? propositions : null;
@@ -101,6 +110,9 @@ export function renderTableauDesPropositionsHtml({
     columns: [
       {
         className: "cell cell-theme",
+        // **Le compte est celui de tout ce que la recherche retient**, et non
+        // celui de la page : « 25 propositions » au-dessus d'une liste qui en
+        // retient mille deux cents ferait croire que la recherche a tout écarté.
         label: lues ? `${combien} proposition${combien > 1 ? "s" : ""}` : "Propositions"
       },
       // La colonne des documents n'a pas d'intitulé : l'icône le dit sur chaque
@@ -121,24 +133,35 @@ export function renderTableauDesPropositionsHtml({
   }
 
   const dite = texte(cherche);
+  const page = pagination ? paginateItems(retenues, pagination) : { items: retenues, totalPages: 1 };
 
-  return renderIssuesTable({
+  const tableau = renderIssuesTable({
     gridTemplate: GRILLE,
     headHtml,
-    rowsHtml: retenues.map((proposition) => renderLigneHtml(proposition, noms)).join(""),
+    rowsHtml: page.items.map((proposition) => renderLigneHtml(proposition, noms)).join(""),
     emptyTitle: dite ? "Aucune proposition ne répond à cette recherche" : "Aucune proposition",
     emptyDescription: dite
       ? "Élargissez la recherche : elle porte sur le titre et sur le nom du projet."
       : "Une proposition naît d'un dépôt de documents, dans l'onglet Propositions d'un projet."
   });
+
+  // Les commandes ne s'affichent que s'il y a plus d'une page : le composant
+  // partagé le sait, et rend `""` sinon.
+  return pagination
+    ? `${tableau}${renderPaginationControls(page, { entity: "propositions-transversales" })}`
+    : tableau;
 }
 
 /**
  * Une ligne.
  *
- * **Elle mène à l'onglet du projet**, et non à un écran de proposition
- * transversal : la proposition se lit, se discute et se tranche là où son
- * corpus est. Un détail monté ici montrerait la moitié de ce qu'elle est.
+ * **Elle ouvre la proposition, dans son projet.** Pas un écran de proposition
+ * transversal : elle se lit, se discute et se tranche là où son corpus est, et
+ * un détail monté ici montrerait la moitié de ce qu'elle est.
+ *
+ * L'adresse porte son identifiant — `#project/<projet>/propositions/<id>` —, ce
+ * qui la rend copiable et partageable. Sans lui, la ligne menait à la liste de
+ * l'onglet, et il fallait y retrouver à la main ce qu'on venait de désigner.
  *
  * Un projet qu'on ne sait pas nommer montre son identifiant plutôt qu'une
  * cellule vide, qui ferait croire que la proposition n'appartient à aucun
@@ -158,8 +181,7 @@ function renderLigneHtml(proposition, noms) {
             svgIcon(etat.icone, { className: "octicon" })}</span>
           <span class="issue-row-title-grid__title">
             <a class="row-title-trigger theme-text theme-text--pb"
-              href="#project/${escapeHtml(projet)}/propositions"
-              data-proposition-transversale="${escapeHtml(texte(proposition?.id))}"
+              href="#project/${escapeHtml(projet)}/propositions/${escapeHtml(texte(proposition?.id))}"
               >${escapeHtml(texte(proposition?.title) || "Proposition")}</a>
           </span>
           <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">

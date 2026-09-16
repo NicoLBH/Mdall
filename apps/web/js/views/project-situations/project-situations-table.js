@@ -4,7 +4,9 @@ import { renderStatusBadge } from "../ui/status-badges.js";
 import { renderTableHeadFilterToggle } from "../ui/table-head-filter-toggle.js";
 import { renderDataTableHead } from "../ui/data-table-shell.js";
 import { renderIssuesTable } from "../ui/issues-table.js";
-import { normalizePaginationState, renderPaginationControls } from "../ui/pagination.js";
+import {
+  normalizePaginationState, paginateItems, renderPaginationControls
+} from "../ui/pagination.js";
 import { motDeLAppartenance, pourquoiPasModifiable } from "../../services/situations-privees.js";
 import { phraseDuPerimetre, projetsRegardes, regardeToutMonTravail } from "../../services/perimetre-dune-situation.js";
 import { detailDeLAvancement, phraseDeLAvancement } from "../../services/avancement-dune-situation.js";
@@ -70,7 +72,27 @@ export function renderTableauDesSujetsRetenusHtml({
   /** Qui travaille sur ces chantiers, pour nommer l'auteur. */
   personnes = [],
   /** La longueur du fil de discussion de chaque sujet, par identifiant. */
-  messages = {}
+  messages = {},
+  /**
+   * Le titre mène-t-il au sujet, dans son projet ?
+   *
+   * **Non sous le formulaire d'une situation.** On y regarde ce que la requête
+   * retient *pendant qu'on l'écrit* : un lien y ferait quitter la page, et le
+   * formulaire n'est pas enregistré — on perdrait ce qu'on venait de composer.
+   *
+   * **Oui sur l'écran de tous les sujets.** C'est une liste qu'on parcourt pour
+   * aller quelque part, et une ligne qui ne mène nulle part n'est qu'un titre.
+   */
+  ouvrable = false,
+  /**
+   * La page qu'on regarde, et sa taille.
+   *
+   * **Huit cents sujets ne tiennent pas sur une page.** Les rendre tous fait un
+   * document que le navigateur met une seconde à poser, et qu'on ne parcourt
+   * pas — on cherche, on ne feuillette pas. `null` rend tout, ce qui reste juste
+   * sous un formulaire où la liste est courte par construction.
+   */
+  pagination = null
 } = {}) {
   const dite = String(requete ?? "").trim();
   const noms = nomsDesProjets && typeof nomsDesProjets === "object" ? nomsDesProjets : {};
@@ -83,7 +105,13 @@ export function renderTableauDesSujetsRetenusHtml({
   const lus = Array.isArray(sujets) ? sujets : null;
   const combien = lus ? lus.length : 0;
 
+  // **Le compte est celui de tout ce que la requête retient**, et non celui de
+  // la page. « 25 sujets » au-dessus d'une liste qui en retient huit cents
+  // ferait croire que la recherche a tout écarté.
   const compte = lus ? `${combien} sujet${combien > 1 ? "s" : ""}` : "Sujets";
+  const page = lus && pagination
+    ? paginateItems(lus, pagination)
+    : { items: lus ?? [], totalPages: 1 };
   const headHtml = renderDataTableHead({
     columns: [
       {
@@ -122,15 +150,21 @@ export function renderTableauDesSujetsRetenusHtml({
     });
   }
 
-  return renderIssuesTable({
+  const tableau = renderIssuesTable({
     gridTemplate: TABLEAU_DES_SUJETS_RETENUS,
     headHtml,
-    rowsHtml: lus.map((sujet) => renderSujetRetenuHtml(sujet, noms, decor)).join(""),
+    rowsHtml: page.items.map((sujet) => renderSujetRetenuHtml(sujet, noms, decor, ouvrable)).join(""),
     emptyTitle: dite ? "Aucun sujet ne répond à cette recherche" : "Aucun sujet retenu",
     emptyDescription: dite
       ? "Élargissez la requête : une situation qui ne retient rien ne montrera rien."
       : "Écrivez une requête : c'est elle qui dit ce que la situation retient."
   });
+
+  // Les commandes ne s'affichent que s'il y a plus d'une page : le composant
+  // partagé le sait, et rend `""` sinon.
+  return pagination
+    ? `${tableau}${renderPaginationControls(page, { entity: "sujets-transversaux" })}`
+    : tableau;
 }
 
 /**
@@ -184,7 +218,7 @@ function indexDesPersonnes(personnes = []) {
  * Rendre une cellule vide quand on ne sait pas nommer le projet ferait croire
  * que le sujet n'appartient à aucun chantier, ce qui n'arrive pas (règle 5).
  */
-function renderSujetRetenuHtml(sujet, noms, decor = {}) {
+function renderSujetRetenuHtml(sujet, noms, decor = {}, ouvrable = false) {
   const id = String(sujet?.id ?? "").trim();
   const ouvert = String(sujet?.status || "open") !== "closed";
   const chantier = String(sujet?.project_id ?? sujet?.projectId ?? "").trim();
@@ -212,8 +246,19 @@ function renderSujetRetenuHtml(sujet, noms, decor = {}) {
           <span class="issue-row-title-grid__status" aria-hidden="true">${
             svgIcon(ouvert ? "issue-opened" : "check-circle", { className: "octicon" })}</span>
           <span class="issue-row-title-grid__title issue-row-subject-title-line">
-            <span class="theme-text theme-text--pb">${
-              escapeHtml(String(sujet?.title || "Sujet"))}</span>
+            ${/*
+              **Le titre mène au sujet, dans son projet.** Un sujet se lit avec
+              son fil, ses pièces et son arborescence : le montrer entier veut
+              dire l'ouvrir là où il est. Sous le formulaire d'une situation, en
+              revanche, le lien ferait quitter une page non enregistrée — c'est
+              `ouvrable` qui tranche, et l'appelant seul sait où il est.
+            */""}
+            ${ouvrable && id && chantier
+              ? `<a class="row-title-trigger theme-text theme-text--pb"
+                  href="#project/${escapeHtml(chantier)}/sujets/${escapeHtml(id)}"
+                  >${escapeHtml(String(sujet?.title || "Sujet"))}</a>`
+              : `<span class="theme-text theme-text--pb">${
+                  escapeHtml(String(sujet?.title || "Sujet"))}</span>`}
             ${pastilles ? `<span class="issue-row-subject-labels">${pastilles}</span>` : ""}
           </span>
           <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">

@@ -40,6 +40,7 @@ import { chargerLesSujetsDesChantiers } from "../services/project-subjects-supab
 import { chargerLesPersonnesDesChantiers } from "../services/profile-supabase-sync.js";
 import { TOUS_LES_SUJETS } from "../services/ecrans-transversaux.js";
 import { store } from "../store.js";
+import { brancherLaPagination } from "./ui/pagination-transversale.js";
 
 /**
  * Ce que l'écran sait, entre deux rendus.
@@ -48,7 +49,8 @@ import { store } from "../store.js";
  * et le tableau le dit plutôt que de rendre une liste vide (règle 5).
  */
 const vue = {
-  charge: null, personnes: [], nomsDesProjets: {}, requete: "", cherchesDesFiltres: {}, erreur: ""
+  charge: null, personnes: [], nomsDesProjets: {}, requete: "", cherchesDesFiltres: {},
+  erreur: "", page: 1
 };
 
 export function renderTousLesSujets(root) {
@@ -103,6 +105,10 @@ function brancher(contenu) {
     barre.oninput = (event) => {
       const ou = event.target.selectionStart;
       vue.requete = String(event.target.value || "");
+      // **Changer la requête ramène à la première page.** Rester à la page
+      // douze d'une liste qui n'en fait plus trois montre un tableau vide, et
+      // l'on croit que la recherche ne retient rien.
+      vue.page = 1;
       redessiner(contenu);
       rendreLeCurseur(contenu, "[data-sujets-recherche]", ou);
     };
@@ -111,6 +117,12 @@ function brancher(contenu) {
   contenu.querySelector("[data-sujets-vider]")?.addEventListener("click", (event) => {
     event.preventDefault();
     vue.requete = "";
+    vue.page = 1;
+    redessiner(contenu);
+  });
+
+  brancherLaPagination(contenu, "sujets-transversaux", (page) => {
+    vue.page = page;
     redessiner(contenu);
   });
 
@@ -132,6 +144,7 @@ function brancher(contenu) {
       event.preventDefault();
       const nomDuMenu = nomDuMenuDe(entree);
       vue.requete = String(entree.getAttribute("data-sujets-lecture") || "");
+      vue.page = 1;
       redessiner(contenu);
       // Le menu part avec le redessin, et l'on recliquerait le bouton entre deux
       // valeurs d'un champ à choix multiple — où l'on en coche justement

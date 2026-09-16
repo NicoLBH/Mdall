@@ -56,7 +56,7 @@ const MENUS = ["projet", "statut", "label", "assigné", "auteur"];
  */
 export function renderPageDeTousLesSujets({
   charge = null, personnes = [], nomsDesProjets = {}, requete = "",
-  moi = [], cherchesDesFiltres = {}, erreur = ""
+  moi = [], cherchesDesFiltres = {}, erreur = "", page = 1
 } = {}) {
   const champs = champsDuCarnet({ charge: charge ?? {}, personnes, nomsDesProjets });
   const tous = Array.isArray(charge?.subjects) ? charge.subjects : null;
@@ -82,7 +82,13 @@ export function renderPageDeTousLesSujets({
               meta,
               labels: Array.isArray(charge?.labels) ? charge.labels : [],
               personnes,
-              messages: charge?.subjectMessageCountsBySubjectId ?? {}
+              messages: charge?.subjectMessageCountsBySubjectId ?? {},
+              // **Le titre mène au sujet**, dans son projet : c'est une liste
+              // qu'on parcourt pour aller quelque part, et une ligne qui ne mène
+              // nulle part n'est qu'un titre.
+              ouvrable: true,
+              // Huit cents sujets ne tiennent pas sur une page.
+              pagination: { currentPage: page }
             })}
           </section>
         </div>

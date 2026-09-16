@@ -24,5 +24,5 @@ test("la page Sujets ne rend plus le conteneur scrollable projectSituationsScrol
 });
 
 test("renderProjectSubjects réinitialise la source active au montage de la page", () => {
-  assert.match(subjectsEntrySource, /export function renderProjectSubjects\(root\)\s*\{[\s\S]*?clearProjectActiveScrollSource\(\);/);
+  assert.match(subjectsEntrySource, /export function renderProjectSubjects\(root,[^)]*\)\s*\{[\s\S]*?clearProjectActiveScrollSource\(\);/);
 });
