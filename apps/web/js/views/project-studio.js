@@ -6,11 +6,7 @@ import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import { RANGEMENT, renderVitrineDeLatelier } from "./atelier/vitrine-de-latelier.js";
 import { panneauDemandeParLaRoute } from "../services/route-de-latelier.js";
 import { utilitaireParCible } from "../services/catalogue-de-latelier.js";
-import {
-  renderNavList,
-  renderNavListGroup,
-  renderNavListItem
-} from "./ui/nav-list.js";
+import { renderNavList } from "./ui/nav-list.js";
 import {
   bindRailResizer,
   followRailScroll,
@@ -20,20 +16,16 @@ import {
 import {
   copiloteConversationId,
   copiloteConversations,
-  forgetConversationLocally,
   openConversation,
-  renameConversationLocally,
   renderCopilote,
-  startNewConversation,
-  transcrireLaDiscussion
+  startNewConversation
 } from "./studio/copilote/copilote.js";
-import { conversationTitle } from "../services/copilote-conversations.js";
+import {
+  brancherLeRailDesDiscussions,
+  renderRailDesDiscussionsHtml
+} from "./ui/rail-des-discussions.js";
 import { PROJECT_TAB_IDS } from "../constants.js";
 import { store } from "../store.js";
-import {
-  deleteConversation,
-  renameConversation
-} from "../services/copilote-conversations-supabase.js";
 import { renderSolidityClimate } from "./studio/solidity/solidity-climate.js";
 import { renderSolidityGeorisks } from "./studio/solidity/solidity-georisks.js";
 import { renderSolidityFondations } from "./studio/solidity/solidity-fondations.js";
@@ -41,7 +33,6 @@ import { renderIncendieHabitation } from "./studio/incendie/incendie-habitation.
 import { renderSolidityArkolia } from "./studio/socotec/socotec-enr-pv-hangard-neuf.js";
 import { renderSeismicGeneral } from "./studio/seismic/seismic-general.js";
 import { renderCtContinuityLab } from "./studio/dev/ct-continuity-lab.js";
-import { copierDansLePressePapiers } from "./ui/bouton-copier.js";
 import { renderVariablesMutualisees } from "./studio/dev/variables-mutualisees.js";
 import { renderLectureDesCr } from "./studio/dev/lecture-des-cr.js";
 import { renderRangerLesSujets } from "./studio/dev/ranger-les-sujets.js";
@@ -51,65 +42,6 @@ import {
   renderPanneauImpact,
   renderPanneauAudit
 } from "./studio/explorations/explorations.js";
-
-/**
- * L'historique des discussions, sous l'entrée Copilote.
- *
- * Il est plat et sans intitulé de groupe : ce ne sont pas des utilitaires de
- * plus, ce sont les fils d'un seul. Le décalage à gauche le dit mieux qu'un
- * titre, qui ferait croire à une rubrique.
- */
-function renderCopiloteHistorique() {
-  const courante = copiloteConversationId();
-
-  return renderNavListGroup({
-    id: "studioCopiloteHistorique",
-    className: "nav-list__list--sub",
-    items: copiloteConversations().map((conversation) => {
-      const titre = conversationTitle(conversation);
-      return renderNavListItem({
-        label: titre,
-        // L'intitulé est tronqué par le rail : l'infobulle rend la question
-        // entière, sans quoi deux discussions voisines se ressemblent.
-        title: titre,
-        className: "nav-list__item--sub",
-        isActive: conversation.id === courante,
-        // Pas de `data-side-nav-target` : rouvrir un fil se traite à part, sinon
-        // le panneau se redessinerait deux fois — une fois par le routeur, une
-        // fois par nous — et la seconde effacerait la discussion chargée.
-        dataAttributes: { "data-copilote-conversation": conversation.id },
-        actionHtml: `
-          <button type="button" class="nav-list__action-btn" data-copilote-menu="${escapeHtml(conversation.id)}"
-            aria-haspopup="menu" aria-expanded="false"
-            aria-label="Actions sur cette discussion" title="Actions">
-            ${svgIcon("kebab-horizontal")}
-          </button>
-          <div class="copilote-fil-menu" role="menu" data-copilote-menu-for="${escapeHtml(conversation.id)}" hidden>
-            <button type="button" class="copilote-fil-menu__item" role="menuitem"
-              data-copilote-rename="${escapeHtml(conversation.id)}">
-              ${svgIcon("pencil")}<span>Renommer</span>
-            </button>
-            <button type="button" class="copilote-fil-menu__item" role="menuitem"
-              data-copilote-copy="${escapeHtml(conversation.id)}"
-              title="Outil de développement — la discussion entière dans le presse-papiers">
-              ${svgIcon("copy")}<span>Copier la discussion</span>
-              <em class="copilote-fil-menu__temporaire">dev</em>
-            </button>
-            <button type="button" class="copilote-fil-menu__item" role="menuitem"
-              data-copilote-en-sujet="${escapeHtml(conversation.id)}"
-              title="Les messages deviennent des commentaires, visibles par l'équipe du projet">
-              ${svgIcon("issue-opened")}<span>Créer un sujet</span>
-            </button>
-            <button type="button" class="copilote-fil-menu__item is-danger" role="menuitem"
-              data-copilote-delete="${escapeHtml(conversation.id)}">
-              ${svgIcon("trash")}<span>Effacer</span>
-            </button>
-          </div>
-        `
-      });
-    })
-  });
-}
 
 /**
  * Ce que le rail porte encore, et pourquoi si peu.
@@ -125,25 +57,12 @@ function renderCopiloteHistorique() {
  * propre gauche.
  */
 function renderStudioNav() {
-  return [
-    renderNavListGroup({
-      items: [
-        renderNavListItem({
-          label: "Nouvelle discussion",
-          dataAttributes: { "data-side-nav-target": "studio-copilote" },
-          iconHtml: svgIcon("copilot", { className: "octicon octicon-copilot" }),
-          isActive: true,
-          actionHtml: `
-            <button type="button" class="nav-list__action-btn" data-copilote-new
-              aria-label="Nouvelle discussion" title="Nouvelle discussion">
-              ${svgIcon("new-chat")}
-            </button>
-          `
-        })
-      ]
-    }),
-    renderCopiloteHistorique()
-  ].join("");
+  return renderRailDesDiscussionsHtml({
+    id: HISTORIQUE,
+    // La ligne mène au panneau du Copilote : c'est le routeur de panneaux de
+    // l'Atelier qui l'ouvre, et non nous.
+    attributsDeLEntree: { "data-side-nav-target": "studio-copilote" }
+  });
 }
 
 /**
@@ -153,6 +72,15 @@ function renderStudioNav() {
  * et le panneau par défaut le désignent tous les trois (règle 10).
  */
 const ACCUEIL = "atelier-vitrine";
+
+/**
+ * L'identifiant de l'historique dans le rail.
+ *
+ * Il est écrit au rendu et relu au rafraîchissement : les deux doivent dire le
+ * même mot, et un écran qui se rafraîchirait sur un identifiant d'un autre
+ * écran réécrirait l'historique du voisin (règle 10).
+ */
+const HISTORIQUE = "studioCopiloteHistorique";
 
 /**
  * L'écran de l'Atelier qu'on regarde.
@@ -692,11 +620,15 @@ function afficherPanneau(root, targetId) {
 }
 
 /**
- * Les discussions dans le rail : en ouvrir une neuve, en rouvrir une passée.
+ * Les discussions dans le rail.
  *
- * La délégation est nécessaire, pas décorative : l'historique se réécrit à
- * chaque message, et des écouteurs posés sur les entrées disparaîtraient avec
- * elles — la deuxième discussion serait morte au clic.
+ * Tout le geste — le kebab, renommer, copier, effacer, ouvrir un sujet — vit
+ * dans `ui/rail-des-discussions.js` : le Copilote transverse montre le même
+ * rail, et deux copies d'un menu qui **efface sans retour** divergent au
+ * premier correctif.
+ *
+ * Ce qui reste ici est ce que l'Atelier est seul à savoir : où le Copilote est
+ * monté, quel panneau afficher, et quel repère marquer dans le rail.
  */
 function brancherCopilote(root, copiloteRoot, getScrollSource) {
   // L'écouteur d'avant se retire : l'Atelier se redessine à chaque repli du
@@ -705,8 +637,7 @@ function brancherCopilote(root, copiloteRoot, getScrollSource) {
   if (studioCopiloteDetacher) studioCopiloteDetacher();
   studioCopiloteDetacher = null;
 
-  const rail = root.querySelector(".project-rail");
-  if (!rail || !copiloteRoot) return;
+  if (!copiloteRoot) return;
 
   const venir = () => {
     registerProjectPrimaryScrollSource(getScrollSource());
@@ -715,200 +646,21 @@ function brancherCopilote(root, copiloteRoot, getScrollSource) {
     marquerActif(root, "studio-copilote");
   };
 
-  const fermerMenus = () => {
-    for (const menu of rail.querySelectorAll("[data-copilote-menu-for]")) menu.hidden = true;
-    for (const bouton of rail.querySelectorAll("[data-copilote-menu]")) bouton.setAttribute("aria-expanded", "false");
-  };
-
-  rail.addEventListener("click", async (event) => {
-    if (event.target.closest("[data-copilote-new]")) {
-      fermerMenus();
-      startNewConversation();
+  studioCopiloteDetacher = brancherLeRailDesDiscussions({
+    racine: root,
+    id: HISTORIQUE,
+    panneau: copiloteRoot,
+    surNouvelle: () => { startNewConversation(); venir(); },
+    surOuverture: (id) => {
+      if (!openConversation(id)) return false;
       venir();
-      return;
-    }
-
-    const kebab = event.target.closest("[data-copilote-menu]");
-    if (kebab) {
-      // Le menu ne doit pas ouvrir la discussion au passage : on l'ouvre pour
-      // la renommer ou l'effacer, pas pour la lire.
-      event.stopPropagation();
-      const id = kebab.dataset.copiloteMenu;
-      const menu = rail.querySelector(`[data-copilote-menu-for="${CSS.escape(id)}"]`);
-      const ouvert = menu && !menu.hidden;
-      fermerMenus();
-      if (menu && !ouvert) {
-        menu.hidden = false;
-        kebab.setAttribute("aria-expanded", "true");
-      }
-      return;
-    }
-
-    const renommer = event.target.closest("[data-copilote-rename]");
-    if (renommer) {
-      event.stopPropagation();
-      fermerMenus();
-      await renommerFil(root, renommer.dataset.copiloteRename, copiloteRoot);
-      return;
-    }
-
-    const copier = event.target.closest("[data-copilote-copy]");
-    if (copier) {
-      event.stopPropagation();
-      fermerMenus();
-      await copierLeFil(copier.dataset.copiloteCopy);
-      return;
-    }
-
-    const enSujet = event.target.closest("[data-copilote-en-sujet]");
-    if (enSujet) {
-      event.stopPropagation();
-      fermerMenus();
-      await ouvrirUnSujetDepuisLeFil(enSujet.dataset.copiloteEnSujet);
-      return;
-    }
-
-    const effacer = event.target.closest("[data-copilote-delete]");
-    if (effacer) {
-      event.stopPropagation();
-      fermerMenus();
-      await effacerFil(root, effacer.dataset.copiloteDelete, copiloteRoot);
-      return;
-    }
-
-    fermerMenus();
-
-    const fil = event.target.closest("[data-copilote-conversation]");
-    if (fil && openConversation(fil.dataset.copiloteConversation)) venir();
-  });
-
-  document.addEventListener("click", (event) => {
-    if (!event.target.closest?.(".project-rail")) fermerMenus();
-  });
-
-  // L'historique se redessine seul, sans toucher au reste du rail : redessiner
-  // l'Atelier entier à chaque message replierait les réglages en cours.
-  const rafraichir = () => {
-    const liste = root.querySelector("#studioCopiloteHistorique");
-    if (!liste?.isConnected) return;
-    liste.outerHTML = renderCopiloteHistorique();
+      return true;
+    },
     // Le panneau courant, pas le Copilote : un message qui arrive pendant qu'on
     // est sur un utilitaire ne doit pas déplacer le repère du rail.
-    marquerActif(root, panneauCourant);
-  };
-
-  /**
-   * Renommer.
-   *
-   * Le nom part en base avant d'apparaître à l'écran : l'ordre inverse
-   * montrerait un nom que rien ne conserve, et il disparaîtrait au
-   * rechargement sans que personne comprenne pourquoi.
-   */
-  async function renommerFil(hote, id, panneau) {
-    const actuel = copiloteConversations().find((entree) => entree.id === id);
-    const propose = window.prompt("Renommer cette discussion", conversationTitle(actuel) || "");
-    if (propose === null) return;
-
-    try {
-      const nom = await renameConversation(id, propose);
-      renameConversationLocally(id, nom);
-      rafraichir();
-    } catch (error) {
-      window.alert(`Le nouveau nom n'a pas pu être enregistré. ${error?.message || ""}`.trim());
-    }
-  }
-
-  /**
-   * Copier la discussion — outil de développement, destiné à disparaître.
-   *
-   * Le texte ne part nulle part : il va dans le presse-papiers de qui clique.
-   * Une conversation avec le copilote est privée, et la copier pour soi n'est
-   * pas la partager.
-   */
-  /**
-   * Ouvrir un sujet à partir d'une discussion.
-   *
-   * **Ce qui part ne revient pas** : le sujet est visible par toute l'équipe du
-   * projet, et la discussion, elle, reste privée. On demande donc avant, en
-   * disant ce que le geste fait — pas « êtes-vous sûr ? », qui ne dit rien.
-   */
-  async function ouvrirUnSujetDepuisLeFil(id) {
-    const conversation = copiloteConversations().find((entree) => entree.id === id);
-    if (!conversation) return;
-
-    const nombre = (conversation.messages ?? []).filter((message) => String(message?.content || "").trim()).length;
-    if (!nombre) {
-      window.alert("Cette discussion n'a rien à montrer.");
-      return;
-    }
-
-    const nom = conversationTitle(conversation) || "cette discussion";
-    const ok = window.confirm(
-      `Ouvrir un sujet « ${nom} » ?\n\n`
-      + `Les ${nombre} messages deviendront des commentaires, visibles par toute l'équipe du projet. `
-      + `La discussion, elle, reste privée.`
-    );
-    if (!ok) return;
-
-    try {
-      const { transformerEnSujet } = await import("../services/copilote-en-sujet.js");
-      const { resolveCurrentBackendProjectId } = await import("../services/project-supabase-sync.js");
-      const projet = await resolveCurrentBackendProjectId().catch(() => "");
-      const rendu = await transformerEnSujet({ projectId: projet, conversation });
-
-      if (!rendu.ok) { window.alert(rendu.raison); return; }
-      if (rendu.commentaires < rendu.attendus) {
-        // Le compte seul ne sert à rien : « 0 sur 5 » a laissé chercher deux
-        // tours. C'est la raison qu'on lit, le compte n'en est que le décor.
-        window.alert(
-          `Le sujet « ${rendu.sujet.title} » est ouvert, avec ${rendu.commentaires} commentaire`
-          + `${rendu.commentaires > 1 ? "s" : ""} sur ${rendu.attendus}.\n\n`
-          + (rendu.raison || "Les autres n'ont pas pu être écrits.")
-        );
-      }
-
-      const projetAffiche = String(store.currentProjectId || "").trim();
-      if (projetAffiche) window.location.hash = `#project/${projetAffiche}/sujets`;
-    } catch (erreur) {
-      window.alert(`Le sujet n'a pas pu être ouvert. ${erreur?.message || ""}`.trim());
-    }
-  }
-
-  async function copierLeFil(id) {
-    const texte = await transcrireLaDiscussion(id);
-    if (!texte) {
-      window.alert("Cette discussion n'a rien à copier.");
-      return;
-    }
-    await copierDansLePressePapiers(texte);
-  }
-
-  /**
-   * Effacer.
-   *
-   * On demande confirmation parce que c'est sans retour : la discussion et ses
-   * messages partent de la base, et rien n'en garde de copie — c'est ce qu'on
-   * promet à quelqu'un qui efface une conversation privée.
-   */
-  async function effacerFil(hote, id, panneau) {
-    const actuel = copiloteConversations().find((entree) => entree.id === id);
-    const nom = conversationTitle(actuel);
-    if (!window.confirm(`Effacer « ${nom} » ? La discussion et ses messages seront supprimés, sans retour.`)) return;
-
-    try {
-      await deleteConversation(id);
-      forgetConversationLocally(id);
-      rafraichir();
-      if (panneau) renderCopilote(panneau);
-    } catch (error) {
-      window.alert(`La discussion n'a pas pu être effacée. ${error?.message || ""}`.trim());
-    }
-  }
-
-  const surConversations = () => rafraichir();
-
-  document.addEventListener("copilote:conversations", surConversations);
-  studioCopiloteDetacher = () => document.removeEventListener("copilote:conversations", surConversations);
+    apresRafraichissement: () => marquerActif(root, panneauCourant),
+    redessinerLePanneau: (panneau) => renderCopilote(panneau)
+  });
 }
 
 /**

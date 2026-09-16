@@ -9,9 +9,11 @@
  * n'en écrit que pour soi). Le détail est dans la migration.
  *
  * Ce fichier est la seule porte. Il n'expose aucune lecture « par projet » ni
- * « par équipe » : la seule question qu'on peut lui poser est « les miennes,
- * sur ce projet ». Une fonction qui rendrait celles des autres serait refusée
- * par la base, mais elle n'aurait rien à faire ici de toute façon.
+ * « par équipe » : les seules questions qu'on peut lui poser sont « les
+ * miennes, sur ce projet », « les miennes, sur aucun projet » et « où et quand
+ * ai-je discuté ». Toutes commencent par *les miennes*. Une fonction qui
+ * rendrait celles des autres serait refusée par la base, mais elle n'aurait
+ * rien à faire ici de toute façon.
  *
  * ## Une écriture qui échoue se dit
  *
@@ -50,6 +52,42 @@ function versMessage(ligne) {
 }
 
 /**
+ * Où j'ai discuté, et quand — **sans un seul message**.
+ *
+ * L'accueil classe mes projets par le nombre de jours où j'y ai fait quelque
+ * chose, et une discussion en est une trace. Il lui faut donc le projet et la
+ * date, plus le titre pour nommer la ligne de la timeline. **Pas le contenu** :
+ * il n'en a aucun usage, et ce qui ne sort pas d'ici ne peut pas fuir.
+ *
+ * Passer par cette porte plutôt que d'interroger la table depuis l'accueil
+ * n'est pas une politesse : la cloison le vérifie, et c'est elle qui garantit
+ * qu'on sait, à un seul endroit, tout ce qui est lu de ces deux tables.
+ *
+ * **Celles qui portent un projet.** Une discussion « Tous les projets » n'en
+ * désigne aucun : la compter quelque part reviendrait à lui inventer une place.
+ *
+ * @param {object} [options]
+ * @param {number} [options.auPlus] de quoi classer, pas une archive
+ * @returns {Promise<{projectId: string, title: string, updatedAt: string}[]>}
+ */
+export async function listerMesTracesDeDiscussion({ auPlus = 300 } = {}) {
+  const { data, error } = await supabase
+    .from("copilot_conversations")
+    .select("project_id,title,updated_at")
+    .not("project_id", "is", null)
+    .order("updated_at", { ascending: false })
+    .limit(Math.max(1, auPlus));
+
+  if (error) throw new Error(error.message || "Lecture impossible.");
+
+  return (Array.isArray(data) ? data : []).map((ligne) => ({
+    projectId: texte(ligne?.project_id),
+    title: texte(ligne?.title),
+    updatedAt: texte(ligne?.updated_at)
+  }));
+}
+
+/**
  * Mes discussions sur ce projet, la plus récemment touchée en tête.
  *
  * Les messages viennent avec : le rail affiche un titre tiré de la première
@@ -58,12 +96,21 @@ function versMessage(ligne) {
  */
 export async function listConversations(projectId) {
   const projet = texte(projectId);
-  if (!projet) return [];
 
-  const { data: conversations, error } = await supabase
+  // **`null` demande celles qui ne sont d'aucun projet**, et `""` reste une
+  // absence de réponse — on ne sait pas de quel projet on parle, on ne rend
+  // rien. Les confondre ferait montrer les discussions transversales sur
+  // l'écran d'un projet qui n'a pas fini de se résoudre.
+  const sansProjet = projectId === null;
+  if (!projet && !sansProjet) return [];
+
+  const demande = supabase
     .from("copilot_conversations")
-    .select("id,project_id,title,created_at,updated_at")
-    .eq("project_id", projet)
+    .select("id,project_id,title,created_at,updated_at");
+
+  const { data: conversations, error } = await (sansProjet
+    ? demande.is("project_id", null)
+    : demande.eq("project_id", projet))
     .order("updated_at", { ascending: false })
     .limit(50);
 
@@ -96,11 +143,12 @@ export async function listConversations(projectId) {
  */
 export async function createConversation(projectId) {
   const projet = texte(projectId);
-  if (!projet) throw new Error("Aucun projet.");
+  // Même règle qu'à la lecture : `null` est une demande, `""` est une ignorance.
+  if (!projet && projectId !== null) throw new Error("Aucun projet.");
 
   const { data, error } = await supabase
     .from("copilot_conversations")
-    .insert({ project_id: projet })
+    .insert({ project_id: projet || null })
     .select("id,project_id,title,created_at,updated_at")
     .single();
 

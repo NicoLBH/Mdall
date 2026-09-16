@@ -1,7 +1,7 @@
 import { svgIcon } from "../ui/icons.js";
 import { ICONE_DU_CARNET, NOM_DU_CARNET, ROUTE_DU_CARNET } from "../services/mon-carnet.js";
 import {
-  TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
+  LE_COPILOTE, TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
 } from "../services/ecrans-transversaux.js";
 
 function parseHash() {
@@ -22,7 +22,8 @@ function getNavModel() {
     activeProjects: active === cheminDe(TOUS_LES_PROJETS) || active === "project",
     activeSituations: active === "situations",
     activeSujets: active === cheminDe(TOUS_LES_SUJETS),
-    activePropositions: active === cheminDe(TOUTES_LES_PROPOSITIONS)
+    activePropositions: active === cheminDe(TOUTES_LES_PROPOSITIONS),
+    activeCopilote: active === cheminDe(LE_COPILOTE)
   };
 }
 
@@ -86,6 +87,19 @@ export function renderGlobalNav() {
             label: TOUS_LES_PROJETS.nom, isActive: model.activeProjects
           })}
           ${renderNavLink({ href: ROUTE_DU_CARNET, icon: svgIcon(ICONE_DU_CARNET, { className: `octicon octicon-${ICONE_DU_CARNET}` }), label: NOM_DU_CARNET, isActive: model.activeSituations })}
+          ${/*
+            **Sous les situations, le Copilote.** Il vit dans un projet, et c'est
+            ce qui fait sa valeur — il hérite d'une mémoire. Mais toutes les
+            questions ne portent pas sur un chantier, et les poser obligeait à en
+            ouvrir un au hasard : la réponse arrivait chargée d'une mémoire qui
+            n'avait rien à y voir.
+          */""}
+          ${renderNavLink({
+            href: LE_COPILOTE.route,
+            icon: svgIcon(LE_COPILOTE.icone, { className: `octicon octicon-${LE_COPILOTE.icone}` }),
+            label: LE_COPILOTE.nom,
+            isActive: model.activeCopilote
+          })}
         </div>
       </div>
     </div>

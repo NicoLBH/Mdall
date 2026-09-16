@@ -24,8 +24,9 @@ import {
   auteursParCompte, comptesDesPersonnes, renderPageDeToutesLesPropositions
 } from "./toutes-les-propositions-page.js";
 import {
-  TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
+  LE_COPILOTE, TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
 } from "../services/ecrans-transversaux.js";
+import { ROUTE_DU_CARNET } from "../services/mon-carnet.js";
 import { CLES_DE_LA_CHARGE } from "../services/charge-des-sujets.js";
 import { PROPOSITION } from "../services/proposition-state.js";
 import { renderTableauDesSujetsRetenusHtml } from "./project-situations/project-situations-table.js";
@@ -322,6 +323,32 @@ test("chaque adresse du menu a son écran dans le routeur", async () => {
   assert.match(
     source,
     /cheminDe\(TOUTES_LES_PROPOSITIONS\)[\s\S]{0,120}store\.currentProjectId = null/
+  );
+
+  // Le Copilote transverse en dépend plus que les autres : c'est cette marque
+  // que le service lit pour n'envoyer **aucun** identifiant de chantier, et que
+  // le rail lit pour demander les discussions qui n'en portent aucune. Un projet
+  // resté dans le magasin y enverrait la mémoire du dernier ouvert.
+  assert.match(source, /cheminDe\(LE_COPILOTE\)[\s\S]{0,200}renderCopiloteTransversal\(root\)/);
+  assert.match(source, /cheminDe\(LE_COPILOTE\)[\s\S]{0,120}store\.currentProjectId = null/);
+});
+
+/**
+ * **Le Copilote est la quatrième façon de tout regarder**, et il se range sous
+ * les situations, comme l'écran le demande.
+ */
+test("le menu général ouvre le Copilote transverse", () => {
+  const html = menuRendu();
+
+  assert.match(html, new RegExp(`href="${LE_COPILOTE.route}"`));
+  assert.match(html, new RegExp(`>\\s*${LE_COPILOTE.nom}\\s*<`));
+  assert.equal(cheminDe(LE_COPILOTE), "copilote");
+
+  // Sous les situations : l'ordre des entrées est celui de la question qu'on se
+  // pose, et le Copilote vient après ce qu'on a à faire.
+  assert.ok(
+    html.indexOf(`href="${ROUTE_DU_CARNET}"`) < html.indexOf(`href="${LE_COPILOTE.route}"`),
+    "le Copilote vient après les situations"
   );
 });
 

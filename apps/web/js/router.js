@@ -5,9 +5,10 @@ import { renderPersonalSettings } from "./views/personal-settings.js";
 import { renderMonCarnet } from "./views/mon-carnet.js";
 import { renderTousLesSujets } from "./views/tous-les-sujets.js";
 import { renderToutesLesPropositions } from "./views/toutes-les-propositions.js";
+import { renderCopiloteTransversal } from "./views/copilote-transversal.js";
 import { ROUTE_DU_CARNET, adresseDunAncienLien } from "./services/mon-carnet.js";
 import {
-  TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
+  LE_COPILOTE, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
 } from "./services/ecrans-transversaux.js";
 import { unmountProjectShellChrome } from "./views/project-shell-chrome.js";
 import { store } from "./store.js";
@@ -73,6 +74,20 @@ function route() {
     store.currentProjectId = null;
     unmountProjectShellChrome();
     renderToutesLesPropositions(root);
+    return;
+  }
+
+  /**
+   * **Le Copilote qui n'est d'aucun projet.**
+   *
+   * Même marque que les autres : `currentProjectId` nul. C'est elle que le
+   * service lit pour n'envoyer aucun identifiant de chantier, et que le rail lit
+   * pour demander à la base les discussions qui n'en portent aucun.
+   */
+  if (parts[0] === cheminDe(LE_COPILOTE)) {
+    store.currentProjectId = null;
+    unmountProjectShellChrome();
+    renderCopiloteTransversal(root);
     return;
   }
 
