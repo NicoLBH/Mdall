@@ -34,11 +34,8 @@ import {
 } from "./tous-les-sujets-page.js";
 import { quandOnClique } from "./ui/tete-de-tableau.js";
 import { brancherLeRail, reglagesDuRail } from "./ui/reglages-du-rail.js";
+import { brancherLaRequete } from "./ui/branchement-de-la-requete.js";
 import { normaliserLeTri, triSuivant, TRI } from "../services/tri-des-sujets.js";
-import {
-  BLOC_DES_FILTRES, basculerUnMenuDenTete, dansUnBlocDeFiltres,
-  fermerLesMenusDenTete, ouvrirUnMenuDenTete
-} from "./ui/menus-den-tete.js";
 import { mesPersonnes } from "../services/meta-des-sujets.js";
 import { fetchMesChantiers } from "../services/project-situations-supabase.js";
 import { chargerLesSujetsDesChantiers } from "../services/project-subjects-supabase.js";
@@ -182,27 +179,6 @@ function redessiner(contenu) {
 }
 
 function brancher(contenu) {
-  const barre = contenu.querySelector("[data-sujets-recherche]");
-  if (barre) {
-    barre.oninput = (event) => {
-      const ou = event.target.selectionStart;
-      vue.requete = String(event.target.value || "");
-      // **Changer la requête ramène à la première page.** Rester à la page
-      // douze d'une liste qui n'en fait plus trois montre un tableau vide, et
-      // l'on croit que la recherche ne retient rien.
-      vue.page = 1;
-      redessiner(contenu);
-      rendreLeCurseur(contenu, "[data-sujets-recherche]", ou);
-    };
-  }
-
-  contenu.querySelector("[data-sujets-vider]")?.addEventListener("click", (event) => {
-    event.preventDefault();
-    vue.requete = "";
-    vue.page = 1;
-    redessiner(contenu);
-  });
-
   brancherLaPagination(contenu, "sujets-transversaux", (page) => {
     vue.page = page;
     redessiner(contenu);
@@ -220,86 +196,12 @@ function brancher(contenu) {
     redessiner: () => redessiner(contenu)
   });
 
-  // Un clic ailleurs referme ce qui était ouvert : un menu resté ouvert derrière
-  // ce qu'on regarde se lit comme un défaut d'affichage.
-  contenu.addEventListener("click", (event) => {
-    if (!dansUnBlocDeFiltres(event.target)) fermerLesMenusDenTete(contenu);
+  // **La barre, le rail et les menus posent la même requête**, et une seule
+  // écoute les entend tous les trois (`ui/branchement-de-la-requete.js`). Les
+  // propositions emploient la même, dans un projet comme à travers tous.
+  brancherLaRequete(contenu, {
+    nom: "sujets",
+    etat: vue,
+    redessiner: () => redessiner(contenu)
   });
-
-  /**
-   * **Un clic pose une requête, il ne navigue pas.**
-   *
-   * Le rail et les menus de l'en-tête écrivent le même attribut, et pour la
-   * même raison : chaque entrée porte la **requête complète** qu'elle
-   * produirait, on la recopie telle quelle, et la barre reste l'endroit où elle
-   * se lit et se corrige au clavier.
-   *
-   * L'écoute est donc posée sur tout le contenu, et non dans le seul bloc des
-   * filtres : le rail est ailleurs dans la page, et une seconde écoute pour lui
-   * aurait fait deux gestes à corriger ensemble (règle 4). Ce qui les distingue
-   * est ce qu'on fait **après** — un menu se rouvre, un rail n'a rien à rouvrir.
-   */
-  contenu.querySelectorAll("[data-sujets-lecture]").forEach((entree) => {
-    entree.addEventListener("click", (event) => {
-      event.preventDefault();
-      const nomDuMenu = nomDuMenuDe(entree);
-      vue.requete = String(entree.getAttribute("data-sujets-lecture") || "");
-      vue.page = 1;
-      redessiner(contenu);
-      // Le menu part avec le redessin, et l'on recliquerait le bouton entre deux
-      // valeurs d'un champ à choix multiple — où l'on en coche justement
-      // plusieurs d'affilée. Une entrée du rail n'est pas dans un menu :
-      // `nomDuMenuDe` rend `""`, et il n'y a rien à rouvrir.
-      ouvrirUnMenuDenTete(contenu, nomDuMenu);
-    });
-  });
-
-  const bloc = contenu.querySelector(`[${BLOC_DES_FILTRES}]`);
-  if (!bloc) return;
-
-  bloc.querySelectorAll("[data-sujets-menu]").forEach((bouton) => {
-    bouton.addEventListener("click", (event) => {
-      event.preventDefault();
-      basculerUnMenuDenTete(contenu, String(bouton.getAttribute("data-sujets-menu") || ""));
-    });
-  });
-
-  bloc.querySelectorAll("[data-sujets-filtre-recherche]").forEach((champ) => {
-    champ.addEventListener("input", (event) => {
-      const cle = String(champ.getAttribute("data-sujets-filtre-recherche") || "");
-      const nomDuMenu = nomDuMenuDe(champ);
-      const debut = event.target.selectionStart;
-      const fin = event.target.selectionEnd;
-
-      vue.cherchesDesFiltres = {
-        ...vue.cherchesDesFiltres, [cle]: String(event.target.value || "")
-      };
-      redessiner(contenu);
-      ouvrirUnMenuDenTete(contenu, nomDuMenu);
-
-      const remis = contenu.querySelector(`[data-sujets-filtre-recherche="${cle}"]`);
-      if (!remis) return;
-      remis.focus();
-      if (Number.isFinite(debut) && Number.isFinite(fin)) remis.setSelectionRange(debut, fin);
-    });
-  });
-
-}
-
-function nomDuMenuDe(noeud) {
-  return String(
-    noeud.closest("[data-sujets-menu-liste]")?.getAttribute("data-sujets-menu-liste") || ""
-  );
-}
-
-/**
- * **Le curseur revient là où il était.** Sans cela, le deuxième caractère le
- * renverrait au début du champ et la saisie deviendrait impossible.
- */
-function rendreLeCurseur(contenu, selecteur, ou) {
-  const remis = contenu.querySelector(selecteur);
-  if (!remis) return;
-  remis.focus();
-  const position = Number.isFinite(ou) ? ou : remis.value.length;
-  remis.setSelectionRange(position, position);
 }

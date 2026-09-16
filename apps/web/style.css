@@ -16029,69 +16029,15 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   gap:12px;
 }
 
-.propositions-filters{
-  display:flex;
-  gap:16px;
-  padding:12px 16px;
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  background:var(--panel2);
-}
+/* **La liste des propositions est devenue le tableau des autres écrans.**
 
-.propositions-filter{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  background:none;
-  border:0;
-  padding:0;
-  cursor:pointer;
-  color:var(--muted);
-  font:inherit;
-  font-size:14px;
-}
-.propositions-filter.is-active{ color:var(--text); font-weight:600; }
-.propositions-filter:hover{ color:var(--text); }
-.propositions-filter:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:2px; }
+   Elle avait ses propres classes — son filtre à deux onglets, sa grille de
+   lignes, son titre, sa méta —, et l'écran qui traverse les projets montrait la
+   même chose avec celles des tableaux. Deux dessins pour une même liste : la
+   moindre retouche en demandait deux, et la seconde arrivait en retard.
 
-.propositions-list{
-  margin:0;
-  padding:0;
-  list-style:none;
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  overflow:hidden;
-}
-
-.propositions-row{
-  display:grid;
-  grid-template-columns:24px 1fr;
-  gap:8px;
-  padding:12px 16px;
-  /* Le fond de la page : les lignes ne sont pas des cartes posées dessus, elles
-     sont le tableau. C'est le cadre qui les tient, pas leur couleur. */
-  background:var(--bg);
-  border-bottom:1px solid var(--border2);
-}
-.propositions-row:last-child{ border-bottom:0; }
-
-.propositions-row__icon{ color:var(--fgColor-open); padding-top:2px; }
-.propositions-row__icon--merged{ color:var(--fgColor-done); }
-.propositions-row__icon--closed{ color:var(--fgColor-danger); }
-
-.propositions-row__body{ display:flex; flex-direction:column; gap:2px; min-width:0; }
-.propositions-row__title{
-  color:var(--text);
-  font-size:15px;
-  font-weight:600;
-  text-decoration:none;
-  align-self:flex-start;
-}
-.propositions-row__title:hover{ color:var(--blueLink); text-decoration:none; }
-.propositions-row__title:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:2px; }
-.propositions-row__meta{ color:var(--muted); font-size:12px; }
-.propositions-row__number{ font-variant-numeric:tabular-nums; }
-
+   Ce qui reste ici (`.propositions-empty`) sert encore ailleurs : la Mémoire,
+   les documents, les bandeaux d'avertissement d'une revue. */
 .propositions-empty{
   border:1px solid var(--border);
   border-radius:var(--radius);

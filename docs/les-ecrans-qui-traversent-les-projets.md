@@ -347,3 +347,95 @@ navigateur qui refuse les cookies, c'est-à-dire jamais chez celui qui l'écrit.
 
 Chaque écran nomme le sien : replier le rail des Sujets d'un projet n'a aucune
 raison de replier celui du carnet.
+
+---
+
+## Les propositions ont une grammaire, et les mêmes filtres des deux côtés
+
+### Le problème
+
+L'écran des propositions — celui d'un projet comme celui qui les traverse —
+n'avait qu'un **champ de texte libre** et **deux onglets**. « Celles que j'ai
+ouvertes sur Chamonix », « celles qui n'ont aucun document », « qui a fusionné
+ça ? » se cherchaient en ouvrant les deux onglets et en lisant les lignes une
+par une.
+
+Les sujets avaient déjà tout ce qu'il fallait : une barre où la requête se lit
+et se corrige, des menus qui posent un jeton, un miroir qui colore ce qui filtre.
+
+### Ce qu'une proposition porte, et rien d'autre
+
+`champs-des-propositions.js` déclare ce que la table contient :
+
+- **statut** — ouverte, fusionnée, refusée ;
+- **auteur** (`created_by`) et **décidée par** (`merged_by`, `closed_by`) : les
+  deux se confondent souvent et divergent toujours au moment où ça compte ;
+- **documents** — y a-t-il quelque chose dedans, la première question qu'on se
+  pose devant une proposition ;
+- **projet**, là où l'écran en traverse plusieurs.
+
+Une proposition n'a **ni label, ni assigné, ni objectif, ni jalon**. Les
+déclarer ferait proposer des filtres qui ne retiendraient jamais rien, et l'on
+chercherait ce qu'on a mal tapé plutôt que ce qui n'existe pas (règle 5). C'est
+pourquoi la liste des menus est plus courte que celle d'un dépôt Git : ce sont
+les colonnes qui la fixent, pas l'exemple.
+
+### Deux boutons pour trois valeurs
+
+Le filtre de l'en-tête coupe en « Ouvertes » et « Closes » — la question posée
+devant la liste est « qu'est-ce qui attend encore une décision ? ». La barre,
+elle, distingue fusionnée et refusée : l'une est entrée au corpus, l'autre non.
+
+« Closes » pose donc **deux jetons**, et `statut:fusionnée` seul n'allume
+**aucun** des deux boutons : allumer « Closes » ferait croire qu'on voit aussi
+les refusées.
+
+### Un seul tableau pour les deux écrans
+
+L'onglet d'un projet montrait une liste à lui : ses classes, son filtre à deux
+onglets, son dessin de ligne. L'écran transversal montrait un tableau. Les deux
+disaient la même chose de deux façons, et la moindre retouche demandait deux
+calages — dont le second arrive toujours en retard (règle 10).
+
+C'est maintenant le même tableau, la même barre, le même en-tête. Une seule
+chose les sépare, et elle se donne en paramètre : la **colonne du projet**, qui
+n'a de sens que là où l'on en traverse plusieurs. Le titre y ouvre la revue
+**sur place** — elle remplace la liste sans changer d'adresse —, quand il est un
+lien sur l'écran transversal.
+
+Rien n'est perdu de ce que la liste montrait : le numéro, la date d'ouverture,
+la date de fusion, le nombre de documents. L'auteur, lui, est **gagné** : la
+ligne disait « un collaborateur », faute d'un pont entre le compte qui a cliqué
+et la personne qui porte un nom. Ce pont est le trombinoscope, et c'est lui qui
+permet aussi à `auteur:moi` d'exister.
+
+### Un compte n'est pas une personne
+
+Une proposition porte un `user_id` ; un sujet porte un identifiant de
+trombinoscope, propre à chaque projet. `comptesDesPersonnes` fait le pont, et
+**dédoublonne** : la même personne sur quatre projets a quatre lignes de
+trombinoscope, et quatre entrées du même nom dans un menu se ressemblent trait
+pour trait.
+
+### L'état ne se dit qu'une fois
+
+La ligne d'un sujet, sur l'écran transversal, portait l'icône d'état **et** une
+pastille « Ouvert » / « Fermé » à côté du titre : la même information deux fois,
+sur la ligne la plus chargée de l'écran, poussant l'auteur hors du cadre dès que
+la colonne se resserre. L'onglet Sujets d'un projet n'a jamais eu cette
+pastille.
+
+Elle est partie. L'icône, en revanche, **porte son nom** — `aria-label` — parce
+qu'elle est désormais seule à dire l'état : sans cela, il cesserait d'être
+lisible pour qui ne voit ni les formes ni les couleurs.
+
+### Ce que la mutualisation a produit
+
+Trois écrans posent la même barre et les mêmes menus. Les gestes sont
+exactement les mêmes, et les deux détails qui les rendent utilisables se
+réapprennent à chaque copie : **le curseur qui revient là où il était** (sans
+quoi le deuxième caractère le renvoie au début du champ), et **le menu qui se
+rouvre après le rendu** (sans quoi on reclique le bouton entre deux valeurs d'un
+champ à choix multiple). Ils vivent maintenant dans
+`ui/branchement-de-la-requete.js`, et la barre elle-même dans
+`ui/barre-de-requete.js`.

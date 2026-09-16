@@ -298,7 +298,13 @@ function renderSujetRetenuHtml(sujet, noms, decor = {}, ouvrable = false) {
                 svgIcon("blocked", { className: "octicon octicon-blocked fgColor-danger" })
                 }<span>Bloqué</span></span>`
               : ""}
-            ${renderStatusBadge({ label: etat.mot, tone: etat.ton })}
+            ${/*
+              **L'état n'est pas répété ici.** L'icône du début de la ligne le
+              dit déjà, et c'est elle qu'on regarde en parcourant : une pastille
+              « Ouvert » de plus n'ajoutait rien et poussait l'auteur hors du
+              cadre sur une colonne étroite. L'icône porte son nom, pour qui ne
+              voit ni les formes ni les couleurs.
+            */""}
             ${auteur ? `<span class="issue-row-author-name">${escapeHtml(auteur)}</span>` : ""}
           </span>
         </span>

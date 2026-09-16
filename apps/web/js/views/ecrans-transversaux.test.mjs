@@ -20,7 +20,9 @@ import { renderGlobalNav } from "./global-nav.js";
 import {
   renderPageDeTousLesSujets, requeteAvecLeStatut, requeteDeDepart
 } from "./tous-les-sujets-page.js";
-import { renderPageDeToutesLesPropositions } from "./toutes-les-propositions-page.js";
+import {
+  auteursParCompte, comptesDesPersonnes, renderPageDeToutesLesPropositions
+} from "./toutes-les-propositions-page.js";
 import {
   TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
 } from "../services/ecrans-transversaux.js";
@@ -28,6 +30,7 @@ import { CLES_DE_LA_CHARGE } from "../services/charge-des-sujets.js";
 import { PROPOSITION } from "../services/proposition-state.js";
 import { renderTableauDesSujetsRetenusHtml } from "./project-situations/project-situations-table.js";
 import { FILTRES_DES_PROJETS, renderRailDesProjets } from "./tous-les-projets-rail.js";
+import { renderTableauDesPropositionsHtml } from "./ui/tableau-des-propositions.js";
 
 /* ── Le menu général ─────────────────────────────────────────────────────── */
 
@@ -251,11 +254,11 @@ test("toutes les propositions : une ligne ouvre sa proposition", () => {
 
 /** La recherche porte sur le titre et sur le nom du projet — les deux à l'écran. */
 test("toutes les propositions : la recherche porte sur le titre et le projet", () => {
-  const parLeTitre = propositions({ cherche: "fondations" });
+  const parLeTitre = propositions({ requete: "fondations" });
   assert.match(parLeTitre, /Reprise des fondations/);
   assert.ok(!parLeTitre.includes("Calepinage façade"));
 
-  const parLeProjet = propositions({ cherche: "verifas" });
+  const parLeProjet = propositions({ requete: "verifas" });
   assert.match(parLeProjet, /Calepinage façade/, "sans accent ni casse");
   assert.match(parLeProjet, /Variante toiture/);
   assert.ok(!parLeProjet.includes("Reprise des fondations"));
@@ -263,10 +266,10 @@ test("toutes les propositions : la recherche porte sur le titre et le projet", (
 
 /** Une recherche sans résultat dit quoi faire, et ne se confond pas avec un vide. */
 test("toutes les propositions : une recherche sans résultat le dit", () => {
-  const html = propositions({ cherche: "zoiseau" });
+  const html = propositions({ requete: "zoiseau" });
 
   assert.match(html, /Aucune proposition ne répond à cette recherche/);
-  assert.match(html, /Élargissez la recherche/);
+  assert.match(html, /Élargissez la requête/);
 });
 
 /** Et sans lecture, on ne prétend pas qu'il n'y en a aucune (règle 5). */
@@ -484,10 +487,15 @@ test("les commandes de pagination sont branchées sur les deux écrans", async (
   assert.match(sujets, /brancherLaPagination\(contenu, "sujets-transversaux"/);
   assert.match(propositions, /brancherLaPagination\(contenu, "propositions-transversales"/);
 
-  // **Changer la recherche ramène à la première page.** Rester à la page douze
-  // d'une liste qui n'en fait plus trois montre un tableau vide.
-  assert.match(sujets, /vue\.requete = String\(event\.target\.value \|\| ""\);[\s\S]{0,400}vue\.page = 1;/);
-  assert.match(propositions, /vue\.cherche = String\(event\.target\.value \|\| ""\);[\s\S]{0,400}vue\.page = 1;/);
+  // **Changer la requête ramène à la première page.** Rester à la page douze
+  // d'une liste qui n'en fait plus trois montre un tableau vide. C'est écrit
+  // une seule fois, dans l'écoute que les trois écrans partagent.
+  const branchement = await readFile(
+    new URL("./ui/branchement-de-la-requete.js", import.meta.url), "utf8"
+  );
+  assert.match(branchement, /etat\.requete = String\(event\.target\.value \|\| ""\);[\s\S]{0,400}etat\.page = 1;/);
+  assert.match(sujets, /brancherLaRequete\(contenu, \{/);
+  assert.match(propositions, /brancherLaRequete\(contenu, \{/);
 });
 
 /**
@@ -683,17 +691,51 @@ test("tous les sujets : le bouton de tri demande l'ordre d'arrivée", () => {
  * **Un sujet abandonné ne prend pas la coche de ce qui est fait.** La ligne
  * était là, lisible, avec le signe du contraire de ce qui s'est passé.
  */
-test("tous les sujets : l'abandon a son signe, et son mot", () => {
+test("tous les sujets : l'abandon a son signe, et son nom", () => {
   const html = etats();
-  const ligne = html.slice(html.indexOf("Reprise en sous-œuvre"));
-
-  assert.match(ligne.slice(0, 600), /Abandonné/);
-  assert.ok(
-    html.slice(html.indexOf("Reprise en sous-œuvre") - 600, html.indexOf("Reprise en sous-œuvre"))
-      .includes("#skip"),
-    "et l'icône de ce qu'on a passé, pas la coche"
+  const avant = html.slice(
+    html.indexOf("Reprise en sous-œuvre") - 900, html.indexOf("Reprise en sous-œuvre")
   );
+
+  assert.ok(avant.includes("#skip"), "l'icône de ce qu'on a passé, et non la coche");
+  // **Le nom est sur l'icône**, parce qu'elle est seule à dire l'état : la
+  // pastille qui le répétait à côté du titre est partie.
+  assert.match(avant, /aria-label="Abandonné"/);
 });
+
+/**
+ * **L'état ne se dit qu'une fois.** La ligne portait l'icône **et** une
+ * pastille « Ouvert » / « Fermé », sur la ligne la plus chargée de l'écran :
+ * la même information deux fois, dont l'une poussait l'auteur hors du cadre.
+ *
+ * L'onglet Sujets d'un projet n'a jamais eu cette pastille ; c'est lui qu'on
+ * reprend.
+ */
+test("tous les sujets : la deuxième ligne ne répète pas l'état", () => {
+  const ligne = ligneDe(etats(), "Reprise d&#39;acrotère");
+  const meta = ligne.slice(ligne.indexOf("issue-row-title-grid__meta"));
+
+  assert.ok(!meta.includes("badge"), "aucune pastille dans la deuxième ligne");
+  assert.ok(!/>\s*Ouvert\s*</.test(meta), "et pas davantage le mot tout seul");
+  // L'icône, elle, le dit — et elle le dit pour tout le monde.
+  assert.match(ligne, /aria-label="Ouvert"/);
+});
+
+/**
+ * Une ligne entière, du début de sa boîte au début de la suivante.
+ *
+ * **Découper au titre ne suffit pas** : l'icône d'état le précède, et une
+ * garde qui ne regarde que ce qui suit le titre passe à côté de la moitié de
+ * la ligne — c'est ainsi qu'un « A. Martin » trouvé ailleurs dans la page a
+ * déjà fait passer une garde vide.
+ */
+function ligneDe(html, titre) {
+  const ou = html.indexOf(titre);
+  if (ou < 0) return "";
+  const debut = html.lastIndexOf('<div class="issue-row', ou);
+  const suivante = html.indexOf('<div class="issue-row', ou);
+  return html.slice(debut, suivante > 0 ? suivante : undefined);
+}
 
 /**
  * **Le formulaire d'une situation n'a ni filtre d'état ni tri.** On y regarde ce
@@ -739,16 +781,22 @@ test("toutes les propositions : ouvertes et closes se comptent comme dans un pro
   assert.match(tete.slice(tete.indexOf('data-propositions-toutes-etat="open"'), tete.length).slice(0, 400), />\s*1\s*</);
   assert.match(tete.slice(tete.indexOf('data-propositions-toutes-etat="closed"'), tete.length).slice(0, 400), />\s*2\s*</);
 
-  const ouvertes = propositions({ etat: "open" });
+  const ouvertes = propositions({ requete: "statut:ouverte" });
   assert.match(ouvertes, /Reprise des fondations/);
   assert.ok(!ouvertes.includes("Calepinage façade"), "la fusionnée sort");
   assert.ok(!ouvertes.includes("Variante toiture"), "la refusée aussi");
   assert.match(ouvertes, /1 proposition</, "et le compte suit la liste");
 
-  const closes = propositions({ etat: "closed" });
+  // **Closes en pose deux** — fusionnées ou refusées : c'est la coupe de
+  // l'onglet d'un projet, et la barre sait dire laquelle des deux.
+  const closes = propositions({ requete: "statut:fusionnée statut:refusée" });
   assert.match(closes, /Calepinage façade/);
   assert.match(closes, /Variante toiture/);
   assert.ok(!closes.includes("Reprise des fondations"));
+
+  const fusionnees = propositions({ requete: "statut:fusionnée" });
+  assert.match(fusionnees, /Calepinage façade/);
+  assert.ok(!fusionnees.includes("Variante toiture"), "une refusée n'est pas une fusionnée");
 });
 
 /** Sans rien demander, les trois sont là — et aucun bouton n'est enfoncé. */
@@ -897,11 +945,16 @@ test("tous les sujets : effacer le jeton rend tout", () => {
 /** Les propositions partent aussi des ouvertes, comme l'onglet d'un projet. */
 test("toutes les propositions : l'écran part des ouvertes", async () => {
   const source = await readFile(new URL("./toutes-les-propositions.js", import.meta.url), "utf8");
-  assert.match(source, /etat: "open"/, "l'état de départ");
+  const projet = await readFile(new URL("./project-propositions.js", import.meta.url), "utf8");
 
-  // **Recliquer l'éteint** : c'est la seule sortie, une proposition n'ayant pas
-  // de grammaire où effacer un jeton.
-  assert.match(source, /vue\.etat = vue\.etat === voulu \? "" : voulu;/);
+  // **Le jeton est dans la barre**, des deux côtés : il s'y lit et il s'y
+  // efface, comme pour les sujets. Une proposition a maintenant sa grammaire.
+  assert.match(source, /requete: requeteDeDepartDesPropositions\(\)/, "à travers les projets");
+  assert.match(projet, /requete: requeteDeDepartDesPropositions\(\)/, "et dans un projet");
+
+  // Et le clic de l'en-tête l'écrit, au lieu de tenir une case à lui.
+  assert.match(source, /requeteAvecLEtat\(vue\.requete/);
+  assert.match(projet, /requeteAvecLEtat\(view\.requete/);
 });
 
 /* ── Le rail de « Tous les sujets » ──────────────────────────────────────── */
@@ -1013,10 +1066,14 @@ test("les rails des écrans transversaux sont branchés", async () => {
   // **Les entrées du rail sont écoutées avec celles des menus**, et par la même
   // écoute : elles écrivent le même attribut, et deux écoutes pour un même
   // geste auraient fini par ne plus faire la même chose (règle 4).
+  const branchement = await readFile(
+    new URL("./ui/branchement-de-la-requete.js", import.meta.url), "utf8"
+  );
   assert.match(
-    sujets, /contenu\.querySelectorAll\("\[data-sujets-lecture\]"\)/,
+    branchement, /contenu\.querySelectorAll\("\[data-sujets-lecture\]"\)/,
     "sur tout le contenu, et non dans le seul bloc des filtres"
   );
+  assert.match(sujets, /brancherLaRequete\(contenu, \{/, "et l'écran s'en sert");
 });
 
 /* ── Le rail de « Tous les projets » ─────────────────────────────────────── */
@@ -1070,4 +1127,151 @@ test("tous les projets : les entrées vivent avec le rail qui les montre", async
 
   assert.match(ecran, /const PROJECT_LIST_FILTERS = FILTRES_DES_PROJETS;/);
   assert.ok(!ecran.includes('href: "#projects/mine"'), "et l'écran ne les réécrit pas");
+});
+
+/* ── Les propositions ont les mêmes filtres, des deux côtés ──────────────── */
+
+const QUI = [
+  { personId: "p-1", userId: "u-1", name: "Ourdine Ferrand" },
+  { personId: "p-2", userId: "u-2", name: "A. Martin" }
+];
+
+const PROPOSITIONS_NOMMEES = [
+  { ...PROPOSITIONS[0], created_by: "u-1", created_at: "2026-03-01T00:00:00Z" },
+  { ...PROPOSITIONS[1], created_by: "u-2", merged_by: "u-1", merged_at: "2026-02-02T00:00:00Z" },
+  { ...PROPOSITIONS[2], created_by: "u-2", closed_by: "u-2" }
+];
+
+const nommees = (reste = {}) => renderPageDeToutesLesPropositions({
+  propositions: PROPOSITIONS_NOMMEES, nomsDesProjets: NOMS, personnes: QUI, moi: "u-1", ...reste
+});
+
+/**
+ * **La barre de requête, et les menus de l'en-tête.** L'écran n'avait qu'un
+ * champ de texte libre et deux onglets : on y cherchait « celles que j'ai
+ * ouvertes sur Chamonix » en ouvrant les deux onglets et en lisant les lignes
+ * une par une.
+ */
+test("toutes les propositions : la barre et les menus de l'en-tête", () => {
+  const html = nommees();
+
+  assert.match(html, /data-propositions-recherche/, "la barre, avec son nom à elle");
+  assert.match(html, /memory-search__mirror/, "et son miroir, qui colore les jetons reconnus");
+
+  for (const menu of ["projet", "auteur", "decideur", "documents"]) {
+    assert.match(
+      html, new RegExp(`data-sujets-menu="propositions-toutes-${menu}"`), `le menu ${menu}`
+    );
+  }
+  assert.ok(
+    html.indexOf("propositions-toutes-projet") < html.indexOf("propositions-toutes-auteur"),
+    "le projet précède l'auteur : c'est la première chose qu'on restreint ici"
+  );
+  assert.ok(
+    !html.includes('data-sujets-menu="propositions-toutes-statut"'),
+    "le statut n'a pas de menu : le filtre de l'en-tête le dit déjà"
+  );
+});
+
+/** Ce qui n'existe pas sur une proposition ne se propose pas (règle 5). */
+test("toutes les propositions : aucun menu ne promet ce qu'elles n'ont pas", () => {
+  const html = nommees();
+
+  for (const absent of ["label", "assigne", "objectif", "lot", "mention"]) {
+    assert.ok(
+      !html.includes(`propositions-toutes-${absent}`),
+      `une proposition n'a pas de ${absent}`
+    );
+  }
+});
+
+/** Et la requête retient vraiment ce qu'elle dit. */
+test("toutes les propositions : la requête filtre comme la grammaire le dit", () => {
+  const miennes = nommees({ requete: "auteur:moi" });
+  assert.match(miennes, /Reprise des fondations/);
+  assert.ok(!miennes.includes("Calepinage façade"));
+  assert.match(miennes, /1 proposition</);
+
+  const sansDocument = nommees({ requete: "documents:non" });
+  assert.match(sansDocument, /Calepinage façade/);
+  assert.ok(!sansDocument.includes("Reprise des fondations"));
+});
+
+/**
+ * **Qui l'a ouverte, nommé, et quand.** La ligne disait « un collaborateur » :
+ * une proposition porte un compte, la personne porte un nom, et c'est le
+ * trombinoscope qui fait le pont. Sans lui, aucun filtre ne pouvait porter sur
+ * son auteur.
+ */
+test("toutes les propositions : la ligne nomme son auteur et sa date", () => {
+  const ligne = ligneDe(nommees(), "Reprise des fondations");
+
+  assert.match(ligne, /Ourdine Ferrand/);
+  assert.match(ligne, /ouverte le 01 mars 2026/);
+  assert.ok(!ligne.includes("un collaborateur"));
+});
+
+/** Une fusion dit quand elle a eu lieu : c'est ce que la liste d'avant montrait. */
+test("toutes les propositions : une fusionnée dit sa date de fusion", () => {
+  const ligne = ligneDe(nommees(), "Calepinage façade");
+
+  assert.match(ligne, /fusionnée le 02 févr\. 2026/);
+});
+
+/**
+ * **Un compte apparaît une fois**, même s'il a une ligne de trombinoscope par
+ * projet : deux entrées du même nom dans un menu se ressemblent trait pour
+ * trait, et l'on clique au hasard.
+ */
+test("un compte présent sur deux projets ne fait qu'une entrée", () => {
+  const deuxFois = [...QUI, { personId: "p-3", userId: "u-1", name: "Ourdine Ferrand" }];
+
+  assert.deepEqual(
+    comptesDesPersonnes(deuxFois).map((sien) => sien.id), ["u-1", "u-2"]
+  );
+  assert.deepEqual(auteursParCompte(deuxFois), {
+    "u-1": "Ourdine Ferrand", "u-2": "A. Martin"
+  });
+});
+
+/**
+ * **L'onglet d'un projet montre le même tableau**, moins la colonne du projet.
+ * Il avait sa propre liste, ses propres classes et son propre filtre à deux
+ * onglets : deux dessins pour une même chose, dont la seconde retouche arrive
+ * toujours en retard (règle 10).
+ */
+test("les propositions d'un projet passent au tableau partagé", async () => {
+  const source = await readFile(new URL("./project-propositions.js", import.meta.url), "utf8");
+
+  assert.match(source, /renderTableauDesPropositionsHtml\(\{/, "le tableau partagé");
+  assert.match(source, /teteDesPropositions\(\{/, "son en-tête");
+  assert.match(source, /renderBarreDeRequeteHtml\(\{/, "et la barre de requête");
+  assert.match(source, /avecLeProjet: false/, "sans la colonne du projet : il n'y en a qu'un");
+  assert.match(source, /surPlace: true/, "et la revue remplace la liste sans changer d'adresse");
+
+  assert.ok(!source.includes('class="propositions-list"'), "l'ancienne liste n'est plus");
+  assert.ok(!source.includes("data-propositions-filter"), "ni son filtre à deux onglets");
+
+  // **Les deux écrans ne se disputent pas leurs gestes.** `quandOnClique` range
+  // ce qu'on lui déclare dans une table unique : deux écrans qui partageraient
+  // un nom se voleraient leur clic, et le dernier monté gagnerait.
+  assert.match(source, /etat: "propositions-projet-etat"/);
+  assert.ok(!source.includes('"propositions-toutes-etat"'), "et ce ne sont pas ceux de l'autre");
+});
+
+/** Le tableau d'un projet ne montre pas de colonne « Projet ». */
+test("le tableau d'un seul projet n'a pas la colonne du projet", () => {
+  const html = renderTableauDesPropositionsHtml({
+    propositions: PROPOSITIONS_NOMMEES, nomsDesProjets: NOMS, champs: [],
+    avecLeProjet: false, surPlace: true
+  });
+
+  assert.ok(!html.includes(">Projet<"), "aucun intitulé de colonne");
+  assert.ok(!html.includes("NOVACLIM"), "et aucun nom de projet sur les lignes");
+  assert.ok(!html.includes("VERIFAS"));
+  // **La grille compte les colonnes une seule fois.** Une largeur écrite pour
+  // trois colonnes au-dessus de deux décale l'en-tête au premier réglage.
+  assert.match(html, /--issues-cols:minmax\(0, 1fr\) 84px;/);
+  assert.match(html, /data-proposition-open="pr-1"/, "le titre ouvre la revue sur place");
+  assert.ok(!html.includes('href="#project'), "et ne change pas d'adresse");
 });

@@ -40,7 +40,7 @@ import {
 } from "./entrees-de-selection.js";
 import { GROUPE, MARQUAGES, NOMS_DU_GROUPE, phraseDeLaSelection } from "../../services/selection-des-sujets.js";
 import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
-import { renderQueryMirror } from "../../services/query-bar.js";
+import { renderBarreDeRequeteHtml } from "../ui/barre-de-requete.js";
 import { phraseDesIgnores } from "../../services/champs-des-sujets.js";
 import { epinglesDuRail, railDesSujets } from "../../services/rail-des-sujets.js";
 import {
@@ -259,48 +259,18 @@ function renderEpinglesRepliees(posees = [], { ouvert = false, active = false } 
 export function renderRechercheDesSujetsHtml({
   requete = "", champs = [], ignores = [], epingler = true
 } = {}) {
-  const dite = phraseDesIgnores(ignores);
-  const remplie = Boolean(texte(requete));
-
-  return `
-    <div class="memory-search sujets-search gh-field-focus">
-      <div class="memory-search__field">
-        <div class="memory-search__mirror" aria-hidden="true">${renderQueryMirror(requete, champs)}</div>
-        <input
-          type="search"
-          class="gh-input memory-search__input"
-          placeholder="Chercher un sujet — un mot du titre, statut:ouvert, label:…"
-          value="${escapeHtml(requete)}"
-          aria-label="Chercher un sujet"
-          data-sujets-recherche
-        >
-        <div class="memory-search__gestes">
-          ${/*
-            **L'épingle disparaît dans le formulaire.** Épingler une recherche
-            et enregistrer la vue qu'on est en train d'écrire, ce sont deux
-            gestes pour une seule chose — et celui du haut ne garderait ni le
-            nom ni l'habit qu'on vient de choisir (règle 10).
-          */""}
-          ${epingler ? `
-          <button type="button" class="bouton-discret memory-search__geste" data-sujets-epingler
-            title="Épingler cette recherche" aria-label="Épingler cette recherche"
-            ${remplie ? "" : "disabled"}>
-            ${svgIcon("pin", { className: "octicon" })}
-          </button>
-          ` : ""}
-          <button type="button" class="bouton-discret memory-search__geste" data-sujets-vider
-            title="Effacer la recherche" aria-label="Effacer la recherche"
-            ${remplie ? "" : "disabled"}>
-            ${svgIcon("x", { className: "octicon" })}
-          </button>
-        </div>
-      </div>
-      <span class="memory-search__icon" aria-hidden="true">${svgIcon("search", { className: "octicon" })}</span>
-      <div class="memory-search__suggestions" data-sujets-suggestions hidden role="listbox"
-        aria-label="Compléter la recherche"></div>
-    </div>
-    ${dite ? `<p class="sujets-search__reserve mono-small">${escapeHtml(dite)}</p>` : ""}
-  `;
+  // **Le dessin est dans `ui/barre-de-requete.js`**, parce que les propositions
+  // la demandent à leur tour. Cette fonction reste pour les six appels qui la
+  // nomment ici, et ne fait plus que dire de quel écran il s'agit.
+  return renderBarreDeRequeteHtml({
+    nom: "sujets",
+    requete,
+    champs,
+    epingler,
+    placeholder: "Chercher un sujet — un mot du titre, statut:ouvert, label:…",
+    etiquette: "Chercher un sujet",
+    phraseDesIgnores: phraseDesIgnores(ignores)
+  });
 }
 
 /**
