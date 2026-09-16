@@ -634,15 +634,6 @@ export function createProjectSituationsView({
                     <button type="button" class="gh-btn gh-action__main gh-btn--default gh-btn--md" data-open-situation-insights>
                       ${svgIcon("graph", { className: "octicon octicon-graph" })}<span>Indicateurs</span>
                     </button>
-                    <button
-                      type="button"
-                      class="gh-btn gh-action__main gh-btn--default gh-btn--md"
-                      data-open-situation-drilldown
-                      aria-label="Déplier ou replier la barre latérale"
-                      title="Déplier ou replier la barre latérale"
-                    >
-                      ${svgIcon("sidebar-expand", { className: "octicon octicon-sidebar-expand" })}
-                    </button>
                     ${/*
                       **Les gestes de la situation, là où on la regarde.** Ils
                       n'étaient que sur sa ligne du tableau : ouvrir une
@@ -654,11 +645,25 @@ export function createProjectSituationsView({
                       entrée de plus : « Modifier la situation ». Le crayon à
                       côté du titre ouvre le même formulaire — il reste, parce
                       qu'un geste d'un seul clic vaut mieux qu'un menu.
+
+                      **Entre les deux boutons, et non après.** Ceux qui
+                      l'encadrent ouvrent quelque chose à l'écran ; lui porte
+                      les gestes de la situation. Au bout de la rangée, il
+                      passait pour un troisième bouton d'affichage.
                     */""}
                     ${renderKebabDeLaSituation(selectedSituation, {
                       ouvert: String(uiState.menuDeLaSituation || "") === String(selectedSituation.id || ""),
                       avecModifier: true
                     })}
+                    <button
+                      type="button"
+                      class="gh-btn gh-action__main gh-btn--default gh-btn--md"
+                      data-open-situation-drilldown
+                      aria-label="Déplier ou replier la barre latérale"
+                      title="Déplier ou replier la barre latérale"
+                    >
+                      ${svgIcon("sidebar-expand", { className: "octicon octicon-sidebar-expand" })}
+                    </button>
                   </div>
                 </div>
               </div>

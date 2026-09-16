@@ -1,15 +1,9 @@
 import { store } from "../store.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
-  PROJECT_SHELL_COMPACT_CHANGE_EVENT,
   setProjectCompactEnabled,
   refreshProjectShellChrome,
-  syncProjectShellCompactFromScrollSource,
-  registerProjectScrollSources,
-  setProjectActiveScrollSource,
-  clearProjectActiveScrollSource,
-  setProjectViewHeader,
-  debugProjectScrollPolicy
+  setProjectViewHeader
 } from "./project-shell-chrome.js";
 import { renderProjectSituationsRunbar, bindProjectSituationsRunbar } from "./project-situations-runbar.js";
 import { loadFlatSubjectsForCurrentProject } from "../services/project-subjects-supabase.js";
@@ -47,7 +41,6 @@ import { createProjectSituationsEvents } from "./project-situations/project-situ
 import { createProjectSituationsReviewState } from "./project-situations/project-situations-review-state.js";
 import { createProjectSituationsThread } from "./project-situations/project-situations-thread.js";
 import { createProjectSituationsKanbanView } from "./project-situations/project-situations-view-kanban.js";
-import { resolveKanbanScrollableSource } from "./project-situations-scroll-source.js";
 import { renderGlobalHeader } from "./global-header.js";
 import { bindRailResizer, followRailScroll, railWidth } from "./ui/project-rail.js";
 
@@ -415,22 +408,19 @@ function moiDeLEcran() {
   });
 }
 
-function syncProjectHeader(root) {
-  const selectedSituationId = String(store.situationsView?.selectedSituationId || "").trim();
-  const selectedSituation = getSituationById(selectedSituationId);
-
+/**
+ * **Plus de libellé compact : il n'y a plus de bandeau compact.**
+ *
+ * `compactLabel` et son retour nourrissaient la barre qui remplaçait l'en-tête
+ * au défilement, sur un onglet d'un projet. Les situations en sont sorties : ce
+ * qu'ils remplissaient n'apparaît plus, et les garder aurait laissé du code qui
+ * écrit dans un endroit que personne ne regarde.
+ */
+function syncProjectHeader() {
   setProjectViewHeader({
     contextLabel: "Situations",
     variant: "situations",
-    hideBar: true,
-    compactLabel: "Situations",
-    compactLabelSuffix: selectedSituation ? String(selectedSituation.title || "Situation") : "",
-    onCompactLabelClick: selectedSituation
-      ? () => {
-          setSelectedSituationId(null);
-          rerender(root);
-        }
-      : null
+    hideBar: true
   });
 }
 
@@ -438,18 +428,6 @@ let situationsTabResetBound = false;
 let currentSituationsRoot = null;
 let cleanupSituationsListeners = null;
 
-function isKanbanScrollDebugEnabled() {
-  try {
-    return window.localStorage?.getItem("debug:situation-kanban-scroll") === "1";
-  } catch (_) {
-    return false;
-  }
-}
-
-function debugKanbanScroll(label, payload) {
-  if (!isKanbanScrollDebugEnabled()) return;
-  console.info(label, payload);
-}
 let cleanupSituationsSyncEvents = null;
 
 function syncSituationsAvailableHeight(root) {
@@ -461,14 +439,19 @@ function syncSituationsAvailableHeight(root) {
   root.style.setProperty("--project-situations-available-h", `${availableHeight}px`);
 }
 
+/**
+ * **La hauteur se recalcule au redimensionnement, et c'est tout.**
+ *
+ * Elle écoutait aussi le changement de compactage — il déplaçait le haut de
+ * l'écran, et les colonnes du kanban devaient en tenir compte. Ce compactage a
+ * quitté cet écran avec la barre d'onglets d'un projet ; l'écoute part avec.
+ */
 function bindSituationsSyncEvents(root) {
   cleanupSituationsSyncEvents?.();
   const syncHeight = () => syncSituationsAvailableHeight(root);
   window.addEventListener("resize", syncHeight, { passive: true });
-  window.addEventListener(PROJECT_SHELL_COMPACT_CHANGE_EVENT, syncHeight);
   cleanupSituationsSyncEvents = () => {
     window.removeEventListener("resize", syncHeight);
-    window.removeEventListener(PROJECT_SHELL_COMPACT_CHANGE_EVENT, syncHeight);
   };
 }
 
@@ -582,102 +565,51 @@ function rerender(root) {
   const hasSelectedSituation = !!String(store.situationsView?.selectedSituationId || "").trim();
   root.className = `project-shell__content${hasSelectedSituation ? " project-shell__content--situation-kanban" : ""}`;
   renderGlobalHeader();
-  syncProjectHeader(root);
+  syncProjectHeader();
   refreshProjectShellChrome();
   root.innerHTML = renderPage();
   bindSituationsSyncEvents(root);
   brancherLeRailDuCarnet(root);
   syncSituationsAvailableHeight(root);
   syncSituationsToolbar();
-  const primaryScrollRoot = document.getElementById("projectSituationsScroll");
-  const tableScrollBody = root.querySelector(".issues-table .data-table-shell__body");
-  const gridScrollBody = root.querySelector(".project-situation-alt-view--grid");
-  const roadmapScrollBody = root.querySelector(".project-situation-alt-view--roadmap");
-  const kanbanColumns = [...root.querySelectorAll(".situation-kanban__col")];
-  const kanbanCardLists = [...root.querySelectorAll(".situation-kanban__cards")];
-  if (kanbanColumns.length) {
-    registerProjectScrollSources(kanbanCardLists);
-  } else {
-    clearProjectActiveScrollSource();
-    registerProjectScrollSources(primaryScrollRoot, tableScrollBody, gridScrollBody, roadmapScrollBody);
-  }
-  debugProjectScrollPolicy("render-project-situations", {
-    hasSelectedSituation,
-    hasKanbanColumns: kanbanColumns.length > 0
-  });
+  /**
+   * **Le compactage du bandeau d'onglets a quitté cet écran.**
+   *
+   * ## Ce que c'était
+   *
+   * Sur un onglet d'un projet, faire défiler escamote l'en-tête et réduit la
+   * barre d'onglets : l'écran gagne quarante pixels sur une liste longue, et le
+   * nom de l'onglet passe dans la barre du haut pour qu'on sache où l'on est.
+   * Cela demande une machinerie — savoir **quelle boîte** défile parmi les
+   * colonnes d'un kanban, la déclarer comme source, écouter la molette et le
+   * doigt avant le défilement, poser une classe sur le corps du document.
+   *
+   * ## Pourquoi ça n'a plus lieu d'être
+   *
+   * Les situations sont **sorties du giron d'un projet** : cet écran n'a plus
+   * de barre d'onglets à compacter. Il restait la machinerie, et elle se voyait
+   * quand même — on faisait défiler le kanban ou le tableau, et le haut de
+   * l'écran sautait pour réduire une barre qui n'était plus là.
+   *
+   * ## Ce qui reste
+   *
+   * La hauteur disponible, qui est autre chose : les colonnes du kanban
+   * doivent savoir jusqu'où descendre. Elle se recalcule au défilement et au
+   * redimensionnement, et rien de plus.
+   */
+  setProjectCompactEnabled(false);
 
-  const unbindColumnHandlers = [];
-  const kanbanScrollElements = kanbanColumns.length
-    ? [...new Set([...kanbanColumns, ...kanbanCardLists].filter(Boolean))]
-    : [];
+  const kanbanScrollElements = [...new Set([
+    ...root.querySelectorAll(".situation-kanban__col"),
+    ...root.querySelectorAll(".situation-kanban__cards")
+  ].filter(Boolean))];
 
-  const resolveAndActivateKanbanScrollableSource = (target, eventType = null, { syncImmediately = false } = {}) => {
-    const sourceEl = resolveKanbanScrollableSource(target);
-    if (!sourceEl) return;
-
-    setProjectCompactEnabled(true);
-    setProjectActiveScrollSource(sourceEl, { syncImmediately });
-
-    const scrollTop = Number(sourceEl.scrollTop || 0);
-    const nextCompact = scrollTop > 12;
-    const didChange = document.body.classList.contains("project-shell-compact") !== nextCompact;
-    debugKanbanScroll("[situations:kanban-scroll-source]", {
-      eventType,
-      sourceTag: sourceEl.tagName || null,
-      sourceClass: sourceEl.className || null,
-      scrollTop,
-      nextCompact,
-      didChange,
-      syncImmediately
-    });
-  };
-
-  kanbanScrollElements.forEach((source) => {
-    const onKanbanMouseEnter = (event) => {
-      const sourceEl = resolveKanbanScrollableSource(event?.target || source);
-      if (!sourceEl) return;
-      debugKanbanScroll("[situations:kanban-hover-ignored]", {
-        eventType: event?.type || null,
-        sourceTag: sourceEl.tagName || null,
-        sourceClass: sourceEl.className || null,
-        scrollTop: Number(sourceEl.scrollTop || 0),
-        ignoredHover: true
-      });
-    };
-    const prepareScrollSource = (event) => {
-      resolveAndActivateKanbanScrollableSource(event?.target || source, event?.type || null, {
-        syncImmediately: false
-      });
-    };
-    const onKanbanScroll = (event) => {
-      const sourceEl = event?.currentTarget;
-      if (!sourceEl) return;
-      syncProjectShellCompactFromScrollSource(sourceEl);
-
-      const scrollTop = Number(sourceEl.scrollTop || 0);
-      const nextCompact = scrollTop > 12;
-      const didChange = document.body.classList.contains("project-shell-compact") !== nextCompact;
-      debugKanbanScroll("[situations:kanban-scroll]", {
-        eventType: event?.type || null,
-        sourceTag: sourceEl.tagName || null,
-        sourceClass: sourceEl.className || null,
-        scrollTop,
-        nextCompact,
-        didChange
-      });
-      syncSituationsAvailableHeight(root);
-    };
-    source.addEventListener("mouseenter", onKanbanMouseEnter);
-    source.addEventListener("wheel", prepareScrollSource, { passive: true });
-    source.addEventListener("touchstart", prepareScrollSource, { passive: true });
+  const unbindColumnHandlers = kanbanScrollElements.map((source) => {
+    const onKanbanScroll = () => syncSituationsAvailableHeight(root);
     source.addEventListener("scroll", onKanbanScroll, { passive: true });
-    unbindColumnHandlers.push(() => {
-      source.removeEventListener("mouseenter", onKanbanMouseEnter);
-      source.removeEventListener("wheel", prepareScrollSource);
-      source.removeEventListener("touchstart", prepareScrollSource);
-      source.removeEventListener("scroll", onKanbanScroll);
-    });
+    return () => source.removeEventListener("scroll", onKanbanScroll);
   });
+
   cleanupSituationsListeners = () => {
     unbindColumnHandlers.forEach((unbind) => unbind());
   };
@@ -790,8 +722,10 @@ const { bindEvents } = createProjectSituationsEvents({
 export function renderProjectSituations(root) {
   bindSituationsTabReset();
   currentSituationsRoot = root;
-  // Les vues Situations doivent toujours piloter le compactage via leur source de scroll locale.
-  setProjectCompactEnabled(true);
+  // **Pas de compactage sur cet écran.** Il n'a plus de barre d'onglets de
+  // projet à réduire ; ce qu'il en restait sautait au défilement, sans rien
+  // gagner.
+  setProjectCompactEnabled(false);
   if (store.situationsView && typeof store.situationsView === "object") {
     store.situationsView.selectedSituationId = null;
   }

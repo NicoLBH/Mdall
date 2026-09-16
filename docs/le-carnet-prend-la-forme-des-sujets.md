@@ -773,3 +773,54 @@ Au passage, « Supprimer » devient « Supprimer la vue » / « Supprimer la
 situation » : le mot seul, sous deux entrées qui nomment la chose, laissait se
 demander ce qu'il supprimait — la vue, ou ce qu'elle retient. C'est la question
 qu'il ne faut pas se poser devant un bouton rouge.
+
+---
+
+## 9. Le compactage du bandeau d'onglets quitte l'écran
+
+### Le kebab se place entre les deux boutons
+
+Ceux qui l'encadrent ouvrent quelque chose à l'écran — les indicateurs, la barre
+latérale ; lui porte les gestes de la situation. Au bout de la rangée, il passait
+pour un troisième bouton d'affichage.
+
+### Le compactage, et pourquoi il n'a plus lieu d'être
+
+**Ce que c'était.** Sur un onglet d'un projet, faire défiler escamote l'en-tête
+et réduit la barre d'onglets : l'écran gagne quarante pixels sur une liste
+longue, et le nom de l'onglet passe dans la barre du haut pour qu'on sache où
+l'on est.
+
+Cela demande une machinerie. Savoir **quelle boîte** défile parmi les colonnes
+d'un kanban — un résolveur entier, `project-situations-scroll-source.js` —, la
+déclarer comme source active, écouter la molette et le doigt *avant* le
+défilement pour que la bonne boîte soit désignée à temps, poser une classe sur le
+corps du document, et prévenir par un événement tout ce qui en dépend.
+
+**Pourquoi ça part.** Les situations sont sorties du giron d'un projet : cet
+écran n'a plus de barre d'onglets à compacter. Il restait la machinerie, et elle
+se voyait quand même — on faisait défiler le kanban ou le tableau, et le haut de
+l'écran sautait pour réduire une barre qui n'était plus là.
+
+Ce qui part :
+
+- `setProjectCompactEnabled(true)` devient `false`, aux deux endroits qui
+  l'appelaient ;
+- les portes du compactage — `registerProjectScrollSources`,
+  `setProjectActiveScrollSource`, `clearProjectActiveScrollSource`,
+  `syncProjectShellCompactFromScrollSource` — quittent l'écran ;
+- `project-situations-scroll-source.js` est supprimé : son seul appelant était
+  celui-là ;
+- les écoutes de `mouseenter`, `wheel` et `touchstart` posées pour désigner la
+  source, et le journal de mise au point qui les accompagnait ;
+- `compactLabel`, `compactLabelSuffix` et `onCompactLabelClick` : ils
+  remplissaient la barre compacte, qui n'apparaît plus.
+
+**Ce qui reste**, et c'est autre chose : la hauteur disponible. Les colonnes du
+kanban doivent savoir jusqu'où descendre ; elle se recalcule au défilement d'une
+colonne et au redimensionnement de la fenêtre, et rien de plus. L'écoute du
+changement de compactage part avec lui.
+
+Les deux garde-fous qui gardaient la machinerie gardent maintenant **son
+absence** : une machinerie qu'on remet sans le vouloir est précisément ce qui
+arrive quand on recopie le montage d'un écran voisin.

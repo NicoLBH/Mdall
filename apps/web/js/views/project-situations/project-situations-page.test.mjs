@@ -632,5 +632,15 @@ test("le détail d'une situation porte son kebab, avec « Modifier »", () => {
   assert.match(actions, /Désépingler la situation/, "elle est épinglée : on la retire");
   assert.match(actions, /Supprimer la situation/, "et on peut la supprimer");
   assert.match(actions, /data-sujets-vue-modifier="11111111/, "et l'entrée porte son identifiant");
+
+  // **L'ordre de la rangée compte.** Les deux boutons qui encadrent le kebab
+  // ouvrent quelque chose à l'écran ; lui porte les gestes de la situation. Au
+  // bout de la rangée, il passait pour un troisième bouton d'affichage.
+  const indicateurs = actions.indexOf("data-open-situation-insights");
+  const gestes = actions.indexOf("data-situations-menu");
+  const barre = actions.indexOf("data-open-situation-drilldown");
+
+  assert.ok(indicateurs < gestes, "le kebab vient après « Indicateurs »");
+  assert.ok(gestes < barre, "et avant le bouton de la barre latérale");
 });
 
