@@ -84,11 +84,30 @@ relecture ne garantit.
 La migration est additive : elle n'ajoute qu'une fonction, ne touche aucune
 table et aucune politique.
 
+## Le dégradé n'est pas un effet
+
+Le trait est **sombre en bas, clair en haut**. C'est ce qui rend les sommets
+lisibles sur une ligne de cent pixels : à couleur constante, un pic d'une semaine
+et un palier de trois mois pèsent le même vert, et l'œil ne distingue plus la
+forme du fond — un aplat de trait sur un fond sombre se lit comme un
+soulignement.
+
+Le dégradé est calé sur le **cadre**, en `userSpaceOnUse`, et non sur l'étendue
+du tracé : en unités de boîte, une courbe plate n'aurait aucune hauteur et le
+dégradé s'effondrerait sur une seule teinte. Calé sur le cadre, deux courbes
+voisines montrent la même couleur à la même hauteur.
+
+Chaque courbe a **son propre identifiant de dégradé**. Un `id` répété dans une
+page fait pointer toutes les courbes vers le premier dégradé rencontré : rien ne
+se verrait tant qu'elles se ressemblent, et le jour où l'une change de teinte les
+autres suivraient sans qu'on comprenne.
+
 ## Ce qui n'a pas été redessiné
 
-La couleur est `--success`, celle des états ouverts : c'est déjà la couleur de
-« ça bouge », et en inventer une seconde ferait deux verts à retoucher ensemble.
-Le trait est en `currentColor`, si bien que le SVG n'en connaît aucune.
+La teinte du haut est `--success`, celle des états ouverts : c'est déjà la
+couleur de « ça bouge », et en inventer une seconde ferait deux verts à retoucher
+ensemble. Les deux teintes vivent dans la feuille de style et sont lues par
+variable CSS, si bien que le SVG n'en connaît aucune.
 
 La colonne s'ajoute à la grille du tableau existant, qui garde ses largeurs
 relatives.

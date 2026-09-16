@@ -25742,18 +25742,41 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    finirait en retard sur eux.
    ───────────────────────────────────────────────────────────────────────── */
 
-/* Le bouton et le champ s'alignent sur les entrées du rail : même gouttière à
-   gauche, même retrait. Les décaler d'un pixel se voit tout de suite, parce que
-   la liste des projets est juste dessous. */
-.accueil-rail__nouveau,
-.accueil-rail__recherche{
-  margin:0 var(--nav-list-gutter, 10px) 6px;
+/* Le titre et le bouton sur une ligne : dans un rail, chaque ligne compte, et
+   le bouton vert n'a rien à annoncer qui mérite la sienne. */
+.accueil-rail__tete{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding-right:var(--nav-list-gutter, 10px);
 }
-.accueil-rail__nouveau{ display:flex; width:auto; }
+/* Le titre garde sa marge du haut, celle de tous les intitulés de groupe ;
+   c'est elle qui sépare le rail de ce qui le surmonte. */
+.accueil-rail__tete .nav-list__group-label{ margin-bottom:0; }
+
+.accueil-rail__nouveau{
+  flex:0 0 auto;
+  display:inline-flex; width:auto;
+  min-height:28px; padding:4px 10px; font-size:12px;
+}
+/* Le champ s'aligne sur les entrées de la liste, qui n'ont plus de gouttière à
+   gauche : les décaler d'un pixel se voit tout de suite, la liste est juste
+   dessous. */
+.accueil-rail__recherche{ margin:0 var(--nav-list-gutter, 10px) 6px 0; }
 .accueil-rail__vide{
-  margin:6px var(--nav-list-gutter, 10px);
+  margin:6px var(--nav-list-gutter, 10px) 6px 0;
   color:var(--muted); font-size:12px; line-height:18px;
 }
+
+/* **Cette liste-là n'a pas de gouttière.** Ailleurs, le retrait fait la place du
+   trait bleu de l'entrée courante ; ici aucune entrée n'est « celle qu'on
+   regarde » — ce sont des destinations —, et le retrait ne faisait que décaler
+   la liste du titre qui la surmonte. Scopé à `--accueil` : les autres rails
+   gardent leur trait. */
+.nav-list--accueil .nav-list__item{ padding-left:0; }
+/* Le nom peut être coupé ; le compte, jamais. « 11 jours » passait sur deux
+   lignes dans un rail étroit, et un compte cassé en deux ne se lit plus comme un
+   compte. */
+.nav-list--accueil .nav-list__label{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.nav-list--accueil .nav-list__trailing{ flex:0 0 auto; white-space:nowrap; }
 /* Replié, le rail n'a plus la place d'un libellé ni d'un champ : il ne reste
    que les icônes, et un bouton vert qui dirait « Nouveau » sur 66 px déborderait
    sur le trait. */
@@ -25778,13 +25801,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   .accueil-colonnes{ grid-template-columns:minmax(0, 1fr); }
 }
 
-.accueil-copilote{
-  display:flex; flex-direction:column; gap:16px;
-  max-width:720px; margin:0 auto; width:100%;
+.accueil-colonnes__centre{
+  display:flex; flex-direction:column;
+  max-width:720px; width:100%; min-width:0;
 }
-/* L'invite est centrée, comme sur l'écran du Copilote quand rien n'a encore été
-   dit : c'est la même situation, et la même figure. */
-.accueil-copilote .copilote-empty{ margin:0 auto; }
+.accueil-copilote{ display:flex; flex-direction:column; gap:12px; width:100%; }
 .accueil-copilote__compose{ width:100%; }
 
 .accueil-actualites{
@@ -25802,8 +25823,28 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   display:flex; flex-direction:column; gap:12px;
 }
 
-.accueil-actualite{ display:flex; align-items:flex-start; gap:8px; }
-.accueil-actualite__icone{ display:inline-flex; flex:0 0 auto; margin-top:2px; color:var(--muted); }
+/* La timeline : un rond par ligne, et un filet qui les relie.
+
+   Le rond ne porte aucune information — le genre est dit par le lien et par où
+   il mène. Sa seule fonction est de faire une colonne : quatre lignes alignées
+   sur un filet se lisent comme une suite, quatre lignes posées l'une sous
+   l'autre se lisent comme une liste. */
+.accueil-actualite{ position:relative; display:flex; align-items:flex-start; gap:10px; }
+.accueil-actualite__jalon{
+  position:relative; z-index:1;
+  flex:0 0 auto; margin-top:5px;
+  width:8px; height:8px; border-radius:50%;
+  background:var(--muted);
+}
+/* Le filet part du rond et descend jusqu'au suivant. Il s'arrête à la dernière
+   ligne : un trait qui continue dans le vide annonce une suite qui n'existe
+   pas. Le `gap` de la liste est repris ici, sans quoi le trait serait
+   interrompu entre deux lignes. */
+.accueil-actualite:not(:last-child)::before{
+  content:""; position:absolute; left:3.5px; top:9px;
+  width:1px; height:calc(100% + 12px);
+  background:var(--border);
+}
 .accueil-actualite__corps{ min-width:0; }
 /* Le titre ne se souligne pas — ni ici, ni dans les tableaux : c'est une ligne
    qu'on parcourt, et une page de soulignés se lit comme un formulaire. */
@@ -25831,6 +25872,13 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .courbe-activite{
   display:block;
   width:100%; height:28px;
+  /* **Sombre en bas, clair en haut.** Ce n'est pas un effet : à couleur
+     constante, un pic d'une semaine et un palier de trois mois pèsent le même
+     vert, et l'œil ne distingue plus la forme du fond. Les deux teintes sont
+     celles de l'application — `--success` en haut, la même assombrie en bas —
+     et non deux verts de plus à retoucher un jour. */
+  --courbe-activite-haut:var(--success);
+  --courbe-activite-bas:rgb(35,92,50);
   color:var(--success);
 }
 /* `preserveAspectRatio:none` étire le dessin à la cellule ; sans hauteur

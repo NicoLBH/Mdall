@@ -124,6 +124,9 @@ function renderProjectRow(project) {
       <div class="projects-repo__cell projects-repo__cell--activite">
         ${renderCourbeDactivite({
           valeurs,
+          // Le dégradé de cette courbe-là : un identifiant répété ferait pointer
+          // toutes les lignes vers le premier dégradé de la page.
+          cle: project.id,
           titre: Array.isArray(valeurs) ? titreDeLaCourbe(totalDeLaCourbe(valeurs)) : ""
         })}
       </div>

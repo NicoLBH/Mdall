@@ -1,6 +1,18 @@
 /**
  * La courbe d'activité : une ligne verte, large comme une cellule.
  *
+ * ## Le dégradé, et pourquoi il n'est pas décoratif
+ *
+ * Le trait est **sombre en bas, clair en haut**. Ce n'est pas un effet : c'est
+ * ce qui rend les sommets lisibles sur une ligne de cent pixels. À couleur
+ * constante, un pic d'une semaine et un palier de trois mois pèsent le même
+ * vert, et l'œil ne distingue plus la forme du fond — un aplat de trait sur un
+ * fond sombre se lit comme un soulignement.
+ *
+ * Les deux teintes vivent dans la feuille de style, pas ici : le dessin les lit
+ * par variable CSS. Un vert écrit dans le SVG serait un second vert à retoucher
+ * le jour où celui de l'application change (règle 4).
+ *
  * ## Ce qu'elle montre, et à quelle échelle
  *
  * Une forme, pas une mesure. Chaque projet est tracé **à l'échelle de son
@@ -56,6 +68,22 @@ function pointsDe(valeurs = []) {
 const court = (valeur) => Math.round(valeur * 100) / 100;
 
 /**
+ * Le nom du dégradé de cette courbe-là.
+ *
+ * **Un identifiant par courbe**, et c'est obligatoire : un `id` répété dans une
+ * page fait que toutes les courbes pointent vers le premier dégradé rencontré.
+ * Ici toutes se ressemblent, donc rien ne se verrait — jusqu'au jour où l'une
+ * change de teinte et où les autres suivent sans qu'on comprenne.
+ *
+ * La clé est nettoyée : un identifiant de projet est un UUID, mais rien ne
+ * garantit qu'un appelant n'y mette pas un guillemet.
+ */
+function nomDuDegrade(cle = "") {
+  const propre = String(cle ?? "").replace(/[^a-zA-Z0-9_-]/g, "") || "seule";
+  return `courbe-activite-${propre}`;
+}
+
+/**
  * La courbe d'un projet.
  *
  * @param {object} options
@@ -64,20 +92,37 @@ const court = (valeur) => Math.round(valeur * 100) / 100;
  *   qu'une ligne à zéro, qui dirait « rien de l'année » — ce qui est une
  *   information, et fausse (règle 5).
  * @param {string} [options.titre] ce que dit le survol
+ * @param {string} [options.cle] de quoi nommer le dégradé sans le confondre
+ *   avec celui de la courbe voisine
  */
-export function renderCourbeDactivite({ valeurs = null, titre = "" } = {}) {
+export function renderCourbeDactivite({ valeurs = null, titre = "", cle = "" } = {}) {
   if (!Array.isArray(valeurs)) return `<span class="courbe-activite courbe-activite--inconnue"></span>`;
 
   const points = pointsDe(valeurs);
   if (!points.length) return `<span class="courbe-activite courbe-activite--inconnue"></span>`;
 
   const trait = points.map(([x, y]) => `${court(x)},${court(y)}`).join(" ");
+  const degrade = nomDuDegrade(cle);
 
   return `
     <span class="courbe-activite"${titre ? ` title="${escapeHtml(titre)}"` : ""}>
       <svg class="courbe-activite__dessin" viewBox="0 0 ${LARGEUR} ${HAUTEUR}"
         preserveAspectRatio="none" aria-hidden="true" focusable="false">
-        <polyline points="${trait}" fill="none" stroke="currentColor"
+        <defs>
+          ${/*
+            **En unités du dessin, et non de la boîte.** Un dégradé en unités de
+            boîte se rapporte à l'étendue du tracé : une courbe plate n'aurait
+            aucune hauteur, et le dégradé s'effondrerait sur une seule teinte.
+            Ici il est calé sur le cadre, et deux courbes voisines montrent donc
+            la même couleur à la même hauteur.
+          */""}
+          <linearGradient id="${degrade}" gradientUnits="userSpaceOnUse"
+            x1="0" y1="${HAUTEUR}" x2="0" y2="0">
+            <stop offset="0" stop-color="var(--courbe-activite-bas)" />
+            <stop offset="1" stop-color="var(--courbe-activite-haut)" />
+          </linearGradient>
+        </defs>
+        <polyline points="${trait}" fill="none" stroke="url(#${degrade})"
           stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"
           vector-effect="non-scaling-stroke" />
       </svg>
