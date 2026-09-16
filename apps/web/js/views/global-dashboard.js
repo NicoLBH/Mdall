@@ -20,10 +20,9 @@
  *
  * ## Ce que l'accueil n'écrit pas
  *
- * Il n'ouvre aucune discussion. La question tapée ici part dans le brouillon du
- * Copilote et l'écran bascule : la discussion se crée au premier message, là où
- * elle se crée déjà, et non à deux endroits qui finiraient par la créer
- * différemment.
+ * Il n'ouvre aucune discussion. La question tapée ici part au Copilote et
+ * l'écran bascule : la discussion se crée au premier message, là où elle se
+ * crée déjà, et non à deux endroits qui finiraient par la créer différemment.
  */
 
 import { mountProjectShellChrome, setProjectViewHeader } from "./project-shell-chrome.js";
@@ -109,14 +108,20 @@ function redessiner(root) {
 }
 
 /**
- * Basculer sur le Copilote, **en emportant ce qui est écrit**.
+ * Ouvrir le Copilote, **en emportant ce qui est écrit**.
  *
  * La question passe par `services/question-de-laccueil.js`, qui dit au long
  * pourquoi ni l'adresse ni le brouillon du Copilote ne conviennent : la
  * première la mettrait dans l'historique du navigateur, le second serait effacé
  * par le changement de projet.
  */
-function basculer(question) {
+function envoyer(question) {
+  // **Une question vide n'ouvre rien.** Entrée sur un champ blanc changerait
+  // d'écran sans rien emporter, et l'on se retrouverait ailleurs sans savoir
+  // pourquoi.
+  if (!String(question ?? "").trim()) return;
+
+  vue.brouillon = "";
   deposerLaQuestion(question);
   window.location.hash = ouMeneLaQuestion(vue.projetChoisi);
 }
@@ -155,22 +160,27 @@ function brancher(root) {
   });
 
   /**
-   * **Écrire ici, c'est ouvrir le Copilote.**
+   * **Envoyer ici, c'est ouvrir le Copilote.**
    *
-   * La bascule se fait à la première frappe, et emporte ce qui vient d'être
-   * tapé : c'est ce que l'accueil promet en montrant une saisie de Copilote.
-   * Attendre l'envoi obligerait à écrire la question entière dans un cadre qui
-   * ne montre ni le fil, ni les pièces jointes, ni les étapes.
+   * Entrée envoie, Maj+Entrée passe à la ligne : **exactement la convention du
+   * Copilote**, et c'est ce qui la rend supportable. Basculer à la première
+   * frappe changeait d'écran pendant qu'on écrit — on n'avait rien demandé, la
+   * page sautait sous le curseur, et l'on ne pouvait plus se raviser.
+   *
+   * On ne redessine pas à chaque touche : l'écran remplacerait le champ, et le
+   * curseur repartirait au début. Le brouillon se retient, il ne se réaffiche
+   * qu'en revenant sur l'accueil.
    */
   const saisie = root.querySelector(`[${GESTES_DE_LACCUEIL.saisie}]`);
-  saisie?.addEventListener("input", () => {
-    const question = saisie.value;
-    if (!question.trim()) { vue.brouillon = question; return; }
-    vue.brouillon = "";
-    basculer(question);
+  saisie?.addEventListener("input", () => { vue.brouillon = saisie.value; });
+
+  saisie?.addEventListener("keydown", (evenement) => {
+    if (evenement.key !== "Enter" || evenement.shiftKey) return;
+    evenement.preventDefault();
+    envoyer(saisie.value);
   });
 
   root.querySelector(`[${GESTES_DE_LACCUEIL.envoi}]`)?.addEventListener("click", () => {
-    basculer(saisie?.value || "");
+    envoyer(saisie?.value || "");
   });
 }

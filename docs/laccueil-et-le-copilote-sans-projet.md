@@ -66,12 +66,16 @@ Il ne le filtre pas. Chercher dans les cinq plus actifs ne rendrait rien dès qu
 le projet cherché n'en est pas — c'est-à-dire précisément quand on le cherche, et
 l'écran dirait « aucun projet de ce nom » d'un projet qui existe.
 
-## Écrire à l'accueil, c'est ouvrir le Copilote
+## Envoyer à l'accueil, c'est ouvrir le Copilote
 
-La bascule se fait à la première frappe et emporte ce qui vient d'être tapé.
-C'est ce que l'accueil promet en montrant une saisie de Copilote ; attendre
-l'envoi obligerait à écrire la question entière dans un cadre qui ne montre ni
-le fil, ni les pièces jointes, ni les étapes.
+**Entrée envoie, Maj+Entrée passe à la ligne** — exactement la convention du
+Copilote, et c'est ce qui la rend supportable. Une première version basculait
+dès la première frappe : l'écran changeait pendant qu'on écrivait, la page
+sautait sous le curseur, et l'on ne pouvait plus se raviser. La bascule est
+maintenant un geste, et non un effet de bord de la saisie.
+
+Une question vide n'ouvre rien : Entrée sur un champ blanc changerait d'écran
+sans rien emporter, et l'on se retrouverait ailleurs sans savoir pourquoi.
 
 La question passe par `services/question-de-laccueil.js`, et **ni par l'adresse,
 ni par le brouillon du Copilote** :
@@ -152,9 +156,17 @@ attendu n'aurait constaté qu'une réécriture, pas un écran laissé dehors.
 
 ## La migration
 
-`202610050001_copilot_conversations_sans_projet.sql`, strictement additive :
+`202610110001_copilot_conversations_sans_projet.sql`, strictement additive :
 `project_id` cesse d'être obligatoire, et un index partiel couvre la recherche
 `project_id is null`. Aucune colonne supprimée, aucune contrainte durcie.
+
+**L'horodatage est celui de la dernière**, et pas un de plus tôt : `supabase db
+push` refuse d'insérer une migration **avant** la dernière déjà appliquée. Un
+horodatage repris à une migration existante — c'est arrivé ici — se range avant
+elle dans l'ordre alphabétique, donc six migrations avant la dernière, et le
+déploiement s'arrête en nommant *l'autre* fichier. Rien dans le dépôt ne le
+signalait : le SQL était juste et les tests passaient.
+`scripts/lordre-des-migrations.test.mjs` le voit désormais.
 
 **La politique de sécurité ne bouge pas d'une ligne.** Elle n'a jamais regardé le
 projet, seulement le propriétaire : une discussion sans chantier reste
