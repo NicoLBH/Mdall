@@ -109,3 +109,13 @@ Verification done:
 - `apps/web/js/services/google-maps-embed-service.js` now exposes stable exports without duplicate declarations.
 - Studio views only import `buildGoogleMapsPlaceEmbedUrl` and no longer depend on optional `hasGoogleMapsEmbedApiKey` export.
 - All `apps/web/js/views/studio/**/*.js` files pass a syntax check with `node --check`.
+
+## Le régime incendie choisit l'outil
+
+Le Copilote appelle l'utilitaire « Incendie — Habitation » parce que sa
+description parle d'habitation. Avec l'ERP et le code du travail, trois
+descriptions se ressembleront — et le régime applicable est une qualification
+réglementaire, pas une intuition de rédaction. Le plan pour qu'il se déduise
+d'une **variable du projet**, sans qu'aucun identifiant d'outil ne soit écrit
+dans l'orchestration :
+[`docs/le-regime-incendie-choisit-loutil.md`](docs/le-regime-incendie-choisit-loutil.md).

@@ -49,6 +49,8 @@ import { renderAttenteSpinner } from "../../ui/spinner.js";
 import { sendAssistMessage } from "../../../services/copilote-service.js";
 import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.js";
 import { rendreLeMarkdown } from "../../ui/markdown-leger.js";
+import { adresseDeLaPiece, oublierLAdresse } from "../../../services/piece-jointe.js";
+import { renderApercuDeLaNoteHtml, renderLigneDeLaNoteHtml } from "./note-jointe.js";
 import { renderVoileDeDepot } from "../../ui/voile-de-depot.js";
 import { aRetenirDuResultat, executerUtilitaire } from "../../../services/utilitaires-service.js";
 import { conversationTitle, findConversation } from "../../../services/copilote-conversations.js";
@@ -146,6 +148,14 @@ function etatParDefaut() {
     // n'est ni stockée ni enregistrée avec la conversation : une note
     // déposée pour un essai n'est pas une pièce du projet.
     pieceJointe: null,
+    /**
+     * L'aperçu de la note, quand il est ouvert : `{nom, adresse}`.
+     *
+     * L'adresse est une adresse d'objet, fabriquée à l'ouverture et **rendue**
+     * à la fermeture : sans cela les octets de la note resteraient en mémoire
+     * jusqu'à ce qu'on quitte la page.
+     */
+    apercu: null,
     // Ce que la conversation a déjà fait confirmer, valeur comprise. Sans
     // cette mémoire, chaque nouvelle question redemanderait la contrainte de
     // sol qu'on vient de saisir ; avec la valeur, une autre valeur sous la
@@ -187,6 +197,8 @@ function ensureState() {
     store.ui.assistant.draft = "";
     store.ui.assistant.lastError = "";
     store.ui.assistant.pieceJointe = null;
+    // Changer de projet emporte l'aperçu, et rend les octets qu'il retenait.
+    oublierLApercu(store.ui.assistant);
     store.ui.assistant.confirmeesValeurs = {};
     store.ui.assistant.chargement = false;
   }
@@ -1504,16 +1516,63 @@ function renderActions(etat) {
 function renderPieceJointe(etat) {
   const piece = etat.pieceJointe;
   if (!piece || noteDejaPartie(etat)) return "";
-  const ko = Math.max(1, Math.round((piece.taille ?? 0) / 1024));
 
-  return `
-    <div class="copilote-piece">
-      ${svgIcon("file-pdf")}
-      <span class="copilote-piece__nom">${escapeHtml(piece.nom)}</span>
-      <span class="copilote-piece__poids">${ko} ko</span>
-      <button type="button" class="copilote-piece__retirer" id="copiloteRetirerPiece"
-              aria-label="Retirer la note jointe" title="Retirer">×</button>
-    </div>`;
+  return renderLigneDeLaNoteHtml({
+    piece,
+    ouvert: Boolean(etat.apercu),
+    // Sans octets, pas d'aperçu : la ligne reste une étiquette plutôt qu'un
+    // bouton qui n'ouvrirait rien.
+    montrable: Boolean(piece.donnees)
+  });
+}
+
+/**
+ * L'aperçu de la note, s'il est ouvert.
+ *
+ * **L'adresse d'objet est fabriquée une fois, à l'ouverture**, et gardée dans
+ * l'état. En fabriquer une à chaque rendu retiendrait les octets de la note à
+ * chaque frappe — six mégaoctets par caractère tapé, jusqu'à quitter la page.
+ */
+function renderApercu(etat) {
+  if (!etat.apercu?.adresse) return "";
+  return renderApercuDeLaNoteHtml(etat.apercu);
+}
+
+/**
+ * Ouvrir ou refermer l'aperçu de la note jointe.
+ *
+ * On rend l'adresse précédente avant d'en fabriquer une autre : une adresse
+ * d'objet retient ses octets tant qu'on ne la révoque pas.
+ */
+function basculerLApercu(root) {
+  const etat = ensureState();
+
+  if (etat.apercu) {
+    oublierLAdresse(etat.apercu.adresse);
+    etat.apercu = null;
+    render(root);
+    return;
+  }
+
+  const piece = etat.pieceJointe;
+  const adresse = adresseDeLaPiece(piece);
+  // **Une note illisible se dit.** Un bouton qui ouvre un cadre vide fait
+  // croire que le PDF est vide, et l'on rejoint la note pour rien.
+  if (!adresse) {
+    etat.lastError = "Cette note n'a pas pu être ouverte.";
+    render(root);
+    return;
+  }
+
+  etat.apercu = { nom: piece?.nom ?? "", adresse };
+  render(root);
+}
+
+/** La note s'en va : son aperçu aussi, et ses octets avec. */
+function oublierLApercu(etat) {
+  if (!etat.apercu) return;
+  oublierLAdresse(etat.apercu.adresse);
+  etat.apercu = null;
 }
 
 /** La note a-t-elle déjà voyagé avec une question ? */
@@ -1531,6 +1590,12 @@ function render(root) {
       <div class="copilote${vide ? " copilote--empty" : ""}">
         ${renderVoileDeDepot("Ajouter des fichiers")}
         ${renderCorps(etat)}
+        ${/*
+          **Entre le fil et la saisie.** Dans la zone de saisie, l'aperçu aurait
+          mangé la place du texte à écrire ; au-dessus du fil, il aurait poussé
+          la conversation hors de l'écran.
+        */""}
+        ${renderApercu(etat)}
 
         <div class="copilote-composer">
           <div class="copilote-composer__inner">
@@ -1672,6 +1737,9 @@ async function joindre(root, fichier, { ecartes = 0 } = {}) {
 
   try {
     const { lireLeFichier } = await import("../../../services/piece-jointe.js");
+    // **L'aperçu de la note d'avant se referme.** Le laisser ouvert montrerait
+    // l'ancienne sous le nom de la nouvelle, et retiendrait ses octets.
+    oublierLApercu(etat);
     etat.pieceJointe = await lireLeFichier(fichier);
     etat.lastError = ecartes > 0
       ? `Une seule note à la fois : ${ecartes} autre${ecartes > 1 ? "s" : ""} fichier${
@@ -2309,8 +2377,21 @@ function bind(root) {
     void joindre(root, event.target.files?.[0] ?? null);
   });
   root.querySelector("#copiloteRetirerPiece")?.addEventListener("click", () => {
-    ensureState().pieceJointe = null;
+    const etat = ensureState();
+    etat.pieceJointe = null;
+    // La note s'en va : son aperçu n'a plus d'objet, et ses octets non plus.
+    oublierLApercu(etat);
     render(root);
+  });
+
+  // **La ligne de la note ouvre la note.** Un nom qu'on ne peut pas vérifier
+  // oblige à sortir de l'écran pour s'assurer qu'on a joint la bonne.
+  root.querySelector("[data-copilote-apercu]")?.addEventListener("click", () => {
+    basculerLApercu(root);
+  });
+
+  root.querySelector("[data-copilote-apercu-fermer]")?.addEventListener("click", () => {
+    basculerLApercu(root);
   });
 
   for (const bouton of root.querySelectorAll("[data-remise-outil]")) {

@@ -17505,11 +17505,23 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .project-simple-page--copilote .project-simple-scroll--parametres{
   overflow:hidden; padding:0; min-height:0; height:100%;
 }
-.project-simple-page--copilote .settings-shell--parametres,
-.project-simple-page--copilote .project-rail-layout,
-.project-simple-page--copilote .project-rail-layout__content,
-.project-simple-page--copilote .project-studio-router__panel.is-active,
-.project-simple-page--copilote #projectStudioCopilotePanel,
+/* **Tout ce qui contient le Copilote devient une colonne pleine hauteur, quel
+   que soit son nom.**
+
+   Cette règle nommait les conteneurs un par un — la coque, la mise en page du
+   rail, son contenu, le panneau, l'hôte, la section. C'est une liste : elle
+   était juste le jour où on l'a écrite, et le jour où un `div` de plus s'est
+   glissé entre deux d'entre eux, la chaîne s'est rompue **sans un mot**.
+   `height:100%` ne se rapportait plus à rien, le fil a grandi avec la
+   conversation, et comme la coque ne défile pas sur cet écran, **plus rien ne
+   défilait du tout** : on ne pouvait plus remonter lire ce qui venait d'être
+   répondu.
+
+   `:has()` dit la règle telle qu'elle est vraie — *les ancêtres du Copilote* —
+   plutôt que la liste de ceux qu'on avait sous les yeux. Un conteneur de plus
+   se règle tout seul. C'est la même leçon que la marge du contenu voisin d'un
+   rail, qui avait laissé la Mémoire dehors pour la même raison. */
+.project-simple-page--copilote :has(.copilote-section),
 .project-simple-page--copilote .copilote-section{
   display:flex; flex-direction:column;
   height:100%; min-height:0; max-width:none; gap:0;
@@ -17965,6 +17977,49 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 .copilote-piece__retirer:hover{ color:#f85149; }
 .copilote-piece .ui-icon{ color:#f85149; opacity:.85; }
+
+/* **La ligne d'une note ouvre la note.** Elle ne disait que son nom, et deux
+   versions d'une note de calcul portent le même nom à un suffixe près : il
+   fallait sortir de l'écran pour s'assurer qu'on avait joint la bonne.
+
+   C'est donc un bouton, et il prend toute la ligne sauf la croix. Rien de son
+   dessin ne change : ce sont les mêmes espacements, la même icône, la même
+   troncature — seul le pointeur et le fond au survol disent qu'il se clique. */
+.copilote-piece__ouvrir{
+  display:flex; align-items:center; gap:8px; flex:1; min-width:0;
+  background:none; border:0; padding:0; margin:0;
+  color:inherit; font:inherit; text-align:left; cursor:pointer;
+}
+.copilote-piece:has(.copilote-piece__ouvrir:hover),
+.copilote-piece:has(.copilote-piece__ouvrir:focus-visible){ border-color:var(--accent); }
+.copilote-piece__ouvrir:focus-visible{ outline:none; }
+
+/* L'aperçu, entre le fil et la saisie : il prend la hauteur qu'on lui donne, et
+   le fil se resserre — on continue de lire la discussion pendant qu'on vérifie
+   la note.
+
+   `min()` plutôt qu'une hauteur fixe : sur un écran bas, quatre cent vingt
+   pixels d'aperçu ne laisseraient rien à la conversation. */
+.copilote-apercu{
+  flex:0 0 auto; display:flex; flex-direction:column; min-height:0;
+  height:min(420px, 45vh);
+  margin:0 24px 8px; border:1px solid var(--border); border-radius:10px;
+  background:var(--panel2); overflow:hidden;
+}
+.copilote-apercu__tete{
+  display:flex; align-items:center; gap:8px; flex:0 0 auto;
+  padding:6px 8px 6px 12px; border-bottom:1px solid var(--border2);
+  font-size:12px; color:var(--text);
+}
+.copilote-apercu__tete .ui-icon{ flex:none; color:#f85149; opacity:.85; }
+.copilote-apercu__nom{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.copilote-apercu__fermer{ flex:none; }
+/* Le lecteur est celui du navigateur : il défile, il cherche, il zoome. Le
+   cadre n'a qu'à lui donner une hauteur — sans elle, un `iframe` retombe sur
+   cent cinquante pixels, et l'on ferait défiler une fenêtre de trois lignes. */
+.copilote-apercu__page{
+  flex:1 1 auto; min-height:0; width:100%; border:0; background:var(--bg);
+}
 
 /* Une fois la note partie, elle ne tient plus une carte dans la zone de saisie :
    le trombone allumé dit qu'elle est jointe à la discussion, la croix à côté
@@ -25034,8 +25089,16 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width:0; width:100%;
 }
 .situations-sujets-tete__compte{flex:0 0 auto;}
+/* **Ce qu'on regarde à gauche, ce qui restreint à droite.**
+
+   Le filtre d'état et le compte disent *ce qui est à l'écran* ; les menus et le
+   bouton de tri sont des *commandes*. Tout à la file, il fallait lire la ligne
+   entière pour trouver le bouton cherché — et la file s'allongeait d'un menu à
+   chaque écran. La marge automatique fait la coupure, et ce qui suit les menus
+   — le tri — part à droite avec eux. */
 .situations-sujets-tete__filtres{display:flex; align-items:center; gap:2px; flex-wrap:wrap;
   min-width:0;}
+.situations-sujets-tete .cell-assignees-head{margin-left:auto;}
 
 /* **Les menus se posent en ligne, pas en colonne.**
 

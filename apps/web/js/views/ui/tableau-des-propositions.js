@@ -121,6 +121,9 @@ export function renderTableauDesPropositionsHtml({
         // **Le filtre d'abord, à gauche**, puis le compte, puis les menus :
         // c'est l'ordre de l'en-tête du tableau des sujets, et les deux écrans
         // se lisent sans réapprendre où regarder.
+        // **Ce qu'on regarde à gauche, ce qui restreint à droite** : le filtre
+        // d'état et le compte disent ce qui est à l'écran, les menus et le tri
+        // sont des commandes. C'est la même tête que celle des sujets.
         html: `<span class="situations-sujets-tete">
           ${statutHtml}
           <span class="situations-sujets-tete__compte">${escapeHtml(lues
@@ -130,20 +133,15 @@ export function renderTableauDesPropositionsHtml({
             // écarté.
             ? `${combien} proposition${combien > 1 ? "s" : ""}`
             : "Propositions")}</span>
-          ${filtresHtml}
+          <span class="cell-assignees-head">${filtresHtml}${triHtml}</span>
         </span>`
       },
       // La colonne des documents n'a pas d'intitulé : l'icône le dit sur chaque
       // ligne, et un mot au-dessus de quatre-vingts pixels tiendrait mal.
       { className: "cell cell-messages-head", html: "" },
       ...(avecLeProjet
-        ? [{
-          className: "cell",
-          // Le tri est dans la dernière colonne de la tête, comme dans l'onglet
-          // des sujets : c'est là qu'on va le chercher.
-          html: `<span class="cell-assignees-head"><span>Projet</span>${triHtml}</span>`
-        }]
-        : [{ className: "cell cell-messages-head", html: triHtml }])
+        ? [{ className: "cell", label: "Projet" }]
+        : [{ className: "cell", html: "" }])
     ]
   });
 
