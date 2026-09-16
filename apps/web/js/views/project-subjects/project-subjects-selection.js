@@ -232,9 +232,23 @@ export function createProjectSubjectsSelection({
     return { type: selection.type, id: selection.item.id, item: selection.item };
   }
 
-  function openDrilldownFromSituation(situationId) {
-    const situation = getNestedSituation(situationId);
-    if (!situation) return null;
+  /**
+   * Ouvrir le panneau latéral sur une situation.
+   *
+   * ## Pourquoi la situation peut se donner
+   *
+   * `getNestedSituation` cherche dans le magasin de **l'onglet Sujets d'un
+   * projet**. L'écran des situations tient les siennes ailleurs : le panneau ne
+   * s'ouvrait donc pas du tout depuis là — on cliquait le bouton à droite
+   * d'« Indicateurs », il ne se passait rien, et rien ne disait pourquoi.
+   *
+   * L'appelant qui a déjà la ligne en main la donne. Aller la chercher dans
+   * l'autre magasin depuis ici ferait lire à ce module l'état d'un écran qu'il
+   * ne connaît pas, et le prochain écran repasserait par la même panne.
+   */
+  function openDrilldownFromSituation(situationId, { situation: donnee = null } = {}) {
+    const situation = getNestedSituation(situationId) || donnee;
+    if (!situation?.id) return null;
     setDrilldownSelection({ selectedSituationId: situation.id, selectedSubjectId: null });
     markEntitySeen("situation", situation.id, { source: "drilldown" });
     return { type: "situation", item: situation };

@@ -26,6 +26,8 @@ const ICI = dirname(fileURLToPath(import.meta.url));
 const source = readFileSync(resolve(ICI, "./project-situations-view.js"), "utf8");
 const evenements = readFileSync(resolve(ICI, "./project-situations-events.js"), "utf8");
 const tableau = readFileSync(resolve(ICI, "./project-situations-table.js"), "utf8");
+/** Le menu d'une situation, désormais partagé entre le tableau et le détail. */
+const kebab = readFileSync(resolve(ICI, "./kebab-dune-situation.js"), "utf8");
 
 test("la ligne de titre partagée porte la structure des autres écrans", () => {
   const html = renderTitreDEcranHtml({
@@ -340,15 +342,20 @@ test("tout ce que le formulaire compose part vers la base", () => {
  * vues, et c'est l'écran des situations qui les reçoit.
  */
 test("les gestes du kebab sont posés et écoutés", () => {
-  assert.match(tableau, /data-situations-menu=/, "le kebab est posé");
+  assert.match(kebab, /data-situations-menu=/, "le kebab est posé");
   assert.match(evenements, /data-situations-menu/, "et il est écouté");
   assert.match(evenements, /data-sujets-vue-epingler[\s\S]{0,240}basculerLEpingle/);
   assert.match(evenements, /data-sujets-decrocher[\s\S]{0,240}effacerLaSituation/);
   // Le menu partagé compose l'attribut : `data-${geste.attribut}`. C'est donc
   // le nom qu'on compare, et c'est lui qui doit se retrouver dans l'écoute.
-  assert.match(tableau, /attribut: "situations-reprendre"/, "la reprise est posée");
+  assert.match(kebab, /attribut: "situations-reprendre"/, "la reprise est posée");
   assert.match(evenements, /data-situations-reprendre[\s\S]{0,240}reprendreLaSienne/,
     "et elle est écoutée — c'est le seul geste d'une situation d'avant");
+
+  // **« Modifier la situation » n'existe que dans le détail**, et il faut donc
+  // qu'il soit écouté lui aussi : l'entrée s'affiche, et le clic ne ferait rien.
+  assert.match(evenements, /data-sujets-vue-modifier[\s\S]{0,240}ouvrirLaCompositionDeLaSituation/,
+    "le geste « Modifier » ouvre le formulaire");
 });
 
 /**
@@ -484,4 +491,34 @@ test("le formulaire d'une situation garde de la place sous lui", () => {
   );
 
   assert.ok(dessous >= 200, `il en reste ${dessous}px, et un menu ouvert en fait davantage`);
+});
+
+/**
+ * **L'écran des situations donne la sienne au panneau latéral.**
+ *
+ * Le panneau cherche la situation dans le magasin de l'onglet Sujets d'un
+ * projet, que cet écran-ci ne remplit pas : la sélection échouait, le panneau ne
+ * s'ouvrait pas, et le bouton à droite d'« Indicateurs » ne faisait rien. Rien
+ * ne levait — c'est le défaut qu'aucune exécution sans document ne montre.
+ */
+test("le panneau latéral reçoit la situation, et le bouton le referme", () => {
+  assert.match(
+    evenements, /openSituationDrilldownFromSelection\([\s\S]{0,200}situation: selectedSituation/,
+    "la situation est donnée, sans quoi la sélection échoue"
+  );
+  assert.match(
+    evenements, /situationsView\?\.drilldown\?\.isOpen === true[\s\S]{0,120}closeSituationDrilldown/,
+    "et le même bouton le referme"
+  );
+
+  const selection = readFileSync(resolve(ICI, "../project-subjects/project-subjects-selection.js"), "utf8");
+  assert.match(
+    selection, /getNestedSituation\(situationId\) \|\| donnee/,
+    "la sélection accepte celle qu'on lui donne"
+  );
+
+  // **L'état doit exister pour que quiconque l'écrive.** Trois endroits le
+  // posaient déjà en se gardant d'un objet absent : personne n'écrivait rien.
+  const magasin = readFileSync(resolve(ICI, "../../store.js"), "utf8");
+  assert.match(magasin, /drilldown: \{ isOpen: false \}/);
 });

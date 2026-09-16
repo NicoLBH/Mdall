@@ -5,18 +5,12 @@ import { renderTableHeadFilterToggle } from "../ui/table-head-filter-toggle.js";
 import { renderDataTableHead } from "../ui/data-table-shell.js";
 import { renderIssuesTable } from "../ui/issues-table.js";
 import { normalizePaginationState, renderPaginationControls } from "../ui/pagination.js";
-import {
-  REPRENDRE, motDeLAppartenance, peutEtreModifiee, pourquoiPasModifiable
-} from "../../services/situations-privees.js";
+import { motDeLAppartenance, pourquoiPasModifiable } from "../../services/situations-privees.js";
 import { phraseDuPerimetre, projetsRegardes, regardeToutMonTravail } from "../../services/perimetre-dune-situation.js";
 import { detailDeLAvancement, phraseDeLAvancement } from "../../services/avancement-dune-situation.js";
-import {
-  couleurDeLaSituation, iconeDeLaSituation, situationCommeUneEpingle
-} from "../../services/situation-comme-une-vue.js";
-import { MOT_DE_LA_SITUATION } from "../../services/situation-en-composition.js";
-import { renderMenuDeLaVueHtml } from "../project-subjects/project-subjects-recherche.js";
-import { estUneLecture } from "../../services/lectures-du-carnet.js";
+import { couleurDeLaSituation, iconeDeLaSituation } from "../../services/situation-comme-une-vue.js";
 import { definitionDeLabel, renderPastilleDeLabel } from "../ui/pastille-de-label.js";
+import { renderKebabDeLaSituation } from "./kebab-dune-situation.js";
 import { personnesDuProjet } from "../../services/meta-des-sujets.js";
 
 /**
@@ -353,64 +347,17 @@ export function createProjectSituationsTable({
   }
 
   /**
-   * Ce qu'on peut faire de cette situation, sous un kebab.
+   * **Le menu vit dans `kebab-dune-situation.js`.** Le détail d'une situation
+   * le porte aussi, et le recopier aurait fait deux menus qui divergent à la
+   * première entrée ajoutée (règle 10). Seul l'état ouvert vient d'ici.
    *
-   * ## Le même menu que celui des vues
-   *
-   * `renderMenuDeLaVueHtml` porte déjà l'épingle, le séparateur et l'entrée
-   * dangereuse ; on lui donne le **mot** de ce qu'on manipule, comme au
-   * formulaire, et il dit « Épingler la situation ». En dessiner un second
-   * ferait deux menus qui se ressemblent assez pour qu'on les croie identiques
-   * et diffèrent assez pour qu'on le voie (règle 10).
-   *
-   * ## Deux situations n'en ont pas
-   *
-   * **Une lecture du rail** n'est pas en base : elle ne s'épingle pas — elle y
-   * est déjà — et ne s'efface pas. Un menu qui l'offrirait ouvrirait deux
-   * gestes qui échouent en silence.
-   *
-   * **Une situation d'avant le cloisonnement** n'appartient à personne, et la
-   * base refuse de la réécrire. `pourquoiPasModifiable` le dit déjà sur sa
-   * pastille ; lui donner un menu actif ferait cliquer sur un geste qui échoue
-   * sans raison visible.
+   * Pas de « Modifier » : chaque ligne porte déjà son crayon, et deux chemins
+   * pour un geste font que l'un des deux finit par ne plus marcher.
    */
-  function renderKebabDeLaSituation(situation) {
-    // **Une lecture du rail n'est pas en base** : elle ne s'épingle pas — elle
-    // y est déjà — et ne s'efface pas. Un menu qui l'offrirait ouvrirait deux
-    // gestes qui échouent en silence.
-    if (estUneLecture(situation)) return "";
-
-    const id = String(situation?.id || "");
-    // **Celle qui n'appartient à personne n'offre qu'un geste : la reprendre.**
-    // L'écran le promet depuis l'étape 1 — « Reprenez-la pour pouvoir la
-    // modifier » — et il n'y avait rien pour le faire. Un carnet qui ne
-    // contient que des situations d'avant n'avait donc aucun geste du tout.
-    const gestes = peutEtreModifiee(situation)
-      ? null
-      : [{ cle: "reprendre", nom: REPRENDRE, icone: "person", attribut: "situations-reprendre" }];
-    const ouvert = String(uiState.menuDeLaSituation || "") === id;
-
-    return `
-      <div class="sujets-vues__gestes">
-        <button type="button" class="bouton-discret sujets-vues__kebab"
-          data-situations-menu="${escapeHtml(id)}"
-          aria-haspopup="true" aria-expanded="${ouvert}"
-          title="Ce qu'on peut faire de cette situation"
-          aria-label="Ce qu'on peut faire de cette situation">
-          ${svgIcon("kebab-horizontal", { className: "octicon" })}
-        </button>
-        ${renderMenuDeLaVueHtml({
-          vue: situationCommeUneEpingle(situation),
-          ouvert,
-          mot: MOT_DE_LA_SITUATION,
-          gestes,
-          // **Le menu dit pourquoi il est court.** Sans épingler ni supprimer,
-          // et sans un mot, on le lit comme un défaut d'affichage — et l'on
-          // cherche la panne ailleurs.
-          note: pourquoiPasModifiable(situation)
-        })}
-      </div>
-    `;
+  function renderKebabDeLaLigne(situation) {
+    return renderKebabDeLaSituation(situation, {
+      ouvert: String(uiState.menuDeLaSituation || "") === String(situation?.id || "")
+    });
   }
 
   function getSituationsTableHeadHtml() {
@@ -458,7 +405,7 @@ export function createProjectSituationsTable({
           </span>
         </div>
         <div class="cell mono">${escapeHtml(renderSituationCount(situation.id))}</div>
-        <div class="cell cell--gestes">${renderKebabDeLaSituation(situation)}</div>
+        <div class="cell cell--gestes">${renderKebabDeLaLigne(situation)}</div>
       </div>
     `;
   }

@@ -76,21 +76,53 @@ function personne(collaborateur = {}) {
 }
 
 /**
- * Qui regarde, **dans ce projet**.
+ * **Toutes** les personnes qu'un compte est, sur les projets qu'on regarde.
  *
- * `""` quand on ne sait pas — parce que le trombinoscope n'est pas encore
- * chargé, ou parce que celui qui regarde n'y figure pas. C'est une réponse, et
- * le filtre l'annonce au lieu de rendre une liste vide (règle 5).
+ * ## Le défaut qu'elle répare
+ *
+ * Un compte Mdall n'est pas une personne : c'est le trombinoscope d'un projet
+ * qui fait le lien, et **chaque projet a le sien**. Une même personne qui
+ * travaille sur quatre projets porte donc quatre identifiants de personne, un
+ * par projet.
+ *
+ * `moiDansLeProjet` n'en rendait qu'un — le premier trouvé —, et c'était juste
+ * tant qu'un écran ne regardait qu'un projet. Sur un écran qui les traverse,
+ * « Assigné à moi » ne comptait que les sujets du projet dont l'identifiant
+ * avait été tiré, et **zéro** quand ce projet-là ne m'assignait rien. Le rail
+ * affichait 0 à côté de « Assigné à moi », de « Créé par moi » et de
+ * « Mentions », et l'on croyait n'avoir rien à faire.
+ *
+ * ## Une liste, et vide quand on ne sait pas
+ *
+ * Vide parce que le trombinoscope n'est pas encore chargé, ou parce que celui
+ * qui regarde n'y figure pas. C'est une réponse, et le filtre l'annonce au lieu
+ * de rendre une liste vide (règle 5).
+ *
+ * @returns {string[]} des identifiants de personne, sans doublon
+ */
+export function mesPersonnes({ collaborateurs = [], utilisateur = "" } = {}) {
+  const compte = texte(utilisateur);
+  if (!compte) return [];
+
+  const miennes = (Array.isArray(collaborateurs) ? collaborateurs : [])
+    .map(personne)
+    .filter((sien) => sien.id && sien.utilisateur === compte)
+    .map((sien) => sien.id);
+
+  return [...new Set(miennes)];
+}
+
+/**
+ * Qui regarde, **dans ce projet** — une seule personne.
+ *
+ * `""` quand on ne sait pas. Sur un écran qui traverse les projets, la question
+ * n'a plus de réponse unique : c'est `mesPersonnes` qu'il faut, et le filtre
+ * sait lire une liste. Celle-ci reste pour les écrans qui n'en regardent qu'un,
+ * et elle prend sa réponse au même endroit — deux façons de répondre finiraient
+ * par ne plus être d'accord (règle 4).
  */
 export function moiDansLeProjet({ collaborateurs = [], utilisateur = "" } = {}) {
-  const compte = texte(utilisateur);
-  if (!compte) return "";
-
-  const trouve = (Array.isArray(collaborateurs) ? collaborateurs : [])
-    .map(personne)
-    .find((sien) => sien.id && sien.utilisateur === compte);
-
-  return trouve ? trouve.id : "";
+  return mesPersonnes({ collaborateurs, utilisateur })[0] ?? "";
 }
 
 /**

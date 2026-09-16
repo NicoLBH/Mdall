@@ -114,6 +114,7 @@ export function createProjectSituationsEvents({
   /** Le vocabulaire du carnet : sans lui, aucune requête du rail ne se relit. */
   champsDeLEcran = () => [],
   loadSituationInsightsData,
+  closeSituationDrilldown,
   openSituationDrilldownFromSelection,
   openSubjectDrilldown,
   openSharedSubjectMetaDropdown,
@@ -2261,6 +2262,18 @@ export function createProjectSituationsEvents({
         await basculerLEpingle(root, String(entree.getAttribute("data-sujets-vue-epingler") || ""));
       });
     });
+    // **« Modifier la situation », depuis le menu du détail.** Le menu est celui
+    // des vues : son entrée porte donc l'attribut des vues, et c'est ici qu'elle
+    // atterrit sur le formulaire d'une situation. Sans cette écoute, l'entrée
+    // s'affiche et le clic ne fait rien.
+    root.querySelectorAll("[data-sujets-vue-modifier]").forEach((entree) => {
+      entree.addEventListener("click", (event) => {
+        event.preventDefault();
+        ouvrirLaCompositionDeLaSituation(
+          root, String(entree.getAttribute("data-sujets-vue-modifier") || "")
+        );
+      });
+    });
     root.querySelectorAll("[data-situations-reprendre]").forEach((entree) => {
       entree.addEventListener("click", async (event) => {
         event.preventDefault();
@@ -2447,8 +2460,23 @@ export function createProjectSituationsEvents({
         const selectedSituation = getSituationById(selectedSituationId);
         if (!selectedSituation) return;
 
+        // **Le même bouton ouvre et referme.** Il ne savait qu'ouvrir : une
+        // fois le panneau là, recliquer le rouvrait, et il fallait aller
+        // chercher sa croix. C'est le geste qu'on attend d'un bouton de
+        // barre latérale — déplier, replier.
+        if (store.situationsView?.drilldown?.isOpen === true) {
+          closeSituationDrilldown?.();
+          return;
+        }
+
         if (typeof openSituationDrilldownFromSelection === "function") {
-          openSituationDrilldownFromSelection(selectedSituationId, { context: "situation", variant: "situation-kanban" });
+          // **La situation se donne.** Le panneau cherche la sienne dans le
+          // magasin de l'onglet Sujets d'un projet, que cet écran-ci ne
+          // remplit pas : sans elle, la sélection échouait et le panneau ne
+          // s'ouvrait pas — le bouton ne faisait rien.
+          openSituationDrilldownFromSelection(selectedSituationId, {
+            context: "situation", variant: "situation-kanban", situation: selectedSituation
+          });
         }
 
         const drilldownBody = document.getElementById("drilldownBody");
