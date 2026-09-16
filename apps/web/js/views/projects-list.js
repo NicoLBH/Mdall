@@ -14,6 +14,9 @@ import {
 import { railWidth } from "./ui/project-rail.js";
 import { brancherLeRail, reglagesDuRail } from "./ui/reglages-du-rail.js";
 import { FILTRES_DES_PROJETS, renderRailDesProjets } from "./tous-les-projets-rail.js";
+import { renderCourbeDactivite, titreDeLaCourbe } from "./ui/courbe-dactivite.js";
+import { courbesParProjet, totalDeLaCourbe } from "../services/activite-des-projets.js";
+import { lireLActiviteDesProjets } from "../services/activite-des-projets-supabase.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 
@@ -60,7 +63,16 @@ const projectListUiState = {
   loadingAccess: false,
   accessLoaded: false,
   accessError: "",
-  contributorProjectIds: new Set()
+  contributorProjectIds: new Set(),
+  /**
+   * La courbe de chaque projet, par identifiant.
+   *
+   * `null` tant qu'on n'a pas lu, et `null` si la lecture échoue : la cellule
+   * reste alors vide. Un objet vide dirait « aucun projet n'a bougé de
+   * l'année », ce qui est une information — et fausse (règle 5).
+   */
+  courbes: null,
+  chargeLActivite: false
 };
 
 function parseHash() {
@@ -95,6 +107,12 @@ function getProjectsSignature(projects = []) {
 }
 
 function renderProjectRow(project) {
+  // **La courbe du projet, ou rien.** `courbes` nul veut dire « on n'a pas
+  // regardé » ; une courbe absente d'un objet lu veut dire « ce projet n'a rien
+  // vécu », et se dessine à plat. Les deux ne disent pas la même chose.
+  const lues = projectListUiState.courbes;
+  const valeurs = lues ? (lues[String(project.id || "")] ?? []) : null;
+
   return `
     <button class="projects-repo__row" type="button" data-project-id="${project.id}">
       <div class="projects-repo__cell projects-repo__cell--name">
@@ -103,8 +121,33 @@ function renderProjectRow(project) {
       <div class="projects-repo__cell projects-repo__cell--client">${project.clientName}</div>
       <div class="projects-repo__cell projects-repo__cell--city">${project.city}</div>
       <div class="projects-repo__cell projects-repo__cell--phase">${project.currentPhase}</div>
+      <div class="projects-repo__cell projects-repo__cell--activite">
+        ${renderCourbeDactivite({
+          valeurs,
+          titre: Array.isArray(valeurs) ? titreDeLaCourbe(totalDeLaCourbe(valeurs)) : ""
+        })}
+      </div>
     </button>
   `;
+}
+
+/**
+ * Lire l'activité de tous les projets, une seule fois par venue sur l'écran.
+ *
+ * Elle ne dépend d'aucun filtre : les deux vues montrent les mêmes projets sous
+ * deux angles, et relire à chaque bascule ferait deux fois le voyage pour le
+ * même dessin.
+ */
+async function chargerLActivite(root) {
+  if (projectListUiState.chargeLActivite) return;
+  projectListUiState.chargeLActivite = true;
+
+  const lignes = await lireLActiviteDesProjets().catch(() => null);
+  // Une lecture qui échoue laisse la cellule vide. Elle ne dessine pas une
+  // ligne à zéro, qui dirait « rien de l'année » (règle 5).
+  projectListUiState.courbes = lignes ? courbesParProjet({ lignes }) : null;
+
+  if (lignes && root?.isConnected) renderProjectsList(root);
 }
 
 function renderProjectsToolbar() {
@@ -203,13 +246,16 @@ function renderProjectsListContent(activeFilterId) {
 
       ${renderDataTableShell({
         className: "projects-repo",
-        gridTemplate: "minmax(260px, 2fr) minmax(220px, 1.5fr) minmax(120px, 1fr) minmax(120px, .8fr)",
+        gridTemplate: "minmax(240px, 2fr) minmax(200px, 1.5fr) minmax(110px, 1fr) minmax(110px, .8fr) 120px",
         headHtml: renderDataTableHead({
           columns: [
             "Nom du projet",
             "Nom du client",
             "Ville",
-            "Phase en cours"
+            "Phase en cours",
+            // Ce que la courbe couvre est dit dans l'en-tête : une forme sans
+            // fenêtre ne se lit pas, et l'on croirait voir « depuis toujours ».
+            "Activité (12 mois)"
           ]
         }),
         bodyHtml: rows,
@@ -589,6 +635,7 @@ export function renderProjectsList(root) {
 
   const activeFilterId = getActiveProjectsFilterId();
   ensureProjectAccessLoaded(root);
+  void chargerLActivite(root);
 
   const replie = reglagesDesProjets.replie();
 
