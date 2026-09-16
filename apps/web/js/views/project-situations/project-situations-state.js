@@ -83,6 +83,9 @@ export function createProjectSituationsState({ store }) {
     // La situation qu'on est en train d'écrire — habit, nom, description,
     // requête —, ou `null` quand on regarde la liste. C'est l'écran, pas la
     // donnée : elle n'existe nulle part tant qu'on n'a pas enregistré.
+    // Le kebab ouvert dans le tableau, s'il y en a un. Un seul à la fois : deux
+    // menus ouverts font deux listes de gestes pour deux lignes différentes.
+    menuDeLaSituation: "",
     situationEnCours: null,
     // Ce que sa requête refuse d'enregistrer, dit par le service.
     situationEnCoursErreur: "",

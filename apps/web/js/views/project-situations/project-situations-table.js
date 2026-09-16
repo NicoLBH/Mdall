@@ -5,10 +5,17 @@ import { renderTableHeadFilterToggle } from "../ui/table-head-filter-toggle.js";
 import { renderDataTableHead } from "../ui/data-table-shell.js";
 import { renderIssuesTable } from "../ui/issues-table.js";
 import { normalizePaginationState, renderPaginationControls } from "../ui/pagination.js";
-import { motDeLAppartenance, pourquoiPasModifiable } from "../../services/situations-privees.js";
+import {
+  motDeLAppartenance, peutEtreModifiee, pourquoiPasModifiable
+} from "../../services/situations-privees.js";
 import { phraseDuPerimetre, projetsRegardes, regardeToutMonTravail } from "../../services/perimetre-dune-situation.js";
 import { detailDeLAvancement, phraseDeLAvancement } from "../../services/avancement-dune-situation.js";
-import { couleurDeLaSituation, iconeDeLaSituation } from "../../services/situation-comme-une-vue.js";
+import {
+  couleurDeLaSituation, iconeDeLaSituation, situationCommeUneEpingle
+} from "../../services/situation-comme-une-vue.js";
+import { MOT_DE_LA_SITUATION } from "../../services/situation-en-composition.js";
+import { renderMenuDeLaVueHtml } from "../project-subjects/project-subjects-recherche.js";
+import { estUneLecture } from "../../services/lectures-du-carnet.js";
 
 /**
  * Le tableau des sujets qu'une requête retient, sous le formulaire.
@@ -104,6 +111,14 @@ function renderSujetRetenuHtml(sujet, noms) {
     </div>
   `;
 }
+
+/**
+ * Les trois colonnes, écrites une fois pour l'en-tête et pour les lignes.
+ *
+ * Deux écritures de la même grille se décalent d'une colonne au premier ajout,
+ * et l'en-tête se retrouve au-dessus de la mauvaise (règle 4).
+ */
+const GRILLE_DES_SITUATIONS = "minmax(420px, 1.6fr) 90px 44px";
 
 export function createProjectSituationsTable({
   store,
@@ -203,6 +218,52 @@ export function createProjectSituationsTable({
     return `<span title="${escapeHtml(detailDeLAvancement(avancement))}">${renderStatusBadge({ label: phrase })}</span>`;
   }
 
+  /**
+   * Ce qu'on peut faire de cette situation, sous un kebab.
+   *
+   * ## Le même menu que celui des vues
+   *
+   * `renderMenuDeLaVueHtml` porte déjà l'épingle, le séparateur et l'entrée
+   * dangereuse ; on lui donne le **mot** de ce qu'on manipule, comme au
+   * formulaire, et il dit « Épingler la situation ». En dessiner un second
+   * ferait deux menus qui se ressemblent assez pour qu'on les croie identiques
+   * et diffèrent assez pour qu'on le voie (règle 10).
+   *
+   * ## Deux situations n'en ont pas
+   *
+   * **Une lecture du rail** n'est pas en base : elle ne s'épingle pas — elle y
+   * est déjà — et ne s'efface pas. Un menu qui l'offrirait ouvrirait deux
+   * gestes qui échouent en silence.
+   *
+   * **Une situation d'avant le cloisonnement** n'appartient à personne, et la
+   * base refuse de la réécrire. `pourquoiPasModifiable` le dit déjà sur sa
+   * pastille ; lui donner un menu actif ferait cliquer sur un geste qui échoue
+   * sans raison visible.
+   */
+  function renderKebabDeLaSituation(situation) {
+    if (estUneLecture(situation) || !peutEtreModifiee(situation)) return "";
+
+    const id = String(situation?.id || "");
+    const ouvert = String(uiState.menuDeLaSituation || "") === id;
+
+    return `
+      <div class="sujets-vues__gestes">
+        <button type="button" class="bouton-discret sujets-vues__kebab"
+          data-situations-menu="${escapeHtml(id)}"
+          aria-haspopup="true" aria-expanded="${ouvert}"
+          title="Ce qu'on peut faire de cette situation"
+          aria-label="Ce qu'on peut faire de cette situation">
+          ${svgIcon("kebab-horizontal", { className: "octicon" })}
+        </button>
+        ${renderMenuDeLaVueHtml({
+          vue: situationCommeUneEpingle(situation),
+          ouvert,
+          mot: MOT_DE_LA_SITUATION
+        })}
+      </div>
+    `;
+  }
+
   function getSituationsTableHeadHtml() {
     const current = getCurrentSituationsStatusFilter();
     const counts = getSituationsStatusCounts();
@@ -218,7 +279,10 @@ export function createProjectSituationsTable({
             ]
           })
         },
-        { className: "cell", label: "Nb sujets" }
+        { className: "cell", label: "Nb sujets" },
+        // L'en-tête de la colonne du kebab reste vide : « Actions » au-dessus
+        // d'un bouton qui dit déjà ce qu'il est n'ajoute qu'un mot à lire.
+        { className: "cell", label: "" }
       ]
     });
   }
@@ -245,6 +309,7 @@ export function createProjectSituationsTable({
           </span>
         </div>
         <div class="cell mono">${escapeHtml(renderSituationCount(situation.id))}</div>
+        <div class="cell cell--gestes">${renderKebabDeLaSituation(situation)}</div>
       </div>
     `;
   }
@@ -265,7 +330,7 @@ export function createProjectSituationsTable({
 
     if (uiState.loading && !situations.length) {
       return renderIssuesTable({
-        gridTemplate: "minmax(420px, 1.6fr) 90px",
+        gridTemplate: GRILLE_DES_SITUATIONS,
         headHtml: getSituationsTableHeadHtml(),
         emptyTitle: "Chargement des situations…",
         emptyDescription: ""
@@ -273,7 +338,7 @@ export function createProjectSituationsTable({
     }
 
     const tableHtml = renderIssuesTable({
-      gridTemplate: "minmax(420px, 1.6fr) 90px",
+      gridTemplate: GRILLE_DES_SITUATIONS,
       headHtml: getSituationsTableHeadHtml(),
       rowsHtml: situations.map((situation) => renderSituationTitleCell(situation)).join(""),
       emptyTitle: "Aucune situation",
@@ -285,6 +350,7 @@ export function createProjectSituationsTable({
 
   return {
     getSituationsTableHeadHtml,
+    renderKebabDeLaSituation,
     renderSituationTitleCell,
     renderSituationsTable
   };

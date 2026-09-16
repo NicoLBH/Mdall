@@ -221,16 +221,17 @@ export function vueRegardee({ vues = [], requete = "" } = {}) {
  *   n'a pas de sens dans le tableau des vues, où l'on est déjà sur l'écran qui
  *   les modifie.
  */
-export function gestesDeLaVue(vue = {}, { avecModifier = false } = {}) {
+export function gestesDeLaVue(vue = {}, { avecModifier = false, mot = MOT_DE_LA_VUE } = {}) {
   const auRail = vue?.auRail === true;
+  const chose = texte(mot) || MOT_DE_LA_VUE;
 
   return [
     ...(avecModifier
-      ? [{ cle: "modifier", nom: "Modifier la vue", icone: "pencil", attribut: "sujets-vue-modifier" }]
+      ? [{ cle: "modifier", nom: `Modifier la ${chose}`, icone: "pencil", attribut: "sujets-vue-modifier" }]
       : []),
     {
       cle: "epingler",
-      nom: auRail ? "Désépingler la vue" : "Épingler la vue",
+      nom: `${auRail ? "Désépingler" : "Épingler"} la ${chose}`,
       // L'épingle barrée dit qu'on va la retirer. La même icône dans les deux
       // sens obligerait à lire le mot pour savoir dans quel état on est.
       icone: auRail ? "pin-slash" : "pin",

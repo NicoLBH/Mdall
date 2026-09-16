@@ -44,6 +44,8 @@ export const COLONNES_DUNE_SITUATION = Object.freeze([
   "icon",
   "color",
   "requete",
+  // Où on la trouve : épinglée au rail du carnet, ou seulement au tableau.
+  "au_rail",
   "objective_text",
   "status",
   "progress_percent",

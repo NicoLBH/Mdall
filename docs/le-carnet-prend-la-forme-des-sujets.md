@@ -199,6 +199,46 @@ Le test de la forme ne la décrit plus : il la fait **traverser** `epinglesDuRai
 et regarde ce qui en ressort. Une fixture qui recopie les hypothèses du code ne
 teste que elle-même.
 
+### Le contenu passait sous son propre rail
+
+Le carnet se lisait **à travers** sa barre de gauche : le titre, la recherche et
+le tableau commençaient au bord de l'écran, par-dessus les entrées du rail — qui
+n'a pas de fond, exprès.
+
+La cause tient en une ligne absente. Le rail est en `position:fixed` : il ne
+pousse rien, c'est au contenu de s'écarter, et cette marge était portée par la
+**classe de chaque page** — `--memory`, `--sujets`, le panneau du Copilote. Le
+commentaire d'à côté prévenait déjà : *« un écran de plus se réglera avec sa
+classe ajoutée ici »*. Personne ne l'a fait.
+
+La règle est donc posée là où elle est vraie : sur `.project-rail-layout__content`,
+le contenu **voisin d'un rail**, ce qui est exactement la condition. Les quatre
+mises en page qui portent un rail l'ont en premier enfant ; un cinquième écran
+la reçoit en naissant. Un test compte les occurrences : deux marges
+compteraient la largeur du rail deux fois.
+
+### Le rail garde ce qu'on y met
+
+Il montrait **toutes** mes situations. Sur un carnet qui en compte vingt-six, la
+barre de gauche devient une liste qu'on ne parcourt plus — l'inverse de ce à
+quoi un rail sert : il est court, et une entrée de plus coûte une place à celles
+qu'on regarde tous les jours.
+
+`situations.au_rail` dit désormais où on la trouve, et rien d'autre — ni son
+importance, ni son état. Faux par défaut : le tableau les montre toutes, le rail
+redevient court jusqu'à ce qu'on y mette quelque chose. C'est la règle que les
+vues portent déjà.
+
+Le geste vit dans un **kebab sur la ligne du tableau**, et c'est le menu des
+vues — on lui donne le mot de ce qu'on manipule, comme au formulaire, et il dit
+« Épingler la situation ». Il porte aussi l'effacement, qui demande avant en
+nommant ce qui part **et ce qui reste** : les sujets appartiennent au projet,
+pas au carnet de quelqu'un.
+
+Deux situations n'ont pas de menu : une **lecture du rail**, qui n'est pas en
+base et dont les deux gestes échoueraient en silence ; et une situation **d'avant
+le cloisonnement**, que la base refuse de réécrire au nom d'un autre.
+
 ### Le rail du carnet n'est pas celui d'un projet
 
 Il montait le rail des Sujets tel quel, et en héritait deux choses qui ne sont

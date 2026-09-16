@@ -88,13 +88,17 @@ export function seDitParUneRequete(situation = null) {
  * décrire à quoi elle ressemble : une fixture qui recopie les hypothèses du
  * code ne teste que elle-même.
  *
- * ## `auRail` est vrai, et ce n'est pas une facilité
+ * ## `auRail` se lit, il ne se suppose plus
  *
- * Sur l'écran des Sujets, une vue doit être épinglée pour occuper le rail : il
- * est court, partagé avec les lectures, et la vue a son propre écran où la
- * retrouver. Dans le carnet, **le rail est la liste de mes situations** : il
- * n'y a pas de second endroit où elles vivraient, et une situation qu'il
- * n'afficherait pas serait une situation qu'on ne retrouve plus.
+ * Il valait `true` pour tout le monde : le rail montrait alors **toutes** mes
+ * situations, et sur un carnet qui en compte vingt-six la barre de gauche
+ * devient une liste qu'on ne parcourt plus. C'était l'inverse de ce à quoi un
+ * rail sert — il est court, et une entrée de plus coûte une place à celles
+ * qu'on regarde tous les jours.
+ *
+ * C'est la règle que les vues portent déjà : une vue enregistrée vit sur son
+ * écran et ne monte au rail que lorsqu'on l'y met. La situation a son tableau,
+ * qui les montre toutes ; le rail garde celles qu'on y a mises.
  *
  * ## Ce qu'elle ne calcule pas
  *
@@ -109,6 +113,6 @@ export function situationCommeUneEpingle(situation = null) {
     icone: iconeDeLaSituation(situation),
     couleur: couleurDeLaSituation(situation).cle,
     requete: requeteDeLaSituation(situation),
-    auRail: true
+    auRail: situation?.au_rail === true || situation?.auRail === true
   };
 }

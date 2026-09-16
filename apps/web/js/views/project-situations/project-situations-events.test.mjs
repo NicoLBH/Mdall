@@ -52,9 +52,10 @@ function gestes({ situations = [MA_SITUATION], creation = { id: "neuve" } } = {}
       return creation;
     },
     updateSituationRecord: async (id, charge) => {
-      appels.push(`modifier:${id}:${charge.title}`);
+      appels.push(`modifier:${id}:${"au_rail" in charge ? `rail=${charge.au_rail}` : charge.title}`);
       return { id };
     },
+    supprimerLaSituation: async (id) => appels.push(`effacer:${id}`),
     repriseDeLAncienFiltre: () => null,
     setSelectedSituationId: (id) => appels.push(`selection:${id}`),
     getSituationById: (id) => situations.find((situation) => situation.id === id) || null,
@@ -156,4 +157,83 @@ test("une situation sans requête est refusée", async () => {
   await portes.enregistrerLaComposition({});
 
   assert.equal(uiState.situationEnCoursErreur, "sans_requete");
+});
+
+/* ── Épingler, et effacer ────────────────────────────────────────────────── */
+
+/**
+ * **Le rail est court.** Une situation y monte quand on l'y met, et pas parce
+ * qu'elle existe : c'est la règle que les vues portent déjà, et un carnet de
+ * vingt-six situations en montre l'utilité.
+ */
+test("épingler une situation la pose au rail, et re-cliquer l'en retire", async () => {
+  const posee = gestes();
+  await posee.portes.basculerLEpingle({}, "s-1");
+  assert.ok(posee.appels.includes("modifier:s-1:rail=true"), "elle monte au rail");
+
+  const retiree = gestes({ situations: [{ ...MA_SITUATION, au_rail: true }] });
+  await retiree.portes.basculerLEpingle({}, "s-1");
+  assert.ok(retiree.appels.includes("modifier:s-1:rail=false"), "et elle en redescend");
+});
+
+/** Le menu se referme : le laisser ouvert fait douter d'avoir cliqué. */
+test("le menu se referme quand on épingle", async () => {
+  const { portes, uiState } = gestes();
+  uiState.menuDeLaSituation = "s-1";
+
+  await portes.basculerLEpingle({}, "s-1");
+
+  assert.equal(uiState.menuDeLaSituation, "");
+});
+
+/**
+ * **On demande avant, en nommant ce qui part.** Une situation porte une façon
+ * de travailler ; la perdre sans l'avoir dit serait pire que de la garder.
+ */
+test("effacer demande confirmation, et renonce si on dit non", async () => {
+  const demandes = [];
+  const avant = globalThis.window;
+  globalThis.window = { confirm: (question) => { demandes.push(question); return false; } };
+
+  try {
+    const { portes, appels } = gestes();
+    await portes.effacerLaSituation({}, "s-1");
+
+    assert.equal(demandes.length, 1, "on demande");
+    assert.match(demandes[0], /Ma semaine/, "en nommant ce qui part");
+    assert.match(demandes[0], /sujets .* restent dans leurs projets/,
+      "et en disant ce qui ne part pas");
+    assert.ok(!appels.some((appel) => appel.startsWith("effacer:")), "et rien n'est effacé");
+  } finally {
+    globalThis.window = avant;
+  }
+});
+
+/** Et si l'on dit oui, elle part — et l'on ne reste pas sur son détail. */
+test("effacer retire la situation et quitte son détail", async () => {
+  const avant = globalThis.window;
+  globalThis.window = { confirm: () => true };
+
+  try {
+    const { portes, appels, store } = gestes();
+    store.situationsView.selectedSituationId = "s-1";
+
+    await portes.effacerLaSituation({}, "s-1");
+
+    assert.ok(appels.includes("effacer:s-1"));
+    assert.ok(appels.includes("selection:null"), "on ne reste pas sur ce qui n'existe plus");
+    assert.ok(appels.includes("refresh"), "et la liste se relit");
+  } finally {
+    globalThis.window = avant;
+  }
+});
+
+/** Une situation qu'on ne trouve pas ne fait rien lever, et ne demande rien. */
+test("un geste sur une situation inconnue ne fait rien", async () => {
+  const { portes, appels } = gestes();
+
+  await portes.basculerLEpingle({}, "zoiseau");
+  await portes.effacerLaSituation({}, "zoiseau");
+
+  assert.deepEqual(appels, []);
 });

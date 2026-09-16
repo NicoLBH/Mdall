@@ -604,13 +604,15 @@ export function renderCompteDeLaSelectionHtml({ combien = 0, total = 0 } = {}) {
  * @param {boolean} [options.avecModifier] « Modifier la vue » — inutile dans le
  *   tableau des vues, où l'on est déjà sur l'écran qui les modifie.
  */
-export function renderMenuDeLaVueHtml({ vue = {}, ouvert = false, avecModifier = false } = {}) {
+export function renderMenuDeLaVueHtml({
+  vue = {}, ouvert = false, avecModifier = false, mot = MOT_DE_LA_VUE
+} = {}) {
   const id = texte(vue?.id);
 
   return `
     <div class="gh-menu sujets-vues__menu" data-sujets-vue-menu-liste="${escapeHtml(id)}"
       role="menu"${ouvert ? "" : " hidden"}>
-      ${gestesDeLaVue(vue, { avecModifier }).map((geste) => (geste.separateur
+      ${gestesDeLaVue(vue, { avecModifier, mot }).map((geste) => (geste.separateur
         ? '<div class="gh-menu__separator" role="presentation"></div>'
         : `
           <button type="button" class="gh-menu__item${geste.danger ? " gh-menu__item--danger" : ""}"

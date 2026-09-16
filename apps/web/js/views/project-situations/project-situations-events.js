@@ -98,6 +98,8 @@ export function createProjectSituationsEvents({
   refreshSituationsData,
   createSituationRecord,
   updateSituationRecord,
+  /** Effacer une situation. Sans retour : l'écran demande avant, pas après. */
+  supprimerLaSituation = async () => undefined,
   /** L'ancien filtre d'une situation, repris en requête — ou `null`. */
   repriseDeLAncienFiltre = () => null,
   setSelectedSituationId,
@@ -1790,6 +1792,70 @@ export function createProjectSituationsEvents({
     rerender(root);
   }
 
+  /**
+   * Épingler une situation au rail, ou l'en retirer.
+   *
+   * **Le rail est court.** Une situation y monte quand on l'y met, et pas
+   * parce qu'elle existe : c'est la règle que les vues portent déjà, et un
+   * carnet de vingt-six situations en montre l'utilité.
+   *
+   * Le menu se referme : le laisser ouvert sur une entrée qui vient de changer
+   * de nom — « Épingler » devenu « Désépingler » — fait douter d'avoir cliqué.
+   */
+  async function basculerLEpingle(root, situationId) {
+    const situation = getSituationById(situationId);
+    if (!situation) return;
+
+    uiState.menuDeLaSituation = "";
+    try {
+      await updateSituationRecord(situation.id, { au_rail: situation.au_rail !== true });
+      await refreshSituationsData(root, { forceSubjects: false });
+    } catch (error) {
+      console.error("epingler la situation failed", error);
+      uiState.error = error instanceof Error ? error.message : "L'épingle n'a pas pu être posée.";
+      rerender(root);
+    }
+  }
+
+  /**
+   * Effacer une situation.
+   *
+   * **On demande avant, en nommant ce qui part.** Il n'y a pas d'effacement
+   * doux : une situation n'est pas une affirmation de la mémoire, elle n'a pas
+   * d'histoire à préserver. Mais elle porte une façon de travailler, et la
+   * perdre sans l'avoir dit serait pire que de la garder.
+   *
+   * **Les sujets ne bougent pas.** Ils appartiennent au projet, pas au carnet
+   * de quelqu'un, et la phrase le dit — sans quoi on n'ose pas cliquer.
+   */
+  async function effacerLaSituation(root, situationId) {
+    const situation = getSituationById(situationId);
+    if (!situation) return;
+
+    uiState.menuDeLaSituation = "";
+    const nom = String(situation.title || "cette situation");
+    if (!window.confirm(
+      `Effacer « ${nom} » ? Elle disparaît de votre carnet, sans retour. `
+      + "Les sujets qu'elle retenait restent dans leurs projets."
+    )) {
+      rerender(root);
+      return;
+    }
+
+    try {
+      await supprimerLaSituation(situation.id);
+      // On ne reste pas sur le détail de ce qui n'existe plus.
+      if (String(store.situationsView?.selectedSituationId || "") === String(situation.id)) {
+        setSelectedSituationId(null);
+      }
+      await refreshSituationsData(root, { forceSubjects: false });
+    } catch (error) {
+      console.error("supprimer la situation failed", error);
+      uiState.error = error instanceof Error ? error.message : "La situation n'a pas pu être effacée.";
+      rerender(root);
+    }
+  }
+
   /** Fermer le formulaire sans rien écrire. */
   function annulerLaComposition(root) {
     uiState.situationEnCours = null;
@@ -2056,6 +2122,31 @@ export function createProjectSituationsEvents({
     if (openButton) {
       openButton.onclick = () => ouvrirLaComposition(root);
     }
+
+    // **Le kebab d'une ligne du tableau.** Le menu est celui des vues ; ses
+    // entrées portent donc les attributs des vues, et c'est ici qu'elles
+    // atterrissent sur une situation.
+    root.querySelectorAll("[data-situations-menu]").forEach((bouton) => {
+      bouton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const id = String(bouton.getAttribute("data-situations-menu") || "");
+        uiState.menuDeLaSituation = String(uiState.menuDeLaSituation || "") === id ? "" : id;
+        rerender(root);
+      });
+    });
+    root.querySelectorAll("[data-sujets-vue-epingler]").forEach((entree) => {
+      entree.addEventListener("click", async (event) => {
+        event.preventDefault();
+        await basculerLEpingle(root, String(entree.getAttribute("data-sujets-vue-epingler") || ""));
+      });
+    });
+    root.querySelectorAll("[data-sujets-decrocher]").forEach((entree) => {
+      entree.addEventListener("click", async (event) => {
+        event.preventDefault();
+        await effacerLaSituation(root, String(entree.getAttribute("data-sujets-decrocher") || ""));
+      });
+    });
 
     // **Les gestes du formulaire d'une situation.** Ce sont ceux du formulaire
     // d'une vue, aux mêmes attributs : le dessin est partagé, l'écoute suit.
@@ -2400,6 +2491,8 @@ export function createProjectSituationsEvents({
 
   return {
     situationQuiPorte,
+    basculerLEpingle,
+    effacerLaSituation,
     ouvrirLaComposition,
     ouvrirLaCompositionDeLaSituation,
     annulerLaComposition,

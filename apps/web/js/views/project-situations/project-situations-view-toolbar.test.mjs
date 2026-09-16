@@ -328,3 +328,36 @@ test("tout ce que le formulaire compose part vers la base", () => {
       `${colonne} est composé au formulaire mais n'est pas écrit à la création`);
   }
 });
+
+/* ── Épingler et effacer, de bout en bout ────────────────────────────────── */
+
+/**
+ * **Le menu est posé dans le tableau et écouté par l'écran.** Un attribut posé
+ * d'un seul côté est la panne type : le kebab s'ouvre, l'entrée s'affiche, et
+ * le clic ne fait rien.
+ *
+ * Le menu vient de celui des vues : ses entrées portent donc les attributs des
+ * vues, et c'est l'écran des situations qui les reçoit.
+ */
+test("les gestes du kebab sont posés et écoutés", () => {
+  assert.match(tableau, /data-situations-menu=/, "le kebab est posé");
+  assert.match(evenements, /data-situations-menu/, "et il est écouté");
+  assert.match(evenements, /data-sujets-vue-epingler[\s\S]{0,240}basculerLEpingle/);
+  assert.match(evenements, /data-sujets-decrocher[\s\S]{0,240}effacerLaSituation/);
+});
+
+/**
+ * **Ce qu'on efface part vraiment en base**, et la colonne de l'épingle aussi.
+ * Un champ absent d'un corps de requête ne lève nulle part : c'est le défaut
+ * qu'aucun rendu ne montre.
+ */
+test("l'épingle et l'effacement atteignent la base", () => {
+  const service = readFileSync(resolve(ICI, "../../services/project-situations-supabase.js"), "utf8");
+
+  assert.match(service, /hasOwnProperty\.call\(patch, "au_rail"\)/, "l'épingle s'écrit");
+  assert.match(service, /export async function deleteSituation/, "et l'effacement existe");
+  assert.match(service, /method: "DELETE"/);
+
+  const colonnes = readFileSync(resolve(ICI, "../../services/colonnes-dune-situation.js"), "utf8");
+  assert.match(colonnes, /"au_rail"/, "et la colonne se relit, sans quoi le rail serait toujours vide");
+});
