@@ -111,8 +111,12 @@ function getHeaderModel() {
     };
   }
 
+  // **« Tableau de bord » dans la barre du haut, « Accueil » sur la page.** La
+  // barre nomme *où l'on est* dans l'application ; le titre de la page nomme ce
+  // qu'on y fait. « Accueil » aux deux endroits se lisait comme une répétition,
+  // et n'apprenait rien la seconde fois.
   return {
-    primary: "Accueil",
+    primary: "Tableau de bord",
     secondary: "",
     showSecondary: false,
     href: "#dashboard",

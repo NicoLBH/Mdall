@@ -30,6 +30,7 @@ import {
 } from "./accueil-page.js";
 import { GENRE } from "../services/projets-actifs.js";
 import { LE_COPILOTE } from "../services/ecrans-transversaux.js";
+import { ACTIONS_A_VENIR } from "./ui/actions-du-copilote.js";
 
 const MAINTENANT = Date.parse("2026-06-01T12:00:00Z");
 const jour = (rang) => new Date(MAINTENANT - rang * 24 * 60 * 60 * 1000).toISOString();
@@ -87,15 +88,22 @@ test("le bouton « Nouveau » emploie la classe des boutons primaires", () => {
   assert.match(bouton, /Nouveau/);
 });
 
-test("le rail montre les cinq projets les plus actifs, avec leurs jours", () => {
+/**
+ * **Le plus travaillé en bas.** Le rail se lit en montant depuis la zone de
+ * saisie, qui est ce qu'on regarde en arrivant : le projet qu'on a le plus dans
+ * les mains est donc le plus près d'elle. C'est l'ordre d'affichage qui
+ * s'inverse, pas le classement — les cinq retenus restent les cinq plus actifs.
+ */
+test("le rail montre les cinq plus actifs, le plus travaillé en bas", () => {
   const retenus = projetsDuRail({ projets: PROJETS, actifs: ACTIFS });
 
   assert.equal(retenus.length, TOP_PROJETS);
   assert.deepEqual(retenus.map((projet) => projet.nom), [
-    "NOVACLIM", "VERIFAS", "BERTRAND", "ORVAULT", "MARENNES"
+    "MARENNES", "ORVAULT", "BERTRAND", "VERIFAS", "NOVACLIM"
   ]);
-  assert.equal(retenus[0].detail, "12 jours", "le compte s'affiche avec son unité");
-  assert.equal(retenus[4].detail, "1 jour");
+  assert.equal(retenus.at(-1).detail, "12 jours", "le compte s'affiche avec son unité");
+  assert.equal(retenus[0].detail, "1 jour");
+  assert.ok(!retenus.some((projet) => projet.nom === "TALENCE"), "et TALENCE reste dehors");
 });
 
 /**
@@ -155,18 +163,45 @@ test("le choix du projet propose tous mes projets", () => {
 });
 
 /**
- * **Sans projet, l'invite ne promet pas de mémoire.** Elle dit d'où le copilote
- * parle, donc sur quoi le juger : promettre une mémoire absente ferait passer
- * la première réponse pour un oubli plutôt que pour une limite annoncée.
+ * **L'écran a un titre, pas une invite.** Le Copilote d'un projet porte une
+ * invite parce qu'il doit dire quelle mémoire il lit ; ici l'écran entier est
+ * l'accueil, et la phrase répétait ce que le titre et le choix du projet disent
+ * déjà — en poussant la saisie hors du premier regard.
  */
-test("l'invite dit ce que le copilote a, et ce qu'il n'a pas", () => {
-  const sans = rendu();
-  assert.match(sans, /tous projets confondus/);
-  assert.match(sans, /pas leurs valeurs/);
+test("la page porte son titre, et aucune invite au-dessus de la saisie", () => {
+  const html = rendu();
 
-  const avec = rendu({ projetChoisi: "p-b" });
-  assert.match(avec, /Le copilote de VERIFAS/);
-  assert.match(avec, /mémoire de ce projet/);
+  assert.match(html, /project-table-toolbar--titre/, "la ligne de titre de tous les écrans");
+  assert.match(html, /project-table-toolbar__title">Accueil</);
+  assert.doesNotMatch(html, /copilote-empty/, "plus d'invite");
+  assert.doesNotMatch(html, /Le copilote, tous projets confondus/);
+});
+
+/**
+ * **La saisie est celle du Copilote, et se voit.** Le trombone et le compteur
+ * de crédits disent que c'est le même outil ; ils sont éteints parce qu'ils
+ * demandent une discussion ouverte, qui n'existe qu'une fois la question posée.
+ */
+test("la saisie porte les outils du Copilote, éteints", () => {
+  const html = rendu();
+  const barre = html.slice(html.indexOf("copilote-compose__tools"), html.indexOf("</div>", html.indexOf("copilote-compose__tools")));
+
+  assert.match(barre, /octicon-paperclip|paperclip/);
+  assert.match(barre, /meter/);
+  assert.match(barre, /copilote-compose__divider/);
+  // Éteints : un bouton qui ferait semblant de fonctionner coûterait plus cher.
+  assert.equal((barre.match(/disabled/g) || []).length, 2);
+});
+
+/** Et les trois boutons d'un Copilote de projet, sans une ligne de plus. */
+test("les trois actions à venir sont celles du Copilote", () => {
+  const html = rendu();
+
+  for (const action of ACTIONS_A_VENIR) {
+    assert.match(html, new RegExp(`data-copilote-action="${action.id}"`), action.id);
+    assert.match(html, new RegExp(action.label));
+  }
+  assert.match(html, /copilote-actions/);
 });
 
 /** Deux destinations, une seule règle. */
@@ -272,6 +307,46 @@ test("replié, le rail passe à la largeur des icônes seules", () => {
   assert.match(html, /project-rail-layout--collapsed/);
 });
 
+/* ── La timeline ─────────────────────────────────────────────────────────── */
+
+/**
+ * **Un rond par ligne, et rien de plus.** Le rond ne porte aucune information —
+ * le genre est dit par le lien et par où il mène. Sa fonction est de faire une
+ * colonne : quatre lignes alignées sur un filet se lisent comme une suite,
+ * quatre lignes posées l'une sous l'autre se lisent comme une liste.
+ */
+test("chaque actualité porte son jalon", () => {
+  const html = rendu({ actualites: DERNIERES });
+
+  assert.equal((html.match(/accueil-actualite__jalon/g) || []).length, ACTUALITES);
+  // Plus d'icône de genre : deux signes pour la même chose font chercher lequel
+  // est le bon, et celui-ci n'en disait pas plus que le lien.
+  assert.doesNotMatch(html, /accueil-actualite__icone/);
+});
+
+/* ── Le rail, encore ─────────────────────────────────────────────────────── */
+
+/**
+ * **Le titre et le bouton sur une ligne.** Dans un rail, chaque ligne compte, et
+ * le bouton vert n'a rien à annoncer qui mérite la sienne.
+ */
+test("le titre du rail et le bouton vert tiennent sur la même ligne", () => {
+  const html = rendu();
+  const tete = html.slice(html.indexOf("accueil-rail__tete"), html.indexOf("accueil-rail__recherche"));
+
+  assert.match(tete, /Top projets/);
+  assert.match(tete, /href="#projects\/new"/);
+});
+
+/**
+ * **Cette liste-là n'a pas de gouttière**, et c'est la classe qui le dit :
+ * retirer le retrait pour tous les rails emporterait le trait bleu de l'entrée
+ * courante partout ailleurs.
+ */
+test("la liste du rail est marquée, pour n'écarter qu'elle", () => {
+  assert.match(rendu(), /nav-list nav-list--accueil/);
+});
+
 /* ── Le geste qui ouvre le Copilote ──────────────────────────────────────── */
 
 /**
@@ -329,4 +404,22 @@ test("la question posée à l'accueil part à l'arrivée sur le Copilote", async
 
   assert.ok(envoi > 0, "la question part");
   assert.ok(rendu >= 0 && envoi > rendu, "et elle part après le rendu");
+});
+
+/* ── Où l'on est, et ce qu'on y fait ─────────────────────────────────────── */
+
+/**
+ * **« Tableau de bord » dans la barre du haut, « Accueil » sur la page.**
+ *
+ * La barre nomme *où l'on est* dans l'application ; le titre de la page nomme ce
+ * qu'on y fait. Le même mot aux deux endroits se lisait comme une répétition, et
+ * n'apprenait rien la seconde fois. La barre du haut parle à la base — elle
+ * déconnecte — et ne s'importe pas : on lit sa source pour ce seul mot.
+ */
+test("la barre du haut dit « Tableau de bord »", async () => {
+  const source = await readFile(new URL("./global-header.js", import.meta.url), "utf8");
+
+  const parDefaut = source.slice(source.lastIndexOf("return {"));
+  assert.match(parDefaut, /primary: "Tableau de bord"/);
+  assert.match(parDefaut, /href: "#dashboard"/, "et c'est bien l'accueil");
 });

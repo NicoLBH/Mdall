@@ -18,14 +18,45 @@ arrivait alors chargée d'une mémoire qui n'avait rien à y voir.
 
 Trois questions, et une par colonne.
 
-**Où je travaille en ce moment** — le rail, à gauche : un bouton vert pour créer
-un projet, un champ pour en chercher un, et les cinq projets les plus actifs.
+**Où je travaille en ce moment** — le rail, à gauche : le titre et le bouton vert
+sur une ligne (dans un rail, chaque ligne compte), un champ pour chercher un
+projet, et les cinq plus actifs. **Le plus travaillé est en bas** : le rail se lit
+en montant depuis la zone de saisie, qui est ce qu'on regarde en arrivant, et le
+projet qu'on a le plus dans les mains est donc le plus près d'elle. C'est l'ordre
+d'affichage qui s'inverse, pas le classement.
+
+Cette liste-là n'a pas de gouttière à gauche. Ailleurs, le retrait fait la place
+du trait bleu de l'entrée courante ; ici aucune entrée n'est « celle qu'on
+regarde » — ce sont des destinations —, et le retrait ne faisait que décaler la
+liste du titre qui la surmonte.
 
 **Ce que je veux demander** — le Copilote, au centre, avec le choix du projet.
 Par défaut, aucun.
 
+Il n'y a **pas d'invite au-dessus de la saisie**. Le Copilote d'un projet en porte
+une parce qu'il doit dire quelle mémoire il lit ; ici l'écran entier est
+l'accueil, et la phrase répétait ce que le titre et le choix du projet disent
+déjà — en poussant la saisie hors du premier regard. La page porte à la place la
+ligne de titre de tous les écrans, alignée sur la colonne centrale.
+
+La saisie est celle du Copilote, et se voit : le trombone, le compteur de crédits
+et leur séparateur sont là, **éteints**, parce qu'ils demandent une discussion
+ouverte — qui n'existe qu'une fois la question posée. Les trois boutons du
+dessous sont les siens aussi, pris dans `ui/actions-du-copilote.js` plutôt que
+recopiés : c'est ce qui dit que c'est le même outil.
+
 **Ce qui vient de se passer** — quatre lignes à droite, chacune nommant son
-projet et menant à l'onglet où la chose est.
+projet et menant à l'onglet où la chose est, alignées sur une timeline
+verticale. Le rond ne porte aucune information : le genre est dit par le lien et
+par où il mène. Sa seule fonction est de faire une colonne — quatre lignes
+alignées sur un filet se lisent comme une suite, quatre lignes posées l'une sous
+l'autre se lisent comme une liste.
+
+## « Tableau de bord » en haut, « Accueil » sur la page
+
+La barre du haut nomme **où l'on est** dans l'application ; le titre de la page
+nomme **ce qu'on y fait**. Le même mot aux deux endroits se lisait comme une
+répétition, et n'apprenait rien la seconde fois.
 
 ## Comment se calcule « le plus actif »
 

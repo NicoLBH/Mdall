@@ -92,15 +92,56 @@ test("une seule valeur se pose au centre", () => {
 });
 
 /**
- * **La couleur se décide sur le conteneur.** Le trait est en `currentColor` :
- * un vert écrit dans le SVG serait un second vert à retoucher le jour où celui
- * de la feuille de style change (règle 4).
+ * **La couleur se décide dans la feuille de style.** Les deux teintes du
+ * dégradé sont lues par variable CSS : un vert écrit dans le SVG serait un
+ * second vert à retoucher le jour où celui de l'application change (règle 4).
  */
-test("le trait prend la couleur de son conteneur", () => {
+test("les teintes viennent de la feuille de style, pas du dessin", () => {
   const html = renderCourbeDactivite({ valeurs: [1, 2] });
 
-  assert.match(html, /stroke="currentColor"/);
-  assert.doesNotMatch(html, /stroke="#/, "aucune couleur écrite en dur");
+  assert.match(html, /stop-color="var\(--courbe-activite-bas\)"/);
+  assert.match(html, /stop-color="var\(--courbe-activite-haut\)"/);
+  assert.doesNotMatch(html, /#[0-9a-fA-F]{3,6}"/, "aucune couleur écrite en dur");
+});
+
+/** Sombre en bas, clair en haut : le dégradé monte, il ne descend pas. */
+test("le dégradé va du bas vers le haut du cadre", () => {
+  const html = renderCourbeDactivite({ valeurs: [1, 2] });
+  const degrade = html.slice(html.indexOf("<linearGradient"), html.indexOf("</linearGradient>"));
+
+  assert.match(degrade, /gradientUnits="userSpaceOnUse"/,
+    "calé sur le cadre : en unités de boîte, une courbe plate n'aurait aucune hauteur");
+  assert.match(degrade, /y1="28"/, "le bas du cadre");
+  assert.match(degrade, /y2="0"/, "le haut");
+
+  const bas = degrade.indexOf("--courbe-activite-bas");
+  const haut = degrade.indexOf("--courbe-activite-haut");
+  assert.ok(bas < haut, "la teinte sombre est au départ du dégradé");
+});
+
+/**
+ * **Un identifiant par courbe.** Un `id` répété dans une page fait que toutes
+ * les courbes pointent vers le premier dégradé rencontré : rien ne se verrait
+ * tant qu'elles se ressemblent, et le jour où l'une change de teinte les autres
+ * suivraient sans qu'on comprenne.
+ */
+test("deux courbes voisines ne partagent pas leur dégradé", () => {
+  const une = renderCourbeDactivite({ valeurs: [1, 2], cle: "p-a" });
+  const autre = renderCourbeDactivite({ valeurs: [1, 2], cle: "p-b" });
+
+  const nomDe = (html) => html.match(/<linearGradient id="([^"]+)"/)?.[1];
+
+  assert.equal(nomDe(une), "courbe-activite-p-a");
+  assert.notEqual(nomDe(une), nomDe(autre));
+  assert.match(une, new RegExp(`stroke="url\\(#${nomDe(une)}\\)"`), "et le trait pointe vers le sien");
+});
+
+/** Une clé qui n'est pas un identifiant valide ne casse pas le dessin. */
+test("une clé douteuse est nettoyée", () => {
+  const html = renderCourbeDactivite({ valeurs: [1], cle: 'p"><script>' });
+
+  assert.match(html, /<linearGradient id="courbe-activite-pscript"/);
+  assert.doesNotMatch(html, /<script>/);
 });
 
 /** Une forme sans chiffre laisse deviner un ordre de grandeur qu'elle n'a pas. */

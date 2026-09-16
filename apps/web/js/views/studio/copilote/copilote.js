@@ -62,20 +62,10 @@ import {
 } from "../../../services/copilote-conversations-supabase.js";
 import { resolveCurrentBackendProjectId } from "../../../services/project-supabase-sync.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
+import {
+  renderActionsAVenirHtml, renderActionsAVenirMenuHtml
+} from "../../ui/actions-du-copilote.js";
 import { getNiceChartTicks, renderSvgLineChart } from "../../../utils/svg-line-chart.js";
-
-/**
- * Ce que le copilote saura faire, et ne sait pas encore.
- *
- * Le libellé et l'icône sont posés maintenant pour que la place soit prise et
- * que la suite ne soit pas une surprise. `disabled` porte la vérité : ces
- * boutons ne cliquent pas.
- */
-const ACTIONS_A_VENIR = [
-  { id: "conflits", label: "Résoudre conflits", icon: "bug" },
-  { id: "sujet", label: "Créer un sujet", icon: "issue-draft" },
-  { id: "proposition", label: "Proposition", icon: "git-pull-request" }
-];
 
 /**
  * Le Markdown d'une réponse, rendu par le composant partagé.
@@ -1483,19 +1473,7 @@ function renderCredits(etat) {
 function renderActions(etat) {
   const vide = (etat.messages ?? []).length === 0 && !etat.isSending;
 
-  if (vide) {
-    return `
-      <div class="copilote-actions" role="group" aria-label="Ce que le copilote saura faire">
-        ${ACTIONS_A_VENIR.map((action) => `
-          <button type="button" class="copilote-action" data-copilote-action="${escapeHtml(action.id)}" disabled
-            title="Bientôt : ${escapeHtml(action.label.toLowerCase())}">
-            ${svgIcon(action.icon)}
-            <span>${escapeHtml(action.label)}</span>
-          </button>
-        `).join("")}
-      </div>
-    `;
-  }
+  if (vide) return renderActionsAVenirHtml();
 
   return `
     <div class="copilote-compose__menu">
@@ -1507,13 +1485,7 @@ function renderActions(etat) {
       ${
         etat.menuOpen
           ? `<div class="copilote-menu" role="menu">
-              ${ACTIONS_A_VENIR.map((action) => `
-                <button type="button" class="copilote-menu__item" role="menuitem"
-                  data-copilote-action="${escapeHtml(action.id)}" disabled>
-                  ${svgIcon(action.icon)}
-                  <span>${escapeHtml(action.label)}</span>
-                </button>
-              `).join("")}
+              ${renderActionsAVenirMenuHtml()}
               <p class="copilote-menu__note">Ces trois-là ne cliquent pas encore.</p>
             </div>`
           : ""
