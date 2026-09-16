@@ -100,6 +100,9 @@ function normalizeSituationRow(row = {}) {
     icon: firstNonEmpty(row.icon, ""),
     color: firstNonEmpty(row.color, ""),
     requete: firstNonEmpty(row.requete, ""),
+    // **Où on la trouve, et rien d'autre.** Le rail est court : une situation
+    // n'y monte que lorsqu'on l'y met (étape des épinglées).
+    au_rail: row.au_rail === true,
     description: firstNonEmpty(row.description, ""),
     status: normalizeSituationStatus(row.status),
     mode: normalizeSituationMode(row.mode),
@@ -822,6 +825,9 @@ export async function updateSituation(situationId, patch = {}) {
   if (Object.prototype.hasOwnProperty.call(patch, "color")) {
     body.color = firstNonEmpty(patch.color, "") || null;
   }
+  if (Object.prototype.hasOwnProperty.call(patch, "au_rail")) {
+    body.au_rail = patch.au_rail === true;
+  }
   if (Object.prototype.hasOwnProperty.call(patch, "requete")) {
     body.requete = firstNonEmpty(patch.requete, "") || null;
     // **La requête reprend l'ancien filtre, elle ne s'y ajoute pas.** Les deux
@@ -859,6 +865,44 @@ export async function updateSituation(situationId, patch = {}) {
   const updated = normalizeSituationRow((safeArray(await res.json())[0]) || {});
   await loadSituationsForCurrentProject(updated.project_id || current.project_id);
   return updated;
+}
+
+/**
+ * Effacer une situation.
+ *
+ * ## Ce qui disparaît, et ce qui reste
+ *
+ * La situation et ses rattachements — `situation_subjects` part avec elle, par
+ * la cascade. **Les sujets, eux, ne bougent pas** : ils appartiennent au projet,
+ * pas au carnet de quelqu'un. Effacer sa façon de travailler ne doit rien
+ * retirer au chantier.
+ *
+ * ## Sans retour, et c'est dit avant
+ *
+ * Il n'y a pas d'effacement doux ici. Une situation n'est pas une affirmation
+ * de la mémoire : elle n'a pas d'histoire à préserver, et lui inventer un état
+ * « effacée » ferait une liste qu'il faudrait filtrer partout pour toujours.
+ * L'écran demande donc confirmation **avant**, en nommant ce qui part.
+ *
+ * La base tranche qui peut : la règle de suppression ne rend que les siennes.
+ * Une situation d'avant le cloisonnement n'appartient à personne et ne
+ * s'efface pas — l'appel échoue plutôt que d'effacer celle d'un autre.
+ */
+export async function deleteSituation(situationId) {
+  const normalizedSituationId = normalizeUuid(situationId);
+  if (!normalizedSituationId) throw new Error("situationId is required");
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/situations?id=eq.${normalizedSituationId}`, {
+    method: "DELETE",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" })
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`situation delete failed (${res.status}): ${text}`);
+  }
+
+  return normalizedSituationId;
 }
 
 export async function closeSituation(situationId) {

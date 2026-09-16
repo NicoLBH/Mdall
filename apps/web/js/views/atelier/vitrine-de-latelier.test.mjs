@@ -313,33 +313,54 @@ test("revenir à la vitrine efface le panneau demandé par l'adresse", () => {
  * tout l'Atelier ; il n'y est plus — le sien vit dans le panneau du Copilote.
  * Et la coquille du projet pose 12 px autour de chaque onglet.
  */
-test("la vitrine n'est plus rognée par le rail ni par la coquille", () => {
+test("la vitrine n'est plus rognée par la coquille", () => {
   const css = lis("../../../style.css");
 
-  // La Mémoire garde sa marge : elle a toujours son rail.
-  assert.match(css, /\.project-simple-page--memory\{ margin-left:var\(--project-rail-width/);
-  // L'Atelier ne l'a plus, et annule les 12 px de la coquille.
   assert.match(css, /\.project-simple-page--atelier\{[^}]*margin-inline:-12px/);
+});
+
+/**
+ * **La place du rail se réserve une seule fois, et pas par page.**
+ *
+ * Elle était portée par la classe de chaque page — `--memory`, `--sujets`, le
+ * panneau du Copilote. Le commentaire prévenait déjà qu'un écran de plus
+ * devrait s'ajouter à la liste ; personne ne l'a fait, et le carnet des
+ * situations s'est lu **à travers** son propre rail, qui n'a pas de fond.
+ *
+ * La règle est désormais sur `.project-rail-layout__content` — le contenu
+ * voisin d'un rail, ce qui est exactement la condition. Un cinquième écran la
+ * reçoit en naissant.
+ */
+test("la place du rail se réserve une fois, sur la mise en page", () => {
+  const css = lis("../../../style.css");
+
+  assert.match(
+    css,
+    /\.project-rail-layout__content\{[^}]*margin-left:var\(--project-rail-width/,
+    "le contenu voisin d'un rail s'en écarte"
+  );
+  assert.equal(
+    css.match(/margin-left:var\(--project-rail-width/g)?.length, 1,
+    "et une seule fois : deux marges compteraient la largeur deux fois"
+  );
+  // La vitrine n'a pas de rail, donc pas de `project-rail-layout` : elle garde
+  // toute la largeur sans avoir à annuler quoi que ce soit.
+  assert.doesNotMatch(css, /\.project-simple-page--atelier\{[^}]*--project-rail-width:0/);
 });
 
 /**
  * **Mais le Copilote garde sa place.**
  *
  * `.project-rail` est en `position:fixed` contre le bord gauche : il ne pousse
- * rien, c'est au contenu de s'écarter. Retirer la marge de la page sans la
- * rendre au panneau du Copilote l'aurait fait passer sous son propre rail — et
- * mettre la variable à zéro aurait fait disparaître le rail lui-même, qui y lit
- * sa largeur.
+ * rien, c'est au contenu de s'écarter. Le panneau porte la largeur du rail ;
+ * le rail, en position fixe, la lit par héritage, et son contenu s'en écarte
+ * par la règle unique ci-dessus.
  */
-test("le panneau du Copilote réserve la place de son rail, la vitrine non", () => {
-  const css = lis("../../../style.css");
+test("le panneau du Copilote pose la largeur de son rail", () => {
   const atelier = lis("../project-studio.js");
 
-  assert.match(css, /\.project-studio-router__panel--copilote\{\s*margin-left:var\(--project-rail-width/);
-  assert.doesNotMatch(css, /\.project-simple-page--atelier\{[^}]*--project-rail-width:0/);
-  // La largeur du rail se pose sur le panneau : le rail, en position fixe, la
-  // lit par héritage.
   assert.match(atelier, /panel--copilote"[\s\S]{0,160}--project-rail-width:/);
+  assert.match(atelier, /project-rail-layout__content/, "et son contenu s'en écarte");
 });
 
 /**

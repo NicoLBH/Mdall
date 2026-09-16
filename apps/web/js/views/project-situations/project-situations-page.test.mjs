@@ -45,8 +45,13 @@ const MA_SITUATION = {
   owner_id: "22222222-2222-4222-8222-222222222222",
   requete: "priorité:haute",
   icon: "alert",
-  color: "rouge"
+  color: "rouge",
+  // Épinglée : le rail ne montre que celles qu'on y a mises.
+  au_rail: true
 };
+
+/** La même, restée au tableau. */
+const NON_EPINGLEE = { ...MA_SITUATION, id: "22222222-2222-4222-8222-222222222222", title: "Plus tard", au_rail: false };
 
 /**
  * L'écran, monté comme `project-situations.js` le monte.
@@ -122,11 +127,23 @@ test("le carnet rend sa liste : rail, titre, recherche, tableau", () => {
  * sur cette ligne-là : la liste de mes situations, lue avec un nom qui
  * n'existait pas.
  */
-test("mes situations apparaissent dans le rail", () => {
+test("mes situations épinglées apparaissent dans le rail", () => {
   const html = ecran({ situations: [MA_SITUATION] }).renderPage();
 
   assert.match(html, /Ma semaine/, "ma situation est dans le rail");
   assert.match(html, /data-sujets-lecture="priorité:haute"/, "avec la requête qu'elle ouvre");
+});
+
+/**
+ * **Le rail garde celles qu'on y a mises.** Il les montrait toutes : sur un
+ * carnet qui en compte vingt-six, la barre de gauche devenait une liste qu'on
+ * ne parcourt plus — l'inverse de ce à quoi un rail sert.
+ */
+test("une situation non épinglée reste au tableau, pas au rail", () => {
+  const html = ecran({ situations: [MA_SITUATION, NON_EPINGLEE] }).renderPage();
+
+  assert.match(html, /Ma semaine/, "l'épinglée est au rail");
+  assert.ok(!html.includes("Plus tard"), "l'autre n'y est pas — le tableau la montre");
 });
 
 /** Et sans aucune situation, le rail se monte quand même : il porte ses lectures. */

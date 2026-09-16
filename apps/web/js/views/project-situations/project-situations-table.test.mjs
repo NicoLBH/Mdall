@@ -20,10 +20,12 @@ import {
  * d'un projet ; nul, c'est le carnet, qui n'est la liste d'aucun. Le laisser
  * nul par défaut ici ferait passer chaque test pour un test du carnet.
  */
-function tableau({ projectScopeId = "projet-courant", nomsDesProjets = {}, avancements = {} } = {}) {
+function tableau({
+  projectScopeId = "projet-courant", nomsDesProjets = {}, avancements = {}, menuOuvert = ""
+} = {}) {
   return createProjectSituationsTable({
     store: { situationsView: { selectedSituationId: null, projectScopeId, nomsDesProjets } },
-    uiState: { avancementParSituationId: avancements },
+    uiState: { avancementParSituationId: avancements, menuDeLaSituation: menuOuvert },
     getSituations: () => [],
     getPaginatedSituations: () => [],
     getSituationsPaginationState: () => null,
@@ -370,4 +372,93 @@ test("une situation d'avant, sans requête, n'en dit pas davantage", () => {
 
   assert.ok(!html.includes("Automatique"));
   assert.ok(!html.includes("Manuelle"));
+});
+
+/* ── Le kebab d'une ligne ────────────────────────────────────────────────── */
+
+const MOI = "22222222-2222-4222-8222-222222222222";
+
+/**
+ * **Le même menu que celui des vues**, avec le mot de ce qu'on manipule. En
+ * dessiner un second ferait deux menus qui se ressemblent assez pour qu'on les
+ * croie identiques et diffèrent assez pour qu'on le voie (règle 10).
+ */
+test("une situation à moi porte un kebab qui parle de situations", () => {
+  const html = tableau().renderSituationTitleCell({ ...SITUATION, owner_id: MOI });
+
+  assert.match(html, /data-situations-menu=/, "le kebab est là");
+  assert.match(html, /Épingler la situation/, "et il parle de situations");
+  assert.match(html, /Supprimer/);
+  assert.ok(!html.includes("la vue"), "jamais de « vue » sur cet écran");
+});
+
+/** Épinglée, l'entrée dit qu'on va la retirer — et l'icône aussi. */
+test("une situation épinglée propose de la désépingler", () => {
+  const html = tableau().renderSituationTitleCell({ ...SITUATION, owner_id: MOI, au_rail: true });
+
+  assert.match(html, /Désépingler la situation/);
+  assert.ok(!html.includes(">Épingler la situation<"));
+});
+
+/**
+ * **Une lecture du rail n'a pas de menu.** Elle n'est pas en base : elle ne
+ * s'épingle pas — elle y est déjà — et ne s'efface pas. Deux gestes qui
+ * échoueraient en silence, et l'on chercherait la panne ailleurs.
+ */
+test("une lecture du rail n'offre aucun geste", () => {
+  const html = tableau().renderSituationTitleCell({
+    ...SITUATION, id: "lecture:miens", title: "Assigné à moi", owner_id: ""
+  });
+
+  assert.ok(!html.includes("data-situations-menu"));
+});
+
+/**
+ * **Une situation d'avant le cloisonnement non plus.** La base refuse de la
+ * réécrire au nom d'un autre ; la pastille le dit déjà, et un menu actif ferait
+ * cliquer sur un geste qui échoue sans raison visible.
+ */
+test("une situation qui n'appartient à personne n'offre aucun geste", () => {
+  const html = tableau().renderSituationTitleCell({ ...SITUATION, owner_id: null });
+
+  assert.match(html, /créée avant le cloisonnement/, "elle le dit toujours");
+  assert.ok(!html.includes("data-situations-menu"), "mais elle ne propose rien");
+});
+
+/** Le menu ne s'ouvre que sur la ligne qu'on a cliquée. */
+test("un seul menu s'ouvre à la fois", () => {
+  const ouvert = tableau({ menuOuvert: SITUATION.id })
+    .renderSituationTitleCell({ ...SITUATION, owner_id: MOI });
+  const ferme = tableau({ menuOuvert: "une-autre" })
+    .renderSituationTitleCell({ ...SITUATION, owner_id: MOI });
+
+  assert.match(ouvert, /aria-expanded="true"/);
+  assert.match(ferme, /aria-expanded="false"/);
+});
+
+/**
+ * **La grille est écrite une fois.** Deux écritures se décalent d'une colonne
+ * au premier ajout, et l'en-tête se retrouve au-dessus de la mauvaise.
+ */
+test("la grille, l'en-tête et les lignes comptent le même nombre de colonnes", () => {
+  const vue = tableau();
+  const tete = vue.getSituationsTableHeadHtml();
+  const ligne = vue.renderSituationTitleCell({ ...SITUATION, owner_id: MOI });
+  const table = vue.renderSituationsTable();
+
+  // La grille est posée en variable CSS par la coquille de tableau. On compte
+  // ses pistes de premier niveau : `minmax(420px, 1.6fr)` en est **une**, et la
+  // couper sur les espaces en trouverait deux.
+  const grille = table.match(/--data-table-cols:([^;]+);/)?.[1] ?? "";
+  let profondeur = 0;
+  let pistes = grille.trim() ? 1 : 0;
+  for (const caractere of grille.trim()) {
+    if (caractere === "(") profondeur += 1;
+    else if (caractere === ")") profondeur -= 1;
+    else if (caractere === " " && profondeur === 0) pistes += 1;
+  }
+
+  assert.equal(tete.match(/data-table-shell__col/g)?.length, 3, "trois en-têtes");
+  assert.equal(ligne.match(/class="cell[ "]/g)?.length, 3, "trois cellules");
+  assert.equal(pistes, 3, "et trois pistes dans la grille");
 });

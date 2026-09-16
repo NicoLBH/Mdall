@@ -70,7 +70,8 @@ test("une situation sans requête ne se lit pas comme « tous les sujets »", ()
 test("une situation traverse le rail et en ressort avec son nom", () => {
   const [epingle] = epinglesDuRail(
     [situationCommeUneEpingle({
-      id: "s-1", title: "Ma semaine", icon: "clock-fill", color: "bleu", requete: "assigné:moi"
+      id: "s-1", title: "Ma semaine", icon: "clock-fill", color: "bleu",
+      requete: "assigné:moi", au_rail: true
     })],
     "assigné:moi"
   );
@@ -84,25 +85,34 @@ test("une situation traverse le rail et en ressort avec son nom", () => {
 });
 
 /**
- * **Dans le carnet, le rail est la liste de mes situations.**
+ * **Le rail garde celles qu'on y a mises, et elles seules.**
  *
- * Sur l'écran des Sujets, une vue doit être épinglée pour y occuper une place :
- * le rail est court et la vue a son propre écran. Ici il n'y a pas de second
- * endroit — une situation que le rail n'afficherait pas serait une situation
- * qu'on ne retrouve plus.
+ * Il les montrait toutes : sur un carnet qui compte vingt-six situations, la
+ * barre de gauche devenait une liste qu'on ne parcourt plus — l'inverse de ce à
+ * quoi un rail sert. Le tableau les montre toutes ; le rail, celles qu'on y a
+ * épinglées. C'est la règle que les vues portent déjà.
  */
-test("mes situations sont toutes au rail", () => {
+test("seules les situations épinglées occupent le rail", () => {
   const trois = ["s-1", "s-2", "s-3"].map((id, rang) => situationCommeUneEpingle({
-    id, title: `Situation ${rang}`, requete: `label:l${rang}`
+    id, title: `Situation ${rang}`, requete: `label:l${rang}`, au_rail: rang === 1
   }));
 
-  assert.equal(epinglesDuRail(trois, "").length, 3);
+  assert.deepEqual(epinglesDuRail(trois, "").map((epingle) => epingle.nom), ["Situation 1"]);
+});
+
+/** La base écrit `au_rail` ; le code français le lit aussi sous son nom. */
+test("les deux façons de nommer l'épingle se lisent", () => {
+  assert.equal(situationCommeUneEpingle({ id: "s", auRail: true }).auRail, true);
+  assert.equal(situationCommeUneEpingle({ id: "s", au_rail: true }).auRail, true);
+  assert.equal(situationCommeUneEpingle({ id: "s" }).auRail, false);
 });
 
 /** Celle qu'on ne regarde pas ne s'allume pas — et c'est le rail qui le décide. */
 test("celle qu'on ne regarde pas ne s'allume pas", () => {
   const [epingle] = epinglesDuRail(
-    [situationCommeUneEpingle({ id: "s-1", title: "Ma semaine", requete: "auteur:moi" })],
+    [situationCommeUneEpingle({
+      id: "s-1", title: "Ma semaine", requete: "auteur:moi", au_rail: true
+    })],
     "assigné:moi"
   );
 
@@ -117,7 +127,7 @@ test("celle qu'on ne regarde pas ne s'allume pas", () => {
  */
 test("une situation sans requête n'occupe pas le rail", () => {
   assert.deepEqual(
-    epinglesDuRail([situationCommeUneEpingle({ id: "s-1", title: "Ma semaine" })], ""),
+    epinglesDuRail([situationCommeUneEpingle({ id: "s-1", title: "Ma semaine", au_rail: true })], ""),
     []
   );
 });

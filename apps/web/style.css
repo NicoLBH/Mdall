@@ -17289,7 +17289,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
  * a toujours son rail et la garde ; l'Atelier ne l'a plus — le sien vit dans le
  * panneau du Copilote — et la garder rognait sa vitrine par la gauche.
  */
-.project-simple-page--memory{ margin-left:var(--project-rail-width, 232px); }
+/* **La marge a quitté cette page pour la mise en page.** Voir
+   `.project-rail-layout__content` plus bas : nommer les pages une par une avait
+   déjà laissé la Mémoire dehors une fois, et le carnet des situations une
+   seconde. */
 
 /*
  * **La vitrine va d'un bord à l'autre de l'écran.**
@@ -17324,14 +17327,32 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
  * marge : le rail lui-même lit cette variable pour sa largeur, et il aurait
  * disparu.
  */
-.project-studio-router__panel--copilote{
-  margin-left:var(--project-rail-width, 232px);
-}
 .project-rail-layout{ display:block; }
 /* `width:100%` n'est pas superflu : sans lui le contenu se dimensionne sur ce
    qu'il porte, et l'Atelier — dont les panneaux sont vides tant qu'on n'a pas
    choisi d'outil — se retrouvait dans une colonne de trois cents pixels. */
-.project-rail-layout__content{ display:flex; flex-direction:column; gap:12px; width:100%; min-width:0; }
+/* **Le contenu s'écarte du rail, et c'est écrit une seule fois.**
+ *
+ * Le rail est en `position:fixed` contre le bord gauche : il ne pousse rien,
+ * c'est au contenu de lui faire de la place. Cette marge était portée par la
+ * classe de chaque page — `--memory`, `--sujets`, le panneau du Copilote —, et
+ * le commentaire d'à côté prévenait déjà : *« un écran de plus se réglera avec
+ * sa classe ajoutée ici »*. Personne ne l'a fait. Le carnet des situations est
+ * arrivé sans sa ligne, et son tableau se lisait **à travers** le rail, qui n'a
+ * pas de fond.
+ *
+ * La règle est donc posée là où elle est vraie : sur le contenu **voisin d'un
+ * rail**, et non sur les pages qu'on pense à énumérer. Les quatre mises en page
+ * qui portent un `project-rail-layout` ont toutes un rail en premier enfant —
+ * il n'y a pas de cas où cette marge indenterait pour rien.
+ *
+ * `width:100%` n'est pas superflu : sans lui le contenu se dimensionne sur ce
+ * qu'il porte, et l'Atelier — dont les panneaux sont vides tant qu'on n'a pas
+ * choisi d'outil — se retrouvait dans une colonne de trois cents pixels. */
+.project-rail-layout__content{
+  display:flex; flex-direction:column; gap:12px; width:100%; min-width:0;
+  margin-left:var(--project-rail-width, 232px);
+}
 
 /* La liste défile si elle déborde ; le bouton de repli reste en bas, quoi qu'il
    arrive — c'est un réglage du rail, pas le dernier de ses éléments. */
@@ -18180,12 +18201,12 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
     position:static; width:auto; flex-direction:row; align-items:center; flex-wrap:wrap;
     border-right:0; border-bottom:1px solid var(--border); padding:0 0 8px;
   }
-  .project-simple-page--memory,
-  .project-simple-page--sujets{ margin-left:0; }
+  /* Le rail est passé dans le flux : le contenu n'a plus rien à lui réserver.
+     Une seule ligne, comme la marge qu'elle annule. */
+  .project-rail-layout__content{ margin-left:0; }
   /* Au téléphone, la coquille n'a plus de remplissage à annuler, et le rail
      passe en rangée au-dessus du contenu : plus rien à lui réserver. */
   .project-simple-page--atelier{ margin-inline:0; }
-  .project-studio-router__panel--copilote{ margin-left:0; }
   .project-rail__scroll{ flex-direction:row; flex-wrap:wrap; gap:4px; overflow:visible; }
   .project-rail__group{ flex-direction:row; }
   .project-rail .side-nav-layout__separator{ display:none; }
@@ -24805,8 +24826,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    une colonne de grille. Le contenu s'écarte par une marge, sans quoi il passe
    dessous — et le rail n'a pas de fond, si bien que les deux se lisent l'un à
    travers l'autre. Une grille ici comptait la largeur du rail deux fois, et le
-   tableau se retrouvait dans une bande de trois cents pixels. */
-.project-simple-page--sujets{ margin-left:var(--project-rail-width, 232px); }
+   tableau se retrouvait dans une bande de trois cents pixels.
+
+   Cette marge est désormais portée par `.project-rail-layout__content`, une
+   fois pour les quatre écrans qui ont un rail. La garder ici en plus la
+   compterait deux fois — ce que la grille faisait déjà. */
 
 /* ── La largeur d'une page, écrite une fois pour toute l'application ─────── */
 
@@ -24878,8 +24902,17 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .sujets-vues__kebab{opacity:0;width:28px;height:28px;padding:0;flex:0 0 auto;
   display:inline-flex;align-items:center;justify-content:center;border-radius:6px;}
 .sujets-vues__kebab:hover{background:var(--surface-hover);}
+/* **Le tableau des situations porte le même kebab**, et donc la même règle de
+   discrétion. Sa ligne est une `issue-row` et non une `sujets-vues__ligne` :
+   sans elle, le bouton restait à `opacity:0` — présent, cliquable, invisible.
+   Un second jeu de classes pour le même bouton aurait divergé au premier
+   réglage (règle 10) ; c'est un sélecteur de plus, pas une copie. */
 .sujets-vues__ligne:hover .sujets-vues__kebab,
+.issue-row:hover .sujets-vues__kebab,
 .sujets-vues__kebab[aria-expanded="true"]{opacity:1;}
+/* La cellule du kebab ne coupe pas son menu, qui sort de la ligne vers le bas.
+   `overflow:hidden` hérité d'une cellule de tableau l'aurait tronqué net. */
+.cell--gestes{display:flex;align-items:center;justify-content:flex-end;overflow:visible;}
 /* `.gh-menu` est masqué par défaut : le menu d'une ligne s'affiche quand il
    n'est pas `hidden`, et l'attribut suffit — une classe de plus dirait la même
    chose une seconde fois (règle 4). */
