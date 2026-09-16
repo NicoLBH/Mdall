@@ -1339,3 +1339,63 @@ test("le groupe des commandes est poussé à droite par la feuille de style", as
 
   assert.match(css, /\.situations-sujets-tete \.cell-assignees-head\{margin-left:auto;\}/);
 });
+
+/* ── La barre du haut ────────────────────────────────────────────────────── */
+
+/**
+ * **Chaque écran transverse se nomme dans la barre du haut.**
+ *
+ * Les trois derniers tombaient dans le cas par défaut, et la barre annonçait
+ * « Tableau de bord » sur le Copilote, sur Tous les sujets et sur Toutes les
+ * propositions. On arrivait donc sur un écran que la barre appelait autrement,
+ * et le premier réflexe est de croire qu'on a mal cliqué.
+ *
+ * Le défaut est **muet** : rien ne lève, et la barre du haut parle à la base —
+ * elle déconnecte — donc elle ne s'importe pas. On lit sa source pour une seule
+ * chose : que le nom vienne de `ecrans-transversaux.js`, et non d'une copie.
+ */
+test("la barre du haut nomme chaque écran transverse depuis un seul endroit", async () => {
+  const source = await readFile(new URL("./global-header.js", import.meta.url), "utf8");
+
+  // La liste parcourue, telle qu'elle est écrite : un écran oublié ici
+  // retomberait sur « Tableau de bord » sans rien dire.
+  const boucle = source.slice(source.indexOf("for (const ecran of ["), source.indexOf("]", source.indexOf("for (const ecran of [")));
+  for (const nom of ["TOUS_LES_SUJETS", "TOUTES_LES_PROPOSITIONS", "LE_COPILOTE", "TOUS_LES_PROJETS"]) {
+    assert.match(boucle, new RegExp(nom), nom);
+  }
+
+  // Et le nom affiché est celui de l'écran, pas une chaîne recopiée.
+  assert.match(source, /primary: ecran\.nom/);
+  assert.match(source, /href: ecran\.route/);
+
+  // Le cas par défaut reste « Tableau de bord » : c'est l'accueil, et lui seul.
+  const parDefaut = source.slice(source.lastIndexOf("return {"));
+  assert.match(parDefaut, /primary: "Tableau de bord"/);
+  assert.match(parDefaut, /href: "#dashboard"/);
+});
+
+/**
+ * **La barre du haut respire autant sans projet qu'avec.**
+ *
+ * Dans un projet, elle n'a pas de bordure : c'est la barre d'onglets qui porte
+ * le trait, et les icônes ont de la place devant elles. Sans projet, le trait se
+ * posait à quatre pixels sous les icônes. La même barre paraissait serrée d'un
+ * écran à l'autre, sans qu'on sache pourquoi — et rien, dans le code, ne
+ * rapprochait les deux réglages.
+ */
+test("l'en-tête sans projet est calé comme celui d'un projet", async () => {
+  const css = await readFile(new URL("../../style.css", import.meta.url), "utf8");
+
+  const regle = css.slice(css.indexOf(".gh-header--global{"), css.indexOf("}", css.indexOf(".gh-header--global{")));
+
+  assert.match(regle, /height:var\(--header-h-compact\)/, "la hauteur de la liste des projets, généralisée");
+  assert.match(regle, /padding:16px 0;/, "un retrait symétrique, en haut comme en bas");
+
+  // Et le contenu descend d'autant : sans cela, le haut de la page passerait
+  // sous la barre.
+  assert.match(css, /body:has\(\.gh-header--global\)\{ --app-top:var\(--header-h-compact\); \}/);
+
+  // Plus de réglage à part pour la liste des projets : deux réglages pour la
+  // même barre finissent par ne plus dire la même chose (règle 4).
+  assert.doesNotMatch(css, /body\.route--projects-list \.gh-header\{/);
+});
