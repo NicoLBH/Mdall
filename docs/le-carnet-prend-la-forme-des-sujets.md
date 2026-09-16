@@ -230,6 +230,23 @@ session à l'autre, et ce sont ceux de cet écran — replier le rail des Sujets
 d'un projet n'a aucune raison de replier celui du carnet. L'écran ne les lit
 plus dans un magasin que personne n'écrivait : il les demande.
 
+### Une marge ne rentre pas dans un `width`
+
+La marge déplacée en a emporté un piège avec elle. Le contenu portait déjà
+`width:100%` — nécessaire, sans quoi l'Atelier se dimensionne sur des panneaux
+vides. **`100%` plus 248 px de marge fait une boîte 248 px plus large que ce qui
+la contient** : la page gagnait une barre de défilement horizontale de la
+largeur exacte du rail, et faire défiler glissait le tableau dessous — replié
+comme déplié, puisque la marge et la largeur lisent la même variable.
+
+Là où la marge était, la page était un bloc en `width:auto`, dont la largeur se
+calcule **après** les marges. Ici la largeur est posée, et il faut la
+retrancher : `width:calc(100% - var(--project-rail-width))`.
+
+Sous 900 px les deux se retirent ensemble. En annuler une seule laisserait une
+colonne amputée de la largeur d'un rail qui n'est plus là — le défaut
+symétrique.
+
 ### Le contenu passait derrière le rail en défilant
 
 La marge règle la **position de départ**, pas ce qui passe derrière quand la

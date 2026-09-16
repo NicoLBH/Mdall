@@ -17339,9 +17339,6 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
  * disparu.
  */
 .project-rail-layout{ display:block; }
-/* `width:100%` n'est pas superflu : sans lui le contenu se dimensionne sur ce
-   qu'il porte, et l'Atelier — dont les panneaux sont vides tant qu'on n'a pas
-   choisi d'outil — se retrouvait dans une colonne de trois cents pixels. */
 /* **Le contenu s'écarte du rail, et c'est écrit une seule fois.**
  *
  * Le rail est en `position:fixed` contre le bord gauche : il ne pousse rien,
@@ -17357,12 +17354,25 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
  * qui portent un `project-rail-layout` ont toutes un rail en premier enfant —
  * il n'y a pas de cas où cette marge indenterait pour rien.
  *
+ * ## La largeur retranche la marge, et c'est tout le sujet
+ *
  * `width:100%` n'est pas superflu : sans lui le contenu se dimensionne sur ce
  * qu'il porte, et l'Atelier — dont les panneaux sont vides tant qu'on n'a pas
- * choisi d'outil — se retrouvait dans une colonne de trois cents pixels. */
+ * choisi d'outil — se retrouvait dans une colonne de trois cents pixels.
+ *
+ * Mais **une marge ne rentre pas dans un `width`** : `100%` plus 248 px de
+ * marge fait une boîte 248 px plus large que ce qui la contient. La page
+ * gagnait donc une barre de défilement horizontale de la largeur exacte du
+ * rail, et faire défiler glissait le tableau **sous** lui — replié comme
+ * déplié, puisque la marge et la largeur lisent la même variable.
+ *
+ * C'est le piège de la marge déplacée : là où elle était, la page était un bloc
+ * en `width:auto`, dont la largeur se calcule **après** les marges. Ici la
+ * largeur est posée, et il faut la retrancher soi-même. */
 .project-rail-layout__content{
-  display:flex; flex-direction:column; gap:12px; width:100%; min-width:0;
+  display:flex; flex-direction:column; gap:12px; min-width:0;
   margin-left:var(--project-rail-width, 232px);
+  width:calc(100% - var(--project-rail-width, 232px));
 }
 
 /* La liste défile si elle déborde ; le bouton de repli reste en bas, quoi qu'il
@@ -18213,8 +18223,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
     border-right:0; border-bottom:1px solid var(--border); padding:0 0 8px;
   }
   /* Le rail est passé dans le flux : le contenu n'a plus rien à lui réserver.
-     Une seule ligne, comme la marge qu'elle annule. */
-  .project-rail-layout__content{ margin-left:0; }
+     La largeur revient à `100%` avec la marge — les deux vont ensemble, et en
+     annuler une seule laisserait une colonne amputée de la largeur d'un rail
+     qui n'est plus là. */
+  .project-rail-layout__content{ margin-left:0; width:100%; }
   /* Au téléphone, la coquille n'a plus de remplissage à annuler, et le rail
      passe en rangée au-dessus du contenu : plus rien à lui réserver. */
   .project-simple-page--atelier{ margin-inline:0; }

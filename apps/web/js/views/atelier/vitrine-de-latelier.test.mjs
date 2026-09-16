@@ -331,7 +331,7 @@ test("la vitrine n'est plus rognée par la coquille", () => {
  * voisin d'un rail, ce qui est exactement la condition. Un cinquième écran la
  * reçoit en naissant.
  */
-test("la place du rail se réserve une fois, sur la mise en page", () => {
+test("la place du rail se réserve une fois, et la largeur la retranche", () => {
   const css = lis("../../../style.css");
 
   assert.match(
@@ -343,6 +343,16 @@ test("la place du rail se réserve une fois, sur la mise en page", () => {
     css.match(/margin-left:var\(--project-rail-width/g)?.length, 1,
     "et une seule fois : deux marges compteraient la largeur deux fois"
   );
+  // **Une marge ne rentre pas dans un `width`.** `100%` plus la marge fait une
+  // boîte plus large que ce qui la contient : la page gagnait une barre de
+  // défilement horizontale de la largeur exacte du rail, et faire défiler
+  // glissait le contenu **sous** lui. Les deux déclarations vont ensemble.
+  // La règle de base, celle qui porte la marge — et non celle du téléphone, qui
+  // les retire toutes les deux.
+  const base = css.match(/\.project-rail-layout__content\{[^}]*margin-left:var\([^}]*\}/)?.[0] ?? "";
+  assert.ok(base, "la règle qui porte la marge doit exister");
+  assert.match(base, /width:calc\(100% - var\(--project-rail-width/, "la largeur retranche la marge");
+  assert.ok(!/width:100%/.test(base), "et ne vaut jamais 100% en même temps qu'elle");
   // La vitrine n'a pas de rail, donc pas de `project-rail-layout` : elle garde
   // toute la largeur sans avoir à annuler quoi que ce soit.
   assert.doesNotMatch(css, /\.project-simple-page--atelier\{[^}]*--project-rail-width:0/);
@@ -460,4 +470,22 @@ test("les vignettes de toutes les cartes font 40 px", () => {
   const regle = css.slice(css.indexOf(".atelier-fiche__vignette,"));
 
   assert.match(regle.slice(0, 400), /width:40px;\s*height:40px/);
+});
+
+/**
+ * **Sous 900 px, la marge et la largeur s'annulent ensemble.**
+ *
+ * Le rail passe dans le flux : il n'y a plus rien à lui réserver. En annuler
+ * une seule laisserait une colonne amputée de la largeur d'un rail qui n'est
+ * plus là — le défaut symétrique de celui qu'on vient de corriger.
+ */
+test("au téléphone, la marge et la largeur se retirent ensemble", () => {
+  const css = lis("../../../style.css");
+  const etroit = css.slice(css.indexOf("@media (max-width: 900px)"));
+
+  assert.match(
+    etroit,
+    /\.project-rail-layout__content\{ margin-left:0; width:100%; \}/,
+    "les deux, ou aucune"
+  );
 });
