@@ -1,44 +1,48 @@
 /**
- * Les propositions de tous mes projets, dans un tableau.
+ * Les propositions, dans un tableau — d'un projet, ou de tous.
  *
- * ## Ce qu'il montre, et pourquoi
+ * ## Un seul tableau, deux écrans
  *
- * Une proposition se reconnaît à quatre choses : **son état**, son numéro, son
- * titre, et le projet d'où elle vient. Les trois premières sont celles de
- * l'onglet d'un projet ; la quatrième est ce que cet écran-ci a de plus, et
- * c'est la seule raison de le regarder — deux propositions du même nom sur deux
- * projets sont deux lignes qu'on ne distingue plus sans dire d'où elles
- * viennent.
+ * L'onglet d'un projet montrait une liste à lui : ses propres classes, son
+ * propre filtre à deux onglets, son propre dessin de ligne. L'écran qui
+ * traverse les projets montrait un tableau. Les deux disaient la même chose de
+ * deux façons, et la moindre retouche demandait deux calages — c'est
+ * exactement ce qu'on cherche à ne plus faire (règle 10).
  *
- * Le nombre de documents accompagne chaque ligne. C'est la première question
- * qu'on se pose devant une proposition : y a-t-il quelque chose dedans.
+ * Une seule chose les sépare, et elle se donne en paramètre : la **colonne du
+ * projet**, qui n'a de sens que là où l'on en traverse plusieurs.
+ *
+ * ## Ce qu'une ligne montre
+ *
+ * Son **état**, son titre, son numéro, qui l'a ouverte et quand, ce qu'elle
+ * contient. Les quatre premiers se lisent en parcourant ; le nombre de
+ * documents répond à la première question qu'on se pose devant une proposition
+ * — y a-t-il quelque chose dedans.
+ *
+ * ## Ce que ce fichier ne fait pas
+ *
+ * Il ne décide pas de ce qu'on regarde. La requête est appliquée par
+ * `champs-des-propositions.js`, l'ordre par `tri-des-sujets.js`, et les
+ * commandes de l'en-tête — filtre d'état, tri, menus — lui arrivent **toutes
+ * dessinées**, comme au tableau des sujets. Un tableau qui trierait ou
+ * filtrerait de son côté et un écran qui compte sur son propre état finiraient
+ * par ne plus montrer la même première ligne (règle 4).
  *
  * ## Ne pas savoir n'est pas « rien »
  *
  * `propositions` vaut `null` tant que la lecture n'a pas abouti. Rendre un
  * tableau vide ferait croire qu'il n'y en a aucune, alors qu'on n'a pas su
  * regarder (règle 5) — et l'on irait chercher la panne dans les projets.
- *
- * ## Rien n'est dessiné de neuf
- *
- * La coquille de tableau des autres écrans, ses cellules, sa pastille d'état et
- * les icônes des propositions d'un projet. Un second dessin aurait divergé au
- * premier réglage (règle 10).
  */
 
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
-import { renderStatusBadge } from "../ui/status-badges.js";
 import { renderDataTableHead } from "../ui/data-table-shell.js";
 import { renderIssuesTable } from "../ui/issues-table.js";
-import { renderTableHeadFilterToggle } from "../ui/table-head-filter-toggle.js";
-import { renderBoutonDeTri } from "../ui/tete-de-tableau.js";
 import { paginateItems, renderPaginationControls } from "../ui/pagination.js";
 import { etatDeLaProposition, renderIconeDetat } from "../ui/etats-des-lignes.js";
-import {
-  TRI, motDuTri, normaliserLeTri, trierLesSujets, triSuivant
-} from "../../services/tri-des-sujets.js";
-import { PROPOSITION } from "../../services/proposition-state.js";
+import { trierLesSujets } from "../../services/tri-des-sujets.js";
+import { propositionsFiltrees } from "../../services/champs-des-propositions.js";
 
 /**
  * L'état d'une proposition vit avec celui d'un sujet, dans un seul fichier
@@ -47,53 +51,26 @@ import { PROPOSITION } from "../../services/proposition-state.js";
  */
 export { etatDeLaProposition };
 
-/** Les attributs que la tête porte, et que l'écran écoute. Un seul endroit. */
-export const GESTES_DES_PROPOSITIONS = {
-  etat: "propositions-toutes-etat",
-  tri: "propositions-toutes-tri"
-};
-
-/** Les colonnes, écrites une fois pour l'en-tête et pour les lignes (règle 4). */
-const GRILLE = "minmax(0, 1fr) 84px 200px";
+/**
+ * Les colonnes, écrites une fois pour l'en-tête et pour les lignes (règle 4).
+ *
+ * Celles du tableau des sujets, plus le projet là où l'écran en traverse
+ * plusieurs : deux propositions du même nom sur deux projets sont deux lignes
+ * qu'on ne distingue plus sans dire d'où elles viennent.
+ */
+const GRILLE_TRANSVERSALE = "minmax(0, 1fr) 84px 200px";
+const GRILLE_DUN_PROJET = "minmax(0, 1fr) 84px";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
-/**
- * Les propositions que cette recherche retient.
- *
- * **Le texte cherche dans le titre et dans le nom du projet.** Pas dans la
- * description : une recherche qui remonte une ligne dont le titre ne contient
- * pas le mot cherché se lit comme une erreur, et l'on ne voit pas où le mot se
- * cache. Le projet, lui, est à l'écran sur la ligne — « toutes celles de
- * Chamonix » est la question qu'on pose ici.
- */
-export function propositionsRetenues({ propositions = [], cherche = "", nomsDesProjets = {} } = {}) {
-  const mots = repli(cherche).split(/\s+/).filter(Boolean);
-  if (!mots.length) return Array.isArray(propositions) ? propositions : [];
-
-  return (Array.isArray(propositions) ? propositions : []).filter((proposition) => {
-    const ou = nomsDesProjets?.[texte(proposition?.project_id)] ?? "";
-    const dit = repli(`${texte(proposition?.title)} ${ou}`);
-    return mots.every((mot) => dit.includes(mot));
-  });
-}
-
-/** Sans accent ni casse : on tape rarement les accents dans une recherche. */
-function repli(valeur) {
-  return texte(valeur).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-}
-
-/**
- * Ouverte, ou close ?
- *
- * **Fusionnée et refusée sont toutes deux closes**, et c'est la coupe de
- * l'onglet d'un projet : la question qu'on se pose devant la liste est « qu'est
- * -ce qui attend encore une décision ? ». Distinguer ici les deux façons de ne
- * plus attendre ferait trois onglets là où il y a deux questions — et l'état
- * exact reste écrit sur chaque ligne.
- */
-function ouverte(proposition) {
-  return etatDeLaProposition(proposition).cle === PROPOSITION.OPEN;
+/** Le jour, tel qu'on l'écrit partout dans les propositions. */
+function leJour(valeur) {
+  const dit = texte(valeur);
+  if (!dit) return "";
+  const date = new Date(dit);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 /**
@@ -101,105 +78,78 @@ function ouverte(proposition) {
  *
  * @param {object} options
  * @param {object[]|null} options.propositions `null` tant qu'on n'a pas lu
- * @param {object} options.nomsDesProjets les projets qu'on sait nommer
- * @param {string} options.cherche ce qui est écrit dans la barre
+ * @param {object} [options.nomsDesProjets] les projets qu'on sait nommer
+ * @param {string} [options.requete] ce qui est écrit dans la barre
+ * @param {object[]} [options.champs] ceux de `champsDesPropositions`
+ * @param {string|string[]} [options.moi] qui regarde
+ * @param {object} [options.auteurs] les gens qu'on sait nommer, par identifiant
+ *   de compte — pour dire qui a ouvert la proposition plutôt que « quelqu'un »
+ * @param {boolean} [options.avecLeProjet] la colonne du projet
+ * @param {boolean} [options.surPlace] le titre ouvre la proposition **ici**,
+ *   sans changer d'adresse : c'est ce que fait l'onglet d'un projet, qui montre
+ *   la revue à la place de la liste. Ailleurs, le titre est un lien.
+ * @param {string} [options.statutHtml] le filtre ouvertes/closes, tout dessiné
+ * @param {string} [options.triHtml] le bouton qui range, tout dessiné
+ * @param {string} [options.filtresHtml] les menus de l'en-tête
+ * @param {string} [options.tri] l'ordre demandé
+ * @param {object|null} [options.pagination]
  */
 export function renderTableauDesPropositionsHtml({
-  propositions = null, nomsDesProjets = {}, cherche = "",
-  /**
-   * Ouvertes, closes, ou les deux.
-   *
-   * **`""` n'est pas « ouvertes ».** C'est « on n'a rien restreint », et la
-   * liste les montre toutes. Allumer « Ouvertes » par défaut dirait que la
-   * liste est coupée alors qu'elle ne l'est pas, et l'on chercherait où sont
-   * passées les autres (règle 5).
-   */
-  etat = "",
-  /**
-   * L'ordre. Celui des sujets, et le même bouton — une proposition porte les
-   * mêmes dates, et « qu'est-ce qui a bougé ? » est la même question.
-   */
+  propositions = null, nomsDesProjets = {}, requete = "", champs = [], moi = "",
+  auteurs = {}, avecLeProjet = true, surPlace = false,
+  statutHtml = "", triHtml = "", filtresHtml = "",
   tri = "",
-  /**
-   * La page qu'on regarde, et sa taille.
-   *
-   * **Mille deux cents propositions ne tiennent pas sur une page.** Les rendre
-   * toutes fait un document que le navigateur met une seconde à poser, et qu'on
-   * ne parcourt pas — on cherche, on ne feuillette pas. `null` rend tout.
-   */
   pagination = null
 } = {}) {
   const noms = nomsDesProjets && typeof nomsDesProjets === "object" ? nomsDesProjets : {};
   const lues = Array.isArray(propositions) ? propositions : null;
-  const cherchees = lues ? propositionsRetenues({ propositions: lues, cherche, nomsDesProjets: noms }) : [];
 
-  // **Les comptes se prennent avant la coupe**, sur ce que la recherche retient.
-  // Les prendre après rendrait « Closes : 0 » chaque fois qu'on regarde les
-  // ouvertes, et le filtre dirait que l'autre moitié n'existe pas.
-  const comptes = {
-    open: cherchees.filter(ouverte).length,
-    closed: cherchees.filter((proposition) => !ouverte(proposition)).length
-  };
+  const { propositions: retenues } = lues
+    ? propositionsFiltrees({ propositions: lues, requete, champs, moi, nomsDesProjets: noms })
+    : { propositions: [] };
 
-  const demande = texte(etat).toLowerCase();
-  const retenues = demande === PROPOSITION.OPEN
-    ? cherchees.filter(ouverte)
-    : (demande === "closed" ? cherchees.filter((proposition) => !ouverte(proposition)) : cherchees);
+  // **Le tableau reçoit la liste et la range**, mais ne choisit pas l'ordre :
+  // c'est l'écran qui le tient, et le bouton de tri qu'il dessine dit lequel.
   const rangees = trierLesSujets(retenues, tri);
   const combien = rangees.length;
-  const range = normaliserLeTri(tri);
+  const grille = avecLeProjet ? GRILLE_TRANSVERSALE : GRILLE_DUN_PROJET;
 
   const headHtml = renderDataTableHead({
     columns: [
       {
         className: "cell cell-theme",
-        // **Le filtre d'abord, à gauche**, puis le compte : c'est l'ordre de
-        // l'en-tête du tableau des sujets d'un projet, et les deux écrans se
-        // lisent sans réapprendre où regarder.
-        //
-        // **Tant qu'on n'a pas lu, il n'y a pas de filtre.** « Ouvertes 0 »
-        // pendant la lecture dit qu'il n'y en a aucune, alors qu'on n'a pas
-        // encore regardé (règle 5).
+        // **Le filtre d'abord, à gauche**, puis le compte, puis les menus :
+        // c'est l'ordre de l'en-tête du tableau des sujets, et les deux écrans
+        // se lisent sans réapprendre où regarder.
         html: `<span class="situations-sujets-tete">
-          ${lues ? renderTableHeadFilterToggle({
-            activeValue: demande,
-            items: [
-              { label: "Ouvertes", value: PROPOSITION.OPEN, count: comptes.open, dataAttr: GESTES_DES_PROPOSITIONS.etat },
-              { label: "Closes", value: "closed", count: comptes.closed, dataAttr: GESTES_DES_PROPOSITIONS.etat }
-            ]
-          }) : ""}
+          ${statutHtml}
           <span class="situations-sujets-tete__compte">${escapeHtml(lues
-            // **Le compte est celui de tout ce que la recherche retient**, et
-            // non celui de la page : « 25 propositions » au-dessus d'une liste
-            // qui en retient mille deux cents ferait croire que la recherche a
-            // tout écarté.
+            // **Le compte est celui de tout ce que la requête retient**, et non
+            // celui de la page : « 25 propositions » au-dessus d'une liste qui
+            // en retient mille deux cents ferait croire que la recherche a tout
+            // écarté.
             ? `${combien} proposition${combien > 1 ? "s" : ""}`
             : "Propositions")}</span>
+          ${filtresHtml}
         </span>`
       },
       // La colonne des documents n'a pas d'intitulé : l'icône le dit sur chaque
       // ligne, et un mot au-dessus de quatre-vingts pixels tiendrait mal.
       { className: "cell cell-messages-head", html: "" },
-      {
-        className: "cell",
-        // Le tri est dans la dernière colonne de la tête, comme dans l'onglet
-        // des sujets : c'est là qu'on va le chercher.
-        html: `<span class="cell-assignees-head">
-          <span>Projet</span>
-          ${renderBoutonDeTri({
-            attribut: GESTES_DES_PROPOSITIONS.tri,
-            valeur: triSuivant(range),
-            actif: range === TRI.DERNIERE_ACTIVITE,
-            titre: motDuTri(range, "l'ordre d'arrivée")
-          })}
-        </span>`
-      }
+      ...(avecLeProjet
+        ? [{
+          className: "cell",
+          // Le tri est dans la dernière colonne de la tête, comme dans l'onglet
+          // des sujets : c'est là qu'on va le chercher.
+          html: `<span class="cell-assignees-head"><span>Projet</span>${triHtml}</span>`
+        }]
+        : [{ className: "cell cell-messages-head", html: triHtml }])
     ]
   });
 
   if (!lues) {
     return renderIssuesTable({
-      gridTemplate: GRILLE,
+      gridTemplate: grille,
       headHtml,
       state: "loading",
       loadingTitle: "Lecture des propositions…",
@@ -207,16 +157,17 @@ export function renderTableauDesPropositionsHtml({
     });
   }
 
-  const dite = texte(cherche);
+  const dite = texte(requete);
   const page = pagination ? paginateItems(rangees, pagination) : { items: rangees, totalPages: 1 };
+  const decor = { noms, auteurs: auteurs && typeof auteurs === "object" ? auteurs : {}, avecLeProjet, surPlace };
 
   const tableau = renderIssuesTable({
-    gridTemplate: GRILLE,
+    gridTemplate: grille,
     headHtml,
-    rowsHtml: page.items.map((proposition) => renderLigneHtml(proposition, noms)).join(""),
+    rowsHtml: page.items.map((proposition) => renderLigneHtml(proposition, decor)).join(""),
     emptyTitle: dite ? "Aucune proposition ne répond à cette recherche" : "Aucune proposition",
     emptyDescription: dite
-      ? "Élargissez la recherche : elle porte sur le titre et sur le nom du projet."
+      ? "Élargissez la requête : elle porte sur le titre, le projet, l'auteur et l'état."
       : "Une proposition naît d'un dépôt de documents, dans l'onglet Propositions d'un projet."
   });
 
@@ -230,37 +181,53 @@ export function renderTableauDesPropositionsHtml({
 /**
  * Une ligne.
  *
- * **Elle ouvre la proposition, dans son projet.** Pas un écran de proposition
- * transversal : elle se lit, se discute et se tranche là où son corpus est, et
- * un détail monté ici montrerait la moitié de ce qu'elle est.
+ * **Le titre ouvre la proposition là où elle se tranche.** Sur l'écran qui
+ * traverse les projets, c'est un lien vers son projet : elle se lit, se discute
+ * et se tranche là où son corpus est, et un détail monté ailleurs montrerait la
+ * moitié de ce qu'elle est — la moitié qui manque étant celle où l'on décide.
+ * L'adresse porte son identifiant, ce qui la rend copiable et partageable.
  *
- * L'adresse porte son identifiant — `#project/<projet>/propositions/<id>` —, ce
- * qui la rend copiable et partageable. Sans lui, la ligne menait à la liste de
- * l'onglet, et il fallait y retrouver à la main ce qu'on venait de désigner.
+ * Dans l'onglet d'un projet, la revue **remplace la liste** sans changer
+ * d'adresse : le titre y est un bouton, et c'est l'écran qui sait quoi en
+ * faire.
  *
  * Un projet qu'on ne sait pas nommer montre son identifiant plutôt qu'une
  * cellule vide, qui ferait croire que la proposition n'appartient à aucun
  * projet — ce qui n'arrive pas (règle 5).
  */
-function renderLigneHtml(proposition, noms) {
+function renderLigneHtml(proposition, decor = {}) {
   const etat = etatDeLaProposition(proposition);
   const projet = texte(proposition?.project_id);
+  const id = texte(proposition?.id);
   const numero = Number(proposition?.number);
   const documents = Number(proposition?.documentCount) || 0;
+  const titre = texte(proposition?.title) || "Proposition";
+
+  // **Qui l'a ouverte, nommé.** « un collaborateur » était la seule chose qu'on
+  // savait dire : on ne pouvait pas chercher qui, ni reconnaître les siennes
+  // autrement qu'en les ouvrant.
+  const auteur = decor.auteurs?.[texte(proposition?.created_by)] ?? "";
+  const ouverte = leJour(proposition?.created_at);
+  const fusionnee = leJour(proposition?.merged_at);
+
+  const lien = decor.surPlace
+    ? `<button type="button" class="row-title-trigger theme-text theme-text--pb"
+        data-proposition-open="${escapeHtml(id)}">${escapeHtml(titre)}</button>`
+    : `<a class="row-title-trigger theme-text theme-text--pb"
+        href="#project/${escapeHtml(projet)}/propositions/${escapeHtml(id)}"
+        >${escapeHtml(titre)}</a>`;
 
   return `
     <div class="issue-row issue-row--pb">
       <div class="cell cell-theme lvl0">
         <span class="issue-row-title-grid">
           <span class="issue-row-title-grid__status">${renderIconeDetat(etat)}</span>
-          <span class="issue-row-title-grid__title">
-            <a class="row-title-trigger theme-text theme-text--pb"
-              href="#project/${escapeHtml(projet)}/propositions/${escapeHtml(texte(proposition?.id))}"
-              >${escapeHtml(texte(proposition?.title) || "Proposition")}</a>
-          </span>
+          <span class="issue-row-title-grid__title issue-row-subject-title-line">${lien}</span>
           <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">
-            ${renderStatusBadge({ label: etat.mot, tone: etat.ton })}
             ${Number.isFinite(numero) && numero > 0 ? `<span>#${escapeHtml(String(numero))}</span>` : ""}
+            ${ouverte ? `<span>ouverte le ${escapeHtml(ouverte)}</span>` : ""}
+            ${auteur ? `<span class="issue-row-author-name">${escapeHtml(auteur)}</span>` : ""}
+            ${fusionnee ? `<span>fusionnée le ${escapeHtml(fusionnee)}</span>` : ""}
           </span>
         </span>
       </div>
@@ -270,7 +237,9 @@ function renderLigneHtml(proposition, noms) {
             ${svgIcon("file")}<span>${escapeHtml(String(documents))}</span>
           </span>`
         : '<span class="issue-row-messages-empty" aria-hidden="true"></span>'}</div>
-      <div class="cell mono-small">${escapeHtml(noms[projet] || projet || "—")}</div>
+      ${decor.avecLeProjet
+        ? `<div class="cell mono-small">${escapeHtml(decor.noms?.[projet] || projet || "—")}</div>`
+        : '<div class="cell"></div>'}
     </div>
   `;
 }

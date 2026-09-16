@@ -159,9 +159,17 @@ export function etatDeLaProposition(proposition = null) {
  * ainsi que l'icône de l'onglet d'un projet est peinte depuis le début, et
  * inventer ici une seconde façon de la colorer ferait diverger les deux au
  * premier réglage.
+ *
+ * ## Elle se nomme, parce qu'elle est seule à le dire
+ *
+ * La ligne portait **aussi** une pastille « Ouvert » / « Fermé », à côté du
+ * titre : la même information deux fois, sur la ligne la plus chargée de
+ * l'écran. La pastille est partie — c'est l'icône qu'on regarde en parcourant —
+ * et l'icône reçoit son nom, sans quoi l'état ne serait plus lisible du tout
+ * pour qui ne voit ni les formes ni les couleurs.
  */
 export function renderIconeDetat(etat = null) {
   const sien = etat && typeof etat === "object" ? etat : etatDunSujet(null);
-  const svg = svgIcon(sien.icone, { style: `color: ${sien.couleur}` });
-  return `<span class="issue-status-icon" aria-hidden="true">${svg}</span>`;
+  const svg = svgIcon(sien.icone, { style: `color: ${sien.couleur}`, title: sien.mot });
+  return `<span class="issue-status-icon">${svg}</span>`;
 }

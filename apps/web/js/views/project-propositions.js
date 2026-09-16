@@ -60,6 +60,28 @@ import {
 } from "../services/edition-de-la-proposition.js";
 import { ITEM, PROPOSITION, describeMerge } from "../services/proposition-state.js";
 import {
+  champsDesPropositions, requeteAvecLEtat, requeteDeDepartDesPropositions
+} from "../services/champs-des-propositions.js";
+import { TRI, normaliserLeTri, triSuivant } from "../services/tri-des-sujets.js";
+import { renderTableauDesPropositionsHtml } from "./ui/tableau-des-propositions.js";
+import { teteDesPropositions } from "./ui/tete-des-propositions.js";
+import { renderBarreDeRequeteHtml } from "./ui/barre-de-requete.js";
+import { brancherLaRequete } from "./ui/branchement-de-la-requete.js";
+import { brancherLaPagination } from "./ui/pagination-transversale.js";
+import { quandOnClique } from "./ui/tete-de-tableau.js";
+import { auteursParCompte, comptesDesPersonnes } from "./toutes-les-propositions-page.js";
+import { phraseDesIgnores } from "../services/champs-des-sujets.js";
+import { propositionsFiltrees } from "../services/champs-des-propositions.js";
+
+/**
+ * Les attributs que la tête porte, et que cet écran écoute.
+ *
+ * **Ils sont à lui.** `quandOnClique` range ce qu'on lui déclare dans une table
+ * unique pour toute l'application : l'écran de toutes les propositions déclare
+ * les siens, et deux écrans qui partageraient un nom se voleraient leur geste.
+ */
+const GESTES = { etat: "propositions-projet-etat", tri: "propositions-projet-tri" };
+import {
   buildSnapshot,
   defaultMergeMessage,
   describeSnapshotGap,
@@ -148,8 +170,28 @@ import { describeReadingStack } from "../services/run-workflow.js";
 
 /** Ce que l'écran tient entre deux rendus. */
 const view = {
-  /** "open" | "closed" — le filtre, comme sur GitHub. */
-  filter: PROPOSITION.OPEN,
+  /**
+   * **Ce qu'on regarde, écrit en toutes lettres.**
+   *
+   * C'était `"open" | "closed"` dans une case à l'écran. La même liste, vue de
+   * tous les projets, se lisait déjà avec une requête — et l'on ne pouvait pas
+   * demander ici « celles que j'ai ouvertes et qui n'ont aucun document ». Les
+   * deux écrans partagent maintenant la grammaire, la barre et les menus : une
+   * requête écrite ici retient ce qu'elle retiendrait là-bas (règle 4).
+   *
+   * **On part des ouvertes**, et le jeton est dans la barre : il s'y lit et s'y
+   * efface. Un filtre par défaut qu'on ne voit nulle part est un écran qui ment
+   * sur ce qu'il montre.
+   */
+  requete: requeteDeDepartDesPropositions(),
+  /** L'ordre demandé. Une seule case. */
+  tri: TRI.DERNIERE_ACTIVITE,
+  /** Ce qui est tapé dans le champ de recherche de chaque menu. */
+  cherchesDesFiltres: {},
+  /** La page qu'on regarde. */
+  page: 1,
+  /** Qui travaille sur ce projet — sans eux, « auteur » ne se déclare pas. */
+  personnes: [],
   /** `null` tant qu'on n'a pas répondu, `[]` quand il n'y a rien. */
   propositions: null,
   /** Vrai si la base n'a pas répondu : ne rien savoir n'est pas savoir qu'il n'y a rien. */
@@ -231,102 +273,6 @@ function accorde(count, singulier, pluriel) {
   return count > 1 ? pluriel : singulier;
 }
 
-function renderFilters(counts) {
-  const tab = (id, label, count) => `
-    <button
-      type="button"
-      class="propositions-filter${view.filter === id ? " is-active" : ""}"
-      data-propositions-filter="${id}"
-      aria-pressed="${view.filter === id ? "true" : "false"}"
-    >
-      ${svgIcon(id === PROPOSITION.OPEN ? "git-pull-request" : "check", { className: "octicon" })}
-      <span>${count} ${label}</span>
-    </button>
-  `;
-
-  return `
-    <div class="propositions-filters">
-      ${tab(PROPOSITION.OPEN, accorde(counts.open, "ouverte", "ouvertes"), counts.open)}
-      ${tab("closed", accorde(counts.closed, "fermée", "fermées"), counts.closed)}
-    </div>
-  `;
-}
-
-/**
- * L'état vide, qui explique quoi faire.
- *
- * Trois états vides distincts, parce qu'ils appellent trois gestes différents :
- * il n'y en a jamais eu, il n'y en a plus d'ouvertes, ou la base n'a pas
- * répondu. Les confondre laisserait croire à une absence là où il y a une panne.
- */
-function renderEmpty() {
-  if (view.unreachable) {
-    return `
-      <div class="propositions-empty">
-        <b>Les propositions n'ont pas pu être lues</b>
-        <p>Le projet est peut-être injoignable. Rien n'est perdu : réessayez en rechargeant la page.</p>
-      </div>
-    `;
-  }
-
-  const jamais = (view.propositions ?? []).length === 0;
-  return `
-    <div class="propositions-empty">
-      ${svgIcon("git-compare", { className: "octicon", width: 24, height: 24 })}
-      <b>${
-        jamais
-          ? "Aucune proposition dans ce projet"
-          : `Aucune proposition ${view.filter === PROPOSITION.OPEN ? "ouverte" : "fermée"}`
-      }</b>
-      <p>
-        Une proposition rassemble des documents et ce qu'ils changeraient au projet,
-        pour qu'on en juge avant de les accepter.
-        Elle s'ouvre depuis l'onglet <b>Documents</b>, en déposant des fichiers.
-      </p>
-    </div>
-  `;
-}
-
-function renderRow(proposition) {
-  const merged = proposition.status === PROPOSITION.MERGED;
-  const closed = proposition.status === PROPOSITION.CLOSED;
-  const auteur = proposition.created_by === store.user?.id ? "vous" : "un collaborateur";
-  const documents = proposition.documentCount;
-
-  return `
-    <li class="propositions-row">
-      <span class="propositions-row__icon propositions-row__icon--${proposition.status}">
-        ${
-          // L'icône de la fusion, pas une coche dans un disque : c'est le même
-          // signe que partout ailleurs — la pastille de l'en-tête, l'acte du
-          // fil, la carte de fin. Une proposition ouverte prend celui d'une
-          // demande ouverte : deux états ne peuvent pas porter le même dessin.
-          //
-          // Refusée, c'est une demande **fermée** : le panneau d'alerte disait
-          // « attention », alors qu'il n'y a rien à surveiller — quelqu'un a
-          // décidé, et la proposition est close.
-          svgIcon(merged ? "git-compare" : closed ? "git-pull-request-closed" : "git-pull-request", {
-            className: "octicon"
-          })
-        }
-      </span>
-      <span class="propositions-row__body">
-        <a
-          class="propositions-row__title"
-          href="#"
-          data-proposition-open="${escapeHtml(proposition.id)}"
-        >${escapeHtml(proposition.title)}</a>
-        <span class="propositions-row__meta">
-          <span class="propositions-row__number">#${Number(proposition.number) || "?"}</span>
-          ouverte le ${escapeHtml(formatDate(proposition.created_at))} par ${auteur}
-          · ${documents} ${accorde(documents, "document", "documents")}
-          ${merged ? `· fusionnée le ${escapeHtml(formatDate(proposition.merged_at))}` : ""}
-        </span>
-      </span>
-    </li>
-  `;
-}
-
 /**
  * Où l'on en était de sa lecture, entre deux rendus.
  *
@@ -337,16 +283,6 @@ function renderRow(proposition) {
 const defilementGarde = { proposition: "" };
 
 function renderContent(root) {
-  const all = view.propositions ?? [];
-  const counts = {
-    open: all.filter((entry) => entry.status === PROPOSITION.OPEN).length,
-    closed: all.filter((entry) => entry.status !== PROPOSITION.OPEN).length
-  };
-  const shown =
-    view.filter === PROPOSITION.OPEN
-      ? all.filter((entry) => entry.status === PROPOSITION.OPEN)
-      : all.filter((entry) => entry.status !== PROPOSITION.OPEN);
-
   if (view.open) {
     // **Le défilement se garde d'un rendu à l'autre.**
     //
@@ -384,27 +320,18 @@ function renderContent(root) {
   closeMergeDrawer();
   defilementGarde.proposition = "";
 
-  root.innerHTML = `
-    <section class="project-simple-page project-simple-page--propositions">
-      <div class="propositions-shell">
-        ${renderFilters(counts)}
-        ${
-          view.loading
-            ? `<div class="propositions-empty"><b>Lecture des propositions…</b></div>`
-            : shown.length === 0
-              ? renderEmpty()
-              : `<ul class="propositions-list">${shown.map(renderRow).join("")}</ul>`
-        }
-      </div>
-    </section>
-  `;
+  root.innerHTML = renderListeHtml();
 
-  for (const button of root.querySelectorAll("[data-propositions-filter]")) {
-    button.addEventListener("click", () => {
-      view.filter = button.getAttribute("data-propositions-filter");
-      renderContent(root);
-    });
-  }
+  brancherLaPagination(root, "propositions-transversales", (page) => {
+    view.page = page;
+    renderContent(root);
+  });
+
+  brancherLaRequete(root, {
+    nom: "propositions",
+    etat: view,
+    redessiner: () => renderContent(root)
+  });
 
   for (const link of root.querySelectorAll("[data-proposition-open]")) {
     link.addEventListener("click", (event) => {
@@ -412,6 +339,110 @@ function renderContent(root) {
       openProposition(root, link.getAttribute("data-proposition-open"));
     });
   }
+}
+
+/** La grammaire de cet écran : un seul projet, donc pas de menu « Projets ». */
+function champsDeLEcran() {
+  return champsDesPropositions({ personnes: comptesDesPersonnes(view.personnes) });
+}
+
+/** Qui regarde — un compte, celui qui a cliqué. */
+function moi() {
+  return String(store.user?.id ?? "").trim();
+}
+
+/**
+ * La liste : la barre, l'en-tête, le tableau.
+ *
+ * **C'est le tableau de l'écran qui traverse les projets**, moins sa colonne.
+ * Cet onglet avait sa propre liste, ses propres classes et son propre filtre à
+ * deux onglets : les deux disaient la même chose de deux façons, et la moindre
+ * retouche demandait deux calages (règle 10).
+ *
+ * **Ne pas savoir n'est pas « aucune ».** Tant qu'on lit — ou quand la base n'a
+ * pas répondu —, on passe `null` au tableau : il dit qu'il charge, plutôt que
+ * de rendre une liste vide qui ferait croire qu'il n'y en a pas (règle 5).
+ */
+function renderListeHtml() {
+  const lues = view.loading || view.unreachable ? null : (view.propositions ?? []);
+  const champs = champsDeLEcran();
+  const qui = moi();
+
+  const { ignores } = Array.isArray(lues)
+    ? propositionsFiltrees({ propositions: lues, requete: view.requete, champs, moi: qui })
+    : { ignores: [] };
+
+  const tete = teteDesPropositions({
+    propositions: lues, champs, requete: view.requete, moi: qui,
+    cherchesDesFiltres: view.cherchesDesFiltres,
+    gestes: GESTES, tri: view.tri, prefixe: "propositions-projet"
+  });
+
+  return `
+    <section class="project-simple-page project-simple-page--propositions">
+      <div class="propositions-shell">
+        ${view.unreachable
+          ? `<div class="settings-inline-error">Les propositions n'ont pas pu être lues. `
+            + `Le projet est peut-être injoignable : rien n'est perdu, réessayez en `
+            + `rechargeant la page.</div>`
+          : ""}
+        ${renderBarreDeRequeteHtml({
+          nom: "propositions",
+          requete: view.requete,
+          champs,
+          epingler: false,
+          suggestions: false,
+          placeholder: "Chercher une proposition — un mot du titre, auteur:moi, statut:fusionnée…",
+          etiquette: "Chercher une proposition",
+          phraseDesIgnores: phraseDesIgnores(ignores)
+        })}
+        ${renderTableauDesPropositionsHtml({
+          propositions: lues,
+          requete: view.requete,
+          champs,
+          moi: qui,
+          tri: view.tri,
+          auteurs: auteursParCompte(view.personnes),
+          // Un seul projet : la colonne n'aurait qu'une valeur, répétée à
+          // chaque ligne.
+          avecLeProjet: false,
+          // **La revue remplace la liste, sans changer d'adresse.** Le titre est
+          // donc un bouton, et c'est l'écran qui sait quoi en faire.
+          surPlace: true,
+          statutHtml: tete.statutHtml,
+          triHtml: tete.triHtml,
+          filtresHtml: tete.filtresHtml,
+          pagination: { currentPage: view.page }
+        })}
+      </div>
+    </section>
+  `;
+}
+
+/**
+ * Ce que la tête du tableau demande.
+ *
+ * L'écoute est posée une fois pour toutes : `quandOnClique` écoute le document
+ * et range ce qu'on lui déclare dans une table à lui.
+ */
+function ecouterLaTete() {
+  quandOnClique(GESTES.etat, (valeur) => {
+    if (!mountedRoot) return;
+    // **Le clic écrit dans la barre**, il ne tient pas de case : il n'y a qu'un
+    // seul état filtrant, et c'est la requête (règle 4).
+    view.requete = requeteAvecLEtat(view.requete, champsDeLEcran(), valeur);
+    view.page = 1;
+    renderContent(mountedRoot);
+  });
+
+  quandOnClique(GESTES.tri, (valeur) => {
+    if (!mountedRoot) return;
+    view.tri = valeur === TRI.PROJET || valeur === TRI.DERNIERE_ACTIVITE
+      ? normaliserLeTri(valeur)
+      : triSuivant(view.tri);
+    view.page = 1;
+    renderContent(mountedRoot);
+  });
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -8282,6 +8313,7 @@ export function renderProjectPropositions(root, { ouvrir = "" } = {}) {
   view.open = null;
   view.review = null;
   mountedRoot = root;
+  ecouterLaTete();
   bindTabReset();
   clearProjectActiveScrollSource();
   setTopCompact(false);
@@ -8300,6 +8332,14 @@ export function renderProjectPropositions(root, { ouvrir = "" } = {}) {
 
       const projectId = await resolveCurrentBackendProjectId().catch(() => "");
       const rows = projectId ? await listPropositions(projectId) : [];
+
+      // **Les personnes vont avec.** Sans elles, ni « auteur » ni « décidée
+      // par » ne se déclarent — deux filtres disparaissent sans un mot, et la
+      // ligne ne sait nommer personne : elle disait « un collaborateur ».
+      if (projectId) {
+        const { chargerLesPersonnesDesChantiers } = await import("../services/profile-supabase-sync.js");
+        view.personnes = await chargerLesPersonnesDesChantiers([projectId]).catch(() => []);
+      }
 
       // De quoi citer, chargé une fois pour l'onglet : les sujets comme les
       // propositions, sans dépendre de ce qu'un autre écran aurait laissé.
