@@ -32,7 +32,7 @@ const porte = lire("./copilote-conversations-supabase.js");
 const service = lire("./copilote-service.js");
 const ecran = lire("../views/studio/copilote/copilote.js");
 const fonction = lire("../../../../supabase/functions/project-copilot/index.ts");
-const migration = lire("../../../../supabase/migrations/202610050001_copilot_conversations_sans_projet.sql");
+const migration = lire("../../../../supabase/migrations/202610110001_copilot_conversations_sans_projet.sql");
 
 /* ── La lecture en base ──────────────────────────────────────────────────── */
 

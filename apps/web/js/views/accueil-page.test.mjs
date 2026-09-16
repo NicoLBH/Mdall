@@ -22,6 +22,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 import {
   ACTUALITES, AUCUN_PROJET, GESTES_DE_LACCUEIL, TOP_PROJETS,
@@ -269,4 +270,39 @@ test("replié, le rail passe à la largeur des icônes seules", () => {
 
   assert.match(html, /--project-rail-width:66px/);
   assert.match(html, /project-rail-layout--collapsed/);
+});
+
+/* ── Le geste qui ouvre le Copilote ──────────────────────────────────────── */
+
+/**
+ * **Entrée envoie, la frappe n'envoie pas.**
+ *
+ * Une première version basculait dès la première lettre : l'écran changeait
+ * pendant qu'on écrivait, la page sautait sous le curseur, et l'on ne pouvait
+ * plus se raviser. C'est un défaut qu'aucune exécution ne montre ici —
+ * l'écran parle à la base et ne s'importe pas — et qu'aucune erreur ne lève :
+ * il se voit en tapant, une fois livré.
+ *
+ * On lit donc la source pour **une** chose : que ce soit la touche Entrée qui
+ * navigue, et non la saisie.
+ */
+test("la bascule se fait sur Entrée, jamais à la frappe", async () => {
+  const source = await readFile(new URL("./global-dashboard.js", import.meta.url), "utf8");
+
+  const surLaFrappe = source.slice(
+    source.indexOf('saisie?.addEventListener("input"'),
+    source.indexOf('saisie?.addEventListener("keydown"')
+  );
+  assert.ok(surLaFrappe, "l'écoute de la saisie");
+  assert.doesNotMatch(surLaFrappe, /envoyer\(|location\.hash/, "elle ne fait que retenir le brouillon");
+
+  const surEntree = source.slice(source.indexOf('saisie?.addEventListener("keydown"'));
+  // Maj+Entrée passe à la ligne : c'est la convention du Copilote, et deux
+  // conventions pour une même saisie font perdre un paragraphe à qui en change.
+  assert.match(surEntree.slice(0, 400), /evenement\.key !== "Enter" \|\| evenement\.shiftKey/);
+  assert.match(surEntree.slice(0, 400), /envoyer\(saisie\.value\)/);
+
+  // Et une question vide n'ouvre rien : on se retrouverait ailleurs sans savoir
+  // pourquoi.
+  assert.match(source, /function envoyer\(question\) \{[\s\S]{0,400}if \(!String\(question \?\? ""\)\.trim\(\)\) return;/);
 });
