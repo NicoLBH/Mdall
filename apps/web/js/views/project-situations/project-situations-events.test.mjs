@@ -19,6 +19,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 import { createProjectSituationsEvents } from "./project-situations-events.js";
 import { champsDesSujets } from "../../services/champs-des-sujets.js";
@@ -34,6 +35,8 @@ const MA_SITUATION = {
 /** Les portes sont fausses et comptées : on voit ce qui est appelé. */
 function gestes({ situations = [MA_SITUATION], creation = { id: "neuve" }, reprise = "" } = {}) {
   const appels = [];
+  /** Ce qui part réellement en base — le nom ne dit pas si la requête a suivi. */
+  const charges = [];
   const store = {
     currentProjectId: null,
     user: { id: MOI },
@@ -49,6 +52,7 @@ function gestes({ situations = [MA_SITUATION], creation = { id: "neuve" }, repri
     refreshSituationsData: async () => appels.push("refresh"),
     createSituationRecord: async (charge) => {
       appels.push(`creer:${charge.title}`);
+      charges.push(charge);
       return creation;
     },
     updateSituationRecord: async (id, charge) => {
@@ -67,7 +71,7 @@ function gestes({ situations = [MA_SITUATION], creation = { id: "neuve" }, repri
     loadSituationInsightsData: async () => ({})
   });
 
-  return { portes, appels, store, uiState };
+  return { portes, appels, charges, store, uiState };
 }
 
 /* ── Cliquer une entrée du rail ──────────────────────────────────────────── */
@@ -153,14 +157,28 @@ test("une situation qui porte un nom déjà pris est refusée", async () => {
   assert.ok(uiState.situationEnCours, "et ce qu'on a écrit reste");
 });
 
-/** Une requête vide ne s'enregistre pas : elle ne montrerait rien. */
-test("une situation sans requête est refusée", async () => {
-  const { portes, uiState } = gestes();
-  uiState.situationEnCours = { ...compositionNeuve(), nom: "Sans rien" };
+/**
+ * **Une situation sans requête s'écrit, et c'est tout l'intérêt.**
+ *
+ * Elle se remplit à la main : on y met les sujets un par un, depuis l'onglet
+ * Sujets de leur projet, et la base sait déjà les lire (`situation_subjects`,
+ * que le mode « manuelle » consulte). Le formulaire la refusait, si bien qu'il
+ * n'y avait aucun moyen d'en créer une.
+ *
+ * Le test regarde **ce qui est écrit**, et non le seul refus : c'est la requête
+ * vide qui doit arriver jusqu'à la base, et un refus levé sans écriture n'aurait
+ * rien réparé.
+ */
+test("une situation sans requête s'enregistre, la requête vide", async () => {
+  const { portes, uiState, charges } = gestes();
+  uiState.situationEnCours = { ...compositionNeuve(), nom: "À la main" };
 
   await portes.enregistrerLaComposition({});
 
-  assert.equal(uiState.situationEnCoursErreur, "sans_requete");
+  assert.equal(uiState.situationEnCoursErreur, "");
+  assert.equal(charges.length, 1, "elle part en base");
+  assert.equal(charges[0].title, "À la main");
+  assert.equal(charges[0].requete, "", "et sans requête");
 });
 
 /* ── Épingler, et effacer ────────────────────────────────────────────────── */
@@ -284,4 +302,48 @@ test("le menu se referme quand on reprend", async () => {
   await monte.portes.reprendreLaSienne({}, "s-avant");
 
   assert.equal(monte.uiState.menuDeLaSituation, "");
+});
+
+/* ── Le seul garde-fou qui lise la source, et pourquoi ────────────────────── */
+
+/**
+ * **Un écouteur absent est le défaut qu'une lecture de source voit, et elle
+ * seule ici.**
+ *
+ * `bindEvents` demande un document, et il n'y en a pas dans ces tests. Le
+ * défaut que ce garde-fou couvre est précis et muet : les entrées des menus de
+ * filtre du formulaire portent `data-sujets-lecture`, **exactement comme celles
+ * du rail** — et le rail change d'écran au clic. Sans l'arrêt en tête de
+ * l'écoute du rail, cliquer un label referme la situation qu'on écrivait et
+ * affiche la liste à la place. Rien ne lève, rien ne se voit en test.
+ *
+ * On lit donc la source pour **une** chose : que l'arrêt soit là, et qu'il soit
+ * bien le premier geste de cette écoute. Le repère qu'il cherche, lui, ne peut
+ * pas diverger — il vit à un seul endroit, `BLOC_DES_FILTRES`, et le rendu
+ * comme l'écoute le prennent de là.
+ */
+test("l'écoute du rail s'arrête sur les menus du formulaire", async () => {
+  const source = await readFile(
+    new URL("./project-situations-events.js", import.meta.url), "utf8"
+  );
+
+  const ecoute = source.slice(source.indexOf('root.querySelectorAll("[data-sujets-lecture]")'));
+  const arret = ecoute.indexOf("if (dansUnBlocDeFiltres(entree)) return;");
+  const navigation = ecoute.indexOf("uiState.situationEnCours = null;");
+
+  assert.notEqual(arret, -1, "l'arrêt est là");
+  assert.ok(arret < navigation, "et avant que l'écran ne change");
+});
+
+/** Et les menus du formulaire sont branchés : sans cela, aucun ne s'ouvre. */
+test("les menus de filtre du formulaire sont branchés", async () => {
+  const source = await readFile(
+    new URL("./project-situations-events.js", import.meta.url), "utf8"
+  );
+
+  assert.match(source, /brancherLesFiltresDuFormulaire\(root\);/, "l'écoute est posée");
+  assert.match(
+    source, /basculerUnMenuDenTete\(root, String\(bouton\.getAttribute\("data-sujets-menu"\)/,
+    "le bouton ouvre son menu"
+  );
 });

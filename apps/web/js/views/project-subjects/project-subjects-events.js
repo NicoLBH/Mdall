@@ -28,6 +28,9 @@ import { renderSubjectAttachmentTile, renderSubjectAttachmentsPreviewList } from
 import { isMetaDropdownOpenForAnchor } from "../ui/select-dropdown-controller.js";
 import { mountHandwritingComposerOverlay } from "../ui/handwriting-composer-overlay.js";
 import { quandOnClique } from "../ui/tete-de-tableau.js";
+import {
+  basculerUnMenuDenTete, fermerLesMenusDenTete, ouvrirUnMenuDenTete
+} from "../ui/menus-den-tete.js";
 import { TRI, normaliserLeTri, triSuivant } from "../../services/tri-des-sujets.js";
 
 export function createProjectSubjectsEvents(config) {
@@ -5817,12 +5820,7 @@ export function createProjectSubjectsEvents(config) {
     poserLaRechercheDuFiltreDansLEtat(nom, dit);
     rerenderPanels();
 
-    if (nomDuMenu) {
-      const remisMenu = racine?.querySelector?.(`[data-sujets-menu-liste="${nomDuMenu}"]`);
-      const remisBouton = racine?.querySelector?.(`[data-sujets-menu="${nomDuMenu}"]`);
-      remisMenu?.classList?.add("gh-menu--open");
-      remisBouton?.setAttribute("aria-expanded", "true");
-    }
+    if (nomDuMenu) ouvrirUnMenuDenTete(racine, nomDuMenu);
 
     const remis = racine?.querySelector?.(`[data-sujets-filtre-recherche="${nom}"]`);
     if (!remis) return;
@@ -5922,33 +5920,11 @@ export function createProjectSubjectsEvents(config) {
   /**
    * Ouvrir ou fermer un menu de filtre de l'en-tête.
    *
-   * **Un seul ouvert à la fois** : deux listes superposées se recouvrent, et
-   * l'on clique dans celle qu'on ne regarde pas.
+   * **Les six lignes vivaient ici, et l'écran des situations en avait besoin.**
+   * Elles sont dans `menus-den-tete.js`, avec le reste de ce qui est partagé
+   * entre les deux tableaux — les recopier aurait fait deux ouvertures qui se
+   * ressemblent assez pour qu'on les croie identiques (règle 10).
    */
-  function basculerUnMenuDenTete(root, cle) {
-    const id = String(cle || "").trim();
-    if (!id) return;
-
-    const bouton = root.querySelector(`[data-sujets-menu="${id}"]`);
-    const liste = root.querySelector(`[data-sujets-menu-liste="${id}"]`);
-    if (!bouton || !liste) return;
-
-    const ouvert = liste.classList.contains("gh-menu--open");
-    fermerLesMenusDenTete(root);
-    if (ouvert) return;
-
-    liste.classList.add("gh-menu--open");
-    bouton.setAttribute("aria-expanded", "true");
-  }
-
-  function fermerLesMenusDenTete(root) {
-    root.querySelectorAll?.("[data-sujets-menu-liste]").forEach((liste) => {
-      liste.classList.remove("gh-menu--open");
-    });
-    root.querySelectorAll?.("[data-sujets-menu]").forEach((bouton) => {
-      bouton.setAttribute("aria-expanded", "false");
-    });
-  }
 
   function ecouterLaBarreDesSujets(root) {
     root.addEventListener("mousedown", (event) => {

@@ -44,19 +44,52 @@ import { estUneLecture } from "../../services/lectures-du-carnet.js";
  * cellules et sa pastille de statut, au même calibrage.
  */
 export function renderTableauDesSujetsRetenusHtml({
-  sujets = null, nomsDesProjets = {}, requete = ""
+  sujets = null, nomsDesProjets = {}, requete = "",
+  /**
+   * Les menus de filtre, au-dessus de la colonne des sujets.
+   *
+   * **Sans eux, il fallait connaître la grammaire pour écrire une requête.**
+   * On tapait un mot, rien ne répondait, et rien ne disait ce qu'on aurait pu
+   * demander. Ce sont les mêmes menus que l'en-tête du tableau des sujets d'un
+   * projet : ils posent un jeton dans la requête, et la requête reste lisible
+   * et corrigeable au clavier.
+   */
+  filtresHtml = "",
+  /**
+   * Une situation qui se remplit à la main n'a pas de requête, et ne retient
+   * donc **rien pour l'instant** — surtout pas tout. Montrer les six cent
+   * quatre-vingt-dix-huit sujets du carnet ferait croire qu'elle les prend.
+   */
+  aLaMain = false
 } = {}) {
   const dite = String(requete ?? "").trim();
   const noms = nomsDesProjets && typeof nomsDesProjets === "object" ? nomsDesProjets : {};
   const lus = Array.isArray(sujets) ? sujets : null;
   const combien = lus ? lus.length : 0;
 
+  const compte = lus ? `${combien} sujet${combien > 1 ? "s" : ""}` : "Sujets";
   const headHtml = renderDataTableHead({
     columns: [
-      { className: "cell cell-theme", label: lus ? `${combien} sujet${combien > 1 ? "s" : ""}` : "Sujets" },
+      {
+        className: "cell cell-theme",
+        html: `<span class="situations-sujets-tete">
+          <span class="situations-sujets-tete__compte">${escapeHtml(compte)}</span>
+          ${filtresHtml}
+        </span>`
+      },
       { className: "cell", label: "Chantier" }
     ]
   });
+
+  if (aLaMain) {
+    return renderIssuesTable({
+      gridTemplate: TABLEAU_DES_SUJETS_RETENUS,
+      headHtml,
+      emptyTitle: "Cette situation se remplit à la main",
+      emptyDescription: "Aucune requête : vous y mettrez les sujets un par un, "
+        + "depuis l'onglet Sujets de leur projet."
+    });
+  }
 
   if (!lus) {
     return renderIssuesTable({
@@ -269,7 +302,11 @@ export function createProjectSituationsTable({
           vue: situationCommeUneEpingle(situation),
           ouvert,
           mot: MOT_DE_LA_SITUATION,
-          gestes
+          gestes,
+          // **Le menu dit pourquoi il est court.** Sans épingler ni supprimer,
+          // et sans un mot, on le lit comme un défaut d'affichage — et l'on
+          // cherche la panne ailleurs.
+          note: pourquoiPasModifiable(situation)
         })}
       </div>
     `;

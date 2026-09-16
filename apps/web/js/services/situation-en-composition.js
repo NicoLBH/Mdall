@@ -71,9 +71,14 @@ export function compositionNeuve() {
 /**
  * Ce qui empêche d'enregistrer cette situation, ou `""`.
  *
- * **C'est le refus d'une vue**, appliqué à des situations : une requête vide ne
- * montrerait rien, un nom vide ne se retrouve pas dans le rail, et deux
- * situations du même nom ne s'y distinguent plus.
+ * **C'est le refus d'une vue**, appliqué à des situations : un nom vide ne se
+ * retrouve pas dans le rail, et deux situations du même nom ne s'y distinguent
+ * plus.
+ *
+ * **Sauf un.** Une vue sans recherche ne montrerait rien, et se refuse ; une
+ * situation sans recherche se remplit à la main, et s'enregistre. C'est la
+ * seule règle des vues qui ne vaut pas ici, et elle se dit à voix haute plutôt
+ * que de se deviner.
  *
  * Les lectures du rail comptent parmi les homonymes possibles : « Assigné à
  * moi » n'est pas en base, mais elle occupe le rail, et une situation qui
@@ -86,6 +91,14 @@ export function compositionNeuve() {
  */
 export function refusDeLaComposition({ composition = {}, situations = [], lectures = [] } = {}) {
   return refusDeLaVue({
+    // **Une situation sans requête s'enregistre**, et c'est le seul refus des
+    // vues qui ne vaut pas ici. Une vue *est* une recherche nommée ; une
+    // situation est un endroit où l'on range des sujets, et la requête n'est
+    // qu'une façon — commode, et pas la seule — de dire lesquels. Celle qu'on
+    // remplit à la main les reçoit un par un, depuis l'onglet Sujets de leur
+    // projet, et c'est la porte que la base tient ouverte depuis toujours :
+    // `situation_subjects`, qu'une situation « manuelle » lit déjà.
+    requeteObligatoire: false,
     requete: composition.requete,
     nom: composition.nom,
     id: texte(composition.id),
@@ -124,10 +137,12 @@ export function statutDe(valeur) {
  * elle n'aboutit pas. Ce module ne la referait pas mieux : il prend ce qu'on
  * lui donne, et **rien quand on ne lui donne rien**.
  *
- * Une requête vide est refusée à l'enregistrement. C'est voulu : mieux vaut
- * empêcher d'enregistrer que laisser remplacer un filtre par une requête qui
- * n'en dirait pas autant, ce qui changerait le contenu d'une liste que
- * quelqu'un regarde tous les jours.
+ * **Une situation d'avant rouverte sans sa requête devient une situation qu'on
+ * remplit à la main**, et c'est ce qu'il faut regarder avant d'enregistrer :
+ * son ancien filtre ne s'appliquera plus. Le formulaire le montre — le tableau
+ * dessous dit « cette situation se remplit à la main » au lieu de lister ce
+ * qu'elle retenait —, et c'est une chose qu'on voit plutôt qu'un refus qu'on
+ * subit.
  */
 export function compositionDepuisLaSituation(situation = null, { requete = "" } = {}) {
   return {

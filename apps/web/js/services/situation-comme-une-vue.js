@@ -60,6 +60,44 @@ export function requeteDeLaSituation(situation = null) {
 }
 
 /**
+ * Le repère d'une situation qui n'a pas de requête.
+ *
+ * ## Le défaut qu'il répare
+ *
+ * Le rail navigue **par requête** : chaque entrée porte celle qu'elle ouvre, et
+ * l'écran retrouve la situation qui la porte. Une situation qu'on remplit à la
+ * main n'en a pas — c'est sa définition. Épinglée, elle disparaissait donc du
+ * rail sans un mot : `epinglesDuRail` écarte ce qui n'a pas de requête, et l'on
+ * cliquait « épingler » pour que rien ne se passe.
+ *
+ * ## Ce n'est pas une requête, et ça ne doit pas pouvoir en devenir une
+ *
+ * Le repère commence par un dièse, que la grammaire des sujets n'emploie nulle
+ * part : elle ne peut donc jamais le produire, et l'écran des Sujets, qui
+ * n'épingle que des vues, n'en fabrique aucun. Il se lit à un seul endroit —
+ * le clic d'une entrée du rail du carnet — qui ouvre la situation par son
+ * identifiant au lieu de chercher qui porte cette recherche.
+ */
+export const REPERE_DUNE_SITUATION = "#situation:";
+
+/** Le repère de cette situation, ou `""` si on ne sait pas l'identifier. */
+export function repereDeLaSituation(situation = null) {
+  const sien = texte(situation?.id);
+  return sien ? `${REPERE_DUNE_SITUATION}${sien}` : "";
+}
+
+/**
+ * L'identifiant que ce repère désigne, ou `""` si ce n'en est pas un.
+ *
+ * `""` plutôt qu'une exception : ce qui arrive ici est le plus souvent une
+ * vraie requête, et ce n'est pas une erreur.
+ */
+export function situationDuRepere(valeur = "") {
+  const dit = texte(valeur);
+  return dit.startsWith(REPERE_DUNE_SITUATION) ? dit.slice(REPERE_DUNE_SITUATION.length) : "";
+}
+
+/**
  * Cette situation dit-elle déjà ce qu'elle retient par une requête ?
  *
  * La question se pose avant de lire `filter_definition` : les deux ne doivent
@@ -112,7 +150,11 @@ export function situationCommeUneEpingle(situation = null) {
     titre: texte(situation?.title) || "Situation",
     icone: iconeDeLaSituation(situation),
     couleur: couleurDeLaSituation(situation).cle,
-    requete: requeteDeLaSituation(situation),
+    // **Sans requête, son repère** : une situation qu'on remplit à la main n'a
+    // pas de recherche à porter, et le rail écarte ce qui n'a rien à ouvrir.
+    // Elle disparaissait donc de la barre de gauche au moment même où l'on
+    // venait de l'y mettre.
+    requete: requeteDeLaSituation(situation) || repereDeLaSituation(situation),
     auRail: situation?.au_rail === true || situation?.auRail === true
   };
 }

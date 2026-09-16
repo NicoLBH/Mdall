@@ -481,3 +481,85 @@ qu'est une situation.
 
 **D'effacer `filter_definition` tout de suite.** Il porte ce que des situations
 retiennent aujourd'hui. On le remplace, on ne le perd pas.
+
+---
+
+## 5. Ce que l'usage a montré après coup
+
+Le plan ci-dessus est fait. Ce qui suit n'en est pas une étape de plus : ce sont
+trois choses que seul l'usage montre, et qu'on écrit ici parce qu'elles
+corrigent des promesses des étapes précédentes.
+
+### Le contenu se collait au rail
+
+Le rail est en position fixe et le contenu s'en écarte d'une marge exacte : il
+commençait donc **au pixel où le rail finit**, sans un blanc entre les deux.
+L'onglet Sujets d'un projet ne connaît pas ce défaut parce qu'il pose son rail
+dans `page-large` — le cadre de l'application, borné à 1400 px et rempli de
+16 px. Le carnet ne l'employait pas. Il l'emploie : **aucune largeur nouvelle**,
+et la gouttière suit partout où ce cadre sert déjà.
+
+### Le formulaire demandait une requête sans dire la grammaire
+
+On écrivait « fondations », le tableau rendait zéro, et rien à l'écran
+n'indiquait qu'il fallait `label:` ou `projet:` — ni quelles valeurs existaient.
+Une recherche qui ne rend rien sans dire pourquoi se lit comme une panne.
+
+Les menus de filtre de l'en-tête sont désormais **au-dessus du tableau du
+formulaire**, et ce sont ceux de l'onglet Sujets : même dessin, mêmes attributs,
+même coche, même recherche dedans. Chaque entrée porte la **requête complète**
+qu'elle produirait ; le clic la recopie dans la barre, qui reste l'endroit où la
+requête se lit et se corrige au clavier.
+
+Deux choses ont été mutualisées pour que cela ne fasse pas une seconde version :
+
+- `views/ui/menus-den-tete.js` — ouvrir, rouvrir après un redessin, fermer. Les
+  six lignes vivaient dans l'écran des Sujets ; l'écran des situations en avait
+  besoin, et les recopier aurait fait deux ouvertures qui divergent au premier
+  réglage (règle 10).
+- `BLOC_DES_FILTRES` — le repère du bloc. Les entrées portent
+  `data-sujets-lecture`, **exactement comme celles du rail**, et le rail change
+  d'écran au clic : sans ce repère, cliquer un label refermait la situation
+  qu'on écrivait. Le nom vit à un seul endroit, que le rendu et l'écoute
+  prennent tous deux de là.
+
+### Le kebab était court, et ne disait pas pourquoi
+
+Toutes les situations d'aujourd'hui datent d'avant le cloisonnement :
+`owner_id` y est nul, la base refuse de les réécrire, et le menu n'offre donc
+que « Reprendre cette situation ». On l'ouvrait, on n'y trouvait ni épingler ni
+supprimer, et **rien ne disait qu'ils reviendraient une fois la situation
+reprise** : un menu amputé sans un mot se lit comme un défaut d'affichage, et
+l'on cherche la panne dans le code.
+
+Le menu porte donc la phrase que le badge portait déjà en infobulle, prise au
+même endroit qu'elle — elle nomme l'empêchement **et la suite**, parce qu'un
+refus qui ne dit pas quoi faire laisse devant un bouton gris.
+
+### Une situation sans requête se remplit à la main
+
+C'est le seul refus des vues qui ne vaut pas pour une situation. Une vue **est**
+une recherche nommée ; une situation est un endroit où l'on range des sujets, et
+la requête n'est qu'une façon — commode, et pas la seule — de dire lesquels.
+
+La base tient cette porte ouverte depuis toujours : `situation_subjects`, que le
+mode « manuelle » consulte, et que `loadSubjectsForSituation` lit déjà. Ce qui
+manquait était **au-dessus** : le formulaire refusait d'enregistrer, et il n'y
+avait donc aucun moyen d'en créer une. Trois conséquences :
+
+- `refusDeLaVue` reçoit `requeteObligatoire`. Une vue l'exige, une situation
+  non — et le refus se dit à voix haute plutôt que de se deviner.
+- Le champ perd son étoile et gagne une phrase : *laissez-la vide pour y mettre
+  les sujets un par un*. Un champ sans étoile, muet, se lit comme un oubli.
+- Le tableau dessous **ne montre pas tout**. Une requête vide retient le carnet
+  entier ; l'afficher ferait enregistrer une situation de six cent
+  quatre-vingt-dix-huit sujets en croyant en faire une vide (règle 5). Il dit ce
+  qu'elle est et comment on la remplira.
+
+Une dernière conséquence, moins visible : `epinglesDuRail` écarte ce qui n'a pas
+de requête — une entrée muette ne ferait rien au clic —, si bien qu'une
+situation qu'on remplit à la main **disparaissait du rail au moment même où l'on
+venait de l'y mettre**. Elle y entre par son repère, `#situation:<id>` : un
+dièse, que la grammaire des sujets n'emploie nulle part et ne peut donc jamais
+produire. Il se lit à un seul endroit, le clic d'une entrée du rail du carnet,
+qui ouvre la situation par son identifiant.

@@ -7,13 +7,15 @@ import { renderSvgLineChart } from "../../utils/svg-line-chart.js";
 import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
 import { NOM_DU_CARNET } from "../../services/mon-carnet.js";
 import {
-  renderFormulaireDeVueHtml, renderRailDesSujetsHtml
+  renderFiltreDenTeteHtml, renderFormulaireDeVueHtml, renderRailDesSujetsHtml
 } from "../project-subjects/project-subjects-recherche.js";
+import { filterValuesOf, toggleFilter, withFilter } from "../../services/query-bar.js";
 import { MOT_DE_LA_SITUATION, STATUT, statutDe } from "../../services/situation-en-composition.js";
 import { laLectureDoublee } from "../../services/vues-des-sujets.js";
 import { sujetsFiltres } from "../../services/champs-des-sujets.js";
 import { renderTableauDesSujetsRetenusHtml } from "./project-situations-table.js";
 import { railWidth } from "../ui/project-rail.js";
+import { BLOC_DES_FILTRES } from "../ui/menus-den-tete.js";
 import { NOM_DES_SITUATIONS, estUneLecture, situationsDeLecture } from "../../services/lectures-du-carnet.js";
 import { situationCommeUneEpingle } from "../../services/situation-comme-une-vue.js";
 import { renderSituationGridView } from "./project-situations-view-grid.js";
@@ -410,6 +412,9 @@ export function createProjectSituationsView({
     return renderFormulaireDeVueHtml({
       vue: forme ?? {},
       mot: MOT_DE_LA_SITUATION,
+      // **Sans requête, la situation se remplit à la main.** L'étoile du champ
+      // disait le contraire, et l'enregistrement le refusait.
+      requeteObligatoire: false,
       champs,
       ignores,
       refus: String(uiState.situationEnCoursErreur || ""),
@@ -423,9 +428,86 @@ export function createProjectSituationsView({
       tableauHtml: `<div class="project-table-host">${renderTableauDesSujetsRetenusHtml({
         sujets: sujetsQueRetient(requete),
         nomsDesProjets: store.situationsView?.nomsDesProjets ?? {},
-        requete
+        requete,
+        filtresHtml: renderFiltresDeLaComposition({ requete, champs }),
+        // Sans requête, la situation ne retient pas « tout » : elle retiendra
+        // les sujets qu'on y mettra un par un, et le tableau le dit plutôt que
+        // de montrer les six cent quatre-vingt-dix-huit sujets du carnet.
+        aLaMain: !requete
       })}</div>`
     });
+  }
+
+  /**
+   * Les menus de filtre, au-dessus de la colonne des sujets du formulaire.
+   *
+   * ## Le défaut qu'ils réparent
+   *
+   * Le formulaire demandait une requête et ne disait pas un mot de la grammaire
+   * qui la lit. On tapait « fondations », le tableau rendait zéro, et rien à
+   * l'écran n'indiquait qu'il fallait écrire `label:...` ou `projet:...` — ni
+   * quelles valeurs existaient. Une recherche qui ne rend rien sans dire
+   * pourquoi se lit comme une panne.
+   *
+   * ## Ce sont les mêmes menus que l'onglet Sujets d'un projet
+   *
+   * `renderFiltreDenTeteHtml`, aux mêmes attributs, à la même coche, avec la
+   * même recherche dedans. Chaque entrée porte **la requête complète** qu'elle
+   * produirait : le clic la recopie dans la barre, et la barre reste lisible et
+   * corrigeable au clavier. Les menus n'ont donc aucun état à eux et ne peuvent
+   * pas contredire ce qui est écrit.
+   *
+   * ## L'ordre est celui de la question qu'on se pose ici
+   *
+   * Le carnet traverse les chantiers : « sur quel chantier » vient donc en
+   * premier, alors que sur l'écran d'un projet le champ n'existe même pas — il
+   * n'aurait qu'une valeur et ne retirerait jamais rien. Un champ absent rend
+   * `""` : la liste se donne une fois pour les deux écrans.
+   *
+   * ## Le conteneur est nommé, et ce n'est pas décoratif
+   *
+   * Les entrées portent `data-sujets-lecture`, comme celles du rail — et le
+   * rail, lui, **change d'écran** au clic. Sans un repère qui dise « ceci est
+   * dans le formulaire », cliquer un label aurait refermé la situation qu'on
+   * était en train d'écrire. Le repère est `BLOC_DES_FILTRES`, écrit là où
+   * l'écoute le cherche : recopié ici, il se serait renommé d'un seul côté.
+   */
+  function renderFiltresDeLaComposition({ requete = "", champs = [] } = {}) {
+    const menus = ["projet", "statut", "label", "assigné", "auteur"]
+      .map((cle) => {
+        const champ = (Array.isArray(champs) ? champs : [])
+          .find((candidat) => candidat?.key === cle);
+        if (!champ) return "";
+
+        return renderFiltreDenTeteHtml({
+          // La clé sert de nom au menu : sans accent ni espace, parce qu'elle
+          // entre dans un sélecteur d'attribut.
+          id: `situation-${cle.normalize("NFD").replace(/[^a-z]/gi, "")}`,
+          champ,
+          requete,
+          // **Toutes les valeurs cochées, et non la première.** Le menu est à
+          // choix multiple ; n'en montrer qu'une ferait décocher sans le vouloir.
+          enCours: filterValuesOf(requete, champs, cle),
+          cherche: chercheDunFiltre(cle),
+          // Cliquer une valeur l'ajoute, la recliquer la retire — et « vider »
+          // efface le champ. Sur un champ à choix simple, `toggleFilter`
+          // remplace au lieu d'empiler : c'est le service qui le sait.
+          poser: (valeur) => (valeur
+            ? toggleFilter(requete, champs, cle, valeur)
+            : withFilter(requete, champs, cle, ""))
+        });
+      })
+      .join("");
+
+    return menus
+      ? `<span class="situations-sujets-tete__filtres" ${BLOC_DES_FILTRES}>${menus}</span>`
+      : "";
+  }
+
+  /** Ce qui est tapé dans le champ de recherche d'un menu de filtre. */
+  function chercheDunFiltre(cle) {
+    const cherches = uiState.chercheDansLesFiltres;
+    return String((cherches && typeof cherches === "object" ? cherches[cle] : "") || "");
   }
 
   /**
@@ -568,6 +650,16 @@ export function createProjectSituationsView({
       <section class="project-simple-page project-simple-page--settings project-simple-page--situations${hasSelectedSituation ? " project-simple-page--situation-view" : ""}"
         style="--project-rail-width:${largeurDuRail}px">
         <div class="project-simple-scroll${hasSelectedSituation ? ` project-simple-scroll--situation-view project-simple-scroll--situation-${layoutClassSuffix}` : ""}" id="projectSituationsScroll">
+          ${/*
+            **La gouttière est celle de l'écran des Sujets, et c'est la même
+            classe.** Le contenu s'écarte du rail par une marge, et la marge
+            colle : le tableau et le formulaire commençaient au pixel où le rail
+            finit, sans un blanc entre les deux. `page-large` est le cadre que
+            les autres écrans emploient déjà — une largeur bornée, un
+            remplissage de 16 px, centré. En poser un ici de plus aurait fait
+            une neuvième largeur à recalibrer au prochain écran.
+          */""}
+          <div class="page-large">
           <div class="project-rail-layout${railReplie() ? " project-rail-layout--collapsed" : ""}">
           ${renderRailDuCarnet()}
           <div class="project-rail-layout__content settings-content project-page-shell project-page-shell--content${hasSelectedSituation ? ` project-page-shell--situation-view project-page-shell--situation-${layoutClassSuffix}` : ""}">
@@ -596,6 +688,7 @@ export function createProjectSituationsView({
                   ${renderSituationsTable()}
                 </section>
               `}
+          </div>
           </div>
           </div>
         </div>

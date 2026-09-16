@@ -6,7 +6,8 @@ import {
   iconeDeLaSituation,
   requeteDeLaSituation,
   seDitParUneRequete,
-  situationCommeUneEpingle
+  situationCommeUneEpingle,
+  situationDuRepere
 } from "./situation-comme-une-vue.js";
 import { COULEURS_DE_VUE, ICONES_DE_VUE } from "./vues-des-sujets.js";
 import { epinglesDuRail } from "./rail-des-sujets.js";
@@ -120,16 +121,52 @@ test("celle qu'on ne regarde pas ne s'allume pas", () => {
 });
 
 /**
- * **Une situation sans requête n'entre pas au rail**, et c'est juste : une
- * entrée du rail pose une requête, et une entrée muette ne ferait rien au clic.
- * C'est le cas des situations d'avant l'étape 4, qui portent un filtre et pas
- * encore de requête.
+ * **Une situation sans requête entre au rail par son repère.**
+ *
+ * `epinglesDuRail` écarte ce qui n'a rien à ouvrir — une entrée muette ne ferait
+ * rien au clic —, et c'était juste tant que toute situation portait une
+ * recherche. Celle qu'on remplit à la main n'en a pas : elle disparaissait donc
+ * du rail au moment même où l'on venait de l'y mettre, sans un mot.
+ *
+ * Le test **traverse** `epinglesDuRail` plutôt que de décrire la forme rendue :
+ * c'est ce défaut-là qu'une fixture qui recopie les hypothèses du code laisse
+ * passer, et il est déjà passé une fois.
  */
-test("une situation sans requête n'occupe pas le rail", () => {
-  assert.deepEqual(
-    epinglesDuRail([situationCommeUneEpingle({ id: "s-1", title: "Ma semaine", au_rail: true })], ""),
-    []
+test("une situation sans requête entre au rail par son repère", () => {
+  const posees = epinglesDuRail(
+    [situationCommeUneEpingle({ id: "s-1", title: "Ma semaine", au_rail: true })], ""
   );
+
+  assert.equal(posees.length, 1, "elle est dans le rail");
+  assert.equal(posees[0].nom, "Ma semaine");
+  assert.equal(
+    situationDuRepere(posees[0].requete), "s-1",
+    "et ce qu'elle porte ouvre cette situation-là"
+  );
+});
+
+/**
+ * **Le repère n'est pas une requête**, et rien ne doit pouvoir le confondre avec
+ * une. La grammaire des sujets n'emploie le dièse nulle part : ce que
+ * `situationDuRepere` rend sur une vraie requête est `""`, et non un
+ * identifiant inventé.
+ */
+test("une vraie requête n'est pas prise pour un repère", () => {
+  assert.equal(situationDuRepere("statut:ouvert label:cr-chantier"), "");
+  assert.equal(situationDuRepere("situation:s-1"), "", "même écrite sans le dièse");
+  assert.equal(situationDuRepere(""), "");
+});
+
+/** Une situation qui porte une requête garde la sienne : le repère ne la remplace pas. */
+test("une situation qui porte une requête entre au rail avec elle", () => {
+  const posees = epinglesDuRail(
+    [situationCommeUneEpingle({
+      id: "s-2", title: "Les bloqués", requete: "bloqué:oui", au_rail: true
+    })],
+    ""
+  );
+
+  assert.equal(posees[0].requete, "bloqué:oui");
 });
 
 /** Une situation sans titre se nomme quand même : une entrée muette ne se clique pas. */
