@@ -1758,36 +1758,13 @@ body.subject-create-subissue-modal-open #situationsDetailsHost{
   padding-top:20px;
   margin-left:20px;
 }
-.projects-page--listing .settings-layout--parametres .settings-content--parametres {
+/* **Le remplissage suit le contenu, et non la mise en page qui l'entourait.**
+   La liste des projets portait une colonne de navigation ordinaire, dans une
+   `settings-layout` ; elle porte maintenant le rail des autres écrans, qui est
+   en position fixe et n'a pas de grille autour de lui. Demander l'ancêtre
+   aurait fait perdre le remplissage sans qu'une ligne de CSS ne change. */
+.projects-page--listing .settings-content--parametres {
   padding:20px 3%;
-}
-
-.projects-layout{
-  grid-template-columns:296px minmax(0, 1fr);
-  gap:40px;
-  width:100%;
-  max-width:none;
-  align-items:start;
-}
-
-.projects-layout__nav{
-  width:296px;
-  position:sticky;
-  top:0;
-  align-self:start;
-}
-
-.projects-layout__nav-group{
-  padding-right:0;
-}
-
-.projects-layout__nav-item .side-nav-layout__icon{
-  color:var(--project-tabs-icon-color);
-}
-
-.projects-layout__nav-item.is-active .side-nav-layout__icon,
-.projects-layout__nav-item:hover .side-nav-layout__icon{
-  color:var(--text);
 }
 
 .projects-layout__content{
@@ -17325,7 +17302,8 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
  *
  * Écarter le contenu ne suffit pas pour ce cas-là : la marge règle la position
  * de départ, pas ce qui passe derrière quand on fait défiler. */
-.project-simple-page--situations .project-rail{ background:var(--bg); }
+.project-simple-page--situations .project-rail,
+.projects-page--listing .project-rail{ background:var(--bg); }
 
 /* **Les menus de filtre sortent de l'en-tête, et la coquille les coupait.**
    `.data-table-shell` coupe à `overflow:hidden` pour que les lignes respectent

@@ -256,3 +256,94 @@ revient à ne voir l'abandon que sur l'écran qui l'a provoqué.
 les liens : le même titre se lisait donc autrement selon l'écran, et le
 soulignement — qui est ici le signe du survol — ne disait plus rien. La classe le
 dit maintenant une fois, pour tout le monde.
+
+---
+
+## Le même écran, mais pour tous les projets
+
+### On part des ouverts, et le jeton se lit dans la barre
+
+`statut:ouvert` est la **requête de départ** de « Tous les sujets », et
+« Ouvertes » celui de « Toutes les propositions ». On arrive sur ces écrans pour
+savoir ce qu'il reste à faire ; tout montrer d'un coup y mêle des années de
+sujets réglés, et la liste répond à une question qu'on ne pose jamais.
+
+**Le jeton est écrit dans la barre**, et c'est tout le point : il s'y lit, il
+s'y sélectionne et il s'y **efface**. Qui veut voir les ouverts *et* les fermés
+le supprime au clavier, comme n'importe quel autre. Un filtre par défaut qu'on
+ne voit nulle part est un écran qui ment sur ce qu'il montre — et l'on cherche
+dans la base des sujets qui y étaient depuis le début.
+
+Il vient de la grammaire : `withFilter` l'écrit, comme partout ailleurs. Poser
+la chaîne `"statut:ouvert"` à la main aurait fait un second endroit où le jeton
+s'orthographie, et le jour où `STATUTS` le renomme, le défaut cesserait
+silencieusement de filtrer (règle 10).
+
+Les propositions n'ont pas de grammaire — une proposition n'a ni label, ni
+assigné, ni objectif, et lui poser la barre des sujets promettrait des filtres
+qui ne retiendraient jamais rien. Leur sortie est donc le bouton : **recliquer
+« Ouvertes » l'éteint**, et l'on revoit tout.
+
+### L'état voyage avec la lecture
+
+Le rail nomme **ce qu'on regarde** — les miens, ceux où l'on m'a nommé — et le
+filtre de l'en-tête **dans quel état**. Les deux questions sont indépendantes ;
+les mêler coûtait deux choses à la fois :
+
+- cliquer « Fermés » éteignait toute la colonne de gauche — on ne savait plus où
+  l'on était, pour avoir dit dans quel état on voulait le voir ;
+- cliquer une lecture faisait sauter le filtre qu'on venait de poser, et il
+  fallait le reposer.
+
+`rail-des-sujets.js` écarte donc `statut` quand il reconnaît une lecture, et
+l'**emporte** dans la requête de chacune — le compte affiché étant celui de
+cette requête-là, c'est-à-dire de ce que le clic montrera. Une requête qui ne
+dit que l'état est la liste entière, dans l'état qu'on regarde : sans cela, ces
+écrans s'ouvraient sur un rail où l'on n'était nulle part.
+
+Le défaut existait aussi dans l'onglet Sujets d'un projet ; il s'y est vu le
+jour où la requête de départ a porté un jeton.
+
+### Le rail de « Tous les sujets »
+
+C'est **celui de l'onglet Sujets d'un projet**, avec ses lectures : « Assigné à
+moi », « Créé par moi », « Mentions », « Activité récente ». Elles ne disent
+rien d'un projet — elles disent qui regarde, et qui regarde est le même d'un
+chantier à l'autre.
+
+Deux choses tombent, et il faut dire pourquoi :
+
+- **les autres écrans** — Vues, Objectifs, Labels — appartiennent à un projet :
+  ils n'existent pas ici, et les proposer ferait trois portes qui ne mènent
+  nulle part. C'est ce que le carnet avait déjà constaté ;
+- **les vues épinglées** aussi : une vue est enregistrée dans un projet, et son
+  vocabulaire est le sien. En montrer une ici promettrait une requête qui ne
+  retiendrait pas la même chose (règle 5).
+
+Le rail et les menus de l'en-tête écrivent le **même attribut** — chaque entrée
+porte la requête complète qu'elle produirait —, et une seule écoute les entend
+tous les deux. Ce qui les distingue est ce qu'on fait après : un menu se rouvre,
+un rail n'a rien à rouvrir.
+
+### « Tous les projets » reçoit le même rail
+
+Sa colonne de gauche était un `<aside>` large de 296 px, ni réglable ni
+repliable, quand les quatre autres écrans à colonne portent tous le même rail.
+Arriver ici faisait perdre les deux gestes sans que rien ne l'explique.
+
+Le dessin de ce rail vit à part (`tous-les-projets-rail.js`), pour la même
+raison que les `*-page.js` : l'écran des projets parle à la base et ne s'importe
+pas dans un test, et **un rail dessiné que personne n'écoute est muet** — c'est
+arrivé au carnet, dont le bouton de repli et la poignée sont restés inertes deux
+étapes durant.
+
+### Un seul endroit sait replier et redimensionner
+
+`ui/reglages-du-rail.js` porte le repli, la largeur, leur mémoire, et le
+branchement de la poignée et du bouton. Le carnet les avait écrits à la main ;
+deux écrans de plus en auraient fait trois copies — et une copie qui oublie de
+borner la largeur relue, ou le `try` autour du stockage, se découvre dans un
+navigateur qui refuse les cookies, c'est-à-dire jamais chez celui qui l'écrit.
+
+Chaque écran nomme le sien : replier le rail des Sujets d'un projet n'a aucune
+raison de replier celui du carnet.

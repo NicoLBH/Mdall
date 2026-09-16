@@ -42,7 +42,7 @@ import { createProjectSituationsReviewState } from "./project-situations/project
 import { createProjectSituationsThread } from "./project-situations/project-situations-thread.js";
 import { createProjectSituationsKanbanView } from "./project-situations/project-situations-view-kanban.js";
 import { renderGlobalHeader } from "./global-header.js";
-import { bindRailResizer, followRailScroll, railWidth } from "./ui/project-rail.js";
+import { brancherLeRail, reglagesDuRail } from "./ui/reglages-du-rail.js";
 
 export { getEffectiveSujetStatus, getEffectiveSituationStatus } from "./project-subjects.js";
 import {
@@ -495,68 +495,34 @@ function bindSituationsTabReset() {
  * rien, tirer ne faisait rien. Un bouton présent qui n'obéit pas est pire
  * qu'un bouton absent : on croit avoir mal cliqué, on recommence.
  *
- * Tout vient du composant partagé, comme dans la Mémoire, l'Atelier et les
- * Sujets. Une quatrième copie de ce calage aurait divergé au premier
- * changement (règle 10).
+ * Le repli, la largeur et leur mémoire sont maintenant dans
+ * `ui/reglages-du-rail.js` : deux écrans transversaux ont demandé le même rail,
+ * et trois copies de ces quatre fonctions auraient fini par ne plus borner la
+ * largeur du même côté (règle 10). Le nom de l'écran entre dans la clé — replier
+ * le rail des Sujets d'un projet n'a aucune raison de replier celui du carnet.
  */
-const RAIL_REPLIE_CLE = "mdall.situationsRailReplie.v1";
-const RAIL_LARGEUR_CLE = "mdall.situationsRailLargeur.v1";
+const reglagesDuCarnet = reglagesDuRail("situations");
 
-/**
- * Le repli et la largeur sont des **réglages**, pas des états de navigation :
- * ils suivent la personne d'une session à l'autre. Et ce sont ceux **de cet
- * écran** : replier le rail des Sujets d'un projet n'a aucune raison de replier
- * celui du carnet, qui ne montre pas les mêmes choses.
- */
 function railReplieDuCarnet() {
-  try { return window.localStorage.getItem(RAIL_REPLIE_CLE) === "1"; } catch { return false; }
+  return reglagesDuCarnet.replie();
 }
 
 function railLargeurDuCarnet() {
-  try {
-    const brut = Number(window.localStorage.getItem(RAIL_LARGEUR_CLE));
-    return Number.isFinite(brut) && brut > 0 ? railWidth(brut) : 248;
-  } catch {
-    return 248;
-  }
-}
-
-function retenirLaLargeurDuCarnet(largeur) {
-  try {
-    window.localStorage.setItem(RAIL_LARGEUR_CLE, String(largeur));
-  } catch {
-    // Un navigateur qui refuse le stockage garde la largeur par défaut : le
-    // geste marche, c'est la mémoire du geste qui manque.
-  }
+  return reglagesDuCarnet.largeur();
 }
 
 function brancherLeRailDuCarnet(root) {
   railDetacher?.();
-  poigneeDetacher?.();
-
-  railDetacher = followRailScroll(root.querySelector(".project-rail"));
-  poigneeDetacher = bindRailResizer({
-    root,
+  railDetacher = brancherLeRail({
+    racine: root,
     id: "sujetsRail",
     pageSelector: ".project-simple-page--situations",
-    getWidth: railLargeurDuCarnet,
-    onEnd: retenirLaLargeurDuCarnet
-  });
-
-  root.querySelector("[data-project-rail-collapse]")?.addEventListener("click", (event) => {
-    event.preventDefault();
-    try {
-      window.localStorage.setItem(RAIL_REPLIE_CLE, railReplieDuCarnet() ? "0" : "1");
-    } catch {
-      // Un refus de stockage n'empêche pas de replier : c'est le rendu suivant
-      // qui perdrait la préférence, pas le geste.
-    }
-    rerender(root);
+    reglages: reglagesDuCarnet,
+    redessiner: () => rerender(root)
   });
 }
 
 let railDetacher = null;
-let poigneeDetacher = null;
 
 function rerender(root) {
   if (!root || !document.body.contains(root)) return;

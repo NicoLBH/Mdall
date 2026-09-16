@@ -23,8 +23,9 @@ import { escapeHtml } from "../utils/escape-html.js";
 import { renderTitreDEcranHtml } from "./ui/titre-decran.js";
 import { renderTableauDesSujetsRetenusHtml } from "./project-situations/project-situations-table.js";
 import {
-  renderFiltreDenTeteHtml, renderRechercheDesSujetsHtml
+  renderFiltreDenTeteHtml, renderRailDesSujetsHtml, renderRechercheDesSujetsHtml
 } from "./project-subjects/project-subjects-recherche.js";
+import { railWidth } from "./ui/project-rail.js";
 import { BLOC_DES_FILTRES } from "./ui/menus-den-tete.js";
 import { renderTableHeadFilterToggle } from "./ui/table-head-filter-toggle.js";
 import { renderBoutonDeTri } from "./ui/tete-de-tableau.js";
@@ -74,7 +75,10 @@ export function renderPageDeTousLesSujets({
   charge = null, personnes = [], nomsDesProjets = {}, requete = "",
   moi = [], cherchesDesFiltres = {}, erreur = "", page = 1,
   /** L'ordre demandé. Une seule case, et c'est l'écran qui la tient. */
-  tri = ""
+  tri = "",
+  /** Le rail est-il replié, et large de combien. Des réglages, pas un état. */
+  railReplie = false,
+  railLargeur = 248
 } = {}) {
   const champs = champsDuCarnet({ charge: charge ?? {}, personnes, nomsDesProjets });
   const tous = Array.isArray(charge?.subjects) ? charge.subjects : null;
@@ -87,9 +91,20 @@ export function renderPageDeTousLesSujets({
   const range = normaliserLeTri(tri);
 
   return `
-    <section class="project-simple-page project-simple-page--settings project-simple-page--situations">
+    <section class="project-simple-page project-simple-page--settings project-simple-page--situations"
+      style="--project-rail-width:${railWidth(railLargeur, railReplie)}px">
       <div class="project-simple-scroll">
         <div class="page-large">
+        ${/*
+          **La structure du rail est celle des Sujets d'un projet et du carnet.**
+          Le rail est en position fixe, le contenu s'écarte par une marge, et la
+          largeur passe par une variable CSS — c'est elle que la poignée fait
+          bouger sans rien redessiner. Une grille écrite ici compterait la
+          largeur deux fois.
+        */""}
+        <div class="project-rail-layout${railReplie ? " project-rail-layout--collapsed" : ""}">
+          ${renderRailHtml({ tous, champs, requete, meta, moi, replie: railReplie })}
+          <div class="project-rail-layout__content settings-content project-page-shell project-page-shell--content">
           ${renderTitreDEcranHtml({ titre: TOUS_LES_SUJETS.nom })}
           ${erreur ? `<div class="settings-inline-error">${escapeHtml(erreur)}</div>` : ""}
           ${renderRechercheDesSujetsHtml({ requete, champs, ignores, epingler: false })}
@@ -126,10 +141,52 @@ export function renderPageDeTousLesSujets({
               pagination: { currentPage: page }
             })}
           </section>
+          </div>
+        </div>
         </div>
       </div>
     </section>
   `;
+}
+
+/**
+ * Le rail : les mêmes lectures que l'onglet Sujets d'un projet.
+ *
+ * ## Rien n'est dessiné de neuf
+ *
+ * « Assigné à moi », « Créé par moi », « Mentions », « Activité récente » sont
+ * des **requêtes toutes faites** que `rail-des-sujets.js` compose depuis la
+ * grammaire, avec le compte de ce que chacune rendra. Elles n'ont rien de
+ * propre à un projet : elles disent qui regarde, et qui regarde est le même
+ * d'un chantier à l'autre. Ce sont donc, mot pour mot, celles de l'onglet d'un
+ * projet — l'écran est le même, il porte simplement sur tous les projets.
+ *
+ * ## Deux choses tombent, et il faut dire pourquoi
+ *
+ * **Les autres écrans** — Vues, Objectifs, Labels — appartiennent à un projet :
+ * ils n'existent pas ici, et les proposer ferait trois portes qui ne mènent
+ * nulle part. C'est ce que le carnet avait déjà constaté.
+ *
+ * **Les vues épinglées** aussi : une vue est enregistrée dans un projet, et son
+ * vocabulaire est le sien. En montrer une ici promettrait une requête qui ne
+ * retiendrait pas la même chose (règle 5) — mieux vaut n'en montrer aucune que
+ * d'en montrer une qui ment.
+ *
+ * Tant qu'on n'a pas lu, les lectures se montrent **sans leur compte** : le rail
+ * le tait de lui-même quand il n'y a rien à compter, et un zéro dirait que ces
+ * quatre lectures ne retiennent rien.
+ */
+function renderRailHtml({ tous = null, champs = [], requete = "", meta = {}, moi = [], replie = false } = {}) {
+  return renderRailDesSujetsHtml({
+    sujets: Array.isArray(tous) ? tous : [],
+    champs,
+    requete,
+    meta,
+    moi,
+    replie,
+    epingles: [],
+    autresEcrans: false
+  });
 }
 
 /**
@@ -213,6 +270,34 @@ function renderStatutHtml({ champs = [], requete = "", tous = null, meta = {}, m
 function statutDemande(requete = "", champs = []) {
   const posees = filterValuesOf(requete, champs, "statut");
   return posees.length === 1 ? String(posees[0] || "") : "";
+}
+
+/**
+ * **La requête de départ : les sujets ouverts.**
+ *
+ * ## Pourquoi un filtre, et pourquoi celui-là
+ *
+ * On arrive sur cet écran pour savoir ce qu'il reste à faire. Tout montrer d'un
+ * coup y mêle des années de sujets réglés, et la liste répond à une question
+ * qu'on ne pose jamais.
+ *
+ * ## Il est **écrit dans la barre**, et c'est tout le point
+ *
+ * `statut:ouvert` s'y lit, s'y sélectionne et s'y **efface** : qui veut voir
+ * les ouverts *et* les fermés le supprime au clavier, comme n'importe quel
+ * autre jeton. Un filtre par défaut qui ne se voit nulle part est un écran qui
+ * ment sur ce qu'il montre, et l'on cherche dans la base des sujets qui étaient
+ * là depuis le début.
+ *
+ * ## Il vient de la grammaire, il n'est pas recopié
+ *
+ * Écrire la chaîne `"statut:ouvert"` à la main aurait fait un second endroit où
+ * le jeton s'orthographie — et le jour où `STATUTS` le renomme, le défaut
+ * cesserait silencieusement de filtrer (règle 10). On le fait donc **produire**
+ * par `withFilter`, qui est ce qui l'écrit partout ailleurs.
+ */
+export function requeteDeDepart() {
+  return withFilter("", champsDuCarnet({ charge: {} }), "statut", "open");
 }
 
 /**

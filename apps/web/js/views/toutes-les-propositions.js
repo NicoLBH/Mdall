@@ -44,11 +44,18 @@ import { normaliserLeTri, triSuivant, TRI } from "../services/tri-des-sujets.js"
 const vue = {
   propositions: null, nomsDesProjets: {}, cherche: "", erreur: "", page: 1,
   /**
-   * Ouvertes, closes, ou les deux — **`""` étant « les deux »**, qui est l'état
-   * d'où l'on part. Allumer « Ouvertes » d'emblée dirait que la liste est
-   * coupée alors qu'elle ne l'est pas.
+   * **On part des ouvertes**, comme l'onglet Propositions d'un projet.
+   *
+   * La question posée en arrivant est « qu'est-ce qui attend une décision ? » :
+   * une liste qui mêle d'emblée les fusionnées et les refusées y répond mal.
+   *
+   * **Recliquer « Ouvertes » l'éteint**, et l'on revoit tout. C'est la seule
+   * sortie ici : une proposition n'a pas de grammaire, donc pas de jeton qu'on
+   * pourrait effacer dans la barre comme on le fait pour les sujets. Le bouton
+   * allumé est alors la seule chose qui dise que la liste est coupée — raison de
+   * plus pour qu'il le dise.
    */
-  etat: "",
+  etat: "open",
   /** L'ordre demandé. Une seule case. */
   tri: TRI.DERNIERE_ACTIVITE
 };

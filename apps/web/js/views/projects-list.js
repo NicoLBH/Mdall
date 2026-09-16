@@ -11,28 +11,18 @@ import {
   renderDataTableHead,
   renderDataTableEmptyState
 } from "./ui/data-table-shell.js";
-import {
-  renderSideNavLayout,
-  renderSideNavGroup,
-  renderSideNavItem
-} from "./ui/side-nav-layout.js";
+import { railWidth } from "./ui/project-rail.js";
+import { brancherLeRail, reglagesDuRail } from "./ui/reglages-du-rail.js";
+import { FILTRES_DES_PROJETS, renderRailDesProjets } from "./tous-les-projets-rail.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 
-const PROJECT_LIST_FILTERS = {
-  contributions: {
-    id: "contributions",
-    label: "Mes contributions",
-    href: "#projects",
-    iconName: "people"
-  },
-  mine: {
-    id: "mine",
-    label: "Mes projets",
-    href: "#projects/mine",
-    iconName: "person"
-  }
-};
+/**
+ * Les deux façons de regarder ses projets. **Elles vivent avec le rail qui les
+ * montre** (`tous-les-projets-rail.js`), et non ici : l'écran les lit, il ne
+ * les définit pas — un nom vit à un seul endroit (règle 10).
+ */
+const PROJECT_LIST_FILTERS = FILTRES_DES_PROJETS;
 
 const projectCreateUiState = {
   ownerMenuOpen: false,
@@ -55,6 +45,16 @@ const projectCreateUiState = {
   isSubmitting: false,
   submitError: ""
 };
+
+/**
+ * Le repli et la largeur du rail : **des réglages à cet écran**, retenus d'une
+ * session à l'autre. Replier celui d'un projet n'a aucune raison de replier
+ * celui-ci.
+ */
+const reglagesDesProjets = reglagesDuRail("tousLesProjets");
+
+/** De quoi débrancher le rail : ses écoutes sont posées sur le document. */
+let detacherLeRailDesProjets = null;
 
 const projectListUiState = {
   loadingAccess: false,
@@ -113,20 +113,6 @@ function renderProjectsToolbar() {
       <span>Nouveau projet</span>
     </a>
   `;
-}
-
-function renderProjectsNav(activeFilterId) {
-  return renderSideNavGroup({
-    className: "projects-layout__nav-group",
-    items: [PROJECT_LIST_FILTERS.contributions, PROJECT_LIST_FILTERS.mine].map((item) => renderSideNavItem({
-      as: "a",
-      href: item.href,
-      label: item.label,
-      iconHtml: svgIcon(item.iconName, { className: `octicon octicon-${item.iconName}` }),
-      isActive: item.id === activeFilterId,
-      className: "projects-layout__nav-item"
-    }))
-  });
 }
 
 async function fetchContributorProjectIds() {
@@ -589,6 +575,11 @@ export function renderProjectsList(root) {
 
   if (isProjectsCreateRoute()) {
     document.body.classList.remove("route--projects-list");
+    // **Le rail s'en va avec sa page.** Ses écoutes sont posées sur le document
+    // et lui survivraient : elles continueraient de mesurer, à chaque
+    // défilement du formulaire, un rail qui n'est plus là.
+    detacherLeRailDesProjets?.();
+    detacherLeRailDesProjets = null;
     renderProjectCreatePage(root);
     return;
   }
@@ -599,17 +590,35 @@ export function renderProjectsList(root) {
   const activeFilterId = getActiveProjectsFilterId();
   ensureProjectAccessLoaded(root);
 
+  const replie = reglagesDesProjets.replie();
+
   root.innerHTML = `
-    <section class="page projects-page projects-page--listing">
-      ${renderSideNavLayout({
-        className: "settings-layout settings-layout--parametres projects-layout",
-        navClassName: "settings-nav settings-nav--parametres projects-layout__nav",
-        contentClassName: "settings-content settings-content--parametres projects-layout__content",
-        navHtml: renderProjectsNav(activeFilterId),
-        contentHtml: renderProjectsListContent(activeFilterId)
-      })}
+    <section class="page projects-page projects-page--listing"
+      style="--project-rail-width:${railWidth(reglagesDesProjets.largeur(), replie)}px">
+      ${/*
+        **Le rail est en position fixe, le contenu s'écarte par une marge**, et
+        la largeur passe par une variable CSS — c'est elle que la poignée fait
+        bouger sans rien redessiner. C'est la structure des quatre autres écrans
+        qui portent un rail ; une grille écrite ici compterait la largeur deux
+        fois.
+      */""}
+      <div class="project-rail-layout${replie ? " project-rail-layout--collapsed" : ""}">
+        ${renderRailDesProjets(activeFilterId, replie)}
+        <div class="project-rail-layout__content settings-content settings-content--parametres projects-layout__content">
+          ${renderProjectsListContent(activeFilterId)}
+        </div>
+      </div>
     </section>
   `;
+
+  detacherLeRailDesProjets?.();
+  detacherLeRailDesProjets = brancherLeRail({
+    racine: root,
+    id: "projetsRail",
+    pageSelector: ".projects-page--listing",
+    reglages: reglagesDesProjets,
+    redessiner: () => renderProjectsList(root)
+  });
 
   root.querySelectorAll("[data-project-id]").forEach((button) => {
     button.addEventListener("click", () => {

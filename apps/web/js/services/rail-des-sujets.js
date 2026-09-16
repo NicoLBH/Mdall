@@ -26,10 +26,19 @@
  * des lectures avec leurs comptes sortent.
  */
 
-import { filterValues, formatQuery, parseQuery } from "./query-bar.js";
+import { filterValues, formatQuery, parseQuery, withFilter } from "./query-bar.js";
 import { MOI, sujetsFiltres } from "./champs-des-sujets.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
+
+/**
+ * Le champ qui dit l'état d'un sujet — ouvert, fermé.
+ *
+ * Il **voyage avec la lecture** au lieu de la remplacer : voir §`lectureDe` et
+ * §`railDesSujets`. Son nom est écrit ici, une fois, parce que deux endroits le
+ * lisent.
+ */
+const CHAMP_DETAT = "statut";
 
 export const LECTURE = {
   TOUS: "tous",
@@ -183,7 +192,13 @@ export function lectureDe(requete = "", champs = []) {
   const { filters, text } = parseQuery(requete, champs);
   if (texte(text)) return LECTURE.TOUS;
 
-  const cles = Object.keys(filters).sort();
+  // **L'état ne fait pas partie de la lecture**, et il ne doit pas l'éteindre.
+  // Le rail nomme *ce qu'on regarde* — les miens, ceux où l'on m'a nommé ; le
+  // filtre ouverts/fermés de l'en-tête nomme *dans quel état*. Les deux
+  // questions sont indépendantes, et les mêler faisait qu'un clic sur « Fermés »
+  // éteignait toute la colonne de gauche : on ne savait plus où l'on était,
+  // pour avoir dit dans quel état on voulait le voir.
+  const cles = Object.keys(filters).filter((cle) => cle !== CHAMP_DETAT).sort();
 
   for (const lecture of Object.values(LECTURE)) {
     const attendus = filtresDe(lecture, champs);
@@ -220,7 +235,13 @@ export function lectureDe(requete = "", champs = []) {
  */
 export function lectureQuOnRegarde(requete = "", champs = []) {
   const dite = texte(requete);
-  if (!dite) return LECTURE.TOUS;
+  // **Une requête qui ne dit que l'état, c'est la liste entière** — dans l'état
+  // qu'on a choisi de regarder. `statut:ouvert` est la requête de départ des
+  // écrans qui traversent les projets : la traiter comme « autre chose »
+  // éteignait toute la colonne de gauche dès la première seconde, et l'écran
+  // s'ouvrait sur un rail où l'on n'était nulle part.
+  const sansLEtat = texte(withFilter(dite, champs, CHAMP_DETAT, ""));
+  if (!sansLEtat) return LECTURE.TOUS;
 
   const lecture = lectureDe(dite, champs);
   return lecture === LECTURE.TOUS ? "" : lecture;
@@ -268,6 +289,9 @@ export function railDesSujets({
   iconeDuDepart = ""
 } = {}) {
   const active = lectureQuOnRegarde(requete, champs);
+  // L'état qu'on regarde, s'il y en a un : `filterValues` le lit comme partout
+  // ailleurs, et un champ à choix simple n'en porte qu'une valeur.
+  const etatRegarde = filterValues(parseQuery(requete, champs).filters, CHAMP_DETAT)[0] ?? "";
 
   const lectures = Object.values(LECTURE).map((lecture) => {
     // **Une seule vérification, et c'est `filtresDe` qui la porte.** Une
@@ -280,7 +304,19 @@ export function railDesSujets({
     // légitimement sans filtre. Deux expressions d'une même règle divergent à
     // la première qui bouge (règle 4).
     if (!filtresDe(lecture, champs)) return null;
-    const laRequete = requeteDeLaLecture(lecture, champs);
+    // **La lecture emporte l'état qu'on regarde.** Cliquer « Assigné à moi »
+    // pendant qu'on regarde les ouverts donne *mes sujets ouverts*, et non la
+    // liste entière de ce qui m'est assigné depuis trois ans : on a changé de
+    // question, pas d'intention. Sans cela, le filtre de l'en-tête sautait à
+    // chaque clic du rail, et il fallait le reposer.
+    const laRequete = withFilter(
+      requeteDeLaLecture(lecture, champs), champs, CHAMP_DETAT, etatRegarde
+    );
+
+    // Le compte est celui de **cette** requête — celle que le clic posera.
+    // Compter sans l'état annoncerait quatre-vingts sujets là où le clic en
+    // montre douze, et un compte qui diffère de ce qu'on voit après avoir
+    // cliqué est pire qu'aucun compte.
 
     const { sujets: retenus, ignores } = sujetsFiltres({
       sujets, requete: laRequete, champs, meta, moi, maintenant
