@@ -1275,3 +1275,40 @@ test("le tableau d'un seul projet n'a pas la colonne du projet", () => {
   assert.match(html, /data-proposition-open="pr-1"/, "le titre ouvre la revue sur place");
   assert.ok(!html.includes('href="#project'), "et ne change pas d'adresse");
 });
+
+/* ── L'en-tête : ce qu'on regarde à gauche, ce qui restreint à droite ────── */
+
+/**
+ * **Le filtre d'état et le compte disent ce qui est à l'écran ; les menus et le
+ * tri sont des commandes.** Tout à la file, il fallait lire la ligne entière
+ * pour trouver le bouton cherché — et la file s'allongeait d'un menu à chaque
+ * écran.
+ *
+ * Le groupe de commandes est `cell-assignees-head`, celui de l'en-tête des
+ * sujets d'un projet : une file de menus suivie du bouton qui range.
+ */
+test("l'en-tête range les commandes à droite, dans un seul groupe", () => {
+  for (const [nom, html] of [
+    ["sujets", avecDuMonde()],
+    ["propositions", nommees()]
+  ]) {
+    const tete = html.slice(html.indexOf("situations-sujets-tete"), html.indexOf("issue-row"));
+
+    const etat = tete.indexOf("table-head-filter-group");
+    const compte = tete.indexOf("situations-sujets-tete__compte");
+    const commandes = tete.indexOf("cell-assignees-head");
+    const menus = tete.indexOf("situations-sujets-tete__filtres");
+    const tri = tete.indexOf("table-head-sort");
+
+    assert.ok(etat < compte, `${nom} : l'état précède le compte`);
+    assert.ok(compte < commandes, `${nom} : les commandes viennent après`);
+    assert.ok(commandes < menus && menus < tri, `${nom} : les menus puis le tri, dans le groupe`);
+  }
+});
+
+/** Et c'est la marge automatique qui les pousse, une seule fois pour les deux. */
+test("le groupe des commandes est poussé à droite par la feuille de style", async () => {
+  const css = await readFile(new URL("../../style.css", import.meta.url), "utf8");
+
+  assert.match(css, /\.situations-sujets-tete \.cell-assignees-head\{margin-left:auto;\}/);
+});

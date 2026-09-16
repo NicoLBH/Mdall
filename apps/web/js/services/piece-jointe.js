@@ -39,3 +39,47 @@ export function lireLeFichier(fichier) {
     lecteur.readAsDataURL(fichier);
   });
 }
+
+/**
+ * De quoi **montrer** la note, sans la redemander à personne.
+ *
+ * ## Pourquoi une adresse d'objet, et pas les octets
+ *
+ * La note est déjà en mémoire, encodée en base64 : c'est sous cette forme
+ * qu'elle part au serveur. Une adresse d'objet (`blob:`) la rend affichable par
+ * le navigateur lui-même — qui sait lire un PDF, le faire défiler et le
+ * chercher — sans écrire une seconde ligne de rendu de page.
+ *
+ * **Elle se libère.** Une adresse d'objet retient les octets tant qu'on ne la
+ * révoque pas : en fabriquer une à chaque rendu garderait six mégaoctets par
+ * ouverture, jusqu'à quitter la page. C'est à l'appelant de la garder et de la
+ * rendre — d'où `oublierLAdresse`.
+ *
+ * @param {{donnees?: string, mediaType?: string}|null} piece
+ * @returns {string} une adresse, ou `""` quand il n'y a rien à montrer
+ */
+export function adresseDeLaPiece(piece = null) {
+  const donnees = String(piece?.donnees ?? "");
+  if (!donnees) return "";
+  if (typeof Blob !== "function" || typeof URL?.createObjectURL !== "function") return "";
+
+  try {
+    const binaire = atob(donnees);
+    const octets = new Uint8Array(binaire.length);
+    for (let rang = 0; rang < binaire.length; rang += 1) octets[rang] = binaire.charCodeAt(rang);
+
+    return URL.createObjectURL(new Blob([octets], {
+      type: String(piece?.mediaType || "application/pdf")
+    }));
+  } catch {
+    // Un base64 tronqué ne doit pas faire tomber l'écran : on ne montre rien,
+    // et la note reste jointe — c'est l'aperçu qui manque, pas la pièce.
+    return "";
+  }
+}
+
+/** Rendre une adresse d'objet. Sans quoi les octets restent en mémoire. */
+export function oublierLAdresse(adresse = "") {
+  if (!adresse || typeof URL?.revokeObjectURL !== "function") return;
+  try { URL.revokeObjectURL(adresse); } catch { /* déjà rendue */ }
+}

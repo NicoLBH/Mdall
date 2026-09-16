@@ -137,24 +137,29 @@ export function renderTableauDesSujetsRetenusHtml({
         // **Ouverts/fermés d'abord, à gauche**, puis le compte, puis les menus :
         // c'est l'ordre de l'en-tête du tableau des sujets d'un projet, et les
         // deux écrans se lisent sans réapprendre où regarder.
+        // **Ce qu'on regarde à gauche, ce qui restreint à droite.** Le filtre
+        // d'état et le compte disent *ce qui est à l'écran* ; les menus et le
+        // tri sont des commandes. Les mêler en une seule file obligeait à lire
+        // toute la ligne pour trouver le bouton qu'on cherchait — et la file
+        // s'allongeait d'un menu à chaque écran.
         html: `<span class="situations-sujets-tete">
           ${statutHtml}
           <span class="situations-sujets-tete__compte">${escapeHtml(compte)}</span>
-          ${filtresHtml}
+          ${/*
+            **Les commandes en un seul groupe, à droite.** `cell-assignees-head`
+            est déjà ce groupe dans l'en-tête des sujets d'un projet : une file
+            de menus suivie du bouton qui range. En inventer un second ici
+            aurait fait deux calages à retoucher ensemble.
+          */""}
+          <span class="cell-assignees-head">${filtresHtml}${triHtml}</span>
         </span>`
       },
       // La colonne du fil n'a pas d'intitulé : l'icône le dit sur chaque ligne,
       // et un mot au-dessus de quatre-vingts pixels tiendrait mal.
       { className: "cell cell-messages-head", html: "" },
       // « Projet » : un projet en conception n'est pas encore un chantier, et la
-      // colonne le nomme comme le filtre le nomme. Le bouton de tri est dans
-      // cette dernière colonne, comme dans l'onglet des sujets.
-      {
-        className: "cell",
-        html: triHtml
-          ? `<span class="cell-assignees-head"><span>Projet</span>${triHtml}</span>`
-          : "Projet"
-      }
+      // colonne le nomme comme le filtre le nomme.
+      { className: "cell", label: "Projet" }
     ]
   });
 
