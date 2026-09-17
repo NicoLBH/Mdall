@@ -54,6 +54,7 @@ import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
 import { NOEUD } from "../../services/memoire-plan.js";
 import { RANG } from "../../services/ce-qui-couvre.js";
+import { phraseDesPointsOuverts } from "../../services/point-porte-sur.js";
 import {
   GENRE, avalDeLaRegle, cerveauDuProjet, chaleurDuLien, chaleurDuNoeud, dansLEnveloppe, dilaterLEnveloppe,
   dispositionDuCerveau, dispositionEclatee, dispositionEnVolume, domainesDuCerveau, enveloppeConvexe,
@@ -120,6 +121,15 @@ const REGLE = "163,113,247";
  * personne ne s'est engagé se ressemblent, mais dans les deux cas l'écran
  * n'affirme rien.
  */
+/**
+ * Le halo d'une valeur qu'un débat ouvert met en question.
+ *
+ * La couleur de l'attention, jamais celle de l'alerte : une valeur en débat
+ * n'est pas une valeur fausse, et le rouge de l'audit dit autre chose — il dit
+ * que quelque chose ne va pas. Ici, tout va bien : des gens discutent.
+ */
+const HALO_DU_DEBAT = "rgba(210,153,34,.75)";
+
 const ANNEAU_DU_RANG = {
   [RANG.INTERNE]: { trait: "rgba(139,148,158,.55)", epaisseur: 1 },
   // Une valeur tranchée en réunion se voit : sans anneau, l'échelon que les
@@ -313,11 +323,38 @@ function renderEchelleDeChaleur(cerveau, signales) {
             </span>`
           : ""
       }
+      ${renderLegendeDuDebat(cerveau)}
       <span class="cerveau-legende__item">
         <b>La forme dit la nature</b>
         <small>plein pour le socle, cerclé pour ce qui se rejoue, creux pour l'opaque</small>
       </span>
     </div>
+  `;
+}
+
+/**
+ * Ce que le halo pointillé veut dire, écrit **une fois** pour les deux légendes.
+ *
+ * Le halo se dessine dans les deux modes ; une explication dans une seule
+ * légende laisserait l'autre devant une décoration, et une décoration ne se
+ * regarde pas. Deux textes auraient fini par ne plus dire la même chose
+ * (règle 10).
+ *
+ * Rien quand aucune valeur n'est en débat : annoncer un halo qu'on ne voit
+ * nulle part ferait chercher. Rien non plus quand on n'a pas lu les arêtes —
+ * `enDebat` vaut alors `null`, et `null` n'est pas zéro.
+ */
+function renderLegendeDuDebat(cerveau) {
+  const debattues = (cerveau?.noeuds ?? []).filter((noeud) => noeud?.enDebat).length;
+  if (!debattues) return "";
+
+  return `
+    <span class="cerveau-legende__item cerveau-legende__item--debat">
+      <i></i>
+      <b>${debattues} en débat</b>
+      <small>un halo pointillé : un sujet ouvert porte dessus — la valeur reste,
+        et le projet continue de calculer avec</small>
+    </span>
   `;
 }
 
@@ -333,6 +370,7 @@ function renderLegende(cerveau, signales) {
           <small>${escapeHtml(quoi.quoi)}</small>
         </span>
       `).join("")}
+      ${renderLegendeDuDebat(cerveau)}
       ${
         // Ce qu'une livraison récente a changé, et qui se voit d'ici : un nœud
         // opaque n'est plus forcément un nœud perdu.
@@ -1309,6 +1347,36 @@ function dessiner(ctx, etat, largeur, hauteur, temps) {
       ctx.stroke();
     }
 
+    /**
+     * Ce qu'un débat ouvert met en question : un **halo pointillé**, dehors.
+     *
+     * Ni une couleur de nœud, ni un anneau plein. Une couleur dirait ce que la
+     * valeur **est**, et un anneau plein la dirait entourée de quelque chose
+     * d'acquis — or ici rien n'est acquis, c'est justement le sujet. Le
+     * pointillé dit l'inachevé, et il est **à l'extérieur** de l'anneau
+     * d'engagement : une valeur peut très bien être examinée par un bureau de
+     * contrôle **et** remise en question, et les deux doivent se lire ensemble.
+     *
+     * Un seul halo, quel qu'en soit le nombre. Trois débats ne se dessinent pas
+     * trois fois plus fort : ce qu'un ingénieur a besoin de voir est qu'il y en
+     * a, et le compte se lit dans la bulle. Fabriquer une intensité serait
+     * refaire le poids que tout le reste de cet écran refuse.
+     *
+     * Absent quand `enDebat` est `null` — on n'a pas lu les arêtes —, et pas
+     * seulement quand il vaut zéro : dessiner tout le projet comme apaisé parce
+     * qu'on n'a pas regardé serait affirmer une absence qu'on n'a pas vérifiée.
+     */
+    if (noeud.enDebat) {
+      ctx.save();
+      ctx.strokeStyle = HALO_DU_DEBAT;
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.arc(x, y, rayon + 7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     if (noeud.id === choisi || noeud.id === survole) {
       ctx.strokeStyle = "#f0f6fc";
       ctx.lineWidth = 1.5;
@@ -1950,6 +2018,7 @@ let ouverte = null;
  */
 export function ouvrirLeCerveau({
   assertions = [], applications = null, selection = "", actes = null,
+  aretes = null, points = null,
   hote: cadre = null, reglages = null
 } = {}) {
   const encastre = Boolean(cadre);
@@ -1960,7 +2029,9 @@ export function ouvrirLeCerveau({
   if (!encastre && ouverte && !ouverte.isConnected) ouverte = null;
   if (!encastre && ouverte) return;
 
-  let cerveau = cerveauDuProjet(assertions, applications, { avecLesFonctions: true, actes });
+  let cerveau = cerveauDuProjet(assertions, applications, {
+    avecLesFonctions: true, actes, aretes, points
+  });
   if (!cerveau.noeuds.length) {
     // Deux vides, et ils ne se disent pas pareil. « Ce projet ne porte aucune
     // affirmation » était vrai tant que le cerveau recevait tout ; il montre
@@ -2071,7 +2142,7 @@ export function ouvrirLeCerveau({
    */
   const relire = () => {
     cerveau = cerveauDuProjet(assertions, applications, {
-      avecLesFonctions: etat.avecLesFonctions, actes
+      avecLesFonctions: etat.avecLesFonctions, actes, aretes, points
     });
     isoles = noeudsIsoles(cerveau);
     etat.poidsMax = cerveau.compte.poidsMax;
@@ -2560,6 +2631,16 @@ export function ouvrirLeCerveau({
             : `<span class="cerveau-bulle__compte">aucun emploi connu · strate ${noeud.strate}</span>`
       }
       ${!fonction && noeud.famille ? renderFamille(noeud) : ""}
+      ${
+        // Ce que le halo montre, en toutes lettres. La phrase vient de là où le
+        // mot de l'écran est écrit une fois : le code dit « point », l'écran
+        // écrit « sujet », et cette bulle n'a pas à le savoir deux fois.
+        noeud.enDebat
+          ? `<span class="cerveau-bulle__debat">${escapeHtml(
+            phraseDesPointsOuverts(new Array(noeud.enDebat).fill(null))
+          )}</span>`
+          : ""
+      }
       ${signal ? `<span class="cerveau-bulle__signal">${escapeHtml(phraseDuSignal(signal))}</span>` : ""}
       ${noeud.enRond ? `<span class="cerveau-bulle__cycle">se lit en rond</span>` : ""}
     `;

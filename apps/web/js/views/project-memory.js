@@ -3619,6 +3619,13 @@ function brancherLeCerveau(root) {
       // Ce qui a été examiné, et par qui. `null` quand la lecture a échoué : le
       // cerveau distingue « personne ne s'est engagé » de « on n'a pas regardé ».
       actes: view.acts,
+      // **Les débats ouverts, et les sujets qu'ils nomment.** Déjà lus pour les
+      // mentions de la liste : c'est ce qui permet au cerveau de montrer où le
+      // projet discute encore sans une lecture de plus. Sans eux, il dessinerait
+      // tout le projet comme apaisé — et « on n'a pas regardé » se dirait comme
+      // « personne ne conteste ».
+      aretes: view.liens,
+      points: view.points,
       // Ce qu'on regarde, en toutes lettres. Un cerveau de douze nœuds sans
       // prévenir qu'un filtre est posé ferait croire à un projet de douze
       // affirmations, et l'on chercherait longtemps ce qui manque (règle 5).

@@ -249,6 +249,51 @@ export function portagesSurLaValeur(assertionId, { liens = [], points = [] } = {
 }
 
 /**
+ * Les points ouverts qui portent sur chaque valeur, en une passe.
+ *
+ * Une `Map` plutôt qu'un appel par valeur : le cerveau d'un gros projet dessine
+ * des centaines de nœuds, et parcourir tous les liens pour chacun ferait un
+ * carré là où une passe suffit. C'est le même raisonnement que
+ * `couvertureDuProjet`, et pour la même raison.
+ *
+ * Une valeur absente de la `Map` n'a **aucun** débat ouvert dessus — à ne pas
+ * confondre avec une `Map` vide parce qu'on n'a pas su lire les liens : cela,
+ * c'est à l'appelant de le distinguer, en ne l'appelant pas.
+ *
+ * @returns {Map<string, object[]>} par identifiant de version, les points ouverts
+ */
+export function pointsOuvertsParValeur({ liens = [], points = [] } = {}) {
+  const parId = new Map(
+    (Array.isArray(points) ? points : []).map((point) => [texte(point?.id), point])
+  );
+
+  const parValeur = new Map();
+  const vus = new Set();
+
+  for (const lien of Array.isArray(liens) ? liens : []) {
+    if (areteEcartee(lien)) continue;
+
+    const valeur = texte(lien?.assertion_id);
+    const pointId = texte(lien?.subject_id);
+    if (!valeur || !pointId) continue;
+
+    const marque = `${valeur}|${pointId}`;
+    if (vus.has(marque)) continue;
+
+    const point = parId.get(pointId);
+    // Un point qu'on ne connaît pas ne se compte pas : on ne sait pas s'il est
+    // ouvert, et le supposer ouvert ferait dire « en débat » à tort (règle 5).
+    if (!point || !pointOuvert(point)) continue;
+
+    vus.add(marque);
+    if (!parValeur.has(valeur)) parValeur.set(valeur, []);
+    parValeur.get(valeur).push(point);
+  }
+
+  return parValeur;
+}
+
+/**
  * Les versions sur lesquelles ce point porte.
  *
  * L'autre sens de l'arête amont — et toujours l'arête amont : ce que ce point

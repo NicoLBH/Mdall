@@ -578,6 +578,52 @@ n'affirme rien : le titre et le bouton se lisent « voilà où cela se passe »,
 Les confondre ferait croire qu'elle ne marche pas, et l'on cesserait de s'en
 servir.
 
+### Le cerveau montre où le projet discute encore
+
+Le cerveau dessinait **la moitié calcul, toute seule** — c'est le constat
+d'ouverture de cette page, et il valait encore pour lui : il recevait les
+affirmations, les lectures et les actes, et ne savait rien des sujets.
+
+Deux marques l'en font sortir, et **aucune n'ajoute de nœud**. Un sujet n'est pas
+une affirmation : en faire une boule dans le graphe recréerait exactement la
+mémoire parallèle que cette page refuse. Le sujet **qualifie** la valeur, il ne
+la remplace pas.
+
+| la marque | ce qu'elle dit |
+| --- | --- |
+| un **halo pointillé**, dehors | un sujet ouvert porte sur cette valeur |
+| l'**anneau d'équipe** | cette valeur a été tranchée en réunion |
+
+**Le halo est dehors, et pointillé.** Dehors, parce qu'une valeur peut très bien
+être examinée par un bureau de contrôle **et** remise en question : les deux
+marques doivent se lire ensemble, pas l'une à la place de l'autre. Pointillé,
+parce qu'il dit l'inachevé — un anneau plein annoncerait quelque chose d'acquis,
+et c'est justement ce qui ne l'est pas.
+
+**Un seul halo, quel qu'en soit le nombre.** Trois débats ne se dessinent pas
+trois fois plus fort : ce qu'un ingénieur a besoin de voir est qu'il y en a, et
+le compte se lit dans la bulle — « 2 sujets ouverts portent sur cette valeur ».
+Fabriquer une intensité serait refaire le poids que tout cet écran refuse.
+
+**La couleur est celle de l'attention, jamais celle de l'alerte.** Une valeur en
+débat n'est pas une valeur fausse. Le rouge de l'audit dit que quelque chose ne
+va pas ; ici tout va bien, des gens discutent.
+
+Et `null` n'est pas zéro : sans les arêtes, aucun halo, mais aucune affirmation
+non plus — dessiner tout le projet comme apaisé parce qu'on n'a pas regardé
+serait exactement l'erreur que cette arête existe pour empêcher.
+
+#### L'anneau qui n'était allumé par rien
+
+L'échelon « tranché avec l'équipe » avait reçu son anneau en même temps qu'il
+entrait dans l'échelle. Mais le rang du cerveau se tirait des **seuls actes** :
+une valeur produite par un sujet fermé s'y dessinait comme une valeur que
+personne n'a examinée. L'anneau existait, et rien ne l'allumait.
+
+Le cerveau passe donc par `rangDeLaVersion`, qui croise l'acte et le débat —
+c'est déjà lui qui décide partout ailleurs, et le recalculer ici en aurait fait
+un second endroit qui décide ce qu'un engagement vaut.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -618,6 +664,9 @@ c'est elle qu'il faudra desserrer, pas les moments où elle tourne.
 | ce qu'on confronte à quoi | `portagesDeCesPoints`, dans `services/point-porte-sur.js` |
 | la reconnaissance et ses trois appelants | `services/portage-reconnaissance.js` |
 | les deux confrontations de la fusion | `proposerLesPortagesDeLaFusion`, dans `views/project-propositions.js` |
+| les débats par valeur, en une passe | `pointsOuvertsParValeur`, dans `services/point-porte-sur.js` |
+| ce que le cerveau sait d'un débat | `enDebat` et `rang`, dans `services/memoire-cerveau.js` |
+| le halo et sa légende | `views/ui/cerveau-du-projet.js` |
 
 ### Le faux document, et pourquoi il existait
 
@@ -743,6 +792,13 @@ valeur que personne n'a mise en doute.
 | « rien reconnu » et « rien de nouveau » se distinguent | ils se confondent | 1 test |
 | le journal dit « proposé », jamais « posé » | il dit « posé » | 1 test |
 | l'étape de fusion est déclarée | elle ne l'est plus | 1 test |
+| « pas regardé » ne se dessine pas comme « personne ne conteste » | les deux se confondent | 1 test |
+| le rang du cerveau croise l'acte et le débat | il oublie les sujets | 1 test |
+| sans rien, le rang reste inconnu | il se dit « rien » | 2 tests |
+| un sujet fermé ne fait plus de halo | il en fait un | 1 test |
+| une arête écartée ne fait plus de halo | elle en fait un | 1 test |
+| un sujet inconnu ne fait pas de halo | il est supposé ouvert | 1 test |
+| le même lien ne compte qu'une fois | il compte deux fois | 1 test |
 
 ---
 

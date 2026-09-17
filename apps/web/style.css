@@ -23882,6 +23882,12 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .cerveau-legende__item--signale i{ background:rgba(248,81,73,.9); border-color:rgba(248,81,73,.9); }
 .cerveau-bulle__signal{ color:#f85149; font-size:11.5px; }
 
+/* Ce qu'un débat ouvert met en question : la couleur de l'attention, jamais
+   celle de l'alerte. Une valeur en débat n'est pas une valeur fausse — le rouge
+   de l'audit dit que quelque chose ne va pas ; ici tout va bien, des gens
+   discutent. */
+.cerveau-bulle__debat{ color:#d29922; font-size:11.5px; }
+
 .cerveau__provenance{
   display:flex; align-items:center; gap:8px; margin:0;
   padding:8px 20px; background:rgba(210,153,34,.10);
@@ -23990,6 +23996,19 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .cerveau-legende__item--rejouable i{ background:rgba(88,166,255,.18); }
 .cerveau-legende__item--opaque i{ background:transparent; }
 .cerveau-legende__item--serveur i{ background:transparent; border-color:#a371f7; }
+/* La pastille d'un débat est **creuse et pointillée**, comme le halo qu'elle
+   explique : une pastille pleine annoncerait un anneau plein, et l'on
+   chercherait dans le dessin quelque chose qui n'y est pas.
+
+   Elle se pose ici, avec les autres variantes, et **après** la règle de base :
+   posée avant, son trait se faisait écraser par le `border` de `--trait` et la
+   pastille disparaissait entièrement — une légende avec un texte et rien en
+   face. Vu au navigateur. */
+.cerveau-legende__item--debat i{
+  --trait:rgba(210,153,34,.85);
+  background:transparent;
+  border:1px dashed rgba(210,153,34,.85);
+}
 /* Une règle n'est pas une nature de valeur : le losange le dit sans une ligne de
    texte de plus, et c'est la forme qu'elle a dans le dessin. */
 /* Une lacune n'est pas une panne : elle se dit sans alarmer, en ambre plutôt
