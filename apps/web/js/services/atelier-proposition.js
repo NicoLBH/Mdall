@@ -30,6 +30,7 @@ import { normalizeSubjectKey } from "./project-memory.js";
 import { normalizeZoneKey } from "./project-zones.js";
 import { BASE_DATUM_KIND, NATURE } from "./assertion-taxonomy.js";
 import { decisionRetenue } from "./decision-versement.js";
+import { raisonnementRetenu } from "./raisonnement-du-point.js";
 import { OPERATEURS, PROVENANCES, STATUTS, AGENT, AGENTS } from "./memoire-en-texte.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -206,6 +207,11 @@ export function cleDAffirmation(affirmation) {
   // `item_key`, et verser l'une supprimerait l'autre.
   if (affirmation?.nature === NATURE.DECISION) return `decision:${cle}`;
 
+  // Et un raisonnement porte **encore le même sujet** : c'est la question, et
+  // elle nomme aussi la décision et la valeur. Trois lignes, une seule clé sans
+  // préfixe — verser la troisième supprimerait les deux autres.
+  if (affirmation?.nature === NATURE.RAISONNEMENT) return `raisonnement:${cle}`;
+
   return cle;
 }
 
@@ -330,6 +336,11 @@ export function itemsDeProposition(affirmations = []) {
       // de `regle` pour une règle — et, comme elle, filtré plutôt que recopié :
       // ce qu'on n'a pas déclaré ne voyage pas.
       decision: decisionRetenue(affirmation.decision),
+          // Et **par où l'on est passé** : les cinq étapes du raisonnement
+          // humain. Comme la décision et la règle, filtré plutôt que recopié.
+          // Sans lui, une ligne de nature « raisonnement » arriverait en mémoire
+          // vide de ce qui la fait exister.
+          raisonnement: raisonnementRetenu(affirmation.raisonnement),
           regle: regleRetenue(affirmation.regle),
           // L'**agent** qu'une fonction appelle, quand elle en appelle un : un
           // tiers dont la loi ne s'écrit pas. Ce qui se conserve est ce qui

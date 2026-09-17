@@ -315,18 +315,32 @@ Ce que ça donne dès cette étape, sans rien d'autre : sur une valeur, « deux
 points ouverts portent dessus » ; et dans une variante, un rang « encore en
 débat » à côté de « ne couvre plus ».
 
-### Étape 3 — le retour se remonte
+### Étape 3 — le retour se remonte *(faite)*
 
-`reference: "sujet:<id>"` devient une arête lisible dans les deux sens. La chaîne
-du raisonnement ne s'arrête plus à une règle : elle continue jusqu'au débat qui a
+`reference: "sujet:<id>"` est une arête lisible dans les deux sens. La chaîne du
+raisonnement ne s'arrête plus à une règle : elle continue jusqu'au débat qui a
 tranché, avec sa date et ses noms.
 
 C'est ici que la question « pourquoi les fondations sont-elles à cette
 profondeur ? » trouve sa réponse complète.
 
-### Étape 4 — `NATURE.RAISONNEMENT` se remplit
+**Il n'y a rien eu à créer en base.** La chaîne était écrite depuis le premier
+jour, et **personne ne la lisait** — une chaîne écrite et jamais lue n'est pas
+une arête, c'est un commentaire dans une colonne. Le défaut n'était pas
+l'absence d'un champ : c'était que la forme s'inventait à l'écriture, dans un
+écran, et qu'aucun lecteur ne la connaissait. `referenceDuPoint` et
+`pointDeLaReference` sont maintenant côte à côte dans le même fichier, et
+l'écran appelle le premier au lieu d'écrire la chaîne à la main.
 
-La case est déclarée depuis longtemps et vide. Elle porte le petit graphe du
+`payload.reference` sert à tout le monde : c'est la marque `sujet:` qui
+distingue la nôtre, et une référence qui ne la porte pas n'est pas un point. Le
+mot de la marque est celui de la mémoire et il ne se renomme pas — il est déjà
+écrit dans les propositions des projets, et le changer rendrait illisible ce qui
+a été enregistré (règle 6).
+
+### Étape 4 — `NATURE.RAISONNEMENT` se remplit *(faite)*
+
+La case était déclarée depuis longtemps et vide. Elle porte le petit graphe du
 raisonnement humain :
 
 ```
@@ -337,8 +351,29 @@ DÉCISION     hors gel = 0,80 m
 PRODUIT      affirmation : hors gel = 0,80 m
 ```
 
-À ce moment-là un point n'est plus une boîte de commentaires : il produit quelque
-chose que le moteur sait consommer.
+Un point n'est plus une boîte de commentaires : il produit quelque chose que le
+moteur sait consommer.
+
+**Les cinq étapes sont lues, aucune n'est déduite.** PORTE SUR vient de l'arête
+amont, PRODUIT de l'arête aval — c'est le seul endroit où les deux se
+rencontrent, et chacune y arrive par son fichier. DÉCISION est la ligne que le
+point a produite et qui porte la question ; elle est retirée de PRODUIT, sans
+quoi on lirait deux fois la même chose.
+
+**Une étape vide se dit.** Un point dont personne n'a noté ce qu'il avait
+examiné n'est pas un point qui n'a rien examiné. Les cinq lignes sont toujours
+rendues, et celles qui manquent portent leur manque en toutes lettres (règle 5).
+Un graphe qui perd ses lignes creuses se lit comme un raisonnement complet, et
+c'est précisément ce qu'il n'est pas.
+
+**Sa valeur est sa question, jamais le résultat.** Rien ne tranche un
+raisonnement : c'est sa définition dans la taxonomie. Le résultat vit sur la
+ligne qu'il a produite, et le recopier ici en ferait deux vérités — c'est celle
+qu'on ne regarde pas qui finirait par avoir raison (règle 4).
+
+Et comme tout le reste, il **ne s'écrit pas** : il sort par la proposition que
+la fermeture du sujet prépare déjà, à côté de la décision et de la valeur. Trois
+lignes, un seul geste, une seule signature.
 
 ### Étape 5 — la priorité se dérive
 
@@ -356,6 +391,10 @@ avec le rang qualitatif, comme dit plus haut.
 | plus de faux document | `create_manual_subject`, réécrite |
 | la reconnaissance, mutualisée | `services/avis-liaison.js`, `liaisonDunIntitule()` |
 | ce sur quoi un point porte | `services/point-porte-sur.js` |
+| ce qu'un point a tranché | `services/point-a-tranche.js` |
+| le graphe du raisonnement humain | `services/raisonnement-du-point.js` |
+| la clé préfixée, et la charge transportée | `services/atelier-proposition.js` |
+| les trois lignes que la fermeture propose | `views/project-subjects/project-subjects-actions.js` |
 
 ### Le faux document, et pourquoi il existait
 
@@ -370,6 +409,21 @@ Les deux colonnes sont relâchées, la fonction ne fabrique plus rien. Les faux
 documents déjà créés **restent** : ils sont cités par les points qui les portent,
 et les effacer romprait cette citation. Une ligne fausse qu'on assume vaut mieux
 qu'une suppression qui casse.
+
+### Les deux arêtes ne se rencontrent qu'à un seul endroit
+
+C'est la décision 3 de cette page, et c'est celle qu'on peut rater sans s'en
+apercevoir : **un seul champ pour les deux ferait couvrir une valeur par le
+débat qui la conteste**.
+
+La cloison est donc physique, pas conventionnelle. `point-porte-sur.js` ne lit
+aucune référence de charge ; `point-a-tranche.js` ne lit aucun lien. Ni l'un ni
+l'autre ne reçoit même de quoi voir ce que l'autre porte — un mélange ne
+s'écrirait pas par distraction, il faudrait changer une signature pour y arriver.
+
+Les deux ne se retrouvent que dans `raisonnementDuPoint`, où chacune tient son
+rôle : l'amont dit sur quoi le débat portait, l'aval ce qu'il a posé. Les croiser
+là fait tomber quatre tests.
 
 ### La reconnaissance n'est pas réécrite : elle est sortie
 
@@ -409,6 +463,21 @@ valeur que personne n'a mise en doute.
 | une version ne se lie pas deux fois | elle se lie deux fois | 1 test |
 | la reconnaissance vient des avis | elle est réécrite ici | 1 test |
 | le schéma laisse naître un point de rien | la contrainte revient | 1 test |
+| une référence sans la marque n'est pas un point | toute référence en devient un | 2 tests |
+| qui et quand viennent de la signature | ils vont se chercher dans le point | 1 test |
+| l'aval ne lit que la charge | il retombe sur le nom du sujet de mémoire | 3 tests |
+| l'amont ne rend pas ce qu'il ne connaît pas | il rend une coquille | 1 test |
+| l'amont ne rend pas deux fois le même lien | il le rend deux fois | 1 test |
+| l'amont ne rend pas les liens d'un autre point | il les rend | 1 test |
+| les deux arêtes ne se croisent pas | elles se croisent | 4 tests |
+| la décision ne se lit pas deux fois | elle reste dans « produit » | 4 tests |
+| une étape vide dit son manque | elle disparaît | 2 tests |
+| sa valeur est sa question | elle recopie le résultat | 1 test |
+| sans question, pas de raisonnement | il passe quand même | 2 tests |
+| la clé d'un raisonnement est préfixée | elle perd son préfixe | 1 test |
+| la charge du raisonnement voyage | elle est oubliée | 2 tests |
+| la charge voyage filtrée | elle est recopiée telle quelle | 1 test |
+| le garde du mot couvre les deux fichiers d'arêtes | le nouveau écrit « sujet » en dur | 1 test |
 
 ---
 
