@@ -148,9 +148,35 @@ function sujetsDeLaMemoire(assertions = []) {
  * @returns {{assertions: object[], motif: string}}
  */
 export function liaisonDeLAvis({ avis = null, assertions = [] } = {}) {
-  const intitule = aplati(intituleDeLAvis(avis));
-  if (!intitule) return { assertions: [], motif: LIAISON.SANS_INTITULE };
+  return liaisonDunIntitule(intituleDeLAvis(avis), assertions);
+}
 
+/**
+ * La reconnaissance elle-même, sur un intitulé quelconque.
+ *
+ * ## Pourquoi elle est sortie de `liaisonDeLAvis`
+ *
+ * Un **point** doit s'accrocher à une valeur de la même façon qu'un avis, et
+ * pour la même raison : un point mal accroché contesterait en silence une valeur
+ * que personne n'a mise en doute. Deux reconnaissances écrites séparément
+ * auraient divergé dès la première correction — et c'est toujours celle qu'on ne
+ * regarde pas qui reste fausse (règle 4).
+ *
+ * Ce qui reste dans `liaisonDeLAvis` est ce qui lui appartient : savoir où un
+ * avis range son intitulé.
+ *
+ * @param {string} intitule ce qu'on donne à reconnaître
+ * @param {object[]} assertions la mémoire du projet
+ * @returns {{assertions: object[], motif: string}}
+ */
+export function liaisonDunIntitule(intitule = "", assertions = []) {
+  const cherche = aplati(intitule);
+  if (!cherche) return { assertions: [], motif: LIAISON.SANS_INTITULE };
+
+  return reconnaitre(cherche, assertions);
+}
+
+function reconnaitre(intitule, assertions) {
   const parSujet = sujetsDeLaMemoire(assertions);
 
   // Les sujets que l'intitulé nomme, du plus précis au moins précis.
