@@ -173,7 +173,7 @@ question ne se repose plus.
 
 ---
 
-## Étape 5 — La portée, et le défaut qu'elle révèle
+## Étape 5 — La portée, et le défaut qu'elle révèle *(faite)*
 
 `prefillDepuisMemoire` range les affirmations par `subject_key.split("@")[0]` :
 **la portée est écartée, et la première trouvée gagne**. Pour une valeur unique
@@ -394,6 +394,69 @@ figure — le test refuse aussi de passer si le fichier n'a pas été lu.
 
 ---
 
+## Étape 5 : la portée, et ce qu'elle a révélé
+
+Ce défaut existait pour **toutes** les valeurs par zone, pas seulement pour le
+régime incendie : `prefillDepuisMemoire` rangeait les affirmations par
+`subject_key.split("@")[0]` et gardait **la première trouvée**. Deux classes de
+sol en mémoire, et l'agent calculait sur celle qui se trouvait être arrivée
+d'abord. Rien à l'écran ne disait qu'il y en avait une autre.
+
+| ce que c'est | où |
+|---|---|
+| la portée remonte avec la valeur | `catalogue.js`, `prefillDepuisMemoire()` |
+| la zone que la question désigne | `porteeDeLaQuestion()` |
+| ce qu'on dit quand la mémoire répond deux choses | `phraseDesContradictions()` |
+| la portée jusqu'à l'écran | `views/studio/copilote/provenance-lisible.js` |
+
+**Trois règles, et la troisième est celle qui compte.**
+
+1. **La portée remonte avec la valeur.** Sans elle, une réponse ne peut pas dire
+   de quelle zone elle parle — et une réponse qu'on ne peut pas situer ne se
+   conteste pas. Elle s'écrit désormais à côté de l'origine :
+   « mémoire du projet · Escalier B ».
+2. **Quand la question nomme une zone**, on ne retient que les affirmations de
+   cette zone-là et celles de l'ouvrage entier. Les autres ne répondent pas à la
+   question posée. La zone se lit dans la question parmi **les portées que la
+   mémoire porte** : la liste des zones vit à l'écran, les portées des
+   affirmations sont là, sous les yeux, et ce sont les seules qui puissent
+   répondre. Accents et casse ne comptent pas ; une portée de deux lettres ne
+   désigne rien, parce qu'un « A » se retrouverait dans la moitié des phrases.
+3. **Quand plusieurs portées répondent des choses différentes, on ne pré-remplit
+   rien — et on le dit.** C'est la seule règle qui distingue « je n'ai pas
+   trouvé » de « j'ai trouvé deux choses contradictoires ». Le silence ferait
+   passer la seconde pour la première, et l'on ressaisirait une valeur que le
+   projet porte déjà, sans savoir qu'on tranche.
+
+**Une zone ne l'emporte pas sur l'ouvrage entier**, et c'est délibéré. Le plus
+spécifique gagne dans un fichier de styles ; sur un chantier, deux affirmations
+qui se contredisent sont une question à poser, pas une priorité à appliquer.
+
+Deux portées **d'accord** ne sont pas une contradiction : elles tranchent, et la
+provenance les nomme toutes les deux — lire une seule ferait croire qu'on n'a lu
+qu'une affirmation.
+
+### Les gardes posées, et ce qu'on a cassé pour les voir tomber
+
+| la garde | ce qu'on a cassé | ce qui est tombé |
+|---|---|---|
+| deux portées contradictoires ne pré-remplissent rien | la première trouvée gagne | 4 tests |
+| la portée remonte avec la valeur | elle reste vide | 3 tests |
+| la question sert à lire la zone | elle ne sert plus | 2 tests |
+| l'ouvrage entier répond toujours | il est écarté | 1 test |
+| deux portées d'accord tranchent | elles comptent pour une contradiction | 2 tests |
+| une portée de deux lettres ne désigne rien | elle désigne | 1 test |
+| ce qui manque dit pourquoi | le message se tait | 1 test |
+| la portée s'écrit à l'écran | elle disparaît de la phrase | 3 tests |
+| le séparateur ne s'écrit pas sans portée | il s'écrit quand même | 3 tests |
+| une origine inconnue se dit telle quelle | elle disparaît | 1 test |
+| toute origine du catalogue sait se dire | l'une perd son mot | 2 tests |
+
+*Vérifié au navigateur* : les quatre provenances s'affichent sur une ligne, avec
+et sans portée, avec la vraie feuille de style.
+
+---
+
 ## L'ordre de fabrication
 
 | | étape | ce qu'on peut livrer seul |
@@ -401,7 +464,7 @@ figure — le test refuse aussi de passer si le fichier n'a pas été lu.
 | 1 | ~~la variable et son versement (§ 1, § 5 pour l'écran)~~ **faite** | oui — elle enrichit la mémoire même sans routage |
 | 2 | ~~le champ `regimeIncendie` sur l'outil habitation (§ 2)~~ **faite** | oui — inerte tant que § 3 n'est pas là |
 | 3 | ~~le filtre de `declarationsPourModele` (§ 3) et l'entrée `regimeIncendie` (§ 4)~~ **faite** | oui — c'est le routage lui-même |
-| 4 | la portée dans `prefillDepuisMemoire` (§ 5) | oui, et **indépendamment** : c'est un défaut qui existe déjà |
+| 4 | ~~la portée dans `prefillDepuisMemoire` (§ 5)~~ **faite** | oui, et **indépendamment** : c'est un défaut qui existe déjà |
 | 5 | la provenance à l'écran (§ 6) | oui |
 
 Chaque ligne est une PR. La quatrième n'attend pas les autres : le défaut de
