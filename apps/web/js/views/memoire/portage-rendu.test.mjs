@@ -169,7 +169,7 @@ test("ce qui est confirmé et ce qui est proposé sont deux blocs, deux titres",
   // « Confirmer » sans savoir ce qu'on confirmait. Vu à l'écran d'un vrai projet.
   const dit = renderCeQuePorteLeSujet({ portages: [POSE, PROPOSE] });
 
-  assert.match(dit, /Ce sujet porte sur/);
+  assert.match(dit, /Ce sujet met ces valeurs en débat/);
   assert.match(dit, /Ces valeurs portent le même nom/);
   assert.match(dit, /data-portage-retire="l-1"/);
   assert.match(dit, /data-portage-confirme="l-2"/);
@@ -222,14 +222,15 @@ test("les boutons répondent à la question posée juste au-dessus", () => {
   // oui ou non, et elle ne s'apprend pas.
   //
   // Sur une arête **déjà confirmée**, il n'y a plus de question : le geste est
-  // de défaire, et il s'appelle « Écarter ». Deux mots, parce que ce sont deux
-  // actes — et un seul mécanisme derrière, la même marque de données.
+  // de défaire, et il s'appelle par son effet — « Retirer du débat ». Deux
+  // libellés, parce que ce sont deux actes ; un seul mécanisme derrière, la
+  // même marque de données.
   const propose = renderCeQuePorteLeSujet({ portages: [PROPOSE] });
   const pose = renderCeQuePorteLeSujet({ portages: [POSE] });
 
   assert.match(propose, />Oui, celle-ci</);
   assert.match(propose, />Non</);
-  assert.match(pose, />Écarter</);
+  assert.match(pose, />Retirer du débat</);
   assert.doesNotMatch(pose, />Oui, celle-ci</);
 });
 
@@ -241,7 +242,7 @@ test("un sujet sans arête offre le geste, et n'affirme toujours rien", () => {
 
   assert.match(dit, /Ces valeurs portent le même nom/);
   assert.match(dit, /data-portage-cherche/);
-  assert.doesNotMatch(dit, /Ce sujet porte sur/);
+  assert.doesNotMatch(dit, /met ces valeurs en débat/);
   assert.doesNotMatch(dit, /portage-liste__corps/);
   assert.doesNotMatch(dit, /ne porte sur rien|aucune valeur/i);
 });
@@ -258,6 +259,79 @@ test("« rien » se dit de trois façons, et elles ne se confondent pas", () => 
   assert.match(rien, /Aucun nom de la mémoire/);
   assert.match(deja, /déjà rattachés, ou ont déjà été écartés/);
   assert.notEqual(rien, deja);
+});
+
+/* ── Ce que confirmer avance ─────────────────────────────────────────────── */
+
+const CONFIRME = (sujet, valeur, portees = [], id = "l-1") => ({
+  assertion: VALEUR(sujet, valeur), lien: { id }, confirme: true, histoire: { ou: portees, lacunes: [] }
+});
+
+test("confirmer se voit : la ligne dit qu'elle est en débat", () => {
+  // On clique « Oui, celle-ci », la ligne change de bloc, et rien ne disait
+  // qu'on avait confirmé. Vu à l'écran d'un vrai projet.
+  const dit = renderCeQuePorteLeSujet({ portages: [CONFIRME("Altitude", "742,30")] });
+
+  assert.match(dit, /Ce sujet met ces valeurs en débat/);
+  assert.match(dit, /portage-liste__pastille--debat">en débat</);
+});
+
+test("le bloc dit ce que le débat fait, et comment il finit", () => {
+  // « Ça avance à quoi de faire tout ça ? » — la question est la bonne, et
+  // l'écran n'y répondait pas. Un geste dont on ne voit ni l'effet ni la suite
+  // n'est pas un geste, c'est une formalité.
+  const dit = renderCeQuePorteLeSujet({ portages: [CONFIRME("Altitude", "742,30")] });
+
+  assert.match(dit, /elles ne se présentent plus comme acquises/);
+  assert.match(dit, /la Mémoire et le cerveau les montrent\s+« en débat »/);
+  assert.match(dit, /Fermer ce sujet comme réalisé\s+demandera ce qui a été tranché/);
+  assert.match(dit, /dans quel sujet elle a\s+été tranchée/);
+});
+
+test("le geste sur une ligne confirmée s'appelle par son effet", () => {
+  // « Écarter » ne disait pas ce qu'il écartait. Il défait la confirmation :
+  // il retire la valeur du débat, et c'est ce qu'il s'appelle.
+  const dit = renderCeQuePorteLeSujet({ portages: [CONFIRME("Altitude", "742,30", [], "l-4")] });
+
+  assert.match(dit, /data-portage-retire="l-4"[^>]*>Retirer du débat</);
+});
+
+test("deux valeurs du même nom se montrent côte à côte, avec leurs portées", () => {
+  // Quatre lignes dans l'ordre de la base, il faut lire les quatre et comparer
+  // de tête. C'est ce qu'on vient chercher, et il faut que ça se voie.
+  const dit = renderCeQuePorteLeSujet({
+    portages: [
+      CONFIRME("Profondeur hors gel", "0,69 m", ["Bâtiment A"], "l-1"),
+      CONFIRME("Profondeur hors gel", "0,466 m", ["Préau"], "l-2")
+    ]
+  });
+
+  const tableau = dit.slice(dit.indexOf("debat-valeurs"), dit.indexOf("portage-liste__corps"));
+  assert.match(tableau, /2 valeurs différentes portent le nom « Profondeur hors gel »/);
+  assert.match(tableau, /<dt>0,69 m<\/dt>\s*<dd>Bâtiment A<\/dd>/);
+  assert.match(tableau, /<dt>0,466 m<\/dt>\s*<dd>Préau<\/dd>/);
+});
+
+test("une valeur sans portée vaut pour l'ouvrage entier, et le dit", () => {
+  // La case vide se lirait « on ne sait pas », et c'est justement la portée qui
+  // décide si deux valeurs se contredisent.
+  const dit = renderCeQuePorteLeSujet({
+    portages: [
+      CONFIRME("Profondeur hors gel", "0,69 m", [], "l-1"),
+      CONFIRME("Profondeur hors gel", "0,466 m", ["Préau"], "l-2")
+    ]
+  });
+
+  assert.match(dit, /<dd>sur l&#39;ouvrage entier<\/dd>/);
+});
+
+test("sans opposition, aucun tableau ne redouble la liste", () => {
+  // Il répéterait mot pour mot les lignes d'en dessous (règle 4).
+  const dit = renderCeQuePorteLeSujet({
+    portages: [CONFIRME("Altitude", "742,30", ["Bâtiment A"])]
+  });
+
+  assert.doesNotMatch(dit, /debat-valeurs/);
 });
 
 /* ── L'histoire d'une valeur, sous la valeur ─────────────────────────────── */

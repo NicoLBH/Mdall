@@ -741,6 +741,71 @@ mais c'est vrai, et cela suffit à ne pas recommencer.
 Cela ne rouvre rien : `portageAProposer` compte toujours les écartées parmi les
 connues, et ne les repropose pas. Les montrer est une lecture.
 
+#### « Ça avance à quoi de faire tout ça ? »
+
+La question est la bonne, et l'écran n'y répondait pas. On clique « Oui,
+celle-ci », la ligne change de bloc, le titre dit « Ce sujet porte sur », le
+bouton dit « Écarter » — et **on ne voit même pas qu'on a confirmé**.
+
+Ce que ça avance était pourtant tout l'intérêt du rapprochement, et le
+mécanisme existait déjà de bout en bout :
+
+```
+reconnaissance  →  « Oui, celle-ci »  →  la valeur est EN DÉBAT
+                                           (Mémoire · cerveau)
+                                              ↓
+                                    fermer le sujet « réalisé »
+                                              ↓
+                              « qu'est-ce qui a été tranché ? »
+                                              ↓
+                            la décision se PROPOSE, puis se signe
+                                              ↓
+                       la valeur dit dans quel sujet elle a été tranchée
+```
+
+Rien de tout cela n'était dit. Le bloc le dit maintenant, en trois endroits :
+
+| où | ce que ça dit |
+|---|---|
+| le titre | « Ce sujet met ces valeurs en débat » — il ne constate plus, il nomme l'état |
+| la pastille | **en débat**, sur chaque ligne, dans la couleur du halo du cerveau |
+| la phrase de fin | fermer le sujet demandera ce qui a été tranché, et la décision remplacera |
+
+Et le geste s'appelle par son effet : **« Retirer du débat »**, pas
+« Écarter ». « Non » reste au bloc d'en dessous — là on répond à une question,
+ici on défait un geste.
+
+#### Ce que le débat a à trancher, côte à côte
+
+Quatre lignes « Profondeur hors gel » dans l'ordre de la base : il faut lire les
+quatre et comparer de tête. `ce-qui-se-debat.js` les range par nom et met les
+valeurs distinctes en regard de leurs portées :
+
+```
+2 valeurs différentes portent le nom « Profondeur hors gel ». Sur des parties
+différentes de l'ouvrage elles peuvent être justes toutes les deux — c'est ce
+que ce sujet a à trancher.
+
+Profondeur hors gel
+  0,69 m      Bâtiment A
+  0,466 m     Préau · Bâtiment B
+```
+
+**Il montre, il ne conclut pas.** « Elles se contredisent » ne se vérifie pas :
+deux parties différentes de l'ouvrage peuvent porter deux valeurs justes. La
+portée est là précisément parce que c'est elle qui décide, et c'est le projet
+qui tranche, pas l'outil.
+
+La même valeur versée deux fois pour deux zones n'est donc pas un débat : c'est
+la même réponse à deux endroits, et elle se range sur une seule ligne avec ses
+deux portées. Le tableau ne s'écrit pas du tout quand aucun nom n'en porte
+plusieurs — il répéterait la liste d'en dessous (règle 4).
+
+La couleur du débat vit maintenant dans `--debat`, lue par la légende du cerveau
+et par la pastille : un seul état, une seule couleur (règle 10). Le halo du
+canevas la recopie — un dessin sur canevas ne lit pas une variable CSS —, et
+c'est le seul endroit où elle se répète.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -946,6 +1011,20 @@ valeur que personne n'a mise en doute.
 | une pastille sans date n'écrit pas de blancs | elle les écrit | 1 test |
 | la date du refus se lit en français | elle reste en ISO | 1 test |
 | sans refus, le bloc ne s'écrit pas | il s'écrit vide | 2 tests |
+| deux valeurs du même nom se rangent côte à côte | chaque version fait une colonne | 1 test |
+| la même valeur à deux endroits n'est pas un débat | elle compte pour une opposition | 1 test |
+| une portée citée deux fois ne se répète pas | elle se répète | 1 test |
+| les noms partagés viennent en premier | ils se noient dans les autres | 1 test |
+| une valeur sans nom ne se range nulle part | elle fait un titre vide | 1 test |
+| le compte des valeurs se lit sur les données | il est écrit d'avance | 1 test |
+| la phrase ne conclut pas à la contradiction | elle y conclut | 1 test |
+| l'absence d'opposition se dit | elle se tait | 1 test |
+| confirmer se voit : la ligne dit « en débat » | rien ne change à l'écran | 1 test |
+| le bloc dit ce que le débat fait, et comment il finit | il se tait | 1 test |
+| le geste confirmé s'appelle par son effet | il reprend « Écarter » | 2 tests |
+| le tableau du débat se dessine | il disparaît | 2 tests |
+| sans opposition, aucun tableau ne redouble la liste | il redouble | 1 test |
+| une valeur sans portée dit l'ouvrage entier | elle laisse la case vide | 1 test |
 
 ---
 
@@ -980,5 +1059,6 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | ce qui ne se rejoue pas, et pourquoi | `docs/rejouer-la-memoire.md` |
 | l'histoire d'une valeur, et ce qu'on n'en sait pas | `apps/web/js/services/histoire-de-la-valeur.js` |
 | ce qu'un sujet a écarté, et qui se relit | `apps/web/js/services/point-porte-sur.js` |
+| ce qu'un sujet met en débat, et ce qui s'y oppose | `apps/web/js/services/ce-qui-se-debat.js` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

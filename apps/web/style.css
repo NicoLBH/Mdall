@@ -36,6 +36,11 @@
   --project-tabs-icon-color:rgb(145, 152, 161);
   --borderColor-accent-emphasis:rgb(31,111,235);
 
+  /* La couleur de l'attention, jamais celle de l'alerte : c'est l'état d'une
+     valeur qu'un sujet ouvert met en débat. Le cerveau la dessine, la liste des
+     arêtes la met en pastille — un seul état, une seule couleur (règle 10). */
+  --debat:rgba(210,153,34,.85);
+
   --radius:6px;
   --radius2:10px;
   --font:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
@@ -9874,6 +9879,22 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   flex:0 0 auto; padding:2px 8px; border-radius:999px;
   border:1px solid var(--border); color:var(--muted); font-size:11px; white-space:nowrap;
 }
+
+/* Une valeur en débat cesse de se présenter comme acquise. C'est la couleur de
+   l'attention et jamais celle de l'alerte — la même que le halo du cerveau,
+   parce que c'est le même état qu'on montre à deux endroits (règle 10). */
+.portage-liste__pastille--debat{ color:var(--debat); border-color:var(--debat); }
+
+/* Ce que le débat a à trancher, côte à côte. Une liste dans l'ordre de la base
+   se compare de tête ; rangée par nom, l'opposition se voit. */
+.debat-valeurs{
+  margin:0 0 10px; padding:10px 12px;
+  border:1px solid var(--border); border-radius:var(--radius);
+}
+.debat-valeurs__dit{ margin:0 0 8px; color:var(--text); font-size:12px; }
+.debat-valeurs__nom{ margin:8px 0 2px; color:var(--muted); font-size:11px; }
+.debat-valeurs__nom:first-of-type{ margin-top:0; }
+.debat-valeurs dt{ font-weight:600; }
 
 /* Le reste de l'histoire : pourquoi cette valeur, et ce qu'on n'en sait pas.
 
@@ -24051,9 +24072,9 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    pastille disparaissait entièrement — une légende avec un texte et rien en
    face. Vu au navigateur. */
 .cerveau-legende__item--debat i{
-  --trait:rgba(210,153,34,.85);
+  --trait:var(--debat);
   background:transparent;
-  border:1px dashed rgba(210,153,34,.85);
+  border:1px dashed var(--debat);
 }
 /* Une règle n'est pas une nature de valeur : le losange le dit sans une ligne de
    texte de plus, et c'est la forme qu'elle a dans le dessin. */
