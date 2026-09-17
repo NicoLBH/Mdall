@@ -4978,10 +4978,10 @@ body.route--project:not(.project-shell-compact) [data-chrome-visibility="compact
 body:has(.gh-header--global){ --app-top:var(--header-h-compact); }
 
 .gh-header--project{border-bottom:none;}
-/* Dans un projet, ce nom **est** celui du projet : il ne s'allège plus. Il était
-   mis en retrait parce qu'il portait celui de la personne, qui précédait le
-   projet ; ce nom-là a quitté la barre, et l'allègement avec lui. */
-.gh-header--project .gh-brand__name{font-size:14px;}
+/* Dans un projet, ce nom **est** celui du projet, et il se lit comme tel : en
+   retrait. Il n'a pas à peser plus que les onglets qu'il surmonte — on sait sur
+   quel chantier on est, on ne le cherche pas. */
+.gh-header--project .gh-brand__name{font-size:14px;font-weight:400;color:var(--muted);}
 
 
 
@@ -18096,12 +18096,36 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .copilote-apercu__tete .ui-icon{ flex:none; color:var(--muted); }
 .copilote-apercu__nom{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .copilote-apercu__fermer{ flex:none; }
-/* Le lecteur est celui du navigateur : il défile, il cherche, il zoome. Le
-   cadre n'a qu'à lui donner une hauteur — sans elle, un `iframe` retombe sur
-   cent cinquante pixels, et l'on ferait défiler une fenêtre de trois lignes. */
+/* **Les pages sont peintes par le lecteur de l'application**, et non par le
+   navigateur : « toujours télécharger les PDF » est un réglage courant, et le
+   cadre montrait alors un bouton « Ouvrir » à la place du document.
+
+   Le conteneur est celui des Documents — mêmes classes, même rendu — et c'est
+   lui qui défile. Les pages, elles, gardent leur taille réelle : les étirer
+   ferait un PDF flou. */
 .copilote-apercu__page{
   flex:1 1 auto; min-height:0; width:100%; border:0; background:var(--bg);
+  overflow:auto;
 }
+/* La note est étroite dans ce panneau : les pages se centrent plutôt que de se
+   coller à gauche. */
+.copilote-apercu__page.documents-pdf-viewer__pages{ align-items:center; min-width:0; }
+.copilote-apercu__page .documents-pdf-viewer__canvas{ max-width:100%; height:auto; }
+
+/* Ce que le lecteur est en train de faire, dit en toutes lettres : un cadre
+   vide, un cadre qui lit et un cadre en panne se regardent exactement pareil. */
+.copilote-apercu__etat{
+  flex:0 0 auto; margin:0; padding:6px 12px;
+  border-top:1px solid var(--border2);
+  color:var(--muted); font-size:12px;
+}
+.copilote-apercu__etat--panne{ color:#f0883e; }
+/* Le recours, discret : le lecteur dessine, ce lien rend la note au navigateur. */
+.copilote-apercu__onglet{
+  flex:none; font-size:12px; color:var(--muted); text-decoration:none;
+  padding:2px 8px; border-radius:6px;
+}
+.copilote-apercu__onglet:hover{ color:var(--text); background:rgba(255,255,255,.07); }
 
 /* Une fois la note partie, elle ne tient plus une carte dans la zone de saisie :
    le trombone allumé dit qu'elle est jointe à la discussion, la croix à côté
@@ -25525,6 +25549,14 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 /* Le chevron dit qu'il y a quelque chose dessous — sans lui, l'épingle se lit
    comme un bouton qui épingle. */
 .sujets-rail__epingles-caret{ width:10px; height:10px; opacity:.7; }
+/* **Replié, le chevron s'en va avec les intitulés.**
+
+   Il ajoutait douze pixels à un bouton qui doit en faire quarante, comme toutes
+   les entrées du rail : le fond du survol s'arrêtait à soixante-dix dans un rail
+   large de soixante-six, il débordait sur le trait et mordait sur l'écran. Dans
+   une colonne d'icônes, plus rien ne porte d'intitulé et c'est l'infobulle qui
+   nomme — le chevron n'a plus personne à annoncer. */
+.project-rail.is-collapsed .sujets-rail__epingles-caret{ display:none; }
 
 /* Les bords plus arrondis que les autres menus : celui-ci sort d'un rail
    étroit, et flotte seul au milieu de l'écran. */

@@ -65,9 +65,39 @@ dans une page n'en désigne plus qu'un, le premier. Les deux étant exclusives, 
 défaut attendait tranquillement de cesser de l'être ; ce sont désormais deux
 repères, et un seul geste les sert.
 
-## Et un cadre qui n'affiche rien le dit
+## L'aperçu est dessiné par l'application, plus par le navigateur
 
-Le lecteur du navigateur peut refuser une note — un base64 tronqué, un fichier qui
-n'est pas le PDF qu'il annonce. Le cadre restait alors vide, et rien ne
-distinguait « ce PDF est vide » de « ce PDF n'a pas pu s'ouvrir » : les deux se
-regardent pareil, et l'un fait rejoindre la note pour rien.
+C'était un cadre pointant sur la note en mémoire, et le navigateur y mettait son
+propre lecteur. Il sait le faire — **mais il peut aussi refuser** : « toujours
+télécharger les PDF » est un réglage courant de Chrome, et le cadre affichait
+alors son écran de téléchargement, avec l'identifiant de l'objet en guise de nom
+et un bouton « Ouvrir ». Une note qu'on vient de joindre et qu'on ne peut pas
+regarder d'un coup d'œil fait douter de tout ce qui suit : si l'écran ne sait pas
+montrer le PDF, que vaut ce qu'il en tirera ?
+
+Les pages sont donc dessinées par **le lecteur de l'application** —
+`services/ct-lab-pdf-view.js`, celui de l'onglet Documents. Le moteur est vendu
+dans le dépôt, le rendu ne dépend d'aucun réglage de navigateur, et c'est le même
+que partout ailleurs.
+
+Trois conséquences, toutes voulues :
+
+- le décodage du base64 vit dans `piece-jointe.js` (`octetsDeLaPiece`), d'où
+  sortent aussi bien les octets du lecteur que l'adresse du recours : deux
+  décodages du même base64 finiraient par ne plus rendre le même document ;
+- **l'adresse d'objet ne sert plus qu'au recours** — « Ouvrir dans un onglet »,
+  pour imprimer ou garder la note à côté ;
+- **l'aperçu dit où il en est** : en lecture, lu, ou en panne. Un cadre vide, un
+  cadre qui lit et un cadre en panne se regardent exactement pareil (règle 5).
+
+Les pages se repeignent après chaque rendu, et **seulement si le conteneur est
+vide** : l'écran se redessine entièrement, les canevas partent avec lui, mais
+repeindre à chaque frappe relirait le document.
+
+## Le chevron de l'épingle débordait lui aussi
+
+Le bouton des vues épinglées porte une épingle **et** un chevron : cinquante-deux
+pixels dans un rail qui en fait soixante-six, bord droit à soixante-dix. Replié,
+le chevron s'en va avec les intitulés — dans une colonne d'icônes, plus rien ne
+porte de libellé et c'est l'infobulle qui nomme : il n'a plus personne à
+annoncer. Le bouton retombe à quarante pixels, comme les autres.

@@ -94,18 +94,58 @@ test("sans note, il n'y a pas de ligne", () => {
 
 /* ── L'aperçu ────────────────────────────────────────────────────────────── */
 
-test("l'aperçu porte le lecteur du navigateur, et de quoi le refermer", () => {
+/**
+ * **Les pages sont dessinées par l'application, pas par le navigateur.**
+ *
+ * Le cadre laissait le navigateur s'en charger. Il sait le faire — mais il peut
+ * aussi refuser : « toujours télécharger les PDF » est un réglage courant, et le
+ * cadre montrait alors un bouton « Ouvrir » à la place du document. Une note
+ * qu'on vient de joindre et qu'on ne peut pas regarder d'un coup d'œil fait
+ * douter de tout ce qui suit.
+ */
+test("l'aperçu porte le lecteur de l'application, et de quoi le refermer", () => {
   const html = renderApercuDeLaNoteHtml({ nom: "note.pdf", adresse: "blob:abc" });
 
-  assert.match(html, /<iframe[^>]*src="blob:abc"/, "le cadre montre la note");
+  assert.doesNotMatch(html, /<iframe/, "plus de cadre : le navigateur ne décide plus");
+  assert.match(html, /data-copilote-apercu-pages/, "les pages se peignent ici");
+  assert.match(html, /documents-pdf-viewer__pages/, "avec les classes du lecteur des Documents");
   assert.match(html, /data-copilote-apercu-fermer/, "et se referme");
   assert.match(html, /aria-label="Aperçu de note\.pdf"/);
 });
 
-/** Sans adresse, rien : un cadre vide se lirait comme un PDF vide. */
-test("sans adresse, aucun aperçu", () => {
-  assert.equal(renderApercuDeLaNoteHtml({ nom: "note.pdf" }), "");
-  assert.equal(renderApercuDeLaNoteHtml(), "");
+/**
+ * **Le recours reste à portée de main.** Le lecteur de l'application dessine ;
+ * ce lien rend la note au navigateur — pour l'imprimer, ou la garder ouverte à
+ * côté.
+ */
+test("l'aperçu offre d'ouvrir la note dans un onglet", () => {
+  const avec = renderApercuDeLaNoteHtml({ nom: "note.pdf", adresse: "blob:abc" });
+  assert.match(avec, /href="blob:abc"[\s\S]{0,80}target="_blank"/);
+  assert.match(avec, /Ouvrir dans un onglet/);
+
+  // Sans adresse, pas de lien mort : l'aperçu se dessine quand même, puisqu'il
+  // ne dépend plus d'elle.
+  const sans = renderApercuDeLaNoteHtml({ nom: "note.pdf" });
+  assert.doesNotMatch(sans, /Ouvrir dans un onglet/);
+  assert.match(sans, /data-copilote-apercu-pages/);
+});
+
+/**
+ * **Trois états, et non deux.** Un cadre vide, un cadre en cours de lecture et
+ * un cadre en panne se regardent exactement pareil : l'écran dit lequel des
+ * trois, sans quoi on rejoint la note pour rien (règle 5).
+ */
+test("l'aperçu dit où en est le dessin", () => {
+  assert.match(renderApercuDeLaNoteHtml({ nom: "n.pdf" }), /Lecture de la note…/);
+  assert.match(renderApercuDeLaNoteHtml({ nom: "n.pdf", etat: "lecture" }), /aria-busy="true"/);
+
+  const lue = renderApercuDeLaNoteHtml({ nom: "n.pdf", etat: "lue" });
+  assert.doesNotMatch(lue, /Lecture de la note/);
+  assert.match(lue, /aria-busy="false"/);
+
+  const panne = renderApercuDeLaNoteHtml({ nom: "n.pdf", etat: "panne", adresse: "blob:abc" });
+  assert.match(panne, /n'a pas pu être dessinée/);
+  assert.match(panne, /ouvrable dans un onglet/, "et le recours est rappelé");
 });
 
 /* ── Les octets ──────────────────────────────────────────────────────────── */
