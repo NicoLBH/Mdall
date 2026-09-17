@@ -18313,6 +18313,11 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .copilote-outil__ecarts .copilote-outil__legende{ color:var(--danger); }
 .copilote-outil__note{ margin:10px 0 0; color:var(--muted); font-size:11px; line-height:15px; }
 .copilote-outil--refus{ border-color:rgba(248,81,73,.35); }
+/* Ce qu'un agent **demande** — « il faut dire ce qu'on change » — n'est pas ce
+   qui a échoué. Le rouge de l'alarme faisait lire une panne là où il n'y avait
+   qu'une question, et la peur restait même après qu'on avait compris. */
+.copilote-outil--manque{ border-color:var(--ton-doute); }
+.copilote-outil--manque .copilote-outil__note{ color:var(--ton-doute-vif); }
 
 /* Le formulaire d'un utilitaire à qui il manque des entrées. Construit depuis
    la déclaration de l'utilitaire, jamais depuis les mots du modèle. */

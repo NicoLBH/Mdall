@@ -117,17 +117,66 @@ test("aucun module d'orchestration n'est servi par le site", async () => {
   assert.deepEqual(fautifs, [], "ces modules seraient lisibles avec F12");
 });
 
+/**
+ * Ce qu'une page peut charger, par opposition à ce qui traîne dans le dossier.
+ *
+ * Un fichier de test n'est chargé par aucune page : il n'est dans le graphe
+ * d'imports d'aucun écran, et le chemin qu'il nomme —
+ * `../../../../supabase/functions/...` — pointe **hors** de ce que le site sert.
+ * Le suivre depuis un navigateur ne mène nulle part.
+ *
+ * Confondre les deux obligerait à écrire les tests de couplage en imports
+ * dynamiques multilignes, pour passer sous la garde plutôt que devant elle —
+ * c'est-à-dire à garder son angle mort en croyant la respecter.
+ *
+ * Le test suivant ferme la porte que celui-ci laisse entrouverte : **rien de ce
+ * que le site sert n'importe un fichier de test.**
+ */
+const estUnTest = (fichier) => fichier.endsWith(".test.mjs");
+
+/**
+ * Est-ce que ce fichier va chercher ce chemin-là ?
+ *
+ * **Les trois formes, et pas deux.** On ne regardait que `from "…"` et
+ * `import("…")` ; l'import à effet de bord — `import "…"`, sans rien en tirer —
+ * passait à travers. C'est pourtant celui qu'on écrit quand on veut juste que le
+ * module soit chargé, et il emporte tout autant ce qu'il nomme.
+ *
+ * Trouvé en cassant la garde pour la voir tomber : elle n'est pas tombée.
+ */
+function vaChercher(source, motif) {
+  return new RegExp(`(?:from|import)\\s*\\(?\\s*["'][^"']*${motif}`).test(source);
+}
+
 test("aucun fichier du site ne remonte vers les utilitaires du serveur", async () => {
   // Un `import "../../../supabase/functions/..."` serait suivi par le
   // navigateur : le module partirait avec la page.
-  const servis = await fichiersDe(webDir, (f) => f.endsWith(".js") || f.endsWith(".mjs"));
+  const servis = await fichiersDe(
+    webDir, (f) => (f.endsWith(".js") || f.endsWith(".mjs")) && !estUnTest(f)
+  );
   const fautifs = [];
 
   for (const fichier of servis) {
     const source = await readFile(fichier, "utf8");
-    if (/from\s+["'][^"']*supabase\/functions/.test(source) || /import\(["'][^"']*supabase\/functions/.test(source)) {
-      fautifs.push(path.relative(rootDir, fichier));
-    }
+    if (vaChercher(source, "supabase\\/functions")) fautifs.push(path.relative(rootDir, fichier));
+  }
+
+  assert.deepEqual(fautifs, []);
+});
+
+test("rien de ce que le site charge n'importe un fichier de test", async () => {
+  // Sans celui-ci, l'exception ci-dessus serait une porte : un module d'écran
+  // importerait un `.test.mjs`, qui lui-même remonte au serveur, et le module
+  // d'orchestration partirait avec la page par un chemin que personne ne
+  // regarde.
+  const servis = await fichiersDe(
+    webDir, (f) => (f.endsWith(".js") || f.endsWith(".mjs")) && !estUnTest(f)
+  );
+  const fautifs = [];
+
+  for (const fichier of servis) {
+    const source = await readFile(fichier, "utf8");
+    if (vaChercher(source, "\\.test\\.mjs")) fautifs.push(path.relative(rootDir, fichier));
   }
 
   assert.deepEqual(fautifs, []);
@@ -141,9 +190,7 @@ test("les modules d'orchestration ne dépendent de rien qui vienne du navigateur
 
   for (const fichier of modules) {
     const source = await readFile(fichier, "utf8");
-    if (/from\s+["'][^"']*apps\/web/.test(source) || /import\(["'][^"']*apps\/web/.test(source)) {
-      fautifs.push(path.relative(rootDir, fichier));
-    }
+    if (vaChercher(source, "apps\\/web")) fautifs.push(path.relative(rootDir, fichier));
   }
 
   assert.deepEqual(fautifs, []);

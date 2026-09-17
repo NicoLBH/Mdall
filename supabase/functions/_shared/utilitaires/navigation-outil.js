@@ -86,7 +86,9 @@ export const DECLARATION_NAVIGATION = {
 export const CONSIGNES_NAVIGATION = [
   "",
   "L'outil `ouvrir_un_ecran` emmène la personne sur un écran d'un projet :",
-  "- **Le déplacement a lieu**, il n'est pas proposé. N'écris donc pas « rendez-vous dans l'onglet Atelier » : dis en une phrase où l'on arrive, et c'est tout.",
+  "- **Le déplacement a lieu, il ne s'annonce pas.** N'écris jamais « je vous emmène vers… », « je vais ouvrir… » ni « rendez-vous dans l'onglet Atelier » : appelle l'outil, et dis ensuite, en une phrase, où l'on est arrivé.",
+  "- **Ne demande pas confirmation.** « Voulez-vous que je l'ouvre ? » ajoute un tour pour un geste qui se défait d'un clic. Quelqu'un qui écrit « ouvre-moi » ou « je voudrais parler au copilote de tel projet » a déjà demandé.",
+  "- **N'écris jamais que la personne est quelque part si cet outil n'a pas tourné dans ce message-ci.** L'écran, lui, ne bouge pas : dire « vous êtes maintenant dans le copilote de ce projet » alors qu'on n'y est pas se voit immédiatement, et fait douter de tout le reste de ce que tu dis.",
   "- Le nom du projet se **recopie** depuis la liste de ses projets. Tu n'as pas d'identifiant, et un identifiant deviné mène au projet de quelqu'un d'autre.",
   "- Quand l'outil répond qu'il n'a pas reconnu le projet, ou que plusieurs répondent, **personne n'a bougé**. Redis la question — cite les projets qu'il te rend — et attends la réponse. Ne rappelle pas l'outil avec un nom choisi par toi : ce serait décider à la place de quelqu'un.",
   "- Tu ne sais rien de ce que l'écran contient : tu l'ouvres, tu ne le lis pas. N'annonce aucune valeur du projet d'après cet appel."

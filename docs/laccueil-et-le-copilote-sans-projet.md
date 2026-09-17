@@ -337,6 +337,79 @@ ajouté à l'une sans l'autre serait parti au navigateur sans rôle. Un test
 vérifie que chaque rôle déclaré est un rôle que le navigateur sait exécuter, et
 qu'aucun nom d'outil n'est écrit dans la page.
 
+### Le défaut qui ne se voit sur aucune des deux moitiés
+
+Au premier essai, à « ouvre-moi le copilote du Reposoir, restaurant scolaire »,
+le journal a dit **« Lancement de ouvrir un ecran »** — donc le serveur avait
+bien l'outil, et le modèle l'avait bien appelé — puis « Lecture de ce qui dépend
+de cette valeur », qui est une étape du **moteur de variante**. À l'écran : un
+encadré rouge, « Test d'une variante — il faut dire ce qu'on change ». Personne
+n'avait bougé.
+
+Le serveur et le site se déploient séparément. Le serveur était à jour, le site
+non. L'appel est donc parti au navigateur avec le rôle `navigation`, et
+l'aiguillage d'alors — un ternaire, *« cerveau, ou sinon variante »* — a lancé
+le moteur de variante. Les deux moitiés étaient justes ; c'est leur décalage qui
+ne l'était pas, et il dure le temps d'un déploiement ou d'un cache de
+navigateur.
+
+**Trois corrections, de la plus superficielle à la plus profonde.**
+
+**1. Un rôle inconnu ne s'exécute plus au hasard.** L'aiguillage est une table :
+un rôle absent arrête le tour au lieu de lancer l'outil d'à côté (règle 5). Ce
+n'est pas suffisant — le tour échoue quand même —, mais c'est honnête.
+
+**2. Le navigateur dit ce qu'il sait faire, et le serveur n'offre que cela.**
+Chaque question emporte les **rôles** que cette page-ci sait exécuter — des
+rôles, pas des noms d'outils : elle n'en apprend aucun. Le serveur ne déclare au
+modèle que les outils dont le rôle y figure : un outil que la page ne connaît pas
+n'est pas proposé, donc jamais appelé. Un navigateur qui ne dit rien est un
+navigateur d'avant, et reçoit les deux rôles qui existaient alors — lui supposer
+les rôles du jour serait exactement le défaut qu'on répare.
+
+La liste annoncée **est** la table qui exécute, lue autrement. Deux listes
+auraient divergé au premier rôle ajouté (règle 4). Elle vit dans
+`services/copilote-executeurs.js` — un fichier à part, parce que c'est le point
+où un décalage se paie et qu'il faut pouvoir le confronter, en vrai, à la table
+des rôles du serveur.
+
+**3. Une question n'est pas une panne.** « Il faut dire ce qu'on change » est ce
+qu'un agent *demande*, pas ce qui a échoué. Encadré de rouge comme une erreur, il
+fait chercher une panne qui n'existe pas — et c'est pire quand l'agent n'aurait
+pas dû être appelé du tout. Le rouge est désormais réservé à ce qui a vraiment
+échoué ; une demande de précision porte le ton du doute. Les deux se dessinent
+dans `carte-sans-resultat.js`, un module pur, pour que la distinction se vérifie
+sans ouvrir l'application.
+
+S'y ajoutent deux garde-fous de langage : les consignes du moteur de variante
+disent qu'une demande d'ouvrir un écran n'en est pas une, et celles de la
+navigation interdisent trois phrases — « je vous emmène vers… » (on appelle
+l'outil, on ne l'annonce pas), « voulez-vous que je l'ouvre ? » (quelqu'un qui
+écrit « ouvre-moi » a déjà demandé), et « vous êtes maintenant dans… » quand
+l'outil n'a pas tourné dans ce message-ci.
+
+Enfin, le maillon entre « l'outil a tourné » et « l'écran a bougé » est sorti du
+fil : `routeOuAller()` vit avec le reste de la navigation, où il se vérifie sans
+navigateur. C'est le maillon dont la panne se lit comme un mensonge.
+
+### La cloison, et le trou qu'on a trouvé en la cassant
+
+Le test de couplage des deux tables doit importer un module du serveur depuis un
+fichier de test du site — ce que la cloison interdit, à juste titre : un module
+d'écran qui remonte au serveur emporterait l'orchestration avec la page.
+
+Un fichier de test, lui, n'est chargé par aucune page. La garde distingue donc
+désormais ce qu'une page peut charger de ce qui traîne dans le dossier, et une
+seconde ferme la porte que la première entrouvre : **rien de ce que le site
+charge n'importe un fichier de test**.
+
+En cassant cette seconde garde pour la voir tomber, elle n'est pas tombée : elle
+ne regardait que `from "…"` et `import("…")`, et laissait passer l'import à
+effet de bord — `import "…"`, celui qu'on écrit précisément quand on veut juste
+qu'un module soit chargé. Le trou existait aussi dans la garde d'origine, depuis
+toujours. Les trois formes sont maintenant couvertes, dans les trois sens de la
+cloison.
+
 ### Ce qui reste à faire
 
 Depuis le Copilote **d'un projet**, la question « ouvre-moi les fichiers » sans

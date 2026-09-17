@@ -203,6 +203,40 @@ export function ouvrirUnEcran({ nom = "", ecran = "", projets = [] } = {}) {
 }
 
 /**
+ * L'adresse où aller, d'après ce qu'un message a exécuté.
+ *
+ * ## Pourquoi c'est une fonction, et pas trois lignes dans l'écran
+ *
+ * C'est le maillon entre « l'outil a tourné » et « l'écran a bougé ». Écrit à
+ * l'intérieur du fil, il n'était vérifiable que l'application ouverte — et
+ * c'est précisément le maillon dont la panne se lit comme un mensonge : le
+ * copilote dit qu'il vous emmène, et rien ne bouge.
+ *
+ * ## Une seule, la première
+ *
+ * Deux ouvertures dans un même message voudraient dire deux endroits à la fois.
+ * On prend la première et l'on ignore les suivantes : la carte de chacune reste
+ * dans le fil, et un clic y mène.
+ *
+ * ## Et rien si l'on y est déjà
+ *
+ * Réécrire la même adresse ne déplace rien — aucun `hashchange` ne part — mais
+ * empile une entrée d'historique, et le bouton « précédent » ne ramènerait
+ * nulle part.
+ *
+ * @param {object[]} executions ce que le message a exécuté
+ * @param {string} [hashCourant] `location.hash`, pour ne pas réécrire l'identique
+ * @returns {string} l'adresse à écrire, ou `""` quand il n'y a nulle part à aller
+ */
+export function routeOuAller(executions = [], hashCourant = "") {
+  const route = (Array.isArray(executions) ? executions : [])
+    .map((execution) => texte(execution?.destination?.route))
+    .find(Boolean) ?? "";
+
+  return route === texte(hashCourant) ? "" : route;
+}
+
+/**
  * L'outil, tel que la conversation l'appelle.
  *
  * La liste des projets se lit **ici** et non au moment du contexte : une

@@ -33,8 +33,8 @@
  * elle est juste, vérifiable, et sans rapport avec la question.
  */
 
-import { OUTIL_CERVEAU } from "./cerveau-outil.js";
-import { OUTIL_NAVIGATION } from "./navigation-outil.js";
+import { DECLARATION_CERVEAU, OUTIL_CERVEAU } from "./cerveau-outil.js";
+import { DECLARATION_NAVIGATION, OUTIL_NAVIGATION } from "./navigation-outil.js";
 
 /** Le nom de l'outil. Il voyage jusqu'au navigateur, qui route dessus. */
 export const OUTIL_VARIANTE = "tester_une_variante";
@@ -123,6 +123,7 @@ export const CONSIGNES_VARIANTE = [
   "",
   "L'outil `tester_une_variante` rejoue la mémoire du projet avec une valeur remplacée :",
   "- Une question sur une conséquence — « et si on déplaçait le projet à… ? » — s'y répond par cet outil, jamais par un raisonnement de ta part. La chaîne va de la commune aux cotes de fondation, et personne ne la refait de tête.",
+  "- **Une demande d'ouvrir un écran n'est pas une variante.** « Ouvre-moi le copilote de tel projet », « montre-moi ses sujets », « je voudrais parler au copilote de… » ne changent aucune valeur : ils demandent d'aller quelque part, et c'est `ouvrir_un_ecran` qui y va. Appeler cet outil-ci sur une telle demande affiche à l'écran un test qui n'a pas eu lieu, avec le motif de son refus — et l'on croit à une panne alors qu'on avait seulement demandé un déplacement.",
   "- Reprends ses chiffres tels quels, avec l'avant et l'après, et cite l'agent qui a recalculé chaque valeur.",
   "- Distingue ce qui a **bougé** de ce qui a été **recalculé sans bouger** : « la zone de vent est recalculée et reste la même » est une information utile, pas un silence.",
   "- Dis ce qui n'a **pas** pu se recalculer et pourquoi : une variante partielle présentée comme complète est le seul vrai danger de cet outil.",
@@ -135,3 +136,51 @@ export const CONSIGNES_VARIANTE = [
   "- Ne conclus jamais qu'un examen tient toujours parce que le changement te paraît favorable. Tu n'as pas à en juger : dis ce qui a bougé, quelqu'un tranchera.",
   "- Chaque engagement porte `qui` : ce que ça coûterait de passer outre. Dis-le en toutes lettres — « celui-là vient d'un bureau de contrôle » — et jamais sous forme de note, de score ou de nombre de validations. Il ne sert à rien d'autre : il n'arbitre aucun calcul et ne départage aucune valeur."
 ].join("\n");
+
+/**
+ * Les rôles qu'un navigateur d'avant savait exécuter.
+ *
+ * ## Le défaut que ça répare
+ *
+ * Le serveur et le site se déploient séparément. Le jour où l'ouverture d'un
+ * écran est arrivée, le serveur l'a offerte au modèle **avant** que le site ne
+ * soit à jour : le modèle l'a appelée, l'appel est parti au navigateur avec le
+ * rôle `navigation`, et l'ancien aiguillage — un ternaire, « cerveau ou sinon
+ * variante » — a lancé **le moteur de variante**. On lisait à l'écran « Test
+ * d'une variante — il faut dire ce qu'on change » après avoir demandé d'ouvrir
+ * un projet, et le journal disait pourtant « Lancement de ouvrir un ecran ».
+ *
+ * Un défaut de ce genre ne se voit sur aucune branche : les deux moitiés sont
+ * justes, c'est leur décalage qui ne l'est pas, et il dure le temps d'un
+ * déploiement ou d'un cache de navigateur.
+ *
+ * ## Le navigateur dit ce qu'il sait faire
+ *
+ * Il envoie **ses rôles**, pas des noms d'outils : il n'en apprend donc aucun,
+ * et c'est toujours le serveur qui décide où chaque appel s'exécute. Le serveur
+ * n'offre au modèle que les outils dont le rôle est dans cette liste — un outil
+ * qu'on ne sait pas exécuter n'est pas proposé, donc jamais appelé.
+ *
+ * Un navigateur qui ne dit rien est un navigateur d'avant : on lui suppose les
+ * deux rôles qui existaient alors. Supposer les trois lui en enverrait un qu'il
+ * ne sait pas faire, c'est-à-dire exactement le défaut qu'on répare.
+ */
+export const ROLES_HISTORIQUES = ["variante", "cerveau"];
+
+/** Les trois déclarations dont l'exécution a lieu dans la page. */
+export const DECLARATIONS_DU_NAVIGATEUR = [
+  DECLARATION_VARIANTE, DECLARATION_CERVEAU, DECLARATION_NAVIGATION
+];
+
+/**
+ * Celles que ce navigateur-ci saura exécuter.
+ *
+ * @param {string[]} [roles] ce que le navigateur a dit savoir faire
+ * @returns {object[]} les déclarations à offrir au modèle
+ */
+export function declarationsPourCeNavigateur(roles = null) {
+  const dits = Array.isArray(roles) ? roles.map((role) => String(role ?? "").trim()).filter(Boolean) : [];
+  const sait = new Set(dits.length ? dits : ROLES_HISTORIQUES);
+
+  return DECLARATIONS_DU_NAVIGATEUR.filter((outil) => sait.has(roleDuNavigateur(outil?.name)));
+}

@@ -61,6 +61,8 @@ import {
 import { renderVoileDeDepot } from "../../ui/voile-de-depot.js";
 import { renderCarteDuCerveau } from "./carte-du-cerveau.js";
 import { renderCarteDuVoyage } from "./carte-du-voyage.js";
+import { renderCarteSansResultat } from "./carte-sans-resultat.js";
+import { routeOuAller } from "../../../services/copilote-navigation.js";
 import { aRetenirDuResultat, executerUtilitaire } from "../../../services/utilitaires-service.js";
 import { conversationTitle, findConversation } from "../../../services/copilote-conversations.js";
 import {
@@ -902,14 +904,10 @@ function renderExecution(execution, message = 0, rang = 0) {
     return renderCarteDuVoyage(execution.destination);
   }
 
+  // Une question n'est pas une panne, et les deux ne se dessinent donc pas
+  // pareil : voir `carte-sans-resultat.js`.
   if (execution?.statut !== "fait") {
-    return `
-      <div class="copilote-outil copilote-outil--refus">
-        <p class="copilote-outil__titre">${escapeHtml(execution?.titre || "Utilitaire")}</p>
-        <p class="copilote-outil__note">${escapeHtml(execution?.message || "L'agent n'a pas conclu.")}</p>
-        ${renderChaine(execution)}
-      </div>
-    `;
+    return renderCarteSansResultat(execution, renderChaine(execution));
   }
 
   const entrees = Object.entries(execution.entrees ?? {}).map(([cle, valeur]) => `
@@ -1924,35 +1922,18 @@ function retenirDeLaConversation(etat, executions = []) {
 /**
  * Aller où le Copilote vient d'ouvrir.
  *
- * ## Pourquoi ici, et pas dans l'outil
- *
- * L'outil reconnaît le projet et rend l'adresse ; il ne déplace personne. Le
- * déplacement attend que la réponse soit **écrite et enregistrée** : partir au
+ * L'outil ne déplace personne : il reconnaît le projet et rend l'adresse. Le
+ * déplacement attend que la réponse soit **écrite et enregistrée** — partir au
  * milieu du tour aurait démonté l'écran pendant que le modèle répondait, et la
  * réponse se serait écrite dans un fil que plus personne ne regardait.
  *
- * ## Une seule, la première
- *
- * Deux ouvertures dans un même message voudraient dire deux endroits à la fois.
- * On prend la première et l'on ignore les suivantes : la carte de chacune reste
- * dans le fil, et un clic y mène.
- *
- * ## Et l'on n'écrit rien si l'on y est déjà
- *
- * Écrire la même adresse ne sonne aucun `hashchange` et ne déplace donc rien —
- * mais cela empile une entrée d'historique, et le bouton « précédent » ne
- * ramènerait nulle part.
+ * Le choix de l'adresse est dans `services/copilote-navigation.js`, où il se
+ * vérifie sans navigateur. Ne reste ici que l'écriture elle-même.
  */
 function allerOuLeCopiloteAOuvert(executions = []) {
-  const route = (Array.isArray(executions) ? executions : [])
-    .map((execution) => String(execution?.destination?.route ?? "").trim())
-    .find(Boolean);
-
-  if (!route) return;
-
   try {
-    if (String(window.location?.hash ?? "") === route) return;
-    window.location.hash = route;
+    const route = routeOuAller(executions, String(window.location?.hash ?? ""));
+    if (route) window.location.hash = route;
   } catch {
     // Un navigateur qui refuse l'adresse laisse la carte dans le fil : le lien
     // y mène, et la conversation n'a rien perdu.
