@@ -1070,17 +1070,26 @@ export function createProjectSubjectsActions(config) {
    */
   async function proposerLaDecisionDuSujet(subjectId, tranche) {
     try {
-      const [{ decisionVersable }, { preparerUneProposition }, { resolveCurrentBackendProjectId }] =
-        await Promise.all([
-          import("../../services/decision-versement.js"),
-          import("../../services/atelier-proposition.js"),
-          import("../../services/project-supabase-sync.js")
-        ]);
+      const [
+        { decisionVersable },
+        { preparerUneProposition },
+        { resolveCurrentBackendProjectId },
+        { referenceDuPoint },
+        { raisonnementVersable }
+      ] = await Promise.all([
+        import("../../services/decision-versement.js"),
+        import("../../services/atelier-proposition.js"),
+        import("../../services/project-supabase-sync.js"),
+        import("../../services/point-a-tranche.js"),
+        import("../../services/raisonnement-du-point.js")
+      ]);
 
       const projectId = String(await resolveCurrentBackendProjectId() || "").trim();
       if (!projectId) return;
 
       const sujet = getNestedSujet(subjectId);
+      const quand = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+      const par = resolveDefaultHumanActorLabel();
       const affirmations = decisionVersable({
         // Le sujet est **la question** : c'est ce sur quoi on a tranché, et c'est
         // par ce nom que la valeur retrouvera sa décision.
@@ -1091,19 +1100,38 @@ export function createProjectSubjectsActions(config) {
         motif: tranche.motif,
         // Le même nom que celui dont ce fichier signe déjà ses décisions : deux
         // lectures de l'utilisateur finiraient par ne plus s'accorder (règle 4).
-        par: resolveDefaultHumanActorLabel(),
-        quand: new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }),
+        par,
+        quand,
         atelier: `Sujet « ${String(sujet?.title ?? "").trim()} »`,
-        reference: `sujet:${subjectId}`
+        // La forme de l'arête aval n'est plus écrite ici : elle appartient au
+        // fichier qui la relit. Une forme inventée à l'écriture et redevinée à
+        // la lecture est exactement ce qui finit par diverger — et c'est ce qui
+        // était arrivé : la chaîne était écrite, et personne ne la lisait.
+        reference: referenceDuPoint(subjectId)
       });
       if (!affirmations.length) return;
+
+      // Et **par où l'on est passé**. Le raisonnement ne répète pas la valeur —
+      // il porte la question, ce qui a été examiné, ce qui a été tranché et ce
+      // que cela pose. Ce qu'on ne sait pas d'ici — sur quelles valeurs le
+      // débat portait, ce qu'il a regardé — reste vide et **se dit** : une
+      // étape creuse nommée vaut mieux qu'un graphe qui a l'air entier.
+      const chemin = raisonnementVersable({
+        point: { id: subjectId, title: sujet?.title },
+        question: tranche.question,
+        produites: affirmations,
+        par,
+        quand,
+        atelier: `Sujet « ${String(sujet?.title ?? "").trim()} »`
+      });
 
       const rendu = await preparerUneProposition({
         projectId,
         titre: `Décision — ${tranche.question}`,
         intro: "Ce qui a été tranché en fermant un sujet. La décision porte la question et les "
-          + "possibles écartés ; la valeur, s'il y en a une, la cite.",
-        affirmations,
+          + "possibles écartés ; la valeur, s'il y en a une, la cite. La troisième ligne est le "
+          + "chemin : par où l'on est passé, et ce qu'on n'a pas noté en le parcourant.",
+        affirmations: [...affirmations, ...chemin],
         zones: []
       });
 

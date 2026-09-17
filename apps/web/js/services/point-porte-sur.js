@@ -24,8 +24,10 @@
  * ## Deux arêtes, et surtout ne pas les confondre
  *
  * Celle-ci dit **« ce point met en question cette affirmation-ci »**. L'autre —
- * « cette affirmation vient de ce point-là » — n'est pas ici : un seul champ
- * pour les deux ferait couvrir une valeur par le débat qui la conteste.
+ * « cette affirmation vient de ce point-là » — est dans `point-a-tranche.js`, et
+ * elle n'entre jamais ici : un seul champ pour les deux ferait couvrir une
+ * valeur par le débat qui la conteste. Ce fichier ne lit donc **aucune
+ * référence de charge**, et celui d'en face ne lit **aucun lien**.
  *
  * ## Elle pointe une version, jamais un nom
  *
@@ -160,6 +162,44 @@ export function pointsQuiPortentSur(assertionId, { liens = [], points = [] } = {
   }
 
   return retenus;
+}
+
+/**
+ * Les versions sur lesquelles ce point porte.
+ *
+ * L'autre sens de l'arête amont — et toujours l'arête amont : ce que ce point
+ * **met en question**, jamais ce qu'il a produit. Ce qu'il a produit se lit dans
+ * `point-a-tranche.js`, et les deux ne se rejoignent nulle part.
+ *
+ * Un lien qui désigne une version inconnue est laissé de côté : on sait qu'il
+ * existe, on ne sait pas ce qu'il vise, et rendre un trou à sa place ferait
+ * compter une valeur qu'on n'a pas.
+ */
+export function surQuoiCePointPorte(pointId = "", { liens = [], assertions = [] } = {}) {
+  const vise = texte(pointId);
+  if (!vise) return [];
+
+  const parId = new Map(
+    (Array.isArray(assertions) ? assertions : []).map((assertion) => [texte(assertion?.id), assertion])
+  );
+
+  const retenues = [];
+  const vues = new Set();
+
+  for (const lien of Array.isArray(liens) ? liens : []) {
+    if (texte(lien?.subject_id) !== vise) continue;
+
+    const id = texte(lien?.assertion_id);
+    if (!id || vues.has(id)) continue;
+
+    const assertion = parId.get(id);
+    if (!assertion) continue;
+
+    vues.add(id);
+    retenues.push(assertion);
+  }
+
+  return retenues;
 }
 
 /** Un point ouvert : tout ce qui n'est pas fermé, sous quelque forme que ce soit. */

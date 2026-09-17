@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 import {
   LIAISON, MOT_A_LECRAN, intituleDuPoint, liensAPoser, phraseDesPointsOuverts,
-  pointsQuiPortentSur, portagePropose
+  pointsQuiPortentSur, portagePropose, surQuoiCePointPorte
 } from "./point-porte-sur.js";
 
 /** Une affirmation de la mémoire, de la forme que la base rend. */
@@ -42,21 +42,39 @@ test("le code dit « point », l'écran écrit « sujet »", () => {
   }
 });
 
+/**
+ * Les fichiers des deux arêtes, et **eux seuls**.
+ *
+ * `raisonnement-du-point.js` n'y est pas, et c'est voulu : il manipule des noms
+ * de la mémoire — « Classe de sol », « Profondeur hors gel » —, et là `sujet`
+ * est le mot juste. La frontière de l'étape 0 passe entre l'objet du suivi et
+ * le nom d'une donnée ; un garde qui l'ignorerait interdirait le bon mot.
+ */
+const FICHIERS_DES_ARETES = ["./point-porte-sur.js", "./point-a-tranche.js"];
+
+/** Les lignes de code — la prose des commentaires parle comme elle veut. */
+function lignesDeCode(source) {
+  return source
+    .split("\n")
+    .filter((ligne) => !ligne.trimStart().startsWith("*") && !ligne.trimStart().startsWith("//"));
+}
+
 test("le mot de l'écran est écrit une fois", () => {
   // Deux endroits qui le disent finiraient par ne plus dire la même chose. Les
   // phrases le lisent, elles ne le recopient pas (règle 10).
-  const source = readFileSync(new URL("./point-porte-sur.js", import.meta.url), "utf8");
-  const apres = source.slice(source.indexOf("export const MOT_A_LECRAN"));
+  for (const fichier of FICHIERS_DES_ARETES) {
+    const source = readFileSync(new URL(fichier, import.meta.url), "utf8");
 
-  // Après la déclaration, le mot n'apparaît plus dans une ligne de code : la
-  // prose des commentaires, elle, en parle tant qu'elle veut.
-  const enDur = apres
-    .split("\n")
-    .filter((ligne) => !ligne.trimStart().startsWith("*") && !ligne.trimStart().startsWith("//"))
-    .filter((ligne) => /\bsujets?\b/i.test(ligne))
-    .filter((ligne) => !ligne.includes("MOT_A_LECRAN ="));
+    const enDur = lignesDeCode(source)
+      .filter((ligne) => /\bsujets?\b/i.test(ligne))
+      // Les deux seules lignes qui ont le droit de l'écrire : celle qui déclare
+      // le mot de l'écran, et celle qui déclare la marque des références. La
+      // marque n'est pas un nom, c'est une donnée déjà enregistrée dans les
+      // projets — la renommer rendrait illisible ce qui est écrit (règle 6).
+      .filter((ligne) => !ligne.includes("MOT_A_LECRAN =") && !ligne.includes("MARQUE_DU_POINT ="));
 
-  assert.deepEqual(enDur, []);
+    assert.deepEqual(enDur, [], `${fichier} écrit le mot de l'écran en dur`);
+  }
 });
 
 /* ── Ce sur quoi un point porte ──────────────────────────────────────────── */
@@ -198,4 +216,52 @@ test("un point peut naître d'une valeur, ou de rien", async () => {
   // L'arête, elle, pointe une **version** d'affirmation.
   assert.match(migration, /assertion_id uuid not null references public\.project_assertions\(id\)/);
   assert.match(migration, /unique \(subject_id, assertion_id\)/);
+});
+
+/* ── L'arête amont, dans l'autre sens ────────────────────────────────────── */
+
+test("un point dit sur quelles versions il porte", () => {
+  const liens = [
+    { subject_id: "p-1", assertion_id: "v-sol" },
+    { subject_id: "p-1", assertion_id: "v-neige" },
+    { subject_id: "p-2", assertion_id: "v-sol-b" },
+    // Le même lien deux fois : la base l'interdit, une lecture peut le voir.
+    { subject_id: "p-1", assertion_id: "v-sol" }
+  ];
+
+  assert.deepEqual(
+    surQuoiCePointPorte("p-1", { liens, assertions: MEMOIRE }).map((v) => v.id),
+    ["v-sol", "v-neige"]
+  );
+  assert.deepEqual(surQuoiCePointPorte("", { liens, assertions: MEMOIRE }), []);
+});
+
+test("un lien vers une version qu'on ne porte pas ne fabrique pas de trou", () => {
+  // On sait que le lien existe, on ne sait pas ce qu'il vise : la version a pu
+  // être filtrée, ou périmée hors du lot. Rendre une coquille à sa place ferait
+  // compter une valeur qu'on n'a pas, et l'écran dirait « porte sur » d'un nom
+  // vide (règle 5).
+  const liens = [
+    { subject_id: "p-1", assertion_id: "v-sol" },
+    { subject_id: "p-1", assertion_id: "v-disparue" }
+  ];
+
+  const portees = surQuoiCePointPorte("p-1", { liens, assertions: MEMOIRE });
+
+  assert.deepEqual(portees.map((v) => v.id), ["v-sol"]);
+  assert.deepEqual(portees.map((v) => v.payload.subject), ["Classe de sol"]);
+});
+
+test("l'arête amont ne rend jamais ce qu'un point a produit", () => {
+  // La cloison de la décision 3, vue du côté amont : une valeur que ce point a
+  // **tranchée** — elle cite sa référence — n'est pas une valeur sur laquelle
+  // il porte. Les confondre ferait couvrir une valeur par le débat qui la
+  // conteste, et présenter comme contestée une valeur qu'on vient de décider.
+  const tranchee = { ...MEMOIRE[1], payload: { ...MEMOIRE[1].payload, reference: "sujet:p-1" } };
+  const liens = [{ subject_id: "p-1", assertion_id: "v-sol" }];
+
+  assert.deepEqual(
+    surQuoiCePointPorte("p-1", { liens, assertions: [MEMOIRE[0], tranchee] }).map((v) => v.id),
+    ["v-sol"]
+  );
 });
