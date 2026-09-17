@@ -80,7 +80,9 @@
 
 import { buildElasticResponseSpectrumTable, getSeismicSizingValues } from "./seismic-spectrum.js";
 import { currentAssertions } from "./memoire.js";
-import { regimeValide } from "./regime-incendie.js";
+import {
+  CLES_REGIME_INCENDIE, CLE_REGIME_INCENDIE, SUJET_REGIME_INCENDIE, regimeIncendieDe, regimeValide
+} from "./regime-incendie.js";
 
 function texte(valeur) {
   return String(valeur ?? "").trim();
@@ -475,6 +477,50 @@ export const OUTILS = [
         requis: true,
         aide: "Ce que l'on cherche. « classement » rend la famille elle-même ; les autres rendent "
           + "l'exigence qui en découle, avec son article."
+      },
+      {
+        cle: "regimeIncendie",
+        libelle: SUJET_REGIME_INCENDIE,
+        type: "choix",
+        valeurs: CLES_REGIME_INCENDIE,
+        /**
+         * **Pas encore requise, et c'est une décision, pas un oubli.**
+         *
+         * Le plan veut qu'on la demande quand le projet ne la porte pas. Trois
+         * choses manquent pour que cette question soit tenable aujourd'hui :
+         *
+         *  - la réponse donnée dans le formulaire ne se **verse** pas en
+         *    mémoire — seul l'écran de l'étude verse. La question se reposerait
+         *    donc à chaque conversation, indéfiniment ;
+         *  - l'étude de l'Atelier, elle, ne répond pas à cette entrée : le
+         *    formulaire s'ouvrirait même pour un bâtiment entièrement décrit,
+         *    ce qui est exactement ce que `prefillDepuisLEtude` existe pour
+         *    éviter ;
+         *  - et tant qu'il n'y a **qu'un** référentiel incendie, la question
+         *    n'a qu'une réponse qui mène quelque part.
+         *
+         * Ce qui protège déjà sans elle : le filtre de `declarationsPourModele`
+         * n'offre pas l'agent d'un autre régime, et `regimeQuiNeCorrespondPas`
+         * refuse le calcul quand le bâtiment relève d'un autre texte. La
+         * rendre requise sera un mot à changer, le jour où la réponse se verse.
+         *
+         * ## Pas une entrée d'aiguillage non plus, et c'est délibéré
+         *
+         * `exigence` en est une : elle dit ce que le modèle est allé chercher,
+         * pas ce que le bâtiment vaut, et le garde-fou des valeurs fabriquées ne
+         * s'y applique donc pas. Le régime, lui, **est** une donnée du bâtiment
+         * — une qualification réglementaire qui se tranche sur la destination
+         * des locaux et se justifie. Un modèle qui la remplirait de lui-même
+         * ferait exactement ce que le catalogue interdit partout ailleurs : le
+         * modèle choisit l'agent, il ne choisit pas les valeurs.
+         *
+         * Elle passe donc par le garde-fou comme les autres : proposée sans
+         * appui, elle est écartée et l'écran la demande.
+         */
+        depuisMemoire: CLE_REGIME_INCENDIE,
+        aide: "Le corps de règles dont relève le bâtiment. Il se tranche sur la destination des "
+          + "locaux, avant tout calcul : une exigence juste dans le mauvais référentiel est une "
+          + "exigence fausse."
       },
       {
         cle: "logementsSuperposes",
@@ -1137,6 +1183,32 @@ export function regimeDeLAgent(outil) {
 }
 
 /**
+ * Pourquoi cet agent ne peut pas répondre à ce bâtiment-là, ou `""`.
+ *
+ * @param {object} outil l'agent qu'on s'apprête à exécuter
+ * @param {object} fournies les entrées, mémoire et enchaînement compris
+ * @returns {string} la phrase du refus, ou `""` quand il n'y a rien à refuser
+ */
+export function regimeQuiNeCorrespondPas(outil, fournies = {}) {
+  const sien = regimeDeLAgent(outil);
+  const celuiDuBatiment = regimeValide(fournies?.regimeIncendie);
+
+  // Un agent sans régime — le spectre sismique, les fondations — n'est jamais
+  // concerné. Et un régime qu'on n'a pas su lire ne fait rien refuser : ne pas
+  // savoir n'autorise pas à conclure que c'est le mauvais (règle 5).
+  if (!sien || !celuiDuBatiment || celuiDuBatiment === sien) return "";
+
+  const dit = regimeIncendieDe(celuiDuBatiment);
+  const nous = regimeIncendieDe(sien);
+
+  return `Ce bâtiment relève du régime « ${dit?.libelle || celuiDuBatiment} »${
+    dit?.texte ? ` (${dit.texte})` : ""}, et cet agent applique le régime « ${
+    nous?.libelle || sien} »${nous?.texte ? ` (${nous.texte})` : ""}. `
+    + "Une exigence juste tirée du mauvais texte reste une exigence fausse : "
+    + "aucun calcul n'a eu lieu.";
+}
+
+/**
  * Les agents qui servent un régime de sécurité incendie.
  *
  * **Déduits, jamais listés.** Une liste d'identifiants
@@ -1155,14 +1227,57 @@ export function agentsIncendie(regime = "") {
 }
 
 /**
+ * Les agents que ce projet-ci peut appeler.
+ *
+ * ## Le défaut que ça répare
+ *
+ * Le modèle choisissait l'agent incendie sur la formulation de la question : la
+ * description d'« Incendie — Habitation » dit *bâtiment d'habitation*, la
+ * question parle d'habitation, cela suffisait. Au second agent — ERP, code du
+ * travail, IGH —, les descriptions commenceront toutes par « la sécurité
+ * incendie d'un bâtiment », et le choix deviendrait un tirage au sort sur la
+ * façon dont la question est tournée.
+ *
+ * **Le modèle ne voit donc pas le mauvais agent.** Ce n'est pas une consigne
+ * dans le prompt, c'est une liste plus courte : une consigne se contourne, une
+ * absence non. Le catalogue porte déjà cette leçon écrite — *le garde-fou est
+ * dans le code, pas dans la consigne*.
+ *
+ * ## Ce qu'on n'écarte jamais
+ *
+ * Les agents qui ne déclarent aucun régime : le spectre sismique, les
+ * fondations, le hors gel. Le routage incendie ne les concerne pas.
+ *
+ * Et **rien du tout quand on ne sait pas**. Un projet qui ne porte pas la
+ * variable, deux zones qui se contredisent, une valeur qu'on ne sait pas lire :
+ * dans les trois cas on rend tous les agents incendie, et le premier appelé
+ * demandera le régime. Vider la liste ferait un Copilote muet sur l'incendie
+ * sans que rien ne dise pourquoi (règle 5).
+ *
+ * @param {string} [regimeIncendie] le régime que la mémoire du projet porte
+ */
+export function agentsPourCeProjet(regimeIncendie = "") {
+  const vise = regimeValide(regimeIncendie);
+  if (!vise) return OUTILS;
+
+  return OUTILS.filter((outil) => {
+    const sien = regimeDeLAgent(outil);
+    return !sien || sien === vise;
+  });
+}
+
+/**
  * La déclaration que lit le modèle, au format des fonctions d'OpenAI.
  *
  * Elle se dérive de la même source que le formulaire : décrire l'outil deux
  * fois, une fois pour le modèle et une fois pour l'écran, serait s'assurer
  * qu'un jour le modèle demande un champ que l'écran ne montre pas.
+ *
+ * @param {object} [duProjet] ce que la mémoire du projet dit de son routage
+ * @param {string} [duProjet.regimeIncendie] le régime de sécurité incendie
  */
-export function declarationsPourModele() {
-  return OUTILS.map((outil) => {
+export function declarationsPourModele({ regimeIncendie = "" } = {}) {
+  return agentsPourCeProjet(regimeIncendie).map((outil) => {
     const properties = {};
     const required = [];
 
@@ -1869,6 +1984,34 @@ export async function executerOutil({
   // Ce que la conversation porte et qui n'est pas une entrée : une note de
   // calcul déposée n'est pas une valeur, c'est une source. Elle ne passe donc
   // pas par le garde-fou des substitutions — il n'y a rien à y substituer.
+  /**
+   * **Le bon référentiel, ou rien.**
+   *
+   * Un agent incendie déclare le régime qu'il sert ; l'entrée `regimeIncendie`
+   * dit celui dont ce bâtiment relève. Quand les deux diffèrent, le calcul
+   * aurait lieu — les entrées sont là, le référentiel tourne — et rendrait une
+   * exigence juste, vérifiable, tirée du mauvais texte. C'est le pire des
+   * résultats : rien à l'écran ne dirait qu'on a répondu pour un bâtiment
+   * d'habitation à une question qui portait sur un ERP.
+   *
+   * Le contrôle est **ici**, et non dans chaque agent : l'ajouter à chacun
+   * serait l'oublier au troisième, et le plan tient à ce qu'ajouter l'ERP se
+   * réduise à un fichier d'agent de plus.
+   */
+  const refusDeRegime = regimeQuiNeCorrespondPas(outil, fournies);
+  if (refusDeRegime) {
+    return {
+      statut: "refus",
+      outil: referenceOutil(outil),
+      titre: outil.titre,
+      entrees: fournies,
+      ecartees: nomsEcartes,
+      chaine,
+      provenances,
+      message: refusDeRegime
+    };
+  }
+
   const resultat = await outil.executer(fournies, {
     piecesJointes, onEtape: dire(onEtape), cleDuModele, autorisation, etudeIncendie, tracage
   });

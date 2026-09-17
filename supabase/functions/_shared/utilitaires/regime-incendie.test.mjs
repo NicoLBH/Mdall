@@ -7,6 +7,9 @@ import {
   REFERENCE_REGIME_INCENDIE,
   REGIMES_INCENDIE,
   SUJET_REGIME_INCENDIE,
+  CLE_REGIME_INCENDIE,
+  regimeDeLaMemoire,
+  regimesDeLaMemoire,
   regimeDuChampDeLArrete,
   regimeIncendieDe,
   regimeValide
@@ -99,4 +102,77 @@ test("un champ qu'on ne sait pas lire ne se range pas au plus proche", () => {
   assert.equal(regimeDuChampDeLArrete("hors champ — à reprendre avec le service instructeur"), "");
   assert.equal(regimeDuChampDeLArrete(""), "");
   assert.equal(regimeDuChampDeLArrete(null), "");
+});
+
+/* ── Ce que la mémoire du projet en dit ──────────────────────────────────── */
+
+/** Une affirmation, de la forme que la base rend. */
+function affirmation(cle, valeur, { remplacee = null, enonce = "" } = {}) {
+  return {
+    subject_key: cle,
+    payload: valeur === null ? {} : { value: valeur },
+    statement: enonce,
+    superseded_by: remplacee
+  };
+}
+
+test("la clé de mémoire est celle que la normalisation produit", async () => {
+  // Elle est écrite ici et calculée là-bas : la cloison interdit à un module
+  // publié d'importer `project-memory.js`. Ce test les confronte à l'exécution
+  // — renommer le sujet sans suivre la clé le fait tomber (règle 10).
+  const { normalizeSubjectKey } = await import("../../../../apps/web/js/services/project-memory.js");
+  assert.equal(normalizeSubjectKey(SUJET_REGIME_INCENDIE), CLE_REGIME_INCENDIE);
+});
+
+test("une valeur remplacée ne route plus rien", async () => {
+  // C'est la règle de `currentAssertions`, réécrite ici faute de pouvoir
+  // l'importer. Le test la confronte à l'originale : router sur un état que le
+  // projet a quitté ferait répondre avec le mauvais texte.
+  const { currentAssertions } = await import("./memoire.js");
+  const memoire = [
+    affirmation(CLE_REGIME_INCENDIE, "erp", { remplacee: "a-2" }),
+    affirmation(CLE_REGIME_INCENDIE, "habitation")
+  ];
+
+  assert.deepEqual(currentAssertions(memoire).length, 1);
+  assert.deepEqual(regimesDeLaMemoire(memoire), ["habitation"]);
+  assert.equal(regimeDeLaMemoire(memoire), "habitation");
+});
+
+test("la portée range l'affirmation, elle ne change pas le sujet", () => {
+  // `regime-de-securite-incendie@Bâtiment A` parle du même sujet que la clé
+  // nue. Lire la portée comme un autre sujet ne trouverait jamais rien.
+  assert.equal(regimeDeLaMemoire([affirmation(`${CLE_REGIME_INCENDIE}@Bâtiment A`, "igh")]), "igh");
+});
+
+test("deux zones qui se contredisent ne tranchent pas", () => {
+  // Choisir l'un des deux ferait répondre sur le rez-de-chaussée une exigence
+  // calculée pour les étages, et rien ne le dirait (règle 5).
+  const memoire = [
+    affirmation(`${CLE_REGIME_INCENDIE}@Rez-de-chaussée`, "erp"),
+    affirmation(`${CLE_REGIME_INCENDIE}@Étages`, "habitation")
+  ];
+
+  assert.deepEqual(regimesDeLaMemoire(memoire), ["habitation", "erp"]);
+  assert.equal(regimeDeLaMemoire(memoire), "");
+
+  // Deux zones **d'accord** tranchent, elles : ce n'est pas une contradiction.
+  assert.equal(regimeDeLaMemoire([
+    affirmation(`${CLE_REGIME_INCENDIE}@A`, "habitation"),
+    affirmation(`${CLE_REGIME_INCENDIE}@B`, "habitation")
+  ]), "habitation");
+});
+
+test("ce qui n'est pas le régime, ou n'est pas lisible, ne compte pas", () => {
+  assert.equal(regimeDeLaMemoire([affirmation("classement-du-batiment", "3e famille B")]), "");
+  assert.equal(regimeDeLaMemoire([affirmation(CLE_REGIME_INCENDIE, "ERP")]), "");
+  assert.equal(regimeDeLaMemoire([]), "");
+  assert.equal(regimeDeLaMemoire(null), "");
+
+  // L'énoncé sert de repli : une affirmation posée à la main porte sa valeur
+  // dans la phrase, comme `prefillDepuisMemoire` le fait déjà.
+  assert.equal(
+    regimeDeLaMemoire([affirmation(CLE_REGIME_INCENDIE, null, { enonce: "habitation" })]),
+    "habitation"
+  );
 });

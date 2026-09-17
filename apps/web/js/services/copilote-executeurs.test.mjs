@@ -90,6 +90,13 @@ test("le navigateur route sur le rôle, et n'apprend aucun nom d'outil", () => {
   // neuf.
   assert.match(client, /browser_roles: ROLES_QUE_CE_NAVIGATEUR_SAIT/);
 
+  // Et le régime de sécurité incendie du projet, qui décide quels agents
+  // incendie sont déclarés. Un champ absent d'un corps de requête ne se voit
+  // nulle part : le serveur lirait `undefined`, offrirait tous les agents, et
+  // le routage serait mort sans qu'aucun test ne tombe.
+  assert.match(client, /fire_regime: regimeDeLaMemoire\(assertions\)/);
+  assert.match(serveur, /declarationsPourModele\(\{ regimeIncendie: texte\(payload\.fire_regime\) \}\)/);
+
   for (const nom of Object.keys(ROLES_DU_NAVIGATEUR)) {
     assert.ok(!client.includes(nom), `${nom} est écrit dans le navigateur`);
     assert.ok(!executeurs.includes(nom), `${nom} est écrit dans la table des exécuteurs`);

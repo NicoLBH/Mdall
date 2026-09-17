@@ -18,10 +18,13 @@ import {
   prefillDepuisLEtude,
   referenceOutil,
   regimeDeLAgent,
+  regimeQuiNeCorrespondPas,
   agentsIncendie,
   sansFigure
 } from "./catalogue.js";
-import { CLES_REGIME_INCENDIE } from "./regime-incendie.js";
+import {
+  CLES_REGIME_INCENDIE, CLE_REGIME_INCENDIE, SUJET_REGIME_INCENDIE
+} from "./regime-incendie.js";
 
 function donnee(cle, valeur, extra = {}) {
   return {
@@ -1207,4 +1210,134 @@ test("un régime qu'on ne sait pas lire n'écarte rien", () => {
   assert.deepEqual(agentsIncendie("ERP").map((outil) => outil.id), tous);
   assert.deepEqual(agentsIncendie("bâtiment agricole").map((outil) => outil.id), tous);
   assert.deepEqual(agentsIncendie("").map((outil) => outil.id), tous);
+});
+
+/* ── Le régime décide quels agents le modèle voit ────────────────────────── */
+
+test("filtré sur un régime, le modèle voit exactement un agent incendie", () => {
+  // La garde du routage. Le modèle ne choisit plus sur la formulation de la
+  // question : il n'a qu'un agent incendie sous la main, et c'est celui du
+  // texte dont ce bâtiment relève. Une consigne se contourne, une absence non.
+  for (const regime of CLES_REGIME_INCENDIE) {
+    const offerts = declarationsPourModele({ regimeIncendie: regime }).map((d) => d.name);
+    const incendie = offerts.filter((nom) => regimeDeLAgent(outilParId(nom)));
+
+    assert.ok(incendie.length <= 1, `${regime} en offre ${incendie.length}`);
+    // Et celui qu'on voit est bien celui du régime visé, jamais un autre.
+    for (const nom of incendie) assert.equal(regimeDeLAgent(outilParId(nom)), regime);
+  }
+});
+
+test("les agents qui ne servent aucun régime ne sont jamais écartés", () => {
+  // Le spectre sismique, les fondations, le hors gel : le routage incendie ne
+  // les concerne pas, et les perdre rendrait le Copilote muet sur tout le reste.
+  const sansRegime = OUTILS.filter((outil) => !regimeDeLAgent(outil)).map((outil) => outil.id);
+  assert.ok(sansRegime.length, "il existe des agents sans régime");
+
+  for (const regime of [...CLES_REGIME_INCENDIE, "", "ERP", "bâtiment agricole"]) {
+    const offerts = declarationsPourModele({ regimeIncendie: regime }).map((d) => d.name);
+    assert.deepEqual(sansRegime.filter((id) => !offerts.includes(id)), [], regime);
+  }
+});
+
+test("sans régime en mémoire, on n'écarte rien : on ne choisit pas à la place de quelqu'un", () => {
+  // Un projet qui ne porte pas la variable, deux zones qui se contredisent, une
+  // valeur qu'on ne sait pas lire : les trois rendent `""`, et les trois
+  // appellent la même suite (règle 5).
+  const tous = declarationsPourModele().map((d) => d.name);
+  assert.deepEqual(declarationsPourModele({ regimeIncendie: "" }).map((d) => d.name), tous);
+  assert.deepEqual(declarationsPourModele({ regimeIncendie: "ERP" }).map((d) => d.name), tous);
+  assert.deepEqual(OUTILS.map((outil) => outil.id), tous, "sans argument, tout est offert");
+});
+
+test("aucun identifiant d'agent n'est écrit dans l'orchestration", async () => {
+  // La garde qui empêche le raccourci de revenir : une liste d'identifiants
+  // dans l'orchestration serait juste le jour où on l'écrit, et fausse au
+  // troisième agent. Le routage se déduit des déclarations, ou il ne se déduit
+  // de rien.
+  const { readFileSync } = await import("node:fs");
+  const fichiers = ["project-copilot/index.ts", "executer-utilitaire/index.ts"];
+
+  for (const nom of fichiers) {
+    // **Lu, et pas supposé.** Un chemin qui ne résout plus ferait passer cette
+    // garde sans rien vérifier — un test vert qui ne regarde rien est pire
+    // qu'un test absent.
+    const source = readFileSync(new URL(`../../${nom}`, import.meta.url), "utf8");
+    assert.ok(source.length > 500, `${nom} n'a pas été lue`);
+
+    for (const outil of OUTILS) {
+      assert.ok(!source.includes(outil.id), `${nom} nomme ${outil.id}`);
+    }
+  }
+});
+
+/* ── Le bon référentiel, ou rien ─────────────────────────────────────────── */
+
+test("un agent refuse de calculer pour un bâtiment d'un autre régime", async () => {
+  // Le calcul aurait lieu et rendrait une exigence juste, vérifiable, tirée du
+  // mauvais texte. Rien à l'écran ne dirait qu'on a répondu avec l'arrêté
+  // habitation à une question qui portait sur un ERP.
+  const resultat = await executerOutil({
+    id: "incendie_habitation",
+    entrees: { exigence: "classement", regimeIncendie: "erp" },
+    question: "quel classement pour ce bâtiment, qui relève du régime erp ?",
+    confirmees: ["regimeIncendie=erp"],
+    etudeIncendie: ETUDE
+  });
+
+  assert.equal(resultat.statut, "refus");
+  assert.match(resultat.message, /Établissement recevant du public/);
+  assert.match(resultat.message, /aucun calcul n'a eu lieu/i);
+});
+
+test("le régime qu'il sert ne l'empêche pas de calculer", async () => {
+  const resultat = await executerOutil({
+    id: "incendie_habitation",
+    entrees: { exigence: "classement", regimeIncendie: "habitation" },
+    question: "quel classement, en régime habitation ?",
+    confirmees: ["regimeIncendie=habitation"],
+    etudeIncendie: ETUDE
+  });
+
+  assert.notEqual(resultat.statut, "refus");
+});
+
+test("un agent sans régime ne refuse jamais sur ce motif", () => {
+  // Et un régime qu'on n'a pas su lire non plus : ne pas savoir n'autorise pas
+  // à conclure que c'est le mauvais.
+  assert.equal(regimeQuiNeCorrespondPas(outilParId("spectre_elastique_ec8"), { regimeIncendie: "erp" }), "");
+  assert.equal(regimeQuiNeCorrespondPas(outilParId("incendie_habitation"), { regimeIncendie: "ERP" }), "");
+  assert.equal(regimeQuiNeCorrespondPas(outilParId("incendie_habitation"), {}), "");
+  assert.equal(regimeQuiNeCorrespondPas(null, { regimeIncendie: "erp" }), "");
+});
+
+/* ── L'entrée qui porte le régime ────────────────────────────────────────── */
+
+test("chaque agent incendie sait recevoir le régime, et le lit dans la mémoire", () => {
+  // Sans cette entrée, la réponse ne saurait pas nommer la qualification sur
+  // laquelle elle repose — et le refus ci-dessus n'aurait rien à comparer.
+  for (const outil of agentsIncendie()) {
+    const entree = outil.entrees.find((champ) => champ.cle === "regimeIncendie");
+    assert.ok(entree, `${outil.id} ne porte pas l'entrée`);
+    assert.deepEqual(entree.valeurs, CLES_REGIME_INCENDIE);
+    assert.equal(entree.depuisMemoire, CLE_REGIME_INCENDIE);
+    // **Pas une entrée d'aiguillage** : le régime est une donnée du bâtiment,
+    // pas ce que le modèle est allé chercher. Le garde-fou des valeurs
+    // fabriquées doit donc s'y appliquer.
+    assert.notEqual(entree.aiguillage, true);
+  }
+});
+
+test("un régime que le modèle fabrique est écarté, pas appliqué", async () => {
+  // « Réponds-moi pour ce bâtiment » suivi d'un « erp » venu de nulle part : la
+  // valeur n'entre pas dans le calcul, et le calcul a lieu sans elle.
+  const resultat = await executerOutil({
+    id: "incendie_habitation",
+    entrees: { exigence: "classement", regimeIncendie: "erp" },
+    question: "quel est le classement de ce bâtiment ?",
+    etudeIncendie: ETUDE
+  });
+
+  assert.notEqual(resultat.statut, "refus");
+  assert.ok(resultat.ecartees.includes(SUJET_REGIME_INCENDIE), resultat.ecartees.join(", "));
 });
