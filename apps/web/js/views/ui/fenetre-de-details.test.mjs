@@ -46,12 +46,33 @@ function fauxElement() {
     ecoutes,
     attributs: {},
     setAttribute(nom, valeur) { this.attributs[nom] = valeur; },
+    // La coque demande si le bouton cliqué est bien chez elle : un clic dans
+    // une autre fenêtre ouverte par-dessus ne doit pas lui parler.
+    contains(node) { return node === this || node?.chezMoi === true; },
     addEventListener: (type, handler) => ecoutes.push({ type, handler }),
     removeEventListener: () => {},
     declencher(type, evenement) {
       for (const ecoute of ecoutes) if (ecoute.type === type) ecoute.handler(evenement);
     }
   };
+}
+
+/**
+ * Un clic, tel que la coque le voit.
+ *
+ * `closest` répond selon ce qu'on cherche : la croix pour la fermeture, le nom
+ * du geste pour la barre d'outils du contenu. Un `closest` qui répondrait à
+ * tout ferait passer chaque clic pour les deux à la fois — et le test ne dirait
+ * plus lequel des deux chemins a joué.
+ */
+function clicSur(quoi, geste = "") {
+  const cible = { chezMoi: true, dataset: { geste } };
+  cible.closest = (selecteur) => {
+    if (quoi === "croix" && selecteur.includes("overlay-chrome__close")) return cible;
+    if (quoi === "geste" && selecteur.includes("data-geste")) return cible;
+    return null;
+  };
+  return { target: cible };
 }
 
 function poserLeDocument() {
@@ -117,9 +138,7 @@ test("la fenêtre reçoit le titre, ce qui se pose à droite, et le corps", () =
  * trois états différents de la mémoire (règle 4).
  */
 for (const [nom, fermer] of [
-  ["la croix", (dom) => dom.hote.declencher("click", {
-    target: { closest: () => ({}) }
-  })],
+  ["la croix", (dom) => dom.hote.declencher("click", clicSur("croix"))],
   ["le voile", (dom) => dom.hote.declencher("click", {
     target: Object.assign(dom.hote, { closest: () => null })
   })],
@@ -207,7 +226,7 @@ test("la croix referme la fenêtre du moment, et non celle d'avant", () => {
 
   let secondRendu = 0;
   ouvrirLaFenetreDeDetails({ corpsHtml: "seconde", surFermeture: () => { secondRendu += 1; } });
-  dom.hote.declencher("click", { target: { closest: () => ({}) } });
+  dom.hote.declencher("click", clicSur("croix"));
 
   assert.equal(secondRendu, 1, "c'est la seconde qui s'est refermée");
   assert.ok(!laFenetreDeDetailsEstOuverte());
@@ -261,6 +280,55 @@ test("changer le contenu d'une fenêtre fermée ne pose rien", () => {
   assert.equal(majLaFenetreDeDetails({ corpsHtml: "perdu" }), null);
   assert.equal(dom.corps.innerHTML, "");
   assert.ok(!laFenetreDeDetailsEstOuverte());
+});
+
+/**
+ * **Les gestes du contenu survivent à son redessin.**
+ *
+ * Une barre d'outils se réécrit — un bouton qui change d'état, un pourcentage
+ * qui bouge — et des écouteurs posés sur ses nœuds mourraient avec eux : le
+ * bouton cesserait de répondre, sans erreur et sans rien à quoi se raccrocher.
+ * L'écoute est sur la coque, qui ne bouge pas.
+ */
+test("un geste du contenu remonte à qui a ouvert la fenêtre", () => {
+  const dom = poserLeDocument();
+  const gestes = [];
+
+  ouvrirLaFenetreDeDetails({ metaHtml: "barre", corpsHtml: "c", surGeste: (nom) => gestes.push(nom) });
+
+  dom.hote.declencher("click", clicSur("geste", "zoom:plus"));
+  // Le contenu se réécrit : l'écoute, elle, est restée sur la coque.
+  majLaFenetreDeDetails({ metaHtml: "barre à 150 %", corpsHtml: "c" });
+  dom.hote.declencher("click", clicSur("geste", "pivoter"));
+
+  assert.deepEqual(gestes, ["zoom:plus", "pivoter"]);
+  assert.ok(laFenetreDeDetailsEstOuverte(), "un geste ne referme pas");
+});
+
+/**
+ * **Les gestes de la fenêtre d'avant ne reviennent pas.**
+ *
+ * L'écoute ne se pose qu'une fois sur la coque, et la coque est la même à
+ * chaque ouverture : elle doit donc appeler celui du moment. Capturé à la
+ * première ouverture, un aperçu refermé continuerait de recevoir les clics de
+ * la fenêtre suivante — et de tourner une note qui n'est plus là.
+ */
+test("le contenu d'avant ne reçoit plus les gestes du contenu d'après", () => {
+  const dom = poserLeDocument();
+  const premier = [];
+  const second = [];
+
+  ouvrirLaFenetreDeDetails({ corpsHtml: "un", surGeste: (nom) => premier.push(nom) });
+  ouvrirLaFenetreDeDetails({ corpsHtml: "deux", surGeste: (nom) => second.push(nom) });
+  dom.hote.declencher("click", clicSur("geste", "pivoter"));
+
+  assert.deepEqual(premier, []);
+  assert.deepEqual(second, ["pivoter"]);
+
+  // Et refermée, la fenêtre n'écoute plus personne.
+  fermerLaFenetreDeDetails();
+  dom.hote.declencher("click", clicSur("geste", "pivoter"));
+  assert.deepEqual(second, ["pivoter"]);
 });
 
 /**

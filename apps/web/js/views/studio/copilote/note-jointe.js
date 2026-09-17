@@ -90,6 +90,74 @@ export function renderLigneDeLaNoteHtml({ piece = null, ouvert = false, montrabl
 }
 
 /**
+ * Les grossissements qu'on peut demander.
+ *
+ * Des crans, et non un pas continu : on veut « un peu plus grand », pas régler
+ * un curseur au centième. `1` est la largeur de la fenêtre — le repos, celui
+ * qu'on retrouve en cliquant le pourcentage.
+ */
+export const CRANS_DE_ZOOM = [0.5, 0.75, 1, 1.5, 2, 3, 4];
+
+/** Le cran suivant dans un sens ou dans l'autre ; aux bornes, on n'avance plus. */
+export function cranSuivant(zoom, sens) {
+  const rang = CRANS_DE_ZOOM.indexOf(zoomValide(zoom));
+  const vise = Math.min(CRANS_DE_ZOOM.length - 1, Math.max(0, rang + (sens < 0 ? -1 : 1)));
+  return CRANS_DE_ZOOM[vise];
+}
+
+/** Le grossissement demandé, ramené à un cran connu. */
+export function zoomValide(zoom) {
+  const valeur = Number(zoom);
+  if (!Number.isFinite(valeur)) return 1;
+  // Le cran le plus proche : une valeur venue d'un état ancien ne doit pas
+  // sortir la barre de ses bornes ni afficher un pourcentage qu'aucun bouton
+  // ne rend.
+  return CRANS_DE_ZOOM.reduce(
+    (meilleur, cran) => (Math.abs(cran - valeur) < Math.abs(meilleur - valeur) ? cran : meilleur),
+    CRANS_DE_ZOOM[0]
+  );
+}
+
+/** Le quart de tour demandé, ramené à 0, 90, 180 ou 270. */
+export function rotationValide(rotation) {
+  const quarts = Math.round((Number(rotation) || 0) / 90);
+  // Le reste d'un nombre négatif est négatif en JavaScript : sans le second
+  // tour, pivoter en arrière depuis le haut rendrait -90, que pdf.js prend pour
+  // un angle valide et qu'aucun bouton ne sait ramener à 0.
+  return (((quarts % 4) + 4) % 4) * 90;
+}
+
+/**
+ * Le grossissement et le quart de tour, dans l'en-tête de la fenêtre.
+ *
+ * Le pourcentage est **un bouton**, et pas une étiquette : c'est là qu'on
+ * revient à la largeur de la fenêtre, et c'est l'endroit où l'on clique déjà
+ * pour le chercher.
+ *
+ * Les bornes se disent en désactivant : un bouton qui répond en ne faisant rien
+ * se lit comme un bouton cassé.
+ */
+function outilsDuDessin({ zoom = 1, rotation = 0, actif = true } = {}) {
+  const cran = zoomValide(zoom);
+  const eteint = !actif;
+
+  const bouton = (icone, titre, geste, desactive = false) => `
+    <button type="button" class="bouton-discret copilote-apercu__outil"
+      data-geste="${geste}" title="${escapeHtml(titre)}" aria-label="${escapeHtml(titre)}"
+      ${desactive || eteint ? "disabled" : ""}>${svgIcon(icone)}</button>`;
+
+  return `
+    ${bouton("zoom-out", "Réduire", "zoom:moins", cran <= CRANS_DE_ZOOM[0])}
+    <button type="button" class="bouton-discret copilote-apercu__taux mono"
+      data-geste="zoom:ajuste" title="Revenir à la largeur de la fenêtre"
+      ${eteint ? "disabled" : ""}>${Math.round(cran * 100)} %</button>
+    ${bouton("zoom-in", "Agrandir", "zoom:plus", cran >= CRANS_DE_ZOOM[CRANS_DE_ZOOM.length - 1])}
+    <span class="copilote-apercu__filet" aria-hidden="true"></span>
+    ${bouton("rotate", `Pivoter d'un quart de tour (${rotationValide(rotation)}°)`, "pivoter")}
+  `;
+}
+
+/**
  * L'aperçu de la note : ce qu'on met **dans la fenêtre de l'application**.
  *
  * ## Elle existait déjà
@@ -109,14 +177,28 @@ export function renderLigneDeLaNoteHtml({ piece = null, ouvert = false, montrabl
  * réglage courant, et le cadre d'avant affichait alors un bouton « Ouvrir » à la
  * place du document.
  *
+ * ## La barre d'outils
+ *
+ * Une page A4 ramenée à la largeur d'une fenêtre se lit pour ce qu'elle est —
+ * un plan, une note —, mais pas toujours pour ce qu'elle *dit* : une cote au
+ * huitième de la taille imprimée ne se lit pas. Le grossissement et le quart de
+ * tour sont donc là, comme dans n'importe quel lecteur, et ils travaillent tous
+ * les deux **sur le dessin**, pas sur une transformation posée par-dessus : les
+ * pages sont repeintes à la nouvelle taille, sinon un grossissement rendrait
+ * une image floue et une rotation laisserait la page dans le cadre de l'autre.
+ *
  * @param {object} options
  * @param {string} options.nom
  * @param {string} [options.adresse] celle de `adresseDeLaPiece` — elle ne sert
  *   qu'au recours : ouvrir la note dans un onglet
  * @param {"lecture"|"lue"|"panne"} [options.etat] où en est le dessin
+ * @param {number} [options.zoom] 1 = la largeur de la fenêtre
+ * @param {number} [options.rotation] en degrés, multiple de 90
  * @returns {{titreHtml: string, metaHtml: string, corpsHtml: string}}
  */
-export function apercuDeLaNote({ nom = "", adresse = "", etat = "lecture" } = {}) {
+export function apercuDeLaNote({
+  nom = "", adresse = "", etat = "lecture", zoom = 1, rotation = 0
+} = {}) {
   const sien = texte(nom);
 
   return {
@@ -125,11 +207,15 @@ export function apercuDeLaNote({ nom = "", adresse = "", etat = "lecture" } = {}
         ${svgIcon("file-pdf")}
         <span class="copilote-apercu__nom">${escapeHtml(sien || "Note jointe")}</span>
       </span>`,
-    metaHtml: texte(adresse)
-      ? `<a class="bouton-discret copilote-apercu__onglet" href="${escapeHtml(adresse)}"
-          target="_blank" rel="noopener"
-          title="Ouvrir la note dans un onglet">Ouvrir dans un onglet</a>`
-      : "",
+    metaHtml: `
+      <div class="copilote-apercu__outils">
+        ${outilsDuDessin({ zoom, rotation, actif: etat !== "panne" })}
+        ${texte(adresse)
+          ? `<a class="bouton-discret copilote-apercu__onglet" href="${escapeHtml(adresse)}"
+              target="_blank" rel="noopener"
+              title="Ouvrir la note dans un onglet">Ouvrir dans un onglet</a>`
+          : ""}
+      </div>`,
     corpsHtml: `
       <div class="copilote-apercu">
         ${/*

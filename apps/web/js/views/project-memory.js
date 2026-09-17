@@ -113,6 +113,7 @@ import { ceQuiCouvre, phraseDeLaCouvertureDe } from "../services/ce-qui-couvre.j
 import { liaisonDeLAvis } from "../services/avis-liaison.js";
 import { bindGhActionButtons, bindGhSelectMenus, renderGhActionButton, renderGhSelectMenu } from "./ui/gh-split-button.js";
 import { renderLightTabs, bindLightTabs } from "./ui/light-tabs.js";
+import { gestesDAffichage, gestesDAjout } from "./project-memoire-gestes.js";
 import { renderSharedDetailsTitleWrap } from "./ui/detail-header.js";
 import { renderOverlayChromeHead, bindOverlayChromeCompact } from "./ui/overlay-chrome.js";
 import { enClair } from "../services/memoire-en-texte.js";
@@ -522,6 +523,7 @@ function renderCounts(resume, vocabulaire, enAttente = 0, plan = { derivees: 0 }
  */
 function renderSearch() {
   return `
+    <div class="memory-recherche">
     <div class="memory-search gh-field-focus">
       <div class="memory-search__field">
         <div class="memory-search__mirror" aria-hidden="true">${renderQueryMirror(view.query, MEMORY_FIELDS)}</div>
@@ -551,6 +553,13 @@ function renderSearch() {
       <span class="memory-search__icon" aria-hidden="true">${svgIcon("search", { className: "octicon" })}</span>
       <div class="memory-search__suggestions" data-memory-suggestions hidden role="listbox"
         aria-label="Compléter la recherche"></div>
+    </div>
+    ${/*
+      **Le réglage de ce qu'on voit va avec la recherche, pas avec le titre.**
+      La ligne du titre porte ce qui écrit ; celle-ci porte ce qui regarde — on
+      cherche, on filtre, et l'on choisit sous quelle forme lire ce qui reste.
+    */""}
+    ${renderBoutonAffichage(view.busy)}
     </div>
   `;
 }
@@ -1624,17 +1633,52 @@ export function renderMemoryHead(resume, { busy = false } = {}) {
           ${
             enVariante
               ? `<span class="memory-head__variante">Lecture seule : on regarde une variante.</span>`
-              : `${renderExportButton(resume, busy)}
-                 ${renderVerserButton(busy)}
-                 ${renderBoutonCerveau(busy)}
-                 <button type="button" class="gh-btn gh-btn--primary" data-memory-declare ${busy ? "disabled" : ""}>
-                   ${svgIcon("plus", { className: "octicon" })} Déclarer une hypothèse
-                 </button>`
+              : renderBoutonAjouter(resume, busy)
           }
         </div>
       </span>
     </header>
   `;
+}
+
+/**
+ * Tout ce qui écrit ou sort la mémoire, sous un seul bouton.
+ *
+ * ## Le défaut que ça répare
+ *
+ * Ils étaient quatre sur la ligne du titre — Exporter, Verser, la bascule
+ * Liste/Cerveau et la déclaration —, et le titre d'une lecture filtrée peut
+ * faire trente caractères. Le rang débordait sur le rail, rien ne s'alignait,
+ * et les boutons changeaient de place selon la lecture ouverte : on cherchait
+ * chaque fois celui qu'on venait d'utiliser.
+ *
+ * ## Pourquoi un seul, et pas trois plus courts
+ *
+ * Parce que c'est **un seul geste sous trois formes** : faire entrer quelque
+ * chose dans la mémoire, ou l'en faire sortir. Déclarer, verser, reconstruire,
+ * exporter, copier — on ouvre le menu, on lit ce qui est possible, on choisit.
+ * Trois boutons obligeaient à savoir d'avance lequel portait ce qu'on cherchait,
+ * et la reconstruction des liens dormait sous « Verser », où personne ne la
+ * trouvait.
+ *
+ * Le bouton principal **ouvre le menu** au lieu de déclarer : on n'ajoute pas,
+ * on choisit quoi ajouter — sans quoi sa moitié gauche ferait autre chose que
+ * ce que son chevron annonce.
+ */
+function renderBoutonAjouter(resume, busy = false) {
+  return renderGhActionButton({
+    id: "memoryAjouter",
+    label: "Ajouter",
+    icon: svgIcon("plus", { className: "octicon" }),
+    tone: "primary",
+    size: "md",
+    // Le bouton principal **ouvre le menu** au lieu de déclarer : on n'ajoute
+    // pas, on choisit quoi ajouter — sans quoi sa moitié gauche ferait autre
+    // chose que ce que son chevron annonce.
+    menuOnMain: true,
+    disabled: busy,
+    items: gestesDAjout({ total: resume.total, busy })
+  });
 }
 
 /**
@@ -1652,121 +1696,68 @@ export function renderMemoryHead(resume, { busy = false } = {}) {
  * action de plus, et l'on n'aurait pas su que le dessin obéit au même filtre.
  *
  * **La liste est toujours celle qu'on regarde** : le cerveau s'ouvre par-dessus
- * et se referme sur elle. La marque le dit, plutôt que de prétendre à un
- * troisième écran qui n'existe pas.
+ * et se referme sur elle. C'est pourquoi « Liste » est dans le menu mais
+ * éteinte — elle dit qu'il y a deux façons de regarder, et laquelle est ouverte,
+ * plutôt que de prétendre à un troisième écran qui n'existe pas.
+ *
+ * **Et c'est un menu, sur la ligne de la recherche.** La bascule était deux
+ * moitiés accolées sur la ligne du titre, au milieu des outils qui écrivent —
+ * or regarder autrement n'écrit rien. Elle est désormais à droite du champ de
+ * recherche, avec les autres réglages de ce qu'on voit.
  *
  * L'usage se lit dans `services/usages-du-rejeu.js` plutôt que d'être écrit
  * ici : la liste des usages dit déjà lequel vit dans la Mémoire, et le récrire
  * ferait deux vérités à tenir (règle 4). Un usage que le moteur ne sert pas
  * encore s'éteint et dit son étape, plutôt que de promettre ce qu'il ne fait pas.
  */
-function renderBoutonCerveau(busy = false) {
+function renderBoutonAffichage(busy = false) {
   const usage = usagesDe(OU.MEMOIRE)[0];
   if (!usage) return "";
 
-  const servi = estServi(usage);
-  return `
-    <span class="memory-bascule" role="group" aria-label="Comment regarder cette sélection">
-      <button type="button" class="memory-bascule__part is-active" aria-pressed="true"
-        title="Ce que vous regardez : la sélection, ligne par ligne." disabled>
-        ${svgIcon("table", { className: "octicon" })} Liste
-      </button>
-      <button type="button" class="memory-bascule__part" data-memoire-cerveau aria-pressed="false"
-        title="${escapeHtml(usage.quoi)}" ${busy || !servi ? "disabled" : ""}>
-        ${svgIcon("memoire-vive", { className: "octicon" })} ${escapeHtml(libelleDeLUsage(usage))}
-      </button>
-    </span>
-  `;
-}
-
-/**
- * Le bouton d'export, sur la ligne du titre.
- *
- * Le même qu'en tête d'une proposition, et volontairement : les deux fichiers
- * se comparent, et deux boutons dessinés différemment feraient croire à deux
- * exports de natures différentes.
- *
- * Il reste distinct de « Copier le dossier de contexte », qui met la mémoire en
- * prose dans le presse-papier pour la coller dans une conversation. Ici on
- * écrit un fichier structuré, qu'on ouvre dans un tableur ou qu'on relit.
- */
-function renderExportButton(resume, busy = false) {
   return renderGhActionButton({
-    id: "memoryExport",
-    label: "Exporter",
-    icon: svgIcon("download", { className: "octicon" }),
+    id: "memoryAffichage",
+    label: "Affichage",
+    icon: svgIcon("gear", { className: "octicon" }),
     size: "md",
-    mainActionMode: "first-item",
-    disabled: resume.total === 0 || busy,
-    items: [
-      { action: "export:json", label: "Exporter en JSON" },
-      { action: "export:csv", label: "Exporter en CSV" },
-      // Copier le dossier de contexte est un export lui aussi : un fichier
-      // qu'on relit d'un côté, une prose qu'on colle de l'autre, mais le même
-      // geste — sortir la mémoire. Deux boutons pour un geste font une barre
-      // qu'on lit deux fois.
-      { action: "export:contexte", label: "Copier le dossier de contexte" }
-    ]
+    menuOnMain: true,
+    items: gestesDAffichage({
+      usage, libelle: libelleDeLUsage(usage), servi: estServi(usage), busy
+    }).map((geste) => ({
+      ...geste,
+      icon: svgIcon(geste.action === "affichage:liste" ? "table" : "memoire-vive", { className: "octicon" })
+    }))
   });
 }
 
 /**
- * Les versements, sous un seul bouton.
+ * Ce que le menu « Ajouter » déclenche.
  *
- * Deux gestes de même nature — faire entrer en mémoire ce qui est déjà établi
- * ailleurs — et donc un seul bouton. Ils restent gris : ils n'écrivent que ce
- * qui a déjà été décidé, contrairement à la déclaration, qui est un acte.
- */
-function renderVerserButton(busy = false) {
-  return renderGhActionButton({
-    id: "memoryVerser",
-    label: "Verser",
-    icon: svgIcon("plus-circle", { className: "octicon" }),
-    size: "md",
-    disabled: busy,
-    items: [
-      { action: "verser:site", label: "Verser les contraintes du site" },
-      { separator: true },
-      {
-        action: "verser:lectures",
-        label: "Reconstruire les liens du raisonnement",
-        // Ce n'est pas un versement : rien n'entre en mémoire. C'est une
-        // relecture de ce que les règles disent déjà, écrite là où elle se
-        // compte. Elle est ici parce que c'est le même geste — rendre explicite
-        // ce qui était implicite — et parce qu'elle écrit, donc elle se demande.
-        title: "Relit ce que chaque règle a lu, et l'enregistre avec son rang et sa zone. "
-          + "Les liens résolus après coup sont marqués comme tels."
-      }
-    ]
-  });
-}
-
-/**
- * Le versement, derrière son bouton.
+ * ## Un seul écouteur, pour un seul bouton
  *
- * Séparé de l'export parce qu'ils ne vont pas dans le même sens : l'un sort la
- * mémoire, l'autre y fait entrer.
+ * Déclarer, verser, reconstruire, exporter et copier étaient répartis sur trois
+ * boutons et deux écouteurs, chacun filtrant les actions qu'il reconnaissait.
+ * Ajouter une entrée obligeait à savoir lequel des deux l'entendrait — et à se
+ * tromper une fois avant de le savoir. Les gestes sont ici, dans l'ordre où le
+ * menu les propose.
  */
-function bindVerserButton(root) {
-  const action = root.querySelector('[data-action-id="memoryVerser"]');
-  if (!action) return;
-
-  action.addEventListener("ghaction:action", (event) => {
-    const quoi = String(event.detail?.action || "");
-    if (quoi === "verser:site") void versSiteConstraints(root);
-    if (quoi === "verser:lectures") void reconstruireLesLectures(root);
-  });
-}
-
-/** L'export de la mémoire : ce que la liste tient, écrit dans un fichier. */
-function bindExportButton(root) {
+function brancherLeMenuAjouter(root) {
   bindGhActionButtons();
 
-  const action = root.querySelector('[data-action-id="memoryExport"]');
+  const action = root.querySelector('[data-action-id="memoryAjouter"]');
   if (!action) return;
 
   action.addEventListener("ghaction:action", async (event) => {
     const quoi = String(event.detail?.action || "");
+
+    if (quoi === "declarer") {
+      view.declaring = !view.declaring;
+      view.notice = "";
+      renderContent(root);
+      return;
+    }
+
+    if (quoi === "verser:site") { void versSiteConstraints(root); return; }
+    if (quoi === "verser:lectures") { void reconstruireLesLectures(root); return; }
     if (!quoi.startsWith("export:")) return;
 
     // La copie du dossier de contexte partage le bouton sans partager le
@@ -2366,12 +2357,22 @@ function renderContent(root) {
       style="--project-rail-width:${railWidth(view.navWidth, view.navCollapsed)}px">
       <div class="propositions-shell">
         ${renderBandeauVariante(varianteEnCours(), { aBouge: laMemoireABouge(varianteEnCours(), view.memoire ?? []), seulement: view.varianteSeulement })}
-        ${renderMemoryHead(resume, { busy: view.busy })}
 
         <div class="project-rail-layout${view.navCollapsed ? " project-rail-layout--collapsed" : ""}">
           ${renderMemoryNav()}
 
           <div class="project-rail-layout__content">
+            ${/*
+              **Le titre est dans la colonne, pas au-dessus du rail.**
+
+              Il était posé avant la disposition à rail, donc calé sur le bord
+              gauche de la coque — c'est-à-dire **sous le rail**, qui flotte
+              par-dessus. « Toute la mémoire du projet » commençait derrière la
+              barre latérale, et le bouton de droite s'alignait sur une colonne
+              que plus rien d'autre ne suivait. Dans le contenu, il part où part
+              le tableau et finit où finit la recherche.
+            */""}
+            ${renderMemoryHead(resume, { busy: view.busy })}
             ${renderHypothesisForm()}
 
             ${view.notice ? `<div class="propositions-empty propositions-empty--warn"><p>${escapeHtml(view.notice)}</p></div>` : ""}
@@ -2871,7 +2872,7 @@ function bindListDelegation(root) {
 
 function bind(root) {
   bindListDelegation(root);
-  bindExportButton(root);
+  brancherLeMenuAjouter(root);
   brancherLeBandeauVariante(root);
   brancherLeFiltreDeVariante(root);
   brancherLeCerveau(root);
@@ -3059,12 +3060,6 @@ function bind(root) {
     renderContent(root);
   });
 
-  root.querySelector("[data-memory-declare]")?.addEventListener("click", () => {
-    view.declaring = !view.declaring;
-    view.notice = "";
-    renderContent(root);
-  });
-
   root.querySelector("[data-memory-declare-cancel]")?.addEventListener("click", () => {
     view.declaring = false;
     view.draft = { subject: "", value: "", domain: "", zones: [] };
@@ -3108,7 +3103,6 @@ function bind(root) {
     declareHypothesis(root);
   });
 
-  bindVerserButton(root);
 
   // Le libellé ouvre le menu, comme le chevron : couper un filtre en deux
   // cibles demanderait de viser le chevron pour une liste qui s'ouvre de toute
@@ -3471,7 +3465,11 @@ function brancherLeFiltreDeVariante(root) {
  * `docs/a-traiter-plus-tard.md`, § 14, et `services/usages-du-rejeu.js`.
  */
 function brancherLeCerveau(root) {
-  root.querySelector("[data-memoire-cerveau]")?.addEventListener("click", () => {
+  const action = root.querySelector('[data-action-id="memoryAffichage"]');
+  action?.addEventListener("ghaction:action", (event) => {
+    // « Liste » est déjà ce qu'on regarde : le menu la porte pour dire qu'il y
+    // a deux façons de lire, pas pour en proposer une troisième.
+    if (String(event.detail?.action || "") !== "affichage:cerveau") return;
     // **La même sélection que le tableau.** Le cerveau recevait la mémoire
     // entière pendant que la liste juste derrière n'en montrait que douze
     // lignes : deux rendus, deux contenus, et rien pour dire lequel disait vrai.

@@ -1,6 +1,6 @@
 import { svgIcon } from "../ui/icons.js";
 import { escapeHtml } from "../utils/escape-html.js";
-import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
+import { registerProjectScrollSources, setProjectViewHeader } from "./project-shell-chrome.js";
 import { bindSideNavPanels } from "./ui/side-nav-layout.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import { RANGEMENT, renderVitrineDeLatelier } from "./atelier/vitrine-de-latelier.js";
@@ -289,6 +289,32 @@ export function renderProjectStudio(root) {
 
   const getScrollSource = () => root.querySelector("#projectStudioRouterScroll");
 
+  /**
+   * **Ce qui défile dans l'Atelier, et qui compacte donc le bandeau d'onglets.**
+   *
+   * ## Le défaut que ça répare
+   *
+   * La coque du routeur défile pour la plupart des utilitaires, mais pas pour
+   * tous : le Copilote tient dans la hauteur de l'écran et c'est **son fil** qui
+   * défile, à l'intérieur. On ne désignait que la coque : elle ne bougeait
+   * jamais, le bandeau du projet ne voyait aucun mouvement et restait déplié.
+   * Sur un écran de conversation, ces quarante-quatre pixels sont pris sur la
+   * seule chose qu'on y fait — lire.
+   *
+   * ## Pourquoi c'est le panneau qui le dit, et non l'Atelier
+   *
+   * Le Copilote le désignait lui-même, et l'Atelier le réécrasait au rendu
+   * suivant : deux endroits décidaient de la même chose, et le dernier arrivé
+   * gagnait selon le chemin par lequel on était entré (règle 4). Le panneau qui
+   * défile autrement le **déclare** (`data-defilement-du-panneau`), et l'Atelier
+   * le lit. Les deux sont enregistrés : celui qui bouge devient la source, sans
+   * que personne ait à trancher d'avance.
+   */
+  const ascenseursDuRouteur = () => [
+    getScrollSource(),
+    root.querySelector("[data-side-nav-panel].is-active [data-defilement-du-panneau]")
+  ];
+
   // **La route l'emporte sur le dernier panneau regardé.** On vient de cliquer
   // un lien qui nomme un panneau : le lui refuser au profit d'où l'on était
   // ferait un raccourci qui n'emmène nulle part.
@@ -325,8 +351,6 @@ export function renderProjectStudio(root) {
   root.addEventListener("click", (evenement) => {
     const button = evenement.target.closest?.("[data-side-nav-target]");
     if (!button || !root.contains(button)) return;
-
-    registerProjectPrimaryScrollSource(getScrollSource());
 
     const targetId = String(button.dataset.sideNavTarget || "").trim();
     if (!targetId) return;
@@ -367,14 +391,18 @@ export function renderProjectStudio(root) {
 
     panneauCourant = targetId || panneauCourant;
     marquerActif(root, targetId);
+
+    // **Après la bascule, et non avant** : c'est le panneau qu'on vient
+    // d'ouvrir qui dit ce qui défile chez lui.
+    registerProjectScrollSources(ascenseursDuRouteur());
   });
 
   brancherLeRetourALaccueil(root);
   brancherLaVitrine(root, vitrineRoot);
-  brancherCopilote(root, copiloteRoot, getScrollSource);
+  brancherCopilote(root, copiloteRoot, ascenseursDuRouteur);
   marquerActif(root, panneauCourant);
 
-  registerProjectPrimaryScrollSource(getScrollSource());
+  registerProjectScrollSources(ascenseursDuRouteur());
 }
 
 /* ── Revenir à l'accueil par l'onglet ────────────────────────────────────── */
@@ -633,7 +661,7 @@ function afficherPanneau(root, targetId) {
  * Ce qui reste ici est ce que l'Atelier est seul à savoir : où le Copilote est
  * monté, quel panneau afficher, et quel repère marquer dans le rail.
  */
-function brancherCopilote(root, copiloteRoot, getScrollSource) {
+function brancherCopilote(root, copiloteRoot, ascenseursDuRouteur) {
   // L'écouteur d'avant se retire : l'Atelier se redessine à chaque repli du
   // rail, et des écouteurs empilés redessineraient l'historique autant de fois
   // qu'on a replié.
@@ -643,9 +671,9 @@ function brancherCopilote(root, copiloteRoot, getScrollSource) {
   if (!copiloteRoot) return;
 
   const venir = () => {
-    registerProjectPrimaryScrollSource(getScrollSource());
     afficherPanneau(root, "studio-copilote");
     renderCopilote(copiloteRoot);
+    registerProjectScrollSources(ascenseursDuRouteur());
     marquerActif(root, "studio-copilote");
   };
 

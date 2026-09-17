@@ -1,4 +1,13 @@
 :root{
+  /* **La largeur de travail d'un onglet de projet.**
+
+     Elle était écrite à la main dans chaque écran — le bandeau des onglets, les
+     Fichiers, le détail d'une discussion, la lecture d'un compte rendu — et la
+     Mémoire, seule, en avait gardé une autre : son tableau faisait mille douze
+     pixels sous un bandeau qui en fait mille deux cent quatre-vingts, et l'on
+     voyait le décrochement en passant d'un onglet à l'autre. Une valeur écrite à
+     plusieurs endroits finit par diverger (règle 4) : elle vit ici. */
+  --largeur-donglet:1280px;
   --bg:#0d1117;
   --bgAssistPanel:rgb(1, 4, 9);
   --panel2:#161b22;
@@ -6572,8 +6581,8 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   margin-bottom:16px;
 }
 .documents-shell{
-  width:min(100%, 1280px);
-  max-width:1280px;
+  width:min(100%, var(--largeur-donglet));
+  max-width:var(--largeur-donglet);
   margin:0 auto;
 }
 .documents-shell.documents-layout:not(.is-root){
@@ -7947,7 +7956,7 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 }
 
 .project-discussions__detail-inner{
-  max-width:1280px;
+  max-width:var(--largeur-donglet);
   margin:0 auto;
   padding:0 16px 24px;
 }
@@ -8686,7 +8695,7 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   border-bottom:1px solid var(--border);
 }
 .project-sticky-chrome__container{
-  max-width:1280px;
+  max-width:var(--largeur-donglet);
   margin:0 auto;
   padding:0 16px;
   display:flex;
@@ -17167,7 +17176,11 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 /* ── La mémoire du projet ────────────────────────────────────────
    Une liste d'affirmations, pas une liste de sujets : un fait daté se lit en
    une ligne, et c'est ce qu'on vient y chercher. */
-.project-simple-page--memory .propositions-shell{ gap:16px; }
+/* La Mémoire prend la largeur de travail des autres onglets : son tableau porte
+   un sujet, une valeur, un domaine, une zone, une provenance et des gestes —
+   mille douze pixels serraient les colonnes et faisaient passer les titres sur
+   deux lignes, sous un bandeau d'onglets qui, lui, allait jusqu'au bout. */
+.project-simple-page--memory .propositions-shell{ gap:16px; max-width:var(--largeur-donglet); }
 
 /* L'en-tête reprend celui d'un utilitaire de l'Atelier — « Suivi des avis du
    Bureau de Contrôle » : titre à gauche, actions à droite, un filet dessous,
@@ -17747,7 +17760,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 /* Le retrait du bas suivait celui d'un écran qui défile ; ici la saisie est déjà
    au bord, et seize pixels de vide sous elle sont seize pixels de discussion en
    moins. */
-.copilote-composer{ flex:0 0 auto; padding:8px 24px 10px; }
+.copilote-composer{ flex:0 0 auto; padding:8px 24px 6px; }
 .copilote-composer__inner{
   display:flex; flex-direction:column; gap:10px;
   width:100%; max-width:var(--copilote-colonne); margin:0 auto;
@@ -18002,7 +18015,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .copilote-massifs__table td em{ font-style:normal; font-size:10.5px; color:#f0883e; }
 /* Un appui qui ne passe pas ne se signale pas par une couleur seule : la
    colonne dit pourquoi, et la teinte ne fait que le rendre trouvable. */
-.copilote-massifs__table tr.est-en-defaut td{ color:#f85149; }
+.copilote-massifs__table tr.est-en-defaut td{ color:var(--ton-doute-vif); }
 /* Le nom d'un massif ouvre son détail : sans lui, « aucune semelle jusqu'à 4 m »
    est une réponse qu'on ne peut ni vérifier ni corriger. */
 .copilote-massifs__nom{
@@ -18158,6 +18171,30 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   padding:2px 8px; border-radius:6px;
 }
 .copilote-apercu__onglet:hover{ color:var(--text); background:rgba(255,255,255,.07); }
+
+/* **La barre d'outils de la note**, dans l'en-tête de la fenêtre : grossir,
+   revenir à la largeur de la fenêtre, pivoter — puis le recours. Une page A4
+   ramenée à la largeur d'une fenêtre se reconnaît, mais une cote au huitième de
+   sa taille imprimée ne se lit pas. */
+.copilote-apercu__outils{ display:flex; align-items:center; gap:2px; }
+.copilote-apercu__outil{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:28px; height:28px; padding:0; border-radius:6px; color:var(--muted);
+}
+.copilote-apercu__outil:hover:not(:disabled){ color:var(--text); background:rgba(255,255,255,.07); }
+/* **Le taux est un bouton**, et non une étiquette : c'est là qu'on revient à la
+   largeur de la fenêtre, et c'est l'endroit où l'on regarde déjà pour le
+   chercher. Sa largeur est fixe — « 50 % » et « 400 % » ne font pas le même
+   nombre de caractères, et la barre sauterait à chaque cran. */
+.copilote-apercu__taux{
+  min-width:52px; height:28px; padding:0 4px; border-radius:6px;
+  color:var(--muted); font-size:11px; text-align:center;
+}
+.copilote-apercu__taux:hover:not(:disabled){ color:var(--text); background:rgba(255,255,255,.07); }
+.copilote-apercu__outils :disabled{ opacity:.4; cursor:default; }
+.copilote-apercu__filet{
+  width:1px; height:18px; margin:0 6px; background:var(--border); flex:0 0 1px;
+}
 
 /* Une fois la note partie, elle ne tient plus une carte dans la zone de saisie :
    le trombone allumé dit qu'elle est jointe à la discussion, la croix à côté
@@ -18645,6 +18682,15 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 /* La saisie et la loupe sont deux zones distinctes : la saisie prend le fond de
    l'application, et un filet la sépare de l'icône — sans quoi on ne sait pas où
    finit ce qu'on tape. */
+/* **Ce qui regarde est sur cette ligne**, ce qui écrit est sur celle du titre.
+   On cherche, on filtre, et l'on choisit sous quelle forme lire ce qui reste :
+   le réglage de l'affichage va donc avec la recherche, et la ligne du titre
+   cesse de déborder sur le rail. */
+.memory-recherche{ display:flex; align-items:stretch; gap:8px; }
+.memory-recherche > .memory-search{ flex:1 1 auto; min-width:0; }
+.memory-recherche > .gh-action{ flex:0 0 auto; }
+.memory-recherche .gh-btn{ height:100%; white-space:nowrap; }
+
 .memory-search{
   position:relative; display:flex; align-items:stretch;
   border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;
@@ -18843,7 +18889,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 #memoryDetailsTitle.details-head--compact .overlay-chrome__bar{
   width:100%;
-  max-width:1012px;
+  max-width:var(--largeur-donglet);
   margin-left:auto;
   margin-right:auto;
   padding:0 16px;
@@ -22995,14 +23041,9 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   --variante-bord:rgba(57,197,207,.40);
 }
 
-/* Le bouton du cerveau porte le cyan des lectures, pas le vert de la
-   déclaration : deux boutons verts côte à côte se liraient comme deux gestes de
-   même poids, or l'un écrit en mémoire et l'autre n'ouvre qu'une lecture. */
-[data-memoire-cerveau]{
-  flex:0 0 auto; white-space:nowrap;
-  border-color:var(--variante-bord); background:var(--variante-fond); color:var(--variante);
-}
-[data-memoire-cerveau]:hover:not(:disabled){ border-color:var(--variante); background:rgba(57,197,207,.18); }
+/* Le cerveau porte le cyan des lectures dans le menu « Affichage » : il n'écrit
+   rien, il ouvre une autre façon de regarder la même sélection. */
+.gh-menu__item[data-menu-action="affichage:cerveau"] .gh-menu__item-icon{ color:var(--variante); }
 
 /* Les explorations de l'Atelier : la même fenêtre, posée dans un panneau.
    Elle ne recouvre plus rien — elle *est* l'écran —, donc ni voile, ni position
@@ -23612,26 +23653,6 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   border-right:1px solid rgba(139,148,158,.16);
 }
 .cerveau__rail[hidden]{ display:none; }
-/* Deux rendus d'une même sélection : la liste, et le cerveau. Accolés, parce
-   qu'ils ne sont pas deux actions mais deux façons de regarder la même chose —
-   séparés, on aurait lu le second comme un outil de plus, et l'on n'aurait pas
-   su que le dessin obéit au même filtre. */
-.memory-bascule{ display:inline-flex; }
-.memory-bascule__part{
-  display:inline-flex; align-items:center; gap:6px;
-  padding:5px 12px; border:1px solid var(--border);
-  background:var(--btn-bg, transparent); color:var(--text);
-  font:inherit; font-size:12px; font-weight:500; cursor:pointer;
-}
-.memory-bascule__part:first-child{ border-radius:6px 0 0 6px; }
-.memory-bascule__part:last-child{ border-radius:0 6px 6px 0; margin-left:-1px; }
-.memory-bascule__part:hover:not(:disabled){ background:rgba(110,118,129,.12); }
-/* Celle qu'on regarde. Enfoncée, et non colorée : ce n'est pas un état
-   d'alerte, c'est « vous êtes ici ». */
-.memory-bascule__part.is-active{
-  background:rgba(110,118,129,.18); color:var(--text); font-weight:600; cursor:default;
-}
-.memory-bascule__part:disabled:not(.is-active){ opacity:.5; cursor:not-allowed; }
 
 /* Ce que le cerveau montre, quand il ne montre pas tout. Ambre, comme tout ce
    qui restreint : un dessin filtré n'est pas le projet, et le lire pour le
@@ -23903,6 +23924,14 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .project-simple-scroll--atelier{padding:0;}
 .project-simple-scroll--atelier .project-studio-router__panel{padding:24px 32px 40px;}
 .project-simple-scroll--atelier .project-studio-router__panel[data-side-nav-panel="atelier-vitrine"]{padding:0;}
+/*
+ * **Le Copilote va jusqu'au bord.** Le panneau réservait quarante pixels sous
+ * lui — le retrait d'un écran qui défile, juste partout ailleurs. Ici la saisie
+ * est déjà en bas et ne défile pas : ces quarante pixels étaient du vide sous
+ * le composeur, pris sur la seule chose qu'on fait sur cet écran — lire la
+ * discussion. Le haut reste : le titre de la conversation a besoin de respirer.
+ */
+.project-simple-scroll--atelier .project-studio-router__panel--copilote{padding-bottom:0;}
 
 .settings-shell--atelier{
   display:flex;
@@ -24396,8 +24425,8 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   display:flex;
   flex-direction:column;
   gap:20px;
-  width:min(100%, 1280px);
-  max-width:1280px;
+  width:min(100%, var(--largeur-donglet));
+  max-width:var(--largeur-donglet);
   margin:0 auto;
 }
 .lecture-cr__entete-fichier{flex:0 0 auto;}
