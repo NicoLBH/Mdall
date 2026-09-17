@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "pretest": "npm run prepare:utilitaires",
     "test": "node --test $(find apps/web/js supabase/functions scripts -name '*.test.mjs' -print)",
     "test:spikes": "node --test $(find spikes -name '*.test.mjs' -print)",
     "prepare:katex": "node scripts/prepare-katex.mjs",

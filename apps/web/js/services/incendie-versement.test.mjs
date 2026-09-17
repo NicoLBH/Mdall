@@ -4,8 +4,9 @@ import assert from "node:assert/strict";
 import {
   conclusionsVersables, cleDuVersement, etatDuVersement, retenuesParDefaut, phraseDuVersement, reglesVersables,
   donneesDeBaseVersables, deductionsVersables, conclusionsDesDeductions,
-  reponsesVersables } from "./incendie-versement.js";
+  reponsesVersables, regimeVersable } from "./incendie-versement.js";
 import { PROVENANCE } from "./memoire-en-texte.js";
+import { SUJET_REGIME_INCENDIE, regimeValide } from "../../vendor/utilitaires/regime-incendie.js";
 
 const VUE = {
   modules: [
@@ -192,8 +193,68 @@ test("le classement part avec l'étude : sans lui, les règles renvoient à rien
 test("hors champ n'est pas une famille, et n'entre donc pas en mémoire", () => {
   // « hors champ — IGH » dit que ce référentiel ne s'applique pas. Versé comme
   // une valeur, il se lirait comme un classement décidé.
-  assert.deepEqual(donneesDeBaseVersables({ faits: { classement: "hors champ — IGH" } }, ""), []);
+  const sujets = donneesDeBaseVersables({ faits: { classement: "hors champ — IGH" } }, "")
+    .map((donnee) => donnee.sujet);
+  assert.equal(sujets.includes("Classement du bâtiment"), false);
   assert.deepEqual(donneesDeBaseVersables({ faits: {} }, ""), []);
+});
+
+/* ── Le régime de sécurité incendie ──────────────────────────────────────── */
+
+test("le régime part même quand le classement ne part pas", () => {
+  // C'est le cas qui compte le plus : « hors champ — IGH » ne dit rien d'une
+  // famille, mais il dit tout d'un référentiel. Taire le régime là où il est le
+  // plus utile laisserait le projet sans la seule valeur qui désigne le texte
+  // applicable — et l'agent incendie se choisirait de nouveau à la formulation
+  // de la question.
+  const versees = donneesDeBaseVersables(
+    { faits: { classement: "hors champ — IGH", dansLeChampDeLArrete: "hors champ — IGH" } },
+    "Bâtiment A"
+  );
+
+  assert.deepEqual(versees.map((donnee) => donnee.sujet), [SUJET_REGIME_INCENDIE]);
+  const [regime] = versees;
+  assert.equal(regime.valeur, "igh");
+  // Une valeur que le routage ne saurait pas lire serait une valeur morte.
+  assert.equal(regimeValide(regime.valeur), regime.valeur);
+  // Par zone, comme le classement : un rez-de-chaussée commercial sous des
+  // logements relève de deux régimes dans un seul ouvrage.
+  assert.deepEqual(regime.zones, ["Bâtiment A"]);
+  assert.equal(regime.nature, "donnee-de-base");
+  assert.equal(regime.provenance.type, PROVENANCE.REGLE);
+  // L'article qui tranche, et non celui du classement : c'est ce qui permet de
+  // contester la qualification sans rouvrir l'étude.
+  assert.equal(regime.article, "article 1er");
+});
+
+test("le régime se lit sur le champ d'application, jamais sur la famille", () => {
+  // La tentation serait de déduire « habitation » d'un classement en 3e famille.
+  // Ce serait demander à la conclusion de désigner la prémisse : la famille est
+  // la *sortie* du référentiel habitation, elle le présuppose. Un classement
+  // sans champ d'application ne verse donc aucun régime.
+  const sansChamp = donneesDeBaseVersables({ faits: { classement: "3e famille B" } }, "");
+  assert.deepEqual(sansChamp.map((donnee) => donnee.sujet), ["Classement du bâtiment"]);
+
+  assert.deepEqual(regimeVersable({ faits: { classement: "1re famille" } }, ""), []);
+  // Un champ qu'on n'a pas su lire ne verse rien non plus : ne pas savoir
+  // n'autorise pas à ranger au plus proche (règle 5).
+  assert.deepEqual(regimeVersable({ faits: { dansLeChampDeLArrete: "hors champ" } }, ""), []);
+});
+
+test("le régime versé dit vers quel texte il renvoie", () => {
+  // « igh » est un mot ; « renvoie à articles R.122-1 à R.122-29 du CCH » est
+  // une porte. Sans elle, la mémoire porterait une qualification que personne ne
+  // saurait vérifier.
+  const [regime] = regimeVersable(
+    { faits: { dansLeChampDeLArrete: "dans le champ" },
+      texteDeReference: { source: "arrêté du 31 janvier 1986 modifié" } },
+    ""
+  );
+
+  assert.equal(regime.valeur, "habitation");
+  assert.equal(regime.reference, "regimeIncendie");
+  assert.match(regime.source, /renvoie à arrêté du 31 janvier 1986 modifié/);
+  assert.deepEqual(regime.zones, []);
 });
 
 /* ────────────────────────────────────────────────────────────────────────────

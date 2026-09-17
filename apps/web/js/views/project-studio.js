@@ -4,7 +4,7 @@ import { registerProjectScrollSources, setProjectViewHeader } from "./project-sh
 import { bindSideNavPanels } from "./ui/side-nav-layout.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import { RANGEMENT, renderVitrineDeLatelier } from "./atelier/vitrine-de-latelier.js";
-import { panneauDemandeParLaRoute } from "../services/route-de-latelier.js";
+import { panneauDemandeParLaRoute, routeDuPanneau } from "../services/route-de-latelier.js";
 import { utilitaireParCible } from "../services/catalogue-de-latelier.js";
 import { renderNavList } from "./ui/nav-list.js";
 import {
@@ -422,25 +422,39 @@ let retourALaccueilBranche = false;
 let racineDeLatelier = null;
 
 /**
- * Effacer le panneau que l'adresse demandait.
+ * Écrire dans l'adresse le panneau qu'on regarde.
  *
- * **Sans cela, on y retournerait tout seul.** L'adresse l'emporte sur le
- * dernier panneau regardé — c'est ce qui fait marcher le raccourci du Copilote
- * — donc tant que `…/atelier/copilote` reste dans la barre, le moindre redessin
- * rouvrirait le Copilote. On reclique l'onglet, la vitrine s'affiche, une
- * synchronisation passe, et l'on se retrouve ailleurs sans avoir rien fait.
+ * ## Le défaut que ça répare
  *
- * `replaceState` plutôt qu'écrire le `hash` : écrire déclencherait un
- * `hashchange`, donc un rendu complet de l'onglet, pour un changement qu'on
- * vient de faire à la main.
+ * L'adresse ne se mettait à jour qu'en *entrant* par un lien. Le Copilote
+ * dimensionnait des fondations, on cliquait « Ouvrir dans l'Atelier », le
+ * panneau basculait — par un clic sur le rail, qui n'écrit pas l'adresse — et
+ * la barre continuait de dire `…/atelier/copilote`. On cliquait alors l'icône
+ * Copilote de la barre du haut : elle pointe sur cette adresse-là, **exactement
+ * celle qui y est déjà**. Aucun `hashchange`, donc rien. Le même geste par
+ * l'onglet Atelier puis le rail marchait, ce qui rendait le défaut
+ * incompréhensible.
+ *
+ * Le panneau ouvert était dit à deux endroits — l'écran et la barre — et les
+ * deux divergeaient dès qu'on ne passait pas par la porte prévue (règle 4).
+ * L'adresse suit donc le panneau, toujours, et un seul appel l'écrit.
+ *
+ * ## Pourquoi `replaceState`
+ *
+ * Écrire le `hash` déclencherait un `hashchange`, donc un rendu complet de
+ * l'onglet, pour un changement qu'on vient de faire à la main. Et pourquoi pas
+ * `pushState` : basculer de panneau n'est pas une navigation qu'on veut
+ * retrouver dix fois dans le bouton « précédent ».
+ *
+ * L'adresse voulue se compose dans `services/route-de-latelier.js`, avec la
+ * lecture qui lui répond : ce qui écrit et ce qui relit sortent du même
+ * fichier, sinon l'un des deux raterait le jour où le nom change (règle 10).
  */
-function oublierLePanneauDeLaRoute() {
+function ecrireLaRoute(panneau) {
   try {
-    const hash = String(window.location?.hash ?? "");
-    if (!panneauDemandeParLaRoute(hash)) return;
-
-    const garde = hash.replace(/^#/, "").split("/").slice(0, 3).join("/");
-    window.history.replaceState(null, "", `#${garde}`);
+    const voulue = routeDuPanneau(String(window.location?.hash ?? ""), panneau);
+    if (!voulue) return;
+    window.history.replaceState(null, "", voulue);
   } catch {
     // Un navigateur qui refuse l'historique garde son adresse : le panneau
     // s'affiche quand même, et c'est le seul point qui compte ici.
@@ -467,7 +481,9 @@ function brancherLeRetourALaccueil(root) {
     const root = racineDeLatelier;
     if (!root || !root.isConnected) return;
 
-    oublierLePanneauDeLaRoute();
+    // L'adresse suit, et c'est `afficherPanneau` qui l'écrit : elle la disait
+    // à deux endroits, et le second — celui-ci — ne jouait qu'au reclic de
+    // l'onglet (règle 4).
     afficherPanneau(root, ACCUEIL);
     marquerActif(root, ACCUEIL);
   });
@@ -650,6 +666,10 @@ function afficherPanneau(root, targetId) {
    * pouvait ramener la coque en haut. On était coincé sur l'écran.
    */
   root.querySelector("#projectStudioRouterScroll")?.scrollTo?.({ top: 0, behavior: "auto" });
+
+  // Et l'adresse dit ce qu'on regarde — d'où qu'on vienne, y compris d'un clic
+  // sur le rail. C'est le seul endroit qui l'écrit : voir `ecrireLaRoute`.
+  ecrireLaRoute(targetId);
 
   for (const panneau of root.querySelectorAll("[data-side-nav-panel]")) {
     panneau.classList.toggle("is-active", panneau.dataset.sideNavPanel === targetId);
