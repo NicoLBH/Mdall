@@ -63,11 +63,14 @@ import { requireUser } from "../_shared/require-user.ts";
 import { deposerLaConsommation } from "../_shared/consommation-ia.ts";
 import { declarationsPourModele } from "../_shared/utilitaires/catalogue.js";
 import {
-  DECLARATION_VARIANTE, CONSIGNES_VARIANTE, OUTILS_DU_NAVIGATEUR, OUTIL_VARIANTE
+  DECLARATION_VARIANTE, CONSIGNES_VARIANTE, OUTILS_DU_NAVIGATEUR, roleDuNavigateur
 } from "../_shared/utilitaires/variante-outil.js";
 import {
-  DECLARATION_CERVEAU, CONSIGNES_CERVEAU, OUTIL_CERVEAU
+  DECLARATION_CERVEAU, CONSIGNES_CERVEAU
 } from "../_shared/utilitaires/cerveau-outil.js";
+import {
+  DECLARATION_NAVIGATION, CONSIGNES_NAVIGATION
+} from "../_shared/utilitaires/navigation-outil.js";
 
 type ToolDeclaration = {
   type?: string;
@@ -202,7 +205,8 @@ function systemPrompt(memoryWasRead: boolean, tronque: boolean) {
     "",
     "Assume tes limites. Ne cherche pas à répondre à tout prix : « je ne sais pas », « la mémoire ne le dit pas », « il me faut cette valeur » sont des réponses professionnelles. Une réponse fabriquée pour ne pas rester sans réponse coûte la confiance de tous ceux qui liront les suivantes.",
     CONSIGNES_VARIANTE,
-    CONSIGNES_CERVEAU
+    CONSIGNES_CERVEAU,
+    CONSIGNES_NAVIGATION
   ];
 
   if (!memoryWasRead) {
@@ -268,18 +272,19 @@ function extractToolCalls(payload: unknown) {
       // des outils pour router, ce qui reviendrait à lui en apprendre un.
       ou: OUTILS_DU_NAVIGATEUR.includes(texte(item.name)) ? "navigateur" : "serveur",
       /**
-       * **Lequel des deux, dit ici aussi.**
+       * **Lequel d'entre eux, dit ici aussi.**
        *
-       * Ils sont deux à tourner au navigateur depuis que le cerveau se lit
-       * depuis la conversation. Le laisser router sur le nom lui apprendrait un
-       * nom d'outil — précisément ce que ce champ existait pour éviter —, et
-       * écrire ce nom des deux côtés le ferait diverger au premier renommage
-       * (règle 4). Le serveur nomme donc un **rôle**, et c'est tout ce que le
-       * navigateur en sait.
+       * Ils sont trois à tourner au navigateur : le moteur de variante, la
+       * lecture du cerveau, et l'ouverture d'un écran. Le laisser router sur le
+       * nom lui apprendrait un nom d'outil — précisément ce que ce champ existe
+       * pour éviter —, et écrire ce nom des deux côtés le ferait diverger au
+       * premier renommage (règle 4). Le serveur nomme donc un **rôle**, et
+       * c'est tout ce que le navigateur en sait.
+       *
+       * Le rôle et la liste sortent de la même table : un outil ajouté à l'une
+       * sans l'autre partirait au navigateur sans rôle.
        */
-      quoi: texte(item.name) === OUTIL_CERVEAU
-        ? "cerveau"
-        : (texte(item.name) === OUTIL_VARIANTE ? "variante" : "")
+      quoi: roleDuNavigateur(item.name)
     }))
     .filter((appel) => appel.call_id && appel.name);
 }
@@ -416,12 +421,13 @@ serve(async (req) => {
   // page revenait à publier la méthode tout en protégeant l'arithmétique.
   // Le navigateur ne les envoie plus, et ne les recevrait pas non plus.
   //
-  // « Tester une variante » s'y ajoute, et **en tête** : c'est le seul outil dont
-  // la réponse porte sur le projet entier, et une coupe au budget ne doit pas le
-  // faire disparaître avant les calculs de détail. Il s'exécute au navigateur —
-  // le moteur y est déjà, c'est l'écran « Tester une variante » — et ce qui
-  // reste ici est ce qui compte : la décision de l'appeler.
-  const outils = [DECLARATION_VARIANTE, DECLARATION_CERVEAU, ...declarationsPourModele()]
+  // Les trois outils du navigateur s'y ajoutent, et **en tête** : ce sont ceux
+  // dont la réponse porte sur le projet entier — ou sur l'application —, et une
+  // coupe au budget ne doit pas les faire disparaître avant les calculs de
+  // détail. Ils s'exécutent au navigateur parce que ce qu'ils font y est déjà —
+  // le moteur de variante, le dessin du cerveau, l'adresse de la page — et ce
+  // qui reste ici est ce qui compte : la décision de les appeler.
+  const outils = [DECLARATION_VARIANTE, DECLARATION_CERVEAU, DECLARATION_NAVIGATION, ...declarationsPourModele()]
     .slice(0, MAX_TOOLS)
     .filter((outil) => texte(outil?.name) && outil?.parameters);
 

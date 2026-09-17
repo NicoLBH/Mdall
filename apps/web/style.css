@@ -18040,17 +18040,24 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 /* **Le bouton dit ce qu'on gagne à ouvrir.** « Ouvrir le cerveau » sous un
    dessin déjà visible ne promet rien ; ce qui manque au cadre — les réglages,
    les secteurs, l'onde au clic — se lit sous le libellé. */
-.copilote-cerveau__ouvrir{
+/* Le geste au bas d'une carte du fil : ouvrir ce dont la carte parle. Une
+   seule classe pour les deux — le cerveau en grand, l'écran d'un projet —,
+   sinon chaque carte se recalibre pour son compte et elles ne se ressemblent
+   plus. Elle vaut pour un <button> comme pour un <a> : c'est le même geste. */
+.copilote-ouvrir{
   display:flex; align-items:baseline; gap:8px; width:100%;
   padding:7px 10px; border:1px solid var(--border); border-radius:8px;
   background:transparent; color:var(--text); font:inherit; font-size:12px;
-  cursor:pointer; text-align:left;
+  cursor:pointer; text-align:left; text-decoration:none;
 }
-.copilote-cerveau__ouvrir .ui-icon{ flex:none; color:var(--variante); align-self:center; }
-.copilote-cerveau__ouvrir small{ color:var(--muted); font-size:11px; }
-.copilote-cerveau__ouvrir:hover{
+.copilote-ouvrir .ui-icon{ flex:none; color:var(--variante); align-self:center; }
+.copilote-ouvrir small{ color:var(--muted); font-size:11px; }
+.copilote-ouvrir:hover{
   border-color:var(--variante); background:rgba(57,197,207,.10);
 }
+/* Ce qui suit la flèche se pousse à droite : le nom du projet à gauche, l'écran
+   au bout. */
+.copilote-ouvrir__ecran{ margin-left:auto; color:var(--muted); font-size:11px; }
 @media (max-width: 700px){ .copilote-outil__colonnes{ grid-template-columns:1fr; } }
 .copilote-outil__legende{ margin:0 0 4px; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
 .copilote-outil__liste{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:2px; }

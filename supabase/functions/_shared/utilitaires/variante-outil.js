@@ -34,6 +34,7 @@
  */
 
 import { OUTIL_CERVEAU } from "./cerveau-outil.js";
+import { OUTIL_NAVIGATION } from "./navigation-outil.js";
 
 /** Le nom de l'outil. Il voyage jusqu'au navigateur, qui route dessus. */
 export const OUTIL_VARIANTE = "tester_une_variante";
@@ -41,12 +42,36 @@ export const OUTIL_VARIANTE = "tester_une_variante";
 /**
  * Les outils que le navigateur exécute lui-même. Fermée, et courte.
  *
- * Deux, et pour la même raison : ce qu'ils font **est déjà dans la page** — le
+ * Trois, et pour la même raison : ce qu'ils font **est déjà dans la page** — le
  * moteur de variante est l'écran « Tester une variante », le cerveau est le
- * dessin qu'on ouvre depuis la Mémoire. Les porter au serveur en ferait une
- * seconde implémentation du même raisonnement (règle 4).
+ * dessin qu'on ouvre depuis la Mémoire, et l'adresse d'une page ne se change
+ * que là où la page est. Les porter au serveur en ferait une seconde
+ * implémentation du même raisonnement (règle 4).
+ *
+ * **C'est la seule table qui dit où un outil s'exécute, et lequel c'est.** Le
+ * navigateur ne la reçoit pas : il reçoit, appel par appel, un `ou` et un rôle.
+ * La lui donner reviendrait à lui apprendre quels outils existent.
  */
-export const OUTILS_DU_NAVIGATEUR = [OUTIL_VARIANTE, OUTIL_CERVEAU];
+export const ROLES_DU_NAVIGATEUR = {
+  [OUTIL_VARIANTE]: "variante",
+  [OUTIL_CERVEAU]: "cerveau",
+  [OUTIL_NAVIGATION]: "navigation"
+};
+
+/**
+ * Et la liste s'en déduit.
+ *
+ * Elle s'écrivait à part, et le rôle avec elle : deux listes pour un même fait,
+ * donc un outil qu'on ajoute à l'une en oubliant l'autre — il partirait au
+ * navigateur sans rôle, et celui-ci l'exécuterait comme le premier venu
+ * (règle 4).
+ */
+export const OUTILS_DU_NAVIGATEUR = Object.keys(ROLES_DU_NAVIGATEUR);
+
+/** Le rôle d'un outil au navigateur, ou `""` quand il tourne au serveur. */
+export function roleDuNavigateur(nom) {
+  return ROLES_DU_NAVIGATEUR[String(nom ?? "").trim()] ?? "";
+}
 
 /** La déclaration passée au modèle, dans la forme qu'attend l'API. */
 export const DECLARATION_VARIANTE = {

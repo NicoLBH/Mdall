@@ -40,7 +40,13 @@ const PUBLICS = [
   // catalogue s'en sert pour router. Écrit des deux côtés, il divergerait au
   // premier régime ajouté, et la divergence serait muette : un agent déclaré
   // `erp` que personne ne trouve, parce que l'écran écrit « ERP ».
-  "regime-incendie.js"
+  "regime-incendie.js",
+  // Les écrans d'un projet et l'adresse de chacun. Le serveur déclare
+  // l'énumération au modèle, le navigateur compose l'adresse de celle qu'il a
+  // choisie : écrite des deux côtés, la liste divergerait au premier écran
+  // ajouté — un `insights` que le modèle propose et qu'on ne sait pas ouvrir.
+  // Rien de secret : ce sont les onglets qu'on lit en haut de l'écran.
+  "ecrans-du-projet.js"
 ];
 
 /**

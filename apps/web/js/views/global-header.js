@@ -195,7 +195,9 @@ function renderRaccourciCopilote(model = {}) {
   return renderRaccourci({
     href: `#project/${encodeURIComponent(projectId)}/${PROJECT_TAB_IDS.STUDIO}/${ATELIER_COPILOTE}`,
     icone: svgIcon("copilot", { className: "octicon octicon-copilot" }),
-    nom: "Copilote"
+    // Le nom vient d'où il vit, avec les autres écrans qui se nomment : recopié
+    // ici, il serait la version qui reste fausse le jour où l'autre change.
+    nom: LE_COPILOTE.nom
   });
 }
 

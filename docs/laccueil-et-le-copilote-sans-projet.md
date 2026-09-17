@@ -254,3 +254,93 @@ Et la lecture des traces de l'accueil passe par la **porte unique**
 tables. Ce n'est pas une politesse : c'est ce qui permet de savoir, à un seul
 endroit, tout ce qui est lu de discussions privées — et
 `copilote-cloison.test.mjs` casse la construction si un autre module s'y met.
+
+---
+
+## Le Copilote sait ouvrir les écrans
+
+On écrivait « ouvre-moi le Copilote du Restaurant scolaire au Reposoir » et il
+répondait *rendez-vous dans l'onglet Atelier, puis Copilote*. On refaisait alors
+à la main le chemin qu'il venait de décrire. Une application qui sait où sont
+ses écrans ne devrait pas faire épeler l'itinéraire.
+
+Il le fait désormais : le projet s'ouvre, sur le bon onglet, et sur le bon
+panneau quand il y en a un.
+
+### Il nomme le projet, il ne choisit pas son identifiant
+
+C'est la règle que `profil-de-travail.js` posait déjà — *nommer le projet à
+ouvrir plutôt que d'inventer un chiffre plausible*. Un identifiant deviné
+mènerait à un projet réel, celui de quelqu'un d'autre, et rien à l'écran ne
+dirait que ce n'était pas celui qu'on demandait.
+
+Le rapprochement se fait donc au navigateur, qui a la liste, et il pardonne ce
+qu'il faut : accents, casse, ponctuation, et les mots-outils du français. « le
+restaurant scolaire au reposoir (74) » reconnaît « Restaurant scolaire — Le
+Reposoir (74) », parce que personne ne retape un tiret cadratin. Le département
+entre parenthèses n'est pas exigé : on le donne pour aider, il ne doit pas
+faire rater le projet.
+
+### Trois réponses, et pas deux
+
+Reconnu, **plusieurs**, aucun. Confondre les deux derniers serait la faute :
+« je n'ai pas trouvé » et « j'en ai trouvé deux » n'appellent pas la même suite,
+et prendre le premier des deux ouvrirait le mauvais chantier sans que personne
+ne l'ait demandé (`fondamentaux.md`, règle 5). Quand deux projets répondent,
+**personne n'est déplacé** et l'outil rend les deux noms, pour que la question
+se repose en citant des noms qui existent.
+
+### On part quand la réponse est écrite, pas avant
+
+L'outil ne déplace personne : il reconnaît, il compose l'adresse, il la rend. Le
+déplacement a lieu quand la réponse est à l'écran **et enregistrée**. Partir au
+milieu du tour aurait démonté l'écran pendant que le modèle répondait, et la
+réponse se serait écrite dans un fil que plus personne ne regardait.
+
+Une carte reste dans la conversation, avec l'icône de l'écran où l'on est allé
+et un lien qui y ramène : on revient sur la discussion des jours plus tard, et
+elle dit où l'on était allé.
+
+### Où vit quoi, et pourquoi
+
+| | |
+|---|---|
+| la liste des destinations et l'adresse de chacune | `_shared/utilitaires/ecrans-du-projet.js`, copié au navigateur |
+| ce que le modèle en sait | `_shared/utilitaires/navigation-outil.js`, **jamais** copié |
+| la reconnaissance du projet | `services/copilote-navigation.js` |
+| la carte dans le fil | `views/studio/copilote/carte-du-voyage.js` |
+
+La liste des écrans est copiée parce que les deux côtés en ont besoin, et pour
+deux raisons différentes : le serveur **déclare l'énumération** au modèle — un
+choix fermé, donc rien à inventer —, le navigateur **compose l'adresse** de
+celle qu'il a choisie. Écrite des deux côtés, elle divergerait au premier écran
+ajouté, et la divergence serait muette : un `insights` que le modèle propose et
+qu'on ne sait pas ouvrir.
+
+Les **libellés**, eux, ne sont pas dans cette liste. « Fichiers », « Mémoire »,
+« Indicateurs » vivent avec les onglets, dans `constants.js`, et la carte va les
+y chercher — ainsi que l'icône de l'onglet, pour qu'on reconnaisse la
+destination avant d'avoir lu son nom. Un test tient les deux listes ensemble :
+un écran offert au modèle dont l'application ne porte pas l'onglet le fait
+tomber.
+
+### Le troisième outil du navigateur
+
+Ils sont trois maintenant à s'exécuter dans la page : le moteur de variante, la
+lecture du cerveau, et l'ouverture d'un écran — parce que ce qu'ils font y est
+déjà, et que l'adresse d'une page ne se change que là où la page est.
+
+Le navigateur ne sait toujours pas quels outils existent : le serveur lui donne
+un **rôle**, appel par appel. Le rôle et la liste sortent désormais de la même
+table (`ROLES_DU_NAVIGATEUR`) : elles s'écrivaient séparément, et un outil
+ajouté à l'une sans l'autre serait parti au navigateur sans rôle. Un test
+vérifie que chaque rôle déclaré est un rôle que le navigateur sait exécuter, et
+qu'aucun nom d'outil n'est écrit dans la page.
+
+### Ce qui reste à faire
+
+Depuis le Copilote **d'un projet**, la question « ouvre-moi les fichiers » sans
+nommer de projet ne trouve rien et se fait redemander. Le projet courant
+pourrait servir de réponse par défaut ; ce n'est pas fait, et c'est délibéré :
+tant que la liste des projets n'est pas dans le contexte d'un projet, la seule
+chose honnête est de redemander.

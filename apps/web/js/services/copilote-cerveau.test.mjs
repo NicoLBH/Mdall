@@ -133,14 +133,29 @@ test("un cerveau encastré ne prend pas le verrou de la fenêtre, et rend de quo
 
 test("le navigateur route sur le rôle que le serveur lui donne", async () => {
   const { readFile } = await import("node:fs/promises");
+  const { ROLES_DU_NAVIGATEUR } = await import(
+    "../../../../supabase/functions/_shared/utilitaires/variante-outil.js"
+  );
   const [client, serveur] = await Promise.all([
     readFile(new URL("./copilote-service.js", import.meta.url), "utf8"),
     readFile(new URL("../../../../supabase/functions/project-copilot/index.ts", import.meta.url), "utf8")
   ]);
 
-  assert.match(client, /appel\?\.quoi === "cerveau"/, "le navigateur lit un rôle");
-  assert.match(serveur, /quoi: texte\(item\.name\) === OUTIL_CERVEAU\s*\n\s*\? "cerveau"/,
-    "et le serveur l'écrit");
-  assert.doesNotMatch(client, /lire_le_cerveau|tester_une_variante/,
-    "le navigateur n'apprend aucun nom d'outil");
+  // Le serveur écrit le rôle, et il le lit dans la table — pas dans une suite
+  // de conditions qui oublierait le troisième outil.
+  assert.match(serveur, /quoi: roleDuNavigateur\(item\.name\)/, "le serveur écrit un rôle");
+  assert.match(client, /appel\?\.quoi/, "le navigateur lit ce rôle");
+
+  // **Chaque rôle déclaré est un rôle que le navigateur sait exécuter.** Un
+  // outil ajouté à la table sans être branché ici partirait au navigateur, qui
+  // ne saurait qu'en faire — et le tour s'arrêterait sans qu'on sache pourquoi.
+  const orphelins = Object.values(ROLES_DU_NAVIGATEUR)
+    .filter((role) => !new RegExp(`\\n\\s*${role}: \\(\\) =>`).test(client));
+  assert.deepEqual(orphelins, []);
+
+  // Et aucun nom d'outil ne descend dans la page : router sur le nom
+  // reviendrait à apprendre au navigateur quels outils existent.
+  for (const nom of Object.keys(ROLES_DU_NAVIGATEUR)) {
+    assert.ok(!client.includes(nom), `${nom} est écrit dans le navigateur`);
+  }
 });
