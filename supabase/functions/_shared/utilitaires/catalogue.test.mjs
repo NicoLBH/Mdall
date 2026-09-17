@@ -17,8 +17,11 @@ import {
   prefillDepuisMemoire,
   prefillDepuisLEtude,
   referenceOutil,
+  regimeDeLAgent,
+  agentsIncendie,
   sansFigure
 } from "./catalogue.js";
+import { CLES_REGIME_INCENDIE } from "./regime-incendie.js";
 
 function donnee(cle, valeur, extra = {}) {
   return {
@@ -1136,4 +1139,72 @@ test("chaque exigence déclarée correspond à un module du référentiel", asyn
 
   const orphelines = [...EXIGENCES].filter((exigence) => !produits.has(exigence));
   assert.deepEqual(orphelines, []);
+});
+
+/* ── Le régime que chaque agent sert ─────────────────────────────────────── */
+
+/** Ce qu'un agent dit de lui-même, sans regarder ce qu'il déclare. */
+const parleDIncendie = (outil) =>
+  /sécurité incendie|arrêté du 31 janvier 1986|coupe-feu/i.test(
+    `${outil.titre ?? ""} ${outil.aQuoiCaSert ?? ""}`
+  );
+
+test("un agent qui parle de sécurité incendie déclare le régime qu'il sert", () => {
+  // La garde qui tient tout le routage. Un agent incendie sans régime est un
+  // agent qu'aucun projet ne saura choisir — ou que tous choisiront, ce qui
+  // revient à tirer au sort sur la formulation de la question.
+  //
+  // Les deux listes se calculent séparément : l'une sur ce que l'agent raconte,
+  // l'autre sur ce qu'il déclare. Les faire diverger fait tomber ce test.
+  const racontent = OUTILS.filter(parleDIncendie).map((outil) => outil.id);
+  const declarent = agentsIncendie().map((outil) => outil.id);
+
+  assert.ok(racontent.length > 0, "aucun agent incendie : la garde ne garderait rien");
+  assert.deepEqual(declarent, racontent);
+});
+
+test("deux agents ne servent pas le même régime", () => {
+  // Sinon le filtre en rend deux, et l'on retombe exactement sur le choix à la
+  // formulation que tout ce mécanisme existe pour supprimer.
+  const regimes = agentsIncendie().map((outil) => regimeDeLAgent(outil));
+  assert.deepEqual([...new Set(regimes)], regimes);
+  // Et chacun est un régime que le vocabulaire connaît : `regimeIncendie: "ERP"`
+  // sortirait l'agent de la liste sans que rien ne le dise.
+  assert.deepEqual(regimes.filter((regime) => !CLES_REGIME_INCENDIE.includes(regime)), []);
+});
+
+test("les agents qui ne servent aucun régime ne sont jamais concernés", () => {
+  // Le spectre sismique, les fondations : le routage incendie ne doit ni les
+  // offrir ni les écarter.
+  assert.equal(regimeDeLAgent(outilParId("spectre_elastique_ec8")), "");
+  assert.equal(regimeDeLAgent(outilParId("fondations_predimensionnement")), "");
+  assert.equal(regimeDeLAgent(outilParId("profondeur_hors_gel")), "");
+  assert.equal(regimeDeLAgent(null), "");
+  assert.equal(agentsIncendie().some((outil) => outil.id === "spectre_elastique_ec8"), false);
+});
+
+test("filtrer sur un régime rend exactement les agents qui le déclarent", () => {
+  // Le test d'acceptation du plan : ajouter l'ERP doit se réduire à un agent de
+  // plus portant `regimeIncendie: "erp"`. Rien ici ne nomme d'identifiant — la
+  // liste se déduit des déclarations, pour chacun des régimes du vocabulaire.
+  for (const regime of CLES_REGIME_INCENDIE) {
+    assert.deepEqual(
+      agentsIncendie(regime).map((outil) => outil.id),
+      agentsIncendie().filter((outil) => regimeDeLAgent(outil) === regime).map((outil) => outil.id),
+      `le filtre « ${regime} » ne rend pas ce que les agents déclarent`
+    );
+  }
+});
+
+test("un régime qu'on ne sait pas lire n'écarte rien", () => {
+  // Règle 5, appliquée au routage : une valeur illisible en mémoire ferait un
+  // Copilote muet sur l'incendie, sans que rien ne dise pourquoi. On ne sait
+  // pas — donc on offre tout, et le premier agent appelé posera la question.
+  // La liste attendue se calcule ici, sur les déclarations, et non en
+  // rappelant la fonction qu'on teste : sinon un filtre qui rendrait
+  // n'importe quoi le rendrait pareil des deux côtés.
+  const tous = OUTILS.filter((outil) => regimeDeLAgent(outil)).map((outil) => outil.id);
+  assert.deepEqual(agentsIncendie("ERP").map((outil) => outil.id), tous);
+  assert.deepEqual(agentsIncendie("bâtiment agricole").map((outil) => outil.id), tous);
+  assert.deepEqual(agentsIncendie("").map((outil) => outil.id), tous);
 });

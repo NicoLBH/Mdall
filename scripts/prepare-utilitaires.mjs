@@ -34,7 +34,13 @@ const targetDir = path.join(rootDir, "apps", "web", "vendor", "utilitaires");
 /** Ce qui se lit déjà à l'écran, et n'a donc rien à cacher. */
 const PUBLICS = [
   "fondations-declaration.js",
-  "seismic-spectrum.js"
+  "seismic-spectrum.js",
+  // Le vocabulaire des régimes incendie : ses libellés se lisent à l'écran — la
+  // liste de choix du formulaire, la ligne de provenance d'une réponse — et le
+  // catalogue s'en sert pour router. Écrit des deux côtés, il divergerait au
+  // premier régime ajouté, et la divergence serait muette : un agent déclaré
+  // `erp` que personne ne trouve, parce que l'écran écrit « ERP ».
+  "regime-incendie.js"
 ];
 
 /**

@@ -80,6 +80,7 @@
 
 import { buildElasticResponseSpectrumTable, getSeismicSizingValues } from "./seismic-spectrum.js";
 import { currentAssertions } from "./memoire.js";
+import { regimeValide } from "./regime-incendie.js";
 
 function texte(valeur) {
   return String(valeur ?? "").trim();
@@ -382,6 +383,26 @@ export const OUTILS = [
     id: "incendie_habitation",
     version: "V1",
     titre: "Incendie — Habitation (arrêté du 31 janvier 1986)",
+    /**
+     * **Le régime que cet agent sert.**
+     *
+     * Le Copilote choisissait l'agent incendie sur la formulation de la
+     * question : sa description dit *bâtiment d'habitation*, la question parle
+     * d'habitation, cela suffisait. Cela tient tant qu'il n'y en a qu'un. Au
+     * second — ERP, code du travail, IGH —, les descriptions commenceront
+     * toutes par « la sécurité incendie d'un bâtiment », et le choix deviendra
+     * un tirage au sort sur la façon dont la question est tournée.
+     *
+     * Ce champ est **la seule chose** que l'orchestration lira pour router.
+     * Aucun fichier ne porte la liste des agents incendie : elle se déduit de
+     * ceux qui déclarent un régime. Ajouter l'ERP doit se réduire à un agent
+     * de plus portant `regimeIncendie: "erp"` — si une seconde ligne doit être
+     * éditée ailleurs, le routage est raté.
+     *
+     * Inerte tant que le filtre n'existe pas, et c'est voulu : la déclaration
+     * se livre seule, et le jour où l'on branche le filtre, elle est déjà là.
+     */
+    regimeIncendie: "habitation",
     aQuoiCaSert:
       "Classe un bâtiment d'habitation en famille (1re, 2e, 3e A, 3e B, 4e) selon l'article 3 de l'arrêté "
       + "du 31 janvier 1986 modifié, puis en déduit l'exigence demandée : degré coupe-feu des planchers, "
@@ -1103,6 +1124,34 @@ export function outilParId(id) {
 /** L'identifiant complet : le nom et sa version, comme pour les déductions. */
 export function referenceOutil(outil) {
   return outil?.version ? `${outil.id}_${outil.version}` : texte(outil?.id);
+}
+
+/**
+ * Le régime de sécurité incendie qu'un agent sert, ou `""`.
+ *
+ * Un agent qui n'en déclare pas n'est pas un agent incendie — le spectre
+ * sismique, les fondations —, et le routage ne le concerne jamais.
+ */
+export function regimeDeLAgent(outil) {
+  return regimeValide(outil?.regimeIncendie);
+}
+
+/**
+ * Les agents qui servent un régime de sécurité incendie.
+ *
+ * **Déduits, jamais listés.** Une liste d'identifiants
+ * — `["incendie_habitation", "incendie_erp", …]` — serait juste le jour où on
+ * l'écrit et fausse au troisième agent : c'est la liste des ancêtres du
+ * Copilote, qui a déjà coûté une barre de défilement. Ici, il suffit de
+ * déclarer.
+ *
+ * @param {string} [regime] pour ne garder que ceux d'un régime donné
+ */
+export function agentsIncendie(regime = "") {
+  const vise = regimeValide(regime);
+  return OUTILS
+    .filter((outil) => regimeDeLAgent(outil))
+    .filter((outil) => !vise || regimeDeLAgent(outil) === vise);
 }
 
 /**

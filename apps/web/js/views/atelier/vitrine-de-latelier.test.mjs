@@ -295,13 +295,19 @@ test("recliquer l'onglet Atelier ramène à la vitrine", () => {
  * moindre redessin y retournerait : on reclique l'onglet, la vitrine s'affiche,
  * une synchronisation passe, et l'on se retrouve ailleurs sans avoir rien fait.
  */
-test("revenir à la vitrine efface le panneau demandé par l'adresse", () => {
+test("changer de panneau écrit l'adresse, et une seule fonction le fait", () => {
   const atelier = lis("../project-studio.js");
 
-  assert.match(atelier, /oublierLePanneauDeLaRoute\(\);\s*\n\s*afficherPanneau\(root, ACCUEIL\)/);
+  // **Un seul endroit l'écrit** : celui qui change de panneau. Elle se disait à
+  // deux, et le second ne jouait qu'au reclic de l'onglet (règle 4) — d'où une
+  // adresse qui désignait le Copilote pendant qu'on regardait les fondations.
+  assert.match(atelier, /function afficherPanneau\([\s\S]{0,1800}?ecrireLaRoute\(targetId\)/);
+  assert.doesNotMatch(atelier, /oublierLePanneauDeLaRoute/);
+
   // `replaceState` et non une écriture du hash : écrire relancerait un rendu
   // complet de l'onglet pour un changement qu'on vient de faire à la main.
   assert.match(atelier, /history\.replaceState/);
+  assert.doesNotMatch(atelier, /window\.location\.hash\s*=/);
 });
 
 /* ── La pleine largeur ───────────────────────────────────────────────────── */

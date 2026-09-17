@@ -97,6 +97,40 @@ second geste à faire, c'est-à-dire la moitié du péage qu'on voulait supprime
 l'application. Une barre de retour propre à cet écran ajouterait un second
 chemin pour un geste que l'application a déjà (règle 4).
 
+### Le raccourci mourait une fois sur deux, et l'adresse disait pourquoi
+
+Le Copilote dimensionnait des fondations, on cliquait « Ouvrir dans l'Atelier »,
+le panneau basculait sur l'agent — et là, l'icône Copilote de la barre du haut
+ne faisait **plus rien**. Le même geste par l'onglet Atelier puis le rail
+marchait. Un défaut qui dépend du chemin par lequel on est arrivé est un défaut
+qu'on ne sait pas raconter, et c'est ce qui le rendait incompréhensible.
+
+La cause n'est pas dans le raccourci : elle est dans l'adresse. Basculer de
+panneau se faisait en cliquant une entrée du rail, et **le rail n'écrit pas
+l'adresse**. La barre continuait donc d'afficher `…/atelier/copilote` alors que
+l'écran montrait les fondations. Le raccourci pointe sur cette adresse-là —
+exactement celle qui y est déjà. Aucun `hashchange`, donc rien.
+
+L'adresse ne se mettait à jour qu'en *entrant* par un lien : le panneau ouvert
+était dit à deux endroits — l'écran et la barre — et les deux divergeaient dès
+qu'on ne passait pas par la porte prévue (règle 4).
+
+**Le correctif :** l'adresse suit le panneau, toujours, et une seule fonction
+l'écrit. `routeDuPanneau(hash, panneau)` compose l'adresse voulue, et
+`afficherPanneau` l'écrit à chaque bascule — par `replaceState`, qui ne sonne
+aucun `hashchange` : on nomme ce qu'on regarde sans redessiner l'onglet pour un
+changement qu'on vient de faire soi-même.
+
+Ce qui n'est pas dans la table de la route n'entre pas dans l'adresse : seul le
+Copilote a un segment, parce qu'il est le seul vers lequel un lien pointe.
+Ouvrir un agent laisse donc `#project/<id>/atelier`, sans quatrième segment —
+treize adresses à maintenir pour des écrans qu'on atteint très bien par la
+vitrine ne vaudraient pas leur coût.
+
+*Vérifié au navigateur* : le clic sur le raccourci ne sonnait rien tant que
+l'adresse portait `…/copilote`, sonne une fois l'adresse écrite, et la route
+relue rend bien `studio-copilote`.
+
 ## Étape 3 — L'extraction devient visible *(commencée)*
 
 L'agent **Lecture des comptes rendus** est dans l'Atelier, rayon

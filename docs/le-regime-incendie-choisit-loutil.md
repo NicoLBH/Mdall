@@ -63,7 +63,7 @@ Ce qu'il faut est **en amont** du classement.
 
 ---
 
-## Étape 1 — La variable « Régime de sécurité incendie »
+## Étape 1 — La variable « Régime de sécurité incendie » *(faite)*
 
 Une donnée de base du projet, au même titre que la zone de sismicité :
 
@@ -95,7 +95,7 @@ depuis l'écran de l'étude (§ 5).
 
 ---
 
-## Étape 2 — Chaque outil incendie déclare le régime qu'il sert
+## Étape 2 — Chaque outil incendie déclare le régime qu'il sert *(faite)*
 
 Un champ, sur l'outil, dans le catalogue :
 
@@ -235,12 +235,80 @@ Chaque garde se vérifie en cassant le code et en la regardant tomber.
 
 ---
 
+## Ce qui est fait, et où c'est écrit
+
+**Étapes 1 et 2.** Elles se livrent ensemble parce que la seconde est inerte
+sans la première : un agent qui déclare servir l'habitation ne sert à rien tant
+qu'aucun projet ne dit de quel régime il relève.
+
+| ce que c'est | où |
+|---|---|
+| le vocabulaire des régimes, en un seul endroit | `supabase/functions/_shared/utilitaires/regime-incendie.js` |
+| sa copie au navigateur, au build | `scripts/prepare-utilitaires.mjs`, liste `PUBLICS` |
+| le versement depuis l'étude habitation | `apps/web/js/services/incendie-versement.js`, `regimeVersable()` |
+| le régime que l'agent habitation sert | `supabase/functions/_shared/utilitaires/catalogue.js`, champ `regimeIncendie` |
+| la liste des agents incendie, **déduite** | `agentsIncendie()`, `regimeDeLAgent()`, même fichier |
+
+**Le vocabulaire vit au serveur et se copie au navigateur.** Deux côtés en ont
+besoin : le catalogue, qui dit quel régime chaque agent sert, et l'écran de
+l'étude, qui verse la valeur et affichera ses choix. Écrit des deux côtés, il
+divergerait au premier régime ajouté — et la divergence serait muette : un agent
+déclaré `erp` que personne ne trouve, parce que l'écran écrit `ERP`.
+
+**La valeur se lit sur le champ d'application, pas sur la famille.** L'article
+1er tranche avant le classement : plancher bas du logement le plus haut à 50 m
+au plus, l'arrêté s'applique ; au-delà, c'est un immeuble de grande hauteur.
+C'est une qualification, elle est justifiée par un article, et elle est en amont
+— exactement ce qu'il faut pour choisir un référentiel. Le classement, lui, est
+la *sortie* du référentiel.
+
+**Le régime part même quand le classement ne part pas.** « Hors champ — IGH » ne
+dit rien d'une famille, mais il dit tout d'un référentiel : c'est précisément le
+cas où savoir de quel texte le bâtiment relève change la suite du travail.
+
+**Et un champ qu'on n'a pas su lire ne verse rien.** Un « hors champ » dont on
+ignore la raison n'est pas un IGH — ce pourrait être un ERP, un lieu de travail,
+ou une lecture qu'on n'a pas encore écrite (règle 5).
+
+### Les gardes posées, et ce qu'on a cassé pour les voir tomber
+
+Chacune a été vérifiée en cassant le code :
+
+| la garde | ce qu'on a cassé | ce qui est tombé |
+|---|---|---|
+| un régime inconnu n'est pas rapproché du plus proche | `regimeValide` rapproche par préfixe | 2 tests |
+| l'IGH se lit sur le champ d'application | la branche `igh` retirée | 2 tests |
+| un champ illisible ne se range pas au plus proche | retour par défaut `"habitation"` | 1 test |
+| hors champ, le régime part quand même | retour `[]` comme avant | 1 test |
+| le régime se lit sur le champ, jamais sur la famille | déduction depuis le classement | 2 tests |
+| le régime versé porte sa zone | portée vidée | 1 test |
+| un agent qui parle d'incendie déclare son régime | `regimeIncendie` retiré du catalogue | 1 test |
+| la liste des agents incendie est déduite, jamais écrite | liste d'identifiants en dur | 1 test |
+| un régime illisible n'écarte rien | filtre strict sur une valeur vide | 3 tests |
+
+L'avant-dernière ligne est **le test d'acceptation du plan** : pour chacun des
+régimes du vocabulaire, le filtre se compare à ce que les agents déclarent. Une
+liste d'identifiants écrite en dur donne le même résultat aujourd'hui — il n'y a
+qu'un agent incendie —, mais elle rend cet agent-là pour `erp` aussi, et le test
+le voit. Le jour où l'agent ERP arrivera, il suffira donc d'un fichier de plus.
+
+### Un détail de construction que ça a révélé
+
+`incendie-versement.js` importe désormais un module **copié au build**. Or
+l'intégration continue lançait `npm test` avant `npm run build:web` : sur un
+dépôt fraîchement cloné, le module n'existait pas encore et le fichier de tests
+ne s'importait même pas. `package.json` porte donc un `pretest` qui prépare les
+copies. Vérifié en supprimant `apps/web/vendor/utilitaires/` : sans lui, le
+fichier tombe avec `ERR_MODULE_NOT_FOUND` ; avec lui, toute la suite passe.
+
+---
+
 ## L'ordre de fabrication
 
 | | étape | ce qu'on peut livrer seul |
 |---|---|---|
-| 1 | la variable et son versement (§ 1, § 5 pour l'écran) | oui — elle enrichit la mémoire même sans routage |
-| 2 | le champ `regimeIncendie` sur l'outil habitation (§ 2) | oui — inerte tant que § 3 n'est pas là |
+| 1 | ~~la variable et son versement (§ 1, § 5 pour l'écran)~~ **faite** | oui — elle enrichit la mémoire même sans routage |
+| 2 | ~~le champ `regimeIncendie` sur l'outil habitation (§ 2)~~ **faite** | oui — inerte tant que § 3 n'est pas là |
 | 3 | le filtre de `declarationsPourModele` (§ 3) et l'entrée `regimeIncendie` (§ 4) | oui — c'est le routage lui-même |
 | 4 | la portée dans `prefillDepuisMemoire` (§ 5) | oui, et **indépendamment** : c'est un défaut qui existe déjà |
 | 5 | la provenance à l'écran (§ 6) | oui |

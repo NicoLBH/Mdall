@@ -38,6 +38,9 @@ import { zonesOf } from "./project-zones.js";
 import { DOMAIN, NATURE } from "./assertion-taxonomy.js";
 import { sourceDuModule, regleDuModule } from "./incendie-en-texte.js";
 import { PROVENANCE, STATUT } from "./memoire-en-texte.js";
+import {
+  DECLARATION_REGIME_INCENDIE, SUJET_REGIME_INCENDIE, regimeDuChampDeLArrete, regimeIncendieDe
+} from "../../vendor/utilitaires/regime-incendie.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -131,6 +134,64 @@ export function reglesVersables(conclusions = [], zone = "") {
 }
 
 /**
+ * Le régime de sécurité incendie, versé depuis le champ d'application.
+ *
+ * ## Pourquoi c'est cette valeur-là, et pas le classement
+ *
+ * L'article 1er de l'arrêté tranche **avant** la famille : plancher bas du
+ * logement le plus haut à 50 m au plus, l'arrêté s'applique ; au-delà, c'est un
+ * immeuble de grande hauteur et ce sont d'autres textes. C'est une
+ * qualification, elle est justifiée par un article, et elle est **en amont** du
+ * classement.
+ *
+ * Le classement, lui, est la *sortie* du référentiel : il le présuppose.
+ * L'employer pour choisir le référentiel reviendrait à demander à la conclusion
+ * de désigner la prémisse.
+ *
+ * ## À quoi elle servira
+ *
+ * À ce que le Copilote n'ait plus à deviner quel agent incendie appeler. Tant
+ * qu'il n'y en a qu'un, ce versement n'est qu'une ligne de plus en mémoire ;
+ * c'est voulu — il enrichit le projet avant que le routage n'existe, et le jour
+ * où l'agent ERP arrive, les projets déjà étudiés portent leur régime.
+ *
+ * @param {object} vue ce que le référentiel a conclu
+ * @param {string} zone la portée retenue, vide pour l'ensemble
+ * @returns {object[]} zéro ou une affirmation
+ */
+export function regimeVersable(vue, zone = "") {
+  const champ = texte(vue?.faits?.dansLeChampDeLArrete);
+  const regime = regimeDuChampDeLArrete(champ);
+  // Un champ d'application qu'on n'a pas su lire ne se range pas au plus
+  // proche : on ne sait pas, et le dire est la seule réponse honnête (règle 5).
+  if (!regime) return [];
+
+  const dit = regimeIncendieDe(regime);
+  const source = texte(vue?.texteDeReference?.source) || "arrêté du 31 janvier 1986 modifié";
+
+  return [{
+    sujet: SUJET_REGIME_INCENDIE,
+    valeur: regime,
+    nature: NATURE.DONNEE_BASE,
+    domaine: DOMAIN.INCENDIE,
+    quoi: DECLARATION_REGIME_INCENDIE.quoi,
+    utilisation: DECLARATION_REGIME_INCENDIE.utilisation,
+    // Ce que l'article 1er a tranché, et le texte vers lequel il renvoie : sans
+    // lui, « igh » serait un mot, et non une porte vers la bonne réglementation.
+    source: dit?.texte ? `${source} — renvoie à ${dit.texte}` : source,
+    article: "article 1er",
+    provenance: { type: PROVENANCE.REGLE, quoi: `Champ d'application de l'arrêté — ${source}` },
+    statut: STATUT.RETENU,
+    reference: DECLARATION_REGIME_INCENDIE.reference,
+    // **Par zone, comme le classement.** Un rez-de-chaussée commercial sous des
+    // logements relève de deux régimes dans un seul ouvrage ; une variable posée
+    // sans portée y répondrait faux la moitié du temps.
+    zones: texte(zone) ? [texte(zone)] : [],
+    atelier: "Incendie — Habitation"
+  }];
+}
+
+/**
  * Le classement, versé comme la variable qu'il est.
  *
  * ## Ce qui manquait
@@ -165,12 +226,17 @@ export function donneesDeBaseVersables(vue, zone = "") {
   // Hors champ, le classement n'est pas une famille : « hors champ — IGH » dit
   // que ce référentiel ne s'applique pas. Le verser comme une valeur du projet
   // ferait entrer en mémoire une phrase qui n'affirme rien.
-  if (!classement || classement.toLowerCase().startsWith("hors champ")) return [];
+  // **Hors champ, le régime part quand même.** « Hors champ — IGH » ne dit rien
+  // d'une famille, mais il dit tout d'un référentiel : c'est précisément le cas
+  // où savoir de quel texte le bâtiment relève change la suite du travail.
+  if (!classement || classement.toLowerCase().startsWith("hors champ")) {
+    return regimeVersable(vue, zone);
+  }
 
   const source = texte(vue?.texteDeReference?.source) || "arrêté du 31 janvier 1986 modifié";
   const portee = texte(zone) ? [texte(zone)] : [];
 
-  return [{
+  return [...regimeVersable(vue, zone), {
     sujet: "Classement du bâtiment",
     valeur: classement,
     nature: NATURE.DONNEE_BASE,
