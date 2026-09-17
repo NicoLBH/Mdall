@@ -47,6 +47,7 @@ import { contexteTransversal } from "./copilote-contexte-transversal.js";
 import { executerUtilitaire } from "./utilitaires-service.js";
 import { executerLaVariante } from "./copilote-variante.js";
 import { executerLeCerveau } from "./copilote-cerveau.js";
+import { executerLaNavigation } from "./copilote-navigation.js";
 import { conversationTitle } from "./copilote-conversations.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
@@ -308,21 +309,43 @@ export async function sendAssistMessage(message, {
       // seconde implémentation du même raisonnement (règle 4), et le router sur
       // son nom reviendrait à apprendre au navigateur quels outils existent.
       if (appel?.ou === "navigateur") {
-        // **Deux outils tournent ici, et c'est le serveur qui dit lequel.** Le
-        // navigateur n'a pas de catalogue — c'est le but : router sur le nom lui
-        // apprendrait un nom d'outil. Il reçoit un rôle, et rien de plus.
-        const { resultat, pourLeModele } = appel?.quoi === "cerveau"
-          ? await executerLeCerveau({
-            assertions,
-            projectId,
-            onEtape: (dit) => etape(onEtape, dit?.texte, dit?.detail)
-          })
-          : await executerLaVariante({
+        /**
+         * **Trois outils tournent ici, et c'est le serveur qui dit lequel.**
+         *
+         * Le navigateur n'a pas de catalogue — c'est le but : router sur le nom
+         * lui apprendrait un nom d'outil. Il reçoit un **rôle**, et rien de
+         * plus.
+         *
+         * Une table plutôt qu'une suite de conditions : au troisième, le
+         * ternaire imbriqué se lisait à l'envers, et le quatrième s'y serait
+         * ajouté par la même pente.
+         */
+        const dire = (dit) => etape(onEtape, dit?.texte, dit?.detail);
+        const parRole = {
+          cerveau: () => executerLeCerveau({ assertions, projectId, onEtape: dire }),
+          variante: () => executerLaVariante({
             entrees: safeJsonParse(appel?.arguments) ?? {},
             assertions,
             projectId,
-            onEtape: (dit) => etape(onEtape, dit?.texte, dit?.detail)
-          });
+            onEtape: dire
+          }),
+          // Il ne déplace personne : il reconnaît le projet et rend l'adresse.
+          // Le déplacement a lieu quand le tour est fini et la réponse
+          // enregistrée — partir au milieu emporterait la conversation.
+          navigation: () => executerLaNavigation({
+            entrees: safeJsonParse(appel?.arguments) ?? {},
+            onEtape: dire
+          })
+        };
+
+        // Un rôle qu'on ne connaît pas n'est pas exécuté au hasard : le tour
+        // s'arrête, plutôt que de lancer un outil pour un autre (règle 5).
+        const executer = parRole[String(appel?.quoi ?? "").trim()];
+        if (!executer) {
+          throw new Error("Le copilote a demandé un outil que cette version ne sait pas exécuter.");
+        }
+
+        const { resultat, pourLeModele } = await executer();
 
         executions.push(resultat);
         if (typeof onToolRun === "function") onToolRun(resultat);

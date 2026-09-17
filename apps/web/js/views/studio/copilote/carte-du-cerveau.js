@@ -114,7 +114,7 @@ export function renderCarteDuCerveau(lecture = null, rang = 0) {
         celui que l'agent vient de lire : rouvrir sur une mémoire relue
         montrerait un autre dessin que celui dont la réponse parle.
       */""}
-      <button type="button" class="copilote-cerveau__ouvrir"
+      <button type="button" class="copilote-ouvrir"
         data-copilote-cerveau="${escapeHtml(String(rang))}">
         ${svgIcon("screen-full")} Ouvrir le cerveau en grand
         <small>les réglages, les secteurs, l'onde au clic</small>

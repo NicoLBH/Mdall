@@ -60,6 +60,7 @@ import {
 } from "../../ui/fenetre-de-details.js";
 import { renderVoileDeDepot } from "../../ui/voile-de-depot.js";
 import { renderCarteDuCerveau } from "./carte-du-cerveau.js";
+import { renderCarteDuVoyage } from "./carte-du-voyage.js";
 import { aRetenirDuResultat, executerUtilitaire } from "../../../services/utilitaires-service.js";
 import { conversationTitle, findConversation } from "../../../services/copilote-conversations.js";
 import {
@@ -433,6 +434,12 @@ function transcrireUneExecution(execution) {
   }
 
   if (execution.ecartees?.length) lignes.push(`- Écartées : ${execution.ecartees.join(", ")}`);
+
+  // Un déplacement n'a ni entrées ni sorties : sans cette ligne, le compte rendu
+  // d'une conversation qui a ouvert trois écrans n'en garderait aucune trace.
+  if (execution.destination) {
+    lignes.push(`- Ouvert : ${execution.destination.projet} — ${execution.destination.ecran}`);
+  }
 
   if (execution.valeurs) lignes.push("- Sorties :", `  \`\`\`json`, `  ${JSON.stringify(execution.valeurs)}`, "  \`\`\`");
   if (execution.champs?.length) {
@@ -886,6 +893,13 @@ function renderExecution(execution, message = 0, rang = 0) {
   // deux colonnes vides sous un titre.
   if (execution?.statut === "fait" && execution?.lecture) {
     return renderCarteDuCerveau(execution.lecture, `${message}:${rang}`);
+  }
+
+  // **Un déplacement n'est pas un calcul non plus** : il n'a ni entrées ni
+  // résultats, il a une destination. Le passer dans le rendu des agents aurait
+  // affiché « route : #project/… » dans une liste de valeurs.
+  if (execution?.statut === "fait" && execution?.destination) {
+    return renderCarteDuVoyage(execution.destination);
   }
 
   if (execution?.statut !== "fait") {
@@ -1908,6 +1922,44 @@ function retenirDeLaConversation(etat, executions = []) {
 }
 
 /**
+ * Aller où le Copilote vient d'ouvrir.
+ *
+ * ## Pourquoi ici, et pas dans l'outil
+ *
+ * L'outil reconnaît le projet et rend l'adresse ; il ne déplace personne. Le
+ * déplacement attend que la réponse soit **écrite et enregistrée** : partir au
+ * milieu du tour aurait démonté l'écran pendant que le modèle répondait, et la
+ * réponse se serait écrite dans un fil que plus personne ne regardait.
+ *
+ * ## Une seule, la première
+ *
+ * Deux ouvertures dans un même message voudraient dire deux endroits à la fois.
+ * On prend la première et l'on ignore les suivantes : la carte de chacune reste
+ * dans le fil, et un clic y mène.
+ *
+ * ## Et l'on n'écrit rien si l'on y est déjà
+ *
+ * Écrire la même adresse ne sonne aucun `hashchange` et ne déplace donc rien —
+ * mais cela empile une entrée d'historique, et le bouton « précédent » ne
+ * ramènerait nulle part.
+ */
+function allerOuLeCopiloteAOuvert(executions = []) {
+  const route = (Array.isArray(executions) ? executions : [])
+    .map((execution) => String(execution?.destination?.route ?? "").trim())
+    .find(Boolean);
+
+  if (!route) return;
+
+  try {
+    if (String(window.location?.hash ?? "") === route) return;
+    window.location.hash = route;
+  } catch {
+    // Un navigateur qui refuse l'adresse laisse la carte dans le fil : le lien
+    // y mène, et la conversation n'a rien perdu.
+  }
+}
+
+/**
  * Joindre une note de calcul.
  *
  * Elle est lue dans le navigateur et gardée en mémoire vive : rien ne part
@@ -2032,6 +2084,10 @@ async function envoyer(root) {
     etat.messages.push(reponse);
     afficherLaReponse(root, etat, jeton);
     await enregistrer(etat, reponse);
+    // **Et l'on part, pas avant.** La réponse est à l'écran et en base : partir
+    // au milieu du tour aurait emporté la conversation qu'on écrivait, et l'on
+    // serait arrivé quelque part sans savoir ce qui avait été répondu.
+    allerOuLeCopiloteAOuvert(reponse.executions);
   } catch (error) {
     // Une interruption n'est pas une panne : c'est une décision de
     // l'utilisateur, et l'afficher en rouge comme une erreur lui reprocherait
