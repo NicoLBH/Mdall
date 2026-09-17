@@ -4,6 +4,8 @@ import { GESTE, gesteDesSujets } from "../../services/gestes-des-sujets.js";
 import { ecranApresUneLecture } from "../../services/rail-des-sujets.js";
 import { escapeHtml as echapper } from "../../utils/escape-html.js";
 import { brancherLaZoneDeDepot } from "../ui/zone-de-depot.js";
+import { oublierLesAretes, remplirLesAretes } from "./aretes-du-sujet.js";
+import { demanderLOrdreDuBlocage, oublierLOrdreDuBlocage } from "./ordre-du-blocage.js";
 import {
   applyMentionSuggestion,
   extractStructuredMentions,
@@ -31,7 +33,7 @@ import { quandOnClique } from "../ui/tete-de-tableau.js";
 import {
   basculerUnMenuDenTete, fermerLesMenusDenTete, ouvrirUnMenuDenTete
 } from "../ui/menus-den-tete.js";
-import { TRI, normaliserLeTri, triSuivant } from "../../services/tri-des-sujets.js";
+import { ORDRES_DU_PROJET, TRI, normaliserLeTri, triSuivant } from "../../services/tri-des-sujets.js";
 
 export function createProjectSubjectsEvents(config) {
   const EMOJI_GRID_COLUMNS = 6;
@@ -1149,11 +1151,82 @@ export function createProjectSubjectsEvents(config) {
   }
 
 
+  /**
+   * Répondre à une arête reconnue, dans le détail d'un sujet.
+   *
+   * **Le même geste que sur la ligne de mémoire**, avec les mêmes marques de
+   * données : c'est le même acte, et lui inventer une seconde forme ferait deux
+   * choses à apprendre là où il n'y en a qu'une (règle 10).
+   *
+   * Rien n'est retiré de l'affichage avant que la base ait pris : un retrait
+   * optimiste qui échoue laisserait croire qu'une valeur n'est plus contestée
+   * alors qu'elle l'est toujours, et personne ne reviendrait vérifier.
+   */
+  async function repondreAuPortage(root, { lienId = "", confirmer = false } = {}) {
+    const id = String(lienId || "").trim();
+    if (!id) return;
+
+    const { confirmerLeLien, retirerLeLien } = await import("../../services/point-porte-sur-supabase.js");
+    const pris = confirmer
+      ? await confirmerLeLien(id, String(store?.user?.id || ""))
+      : await retirerLeLien(id);
+
+    if (!pris) {
+      showError(confirmer
+        ? "Le rattachement n'a pas pu être confirmé. Il reste proposé."
+        : "Le rattachement n'a pas pu être écarté. Il reste affiché.");
+      return;
+    }
+
+    // Ce qu'on avait lu ne vaut plus : la base a changé sous nos pieds. Et
+    // l'ordre du blocage aussi — une arête confirmée change ce qu'un sujet
+    // bloque, et le garder ferait ranger la liste sur un état d'avant.
+    oublierLesAretes();
+    oublierLOrdreDuBlocage();
+    await remplirLesAretes(root);
+    brancherLesGestesDuPortage(root);
+  }
+
+  /**
+   * Les deux réponses à une arête reconnue, sur les boutons qui viennent d'être
+   * écrits.
+   *
+   * **Après le remplissage, et jamais avant.** L'encadré est posé vide puis
+   * rempli quand les lectures reviennent : brancher au câblage du détail ne
+   * trouverait aucun bouton, et les gestes seraient morts sans que rien ne le
+   * dise.
+   */
+  function brancherLesGestesDuPortage(root) {
+    for (const bouton of root?.querySelectorAll?.("[data-portage-confirme]") ?? []) {
+      if (bouton.dataset.portageBranche === "1") continue;
+      bouton.dataset.portageBranche = "1";
+      bouton.addEventListener("click", () => repondreAuPortage(root, {
+        lienId: bouton.getAttribute("data-portage-confirme"),
+        confirmer: true
+      }));
+    }
+
+    for (const bouton of root?.querySelectorAll?.("[data-portage-retire]") ?? []) {
+      if (bouton.dataset.portageBranche === "1") continue;
+      bouton.dataset.portageBranche = "1";
+      bouton.addEventListener("click", () => repondreAuPortage(root, {
+        lienId: bouton.getAttribute("data-portage-retire"),
+        confirmer: false
+      }));
+    }
+  }
+
   function wireDetailsInteractive(root) {
     if (!root) return;
     const bindingEpoch = String(root.dataset.detailsInteractiveEpoch || "0");
     if (interactiveBindingEpochByRoot.get(root) === bindingEpoch) return;
     interactiveBindingEpochByRoot.set(root, bindingEpoch);
+
+    // Les deux arêtes du sujet, remplies après coup. L'appel est ici et nulle
+    // part ailleurs : c'est le seul endroit qui voit tous les hôtes du détail —
+    // la fenêtre, le panneau, le tiroir —, et en brancher trois séparément
+    // aurait fait trois occasions d'en oublier un.
+    remplirLesAretes(root).then(() => brancherLesGestesDuPortage(root));
     const isAutosizeDebugEnabled = () => typeof window !== "undefined" && window?.__MDALL_DEBUG_TEXTAREA_AUTOSIZE__ === true;
     const isElementMeasurable = (element) => {
       if (!element || element.isConnected === false) return false;
@@ -6179,10 +6252,21 @@ export function createProjectSubjectsEvents(config) {
       }
       // Le bouton porte déjà ce qu'il demande ; on ne le recalcule que s'il ne
       // porte rien, pour que la bascule reste vraie même sans attribut.
-      const demande = valeur === TRI.PROJET || valeur === TRI.DERNIERE_ACTIVITE
+      const demande = Object.values(TRI).includes(valeur)
         ? normaliserLeTri(valeur)
-        : triSuivant(store.projectSubjectsView.subjectsSort);
+        : triSuivant(store.projectSubjectsView.subjectsSort, ORDRES_DU_PROJET);
       store.projectSubjectsView.subjectsSort = demande;
+
+      // **Les cinq lectures ne partent qu'ici.** Les faire au chargement de
+      // l'écran ferait payer cinq requêtes à tout le monde pour un rangement
+      // que personne n'a demandé. Tant qu'elles ne sont pas revenues, la liste
+      // ne bouge pas — et elle se redessine une fois, quand on sait.
+      if (demande === TRI.CE_QUE_CA_BLOQUE) {
+        demanderLOrdreDuBlocage(
+          String(store.projectSubjectsView.projectScopeId || store.currentProjectId || ""),
+          () => redessinerApresUnGeste()
+        );
+      }
       // Changer l'ordre change ce qu'est « la première page » : y rester
       // montrerait le milieu d'une liste qu'on vient de retourner.
       redessinerApresUnGeste();

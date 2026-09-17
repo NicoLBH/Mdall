@@ -434,29 +434,58 @@ technique, qui ne vit pas dans l'acte mais dans l'organisme que sa note nomme.
 Un point encore ouvert ne monte rien, et un point qu'on ne connaît pas non plus :
 le supposer fermé ferait dire « tranché avec l'équipe » d'un débat en cours.
 
-### Ce qui reste, et ce que ce n'est pas
+### Les écrans, branchés
 
-**Les six étapes sont faites. Le modèle est entier ; l'écran ne l'est pas.**
+**Les six étapes sont faites, et l'écran les montre.** L'ordre était celui que
+cette page s'était donné : poser l'écran avant le modèle aurait obligé à
+deviner, et l'on aurait fini avec deux idées de ce que « contesté » veut dire.
 
-Tout ce que cette page décrit se construit, se propose, se relit et se trie —
-et rien ne l'affiche encore. Il manque quatre branchements, et aucun ne demande
-de décider quoi que ce soit :
+| ce qu'on voit | où | ce qui le calcule |
+| --- | --- | --- |
+| « un sujet ouvert porte sur cette valeur » | ligne de la Mémoire | `phraseDesPointsOuverts` |
+| « le sujet « … » **porterait** sur cette valeur », et deux réponses | ligne de la Mémoire | `portagesSurLaValeur` |
+| « tranché dans le sujet « … » — Ourdine Ferrand, le 12 mars » | ligne de la Mémoire | `leDebatQuiATranche` |
+| « Sur quoi ce sujet porte », avec les mêmes deux réponses | détail d'un sujet | `surQuoiCePointPorte` |
+| « Par où l'on est passé », les cinq étapes | détail d'un sujet fermé | `etapesDuRaisonnement` |
+| l'ordre par ce que ça coûte de ne pas trancher | tableau des sujets | `ordreDesPointsOuverts` |
 
-| ce qui manque | ce qui l'attend |
-| --- | --- |
-| « un sujet ouvert porte sur cette valeur », devant une valeur de la Mémoire | `phraseDesPointsOuverts` |
-| le geste qui confirme une arête proposée | `liensAPoser`, et `declared_by` nul |
-| les cinq étapes du chemin, dans le détail d'un sujet | `etapesDuRaisonnement` |
-| l'ordre des sujets ouverts, dans la liste | `ordreDesPointsOuverts` |
+**Le conditionnel n'est pas une coquetterie.** Une arête proposée se dit
+« porterait » et porte deux boutons ; une arête posée se dit « porte » et n'en
+porte qu'un. Les mêler ferait contester une valeur que personne n'a mise en
+doute, et le compte — « 2 sujets ouverts portent dessus » — ne prend que les
+confirmées.
 
-C'est délibéré, et c'est l'ordre que cette page s'était donné : **poser l'écran
-avant le modèle aurait obligé à deviner**, et l'on aurait fini avec deux idées de
-ce que « contesté » veut dire.
+**Deux réponses, jamais une.** N'offrir que « confirmer » ferait de la seule
+réponse possible un acquiescement : une reconnaissance fausse resterait affichée
+pour toujours, et l'on apprendrait à ne plus la lire. Écarter sert aussi à
+retirer une arête confirmée — se tromper en confirmant doit rester rattrapable.
 
-Restent aussi les deux rangs déclarés que rien n'atteint — le rôle d'un
-signataire, la nature contractuelle d'une pièce. Chacun demande **une** chose,
-nommée dans `services/ce-qui-couvre.js`, et le jour où elle existe une ligne
-suffit.
+**Le chemin n'apparaît qu'une fois le sujet fermé.** Un raisonnement dit par où
+l'on est arrivé ; devant un débat qui court encore, on n'est arrivé nulle part,
+et quatre lignes creuses sous une question ouverte feraient passer une
+discussion en cours pour un travail bâclé.
+
+**Rien n'est retiré de l'écran avant que la base ait pris.** Un retrait
+optimiste qui échoue laisserait croire qu'une valeur n'est plus contestée alors
+qu'elle l'est toujours, et personne ne reviendrait vérifier.
+
+**Ce que ça coûte de ne pas trancher ne se propose que dans un projet.** Le
+calcul lit la mémoire de ce projet-là, son graphe et ses engagements ; l'offrir
+sur un écran qui traverse quarante projets ferait quarante fois cinq lectures
+pour ranger une page, et un bouton qui promet un rangement qu'il ne peut pas
+tenir est pire que pas de bouton. Les cinq lectures ne partent qu'au clic, une
+fois par projet ; tant qu'elles ne sont pas revenues, **la liste ne bouge pas**.
+
+### Ce qui reste
+
+Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
+contractuelle d'une pièce. Chacun demande **une** chose, nommée dans
+`services/ce-qui-couvre.js`, et le jour où elle existe une ligne suffit.
+
+Et la **reconnaissance** n'est branchée nulle part : `portagePropose` sait dire
+sur quoi un point porterait, mais aucun geste ne pose encore les arêtes
+proposées. L'écran sait donc les montrer et y répondre ; il reste à décider
+quand on les propose — et ce n'est pas une question technique.
 
 ---
 
@@ -475,6 +504,11 @@ suffit.
 | les trois lignes que la fermeture propose | `views/project-subjects/project-subjects-actions.js` |
 | ce qu'un point bloque, et l'ordre des ouverts | `services/ce-que-bloque-un-point.js` |
 | l'échelle de l'engagement, « tranché avec l'équipe » compris | `services/ce-qui-couvre.js` |
+| les arêtes **dessinées**, sans rien qui parle à la base | `views/memoire/portage-rendu.js` |
+| la porte de l'arête amont — lire, poser, confirmer, retirer | `services/point-porte-sur-supabase.js` |
+| les deux mentions et les deux gestes, sur une ligne de mémoire | `views/project-memory.js` |
+| les deux encadrés du détail d'un sujet | `views/project-subjects/aretes-du-sujet.js` |
+| l'ordre du tableau, et les cinq lectures qu'il demande | `views/project-subjects/ordre-du-blocage.js` |
 
 ### Le faux document, et pourquoi il existait
 
@@ -571,6 +605,17 @@ valeur que personne n'a mise en doute.
 | une fermeture est tout ce qui commence par `closed` | seul `closed` compte | 2 tests |
 | le champ saisi départage encore | il cesse de départager | 1 test |
 | les graphies anciennes restent reconnues | elles ne le sont plus | 1 test |
+| proposé et confirmé ne se confondent pas | ils se confondent | 5 tests |
+| une reconnaissance peut être écartée | le bouton disparaît | 3 tests |
+| une étape vide reste dessinée | elle disparaît | 1 test |
+| un intitulé ne passe pas en clair | il passe en clair | 1 test |
+| l'écran dessiné écrit « sujet » | il écrit « point » | 2 tests |
+| chaque phrase a son propre élément | elle repart en texte nu | 1 test |
+| un lien sans auteur n'est pas confirmé | tout devient confirmé | 1 test |
+| un auteur fait de blancs ne compte pas | il compte | 1 test |
+| le compte des ouverts ne filtre pas sur l'auteur | il filtre | 3 tests |
+| un sujet sans place reste derrière | il se mêle aux rangés | 1 test |
+| l'écran transversal ne propose pas le troisième ordre | il le propose | 3 tests |
 
 ---
 

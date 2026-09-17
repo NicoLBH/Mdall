@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  TRI, derniereActivite, motDuTri, normaliserLeTri, trierLesSujets, triSuivant
+  ORDRES_DU_PROJET, TRI, derniereActivite, motDuTri, normaliserLeTri, trierLesSujets, triSuivant
 } from "./tri-des-sujets.js";
 
 const sujet = (id, dates = {}) => ({ id, title: `Sujet ${id}`, ...dates });
@@ -105,8 +105,32 @@ test("sans rien lui donner, le tri ne se plaint pas", () => {
 /* ── La bascule ──────────────────────────────────────────────────────────── */
 
 test("le bouton met le tri, puis le retire", () => {
+  // Deux ordres par défaut : c'est ce que proposent les écrans qui traversent
+  // les projets, et ils ne peuvent pas proposer le troisième.
   assert.equal(triSuivant(TRI.PROJET), TRI.DERNIERE_ACTIVITE);
   assert.equal(triSuivant(TRI.DERNIERE_ACTIVITE), TRI.PROJET);
+});
+
+test("dans un projet, le bouton fait tourner les trois", () => {
+  // Trois ordres, un seul bouton : « comment veux-tu que je range ? » se pose
+  // une fois, et un troisième bouton aurait demandé une place et une icône de
+  // plus pour la même question.
+  assert.equal(triSuivant(TRI.PROJET, ORDRES_DU_PROJET), TRI.DERNIERE_ACTIVITE);
+  assert.equal(triSuivant(TRI.DERNIERE_ACTIVITE, ORDRES_DU_PROJET), TRI.CE_QUE_CA_BLOQUE);
+  assert.equal(triSuivant(TRI.CE_QUE_CA_BLOQUE, ORDRES_DU_PROJET), TRI.PROJET);
+});
+
+test("un ordre que l'écran ne propose pas ne coince pas le bouton", () => {
+  // « Ce que ça coûte » lit la mémoire d'un projet : un écran qui en traverse
+  // quarante ne peut pas le tenir. Y arriver avec cet ordre en poche ne doit pas
+  // laisser le bouton sans rien à faire.
+  assert.equal(triSuivant(TRI.CE_QUE_CA_BLOQUE), TRI.DERNIERE_ACTIVITE);
+  assert.equal(triSuivant(TRI.CE_QUE_CA_BLOQUE, []), TRI.DERNIERE_ACTIVITE);
+});
+
+test("les trois ordres se distinguent, et un ordre inconnu ne prend pas leur place", () => {
+  assert.equal(normaliserLeTri(TRI.CE_QUE_CA_BLOQUE), TRI.CE_QUE_CA_BLOQUE);
+  assert.equal(new Set(Object.values(TRI)).size, 3);
 });
 
 /**
@@ -137,6 +161,20 @@ test("rien de choisi, c'est la dernière activité", () => {
 test("l'info-bulle annonce le geste, pas l'état", () => {
   assert.match(motDuTri(TRI.PROJET), /Trier par dernière activité/);
   assert.match(motDuTri(TRI.DERNIERE_ACTIVITE), /Revenir à l'ordre du projet/);
+
+  const dansUnProjet = { ordres: ORDRES_DU_PROJET };
+  assert.match(motDuTri(TRI.DERNIERE_ACTIVITE, "l'ordre du projet", dansUnProjet),
+    /Trier par ce que ça coûte de ne pas trancher/);
+  assert.match(motDuTri(TRI.CE_QUE_CA_BLOQUE, "l'ordre du projet", dansUnProjet),
+    /Revenir à l'ordre du projet/);
+});
+
+test("aucune info-bulle ne promet un chiffre d'importance", () => {
+  // Ce qu'un ingénieur a besoin de savoir n'est pas combien, c'est ce que ça
+  // coûte de le casser.
+  for (const tri of Object.values(TRI)) {
+    assert.doesNotMatch(motDuTri(tri), /priorit|importance|poids|urgen/i);
+  }
 });
 
 test("aucun mot du tri ne parle comme un outil de visa", () => {
@@ -145,5 +183,57 @@ test("aucun mot du tri ne parle comme un outil de visa", () => {
     for (const interdit of [/visa/i, /à valider/i, /approbation/i]) {
       assert.doesNotMatch(motDuTri(tri), interdit);
     }
+  }
+});
+
+/* ── Ce que ça coûte de ne pas trancher ──────────────────────────────────── */
+
+test("les sujets se rangent aux places qu'on leur donne", () => {
+  // L'ordre n'est pas calculé ici, il est **donné** : ce fichier ne sait rien
+  // des arêtes ni du graphe, et aller les y chercher en ferait un second
+  // endroit qui décide ce qu'un sujet bloque (règle 4).
+  const sujets = [{ id: "a" }, { id: "b" }, { id: "c" }];
+  const ordre = new Map([["c", 0], ["a", 1], ["b", 2]]);
+
+  assert.deepEqual(
+    trierLesSujets(sujets, TRI.CE_QUE_CA_BLOQUE, { ordre }).map((s) => s.id),
+    ["c", "a", "b"]
+  );
+});
+
+test("un sujet sans place reste derrière, dans son ordre d'origine", () => {
+  // Les fermés n'ont pas de place : ce qu'il en coûte de ne pas trancher un
+  // sujet déjà tranché ne veut rien dire.
+  const sujets = [{ id: "ferme-1" }, { id: "ouvert" }, { id: "ferme-2" }];
+  const ordre = new Map([["ouvert", 0]]);
+
+  assert.deepEqual(
+    trierLesSujets(sujets, TRI.CE_QUE_CA_BLOQUE, { ordre }).map((s) => s.id),
+    ["ouvert", "ferme-1", "ferme-2"]
+  );
+});
+
+test("tant qu'on ne sait pas, on ne range pas", () => {
+  // Ranger au hasard en attendant les lectures serait affirmer un ordre qu'on
+  // n'a pas — et retourner la liste deux fois ferait sauter les lignes sous les
+  // yeux de quelqu'un qui vient de cliquer (règle 5).
+  const sujets = [{ id: "a" }, { id: "b" }, { id: "c" }];
+
+  assert.deepEqual(trierLesSujets(sujets, TRI.CE_QUE_CA_BLOQUE).map((s) => s.id), ["a", "b", "c"]);
+  assert.deepEqual(
+    trierLesSujets(sujets, TRI.CE_QUE_CA_BLOQUE, { ordre: new Map() }).map((s) => s.id),
+    ["a", "b", "c"]
+  );
+  // Et pas davantage quand ce qu'on a ne parle pas de ces sujets-là.
+  assert.deepEqual(
+    trierLesSujets(sujets, TRI.CE_QUE_CA_BLOQUE, { ordre: new Map([["z", 0]]) }).map((s) => s.id),
+    ["a", "b", "c"]
+  );
+});
+
+test("ranger ne change jamais le nombre de sujets", () => {
+  const sujets = [{ id: "a" }, { id: "b" }, { id: "c" }];
+  for (const tri of Object.values(TRI)) {
+    assert.equal(trierLesSujets(sujets, tri, { ordre: new Map([["b", 0]]) }).length, 3);
   }
 });

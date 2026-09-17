@@ -1,4 +1,5 @@
 import { renderSharedDetailsTitleWrap, renderSharedDetailsTitleHtml, renderSharedDetailsChromeHeadHtml } from "../ui/detail-header.js";
+import { creuxDesAretes } from "./aretes-du-sujet.js";
 
 export function createProjectSubjectsDetailsRenderer(config) {
   const {
@@ -251,6 +252,16 @@ export function createProjectSubjectsDetailsRenderer(config) {
     const commentBoxHtml = shouldRenderDiscussion
       ? renderCommentBox(selection, { scopeHost: discussionScopeHost, source: "renderDetailsBody" })
       : "";
+    // **Les deux arêtes du sujet.** Posées vides : elles demandent trois lectures
+    // en base, et les attendre ferait patienter devant un écran vide pour un
+    // encadré de fin de page. `remplirLesAretes` les remplit au câblage.
+    const aretesHtml = selection.type === "sujet"
+      ? creuxDesAretes({
+        id: item.id,
+        title: firstNonEmpty(item.title, ""),
+        status: firstNonEmpty(item.status, item.raw?.status, "")
+      })
+      : "";
     const subjectMetaControlsHtml = selection.type === "sujet" ? renderSubjectMetaControls(item) : "";
     const subjectPriorityHtml = selection.type === "sujet"
       ? `
@@ -270,6 +281,7 @@ export function createProjectSubjectsDetailsRenderer(config) {
             ${descCard}
             ${descriptionAddSubissueActionHtml}
             ${renderDocumentRefsCard(selection)}
+            ${aretesHtml}
             ${subIssuesHtml}
             <div class="subject-details-thread-host" data-details-thread-host>
               ${threadHtml}

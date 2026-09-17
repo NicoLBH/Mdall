@@ -110,6 +110,9 @@ import {
   verdictLabel
 } from "../services/memoire-actes.js";
 import { ceQuiCouvre, phraseDeLaCouvertureDe } from "../services/ce-qui-couvre.js";
+import { portagesSurLaValeur } from "../services/point-porte-sur.js";
+import { leDebatQuiATranche } from "../services/point-a-tranche.js";
+import { renderCeQuiPorteSurLaValeur, renderLeDebatQuiATranche } from "./memoire/portage-rendu.js";
 import { liaisonDeLAvis } from "../services/avis-liaison.js";
 import { bindGhActionButtons, bindGhSelectMenus, renderGhActionButton, renderGhSelectMenu } from "./ui/gh-split-button.js";
 import { renderLightTabs, bindLightTabs } from "./ui/light-tabs.js";
@@ -278,6 +281,16 @@ const view = {
   applications: null,
   /** Les actes portés sur les hypothèses. `null` : lecture impossible. */
   acts: null,
+  /**
+   * L'arête amont — `subject_assertion_links`. `null` : lecture impossible.
+   *
+   * La distinction compte plus qu'ailleurs : une valeur dont on n'a pas su lire
+   * les liens n'est pas une valeur que rien ne conteste, et la présenter comme
+   * acquise est exactement l'erreur que cette arête existe pour éviter.
+   */
+  liens: null,
+  /** Les points du projet, réduits à leur nom et à leur état. `null` : idem. */
+  points: null,
   /** Le formulaire de contestation ouvert, s'il y en a un. */
   contesting: null,
   contestDraft: { value: "", note: "" },
@@ -729,6 +742,8 @@ function renderAssertion(assertion) {
         ${renderMarqueDeVariante(assertion)}
         ${renderHypothesisState(assertion)}
         ${renderCeQuiCouvre(assertion)}
+        ${renderCeQuiPorte(assertion)}
+        ${renderLeDebat(assertion)}
         ${renderReviewBanner(assertion)}
         ${assertion.detail ? `<span class="memory-row__detail">${escapeHtml(assertion.detail)}</span>` : ""}
         ${renderDependentsCount(assertion)}
@@ -787,6 +802,43 @@ function renderCeQuiCouvre(assertion) {
       ${escapeHtml(phraseDeLaCouvertureDe(couverture, { dater: formatDate }))}
     </span>
   `;
+}
+
+/**
+ * Ce qui porte sur cette valeur, sur sa ligne.
+ *
+ * **Une valeur en débat cesse de se présenter comme acquise.** C'est le premier
+ * effet visible de l'arête amont, et il vaut à lui seul l'étape : la valeur
+ * reste, et à côté d'elle ce qui la conteste.
+ *
+ * Rien tant que les liens n'ont pas été lus. `null` ne veut pas dire « aucun
+ * débat » — il veut dire « on n'a pas su lire », et afficher le silence d'une
+ * lecture ratée comme une absence de débat est l'erreur que cette arête existe
+ * pour éviter (règle 5).
+ */
+function renderCeQuiPorte(assertion) {
+  if (view.liens === null || view.points === null) return "";
+
+  return renderCeQuiPorteSurLaValeur({
+    portages: portagesSurLaValeur(assertion?.id, { liens: view.liens, points: view.points }),
+    occupe: view.busy
+  });
+}
+
+/**
+ * Le débat qui a tranché cette valeur, sur sa ligne.
+ *
+ * L'autre arête, et surtout pas la même : celle-ci dit d'où la valeur vient,
+ * l'autre ce qui la met en question. C'est ici que « pourquoi les fondations
+ * sont-elles à cette profondeur ? » trouve sa réponse complète — la chaîne ne
+ * s'arrête plus à une règle, elle va jusqu'au débat, avec sa date et ses noms.
+ */
+function renderLeDebat(assertion) {
+  if (view.points === null) return "";
+
+  return renderLeDebatQuiATranche({
+    debat: leDebatQuiATranche({ assertion, points: view.points })
+  });
 }
 
 /**
@@ -2250,6 +2302,64 @@ async function markAsReviewed(root, assertionId) {
 }
 
 /**
+ * Répondre à une arête reconnue : la confirmer, ou l'écarter.
+ *
+ * ## Deux réponses, et un seul geste à apprendre
+ *
+ * La même paire de marques sert ici et dans le détail d'un sujet : c'est le
+ * même acte, il n'a donc qu'une forme (règle 10). Écarter sert aussi à retirer
+ * une arête confirmée — se tromper en confirmant doit rester rattrapable, sinon
+ * le premier clic est définitif.
+ *
+ * ## Ce qui est écrit reste écrit
+ *
+ * Confirmer ne touche que `declared_by` : la date de reconnaissance reste celle
+ * du jour où le lien a été proposé. C'est elle qui dit depuis quand la valeur
+ * était vue comme en question, et la réécrire ferait croire que le débat vient
+ * de commencer (règle 6).
+ *
+ * ## Et l'écran ne ment pas quand la base refuse
+ *
+ * Rien n'est retiré de l'affichage avant que la base ait pris. Un retrait
+ * optimiste qui échoue laisserait croire qu'une valeur n'est plus contestée
+ * alors qu'elle l'est toujours — et personne ne reviendrait vérifier.
+ */
+async function repondreAuPortage(root, { lienId = "", confirmer = false } = {}) {
+  const id = String(lienId ?? "").trim();
+  if (!id || view.busy) return;
+
+  view.busy = true;
+  view.notice = "";
+  renderContent(root);
+
+  const { confirmerLeLien, retirerLeLien } = await import("../services/point-porte-sur-supabase.js");
+
+  const pris = confirmer
+    ? await confirmerLeLien(id, store.user?.id ?? "")
+    : await retirerLeLien(id);
+
+  view.busy = false;
+
+  if (!pris) {
+    view.notice = confirmer
+      ? "Le rattachement n'a pas pu être confirmé. Il reste proposé."
+      : "Le rattachement n'a pas pu être écarté. Il reste affiché.";
+    renderContent(root);
+    return;
+  }
+
+  // On met à jour ce qu'on a sous la main plutôt que de tout relire : la base a
+  // pris, et relire tous les liens du projet pour un champ ferait clignoter la
+  // page.
+  view.liens = confirmer
+    ? (view.liens ?? []).map((lien) =>
+      String(lien?.id) === id ? { ...lien, declared_by: store.user?.id ?? null } : lien)
+    : (view.liens ?? []).filter((lien) => String(lien?.id) !== id);
+
+  renderContent(root);
+}
+
+/**
  * Ce que l'écran montre, tous filtres appliqués.
  *
  * **Un seul endroit décide.** La recherche redessinait la liste avec ses
@@ -2989,6 +3099,24 @@ function bind(root) {
     bouton.addEventListener("click", () => markAsReviewed(root, bouton.getAttribute("data-memory-reviewed")));
   }
 
+  // Confirmer une arête reconnue, ou l'écarter. **Les deux, et pas une.**
+  // N'offrir que le premier ferait de la seule réponse possible un
+  // acquiescement, et une reconnaissance fausse resterait à l'écran pour
+  // toujours — on apprendrait à ne plus la lire.
+  for (const bouton of root.querySelectorAll("[data-portage-confirme]")) {
+    bouton.addEventListener("click", () => repondreAuPortage(root, {
+      lienId: bouton.getAttribute("data-portage-confirme"),
+      confirmer: true
+    }));
+  }
+
+  for (const bouton of root.querySelectorAll("[data-portage-retire]")) {
+    bouton.addEventListener("click", () => repondreAuPortage(root, {
+      lienId: bouton.getAttribute("data-portage-retire"),
+      confirmer: false
+    }));
+  }
+
   // « J'ai vérifié » : une ligne de plus dans l'histoire de la valeur, et rien
   // d'autre. Pas de note demandée — la demander ferait un formulaire, et un
   // formulaire fait une procédure.
@@ -3590,6 +3718,13 @@ export function renderProjectMemory(root) {
       const { listHypothesisActs } = await import("../services/memoire-actes-supabase.js");
       view.acts = view.projectId ? await listHypothesisActs(view.projectId) : null;
 
+      // L'arête amont, et les points qu'elle nomme. Sans les deux, une valeur
+      // que trois débats contestent s'afficherait comme une valeur tranquille —
+      // et c'est précisément ce que cette arête existe pour empêcher.
+      const { listerLesLiens, listerLesPoints } = await import("../services/point-porte-sur-supabase.js");
+      view.liens = view.projectId ? await listerLesLiens(view.projectId) : null;
+      view.points = view.projectId ? await listerLesPoints(view.projectId) : null;
+
       // Les noms des signataires, pour la marge du Blame. Un identifiant dans
       // la marge ne dit rien à personne : c'est le nom qu'on cherche quand on
       // se demande qui a décidé cela.
@@ -3610,6 +3745,8 @@ export function renderProjectMemory(root) {
       view.dependencies = null;
       view.applications = null;
       view.acts = null;
+      view.liens = null;
+      view.points = null;
     }
 
     view.loading = false;

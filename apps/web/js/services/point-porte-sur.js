@@ -136,6 +136,23 @@ export function liensAPoser({ point = null, assertions = [], projectId = "", dec
  * @param {object[]} options.points les points du projet, avec leur `status`
  */
 export function pointsQuiPortentSur(assertionId, { liens = [], points = [] } = {}) {
+  return portagesSurLaValeur(assertionId, { liens, points }).map((portage) => portage.point);
+}
+
+/**
+ * Les portages sur cette version : le point, **le lien**, et s'il est confirmé.
+ *
+ * Le lien voyage avec le point parce que l'écran en a besoin pour deux choses
+ * qu'il ne peut pas deviner : distinguer une arête **proposée** d'une arête
+ * posée par quelqu'un, et savoir laquelle confirmer quand on clique.
+ *
+ * `confirme` lit `declared_by` : nul dit « reconnu, pas encore confirmé ». Un
+ * point mal accroché contesterait en silence une valeur que personne n'a mise
+ * en doute — l'écran doit pouvoir montrer la différence.
+ *
+ * @returns {{point: object, lien: object, confirme: boolean}[]}
+ */
+export function portagesSurLaValeur(assertionId, { liens = [], points = [] } = {}) {
   const vise = texte(assertionId);
   if (!vise) return [];
 
@@ -158,7 +175,7 @@ export function pointsQuiPortentSur(assertionId, { liens = [], points = [] } = {
     if (!point || !pointOuvert(point)) continue;
 
     vus.add(id);
-    retenus.push(point);
+    retenus.push({ point, lien, confirme: Boolean(texte(lien?.declared_by)) });
   }
 
   return retenus;

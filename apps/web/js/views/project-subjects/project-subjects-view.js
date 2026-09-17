@@ -5,7 +5,7 @@ import { etatDunSujet, renderIconeDetat } from "../ui/etats-des-lignes.js";
 import {
   EPINGLES_AU_PLUS, bandeauDesEpingles, estEpingle, motDeLEpingle, sujetsEpingles
 } from "../../services/epingles-des-sujets.js";
-import { TRI, motDuTri } from "../../services/tri-des-sujets.js";
+import { ORDRES_DU_PROJET, TRI, motDuTri, triSuivant } from "../../services/tri-des-sujets.js";
 import { prioriteSaisie } from "../../services/ce-que-bloque-un-point.js";
 import { lecturesReservees, titreDeLaListe } from "../../services/rail-des-sujets.js";
 import { filterValuesOf, toggleFilter, withFilter } from "../../services/query-bar.js";
@@ -311,8 +311,8 @@ function renderDocumentRefsCard(selection) {
   if (!refs.length) return "";
 
   return `
-    <div class="details-document-refs" aria-label="Références documentaires">
-      <div class="details-document-refs__label">Références documentaires</div>
+    <div class="details-bloc details-document-refs" aria-label="Références documentaires">
+      <div class="details-bloc__label details-document-refs__label">Références documentaires</div>
       <div class="details-document-refs__list">
         ${refs.map((doc) => `
           <span class="details-document-ref">
@@ -363,11 +363,14 @@ function renderSubjectsAssigneesHeadHtml() {
         // on ne saurait plus lesquelles sont cochées sans redescendre la
         // colonne des cases. Et la rangée des actions a besoin de la place.
         ? ""
+        // Trois ordres, un seul bouton : il tourne. « Allumé » veut dire
+        // « on ne montre pas l'ordre d'arrivée » — c'est ce qu'un œil cherche
+        // en revenant sur l'écran, pas lequel des deux autres est en cours.
         : renderBoutonDeTri({
           attribut: "subjects-sort",
-          valeur: tri === TRI.DERNIERE_ACTIVITE ? TRI.PROJET : TRI.DERNIERE_ACTIVITE,
-          actif: tri === TRI.DERNIERE_ACTIVITE,
-          titre: motDuTri(tri)
+          valeur: triSuivant(tri, ORDRES_DU_PROJET),
+          actif: tri !== TRI.PROJET,
+          titre: motDuTri(tri, "l'ordre du projet", { ordres: ORDRES_DU_PROJET })
         })}
     </div>
   `;

@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 import {
   LIAISON, MOT_A_LECRAN, intituleDuPoint, liensAPoser, phraseDesPointsOuverts,
-  pointsQuiPortentSur, portagePropose, surQuoiCePointPorte
+  pointsQuiPortentSur, portagePropose, portagesSurLaValeur, surQuoiCePointPorte
 } from "./point-porte-sur.js";
 
 /** Une affirmation de la mémoire, de la forme que la base rend. */
@@ -264,4 +264,37 @@ test("l'arête amont ne rend jamais ce qu'un point a produit", () => {
     surQuoiCePointPorte("p-1", { liens, assertions: [MEMOIRE[0], tranchee] }).map((v) => v.id),
     ["v-sol"]
   );
+});
+
+test("une arête proposée se distingue d'une arête posée par quelqu'un", () => {
+  // `declared_by` nul dit « reconnu, pas encore confirmé ». Les confondre ferait
+  // contester en silence une valeur que personne n'a mise en doute — et l'écran
+  // ne pourrait plus offrir de la confirmer, puisqu'elle aurait l'air acquise.
+  const liens = [
+    { id: "l-1", subject_id: "p-1", assertion_id: "v-sol", declared_by: "u-1" },
+    { id: "l-2", subject_id: "p-2", assertion_id: "v-sol", declared_by: null },
+    { id: "l-3", subject_id: "p-3", assertion_id: "v-sol", declared_by: "   " }
+  ];
+  const points = [
+    { id: "p-1", status: "open" }, { id: "p-2", status: "open" }, { id: "p-3", status: "open" }
+  ];
+
+  const portages = portagesSurLaValeur("v-sol", { liens, points });
+
+  assert.deepEqual(portages.map((portage) => portage.confirme), [true, false, false]);
+  // Et le lien voyage avec : sans lui, l'écran ne saurait pas lequel confirmer.
+  assert.deepEqual(portages.map((portage) => portage.lien.id), ["l-1", "l-2", "l-3"]);
+});
+
+test("le compte des points ouverts ne dépend pas de qui a posé l'arête", () => {
+  // `pointsQuiPortentSur` répond à « qu'est-ce qui porte là-dessus ? », pas à
+  // « qui l'a dit ». Les deux lectures partent de la même, et une seconde marche
+  // dans les liens aurait fini par ne plus compter pareil (règle 4).
+  const liens = [
+    { id: "l-1", subject_id: "p-1", assertion_id: "v-sol", declared_by: "u-1" },
+    { id: "l-2", subject_id: "p-2", assertion_id: "v-sol", declared_by: null }
+  ];
+  const points = [{ id: "p-1", status: "open" }, { id: "p-2", status: "open" }];
+
+  assert.deepEqual(pointsQuiPortentSur("v-sol", { liens, points }).map((p) => p.id), ["p-1", "p-2"]);
 });
