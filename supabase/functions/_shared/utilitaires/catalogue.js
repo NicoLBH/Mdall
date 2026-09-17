@@ -1800,6 +1800,91 @@ export function surQuoiCaRepose(outil, { fournies = {}, provenances = {} } = {})
 }
 
 /**
+ * Ce que le projet pourrait retenir de ce calcul.
+ *
+ * ## Le défaut que ça répare
+ *
+ * Un agent s'arrête faute d'une valeur, l'écran la demande, quelqu'un la donne,
+ * le calcul a lieu. Et puis **rien** : la réponse part, la valeur reste dans la
+ * conversation, et la question se repose à la conversation suivante. On retape
+ * la contrainte de sol, le régime de sécurité incendie, la classe de sol, autant
+ * de fois qu'on ouvre une discussion — et la troisième saisie diverge de la
+ * première.
+ *
+ * ## Ce qu'elle rend, et ce qu'elle écarte
+ *
+ * Ce qui a été **dit par quelqu'un** — dans le formulaire ou dans la question —
+ * et que le projet **sait ranger** : une entrée qui déclare `depuisMemoire`
+ * nomme la clé sous laquelle la mémoire porte déjà ce sujet. Le reste ne se
+ * propose pas :
+ *
+ *  - ce qui **vient déjà** de la mémoire : le projet le porte, il n'y a rien à
+ *    lui apprendre ;
+ *  - ce qui vient de l'**étude** ou d'un **enchaînement** : ce n'est pas
+ *    quelqu'un qui l'a dit, c'est un écran ou un autre agent, et chacun a son
+ *    chemin de versement ;
+ *  - une **valeur par défaut** : personne ne l'a choisie ;
+ *  - une entrée d'**aiguillage** : elle dit ce que le modèle cherchait, pas ce
+ *    que le bâtiment vaut.
+ *
+ * ## Elle ne verse rien, et aucun chemin d'ici n'y mène
+ *
+ * Elle rend une **liste à proposer**. C'est `docs/fondamentaux.md`, règle 1 :
+ * rien n'entre dans la mémoire sans une proposition que quelqu'un relit et
+ * signe. Une réponse de formulaire écrite en douce serait une valeur de projet
+ * sans auteur — exactement ce que la mémoire existe pour empêcher.
+ *
+ * ## Le tri appartient au serveur
+ *
+ * Comme `aRetenir` : c'est la **déclaration des entrées** qui dit ce qui est une
+ * valeur de projet, et l'écran ne connaît plus les agents. Il reçoit donc une
+ * liste toute faite, avec la clé sous laquelle chaque sujet doit atterrir.
+ *
+ * @param {object} outil l'agent qui a calculé
+ * @param {object} options
+ * @param {object} options.fournies les entrées retenues
+ * @param {object} options.provenances ce que rend `provenancesDesEntrees`
+ * @returns {object[]} de quoi construire des affirmations, jamais des affirmations
+ */
+export function aVerserAuProjet(outil, { fournies = {}, provenances = {} } = {}) {
+  const versables = [];
+
+  for (const entree of outil?.entrees ?? []) {
+    // Ce que le modèle cherchait n'est pas ce que le bâtiment vaut.
+    if (entree.aiguillage) continue;
+
+    // Sans clé de mémoire, le projet ne sait pas où ranger ce sujet — et un
+    // sujet rangé au hasard ne se relit pas : la question se reposerait quand
+    // même, sur une mémoire pourtant enrichie.
+    const cles = clesDeMemoire(entree);
+    if (!cles.length) continue;
+
+    // « Dite » est la seule provenance qui vienne de quelqu'un. Les autres ont
+    // déjà leur chemin, ou n'ont pas d'auteur.
+    if (provenances?.[entree.cle]?.origine !== "dite") continue;
+
+    const valeur = texte(fournies?.[entree.cle]);
+    if (!valeur) continue;
+
+    versables.push({
+      // Le nom tel qu'on le lit : c'est lui que la proposition affichera.
+      sujet: texte(entree.libelle) || entree.cle,
+      // Et la clé sous laquelle il doit atterrir. Le navigateur vérifie que le
+      // nom y mène vraiment : il est seul à savoir normaliser un sujet, et un
+      // sujet versé sous une autre clé que celle qu'on relit est une valeur
+      // qu'on n'entendra plus jamais.
+      cle: cles[0],
+      valeur,
+      unite: texte(entree.unite),
+      // Ce que ce nom désigne, tel que l'agent le dit à qui remplit le champ.
+      quoi: texte(entree.aide)
+    });
+  }
+
+  return versables;
+}
+
+/**
  * De quoi dire une étape, même quand personne n'écoute.
  *
  * Les utilitaires racontent ce qu'ils font — lire la note, trouver le hors gel,
@@ -2281,6 +2366,12 @@ export async function executerOutil({
     // la résumait, oubliait la portée et datait de travers. Ce qui doit être dit
     // exactement se rend tout écrit — c'est la leçon du récit du cerveau.
     surQuoiCaRepose: surQuoiCaRepose(outil, { fournies, provenances }),
+    // **Ce que le projet pourrait retenir.** Une valeur donnée dans le
+    // formulaire servait au calcul puis disparaissait avec la conversation : on
+    // la retapait à la discussion suivante. Elle se **propose** désormais — et
+    // se propose seulement : rien n'entre dans la mémoire sans que quelqu'un
+    // relise et signe (règle 1).
+    aVerser: aVerserAuProjet(outil, { fournies, provenances }),
     // Ce que la conversation gardera de ce calcul. Le tri appartient à la
     // déclaration des entrées, donc au serveur : l'écran ne les connaît plus.
     aRetenir: aRetenirDeLaConversation(outil, fournies),

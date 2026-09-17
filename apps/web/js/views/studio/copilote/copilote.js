@@ -63,6 +63,10 @@ import { renderCarteDuCerveau } from "./carte-du-cerveau.js";
 import { renderCarteDuVoyage } from "./carte-du-voyage.js";
 import { renderCarteSansResultat } from "./carte-sans-resultat.js";
 import { phraseDeLaProvenance } from "./provenance-lisible.js";
+import {
+  aProposerDeLaConversation, phraseDeLaProposition, phraseDesSansRetour
+} from "../../../services/copilote-versement.js";
+import { routeDeLEcran } from "../../../../vendor/utilitaires/ecrans-du-projet.js";
 import { routeOuAller } from "../../../services/copilote-navigation.js";
 import { aRetenirDuResultat, executerUtilitaire } from "../../../services/utilitaires-service.js";
 import { conversationTitle, findConversation } from "../../../services/copilote-conversations.js";
@@ -990,6 +994,7 @@ function renderExecution(execution, message = 0, rang = 0) {
         </p>
         ${renderRemise(execution)}
         ${renderRemiseIncendie(execution)}
+        ${renderAProposer(execution, index)}
       </div>
     </div>
   `;
@@ -1028,6 +1033,46 @@ function renderRemise(execution) {
       <span>Ouvrir dans l'Atelier</span>
       <em>${tenus.length} massif${tenus.length > 1 ? "s" : ""}</em>
     </button>
+  `;
+}
+
+/**
+ * De quoi proposer au projet ce que la conversation vient de lui apprendre.
+ *
+ * Quelqu'un a donné une valeur — dans le formulaire, ou en passant dans sa
+ * question — et le calcul s'en est servi. Sans ce bouton, elle repart avec la
+ * conversation : on la retape à la discussion suivante, et la troisième saisie
+ * diverge de la première.
+ *
+ * **Il ne verse rien.** Il ouvre une proposition, que quelqu'un relira et
+ * signera — ou pas. C'est la règle 1, et c'est ce qui donne à la valeur un
+ * auteur et une date au lieu d'une ligne apparue toute seule.
+ */
+function renderAProposer(execution, index = 0) {
+  if (execution?.statut !== "fait") return "";
+
+  const { affirmations, sansRetour } = aProposerDeLaConversation(execution);
+  const dit = phraseDesSansRetour(sansRetour);
+
+  // Rien à proposer, mais quelque chose à dire : une valeur qu'on écarte en
+  // silence se lit comme une valeur qui n'avait rien à donner (règle 5).
+  if (!affirmations.length) {
+    return dit ? `<p class="copilote-outil__note">${escapeHtml(dit)}</p>` : "";
+  }
+
+  return `
+    <button type="button" class="copilote-action" data-proposer-execution="${escapeHtml(String(index))}">
+      ${svgIcon("git-pull-request")}
+      <span>${escapeHtml(phraseDeLaProposition(affirmations))}</span>
+      ${/*
+        Les noms ne se répètent pas : à une seule valeur, la phrase la nomme
+        déjà, et l'écrire deux fois de suite se lit comme un bégaiement.
+      */""}
+      ${affirmations.length > 1
+        ? `<em>${escapeHtml(affirmations.map((a) => a.sujet).join(", "))}</em>`
+        : ""}
+    </button>
+    ${dit ? `<p class="copilote-outil__note">${escapeHtml(dit)}</p>` : ""}
   `;
 }
 
@@ -1913,6 +1958,68 @@ function retenirDeLaConversation(etat, executions = []) {
 }
 
 /**
+ * Proposer au projet ce que la conversation vient de lui apprendre.
+ *
+ * ## Elle ne verse rien
+ *
+ * Elle ouvre une proposition **ouverte**, que quelqu'un relira et signera — ou
+ * pas (`docs/fondamentaux.md`, règle 1). Une valeur écrite en douce serait une
+ * valeur de projet sans auteur ; c'est précisément ce que la mémoire existe
+ * pour empêcher, et c'est pour cela qu'on va ensuite là où la signature se
+ * donne.
+ *
+ * ## Ni zone à choisir, ni titre à écrire
+ *
+ * L'étude de l'Atelier les demande, parce qu'elle propose quarante conclusions
+ * d'un coup et que la portée y change tout. Ici, on propose **une valeur ou
+ * deux, qu'on vient de dire** : deux fenêtres pour deux lignes feraient
+ * renoncer, et l'on retaperait la valeur à la discussion suivante.
+ *
+ * La portée est donc l'ouvrage entier — personne n'a désigné de zone en
+ * répondant — et la proposition s'ouvre à la page où l'on peut la nommer, la
+ * restreindre, ou la refuser.
+ */
+async function proposerAuProjet(root, rang) {
+  const etat = ensureState();
+  const execution = etat.messages?.[Number(rang)]?.executions?.[0]
+    ?? (etat.messages ?? []).flatMap((message) => message.executions ?? [])[Number(rang)];
+
+  const { affirmations } = aProposerDeLaConversation(execution, { par: store.user?.name || "" });
+  if (!affirmations.length) return;
+
+  const projet = await projetEnBase();
+  if (!projet) {
+    etat.lastError = "Ce projet n'est pas relié à la base : rien ne peut lui être proposé.";
+    render(root);
+    return;
+  }
+
+  const { preparerUneProposition } = await import("../../../services/atelier-proposition.js");
+  const rendu = await preparerUneProposition({
+    projectId: projet,
+    titre: `Valeurs données au Copilote — ${execution?.titre || "discussion"}`,
+    intro: "Ces valeurs ont été données dans une discussion avec le Copilote, et un calcul s'en "
+      + "est servi. Elles n'entrent dans la mémoire du projet que si cette proposition est signée.",
+    source: execution?.source || "",
+    affirmations,
+    // Vide veut dire « partout » : c'est une portée, pas une absence de réponse.
+    zones: []
+  });
+
+  if (!rendu?.ok) {
+    etat.lastError = rendu?.raison || "La proposition n'a pas pu être préparée.";
+    render(root);
+    return;
+  }
+
+  // On va où la signature se donne, et **sur la proposition elle-même** : la
+  // liste obligerait à retrouver à la main celle qu'on vient de préparer.
+  store.pendingPropositionId = rendu.proposition.id;
+  const ou = routeDeLEcran(String(store.currentProjectId || "").trim(), "propositions");
+  if (ou) window.location.hash = ou;
+}
+
+/**
  * Aller où le Copilote vient d'ouvrir.
  *
  * L'outil ne déplace personne : il reconnaît le projet et rend l'adresse. Le
@@ -2758,6 +2865,10 @@ function bind(root) {
   // toiles partent avec, et une boucle d'animation laissée derrière tournerait
   // encore sur un canevas détaché.
   void poserLesCerveaux(root);
+
+  for (const bouton of root.querySelectorAll("[data-proposer-execution]")) {
+    bouton.addEventListener("click", () => void proposerAuProjet(root, bouton.dataset.proposerExecution));
+  }
 
   for (const bouton of root.querySelectorAll("[data-remise-outil]")) {
     bouton.addEventListener("click", () => void remettreALAtelier(root, bouton.dataset.remiseOutil));

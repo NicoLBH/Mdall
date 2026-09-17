@@ -522,6 +522,98 @@ rédigerait la provenance de mémoire, c'est-à-dire de travers.
 
 ---
 
+## Le versement : ce que la conversation propose au projet
+
+C'est ce qui manquait pour que le mot `requis` ait un sens. Un agent s'arrêtait
+faute d'une valeur, l'écran la demandait, quelqu'un la donnait, le calcul avait
+lieu — et puis **rien**. La valeur repartait avec la conversation, et la question
+se reposait à la discussion suivante. On retapait la contrainte de sol, le
+régime, la classe de sol, autant de fois qu'on ouvrait une discussion — et la
+troisième saisie divergeait de la première.
+
+| ce que c'est | où |
+|---|---|
+| ce que le projet pourrait retenir | `catalogue.js`, `aVerserAuProjet()` |
+| ce qu'on en fait une proposition | `services/copilote-versement.js` |
+| le bouton dans le fil | `views/studio/copilote/copilote.js` |
+
+### Proposer, jamais verser
+
+Rien n'entre dans la mémoire sans une proposition que quelqu'un relit et signe
+(`docs/fondamentaux.md`, règle 1). Le bouton ouvre donc une proposition
+**ouverte**, et l'on va là où la signature se donne. Une réponse de formulaire
+écrite en douce serait une valeur de projet sans auteur — exactement ce que la
+mémoire existe pour empêcher.
+
+C'est aussi pourquoi la provenance est une **décision** : quelqu'un a tranché,
+dans une conversation, à une date. Pas un calcul, pas une règle — une personne.
+
+Un test lit le code et **casse la construction** si un chemin d'écriture y
+apparaît, dans le service comme dans l'écran.
+
+### Ce qui se propose, et ce qui ne se propose pas
+
+Ce que quelqu'un a **dit** — dans le formulaire ou dans la question — et que le
+projet **sait ranger**. Le reste n'a rien à faire là : ce qui vient de la
+mémoire, le projet le porte déjà ; l'étude et l'enchaînement ont leur propre
+chemin ; une valeur par défaut, personne ne l'a choisie ; une entrée
+d'aiguillage dit ce que le modèle cherchait, pas ce que le bâtiment vaut.
+
+Le tri appartient au **serveur**, comme `aRetenir` : c'est la déclaration des
+entrées qui dit ce qui est une valeur de projet, et l'écran ne connaît plus les
+agents.
+
+### Le nom doit mener à la clé, et l'on dit quand il n'y mène pas
+
+La proposition range un sujet sous `normalizeSubjectKey(sujet)` ; l'agent relit
+sous la clé qu'il déclare. Quand les deux ne coïncident pas, la valeur entre en
+mémoire **et la question se repose quand même** — le projet s'enrichit d'un sujet
+que personne ne relit.
+
+Deux entrées du catalogue sont dans ce cas : « H0 retenu pour le département »
+se range sous `h0-retenu-pour-le-departement`, alors que l'agent relit
+`h0-hors-gel`. Elles ne se proposent donc pas, et l'écran **le dit** : une valeur
+écartée en silence se lit comme une valeur qui n'avait rien à donner (règle 5).
+
+### Sans portée : l'ouvrage entier
+
+Personne n'a désigné de zone en répondant à la question, et en choisir une à sa
+place poserait la valeur là où elle n'a pas été dite. Si le projet en porte une
+qui diffère, la lecture par portée — l'étape 5 — le verra et reposera la
+question.
+
+L'étude de l'Atelier, elle, demande la zone avant de proposer : elle en propose
+quarante d'un coup, et la portée y change tout. Ici on propose une valeur ou
+deux qu'on vient de dire ; deux fenêtres pour deux lignes feraient renoncer, et
+l'on retaperait la valeur à la discussion suivante.
+
+### Les gardes posées, et ce qu'on a cassé pour les voir tomber
+
+| la garde | ce qu'on a cassé | ce qui est tombé |
+|---|---|---|
+| seul ce que quelqu'un a dit se propose | tout se propose | 3 tests |
+| une entrée d'aiguillage ne se propose jamais | la règle saute | 1 test |
+| ce qu'on ne sait pas ranger ne se propose pas | il se propose | 1 test |
+| la liste part au navigateur | elle reste au serveur | 2 tests |
+| le nom doit mener à la clé | il n'y mène plus | 1 test |
+| la provenance est une décision | elle devient un calcul | 1 test |
+| l'unité colle à la valeur | elle se perd | 1 test |
+| aucun chemin ne mène à une écriture | le service nomme la porte de la base | 1 test |
+| l'écran passe par une proposition | il n'en ouvre plus | 1 test |
+
+*Vérifié au navigateur* : le bouton et la phrase de ce qu'on ne sait pas ranger,
+avec la vraie feuille de style.
+
+### Et `requis` ?
+
+Une des trois raisons de ne pas le poser tombe : **la réponse se verse**, une
+fois signée, et la question ne se repose plus. Les deux autres tiennent encore —
+l'étude de l'Atelier ne répond pas à cette entrée, et il n'y a qu'un référentiel
+incendie. La première se lèvera en dérivant le régime du **champ d'application**
+que l'étude conclut déjà ; c'est la prochaine ligne.
+
+---
+
 ## L'ordre de fabrication
 
 | | étape | ce qu'on peut livrer seul |
