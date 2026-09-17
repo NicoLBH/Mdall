@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
 
   const brut = await req.text().catch(() => "");
   if (brut.length > CORPS_MAX) {
-    return json({ error: "La demande dépasse ce que l'utilitaire accepte." }, 413);
+    return json({ error: "La demande dépasse ce que l'agent accepte." }, 413);
   }
 
   let charge: Record<string, unknown>;
@@ -83,7 +83,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const id = String(charge?.id ?? "");
-  console.log("executer-utilitaire:request", {
+  console.log("executer-agent:request", {
     outil: id,
     entrees: Object.keys((charge?.entrees as Record<string, unknown>) ?? {}).length,
     pieces: Array.isArray(charge?.piecesJointes) ? charge.piecesJointes.length : 0
@@ -118,7 +118,7 @@ Deno.serve(async (req: Request) => {
     // propre et ne doit pas en avoir — un calcul lancé pour quelqu'un se fait
     // avec ses droits, pas avec les nôtres.
     autorisation: req.headers.get("Authorization") ?? "",
-    // **De quoi compter ce qu'un utilitaire consomme.** L'orchestration ne
+    // **De quoi compter ce qu'un agent consomme.** L'orchestration ne
     // connaît ni la base ni l'identité : on lui passe de quoi déposer, pas de
     // quoi écrire. C'est ici que le savoir vit, et c'est ici qu'il reste.
     tracage: {
@@ -159,14 +159,14 @@ Deno.serve(async (req: Request) => {
         ...entrees,
         onEtape: (dit: { texte: string; detail: string }) => etapes.push(dit)
       });
-      console.log("executer-utilitaire:done", { outil: id, statut: resultat?.statut, etapes: etapes.length });
+      console.log("executer-agent:done", { outil: id, statut: resultat?.statut, etapes: etapes.length });
       return json({ resultat, etapes, pourLeModele: sansFigure(resultat) });
     } catch (erreur) {
-      console.error("executer-utilitaire:failed", {
+      console.error("executer-agent:failed", {
         outil: id,
         message: erreur instanceof Error ? erreur.message : "unknown"
       });
-      return json({ error: "L'utilitaire n'a pas pu être exécuté." }, 502);
+      return json({ error: "L'agent n'a pas pu être exécuté." }, 502);
     }
   }
 
@@ -204,7 +204,7 @@ Deno.serve(async (req: Request) => {
           onEtape: (dit: { texte: string; detail: string }) => { comptees += 1; ecrire({ etape: dit }); }
         });
 
-        console.log("executer-utilitaire:done", { outil: id, statut: resultat?.statut, etapes: comptees });
+        console.log("executer-agent:done", { outil: id, statut: resultat?.statut, etapes: comptees });
 
         ecrire({
           fin: {
@@ -216,11 +216,11 @@ Deno.serve(async (req: Request) => {
           }
         });
       } catch (erreur) {
-        console.error("executer-utilitaire:failed", {
+        console.error("executer-agent:failed", {
           outil: id,
           message: erreur instanceof Error ? erreur.message : "unknown"
         });
-        ecrire({ erreur: "L'utilitaire n'a pas pu être exécuté." });
+        ecrire({ erreur: "L'agent n'a pas pu être exécuté." });
       } finally {
         controle.close();
       }

@@ -33,11 +33,20 @@
  * elle est juste, vérifiable, et sans rapport avec la question.
  */
 
+import { OUTIL_CERVEAU } from "./cerveau-outil.js";
+
 /** Le nom de l'outil. Il voyage jusqu'au navigateur, qui route dessus. */
 export const OUTIL_VARIANTE = "tester_une_variante";
 
-/** Les outils que le navigateur exécute lui-même. Fermée, et courte. */
-export const OUTILS_DU_NAVIGATEUR = [OUTIL_VARIANTE];
+/**
+ * Les outils que le navigateur exécute lui-même. Fermée, et courte.
+ *
+ * Deux, et pour la même raison : ce qu'ils font **est déjà dans la page** — le
+ * moteur de variante est l'écran « Tester une variante », le cerveau est le
+ * dessin qu'on ouvre depuis la Mémoire. Les porter au serveur en ferait une
+ * seconde implémentation du même raisonnement (règle 4).
+ */
+export const OUTILS_DU_NAVIGATEUR = [OUTIL_VARIANTE, OUTIL_CERVEAU];
 
 /** La déclaration passée au modèle, dans la forme qu'attend l'API. */
 export const DECLARATION_VARIANTE = {
@@ -47,7 +56,7 @@ export const DECLARATION_VARIANTE = {
     "Teste une variante sur la mémoire de ce projet : remplace une valeur par une autre et",
     "rejoue tout ce qui en dépend — zonages climatiques, zone de sismicité, cote hors gel,",
     "spectre sismique, pré-dimensionnement des fondations. Rend ce qui change, avec l'avant,",
-    "l'après et l'utilitaire qui l'a recalculé, et ce qui n'a pas pu se recalculer, avec la raison.",
+    "l'après et l'agent qui l'a recalculé, et ce qui n'a pas pu se recalculer, avec la raison.",
     "Rien n'est écrit dans la mémoire : c'est une exploration.",
     "",
     "Appelle-le dès qu'une question porte sur une conséquence — « et si », « qu'est-ce que ça",
@@ -89,7 +98,7 @@ export const CONSIGNES_VARIANTE = [
   "",
   "L'outil `tester_une_variante` rejoue la mémoire du projet avec une valeur remplacée :",
   "- Une question sur une conséquence — « et si on déplaçait le projet à… ? » — s'y répond par cet outil, jamais par un raisonnement de ta part. La chaîne va de la commune aux cotes de fondation, et personne ne la refait de tête.",
-  "- Reprends ses chiffres tels quels, avec l'avant et l'après, et cite l'utilitaire qui a recalculé chaque valeur.",
+  "- Reprends ses chiffres tels quels, avec l'avant et l'après, et cite l'agent qui a recalculé chaque valeur.",
   "- Distingue ce qui a **bougé** de ce qui a été **recalculé sans bouger** : « la zone de vent est recalculée et reste la même » est une information utile, pas un silence.",
   "- Dis ce qui n'a **pas** pu se recalculer et pourquoi : une variante partielle présentée comme complète est le seul vrai danger de cet outil.",
   "- Rien de tout cela n'entre dans la mémoire. C'est une exploration ; quelqu'un décidera, et par une proposition.",

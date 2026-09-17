@@ -157,5 +157,5 @@ documents et les mêmes chiffres.
 
 **Le `.md` en base.** La restitution vit le temps de l'écran : redéposer le même PDF la
 refait, et la repaie. Sa place est à côté du document, dans la chaîne Documents — c'est là
-qu'un identifiant de document existe, et l'utilitaire de l'Atelier n'en a pas. Migration
+qu'un identifiant de document existe, et l'agent de l'Atelier n'en a pas. Migration
 additive, et une lecture qui ne recommence pas.

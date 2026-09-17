@@ -1589,7 +1589,7 @@ function renderHypothesisForm() {
 /**
  * L'en-tête de l'écran.
  *
- * Il reprend celui d'un utilitaire de l'Atelier — « Suivi des avis du Bureau de
+ * Il reprend celui d'un agent de l'Atelier — « Suivi des avis du Bureau de
  * Contrôle » : le titre à gauche, les actions à droite, un filet dessous, puis
  * la phrase qui dit à quoi sert l'écran. C'est le même geste — consulter un
  * outil du projet —, il se présente donc de la même façon, et avec les mêmes

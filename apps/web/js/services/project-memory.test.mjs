@@ -274,7 +274,7 @@ test("une donnée de base dit son sujet et sa valeur, pas un fichier", () => {
   ]);
 });
 
-test("une contrainte déduite cite son utilitaire et sa version, pas un fichier", () => {
+test("une contrainte déduite cite son agent et sa version, pas un fichier", () => {
   // C'est la ligne dont la provenance doit se lire sans ouvrir le payload :
   // sans elle, une valeur qui change ne dit pas si c'est le site qui a bougé
   // ou notre façon de le lire.

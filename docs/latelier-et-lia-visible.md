@@ -15,7 +15,7 @@ rend directement des sujets est une boîte noire — quand le résultat déçoit
 ne sait pas si le document a été mal lu, mal structuré, ou bien lu et mal
 exploité.
 
-Deux utilitaires extraient déjà d'un PDF, chacun à sa manière. Un troisième
+Deux agents extraient déjà d'un PDF, chacun à sa manière. Un troisième
 allait s'ajouter. C'est le moment de fixer la démarche plutôt que de la
 répéter.
 
@@ -24,11 +24,11 @@ répéter.
 ## Les quatre principes qui décident de l'ordre
 
 **1. On rend l'Atelier extensible avant d'y ajouter des outils.** La sidebar
-actuelle ne tiendra pas deux cents utilitaires : on n'a pas deux cents icônes
+actuelle ne tiendra pas deux cents agents : on n'a pas deux cents icônes
 distinctes, une liste déroulante de deux cents entrées ne se parcourt pas, et
-— le plus grave — **elle occupe la gauche de l'écran, donc aucun utilitaire ne
+— le plus grave — **elle occupe la gauche de l'écran, donc aucun agent ne
 peut avoir sa propre barre latérale**. C'est une limite de structure, pas de
-confort : elle plafonne ce que chaque utilitaire pourra être. Elle passe donc
+confort : elle plafonne ce que chaque agent pourra être. Elle passe donc
 en premier.
 
 **2. On rend l'extraction visible avant de l'améliorer.** On extrait, on
@@ -52,7 +52,7 @@ page à lui. Un coût invisible est un coût qu'on subit.
 ## Étape 1 — L'Atelier devient un marketplace
 
 **Le problème.** Une sidebar de deux cents entrées ne se parcourt pas, et elle
-prend la place dont les utilitaires ont besoin.
+prend la place dont les agents ont besoin.
 
 **Ce qu'on fait.**
 
@@ -62,21 +62,21 @@ prend la place dont les utilitaires ont besoin.
 - Une **navigation verticale des rayons**, celle de Paramètres, réutilisée : une
   liste verticale tient trente rayons là où une rangée d'onglets en tient six
   avant de déborder.
-- Les utilitaires **les plus employés**, six en cartes. **Ils se comptent, ils ne
+- Les agents **les plus employés**, six en cartes. **Ils se comptent, ils ne
   se déclarent pas** : sur tous les projets et tous les utilisateurs. Une liste
-  écrite à la main vieillit sans que personne ne s'en aperçoive — un utilitaire
-  ajouté et beaucoup employé y reste invisible, un utilitaire mis en avant et
+  écrite à la main vieillit sans que personne ne s'en aperçoive — un agent
+  ajouté et beaucoup employé y reste invisible, un agent mis en avant et
   jamais ouvert y garde sa place. Le compteur ne retient **ni qui, ni quand, ni
   sur quel projet** : ce serait une donnée de surveillance qu'il faudrait
   ensuite protéger, et elle n'aide aucune décision de Mdall.
 - Une seconde barre, « Recommandé » / « Ajouté récemment », puis les
-  utilitaires **sur deux colonnes**, chacun avec une **icône d'application**
+  agents **sur deux colonnes**, chacun avec une **icône d'application**
   plutôt qu'un pictogramme : une image est plus facile à distinguer qu'un trait,
   et surtout plus facile à produire deux cents fois.
 - Chaque fiche porte sa **version**, ses **données d'entrée**, ce qu'il fait, ses
   **données de sortie**.
 
-**Ce que cela débloque.** Un utilitaire ouvert occupe **toute la largeur** : il
+**Ce que cela débloque.** Un agent ouvert occupe **toute la largeur** : il
 peut avoir sa propre barre latérale, ses propres onglets, sa propre mise en
 page. C'est la raison principale de cette étape.
 
@@ -99,7 +99,7 @@ chemin pour un geste que l'application a déjà (règle 4).
 
 ## Étape 3 — L'extraction devient visible *(commencée)*
 
-L'utilitaire **Lecture des comptes rendus** est dans l'Atelier, rayon
+L'agent **Lecture des comptes rendus** est dans l'Atelier, rayon
 Développements. On y dépose un PDF, et l'écran reconstruit ce que le modèle a
 compris : l'identité du document, ses rubriques, chaque point avec **la phrase
 d'où il sort** et si cette phrase se retrouve mot pour mot dans le document.
@@ -191,7 +191,7 @@ chaque écran où l'IA intervient.
 
 ## Étape 7 — On reprend l'extraction des comptes rendus
 
-Comme **un utilitaire**, d'abord. Branché ensuite dans le dépôt de document.
+Comme **un agent**, d'abord. Branché ensuite dans le dépôt de document.
 Et cette fois le résultat se voit à l'écran avant de devenir quoi que ce soit.
 
 Ce qui reste à trancher sur le rapprochement d'un point d'une réunion à l'autre
@@ -207,5 +207,5 @@ invisible : on recommencerait à corriger à l'aveugle, et le prochain palier se
 jugerait encore au ressenti.
 
 **Ajouter le compteur d'IA avant l'Atelier.** Il se pose sur des écrans
-d'utilitaires qui vont tous être repris. Le poser deux fois serait le faire
+d'agents qui vont tous être repris. Le poser deux fois serait le faire
 diverger (règle 4).

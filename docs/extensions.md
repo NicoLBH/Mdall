@@ -28,7 +28,7 @@ c'est dangereux : on ouvre l'un en croyant l'autre.
 
 Et une huitième, qui ne devrait pas exister : **`.mdall`**. Elle marque ce dont
 personne n'a dit la nature. Un fichier `.mdall` qui se remplit est un signal :
-un utilitaire a oublié de se prononcer.
+un agent a oublié de se prononcer.
 
 ### Un suffixe réservé, et rien ne l'écrit encore
 
@@ -374,7 +374,7 @@ des champs de plus dans l'accolade, pas une grammaire de plus.
 ## Ce qui écrit ces fichiers
 
 Personne, directement. **Rien n'entre jamais directement dans la mémoire du
-projet** — voir [`fondamentaux.md`](fondamentaux.md), règle 1. Un utilitaire de
+projet** — voir [`fondamentaux.md`](fondamentaux.md), règle 1. Un agent de
 l'Atelier prépare une proposition ; quelqu'un la relit, arbitre ce qui contredit
 ce que le projet a déjà décidé, et signe. C'est la signature qui écrit.
 

@@ -133,7 +133,7 @@ changent tout ce qu'on comprend de l'outil. Ils passent donc en premier.
 **On finit une démonstration avant d'en commencer une autre.** La cascade
 `localisation → altitude → hors gel → fondations` **et** `localisation → zone
 sismique → spectre` est le meilleur argument que le produit possède. Elle demande
-trois choses — la localisation versée, les utilitaires climatiques aux
+trois choses — la localisation versée, les agents climatiques aux
 standards, l'écran qui dessine un arbre plutôt qu'une file — et rien d'autre. On
 les fait à la suite, on la montre, et on s'en sert pour juger le reste.
 
@@ -172,16 +172,16 @@ du site » écrit encore directement ([§ 24](#24-verser-les-contraintes-du-site
 
 ---
 
-## 1. Les utilitaires nommeront leurs sources — *fait*
+## 1. Les agents nommeront leurs sources — *fait*
 
-**État :** fait, pour les outils climatiques · **Reste :** les utilitaires qui
+**État :** fait, pour les outils climatiques · **Reste :** les agents qui
 lisent une API ou un document, et les entrées que la mémoire ne porte pas.
 
 ### Le problème, tel qu'il était
 
 Une règle Mdall dit ce qu'elle lit : ses conditions portent des sujets, et depuis
 l'étape 1 chaque lecture est enregistrée avec l'affirmation qu'elle désignait. Un
-**utilitaire**, non.
+**agent**, non.
 
 `deduction_profondeur_hors_gel_altitude_V1` lit un *fait de contexte* —
 `fact_value.inputs.altitude` — produit par `resolve-climate-tool` au serveur. La
@@ -189,12 +189,12 @@ contrainte qui en sortait gardait l'altitude **comme un nombre**, et rien dans c
 nombre ne disait qu'il venait de la donnée de base que le projet a versée.
 
 Trois conséquences, et elles gangrenaient le reste : une donnée employée
-uniquement par un utilitaire comptait « aucun emploi » ; l'étude d'impact disait
+uniquement par un agent comptait « aucun emploi » ; l'étude d'impact disait
 « rien ne repose sur l'altitude » à un projet dont la moitié des fondations en
 dépendait ; et une altitude corrigée laissait la cote hors gel derrière elle, sans
 un mot.
 
-### Ce qui a été fait : l'utilitaire déclare ce qu'il lit
+### Ce qui a été fait : l'agent déclare ce qu'il lit
 
 Une correction à ce qui était écrit ici. On proposait que le producteur écrive
 `sources: { altitude: "<assertion_id>" }` à côté du nombre. **Ce n'était pas
@@ -204,7 +204,7 @@ donnée de base « Altitude du site » est versée *après lui*, depuis le même
 résultat. Il n'a aucun identifiant à citer, et l'appelant n'en a pas non plus au
 moment où il appelle.
 
-Ce qui est faisable, et qui est fait : **l'utilitaire déclare ses entrées par
+Ce qui est faisable, et qui est fait : **l'agent déclare ses entrées par
 sujet**, dans son propre fichier et sous sa version.
 
 ```js
@@ -218,7 +218,7 @@ Ce n'est pas un rapprochement de noms fait après coup — c'est exactement ce q
 fait une règle `.ref` quand elle écrit `sujet: "Profondeur hors gel"` dans une
 condition. Elle ne cite pas d'identifiant non plus : elle **nomme un sujet**, et
 le versement le résout une fois pour toutes, dans la zone, avec son rang. Les
-lectures d'un utilitaire empruntent le même chemin et la même table.
+lectures d'un agent empruntent le même chemin et la même table.
 
 À partir de là, tout est retombé dans le chemin commun sans que rien d'autre
 change : l'index dans les deux sens, l'étude d'impact, le plan de recalcul et la
@@ -232,12 +232,12 @@ ne recalcule pas — la table est au serveur — mais on dit que la valeur affic
 vaut plus. C'était le défaut le plus dangereux : une valeur d'apparence normale
 dont l'entrée a bougé sous elle.
 
-### Ce qui a été fait ensuite : les utilitaires se rejouent
+### Ce qui a été fait ensuite : les agents se rejouent
 
-Le carnet disait ici que rejouer un utilitaire était « un chantier serveur », et
+Le carnet disait ici que rejouer un agent était « un chantier serveur », et
 que deux lois resteraient en dur dans le navigateur en attendant. **C'était une
 mauvaise réponse**, et elle vidait la variante de son intérêt : sur un projet dont
-le raisonnement passe surtout par des utilitaires, essayer une altitude ne rendait
+le raisonnement passe surtout par des agents, essayer une altitude ne rendait
 que des noms « à revérifier », et il fallait recalculer à la main ce que l'outil
 existe pour calculer.
 
@@ -249,28 +249,28 @@ les deux copies divergent.
 
 `resolve-climate-tool` accepte donc `dry_run`. Même table, même version, même loi ;
 rien n'entre nulle part. Il rend en plus le **fait de contexte** qu'il aurait écrit,
-si bien que l'utilitaire le relit avec sa propre fonction `deduire` — la même qu'au
+si bien que l'agent le relit avec sa propre fonction `deduire` — la même qu'au
 versement. Une variante et un versement ne peuvent donc pas dire deux choses
 différentes de la même situation.
 
-Chaque utilitaire déclare comment se rejouer : `rejeu: { outil: "frost" }`, et sur
+Chaque agent déclare comment se rejouer : `rejeu: { outil: "frost" }`, et sur
 chaque entrée le champ de l'appel par lequel elle passe. Une entrée sans champ se
 lit sans se faire varier — H0 en est une : le serveur le choisit dans sa table
 départementale, et le lui imposer lui ferait dire autre chose que le DTU. La
 variante le **dit** au lieu de rendre un chiffre.
 
-`variante-utilitaires.js`, avec sa table `RELECTURES` et ses deux lois recopiées,
+`variante-agents.js`, avec sa table `RELECTURES` et ses deux lois recopiées,
 n'existe plus.
 
 ### Ce qui reste, et qui est vraiment serveur
 
-**Les autres utilitaires.** Seuls les trois outils climatiques ont un mode « calcule
+**Les autres agents.** Seuls les trois outils climatiques ont un mode « calcule
 sans écrire ». Le zonage sismique et le retrait-gonflement lisent Géorisques, et
 l'extraction d'avis lit des documents : ni l'un ni l'autre ne se rejoue avec une
 valeur du projet. Ils se disent « à revérifier », avec leur nom.
 
 **Nommer les entrées que la mémoire ne porte pas.** Le département, le canton, les
-coordonnées : un utilitaire les lit et le projet ne les verse pas comme sujets. On
+coordonnées : un agent les lit et le projet ne les verse pas comme sujets. On
 ne les déclare donc pas — déclarer un sujet que rien ne verse ferait un lien vers
 rien. Le jour où le projet posera son adresse comme une donnée de base, ces
 lectures-là se déclareront comme les autres, et se feront varier comme les autres.
@@ -282,11 +282,11 @@ contraintes ont été versées autrement — n'a rien à redemander, et le dit.
 ### Ce qu'il ne faut pas faire en attendant
 
 **Rapprocher `inputs.altitude` d'une donnée de base par le nom.** « altitude »
-n'est pas « Altitude du site ». Ce qui a été fait est l'inverse : l'utilitaire
+n'est pas « Altitude du site ». Ce qui a été fait est l'inverse : l'agent
 **dit** le sujet, et c'est un sujet du projet, pas un nom de champ.
 
 **Recopier une loi de calcul dans le navigateur.** C'est ce qu'on vient de
-supprimer. Un utilitaire qu'on ne sait pas rejouer se **nomme** ; il ne se
+supprimer. Un agent qu'on ne sait pas rejouer se **nomme** ; il ne se
 réimplémente pas, fût-ce « juste pour ce cas-là ».
 
 **Laisser passer une valeur qu'un champ ne sait pas lire.** L'appel attend un
@@ -310,7 +310,7 @@ qu'aucun écran ne la porte.
 
 **État :** en attente d'une décision du produit.
 
-L'utilitaire fondations ne remplit plus le diff d'une proposition. C'est
+L'agent fondations ne remplit plus le diff d'une proposition. C'est
 volontaire — décidé en cours de route —, et cette ligne existe pour qu'on ne le
 redécouvre pas comme un bug.
 
@@ -579,7 +579,7 @@ projet pose, suppose ou constate. Plus un projet porte de données, plus son noy
 est peuplé et chaud. Le secteur mémoire existe donc — c'est le cœur, et il n'y a
 rien à construire pour cela.
 
-**Les capteurs, ce sont les utilitaires.** Les nœuds opaques lisent le monde
+**Les capteurs, ce sont les agents.** Les nœuds opaques lisent le monde
 extérieur : une table climatique départementale, Géorisques, un PDF extrait. C'est
 exactement un organe sensoriel — il rapporte une mesure dont on ne peut pas
 refaire le chemin de l'intérieur. La correspondance est juste, et déjà à l'écran :
@@ -852,7 +852,7 @@ n'invitait à faire tant qu'il n'y avait pas de quoi se déplacer ensuite.
 
 ## 10. La reprise d'étude — faite, et ce qu'elle ne fait pas encore
 
-L'utilitaire de fondations est une **fonction native du langage**
+L'agent de fondations est une **fonction native du langage**
 (`docs/fondamentaux.md`, règle 9), et la chaîne
 `altitude → profondeur hors gel → résultat du calcul` se **refait** maintenant
 toute seule : `fondations-reprise.js` relit le tableau d'entrée que le projet
@@ -895,7 +895,7 @@ memoire/structure.ctr    Profondeur hors gel = [ Toutes zones: 0.466 m {…}, ba
 ```
 
 L'une est du socle — posée à la main, donc substituable —, l'autre est déduite
-par l'utilitaire climat. Chacune a ses héritiers, et le calcul lit celle que la
+par l'agent climat. Chacune a ses héritiers, et le calcul lit celle que la
 résolution choisit. Changer l'une ne touche pas l'autre : d'où deux résultats
 pour ce qui ressemble au même geste.
 
@@ -906,7 +906,7 @@ rouge, avec l'autre fichier. Les temps 2 et 3 — le registre qui fait autorité
 et le versement qui ouvre un conflit plutôt qu'une seconde ligne — restent à
 écrire.
 
-**Corrigé au passage.** Un utilitaire écrivait ses mesures avec un point —
+**Corrigé au passage.** Un agent écrivait ses mesures avec un point —
 `2.59 m` — quand tout le reste de la mémoire écrit `2,59 m`. La même valeur
 s'écrivait de deux façons selon qui l'avait posée, et deux écritures ne se
 comparent pas.
@@ -916,7 +916,7 @@ comparent pas.
 ## 12. Ce qui reste sur les agents et la recherche
 
 - **`agent-IA` n'a pas d'appelant.** Le verbe existe, se lit, s'écrit et se
-  colore ; aucun utilitaire ne l'emploie encore. Le jour où l'un le fera, ce qu'il
+  colore ; aucun agent ne l'emploie encore. Le jour où l'un le fera, ce qu'il
   a rendu devra se conserver ligne à ligne — un `agent-IA` ne se rejoue pas pour
   vérifier.
 - **L'orchestration n'existe pas.** Deux agents dans une même fonction, en
@@ -924,7 +924,7 @@ comparent pas.
   moteur ne le fait pas.
 - **Le marché de fonctions** suppose deux choses qui manquent : une signature
   qu'on puisse vérifier avant d'exécuter, et une façon de dire d'où une fonction
-  vient. Le second point est déjà à moitié là — `utilitaire` et `version` sont
+  vient. Le second point est déjà à moitié là — `agent` et `version` sont
   écrits sur chaque appel.
 - **La recherche ne cherche que ce que l'écran montre.** Un fichier replié, une
   ligne écartée : ni l'un ni l'autre n'est parcouru. C'est cohérent — on cherche
@@ -933,9 +933,9 @@ comparent pas.
 
 ---
 
-## 13. Retirer ce qu'une ancienne version d'utilitaire a versé
+## 13. Retirer ce qu'une ancienne version d'agent a versé
 
-Une version de l'utilitaire fondations versait quatre-vingts cotes une par une —
+Une version de l'agent fondations versait quatre-vingts cotes une par une —
 `Section Lx de la semelle Portique courant file A`, et ainsi de suite. La suivante
 range tout dans un seul tableau, `Résultat du calcul des fondations
 superficielles`. Les quatre-vingts noms restent en mémoire : plus rien ne les
@@ -949,7 +949,7 @@ faire sans effacer, ce qu'on refuse.
 Ce qu'il faudrait : qu'un versement déclare ce qu'il remplace **par son origine**
 plutôt que ligne à ligne — « `dimensionnement_fondations_superficielles` V2
 remplace tout ce que V1 a versé sur ces zones ». Chaque ligne porte déjà
-l'utilitaire et la version qui l'ont produite ; l'information est là, il manque
+l'agent et la version qui l'ont produite ; l'information est là, il manque
 le verbe et l'écran qui le montre.
 
 Deux précautions le jour où on l'écrira :
@@ -961,11 +961,11 @@ Deux précautions le jour où on l'écrira :
   il se refuse.
 
 **Livré depuis.** Le mécanisme existe : `memoire-perimetre.js`. Une version
-d'utilitaire qui reprend le travail d'une précédente, et une zone retirée du
+d'agent qui reprend le travail d'une précédente, et une zone retirée du
 projet, sortent leurs lignes du présent — au pied du fichier, avec leur motif.
 
 **Le retrait délibéré est abandonné.** Un verbe pour retirer une ligne « parce
-qu'on le veut », sans qu'un utilitaire ni une zone ne l'y oblige, a été écarté :
+qu'on le veut », sans qu'un agent ni une zone ne l'y oblige, a été écarté :
 il n'y a pas de geste sans motif dans ce projet, et un motif qui n'est ni une
 version reprise ni une zone partie n'a pas été trouvé. Ce qui sort du présent en
 sort parce que quelque chose de nommable l'en a sorti.
@@ -974,7 +974,7 @@ Ce qui reste :
 
 - **le versement qui déclare ce qu'il remplace.** Aujourd'hui la reprise se
   **déduit** des numéros de version. C'est juste, et c'est fragile : un
-  utilitaire qui changerait de lignée en changeant de nom ne reprendrait rien.
+  agent qui changerait de lignée en changeant de nom ne reprendrait rien.
   Le dire explicitement vaudrait mieux que de le calculer.
 
 ---
@@ -1004,8 +1004,8 @@ Il est net, il se vérifie sans discuter, et il donne la réponse d'avance pour 
 ### Ce que ça donne
 
 L'Atelier, de haut en bas — les trois explorations sont **au-dessus** des
-utilitaires parce qu'elles les englobent : elles portent sur tout le projet,
-alors qu'un utilitaire porte sur un sujet.
+agents parce qu'elles les englobent : elles portent sur tout le projet,
+alors qu'un agent porte sur un sujet.
 
 ```
 Copilote
@@ -1658,7 +1658,7 @@ Trois conséquences, et la troisième est la pire :
 - **Le geste de mémoire est explicite.** Un bouton « Proposer à la mémoire » sur
   l'écran de localisation, distinct de l'enregistrement. L'enregistrement range
   l'adresse dans la fiche du projet — c'est lui qui dessine la carte et
-  pré-remplit les utilitaires ; la proposition, elle, se relit avant d'être
+  pré-remplit les agents ; la proposition, elle, se relit avant d'être
   signée. Une proposition qui s'ouvrirait à chaque frappe ne se relirait jamais.
 - **Définir, renommer, retirer une zone** ouvrent une proposition
   (`services/zones-versement.js`). Renommer en définit une autre **et** retire la
@@ -1679,7 +1679,7 @@ Trois conséquences, et la troisième est la pire :
 
 - **L'adresse vit encore à deux endroits** : dans la mémoire, désormais, et dans
   la table `project_location` que l'écran édite. La seconde est le formulaire —
-  ce qui dessine la carte et pré-remplit les utilitaires —, la première est la
+  ce qui dessine la carte et pré-remplit les agents —, la première est la
   référence du raisonnement. Les réunir demande que tout ce qui lit
   `getEffectiveProjectLocation` lise la mémoire ; c'est un travail à part.
 - **« Verser les contraintes du site »** écrit encore directement — c'est le
@@ -1696,7 +1696,7 @@ valait que pour elle quitte le présent, avec son motif.
 
 **État :** fait, spectre compris.
 
-L'utilitaire « Neige, Vent & Gel » était antérieur aux standards actuels —
+L'agent « Neige, Vent & Gel » était antérieur aux standards actuels —
 entrées déclarées, sorties déclarées, appel à un agent-D, rejeu. Il est découpé
 en **deux agents**, et pas trois :
 
@@ -1711,7 +1711,7 @@ communales à chaque mètre essayé, pour rien.
 
 Le serveur, lui, garde ses **trois** clés — `snow`, `wind`, `frost` — et c'est
 juste : les zonages neige et vent ne sont pas révisés ensemble, chacun a son
-fichier et sa version. Un **agent** est un appel ; un **utilitaire** est la
+fichier et sa version. Un **agent** est un appel ; un **agent** est la
 lecture d'un des sujets que cet appel pose. Les confondre revenait soit à perdre
 l'appel — c'est ce qui se passait —, soit à ne plus pouvoir monter la version
 d'un seul zonage.
@@ -1729,15 +1729,15 @@ raisonnement.
 - **Rien ne se rejouait.** La reprise ne reconnaissait qu'un `kind` — celui du
   versement automatique depuis les faits de contexte — et laissait de côté tout
   ce qui entre par une **proposition**, c'est-à-dire le chemin normal. Une zone
-  de neige signée citait pourtant son utilitaire, sa version et ce qu'elle avait
+  de neige signée citait pourtant son agent, sa version et ce qu'elle avait
   lu : tout était là, et rien ne la reprenait. Ce qui décide est désormais ce
-  dont on a besoin pour refaire — l'utilitaire cité, et ce qu'il sait faire.
+  dont on a besoin pour refaire — l'agent cité, et ce qu'il sait faire.
 
 ### Ce que l'étape a posé
 
-- `utilitaires/agents-climatiques.js` — les deux agents, leurs entrées, leurs
+- `agents/agents-climatiques.js` — les deux agents, leurs entrées, leurs
   sorties. Une sortie qui renvoie à un outil (`{ outil: "snow" }`) prend le sujet
-  de l'utilitaire qui la déduit ; celles qu'aucun utilitaire ne déduit — le H0 de
+  de l'agent qui la déduit ; celles qu'aucun agent ne déduit — le H0 de
   la table départementale — se déclarent en entier. **Chaque sortie déclare aussi
   la clé du résultat où elle se lit** : `frost_depth_m` n'est pas `frost_depth`,
   et deviner l'une depuis l'autre lisait un champ absent sans le dire.
@@ -1796,12 +1796,12 @@ restent au serveur ». Trois raisons :
 2. **L'écran la trace.** La courbe se redessine à chaque frappe sur
    l'amortissement — un aller-retour réseau par pixel serait absurde. C'est
    d'ailleurs pourquoi le module figure déjà dans les `PUBLICS` de
-   `scripts/prepare-utilitaires.mjs`.
+   `scripts/prepare-agents.mjs`.
 3. **Le rejeu n'a donc pas de réseau à attendre.** Une variante de zone sismique
    recalcule le spectre sur place, immédiatement.
 
 Il n'y a **qu'un fichier** —
-`supabase/functions/_shared/utilitaires/seismic-spectrum.js` —, copié au
+`supabase/functions/_shared/agents/seismic-spectrum.js` —, copié au
 navigateur au moment du build : deux exécutions, aucune divergence possible. Si
 la décision devait s'inverser, elle ne coûterait qu'un déplacement de l'appel :
 la déclaration de l'agent ne changerait pas d'une ligne.
@@ -1812,7 +1812,7 @@ Un agent peut désormais **déclarer sa propre reprise** (`rejeu: { outil }`), e
 les deux cas se distinguent nettement :
 
 - les agents climatiques n'en déclarent pas — chacune de leurs sorties cite
-  l'utilitaire qui la déduit, et c'est cette ligne-là que la variante refait ;
+  l'agent qui la déduit, et c'est cette ligne-là que la variante refait ;
 - le spectre en déclare une — sa ligne ne cite que lui, et sans cette
   déclaration une variante de zone l'aurait laissée derrière elle.
 
@@ -1832,14 +1832,14 @@ Localisation du projet
  └── Zone sismique ─► Spectre
 ```
 
-Une seule valeur changée, deux chaînes qui partent, quatre utilitaires rejoués.
+Une seule valeur changée, deux chaînes qui partent, quatre agents rejoués.
 C'est la démonstration que le produit existe.
 
 **Ce qui manquait était petit et précis :** l'enchaînement livré était une
 **file**, et il fallait un **arbre**. Le composant savait dessiner une suite de
 boîtes reliées ; il lui manquait le **rang** de propagation, pas seulement
 l'ordre du rejeu. Les arêtes existaient déjà (`lecturesDeLaRegle`,
-`sortiesDeLaFonction`, le `lit` de chaque utilitaire) ; il ne manquait que le
+`sortiesDeLaFonction`, le `lit` de chaque agent) ; il ne manquait que le
 trait qui fourche.
 
 ### Ce que l'étape a posé
@@ -1876,8 +1876,8 @@ Au tronc, et venant en dernier, ils se lisent comme ce qu'ils sont : ce en quoi
 l'ensemble des branches se rejoint.
 
 **La localisation est devenue la tête de la cascade.** L'étape 4 en avait fait un
-sujet de la mémoire ; il fallait encore que les utilitaires déclarent la lire. Les
-trois utilitaires climatiques le déclarent maintenant — celui du vent ne déclarait
+sujet de la mémoire ; il fallait encore que les agents déclarent la lire. Les
+trois agents climatiques le déclarent maintenant — celui du vent ne déclarait
 **rien du tout** —, et changer la commune fait donc partir trois branches à la
 fois, dont l'une continue jusqu'aux fondations.
 
@@ -1894,13 +1894,13 @@ pas savoir rejouer n'autorise pas à prétendre que rien ne dépend de la commun
 **La branche sismique ne se rejoue pas.** Le spectre a bien son agent et sa
 reprise ([§ 20](#20-neige-vent-et-gel-aux-standards-puis-le-spectre)), mais entre
 la commune et lui la zone de sismicité ne se recalcule pas : sa valeur vient de
-Géorisques, et `contraintesAReprendre` ne sait reprendre qu'un utilitaire portant
+Géorisques, et `contraintesAReprendre` ne sait reprendre qu'un agent portant
 un `rejeu.outil`. Généraliser cela est un travail distinct — c'est aussi la
 deuxième question de [§ 24](#24-verser-les-contraintes-du-site) —, et l'étape s'en
 tient à le **dire** : la zone de sismicité se range à revérifier, avec sa raison,
 au lieu de disparaître.
 
-**Le titre d'une étape reste la référence de l'utilitaire**
+**Le titre d'une étape reste la référence de l'agent**
 (`deduction_zone_neige_commune_V1`). C'est délibéré ici — le libellé répéterait ce
 que la ligne « écrit » dit déjà juste en dessous —, mais cela mérite d'être
 retranché le jour où le schéma s'élargit.
@@ -1993,7 +1993,7 @@ c'est un travail distinct.
 
 ## 23. Incendie habitation, finir
 
-Reprendre l'utilitaire pour régler les détails et compléter les manques. Sans
+Reprendre l'agent pour régler les détails et compléter les manques. Sans
 dépendance avec le reste du plan : il se glisse entre deux étapes.
 
 À faire d'abord, quand on l'ouvrira : lister ce qui manque, précisément, plutôt
@@ -2164,7 +2164,7 @@ code INSEE.
 
 C'est réparé : la colonne visée voyage avec la substitution, les trois
 déductions reprennent la déclaration partagée, et varier une colonne qu'un
-utilitaire ne lit pas rend un refus nommé — « cet utilitaire lit bien ce sujet,
+agent ne lit pas rend un refus nommé — « cet agent lit bien ce sujet,
 mais par une autre de ses colonnes » — au lieu d'un appel voué à échouer.
 
 ### Ce qui reste, et qu'il faut trancher
@@ -2477,7 +2477,7 @@ de son mode d'emploi : on tire le marqueur, et le calcul suit.
 
 Changer l'adresse du projet, et **rien ne se recalculait**. L'écran de variante
 rangeait les sept lignes de la chaîne climatique dans « à revérifier », toutes
-avec le même motif : « cet utilitaire lit bien ce sujet, mais par une autre de
+avec le même motif : « cet agent lit bien ce sujet, mais par une autre de
 ses colonnes ». Un refus qui dit vrai sur ce qu'on lui montre, et faux sur ce
 qu'on vient de faire — on venait précisément de changer de commune.
 
@@ -2499,12 +2499,12 @@ Ils voyaient une variation sur l'adresse, la refusaient — à juste titre, c'es
 le garde-fou du tour précédent —, et la chaîne s'arrêtait avant son premier
 maillon.
 
-Le sujet porte maintenant **toutes** ses colonnes variées, et chaque utilitaire
+Le sujet porte maintenant **toutes** ses colonnes variées, et chaque agent
 y prend celle qu'il déclare lire. À défaut, une substitution qui ne nomme pas de
 colonne — c'est ainsi qu'on fait varier un sujet entier, et ce chemin existait
 avant les colonnes. Sinon rien, et le refus retrouve son sens.
 
-Les deux reprises — celle des utilitaires, celle des fonctions natives —
+Les deux reprises — celle des agents, celle des fonctions natives —
 construisaient cette table chacune de leur côté. Elles partagent désormais
 `sujetsSubstitues` : une valeur écrite à deux endroits finit par diverger
 (règle 4), et celle-ci avait déjà commencé.
@@ -2574,7 +2574,7 @@ cessant de verser le second, pas en le masquant.
 ### La zone de sismicité savait tout, sauf revenir
 
 Le spectre déclare lire la zone de sismicité depuis le premier jour, et sait se
-rejouer sans réseau. La zone, elle, répondait « cet utilitaire ne sait pas se
+rejouer sans réseau. La zone, elle, répondait « cet agent ne sait pas se
 rejouer : son calcul reste au serveur ». Vrai, et inutile : la chaîne
 **localisation → zone → spectre** s'arrêtait sur son premier maillon, alors que
 c'est elle qui porte la démonstration entière — déplacer un projet change tout
@@ -2584,7 +2584,7 @@ Il manquait trois choses :
 
 | ce qui manquait | ce qui a été fait |
 | --- | --- |
-| personne ne déclarait ces deux aléas | `utilitaires/agent-risques-naturels.js`, l'agent-D RNT |
+| personne ne déclarait ces deux aléas | `agents/agent-risques-naturels.js`, l'agent-D RNT |
 | le rejeu ne savait parler qu'à l'outil climatique | un registre de services, `climat` par défaut, `georisques` en second |
 | l'aléa argileux ne déclarait **rien** | il lit le point du projet, et le dit |
 
@@ -2643,7 +2643,7 @@ parcours d'écran :
 
 ### Où il s'exécute, et pourquoi ce n'est pas au serveur
 
-C'est **la seule exception** à « les utilitaires s'exécutent au serveur », et elle
+C'est **la seule exception** à « les agents s'exécutent au serveur », et elle
 se défend en une phrase : le moteur de variante *est déjà* dans la page — c'est
 l'écran que n'importe qui ouvre depuis l'Atelier. Le porter au serveur en ferait
 une seconde implémentation du même raisonnement, et deux réponses à une même
@@ -2652,7 +2652,7 @@ question finissent par diverger (règle 4).
 Ce qui reste au serveur est ce qui devait y rester : **la déclaration** de
 l'outil et les consignes qui règlent quand le modèle l'appelle. Le navigateur
 n'apprend même pas son nom — le serveur marque l'appel `ou: "navigateur"`, et la
-boucle route dessus. Le garde-fou de `scripts/prepare-utilitaires.mjs` continue
+boucle route dessus. Le garde-fou de `scripts/prepare-agents.mjs` continue
 de refuser que `variante-outil.js` descende dans la page.
 
 ### Une recherche qui lit une phrase
@@ -3497,9 +3497,9 @@ couleur que Mdall emploie déjà pour « pas encore tranché ». Ailleurs — le
 copilote — il garde la couleur du texte : là, l'attente est la seule chose qui
 se passe, et la souligner ne dirait rien de plus.
 
-## 42. Un utilitaire qui fabrique un compte rendu
+## 42. Un agent qui fabrique un compte rendu
 
-L'utilitaire de lecture sait défaire un compte rendu. Il manque celui qui en
+L'agent de lecture sait défaire un compte rendu. Il manque celui qui en
 fabrique un : on filtre les sujets — par lot, par label, par échéance — on coche
 ce qu'on garde, et l'écran rend un `.md` et un PDF téléchargeable.
 
@@ -3514,7 +3514,7 @@ qu'une lecture apporte, fabriquer le document inverse n'aurait rien à lire.
 ### La rédaction de la proposition, qui manque encore
 
 Le bouton « Transformer » est en place sur l'écran de lecture, à côté des trois
-autres utilitaires. Ce qu'il ne fait pas encore, c'est écrire la proposition :
+autres agents. Ce qu'il ne fait pas encore, c'est écrire la proposition :
 les sujets à ouvrir, ceux qu'un point relance, les lots manquants, les labels à
 créer, les objectifs — **et le rangement du fichier `.md` dans Fichiers**, qui
 attend désormais la fusion.

@@ -260,7 +260,7 @@ export async function testerUneVariante({
  *
  * ## Ce qui doit survivre au résumé
  *
- * Les valeurs, l'avant et l'après, l'utilitaire qui l'a refait — sans quoi la
+ * Les valeurs, l'avant et l'après, l'agent qui l'a refait — sans quoi la
  * réponse n'est pas vérifiable — et **ce qui n'a pas pu se recalculer, avec sa
  * raison**. Taire les refus ferait passer une variante partielle pour une
  * variante complète, ce qui est la seule façon de rendre ce module dangereux.

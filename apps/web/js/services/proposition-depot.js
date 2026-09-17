@@ -25,7 +25,7 @@
  * - tout livrable qu'il apporte a été **lu** — un fichier que le stockage n'a
  *   pas rendu laisse l'analyse aveugle sur une partie du lot ;
  * - toute affirmation qu'il porte dit **d'où elle vient** — un texte et son
- *   article, ou l'utilitaire qui l'a calculée.
+ *   article, ou l'agent qui l'a calculée.
  *
  * Sinon il n'est pas vérifié, et l'on dit ce qui manque. Écrire « Vérifié »
  * partout ferait de la pastille une décoration, et une décoration qu'on

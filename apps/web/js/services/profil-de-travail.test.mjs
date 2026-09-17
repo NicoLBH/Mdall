@@ -10,7 +10,7 @@
  * dément.
  *
  * La consigne doit donc être **dans le texte envoyé**, pas dans la retenue du
- * modèle. C'est la leçon du catalogue des utilitaires : une consigne absente se
+ * modèle. C'est la leçon du catalogue des agents : une consigne absente se
  * remplace par une invention plausible.
  */
 
@@ -66,7 +66,7 @@ test("le profil dit ce qu'on y fait", () => {
   const { texte } = profil();
 
   assert.match(texte, /discussions avec le Copilote/);
-  assert.match(texte, /études d'utilitaire/);
+  assert.match(texte, /études d'agent/);
   assert.match(texte, /propositions déposées/);
 });
 

@@ -40,7 +40,7 @@ export function gestesDAjout({ total = 0, busy = false } = {}) {
   const rienASortir = total === 0 || busy;
 
   return [
-    { action: "declarer", label: "Déclarer une variable", disabled: busy },
+    { action: "declarer", label: "Déclarer une hypothèse", disabled: busy },
     { separator: true },
     { action: "verser:site", label: "Verser les contraintes du site", disabled: busy },
     { separator: true },

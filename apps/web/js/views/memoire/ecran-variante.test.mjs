@@ -149,12 +149,12 @@ const avecStructure = (rendu, structure) => {
   rendu.recalculees[0].assertion.payload.structure = structure;
   // La déclaration se cherche **par le sujet** : pour éprouver une structure
   // donnée, la ligne ne doit porter aucun sujet que le catalogue déclare.
-  rendu.recalculees[0].sujet = "Résultat d'un utilitaire d'essai";
+  rendu.recalculees[0].sujet = "Résultat d'un agent d'essai";
   rendu.recalculees[0].utilitaire = "utilitaire_d_essai_V1";
   return rendu;
 };
 
-test("la couleur d'un verdict vient de ce que l'utilitaire a déclaré", () => {
+test("la couleur d'un verdict vient de ce que l'agent a déclaré", () => {
   // « 12 vérifiées → 12 en défaut » s'écrivait en vert. Aucun écran ne peut le
   // savoir sans qu'on le lui dise, et le lui apprendre par un dictionnaire de
   // mots français serait une machine à deviner.

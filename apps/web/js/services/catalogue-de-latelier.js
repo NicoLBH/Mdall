@@ -39,7 +39,7 @@
  *
  * ## Ce qui n'est pas ici
  *
- * **Comment l'utilitaire s'exécute.** L'orchestration — quels utilitaires
+ * **Comment l'agent s'exécute.** L'orchestration — quels utilitaires
  * existent côté serveur, quand les appeler, comment ils s'enchaînent — vit sous
  * `supabase/functions/_shared/utilitaires/` et n'est pas lisible dans le
  * navigateur. Ce catalogue ne décrit que ce qui s'affiche.
@@ -312,7 +312,7 @@ export function utilitaireParCible(cible) {
  * Ce qui se cherche dans une entrée.
  *
  * **Le nom ne suffit pas** : on cherche « altitude » sans savoir que
- * l'utilitaire s'appelle « Neige, Vent & Gel ». Tout ce qui décrit l'entrée
+ * l'agent s'appelle « Neige, Vent & Gel ». Tout ce qui décrit l'entrée
  * entre donc dans la recherche — le rayon, le résumé, les données d'entrée et
  * de sortie, les mots posés exprès.
  */

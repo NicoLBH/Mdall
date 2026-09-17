@@ -1015,9 +1015,12 @@ function dessinerBarreDeSemelle() {
 
   return `
     <div class="fondations-semelle-barre">
-      <button type="button" class="fondations-semelle-barre__retour" data-semelle-retour>
-        ${svgIcon("arrow-left", { className: "octicon" })} Tableau de l'étude
-      </button>
+      ${/*
+        **Le retour est monté sur la ligne du titre.** Il était ici, entre la
+        désignation, le nombre de massifs, le volume et les flèches : un chemin
+        de retour noyé dans les champs d'une semelle se cherche, alors que c'est
+        le seul geste de l'écran qui ne parle pas de la semelle ouverte.
+      */""}
       <label class="fondations-semelle-barre__nom">
         <span class="fondations-champ__libelle">Désignation</span>
         <input class="fondations-champ__saisie" type="text" data-semelle-designation
@@ -1052,7 +1055,19 @@ function dessiner(root) {
         <div class="settings-card__head studio-tool-card__head">
           <div>
             <span class="settings-card__head-title">
-              <h4>Fondations superficielles — calcul</h4>
+              ${/*
+                **D'où l'on vient, puis où l'on est.** Le retour au tableau de
+                l'étude se lit avant le titre, comme un fil d'Ariane : il désigne
+                ce qu'on quitte, pas ce qu'on regarde, et reste donc gris. Il ne
+                paraît que sur une semelle ouverte — sur le tableau lui-même, il
+                ne mènerait nulle part.
+              */""}
+              ${surLeTableau ? "" : `
+                <button type="button" class="fondations-retour-titre" data-semelle-retour>
+                  ${svgIcon("arrow-left", { className: "octicon" })} Tableau de l'étude
+                </button>
+                <span class="fondations-retour-titre__filet" aria-hidden="true"></span>`}
+              <h4>Fondations superficielles</h4>
               <div class="studio-tool-card__actions">
                 ${surLeTableau ? renderTransformer({
                   id: "fondationsTransformer",
@@ -1071,7 +1086,6 @@ function dessiner(root) {
           <p class="gh-text-muted">
             Fondation superficielle : glissement, basculement, contrainte de référence,
             surfaces comprimées et ferraillage de la semelle, sur 376 combinaisons d'actions.
-            Le calcul est fait par le serveur, jamais par ce navigateur.
           </p>
           ${surLeTableau ? dessinerSynthese() : ""}
           ${etat.libre ? `<p class="fondations-erreur">${escapeHtml(etat.etudeErreur)}</p>` : ""}

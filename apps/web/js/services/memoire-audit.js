@@ -104,7 +104,7 @@ function porteesDesRegles(assertions) {
   return [...zones];
 }
 
-/** Une contrainte déduite porte l'utilitaire qui l'a produite. */
+/** Une contrainte déduite porte l'agent qui l'a produite. */
 const estDeduite = (assertion) => texte(assertion?.payload?.utilitaire) !== "";
 
 /**

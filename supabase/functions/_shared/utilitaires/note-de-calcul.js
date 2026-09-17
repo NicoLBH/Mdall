@@ -37,7 +37,7 @@
  * W3 » sans lire le code.
  */
 
-/** Les cas de l'utilitaire fondations, et ce qu'ils veulent dire. */
+/** Les cas de l'agent fondations, et ce qu'ils veulent dire. */
 export const CAS_UTILITAIRE = {
   G: "Permanente",
   Q: "Exploitation",
@@ -122,7 +122,7 @@ export function casUtilitairePour(libelle, ventsDejaPris = 0) {
     if (!regle.motif.test(dit)) continue;
     if (regle.cas !== "vent") return { cas: regle.cas, dit: regle.dit };
     const place = VENTS[ventsDejaPris];
-    // Au-delà de quatre vents, l'utilitaire n'a plus de case. On le dit plutôt
+    // Au-delà de quatre vents, l'agent n'a plus de case. On le dit plutôt
     // que d'en écraser un : un cas de vent perdu ne se voit pas dans le
     // résultat, il s'y déguise en cas plus favorable.
     return place ? { cas: place, dit: regle.dit } : { cas: null, dit: regle.dit, deTrop: true };

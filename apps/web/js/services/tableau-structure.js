@@ -8,7 +8,7 @@
  * L'écran d'une variante doit dire si un verdict s'est dégradé, et de combien
  * une marge est dépassée. Il y a deux façons de le lui apprendre. La mauvaise :
  * un dictionnaire de mots — « en défaut », « KO », « non vérifié », « hors
- * domaine » — que quelqu'un enrichirait à chaque utilitaire ajouté, jusqu'à
+ * domaine » — que quelqu'un enrichirait à chaque agent ajouté, jusqu'à
  * devenir une machine à deviner le sens des mots français, mal, et sans jamais
  * pouvoir dire qu'elle ne sait pas. La bonne : **l'utilitaire le déclare**, une
  * fois, dans sa structure, et l'écran lit la déclaration.

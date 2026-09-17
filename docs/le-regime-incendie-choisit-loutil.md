@@ -2,7 +2,7 @@
 
 ## Le problème
 
-Le Copilote sait déjà appeler l'utilitaire « Incendie — Habitation ». Il le
+Le Copilote sait déjà appeler l'agent « Incendie — Habitation ». Il le
 choisit parce que sa description dit *bâtiment d'habitation* et que la question
 posée parle d'habitation. Cela tient tant qu'il n'y a **qu'un** outil incendie.
 
@@ -41,7 +41,7 @@ Le choix doit **se déduire d'une valeur du projet**. C'est tout le plan.
 
 ## Ce qui existe déjà, et qu'on ne refait pas
 
-- **Le catalogue** (`supabase/functions/_shared/utilitaires/catalogue.js`)
+- **Le catalogue** (`supabase/functions/_shared/agents/catalogue.js`)
   déclare chaque outil : ce qu'il tranche, ses entrées, ses sorties. La
   déclaration sert trois fois — décrire l'outil au modèle, construire le
   formulaire, vérifier les entrées.
@@ -219,7 +219,7 @@ Toutes exécutables, dans `catalogue.test.mjs` sauf mention :
 2. **Deux outils ne servent pas le même régime.** Sinon le filtre en rend deux
    et l'on retombe sur le tirage au sort.
 3. **Aucun identifiant d'outil n'est écrit dans l'orchestration.** On lit
-   `project-copilot/index.ts` et `executer-utilitaire/index.ts` et l'on vérifie
+   `project-copilot/index.ts` et `executer-agent/index.ts` et l'on vérifie
    qu'aucun `id` du catalogue n'y figure. C'est la garde qui empêche le
    raccourci de revenir.
 4. **Filtrée sur un régime, la liste offerte contient exactement un outil
@@ -250,7 +250,7 @@ portée est là aujourd'hui, pour toutes les valeurs par zone.
 
 ## Comment on saura que c'est fait
 
-Le jour où l'on ajoute l'utilitaire ERP : un fichier, une ligne
+Le jour où l'on ajoute l'agent ERP : un fichier, une ligne
 `regimeIncendie: "erp"`, et **aucune autre modification**. Un projet classé ERP
 voit le Copilote l'appeler sans qu'on ait rien dit ; un projet qui ne porte pas
 la variable s'entend demander laquelle, une fois, et ne l'entend plus jamais.

@@ -5,7 +5,7 @@
  *
  * Ce fichier écrivait, et rien d'autre : `mémoire → texte`, jamais l'inverse.
  * C'était prudent et c'est devenu faux. Un architecte doit pouvoir écrire une
- * ligne à la main et l'injecter ; un utilitaire de l'Atelier ne fait finalement
+ * ligne à la main et l'injecter ; un agent de l'Atelier ne fait finalement
  * rien d'autre qu'écrire du mdall. Les deux sens comptent :
  *
  * ```
@@ -480,7 +480,7 @@ export function estMesuree(valeur) {
  * conséquences qui n'en sont pas.
  *
  * On corrige donc **à l'écriture**, ici, et non chez chaque producteur : un
- * versement qui arriverait demain d'un utilitaire tiers, ou d'un utilisateur,
+ * versement qui arriverait demain d'un agent tiers, ou d'un utilisateur,
  * passe par le même chemin.
  *
  * ## Ce qu'on ne touche pas
@@ -1847,7 +1847,7 @@ export function nomARetenir(entree = "") {
  * ```
  * fonction Prédimensionnement des fondations superficielles(zones, Profondeur hors gel, Données d'entrée…) {
  *    // Dimensionne les massifs superficiels d'une zone. La loi de calcul
- *    // appartient à l'utilitaire — elle ne s'écrit pas ici.
+ *    // appartient à l'agent — elle ne s'écrit pas ici.
  *
  *    const Profondeur hors gel à retenir;
  *    si (Profondeur hors gel renseigné)

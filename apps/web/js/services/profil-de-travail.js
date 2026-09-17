@@ -42,7 +42,7 @@ const texte = (valeur) => String(valeur ?? "").trim();
 const VERBES = {
   [GENRE.DISCUSSION]: "des discussions avec le Copilote",
   [GENRE.PROPOSITION]: "des propositions déposées",
-  [GENRE.ETUDE]: "des études d'utilitaire"
+  [GENRE.ETUDE]: "des études d'agent"
 };
 
 /** Le jour d'une date, tel qu'on l'écrit dans une phrase. */

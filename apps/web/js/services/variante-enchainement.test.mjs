@@ -41,7 +41,7 @@ test("la chaîne part de ce qu'on essaie et suit l'ordre du rejeu", () => {
   assert.equal(etapes[0].detail, "13,22 m → 800 m");
 });
 
-test("une étape dit ce qu'elle lit, d'après ce que l'utilitaire a déclaré", () => {
+test("une étape dit ce qu'elle lit, d'après ce que l'agent a déclaré", () => {
   // Les entrées ne se devinent pas de la chaîne : elles viennent du `lit` de
   // l'utilitaire, et un utilitaire qui déclare mal se voit ici.
   const [, horsGel] = enchainementDeLaVariante(rendu({

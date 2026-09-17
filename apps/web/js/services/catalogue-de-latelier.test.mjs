@@ -12,7 +12,7 @@ import {
 
 /**
  * **On cherche rarement par le nom.** On a une altitude et on veut savoir quoi
- * en faire ; on ne sait pas que l'utilitaire s'appelle « Neige, Vent & Gel ».
+ * en faire ; on ne sait pas que l'agent s'appelle « Neige, Vent & Gel ».
  * Une recherche qui n'interrogerait que l'intitulé ferait conclure qu'il
  * n'existe pas.
  */
@@ -49,7 +49,7 @@ test("un mot cherché accroche un début de mot, pas son milieu", () => {
   assert.deepEqual(chercherDansLatelier("portance").map((u) => u.nom), ["Fondations superficielles"]);
 });
 
-test("les accents ne font pas rater un utilitaire", () => {
+test("les accents ne font pas rater un agent", () => {
   assert.equal(sansAccent("Séisme Élastique"), "seisme elastique");
   assert.deepEqual(chercherDansLatelier("seisme").map((u) => u.nom), ["Spectre"]);
 });
@@ -74,7 +74,7 @@ test("une recherche sans réponse rend une liste vide, pas tout le catalogue", (
  * Six au plus : au-delà, la rangée redevient une liste à parcourir et elle ne
  * met plus rien en avant — elle déplace le problème d'un cran.
  */
-test("on ne met pas en avant plus de six utilitaires", () => {
+test("on ne met pas en avant plus de six agents", () => {
   assert.equal(VEDETTES_AU_PLUS, 6);
   assert.ok(vedettesDeLatelier().length <= VEDETTES_AU_PLUS);
 });
@@ -130,7 +130,7 @@ test("« ajouté récemment » range du plus récent au plus ancien", () => {
  * Un utilitaire sans date passe **en dernier**, pas en premier : ne pas savoir
  * quand il est arrivé n'en fait pas une nouveauté (règle 5).
  */
-test("un utilitaire sans date d'ajout ne passe pas pour une nouveauté", () => {
+test("un agent sans date d'ajout ne passe pas pour une nouveauté", () => {
   const range = ajoutsRecents([
     { cible: "a", ajouteLe: "" },
     { cible: "b", ajouteLe: "2026-01-01" }
@@ -138,7 +138,7 @@ test("un utilitaire sans date d'ajout ne passe pas pour une nouveauté", () => {
   assert.deepEqual(range.map((u) => u.cible), ["b", "a"]);
 });
 
-test("chaque utilitaire dit quand il est entré à l'Atelier", () => {
+test("chaque agent dit quand il est entré à l'Atelier", () => {
   for (const utilitaire of UTILITAIRES) {
     assert.match(utilitaire.ajouteLe ?? "", /^\d{4}-\d{2}-\d{2}$/, utilitaire.nom);
   }
@@ -151,9 +151,9 @@ test("chaque utilitaire dit quand il est entré à l'Atelier", () => {
  * utilitaire inconnu, et la seule à laquelle son nom ne répond jamais. Une
  * entrée qui ne le dit pas laisse ouvrir pour voir.
  */
-test("chaque utilitaire dit ce qu'il prend, ce qu'il rend, et sa version", () => {
+test("chaque agent dit ce qu'il prend, ce qu'il rend, et sa version", () => {
   for (const utilitaire of UTILITAIRES) {
-    assert.ok(utilitaire.nom, "un utilitaire sans nom");
+    assert.ok(utilitaire.nom, "un agent sans nom");
     assert.ok(utilitaire.resume, `${utilitaire.nom} ne dit pas ce qu'il fait`);
     assert.ok(utilitaire.version, `${utilitaire.nom} n'a pas de version`);
     assert.ok(Array.isArray(utilitaire.entrees) && utilitaire.entrees.length > 0,
@@ -170,7 +170,7 @@ test("chaque utilitaire dit ce qu'il prend, ce qu'il rend, et sa version", () =>
  * supposé. Un utilitaire qui appelle un modèle sans dire comment s'en passer en
  * fait une boîte noire.
  */
-test("un utilitaire qui appelle un modèle dit comment s'en passer", () => {
+test("un agent qui appelle un modèle dit comment s'en passer", () => {
   for (const utilitaire of UTILITAIRES.filter((u) => u.intelligence === true)) {
     assert.ok(
       String(utilitaire.aussiALaMain ?? "").trim(),
@@ -183,7 +183,7 @@ test("un utilitaire qui appelle un modèle dit comment s'en passer", () => {
  * Deux utilitaires ne partagent pas une cible : le routeur de l'Atelier ouvre
  * par elle, et le second serait inatteignable — sans erreur, en silence.
  */
-test("chaque cible ne désigne qu'un utilitaire", () => {
+test("chaque cible ne désigne qu'un agent", () => {
   const cibles = UTILITAIRES.map((u) => u.cible);
   assert.equal(new Set(cibles).size, cibles.length);
   assert.equal(utilitaireParCible("studio-copilote")?.nom, "Copilote");
@@ -197,7 +197,7 @@ test("chaque cible ne désigne qu'un utilitaire", () => {
  * rien ne se passe, et rien ne le dit. C'est exactement le genre de silence qui
  * coûte des tours.
  */
-test("tout utilitaire du catalogue a un panneau dans l'Atelier", async () => {
+test("tout agent du catalogue a un panneau dans l'Atelier", async () => {
   const { readFileSync } = await import("node:fs");
   const { fileURLToPath } = await import("node:url");
   const atelier = readFileSync(

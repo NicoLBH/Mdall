@@ -337,7 +337,7 @@ export function itemsDeProposition(affirmations = []) {
           // quelle version, ce qu'il a lu et ce qu'il a rangé. Voir
           // `docs/fondamentaux.md`, règle 9.
           agent: agentRetenu(affirmation.agent ?? affirmation.native),
-          // La référence complète de l'utilitaire, version comprise, et ce qu'il
+          // La référence complète de l'agent, version comprise, et ce qu'il
           // a lu au moment de l'appel. C'est ce qui reconstruit les liens du
           // raisonnement, et ce qui dit six mois plus tard avec quelle version
           // ces cotes ont été trouvées.

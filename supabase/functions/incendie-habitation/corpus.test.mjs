@@ -155,7 +155,7 @@ test("le 5°) ne retranche un niveau que si ses trois conditions sont réunies",
   assert.notEqual(consulter(sansPorte).faits.classement, "2e famille");
 });
 
-test("le déclassement 3ᵉ B en 3ᵉ A est une décision du maire, jamais de l'utilitaire", () => {
+test("le déclassement 3ᵉ B en 3ᵉ A est une décision du maire, jamais de l'agent", () => {
   const cas = { logementsSuperposes: true, etagesSurRdc: 6, duplexOuTriplexAuDernierEtage: false,
     hauteurPlancherBasLogementLePlusHaut: 22, hauteurPlancherBasNiveauLePlusHaut: 22,
     distancePortePaliereEscalier: 14, accesEscaliersAtteintsParVoieEchelles: false };

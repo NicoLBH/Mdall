@@ -68,7 +68,7 @@ export function reservesConservees(fait = {}) {
 }
 
 /**
- * Les sujets du projet qu'un utilitaire déclare lire, dans l'ordre où il les lit.
+ * Les sujets du projet qu'un agent déclare lire, dans l'ordre où il les lit.
  *
  * ## Pourquoi une déclaration, et pas un rapprochement de noms
  *

@@ -8,7 +8,7 @@ marche.
 
 ## 1. Rien n'entre jamais directement dans la mémoire du projet
 
-**Aucun écran, aucun utilitaire, aucun calcul, aucun modèle n'écrit dans la
+**Aucun écran, aucun agent, aucun calcul, aucun modèle n'écrit dans la
 mémoire du projet.** La seule voie est une **proposition**, et c'est un humain
 qui la signe.
 
@@ -19,7 +19,7 @@ Une écriture directe perdrait quatre choses d'un coup.
   Une écriture directe laisse une valeur nouvelle sans rien pour la comparer à
   l'ancienne.
 - **La responsabilité.** Quelqu'un assume le changement, avec son nom et sa
-  date. « L'utilitaire l'a écrit » n'est pas une réponse en réunion.
+  date. « L'agent l'a écrit » n'est pas une réponse en réunion.
 - **Les conflits.** Une proposition se confronte à ce que le projet a déjà
   décidé, et les contradictions se règlent **avant** d'entrer, pas après.
 - **Le retour en arrière.** On pourra défaire une proposition — *on avance en
@@ -46,7 +46,7 @@ l'équipe du projet avant de proposer quoi que ce soit.
 > L'architecte : « Ok, je modifie, je ferme le sujet et je fais une proposition
 > dans ce sens. »
 
-Il met alors ses données à jour dans l'utilitaire, il recalcule, **puis** il
+Il met alors ses données à jour dans l'agent, il recalcule, **puis** il
 transforme en proposition — et c'est là que les tests, la détection de conflits,
 leur arbitrage et la signature ont lieu.
 
@@ -117,7 +117,7 @@ corrections prises pour douze ajouts (règle 5).
 - `rememberProposition` est la porte de la mémoire. Les chemins
   `rememberHypothesis` et `rememberBaseDatum` restent réservés à la déclaration
   faite **à la main** dans l'écran Mémoire, où l'auteur est présent et signe par
-  son geste. Aucun utilitaire ne les appelle.
+  son geste. Aucun agent ne les appelle.
 
 ---
 
@@ -200,7 +200,7 @@ Quatre conséquences pour le code :
    conditions de la règle : les écrire aussi les laisserait diverger le jour où
    quelqu'un modifie la règle sans y penser.
 4. **Rien ne s'invente.** Un « parce que » fabriqué serait pire que pas de
-   « parce que », puisqu'on le citerait en réunion (règle 5). Un utilitaire qui
+   « parce que », puisqu'on le citerait en réunion (règle 5). Un agent qui
    ne sait pas pourquoi écrit la valeur, et c'est tout.
 
 ---
@@ -215,7 +215,7 @@ Chaque information du graphe apparaît une fois dans le texte, et rien de
 déductible n'y apparaît. Un test le vérifie.
 
 Cette loi n'est pas une élégance : c'est ce qui permet à un architecte d'écrire
-trois lignes à la main et de les injecter, et c'est ce qui fait qu'un utilitaire
+trois lignes à la main et de les injecter, et c'est ce qui fait qu'un agent
 nouveau n'a rien à brancher — il écrit du mdall, comme tous les autres.
 
 Elle interdit aussi quelque chose : **on n'ajoute au langage aucune information
@@ -264,7 +264,7 @@ Mdall écrit le raisonnement d'un projet en clair. Une règle d'incendie s'écri
 sa loi est publique — c'est un arrêté —, et l'écrire est ce qui permet de la
 rejouer, de la contester et de la voir vieillir quand le texte change.
 
-Certains utilitaires n'ont pas cette loi-là. Un pré-dimensionnement de fondations
+Certains agents n'ont pas cette loi-là. Un pré-dimensionnement de fondations
 superficielles parcourt trois cent quatre-vingt-huit combinaisons : **sa loi est
 le produit**, et l'écrire dans le fichier d'un projet reviendrait à la donner. On
 ne peut pas non plus la cacher — il a décidé de cotes que le client paiera en
@@ -284,7 +284,7 @@ ne l'est pas, et c'est la règle :
 fonction Prédimensionnement des fondations superficielles(Bâtiment A, Profondeur hors gel, Données d'entrée des fondations superficielles) {
    // Dimensionne les massifs superficiels d'une zone : descente de charge,
    // combinaisons, portance du sol, glissement, renversement et ferraillage.
-   // La loi de calcul appartient à l'utilitaire — elle ne s'écrit pas ici.
+   // La loi de calcul appartient à l'agent — elle ne s'écrit pas ici.
 
    const Profondeur hors gel à retenir;
    si (Profondeur hors gel renseigné)
@@ -292,7 +292,7 @@ fonction Prédimensionnement des fondations superficielles(Bâtiment A, Profonde
    sinon (Profondeur hors gel à retenir = importe (variable: Profondeur hors gel, depuis: sol.ctr, zones: Bâtiment A));
 
    résultat = agent-D (
-      utilitaire: dimensionnement_fondations_superficielles,
+      agent: dimensionnement_fondations_superficielles,
       version: V1,
       zones: Bâtiment A,
       Profondeur hors gel: Profondeur hors gel à retenir,
@@ -313,7 +313,7 @@ tiers, le voici nommé » — vrai, et vérifiable.
 
 ### Deux agents, et la différence n'est pas technique
 
-« Calcul » était trop étroit : un utilitaire calcule, un autre cherche dans une
+« Calcul » était trop étroit : un agent calcule, un autre cherche dans une
 table, un troisième lit un document et n'en extrait qu'une date. Le point commun
 n'est pas le calcul, c'est qu'**un tiers fait le travail et rend un résultat**
 sans que sa loi descende dans le projet.
@@ -375,12 +375,12 @@ silence : elle apprend à croire l'écran.
 
 ## 10. Un nom vit à un seul endroit
 
-Deux fichiers déclarent « Profondeur hors gel » : l'utilitaire climat écrit dans
+Deux fichiers déclarent « Profondeur hors gel » : l'agent climat écrit dans
 `sol.ctr`, celui des fondations dans `structure.ctr`. Les deux lignes vivent,
 chacune a ses héritiers, et rien ne dit qu'elles parlent de la même chose.
 
 C'est le défaut le plus coûteux qu'une mémoire puisse porter, et il grandit tout
-seul : chaque nouvel utilitaire, chaque nouvel utilisateur peut en créer un.
+seul : chaque nouvel agent, chaque nouvel utilisateur peut en créer un.
 Trois conséquences, et la troisième est la pire :
 
 - **les valeurs divergent** — 0,466 m d'un côté, 0,47 m de l'autre ;
@@ -395,7 +395,7 @@ Trois conséquences, et la troisième est la pire :
 > propriété du **nom**, pas de celui qui l'écrit.
 
 Aujourd'hui le fichier se déduit de `{nature, domaine}`, et le domaine est choisi
-par l'utilitaire qui verse. Deux utilitaires donnent donc deux domaines au même
+par l'agent qui verse. Deux agents donnent donc deux domaines au même
 sujet, et le même nom atterrit à deux endroits sans que personne l'ait voulu.
 
 ### Comment on s'y prend — en trois temps
@@ -421,7 +421,7 @@ Un versement qui visait un autre fichier n'y crée rien : il rejoint le domicile
 du nom, et le désaccord se **dit** — des deux côtés. Le fichier qui a reçu la
 ligne annonce « ce nom vous a été versé ailleurs, il vit ici » ; celui qu'on
 visait annonce « ce nom vous était destiné, il vit là-bas ». Sans les deux, on
-chercherait longtemps pourquoi une valeur n'est pas là où l'utilitaire a cru
+chercherait longtemps pourquoi une valeur n'est pas là où l'agent a cru
 l'écrire.
 
 Le conflit se compte par **nom**, pas par versement : ce qui se tranche est « où
@@ -474,7 +474,7 @@ souvent pour que le détour se remarque.
 ## 11. On ne corrige pas la mémoire, on verse par-dessus
 
 La question s'est posée devant un projet d'essai : *une donnée est mal écrite —
-un utilitaire s'est trompé, ou quelqu'un a versé à la main. Je recommence un
+un agent s'est trompé, ou quelqu'un a versé à la main. Je recommence un
 projet ?*
 
 Non. Recommencer serait avouer que la mémoire ne sait pas se corriger, et un
@@ -525,7 +525,7 @@ Deux obligations en découlent, et elles ne sont pas facultatives :
   était-ce voulu — on la nomme, et quelqu'un décide.
 
 **3. Des noms qui ne devraient plus exister du tout.** Une version d'un
-utilitaire versait quatre-vingts cotes une par une — `Section Lx de la semelle
+agent versait quatre-vingts cotes une par une — `Section Lx de la semelle
 Portique courant file A`, et ainsi de suite ; la suivante range tout dans un seul
 tableau. Les quatre-vingts noms restent, sans producteur et sans lecteur.
 
@@ -541,8 +541,8 @@ jamais existé », et une mémoire qui les confond ne vaut plus rien.
 
 Deux déclencheurs, et **rien ne se devine** :
 
-- une version d'utilitaire qui a repris le travail d'une précédente, sur une
-  portée donnée — chaque ligne porte l'utilitaire et la version qui l'ont
+- une version d'agent qui a repris le travail d'une précédente, sur une
+  portée donnée — chaque ligne porte l'agent et la version qui l'ont
   produite ;
 - une définition de zone remplacée ou écartée : c'est la trace du retrait.
 
@@ -641,7 +641,7 @@ fait foi, et la répétition qui ne vaut pas validation.
 
 ## 13. L'IA accélère ; elle n'est jamais une boîte noire, ni le seul chemin
 
-Mdall a d'abord été fait d'utilitaires déterministes : on lit le calcul, on le
+Mdall a d'abord été fait d'agents déterministes : on lit le calcul, on le
 refait, on le conteste. Ce n'est pas un accident de jeunesse, c'est ce qui rend
 la mémoire d'un projet opposable — un chiffre qu'on ne peut pas refaire n'est
 pas un constat, c'est une rumeur.
@@ -659,7 +659,7 @@ L'IA fait gagner du temps et du confort. Elle ne devient jamais la seule porte,
 parce que le jour où elle se trompe, où elle coûte trop cher, ou simplement où
 elle ne répond pas, le projet doit continuer d'avancer.
 
-Conséquence pratique : **un utilitaire qui appelle un modèle déclare son chemin
+Conséquence pratique : **un agent qui appelle un modèle déclare son chemin
 manuel**. Quand ce champ est vide, cela se voit à l'écran — ce n'est pas un
 oubli qu'on masque, c'est une dette qu'on montre.
 
@@ -691,4 +691,4 @@ un résultat sans dire ce qu'il a coûté ni sur quoi il s'est fondé.
 étape, et l'ordre choisi.
 
 `apps/web/js/services/catalogue-de-latelier.js` — les champs `intelligence` et
-`aussiALaMain` de chaque utilitaire, que la vitrine affiche.
+`aussiALaMain` de chaque agent, que la vitrine affiche.

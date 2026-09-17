@@ -26,7 +26,7 @@
  * copie d'une valeur finit toujours par diverger de la première. La mémoire de
  * ce projet en a déjà fait les frais avec une table de libellés recopiée.
  *
- * ## Chaque contrainte cite l'utilitaire qui l'a déduite, et sa version
+ * ## Chaque contrainte cite l'agent qui l'a déduite, et sa version
  *
  * Une règle déduite n'est vraie que selon la méthode qui l'a déduite. Le jour où
  * la méthode change — un zonage révisé, une lecture d'API corrigée — la valeur
@@ -95,7 +95,7 @@ function texte(value) {
  * La clé métier d'une contrainte du site.
  *
  * Elle porte la donnée lue — `site:snow_zone` — et **jamais la version de
- * l'utilitaire**. C'est ce qui fait qu'une `V2` périme ce que la `V1` avait
+ * l'agent**. C'est ce qui fait qu'une `V2` périme ce que la `V1` avait
  * versé au lieu de coexister avec : deux clés donneraient deux règles en vigueur
  * pour un même sujet, ce qui est précisément l'écart qu'on veut éviter de
  * fabriquer soi-même.
@@ -244,7 +244,7 @@ export function plannedConstraintRows({ projectId = "", candidates = [], declare
         utilitaire: candidat.utilitaire,
         source: candidat.source,
         inputs: candidat.inputs ?? null,
-        // Ce que l'utilitaire a déclaré lire, avec la valeur qu'il a lue. Le
+        // Ce que l'agent a déclaré lire, avec la valeur qu'il a lue. Le
         // versement les résout en lectures enregistrées, comme les conditions
         // d'une règle ; la valeur reste ici pour qu'on puisse dire, plus tard,
         // que ce calcul a été fait sur une valeur que le projet a changée

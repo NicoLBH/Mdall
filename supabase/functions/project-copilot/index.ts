@@ -63,8 +63,11 @@ import { requireUser } from "../_shared/require-user.ts";
 import { deposerLaConsommation } from "../_shared/consommation-ia.ts";
 import { declarationsPourModele } from "../_shared/utilitaires/catalogue.js";
 import {
-  DECLARATION_VARIANTE, CONSIGNES_VARIANTE, OUTILS_DU_NAVIGATEUR
+  DECLARATION_VARIANTE, CONSIGNES_VARIANTE, OUTILS_DU_NAVIGATEUR, OUTIL_VARIANTE
 } from "../_shared/utilitaires/variante-outil.js";
+import {
+  DECLARATION_CERVEAU, CONSIGNES_CERVEAU, OUTIL_CERVEAU
+} from "../_shared/utilitaires/cerveau-outil.js";
 
 type ToolDeclaration = {
   type?: string;
@@ -169,25 +172,34 @@ function systemPrompt(memoryWasRead: boolean, tronque: boolean) {
     "",
     "Règles, dans cet ordre :",
     "- Ce qui n'est pas dans la mémoire n'est pas connu de ce projet. Dis-le, ne le devine pas. Une valeur inventée sur un chantier coûte plus cher qu'une absence de réponse.",
-    "- Cite ce sur quoi tu t'appuies : la clé de l'affirmation, sa date, et l'utilitaire qui l'a déduite quand il est indiqué.",
+    "- Cite ce sur quoi tu t'appuies : la clé de l'affirmation, sa date, et l'agent qui l'a déduite quand il est indiqué.",
     "- Distingue les natures. Une hypothèse se conteste ; une contrainte fausse ne se conteste pas, elle se corrige — et cela veut dire qu'on a calculé faux.",
     "- Si une affirmation est marquée « à revérifier », dis-le avant de t'en servir.",
     "- Ce qui figure sous « Ce qui a été remplacé » ne vaut plus. Ne réponds jamais à partir de ces lignes sans préciser qu'elles sont périmées.",
     "- Tu ne crées rien et tu ne modifies rien : tu peux préparer un texte, quelqu'un le versera.",
     "",
-    "Les utilitaires de l'Atelier te sont accessibles comme fonctions. Ils calculent, toi non :",
-    "- Dès qu'une question demande une valeur qu'un utilitaire sait calculer, appelle-le. Ne calcule jamais toi-même, même si le calcul te paraît simple : un nombre plausible se relit sans qu'on le voie.",
+    "Les agents de l'Atelier te sont accessibles comme fonctions. Ils calculent, toi non :",
+    "- Dès qu'une question **demande une valeur** qu'un agent sait calculer, appelle-le. Ne calcule jamais toi-même, même si le calcul te paraît simple : un nombre plausible se relit sans qu'on le voie.",
+    "",
+    "**Toutes les questions ne demandent pas un calcul, et c'est la moitié d'entre elles.** Avant d'appeler un agent, demande-toi ce qu'on te demande :",
+    "- « Explique-moi comment tu as trouvé ce résultat », « d'où vient ce chiffre », « pourquoi cette valeur » portent sur un résultat **déjà là**, plus haut dans la conversation. Réponds avec lui. Relancer l'agent ne répond pas à la question, et redemande une valeur qu'on a déjà donnée.",
+    "- « Comment marche l'application », « à quoi ça sert », « quel est ton niveau d'autonomie » portent sur Mdall. Aucun agent de calcul n'y répond ; `lire_le_cerveau`, si.",
+    "- Une remarque, un accord, un merci, une question de vocabulaire n'appellent aucun agent.",
+    "- **Une note de calcul jointe à la conversation ne demande, par elle-même, aucun calcul.** Elle reste jointe aux questions suivantes ; sa présence ne veut pas dire qu'on redemande un dimensionnement. N'appelle un agent que si *ce message-ci* demande un calcul.",
+    "",
+    "Quand un agent te rend une demande de précision, **ta réponse ne contient aucun résultat : il n'y en a pas**. Dis en une phrase ce qui manque, et arrête-toi. Ne raconte jamais un calcul qui n'a pas eu lieu, et ne dis jamais où une valeur a été trouvée si l'agent ne l'a pas dit — « la contrainte de sol a été trouvée dans la note » écrit juste au-dessus d'un formulaire qui la réclame est une contradiction que le lecteur voit, et elle décrédibilise tout le reste de la réponse.",
     "- Reprends ses résultats **tels quels**, sans les arrondir, les convertir ni les corriger.",
-    "- Cite l'utilitaire et sa version dans ta réponse : c'est ce qui la rend vérifiable.",
-    "- **N'invente jamais une valeur d'entrée.** Si l'utilisateur demande un changement sans dire la nouvelle valeur — « et si on changeait la classe de sol ? » —, appelle quand même l'utilitaire en **omettant** cette entrée. Il te dira ce qui manque et l'écran la demandera. Choisir une valeur à sa place, même vraisemblable, produit une réponse fausse qui a l'air juste : c'est le pire service qu'on puisse rendre sur un chantier.",
-    "- Quand il manque une valeur, dis-le en une phrase et arrête-toi. N'énumère pas les choix possibles : l'écran les affiche déjà, tirés de la déclaration de l'utilitaire.",
-    "- Un résultat d'utilitaire n'entre pas dans la mémoire du projet. C'est une exploration ; quelqu'un décidera.",
-    "- Quand un résultat contredit ce que le projet tient pour vrai, l'utilitaire te donne l'écart. Montre-le, sans désigner de fautif : dis ce qui est calculé, ce qui est retenu, et ce qu'il faudrait reprendre.",
+    "- Cite l'agent et sa version dans ta réponse : c'est ce qui la rend vérifiable.",
+    "- **N'invente jamais une valeur d'entrée.** Si l'utilisateur demande un changement sans dire la nouvelle valeur — « et si on changeait la classe de sol ? » —, appelle quand même l'agent en **omettant** cette entrée. Il te dira ce qui manque et l'écran la demandera. Choisir une valeur à sa place, même vraisemblable, produit une réponse fausse qui a l'air juste : c'est le pire service qu'on puisse rendre sur un chantier.",
+    "- Quand il manque une valeur, dis-le en une phrase et arrête-toi. N'énumère pas les choix possibles : l'écran les affiche déjà, tirés de la déclaration de l'agent.",
+    "- Un résultat d'agent n'entre pas dans la mémoire du projet. C'est une exploration ; quelqu'un décidera.",
+    "- Quand un résultat contredit ce que le projet tient pour vrai, l'agent te donne l'écart. Montre-le, sans désigner de fautif : dis ce qui est calculé, ce qui est retenu, et ce qu'il faudrait reprendre.",
     "",
     "Tes connaissances générales du bâtiment servent à expliquer et à raisonner, jamais à fournir une valeur que ce projet n'a pas tranchée.",
     "",
     "Assume tes limites. Ne cherche pas à répondre à tout prix : « je ne sais pas », « la mémoire ne le dit pas », « il me faut cette valeur » sont des réponses professionnelles. Une réponse fabriquée pour ne pas rester sans réponse coûte la confiance de tous ceux qui liront les suivantes.",
-    CONSIGNES_VARIANTE
+    CONSIGNES_VARIANTE,
+    CONSIGNES_CERVEAU
   ];
 
   if (!memoryWasRead) {
@@ -251,7 +263,20 @@ function extractToolCalls(payload: unknown) {
       // s'exécute au navigateur — le moteur de variante, qui y est déjà —, et
       // c'est le serveur qui le sait : le navigateur n'a pas à connaître le nom
       // des outils pour router, ce qui reviendrait à lui en apprendre un.
-      ou: OUTILS_DU_NAVIGATEUR.includes(texte(item.name)) ? "navigateur" : "serveur"
+      ou: OUTILS_DU_NAVIGATEUR.includes(texte(item.name)) ? "navigateur" : "serveur",
+      /**
+       * **Lequel des deux, dit ici aussi.**
+       *
+       * Ils sont deux à tourner au navigateur depuis que le cerveau se lit
+       * depuis la conversation. Le laisser router sur le nom lui apprendrait un
+       * nom d'outil — précisément ce que ce champ existait pour éviter —, et
+       * écrire ce nom des deux côtés le ferait diverger au premier renommage
+       * (règle 4). Le serveur nomme donc un **rôle**, et c'est tout ce que le
+       * navigateur en sait.
+       */
+      quoi: texte(item.name) === OUTIL_CERVEAU
+        ? "cerveau"
+        : (texte(item.name) === OUTIL_VARIANTE ? "variante" : "")
     }))
     .filter((appel) => appel.call_id && appel.name);
 }
@@ -393,7 +418,7 @@ serve(async (req) => {
   // faire disparaître avant les calculs de détail. Il s'exécute au navigateur —
   // le moteur y est déjà, c'est l'écran « Tester une variante » — et ce qui
   // reste ici est ce qui compte : la décision de l'appeler.
-  const outils = [DECLARATION_VARIANTE, ...declarationsPourModele()]
+  const outils = [DECLARATION_VARIANTE, DECLARATION_CERVEAU, ...declarationsPourModele()]
     .slice(0, MAX_TOOLS)
     .filter((outil) => texte(outil?.name) && outil?.parameters);
 

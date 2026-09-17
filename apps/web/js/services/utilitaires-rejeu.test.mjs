@@ -83,7 +83,7 @@ test("un sujet qui n'entre pas dans l'appel est refusé, et dit pourquoi", () =>
   assert.match(phraseDuRefus(reprise.refus), /le serveur la choisit lui-même/);
 });
 
-test("un utilitaire qui ne sait pas se rejouer est nommé, pas oublié", () => {
+test("un agent qui ne sait pas se rejouer est nommé, pas oublié", () => {
   const orpheline = deduite({
     id: "x", sujet: "Zone de sismicité", valeur: "3", utilitaire: "outil_disparu_V9",
     lectures: [["Altitude du site", "13"]]
@@ -114,7 +114,7 @@ test("une valeur que le champ ne sait pas lire est refusée, jamais laissée pas
 
 /* ── Relire la réponse avec la loi de l'utilitaire, pas une copie ────────── */
 
-test("la réponse du serveur est relue par l'utilitaire lui-même", () => {
+test("la réponse du serveur est relue par l'agent lui-même", () => {
   // Aucune loi n'est recopiée ici : on redonne le fait de contexte à `deduire`,
   // la même fonction qu'au versement. Une variante et un versement ne peuvent
   // donc pas dire deux choses différentes de la même situation.
@@ -146,7 +146,7 @@ test("une réserve qui naît compte, même quand la valeur ne bouge pas", () => 
   assert.equal(relue.reservesOntBouge, true);
 });
 
-test("une réponse dont l'utilitaire ne tire rien ne rend rien", () => {
+test("une réponse dont l'agent ne tire rien ne rend rien", () => {
   const reprise = { assertion: horsGel("0.71 m"), sujet: "Profondeur hors gel",
     utilitaire: "deduction_profondeur_hors_gel_altitude_V1" };
   assert.equal(relectureDuFait(reprise, { fact_value: { frost_depth_m: null } }), null);
@@ -253,7 +253,7 @@ test("aucune variante, aucun appel", async () => {
  *
  * C'est le chemin normal — celui de l'Atelier —, et il portait un `kind` que la
  * reprise ne reconnaissait pas : `base-datum` au lieu de `site-constraint`. Tout
- * était pourtant là, l'utilitaire, sa version et ce qu'il avait lu.
+ * était pourtant là, l'agent, sa version et ce qu'il avait lu.
  */
 const parProposition = ({ id, sujet, valeur, utilitaire, lectures = [] }) => ({
   id, kind: "base-datum", subject_key: sujet, nature: "contrainte",
@@ -422,7 +422,7 @@ test("une affirmation remplacée ne se rejoue pas", () => {
   assert.deepEqual(reprises.map((reprise) => reprise.assertion.id), ["neige-v2"]);
 });
 
-test("la ligne entière varie : chaque utilitaire y prend la colonne qu'il lit", () => {
+test("la ligne entière varie : chaque agent y prend la colonne qu'il lit", () => {
   const reprises = contraintesAReprendre({
     enVigueur: zonages(),
     // L'ordre est celui de la structure versée, et l'adresse arrive en dernier :

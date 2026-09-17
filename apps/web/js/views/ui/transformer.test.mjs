@@ -1,5 +1,5 @@
 /**
- * « Transformer » — la seule sortie d'un utilitaire de l'Atelier, et ses issues.
+ * « Transformer » — la seule sortie d'un agent de l'Atelier, et ses issues.
  */
 
 import test from "node:test";

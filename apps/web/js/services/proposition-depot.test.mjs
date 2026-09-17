@@ -13,7 +13,7 @@ const avecProvenance = (sujet) => ({
 });
 const sansProvenance = (sujet) => ({ sujet, payload: {} });
 
-test("verser des résultats d'utilitaire est un dépôt, même sans un seul fichier", () => {
+test("verser des résultats d'agent est un dépôt, même sans un seul fichier", () => {
   const depot = depotDeLaProposition({
     proposition: PROPOSITION,
     affirmations: [avecProvenance("Degré coupe-feu"), avecProvenance("Famille")],
@@ -68,7 +68,7 @@ test("un dépôt vide se dit vide, il ne se déclare pas vérifié", () => {
   assert.equal(resumeDuDepot(depot), "rien pour l'instant");
 });
 
-test("l'utilitaire qui a calculé une valeur vaut provenance", () => {
+test("l'agent qui a calculé une valeur vaut provenance", () => {
   const depot = depotDeLaProposition({
     proposition: PROPOSITION,
     affirmations: [{ sujet: "Zone de neige", payload: { atelier: "neige-vent-gel" } }]

@@ -191,7 +191,7 @@ test("une valeur recalculée à l'identique ne rend rien suspect en aval", () =>
   assert.deepEqual(rendu.aRevoir, []);
 });
 
-test("une relecture d'utilitaire nourrit le rejeu des règles qui la lisent", () => {
+test("une relecture d'agent nourrit le rejeu des règles qui la lisent", () => {
   // C'est le chaînage complet : l'altitude change, l'utilitaire connu est relu,
   // et la règle qui lit son résultat bascule — deux natures de nœud à la file.
   const memoire = [
@@ -233,7 +233,7 @@ test("une dérive déjà présente n'est pas mise au compte de la variante", () 
   assert.deepEqual(rendu.rejouees, []);
 });
 
-test("un utilitaire qui n'a pas répondu est nommé, jamais deviné", () => {
+test("un agent qui n'a pas répondu est nommé, jamais deviné", () => {
   // Le refus vient du rejeu, avec son motif. Rendre un chiffre ici — d'après une
   // loi recopiée, d'après la valeur d'avant — serait indiscernable d'un chiffre
   // que le référentiel aurait donné.

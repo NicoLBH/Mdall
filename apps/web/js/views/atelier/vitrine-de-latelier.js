@@ -120,7 +120,7 @@ function renderMarqueDIntelligence(utilitaire = {}) {
 
   return `
     <span class="atelier-fiche__ia" title="${escapeHtml(
-      aLaMain ? `Sans l'IA : ${aLaMain}` : "Aucun chemin manuel n'est écrit pour cet utilitaire."
+      aLaMain ? `Sans l'IA : ${aLaMain}` : "Aucun chemin manuel n'est écrit pour cet agent."
     )}">
       ${svgIcon("copilot", { className: "octicon" })}
       <span>${escapeHtml(aLaMain ? "IA · aussi à la main" : "IA · chemin manuel à écrire")}</span>
@@ -206,7 +206,7 @@ function renderBandeau(recherche) {
           <input type="search" id="atelierRecherche" class="atelier-bandeau__champ"
             value="${escapeHtml(recherche)}" autocomplete="off"
             placeholder="incendie · altitude · portance · spectre…"
-            aria-label="Chercher un utilitaire">
+            aria-label="Chercher un agent">
         </div>
       </div>
     </section>
@@ -280,7 +280,7 @@ function renderRangement(rangement) {
       { id: RANGEMENT.RECENT, label: "Ajouté récemment" }
     ],
     activeTabId: texte(rangement) || RANGEMENT.RECOMMANDE,
-    ariaLabel: "Comment ranger les utilitaires",
+    ariaLabel: "Comment ranger les agents",
     className: "atelier-rangement"
   });
 }

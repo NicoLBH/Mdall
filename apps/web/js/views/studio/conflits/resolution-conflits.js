@@ -1,5 +1,5 @@
 /**
- * Résoudre les conflits : l'utilitaire qui met face à face ce qui ne s'accorde pas.
+ * Résoudre les conflits : l'agent qui met face à face ce qui ne s'accorde pas.
  *
  * **Pourquoi ici et non dans la Mémoire.** La Mémoire sert à *voir* ce que le
  * projet tient pour vrai — complètement, sans tri ni jugement. Exploiter cette

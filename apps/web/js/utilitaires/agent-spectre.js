@@ -127,7 +127,7 @@ export const AGENT_D_SPECTRE_ELASTIQUE_EC8_V1 = {
    * Comment cet appel se refait.
    *
    * **Les agents climatiques n'en déclarent pas**, et ce n'est pas un oubli :
-   * chacune de leurs sorties cite l'utilitaire qui la déduit, et c'est cette
+   * chacune de leurs sorties cite l'agent qui la déduit, et c'est cette
    * ligne-là que la variante reprend — une par valeur, chacune avec sa version.
    * Le spectre, lui, ne pose qu'une ligne, et elle ne cite que lui : sans cette
    * déclaration, une variante de zone sismique la laisserait derrière elle.

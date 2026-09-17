@@ -43,7 +43,7 @@ test("le type de la provenance est l'origine : rien de plus à déclarer", () =>
   );
   // …une donnée de base est relevée dans une pièce du projet.
   assert.equal(provenanceDeLAssertion({ nature: "donnee-de-base", payload: { source: "plan R+3" } }).type, PROVENANCE.DOCUMENT);
-  // Ce que l'utilitaire a déclaré l'emporte sur tout le reste.
+  // Ce que l'agent a déclaré l'emporte sur tout le reste.
   assert.deepEqual(
     provenanceDeLAssertion({ nature: "contrainte", payload: { provenance: { type: "règle", quoi: "Colonne sèche" }, source: "arrêté" } }),
     { type: PROVENANCE.REGLE, quoi: "Colonne sèche" }

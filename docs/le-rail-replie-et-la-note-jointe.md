@@ -71,7 +71,7 @@ repères, et un seul geste les sert.
 Une régression, et la plus coûteuse de la série : `assertions` — les affirmations
 de la mémoire du projet — avait été déclaré dans la branche qui les **annonce à
 l'écran**, et non au niveau de la fonction d'envoi. Elles servent bien plus bas :
-les utilitaires s'en pré-remplissent, et le moteur de variante les compare à ce
+les agents s'en pré-remplissent, et le moteur de variante les compare à ce
 que le projet tient pour vrai.
 
 Le résultat est une ligne rouge sous la zone de saisie, **au premier appel

@@ -309,7 +309,7 @@ export const FIGURES = {
     legende: "L'article énumère quatre degrés, puis deux exceptions — et la phrase des exceptions arrive "
       + "après la liste. La figure les met côte à côte : le plafond sous comble communicant, les "
       + "planchers entre logements, celui sur vide sanitaire accessible. Ce sont les trois cas où l'on "
-      + "hésite, et les trois questions que l'utilitaire pose.",
+      + "hésite, et les trois questions que l'agent pose.",
     source: "d'après la FIG.2 du fascicule SOCOTEC 34.13.02.01, article 6 modifié par l'arrêté du 19 juin 2015",
     svg: figureArticle6()
   }],

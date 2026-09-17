@@ -42,7 +42,7 @@ const LIGNES = [
   { rang: 5, clair: "   alors (…)" },
   { rang: 6, clair: "" },
   { rang: 7, clair: "   résultat = calcul natif (" },
-  { rang: 8, clair: "      utilitaire: dimensionnement," },
+  { rang: 8, clair: "      agent: dimensionnement," },
   { rang: 9, clair: "   );" },
   { rang: 10, clair: "}" }
 ];
@@ -93,7 +93,7 @@ test("une recherche de plusieurs mots cherche la phrase, pas les mots", () => {
   // résultats, ce qu'on venait de demander.
   const lignes = [
     { rang: 1, clair: "      Résultat du calcul des fondations superficielles: résultat," },
-    { rang: 2, clair: "      utilitaire: dimensionnement," },
+    { rang: 2, clair: "      agent: dimensionnement," },
     { rang: 3, clair: "   const Profondeur des fondations = 0,47 m;" },
     { rang: 4, clair: "   // le calcul reprend le résultat des fondations" }
   ];

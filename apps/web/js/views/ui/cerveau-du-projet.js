@@ -82,7 +82,7 @@ const POULS = 1100;
 const NATURES = {
   [NOEUD.SOCLE]: { nom: "Socle", trait: "#3fb950", quoi: "ce que le projet pose, suppose ou constate" },
   [NOEUD.REJOUABLE]: { nom: "Rejouable", trait: "#58a6ff", quoi: "une règle du projet le conclut : il se rejoue ici" },
-  [NOEUD.OPAQUE]: { nom: "Opaque", trait: "#8b949e", quoi: "un utilitaire le déduit : on sait qu'il dépend" }
+  [NOEUD.OPAQUE]: { nom: "Opaque", trait: "#8b949e", quoi: "un agent le déduit : on sait qu'il dépend" }
 };
 
 /**

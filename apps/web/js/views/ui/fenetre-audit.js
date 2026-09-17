@@ -195,7 +195,7 @@ function renderPerimees(perimees = []) {
       <h5>${svgIcon("history", { className: "octicon" })} Calculé sur une valeur qui a changé
         <span class="audit-rang__compte">${perimees.length}</span></h5>
       <p>
-        Ces valeurs viennent d'un utilitaire, et l'entrée sur laquelle il les a calculées
+        Ces valeurs viennent d'un agent, et l'entrée sur laquelle il les a calculées
         n'est plus celle que le projet affirme. Nous ne les recalculons pas — la table est au
         serveur —, mais celle qui est affichée <b>ne vaut plus</b>.
       </p>

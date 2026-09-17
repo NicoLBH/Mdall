@@ -59,6 +59,7 @@ import {
   fermerLaFenetreDeDetails, majLaFenetreDeDetails, ouvrirLaFenetreDeDetails
 } from "../../ui/fenetre-de-details.js";
 import { renderVoileDeDepot } from "../../ui/voile-de-depot.js";
+import { renderCarteDuCerveau } from "./carte-du-cerveau.js";
 import { aRetenirDuResultat, executerUtilitaire } from "../../../services/utilitaires-service.js";
 import { conversationTitle, findConversation } from "../../../services/copilote-conversations.js";
 import {
@@ -358,7 +359,7 @@ export function copiloteConversations() {
  * **Ceci est un outil de développement, et il est destiné à disparaître.** Il
  * existe parce qu'un défaut du copilote se raconte mal : « il m'a redemandé la
  * contrainte de sol » ne dit ni ce qu'il avait en mémoire, ni ce qu'il a passé
- * à l'utilitaire, ni ce que l'utilitaire a répondu. La discussion entière, avec
+ * à l'agent, ni ce que l'utilitaire a répondu. La discussion entière, avec
  * qui a dit quoi et ce qui a été calculé, tient en un collage.
  *
  * Il ne partage rien : le texte va dans le presse-papiers de la personne qui
@@ -410,10 +411,10 @@ export async function transcrireLaDiscussion(id) {
   return lignes.join("\n").trim();
 }
 
-/** Ce qu'un utilitaire a reçu, produit, et de qui il l'a tenu. */
+/** Ce qu'un agent a reçu, produit, et de qui il l'a tenu. */
 function transcrireUneExecution(execution) {
   if (!execution) return [];
-  const lignes = [`### Utilitaire — ${execution.titre || execution.outil || "?"} (${execution.statut})`];
+  const lignes = [`### Agent — ${execution.titre || execution.outil || "?"} (${execution.statut})`];
   if (execution.message) lignes.push(execution.message);
 
   const paire = (objet) => Object.entries(objet ?? {})
@@ -538,7 +539,7 @@ function renderMessage(msg, index, etat = null) {
       <span class="copilote-msg__mark" aria-hidden="true">${svgIcon("copilot", { width: 32, height: 32 })}</span>
       <div class="copilote-msg__main">
         ${montrees.length ? "" : journal}
-        ${montrees.map((execution) => renderExecution(execution)).join("")}
+        ${montrees.map((execution, rang) => renderExecution(execution, index, rang)).join("")}
         ${montrees.length ? journal : ""}
         <div class="copilote-msg__body">${mdToHtml(msg.content || "")}</div>
         ${montrees.map((execution) => renderFormulaire(execution, index)).join("")}
@@ -631,7 +632,7 @@ function renderMassifs(execution) {
     </div>`;
 }
 
-/** Les cas de l'utilitaire, tels qu'ils se proposent dans une liste. */
+/** Les cas de l'agent, tels qu'ils se proposent dans une liste. */
 const CAS_A_RANGER = [
   ["G", "Permanente"], ["Q", "Exploitation"], ["Sn", "Neige"], ["Fa", "Accidentelle"],
   ["W1", "Vent cas 1"], ["W2", "Vent cas 2"], ["W3", "Vent cas 3"], ["W4", "Vent cas 4"],
@@ -639,7 +640,7 @@ const CAS_A_RANGER = [
 ];
 
 /**
- * Ranger soi-même un cas que l'utilitaire n'a pas su nommer.
+ * Ranger soi-même un cas que l'agent n'a pas su nommer.
  *
  * ## Pourquoi on le demande plutôt que de le deviner
  *
@@ -705,7 +706,7 @@ function renderRangement(appui, execution) {
  *
  * ## Ce qu'il n'est pas
  *
- * Ce n'est pas l'écran de l'utilitaire, et il ne cherche pas à l'être. Le fil
+ * Ce n'est pas l'écran de l'agent, et il ne cherche pas à l'être. Le fil
  * du copilote est un endroit où l'on **juge**, pas où l'on travaille : on y
  * regarde assez pour décider s'il faut ouvrir l'Atelier, et c'est tout. Les
  * entrées s'y modifient une par une, avec leur mise en page et leurs unités ;
@@ -877,14 +878,21 @@ function renderChaine(execution) {
  * de l'utilitaire, de sa version, de ses entrées et de leur provenance se
  * vérifie. C'est la différence entre un assistant et un outil de travail.
  */
-function renderExecution(execution) {
+function renderExecution(execution, message = 0, rang = 0) {
   if (execution?.statut === "manquant" || execution?.statut === "aConfirmer") return "";
+
+  // **Le cerveau n'est pas un calcul** : il n'a ni entrées ni résultats, il a un
+  // dessin. Le passer dans le rendu des agents de calcul l'aurait montré comme
+  // deux colonnes vides sous un titre.
+  if (execution?.statut === "fait" && execution?.lecture) {
+    return renderCarteDuCerveau(execution.lecture, `${message}:${rang}`);
+  }
 
   if (execution?.statut !== "fait") {
     return `
       <div class="copilote-outil copilote-outil--refus">
         <p class="copilote-outil__titre">${escapeHtml(execution?.titre || "Utilitaire")}</p>
-        <p class="copilote-outil__note">${escapeHtml(execution?.message || "L'utilitaire n'a pas conclu.")}</p>
+        <p class="copilote-outil__note">${escapeHtml(execution?.message || "L'agent n'a pas conclu.")}</p>
         ${renderChaine(execution)}
       </div>
     `;
@@ -922,7 +930,7 @@ function renderExecution(execution) {
     ? `<div class="copilote-outil__figure">
          <p class="copilote-outil__legende">${escapeHtml(execution.figure.titre || "Courbe")}</p>
          ${renderSvgLineChart({
-           ariaDescription: execution.figure.titre || "Courbe de l'utilitaire",
+           ariaDescription: execution.figure.titre || "Courbe de l'agent",
            width: 520,
            height: 220,
            xLabel: execution.figure.xLabel || "",
@@ -973,7 +981,7 @@ function renderExecution(execution) {
       ${renderGouvernance(execution)}
       <div class="copilote-outil__pied">
         <p class="copilote-outil__note">
-          Calculé par ${escapeHtml(execution.source || "l'utilitaire")}. Ce résultat n'entre pas dans la mémoire du projet.
+          Calculé par ${escapeHtml(execution.source || "l'agent")}. Ce résultat n'entre pas dans la mémoire du projet.
         </p>
         ${renderRemise(execution)}
         ${renderRemiseIncendie(execution)}
@@ -1046,7 +1054,7 @@ function renderRemiseIncendie(execution) {
  * Ce que le copilote avait proposé, et qu'on n'a pas retenu.
  *
  * Le dire tient en une ligne, et cette ligne évite un malentendu coûteux :
- * l'utilitaire lit l'altitude sur la note jointe, mais le modèle en avait
+ * l'agent lit l'altitude sur la note jointe, mais le modèle en avait
  * proposé une autre. La question n'était pas de choisir entre les deux — elle
  * était de ne pas laisser croire que la note n'était pas arrivée.
  */
@@ -2313,7 +2321,7 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
       // Le calcul n'a pas eu lieu : la question reste la question.
       if (message) message.content = texteDeLaQuestion;
       etat.lastError = erreur?.name === "AbortError"
-        ? "" : (erreur?.message || "L'utilitaire n'a pas répondu.");
+        ? "" : (erreur?.message || "L'agent n'a pas répondu.");
       // Ce qui a été fait avant la panne reste sous le message : le journal est
       // la seule trace de ce qui a été tenté.
       if (message) message.etapes = [...etat.etapes];
@@ -2535,7 +2543,33 @@ function brancherLesGestesDeLaNote(root) {
     // nettoyages, et à deux états de la mémoire (règle 4).
     if (event.target.closest("[data-copilote-apercu]")) {
       basculerLApercu(root);
+      return;
     }
+
+    /**
+     * **Le cerveau s'ouvre sur ce que l'agent a lu, pas sur une relecture.**
+     *
+     * Le matériau est gardé dans l'exécution : rouvrir en relisant la mémoire
+     * montrerait un autre dessin que celui dont la réponse parle — et sur un
+     * projet qui bouge, la différence se voit au premier versement.
+     */
+    const ouvrir = event.target.closest("[data-copilote-cerveau]");
+    if (ouvrir) void montrerLeCerveau(String(ouvrir.dataset.copiloteCerveau || ""));
+  });
+}
+
+/** Rouvrir en grand le cerveau qu'un message porte, désigné par sa place. */
+async function montrerLeCerveau(place) {
+  const [rangDuMessage, rangDeLExecution] = String(place).split(":").map(Number);
+  const execution = ensureState().messages?.[rangDuMessage]?.executions?.[rangDeLExecution];
+  const materiau = execution?.cerveau;
+  if (!materiau) return;
+
+  const { ouvrirLeCerveau } = await import("../../ui/cerveau-du-projet.js");
+  ouvrirLeCerveau({
+    assertions: materiau.assertions ?? [],
+    applications: materiau.applications ?? null,
+    actes: materiau.actes ?? null
   });
 }
 

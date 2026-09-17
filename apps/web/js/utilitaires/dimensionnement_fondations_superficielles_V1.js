@@ -93,7 +93,7 @@ const casDeCharge = (code, nom, quoi) => ({
 const nappe = (code, nom, ou) => ([
   { nom: `${nom} — nombre de barres`, cle: `entrees.ferraillage.${code}.nombre`, type: "nombre",
     quoi: `Combien de barres l'ingénieur propose ${ou}. C'est une proposition, pas un `
-      + `résultat : l'utilitaire dit ce qu'elle vaut face à ce que le calcul exige, il ne la choisit pas.` },
+      + `résultat : l'agent dit ce qu'elle vaut face à ce que le calcul exige, il ne la choisit pas.` },
   { nom: `${nom} — diamètre`, cle: `entrees.ferraillage.${code}.barre`,
     valeurs: ["HA6", "HA8", "HA10", "HA12", "HA14", "HA16", "HA20", "HA25", "HA32", "HA40"],
     quoi: `Le diamètre des barres ${ou}. Passer au diamètre au-dessus met plus d'acier `
@@ -355,7 +355,7 @@ export const DIMENSIONNEMENT_FONDATIONS_SUPERFICIELLES_V1 = {
    */
   quoi: "Dimensionne les massifs superficiels d'une zone : descente de charge, "
     + "combinaisons, portance du sol, glissement, renversement et ferraillage. "
-    + "La loi de calcul appartient à l'utilitaire — elle ne s'écrit pas ici.",
+    + "La loi de calcul appartient à l'agent — elle ne s'écrit pas ici.",
 
   /**
    * Ce qu'elle lit du projet.
