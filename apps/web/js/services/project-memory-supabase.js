@@ -280,7 +280,12 @@ export async function rememberProposition({ proposition, items = [] } = {}) {
   });
 
   return {
-    written: ecrites.length, superseded: liens.length, flagged: suspectes, lectures, engagements
+    written: ecrites.length, superseded: liens.length, flagged: suspectes, lectures, engagements,
+    // **Les lignes elles-mêmes**, et pas seulement leur nombre. C'est ce que la
+    // reconnaissance confronte aux points ouverts : un nom qui vient d'entrer en
+    // mémoire peut nommer un débat en cours, et sans les lignes il faudrait
+    // relire tout le projet pour retrouver lesquelles sont neuves.
+    ecrites
   };
 }
 

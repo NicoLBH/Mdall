@@ -517,6 +517,44 @@ Un même mot pour le même acte, enfin : « Écarter » sur une arête proposée
 sur une arête confirmée. « Retirer » et « Écarter » auraient fait deux gestes à
 apprendre pour une seule intention.
 
+#### Les deux déclenchements, et ils tombent au même endroit
+
+**Fusionner une proposition fait les deux choses à la fois** : des noms entrent
+en mémoire, et des sujets s'ouvrent — c'est là, et nulle part ailleurs, qu'un
+sujet naît d'un document. Les deux moments se branchent donc au même endroit, en
+**deux confrontations** dont chacune est bornée par ce qui vient de se produire :
+
+| ce qu'on confronte | à quoi |
+| --- | --- |
+| les sujets qui viennent de naître | la mémoire entière — ils n'ont jamais rien rencontré |
+| les sujets déjà ouverts | les seules affirmations qui viennent d'entrer |
+
+Les passer tous contre toute la mémoire serait un balayage déguisé : il
+redécouvrirait les mêmes rapprochements pour des sujets que cette fusion n'a pas
+touchés. Un sujet neuf face à une valeur neuve est dans les deux confrontations,
+et les paires se dédoublonnent avant d'être écrites — la base tient
+`(subject_id, assertion_id)` pour unique, et l'envoi entier serait refusé.
+
+La reconnaissance vient **après le secrétariat et après les pères** : elle lit un
+intitulé, et un sujet dont le titre vient d'être réécrit ne doit pas être
+rapproché sur l'ancien. Elle a son étape dans le journal de la fusion —
+« Rattachements cherchés » —, et ce qu'elle a trouvé s'y lit après coup.
+
+**Elle ne défait jamais ce qui l'appelle.** La mémoire est versée, les sujets
+sont ouverts : manquer un rapprochement ne doit pas remettre cela en cause.
+L'échec se **dit** dans le journal — le taire ferait croire qu'il n'y avait rien
+à rattacher — et la recherche à la demande le rattrape.
+
+L'autre naissance est **humaine** : un sujet créé depuis l'onglet Sujets, ou
+depuis une conversation du Copilote. Là, la reconnaissance part tout de suite :
+l'intitulé vient d'être écrit, celui qui l'a écrit est devant l'écran, et c'est
+le moment où un rapprochement a le plus de chances d'être juste — et où il coûte
+le moins cher à écarter. Muette en cas d'échec, pour la même raison.
+
+Elle ne part **pas** depuis la fusion, où quarante sujets naissent d'un coup :
+les confronter un par un ferait quarante lectures de la mémoire, là où une seule
+confrontation suffit.
+
 #### Chercher, à la demande
 
 Un bouton dans le détail d'un sujet : **Chercher dans la mémoire**. C'est le
@@ -546,10 +584,11 @@ Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la na
 contractuelle d'une pièce. Chacun demande **une** chose, nommée dans
 `services/ce-qui-couvre.js`, et le jour où elle existe une ligne suffit.
 
-Et les **deux déclenchements automatiques** — à la naissance d'un point, au
-versement d'une affirmation. Ils sont maintenant sûrs, puisque le refus se
-souvient ; ils attendent de savoir, par la recherche à la demande, ce que la
-reconnaissance trouve vraiment sur de vrais intitulés.
+Et une question qui ne se tranche qu'en regardant : **la reconnaissance est-elle
+au bon niveau ?** Elle est exacte, sur mots entiers — elle trouvera donc très
+peu. C'est voulu : un sujet mal accroché contesterait en silence une valeur que
+personne n'a mise en doute. Si elle ne trouve jamais rien sur de vrais intitulés,
+c'est elle qu'il faudra desserrer, pas les moments où elle tourne.
 
 ---
 
@@ -576,6 +615,9 @@ reconnaissance trouve vraiment sur de vrais intitulés.
 | une arête écartée se souvient | `202610140001_une_arete_ecartee_se_souvient.sql` |
 | ce qu'il reste à proposer pour un point | `portageAProposer`, dans `services/point-porte-sur.js` |
 | la recherche à la demande | `chercherSurQuoiCeSujetPorte`, dans `views/project-subjects/aretes-du-sujet.js` |
+| ce qu'on confronte à quoi | `portagesDeCesPoints`, dans `services/point-porte-sur.js` |
+| la reconnaissance et ses trois appelants | `services/portage-reconnaissance.js` |
+| les deux confrontations de la fusion | `proposerLesPortagesDeLaFusion`, dans `views/project-propositions.js` |
 
 ### Le faux document, et pourquoi il existait
 
@@ -691,6 +733,16 @@ valeur que personne n'a mise en doute.
 | « rien reconnu » et « déjà là » se disent différemment | ils se confondent | 1 test |
 | le bloc s'affiche même vide, pour porter le geste | il redisparaît | 3 tests |
 | un seul mot pour le même acte | deux mots | 1 test |
+| chaque confrontation ne voit que sa réserve | les deux se fondent en une | 1 test |
+| une arête ne se pose pas deux fois | le dédoublonnage saute | 2 tests |
+| un point sans identifiant ne produit rien | il produit une ligne | 1 test |
+| un sujet fermé n'entre pas dans la reconnaissance | il entre | 1 test |
+| sans projet, elle ne cherche rien | elle cherche | 1 test |
+| une paire vide ne coûte pas une requête | elle en ouvre une | 2 tests |
+| une lecture ratée se dit dans le journal | elle passe pour un silence | 1 test |
+| « rien reconnu » et « rien de nouveau » se distinguent | ils se confondent | 1 test |
+| le journal dit « proposé », jamais « posé » | il dit « posé » | 1 test |
+| l'étape de fusion est déclarée | elle ne l'est plus | 1 test |
 
 ---
 

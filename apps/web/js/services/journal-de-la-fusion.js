@@ -70,6 +70,12 @@ export const ETAPES_DE_LA_FUSION = [
   // d'être ouvert — il lui faut donc ses fils — et il porte un label que le
   // secrétariat vient de créer. Ouvert entre les deux, il naissait sans.
   ["peres", "Lots rangés"],
+  // **En dernier des sujets, et pour une raison.** La reconnaissance lit un
+  // intitulé ; un sujet que le secrétariat vient de réécrire ne doit pas être
+  // rapproché sur son ancien titre. Elle vient donc après tout ce qui touche
+  // aux sujets, et elle ne peut rien défaire — ce qu'elle manque se rattrape
+  // à la main depuis le détail d'un sujet.
+  ["portages", "Rattachements cherchés"],
   ["suivi", "Suivi des avis réécrit"],
   ["tableau", "Avant / après relu"]
 ];

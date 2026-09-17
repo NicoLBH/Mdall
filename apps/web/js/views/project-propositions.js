@@ -6425,9 +6425,14 @@ async function merge(root) {
     // sera réécrit, et la mémoire se rattrape depuis l'onglet Mémoire. Le taire
     // serait pire — on croirait la mémoire à jour.
     const etapeDeLaMemoire = chrono.etape("memoire");
+    let affirmationsVersees = [];
     try {
       const memoire = await import("../services/project-memory-supabase.js");
       const verse = await memoire.rememberProposition({ proposition: view.open, items });
+      // Ce qui vient d'entrer en mémoire, gardé pour la reconnaissance : un nom
+      // qui entre peut nommer un débat en cours, et c'est le second des deux
+      // moments où un rapprochement nouveau peut naître.
+      affirmationsVersees = Array.isArray(verse?.ecrites) ? verse.ecrites : [];
       if (!verse) {
         etapeDeLaMemoire.rate("La mémoire du projet n'a pas pu être mise à jour.");
         view.review.notice =
@@ -6504,6 +6509,20 @@ async function merge(root) {
     // voir. Créée avant les lots, la vue serait vide à l'ouverture.
     await ajouterLesVuesRetenues(proposition, items, etapeDesPeres);
     etapeDesPeres.fini();
+
+    // **Les deux moments de la reconnaissance, et ils tombent ici tous les deux.**
+    //
+    // Fusionner une proposition fait les deux choses à la fois : des noms
+    // entrent en mémoire, et des sujets s'ouvrent. C'est donc le seul endroit
+    // où il faut confronter les deux sens — les sujets qui viennent de naître à
+    // la mémoire entière, et les sujets déjà ouverts aux seules affirmations
+    // qui viennent d'entrer.
+    //
+    // Après les pères et le secrétariat : un sujet dont le titre vient d'être
+    // réécrit ne doit pas être reconnu sur son ancien intitulé.
+    const etapeDesPortages = chrono.etape("portages");
+    await proposerLesPortagesDeLaFusion(proposition, nes, affirmationsVersees, etapeDesPortages);
+    etapeDesPortages.fini();
 
     // L'histoire se refait maintenant : sans cela, le fil resterait celui d'une
     // proposition ouverte — sans acte de fusion, sans carte de fin — jusqu'au
@@ -6887,6 +6906,70 @@ async function ajouterLesVuesRetenues(proposition, items = [], carnet = null) {
  * ouvraient un lot au passage, et un lot nommé dans le document sans entreprise
  * retenue n'entrait jamais.
  */
+/**
+ * Chercher, après une fusion, sur quoi les sujets portent.
+ *
+ * ## Deux confrontations, et chacune est bornée
+ *
+ * Les sujets qui **viennent de naître** rencontrent la mémoire entière : ils
+ * n'ont jamais été confrontés à rien. Les sujets **déjà ouverts** ne rencontrent
+ * que les affirmations qui **viennent d'entrer** : le reste de la mémoire, ils
+ * l'ont déjà vu.
+ *
+ * Les passer tous contre toute la mémoire serait un balayage : il
+ * redécouvrirait les mêmes rapprochements pour des sujets que cette fusion n'a
+ * pas touchés, et une alerte qui revient sans raison est une alerte qu'on cesse
+ * de lire.
+ *
+ * ## Elle ne défait jamais la fusion
+ *
+ * La mémoire est versée, les sujets sont ouverts. Manquer un rapprochement ne
+ * doit pas remettre cela en cause : l'échec se **dit** dans le journal — le
+ * taire ferait croire que rien n'était à rattacher — et la recherche à la
+ * demande, dans le détail d'un sujet, le rattrape.
+ */
+async function proposerLesPortagesDeLaFusion(proposition, nes = [], versees = [], etape = null) {
+  try {
+    const ouverts = await lireLesPointsOuverts(proposition?.project_id);
+    if (ouverts === null) {
+      etape?.avertir?.("Les rattachements n'ont pas pu être cherchés : ils se cherchent à la main depuis un sujet.");
+      return;
+    }
+
+    const memoire = await lireLaMemoire(proposition?.project_id);
+    const { proposerLesPortages, phraseDesPortagesProposes } =
+      await import("../services/portage-reconnaissance.js");
+
+    const bilan = await proposerLesPortages({
+      projectId: proposition?.project_id,
+      confrontations: [
+        { points: nes, assertions: memoire ?? [] },
+        { points: ouverts, assertions: versees }
+      ]
+    });
+
+    if (!bilan) {
+      etape?.avertir?.("Les rattachements n'ont pas pu être cherchés : ils se cherchent à la main depuis un sujet.");
+      return;
+    }
+    etape?.dire?.(phraseDesPortagesProposes(bilan));
+  } catch (erreur) {
+    etape?.rate?.(erreur);
+  }
+}
+
+/** Les points du projet, réduits à ce que la reconnaissance a besoin de savoir. */
+async function lireLesPointsOuverts(projectId) {
+  const { listerLesPoints } = await import("../services/point-porte-sur-supabase.js");
+  return listerLesPoints(projectId);
+}
+
+/** La mémoire du projet, telle qu'elle est après le versement. */
+async function lireLaMemoire(projectId) {
+  const { listProjectAssertions } = await import("../services/project-memory-supabase.js");
+  return listProjectAssertions(projectId);
+}
+
 async function ouvrirLesLotsDuCompteRendu(root, items = []) {
   const lots = items.filter(
     (entry) => entry.itemType === ITEM_TYPE.LOT && entry.status !== ITEM.REFUSED

@@ -1877,6 +1877,19 @@ async function createSubjectFromDraft() {
       });
     }
 
+    // **Sur quoi ce sujet porte, cherché tout de suite.** L'intitulé vient
+    // d'être écrit, et celui qui l'a écrit est devant l'écran : c'est le moment
+    // où un rapprochement a le plus de chances d'être juste, et où il coûte le
+    // moins cher à écarter. Ce qui est posé n'a pas d'auteur — c'est une
+    // reconnaissance, quelqu'un devra la confirmer.
+    //
+    // Muette en cas d'échec : le sujet est ouvert, et manquer son rattachement
+    // ne doit pas faire croire qu'il ne s'est pas ouvert. La recherche à la
+    // demande, dans son détail, le rattrape.
+    import("../../services/portage-reconnaissance.js")
+      .then(({ chercherLePortageDuPointNe }) => chercherLePortageDuPointNe(createdSubject))
+      .catch(() => {});
+
     await reloadSubjectsFromSupabase(getSubjectsCurrentRoot(), {
       rerender: false,
       updateModal: false
