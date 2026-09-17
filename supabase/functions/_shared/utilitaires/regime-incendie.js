@@ -148,3 +148,81 @@ export function regimeDuChampDeLArrete(champ) {
   // on ne sait pas, et le dire est la seule réponse honnête (règle 5).
   return "";
 }
+
+/**
+ * La clé sous laquelle la mémoire du projet range cette variable.
+ *
+ * C'est `normalizeSubjectKey(SUJET_REGIME_INCENDIE)` — la normalisation qui
+ * range toutes les affirmations. Elle vit dans `project-memory.js`, côté
+ * navigateur, et un module publié ne peut pas l'importer : la cloison l'interdit
+ * dans ce sens comme dans l'autre. Elle est donc écrite ici, et **un test
+ * confronte les deux à l'exécution** — si le sujet est renommé sans que la clé
+ * suive, il tombe.
+ */
+export const CLE_REGIME_INCENDIE = "regime-de-securite-incendie";
+
+/**
+ * Les régimes que la mémoire d'un projet porte, sans doublon.
+ *
+ * ## Ce qu'elle lit, et comment
+ *
+ * Les affirmations rangées sous cette clé, portée comprise : `subject_key` vaut
+ * `regime-de-securite-incendie` pour l'ouvrage entier, `…@Bâtiment A` pour une
+ * zone. La portée range l'affirmation, elle ne change pas le sujet dont elle
+ * parle.
+ *
+ * ## Pourquoi elle ignore ce qui a été remplacé
+ *
+ * Une valeur qu'une autre a remplacée ferait router sur un état que le projet a
+ * quitté. C'est la règle de `memoire.js#currentAssertions`, et ce n'est pas un
+ * oubli si elle est réécrite ici : ce module est publié au navigateur, celui-là
+ * ne l'est pas, et la cloison interdit à l'un d'importer l'autre. Le
+ * commentaire de `memoire.js` accepte déjà cette duplication pour la même
+ * raison ; un test tient les deux ensemble.
+ *
+ * @param {object[]} assertions la mémoire du projet, telle qu'elle est lue
+ * @returns {string[]} zéro, un, ou plusieurs régimes, dans l'ordre du vocabulaire
+ */
+export function regimesDeLaMemoire(assertions = []) {
+  const vues = new Set();
+
+  for (const assertion of Array.isArray(assertions) ? assertions : []) {
+    if (assertion?.superseded_by) continue;
+
+    const cle = String(assertion?.subject_key ?? "").trim().split("@")[0];
+    if (cle !== CLE_REGIME_INCENDIE) continue;
+
+    // L'énoncé sert de repli : une affirmation posée à la main porte sa valeur
+    // dans la phrase plutôt que dans le payload — c'est ce que fait déjà
+    // `prefillDepuisMemoire`.
+    const brut = String(assertion?.payload?.value ?? "").trim()
+      || String(assertion?.statement ?? "").trim();
+
+    const regime = regimeValide(brut);
+    if (regime) vues.add(regime);
+  }
+
+  return CLES_REGIME_INCENDIE.filter((cle) => vues.has(cle));
+}
+
+/**
+ * Le régime du projet, quand il n'y en a qu'un.
+ *
+ * ## Trois réponses ramenées à deux, et c'est délibéré
+ *
+ * Rien en mémoire et deux zones qui se contredisent rendent la même chose :
+ * `""`. Ce n'est pas une confusion — c'est que **les deux appellent la même
+ * suite** : on n'écarte aucun agent, et le premier appelé posera la question.
+ * Choisir l'un des deux régimes ferait répondre sur le rez-de-chaussée une
+ * exigence calculée pour les étages, sans que rien ne le dise (règle 5).
+ *
+ * La différence entre les deux cas se lit sur `regimesDeLaMemoire`, qui rend la
+ * liste : c'est elle qu'il faudra afficher quand l'écran nommera la provenance.
+ *
+ * @param {object[]} assertions la mémoire du projet
+ * @returns {string} un régime, ou `""`
+ */
+export function regimeDeLaMemoire(assertions = []) {
+  const trouves = regimesDeLaMemoire(assertions);
+  return trouves.length === 1 ? trouves[0] : "";
+}

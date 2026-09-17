@@ -45,6 +45,7 @@ import { store } from "../store.js";
 import { buildAssistContext } from "./copilote-context.js";
 import { contexteTransversal } from "./copilote-contexte-transversal.js";
 import { executerUtilitaire } from "./utilitaires-service.js";
+import { regimeDeLaMemoire } from "../../vendor/utilitaires/regime-incendie.js";
 import {
   EXECUTEURS_DU_NAVIGATEUR, ROLES_QUE_CE_NAVIGATEUR_SAIT
 } from "./copilote-executeurs.js";
@@ -265,6 +266,19 @@ export async function sendAssistMessage(message, {
         // que ce qu'elle saura faire. Sans cela, un outil déployé côté serveur
         // avant le site était appelé, puis exécuté de travers.
         browser_roles: ROLES_QUE_CE_NAVIGATEUR_SAIT,
+        // **Le régime de sécurité incendie de ce projet**, quand il n'y en a
+        // qu'un. C'est ce qui décide quel agent incendie le modèle se verra
+        // offrir : le laisser deviner sur la formulation de la question ferait
+        // répondre avec le mauvais référentiel.
+        //
+        // Il part par le même canal que la mémoire, et pour la même raison : la
+        // page l'a lue, elle la transmet. Une valeur, jamais un nom d'agent —
+        // c'est toujours le serveur qui choisit ce qu'il déclare.
+        //
+        // Vide quand le projet ne le porte pas, ou quand deux zones se
+        // contredisent : dans les deux cas on n'écarte aucun agent, et le
+        // premier appelé posera la question.
+        fire_regime: regimeDeLaMemoire(assertions),
         tool_exchanges: echanges
       })
     });

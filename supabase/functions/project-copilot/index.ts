@@ -96,6 +96,12 @@ type CopilotRequest = {
    * d'outils : il n'en apprend donc aucun. Absent, c'est un navigateur d'avant.
    */
   browser_roles?: string[];
+  /**
+   * Le régime de sécurité incendie du projet, quand sa mémoire n'en porte qu'un.
+   * Il décide quels agents incendie sont déclarés au modèle. Vide, ils le sont
+   * tous — on ne choisit pas à la place de quelqu'un.
+   */
+  fire_regime?: string;
   tool_exchanges?: ToolExchange[];
 };
 
@@ -433,7 +439,14 @@ serve(async (req) => {
   // site se déploient séparément : offrir un outil que la page ne connaît pas
   // encore, c'est le faire appeler puis exécuter de travers, sans que rien ne le
   // dise. Un outil absent, lui, n'est jamais appelé.
-  const outils = [...declarationsPourCeNavigateur(payload.browser_roles), ...declarationsPourModele()]
+  // **Le modèle ne voit pas le mauvais agent incendie.** Ce n'est pas une
+  // consigne dans le prompt — une consigne se contourne —, c'est une liste plus
+  // courte. Le régime vient de la mémoire du projet, que la page a lue et
+  // transmise comme elle transmet la mémoire elle-même.
+  const outils = [
+    ...declarationsPourCeNavigateur(payload.browser_roles),
+    ...declarationsPourModele({ regimeIncendie: texte(payload.fire_regime) })
+  ]
     .slice(0, MAX_TOOLS)
     .filter((outil) => texte(outil?.name) && outil?.parameters);
 

@@ -117,7 +117,7 @@ change. Si une seconde ligne doit être éditée ailleurs, le plan est raté.
 
 ---
 
-## Étape 3 — L'orchestration n'offre que ce qui s'applique
+## Étape 3 — L'orchestration n'offre que ce qui s'applique *(faite)*
 
 `declarationsPourModele()` rend aujourd'hui **tous** les outils. Elle prend un
 argument :
@@ -139,7 +139,7 @@ déjà pour construire son contexte. Aucune lecture nouvelle.
 
 ---
 
-## Étape 4 — Ce qu'on ne sait pas, on le demande
+## Étape 4 — Ce qu'on ne sait pas, on le demande *(faite, sauf la question)*
 
 Trois cas, et aucun ne se devine :
 
@@ -303,13 +303,104 @@ fichier tombe avec `ERR_MODULE_NOT_FOUND` ; avec lui, toute la suite passe.
 
 ---
 
+## Étapes 3 et 4 : ce qui est fait, et la ligne qui attend
+
+| ce que c'est | où |
+|---|---|
+| le régime que la mémoire du projet porte | `regime-incendie.js`, `regimeDeLaMemoire()` |
+| les agents que ce projet peut appeler | `catalogue.js`, `agentsPourCeProjet()` |
+| le filtre de la déclaration au modèle | `declarationsPourModele({ regimeIncendie })` |
+| le régime transmis par la page | `copilote-service.js`, champ `fire_regime` |
+| l'entrée `regimeIncendie` sur l'agent | `catalogue.js`, agent `incendie_habitation` |
+| le refus quand le texte ne correspond pas | `regimeQuiNeCorrespondPas()` |
+
+**Le modèle ne voit pas le mauvais agent.** Ce n'est pas une consigne dans le
+prompt — une consigne se contourne —, c'est une liste plus courte. Les agents
+sans régime ne sont jamais concernés, et rien n'est écarté quand on ne sait pas.
+
+**D'où vient le régime, et pourquoi de là.** Le plan disait « la mémoire du
+projet, que `project-copilot/index.ts` charge déjà ». C'était faux : la fonction
+reçoit la mémoire **en prose**, pas les affirmations. La lire au serveur aurait
+demandé une requête de plus à chaque question ; la parser dans le texte aurait
+été fragile. La page, elle, a déjà les affirmations — elle vient de les envoyer.
+Elle transmet donc le régime par le même canal et au même titre : une **valeur**
+du projet, jamais un nom d'agent. C'est toujours le serveur qui décide ce qu'il
+déclare.
+
+**Une seule valeur, ou rien.** Deux zones qui se contredisent et une mémoire
+muette rendent la même chose, et c'est voulu : les deux appellent la même suite —
+on n'écarte aucun agent. Choisir l'un des deux régimes ferait répondre sur le
+rez-de-chaussée une exigence calculée pour les étages (règle 5). La différence
+entre les deux cas se lit sur `regimesDeLaMemoire`, qui rend la liste : c'est
+elle qu'affichera l'étape 6.
+
+### Le bon référentiel, ou rien
+
+Un agent incendie déclare le régime qu'il sert ; l'entrée `regimeIncendie` dit
+celui dont le bâtiment relève. Quand les deux diffèrent, le calcul aurait lieu et
+rendrait une exigence juste, vérifiable, **tirée du mauvais texte** — le pire des
+résultats. Le contrôle est dans `executerOutil`, et non dans chaque agent :
+l'ajouter à chacun serait l'oublier au troisième.
+
+L'entrée n'est **pas** une entrée d'aiguillage, contrairement à ce que le plan
+prévoyait. `exigence` en est une parce qu'elle dit ce que le modèle est allé
+chercher ; le régime, lui, **est** une donnée du bâtiment — une qualification
+réglementaire. Il passe donc par le garde-fou des valeurs fabriquées comme les
+autres : proposé sans appui, il est écarté et le calcul a lieu sans lui.
+
+### Ce qui n'est pas fait : la question
+
+Le plan veut que l'agent **demande** le régime quand le projet ne le porte pas.
+L'entrée n'est pas encore `requis`, et c'est une décision :
+
+1. **la réponse ne se verserait pas.** Seul l'écran de l'étude verse en mémoire.
+   La question se reposerait à chaque conversation, indéfiniment — l'inverse de
+   ce que promet le plan (« et la question ne se repose plus ») ;
+2. **l'étude ne répond pas à cette entrée.** Le formulaire s'ouvrirait pour un
+   bâtiment entièrement décrit dans l'Atelier, ce que `prefillDepuisLEtude`
+   existe précisément pour éviter — trois gardes du dépôt le disent ;
+3. **il n'y a qu'un référentiel.** La question n'a aujourd'hui qu'une réponse qui
+   mène quelque part.
+
+Ce qui protège déjà sans elle : le filtre n'offre pas l'agent d'un autre régime,
+et le refus ci-dessus arrête le calcul quand le bâtiment relève d'un autre texte.
+La rendre requise sera **un mot à changer**, le jour où la réponse donnée dans le
+formulaire se verse — c'est-à-dire avec l'étape 5.
+
+### Les gardes posées, et ce qu'on a cassé pour les voir tomber
+
+| la garde | ce qu'on a cassé | ce qui est tombé |
+|---|---|---|
+| filtré, le modèle voit un seul agent incendie | le filtre les garde tous | 1 test |
+| les agents sans régime ne sont jamais écartés | le filtre les écarte aussi | 1 test |
+| un régime illisible n'écarte rien | il vide la liste | 1 test |
+| le mauvais référentiel ne calcule pas | le refus est court-circuité | 1 test |
+| l'entrée n'est pas un aiguillage | elle en devient un | 2 tests |
+| la portée ne change pas le sujet | elle est lue comme un autre sujet | 2 tests |
+| deux zones contradictoires ne tranchent pas | la première gagne | 1 test |
+| une valeur remplacée ne route plus | elle route de nouveau | 1 test |
+| la page envoie le régime | elle ne l'envoie plus | 1 test |
+| le serveur le lit | il l'ignore | 1 test |
+
+S'y ajoutent deux **vérifications croisées à l'exécution** : la clé de mémoire
+est bien celle que `normalizeSubjectKey` produit du sujet, et le filtre des
+valeurs remplacées fait bien ce que `currentAssertions` fait — deux règles
+réécrites faute de pouvoir traverser la cloison, et tenues ensemble par un test.
+
+Et la garde n° 3 du plan est posée : **aucun identifiant d'agent n'est écrit dans
+l'orchestration**. On lit `project-copilot/index.ts` et
+`executer-utilitaire/index.ts`, et l'on vérifie qu'aucun `id` du catalogue n'y
+figure — le test refuse aussi de passer si le fichier n'a pas été lu.
+
+---
+
 ## L'ordre de fabrication
 
 | | étape | ce qu'on peut livrer seul |
 |---|---|---|
 | 1 | ~~la variable et son versement (§ 1, § 5 pour l'écran)~~ **faite** | oui — elle enrichit la mémoire même sans routage |
 | 2 | ~~le champ `regimeIncendie` sur l'outil habitation (§ 2)~~ **faite** | oui — inerte tant que § 3 n'est pas là |
-| 3 | le filtre de `declarationsPourModele` (§ 3) et l'entrée `regimeIncendie` (§ 4) | oui — c'est le routage lui-même |
+| 3 | ~~le filtre de `declarationsPourModele` (§ 3) et l'entrée `regimeIncendie` (§ 4)~~ **faite** | oui — c'est le routage lui-même |
 | 4 | la portée dans `prefillDepuisMemoire` (§ 5) | oui, et **indépendamment** : c'est un défaut qui existe déjà |
 | 5 | la provenance à l'écran (§ 6) | oui |
 
