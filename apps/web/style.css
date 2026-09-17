@@ -38,6 +38,10 @@
   --discussion-avatar-gap:12px;
   --discussion-content-inset:calc(var(--discussion-avatar-size) + var(--discussion-avatar-gap));
   
+  /* La colonne de lecture du Copilote. Le fil, la saisie et la reproduction de
+     l'accueil la lisent tous les trois : deux valeurs feraient sauter la
+     largeur au moment où l'on bascule de l'un à l'autre. */
+  --copilote-colonne:860px;
   --header-h:52px;
   --header-h-compact:64px;
   --header-h-sticky-chrome:60px;
@@ -597,8 +601,16 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 
 .mono-small{font-size:13px;color:var(--muted);font-weight:500;margin-right:4px;}
 
-/* Right panel body: responsive 2-col grid (main + metadata) */
-.subject-details-shell .details-grid{display:grid;grid-template-columns:minmax(0, 1fr) 296px;gap:24px;align-items:stretch;margin-top:10px;min-height:100%;}
+/* Right panel body: responsive 2-col grid (main + metadata)
+
+   **L'accueil emprunte la même.** Sa colonne centrale porte le Copilote, sa
+   colonne de droite l'activité récente : c'est le même partage que le corps d'un
+   sujet et ses métadonnées, et l'on n'a aucune raison de le recalibrer deux
+   fois. Les trois seuils — la largeur de droite, son repli à 256, et
+   l'empilement sous 769 — sont donc écrits une fois pour les deux écrans
+   (règle 4). */
+.subject-details-shell .details-grid,
+.accueil-colonnes{display:grid;grid-template-columns:minmax(0, 1fr) 296px;gap:24px;align-items:stretch;margin-top:10px;min-height:100%;}
 .details-main{min-width:0;padding-bottom:250px;}
 .details-meta-col{padding:0 0 16px 0;height:100%;overflow:auto;}
 .meta-title{
@@ -1415,12 +1427,14 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 }
 
 @container (max-width: 1012px){
-  .subject-details-shell .details-grid{grid-template-columns:minmax(0, 1fr) 256px;}
+  .subject-details-shell .details-grid,
+  .accueil-colonnes{grid-template-columns:minmax(0, 1fr) 256px;}
 }
 
 /* When the right panel is narrow, stack metadata under main */
 @container (max-width: 769px){
-  .subject-details-shell .details-grid{grid-template-columns:1fr;}
+  .subject-details-shell .details-grid,
+  .accueil-colonnes{grid-template-columns:1fr;}
 }
 
 .thread{display:flex;flex-direction:column;gap:12px;}
@@ -4964,8 +4978,10 @@ body.route--project:not(.project-shell-compact) [data-chrome-visibility="compact
 body:has(.gh-header--global){ --app-top:var(--header-h-compact); }
 
 .gh-header--project{border-bottom:none;}
-.gh-header--project .gh-brand__name{font-weight:400;font-size:14px;}
-.gh-header--project .gh-brand__repo{opacity:.92;}
+/* Dans un projet, ce nom **est** celui du projet : il ne s'allège plus. Il était
+   mis en retrait parce qu'il portait celui de la personne, qui précédait le
+   projet ; ce nom-là a quitté la barre, et l'allègement avec lui. */
+.gh-header--project .gh-brand__name{font-size:14px;}
 
 
 
@@ -17569,7 +17585,14 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    largeur. */
 .copilote-thread-wrap{ position:relative; flex:1 1 auto; min-height:0; }
 .copilote-thread{ height:100%; overflow-y:auto; overflow-x:hidden; }
-.copilote-thread__inner{ width:100%; max-width:860px; margin:0 auto; padding:24px 24px 8px; }
+/* **La colonne de lecture du Copilote, et sa mesure unique.**
+
+   Le fil, la saisie et la reproduction de l'accueil doivent faire la même
+   largeur : sinon la première question paraît étroite, puis l'écran s'élargit
+   d'un coup au moment où l'on bascule — on croit avoir changé d'outil. Le
+   nombre vit donc à un seul endroit (`--copilote-colonne`, dans `:root`), et
+   les trois le lisent. */
+.copilote-thread__inner{ width:100%; max-width:var(--copilote-colonne); margin:0 auto; padding:24px 24px 8px; }
 .copilote-msg{ padding:12px 0; margin-bottom:4px; }
 
 /* Le message de l'utilisateur ne porte plus son nom : dans une conversation
@@ -17709,7 +17732,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .copilote-composer{ flex:0 0 auto; padding:8px 24px 16px; }
 .copilote-composer__inner{
   display:flex; flex-direction:column; gap:10px;
-  width:100%; max-width:860px; margin:0 auto;
+  width:100%; max-width:var(--copilote-colonne); margin:0 auto;
 }
 
 /* La saisie porte son bouton d'envoi en bas à droite, dans le cadre : le geste
@@ -17836,6 +17859,26 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   box-shadow:0 12px 32px rgba(1,4,9,.85);
 }
 .copilote-fil-menu[hidden]{ display:none; }
+/* **Le menu du rail replié s'ouvre à côté du rail, et non sous l'icône.** Calé
+   sur le bord droit d'une entrée de quarante pixels, il sortirait de l'écran par
+   la gauche — c'est là qu'il y a la place. */
+.copilote-fil-menu--rail-replie{
+  /* Quatorze pixels, et non six : l'entrée s'arrête huit pixels avant le bord du
+     rail — c'est son retrait —, et un menu posé six pixels après elle chevauchait
+     le trait de séparation. */
+  left:calc(100% + 14px); right:auto; top:0;
+  max-height:min(420px, 60vh); overflow:auto;
+}
+/* La discussion ouverte se repère dans le menu comme dans le rail : sans cela,
+   replié, on ne sait plus laquelle on lit. */
+.copilote-fil-menu__item.est-courante{ background:rgba(255,255,255,.07); font-weight:600; }
+.copilote-fil-menu__item.est-courante span{ color:var(--text); }
+/* Le titre d'une discussion est long : dans un menu, il se coupe plutôt que de
+   l'étirer jusqu'au bord de l'écran. */
+.copilote-fil-menu--rail-replie .copilote-fil-menu__item span{
+  overflow:hidden; text-overflow:ellipsis; max-width:260px;
+}
+.copilote-fil-menu__filet{ height:1px; margin:6px 4px; background:var(--border); }
 .copilote-fil-menu__item{
   display:flex; align-items:center; gap:8px; width:100%;
   min-height:32px; padding:0 8px;
@@ -17987,20 +18030,33 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 /* La note jointe, au-dessus de la saisie : elle change le sens de ce qu'on
    s'apprête à taper, donc elle se voit avant. */
+/* **Une pastille, pas un bandeau.**
+
+   La note prenait toute la largeur de la zone de saisie : une seule note faisait
+   une barre, et deux n'auraient pas pu tenir côte à côte. Elle prend maintenant
+   la largeur de son texte, croix comprise — et la rangée qui les porte sait donc
+   en aligner plusieurs, le jour où l'on en joindra deux.
+
+   L'icône est **grise**, comme dans les Fichiers : le rouge d'un PDF est la
+   couleur d'une alerte partout ailleurs dans l'écran, et une note jointe n'en
+   est pas une. */
+.copilote-pieces{ display:flex; flex-wrap:wrap; gap:6px; margin:0 0 6px; }
 .copilote-piece{
-  display:flex; align-items:center; gap:8px; margin:0 0 6px; padding:5px 10px;
+  display:inline-flex; align-items:center; gap:8px; max-width:100%; padding:5px 10px;
   border:1px solid var(--border2, #30363d); border-radius:8px;
   background:var(--bg2, rgba(110,118,129,.06)); font-size:12px;
 }
 .copilote-piece svg{ flex:none; opacity:.7; }
-.copilote-piece__nom{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* Le nom ne s'étire plus pour remplir la ligne : il prend ce qu'il lui faut, et
+   se coupe seulement quand la pastille atteint le bord. */
+.copilote-piece__nom{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .copilote-piece__poids{ color:var(--muted); font-size:11px; flex:none; }
 .copilote-piece__retirer{
   flex:none; background:none; border:none; color:var(--muted); cursor:pointer;
   font-size:16px; line-height:1; padding:0 2px;
 }
 .copilote-piece__retirer:hover{ color:#f85149; }
-.copilote-piece .ui-icon{ color:#f85149; opacity:.85; }
+.copilote-piece .ui-icon{ color:var(--muted); opacity:1; }
 
 /* **La ligne d'une note ouvre la note.** Elle ne disait que son nom, et deux
    versions d'une note de calcul portent le même nom à un suffixe près : il
@@ -18010,7 +18066,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    dessin ne change : ce sont les mêmes espacements, la même icône, la même
    troncature — seul le pointeur et le fond au survol disent qu'il se clique. */
 .copilote-piece__ouvrir{
-  display:flex; align-items:center; gap:8px; flex:1; min-width:0;
+  display:flex; align-items:center; gap:8px; min-width:0;
   background:none; border:0; padding:0; margin:0;
   color:inherit; font:inherit; text-align:left; cursor:pointer;
 }
@@ -18035,7 +18091,9 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   padding:6px 8px 6px 12px; border-bottom:1px solid var(--border2);
   font-size:12px; color:var(--text);
 }
-.copilote-apercu__tete .ui-icon{ flex:none; color:#f85149; opacity:.85; }
+/* Grise, comme la pastille et comme les Fichiers : le rouge est la couleur d'une
+   alerte partout ailleurs, et un PDF qu'on regarde n'en est pas une. */
+.copilote-apercu__tete .ui-icon{ flex:none; color:var(--muted); }
 .copilote-apercu__nom{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .copilote-apercu__fermer{ flex:none; }
 /* Le lecteur est celui du navigateur : il défile, il cherche, il zoome. Le
@@ -18228,8 +18286,13 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .nav-list__item--sub[data-active="true"] .nav-list__content{ color:var(--text); }
 /* Replié, le rail n'a pas de place pour des intitulés seuls : l'historique
    disparaît avec eux plutôt que de laisser une colonne de lignes vides. */
-.project-rail.is-collapsed .nav-list__list--sub,
+.project-rail.is-collapsed .nav-list__list--sub{ display:none; }
+/* L'action d'une entrée disparaît au repli — sauf le menu des discussions, qui
+   **est** ce qui remplace la liste masquée. */
 .project-rail.is-collapsed .nav-list__action{ display:none; }
+.project-rail.is-collapsed .nav-list__action:has(.copilote-fil-menu--rail-replie){
+  display:block; position:static;
+}
 
 /* Pas de filet au-dessus : le bouton est déjà en bas, et un trait de plus dans
    un rail qui en porte déjà un ne sépare rien. */
@@ -18258,6 +18321,17 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    d'autre, arrondi compris. Rien ne se déplace, seul le texte s'efface. */
 .project-rail.is-collapsed .nav-list__content,
 .project-rail.is-collapsed .project-rail__collapse{ width:fit-content; }
+/* **Et le retrait que l'action laissait derrière elle.**
+
+   Une entrée qui porte un geste à droite — le kebab d'une discussion, l'épingle
+   d'une recherche — réserve trente-quatre pixels pour lui. Repliée, l'action est
+   masquée mais le retrait restait : le fond du survol faisait alors soixante-deux
+   pixels dans un rail qui en fait soixante-six, il débordait sur le trait et
+   mordait sur l'écran. Le fond redevient centré sur l'icône, comme sur les
+   entrées qui ne portent rien. */
+.project-rail.is-collapsed .nav-list__item:has(.nav-list__action) .nav-list__content{
+  padding-right:12px;
+}
 .project-rail.is-collapsed .project-rail__collapse .side-nav-layout__label{ display:none; }
 
 /* La poignée déborde sur le contenu pour être saisissable sans viser le trait. */
@@ -25783,6 +25857,9 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   flex:0 0 auto;
   display:inline-flex; width:auto;
   min-height:28px; padding:4px 10px; font-size:12px;
+  /* C'est un lien — il s'ouvre dans un onglet, et le clic du milieu marche —
+     mais il se dessine en bouton : un bouton souligné n'est pas un bouton. */
+  text-decoration:none;
 }
 /* Le champ s'aligne sur les entrées de la liste, qui n'ont plus de gouttière à
    gauche : les décaler d'un pixel se voit tout de suite, la liste est juste
@@ -25819,22 +25896,22 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 /* Deux colonnes : la question au centre, ce qui vient de se passer à droite.
    La colonne de droite est fixe — une liste de dates qui s'étire sur la moitié
    de l'écran se lit plus mal, pas mieux. */
-.accueil-colonnes{
-  display:grid;
-  grid-template-columns:minmax(0, 1fr) 300px;
-  gap:24px;
-  align-items:start;
-  padding:24px 0;
-}
-/* Sous 1080 px, la colonne de droite passe dessous plutôt que de rétrécir : à
-   240 px, un titre de proposition tient sur quatre lignes. */
-@media (max-width: 1080px){
-  .accueil-colonnes{ grid-template-columns:minmax(0, 1fr); }
-}
+/* La grille elle-même est celle du détail d'un sujet, écrite plus haut avec
+   lui. Ne restent ici que l'alignement en haut — les deux colonnes de l'accueil
+   n'ont pas à s'étirer l'une sur l'autre — et le conteneur, sans lequel les
+   seuils de la grille se rapporteraient à la fenêtre plutôt qu'à la colonne. */
+.accueil-colonnes{ align-items:start; padding:24px 0; }
+.project-rail-layout__content:has(.accueil-colonnes){ container-type:inline-size; }
 
 .accueil-colonnes__centre{
   display:flex; flex-direction:column;
-  max-width:720px; width:100%; min-width:0;
+  /* La largeur du Copilote, et pas une autre : c'est là qu'on écrit la question
+     qui s'ouvrira dans le Copilote. */
+  max-width:var(--copilote-colonne); width:100%; min-width:0;
+  /* **Centrée dans sa colonne**, comme le fil du Copilote l'est dans la sienne.
+     Calée à gauche, la saisie se déplacerait latéralement au moment où l'on
+     bascule sur le Copilote — on croirait avoir changé d'écran deux fois. */
+  margin-inline:auto;
 }
 .accueil-copilote{ display:flex; flex-direction:column; gap:12px; width:100%; }
 .accueil-copilote__compose{ width:100%; }

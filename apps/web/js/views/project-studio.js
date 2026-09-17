@@ -59,6 +59,9 @@ import {
 function renderStudioNav() {
   return renderRailDesDiscussionsHtml({
     id: HISTORIQUE,
+    // Replié, l'historique ne tient pas dans soixante-six pixels : il passe
+    // dans un menu, ouvert par la seule icône qui reste.
+    replie: railState.collapsed,
     // La ligne mène au panneau du Copilote : c'est le routeur de panneaux de
     // l'Atelier qui l'ouvre, et non nous.
     attributsDeLEntree: { "data-side-nav-target": "studio-copilote" }

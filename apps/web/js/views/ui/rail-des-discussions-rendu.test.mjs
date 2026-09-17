@@ -20,7 +20,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  renderHistoriqueDesDiscussions, renderRailDesDiscussionsHtml
+  renderHistoriqueDesDiscussions, renderMenuDesDiscussionsHtml, renderRailDesDiscussionsHtml
 } from "./rail-des-discussions-rendu.js";
 
 const FILS = [
@@ -89,4 +89,69 @@ test("sans discussion, le rail montre l'entrée neuve et rien d'autre", () => {
 
   assert.match(html, /Nouvelle discussion/);
   assert.doesNotMatch(html, /data-copilote-conversation/);
+});
+
+/* ── Le rail replié ──────────────────────────────────────────────────────── */
+
+/**
+ * **Replié, les discussions passaient à la trappe.**
+ *
+ * Le rail fait soixante-six pixels : un titre n'y tient pas, et la feuille de
+ * style masquait l'historique. C'était honnête — mieux vaut rien qu'une colonne
+ * de lignes vides — mais cela rendait les fils **inatteignables** : pour en
+ * rouvrir un, il fallait déplier, cliquer, replier. Trois gestes pour un.
+ */
+test("replié, le rail met les discussions dans un menu", () => {
+  const html = renderRailDesDiscussionsHtml({ conversations: FILS, replie: true });
+
+  assert.match(html, /data-copilote-discussions-menu/, "le menu existe");
+  assert.match(html, /data-copilote-discussions="1"/, "et l'icône du Copilote l'ouvre");
+  for (const fil of FILS) {
+    assert.match(html, new RegExp(`data-copilote-conversation="${fil.id}"`), fil.id);
+  }
+});
+
+/**
+ * **« Nouvelle discussion » reste en tête.** C'est ce que l'icône faisait avant :
+ * le geste qu'on connaît ne disparaît pas, il change de place.
+ */
+test("le menu du rail replié ouvre sur « Nouvelle discussion »", () => {
+  const menu = renderMenuDesDiscussionsHtml({ conversations: FILS });
+
+  assert.ok(
+    menu.indexOf("data-copilote-new") < menu.indexOf("data-copilote-conversation"),
+    "avant les fils, et non après"
+  );
+  assert.match(menu, /Nouvelle discussion/);
+});
+
+/** La discussion ouverte se repère : sinon, replié, on ne sait plus laquelle on lit. */
+test("le menu marque la discussion ouverte", () => {
+  const menu = renderMenuDesDiscussionsHtml({ conversations: FILS, courante: "c-2" });
+  const lignes = menu.split("<button").slice(1);
+
+  assert.equal(lignes.filter((ligne) => ligne.includes("est-courante")).length, 1);
+  assert.match(lignes.find((ligne) => ligne.includes("c-2")), /est-courante/);
+});
+
+/**
+ * **Déplié, le menu n'existe pas** : l'icône reprend son geste, et l'historique
+ * est dans le rail. Deux listes des mêmes fils feraient chercher laquelle est à
+ * jour.
+ */
+test("déplié, il n'y a pas de menu", () => {
+  const html = renderRailDesDiscussionsHtml({
+    conversations: FILS, attributsDeLEntree: { "data-copilote-new": "1" }
+  });
+
+  assert.doesNotMatch(html, /data-copilote-discussions-menu/);
+  assert.match(html, /data-copilote-new="1"/, "l'entrée reprend son geste");
+});
+
+/** Sans fil, le menu ne montre que le geste neuf, et pas de filet dans le vide. */
+test("sans discussion, le menu se réduit au geste neuf", () => {
+  const menu = renderMenuDesDiscussionsHtml({ conversations: [] });
+
+  assert.match(menu, /data-copilote-new/);
+  assert.doesNotMatch(menu, /copilote-fil-menu__filet/);
 });

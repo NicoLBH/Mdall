@@ -96,6 +96,9 @@ export function renderHistoriqueDesDiscussions({
  * @param {boolean} [options.avecSujet]
  * @param {boolean} [options.actif] l'entrée « Nouvelle discussion » est-elle
  *   celle qu'on regarde
+ * @param {boolean} [options.replie] le rail est-il replié. L'historique n'y
+ *   tient alors pas : il passe dans un menu, ouvert par la seule icône qui
+ *   reste.
  * @param {Record<string, string>} [options.attributsDeLEntree] ce que l'écran
  *   pose sur la ligne pour savoir qu'on l'a cliquée. L'Atelier y met la cible
  *   de son routeur de panneaux ; l'écran transverse, qui n'en a pas, y met le
@@ -103,17 +106,25 @@ export function renderHistoriqueDesDiscussions({
  */
 export function renderRailDesDiscussionsHtml({
   conversations = [], courante = "", id = "copiloteHistorique", avecSujet = true,
-  actif = true, attributsDeLEntree = {}
+  actif = true, attributsDeLEntree = {}, replie = false
 } = {}) {
+  const fils = Array.isArray(conversations) ? conversations : [];
+
   return [
     renderNavListGroup({
       items: [
         renderNavListItem({
           label: "Nouvelle discussion",
-          dataAttributes: attributsDeLEntree,
+          // **Repliée, l'entrée ouvre la liste au lieu d'ouvrir un fil neuf.**
+          // C'est la seule icône qui reste : lui laisser le geste d'avant
+          // rendrait l'historique inatteignable sans déplier le rail.
+          dataAttributes: replie ? { "data-copilote-discussions": "1" } : attributsDeLEntree,
+          title: replie ? "Discussions du Copilote" : "",
           iconHtml: svgIcon("copilot", { className: "octicon octicon-copilot" }),
           isActive: actif,
-          actionHtml: `
+          actionHtml: replie
+            ? renderMenuDesDiscussionsHtml({ conversations: fils, courante })
+            : `
             <button type="button" class="nav-list__action-btn" data-copilote-new
               aria-label="Nouvelle discussion" title="Nouvelle discussion">
               ${svgIcon("new-chat")}
@@ -122,7 +133,53 @@ export function renderRailDesDiscussionsHtml({
         })
       ]
     }),
-    renderHistoriqueDesDiscussions({ conversations, courante, id, avecSujet })
+    renderHistoriqueDesDiscussions({ conversations: fils, courante, id, avecSujet })
   ].join("");
+}
+
+/**
+ * Les discussions dans un menu, quand le rail est replié.
+ *
+ * ## Pourquoi elles n'y restent pas sous forme de liste
+ *
+ * Replié, le rail fait soixante-six pixels : un titre de discussion n'y tient
+ * pas, et la feuille de style masquait donc l'historique. C'était honnête —
+ * mieux vaut rien qu'une colonne de lignes vides — mais cela **rendait les
+ * discussions inatteignables** : pour rouvrir un fil, il fallait déplier le
+ * rail, cliquer, puis le replier. Trois gestes pour un.
+ *
+ * Le menu les rend au clic sur la seule icône qui reste. « Nouvelle
+ * discussion » est en tête, parce que c'est ce que l'icône faisait avant : le
+ * geste qu'on connaît ne disparaît pas, il change de place.
+ *
+ * ## Il s'ouvre à droite, et non sous l'icône
+ *
+ * Un menu calé sur le bord droit d'une entrée de soixante-six pixels sortirait
+ * de l'écran par la gauche. Il s'ouvre donc **à côté du rail**, là où il y a la
+ * place.
+ */
+export function renderMenuDesDiscussionsHtml({ conversations = [], courante = "" } = {}) {
+  const fils = Array.isArray(conversations) ? conversations : [];
+
+  return `
+    <div class="copilote-fil-menu copilote-fil-menu--rail-replie" role="menu"
+      data-copilote-discussions-menu hidden>
+      <button type="button" class="copilote-fil-menu__item" role="menuitem" data-copilote-new>
+        ${svgIcon("new-chat")}<span>Nouvelle discussion</span>
+      </button>
+      ${fils.length ? `<div class="copilote-fil-menu__filet" role="separator"></div>` : ""}
+      ${fils.map((conversation) => {
+        const titre = conversationTitle(conversation);
+        return `
+          <button type="button" role="menuitem"
+            class="copilote-fil-menu__item${conversation.id === courante ? " est-courante" : ""}"
+            data-copilote-conversation="${escapeHtml(conversation.id)}"
+            title="${escapeHtml(titre)}">
+            ${svgIcon("comment-outline")}<span>${escapeHtml(titre)}</span>
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
 }
 

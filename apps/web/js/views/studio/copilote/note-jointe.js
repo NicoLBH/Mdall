@@ -31,11 +31,16 @@ import { svgIcon } from "../../../ui/icons.js";
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /**
- * La ligne d'une note en partance, dans la zone de saisie.
+ * La pastille d'une note en partance, dans la zone de saisie.
  *
  * **C'est un bouton, et non plus une étiquette.** Elle porte déjà le nom et le
  * poids ; la cliquer ouvre la note. Un nom qu'on ne peut pas vérifier oblige à
  * sortir de l'écran pour s'assurer qu'on a joint la bonne.
+ *
+ * **Et c'est une pastille, non un bandeau.** Elle prenait toute la largeur de la
+ * zone de saisie : une seule note faisait une barre, et deux n'auraient pas pu
+ * tenir côte à côte. Elle prend la largeur de son texte, dans une rangée qui
+ * saura en aligner plusieurs le jour où l'on en joindra deux.
  *
  * La croix reste à part : un bouton dans un bouton n'est pas du HTML valide, et
  * le navigateur en fait ce qu'il veut.
@@ -50,6 +55,7 @@ export function renderLigneDeLaNoteHtml({ piece = null, ouvert = false, montrabl
   const ko = Math.max(1, Math.round((piece.taille ?? 0) / 1024));
 
   return `
+    <div class="copilote-pieces">
     <div class="copilote-piece">
       ${montrable
         ? `<button type="button" class="copilote-piece__ouvrir" data-copilote-apercu
@@ -62,8 +68,16 @@ export function renderLigneDeLaNoteHtml({ piece = null, ouvert = false, montrabl
         : `${svgIcon("file-pdf")}
           <span class="copilote-piece__nom">${escapeHtml(piece.nom)}</span>
           <span class="copilote-piece__poids">${ko} ko</span>`}
-      <button type="button" class="copilote-piece__retirer" id="copiloteRetirerPiece"
+      ${/*
+        **Un repère, et non un identifiant.** La barre d'outils porte une seconde
+        croix qui retire la même note ; les deux s'appelaient `copiloteRetirerPiece`,
+        et un identifiant écrit deux fois dans une page n'en désigne plus qu'un —
+        le premier. Les deux sont exclusives aujourd'hui, ce qui rendait le défaut
+        invisible en attendant qu'il ne le soit plus.
+      */""}
+      <button type="button" class="copilote-piece__retirer" data-copilote-retirer-piece
               aria-label="Retirer la note jointe" title="Retirer">×</button>
+    </div>
     </div>`;
 }
 

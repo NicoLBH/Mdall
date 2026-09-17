@@ -70,9 +70,20 @@ function getHeaderModel() {
       : null;
 
     return {
-      primary: store.user?.name || "Utilisateur",
-      secondary: getProjectDisplayName(parts[1]),
-      showSecondary: true,
+      /**
+       * **Le projet, et non celui qui le regarde.**
+       *
+       * La barre disait « Untel / NOVACLIM ». Le nom de la personne y était sur
+       * chaque écran d'un projet, et il n'apprenait rien : on sait qui l'on est,
+       * et l'avatar le redit à trois centimètres de là, sur la même ligne. Il
+       * prenait la place du seul nom qu'on vient y chercher.
+       */
+      primary: getProjectDisplayName(parts[1]),
+      secondary: "",
+      showSecondary: false,
+      // Le fil compact du projet — l'onglet, puis le détail ouvert — reste : il
+      // vivait dans la branche du nom, et partait avec lui.
+      showCompactTab: true,
       href: `#project/${parts[1]}/documents`,
       headerClass: "gh-header gh-header--project",
       breadcrumbTabLabel: selectedSituation ? "Situations" : "",
@@ -308,7 +319,18 @@ export function renderGlobalHeader() {
                 ? `
                   <span class="gh-brand__sep">/</span>
                   <span class="gh-brand__repo">${model.secondary}</span>
-
+                `
+                : ``
+            }
+            ${/*
+              **Le fil compact ne dépend plus du second nom.** Il vivait dans la
+              même branche, et il est parti avec le nom de la personne le jour où
+              celui-ci a quitté la barre — c'est-à-dire que le détail ouvert n'avait
+              plus de chemin de retour, sans qu'aucune erreur ne le dise.
+            */""}
+            ${
+              model.showCompactTab
+                ? `
                   <span id="projectCompactTab" class="gh-brand__compact-tab" aria-hidden="true">
                     <span class="gh-brand__sep">/</span>
                     <span id="projectCompactTabLabel" class="gh-brand__compact-tab-label">

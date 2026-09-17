@@ -75,6 +75,9 @@ function navDuRail() {
   return renderRailDesDiscussionsHtml({
     id: HISTORIQUE,
     avecSujet: false,
+    // Replié, l'historique ne tient pas dans soixante-six pixels : il passe
+    // dans un menu, ouvert par la seule icône qui reste.
+    replie: reglages.replie(),
     // L'entrée « Nouvelle discussion » est celle qu'on regarde tant qu'aucun fil
     // n'est ouvert. Deux repères bleus pour un seul écran ne désignent plus rien.
     actif: !copiloteConversationId(),

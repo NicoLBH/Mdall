@@ -34,7 +34,37 @@ test("la ligne d'une note est un bouton qui l'ouvre", () => {
   assert.match(html, /aria-expanded="false"/);
   assert.match(html, /note\.pdf/);
   assert.match(html, /117 ko/, "le poids reste lisible");
-  assert.match(html, /id="copiloteRetirerPiece"/, "et la croix reste à part");
+  assert.match(html, /data-copilote-retirer-piece/, "et la croix reste à part");
+});
+
+/**
+ * **Une pastille, pas un bandeau.**
+ *
+ * La note prenait toute la largeur de la zone de saisie : une seule faisait une
+ * barre, et deux n'auraient pas pu tenir côte à côte. La rangée qui la porte
+ * saura en aligner plusieurs le jour où l'on en joindra deux.
+ */
+test("la note est une pastille, dans une rangée qui peut en porter plusieurs", () => {
+  const html = renderLigneDeLaNoteHtml({ piece: { nom: "note.pdf", taille: 1200 } });
+
+  assert.match(html, /class="copilote-pieces"/);
+  assert.ok(
+    html.indexOf("copilote-pieces") < html.indexOf("copilote-piece\""),
+    "la rangée enveloppe la pastille"
+  );
+});
+
+/**
+ * **Un repère, et non un identifiant.** La barre d'outils porte une seconde
+ * croix qui retire la même note ; les deux s'appelaient `copiloteRetirerPiece`,
+ * et un identifiant écrit deux fois dans une page n'en désigne plus qu'un — le
+ * premier. Elles sont exclusives aujourd'hui, ce qui rendait le défaut invisible
+ * en attendant qu'il cesse de l'être.
+ */
+test("la croix ne porte plus d'identifiant, mais un repère", () => {
+  const html = renderLigneDeLaNoteHtml({ piece: { nom: "note.pdf" } });
+
+  assert.doesNotMatch(html, /id="copiloteRetirerPiece"/);
 });
 
 /** Ouvert, elle le dit — sinon on reclique pour ouvrir ce qui est déjà ouvert. */

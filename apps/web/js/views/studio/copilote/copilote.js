@@ -1644,7 +1644,7 @@ function render(root) {
                     // donc pouvoir la retirer, mais cela ne vaut pas une carte
                     // dans la zone de saisie : une croix à côté du trombone suffit.
                     noteDejaPartie(etat)
-                      ? `<button type="button" class="copilote-tool copilote-tool--retirer" id="copiloteRetirerPiece"
+                      ? `<button type="button" class="copilote-tool copilote-tool--retirer" data-copilote-retirer-piece
                           aria-label="Retirer la note jointe à la discussion"
                           title="Retirer ${escapeHtml(etat.pieceJointe.nom)} de la discussion">×</button>`
                       : ""
@@ -2327,6 +2327,39 @@ function ajusterHauteur(champ) {
   champ.style.height = `${champ.scrollHeight}px`;
 }
 
+/**
+ * **Les gestes de la note, par délégation, et une seule fois.**
+ *
+ * Ils étaient branchés sur les nœuds eux-mêmes, un par un. Or ces nœuds naissent
+ * et meurent à chaque rendu — et la pastille de la note vit dans la zone de
+ * saisie, qui se redessine dès qu'un message arrive, qu'une note est jointe ou
+ * que l'aperçu s'ouvre. Un écouteur posé sur le nœud d'avant ne tient plus sur
+ * celui d'après, et **rien ne le dit** : le clic ne fait simplement rien.
+ *
+ * L'écoute est donc posée sur la coque, qui, elle, ne bouge pas — c'est déjà ce
+ * que fait le rail des discussions, pour la même raison. Et **une seule fois** :
+ * `bind` court après chaque rendu, et une écoute de plus à chaque fois ferait
+ * retirer la note autant de fois qu'on a redessiné.
+ */
+function brancherLesGestesDeLaNote(root) {
+  root.addEventListener("click", (event) => {
+    if (event.target.closest("[data-copilote-retirer-piece]")) {
+      const etat = ensureState();
+      etat.pieceJointe = null;
+      // La note s'en va : son aperçu n'a plus d'objet, et ses octets non plus.
+      oublierLApercu(etat);
+      render(root);
+      return;
+    }
+
+    // **La pastille de la note ouvre la note.** Un nom qu'on ne peut pas
+    // vérifier oblige à sortir de l'écran pour s'assurer qu'on a joint la bonne.
+    if (event.target.closest("[data-copilote-apercu], [data-copilote-apercu-fermer]")) {
+      basculerLApercu(root);
+    }
+  });
+}
+
 function bind(root) {
   const etat = ensureState();
   const champ = root.querySelector("#copiloteInput");
@@ -2391,22 +2424,38 @@ function bind(root) {
   root.querySelector("#copiloteFichier")?.addEventListener("change", (event) => {
     void joindre(root, event.target.files?.[0] ?? null);
   });
-  root.querySelector("#copiloteRetirerPiece")?.addEventListener("click", () => {
+  /**
+   * **La note : la retirer, et l'ouvrir. Par délégation.**
+   *
+   * Ces trois gestes étaient branchés sur les nœuds eux-mêmes, un par un. Or ces
+   * nœuds naissent et meurent à chaque rendu — et la pastille de la note vit
+   * dans la zone de saisie, qui se redessine dès qu'un message arrive, qu'une
+   * note est jointe ou que l'aperçu s'ouvre. Un écouteur posé sur le nœud
+   * d'avant ne tient plus sur celui d'après, et **rien ne le dit** : le clic ne
+   * fait simplement rien.
+   *
+   * L'écoute est donc posée sur la coque, qui, elle, ne bouge pas. C'est déjà ce
+   * que fait le rail des discussions, pour la même raison.
+   */
+  if (root.dataset.copiloteDelegue !== "1") {
+    root.dataset.copiloteDelegue = "1";
+    brancherLesGestesDeLaNote(root);
+  }
+
+  const cadre = root.querySelector(".copilote-apercu__page");
+  /**
+   * **Un cadre qui n'a rien affiché le dit.**
+   *
+   * Le lecteur du navigateur peut refuser une note — un base64 tronqué, un
+   * fichier qui n'est pas le PDF qu'il annonce. Le cadre reste alors vide, et
+   * rien ne distingue « ce PDF est vide » de « ce PDF n'a pas pu s'ouvrir » :
+   * les deux se regardent pareil, et l'un fait rejoindre la note pour rien.
+   */
+  cadre?.addEventListener("error", () => {
     const etat = ensureState();
-    etat.pieceJointe = null;
-    // La note s'en va : son aperçu n'a plus d'objet, et ses octets non plus.
     oublierLApercu(etat);
+    etat.lastError = "Cette note n'a pas pu être affichée.";
     render(root);
-  });
-
-  // **La ligne de la note ouvre la note.** Un nom qu'on ne peut pas vérifier
-  // oblige à sortir de l'écran pour s'assurer qu'on a joint la bonne.
-  root.querySelector("[data-copilote-apercu]")?.addEventListener("click", () => {
-    basculerLApercu(root);
-  });
-
-  root.querySelector("[data-copilote-apercu-fermer]")?.addEventListener("click", () => {
-    basculerLApercu(root);
   });
 
   for (const bouton of root.querySelectorAll("[data-remise-outil]")) {
