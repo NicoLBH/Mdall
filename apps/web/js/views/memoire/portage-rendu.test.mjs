@@ -373,6 +373,58 @@ test("une valeur sans histoire ne fabrique pas de dépliant vide", () => {
   assert.doesNotMatch(dit, /portage-liste__identite/);
 });
 
+/* ── Ce qui a été écarté ─────────────────────────────────────────────────── */
+
+const ECARTE = {
+  assertion: VALEUR("Profondeur hors gel", "0,80 m"),
+  lien: { id: "l-7" },
+  quand: "2026-03-12T10:00:00Z",
+  qui: "Ourdine Ferrand"
+};
+
+test("un refus se relit, avec qui a dit non et quand", () => {
+  // Écarter retirait la valeur, et le refus disparaissait avec elle. Six mois
+  // plus tard, personne ne sait que la question a été tranchée, et on la rouvre
+  // en réunion (règle 6).
+  const dit = renderCeQuePorteLeSujet({ portages: [], ecartes: [ECARTE] });
+
+  assert.match(dit, /Ces valeurs ont été écartées/);
+  assert.match(dit, /Profondeur hors gel = 0,80 m/);
+  assert.match(dit, /Écartée le 12 mars 2026 par Ourdine Ferrand/);
+});
+
+test("un refus ne s'offre pas : aucun bouton sur sa ligne", () => {
+  // Il n'y a plus rien à décider. Un bouton ici redemanderait ce qui est déjà
+  // répondu, et « Confirmer » sur une valeur écartée est un piège.
+  const dit = renderCeQuePorteLeSujet({ portages: [], ecartes: [ECARTE] });
+  const bloc = dit.slice(dit.indexOf("portage-liste--ecarte"));
+
+  assert.doesNotMatch(bloc, /<button/);
+  assert.doesNotMatch(bloc, /data-portage-confirme|data-portage-retire/);
+});
+
+test("un refus dont on ignore la date ou l'auteur le dit quand même", () => {
+  // « Écartée » tout court se lit « quelqu'un, un jour » — c'est peu, mais
+  // c'est vrai, et cela suffit à ne pas recommencer. Inventer serait pire.
+  const dit = renderCeQuePorteLeSujet({
+    portages: [],
+    ecartes: [{ assertion: VALEUR("Altitude", "742,30"), lien: { id: "l-6" }, quand: "", qui: "" }]
+  });
+
+  assert.match(dit, /Ces valeurs ont été écartées/);
+  assert.match(dit, /portage-liste__pastille">Écartée</);
+  assert.doesNotMatch(dit, /le  par|par <\/span>/);
+});
+
+test("sans refus, le bloc des écartées ne s'écrit pas", () => {
+  // Il constate ; sans rien à constater il n'a rien à dire, et un bloc vide
+  // ferait chercher ce qu'il annonce.
+  const dit = renderCeQuePorteLeSujet({ portages: [PROPOSE] });
+
+  assert.doesNotMatch(dit, /Ces valeurs ont été écartées/);
+  assert.doesNotMatch(dit, /portage-liste--ecarte/);
+});
+
 test("une valeur sans valeur se dit par son seul nom", () => {
   const dit = renderCeQuePorteLeSujet({
     portages: [{ assertion: { subject_key: "Altitude" }, lien: { id: "l-1" }, confirme: true }]

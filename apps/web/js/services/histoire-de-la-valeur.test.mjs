@@ -11,13 +11,66 @@ const at = "2024-05-14T10:00:00Z";
 /** Une valeur de la mémoire. Aucun nom réel nulle part. */
 const valeur = (id, sujet, dite, charge = {}, plus = {}) => ({
   id, kind: "base-datum", subject_key: id, status: "assumed", superseded_by: null,
-  decided_at: at, decided_by: "u-1", proposition_number: 14,
+  decided_at: at, decided_by: "u-1", proposition_id: "p-14", proposition_number: 14,
   statement: `${sujet} : ${dite}`,
   payload: { subject: sujet, value: dite, ...charge },
   ...plus
 });
 
 const NOMMER = (id) => (id === "u-1" ? "Ourdine Ferrand" : "");
+
+const VERSEMENTS = [{ id: "p-14", number: 14, title: "Analyse du compte rendu du 12 mars" }];
+
+/* ── Le versement qui a posé la valeur ───────────────────────────────────── */
+
+test("un versement se dit par son titre, et se cite par son numéro", () => {
+  // « #P69 » ne dit rien à personne. Ce qu'on cherche en relisant une valeur
+  // qu'on n'a pas posée, c'est ce qu'on faisait ce jour-là.
+  const posee = valeur("v-1", "Altitude", "742,30");
+
+  const dit = lignesDeLHistoire(histoireDeLaValeur(posee, {
+    assertions: [posee], versements: VERSEMENTS, nommer: NOMMER
+  })).find((ligne) => ligne.quoi === "Versée");
+
+  assert.match(dit.dit, /« Analyse du compte rendu du 12 mars » #P14/);
+});
+
+test("le titre sous lequel le versement a été accepté l'emporte", () => {
+  // Une proposition se rouvre, se renomme et se fusionne sous un autre titre.
+  // C'est celui-là qui décrit ce qui est réellement entré dans la mémoire.
+  const posee = valeur("v-1", "Altitude", "742,30");
+  const versements = [{ id: "p-14", number: 14, title: "Brouillon", merge_title: "Relevé topographique" }];
+
+  const dit = lignesDeLHistoire(histoireDeLaValeur(posee, { assertions: [posee], versements }))
+    .find((ligne) => ligne.quoi === "Versée");
+
+  assert.match(dit.dit, /« Relevé topographique »/);
+  assert.doesNotMatch(dit.dit, /Brouillon/);
+});
+
+test("un versement qu'on n'a pas lu garde son numéro, et n'invente pas de titre", () => {
+  // Le numéro se cite entre gens du projet, et c'est tout ce qui reste quand le
+  // versement n'est pas dans ce qu'on a chargé. Un titre absent ne s'invente
+  // pas (règle 5).
+  const posee = valeur("v-1", "Altitude", "742,30");
+
+  const dit = lignesDeLHistoire(histoireDeLaValeur(posee, { assertions: [posee], versements: [] }))
+    .find((ligne) => ligne.quoi === "Versée");
+
+  assert.match(dit.dit, /#P14/);
+  assert.doesNotMatch(dit.dit, /«/);
+});
+
+test("le versement d'à côté ne prête pas son titre", () => {
+  // Deux propositions portent deux numéros ; les confondre ferait lire sur une
+  // valeur le travail d'un autre jour.
+  const posee = valeur("v-1", "Altitude", "742,30", {}, { proposition_id: "p-99" });
+
+  const dit = lignesDeLHistoire(histoireDeLaValeur(posee, { assertions: [posee], versements: VERSEMENTS }))
+    .find((ligne) => ligne.quoi === "Versée");
+
+  assert.doesNotMatch(dit.dit, /Analyse du compte rendu/);
+});
 
 /* ── D'où sort une valeur ────────────────────────────────────────────────── */
 
@@ -168,13 +221,17 @@ test("chaque ligne porte son intitulé, et se lit en diagonale", () => {
     histoireDeLaValeur(conclusion, {
       assertions: [conclusion, altitude],
       applications: [{ output_assertion_id: "v-hg", input_assertion_id: "v-alt", input_subject: "Altitude" }],
+      versements: VERSEMENTS,
       nommer: NOMMER
     }),
     { dater: (quand) => String(quand).slice(0, 10) }
   );
 
   const dit = new Map(lignes.map((ligne) => [ligne.quoi, ligne.dit]));
-  assert.equal(dit.get("Versée"), "le 2024-05-14 · par Ourdine Ferrand · #P14");
+  assert.equal(
+    dit.get("Versée"),
+    "le 2024-05-14 · par Ourdine Ferrand · « Analyse du compte rendu du 12 mars » #P14"
+  );
   assert.equal(dit.get("Porte sur"), "Bâtiment A");
   assert.equal(dit.get("Origine"), "déduite par la règle Hors gel");
   assert.equal(dit.get("Parce que"), "« Sol de type moraine » — etude-geotechnique.pdf, p. 12");

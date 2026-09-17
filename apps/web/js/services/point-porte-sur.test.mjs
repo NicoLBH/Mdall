@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 
 import {
   LIAISON, MOT_A_LECRAN, intituleDuPoint, liensAPoser, phraseDesPointsOuverts,
-  areteEcartee, pointsQuiPortentSur, portageAProposer, portagePropose, portagesDeCesPoints,
-  portagesSurLaValeur, surQuoiCePointPorte
+  areteEcartee, ceQueCePointAEcarte, pointsQuiPortentSur, portageAProposer, portagePropose,
+  portagesDeCesPoints, portagesSurLaValeur, surQuoiCePointPorte
 } from "./point-porte-sur.js";
 
 /** Une affirmation de la mémoire, de la forme que la base rend. */
@@ -469,4 +469,79 @@ test("un point sans identifiant ne se range nulle part", () => {
     liens: []
   });
   assert.equal(parPoint.size, 0);
+});
+
+
+/* ── Ce qu'un sujet a écarté ─────────────────────────────────────────────── */
+
+const ECARTE = (assertionId, quand, par = "u-2") => ({
+  id: `l-${assertionId}`, subject_id: "p-1", assertion_id: assertionId,
+  declared_by: null, ecarte_le: quand, ecarte_par: par
+});
+
+test("un refus se relit, avec qui a dit non et quand", () => {
+  // Écarter retire la valeur de ce que le sujet porte — c'est ce que le geste
+  // promet. Mais faire disparaître le refus lui-même fait rouvrir la même
+  // question en réunion six mois plus tard : un constat ne devient pas faux.
+  const liens = [ECARTE("v-sol", "2026-03-12T10:00:00Z")];
+
+  const ecartes = ceQueCePointAEcarte("p-1", { liens, assertions: MEMOIRE });
+
+  assert.deepEqual(ecartes.map((e) => e.assertion.id), ["v-sol"]);
+  assert.equal(ecartes[0].lien.ecarte_par, "u-2");
+  assert.equal(ecartes[0].lien.ecarte_le, "2026-03-12T10:00:00Z");
+});
+
+test("ce qui n'est pas écarté ne se lit pas comme un refus", () => {
+  // Une arête vivante — posée ou proposée — appartient à l'autre liste. Les
+  // mélanger ferait lire « quelqu'un a dit non » sur ce que personne n'a
+  // regardé.
+  const liens = [
+    { id: "l-1", subject_id: "p-1", assertion_id: "v-sol", declared_by: "u-1", ecarte_le: null },
+    { id: "l-2", subject_id: "p-1", assertion_id: "v-neige", declared_by: null, ecarte_le: null }
+  ];
+
+  assert.deepEqual(ceQueCePointAEcarte("p-1", { liens, assertions: MEMOIRE }), []);
+  assert.deepEqual(surQuoiCePointPorte("p-1", { liens, assertions: MEMOIRE }).map((v) => v.id),
+    ["v-sol", "v-neige"]);
+});
+
+test("le refus d'un autre sujet ne se lit pas ici", () => {
+  const liens = [{ ...ECARTE("v-sol", "2026-03-12T10:00:00Z"), subject_id: "p-autre" }];
+
+  assert.deepEqual(ceQueCePointAEcarte("p-1", { liens, assertions: MEMOIRE }), []);
+});
+
+test("un refus qui vise une version qu'on ne retrouve pas ne se rend pas", () => {
+  // On saurait qu'un refus existe sans pouvoir dire sur quoi, et une ligne vide
+  // vaut moins que rien.
+  const liens = [ECARTE("v-disparue", "2026-03-12T10:00:00Z")];
+
+  assert.deepEqual(ceQueCePointAEcarte("p-1", { liens, assertions: MEMOIRE }), []);
+});
+
+test("le refus le plus récent se lit en premier", () => {
+  // C'est celui dont on se souvient le moins bien, et celui qu'on s'apprête à
+  // redemander.
+  const liens = [
+    ECARTE("v-sol", "2025-01-04T10:00:00Z"),
+    ECARTE("v-neige", "2026-03-12T10:00:00Z")
+  ];
+
+  assert.deepEqual(
+    ceQueCePointAEcarte("p-1", { liens, assertions: MEMOIRE }).map((e) => e.assertion.id),
+    ["v-neige", "v-sol"]
+  );
+});
+
+test("sans sujet, aucun refus ne se lit", () => {
+  // Avec la mémoire sous la main : sans elle, rien ne remonterait de toute
+  // façon, et la garde passerait sans rien garder.
+  assert.deepEqual(
+    ceQueCePointAEcarte("", {
+      liens: [ECARTE("v-sol", "2026-03-12T10:00:00Z")],
+      assertions: MEMOIRE
+    }),
+    []
+  );
 });

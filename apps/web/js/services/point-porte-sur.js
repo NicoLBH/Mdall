@@ -50,9 +50,11 @@ const texte = (valeur) => String(valeur ?? "").trim();
 /**
  * Une arête écartée : quelqu'un a regardé ce rapprochement et a dit non.
  *
- * **Elle reste en base, et elle ne se lit plus.** Un refus est une information
- * — qui, quand — et un constat ne devient pas faux (règle 6) ; mais l'écran ne
- * doit plus rien en dire, sinon écarter n'aurait servi à rien.
+ * **Elle sort de ce que le point porte, et elle se lit à part.** Écarter retire
+ * la valeur de la liste — c'est ce que le geste promet. Mais le refus lui-même
+ * reste une information — qui, quand — et un constat ne devient pas faux
+ * (règle 6) : `ceQueCePointAEcarte` le rend, sans geste, pour qu'on sache que la
+ * question a déjà été tranchée au lieu de la rouvrir en réunion.
  *
  * Elle occupe aussi la place : `unique (subject_id, assertion_id)` fait qu'une
  * reconnaissance qui repasse ne peut pas la remplacer. Le refus tient donc tout
@@ -330,6 +332,60 @@ export function surQuoiCePointPorte(pointId = "", { liens = [], assertions = [] 
   }
 
   return retenues;
+}
+
+/**
+ * Ce que ce point a **écarté** : le rapprochement a été regardé, et refusé.
+ *
+ * ## Pourquoi cela se montre, alors qu'écarter devait faire disparaître
+ *
+ * Écarter retire la valeur de ce que le point porte — c'est ce que le geste
+ * promet, et `surQuoiCePointPorte` le tient. Mais faire disparaître le refus
+ * **lui-même** laisse une question sans réponse visible : quelqu'un a déjà
+ * tranché, personne ne le sait, et la même valeur se rediscute en réunion.
+ *
+ * Un refus est une information — qui, quand — et un constat ne devient pas faux
+ * (règle 6). Il se lit donc, avec sa date et son auteur, et **sans geste** : il
+ * n'y a plus rien à décider, seulement à savoir.
+ *
+ * ## Ce que cela ne change pas
+ *
+ * La reconnaissance ne les repropose toujours pas : `portageAProposer` les
+ * compte parmi les connues, et c'est là que la prudence vit. Les montrer ici est
+ * une lecture, pas une réouverture.
+ *
+ * @returns {{assertion: object, lien: object}[]} du plus récemment écarté au plus ancien
+ */
+export function ceQueCePointAEcarte(pointId = "", { liens = [], assertions = [] } = {}) {
+  const vise = texte(pointId);
+  if (!vise) return [];
+
+  const parId = new Map(
+    (Array.isArray(assertions) ? assertions : []).map((assertion) => [texte(assertion?.id), assertion])
+  );
+
+  const retenues = [];
+  const vues = new Set();
+
+  for (const lien of Array.isArray(liens) ? liens : []) {
+    if (texte(lien?.subject_id) !== vise) continue;
+    if (!areteEcartee(lien)) continue;
+
+    const id = texte(lien?.assertion_id);
+    if (!id || vues.has(id)) continue;
+
+    // Une version qu'on ne retrouve pas ne se rend pas : on saurait qu'un refus
+    // existe sans pouvoir dire sur quoi, et une ligne vide vaut moins que rien.
+    const assertion = parId.get(id);
+    if (!assertion) continue;
+
+    vues.add(id);
+    retenues.push({ assertion, lien });
+  }
+
+  // Le refus le plus récent en premier : c'est celui dont on se souvient le
+  // moins bien et qu'on s'apprête à redemander.
+  return retenues.sort((a, b) => texte(b.lien?.ecarte_le).localeCompare(texte(a.lien?.ecarte_le)));
 }
 
 /**
