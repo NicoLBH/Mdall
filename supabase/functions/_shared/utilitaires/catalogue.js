@@ -1717,6 +1717,88 @@ export function provenancesDesEntrees(outil, {
   return rendu;
 }
 
+/** Un jour, tel qu'on l'écrit dans une phrase. Vide quand la date ne se lit pas. */
+function leJour(quand = "") {
+  const lu = Date.parse(texte(quand));
+  if (!Number.isFinite(lu)) return "";
+
+  const jour = new Date(lu);
+  const dit = jour.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  // « le 1 mars » ne se dit pas. Une date mal écrite au milieu d'une provenance
+  // fait douter du reste de la phrase.
+  return jour.getDate() === 1 ? dit.replace(/^1 /, "1er ") : dit;
+}
+
+/**
+ * Ce sur quoi la réponse repose, en une phrase toute prête.
+ *
+ * ## Le défaut que ça répare
+ *
+ * Un agent rend « CF 1 h » et le modèle l'écrit. Personne ne voit sur quelle
+ * **qualification** ce degré a été calculé : quel classement, quel régime, pour
+ * quelle zone, tranché quand. La réponse s'appuie alors sur une hypothèse que la
+ * personne croyait peut-être abandonnée, et rien ne le dit. C'est l'exigence que
+ * l'étude citée par son titre porte déjà, étendue aux valeurs elles-mêmes.
+ *
+ * Sans elle, tout le plan du régime incendie reste à moitié fait : le bon agent
+ * est choisi, mais on ne peut pas **contester** le choix, faute de lire sur quoi
+ * il s'est fait.
+ *
+ * ## Pourquoi une phrase, et pas des champs à recomposer
+ *
+ * Le modèle recevait déjà `provenances` : il pouvait, en théorie, écrire cette
+ * phrase. En théorie seulement — il la résumait, il oubliait la portée, il
+ * datait de travers. C'est la leçon de `lire_le_cerveau` : ce qui doit être dit
+ * exactement se **rend tout écrit**, et la consigne dit de le reprendre tel
+ * quel. Une phrase qu'on paraphrase n'est plus une provenance.
+ *
+ * ## Ce qu'elle nomme, et ce qu'elle tait
+ *
+ * Ce que le **projet** affirme : la mémoire, et l'étude de l'Atelier. Ce sont
+ * les seules dont on puisse croire à tort qu'elles disent autre chose. Une
+ * valeur dite dans la conversation est sous les yeux, une valeur par défaut est
+ * déclarée, une valeur calculée en chemin est déjà dans `chaine`.
+ *
+ * Et la **qualification d'abord** : le régime de sécurité incendie décide quel
+ * texte s'applique, donc il décide de tout le reste. Le lire en troisième
+ * position le ferait lire en dernier.
+ *
+ * @param {object} outil l'agent qui a calculé
+ * @param {object} options
+ * @param {object} options.fournies les entrées retenues
+ * @param {object} options.provenances ce que rend `provenancesDesEntrees`
+ * @returns {string} la phrase, ou `""` quand rien ne vient du projet
+ */
+export function surQuoiCaRepose(outil, { fournies = {}, provenances = {} } = {}) {
+  const dune = (entree) => {
+    const source = provenances?.[entree.cle];
+    if (!source || (source.origine !== "memoire" && source.origine !== "etude")) return "";
+
+    const valeur = texte(fournies?.[entree.cle]);
+    if (!valeur) return "";
+
+    const situe = [
+      texte(source.portee),
+      source.origine === "memoire"
+        ? (leJour(source.trancheeLe) ? `tranché le ${leJour(source.trancheeLe)}` : "")
+        : "d'après l'étude du projet"
+    ].filter(Boolean).join(", ");
+
+    const libelle = texte(entree.libelle) || entree.cle;
+    return `${libelle} : ${valeur}${situe ? ` (${situe})` : ""}`;
+  };
+
+  // La qualification en tête : elle décide quel texte s'applique, donc elle
+  // décide de tout ce qui suit.
+  const entrees = [...(outil?.entrees ?? [])].sort((a, b) =>
+    Number(b.cle === "regimeIncendie") - Number(a.cle === "regimeIncendie"));
+
+  const dits = entrees.map(dune).filter(Boolean);
+  if (!dits.length) return "";
+
+  return `Cette réponse repose sur ce que le projet affirme — ${dits.join(" ; ")}.`;
+}
+
 /**
  * De quoi dire une étape, même quand personne n'écoute.
  *
@@ -2194,6 +2276,11 @@ export async function executerOutil({
     // d'où viennent les entrées ne se conteste pas, il se subit.
     chaine,
     provenances,
+    // **Sur quoi la réponse repose**, écrit une fois pour toutes. Le modèle
+    // avait déjà `provenances` et pouvait composer cette phrase ; en pratique il
+    // la résumait, oubliait la portée et datait de travers. Ce qui doit être dit
+    // exactement se rend tout écrit — c'est la leçon du récit du cerveau.
+    surQuoiCaRepose: surQuoiCaRepose(outil, { fournies, provenances }),
     // Ce que la conversation gardera de ce calcul. Le tri appartient à la
     // déclaration des entrées, donc au serveur : l'écran ne les connaît plus.
     aRetenir: aRetenirDeLaConversation(outil, fournies),
