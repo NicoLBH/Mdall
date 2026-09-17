@@ -90,15 +90,20 @@ export function renderLigneDeLaNoteHtml({ piece = null, ouvert = false, montrabl
 }
 
 /**
- * L'aperçu déplié, entre le fil et la saisie.
+ * L'aperçu, par-dessus l'écran.
  *
- * **Là, et pas ailleurs.** Dans la zone de saisie, il aurait mangé la place du
- * texte à écrire ; au-dessus du fil, il aurait poussé la conversation hors de
- * l'écran. Entre les deux, il prend la hauteur qu'on lui donne et le fil se
- * resserre — on continue de lire la discussion pendant qu'on vérifie la note.
+ * **Il tenait entre le fil et la saisie**, et prenait la hauteur qu'on lui
+ * laissait : quatre cent vingt pixels de large comme de haut, dans lesquels une
+ * page A4 arrivait illisible. Or la seule chose qu'on demande à un aperçu est
+ * de pouvoir **jeter un œil** : s'il faut plisser les yeux, autant ouvrir le
+ * fichier ailleurs, et le geste n'a servi à rien.
  *
- * **Il se referme de deux façons** : par sa croix, et en recliquant la ligne
- * qui l'a ouvert. Un panneau qui ne se referme que d'un côté se laisse ouvert.
+ * Il passe donc par-dessus l'écran, sur un voile sombre qui laisse voir la
+ * discussion autour — on n'a pas quitté la conversation, on regarde une pièce.
+ *
+ * **Il se referme de quatre façons** : par sa croix, en recliquant la pastille
+ * qui l'a ouvert, en cliquant le voile, et par Échap. Un panneau qui couvre
+ * l'écran et ne se referme que d'un côté se referme mal.
  *
  * @param {object} options
  * @param {string} options.nom
@@ -110,7 +115,9 @@ export function renderApercuDeLaNoteHtml({ nom = "", adresse = "", etat = "lectu
   const sien = texte(nom);
 
   return `
-    <section class="copilote-apercu" aria-label="${escapeHtml(`Aperçu de ${sien || "la note"}`)}">
+    <div class="copilote-apercu-voile" data-copilote-apercu-voile>
+    <section class="copilote-apercu" role="dialog" aria-modal="true"
+      aria-label="${escapeHtml(`Aperçu de ${sien || "la note"}`)}">
       <header class="copilote-apercu__tete">
         ${svgIcon("file-pdf")}
         <span class="copilote-apercu__nom">${escapeHtml(sien)}</span>
@@ -148,5 +155,6 @@ export function renderApercuDeLaNoteHtml({ nom = "", adresse = "", etat = "lectu
           </p>`
         : ""}
     </section>
+    </div>
   `;
 }

@@ -1585,7 +1585,14 @@ async function peindreLApercu(root) {
     if (!hote.isConnected || !ensureState().apercu) return;
 
     etat.apercu.dispose?.();
-    const lu = await renderPdfDocument(hote, { bytes: octets, width: 760 });
+    // **La page prend la largeur qu'on lui donne**, moins la gouttière du
+    // lecteur. Une largeur écrite en dur laisserait une page étroite au milieu
+    // d'une fenêtre qui couvre l'écran — c'est exactement ce qu'on venait de
+    // corriger en l'agrandissant.
+    const dispo = Math.round(hote.clientWidth || 0) - 24;
+    const lu = await renderPdfDocument(hote, {
+      bytes: octets, width: Math.max(320, Math.min(1400, dispo || 760))
+    });
     etat.apercu.dispose = lu.dispose;
     etat.apercu.etat = "lue";
   } catch {
@@ -2409,7 +2416,22 @@ function brancherLesGestesDeLaNote(root) {
     // vérifier oblige à sortir de l'écran pour s'assurer qu'on a joint la bonne.
     if (event.target.closest("[data-copilote-apercu], [data-copilote-apercu-fermer]")) {
       basculerLApercu(root);
+      return;
     }
+
+    // **Le voile referme aussi.** Un panneau qui couvre l'écran et ne se ferme
+    // que par sa croix se ferme mal : on clique à côté, c'est le geste.
+    // `event.target` et non `closest` : cliquer *dans* la fenêtre ne la referme
+    // pas, seul le voile lui-même compte.
+    if (event.target.matches?.("[data-copilote-apercu-voile]")) basculerLApercu(root);
+  });
+
+  // Et Échap, comme toute fenêtre qui couvre l'écran. L'écoute est sur le
+  // document : le voile n'a pas le focus, et un clavier n'a pas à viser.
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !ensureState().apercu || !root.isConnected) return;
+    event.preventDefault();
+    basculerLApercu(root);
   });
 }
 

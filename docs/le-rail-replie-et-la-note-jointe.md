@@ -44,8 +44,9 @@ largeur de son texte, croix comprise, dans une rangée qui saura en aligner
 plusieurs le jour où l'on en joindra deux.
 
 L'icône est **grise**, comme dans les Fichiers — dans l'aperçu aussi, croix de
-fermeture comprise. Le rouge d'un PDF est la couleur d'une alerte partout ailleurs
-dans l'écran, et une note jointe n'en est pas une.
+fermeture comprise, et dans le fil une fois la note partie avec la question. Le
+rouge d'un PDF est la couleur d'une alerte partout ailleurs dans l'écran, et une
+note jointe n'en est pas une.
 
 ## Les gestes de la note passent par délégation
 
@@ -64,6 +65,26 @@ celui de la pastille et celui de la barre d'outils. Un identifiant écrit deux f
 dans une page n'en désigne plus qu'un, le premier. Les deux étant exclusives, le
 défaut attendait tranquillement de cesser de l'être ; ce sont désormais deux
 repères, et un seul geste les sert.
+
+## `assertions is not defined`
+
+Une régression, et la plus coûteuse de la série : `assertions` — les affirmations
+de la mémoire du projet — avait été déclaré dans la branche qui les **annonce à
+l'écran**, et non au niveau de la fonction d'envoi. Elles servent bien plus bas :
+les utilitaires s'en pré-remplissent, et le moteur de variante les compare à ce
+que le projet tient pour vrai.
+
+Le résultat est une ligne rouge sous la zone de saisie, **au premier appel
+d'outil** — c'est-à-dire sur la question la plus chère de l'écran, celle qui
+vient avec une note de calcul. La question partait, la réponse ne venait jamais,
+et le message ne disait rien de la cause.
+
+Rien ne pouvait le voir : la syntaxe est valide, le dépôt n'a pas de linter, et
+`copilote-service.js` ne s'importe pas dans un test — l'authentification tire son
+client d'un CDN, et l'import lève avant la première ligne.
+`copilote-portee.test.mjs` relève désormais la profondeur d'accolades de chaque
+déclaration de la fonction d'envoi, et refuse qu'une valeur employée par la
+boucle des outils soit déclarée dans une branche.
 
 ## L'aperçu est dessiné par l'application, plus par le navigateur
 
@@ -92,7 +113,21 @@ Trois conséquences, toutes voulues :
 
 Les pages se repeignent après chaque rendu, et **seulement si le conteneur est
 vide** : l'écran se redessine entièrement, les canevas partent avec lui, mais
-repeindre à chaque frappe relirait le document.
+repeindre à chaque frappe relirait le document. La page prend la largeur du
+conteneur, et non une largeur écrite en dur — sinon la fenêtre s'agrandit et la
+page reste étroite au milieu.
+
+## Et l'aperçu passe par-dessus l'écran
+
+Il tenait entre le fil et la saisie, dans quatre cent vingt pixels où une page A4
+arrivait illisible. Or la seule chose qu'on demande à un aperçu est de pouvoir
+**jeter un œil** : s'il faut plisser les yeux, autant ouvrir le fichier ailleurs,
+et le geste n'a servi à rien.
+
+C'est donc une fenêtre sur un voile sombre, qui laisse voir la discussion autour —
+on n'a pas quitté la conversation, on regarde une pièce. Elle se referme de quatre
+façons : sa croix, la pastille qui l'a ouverte, le voile, et Échap. Un panneau qui
+couvre l'écran et ne se referme que d'un côté se referme mal.
 
 ## Le chevron de l'épingle débordait lui aussi
 

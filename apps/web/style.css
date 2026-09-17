@@ -17612,7 +17612,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   margin:0 2px 6px; color:var(--muted); font-size:12.5px;
 }
 .copilote-msg__note span{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.copilote-msg__note .ui-icon{ flex:none; color:#f85149; opacity:.85; }
+/* Grise, comme la pastille de la zone de saisie et comme les Fichiers : le
+   rouge est la couleur d'une alerte partout ailleurs dans l'écran, et une note
+   qui a voyagé avec la question n'en est pas une. */
+.copilote-msg__note .ui-icon{ flex:none; color:var(--muted); }
 
 /* Le fond est sur la bulle, l'horodatage est **dessous**. À l'intérieur, il
    réservait sa place même invisible, et ce vide se lisait comme un remplissage
@@ -18080,11 +18083,32 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
    `min()` plutôt qu'une hauteur fixe : sur un écran bas, quatre cent vingt
    pixels d'aperçu ne laisseraient rien à la conversation. */
+/* **Le voile, et la fenêtre par-dessus l'écran.**
+
+   L'aperçu tenait entre le fil et la saisie, dans quatre cent vingt pixels où
+   une page A4 arrivait illisible. Or la seule chose qu'on demande à un aperçu
+   est de pouvoir jeter un œil : s'il faut plisser les yeux, autant ouvrir le
+   fichier ailleurs, et le geste n'a servi à rien.
+
+   Le voile laisse voir la discussion autour — on n'a pas quitté la
+   conversation, on regarde une pièce. Le retrait est le même en haut et en bas
+   qu'à gauche et à droite dans l'esprit : large sur les côtés, où il n'y a rien
+   à lire, serré en hauteur, qui est ce qui manque à une page. */
+.copilote-apercu-voile{
+  position:fixed; inset:0; z-index:60;
+  display:flex; padding:40px 80px;
+  background:rgba(1,4,9,.72);
+}
 .copilote-apercu{
-  flex:0 0 auto; display:flex; flex-direction:column; min-height:0;
-  height:min(420px, 45vh);
-  margin:0 24px 8px; border:1px solid var(--border); border-radius:10px;
+  flex:1 1 auto; display:flex; flex-direction:column; min-height:0; min-width:0;
+  border:1px solid var(--border); border-radius:10px;
   background:var(--panel2); overflow:hidden;
+  box-shadow:0 24px 64px rgba(1,4,9,.6);
+}
+/* Sur un écran étroit, quatre-vingts pixels de chaque côté ne laissent plus une
+   page : le retrait se resserre plutôt que la page. */
+@media (max-width: 900px){
+  .copilote-apercu-voile{ padding:16px; }
 }
 .copilote-apercu__tete{
   display:flex; align-items:center; gap:8px; flex:0 0 auto;

@@ -212,10 +212,24 @@ export async function sendAssistMessage(message, {
   // c'est là qu'il invente.
   const context = transversal ? await contexteTransversal() : await buildAssistContext();
 
+  /**
+   * **Les affirmations de la mémoire, au niveau de la fonction.**
+   *
+   * Elles servent bien plus bas — les utilitaires s'en pré-remplissent, et le
+   * moteur de variante les compare à ce que le projet tient pour vrai. Déclarées
+   * dans la branche qui les annonce, elles n'existaient plus une ligne après :
+   * `assertions is not defined`, au premier appel d'outil, sur un écran qui
+   * venait d'accepter une note de calcul. Le premier tour marchait, le second
+   * tombait — et le message ne disait rien de la cause.
+   *
+   * Sans projet, elles sont vides, et c'est exact : il n'y a pas de mémoire d'où
+   * les tirer.
+   */
+  const assertions = context.memoire?.assertions ?? [];
+
   if (transversal) {
     etape(onEtape, "Lecture de votre façon de travailler", "aucune mémoire de projet");
   } else {
-    const assertions = context.memoire?.assertions ?? [];
     etape(onEtape, "Lecture de la mémoire du projet",
       assertions.length ? `${assertions.length} affirmation${assertions.length > 1 ? "s" : ""} en vigueur` : "rien en mémoire");
   }
