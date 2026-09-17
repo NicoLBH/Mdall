@@ -15,6 +15,7 @@ import {
   phraseDesSubstitutions,
   provenancesDesEntrees,
   prefillDepuisMemoire,
+  phraseDesContradictions,
   prefillDepuisLEtude,
   referenceOutil,
   regimeDeLAgent,
@@ -1340,4 +1341,160 @@ test("un régime que le modèle fabrique est écarté, pas appliqué", async () 
 
   assert.notEqual(resultat.statut, "refus");
   assert.ok(resultat.ecartees.includes(SUJET_REGIME_INCENDIE), resultat.ecartees.join(", "));
+});
+
+/* ── La portée d'une valeur, et ce qu'on fait quand elles se contredisent ── */
+
+/** La même affirmation, posée sur une zone. */
+function surLaZone(cle, valeur, zone = "") {
+  return donnee(zone ? `${cle}@${zone}` : cle, valeur);
+}
+
+test("la portée remonte avec la valeur", () => {
+  // Sans elle, une réponse ne peut pas dire de quelle zone elle parle — et une
+  // réponse qu'on ne peut pas situer ne se conteste pas.
+  const { valeurs, provenance } = prefillDepuisMemoire(
+    SPECTRE, [surLaZone("classe-de-sol", "Classe de sol D", "Bâtiment A")]
+  );
+
+  assert.equal(valeurs.soilClass, "D");
+  assert.equal(provenance.soilClass.portee, "Bâtiment A");
+});
+
+test("deux portées qui se contredisent ne pré-remplissent rien", () => {
+  // **Le défaut que l'étape répare.** On rangeait par sujet en écartant la
+  // portée, et la première écrite gagnait : deux classes de sol en mémoire, et
+  // l'agent calculait sur celle qui se trouvait être arrivée d'abord. Rien à
+  // l'écran ne disait qu'il y en avait une autre.
+  const deux = [
+    surLaZone("classe-de-sol", "Classe de sol C", "Bâtiment A"),
+    surLaZone("classe-de-sol", "Classe de sol D", "Escalier B")
+  ];
+  const { valeurs, provenance, contradictions } = prefillDepuisMemoire(SPECTRE, deux);
+
+  assert.equal(valeurs.soilClass, undefined);
+  assert.equal(provenance.soilClass, undefined);
+
+  // Et ce n'est **pas** « je n'ai pas trouvé » : le projet sait deux choses, et
+  // le taire ferait passer une contradiction pour une lacune (règle 5).
+  assert.deepEqual(contradictions.soilClass.valeurs, ["C", "D"]);
+  assert.deepEqual(contradictions.soilClass.portees, ["Bâtiment A", "Escalier B"]);
+});
+
+test("deux portées d'accord ne sont pas une contradiction", () => {
+  // Refuser là aussi reposerait une question à laquelle le projet a répondu
+  // deux fois pareil.
+  const accord = [
+    surLaZone("classe-de-sol", "Classe de sol C", "Bâtiment A"),
+    surLaZone("classe-de-sol", "Classe de sol C", "Escalier B")
+  ];
+  const { valeurs, provenance, contradictions } = prefillDepuisMemoire(SPECTRE, accord);
+
+  assert.equal(valeurs.soilClass, "C");
+  assert.deepEqual(contradictions, {});
+  // Les deux sont nommées : lire une seule portée ferait croire qu'on n'a lu
+  // qu'une affirmation.
+  assert.deepEqual(provenance.soilClass.portees, ["Bâtiment A", "Escalier B"]);
+});
+
+test("la question qui nomme une zone écarte les autres", () => {
+  // « Et pour l'escalier B ? » ne parle pas des mêmes affirmations que la
+  // question d'avant. Les autres zones ne répondent pas à celle-là.
+  const deux = [
+    surLaZone("classe-de-sol", "Classe de sol C", "Bâtiment A"),
+    surLaZone("classe-de-sol", "Classe de sol D", "Escalier B")
+  ];
+  const vise = prefillDepuisMemoire(SPECTRE, deux, { question: "et pour l'escalier B, ça donne quoi ?" });
+
+  assert.equal(vise.valeurs.soilClass, "D");
+  assert.equal(vise.provenance.soilClass.portee, "Escalier B");
+  assert.deepEqual(vise.contradictions, {});
+
+  // Les accents et la casse ne comptent pas : personne ne retape « Bâtiment A »
+  // à l'identique.
+  const autre = prefillDepuisMemoire(SPECTRE, deux, { question: "et sur le batiment a ?" });
+  assert.equal(autre.valeurs.soilClass, "C");
+});
+
+test("l'ouvrage entier répond toujours, et ne l'emporte pas pour autant", () => {
+  // Il n'exclut aucune zone : il est donc retenu même quand la question en
+  // nomme une. Mais le plus spécifique ne gagne pas — sur un chantier, deux
+  // affirmations qui se contredisent sont une question à poser, pas une
+  // priorité à appliquer.
+  const mixte = [
+    surLaZone("classe-de-sol", "Classe de sol C"),
+    surLaZone("classe-de-sol", "Classe de sol D", "Escalier B")
+  ];
+  const rendu = prefillDepuisMemoire(SPECTRE, mixte, { question: "pour l'escalier B ?" });
+
+  assert.equal(rendu.valeurs.soilClass, undefined);
+  assert.ok(rendu.contradictions.soilClass.portees.includes("l'ouvrage entier"));
+
+  // D'accord, ils tranchent — et c'est la portée de la zone visée qu'on montre.
+  const daccord = [
+    surLaZone("classe-de-sol", "Classe de sol D"),
+    surLaZone("classe-de-sol", "Classe de sol D", "Escalier B")
+  ];
+  const dit = prefillDepuisMemoire(SPECTRE, daccord, { question: "pour l'escalier B ?" });
+  assert.equal(dit.valeurs.soilClass, "D");
+  assert.equal(dit.provenance.soilClass.portee, "Escalier B");
+});
+
+test("une portée de deux lettres ne désigne rien", () => {
+  // Une zone « A » se retrouverait dans la moitié des phrases, et l'on
+  // écarterait les autres sur une coïncidence.
+  const deux = [
+    surLaZone("classe-de-sol", "Classe de sol C", "A"),
+    surLaZone("classe-de-sol", "Classe de sol D", "B")
+  ];
+  const rendu = prefillDepuisMemoire(SPECTRE, deux, { question: "quelle classe de sol a-t-on ?" });
+
+  assert.equal(rendu.valeurs.soilClass, undefined);
+  assert.ok(rendu.contradictions.soilClass);
+});
+
+test("une valeur sans portée continue de répondre comme avant", () => {
+  // La grande majorité des affirmations n'en portent aucune : l'étape ne doit
+  // rien changer pour elles.
+  const { valeurs, provenance, contradictions } = prefillDepuisMemoire(SPECTRE, MEMOIRE);
+
+  assert.deepEqual(valeurs, { zoneSismique: "4", importanceCategory: "II", soilClass: "C" });
+  assert.equal(provenance.soilClass.portee, "");
+  assert.deepEqual(contradictions, {});
+});
+
+test("ce qui manque dit pourquoi la mémoire n'a pas répondu", async () => {
+  // Se taire ferait passer une contradiction pour une lacune : on ressaisirait
+  // une valeur que le projet porte déjà, sans savoir qu'on tranche.
+  const resultat = await executerOutil({
+    id: "spectre_elastique_ec8",
+    entrees: {},
+    question: "quel spectre pour ce projet ?",
+    assertions: [
+      donnee("zone-sismique", "4"),
+      donnee("categorie-importance", "II"),
+      surLaZone("classe-de-sol", "Classe de sol C", "Bâtiment A"),
+      surLaZone("classe-de-sol", "Classe de sol D", "Escalier B")
+    ]
+  });
+
+  assert.equal(resultat.statut, "manquant");
+  assert.ok(resultat.champs.some((champ) => champ.cle === "soilClass"));
+  assert.match(resultat.message, /répond plusieurs choses/);
+  assert.match(resultat.message, /Bâtiment A/);
+  assert.match(resultat.message, /Escalier B/);
+  assert.deepEqual(resultat.contradictions.soilClass.valeurs, ["C", "D"]);
+});
+
+test("une contradiction sur une entrée qui ne manque pas ne se dit pas", () => {
+  // Le message ne parle que de ce qui bloque : nommer une contradiction sur une
+  // valeur que la conversation a déjà tranchée ferait chercher un problème
+  // résolu.
+  assert.equal(phraseDesContradictions({}), "");
+  assert.match(
+    phraseDesContradictions({
+      soilClass: { libelle: "Classe de sol", valeurs: ["C", "D"], portees: ["A", "B"] }
+    }),
+    /Classe de sol : C ou D/
+  );
 });

@@ -1381,19 +1381,92 @@ export function prefillDepuisLEtude(outil, etude = null) {
   return { valeurs: rempli, provenance };
 }
 
-export function prefillDepuisMemoire(outil, assertions = []) {
+/** Un texte réduit à ce qui le distingue : accents, casse et ponctuation partent. */
+function reduit(valeur) {
+  return texte(valeur)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * La portée que la question désigne, parmi celles que la mémoire porte.
+ *
+ * **On ne cherche pas une zone dans l'absolu** : on regarde si la question
+ * nomme l'une des portées qui existent. La liste des zones d'un projet vit à
+ * l'écran ; les portées des affirmations, elles, sont là, sous les yeux, et ce
+ * sont les seules qui puissent répondre.
+ *
+ * La plus longue l'emporte : « Bâtiment A » et « Bâtiment A — escalier 2 »
+ * peuvent coexister, et la question qui nomme la seconde nomme aussi la
+ * première.
+ *
+ * Deux lettres ne désignent rien — une portée « A » se retrouverait dans la
+ * moitié des phrases — et l'on préfère alors ne pas trancher (règle 5).
+ */
+function porteeDeLaQuestion(portees = [], question = "") {
+  const dit = reduit(question);
+  if (!dit) return "";
+
+  return [...portees]
+    .filter((portee) => reduit(portee).length > 2 && dit.includes(reduit(portee)))
+    .sort((a, b) => reduit(b).length - reduit(a).length)[0] ?? "";
+}
+
+/**
+ * Ce que la mémoire du projet répond, portée comprise.
+ *
+ * ## Le défaut que ça répare
+ *
+ * On rangeait les affirmations par `subject_key.split("@")[0]` et l'on gardait
+ * **la première trouvée**. Pour une valeur unique au projet — la zone de
+ * sismicité — c'est sans conséquence. Pour une valeur par zone, c'était un
+ * défaut muet : deux classements en mémoire, et l'agent prenait celui qui avait
+ * été écrit en premier. Rien à l'écran ne disait qu'il y en avait un autre.
+ *
+ * ## Trois règles, et la troisième est celle qui compte
+ *
+ * 1. **La portée remonte avec la valeur.** Sans elle, une réponse ne peut pas
+ *    dire de quelle zone elle parle, et l'on ne peut pas la contester.
+ * 2. **Quand la question nomme une zone**, on ne retient que les affirmations
+ *    de cette zone-là et celles de l'ouvrage entier. Les autres zones ne
+ *    répondent pas à la question posée.
+ * 3. **Quand plusieurs portées répondent des choses différentes, on ne
+ *    pré-remplit rien** — et on le dit. C'est la seule règle qui distingue
+ *    « je n'ai pas trouvé » de « j'ai trouvé deux choses contradictoires » :
+ *    les confondre ferait répondre sur le rez-de-chaussée une exigence calculée
+ *    pour les étages, et le silence le ferait passer pour une lacune.
+ *
+ * **Une zone ne l'emporte pas sur l'ouvrage entier**, et c'est délibéré. Le
+ * plus spécifique gagne dans un fichier de styles ; sur un chantier, deux
+ * affirmations qui se contredisent sont une question à poser, pas une priorité
+ * à appliquer.
+ *
+ * @param {object} outil l'agent dont on remplit les entrées
+ * @param {object[]} assertions la mémoire du projet
+ * @param {object} [options]
+ * @param {string} [options.question] ce qui a été demandé, pour y lire une zone
+ * @returns {{valeurs: object, provenance: object, contradictions: object}}
+ */
+export function prefillDepuisMemoire(outil, assertions = [], { question = "" } = {}) {
   const courantes = currentAssertions(Array.isArray(assertions) ? assertions : []);
   const parCle = new Map();
 
   for (const assertion of courantes) {
     // `sujet@portee` : la portée range l'affirmation, elle ne change pas le
-    // sujet dont elle parle.
-    const cle = texte(assertion?.subject_key).split("@")[0];
-    if (cle && !parCle.has(cle)) parCle.set(cle, assertion);
+    // sujet dont elle parle. On les garde **toutes** — c'est en les comparant
+    // qu'on voit qu'elles se contredisent.
+    const [cle, ...reste] = texte(assertion?.subject_key).split("@");
+    if (!cle) continue;
+    if (!parCle.has(cle)) parCle.set(cle, []);
+    parCle.get(cle).push({ assertion, portee: texte(reste.join("@")) });
   }
 
   const rempli = {};
   const provenance = {};
+  const contradictions = {};
 
   for (const entree of outil?.entrees ?? []) {
     const declarations = declarationsDeMemoire(entree);
@@ -1402,35 +1475,93 @@ export function prefillDepuisMemoire(outil, assertions = []) {
     const trouvee = declarations.find((declaration) => parCle.has(declaration.cle));
     if (!trouvee) continue;
     const cleTrouvee = trouvee.cle;
-    const assertion = parCle.get(cleTrouvee);
+    const portantes = parCle.get(cleTrouvee);
 
-    // L'énoncé sert de repli : une affirmation déclarée à la main peut porter
-    // sa valeur dans la phrase plutôt que dans le payload.
-    const brut = texte(assertion?.payload?.value) || texte(assertion?.statement);
+    const zoneVisee = porteeDeLaQuestion(
+      portantes.map((portante) => portante.portee).filter(Boolean), question
+    );
 
-    // Une affirmation ne porte pas que sa valeur : elle porte aussi ce sur quoi
-    // elle a été calculée. « Profondeur hors gel : 0,99 m » sait l'altitude du
-    // site, elle est dans ses entrées. Une lecture déclarée par clé va la
-    // chercher là ; sans elle, on lirait 0,99 comme une altitude.
+    // Les autres zones ne répondent pas à la question posée. L'ouvrage entier,
+    // lui, répond toujours : il n'exclut aucune zone.
+    const retenues = zoneVisee
+      ? portantes.filter((portante) => !portante.portee || portante.portee === zoneVisee)
+      : portantes;
+
     const lire = trouvee.lire || entree.lireMemoire;
-    const valeur = texte(lire ? lire(brut, assertion) : brut);
-    if (!valeur) continue;
-    // Une valeur que la liste ne propose pas ne s'impose pas : elle rendrait le
-    // formulaire invalide sans qu'on comprenne d'où ça vient.
-    if (Array.isArray(entree.valeurs) && !entree.valeurs.includes(valeur)) continue;
+    const lues = [];
 
-    rempli[entree.cle] = valeur;
+    for (const { assertion, portee } of retenues) {
+      // L'énoncé sert de repli : une affirmation déclarée à la main peut porter
+      // sa valeur dans la phrase plutôt que dans le payload.
+      const brut = texte(assertion?.payload?.value) || texte(assertion?.statement);
+
+      // Une affirmation ne porte pas que sa valeur : elle porte aussi ce sur
+      // quoi elle a été calculée. « Profondeur hors gel : 0,99 m » sait
+      // l'altitude du site, elle est dans ses entrées. Une lecture déclarée par
+      // clé va la chercher là ; sans elle, on lirait 0,99 comme une altitude.
+      const valeur = texte(lire ? lire(brut, assertion) : brut);
+      if (!valeur) continue;
+      // Une valeur que la liste ne propose pas ne s'impose pas : elle rendrait
+      // le formulaire invalide sans qu'on comprenne d'où ça vient.
+      if (Array.isArray(entree.valeurs) && !entree.valeurs.includes(valeur)) continue;
+
+      lues.push({ valeur, brut, portee, assertion });
+    }
+
+    if (!lues.length) continue;
+
+    const distinctes = [...new Set(lues.map((lue) => lue.valeur))];
+    if (distinctes.length > 1) {
+      // On ne tranche pas, et on ne se tait pas : le silence se lirait comme
+      // une lacune, alors que le projet sait deux choses.
+      contradictions[entree.cle] = {
+        cle: cleTrouvee,
+        libelle: texte(entree.libelle) || entree.cle,
+        valeurs: distinctes,
+        portees: lues.map((lue) => lue.portee || "l'ouvrage entier")
+      };
+      continue;
+    }
+
+    // Celle de la zone visée d'abord : c'est d'elle que la question parle, et
+    // c'est sa portée qu'il faut montrer.
+    const retenue = lues.find((lue) => zoneVisee && lue.portee === zoneVisee) ?? lues[0];
+
+    rempli[entree.cle] = retenue.valeur;
     provenance[entree.cle] = {
       cle: cleTrouvee,
       // Ce que la mémoire dit mot pour mot : « 4 » tout seul ne dit pas d'où
       // il sort.
-      brut,
-      enonce: texte(assertion?.statement),
-      trancheeLe: texte(assertion?.decided_at)
+      brut: retenue.brut,
+      enonce: texte(retenue.assertion?.statement),
+      trancheeLe: texte(retenue.assertion?.decided_at),
+      // **La portée remonte avec la valeur.** Sans elle, la réponse ne peut pas
+      // dire de quelle zone elle parle.
+      portee: retenue.portee,
+      // Toutes celles qui disent la même chose : deux zones d'accord ne sont
+      // pas une contradiction, et le dire évite de croire qu'on n'en a lu
+      // qu'une.
+      portees: lues.map((lue) => lue.portee).filter(Boolean)
     };
   }
 
-  return { valeurs: rempli, provenance };
+  return { valeurs: rempli, provenance, contradictions };
+}
+
+/**
+ * Ce qu'on dit quand la mémoire répond deux choses.
+ *
+ * Nommer les valeurs **et** leurs portées : « le projet dit 3e famille B pour
+ * l'ouvrage entier et 4e famille pour l'escalier B » se conteste ; « il manque
+ * le classement » ne se conteste pas, et laisse croire à une lacune.
+ */
+export function phraseDesContradictions(contradictions = {}) {
+  const dites = Object.values(contradictions ?? {}).map((souci) =>
+    `${souci.libelle} : ${souci.valeurs.join(" ou ")} selon la portée (${souci.portees.join(", ")})`);
+
+  if (!dites.length) return "";
+  return `La mémoire du projet répond plusieurs choses — ${dites.join(" ; ")}. `
+    + "Aucune n'a été retenue : il faut dire laquelle s'applique ici.";
 }
 
 /**
@@ -1565,7 +1696,11 @@ export function provenancesDesEntrees(outil, {
       rendu[cle] = {
         origine: "memoire",
         detail: texte(depuisMemoire[cle].enonce) || texte(depuisMemoire[cle].cle),
-        trancheeLe: texte(depuisMemoire[cle].trancheeLe)
+        trancheeLe: texte(depuisMemoire[cle].trancheeLe),
+        // **De quelle zone cette valeur parle.** Une réponse qui ne peut pas le
+        // dire ne se conteste pas : on lit « 3e famille B » sans savoir si
+        // c'est l'ouvrage entier ou l'escalier dont on parlait.
+        portee: texte(depuisMemoire[cle].portee)
       };
     } else if (depuisLEtude?.[cle]) {
       rendu[cle] = {
@@ -1845,7 +1980,11 @@ export async function executerOutil({
     return { statut: "inconnu", id: texte(id), message: `Aucun agent ne porte le nom « ${texte(id)} ».` };
   }
 
-  const { valeurs: depuisMemoire, provenance } = prefillDepuisMemoire(outil, assertions);
+  // **La question sert à lire la portée.** « Et pour l'escalier B ? » ne parle
+  // pas des mêmes affirmations que la question d'avant, et la mémoire d'un
+  // projet en porte une par zone.
+  const { valeurs: depuisMemoire, provenance, contradictions } =
+    prefillDepuisMemoire(outil, assertions, { question });
   // Ce que l'Atelier a déjà recueilli pour ce bâtiment. Le copilote redemandait
   // le nombre d'étages qu'on venait de saisir dans l'onglet voisin ; la seconde
   // saisie divergeait de la première, et l'on obtenait deux vérités.
@@ -1974,7 +2113,20 @@ export async function executerOutil({
       ecartees: nomsEcartes,
       chaine,
       provenances,
-      message: "Le calcul n'a pas eu lieu : il manque des entrées."
+      // **Ce qui manque, et pourquoi.** Quand la mémoire répond deux choses
+      // selon la portée, se taire ferait passer pour une lacune ce qui est une
+      // contradiction — et l'on ressaisirait une valeur que le projet porte
+      // déjà, deux fois, sans savoir qu'on tranche.
+      contradictions,
+      message: [
+        "Le calcul n'a pas eu lieu : il manque des entrées.",
+        phraseDesContradictions(
+          Object.fromEntries(
+            Object.entries(contradictions)
+              .filter(([cle]) => manquantes.some((entree) => entree.cle === cle))
+          )
+        )
+      ].filter(Boolean).join(" ")
     };
   }
 

@@ -62,6 +62,7 @@ import { renderVoileDeDepot } from "../../ui/voile-de-depot.js";
 import { renderCarteDuCerveau } from "./carte-du-cerveau.js";
 import { renderCarteDuVoyage } from "./carte-du-voyage.js";
 import { renderCarteSansResultat } from "./carte-sans-resultat.js";
+import { phraseDeLaProvenance } from "./provenance-lisible.js";
 import { routeOuAller } from "../../../services/copilote-navigation.js";
 import { aRetenirDuResultat, executerUtilitaire } from "../../../services/utilitaires-service.js";
 import { conversationTitle, findConversation } from "../../../services/copilote-conversations.js";
@@ -823,27 +824,19 @@ function nombreLisible(valeur, decimales = 2) {
  * valeur produite par un autre utilitaire se corrige à sa source, et une valeur
  * dite dans la conversation se redit.
  */
-const MOTS_DE_PROVENANCE = {
-  memoire: "mémoire du projet",
-  // Une réponse d'étude n'a pas été tranchée — personne ne l'a versée à la
-  // mémoire, rien ne s'y appuie encore. Elle a pourtant un auteur : quelqu'un
-  // l'a saisie dans l'Atelier pour ce bâtiment. Le mot le dit tel quel, sans la
-  // hausser au rang de vérité du projet.
-  etude: "étude du projet",
-  dite: "dite ici",
-  defaut: "valeur par défaut",
-  utilitaire: "calculée par"
-};
 
 function ditLaProvenance(execution, cle) {
   const source = execution?.provenances?.[cle]
     ?? (execution?.venuesDeLaMemoire?.[cle] ? { origine: "memoire" } : null);
   if (!source) return "";
 
-  const mot = MOTS_DE_PROVENANCE[source.origine] || source.origine;
-  const suite = source.origine === "utilitaire" ? ` ${source.detail || ""}` : "";
+  // La portée en fait partie : « mémoire du projet · Escalier B » se conteste,
+  // « mémoire du projet » tout seul ne se situe pas.
+  const dit = phraseDeLaProvenance(source);
+  if (!dit) return "";
+
   return `<span class="copilote-outil__source" title="${escapeHtml(source.detail || "")}">${
-    escapeHtml(`${mot}${suite}`.trim())}</span>`;
+    escapeHtml(dit)}</span>`;
 }
 
 /**
