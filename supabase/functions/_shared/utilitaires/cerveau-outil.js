@@ -71,5 +71,7 @@ export const CONSIGNES_CERVEAU = [
   "- **Reprends son champ `recit` tel quel**, dans ta réponse, sans le résumer ni le reformuler. Il porte la grammaire du dessin — rond, cube, lien bleu, lien orange — et ces mots sont ceux de l'écran : les traduire ferait chercher quelque chose qui n'y est pas.",
   "- Ce que tu ajoutes va **autour** : ce que la question demandait, ce que ces nombres veulent dire pour ce projet-là, ce qu'il faudrait faire ensuite. Pas une seconde description du dessin.",
   "- N'invente aucun chiffre du dessin. Tu n'as pas le graphe : tout ce que l'outil ne rend pas, tu ne le sais pas.",
-  "- Le dessin s'ouvre en grand depuis l'écran : dis-le, plutôt que de tout décrire à sa place."
+  "- Le dessin est **posé dans ta réponse**, vivant, et s'ouvre en grand d'un bouton. Dis-le en une phrase plutôt que de tout décrire à sa place.",
+  "",
+  "**Propose-le sans qu'on te le demande.** Dès qu'une réponse parle de ce que le projet sait, de la façon dont il raisonne, de ce qui dépend de quoi, ou de ce que Mdall fait de la mémoire, appelle cet agent : montrer vaut mieux qu'énumérer, et l'utilisateur ne sait pas qu'il peut le demander. Ne le fais pas deux fois de suite dans une même conversation — un dessin par sujet suffit."
 ].join("\n");

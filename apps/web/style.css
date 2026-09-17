@@ -18033,11 +18033,24 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .copilote-cerveau__chiffre b{ color:var(--text); font-size:20px; line-height:24px; font-weight:600; }
 .copilote-cerveau__chiffre span{ color:var(--text); }
 .copilote-cerveau__chiffre small{ color:var(--muted); font-size:11px; line-height:15px; }
+/* Le dessin, dans la bulle. Il occupe toute la largeur du message : à moins que
+   ça, on voit qu'il y a quelque chose sans voir ce que c'est. */
+.copilote-cerveau__scene{ margin:0 0 10px; }
+
+/* **Le bouton dit ce qu'on gagne à ouvrir.** « Ouvrir le cerveau » sous un
+   dessin déjà visible ne promet rien ; ce qui manque au cadre — les réglages,
+   les secteurs, l'onde au clic — se lit sous le libellé. */
 .copilote-cerveau__ouvrir{
-  display:inline-flex; align-items:center; gap:6px;
-  padding:4px 10px; border-radius:6px; color:var(--muted); font-size:12px;
+  display:flex; align-items:baseline; gap:8px; width:100%;
+  padding:7px 10px; border:1px solid var(--border); border-radius:8px;
+  background:transparent; color:var(--text); font:inherit; font-size:12px;
+  cursor:pointer; text-align:left;
 }
-.copilote-cerveau__ouvrir:hover{ color:var(--text); background:rgba(255,255,255,.07); }
+.copilote-cerveau__ouvrir .ui-icon{ flex:none; color:var(--variante); align-self:center; }
+.copilote-cerveau__ouvrir small{ color:var(--muted); font-size:11px; }
+.copilote-cerveau__ouvrir:hover{
+  border-color:var(--variante); background:rgba(57,197,207,.10);
+}
 @media (max-width: 700px){ .copilote-outil__colonnes{ grid-template-columns:1fr; } }
 .copilote-outil__legende{ margin:0 0 4px; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
 .copilote-outil__liste{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:2px; }
@@ -19721,8 +19734,20 @@ strong.est-verifie{ color:#3fb950; }
   color:var(--muted); font:inherit; font-size:16px; cursor:pointer;
 }
 .fondations-retour-titre:hover{ color:#58a6ff; text-decoration:underline; }
-.fondations-retour-titre__filet{
-  width:1px; height:18px; background:var(--border); flex:0 0 1px; margin:0 2px;
+/* **D'où l'on vient, le filet, puis où l'on est** — dans cet ordre et collés à
+   gauche. La ligne du titre écarte ses enfants aux deux bords : trois éléments y
+   laissaient le titre flotter au milieu, loin du chemin qui le précède. */
+.fondations-titre{
+  display:flex; align-items:baseline; gap:10px; min-width:0; flex:1 1 auto;
+}
+.fondations-titre h4{ margin:0; }
+/* Un trait dessiné plutôt qu'un caractère : une barre verticale de police change
+   de hauteur et d'épaisseur avec elle, et se poserait de travers à côté d'un
+   titre de vingt-deux pixels. Le caractère reste dans le HTML pour qui lit le
+   texte sans la feuille de style. */
+.fondations-titre__filet{
+  flex:0 0 1px; width:1px; height:20px; align-self:center;
+  background:var(--border); color:transparent; overflow:hidden;
 }
 .fondations-semelle-barre__nom{ display:flex; flex-direction:column; gap:4px; flex:1 1 220px; max-width:340px; }
 .fondations-semelle-barre__nombre{ display:flex; flex-direction:column; gap:4px; width:130px; }
@@ -23806,6 +23831,35 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    pousserait le pied hors de l'écran dans un conteneur flex. */
 .cerveau__scene{ position:relative; flex:1; min-height:0; }
 .cerveau__scene canvas{ display:block; touch-action:none; }
+
+/* ── Le cerveau encastré dans une réponse ─────────────────────────────────
+   Le **même dessin**, dans un cadre : la boucle, le battement, le glissé, la
+   molette et les secteurs sont ceux de la fenêtre. Un second dessin
+   « simplifié » aurait été un second dessin à corriger (règle 4).
+
+   Ce que le cadre retire est ce qui n'a pas de place dans une bulle de
+   conversation : le rail des réglages, les lacunes dépliées, la croix de
+   fermeture — un message ne se ferme pas. Restent la ligne de titre, ses
+   bascules, et la phrase du bas qui dit quoi faire. */
+.cerveau-encastre{ display:block; }
+.cerveau-encastre .cerveau{
+  position:relative; inset:auto; z-index:0;
+  height:420px; border-radius:10px; overflow:hidden;
+  border:1px solid var(--border);
+}
+@media (max-width: 700px){ .cerveau-encastre .cerveau{ height:320px; } }
+.cerveau-encastre .cerveau__rail,
+.cerveau-encastre .cerveau__fermer,
+/* Le titre est déjà celui de la carte, juste au-dessus : le répéter dans le
+   cadre faisait deux fois « Le cerveau du projet » à quatre-vingts pixels
+   d'écart. */
+.cerveau-encastre .cerveau__tete > b,
+/* Et le bouton qui replie le rail ne replie rien : il n'y a pas de rail. */
+.cerveau-encastre [data-cerveau-rail]{ display:none; }
+/* La ligne de titre reste pour ce qu'elle porte encore : approcher, reculer,
+   recadrer. Ce qui compte ici est de tourner le dessin, pas de le régler. */
+.cerveau-encastre .cerveau__tete{ padding:6px 10px; font-size:12px; }
+.cerveau-encastre .cerveau__navigation{ margin-left:auto; }
 
 .cerveau__bulle{
   position:absolute; top:0; left:0; pointer-events:none;

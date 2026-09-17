@@ -58,14 +58,29 @@ test("la carte porte les trois chiffres et de quoi ouvrir le dessin", () => {
 });
 
 /**
- * **La carte n'est pas le dessin.** Une toile animée dans une bulle de
- * conversation serait illisible, et sa boucle tournerait encore trois écrans
- * plus haut : la carte dit des chiffres, et ouvre en grand.
+ * **La carte marque la place du dessin, elle ne le monte pas.**
+ *
+ * Un module qui dessine ne s'importe pas dans un test — c'est une toile et une
+ * boucle d'animation. Celui-ci rend du HTML et un creux ; c'est l'écran qui y
+ * pose le dessin après le rendu, et c'est lui qui le retire.
  */
-test("la carte ne dessine rien elle-même", () => {
-  const html = renderCarteDuCerveau(lecture({ total: 2, parUneRegle: 2, sansRegle: 0, partParUneRegle: 100 }), 0);
+test("la carte laisse un creux, désigné par la place du dessin", () => {
+  const html = renderCarteDuCerveau(lecture({ total: 2, parUneRegle: 2, sansRegle: 0, partParUneRegle: 100 }), "4:1");
 
-  assert.doesNotMatch(html, /<canvas|<svg[^>]*data-cerveau/);
+  assert.match(html, /data-copilote-cerveau-scene="4:1"/);
+  assert.doesNotMatch(html, /<canvas/, "le creux est vide : la carte ne dessine pas");
+});
+
+/**
+ * **Le bouton dit ce qu'on gagne à ouvrir.** « Ouvrir le cerveau » sous un
+ * dessin déjà visible ne promet rien : ce qui manque au cadre — les réglages,
+ * les secteurs, l'onde au clic — doit se lire, sinon personne ne clique.
+ */
+test("le bouton promet ce que le cadre n'a pas", () => {
+  const html = renderCarteDuCerveau(lecture({ total: 2, parUneRegle: 1, sansRegle: 1, partParUneRegle: 50 }), 0);
+
+  assert.match(html, /Ouvrir le cerveau en grand/);
+  assert.match(html, /les réglages, les secteurs, l'onde au clic/);
 });
 
 test("sans lecture, il n'y a pas de carte", () => {

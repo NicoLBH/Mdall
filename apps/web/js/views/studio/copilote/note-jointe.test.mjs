@@ -431,7 +431,11 @@ test("le fil déclare qu'il est l'ascenseur de son écran", async () => {
   ]);
 
   // Le fil le dit dans son HTML…
-  assert.match(copilote, /id="copiloteThread" data-defilement-du-panneau/);
+  assert.match(copilote, /id="copiloteThread"\s*\n?\s*data-defilement-du-panneau/);
+  // **Et qu'il se lit au sens, pas à la position** : un fil calé en bas est
+  // toujours défilé, donc replierait le bandeau en permanence — et replié, il
+  // n'a plus d'onglets.
+  assert.match(copilote, /data-compactage-directionnel/);
   // …et l'Atelier le lit, au lieu de ne désigner que sa propre coque.
   assert.match(atelier, /\[data-side-nav-panel\]\.is-active \[data-defilement-du-panneau\]/);
   assert.match(atelier, /registerProjectScrollSources\(ascenseursDuRouteur\(\)\)/);

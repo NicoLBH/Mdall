@@ -292,13 +292,59 @@ function applyCompactState(isCompact) {
   }));
 }
 
-function syncCompactState() {
-  const activeScrollSourceEl = getActiveScrollSourceEl();
-  const scrollTop = activeScrollSourceEl
-    ? getScrollTopFromElement(activeScrollSourceEl)
-    : getDocumentScrollTop();
+/**
+ * Ce qu'un ascenseur **directionnel** montrait la dernière fois qu'on l'a lu.
+ *
+ * Par élément, et non un seul chiffre : deux écrans peuvent porter chacun le
+ * leur, et les confondre ferait lire le mouvement de l'un sur la position de
+ * l'autre.
+ */
+const dernieresHauteurs = new WeakMap();
 
-  applyCompactState(scrollTop > 12);
+/**
+ * Le bandeau se replie-t-il, d'après ce qui défile ?
+ *
+ * ## Deux réponses, et il faut les deux
+ *
+ * Sur un écran qui se lit du haut vers le bas, **la position suffit** : on est
+ * en bas, on lit, le bandeau s'efface ; on remonte en haut, il revient.
+ *
+ * Sur une conversation, non. Le fil est **calé en bas** — c'est le dernier
+ * message qu'on veut voir en arrivant —, donc il est toujours défilé, donc le
+ * bandeau serait replié en permanence. Or replié, il n'y a plus d'onglets :
+ * pour en changer il fallait remonter toute la discussion. Une hauteur de
+ * lecture gagnée au prix de la navigation n'est pas un gain.
+ *
+ * Ces écrans-là posent `data-compactage-directionnel` et c'est le **sens** qui
+ * décide : on descend, le bandeau s'efface ; on remonte d'un cran, il revient.
+ * C'est le geste qu'on fait déjà pour relire ce qui précède.
+ */
+export function seReplie(el) {
+  const hauteur = el ? getScrollTopFromElement(el) : getDocumentScrollTop();
+  if (!el?.dataset || el.dataset.compactageDirectionnel === undefined) return hauteur > 12;
+
+  // Tout en haut, le bandeau est là : il n'y a rien au-dessus à quoi le sens
+  // pourrait se rapporter.
+  if (hauteur <= 12) {
+    dernieresHauteurs.set(el, hauteur);
+    return false;
+  }
+
+  const avant = dernieresHauteurs.get(el);
+  dernieresHauteurs.set(el, hauteur);
+  // Première lecture : on ne sait pas d'où l'on vient, et on ne replie pas sur
+  // une supposition. Un fil qui arrive calé en bas garde donc ses onglets.
+  if (avant === undefined) return false;
+
+  // Quelques pixels de jeu : une inertie de pavé tactile rend des mouvements
+  // d'un pixel dans les deux sens, et le bandeau clignoterait.
+  if (hauteur > avant + 4) return true;
+  if (hauteur < avant - 4) return false;
+  return shellState.isCompact;
+}
+
+function syncCompactState() {
+  applyCompactState(seReplie(getActiveScrollSourceEl()));
 }
 
 

@@ -84,6 +84,53 @@ test("la lecture dit ce qu'elle fait pendant qu'elle le fait", async () => {
  * attrape exactement le défaut qui rendrait le cerveau muet : un aiguillage qui
  * repasse par le nom, ou un rôle écrit différemment des deux côtés.
  */
+/**
+ * **Une boucle d'animation laissée derrière tourne pour toujours.**
+ *
+ * Le fil se réécrit entièrement à chaque message, à chaque étape d'agent, à
+ * chaque conversation qui arrive : les toiles partent avec, mais pas les
+ * boucles — elles continuent sur un canevas détaché, et il y en a une de plus à
+ * chaque rendu. Au bout de dix messages l'onglet chauffe, et rien à l'écran ne
+ * le dit. C'est exactement la classe de défaut qu'aucune exécution ne montre
+ * ici : l'écran parle à la base et ne s'importe pas.
+ */
+test("les dessins encastrés sont retirés avant d'être reposés", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(
+    new URL("../views/studio/copilote/copilote.js", import.meta.url), "utf8");
+
+  assert.match(source, /function retirerLesCerveaux[\s\S]{0,300}fermer\(\)/,
+    "il y a de quoi les retirer");
+  assert.match(source, /async function poserLesCerveaux[\s\S]{0,300}retirerLesCerveaux\(/,
+    "et on retire avant de poser");
+  assert.match(source, /void poserLesCerveaux\(root\)/, "à chaque rendu");
+
+  // **Les quatre réglages d'arrivée**, qui sont ceux où un projet ressemble à
+  // quelque chose : les strates en profondeur, le battement, la séparation
+  // horizontale mémoire/raisonnement, et la chaleur.
+  assert.match(
+    source,
+    /reglages: \{ vue: "volume", mode: "vivant", orientation: "horizontal", couleur: "chaleur" \}/
+  );
+});
+
+/**
+ * **Le dessin encastré n'est pas la fenêtre.** Le verrou « une seule à la fois »
+ * protège la fenêtre — deux superposées ne se distinguent pas ; un fil peut en
+ * porter trois, qui ne se recouvrent pas. Et Échap ne doit pas faire disparaître
+ * un morceau de la réponse qu'on est en train de lire.
+ */
+test("un cerveau encastré ne prend pas le verrou de la fenêtre, et rend de quoi le retirer", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(
+    new URL("../views/ui/cerveau-du-projet.js", import.meta.url), "utf8");
+
+  assert.match(source, /if \(!encastre && ouverte\) return;/);
+  assert.match(source, /if \(!encastre\) ouverte = hote;/);
+  assert.match(source, /if \(!encastre && evenement\.key === "Escape"\) fermer\(\);/);
+  assert.match(source, /return encastre \? fermer : undefined;/);
+});
+
 test("le navigateur route sur le rôle que le serveur lui donne", async () => {
   const { readFile } = await import("node:fs/promises");
   const [client, serveur] = await Promise.all([
