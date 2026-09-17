@@ -41,14 +41,30 @@ export function lireLeFichier(fichier) {
 }
 
 /**
- * De quoi **montrer** la note, sans la redemander à personne.
+ * Les octets de la note, décodés.
  *
- * ## Pourquoi une adresse d'objet, et pas les octets
+ * C'est sous cette forme que le lecteur de l'application la dessine : il attend
+ * des octets, pas une adresse. Le décodage vit ici et non chez lui — il sert
+ * aussi à fabriquer l'adresse ci-dessous, et deux décodages du même base64
+ * finiraient par ne plus rendre le même document (règle 4).
  *
- * La note est déjà en mémoire, encodée en base64 : c'est sous cette forme
- * qu'elle part au serveur. Une adresse d'objet (`blob:`) la rend affichable par
- * le navigateur lui-même — qui sait lire un PDF, le faire défiler et le
- * chercher — sans écrire une seconde ligne de rendu de page.
+ * @returns {Uint8Array|null} `null` quand il n'y a rien à lire
+ */
+
+/**
+ * De quoi **ouvrir** la note ailleurs : un onglet, un téléchargement.
+ *
+ * ## Ce qu'elle n'est plus
+ *
+ * Elle servait à montrer la note dans un cadre, en laissant le navigateur s'en
+ * charger. Il sait le faire — mais **il peut aussi refuser** : « toujours
+ * télécharger les PDF » est un réglage courant, et le cadre affichait alors un
+ * bouton « Ouvrir » à la place du document. Une note qu'on ne peut pas regarder
+ * d'un coup d'œil fait douter de tout ce qui suit.
+ *
+ * L'aperçu est donc dessiné par l'application (`ct-lab-pdf-view.js`, le lecteur
+ * des Documents), et cette adresse ne sert plus qu'au recours : ouvrir la note
+ * dans un onglet.
  *
  * **Elle se libère.** Une adresse d'objet retient les octets tant qu'on ne la
  * révoque pas : en fabriquer une à chaque rendu garderait six mégaoctets par
@@ -58,22 +74,32 @@ export function lireLeFichier(fichier) {
  * @param {{donnees?: string, mediaType?: string}|null} piece
  * @returns {string} une adresse, ou `""` quand il n'y a rien à montrer
  */
-export function adresseDeLaPiece(piece = null) {
+export function octetsDeLaPiece(piece = null) {
   const donnees = String(piece?.donnees ?? "");
-  if (!donnees) return "";
-  if (typeof Blob !== "function" || typeof URL?.createObjectURL !== "function") return "";
+  if (!donnees) return null;
 
   try {
     const binaire = atob(donnees);
     const octets = new Uint8Array(binaire.length);
     for (let rang = 0; rang < binaire.length; rang += 1) octets[rang] = binaire.charCodeAt(rang);
+    return octets;
+  } catch {
+    // Un base64 tronqué ne doit pas faire tomber l'écran : on ne montre rien,
+    // et la note reste jointe — c'est l'aperçu qui manque, pas la pièce.
+    return null;
+  }
+}
 
+export function adresseDeLaPiece(piece = null) {
+  const octets = octetsDeLaPiece(piece);
+  if (!octets) return "";
+  if (typeof Blob !== "function" || typeof URL?.createObjectURL !== "function") return "";
+
+  try {
     return URL.createObjectURL(new Blob([octets], {
       type: String(piece?.mediaType || "application/pdf")
     }));
   } catch {
-    // Un base64 tronqué ne doit pas faire tomber l'écran : on ne montre rien,
-    // et la note reste jointe — c'est l'aperçu qui manque, pas la pièce.
     return "";
   }
 }

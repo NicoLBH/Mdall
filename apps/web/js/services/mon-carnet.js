@@ -134,6 +134,9 @@ export function adresseDunAncienLien(parties = []) {
  * croire qu'on est encore dedans, et qu'on y lit les situations de ce
  * chantier-là. On en est sorti : le fil d'Ariane le montre.
  *
+ * **Il ne nomme plus la personne non plus.** Elle était écrite là sur chaque
+ * écran, et n'apprenait rien — l'avatar la redit sur la même ligne.
+ *
  * Écrit ici plutôt que dans l'en-tête pour la même raison que le reste : trois
  * endroits disent le nom de cet écran, et un nom vit à un seul endroit
  * (règle 10).
@@ -146,23 +149,33 @@ export function enTeteDuCarnet(situationOuverte = null, personne = "") {
   const nom = String(personne ?? "").trim();
 
   return {
-    // **Le nom de la personne, pas celui de l'écran.** La barre du haut dit à
-    // qui l'on est, puis où l'on est : « Untel / Situations / Ma semaine ».
-    primary: nom || NOM_DU_CARNET,
+    /**
+     * **Le nom de l'écran, et non celui de la personne.**
+     *
+     * La barre disait « Untel / Situations / Ma semaine ». Le nom de la personne
+     * y était sur chaque écran et n'apprenait rien : on sait qui l'on est, et
+     * l'avatar le redit à trois centimètres de là, sur la même ligne. C'est le
+     * même retrait que dans un projet, où le nom a laissé la place au chantier.
+     */
+    primary: NOM_DU_CARNET,
     secondary: "",
     // Aucun chantier au-dessus du carnet : on est sorti du projet.
     showSecondary: false,
     href: ROUTE_DU_CARNET,
     headerClass: "gh-header gh-header--global",
-    // **Le nom de l'écran vit dans le fil, et une seule fois.** Il était à la
-    // fois en tête et dans le fil, ce qui donnait « Situations / Situations /
-    // Ma semaine » — le même mot deux fois, dont l'un ne renseignait sur rien.
-    //
-    // Dans le fil, il porte en plus ce qu'on attend de lui : **le retour à la
-    // liste**. C'est le même bouton que celui qui manquait quand on était
-    // dans une situation et qu'on recliquait sur « Situations ».
-    breadcrumbTabLabel: nom ? NOM_DU_CARNET : "",
+    /**
+     * **Et il porte le retour à la liste.**
+     *
+     * Ce retour vivait dans le fil, sous le nom de l'écran répété après celui de
+     * la personne. Le nom parti, le répéter donnerait « Situations /
+     * Situations / Ma semaine » — le doublon qu'on avait justement défait. C'est
+     * donc la tête elle-même qui referme la situation ouverte : elle en porte le
+     * repère, et l'écoute de la barre le reconnaît déjà.
+     */
+    primaryRaccourci: titre ? "situations" : "",
+    // Le fil ne porte plus que la situation ouverte, s'il y en a une.
+    breadcrumbTabLabel: "",
     breadcrumbCurrentLabel: titre,
-    showSituationBreadcrumb: Boolean(nom)
+    showSituationBreadcrumb: Boolean(titre)
   };
 }

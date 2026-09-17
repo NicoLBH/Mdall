@@ -72,19 +72,19 @@ test("les autres onglets d'un projet ne sont pas détournés", () => {
 /* ── Tout en haut ────────────────────────────────────────────────────────── */
 
 /**
- * **La barre du haut dit à qui l'on est, puis où l'on est.**
+ * **La barre du haut dit où l'on est, et non qui l'on est.**
  *
- * Elle portait « Situations » en tête **et** dans le fil : « Situations /
- * Situations / Ma semaine ». Le même mot deux fois, dont l'un ne renseignait
- * sur rien. Le nom de l'écran vit maintenant dans le fil, et une seule fois.
+ * Elle portait le nom de la personne, sur chaque écran : il n'apprenait rien —
+ * on sait qui l'on est, et l'avatar le redit sur la même ligne. C'est le même
+ * retrait que dans un projet, où ce nom a laissé la place au chantier.
  */
-test("la barre du haut porte le nom de la personne, puis celui de l'écran", () => {
+test("la barre du haut porte le nom de l'écran, et pas celui de la personne", () => {
   const entete = enTeteDuCarnet(null, "Manoa Le Bihan");
 
-  assert.equal(entete.primary, "Manoa Le Bihan");
-  assert.equal(entete.breadcrumbTabLabel, NOM_DU_CARNET);
+  assert.equal(entete.primary, NOM_DU_CARNET);
+  assert.doesNotMatch(JSON.stringify(entete), /Manoa/, "la personne n'y est plus du tout");
   assert.equal(entete.breadcrumbCurrentLabel, "", "aucune situation ouverte : rien après");
-  assert.equal(entete.showSituationBreadcrumb, true, "le fil existe dès qu'on est dans le carnet");
+  assert.equal(entete.showSituationBreadcrumb, false, "et pas de fil pour rien");
 });
 
 /** Aucun chantier au-dessus du carnet : on est sorti du projet. */
@@ -99,16 +99,30 @@ test("dans le carnet, aucun chantier n'est écrit tout en haut", () => {
 
 /**
  * **Le même mot ne se dit pas deux fois.** C'est le défaut relevé à l'écran :
- * « Situations / Situations / Ma semaine ».
+ * « Situations / Situations / Ma semaine ». Le nom de la personne parti, le
+ * répéter dans le fil l'aurait redonné.
  */
 test("une situation ouverte se nomme une fois, après l'écran", () => {
   const entete = enTeteDuCarnet({ id: "s-1", title: "Ma semaine" }, "Manoa Le Bihan");
 
   assert.deepEqual(
     [entete.primary, entete.breadcrumbTabLabel, entete.breadcrumbCurrentLabel],
-    ["Manoa Le Bihan", NOM_DU_CARNET, "Ma semaine"]
+    [NOM_DU_CARNET, "", "Ma semaine"]
   );
-  assert.notEqual(entete.primary, entete.breadcrumbTabLabel, "plus de « Situations / Situations »");
+  assert.equal(entete.showSituationBreadcrumb, true);
+});
+
+/**
+ * **Et la tête porte le retour à la liste.**
+ *
+ * Il vivait dans le fil, sous le nom de l'écran répété. Sans ce repère, cliquer
+ * « Situations » laisserait la situation ouverte : l'adresse ne change pas, donc
+ * rien ne se redessine — c'est exactement le défaut qui avait fait naître ce
+ * bouton.
+ */
+test("la tête referme la situation ouverte, et elle seule", () => {
+  assert.equal(enTeteDuCarnet({ id: "s-1", title: "Ma semaine" }, "X").primaryRaccourci, "situations");
+  assert.equal(enTeteDuCarnet(null, "X").primaryRaccourci, "", "rien à refermer : aucun geste");
 });
 
 /** Une situation sans titre ne laisse pas un fil muet. */
@@ -116,14 +130,9 @@ test("une situation sans titre se nomme quand même", () => {
   assert.equal(enTeteDuCarnet({ id: "s-1" }, "Untel").breadcrumbCurrentLabel, "Situation");
 });
 
-/**
- * Sans personne connue, le nom de l'écran reprend la tête — et le fil se tait,
- * sinon on retomberait exactement sur le doublon qu'on vient de défaire.
- */
-test("sans personne connue, l'écran prend la tête et le fil se tait", () => {
-  const entete = enTeteDuCarnet(null, "");
-
-  assert.equal(entete.primary, NOM_DU_CARNET);
-  assert.equal(entete.showSituationBreadcrumb, false);
-  assert.equal(entete.breadcrumbTabLabel, "");
+/** Le nom de l'écran est en tête, qu'on sache ou non qui regarde. */
+test("la tête ne dépend plus de qui regarde", () => {
+  assert.equal(enTeteDuCarnet(null, "").primary, NOM_DU_CARNET);
+  assert.equal(enTeteDuCarnet(null, "Untel").primary, NOM_DU_CARNET);
+  assert.equal(enTeteDuCarnet(null, "").showSituationBreadcrumb, false);
 });

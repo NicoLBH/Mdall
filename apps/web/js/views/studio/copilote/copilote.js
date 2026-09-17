@@ -50,7 +50,7 @@ import { renderAttenteSpinner } from "../../ui/spinner.js";
 import { sendAssistMessage } from "../../../services/copilote-service.js";
 import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.js";
 import { rendreLeMarkdown } from "../../ui/markdown-leger.js";
-import { adresseDeLaPiece, oublierLAdresse } from "../../../services/piece-jointe.js";
+import { adresseDeLaPiece, octetsDeLaPiece, oublierLAdresse } from "../../../services/piece-jointe.js";
 import { renderApercuDeLaNoteHtml, renderLigneDeLaNoteHtml } from "./note-jointe.js";
 import { renderVoileDeDepot } from "../../ui/voile-de-depot.js";
 import { aRetenirDuResultat, executerUtilitaire } from "../../../services/utilitaires-service.js";
@@ -1547,8 +1547,55 @@ function renderPieceJointe(etat) {
  * chaque frappe — six mégaoctets par caractère tapé, jusqu'à quitter la page.
  */
 function renderApercu(etat) {
-  if (!etat.apercu?.adresse) return "";
+  if (!etat.apercu) return "";
   return renderApercuDeLaNoteHtml(etat.apercu);
+}
+
+/**
+ * Peindre les pages de la note, avec le lecteur de l'application.
+ *
+ * ## Pourquoi pas le navigateur
+ *
+ * Il sait lire un PDF — **mais il peut aussi refuser** : « toujours télécharger
+ * les PDF » est un réglage courant, et le cadre affichait alors un bouton
+ * « Ouvrir » à la place du document. Une note qu'on vient de joindre et qu'on ne
+ * peut pas regarder d'un coup d'œil fait douter de tout ce qui suit.
+ *
+ * ## Pourquoi on repeint après chaque rendu
+ *
+ * L'écran se redessine entièrement : les canevas peints disparaissent avec lui.
+ * On ne repeint que lorsque le conteneur est **vide** — sinon chaque frappe
+ * relirait le document.
+ */
+async function peindreLApercu(root) {
+  const etat = ensureState();
+  const hote = root.querySelector("[data-copilote-apercu-pages]");
+  if (!etat.apercu || !hote || hote.childElementCount) return;
+
+  const octets = octetsDeLaPiece(etat.pieceJointe);
+  if (!octets) {
+    etat.apercu.etat = "panne";
+    render(root);
+    return;
+  }
+
+  try {
+    const { renderPdfDocument } = await import("../../../services/ct-lab-pdf-view.js");
+    // Le lecteur a pu se refermer pendant le chargement du moteur.
+    if (!hote.isConnected || !ensureState().apercu) return;
+
+    etat.apercu.dispose?.();
+    const lu = await renderPdfDocument(hote, { bytes: octets, width: 760 });
+    etat.apercu.dispose = lu.dispose;
+    etat.apercu.etat = "lue";
+  } catch {
+    // **Une note qu'on n'a pas su dessiner se dit.** Un cadre vide et un cadre
+    // en panne se ressemblent exactement, et l'un fait rejoindre la note pour
+    // rien. Le recours — l'ouvrir dans un onglet — reste à portée de main.
+    etat.apercu.etat = "panne";
+  }
+
+  if (root.isConnected) render(root);
 }
 
 /**
@@ -1568,22 +1615,28 @@ function basculerLApercu(root) {
   }
 
   const piece = etat.pieceJointe;
-  const adresse = adresseDeLaPiece(piece);
   // **Une note illisible se dit.** Un bouton qui ouvre un cadre vide fait
   // croire que le PDF est vide, et l'on rejoint la note pour rien.
-  if (!adresse) {
+  if (!octetsDeLaPiece(piece)) {
     etat.lastError = "Cette note n'a pas pu être ouverte.";
     render(root);
     return;
   }
 
-  etat.apercu = { nom: piece?.nom ?? "", adresse };
+  // L'adresse ne sert plus qu'au recours : ouvrir la note dans un onglet. Son
+  // absence n'empêche donc pas l'aperçu.
+  const adresse = adresseDeLaPiece(piece);
+
+  etat.apercu = { nom: piece?.nom ?? "", adresse, etat: "lecture" };
   render(root);
 }
 
 /** La note s'en va : son aperçu aussi, et ses octets avec. */
 function oublierLApercu(etat) {
   if (!etat.apercu) return;
+  // Le document du lecteur se rend aussi : le laisser ouvert garderait les
+  // pages en mémoire jusqu'à quitter la page.
+  etat.apercu.dispose?.();
   oublierLAdresse(etat.apercu.adresse);
   etat.apercu = null;
 }
@@ -2442,21 +2495,10 @@ function bind(root) {
     brancherLesGestesDeLaNote(root);
   }
 
-  const cadre = root.querySelector(".copilote-apercu__page");
-  /**
-   * **Un cadre qui n'a rien affiché le dit.**
-   *
-   * Le lecteur du navigateur peut refuser une note — un base64 tronqué, un
-   * fichier qui n'est pas le PDF qu'il annonce. Le cadre reste alors vide, et
-   * rien ne distingue « ce PDF est vide » de « ce PDF n'a pas pu s'ouvrir » :
-   * les deux se regardent pareil, et l'un fait rejoindre la note pour rien.
-   */
-  cadre?.addEventListener("error", () => {
-    const etat = ensureState();
-    oublierLApercu(etat);
-    etat.lastError = "Cette note n'a pas pu être affichée.";
-    render(root);
-  });
+  // Les pages se repeignent après chaque rendu, et seulement si le conteneur
+  // est vide : le rendu emporte les canevas, et repeindre à chaque frappe
+  // relirait le document.
+  void peindreLApercu(root);
 
   for (const bouton of root.querySelectorAll("[data-remise-outil]")) {
     bouton.addEventListener("click", () => void remettreALAtelier(root, bouton.dataset.remiseOutil));

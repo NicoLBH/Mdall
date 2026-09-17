@@ -313,7 +313,15 @@ export function renderGlobalHeader() {
         <div class="gh-brand-wrap">
           <a class="gh-brand" href="${model.href}">
             ${svgIcon("heimdall", { className: "gh-brand__logo", title: "Heimdall" })}
-            <span class="gh-brand__name">${model.primary}</span>
+            ${/*
+              **La tête peut porter un geste.** Dans les Situations, elle referme
+              la situation ouverte : le retour à la liste vivait dans le fil,
+              sous le nom de l'écran répété après celui de la personne — ce nom
+              est parti, et le répéter redonnerait le doublon qu'on avait défait.
+            */""}
+            <span class="gh-brand__name"${
+              model.primaryRaccourci ? ` data-raccourci="${model.primaryRaccourci}"` : ""
+            }>${model.primary}</span>
             ${
               model.showSecondary
                 ? `
@@ -345,8 +353,10 @@ export function renderGlobalHeader() {
 
           ${model.showSituationBreadcrumb ? `
             <span class="gh-brand__trail">
-              <span class="gh-brand__sep">/</span>
-              <button type="button" class="gh-brand__trail-btn" id="globalHeaderSituationsBack">${model.breadcrumbTabLabel}</button>
+              ${model.breadcrumbTabLabel ? `
+                <span class="gh-brand__sep">/</span>
+                <button type="button" class="gh-brand__trail-btn" id="globalHeaderSituationsBack">${model.breadcrumbTabLabel}</button>
+              ` : ""}
               ${model.breadcrumbCurrentLabel ? `
                 <span class="gh-brand__sep">/</span>
                 <span class="gh-brand__trail-current">${model.breadcrumbCurrentLabel}</span>

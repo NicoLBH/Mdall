@@ -9,13 +9,21 @@
  * suffixe près, et c'est l'intérieur qui les distingue. Il fallait rouvrir le
  * fichier ailleurs, dans un autre onglet, pour en avoir le cœur net.
  *
- * ## Le navigateur sait lire un PDF
+ * ## C'est l'application qui dessine, et non le navigateur
  *
- * L'aperçu est un cadre, et son contenu est l'**adresse d'objet** de la note
- * déjà en mémoire (`services/piece-jointe.js`). Le navigateur y met son propre
- * lecteur : il défile, il cherche, il zoome, il imprime. Redessiner les pages
- * page par page — ce que fait le lecteur de l'onglet Documents, parce qu'il
- * doit surligner des extraits — aurait coûté cent lignes pour moins.
+ * L'aperçu était un cadre pointant sur la note en mémoire, et le navigateur y
+ * mettait son propre lecteur. Il sait le faire — **mais il peut aussi refuser** :
+ * « toujours télécharger les PDF » est un réglage courant de Chrome, et le cadre
+ * affichait alors un bouton « Ouvrir » à la place du document. Une note qu'on
+ * vient de joindre et qu'on ne peut pas regarder d'un coup d'œil fait douter de
+ * tout ce qui suit : si l'écran ne sait pas montrer le PDF, que vaut ce qu'il en
+ * tirera ?
+ *
+ * Les pages sont donc dessinées par le lecteur de l'application
+ * (`services/ct-lab-pdf-view.js`, celui de l'onglet Documents) : le moteur est
+ * vendu dans le dépôt, le rendu ne dépend d'aucun réglage, et il est le même que
+ * partout ailleurs. Le cadre ne reste qu'en recours, sous la forme d'un lien qui
+ * ouvre la note dans un onglet.
  *
  * ## Pourquoi c'est un fichier à part
  *
@@ -94,17 +102,28 @@ export function renderLigneDeLaNoteHtml({ piece = null, ouvert = false, montrabl
  *
  * @param {object} options
  * @param {string} options.nom
- * @param {string} options.adresse celle de `adresseDeLaPiece`
+ * @param {string} [options.adresse] celle de `adresseDeLaPiece` — elle ne sert
+ *   plus qu'au recours : ouvrir la note dans un onglet
+ * @param {"lecture"|"lue"|"panne"} [options.etat] où en est le dessin
  */
-export function renderApercuDeLaNoteHtml({ nom = "", adresse = "" } = {}) {
+export function renderApercuDeLaNoteHtml({ nom = "", adresse = "", etat = "lecture" } = {}) {
   const sien = texte(nom);
-  if (!texte(adresse)) return "";
 
   return `
     <section class="copilote-apercu" aria-label="${escapeHtml(`Aperçu de ${sien || "la note"}`)}">
       <header class="copilote-apercu__tete">
         ${svgIcon("file-pdf")}
         <span class="copilote-apercu__nom">${escapeHtml(sien)}</span>
+        ${/*
+          **Le recours, à portée de main.** Le lecteur de l'application dessine
+          les pages ; ce lien, lui, rend la note au navigateur — pour l'imprimer,
+          la chercher, ou simplement la garder ouverte à côté.
+        */""}
+        ${texte(adresse)
+          ? `<a class="bouton-discret copilote-apercu__onglet" href="${escapeHtml(adresse)}"
+              target="_blank" rel="noopener"
+              title="Ouvrir la note dans un onglet">Ouvrir dans un onglet</a>`
+          : ""}
         <button type="button" class="bouton-discret copilote-apercu__fermer"
           data-copilote-apercu-fermer
           aria-label="Refermer l'aperçu" title="Refermer l'aperçu">
@@ -112,13 +131,22 @@ export function renderApercuDeLaNoteHtml({ nom = "", adresse = "" } = {}) {
         </button>
       </header>
       ${/*
-        **Le lecteur est celui du navigateur.** Il défile, il cherche, il zoome.
-        Le cadre n'a qu'à lui donner une hauteur : sans elle, il se réduirait à
-        la hauteur par défaut d'un cadre — cent cinquante pixels — et il
-        faudrait faire défiler une fenêtre de trois lignes.
+        **Les pages sont peintes ici, par le lecteur de l'application.** Le
+        conteneur est vide au rendu : le dessin est asynchrone, et l'écran dit ce
+        qu'il fait en attendant plutôt que de laisser un rectangle noir — un
+        cadre vide et un cadre en cours de lecture se ressemblent exactement.
       */""}
-      <iframe class="copilote-apercu__page" src="${escapeHtml(adresse)}"
-        title="${escapeHtml(sien || "Note jointe")}"></iframe>
+      <div class="copilote-apercu__page documents-pdf-viewer__pages"
+        data-copilote-apercu-pages
+        aria-busy="${etat === "lecture" ? "true" : "false"}"></div>
+      ${etat === "lecture"
+        ? `<p class="copilote-apercu__etat">Lecture de la note…</p>`
+        : ""}
+      ${etat === "panne"
+        ? `<p class="copilote-apercu__etat copilote-apercu__etat--panne">
+            Cette note n'a pas pu être dessinée${texte(adresse) ? " — elle reste ouvrable dans un onglet." : "."}
+          </p>`
+        : ""}
     </section>
   `;
 }
