@@ -271,22 +271,31 @@ arêtes — jamais une seconde porte.
 
 ## Les étapes
 
-### Étape 0 — trancher le mot
+### Étape 0 — trancher le mot *(faite)*
 
 `sujet` désigne déjà deux choses : dans le langage, le **nom d'une donnée**
 (« Hauteur du plancher bas du logement le plus haut ») ; dans le suivi, un fil de
 discussion. Le jour où il faut écrire l'arête, `le sujet porte sur le sujet` est
 illisible et l'on s'arrête.
 
-**Proposition : la mémoire garde « sujet »** — c'est le mot du langage, il est
-dans les `.ref` et les `.ctr`, il est presque contractuel — et l'objet du suivi
-devient **« point »**. C'est le mot natif du métier : un point de compte rendu,
-un point ouvert, un point soldé. Il est court, et il ne promet aucune procédure.
+**Tranché : la mémoire garde « sujet »** — c'est le mot du langage, il est dans
+les `.ref` et les `.ctr`, il est presque contractuel — et **le code appelle
+« point »** l'objet du suivi. C'est le mot natif du métier : un point de compte
+rendu, un point ouvert, un point soldé.
 
-Le coût est réel — écrans, vocabulaire, tests — et il n'a pas à être payé tout de
-suite. La décision, elle, se prend avant l'étape 2 : c'est elle qui nomme l'arête.
+**À l'écran, rien ne change : on écrit « sujet ».** Le vocabulaire des écrans a
+son histoire et ses habitudes, et le renommer coûterait cher — écrans,
+raccourcis, tests — pour ne régler qu'une gêne de lecture du code. La gêne, elle,
+était réelle : « le sujet porte sur le sujet » ne s'écrit pas.
 
-### Étape 1 — un point peut naître d'une valeur
+La frontière est donc nette. `services/point-porte-sur.js` la porte : ses
+fonctions parlent de points, **tout ce qu'il rend à lire dit « sujet »**, et le
+mot de l'écran est écrit une seule fois. Un test le vérifie dans les deux sens —
+il tombe si une phrase se met à dire « point », et il tombe si une variable de ce
+fichier se remet à s'appeler `sujet`. C'est d'ailleurs lui qui en a trouvé une,
+écrite deux minutes plus tôt.
+
+### Étape 1 — un point peut naître d'une valeur *(faite)*
 
 C'est le trou 4, et il bloque tout le reste. Aujourd'hui un point est l'enfant
 d'un document analysé ; il doit pouvoir naître d'une affirmation, d'une
@@ -295,7 +304,7 @@ conclusion de calcul, ou de rien.
 Migration additive : les deux colonnes deviennent facultatives. Ce qui les porte
 aujourd'hui les garde — un point venu d'un compte rendu cite toujours sa page.
 
-### Étape 2 — un point dit sur quoi il porte
+### Étape 2 — un point dit sur quoi il porte *(faite)*
 
 L'arête amont, vers une **version** d'affirmation. Posée par un geste humain, ou
 proposée par reconnaissance **exacte sur mots entiers** — c'est la prudence
@@ -335,6 +344,71 @@ chose que le moteur sait consommer.
 
 Une fois les arêtes en place, ce qu'un point bloque se calcule. Reste à croiser
 avec le rang qualitatif, comme dit plus haut.
+
+---
+
+## Ce qui est posé, et où
+
+| ce que c'est | où |
+|---|---|
+| les deux colonnes deviennent facultatives | `202610130001_un_point_porte_sur_une_affirmation.sql` |
+| l'arête « porte sur » | table `subject_assertion_links`, même migration |
+| plus de faux document | `create_manual_subject`, réécrite |
+| la reconnaissance, mutualisée | `services/avis-liaison.js`, `liaisonDunIntitule()` |
+| ce sur quoi un point porte | `services/point-porte-sur.js` |
+
+### Le faux document, et pourquoi il existait
+
+`subjects.document_id` et `subjects.analysis_run_id` étaient **obligatoires** :
+dans le schéma, un point était l'enfant d'un document analysé, pas du projet. Le
+code s'en accommodait en **fabriquant** un `manual-subjects-system.json` et une
+analyse fictive « réussie » pour chaque projet, uniquement pour satisfaire deux
+contraintes. Un document que personne n'a déposé, dans la table des documents,
+avec une analyse qui n'a jamais tourné.
+
+Les deux colonnes sont relâchées, la fonction ne fabrique plus rien. Les faux
+documents déjà créés **restent** : ils sont cités par les points qui les portent,
+et les effacer romprait cette citation. Une ligne fausse qu'on assume vaut mieux
+qu'une suppression qui casse.
+
+### La reconnaissance n'est pas réécrite : elle est sortie
+
+Un point doit s'accrocher à une valeur exactement comme un avis de bureau de
+contrôle : **sur mots entiers, un sujet ou rien**. Deux reconnaissances écrites
+séparément auraient divergé à la première correction. `liaisonDeLAvis` s'est donc
+ouverte en deux : `liaisonDunIntitule()` fait la reconnaissance, et ce qui reste
+dans l'avis est ce qui lui appartient — savoir où il range son intitulé.
+
+### Ce que ça donne déjà
+
+Sur une valeur : « 2 sujets ouverts portent sur cette valeur ». C'est le premier
+effet visible de l'arête, et il vaut à lui seul l'étape — **une valeur en débat
+cesse de se présenter comme acquise**.
+
+Un point **fermé** ne compte pas : il a fait son travail, et le compter ferait
+présenter comme en débat une valeur que plus personne ne discute. Un point qu'on
+ne connaît pas ne compte pas non plus — on ne sait pas s'il est ouvert, et le
+supposer ouvert ferait dire « en débat » à tort (règle 5).
+
+### Une arête proposée n'a pas d'auteur
+
+`declared_by` nul dit « reconnu, pas encore confirmé ». L'écran doit pouvoir le
+distinguer d'un geste humain : un point mal accroché contesterait en silence une
+valeur que personne n'a mise en doute.
+
+### Les gardes posées, et ce qu'on a cassé pour les voir tomber
+
+| la garde | ce qu'on a cassé | ce qui est tombé |
+|---|---|---|
+| l'écran écrit « sujet » | il se met à dire « point » | 2 tests |
+| le mot est écrit une fois | il s'écrit en dur dans une phrase | 1 test |
+| une variable du code ne s'appelle pas `sujet` | elle s'y remet | 1 test |
+| un point fermé ne met plus rien en question | il compte encore | 1 test |
+| un point inconnu ne se compte pas | il est supposé ouvert | 2 tests |
+| une arête proposée n'a pas d'auteur | elle s'en donne un | 1 test |
+| une version ne se lie pas deux fois | elle se lie deux fois | 1 test |
+| la reconnaissance vient des avis | elle est réécrite ici | 1 test |
+| le schéma laisse naître un point de rien | la contrainte revient | 1 test |
 
 ---
 
