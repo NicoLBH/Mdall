@@ -48,6 +48,23 @@ import { LIAISON, liaisonDunIntitule, phraseDeLaLiaison } from "./avis-liaison.j
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /**
+ * Une arête écartée : quelqu'un a regardé ce rapprochement et a dit non.
+ *
+ * **Elle reste en base, et elle ne se lit plus.** Un refus est une information
+ * — qui, quand — et un constat ne devient pas faux (règle 6) ; mais l'écran ne
+ * doit plus rien en dire, sinon écarter n'aurait servi à rien.
+ *
+ * Elle occupe aussi la place : `unique (subject_id, assertion_id)` fait qu'une
+ * reconnaissance qui repasse ne peut pas la remplacer. Le refus tient donc tout
+ * seul, sans que la reconnaissance ait à le consulter — c'est ce qui empêche le
+ * même rapprochement de revenir à la troisième relecture, et une alerte qu'on a
+ * déjà refusée trois fois est une alerte qu'on n'ouvre plus.
+ */
+export function areteEcartee(lien) {
+  return Boolean(texte(lien?.ecarte_le));
+}
+
+/**
  * Le mot de l'écran.
  *
  * Écrit une fois : les phrases d'ici le lisent, et le jour où l'écran changera
@@ -74,6 +91,55 @@ export function intituleDuPoint(point = null) {
 export function portagePropose(point = null, assertions = []) {
   const { assertions: reconnues, motif } = liaisonDunIntitule(intituleDuPoint(point), assertions);
   return { assertions: reconnues, motif, phrase: phraseDeLaLiaison(motif) };
+}
+
+/**
+ * Ce qu'il reste à proposer pour ce point : la reconnaissance, **moins ce qui
+ * est déjà su**.
+ *
+ * ## Trois choses ne se reproposent pas
+ *
+ * Une version **déjà rattachée** — le lien existe, il n'y a rien à ajouter. Une
+ * version **écartée** — quelqu'un a dit non, et le redemander est la façon la
+ * plus sûre de faire fermer l'écran. Une version **remplacée**, enfin : celle-là
+ * ne remonte déjà pas jusqu'ici, parce que `avis-liaison.js` l'écarte à la
+ * reconnaissance. La refiltrer ici en ferait un second endroit qui décide ce
+ * qui vaut encore (règle 4).
+ *
+ * ## Ce qui est trouvé et ce qui est déjà là se comptent séparément
+ *
+ * « Rien à proposer » se lit de deux façons — la reconnaissance n'a rien
+ * reconnu, ou tout ce qu'elle reconnaît est déjà rattaché — et l'écran ne doit
+ * pas dire l'une pour l'autre (règle 5). `reconnues` dit ce que les mots ont
+ * trouvé, `aProposer` ce qui reste, `deja` ce qui était là.
+ *
+ * @param {object} options
+ * @param {object} options.point le point
+ * @param {object[]} options.assertions la mémoire du projet
+ * @param {object[]} [options.liens] les arêtes déjà écrites, écartées comprises
+ * @returns {{aProposer: object[], reconnues: object[], deja: object[], motif: string, phrase: string}}
+ */
+export function portageAProposer({ point = null, assertions = [], liens = [] } = {}) {
+  const pointId = texte(point?.id);
+  const { assertions: reconnues, motif, phrase } = portagePropose(point, assertions);
+
+  // Tout ce que ce point-là connaît déjà d'une version : rattachée ou refusée.
+  // Les deux bloquent, et pour deux raisons opposées — c'est bien pour cela
+  // qu'elles se comptent à part, et pas ici.
+  const connues = new Set(
+    (Array.isArray(liens) ? liens : [])
+      .filter((lien) => texte(lien?.subject_id) === pointId)
+      .map((lien) => texte(lien?.assertion_id))
+      .filter(Boolean)
+  );
+
+  return {
+    reconnues,
+    aProposer: reconnues.filter((assertion) => !connues.has(texte(assertion?.id))),
+    deja: reconnues.filter((assertion) => connues.has(texte(assertion?.id))),
+    motif,
+    phrase
+  };
 }
 
 /**
@@ -165,6 +231,7 @@ export function portagesSurLaValeur(assertionId, { liens = [], points = [] } = {
 
   for (const lien of Array.isArray(liens) ? liens : []) {
     if (texte(lien?.assertion_id) !== vise) continue;
+    if (areteEcartee(lien)) continue;
 
     const id = texte(lien?.subject_id);
     if (!id || vus.has(id)) continue;
@@ -205,6 +272,7 @@ export function surQuoiCePointPorte(pointId = "", { liens = [], assertions = [] 
 
   for (const lien of Array.isArray(liens) ? liens : []) {
     if (texte(lien?.subject_id) !== vise) continue;
+    if (areteEcartee(lien)) continue;
 
     const id = texte(lien?.assertion_id);
     if (!id || vues.has(id)) continue;

@@ -9837,6 +9837,14 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
    Une arête **proposée** se voit sans se lire autrement : c'est la bordure qui
    le dit, pas un mot de plus. Elle porte deux boutons, jamais un seul — n'offrir
    que « confirmer » ferait de la seule réponse possible un acquiescement. */
+/* Le titre du bloc porte le geste, à sa droite.
+
+   Un bouton posé sous la liste se lit comme une action sur la dernière ligne ;
+   collé au titre, il se lit comme une action sur le bloc — et c'est ce qu'il
+   fait. C'est le geste du crayon d'un titre de sujet, un cran plus bas : un
+   seul à apprendre au lieu de deux formes pour une même intention. */
+.portage-liste__tete{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.portage-liste__dit{ margin-top:8px; font-size:11px; color:var(--muted); font-style:italic; }
 .portage-liste__corps{ display:flex; flex-direction:column; gap:6px; margin:0; padding:0; list-style:none; }
 .portage-liste__ligne{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; }
 .portage-liste__valeur{ flex:1 1 auto; color:var(--text); }

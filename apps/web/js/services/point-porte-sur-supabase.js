@@ -16,12 +16,20 @@
  * `declared_by` nul dit « reconnu, pas encore confirmé ». Confirmer est donc une
  * **écriture de ce seul champ** : le lien existait déjà, quelqu'un en répond
  * maintenant. Le réécrire en entier effacerait sa date de reconnaissance.
+ *
+ * ## Écarter n'efface pas
+ *
+ * Un refus est une information — qui, quand — et un constat ne devient pas faux
+ * (règle 6). La ligne reste donc, marquée : elle ne se lit plus, et elle occupe
+ * la place, ce qui suffit à empêcher la reconnaissance de reproposer le même
+ * rapprochement au prochain passage. C'est ce qui manquait, et sans quoi
+ * proposer automatiquement aurait été pire que ne rien proposer.
  */
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 
 const SUPABASE_URL = getSupabaseUrl();
-const COLONNES = "id,project_id,subject_id,assertion_id,declared_by,created_at";
+const COLONNES = "id,project_id,subject_id,assertion_id,declared_by,created_at,ecarte_le,ecarte_par";
 
 /** Ce qu'un point ouvert a besoin de dire de lui : son nom, et s'il est fermé. */
 const COLONNES_DU_POINT = "id,project_id,title,status,priority,created_at";
@@ -56,6 +64,10 @@ export async function listerLesLiens(projectId) {
   if (!projectId) return null;
 
   try {
+    // **Les écartées viennent aussi.** Elles ne s'affichent pas — `areteEcartee`
+    // les retire à la lecture —, mais la recherche à la demande a besoin de
+    // savoir ce qui a déjà été refusé pour ne pas le reproposer. Les filtrer ici
+    // ferait revenir chaque rapprochement écarté au clic suivant.
     return (await requete("subject_assertion_links", {
       params: { select: COLONNES, project_id: `eq.${projectId}`, order: "created_at.asc" }
     })) ?? [];
@@ -135,21 +147,37 @@ export async function confirmerLeLien(lienId, declarePar = "") {
 }
 
 /**
- * Retirer un lien.
+ * Écarter un lien : quelqu'un a regardé ce rapprochement et a dit non.
  *
- * C'est le pendant du geste qui confirme : une reconnaissance qui s'est trompée
- * doit pouvoir être écartée, sans quoi la seule réponse possible à une
+ * C'est le pendant du geste qui confirme — une reconnaissance qui s'est trompée
+ * doit pouvoir être refusée, sans quoi la seule réponse possible à une
  * proposition serait de l'accepter.
  *
- * @returns {Promise<boolean>} vrai si la suppression a abouti
+ * **Marqué, jamais effacé.** `declared_by` reste : « posée par Ourdine Ferrand
+ * le 12 mars, écartée le 3 avril » se relit, et effacer l'auteur en écartant
+ * ferait disparaître le fait qu'elle avait été confirmée.
+ *
+ * Écarter sans savoir qui n'est pas une raison de ne rien écrire : la date suffit
+ * à tenir la place et à empêcher le retour de la proposition. Ce qu'on ne sait
+ * pas se tait, il ne bloque pas le geste (règle 5).
+ *
+ * @returns {Promise<boolean>} vrai si le refus a été enregistré
  */
-export async function retirerLeLien(lienId) {
+export async function ecarterLeLien(lienId, ecartePar = "") {
   const id = String(lienId ?? "").trim();
   if (!id) return false;
 
   try {
-    await requete("subject_assertion_links", { method: "DELETE", params: { id: `eq.${id}` } });
-    return true;
+    const lignes = (await requete("subject_assertion_links", {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      params: { id: `eq.${id}` },
+      body: {
+        ecarte_le: new Date().toISOString(),
+        ecarte_par: String(ecartePar ?? "").trim() || null
+      }
+    })) ?? [];
+    return lignes.length > 0;
   } catch {
     return false;
   }

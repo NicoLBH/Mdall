@@ -476,16 +476,80 @@ pour ranger une page, et un bouton qui promet un rangement qu'il ne peut pas
 tenir est pire que pas de bouton. Les cinq lectures ne partent qu'au clic, une
 fois par projet ; tant qu'elles ne sont pas revenues, **la liste ne bouge pas**.
 
+### Quand la reconnaissance se déclenche
+
+Un point naît de bien plus que d'un compte rendu : `run-analysis` →
+`generate-observations` → `resolve-observations` en crée depuis **n'importe quel
+document analysé**, `create_manual_subject` depuis la main, et depuis l'étape 1
+un point peut naître d'une valeur ou de rien. La reconnaissance ne regarde que
+l'**intitulé** — elle se moque de savoir d'où il vient.
+
+Il n'y a que deux instants où un rapprochement nouveau peut naître, et ce sont
+les deux côtés de la même arête : **un point naît** — on confronte son intitulé
+à la mémoire — et **une affirmation entre en mémoire** — on confronte son nom
+aux points ouverts. Plus un rattrapage **à la demande**, qui est le seul moyen
+d'atteindre les points déjà ouverts aujourd'hui, et le seul qui serve quand un
+intitulé vient d'être corrigé.
+
+**Jamais de balayage périodique.** Un travail de fond qui redécouvre chaque nuit
+les mêmes rapprochements est la façon la plus sûre de faire ignorer l'alerte —
+c'est déjà la raison pour laquelle on ne crie pas « caduc ».
+
+#### Écarter se souvient, et c'était le préalable
+
+Écarter **effaçait la ligne**. Rien ne gardait donc trace du refus : à la
+reconnaissance suivante, le même rapprochement se reproposait à l'identique.
+Proposer sans mémoire du refus est **pire que ne pas proposer** — au troisième
+« le sujet « … » porterait sur cette valeur » qu'on a déjà refusé, on cesse
+d'ouvrir la Mémoire.
+
+Un refus est une information — qui, quand — et un constat ne devient pas faux
+(règle 6). La ligne reste donc, marquée par `ecarte_le` : elle ne se lit plus, et
+elle **occupe la place**. `unique (subject_id, assertion_id)` fait le reste — une
+reconnaissance qui repasse envoie ses lignes en `ignore-duplicates`, et celle-là
+est ignorée sans qu'elle ait à consulter quoi que ce soit.
+
+`declared_by` reste : « posée par Ourdine Ferrand le 12 mars, écartée le 3
+avril » se relit, et effacer l'auteur en écartant ferait disparaître le fait
+qu'elle avait été confirmée.
+
+Un même mot pour le même acte, enfin : « Écarter » sur une arête proposée comme
+sur une arête confirmée. « Retirer » et « Écarter » auraient fait deux gestes à
+apprendre pour une seule intention.
+
+#### Chercher, à la demande
+
+Un bouton dans le détail d'un sujet : **Chercher dans la mémoire**. C'est le
+déclenchement qui coûte le moins cher à se tromper — quelqu'un a cliqué, il
+regarde, il répond — et c'est celui qui dira, sur de vrais projets, si la
+prudence de la reconnaissance est au bon niveau avant qu'on l'automatise.
+
+Le bloc s'affiche maintenant **même vide**, et ce n'est pas une contradiction
+avec la règle qu'il portait. Il porte un **geste**, et un endroit où agir
+n'affirme rien : le titre et le bouton se lisent « voilà où cela se passe », pas
+« ce sujet ne porte sur rien ».
+
+**« Rien » est trois choses**, et l'écran les distingue (règle 5) :
+
+| ce qu'on lit | ce que ça veut dire |
+| --- | --- |
+| *(rien)* | personne n'a encore cherché |
+| « Aucun nom de la mémoire n'apparaît dans l'intitulé de ce sujet. » | la reconnaissance a tourné, et n'a rien reconnu |
+| « Les noms reconnus sont déjà rattachés, ou ont déjà été écartés. » | elle a reconnu, et tout était déjà su |
+
+Les confondre ferait croire qu'elle ne marche pas, et l'on cesserait de s'en
+servir.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
 contractuelle d'une pièce. Chacun demande **une** chose, nommée dans
 `services/ce-qui-couvre.js`, et le jour où elle existe une ligne suffit.
 
-Et la **reconnaissance** n'est branchée nulle part : `portagePropose` sait dire
-sur quoi un point porterait, mais aucun geste ne pose encore les arêtes
-proposées. L'écran sait donc les montrer et y répondre ; il reste à décider
-quand on les propose — et ce n'est pas une question technique.
+Et les **deux déclenchements automatiques** — à la naissance d'un point, au
+versement d'une affirmation. Ils sont maintenant sûrs, puisque le refus se
+souvient ; ils attendent de savoir, par la recherche à la demande, ce que la
+reconnaissance trouve vraiment sur de vrais intitulés.
 
 ---
 
@@ -509,6 +573,9 @@ quand on les propose — et ce n'est pas une question technique.
 | les deux mentions et les deux gestes, sur une ligne de mémoire | `views/project-memory.js` |
 | les deux encadrés du détail d'un sujet | `views/project-subjects/aretes-du-sujet.js` |
 | l'ordre du tableau, et les cinq lectures qu'il demande | `views/project-subjects/ordre-du-blocage.js` |
+| une arête écartée se souvient | `202610140001_une_arete_ecartee_se_souvient.sql` |
+| ce qu'il reste à proposer pour un point | `portageAProposer`, dans `services/point-porte-sur.js` |
+| la recherche à la demande | `chercherSurQuoiCeSujetPorte`, dans `views/project-subjects/aretes-du-sujet.js` |
 
 ### Le faux document, et pourquoi il existait
 
@@ -616,6 +683,14 @@ valeur que personne n'a mise en doute.
 | le compte des ouverts ne filtre pas sur l'auteur | il filtre | 3 tests |
 | un sujet sans place reste derrière | il se mêle aux rangés | 1 test |
 | l'écran transversal ne propose pas le troisième ordre | il le propose | 3 tests |
+| une arête écartée ne se lit plus (amont) | elle se relit | 1 test |
+| une arête écartée ne se lit plus (aval) | elle se relit | 1 test |
+| un auteur sans date n'écarte rien | il écarte | 1 test |
+| un refus bloque la reproposition | il cesse de bloquer | 1 test |
+| le refus d'un autre sujet ne bloque pas celui-ci | il bloque | 1 test |
+| « rien reconnu » et « déjà là » se disent différemment | ils se confondent | 1 test |
+| le bloc s'affiche même vide, pour porter le geste | il redisparaît | 3 tests |
+| un seul mot pour le même acte | deux mots | 1 test |
 
 ---
 

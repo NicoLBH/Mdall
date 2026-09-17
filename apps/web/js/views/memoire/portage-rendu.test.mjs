@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  renderCeQuePorteLeSujet, renderCeQuiPorteSurLaValeur, renderLeChemin, renderLeDebatQuiATranche
+  RECHERCHE, renderCeQuePorteLeSujet, renderCeQuiPorteSurLaValeur, renderLeChemin,
+  renderLeDebatQuiATranche
 } from "./portage-rendu.js";
 import { NATURE } from "../../services/assertion-taxonomy.js";
 import { raisonnementDuPoint } from "../../services/raisonnement-du-point.js";
@@ -176,8 +177,50 @@ test("le détail d'un sujet dit sur quoi il porte, et porte les mêmes gestes", 
   assert.match(dit, /Sur quoi ce sujet porte/);
 });
 
-test("un sujet sans arête n'affirme pas qu'il ne porte sur rien", () => {
-  assert.equal(renderCeQuePorteLeSujet({ portages: [] }), "");
+test("un sujet sans arête offre le geste, et n'affirme toujours rien", () => {
+  // Le bloc s'affiche maintenant même vide, parce qu'il porte un **geste** : un
+  // endroit où agir n'affirme rien. Ce qu'il ne dit toujours pas, c'est « ce
+  // sujet ne porte sur rien » — personne ne l'a dit, et l'écran ne l'invente pas.
+  const dit = renderCeQuePorteLeSujet({ portages: [] });
+
+  assert.match(dit, /Sur quoi ce sujet porte/);
+  assert.match(dit, /data-portage-cherche/);
+  assert.doesNotMatch(dit, /portage-liste__corps/);
+  assert.doesNotMatch(dit, /ne porte sur rien|aucune valeur|rien/i);
+});
+
+test("« rien » se dit de trois façons, et elles ne se confondent pas", () => {
+  // Confondre « la reconnaissance n'a rien trouvé » avec « tout est déjà là »
+  // ferait croire qu'elle ne marche pas, et l'on cesserait de s'en servir.
+  const jamais = renderCeQuePorteLeSujet({ portages: [] });
+  const rien = renderCeQuePorteLeSujet({ portages: [], recherche: RECHERCHE.RIEN });
+  const deja = renderCeQuePorteLeSujet({ portages: [], recherche: RECHERCHE.DEJA });
+
+  assert.doesNotMatch(jamais, /portage-liste__dit/);
+  // Les apostrophes sont échappées — c'est le rendu, pas la phrase, qu'on lit.
+  assert.match(rien, /Aucun nom de la mémoire/);
+  assert.match(deja, /déjà rattachés, ou ont déjà été écartés/);
+  assert.notEqual(rien, deja);
+});
+
+test("le même mot pour le même acte, qu'il soit confirmé ou proposé", () => {
+  // « Retirer » et « Écarter » auraient fait deux gestes à apprendre pour une
+  // seule intention : je ne veux pas de cette arête (règle 10).
+  const dit = renderCeQuePorteLeSujet({
+    portages: [
+      { assertion: { payload: { subject: "Altitude" } }, lien: { id: "l-1" }, confirme: true },
+      { assertion: { payload: { subject: "Classe de sol" } }, lien: { id: "l-2" }, confirme: false }
+    ]
+  });
+
+  assert.equal((dit.match(/>Écarter</g) ?? []).length, 2);
+  assert.doesNotMatch(dit, /Retirer/);
+});
+
+test("une recherche en vol désarme son propre bouton et le dit", () => {
+  const dit = renderCeQuePorteLeSujet({ portages: [], occupe: true });
+  assert.match(dit, /data-portage-cherche disabled/);
+  assert.match(dit, /Recherche…/);
 });
 
 test("une valeur sans valeur se dit par son seul nom", () => {
