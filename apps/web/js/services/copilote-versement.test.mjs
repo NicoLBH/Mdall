@@ -9,7 +9,7 @@ import { normalizeSubjectKey } from "./project-memory.js";
 
 const REGIME = {
   sujet: "Régime de sécurité incendie",
-  cle: "regime-de-securite-incendie",
+  cles: ["regime-de-securite-incendie"],
   valeur: "habitation",
   unite: "",
   quoi: "Le corps de règles dont relève le bâtiment."
@@ -42,8 +42,8 @@ test("le nom doit mener à la clé que l'agent relit", () => {
   // l'agent relit sous la clé qu'il déclare. Quand les deux divergent, la valeur
   // entre en mémoire **et la question se repose quand même** — le projet
   // s'enrichit d'un sujet que personne ne relit.
-  const boiteux = { sujet: "H0 retenu pour le département", cle: "h0-hors-gel", valeur: "0.50", unite: "m" };
-  assert.notEqual(normalizeSubjectKey(boiteux.sujet), boiteux.cle, "le cas n'est plus celui qu'on teste");
+  const boiteux = { sujet: "Un nom que personne ne relit", cles: ["h0-hors-gel"], valeur: "0.50", unite: "m" };
+  assert.ok(!boiteux.cles.includes(normalizeSubjectKey(boiteux.sujet)), "le cas n'est plus celui qu'on teste");
 
   const { affirmations, sansRetour } = aProposerDeLaConversation({ aVerser: [REGIME, boiteux] });
 
@@ -54,11 +54,29 @@ test("le nom doit mener à la clé que l'agent relit", () => {
   assert.match(phraseDesSansRetour(sansRetour), /reste dans la conversation/);
 });
 
+test("le nom peut mener à n'importe laquelle des clés que l'agent relit", () => {
+  // Un même fait s'écrit sous plusieurs noms selon qui l'a établi, et l'agent
+  // les lit tous. « H0 retenu pour le département » se range sous la troisième
+  // clé déclarée : exiger la première l'aurait écartée alors qu'elle revient
+  // très bien.
+  const h0 = {
+    sujet: "H0 retenu pour le département",
+    cles: ["h0-hors-gel", "h0", "h0-retenu-pour-le-departement"],
+    valeur: "0.50",
+    unite: "m"
+  };
+  assert.notEqual(normalizeSubjectKey(h0.sujet), h0.cles[0], "le cas n'est plus celui qu'on teste");
+
+  const { affirmations, sansRetour } = aProposerDeLaConversation({ aVerser: [h0] });
+  assert.deepEqual(affirmations.map((a) => a.sujet), [h0.sujet]);
+  assert.deepEqual(sansRetour, []);
+});
+
 test("l'unité colle à la valeur", () => {
   // « 24,5 » et « 24,5 m » ne se relisent pas pareil, et c'est la seconde que la
   // mémoire doit porter.
   const { affirmations } = aProposerDeLaConversation({
-    aVerser: [{ sujet: "Altitude du site", cle: "altitude-du-site", valeur: "450", unite: "m" }]
+    aVerser: [{ sujet: "Altitude du site", cles: ["altitude-du-site"], valeur: "450", unite: "m" }]
   });
 
   assert.equal(affirmations[0].valeur, "450 m");
@@ -77,7 +95,7 @@ test("une exécution sans rien à proposer ne propose rien", () => {
   assert.deepEqual(aProposerDeLaConversation({ aVerser: [] }).affirmations, []);
   // Une ligne incomplète n'invente pas ce qui lui manque.
   assert.deepEqual(
-    aProposerDeLaConversation({ aVerser: [{ sujet: "Altitude du site", cle: "altitude-du-site" }] }).affirmations,
+    aProposerDeLaConversation({ aVerser: [{ sujet: "Altitude du site", cles: ["altitude-du-site"] }] }).affirmations,
     []
   );
   assert.equal(phraseDeLaProposition([]), "");

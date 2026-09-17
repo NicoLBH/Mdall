@@ -58,12 +58,14 @@ export function aProposerDeLaConversation(execution, { par = "", le = "" } = {})
   for (const versable of versables) {
     const sujet = texte(versable?.sujet);
     const valeur = texte(versable?.valeur);
-    const cle = texte(versable?.cle);
-    if (!sujet || !valeur || !cle) continue;
+    const cles = (Array.isArray(versable?.cles) ? versable.cles : []).map(texte).filter(Boolean);
+    if (!sujet || !valeur || !cles.length) continue;
 
-    // Le nom doit mener à la clé que l'agent relit, sinon la question se repose
-    // sur une mémoire pourtant enrichie.
-    if (normalizeSubjectKey(sujet) !== cle) {
+    // Le nom doit mener à **l'une** des clés que l'agent relit, sinon la question
+    // se repose sur une mémoire pourtant enrichie. Une seule suffit : un même
+    // fait s'écrit sous plusieurs noms selon qui l'a établi, et l'agent les lit
+    // tous.
+    if (!cles.includes(normalizeSubjectKey(sujet))) {
       sansRetour.push(sujet);
       continue;
     }
