@@ -128,6 +128,9 @@ const REGLE = "163,113,247";
  * n'est pas une valeur fausse, et le rouge de l'audit dit autre chose — il dit
  * que quelque chose ne va pas. Ici, tout va bien : des gens discutent.
  */
+// La même couleur que `--debat` dans la feuille de style, qui l'écrit pour la
+// légende et pour la pastille des arêtes : un dessin sur canevas ne lit pas une
+// variable CSS, et c'est le seul endroit où elle se recopie.
 const HALO_DU_DEBAT = "rgba(210,153,34,.75)";
 
 const ANNEAU_DU_RANG = {

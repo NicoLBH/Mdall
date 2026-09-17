@@ -38,6 +38,7 @@ import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
 import { MOT_A_LECRAN, intituleDuPoint, phraseDesPointsOuverts } from "../../services/point-porte-sur.js";
 import { phraseDuDebat } from "../../services/point-a-tranche.js";
+import { ceQuiSeDebat, phraseDeCeQuiSeDebat } from "../../services/ce-qui-se-debat.js";
 import { etapesDuRaisonnement, lacunesDuRaisonnement, phraseDesLacunesDuRaisonnement }
   from "../../services/raisonnement-du-point.js";
 import { lignesDeLHistoire, phraseDesLacunesDeLHistoire }
@@ -297,26 +298,90 @@ function renderLaPastilleDuRefus(ecarte) {
 }
 
 /**
- * Ce qui est **confirmé** : le sujet porte là-dessus, quelqu'un l'a dit.
+ * Ce qui est confirmé — c'est-à-dire **ce que ce sujet met en débat**.
  *
- * Un titre qui affirme, parce qu'ici on affirme. Rien quand il n'y a rien : ce
- * n'est pas « ce sujet ne porte sur rien », c'est que personne ne l'a encore
- * dit, et le bloc d'en dessous est justement là pour le demander.
+ * ## « Ça avance à quoi de faire tout ça ? »
+ *
+ * Le titre disait « Ce sujet porte sur », les lignes portaient un bouton
+ * « Écarter », et rien ne disait ce qu'on venait de faire en confirmant. Vu à
+ * l'écran d'un vrai projet : on clique « Oui, celle-ci », la ligne change de
+ * bloc, et **on ne voit même pas qu'on a confirmé**.
+ *
+ * Ce que ça avance est pourtant tout l'intérêt du rapprochement : une valeur
+ * qu'un sujet ouvert met en débat **cesse de se présenter comme acquise**, dans
+ * la Mémoire et dans le cerveau. Le titre le dit maintenant, une pastille le
+ * montre sur chaque ligne, et une phrase dit comment cela se termine.
+ *
+ * ## Le bouton s'appelle par son effet
+ *
+ * « Écarter » sur une ligne confirmée ne disait pas ce qu'il écartait. Il retire
+ * la valeur du débat — c'est-à-dire qu'il défait la confirmation —, et c'est ce
+ * qu'il s'appelle. « Non » reste au bloc d'en dessous : là on répond à une
+ * question, ici on défait un geste.
  */
 function renderCeSurQuoiIlPorte(poses, occupe) {
   if (!poses.length) return "";
 
-  const titre = `Ce ${MOT_A_LECRAN.un} porte sur`;
+  const titre = `Ce ${MOT_A_LECRAN.un} met ces valeurs en débat`;
 
   return `
-    <section class="details-bloc portage-liste" aria-label="${escapeHtml(titre)}">
+    <section class="details-bloc portage-liste portage-liste--debat" aria-label="${escapeHtml(titre)}">
       <div class="details-bloc__label">${escapeHtml(titre)}</div>
+      <p class="portage-liste__pourquoi">Tant que ce ${escapeHtml(MOT_A_LECRAN.un)} est ouvert,
+        elles ne se présentent plus comme acquises : la Mémoire et le cerveau les montrent
+        « en débat ».</p>
+      ${renderCeQuiSeDebat(ceQuiSeDebat(poses))}
       <ul class="portage-liste__corps">
         ${poses.map((portage) => renderUneValeur(portage, {
-          gestes: `<button type="button" class="gh-btn gh-btn--sm" data-portage-retire="${escapeHtml(texte(portage?.lien?.id))}" ${occupe ? "disabled" : ""}>Écarter</button>`
+          gestes: `<span class="portage-liste__pastille portage-liste__pastille--debat">en débat</span>
+            <button type="button" class="gh-btn gh-btn--sm" data-portage-retire="${escapeHtml(texte(portage?.lien?.id))}" ${occupe ? "disabled" : ""}>Retirer du débat</button>`
         })).join("")}
       </ul>
+      <p class="portage-liste__consequence">Fermer ce ${escapeHtml(MOT_A_LECRAN.un)} comme réalisé
+        demandera ce qui a été tranché. La décision se propose, et une fois signée elle entre en
+        mémoire : chacune de ces valeurs dira alors dans quel ${escapeHtml(MOT_A_LECRAN.un)} elle a
+        été tranchée.</p>
     </section>
+  `;
+}
+
+/**
+ * Ce que ce débat a à trancher, côte à côte.
+ *
+ * ## Une liste ne montre pas une opposition
+ *
+ * Quatre lignes « Profondeur hors gel », deux valeurs différentes, dans l'ordre
+ * où la base les rend : il faut lire les quatre et comparer de tête. Rangées par
+ * nom, avec leurs valeurs distinctes en regard, **l'opposition se voit**.
+ *
+ * ## Il montre, il ne conclut pas
+ *
+ * La portée est là parce que c'est elle qui décide : « 0,466 m au Préau » et
+ * « 0,69 m au Bâtiment A » peuvent être justes toutes les deux. L'écran met les
+ * deux sous les yeux ; c'est le projet qui tranche.
+ *
+ * Rien quand aucun nom n'en porte plusieurs : un tableau qui répéterait la liste
+ * d'en dessous ferait lire deux fois la même chose (règle 4).
+ */
+function renderCeQuiSeDebat(debat) {
+  const partages = (debat?.noms ?? []).filter((entree) => entree.plusieursValeurs);
+  if (!partages.length) return "";
+
+  return `
+    <div class="debat-valeurs">
+      <p class="debat-valeurs__dit">${escapeHtml(phraseDeCeQuiSeDebat(debat))}</p>
+      ${partages.map((entree) => `
+        <div class="debat-valeurs__nom">${escapeHtml(entree.nom)}</div>
+        <dl class="memory-facts">
+          ${entree.versions.map((version) => `
+            <dt>${escapeHtml(version.valeur)}</dt>
+            <dd>${escapeHtml(version.portees.length
+              ? version.portees.join(" · ")
+              : "sur l'ouvrage entier")}</dd>
+          `).join("")}
+        </dl>
+      `).join("")}
+    </div>
   `;
 }
 
