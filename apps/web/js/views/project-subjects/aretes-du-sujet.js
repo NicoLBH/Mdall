@@ -25,6 +25,7 @@
  */
 
 import { RECHERCHE, renderCeQuePorteLeSujet, renderLeChemin } from "../memoire/portage-rendu.js";
+import { histoireDeLaValeur } from "../../services/histoire-de-la-valeur.js";
 import { raisonnementDuPoint } from "../../services/raisonnement-du-point.js";
 import { pointOuvert, surQuoiCePointPorte } from "../../services/point-porte-sur.js";
 import { affirmationsDecideesDans } from "../../services/point-a-tranche.js";
@@ -32,7 +33,7 @@ import { affirmationsDecideesDans } from "../../services/point-a-tranche.js";
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /** Ce qu'on a lu, et pour quel projet. Vidé dès qu'un geste change la base. */
-let cache = { projectId: "", liens: null, assertions: null };
+let cache = { projectId: "", liens: null, assertions: null, applications: [], actes: [], points: [] };
 
 /**
  * Ce que la dernière recherche a donné, pour ce sujet-là.
@@ -45,7 +46,7 @@ let recherches = new Map();
 
 /** Repartir de zéro à la prochaine ouverture. */
 export function oublierLesAretes() {
-  cache = { projectId: "", liens: null, assertions: null };
+  cache = { projectId: "", liens: null, assertions: null, applications: [], actes: [], points: [] };
 }
 
 const attribut = (valeur) => texte(valeur).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -73,21 +74,44 @@ async function lireLeProjet() {
 
   if (cache.projectId === projectId && cache.liens !== null && cache.assertions !== null) return cache;
 
-  const [{ listerLesLiens }, { listProjectAssertions }] = await Promise.all([
+  const [
+    { listerLesLiens, listerLesPoints },
+    { listProjectAssertions },
+    { listerLesApplications },
+    { listHypothesisActs }
+  ] = await Promise.all([
     import("../../services/point-porte-sur-supabase.js"),
-    import("../../services/project-memory-supabase.js")
+    import("../../services/project-memory-supabase.js"),
+    import("../../services/memoire-applications-supabase.js"),
+    import("../../services/memoire-actes-supabase.js")
   ]);
 
-  const [liens, assertions] = await Promise.all([
+  // **Ce qu'il faut pour raconter, et rien de plus.** Les deux premières portent
+  // les arêtes ; les trois autres portent l'histoire — ce que chaque conclusion
+  // a lu, qui s'est engagé dessus, et dans quel débat elle a été tranchée.
+  //
+  // Les trois dernières ne font pas échouer la lecture : sans elles l'histoire
+  // est plus courte, et l'écran nomme ce qui manque plutôt que de se taire.
+  const [liens, assertions, applications, actes, points] = await Promise.all([
     listerLesLiens(projectId),
-    listProjectAssertions(projectId)
+    listProjectAssertions(projectId),
+    listerLesApplications(projectId),
+    listHypothesisActs(projectId),
+    listerLesPoints(projectId)
   ]);
 
   // `null` n'est pas `[]` : une lecture ratée ne se montre pas comme une absence
   // d'arête. On ne garde donc rien, et la prochaine ouverture réessaiera.
   if (liens === null || assertions === null) return null;
 
-  cache = { projectId, liens, assertions };
+  cache = {
+    projectId, liens, assertions,
+    applications: applications ?? [],
+    // `null` se garde tel quel : « on n'a pas lu les actes » n'est pas « personne
+    // ne s'est engagé », et `ceQuiCouvre` distingue les deux.
+    actes,
+    points: points ?? []
+  };
   return cache;
 }
 
@@ -119,9 +143,30 @@ export async function remplirLesAretes(hote, { occupe = false } = {}) {
   const portees = surQuoiCePointPorte(subjectId, { liens: lu.liens, assertions: lu.assertions });
   const parLien = new Map(lu.liens.map((lien) => [`${texte(lien?.subject_id)}|${texte(lien?.assertion_id)}`, lien]));
 
+  // **L'histoire de chaque valeur, et pas seulement son nom.**
+  //
+  // « Profondeur hors gel = 0,466 m » trois fois de suite ne se choisit pas :
+  // vu à l'écran d'un vrai projet, la même valeur existait pour plusieurs
+  // parties de l'ouvrage et rien ne les distinguait. Et même distinctes, trois
+  // valeurs ne se confirment pas sans savoir d'où elles sortent — surtout
+  // lorsqu'elles ont été versées il y a deux ans par quelqu'un d'autre.
+  //
+  // Tout est déjà enregistré : la règle, ce qu'elle a lu, la citation, la
+  // décision et ses écartés, qui et quand. Il n'y a rien à résumer, seulement à
+  // lire.
   const portages = portees.map((assertion) => {
     const lien = parLien.get(`${subjectId}|${texte(assertion?.id)}`) ?? null;
-    return { assertion, lien, confirme: Boolean(texte(lien?.declared_by)) };
+    return {
+      assertion,
+      lien,
+      confirme: Boolean(texte(lien?.declared_by)),
+      histoire: histoireDeLaValeur(assertion, {
+        assertions: lu.assertions,
+        applications: lu.applications ?? [],
+        actes: lu.actes,
+        points: lu.points ?? []
+      })
+    };
   });
 
   // **Le chemin n'apparaît qu'une fois le sujet fermé.** Un raisonnement dit par
@@ -203,7 +248,7 @@ export async function chercherSurQuoiCeSujetPorte(hote) {
 
   if (bilan.proposees) {
     // Ce qu'on avait lu ne vaut plus.
-    cache = { projectId: "", liens: null, assertions: null };
+    cache = { projectId: "", liens: null, assertions: null, applications: [], actes: [], points: [] };
   }
 
   recherches.set(subjectId, bilan.proposees

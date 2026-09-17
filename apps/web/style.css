@@ -9846,9 +9846,47 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 .portage-liste__tete{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .portage-liste__dit{ margin-top:8px; font-size:11px; color:var(--muted); font-style:italic; }
 .portage-liste__corps{ display:flex; flex-direction:column; gap:6px; margin:0; padding:0; list-style:none; }
-.portage-liste__ligne{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; }
-.portage-liste__valeur{ flex:1 1 auto; color:var(--text); }
-.portage-liste__ligne--propose .portage-liste__valeur{ color:var(--muted); }
+.portage-liste__ligne{ display:flex; flex-direction:column; gap:4px; font-size:12px; }
+.portage-liste__haut{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.portage-liste__valeur{ flex:1 1 auto; min-width:0; color:var(--text); font-weight:600; }
+.portage-liste__gestes{ display:inline-flex; gap:6px; flex:0 0 auto; }
+.portage-liste__ligne--propose .portage-liste__valeur{ font-weight:500; }
+
+/* Ce qui distingue une valeur d'une autre, et qui ne se déplie donc pas.
+
+   Trois lignes « Profondeur hors gel = 0,466 m » ne se choisissent pas. La
+   portée, la date et l'origine sont ce qui les sépare : les cacher sous un
+   dépliant obligerait à ouvrir cinq volets pour comparer cinq lignes. */
+.portage-liste__identite{ color:var(--muted); font-size:11px; }
+
+/* La question que le bloc pose, et la conséquence de la réponse.
+
+   Une question sans sa conséquence n'est pas une question, c'est un piège : on
+   clique sans savoir ce que le clic fait. */
+.portage-liste__pourquoi{ margin:0 0 10px; color:var(--text); font-size:12px; }
+.portage-liste__consequence{ margin:10px 0 0; color:var(--muted); font-size:11px; }
+.portage-liste--propose{ border-style:dashed; }
+
+/* Le reste de l'histoire : pourquoi cette valeur, et ce qu'on n'en sait pas.
+
+   Dépliée, parce que cinq histoires entières feraient une page qu'on ne lit
+   pas. À un clic, parce que c'est elle qui permet de répondre — surtout quand
+   la valeur a été versée il y a deux ans par quelqu'un d'autre. */
+.portage-liste__histoire summary{
+  cursor:pointer; color:var(--muted); font-size:11px; list-style:none;
+  padding:2px 0; user-select:none;
+}
+.portage-liste__histoire summary::-webkit-details-marker{ display:none; }
+.portage-liste__histoire summary::before{ content:"▸ "; }
+.portage-liste__histoire[open] summary::before{ content:"▾ "; }
+.portage-liste__histoire summary:hover{ color:var(--text); }
+
+/* L'histoire se lit dans la liste « intitulé → valeur » de la Mémoire —
+   `.memory-facts`, telle quelle. Lui donner ici une largeur de colonne à elle
+   ferait lire les mêmes lignes à deux calibres selon l'écran. Seule la marge du
+   haut est à poser, parce qu'ici la liste sort d'un dépliant. */
+.portage-liste__histoire .memory-facts{ margin-top:6px; }
+.histoire__manques{ margin:8px 0 0; color:var(--muted); font-size:11px; font-style:italic; }
 .details-document-refs__list{
   display:flex;
   flex-wrap:wrap;

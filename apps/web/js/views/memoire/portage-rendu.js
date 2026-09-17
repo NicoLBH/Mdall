@@ -40,8 +40,27 @@ import { MOT_A_LECRAN, intituleDuPoint, phraseDesPointsOuverts } from "../../ser
 import { phraseDuDebat } from "../../services/point-a-tranche.js";
 import { etapesDuRaisonnement, lacunesDuRaisonnement, phraseDesLacunesDuRaisonnement }
   from "../../services/raisonnement-du-point.js";
+import { lignesDeLHistoire, phraseDesLacunesDeLHistoire }
+  from "../../services/histoire-de-la-valeur.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
+
+/**
+ * Une date, telle qu'on la lit.
+ *
+ * C'est **ici** que la locale se pose, et pas dans le service : un service qui
+ * formate une date décide de l'affichage à la place de celui qui affiche. Ce
+ * fichier est celui qui affiche.
+ *
+ * Une date illisible se rend telle quelle plutôt que de disparaître : « le
+ * 2024-13-40 » se remarque et se corrige, une ligne sans date ne se remarque
+ * pas.
+ */
+function dateEnFrancais(quand) {
+  const lue = Date.parse(texte(quand));
+  if (!Number.isFinite(lue)) return texte(quand);
+  return new Date(lue).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+}
 
 /** Les intitulés d'une liste de portages, un par ligne — c'est l'info-bulle. */
 function intitules(portages) {
@@ -208,7 +227,7 @@ const RECHERCHES_DITES = {
  * sujets déjà ouverts aujourd'hui, qui n'auront jamais d'arête autrement.
  *
  * @param {object} options
- * @param {{assertion, lien, confirme}[]} [options.portages]
+ * @param {{assertion, lien, confirme, histoire}[]} [options.portages]
  * @param {boolean} [options.occupe] vrai pendant qu'une écriture est en vol
  * @param {string} [options.recherche] une valeur de `RECHERCHE`
  */
@@ -216,33 +235,193 @@ export function renderCeQuePorteLeSujet({
   portages = [], occupe = false, recherche = RECHERCHE.JAMAIS
 } = {}) {
   const lus = Array.isArray(portages) ? portages : [];
-
-  const lignes = lus.map(({ assertion, lien, confirme }) => `
-    <li class="portage-liste__ligne${confirme ? "" : " portage-liste__ligne--propose"}">
-      <span class="portage-liste__valeur">${escapeHtml(nomEtValeur(assertion))}</span>
-      ${confirme
-        ? `<button type="button" class="gh-btn gh-btn--sm" data-portage-retire="${escapeHtml(texte(lien?.id))}" ${occupe ? "disabled" : ""}>Écarter</button>`
-        : `<button type="button" class="gh-btn gh-btn--sm" data-portage-confirme="${escapeHtml(texte(lien?.id))}" ${occupe ? "disabled" : ""}>Confirmer</button>
-           <button type="button" class="gh-btn gh-btn--sm" data-portage-retire="${escapeHtml(texte(lien?.id))}" ${occupe ? "disabled" : ""}>Écarter</button>`}
-    </li>
-  `).join("");
-
-  const titre = `Sur quoi ce ${MOT_A_LECRAN.un} porte`;
+  const poses = lus.filter((portage) => portage.confirme);
+  const proposes = lus.filter((portage) => !portage.confirme);
   const dit = RECHERCHES_DITES[texte(recherche)] ?? "";
 
   return `
+    ${renderCeSurQuoiIlPorte(poses, occupe)}
+    ${renderCeQuiPorteLeMemeNom(proposes, { occupe, dit })}
+  `;
+}
+
+/**
+ * Ce qui est **confirmé** : le sujet porte là-dessus, quelqu'un l'a dit.
+ *
+ * Un titre qui affirme, parce qu'ici on affirme. Rien quand il n'y a rien : ce
+ * n'est pas « ce sujet ne porte sur rien », c'est que personne ne l'a encore
+ * dit, et le bloc d'en dessous est justement là pour le demander.
+ */
+function renderCeSurQuoiIlPorte(poses, occupe) {
+  if (!poses.length) return "";
+
+  const titre = `Ce ${MOT_A_LECRAN.un} porte sur`;
+
+  return `
     <section class="details-bloc portage-liste" aria-label="${escapeHtml(titre)}">
+      <div class="details-bloc__label">${escapeHtml(titre)}</div>
+      <ul class="portage-liste__corps">
+        ${poses.map((portage) => renderUneValeur(portage, {
+          gestes: `<button type="button" class="gh-btn gh-btn--sm" data-portage-retire="${escapeHtml(texte(portage?.lien?.id))}" ${occupe ? "disabled" : ""}>Écarter</button>`
+        })).join("")}
+      </ul>
+    </section>
+  `;
+}
+
+/**
+ * Ce que la reconnaissance propose, et **pourquoi elle le propose**.
+ *
+ * ## Le bloc pose une question, il ne constate pas
+ *
+ * Il portait le même titre que les arêtes confirmées — « Sur quoi ce sujet
+ * porte » — sur une liste de valeurs que personne n'avait encore regardées. Le
+ * titre affirmait ce que les boutons demandaient, et l'on cliquait « Confirmer »
+ * sans savoir ce qu'on confirmait.
+ *
+ * Il dit maintenant **d'où sortent ces lignes** — le nom reconnu dans l'intitulé
+ * —, **ce qu'on demande**, et **ce que ça fait**. Une question sans sa
+ * conséquence n'est pas une question, c'est un piège.
+ *
+ * ## Le nom se lit sur les lignes qu'il annonce
+ *
+ * Il ne se reçoit pas d'ailleurs : une phrase qui nomme « Profondeur hors gel »
+ * au-dessus d'une liste où figure autre chose fait chercher dans l'intitulé un
+ * mot qui n'y est pas (règle 10). Elle le lit donc sur ses propres lignes, et
+ * se tait dès qu'elles ne s'accordent pas — plusieurs noms de la mémoire
+ * peuvent tenir dans un même titre.
+ *
+ * ## Les boutons disent l'acte, pas l'abstraction
+ *
+ * « Oui, celle-ci » et « Non, pas celle-là » se répondent sans rien apprendre.
+ * « Confirmer » et « Écarter » demandent de savoir ce qu'on confirme dans un
+ * mécanisme dont on ignore tout.
+ */
+function renderCeQuiPorteLeMemeNom(proposes, { occupe, dit }) {
+  const titre = "Ces valeurs portent le même nom";
+
+  const nom = nomCommun(proposes);
+  const pourquoi = nom
+    ? `Le nom « ${nom} » apparaît dans le titre de ce ${MOT_A_LECRAN.un}.`
+    : `Un nom de la mémoire apparaît dans le titre de ce ${MOT_A_LECRAN.un}.`;
+
+  return `
+    <section class="details-bloc portage-liste portage-liste--propose" aria-label="${escapeHtml(titre)}">
       <div class="details-bloc__label portage-liste__tete">
         <span>${escapeHtml(titre)}</span>
         <button type="button" class="gh-btn gh-btn--sm" data-portage-cherche ${occupe ? "disabled" : ""}>
           ${occupe ? "Recherche…" : "Chercher dans la mémoire"}
         </button>
       </div>
-      ${lignes ? `<ul class="portage-liste__corps">${lignes}</ul>` : ""}
+      ${proposes.length
+        ? `<p class="portage-liste__pourquoi">${escapeHtml(pourquoi)}
+            Est-ce de celles-ci que ce ${escapeHtml(MOT_A_LECRAN.un)} parle ?</p>
+           <ul class="portage-liste__corps">
+             ${proposes.map((portage) => renderUneValeur(portage, {
+               gestes: `
+                 <button type="button" class="gh-btn gh-btn--sm" data-portage-confirme="${escapeHtml(texte(portage?.lien?.id))}" ${occupe ? "disabled" : ""}>Oui, celle-ci</button>
+                 <button type="button" class="gh-btn gh-btn--sm" data-portage-retire="${escapeHtml(texte(portage?.lien?.id))}" ${occupe ? "disabled" : ""}>Non</button>`
+             })).join("")}
+           </ul>
+           <p class="portage-liste__consequence">Confirmer une valeur la montre « en débat »
+             dans la Mémoire et dans le cerveau, jusqu'à ce que ce ${escapeHtml(MOT_A_LECRAN.un)}
+             soit fermé. Écarter la retire, et elle ne sera plus reproposée.</p>`
+        : ""}
       ${dit ? `<div class="portage-liste__dit">${escapeHtml(dit)}</div>` : ""}
     </section>
   `;
 }
+
+/**
+ * Une valeur, et **l'histoire qui permet d'en répondre**.
+ *
+ * ## Pourquoi le nom et la valeur ne suffisent pas
+ *
+ * « Profondeur hors gel = 0,466 m », trois fois de suite, sur trois lignes
+ * identiques. Vu à l'écran d'un vrai projet : la même valeur existait pour
+ * plusieurs parties de l'ouvrage, et rien ne les distinguait. **On ne peut pas
+ * confirmer ce qu'on ne distingue pas.**
+ *
+ * Et même distinctes, trois valeurs ne se choisissent pas : il faut savoir
+ * laquelle parle de quoi. D'où elle sort, ce qu'elle a lu, ce qui l'explique,
+ * qui l'a posée et quand. C'est ce que la mémoire enregistre depuis toujours et
+ * que cet écran ne montrait pas.
+ *
+ * ## Deux niveaux, et le premier suffit souvent
+ *
+ * La **ligne d'identité** est toujours là — la portée, la date, l'auteur,
+ * l'origine en quatre mots. C'est ce qui permet de distinguer cinq lignes d'un
+ * coup d'œil. Le **reste de l'histoire** se déplie : cinq histoires entières
+ * dépliées feraient une page qu'on ne lit pas.
+ *
+ * Ce que la mémoire ne dit pas est **dans le dépli**, nommé. Une valeur dont
+ * rien ne dit l'origine n'est pas une valeur dont l'origine va de soi.
+ *
+ * ## La liste des intitulés est celle de la Mémoire
+ *
+ * `memory-facts` porte déjà, dans l'onglet Mémoire, une liste « intitulé →
+ * valeur ». Lui donner ici une seconde largeur de colonne ferait lire les mêmes
+ * lignes à deux calibres selon l'écran ; c'est la même chose qu'on montre, elle
+ * se montre pareil.
+ */
+function renderUneValeur(portage, { gestes }) {
+  const { assertion, confirme, histoire = null } = portage ?? {};
+  const lignes = lignesDeLHistoire(histoire, { dater: dateEnFrancais });
+  const manques = phraseDesLacunesDeLHistoire(histoire?.lacunes);
+  const identite = lignes.filter((ligne) => IDENTITE.includes(ligne.quoi));
+  const reste = lignes.filter((ligne) => !IDENTITE.includes(ligne.quoi));
+
+  return `
+    <li class="portage-liste__ligne${confirme ? "" : " portage-liste__ligne--propose"}">
+      <div class="portage-liste__haut">
+        <span class="portage-liste__valeur">${escapeHtml(nomEtValeur(assertion))}</span>
+        <span class="portage-liste__gestes">${gestes}</span>
+      </div>
+      ${identite.length
+        ? `<div class="portage-liste__identite">${
+          identite.map((ligne) => escapeHtml(ligne.dit)).join(" · ")
+        }</div>`
+        : ""}
+      ${reste.length || manques
+        ? `<details class="portage-liste__histoire">
+            <summary>Pourquoi cette valeur ?</summary>
+            <dl class="memory-facts">
+              ${reste.map((ligne) => `
+                <dt>${escapeHtml(ligne.quoi)}</dt>
+                <dd>${escapeHtml(ligne.dit)}</dd>
+              `).join("")}
+            </dl>
+            ${manques ? `<p class="histoire__manques">${escapeHtml(manques)}</p>` : ""}
+          </details>`
+        : ""}
+    </li>
+  `;
+}
+
+/**
+ * Le nom que ces lignes ont en commun — vide dès qu'elles n'en ont pas un seul.
+ *
+ * C'est ce nom qui les a fait remonter. Mais un titre peut contenir plusieurs
+ * noms de la mémoire, et la reconnaissance rapproche alors des valeurs qui ne
+ * s'appellent pas pareil : en nommer une seule ferait chercher dans le titre un
+ * mot qui explique la moitié de la liste (règle 5). La phrase générique reste
+ * vraie, et c'est tout ce qu'on lui demande.
+ */
+function nomCommun(portages = []) {
+  const noms = new Set(portages.map((portage) => texte(portage?.assertion?.payload?.subject)
+    || texte(portage?.assertion?.subject_key)));
+
+  return noms.size === 1 ? [...noms][0] : "";
+}
+
+/**
+ * Ce qui distingue une valeur d'une autre, et qui reste donc toujours visible.
+ *
+ * Où elle porte, quand et par qui elle a été versée, d'où elle sort. Le reste —
+ * ce qu'elle a lu, la citation, les écartés — explique ; ceux-ci **identifient**,
+ * et sans eux cinq lignes se ressemblent.
+ */
+const IDENTITE = ["Porte sur", "Versée", "Origine"];
 
 /** « Altitude = 742,30 », ou le seul nom quand la valeur manque. */
 function nomEtValeur(assertion) {
