@@ -1916,14 +1916,46 @@ let ouverte = null;
  * @param {string} [options.selection] ce que la requête retient, en toutes
  *   lettres — vide quand on regarde tout
  */
+/**
+ * Ouvrir le cerveau du projet — en grand, ou **dans un cadre**.
+ *
+ * ## Le même moteur, à deux tailles
+ *
+ * Encastré dans une bulle de conversation, le dessin garde tout ce qui le rend
+ * vivant : la boucle d'animation, le battement, le glissé, la molette, les
+ * secteurs. Rien n'est réécrit en plus petit. Un second dessin « simplifié »
+ * aurait été un second dessin à corriger, et deux dessins d'un même projet
+ * finissent par ne plus se ressembler (règle 4).
+ *
+ * Ce que le cadre retire est ce qui n'a pas de place dans une bulle : le rail
+ * des réglages, les légendes dépliées, la croix de fermeture. Une classe le dit,
+ * et la feuille de style s'en charge.
+ *
+ * ## Le verrou ne vaut que pour la fenêtre
+ *
+ * « Une seule à la fois » protège la **fenêtre** : deux superposées ne se
+ * distinguent pas. Un cadre, lui, vit dans un message, et l'on peut en avoir
+ * trois dans un fil — ils ne se recouvrent pas.
+ *
+ * @param {object} options
+ * @param {object[]} options.assertions **la sélection**, filtrée comme le tableau
+ * @param {object[]|null} [options.applications] les lectures enregistrées
+ * @param {string} [options.selection] ce que la requête retient, en toutes lettres
+ * @param {Element|null} [options.hote] où poser le dessin ; le document, sinon
+ * @param {object} [options.reglages] la vue, le mode, l'orientation, la couleur
+ * @returns {(() => void)|undefined} de quoi le retirer, quand il est encastré
+ */
 export function ouvrirLeCerveau({
-  assertions = [], applications = null, selection = "", actes = null
+  assertions = [], applications = null, selection = "", actes = null,
+  hote: cadre = null, reglages = null
 } = {}) {
+  const encastre = Boolean(cadre);
+
   // Une fenêtre dont l'hôte a quitté le document est fermée, quoi qu'en dise le
   // verrou : sans cette ligne, un rendu qui balaie la page laisse le verrou posé
   // et l'écran ne se rouvre plus jamais.
-  if (ouverte && !ouverte.isConnected) ouverte = null;
-  if (ouverte) return;
+  if (!encastre && ouverte && !ouverte.isConnected) ouverte = null;
+  if (!encastre && ouverte) return;
 
   let cerveau = cerveauDuProjet(assertions, applications, { avecLesFonctions: true, actes });
   if (!cerveau.noeuds.length) {
@@ -1944,9 +1976,10 @@ export function ouvrirLeCerveau({
   const signales = signauxDeLAudit(assertions);
 
   const hote = document.createElement("div");
+  if (encastre) hote.className = "cerveau-encastre";
   hote.innerHTML = renderCadre(cerveau, isoles.size, [...signales.keys()].length, selection);
-  document.body.appendChild(hote);
-  ouverte = hote;
+  (cadre ?? document.body).appendChild(hote);
+  if (!encastre) ouverte = hote;
 
   const toile = hote.querySelector("[data-cerveau-toile]");
   const resume = hote.querySelector("[data-cerveau-resume]");
@@ -2696,11 +2729,14 @@ export function ouvrirLeCerveau({
     window.removeEventListener("resize", redimensionner);
     document.removeEventListener("keydown", auClavier);
     hote.remove();
-    ouverte = null;
+    if (!encastre) ouverte = null;
   };
 
+  // **Échap ne referme que la fenêtre.** Encastré, le dessin est un morceau de
+  // message : une touche qui le ferait disparaître du fil emporterait une partie
+  // de la réponse qu'on est en train de lire.
   const auClavier = (evenement) => {
-    if (evenement.key === "Escape") fermer();
+    if (!encastre && evenement.key === "Escape") fermer();
   };
 
   window.addEventListener("resize", redimensionner);
@@ -2819,9 +2855,29 @@ export function ouvrirLeCerveau({
   }
 
   toile.style.cursor = "grab";
+
+  /**
+   * Les réglages d'arrivée, quand l'appelant en a.
+   *
+   * Ils passent par les **mêmes fonctions que les boutons** : régler `etat`
+   * directement sauterait le recadrage et la recomposition, et le dessin
+   * s'ouvrirait sur une caméra qui ne correspond plus à ce qu'il montre. Chaque
+   * changement ne fait rien quand la valeur est déjà celle-là.
+   */
+  if (reglages) {
+    if (reglages.vue) changerDeVue(reglages.vue);
+    if (reglages.orientation) basculer(reglages.orientation);
+    if (reglages.couleur) changerDeCouleur(reglages.couleur);
+    if (reglages.mode) changerDeMode(reglages.mode);
+  }
+
   redimensionner();
   accorderLeBattement();
   image = requestAnimationFrame(boucle);
+
+  // Encastré, le dessin vit dans un message : c'est l'appelant qui décide quand
+  // il s'en va, et il n'a pas de croix pour le faire.
+  return encastre ? fermer : undefined;
 }
 
 /** Pour les pages d'essai : le cadre seul, sans boucle ni pointeur. */

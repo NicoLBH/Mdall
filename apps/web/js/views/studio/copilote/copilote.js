@@ -1448,7 +1448,8 @@ function renderCorps(etat) {
         bandeau d'onglets déplié : quarante-quatre pixels pris sur la seule
         chose qu'on fait ici, lire.
       */""}
-      <div class="copilote-thread" id="copiloteThread" data-defilement-du-panneau>
+      <div class="copilote-thread" id="copiloteThread"
+        data-defilement-du-panneau data-compactage-directionnel>
         <div class="copilote-thread__inner">
           ${messages.map((msg, index) => renderMessage(msg, index, etat)).join("")}
           ${etat.isSending && etat.enCours === null ? renderAttente(etat.etapes) : ""}
@@ -2558,11 +2559,15 @@ function brancherLesGestesDeLaNote(root) {
   });
 }
 
-/** Rouvrir en grand le cerveau qu'un message porte, désigné par sa place. */
-async function montrerLeCerveau(place) {
+/** Le matériau qu'un message garde pour son dessin, désigné par sa place. */
+function materiauDuCerveau(place) {
   const [rangDuMessage, rangDeLExecution] = String(place).split(":").map(Number);
-  const execution = ensureState().messages?.[rangDuMessage]?.executions?.[rangDeLExecution];
-  const materiau = execution?.cerveau;
+  return ensureState().messages?.[rangDuMessage]?.executions?.[rangDeLExecution]?.cerveau ?? null;
+}
+
+/** Rouvrir en grand le cerveau qu'un message porte. */
+async function montrerLeCerveau(place) {
+  const materiau = materiauDuCerveau(place);
   if (!materiau) return;
 
   const { ouvrirLeCerveau } = await import("../../ui/cerveau-du-projet.js");
@@ -2571,6 +2576,65 @@ async function montrerLeCerveau(place) {
     applications: materiau.applications ?? null,
     actes: materiau.actes ?? null
   });
+}
+
+/**
+ * Les dessins encastrés dans le fil, posés après le rendu.
+ *
+ * ## Pourquoi après, et pourquoi on les retire
+ *
+ * Chaque dessin tient une boucle d'animation. Le fil se réécrit entièrement à
+ * chaque message, à chaque étape d'agent, à chaque conversation qui arrive : les
+ * toiles partent avec, mais **les boucles, non** — elles continuent de tourner
+ * sur un canevas détaché, et il y en a une de plus à chaque rendu. Au bout de
+ * dix messages l'onglet chauffe, et rien à l'écran ne le dit.
+ *
+ * Elles sont donc retenues par leur place dans le fil, et retirées avant le
+ * dessin suivant.
+ */
+const dessinsEncastres = new Map();
+
+function retirerLesCerveaux(sauf = null) {
+  for (const [place, fermer] of [...dessinsEncastres]) {
+    if (sauf?.has(place)) continue;
+    fermer();
+    dessinsEncastres.delete(place);
+  }
+}
+
+async function poserLesCerveaux(root) {
+  const scenes = [...root.querySelectorAll("[data-copilote-cerveau-scene]")];
+  retirerLesCerveaux(new Set(scenes.map((scene) => scene.dataset.copiloteCerveauScene)));
+
+  const aPoser = scenes.filter((scene) => !dessinsEncastres.has(scene.dataset.copiloteCerveauScene));
+  if (!aPoser.length) return;
+
+  const { ouvrirLeCerveau } = await import("../../ui/cerveau-du-projet.js");
+
+  for (const scene of aPoser) {
+    const place = scene.dataset.copiloteCerveauScene;
+    const materiau = materiauDuCerveau(place);
+    // La scène a pu partir avec un rendu pendant le chargement du module.
+    if (!materiau || !scene.isConnected) continue;
+
+    const fermer = ouvrirLeCerveau({
+      assertions: materiau.assertions ?? [],
+      applications: materiau.applications ?? null,
+      actes: materiau.actes ?? null,
+      hote: scene,
+      /**
+       * **En volume, vivant, couché, en chaleur.**
+       *
+       * C'est la vue où un projet ressemble à quelque chose : les strates en
+       * profondeur, le battement qui montre que ça pense, la séparation
+       * horizontale entre ce dont on se souvient et ce qu'on en déduit, et la
+       * chaleur qui dit par où passe le raisonnement. Les quatre réglages
+       * d'accueil du dessin en grand, posés d'emblée.
+       */
+      reglages: { vue: "volume", mode: "vivant", orientation: "horizontal", couleur: "chaleur" }
+    });
+    if (typeof fermer === "function") dessinsEncastres.set(place, fermer);
+  }
 }
 
 function bind(root) {
@@ -2659,6 +2723,11 @@ function bind(root) {
   // est vide : le rendu emporte les canevas, et repeindre à chaque frappe
   // relirait le document.
   void peindreLApercu(root);
+
+  // Et les dessins du cerveau se reposent : le fil se réécrit entièrement, les
+  // toiles partent avec, et une boucle d'animation laissée derrière tournerait
+  // encore sur un canevas détaché.
+  void poserLesCerveaux(root);
 
   for (const bouton of root.querySelectorAll("[data-remise-outil]")) {
     bouton.addEventListener("click", () => void remettreALAtelier(root, bouton.dataset.remiseOutil));

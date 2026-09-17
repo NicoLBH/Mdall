@@ -637,6 +637,20 @@ function marquerActif(root, targetId) {
 /** Afficher un panneau sans passer par un clic : rouvrir un fil en a besoin. */
 function afficherPanneau(root, targetId) {
   panneauCourant = targetId || panneauCourant;
+
+  /**
+   * **Changer de panneau ramène en haut.**
+   *
+   * Le routeur des panneaux le faisait pour ses propres entrées, pas pour les
+   * raccourcis qui passent par ici — celui du Copilote, en particulier. On
+   * descendait dans une étude de fondations, le bandeau du projet se repliait,
+   * on cliquait « Copilote » : le panneau changeait, mais la coque gardait ses
+   * huit cents pixels de défilement. Le bandeau restait donc replié, et replié
+   * il n'a plus d'onglets — le Copilote tenant dans la hauteur, plus rien ne
+   * pouvait ramener la coque en haut. On était coincé sur l'écran.
+   */
+  root.querySelector("#projectStudioRouterScroll")?.scrollTo?.({ top: 0, behavior: "auto" });
+
   for (const panneau of root.querySelectorAll("[data-side-nav-panel]")) {
     panneau.classList.toggle("is-active", panneau.dataset.sideNavPanel === targetId);
   }

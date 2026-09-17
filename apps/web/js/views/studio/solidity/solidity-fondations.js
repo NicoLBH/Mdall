@@ -1062,12 +1062,21 @@ function dessiner(root) {
                 paraît que sur une semelle ouverte — sur le tableau lui-même, il
                 ne mènerait nulle part.
               */""}
-              ${surLeTableau ? "" : `
-                <button type="button" class="fondations-retour-titre" data-semelle-retour>
-                  ${svgIcon("arrow-left", { className: "octicon" })} Tableau de l'étude
-                </button>
-                <span class="fondations-retour-titre__filet" aria-hidden="true"></span>`}
-              <h4>Fondations superficielles</h4>
+              ${/*
+                **Un seul bloc à gauche, les gestes à droite.** La ligne du titre
+                écarte ses enfants aux deux bords ; le retour, le filet et le
+                titre en faisaient trois, et le titre se retrouvait au milieu de
+                la ligne, loin de ce qui le précède. Ils tiennent maintenant
+                ensemble, et c'est le groupe qui se cale à gauche.
+              */""}
+              <span class="fondations-titre">
+                ${surLeTableau ? "" : `
+                  <button type="button" class="fondations-retour-titre" data-semelle-retour>
+                    ${svgIcon("arrow-left", { className: "octicon" })} Tableau de l'étude
+                  </button>
+                  <span class="fondations-titre__filet" aria-hidden="true">|</span>`}
+                <h4>Fondations superficielles</h4>
+              </span>
               <div class="studio-tool-card__actions">
                 ${surLeTableau ? renderTransformer({
                   id: "fondationsTransformer",
