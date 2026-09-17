@@ -57,6 +57,25 @@ function loadPdfJs() {
 }
 
 /**
+ * Une copie des octets, pour pdf.js.
+ *
+ * **Il prend possession du tampon et le détache.** Le `Uint8Array` qu'on lui
+ * passe devient vide, et la lecture suivante des mêmes octets lève
+ * `DataCloneError` — sans que rien à l'écran ne le dise : le lecteur se vide,
+ * la barre d'outils continue de répondre, et la page qu'on vient de grossir a
+ * simplement disparu.
+ *
+ * C'est le cas dès qu'un appelant relit le même document : grossir, pivoter,
+ * rouvrir une note dont il tient déjà les octets. Un lecteur qui détruit ce
+ * qu'on lui donne est un piège pour tous ses appelants — la copie se fait donc
+ * ici, une fois, plutôt que dans chacun d'eux (règle 4).
+ */
+export function octetsPourPdfJs(bytes) {
+  const source = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  return source.slice();
+}
+
+/**
  * Repère les éléments de texte couverts par un extrait.
  *
  * L'extrait cité et le texte rendu par pdf.js proviennent de deux lectures
@@ -138,9 +157,17 @@ export function locateExcerpt(items, excerpt) {
  * @returns {Promise<{pageCount: number, dispose: () => void}>} `dispose` rend
  *   le document et l'observateur : à appeler en fermant le lecteur.
  */
-export async function renderPdfDocument(container, { bytes, width = 900, margin = "1200px" } = {}) {
+export async function renderPdfDocument(container, {
+  bytes, width = 900, margin = "1200px", rotation = 0
+} = {}) {
+  // **Le quart de tour se demande à pdf.js, il ne se pose pas en CSS.** Une
+  // page tournée par transformation garderait la place de la page droite : le
+  // cadre resterait haut et étroit autour d'un paysage, et la barre de
+  // défilement mesurerait une hauteur qui n'existe plus. Ici la page tournée
+  // *est* la page : ses dimensions sont celles qu'on voit.
+  const quart = ((Math.round(Number(rotation) || 0) % 360) + 360) % 360;
   const pdfjs = await loadPdfJs();
-  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const data = octetsPourPdfJs(bytes);
 
   const loadingTask = pdfjs.getDocument({ data, disableWorker: true, useSystemFonts: true });
   const document_ = await loadingTask.promise;
@@ -157,9 +184,13 @@ export async function renderPdfDocument(container, { bytes, width = 900, margin 
 
     try {
       const page = await document_.getPage(numero);
-      const base = page.getViewport({ scale: 1 });
+      // **On ajoute au quart de tour du fichier, on ne le remplace pas.** Un
+      // plan enregistré en paysage porte déjà `rotate: 90` ; écrire la rotation
+      // à la place de la sienne le remettrait droit, c'est-à-dire de travers.
+      const tour = (Number(page.rotate) || 0) + quart;
+      const base = page.getViewport({ scale: 1, rotation: tour });
       const scale = Math.max(0.2, width / Math.max(base.width, 1));
-      const viewport = page.getViewport({ scale });
+      const viewport = page.getViewport({ scale, rotation: tour });
 
       const canvas = document.createElement("canvas");
       canvas.className = "documents-pdf-viewer__canvas";
@@ -205,9 +236,10 @@ export async function renderPdfDocument(container, { bytes, width = 900, margin 
 
   for (let numero = 1; numero <= pageCount; numero += 1) {
     const page = await document_.getPage(numero);
-    const base = page.getViewport({ scale: 1 });
+    const tour = (Number(page.rotate) || 0) + quart;
+    const base = page.getViewport({ scale: 1, rotation: tour });
     const scale = Math.max(0.2, width / Math.max(base.width, 1));
-    const viewport = page.getViewport({ scale });
+    const viewport = page.getViewport({ scale, rotation: tour });
 
     const pageNode = document.createElement("div");
     pageNode.className = "documents-pdf-viewer__page";
@@ -237,7 +269,7 @@ export async function renderPdfDocument(container, { bytes, width = 900, margin 
 
 export async function renderPdfPage(container, { bytes, page = 1, excerpt = "", width = 900 } = {}) {
   const pdfjs = await loadPdfJs();
-  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const data = octetsPourPdfJs(bytes);
 
   // `disableWorker` : le worker vient d'un fichier séparé que le dossier vendu
   // ne fournit pas. Une page à la fois, le rendu synchrone suffit largement.

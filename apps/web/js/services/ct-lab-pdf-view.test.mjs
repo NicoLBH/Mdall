@@ -1,7 +1,11 @@
+/**
+ * Le lecteur de PDF : le repérage d'une citation, et ce qu'il fait des octets.
+ */
+
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { locateExcerpt } from "./ct-lab-pdf-view.js";
+import { locateExcerpt, octetsPourPdfJs } from "./ct-lab-pdf-view.js";
 
 /** Ce que pdf.js rend : des fragments, découpés selon la mise en page. */
 const ITEMS = [
@@ -53,4 +57,54 @@ test("les fragments vides ne décalent pas l'index", () => {
 
   assert.equal(withHoles[found.from].str, "coupure prévus dans le sas");
   assert.equal(withHoles[found.to].str, "principal est à reporter sur le plan.");
+});
+
+/* ── Les octets qu'on donne au moteur ────────────────────────────────────── */
+
+/**
+ * **pdf.js prend possession du tampon et le détache.**
+ *
+ * Le `Uint8Array` qu'on lui a passé devient vide, et la lecture suivante des
+ * mêmes octets lève `DataCloneError` — au fond d'un `try`, donc sans rien à
+ * l'écran : le lecteur se vide, la barre d'outils continue de répondre, et la
+ * page qu'on vient de grossir a simplement disparu.
+ *
+ * C'est le cas dès qu'un appelant relit le même document, ce que font tous ceux
+ * qui grossissent ou pivotent. Un lecteur qui détruit ce qu'on lui donne est un
+ * piège pour chacun d'eux : la copie se fait donc une fois, ici (règle 4).
+ *
+ * Aucune exécution ne montrerait le détachement — il demande un vrai navigateur
+ * — mais la copie, si : une vue sur le tampon de l'appelant serait détachée
+ * avec lui.
+ */
+test("les octets donnés au moteur ne sont pas ceux de l'appelant", () => {
+  const siens = new Uint8Array([37, 80, 68, 70, 45]); // « %PDF- »
+  const copie = octetsPourPdfJs(siens);
+
+  assert.deepEqual([...copie], [...siens], "mêmes octets");
+  assert.notEqual(copie.buffer, siens.buffer, "mais pas le même tampon");
+
+  copie[0] = 0;
+  assert.equal(siens[0], 37, "toucher la copie ne touche pas l'original");
+});
+
+test("un ArrayBuffer devient lui aussi une copie", () => {
+  const tampon = new Uint8Array([1, 2, 3]).buffer;
+  const copie = octetsPourPdfJs(tampon);
+
+  assert.deepEqual([...copie], [1, 2, 3]);
+  assert.notEqual(copie.buffer, tampon);
+});
+
+/**
+ * **Une vue partielle ne rend pas tout le tampon.** Les octets d'une note lue
+ * par morceaux arrivent parfois comme une fenêtre sur un tampon plus grand ;
+ * copier le tampon entier donnerait au moteur ce qui est autour — c'est-à-dire
+ * autre chose que le document.
+ */
+test("une vue sur une partie du tampon ne rend que cette partie", () => {
+  const tout = new Uint8Array([9, 9, 37, 80, 68, 70, 9]);
+  const dedans = tout.subarray(2, 6);
+
+  assert.deepEqual([...octetsPourPdfJs(dedans)], [37, 80, 68, 70]);
 });

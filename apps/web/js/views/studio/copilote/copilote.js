@@ -51,7 +51,10 @@ import { sendAssistMessage } from "../../../services/copilote-service.js";
 import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.js";
 import { rendreLeMarkdown } from "../../ui/markdown-leger.js";
 import { adresseDeLaPiece, octetsDeLaPiece, oublierLAdresse } from "../../../services/piece-jointe.js";
-import { apercuDeLaNote, renderLigneDeLaNoteHtml, renderNoteDuMessageHtml } from "./note-jointe.js";
+import {
+  apercuDeLaNote, cranSuivant, renderLigneDeLaNoteHtml, renderNoteDuMessageHtml,
+  rotationValide, zoomValide
+} from "./note-jointe.js";
 import {
   fermerLaFenetreDeDetails, majLaFenetreDeDetails, ouvrirLaFenetreDeDetails
 } from "../../ui/fenetre-de-details.js";
@@ -1429,7 +1432,15 @@ function renderCorps(etat) {
 
   return `
     <div class="copilote-thread-wrap">
-      <div class="copilote-thread" id="copiloteThread">
+      ${/*
+        **Le fil déclare qu'il est l'ascenseur de son écran.** La coque du
+        Copilote ne défile pas — elle tient dans la hauteur —, c'est le fil qui
+        défile à l'intérieur. Sans cette déclaration, l'écran qui l'accueille
+        désigne sa propre coque, ne voit jamais rien bouger, et garde son
+        bandeau d'onglets déplié : quarante-quatre pixels pris sur la seule
+        chose qu'on fait ici, lire.
+      */""}
+      <div class="copilote-thread" id="copiloteThread" data-defilement-du-panneau>
         <div class="copilote-thread__inner">
           ${messages.map((msg, index) => renderMessage(msg, index, etat)).join("")}
           ${etat.isSending && etat.enCours === null ? renderAttente(etat.etapes) : ""}
@@ -1590,7 +1601,10 @@ function basculerLApercu(root) {
 
   // L'adresse ne sert qu'au recours : ouvrir la note dans un onglet.
   const adresse = adresseDeLaPiece(piece);
-  etat.apercu = { nom: piece?.nom ?? "", adresse, etat: "lecture" };
+  // On rouvre **à la largeur de la fenêtre et à l'endroit** : le grossissement
+  // d'une note n'a rien à dire de la suivante, et retrouver un plan de travers
+  // parce qu'on avait tourné le précédent se lit comme un défaut.
+  etat.apercu = { nom: piece?.nom ?? "", adresse, etat: "lecture", zoom: 1, rotation: 0 };
 
   poserLaFenetre(root);
   render(root);
@@ -1605,6 +1619,7 @@ function poserLaFenetre(root) {
   return ouvrirLaFenetreDeDetails({
     ...apercuDeLaNote(etat.apercu),
     className: "modal--apercu-note",
+    surGeste: (geste) => reglerLeDessin(root, geste),
     surFermeture: () => {
       const sien = ensureState();
       // La fenêtre est déjà fermée : on ne rend plus que ce qu'elle retenait.
@@ -1614,6 +1629,48 @@ function poserLaFenetre(root) {
       if (root?.isConnected) render(root);
     }
   });
+}
+
+/**
+ * Grossir, réduire, revenir à la largeur de la fenêtre, pivoter.
+ *
+ * ## Les pages sont repeintes, et non transformées
+ *
+ * Une page grossie par `transform` est une image étirée : les traits d'un plan
+ * s'épaississent et les cotes deviennent illisibles — c'est-à-dire qu'on grossit
+ * précisément ce qu'on voulait lire, et qu'on le perd. Une page tournée par
+ * `transform` garde en plus la place de la page droite : le cadre reste haut et
+ * étroit autour d'un paysage. On redemande donc le dessin.
+ *
+ * ## Le document précédent se rend avant le suivant
+ *
+ * Chaque dessin ouvre un document pdf.js, qui tient les octets, ses polices et
+ * ses pages. Quatre grossissements sans rendre les trois précédents, et l'onglet
+ * porte quatre fois la note — sans que rien à l'écran ne le dise.
+ */
+function reglerLeDessin(root, geste) {
+  const etat = ensureState();
+  const apercu = etat.apercu;
+  if (!apercu) return;
+
+  const avant = { zoom: zoomValide(apercu.zoom), rotation: rotationValide(apercu.rotation) };
+
+  if (geste === "zoom:moins") apercu.zoom = cranSuivant(avant.zoom, -1);
+  else if (geste === "zoom:plus") apercu.zoom = cranSuivant(avant.zoom, 1);
+  else if (geste === "zoom:ajuste") apercu.zoom = 1;
+  else if (geste === "pivoter") apercu.rotation = rotationValide(avant.rotation + 90);
+  else return;
+
+  if (zoomValide(apercu.zoom) === avant.zoom && rotationValide(apercu.rotation) === avant.rotation) {
+    return;
+  }
+
+  // Le document d'avant part avec ses pages : le suivant le remplace.
+  apercu.dispose?.();
+  apercu.dispose = null;
+  apercu.etat = "lecture";
+  majLaFenetreDeDetails(apercuDeLaNote(apercu));
+  void peindreLApercu(root);
 }
 
 /**
@@ -1653,8 +1710,15 @@ async function peindreLApercu(root) {
     // lecteur : une largeur écrite en dur laisserait une page étroite au milieu
     // d'une fenêtre qui couvre l'écran.
     const dispo = Math.round(hote.clientWidth || 0) - 24;
+    const ajustee = Math.max(320, Math.min(1400, dispo || 760));
     const lu = await renderPdfDocument(hote, {
-      bytes: octets, width: Math.max(320, Math.min(1400, dispo || 760))
+      bytes: octets,
+      // Le grossissement se compte **depuis la largeur de la fenêtre** : c'est
+      // ce que « 100 % » veut dire ici, et non la taille imprimée — une note A4
+      // à sa taille réelle serait plus étroite que la fenêtre sur un grand
+      // écran, et « ajuster » l'aurait rétrécie.
+      width: Math.round(ajustee * zoomValide(etat.apercu.zoom)),
+      rotation: rotationValide(etat.apercu.rotation)
     });
     etat.apercu.dispose = lu.dispose;
     etat.apercu.etat = "lue";
@@ -2743,16 +2807,16 @@ export function renderCopilote(root, { reload = false, garderLeDefilement = fals
    * **Le fil est le seul ascenseur de son écran, et c'est lui qui compacte les
    * onglets.**
    *
-   * On lui désignait `null` : la coque ne défilant pas, le bandeau du projet ne
-   * voyait plus aucun mouvement et restait déplié. Sur un écran de conversation,
-   * ces quarante-quatre pixels sont pris sur la seule chose qu'on y fait —
-   * lire —, et la zone de saisie remontait d'autant.
+   * Il le **déclare** dans son HTML (`data-defilement-du-panneau`) ; l'écran qui
+   * l'accueille le lit et l'enregistre. C'est le correctif : l'Atelier
+   * désignait sa propre coque, qui ne défile pas sur cet écran, et le Copilote
+   * la réécrasait de son côté — deux endroits décidaient de la même chose, et le
+   * dernier arrivé gagnait selon le chemin par lequel on était entré (règle 4).
    *
-   * Le fil défile ; il est donc la source, comme le contenu de n'importe quel
-   * autre onglet. Ce n'est pas une exception, c'est la règle appliquée à la
-   * barre qui défile vraiment.
+   * Reste l'enregistrement d'ici, pour l'écran transverse du Copilote : il n'a
+   * pas de routeur pour le lire, et le fil y est le seul ascenseur.
    */
-  if (!garderLeDefilement) {
+  if (!garderLeDefilement && !root.closest("#projectStudioRouterScroll")) {
     registerProjectPrimaryScrollSource(root.querySelector("#copiloteThread") || null);
   }
 

@@ -15,7 +15,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { apercuDeLaNote, renderLigneDeLaNoteHtml, renderNoteDuMessageHtml } from "./note-jointe.js";
+import {
+  apercuDeLaNote, CRANS_DE_ZOOM, cranSuivant, renderLigneDeLaNoteHtml,
+  renderNoteDuMessageHtml, rotationValide, zoomValide
+} from "./note-jointe.js";
 import { adresseDeLaPiece, oublierLAdresse } from "../../../services/piece-jointe.js";
 
 const PDF = Buffer.from("%PDF-1.4 une note").toString("base64");
@@ -137,9 +140,10 @@ test("l'aperçu offre d'ouvrir la note dans un onglet", () => {
   assert.match(avec.metaHtml, /Ouvrir dans un onglet/);
 
   // Sans adresse, pas de lien mort : l'aperçu se dessine quand même, puisqu'il
-  // ne dépend plus d'elle.
+  // ne dépend plus d'elle. La barre d'outils reste, elle ne dépendait de rien.
   const sans = apercuDeLaNote({ nom: "note.pdf" });
-  assert.equal(sans.metaHtml, "");
+  assert.doesNotMatch(sans.metaHtml, /Ouvrir dans un onglet|<a /);
+  assert.match(sans.metaHtml, /data-geste="zoom:plus"/);
   assert.match(sans.corpsHtml, /data-copilote-apercu-pages/);
 });
 
@@ -207,6 +211,96 @@ test("le nom de la note est échappé, dans le titre comme dans le texte", () =>
 
   assert.doesNotMatch(html, /<img/);
   assert.equal(html.match(/&lt;img/g)?.length, 2, "le corps et le titre de survol");
+});
+
+/* ── Grossir, et pivoter ─────────────────────────────────────────────────── */
+
+/**
+ * **Une page ramenée à la largeur d'une fenêtre ne se lit pas toujours.**
+ *
+ * On reconnaît un plan, une note — mais pas ce qu'ils *disent* : une cote au
+ * huitième de la taille imprimée est un trait. Le grossissement est donc là,
+ * par crans : on veut « un peu plus grand », pas régler un curseur au centième.
+ */
+test("le grossissement avance par crans, et s'arrête aux bornes", () => {
+  assert.equal(cranSuivant(1, 1), 1.5);
+  assert.equal(cranSuivant(1, -1), 0.75);
+
+  const plusGrand = CRANS_DE_ZOOM[CRANS_DE_ZOOM.length - 1];
+  assert.equal(cranSuivant(plusGrand, 1), plusGrand, "au bout, on n'avance plus");
+  assert.equal(cranSuivant(CRANS_DE_ZOOM[0], -1), CRANS_DE_ZOOM[0]);
+
+  // **1 est la largeur de la fenêtre**, et c'est le repos : c'est ce que « 100 % »
+  // veut dire ici, et non la taille imprimée — une A4 à sa taille réelle serait
+  // plus étroite que la fenêtre sur un grand écran.
+  assert.ok(CRANS_DE_ZOOM.includes(1));
+});
+
+/**
+ * **Une valeur qu'aucun bouton ne rend n'existe pas.** Un état gardé d'une
+ * version d'avant, ou un 0 venu d'un calcul de largeur raté, sortirait la barre
+ * de ses bornes et afficherait un pourcentage qu'on ne saurait plus quitter.
+ */
+test("un grossissement inconnu retombe sur un cran", () => {
+  assert.equal(zoomValide(1.2), 1);
+  assert.equal(zoomValide(99), CRANS_DE_ZOOM[CRANS_DE_ZOOM.length - 1]);
+  assert.equal(zoomValide(0), CRANS_DE_ZOOM[0]);
+  assert.equal(zoomValide(undefined), 1);
+  assert.equal(zoomValide("beaucoup"), 1);
+});
+
+/**
+ * **Le quart de tour reste entre 0 et 270.**
+ *
+ * Le reste d'un nombre négatif est négatif en JavaScript : sans second tour,
+ * pivoter en arrière depuis le haut rendrait −90, que pdf.js prend pour un
+ * angle valide et qu'aucun clic ne sait ramener à zéro — la note resterait de
+ * travers, et seule sa fermeture la remettrait droite.
+ */
+test("pivoter reste dans le tour, dans les deux sens", () => {
+  assert.equal(rotationValide(0), 0);
+  assert.equal(rotationValide(90), 90);
+  assert.equal(rotationValide(360), 0);
+  assert.equal(rotationValide(450), 90);
+  assert.equal(rotationValide(-90), 270);
+  assert.equal(rotationValide(-450), 270);
+  assert.equal(rotationValide("nulle part"), 0);
+});
+
+/**
+ * **La barre dit où l'on en est, et ce qu'on ne peut plus faire.** Un bouton
+ * qui répond en ne faisant rien se lit comme un bouton cassé ; aux bornes, il
+ * s'éteint.
+ */
+test("la barre d'outils porte le taux, et s'éteint aux bornes", () => {
+  const cent = apercuDeLaNote({ nom: "n.pdf", etat: "lue" }).metaHtml;
+  assert.match(cent, /data-geste="zoom:ajuste"[\s\S]{0,120}100 %/);
+  assert.doesNotMatch(cent, /data-geste="zoom:moins"[^>]*disabled/);
+  assert.doesNotMatch(cent, /data-geste="zoom:plus"[^>]*disabled/);
+
+  const plusPetit = apercuDeLaNote({ nom: "n.pdf", etat: "lue", zoom: CRANS_DE_ZOOM[0] }).metaHtml;
+  assert.match(plusPetit, /data-geste="zoom:moins"[^>]*disabled/);
+  assert.doesNotMatch(plusPetit, /data-geste="zoom:plus"[^>]*disabled/);
+
+  const dernier = CRANS_DE_ZOOM[CRANS_DE_ZOOM.length - 1];
+  const plusGrand = apercuDeLaNote({ nom: "n.pdf", etat: "lue", zoom: dernier }).metaHtml;
+  assert.match(plusGrand, new RegExp(`${dernier * 100} %`));
+  assert.match(plusGrand, /data-geste="zoom:plus"[^>]*disabled/);
+});
+
+/**
+ * **Une note qu'on n'a pas su dessiner n'offre pas de la grossir.** Il n'y a
+ * rien à grossir : les boutons resteraient cliquables sur un cadre vide, et
+ * chaque clic redemanderait un dessin qui échoue.
+ */
+test("la barre s'éteint quand le dessin est en panne", () => {
+  const panne = apercuDeLaNote({ nom: "n.pdf", etat: "panne", adresse: "blob:a" }).metaHtml;
+
+  for (const geste of ["zoom:moins", "zoom:plus", "zoom:ajuste", "pivoter"]) {
+    assert.match(panne, new RegExp(`data-geste="${geste}"[^>]*disabled`), geste);
+  }
+  // Le recours, lui, reste : c'est tout ce qui marche encore.
+  assert.match(panne, /Ouvrir dans un onglet/);
 });
 
 /* ── Les octets ──────────────────────────────────────────────────────────── */
@@ -329,10 +423,21 @@ test("l'état du dessin se dit sans rouvrir la fenêtre", async () => {
  * voyait aucun mouvement et restait déplié. Sur un écran de conversation, ces
  * quarante-quatre pixels sont pris sur la seule chose qu'on y fait — lire.
  */
-test("le défilement du fil est la source de compactage de l'écran", async () => {
+test("le fil déclare qu'il est l'ascenseur de son écran", async () => {
   const { readFile } = await import("node:fs/promises");
-  const source = await readFile(new URL("./copilote.js", import.meta.url), "utf8");
+  const [copilote, atelier] = await Promise.all([
+    readFile(new URL("./copilote.js", import.meta.url), "utf8"),
+    readFile(new URL("../../project-studio.js", import.meta.url), "utf8")
+  ]);
 
-  assert.match(source, /registerProjectPrimaryScrollSource\([\s\S]{0,80}#copiloteThread/);
-  assert.doesNotMatch(source, /registerProjectPrimaryScrollSource\(null\)/);
+  // Le fil le dit dans son HTML…
+  assert.match(copilote, /id="copiloteThread" data-defilement-du-panneau/);
+  // …et l'Atelier le lit, au lieu de ne désigner que sa propre coque.
+  assert.match(atelier, /\[data-side-nav-panel\]\.is-active \[data-defilement-du-panneau\]/);
+  assert.match(atelier, /registerProjectScrollSources\(ascenseursDuRouteur\(\)\)/);
+
+  // **Et l'Atelier ne désigne plus la coque seule** : c'est ce qui écrasait la
+  // déclaration du fil selon le chemin par lequel on entrait (règle 4).
+  assert.doesNotMatch(atelier, /registerProjectPrimaryScrollSource/);
+  assert.doesNotMatch(copilote, /registerProjectPrimaryScrollSource\(null\)/);
 });

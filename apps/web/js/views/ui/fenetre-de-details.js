@@ -30,6 +30,9 @@ import { bindOverlayChromeDismiss, setOverlayChromeOpenState } from "./overlay-c
 /** Ce qu'on referme quand on en rouvre une autre, ou qu'on quitte l'écran. */
 let fermetureEnCours = null;
 
+/** Ce qui écoute les gestes du contenu en place — un seul à la fois. */
+let gesteEnCours = null;
+
 /** Les morceaux de la fenêtre, tels que le document les porte. */
 function morceaux() {
   const hote = document.getElementById("detailsModal");
@@ -44,6 +47,26 @@ function morceaux() {
 }
 
 /**
+ * Les gestes que le contenu porte, écoutés une fois pour toutes.
+ *
+ * Le contenu se réécrit — une barre d'outils dont un bouton change d'état, un
+ * corps repeint —, et des écouteurs posés sur ses nœuds mourraient avec eux :
+ * le bouton cesserait de répondre sans rien dire. L'écoute est donc sur la
+ * coque, qui ne bouge pas, et elle appelle **celui du moment** plutôt qu'une
+ * fermeture capturée à la première ouverture.
+ */
+function brancherLesGestes(hote) {
+  if (hote.dataset.fenetreGestesBranches === "1") return;
+  hote.dataset.fenetreGestesBranches = "1";
+
+  hote.addEventListener("click", (evenement) => {
+    const bouton = evenement.target.closest?.("[data-geste]");
+    if (!bouton || !hote.contains(bouton)) return;
+    gesteEnCours?.(String(bouton.dataset.geste || ""), evenement);
+  });
+}
+
+/**
  * Ouvrir la fenêtre sur un contenu.
  *
  * @param {object} options
@@ -54,10 +77,13 @@ function morceaux() {
  *   quelques réglages qui ne valent que pour ce contenu-là
  * @param {() => void} [options.surFermeture] appelé par la croix, le voile et
  *   Échap : c'est à l'appelant de rendre ce qu'il retenait.
+ * @param {(geste: string, evenement: Event) => void} [options.surGeste] appelé
+ *   quand on clique un `[data-geste]` du contenu, avec le nom qu'il porte.
  * @returns {Element|null} le corps, où peindre
  */
 export function ouvrirLaFenetreDeDetails({
-  titreHtml = "", metaHtml = "", corpsHtml = "", className = "", surFermeture = null
+  titreHtml = "", metaHtml = "", corpsHtml = "", className = "",
+  surFermeture = null, surGeste = null
 } = {}) {
   const parts = morceaux();
   if (!parts?.corps) return null;
@@ -78,6 +104,8 @@ export function ouvrirLaFenetreDeDetails({
   // écoute ne se pose qu'une fois — c'est pourquoi elle délègue à un renvoi
   // qu'on remplace, plutôt que d'en empiler une par ouverture.
   bindOverlayChromeDismiss(parts.hote, { onClose: () => fermetureEnCours?.() });
+  brancherLesGestes(parts.hote);
+  gesteEnCours = typeof surGeste === "function" ? surGeste : null;
 
   const auClavier = (evenement) => {
     if (evenement.key === "Escape") fermetureEnCours?.();
@@ -86,6 +114,7 @@ export function ouvrirLaFenetreDeDetails({
 
   fermetureEnCours = () => {
     fermetureEnCours = null;
+    gesteEnCours = null;
     document.removeEventListener("keydown", auClavier);
     if (className) parts.hote.classList.remove(className);
     setOverlayChromeOpenState(parts.hote, false);
