@@ -9867,6 +9867,14 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 .portage-liste__consequence{ margin:10px 0 0; color:var(--muted); font-size:11px; }
 .portage-liste--propose{ border-style:dashed; }
 
+/* Un refus se lit, il ne s'offre pas. La pastille prend la place qu'un bouton
+   aurait prise, pour que l'œil ne cherche pas un geste qui n'existe plus. */
+.portage-liste--ecarte .portage-liste__valeur{ color:var(--muted); }
+.portage-liste__pastille{
+  flex:0 0 auto; padding:2px 8px; border-radius:999px;
+  border:1px solid var(--border); color:var(--muted); font-size:11px; white-space:nowrap;
+}
+
 /* Le reste de l'histoire : pourquoi cette valeur, et ce qu'on n'en sait pas.
 
    Dépliée, parce que cinq histoires entières feraient une page qu'on ne lit

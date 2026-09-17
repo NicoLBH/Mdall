@@ -228,11 +228,12 @@ const RECHERCHES_DITES = {
  *
  * @param {object} options
  * @param {{assertion, lien, confirme, histoire}[]} [options.portages]
+ * @param {{assertion, lien, histoire, quand, qui}[]} [options.ecartes] les refus, à lire
  * @param {boolean} [options.occupe] vrai pendant qu'une écriture est en vol
  * @param {string} [options.recherche] une valeur de `RECHERCHE`
  */
 export function renderCeQuePorteLeSujet({
-  portages = [], occupe = false, recherche = RECHERCHE.JAMAIS
+  portages = [], ecartes = [], occupe = false, recherche = RECHERCHE.JAMAIS
 } = {}) {
   const lus = Array.isArray(portages) ? portages : [];
   const poses = lus.filter((portage) => portage.confirme);
@@ -242,7 +243,57 @@ export function renderCeQuePorteLeSujet({
   return `
     ${renderCeSurQuoiIlPorte(poses, occupe)}
     ${renderCeQuiPorteLeMemeNom(proposes, { occupe, dit })}
+    ${renderCeQuiAEteEcarte(Array.isArray(ecartes) ? ecartes : [])}
   `;
+}
+
+/**
+ * Ce que quelqu'un a déjà refusé de rattacher à ce sujet.
+ *
+ * ## Un refus qui ne se voit pas se rediscute
+ *
+ * Écarter retirait la valeur, et le refus disparaissait avec elle. Six mois
+ * plus tard, personne ne sait que la question a été tranchée : on la rouvre en
+ * réunion, et le travail de celui qui avait dit non est perdu. Un constat ne
+ * devient pas faux (règle 6) — il se relit.
+ *
+ * ## Il se lit, il ne s'agit pas
+ *
+ * **Aucun bouton.** Il n'y a plus rien à décider : la pastille dit qui a
+ * écarté et quand, et c'est tout ce dont on a besoin pour ne pas recommencer.
+ * Un bouton ici redemanderait ce qui est déjà répondu.
+ */
+function renderCeQuiAEteEcarte(ecartes) {
+  if (!ecartes.length) return "";
+
+  const titre = "Ces valeurs ont été écartées";
+
+  return `
+    <section class="details-bloc portage-liste portage-liste--ecarte" aria-label="${escapeHtml(titre)}">
+      <div class="details-bloc__label">${escapeHtml(titre)}</div>
+      <p class="portage-liste__pourquoi">Quelqu'un a regardé ces rapprochements et a dit non.
+        Elles ne seront plus reproposées.</p>
+      <ul class="portage-liste__corps">
+        ${ecartes.map((ecarte) => renderUneValeur(ecarte, { gestes: renderLaPastilleDuRefus(ecarte) })).join("")}
+      </ul>
+    </section>
+  `;
+}
+
+/**
+ * Le refus, dit au lieu d'être offert.
+ *
+ * Avec sa date et son auteur quand on les a : « écartée » tout court se lit
+ * « quelqu'un, un jour », ce qui ne se vérifie auprès de personne (règle 5).
+ */
+function renderLaPastilleDuRefus(ecarte) {
+  const quand = dateEnFrancais(texte(ecarte?.quand));
+  const qui = texte(ecarte?.qui);
+
+  const dit = ["Écartée", quand ? `le ${quand}` : "", qui ? `par ${qui}` : ""]
+    .filter(Boolean).join(" ");
+
+  return `<span class="portage-liste__pastille">${escapeHtml(dit)}</span>`;
 }
 
 /**

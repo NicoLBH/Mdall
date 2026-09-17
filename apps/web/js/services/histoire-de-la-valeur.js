@@ -186,6 +186,34 @@ export function entreesDeLaValeur(assertion = null, applications = []) {
     .filter((entree) => entree.sujet);
 }
 
+/**
+ * Le versement qui a posé cette valeur : son numéro, et **son titre**.
+ *
+ * « #P69 » ne dit rien à personne. Le titre, lui, dit ce qu'on faisait ce
+ * jour-là — « Analyse du compte rendu du 12 mars » — et c'est cela qu'on
+ * cherche en relisant une valeur qu'on n'a pas posée.
+ *
+ * Le numéro reste : c'est lui qu'on cite entre gens du projet, et c'est le seul
+ * qui reste quand le versement n'est pas dans ce qu'on a lu. Un titre absent ne
+ * s'invente pas — il manque, et le numéro suffit alors (règle 5).
+ */
+function leVersement(assertion, versements = []) {
+  const numero = Number.isFinite(Number(assertion?.proposition_number))
+    ? Number(assertion.proposition_number)
+    : null;
+  const id = texte(assertion?.proposition_id);
+
+  const versement = id
+    ? (Array.isArray(versements) ? versements : []).find((ligne) => texte(ligne?.id) === id)
+    : null;
+
+  // `merge_title` d'abord : c'est le titre sous lequel le versement a été
+  // accepté, et donc celui qui décrit ce qui est entré dans la mémoire.
+  const titre = texte(versement?.merge_title) || texte(versement?.title);
+
+  return numero === null && !titre ? null : { numero, titre };
+}
+
 /** Ce que ces entrées valaient, retrouvé dans la mémoire qu'on a sous la main. */
 function garnirLesEntrees(entrees, assertions) {
   const parId = new Map(
@@ -207,10 +235,11 @@ function garnirLesEntrees(entrees, assertions) {
  * @param {object[]} [options.applications] les lectures enregistrées
  * @param {object[]} [options.actes] les examens portés sur les valeurs
  * @param {object[]} [options.points] les sujets, pour le débat qui a tranché
+ * @param {object[]} [options.versements] les propositions, pour les nommer
  * @param {(id: string) => string} [options.nommer] comment afficher un identifiant
  */
 export function histoireDeLaValeur(assertion = null, {
-  assertions = [], applications = [], actes = null, points = [], nommer = null
+  assertions = [], applications = [], actes = null, points = [], versements = [], nommer = null
 } = {}) {
   if (!assertion) return null;
 
@@ -238,9 +267,7 @@ export function histoireDeLaValeur(assertion = null, {
     ou: portees,
     quand: texte(assertion.decided_at),
     qui,
-    proposition: Number.isFinite(Number(assertion.proposition_number))
-      ? Number(assertion.proposition_number)
-      : null,
+    proposition: leVersement(assertion, versements),
     nature: classifyAssertion(assertion).nature,
     origine,
     // L'extrait, et de quoi y retourner. C'est ce qui permet de **vérifier**
@@ -326,10 +353,16 @@ export function lignesDeLHistoire(histoire = null, { dater = null } = {}) {
   const date = (quand) => (quand ? (dater ? dater(quand) : texte(quand).slice(0, 10)) : "");
   const lignes = [];
 
+  const versement = histoire.proposition ?? null;
   const versee = [
     date(histoire.quand) ? `le ${date(histoire.quand)}` : "",
     texte(histoire.qui) ? `par ${histoire.qui}` : "",
-    histoire.proposition ? `#P${histoire.proposition}` : ""
+    // Le titre parle, le numéro identifie. Les deux ensemble se lisent et se
+    // citent ; le numéro seul ne se lit pas, et le titre seul ne se cite pas.
+    texte(versement?.titre)
+      ? [`« ${texte(versement.titre)} »`, versement.numero ? `#P${versement.numero}` : ""]
+        .filter(Boolean).join(" ")
+      : (versement?.numero ? `#P${versement.numero}` : "")
   ].filter(Boolean).join(" · ");
   if (versee) lignes.push({ quoi: "Versée", dit: versee });
 

@@ -695,6 +695,52 @@ phrase générique — vraie, elle — reprend la place.
 La liste des intitulés est celle de la Mémoire, `.memory-facts`, telle quelle :
 la même chose se montre pareil d'un écran à l'autre.
 
+#### Un identifiant n'est pas un nom, un numéro n'est pas un titre
+
+Sur le même écran de vrai projet, la ligne d'identité disait :
+
+```
+le 11 septembre 2026 · par caf479f5-60a8-4803-8250-c57402aca26a · #P69 · …
+```
+
+Deux fois rien. « caf479f5-… » ne se reconnaît pas, et « #P69 » ne dit pas ce
+qu'on faisait ce jour-là. L'écran ne passait pas de `nommer` — l'histoire
+rendait donc l'identifiant brut, ce qui est pire que le silence : on croit lire
+une information.
+
+L'écran lit maintenant les profils (`loadAuthors`) et les versements
+(`listPropositions`), et l'histoire dit **« Relevé topographique et zone
+climatique » #P69** : le titre se lit, le numéro se cite. À défaut de titre le
+numéro suffit — il ne s'invente pas (règle 5) — et à défaut de nom l'auteur
+compte parmi les trous et l'écran le dit.
+
+Le titre retenu est `merge_title` avant `title` : c'est sous celui-là que le
+versement a été accepté, donc celui qui décrit ce qui est réellement entré dans
+la mémoire.
+
+#### Un refus se relit, il ne se redemande pas
+
+Écarter une arête la retirait de ce que le sujet porte — c'est ce que le geste
+promet — et le refus disparaissait avec elle. Six mois plus tard personne ne
+sait que la question a été tranchée : on la rouvre en réunion, et le travail de
+celui qui avait dit non est perdu. Un constat ne devient pas faux (règle 6).
+
+`ceQueCePointAEcarte` les rend, dans un troisième bloc :
+
+| ce qu'on voit | ce que ça dit | ce qu'on peut faire |
+|---|---|---|
+| **Ce sujet porte sur** | ce qui est confirmé | Écarter |
+| **Ces valeurs portent le même nom** | ce qui est proposé | Oui, celle-ci · Non |
+| **Ces valeurs ont été écartées** | ce qui a été refusé | rien |
+
+**Aucun bouton** sur ces lignes-là : il n'y a plus rien à décider, seulement à
+savoir. Une pastille dit qui a écarté et quand — « Écartée le 12 mars 2026 par
+… » —, et « Écartée » tout court quand on ignore l'un ou l'autre : c'est peu,
+mais c'est vrai, et cela suffit à ne pas recommencer.
+
+Cela ne rouvre rien : `portageAProposer` compte toujours les écartées parmi les
+connues, et ne les repropose pas. Les montrer est une lecture.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -887,6 +933,19 @@ valeur que personne n'a mise en doute.
 | les trous à eux seuls ouvrent le dépliant | il reste fermé | 1 test |
 | l'histoire emprunte la grille de la Mémoire | elle réinvente la sienne | 1 test |
 | une écriture en vol désarme tous les gestes | ils restent armés | 1 test |
+| un versement se dit par son titre | il ne dit que son numéro | 1 test |
+| le titre de la fusion l'emporte sur celui du brouillon | le brouillon l'emporte | 1 test |
+| un versement non lu garde son numéro et n'invente rien | il invente un titre | 1 test |
+| le versement d'à côté ne prête pas son titre | il le prête | 1 test |
+| un refus se relit, avec qui et quand | il disparaît | 2 tests |
+| une arête vivante ne se lit pas comme un refus | les deux se confondent | 2 tests |
+| le refus d'un autre sujet ne remonte pas | il remonte | 2 tests |
+| un refus qui vise une version inconnue ne se rend pas | il rend une ligne vide | 1 test |
+| le refus le plus récent se lit en premier | l'ordre se perd | 1 test |
+| un refus ne s'offre pas : aucun bouton | un bouton revient | 1 test |
+| une pastille sans date n'écrit pas de blancs | elle les écrit | 1 test |
+| la date du refus se lit en français | elle reste en ISO | 1 test |
+| sans refus, le bloc ne s'écrit pas | il s'écrit vide | 2 tests |
 
 ---
 
@@ -920,5 +979,6 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | ce qui couvre une valeur, et ce qui ne la couvre plus | `apps/web/js/services/couverture.js`, `docs/ce-qui-couvre-une-valeur.md` |
 | ce qui ne se rejoue pas, et pourquoi | `docs/rejouer-la-memoire.md` |
 | l'histoire d'une valeur, et ce qu'on n'en sait pas | `apps/web/js/services/histoire-de-la-valeur.js` |
+| ce qu'un sujet a écarté, et qui se relit | `apps/web/js/services/point-porte-sur.js` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

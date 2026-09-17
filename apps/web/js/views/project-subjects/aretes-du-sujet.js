@@ -27,13 +27,19 @@
 import { RECHERCHE, renderCeQuePorteLeSujet, renderLeChemin } from "../memoire/portage-rendu.js";
 import { histoireDeLaValeur } from "../../services/histoire-de-la-valeur.js";
 import { raisonnementDuPoint } from "../../services/raisonnement-du-point.js";
-import { pointOuvert, surQuoiCePointPorte } from "../../services/point-porte-sur.js";
+import { ceQueCePointAEcarte, pointOuvert, surQuoiCePointPorte } from "../../services/point-porte-sur.js";
 import { affirmationsDecideesDans } from "../../services/point-a-tranche.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
+/** Rien de lu — et `null` pour ce dont l'absence n'est pas une réponse. */
+const VIDE = () => ({
+  projectId: "", liens: null, assertions: null,
+  applications: [], actes: [], points: [], versements: [], noms: new Map()
+});
+
 /** Ce qu'on a lu, et pour quel projet. Vidé dès qu'un geste change la base. */
-let cache = { projectId: "", liens: null, assertions: null, applications: [], actes: [], points: [] };
+let cache = VIDE();
 
 /**
  * Ce que la dernière recherche a donné, pour ce sujet-là.
@@ -46,7 +52,7 @@ let recherches = new Map();
 
 /** Repartir de zéro à la prochaine ouverture. */
 export function oublierLesAretes() {
-  cache = { projectId: "", liens: null, assertions: null, applications: [], actes: [], points: [] };
+  cache = VIDE();
 }
 
 const attribut = (valeur) => texte(valeur).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -78,26 +84,31 @@ async function lireLeProjet() {
     { listerLesLiens, listerLesPoints },
     { listProjectAssertions },
     { listerLesApplications },
-    { listHypothesisActs }
+    { listHypothesisActs },
+    { listPropositions, loadAuthors }
   ] = await Promise.all([
     import("../../services/point-porte-sur-supabase.js"),
     import("../../services/project-memory-supabase.js"),
     import("../../services/memoire-applications-supabase.js"),
-    import("../../services/memoire-actes-supabase.js")
+    import("../../services/memoire-actes-supabase.js"),
+    import("../../services/propositions-supabase.js")
   ]);
 
   // **Ce qu'il faut pour raconter, et rien de plus.** Les deux premières portent
-  // les arêtes ; les trois autres portent l'histoire — ce que chaque conclusion
-  // a lu, qui s'est engagé dessus, et dans quel débat elle a été tranchée.
+  // les arêtes ; les autres portent l'histoire — ce que chaque conclusion a lu,
+  // qui s'est engagé dessus, dans quel débat elle a été tranchée, et sous quel
+  // titre elle est entrée dans la mémoire.
   //
-  // Les trois dernières ne font pas échouer la lecture : sans elles l'histoire
-  // est plus courte, et l'écran nomme ce qui manque plutôt que de se taire.
-  const [liens, assertions, applications, actes, points] = await Promise.all([
+  // Seules les deux premières font échouer la lecture : sans les autres
+  // l'histoire est plus courte, et l'écran nomme ce qui manque plutôt que de se
+  // taire.
+  const [liens, assertions, applications, actes, points, versements] = await Promise.all([
     listerLesLiens(projectId),
     listProjectAssertions(projectId),
     listerLesApplications(projectId),
     listHypothesisActs(projectId),
-    listerLesPoints(projectId)
+    listerLesPoints(projectId),
+    listPropositions(projectId)
   ]);
 
   // `null` n'est pas `[]` : une lecture ratée ne se montre pas comme une absence
@@ -110,7 +121,9 @@ async function lireLeProjet() {
     // `null` se garde tel quel : « on n'a pas lu les actes » n'est pas « personne
     // ne s'est engagé », et `ceQuiCouvre` distingue les deux.
     actes,
-    points: points ?? []
+    points: points ?? [],
+    versements: versements ?? [],
+    noms: await lireLesNoms(loadAuthors, assertions, liens)
   };
   return cache;
 }
@@ -154,20 +167,42 @@ export async function remplirLesAretes(hote, { occupe = false } = {}) {
   // Tout est déjà enregistré : la règle, ce qu'elle a lu, la citation, la
   // décision et ses écartés, qui et quand. Il n'y a rien à résumer, seulement à
   // lire.
+  const raconter = (assertion) => histoireDeLaValeur(assertion, {
+    assertions: lu.assertions,
+    applications: lu.applications ?? [],
+    actes: lu.actes,
+    points: lu.points ?? [],
+    versements: lu.versements ?? [],
+    // Un identifiant ne parle à personne, et « par caf479f5-… » est pire que
+    // rien : on croit lire une information. À défaut de nom, l'histoire compte
+    // l'auteur comme manquant et le dit (règle 5).
+    nommer: (id) => texte(lu.noms?.get?.(texte(id)))
+  });
+
   const portages = portees.map((assertion) => {
     const lien = parLien.get(`${subjectId}|${texte(assertion?.id)}`) ?? null;
     return {
       assertion,
       lien,
       confirme: Boolean(texte(lien?.declared_by)),
-      histoire: histoireDeLaValeur(assertion, {
-        assertions: lu.assertions,
-        applications: lu.applications ?? [],
-        actes: lu.actes,
-        points: lu.points ?? []
-      })
+      histoire: raconter(assertion)
     };
   });
+
+  // **Les refus se lisent, ils ne s'agissent plus.** Une valeur écartée sort de
+  // ce que le sujet porte — c'est ce que le geste promet — mais le refus, lui,
+  // reste un constat, et un constat ne devient pas faux (règle 6). Sans lui,
+  // la même question se rouvre en réunion six mois plus tard.
+  const ecartes = ceQueCePointAEcarte(subjectId, { liens: lu.liens, assertions: lu.assertions })
+    .map(({ assertion, lien }) => ({
+      assertion,
+      lien,
+      histoire: raconter(assertion),
+      // La date brute : c'est l'écran de rendu qui parle français, et une
+      // seconde mise en forme ici en ferait deux à corriger (règle 10).
+      quand: texte(lien?.ecarte_le),
+      qui: texte(lu.noms?.get?.(texte(lien?.ecarte_par)))
+    }));
 
   // **Le chemin n'apparaît qu'une fois le sujet fermé.** Un raisonnement dit par
   // où l'on est arrivé ; devant un débat qui court encore, on n'est arrivé nulle
@@ -185,6 +220,7 @@ export async function remplirLesAretes(hote, { occupe = false } = {}) {
     renderCeQuePorteLeSujet({
       portages,
       occupe,
+      ecartes,
       recherche: recherches.get(subjectId) ?? RECHERCHE.JAMAIS
     }),
     renderLeChemin({ raisonnement: chemin })
@@ -248,7 +284,7 @@ export async function chercherSurQuoiCeSujetPorte(hote) {
 
   if (bilan.proposees) {
     // Ce qu'on avait lu ne vaut plus.
-    cache = { projectId: "", liens: null, assertions: null, applications: [], actes: [], points: [] };
+    cache = VIDE();
   }
 
   recherches.set(subjectId, bilan.proposees
@@ -256,4 +292,28 @@ export async function chercherSurQuoiCeSujetPorte(hote) {
     : (bilan.reconnues ? RECHERCHE.DEJA : RECHERCHE.RIEN));
 
   await remplirLesAretes(hote);
+}
+
+/**
+ * Les noms de tous ceux qui apparaissent sur cet écran.
+ *
+ * Ceux qui ont versé une valeur **et** ceux qui ont écarté une arête : deux
+ * gestes, une seule lecture. Une lecture ratée rend une table vide — l'écran
+ * dira alors qu'il ne sait pas qui, ce qui est exact, plutôt que d'afficher un
+ * identifiant que personne ne reconnaît.
+ */
+async function lireLesNoms(loadAuthors, assertions, liens) {
+  const ids = [
+    ...(assertions ?? []).map((row) => texte(row?.decided_by)),
+    ...(liens ?? []).map((lien) => texte(lien?.ecarte_par))
+  ].filter(Boolean);
+
+  if (!ids.length) return new Map();
+
+  try {
+    const auteurs = await loadAuthors(ids);
+    return new Map([...auteurs].map(([id, auteur]) => [id, texte(auteur?.name)]));
+  } catch {
+    return new Map();
+  }
 }
