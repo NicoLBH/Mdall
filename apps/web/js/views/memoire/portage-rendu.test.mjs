@@ -159,34 +159,91 @@ test("sans question, aucun chemin ne se dessine", () => {
 
 /* ── L'autre bout, dans le détail d'un sujet ─────────────────────────────── */
 
-test("le détail d'un sujet dit sur quoi il porte, et porte les mêmes gestes", () => {
-  // Les mêmes marques de données que sur la ligne de mémoire : inventer un
-  // second geste pour le même acte ferait deux choses à apprendre (règle 10).
-  const dit = renderCeQuePorteLeSujet({
-    portages: [
-      { assertion: { payload: { subject: "Altitude", value: "742,30" } }, lien: { id: "l-1" }, confirme: true },
-      { assertion: { payload: { subject: "Classe de sol", value: "C" } }, lien: { id: "l-2" }, confirme: false }
-    ]
-  });
+const VALEUR = (sujet, valeur) => ({ payload: { subject: sujet, value: valeur } });
+const POSE = { assertion: VALEUR("Altitude", "742,30"), lien: { id: "l-1" }, confirme: true };
+const PROPOSE = { assertion: VALEUR("Classe de sol", "C"), lien: { id: "l-2" }, confirme: false };
 
-  assert.match(dit, /Altitude = 742,30/);
-  assert.match(dit, /Classe de sol = C/);
+test("ce qui est confirmé et ce qui est proposé sont deux blocs, deux titres", () => {
+  // Un seul titre — « Sur quoi ce sujet porte » — coiffait les deux. Il
+  // **affirmait** ce que les boutons **demandaient**, et l'on cliquait
+  // « Confirmer » sans savoir ce qu'on confirmait. Vu à l'écran d'un vrai projet.
+  const dit = renderCeQuePorteLeSujet({ portages: [POSE, PROPOSE] });
+
+  assert.match(dit, /Ce sujet porte sur/);
+  assert.match(dit, /Ces valeurs portent le même nom/);
   assert.match(dit, /data-portage-retire="l-1"/);
   assert.match(dit, /data-portage-confirme="l-2"/);
-  assert.match(dit, /portage-liste__ligne--propose/);
-  assert.match(dit, /Sur quoi ce sujet porte/);
+});
+
+test("le bloc des propositions dit d'où elles sortent, et ce qu'on demande", () => {
+  // Trois manques, et chacun suffisait à rendre l'écran incompréhensible : d'où
+  // sortent ces lignes, ce qu'on demande, et ce que ça fait.
+  const dit = renderCeQuePorteLeSujet({ portages: [PROPOSE] });
+
+  assert.match(dit, /Le nom « Classe de sol » apparaît dans le titre de ce sujet/);
+  assert.match(dit, /Est-ce de celles-ci que ce sujet parle \?/);
+  assert.match(dit, /Confirmer une valeur la montre « en débat »/);
+  assert.match(dit, /Écarter la retire, et elle ne sera plus reproposée/);
+});
+
+test("le nom annoncé est celui des lignes annoncées, pas celui d'à côté", () => {
+  // La ligne confirmée au-dessus peut s'appeler tout autrement — elle n'a pas
+  // été rapprochée, quelqu'un l'a posée. La lire ici nommerait un mot que la
+  // reconnaissance n'a jamais trouvé dans le titre.
+  const dit = renderCeQuePorteLeSujet({ portages: [POSE, PROPOSE] });
+
+  assert.match(dit, /Le nom « Classe de sol » apparaît/);
+  assert.doesNotMatch(dit, /Le nom « Altitude » apparaît/);
+});
+
+test("deux noms rapprochés par un même titre ne s'annoncent pas comme un seul", () => {
+  // « Profondeur hors gel au Bâtiment A » contient deux noms de la mémoire, et
+  // la reconnaissance remonte les deux. En nommer un seul ferait chercher un mot
+  // qui n'explique que la moitié de la liste (règle 5) ; la phrase générique,
+  // elle, reste vraie.
+  const autre = { assertion: VALEUR("Altitude", "742,30"), lien: { id: "l-3" }, confirme: false };
+  const dit = renderCeQuePorteLeSujet({ portages: [PROPOSE, autre] });
+
+  assert.match(dit, /Un nom de la mémoire apparaît dans le titre de ce sujet/);
+  assert.doesNotMatch(dit, /Le nom «/);
+});
+
+test("une valeur sans nom lisible ne fait pas annoncer un nom vide", () => {
+  const anonyme = { assertion: { payload: {} }, lien: { id: "l-4" }, confirme: false };
+  const dit = renderCeQuePorteLeSujet({ portages: [anonyme] });
+
+  assert.match(dit, /Un nom de la mémoire apparaît dans le titre de ce sujet/);
+  assert.doesNotMatch(dit, /Le nom «/);
+});
+
+test("les boutons répondent à la question posée juste au-dessus", () => {
+  // « Confirmer » et « Écarter » demandent de connaître le mécanisme. Sous une
+  // question — « est-ce de celles-ci que ce sujet parle ? » —, la réponse est
+  // oui ou non, et elle ne s'apprend pas.
+  //
+  // Sur une arête **déjà confirmée**, il n'y a plus de question : le geste est
+  // de défaire, et il s'appelle « Écarter ». Deux mots, parce que ce sont deux
+  // actes — et un seul mécanisme derrière, la même marque de données.
+  const propose = renderCeQuePorteLeSujet({ portages: [PROPOSE] });
+  const pose = renderCeQuePorteLeSujet({ portages: [POSE] });
+
+  assert.match(propose, />Oui, celle-ci</);
+  assert.match(propose, />Non</);
+  assert.match(pose, />Écarter</);
+  assert.doesNotMatch(pose, />Oui, celle-ci</);
 });
 
 test("un sujet sans arête offre le geste, et n'affirme toujours rien", () => {
-  // Le bloc s'affiche maintenant même vide, parce qu'il porte un **geste** : un
-  // endroit où agir n'affirme rien. Ce qu'il ne dit toujours pas, c'est « ce
-  // sujet ne porte sur rien » — personne ne l'a dit, et l'écran ne l'invente pas.
+  // Le bloc des propositions s'affiche même vide, parce qu'il porte un **geste**
+  // : un endroit où agir n'affirme rien. Celui des confirmées, lui, disparaît —
+  // il affirme, et il n'a rien à affirmer.
   const dit = renderCeQuePorteLeSujet({ portages: [] });
 
-  assert.match(dit, /Sur quoi ce sujet porte/);
+  assert.match(dit, /Ces valeurs portent le même nom/);
   assert.match(dit, /data-portage-cherche/);
+  assert.doesNotMatch(dit, /Ce sujet porte sur/);
   assert.doesNotMatch(dit, /portage-liste__corps/);
-  assert.doesNotMatch(dit, /ne porte sur rien|aucune valeur|rien/i);
+  assert.doesNotMatch(dit, /ne porte sur rien|aucune valeur/i);
 });
 
 test("« rien » se dit de trois façons, et elles ne se confondent pas", () => {
@@ -203,24 +260,117 @@ test("« rien » se dit de trois façons, et elles ne se confondent pas", () => 
   assert.notEqual(rien, deja);
 });
 
-test("le même mot pour le même acte, qu'il soit confirmé ou proposé", () => {
-  // « Retirer » et « Écarter » auraient fait deux gestes à apprendre pour une
-  // seule intention : je ne veux pas de cette arête (règle 10).
-  const dit = renderCeQuePorteLeSujet({
-    portages: [
-      { assertion: { payload: { subject: "Altitude" } }, lien: { id: "l-1" }, confirme: true },
-      { assertion: { payload: { subject: "Classe de sol" } }, lien: { id: "l-2" }, confirme: false }
-    ]
-  });
+/* ── L'histoire d'une valeur, sous la valeur ─────────────────────────────── */
 
-  assert.equal((dit.match(/>Écarter</g) ?? []).length, 2);
-  assert.doesNotMatch(dit, /Retirer/);
+const AVEC_HISTOIRE = {
+  assertion: VALEUR("Profondeur hors gel", "0,466 m"),
+  lien: { id: "l-9" },
+  confirme: false,
+  histoire: {
+    quoi: { sujet: "Profondeur hors gel", valeur: "0,466 m" },
+    ou: ["Bâtiment A"],
+    quand: "2024-05-14T10:00:00Z",
+    qui: "Ourdine Ferrand",
+    proposition: 14,
+    origine: { genre: "regle", quoi: "Profondeur hors gel", par: "", le: "" },
+    parceQue: { source: "etude-geotechnique.pdf", article: "", citation: "Sol de type moraine", page: 12 },
+    entrees: [{ sujet: "Altitude", valeur: "742,30" }],
+    regle: null, decision: null, debat: null, examens: null, avant: [],
+    lacunes: []
+  }
+};
+
+test("ce qui distingue deux valeurs est lisible sans rien ouvrir", () => {
+  // Trois lignes « Profondeur hors gel = 0,466 m » ne se choisissent pas. La
+  // portée, la date et l'origine sont ce qui les sépare, et les lire ne doit
+  // pas coûter cinq dépliants ouverts et comparés de mémoire.
+  //
+  // On lit donc **ce qui précède le dépliant**, et rien d'autre : qu'une portée
+  // soit quelque part dans le rendu ne dit pas qu'on la voit.
+  const dit = renderCeQuePorteLeSujet({ portages: [AVEC_HISTOIRE] });
+  const visible = dit.split("<details")[0];
+
+  assert.match(visible, /portage-liste__identite/);
+  assert.match(visible, /Bâtiment A/);
+  assert.match(visible, /Ourdine Ferrand/);
+  assert.match(visible, /déduite par la règle Profondeur hors gel/);
 });
 
-test("une recherche en vol désarme son propre bouton et le dit", () => {
-  const dit = renderCeQuePorteLeSujet({ portages: [], occupe: true });
+test("ce qui identifie ne se répète pas dans le dépliant", () => {
+  // La même portée écrite deux fois sur la même ligne fait douter qu'il s'agisse
+  // de la même (règle 4). Le dépliant explique ; il ne redit pas.
+  const dit = renderCeQuePorteLeSujet({ portages: [AVEC_HISTOIRE] });
+  const [visible, replie = ""] = dit.split("<details");
+
+  assert.match(visible, /Bâtiment A/);
+  assert.doesNotMatch(replie, /Bâtiment A/);
+  assert.doesNotMatch(replie, /Ourdine Ferrand/);
+  assert.doesNotMatch(replie, /déduite par la règle/);
+});
+
+test("le reste de l'histoire se déplie, et il est là", () => {
+  // Cinq histoires entières dépliées feraient une page qu'on ne lit pas ; mais
+  // ce qui explique la valeur doit être à un clic, pas ailleurs.
+  const dit = renderCeQuePorteLeSujet({ portages: [AVEC_HISTOIRE] });
+
+  assert.match(dit, /<summary>Pourquoi cette valeur \?<\/summary>/);
+  assert.match(dit, /Parce que/);
+  assert.match(dit, /Sol de type moraine/);
+  assert.match(dit, /etude-geotechnique\.pdf, p\. 12/);
+  assert.match(dit, /Elle a lu/);
+  assert.match(dit, /Altitude = 742,30/);
+});
+
+test("ce que la mémoire ne dit pas est écrit, pas comblé", () => {
+  // Une valeur dont rien ne dit l'origine n'est pas une valeur dont l'origine va
+  // de soi. La nommer est ce qui permet d'aller l'écrire (règle 5).
+  const nue = {
+    assertion: VALEUR("Profondeur hors gel", "0,47 m"),
+    lien: { id: "l-8" },
+    confirme: false,
+    histoire: {
+      quoi: { sujet: "Profondeur hors gel", valeur: "0,47 m" },
+      ou: [], quand: "", qui: "", proposition: null,
+      origine: { genre: "rien", quoi: "", par: "", le: "" },
+      parceQue: { source: "", article: "", citation: "", page: null },
+      entrees: [], regle: null, decision: null, debat: null, examens: null, avant: [],
+      lacunes: ["origine", "pourquoi", "auteur", "portee"]
+    }
+  };
+
+  const dit = renderCeQuePorteLeSujet({ portages: [nue] });
+
+  // Les apostrophes sont échappées — on lit le rendu, pas la phrase.
+  assert.match(dit, /Ce que la mémoire ne dit pas/);
+  assert.match(dit, /rien ne dit d&#39;où vient cette valeur/);
+  assert.match(dit, /on ne sait pas qui l&#39;a versée/);
+  assert.match(dit, /rien ne dit sur quelle partie de l&#39;ouvrage elle porte/);
+});
+
+test("une écriture en vol désarme tous les gestes du bloc, et le dit", () => {
+  // Deux clics sur « Oui, celle-ci » pendant que le premier vole poseraient deux
+  // fois la même arête. Le bouton de recherche le dit en plus, parce que lui
+  // seul met du temps sans rien changer à l'écran.
+  const dit = renderCeQuePorteLeSujet({ portages: [POSE, PROPOSE], occupe: true });
+
   assert.match(dit, /data-portage-cherche disabled/);
   assert.match(dit, /Recherche…/);
+  assert.equal((dit.match(/disabled/g) ?? []).length, 4);
+});
+
+test("l'histoire se lit dans la liste d'intitulés de la Mémoire, pas une autre", () => {
+  // La même chose — un intitulé, une valeur — se montre pareil sur les deux
+  // écrans. Une seconde grille ici et les colonnes ne s'alignent plus d'un
+  // écran à l'autre, sans que personne ne voie pourquoi.
+  const dit = renderCeQuePorteLeSujet({ portages: [AVEC_HISTOIRE] });
+
+  assert.match(dit, /<dl class="memory-facts">/);
+});
+
+test("une valeur sans histoire ne fabrique pas de dépliant vide", () => {
+  const dit = renderCeQuePorteLeSujet({ portages: [PROPOSE] });
+  assert.doesNotMatch(dit, /<summary>/);
+  assert.doesNotMatch(dit, /portage-liste__identite/);
 });
 
 test("une valeur sans valeur se dit par son seul nom", () => {

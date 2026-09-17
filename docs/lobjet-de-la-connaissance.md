@@ -624,6 +624,77 @@ Le cerveau passe donc par `rangDeLaVersion`, qui croise l'acte et le débat —
 c'est déjà lui qui décide partout ailleurs, et le recalculer ici en aurait fait
 un second endroit qui décide ce qu'un engagement vaut.
 
+### L'histoire d'une valeur, sous la valeur
+
+Sur un vrai projet, le bloc des arêtes montrait **cinq lignes identiques** :
+
+```
+Profondeur hors gel = 0,466 m     [Confirmer] [Écarter]
+Profondeur hors gel = 0,466 m     [Confirmer] [Écarter]
+Profondeur hors gel = 0,466 m     [Confirmer] [Écarter]
+…
+```
+
+Elles n'étaient pas un doublon : la même valeur existait pour plusieurs parties
+de l'ouvrage, versée à des dates différentes, par des chemins différents. Rien
+ne les distinguait, et **on ne confirme pas ce qu'on ne distingue pas**.
+
+Distinguer ne suffisait d'ailleurs pas. Une valeur versée il y a deux ans par
+quelqu'un qui a quitté le projet ne se confirme que si l'on sait **pourquoi elle
+vaut ça** : la règle appliquée et ce qu'elle a lu, la citation du texte et sa
+page, la question tranchée et les possibles écartés. C'est cela, la mémoire d'un
+projet — pas la valeur, le chemin qui y mène.
+
+`services/histoire-de-la-valeur.js` rassemble ce chemin. Il est pur : il reçoit
+la mémoire, les lectures, les actes et les points, et ne va rien chercher.
+
+#### Rien n'est résumé, tout est lu
+
+On aurait pu demander à un modèle d'écrire ce récit. Deux raisons de ne pas le
+faire, et chacune tient toute seule.
+
+**Tout est déjà écrit, exactement.** Résumer ce qui est exact, c'est le rendre
+approximatif — et c'est précisément sur l'exactitude qu'on s'appuie pour
+confirmer.
+
+**Un récit produit serait une seconde vérité** (règle 4), et celle qu'on lit
+plutôt que l'autre. Le jour où la règle change, la mémoire suit et le résumé
+non ; personne ne s'en aperçoit, parce que c'est le résumé qu'on lit.
+
+#### Deux niveaux, et le premier suffit souvent
+
+La **ligne d'identité** — la portée, la date, l'auteur, l'origine — ne se replie
+pas : c'est elle qui sépare cinq lignes d'un coup d'œil, et la cacher
+obligerait à ouvrir cinq volets pour en comparer deux. Le **reste** se déplie,
+parce que cinq histoires entières feraient une page qu'on ne lit pas.
+
+Ce que la mémoire ne dit pas est **nommé**, jamais comblé : « rien ne dit d'où
+vient cette valeur » se répare, « origine inconnue » n'aide personne (règle 5).
+
+#### Le bloc pose une question, il ne constate plus
+
+Un seul titre — « Sur quoi ce sujet porte » — coiffait les arêtes confirmées
+**et** les valeurs que personne n'avait encore regardées. Le titre affirmait ce
+que les boutons demandaient. Ce sont maintenant deux blocs :
+
+| ce qu'on voit | ce que ça dit |
+|---|---|
+| **Ce sujet porte sur** | ce qui est confirmé — et rien du tout quand il n'y a rien |
+| **Ces valeurs portent le même nom** | d'où sortent ces lignes, ce qu'on demande, ce que ça fait |
+
+Les boutons répondent à la question posée juste au-dessus : « Oui, celle-ci » et
+« Non », au lieu de « Confirmer » et « Écarter », qui demandaient de connaître un
+mécanisme. Sur une arête déjà confirmée il n'y a plus de question, et le geste
+s'appelle « Écarter ».
+
+Le nom annoncé se lit **sur les lignes qu'il annonce**, pas ailleurs : une
+confirmée d'à côté peut s'appeler tout autrement, et un même titre peut contenir
+deux noms de la mémoire. Dès que les lignes ne s'accordent pas sur un nom, la
+phrase générique — vraie, elle — reprend la place.
+
+La liste des intitulés est celle de la Mémoire, `.memory-facts`, telle quelle :
+la même chose se montre pareil d'un écran à l'autre.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -799,6 +870,23 @@ valeur que personne n'a mise en doute.
 | une arête écartée ne fait plus de halo | elle en fait un | 1 test |
 | un sujet inconnu ne fait pas de halo | il est supposé ouvert | 1 test |
 | le même lien ne compte qu'une fois | il compte deux fois | 1 test |
+| la provenance enregistrée l'emporte sur la charge | la charge l'emporte | 1 test |
+| une entrée qu'on ne retrouve plus garde son nom | elle disparaît | 2 tests |
+| les lectures d'une autre conclusion ne remontent pas | elles remontent | 1 test |
+| les trous se nomment un par un | ils se taisent | 3 tests |
+| une valeur seule ne se voit pas reprocher sa portée | elle se le voit | 1 test |
+| une décision se signe et ne bégaie pas | elle bégaie | 2 tests |
+| deux blocs, deux titres | un seul titre coiffe les deux | 2 tests |
+| les propositions disent d'où elles sortent | la phrase disparaît | 1 test |
+| une question dit sa conséquence | elle ne la dit plus | 1 test |
+| les boutons répondent à la question | ils redisent le mécanisme | 1 test |
+| le nom annoncé est celui des lignes annoncées | il vient d'à côté | 1 test |
+| deux noms ne s'annoncent pas comme un seul | le premier parle pour tous | 2 tests |
+| l'identité se lit sans rien ouvrir | elle descend dans le dépliant | 3 tests |
+| l'identité ne se répète pas dans le dépliant | elle s'y redit | 1 test |
+| les trous à eux seuls ouvrent le dépliant | il reste fermé | 1 test |
+| l'histoire emprunte la grille de la Mémoire | elle réinvente la sienne | 1 test |
+| une écriture en vol désarme tous les gestes | ils restent armés | 1 test |
 
 ---
 
@@ -831,5 +919,6 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | la marche dans le graphe | `apps/web/js/services/memoire-variante.js` |
 | ce qui couvre une valeur, et ce qui ne la couvre plus | `apps/web/js/services/couverture.js`, `docs/ce-qui-couvre-une-valeur.md` |
 | ce qui ne se rejoue pas, et pourquoi | `docs/rejouer-la-memoire.md` |
+| l'histoire d'une valeur, et ce qu'on n'en sait pas | `apps/web/js/services/histoire-de-la-valeur.js` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |
