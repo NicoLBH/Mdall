@@ -26,7 +26,7 @@
  * ## Ce que le rang sait dire, et ce qu'il ne sait pas encore
  *
  * Le vocabulaire est ordonné en entier, parce que **l'ordre est son sens** : un
- * rang isolé ne veut rien dire, c'est sa place qui parle. Mais trois niveaux
+ * rang isolé ne veut rien dire, c'est sa place qui parle. Mais quatre niveaux
  * seulement sont atteignables aujourd'hui, et le dire vaut mieux que de faire
  * croire que les autres ne se rencontrent jamais (règle 5) :
  *
@@ -34,12 +34,30 @@
  * | --- | --- | --- |
  * | rien | aucun acte | oui |
  * | relu en interne | quelqu'un du projet a signé | oui |
+ * | tranché avec l'équipe | un point fermé a produit la valeur | oui |
  * | visé par la maîtrise d'œuvre | le rôle du signataire | **non** — Mdall ne connaît pas les rôles |
  * | avis d'un bureau de contrôle | un organisme reconnu dans la pièce | oui |
  * | acté contractuellement | la nature contractuelle de la pièce | **non** — rien ne la porte |
  *
  * Les deux manquants demandent chacun **une** chose, nommée ci-dessus. Le jour
  * où elle existe, une ligne suffit ici.
+ *
+ * ## L'échelon que les points apportent
+ *
+ * « Tranché avec l'équipe » manquait, et il manquait parce que rien ne
+ * l'établissait : un débat entre gens du projet ne laissait aucune trace qu'une
+ * valeur pouvait citer. L'arête aval le donne — une valeur produite par un point
+ * fermé a été tranchée en réunion, avec sa date et ses noms.
+ *
+ * Il se place **au-dessus d'une relecture interne** — une personne qui relit
+ * n'engage qu'elle, une équipe qui tranche engage le projet — et **au-dessous de
+ * la maîtrise d'œuvre**, dont la signature engage au-delà du projet.
+ *
+ * Ce qui l'établit ne vit pas ici, comme le contrôle technique ne vit pas dans
+ * l'acte mais dans l'organisme que sa note nomme : c'est
+ * `services/ce-que-bloque-un-point.js` qui le dérive. Le **vocabulaire**, lui,
+ * n'a qu'un domicile — sans quoi deux échelles diraient deux choses du même
+ * engagement (règle 10).
  *
  * ## Un document non attribué ne monte pas le rang
  *
@@ -67,6 +85,8 @@ export const RANG = {
   RIEN: "rien",
   /** Quelqu'un du projet l'a examinée et a signé. */
   INTERNE: "interne",
+  /** Un point fermé l'a produite : l'équipe a tranché, à une date, avec des noms. */
+  EQUIPE: "equipe",
   /** Le signataire engage la maîtrise d'œuvre. Pas encore distinguable. */
   MAITRISE_DOEUVRE: "maitrise-doeuvre",
   /** Un bureau de contrôle l'a examinée, et il est nommé dans la pièce. */
@@ -77,7 +97,8 @@ export const RANG = {
 
 /** L'ordre du vocabulaire. Rien d'autre ne dit ce qu'un rang vaut. */
 export const ORDRE_DES_RANGS = [
-  RANG.RIEN, RANG.INTERNE, RANG.MAITRISE_DOEUVRE, RANG.CONTROLE_TECHNIQUE, RANG.CONTRACTUEL
+  RANG.RIEN, RANG.INTERNE, RANG.EQUIPE, RANG.MAITRISE_DOEUVRE,
+  RANG.CONTROLE_TECHNIQUE, RANG.CONTRACTUEL
 ];
 
 /**
@@ -90,6 +111,7 @@ export const ORDRE_DES_RANGS = [
 export const PHRASES_DU_RANG = {
   [RANG.RIEN]: "personne ne s'est prononcé",
   [RANG.INTERNE]: "examinée dans le projet",
+  [RANG.EQUIPE]: "tranchée avec l'équipe du projet",
   [RANG.MAITRISE_DOEUVRE]: "examinée par la maîtrise d'œuvre",
   [RANG.CONTROLE_TECHNIQUE]: "examinée par un bureau de contrôle",
   [RANG.CONTRACTUEL]: "actée contractuellement"

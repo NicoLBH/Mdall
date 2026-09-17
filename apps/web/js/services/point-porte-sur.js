@@ -155,7 +155,7 @@ export function pointsQuiPortentSur(assertionId, { liens = [], points = [] } = {
     const point = parId.get(id);
     // Un point qu'on ne connaît pas ne se compte pas : on ne sait pas s'il est
     // ouvert, et le supposer ouvert ferait dire « en débat » à tort (règle 5).
-    if (!point || !estOuvert(point)) continue;
+    if (!point || !pointOuvert(point)) continue;
 
     vus.add(id);
     retenus.push(point);
@@ -202,8 +202,15 @@ export function surQuoiCePointPorte(pointId = "", { liens = [], assertions = [] 
   return retenues;
 }
 
-/** Un point ouvert : tout ce qui n'est pas fermé, sous quelque forme que ce soit. */
-function estOuvert(point) {
+/**
+ * Un point ouvert : tout ce qui n'est pas fermé, sous quelque forme que ce soit.
+ *
+ * Exportée parce que deux endroits en ont besoin — ce qui porte sur une valeur,
+ * et ce qu'un point bloque — et que deux définitions de « ouvert » finiraient
+ * par ne pas compter les mêmes points (règle 10). Le préfixe couvre toutes les
+ * fermetures : `closed`, `closed_duplicate`, et celles qui viendront.
+ */
+export function pointOuvert(point) {
   return !texte(point?.status).startsWith("closed");
 }
 

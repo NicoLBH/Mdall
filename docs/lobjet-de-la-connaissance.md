@@ -375,10 +375,88 @@ Et comme tout le reste, il **ne s'écrit pas** : il sort par la proposition que
 la fermeture du sujet prépare déjà, à côté de la décision et de la valeur. Trois
 lignes, un seul geste, une seule signature.
 
-### Étape 5 — la priorité se dérive
+### Étape 5 — la priorité se dérive *(faite)*
 
-Une fois les arêtes en place, ce qu'un point bloque se calcule. Reste à croiser
-avec le rang qualitatif, comme dit plus haut.
+Les arêtes étant en place, ce qu'un point bloque se calcule : on part de ce sur
+quoi il porte, on descend le graphe des dépendances, et l'on croise avec le rang
+qualitatif.
+
+**La profondeur n'est pas l'importance, et c'est ce qui commande le tri.**
+Quatorze conclusions en aval dont aucune n'est engagée coûtent moins qu'une
+seule sur laquelle un bureau de contrôle s'est prononcé. Le rang passe donc
+avant la portée, toujours ; la portée ne départage qu'à engagement égal. Un tri
+par nombre d'aval aurait mis en tête exactement ce qu'il ne faut pas regarder en
+premier.
+
+**L'engagement peut venir de l'aval.** Une valeur nue dont dépend une conclusion
+couverte par un avis coûte cher à casser. Ne peser que ce sur quoi le point
+porte manquerait tout le prix — un test le tient, et le retirer fait tomber
+quatre assertions.
+
+**Un point sans arête n'est pas un point qui ne bloque rien.** C'est la
+distinction que cette étape pouvait rater. Il n'a pas un coût nul, il n'a pas de
+coût **mesuré**, et écrire « ne bloque rien » serait affirmer une absence qu'on
+n'a pas vérifiée (règle 5). Il ne se mêle donc pas aux points pesés — ni devant,
+ce qui serait faux, ni au milieu, ce qui ferait croire qu'on l'a regardé : il
+vient après, rangé par le champ saisi.
+
+**Aucun poids n'est fabriqué.** Pas de « poids 5 > poids 3 ». Il y a un rang —
+un mot dont la place dans une échelle fait tout le sens — et des choses qu'on
+nomme : trois conclusions, un avis. Compter des conclusions qu'on peut énumérer
+n'est pas fabriquer une note : la première se vérifie en ouvrant la liste, la
+seconde ne se vérifie nulle part.
+
+Ce que l'écran lit :
+
+> ce sujet porte sur une valeur dont dépendent 3 conclusions, dont l'une est
+> examinée par un bureau de contrôle
+
+L'engagement se dit **au singulier**, quel qu'en soit le nombre : c'est le plus
+coûteux qui compte, et en annoncer deux ferait croire qu'ils s'additionnent.
+
+### L'échelon que les points apportent
+
+« Tranché avec l'équipe » manquait à l'échelle de l'engagement, et il manquait
+parce que **rien ne l'établissait** : un débat entre gens du projet ne laissait
+aucune trace qu'une valeur pouvait citer. L'arête aval le donne — une valeur
+produite par un point fermé a été tranchée en réunion, avec sa date et ses noms.
+
+Il se place au-dessus d'une relecture interne — une personne qui relit n'engage
+qu'elle, une équipe qui tranche engage le projet — et au-dessous de la maîtrise
+d'œuvre, dont la signature engage au-delà du projet. Le déplacer d'un cran
+changerait ce qu'il coûte de casser la valeur qu'il couvre, et un test tient
+cette place.
+
+**Le vocabulaire n'a qu'un domicile** : `services/ce-qui-couvre.js`, comme les
+cinq autres rangs. Ce qui l'établit vit ailleurs — exactement comme le contrôle
+technique, qui ne vit pas dans l'acte mais dans l'organisme que sa note nomme.
+
+Un point encore ouvert ne monte rien, et un point qu'on ne connaît pas non plus :
+le supposer fermé ferait dire « tranché avec l'équipe » d'un débat en cours.
+
+### Ce qui reste, et ce que ce n'est pas
+
+**Les six étapes sont faites. Le modèle est entier ; l'écran ne l'est pas.**
+
+Tout ce que cette page décrit se construit, se propose, se relit et se trie —
+et rien ne l'affiche encore. Il manque quatre branchements, et aucun ne demande
+de décider quoi que ce soit :
+
+| ce qui manque | ce qui l'attend |
+| --- | --- |
+| « un sujet ouvert porte sur cette valeur », devant une valeur de la Mémoire | `phraseDesPointsOuverts` |
+| le geste qui confirme une arête proposée | `liensAPoser`, et `declared_by` nul |
+| les cinq étapes du chemin, dans le détail d'un sujet | `etapesDuRaisonnement` |
+| l'ordre des sujets ouverts, dans la liste | `ordreDesPointsOuverts` |
+
+C'est délibéré, et c'est l'ordre que cette page s'était donné : **poser l'écran
+avant le modèle aurait obligé à deviner**, et l'on aurait fini avec deux idées de
+ce que « contesté » veut dire.
+
+Restent aussi les deux rangs déclarés que rien n'atteint — le rôle d'un
+signataire, la nature contractuelle d'une pièce. Chacun demande **une** chose,
+nommée dans `services/ce-qui-couvre.js`, et le jour où elle existe une ligne
+suffit.
 
 ---
 
@@ -395,6 +473,8 @@ avec le rang qualitatif, comme dit plus haut.
 | le graphe du raisonnement humain | `services/raisonnement-du-point.js` |
 | la clé préfixée, et la charge transportée | `services/atelier-proposition.js` |
 | les trois lignes que la fermeture propose | `views/project-subjects/project-subjects-actions.js` |
+| ce qu'un point bloque, et l'ordre des ouverts | `services/ce-que-bloque-un-point.js` |
+| l'échelle de l'engagement, « tranché avec l'équipe » compris | `services/ce-qui-couvre.js` |
 
 ### Le faux document, et pourquoi il existait
 
@@ -478,6 +558,19 @@ valeur que personne n'a mise en doute.
 | la charge du raisonnement voyage | elle est oubliée | 2 tests |
 | la charge voyage filtrée | elle est recopiée telle quelle | 1 test |
 | le garde du mot couvre les deux fichiers d'arêtes | le nouveau écrit « sujet » en dur | 1 test |
+| le rang passe avant la portée | la portée passe devant | 1 test |
+| un point non pesé ne se mêle pas aux pesés | il s'y mêle | 1 test |
+| l'écran n'écrit pas « ne bloque rien » | il l'écrit | 1 test |
+| la valeur visée ne compte pas dans son aval | elle s'y compte | 1 test |
+| l'aval porte l'engagement | seule la valeur visée le porte | 4 tests |
+| un point ouvert n'a rien tranché | il est supposé fermé | 1 test |
+| l'avis d'un bureau l'emporte sur l'équipe | l'équipe l'écrase | 1 test |
+| la place de l'échelon d'équipe | il glisse d'un cran | 2 tests |
+| aucun rang ne dit le mot d'un outil de visa | le nouveau le dit | 1 test |
+| un point fermé ne se trie pas | il revient | 1 test |
+| une fermeture est tout ce qui commence par `closed` | seul `closed` compte | 2 tests |
+| le champ saisi départage encore | il cesse de départager | 1 test |
+| les graphies anciennes restent reconnues | elles ne le sont plus | 1 test |
 
 ---
 
