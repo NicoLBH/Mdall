@@ -114,6 +114,25 @@ test("l'aperçu porte le lecteur de l'application, et de quoi le refermer", () =
 });
 
 /**
+ * **L'aperçu passe par-dessus l'écran.**
+ *
+ * Il tenait entre le fil et la saisie, dans quatre cent vingt pixels où une page
+ * A4 arrivait illisible. Or la seule chose qu'on demande à un aperçu est de
+ * pouvoir jeter un œil : s'il faut plisser les yeux, autant ouvrir le fichier
+ * ailleurs, et le geste n'a servi à rien.
+ */
+test("l'aperçu est une fenêtre posée sur un voile", () => {
+  const html = renderApercuDeLaNoteHtml({ nom: "note.pdf" });
+
+  assert.match(html, /data-copilote-apercu-voile/, "le voile referme au clic");
+  assert.match(html, /role="dialog"[\s\S]{0,60}aria-modal="true"/, "et c'est une fenêtre, pas un encart");
+  assert.ok(
+    html.indexOf("copilote-apercu-voile") < html.indexOf("copilote-apercu\""),
+    "le voile enveloppe la fenêtre"
+  );
+});
+
+/**
  * **Le recours reste à portée de main.** Le lecteur de l'application dessine ;
  * ce lien rend la note au navigateur — pour l'imprimer, ou la garder ouverte à
  * côté.
