@@ -466,14 +466,19 @@ test("une question de parc n'exige pas qu'on décrive le bâtiment", () => {
   // degré le parc doit être stable, ce serait refuser de répondre à une
   // question qui a pourtant tout ce qu'il faut.
   const incendie = outilParId("incendie_habitation");
-  const duParc = { exigence: "stabiliteParc", parcDeStationnement: "oui", surfaceParc: 2000,
+  //
+  // Le régime de sécurité incendie, lui, reste exigé : il ne décrit pas le
+  // bâtiment, il dit sous quel texte on calcule. Un degré de stabilité juste
+  // tiré du mauvais référentiel reste un degré faux.
+  const duParc = { exigence: "stabiliteParc", regimeIncendie: "habitation",
+    parcDeStationnement: "oui", surfaceParc: 2000,
     niveauxParcAuDessus: 1, niveauxParcAuDessous: 2 };
   assert.deepEqual(entreesManquantes(incendie, duParc).map((e) => e.cle), []);
   // Pour tout le reste, décrire le bâtiment reste le préalable : c'est le
   // classement qui commande, et il ne se devine pas.
   assert.deepEqual(entreesManquantes(incendie, { exigence: "planchersCoupeFeu" }).map((e) => e.cle),
-    ["logementsSuperposes", "etagesSurRdc", "hauteurPlancherBasLogementLePlusHaut",
-     "duplexOuTriplexAuDernierEtage"]);
+    ["regimeIncendie", "logementsSuperposes", "etagesSurRdc",
+     "hauteurPlancherBasLogementLePlusHaut", "duplexOuTriplexAuDernierEtage"]);
   // La liste des exigences que l'outil propose au modèle porte bien celles du
   // titre VI : sans elles, il ne saurait pas qu'il peut les demander.
   const exigence = incendie.entrees.find((e) => e.cle === "exigence");
@@ -1032,6 +1037,11 @@ const ETUDE = {
     etagesSurRdc: 3,
     duplexOuTriplexAuDernierEtage: false,
     hauteurPlancherBasNiveauLePlusHaut: 9.4,
+    // L'article 1er tranche sur **deux** hauteurs : sans la seconde, le
+    // référentiel ne conclut pas son champ d'application, et l'étude ne répond
+    // donc pas à tout ce qu'on lui demande. Une étude complète les porte toutes
+    // les deux.
+    hauteurPlancherBasLogementLePlusHaut: 9.4,
     niveauxEnSousSol: 2,
     parcDeStationnement: true,
     surfaceParc: 480,
@@ -1331,9 +1341,14 @@ test("chaque agent incendie sait recevoir le régime, et le lit dans la mémoire
   }
 });
 
-test("un régime que le modèle fabrique est écarté, pas appliqué", async () => {
-  // « Réponds-moi pour ce bâtiment » suivi d'un « erp » venu de nulle part : la
-  // valeur n'entre pas dans le calcul, et le calcul a lieu sans elle.
+test("un régime que le modèle fabrique ne s'applique jamais : il se demande", async () => {
+  // « Réponds-moi pour ce bâtiment » suivi d'un « erp » venu de nulle part. La
+  // valeur n'entre pas dans le calcul — et depuis qu'elle est requise, elle ne
+  // s'écarte plus en silence : l'écran la demande, et quelqu'un tranche.
+  //
+  // C'est plus fort qu'avant. Écartée, elle laissait le calcul se faire sur le
+  // régime de l'étude sans que personne ne voie qu'on avait proposé un autre
+  // texte ; demandée, la contradiction se pose à l'écran.
   const resultat = await executerOutil({
     id: "incendie_habitation",
     entrees: { exigence: "classement", regimeIncendie: "erp" },
@@ -1341,8 +1356,13 @@ test("un régime que le modèle fabrique est écarté, pas appliqué", async () 
     etudeIncendie: ETUDE
   });
 
-  assert.notEqual(resultat.statut, "refus");
-  assert.ok(resultat.ecartees.includes(SUJET_REGIME_INCENDIE), resultat.ecartees.join(", "));
+  assert.equal(resultat.statut, "aConfirmer");
+  assert.ok(resultat.champs.some((champ) => champ.cle === "regimeIncendie"), "elle n'est pas demandée");
+  // Et ce qu'on montre à côté de la proposition du modèle, c'est ce que le
+  // projet dit : l'étude a conclu le champ d'application, et c'est elle qui
+  // doit rester affichée tant que personne n'a tranché.
+  assert.equal(resultat.connues.regimeIncendie, "habitation");
+  assert.equal(resultat.proposeParLeModele.regimeIncendie, "erp");
 });
 
 /* ── La portée d'une valeur, et ce qu'on fait quand elles se contredisent ── */
@@ -1647,7 +1667,7 @@ test("ce que quelqu'un a dit et que le projet sait ranger se propose", () => {
   assert.equal(versables[0].sujet, "Classe de sol");
   // La clé sous laquelle l'agent relira : le navigateur vérifie que le nom y
   // mène, il est seul à savoir normaliser un sujet.
-  assert.equal(versables[0].cle, "classe-de-sol");
+  assert.deepEqual(versables[0].cles, ["classe-de-sol", "type-de-sol", "categorie-de-sol", "sol-ec8"]);
   assert.equal(versables[0].valeur, "C");
 });
 
@@ -1683,7 +1703,7 @@ test("une entrée d'aiguillage ne se propose jamais", () => {
     provenances: { cherchee: { origine: "dite" }, tenue: { origine: "dite" } }
   });
 
-  assert.deepEqual(versables.map((v) => v.cle), ["ce-que-le-batiment-vaut"]);
+  assert.deepEqual(versables.map((v) => v.cles[0]), ["ce-que-le-batiment-vaut"]);
 
   // Et le catalogue d'aujourd'hui ne propose rien d'un aiguillage non plus.
   const incendie = outilParId("incendie_habitation");
@@ -1691,7 +1711,7 @@ test("une entrée d'aiguillage ne se propose jamais", () => {
     fournies: { exigence: "classement", regimeIncendie: "habitation" },
     provenances: { exigence: { origine: "dite" }, regimeIncendie: { origine: "dite" } }
   });
-  assert.deepEqual(reels.map((v) => v.cle), ["regime-de-securite-incendie"]);
+  assert.deepEqual(reels.map((v) => v.cles[0]), ["regime-de-securite-incendie"]);
 });
 
 test("ce que le projet ne sait pas ranger ne se propose pas", () => {
@@ -1721,7 +1741,7 @@ test("le résultat porte ce qu'il y aurait à proposer", async () => {
   });
 
   assert.equal(resultat.statut, "fait");
-  assert.deepEqual(resultat.aVerser.map((v) => v.cle), ["classe-de-sol"]);
+  assert.deepEqual(resultat.aVerser.map((v) => v.cles[0]), ["classe-de-sol"]);
   assert.equal(resultat.aVerser[0].valeur, "D");
 
   // Elle part au navigateur : c'est lui qui montre le bouton et prépare la
@@ -1741,4 +1761,82 @@ test("rien de ce que la mémoire porte déjà ne se repropose", async () => {
 
   assert.equal(resultat.statut, "fait");
   assert.deepEqual(resultat.aVerser, []);
+});
+
+/* ── Le régime se demande, et trois chemins le remplissent avant ─────────── */
+
+test("le régime est requis : on ne calcule pas sous une qualification qu'on ignore", () => {
+  // Une exigence juste tirée du mauvais texte reste une exigence fausse, et rien
+  // à l'écran ne le dirait.
+  const incendie = outilParId("incendie_habitation");
+  const manquantes = entreesManquantes(incendie, { exigence: "classement" }).map((e) => e.cle);
+  assert.ok(manquantes.includes("regimeIncendie"), manquantes.join(", "));
+});
+
+test("l'étude conclut le champ d'application, et le régime s'en déduit", async () => {
+  // La question ne se pose donc pas pour un bâtiment déjà décrit dans l'Atelier.
+  // Le seuil n'est pas recopié ici : on rejoue le module du référentiel, qui
+  // porte la règle et son article.
+  const incendie = outilParId("incendie_habitation");
+  const lu = (reponses) => prefillDepuisLEtude(incendie, { titre: "B", reponses }).valeurs.regimeIncendie;
+
+  assert.equal(lu({ hauteurPlancherBasLogementLePlusHaut: 9.4, hauteurPlancherBasNiveauLePlusHaut: 9.4 }),
+    "habitation");
+  // Au-delà de 50 m, l'arrêté cesse de s'appliquer : c'est un immeuble de grande
+  // hauteur, et ce sont d'autres textes.
+  assert.equal(lu({ hauteurPlancherBasLogementLePlusHaut: 9.4, hauteurPlancherBasNiveauLePlusHaut: 60 }),
+    "igh");
+
+  // Et quand le référentiel ne conclut pas — une des deux hauteurs manque —, on
+  // ne devine pas : la question se pose (règle 5).
+  assert.equal(lu({ hauteurPlancherBasNiveauLePlusHaut: 9.4 }), undefined);
+  assert.equal(lu({}), undefined);
+
+  // Le seuil vient bien du référentiel, et non d'une copie : le module qu'on
+  // rejoue est celui que l'étude de l'Atelier utilise.
+  const { champApplication } = await import("../../incendie-habitation/modules-classement.js");
+  assert.equal(champApplication.produit, "dansLeChampDeLArrete");
+  assert.equal(champApplication.source.article, "1er");
+});
+
+test("la mémoire du projet remplit le régime avant qu'on le demande", () => {
+  // Le troisième chemin : une fois la réponse proposée et signée, la question ne
+  // revient plus.
+  const incendie = outilParId("incendie_habitation");
+  const { valeurs } = prefillDepuisMemoire(incendie, [donnee(CLE_REGIME_INCENDIE, "habitation")]);
+  assert.equal(valeurs.regimeIncendie, "habitation");
+});
+
+test("chaque valeur qu'un agent relit se propose sous un nom qu'il relit", () => {
+  // **La garde du retour.** Une valeur donnée dans une discussion se propose
+  // sous son nom lisible, et la proposition la range sous ce nom normalisé.
+  // Quand ce nom n'est aucune des clés que l'agent déclare, la valeur entre en
+  // mémoire et la question se repose quand même — le projet s'enrichit d'un
+  // sujet que personne ne relit.
+  //
+  // Deux entrées étaient dans ce cas : « H0 retenu pour le département » se
+  // rangeait sous `h0-retenu-pour-le-departement`, et l'agent relisait
+  // `h0-hors-gel`.
+  const boiteuses = [];
+
+  for (const outil of OUTILS) {
+    for (const entree of outil.entrees) {
+      if (entree.aiguillage) continue;
+      const cles = [].concat(entree.depuisMemoire ?? [])
+        .map((declaree) => (typeof declaree === "string" ? declaree : declaree?.cle))
+        .filter(Boolean);
+      if (!cles.length) continue;
+
+      // La normalisation vit au navigateur — la cloison interdit de l'importer
+      // ici. On la rejoue sur la seule forme qui compte : minuscules, sans
+      // accents, tout ce qui n'est ni lettre ni chiffre devient un tiret.
+      const nom = String(entree.libelle ?? "")
+        .normalize("NFD").replace(/[̀-ͯ]/g, "")
+        .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+      if (!cles.includes(nom)) boiteuses.push(`${outil.id}.${entree.cle} → ${nom}`);
+    }
+  }
+
+  assert.deepEqual(boiteuses, []);
 });

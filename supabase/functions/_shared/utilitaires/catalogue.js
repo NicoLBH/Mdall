@@ -81,8 +81,20 @@
 import { buildElasticResponseSpectrumTable, getSeismicSizingValues } from "./seismic-spectrum.js";
 import { currentAssertions } from "./memoire.js";
 import {
-  CLES_REGIME_INCENDIE, CLE_REGIME_INCENDIE, SUJET_REGIME_INCENDIE, regimeIncendieDe, regimeValide
+  CLES_REGIME_INCENDIE, CLE_REGIME_INCENDIE, SUJET_REGIME_INCENDIE,
+  regimeDuChampDeLArrete, regimeIncendieDe, regimeValide
 } from "./regime-incendie.js";
+/**
+ * Le champ d'application de l'arrêté habitation, et le moteur qui le tranche.
+ *
+ * **Importés, et non réécrits.** L'article 1er dit à quelle hauteur l'arrêté
+ * cesse de s'appliquer ; recopier ce seuil ici en ferait une seconde version de
+ * la règle, et la seconde version est toujours celle qu'on oublie de corriger
+ * (règle 4). Les deux modules sont du raisonnement pur — ni réseau, ni session —
+ * et s'importent donc sans réveiller le service incendie.
+ */
+import { evaluerModule } from "../../incendie-habitation/moteur.js";
+import { champApplication } from "../../incendie-habitation/modules-classement.js";
 
 function texte(valeur) {
   return String(valeur ?? "").trim();
@@ -203,7 +215,12 @@ export const OUTILS = [
         type: "nombre",
         unite: "m",
         requis: true,
-        depuisMemoire: ["h0-hors-gel", "h0"],
+        // **Le libellé doit mener à une clé déclarée.** Une valeur donnée dans une
+        // discussion se propose sous son nom lisible, et la proposition la range
+        // sous ce nom normalisé — ici `h0-retenu-pour-le-departement`. Sans cette
+        // troisième clé, elle entrait en mémoire et l'agent ne la relisait pas :
+        // la question se reposait sur un projet pourtant enrichi.
+        depuisMemoire: ["h0-hors-gel", "h0", "h0-retenu-pour-le-departement"],
         lireMemoire: nombreEcrit,
         aide: "Valeur départementale. Quand le département en offre plusieurs, c'est une décision, pas une déduction."
       },
@@ -484,27 +501,41 @@ export const OUTILS = [
         type: "choix",
         valeurs: CLES_REGIME_INCENDIE,
         /**
-         * **Pas encore requise, et c'est une décision, pas un oubli.**
+         * **Requise : on ne calcule pas sous une qualification qu'on ignore.**
          *
-         * Le plan veut qu'on la demande quand le projet ne la porte pas. Trois
-         * choses manquent pour que cette question soit tenable aujourd'hui :
+         * Une exigence juste tirée du mauvais texte reste une exigence fausse, et
+         * rien à l'écran ne le dirait. Tant que le projet ne dit pas de quel
+         * régime ce bâtiment relève, la question se pose — une fois.
          *
-         *  - la réponse donnée dans le formulaire ne se **verse** pas en
-         *    mémoire — seul l'écran de l'étude verse. La question se reposerait
-         *    donc à chaque conversation, indéfiniment ;
-         *  - l'étude de l'Atelier, elle, ne répond pas à cette entrée : le
-         *    formulaire s'ouvrirait même pour un bâtiment entièrement décrit,
-         *    ce qui est exactement ce que `prefillDepuisLEtude` existe pour
-         *    éviter ;
-         *  - et tant qu'il n'y a **qu'un** référentiel incendie, la question
-         *    n'a qu'une réponse qui mène quelque part.
+         * **Une fois**, parce que trois chemins la remplissent avant qu'on la
+         * pose : la mémoire du projet, l'étude de l'Atelier — qui conclut déjà le
+         * champ d'application de l'arrêté —, et ce que la conversation a déjà
+         * établi. Et parce que la réponse donnée dans le formulaire **se
+         * propose** au projet : signée, elle entre en mémoire, et la question ne
+         * revient plus.
          *
-         * Ce qui protège déjà sans elle : le filtre de `declarationsPourModele`
-         * n'offre pas l'agent d'un autre régime, et `regimeQuiNeCorrespondPas`
-         * refuse le calcul quand le bâtiment relève d'un autre texte. La
-         * rendre requise sera un mot à changer, le jour où la réponse se verse.
+         * Ces trois chemins ont manqué longtemps, et c'est pourquoi cette ligne
+         * arrive en dernier : requise trop tôt, elle aurait rouvert un formulaire
+         * à chaque discussion, sur un bâtiment pourtant entièrement décrit.
+         */
+        requis: true,
+        /**
+         * **Ce que l'étude a conclu, et non ce qu'elle a répondu.**
          *
-         * ## Pas une entrée d'aiguillage non plus, et c'est délibéré
+         * L'article 1er tranche sur deux hauteurs que le questionnaire de
+         * l'Atelier recueille déjà. On ne les relit pas à la main : on rejoue le
+         * module du référentiel, qui porte la règle et son seuil.
+         *
+         * Quand il ne conclut pas — une des deux hauteurs manque —, on ne rend
+         * rien : un champ d'application qu'on n'a pas su établir ne se devine
+         * pas, et la question se pose (règle 5).
+         */
+        depuisLEtude: ["hauteurPlancherBasLogementLePlusHaut", "hauteurPlancherBasNiveauLePlusHaut"],
+        lireLEtude: (_brut, reponses) => regimeDuChampDeLArrete(
+          evaluerModule(champApplication, reponses ?? {})?.valeur ?? ""
+        ),
+        /**
+         * **Pas une entrée d'aiguillage, et c'est délibéré.**
          *
          * `exigence` en est une : elle dit ce que le modèle est allé chercher,
          * pas ce que le bâtiment vaut, et le garde-fou des valeurs fabriquées ne
@@ -804,7 +835,12 @@ export const OUTILS = [
         // calculer. La réclamer quand même, c'est demander la recette à qui
         // tient déjà le plat.
         requisSaufSi: (entrees) => nombre(entrees?.horsGel) !== null,
-        depuisMemoire: ["h0-hors-gel", "h0"],
+        // **Le libellé doit mener à une clé déclarée.** Une valeur donnée dans une
+        // discussion se propose sous son nom lisible, et la proposition la range
+        // sous ce nom normalisé — ici `h0-retenu-pour-le-departement`. Sans cette
+        // troisième clé, elle entrait en mémoire et l'agent ne la relisait pas :
+        // la question se reposait sur un projet pourtant enrichi.
+        depuisMemoire: ["h0-hors-gel", "h0", "h0-retenu-pour-le-departement"],
         lireMemoire: nombreEcrit,
         aide: "Valeur départementale du NF DTU 13.1. Quand le département en offre plusieurs, c'est une "
           + "décision, pas une déduction."
@@ -1869,11 +1905,15 @@ export function aVerserAuProjet(outil, { fournies = {}, provenances = {} } = {})
     versables.push({
       // Le nom tel qu'on le lit : c'est lui que la proposition affichera.
       sujet: texte(entree.libelle) || entree.cle,
-      // Et la clé sous laquelle il doit atterrir. Le navigateur vérifie que le
-      // nom y mène vraiment : il est seul à savoir normaliser un sujet, et un
-      // sujet versé sous une autre clé que celle qu'on relit est une valeur
-      // qu'on n'entendra plus jamais.
-      cle: cles[0],
+      // Et **toutes** les clés sous lesquelles l'agent relira. Le navigateur
+      // vérifie que le nom mène à l'une d'elles : il est seul à savoir
+      // normaliser un sujet, et un sujet versé sous une clé qu'on ne relit pas
+      // est une valeur qu'on n'entendra plus jamais.
+      //
+      // Toutes, et pas la première : un même fait s'écrit sous plusieurs noms
+      // selon qui l'a établi, et le nom lisible d'une entrée n'est pas toujours
+      // le premier de la liste.
+      cles: [...cles],
       valeur,
       unite: texte(entree.unite),
       // Ce que ce nom désigne, tel que l'agent le dit à qui remplit le champ.

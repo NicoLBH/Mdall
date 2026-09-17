@@ -139,7 +139,7 @@ déjà pour construire son contexte. Aucune lecture nouvelle.
 
 ---
 
-## Étape 4 — Ce qu'on ne sait pas, on le demande *(faite, sauf la question)*
+## Étape 4 — Ce qu'on ne sait pas, on le demande *(faite)*
 
 Trois cas, et aucun ne se devine :
 
@@ -611,6 +611,65 @@ fois signée, et la question ne se repose plus. Les deux autres tiennent encore 
 l'étude de l'Atelier ne répond pas à cette entrée, et il n'y a qu'un référentiel
 incendie. La première se lèvera en dérivant le régime du **champ d'application**
 que l'étude conclut déjà ; c'est la prochaine ligne.
+
+---
+
+## Le mot `requis` est posé : le plan est fini
+
+Trois choses manquaient pour que la question soit tenable. Elles sont là.
+
+**1. La réponse se verse.** Donnée dans le formulaire, elle se **propose** au
+projet ; signée, elle entre en mémoire, et la question ne revient plus.
+
+**2. L'étude répond à cette entrée.** L'article 1er tranche sur deux hauteurs que
+le questionnaire de l'Atelier recueille déjà. On ne les relit pas à la main : on
+**rejoue le module du référentiel**, qui porte la règle et son article. Recopier
+le seuil ici en aurait fait une seconde version, et la seconde version est
+toujours celle qu'on oublie de corriger (règle 4).
+
+Quand le module ne conclut pas — une des deux hauteurs manque —, on ne rend
+rien : un champ d'application qu'on n'a pas su établir ne se devine pas.
+
+**3. Le libellé mène à une clé que l'agent relit.** C'était le défaut trouvé au
+tour précédent : « H0 retenu pour le département » se rangeait sous
+`h0-retenu-pour-le-departement`, et l'agent relisait `h0-hors-gel`. Les deux
+entrées déclarent désormais cette troisième clé, et le navigateur accepte
+**n'importe laquelle** des clés déclarées — un même fait s'écrit sous plusieurs
+noms selon qui l'a établi, et l'agent les lit tous.
+
+Un test balaie le catalogue et vérifie que **chaque** valeur qu'un agent relit se
+propose sous un nom qu'il relit. Les douze entrées bouclent.
+
+### Trois chemins remplissent la question avant qu'on la pose
+
+La mémoire du projet, l'étude de l'Atelier, et ce que la conversation a déjà
+établi. C'est ce qui fait qu'elle se pose **une fois** — et non à chaque
+discussion, sur un bâtiment pourtant entièrement décrit.
+
+### Ce que ça change pour un régime fabriqué
+
+Il ne s'écarte plus en silence : l'écran le **demande**, avec ce que le projet
+dit à côté de ce que le modèle propose. Écarté, le calcul se faisait sur le
+régime de l'étude sans que personne ne voie qu'on avait proposé un autre texte.
+
+### Deux fixtures complétées, aucune garantie affaiblie
+
+L'étude de référence des tests porte maintenant les **deux** hauteurs de
+l'article 1er : sans la seconde, le référentiel ne conclut pas son champ
+d'application, et l'étude ne répond donc pas à tout ce qu'on lui demande. Et la
+question de parc porte la qualification — qui ne décrit pas le bâtiment, mais dit
+sous quel texte on calcule. Les assertions, elles, n'ont pas bougé.
+
+### Les gardes posées, et ce qu'on a cassé pour les voir tomber
+
+| la garde | ce qu'on a cassé | ce qui est tombé |
+|---|---|---|
+| le régime est requis | il redevient facultatif | 3 tests |
+| le seuil vient du référentiel | il est recopié à la main | 1 test |
+| l'étude remplit le régime | elle ne le remplit plus | 4 tests |
+| toutes les clés partent au navigateur | une seule part | 1 test |
+| le nom peut mener à n'importe laquelle | seule la première compte | 1 test |
+| chaque entrée boucle | les deux libellés h0 ne bouclent plus | 1 test |
 
 ---
 
