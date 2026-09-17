@@ -9787,6 +9787,14 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 .project-situations__table-toolbar .project-table-toolbar{margin: 0;}
 
 
+/* Un bloc dans le détail d'un sujet.
+
+   La géométrie est écrite **une fois** : les références documentaires, ce sur
+   quoi un sujet porte et le chemin du raisonnement sont trois blocs du même
+   écran, et trois encadrés calibrés séparément se seraient mis à diverger au
+   premier ajustement. Un nouveau bloc n'invente donc ni marge, ni bordure, ni
+   fond — il prend `.details-bloc` et n'écrit que ce qui lui est propre. */
+.details-bloc,
 .details-document-refs{
   margin:12px 0 16px 50px;
   padding:10px 12px;
@@ -9794,11 +9802,45 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   border-radius:var(--radius);
   background:rgba(13,17,23,.35);
 }
+.details-bloc__label,
 .details-document-refs__label{
   margin-bottom:8px;
   font-size:12px;
   color:var(--muted);
 }
+
+/* Le petit graphe du raisonnement humain, dans le détail d'un sujet.
+
+   Cinq lignes, **toujours les cinq** : une étape que personne n'a remplie dit
+   son manque en gris plutôt que de disparaître. Un graphe qui perd ses lignes
+   creuses se lit comme un raisonnement complet, et c'est ce qu'il n'est pas.
+
+   L'intitulé de l'étape est une colonne fixe : c'est ce qui fait lire les cinq
+   d'un coup d'œil, au lieu de cinq phrases à déchiffrer une par une. */
+.chemin__corps{ display:flex; flex-direction:column; gap:6px; }
+.chemin__etape{ display:flex; gap:10px; align-items:baseline; font-size:12px; }
+.chemin__quoi{ flex:0 0 96px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; font-size:11px; }
+.chemin__quoi-dit{ display:flex; flex-wrap:wrap; gap:6px; color:var(--text); }
+.chemin__entree{
+  display:inline-flex;
+  align-items:center;
+  padding:2px 8px;
+  border:1px solid rgba(48,54,61,.55);
+  border-radius:999px;
+  background:rgba(110,118,129,.06);
+}
+.chemin__etape--manque .chemin__quoi-dit{ color:var(--muted); font-style:italic; }
+.chemin__manques{ margin-top:8px; font-size:11px; color:var(--muted); }
+
+/* Ce sur quoi un sujet porte, et les deux réponses qu'on fait à une proposition.
+
+   Une arête **proposée** se voit sans se lire autrement : c'est la bordure qui
+   le dit, pas un mot de plus. Elle porte deux boutons, jamais un seul — n'offrir
+   que « confirmer » ferait de la seule réponse possible un acquiescement. */
+.portage-liste__corps{ display:flex; flex-direction:column; gap:6px; margin:0; padding:0; list-style:none; }
+.portage-liste__ligne{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; }
+.portage-liste__valeur{ flex:1 1 auto; color:var(--text); }
+.portage-liste__ligne--propose .portage-liste__valeur{ color:var(--muted); }
 .details-document-refs__list{
   display:flex;
   flex-wrap:wrap;
@@ -23976,6 +24018,7 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    Le rang ne s'écrit pas : il donne sa nuance. Plus l'engagement coûte cher à
    casser, plus la mention se détache — c'est tout ce qu'un « poids » doit faire,
    et il n'y a aucun nombre à lire. */
+.memory-mention,
 .memory-couverture{
   display:inline-flex;
   align-items:center;
@@ -23984,10 +24027,44 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   font-size:12px;
   color:var(--muted);
 }
+.memory-mention .octicon,
 .memory-couverture .octicon{ width:14px; height:14px; flex:0 0 14px; }
 .memory-couverture--interne{ color:var(--muted); }
+.memory-couverture--equipe{ color:var(--muted); font-weight:600; }
 .memory-couverture--controle-technique{ color:var(--fgColor-open); font-weight:600; }
 .memory-couverture--contractuel{ color:var(--fgColor-open); font-weight:600; }
+
+/* Ce qui porte sur une valeur, et ce qui l'a tranchée.
+
+   Deux mentions de plus sur la même ligne, et **exactement la même géométrie** :
+   `.memory-mention` la porte pour les trois. Une valeur en débat, une valeur
+   examinée et une valeur tranchée en réunion se lisent d'un même coup d'œil ;
+   trois alignements différents auraient fait trois choses à regarder.
+
+   Rien n'est une pastille, ici non plus : une valeur sur laquelle un débat porte
+   ne change pas d'état. Elle reste, et à côté d'elle ce qui la conteste.
+
+   Le conditionnel d'une arête **proposée** se voit : la mention est en retrait de
+   ton et porte ses deux réponses. Une reconnaissance n'est pas un jugement, et la
+   montrer comme un fait ferait contester une valeur que personne n'a mise en
+   doute. */
+.memory-portage{ display:inline-flex; flex-wrap:wrap; min-width:0; }
+/* La phrase prend la place qui reste.
+
+   Sans elle, le texte d'une mention est un élément flexible **anonyme** : rien
+   ne peut lui dire quelle place prendre, et un parent étroit le réduit jusqu'au
+   mot le plus long. Les mentions d'ici portent des intitulés de sujet entiers et
+   deux boutons ; tenir par la largeur du parent serait tenir par chance. */
+.memory-mention__dit{ flex:1 1 auto; min-width:0; }
+.memory-portage--propose{ color:var(--fgColor-attention, var(--muted)); }
+/* Les deux réponses ne se séparent pas.
+
+   « Confirmer » seul en bout de ligne et « Écarter » renvoyé à la ligne suivante
+   se lisent comme deux gestes sans rapport : ce sont les deux moitiés d'une même
+   question, et elles passent à la ligne ensemble. */
+.memory-portage__gestes{ display:inline-flex; gap:6px; flex:0 0 auto; }
+.memory-portage--propose .gh-btn{ margin-left:0; }
+.memory-portage--tranche{ color:var(--muted); }
 
 /* Le rang d'un engagement que la variante fait tomber.
 

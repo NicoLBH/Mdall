@@ -38,8 +38,43 @@ const texte = (valeur) => String(valeur ?? "").trim();
 /** Les ordres possibles. `PROJET` est l'ordre d'origine, qu'on ne touche pas. */
 export const TRI = {
   PROJET: "projet",
-  DERNIERE_ACTIVITE: "derniere-activite"
+  DERNIERE_ACTIVITE: "derniere-activite",
+  /**
+   * Ce que ça coûte de ne pas trancher — étape 5 de
+   * `docs/lobjet-de-la-connaissance.md`.
+   *
+   * L'ordre ne se calcule pas ici : il est **donné**. Ce fichier ne sait rien
+   * des arêtes, du graphe des dépendances ni des engagements, et aller les
+   * chercher en ferait un second endroit qui décide ce qu'un sujet bloque
+   * (règle 4). Il reçoit des places, il range.
+   */
+  CE_QUE_CA_BLOQUE: "ce-que-ca-bloque"
 };
+
+/**
+ * Les ordres qu'un écran propose, et pourquoi ils ne sont pas les mêmes partout.
+ *
+ * **Ce que ça coûte de ne pas trancher ne se propose que dans un projet.** Le
+ * calcul lit la mémoire de ce projet-là, son graphe de dépendances et ses
+ * engagements ; l'offrir sur un écran qui traverse quarante projets ferait
+ * quarante fois cinq lectures pour ranger une page. Un bouton qui promet un
+ * rangement qu'il ne peut pas tenir est pire que pas de bouton.
+ *
+ * Les valeurs, elles, se reconnaissent partout : un ordre retenu dans un projet
+ * ne doit pas devenir illisible parce qu'on a ouvert un autre écran.
+ */
+export const ORDRES = [TRI.DERNIERE_ACTIVITE, TRI.PROJET];
+
+/** Dans un projet : ce qui a bougé, ce qui coûte cher à laisser ouvert, l'arrivée. */
+export const ORDRES_DU_PROJET = [TRI.DERNIERE_ACTIVITE, TRI.CE_QUE_CA_BLOQUE, TRI.PROJET];
+
+const TOUS = Object.values(TRI);
+
+/** Le cycle demandé, ramené à ce qui existe — jamais vide. */
+function cycle(ordres) {
+  const lus = (Array.isArray(ordres) ? ordres : []).filter((ordre) => TOUS.includes(ordre));
+  return lus.length ? lus : ORDRES;
+}
 
 /**
  * Un ordre lu depuis l'état, ramené à ce qui existe.
@@ -58,12 +93,32 @@ export const TRI = {
  * valait la chaîne vide.
  */
 export function normaliserLeTri(tri) {
-  return texte(tri) === TRI.PROJET ? TRI.PROJET : TRI.DERNIERE_ACTIVITE;
+  const dit = texte(tri);
+  return TOUS.includes(dit) ? dit : TRI.DERNIERE_ACTIVITE;
 }
 
-/** Le bouton est une bascule : un clic met le tri, un autre le retire. */
-export function triSuivant(tri) {
-  return normaliserLeTri(tri) === TRI.DERNIERE_ACTIVITE ? TRI.PROJET : TRI.DERNIERE_ACTIVITE;
+/**
+ * Le bouton fait tourner les ordres, dans le même sens, toujours.
+ *
+ * Dans un projet il en fait tourner trois : ce qui a bougé, ce qui coûte cher à
+ * laisser ouvert, puis l'ordre d'arrivée. Un troisième bouton aurait demandé une
+ * place et une icône de plus pour la même question — « comment veux-tu que je
+ * range ? » — posée une fois.
+ *
+ * Un ordre que cet écran ne propose pas n'est pas une erreur : on repart du
+ * premier qu'il propose, plutôt que de rester coincé sur un rangement que le
+ * bouton ne sait pas défaire.
+ *
+ * @param {string} tri
+ * @param {string[]} [ordres] ce que cet écran-là propose
+ */
+export function triSuivant(tri, ordres = ORDRES) {
+  const offerts = cycle(ordres);
+  // Un ordre absent du cycle rend `-1`, et `(-1 + 1) % n` vaut `0` : on repart
+  // du premier que l'écran propose. Rien à écrire pour ce cas — l'écrire en
+  // plus aurait fait une branche que rien ne peut faire tomber.
+  const place = offerts.indexOf(normaliserLeTri(tri));
+  return offerts[(place + 1) % offerts.length];
 }
 
 /**
@@ -84,10 +139,11 @@ export function triSuivant(tri) {
  * @param {string} [ordreDorigine] le nom de l'ordre d'origine, tel qu'il se dit
  *   sur cet écran-là
  */
-export function motDuTri(tri, ordreDorigine = "l'ordre du projet") {
-  return normaliserLeTri(tri) === TRI.DERNIERE_ACTIVITE
-    ? `Revenir à ${String(ordreDorigine || "l'ordre du projet")}`
-    : "Trier par dernière activité";
+export function motDuTri(tri, ordreDorigine = "l'ordre du projet", { ordres = ORDRES } = {}) {
+  const suivant = triSuivant(tri, ordres);
+  if (suivant === TRI.DERNIERE_ACTIVITE) return "Trier par dernière activité";
+  if (suivant === TRI.CE_QUE_CA_BLOQUE) return "Trier par ce que ça coûte de ne pas trancher";
+  return `Revenir à ${String(ordreDorigine || "l'ordre du projet")}`;
 }
 
 /**
@@ -137,11 +193,17 @@ function instant(sujet) {
  *
  * @param {object[]} sujets déjà filtrés
  * @param {string} [tri] une valeur de `TRI`
+ * @param {object} [options]
+ * @param {Map<string, number>} [options.ordre] pour `CE_QUE_CA_BLOQUE` : la
+ *   place de chaque sujet, telle qu'`ordreDesPointsOuverts` l'a calculée
  * @returns {object[]} une nouvelle liste, de même longueur
  */
-export function trierLesSujets(sujets = [], tri = TRI.PROJET) {
+export function trierLesSujets(sujets = [], tri = TRI.PROJET, { ordre = null } = {}) {
   const lus = Array.isArray(sujets) ? sujets : [];
-  if (normaliserLeTri(tri) !== TRI.DERNIERE_ACTIVITE) return lus.slice();
+  const demande = normaliserLeTri(tri);
+
+  if (demande === TRI.CE_QUE_CA_BLOQUE) return parCeQueCaBloque(lus, ordre);
+  if (demande !== TRI.DERNIERE_ACTIVITE) return lus.slice();
 
   return lus.slice().sort((gauche, droite) => {
     const a = instant(gauche);
@@ -151,4 +213,33 @@ export function trierLesSujets(sujets = [], tri = TRI.PROJET) {
     if (b === null) return -1;
     return b - a;
   });
+}
+
+/**
+ * Les sujets, rangés par ce que ça coûte de ne pas les trancher.
+ *
+ * ## Tant qu'on ne sait pas, on ne range pas
+ *
+ * Les places viennent de trois lectures en base. Tant qu'elles ne sont pas
+ * revenues, la liste reste dans l'ordre où elle est arrivée : la retourner
+ * d'abord, puis la retourner encore, ferait sauter les lignes sous les yeux de
+ * quelqu'un qui vient de cliquer. Et ranger au hasard en attendant serait
+ * affirmer un ordre qu'on n'a pas (règle 5).
+ *
+ * ## Un sujet fermé n'a pas de place ici
+ *
+ * `ordreDesPointsOuverts` ne range que les ouverts, et c'est voulu : ce qu'il
+ * en coûte de ne pas trancher un sujet déjà tranché ne veut rien dire. Les
+ * fermés restent donc derrière, dans leur ordre d'origine — le tri de
+ * JavaScript est stable, ce qui suffit à le garantir.
+ */
+function parCeQueCaBloque(sujets, ordre) {
+  if (!(ordre instanceof Map)) return sujets.slice();
+
+  const place = (sujet) => {
+    const lue = ordre.get(texte(sujet?.id));
+    return Number.isFinite(lue) ? lue : Number.POSITIVE_INFINITY;
+  };
+
+  return sujets.slice().sort((gauche, droite) => place(gauche) - place(droite));
 }

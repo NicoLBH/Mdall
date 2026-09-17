@@ -1,4 +1,5 @@
-import { normaliserLeTri, trierLesSujets } from "../../services/tri-des-sujets.js";
+import { TRI, normaliserLeTri, trierLesSujets } from "../../services/tri-des-sujets.js";
+import { placesDuBlocage } from "./ordre-du-blocage.js";
 import { champsDesSujets, sujetsFiltres } from "../../services/champs-des-sujets.js";
 import { metaDesSujets, moiDansLeProjet, personnesDuProjet } from "../../services/meta-des-sujets.js";
 import { CLES_DE_LA_CHARGE } from "../../services/charge-des-sujets.js";
@@ -625,10 +626,25 @@ export function createProjectSubjectsSelectors({
     });
 
     const statut = getCurrentSubjectsStatusFilter();
+    const tri = getCurrentSubjectsSort();
     return trierLesSujets(
       retenus.filter((subject) => sujetMatchesStatusFilter(subject, statut)),
-      getCurrentSubjectsSort()
+      tri,
+      // Les places de « ce que ça coûte de ne pas trancher », quand on les a.
+      // `null` dit qu'on ne sait pas encore, et la liste ne bouge alors pas :
+      // ranger au hasard en attendant serait affirmer un ordre qu'on n'a pas.
+      { ordre: tri === TRI.CE_QUE_CA_BLOQUE ? placesDuBlocage(getProjetCourant()) : null }
     );
+  }
+
+  /**
+   * Le projet dont on range les sujets.
+   *
+   * Le même identifiant que celui sous lequel les places ont été lues — sans
+   * quoi on rangerait la liste d'un projet avec l'ordre d'un autre.
+   */
+  function getProjetCourant() {
+    return String(store?.projectSubjectsView?.projectScopeId || store?.currentProjectId || "").trim();
   }
 
   function getPaginatedFilteredFlatSubjects() {
