@@ -90,71 +90,106 @@ export function renderLigneDeLaNoteHtml({ piece = null, ouvert = false, montrabl
 }
 
 /**
- * L'aperçu, par-dessus l'écran.
+ * L'aperçu de la note : ce qu'on met **dans la fenêtre de l'application**.
  *
- * **Il tenait entre le fil et la saisie**, et prenait la hauteur qu'on lui
- * laissait : quatre cent vingt pixels de large comme de haut, dans lesquels une
- * page A4 arrivait illisible. Or la seule chose qu'on demande à un aperçu est
- * de pouvoir **jeter un œil** : s'il faut plisser les yeux, autant ouvrir le
- * fichier ailleurs, et le geste n'a servi à rien.
+ * ## Elle existait déjà
  *
- * Il passe donc par-dessus l'écran, sur un voile sombre qui laisse voir la
- * discussion autour — on n'a pas quitté la conversation, on regarde une pièce.
+ * `#detailsModal` attend dans le document depuis toujours : sa coque, son voile,
+ * son en-tête, sa croix et son comportement de fermeture sont réglés, et c'est
+ * **la** fenêtre de Mdall. En dessiner une seconde pour une note revenait à
+ * recalibrer un voile et une ombre contre ceux d'à côté, et à les faire diverger
+ * au premier réglage (règle 10). Ce module ne rend donc plus que trois morceaux —
+ * le titre, ce qui se pose à droite, et le corps — et
+ * `ui/fenetre-de-details.js` les y met.
  *
- * **Il se referme de quatre façons** : par sa croix, en recliquant la pastille
- * qui l'a ouvert, en cliquant le voile, et par Échap. Un panneau qui couvre
- * l'écran et ne se referme que d'un côté se referme mal.
+ * ## Ce que le corps contient
+ *
+ * Un conteneur vide, où le lecteur de l'application peint les pages. Le
+ * navigateur ne décide plus rien : « toujours télécharger les PDF » est un
+ * réglage courant, et le cadre d'avant affichait alors un bouton « Ouvrir » à la
+ * place du document.
  *
  * @param {object} options
  * @param {string} options.nom
  * @param {string} [options.adresse] celle de `adresseDeLaPiece` — elle ne sert
- *   plus qu'au recours : ouvrir la note dans un onglet
+ *   qu'au recours : ouvrir la note dans un onglet
  * @param {"lecture"|"lue"|"panne"} [options.etat] où en est le dessin
+ * @returns {{titreHtml: string, metaHtml: string, corpsHtml: string}}
  */
-export function renderApercuDeLaNoteHtml({ nom = "", adresse = "", etat = "lecture" } = {}) {
+export function apercuDeLaNote({ nom = "", adresse = "", etat = "lecture" } = {}) {
   const sien = texte(nom);
 
-  return `
-    <div class="copilote-apercu-voile" data-copilote-apercu-voile>
-    <section class="copilote-apercu" role="dialog" aria-modal="true"
-      aria-label="${escapeHtml(`Aperçu de ${sien || "la note"}`)}">
-      <header class="copilote-apercu__tete">
+  return {
+    titreHtml: `
+      <span class="copilote-apercu__titre">
         ${svgIcon("file-pdf")}
-        <span class="copilote-apercu__nom">${escapeHtml(sien)}</span>
+        <span class="copilote-apercu__nom">${escapeHtml(sien || "Note jointe")}</span>
+      </span>`,
+    metaHtml: texte(adresse)
+      ? `<a class="bouton-discret copilote-apercu__onglet" href="${escapeHtml(adresse)}"
+          target="_blank" rel="noopener"
+          title="Ouvrir la note dans un onglet">Ouvrir dans un onglet</a>`
+      : "",
+    corpsHtml: `
+      <div class="copilote-apercu">
         ${/*
-          **Le recours, à portée de main.** Le lecteur de l'application dessine
-          les pages ; ce lien, lui, rend la note au navigateur — pour l'imprimer,
-          la chercher, ou simplement la garder ouverte à côté.
+          **Les pages sont peintes ici, par le lecteur de l'application.** Le
+          conteneur est vide au rendu : le dessin est asynchrone, et l'écran dit
+          ce qu'il fait en attendant plutôt que de laisser un rectangle noir — un
+          cadre vide et un cadre en cours de lecture se ressemblent exactement.
         */""}
-        ${texte(adresse)
-          ? `<a class="bouton-discret copilote-apercu__onglet" href="${escapeHtml(adresse)}"
-              target="_blank" rel="noopener"
-              title="Ouvrir la note dans un onglet">Ouvrir dans un onglet</a>`
+        <div class="copilote-apercu__page documents-pdf-viewer__pages"
+          data-copilote-apercu-pages
+          aria-busy="${etat === "lecture" ? "true" : "false"}"></div>
+        ${etat === "lecture"
+          ? `<p class="copilote-apercu__etat">Lecture de la note…</p>`
           : ""}
-        <button type="button" class="bouton-discret copilote-apercu__fermer"
-          data-copilote-apercu-fermer
-          aria-label="Refermer l'aperçu" title="Refermer l'aperçu">
-          ${svgIcon("x", { className: "octicon" })}
-        </button>
-      </header>
-      ${/*
-        **Les pages sont peintes ici, par le lecteur de l'application.** Le
-        conteneur est vide au rendu : le dessin est asynchrone, et l'écran dit ce
-        qu'il fait en attendant plutôt que de laisser un rectangle noir — un
-        cadre vide et un cadre en cours de lecture se ressemblent exactement.
-      */""}
-      <div class="copilote-apercu__page documents-pdf-viewer__pages"
-        data-copilote-apercu-pages
-        aria-busy="${etat === "lecture" ? "true" : "false"}"></div>
-      ${etat === "lecture"
-        ? `<p class="copilote-apercu__etat">Lecture de la note…</p>`
-        : ""}
-      ${etat === "panne"
-        ? `<p class="copilote-apercu__etat copilote-apercu__etat--panne">
-            Cette note n'a pas pu être dessinée${texte(adresse) ? " — elle reste ouvrable dans un onglet." : "."}
-          </p>`
-        : ""}
-    </section>
+        ${etat === "panne"
+          ? `<p class="copilote-apercu__etat copilote-apercu__etat--panne">
+              Cette note n'a pas pu être dessinée${texte(adresse) ? " — elle reste ouvrable dans un onglet." : "."}
+            </p>`
+          : ""}
+      </div>`
+  };
+}
+
+/**
+ * La note **une fois la question partie**, dans la bulle où elle a servi.
+ *
+ * ## Le défaut que ça répare
+ *
+ * Elle s'y voyait, mais son nom n'était plus qu'un texte : on relit une réponse,
+ * on veut revoir la note sur laquelle elle s'appuie, et il fallait rouvrir le
+ * fichier ailleurs — sortir de l'écran pour vérifier ce que l'écran vient
+ * d'affirmer. La pastille de la zone de saisie s'ouvrait, elle ; la ligne du fil
+ * ne s'ouvrait pas, alors qu'elle désigne la même note.
+ *
+ * ## Pourquoi `montrable` se décide dehors
+ *
+ * Ce qu'une discussion enregistre, ce sont le rôle et le texte : la note relue
+ * d'une session d'avant n'a plus ses octets, et un bouton qui rendrait un cadre
+ * vide ferait croire que le PDF l'est (règle 5). Seul l'écran sait si la pièce
+ * qu'il tient est encore celle-là ; ce dessin ne fait qu'en tirer les
+ * conséquences.
+ *
+ * @param {object} options
+ * @param {string} options.nom
+ * @param {boolean} [options.montrable] a-t-on encore ses octets
+ */
+export function renderNoteDuMessageHtml({ nom = "", montrable = false } = {}) {
+  const sien = texte(nom);
+  if (!sien) return "";
+
+  const dedans = `
+    ${svgIcon("file-pdf", { width: 18, height: 18 })}
+    <span>${escapeHtml(sien)}</span>`;
+
+  return `
+    <div class="copilote-msg__note">
+      ${montrable
+        ? `<button type="button" class="copilote-msg__note-ouvrir" data-copilote-apercu
+            title="Voir ${escapeHtml(sien)}">${dedans}</button>`
+        : dedans}
     </div>
   `;
 }
