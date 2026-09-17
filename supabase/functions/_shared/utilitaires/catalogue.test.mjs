@@ -17,6 +17,7 @@ import {
   prefillDepuisMemoire,
   phraseDesContradictions,
   surQuoiCaRepose,
+  aVerserAuProjet,
   prefillDepuisLEtude,
   referenceOutil,
   regimeDeLAgent,
@@ -1631,4 +1632,113 @@ test("la consigne nomme exactement le champ que le résultat porte", async () =>
   for (const nom of new Set(nommes)) {
     assert.ok(nom in resultat, `la consigne nomme « ${nom} », que le résultat ne porte pas`);
   }
+});
+
+/* ── Ce que le projet pourrait retenir de la conversation ────────────────── */
+
+test("ce que quelqu'un a dit et que le projet sait ranger se propose", () => {
+  // Sans cela, la valeur repart avec la discussion : on la retape à la suivante.
+  const versables = aVerserAuProjet(SPECTRE, {
+    fournies: { soilClass: "C" },
+    provenances: { soilClass: { origine: "dite" } }
+  });
+
+  assert.equal(versables.length, 1);
+  assert.equal(versables[0].sujet, "Classe de sol");
+  // La clé sous laquelle l'agent relira : le navigateur vérifie que le nom y
+  // mène, il est seul à savoir normaliser un sujet.
+  assert.equal(versables[0].cle, "classe-de-sol");
+  assert.equal(versables[0].valeur, "C");
+});
+
+test("ce qui ne vient pas de quelqu'un ne se propose pas", () => {
+  // La mémoire le porte déjà ; l'étude et l'enchaînement ont leur propre chemin ;
+  // une valeur par défaut, personne ne l'a choisie.
+  for (const origine of ["memoire", "etude", "utilitaire", "defaut"]) {
+    assert.deepEqual(aVerserAuProjet(SPECTRE, {
+      fournies: { soilClass: "C" },
+      provenances: { soilClass: { origine } }
+    }), [], origine);
+  }
+});
+
+test("une entrée d'aiguillage ne se propose jamais", () => {
+  // Elle dit ce que le modèle cherchait, pas ce que le bâtiment vaut. Versée,
+  // elle ferait entrer en mémoire la question au lieu de la réponse.
+  //
+  // L'agent est construit ici, et non pris dans le catalogue : aucune entrée
+  // d'aiguillage n'y déclare aujourd'hui de clé de mémoire, si bien que la règle
+  // ne s'exercerait pas. Le plan en prévoyait pourtant une — le régime devait
+  // être les deux à la fois —, et c'est ce jour-là qu'elle doit tenir.
+  const invente = {
+    id: "invente",
+    entrees: [
+      { cle: "cherchee", libelle: "Ce que le modèle cherchait", aiguillage: true, depuisMemoire: "ce-que-le-modele-cherchait" },
+      { cle: "tenue", libelle: "Ce que le bâtiment vaut", depuisMemoire: "ce-que-le-batiment-vaut" }
+    ]
+  };
+
+  const versables = aVerserAuProjet(invente, {
+    fournies: { cherchee: "classement", tenue: "3e famille B" },
+    provenances: { cherchee: { origine: "dite" }, tenue: { origine: "dite" } }
+  });
+
+  assert.deepEqual(versables.map((v) => v.cle), ["ce-que-le-batiment-vaut"]);
+
+  // Et le catalogue d'aujourd'hui ne propose rien d'un aiguillage non plus.
+  const incendie = outilParId("incendie_habitation");
+  const reels = aVerserAuProjet(incendie, {
+    fournies: { exigence: "classement", regimeIncendie: "habitation" },
+    provenances: { exigence: { origine: "dite" }, regimeIncendie: { origine: "dite" } }
+  });
+  assert.deepEqual(reels.map((v) => v.cle), ["regime-de-securite-incendie"]);
+});
+
+test("ce que le projet ne sait pas ranger ne se propose pas", () => {
+  // Sans clé de mémoire, le sujet atterrirait au hasard — et la question se
+  // reposerait quand même, sur une mémoire pourtant enrichie.
+  const incendie = outilParId("incendie_habitation");
+  const sansCle = incendie.entrees.find((entree) => !entree.depuisMemoire && !entree.aiguillage);
+  assert.ok(sansCle, "toutes les entrées déclarent une clé : le cas n'existe plus");
+
+  const versables = aVerserAuProjet(incendie, {
+    fournies: { [sansCle.cle]: "3" },
+    provenances: { [sansCle.cle]: { origine: "dite" } }
+  });
+  assert.deepEqual(versables, []);
+});
+
+test("le résultat porte ce qu'il y aurait à proposer", async () => {
+  // Le tri appartient à la déclaration des entrées, donc au serveur : l'écran ne
+  // connaît plus les agents et ne saurait pas quelles valeurs sont des valeurs
+  // de projet.
+  const resultat = await executerOutil({
+    id: "spectre_elastique_ec8",
+    entrees: { soilClass: "D" },
+    question: "et avec une classe de sol D ?",
+    confirmees: ["soilClass"],
+    assertions: [donnee("zone-sismique", "4"), donnee("categorie-importance", "II")]
+  });
+
+  assert.equal(resultat.statut, "fait");
+  assert.deepEqual(resultat.aVerser.map((v) => v.cle), ["classe-de-sol"]);
+  assert.equal(resultat.aVerser[0].valeur, "D");
+
+  // Elle part au navigateur : c'est lui qui montre le bouton et prépare la
+  // proposition.
+  assert.deepEqual(sansFigure(resultat).aVerser, resultat.aVerser);
+});
+
+test("rien de ce que la mémoire porte déjà ne se repropose", async () => {
+  // Le projet le sait : lui reproposer sa propre valeur ferait une proposition
+  // vide de sens, et une deuxième affirmation pour un seul fait.
+  const resultat = await executerOutil({
+    id: "spectre_elastique_ec8",
+    entrees: {},
+    question: "quel spectre ?",
+    assertions: [donnee("zone-sismique", "4"), donnee("categorie-importance", "II"), donnee("classe-de-sol", "C")]
+  });
+
+  assert.equal(resultat.statut, "fait");
+  assert.deepEqual(resultat.aVerser, []);
 });
