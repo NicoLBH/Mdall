@@ -1,5 +1,5 @@
 /**
- * Ce qu'un utilitaire déclare de son tableau — et ce qu'on refuse de deviner.
+ * Ce qu'un agent déclare de son tableau — et ce qu'on refuse de deviner.
  */
 
 import test from "node:test";

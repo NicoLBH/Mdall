@@ -24,7 +24,7 @@ const parAction = (gestes, action) => gestes.find((g) => g.action === action);
 
 test("le menu Ajouter propose les cinq gestes, dans l'ordre et séparés", () => {
   assert.deepEqual(libelles(gestesDAjout({ total: 8 })), [
-    "Déclarer une variable",
+    "Déclarer une hypothèse",
     "———",
     "Verser les contraintes du site",
     "———",

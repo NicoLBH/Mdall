@@ -193,7 +193,7 @@ let projetAffiche = "";
  * L'identifiant du projet **en base**.
  *
  * Ce n'est pas celui de la route. Ils coïncident souvent, et « souvent » ne
- * suffit pas : l'utilitaire du copilote va chercher l'étude sous l'identifiant
+ * suffit pas : l'agent du copilote va chercher l'étude sous l'identifiant
  * que `resolveCurrentBackendProjectId` rend, et une étude écrite sous un autre
  * ne serait jamais retrouvée — le pré-remplissage marcherait chez l'un et pas
  * chez l'autre, sans rien dire. L'écran des fondations résout déjà ainsi ; on
@@ -1049,7 +1049,7 @@ function questionCourante() {
 }
 
 function brancher(root) {
-  // « Transformer » : les deux seules sorties d'un utilitaire. Aucune n'écrit
+  // « Transformer » : les deux seules sorties d'un agent. Aucune n'écrit
   // dans la mémoire du projet — voir `docs/fondamentaux.md`.
   root.addEventListener("ghaction:action", (evenement) => {
     const quoi = evenement.detail?.action;

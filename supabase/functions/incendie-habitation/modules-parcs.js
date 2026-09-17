@@ -55,7 +55,7 @@ export const champParc = {
     {
       si: { surfaceParc: { plusDe: 6000 } },
       alors: { valeur: "hors champ — plus de 6 000 m²",
-        mention: "Le titre VI ne va pas au-delà. Un parc plus vaste relève d'une autre réglementation, qui n'est pas portée par cet utilitaire." },
+        mention: "Le titre VI ne va pas au-delà. Un parc plus vaste relève d'une autre réglementation, qui n'est pas portée par cet agent." },
       source: reglement("77", "premier alinéa", "Les dispositions du présent titre sont applicables aux parcs de stationnement couverts lorsqu'ils ont plus de 100 m² et 6 000 m² au plus.")
     },
     {

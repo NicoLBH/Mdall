@@ -75,7 +75,7 @@ copilote, le compte rendu de la discussion (menu de la discussion dans le rail �
       se retape pas.
 - [ ] Déplier **« Ce que le copilote a fait »** : une étape dit
       *« Étude du projet reprise — \<nom\> — N entrées pré-remplies »*.
-- [ ] Dans le bloc de l'utilitaire, colonne **ENTRÉES** : chaque valeur porte
+- [ ] Dans le bloc de l'agent, colonne **ENTRÉES** : chaque valeur porte
       « étude du projet » en petit à côté d'elle. La conclusion cite l'article
       et la phrase de l'arrêté.
 - [ ] **Sortie « etude »** dans la colonne RÉSULTATS : elle nomme l'étude qui a
@@ -104,7 +104,7 @@ copilote, le compte rendu de la discussion (menu de la discussion dans le rail �
 Depuis un résultat incendie **conclu** du copilote (§2).
 
 - [ ] Un bouton **« Ouvrir dans l'Atelier — N réponses »** est présent sous le
-      bloc de l'utilitaire.
+      bloc de l'agent.
 - [ ] **Cliquer.** On arrive sur *Incendie Habitation*, onglet Questionnaire,
       avec un bandeau orange en haut : « N réponses réunies par le copilote »,
       la conclusion rappelée en dessous.
@@ -128,7 +128,7 @@ Depuis un résultat incendie **conclu** du copilote (§2).
 ## 3 bis. Transformer — sujet ou proposition
 
 **Rien n'entre jamais directement dans la mémoire du projet** (voir
-[`docs/fondamentaux.md`](fondamentaux.md)). Un utilitaire propose deux sorties,
+[`docs/fondamentaux.md`](fondamentaux.md)). Un agent propose deux sorties,
 et aucune n'écrit.
 
 **Atelier › Incendie › Incendie Habitation › Résultats.**
@@ -246,10 +246,10 @@ calcul jointe conviennent bien, parce qu'elles durent.
       collaborateur du projet.
 - [ ] **Aucun sujet Mdall n'est créé, fermé ni rouvert** par une action du
       copilote ou de l'Atelier.
-- [ ] **Le catalogue des utilitaires n'apparaît pas dans le navigateur.** Dans
+- [ ] **Le catalogue des agents n'apparaît pas dans le navigateur.** Dans
       les outils de développement, onglet Réseau : la réponse de
-      `executer-utilitaire` contient un résultat et des champs de formulaire,
-      **jamais** la liste des utilitaires ni les consignes qui décident quand les
+      `executer-agent` contient un résultat et des champs de formulaire,
+      **jamais** la liste des agents ni les consignes qui décident quand les
       appeler. Aucun fichier servi ne contient le mot `fondations_predimensionnement`
       en dehors de ce que le serveur vient de rendre.
 - [ ] **Aucune clé d'API** dans les fichiers servis ni dans les réponses.

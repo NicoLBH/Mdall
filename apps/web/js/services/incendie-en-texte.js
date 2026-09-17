@@ -219,7 +219,7 @@ export function fichierDesRegles(vue, {
   extension = "ref",
   zone = TOUTES_ZONES,
   referentiel = "arrêté du 31 janvier 1986 modifié",
-  produitPar = "l'utilitaire incendie — habitation",
+  produitPar = "l'agent incendie — habitation",
   le = ""
 } = {}) {
   const modules = Array.isArray(vue?.modules) ? vue.modules : [];
@@ -260,7 +260,7 @@ export function fichierDeLEtude(vue, {
   extension = "ctr",
   zone = TOUTES_ZONES,
   referentiel = "arrêté du 31 janvier 1986 modifié",
-  produitPar = "l'utilitaire incendie — habitation",
+  produitPar = "l'agent incendie — habitation",
   le = ""
 } = {}) {
   const modules = Array.isArray(vue?.modules) ? vue.modules : [];

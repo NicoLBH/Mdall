@@ -647,7 +647,7 @@ vient d'un bureau de contrôle », jamais sous forme de note ou de score.
 moteur, testée. **Aucun écran ne la lit encore**, et c'est normal — rien
 n'écrit automatiquement dans la mémoire (règle 1), donc rien n'a encore besoin
 de s'arrêter. Ce que les écrans montrent vient de `couvertureDeLaVariante`, qui
-en voit davantage : les utilitaires aussi, pas seulement les règles. Le jour où
+en voit davantage : les agents aussi, pas seulement les règles. Le jour où
 un recalcul écrira, le crochet est là.
 
 Et sans les actes, `jalons` vaut `null` — **pas** une liste vide : ne pas savoir

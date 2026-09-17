@@ -406,7 +406,7 @@ const deduite = (sujet, valeur, lectures = [], { id = null, zones = null, utilit
   }
 });
 
-test("un utilitaire qui déclare ce qu'il lit fait des lectures, comme une règle", () => {
+test("un agent qui déclare ce qu'il lit fait des lectures, comme une règle", () => {
   // C'était le trou : une donnée employée uniquement par un utilitaire comptait
   // « aucun emploi », et l'étude d'impact disait « rien ne repose dessus » à un
   // projet dont la moitié des fondations en dépendait.
@@ -477,14 +477,14 @@ test("une contrainte versée sans déclaration prend celle de son catalogue", ()
   assert.equal(lignes[2].input_assertion_id, "ddb-alt");
 });
 
-test("un utilitaire inconnu du catalogue ne rend aucun lien", () => {
+test("un agent inconnu du catalogue ne rend aucun lien", () => {
   const orpheline = { ...deduite("Zone de sismicité", "3", [], { utilitaire: "outil_disparu_V9" }) };
   delete orpheline.payload.lectures;
 
   assert.deepEqual(applicationsDeLaMemoire([orpheline], { projectId: "p1" }), []);
 });
 
-test("une règle et un utilitaire pour un même sujet : la règle l'emporte", () => {
+test("une règle et un agent pour un même sujet : la règle l'emporte", () => {
   // C'est un défaut de la mémoire, pas deux raisonnements. La règle porte le
   // texte, elle s'audite, elle se rejoue. Écrire les deux ferait en plus deux
   // rangs 1 pour un même appel, ce que la clé de la table refuse — et le
@@ -511,7 +511,7 @@ test("une contrainte qui se déclarerait sa propre lecture ne se lie pas à elle
   assert.equal(ligne.input_subject, "Profondeur hors gel");
 });
 
-test("les lectures d'un utilitaire respectent la zone, comme celles d'une règle", () => {
+test("les lectures d'un agent respectent la zone, comme celles d'une règle", () => {
   const memoire = [
     dit("Altitude du site", "13 m", { id: "alt-a", zones: ["batiment-a"] }),
     dit("Altitude du site", "890 m", { id: "alt-b", zones: ["batiment-b"] }),
@@ -527,7 +527,7 @@ test("les lectures d'un utilitaire respectent la zone, comme celles d'une règle
   assert.equal(ligne.input_assertion_id, "alt-b");
 });
 
-test("les lectures d'un utilitaire dessinent un lien de dépendance", () => {
+test("les lectures d'un agent dessinent un lien de dépendance", () => {
   const memoire = [
     dit("Altitude du site", "13 m", { id: "ddb-alt" }),
     deduite("Profondeur hors gel", "0.71 m", [["Altitude du site", "13"]], { id: "c-gel" })

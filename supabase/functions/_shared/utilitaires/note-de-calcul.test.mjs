@@ -62,7 +62,7 @@ const PORTIQUE_COURANT_FILE_B = {
   ]
 };
 
-test("les charges d'un appui arrivent dans le vocabulaire de l'utilitaire", () => {
+test("les charges d'un appui arrivent dans le vocabulaire de l'agent", () => {
   const { charges, correspondances } = chargesPourLUtilitaire(PORTIQUE_COURANT_FILE_B);
   assert.deepEqual(Object.keys(charges).sort(), ["Fa", "G", "Sn", "W1", "W2", "W3"]);
   assert.equal(charges.G.V, 4.078);
@@ -145,7 +145,7 @@ test("le schéma décrit ce qui entre dans le calcul, et rien d'autre", () => {
   assert.ok(SCHEMA_NOTE.properties.unites.enum.includes("{ T ; Tm }"));
 });
 
-test("les cas de l'utilitaire sont ceux que la déclaration connaît", () => {
+test("les cas de l'agent sont ceux que la déclaration connaît", () => {
   for (const cas of ["G", "Q", "Sn", "W1", "W2", "W3", "W4", "Sx", "Sy", "Sz", "Fa"]) {
     assert.ok(CAS_UTILITAIRE[cas], `${cas} doit être connu`);
   }

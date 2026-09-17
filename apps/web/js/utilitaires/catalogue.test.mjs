@@ -20,23 +20,23 @@ import { RESERVE, RESERVES, phraseDeReserve } from "./reserves.js";
 
 /* ── Le catalogue se tient ───────────────────────────────────────────────── */
 
-test("chaque utilitaire porte un nom, une version et une source", () => {
+test("chaque agent porte un nom, une version et une source", () => {
   for (const outil of UTILITAIRES) {
-    assert.ok(outil.nom, "un utilitaire sans nom est introuvable");
+    assert.ok(outil.nom, "un agent sans nom est introuvable");
     assert.match(outil.version, /^V\d+$/, `version illisible : ${outil.nom}`);
     assert.ok(outil.source, `sans source, on ne sait pas quoi vérifier : ${outil.nom}`);
     assert.ok(outil.libelle, `sans libellé, l'écran ne peut rien dire : ${outil.nom}`);
   }
 });
 
-test("deux utilitaires ne partagent pas une référence", () => {
+test("deux agents ne partagent pas une référence", () => {
   // Deux fois la même référence, et la provenance d'une contrainte devient
   // ambiguë : on ne saurait plus quel code l'a produite.
   const references = UTILITAIRES.map(referenceOf);
   assert.equal(new Set(references).size, references.length);
 });
 
-test("le nom dit ce que fait l'utilitaire, pas seulement d'où il vient", () => {
+test("le nom dit ce que fait l'agent, pas seulement d'où il vient", () => {
   // « socotec_V1 » ne dit rien. « extraction_avis_rapports_socotec_V1 » si.
   //
   // Trois verbes, parce qu'il y a trois choses qu'un utilitaire fait : il
@@ -68,8 +68,8 @@ test("la dernière version d'une lignée est celle de plus haut numéro", () => 
   assert.equal(derniereVersion("deduction_inexistante"), null);
 });
 
-test("la provenance nomme la source avant l'utilitaire", () => {
-  // C'est la source qu'on va vérifier ; l'utilitaire dit comment on l'a lue.
+test("la provenance nomme la source avant l'agent", () => {
+  // C'est la source qu'on va vérifier ; l'agent dit comment on l'a lue.
   const dit = describeProvenance(utilitaireByReference("deduction_zone_sismique_georisques_V1"));
   assert.match(dit, /^Géorisques/);
   assert.match(dit, /deduction_zone_sismique_georisques_V1$/);
@@ -131,7 +131,7 @@ test("une profondeur hors gel absente n'entre pas comme zéro", () => {
   assert.equal(outil.deduire({ fact_value: { frost_depth_m: "", inputs: {} } }), null);
   // La virgule décimale, comme partout ailleurs dans la mémoire : « 0.81 m » ne
   // se rapproche pas de « 0,81 m », et la même cote s'écrivait de deux façons
-  // selon qu'un humain l'avait tranchée ou qu'un utilitaire l'avait déduite.
+  // selon qu'un humain l'avait tranchée ou qu'un agent l'avait déduite.
   assert.equal(outil.deduire({ fact_value: { frost_depth_m: 0.8125, inputs: {} } }).valeur, "0,81 m");
 });
 
@@ -220,7 +220,7 @@ test("deux agents ne partagent pas une référence", () => {
   assert.equal(agentByReference("agent_d_zones_climatiques"), null);
 });
 
-test("une sortie qui renvoie à un outil prend le sujet de son utilitaire", () => {
+test("une sortie qui renvoie à un outil prend le sujet de son agent", () => {
   // Le sujet n'est écrit qu'à un endroit : le jour où un zonage change de nom,
   // il n'y a qu'un fichier à toucher.
   const [neige, vent] = sortiesDeLAgent(agentByReference("agent_d_zones_climatiques_commune_V1"));
@@ -230,7 +230,7 @@ test("une sortie qui renvoie à un outil prend le sujet de son utilitaire", () =
   assert.equal(vent.sujet, "Zone de vent");
 });
 
-test("une sortie que nul utilitaire ne déduit se déclare en entier", () => {
+test("une sortie que nul agent ne déduit se déclare en entier", () => {
   // Le H0 se lit dans le résultat du gel, mais ce n'est pas la cote hors gel :
   // il déclare son propre sujet, et c'est ce qui empêche de les confondre.
   const [cote, h0] = sortiesDeLAgent(agentByReference("agent_d_profondeur_hors_gel_V1"));

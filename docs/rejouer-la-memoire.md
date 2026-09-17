@@ -67,7 +67,7 @@ documents. Ils ne se rejouent pas : ils ont eu lieu. Les rejouer voudrait dire
 re-décider ce que des gens ont décidé.
 
 Ce qui se rejoue, c'est le **calque dérivé** : le sous-graphe des affirmations
-qu'une règle ou un utilitaire a produites à partir d'autres affirmations. C'est
+qu'une règle ou un agent a produites à partir d'autres affirmations. C'est
 un ensemble fermé, fini, et le seul où le mot « rejouer » a un sens.
 
 La cible est donc : **rendre le calque dérivé recalculable, et rendre sa
@@ -81,7 +81,7 @@ graphe sans cycle, et chaque nœud est-il réévaluable depuis ses parents ? ».
 | nature | ce que c'est | ce qu'on en fait |
 | --- | --- | --- |
 | **Socle** | donnée de base, hypothèse, constat, décision | on le **change** ; il ne se recalcule pas |
-| **Dérivé rejouable** | une règle Mdall ou un utilitaire déterministe dont on a le code **et** les entrées | il se **recalcule** |
+| **Dérivé rejouable** | une règle Mdall ou un agent déterministe dont on a le code **et** les entrées | il se **recalcule** |
 | **Dérivé opaque** | le référentiel serveur, une extraction PDF, un jugement | on sait qu'il **dépend** ; on ne sait pas le refaire — **nommé, jamais recalculé** |
 
 La troisième catégorie est de plein droit, pas une exception : elle ne
@@ -156,12 +156,12 @@ enregistre.
 
 #### Ce que cette étape ne couvre pas encore
 
-Les contraintes déduites par un **utilitaire** — zone de neige, profondeur hors
+Les contraintes déduites par un **agent** — zone de neige, profondeur hors
 gel — lisent des faits de contexte, pas des affirmations : leurs entrées n'ont
 pas d'identifiant à citer. La colonne `utility` et l'`input_assertion_id`
 nullable leur laissent la place, et rien n'aura à changer ici le jour où l'outil
 climatique nommera ses sources. En attendant, une donnée de base employée
-*uniquement* par un utilitaire n'apparaît pas encore dans le compte — celles que
+*uniquement* par un agent n'apparaît pas encore dans le compte — celles que
 les règles citent, si.
 
 ### 2. L'index dans les deux sens — *fait*
@@ -319,7 +319,7 @@ c'est même la plus fréquente, et la plus rassurante.
 
 #### Ce qu'il n'a pas regardé se dit
 
-Les déductions d'un utilitaire ne se rejouent pas ici, et les composantes qui se
+Les déductions d'un agent ne se rejouent pas ici, et les composantes qui se
 lisent en rond non plus. Un bloc **hors de portée** les compte et les nomme :
 les taire ferait passer « rien à signaler » pour « tout a été vérifié », ce qui
 est le mensonge que tout ce chantier existe pour éviter.
@@ -367,9 +367,9 @@ affiche — exactement le défaut que l'audit cherche. La fenêtre s'ouvre donc 
 question qui précède — *quelle valeur essaie-t-on ?* —, comme le fait l'étude
 d'impact, et les valeurs les plus employées sont en tête.
 
-Les deux relectures d'utilitaires ont déménagé dans un fichier à part, où elles
+Les deux relectures d'agents ont déménagé dans un fichier à part, où elles
 étaient **l'exception, et se disaient comme telles**. Elles n'existent plus : les
-utilitaires se rejouent maintenant en redemandant à leur référentiel de calculer
+agents se rejouent maintenant en redemandant à leur référentiel de calculer
 sans écrire. Voir `docs/a-traiter-plus-tard.md`, § 1.
 
 Et la variante n'est alors qu'**un** des usages du moteur, pas le plus précieux :
@@ -396,7 +396,7 @@ dire.
 
 **Le temps.** Une règle appliquée en mars n'est pas la règle d'aujourd'hui. Le
 rejeu utilise les règles **d'aujourd'hui** ; la mémoire tient celles **du jour**.
-L'écart entre les deux est une information — le `V1`/`V2` des utilitaires,
+L'écart entre les deux est une information — le `V1`/`V2` des agents,
 étendu à tout le graphe. Il s'affiche, il ne se lisse pas.
 
 **Les entrées cachées.** Une règle qui lit ce qu'elle n'a pas déclaré fait
@@ -411,7 +411,7 @@ coûteux sont justement les opaques, ce qui est une raison de plus de les nommer
 ## Ce que l'écran montre, à chaque étape
 
 La rubrique **Explorations** de l'Atelier porte les trois usages du moteur —
-au-dessus des utilitaires, parce qu'elles les englobent. Ils s'allument à mesure
+au-dessus des agents, parce qu'elles les englobent. Ils s'allument à mesure
 que le plan avance. Le quatrième usage, **le cerveau du projet**, ne pose pas de
 question : il montre la forme de ce qui est là, c'est une lecture, et il vit dans
 la Mémoire. Voir `docs/a-traiter-plus-tard.md`, § 14.
@@ -442,7 +442,7 @@ trace de ce qu'elles ont lu. Ce n'est plus une démonstration sur deux cas.
 Une correction à ce document : j'avais écrit que l'évaluateur ferait
 **disparaître** la table `RELECTURES`. C'est faux, et la raison est structurelle.
 
-`RELECTURES` ne relit pas des règles : elle relit des **utilitaires** — la
+`RELECTURES` ne relit pas des règles : elle relit des **agents** — la
 profondeur hors gel, la zone de neige. Ils calculent au serveur, sur des faits de
 contexte, et l'évaluateur du `.ref` ne sait rien d'eux. Deux mondes différents,
 et le second ne se replie pas dans le premier.
@@ -454,11 +454,11 @@ s'allongera pas d'un cas à chaque projet : les projets apportent des règles, e
 les règles se rejouent.
 
 **Et elle a disparu depuis.** Pas parce que l'évaluateur a fini par savoir lire un
-utilitaire — il ne le sait toujours pas — mais parce qu'on a cessé de vouloir le
+agent — il ne le sait toujours pas — mais parce qu'on a cessé de vouloir le
 lui faire faire. L'outil qui a produit la contrainte sait la refaire ; il lui
 manquait le droit de calculer sans écrire. Voir `docs/a-traiter-plus-tard.md`,
 § 1.
 
-Elle disparaîtra le jour où les utilitaires **nommeront leurs sources** et
+Elle disparaîtra le jour où les agents **nommeront leurs sources** et
 seront rejouables comme le reste. Ce n'est pas une étape de ce plan ; c'est un
 chantier serveur, et il vaut d'être posé à part.

@@ -415,7 +415,7 @@ export const parementsFacade = {
     {
       si: { famille: ["3", "4"] },
       alors: { valeur: "voir article 13",
-        mention: "Les systèmes de façade des troisième et quatrième familles relèvent de l'article 13, qui ouvre plusieurs solutions et n'est pas porté dans cette version de l'utilitaire." },
+        mention: "Les systèmes de façade des troisième et quatrième familles relèvent de l'article 13, qui ouvre plusieurs solutions et n'est pas porté dans cette version de l'agent." },
       source: reglement("13", "A et B", "Pour l'application de cet article un système de façade comprend les couches successives de matériaux du nu extérieur jusqu'au nu intérieur de la façade…")
     }
   ]
@@ -463,7 +463,7 @@ export const couverture = {
 function MENTION_ART15() {
   return "S'ajoute un indice de propagation, déterminé selon le tableau de l'article 15 en fonction de "
     + "la distance à l'immeuble voisin ou à la limite de propriété et de l'indice de la couverture voisine "
-    + "— non porté dans cette version de l'utilitaire.";
+    + "— non porté dans cette version de l'agent.";
 }
 
 /* ------------------------------------------------------------------ *
@@ -490,7 +490,7 @@ export const conduitsEtGaines = {
     {
       si: { famille: { renseigne: true } },
       alors: { valeur: "coupe-feu de traversée",
-        mention: "Soit par l'emploi de conduits et gaines assurant un « coupe-feu de traversée » d'une durée au moins égale au degré de résistance au feu de la paroi traversée, avec un maximum de 60 minutes, soit par les autres moyens de l'article 45 — non détaillés dans cette version de l'utilitaire." },
+        mention: "Soit par l'emploi de conduits et gaines assurant un « coupe-feu de traversée » d'une durée au moins égale au degré de résistance au feu de la paroi traversée, avec un maximum de 60 minutes, soit par les autres moyens de l'article 45 — non détaillés dans cette version de l'agent." },
       source: reglement("45", null, "Pour les conduits et gaines dans les bâtiments collectifs de 2ème famille et les bâtiments des 3ème et 4ème familles, les objectifs définis ci-dessus peuvent être atteints : soit par l'emploi de conduits et gaines assurant un « coupe-feu de traversée » d'une durée au moins égale au degré de résistance au feu de la paroi traversée avec un maximum de 60 minutes ; […]")
     }
   ]

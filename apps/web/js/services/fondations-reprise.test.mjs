@@ -180,7 +180,7 @@ test("l'altitude change, et les fondations se refont — toute la chaîne", asyn
   assert.equal(fondations.tableau[0]["arase supérieure"], "-0,60 m", "le tableau d'après voyage avec");
 });
 
-test("les fonctions natives se reprennent en dernier, sur ce que les utilitaires ont établi", async () => {
+test("les fonctions natives se reprennent en dernier, sur ce que les agents ont établi", async () => {
   // Une variante d'altitude ne touche pas les fondations directement : elle
   // change la profondeur hors gel, et c'est elle que le calcul lit. Les
   // reprendre avec les seules valeurs essayées ne les aurait jamais atteintes.
@@ -227,7 +227,7 @@ test("la contrainte de sol se trouve dans la liste, sous son nom déclaré", () 
   // pas varier.
   assert.equal(proposees.some((entree) => entree.sujet === SUJET_DONNEES), false);
 
-  // Et ce que l'utilitaire n'a pas déclaré ne s'offre pas : `buteeZf` sous son
+  // Et ce que l'agent n'a pas déclaré ne s'offre pas : `buteeZf` sous son
   // nom de code serait un champ que personne n'oserait toucher.
   assert.equal(proposees.some((entree) => entree.sujet.includes("butee")), false);
 });

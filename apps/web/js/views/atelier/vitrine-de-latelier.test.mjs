@@ -73,7 +73,7 @@ test("une recherche sans réponse explique comment chercher autrement", () => {
  * c'est ce qui la rend reconnaissable d'une ouverture à l'autre. Une couleur
  * tirée au hasard serait une décoration, pas un repère.
  */
-test("la vignette d'un utilitaire ne change pas d'une fois sur l'autre", () => {
+test("la vignette d'un agent ne change pas d'une fois sur l'autre", () => {
   const premiere = vignetteDeLUtilitaire({ nom: "Spectre" });
   const seconde = vignetteDeLUtilitaire({ nom: "Spectre" });
 
@@ -82,7 +82,7 @@ test("la vignette d'un utilitaire ne change pas d'une fois sur l'autre", () => {
   assert.notDeepEqual(premiere, vignetteDeLUtilitaire({ nom: "Copilote" }));
 });
 
-test("un utilitaire sans nom garde une vignette lisible", () => {
+test("un agent sans nom garde une vignette lisible", () => {
   assert.equal(vignetteDeLUtilitaire({}).lettre, "·");
   assert.equal(vignetteDeLUtilitaire().lettre, "·");
 });
@@ -94,7 +94,7 @@ test("un utilitaire sans nom garde une vignette lisible", () => {
  * coûte, et son résultat ne se lit pas comme un calcul déterministe. La marque
  * porte le chemin manuel — et son absence se voit, ce qui est le but.
  */
-test("un utilitaire qui appelle un modèle le dit sur sa fiche", () => {
+test("un agent qui appelle un modèle le dit sur sa fiche", () => {
   const html = renderVitrineDeLatelier();
 
   assert.match(html, /IA · aussi à la main/);
@@ -143,11 +143,11 @@ test("le rangement et les rayons ne parlent pas par le même attribut", () => {
 
 /**
  * **Le rail ne porte plus le catalogue.** C'était la raison principale du
- * changement : un rail à gauche de l'écran interdit à chaque utilitaire d'avoir
+ * changement : un rail à gauche de l'écran interdit à chaque agent d'avoir
  * le sien. Ce qui reste dans le rail est la barre latérale du Copilote, dans le
  * panneau du Copilote.
  */
-test("le rail de l'Atelier ne range plus les utilitaires", () => {
+test("le rail de l'Atelier ne range plus les agents", () => {
   const atelier = lis("../project-studio.js");
 
   for (const nom of ["Incendie Habitation", "Spectre", "Étude d'impact"]) {
@@ -157,7 +157,7 @@ test("le rail de l'Atelier ne range plus les utilitaires", () => {
   assert.match(atelier, /data-side-nav-panel="studio-copilote"[\s\S]{0,400}project-rail-layout/);
 });
 
-test("l'accueil de l'Atelier est la vitrine, et non un utilitaire", () => {
+test("l'accueil de l'Atelier est la vitrine, et non un agent", () => {
   const atelier = lis("../project-studio.js");
 
   assert.match(atelier, /const ACCUEIL = "atelier-vitrine";/);

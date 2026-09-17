@@ -1,5 +1,5 @@
 /**
- * L'utilitaire qui lit un compte rendu de chantier, et **montre ce qu'il a lu**.
+ * L'agent qui lit un compte rendu de chantier, et **montre ce qu'il a lu**.
  *
  * ## Pourquoi cet écran existe
  *

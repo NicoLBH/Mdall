@@ -1368,7 +1368,7 @@ source.
 Le géotechnicien dicte au téléphone : contrainte de sol 0,2 MPa, nappe à −2,40 m.
 Le rapport arrivera dans trois semaines ; le dimensionnement, lui, part demain. On
 verse les deux valeurs depuis l'Atelier, et le contrôle tombe : elles ne citent ni
-texte, ni article, ni utilitaire.
+texte, ni article, ni agent.
 
 Trois réponses possibles, et une seule est bonne selon le jour :
 

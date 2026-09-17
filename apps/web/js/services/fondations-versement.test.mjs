@@ -190,7 +190,7 @@ test("la chaîne tient : altitude → profondeur hors gel → le résultat du ca
   const memoire = memoireDuProjet();
   const applications = applicationsDeLaMemoire(memoire, { projectId: "p" });
 
-  // L'utilitaire du hors gel lit l'altitude.
+  // L'agent du hors gel lit l'altitude.
   assert.ok(applications.some((ligne) =>
     ligne.output_assertion_id === "z1" && ligne.input_assertion_id === "z0"));
 

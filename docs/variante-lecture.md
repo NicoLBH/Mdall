@@ -94,14 +94,14 @@ la variante fait au projet. Sur les deux essais réels :
 
 **Chaque nombre de ces phrases vient du calcul, aucun n'est produit par
 l'écran.** C'est la seule règle qui compte ici : la phrase assemble, elle ne
-conclut pas à la place des utilitaires. Le matériau existe déjà — nombre de
+conclut pas à la place des agents. Le matériau existe déjà — nombre de
 valeurs qui bougent, verdicts qui basculent, pire ratio — sauf le mot « limite »,
-qui demande que l'utilitaire dise ce qu'est sa colonne de marge (voir plus bas).
+qui demande que l'agent dise ce qu'est sa colonne de marge (voir plus bas).
 
 ### Rang 1 — la cascade, pas la liste
 
 Ce qui aurait évité la mélecture. La profondeur indentée dit le rang de
-propagation ; l'utilitaire qui a recalculé est au bout de la ligne, pas en
+propagation ; l'agent qui a recalculé est au bout de la ligne, pas en
 dessous.
 
 ```
@@ -112,13 +112,13 @@ Altitude du site                 13,22 m → 800 m       ce que vous essayez
 ```
 
 L'information est disponible : `lecturesDeLaRegle`, `sortiesDeLaFonction` et le
-`lit` de chaque utilitaire donnent déjà les arêtes, et l'ordre du rejeu suit
+`lit` de chaque agent donnent déjà les arêtes, et l'ordre du rejeu suit
 déjà la chaîne. Il ne manque que le rang et le trait.
 
 ### Rang 2 — l'écart, pas seulement les deux valeurs
 
 `0,978 → 0,925` demande une soustraction mentale ; `0,978 → 0,925 (−5 %)` ne la
-demande pas. Sur une colonne dont l'utilitaire déclare l'unité — `structure` la
+demande pas. Sur une colonne dont l'agent déclare l'unité — `structure` la
 donne déjà : `{nom: "arase supérieure", type: "nombre, en m"}` — l'écart se
 calcule et s'écrit : `−0,06 m`. Sur une colonne sans unité, rien : mieux vaut
 pas d'écart qu'un écart faux.
@@ -170,7 +170,7 @@ d'emploi de la NF P94-261 ». C'est une **lecture**, pas un versement : rien
 n'entre en mémoire, la règle 1 est respectée.
 
 **Ce qu'il ne doit jamais faire :** produire un nombre, un verdict, ou un
-schéma. Un chiffre dans Mdall se remonte à l'utilitaire qui l'a calculé et à la
+schéma. Un chiffre dans Mdall se remonte à l'agent qui l'a calculé et à la
 version de sa loi. Un chiffre qui viendrait d'un modèle serait indiscernable des
 autres à l'écran et détruirait la seule promesse du produit. La contrainte
 technique qui en découle : **on lui donne les faits calculés, et il n'a le droit
@@ -195,14 +195,14 @@ Un écran doit savoir que « en défaut » est un défaut, et que `16,050` est s
 fois trop. Il y a deux façons de le lui apprendre.
 
 **La mauvaise** : un dictionnaire de mots — « en défaut », « KO », « non
-vérifié », « hors domaine d'emploi » — qu'on enrichirait à chaque utilitaire
+vérifié », « hors domaine d'emploi » — qu'on enrichirait à chaque agent
 ajouté. C'est une machine à deviner le sens du français, qui se tromperait un
 jour sans le dire, qui obligerait à toucher aux écrans pour chaque nouvel outil,
 et qui ne saurait jamais répondre « je ne sais pas ». Un faux modèle de langue,
 programmé à la main.
 
-**La bonne** : **l'utilitaire déclare, une fois, dans sa structure.** L'écran lit
-la déclaration. Un utilitaire qui ne déclare rien n'est pas un cas particulier à
+**La bonne** : **l'agent déclare, une fois, dans sa structure.** L'écran lit
+la déclaration. Un agent qui ne déclare rien n'est pas un cas particulier à
 traiter : l'écran reste neutre sur lui, ce qui est exact — personne ne lui a dit.
 
 ```js
@@ -222,7 +222,7 @@ dictionnaire :
    de plus. Ouvert, chacun écrirait le sien et les écrans finiraient par les
    interpréter, c'est-à-dire par deviner. Ces trois mots ne parlent pas du
    métier : ils disent seulement ce qu'un lecteur doit ressentir. Le métier reste
-   entier dans le libellé que l'utilitaire a choisi, et c'est lui qu'on affiche.
+   entier dans le libellé que l'agent a choisi, et c'est lui qu'on affiche.
 2. **Aucune inférence, jamais.** `sensDeLaValeur` sur une valeur non déclarée
    rend `""`. Un mot n'est pas un sens.
 3. **La forme ancienne reste lue** — `valeurs: ["vérifiée", "en défaut"]` déclare
@@ -231,7 +231,7 @@ dictionnaire :
    qui rend la migration additive.
 
 **Une légende n'est pas une donnée.** La déclaration lue est celle de
-l'utilitaire **d'aujourd'hui**, pas la copie figée au versement — la copie ne
+l'agent **d'aujourd'hui**, pas la copie figée au versement — la copie ne
 sert que de recours. Pour une *valeur*, le gel est la règle même de Mdall : on
 rejoue avec la loi de l'époque. Mais `sens` et `marge` ne changent pas ce que le
 calcul a rendu ; ils changent ce qu'un lecteur en comprend. Les figer voudrait
@@ -240,7 +240,7 @@ qu'il faudrait re-verser des années de mémoire pour gagner une couleur. La
 correspondance se fait par nom de colonne : une colonne renommée ne trouve rien,
 donc ne se colore pas — jamais un mauvais rapprochement.
 
-Tout est dans `services/tableau-structure.js`, et **ajouter un utilitaire ne
+Tout est dans `services/tableau-structure.js`, et **ajouter un agent ne
 demande jamais de toucher à un écran.**
 
 ---
@@ -264,7 +264,7 @@ se comprend seul, « H0 retenu pour le département » non.
 
 La liste porte maintenant une phrase sous chaque valeur, prise dans l'ordre du
 plus précis au plus général : ce que l'affirmation dit d'elle-même (`quoi`), à
-quoi elle sert (`utilisation`), le libellé de l'utilitaire qui l'a produite, la
+quoi elle sert (`utilisation`), le libellé de l'agent qui l'a produite, la
 norme dont elle vient. **Les quatre sont déclarées.** Quand les quatre se
 taisent, la ligne ne dit rien : une phrase fabriquée ici serait indiscernable
 d'une phrase versée.
@@ -318,8 +318,8 @@ Ce que cela donne, et pourquoi :
 ### Les soixante-deux champs des fondations
 
 Tous déclarés, avec pour chacun ce qu'il est et ce que le faire varier veut dire.
-La liste vit **dans la déclaration de l'utilitaire** et nulle part ailleurs —
-`utilitaires/dimensionnement_fondations_superficielles_V1.js`, `STRUCTURE_DES_ENTREES` —
+La liste vit **dans la déclaration de l'agent** et nulle part ailleurs —
+`agents/dimensionnement_fondations_superficielles_V1.js`, `STRUCTURE_DES_ENTREES` —
 parce qu'une seconde copie dans ce document divergerait au premier ajout
 (règle 4). Sept groupes, dans l'ordre où un ingénieur lit une semelle :
 

@@ -130,7 +130,7 @@ test("une étude vide rend deux fichiers vides, pas une erreur", () => {
 test("l'en-tête dit toujours ce qui a produit le fichier, et dans quelle écriture", () => {
   const fichier = fichierDeLEtude(VUE, { le: "7 septembre 2026" });
   const entete = fichier.enTete.map(enClair);
-  assert.match(entete[1], /établi par l'utilitaire incendie — habitation, le 7 septembre 2026/);
+  assert.match(entete[1], /établi par l'agent incendie — habitation, le 7 septembre 2026/);
   assert.equal(entete[2], `note: écriture Mdall v${ECRITURE}`);
 });
 

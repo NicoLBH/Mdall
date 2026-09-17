@@ -49,7 +49,7 @@ import {
  * **Il portait tout l'Atelier ; il ne porte plus que le Copilote.** Le
  * catalogue des utilitaires est passé dans la vitrine, pour trois raisons dites
  * au long dans `atelier/vitrine-de-latelier.js` — dont la plus lourde : un rail
- * à gauche de l'écran interdit à chaque utilitaire d'avoir le sien.
+ * à gauche de l'écran interdit à chaque agent d'avoir le sien.
  *
  * Ce qui reste ici est **la barre latérale du Copilote**, et non celle de
  * l'Atelier : l'historique de ses discussions, et de quoi en ouvrir une neuve.
@@ -321,7 +321,7 @@ export function renderProjectStudio(root) {
   const demande = panneauDemandeParLaRoute(window.location?.hash ?? "");
   if (demande) panneauCourant = demande;
 
-  // Le panneau retenu, s'il existe encore : un utilitaire retiré d'une version
+  // Le panneau retenu, s'il existe encore : un agent retiré d'une version
   // à l'autre ne doit pas rendre l'Atelier vide au redessin.
   if (!root.querySelector(`[data-side-nav-panel="${CSS.escape(panneauCourant)}"]`)) {
     panneauCourant = ACCUEIL;
@@ -476,7 +476,7 @@ function brancherLeRetourALaccueil(root) {
 /**
  * Compter une ouverture — mais seulement d'un utilitaire du catalogue.
  *
- * La vitrine elle-même n'est pas un utilitaire : la compter ferait d'elle la
+ * La vitrine elle-même n'est pas un agent : la compter ferait d'elle la
  * première des vedettes, et la rangée mettrait en avant l'écran depuis lequel
  * on la regarde.
  */

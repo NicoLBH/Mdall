@@ -13,7 +13,7 @@ n'accepterait pas d'un calcul — qu'il donne un résultat sans dire ce qu'il a
 coûté ni sur quoi il s'est fondé »*.
 
 Un coût invisible est un coût qu'on subit. Tant que Mdall n'était fait que
-d'utilitaires déterministes, la question ne se posait pas : un calcul ne coûte
+d'agents déterministes, la question ne se posait pas : un calcul ne coûte
 rien. Un appel de modèle, si — et cela change ce qu'on décide d'en faire.
 
 ## Les quatre endroits où le coût doit se voir

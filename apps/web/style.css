@@ -7500,6 +7500,24 @@ body.route--project.documents-pdf-sticky-mode.documents-local-chrome-compact #ap
   min-width:160px;
 }
 
+/* **Le titre d'un filtre d'en-tête se lit à quatorze pixels.**
+
+   Il en faisait douze, comme un libellé de formulaire — sauf qu'un filtre n'est
+   pas un libellé : c'est le nom de la colonne qu'on restreint, et il se lit à
+   côté des titres de colonnes du tableau. Douze le faisait passer pour une
+   annotation, et l'on cherchait le filtre ailleurs.
+
+   Les trois zones sont celles que `views/ui/tete-de-tableau.js` déclare
+   (`ZONES`), plus la tête de la Mémoire, qui dessine la sienne. */
+.data-table-shell__head .gh-select-field .gh-action__label,
+.data-table-shell__head .gh-select-field__label,
+.project-table-toolbar .gh-select-field .gh-action__label,
+.project-table-toolbar .gh-select-field__label,
+.memory-table__head .gh-select-field .gh-action__label,
+.memory-table__head .gh-select-field__label{
+  font-size:14px;
+}
+
 .gh-select-field--inline .gh-action{
   width:auto;
 }
@@ -17993,6 +18011,33 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .copilote-outil__titre .ui-icon{ color:var(--muted); flex:0 0 16px; }
 .copilote-outil__version{ margin-left:auto; color:var(--muted); font-weight:400; font-size:11px; }
 .copilote-outil__colonnes{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+
+/* **Le cerveau, dans le fil.** Ce n'est pas un calcul : il n'a ni entrées ni
+   résultats, il a un dessin. Trois chiffres, et de quoi l'ouvrir en grand — une
+   toile animée dans une bulle de conversation serait illisible, et sa boucle
+   tournerait encore trois écrans plus haut. */
+.copilote-cerveau{
+  margin:0 0 12px; padding:12px;
+  border:1px solid var(--border); border-radius:12px; background:var(--bgAssistPanel);
+  font-size:12px;
+}
+.copilote-cerveau .copilote-outil__titre .ui-icon{ color:var(--variante); }
+.copilote-cerveau__chiffres{
+  display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px;
+  margin:0 0 10px; padding:0; list-style:none;
+}
+@media (max-width: 700px){
+  .copilote-cerveau__chiffres{ grid-template-columns:minmax(0, 1fr); gap:8px; }
+}
+.copilote-cerveau__chiffre{ display:flex; flex-direction:column; gap:1px; min-width:0; }
+.copilote-cerveau__chiffre b{ color:var(--text); font-size:20px; line-height:24px; font-weight:600; }
+.copilote-cerveau__chiffre span{ color:var(--text); }
+.copilote-cerveau__chiffre small{ color:var(--muted); font-size:11px; line-height:15px; }
+.copilote-cerveau__ouvrir{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:4px 10px; border-radius:6px; color:var(--muted); font-size:12px;
+}
+.copilote-cerveau__ouvrir:hover{ color:var(--text); background:rgba(255,255,255,.07); }
 @media (max-width: 700px){ .copilote-outil__colonnes{ grid-template-columns:1fr; } }
 .copilote-outil__legende{ margin:0 0 4px; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
 .copilote-outil__liste{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:2px; }
@@ -19664,6 +19709,21 @@ strong.est-verifie{ color:#3fb950; }
   color:var(--muted); font:inherit; cursor:pointer;
 }
 .fondations-semelle-barre__retour:hover{ color:#58a6ff; text-decoration:underline; }
+
+/* **D'où l'on vient, sur la ligne du titre.** Il était dans la barre de la
+   semelle, entre la désignation, le nombre de massifs, le volume et les
+   flèches : noyé au milieu de ce qui décrit la semelle ouverte, alors que c'est
+   le seul geste qui n'en parle pas. Il garde son gris et son soulignement au
+   survol — il désigne ce qu'on quitte, pas ce qu'on regarde. */
+.fondations-retour-titre{
+  display:inline-flex; align-items:center; gap:6px; flex:none;
+  background:none; border:0; padding:0;
+  color:var(--muted); font:inherit; font-size:16px; cursor:pointer;
+}
+.fondations-retour-titre:hover{ color:#58a6ff; text-decoration:underline; }
+.fondations-retour-titre__filet{
+  width:1px; height:18px; background:var(--border); flex:0 0 1px; margin:0 2px;
+}
 .fondations-semelle-barre__nom{ display:flex; flex-direction:column; gap:4px; flex:1 1 220px; max-width:340px; }
 .fondations-semelle-barre__nombre{ display:flex; flex-direction:column; gap:4px; width:130px; }
 .fondations-semelle-barre__volume{ color:var(--muted); font-size:12px; padding-bottom:6px; }

@@ -142,7 +142,7 @@ export function reglesVersables(conclusions = [], zone = "") {
  * Or c'est **le** point sur lequel tout le reste pend. Trente contraintes
  * écrivaient « ← règle Classement du bâtiment » sans que le projet dise nulle
  * part en quelle famille ce bâtiment est classé. Le renvoi ne menait à rien, et
- * la seule façon de le savoir était de rouvrir l'utilitaire — c'est-à-dire de
+ * la seule façon de le savoir était de rouvrir l'agent — c'est-à-dire de
  * refaire l'étude.
  *
  * ## Pourquoi une donnée de base, et par zone

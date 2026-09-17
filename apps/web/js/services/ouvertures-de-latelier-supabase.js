@@ -61,7 +61,7 @@ export async function lireLesOuvertures() {
 }
 
 /**
- * Noter qu'un utilitaire vient d'être ouvert.
+ * Noter qu'un agent vient d'être ouvert.
  *
  * Par la fonction de la base, qui ne sait qu'ajouter un : un `update` ouvert
  * laisserait poser n'importe quelle valeur, et le classement ne voudrait plus

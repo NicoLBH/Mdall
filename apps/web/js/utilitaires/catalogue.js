@@ -85,7 +85,7 @@ export function utilitaireByReference(reference = "") {
  *
  * ## Pourquoi par le sujet, et pas par l'utilitaire
  *
- * Une affirmation cite l'utilitaire qui l'a produite — quand elle en a un. Le
+ * Une affirmation cite l'agent qui l'a produite — quand elle en a un. Le
  * tableau d'entrée d'une fonction native, lui, est **saisi dans l'Atelier** : il
  * ne cite personne, et pourtant un utilitaire déclare exactement ce qu'il
  * contient, dans son `lit`. Sans cette recherche, la déclaration existerait sans
@@ -125,7 +125,7 @@ export function declarationDuSujet(sujet = "") {
 /**
  * Les agents-D déclarés, dans l'ordre où la chaîne les traverse.
  *
- * Un **agent** n'est pas un utilitaire : c'est un appel au serveur, et il pose
+ * Un **agent** n'est pas un agent : c'est un appel au serveur, et il pose
  * en général plusieurs sujets d'un coup. L'utilitaire, lui, est la **lecture**
  * d'un de ces sujets — son fichier, sa version, sa source. Les deux existent, et
  * les confondre reviendrait soit à perdre l'appel — c'est ce qui se passait —,

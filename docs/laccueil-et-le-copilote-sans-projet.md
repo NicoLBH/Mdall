@@ -104,7 +104,7 @@ justifier qu'une vaille 1,4 fois l'autre. Un poids qu'on ne peut pas défendre
 est un poids qu'on finira par retoucher au hasard.
 
 Les trois sources sont **toutes miennes** : une discussion avec le Copilote, une
-proposition que j'ai ouverte, une étude d'utilitaire que j'ai remplie. Les
+proposition que j'ai ouverte, une étude d'agent que j'ai remplie. Les
 dépôts de documents en seraient une quatrième, et la plus parlante ; la table ne
 dit pas **qui** a déposé, et « le projet a bougé » n'est pas « j'y ai
 travaillé ». On ne les compte donc pas, plutôt que de compter le travail des
@@ -182,7 +182,7 @@ qu'aucune mémoire de projet n'est jointe, qu'il ne faut en citer aucune valeur
 même plausible, et que si la question en demande une, il faut dire **quel projet
 ouvrir**. Un assistant sans matière répond quand même ; c'est là qu'il invente.
 La consigne est écrite plutôt que confiée à sa retenue : c'est la leçon du
-catalogue des utilitaires.
+catalogue des agents.
 
 ## La marque, une seule
 

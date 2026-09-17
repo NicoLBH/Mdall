@@ -1,7 +1,7 @@
 /**
  * Lire une réponse d'API dont on ne connaît pas la forme exacte.
  *
- * Ce n'est pas un utilitaire — c'est l'outil dont plusieurs se servent, d'où le
+ * Ce n'est pas un agent — c'est l'outil dont plusieurs se servent, d'où le
  * nom en tirets plutôt qu'en `nom_V1` : la distinction se voit dans le dossier.
  *
  * Géorisques ne publie pas un schéma stable : selon l'endpoint la réponse est

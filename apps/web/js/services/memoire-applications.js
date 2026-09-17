@@ -182,7 +182,7 @@ export function sortiesDeLaFonction(regle = {}) {
  * Deux sources, et l'ordre entre elles importe.
  *
  * **Ce que la contrainte porte**, d'abord : le versement y a recopié la
- * déclaration de l'utilitaire, avec la valeur lue. C'est un enregistrement, daté
+ * déclaration de l'agent, avec la valeur lue. C'est un enregistrement, daté
  * de la contrainte, et il vaut même si le catalogue change ensuite.
  *
  * **Ce que le catalogue déclare**, à défaut : une contrainte versée avant que les

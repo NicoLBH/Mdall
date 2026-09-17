@@ -88,7 +88,7 @@ export async function executerUtilitaire({
   if (!reponse.ok) {
     const brut = await reponse.text().catch(() => "");
     const charge = analyser(brut);
-    throw new Error(charge?.error || `L'utilitaire n'a pas répondu (HTTP ${reponse.status}).`);
+    throw new Error(charge?.error || `L'agent n'a pas répondu (HTTP ${reponse.status}).`);
   }
 
   const etapes = [];
@@ -122,7 +122,7 @@ export async function executerUtilitaire({
   }
 
   if (erreur) throw new Error(erreur);
-  if (!fin?.resultat) throw new Error("L'utilitaire a répondu, mais sans résultat.");
+  if (!fin?.resultat) throw new Error("L'agent a répondu, mais sans résultat.");
 
   return {
     resultat: fin.resultat,

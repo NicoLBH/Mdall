@@ -96,7 +96,7 @@ const estUneRegle = (assertion) => assertion?.payload?.referentiel === true;
  *
  * Quatre sources, toutes **déclarées**, dans l'ordre du plus précis au plus
  * général : ce que l'affirmation dit d'elle-même, à quoi elle sert, le libellé
- * de l'utilitaire qui l'a produite, et la norme dont elle vient. Aucune n'est
+ * de l'agent qui l'a produite, et la norme dont elle vient. Aucune n'est
  * fabriquée : quand les quatre se taisent, on ne dit rien plutôt que d'écrire
  * une phrase que personne n'a signée.
  */
@@ -111,7 +111,7 @@ export function descriptionDeLaValeur(assertion = null) {
 }
 
 /**
- * La déclaration à laquelle lire un tableau : celle de l'utilitaire d'aujourd'hui.
+ * La déclaration à laquelle lire un tableau : celle de l'agent d'aujourd'hui.
  *
  * ## Pourquoi pas la copie figée
  *
@@ -136,7 +136,7 @@ export function structureDuTableau(ligne = null) {
   const assertion = ligne?.assertion ?? ligne;
   const sujet = texte(assertion?.payload?.subject) || texte(ligne?.sujet);
 
-  // Par le **sujet**, et non par l'utilitaire cité : un tableau d'entrée est
+  // Par le **sujet**, et non par l'agent cité : un tableau d'entrée est
   // saisi dans l'Atelier et ne cite personne, alors qu'un utilitaire le déclare
   // entièrement dans son `lit`. Chercher par l'utilitaire laisserait cette
   // déclaration-là inatteignable — et c'est précisément celle des entrées.

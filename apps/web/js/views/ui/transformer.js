@@ -1,5 +1,5 @@
 /**
- * « Transformer » — la seule sortie d'un utilitaire de l'Atelier.
+ * « Transformer » — la seule sortie d'un agent de l'Atelier.
  *
  * ## Pourquoi ce bouton existe, et pourquoi il n'écrit rien
  *

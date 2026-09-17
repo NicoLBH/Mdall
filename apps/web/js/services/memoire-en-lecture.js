@@ -155,7 +155,7 @@ const TABLEAU_OUVRANT = /^(.*?)\s*=\s*\[$/;
 /** `]` ou `];` — la fin du tableau. */
 const TABLEAU_FERMANT = /^\]\s*;?$/;
 /**
- * `résultat = agent-D (utilitaire: …, version: V1);`
+ * `résultat = agent-D (agent: …, version: V1);`
  *
  * La seule ligne d'une fonction qui ne se lit pas. Elle se **lit** — l'agent,
  * l'utilitaire et sa version sont ce qui permet de refaire le travail — mais
@@ -268,10 +268,10 @@ export function lireLeTableau(lecture, ligne = "") {
 }
 
 /**
- * Un `résultat = calcul natif (utilitaire: X, version: V1);`
+ * Un `résultat = calcul natif (agent: X, version: V1);`
  *
  * Ce qu'il rend est ce qui permet de refaire le calcul plus tard : le nom de
- * l'utilitaire et sa version. Rien d'autre n'est là — c'est tout le propos
+ * l'agent et sa version. Rien d'autre n'est là — c'est tout le propos
  * d'une fonction native, et la lecture ne va pas inventer un corps qui n'a
  * jamais été écrit.
  */

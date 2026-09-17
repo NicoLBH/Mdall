@@ -430,7 +430,7 @@ export async function listProjectDecisions(projectId, { exceptPropositionId = nu
  * rien n'entre dans la mémoire du projet — voir `docs/fondamentaux.md`.
  *
  * `on_conflict` en fusion : proposer deux fois la même affirmation dans la même
- * proposition met la seconde à jour au lieu d'échouer. Un utilitaire qu'on
+ * proposition met la seconde à jour au lieu d'échouer. Un agent qu'on
  * relance après avoir corrigé une entrée doit pouvoir remplacer ce qu'il avait
  * proposé, pas ouvrir une seconde ligne pour le même sujet.
  *

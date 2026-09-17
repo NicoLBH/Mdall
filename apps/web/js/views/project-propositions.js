@@ -3118,7 +3118,7 @@ export function renderDeposits(review) {
 /**
  * Le dépôt de la proposition elle-même.
  *
- * Verser le résultat d'un utilitaire **est** un dépôt : quelqu'un a produit de
+ * Verser le résultat d'un agent **est** un dépôt : quelqu'un a produit de
  * la matière et l'apporte au projet. L'onglet ne montrait que des fichiers, et
  * une proposition venue de l'Atelier s'y lisait vide — comme si rien n'avait
  * été déposé.

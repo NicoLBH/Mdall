@@ -189,7 +189,7 @@ export const NATURES = {
   },
   "lecture-note-de-calcul": {
     nom: "Lecture des notes de calcul",
-    quoi: "Relever les valeurs d'une note de calcul jointe à un utilitaire."
+    quoi: "Relever les valeurs d'une note de calcul jointe à un agent."
   },
   "observations": {
     nom: "Relevé d'observations",

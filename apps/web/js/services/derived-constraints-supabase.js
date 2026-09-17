@@ -16,7 +16,7 @@
  * contrainte n'en reçoit pas, parce qu'on ne se prononce pas dessus. `planAct`
  * le refuse, et ce fichier n'essaie pas.
  *
- * ## Les lectures de l'utilitaire s'enregistrent ici
+ * ## Les lectures de l'agent s'enregistrent ici
  *
  * Une proposition fusionnée enregistrait ce que ses règles avaient lu ; ce
  * chemin-ci n'enregistrait rien, faute d'avoir quoi que ce soit à enregistrer —

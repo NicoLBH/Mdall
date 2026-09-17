@@ -41,7 +41,7 @@
  * renvoie à l'utilitaire qui la déduit, avec son sujet, sa source et sa version.
  * Recopier le sujet ici ferait deux vérités à tenir, et le jour où un zonage
  * change de nom l'une des deux mentirait (règle 4). Les autres — le H0 que la
- * table départementale donne, et qu'aucun utilitaire ne « déduit » puisqu'il est
+ * table départementale donne, et qu'aucun agent ne « déduit » puisqu'il est
  * lu tel quel — se déclarent en entier, ici, une fois.
  *
  * Sa **loi** non plus, et pour une raison inverse de celle des fondations : elle

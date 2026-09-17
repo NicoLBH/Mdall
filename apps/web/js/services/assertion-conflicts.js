@@ -26,7 +26,7 @@
  *
  * ## Ce module détecte, il n'affiche pas
  *
- * Il est lu par l'utilitaire « Résoudre les conflits » de l'Atelier. La Mémoire
+ * Il est lu par l'agent « Résoudre les conflits » de l'Atelier. La Mémoire
  * ne s'en sert plus : elle sert à **voir** ce que le projet tient pour vrai, et
  * mêler à cette lecture ce qui ne s'accorde pas ferait passer un désaccord pour
  * une connaissance de plus. Exploiter la mémoire est le travail de l'Atelier.

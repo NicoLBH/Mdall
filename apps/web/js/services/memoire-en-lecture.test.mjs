@@ -88,7 +88,7 @@ test("lire(écrire(G)) = G — une affirmation de projet aussi", () => {
 
 test("l'en-tête ne produit aucun bloc, et le chemin se lit", () => {
   const texte = texteDesLignes([
-    ...enTeteDeFichier({ chemin: ["Contraintes", "Incendie"], produitPar: "un utilitaire", le: "6 septembre 2026" }),
+    ...enTeteDeFichier({ chemin: ["Contraintes", "Incendie"], produitPar: "un agent", le: "6 septembre 2026" }),
     ...blocDAffirmation({ sujet: "Colonne sèche", valeur: "exigée", statut: STATUT.RETENU })
   ]);
 

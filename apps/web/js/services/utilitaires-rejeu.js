@@ -96,13 +96,13 @@ export const REFUS = {
 };
 
 const PHRASES = {
-  [REFUS.SANS_REJEU]: "cet utilitaire ne sait pas se rejouer : son calcul reste au serveur",
+  [REFUS.SANS_REJEU]: "cet agent ne sait pas se rejouer : son calcul reste au serveur",
   [REFUS.ENTREE_IMPOSSIBLE]:
     "cette valeur n'entre pas dans son calcul — le serveur la choisit lui-même, et la lui imposer "
     + "lui ferait dire autre chose que son référentiel",
   [REFUS.SANS_APPEL]: "aucun appel conservé pour cet outil : on ne sait pas quoi redemander",
   [REFUS.AUTRE_COLONNE]:
-    "cet utilitaire lit bien ce sujet, mais par une autre de ses colonnes : celle qu'on fait "
+    "cet agent lit bien ce sujet, mais par une autre de ses colonnes : celle qu'on fait "
     + "varier n'entre pas dans son calcul",
   [REFUS.INJOIGNABLE]: "l'outil n'a pas répondu : sa valeur d'aujourd'hui reste affichée",
   [REFUS.VALEUR_ILLISIBLE]:
@@ -190,7 +190,7 @@ export function champsDeLAppel(assertion, substituees = new Map()) {
     if (!texte(declaree?.entree)) { bloque = REFUS.ENTREE_IMPOSSIBLE; continue; }
 
     // Un sujet versé comme tableau entre par **une** de ses colonnes, et
-    // l'utilitaire dit laquelle. Faire varier une autre colonne — l'adresse,
+    // l'agent dit laquelle. Faire varier une autre colonne — l'adresse,
     // qui « ne décide de rien dans les zonages : elle situe » — envoyait sa
     // valeur dans le champ du code INSEE, et le serveur répondait 400. On le
     // refuse en le disant, plutôt que de faire passer une colonne pour une panne.
@@ -423,7 +423,7 @@ function uneSeuleParSujetEtPortee(reprises = []) {
  *
  * ## Ce qu'on rend, et pourquoi il faut les deux
  *
- * La fonction — elle porte l'utilitaire, sa version et ce qu'elle lit — **et** la
+ * La fonction — elle porte l'agent, sa version et ce qu'elle lit — **et** la
  * sortie, qui est la ligne que le calque remplace. Rendre l'une sans l'autre
  * ferait soit une valeur sans provenance, soit une provenance sans valeur.
  */
@@ -704,7 +704,7 @@ export async function repriseDeLaFonction(reprise, { assertions = [], appeler = 
  * Ce qu'une contrainte devient, une fois son utilitaire rejoué.
  *
  * Pure aussi : elle reçoit le fait de contexte que le serveur vient de rendre et le
- * fait relire par l'utilitaire — **sa propre fonction `deduire`**, la même qu'au
+ * fait relire par l'agent — **sa propre fonction `deduire`**, la même qu'au
  * versement. C'est ce qui garantit qu'une variante et un versement ne peuvent pas
  * dire deux choses différentes de la même situation.
  */

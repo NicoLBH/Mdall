@@ -245,7 +245,7 @@ function renderTableauRecalcule(ligne) {
   const apres = Array.isArray(ligne?.tableau) ? ligne.tableau : null;
   if (!apres?.length) return "";
 
-  // Ce que l'utilitaire déclare de son propre tableau — celle d'aujourd'hui, pas
+  // Ce que l'agent déclare de son propre tableau — celle d'aujourd'hui, pas
   // la copie figée au versement : une légende n'est pas une donnée. Voir
   // `structureDuTableau`.
   const structure = structureDuTableau(ligne);
@@ -454,7 +454,7 @@ function renderARevoir(ligne) {
         // sans motif est une inquiétude sans adresse, et l'on ne sait pas s'il
         // faut corriger la donnée ou l'outil.
         escapeHtml(ligne.pourquoi || (ligne.motif === "utilitaire"
-          ? "un utilitaire l'a déduite, et nous ne savons pas rejouer son calcul ici"
+          ? "un agent l'a déduite, et nous ne savons pas rejouer son calcul ici"
           : ligne.motif === "sans-objet"
             ? "la règle qui la concluait ne s'applique plus"
             : "repose sur une valeur qui vient de bouger"))

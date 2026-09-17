@@ -220,7 +220,7 @@ test("un outil que personne ne connaît se dit inconnu, pas vide", async () => {
 
 /* ── Le calcul ───────────────────────────────────────────────────────────── */
 
-test("le calcul rend les valeurs de l'utilitaire, avec leur source et leur version", async () => {
+test("le calcul rend les valeurs de l'agent, avec leur source et leur version", async () => {
   const resultat = await executerOutil({ id: "spectre_elastique_ec8", assertions: MEMOIRE });
 
   assert.equal(resultat.statut, "fait");
@@ -437,7 +437,7 @@ test("une altitude citée dans la question change la cote, et le conflit se voit
   assert.equal(resultat.ecarts[0].valeurCalculee, 0.688);
 });
 
-test("chaque utilitaire est proposé au modèle avec son périmètre, et ses bornes", () => {
+test("chaque agent est proposé au modèle avec son périmètre, et ses bornes", () => {
   // C'est là-dessus que porte l'aiguillage : des descriptions qui disent ce que
   // l'outil tranche **et** ce qu'il ne tranche pas. Sans la seconde moitié, le
   // modèle appelle l'outil le plus proche et rend une réponse hors sujet.
@@ -486,7 +486,7 @@ test("le référentiel incendie annonce ce qu'il ne traite pas, nommément", () 
   assert.equal(incendie.executer.constructor.name, "AsyncFunction");
 });
 
-test("les deux utilitaires lisent l'altitude et le sol dans des clés distinctes", () => {
+test("les deux agents lisent l'altitude et le sol dans des clés distinctes", () => {
   // Deux outils qui liraient la même clé pour deux choses différentes
   // finiraient par se pré-remplir l'un avec la valeur de l'autre.
   const clesGel = GEL.entrees.flatMap((entree) => entree.depuisMemoire ?? []);
@@ -756,7 +756,7 @@ test("rien à demander, mais des valeurs à écarter : le calcul part quand mêm
   // l'utilitaire cherche ses cotes lui-même au lieu de reprendre celles que le
   // modèle avait trouvées plausibles.
   //
-  // Ici l'utilitaire s'arrête faute de note jointe, et c'est la bonne réponse :
+  // Ici l'agent s'arrête faute de note jointe, et c'est la bonne réponse :
   // ce qui compte est qu'il ait été appelé, et avec quoi.
   const resultat = await executerOutil({
     id: "fondations_predimensionnement",
@@ -813,7 +813,7 @@ test("la cote hors gel du projet dispense de redemander H0", async () => {
     question: "dimensionne les massifs avec une contrainte de sol à 1 bar"
   });
 
-  // Plus de question : l'utilitaire est allé jusqu'à la note, et c'est elle qui
+  // Plus de question : l'agent est allé jusqu'à la note, et c'est elle qui
   // manque — pas une valeur qu'on aurait dû taper.
   assert.equal(resultat.statut, "refus");
   assert.match(resultat.message, /Aucune note de calcul n'est jointe/);
@@ -835,9 +835,9 @@ test("l'altitude se lit dans les entrées de la cote hors gel, pas dans sa valeu
   assert.equal(valeurs.h0, undefined);
 });
 
-test("ce qui manque et qu'un autre utilitaire sait produire se produit", async () => {
+test("ce qui manque et qu'un autre agent sait produire se produit", async () => {
   // L'enchaînement demandé : « il me manque la cote hors gel » → « qui sait la
-  // produire ? » → « l'utilitaire gel » → « qu'attend-il ? » → « H0 et
+  // produire ? » → « l'agent gel » → « qu'attend-il ? » → « H0 et
   // l'altitude, que la conversation et la mémoire donnent » → « je l'exécute et
   // j'injecte ». Personne n'a rien tapé de plus.
   const fondations = outilParId("fondations_predimensionnement");
@@ -858,7 +858,7 @@ test("ce qui manque et qu'un autre utilitaire sait produire se produit", async (
 });
 
 test("on ne pose pas une question pour en éviter une", async () => {
-  // L'utilitaire gel manque d'altitude : le déduire demanderait une valeur de
+  // L'agent gel manque d'altitude : le déduire demanderait une valeur de
   // plus, et l'on aurait échangé une question contre une autre, moins
   // compréhensible. On renonce, et c'est la cote hors gel qui se demande.
   const fondations = outilParId("fondations_predimensionnement");
@@ -872,7 +872,7 @@ test("on ne pose pas une question pour en éviter une", async () => {
   assert.deepEqual(chaine, []);
 });
 
-test("un utilitaire ne s'appelle pas lui-même", async () => {
+test("un agent ne s'appelle pas lui-même", async () => {
   const fondations = outilParId("fondations_predimensionnement");
   const { obtenues } = await deduireLesEntrees(fondations, {
     fournies: { h0: 0.45, altitude: 250 },
@@ -916,7 +916,7 @@ test("une entrée que le projet rend inutile ne se demande pas, même inventée"
     question: "fais le dimensionnement des fondations de cette descente de charge, avec qels = 1bar"
   });
 
-  // Aucune question : l'utilitaire est allé jusqu'à la note, et c'est elle qui
+  // Aucune question : l'agent est allé jusqu'à la note, et c'est elle qui
   // manque.
   assert.equal(resultat.statut, "refus");
   assert.match(resultat.message, /Aucune note de calcul n'est jointe/);
@@ -973,7 +973,7 @@ test("un cas rangé à la demande rend l'appui calculable", async () => {
   const fondations = outilParId("fondations_predimensionnement");
   const rangement = fondations.entrees.find((entree) => entree.cle === "rangementDesCas");
 
-  assert.ok(rangement, "l'utilitaire déclare où ranger les cas qu'il n'a pas su nommer");
+  assert.ok(rangement, "l'agent déclare où ranger les cas qu'il n'a pas su nommer");
   assert.equal(rangement.aiguillage, true);
 
   // Sans note jointe l'utilitaire refuse, mais le rangement a bien traversé le
@@ -997,7 +997,7 @@ test("un cas rangé à la demande rend l'appui calculable", async () => {
 /**
  * Le référentiel incendie, joué sur place.
  *
- * L'utilitaire l'appelle par le réseau — c'est une fonction voisine. Ici on
+ * L'agent l'appelle par le réseau — c'est une fonction voisine. Ici on
  * court-circuite le transport et l'on branche le **vrai** raisonnement : sans
  * cela on vérifierait que l'on a bien composé un numéro, pas que la réponse
  * tient.
@@ -1032,7 +1032,7 @@ const ETUDE = {
   }
 };
 
-test("une case cochée dans l'étude devient un « oui » pour l'utilitaire", () => {
+test("une case cochée dans l'étude devient un « oui » pour l'agent", () => {
   const outil = outilParId("incendie_habitation");
   const { valeurs, provenance } = prefillDepuisLEtude(outil, ETUDE);
 

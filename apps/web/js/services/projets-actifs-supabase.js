@@ -80,7 +80,7 @@ async function propositions(moi = "") {
   }));
 }
 
-/** Les études d'utilitaire que j'ai remplies. */
+/** Les études d'agent que j'ai remplies. */
 async function etudes() {
   const { data, error } = await supabase
     .from("incendie_etudes")

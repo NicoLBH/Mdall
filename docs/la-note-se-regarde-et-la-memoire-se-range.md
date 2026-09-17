@@ -111,7 +111,7 @@ cherchait chaque fois celui qu'on venait d'utiliser.
 
 **« + Ajouter » porte tout ce qui écrit ou sort la mémoire**, parce que c'est un
 seul geste sous plusieurs formes : faire entrer quelque chose, ou l'en faire
-sortir. Déclarer une variable · verser les contraintes du site · reconstruire les
+sortir. Déclarer une hypothèse · verser les contraintes du site · reconstruire les
 liens du raisonnement · exporter en JSON, en CSV, copier le dossier de contexte.
 Son bouton principal ouvre le menu au lieu de déclarer : on n'ajoute pas, on
 choisit quoi ajouter. Trois boutons obligeaient à savoir d'avance lequel portait
@@ -131,14 +131,6 @@ menu s'ouvre, il a l'air complet — et « Reconstruire les liens du raisonnemen
 qu'on utilise trois fois par an, n'existe plus. On ne s'en aperçoit que le jour
 où l'on en a besoin, c'est-à-dire trop tard pour savoir quelle modification l'a
 emportée.
-
-### Une réserve sur le mot « variable »
-
-Le menu dit « Déclarer une variable », comme demandé. Le formulaire qui s'ouvre
-dit, lui, qu'**une hypothèse** est ce qu'une mesure viendra trancher, et qu'une
-zone de neige n'en est pas une. Deux noms pour une même chose finissent par
-désigner deux choses (règle 10) — et « variable » nomme déjà autre chose dans
-l'Atelier, les variables mutualisées du `.ref`. À trancher.
 
 ## Les lignes en défaut : le doute, pas l'alerte
 

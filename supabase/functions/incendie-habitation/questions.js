@@ -211,7 +211,7 @@ export const QUESTIONS = [
     paragraphe: "3°), troisième alinéa",
     aide: "Possible dans les communes dont les services de secours disposent d'échelles aériennes "
       + "de hauteur suffisante, et si le bâtiment est dans leur secteur d'intervention. La décision "
-      + "appartient aux autorités locales, jamais à l'utilitaire."
+      + "appartient aux autorités locales, jamais à l'agent."
   },
   {
     cle: "logementsAtteignablesEchellesOuParcoursSur",

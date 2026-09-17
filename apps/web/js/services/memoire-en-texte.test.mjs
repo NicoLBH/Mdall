@@ -159,11 +159,11 @@ test("une exception se lit sous la règle, dans les mots du texte", () => {
 test("l'en-tête porte la version de l'écriture, pas seulement la date", () => {
   const lignes = enTeteDeFichier({
     chemin: ["Escalier B", "Incendie"], extension: "ctr",
-    produitPar: "un utilitaire", le: "7 septembre 2026"
+    produitPar: "un agent", le: "7 septembre 2026"
   });
   assert.deepEqual(lignes.map(clair), [
     "fichier: escalier-b/incendie.ctr",
-    "note: établi par un utilitaire, le 7 septembre 2026",
+    "note: établi par un agent, le 7 septembre 2026",
     `note: écriture Mdall v${ECRITURE}`
   ]);
 });

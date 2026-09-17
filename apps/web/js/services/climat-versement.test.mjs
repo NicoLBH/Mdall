@@ -108,7 +108,7 @@ test("l'altitude est une entrée, pas un produit des zonages", () => {
 test("chaque agent pose ce qu'il déclare, et rien d'autre", () => {
   const zones = sortiesDeLAgent(AGENT_D_ZONES_CLIMATIQUES_COMMUNE_V1);
   assert.deepEqual(zones.map((sortie) => sortie.sujet), ["Zone de neige", "Zone de vent"]);
-  // Le sujet vient de l'utilitaire, jamais d'une copie faite dans l'agent.
+  // Le sujet vient de l'agent, jamais d'une copie faite dans l'agent.
   assert.equal(zones[0].utilitaire.nom, "deduction_zone_neige_commune");
 
   const gel = sortiesDeLAgent(AGENT_D_PROFONDEUR_HORS_GEL_V1);
@@ -149,7 +149,7 @@ test("un appel qui n'a rien rendu ne se verse pas", () => {
 
 /* ── Ce que les appels posent ────────────────────────────────────────────── */
 
-test("chaque valeur cite l'utilitaire qui la déduit, pas l'agent", () => {
+test("chaque valeur cite l'agent qui la déduit, pas l'agent", () => {
   // C'est ce qui permet de monter la version d'un seul zonage, et c'est ce que
   // le rejeu suit pour refaire cette valeur-là.
   const posees = sortiesVersables(AGENT_D_ZONES_CLIMATIQUES_COMMUNE_V1, {
@@ -177,7 +177,7 @@ test("la cote et son H0 sortent du même appel, chacun avec son sujet", () => {
   assert.deepEqual(posees.map((ligne) => ligne.sujet), ["Profondeur hors gel", SUJET_H0]);
   assert.equal(posees[0].valeur, "0,89 m");
   assert.equal(posees[1].valeur, "0,6 m");
-  // Faute d'utilitaire qui le déduise, le H0 cite l'agent — et le dit.
+  // Faute d'agent qui le déduise, le H0 cite l'agent — et le dit.
   assert.equal(posees[1].utilitaire, "agent_d_profondeur_hors_gel_V1");
 });
 

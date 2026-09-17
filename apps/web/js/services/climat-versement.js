@@ -150,7 +150,7 @@ export function valeurDeLaSortie(sortie, resultats = {}) {
  * et non l'agent : c'est ce qui permet de monter la version d'un seul zonage, et
  * c'est ce que le rejeu suit pour refaire cette valeur-là.
  *
- * Une sortie qu'aucun utilitaire ne déduit — le H0 de la table — cite l'agent,
+ * Une sortie qu'aucun agent ne déduit — le H0 de la table — cite l'agent,
  * faute de mieux, et dit d'où elle vient dans sa provenance.
  */
 export function sortiesVersables(agent, { resultats = {}, localisation = null, altitude = "", zone = "" } = {}) {

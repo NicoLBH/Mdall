@@ -270,8 +270,8 @@ seule chose.
 | --- | --- |
 | `importe (variable: X, depuis: f)` | dit d'où vient une entrée, et où aller la lire |
 | `enregistre (X: v, …, dans: f, zones: z)` | écrit une ou plusieurs valeurs dans un fichier, sur une portée |
-| `agent-D (utilitaire: X, version: V)` | un agent déterministe fait le travail — mêmes entrées, même sortie |
-| `agent-IA (utilitaire: X, version: V)` | un agent qui juge ou rédige — sa sortie peut varier à entrées égales |
+| `agent-D (agent: X, version: V)` | un agent déterministe fait le travail — mêmes entrées, même sortie |
+| `agent-IA (agent: X, version: V)` | un agent qui juge ou rédige — sa sortie peut varier à entrées égales |
 | `décision humaine assumée (quoi, par: X, le: d)` | quelqu'un a tranché, et il signe |
 
 `décision humaine assumée` remplace la ligne `décision:` dès qu'on sait qui a
@@ -298,7 +298,7 @@ fil de l'eau ne se relirait nulle part. Ceux que le besoin nommera ensuite :
 Une règle porte sa loi : `si (Hauteur ≤ 28 m) alors ("3e famille B")`. C'est
 possible parce que cette loi est un arrêté — publique, opposable, citable.
 
-Certains utilitaires n'ont pas cette loi-là : un pré-dimensionnement de
+Certains agents n'ont pas cette loi-là : un pré-dimensionnement de
 fondations **est** sa loi. On ne peut ni la donner, ni la taire. Le langage a
 donc un verbe pour cela — mais **pas** un second genre de fonction :
 
@@ -306,7 +306,7 @@ donc un verbe pour cela — mais **pas** un second genre de fonction :
 fonction Prédimensionnement des fondations superficielles(zones, Profondeur hors gel, Données d'entrée des fondations superficielles) {
    // Dimensionne les massifs superficiels d'une zone : descente de charge,
    // combinaisons, portance du sol, glissement, renversement et ferraillage.
-   // La loi de calcul appartient à l'utilitaire — elle ne s'écrit pas ici.
+   // La loi de calcul appartient à l'agent — elle ne s'écrit pas ici.
 
    const Profondeur hors gel à retenir;
    si (Profondeur hors gel renseigné)
@@ -314,7 +314,7 @@ fonction Prédimensionnement des fondations superficielles(zones, Profondeur hor
    sinon (Profondeur hors gel à retenir = importe (variable: Profondeur hors gel, depuis: sol.ctr, zones: zones));
 
    résultat = agent-D (
-      utilitaire: dimensionnement_fondations_superficielles,
+      agent: dimensionnement_fondations_superficielles,
       version: V1,
       zones: zones,
       Profondeur hors gel: Profondeur hors gel à retenir,
@@ -362,7 +362,7 @@ une même fonction. C'est ce que le mot rend possible.
 
 ### `calcul natif` n'existe plus
 
-« Calcul » était trop étroit : un utilitaire calcule, un autre cherche dans une
+« Calcul » était trop étroit : un agent calcule, un autre cherche dans une
 table, un troisième lit un document et n'en extrait qu'une date. Le point commun
 n'est pas le calcul, c'est qu'un tiers fait le travail et rend un résultat.
 
@@ -477,9 +477,9 @@ un nom appartient au projet ou à la fonction qu'on regarde.
 | violet | un **appel** | `agent-D`, `agent-IA`, `enregistre`, `décision humaine assumée` |
 | bleu | une **variable du projet** | `Profondeur hors gel`, `Résultat du calcul…` |
 | blanc | un **nom local** | `résultat`, `Profondeur hors gel à retenir` |
-| jaune | un **champ du langage** | `utilitaire:`, `version:`, `dans:`, `zones:`, `statut:`, `le:` |
+| jaune | un **champ du langage** | `agent:`, `version:`, `dans:`, `zones:`, `statut:`, `le:` |
 | orange | un **paramètre**, une portée, un chemin | `batiment-a`, `structure.ctr` |
-| gris italique | une **source** | le nom d'un utilitaire, sa version |
+| gris italique | une **source** | le nom d'un agent, sa version |
 
 Deux distinctions comptent plus que les autres.
 
@@ -754,7 +754,7 @@ chose, et cela se voit.
 Rien n'est stocké. Le stocker en ferait une seconde vérité, qui divergerait au
 premier versement (`docs/fondamentaux.md`, règle 4).
 
-### Ce qu'un utilitaire doit verser pour que la chaîne tienne
+### Ce qu'un agent doit verser pour que la chaîne tienne
 
 Trois choses, et il en manquait deux :
 
@@ -870,7 +870,7 @@ ligne touchée porte donc une étiquette et un filet coloré à sa gauche :
 | étiquette | ce qu'elle dit |
 | --- | --- |
 | **Variante** | la valeur qu'on a soi-même substituée |
-| **Recalculée** | un utilitaire rejoué a rendu autre chose — la valeur d'avant est barrée à côté |
+| **Recalculée** | un agent rejoué a rendu autre chose — la valeur d'avant est barrée à côté |
 | **Supposée** | rejouée, mais en supposant l'altitude de départ (voir plus bas) |
 | **Relue** | rejouée, et elle ne bouge pas — ce n'est pas la même chose que « pas regardée » |
 | **À revérifier** | concernée, et nous ne savons pas la rejouer : la valeur affichée est celle d'avant, et le mot le dit |
@@ -888,7 +888,7 @@ comptées comme sans rapport avec l'altitude — un silence, sur la déduction
 phare. Ne pas savoir n'autorise pas à prétendre qu'il n'y a rien (règle 5).
 
 Deux façons de savoir qu'une contrainte est concernée, et il faut les deux :
-elle garde son altitude d'entrée, **ou** l'utilitaire qui l'a déduite est d'une
+elle garde son altitude d'entrée, **ou** l'agent qui l'a déduite est d'une
 lignée qui lit l'altitude — la lignée, pas la version. Concernée sans être
 rejouable, elle est nommée avec sa raison exacte : « ce calcul ne dit pas sur
 quelle altitude il a été fait », ou « nous ne savons pas rejouer
@@ -911,7 +911,7 @@ qu'on refuse partout ailleurs.
 
 Une valeur nouvelle ne produit pas un seul genre de conséquence.
 
-1. **Recalculé** — un utilitaire déterministe a été rejoué avec la nouvelle
+1. **Recalculé** — un agent déterministe a été rejoué avec la nouvelle
    entrée. On rend une vraie valeur, et son écart.
 2. **À revérifier** — quelque chose en dépend, mais on ne sait pas le rejouer :
    le référentiel est au serveur et prend le questionnaire entier, pas un champ.
@@ -922,7 +922,7 @@ Une valeur nouvelle ne produit pas un seul genre de conséquence.
 La faute mortelle serait de présenter le deuxième rang comme le premier. Un
 chiffre qui a l'air recalculé et qui n'était que propagé, une seule fois, et
 plus personne ne fait confiance à l'écran. C'est pourquoi une relecture est
-**refusée dès que l'utilitaire cité n'est pas exactement celui dont on connaît
+**refusée dès que l'agent cité n'est pas exactement celui dont on connaît
 la loi** : une `V2` fait tomber la contrainte au rang « à revérifier » plutôt
 que de la recalculer selon une règle qui n'est plus la sienne.
 
@@ -962,12 +962,12 @@ Le seul vrai danger d'une variante est **d'oublier qu'on y est**.
 | `apps/web/js/services/memoire-en-texte.js` | écrit — graphe → texte |
 | `apps/web/js/services/memoire-en-lecture.js` | lit — texte → graphe, et colore |
 | `apps/web/js/services/memoire-rangement.js` | où un fichier vit, et sous quelle extension |
-| `apps/web/js/services/incendie-en-texte.js` | branche l'utilitaire incendie sur le tout |
-| `apps/web/js/utilitaires/dimensionnement_fondations_superficielles_V1.js` | déclare la fonction native des fondations — ce qu'elle lit, jamais comment |
+| `apps/web/js/services/incendie-en-texte.js` | branche l'agent incendie sur le tout |
+| `apps/web/js/agents/dimensionnement_fondations_superficielles_V1.js` | déclare la fonction native des fondations — ce qu'elle lit, jamais comment |
 | `apps/web/js/services/fondations-versement.js` | ce qu'une étude de fondations propose : ses entrées, l'appel, son résultat |
-| `apps/web/js/utilitaires/agents-climatiques.js` | les deux agents-D du climat : ce qu'ils lisent, ce qu'ils posent, et la localisation |
+| `apps/web/js/agents/agents-climatiques.js` | les deux agents-D du climat : ce qu'ils lisent, ce qu'ils posent, et la localisation |
 | `apps/web/js/services/climat-versement.js` | ce qu'une étude climatique propose : la localisation, les deux appels, les zones |
-| `apps/web/js/utilitaires/agent-spectre.js` | l'agent-D du spectre élastique : ce qu'il lit, et la ligne qu'il pose |
+| `apps/web/js/agents/agent-spectre.js` | l'agent-D du spectre élastique : ce qu'il lit, et la ligne qu'il pose |
 | `apps/web/js/services/spectre-versement.js` | ce qu'une étude de spectre propose : les choix du projet, l'appel, la courbe |
 | `apps/web/js/services/spectre-reprise.js` | refait le spectre quand la zone, le sol ou l'importance changent |
 | `apps/web/js/services/localisation-versement.js` | la ligne de la localisation et celle de l'altitude — deux écrans les posent, une seule construction |
@@ -979,10 +979,10 @@ Le seul vrai danger d'une variante est **d'oublier qu'on y est**.
 | `apps/web/js/services/memoire-raisonnement.js` | remonte la chaîne, et en tire le schéma des dépendances |
 | `apps/web/js/views/ui/graphe-liaisons.js` | dessine le schéma — il ne sait rien du feu ni de la mémoire |
 | `apps/web/js/views/project-memoire-raisonnement.js` | l'espace de raisonnement : le schéma, le code et les valeurs en une grille |
-| `apps/web/js/utilitaires/lecture-fait.js` | ce que tout utilitaire lit d'un fait, et les sujets du projet qu'il déclare lire |
+| `apps/web/js/agents/lecture-fait.js` | ce que tout agent lit d'un fait, et les sujets du projet qu'il déclare lire |
 | `apps/web/js/services/memoire-variante.js` | relit la mémoire sous une autre valeur du socle, et range les conséquences en trois rangs |
 | `apps/web/js/services/memoire-cerveau.js` | range le raisonnement en strates, pour qu'il se dessine — nœuds, liens, natures |
-| `apps/web/js/services/utilitaires-rejeu.js` | redemande à un utilitaire de se recalculer avec les valeurs essayées, sans rien écrire |
+| `apps/web/js/services/agents-rejeu.js` | redemande à un agent de se recalculer avec les valeurs essayées, sans rien écrire |
 | `apps/web/js/services/variante-en-cours.js` | la variante essayée — en portée de module, jamais rangée nulle part |
 | `apps/web/js/views/memoire/ecran-variante.js` | l'écran : ce qu'on essaie et ce que cela change, ensemble |
 | `apps/web/js/views/ui/bandeau-variante.js` | le bandeau qui dit qu'on ne lit pas la mémoire du projet |

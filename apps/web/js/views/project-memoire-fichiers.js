@@ -1453,7 +1453,7 @@ export function renderFichier(fichier, {
                ${svgIcon("alert", { className: "octicon" })}
                <b>Sans nature.</b> Ce que ce fichier contient n'a pas été déclaré :
                ni règle, ni donnée de base, ni contrainte. Il ne devrait pas exister —
-               l'utilitaire qui a versé ces lignes ne s'est pas prononcé.
+               l'agent qui a versé ces lignes ne s'est pas prononcé.
              </p>`
           : ""
       }

@@ -5,7 +5,7 @@
  *
  * Un modèle de langage ne calcule pas : il **rédige un calcul plausible**, ce
  * qui est une tout autre chose et beaucoup plus dangereux — un spectre faux au
- * dixième près se relit sans qu'on le voie. Les utilitaires de l'Atelier, eux,
+ * dixième près se relit sans qu'on le voie. Les agents de l'Atelier, eux,
  * calculent : mêmes entrées, mêmes sorties, une version inscrite.
  *
  * Le partage est donc net, et il n'est pas négociable :
@@ -700,7 +700,7 @@ export const OUTILS = [
       + "proposer un chiffre pour l'une d'elles ne fait pas avancer le calcul, cela l'arrête. "
       + "Ne ferraille pas la semelle, ne traite pas les fondations profondes, et ne remplace pas une "
       + "note de calcul de béton armé : il donne les cotes par lesquelles on commence.",
-    source: "utilitaire « Fondations — calcul » et NF DTU 13.1",
+    source: "agent « Fondations — calcul » et NF DTU 13.1",
     entrees: [
       {
         cle: "contrainteLimite",
@@ -753,7 +753,7 @@ export const OUTILS = [
           { cle: "site:frost_depth", lire: entreeDuFait("altitude") }
         ],
         lireMemoire: nombreEcrit,
-        aide: "L'utilitaire la lit sur la note — les hypothèses de neige la portent presque toujours. "
+        aide: "L'agent la lit sur la note — les hypothèses de neige la portent presque toujours. "
           + "Elle ne se saisit que si la note n'en dit rien."
       },
       {
@@ -788,7 +788,7 @@ export const OUTILS = [
         // quelqu'un vient de prendre à l'écran. Le garde-fou des valeurs
         // fabriquées n'a pas à s'y appliquer.
         aiguillage: true,
-        aide: "Où ranger les cas que l'utilitaire n'a pas su nommer, sous la forme "
+        aide: "Où ranger les cas que l'agent n'a pas su nommer, sous la forme "
           + "« intitulé = cas », séparés par des points-virgules. Les cas sont G, Q, Sn, Fa, "
           + "W1 à W4, Sx, Sy, Sz — ou « aucun » pour laisser l'appui de côté. "
           + "Ne se remplit que si quelqu'un l'a dit : ranger un effort au hasard change les "
@@ -814,7 +814,7 @@ export const OUTILS = [
      * qu'il sait faire sans rien décider.
      */
     async executer(entrees = {}, contexte = {}) {
-      // L'utilitaire raconte ce qu'il fait à mesure : une minute de rond qui
+      // L'agent raconte ce qu'il fait à mesure : une minute de rond qui
       // tourne ressemble à une panne, cinq étapes datées ressemblent à du
       // travail — et c'en est.
       const etape = typeof contexte.onEtape === "function" ? contexte.onEtape : () => {};
@@ -1411,7 +1411,7 @@ export function provenancesDesEntrees(outil, {
     } else if (texte(dejaEtablies?.[cle]) !== "") {
       rendu[cle] = { origine: "dite", detail: "établie plus tôt dans la discussion" };
     } else if (entree.defaut !== undefined) {
-      rendu[cle] = { origine: "defaut", detail: "valeur par défaut de l'utilitaire" };
+      rendu[cle] = { origine: "defaut", detail: "valeur par défaut de l'agent" };
     }
   }
 
@@ -1438,7 +1438,7 @@ function dire(onEtape) {
  * ## Pourquoi l'enchaînement est du code, et pas une consigne au modèle
  *
  * « Il me manque H0 » → « est-il en mémoire ? » → « non » → « qui sait le
- * produire ? » → « l'utilitaire gel » → « qu'attend-il ? » → « l'altitude, que
+ * produire ? » → « l'agent gel » → « qu'attend-il ? » → « l'altitude, que
  * le projet connaît » → « je l'exécute et j'injecte le résultat ». Écrit dans
  * une consigne, cet enchaînement marcherait souvent, se tromperait parfois de
  * sortie, et l'on ne saurait pas laquelle des deux fois. Écrit ici, il donne le
@@ -1491,7 +1491,7 @@ export async function deduireLesEntrees(outil, {
     const suivants = new Set([...dejaVus, outil.id, sous.id]);
     let pour = avecDefauts(sous, { ...memoire, ...reprises });
 
-    // L'utilitaire appelé peut lui-même avoir une entrée déductible : c'est
+    // L'agent appelé peut lui-même avoir une entrée déductible : c'est
     // ainsi qu'une chaîne de trois maillons tient sans qu'on l'écrive nulle part.
     const dessous = await deduireLesEntrees(sous, {
       fournies: pour, assertions, piecesJointes, onEtape, dejaVus: suivants, profondeur: profondeur + 1
@@ -1678,7 +1678,7 @@ export async function executerOutil({
 } = {}) {
   const outil = outilParId(id);
   if (!outil) {
-    return { statut: "inconnu", id: texte(id), message: `Aucun utilitaire ne porte le nom « ${texte(id)} ».` };
+    return { statut: "inconnu", id: texte(id), message: `Aucun agent ne porte le nom « ${texte(id)} ».` };
   }
 
   const { valeurs: depuisMemoire, provenance } = prefillDepuisMemoire(outil, assertions);
@@ -1749,7 +1749,7 @@ export async function executerOutil({
 
   // Ce qui manque encore et qu'un autre utilitaire sait produire se produit,
   // plutôt que de se demander. C'est le cœur de l'enchaînement : la cote hors
-  // gel manque, l'utilitaire gel la calcule de l'altitude que le projet
+  // gel manque, l'agent gel la calcule de l'altitude que le projet
   // connaît, et personne n'a rien tapé.
   const { obtenues, chaine } = await deduireLesEntrees(outil, {
     fournies: avantChaine, assertions, piecesJointes, onEtape, dejaVus: new Set([outil.id])
@@ -1832,7 +1832,7 @@ export async function executerOutil({
       ecartees: nomsEcartes,
       chaine,
       provenances,
-      message: resultat?.raison || "L'utilitaire n'a pas pu conclure."
+      message: resultat?.raison || "L'agent n'a pas pu conclure."
     };
   }
 

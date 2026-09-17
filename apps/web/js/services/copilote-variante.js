@@ -20,7 +20,7 @@
  *
  * ## Ce qui part au modèle, et ce qui n'en part pas
  *
- * Un résumé : ce qui change, l'avant, l'après, l'utilitaire, et ce qui n'a pas
+ * Un résumé : ce qui change, l'avant, l'après, l'agent, et ce qui n'a pas
  * pu se recalculer avec sa raison. Pas les lignes de mémoire entières, pas les
  * tableaux de massifs, pas les provenances — c'est ce qu'il faut à un écran,
  * c'est vingt fois trop pour une réponse écrite, et cela noierait les trois
@@ -41,7 +41,7 @@ export const TITRE_VARIANTE = "Test d'une variante";
  * ce que chaque règle a vraiment lu. C'est moins précis, et ce n'est pas une
  * panne : la variante le fait déjà pour l'écran quand l'index manque.
  */
-async function applicationsDuProjet(projectId) {
+export async function applicationsDuProjet(projectId) {
   try {
     const { listerLesApplications } = await import("./memoire-applications-supabase.js");
     return await listerLesApplications(projectId);
@@ -56,7 +56,7 @@ async function applicationsDuProjet(projectId) {
  * Sans eux, la variante dit ce qui change et pas **ce que ça coûte**. Leur
  * absence n'est pas une panne : un projet peut n'avoir aucun engagement.
  */
-async function actesDuProjet(projectId) {
+export async function actesDuProjet(projectId) {
   try {
     const { listHypothesisActs } = await import("./memoire-actes-supabase.js");
     return await listHypothesisActs(projectId);

@@ -46,6 +46,7 @@ import { buildAssistContext } from "./copilote-context.js";
 import { contexteTransversal } from "./copilote-contexte-transversal.js";
 import { executerUtilitaire } from "./utilitaires-service.js";
 import { executerLaVariante } from "./copilote-variante.js";
+import { executerLeCerveau } from "./copilote-cerveau.js";
 import { conversationTitle } from "./copilote-conversations.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
@@ -251,15 +252,7 @@ export async function sendAssistMessage(message, {
         // chantier : il n'y a rien à autoriser, et la discussion reste
         // propriétaire seul comme toutes les autres.
         project_id: projectId,
-        question: piecesJointes.length
-          ? `${content}\n\n[Une note de calcul est jointe à cette conversation : ${
-            piecesJointes.map((p) => p?.nom).filter(Boolean).join(", ")}. `
-            + "L'utilitaire de pré-dimensionnement des fondations sait la lire ; toi non, "
-            + "et tu n'as pas à en connaître le contenu. Ne dis donc pas qu'il te manque la "
-            + "descente de charges : appelle l'utilitaire, il l'y trouvera. Et ne propose aucune "
-            + "valeur que la note pourrait porter — l'altitude du site en particulier : la remplir "
-            + "d'un chiffre plausible arrête le calcul au lieu de l'avancer.]"
-          : content,
+        question: piecesJointes.length ? `${content}\n\n${rappelDeLaNote(piecesJointes)}` : content,
         history: historyForPayload(),
         other_conversations: autresDiscussionsPourPayload(),
         memory: { lue: context.memoire?.lue === true, texte: context.memoire?.texte || "" },
@@ -315,12 +308,21 @@ export async function sendAssistMessage(message, {
       // seconde implémentation du même raisonnement (règle 4), et le router sur
       // son nom reviendrait à apprendre au navigateur quels outils existent.
       if (appel?.ou === "navigateur") {
-        const { resultat, pourLeModele } = await executerLaVariante({
-          entrees: safeJsonParse(appel?.arguments) ?? {},
-          assertions,
-          projectId,
-          onEtape: (dit) => etape(onEtape, dit?.texte, dit?.detail)
-        });
+        // **Deux outils tournent ici, et c'est le serveur qui dit lequel.** Le
+        // navigateur n'a pas de catalogue — c'est le but : router sur le nom lui
+        // apprendrait un nom d'outil. Il reçoit un rôle, et rien de plus.
+        const { resultat, pourLeModele } = appel?.quoi === "cerveau"
+          ? await executerLeCerveau({
+            assertions,
+            projectId,
+            onEtape: (dit) => etape(onEtape, dit?.texte, dit?.detail)
+          })
+          : await executerLaVariante({
+            entrees: safeJsonParse(appel?.arguments) ?? {},
+            assertions,
+            projectId,
+            onEtape: (dit) => etape(onEtape, dit?.texte, dit?.detail)
+          });
 
         executions.push(resultat);
         if (typeof onToolRun === "function") onToolRun(resultat);
@@ -333,7 +335,7 @@ export async function sendAssistMessage(message, {
         continue;
       }
 
-      // L'utilitaire s'exécute **au serveur** : le catalogue, les garde-fous et
+      // L'agent s'exécute **au serveur** : le catalogue, les garde-fous et
       // l'enchaînement y sont, et le navigateur n'en connaît que la réponse.
       const { resultat, pourLeModele } = await executerUtilitaire({
         id: appel?.name,
@@ -352,7 +354,7 @@ export async function sendAssistMessage(message, {
         // de calcul déposée est une source, pas une entrée. Elle ne passe donc
         // pas par le garde-fou des substitutions.
         piecesJointes,
-        // Ce que l'utilitaire fait pendant qu'il le fait — lire la note,
+        // Ce que l'agent fait pendant qu'il le fait — lire la note,
         // trouver le hors gel, chercher les cotes — se raconte à l'écran **à
         // mesure**, et non au retour de l'appel : c'est un travail de plusieurs
         // secondes, et le montrer d'un bloc à la fin revient à ne pas le
@@ -380,10 +382,39 @@ export async function sendAssistMessage(message, {
     etape(onEtape, aboutis.length ? "Rédaction de la réponse" : "Préparation de la question",
       aboutis.length
         ? `d'après ${aboutis.map((execution) => execution.titre).join(", ")}`
-        : "l'utilitaire demande une précision");
+        : "l'agent demande une précision");
   }
 
   throw new Error("Le copilote n'a pas conclu.");
+}
+
+/**
+ * Ce qu'on rappelle au modèle quand une note est jointe à la conversation.
+ *
+ * ## Le défaut que ça répare
+ *
+ * Ce rappel disait « appelle l'agent, il l'y trouvera » — un ordre. Or il part
+ * avec **chaque** message tant que la note est jointe, et pas seulement avec
+ * celui qui demande un calcul. On demandait « explique-moi comment tu as trouvé
+ * ce résultat », le rappel repartait, et le modèle relançait le
+ * pré-dimensionnement : l'écran redemandait la contrainte de sol, qu'on venait
+ * de donner deux messages plus haut. La question, elle, restait sans réponse.
+ *
+ * Il décrit donc, au lieu d'ordonner. Ce qu'il dit reste vrai à chaque message —
+ * la note est là, l'agent sait la lire, le modèle non ; ce qui change, et qui
+ * n'appartient pas à ce rappel, c'est si *ce message-ci* demande un calcul.
+ */
+function rappelDeLaNote(piecesJointes = []) {
+  const noms = piecesJointes.map((piece) => piece?.nom).filter(Boolean).join(", ");
+
+  return `[Une note de calcul est jointe à cette conversation : ${noms}. `
+    + "Elle y reste d'un message à l'autre. **Sa présence ne demande aucun calcul** : "
+    + "n'appelle un agent que si ce message-ci en demande un. "
+    + "Le cas échéant, l'agent de pré-dimensionnement des fondations sait la lire ; toi non, "
+    + "et tu n'as pas à en connaître le contenu. Ne dis donc pas qu'il te manque la "
+    + "descente de charges — il l'y trouvera. Et ne propose aucune valeur que la note "
+    + "pourrait porter, l'altitude du site en particulier : la remplir d'un chiffre "
+    + "plausible arrête le calcul au lieu de l'avancer.]";
 }
 
 /**
@@ -407,7 +438,7 @@ function souffler() {
 }
 
 /**
- * Le nom d'un utilitaire, tel qu'on le dit à quelqu'un.
+ * Le nom d'un agent, tel qu'on le dit à quelqu'un.
  *
  * `spectre_elastique_ec8` est un identifiant ; « Spectre de réponse élastique
  * (EC8) » est ce qu'on lit. On passe par le catalogue plutôt que d'embellir
@@ -415,7 +446,7 @@ function souffler() {
  * dans les messages d'attente.
  */
 function texteDeNom(id) {
-  return String(id || "un utilitaire").replace(/_V\d+$/, "").replace(/_/g, " ");
+  return String(id || "un agent").replace(/_V\d+$/, "").replace(/_/g, " ");
 }
 
 /** Le décompte cumulé des tours. Un champ absent le reste : on ne compte pas du vide. */
