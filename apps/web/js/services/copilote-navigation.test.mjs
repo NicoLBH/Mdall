@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  TITRE_NAVIGATION, executerLaNavigation, ouvrirUnEcran, projetsDesignes
+  TITRE_NAVIGATION, executerLaNavigation, ouvrirUnEcran, projetsDesignes, routeOuAller
 } from "./copilote-navigation.js";
 
 /**
@@ -155,4 +155,44 @@ test("l'appel raconte ce qu'il fait pendant qu'il le fait", async () => {
   });
 
   assert.deepEqual(dits, ["Recherche du projet", "Ouverture de Médiathèque des Gets"]);
+});
+
+/* ── Le maillon entre « l'outil a tourné » et « l'écran a bougé » ────────── */
+
+test("le message qui a ouvert un écran dit où aller", () => {
+  // C'est le maillon dont la panne se lit comme un mensonge : le copilote
+  // annonce qu'il vous emmène, et rien ne bouge.
+  const { resultat } = ouvrirUnEcran({
+    nom: "SCCV du diamant", ecran: "documents", projets: PROJETS
+  });
+
+  assert.equal(routeOuAller([resultat], "#copilote"), "#project/p3/documents");
+});
+
+test("un message qui n'a rien ouvert ne déplace personne", () => {
+  // Un calcul de fondations, une lecture du cerveau, un refus : rien de tout
+  // cela ne doit quitter l'écran où l'on est.
+  assert.equal(routeOuAller([], "#copilote"), "");
+  assert.equal(routeOuAller([{ statut: "fait", valeurs: { largeur: 1.2 } }], "#copilote"), "");
+  const { resultat } = ouvrirUnEcran({ nom: "chamonix", ecran: "sujets", projets: PROJETS });
+  assert.equal(routeOuAller([resultat], "#copilote"), "", "un refus ne déplace pas");
+});
+
+test("deux ouvertures dans un message mènent à la première", () => {
+  // Deux endroits à la fois n'existent pas. La carte de chacune reste dans le
+  // fil, et un clic mène à l'autre.
+  const premier = ouvrirUnEcran({ nom: "SCCV du diamant", ecran: "documents", projets: PROJETS });
+  const second = ouvrirUnEcran({ nom: "la médiathèque des gets", ecran: "sujets", projets: PROJETS });
+
+  assert.equal(routeOuAller([premier.resultat, second.resultat], "#copilote"), "#project/p3/documents");
+});
+
+test("on n'écrit pas l'adresse où l'on est déjà", () => {
+  // Elle ne déplacerait rien — aucun `hashchange` ne part — mais empilerait une
+  // entrée d'historique, et le bouton « précédent » ne ramènerait nulle part.
+  const { resultat } = ouvrirUnEcran({
+    nom: "SCCV du diamant", ecran: "documents", projets: PROJETS
+  });
+
+  assert.equal(routeOuAller([resultat], "#project/p3/documents"), "");
 });

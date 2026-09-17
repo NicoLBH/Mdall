@@ -45,9 +45,9 @@ import { store } from "../store.js";
 import { buildAssistContext } from "./copilote-context.js";
 import { contexteTransversal } from "./copilote-contexte-transversal.js";
 import { executerUtilitaire } from "./utilitaires-service.js";
-import { executerLaVariante } from "./copilote-variante.js";
-import { executerLeCerveau } from "./copilote-cerveau.js";
-import { executerLaNavigation } from "./copilote-navigation.js";
+import {
+  EXECUTEURS_DU_NAVIGATEUR, ROLES_QUE_CE_NAVIGATEUR_SAIT
+} from "./copilote-executeurs.js";
 import { conversationTitle } from "./copilote-conversations.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
@@ -260,6 +260,11 @@ export async function sendAssistMessage(message, {
         // L'écran part à part de la mémoire, et sous son propre nom : les mêler
         // ferait passer un filtre pour une vérité du projet.
         screen: { app: context.app, subjects: context.subjects, project_form: context.project_form },
+        // **Ce que cette page-ci sait exécuter**, dit en rôles et non en noms
+        // d'outils : elle n'en apprend aucun, et le serveur n'offre au modèle
+        // que ce qu'elle saura faire. Sans cela, un outil déployé côté serveur
+        // avant le site était appelé, puis exécuté de travers.
+        browser_roles: ROLES_QUE_CE_NAVIGATEUR_SAIT,
         tool_exchanges: echanges
       })
     });
@@ -309,43 +314,29 @@ export async function sendAssistMessage(message, {
       // seconde implémentation du même raisonnement (règle 4), et le router sur
       // son nom reviendrait à apprendre au navigateur quels outils existent.
       if (appel?.ou === "navigateur") {
-        /**
-         * **Trois outils tournent ici, et c'est le serveur qui dit lequel.**
-         *
-         * Le navigateur n'a pas de catalogue — c'est le but : router sur le nom
-         * lui apprendrait un nom d'outil. Il reçoit un **rôle**, et rien de
-         * plus.
-         *
-         * Une table plutôt qu'une suite de conditions : au troisième, le
-         * ternaire imbriqué se lisait à l'envers, et le quatrième s'y serait
-         * ajouté par la même pente.
-         */
         const dire = (dit) => etape(onEtape, dit?.texte, dit?.detail);
-        const parRole = {
-          cerveau: () => executerLeCerveau({ assertions, projectId, onEtape: dire }),
-          variante: () => executerLaVariante({
-            entrees: safeJsonParse(appel?.arguments) ?? {},
-            assertions,
-            projectId,
-            onEtape: dire
-          }),
-          // Il ne déplace personne : il reconnaît le projet et rend l'adresse.
-          // Le déplacement a lieu quand le tour est fini et la réponse
-          // enregistrée — partir au milieu emporterait la conversation.
-          navigation: () => executerLaNavigation({
-            entrees: safeJsonParse(appel?.arguments) ?? {},
-            onEtape: dire
-          })
-        };
 
-        // Un rôle qu'on ne connaît pas n'est pas exécuté au hasard : le tour
-        // s'arrête, plutôt que de lancer un outil pour un autre (règle 5).
-        const executer = parRole[String(appel?.quoi ?? "").trim()];
+        // Un rôle qu'on ne connaît pas n'est **pas** exécuté au hasard : le tour
+        // s'arrête, plutôt que de lancer un outil pour un autre. C'est ce que
+        // l'ancien ternaire faisait — « cerveau, ou sinon variante » —, et le
+        // jour où un troisième rôle est arrivé, on a vu un test de variante
+        // s'afficher en réponse à « ouvre-moi ce projet » (règle 5).
+        //
+        // Ce cas ne devrait plus se présenter : le serveur n'offre au modèle que
+        // les rôles que cette page annonce savoir faire. Le garde-fou reste,
+        // parce qu'une garantie qui repose sur deux déploiements n'en est pas
+        // tout à fait une.
+        const executer = EXECUTEURS_DU_NAVIGATEUR[String(appel?.quoi ?? "").trim()];
         if (!executer) {
           throw new Error("Le copilote a demandé un outil que cette version ne sait pas exécuter.");
         }
 
-        const { resultat, pourLeModele } = await executer();
+        const { resultat, pourLeModele } = await executer({
+          entrees: safeJsonParse(appel?.arguments) ?? {},
+          assertions,
+          projectId,
+          dire
+        });
 
         executions.push(resultat);
         if (typeof onToolRun === "function") onToolRun(resultat);

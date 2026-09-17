@@ -63,14 +63,10 @@ import { requireUser } from "../_shared/require-user.ts";
 import { deposerLaConsommation } from "../_shared/consommation-ia.ts";
 import { declarationsPourModele } from "../_shared/utilitaires/catalogue.js";
 import {
-  DECLARATION_VARIANTE, CONSIGNES_VARIANTE, OUTILS_DU_NAVIGATEUR, roleDuNavigateur
+  CONSIGNES_VARIANTE, OUTILS_DU_NAVIGATEUR, declarationsPourCeNavigateur, roleDuNavigateur
 } from "../_shared/utilitaires/variante-outil.js";
-import {
-  DECLARATION_CERVEAU, CONSIGNES_CERVEAU
-} from "../_shared/utilitaires/cerveau-outil.js";
-import {
-  DECLARATION_NAVIGATION, CONSIGNES_NAVIGATION
-} from "../_shared/utilitaires/navigation-outil.js";
+import { CONSIGNES_CERVEAU } from "../_shared/utilitaires/cerveau-outil.js";
+import { CONSIGNES_NAVIGATION } from "../_shared/utilitaires/navigation-outil.js";
 
 type ToolDeclaration = {
   type?: string;
@@ -95,6 +91,11 @@ type CopilotRequest = {
   screen?: unknown;
   other_conversations?: Array<{ titre?: string; le?: string; messages?: number }>;
   tools?: ToolDeclaration[];
+  /**
+   * Ce que ce navigateur-ci sait exécuter, dit en **rôles** et non en noms
+   * d'outils : il n'en apprend donc aucun. Absent, c'est un navigateur d'avant.
+   */
+  browser_roles?: string[];
   tool_exchanges?: ToolExchange[];
 };
 
@@ -421,13 +422,18 @@ serve(async (req) => {
   // page revenait à publier la méthode tout en protégeant l'arithmétique.
   // Le navigateur ne les envoie plus, et ne les recevrait pas non plus.
   //
-  // Les trois outils du navigateur s'y ajoutent, et **en tête** : ce sont ceux
-  // dont la réponse porte sur le projet entier — ou sur l'application —, et une
-  // coupe au budget ne doit pas les faire disparaître avant les calculs de
-  // détail. Ils s'exécutent au navigateur parce que ce qu'ils font y est déjà —
-  // le moteur de variante, le dessin du cerveau, l'adresse de la page — et ce
-  // qui reste ici est ce qui compte : la décision de les appeler.
-  const outils = [DECLARATION_VARIANTE, DECLARATION_CERVEAU, DECLARATION_NAVIGATION, ...declarationsPourModele()]
+  // Les outils du navigateur s'y ajoutent, et **en tête** : ce sont ceux dont la
+  // réponse porte sur le projet entier — ou sur l'application —, et une coupe au
+  // budget ne doit pas les faire disparaître avant les calculs de détail. Ils
+  // s'exécutent au navigateur parce que ce qu'ils font y est déjà — le moteur de
+  // variante, le dessin du cerveau, l'adresse de la page — et ce qui reste ici
+  // est ce qui compte : la décision de les appeler.
+  //
+  // **On n'offre que ce que ce navigateur-ci sait exécuter.** Le serveur et le
+  // site se déploient séparément : offrir un outil que la page ne connaît pas
+  // encore, c'est le faire appeler puis exécuter de travers, sans que rien ne le
+  // dise. Un outil absent, lui, n'est jamais appelé.
+  const outils = [...declarationsPourCeNavigateur(payload.browser_roles), ...declarationsPourModele()]
     .slice(0, MAX_TOOLS)
     .filter((outil) => texte(outil?.name) && outil?.parameters);
 
