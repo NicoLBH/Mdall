@@ -59,15 +59,29 @@ test("c'est l'engagement le plus coûteux qui compte", () => {
  */
 test("le vocabulaire est ordonné, du plus léger au plus lourd", () => {
   assert.deepEqual(ORDRE_DES_RANGS, [
-    RANG.RIEN, RANG.INTERNE, RANG.MAITRISE_DOEUVRE, RANG.CONTROLE_TECHNIQUE, RANG.CONTRACTUEL
+    RANG.RIEN, RANG.INTERNE, RANG.EQUIPE, RANG.MAITRISE_DOEUVRE,
+    RANG.CONTROLE_TECHNIQUE, RANG.CONTRACTUEL
   ]);
+});
+
+test("une équipe qui tranche engage plus qu'une relecture, moins qu'une signature", () => {
+  // La place de l'échelon **est** son sens. Une personne qui relit n'engage
+  // qu'elle ; une équipe qui tranche engage le projet ; une maîtrise d'œuvre qui
+  // signe engage au-delà du projet. Le déplacer d'un cran changerait ce qu'il
+  // coûte de casser la valeur qu'il couvre.
+  assert.ok(rangEstAuMoins(RANG.EQUIPE, RANG.INTERNE));
+  assert.ok(!rangEstAuMoins(RANG.INTERNE, RANG.EQUIPE));
+  assert.ok(!rangEstAuMoins(RANG.EQUIPE, RANG.MAITRISE_DOEUVRE));
+  assert.equal(rangLePlusHaut([RANG.INTERNE, RANG.EQUIPE]), RANG.EQUIPE);
 });
 
 test("deux rangs sont déclarés que rien n'atteint encore, et c'est dit", () => {
   // Mdall ne connaît pas le rôle d'un signataire, ni la nature contractuelle
   // d'une pièce. Les déclarer sans les atteindre vaut mieux que de faire croire
   // qu'ils ne se rencontrent jamais (règle 5) — et le jour où l'un devient
-  // dérivable, une ligne suffit.
+  // dérivable, une ligne suffit. C'est exactement ce qui vient d'arriver à
+  // « tranché avec l'équipe » : un point fermé l'établit désormais, et ce qui le
+  // dérive vit dans `ce-que-bloque-un-point.js`, jamais dans un acte.
   const atteints = new Set([
     rangDeLActe(acte({ note: "SOCOTEC" })),
     rangDeLActe(acte({ note: "relu" })),
@@ -76,6 +90,7 @@ test("deux rangs sont déclarés que rien n'atteint encore, et c'est dit", () =>
 
   assert.ok(!atteints.has(RANG.MAITRISE_DOEUVRE));
   assert.ok(!atteints.has(RANG.CONTRACTUEL));
+  assert.ok(!atteints.has(RANG.EQUIPE), "un acte ne tranche pas avec l'équipe");
   assert.equal(atteints.size, 3);
 });
 

@@ -6,6 +6,7 @@ import {
   EPINGLES_AU_PLUS, bandeauDesEpingles, estEpingle, motDeLEpingle, sujetsEpingles
 } from "../../services/epingles-des-sujets.js";
 import { TRI, motDuTri } from "../../services/tri-des-sujets.js";
+import { prioriteSaisie } from "../../services/ce-que-bloque-un-point.js";
 import { lecturesReservees, titreDeLaListe } from "../../services/rail-des-sujets.js";
 import { filterValuesOf, toggleFilter, withFilter } from "../../services/query-bar.js";
 import { renderTitreDEcranHtml } from "../ui/titre-decran.js";
@@ -177,16 +178,16 @@ function issueIcon(status = "open", options = {}) {
   return renderIconeDetat(etatDunSujet({ status, review_state: reviewState }));
 }
 
+/**
+ * Le champ saisi, ramené au vocabulaire.
+ *
+ * La reconnaissance vit dans `services/ce-que-bloque-un-point.js` depuis que le
+ * tri des points ouverts en a besoin lui aussi. Deux tables des graphies
+ * anciennes — `p1`, `hight` — auraient fini par ne plus reconnaître les mêmes
+ * (règle 10) ; celle-ci reste ici parce que tout l'écran l'appelle par ce nom.
+ */
 function normalizeBackendPriority(priority = "") {
-  const raw = String(priority ?? "").trim();
-  if (!raw) return "";
-  const value = raw.toLowerCase();
-  if (value === "hight") return "high";
-  if (["low", "medium", "high", "critical"].includes(value)) return value;
-  if (value === "p1") return "critical";
-  if (value === "p2") return "high";
-  if (value === "p3") return "medium";
-  return value;
+  return prioriteSaisie(priority);
 }
 
 function priorityBadge(priority = "medium") {

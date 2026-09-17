@@ -122,6 +122,9 @@ const REGLE = "163,113,247";
  */
 const ANNEAU_DU_RANG = {
   [RANG.INTERNE]: { trait: "rgba(139,148,158,.55)", epaisseur: 1 },
+  // Une valeur tranchée en réunion se voit : sans anneau, l'échelon que les
+  // points apportent serait dessiné comme un projet où personne ne s'est engagé.
+  [RANG.EQUIPE]: { trait: "rgba(139,148,158,.85)", epaisseur: 1.1 },
   [RANG.MAITRISE_DOEUVRE]: { trait: "rgba(88,166,255,.7)", epaisseur: 1.2 },
   [RANG.CONTROLE_TECHNIQUE]: { trait: "rgba(63,185,80,.85)", epaisseur: 1.6 },
   [RANG.CONTRACTUEL]: { trait: "rgba(63,185,80,1)", epaisseur: 2.2 }
