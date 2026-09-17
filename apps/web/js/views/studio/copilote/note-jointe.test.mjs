@@ -15,7 +15,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { renderApercuDeLaNoteHtml, renderLigneDeLaNoteHtml } from "./note-jointe.js";
+import { apercuDeLaNote, renderLigneDeLaNoteHtml, renderNoteDuMessageHtml } from "./note-jointe.js";
 import { adresseDeLaPiece, oublierLAdresse } from "../../../services/piece-jointe.js";
 
 const PDF = Buffer.from("%PDF-1.4 une note").toString("base64");
@@ -99,54 +99,48 @@ test("sans note, il n'y a pas de ligne", () => {
  *
  * Le cadre laissait le navigateur s'en charger. Il sait le faire — mais il peut
  * aussi refuser : « toujours télécharger les PDF » est un réglage courant, et le
- * cadre montrait alors un bouton « Ouvrir » à la place du document. Une note
- * qu'on vient de joindre et qu'on ne peut pas regarder d'un coup d'œil fait
- * douter de tout ce qui suit.
+ * cadre montrait alors un bouton « Ouvrir » à la place du document.
  */
-test("l'aperçu porte le lecteur de l'application, et de quoi le refermer", () => {
-  const html = renderApercuDeLaNoteHtml({ nom: "note.pdf", adresse: "blob:abc" });
+test("l'aperçu porte le lecteur de l'application, et rien du navigateur", () => {
+  const { corpsHtml } = apercuDeLaNote({ nom: "note.pdf", adresse: "blob:abc" });
 
-  assert.doesNotMatch(html, /<iframe/, "plus de cadre : le navigateur ne décide plus");
-  assert.match(html, /data-copilote-apercu-pages/, "les pages se peignent ici");
-  assert.match(html, /documents-pdf-viewer__pages/, "avec les classes du lecteur des Documents");
-  assert.match(html, /data-copilote-apercu-fermer/, "et se referme");
-  assert.match(html, /aria-label="Aperçu de note\.pdf"/);
+  assert.doesNotMatch(corpsHtml, /<iframe|<object|<embed/, "aucun lecteur du navigateur");
+  assert.match(corpsHtml, /data-copilote-apercu-pages/, "les pages se peignent ici");
+  assert.match(corpsHtml, /documents-pdf-viewer__pages/, "avec les classes du lecteur des Documents");
 });
 
 /**
- * **L'aperçu passe par-dessus l'écran.**
+ * **La fenêtre est celle de l'application.**
  *
- * Il tenait entre le fil et la saisie, dans quatre cent vingt pixels où une page
- * A4 arrivait illisible. Or la seule chose qu'on demande à un aperçu est de
- * pouvoir jeter un œil : s'il faut plisser les yeux, autant ouvrir le fichier
- * ailleurs, et le geste n'a servi à rien.
+ * `#detailsModal` attend dans le document : sa coque, son voile, son en-tête, sa
+ * croix et sa fermeture sont réglés. Ce module ne rend que les trois morceaux
+ * qu'on y met — en dessiner une seconde revenait à recalibrer un voile et une
+ * ombre contre ceux d'à côté (règle 10).
  */
-test("l'aperçu est une fenêtre posée sur un voile", () => {
-  const html = renderApercuDeLaNoteHtml({ nom: "note.pdf" });
+test("l'aperçu se range dans les trois morceaux d'une fenêtre", () => {
+  const rendu = apercuDeLaNote({ nom: "note.pdf", adresse: "blob:abc" });
 
-  assert.match(html, /data-copilote-apercu-voile/, "le voile referme au clic");
-  assert.match(html, /role="dialog"[\s\S]{0,60}aria-modal="true"/, "et c'est une fenêtre, pas un encart");
-  assert.ok(
-    html.indexOf("copilote-apercu-voile") < html.indexOf("copilote-apercu\""),
-    "le voile enveloppe la fenêtre"
-  );
+  assert.deepEqual(Object.keys(rendu).sort(), ["corpsHtml", "metaHtml", "titreHtml"]);
+  assert.match(rendu.titreHtml, /note\.pdf/, "le nom est le titre de la fenêtre");
+  // Aucune coque : elle est déjà dans le document, et une seconde divergerait.
+  assert.doesNotMatch(rendu.corpsHtml, /role="dialog"|copilote-apercu-voile|__fermer/);
 });
 
 /**
  * **Le recours reste à portée de main.** Le lecteur de l'application dessine ;
  * ce lien rend la note au navigateur — pour l'imprimer, ou la garder ouverte à
- * côté.
+ * côté. Il se pose à droite de l'en-tête, avant la croix.
  */
 test("l'aperçu offre d'ouvrir la note dans un onglet", () => {
-  const avec = renderApercuDeLaNoteHtml({ nom: "note.pdf", adresse: "blob:abc" });
-  assert.match(avec, /href="blob:abc"[\s\S]{0,80}target="_blank"/);
-  assert.match(avec, /Ouvrir dans un onglet/);
+  const avec = apercuDeLaNote({ nom: "note.pdf", adresse: "blob:abc" });
+  assert.match(avec.metaHtml, /href="blob:abc"[\s\S]{0,80}target="_blank"/);
+  assert.match(avec.metaHtml, /Ouvrir dans un onglet/);
 
   // Sans adresse, pas de lien mort : l'aperçu se dessine quand même, puisqu'il
   // ne dépend plus d'elle.
-  const sans = renderApercuDeLaNoteHtml({ nom: "note.pdf" });
-  assert.doesNotMatch(sans, /Ouvrir dans un onglet/);
-  assert.match(sans, /data-copilote-apercu-pages/);
+  const sans = apercuDeLaNote({ nom: "note.pdf" });
+  assert.equal(sans.metaHtml, "");
+  assert.match(sans.corpsHtml, /data-copilote-apercu-pages/);
 });
 
 /**
@@ -155,16 +149,64 @@ test("l'aperçu offre d'ouvrir la note dans un onglet", () => {
  * trois, sans quoi on rejoint la note pour rien (règle 5).
  */
 test("l'aperçu dit où en est le dessin", () => {
-  assert.match(renderApercuDeLaNoteHtml({ nom: "n.pdf" }), /Lecture de la note…/);
-  assert.match(renderApercuDeLaNoteHtml({ nom: "n.pdf", etat: "lecture" }), /aria-busy="true"/);
+  assert.match(apercuDeLaNote({ nom: "n.pdf" }).corpsHtml, /Lecture de la note…/);
+  assert.match(apercuDeLaNote({ nom: "n.pdf", etat: "lecture" }).corpsHtml, /aria-busy="true"/);
 
-  const lue = renderApercuDeLaNoteHtml({ nom: "n.pdf", etat: "lue" });
+  const lue = apercuDeLaNote({ nom: "n.pdf", etat: "lue" }).corpsHtml;
   assert.doesNotMatch(lue, /Lecture de la note/);
   assert.match(lue, /aria-busy="false"/);
 
-  const panne = renderApercuDeLaNoteHtml({ nom: "n.pdf", etat: "panne", adresse: "blob:abc" });
+  const panne = apercuDeLaNote({ nom: "n.pdf", etat: "panne", adresse: "blob:abc" }).corpsHtml;
   assert.match(panne, /n'a pas pu être dessinée/);
   assert.match(panne, /ouvrable dans un onglet/, "et le recours est rappelé");
+});
+
+/* ── La note dans le fil ─────────────────────────────────────────────────── */
+
+/**
+ * **Une fois la question partie, la note s'ouvre encore.**
+ *
+ * Elle se voit dans la bulle où elle a servi, mais son nom n'y était qu'un
+ * texte : on relit une réponse, on veut revoir la note sur laquelle elle
+ * s'appuie, et il fallait rouvrir le fichier ailleurs — sortir de l'écran pour
+ * vérifier ce que l'écran vient d'affirmer. Elle porte le même repère que la
+ * pastille de la zone de saisie : un seul geste les ouvre toutes les deux.
+ */
+test("le nom de la note reste cliquable dans le fil", () => {
+  const html = renderNoteDuMessageHtml({ nom: "descente-de-charge.pdf", montrable: true });
+
+  assert.match(html, /<button[^>]*data-copilote-apercu/);
+  assert.match(html, /descente-de-charge\.pdf/);
+  assert.match(html, /title="Voir descente-de-charge\.pdf"/);
+});
+
+/**
+ * **Sans octets, pas de bouton.** Ce qu'une discussion enregistre, ce sont le
+ * rôle et le texte : la note relue d'une session d'avant n'a plus de contenu, et
+ * un bouton qui rendrait un cadre vide ferait croire que le PDF l'est (règle 5).
+ * Le nom reste, puisqu'il dit toujours sur quoi la réponse s'appuyait.
+ */
+test("la note d'une session d'avant se lit, mais ne s'ouvre pas", () => {
+  const html = renderNoteDuMessageHtml({ nom: "note.pdf", montrable: false });
+
+  assert.doesNotMatch(html, /<button|data-copilote-apercu/);
+  assert.match(html, /note\.pdf/);
+
+  // Et un message sans note ne laisse pas de rangée vide dans la bulle.
+  assert.equal(renderNoteDuMessageHtml({ nom: "" }), "");
+  assert.equal(renderNoteDuMessageHtml(), "");
+});
+
+/**
+ * **Un nom venu d'un fichier déposé n'est pas du HTML.** Il vient du disque de
+ * quelqu'un : il peut contenir n'importe quoi, et il est écrit deux fois — dans
+ * le titre de survol et dans le corps du bouton.
+ */
+test("le nom de la note est échappé, dans le titre comme dans le texte", () => {
+  const html = renderNoteDuMessageHtml({ nom: '<img src=x onerror=1>"', montrable: true });
+
+  assert.doesNotMatch(html, /<img/);
+  assert.equal(html.match(/&lt;img/g)?.length, 2, "le corps et le titre de survol");
 });
 
 /* ── Les octets ──────────────────────────────────────────────────────────── */
@@ -202,22 +244,29 @@ test("rendre une adresse est sans risque, même deux fois", () => {
 /* ── L'écran s'en sert, et rend ce qu'il a pris ──────────────────────────── */
 
 /**
- * **L'adresse se fabrique une fois, à l'ouverture, et se rend à la fermeture.**
+ * **Ce que l'aperçu retient se rend à la fermeture** : le document du lecteur,
+ * et l'adresse d'objet du recours.
  *
- * En fabriquer une à chaque rendu retiendrait les octets de la note à chaque
- * frappe — six mégaoctets par caractère tapé, jusqu'à quitter la page. Rien à
- * l'écran ne le dirait : c'est le défaut qu'on découvre au bout d'une heure,
- * quand l'onglet rame. Aucune exécution ne le montre ici — l'écran parle à la
- * base et ne s'importe pas.
+ * Les garder retiendrait les pages et les octets de la note jusqu'à ce qu'on
+ * quitte l'application. Rien à l'écran ne le dirait : c'est le défaut qu'on
+ * découvre au bout d'une heure, quand l'onglet rame. Aucune exécution ne le
+ * montre ici — l'écran parle à la base et ne s'importe pas.
  */
-test("le Copilote rend les octets de l'aperçu qu'il referme", async () => {
+test("le Copilote rend ce que l'aperçu retenait quand il referme", async () => {
   const { readFile } = await import("node:fs/promises");
   const source = await readFile(new URL("./copilote.js", import.meta.url), "utf8");
 
   assert.match(source, /adresseDeLaPiece\(piece\)/, "l'adresse se fabrique à l'ouverture");
+
+  // **La fermeture rend tout, et par un seul chemin** : celui de la fenêtre.
+  // Deux nettoyages mèneraient à deux états différents de la mémoire (règle 4).
   assert.match(
-    source, /basculerLApercu[\s\S]{0,400}oublierLAdresse\(etat\.apercu\.adresse\)/,
-    "et se rend quand on referme"
+    source, /surFermeture:[\s\S]{0,300}dispose\?\.\(\)[\s\S]{0,200}oublierLAdresse/,
+    "le document du lecteur et l'adresse partent ensemble"
+  );
+  assert.match(
+    source, /function oublierLApercu[\s\S]{0,400}fermerLaFenetreDeDetails\(\)/,
+    "et tout passe par la fenêtre"
   );
 
   // **Trois chemins mènent à la même fermeture**, et les trois doivent rendre :
@@ -225,8 +274,65 @@ test("le Copilote rend les octets de l'aperçu qu'il referme", async () => {
   assert.match(source, /etat\.pieceJointe = null;[\s\S]{0,200}oublierLApercu\(etat\)/, "retirer");
   assert.match(source, /oublierLApercu\(etat\);\s*\n\s*etat\.pieceJointe = await lireLeFichier/, "rejoindre");
   assert.match(source, /oublierLApercu\(store\.ui\.assistant\)/, "changer de projet");
+});
 
-  // L'aperçu est posé entre le fil et la saisie : dans la saisie il mangerait
-  // la place du texte, au-dessus du fil il pousserait la conversation dehors.
-  assert.match(source, /renderCorps\(etat\)[\s\S]{0,400}renderApercu\(etat\)[\s\S]{0,200}copilote-composer/);
+/**
+ * **L'aperçu est une fenêtre, pas un morceau d'écran.**
+ *
+ * Il tenait dans le flux, entre le fil et la saisie : chaque rendu du Copilote —
+ * à chaque message, à chaque étape d'outil, à chaque conversation qui arrive —
+ * effaçait les pages peintes pour les repeindre. Il est désormais posé
+ * impérativement, et le rendu de l'écran ne le connaît plus.
+ */
+test("l'aperçu ne se redessine plus avec l'écran", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("./copilote.js", import.meta.url), "utf8");
+
+  assert.match(source, /ouvrirLaFenetreDeDetails\(/, "il passe par la fenêtre de l'application");
+  assert.doesNotMatch(
+    source, /\$\{renderApercu\(etat\)\}/,
+    "et le gabarit de l'écran ne le contient plus"
+  );
+});
+
+/**
+ * **Une note qu'on n'a pas su dessiner ne referme pas sa fenêtre.**
+ *
+ * Elle reste ouverte, et dit la panne : le recours — l'ouvrir dans un onglet —
+ * est dans son en-tête. Le dire en rouvrant la fenêtre la refermait d'abord :
+ * `surFermeture` partait, l'aperçu était oublié, et la fenêtre restait ouverte
+ * sur une note dont plus personne ne se savait propriétaire. La croix ne rendait
+ * plus les octets, et le clic suivant rouvrait au lieu de fermer.
+ */
+test("l'état du dessin se dit sans rouvrir la fenêtre", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("./copilote.js", import.meta.url), "utf8");
+
+  assert.match(
+    source, /function direLetatDeLApercu[\s\S]{0,300}majLaFenetreDeDetails\(apercuDeLaNote/,
+    "elle se rafraîchit"
+  );
+  assert.doesNotMatch(
+    source, /etat\.apercu\.etat = "panne";\s*\n\s*poserLaFenetre/,
+    "et ne se rouvre pas"
+  );
+
+  // Et l'écran ne referme plus par lui-même : la fenêtre porte sa croix, son
+  // voile et son Échap, et c'est son `surFermeture` qui rend les octets.
+  assert.doesNotMatch(source, /data-copilote-apercu-voile|data-copilote-apercu-fermer/);
+});
+
+/**
+ * **Le fil compacte les onglets.**
+ *
+ * On lui désignait `null` : la coque ne défilant pas, le bandeau du projet ne
+ * voyait aucun mouvement et restait déplié. Sur un écran de conversation, ces
+ * quarante-quatre pixels sont pris sur la seule chose qu'on y fait — lire.
+ */
+test("le défilement du fil est la source de compactage de l'écran", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("./copilote.js", import.meta.url), "utf8");
+
+  assert.match(source, /registerProjectPrimaryScrollSource\([\s\S]{0,80}#copiloteThread/);
+  assert.doesNotMatch(source, /registerProjectPrimaryScrollSource\(null\)/);
 });

@@ -17612,6 +17612,18 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   margin:0 2px 6px; color:var(--muted); font-size:12.5px;
 }
 .copilote-msg__note span{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* **La note s'ouvre encore une fois la question partie.** On relit une réponse,
+   on veut revoir la note sur laquelle elle s'appuie : le nom seul obligeait à
+   rouvrir le fichier ailleurs, c'est-à-dire à sortir de l'écran pour vérifier ce
+   que l'écran vient d'affirmer. Rien de son dessin ne change — seuls le pointeur
+   et la couleur au survol disent qu'elle se clique. */
+.copilote-msg__note-ouvrir{
+  display:inline-flex; align-items:center; gap:8px; min-width:0;
+  background:none; border:0; padding:0; margin:0;
+  color:inherit; font:inherit; cursor:pointer;
+}
+.copilote-msg__note-ouvrir:hover{ color:var(--text); }
+.copilote-msg__note-ouvrir:hover .ui-icon{ color:var(--text); }
 /* Grise, comme la pastille de la zone de saisie et comme les Fichiers : le
    rouge est la couleur d'une alerte partout ailleurs dans l'écran, et une note
    qui a voyagé avec la question n'en est pas une. */
@@ -17732,7 +17744,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 /* La saisie ne défile pas avec le fil : elle reste en bas, sur toute la
    largeur, sa colonne ramenée au centre comme le fil. */
-.copilote-composer{ flex:0 0 auto; padding:8px 24px 16px; }
+/* Le retrait du bas suivait celui d'un écran qui défile ; ici la saisie est déjà
+   au bord, et seize pixels de vide sous elle sont seize pixels de discussion en
+   moins. */
+.copilote-composer{ flex:0 0 auto; padding:8px 24px 10px; }
 .copilote-composer__inner{
   display:flex; flex-direction:column; gap:10px;
   width:100%; max-width:var(--copilote-colonne); margin:0 auto;
@@ -17758,8 +17773,13 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 /* Pas de poignée de redimensionnement : elle tombait juste au-dessus du bouton
    d'envoi, où elle ressemblait à un défaut d'affichage. Le champ grandit tout
    seul avec ce qu'on écrit, jusqu'à une limite au-delà de laquelle il défile. */
+/* **Deux lignes au repos, et non trois.** La saisie vide occupait soixante-quatre
+   pixels de haut pour une question qui en fait rarement plus d'une — c'est autant
+   de pris sur la seule chose qu'on fait ici : lire la discussion. Elle grandit
+   avec ce qu'on écrit (`ajusterHauteur`), donc rien n'est perdu : ce qui est
+   gagné, c'est la place qu'elle prenait sans rien contenir. */
 .copilote-input{
-  width:100%; min-height:64px; max-height:40vh; resize:none; overflow-y:auto;
+  width:100%; min-height:44px; max-height:40vh; resize:none; overflow-y:auto;
   border:0; background:transparent; outline:none;
   color:var(--text); font:inherit; font-size:14px; line-height:20px;
 }
@@ -18083,43 +18103,31 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
    `min()` plutôt qu'une hauteur fixe : sur un écran bas, quatre cent vingt
    pixels d'aperçu ne laisseraient rien à la conversation. */
-/* **Le voile, et la fenêtre par-dessus l'écran.**
+/* **L'aperçu vit dans la fenêtre de l'application** (`#detailsModal`) : sa
+   coque, son voile, son en-tête, sa croix et sa fermeture y sont déjà réglés, et
+   c'est la même fenêtre que partout ailleurs. Ne reste ici que le contenu.
 
-   L'aperçu tenait entre le fil et la saisie, dans quatre cent vingt pixels où
-   une page A4 arrivait illisible. Or la seule chose qu'on demande à un aperçu
-   est de pouvoir jeter un œil : s'il faut plisser les yeux, autant ouvrir le
-   fichier ailleurs, et le geste n'a servi à rien.
-
-   Le voile laisse voir la discussion autour — on n'a pas quitté la
-   conversation, on regarde une pièce. Le retrait est le même en haut et en bas
-   qu'à gauche et à droite dans l'esprit : large sur les côtés, où il n'y a rien
-   à lire, serré en hauteur, qui est ce qui manque à une page. */
-.copilote-apercu-voile{
-  position:fixed; inset:0; z-index:60;
-  display:flex; padding:40px 80px;
-  background:rgba(1,4,9,.72);
-}
+   Il prend toute la hauteur du corps : une page A4 dans quatre cents pixels
+   arrive illisible, et la seule chose qu'on demande à un aperçu est de pouvoir
+   jeter un œil. */
 .copilote-apercu{
-  flex:1 1 auto; display:flex; flex-direction:column; min-height:0; min-width:0;
-  border:1px solid var(--border); border-radius:10px;
-  background:var(--panel2); overflow:hidden;
-  box-shadow:0 24px 64px rgba(1,4,9,.6);
+  display:flex; flex-direction:column; min-height:0; height:100%;
+  background:var(--bg);
 }
-/* Sur un écran étroit, quatre-vingts pixels de chaque côté ne laissent plus une
-   page : le retrait se resserre plutôt que la page. */
-@media (max-width: 900px){
-  .copilote-apercu-voile{ padding:16px; }
-}
-.copilote-apercu__tete{
-  display:flex; align-items:center; gap:8px; flex:0 0 auto;
-  padding:6px 8px 6px 12px; border-bottom:1px solid var(--border2);
-  font-size:12px; color:var(--text);
-}
+/* Le titre de la fenêtre porte l'icône du fichier, grise comme partout. */
+.copilote-apercu__titre{ display:inline-flex; align-items:center; gap:8px; min-width:0; }
+
+/* **La zone de droite de l'en-tête se montre ici.** Elle est masquée par défaut —
+   le détail d'un sujet ne s'en sert que dans certains cas —, et le recours
+   « Ouvrir dans un onglet » s'y perdait sans un pixel de largeur. La règle est
+   portée par la classe de ce contenu-là : les autres fenêtres gardent la leur. */
+.modal--apercu-note .details-meta{ display:flex; align-items:center; }
+/* Le corps de la fenêtre n'a pas de retrait : la page occupe tout. */
+.modal--apercu-note .modal__body{ padding:0; }
 /* Grise, comme la pastille et comme les Fichiers : le rouge est la couleur d'une
    alerte partout ailleurs, et un PDF qu'on regarde n'en est pas une. */
-.copilote-apercu__tete .ui-icon{ flex:none; color:var(--muted); }
-.copilote-apercu__nom{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.copilote-apercu__fermer{ flex:none; }
+.copilote-apercu__titre .ui-icon{ flex:none; color:var(--muted); }
+.copilote-apercu__nom{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* **Les pages sont peintes par le lecteur de l'application**, et non par le
    navigateur : « toujours télécharger les PDF » est un réglage courant, et le
    cadre montrait alors un bouton « Ouvrir » à la place du document.

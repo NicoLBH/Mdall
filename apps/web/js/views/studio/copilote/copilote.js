@@ -51,7 +51,10 @@ import { sendAssistMessage } from "../../../services/copilote-service.js";
 import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.js";
 import { rendreLeMarkdown } from "../../ui/markdown-leger.js";
 import { adresseDeLaPiece, octetsDeLaPiece, oublierLAdresse } from "../../../services/piece-jointe.js";
-import { renderApercuDeLaNoteHtml, renderLigneDeLaNoteHtml } from "./note-jointe.js";
+import { apercuDeLaNote, renderLigneDeLaNoteHtml, renderNoteDuMessageHtml } from "./note-jointe.js";
+import {
+  fermerLaFenetreDeDetails, majLaFenetreDeDetails, ouvrirLaFenetreDeDetails
+} from "../../ui/fenetre-de-details.js";
 import { renderVoileDeDepot } from "../../ui/voile-de-depot.js";
 import { aRetenirDuResultat, executerUtilitaire } from "../../../services/utilitaires-service.js";
 import { conversationTitle, findConversation } from "../../../services/copilote-conversations.js";
@@ -477,12 +480,18 @@ export function copiloteConversationId() {
 function renderNoteDuMessage(msg) {
   const note = msg?.note;
   if (!note?.nom) return "";
-  return `
-    <div class="copilote-msg__note">
-      ${svgIcon("file-pdf", { width: 18, height: 18 })}
-      <span>${escapeHtml(note.nom)}</span>
-    </div>
-  `;
+
+  /**
+   * **On ne l'ouvre que si l'on a encore ses octets.** Ce qui est enregistré
+   * d'une discussion, ce sont le rôle et le texte : la note relue d'une session
+   * d'avant n'a plus de contenu, et un bouton qui rendrait un cadre vide ferait
+   * croire que le PDF l'est.
+   */
+  const piece = ensureState().pieceJointe;
+  return renderNoteDuMessageHtml({
+    nom: note.nom,
+    montrable: Boolean(piece?.donnees) && piece?.nom === note.nom
+  });
 }
 
 function renderMessage(msg, index, etat = null) {
@@ -1546,67 +1555,18 @@ function renderPieceJointe(etat) {
  * l'état. En fabriquer une à chaque rendu retiendrait les octets de la note à
  * chaque frappe — six mégaoctets par caractère tapé, jusqu'à quitter la page.
  */
-function renderApercu(etat) {
-  if (!etat.apercu) return "";
-  return renderApercuDeLaNoteHtml(etat.apercu);
-}
-
-/**
- * Peindre les pages de la note, avec le lecteur de l'application.
- *
- * ## Pourquoi pas le navigateur
- *
- * Il sait lire un PDF — **mais il peut aussi refuser** : « toujours télécharger
- * les PDF » est un réglage courant, et le cadre affichait alors un bouton
- * « Ouvrir » à la place du document. Une note qu'on vient de joindre et qu'on ne
- * peut pas regarder d'un coup d'œil fait douter de tout ce qui suit.
- *
- * ## Pourquoi on repeint après chaque rendu
- *
- * L'écran se redessine entièrement : les canevas peints disparaissent avec lui.
- * On ne repeint que lorsque le conteneur est **vide** — sinon chaque frappe
- * relirait le document.
- */
-async function peindreLApercu(root) {
-  const etat = ensureState();
-  const hote = root.querySelector("[data-copilote-apercu-pages]");
-  if (!etat.apercu || !hote || hote.childElementCount) return;
-
-  const octets = octetsDeLaPiece(etat.pieceJointe);
-  if (!octets) {
-    etat.apercu.etat = "panne";
-    render(root);
-    return;
-  }
-
-  try {
-    const { renderPdfDocument } = await import("../../../services/ct-lab-pdf-view.js");
-    // Le lecteur a pu se refermer pendant le chargement du moteur.
-    if (!hote.isConnected || !ensureState().apercu) return;
-
-    etat.apercu.dispose?.();
-    // **La page prend la largeur qu'on lui donne**, moins la gouttière du
-    // lecteur. Une largeur écrite en dur laisserait une page étroite au milieu
-    // d'une fenêtre qui couvre l'écran — c'est exactement ce qu'on venait de
-    // corriger en l'agrandissant.
-    const dispo = Math.round(hote.clientWidth || 0) - 24;
-    const lu = await renderPdfDocument(hote, {
-      bytes: octets, width: Math.max(320, Math.min(1400, dispo || 760))
-    });
-    etat.apercu.dispose = lu.dispose;
-    etat.apercu.etat = "lue";
-  } catch {
-    // **Une note qu'on n'a pas su dessiner se dit.** Un cadre vide et un cadre
-    // en panne se ressemblent exactement, et l'un fait rejoindre la note pour
-    // rien. Le recours — l'ouvrir dans un onglet — reste à portée de main.
-    etat.apercu.etat = "panne";
-  }
-
-  if (root.isConnected) render(root);
-}
-
 /**
  * Ouvrir ou refermer l'aperçu de la note jointe.
+ *
+ * **C'est une fenêtre de l'application**, celle qui attend dans le document
+ * (`ui/fenetre-de-details.js`) : coque, voile, en-tête, croix et fermeture y
+ * sont déjà réglés, et c'est la même que partout ailleurs.
+ *
+ * Elle est ouverte **impérativement**, et non rendue avec l'écran : le Copilote
+ * se redessine à chaque message, à chaque frappe d'outil, à chaque arrivée de
+ * conversation — et chaque rendu aurait effacé les pages peintes pour les
+ * repeindre. Une fenêtre n'appartient pas au flux de l'écran, elle est posée
+ * par-dessus.
  *
  * On rend l'adresse précédente avant d'en fabriquer une autre : une adresse
  * d'objet retient ses octets tant qu'on ne la révoque pas.
@@ -1615,9 +1575,7 @@ function basculerLApercu(root) {
   const etat = ensureState();
 
   if (etat.apercu) {
-    oublierLAdresse(etat.apercu.adresse);
-    etat.apercu = null;
-    render(root);
+    fermerLaFenetreDeDetails();
     return;
   }
 
@@ -1630,21 +1588,109 @@ function basculerLApercu(root) {
     return;
   }
 
-  // L'adresse ne sert plus qu'au recours : ouvrir la note dans un onglet. Son
-  // absence n'empêche donc pas l'aperçu.
+  // L'adresse ne sert qu'au recours : ouvrir la note dans un onglet.
   const adresse = adresseDeLaPiece(piece);
-
   etat.apercu = { nom: piece?.nom ?? "", adresse, etat: "lecture" };
+
+  poserLaFenetre(root);
   render(root);
+  void peindreLApercu(root);
+}
+
+/** Poser le contenu de l'aperçu dans la fenêtre, et dire quoi faire à sa fermeture. */
+function poserLaFenetre(root) {
+  const etat = ensureState();
+  if (!etat.apercu) return null;
+
+  return ouvrirLaFenetreDeDetails({
+    ...apercuDeLaNote(etat.apercu),
+    className: "modal--apercu-note",
+    surFermeture: () => {
+      const sien = ensureState();
+      // La fenêtre est déjà fermée : on ne rend plus que ce qu'elle retenait.
+      sien.apercu?.dispose?.();
+      oublierLAdresse(sien.apercu?.adresse);
+      sien.apercu = null;
+      if (root?.isConnected) render(root);
+    }
+  });
+}
+
+/**
+ * Peindre les pages de la note, avec le lecteur de l'application.
+ *
+ * ## Pourquoi pas le navigateur
+ *
+ * Il sait lire un PDF — **mais il peut aussi refuser** : « toujours télécharger
+ * les PDF » est un réglage courant, et le cadre affichait alors un bouton
+ * « Ouvrir » à la place du document. Une note qu'on vient de joindre et qu'on ne
+ * peut pas regarder d'un coup d'œil fait douter de tout ce qui suit.
+ *
+ * ## Les octets sont ici, et depuis le début
+ *
+ * La note est lue par le navigateur au moment où on la dépose
+ * (`lireLeFichier`), gardée en base64 dans l'état, et décodée en octets pour le
+ * lecteur. **Rien n'est demandé à personne** : il n'y a pas d'adresse d'origine,
+ * pas de requête, et l'aperçu marche hors ligne.
+ */
+async function peindreLApercu(root) {
+  const etat = ensureState();
+  const hote = document.querySelector("[data-copilote-apercu-pages]");
+  if (!etat.apercu || !hote || hote.childElementCount) return;
+
+  const octets = octetsDeLaPiece(etat.pieceJointe);
+  if (!octets) {
+    direLetatDeLApercu(etat, "panne");
+    return;
+  }
+
+  try {
+    const { renderPdfDocument } = await import("../../../services/ct-lab-pdf-view.js");
+    // La fenêtre a pu se refermer pendant le chargement du moteur.
+    if (!hote.isConnected || !ensureState().apercu) return;
+
+    // **La page prend la largeur qu'on lui donne**, moins la gouttière du
+    // lecteur : une largeur écrite en dur laisserait une page étroite au milieu
+    // d'une fenêtre qui couvre l'écran.
+    const dispo = Math.round(hote.clientWidth || 0) - 24;
+    const lu = await renderPdfDocument(hote, {
+      bytes: octets, width: Math.max(320, Math.min(1400, dispo || 760))
+    });
+    etat.apercu.dispose = lu.dispose;
+    etat.apercu.etat = "lue";
+    // La ligne d'attente s'en va : le document est là.
+    document.querySelector(".copilote-apercu__etat")?.remove();
+    hote.setAttribute("aria-busy", "false");
+  } catch {
+    // **Une note qu'on n'a pas su dessiner se dit.** Un cadre vide et un cadre
+    // en panne se ressemblent exactement, et l'un fait rejoindre la note pour
+    // rien. Le recours — l'ouvrir dans un onglet — reste à portée de main.
+    direLetatDeLApercu(etat, "panne");
+  }
+}
+
+/**
+ * Dire où en est le dessin, **sans rouvrir la fenêtre**.
+ *
+ * Rouvrir referme d'abord celle d'avant : `surFermeture` partirait, l'aperçu
+ * serait oublié, et la fenêtre resterait ouverte sur une note dont plus
+ * personne ne se sait propriétaire — la croix ne rendrait plus rien, et le clic
+ * suivant rouvrirait au lieu de fermer.
+ */
+function direLetatDeLApercu(etat, quoi) {
+  if (!etat.apercu) return;
+  etat.apercu.etat = quoi;
+  majLaFenetreDeDetails(apercuDeLaNote(etat.apercu));
 }
 
 /** La note s'en va : son aperçu aussi, et ses octets avec. */
 function oublierLApercu(etat) {
   if (!etat.apercu) return;
-  // Le document du lecteur se rend aussi : le laisser ouvert garderait les
-  // pages en mémoire jusqu'à quitter la page.
-  etat.apercu.dispose?.();
-  oublierLAdresse(etat.apercu.adresse);
+  // La fenêtre se referme, et sa fermeture rend le document du lecteur et
+  // l'adresse d'objet : les laisser garderait les pages en mémoire jusqu'à
+  // quitter la page. Deux chemins de fermeture mèneraient à deux nettoyages
+  // différents (règle 4) — celui-ci passe donc par la fenêtre.
+  fermerLaFenetreDeDetails();
   etat.apercu = null;
 }
 
@@ -1664,11 +1710,12 @@ function render(root) {
         ${renderVoileDeDepot("Ajouter des fichiers")}
         ${renderCorps(etat)}
         ${/*
-          **Entre le fil et la saisie.** Dans la zone de saisie, l'aperçu aurait
-          mangé la place du texte à écrire ; au-dessus du fil, il aurait poussé
-          la conversation hors de l'écran.
+          **L'aperçu n'est plus ici.** Il tenait entre le fil et la saisie, dans
+          quatre cent vingt pixels où une page A4 arrivait illisible — et chaque
+          rendu de l'écran effaçait les pages peintes pour les repeindre. C'est
+          une fenêtre de l'application, posée par-dessus, et ouverte par
+          `basculerLApercu`.
         */""}
-        ${renderApercu(etat)}
 
         <div class="copilote-composer">
           <div class="copilote-composer__inner">
@@ -1677,7 +1724,11 @@ function render(root) {
               <textarea
                 id="copiloteInput"
                 class="copilote-input"
-                rows="3"
+                ${/*
+                  Deux lignes au repos : la saisie grandit avec ce qu'on écrit,
+                  et trois lignes vides sont trois lignes de discussion en moins.
+                */""}
+                rows="2"
                 ${etat.isSending ? "disabled" : ""}
                 placeholder="${etat.isSending
                   ? "Le copilote réfléchit…"
@@ -2414,24 +2465,13 @@ function brancherLesGestesDeLaNote(root) {
 
     // **La pastille de la note ouvre la note.** Un nom qu'on ne peut pas
     // vérifier oblige à sortir de l'écran pour s'assurer qu'on a joint la bonne.
-    if (event.target.closest("[data-copilote-apercu], [data-copilote-apercu-fermer]")) {
+    // **La croix, le voile et Échap ne sont plus ici** : c'est la fenêtre de
+    // l'application qui les porte, et elle rend ce que l'aperçu retenait par le
+    // `surFermeture` qu'on lui confie. Deux fermetures mèneraient à deux
+    // nettoyages, et à deux états de la mémoire (règle 4).
+    if (event.target.closest("[data-copilote-apercu]")) {
       basculerLApercu(root);
-      return;
     }
-
-    // **Le voile referme aussi.** Un panneau qui couvre l'écran et ne se ferme
-    // que par sa croix se ferme mal : on clique à côté, c'est le geste.
-    // `event.target` et non `closest` : cliquer *dans* la fenêtre ne la referme
-    // pas, seul le voile lui-même compte.
-    if (event.target.matches?.("[data-copilote-apercu-voile]")) basculerLApercu(root);
-  });
-
-  // Et Échap, comme toute fenêtre qui couvre l'écran. L'écoute est sur le
-  // document : le voile n'a pas le focus, et un clavier n'a pas à viser.
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || !ensureState().apercu || !root.isConnected) return;
-    event.preventDefault();
-    basculerLApercu(root);
   });
 }
 
@@ -2699,10 +2739,22 @@ export function renderCopilote(root, { reload = false, garderLeDefilement = fals
   calage = () => caler(root);
   window.addEventListener("resize", calage);
 
-  // Le fil est le seul ascenseur de **son** écran : la coque ne défile plus. Le
-  // lui désigner comme source de défilement ferait chercher au bandeau un
-  // mouvement qui n'a plus lieu.
-  if (!garderLeDefilement) registerProjectPrimaryScrollSource(null);
+  /**
+   * **Le fil est le seul ascenseur de son écran, et c'est lui qui compacte les
+   * onglets.**
+   *
+   * On lui désignait `null` : la coque ne défilant pas, le bandeau du projet ne
+   * voyait plus aucun mouvement et restait déplié. Sur un écran de conversation,
+   * ces quarante-quatre pixels sont pris sur la seule chose qu'on y fait —
+   * lire —, et la zone de saisie remontait d'autant.
+   *
+   * Le fil défile ; il est donc la source, comme le contenu de n'importe quel
+   * autre onglet. Ce n'est pas une exception, c'est la règle appliquée à la
+   * barre qui défile vraiment.
+   */
+  if (!garderLeDefilement) {
+    registerProjectPrimaryScrollSource(root.querySelector("#copiloteThread") || null);
+  }
 
   // Les discussions se relisent à la première venue, et sur demande. Une
   // relecture à chaque rendu ferait clignoter le rail pendant qu'on écrit.

@@ -43,10 +43,10 @@ barre, et deux n'auraient pas pu tenir côte à côte. Elle prend maintenant la
 largeur de son texte, croix comprise, dans une rangée qui saura en aligner
 plusieurs le jour où l'on en joindra deux.
 
-L'icône est **grise**, comme dans les Fichiers — dans l'aperçu aussi, croix de
-fermeture comprise, et dans le fil une fois la note partie avec la question. Le
-rouge d'un PDF est la couleur d'une alerte partout ailleurs dans l'écran, et une
-note jointe n'en est pas une.
+L'icône est **grise**, comme dans les Fichiers — dans l'en-tête de l'aperçu aussi,
+et dans le fil une fois la note partie avec la question. Le rouge d'un PDF est la
+couleur d'une alerte partout ailleurs dans l'écran, et une note jointe n'en est
+pas une.
 
 ## Les gestes de la note passent par délégation
 
@@ -117,17 +117,92 @@ repeindre à chaque frappe relirait le document. La page prend la largeur du
 conteneur, et non une largeur écrite en dur — sinon la fenêtre s'agrandit et la
 page reste étroite au milieu.
 
-## Et l'aperçu passe par-dessus l'écran
+## L'aperçu emprunte la fenêtre de l'application
 
 Il tenait entre le fil et la saisie, dans quatre cent vingt pixels où une page A4
 arrivait illisible. Or la seule chose qu'on demande à un aperçu est de pouvoir
 **jeter un œil** : s'il faut plisser les yeux, autant ouvrir le fichier ailleurs,
 et le geste n'a servi à rien.
 
-C'est donc une fenêtre sur un voile sombre, qui laisse voir la discussion autour —
-on n'a pas quitté la conversation, on regarde une pièce. Elle se referme de quatre
-façons : sa croix, la pastille qui l'a ouverte, le voile, et Échap. Un panneau qui
-couvre l'écran et ne se referme que d'un côté se referme mal.
+J'en avais d'abord dessiné une à lui : sa coque, son voile, son en-tête et sa
+croix. C'était une erreur, et de la classe que la règle 10 nomme — deux fenêtres à
+recalibrer l'une contre l'autre, qui divergent au premier réglage. Mdall en a une,
+`#detailsModal`, qui attend dans le document depuis toujours et que le détail d'un
+sujet remplit déjà de son contenu.
+
+`ui/fenetre-de-details.js` la prête à qui en a besoin. On lui donne trois
+morceaux — le titre, ce qui se pose à droite de l'en-tête, le corps —, elle rend
+le corps pour qu'on y peigne, et on lui confie de quoi défaire ce qu'on retenait.
+La croix, le voile et Échap y mènent tous les trois, et le Copilote n'en porte
+plus aucun.
+
+Deux choses qu'elle ne fait pas, et qui comptent :
+
+- **elle n'écrit pas dans le magasin.** Le détail d'un sujet retient son ouverture
+  dans `store.*.detailsModalOpen`, parce que son écran se redessine et doit la
+  rouvrir. L'aperçu d'une note est un geste : écrire ce drapeau ferait croire à
+  l'écran des sujets que **sa** fenêtre est ouverte, et il la remplirait de son
+  contenu au premier rendu ;
+- **changer ce qu'elle montre ne la referme pas.** Une note qu'on lit puis qu'on
+  n'a pas su dessiner était réaffichée en rouvrant la fenêtre — et rouvrir referme
+  d'abord : le nettoyage partait, l'aperçu était oublié, et la fenêtre restait
+  ouverte sur une note dont plus personne ne se savait propriétaire. La croix ne
+  rendait plus les octets, et le clic suivant rouvrait au lieu de fermer. Rien à
+  l'écran ne le disait.
+
+Un réglage, et un seul, lui est propre : `#detailsMetaModal` est masqué par défaut,
+et le lien « Ouvrir dans un onglet » y mesurait zéro pixel de large. Seule la
+mesure au navigateur pouvait le voir — le HTML était juste, et l'élément était là.
+
+## La note n'était plus ouvrable une fois la question partie
+
+Elle se voyait dans la bulle où elle a servi, mais son nom n'y était qu'un texte.
+On relit une réponse, on veut revoir la note sur laquelle elle s'appuie : il
+fallait rouvrir le fichier ailleurs — **sortir de l'écran pour vérifier ce que
+l'écran vient d'affirmer**. La pastille de la zone de saisie s'ouvrait, elle ;
+la ligne du fil désignait la même note et ne s'ouvrait pas.
+
+Les deux portent désormais le même repère, `data-copilote-apercu`, et la même
+délégation les sert. Ce dessin est parti dans `note-jointe.js`, où il s'exécute
+dans un test : l'écran du Copilote parle à la base, et ne s'importe pas.
+
+On ne l'ouvre que si l'on a **encore ses octets**. Ce qu'une discussion
+enregistre, ce sont le rôle et le texte : la note relue d'une session d'avant n'a
+plus de contenu, et un bouton qui rendrait un cadre vide ferait croire que le PDF
+l'est (règle 5). Le nom reste, puisqu'il dit toujours sur quoi la réponse
+s'appuyait.
+
+## La note est-elle vraiment dans le navigateur ?
+
+La question valait d'être posée — un aperçu qui ne s'affiche pas ressemble
+exactement à un lien mort vers un fichier resté ailleurs. Mesuré dans Chromium,
+sur le vrai code servi en HTTP, du clic dans le fil jusqu'à la fermeture :
+
+| Ce qu'on mesure | Ce qu'on lit |
+| --- | --- |
+| octets en mémoire | 552 |
+| en-tête du fichier | `%PDF-` |
+| pages lues par le lecteur | 1 |
+| canevas dessiné | 1288 × 858 |
+| lien « Ouvrir dans un onglet » | 167 px |
+| **requêtes réseau pour la note** | **0** |
+| à la fermeture | le nettoyage a joué une fois, le corps est vide |
+
+Zéro requête : la note est lue par le navigateur au moment où on la dépose
+(`lireLeFichier`), gardée en base64 dans l'état, décodée en octets pour le
+lecteur. Il n'y a pas d'adresse d'origine, rien n'est demandé à personne, et
+l'aperçu marche hors ligne.
+
+## Le fil compacte les onglets, et le composeur a maigri
+
+On désignait `null` comme source de défilement de l'écran : la coque du Copilote
+ne défile pas — c'est le fil qui défile, à l'intérieur —, le bandeau du projet ne
+voyait donc aucun mouvement et restait déplié. Sur un écran de conversation, ces
+quarante-quatre pixels sont pris sur la seule chose qu'on y fait : lire.
+
+La zone de saisie descend de trois lignes à deux, et garde ses marges basses. Elle
+grandit avec le texte qu'on y met, jusqu'à quarante pour cent de la hauteur — ce
+qui se perd est ce qui ne servait pas.
 
 ## Le chevron de l'épingle débordait lui aussi
 
