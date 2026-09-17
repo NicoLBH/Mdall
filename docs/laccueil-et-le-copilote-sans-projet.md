@@ -122,6 +122,22 @@ Il ne le filtre pas. Chercher dans les cinq plus actifs ne rendrait rien dès qu
 le projet cherché n'en est pas — c'est-à-dire précisément quand on le cherche, et
 l'écran dirait « aucun projet de ce nom » d'un projet qui existe.
 
+## La grille est celle du détail d'un sujet
+
+La colonne centrale porte le Copilote, celle de droite l'activité récente : c'est
+le même partage que le corps d'un sujet et ses métadonnées, et l'on n'a aucune
+raison de le recalibrer deux fois. Les trois seuils — la largeur de droite, son
+repli à 256, l'empilement en dessous — sont écrits une fois pour les deux écrans
+(règle 4), et les seuils se rapportent à la **colonne**, non à la fenêtre : un
+rail déplié rétrécit le contenu sans que la fenêtre bouge.
+
+La colonne centrale fait la largeur du Copilote, et **centrée comme lui**. Elle
+faisait 720 pixels quand le fil en fait 860 : on écrivait la première question
+dans un cadre étroit, puis l'écran s'élargissait d'un coup au moment où l'on
+basculait — on croyait avoir changé d'outil. Le nombre vit désormais à un seul
+endroit (`--copilote-colonne`), et le fil, la saisie et l'accueil le lisent tous
+les trois.
+
 ## Envoyer à l'accueil, c'est ouvrir le Copilote
 
 **Entrée envoie, Maj+Entrée passe à la ligne** — exactement la convention du

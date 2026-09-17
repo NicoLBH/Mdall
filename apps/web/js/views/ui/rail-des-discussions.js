@@ -29,6 +29,7 @@
 import { conversationTitle } from "../../services/copilote-conversations.js";
 import {
   renderHistoriqueDesDiscussions as dessinerLHistorique,
+  renderMenuDesDiscussionsHtml as dessinerLeMenu,
   renderRailDesDiscussionsHtml as dessinerLeRail
 } from "./rail-des-discussions-rendu.js";
 import {
@@ -102,6 +103,11 @@ export function brancherLeRailDesDiscussions({
   const fermerMenus = () => {
     for (const menu of rail.querySelectorAll("[data-copilote-menu-for]")) menu.hidden = true;
     for (const bouton of rail.querySelectorAll("[data-copilote-menu]")) bouton.setAttribute("aria-expanded", "false");
+    // Celui du rail replié se referme avec les autres : deux listes
+    // superposées se recouvrent, et l'on clique dans celle qu'on ne regarde pas.
+    const replie = rail.querySelector("[data-copilote-discussions-menu]");
+    if (replie) replie.hidden = true;
+    rail.querySelector("[data-copilote-discussions]")?.setAttribute("aria-expanded", "false");
   };
 
   /**
@@ -109,6 +115,24 @@ export function brancherLeRailDesDiscussions({
    * l'écran entier à chaque message replierait les réglages en cours.
    */
   const rafraichir = () => {
+    /**
+     * **Le menu du rail replié se réécrit aussi.**
+     *
+     * Il ne vit pas dans le groupe de l'historique — il est accroché à l'entrée
+     * du Copilote, qui, elle, ne bouge pas. Ne rafraîchir que l'historique
+     * laissait donc, rail replié, un menu figé sur les discussions d'il y a une
+     * heure : la question qu'on venait de poser n'y figurait pas.
+     */
+    const menu = racine.querySelector("[data-copilote-discussions-menu]");
+    if (menu?.isConnected) {
+      const ouvert = !menu.hidden;
+      menu.outerHTML = dessinerLeMenu({
+        conversations: copiloteConversations(), courante: copiloteConversationId()
+      });
+      const repose = racine.querySelector("[data-copilote-discussions-menu]");
+      if (repose && ouvert) repose.hidden = false;
+    }
+
     const liste = racine.querySelector(`#${CSS.escape(id)}`);
     if (!liste?.isConnected) return;
     liste.outerHTML = renderHistoriqueDesDiscussions({ id, avecSujet });
@@ -225,6 +249,24 @@ export function brancherLeRailDesDiscussions({
   }
 
   const auClic = async (event) => {
+    /**
+     * **Avant tout le reste** : repliée, l'icône du Copilote ouvre la liste des
+     * discussions. Elle porte aussi le geste « nouvelle discussion » quand le
+     * rail est déplié, et c'est celui-là qu'on ne veut pas déclencher ici.
+     */
+    const bascule = event.target.closest("[data-copilote-discussions]");
+    if (bascule) {
+      event.stopPropagation();
+      const menu = rail.querySelector("[data-copilote-discussions-menu]");
+      const ouvert = menu && !menu.hidden;
+      fermerMenus();
+      if (menu && !ouvert) {
+        menu.hidden = false;
+        bascule.setAttribute("aria-expanded", "true");
+      }
+      return;
+    }
+
     if (event.target.closest("[data-copilote-new]")) {
       fermerMenus();
       surNouvelle();
