@@ -4,7 +4,7 @@ import { GESTE, gesteDesSujets } from "../../services/gestes-des-sujets.js";
 import { ecranApresUneLecture } from "../../services/rail-des-sujets.js";
 import { escapeHtml as echapper } from "../../utils/escape-html.js";
 import { brancherLaZoneDeDepot } from "../ui/zone-de-depot.js";
-import { oublierLesAretes, remplirLesAretes } from "./aretes-du-sujet.js";
+import { chercherSurQuoiCeSujetPorte, oublierLesAretes, remplirLesAretes } from "./aretes-du-sujet.js";
 import { demanderLOrdreDuBlocage, oublierLOrdreDuBlocage } from "./ordre-du-blocage.js";
 import {
   applyMentionSuggestion,
@@ -1166,10 +1166,10 @@ export function createProjectSubjectsEvents(config) {
     const id = String(lienId || "").trim();
     if (!id) return;
 
-    const { confirmerLeLien, retirerLeLien } = await import("../../services/point-porte-sur-supabase.js");
+    const { confirmerLeLien, ecarterLeLien } = await import("../../services/point-porte-sur-supabase.js");
     const pris = confirmer
       ? await confirmerLeLien(id, String(store?.user?.id || ""))
-      : await retirerLeLien(id);
+      : await ecarterLeLien(id, String(store?.user?.id || ""));
 
     if (!pris) {
       showError(confirmer
@@ -1196,7 +1196,26 @@ export function createProjectSubjectsEvents(config) {
    * trouverait aucun bouton, et les gestes seraient morts sans que rien ne le
    * dise.
    */
+  /**
+   * Chercher sur quoi ce sujet porte.
+   *
+   * C'est un geste humain, et c'est tout son intérêt : quelqu'un a cliqué, il
+   * regarde ce qui sort, il répond. Ce qui est déjà rattaché ou déjà écarté ne
+   * revient pas — sans quoi le même rapprochement se reproposerait à chaque
+   * clic, et l'on cesserait de cliquer.
+   */
+  async function chercherLePortage(root) {
+    await chercherSurQuoiCeSujetPorte(root);
+    brancherLesGestesDuPortage(root);
+  }
+
   function brancherLesGestesDuPortage(root) {
+    for (const bouton of root?.querySelectorAll?.("[data-portage-cherche]") ?? []) {
+      if (bouton.dataset.portageBranche === "1") continue;
+      bouton.dataset.portageBranche = "1";
+      bouton.addEventListener("click", () => chercherLePortage(root));
+    }
+
     for (const bouton of root?.querySelectorAll?.("[data-portage-confirme]") ?? []) {
       if (bouton.dataset.portageBranche === "1") continue;
       bouton.dataset.portageBranche = "1";

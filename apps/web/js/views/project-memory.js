@@ -2332,11 +2332,11 @@ async function repondreAuPortage(root, { lienId = "", confirmer = false } = {}) 
   view.notice = "";
   renderContent(root);
 
-  const { confirmerLeLien, retirerLeLien } = await import("../services/point-porte-sur-supabase.js");
+  const { confirmerLeLien, ecarterLeLien } = await import("../services/point-porte-sur-supabase.js");
 
   const pris = confirmer
     ? await confirmerLeLien(id, store.user?.id ?? "")
-    : await retirerLeLien(id);
+    : await ecarterLeLien(id, store.user?.id ?? "");
 
   view.busy = false;
 
@@ -2351,10 +2351,17 @@ async function repondreAuPortage(root, { lienId = "", confirmer = false } = {}) 
   // On met à jour ce qu'on a sous la main plutôt que de tout relire : la base a
   // pris, et relire tous les liens du projet pour un champ ferait clignoter la
   // page.
-  view.liens = confirmer
-    ? (view.liens ?? []).map((lien) =>
-      String(lien?.id) === id ? { ...lien, declared_by: store.user?.id ?? null } : lien)
-    : (view.liens ?? []).filter((lien) => String(lien?.id) !== id);
+  //
+  // Une arête écartée est **marquée**, pas retirée de la liste : c'est ainsi
+  // qu'elle est en base, et une lecture d'écran qui l'effacerait ferait croire à
+  // la recherche du détail qu'elle peut la reproposer.
+  const quand = new Date().toISOString();
+  view.liens = (view.liens ?? []).map((lien) => {
+    if (String(lien?.id) !== id) return lien;
+    return confirmer
+      ? { ...lien, declared_by: store.user?.id ?? null }
+      : { ...lien, ecarte_le: quand, ecarte_par: store.user?.id ?? null };
+  });
 
   renderContent(root);
 }

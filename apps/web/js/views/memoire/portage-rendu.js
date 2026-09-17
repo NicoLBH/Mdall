@@ -169,6 +169,26 @@ export function renderLeChemin({ raisonnement = null } = {}) {
 }
 
 /**
+ * Ce que la recherche a donné la dernière fois qu'on l'a lancée.
+ *
+ * Quatre états, et ils ne se disent pas pareil — **« rien » est trois choses
+ * différentes**, et les confondre ferait croire que la reconnaissance ne marche
+ * pas (règle 5) :
+ *
+ * - `JAMAIS` : personne ne l'a lancée. L'écran ne dit rien, il propose.
+ * - `RIEN` : aucun nom de la mémoire n'apparaît dans l'intitulé.
+ * - `DEJA` : tout ce qu'elle reconnaît est déjà rattaché, ou a déjà été écarté.
+ * - `TROUVE` : des rapprochements ont été proposés, et ils sont en dessous.
+ */
+export const RECHERCHE = { JAMAIS: "jamais", RIEN: "rien", DEJA: "deja", TROUVE: "trouve" };
+
+const RECHERCHES_DITES = {
+  [RECHERCHE.RIEN]: "Aucun nom de la mémoire n'apparaît dans l'intitulé de ce sujet.",
+  [RECHERCHE.DEJA]: "Les noms reconnus sont déjà rattachés, ou ont déjà été écartés.",
+  [RECHERCHE.TROUVE]: ""
+};
+
+/**
  * Ce sur quoi un sujet porte, dans son détail.
  *
  * L'autre bout de l'arête amont. On y confirme et on y écarte comme sur la
@@ -176,29 +196,50 @@ export function renderLeChemin({ raisonnement = null } = {}) {
  * inventer un second pour le même acte ferait deux choses à apprendre là où il
  * n'y en a qu'une (règle 10).
  *
- * Rien quand rien n'est accroché. Ce n'est pas « ce sujet ne porte sur rien » :
- * c'est que personne ne l'a dit, et l'écran ne l'affirme pas.
+ * ## Le bloc s'affiche même vide, et ce n'est pas une contradiction
+ *
+ * Il portait jusqu'ici la règle « rien quand rien n'est accroché » : un sujet
+ * sans arête ne porte pas sur rien, personne ne l'a dit, et l'écran ne
+ * l'affirmait pas.
+ *
+ * Il porte maintenant un **geste** — chercher —, et un endroit où agir n'affirme
+ * rien. Le titre et le bouton se lisent « voilà où cela se passe », pas « ce
+ * sujet ne porte sur rien ». C'est d'ailleurs la seule façon d'atteindre les
+ * sujets déjà ouverts aujourd'hui, qui n'auront jamais d'arête autrement.
+ *
+ * @param {object} options
+ * @param {{assertion, lien, confirme}[]} [options.portages]
+ * @param {boolean} [options.occupe] vrai pendant qu'une écriture est en vol
+ * @param {string} [options.recherche] une valeur de `RECHERCHE`
  */
-export function renderCeQuePorteLeSujet({ portages = [], occupe = false } = {}) {
+export function renderCeQuePorteLeSujet({
+  portages = [], occupe = false, recherche = RECHERCHE.JAMAIS
+} = {}) {
   const lus = Array.isArray(portages) ? portages : [];
-  if (!lus.length) return "";
 
   const lignes = lus.map(({ assertion, lien, confirme }) => `
     <li class="portage-liste__ligne${confirme ? "" : " portage-liste__ligne--propose"}">
       <span class="portage-liste__valeur">${escapeHtml(nomEtValeur(assertion))}</span>
       ${confirme
-        ? `<button type="button" class="gh-btn gh-btn--sm" data-portage-retire="${escapeHtml(texte(lien?.id))}" ${occupe ? "disabled" : ""}>Retirer</button>`
+        ? `<button type="button" class="gh-btn gh-btn--sm" data-portage-retire="${escapeHtml(texte(lien?.id))}" ${occupe ? "disabled" : ""}>Écarter</button>`
         : `<button type="button" class="gh-btn gh-btn--sm" data-portage-confirme="${escapeHtml(texte(lien?.id))}" ${occupe ? "disabled" : ""}>Confirmer</button>
            <button type="button" class="gh-btn gh-btn--sm" data-portage-retire="${escapeHtml(texte(lien?.id))}" ${occupe ? "disabled" : ""}>Écarter</button>`}
     </li>
   `).join("");
 
   const titre = `Sur quoi ce ${MOT_A_LECRAN.un} porte`;
+  const dit = RECHERCHES_DITES[texte(recherche)] ?? "";
 
   return `
     <section class="details-bloc portage-liste" aria-label="${escapeHtml(titre)}">
-      <div class="details-bloc__label">${escapeHtml(titre)}</div>
-      <ul class="portage-liste__corps">${lignes}</ul>
+      <div class="details-bloc__label portage-liste__tete">
+        <span>${escapeHtml(titre)}</span>
+        <button type="button" class="gh-btn gh-btn--sm" data-portage-cherche ${occupe ? "disabled" : ""}>
+          ${occupe ? "Recherche…" : "Chercher dans la mémoire"}
+        </button>
+      </div>
+      ${lignes ? `<ul class="portage-liste__corps">${lignes}</ul>` : ""}
+      ${dit ? `<div class="portage-liste__dit">${escapeHtml(dit)}</div>` : ""}
     </section>
   `;
 }

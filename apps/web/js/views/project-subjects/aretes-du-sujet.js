@@ -24,15 +24,25 @@
  * change de projet — ou quand un geste vient de les modifier.
  */
 
-import { renderCeQuePorteLeSujet, renderLeChemin } from "../memoire/portage-rendu.js";
+import { RECHERCHE, renderCeQuePorteLeSujet, renderLeChemin } from "../memoire/portage-rendu.js";
 import { raisonnementDuPoint } from "../../services/raisonnement-du-point.js";
-import { pointOuvert, surQuoiCePointPorte } from "../../services/point-porte-sur.js";
+import { liensAPoser, pointOuvert, portageAProposer, surQuoiCePointPorte }
+  from "../../services/point-porte-sur.js";
 import { affirmationsDecideesDans } from "../../services/point-a-tranche.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /** Ce qu'on a lu, et pour quel projet. Vidé dès qu'un geste change la base. */
 let cache = { projectId: "", liens: null, assertions: null };
+
+/**
+ * Ce que la dernière recherche a donné, pour ce sujet-là.
+ *
+ * Par sujet et non global : passer d'un sujet à l'autre ne doit pas emporter le
+ * verdict du précédent — « aucun nom reconnu » collé sous un autre intitulé
+ * serait faux, et on n'aurait aucun moyen de s'en apercevoir.
+ */
+let recherches = new Map();
 
 /** Repartir de zéro à la prochaine ouverture. */
 export function oublierLesAretes() {
@@ -128,7 +138,80 @@ export async function remplirLesAretes(hote, { occupe = false } = {}) {
     });
 
   creux.innerHTML = [
-    renderCeQuePorteLeSujet({ portages, occupe }),
+    renderCeQuePorteLeSujet({
+      portages,
+      occupe,
+      recherche: recherches.get(subjectId) ?? RECHERCHE.JAMAIS
+    }),
     renderLeChemin({ raisonnement: chemin })
   ].join("");
+}
+
+/**
+ * Chercher sur quoi ce sujet porte, à la demande.
+ *
+ * ## Pourquoi à la demande, et pas tout seul
+ *
+ * C'est le seul déclenchement qui atteint les sujets **déjà ouverts** — ils
+ * n'auront jamais d'arête autrement —, et c'est celui qui coûte le moins cher à
+ * se tromper : quelqu'un a cliqué, il regarde le résultat, il répond. Un
+ * balayage de fond qui redécouvre chaque nuit les mêmes rapprochements est la
+ * façon la plus sûre de faire ignorer l'alerte.
+ *
+ * ## Ce qui ne se repropose pas
+ *
+ * Ce qui est déjà rattaché, ce qui a déjà été **écarté**, et ce qui a été
+ * remplacé. Le second est le plus important : reproposer un rapprochement qu'on
+ * vient de refuser, c'est crier au loup, et l'on cesse d'ouvrir l'écran.
+ *
+ * ## Et le verdict se dit
+ *
+ * « Rien » est trois choses — rien reconnu, tout déjà là, ou des propositions
+ * posées — et l'écran les distingue. Sans quoi une recherche qui ne trouve rien
+ * se lirait comme une recherche qui n'a pas tourné (règle 5).
+ */
+export async function chercherSurQuoiCeSujetPorte(hote) {
+  const creux = hote?.querySelector?.("[data-aretes-du-sujet]");
+  if (!creux) return;
+
+  const subjectId = texte(creux.getAttribute("data-aretes-du-sujet"));
+  if (!subjectId) return;
+
+  const lu = await lireLeProjet();
+  if (!lu || !creux.isConnected) return;
+
+  // Le projet vient de la lecture, jamais d'avant elle : au premier clic il n'y
+  // a rien en cache, et un point sans projet ne produirait aucune ligne.
+  const point = {
+    id: subjectId,
+    title: texte(creux.getAttribute("data-aretes-titre")),
+    project_id: lu.projectId
+  };
+
+  const { aProposer, reconnues } = portageAProposer({
+    point,
+    assertions: lu.assertions,
+    liens: lu.liens
+  });
+
+  if (aProposer.length) {
+    const { poserLesLiens } = await import("../../services/point-porte-sur-supabase.js");
+    // Sans auteur : c'est une reconnaissance, pas un jugement. Quelqu'un doit
+    // encore la confirmer, et une arête posée toute seule ferait contester une
+    // valeur sans que personne ne l'ait demandé.
+    const posees = await poserLesLiens(liensAPoser({
+      point,
+      assertions: aProposer,
+      projectId: lu.projectId
+    }));
+    if (posees === null) return;
+    // Ce qu'on avait lu ne vaut plus.
+    cache = { projectId: "", liens: null, assertions: null };
+  }
+
+  recherches.set(subjectId, aProposer.length
+    ? RECHERCHE.TROUVE
+    : (reconnues.length ? RECHERCHE.DEJA : RECHERCHE.RIEN));
+
+  await remplirLesAretes(hote);
 }

@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 
 import {
   LIAISON, MOT_A_LECRAN, intituleDuPoint, liensAPoser, phraseDesPointsOuverts,
-  pointsQuiPortentSur, portagePropose, portagesSurLaValeur, surQuoiCePointPorte
+  areteEcartee, pointsQuiPortentSur, portageAProposer, portagePropose, portagesSurLaValeur,
+  surQuoiCePointPorte
 } from "./point-porte-sur.js";
 
 /** Une affirmation de la mémoire, de la forme que la base rend. */
@@ -297,4 +298,99 @@ test("le compte des points ouverts ne dépend pas de qui a posé l'arête", () =
   const points = [{ id: "p-1", status: "open" }, { id: "p-2", status: "open" }];
 
   assert.deepEqual(pointsQuiPortentSur("v-sol", { liens, points }).map((p) => p.id), ["p-1", "p-2"]);
+});
+
+/* ── Une arête écartée se souvient ───────────────────────────────────────── */
+
+test("une arête écartée ne se lit plus, dans les deux sens", () => {
+  // Elle reste en base — un refus est une information, et un constat ne devient
+  // pas faux (règle 6) —, mais l'écran ne doit plus rien en dire : sinon
+  // écarter n'aurait servi à rien.
+  const liens = [
+    { id: "l-1", subject_id: "p-1", assertion_id: "v-sol", declared_by: "u-1" },
+    { id: "l-2", subject_id: "p-2", assertion_id: "v-sol", declared_by: "u-1", ecarte_le: "2026-04-03T10:00:00Z" }
+  ];
+  const points = [{ id: "p-1", status: "open" }, { id: "p-2", status: "open" }];
+
+  assert.deepEqual(pointsQuiPortentSur("v-sol", { liens, points }).map((p) => p.id), ["p-1"]);
+  assert.deepEqual(surQuoiCePointPorte("p-2", { liens, assertions: MEMOIRE }), []);
+  assert.deepEqual(surQuoiCePointPorte("p-1", { liens, assertions: MEMOIRE }).map((v) => v.id), ["v-sol"]);
+});
+
+test("écartée se reconnaît à sa date, pas à autre chose", () => {
+  assert.equal(areteEcartee({ ecarte_le: "2026-04-03T10:00:00Z" }), true);
+  assert.equal(areteEcartee({ ecarte_le: null }), false);
+  assert.equal(areteEcartee({ ecarte_le: "   " }), false);
+  assert.equal(areteEcartee({ ecarte_par: "u-1" }), false, "un auteur sans date n'écarte rien");
+  assert.equal(areteEcartee(null), false);
+});
+
+/* ── Ce qu'il reste à proposer ───────────────────────────────────────────── */
+
+const LE_POINT = { id: "p-1", title: "La classe de sol C tient-elle sans le sondage SP3 ?" };
+
+test("la reconnaissance ne repropose pas ce qui est déjà rattaché", () => {
+  const liens = [{ id: "l-1", subject_id: "p-1", assertion_id: "v-sol", declared_by: "u-1" }];
+  const { aProposer, deja, reconnues } = portageAProposer({ point: LE_POINT, assertions: MEMOIRE, liens });
+
+  assert.deepEqual(reconnues.map((v) => v.id), ["v-sol", "v-sol-b"]);
+  assert.deepEqual(aProposer.map((v) => v.id), ["v-sol-b"]);
+  assert.deepEqual(deja.map((v) => v.id), ["v-sol"]);
+});
+
+test("la reconnaissance ne repropose pas ce qui a été écarté", () => {
+  // C'est le point dur. Crier au loup fait ignorer l'alerte au bout de trois
+  // fois : reproposer un rapprochement qu'on vient de refuser est la façon la
+  // plus sûre de faire fermer l'écran.
+  const liens = [
+    { id: "l-1", subject_id: "p-1", assertion_id: "v-sol", ecarte_le: "2026-04-03T10:00:00Z" }
+  ];
+  const { aProposer, deja } = portageAProposer({ point: LE_POINT, assertions: MEMOIRE, liens });
+
+  assert.deepEqual(aProposer.map((v) => v.id), ["v-sol-b"]);
+  assert.deepEqual(deja.map((v) => v.id), ["v-sol"]);
+});
+
+test("un refus posé sur un autre sujet ne bloque pas celui-ci", () => {
+  // Le refus appartient au sujet qui l'a posé : « ce débat-là ne porte pas sur
+  // cette valeur » ne dit rien du débat d'à côté.
+  const liens = [
+    { id: "l-9", subject_id: "p-autre", assertion_id: "v-sol", ecarte_le: "2026-04-03T10:00:00Z" }
+  ];
+  const { aProposer } = portageAProposer({ point: LE_POINT, assertions: MEMOIRE, liens });
+
+  assert.deepEqual(aProposer.map((v) => v.id), ["v-sol", "v-sol-b"]);
+});
+
+test("une version remplacée ne remonte même pas jusqu'à la proposition", () => {
+  // L'arête pointe une version, et rattacher un débat d'aujourd'hui à une valeur
+  // qui ne vaut plus le ferait porter sur du passé. Cette prudence n'est pas
+  // écrite ici : `avis-liaison.js` l'applique à la reconnaissance, et la
+  // refiltrer en ferait un second endroit qui décide ce qui vaut encore.
+  const memoire = MEMOIRE.map((valeur) =>
+    valeur.id === "v-sol" ? { ...valeur, superseded_by: "v-sol-b" } : valeur);
+
+  const { aProposer, reconnues } = portageAProposer({ point: LE_POINT, assertions: memoire, liens: [] });
+
+  assert.deepEqual(reconnues.map((v) => v.id), ["v-sol-b"]);
+  assert.deepEqual(aProposer.map((v) => v.id), ["v-sol-b"]);
+});
+
+test("« rien à proposer » se lit de deux façons, et elles se distinguent", () => {
+  // La reconnaissance n'a rien reconnu, ou tout ce qu'elle reconnaît est déjà
+  // su : l'écran ne doit pas dire l'une pour l'autre (règle 5).
+  const muet = { id: "p-9", title: "Prévoir une réunion mardi" };
+  const rien = portageAProposer({ point: muet, assertions: MEMOIRE, liens: [] });
+  assert.deepEqual(rien.reconnues, []);
+  assert.deepEqual(rien.aProposer, []);
+  assert.deepEqual(rien.deja, []);
+
+  const liens = [
+    { id: "l-1", subject_id: "p-1", assertion_id: "v-sol" },
+    { id: "l-2", subject_id: "p-1", assertion_id: "v-sol-b" }
+  ];
+  const tout = portageAProposer({ point: LE_POINT, assertions: MEMOIRE, liens });
+  assert.deepEqual(tout.aProposer, []);
+  assert.equal(tout.deja.length, 2);
+  assert.equal(tout.reconnues.length, 2);
 });
