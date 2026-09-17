@@ -16,6 +16,7 @@ import {
   provenancesDesEntrees,
   prefillDepuisMemoire,
   phraseDesContradictions,
+  surQuoiCaRepose,
   prefillDepuisLEtude,
   referenceOutil,
   regimeDeLAgent,
@@ -1497,4 +1498,137 @@ test("une contradiction sur une entrée qui ne manque pas ne se dit pas", () => 
     }),
     /Classe de sol : C ou D/
   );
+});
+
+/* ── Sur quoi la réponse repose, écrit une fois pour toutes ──────────────── */
+
+test("la phrase nomme la valeur, sa portée et le jour où elle a été tranchée", () => {
+  // Sans elle, on lit « CF 1 h » sans savoir sur quel classement, pour quelle
+  // zone, tranché quand. La réponse a l'air juste, elle l'est peut-être, et
+  // personne ne peut le vérifier.
+  const dit = surQuoiCaRepose(SPECTRE, {
+    fournies: { soilClass: "C" },
+    provenances: { soilClass: { origine: "memoire", portee: "Escalier B", trancheeLe: "2026-02-20T09:00:00Z" } }
+  });
+
+  assert.match(dit, /Classe de sol : C/);
+  assert.match(dit, /Escalier B/);
+  assert.match(dit, /tranché le 20 février 2026/);
+});
+
+test("la qualification vient en tête, parce qu'elle décide de tout le reste", () => {
+  // Le régime dit quel texte s'applique : le lire en troisième position le
+  // ferait lire en dernier.
+  const incendie = outilParId("incendie_habitation");
+  const dit = surQuoiCaRepose(incendie, {
+    fournies: { regimeIncendie: "habitation", etagesSurRdc: "3" },
+    provenances: {
+      etagesSurRdc: { origine: "memoire", trancheeLe: "2026-01-02T09:00:00Z" },
+      regimeIncendie: { origine: "memoire", portee: "Étages", trancheeLe: "2026-03-01T09:00:00Z" }
+    }
+  });
+
+  assert.ok(
+    dit.indexOf(SUJET_REGIME_INCENDIE) < dit.indexOf("étages sur rez-de-chaussée"),
+    dit
+  );
+  // Et « le 1 mars » ne se dit pas : une date mal écrite au milieu d'une
+  // provenance fait douter du reste de la phrase.
+  assert.match(dit, /tranché le 1er mars 2026/);
+});
+
+test("ce qui ne vient pas du projet n'y figure pas", () => {
+  // Une valeur dite dans la conversation est sous les yeux ; une valeur par
+  // défaut est déclarée ; une valeur calculée en chemin est déjà dans `chaine`.
+  // Les nommer ici ferait passer pour une affirmation du projet ce qui n'en est
+  // pas une — exactement l'inverse du but.
+  const dit = surQuoiCaRepose(SPECTRE, {
+    fournies: { soilClass: "C", zoneSismique: "4", importanceCategory: "II" },
+    provenances: {
+      soilClass: { origine: "dite" },
+      zoneSismique: { origine: "defaut" },
+      importanceCategory: { origine: "utilitaire", detail: "Zonage sismique" }
+    }
+  });
+
+  assert.equal(dit, "");
+});
+
+test("l'étude se dit comme une étude, et sans date", () => {
+  // Une réponse d'étude n'a été tranchée par personne : lui donner une date la
+  // hausserait au rang de décision.
+  const dit = surQuoiCaRepose(SPECTRE, {
+    fournies: { soilClass: "C" },
+    provenances: { soilClass: { origine: "etude", detail: "étude « Bâtiment A »", trancheeLe: "2026-02-20" } }
+  });
+
+  assert.match(dit, /d'après l'étude du projet/);
+  assert.doesNotMatch(dit, /tranché/);
+});
+
+test("une valeur absente ou une date illisible ne s'inventent pas", () => {
+  // Règle 5 : une provenance qui nomme une valeur que le calcul n'a pas reçue
+  // serait une provenance fausse, et elle a l'air aussi vraie que les autres.
+  assert.equal(surQuoiCaRepose(SPECTRE, {
+    fournies: {}, provenances: { soilClass: { origine: "memoire" } }
+  }), "");
+
+  const sansDate = surQuoiCaRepose(SPECTRE, {
+    fournies: { soilClass: "C" },
+    provenances: { soilClass: { origine: "memoire", trancheeLe: "jamais" } }
+  });
+  assert.match(sansDate, /Classe de sol : C$|Classe de sol : C\./);
+  assert.doesNotMatch(sansDate, /tranché/);
+
+  assert.equal(surQuoiCaRepose(null, {}), "");
+  assert.equal(surQuoiCaRepose(SPECTRE, {}), "");
+});
+
+test("le résultat la porte, et elle part au modèle", async () => {
+  // Elle ne sert à rien si elle reste au serveur : c'est le modèle qui rédige
+  // la réponse, et c'est lui qui doit la reprendre telle quelle.
+  const resultat = await executerOutil({
+    id: "spectre_elastique_ec8",
+    entrees: {},
+    question: "quel spectre pour ce projet ?",
+    assertions: [
+      donnee("zone-sismique", "4", { decided_at: "2026-03-12T09:00:00Z" }),
+      donnee("categorie-importance", "II", { decided_at: "2026-01-05T09:00:00Z" }),
+      surLaZone("classe-de-sol", "Classe de sol C", "Escalier B")
+    ]
+  });
+
+  assert.equal(resultat.statut, "fait");
+  assert.match(resultat.surQuoiCaRepose, /Zone de sismicité : 4/);
+  assert.match(resultat.surQuoiCaRepose, /Escalier B/);
+
+  // `sansFigure` allège ce qui ne sert qu'à l'écran. La provenance, elle, sert
+  // au modèle : l'alléger la ferait disparaître de la réponse rédigée.
+  assert.equal(sansFigure(resultat).surQuoiCaRepose, resultat.surQuoiCaRepose);
+});
+
+test("la consigne nomme exactement le champ que le résultat porte", async () => {
+  // Deux endroits écrivent ce nom : le résultat qui le remplit, et la consigne
+  // qui dit de le reprendre tel quel. Un champ renommé d'un côté seulement ne
+  // se voit nulle part — le modèle chercherait une clé absente et rédigerait la
+  // provenance de mémoire, c'est-à-dire de travers.
+  const { readFileSync } = await import("node:fs");
+  const consignes = readFileSync(
+    new URL("../../project-copilot/index.ts", import.meta.url), "utf8"
+  );
+
+  const resultat = await executerOutil({
+    id: "spectre_elastique_ec8",
+    entrees: {},
+    question: "quel spectre ?",
+    assertions: [donnee("zone-sismique", "4"), donnee("categorie-importance", "II"), donnee("classe-de-sol", "C")]
+  });
+
+  assert.equal(resultat.statut, "fait");
+  const nommes = [...consignes.matchAll(/`(surQuoiCaRepose|[a-zA-Z]+CaRepose)`/g)].map((t) => t[1]);
+  assert.ok(nommes.length, "la consigne ne nomme aucun champ de provenance");
+
+  for (const nom of new Set(nommes)) {
+    assert.ok(nom in resultat, `la consigne nomme « ${nom} », que le résultat ne porte pas`);
+  }
 });

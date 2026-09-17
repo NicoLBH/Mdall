@@ -195,7 +195,7 @@ ferait répondre sur le rez-de-chaussée une exigence calculée pour les étages
 
 ---
 
-## Étape 6 — Ce que l'écran dit
+## Étape 6 — Ce que l'écran dit *(faite)*
 
 Une réponse du Copilote qui s'appuie sur un régime doit le **nommer**, avec sa
 portée et sa provenance : « pour le régime *habitation* (zone R+1 à R+4, tranché
@@ -457,6 +457,71 @@ et sans portée, avec la vraie feuille de style.
 
 ---
 
+## Étape 6 : sur quoi la réponse repose, écrit une fois pour toutes
+
+Un agent rend « CF 1 h » et le modèle l'écrit. Personne ne voit sur quelle
+**qualification** ce degré a été calculé : quel classement, quel régime, pour
+quelle zone, tranché quand. La réponse s'appuie alors sur une hypothèse que la
+personne croyait peut-être abandonnée, et rien ne le dit. Sans cette étape, tout
+le plan reste à moitié fait : le bon agent est choisi, mais on ne peut pas
+**contester** le choix, faute de lire sur quoi il s'est fait.
+
+Le résultat porte donc une phrase toute prête :
+
+> Cette réponse repose sur ce que le projet affirme — Régime de sécurité
+> incendie : habitation (Étages R+1 à R+4, tranché le 1er mars 2026) ; Nombre
+> d'étages sur rez-de-chaussée : 3 (d'après l'étude du projet).
+
+### Pourquoi une phrase, et pas des champs à recomposer
+
+Le modèle recevait déjà `provenances` : il pouvait, en théorie, écrire cette
+phrase. En théorie seulement — il la résumait, oubliait la portée, datait de
+travers. C'est la leçon du récit du cerveau : **ce qui doit être dit exactement
+se rend tout écrit**, et la consigne dit de le reprendre tel quel. Une phrase
+qu'on paraphrase n'est plus une provenance.
+
+### Ce qu'elle nomme, et ce qu'elle tait
+
+Ce que le **projet** affirme : la mémoire, et l'étude de l'Atelier. Ce sont les
+seules dont on puisse croire à tort qu'elles disent autre chose. Une valeur dite
+dans la conversation est sous les yeux ; une valeur par défaut est déclarée ;
+une valeur calculée en chemin est déjà dans `chaine`. Les nommer ici ferait
+passer pour une affirmation du projet ce qui n'en est pas une — l'inverse du but.
+
+L'étude se dit **comme une étude, et sans date** : une réponse d'étude n'a été
+tranchée par personne, et lui donner une date la hausserait au rang de décision.
+
+Et la **qualification d'abord** : le régime décide quel texte s'applique, donc il
+décide de tout le reste. Le lire en troisième position le ferait lire en dernier.
+
+### Le garde-fou reste dans le code
+
+Une consigne se contourne : si le modèle omet la phrase, rien ne la dit. Ce qui
+tient sans lui, c'est l'étape 5 — le tableau des entrées affiche la provenance
+**et sa portée** pour chaque valeur, « mémoire du projet · Escalier B ». La
+phrase est le complément rédigé ; le tableau est la garantie.
+
+### Les gardes posées, et ce qu'on a cassé pour les voir tomber
+
+| la garde | ce qu'on a cassé | ce qui est tombé |
+|---|---|---|
+| la phrase nomme la portée | elle disparaît | 2 tests |
+| elle nomme le jour où c'était tranché | la date disparaît | 2 tests |
+| la qualification vient en tête | le régime passe en dernier | 1 test |
+| ce qui ne vient pas du projet n'y figure pas | tout y entre | 1 test |
+| une étude se dit sans date | elle se date comme une décision | 1 test |
+| une valeur absente ne se nomme pas | elle se nomme « ? » | 1 test |
+| le premier du mois s'écrit « 1er » | il s'écrit « 1 » | 1 test |
+| la phrase part au modèle | elle reste au serveur | 1 test |
+| la consigne nomme le champ que le résultat porte | elle en nomme un autre, puis plus aucun | 2 fois 1 test |
+
+La dernière est la garde du branchement : deux endroits écrivent ce nom — le
+résultat qui le remplit, la consigne qui dit de le reprendre. Renommé d'un côté
+seulement, il ne se voit nulle part : le modèle chercherait une clé absente et
+rédigerait la provenance de mémoire, c'est-à-dire de travers.
+
+---
+
 ## L'ordre de fabrication
 
 | | étape | ce qu'on peut livrer seul |
@@ -465,7 +530,7 @@ et sans portée, avec la vraie feuille de style.
 | 2 | ~~le champ `regimeIncendie` sur l'outil habitation (§ 2)~~ **faite** | oui — inerte tant que § 3 n'est pas là |
 | 3 | ~~le filtre de `declarationsPourModele` (§ 3) et l'entrée `regimeIncendie` (§ 4)~~ **faite** | oui — c'est le routage lui-même |
 | 4 | ~~la portée dans `prefillDepuisMemoire` (§ 5)~~ **faite** | oui, et **indépendamment** : c'est un défaut qui existe déjà |
-| 5 | la provenance à l'écran (§ 6) | oui |
+| 5 | ~~la provenance à l'écran (§ 6)~~ **faite** | oui |
 
 Chaque ligne est une PR. La quatrième n'attend pas les autres : le défaut de
 portée est là aujourd'hui, pour toutes les valeurs par zone.
