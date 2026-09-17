@@ -10,6 +10,7 @@ import {
   valeursDeLOnde
 } from "./memoire-cerveau.js";
 import { impactDe } from "./memoire-applications.js";
+import { RANG } from "./ce-qui-couvre.js";
 
 const at = "2026-01-10T09:00:00Z";
 
@@ -1046,4 +1047,104 @@ test("un nœud porte ce qui le couvre, et le rang le plus coûteux", () => {
 test("sans les actes, un nœud ne prétend pas ne rien porter", () => {
   const cerveau = cerveauDuProjet(memoire(), lectures());
   assert.equal(cerveau.noeuds.find((entree) => entree.id === "alt").rang, null);
+});
+
+/* ── Ce que le projet discute encore ─────────────────────────────────────── */
+
+const LES_VALEURS = [dit("v-alt", "Altitude", "742,30"), dit("v-neige", "Zone de neige", "A2")];
+const UN_SUJET = (id, statut) => ({ id, title: `Sujet ${id}`, status: statut });
+const UNE_ARETE = (sujet, valeur, plus = {}) =>
+  ({ id: `l-${sujet}-${valeur}`, subject_id: sujet, assertion_id: valeur, ...plus });
+
+const noeudDe = (cerveau, id) => cerveau.noeuds.find((noeud) => noeud.id === id);
+
+test("un débat ouvert se voit sur la valeur qu'il met en question", () => {
+  const cerveau = cerveauDuProjet(LES_VALEURS, null, {
+    aretes: [UNE_ARETE("p-1", "v-alt"), UNE_ARETE("p-2", "v-alt")],
+    points: [UN_SUJET("p-1", "open"), UN_SUJET("p-2", "open")]
+  });
+
+  assert.equal(noeudDe(cerveau, "v-alt").enDebat, 2);
+  assert.equal(noeudDe(cerveau, "v-neige").enDebat, 0);
+});
+
+test("« on n'a pas regardé » ne se dessine pas comme « personne ne conteste »", () => {
+  // `null` et `0` ne sont pas la même chose. Dessiner tout le projet comme
+  // apaisé parce qu'on n'a pas lu les arêtes serait affirmer une absence qu'on
+  // n'a pas vérifiée (règle 5) — et c'est exactement ce que cette arête existe
+  // pour empêcher.
+  const sansRien = cerveauDuProjet(LES_VALEURS, null, {});
+  const sansLesPoints = cerveauDuProjet(LES_VALEURS, null, { aretes: [UNE_ARETE("p-1", "v-alt")] });
+
+  assert.equal(noeudDe(sansRien, "v-alt").enDebat, null);
+  assert.equal(noeudDe(sansLesPoints, "v-alt").enDebat, null);
+});
+
+test("un sujet fermé ne met plus rien en question", () => {
+  const cerveau = cerveauDuProjet(LES_VALEURS, null, {
+    aretes: [UNE_ARETE("p-1", "v-alt"), UNE_ARETE("p-2", "v-alt")],
+    points: [UN_SUJET("p-1", "closed"), UN_SUJET("p-2", "closed_duplicate")]
+  });
+
+  assert.equal(noeudDe(cerveau, "v-alt").enDebat, 0);
+});
+
+test("une arête écartée ne met plus rien en question non plus", () => {
+  const cerveau = cerveauDuProjet(LES_VALEURS, null, {
+    aretes: [UNE_ARETE("p-1", "v-alt", { ecarte_le: "2026-04-03T10:00:00Z" })],
+    points: [UN_SUJET("p-1", "open")]
+  });
+
+  assert.equal(noeudDe(cerveau, "v-alt").enDebat, 0);
+});
+
+test("le même sujet cité deux fois ne compte qu'une", () => {
+  // La base tient la paire pour unique, mais une lecture peut rendre deux
+  // lignes — un lot relu, une page qui recolle. Deux halos pour un débat
+  // feraient un compte qu'on ne peut pas vérifier en ouvrant la liste.
+  const cerveau = cerveauDuProjet(LES_VALEURS, null, {
+    aretes: [UNE_ARETE("p-1", "v-alt"), { ...UNE_ARETE("p-1", "v-alt"), id: "l-bis" }],
+    points: [UN_SUJET("p-1", "open")]
+  });
+
+  assert.equal(noeudDe(cerveau, "v-alt").enDebat, 1);
+});
+
+test("un sujet qu'on ne connaît pas ne compte pas", () => {
+  // On ne sait pas s'il est ouvert, et le supposer ouvert ferait dessiner un
+  // halo sur une valeur que plus personne ne discute.
+  const cerveau = cerveauDuProjet(LES_VALEURS, null, {
+    aretes: [UNE_ARETE("p-inconnu", "v-alt")],
+    points: [UN_SUJET("p-1", "open")]
+  });
+
+  assert.equal(noeudDe(cerveau, "v-alt").enDebat, 0);
+});
+
+/* ── L'échelon que les points apportent, dans le cerveau ─────────────────── */
+
+test("une valeur tranchée en réunion porte son anneau", () => {
+  // L'anneau existait et rien ne l'allumait : le rang du cerveau se tirait des
+  // seuls actes, et une valeur produite par un sujet fermé se dessinait comme
+  // une valeur que personne n'a examinée.
+  const tranchee = dit("v-hg", "Profondeur hors gel", "0,80 m");
+  tranchee.payload.reference = "sujet:p-ferme";
+
+  const cerveau = cerveauDuProjet([tranchee], null, { points: [UN_SUJET("p-ferme", "closed")] });
+
+  assert.equal(noeudDe(cerveau, "v-hg").rang, RANG.EQUIPE);
+});
+
+test("sans actes et sans sujets, le rang reste inconnu", () => {
+  // Ne pas savoir n'autorise pas à dessiner tout le projet comme non examiné.
+  assert.equal(noeudDe(cerveauDuProjet(LES_VALEURS, null, {}), "v-alt").rang, null);
+});
+
+test("un débat en cours n'a pas tranché : il n'allume pas l'anneau", () => {
+  const tranchee = dit("v-hg", "Profondeur hors gel", "0,80 m");
+  tranchee.payload.reference = "sujet:p-ouvert";
+
+  const cerveau = cerveauDuProjet([tranchee], null, { points: [UN_SUJET("p-ouvert", "open")] });
+
+  assert.equal(noeudDe(cerveau, "v-hg").rang, RANG.RIEN);
 });

@@ -56,6 +56,8 @@ import { VERDICT, auditerLaMemoire } from "./memoire-audit.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { zonesLisibles } from "./memoire-blame.js";
 import { RANG, couvertureDuProjet } from "./ce-qui-couvre.js";
+import { rangDeLaVersion } from "./ce-que-bloque-un-point.js";
+import { pointsOuvertsParValeur } from "./point-porte-sur.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -289,7 +291,8 @@ export function pasDuRaisonnement(enVigueur = [], applications = null) {
 }
 
 export function cerveauDuProjet(
-  assertions = [], applications = null, { avecLesFonctions = false, actes = null } = {}
+  assertions = [], applications = null,
+  { avecLesFonctions = false, actes = null, aretes = null, points = null } = {}
 ) {
   const enVigueur = currentAssertions(Array.isArray(assertions) ? assertions : []);
 
@@ -333,6 +336,22 @@ export function cerveauDuProjet(
     valeurs.map((assertion) => [texte(assertion.id), texte(assertion?.domain) || texte(assertion?.payload?.domain)])
   );
 
+  /**
+   * Ce qui s'est engagé sur une version : un acte, ou un débat qui l'a tranchée.
+   *
+   * **C'est `rangDeLaVersion` qui décide, et pas ce fichier.** L'échelon
+   * « tranché avec l'équipe » se dérive de l'arête aval, et le recalculer ici en
+   * ferait un second endroit qui décide ce qu'un engagement vaut (règle 4).
+   *
+   * Sans les actes **et** sans les points, on ne sait rien : `null`, et l'écran
+   * ne dessine aucun anneau — ne pas savoir n'autorise pas à montrer tout le
+   * projet comme non examiné.
+   */
+  function rangDuNoeud(assertion, id) {
+    if (!couvertures && !points) return null;
+    return rangDeLaVersion(assertion, { couvertures, points: points ?? [] });
+  }
+
   // Le degré de chaque nœud : combien de liens le touchent, et dans quel sens.
   const degres = new Map(ids.map((id) => [id, { entrant: 0, sortant: 0 }]));
   for (const lien of liens) {
@@ -343,6 +362,22 @@ export function cerveauDuProjet(
   // Ce qui couvre chaque valeur, en une passe : un appel par nœud parcourrait
   // tous les actes autant de fois qu'il y a de nœuds.
   const couvertures = Array.isArray(actes) ? couvertureDuProjet({ actes }) : null;
+
+  /**
+   * Les débats ouverts qui portent sur chaque valeur.
+   *
+   * `null` quand les arêtes ou les points n'ont pas été donnés — **pas** une
+   * `Map` vide : dessiner tout le projet comme apaisé parce qu'on n'a pas
+   * regardé serait affirmer une absence qu'on n'a pas vérifiée (règle 5), et
+   * c'est exactement l'erreur que cette arête existe pour empêcher.
+   */
+  // `aretes` et non `liens` : dans ce fichier, un lien est une **lecture** du
+  // raisonnement — une flèche entre deux valeurs. Une arête est ce qu'un débat
+  // met en question. Deux choses, deux mots, sans quoi on relit de travers la
+  // ligne qui les mélange.
+  const debats = Array.isArray(aretes) && Array.isArray(points)
+    ? pointsOuvertsParValeur({ liens: aretes, points })
+    : null;
 
   const noeuds = dessines.map((assertion) => {
     const id = texte(assertion.id);
@@ -384,7 +419,19 @@ export function cerveauDuProjet(
        * savoir n'autorise pas à dessiner tout le projet comme non examiné
        * (règle 5). L'écran distingue les deux.
        */
-      rang: couvertures ? (couvertures.get(id)?.rang ?? RANG.RIEN) : null,
+      rang: rangDuNoeud(assertion, id),
+      /**
+       * Combien de débats ouverts portent sur ce nœud.
+       *
+       * `null` quand on n'a pas lu les arêtes — pas `0`. Une valeur que trois
+       * sujets contestent et une valeur qu'on n'a pas su regarder ne se
+       * dessinent pas pareil.
+       *
+       * Un **nombre**, et pas un état : le débat **qualifie** la valeur, il ne
+       * la change pas. Une valeur en question reste ce qu'elle est, et le projet
+       * continue de calculer dessus — c'est le lecteur qui décide.
+       */
+      enDebat: debats ? (debats.get(id)?.length ?? 0) : null,
       titre: titreDeLAffirmation(assertion),
       sujet: texte(assertion?.payload?.subject) || titreDeLAffirmation(assertion),
       valeur: texte(assertion?.payload?.value),
