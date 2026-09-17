@@ -123,6 +123,13 @@ export async function transformerEnSujet({ projectId = "", conversation = null }
   }
   if (!sujet?.id) return { ok: false, raison: "Le sujet n'a pas pu être ouvert." };
 
+  // Sur quoi ce sujet porte, cherché tout de suite : le titre vient de la
+  // conversation, et il nomme souvent une valeur du projet. Muette en cas
+  // d'échec — le sujet est ouvert, c'est ce qui compte.
+  import("./portage-reconnaissance.js")
+    .then(({ chercherLePortageDuPointNe }) => chercherLePortageDuPointNe(sujet, { projectId: projet }))
+    .catch(() => {});
+
   if (description) {
     try {
       await updateSubjectDescription({ subjectId: sujet.id, description });

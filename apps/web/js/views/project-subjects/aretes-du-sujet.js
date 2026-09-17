@@ -26,8 +26,7 @@
 
 import { RECHERCHE, renderCeQuePorteLeSujet, renderLeChemin } from "../memoire/portage-rendu.js";
 import { raisonnementDuPoint } from "../../services/raisonnement-du-point.js";
-import { liensAPoser, pointOuvert, portageAProposer, surQuoiCePointPorte }
-  from "../../services/point-porte-sur.js";
+import { pointOuvert, surQuoiCePointPorte } from "../../services/point-porte-sur.js";
 import { affirmationsDecideesDans } from "../../services/point-a-tranche.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -188,30 +187,28 @@ export async function chercherSurQuoiCeSujetPorte(hote) {
     project_id: lu.projectId
   };
 
-  const { aProposer, reconnues } = portageAProposer({
-    point,
-    assertions: lu.assertions,
+  // **Le même orchestrateur que la naissance d'un point et que la fusion.**
+  // Trois moments, une seule décision de ce qu'on propose et de ce qu'on écrit :
+  // trois orchestrations séparées auraient fini par ne plus proposer la même
+  // chose, et c'est la proposition qu'on regarde pour juger si la reconnaissance
+  // est au bon niveau (règle 4).
+  const { proposerLesPortages } = await import("../../services/portage-reconnaissance.js");
+  const bilan = await proposerLesPortages({
+    projectId: lu.projectId,
+    confrontations: [{ points: [point], assertions: lu.assertions }],
     liens: lu.liens
   });
 
-  if (aProposer.length) {
-    const { poserLesLiens } = await import("../../services/point-porte-sur-supabase.js");
-    // Sans auteur : c'est une reconnaissance, pas un jugement. Quelqu'un doit
-    // encore la confirmer, et une arête posée toute seule ferait contester une
-    // valeur sans que personne ne l'ait demandé.
-    const posees = await poserLesLiens(liensAPoser({
-      point,
-      assertions: aProposer,
-      projectId: lu.projectId
-    }));
-    if (posees === null) return;
+  if (!bilan) return;
+
+  if (bilan.proposees) {
     // Ce qu'on avait lu ne vaut plus.
     cache = { projectId: "", liens: null, assertions: null };
   }
 
-  recherches.set(subjectId, aProposer.length
+  recherches.set(subjectId, bilan.proposees
     ? RECHERCHE.TROUVE
-    : (reconnues.length ? RECHERCHE.DEJA : RECHERCHE.RIEN));
+    : (bilan.reconnues ? RECHERCHE.DEJA : RECHERCHE.RIEN));
 
   await remplirLesAretes(hote);
 }

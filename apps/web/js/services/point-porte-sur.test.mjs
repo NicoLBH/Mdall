@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 
 import {
   LIAISON, MOT_A_LECRAN, intituleDuPoint, liensAPoser, phraseDesPointsOuverts,
-  areteEcartee, pointsQuiPortentSur, portageAProposer, portagePropose, portagesSurLaValeur,
-  surQuoiCePointPorte
+  areteEcartee, pointsQuiPortentSur, portageAProposer, portagePropose, portagesDeCesPoints,
+  portagesSurLaValeur, surQuoiCePointPorte
 } from "./point-porte-sur.js";
 
 /** Une affirmation de la mémoire, de la forme que la base rend. */
@@ -393,4 +393,80 @@ test("« rien à proposer » se lit de deux façons, et elles se distinguent", (
   assert.deepEqual(tout.aProposer, []);
   assert.equal(tout.deja.length, 2);
   assert.equal(tout.reconnues.length, 2);
+});
+
+/* ── Deux confrontations, une seule écriture ─────────────────────────────── */
+
+// Les deux nomment la classe de sol. C'est voulu : c'est ce qui permet de voir
+// si chacun n'a rencontré que ce qu'on lui a donné à rencontrer.
+const UN_NEUF = { id: "p-neuf", title: "La classe de sol C est-elle confirmée ?" };
+const UN_OUVERT = { id: "p-ouvert", title: "La classe de sol C vaut-elle pour le préau ?" };
+
+test("chaque confrontation ne rapproche que ce qu'on lui donne", () => {
+  // Un point qui naît rencontre la mémoire entière ; un point déjà ouvert ne
+  // rencontre que ce qui vient d'entrer. Verser les deux réserves dans une seule
+  // serait un balayage déguisé : le point déjà ouvert se ferait rapprocher de
+  // valeurs que cet événement n'a pas touchées, et l'alerte reviendrait sans
+  // raison.
+  const { parPoint, combien } = portagesDeCesPoints({
+    confrontations: [
+      { points: [UN_NEUF], assertions: MEMOIRE },
+      // Celui-là ne voit que la zone de neige, qu'il ne nomme pas.
+      { points: [UN_OUVERT], assertions: [MEMOIRE[1]] }
+    ],
+    liens: []
+  });
+
+  assert.deepEqual([...parPoint.keys()], ["p-neuf", "p-ouvert"]);
+  assert.deepEqual(parPoint.get("p-neuf").aProposer.map((v) => v.id), ["v-sol", "v-sol-b"]);
+  assert.deepEqual(parPoint.get("p-ouvert").aProposer, [], "il n'a pas vu la classe de sol");
+  assert.equal(combien, 2);
+});
+
+test("un point qui est dans deux confrontations ne se pose pas deux fois", () => {
+  // Un point neuf qui rencontre une valeur neuve est dans les deux. Poser deux
+  // fois la même arête n'est pas une maladresse : la base tient la paire pour
+  // unique, et l'envoi entier serait refusé — les autres lignes avec.
+  const { parPoint, combien } = portagesDeCesPoints({
+    confrontations: [
+      { points: [UN_NEUF], assertions: MEMOIRE },
+      { points: [UN_NEUF], assertions: [MEMOIRE[0]] }
+    ],
+    liens: []
+  });
+
+  assert.deepEqual(parPoint.get("p-neuf").aProposer.map((v) => v.id), ["v-sol", "v-sol-b"]);
+  assert.equal(combien, 2);
+});
+
+test("ce qui est écarté ne revient pas, même par une autre confrontation", () => {
+  const liens = [
+    { id: "l-1", subject_id: "p-neuf", assertion_id: "v-sol", ecarte_le: "2026-04-03T10:00:00Z" }
+  ];
+  const { parPoint } = portagesDeCesPoints({
+    confrontations: [
+      { points: [UN_NEUF], assertions: MEMOIRE },
+      { points: [UN_NEUF], assertions: MEMOIRE }
+    ],
+    liens
+  });
+
+  assert.deepEqual(parPoint.get("p-neuf").aProposer.map((v) => v.id), ["v-sol-b"]);
+  assert.deepEqual(parPoint.get("p-neuf").deja.map((v) => v.id), ["v-sol"]);
+});
+
+test("une confrontation vide ne produit rien, et ne casse rien", () => {
+  assert.equal(portagesDeCesPoints({}).combien, 0);
+  assert.equal(portagesDeCesPoints({ confrontations: [{ points: [], assertions: MEMOIRE }] }).combien, 0);
+  assert.equal(portagesDeCesPoints({ confrontations: [{ points: [UN_NEUF], assertions: [] }] }).combien, 0);
+});
+
+test("un point sans identifiant ne se range nulle part", () => {
+  // Une arête a besoin des deux bouts. Un point sans identifiant produirait une
+  // ligne que la base refuserait, et l'envoi entier partirait avec.
+  const { parPoint } = portagesDeCesPoints({
+    confrontations: [{ points: [{ title: "La classe de sol C" }], assertions: MEMOIRE }],
+    liens: []
+  });
+  assert.equal(parPoint.size, 0);
 });

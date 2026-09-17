@@ -317,3 +317,70 @@ export function phraseDesPointsOuverts(points = []) {
 
 /** Les motifs de reconnaissance, repris tels quels : une seule table pour les deux. */
 export { LIAISON };
+
+/**
+ * Ce qu'il reste à proposer pour **plusieurs** points, en une passe.
+ *
+ * ## Pourquoi « confronter », et pas « balayer »
+ *
+ * Chaque confrontation dit **ce qu'on rapproche de quoi**, et elle est bornée
+ * par ce qui vient de se produire : les points qui viennent de naître face à la
+ * mémoire entière, les points ouverts face aux seules affirmations qui viennent
+ * d'entrer. Ce sont les deux seuls instants où un rapprochement nouveau peut
+ * apparaître.
+ *
+ * Confronter tous les points ouverts à toute la mémoire à chaque événement
+ * serait un balayage déguisé : il redécouvrirait les mêmes rapprochements pour
+ * des points que rien n'a touchés, et une alerte qui revient sans raison est une
+ * alerte qu'on cesse de lire.
+ *
+ * ## Une seule écriture, sans doublon
+ *
+ * Un point neuf qui rencontre une affirmation neuve est dans les deux
+ * confrontations. Poser deux fois la même arête n'est pas une faute de goût :
+ * la base tient `(subject_id, assertion_id)` pour unique, et l'envoi entier
+ * serait refusé. Les paires se dédoublonnent donc ici, avant d'être écrites.
+ *
+ * @param {object} options
+ * @param {{points: object[], assertions: object[]}[]} options.confrontations
+ * @param {object[]} [options.liens] ce qui est déjà écrit, écarté compris
+ * @returns {{parPoint: Map<string, object>, combien: number}}
+ *   `parPoint` : par identifiant, `{point, aProposer, reconnues, deja}`.
+ *   `combien` : le nombre d'arêtes à poser, doublons ôtés.
+ */
+export function portagesDeCesPoints({ confrontations = [], liens = [] } = {}) {
+  const parPoint = new Map();
+
+  for (const { points = [], assertions = [] } of Array.isArray(confrontations) ? confrontations : []) {
+    for (const point of Array.isArray(points) ? points : []) {
+      const id = texte(point?.id);
+      if (!id) continue;
+
+      const dit = portageAProposer({ point, assertions, liens });
+      const avant = parPoint.get(id) ?? { point, aProposer: [], reconnues: [], deja: [] };
+
+      parPoint.set(id, {
+        point,
+        aProposer: sansDoublon([...avant.aProposer, ...dit.aProposer]),
+        reconnues: sansDoublon([...avant.reconnues, ...dit.reconnues]),
+        deja: sansDoublon([...avant.deja, ...dit.deja])
+      });
+    }
+  }
+
+  let combien = 0;
+  for (const dit of parPoint.values()) combien += dit.aProposer.length;
+
+  return { parPoint, combien };
+}
+
+/** Des versions sans répétition, dans l'ordre où elles sont apparues. */
+function sansDoublon(assertions) {
+  const vues = new Set();
+  return assertions.filter((assertion) => {
+    const id = texte(assertion?.id);
+    if (!id || vues.has(id)) return false;
+    vues.add(id);
+    return true;
+  });
+}
