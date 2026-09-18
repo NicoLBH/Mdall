@@ -88,9 +88,17 @@ fois — une règle écrite à deux endroits finit par ne s'appliquer qu'à l'un
 deux (règle 4).
 
 Et **le champ du nom tient sur la ligne du fil**. Il passait dessous dès que le
-chemin s'allongeait, et l'on perdait de quel dossier il était le bout. C'est le
-chemin qui se serre maintenant, et qui coupe par la gauche s'il le faut : il se
-relit dans l'arborescence, le nom qu'on tape ne se relit nulle part.
+chemin s'allongeait, et l'on perdait de quel dossier il était le bout.
+
+Mis sur une ligne, il a fallu lui donner la place : sans `flex-grow`, le fil
+restait à sa taille de contenu — et cette taille est fausse, parce qu'un
+`<input>` ne contribue que sa **largeur intrinsèque**, une vingtaine de
+caractères, quelle que soit sa valeur. Le fil se calait à 374px, le champ
+réclamait ses 200px de minimum, et les deux liens du chemin se coupaient en
+« Fic… / Doc… » — avec mille six cents pixels vides à côté. Il grandit
+maintenant, et la coupure ne sert plus que sur un écran réellement étroit : elle
+coupe par la gauche, parce que le chemin se relit dans l'arborescence quand le
+nom qu'on tape ne se relit nulle part.
 
 Trois choses méritent d'être dites :
 
@@ -135,7 +143,22 @@ pas un séparateur : elle vient d'un chemin collé depuis ailleurs, et l'accepte
 refuser à la modification pendant qu'on l'accepte à la création aurait fait deux
 règles pour un même champ.
 
-Deux précautions sur ce que cela écrit :
+### `null` est un endroit, pas une panne
+
+La première version rendait l'identifiant du dossier, ou `null` en cas d'échec.
+Or **`null` est la racine de Documents** : écrire un fichier à la racine se
+faisait donc refuser par « le dossier n'a pas pu être créé », alors qu'il n'y
+avait aucun dossier à créer. Deux situations, une seule valeur — exactement ce
+que la règle 5 interdit, et le premier essai réel l'a montré.
+
+Ce qui l'avait laissé passer mérite d'être dit : le code vivait dans le module
+du transport, qui importe le SDK Supabase et ne s'exécute donc pas hors
+navigateur. **Rien ne pouvait l'exercer.** Il est sorti dans
+`creuser-les-dossiers.js`, dont les deux accès à la base entrent par des portes
+qu'on remplace en test — et il rend maintenant `{trouve, id}` : `trouve` dit si
+l'on sait où écrire, `id` dit où.
+
+Deux précautions de plus sur ce que cela écrit :
 
 - **Un dossier déjà là est repris, à la casse près.** « Perso » et « perso »
   côte à côte se confondent à l'œil, et l'on ouvrirait le mauvais — la base
@@ -377,8 +400,11 @@ quel ordre, et ce qu'on dit d'un dossier qui n'offre rien. Pur.
 `apps/web/js/services/fichier-a-la-main.js` — `leCheminSaisi`, les refus, et ce
 qu'il faut écrire pour créer ou réenregistrer un fichier. Pur.
 
-`apps/web/js/services/fichier-a-la-main-supabase.js` — `dossierDuChemin` : le
-dossier creusé de proche en proche, et la collision refusée une fois résolu.
+`apps/web/js/services/creuser-les-dossiers.js` — le dossier où mène un chemin,
+creusé de proche en proche. Les portes s'y remplacent, et le parcours s'exécute.
+
+`apps/web/js/services/fichier-a-la-main-supabase.js` — le transport, et la
+collision refusée une fois le dossier résolu.
 
 `apps/web/js/services/ranger-la-restitution.js` — `rangerLeDocumentDeTexte` :
 une ligne de document, sans transcription.

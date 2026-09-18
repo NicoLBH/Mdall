@@ -27,44 +27,22 @@ import {
 } from "./document-deposit.js";
 import { leFichierAEcrire, leFichierAReecrire } from "./fichier-a-la-main.js";
 import { createDocumentFolder, listDocumentFolderChildren } from "./project-supabase-sync.js";
+import { creuserLesDossiers } from "./creuser-les-dossiers.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /**
- * Le dossier où le chemin saisi mène, en le creusant s'il le faut.
+ * Les portes des dossiers, telles qu'elles sont en vrai.
  *
- * ## On réutilise avant de créer
- *
- * Un dossier déjà là est repris, **à la casse près** : « Perso » et « perso »
- * côte à côte dans un même dossier se confondent à l'œil, et l'on ouvrirait le
- * mauvais. La base refuse d'ailleurs le doublon, et l'on aurait donc échoué
- * sans savoir pourquoi.
- *
- * ## On crée de proche en proche
- *
- * `a/b/c.md` fait `a`, puis `b` dans `a`. Un dossier créé en route reste créé
- * si la suite échoue : c'est ennuyeux, pas grave — et cela vaut mieux qu'un
- * fichier déposé à la racine parce qu'un maillon a manqué.
- *
- * @returns {Promise<string|null>} l'identifiant du dossier, `null` en cas d'échec.
+ * La décision — réutiliser ou créer, et comment dire « la racine » — vit dans
+ * `creuser-les-dossiers.js`, qui s'exécute sans réseau et se vérifie.
  */
-async function dossierDuChemin(projectId, depuis, dossiers = []) {
-  let courant = depuis || null;
-
-  for (const nom of dossiers) {
-    const enfants = (await listDocumentFolderChildren(projectId, courant)) ?? [];
-    const deja = enfants.find((dossier) =>
-      texte(dossier?.name).toLocaleLowerCase("fr-FR") === texte(nom).toLocaleLowerCase("fr-FR"));
-
-    const dossier = deja ?? (await createDocumentFolder(projectId, courant, nom));
-    if (!dossier?.id) return null;
-    courant = dossier.id;
-  }
-
-  return courant;
-}
+const PORTES_DES_DOSSIERS = {
+  listerLesEnfants: listDocumentFolderChildren,
+  creerLeDossier: createDocumentFolder
+};
 
 /** Ce que ce dossier porte déjà, pour refuser une collision qu'on n'a pas vue. */
 async function nomPrisDans(projectId, folderId, nom) {
@@ -93,12 +71,14 @@ export async function ecrireLeFichier(saisi = "", {
   try {
     // **Le dossier d'abord.** « perso/notice.md » crée « perso » puis y dépose ;
     // déposer puis créer laisserait le fichier à la racine si la création rate.
-    const ou = await dossierDuChemin(projectId, folderId, aEcrire.dossiers);
-    if (ou === null) return rate("le dossier n'a pas pu être créé");
+    const ou = await creuserLesDossiers({
+      projectId, depuis: folderId, dossiers: aEcrire.dossiers, portes: PORTES_DES_DOSSIERS
+    });
+    if (!ou.trouve) return rate(ou.motif);
 
     // Le service pur ne peut pas vérifier un dossier qu'il n'a pas lu : c'est
     // ici, une fois le dossier résolu, que la collision se refuse (règle 5).
-    if (aEcrire.dossiers.length && (await nomPrisDans(projectId, ou, aEcrire.nom))) {
+    if (aEcrire.dossiers.length && (await nomPrisDans(projectId, ou.id, aEcrire.nom))) {
       return rate("ce dossier porte déjà un fichier de ce nom");
     }
 
@@ -107,12 +87,12 @@ export async function ecrireLeFichier(saisi = "", {
     // un nom que personne n'a choisi.
     const fichier = new File([aEcrire.contenu], aEcrire.nom, { type: aEcrire.type });
     const stockage = await uploadDocumentToStorage(fichier, {
-      projectId, scope: `${ou || "racine"}/ecrit`
+      projectId, scope: `${ou.id || "racine"}/ecrit`
     });
 
     const document = await insertDocumentRow({
       ...aEcrire.ligne,
-      folder_id: ou,
+      folder_id: ou.id,
       storage_bucket: stockage.storage_bucket,
       storage_path: stockage.storage_path,
       file_size_bytes: fichier.size || 0
@@ -199,10 +179,12 @@ export async function enregistrerLeFichier(document = null, {
   try {
     // Renommer avec un chemin **déplace** : le champ est au bout du fil
     // d'Ariane, qui dit d'où l'on part.
-    const ou = await dossierDuChemin(projectId, folderId, aEcrire.dossiers);
-    if (ou === null) return rate("le dossier n'a pas pu être créé");
+    const ou = await creuserLesDossiers({
+      projectId, depuis: folderId, dossiers: aEcrire.dossiers, portes: PORTES_DES_DOSSIERS
+    });
+    if (!ou.trouve) return rate(ou.motif);
 
-    if (aEcrire.dossiers.length && (await nomPrisDans(projectId, ou, aEcrire.nom))) {
+    if (aEcrire.dossiers.length && (await nomPrisDans(projectId, ou.id, aEcrire.nom))) {
       return rate("ce dossier porte déjà un fichier de ce nom");
     }
 
@@ -211,7 +193,7 @@ export async function enregistrerLeFichier(document = null, {
 
     const ligne = await updateDocumentRow(document.id, {
       ...aEcrire.patch,
-      folder_id: ou,
+      folder_id: ou.id,
       storage_bucket: stockage.storage_bucket,
       storage_path: stockage.storage_path,
       file_size_bytes: fichier.size || 0
