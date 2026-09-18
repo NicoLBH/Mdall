@@ -210,6 +210,10 @@ export const NATURES = {
   "echange-sujet": {
     nom: "Échange dans un sujet",
     quoi: "Répondre dans la discussion d'un sujet."
+  },
+  "brouillon-de-fermeture": {
+    nom: "Brouillon de fermeture",
+    quoi: "Relire le fil d'un sujet qu'on ferme, et écrire le brouillon de ce qui a été tranché."
   }
 };
 

@@ -1184,6 +1184,115 @@ export function createProjectSubjectsActions(config) {
     }
   }
 
+  /**
+   * Ce qu'ailleurs on a tranché en partant des mêmes valeurs.
+   *
+   * ## Pourquoi maintenant, et pas dans la Mémoire
+   *
+   * Dans la Mémoire on relit un raisonnement déjà versé : il est trop tard. Ici
+   * on n'a pas encore écrit — c'est le seul moment où le référentiel peut
+   * changer quelque chose.
+   *
+   * ## Pourquoi par le départ, et pas par la conclusion
+   *
+   * La conclusion est ce qu'on s'apprête à écrire : on ne l'a pas. Le départ, si
+   * — ce sont les valeurs que le sujet met en question. « En partant de là,
+   * ailleurs, on a tranché ceci » est donc la seule question posable avant.
+   *
+   * Muette en cas d'échec : ne pas joindre le référentiel ne doit pas empêcher
+   * de fermer un sujet, et dire « personne ne fait autrement » sur une lecture
+   * ratée serait pire que se taire (règle 5).
+   */
+  async function cequOnATrancheAilleurs(subjectId) {
+    try {
+      const [
+        { listerLesLiens },
+        { listProjectAssertions },
+        { resolveCurrentBackendProjectId },
+        { ceQueCePointMetEnDebat },
+        { listerLesFormes },
+        { ceQuAilleursOnEnTire, phraseDeCeQuAilleursOnEnTire }
+      ] = await Promise.all([
+        import("../../services/point-porte-sur-supabase.js"),
+        import("../../services/project-memory-supabase.js"),
+        import("../../services/project-supabase-sync.js"),
+        import("../../services/point-porte-sur.js"),
+        import("../../services/referentiel-des-formes-supabase.js"),
+        import("../../services/referentiel-des-formes.js")
+      ]);
+
+      const projectId = String(await resolveCurrentBackendProjectId() || "").trim();
+      if (!projectId) return "";
+
+      const [liens, assertions, formes] = await Promise.all([
+        listerLesLiens(projectId),
+        listProjectAssertions(projectId),
+        listerLesFormes()
+      ]);
+      if (liens === null || assertions === null || formes === null) return "";
+
+      const entrees = ceQueCePointMetEnDebat(subjectId, { liens, assertions })
+        .map((assertion) => String(assertion?.payload?.subject ?? "").trim());
+
+      return phraseDeCeQuAilleursOnEnTire(ceQuAilleursOnEnTire(entrees, formes));
+    } catch {
+      return "";
+    }
+  }
+
+  /**
+   * Le brouillon que le copilote écrit en relisant le fil.
+   *
+   * ## Ce qui ne part pas
+   *
+   * La conversation avec le copilote. `matiereDuPoint` la refuse par
+   * `messageLisible`, qui refuse aussi les messages effacés — une seconde copie
+   * de cette règle finirait par ne plus dire la même chose que la première, et
+   * c'est la copie oubliée qui laisserait fuir.
+   *
+   * ## Ce qui revient n'est rien de plus qu'un brouillon
+   *
+   * Il tombe dans les champs d'une fenêtre qu'un humain relit, et ce qui en sort
+   * est une proposition que quelqu'un signera. Deux portes humaines avant la
+   * mémoire.
+   *
+   * Muet en cas d'échec : la fenêtre s'ouvrira sans lui, ce qu'elle faisait
+   * jusqu'ici. Sauf si le contrôle l'a **écarté** — cela se dit, sinon on croit
+   * que le copilote n'a rien trouvé et on recommence.
+   */
+  async function brouillonDeFermeture(subjectId) {
+    try {
+      const [
+        { matiereDuPoint },
+        { demanderLeBrouillon },
+        { listerLesCommentairesDunPoint },
+        { resolveCurrentBackendProjectId }
+      ] = await Promise.all([
+        import("../../services/brouillon-de-fermeture.js"),
+        import("../../services/brouillon-de-fermeture-supabase.js"),
+        import("../../services/subject-messages-supabase.js"),
+        import("../../services/project-supabase-sync.js")
+      ]);
+
+      const projectId = String(await resolveCurrentBackendProjectId() || "").trim();
+      const point = getNestedSujet(subjectId);
+      if (!projectId || !point) return { brouillon: null, dit: "" };
+
+      const messages = await listerLesCommentairesDunPoint(subjectId);
+      if (messages === null) return { brouillon: null, dit: "" };
+
+      const matiere = matiereDuPoint(
+        { id: subjectId, title: point?.title ?? point?.raw?.title, description: point?.raw?.description },
+        messages
+      );
+      if (!matiere) return { brouillon: null, dit: "" };
+
+      return await demanderLeBrouillon({ projectId, matiere });
+    } catch {
+      return { brouillon: null, dit: "" };
+    }
+  }
+
   /** La date, telle qu'on l'écrit dans cette fenêtre. */
   function formatDateFr(quand) {
     const lue = Date.parse(String(quand ?? ""));
@@ -1324,11 +1433,26 @@ export function createProjectSubjectsActions(config) {
       // décisions sur l'outil plutôt que sur l'ouvrage.
       if (normalized === "issue:close:realized") {
         const { demanderCeQuOnATranche, SANS_DECISION } = await import("../ui/decision-du-sujet.js");
+        // Les trois lectures se font ensemble : la fenêtre n'attend pas trois
+        // fois, elle attend une fois. Et aucune ne peut faire échouer les
+        // autres — chacune se tait toute seule.
+        const [dejaVus, ailleurs, ecritParLeCopilote] = await Promise.all([
+          cequOnADejaRaisonne(target.id),
+          cequOnATrancheAilleurs(target.id),
+          brouillonDeFermeture(target.id)
+        ]);
+
         const reponse = await demanderCeQuOnATranche({
           titre: subject?.title ?? subject?.raw?.title,
           // **Avant d'écrire, ce qu'on a déjà raisonné.** Une fois la décision
           // écrite, il est trop tard pour en tenir compte.
-          dejaVus: await cequOnADejaRaisonne(target.id)
+          dejaVus,
+          // Et ce qu'on a tranché ailleurs en partant des mêmes valeurs.
+          ailleurs,
+          // Le brouillon du copilote remplit les champs, et chacun porte sa
+          // marque tant que personne n'y a touché.
+          brouillon: ecritParLeCopilote.brouillon,
+          refus: ecritParLeCopilote.dit
         });
 
         // Renoncer à la fenêtre, c'est renoncer à fermer : on n'a encore rien

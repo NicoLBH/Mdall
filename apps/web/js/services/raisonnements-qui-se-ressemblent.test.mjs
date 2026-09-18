@@ -255,7 +255,7 @@ test("la fermeture va chercher ce qu'on a déjà raisonné, avant d'écrire", ()
     new URL("../views/project-subjects/project-subjects-actions.js", import.meta.url), "utf8"
   );
 
-  assert.match(source, /dejaVus: await cequOnADejaRaisonne\(target\.id\)/,
+  assert.match(source, /cequOnADejaRaisonne\(target\.id\)[\s\S]{0,600}demanderCeQuOnATranche\(\{[\s\S]{0,400}\bdejaVus\b/,
     "la fenêtre s'ouvre sans ce que le projet a déjà raisonné");
   assert.match(source, /raisonnementsPartisDeCesValeurs\(entrees, assertions\)/,
     "rien ne cherche les raisonnements partis des mêmes valeurs");
@@ -273,7 +273,18 @@ test("la fenêtre montre ces raisonnements, et ne remplit aucun champ avec", () 
   // nom et ferait passer la garde alors que rien n'est dessiné.
   assert.match(fenetre, /\$\{renderDejaRaisonne\(dejaVus\)\}/,
     "la fenêtre ne dessine pas le rappel");
-  // Un seul champ est pré-rempli, et c'est le titre du sujet — comme avant.
-  assert.equal((fenetre.match(/value="\$\{escapeHtml\(/g) ?? []).length, 1,
-    "un champ se pré-remplit à partir du rappel");
+
+  // Et le rappel ne sort **que** par là. La garde comptait les champs
+  // pré-remplis ; depuis que le copilote en remplit, ce compte ne dit plus rien.
+  // Ce qu'elle protège, c'est que `dejaVus` ne serve nulle part ailleurs dans le
+  // corps de la fenêtre : un seul lecteur, et ce lecteur ne fait pas de champ.
+  const corps = fenetre.slice(
+    fenetre.indexOf("function renderFenetre"),
+    fenetre.indexOf("/** La question posée")
+  );
+  const lectures = corps.match(/dejaVus/g) ?? [];
+
+  assert.equal(lectures.length, 2,
+    "ce que le projet a déjà raisonné est lu ailleurs que dans son rappel");
+  assert.match(corps, /renderFenetre\(titre, dejaVus,/, "la fenêtre ne reçoit plus le rappel");
 });
