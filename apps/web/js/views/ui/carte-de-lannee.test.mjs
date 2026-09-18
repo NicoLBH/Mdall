@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  ANNEE_NON_LUE, JOURS_NOMMES, colonnesDeLAnnee, etiquettesDesMois, renderCarteDeLAnnee
+  ANNEE_NON_LUE, JOURS_NOMMES, brancherLaCarteDeLAnnee, colonnesDeLAnnee, etiquettesDesMois,
+  oublierOuLOnRegardait, renderCarteDeLAnnee
 } from "./carte-de-lannee.js";
 import { monAnneeDeTravail } from "../../services/mon-annee-de-travail.js";
 
@@ -141,6 +142,7 @@ test("trois jours sont nommés, un sur deux", () => {
   // plus laquelle va où.
   assert.deepEqual(JOURS_NOMMES.map((jour) => jour.rang), [0, 2, 4]);
   assert.deepEqual(JOURS_NOMMES.map((jour) => jour.entier), ["lundi", "mercredi", "vendredi"]);
+  assert.deepEqual(JOURS_NOMMES.map((jour) => jour.court), ["lund.", "merc.", "vend."]);
 });
 
 test("les sept lignes sont posées, y compris les muettes", () => {
@@ -179,4 +181,63 @@ test("les noms sont hors du cadre qui défile", () => {
 
 test("une année non lue n'a pas de noms de jour à montrer", () => {
   assert.equal(renderCarteDeLAnnee(null).includes("annee-carte__jours"), false);
+});
+
+test("le défilement se pose à droite, puis se retient", () => {
+  // Arriver à gauche mettrait sous les yeux le mois qu'on regarde le moins. Et
+  // sauter à droite à chaque rendu arracherait la carte des mains de qui est en
+  // train de la parcourir — l'accueil se redessine à chaque frappe dans sa
+  // recherche.
+  const defilant = {
+    scrollWidth: 900, clientWidth: 400, scrollLeft: 0,
+    ecoutes: {},
+    addEventListener(quoi, quand) { this.ecoutes[quoi] = quand; }
+  };
+  const racine = { querySelector: () => defilant };
+
+  oublierOuLOnRegardait();
+  brancherLaCarteDeLAnnee(racine);
+  assert.equal(defilant.scrollLeft, 500, "la carte ne s'ouvre pas sur les semaines récentes");
+
+  // On parcourt, puis l'écran se redessine : on revient où l'on était.
+  defilant.scrollLeft = 120;
+  defilant.ecoutes.scroll();
+  defilant.scrollLeft = 0;
+  brancherLaCarteDeLAnnee(racine);
+  assert.equal(defilant.scrollLeft, 120, "le redessin arrache la carte à qui la parcourt");
+
+  // Et revenir sur l'écran, c'est y arriver de nouveau.
+  oublierOuLOnRegardait();
+  defilant.scrollLeft = 0;
+  brancherLaCarteDeLAnnee(racine);
+  assert.equal(defilant.scrollLeft, 500);
+});
+
+test("une position retenue ne dépasse pas la fin", () => {
+  // La fenêtre peut avoir grandi entre deux rendus, ou le rail s'être déplié :
+  // poser un défilement plus large que le cadre laisserait une bande vide à
+  // droite de la carte.
+  const large = {
+    scrollWidth: 900, clientWidth: 400, scrollLeft: 0,
+    ecoutes: {}, addEventListener(quoi, quand) { this.ecoutes[quoi] = quand; }
+  };
+
+  oublierOuLOnRegardait();
+  brancherLaCarteDeLAnnee({ querySelector: () => large });
+  // **On retient une position pour de vrai** : sans ce défilement, la seconde
+  // pose repasserait par le chemin « jamais regardé », et la garde ne dirait
+  // rien du plafonnement.
+  large.scrollLeft = 480;
+  large.ecoutes.scroll();
+
+  const etroit = { scrollWidth: 500, clientWidth: 400, scrollLeft: 0, addEventListener() {} };
+  brancherLaCarteDeLAnnee({ querySelector: () => etroit });
+
+  assert.equal(etroit.scrollLeft, 100);
+});
+
+test("sans carte à l'écran, le branchement ne casse rien", () => {
+  // Une année non lue ne dessine pas de grille : il n'y a rien à défiler.
+  assert.doesNotThrow(() => brancherLaCarteDeLAnnee({ querySelector: () => null }));
+  assert.doesNotThrow(() => brancherLaCarteDeLAnnee(null));
 });

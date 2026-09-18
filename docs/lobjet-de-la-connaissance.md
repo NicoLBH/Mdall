@@ -2008,6 +2008,22 @@ celui des étiquettes de mois, pour que « lundi » tombe en face de sa ligne et
 du nom du mois : la sonde relit l'écart entre chaque nom et le centre de sa
 rangée de carrés, et il est nul sur les sept.
 
+#### On arrive à droite, sur les mois récents
+
+Douze mois ne tiennent pas toujours dans la carte, et elle défile. Arriver à
+gauche mettrait sous les yeux le mois qu'on regarde le moins.
+
+Et le défilement **se retient** : l'accueil se redessine à chaque frappe dans sa
+recherche, et sauter à droite à chaque touche arracherait la carte des mains de
+qui la parcourt. C'est le même défaut que le curseur qui repart au début d'un
+champ, et il se corrige de la même façon. Revenir sur l'écran, en revanche, c'est
+y arriver : la position s'oublie au montage, sinon l'accueil se rouvrirait au
+milieu de février.
+
+Une position retenue est **plafonnée à la fin** : la fenêtre peut avoir grandi
+entre deux rendus, et poser un défilement plus large que le cadre laisserait une
+bande vide à droite.
+
 #### La tête dit le total **et** les jours
 
 « 1 478 gestes » ne dit pas si c'est trois jours ou trois cents, et c'est
@@ -2070,6 +2086,14 @@ deuxième fois qu'un jeton inventé passe la revue de code et tombe au navigateu
 | les noms passent après les semaines | *ils précèdent les semaines* |
 | la colonne des noms perd son retrait de mois | la sonde, décalage de −14 px sur les sept lignes |
 | le nom entier ne s'affiche jamais | la sonde, forme courte à 1400 px |
+| la carte s'ouvre à gauche | deux gardes |
+| le redessin ramène toujours à droite | *le défilement se retient* |
+| la position retenue dépasse la fin | *elle ne dépasse pas la fin* |
+| on ne suit plus le défilement | *le défilement se retient* |
+| revenir sur l'écran garde l'ancienne position | la même |
+| sans carte, le branchement jette | *il ne casse rien* |
+| les abréviations reviennent à trois lettres | *trois jours sont nommés, un sur deux* |
+| l'écran ne branche plus la carte | *l'accueil pose le défilement* |
 
 Et quatre états au navigateur, couleurs calculées relues : année chargée, année
 d'un seul rythme, année vide, année non lue. Aucune teinte transparente, aucune
