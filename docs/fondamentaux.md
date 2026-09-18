@@ -663,6 +663,24 @@ Conséquence pratique : **un agent qui appelle un modèle déclare son chemin
 manuel**. Quand ce champ est vide, cela se voit à l'écran — ce n'est pas un
 oubli qu'on masque, c'est une dette qu'on montre.
 
+Dit par celui qui s'en sert, et qu'on garde tel quel :
+
+> « je dois pouvoir me passer de l'ia et du llm, qui ne sont là que pour me
+> rendre la vie plus confortable »
+
+C'est plus exigeant que « l'IA n'est pas la seule porte » : le chemin manuel
+n'est pas un repli qu'on emprunte quand le modèle tombe, c'est **le chemin**,
+et le modèle est le confort qu'on lui ajoute. Une fonctionnalité dont la seule
+version est celle qui appelle un modèle est donc incomplète, même quand elle
+marche.
+
+Premier endroit où cela se voit hors de l'Atelier : **on écrit un fichier à la
+main dans Fichiers**. Une notice incendie ouverte dans un traitement de texte
+ou dans un PDF sélectionnable se sélectionne, se copie, se colle — et le
+document est là, sans une requête. La transcription par le modèle reste
+offerte, pour les PDF qu'on ne peut pas sélectionner ; elle n'est plus la seule
+façon de faire entrer un texte.
+
 ### Ce que l'IA produit s'affiche avant d'être exploité
 
 Une extraction qui rend directement des sujets est une boîte noire : quand le
@@ -692,3 +710,6 @@ un résultat sans dire ce qu'il a coûté ni sur quoi il s'est fondé.
 
 `apps/web/js/services/catalogue-de-latelier.js` — les champs `intelligence` et
 `aussiALaMain` de chaque agent, que la vitrine affiche.
+
+`docs/ecrire-un-fichier-a-la-main.md` — écrire un fichier depuis Fichiers, sans
+modèle : le nom, la zone de saisie, et ce que le collage fait gagner.
