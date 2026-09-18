@@ -19,7 +19,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { ATELIER_COPILOTE, panneauDemandeParLaRoute, routeDuPanneau } from "./route-de-latelier.js";
+import { ATELIER_COPILOTE, ATELIER_LECTURE_DES_CR, panneauDemandeParLaRoute, routeDuPanneau } from "./route-de-latelier.js";
 
 /* ── Ce que la route ouvre ───────────────────────────────────────────────── */
 
@@ -103,4 +103,30 @@ test("ce que l'adresse écrit, l'adresse le relit", () => {
 
   const effacee = routeDuPanneau("#project/p1/atelier/copilote", "solidity-fondations");
   assert.equal(panneauDemandeParLaRoute(effacee), "", "et la vitrine s'ouvre");
+});
+
+/**
+ * **Fichiers mène à la lecture d'un compte rendu.** On ouvre un `.md`, on
+ * demande d'en relever les points, et l'on doit atterrir sur le panneau — pas
+ * sur la vitrine, où le document posé n'aurait aucun écran pour le prendre.
+ */
+test("la lecture d'un compte rendu s'ouvre par son adresse", () => {
+  assert.equal(
+    panneauDemandeParLaRoute(`#project/p1/atelier/${ATELIER_LECTURE_DES_CR}`),
+    "dev-lecture-cr"
+  );
+});
+
+test("les deux sens s'accordent aussi pour la lecture d'un compte rendu", () => {
+  const ecrite = routeDuPanneau("#project/p1/atelier", "dev-lecture-cr");
+  assert.equal(panneauDemandeParLaRoute(ecrite), "dev-lecture-cr");
+});
+
+test("les deux panneaux nommés par la route sont distincts", () => {
+  // Deux entrées qui pointeraient le même panneau feraient un raccourci mort,
+  // et rien ne le dirait : la page s'ouvrirait, simplement pas la bonne.
+  assert.notEqual(
+    panneauDemandeParLaRoute(`#project/p1/atelier/${ATELIER_LECTURE_DES_CR}`),
+    panneauDemandeParLaRoute("#project/p1/atelier/copilote")
+  );
 });

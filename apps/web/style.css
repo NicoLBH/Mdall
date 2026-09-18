@@ -22820,6 +22820,18 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
 }
 .saisie-code__zone::placeholder{ color:var(--muted); }
 
+/* Un fichier de texte, rendu, dans Fichiers.
+
+   Il reprend `md-body` — le même rendu que l'aperçu d'une restitution dans
+   l'Atelier : deux mises en page pour un même Markdown se seraient répondu de
+   moins en moins d'une retouche à l'autre. Il ne reste ici que le cadre et le
+   défilement. */
+.documents-texte-apercu{
+  flex:1 1 auto; min-height:0; overflow:auto;
+  padding:16px 20px;
+  font-size:13px; line-height:1.6; color:var(--text);
+}
+
 /* La transcription d'un document, montrée comme un fichier de code.
 
    Les lignes reprennent les classes de la Mémoire — `memoire-ligne`,
@@ -25300,6 +25312,14 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    quand la page n'a pas pu être mesurée — l'aperçu s'étale alors. */
 .lecture-cr__md-apercu > .md-render{max-width:var(--lecture-cr-papier,none);margin:0 auto;}
 .lecture-cr__md-format{padding:8px 20px 0;color:var(--text-muted);}
+
+/* Ce que la zone de dépôt accepte, dit sous son invitation. Un `.md` déposé
+   ici ne coûte rien : le dire évite de rouvrir le PDF pour le même document. */
+.lecture-cr__depot-aide{margin:4px 0 10px;color:var(--text-muted);max-width:52ch;text-align:center;}
+.lecture-cr__depot-aide code{
+  font-family:var(--mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  background:rgba(110,118,129,.12); border-radius:4px; padding:0 4px;
+}
 
 /* Une restitution qui n'a rien pu rendre. Elle explique ce qui manque plutôt
    que de rester vide — un cadre vide se lit « le document était vide ». */

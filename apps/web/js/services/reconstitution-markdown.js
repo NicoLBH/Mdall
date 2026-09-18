@@ -58,6 +58,24 @@ export const QUOI_DE_LA_LECTURE = {
 };
 
 /**
+ * Les lectures qu'une restitution offre.
+ *
+ * **« Origine » n'existe que face à un PDF.** Elle met chaque ligne en regard de
+ * la page dont elle sort : sans document extrait, il n'y a pas de page à
+ * nommer, et le numéro affiché ne renverrait à rien qu'on puisse ouvrir. Le
+ * laisser cliquable donnerait une colonne « p. 1 » sur tout un document, ce qui
+ * se lit comme une information et n'en est pas une (règle 5).
+ *
+ * C'est le cas d'un compte rendu déjà écrit en Markdown, qu'on lit sans
+ * extraction ni restitution.
+ */
+export function lecturesDeLaRestitution({ depuisUnPdf = true } = {}) {
+  return depuisUnPdf
+    ? [LECTURE.APERCU, LECTURE.CODE, LECTURE.ORIGINE]
+    : [LECTURE.APERCU, LECTURE.CODE];
+}
+
+/**
  * Le document, remis bout à bout dans l'ordre des pages.
  *
  * **L'ordre vient des numéros de page, pas de l'ordre de la réponse.** Un

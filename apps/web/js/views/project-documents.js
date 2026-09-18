@@ -7,6 +7,13 @@ import {
 import {
   nomDeLaTranscription, phraseDeLaTranscription, transcriptionDuDocument
 } from "../services/transcription-du-document.js";
+import {
+  LECTURE_DU_TEXTE, NOMS_DE_LA_LECTURE, QUOI_DE_LA_LECTURE, estUnFichierTexte, leFichierLu,
+  lectureParDefaut, lecturesDuFichier, phraseDuFichier
+} from "../services/lire-un-fichier-texte.js";
+import { renderMarkdownToHtml } from "../utils/markdown-renderer.js";
+import { deposerLeCrALire } from "../services/un-cr-a-lire.js";
+import { ATELIER_LECTURE_DES_CR } from "../services/route-de-latelier.js";
 import { PROJECT_TAB_IDS } from "../constants.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import { brancherLaZoneDeDepot } from "./ui/zone-de-depot.js";
@@ -216,6 +223,19 @@ const docsViewState = {
    * du chemin — là où le fichier va exister.
    */
   ecriture: null,
+  /**
+   * Le fichier de texte ouvert, s'il y en a un.
+   *
+   * `null` : on n'en lit aucun. Il ne passe pas par `pdfPreview` — ce sont deux
+   * lecteurs qui n'ont rien en commun : pas de zoom, pas de rotation, pas de
+   * recherche dans une page, pas d'octets à rendre. Les faire cohabiter dans un
+   * même état aurait donné un objet dont la moitié des champs sont morts selon
+   * le cas, et deux écrans à relire pour savoir lequel.
+   *
+   * `contenu` est `null` tant qu'on n'a pas lu, et le reste si la lecture a
+   * échoué : `motif` dit alors laquelle des deux (règle 5).
+   */
+  texte: null,
   currentFolderId: null,
   breadcrumb: [],
   folders: [],
@@ -1533,7 +1553,10 @@ function renderRepoFolderRow(folder) {
 function renderRepoDocumentRow(doc) {
   const decoratedDoc = decorateDocumentWithPhase(doc);
   const isPdf = isPdfDocument(decoratedDoc);
-  const isPreviewablePdf = canPreviewPdf(decoratedDoc);
+  // **Un fichier de texte s'ouvre aussi.** Sa ligne était morte : le seul moyen
+  // de voir ce qu'il portait était de le télécharger pour l'ouvrir ailleurs.
+  const estDuTexte = estUnFichierTexte(decoratedDoc.name || decoratedDoc.fileName || "");
+  const isPreviewablePdf = canPreviewPdf(decoratedDoc) || estDuTexte;
   const recognition = describeRecognition(decoratedDoc);
   // Ce que la ligne dit du rapport de ce document à la mémoire : « hors
   // corpus » quand il en est sorti, « hors mémoire » quand il a été déposé
@@ -1548,7 +1571,9 @@ function renderRepoDocumentRow(doc) {
     <div
       class="documents-repo__row documents-repo__row--file${isPdf ? " documents-repo__row--pdf" : ""}${isPreviewablePdf ? " is-clickable" : ""}${refuse ? " documents-repo__row--refused" : ""}"
       data-document-id="${escapeHtml(decoratedDoc.id || "")}"
-      ${isPreviewablePdf ? 'role="button" tabindex="0" aria-label="Ouvrir l’aperçu du PDF"' : ""}
+      ${isPreviewablePdf
+        ? `role="button" tabindex="0" aria-label="${estDuTexte ? "Ouvrir le fichier" : "Ouvrir l’aperçu du PDF"}"`
+        : ""}
     >
       <div class="documents-repo__cell documents-repo__cell--name">
         <span class="documents-repo__icon">${getDocumentIconSvg()}</span>
@@ -1919,6 +1944,132 @@ function renderEcritureDeFichier() {
  * plus ce qui a été ajouté, déplacé ou inventé : exactement ce qu'on vient
  * vérifier. Numérotée, elle se cite aussi : « ligne 214 » désigne un endroit.
  */
+/**
+ * Un fichier de texte, ouvert depuis Fichiers.
+ *
+ * ## Pourquoi il fallait ce lecteur
+ *
+ * On sait écrire un fichier à la main, et l'on ne savait pas le relire : un
+ * `.md` collé y restait une ligne dans un tableau, et le seul moyen de voir ce
+ * qu'il portait était de le télécharger pour l'ouvrir ailleurs. C'est
+ * exactement le genre d'aller-retour que cet onglet existe pour éviter.
+ *
+ * ## Deux lectures, et le même vocabulaire que partout
+ *
+ * « Aperçu » et « Code », les mots de la Mémoire et de la restitution de
+ * l'Atelier, avec les mêmes classes (`memoire-fichier__lectures`,
+ * `memoire-lecture`). Un même geste ne s'appelle pas de deux façons, et ne se
+ * dessine pas de deux façons non plus.
+ *
+ * La barre ne s'affiche que s'il y a un choix : un `.ref` n'a pas d'aperçu qui
+ * veuille dire quelque chose, et un bouton qui mène à rien se clique une fois.
+ *
+ * ## Trois états, et ils ne se confondent pas
+ *
+ * En cours de lecture · lu · pas su lire. Un fichier vide est un quatrième cas,
+ * et c'est une réponse : il se dit, il ne se tait pas (règle 5).
+ */
+function renderLectureDuTexte() {
+  const ouvert = docsViewState.texte ?? {};
+  const nom = String(ouvert.nom || "fichier");
+  const lectures = lecturesDuFichier(nom);
+  const lecture = lectures.includes(ouvert.lecture) ? ouvert.lecture : lectures[0];
+
+  const treeHtml = renderArbreDesFichiers({
+    memoire: preparerLaMemoire(docsViewState.memoireAssertions ?? []),
+    ouverte: docsViewState.documentTreeOpen !== false,
+    query: docsViewState.memoireQuery ?? ""
+  });
+
+  return `
+    <section class="project-simple-page project-simple-page--documents">
+      <div class="documents-shell documents-shell--project-page documents-layout" id="projectDocumentScroll" style="--documents-tree-width:${docsViewState.documentTreeOpen ? Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280))) : 0}px">
+        ${treeHtml}
+        <main class="documents-main">
+          ${renderDocumentsTopBar()}
+          ${renderDocumentsActivityBanner()}
+          <div class="documents-report">
+            <section class="documents-report-table">
+              <header class="documents-report-table__header">
+                <div class="documents-report-table__actions">
+                  <div class="documents-report-table__actions-group documents-report-table__actions-group--start">
+                    ${lectures.length > 1
+                      ? `<span class="memoire-fichier__lectures">
+                          ${lectures.map((cle) => `
+                            <button type="button" class="memoire-lecture${lecture === cle ? " is-active" : ""}"
+                              data-texte-lecture="${escapeHtml(cle)}" aria-pressed="${lecture === cle}"
+                              title="${escapeHtml(QUOI_DE_LA_LECTURE[cle] ?? "")}"
+                            >${escapeHtml(NOMS_DE_LA_LECTURE[cle])}</button>
+                          `).join("")}
+                        </span>`
+                      : ""}
+                    <b class="documents-transcription__tete">${escapeHtml(nom)}</b>
+                    <span class="documents-ecriture__dit">${escapeHtml(phraseDuTexteOuvert(ouvert))}</span>
+                  </div>
+                  <div class="documents-report-table__actions-group documents-report-table__actions-group--end">
+                    ${/*
+                      **La sortie de cet écran.** Un fichier de texte ne
+                      s'extrait pas : il est déjà le document. C'est tout ce que
+                      « lire un compte rendu » a de moins à faire ici, et c'est
+                      la raison pour laquelle le bouton existe (fondamental 13).
+                    */""}
+                    ${typeof ouvert.contenu === "string" && ouvert.contenu.trim()
+                      ? `<button type="button" class="gh-btn" data-texte-lire-un-cr
+                           title="Relever les points de ce document, sans extraction ni restitution"
+                         >Lire comme un compte rendu</button>`
+                      : ""}
+                    <button type="button" class="gh-btn" data-texte-fermer>Fermer</button>
+                  </div>
+                </div>
+              </header>
+              <div class="documents-report-table__body">
+                ${renderCorpsDuTexte(ouvert, lecture)}
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    </section>
+  `;
+}
+
+/** Ce qu'on dit du fichier ouvert, à côté de son nom. */
+function phraseDuTexteOuvert(ouvert = {}) {
+  if (ouvert.enCours) return "lecture…";
+  if (typeof ouvert.contenu !== "string") return String(ouvert.motif || "non lu");
+  return phraseDuFichier(leFichierLu(ouvert.contenu));
+}
+
+/**
+ * Le corps : le document rendu, ou ses lignes numérotées.
+ *
+ * **Un fichier vide se dit.** Rendre une page blanche ne se distinguerait pas
+ * d'un lecteur en panne, et la différence compte : l'un se remplit, l'autre se
+ * signale.
+ */
+function renderCorpsDuTexte(ouvert = {}, lecture = LECTURE_DU_TEXTE.CODE) {
+  if (ouvert.enCours) {
+    return `<div class="documents-pdf-viewer__fallback documents-pdf-viewer__fallback--empty">
+      <p>Lecture du fichier…</p></div>`;
+  }
+
+  if (typeof ouvert.contenu !== "string") {
+    return `<div class="documents-pdf-viewer__fallback documents-pdf-viewer__fallback--empty">
+      <p>${escapeHtml(String(ouvert.motif || "Ce fichier n'a pas pu être lu."))}</p></div>`;
+  }
+
+  if (!ouvert.contenu.trim()) {
+    return `<div class="documents-pdf-viewer__fallback documents-pdf-viewer__fallback--empty">
+      <p>Ce fichier est vide. Ce n'est pas une panne de lecture : il ne porte rien.</p></div>`;
+  }
+
+  const lu = leFichierLu(ouvert.contenu);
+
+  return lecture === LECTURE_DU_TEXTE.APERCU
+    ? `<div class="documents-texte-apercu md-body">${renderMarkdownToHtml(ouvert.contenu)}</div>`
+    : `<div class="documents-transcription">${renderFichierDeCode(lu.lignes)}</div>`;
+}
+
 function renderTranscriptionDuDocument(documentItem) {
   const apercu = docsViewState.pdfPreview ?? {};
 
@@ -3674,6 +3825,79 @@ function openReportPreview(root) {
   renderProjectDocuments(root);
 }
 
+/**
+ * Ouvrir un fichier de texte.
+ *
+ * **L'écran s'affiche avant la lecture.** Le contenu vient du stockage, ce qui
+ * prend le temps d'un aller-retour : rester sur la liste pendant ce temps ferait
+ * un clic sans effet, et l'on recliquerait.
+ *
+ * Un contenu vide et une lecture ratée ne se confondent pas : `contenu` reste
+ * `null` dans le second cas, et le motif le dit (règle 5).
+ */
+async function ouvrirLeTexte(root, documentItem) {
+  const nom = String(documentItem?.name || documentItem?.fileName || "fichier");
+
+  docsViewState.activity = null;
+  docsViewState.texte = {
+    documentId: String(documentItem?.id || ""),
+    nom,
+    lecture: lectureParDefaut(nom),
+    contenu: null,
+    enCours: true,
+    motif: ""
+  };
+  renderProjectDocuments(root);
+
+  const { lireLeTexteDuFichier } = await import("../services/fichier-a-la-main-supabase.js");
+  const lu = await lireLeTexteDuFichier(documentItem).catch(() => null);
+
+  // Rouvrir un autre fichier pendant la lecture du premier ne doit pas faire
+  // atterrir le premier texte dans le second écran.
+  if (docsViewState.texte?.documentId !== String(documentItem?.id || "")) return;
+
+  docsViewState.texte = {
+    ...docsViewState.texte,
+    enCours: false,
+    contenu: typeof lu === "string" ? lu : null,
+    motif: typeof lu === "string" ? "" : "Ce fichier n'a pas pu être lu. Réessayez dans un instant."
+  };
+  renderProjectDocuments(root);
+}
+
+function fermerLeTexte(root) {
+  docsViewState.texte = null;
+  renderProjectDocuments(root);
+}
+
+/**
+ * Faire relever les points de ce fichier par l'Atelier.
+ *
+ * ## Le chemin le plus court, et le seul qui ne repaie rien
+ *
+ * Le fichier est déjà là, et il est déjà du texte : l'Atelier n'a ni à
+ * l'extraire, ni à le faire refaire par le modèle. On lui passe donc le texte
+ * qu'on vient de lire, et l'on navigue jusqu'à son panneau.
+ *
+ * ## Pourquoi on ne l'appelle pas directement
+ *
+ * Le panneau de l'Atelier n'est pas monté tant qu'on n'y est pas allé : écrire
+ * dedans depuis ici écrirait dans un écran qui n'existe pas. Le texte se pose
+ * dans une case que l'Atelier vient prendre à son montage.
+ */
+function lireCeFichierCommeUnCompteRendu() {
+  const ouvert = docsViewState.texte ?? {};
+  const projet = String(store.currentProjectId || "").trim();
+
+  if (!deposerLeCrALire({ nom: ouvert.nom, contenu: ouvert.contenu })) return;
+  if (!projet) return;
+
+  // La route nomme le panneau, et le nom vit dans `route-de-latelier.js` avec
+  // la lecture qui lui répond : composer l'adresse ici la ferait diverger le
+  // jour où le panneau change de nom (règle 10).
+  window.location.hash = `#project/${encodeURIComponent(projet)}/atelier/${ATELIER_LECTURE_DES_CR}`;
+}
+
 async function openPdfPreview(root, documentId) {
   const documentItem = pieceDesFichiers(documentId);
 
@@ -3689,11 +3913,17 @@ async function openPdfPreview(root, documentId) {
     renderProjectDocumentsContent(root);
     return;
   }
+  // **Deux lecteurs, et le nom du fichier décide.** Ils n'ont rien en commun :
+  // l'un rend des octets sur un canevas, l'autre des lignes de texte.
+  if (estUnFichierTexte(documentItem.name || documentItem.fileName || "")) {
+    await ouvrirLeTexte(root, documentItem);
+    return;
+  }
   if (!isPdfDocument(documentItem)) {
     docsViewState.activity = {
       tone: "info",
-      title: `« ${String(documentItem.name || "Ce fichier")} » n'est pas un PDF`,
-      message: "Le lecteur ne sait afficher que des PDF. Téléchargez la pièce pour l'ouvrir ailleurs."
+      title: `« ${String(documentItem.name || "Ce fichier")} » ne s'ouvre pas ici`,
+      message: "Le lecteur sait afficher les PDF et les fichiers de texte. Téléchargez la pièce pour l'ouvrir ailleurs."
     };
     renderProjectDocumentsContent(root);
     return;
@@ -4313,6 +4543,22 @@ function bindDocumentsSplitActions(root) {
     });
   }
 
+  // La lecture d'un fichier de texte : la bascule, la sortie, et le passage à
+  // l'Atelier.
+  if (docsViewState.texte) {
+    for (const bouton of root.querySelectorAll("[data-texte-lecture]")) {
+      bouton.addEventListener("click", () => {
+        docsViewState.texte.lecture = bouton.getAttribute("data-texte-lecture") || "";
+        renderProjectDocumentsContent(root);
+      });
+    }
+
+    root.querySelector("[data-texte-fermer]")?.addEventListener("click", () => fermerLeTexte(root));
+    root.querySelector("[data-texte-lire-un-cr]")?.addEventListener("click", () => {
+      lireCeFichierCommeUnCompteRendu();
+    });
+  }
+
   const menu = document.querySelector('[data-action-id="documentsMenu"]');
   if (menu) {
     menu.addEventListener("ghaction:action", (event) => {
@@ -4812,6 +5058,8 @@ function renderProjectDocumentsContent(root) {
 
   root.innerHTML = docsViewState.ecriture
     ? renderEcritureDeFichier()
+    : docsViewState.texte
+    ? renderLectureDuTexte()
     : docsViewState.mode === "list" && docsViewState.branche === ""
     ? renderRacineDesFichiers()
     : docsViewState.mode === "list" && docsViewState.branche === BRANCHE.MEMOIRE

@@ -681,6 +681,13 @@ document est là, sans une requête. La transcription par le modèle reste
 offerte, pour les PDF qu'on ne peut pas sélectionner ; elle n'est plus la seule
 façon de faire entrer un texte.
 
+Et le parcours va maintenant jusqu'au bout : ce fichier se **relit** dans
+Fichiers, et l'Atelier sait en relever les points **sans extraction ni
+restitution** — les deux étapes payantes du parcours d'un PDF n'existent que
+pour fabriquer du Markdown à partir d'une image de page, et il en est déjà.
+D'une notice ouverte dans un traitement de texte jusqu'aux points confrontés au
+projet, **aucun modèle n'a lu de PDF**.
+
 ### Ce que l'IA produit s'affiche avant d'être exploité
 
 Une extraction qui rend directement des sujets est une boîte noire : quand le
@@ -713,3 +720,7 @@ un résultat sans dire ce qu'il a coûté ni sur quoi il s'est fondé.
 
 `docs/ecrire-un-fichier-a-la-main.md` — écrire un fichier depuis Fichiers, sans
 modèle : le nom, la zone de saisie, et ce que le collage fait gagner.
+
+`docs/lire-un-fichier-de-texte.md` — le relire, en Code et en Aperçu, et en tirer
+un compte rendu sans extraction ni restitution : le parcours complet sans qu'un
+modèle ait lu de PDF.

@@ -3724,7 +3724,7 @@ mauvais élément.
 ne monte le geste que dans ce cas — plutôt que de le monter toujours et de
 compter sur l'absence du nœud pour qu'il ne fasse rien.
 
-## 46. Lire un compte rendu à partir d'un fichier déjà dans Fichiers
+## 46. Lire un compte rendu à partir d'un fichier déjà dans Fichiers · *fait*
 
 **Ce qui manque.** La lecture d'un compte rendu part aujourd'hui d'un fichier
 qu'on choisit sur son disque, dans l'écran du Copilote. Un document déjà déposé
@@ -3749,3 +3749,16 @@ du parcours.
   que d'en écrire une seconde (règle 4).
 - Le texte collé est déjà du Markdown, ou peut l'être. Le faire repasser par
   une transcription serait payer pour ce qu'on a.
+
+**Ce qui a été fait.** Un fichier de texte s'ouvre depuis Fichiers, en Code et en
+Aperçu, et porte un bouton qui le fait relever par l'Atelier. La zone de dépôt de
+l'Atelier accepte les mêmes extensions. Le parcours perd ses deux étapes
+payantes — extraction et restitution — et l'écran dit ce qui n'a plus de sens
+avec elles plutôt que d'afficher des zéros : pas de mesure de fidélité, pas de
+lecture « Origine », « 0 € — déjà du texte », rien à ranger.
+Voir `docs/lire-un-fichier-de-texte.md`.
+
+**Ce qui n'a pas été fait, et qui reste ouvert.** Un compte rendu **PDF** déjà
+déposé dans Fichiers ne se relit toujours pas depuis là : il faut le redéposer
+dans l'Atelier. Sa transcription, elle, se relit déjà — et `relireLaRestitution`
+sait ne pas repayer. Ce qui manque est le chemin, pas la décision.

@@ -49,8 +49,13 @@ import {
 } from "../../../services/lecture-du-cr.js";
 import {
   LECTURE, NOMS_DE_LECTURE, QUOI_DE_LA_LECTURE, assemblerLeMarkdown, enFichierMarkdown,
-  enPourcent, fideliteDeLaReconstitution, motsDuMobilier, pagesALire, tonDeLaPart
+  enPourcent, fideliteDeLaReconstitution, lecturesDeLaRestitution, motsDuMobilier, pagesALire,
+  tonDeLaPart
 } from "../../../services/reconstitution-markdown.js";
+import {
+  EXTENSIONS_LISIBLES, estUnFichierTexte, laRestitutionDunTexte
+} from "../../../services/lire-un-fichier-texte.js";
+import { reprendreLeCrALire } from "../../../services/un-cr-a-lire.js";
 import { PHRASES_DU_RANGEMENT, RANGEE } from "../../../services/restitution-rangee.js";
 import {
   LABEL_DU_CR, QUOI_DU_LABEL, labelDuCrDansLeProjet, labelsAProposer, styleDuLabel
@@ -86,6 +91,33 @@ const texte = (valeur) => String(valeur ?? "").trim();
 
 /** Ce que cet écran accepte. Nommé une fois : la zone et le champ le lisent. */
 const EST_UN_PDF = /\.pdf$/i;
+
+/**
+ * Un compte rendu déjà écrit en texte se lit **sans extraction**.
+ *
+ * ## Pourquoi c'est un chemin à part, et non un cas particulier du PDF
+ *
+ * Le parcours d'un PDF est : extraire les pages, faire refaire le document par
+ * le modèle, relever les points sur ce qu'il a refait. Les deux premières
+ * étapes existent pour **fabriquer du Markdown à partir d'une image de page**.
+ * Un `.md` en est déjà : les lui faire subir serait payer deux appels pour
+ * retrouver le texte qu'on avait.
+ *
+ * C'est le fondamental 13 pris au mot : « je dois pouvoir me passer de l'ia et
+ * du llm ». On colle une notice depuis un traitement de texte, on l'enregistre
+ * dans Fichiers, et on la fait relever ici — **aucun modèle n'a lu de PDF**.
+ *
+ * ## Ce qui disparaît avec l'extraction, et qu'il faut dire
+ *
+ * Les mesures de fidélité n'ont plus d'objet : il n'y a rien à comparer, et
+ * « 100 % du document retrouvé » serait une tautologie présentée comme un
+ * résultat. La lecture « Origine » non plus : sans PDF, aucune page à mettre en
+ * regard. L'écran ne les affiche donc pas, plutôt que d'afficher des chiffres
+ * qui ne mesurent rien (règle 5).
+ */
+const ACCEPTE = [".pdf", ...EXTENSIONS_LISIBLES].join(",");
+
+const estUnDocumentAccepte = (nom) => EST_UN_PDF.test(texte(nom)) || estUnFichierTexte(texte(nom));
 
 /**
  * Les deux moitiés de l'écran.
@@ -264,7 +296,7 @@ const etat = {
    * vraisemblable pour remplir le cadre (règle 5).
    */
   panne: "",
-  /** Le PDF déposé, gardé le temps de la lecture. */
+  /** Le document déposé, gardé le temps de la lecture. */
   fichier: null,
   /** L'onglet regardé. Voir `ONGLET`. */
   onglet: ONGLET.RESTITUTION,
@@ -307,6 +339,19 @@ function unCote() {
     forme: null,
       /** La réponse du modèle a-t-elle été coupée ? */
     coupee: false,
+    /**
+     * Le document était-il **déjà du texte** ?
+     *
+     * Vrai : ni extraction, ni restitution. Il n'y a donc pas de PDF derrière,
+     * pas de page à mettre en regard d'une ligne, rien à mesurer contre quoi
+     * que ce soit, et aucun appel à facturer.
+     *
+     * **Il vit ici et non dans l'état de l'écran** : c'est une propriété de
+     * cette restitution-ci, et l'écran se dessine à partir d'une vue qu'on lui
+     * passe. Tenu à côté, il aurait été lu depuis le module pendant que le
+     * reste venait de la vue — deux sources pour un même écran (règle 4).
+     */
+    dejaDuTexte: false,
     /** La transcription a-t-elle eu le squelette du document sous les yeux ? */
     surLaStructure: false,
     /** Les pages qui ne sont pas parties, et celles dont rien n'est revenu. */
@@ -370,6 +415,38 @@ export function renderLectureDesCr(hote) {
   hoteCourant = hote;
   hote.innerHTML = renderLaLecture(etat);
   brancher(hote);
+  prendreCeQueFichiersADepose(hote);
+}
+
+/**
+ * Un compte rendu que **Fichiers** a posé là avant de nous y envoyer.
+ *
+ * ## Pourquoi il arrive par une case, et non par un appel
+ *
+ * Le geste part de Fichiers — on regarde un `.md`, on veut en relever les
+ * points — et il aboutit ici, sur un panneau qui n'était pas monté quand on a
+ * cliqué. Fichiers pose donc le texte, navigue, et c'est le montage qui vient
+ * le prendre.
+ *
+ * ## Il ne se reprend qu'une fois
+ *
+ * `reprendreLeCrALire` vide la case. Sans cela, chaque retour sur ce panneau
+ * relancerait la lecture du même document — un appel au modèle, payé, que
+ * personne n'a demandé.
+ *
+ * ## Et jamais par-dessus une lecture en cours
+ *
+ * Abandonner un appel déjà lancé, c'est le payer pour rien.
+ */
+function prendreCeQueFichiersADepose(hote) {
+  if (etat.phase === "lecture") return;
+
+  const attendu = reprendreLeCrALire();
+  if (!attendu) return;
+
+  // Un `File` plutôt qu'un `Blob` : tout le parcours nomme le document par
+  // `fichier.name`, et un `Blob` n'en a pas.
+  void lire(hote, new File([attendu.contenu], attendu.nom, { type: "text/markdown" }));
 }
 
 /**
@@ -428,8 +505,8 @@ function renderEntete(vue = etat) {
             // supprimer sans laisser de quoi en déposer un autre.
             vue.fichier
               ? `<label class="gh-btn gh-btn--sm lecture-cr__entete-fichier">
-                   ${svgIcon("file", { className: "octicon" })} Un autre PDF
-                   <input type="file" accept="application/pdf,.pdf" hidden data-lecture-cr-fichier>
+                   ${svgIcon("file", { className: "octicon" })} Un autre document
+                   <input type="file" accept="${escapeHtml(ACCEPTE)}" hidden data-lecture-cr-fichier>
                  </label>`
               : ""
           }
@@ -494,9 +571,13 @@ function renderDepot(vue) {
       ` : `
         <span class="lecture-cr__depot-icone" aria-hidden="true">${svgIcon("file", { className: "octicon" })}</span>
         <p class="lecture-cr__depot-mot">Déposez un compte rendu, ou choisissez-le.</p>
+        <p class="lecture-cr__depot-aide mono-small">
+          Un PDF, ou un document déjà écrit en texte — <code>.md</code>, <code>.txt</code>.
+          Le second se lit sans extraction ni restitution : aucun appel au modèle pour le relire.
+        </p>
         <label class="gh-btn gh-btn--sm lecture-cr__depot-choix">
-          Choisir un PDF
-          <input type="file" accept="application/pdf,.pdf" hidden data-lecture-cr-fichier>
+          Choisir un document
+          <input type="file" accept="${escapeHtml(ACCEPTE)}" hidden data-lecture-cr-fichier>
         </label>
       `}
     </div>
@@ -1072,6 +1153,17 @@ function renderRangement(cote) {
   // question se pose. Seul ce qui sort de l'ordinaire reste écrit.
   if (rangement.aRanger) return avant ? `<p class="lecture-cr__rangement">${avant}</p>` : "";
 
+  // **Un document déjà en texte n'a rien à ranger, et ce n'est pas un défaut.**
+  // Ranger consiste à poser une transcription sur la ligne d'un PDF ; il n'y a
+  // pas de PDF, et le texte est déjà le document. Le dire en rouge ferait
+  // chercher une panne là où tout s'est passé comme il faut.
+  if (cote.dejaDuTexte) {
+    return `<p class="lecture-cr__rangement est-bon">
+      Ce document était déjà écrit en texte : rien n'a été extrait, rien n'a été restitué,
+      et il n'y a donc rien à ranger.
+    </p>`;
+  }
+
   return `<p class="lecture-cr__rangement est-douteux">
     ${avant}Il n'y a rien à ranger pour ce document${
       rangement.motif ? ` (${escapeHtml(rangement.motif)})` : ""
@@ -1083,11 +1175,15 @@ function renderRangement(cote) {
 function renderBarreDeLaRestitution(vue, md) {
   const lignes = md.modele.lignes.length;
   const nom = `${texte(vue.lecture?.nom).replace(/\.pdf$/i, "") || "document"}.md`;
+  // **« Origine » n'existe que face à un PDF.** La règle vit dans le service,
+  // avec son pourquoi : sans page à nommer, la colonne « p. 1 » se lirait comme
+  // une information et n'en serait pas une.
+  const lectures = lecturesDeLaRestitution({ depuisUnPdf: !md.modele.dejaDuTexte });
 
   return `
     <header class="lecture-cr__md-tete">
       <span class="memoire-fichier__lectures">
-        ${Object.values(LECTURE).map((cle) => `
+        ${lectures.map((cle) => `
           <button type="button" class="memoire-lecture${md.lecture === cle ? " is-active" : ""}"
             data-lecture-cr-md-lecture="${escapeHtml(cle)}" aria-pressed="${md.lecture === cle}"
             title="${escapeHtml(QUOI_DE_LA_LECTURE[cle] ?? "")}">${escapeHtml(NOMS_DE_LECTURE[cle])}</button>
@@ -1118,6 +1214,16 @@ function renderBarreDeLaRestitution(vue, md) {
  */
 function renderPastilleDuPrix(cote) {
   if (cote.phase !== "fait") return "";
+
+  // **Déjà du texte n'est pas « coût non annoncé ».** Aucun appel n'a eu lieu,
+  // et c'est une information : la pastille grise des décomptes manquants ferait
+  // croire à un prix qu'on ignore.
+  if (cote.dejaDuTexte) {
+    return `
+      <span class="lecture-cr__md-prix est-bon"
+        title="Ce document était déjà écrit en texte : ni extraction, ni restitution.">0 € — déjà du texte</span>
+    `;
+  }
 
   // **Relue n'est pas « coût non annoncé ».** Une restitution reprise dans
   // Fichiers n'a rien coûté, et c'est une information ; afficher la pastille
@@ -2380,7 +2486,7 @@ function brancher(hote) {
         // `trierLesFichiers` rend `{retenus, ecartes}` et non un tableau : le
         // déstructurer comme une liste aurait donné `undefined`, et un dépôt
         // resté sans effet — sans erreur, et sans rien pour le dire.
-        const { retenus } = trierLesFichiers(fichiers, (candidat) => EST_UN_PDF.test(texte(candidat?.name)));
+        const { retenus } = trierLesFichiers(fichiers, (candidat) => estUnDocumentAccepte(candidat?.name));
         if (retenus[0]) void lire(hote, retenus[0]);
       }
     })
@@ -2393,6 +2499,76 @@ function brancher(hote) {
     detacherLaZone?.();
     detacher = null;
   };
+}
+
+/**
+ * Ouvrir un PDF : l'extraire, puis le faire refaire par le modèle.
+ *
+ * @returns {Promise<string>} le motif de l'échec, ou `""` si tout s'est passé.
+ */
+async function ouvrirUnPdf(hote, fichier) {
+  const { extractPagesFromFile } = await import("../../../services/pdf-extraction.js");
+  const extrait = await extractPagesFromFile(fichier);
+  const pages = Array.isArray(extrait?.pages) ? extrait.pages : [];
+
+  if (pages.length === 0) return "Aucune page n'a pu être lue dans ce PDF.";
+
+  etat.pagesLues = pages;
+
+  // **La restitution d'abord, et les points ensuite, sur elle.** C'est tout le
+  // procédé : le modèle relit un document qu'on a sous les yeux, et l'on sait
+  // donc exactement sur quoi il s'est fondé. Lire les points sur le texte brut
+  // du PDF laisserait la question ouverte à chaque déception.
+  redessiner(hote);
+  await restituerOuRelire(hote);
+  return "";
+}
+
+/**
+ * Ouvrir un document déjà écrit en texte : **ni extraction, ni restitution**.
+ *
+ * ## Ce qu'on ne fait pas, et pourquoi
+ *
+ * Extraire n'a pas d'objet : il n'y a pas d'image de page à déchiffrer. Faire
+ * refaire le document par le modèle non plus : il rendrait le texte qu'on vient
+ * de lui donner, pour le prix d'un appel. Le document **est** la restitution.
+ *
+ * ## Ce qui disparaît avec elles, et qu'on n'invente pas
+ *
+ * Aucune mesure de fidélité : il n'y a rien à comparer, et « 100 % du document
+ * retrouvé » serait une tautologie présentée comme un résultat. Aucun dégât,
+ * aucune forme : ces mesures surveillent ce que le modèle s'est permis, et il
+ * ne s'est rien permis. Les champs restent à `null`, et les cartes ne
+ * s'affichent pas — plutôt que d'afficher des zéros qui se lisent comme des
+ * constats (règle 5).
+ *
+ * @returns {Promise<string>} le motif de l'échec, ou `""`.
+ */
+async function ouvrirUnDocumentDeTexte(hote, fichier) {
+  // **Tout ce qu'il y a à faire tient dans le service**, qui se vérifie sans
+  // navigateur : les pages, le texte assemblé, les lignes numérotées.
+  const refait = laRestitutionDunTexte(await fichier.text());
+  if (!refait) return "Ce fichier ne porte aucun texte.";
+
+  // Les mêmes pages des deux côtés : c'est précisément ce qui permet de se
+  // passer des deux premières étapes.
+  etat.pagesLues = refait.pagesLues;
+
+  const cote = etat.md.modele;
+  cote.dejaDuTexte = true;
+  cote.pages = refait.pages;
+  cote.texte = refait.texte;
+  cote.lignes = refait.lignes;
+  cote.phase = "fait";
+  // **Rien à ranger.** Ranger consiste à poser une transcription sur la ligne
+  // d'un PDF ; ce document n'en a pas, et recopier son texte sur sa propre
+  // ligne ferait deux vérités qui divergeraient à la première correction
+  // (règle 4). Le fichier est déjà dans Fichiers, ou il y sera déposé comme
+  // n'importe quel fichier.
+  cote.rangement = { ...cote.rangement, aRanger: null, motif: "ce document est déjà du texte" };
+
+  redessiner(hote);
+  return "";
 }
 
 /**
@@ -2428,27 +2604,18 @@ async function lire(hote, fichier) {
   redessiner(hote);
 
   try {
-    const { extractPagesFromFile } = await import("../../../services/pdf-extraction.js");
-    const extrait = await extractPagesFromFile(fichier);
-    const pages = Array.isArray(extrait?.pages) ? extrait.pages : [];
+    // **Deux ouvertures, et une seule suite.** Un PDF s'extrait puis se refait ;
+    // un document déjà écrit en texte est le document. Ce qui vient après — les
+    // points, la confrontation au projet — ne connaît pas la différence.
+    const motif = estUnFichierTexte(fichier?.name)
+      ? await ouvrirUnDocumentDeTexte(hote, fichier)
+      : await ouvrirUnPdf(hote, fichier);
+    if (motif) return echouer(hote, motif);
 
-    if (pages.length === 0) {
-      return echouer(hote, "Aucune page n'a pu être lue dans ce PDF.");
-    }
-
-    etat.pagesLues = pages;
-
-    // **La restitution d'abord, et les points ensuite, sur elle.** C'est tout
-    // le procédé : le modèle relit un document qu'on a sous les yeux, et l'on
-    // sait donc exactement sur quoi il s'est fondé. Lire les points sur le
-    // texte brut du PDF laisserait la question ouverte à chaque déception.
-    redessiner(hote);
-    await restituerOuRelire(hote);
-
-    // Si elle n'a pas abouti, on lit sur le texte brut plutôt que de ne rien
-    // lire — mais l'écran le dit. La décision vit dans le service, avec son
-    // pourquoi : c'est elle qui donne son sens à l'écran entier.
-    const { pages: lues, lueSur } = pagesALire(pages, etat.md.modele);
+    // Si la restitution n'a pas abouti, on lit sur le texte brut plutôt que de
+    // ne rien lire — mais l'écran le dit. La décision vit dans le service, avec
+    // son pourquoi : c'est elle qui donne son sens à l'écran entier.
+    const { pages: lues, lueSur } = pagesALire(etat.pagesLues, etat.md.modele);
 
     etat.etape = "sujets";
     redessiner(hote);
@@ -3209,8 +3376,8 @@ function renderEcranEnPanne(erreur) {
       <div class="lecture-cr__depot" data-lecture-cr-zone>
         <p class="lecture-cr__depot-mot">Déposez un autre compte rendu, ou choisissez-le.</p>
         <label class="gh-btn gh-btn--sm lecture-cr__depot-choix">
-          Choisir un PDF
-          <input type="file" accept="application/pdf,.pdf" hidden data-lecture-cr-fichier>
+          Choisir un document
+          <input type="file" accept="${escapeHtml(ACCEPTE)}" hidden data-lecture-cr-fichier>
         </label>
       </div>
     </div>
