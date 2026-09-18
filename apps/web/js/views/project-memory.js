@@ -1080,7 +1080,7 @@ function renderLaSignatureDeLaForme(assertion, forme) {
  * jeu, pas l'intention de celui qui l'a écrit.
  */
 function renderCeQuiLuiRessemble(voisins) {
-  const dit = phraseDeLaRessemblance(voisins[0].ressemblance, voisins.length);
+  const dit = phraseDeLaRessemblance(voisins[0].ressemblance, voisins.length, voisins[0].communs);
   if (!dit) return "";
 
   return `

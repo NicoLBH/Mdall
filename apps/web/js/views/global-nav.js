@@ -1,7 +1,7 @@
 import { svgIcon } from "../ui/icons.js";
 import { ICONE_DU_CARNET, NOM_DU_CARNET, ROUTE_DU_CARNET } from "../services/mon-carnet.js";
 import {
-  LE_COPILOTE, TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
+  LE_COPILOTE, LE_REFERENTIEL, TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
 } from "../services/ecrans-transversaux.js";
 
 function parseHash() {
@@ -23,7 +23,8 @@ function getNavModel() {
     activeSituations: active === "situations",
     activeSujets: active === cheminDe(TOUS_LES_SUJETS),
     activePropositions: active === cheminDe(TOUTES_LES_PROPOSITIONS),
-    activeCopilote: active === cheminDe(LE_COPILOTE)
+    activeCopilote: active === cheminDe(LE_COPILOTE),
+    activeReferentiel: active === cheminDe(LE_REFERENTIEL)
   };
 }
 
@@ -99,6 +100,18 @@ export function renderGlobalNav() {
             icon: svgIcon(LE_COPILOTE.icone, { className: `octicon octicon-${LE_COPILOTE.icone}` }),
             label: LE_COPILOTE.nom,
             isActive: model.activeCopilote
+          })}
+          ${/*
+            **Et sous le Copilote, le référentiel.** Les entrées au-dessus
+            rassemblent ce qui existe dans chaque chantier ; celle-ci montre ce
+            qu'ils ont en commun — des formes de raisonnement, sans une seule
+            valeur. On le rencontrait sans pouvoir le visiter.
+          */""}
+          ${renderNavLink({
+            href: LE_REFERENTIEL.route,
+            icon: svgIcon(LE_REFERENTIEL.icone, { className: `octicon octicon-${LE_REFERENTIEL.icone}` }),
+            label: LE_REFERENTIEL.nom,
+            isActive: model.activeReferentiel
           })}
         </div>
       </div>

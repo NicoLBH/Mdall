@@ -28,17 +28,38 @@
  * aussi, très exactement, la frontière de l'anonymat : la structure se
  * réutilise, les valeurs ne sortent jamais du projet.
  *
- * ## Exact, ou rien
- *
- * Deux degrés, tous deux vérifiables et explicables :
+ * ## Trois degrés, et le troisième se montre
  *
  * - **le même** : mêmes entrées, mêmes conclusions
  * - **le même départ** : mêmes entrées, conclusions différentes
+ * - **proche** : au moins deux valeurs de départ en commun
  *
- * Pas de « partage deux noms sur trois » : un seuil est un chiffre qu'on ne
- * sait pas justifier, et un rapprochement qu'on ne sait pas expliquer est un
- * rapprochement qu'on cesse de lire. Ce qui ne se rapproche pas se tait, et
- * quelqu'un fera le lien à la main s'il le veut.
+ * Le troisième a longtemps été refusé, et pour une bonne raison : « partage deux
+ * noms sur trois » est un seuil, et un rapprochement qu'on ne sait pas expliquer
+ * est un rapprochement qu'on cesse de lire.
+ *
+ * Ce qui le rend acceptable n'est pas le seuil — c'est que **la phrase nomme les
+ * valeurs communes**. « Part de 2 des mêmes valeurs : altitude, nature du sol »
+ * se vérifie d'un coup d'œil, et se réfute d'un coup d'œil. Un rapprochement qui
+ * dit **sur quoi** il repose ne couvre rien en silence : le lecteur voit ce que
+ * l'outil a vu, et décide.
+ *
+ * ## Pourquoi deux, et pas un
+ *
+ * Un seul nom en commun est le cas ordinaire, pas le cas remarquable : presque
+ * tout raisonnement de fondation part de la nature du sol. Le proposer ferait
+ * remonter la moitié de la mémoire à chaque ligne, et l'on cesserait de lire la
+ * mention — y compris les fois où elle dit « le même ».
+ *
+ * Deux est le premier chiffre qui distingue. Il n'est pas juste dans l'absolu :
+ * il est **le plus petit qui ne noie pas le reste**, et c'est tout ce qu'on lui
+ * demande.
+ *
+ * ## L'exact passe toujours devant
+ *
+ * Une ressemblance exacte et une ressemblance approchée ne se valent pas, et le
+ * tri le dit : le même, puis le même départ, puis les proches — les plus proches
+ * d'abord. Mélangées, la seule qui compte se perdrait au milieu des autres.
  *
  * ## Il est pur
  *
@@ -54,14 +75,26 @@ export const RESSEMBLANCE = {
   /** Mêmes entrées, mêmes conclusions. */
   LE_MEME: "le-meme",
   /** Mêmes entrées, conclusions différentes. */
-  MEME_DEPART: "meme-depart"
+  MEME_DEPART: "meme-depart",
+  /** Au moins deux valeurs de départ en commun, sans être les mêmes. */
+  PROCHE: "proche"
 };
 
 /** Ce qu'on en dit, à l'écran. Écrit une fois (règle 10). */
 export const RESSEMBLANCES_DITES = {
   [RESSEMBLANCE.LE_MEME]: "part des mêmes valeurs et aboutit aux mêmes",
-  [RESSEMBLANCE.MEME_DEPART]: "part des mêmes valeurs, et n'aboutit pas aux mêmes"
+  [RESSEMBLANCE.MEME_DEPART]: "part des mêmes valeurs, et n'aboutit pas aux mêmes",
+  [RESSEMBLANCE.PROCHE]: "part de certaines des mêmes valeurs"
 };
+
+/**
+ * Combien de valeurs de départ en commun font une ressemblance approchée.
+ *
+ * Un seul nom est le cas ordinaire : presque tout raisonnement de fondation part
+ * de la nature du sol. Deux est le premier chiffre qui distingue — le plus petit
+ * qui ne noie pas les ressemblances exactes au milieu du reste.
+ */
+export const VALEURS_COMMUNES_MINIMUM = 2;
 
 /** Les noms d'une liste de `{sujet, valeur}`, repliés comme la mémoire les replie. */
 function nomsDe(entrees = []) {
@@ -96,6 +129,22 @@ function memesNoms(gauche, droite) {
 }
 
 /**
+ * Les valeurs de départ que ces deux raisonnements ont en commun.
+ *
+ * Elles sont **ce qui rend un rapprochement approché lisible** : sans elles,
+ * « proche » est un verdict qu'on ne peut ni vérifier ni réfuter, et un verdict
+ * qu'on ne peut pas réfuter est un verdict qu'on cesse de lire.
+ *
+ * Triées, pour que la même paire se dise toujours pareil (règle 10).
+ */
+export function valeursCommunes(gauche = null, droite = null) {
+  const ici = signatureDunRaisonnement(gauche).entrees;
+  const la = signatureDunRaisonnement(droite).entrees;
+
+  return [...ici].filter((nom) => la.has(nom)).sort();
+}
+
+/**
  * À quel point ces deux raisonnements se rapprochent — ou `""` s'ils ne se
  * rapprochent pas.
  *
@@ -109,11 +158,18 @@ export function ceQuiLesRapproche(gauche = null, droite = null) {
   const la = signatureDunRaisonnement(droite);
 
   if (!ici.entrees.size || !la.entrees.size) return "";
-  if (!memesNoms(ici.entrees, la.entrees)) return "";
 
-  return memesNoms(ici.conclusions, la.conclusions)
-    ? RESSEMBLANCE.LE_MEME
-    : RESSEMBLANCE.MEME_DEPART;
+  if (memesNoms(ici.entrees, la.entrees)) {
+    return memesNoms(ici.conclusions, la.conclusions)
+      ? RESSEMBLANCE.LE_MEME
+      : RESSEMBLANCE.MEME_DEPART;
+  }
+
+  // Approché. Il ne se rend que parce que la phrase nommera les valeurs
+  // communes : un « proche » nu serait un verdict qu'on ne peut pas réfuter.
+  return valeursCommunes(gauche, droite).length >= VALEURS_COMMUNES_MINIMUM
+    ? RESSEMBLANCE.PROCHE
+    : "";
 }
 
 /**
@@ -146,17 +202,24 @@ export function raisonnementsQuiSeRessemblent(assertion = null, assertions = [])
     // faire aujourd'hui.
     if (texte(autre?.superseded_by)) continue;
 
-    const ressemblance = ceQuiLesRapproche(ici, autre?.payload?.raisonnement ?? null);
-    if (ressemblance) trouves.push({ assertion: autre, ressemblance });
+    const la = autre?.payload?.raisonnement ?? null;
+    const ressemblance = ceQuiLesRapproche(ici, la);
+    // Les valeurs communes voyagent avec le rapprochement : les recalculer à
+    // l'écran ferait deux lectures de la même chose, et l'une des deux finirait
+    // par ne plus dire ce que l'autre dit (règle 4).
+    if (ressemblance) trouves.push({ assertion: autre, ressemblance, communs: valeursCommunes(ici, la) });
   }
 
+  // L'exact devant, puis les proches — les plus proches d'abord. Mélangés, le
+  // seul rapprochement qui compte se perdrait au milieu des autres.
   return trouves.sort((gauche, droite) =>
-    rang(gauche.ressemblance) - rang(droite.ressemblance));
+    rang(gauche.ressemblance) - rang(droite.ressemblance)
+    || droite.communs.length - gauche.communs.length);
 }
 
 /** Le plus proche en premier. */
 const rang = (ressemblance) =>
-  (ressemblance === RESSEMBLANCE.LE_MEME ? 0 : 1);
+  ({ [RESSEMBLANCE.LE_MEME]: 0, [RESSEMBLANCE.MEME_DEPART]: 1 }[ressemblance] ?? 2);
 
 /**
  * Ce que le projet a déjà raisonné **à partir de ces valeurs-là**.
@@ -211,9 +274,23 @@ export function raisonnementsPartisDeCesValeurs(entrees = [], assertions = []) {
  * raisonnement » : ce qui est vérifié, ce sont les noms mis en jeu, pas
  * l'intention de celui qui l'a écrit.
  */
-export function phraseDeLaRessemblance(ressemblance = "", combien = 1) {
+export function phraseDeLaRessemblance(ressemblance = "", combien = 1, communs = []) {
   const dit = RESSEMBLANCES_DITES[texte(ressemblance)];
   if (!dit) return "";
+
+  // Un rapprochement approché **nomme ce sur quoi il repose**, et c'est la seule
+  // chose qui le rend acceptable : le lecteur voit ce que l'outil a vu, et
+  // réfute d'un coup d'œil. Sans les noms, « proche » est un verdict opaque.
+  const lesquelles = Array.isArray(communs) && communs.length
+    ? ` : ${communs.join(", ")}`
+    : "";
+
+  if (texte(ressemblance) === RESSEMBLANCE.PROCHE) {
+    const combienDeValeurs = Array.isArray(communs) ? communs.length : 0;
+    return combien > 1
+      ? `${combien} autres raisonnements partent de ${combienDeValeurs} des mêmes valeurs${lesquelles}`
+      : `Un autre raisonnement part de ${combienDeValeurs} des mêmes valeurs${lesquelles}`;
+  }
 
   return combien > 1
     ? `${combien} autres raisonnements partent des mêmes valeurs`
