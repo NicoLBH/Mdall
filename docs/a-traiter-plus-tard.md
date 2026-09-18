@@ -3723,3 +3723,29 @@ mauvais élément.
 **Ce qu'il faudrait.** Que la coquille sache si elle a une barre à replier, et
 ne monte le geste que dans ce cas — plutôt que de le monter toujours et de
 compter sur l'absence du nœud pour qu'il ne fasse rien.
+
+## 46. Lire un compte rendu à partir d'un fichier déjà dans Fichiers
+
+**Ce qui manque.** La lecture d'un compte rendu part aujourd'hui d'un fichier
+qu'on choisit sur son disque, dans l'écran du Copilote. Un document déjà déposé
+dans **Fichiers** — ou écrit à la main et collé, ce qui est maintenant
+possible — ne peut pas être lu sans le redéposer.
+
+**Pourquoi c'est le prochain pas.** Écrire un fichier à la main ne sert
+pleinement qu'à ce moment-là : coller une notice depuis un traitement de texte,
+puis la faire lire, c'est le chemin complet **sans qu'un modèle ait eu à lire
+un PDF**. C'est le fondamental 13 tenu de bout en bout, et non sur une moitié
+du parcours.
+
+**Ce qu'il faudra regarder.**
+
+- Un fichier écrit à la main porte `document_kind: "ecrit_a_la_main"` : il n'a
+  pas de PDF derrière lui. La lecture « Origine », qui confronte la
+  transcription au document page à page, n'a donc rien à confronter. Il faut
+  que l'écran le dise, et non qu'il affiche une page vide (fondamental 5).
+- Un fichier déjà rangé peut porter une transcription à jour : `relireLa
+  Restitution` et `restitutionReutilisable` savent déjà décider de ne pas
+  rappeler le modèle. C'est la même décision qu'il faut brancher ici, plutôt
+  que d'en écrire une seconde (règle 4).
+- Le texte collé est déjà du Markdown, ou peut l'être. Le faire repasser par
+  une transcription serait payer pour ce qu'on a.

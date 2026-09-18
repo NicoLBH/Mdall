@@ -22771,6 +22771,55 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
 /* Ce qu'on a tranché ailleurs en partant des mêmes valeurs. Le même cadre que
    le rappel du projet juste au-dessus : deux cadres différents feraient croire à
    deux natures de choses, alors que ce sont deux relectures avant d'écrire. */
+/* Écrire un fichier à la main.
+
+   Le nom se tape au bout du fil d'Ariane, là où le fichier va exister. Le champ
+   reprend `gh-input` : une largeur nouvelle ici serait à recaler à chaque
+   retouche de la barre. */
+.documents-breadcrumb__nom{
+  min-width:200px; max-width:320px; height:26px; padding:2px 8px; font-size:13px;
+}
+.documents-ecriture__dit{ color:var(--muted); font-size:12px; }
+.documents-ecriture__dit b{ color:var(--text); }
+
+/* La zone de saisie : la gouttière à gauche, le texte à droite. Les deux ont la
+   même fonte et la même hauteur de ligne — c'est la seule façon pour qu'un
+   numéro tombe en face de sa ligne, et elle se casse au premier réglage écrit
+   d'un seul côté. */
+.saisie-code{
+  /* **La hauteur d'une ligne est une longueur, pas un facteur.** Les numéros
+     s'écrivent en 11px et le texte en 12px : un `line-height:1.55` partagé
+     donnerait 17,05px d'un côté et 18,6px de l'autre, et la gouttière
+     dériverait d'une ligne entière au bout de douze. Elle est donc fixée ici,
+     en pixels, et les deux colonnes la lisent. */
+  --saisie-ligne:19px;
+  display:flex; align-items:stretch; height:100%; min-height:320px;
+  font-family:var(--mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+  font-size:12px; line-height:var(--saisie-ligne);
+}
+.saisie-code__gouttiere{
+  flex:0 0 auto;
+  /* Pas une colonne flex : `memoire-ligne__num` porte `flex:0 0 40px`, qui vaut
+     une largeur dans la Mémoire — ses lignes sont des rangées — et vaudrait ici
+     une **hauteur** de 40px par numéro. C'est un bloc, et les numéros sont des
+     blocs. */
+  padding:10px 0; overflow:hidden; user-select:none;
+  border-right:1px solid var(--border); background:rgba(110,118,129,.05);
+}
+.saisie-code__gouttiere .memoire-ligne__num{
+  display:block; flex:none; width:40px; line-height:var(--saisie-ligne);
+}
+.saisie-code__zone{
+  flex:1 1 auto; min-width:0;
+  padding:10px 12px; margin:0; border:0; outline:none; resize:none;
+  background:transparent; color:var(--text);
+  font:inherit; line-height:var(--saisie-ligne);
+  /* Le texte ne se replie pas : un collage de Word garde ses colonnes, et c'est
+     ce qu'on veut relire tel quel. */
+  white-space:pre; overflow:auto;
+}
+.saisie-code__zone::placeholder{ color:var(--muted); }
+
 /* La transcription d'un document, montrée comme un fichier de code.
 
    Les lignes reprennent les classes de la Mémoire — `memoire-ligne`,

@@ -1,5 +1,9 @@
 import { store } from "../store.js";
 import { renderFichierDeCode } from "./ui/fichier-de-code.js";
+import { brancherLaSaisieDeCode, renderSaisieDeCode } from "./ui/saisie-de-code.js";
+import {
+  EXTENSION_PAR_DEFAUT, nomComplet, phraseDesRefus, pourquoiOnNePeutPasLEcrire
+} from "../services/fichier-a-la-main.js";
 import {
   nomDeLaTranscription, phraseDeLaTranscription, transcriptionDuDocument
 } from "../services/transcription-du-document.js";
@@ -205,6 +209,13 @@ const docsViewState = {
     transcriptionLue: false,
     transcriptionEnCours: false
   },
+  /**
+   * Le fichier qu'on est en train d'écrire à la main, s'il y en a un.
+   *
+   * `null` : on n'en écrit pas. Son nom se tape dans le fil d'Ariane, au bout
+   * du chemin — là où le fichier va exister.
+   */
+  ecriture: null,
   currentFolderId: null,
   breadcrumb: [],
   folders: [],
@@ -1368,6 +1379,16 @@ function renderDocumentsMenu(selectedDocument) {
     // deux libellés qui finiraient par ne plus dire la même chose.
     items: [
       {
+        // **Écrire un fichier à la main.** L'IA rend la vie plus confortable ;
+        // rien ne doit en dépendre. Une notice qu'on a déjà sous les yeux dans
+        // Word ou dans un PDF sélectionnable n'a pas à repasser par une
+        // transcription payante : on la colle, et elle est dans le projet.
+        action: "documents-ecrire",
+        icon: svgIcon("pencil", { width: 14, height: 14 }),
+        label: "Créer un fichier",
+        title: `Écrire ou coller du texte dans un fichier ${EXTENSION_PAR_DEFAUT}`
+      },
+      {
         action: "documents-remove",
         icon: svgIcon("trash", { width: 14, height: 14 }),
         label: nomDuFichier ? "Retirer ce document" : "Retirer un document",
@@ -1449,6 +1470,34 @@ function renderDocumentsBreadcrumb() {
     })),
     ...(selectedDocument?.name ? [{ libelle: String(selectedDocument.name), cible: "" }] : [])
   ];
+
+  /**
+   * **Le nom se tape au bout du chemin**, là où le fichier va exister.
+   *
+   * Une fenêtre au milieu de l'écran aurait demandé le nom sans dire où : dans
+   * quel dossier, à côté de quoi. Ici la question et sa réponse sont sur la
+   * même ligne — « Fichiers / Documents / Incendie / [ notice.md ] ».
+   */
+  if (docsViewState.ecriture) {
+    const chemin = morceaux
+      .map((morceau) => lien(morceau.cible, morceau.libelle))
+      .join(sep);
+
+    return `
+      <div class="documents-breadcrumb">
+        ${chemin}${sep}
+        <input
+          type="text"
+          class="gh-input documents-breadcrumb__nom"
+          data-ecriture-nom
+          value="${escapeHtml(String(docsViewState.ecriture.nom ?? ""))}"
+          placeholder="nom du fichier"
+          autocomplete="off"
+          spellcheck="false"
+        >
+      </div>
+    `;
+  }
 
   // Un répertoire garde son slash final, un fichier n'en a pas : « Fichiers /
   // Documents / » se lit comme un endroit où l'on est, « … / plan.pdf » comme
@@ -1764,6 +1813,86 @@ function renderReportPreviewView() {
             </section>
           </div>
         </div>
+    </section>
+  `;
+}
+
+/**
+ * L'écran où l'on écrit un fichier à la main.
+ *
+ * ## Ce qu'il permet, et pourquoi il compte
+ *
+ * **On doit pouvoir se passer du modèle.** L'IA rend la vie plus confortable —
+ * elle relit un compte rendu de onze pages en deux centimes — mais rien de ce
+ * que Mdall sait faire ne doit *en dépendre*. Une notice incendie déjà ouverte
+ * dans Word, ou dans un PDF sélectionnable, n'a aucune raison de repasser par
+ * une transcription payante : on la sélectionne, on la colle, elle est là.
+ *
+ * C'est aussi la porte qui reste ouverte le jour où le fournisseur tombe, change
+ * ses prix ou refuse un document.
+ *
+ * ## Une zone de texte, et rien de plus savant
+ *
+ * Entrée fait un retour à la ligne, le collage colle, la sélection sélectionne :
+ * tout cela vient du navigateur, et un éditeur qui reconstruirait la saisie le
+ * casserait. C'est précisément le collage qu'on vient chercher.
+ *
+ * ## Le nom se dit avant, le contenu après
+ *
+ * Le champ du nom est dans le fil d'Ariane ; la zone est dessous. On peut créer
+ * un fichier vide et coller ensuite — refuser un contenu vide obligerait à taper
+ * un caractère avant de pouvoir coller.
+ */
+function renderEcritureDeFichier() {
+  const ecriture = docsViewState.ecriture ?? {};
+  const refus = phraseDesRefus(pourquoiOnNePeutPasLEcrire(ecriture.nom ?? "", {
+    dejaLa: Array.isArray(docsViewState.files) ? docsViewState.files : []
+  }));
+  const nom = nomComplet(ecriture.nom ?? "");
+
+  const treeHtml = renderArbreDesFichiers({
+    memoire: preparerLaMemoire(docsViewState.memoireAssertions ?? []),
+    ouverte: docsViewState.documentTreeOpen !== false,
+    query: docsViewState.memoireQuery ?? ""
+  });
+
+  return `
+    <section class="project-simple-page project-simple-page--documents">
+      <div class="documents-shell documents-shell--project-page documents-layout" id="projectDocumentScroll" style="--documents-tree-width:${docsViewState.documentTreeOpen ? Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280))) : 0}px">
+        ${treeHtml}
+        <main class="documents-main">
+          ${renderDocumentsTopBar()}
+          ${renderDocumentsActivityBanner()}
+          <div class="documents-report">
+            <section class="documents-report-table">
+              <header class="documents-report-table__header">
+                <div class="documents-report-table__actions">
+                  <div class="documents-report-table__actions-group documents-report-table__actions-group--start">
+                    <span class="documents-ecriture__dit">${
+                      refus
+                        ? escapeHtml(refus)
+                        : `Le fichier s'appellera <b>${escapeHtml(nom)}</b>. Collez ou tapez son contenu.`
+                    }</span>
+                  </div>
+                  <div class="documents-report-table__actions-group documents-report-table__actions-group--end">
+                    <button type="button" class="gh-btn" data-ecriture-annuler>Annuler</button>
+                    <button type="button" class="gh-btn gh-btn--primary" data-ecriture-valider
+                      ${refus || ecriture.enCours ? "disabled" : ""}
+                    >${ecriture.enCours ? "Création…" : "Créer le fichier"}</button>
+                  </div>
+                </div>
+              </header>
+              <div class="documents-report-table__body">
+                ${renderSaisieDeCode({
+                  contenu: ecriture.contenu ?? "",
+                  marque: "data-ecriture-contenu",
+                  invite: "Collez ici le texte de votre notice, de votre compte rendu…"
+                })}
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
     </section>
   `;
 }
@@ -4158,6 +4287,32 @@ function bindDocumentsSplitActions(root) {
     });
   }
 
+  // L'écriture d'un fichier : le nom dans le fil, le texte dessous.
+  if (docsViewState.ecriture) {
+    const champ = root.querySelector("[data-ecriture-nom]");
+    champ?.addEventListener("input", () => {
+      docsViewState.ecriture.nom = champ.value;
+      renderProjectDocumentsContent(root);
+      // Le rendu remplace le champ : sans cela, on taperait une lettre et le
+      // curseur partirait — le même défaut que la recherche de l'accueil.
+      const repris = root.querySelector("[data-ecriture-nom]");
+      repris?.focus();
+      repris?.setSelectionRange(repris.value.length, repris.value.length);
+    });
+
+    // **La zone ne se redessine pas à la frappe.** L'écran entier se reconstruit
+    // à chaque rendu, et l'on perdrait le curseur au milieu d'un collage de
+    // trente pages. Le texte se retient, la gouttière suit toute seule.
+    brancherLaSaisieDeCode(root, {
+      surChangement: (valeur) => { docsViewState.ecriture.contenu = valeur; }
+    });
+
+    root.querySelector("[data-ecriture-annuler]")?.addEventListener("click", () => fermerLEcriture(root));
+    root.querySelector("[data-ecriture-valider]")?.addEventListener("click", () => {
+      void ecrireLeFichierAlaMain(root);
+    });
+  }
+
   const menu = document.querySelector('[data-action-id="documentsMenu"]');
   if (menu) {
     menu.addEventListener("ghaction:action", (event) => {
@@ -4169,9 +4324,96 @@ function bindDocumentsSplitActions(root) {
         return;
       }
       if (action === "documents-add-folder") { void creerUnDossier(root); return; }
+      if (action === "documents-ecrire") { ouvrirLEcriture(root); return; }
       if (action === "documents-remove") void retirerLeDocument(root);
     });
   }
+}
+
+/**
+ * Ouvrir l'écriture d'un fichier, là où l'on se trouve.
+ *
+ * Le dossier courant, et non la racine : on crée un fichier à l'endroit qu'on
+ * regarde. Le demander dans une fenêtre après coup ferait choisir deux fois.
+ */
+function ouvrirLEcriture(root) {
+  docsViewState.ecriture = { nom: "", contenu: "", enCours: false };
+  docsViewState.activity = null;
+  renderProjectDocumentsContent(root);
+}
+
+/** Renoncer. Rien n'a été écrit, il n'y a rien à défaire. */
+function fermerLEcriture(root) {
+  docsViewState.ecriture = null;
+  renderProjectDocumentsContent(root);
+}
+
+/**
+ * Écrire le fichier.
+ *
+ * ## Ce qui se relit avant d'écrire
+ *
+ * Les refus se recalculent ici, et pas seulement à l'affichage : un bouton
+ * désactivé est une politesse, pas une garde — la liste du dossier a pu changer
+ * pendant qu'on tapait, et le nom devenir pris.
+ *
+ * ## Ce qui se passe quand ça échoue
+ *
+ * On reste dans l'écriture, avec le texte. Retomber sur la liste ferait perdre
+ * un collage de trente pages pour une panne de réseau.
+ */
+async function ecrireLeFichierAlaMain(root) {
+  const ecriture = docsViewState.ecriture;
+  if (!ecriture || ecriture.enCours) return;
+
+  const dejaLa = Array.isArray(docsViewState.files) ? docsViewState.files : [];
+  const refus = phraseDesRefus(pourquoiOnNePeutPasLEcrire(ecriture.nom, { dejaLa }));
+  if (refus) {
+    setDocumentsActivity({ tone: "warning", title: "Ce nom ne convient pas", message: refus });
+    renderProjectDocumentsContent(root);
+    return;
+  }
+
+  ecriture.enCours = true;
+  renderProjectDocumentsContent(root);
+
+  const { ecrireLeFichier } = await import("../services/fichier-a-la-main-supabase.js");
+  const projectId = await resolveCurrentBackendProjectId().catch(() => "");
+  const ecrit = await ecrireLeFichier(ecriture.nom, {
+    contenu: ecriture.contenu,
+    projectId,
+    folderId: docsViewState.currentFolderId,
+    dejaLa
+  });
+
+  // L'écran a pu changer pendant l'écriture : reprendre la main sur une
+  // écriture qu'on a quittée ferait réapparaître un formulaire fermé.
+  if (docsViewState.ecriture !== ecriture) return;
+
+  ecriture.enCours = false;
+
+  if (!ecrit.ecrit) {
+    setDocumentsActivity({
+      tone: "error",
+      title: "Le fichier n'a pas pu être créé",
+      message: `${ecrit.motif}. Votre texte est toujours là : réessayez.`
+    });
+    renderProjectDocumentsContent(root);
+    return;
+  }
+
+  docsViewState.ecriture = null;
+  setDocumentsActivity({
+    tone: "success",
+    title: `« ${nomComplet(ecriture.nom)} » est dans le projet`,
+    message: "Il se relit comme un fichier de code, et se lira bientôt comme un compte rendu."
+  });
+
+  // On relit le dossier plutôt que d'ajouter la ligne à la main : c'est la base
+  // qui dit ce qu'il contient, et deux listes qui divergent d'un fichier sont
+  // pires qu'un aller-retour de plus (règle 4).
+  await loadCurrentDirectory().catch(() => undefined);
+  renderProjectDocumentsContent(root);
 }
 
 /** Créer un dossier. Le même geste depuis le bouton et depuis le menu. */
@@ -4568,7 +4810,9 @@ function renderProjectDocumentsContent(root) {
   syncDocumentsProjectViewHeader();
   mesurerLaHauteurDuContenu();
 
-  root.innerHTML = docsViewState.mode === "list" && docsViewState.branche === ""
+  root.innerHTML = docsViewState.ecriture
+    ? renderEcritureDeFichier()
+    : docsViewState.mode === "list" && docsViewState.branche === ""
     ? renderRacineDesFichiers()
     : docsViewState.mode === "list" && docsViewState.branche === BRANCHE.MEMOIRE
     ? renderBrancheMemoire()
