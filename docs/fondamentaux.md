@@ -724,3 +724,7 @@ modèle : le nom, la zone de saisie, et ce que le collage fait gagner.
 `docs/lire-un-fichier-de-texte.md` — le relire, en Code et en Aperçu, et en tirer
 un compte rendu sans extraction ni restitution : le parcours complet sans qu'un
 modèle ait lu de PDF.
+
+`docs/lire-les-mails.md` — le plan du lecteur de fils de mails, dont la première
+étape ne coûte rien : un `.eml` est du texte structuré, le déplier est du
+*parsing*, pas de la lecture.
