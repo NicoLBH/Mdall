@@ -3751,8 +3751,9 @@ du parcours.
   une transcription serait payer pour ce qu'on a.
 
 **Ce qui a été fait.** Un fichier de texte s'ouvre depuis Fichiers, en Code et en
-Aperçu, et porte un bouton qui le fait relever par l'Atelier. La zone de dépôt de
-l'Atelier accepte les mêmes extensions. Le parcours perd ses deux étapes
+Aperçu, et se modifie sur place — contenu et nom. L'Atelier, lui, va le chercher :
+« Choisir depuis Fichiers » ouvre l'arborescence des documents du projet. Sa zone
+de dépôt accepte les mêmes extensions. Le parcours perd ses deux étapes
 payantes — extraction et restitution — et l'écran dit ce qui n'a plus de sens
 avec elles plutôt que d'afficher des zéros : pas de mesure de fidélité, pas de
 lecture « Origine », « 0 € — déjà du texte », rien à ranger.

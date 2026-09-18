@@ -12,8 +12,6 @@ import {
   lectureParDefaut, lecturesDuFichier, phraseDuFichier
 } from "../services/lire-un-fichier-texte.js";
 import { renderMarkdownToHtml } from "../utils/markdown-renderer.js";
-import { deposerLeCrALire } from "../services/un-cr-a-lire.js";
-import { ATELIER_LECTURE_DES_CR } from "../services/route-de-latelier.js";
 import { PROJECT_TAB_IDS } from "../constants.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import { brancherLaZoneDeDepot } from "./ui/zone-de-depot.js";
@@ -234,6 +232,11 @@ const docsViewState = {
    *
    * `contenu` est `null` tant qu'on n'a pas lu, et le reste si la lecture a
    * échoué : `motif` dit alors laquelle des deux (règle 5).
+   *
+   * `edition` : `null` quand on lit, `{nom, contenu, enCours}` quand on écrit.
+   * **Une copie**, et non le contenu lu retouché sur place : annuler doit
+   * rendre le fichier tel qu'il est en base, et il n'y aurait rien à quoi
+   * revenir si l'on avait écrit par-dessus.
    */
   texte: null,
   currentFolderId: null,
@@ -1475,6 +1478,7 @@ function renderDocumentsTopBar() {
  */
 function renderDocumentsBreadcrumb() {
   const selectedDocument = docsViewState.mode === "pdf-preview" ? decorateDocumentWithPhase(getSelectedPdfDocument()) : null;
+  const ouvert = docsViewState.texte ?? null;
 
   const lien = (cible, libelle) =>
     `<button type="button" class="documents-breadcrumb__link" ${cible}>${escapeHtml(libelle)}</button>`;
@@ -1488,7 +1492,12 @@ function renderDocumentsBreadcrumb() {
       libelle: String(dossier.name || "Dossier"),
       cible: `data-breadcrumb-folder-id="${escapeHtml(String(dossier.id || ""))}"`
     })),
-    ...(selectedDocument?.name ? [{ libelle: String(selectedDocument.name), cible: "" }] : [])
+    ...(selectedDocument?.name ? [{ libelle: String(selectedDocument.name), cible: "" }] : []),
+    // **Le nom du fichier ouvert vit ici, et nulle part ailleurs.** Il était
+    // aussi dans la barre d'outils, à côté des lectures : deux endroits pour un
+    // même nom, dont l'un redisait ce que l'autre montrait déjà (règle 10). Le
+    // fil dit en plus **où** est ce fichier, ce que la barre ne disait pas.
+    ...(ouvert && !ouvert.edition ? [{ libelle: String(ouvert.nom || "fichier"), cible: "" }] : [])
   ];
 
   /**
@@ -1498,7 +1507,28 @@ function renderDocumentsBreadcrumb() {
    * quel dossier, à côté de quoi. Ici la question et sa réponse sont sur la
    * même ligne — « Fichiers / Documents / Incendie / [ notice.md ] ».
    */
-  if (docsViewState.ecriture) {
+  const saisie = (marque, valeur) => `
+    <input
+      type="text"
+      class="gh-input documents-breadcrumb__nom"
+      ${marque}
+      value="${escapeHtml(String(valeur ?? ""))}"
+      placeholder="nom du fichier"
+      autocomplete="off"
+      spellcheck="false"
+    >
+  `;
+
+  // **Écrire un fichier neuf et renommer celui qu'on modifie sont le même
+  // geste** : un nom qui se tape au bout du chemin, là où le fichier existe.
+  // Deux champs dessinés séparément auraient fini par ne plus se ressembler.
+  const enSaisie = docsViewState.ecriture
+    ? { marque: "data-ecriture-nom", valeur: docsViewState.ecriture.nom }
+    : (ouvert?.edition
+      ? { marque: "data-edition-nom", valeur: ouvert.edition.nom }
+      : null);
+
+  if (enSaisie) {
     const chemin = morceaux
       .map((morceau) => lien(morceau.cible, morceau.libelle))
       .join(sep);
@@ -1506,15 +1536,7 @@ function renderDocumentsBreadcrumb() {
     return `
       <div class="documents-breadcrumb">
         ${chemin}${sep}
-        <input
-          type="text"
-          class="gh-input documents-breadcrumb__nom"
-          data-ecriture-nom
-          value="${escapeHtml(String(docsViewState.ecriture.nom ?? ""))}"
-          placeholder="nom du fichier"
-          autocomplete="off"
-          spellcheck="false"
-        >
+        ${saisie(enSaisie.marque, enSaisie.valeur)}
       </div>
     `;
   }
@@ -1522,7 +1544,7 @@ function renderDocumentsBreadcrumb() {
   // Un répertoire garde son slash final, un fichier n'en a pas : « Fichiers /
   // Documents / » se lit comme un endroit où l'on est, « … / plan.pdf » comme
   // une chose qu'on regarde.
-  const surUnFichier = Boolean(selectedDocument?.name);
+  const surUnFichier = Boolean(selectedDocument?.name) || Boolean(ouvert);
 
   const rendu = morceaux
     .map((morceau, rang) => (rang === morceaux.length - 1 ? ici(morceau.libelle) : lien(morceau.cible, morceau.libelle)))
@@ -1971,9 +1993,20 @@ function renderEcritureDeFichier() {
  */
 function renderLectureDuTexte() {
   const ouvert = docsViewState.texte ?? {};
-  const nom = String(ouvert.nom || "fichier");
+  const edition = ouvert.edition ?? null;
+  const nom = String(edition ? nomComplet(edition.nom ?? "") : (ouvert.nom || "fichier"));
   const lectures = lecturesDuFichier(nom);
   const lecture = lectures.includes(ouvert.lecture) ? ouvert.lecture : lectures[0];
+
+  // En édition, on ne renomme pas par-dessus soi-même : le fichier qu'on
+  // modifie porte déjà son nom, et le compter parmi ceux qui sont pris
+  // refuserait de garder celui qu'on a.
+  const refus = edition
+    ? phraseDesRefus(pourquoiOnNePeutPasLEcrire(edition.nom ?? "", {
+      dejaLa: (Array.isArray(docsViewState.files) ? docsViewState.files : [])
+        .filter((piece) => String(piece?.id || "") !== String(ouvert.documentId || ""))
+    }))
+    : "";
 
   const treeHtml = renderArbreDesFichiers({
     memoire: preparerLaMemoire(docsViewState.memoireAssertions ?? []),
@@ -1993,37 +2026,60 @@ function renderLectureDuTexte() {
               <header class="documents-report-table__header">
                 <div class="documents-report-table__actions">
                   <div class="documents-report-table__actions-group documents-report-table__actions-group--start">
-                    ${lectures.length > 1
-                      ? `<span class="memoire-fichier__lectures">
-                          ${lectures.map((cle) => `
-                            <button type="button" class="memoire-lecture${lecture === cle ? " is-active" : ""}"
-                              data-texte-lecture="${escapeHtml(cle)}" aria-pressed="${lecture === cle}"
-                              title="${escapeHtml(QUOI_DE_LA_LECTURE[cle] ?? "")}"
-                            >${escapeHtml(NOMS_DE_LA_LECTURE[cle])}</button>
-                          `).join("")}
-                        </span>`
-                      : ""}
-                    <b class="documents-transcription__tete">${escapeHtml(nom)}</b>
-                    <span class="documents-ecriture__dit">${escapeHtml(phraseDuTexteOuvert(ouvert))}</span>
+                    ${edition
+                      ? `<span class="documents-ecriture__dit">${
+                        refus
+                          ? escapeHtml(refus)
+                          : `Le fichier s&#39;appellera <b>${escapeHtml(nom)}</b>.`
+                      }</span>`
+                      : `
+                        ${lectures.length > 1
+                          ? `<span class="memoire-fichier__lectures">
+                              ${lectures.map((cle) => `
+                                <button type="button" class="memoire-lecture${lecture === cle ? " is-active" : ""}"
+                                  data-texte-lecture="${escapeHtml(cle)}" aria-pressed="${lecture === cle}"
+                                  title="${escapeHtml(QUOI_DE_LA_LECTURE[cle] ?? "")}"
+                                >${escapeHtml(NOMS_DE_LA_LECTURE[cle])}</button>
+                              `).join("")}
+                            </span>`
+                          : ""}
+                        <span class="documents-ecriture__dit">${escapeHtml(phraseDuTexteOuvert(ouvert))}</span>
+                      `}
                   </div>
                   <div class="documents-report-table__actions-group documents-report-table__actions-group--end">
-                    ${/*
-                      **La sortie de cet écran.** Un fichier de texte ne
-                      s'extrait pas : il est déjà le document. C'est tout ce que
-                      « lire un compte rendu » a de moins à faire ici, et c'est
-                      la raison pour laquelle le bouton existe (fondamental 13).
-                    */""}
-                    ${typeof ouvert.contenu === "string" && ouvert.contenu.trim()
-                      ? `<button type="button" class="gh-btn" data-texte-lire-un-cr
-                           title="Relever les points de ce document, sans extraction ni restitution"
-                         >Lire comme un compte rendu</button>`
-                      : ""}
-                    <button type="button" class="gh-btn" data-texte-fermer>Fermer</button>
+                    ${edition
+                      ? `
+                        <button type="button" class="gh-btn" data-edition-annuler
+                          ${edition.enCours ? "disabled" : ""}>Annuler</button>
+                        <button type="button" class="gh-btn gh-btn--primary" data-edition-valider
+                          ${refus || edition.enCours ? "disabled" : ""}
+                        >${edition.enCours ? "Enregistrement…" : "Enregistrer"}</button>
+                      `
+                      : `
+                        ${/*
+                          **Le crayon a remplacé « Fermer ».** Fermer se fait
+                          déjà par le fil d'Ariane et par l'arbre, qui sont là
+                          et qui disent en plus où l'on va ; un bouton qui ne
+                          fait que défaire ce qu'on vient de faire prenait la
+                          place du seul geste qui manquait — corriger.
+                        */""}
+                        ${typeof ouvert.contenu === "string"
+                          ? `<button type="button" class="gh-btn documents-report-table__icon-btn"
+                               data-texte-editer aria-label="Modifier ce fichier" title="Modifier ce fichier"
+                             >${svgIcon("pencil", { className: "octicon" })}</button>`
+                          : ""}
+                      `}
                   </div>
                 </div>
               </header>
               <div class="documents-report-table__body">
-                ${renderCorpsDuTexte(ouvert, lecture)}
+                ${edition
+                  ? renderSaisieDeCode({
+                    contenu: edition.contenu ?? "",
+                    marque: "data-edition-contenu",
+                    invite: "Le fichier est vide. Écrivez ou collez son contenu…"
+                  })
+                  : renderCorpsDuTexte(ouvert, lecture)}
               </div>
             </section>
           </div>
@@ -2400,13 +2456,32 @@ async function chargerLaMemoire() {
  * fasse rien : l'écouteur changeait le chemin de la Mémoire, mais pas la
  * branche affichée. Une seule porte ne peut pas avoir ce défaut-là.
  */
+/**
+ * Ce qu'une navigation referme, **dit à un seul endroit**.
+ *
+ * Aller quelque part ferme ce qu'on regardait : un aperçu de PDF ou un fichier
+ * de texte qui survit à la navigation oblige à le fermer à la main pour voir où
+ * l'on vient d'aller.
+ *
+ * Trois gestes mènent ailleurs — l'arbre, le fil d'Ariane, le nom d'un dossier
+ * dans le tableau — et chacun refermait pour son compte : l'arbre fermait
+ * l'aperçu, les deux autres ne fermaient rien. C'est ainsi qu'un fichier ouvert
+ * serait resté à l'écran sous le chemin d'un autre dossier.
+ *
+ * **Ce qui n'est pas fermé ici** : l'écriture d'un fichier neuf. Le fil d'Ariane
+ * y désigne le dossier où le fichier va naître — en sortir perdrait un texte que
+ * personne n'a encore enregistré.
+ */
+function allerAilleurs() {
+  if (docsViewState.mode !== "list") docsViewState.mode = "list";
+  docsViewState.texte = null;
+}
+
 async function allerDansLArbre(root, adresse) {
   const [prefixe, ...reste] = String(adresse ?? "").split(":");
   const cible = reste.join(":");
 
-  // Aller quelque part ferme ce qu'on regardait. Un aperçu de PDF qui survit à
-  // la navigation oblige à le fermer à la main pour voir où l'on vient d'aller.
-  if (docsViewState.mode !== "list") docsViewState.mode = "list";
+  allerAilleurs();
   docsViewState.memoireQuery = "";
 
   if (prefixe === "branche") {
@@ -3865,38 +3940,87 @@ async function ouvrirLeTexte(root, documentItem) {
   renderProjectDocuments(root);
 }
 
-function fermerLeTexte(root) {
-  docsViewState.texte = null;
+
+/**
+ * Passer en modification.
+ *
+ * **Sur une copie.** Annuler doit rendre le fichier tel qu'il est en base ; si
+ * l'on retouchait le contenu lu, il n'y aurait plus rien à quoi revenir.
+ */
+function ouvrirLEdition(root) {
+  const ouvert = docsViewState.texte;
+  if (!ouvert || typeof ouvert.contenu !== "string") return;
+
+  docsViewState.texte = {
+    ...ouvert,
+    edition: { nom: String(ouvert.nom || ""), contenu: ouvert.contenu, enCours: false }
+  };
+  renderProjectDocuments(root);
+}
+
+function fermerLEdition(root) {
+  if (!docsViewState.texte) return;
+  docsViewState.texte = { ...docsViewState.texte, edition: null };
   renderProjectDocuments(root);
 }
 
 /**
- * Faire relever les points de ce fichier par l'Atelier.
+ * Enregistrer ce qu'on vient de modifier.
  *
- * ## Le chemin le plus court, et le seul qui ne repaie rien
+ * ## Les refus se rejouent dans le service
  *
- * Le fichier est déjà là, et il est déjà du texte : l'Atelier n'a ni à
- * l'extraire, ni à le faire refaire par le modèle. On lui passe donc le texte
- * qu'on vient de lire, et l'on navigue jusqu'à son panneau.
+ * Le bouton est éteint quand le nom ne convient pas, mais l'écran n'est pas un
+ * garde-fou : une touche rapide, un rendu en retard, et l'on enregistrerait
+ * sous un nom refusé. La liste du dossier part donc avec l'appel, et c'est
+ * `leFichierAReecrire` qui refuse — au même endroit que pour un fichier neuf
+ * (règle 4).
  *
- * ## Pourquoi on ne l'appelle pas directement
+ * ## Ce qui reste à l'écran quand ça rate
  *
- * Le panneau de l'Atelier n'est pas monté tant qu'on n'y est pas allé : écrire
- * dedans depuis ici écrirait dans un écran qui n'existe pas. Le texte se pose
- * dans une case que l'Atelier vient prendre à son montage.
+ * Le texte modifié. Le perdre ferait recommencer une saisie de trois cents
+ * lignes pour une panne de réseau.
  */
-function lireCeFichierCommeUnCompteRendu() {
-  const ouvert = docsViewState.texte ?? {};
-  const projet = String(store.currentProjectId || "").trim();
+async function enregistrerLEdition(root) {
+  const ouvert = docsViewState.texte;
+  const edition = ouvert?.edition;
+  if (!edition || edition.enCours) return;
 
-  if (!deposerLeCrALire({ nom: ouvert.nom, contenu: ouvert.contenu })) return;
-  if (!projet) return;
+  docsViewState.texte = { ...ouvert, edition: { ...edition, enCours: true } };
+  renderProjectDocumentsContent(root);
 
-  // La route nomme le panneau, et le nom vit dans `route-de-latelier.js` avec
-  // la lecture qui lui répond : composer l'adresse ici la ferait diverger le
-  // jour où le panneau change de nom (règle 10).
-  window.location.hash = `#project/${encodeURIComponent(projet)}/atelier/${ATELIER_LECTURE_DES_CR}`;
+  const projectId = await resolveCurrentBackendProjectId().catch(() => "");
+  const { enregistrerLeFichier } = await import("../services/fichier-a-la-main-supabase.js");
+  const ecrit = await enregistrerLeFichier(pieceDesFichiers(ouvert.documentId), {
+    nom: edition.nom, contenu: edition.contenu, projectId,
+    folderId: docsViewState.currentFolderId || null,
+    dejaLa: Array.isArray(docsViewState.files) ? docsViewState.files : []
+  });
+
+  if (!ecrit.enregistre) {
+    docsViewState.activity = {
+      tone: "error",
+      title: "Ce fichier n'a pas pu être enregistré",
+      message: `${ecrit.motif}. Le texte est toujours à l'écran : réessayez.`
+    };
+    docsViewState.texte = { ...docsViewState.texte, edition: { ...edition, enCours: false } };
+    renderProjectDocumentsContent(root);
+    return;
+  }
+
+  // La liste porte le nom et la taille : sans la relire, le tableau montrerait
+  // l'ancien nom sous le fichier qu'on vient de renommer.
+  await loadCurrentDirectory().catch(() => undefined);
+
+  docsViewState.activity = null;
+  docsViewState.texte = {
+    ...docsViewState.texte,
+    nom: nomComplet(edition.nom),
+    contenu: edition.contenu,
+    edition: null
+  };
+  renderProjectDocuments(root);
 }
+
 
 async function openPdfPreview(root, documentId) {
   const documentItem = pieceDesFichiers(documentId);
@@ -4553,10 +4677,32 @@ function bindDocumentsSplitActions(root) {
       });
     }
 
-    root.querySelector("[data-texte-fermer]")?.addEventListener("click", () => fermerLeTexte(root));
-    root.querySelector("[data-texte-lire-un-cr]")?.addEventListener("click", () => {
-      lireCeFichierCommeUnCompteRendu();
-    });
+    root.querySelector("[data-texte-editer]")?.addEventListener("click", () => ouvrirLEdition(root));
+
+    if (docsViewState.texte.edition) {
+      const champ = root.querySelector("[data-edition-nom]");
+      champ?.addEventListener("input", () => {
+        docsViewState.texte.edition.nom = champ.value;
+        renderProjectDocumentsContent(root);
+        // Le rendu remplace le champ : sans cela, on taperait une lettre et le
+        // curseur partirait.
+        const repris = root.querySelector("[data-edition-nom]");
+        repris?.focus();
+        repris?.setSelectionRange(repris.value.length, repris.value.length);
+      });
+
+      // **La zone ne se redessine pas à la frappe** : l'écran entier se
+      // reconstruit à chaque rendu, et l'on perdrait le curseur au milieu d'un
+      // collage de trente pages.
+      brancherLaSaisieDeCode(root, {
+        surChangement: (valeur) => { docsViewState.texte.edition.contenu = valeur; }
+      });
+
+      root.querySelector("[data-edition-annuler]")?.addEventListener("click", () => fermerLEdition(root));
+      root.querySelector("[data-edition-valider]")?.addEventListener("click", () => {
+        void enregistrerLEdition(root);
+      });
+    }
   }
 
   const menu = document.querySelector('[data-action-id="documentsMenu"]');
@@ -4817,6 +4963,7 @@ function bindDocumentsView(root) {
     trigger.addEventListener("click", async (event) => {
       event.preventDefault();
       console.info("[documents-view] open-folder", { folderId });
+      allerAilleurs();
       await loadCurrentDirectory({ forceFolderId: folderId });
       renderProjectDocumentsContent(root);
     });
@@ -4830,6 +4977,7 @@ function bindDocumentsView(root) {
       // destination**. C'est ce qu'il y montre — le dernier morceau est le
       // dossier où les fichiers vont atterrir —, et en sortir sans le dire
       // ferait perdre les fichiers déjà choisis.
+      allerAilleurs();
       await loadCurrentDirectory({ forceFolderId: folderId || null });
       renderProjectDocumentsContent(root);
     });
