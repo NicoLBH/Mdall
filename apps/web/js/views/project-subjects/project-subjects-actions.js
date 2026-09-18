@@ -1096,6 +1096,35 @@ export function createProjectSubjectsActions(config) {
     }
   }
 
+  /**
+   * Les documents que ce sujet a regardés, lus au moment de fermer.
+   *
+   * Les messages **et** les pièces jointes : une pièce ne se juge pas sans son
+   * message, puisque c'est lui qui dit si l'échange était privé. Sans les deux,
+   * rien — et l'étape reste creuse, ce qui est exact.
+   */
+  async function ceQueLeSujetARegarde(subjectId) {
+    try {
+      const [
+        { listerLesCommentairesDunPoint, listerLesPiecesJointesDunPoint },
+        { ceQueLePointAExamine }
+      ] = await Promise.all([
+        import("../../services/subject-messages-supabase.js"),
+        import("../../services/ce-que-le-point-a-examine.js")
+      ]);
+
+      const [messages, piecesJointes] = await Promise.all([
+        listerLesCommentairesDunPoint(subjectId),
+        listerLesPiecesJointesDunPoint(subjectId)
+      ]);
+      if (messages === null || piecesJointes === null) return [];
+
+      return ceQueLePointAExamine({ point: { id: subjectId }, messages, piecesJointes });
+    } catch {
+      return [];
+    }
+  }
+
   async function proposerLaDecisionDuSujet(subjectId, tranche) {
     try {
       const [
@@ -1155,6 +1184,15 @@ export function createProjectSubjectsActions(config) {
       // qu'il ne sait pas, ce qui est exact, plutôt que de retenir la décision.
       const porteSur = await ceQueLeSujetMettaitEnDebat(projectId, subjectId, ceQueCePointMetEnDebat);
 
+      // **Ce qu'on a regardé.** Les documents versés dans la discussion : quand
+      // on débat d'une profondeur de fondation, l'étude géotechnique est jointe
+      // au fil, et c'est précisément ce qu'on est allé lire.
+      //
+      // Les pièces d'un échange avec le copilote n'entrent jamais — leur seul
+      // nom de fichier trahirait ce qui s'est dit dans une conversation privée —
+      // et le refus vit dans le service, pas dans la requête.
+      const examine = await ceQueLeSujetARegarde(subjectId);
+
       // Et **par où l'on est passé**. Le raisonnement ne répète pas la valeur —
       // il porte la question, sur quoi le débat portait, ce qui a été tranché et
       // ce que cela pose. Ce qu'on ne sait toujours pas d'ici — ce qui a été
@@ -1164,6 +1202,7 @@ export function createProjectSubjectsActions(config) {
         point: { id: subjectId, title: sujet?.title },
         question: tranche.question,
         porteSur,
+        examine,
         produites: affirmations,
         par,
         quand,

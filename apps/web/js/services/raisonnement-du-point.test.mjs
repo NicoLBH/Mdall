@@ -11,6 +11,7 @@ import { cleDAffirmation, itemsDeProposition } from "./atelier-proposition.js";
 import { decisionVersable } from "./decision-versement.js";
 import { affirmationsDecideesDans, referenceDuPoint } from "./point-a-tranche.js";
 import { ceQueCePointMetEnDebat, surQuoiCePointPorte } from "./point-porte-sur.js";
+import { ceQueLePointAExamine } from "./ce-que-le-point-a-examine.js";
 import { readFileSync } from "node:fs";
 
 const LE_POINT = { id: "p-hors-gel", title: "Quelle profondeur de fondation retenir ?" };
@@ -353,4 +354,66 @@ test("la fermeture d'un sujet passe bien ces entrées au raisonnement", () => {
   assert.match(source, /\bceQueCePointMetEnDebat\b/, "la fermeture ne lit pas les arêtes confirmées");
   assert.doesNotMatch(source, /\bsurQuoiCePointPorte\b/,
     "la fermeture lit ce que l'écran montre, propositions comprises");
+});
+
+
+/* ── Ce qu'on a regardé, enfin écrit ─────────────────────────────────────── */
+
+test("un raisonnement porte les documents que le sujet a regardés", () => {
+  // La cinquième étape du graphe partait vide et le disait. Quand on débat d'une
+  // profondeur de fondation, l'étude géotechnique est jointe au fil : c'est
+  // précisément ce qu'on est allé lire.
+  const [ligne] = raisonnementVersable({
+    point: LE_POINT,
+    question: LE_POINT.title,
+    porteSur: [valeur("v-alt", "Altitude", "742,30")],
+    examine: ceQueLePointAExamine({
+      point: { id: LE_POINT.id },
+      messages: [{
+        id: "m-1", subject_id: LE_POINT.id, body_markdown: "voici la note",
+        visibility: "normal", deleted_at: null
+      }],
+      piecesJointes: [{
+        id: "a-1", subject_id: LE_POINT.id, message_id: "m-1",
+        file_name: "etude-geotechnique.pdf", created_at: "2026-03-12T10:00:00Z", deleted_at: null
+      }]
+    }),
+    produites: decisionVersable({
+      sujet: LE_POINT.title, retenu: "0,80 m", question: LE_POINT.title, motif: "étude géotechnique"
+    })
+  });
+
+  assert.deepEqual(ligne.raisonnement.examine, [{ quoi: "etude-geotechnique.pdf", ou: "" }]);
+  assert.deepEqual(lacunesDuRaisonnement(ligne.raisonnement), [],
+    "le graphe est entier : plus une seule étape creuse");
+});
+
+test("la fermeture d'un sujet passe bien ces documents au raisonnement", () => {
+  // Le même défaut invisible que pour les entrées : un champ qu'on oublie de
+  // passer ne se voit nulle part, et l'étape resterait creuse sans que rien ne
+  // tombe.
+  const source = readFileSync(
+    new URL("../views/project-subjects/project-subjects-actions.js", import.meta.url), "utf8"
+  );
+
+  const appel = source.slice(source.indexOf("raisonnementVersable({"));
+  assert.match(appel.slice(0, 400), /examine,/, "le raisonnement se verse sans ce qu'il a regardé");
+
+  // Et ce qu'on passe vient bien d'une lecture, pas d'une liste vide écrite en
+  // dur : le graphe aurait alors l'air de s'être rempli tout seul.
+  assert.match(source, /const examine = await ceQueLeSujetARegarde\(subjectId\);/,
+    "la fermeture ne va pas lire ce que le sujet a regardé");
+});
+
+test("la confidentialité des pièces jointes ne descend pas dans la requête", () => {
+  // Une garde écrite en SQL serait invisible aux tests, et une garde qu'on ne
+  // peut pas voir tomber n'est pas une garde. La porte rend tout ; c'est
+  // `ce-que-le-point-a-examine.js` qui refuse, et lui se casse.
+  const porte = readFileSync(
+    new URL("./subject-messages-supabase.js", import.meta.url), "utf8"
+  );
+
+  const requete = porte.slice(porte.indexOf("listerLesPiecesJointesDunPoint"));
+  assert.doesNotMatch(requete.slice(0, 700), /ephemeral/,
+    "la requête des pièces jointes filtre elle-même la confidentialité");
 });

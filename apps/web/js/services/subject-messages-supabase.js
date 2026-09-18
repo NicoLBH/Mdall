@@ -385,6 +385,39 @@ export async function listerLesCommentairesDunPoint(subjectId) {
   }
 }
 
+/**
+ * Les pièces jointes d'un point, réduites à ce que le raisonnement doit savoir.
+ *
+ * Le nom du fichier, le message auquel il pend, et les deux marques qui disent
+ * s'il compte. **Pas le chemin de stockage** : il n'est pas une information de
+ * projet, et le faire voyager jusqu'à un écran qui ne l'ouvre pas serait le
+ * sortir sans raison.
+ *
+ * Les pièces d'un échange privé **viennent** : ce n'est pas la requête qui
+ * refuse, c'est `ce-que-le-point-a-examine.js`. Une garde de confidentialité
+ * écrite en SQL serait invisible aux tests, et une garde qu'on ne peut pas voir
+ * tomber n'est pas une garde.
+ *
+ * `null` quand la lecture échoue, jamais `[]` : « on n'a pas pu lire » n'est pas
+ * « rien n'a été examiné » (règle 5).
+ */
+export async function listerLesPiecesJointesDunPoint(subjectId) {
+  const vise = normalizeId(subjectId);
+  if (!vise) return null;
+
+  const params = new URLSearchParams();
+  params.set("select", "id,subject_id,message_id,file_name,created_at,deleted_at");
+  params.set("subject_id", `eq.${vise}`);
+  params.set("order", "created_at.asc");
+
+  try {
+    const rows = await restFetch("/rest/v1/subject_message_attachments", params);
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return null;
+  }
+}
+
 export function createSubjectMessagesSupabaseRepository() {
   async function listAttachmentsByMessageIds(messageIds = []) {
     const ids = (Array.isArray(messageIds) ? messageIds : [])
