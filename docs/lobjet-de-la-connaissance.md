@@ -1090,6 +1090,64 @@ Rien de nouveau : la chaîne `supersedes` marche pour un raisonnement comme pour
 une valeur, et la ligne porte déjà « remplacée le … ». C'était le but de tout ce
 qui précède, et cela ne demandait aucune mécanique de plus.
 
+### Le chemin n'a plus de trou — « Examine » se remplit
+
+#### L'étape qu'on avait laissée creuse
+
+Le raisonnement portait quatre étapes sur cinq. La cinquième — **ce qui a été
+regardé** — restait vide et le disait. C'était exact, et c'était dommage : quand
+on débat d'une profondeur de fondation, l'étude géotechnique est jointe au fil,
+et c'est précisément ce qu'on est allé lire.
+
+```
+Avant                                   Après
+PORTE SUR  Altitude = 742,30            PORTE SUR  Altitude = 742,30
+           Nature du sol = moraine                 Nature du sol = moraine
+EXAMINE    on ne sait pas…              EXAMINE    etude-geotechnique.pdf
+DÉCISION   … = 0,69 m                              releve-topographique.pdf
+PRODUIT    … = 0,69 m                   DÉCISION   … = 0,69 m
+                                        PRODUIT    … = 0,69 m
+Ce raisonnement ne dit pas tout : …     (plus rien : le graphe est entier)
+```
+
+#### Trois refus, et le premier est celui qui compte
+
+**Une pièce jointe à un échange avec le copilote ne se montre jamais.** Ces
+conversations sont privées par construction, et le **seul nom de fichier** d'un
+document qu'on y a déposé suffirait à trahir ce qui s'y est dit. C'est la règle
+de l'étape 1, et c'est la **même fonction** qui la tient — `messageLisible` :
+une seconde lecture de la confidentialité finirait par ne pas refuser la même
+chose (règle 10).
+
+**Un dépôt que personne n'a posté ne compte pas.** Une pièce sans `message_id`
+est un envoi en cours : le fichier existe, personne ne l'a mis dans la
+discussion. Dire « on a examiné ceci » d'un brouillon serait faux.
+
+**Un message qu'on n'a pas lu ne se juge pas.** Si les messages manquent, on ne
+peut pas savoir lesquels étaient privés — et montrer dans le doute est exactement
+ce qu'on ne fait pas. L'étape reste alors creuse et le dit (règle 5).
+
+#### La confidentialité ne descend pas dans le SQL
+
+La requête rend **tout**, y compris les pièces des échanges privés ; c'est le
+service qui refuse. Une garde écrite en SQL serait invisible aux tests, et une
+garde qu'on ne peut pas voir tomber n'est pas une garde. Un test vérifie que la
+requête ne filtre pas elle-même — c'est le seul moyen d'empêcher cette prudence
+de glisser au mauvais endroit à la prochaine correction.
+
+Et la porte ne demande que ce qui sert : le nom du fichier et les deux marques
+qui décident. **Pas le chemin de stockage** — il n'est pas une information de
+projet, et le faire voyager jusqu'à un écran qui ne l'ouvre pas serait le sortir
+sans raison.
+
+#### Une ceinture qui n'en est qu'une
+
+En cassant, `messages === null` dans l'orchestrateur de la fermeture s'est révélé
+redondant : le service refuse déjà une liste de messages absente, et c'est **là**
+que la ligne tient. La vérification reste — une seconde ceinture ne coûte rien —
+mais le test dit maintenant où vit la prudence, et il éprouve `null` autant que
+`[]`.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -1358,6 +1416,18 @@ valeur que personne n'a mise en doute.
 | une ligne ne se dit pas deux fois | la question se répète | 1 test |
 | la ligne dessine le chemin et ce qui lui ressemble | rien ne s'appelle, en silence | 3 tests |
 | le chemin est celui du détail d'un sujet | l'écran en redessine un second | 1 test |
+| une pièce jointe au copilote ne se montre jamais | elle se montre | 2 tests |
+| une pièce à un message effacé ne se montre pas | elle se montre | 1 test |
+| un dépôt que personne n'a posté ne compte pas | il compte | 1 test |
+| un message qu'on n'a pas lu ne se juge pas | on montre dans le doute | 3 tests |
+| une pièce retirée ne parle plus | elle parle | 1 test |
+| les pièces d'un autre sujet ne remontent pas | elles remontent | 1 test |
+| le même document ne compte qu'une fois | il compte deux fois | 1 test |
+| une pièce sans nom ne fait pas de ligne vide | elle en fait une | 1 test |
+| l'ordre d'arrivée se tient | il se perd | 1 test |
+| le raisonnement porte ce qu'il a regardé | l'étape reste creuse | 1 test |
+| la fermeture va lire ce qu'il a regardé | elle passe une liste vide | 2 tests |
+| la confidentialité ne descend pas dans le SQL | elle y descend | 1 test |
 
 ---
 
@@ -1394,6 +1464,7 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | ce qu'un sujet a écarté, et qui se relit | `apps/web/js/services/point-porte-sur.js` |
 | ce qu'un sujet met vraiment en débat | `apps/web/js/services/point-porte-sur.js` — `ceQueCePointMetEnDebat` |
 | ce qui rapproche deux raisonnements | `apps/web/js/services/raisonnements-qui-se-ressemblent.js` |
+| ce qu'un sujet a regardé | `apps/web/js/services/ce-que-le-point-a-examine.js` |
 | ce qu'un sujet met en débat, et ce qui s'y oppose | `apps/web/js/services/ce-qui-se-debat.js` |
 | tout ce qu'un sujet nomme, et où | `apps/web/js/services/ce-que-le-point-nomme.js` |
 | tous les noms d'un texte | `apps/web/js/services/avis-liaison.js` — `nomsDunTexte` |
