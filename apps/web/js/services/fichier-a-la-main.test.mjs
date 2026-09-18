@@ -39,14 +39,53 @@ test("un nom vide ne fait pas un fichier", () => {
   assert.deepEqual(pourquoiOnNePeutPasLEcrire("   "), [REFUS.SANS_NOM]);
 });
 
-test("un chemin n'est pas un nom, et se dit avant le reste", () => {
-  // « ../notice.md » n'est pas refusé parce qu'il est pris : il est refusé parce
-  // que ce n'est pas un nom. Le dire dans cet ordre évite un message qui envoie
-  // chercher au mauvais endroit.
-  for (const chemin of ["dossier/notice.md", "..\\notice.md", "../notice.md"]) {
+test("un « / » nomme un dossier à traverser, et le reste n'est pas un chemin", () => {
+  // Le fil d'Ariane dit d'où l'on part, et le champ est à son bout :
+  // « Fichiers / Documents / [ perso/notice.md ] » se lit comme ce qu'il fait.
+  assert.deepEqual(pourquoiOnNePeutPasLEcrire("perso/notice.md", { dejaLa: DEJA_LA }), []);
+  assert.deepEqual(pourquoiOnNePeutPasLEcrire("a/b/c.md"), []);
+
+  // La barre inverse vient d'un chemin collé depuis ailleurs : l'accepter
+  // écrirait un fichier dont le nom porte une barre.
+  for (const chemin of ["..\\notice.md", "../notice.md", "perso/../notice.md"]) {
     assert.deepEqual(pourquoiOnNePeutPasLEcrire(chemin, { dejaLa: DEJA_LA }), [REFUS.UN_CHEMIN],
       `« ${chemin} » passe`);
   }
+});
+
+test("un « / » sépare deux noms : il en faut un de chaque côté", () => {
+  // Un « / » en tête ne veut pas dire « depuis la racine » — le chemin est
+  // toujours relatif au dossier ouvert : il veut dire qu'un dossier n'a pas de
+  // nom.
+  for (const mauvais of ["/notice.md", "perso//notice.md", "perso/", "notice.md/"]) {
+    assert.deepEqual(pourquoiOnNePeutPasLEcrire(mauvais), [REFUS.UN_DOSSIER_SANS_NOM],
+      `« ${mauvais} » passe`);
+  }
+});
+
+test("un nom pris dans un sous-dossier ne se déclare pas libre", () => {
+  // `dejaLa` décrit le dossier ouvert, pas ceux qu'on n'a pas lus : affirmer
+  // qu'un nom y est libre serait prétendre savoir (règle 5). C'est le dépôt,
+  // qui aura résolu le dossier, qui refusera la collision.
+  assert.deepEqual(pourquoiOnNePeutPasLEcrire("notice-incendie.md", { dejaLa: DEJA_LA }),
+    [REFUS.DEJA_PRIS]);
+  assert.deepEqual(pourquoiOnNePeutPasLEcrire("perso/notice-incendie.md", { dejaLa: DEJA_LA }), []);
+});
+
+test("les dossiers traversés voyagent avec le fichier à écrire", () => {
+  const ecrire = leFichierAEcrire("perso/sous/notice", { projectId: "pr-1", folderId: "f-1" });
+
+  assert.deepEqual(ecrire.dossiers, ["perso", "sous"]);
+  // Le nom ne garde rien du chemin : c'est le dossier qui le porte.
+  assert.equal(ecrire.nom, "notice.md");
+  assert.equal(ecrire.ligne.filename, "notice.md");
+  // **Le dossier ouvert, et non `null`.** Y mettre `null` ferait atterrir à la
+  // racine tout fichier dont la création des dossiers échoue à mi-parcours.
+  assert.equal(ecrire.ligne.folder_id, "f-1");
+});
+
+test("sans « / », il n'y a aucun dossier à créer", () => {
+  assert.deepEqual(leFichierAEcrire("notice", { projectId: "pr-1" }).dossiers, []);
 });
 
 test("« . » et « .. » ne sont pas des noms de fichier", () => {
@@ -85,7 +124,8 @@ test("le nom se compare complété, pas tel qu'il est tapé", () => {
 });
 
 test("un refus dit quoi faire, pas qu'il refuse", () => {
-  assert.match(phraseDesRefus([REFUS.UN_CHEMIN]), /pas un chemin/);
+  assert.match(phraseDesRefus([REFUS.UN_CHEMIN]), /est un nom/);
+  assert.match(phraseDesRefus([REFUS.UN_DOSSIER_SANS_NOM]), /de chaque côté/);
   assert.match(phraseDesRefus([REFUS.PAS_DU_TEXTE]), /\.md/);
   assert.equal(phraseDesRefus([]), "");
 });
@@ -125,7 +165,7 @@ test("un fichier vide s'écrit quand même", () => {
 
 test("un nom refusé n'écrit rien", () => {
   assert.equal(leFichierAEcrire("", { projectId: "pr-1" }), null);
-  assert.equal(leFichierAEcrire("a/b.md", { projectId: "pr-1" }), null);
+  assert.equal(leFichierAEcrire("a//b.md", { projectId: "pr-1" }), null);
   assert.equal(leFichierAEcrire("notice.pdf", { projectId: "pr-1" }), null);
   assert.equal(leFichierAEcrire("notice-incendie", { projectId: "pr-1", dejaLa: DEJA_LA }), null);
 });
@@ -348,7 +388,7 @@ test("sans document, il n'y a rien à réenregistrer", () => {
 test("les refus d'un nom neuf valent pour un renommage", () => {
   // Une seule règle, demandée deux fois — et non deux règles qui finiraient par
   // ne plus dire la même chose (règle 4).
-  for (const mauvais of ["", "   ", "dossier/notice.md", "..", "photo.png"]) {
+  for (const mauvais of ["", "   ", "dossier//notice.md", "..", "photo.png"]) {
     assert.equal(leFichierAReecrire(PIECE, { saisi: mauvais, quand: 1 }), null, mauvais);
   }
 });

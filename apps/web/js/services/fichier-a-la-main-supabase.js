@@ -26,8 +26,55 @@ import {
   currentUserId, insertDocumentRow, updateDocumentRow, uploadDocumentToStorage
 } from "./document-deposit.js";
 import { leFichierAEcrire, leFichierAReecrire } from "./fichier-a-la-main.js";
+import { createDocumentFolder, listDocumentFolderChildren } from "./project-supabase-sync.js";
 
 const SUPABASE_URL = getSupabaseUrl();
+
+const texte = (valeur) => String(valeur ?? "").trim();
+
+/**
+ * Le dossier où le chemin saisi mène, en le creusant s'il le faut.
+ *
+ * ## On réutilise avant de créer
+ *
+ * Un dossier déjà là est repris, **à la casse près** : « Perso » et « perso »
+ * côte à côte dans un même dossier se confondent à l'œil, et l'on ouvrirait le
+ * mauvais. La base refuse d'ailleurs le doublon, et l'on aurait donc échoué
+ * sans savoir pourquoi.
+ *
+ * ## On crée de proche en proche
+ *
+ * `a/b/c.md` fait `a`, puis `b` dans `a`. Un dossier créé en route reste créé
+ * si la suite échoue : c'est ennuyeux, pas grave — et cela vaut mieux qu'un
+ * fichier déposé à la racine parce qu'un maillon a manqué.
+ *
+ * @returns {Promise<string|null>} l'identifiant du dossier, `null` en cas d'échec.
+ */
+async function dossierDuChemin(projectId, depuis, dossiers = []) {
+  let courant = depuis || null;
+
+  for (const nom of dossiers) {
+    const enfants = (await listDocumentFolderChildren(projectId, courant)) ?? [];
+    const deja = enfants.find((dossier) =>
+      texte(dossier?.name).toLocaleLowerCase("fr-FR") === texte(nom).toLocaleLowerCase("fr-FR"));
+
+    const dossier = deja ?? (await createDocumentFolder(projectId, courant, nom));
+    if (!dossier?.id) return null;
+    courant = dossier.id;
+  }
+
+  return courant;
+}
+
+/** Ce que ce dossier porte déjà, pour refuser une collision qu'on n'a pas vue. */
+async function nomPrisDans(projectId, folderId, nom) {
+  const { listDocumentDirectory } = await import("./project-supabase-sync.js");
+  const contenu = await listDocumentDirectory(projectId, folderId || null);
+
+  return (contenu?.files ?? []).some((fichier) =>
+    texte(fichier?.name ?? fichier?.original_filename ?? fichier?.filename).toLowerCase()
+      === texte(nom).toLowerCase());
+}
 
 /**
  * Créer un fichier écrit à la main.
@@ -44,16 +91,28 @@ export async function ecrireLeFichier(saisi = "", {
   if (!aEcrire) return rate("ce nom ne convient pas");
 
   try {
+    // **Le dossier d'abord.** « perso/notice.md » crée « perso » puis y dépose ;
+    // déposer puis créer laisserait le fichier à la racine si la création rate.
+    const ou = await dossierDuChemin(projectId, folderId, aEcrire.dossiers);
+    if (ou === null) return rate("le dossier n'a pas pu être créé");
+
+    // Le service pur ne peut pas vérifier un dossier qu'il n'a pas lu : c'est
+    // ici, une fois le dossier résolu, que la collision se refuse (règle 5).
+    if (aEcrire.dossiers.length && (await nomPrisDans(projectId, ou, aEcrire.nom))) {
+      return rate("ce dossier porte déjà un fichier de ce nom");
+    }
+
     // Un `File` plutôt qu'un `Blob` : le téléversement nomme l'objet de stockage
     // d'après `file.name`, et un `Blob` n'en a pas — le fichier arriverait sous
     // un nom que personne n'a choisi.
     const fichier = new File([aEcrire.contenu], aEcrire.nom, { type: aEcrire.type });
     const stockage = await uploadDocumentToStorage(fichier, {
-      projectId, scope: `${folderId || "racine"}/ecrit`
+      projectId, scope: `${ou || "racine"}/ecrit`
     });
 
     const document = await insertDocumentRow({
       ...aEcrire.ligne,
+      folder_id: ou,
       storage_bucket: stockage.storage_bucket,
       storage_path: stockage.storage_path,
       file_size_bytes: fichier.size || 0
@@ -66,14 +125,10 @@ export async function ecrireLeFichier(saisi = "", {
   }
 }
 
-/**
- * Le texte d'un fichier déjà déposé.
- *
- * @returns {Promise<string|null>} `null` si la lecture a échoué.
- */
-export async function lireLeTexteDuFichier(document = null) {
-  const seau = String(document?.storageBucket ?? document?.storage_bucket ?? "").trim();
-  const chemin = String(document?.storagePath ?? document?.storage_path ?? "").trim();
+/** La réponse du stockage pour ce document, ou `null`. */
+async function reponseDuStockage(document = null) {
+  const seau = texte(document?.storageBucket ?? document?.storage_bucket);
+  const chemin = texte(document?.storagePath ?? document?.storage_path);
   if (!seau || !chemin) return null;
 
   try {
@@ -83,11 +138,35 @@ export async function lireLeTexteDuFichier(document = null) {
       headers: await buildSupabaseAuthHeaders({}), cache: "no-store"
     });
 
-    if (!reponse.ok) return null;
-    return await reponse.text();
+    return reponse.ok ? reponse : null;
   } catch {
     return null;
   }
+}
+
+/**
+ * Le texte d'un fichier déjà déposé.
+ *
+ * @returns {Promise<string|null>} `null` si la lecture a échoué.
+ */
+export async function lireLeTexteDuFichier(document = null) {
+  const reponse = await reponseDuStockage(document);
+  return reponse ? await reponse.text().catch(() => null) : null;
+}
+
+/**
+ * Les octets d'un fichier déjà déposé.
+ *
+ * **C'est ce qui rend un PDF choisissable depuis Fichiers.** L'extraction part
+ * du fichier lui-même, et le fichier est dans le stockage : le redescendre coûte
+ * un aller-retour, et évite de redéposer un document qui est déjà là — ce qui en
+ * aurait fait un second exemplaire dans le projet.
+ *
+ * @returns {Promise<ArrayBuffer|null>} `null` si la lecture a échoué.
+ */
+export async function lireLesOctetsDuFichier(document = null) {
+  const reponse = await reponseDuStockage(document);
+  return reponse ? await reponse.arrayBuffer().catch(() => null) : null;
 }
 
 /**
@@ -118,11 +197,21 @@ export async function enregistrerLeFichier(document = null, {
   if (!aEcrire) return rate("ce nom ne convient pas");
 
   try {
+    // Renommer avec un chemin **déplace** : le champ est au bout du fil
+    // d'Ariane, qui dit d'où l'on part.
+    const ou = await dossierDuChemin(projectId, folderId, aEcrire.dossiers);
+    if (ou === null) return rate("le dossier n'a pas pu être créé");
+
+    if (aEcrire.dossiers.length && (await nomPrisDans(projectId, ou, aEcrire.nom))) {
+      return rate("ce dossier porte déjà un fichier de ce nom");
+    }
+
     const fichier = new File([aEcrire.contenu], aEcrire.nom, { type: aEcrire.type });
     const stockage = await uploadDocumentToStorage(fichier, { projectId, scope: aEcrire.scope });
 
     const ligne = await updateDocumentRow(document.id, {
       ...aEcrire.patch,
+      folder_id: ou,
       storage_bucket: stockage.storage_bucket,
       storage_path: stockage.storage_path,
       file_size_bytes: fichier.size || 0

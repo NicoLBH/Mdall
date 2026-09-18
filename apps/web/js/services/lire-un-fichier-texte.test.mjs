@@ -255,3 +255,45 @@ test("un fichier de texte ouvre son lecteur avant d'être refusé", () => {
 test("le lecteur de texte est atteignable depuis le rendu de l'onglet", () => {
   assert.match(FICHIERS, /docsViewState\.texte\s*\?\s*renderLectureDuTexte\(\)/);
 });
+
+/* ── Ce qui se range à droite, et ce qui tient sur une ligne ───────────────
+ *
+ * Deux défauts de mise en page qu'aucun test d'exécution ne voit : une barre
+ * d'outils dont les deux groupes se serrent à gauche, et un nom à saisir qui
+ * tombe sous le fil d'Ariane. Rien ne lève, tout s'affiche — c'est seulement
+ * illisible.
+ */
+
+const STYLE = readFileSync(new URL("../../style.css", import.meta.url), "utf8");
+
+test("le groupe de droite d'une barre d'outils va à droite", () => {
+  // Un `margin` sur le groupe de gauche plutôt qu'un `justify-content` sur le
+  // parent : il ne fait rien quand il n'y a qu'un groupe, donc il n'a pas
+  // besoin d'être posé au cas par cas — c'est ce qui le rend mutualisable.
+  assert.match(STYLE,
+    /\.documents-report-table__actions-group--start\{\s*margin-right:auto;\s*\}/);
+});
+
+test("la règle vit sur la barre, et non sur chaque barre", () => {
+  // Elle était sur la seule barre du lecteur de PDF : les deux autres — le
+  // fichier écrit, le fichier lu — se serraient donc à gauche. Une règle écrite
+  // à deux endroits finit par ne s'appliquer qu'à l'un des deux (règle 4).
+  const barre = STYLE.slice(
+    STYLE.indexOf(".documents-report-table__actions{"),
+    STYLE.indexOf(".documents-report-table__actions-group{")
+  );
+  const variante = barre.slice(barre.indexOf(".documents-report-table__actions--pdf-preview{"));
+
+  assert.match(barre, /width:100%;/, "la barre ne prend pas la largeur de son en-tête");
+  assert.equal(/width:100%;/.test(variante), false, "la variante PDF la redit");
+  assert.equal(/justify-content/.test(variante), false, "la variante PDF pousse elle-même");
+});
+
+test("le fil qui porte un nom à saisir ne va pas à la ligne", () => {
+  // Le lire sur une seconde ligne ferait perdre de quel dossier il est le bout.
+  assert.match(STYLE, /\.documents-breadcrumb--nomme\{ flex-wrap:nowrap; \}/);
+
+  const ecran = readFileSync(new URL("../views/project-documents.js", import.meta.url), "utf8");
+  assert.match(ecran, /documents-breadcrumb documents-breadcrumb--nomme/,
+    "le fil ne porte pas la classe quand il porte le champ");
+});

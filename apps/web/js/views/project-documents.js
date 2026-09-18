@@ -2,7 +2,7 @@ import { store } from "../store.js";
 import { renderFichierDeCode } from "./ui/fichier-de-code.js";
 import { brancherLaSaisieDeCode, renderSaisieDeCode } from "./ui/saisie-de-code.js";
 import {
-  EXTENSION_PAR_DEFAUT, nomComplet, phraseDesRefus, pourquoiOnNePeutPasLEcrire
+  EXTENSION_PAR_DEFAUT, leCheminSaisi, nomComplet, phraseDesRefus, pourquoiOnNePeutPasLEcrire
 } from "../services/fichier-a-la-main.js";
 import {
   nomDeLaTranscription, phraseDeLaTranscription, transcriptionDuDocument
@@ -1513,7 +1513,7 @@ function renderDocumentsBreadcrumb() {
       class="gh-input documents-breadcrumb__nom"
       ${marque}
       value="${escapeHtml(String(valeur ?? ""))}"
-      placeholder="nom du fichier"
+      placeholder="notice.md — ou perso/notice.md"
       autocomplete="off"
       spellcheck="false"
     >
@@ -1534,7 +1534,7 @@ function renderDocumentsBreadcrumb() {
       .join(sep);
 
     return `
-      <div class="documents-breadcrumb">
+      <div class="documents-breadcrumb documents-breadcrumb--nomme">
         ${chemin}${sep}
         ${saisie(enSaisie.marque, enSaisie.valeur)}
       </div>
@@ -1890,6 +1890,29 @@ function renderReportPreviewView() {
  * un fichier vide et coller ensuite — refuser un contenu vide obligerait à taper
  * un caractère avant de pouvoir coller.
  */
+/**
+ * Où le fichier va atterrir, dit en clair.
+ *
+ * **Le nom seul ne suffit plus** depuis qu'un « / » crée un dossier : « le
+ * fichier s'appellera perso/notice.md » laisserait croire à un nom qui porte
+ * une barre. On nomme donc le fichier et le dossier séparément, et l'on dit que
+ * le second sera créé — c'est une écriture de plus que personne n'a demandée
+ * explicitement, elle s'annonce.
+ *
+ * Écrite une fois : la création et la modification posent la même question, et
+ * deux phrases finiraient par ne plus dire la même chose (règle 10).
+ */
+function phraseDeLaDestination(saisi = "") {
+  const { dossiers, nom } = leCheminSaisi(saisi);
+  const complet = escapeHtml(nomComplet(nom));
+  if (!complet) return "";
+
+  return dossiers.length
+    ? `Le fichier <b>${complet}</b> ira dans <b>${escapeHtml(dossiers.join(" / "))}</b>,
+       qui sera créé s&#39;il n&#39;existe pas.`
+    : `Le fichier s&#39;appellera <b>${complet}</b>.`;
+}
+
 function renderEcritureDeFichier() {
   const ecriture = docsViewState.ecriture ?? {};
   const refus = phraseDesRefus(pourquoiOnNePeutPasLEcrire(ecriture.nom ?? "", {
@@ -1918,7 +1941,7 @@ function renderEcritureDeFichier() {
                     <span class="documents-ecriture__dit">${
                       refus
                         ? escapeHtml(refus)
-                        : `Le fichier s'appellera <b>${escapeHtml(nom)}</b>. Collez ou tapez son contenu.`
+                        : `${phraseDeLaDestination(ecriture.nom ?? "")} Collez ou tapez son contenu.`
                     }</span>
                   </div>
                   <div class="documents-report-table__actions-group documents-report-table__actions-group--end">
@@ -1994,7 +2017,9 @@ function renderEcritureDeFichier() {
 function renderLectureDuTexte() {
   const ouvert = docsViewState.texte ?? {};
   const edition = ouvert.edition ?? null;
-  const nom = String(edition ? nomComplet(edition.nom ?? "") : (ouvert.nom || "fichier"));
+  const nom = String(edition
+    ? nomComplet(leCheminSaisi(edition.nom ?? "").nom)
+    : (ouvert.nom || "fichier"));
   const lectures = lecturesDuFichier(nom);
   const lecture = lectures.includes(ouvert.lecture) ? ouvert.lecture : lectures[0];
 
@@ -2028,9 +2053,7 @@ function renderLectureDuTexte() {
                   <div class="documents-report-table__actions-group documents-report-table__actions-group--start">
                     ${edition
                       ? `<span class="documents-ecriture__dit">${
-                        refus
-                          ? escapeHtml(refus)
-                          : `Le fichier s&#39;appellera <b>${escapeHtml(nom)}</b>.`
+                        refus ? escapeHtml(refus) : phraseDeLaDestination(edition.nom ?? "")
                       }</span>`
                       : `
                         ${lectures.length > 1
@@ -4014,7 +4037,9 @@ async function enregistrerLEdition(root) {
   docsViewState.activity = null;
   docsViewState.texte = {
     ...docsViewState.texte,
-    nom: nomComplet(edition.nom),
+    // Le nom, sans le chemin : celui-ci a servi à choisir le dossier, il ne
+    // fait pas partie du nom du fichier.
+    nom: nomComplet(leCheminSaisi(edition.nom).nom),
     contenu: edition.contenu,
     edition: null
   };
@@ -4797,7 +4822,7 @@ async function ecrireLeFichierAlaMain(root) {
   docsViewState.ecriture = null;
   setDocumentsActivity({
     tone: "success",
-    title: `« ${nomComplet(ecriture.nom)} » est dans le projet`,
+    title: `« ${nomComplet(leCheminSaisi(ecriture.nom).nom)} » est dans le projet`,
     message: "Il se relit comme un fichier de code, et se lira bientôt comme un compte rendu."
   });
 

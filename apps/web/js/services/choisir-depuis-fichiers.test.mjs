@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
-  ENTREE, PAS_CHOISISSABLE, cheminDuDossier, entreesDuDossier, phraseDuDossier,
-  pourquoiPasChoisissable
+  CE_QUE_CA_DEMANDE, ENTREE, LECTURE_DU_CHOIX, PAS_CHOISISSABLE, cheminDuDossier, commentCaSeLit,
+  entreesDuDossier, phraseDuDossier, pourquoiPasChoisissable
 } from "./choisir-depuis-fichiers.js";
 
 const range = (nom, surcharge = {}) => ({
@@ -18,11 +18,30 @@ test("un document de texte se choisit", () => {
   assert.equal(pourquoiPasChoisissable(range("releve.txt")), "");
 });
 
-test("un PDF ne se choisit pas, et l'on dit pourquoi", () => {
-  // Il se lit très bien à l'Atelier, mais en le déposant : l'extraction part du
-  // fichier lui-même. Le jour où on saura le relire d'ici, cette raison
-  // disparaîtra — et c'est pour cela qu'elle est nommée.
-  assert.equal(pourquoiPasChoisissable(range("cr.pdf")), PAS_CHOISISSABLE.PAS_DU_TEXTE);
+test("un PDF se choisit aussi", () => {
+  // Ses octets se redescendent du stockage : il est déjà dans le projet, et le
+  // redéposer en ferait un second exemplaire.
+  assert.equal(pourquoiPasChoisissable(range("cr.pdf")), "");
+});
+
+test("un format que Mdall ne sait pas lire ne se choisit pas", () => {
+  assert.equal(pourquoiPasChoisissable(range("plan.dwg")), PAS_CHOISISSABLE.PAS_LISIBLE);
+  assert.equal(pourquoiPasChoisissable(range("photo.png")), PAS_CHOISISSABLE.PAS_LISIBLE);
+});
+
+test("chaque document dit comment il se lira", () => {
+  // Un PDF passe par une extraction et une restitution, donc par un appel payé.
+  // Le découvrir après coup, sur une facture, n'est pas une façon de décider.
+  assert.equal(commentCaSeLit(range("notice.md")), LECTURE_DU_CHOIX.TEXTE);
+  assert.equal(commentCaSeLit(range("cr.pdf")), LECTURE_DU_CHOIX.PDF);
+  assert.equal(commentCaSeLit(range("plan.dwg")), "");
+});
+
+test("seul le PDF annonce ce qu'il demande", () => {
+  // Une phrase sur chaque ligne ferait du bruit là où il n'y a rien à dire, et
+  // l'œil cesserait de la voir quand elle compte.
+  assert.equal(CE_QUE_CA_DEMANDE[LECTURE_DU_CHOIX.TEXTE], "");
+  assert.match(CE_QUE_CA_DEMANDE[LECTURE_DU_CHOIX.PDF], /extrait puis restitué/);
 });
 
 test("un document sans contenu attaché ne se choisit pas", () => {
@@ -81,13 +100,32 @@ test("les fichiers sont dans l'ordre alphabétique", () => {
   assert.deepEqual(fichiers.map((entree) => entree.nom), ["annexe.md", "cr.pdf", "notice.md"]);
 });
 
-test("un PDF figure dans la liste, éteint", () => {
-  // Le masquer ferait paraître vide un dossier qui porte douze comptes rendus,
-  // et l'on chercherait une panne (règle 5).
-  const pdf = entreesDuDossier(DOSSIER).find((entree) => entree.nom === "cr.pdf");
-  assert.ok(pdf, "le PDF a disparu de la liste");
-  assert.equal(pdf.choisissable, false);
-  assert.equal(pdf.pourquoi, PAS_CHOISISSABLE.PAS_DU_TEXTE);
+test("un format illisible figure dans la liste, éteint", () => {
+  // Le masquer ferait paraître vide un dossier qui porte douze documents, et
+  // l'on chercherait une panne (règle 5).
+  const entrees = entreesDuDossier({ files: [range("plan.dwg"), range("notice.md")] });
+  const plan = entrees.find((entree) => entree.nom === "plan.dwg");
+
+  assert.ok(plan, "le plan a disparu de la liste");
+  assert.equal(plan.choisissable, false);
+  assert.equal(plan.pourquoi, PAS_CHOISISSABLE.PAS_LISIBLE);
+  // Et rien ne dit comment il se lirait : aucune façon ne convient.
+  assert.equal(plan.lecture, "");
+});
+
+test("un texte dont le dépôt n'a pas abouti reste du texte", () => {
+  // Il n'y a rien à lire, mais sa nature n'a pas changé : la blanchir aurait
+  // fait une ligne dont rien ne dépend — ce champ n'est jamais lu sur une
+  // entrée qu'on ne peut pas prendre.
+  const [notice] = entreesDuDossier({ files: [range("notice.md", { storage_path: "" })] });
+  assert.equal(notice.pourquoi, PAS_CHOISISSABLE.RIEN_A_LIRE);
+  assert.equal(notice.lecture, LECTURE_DU_CHOIX.TEXTE);
+});
+
+test("la liste porte la façon dont chaque document se lira", () => {
+  const entrees = entreesDuDossier(DOSSIER);
+  assert.equal(entrees.find((e) => e.nom === "notice.md").lecture, LECTURE_DU_CHOIX.TEXTE);
+  assert.equal(entrees.find((e) => e.nom === "cr.pdf").lecture, LECTURE_DU_CHOIX.PDF);
 });
 
 test("un dossier ne se choisit pas : il s'ouvre", () => {
@@ -122,20 +160,22 @@ test("à la racine, le chemin est la racine seule", () => {
 
 // ── Ce qu'on dit du dossier ────────────────────────────────────────────────
 
-test("un dossier vide et un dossier sans texte ne se disent pas pareil", () => {
+test("un dossier vide et un dossier illisible ne se disent pas pareil", () => {
   // L'un invite à déposer, l'autre à ouvrir un autre dossier.
   assert.match(phraseDuDossier([]), /vide/);
-  assert.match(
-    phraseDuDossier(entreesDuDossier({ files: [range("cr.pdf")] })),
-    /Aucun document de texte/
-  );
+  assert.match(phraseDuDossier(entreesDuDossier({ files: [range("plan.dwg")] })), /Rien à lire/);
 });
 
-test("un dossier qui ne porte que des PDF et des dossiers invite à descendre", () => {
+test("un dossier illisible qui porte des dossiers invite à descendre", () => {
   const dit = phraseDuDossier(entreesDuDossier({
-    folders: [{ id: "f1", name: "Incendie" }], files: [range("cr.pdf")]
+    folders: [{ id: "f1", name: "Incendie" }], files: [range("plan.dwg")]
   }));
   assert.match(dit, /Ouvrez un dossier/);
+});
+
+test("un dossier qui ne porte que des PDF offre quelque chose", () => {
+  // Il n'invite plus à aller voir ailleurs : ses comptes rendus se lisent.
+  assert.equal(phraseDuDossier(entreesDuDossier({ files: [range("cr.pdf")] })), "");
 });
 
 test("un dossier qui offre quelque chose ne se commente pas", () => {
