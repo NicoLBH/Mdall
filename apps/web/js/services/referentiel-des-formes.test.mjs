@@ -2,8 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  ceQuAilleursOnRegarde, formeDejaConnue, formesQuiAboutissentA,
-  leVersementDuneForme, monVersementDeCetteForme, phraseDeCeQuAilleursOnRegarde
+  ceQuAilleursOnEnTire, ceQuAilleursOnRegarde, formeDejaConnue, formesQuiAboutissentA,
+  formesQuiPartentDe, leVersementDuneForme, monVersementDeCetteForme,
+  phraseDeCeQuAilleursOnEnTire, phraseDeCeQuAilleursOnRegarde
 } from "./referentiel-des-formes.js";
 
 /** Une forme, telle que `forme-dun-raisonnement.js` la produit. */
@@ -272,4 +273,48 @@ test("sans lecture du référentiel, l'écran ne propose pas le geste", () => {
   );
   assert.match(signature, /if \(view\.formes === null \|\| view\.versements === null\)/,
     "le geste se propose sur un référentiel qu'on n'a pas lu");
+});
+
+/* ── Ce qu'on peut demander AVANT d'avoir tranché ────────────────────────── */
+
+test("en partant de ces valeurs, ailleurs, on a tranché ceci", () => {
+  // La seule question qu'on puisse poser au moment de fermer un sujet : on sait
+  // de quoi le débat part, on ne sait pas encore où il va.
+  const ailleurs = ceQuAilleursOnEnTire(["Altitude", "Nature du sol"], REFERENTIEL);
+
+  assert.deepEqual(ailleurs.noms, ["classe d'exposition", "profondeur hors gel"]);
+  assert.equal(phraseDeCeQuAilleursOnEnTire(ailleurs),
+    "En partant de ces valeurs, ailleurs, on a tranché classe d'exposition, profondeur hors gel.");
+});
+
+test("une seule valeur commune suffit à faire remonter une forme", () => {
+  // `f-2` part de la nature du sol et de la pente ; on n'a que la nature du sol.
+  // Exiger toutes les entrées ne ferait remonter que les raisonnements déjà
+  // identiques — c'est-à-dire ceux qui n'apprennent rien.
+  const ailleurs = ceQuAilleursOnEnTire(["Nature du sol"], REFERENTIEL);
+
+  assert.equal(ailleurs.noms.includes("profondeur hors gel"), true);
+});
+
+test("ce qui ne part pas de ces valeurs ne remonte pas", () => {
+  // `f-3` part de l'exposition et de la zone de neige : rien à voir.
+  const ailleurs = ceQuAilleursOnEnTire(["Altitude"], REFERENTIEL);
+
+  assert.equal(ailleurs.noms.includes("charge de neige"), false);
+});
+
+test("sans référentiel lu, on ne dit pas ce qu'on tire ailleurs", () => {
+  assert.equal(ceQuAilleursOnEnTire(["Altitude"], null), null);
+  assert.equal(formesQuiPartentDe(["Altitude"], null), null);
+  assert.equal(phraseDeCeQuAilleursOnEnTire(null), "");
+
+  // Lu et vide : ce n'est pas la même chose, et ça se dit autrement.
+  assert.deepEqual(ceQuAilleursOnEnTire(["Altitude"], []), { noms: [], formes: 0 });
+});
+
+test("sans valeur de départ, la question ne se pose pas", () => {
+  // Un sujet dont aucune arête n'est confirmée ne part de rien de connu.
+  // Répondre « ailleurs on tranche tout ceci » sur un départ vide ferait
+  // remonter le référentiel entier, ce qui ne renseigne sur rien.
+  assert.deepEqual(ceQuAilleursOnEnTire([], REFERENTIEL), { noms: [], formes: 0 });
 });

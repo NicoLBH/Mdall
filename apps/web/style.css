@@ -22768,6 +22768,30 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
   display:flex; flex-wrap:wrap; gap:6px; align-items:baseline; font-size:12px; color:var(--text);
 }
 .decision-sujet__deja-ligne i{ color:var(--muted); font-size:11px; }
+/* Ce qu'on a tranché ailleurs en partant des mêmes valeurs. Le même cadre que
+   le rappel du projet juste au-dessus : deux cadres différents feraient croire à
+   deux natures de choses, alors que ce sont deux relectures avant d'écrire. */
+.decision-sujet__ailleurs{
+  padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius);
+  display:flex; align-items:baseline; gap:8px; font-size:12px; color:var(--accent);
+}
+
+/* L'aveu que ces champs viennent du copilote. Il se lit avant eux, et il ne se
+   replie pas : un pré-remplissage qu'on ne voit pas se signe comme le sien. */
+.decision-sujet__brouillon{
+  padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius);
+  display:flex; align-items:baseline; gap:8px; font-size:12px; color:var(--muted);
+}
+.decision-sujet__brouillon b{ color:var(--text); }
+.decision-sujet__brouillon--ecarte{ color:var(--warning, var(--muted)); }
+
+/* La marque d'un champ que personne n'a encore relu. Elle tombe à la première
+   frappe : une ligne corrigée à la main ne vient plus du copilote. */
+.decision-sujet [data-decision-propose]{
+  border-left:2px solid var(--accent);
+  background:color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
 .decision-sujet__champ{ display:flex; flex-direction:column; gap:6px; }
 .decision-sujet__champ > span{ color:var(--text); font-size:12px; font-weight:600; }
 .decision-sujet__champ > span i{ color:var(--muted); font-weight:400; font-style:normal; }

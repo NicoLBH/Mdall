@@ -1549,6 +1549,169 @@ Et quatre états à l'écran, éprouvés par une sonde de navigateur qui monte l
 module : à verser, versée, signature retirée, référentiel non lu. Aucune fuite du
 projet dans le bloc, dans aucun des quatre.
 
+### La fenêtre de fermeture sait ce qu'on sait
+
+#### Le moment, et pourquoi c'est celui-là
+
+Le référentiel n'était consulté qu'en relisant un raisonnement **déjà versé** —
+c'est-à-dire trop tard. Le seul instant où il peut changer quelque chose est
+celui où l'on n'a pas encore écrit : la fenêtre de fermeture.
+
+#### On interroge par le départ, pas par la conclusion
+
+La conclusion est ce qu'on s'apprête à écrire : on ne l'a pas. Le départ, si —
+ce sont les valeurs que le sujet met en question, et les arêtes confirmées les
+donnent. D'où `formesQuiPartentDe`, le miroir de `formesQuiAboutissentA`, et la
+phrase qu'il porte :
+
+> **En partant de ces valeurs, ailleurs, on a tranché classe d'exposition,
+> profondeur hors gel.**
+
+**Une seule valeur commune suffit.** Exiger toutes les entrées ne ferait remonter
+que les raisonnements déjà identiques — c'est-à-dire ceux qui n'apprennent rien.
+
+**Un départ vide ne remonte rien.** Un sujet dont aucune arête n'est confirmée ne
+part de rien de connu ; répondre là ferait remonter le référentiel entier, ce qui
+ne renseigne sur rien.
+
+Et elle ne pré-remplit aucun champ. « Ailleurs on a tranché une classe
+d'exposition » dit où regarder, pas quoi écrire : peut-être la question ne se
+pose-t-elle pas ici.
+
+### Le copilote écrit le brouillon de la fermeture
+
+#### Pourquoi on pré-remplit ici, après avoir refusé de le faire ailleurs
+
+Le rappel « voici comment on avait raisonné la dernière fois » ne remplit
+délibérément rien : reprendre d'un clic **la décision de quelqu'un d'autre**
+ferait signer une décision que personne n'a reprise.
+
+Ce que le copilote écrit n'est pas cela. C'est **ce sujet-ci, relu** : son titre,
+sa description, ses commentaires. Rien n'y est repris d'ailleurs, rien n'y est
+décidé — c'est de la mise en forme de ce qui est déjà écrit. Et le recopier à la
+main à la fin d'une journée est le meilleur moyen de ne pas le faire du tout,
+donc de tout perdre.
+
+#### Deux portes humaines, et le copilote n'en franchit aucune
+
+Le brouillon tombe dans les champs d'une fenêtre qu'un humain relit et corrige.
+Ce qui en sort est une **proposition**, que quelqu'un signe. La règle 1 tient
+sans aménagement : le copilote remplit un brouillon devant quelqu'un.
+
+#### Ce qui rendrait cela dangereux, et ce qui l'empêche
+
+**Ne pas le voir.** Un champ pré-rempli sans marque se signe comme un champ qu'on
+a écrit soi-même. Chaque champ rempli par le copilote porte donc un liseré tant
+qu'on n'y a pas touché, et un bandeau le dit en toutes lettres. La marque tombe à
+la première frappe : une ligne corrigée à la main ne vient plus du copilote, et
+lui laisser l'aveu ferait relire deux fois ce qu'on a écrit soi-même.
+
+#### La garantie n'est pas dans la consigne
+
+« N'invente aucun chiffre » est un vœu. Le contrôle est dans
+`_shared/fermeture-du-modele.js`, testé en Node : **tout groupe de caractères
+portant un chiffre** doit se retrouver tel quel dans le fil. « 0,69 m », « R+2 »,
+« C25/30 » — inventés, ils trompent tous de la même façon.
+
+**Le découpage ne suit pas la ponctuation de nombre.** Couper sur la virgule
+rendrait « 0 » et « 69 » séparément, et « 0,69 » inventé passerait parce que
+« 69 » figure ailleurs. Seule la ponctuation de phrase coupe, et les points ou
+virgules de fin sont retirés — sans quoi « 0,69. » ne se retrouverait pas.
+
+**Le chiffre se cherche tel quel, jamais replié.** Replier les deux côtés ferait
+de « 0,69 » la chaîne « 069 », qu'une matière parlant du repère « 1069 »
+contient : un nombre jamais écrit passerait parce qu'un autre le contient.
+
+**Et le refus porte sur le brouillon entier.** Vider le seul champ fautif
+laisserait les autres en place — or on vient de découvrir que le modèle invente,
+et rien ne dit qu'il n'a inventé qu'une fois. Pire : un champ vide au milieu d'un
+brouillon rempli invite à le compléter de mémoire, c'est-à-dire avec ce que le
+modèle venait d'écrire.
+
+Quand il est écarté, **la fenêtre le dit** : « le copilote a écrit un chiffre qui
+ne figure nulle part dans ce sujet (0,80) ». Le taire ferait croire qu'il n'a
+rien trouvé, et l'on recommencerait.
+
+#### La conversation avec le copilote ne part jamais
+
+C'est l'interdit qui compte le plus. Un échange avec le copilote est **privé** :
+il ne se montre pas aux collaborateurs du projet, et il ne s'envoie pas davantage
+à un modèle pour qu'il en fasse un brouillon qu'ils liront.
+
+La règle n'est pas recopiée dans `brouillon-de-fermeture.js` : la matière passe
+par `textesDuPoint`, qui l'applique via `messageLisible` — lequel refuse aussi
+les messages effacés. Une seconde copie finirait par ne plus dire la même chose
+que la première (règle 10), et c'est la copie oubliée qui laisserait fuir. Une
+garde vérifie que le mot `ephemeral` **n'apparaît pas** dans ce fichier.
+
+#### L'instruction vit au serveur, et nulle part ailleurs
+
+Elle est dans `supabase/functions/brouillon-de-fermeture/`. Le navigateur envoie
+`{project_id, matiere}` et rien d'autre : ce qu'on demande au modèle ne se lit
+pas avec F12, et une instruction envoyée par le client ferait de cette fonction
+Edge un relais ouvert vers un modèle payant. Une garde cherche `instructions`,
+`system`, `prompt`, « RÈGLE ABSOLUE » dans le fichier du navigateur, et exige
+qu'ils n'y soient pas.
+
+#### Les trois lectures se font ensemble
+
+Le rappel du projet, le référentiel, le brouillon. En série, la fenêtre ferait
+attendre trois fois, en fin de journée. Et chacune se tait toute seule : aucune
+ne peut faire échouer les deux autres ni empêcher de fermer un sujet.
+
+#### Deux gardes existantes ont fait leur travail
+
+**Le compte des champs pré-remplis.** « Un seul champ est pré-rempli, et c'est le
+titre » protégeait le rappel contre toute reprise. Le compte ne dit plus rien
+depuis que le copilote remplit ; la garde a été **réécrite pour dire ce qu'elle
+protégeait** — `dejaVus` n'est lu qu'à un seul endroit du corps de la fenêtre, et
+cet endroit ne fabrique pas de champ.
+
+**Le nom d'une nature de consommation.** « Toute nature déposée par une fonction a
+son nom à l'écran » est tombée à la seconde où la fonction Edge a déposé
+`brouillon-de-fermeture`. Elle a un nom.
+
+#### Deux gardes neuves ne sont pas tombées, et ont été réparées
+
+**Le pli des deux côtés.** Le jeu d'essai ne contenait aucun cas où un nombre
+replié se retrouve dans un autre nombre. Ajouté — « 0,69 » contre « repère
+1069 » —, la garde tombe.
+
+**Un tableau au lieu d'un objet.** `[]` est un objet pour JavaScript : le modèle
+rendant `[{...}]` s'entendait dire qu'il avait oublié la question, au lieu qu'il
+n'avait pas répondu dans la forme attendue. Les deux motifs envoient chercher des
+choses différentes ; ils sont maintenant distincts.
+
+#### Les gardes, et ce qui tombe quand on les casse
+
+| ce qu'on casse | ce qui tombe |
+|---|---|
+| le contrôle des chiffres disparaît | six gardes |
+| seuls les champs « valeur » sont contrôlés | trois gardes |
+| on coupe aussi sur la virgule et le point | quatre gardes |
+| on vide le champ fautif au lieu de refuser | six gardes |
+| on replie les deux côtés avant de comparer | *le chiffre se cherche tel quel* |
+| une question vide passe | deux gardes |
+| le refus ne montre plus le chiffre en cause | *le refus montre le chiffre* |
+| un tableau devient un brouillon | *une réponse qui n'est pas un objet est dite illisible* |
+| la matière lit les messages bruts | quatre gardes, dont *la conversation ne part jamais* |
+| les étiquettes disparaissent | *le titre, la description et les commentaires partent, étiquetés* |
+| le client compose l'instruction | *aucune consigne ne vit dans le navigateur* |
+| le refus remonte sans sa raison | *le refus du contrôle remonte jusqu'à la fenêtre* |
+| un champ rempli ne porte plus sa marque | *un champ rempli par le copilote porte sa marque* |
+| la marque reste après correction | *la marque tombe dès qu'on touche au champ* |
+| les trois lectures se font en série | *la fenêtre reçoit les trois lectures* |
+| le référentiel se consulte par la conclusion | *il se consulte par le départ* |
+| une lecture ratée devient une phrase | la même |
+| la garde de confidentialité est recopiée | *elle n'est pas recopiée ici* |
+| on exige toutes les entrées communes | *une seule valeur commune suffit* |
+| un départ vide fait remonter tout le référentiel | *sans valeur de départ, la question ne se pose pas* |
+| on lit le départ au lieu de la conclusion | deux gardes |
+
+Et quatre états à l'écran, éprouvés par une sonde qui monte le vrai module : sans
+rien, avec le référentiel, avec le brouillon, avec un brouillon écarté. Dans le
+troisième, la correction d'un champ fait tomber **sa** marque et elle seule.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -1599,6 +1762,11 @@ c'est elle qu'il faudra desserrer, pas les moments où elle tourne.
 | les allers-retours, sans porte de suppression | `services/referentiel-des-formes-supabase.js` |
 | « Ailleurs, on part aussi de… », visible sur la ligne | `renderCeQuAilleursOnRegarde`, dans `views/project-memory.js` |
 | le geste de sortie, sous la forme entière | `renderLaSignatureDeLaForme` et `verserLaForme`, même fichier |
+| la question posée par le départ | `formesQuiPartentDe` et `ceQuAilleursOnEnTire`, dans `services/referentiel-des-formes.js` |
+| ce que le contrôle refuse d'un brouillon | `supabase/functions/_shared/fermeture-du-modele.js` |
+| l'instruction au modèle, au serveur et nulle part ailleurs | `supabase/functions/brouillon-de-fermeture/index.ts` |
+| le fil mis sous les yeux du copilote, sans sa conversation | `services/brouillon-de-fermeture.js` |
+| les trois lectures, et la fenêtre qui les reçoit | `views/project-subjects/project-subjects-actions.js`, `views/ui/decision-du-sujet.js` |
 
 ### Le faux document, et pourquoi il existait
 

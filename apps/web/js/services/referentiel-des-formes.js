@@ -95,6 +95,52 @@ export function formesQuiAboutissentA(conclusions = [], formes = null) {
 }
 
 /**
+ * Les formes du référentiel qui partent de l'un de ces noms.
+ *
+ * C'est la question posée à l'envers, et c'est la seule qu'on puisse poser
+ * **avant** d'avoir tranché : on sait de quoi le débat part — les valeurs qu'il
+ * met en question —, on ne sait pas encore où il va. « En partant de là,
+ * ailleurs, on a tranché ceci » arrive donc au bon moment, celui où l'on peut
+ * encore en tenir compte.
+ *
+ * @returns {object[]|null} `null` si le référentiel n'a pas été lu.
+ */
+export function formesQuiPartentDe(entrees = [], formes = null) {
+  if (!Array.isArray(formes)) return null;
+
+  const cherchees = nomsDe(entrees);
+  if (!cherchees.size) return [];
+
+  return formes.filter((ligne) =>
+    [...nomsDe(ligne?.entrees)].some((nom) => cherchees.has(nom)));
+}
+
+/**
+ * Ce qu'ailleurs on tire de ces valeurs-là.
+ *
+ * @returns {{noms: string[], formes: number}|null} `null` si le référentiel n'a
+ *   pas été lu ; `noms` vide quand il ne connaît rien qui en parte.
+ */
+export function ceQuAilleursOnEnTire(entrees = [], formes = null) {
+  const voisines = formesQuiPartentDe(entrees, formes);
+  if (voisines === null) return null;
+
+  const tires = new Set();
+  for (const voisine of voisines) {
+    for (const nom of nomsDe(voisine?.conclusions)) tires.add(nom);
+  }
+
+  return { noms: [...tires].sort(), formes: voisines.length };
+}
+
+/** Ce qu'on en dit — vide quand il n'y a rien à en dire. */
+export function phraseDeCeQuAilleursOnEnTire(ailleurs = null) {
+  if (!ailleurs?.noms?.length) return "";
+
+  return `En partant de ces valeurs, ailleurs, on a tranché ${ailleurs.noms.join(", ")}.`;
+}
+
+/**
  * Ce qu'ailleurs on regarde et que cette forme ne regarde pas.
  *
  * Les entrées des formes qui aboutissent au même endroit, moins les siennes.
