@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 
 import {
   LIAISON, MOT_A_LECRAN, intituleDuPoint, liensAPoser, phraseDesPointsOuverts,
-  areteEcartee, ceQueCePointAEcarte, pointsQuiPortentSur, portageAProposer, portagePropose,
-  portagesDeCesPoints, portagesSurLaValeur, surQuoiCePointPorte
+  areteEcartee, ceQueCePointAEcarte, ceQueCePointMetEnDebat, pointsQuiPortentSur,
+  portageAProposer, portagePropose, portagesDeCesPoints, portagesSurLaValeur, surQuoiCePointPorte
 } from "./point-porte-sur.js";
 
 /** Une affirmation de la mémoire, de la forme que la base rend. */
@@ -544,4 +544,50 @@ test("sans sujet, aucun refus ne se lit", () => {
     }),
     []
   );
+});
+
+
+/* ── Ce qu'un point met vraiment en débat ────────────────────────────────── */
+
+test("une arête proposée n'est pas ce que le débat met en question", () => {
+  // Elle n'a pas d'auteur : c'est un rapprochement de mots que personne n'a
+  // relu. L'écrire dans un raisonnement enregistrerait une machine à la place
+  // d'un humain (règle 1).
+  const liens = [
+    { id: "l-1", subject_id: "p-1", assertion_id: "v-sol", declared_by: "u-1", ecarte_le: null },
+    { id: "l-2", subject_id: "p-1", assertion_id: "v-neige", declared_by: null, ecarte_le: null }
+  ];
+
+  assert.deepEqual(ceQueCePointMetEnDebat("p-1", { liens, assertions: MEMOIRE }).map((v) => v.id),
+    ["v-sol"]);
+  // L'écran, lui, montre les deux : c'est pour cela qu'il les distingue.
+  assert.deepEqual(surQuoiCePointPorte("p-1", { liens, assertions: MEMOIRE }).map((v) => v.id),
+    ["v-sol", "v-neige"]);
+});
+
+test("un auteur fait de blancs ne confirme rien", () => {
+  const liens = [{ id: "l-1", subject_id: "p-1", assertion_id: "v-sol", declared_by: "   ", ecarte_le: null }];
+
+  assert.deepEqual(ceQueCePointMetEnDebat("p-1", { liens, assertions: MEMOIRE }), []);
+});
+
+test("une arête écartée ne revient pas par cette porte non plus", () => {
+  const liens = [{
+    id: "l-1", subject_id: "p-1", assertion_id: "v-sol",
+    declared_by: "u-1", ecarte_le: "2026-03-12T10:00:00Z"
+  }];
+
+  assert.deepEqual(ceQueCePointMetEnDebat("p-1", { liens, assertions: MEMOIRE }), []);
+});
+
+test("les arêtes d'un autre point ne remontent pas", () => {
+  const liens = [{ id: "l-1", subject_id: "p-autre", assertion_id: "v-sol", declared_by: "u-1", ecarte_le: null }];
+
+  assert.deepEqual(ceQueCePointMetEnDebat("p-1", { liens, assertions: MEMOIRE }), []);
+});
+
+test("sans point, rien ne se met en débat", () => {
+  const liens = [{ id: "l-1", subject_id: "p-1", assertion_id: "v-sol", declared_by: "u-1", ecarte_le: null }];
+
+  assert.deepEqual(ceQueCePointMetEnDebat("", { liens, assertions: MEMOIRE }), []);
 });

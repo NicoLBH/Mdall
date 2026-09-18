@@ -10,7 +10,8 @@ import { NATURE } from "./assertion-taxonomy.js";
 import { cleDAffirmation, itemsDeProposition } from "./atelier-proposition.js";
 import { decisionVersable } from "./decision-versement.js";
 import { affirmationsDecideesDans, referenceDuPoint } from "./point-a-tranche.js";
-import { surQuoiCePointPorte } from "./point-porte-sur.js";
+import { ceQueCePointMetEnDebat, surQuoiCePointPorte } from "./point-porte-sur.js";
+import { readFileSync } from "node:fs";
 
 const LE_POINT = { id: "p-hors-gel", title: "Quelle profondeur de fondation retenir ?" };
 
@@ -283,4 +284,73 @@ test("les lignes d'une décision qu'on vient de préparer se lisent aussi", () =
     sujet: "Quelle profondeur de fondation retenir ?",
     valeur: "0,80 m"
   }]);
+});
+
+
+/* ── Ce sur quoi le débat portait, enfin écrit ───────────────────────────── */
+
+test("un raisonnement porte les valeurs que le sujet mettait en débat", () => {
+  // C'étaient ses **entrées**, et elles manquaient : le raisonnement s'écrivait
+  // en disant « on ne sait pas sur quelles valeurs il portait » alors que les
+  // arêtes étaient là, confirmées une par une.
+  const memoire = [
+    valeur("v-alt", "Altitude", "742,30"),
+    valeur("v-sol", "Nature du sol", "moraine")
+  ];
+  const liens = [
+    { subject_id: LE_POINT.id, assertion_id: "v-alt", declared_by: "u-1" },
+    { subject_id: LE_POINT.id, assertion_id: "v-sol", declared_by: "u-1" }
+  ];
+
+  const [ligne] = raisonnementVersable({
+    point: LE_POINT,
+    question: LE_POINT.title,
+    porteSur: ceQueCePointMetEnDebat(LE_POINT.id, { liens, assertions: memoire }),
+    produites: decisionVersable({
+      sujet: LE_POINT.title, retenu: "0,80 m", question: LE_POINT.title, motif: "étude géotechnique"
+    })
+  });
+
+  assert.deepEqual(ligne.raisonnement.porteSur, [
+    { sujet: "Altitude", valeur: "742,30" },
+    { sujet: "Nature du sol", valeur: "moraine" }
+  ]);
+  assert.ok(!lacunesDuRaisonnement(ligne.raisonnement).includes(ETAPE.PORTE_SUR));
+});
+
+test("une arête que personne n'a confirmée n'entre pas dans le raisonnement", () => {
+  // Elle n'a pas d'auteur : l'écrire enregistrerait, pour toujours, un
+  // rapprochement de mots à la place d'un humain (règle 1). Le raisonnement dit
+  // alors qu'il ne sait pas — ce qui est exact.
+  const memoire = [valeur("v-alt", "Altitude", "742,30")];
+  const liens = [{ subject_id: LE_POINT.id, assertion_id: "v-alt", declared_by: null }];
+
+  const chemin = raisonnementDuPoint({
+    point: LE_POINT,
+    porteSur: ceQueCePointMetEnDebat(LE_POINT.id, { liens, assertions: memoire })
+  });
+
+  assert.deepEqual(chemin.porteSur, []);
+  assert.ok(lacunesDuRaisonnement(chemin).includes(ETAPE.PORTE_SUR));
+});
+
+test("la fermeture d'un sujet passe bien ces entrées au raisonnement", () => {
+  // Une garde sur le **texte** de la source, et c'est le seul cas où cela vaut :
+  // un champ qu'on oublie de passer ne se voit nulle part. Le raisonnement
+  // s'écrirait, la proposition partirait, et l'étape resterait creuse sans que
+  // rien ne tombe.
+  const source = readFileSync(
+    new URL("../views/project-subjects/project-subjects-actions.js", import.meta.url), "utf8"
+  );
+
+  const appel = source.slice(source.indexOf("raisonnementVersable({"));
+  assert.match(appel.slice(0, 400), /porteSur,/, "le raisonnement se verse sans ses entrées");
+
+  // Et elles viennent des arêtes **confirmées**, pas de tout ce que l'écran
+  // montre. Ce qu'on vérifie est donc l'absence de l'autre lecture : chercher la
+  // présence du bon nom laisserait passer un alias, et c'est justement ainsi
+  // qu'on se trompe de porte.
+  assert.match(source, /\bceQueCePointMetEnDebat\b/, "la fermeture ne lit pas les arêtes confirmées");
+  assert.doesNotMatch(source, /\bsurQuoiCePointPorte\b/,
+    "la fermeture lit ce que l'écran montre, propositions comprises");
 });

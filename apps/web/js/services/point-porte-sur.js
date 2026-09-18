@@ -346,6 +346,43 @@ export function surQuoiCePointPorte(pointId = "", { liens = [], assertions = [] 
 }
 
 /**
+ * Ce que ce point met **vraiment** en débat : les arêtes qu'un humain a
+ * confirmées.
+ *
+ * ## Pourquoi pas `surQuoiCePointPorte`
+ *
+ * Celui-là rend aussi les arêtes **proposées** — ce que la reconnaissance a
+ * rapproché et que personne n'a encore relu. C'est ce qu'il faut à l'écran, qui
+ * les montre justement pour qu'on réponde.
+ *
+ * Mais ce qui s'écrit dans la mémoire est autre chose. Un raisonnement qui
+ * dirait « ce débat portait sur ces quatre valeurs » en comptant deux
+ * rapprochements de mots que personne n'a validés enregistrerait, pour toujours,
+ * une machine à la place d'un humain (règle 1). Une arête proposée n'a pas
+ * d'auteur, et c'est exactement ce que `declared_by` dit.
+ *
+ * ## Le même mécanisme, un seul filtre de plus
+ *
+ * Les écartées sortent déjà, pour la même raison qu'ailleurs. Ce qui reste est
+ * ce que quelqu'un a déclaré, et c'est cela qu'un raisonnement a le droit de
+ * dire.
+ */
+export function ceQueCePointMetEnDebat(pointId = "", { liens = [], assertions = [] } = {}) {
+  const vise = texte(pointId);
+  if (!vise) return [];
+
+  const confirmees = new Set(
+    (Array.isArray(liens) ? liens : [])
+      .filter((lien) => texte(lien?.subject_id) === vise && texte(lien?.declared_by))
+      .map((lien) => texte(lien?.assertion_id))
+      .filter(Boolean)
+  );
+
+  return surQuoiCePointPorte(vise, { liens, assertions })
+    .filter((assertion) => confirmees.has(texte(assertion?.id)));
+}
+
+/**
  * Ce que ce point a **écarté** : le rapprochement a été regardé, et refusé.
  *
  * ## Pourquoi cela se montre, alors qu'écarter devait faire disparaître

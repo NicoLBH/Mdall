@@ -1065,6 +1065,37 @@ export function createProjectSubjectsActions(config) {
    * plus au moment de fermer ferait renoncer. Elle vaut partout jusqu'à ce
    * qu'on la restreigne dans la proposition.
    */
+  /**
+   * Les valeurs que ce sujet mettait en débat, lues au moment de fermer.
+   *
+   * Lues **ici** et pas gardées d'avant : entre l'ouverture de l'écran et la
+   * fermeture, quelqu'un a pu confirmer ou retirer une arête, et un raisonnement
+   * qui enregistrerait l'état d'il y a dix minutes serait faux pour toujours
+   * (règle 6).
+   *
+   * Muette en cas d'échec : le raisonnement dira qu'il ne sait pas — ce qui est
+   * exact — plutôt que de faire échouer une fermeture que l'utilisateur a
+   * demandée.
+   */
+  async function ceQueLeSujetMettaitEnDebat(projectId, subjectId, lire) {
+    try {
+      const [{ listerLesLiens }, { listProjectAssertions }] = await Promise.all([
+        import("../../services/point-porte-sur-supabase.js"),
+        import("../../services/project-memory-supabase.js")
+      ]);
+
+      const [liens, assertions] = await Promise.all([
+        listerLesLiens(projectId),
+        listProjectAssertions(projectId)
+      ]);
+      if (liens === null || assertions === null) return [];
+
+      return lire(subjectId, { liens, assertions });
+    } catch {
+      return [];
+    }
+  }
+
   async function proposerLaDecisionDuSujet(subjectId, tranche) {
     try {
       const [
@@ -1072,13 +1103,15 @@ export function createProjectSubjectsActions(config) {
         { preparerUneProposition },
         { resolveCurrentBackendProjectId },
         { referenceDuPoint },
-        { raisonnementVersable }
+        { raisonnementVersable },
+        { ceQueCePointMetEnDebat }
       ] = await Promise.all([
         import("../../services/decision-versement.js"),
         import("../../services/atelier-proposition.js"),
         import("../../services/project-supabase-sync.js"),
         import("../../services/point-a-tranche.js"),
-        import("../../services/raisonnement-du-point.js")
+        import("../../services/raisonnement-du-point.js"),
+        import("../../services/point-porte-sur.js")
       ]);
 
       const projectId = String(await resolveCurrentBackendProjectId() || "").trim();
@@ -1108,14 +1141,29 @@ export function createProjectSubjectsActions(config) {
       });
       if (!affirmations.length) return;
 
+      // **Sur quoi le débat portait.** Le savoir était déjà là — les arêtes
+      // amont, confirmées une par une — et le raisonnement s'écrivait quand
+      // même en disant « on ne sait pas ». C'est l'étape qui manquait pour
+      // qu'un raisonnement se relise, et plus tard se rapproche d'un autre :
+      // ce sont ses **entrées**.
+      //
+      // Confirmées seulement. Une arête proposée est un rapprochement de mots
+      // que personne n'a relu ; l'écrire ici enregistrerait une machine à la
+      // place d'un humain (règle 1).
+      //
+      // Une lecture ratée n'empêche pas de fermer : le raisonnement dira alors
+      // qu'il ne sait pas, ce qui est exact, plutôt que de retenir la décision.
+      const porteSur = await ceQueLeSujetMettaitEnDebat(projectId, subjectId, ceQueCePointMetEnDebat);
+
       // Et **par où l'on est passé**. Le raisonnement ne répète pas la valeur —
-      // il porte la question, ce qui a été examiné, ce qui a été tranché et ce
-      // que cela pose. Ce qu'on ne sait pas d'ici — sur quelles valeurs le
-      // débat portait, ce qu'il a regardé — reste vide et **se dit** : une
-      // étape creuse nommée vaut mieux qu'un graphe qui a l'air entier.
+      // il porte la question, sur quoi le débat portait, ce qui a été tranché et
+      // ce que cela pose. Ce qu'on ne sait toujours pas d'ici — ce qui a été
+      // regardé — reste vide et **se dit** : une étape creuse nommée vaut mieux
+      // qu'un graphe qui a l'air entier.
       const chemin = raisonnementVersable({
         point: { id: subjectId, title: sujet?.title },
         question: tranche.question,
+        porteSur,
         produites: affirmations,
         par,
         quand,
