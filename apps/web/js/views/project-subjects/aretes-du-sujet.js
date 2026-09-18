@@ -28,7 +28,8 @@ import { RECHERCHE, renderCeQuePorteLeSujet, renderLeChemin } from "../memoire/p
 import { histoireDeLaValeur } from "../../services/histoire-de-la-valeur.js";
 import { raisonnementDuPoint } from "../../services/raisonnement-du-point.js";
 import { ceQueCePointAEcarte, pointOuvert, surQuoiCePointPorte } from "../../services/point-porte-sur.js";
-import { ceQueLePointNomme, phraseDOuOnLaVu } from "../../services/ce-que-le-point-nomme.js";
+import { MOT_A_LECRAN } from "../../services/point-porte-sur.js";
+import { ceQueLePointNomme, phraseDeLaReconnaissance } from "../../services/ce-que-le-point-nomme.js";
 import { affirmationsDecideesDans } from "../../services/point-a-tranche.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -444,18 +445,18 @@ async function lireLesCommentaires(subjectId) {
 }
 
 /**
- * Pour chaque version reconnue, **où** son nom a été vu — par identifiant.
+ * Pour chaque version reconnue, **comment et où** — par identifiant.
  *
- * La phrase est faite ici et pas dans le rendu parce qu'elle sort du service qui
- * sait lire les traces : deux façons de l'écrire finiraient par ne pas dire la
- * même chose (règle 10).
+ * La phrase vient du service, pas d'ici : elle dépend de par où la mémoire s'est
+ * reconnue — son nom, ou sa valeur —, et deux endroits qui l'écriraient
+ * finiraient par ne pas dire la même chose (règle 10).
  */
 function ouChaqueNomAEteVu(point, messages, assertions) {
   const parVersion = new Map();
 
   const { noms } = ceQueLePointNomme({ point, messages, assertions });
   for (const entree of noms) {
-    const dit = phraseDOuOnLaVu(entree.vu);
+    const dit = phraseDeLaReconnaissance(entree, { mot: MOT_A_LECRAN.un });
     if (!dit) continue;
 
     for (const version of entree.versions) {
