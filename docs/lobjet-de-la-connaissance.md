@@ -949,6 +949,76 @@ reconstruire ce nom ailleurs en aurait fait deux, qui auraient fini par ne pas
 tomber sur le même repli (règle 10). Il vit maintenant dans
 `services/nom-de-qui-parle.js`, pur, et les deux écrans le lisent.
 
+### Étape 3 de la capitalisation — le raisonnement porte enfin ses entrées
+
+#### Ce qui s'écrivait déjà, et ce qu'il taisait
+
+Fermer un sujet « comme réalisé » verse **deux** choses depuis longtemps : la
+décision, et un `NATURE.RAISONNEMENT` qui porte les cinq étapes du chemin. Le
+mécanisme était complet ; deux étapes sur cinq partaient vides, et le code de
+fermeture l'avouait en commentaire :
+
+> Ce qu'on ne sait pas d'ici — sur quelles valeurs le débat portait, ce qu'il a
+> regardé — reste vide et **se dit**.
+
+Sauf qu'on le savait. Les arêtes amont étaient là, confirmées une par une par
+des humains, et le raisonnement s'enregistrait en disant « on ne sait pas sur
+quelles valeurs il portait ».
+
+```
+Avant                                   Après
+SUJET      Profondeur hors gel : …      SUJET      Profondeur hors gel : …
+PORTE SUR  on ne sait pas…              PORTE SUR  Altitude = 742,30
+EXAMINE    on ne sait pas…                         Nature du sol = moraine
+DÉCISION   … = 0,69 m                   EXAMINE    on ne sait pas…
+PRODUIT    … = 0,69 m                   DÉCISION   … = 0,69 m
+                                        PRODUIT    … = 0,69 m
+```
+
+Ce sont les **entrées** du raisonnement — ce que ma réponse de stratégie appelait
+« les noms » —, et c'est ce qui manquait pour qu'un raisonnement se relise, puis
+se rapproche d'un autre.
+
+#### Confirmées seulement
+
+`ceQueCePointMetEnDebat` ne rend que les arêtes qu'un humain a déclarées.
+`surQuoiCePointPorte` rend aussi les **proposées**, et c'est ce qu'il faut à
+l'écran — qui les montre justement pour qu'on réponde. Mais un raisonnement qui
+dirait « ce débat portait sur ces quatre valeurs » en comptant deux
+rapprochements de mots que personne n'a relus enregistrerait, pour toujours, une
+machine à la place d'un humain (règle 1).
+
+Une garde le tient dans les deux sens : ce qui est proposé n'entre pas, et la
+fermeture n'a pas le droit d'importer `surQuoiCePointPorte`.
+
+#### Lues au moment de fermer
+
+Et pas gardées d'avant : entre l'ouverture de l'écran et la fermeture, quelqu'un
+a pu confirmer ou retirer une arête, et un raisonnement qui enregistrerait l'état
+d'il y a dix minutes serait faux pour toujours (règle 6).
+
+Une lecture ratée ne retient pas la fermeture : le raisonnement dira alors qu'il
+ne sait pas — ce qui est exact — plutôt que de faire échouer un geste demandé.
+
+#### Ce qui reste creux, et pourquoi
+
+**`EXAMINE`** — ce qui a été regardé — reste vide et nommé. Ce seraient les
+documents joints à la discussion, et les lire demande de traverser les messages :
+un document joint à un échange `ephemeral` appartient à une conversation avec le
+copilote, et son seul **nom de fichier** ne doit pas reparaître devant les
+collaborateurs. C'est faisable, avec la même garde qu'à l'étape 1, et c'est la
+prochaine étape plutôt qu'un oubli.
+
+#### Une garde sur le texte de la source, et pourquoi c'est légitime ici
+
+Un champ qu'on oublie de passer ne se voit **nulle part** : le raisonnement
+s'écrit, la proposition part, l'étape reste creuse, et rien ne tombe. C'est
+exactement le défaut invisible pour lequel lire la source vaut quelque chose.
+
+La première version de cette garde cherchait la présence du bon nom — un alias à
+l'import la laissait passer. Elle vérifie maintenant l'**absence** de l'autre
+lecture, ce qui est la chose qu'on veut vraiment savoir.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -1198,6 +1268,13 @@ valeur que personne n'a mise en doute.
 | la porte se ferme pendant une écriture | elle reste armée | 2 tests |
 | la porte dit ce qu'elle ouvre | elle se tait | 2 tests |
 | le nom de qui signe se lit à un seul endroit | chaque écran le reconstruit | 4 tests |
+| une arête proposée n'entre pas dans le raisonnement | elle y entre | 4 tests |
+| un auteur fait de blancs ne confirme rien | il confirme | 1 test |
+| une écartée ne revient pas par cette porte | elle revient | 2 tests |
+| les arêtes d'un autre sujet ne remontent pas | elles remontent | 1 test |
+| le raisonnement porte ce que le sujet mettait en débat | l'étape reste creuse | 1 test |
+| la fermeture passe bien ces entrées | elle les oublie, en silence | 1 test |
+| la fermeture ne lit pas ce que l'écran montre | elle le lit sous un alias | 1 test |
 
 ---
 
@@ -1232,6 +1309,7 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | ce qui ne se rejoue pas, et pourquoi | `docs/rejouer-la-memoire.md` |
 | l'histoire d'une valeur, et ce qu'on n'en sait pas | `apps/web/js/services/histoire-de-la-valeur.js` |
 | ce qu'un sujet a écarté, et qui se relit | `apps/web/js/services/point-porte-sur.js` |
+| ce qu'un sujet met vraiment en débat | `apps/web/js/services/point-porte-sur.js` — `ceQueCePointMetEnDebat` |
 | ce qu'un sujet met en débat, et ce qui s'y oppose | `apps/web/js/services/ce-qui-se-debat.js` |
 | tout ce qu'un sujet nomme, et où | `apps/web/js/services/ce-que-le-point-nomme.js` |
 | tous les noms d'un texte | `apps/web/js/services/avis-liaison.js` — `nomsDunTexte` |
