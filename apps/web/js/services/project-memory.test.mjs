@@ -515,3 +515,27 @@ test("une affirmation dit ce qu'elle affirme, pas qu'elle est un document", asyn
     "Document au corpus : RICT.pdf"
   );
 });
+
+test("une ligne ne se dit pas deux fois", async () => {
+  // Un raisonnement n'affirme rien : sa seule valeur possible est sa question,
+  // et la règle générale écrivait « Quelle profondeur retenir ? : Quelle
+  // profondeur retenir ? ». Vu à l'écran dès que la fermeture d'un sujet a
+  // commencé à en verser.
+  const { titreDeLAffirmation } = await import("./project-memory.js");
+
+  const question = "Quelle profondeur de fondation retenir ?";
+  assert.equal(titreDeLAffirmation({ payload: { subject: question, value: question } }), question);
+
+  // Et la répétition ne tient pas à une espace près : ce qui compte est que la
+  // ligne n'apprenne rien en se redisant.
+  assert.equal(
+    titreDeLAffirmation({ payload: { subject: question, value: `  ${question}  ` } }),
+    question
+  );
+
+  // Ce qui diffère se dit toujours en entier.
+  assert.equal(
+    titreDeLAffirmation({ payload: { subject: "Altitude", value: "742,30" } }),
+    "Altitude : 742,30"
+  );
+});

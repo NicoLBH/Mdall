@@ -24177,6 +24177,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .memory-portage--propose .gh-btn{ margin-left:0; }
 .memory-portage--tranche{ color:var(--muted); }
 
+/* Ce qui, dans la mémoire, part des mêmes valeurs. La couleur de l'attention —
+   la même que le débat, parce que c'est la même invitation à regarder — et
+   jamais celle de l'alerte : ressembler n'est pas un défaut. */
+.memory-portage--ressemble{ color:var(--debat); }
+
 /* Le rang d'un engagement que la variante fait tomber.
 
    Ce qu'on veut voir d'abord n'est pas le plus récent : c'est ce qui fait le

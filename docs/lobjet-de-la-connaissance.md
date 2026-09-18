@@ -1019,6 +1019,77 @@ La première version de cette garde cherchait la présence du bon nom — un ali
 l'import la laissait passer. Elle vérifie maintenant l'**absence** de l'autre
 lecture, ce qui est la chose qu'on veut vraiment savoir.
 
+### Étape 4 de la capitalisation — voir les raisonnements, et ce qui leur ressemble
+
+#### Les voir
+
+Le filtre **Mémoire → Raisonnements** existait et se remplissait déjà — la
+fermeture d'un sujet en verse un depuis longtemps. Mais il rendait des lignes
+**ordinaires**, et deux choses n'allaient pas.
+
+Un raisonnement n'affirme rien : sa seule valeur possible est sa question. La
+règle générale du titre écrivait donc :
+
+```
+Quelle profondeur retenir ? : Quelle profondeur retenir ?
+```
+
+**Une ligne ne se dit pas deux fois** : quand la valeur répète le sujet, seul le
+sujet s'écrit. La correction est générale et pas particulière aux
+raisonnements — une ligne qui se redit n'apprend rien, quelle que soit sa nature.
+
+Et tout ce que la fermeture enregistre — sur quoi le débat portait, ce qu'il a
+tranché, ce qu'il a posé — restait dans la charge, invisible. La ligne dessine
+maintenant **le chemin des cinq étapes**, celui du détail d'un sujet et pas un
+second (règle 10).
+
+#### Ce qui leur ressemble
+
+`raisonnements-qui-se-ressemblent.js` compare des **noms**, jamais du texte ni
+des valeurs.
+
+Une question est du texte libre : deux personnes n'écriront jamais la même, et un
+modèle qui les rapprocherait produirait une ressemblance qu'on ne peut ni
+vérifier ni expliquer. Ce qui est stable, c'est ce qu'un raisonnement **met en
+jeu** : les noms de ses entrées, les noms de ce qu'il pose.
+
+```
+signature = { entrées: {altitude, nature du sol}, conclusions: {profondeur hors gel} }
+```
+
+« Altitude » compte ; « 742,30 » ne compte pas. Deux projets ne partagent jamais
+leurs valeurs, ils partagent leurs **formes de raisonnement** — et c'est très
+exactement la frontière de l'anonymat : la structure se réutilise, les valeurs ne
+sortent jamais du projet.
+
+#### Exact, ou rien
+
+| degré | ce que c'est |
+|---|---|
+| **le même** | mêmes entrées, mêmes conclusions |
+| **le même départ** | mêmes entrées, conclusions différentes |
+
+Pas de « partage deux noms sur trois » : un seuil est un chiffre qu'on ne sait
+pas justifier, et un rapprochement qu'on ne sait pas expliquer est un
+rapprochement qu'on cesse de lire. La même doctrine que la reconnaissance des
+noms, sur un autre objet.
+
+Trois refus tiennent :
+
+- **un raisonnement sans entrée ne se rapproche de rien** — deux signatures vides
+  se déclareraient identiques, ce qui est le faux rapprochement type (règle 5) ;
+- **une version remplacée ne se propose pas** — elle se relit dans l'histoire de
+  la ligne, pas comme un rapprochement à faire aujourd'hui ;
+- **la phrase dit le fait** — « part des mêmes valeurs » —, jamais « c'est le
+  même raisonnement » : ce qui est vérifié, ce sont les noms mis en jeu, pas
+  l'intention de celui qui l'a écrit.
+
+#### « L'ancien était…, il a été remplacé par… »
+
+Rien de nouveau : la chaîne `supersedes` marche pour un raisonnement comme pour
+une valeur, et la ligne porte déjà « remplacée le … ». C'était le but de tout ce
+qui précède, et cela ne demandait aucune mécanique de plus.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -1275,6 +1346,18 @@ valeur que personne n'a mise en doute.
 | le raisonnement porte ce que le sujet mettait en débat | l'étape reste creuse | 1 test |
 | la fermeture passe bien ces entrées | elle les oublie, en silence | 1 test |
 | la fermeture ne lit pas ce que l'écran montre | elle le lit sous un alias | 1 test |
+| la signature porte les noms, jamais les valeurs | elle emporte les valeurs | 5 tests |
+| les noms se replient comme la mémoire les replie | deux replis divergent | 2 tests |
+| mêmes entrées et mêmes conclusions : le même | les conclusions ne comptent plus | 2 tests |
+| une entrée de plus ou de moins ne rapproche pas | un seuil s'installe | 1 test |
+| un raisonnement sans entrée ne se rapproche de rien | il se rapproche de tout | 1 test |
+| un raisonnement ne se rapproche pas de lui-même | il se trouve lui-même | 4 tests |
+| une version remplacée ne se propose pas | elle se propose | 1 test |
+| le plus proche vient en premier | l'ordre se perd | 1 test |
+| la phrase dit le fait, pas l'identité | elle conclut à l'identité | 1 test |
+| une ligne ne se dit pas deux fois | la question se répète | 1 test |
+| la ligne dessine le chemin et ce qui lui ressemble | rien ne s'appelle, en silence | 3 tests |
+| le chemin est celui du détail d'un sujet | l'écran en redessine un second | 1 test |
 
 ---
 
@@ -1310,6 +1393,7 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | l'histoire d'une valeur, et ce qu'on n'en sait pas | `apps/web/js/services/histoire-de-la-valeur.js` |
 | ce qu'un sujet a écarté, et qui se relit | `apps/web/js/services/point-porte-sur.js` |
 | ce qu'un sujet met vraiment en débat | `apps/web/js/services/point-porte-sur.js` — `ceQueCePointMetEnDebat` |
+| ce qui rapproche deux raisonnements | `apps/web/js/services/raisonnements-qui-se-ressemblent.js` |
 | ce qu'un sujet met en débat, et ce qui s'y oppose | `apps/web/js/services/ce-qui-se-debat.js` |
 | tout ce qu'un sujet nomme, et où | `apps/web/js/services/ce-que-le-point-nomme.js` |
 | tous les noms d'un texte | `apps/web/js/services/avis-liaison.js` — `nomsDunTexte` |
