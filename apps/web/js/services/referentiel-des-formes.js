@@ -228,6 +228,106 @@ export function leVersementDuneForme(forme = null, {
 }
 
 /**
+ * Ce que le référentiel sait trancher, rangé par conclusion.
+ *
+ * ## C'est l'index, et c'est ce qu'on vient y chercher
+ *
+ * Une liste brute de formes est un fichier ; ce qu'on vient demander à un
+ * référentiel est **« que sait-on trancher, et avec quoi ? »**. La conclusion
+ * est donc l'entrée de l'index, et les départs viennent sous elle.
+ *
+ * ## Les départs se réunissent, ils ne se comptent pas deux fois
+ *
+ * Trois projets qui tranchent une profondeur hors gel en partant de l'altitude
+ * font **une** ligne « altitude », pas trois. Le compte des formes reste dit à
+ * part : « 4 manières » se lit, et ne se confond pas avec « 4 fois la même ».
+ *
+ * ## Ne pas savoir n'est pas savoir qu'il n'y a rien
+ *
+ * `null` quand le référentiel n'a pas été lu. Un index vide dirait « on ne sait
+ * rien trancher » d'une lecture ratée (règle 5).
+ *
+ * @returns {{conclusion: string, entrees: string[], formes: number}[]|null}
+ */
+export function ceQueLeReferentielSaitTrancher(formes = null) {
+  if (!Array.isArray(formes)) return null;
+
+  const index = new Map();
+  for (const ligne of formes) {
+    for (const conclusion of nomsDe(ligne?.conclusions)) {
+      const range = index.get(conclusion) ?? { conclusion, entrees: new Set(), formes: 0 };
+      for (const nom of nomsDe(ligne?.entrees)) range.entrees.add(nom);
+      range.formes += 1;
+      index.set(conclusion, range);
+    }
+  }
+
+  return [...index.values()]
+    .map(({ conclusion, entrees, formes: combien }) => ({
+      conclusion, entrees: [...entrees].sort(), formes: combien
+    }))
+    // Le plus su d'abord : c'est là que le référentiel a quelque chose à dire.
+    // À égalité, l'ordre du nom — sans quoi deux lectures de la même mémoire ne
+    // donneraient pas la même page (règle 10).
+    .sort((gauche, droite) =>
+      droite.formes - gauche.formes || gauche.conclusion.localeCompare(droite.conclusion));
+}
+
+/**
+ * Les formes dont un nom contient ce qu'on cherche.
+ *
+ * ## Elle cherche dans les noms, et seulement dans les noms
+ *
+ * Il n'y a rien d'autre : ni question, ni valeur, ni projet. Ce que la recherche
+ * ne peut pas trouver, c'est ce que le référentiel ne contient pas — et c'est
+ * exactement ce qu'on veut d'un référentiel anonyme.
+ *
+ * ## Sur un morceau de nom, et non sur le mot entier
+ *
+ * « profond » doit trouver « profondeur hors gel ». Ailleurs — la reconnaissance
+ * d'un nom dans un texte —, chercher sur un morceau serait faux : « argile » ne
+ * se reconnaît pas dans « argileux ». Ici c'est l'inverse : quelqu'un tape ce
+ * dont il se souvient, et exiger le mot exact d'un champ de recherche fait une
+ * recherche qui ne trouve rien.
+ *
+ * @returns {object[]|null} `null` si le référentiel n'a pas été lu.
+ */
+export function formesQuiMentionnent(quoi = "", formes = null) {
+  if (!Array.isArray(formes)) return null;
+
+  const cherche = cleDuSujet(texte(quoi));
+  if (!cherche) return formes;
+
+  return formes.filter((ligne) =>
+    [...nomsDe(ligne?.entrees), ...nomsDe(ligne?.conclusions), cleDuSujet(texte(ligne?.domaine))]
+      .some((nom) => nom.includes(cherche)));
+}
+
+/**
+ * Les domaines du référentiel, et combien de formes chacun porte.
+ *
+ * Les formes sans domaine ne se rangent pas sous un domaine inventé : elles
+ * n'en ont pas, et leur en donner un ferait croire que quelqu'un l'a dit.
+ *
+ * @returns {{domaine: string, formes: number}[]|null}
+ */
+export function domainesDuReferentiel(formes = null) {
+  if (!Array.isArray(formes)) return null;
+
+  const comptes = new Map();
+  for (const ligne of formes) {
+    const domaine = cleDuSujet(texte(ligne?.domaine));
+    if (!domaine) continue;
+    comptes.set(domaine, (comptes.get(domaine) ?? 0) + 1);
+  }
+
+  return [...comptes.entries()]
+    .map(([domaine, combien]) => ({ domaine, formes: combien }))
+    .sort((gauche, droite) =>
+      droite.formes - gauche.formes || gauche.domaine.localeCompare(droite.domaine));
+}
+
+/**
  * Le versement de cette forme par ce projet — ou `null`.
  *
  * Une signature retirée ne compte pas : elle a été retirée, et afficher

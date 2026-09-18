@@ -1712,6 +1712,154 @@ Et quatre états à l'écran, éprouvés par une sonde qui monte le vrai module 
 rien, avec le référentiel, avec le brouillon, avec un brouillon écarté. Dans le
 troisième, la correction d'un champ fait tomber **sa** marque et elle seule.
 
+### Le référentiel se visite
+
+#### Ce qui manquait
+
+On le **rencontrait** — une phrase sur une ligne de mémoire, une phrase dans la
+fenêtre de fermeture — et l'on ne pouvait pas le visiter. « Que sait-on
+trancher ? » n'avait aucun endroit où se poser.
+
+#### Un cinquième écran sans projet
+
+Sous « Tous les sujets », « Toutes les propositions », « Tous les projets » et le
+Copilote. C'est le seul des cinq qui ne rassemble pas ce qui existe dans chaque
+chantier : il montre **ce qu'ils ont en commun**.
+
+Son nom, sa route et son icône vivent dans `ecrans-transversaux.js`, comme les
+quatre autres — une entrée est dite au menu, à la route et au titre, et recopiée
+elle finit par différer de l'une des trois (règle 10).
+
+#### L'index, pas la liste
+
+Une liste brute de formes est un fichier. Ce qu'on vient demander à un
+référentiel, c'est **« que sait-on trancher, et avec quoi ? »** — donc la
+conclusion est l'entrée de l'index, et les départs viennent sous elle.
+
+**Les départs se réunissent, ils ne se comptent pas deux fois.** Trois projets
+qui tranchent une profondeur hors gel en partant de l'altitude font *une* ligne
+« altitude ». Le compte des formes reste dit à part : « 2 manières » se lit, et
+ne se confond pas avec « 2 fois la même ».
+
+**Le plus su d'abord, et à égalité l'ordre du nom.** Sans le second critère,
+l'ordre serait celui de la lecture, et deux lectures de la même table ne
+donneraient pas la même page.
+
+#### La recherche cherche sur un morceau de nom
+
+« profond » doit trouver « profondeur hors gel ». C'est l'inverse de la
+reconnaissance d'un nom dans un texte, où chercher sur un morceau serait faux —
+« argile » ne se reconnaît pas dans « argileux ». Ici quelqu'un tape ce dont il
+se souvient, et exiger le mot entier d'un champ de recherche fait une recherche
+qui ne trouve rien.
+
+Elle lit les départs, les conclusions et les domaines — c'est-à-dire tout ce que
+le référentiel contient. Ce qu'elle ne peut pas trouver, c'est ce qui n'y est
+pas.
+
+**Les domaines se comptent sur ce qui est montré**, pas sur le référentiel
+entier : laisser « charpente · 2 » au-dessus d'une liste qui n'en porte aucune
+ferait chercher une ligne qui n'y est pas.
+
+#### L'écran ne verse rien et ne retire rien
+
+Une forme sort d'un projet, devant le raisonnement dont elle est tirée, avec la
+signature de quelqu'un : c'est là que le geste a un sens. Un bouton posé ici
+ferait signer une forme qu'on ne regarde pas. Une garde vérifie que cet écran
+n'appelle ni `verserUneForme`, ni `retirerMaSignature`, ni
+`leVersementDuneForme`.
+
+Et rien n'en redescend dans une mémoire. Ce qu'on apprend ici, c'est où regarder.
+
+### La ressemblance se desserre, et se montre
+
+#### Ce qui était refusé, et pourquoi on le rouvre
+
+« Exact, ou rien » : mêmes entrées, ou rien. La raison était bonne — « partage
+deux noms sur trois » est un seuil, et un rapprochement qu'on ne sait pas
+expliquer est un rapprochement qu'on cesse de lire.
+
+Le prix l'était moins : sur de vrais intitulés, l'égalité stricte ne trouve
+presque jamais rien. Un outil qui ne rapproche jamais rien n'est pas prudent, il
+est muet.
+
+#### Ce qui le rend acceptable n'est pas le seuil
+
+C'est que **la phrase nomme les valeurs communes** :
+
+> Un autre raisonnement part de 2 des mêmes valeurs : altitude, nature du sol.
+
+Cela se vérifie d'un coup d'œil, et se **réfute** d'un coup d'œil. Un
+rapprochement qui dit sur quoi il repose ne couvre rien en silence : le lecteur
+voit ce que l'outil a vu, et décide. C'est la seule raison pour laquelle ce
+troisième degré est acceptable — sans les noms, « proche » est un verdict opaque.
+
+#### Deux, et pas un
+
+Un seul nom en commun est le cas ordinaire, pas le cas remarquable : presque tout
+raisonnement de fondation part de la nature du sol. Le proposer ferait remonter
+la moitié de la mémoire à chaque ligne, et l'on cesserait de lire la mention — y
+compris les fois où elle dit « le même ».
+
+Deux est le premier chiffre qui distingue. Il n'est pas juste dans l'absolu : il
+est **le plus petit qui ne noie pas le reste**, et c'est tout ce qu'on lui
+demande.
+
+#### L'exact passe toujours devant
+
+Le même, puis le même départ, puis les proches — les plus proches d'abord.
+Mélangés, le seul rapprochement qui compte se perdrait au milieu des autres.
+
+Et les valeurs communes **voyagent avec le rapprochement** : les recalculer à
+l'écran ferait deux lectures de la même chose, et l'une finirait par ne plus dire
+ce que l'autre dit (règle 4).
+
+#### Une garde qui disait le contraire, et ce qu'on en a fait
+
+« Une entrée de plus ou de moins ne se rapproche pas » énonçait la règle qu'on
+vient de changer. Elle n'a pas été supprimée : elle a été **réécrite en deux**,
+qui disent la nouvelle — l'une pour ce qui se rapproche désormais et le nomme,
+l'autre pour ce qui ne se rapproche toujours pas, avec la raison du seuil. Une
+garde qu'on efface parce qu'elle gêne est une garde qu'on n'avait pas comprise.
+
+#### Les gardes, et ce qui tombe quand on les casse
+
+| ce qu'on casse | ce qui tombe |
+|---|---|
+| le seuil tombe à une seule valeur | *une seule valeur en commun ne se rapproche pas* |
+| l'approché passe devant l'exact | deux gardes |
+| entre deux approchés, l'ordre est quelconque | *le plus proche d'abord* |
+| la phrase ne nomme plus les valeurs communes | *un rapprochement approché nomme ce sur quoi il repose* |
+| la phrase ne dit plus combien | la même |
+| les valeurs communes ne voyagent plus | *entre deux approchés, le plus proche d'abord* |
+| les valeurs communes ne sont plus triées | la même |
+| l'index range par le départ | deux gardes |
+| les départs se comptent en double | deux gardes |
+| l'index ne trie que sur le compte | *à égalité, l'ordre du nom* |
+| l'index range le moins su d'abord | *le plus su d'abord* |
+| un référentiel non lu a un index vide | *il n'a pas un index vide* |
+| la recherche exige le mot entier | *elle trouve sur un morceau de nom* |
+| la recherche ne lit pas le domaine | *elle lit aussi le domaine* |
+| une recherche vide cache tout | *une recherche vide ne cache rien* |
+| chercher sans lecture rend une liste vide | *cela ne rend pas une liste vide* |
+| un domaine absent devient un domaine | *l'absence de domaine ne s'invente pas* |
+| la page range par le départ | deux gardes |
+| la recherche ne restreint plus la page | deux gardes |
+| ce qu'on tape ne reste pas dans le champ | *ce qu'on a tapé reste dans le champ* |
+| la barre disparaît quand rien n'est trouvé | *la recherche reste à l'écran* |
+| non lu devient vide | *un référentiel non lu ne se dit pas vide* |
+| le compte se colle aux départs | *le compte se dit à part* |
+| les domaines inventent leur pastille | *ils réutilisent celle de la Mémoire* |
+| les domaines comptent tout le référentiel | *ils comptent sur ce qui est montré* |
+| l'identifiant d'une forme s'affiche | *rien du projet n'est à l'écran* |
+| l'écran du référentiel sait verser | *il ne verse rien et ne retire rien* |
+| le routeur oublie le référentiel | *chaque adresse du menu a son écran* |
+| l'entrée de menu disparaît | *le menu général ouvre le référentiel* |
+
+Et cinq états à l'écran, en 1200 px et 640 px, éprouvés par une sonde qui monte
+le vrai module de page : rempli, cherché, rien trouvé, non lu, vide. Aucune fuite
+du projet, aucun débordement.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -1767,6 +1915,10 @@ c'est elle qu'il faudra desserrer, pas les moments où elle tourne.
 | l'instruction au modèle, au serveur et nulle part ailleurs | `supabase/functions/brouillon-de-fermeture/index.ts` |
 | le fil mis sous les yeux du copilote, sans sa conversation | `services/brouillon-de-fermeture.js` |
 | les trois lectures, et la fenêtre qui les reçoit | `views/project-subjects/project-subjects-actions.js`, `views/ui/decision-du-sujet.js` |
+| l'index de ce qu'on sait trancher, et la recherche | `ceQueLeReferentielSaitTrancher`, `formesQuiMentionnent`, `domainesDuReferentiel` |
+| l'écran du référentiel, et sa page éprouvable | `views/le-referentiel.js`, `views/le-referentiel-page.js` |
+| la cinquième façon de tout regarder | `LE_REFERENTIEL`, dans `services/ecrans-transversaux.js` |
+| le troisième degré de ressemblance, et ce qui le rend lisible | `RESSEMBLANCE.PROCHE` et `valeursCommunes`, dans `services/raisonnements-qui-se-ressemblent.js` |
 
 ### Le faux document, et pourquoi il existait
 

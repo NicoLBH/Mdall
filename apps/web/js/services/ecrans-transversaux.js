@@ -61,6 +61,24 @@ export const LE_COPILOTE = {
   icone: "copilot"
 };
 
+/**
+ * Le référentiel des formes de raisonnement.
+ *
+ * **Il n'est d'aucun projet, et c'est sa raison d'être.** Les trois autres
+ * écrans rassemblent ce qui existe dans chaque chantier ; celui-ci montre ce
+ * qu'ils ont en commun — des formes de raisonnement, sans une seule valeur.
+ *
+ * On le rencontrait déjà, sur une ligne de mémoire et dans la fenêtre de
+ * fermeture, et l'on ne pouvait pas le **visiter** : « que sait-on trancher ? »
+ * n'avait nulle part où se poser.
+ */
+export const LE_REFERENTIEL = {
+  nom: "Le référentiel",
+  route: "#referentiel",
+  /** Celle qui dit déjà « ailleurs, on regarde ceci » sur une ligne de mémoire. */
+  icone: "north-star"
+};
+
 /** La liste des projets eux-mêmes. */
 export const TOUS_LES_PROJETS = {
   nom: "Tous les projets",

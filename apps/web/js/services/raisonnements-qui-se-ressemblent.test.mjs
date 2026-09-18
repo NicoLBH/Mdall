@@ -5,7 +5,8 @@ import { readFileSync } from "node:fs";
 
 import {
   RESSEMBLANCE, ceQuiLesRapproche, phraseDeLaRessemblance,
-  raisonnementsPartisDeCesValeurs, raisonnementsQuiSeRessemblent, signatureDunRaisonnement
+  raisonnementsPartisDeCesValeurs, raisonnementsQuiSeRessemblent, signatureDunRaisonnement,
+  valeursCommunes
 } from "./raisonnements-qui-se-ressemblent.js";
 
 /** Un raisonnement, tel que la fermeture d'un sujet le verse. */
@@ -63,14 +64,69 @@ test("mêmes entrées, autres conclusions : le même départ", () => {
   assert.equal(ceQuiLesRapproche(HORS_GEL, autre), RESSEMBLANCE.MEME_DEPART);
 });
 
-test("une entrée de plus ou de moins ne se rapproche pas", () => {
-  // Pas de seuil : un chiffre qu'on ne sait pas justifier produit un
-  // rapprochement qu'on ne sait pas expliquer, et qu'on cesse de lire.
+test("une entrée de plus se rapproche, et dit de combien", () => {
+  // Le rapprochement approché a longtemps été refusé — « partage deux noms sur
+  // trois » est un seuil, et un verdict qu'on ne sait pas expliquer est un
+  // verdict qu'on cesse de lire.
+  //
+  // Ce qui le rend acceptable n'est pas le seuil : c'est que la phrase **nomme
+  // les valeurs communes**. Le lecteur voit ce que l'outil a vu, et réfute d'un
+  // coup d'œil.
   const enPlus = chemin("q", [["Altitude"], ["Nature du sol"], ["Localisation"]], [["Profondeur hors gel"]]);
-  const enMoins = chemin("q", [["Altitude"]], [["Profondeur hors gel"]]);
 
-  assert.equal(ceQuiLesRapproche(HORS_GEL, enPlus), "");
+  assert.equal(ceQuiLesRapproche(HORS_GEL, enPlus), RESSEMBLANCE.PROCHE);
+  assert.deepEqual(valeursCommunes(HORS_GEL, enPlus), ["altitude", "nature du sol"]);
+});
+
+test("une seule valeur en commun ne se rapproche pas", () => {
+  // C'est le cas ordinaire, pas le cas remarquable : presque tout raisonnement
+  // de fondation part de la nature du sol. Le proposer ferait remonter la moitié
+  // de la mémoire à chaque ligne — et l'on cesserait de lire la mention, y
+  // compris les fois où elle dit « le même ».
+  const enMoins = chemin("q", [["Altitude"]], [["Profondeur hors gel"]]);
+  const uneAutre = chemin("q", [["Altitude"], ["Zone de neige"]], [["Charge de neige"]]);
+
   assert.equal(ceQuiLesRapproche(HORS_GEL, enMoins), "");
+  assert.equal(ceQuiLesRapproche(HORS_GEL, uneAutre), "");
+});
+
+test("un rapprochement approché nomme ce sur quoi il repose", () => {
+  // Sans les noms, « proche » est un verdict qu'on ne peut ni vérifier ni
+  // réfuter — et c'est exactement ce qui faisait refuser ce degré.
+  const dit = phraseDeLaRessemblance(RESSEMBLANCE.PROCHE, 1, ["altitude", "nature du sol"]);
+
+  assert.match(dit, /part de 2 des mêmes valeurs/);
+  assert.match(dit, /altitude, nature du sol/);
+});
+
+test("l'exact passe devant l'approché", () => {
+  // Mélangés, le seul rapprochement qui compte se perdrait au milieu des autres.
+  const memeDepart = ligne("r-2", chemin("Quelle classe d'exposition ?",
+    [["Altitude"], ["Nature du sol"]], [["Classe d'exposition"]]));
+  const proche = ligne("r-3", chemin("q",
+    [["Altitude"], ["Nature du sol"], ["Localisation"]], [["Profondeur hors gel"]]));
+  const ici = ligne("r-1", HORS_GEL);
+
+  const trouves = raisonnementsQuiSeRessemblent(ici, [proche, memeDepart, ici]);
+
+  assert.deepEqual(trouves.map((t) => t.assertion.id), ["r-2", "r-3"]);
+  assert.deepEqual(trouves.map((t) => t.ressemblance),
+    [RESSEMBLANCE.MEME_DEPART, RESSEMBLANCE.PROCHE]);
+});
+
+test("entre deux approchés, le plus proche d'abord", () => {
+  // Trois valeurs en commun valent mieux que deux, et la liste le dit.
+  const deux = ligne("r-2", chemin("q",
+    [["Altitude"], ["Nature du sol"], ["Localisation"], ["Zone de neige"]], [["Autre chose"]]));
+  const trois = ligne("r-3", chemin("q",
+    [["Altitude"], ["Nature du sol"], ["Exposition"], ["Localisation"]], [["Autre chose"]]));
+  const ici = ligne("r-1", chemin("q",
+    [["Altitude"], ["Nature du sol"], ["Exposition"]], [["Profondeur hors gel"]]));
+
+  const trouves = raisonnementsQuiSeRessemblent(ici, [deux, trois]);
+
+  assert.deepEqual(trouves.map((t) => t.assertion.id), ["r-3", "r-2"]);
+  assert.deepEqual(trouves[0].communs, ["altitude", "exposition", "nature du sol"]);
 });
 
 test("un raisonnement sans entrée ne se rapproche de rien", () => {

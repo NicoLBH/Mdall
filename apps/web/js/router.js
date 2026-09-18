@@ -6,9 +6,10 @@ import { renderMonCarnet } from "./views/mon-carnet.js";
 import { renderTousLesSujets } from "./views/tous-les-sujets.js";
 import { renderToutesLesPropositions } from "./views/toutes-les-propositions.js";
 import { renderCopiloteTransversal } from "./views/copilote-transversal.js";
+import { renderLeReferentiel } from "./views/le-referentiel.js";
 import { ROUTE_DU_CARNET, adresseDunAncienLien } from "./services/mon-carnet.js";
 import {
-  LE_COPILOTE, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
+  LE_COPILOTE, LE_REFERENTIEL, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
 } from "./services/ecrans-transversaux.js";
 import { unmountProjectShellChrome } from "./views/project-shell-chrome.js";
 import { store } from "./store.js";
@@ -88,6 +89,20 @@ function route() {
     store.currentProjectId = null;
     unmountProjectShellChrome();
     renderCopiloteTransversal(root);
+    return;
+  }
+
+  /**
+   * **Le référentiel des formes.**
+   *
+   * Même marque que les autres : `currentProjectId` nul. Ici elle dit quelque
+   * chose de plus fort qu'ailleurs — il n'y a pas de projet à mettre, parce que
+   * le référentiel n'appartient à aucun.
+   */
+  if (parts[0] === cheminDe(LE_REFERENTIEL)) {
+    store.currentProjectId = null;
+    unmountProjectShellChrome();
+    renderLeReferentiel(root);
     return;
   }
 

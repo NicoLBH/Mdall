@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  ceQuAilleursOnEnTire, ceQuAilleursOnRegarde, formeDejaConnue, formesQuiAboutissentA,
+  ceQuAilleursOnEnTire, ceQuAilleursOnRegarde, ceQueLeReferentielSaitTrancher,
+  domainesDuReferentiel, formeDejaConnue, formesQuiAboutissentA, formesQuiMentionnent,
   formesQuiPartentDe, leVersementDuneForme, monVersementDeCetteForme,
   phraseDeCeQuAilleursOnEnTire, phraseDeCeQuAilleursOnRegarde
 } from "./referentiel-des-formes.js";
@@ -317,4 +318,87 @@ test("sans valeur de départ, la question ne se pose pas", () => {
   // Répondre « ailleurs on tranche tout ceci » sur un départ vide ferait
   // remonter le référentiel entier, ce qui ne renseigne sur rien.
   assert.deepEqual(ceQuAilleursOnEnTire([], REFERENTIEL), { noms: [], formes: 0 });
+});
+
+/* ── Parcourir le référentiel ────────────────────────────────────────────── */
+
+test("l'index range par ce qu'on sait trancher", () => {
+  // Une liste brute de formes est un fichier. Ce qu'on vient demander à un
+  // référentiel, c'est « que sait-on trancher, et avec quoi ? ».
+  const index = ceQueLeReferentielSaitTrancher(REFERENTIEL);
+
+  assert.deepEqual(index.map((r) => r.conclusion),
+    ["profondeur hors gel", "charge de neige", "classe d'exposition"]);
+  assert.equal(index[0].formes, 2);
+});
+
+test("les départs se réunissent, ils ne se comptent pas deux fois", () => {
+  // Trois projets qui tranchent la même chose en partant de l'altitude font une
+  // ligne « altitude », pas trois. Le compte des formes reste dit à part.
+  const index = ceQueLeReferentielSaitTrancher(REFERENTIEL);
+  const horsGel = index.find((r) => r.conclusion === "profondeur hors gel");
+
+  assert.deepEqual(horsGel.entrees, ["altitude", "nature du sol", "pente du terrain"]);
+  assert.equal(horsGel.formes, 2);
+});
+
+test("le plus su d'abord, et à égalité l'ordre du nom", () => {
+  // Sans le second critère, l'ordre serait celui de la lecture : deux lectures
+  // de la même mémoire, rangées autrement, ne donneraient pas la même page
+  // (règle 10).
+  //
+  // Le jeu d'essai est fait pour le voir : « zone de sismicité » est lu en
+  // premier et doit s'afficher en dernier. Un référentiel dont l'ordre de
+  // lecture est déjà l'ordre alphabétique ne prouverait rien.
+  const melange = [
+    auReferentiel("f-a", ["zone"], ["zone de sismicité"]),
+    auReferentiel("f-b", ["portée"], ["flèche admissible"]),
+    auReferentiel("f-c", ["altitude"], ["charge de neige"]),
+    auReferentiel("f-d", ["altitude", "sol"], ["profondeur hors gel"]),
+    auReferentiel("f-e", ["nature du sol"], ["profondeur hors gel"])
+  ];
+
+  assert.deepEqual(ceQueLeReferentielSaitTrancher(melange).map((r) => r.conclusion),
+    // Repliés, comme la mémoire les replie : les accents partent, et c'est bien
+    // sur le nom replié que le tri se fait.
+    ["profondeur hors gel", "charge de neige", "fleche admissible", "zone de sismicite"]);
+});
+
+test("un référentiel non lu n'a pas un index vide", () => {
+  // Un index vide dirait « on ne sait rien trancher » d'une lecture ratée.
+  assert.equal(ceQueLeReferentielSaitTrancher(null), null);
+  assert.deepEqual(ceQueLeReferentielSaitTrancher([]), []);
+});
+
+test("la recherche trouve sur un morceau de nom", () => {
+  // Quelqu'un tape ce dont il se souvient. Exiger le mot entier d'un champ de
+  // recherche fait une recherche qui ne trouve rien — c'est l'inverse de la
+  // reconnaissance d'un nom dans un texte, où « argile » ne doit pas se
+  // reconnaître dans « argileux ».
+  assert.deepEqual(formesQuiMentionnent("profond", REFERENTIEL).map((f) => f.id),
+    ["f-1", "f-2"]);
+  assert.deepEqual(formesQuiMentionnent("neige", REFERENTIEL).map((f) => f.id), ["f-3"]);
+});
+
+test("la recherche lit aussi le domaine", () => {
+  assert.deepEqual(formesQuiMentionnent("charpente", REFERENTIEL).map((f) => f.id), ["f-3"]);
+});
+
+test("une recherche vide ne cache rien", () => {
+  assert.equal(formesQuiMentionnent("", REFERENTIEL).length, REFERENTIEL.length);
+  assert.equal(formesQuiMentionnent("  ", REFERENTIEL).length, REFERENTIEL.length);
+});
+
+test("chercher dans un référentiel non lu ne rend pas une liste vide", () => {
+  assert.equal(formesQuiMentionnent("profond", null), null);
+});
+
+test("les domaines se comptent, et l'absence de domaine ne s'invente pas", () => {
+  // Ranger les formes sans domaine sous un domaine inventé ferait croire que
+  // quelqu'un l'a dit.
+  const sansDomaine = auReferentiel("f-9", ["portée"], ["flèche admissible"], "");
+  const domaines = domainesDuReferentiel([...REFERENTIEL, sansDomaine]);
+
+  assert.deepEqual(domaines, [{ domaine: "gros-oeuvre", formes: 3 }, { domaine: "charpente", formes: 1 }]);
+  assert.equal(domainesDuReferentiel(null), null);
 });

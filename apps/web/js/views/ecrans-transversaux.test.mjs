@@ -15,6 +15,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 
 import { renderGlobalNav } from "./global-nav.js";
 import {
@@ -24,7 +25,7 @@ import {
   auteursParCompte, comptesDesPersonnes, renderPageDeToutesLesPropositions
 } from "./toutes-les-propositions-page.js";
 import {
-  LE_COPILOTE, TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
+  LE_COPILOTE, LE_REFERENTIEL, TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
 } from "../services/ecrans-transversaux.js";
 import { ROUTE_DU_CARNET } from "../services/mon-carnet.js";
 import { CLES_DE_LA_CHARGE } from "../services/charge-des-sujets.js";
@@ -76,7 +77,7 @@ test("le menu nomme les trois écrans transversaux", () => {
 test("chaque entrée du menu porte son adresse", () => {
   const html = menuRendu();
 
-  for (const ecran of [TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS]) {
+  for (const ecran of [TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, LE_REFERENTIEL]) {
     assert.match(html, new RegExp(`href="${ecran.route}"`), `${ecran.nom} mène à ${ecran.route}`);
   }
 });
@@ -90,7 +91,20 @@ test("le chemin d'un écran se lit sans son dièse", () => {
   assert.equal(cheminDe(TOUS_LES_SUJETS), "sujets");
   assert.equal(cheminDe(TOUTES_LES_PROPOSITIONS), "propositions");
   assert.equal(cheminDe(TOUS_LES_PROJETS), "projects");
+  assert.equal(cheminDe(LE_REFERENTIEL), "referentiel");
   assert.equal(cheminDe(), "");
+});
+
+/**
+ * **Le référentiel est la cinquième façon de tout regarder**, et la seule qui ne
+ * rassemble pas ce qui existe dans chaque chantier : elle montre ce qu'ils ont
+ * en commun. On le rencontrait sans pouvoir le visiter.
+ */
+test("le menu général ouvre le référentiel", () => {
+  const html = menuRendu();
+
+  assert.match(html, new RegExp(`href="${LE_REFERENTIEL.route}"`));
+  assert.match(html, new RegExp(LE_REFERENTIEL.nom));
 });
 
 /* ── Tous les sujets ─────────────────────────────────────────────────────── */
@@ -331,6 +345,24 @@ test("chaque adresse du menu a son écran dans le routeur", async () => {
   // resté dans le magasin y enverrait la mémoire du dernier ouvert.
   assert.match(source, /cheminDe\(LE_COPILOTE\)[\s\S]{0,200}renderCopiloteTransversal\(root\)/);
   assert.match(source, /cheminDe\(LE_COPILOTE\)[\s\S]{0,120}store\.currentProjectId = null/);
+
+  // Le référentiel n'appartient à aucun projet — la marque y dit quelque chose
+  // de plus fort qu'ailleurs : il n'y a pas de projet à mettre.
+  assert.match(source, /cheminDe\(LE_REFERENTIEL\)[\s\S]{0,200}renderLeReferentiel\(root\)/);
+  assert.match(source, /cheminDe\(LE_REFERENTIEL\)[\s\S]{0,120}store\.currentProjectId = null/);
+});
+
+test("l'écran du référentiel ne verse rien et ne retire rien", () => {
+  // Une forme sort d'un projet, devant le raisonnement dont elle est tirée, avec
+  // la signature de quelqu'un. Un bouton posé ici ferait signer une forme qu'on
+  // ne regarde pas — et rien n'en redescend dans une mémoire.
+  const ecran = readFileSync(new URL("./le-referentiel.js", import.meta.url), "utf8");
+
+  for (const interdit of ["verserUneForme", "retirerMaSignature", "leVersementDuneForme"]) {
+    assert.equal(ecran.includes(interdit), false, `l'écran du référentiel appelle « ${interdit} »`);
+  }
+  // Il lit, et c'est tout ce qu'il fait.
+  assert.match(ecran, /import \{ listerLesFormes \}/);
 });
 
 /**
