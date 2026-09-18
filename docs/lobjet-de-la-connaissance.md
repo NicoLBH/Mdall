@@ -1398,6 +1398,157 @@ et la sonde ne le voit pas ; c'est la garde de service qui le voit. Ajouter une
 ligne à l'écran ne change rien à la forme, et c'est la sonde qui le voit. Aucune
 des deux ne remplace l'autre.
 
+### Le référentiel des formes : la sortie, et le retour
+
+#### La question qui justifie tout
+
+La forme existait et se montrait. Rien ne la faisait voyager, donc rien n'en
+tirait encore le seul bénéfice qui compte :
+
+> *J'ai à trancher une profondeur hors gel. Ailleurs, d'où part-on ?*
+
+La réponse — « de l'altitude et de la nature du sol » — vaut pour quelqu'un qui
+n'a jamais ouvert cet autre projet, parce qu'elle ne contient rien de cet autre
+projet.
+
+#### Deux tables, et c'est la séparation qui fait l'anonymat
+
+`reasoning_forms` **n'a aucune colonne pour dire d'où elle vient.** Pas de
+`project_id`, pas de `signed_by`, pas de `created_by`. Ce n'est pas une politique
+qu'on pourrait desserrer un jour : c'est la forme de la table. Lire le
+référentiel entier ne dit pas quel projet a versé quoi, parce que l'information
+n'y est pas.
+
+`reasoning_form_contributions` porte ce lien — projet, raisonnement, signataire —
+et **ne se lit que par les membres du projet**, avec la politique des faits de
+contexte, mot pour mot.
+
+Une seule table qui aurait porté les deux aurait obligé à choisir : ouverte, et
+le référentiel dit qui ; fermée, et il ne sert plus à personne.
+
+#### L'empreinte est calculée par le serveur, jamais reçue
+
+Le client envoie des noms ; un déclencheur les replie, les ordonne, les
+dédoublonne et compose la chaîne. `leVersementDuneForme` **n'envoie pas
+d'empreinte du tout**, et une garde le vérifie.
+
+Trois raisons :
+
+1. **Rien ne peut s'y cacher.** Un champ libre à côté des noms serait un endroit
+   où glisser autre chose. Celui-ci est écrasé.
+2. **Deux clients ne peuvent pas créer deux fois la même forme.** « Nature du sol
+   + Altitude » et « altitude + nature du sol » se replient sur la même chaîne, et
+   l'unicité les confond (règle 4).
+3. Le repli est celui de `memoire-identifiants.js`. Le client envoie donc déjà
+   des noms repliés, et le déclencheur ne fait rien — il est là pour ce qui n'est
+   pas ce client-là.
+
+#### Ce qui est versé ne se reprend pas, et on le dit avant
+
+Une forme versée a pu être lue par un autre projet la seconde d'après. La
+retirer ne la retirerait de la tête de personne. **Il n'y a donc pas de chemin de
+suppression** — ni politique `delete` en base, ni fonction dans le transport, et
+une garde vérifie qu'il n'en apparaît pas.
+
+Ce qui se retire est la **signature** : « ce projet-ci l'a versée » est une
+information privée, et elle s'efface. `retire_le` la marque plutôt que de
+supprimer la ligne — un constat ne devient pas faux (règle 6), et l'unicité doit
+continuer d'empêcher un second versement.
+
+L'écran ne les confond pas : *« La forme, elle, reste : d'autres projets ont pu
+la lire. »* Et la porte à sens unique se dit **avant** le clic, pas après.
+
+#### Le geste est sous la forme entière, et nulle part ailleurs
+
+Un bouton « verser » posé en haut d'une liste ferait signer sans regarder. Sa
+place **est** la garantie : la signature se donne devant ce qu'on signe, déplié,
+en entier. Une garde compte les endroits où le geste apparaît, et il y en a un.
+
+Et la forme se **recalcule** au clic, à partir de l'affirmation. L'écrire dans
+l'attribut du bouton en ferait une seconde vérité (règle 4) : elle vieillirait à
+côté de celle qu'on a montrée, et l'on signerait pour ce qui n'est plus affiché.
+
+#### « Ailleurs, on part aussi de… » ne se replie pas
+
+Tout le reste de ce bloc est une lecture de contrôle, qu'on ouvre quand on veut
+vérifier. Cette phrase-là est l'inverse : c'est **ce qu'on est venu chercher sans
+le savoir**, et une phrase qu'il faut déplier pour lire est une phrase que
+personne ne lit. Elle est donc sur la ligne, visible, avant l'encadré — et une
+garde vérifie l'ordre des deux.
+
+#### Elle dit un fait, jamais un reproche
+
+« Ailleurs, on part aussi de la pente du terrain » se vérifie. « Vous avez oublié
+la pente du terrain » serait un jugement sur un raisonnement que le référentiel
+ne connaît pas : peut-être la pente a-t-elle été regardée puis écartée, peut-être
+ne s'applique-t-elle pas ici. Le référentiel n'en sait rien, et il ne fait pas
+semblant.
+
+#### Rien ne redescend dans la mémoire
+
+L'interdit fondateur, dans l'autre sens. **On ne verse RIEN directement dans la
+mémoire**, et surtout pas ce qui vient d'un autre projet. Il n'existe donc, ni
+dans le service, ni dans l'écran, aucune fonction qui produise une affirmation,
+une proposition ou une valeur à partir d'une forme lue.
+
+Ce qu'on apprend d'ailleurs, c'est **où regarder**. C'est au projet de regarder,
+puis de proposer, puis de signer — comme pour tout le reste.
+
+#### Ne pas savoir, et le dire
+
+`view.formes` à `null`, c'est une lecture qui a échoué. Alors :
+
+- la phrase « ailleurs » ne s'affiche pas — dessiner « rien ne se fait autrement »
+  ferait d'une panne de réseau une affirmation sur le métier (règle 5) ;
+- le geste ne se propose pas — offrir de verser sans savoir si c'est déjà fait
+  ferait signer deux fois, la base refuserait la seconde, et l'on croirait la
+  première perdue ;
+- et l'encadré **dit pourquoi** : « Le référentiel n'a pas pu être lu. »
+
+#### Ce que cette étape ne garantit pas
+
+Qu'un nom soit anonyme. « Hauteur sous plafond du bureau de la directrice » est
+un nom, il passera, et aucune règle en base ne peut l'en empêcher. C'est pourquoi
+la sortie se signe devant la forme entière affichée : la garantie est là, et elle
+est humaine. La base garantit seulement que **rien d'autre que des noms** ne peut
+entrer.
+
+#### Deux gardes qui ne sont pas tombées, et ce qu'on en a fait
+
+**Un filtre mort.** `ceQuAilleursOnRegarde` écartait d'abord la forme elle-même
+par son empreinte. Cassé, rien ne tombait — parce que ses entrées *sont* les
+siennes, et que le retrait de ce qu'on regarde déjà les enlève de toute façon. Le
+filtre est parti, et le commentaire dit ce qui protège vraiment.
+
+**Une garde qui ne distinguait pas deux règles.** « Une forme se reconnaît par
+son empreinte » passait encore quand on reconnaissait par les seules entrées : le
+référentiel d'essai n'avait aucune paire capable de les départager. Une forme y a
+été ajoutée — mêmes entrées, autre conclusion —, et la garde tombe.
+
+#### Les gardes, et ce qui tombe quand on les casse
+
+| ce qu'on casse | ce qui tombe |
+|---|---|
+| ce qu'on regarde déjà se propose comme nouveau | trois gardes, dont *ce qu'ailleurs on regarde* |
+| ce qui aboutit ailleurs remonte quand même | trois gardes |
+| un référentiel non lu devient un référentiel vide | *un référentiel non lu ne dit pas que personne ne fait autrement* |
+| une signature retirée compte encore | *une signature retirée ne fait plus dire « versée »* |
+| l'empreinte part avec le versement | deux gardes, dont *le serveur la compose* |
+| on verse sans signataire | *rien ne sort sans signataire* |
+| une forme creuse part quand même | *une forme vide ne part pas* |
+| la reconnaissance ne lit plus que le départ | *une forme se reconnaît par son empreinte* |
+| la phrase juge le raisonnement | *elle dit un fait, pas un reproche* |
+| la phrase « ailleurs » n'est jamais appelée | *la ligne dit ce qu'ailleurs on regarde* |
+| elle passe dans le bloc replié | la même — l'ordre est vérifié |
+| le geste quitte la forme dépliée | *le geste est sous la forme entière* |
+| la forme signée voyage dans le HTML | *elle se recalcule au clic* |
+| on propose le geste sans avoir lu | *sans lecture, l'écran ne propose rien* |
+| le transport sait supprimer une forme | *rien ne redescend du référentiel* |
+
+Et quatre états à l'écran, éprouvés par une sonde de navigateur qui monte le vrai
+module : à verser, versée, signature retirée, référentiel non lu. Aucune fuite du
+projet dans le bloc, dans aucun des quatre.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -1443,6 +1594,11 @@ c'est elle qu'il faudra desserrer, pas les moments où elle tourne.
 | le halo et sa légende | `views/ui/cerveau-du-projet.js` |
 | la forme qu'un raisonnement peut emporter, et ses refus | `services/forme-dun-raisonnement.js` |
 | l'encadré qui la montre en entier, replié | `renderCeQuiPourraitVoyager`, dans `views/project-memory.js` |
+| les deux tables, et l'empreinte composée par le serveur | `202610150001_le_referentiel_des_formes.sql` |
+| ce que le référentiel répond, et ce qu'il tait | `services/referentiel-des-formes.js` |
+| les allers-retours, sans porte de suppression | `services/referentiel-des-formes-supabase.js` |
+| « Ailleurs, on part aussi de… », visible sur la ligne | `renderCeQuAilleursOnRegarde`, dans `views/project-memory.js` |
+| le geste de sortie, sous la forme entière | `renderLaSignatureDeLaForme` et `verserLaForme`, même fichier |
 
 ### Le faux document, et pourquoi il existait
 

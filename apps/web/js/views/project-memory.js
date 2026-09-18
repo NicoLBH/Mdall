@@ -118,6 +118,10 @@ import { phraseDeLaRessemblance, raisonnementsQuiSeRessemblent }
   from "../services/raisonnements-qui-se-ressemblent.js";
 import { formeDunRaisonnement, phraseDeLaForme, phraseDesRefus, pourquoiElleNeVoyagePas }
   from "../services/forme-dun-raisonnement.js";
+import {
+  ceQuAilleursOnRegarde, leVersementDuneForme, monVersementDeCetteForme,
+  phraseDeCeQuAilleursOnRegarde
+} from "../services/referentiel-des-formes.js";
 import { liaisonDeLAvis } from "../services/avis-liaison.js";
 import { bindGhActionButtons, bindGhSelectMenus, renderGhActionButton, renderGhSelectMenu } from "./ui/gh-split-button.js";
 import { renderLightTabs, bindLightTabs } from "./ui/light-tabs.js";
@@ -296,6 +300,16 @@ const view = {
   liens: null,
   /** Les points du projet, réduits à leur nom et à leur état. `null` : idem. */
   points: null,
+  /**
+   * Le référentiel des formes de raisonnement, commun à tous les projets.
+   *
+   * `null` : il n'a pas été lu — et alors on ne dit rien de ce qui se fait
+   * ailleurs, parce que ne pas savoir n'autorise pas à prétendre qu'il n'y a
+   * rien (règle 5). `[]` : il est vide, et ça se dit autrement.
+   */
+  formes: null,
+  /** Les signatures de ce projet sur ces formes. `null` : lecture impossible. */
+  versements: null,
   /** Le formulaire de contestation ouvert, s'il y en a un. */
   contesting: null,
   contestDraft: { value: "", note: "" },
@@ -378,6 +392,11 @@ export function __setMemoryStateForPreview({
   assertions = null,
   dependencies = null,
   acts = null,
+  // Le référentiel et nos signatures : une page d'essai qui ne pourrait pas les
+  // poser ne montrerait jamais le geste de sortie, qui est ce qui s'y vérifie
+  // le moins par ailleurs.
+  formes = null,
+  versements = null,
   declaring = false,
   onglet = "",
   copilote = false,
@@ -387,6 +406,8 @@ export function __setMemoryStateForPreview({
   view.assertions = assertions;
   view.dependencies = dependencies;
   view.acts = acts;
+  view.formes = formes;
+  view.versements = versements;
   view.declaring = declaring;
   // L'onglet ouvert du détail : sans lui, une page d'essai ne pourrait montrer
   // que la première des trois lectures.
@@ -885,7 +906,50 @@ function renderLeRaisonnement(assertion) {
   return `
     ${renderLeChemin({ raisonnement: chemin })}
     ${voisins.length ? renderCeQuiLuiRessemble(voisins) : ""}
+    ${renderCeQuAilleursOnRegarde(assertion)}
     ${renderCeQuiPourraitVoyager(assertion, chemin)}
+  `;
+}
+
+/**
+ * Ce qu'ailleurs on regarde pour trancher la même chose.
+ *
+ * ## Pourquoi celle-ci ne se replie pas
+ *
+ * Tout le reste de ce bloc est une lecture de contrôle : on l'ouvre quand on
+ * veut vérifier. Celle-ci est l'inverse — c'est **ce qu'on est venu chercher
+ * sans le savoir**, et une phrase qu'il faut déplier pour lire est une phrase
+ * que personne ne lit.
+ *
+ * ## Elle dit un fait, jamais un reproche
+ *
+ * « Ailleurs, on part aussi de la pente du terrain » se vérifie. « Vous avez
+ * oublié la pente du terrain » serait un jugement sur un raisonnement que le
+ * référentiel ne connaît pas : peut-être a-t-elle été regardée et écartée. La
+ * phrase vient de `referentiel-des-formes.js`, et l'écran ne la retouche pas.
+ *
+ * ## Et quand on n'a pas lu, on ne dit rien
+ *
+ * `view.formes` à `null` : la lecture a échoué. Dessiner « rien ne se fait
+ * autrement » ferait d'une panne de réseau une affirmation sur le métier
+ * (règle 5).
+ */
+function renderCeQuAilleursOnRegarde(assertion) {
+  if (view.formes === null) return "";
+
+  const forme = formeDunRaisonnement(assertion, {
+    assertions: view.assertions === null ? [] : view.assertions
+  });
+  if (!forme) return "";
+
+  const dit = phraseDeCeQuAilleursOnRegarde(ceQuAilleursOnRegarde(forme, view.formes));
+  if (!dit) return "";
+
+  return `
+    <span class="memory-mention memory-portage memory-portage--ailleurs">
+      ${svgIcon("north-star", { className: "octicon" })}
+      <span class="memory-mention__dit">${escapeHtml(dit)}</span>
+    </span>
   `;
 }
 
@@ -941,8 +1005,70 @@ function renderCeQuiPourraitVoyager(assertion, chemin) {
         <dt>Empreinte</dt><dd>${escapeHtml(forme.empreinte)}</dd>
       </dl>
       <p class="memory-row__forme-rien">Ni valeur, ni partie de l'ouvrage, ni question, ni date,
-        ni nom de personne : rien de ce projet n'est là. Rien n'est parti — la sortie se signera.</p>
+        ni nom de personne : rien de ce projet n'est là.</p>
+      ${renderLaSignatureDeLaForme(assertion, forme)}
     </details>
+  `;
+}
+
+/**
+ * Le geste par lequel une forme sort du projet — et celui par lequel on se
+ * retire de son versement.
+ *
+ * ## C'est une signature, pas un bouton
+ *
+ * Rien ne sort d'un projet sans que quelqu'un en réponde : c'est la règle 1
+ * appliquée à la sortie, et c'est pour cela que le geste est ici, sous la forme
+ * entière, et nulle part ailleurs. Un bouton « verser » posé en haut d'une liste
+ * ferait signer sans regarder.
+ *
+ * ## On dit la porte à sens unique avant de la franchir
+ *
+ * Une forme versée a pu être lue par un autre projet la seconde d'après. La
+ * reprendre ne la reprendrait de la tête de personne, et il n'y a pas de chemin
+ * pour la supprimer. Le dire **après** le clic serait le dire trop tard.
+ *
+ * Ce qui se retire est la **signature** — « ce projet-ci l'a versée » —, qui est
+ * privée, et la phrase ne les confond pas.
+ *
+ * ## Et tant qu'on n'a pas lu, on ne propose rien
+ *
+ * Sans le référentiel et sans nos signatures, on ne sait pas si cette forme est
+ * déjà versée. Offrir le geste reviendrait à le proposer une seconde fois pour
+ * rien — et à faire croire qu'il n'avait pas été fait.
+ */
+function renderLaSignatureDeLaForme(assertion, forme) {
+  if (view.formes === null || view.versements === null) {
+    return `<p class="memory-row__forme-rien">Le référentiel n'a pas pu être lu : on ne sait pas si
+      cette forme y est déjà.</p>`;
+  }
+
+  const mien = monVersementDeCetteForme(forme, {
+    formes: view.formes, versements: view.versements
+  });
+
+  if (mien) {
+    return `
+      <p class="memory-row__forme-signee">
+        Versée au référentiel le ${escapeHtml(formatDate(mien.signed_at))}
+        par ${escapeHtml(nameOf(mien.signed_by))}.
+      </p>
+      <div class="memory-row__forme-gestes">
+        <button type="button" class="gh-btn gh-btn--sm" data-forme-retirer="${escapeHtml(mien.id)}"
+          ${view.busy ? "disabled" : ""}>Retirer ma signature</button>
+        <span class="memory-row__forme-rien">La forme, elle, reste : d'autres projets ont pu la lire.</span>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="memory-row__forme-gestes">
+      <button type="button" class="gh-btn gh-btn--sm gh-btn--primary"
+        data-forme-verser="${escapeHtml(assertion?.id ?? "")}" ${view.busy ? "disabled" : ""}
+      >Verser cette forme au référentiel</button>
+      <span class="memory-row__forme-rien">Une fois versée, elle ne se reprend pas : d'autres projets
+        pourront l'avoir lue.</span>
+    </div>
   `;
 }
 
@@ -2449,6 +2575,89 @@ async function markAsReviewed(root, assertionId) {
  * optimiste qui échoue laisserait croire qu'une valeur n'est plus contestée
  * alors qu'elle l'est toujours — et personne ne reviendrait vérifier.
  */
+/**
+ * Verser une forme au référentiel, ou retirer sa signature.
+ *
+ * ## Ce qui n'est pas ici
+ *
+ * Aucun chemin qui **rapporte** quoi que ce soit du référentiel dans la mémoire.
+ * On ne verse RIEN directement dans la mémoire, et surtout pas ce qui vient d'un
+ * autre projet : ce qu'on apprend d'ailleurs, c'est où regarder, et c'est au
+ * projet de regarder — puis de proposer, et de signer, comme pour tout le reste.
+ *
+ * ## La forme se recalcule, elle ne se transporte pas
+ *
+ * On la reprend de l'affirmation au moment du clic plutôt que de la glisser dans
+ * l'attribut du bouton. Une forme écrite dans le HTML serait une seconde vérité
+ * (règle 4) : elle vieillirait à côté de celle qu'on a montrée, et l'on
+ * signerait pour ce qui n'est plus affiché.
+ */
+async function verserLaForme(root, { assertionId = "", signatureId = "" } = {}) {
+  if (view.busy) return;
+
+  const qui = store.user?.id ?? "";
+  if (!qui) {
+    view.notice = "Une forme ne se verse pas sans signataire : reconnectez-vous.";
+    renderContent(root);
+    return;
+  }
+
+  view.busy = true;
+  view.notice = "";
+  renderContent(root);
+
+  const referentiel = await import("../services/referentiel-des-formes-supabase.js");
+
+  if (signatureId) {
+    const pris = await referentiel.retirerMaSignature(signatureId, qui);
+    view.busy = false;
+
+    if (!pris) {
+      view.notice = "La signature n'a pas pu être retirée. Elle tient toujours.";
+      renderContent(root);
+      return;
+    }
+
+    // On marque ce qu'on a sous la main : la ligne reste, elle est retirée.
+    // La supprimer ferait proposer un second versement que la base refuserait.
+    const quand = new Date().toISOString();
+    view.versements = (view.versements ?? []).map((ligne) =>
+      String(ligne?.id) === String(signatureId)
+        ? { ...ligne, retire_le: quand, retire_par: qui }
+        : ligne);
+
+    renderContent(root);
+    return;
+  }
+
+  const assertion = (view.assertions ?? []).find((ligne) => String(ligne?.id) === String(assertionId));
+  const forme = formeDunRaisonnement(assertion, {
+    assertions: view.assertions === null ? [] : view.assertions
+  });
+
+  const versement = leVersementDuneForme(forme, {
+    projectId: view.projectId, assertionId, signePar: qui
+  });
+
+  const ecrite = versement ? await referentiel.verserUneForme(versement) : null;
+  view.busy = false;
+
+  if (!ecrite) {
+    view.notice = "La forme n'a pas pu être versée. Rien n'est parti.";
+    renderContent(root);
+    return;
+  }
+
+  // Le référentiel a changé — la forme y est maintenant, et c'est par lui que
+  // l'écran sait qu'elle est versée. On le relit plutôt que de l'imaginer : la
+  // base a pu reconnaître une forme qu'un autre projet avait déjà versée, et
+  // c'est son identifiant à elle qui compte.
+  view.formes = await referentiel.listerLesFormes();
+  view.versements = await referentiel.listerMesVersements(view.projectId);
+
+  renderContent(root);
+}
+
 async function repondreAuPortage(root, { lienId = "", confirmer = false } = {}) {
   const id = String(lienId ?? "").trim();
   if (!id || view.busy) return;
@@ -3249,6 +3458,20 @@ function bind(root) {
     }));
   }
 
+  // La sortie du projet. Le geste est sous la forme entière, dépliée : c'est la
+  // seule place où l'on puisse signer en sachant ce qu'on signe.
+  for (const bouton of root.querySelectorAll("[data-forme-verser]")) {
+    bouton.addEventListener("click", () => verserLaForme(root, {
+      assertionId: bouton.getAttribute("data-forme-verser")
+    }));
+  }
+
+  for (const bouton of root.querySelectorAll("[data-forme-retirer]")) {
+    bouton.addEventListener("click", () => verserLaForme(root, {
+      signatureId: bouton.getAttribute("data-forme-retirer")
+    }));
+  }
+
   // « J'ai vérifié » : une ligne de plus dans l'histoire de la valeur, et rien
   // d'autre. Pas de note demandée — la demander ferait un formulaire, et un
   // formulaire fait une procédure.
@@ -3864,6 +4087,13 @@ export function renderProjectMemory(root) {
       view.liens = view.projectId ? await listerLesLiens(view.projectId) : null;
       view.points = view.projectId ? await listerLesPoints(view.projectId) : null;
 
+      // Le référentiel des formes, et nos signatures dessus. Le premier est
+      // commun à tous les projets et ne dit d'où vient rien ; les secondes ne
+      // se lisent que d'ici, et c'est la politique de la table qui le garantit.
+      const referentiel = await import("../services/referentiel-des-formes-supabase.js");
+      view.formes = await referentiel.listerLesFormes();
+      view.versements = view.projectId ? await referentiel.listerMesVersements(view.projectId) : null;
+
       // Les noms des signataires, pour la marge du Blame. Un identifiant dans
       // la marge ne dit rien à personne : c'est le nom qu'on cherche quand on
       // se demande qui a décidé cela.
@@ -3886,6 +4116,8 @@ export function renderProjectMemory(root) {
       view.acts = null;
       view.liens = null;
       view.points = null;
+      view.formes = null;
+      view.versements = null;
     }
 
     view.loading = false;
