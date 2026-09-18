@@ -159,6 +159,52 @@ const rang = (ressemblance) =>
   (ressemblance === RESSEMBLANCE.LE_MEME ? 0 : 1);
 
 /**
+ * Ce que le projet a déjà raisonné **à partir de ces valeurs-là**.
+ *
+ * ## Le moment où cela sert
+ *
+ * Pas en relisant la mémoire : **en fermant un sujet**. On sait alors sur quoi
+ * le débat portait — les arêtes confirmées —, et on ne sait pas encore ce qu'on
+ * va trancher. C'est l'instant exact où « voici comment on avait raisonné la
+ * dernière fois » vaut quelque chose ; une fois la décision écrite, il est trop
+ * tard pour en tenir compte.
+ *
+ * ## Le même départ, et rien de plus
+ *
+ * Les conclusions ne sont pas encore prises : on ne peut comparer que le départ,
+ * et c'est honnête de ne dire que cela. Un raisonnement rendu ici **part des
+ * mêmes valeurs** ; ce qu'il en a fait est justement ce qu'on vient regarder.
+ *
+ * Et la même exigence qu'ailleurs : des entrées vides ne se rapprochent de rien,
+ * sans quoi tout sujet dont on ignore les arêtes se verrait proposer la mémoire
+ * entière (règle 5).
+ *
+ * @param {{sujet: string}[]} entrees les valeurs que ce débat met en question
+ * @param {object[]} assertions la mémoire du projet
+ * @returns {object[]} les lignes de raisonnement, les plus récentes d'abord
+ */
+export function raisonnementsPartisDeCesValeurs(entrees = [], assertions = []) {
+  const depart = { porteSur: entrees, produit: [] };
+  if (!signatureDunRaisonnement(depart).entrees.size) return [];
+
+  return (Array.isArray(assertions) ? assertions : [])
+    .filter((ligne) => !texte(ligne?.superseded_by))
+    .filter((ligne) => {
+      const la = ligne?.payload?.raisonnement ?? null;
+      // On ne compare que le départ : `ceQuiLesRapproche` dirait « le même » dès
+      // que les deux n'aboutissent à rien, et ici l'un des deux n'aboutit pas
+      // *encore*. Ce serait une ressemblance fabriquée par le calendrier.
+      return la && memesNoms(
+        signatureDunRaisonnement(depart).entrees,
+        signatureDunRaisonnement(la).entrees
+      );
+    })
+    // Le plus récent d'abord : c'est la dernière fois qu'on s'est posé la
+    // question, et c'est celle qu'on veut relire.
+    .sort((gauche, droite) => texte(droite?.decided_at).localeCompare(texte(gauche?.decided_at)));
+}
+
+/**
  * Ce qu'on dit d'un rapprochement, en une phrase.
  *
  * Elle dit **le fait** — « part des mêmes valeurs » — et jamais « c'est le même

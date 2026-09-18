@@ -45,7 +45,51 @@ export const SANS_DECISION = { sansDecision: true };
 /** Combien de possibles écartés la fenêtre offre d'écrire d'emblée. */
 const ECARTES_OFFERTS = 3;
 
-function renderFenetre(titre) {
+/**
+ * Ce que le projet a déjà raisonné à partir des mêmes valeurs.
+ *
+ * ## Le seul moment où cela sert
+ *
+ * On sait sur quoi le débat portait — les arêtes confirmées —, et on ne sait pas
+ * encore ce qu'on va trancher. C'est **maintenant** que « voici comment on avait
+ * raisonné la dernière fois » vaut quelque chose ; une fois la décision écrite,
+ * il est trop tard pour en tenir compte.
+ *
+ * ## Il informe, il ne pré-remplit rien
+ *
+ * Aucun champ n'est rempli à partir de ce qu'on montre. Reprendre d'un clic la
+ * décision d'avant ferait signer une décision que personne n'a reprise — et une
+ * décision recopiée est pire qu'une décision absente (règle 1).
+ *
+ * ## Il dit le départ, jamais l'identité
+ *
+ * « Part des mêmes valeurs » se vérifie ; « c'est la même question » ne se
+ * vérifie pas. Ce qu'on compare, ce sont les noms mis en jeu.
+ */
+function renderDejaRaisonne(dejaVus) {
+  if (!dejaVus.length) return "";
+
+  return `
+    <div class="decision-sujet__deja">
+      <div class="decision-sujet__deja-tete">
+        ${dejaVus.length === 1
+          ? "Le projet a déjà raisonné à partir des mêmes valeurs :"
+          : `Le projet a déjà raisonné ${dejaVus.length} fois à partir des mêmes valeurs :`}
+      </div>
+      ${dejaVus.map((vu) => `
+        <div class="decision-sujet__deja-ligne">
+          <b>${escapeHtml(texte(vu?.question))}</b>
+          ${texte(vu?.retenu) ? `<span>→ ${escapeHtml(texte(vu.retenu))}</span>` : ""}
+          ${texte(vu?.quand) || texte(vu?.qui)
+            ? `<i>${escapeHtml([texte(vu?.quand), texte(vu?.qui)].filter(Boolean).join(" · "))}</i>`
+            : ""}
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderFenetre(titre, dejaVus) {
   const ecarte = (rang) => `
     <div class="decision-sujet__ecarte">
       <input type="text" class="gh-input" data-decision-ecarte="${rang}"
@@ -69,6 +113,8 @@ function renderFenetre(titre) {
           décision de la mémoire — après signature. Ce sont surtout les <b>possibles
           écartés</b> qui comptent : c'est la réponse à « pourquoi pas… ? », six mois plus tard.
         </p>
+
+        ${renderDejaRaisonne(dejaVus)}
 
         <label class="decision-sujet__champ">
           <span>La question tranchée</span>
@@ -109,17 +155,20 @@ let questionOuverte = null;
 /**
  * Poser la question, et attendre la réponse.
  *
- * @param {{titre?: string}} options le titre du sujet, qui pré-remplit la question
+ * @param {object} options
+ * @param {string} [options.titre] le titre du sujet, qui pré-remplit la question
+ * @param {{question, retenu, quand, qui}[]} [options.dejaVus] ce que le projet a
+ *   déjà raisonné à partir des mêmes valeurs — montré, jamais repris
  * @returns {Promise<{question, retenu, ecartes, motif}|SANS_DECISION|null>}
  *   `null` si l'on renonce **à fermer** ; `SANS_DECISION` si l'on ferme sans
  *   rien enregistrer.
  */
-export function demanderCeQuOnATranche({ titre = "" } = {}) {
+export function demanderCeQuOnATranche({ titre = "", dejaVus = [] } = {}) {
   if (questionOuverte) return Promise.resolve(null);
 
   return new Promise((resoudre) => {
     const hote = document.createElement("div");
-    hote.innerHTML = renderFenetre(texte(titre));
+    hote.innerHTML = renderFenetre(texte(titre), Array.isArray(dejaVus) ? dejaVus : []);
     document.body.appendChild(hote);
     questionOuverte = hote;
 

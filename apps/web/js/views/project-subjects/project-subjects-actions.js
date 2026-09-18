@@ -1125,6 +1125,72 @@ export function createProjectSubjectsActions(config) {
     }
   }
 
+  /**
+   * Ce que le projet a déjà raisonné à partir des mêmes valeurs que ce sujet.
+   *
+   * ## Pourquoi cette lecture-là, et pas une autre
+   *
+   * Les arêtes confirmées du sujet donnent son **départ** ; les raisonnements de
+   * la mémoire qui partent des mêmes valeurs sont ceux qu'on a intérêt à relire
+   * avant de trancher. Ce sont les noms qui se comparent, jamais les questions —
+   * deux personnes n'écrivent jamais la même.
+   *
+   * Muette en cas d'échec : ne pas retrouver ce qu'on a déjà raisonné ne doit
+   * pas empêcher de fermer un sujet. La fenêtre s'ouvrira sans ce rappel, ce qui
+   * est ce qu'elle faisait jusqu'ici.
+   */
+  async function cequOnADejaRaisonne(subjectId) {
+    try {
+      const [
+        { listerLesLiens },
+        { listProjectAssertions },
+        { resolveCurrentBackendProjectId },
+        { ceQueCePointMetEnDebat },
+        { raisonnementsPartisDeCesValeurs }
+      ] = await Promise.all([
+        import("../../services/point-porte-sur-supabase.js"),
+        import("../../services/project-memory-supabase.js"),
+        import("../../services/project-supabase-sync.js"),
+        import("../../services/point-porte-sur.js"),
+        import("../../services/raisonnements-qui-se-ressemblent.js")
+      ]);
+
+      const projectId = String(await resolveCurrentBackendProjectId() || "").trim();
+      if (!projectId) return [];
+
+      const [liens, assertions] = await Promise.all([
+        listerLesLiens(projectId),
+        listProjectAssertions(projectId)
+      ]);
+      if (liens === null || assertions === null) return [];
+
+      const entrees = ceQueCePointMetEnDebat(subjectId, { liens, assertions })
+        .map((assertion) => ({ sujet: String(assertion?.payload?.subject ?? "").trim() }));
+
+      return raisonnementsPartisDeCesValeurs(entrees, assertions).map((ligne) => ({
+        question: String(ligne?.payload?.raisonnement?.question ?? "").trim(),
+        // Ce qui avait été retenu, et rien d'autre : c'est la réponse à « voici
+        // comment on avait raisonné la dernière fois ».
+        retenu: (ligne?.payload?.raisonnement?.produit ?? [])
+          .map((entree) => [entree?.sujet, entree?.valeur].filter(Boolean).join(" = "))
+          .filter(Boolean).join(" · "),
+        // La date, et pas l'auteur : le nommer demanderait une lecture des
+        // profils de plus, au moment précis où l'on retient quelqu'un devant une
+        // fenêtre. La ligne complète se lit dans la Mémoire.
+        quand: formatDateFr(ligne?.decided_at)
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /** La date, telle qu'on l'écrit dans cette fenêtre. */
+  function formatDateFr(quand) {
+    const lue = Date.parse(String(quand ?? ""));
+    if (!Number.isFinite(lue)) return "";
+    return new Date(lue).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  }
+
   async function proposerLaDecisionDuSujet(subjectId, tranche) {
     try {
       const [
@@ -1258,7 +1324,12 @@ export function createProjectSubjectsActions(config) {
       // décisions sur l'outil plutôt que sur l'ouvrage.
       if (normalized === "issue:close:realized") {
         const { demanderCeQuOnATranche, SANS_DECISION } = await import("../ui/decision-du-sujet.js");
-        const reponse = await demanderCeQuOnATranche({ titre: subject?.title ?? subject?.raw?.title });
+        const reponse = await demanderCeQuOnATranche({
+          titre: subject?.title ?? subject?.raw?.title,
+          // **Avant d'écrire, ce qu'on a déjà raisonné.** Une fois la décision
+          // écrite, il est trop tard pour en tenir compte.
+          dejaVus: await cequOnADejaRaisonne(target.id)
+        });
 
         // Renoncer à la fenêtre, c'est renoncer à fermer : on n'a encore rien
         // fait, et fermer quand même serait agir sur un geste annulé.
