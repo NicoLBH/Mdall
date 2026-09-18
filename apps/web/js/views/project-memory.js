@@ -112,7 +112,10 @@ import {
 import { ceQuiCouvre, phraseDeLaCouvertureDe } from "../services/ce-qui-couvre.js";
 import { portagesSurLaValeur } from "../services/point-porte-sur.js";
 import { leDebatQuiATranche } from "../services/point-a-tranche.js";
-import { renderCeQuiPorteSurLaValeur, renderLeDebatQuiATranche } from "./memoire/portage-rendu.js";
+import { renderCeQuiPorteSurLaValeur, renderLeChemin, renderLeDebatQuiATranche }
+  from "./memoire/portage-rendu.js";
+import { phraseDeLaRessemblance, raisonnementsQuiSeRessemblent }
+  from "../services/raisonnements-qui-se-ressemblent.js";
 import { liaisonDeLAvis } from "../services/avis-liaison.js";
 import { bindGhActionButtons, bindGhSelectMenus, renderGhActionButton, renderGhSelectMenu } from "./ui/gh-split-button.js";
 import { renderLightTabs, bindLightTabs } from "./ui/light-tabs.js";
@@ -744,6 +747,7 @@ function renderAssertion(assertion) {
         ${renderCeQuiCouvre(assertion)}
         ${renderCeQuiPorte(assertion)}
         ${renderLeDebat(assertion)}
+        ${renderLeRaisonnement(assertion)}
         ${renderReviewBanner(assertion)}
         ${assertion.detail ? `<span class="memory-row__detail">${escapeHtml(assertion.detail)}</span>` : ""}
         ${renderDependentsCount(assertion)}
@@ -839,6 +843,67 @@ function renderLeDebat(assertion) {
   return renderLeDebatQuiATranche({
     debat: leDebatQuiATranche({ assertion, points: view.points })
   });
+}
+
+/**
+ * Un raisonnement, lu comme un raisonnement.
+ *
+ * ## Une ligne ne suffit pas à montrer un chemin
+ *
+ * Le filtre « Raisonnements » existait, et il rendait depuis longtemps des
+ * lignes — mais des lignes ordinaires, qui ne disaient que leur question. Tout
+ * ce que la fermeture d'un sujet enregistre — sur quoi le débat portait, ce
+ * qu'il a tranché, ce qu'il a posé — restait dans la charge, invisible.
+ *
+ * C'est le même dessin que dans le détail d'un sujet, et il n'y en a qu'un : les
+ * cinq étapes, **toujours les cinq**, celles que personne n'a remplies portant
+ * leur manque en toutes lettres.
+ *
+ * ## Et ce à quoi il ressemble
+ *
+ * Deux raisonnements qui partent des mêmes valeurs parlent probablement de la
+ * même chose. C'est la deuxième question que la mémoire sait poser — après
+ * « vous parlez bien de cette variable ? » —, et c'est celle qui capitalise :
+ * « voici comment on avait raisonné la dernière fois ».
+ *
+ * Rien sur les autres lignes : une valeur n'a pas de chemin, et lui en dessiner
+ * un vide ferait chercher un raisonnement qui n'existe pas.
+ */
+function renderLeRaisonnement(assertion) {
+  const chemin = assertion?.payload?.raisonnement ?? null;
+  if (!chemin) return "";
+
+  // `null` n'est pas `[]` : tant que la mémoire n'est pas lue, on ne sait pas
+  // ce qui ressemble à quoi, et afficher « rien ne lui ressemble » serait dire
+  // le silence d'une lecture comme une absence (règle 5).
+  const voisins = view.assertions === null
+    ? []
+    : raisonnementsQuiSeRessemblent(assertion, view.assertions);
+
+  return `
+    ${renderLeChemin({ raisonnement: chemin })}
+    ${voisins.length ? renderCeQuiLuiRessemble(voisins) : ""}
+  `;
+}
+
+/**
+ * Ce qui, dans la mémoire, part des mêmes valeurs.
+ *
+ * Elle dit **le fait** et rien de plus — « part des mêmes valeurs » —, jamais
+ * « c'est le même raisonnement » : ce qui est vérifié, ce sont les noms mis en
+ * jeu, pas l'intention de celui qui l'a écrit.
+ */
+function renderCeQuiLuiRessemble(voisins) {
+  const dit = phraseDeLaRessemblance(voisins[0].ressemblance, voisins.length);
+  if (!dit) return "";
+
+  return `
+    <span class="memory-mention memory-portage memory-portage--ressemble"
+      title="${escapeHtml(voisins.map(({ assertion }) => titreDeLAffirmation(assertion)).join("\n"))}">
+      ${svgIcon("git-compare", { className: "octicon" })}
+      <span class="memory-mention__dit">${escapeHtml(dit)}</span>
+    </span>
+  `;
 }
 
 /**

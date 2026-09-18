@@ -167,9 +167,10 @@ export function readerRows(assertions = [], reader = READER.ALL) {
   }
 
   if (reader === READER.DECISIONS || reader === READER.REASONINGS) {
-    // Le filtre est écrit comme les autres, et il ne rend rien : aucune ligne ne
-    // porte encore ces natures. C'est voulu — le jour où l'étape 8 en verse, ces
-    // deux lectures se remplissent sans qu'on touche à une ligne d'ici.
+    // Le filtre est écrit comme les autres, et il s'est rempli tout seul : la
+    // fermeture d'un sujet verse désormais une décision **et** un raisonnement,
+    // et ces deux lectures les ont reçus sans qu'on touche à une ligne d'ici.
+    // Les décisions attendent encore leur premier versement hors fermeture.
     const voulue = reader === READER.DECISIONS ? NATURE.DECISION : NATURE.RAISONNEMENT;
     return currentAssertions(lignes).filter(
       (assertion) => classifyAssertion(assertion).nature === voulue

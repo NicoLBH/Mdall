@@ -132,7 +132,13 @@ export function titreDeLAffirmation(assertion = {}) {
   if (!sujet) return texte(assertion?.statement);
 
   const valeur = texte(payload.value);
-  return valeur ? `${sujet} : ${valeur}` : sujet;
+  // **Une ligne ne se dit pas deux fois.** Un raisonnement n'affirme rien : sa
+  // seule valeur possible est sa question, et la règle générale écrivait alors
+  // « Quelle profondeur retenir ? : Quelle profondeur retenir ? ». Vu à l'écran
+  // dès que la fermeture d'un sujet a commencé à en verser.
+  if (!valeur || valeur === sujet) return sujet;
+
+  return `${sujet} : ${valeur}`;
 }
 
 function lisible(value) {
