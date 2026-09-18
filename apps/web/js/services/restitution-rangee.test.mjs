@@ -5,7 +5,7 @@ import {
   DOSSIER_DES_CR, PHRASES_DU_RANGEMENT, RANGEE, sourceRangee, transcriptionRangee
 } from "./restitution-rangee.js";
 import {
-  empreinteDesPages, rangerLaRestitution, relireLaRestitution
+  empreinteDesPages, rangerLaRestitution, rangerLeDocumentDeTexte, relireLaRestitution
 } from "./ranger-la-restitution.js";
 
 /* ── Où les comptes rendus se rangent ───────────────────────────────────── */
@@ -356,4 +356,119 @@ test("le second compte rendu se relit sans rappeler le modèle", async () => {
 
   assert.equal(relue.etat, RANGEE.A_JOUR);
   assert.equal(relue.markdown, "# Réunion 8");
+});
+
+/* ── Un document déjà écrit en texte se place, il ne se transcrit pas ──────
+ *
+ * Il n'a pas de PDF derrière lui, et son texte est déjà le document : lui poser
+ * une transcription ferait deux vérités du même contenu (règle 4), et dirait
+ * qu'un modèle a lu ce que personne n'a lu.
+ *
+ * Il lui faut pourtant **une ligne de document**, parce que la proposition s'y
+ * accroche : c'est par elle que chaque point se remonte au compte rendu dont il
+ * sort. C'est ce qui manquait — « Transformer » refusait une lecture qui avait
+ * pourtant abouti.
+ */
+
+const unTexte = (nom = "notice.md") =>
+  new File(["# Notice\n\nType M."], nom, { type: "text/markdown" });
+
+test("un document de texte se dépose sans transcription", async () => {
+  const { portes, journal } = baseEnMemoire();
+
+  const range = await rangerLeDocumentDeTexte({
+    projectId: "projet", fichier: unTexte(), empreinte: "abc", portes
+  });
+
+  assert.equal(range.range, true);
+  assert.equal(journal.deposes.length, 1);
+
+  const [depose] = journal.deposes;
+  assert.equal(depose.filename, "notice.md");
+  assert.equal(depose.content_fingerprint, "abc");
+  // Ni `source_pdf` — il n'y a pas d'original ailleurs — ni une transcription
+  // qu'aucun modèle n'a écrite.
+  assert.equal(depose.document_kind, "source_texte");
+  assert.equal("transcription_markdown" in depose, false);
+  assert.equal(journal.modifies.length, 0, "aucune transcription posée");
+});
+
+test("il se range dans le dossier des comptes rendus", async () => {
+  const { portes, journal } = baseEnMemoire();
+  await rangerLeDocumentDeTexte({
+    projectId: "projet", fichier: unTexte(), empreinte: "abc", portes
+  });
+
+  assert.deepEqual(journal.dossiersCrees, [DOSSIER_DES_CR]);
+});
+
+test("le relire deux fois n'en fait pas deux exemplaires", async () => {
+  const base = baseEnMemoire();
+  await rangerLeDocumentDeTexte({
+    projectId: "projet", fichier: unTexte(), empreinte: "abc", portes: base.portes
+  });
+
+  // Le même texte sous un autre nom : c'est l'empreinte qui décide, pas le nom.
+  const suite = baseEnMemoire({
+    dossiers: base.dossiers, fichiers: base.fichiers, chemins: base.journal.chemins
+  });
+  const range = await rangerLeDocumentDeTexte({
+    projectId: "projet", fichier: unTexte("Notice v2.md"), empreinte: "abc", portes: suite.portes
+  });
+
+  assert.equal(range.range, true);
+  assert.equal(suite.journal.deposes.length, 0, "un second exemplaire a été déposé");
+  assert.equal(range.document.filename, "notice.md", "ce n'est pas celui d'avant");
+});
+
+test("deux textes différents font deux documents", async () => {
+  const base = baseEnMemoire();
+  await rangerLeDocumentDeTexte({
+    projectId: "projet", fichier: unTexte(), empreinte: "abc", portes: base.portes
+  });
+
+  const suite = baseEnMemoire({
+    dossiers: base.dossiers, fichiers: base.fichiers, chemins: base.journal.chemins
+  });
+  await rangerLeDocumentDeTexte({
+    projectId: "projet", fichier: unTexte("autre.md"), empreinte: "zzz", portes: suite.portes
+  });
+
+  assert.equal(suite.journal.deposes.length, 1);
+});
+
+test("deux versions d'un même nom ne se heurtent pas au stockage", async () => {
+  // Le chemin porte l'empreinte : sans elle, la seconde échouerait sur un
+  // conflit, et l'écran annoncerait un échec sans dire que c'est le nom qui
+  // était pris.
+  const base = baseEnMemoire();
+  await rangerLeDocumentDeTexte({
+    projectId: "projet", fichier: unTexte(), empreinte: "abc", portes: base.portes
+  });
+
+  const suite = baseEnMemoire({
+    dossiers: base.dossiers, fichiers: base.fichiers, chemins: base.journal.chemins
+  });
+  const range = await rangerLeDocumentDeTexte({
+    projectId: "projet", fichier: unTexte(), empreinte: "zzz", portes: suite.portes
+  });
+
+  assert.equal(range.range, true, range.motif);
+});
+
+test("sans projet et sans fichier, rien ne se place", async () => {
+  const { portes } = baseEnMemoire();
+  assert.equal((await rangerLeDocumentDeTexte({ fichier: unTexte(), portes })).range, false);
+  assert.equal((await rangerLeDocumentDeTexte({ projectId: "projet", portes })).range, false);
+});
+
+test("une panne du dépôt se dit, elle ne se tait pas", async () => {
+  const { portes } = baseEnMemoire();
+  const range = await rangerLeDocumentDeTexte({
+    projectId: "projet", fichier: unTexte(), empreinte: "abc",
+    portes: { ...portes, ecrireLaLigne: async () => { throw new Error("rls refuse"); } }
+  });
+
+  assert.equal(range.range, false);
+  assert.match(range.motif, /rls refuse/);
 });

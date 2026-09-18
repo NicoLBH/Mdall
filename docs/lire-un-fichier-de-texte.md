@@ -32,6 +32,26 @@ Un fichier dont l'extension est acceptée — `.md`, `.txt`, `.csv`, `.ref`,
 
 Aucune ne remplace l'autre, et c'est pourquoi il y en a deux.
 
+### Un document se lit avec ses titres
+
+L'aperçu « n'avait pas l'air rendu », et la cause n'était pas dans le rendu :
+`.md-render` est calibré pour un **fil de discussion**, où tous les titres font
+14px — la taille du texte courant — parce qu'un `##` dans un commentaire ne doit
+pas écraser les trois lignes qui l'entourent.
+
+Une notice ou un compte rendu, c'est l'inverse : **ses titres sont sa
+structure**. Rendus à la taille du texte, on ne distingue plus une rubrique d'un
+paragraphe, et l'aperçu ne sert plus à rien. Une variante `md-document` les
+remet à l'échelle (22 · 17 · 15 · 14 · 13), et elle est portée par les **deux**
+écrans qui montrent un document : l'aperçu d'un fichier dans Fichiers, et celui
+d'une restitution dans l'Atelier. Deux calibrages auraient fait lire le même
+Markdown de deux façons selon l'écran.
+
+Il manquait aussi le **trait de séparation** : `---` s'affichait tel quel. Trois
+tirets, astérisques ou tirets bas — le même caractère répété, sinon c'est du
+texte — et il se cherche après le tableau, dont la ligne de séparation est faite
+des mêmes tirets mais porte des barres.
+
 **L'aperçu n'est offert que s'il veut dire quelque chose.** Un `.ref` ou un
 `.json` rendus en Markdown donnent le même texte sans ses retours à la ligne :
 un bouton qui mène à cela se clique une fois, et l'on cesse de regarder la barre
@@ -286,6 +306,58 @@ quand il l'est, « rien à lire ici » quand il ne porte que des formats qu'on n
 sait pas lire, « … ouvrez un dossier » quand il porte aussi des dossiers. La
 première invite à déposer, les autres à chercher ailleurs.
 
+## Une panne de la sortie n'est pas une panne de la lecture
+
+Lire un `.md` créé à la main, puis cliquer « Transformer », donnait
+« il n'y a rien à proposer pour l'instant » — **et bloquait l'écran** : il
+fallait recharger la page. Trois défauts en un, et ils valent d'être nommés
+séparément.
+
+### Le document n'avait pas de ligne
+
+« Transformer » demande une **ligne de document** : c'est elle que la
+proposition porte, et par elle que chaque point se remonte au compte rendu dont
+il sort. Un document de texte n'en recevait aucune, parce qu'il n'y a rien à y
+transcrire — et ce raisonnement confondait deux choses. Il n'y a rien à
+transcrire ; il y a tout de même un document à placer.
+
+Deux cas, et le premier n'écrit rien :
+
+- **choisi depuis Fichiers** — la ligne existe, elle voyage avec le document ;
+- **déposé depuis le disque** — elle s'écrit à la fusion, comme pour un PDF, et
+  pas avant : déposer un fichier dans le projet est une écriture, et une
+  écriture attend qu'on ait décidé (règle 1).
+
+Le dépôt d'un document de texte ne passe pas par `rangerLaRestitution`, qui pose
+une transcription sur la ligne d'un PDF : ici le texte **est** le document, et
+le recopier ferait deux vérités du même contenu (règle 4) — en disant au passage
+qu'un modèle a lu ce que personne n'a lu. Sa ligne porte `source_texte`, ni
+`source_pdf` — il n'y a pas d'original ailleurs — ni « écrit à la main », qui
+attribuerait une écriture à quelqu'un qui ne l'a pas faite.
+
+### Le refus éteignait la lecture
+
+Les refus de « Transformer » passaient par `echouer`, qui pose
+`phase: "echec"` — la phase de la **lecture**. Or le bouton demande
+`phase === "lue"` : une fois posée, plus rien ne le rallumait. L'écran affichait
+une analyse complète, payée, qu'on ne pouvait plus transformer.
+
+Une panne de la sortie n'est pas une panne de la lecture. `refuser` dit la
+première sans toucher à la seconde.
+
+### L'alerte ne se fermait pas
+
+Et c'est ce qui achevait de bloquer : une alerte qu'on ne peut pas refermer est
+un écran dont on ne sort pas. Elle porte maintenant une croix, quelle que soit
+la panne — ce qui est à l'écran dessous, lui, ne bouge pas.
+
+### Les textes de l'alerte sont nommés
+
+Le cadre du milieu annonce « ce diagnostic vient du serveur ». Deux explications
+de l'**écran** y étaient parties, parce que `panne` et `queFaire` occupaient la
+troisième et la quatrième position d'un appel : on lisait nos propres mots comme
+une panne distante. Ils sont nommés, et la confusion ne se pose plus.
+
 ## Ce que cela ne change pas
 
 Rien n'entre dans la mémoire. Un fichier est de la matière première ; les points
@@ -307,6 +379,13 @@ qu'il faut écrire pour créer ou réenregistrer un fichier. Pur.
 
 `apps/web/js/services/fichier-a-la-main-supabase.js` — `dossierDuChemin` : le
 dossier creusé de proche en proche, et la collision refusée une fois résolu.
+
+`apps/web/js/services/ranger-la-restitution.js` — `rangerLeDocumentDeTexte` :
+une ligne de document, sans transcription.
+
+`apps/web/js/utils/markdown-renderer.js` — le trait de séparation.
+
+`apps/web/style.css`, `.md-document` — l'échelle des titres d'un document.
 
 `apps/web/js/services/reconstitution-markdown.js` — `lecturesDeLaRestitution` :
 « Origine » n'existe que face à un PDF.

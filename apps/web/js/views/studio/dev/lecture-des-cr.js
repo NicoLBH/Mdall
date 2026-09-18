@@ -754,6 +754,13 @@ function renderAlerte(vue) {
           titre: "Copier le diagnostic",
           titreCopie: "Diagnostic copié"
         }) : ""}
+        ${/*
+          **La sortie.** Une alerte qu'on ne peut pas fermer est un écran dont
+          on ne sort pas : il fallait recharger la page.
+        */""}
+        <button type="button" class="gh-btn gh-btn--sm lecture-cr__alerte-fermer"
+          data-lecture-cr-alerte-fermer aria-label="Fermer ce message" title="Fermer ce message"
+        >${svgIcon("x", { className: "octicon" })}</button>
       </div>
       ${panne ? `
         <pre class="lecture-cr__alerte-panne mono-small"
@@ -1153,8 +1160,8 @@ function renderRangement(cote) {
   // chercher une panne là où tout s'est passé comme il faut.
   if (cote.dejaDuTexte) {
     return `<p class="lecture-cr__rangement est-bon">
-      Ce document était déjà écrit en texte : rien n'a été extrait, rien n'a été restitué,
-      et il n'y a donc rien à ranger.
+      Ce document était déjà écrit en texte, et il est déjà dans Fichiers : rien n'a été
+      extrait, rien n'a été restitué, et il n'y a rien à y écrire.
     </p>`;
   }
 
@@ -1286,7 +1293,7 @@ function renderLApercu(vue, cote) {
 
   return `
     ${dite ? `<p class="lecture-cr__md-format mono-small">${escapeHtml(dite)}</p>` : ""}
-    <div class="lecture-cr__md-apercu md-body"${
+    <div class="lecture-cr__md-apercu md-body md-document"${
       format.largeur > 0 ? ` style="--lecture-cr-papier:${format.largeur}px"` : ""}>
       ${renderMarkdownToHtml(cote.texte)}
     </div>
@@ -2429,6 +2436,11 @@ function brancher(hote) {
       return;
     }
 
+    if (cible.closest("[data-lecture-cr-alerte-fermer]")) {
+      tairelAlerte(hote);
+      return;
+    }
+
     if (cible.closest("[data-lecture-cr-depuis-fichiers]")) {
       void ouvrirLeChoix(hote, "");
       return;
@@ -2623,9 +2635,12 @@ async function prendreLeDocument(hote, documentId) {
     // Un `File` plutôt qu'un `Blob` : tout le parcours nomme le document par
     // `fichier.name`, et un `Blob` n'en a pas.
     const nom = nomDuFichier(piece) || choisi.nom;
+    // **La ligne du document voyage avec lui.** Il est déjà dans le projet : la
+    // proposition s'accrochera à cette ligne-là, et non à un second exemplaire
+    // qu'on redéposerait.
     await lire(hote, new File([lu], nom, {
       type: enTexte ? "text/markdown" : "application/pdf"
-    }));
+    }), piece);
   } catch (erreur) {
     rate(`Ce document n'a pas pu être lu (${texte(erreur?.message) || "cause inconnue"}).`);
   }
@@ -2674,7 +2689,7 @@ async function ouvrirUnPdf(hote, fichier) {
  *
  * @returns {Promise<string>} le motif de l'échec, ou `""`.
  */
-async function ouvrirUnDocumentDeTexte(hote, fichier) {
+async function ouvrirUnDocumentDeTexte(hote, fichier, piece = null) {
   // **Tout ce qu'il y a à faire tient dans le service**, qui se vérifie sans
   // navigateur : les pages, le texte assemblé, les lignes numérotées.
   const refait = laRestitutionDunTexte(await fichier.text());
@@ -2690,12 +2705,38 @@ async function ouvrirUnDocumentDeTexte(hote, fichier) {
   cote.texte = refait.texte;
   cote.lignes = refait.lignes;
   cote.phase = "fait";
-  // **Rien à ranger.** Ranger consiste à poser une transcription sur la ligne
-  // d'un PDF ; ce document n'en a pas, et recopier son texte sur sa propre
-  // ligne ferait deux vérités qui divergeraient à la première correction
-  // (règle 4). Le fichier est déjà dans Fichiers, ou il y sera déposé comme
-  // n'importe quel fichier.
-  cote.rangement = { ...cote.rangement, aRanger: null, motif: "ce document est déjà du texte" };
+
+  /**
+   * **Rien à transcrire, mais un document à placer.**
+   *
+   * Ranger consiste à poser une transcription sur la ligne d'un PDF ; ce
+   * document n'en a pas, et recopier son texte sur sa propre ligne ferait deux
+   * vérités qui divergeraient à la première correction (règle 4).
+   *
+   * Il faut pourtant **une ligne de document** : c'est elle que la proposition
+   * porte, et par elle que chaque point se remonte au compte rendu dont il
+   * sort. Deux cas, et le premier n'écrit rien :
+   *
+   * - **choisi depuis Fichiers** — la ligne existe, on la garde ;
+   * - **déposé depuis le disque** — elle s'écrira à la fusion, comme pour un
+   *   PDF, et pas avant : déposer un fichier dans le projet est une écriture,
+   *   et une écriture attend qu'on ait décidé (règle 1).
+   *
+   * C'était `aRanger: null` et rien d'autre : « Transformer » refusait alors
+   * une lecture qui avait pourtant abouti, et rien ne débloquait l'écran.
+   */
+  const { empreinteDesPages } = await import("../../../services/ranger-la-restitution.js");
+  cote.rangement = {
+    ...cote.rangement,
+    document: piece ?? null,
+    aRanger: piece
+      ? null
+      : {
+        projectId: await projetCourant(),
+        empreinte: await empreinteDesPages(etat.pagesLues).catch(() => ""),
+        markdown: ""
+      }
+  };
 
   redessiner(hote);
   return "";
@@ -2708,7 +2749,7 @@ async function ouvrirUnDocumentDeTexte(hote, fichier) {
  * de secondes, et un écran qui ne dit rien pendant ce temps donne l'impression
  * de s'être arrêté.
  */
-async function lire(hote, fichier) {
+async function lire(hote, fichier, piece = null) {
   etat.phase = "lecture";
   etat.etape = "ouverture";
   etat.lecture = null;
@@ -2738,9 +2779,9 @@ async function lire(hote, fichier) {
     // un document déjà écrit en texte est le document. Ce qui vient après — les
     // points, la confrontation au projet — ne connaît pas la différence.
     const motif = estUnFichierTexte(fichier?.name)
-      ? await ouvrirUnDocumentDeTexte(hote, fichier)
+      ? await ouvrirUnDocumentDeTexte(hote, fichier, piece)
       : await ouvrirUnPdf(hote, fichier);
-    if (motif) return echouer(hote, motif);
+    if (motif) return echouer(hote, { motif });
 
     // Si la restitution n'a pas abouti, on lit sur le texte brut plutôt que de
     // ne rien lire — mais l'écran le dit. La décision vit dans le service, avec
@@ -2765,12 +2806,11 @@ async function lire(hote, fichier) {
     });
     if (!lu?.ok) {
       const { phraseDuRefus, queFaire } = await import("../../../services/sujets-par-le-modele.js");
-      return echouer(
-        hote,
-        phraseDuRefus(lu?.motif) || "Le modèle n'a pas rendu de lecture exploitable.",
-        lu?.panne,
-        queFaire(lu?.motif)
-      );
+      return echouer(hote, {
+        motif: phraseDuRefus(lu?.motif) || "Le modèle n'a pas rendu de lecture exploitable.",
+        panne: lu?.panne,
+        queFaire: queFaire(lu?.motif)
+      });
     }
 
     const identite = identiteDuCompteRendu(lues.map((page) => texte(page?.text)).join("\n"));
@@ -2833,7 +2873,9 @@ async function lire(hote, fichier) {
     etat.phase = "lue";
     redessiner(hote);
   } catch (erreur) {
-    echouer(hote, `La lecture n'a pas abouti : ${texte(erreur?.message) || "cause inconnue"}`);
+    echouer(hote, {
+      motif: `La lecture n'a pas abouti : ${texte(erreur?.message) || "cause inconnue"}`
+    });
   }
 }
 
@@ -3299,12 +3341,15 @@ function garnirLeCote(cote, pages) {
  */
 async function transformer(hote, { sujet = false, branche = "" } = {}) {
   if (sujet) {
-    echouer(
-      hote,
-      "Ouvrir un sujet : pas encore branché depuis cet écran.",
-      "« Faire une proposition » l'est : elle porte le compte rendu et les points qui "
-      + "ouvriraient un sujet, et c'est en la signant qu'ils s'ouvrent."
-    );
+    // **Le quatrième argument, et non le troisième.** Le troisième est le
+    // diagnostic du serveur, rendu dans un cadre qui annonce « ce diagnostic
+    // vient du serveur » : y poser une explication de l'écran faisait passer nos
+    // propres mots pour ceux d'une panne distante.
+    refuser(hote, {
+      motif: "Ouvrir un sujet : pas encore branché depuis cet écran.",
+      queFaire: "« Faire une proposition » l'est : elle porte le compte rendu et les points "
+        + "qui ouvriraient un sujet, et c'est en la signant qu'ils s'ouvrent."
+    });
     return;
   }
 
@@ -3313,12 +3358,11 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
   const dejaRange = cote?.rangement?.document ?? null;
 
   if (!aRanger && !dejaRange) {
-    echouer(
-      hote,
-      "Il n'y a rien à proposer pour l'instant.",
-      "Le document doit d'abord avoir été relu : c'est lui que la proposition porte, et "
-      + "c'est par lui que chaque point se vérifie."
-    );
+    refuser(hote, {
+      motif: "Il n'y a rien à proposer pour l'instant.",
+      queFaire: "Le document doit d'abord avoir été relu : c'est lui que la proposition "
+        + "porte, et c'est par lui que chaque point se vérifie."
+    });
     return;
   }
 
@@ -3334,18 +3378,23 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
 
     // Déjà rangé : on ne redépose pas. Sinon, c'est maintenant — et non à la
     // lecture, où personne n'avait encore rien décidé.
+    //
+    // **Un document déjà écrit en texte se place, il ne se transcrit pas.** Il
+    // n'a pas de PDF derrière lui, et son texte est déjà le document : lui
+    // poser une transcription ferait deux vérités du même contenu (règle 4).
+    const placer = cote?.dejaDuTexte
+      ? (await import("../../../services/ranger-la-restitution.js")).rangerLeDocumentDeTexte
+      : rangerLaRestitution;
     const range = dejaRange
       ? { range: true, document: dejaRange, motif: "" }
-      : await rangerLaRestitution({ ...aRanger, fichier: etat.fichier });
+      : await placer({ ...aRanger, fichier: etat.fichier });
 
     if (!range.range || !range.document?.id) {
-      etat.versement = null;
-      echouer(
-        hote,
-        "Le compte rendu n'a pas pu être rangé dans Fichiers.",
-        `${cr.phraseDuRefus(cr.REFUS.SANS_DOCUMENT)}${
+      refuser(hote, {
+        motif: "Le compte rendu n'a pas pu être rangé dans Fichiers.",
+        panne: `${cr.phraseDuRefus(cr.REFUS.SANS_DOCUMENT)}${
           range.motif ? ` (${range.motif})` : ""}`
-      );
+      });
       return;
     }
 
@@ -3426,12 +3475,10 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
     const projet = texte(store.currentProjectId);
     if (projet) window.location.hash = `#project/${projet}/propositions`;
   } catch (erreur) {
-    etat.versement = null;
-    echouer(
-      hote,
-      "La proposition n'a pas pu être préparée.",
-      texte(erreur?.message) || "cause inconnue"
-    );
+    refuser(hote, {
+      motif: "La proposition n'a pas pu être préparée.",
+      panne: texte(erreur?.message) || "cause inconnue"
+    });
   }
 }
 
@@ -3443,11 +3490,58 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
  * rien à l'écran, et rien non plus pour comprendre la panne. Les onglets gardent
  * maintenant ce qu'ils ont, et l'alerte se pose au-dessus.
  */
-function echouer(hote, motif, panne = "", queFaire = "") {
+function echouer(hote, { motif = "", panne = "", queFaire = "" } = {}) {
   etat.phase = "echec";
+  dire(hote, { motif, panne, queFaire });
+}
+
+/**
+ * **Transformer a refusé ; la lecture, elle, a bien eu lieu.**
+ *
+ * ## Le défaut que ça répare
+ *
+ * Les refus de « Transformer » passaient par `echouer`, qui pose
+ * `phase: "echec"`. Or c'est la phase de la **lecture** : une fois posée, le
+ * bouton restait éteint — `pret` demande `phase === "lue"` — et plus rien ne
+ * le rallumait. L'écran affichait une analyse complète, payée, qu'on ne
+ * pouvait plus transformer ni faire disparaître : il fallait recharger la page.
+ *
+ * Une panne de la sortie n'est pas une panne de la lecture. Le dire est
+ * exactement ce que la règle 5 demande, et cela suffit à débloquer l'écran.
+ */
+function refuser(hote, { motif = "", panne = "", queFaire = "" } = {}) {
+  etat.versement = null;
+  dire(hote, { motif, panne, queFaire });
+}
+
+/**
+ * Poser ce qu'il y a à dire dans l'alerte, sans rien décider d'autre.
+ *
+ * **Les trois textes sont nommés, et non rangés dans un ordre.** `panne` est le
+ * diagnostic du serveur, rendu dans un cadre qui annonce « ce diagnostic vient
+ * du serveur » ; `queFaire` est ce que l'écran conseille. Passés en troisième
+ * et quatrième position, les deux se confondaient — et se sont confondus : deux
+ * explications de l'écran sont parties dans le cadre du serveur, où elles se
+ * lisaient comme des pannes distantes. Nommés, la confusion ne se pose plus.
+ */
+function dire(hote, { motif = "", panne = "", queFaire = "" } = {}) {
   etat.motif = motif;
   etat.panne = texte(panne);
   etat.queFaire = texte(queFaire);
+  redessiner(hote);
+}
+
+/**
+ * Refermer l'alerte.
+ *
+ * **Une alerte qu'on ne peut pas fermer est un écran dont on ne sort pas.**
+ * Elle reste tant qu'elle a quelque chose à dire, et s'en va quand on l'a lue —
+ * ce qui est à l'écran dessous, lui, ne bouge pas.
+ */
+function tairelAlerte(hote) {
+  etat.motif = "";
+  etat.panne = "";
+  etat.queFaire = "";
   redessiner(hote);
 }
 

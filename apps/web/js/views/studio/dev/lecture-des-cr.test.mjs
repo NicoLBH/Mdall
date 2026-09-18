@@ -1802,8 +1802,10 @@ test("un document deja en texte n'a rien a ranger, et ce n'est pas un defaut", (
   const html = renderLaLecture(unEtatDeTexte());
 
   // La phrase est écrite dans le gabarit, pas passée par `escapeHtml` : elle
-  // garde son apostrophe. On cherche donc un fragment qui n'en porte pas.
-  assert.match(html, /a été extrait, rien n/);
+  // garde ses apostrophes, et ses retours à la ligne. On cherche donc des
+  // fragments courts, sans apostrophe et sans coupure.
+  assert.match(html, /déjà dans Fichiers/);
+  assert.match(html, /rien à y écrire/);
   // Le dire en rouge ferait chercher une panne là où tout s'est bien passé.
   assert.equal(/lecture-cr__rangement est-douteux/.test(html), false);
 });
@@ -1817,4 +1819,92 @@ test("le document lu est bien celui du fichier, ligne a ligne", () => {
   // tronqué à la première page passerait.
   assert.match(html, /Notice incendie/);
   assert.match(html, /CF 1\/2 h\./);
+});
+
+
+/* ── Une panne de la sortie n'est pas une panne de la lecture ─────────────
+ *
+ * Les refus de « Transformer » posaient `phase: "echec"` — la phase de la
+ * lecture. Le bouton restait alors éteint pour toujours, et l'alerte ne se
+ * fermait pas : l'écran affichait une analyse complète, payée, qu'on ne pouvait
+ * plus ni transformer ni faire disparaître. Il fallait recharger la page.
+ */
+
+/** Une lecture qui a abouti, avec une alerte par-dessus. */
+const avecAlerte = (surcharge) => unEtat({
+  phase: "lue", fichier: { name: "cr.pdf" }, md: uneRestitution(), ...surcharge
+});
+
+test("l'alerte se referme, quelle que soit la panne", () => {
+  // Une alerte qu'on ne peut pas fermer est un écran dont on ne sort pas.
+  for (const vue of [
+    avecAlerte({ motif: "Il n'y a rien à proposer pour l'instant." }),
+    unEtat({ phase: "echec", motif: "La lecture n'a pas abouti", panne: "500" }),
+    avecAlerte({ motif: "Refusé", queFaire: "Faites autrement." })
+  ]) {
+    assert.match(renderLaLecture(vue), /data-lecture-cr-alerte-fermer/);
+  }
+});
+
+test("sans rien à dire, il n'y a pas d'alerte à fermer", () => {
+  assert.equal(renderLaLecture(avecAlerte({})).includes("data-lecture-cr-alerte-fermer"), false);
+});
+
+test("une explication de l'écran ne se donne pas pour un diagnostic du serveur", () => {
+  // Le cadre du diagnostic annonce « ce diagnostic vient du serveur » : y poser
+  // nos propres mots ferait passer une explication pour une panne distante.
+  const nos = renderLaLecture(avecAlerte({ motif: "Refusé", queFaire: "Le document d'abord." }));
+  assert.equal(nos.includes("vient du serveur"), false);
+  assert.equal(/lecture-cr__alerte-panne/.test(nos), false);
+
+  const sien = renderLaLecture(avecAlerte({ motif: "Panne", panne: "rls refuse" }));
+  assert.match(sien, /vient du serveur/);
+  assert.match(sien, /lecture-cr__alerte-panne/);
+});
+
+test("Transformer refuse sans éteindre la lecture", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ecran = readFileSync(new URL("./lecture-des-cr.js", import.meta.url), "utf8");
+  const sortie = ecran.slice(
+    ecran.indexOf("async function transformer"), ecran.indexOf("function echouer(")
+  );
+
+  // `echouer` pose `phase: "echec"` — la phase de la **lecture**. `pret` demande
+  // `phase === "lue"` : une fois posée, le bouton ne se rallumait plus, et il
+  // fallait recharger la page.
+  assert.notEqual(sortie.length, 0, "la sortie de l'écran a changé de nom");
+  assert.equal(sortie.includes("echouer("), false, "un refus éteint encore la lecture");
+  assert.match(sortie, /refuser\(/, "aucun refus n'est dit");
+});
+
+test("les trois textes d'une alerte sont nommés, et non rangés dans un ordre", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ecran = readFileSync(new URL("./lecture-des-cr.js", import.meta.url), "utf8");
+
+  // `panne` est le diagnostic du serveur, rendu dans un cadre qui l'annonce
+  // comme tel ; `queFaire` est ce que l'écran conseille. En troisième et
+  // quatrième position, les deux se confondaient — et se sont confondus.
+  for (const nom of ["echouer", "refuser", "dire"]) {
+    assert.match(ecran,
+      new RegExp(`function ${nom}\\(hote, \\{ motif = "", panne = "", queFaire = "" \\} = \\{\\}\\)`),
+      `${nom} range encore ses textes dans un ordre`);
+  }
+
+  // Et aucun appel ne passe un texte en deuxième position.
+  const appels = ecran.match(/\b(echouer|refuser)\(hote,[^\n]*/g) ?? [];
+  assert.notEqual(appels.length, 0);
+  for (const appel of appels) {
+    assert.match(appel, /\(hote, \{/, `un appel range ses textes dans un ordre : ${appel}`);
+  }
+});
+
+test("un refus ne touche pas à la phase de la lecture", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ecran = readFileSync(new URL("./lecture-des-cr.js", import.meta.url), "utf8");
+  const refus = ecran.slice(
+    ecran.indexOf("function refuser("), ecran.indexOf("/** Poser ce qu'il y a à dire")
+  );
+
+  assert.notEqual(refus.length, 0);
+  assert.equal(/etat\.phase/.test(refus), false, "le refus écrit la phase de la lecture");
 });
