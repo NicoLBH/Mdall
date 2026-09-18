@@ -50,10 +50,14 @@ export const EXTENSION_PAR_DEFAUT = ".md";
  */
 export const EXTENSIONS_ECRITES = [".md", ".txt", ".csv", ".ref", ".ddb", ".ctr", ".json"];
 
+/** Ce qui sépare un dossier du suivant dans la saisie. */
+export const SEPARATEUR = "/";
+
 /** Pourquoi un nom est refusé. */
 export const REFUS = {
   SANS_NOM: "sans-nom",
   UN_CHEMIN: "un-chemin",
+  UN_DOSSIER_SANS_NOM: "un-dossier-sans-nom",
   DEJA_PRIS: "deja-pris",
   PAS_DU_TEXTE: "pas-du-texte"
 };
@@ -61,7 +65,8 @@ export const REFUS = {
 /** Ce qu'on dit de chaque refus. Écrit une fois (règle 10). */
 export const REFUS_DITS = {
   [REFUS.SANS_NOM]: "Donnez un nom à ce fichier.",
-  [REFUS.UN_CHEMIN]: "Un nom de fichier, pas un chemin : ni « / », ni « \\ », ni « .. ».",
+  [REFUS.UN_CHEMIN]: "Ni « \\ », ni « .. » : « / » sépare les dossiers, le reste est un nom.",
+  [REFUS.UN_DOSSIER_SANS_NOM]: "Un « / » sépare deux noms : il en faut un de chaque côté.",
   [REFUS.DEJA_PRIS]: "Ce dossier porte déjà un fichier de ce nom.",
   [REFUS.PAS_DU_TEXTE]:
     `On n'écrit à la main que du texte : ${EXTENSIONS_ECRITES.join(", ")}.`
@@ -88,28 +93,66 @@ export function nomComplet(saisi = "") {
 }
 
 /**
+ * Ce que la saisie désigne : des dossiers à traverser, et un nom de fichier.
+ *
+ * ## Pourquoi le « / » a cessé d'être un refus
+ *
+ * Il l'était, et pour une bonne raison : un nom qui traverse est un nom qui
+ * peut écrire ailleurs qu'où l'on croit. Mais le fil d'Ariane **dit où l'on
+ * est**, et le champ est posé à son bout : « Fichiers / Documents / [ perso/
+ * notice.md ] » se lit exactement comme ce qu'il fait. Le refuser obligeait à
+ * créer le dossier d'abord, à y entrer, puis à revenir écrire — trois gestes
+ * pour un.
+ *
+ * Le chemin est **relatif au dossier ouvert**, toujours. Un « / » en tête ne
+ * veut donc pas dire « depuis la racine » : il veut dire qu'un dossier n'a pas
+ * de nom, et c'est refusé.
+ *
+ * @returns {{dossiers: string[], nom: string}}
+ */
+export function leCheminSaisi(saisi = "") {
+  const morceaux = String(saisi ?? "").split(SEPARATEUR).map((morceau) => morceau.trim());
+  return { dossiers: morceaux.slice(0, -1), nom: morceaux[morceaux.length - 1] ?? "" };
+}
+
+/**
  * Ce qui empêche d'écrire ce fichier — vide quand rien n'empêche.
  *
- * @param {string} saisi le nom tapé
+ * **`DEJA_PRIS` ne se vérifie que dans le dossier ouvert.** `dejaLa` décrit
+ * celui-là, et non les sous-dossiers qu'on n'a pas lus : affirmer qu'un nom est
+ * libre dans un dossier qu'on n'a pas regardé serait prétendre savoir (règle
+ * 5). C'est le dépôt, qui aura résolu le dossier, qui refusera la collision.
+ *
+ * @param {string} saisi le nom tapé, éventuellement précédé de dossiers
  * @param {object} [options]
  * @param {object[]} [options.dejaLa] les fichiers du dossier où l'on écrit
  * @returns {string[]}
  */
 export function pourquoiOnNePeutPasLEcrire(saisi = "", { dejaLa = [] } = {}) {
-  const nom = texte(saisi);
-  if (!nom) return [REFUS.SANS_NOM];
+  if (!texte(saisi)) return [REFUS.SANS_NOM];
 
-  // Un chemin d'abord : « ../secret.md » n'est pas un nom refusé parce qu'il est
-  // pris, il est refusé parce que ce n'est pas un nom. Le dire dans cet ordre
-  // évite un message qui envoie chercher au mauvais endroit.
+  const { dossiers, nom } = leCheminSaisi(saisi);
+  if (!nom) return [REFUS.UN_DOSSIER_SANS_NOM];
+  if (dossiers.some((dossier) => !dossier)) return [REFUS.UN_DOSSIER_SANS_NOM];
+
+  // Le chemin d'abord : « ..\secret.md » n'est pas un nom refusé parce qu'il
+  // est pris, il est refusé parce que ce n'est pas un nom. Le dire dans cet
+  // ordre évite un message qui envoie chercher au mauvais endroit.
   //
-  // Le séparateur écarte toute traversée — elle en demande un. Le « .. » seul,
-  // lui, n'écarte qu'un cas, et c'en est un : « .. » et « . » ne sont pas des
-  // noms de fichier, et sans ce refus ils deviendraient « ...md » et « ..md ».
-  if (/[/\\]/.test(nom) || /^\.+$/.test(nom)) return [REFUS.UN_CHEMIN];
+  // La barre inverse n'est pas un séparateur ici : elle vient d'un chemin
+  // collé depuis ailleurs, et l'accepter écrirait un fichier dont le nom porte
+  // une barre. Le « .. » et le « . » n'écartent qu'un cas, et c'en est un :
+  // sans ce refus ils deviendraient « ...md » et « ..md ».
+  const segments = [...dossiers, nom];
+  if (segments.some((segment) => segment.includes("\\") || /^\.+$/.test(segment))) {
+    return [REFUS.UN_CHEMIN];
+  }
 
   const complet = nomComplet(nom);
   if (!EXTENSIONS_ECRITES.includes(extensionDe(complet))) return [REFUS.PAS_DU_TEXTE];
+
+  // Un sous-dossier ne se vérifie pas d'ici : on ne l'a pas lu.
+  if (dossiers.length > 0) return [];
 
   // Le même nom, à la casse près : deux fichiers « Notice.md » et « notice.md »
   // dans un dossier se confondent à l'œil, et l'on ouvre le mauvais.
@@ -143,7 +186,13 @@ export function typeDuFichier(nom = "") {
  * nom : les composer à deux endroits ferait un jour un fichier qui ne s'appelle
  * pas comme sa ligne.
  *
- * @returns {{nom: string, type: string, contenu: string, ligne: object}|null}
+ * `dossiers` sont ceux à traverser depuis celui qui est ouvert, et à créer
+ * s'ils n'existent pas. La ligne porte `folder_id: folderId` — **celui du
+ * dossier ouvert**, que le dépôt remplacera par celui du dernier dossier du
+ * chemin. Y mettre `null` aurait fait atterrir à la racine tout fichier dont la
+ * création des dossiers échoue à mi-parcours.
+ *
+ * @returns {{nom, type, contenu, dossiers, ligne}|null}
  */
 export function leFichierAEcrire(saisi = "", {
   contenu = "", projectId = "", folderId = null, parQui = "", dejaLa = []
@@ -151,13 +200,15 @@ export function leFichierAEcrire(saisi = "", {
   if (pourquoiOnNePeutPasLEcrire(saisi, { dejaLa }).length) return null;
   if (!texte(projectId)) return null;
 
-  const nom = nomComplet(saisi);
+  const { dossiers, nom: saisiSeul } = leCheminSaisi(saisi);
+  const nom = nomComplet(saisiSeul);
   const corps = String(contenu ?? "");
 
   return {
     nom,
     type: typeDuFichier(nom),
     contenu: corps,
+    dossiers,
     ligne: {
       project_id: texte(projectId),
       folder_id: folderId || null,
@@ -211,7 +262,12 @@ export function leFichierAReecrire(document = null, {
   const autres = (dejaLa ?? []).filter((piece) => texte(piece?.id) !== id);
   if (pourquoiOnNePeutPasLEcrire(saisi, { dejaLa: autres }).length) return null;
 
-  const nom = nomComplet(saisi);
+  // **Renommer avec un chemin déplace.** Le champ est au bout du fil d'Ariane,
+  // qui dit d'où l'on part : « Fichiers / Documents / [ perso/notice.md ] » se
+  // lit comme ce qu'il fait. Le refuser ici pendant qu'on l'accepte à la
+  // création aurait fait deux règles pour un même champ.
+  const { dossiers, nom: saisiSeul } = leCheminSaisi(saisi);
+  const nom = nomComplet(saisiSeul);
   const type = typeDuFichier(nom);
   const moment = Number(quand) || 0;
   if (!moment) return null;
@@ -220,6 +276,7 @@ export function leFichierAReecrire(document = null, {
     nom,
     type,
     contenu: String(contenu ?? ""),
+    dossiers,
     scope: `${folderId || "racine"}/ecrit/${moment}`,
     patch: {
       filename: nom,

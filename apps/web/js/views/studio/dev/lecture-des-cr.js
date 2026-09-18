@@ -55,7 +55,9 @@ import {
 import {
   EXTENSIONS_LISIBLES, estUnFichierTexte, laRestitutionDunTexte, nomDuFichier
 } from "../../../services/lire-un-fichier-texte.js";
-import { entreesDuDossier } from "../../../services/choisir-depuis-fichiers.js";
+import {
+  LECTURE_DU_CHOIX, entreesDuDossier
+} from "../../../services/choisir-depuis-fichiers.js";
 import { renderChoisirUnFichier } from "../../ui/choisir-un-fichier.js";
 import { PHRASES_DU_RANGEMENT, RANGEE } from "../../../services/restitution-rangee.js";
 import {
@@ -2571,9 +2573,18 @@ function fermerLeChoix(hote) {
 /**
  * Prendre un document choisi, et le lire.
  *
- * Le texte est **relu au stockage**, et non repris d'un cache : la liste d'un
- * dossier ne descend pas le contenu des fichiers, et le faire descendrait
- * quarante documents pour en ouvrir un.
+ * ## Le contenu est **relu au stockage**
+ *
+ * Et non repris d'un cache : la liste d'un dossier ne descend pas le contenu
+ * des fichiers, et le faire descendrait quarante documents pour en ouvrir un.
+ *
+ * ## Un PDF se prend comme un texte, et coûte autre chose
+ *
+ * On redescend ses octets plutôt que de demander de le redéposer : il est déjà
+ * dans le projet, et le redéposer en ferait un second exemplaire — le genre de
+ * doublon qu'on ne remarque qu'au vingtième. Ensuite, le parcours est celui
+ * d'un PDF déposé, extraction et restitution comprises : c'est ce que la liste
+ * annonçait à côté de son nom.
  */
 async function prendreLeDocument(hote, documentId) {
   const choisi = (etat.choix?.entrees ?? []).find((entree) => entree.id === texte(documentId));
@@ -2583,36 +2594,40 @@ async function prendreLeDocument(hote, documentId) {
   redessiner(hote);
 
   const projectId = await projetCourant();
+  const rate = (dit) => {
+    etat.choix = { ...etat.choix, enCours: false, motif: dit };
+    redessiner(hote);
+  };
 
   try {
-    const [{ listDocumentDirectory }, { lireLeTexteDuFichier }] = await Promise.all([
+    const [{ listDocumentDirectory }, stockage] = await Promise.all([
       import("../../../services/project-supabase-sync.js"),
       import("../../../services/fichier-a-la-main-supabase.js")
     ]);
 
     const contenu = await listDocumentDirectory(projectId, texte(etat.choix.dossier) || null);
     const piece = (contenu?.files ?? []).find((fichier) => texte(fichier?.id) === texte(documentId));
-    const lu = piece ? await lireLeTexteDuFichier(piece) : null;
+    if (!piece) return rate("Ce document n'est plus dans ce dossier. Rouvrez-le.");
 
-    if (typeof lu !== "string") {
-      etat.choix = {
-        ...etat.choix, enCours: false,
-        motif: "Ce document n'a pas pu être lu. Réessayez dans un instant."
-      };
-      redessiner(hote);
-      return;
-    }
+    const enTexte = choisi.lecture === LECTURE_DU_CHOIX.TEXTE;
+    const lu = enTexte
+      ? await stockage.lireLeTexteDuFichier(piece)
+      : await stockage.lireLesOctetsDuFichier(piece);
+
+    // `null` est un échec de lecture ; une chaîne vide est un fichier vide, et
+    // le parcours le dira à sa façon. Les confondre ferait annoncer une panne
+    // pour un document qui ne porte rien (règle 5).
+    if (lu === null) return rate("Ce document n'a pas pu être lu. Réessayez dans un instant.");
 
     etat.choix = null;
     // Un `File` plutôt qu'un `Blob` : tout le parcours nomme le document par
     // `fichier.name`, et un `Blob` n'en a pas.
-    await lire(hote, new File([lu], nomDuFichier(piece) || choisi.nom, { type: "text/markdown" }));
+    const nom = nomDuFichier(piece) || choisi.nom;
+    await lire(hote, new File([lu], nom, {
+      type: enTexte ? "text/markdown" : "application/pdf"
+    }));
   } catch (erreur) {
-    etat.choix = {
-      ...etat.choix, enCours: false,
-      motif: `Ce document n'a pas pu être lu (${texte(erreur?.message) || "cause inconnue"}).`
-    };
-    redessiner(hote);
+    rate(`Ce document n'a pas pu être lu (${texte(erreur?.message) || "cause inconnue"}).`);
   }
 }
 

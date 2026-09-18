@@ -6126,11 +6126,17 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   align-items:center;
   gap:8px;
   flex-wrap:wrap;
+  /* La barre occupe la largeur de son en-tête : sans cela les deux groupes se
+     serrent à gauche, et « à droite » ne veut rien dire. */
+  width:100%;
 }
 
+/* Le zoom, la rotation et la recherche d'un PDF : les mêmes deux groupes que
+   partout, avec un peu plus d'air entre eux. Le `width` et le
+   `justify-content` qu'elle portait sont partis : ils vivent maintenant sur la
+   barre et sur le groupe de gauche, pour toutes les barres à la fois — une
+   règle écrite à deux endroits finit par ne s'appliquer qu'à l'un des deux. */
 .documents-report-table__actions--pdf-preview{
-  width:100%;
-  justify-content:space-between;
   gap:10px;
 }
 
@@ -6138,7 +6144,13 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   display:flex;
   align-items:center;
   gap:8px;
+  min-width:0;
 }
+
+/* **Ce qui suit le groupe de gauche va à droite.** Un `margin` plutôt qu'un
+   `justify-content` sur le parent : il ne fait rien quand il n'y a qu'un
+   groupe, et il n'a donc pas besoin d'être posé au cas par cas. */
+.documents-report-table__actions-group--start{ margin-right:auto; }
 
 .documents-report-table__icon-btn{
   width:32px;
@@ -22778,6 +22790,17 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
    retouche de la barre. */
 .documents-breadcrumb__nom{
   min-width:200px; max-width:320px; height:26px; padding:2px 8px; font-size:13px;
+  /* Il ne se replie pas sous le chemin : c'est le bout du fil, et le lire sur
+     une seconde ligne ferait perdre de quel dossier il est le bout. */
+  flex:0 1 auto;
+}
+
+/* Le fil qui porte un nom à saisir ne va pas à la ligne. C'est le chemin qui
+   se serre, et qui coupe par la gauche s'il le faut — il se relit dans
+   l'arborescence, le nom qu'on tape ne se relit nulle part. */
+.documents-breadcrumb--nomme{ flex-wrap:nowrap; }
+.documents-breadcrumb--nomme .documents-breadcrumb__link{
+  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .documents-ecriture__dit{ color:var(--muted); font-size:12px; }
 .documents-ecriture__dit b{ color:var(--text); }

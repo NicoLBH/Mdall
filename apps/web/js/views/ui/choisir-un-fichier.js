@@ -11,8 +11,15 @@
  *
  * ## Ce qui ne se choisit pas s'affiche quand même
  *
- * Éteint, avec sa raison en survol. Masquer les PDF ferait paraître vide un
- * dossier qui porte douze comptes rendus : on chercherait une panne (règle 5).
+ * Éteint, avec sa raison. Masquer ce qu'on refuse ferait paraître vide un
+ * dossier qui porte douze documents : on chercherait une panne (règle 5).
+ *
+ * ## Et ce qui se choisit dit ce qu'il coûtera
+ *
+ * Un PDF passe par une extraction et une restitution, donc par un appel payé ;
+ * un document de texte, non. La colonne le dit **avant** qu'on clique : un prix
+ * qu'on découvre après coup, sur une facture, n'entre jamais dans la décision
+ * (fondamental 13).
  *
  * ## Il est pur
  *
@@ -22,7 +29,7 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
 import {
-  ENTREE, PHRASES_DU_REFUS, cheminDuDossier, phraseDuDossier
+  CE_QUE_CA_DEMANDE, ENTREE, PHRASES_DU_REFUS, cheminDuDossier, phraseDuDossier
 } from "../../services/choisir-depuis-fichiers.js";
 
 /** Le chemin du dossier ouvert : chaque morceau remonte. */
@@ -47,12 +54,13 @@ function renderUneEntree(entree) {
     ? `data-choisir-dossier="${escapeHtml(entree.id)}"`
     : (entree.choisissable ? `data-choisir-document="${escapeHtml(entree.id)}"` : "");
   const refus = entree.pourquoi ? (PHRASES_DU_REFUS[entree.pourquoi] ?? "") : "";
+  const dit = refus || (entree.lecture ? (CE_QUE_CA_DEMANDE[entree.lecture] ?? "") : "");
 
   return `
     <div class="documents-repo__row documents-repo__row--file${
       marque ? " is-clickable" : " choisir-fichier__ligne--eteinte"}"
       ${marque ? `role="button" tabindex="0" ${marque}` : ""}
-      ${refus ? `title="${escapeHtml(refus)}"` : ""}
+      ${dit ? `title="${escapeHtml(dit)}"` : ""}
     >
       <div class="documents-repo__cell documents-repo__cell--name">
         <span class="documents-repo__icon">${
@@ -60,7 +68,7 @@ function renderUneEntree(entree) {
         <span class="documents-repo__name">${escapeHtml(entree.nom)}</span>
       </div>
       <div class="documents-repo__cell documents-repo__cell--message">
-        <div class="documents-repo__message-main">${escapeHtml(refus)}</div>
+        <div class="documents-repo__message-main">${escapeHtml(dit)}</div>
       </div>
     </div>
   `;

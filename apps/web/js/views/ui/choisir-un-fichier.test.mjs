@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { renderChoisirUnFichier, renderLeChemin } from "./choisir-un-fichier.js";
-import { ENTREE, PAS_CHOISISSABLE, entreesDuDossier } from "../../services/choisir-depuis-fichiers.js";
+import {
+  ENTREE, LECTURE_DU_CHOIX, entreesDuDossier
+} from "../../services/choisir-depuis-fichiers.js";
 
 const DOSSIER = entreesDuDossier({
   folders: [{ id: "f1", name: "Incendie" }],
@@ -12,19 +14,36 @@ const DOSSIER = entreesDuDossier({
   ]
 });
 
-test("un document de texte se clique, un PDF non", () => {
+test("un texte et un PDF se cliquent tous les deux", () => {
   const html = renderChoisirUnFichier({ entrees: DOSSIER });
-
   assert.match(html, /data-choisir-document="d1"/);
-  // Il est là — on ne masque pas ce qu'on refuse (règle 5) — mais rien ne le
-  // prend : un clic qui n'aboutit pas ne se distingue pas d'une panne.
-  assert.match(html, /cr\.pdf/);
-  assert.equal(html.includes('data-choisir-document="d2"'), false);
+  assert.match(html, /data-choisir-document="d2"/);
 });
 
-test("un PDF dit pourquoi il ne se choisit pas", () => {
+test("un PDF annonce ce qu'il coûtera, un texte ne dit rien", () => {
   const html = renderChoisirUnFichier({ entrees: DOSSIER });
-  assert.match(html, /il faut l&#39;extraire/);
+
+  // Un prix qu'on découvre après coup n'entre jamais dans la décision.
+  assert.match(html, /extrait puis restitué/);
+  // Et une phrase sur chaque ligne ferait du bruit là où il n'y a rien à dire :
+  // deux entrées sur trois n'ont rien à annoncer, et leur colonne reste vide.
+  const colonnes = [...html.matchAll(/documents-repo__message-main">([^<]*)</g)]
+    .map((trouve) => trouve[1].trim());
+
+  assert.equal(colonnes.length, 3, "un dossier, un texte, un PDF");
+  assert.deepEqual(colonnes.filter(Boolean), ["Ce document sera extrait puis restitué par le modèle."]);
+});
+
+test("un format illisible ne se clique pas, et dit pourquoi", () => {
+  const html = renderChoisirUnFichier({
+    entrees: entreesDuDossier({ files: [{ id: "d9", name: "plan.dwg", storage_bucket: "b", storage_path: "p" }] })
+  });
+
+  // Il est là — on ne masque pas ce qu'on refuse (règle 5) — mais rien ne le
+  // prend : un clic qui n'aboutit pas ne se distingue pas d'une panne.
+  assert.match(html, /plan\.dwg/);
+  assert.equal(html.includes('data-choisir-document="d9"'), false);
+  assert.match(html, /ne sait pas lire ce format/);
   assert.match(html, /choisir-fichier__ligne--eteinte/);
 });
 
@@ -95,5 +114,6 @@ test("chaque entrée porte son type", () => {
   // Cherché par son nom, et non par son rang : la liste est triée, et un test
   // qui compte les places se casserait au premier fichier renommé.
   const pdf = DOSSIER.find((entree) => entree.nom === "cr.pdf");
-  assert.equal(pdf.pourquoi, PAS_CHOISISSABLE.PAS_DU_TEXTE);
+  assert.equal(pdf.lecture, LECTURE_DU_CHOIX.PDF);
+  assert.equal(pdf.pourquoi, "");
 });

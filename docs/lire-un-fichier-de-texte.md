@@ -60,6 +60,18 @@ même endroit — écrire un fichier et renommer celui qu'on modifie sont le mê
 geste, et deux champs dessinés séparément auraient fini par ne plus se
 ressembler.
 
+Le crayon, puis « Annuler » et « Enregistrer », sont **à droite de la barre**.
+Ils s'y serraient à gauche, contre les lectures : la règle qui pousse le second
+groupe d'une barre d'outils vers la droite n'existait que sur la barre du
+lecteur de PDF. Elle vit maintenant sur la barre, pour toutes les barres à la
+fois — une règle écrite à deux endroits finit par ne s'appliquer qu'à l'un des
+deux (règle 4).
+
+Et **le champ du nom tient sur la ligne du fil**. Il passait dessous dès que le
+chemin s'allongeait, et l'on perdait de quel dossier il était le bout. C'est le
+chemin qui se serre maintenant, et qui coupe par la gauche s'il le faut : il se
+relit dans l'arborescence, le nom qu'on tape ne se relit nulle part.
+
 Trois choses méritent d'être dites :
 
 - **On travaille sur une copie.** Annuler doit rendre le fichier tel qu'il est
@@ -77,6 +89,45 @@ Trois choses méritent d'être dites :
 
 Un enregistrement qui échoue **garde le texte à l'écran**. Le perdre ferait
 recommencer une saisie de trois cents lignes pour une panne de réseau.
+
+### Un « / » crée le dossier
+
+Le fil d'Ariane dit d'où l'on part, et le champ est posé à son bout. Ce qu'on y
+tape se lit donc comme ce qu'il fait :
+
+| Depuis `Fichiers / Documents /`, on tape… | …et le fichier atterrit à |
+|---|---|
+| `teste.md` | `Fichiers / Documents / teste.md` |
+| `perso/teste.md` | `Fichiers / Documents / perso / teste.md`, `perso` étant créé s'il n'existe pas |
+| `perso/notices/teste.md` | les deux dossiers sont creusés de proche en proche |
+
+Le « / » était refusé, et pour une bonne raison : un nom qui traverse est un nom
+qui peut écrire ailleurs qu'où l'on croit. Mais le refuser obligeait à créer le
+dossier d'abord, à y entrer, puis à revenir écrire — **trois gestes pour un**.
+
+Le chemin est **relatif au dossier ouvert**, toujours. Un « / » en tête ne veut
+donc pas dire « depuis la racine » : il veut dire qu'un dossier n'a pas de nom,
+et c'est refusé — comme `perso//notice.md` et `perso/`. La barre inverse n'est
+pas un séparateur : elle vient d'un chemin collé depuis ailleurs, et l'accepter
+écrirait un fichier dont le nom porte une barre.
+
+**Renommer avec un chemin déplace**, par le même champ et la même règle. Le
+refuser à la modification pendant qu'on l'accepte à la création aurait fait deux
+règles pour un même champ.
+
+Deux précautions sur ce que cela écrit :
+
+- **Un dossier déjà là est repris, à la casse près.** « Perso » et « perso »
+  côte à côte se confondent à l'œil, et l'on ouvrirait le mauvais — la base
+  refuse d'ailleurs le doublon, et l'on aurait échoué sans savoir pourquoi.
+- **Le dossier d'abord, le fichier ensuite.** Déposer puis créer laisserait le
+  fichier à la racine si la création rate. Un dossier créé en route reste créé
+  si la suite échoue : c'est ennuyeux, pas grave.
+
+Une collision de nom dans un sous-dossier ne se refuse pas à la saisie : la
+liste qu'a l'écran décrit le dossier ouvert, pas ceux qu'on n'a pas lus, et
+affirmer qu'un nom y est libre serait prétendre savoir (règle 5). C'est le
+dépôt, une fois le dossier résolu, qui refuse.
 
 ### Aller ailleurs referme
 
@@ -198,20 +249,42 @@ Les dossiers d'abord, puis les fichiers, chacun dans l'ordre du **français** :
 trié sur les codes de caractères, on aurait « Zinguerie », « atelier »,
 « Étanchéité » dans cet ordre — majuscules d'abord, accents tout à la fin.
 
-Ce qui ne se choisit pas **s'affiche quand même**, éteint, avec sa raison :
-masquer les PDF ferait paraître vide un dossier qui porte douze comptes rendus,
-et l'on chercherait une panne (règle 5). Deux raisons, et elles ne se confondent
-pas :
+### Un PDF se choisit aussi, et dit ce qu'il coûtera
+
+Il ne se choisissait pas d'abord, et la raison paraissait bonne : l'extraction
+part du fichier lui-même, qu'il fallait donc déposer. Mais **le fichier est
+déjà là** — dans le stockage, attaché à sa ligne. On redescend ses octets, et
+le redéposer en aurait fait un second exemplaire du même compte rendu : le
+genre de doublon qu'on ne remarque qu'au vingtième.
+
+Le parcours est alors celui d'un PDF déposé, extraction et restitution
+comprises. C'est le seul des deux qui coûte un appel, et **la liste le dit à
+côté du nom, avant qu'on clique** : « ce document sera extrait puis restitué
+par le modèle ». Un prix qu'on découvre après coup, sur une facture, n'entre
+jamais dans la décision (fondamental 13). Un document de texte, lui, n'annonce
+rien : une phrase sur chaque ligne ferait du bruit là où il n'y a rien à dire,
+et l'œil cesserait de la voir quand elle compte.
+
+### Ce qui ne se choisit pas s'affiche quand même
+
+Éteint, avec sa raison : masquer ce qu'on refuse ferait paraître vide un
+dossier qui porte douze documents, et l'on chercherait une panne (règle 5).
+Deux raisons, et ni l'une ni l'autre n'est un format :
 
 | Raison | Ce qu'elle veut dire |
 |---|---|
-| pas du texte | Un PDF se lit très bien à l'Atelier, mais en le déposant : l'extraction part du fichier lui-même. |
-| rien à lire | Aucun contenu n'est attaché à ce document — son dépôt ne s'est pas terminé. |
+| pas lisible | Mdall ne sait pas lire ce format — un plan, une image. |
+| rien à lire | Aucun contenu n'est attaché à ce document : son dépôt ne s'est pas terminé. |
+
+Un document refusé **garde sa nature** : un `.md` dont le dépôt n'a pas abouti
+est bien du texte, il n'y a simplement rien à lire. La première version
+blanchissait ce champ, et un cassage a montré que rien n'en dépendait — le
+champ n'est jamais lu sur une entrée qu'on ne peut pas prendre.
 
 Et trois phrases pour un dossier qui n'offre rien : « ce dossier est vide »
-quand il l'est, « aucun document de texte ici » quand il ne porte que des PDF,
-« … ouvrez un dossier » quand il porte aussi des dossiers. La première invite à
-déposer, les autres à chercher ailleurs.
+quand il l'est, « rien à lire ici » quand il ne porte que des formats qu'on ne
+sait pas lire, « … ouvrez un dossier » quand il porte aussi des dossiers. La
+première invite à déposer, les autres à chercher ailleurs.
 
 ## Ce que cela ne change pas
 
@@ -229,8 +302,11 @@ quel ordre, et ce qu'on dit d'un dossier qui n'offre rien. Pur.
 
 `apps/web/js/views/ui/choisir-un-fichier.js` — la liste, aux classes de Fichiers.
 
-`apps/web/js/services/fichier-a-la-main.js` — `leFichierAReecrire` : ce qu'il
-faut écrire pour réenregistrer un fichier modifié. Pur.
+`apps/web/js/services/fichier-a-la-main.js` — `leCheminSaisi`, les refus, et ce
+qu'il faut écrire pour créer ou réenregistrer un fichier. Pur.
+
+`apps/web/js/services/fichier-a-la-main-supabase.js` — `dossierDuChemin` : le
+dossier creusé de proche en proche, et la collision refusée une fois résolu.
 
 `apps/web/js/services/reconstitution-markdown.js` — `lecturesDeLaRestitution` :
 « Origine » n'existe que face à un PDF.

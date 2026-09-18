@@ -76,9 +76,14 @@ pas de 40 contre 19, et 189px de dérive à la dixième ligne.
 | Motif | Ce que c'est |
 |---|---|
 | `SANS_NOM` | un fichier sans nom |
-| `UN_CHEMIN` | un nom qui porte `/` ou `\` — ou qui n'est que des points |
+| `UN_DOSSIER_SANS_NOM` | un « / » sans nom d'un côté : `/notice.md`, `perso//x.md`, `perso/` |
+| `UN_CHEMIN` | un `\`, ou un segment qui n'est que des points |
 | `PAS_DU_TEXTE` | une extension qui n'est pas du texte |
-| `DEJA_PRIS` | le dossier a déjà un fichier de ce nom |
+| `DEJA_PRIS` | le dossier ouvert a déjà un fichier de ce nom |
+
+**Le « / » n'est plus un refus : il crée un dossier.** `perso/notice.md` dépose
+dans `perso`, créé s'il n'existe pas. Le chemin est relatif au dossier ouvert —
+c'est ce que le fil d'Ariane montre. Voir `docs/lire-un-fichier-de-texte.md`.
 
 L'extension par défaut est `.md` : un nom saisi sans extension la reçoit. Les
 extensions acceptées sont celles qu'on écrit et qu'on relit ici — `.md`,
@@ -86,9 +91,10 @@ extensions acceptées sont celles qu'on écrit et qu'on relit ici — `.md`,
 `.json`.
 
 Un nom qui n'est que des points mérite un mot : la première version refusait
-`..`, ce qui ne servait à rien — une remontée de dossier porte toujours un
-séparateur, déjà refusé. Casser cette ligne ne faisait rien tomber. La règle
-utile est « un nom qui n'est fait que de points n'est pas un nom ».
+`..`, ce qui ne servait à rien tant que tout séparateur était refusé. Casser
+cette ligne ne faisait rien tomber. Depuis que le « / » crée un dossier, elle
+porte pour de bon : `perso/../notice.md` remonterait d'un dossier, et c'est
+refusé segment par segment.
 
 ## Ce que la ligne du document dit
 

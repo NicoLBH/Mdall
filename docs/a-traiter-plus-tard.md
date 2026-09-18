@@ -3759,7 +3759,7 @@ avec elles plutôt que d'afficher des zéros : pas de mesure de fidélité, pas 
 lecture « Origine », « 0 € — déjà du texte », rien à ranger.
 Voir `docs/lire-un-fichier-de-texte.md`.
 
-**Ce qui n'a pas été fait, et qui reste ouvert.** Un compte rendu **PDF** déjà
-déposé dans Fichiers ne se relit toujours pas depuis là : il faut le redéposer
-dans l'Atelier. Sa transcription, elle, se relit déjà — et `relireLaRestitution`
-sait ne pas repayer. Ce qui manque est le chemin, pas la décision.
+**Un PDF déjà déposé se choisit aussi.** Ses octets se redescendent du stockage
+plutôt que d'être redéposés — ce qui en aurait fait un second exemplaire — et le
+parcours est celui d'un PDF déposé. La liste dit à côté de son nom qu'il sera
+extrait puis restitué : c'est le seul des deux choix qui coûte un appel.

@@ -30,6 +30,7 @@
  */
 
 import { estUnFichierTexte, nomDuFichier } from "./lire-un-fichier-texte.js";
+import { extensionDe } from "./fichier-a-la-main.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -37,28 +38,47 @@ const texte = (valeur) => String(valeur ?? "").trim();
 export const ENTREE = { DOSSIER: "dossier", FICHIER: "fichier" };
 
 /**
+ * Ce qu'un document déjà déposé demande pour être lu.
+ *
+ * **Le texte ne demande rien** : il est déjà le document. **Un PDF demande une
+ * extraction**, et c'est le seul parcours qui coûte un appel — il est donc dit,
+ * à côté du document, avant qu'on clique.
+ */
+export const LECTURE_DU_CHOIX = { TEXTE: "texte", PDF: "pdf" };
+
+export const CE_QUE_CA_DEMANDE = {
+  [LECTURE_DU_CHOIX.TEXTE]: "",
+  [LECTURE_DU_CHOIX.PDF]: "Ce document sera extrait puis restitué par le modèle."
+};
+
+/**
  * Pourquoi un fichier ne se choisit pas.
  *
- * Une seule raison pour l'instant, et elle mérite d'être nommée : un PDF se lit
- * très bien à l'Atelier — mais en le déposant, parce qu'il faut l'extraire, et
- * l'extraction a besoin du fichier lui-même. Le jour où on saura le relire
- * depuis Fichiers, c'est cette raison-là qui disparaîtra.
+ * Il ne reste que deux cas, et ni l'un ni l'autre n'est un format : un document
+ * que Mdall ne sait pas lire, et un document dont le dépôt ne s'est pas terminé.
  */
 export const PAS_CHOISISSABLE = {
-  PAS_DU_TEXTE: "pas-du-texte",
+  PAS_LISIBLE: "pas-lisible",
   RIEN_A_LIRE: "rien-a-lire"
 };
 
 export const PHRASES_DU_REFUS = {
-  [PAS_CHOISISSABLE.PAS_DU_TEXTE]:
-    "Ce document n'est pas du texte : il faut l'extraire, et l'extraction part du fichier. Déposez-le.",
+  [PAS_CHOISISSABLE.PAS_LISIBLE]:
+    "Mdall ne sait pas lire ce format : un PDF, ou un document de texte.",
   [PAS_CHOISISSABLE.RIEN_A_LIRE]:
     "Aucun contenu n'est attaché à ce document : son dépôt ne s'est pas terminé."
 };
 
+/** Comment ce document se lirait — `""` s'il ne se lit pas du tout. */
+export function commentCaSeLit(document = null) {
+  const nom = nomDuFichier(document);
+  if (estUnFichierTexte(nom)) return LECTURE_DU_CHOIX.TEXTE;
+  return extensionDe(nom) === ".pdf" ? LECTURE_DU_CHOIX.PDF : "";
+}
+
 /** Pourquoi ce document ne se choisit pas — ou `""` s'il se choisit. */
 export function pourquoiPasChoisissable(document = null) {
-  if (!estUnFichierTexte(nomDuFichier(document))) return PAS_CHOISISSABLE.PAS_DU_TEXTE;
+  if (!commentCaSeLit(document)) return PAS_CHOISISSABLE.PAS_LISIBLE;
 
   const seau = texte(document?.storageBucket ?? document?.storage_bucket);
   const chemin = texte(document?.storagePath ?? document?.storage_path);
@@ -107,7 +127,16 @@ export function entreesDuDossier(contenu = null) {
         id: texte(fichier?.id),
         nom: nomDuFichier(fichier) || "Document",
         choisissable: !pourquoi,
-        pourquoi
+        pourquoi,
+        // **Comment il se lira**, dit avant qu'on clique : un PDF coûtera un
+        // appel, un texte non. Le découvrir après coup, sur une facture, n'est
+        // pas une façon de décider (fondamental 13).
+        //
+        // Un document refusé garde sa nature : un `.md` dont le dépôt n'a pas
+        // abouti est bien du texte, il n'y a simplement rien à lire. Le blanchir
+        // aurait été une ligne qu'aucun cassage ne fait tomber — rien ne lit ce
+        // champ sur une entrée qu'on ne peut pas prendre.
+        lecture: commentCaSeLit(fichier)
       };
     })
     .filter((entree) => entree.id)
@@ -135,10 +164,10 @@ export function cheminDuDossier(breadcrumb = []) {
  * Ce qu'on dit d'un dossier qui n'offre rien à choisir.
  *
  * Trois situations, trois phrases. « Ce dossier est vide » quand il l'est ;
- * « rien qui se lise ici » quand il ne porte que des PDF — et la nuance compte,
- * parce que la seconde invite à ouvrir un autre dossier quand la première
- * invite à en déposer. Et `""` quand il y a quelque chose : on ne commente pas
- * une liste qui se lit toute seule.
+ * « rien qui se lise ici » quand il ne porte que des formats qu'on ne sait pas
+ * lire — et la nuance compte, parce que la seconde invite à ouvrir un autre
+ * dossier quand la première invite à en déposer. Et `""` quand il y a quelque
+ * chose : on ne commente pas une liste qui se lit toute seule.
  */
 export function phraseDuDossier(entrees = []) {
   const lues = Array.isArray(entrees) ? entrees : [];
@@ -147,6 +176,6 @@ export function phraseDuDossier(entrees = []) {
   if (lues.some((entree) => entree.choisissable)) return "";
 
   return lues.some((entree) => entree.type === ENTREE.DOSSIER)
-    ? "Aucun document de texte ici. Ouvrez un dossier."
-    : "Aucun document de texte ici.";
+    ? "Rien à lire ici. Ouvrez un dossier."
+    : "Rien à lire ici.";
 }
