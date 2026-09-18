@@ -180,7 +180,8 @@ test("le bloc des propositions dit d'où elles sortent, et ce qu'on demande", ()
   // sortent ces lignes, ce qu'on demande, et ce que ça fait.
   const dit = renderCeQuePorteLeSujet({ portages: [PROPOSE] });
 
-  assert.match(dit, /Le nom « Classe de sol » apparaît dans le titre de ce sujet/);
+  assert.match(dit, /Le nom « Classe de sol » apparaît dans ce sujet/);
+  assert.doesNotMatch(dit, /dans le titre/);
   assert.match(dit, /Est-ce de celles-ci que ce sujet parle \?/);
   assert.match(dit, /Confirmer une valeur la montre « en débat »/);
   assert.match(dit, /Écarter la retire, et elle ne sera plus reproposée/);
@@ -204,7 +205,7 @@ test("deux noms rapprochés par un même titre ne s'annoncent pas comme un seul"
   const autre = { assertion: VALEUR("Altitude", "742,30"), lien: { id: "l-3" }, confirme: false };
   const dit = renderCeQuePorteLeSujet({ portages: [PROPOSE, autre] });
 
-  assert.match(dit, /Un nom de la mémoire apparaît dans le titre de ce sujet/);
+  assert.match(dit, /Des noms de la mémoire apparaissent dans ce sujet/);
   assert.doesNotMatch(dit, /Le nom «/);
 });
 
@@ -212,7 +213,7 @@ test("une valeur sans nom lisible ne fait pas annoncer un nom vide", () => {
   const anonyme = { assertion: { payload: {} }, lien: { id: "l-4" }, confirme: false };
   const dit = renderCeQuePorteLeSujet({ portages: [anonyme] });
 
-  assert.match(dit, /Un nom de la mémoire apparaît dans le titre de ce sujet/);
+  assert.match(dit, /Des noms de la mémoire apparaissent dans ce sujet/);
   assert.doesNotMatch(dit, /Le nom «/);
 });
 
@@ -445,6 +446,36 @@ test("une valeur sans histoire ne fabrique pas de dépliant vide", () => {
   const dit = renderCeQuePorteLeSujet({ portages: [PROPOSE] });
   assert.doesNotMatch(dit, /<summary>/);
   assert.doesNotMatch(dit, /portage-liste__identite/);
+});
+
+/* ── D'où le rapprochement sort ──────────────────────────────────────────── */
+
+test("une proposition dit où son nom a été vu", () => {
+  // Un nom trouvé dans le titre et un nom trouvé dans un commentaire ne se
+  // relisent pas pareil. On ne confirme pas un rapprochement dont on ignore
+  // d'où il sort.
+  const dit = renderCeQuePorteLeSujet({
+    portages: [{ ...PROPOSE, ou: "dans la description et un commentaire" }]
+  });
+
+  assert.match(dit, /Son nom apparaît dans la description et un commentaire de ce sujet\./);
+});
+
+test("cet endroit se lit sans rien ouvrir", () => {
+  // Replié, il faudrait ouvrir chaque ligne pour savoir laquelle vient du titre
+  // et laquelle vient d'une discussion.
+  const dit = renderCeQuePorteLeSujet({
+    portages: [{ ...AVEC_HISTOIRE, ou: "dans le titre" }]
+  });
+
+  assert.match(dit.split("<details")[0], /portage-liste__ou/);
+});
+
+test("sans endroit connu, rien ne s'invente", () => {
+  const dit = renderCeQuePorteLeSujet({ portages: [PROPOSE] });
+
+  assert.doesNotMatch(dit, /portage-liste__ou/);
+  assert.doesNotMatch(dit, /Son nom apparaît/);
 });
 
 /* ── Ce qui a été écarté ─────────────────────────────────────────────────── */

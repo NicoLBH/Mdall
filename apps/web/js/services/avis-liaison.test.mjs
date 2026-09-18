@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  LIAISON, intituleDeLAvis, liaisonDeLAvis, liaisonsProposees, phraseDeLaLiaison
+  LIAISON, intituleDeLAvis, liaisonDeLAvis, liaisonsProposees, nomsDunTexte, phraseDeLaLiaison
 } from "./avis-liaison.js";
 
 /** La mémoire d'un projet. Aucun nom réel, aucune commune réelle. */
@@ -188,4 +188,73 @@ test("la teneur de l'avis n'entre jamais dans la reconnaissance", () => {
   });
 
   assert.deepEqual(favorable.assertions.map((a) => a.id), suspendu.assertions.map((a) => a.id));
+});
+
+
+/* ── Tous les noms d'un texte, et pas seulement le premier ───────────────── */
+
+test("un texte qui cite trois noms les rend tous les trois", () => {
+  // `liaisonDeLAvis` répond « un sujet ou rien » : c'est ce qu'il faut pour un
+  // titre d'avis. Un paragraphe en nomme plusieurs, et n'en rendre qu'un revient
+  // à jeter le reste sans le dire (règle 5).
+  const dits = nomsDunTexte(
+    "La zone de neige et la zone de vent conditionnent la profondeur hors gel.",
+    MEMOIRE
+  );
+
+  assert.deepEqual(dits.map((entree) => entree.nom).sort(),
+    ["profondeur hors gel", "zone de neige", "zone de vent"]);
+});
+
+test("chaque nom rend ses versions en vigueur", () => {
+  const dits = nomsDunTexte("zone de neige", MEMOIRE);
+
+  assert.deepEqual(dits[0].versions.map((version) => version.id), ["neige"]);
+});
+
+test("un nom contenu dans un autre est écarté du lot", () => {
+  // Proposer « Zone » sur un texte qui parle de la zone de neige est exactement
+  // le faux rapprochement que cette reconnaissance existe pour éviter : un
+  // rapprochement manqué se voit, un faux couvre en silence.
+  const memoire = [...MEMOIRE, { id: "zone", superseded_by: null, payload: { subject: "Zone", value: "A" } }];
+
+  assert.deepEqual(nomsDunTexte("la zone de neige", memoire).map((entree) => entree.nom),
+    ["zone de neige"]);
+});
+
+test("les noms sortent du plus long au plus court", () => {
+  // Le plus précis d'abord : c'est celui dont on est le plus sûr.
+  const dits = nomsDunTexte("classe de sol EC8 et zone de vent", MEMOIRE);
+
+  assert.deepEqual(dits.map((entree) => entree.nom), ["classe de sol ec8", "zone de vent"]);
+});
+
+test("un nom que plus aucune version en vigueur ne porte ne remonte pas", () => {
+  // La prudence vit dans l'index de la mémoire, qui n'admet pas les versions
+  // remplacées. La redire ici en ferait un second endroit qui décide ce qui vaut
+  // encore (règle 4) — ce test dit donc que l'index tient, pas qu'on refiltre.
+  const memoire = [{ id: "vieux", superseded_by: "neuf", payload: { subject: "Zone de neige", value: "A1" } }];
+
+  assert.deepEqual(nomsDunTexte("la zone de neige", memoire), []);
+});
+
+test("les mots entiers valent ici aussi", () => {
+  // « Vent » ne se reconnaît pas dans « éventuel », ni « sol » dans « solive ».
+  // La même prudence que pour un intitulé d'avis, parce que c'est la même
+  // fonction qui la tient — et c'est un nom court qui la met à l'épreuve.
+  const memoire = [
+    { id: "vent", superseded_by: null, payload: { subject: "Vent", value: "3" } },
+    { id: "sol", superseded_by: null, payload: { subject: "Sol", value: "C" } }
+  ];
+
+  assert.deepEqual(nomsDunTexte("un éventuel désordre sur la solive", memoire), []);
+  assert.deepEqual(nomsDunTexte("le vent sur le sol", memoire).map((e) => e.nom).sort(), ["sol", "vent"]);
+});
+
+test("un texte vide ne nomme rien", () => {
+  // Tenu par `nommeEntierement`, qui ne reconnaît rien dans rien. Le retour
+  // anticipé de `nomsDunTexte` n'ajoute pas de prudence : il épargne l'index.
+  assert.deepEqual(nomsDunTexte("", MEMOIRE), []);
+  assert.deepEqual(nomsDunTexte("   ", MEMOIRE), []);
+  assert.deepEqual(nomsDunTexte("zone de neige", []), []);
 });
