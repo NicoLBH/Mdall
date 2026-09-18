@@ -1,0 +1,457 @@
+# Lire les mails d'un projet
+
+**À quoi sert cette page :** le plan d'un second utilitaire de l'Atelier — « Lecture des
+mails » —, bâti comme « Lecture d'un compte rendu » et pour la même raison : une matière
+première qu'on relit, qu'on juge à l'œil, et dont on ne tire rien sans signature.
+
+Ce qui est décidé, ce qui reste à trancher, et dans quel ordre.
+
+---
+
+## Pourquoi un utilitaire à part, et non le lecteur de CR
+
+Un compte rendu est **déjà arbitré**. Quelqu'un a tenu la réunion, écouté, tranché, et
+rédigé : les points y sont numérotés, rangés par lot, datés d'une échéance. Le lecteur de
+CR fait du secrétariat sur une décision déjà prise.
+
+Un fil de mails est l'inverse : c'est **l'arbitrage en train de se faire**, ou de ne pas se
+faire. On y trouve ce qu'un compte rendu ne porte jamais —
+
+- une question posée à laquelle **personne n'a répondu** ;
+- deux messages qui **affirment le contraire** l'un de l'autre ;
+- un engagement pris **entre deux réunions**, qui ne figure nulle part ;
+- la **source** d'un chiffre qu'un compte rendu reprendra sans dire d'où il vient.
+
+C'est cette matière-là qui vaut la peine, et aucune des trois ne se range dans un lot avec
+une échéance. Faire entrer les mails dans le lecteur de CR obligerait à leur inventer une
+structure qu'ils n'ont pas — et l'on retomberait sur des points « sans lot », « sans page »,
+« sans échéance », c'est-à-dire sur un écran qui n'affiche que des trous.
+
+## Ce qui ne change pas
+
+**Rien n'entre directement dans la mémoire.** Le fil se lit, se juge, et sort par une
+proposition que quelqu'un signe, ligne à ligne (règle 1).
+
+**Ce que l'IA produit s'affiche avant d'être exploité**, et son coût se voit à la requête
+près (fondamental 13).
+
+**On doit pouvoir se passer du modèle.** Et ici, plus qu'ailleurs : voir ci-dessous.
+
+---
+
+## Deux portes, un seul procédé
+
+Un mail entre par deux chemins, et il ne faut pas les confondre.
+
+```
+ PORTE 1  on glisse des .eml dans la zone de dépôt      ← d'abord, tout de suite
+ PORTE 2  on envoie le fil à l'adresse du projet        ← ensuite, et c'est un morceau à part
+                            │
+                            ▼
+                    LE MÊME DÉPLIAGE
+```
+
+**La seconde est la porte principale** — c'est ainsi qu'on s'en servira vraiment : on
+transfère un fil à l'adresse du projet depuis sa messagerie, sans rien télécharger ni
+glisser. Mais elle demande une boîte de réception, un domaine, une identification de
+l'expéditeur : c'est de l'infrastructure, et elle a ses propres questions de sécurité
+(plus bas).
+
+La première se fait tout de suite et ne dépend de rien. Elle sert à écrire et à vérifier le
+dépliage, le fil, le relevé — c'est-à-dire **tout ce que la seconde porte utilisera aussi**.
+Commencer par elle n'est pas un repli : c'est l'ordre qui permet de brancher la boîte sur
+quelque chose qui marche déjà.
+
+## Le procédé, et ce qui le distingue du CR
+
+```
+ .eml ──►  1. DÉPLIER                     AUCUN APPEL      0 c.
+           en-têtes, corps, citations, pièces jointes
+              │
+              ▼
+           LE FIL RECONSTITUÉ  ──►  2. RELEVÉ    modèle bon marché
+              (affiché, relu)         ce que chacun constate, demande,
+                                      engage, décide — et ce qui reste sans réponse
+                                         │
+                                         ▼
+                                      3. CONFRONTATION au projet   (existant)
+                                         │
+                                         ▼
+                                      UNE PROPOSITION ──► la mémoire
+```
+
+**La première étape ne coûte rien, et c'est le point central de ce plan.**
+
+Un PDF est une image de page : le transcrire demande un modèle, et tout le lecteur de CR est
+construit autour de cette dépense — la restitution, sa mesure de fidélité, les mots ajoutés,
+les titres inventés, le rangement pour ne pas repayer.
+
+Un `.eml` est **du texte structuré** (RFC 5322). L'expéditeur, la date, l'objet, les
+destinataires, le corps, le fil des citations : tout y est nommé. Le déplier est du
+*parsing*, pas de la lecture.
+
+Trois conséquences :
+
+| Chez le CR | Ici |
+|---|---|
+| La restitution coûte un appel | Le dépliage est gratuit |
+| On mesure la fidélité — mots retrouvés, mots ajoutés | **Rien à mesurer** : on n'a rien réécrit |
+| On range la restitution pour ne pas la repayer | **Rien à ranger** : la refaire est gratuite |
+| Une page fausse se voit mal | Un mail mal déplié se voit tout de suite |
+
+Ce qui remplace la mesure de fidélité n'est donc pas un chiffre, mais une question :
+**qu'est-ce qu'on n'a pas su placer ?** Un message dont la date ne se lit pas, un séparateur
+de citation qu'on ne reconnaît pas, un corps en HTML qu'on n'a pas su réduire en texte. Ces
+trous-là s'affichent (règle 5) — ils ne se comptent pas, ils se montrent.
+
+---
+
+## Étape 1 — Déplier un mail, sans modèle
+
+### Ce qu'un `.eml` porte
+
+```
+From: ...                      qui écrit
+To: ..., Cc: ...               à qui, en copie
+Date: ...                      quand, avec son fuseau
+Subject: ...                   l'objet — souvent « Re: Re: TR: … »
+Message-ID: <...>              l'identité du message
+In-Reply-To: <...>             à quel message il répond
+References: <...> <...>        toute la chaîne au-dessus de lui
+```
+
+`In-Reply-To` et `References` sont **ce qui reconstitue le fil sans rien deviner**. Quand ils
+sont là, l'arbre de la discussion est donné : on n'a pas à le reconstruire par les dates, qui
+mentent (un message envoyé d'un téléphone mal réglé, un fuseau, un brouillon repris trois
+jours plus tard).
+
+Quand ils manquent — un mail transféré, un export d'une messagerie qui les perd — on retombe
+sur l'ordre des dates, **et l'écran le dit** : « ce fil a été ordonné par ses dates, faute de
+chaîne de réponses ». Deux façons de savoir, deux degrés de certitude, et on ne les confond
+pas.
+
+### Le corps, et ses trois formes
+
+Un mail porte `text/plain`, `text/html`, ou les deux dans un `multipart/alternative`. Chacun
+peut être encodé (`base64`, `quoted-printable`) et dans n'importe quel jeu de caractères.
+
+**On prend `text/plain` quand il existe**, et l'on réduit le HTML en texte sinon. Prendre le
+HTML par défaut ferait passer de la mise en forme pour du propos — et c'est exactement ce
+qu'on reproche à une transcription infidèle.
+
+Un corps qu'on n'a pas su décoder ne s'affiche pas vide : il se dit non décodé, avec son
+encodage. « Ce message est vide » et « je n'ai pas su le lire » demandent deux gestes
+différents (règle 5).
+
+### La citation : le morceau difficile
+
+Chaque message d'un fil porte **son propre texte, plus la copie de tout ce qui précède**.
+Déposer huit mails d'une même discussion, c'est déposer huit fois le même texte, imbriqué de
+huit façons.
+
+Le dépliage doit séparer, dans chaque message, **ce que son auteur a écrit** de ce qu'il
+recopie. Deux marques, et elles sont de nature différente :
+
+- le préfixe `>` (et `>>`, `>>>`) — une convention, fiable ;
+- les bandeaux des messageries — « Le 12 mars 2026 à 09:14, X a écrit : »,
+  `De : … Envoyé : … À :`, `-----Message d'origine-----`, une ligne de tirets bas. Ceux-là
+  dépendent de la langue et du logiciel, et **aucune liste n'est complète**.
+
+D'où la règle : on reconnaît ce qu'on reconnaît, et **ce qu'on n'a pas su couper reste dans
+le message, visiblement**. Couper trop perdrait du propos ; couper au jugé sans le dire
+ferait croire qu'on a tout vu. Un message dont la coupure est incertaine porte une marque, et
+l'écran la montre.
+
+### Ce qui sort de l'étape 1
+
+Une **discussion** : une suite de messages, chacun avec qui, quand, à qui, ce qu'il ajoute,
+ce qu'il cite, et ses pièces jointes nommées. Plus la liste de ce qu'on n'a pas su placer.
+
+C'est ce que l'onglet « Le fil » affiche, et c'est ce que le modèle relira — exactement comme
+la restitution d'un CR : **on voit sur quoi il s'est fondé**.
+
+---
+
+## Où va le mail : un dossier privé
+
+**Un compte rendu est un document contractuel qui circule. Un mail est de la
+correspondance.** Il porte des adresses, des noms, parfois des propos qui ne regardent pas
+le projet. Le déposer comme un CR le rendrait lisible par toute l'équipe.
+
+Un mail déposé va donc dans un dossier **« Mails »**, à la racine de Fichiers, **qui n'est
+pas partagé** : seul celui qui l'a déposé y a accès. Il porte un cadenas dans l'arbre et
+dans le tableau — un dossier qui se comporte autrement que ses voisins doit se voir.
+
+> C'est une décision provisoire, et elle est à rediscuter. Elle est écrite ici pour qu'on
+> sache ce qui a été choisi, et pourquoi on pourrait en changer.
+
+### La garde vit dans la base, pas dans l'écran
+
+Un écran qui masque est un écran qu'on contourne : l'API est là, et elle répond. La règle
+posée pour le Copilote vaut mot pour mot ici — *il faut mettre les garde-fous pour empêcher
+que ça arrive, sinon le produit sera discrédité*.
+
+Donc : une colonne sur le dossier (`prive`), et une **politique RLS** qui restreint la
+lecture des documents d'un dossier privé à celui qui les a déposés. La migration est
+strictement additive, et le défaut est « partagé » — un dossier existant ne change pas de
+nature.
+
+L'écran, lui, ne fait que montrer ce que la base autorise déjà. S'il oubliait le cadenas,
+personne ne verrait rien de plus.
+
+### L'asymétrie, et pourquoi il faut la dire
+
+Ce qui sort du fil — les prises de position, avec qui l'a dite, quand, et la citation —
+entre dans une proposition **visible de l'équipe**. C'est tout l'objet : *extraire le
+contenu des mails sans dévoiler la correspondance*.
+
+Mais alors la citation d'un point issu d'un mail **pointe vers un document que les autres ne
+peuvent pas ouvrir**. Un collaborateur lit « d'après l'échange du 12 mars », et ne peut pas
+aller voir.
+
+Cela ne se tait pas. Le point porte **« issu d'un échange privé »**, et celui qui le relit
+sait qu'il ne remontera pas à la source. C'est une asymétrie assumée, pas un oubli (règle 5)
+— et c'est précisément ce qui devra être rediscuté : un constat qu'on ne peut pas vérifier
+est plus fragile qu'un constat qu'on peut ouvrir.
+
+---
+
+## Étape 2 — Le relevé : ce qu'un fil porte
+
+Un compte rendu donne des *points* : un lot, une référence, un destinataire, une échéance.
+Un fil de mails n'a rien de tout cela. Ce qu'il porte, ce sont des **prises de position** —
+chacune attribuée, datée, et citée mot pour mot.
+
+| Nature | Ce que c'est | Ce que ça devient |
+|---|---|---|
+| **Constat** | un fait affirmé — « le support est humide au droit de l'acrotère » | une valeur en mémoire, si elle est signée |
+| **Demande** | « pouvez-vous confirmer la cote avant vendredi ? » | un sujet à ouvrir |
+| **Engagement** | « nous repassons jeudi avec le géomètre » | un sujet, avec un qui et une date |
+| **Décision** | « on part sur la variante B » | un sujet, ou une relance de celui qui posait la question |
+| **Source** | « d'après le DTU 43.1 § 5.2 » | ce qui fonde un constat — la provenance, pas le constat |
+| **Question sans réponse** | posée, jamais reprise dans la suite du fil | **un sujet à ouvrir, et c'est l'apport principal** |
+| **Désaccord** | deux messages affirment le contraire | un sujet, avec les deux positions citées |
+
+Les deux dernières sont celles qu'un compte rendu ne porte jamais, et elles se **dérivent**,
+elles ne se demandent pas au modèle : une question sans réponse est une demande qu'aucun
+message postérieur ne reprend ; un désaccord est deux constats contraires sur la même chose.
+Les faire déclarer par le modèle en ferait des inventions ; les calculer sur le fil déplié en
+fait des observations.
+
+**Chaque prise de position porte sa citation**, et la citation se vérifie contre le message
+d'où elle sort — comme celle d'un point de CR se vérifie contre sa page. Une citation
+introuvable écarte la prise de position : c'est le garde-fou existant, et il vaut ici sans
+changement (règle 12).
+
+---
+
+## Étape 3 — La confrontation, et la sortie
+
+Rien de neuf : c'est la chaîne du CR, et elle se réutilise telle quelle.
+
+| Ce qu'on réutilise | Où |
+|---|---|
+| Confronter à ce que le projet suit déjà | `services/lecture-du-cr.js` — `confrontation` |
+| Les lots que le fil nomme | `services/lots-du-cr.js` |
+| Les échéances datées | `services/echeances-du-cr.js` |
+| Les fermetures | `services/fermeture-du-cr.js` |
+| Rédiger la proposition | `services/proposition-du-cr.js`, `atelier-proposition.js` |
+| L'appliquer à la fusion | `services/appliquer-le-cr.js` |
+
+Ce qui change : le **label**. Un CR porte « CR chantier » ; un fil de mails porterait
+« Échange ». Et l'identité du document n'est plus « compte rendu n° 14 du 3 mars » mais
+**l'objet du fil et sa période** — « Étanchéité toiture · 12 messages du 3 au 19 mars ».
+
+---
+
+## Ce que l'écran montre
+
+La même coquille que le lecteur de CR, et les mêmes classes — c'est la même nature d'écran, et
+en dessiner un second jeu ferait deux calibrages à recaler ensemble.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Lecture d'un fil de mails      [Un autre fil] [Transformer ▾]│
+├─────────────────────────────────────────────────────────────┤
+│  ⌜ déposez des .eml, ou choisissez-les ⌝                     │
+├─────────────────────────────────────────────────────────────┤
+│  Le fil : Étanchéité toiture · 12 messages du 3 au 19 mars   │
+│  ⚠ 2 messages ordonnés par leur date, faute de chaîne        │
+├──────────────┬──────────────────────────────────────────────┤
+│  Le fil      │  Analyse                                      │
+├──────────────┴──────────────────────────────────────────────┤
+│  ▸ 3 mars 09:14 — A. (entreprise)  → B., C. en copie         │
+│    « Le support est humide au droit de l'acrotère. »         │
+│    ⎿ cite le message du 2 mars                               │
+│    📎 releve-humidite.pdf                                     │
+│  ▸ 3 mars 11:02 — B. (maître d'œuvre) → A.                   │
+│    ...                                                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Le fil d'abord, l'analyse ensuite** — c'est l'ordre du procédé, et c'est celui du lecteur de
+CR pour la même raison : juger des points sans avoir vu ce dont ils sortent, c'est ce qui
+rendait les déceptions inexplicables.
+
+---
+
+## Les étapes, dans l'ordre
+
+Chacune ferme sur quelque chose qui marche, et chacune se vérifie en cassant une règle.
+
+### 1 — Déplier un `.eml`, et rien d'autre
+
+Un service pur : du texte RFC 5322 entre, une discussion sort. Pas d'écran, pas de réseau.
+Les en-têtes, le décodage (`base64`, `quoted-printable`, les jeux de caractères), le choix
+`text/plain` / `text/html`, les pièces jointes nommées.
+
+**Ce qui se vérifie en cassant** : un mail sans `Date` n'invente pas la date du jour ; un
+corps non décodé ne s'affiche pas vide ; un `multipart` dont on prend le HTML alors que le
+texte existe.
+
+### 2 — Séparer ce qu'on écrit de ce qu'on cite
+
+Le préfixe `>`, puis les bandeaux des messageries. Ce qu'on n'a pas su couper reste, et se
+marque.
+
+**En cassant** : un bandeau reconnu ne doit pas emporter le message entier ; une ligne qui
+commence par `>` dans un devis (`> 50 m²`) n'est pas une citation — il lui faut le contexte
+d'un bloc.
+
+### 3 — Reconstituer le fil
+
+`In-Reply-To` et `References` d'abord, les dates ensuite, et l'écran dit lequel des deux. Les
+doublons — le même message recopié dans huit citations — n'apparaissent **qu'une fois**, à sa
+place.
+
+**En cassant** : deux messages de même date mais de chaîne différente ; un fil où le dernier
+message porte tout, déposé seul.
+
+### 4 — L'écran, et le fil affiché
+
+La coquille du lecteur de CR, l'onglet « Le fil », les messages, les trous. Aucun appel
+encore : à ce stade, l'utilitaire **déplie et montre**, gratuitement. C'est déjà utile.
+
+Le dossier « Mails » et son cadenas arrivent ici, avec leur migration et leur politique de
+lecture : le premier fil déposé doit atterrir au bon endroit, pas dans Documents.
+
+### 5 — Le relevé par le modèle
+
+Une fonction serveur, la consigne **côté serveur uniquement**, le garde-fou des citations, le
+prix à la requête. Les prises de position s'affichent avec ce qui leur manque.
+
+### 6 — Ce qui se dérive, et que le modèle ne déclare pas
+
+Les questions sans réponse, les désaccords. Sur le fil déplié, en pur, vérifiable.
+
+### 7 — La confrontation et la proposition
+
+Le branchement sur la chaîne existante. Le label « Échange », l'identité du fil. Le point
+porte « issu d'un échange privé ».
+
+### 8 — La boîte de réception du projet
+
+La porte principale, et le morceau le plus lourd. Elle vient en dernier parce qu'elle se
+branche sur tout ce qui précède : ce qui arrive par mail passe par le **même dépliage** que
+ce qu'on glisse.
+
+---
+
+## L'adresse du projet : ce qu'elle ouvre, et ce qu'elle expose
+
+Envoyer un fil à `projet@mdall.com` est le geste le plus simple qui soit — et une adresse
+qui reçoit est une porte que le monde entier peut pousser. Quatre points à trancher avant
+d'ouvrir quoi que ce soit.
+
+### Une adresse devinable est une porte ouverte
+
+`projet@mdall.com` est une adresse unique : elle ne dit pas **quel** projet. Il en faut une
+par projet, et si elle se devine — `74-scionzier@mdall.com` — n'importe qui peut déposer
+n'importe quoi dans la mémoire d'un chantier.
+
+Elle doit donc porter un **secret** : `p-7f3a9c2e@mdall.com`, tiré au hasard, affiché dans
+les paramètres du projet, **révocable** en un clic. Le jour où elle fuite, on en change, et
+l'ancienne cesse de répondre.
+
+### Le `From` d'un mail ne prouve rien
+
+Il se falsifie en trois lignes. SPF, DKIM et DMARC donnent un degré de confiance sur le
+domaine expéditeur, jamais une identité.
+
+La règle sûre, et elle découle du dossier privé : **seul un mail dont l'expéditeur est
+l'adresse d'un compte Mdall membre du projet entre**. Tout autre est écarté, et l'écart se
+dit — on ne jette pas en silence (règle 5). Un fil transféré par quelqu'un d'autre n'entre
+pas : il n'aurait de toute façon nulle part où aller, puisque le dossier est celui de
+l'expéditeur.
+
+### Il atterrit chez l'expéditeur, pas dans un dossier commun
+
+C'est la conséquence directe du dossier privé. Deux personnes qui transfèrent le même fil
+le déposent chacune chez elle. C'est un doublon, et c'est le prix de la confidentialité —
+le dire vaut mieux que de le découvrir.
+
+### Ce qu'une boîte reçoit et qu'on n'a pas demandé
+
+Du volume, des pièces jointes de vingt mégaoctets, des réponses automatiques, du spam. Il
+faut un plafond par mail et par jour, un refus net au-delà, et une trace de ce qui a été
+refusé. Une boîte sans plafond est une facture de stockage qu'on découvre à la fin du mois.
+
+---
+
+## Ce que ce plan refuse
+
+**De lire les pièces jointes.** Un mail en porte, et souvent le vrai contenu y est. Elles sont
+**nommées** dans le fil et rien de plus : les lire, c'est un autre procédé — et pour un PDF,
+c'est le lecteur de CR, qui existe. Les enchaîner viendra après, et pas dans le même tour.
+
+**De deviner un fil sans en avoir les pièces.** Si l'on dépose le dernier message d'une
+discussion, on a son texte et les citations qu'il porte : c'est un fil **reconstitué à partir
+de citations**, pas le fil lui-même. Les dates y sont celles que les bandeaux affichent, les
+destinataires sont perdus. L'écran le dira — c'est moins sûr, ce n'est pas faux, et la
+différence se voit.
+
+**De mesurer une fidélité.** Il n'y a rien à mesurer : on n'a rien réécrit. Afficher « 100 %
+du message retrouvé » serait une tautologie présentée comme un résultat.
+
+**De faire entrer quoi que ce soit sans signature.** Comme partout.
+
+---
+
+## Ce qui est tranché
+
+| Question | Réponse |
+|---|---|
+| Le format déposé | **`.eml`** d'abord — il se déplie gratuitement. `.msg` (Outlook) peut-être plus tard : format binaire propriétaire, il demanderait une bibliothèque de lecture. |
+| La porte principale | **L'adresse du projet**, à quoi l'on transfère un fil depuis sa messagerie. Elle vient après, parce qu'elle se branche sur le dépliage écrit par la première porte. |
+| Un mail, ou tout le fil | **Les deux**, et l'écran dit lequel — donc quel degré de certitude on a sur les dates et les destinataires. |
+| Ce qu'on relève | **Les sept natures** du tableau ci-dessus, dont deux se dérivent du fil au lieu d'être demandées au modèle. |
+| Où va le mail | Un dossier **« Mails »** à la racine de Fichiers, **non partagé**, avec un cadenas. Provisoire, et à rediscuter. |
+
+## Ce qui reste à trancher
+
+**La vérifiabilité d'un point issu d'un mail.** Le dossier privé rend la correspondance
+invisible à l'équipe, donc la citation d'un point ne pointe vers rien qu'un collaborateur
+puisse ouvrir. Le point le dit — « issu d'un échange privé » — mais un constat qu'on ne peut
+pas vérifier est plus fragile qu'un constat qu'on peut ouvrir.
+
+Trois issues possibles le jour où l'on en débattra : le laisser ainsi et l'assumer ; joindre
+à la proposition **le seul message cité**, et non le fil ; ou permettre de rendre un fil
+partagé après coup, quand on a vérifié qu'il ne contient rien de privé.
+
+**Qui a le droit d'écrire à l'adresse du projet**, et ce qu'on fait des mails d'un
+expéditeur inconnu. Voir la section ci-dessus.
+
+---
+
+## Où c'est écrit, quand ce sera écrit
+
+| Ce que c'est | Où |
+|---|---|
+| Déplier un `.eml` | `services/un-mail-deplie.js` — pur |
+| Séparer le propos de la citation | `services/ce-quon-cite.js` — pur |
+| Reconstituer le fil | `services/le-fil-des-mails.js` — pur |
+| Ce qu'un fil porte | `services/prises-de-position.js` — pur |
+| Le relevé par le modèle | `supabase/functions/relever-un-fil/` — la consigne y vit seule |
+| L'écran | `views/studio/dev/lecture-des-mails.js` |
+| Le dossier privé | une migration additive : `project_document_folders.prive`, et la politique RLS qui va avec |
+| La boîte du projet | une fonction serveur qui reçoit, vérifie l'expéditeur, et dépose — à écrire en dernier |
