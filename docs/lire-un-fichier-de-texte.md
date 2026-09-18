@@ -172,13 +172,28 @@ liste qu'a l'écran décrit le dossier ouvert, pas ceux qu'on n'a pas lus, et
 affirmer qu'un nom y est libre serait prétendre savoir (règle 5). C'est le
 dépôt, une fois le dossier résolu, qui refuse.
 
-### Aller ailleurs referme
+### Entrer dans un dossier se dit à un seul endroit
 
-Trois gestes mènent ailleurs — l'arbre, le fil d'Ariane, le nom d'un dossier
-dans le tableau — et chacun refermait pour son compte : l'arbre fermait
-l'aperçu d'un PDF, les deux autres ne fermaient rien. C'est ainsi qu'un fichier
-ouvert serait resté à l'écran sous le chemin d'un autre dossier. Ce qu'une
-navigation referme est maintenant dit à un seul endroit (règle 10).
+Trois gestes entrent dans un dossier de Documents : l'arbre, le nom d'un
+dossier dans le tableau, et le fil d'Ariane. Chacun chargeait le dossier pour
+son compte — et **seul l'arbre disait qu'on est dans la branche Documents**.
+
+Or l'écran se choisit sur la branche. Charger le bon dossier n'y changeait donc
+rien : cliquer « Documents » dans le fil chargeait la racine de Documents et
+affichait **l'accueil de l'onglet**. Le geste paraissait remonter trop haut ; en
+réalité il ne disait pas où il allait.
+
+Les trois passent maintenant par `allerDansLeDossier`, qui dit la branche,
+referme le fichier ouvert — il resterait à l'écran sous le chemin d'un autre
+dossier — et charge. Un test compte ses trois appelants, et un autre refuse tout
+chargement de dossier qui ne passerait pas par elle : le défaut se refait en une
+ligne.
+
+**Ce qu'elle ne fait pas** : refermer l'écran où l'on est. Sur le dépôt, le fil
+d'Ariane ne quitte pas l'écran — il change la **destination**, c'est ce qu'il y
+montre, et en sortir ferait perdre les fichiers déjà choisis. C'est l'arbre qui
+referme, parce que lui emmène vraiment ailleurs : dans une autre branche, dans
+un fichier de la Mémoire, à l'accueil.
 
 ### Un fichier de texte n'a pas de pages, sauf s'il en porte
 

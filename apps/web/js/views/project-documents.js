@@ -2487,10 +2487,10 @@ async function chargerLaMemoire() {
  * de texte qui survit à la navigation oblige à le fermer à la main pour voir où
  * l'on vient d'aller.
  *
- * Trois gestes mènent ailleurs — l'arbre, le fil d'Ariane, le nom d'un dossier
- * dans le tableau — et chacun refermait pour son compte : l'arbre fermait
- * l'aperçu, les deux autres ne fermaient rien. C'est ainsi qu'un fichier ouvert
- * serait resté à l'écran sous le chemin d'un autre dossier.
+ * C'est **l'arbre** qui appelle ici, parce que lui emmène vraiment ailleurs :
+ * dans une autre branche, dans un fichier de la Mémoire, à l'accueil. Entrer
+ * dans un dossier de Documents, c'est `allerDansLeDossier`, qui referme le
+ * fichier ouvert sans refermer l'écran où l'on est.
  *
  * **Ce qui n'est pas fermé ici** : l'écriture d'un fichier neuf. Le fil d'Ariane
  * y désigne le dossier où le fichier va naître — en sortir perdrait un texte que
@@ -2499,6 +2499,36 @@ async function chargerLaMemoire() {
 function allerAilleurs() {
   if (docsViewState.mode !== "list") docsViewState.mode = "list";
   docsViewState.texte = null;
+}
+
+/**
+ * Entrer dans un dossier de Documents.
+ *
+ * ## Pourquoi c'est une fonction, et pas trois lignes recopiées
+ *
+ * Trois gestes y mènent : l'arbre, le nom d'un dossier dans le tableau, et le
+ * fil d'Ariane. Chacun chargeait le dossier pour son compte — et **seul l'arbre
+ * disait qu'on est dans la branche Documents**.
+ *
+ * Or l'écran se choisit sur la branche : sans elle, charger le bon dossier n'y
+ * change rien, et l'on retombe sur l'accueil de l'onglet. C'est ce qui arrivait
+ * en cliquant « Documents » dans le fil — le dossier était chargé, l'écran
+ * montrait l'accueil.
+ *
+ * ## Ce qu'elle ne fait pas
+ *
+ * Elle ne referme pas l'écran où l'on est. Sur le dépôt, le fil d'Ariane ne
+ * quitte pas l'écran : il **change la destination** — c'est ce qu'il y montre,
+ * et en sortir ferait perdre les fichiers déjà choisis. C'est l'arbre qui
+ * referme, parce que lui emmène ailleurs, et il le fait avant d'appeler ici.
+ */
+async function allerDansLeDossier(root, folderId) {
+  docsViewState.branche = BRANCHE.DOCUMENTS;
+  // Un fichier ouvert ne survit pas à un changement de dossier : il resterait à
+  // l'écran sous le chemin d'un autre dossier.
+  docsViewState.texte = null;
+  await loadCurrentDirectory({ forceFolderId: String(folderId ?? "") || null });
+  renderProjectDocumentsContent(root);
 }
 
 async function allerDansLArbre(root, adresse) {
@@ -2545,9 +2575,7 @@ async function allerDansLArbre(root, adresse) {
   }
 
   if (prefixe === "documents") {
-    docsViewState.branche = BRANCHE.DOCUMENTS;
-    await loadCurrentDirectory({ forceFolderId: cible || null });
-    renderProjectDocumentsContent(root);
+    await allerDansLeDossier(root, cible);
     return;
   }
 
@@ -4989,23 +5017,19 @@ function bindDocumentsView(root) {
     trigger.addEventListener("click", async (event) => {
       event.preventDefault();
       console.info("[documents-view] open-folder", { folderId });
-      allerAilleurs();
-      await loadCurrentDirectory({ forceFolderId: folderId });
-      renderProjectDocumentsContent(root);
+      await allerDansLeDossier(root, folderId);
     });
   });
 
   document.querySelectorAll("[data-breadcrumb-folder-id]").forEach((crumb) => {
     crumb.addEventListener("click", async () => {
-      const folderId = crumb.getAttribute("data-breadcrumb-folder-id") || null;
+      const folderId = crumb.getAttribute("data-breadcrumb-folder-id") || "";
       console.info("[documents-view] breadcrumb-click", { folderId: folderId || null });
       // Sur l'écran de dépôt, le fil ne quitte pas l'écran : il **change la
       // destination**. C'est ce qu'il y montre — le dernier morceau est le
       // dossier où les fichiers vont atterrir —, et en sortir sans le dire
       // ferait perdre les fichiers déjà choisis.
-      allerAilleurs();
-      await loadCurrentDirectory({ forceFolderId: folderId || null });
-      renderProjectDocumentsContent(root);
+      await allerDansLeDossier(root, folderId);
     });
   });
 
