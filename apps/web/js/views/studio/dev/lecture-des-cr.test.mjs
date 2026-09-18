@@ -25,6 +25,7 @@ import { renderLaLecture, reservesDeLaRestitution } from "./lecture-des-cr.js";
 import {
   LECTURE, assemblerLeMarkdown, fideliteDeLaReconstitution
 } from "../../../services/reconstitution-markdown.js";
+import { pagesDuTexte } from "../../../services/lire-un-fichier-texte.js";
 import { SORT, confrontation, lectureAssemblee } from "../../../services/lecture-du-cr.js";
 import { LIEN, NOMS_DU_LIEN, QUOI_DU_LIEN } from "../../../services/liens-du-cr.js";
 import { prixDeLAppel } from "../../../services/consommation-ia.js";
@@ -82,6 +83,7 @@ function unCote(surcharge = {}) {
     phase: "vide", texte: "", lignes: [], pages: [], fidelite: null, degats: null, forme: null,
     jetons: { entree: null, sortie: null }, modeleIA: "",
     coupee: false, surLaStructure: false, horsPlafond: [], absentes: [], aplaties: [], motif: "",
+    dejaDuTexte: false,
     rangement: { relue: false, etat: "", range: false, dossier: "", motif: "" },
     ...surcharge
   };
@@ -1707,4 +1709,112 @@ test("le branchement ne dépend pas de la zone de dépôt", async () => {
   assert.match(code, /if \(!hote\) return;/);
   // Et la zone se branche si elle est là.
   assert.match(code, /zone\s*\n?\s*\?\s*brancherLaZoneDeDepot\(zone/);
+});
+
+
+/* ── Un compte rendu déjà écrit en texte ──────────────────────────────────
+ *
+ * Ni extraction, ni restitution : le document *est* la restitution. Ce qui
+ * disparaît avec ces deux étapes — les mesures de fidélité, la lecture
+ * « Origine », le prix de l'appel — ne doit pas être remplacé par des zéros,
+ * qui se lisent comme des constats (règle 5).
+ *
+ * Le côté est monté exactement comme l'écran le monte : les pages viennent de
+ * `pagesDuTexte`, le texte de `assemblerLeMarkdown`. Le recopier à la main
+ * aurait vérifié ma copie, pas le parcours.
+ */
+
+const NOTICE = [
+  "# Notice incendie",
+  "",
+  "Type M, 3e famille B.",
+  "",
+  "Les portes coupe-feu sont de degre CF 1/2 h."
+].join("\n");
+
+/** Le côté tel que `ouvrirUnDocumentDeTexte` le laisse. */
+function unCoteDeTexte(surcharge = {}) {
+  const pages = pagesDuTexte(NOTICE);
+  const assemble = assemblerLeMarkdown(pages);
+
+  return unCote({
+    phase: "fait", pages, texte: assemble.texte, lignes: assemble.lignes,
+    // Rien n'a été mesuré, parce qu'il n'y avait rien à comparer.
+    fidelite: null, degats: null, forme: null,
+    dejaDuTexte: true,
+    rangement: { relue: false, etat: "", range: false, dossier: "", motif: "", aRanger: null },
+    ...surcharge
+  });
+}
+
+function unEtatDeTexte(surcharge = {}) {
+  return unEtat({
+    phase: "lue",
+    fichier: { name: "notice-incendie.md" },
+    lecture: lectureAssemblee({ nom: "notice-incendie.md", points: [] }) ?? null,
+    pagesLues: [{ page: 1, text: NOTICE }],
+    md: { lecture: LECTURE.APERCU, modele: unCoteDeTexte() },
+    ...surcharge
+  });
+}
+
+test("un document deja en texte ne propose pas la lecture Origine", () => {
+  const html = renderLaLecture(unEtatDeTexte());
+
+  // Sans PDF, il n'y a pas de page a mettre en regard d'une ligne : la colonne
+  // « p. 1 » se lirait comme une information et n'en serait pas une.
+  assert.equal(html.includes(`data-lecture-cr-md-lecture="${LECTURE.ORIGINE}"`), false);
+  assert.equal(html.includes(`data-lecture-cr-md-lecture="${LECTURE.APERCU}"`), true);
+  assert.equal(html.includes(`data-lecture-cr-md-lecture="${LECTURE.CODE}"`), true);
+});
+
+test("un document extrait d'un PDF propose les trois lectures", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", fichier: { name: "cr.pdf" }, pagesLues: PAGES, md: uneRestitution()
+  }));
+
+  for (const cle of Object.values(LECTURE)) {
+    assert.equal(html.includes(`data-lecture-cr-md-lecture="${cle}"`), true, cle);
+  }
+});
+
+test("un document deja en texte n'a rien coute, et le dit sans ambiguite", () => {
+  const html = renderLaLecture(unEtatDeTexte());
+
+  assert.match(html, /0 € — déjà du texte/);
+  // Ni la pastille grise des décomptes manquants, ni « 0 € — relue » : trois
+  // situations différentes, et l'écran doit dire laquelle.
+  assert.equal(html.includes("est-inconnu"), false);
+  assert.equal(html.includes("relue"), false);
+});
+
+test("un document deja en texte n'affiche aucune mesure de fidelite", () => {
+  const html = renderLaLecture(unEtatDeTexte());
+
+  // « 100 % du document retrouvé » serait une tautologie présentée comme un
+  // résultat : le document n'a pas été refait, il a été lu.
+  assert.equal(html.includes("Part retrouvée"), false);
+  assert.equal(html.includes("Mots ajoutés"), false);
+  assert.equal(html.includes("Titres inventés"), false);
+});
+
+test("un document deja en texte n'a rien a ranger, et ce n'est pas un defaut", () => {
+  const html = renderLaLecture(unEtatDeTexte());
+
+  // La phrase est écrite dans le gabarit, pas passée par `escapeHtml` : elle
+  // garde son apostrophe. On cherche donc un fragment qui n'en porte pas.
+  assert.match(html, /a été extrait, rien n/);
+  // Le dire en rouge ferait chercher une panne là où tout s'est bien passé.
+  assert.equal(/lecture-cr__rangement est-douteux/.test(html), false);
+});
+
+test("le document lu est bien celui du fichier, ligne a ligne", () => {
+  const html = renderLaLecture(unEtatDeTexte({
+    md: { lecture: LECTURE.CODE, modele: unCoteDeTexte() }
+  }));
+
+  // Pas seulement son titre : la derniere ligne aussi, sinon un document
+  // tronqué à la première page passerait.
+  assert.match(html, /Notice incendie/);
+  assert.match(html, /CF 1\/2 h\./);
 });
