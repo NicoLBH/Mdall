@@ -1210,6 +1210,77 @@ L'auteur du raisonnement d'avant. Le nommer demanderait une lecture des profils
 de plus, au moment précis où l'on retient quelqu'un devant une fenêtre. La date
 suffit à situer ; la ligne complète se lit dans la Mémoire.
 
+### Reconnaître une valeur, pas seulement un nom
+
+#### La limite qu'on lève
+
+L'étape 1 avait posé une limite, assumée et testée : « à Chamonix » nomme la
+**valeur** de la localisation, pas la localisation, et la reconnaissance ne
+lisait que les noms. C'est pourtant la manière la plus naturelle d'écrire un
+compte rendu — personne n'écrit « Localisation : Chamonix » dans une phrase.
+
+```
+« Dans la ville de Montholon (89110), les fondations ont une profondeur
+  hors gel de 0,69 m. »   (description)
+« Le sol est une moraine compacte. »   (commentaire)
+
+→ Profondeur hors gel   Son nom apparaît dans la description de ce sujet.
+→ Localisation          Sa valeur « Montholon (89110) » apparaît dans la description.
+→ Nature du sol         Sa valeur « moraine » apparaît dans un commentaire.
+```
+
+#### C'est la reconnaissance la plus dangereuse
+
+Un nom de la mémoire est un nom : « Profondeur hors gel » ne se trouve pas par
+hasard dans un texte. Une valeur, si — « C », « 3 », « A2 » sont partout, et
+« Montholon » peut être une rue. Un rapprochement faux couvre en silence, et
+c'est ici qu'on risquerait d'en produire beaucoup.
+
+D'où **quatre refus**, tous exacts, aucun réglable au jugé :
+
+| refus | ce qu'il écarte |
+|---|---|
+| trop courte | « C », « A2 », « XF3 » — les codes, qui sont partout |
+| portée par plusieurs noms | « C » pour « Classe de sol » **et** « Classe d'exposition » : vraie ambiguïté |
+| qui est aussi un nom | elle se reconnaît déjà par l'autre porte, la seconde fois serait fausse |
+| sur des mots entiers | « argile » ne se reconnaît pas dans « argileux » |
+
+Le seuil de longueur n'est pas un chiffre nouveau : `sujetQuiContient` en portait
+déjà un, avec exactement la même justification — « CF », « L », « S » sont des
+codes de mission, pas des noms. Il est maintenant **exporté** et lu aux deux
+endroits : deux seuils finiraient par ne pas protéger de la même chose
+(règle 10).
+
+#### Le nom l'emporte sur sa valeur
+
+« Localisation : Chamonix » nomme deux fois la même chose. Le proposer deux fois
+ferait répondre deux fois à une seule question — et le nom est la reconnaissance
+la plus sûre.
+
+#### Seules les versions qui portent cette valeur
+
+Pas toutes celles du nom : le texte a écrit une valeur, et proposer les autres
+reviendrait à mettre en débat ce dont il n'a pas parlé.
+
+Et la valeur s'affiche **telle que la mémoire l'écrit** — « Montholon (89110) »,
+pas « montholon (89110) ». Le repli sert à comparer, pas à montrer.
+
+#### Le bloc n'annonce plus rien, parce que chaque ligne le dit
+
+Il a porté successivement « le nom X apparaît dans le titre », puis « dans ce
+sujet ». Les deux sont devenus faux, et pour la même raison : une annonce qui
+vaut pour tout le bloc ne peut plus dire vrai de chaque ligne, dès lors que
+celles-ci sont reconnues de deux façons différentes.
+
+Chacune porte donc sa propre phrase, exacte — « Son nom apparaît… » ou « Sa
+valeur « Montholon » apparaît… » —, et le bloc se contente de dire où regarder :
+**« La mémoire se reconnaît dans ce sujet. Chaque ligne dit ce qui l'a fait
+remonter. »**
+
+`nomCommun` a disparu avec l'annonce : il répétait ce que les lignes disent mieux
+(règle 4). C'est la troisième fois que cette phrase de tête ment ; elle ne dit
+plus rien qu'une ligne puisse contredire.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -1498,6 +1569,19 @@ valeur que personne n'a mise en doute.
 | la fermeture va chercher ce rappel | la fenêtre s'ouvre sans lui | 1 test |
 | la fenêtre dessine le rappel | elle ne le dessine pas | 1 test |
 | le rappel ne pré-remplit aucun champ | il en remplit un | 1 test |
+| une valeur du texte désigne son nom | elle ne désigne rien | 3 tests |
+| une valeur trop courte ne désigne rien | elle désigne | 1 test |
+| le seuil des valeurs est celui des noms | les deux divergent | 2 tests |
+| une valeur portée par deux noms ne désigne rien | elle désigne le premier | 1 test |
+| une valeur qui est aussi un nom se laisse à l'autre porte | elle passe deux fois | 1 test |
+| les mots entiers valent pour les valeurs | `includes` suffit | 1 test |
+| seules les versions de cette valeur se proposent | toutes celles du nom | 1 test |
+| la valeur s'affiche comme la mémoire l'écrit | elle s'affiche repliée | 2 tests |
+| le nom l'emporte sur sa propre valeur | les deux se proposent | 2 tests |
+| la phrase dit par où on a reconnu | elle dit toujours « son nom » | 3 tests |
+| une reconnaissance sans trace se tait | elle parle | 1 test |
+| le bloc n'annonce plus de nom | il en réannonce un | 2 tests |
+| le titre ne parle plus du même nom | il y revient | 2 tests |
 
 ---
 
@@ -1538,6 +1622,7 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | ce qu'un sujet met en débat, et ce qui s'y oppose | `apps/web/js/services/ce-qui-se-debat.js` |
 | tout ce qu'un sujet nomme, et où | `apps/web/js/services/ce-que-le-point-nomme.js` |
 | tous les noms d'un texte | `apps/web/js/services/avis-liaison.js` — `nomsDunTexte` |
+| toutes les valeurs d'un texte | `apps/web/js/services/avis-liaison.js` — `valeursDunTexte` |
 | une valeur qu'un sujet apporte | `apps/web/js/services/valeur-depuis-un-point.js` |
 | la fenêtre qui la demande | `apps/web/js/views/ui/valeur-du-sujet.js` |
 | le nom sous lequel on signe | `apps/web/js/services/nom-de-qui-parle.js` |

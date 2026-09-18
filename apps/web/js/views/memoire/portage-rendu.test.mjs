@@ -170,51 +170,43 @@ test("ce qui est confirmé et ce qui est proposé sont deux blocs, deux titres",
   const dit = renderCeQuePorteLeSujet({ portages: [POSE, PROPOSE] });
 
   assert.match(dit, /Ce sujet met ces valeurs en débat/);
-  assert.match(dit, /Ces valeurs portent le même nom/);
+  assert.match(dit, /La mémoire se reconnaît dans ce sujet/);
   assert.match(dit, /data-portage-retire="l-1"/);
   assert.match(dit, /data-portage-confirme="l-2"/);
 });
 
-test("le bloc des propositions dit d'où elles sortent, et ce qu'on demande", () => {
-  // Trois manques, et chacun suffisait à rendre l'écran incompréhensible : d'où
-  // sortent ces lignes, ce qu'on demande, et ce que ça fait.
+test("le bloc des propositions dit ce qu'on demande, et ce que ça fait", () => {
   const dit = renderCeQuePorteLeSujet({ portages: [PROPOSE] });
 
-  assert.match(dit, /Le nom « Classe de sol » apparaît dans ce sujet/);
-  assert.doesNotMatch(dit, /dans le titre/);
   assert.match(dit, /Est-ce de celles-ci que ce sujet parle \?/);
   assert.match(dit, /Confirmer une valeur la montre « en débat »/);
   assert.match(dit, /Écarter la retire, et elle ne sera plus reproposée/);
 });
 
-test("le nom annoncé est celui des lignes annoncées, pas celui d'à côté", () => {
-  // La ligne confirmée au-dessus peut s'appeler tout autrement — elle n'a pas
-  // été rapprochée, quelqu'un l'a posée. La lire ici nommerait un mot que la
-  // reconnaissance n'a jamais trouvé dans le titre.
-  const dit = renderCeQuePorteLeSujet({ portages: [POSE, PROPOSE] });
+test("le bloc n'annonce plus de nom : chaque ligne dit le sien", () => {
+  // Il a porté « le nom X apparaît dans le titre », puis « dans ce sujet ». Les
+  // deux sont devenus faux : la reconnaissance lit trois endroits, et elle
+  // reconnaît aussi bien un nom qu'une **valeur** — « à Montholon » ne nomme pas
+  // la localisation, il en écrit la valeur.
+  //
+  // Une annonce qui vaut pour tout le bloc ne peut plus dire vrai de chaque
+  // ligne, et elle répétait ce que les lignes disent mieux (règle 4).
+  const dit = renderCeQuePorteLeSujet({
+    portages: [
+      { ...PROPOSE, ou: "Son nom apparaît dans la description de ce sujet." },
+      { assertion: VALEUR("Localisation", "Montholon"), lien: { id: "l-3" }, confirme: false,
+        ou: "Sa valeur « Montholon » apparaît dans un commentaire de ce sujet." }
+    ]
+  });
 
-  assert.match(dit, /Le nom « Classe de sol » apparaît/);
-  assert.doesNotMatch(dit, /Le nom « Altitude » apparaît/);
-});
-
-test("deux noms rapprochés par un même titre ne s'annoncent pas comme un seul", () => {
-  // « Profondeur hors gel au Bâtiment A » contient deux noms de la mémoire, et
-  // la reconnaissance remonte les deux. En nommer un seul ferait chercher un mot
-  // qui n'explique que la moitié de la liste (règle 5) ; la phrase générique,
-  // elle, reste vraie.
-  const autre = { assertion: VALEUR("Altitude", "742,30"), lien: { id: "l-3" }, confirme: false };
-  const dit = renderCeQuePorteLeSujet({ portages: [PROPOSE, autre] });
-
-  assert.match(dit, /Des noms de la mémoire apparaissent dans ce sujet/);
+  // Les apostrophes sont échappées — on lit le rendu, pas la phrase.
+  assert.match(dit, /Chaque ligne dit ce qui l&#39;a fait remonter\./);
   assert.doesNotMatch(dit, /Le nom «/);
-});
+  assert.doesNotMatch(dit, /Des noms de la mémoire/);
 
-test("une valeur sans nom lisible ne fait pas annoncer un nom vide", () => {
-  const anonyme = { assertion: { payload: {} }, lien: { id: "l-4" }, confirme: false };
-  const dit = renderCeQuePorteLeSujet({ portages: [anonyme] });
-
-  assert.match(dit, /Des noms de la mémoire apparaissent dans ce sujet/);
-  assert.doesNotMatch(dit, /Le nom «/);
+  // Et les deux lignes disent chacune la leur, sans se contredire.
+  assert.match(dit, /Son nom apparaît dans la description/);
+  assert.match(dit, /Sa valeur « Montholon » apparaît dans un commentaire/);
 });
 
 test("les boutons répondent à la question posée juste au-dessus", () => {
@@ -241,7 +233,7 @@ test("un sujet sans arête offre le geste, et n'affirme toujours rien", () => {
   // il affirme, et il n'a rien à affirmer.
   const dit = renderCeQuePorteLeSujet({ portages: [] });
 
-  assert.match(dit, /Ces valeurs portent le même nom/);
+  assert.match(dit, /La mémoire se reconnaît dans ce sujet/);
   assert.match(dit, /data-portage-cherche/);
   assert.doesNotMatch(dit, /met ces valeurs en débat/);
   assert.doesNotMatch(dit, /portage-liste__corps/);
@@ -481,15 +473,22 @@ test("la porte se ferme pendant qu'une écriture vole", () => {
 
 /* ── D'où le rapprochement sort ──────────────────────────────────────────── */
 
-test("une proposition dit où son nom a été vu", () => {
-  // Un nom trouvé dans le titre et un nom trouvé dans un commentaire ne se
+test("une proposition dit d'où le rapprochement sort", () => {
+  // Un nom trouvé dans le titre et une valeur trouvée dans un commentaire ne se
   // relisent pas pareil. On ne confirme pas un rapprochement dont on ignore
   // d'où il sort.
-  const dit = renderCeQuePorteLeSujet({
-    portages: [{ ...PROPOSE, ou: "dans la description et un commentaire" }]
+  //
+  // La phrase entière vient du service qui a reconnu : elle dépend de **par
+  // où** il a reconnu, et l'écran la pose telle quelle.
+  const parLeNom = renderCeQuePorteLeSujet({
+    portages: [{ ...PROPOSE, ou: "Son nom apparaît dans la description de ce sujet." }]
+  });
+  const parLaValeur = renderCeQuePorteLeSujet({
+    portages: [{ ...PROPOSE, ou: "Sa valeur « Chamonix » apparaît dans un commentaire de ce sujet." }]
   });
 
-  assert.match(dit, /Son nom apparaît dans la description et un commentaire de ce sujet\./);
+  assert.match(parLeNom, /Son nom apparaît dans la description de ce sujet\./);
+  assert.match(parLaValeur, /Sa valeur « Chamonix » apparaît dans un commentaire de ce sujet\./);
 });
 
 test("cet endroit se lit sans rien ouvrir", () => {

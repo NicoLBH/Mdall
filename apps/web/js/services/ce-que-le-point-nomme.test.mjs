@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  OU, ceQueLePointNomme, messageLisible, phraseDOuOnLaVu, textesDuPoint
+  OU, PAR, ceQueLePointNomme, messageLisible, phraseDOuOnLaVu,
+  phraseDeLaReconnaissance, textesDuPoint
 } from "./ce-que-le-point-nomme.js";
 
 /** Une affirmation de la mémoire. Aucun nom réel nulle part. */
@@ -101,20 +102,51 @@ test("une description qui cite deux noms les rend tous les deux", () => {
   assert.deepEqual(dit.noms.map((entree) => entree.nom).sort(), ["localisation", "profondeur hors gel"]);
 });
 
-test("une valeur écrite dans le texte ne reconnaît pas son nom", () => {
-  // « à Chamonix » nomme la **valeur** de la localisation, pas la localisation.
-  // La reconnaissance porte sur les noms de la mémoire, et elle s'arrête là :
-  // reconnaître les valeurs accrocherait « Chamonix » sur une rue, un nom de
-  // personne ou une marque, et un rapprochement faux couvre en silence.
-  //
-  // C'est une limite assumée, pas un oubli — et c'est elle qu'il faudra lever
-  // si l'on veut lire « à Chamonix » comme une localisation.
+test("une valeur écrite dans le texte désigne son nom", () => {
+  // La limite est levée : « à Chamonix » nomme la **valeur** de la
+  // localisation, et c'est la manière la plus naturelle d'écrire un compte
+  // rendu. Elle l'était depuis toujours, et la reconnaissance passait à côté.
   const dit = ceQueLePointNomme({
     point: { id: "p-1", description: "à Chamonix, les fondations descendent à 0,69 m" },
     assertions: MEMOIRE
   });
 
-  assert.deepEqual(dit.noms, []);
+  assert.deepEqual(dit.noms.map((e) => e.nom).sort(), ["localisation", "profondeur hors gel"]);
+  assert.deepEqual(dit.noms.map((e) => e.par), [PAR.VALEUR, PAR.VALEUR]);
+
+  // Et « C » — la classe de sol — ne remonte pas : trop courte pour désigner
+  // quoi que ce soit. C'est le refus qui rend cette porte utilisable.
+  assert.ok(!dit.noms.some((e) => e.nom === "classe de sol"));
+});
+
+test("le nom l'emporte sur sa propre valeur", () => {
+  // « Localisation : Chamonix » nomme deux fois la même chose. Le proposer deux
+  // fois ferait répondre deux fois à une seule question — et le nom est la
+  // reconnaissance la plus sûre.
+  const dit = ceQueLePointNomme({
+    point: { id: "p-1", description: "Localisation : Chamonix" },
+    assertions: MEMOIRE
+  });
+
+  assert.equal(dit.noms.length, 1);
+  assert.equal(dit.noms[0].par, PAR.NOM);
+});
+
+test("la phrase dit par où on a reconnu, parce que cela change tout", () => {
+  // « Sa valeur apparaît » se relit tout autrement que « son nom apparaît » :
+  // une valeur peut être un mot ordinaire, et c'est ce qui permet de juger.
+  const parLaValeur = ceQueLePointNomme({
+    point: { id: "p-1", description: "à Chamonix" }, assertions: MEMOIRE
+  }).noms[0];
+  const parLeNom = ceQueLePointNomme({
+    point: { id: "p-1", title: "La localisation du projet" }, assertions: MEMOIRE
+  }).noms[0];
+
+  assert.equal(phraseDeLaReconnaissance(parLaValeur),
+    "Sa valeur « Chamonix » apparaît dans la description de ce sujet.");
+  assert.equal(phraseDeLaReconnaissance(parLeNom),
+    "Son nom apparaît dans le titre de ce sujet.");
+  assert.equal(phraseDeLaReconnaissance(null), "");
 });
 
 test("un titre qui ne nomme rien ne fait pas taire la description", () => {

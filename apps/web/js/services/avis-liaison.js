@@ -41,6 +41,16 @@ import { aplati } from "./recherche-de-valeur.js";
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /**
+ * En dessous de quoi un mot ne désigne plus rien.
+ *
+ * « CF », « L », « S » sont des codes de mission ou de degré, pas des noms ; ils
+ * se retrouveraient dans la moitié de la mémoire. La même raison vaut pour les
+ * **valeurs** — « C », « A2 », « 3 » sont partout —, et le même nombre : deux
+ * seuils finiraient par ne pas protéger de la même chose (règle 10).
+ */
+export const LONGUEUR_MINIMALE = 4;
+
+/**
  * Pourquoi un avis s'accroche, ou ne s'accroche pas.
  *
  * Nommés et non rédigés : c'est l'écran qui écrit la phrase, et un motif se dit
@@ -229,7 +239,7 @@ function reconnaitre(intitule, assertions) {
  * entier dit plus qu'un intitulé qui en est un morceau.
  */
 function sujetQuiContient(intitule, parSujet) {
-  if (intitule.length < 4) return null;
+  if (intitule.length < LONGUEUR_MINIMALE) return null;
 
   const contenants = [...parSujet.keys()].filter((cle) => nommeEntierement(cle, intitule));
   return contenants.length === 1 ? contenants[0] : null;
@@ -290,6 +300,101 @@ export function nomsDunTexte(lu = "", assertions = []) {
   }
 
   return retenus.map((cle) => ({ nom: cle, versions: parSujet.get(cle) ?? [] }));
+}
+
+/**
+ * Les **valeurs** de la mémoire qu'un texte cite, et le nom qu'elles désignent.
+ *
+ * ## Le cas qu'on vient régler
+ *
+ * « Dans la ville de Montholon, les fondations… » ne nomme pas la localisation :
+ * il en écrit la **valeur**. La reconnaissance par les noms passait à côté, et
+ * c'est la manière la plus naturelle d'écrire un compte rendu.
+ *
+ * ## Pourquoi c'est la reconnaissance la plus dangereuse
+ *
+ * Un nom de la mémoire est un nom : « Profondeur hors gel » ne se trouve pas par
+ * hasard dans un texte. Une valeur, si — « C », « 3 », « A2 » sont partout, et
+ * « Montholon » peut être une rue. Un rapprochement faux couvre en silence, et
+ * c'est ici qu'on risquerait d'en produire beaucoup.
+ *
+ * D'où **quatre refus**, tous exacts, aucun réglable au jugé :
+ *
+ * **Trop courte.** `LONGUEUR_MINIMALE`, le même seuil que pour les noms et pour
+ * la même raison. Il élimine à lui seul les codes — « C », « A2 », « XF3 ».
+ *
+ * **Portée par plusieurs noms.** Si « C » est la valeur de « Classe de sol » et
+ * de « Classe d'exposition », le texte ne dit pas laquelle : c'est une vraie
+ * ambiguïté, et on ne devine pas (règle 5).
+ *
+ * **Qui est aussi un nom.** Une valeur qui s'écrit comme un sujet de la mémoire
+ * ferait deux reconnaissances de la même phrase, et la seconde serait fausse.
+ *
+ * **Sur des mots entiers**, comme partout : « argile » ne se reconnaît pas dans
+ * « argileux ».
+ *
+ * ## Ce qu'elle propose
+ *
+ * Les seules versions qui portent **cette valeur-là**, pas toutes celles du nom :
+ * le texte a écrit une valeur, et proposer les autres reviendrait à mettre en
+ * débat ce dont il n'a pas parlé.
+ *
+ * @returns {{nom: string, valeur: string, versions: object[]}[]}
+ */
+export function valeursDunTexte(lu = "", assertions = []) {
+  const cherche = aplati(lu);
+  // Un texte vide ne citerait rien de toute façon — `nommeEntierement` le
+  // refuse. Ce retour épargne la construction des deux index, rien de plus.
+  if (!cherche) return [];
+
+  const parSujet = sujetsDeLaMemoire(assertions);
+  const parValeur = valeursDeLaMemoire(parSujet);
+
+  const trouvees = [];
+  for (const [valeur, dit] of parValeur) {
+    // Une valeur que plusieurs noms portent ne désigne rien de sûr, et une
+    // valeur qui est aussi un nom se reconnaît déjà par l'autre porte.
+    if (dit.noms.size !== 1 || parSujet.has(valeur)) continue;
+    if (valeur.length < LONGUEUR_MINIMALE) continue;
+    if (!nommeEntierement(cherche, valeur)) continue;
+
+    // La valeur **telle que la mémoire l'écrit**, et pas repliée : elle
+    // s'affiche à l'écran — « Sa valeur « Chamonix » apparaît… » — et
+    // « chamonix » se lirait comme une coquille.
+    trouvees.push({ nom: [...dit.noms][0], valeur: dit.dite, cle: valeur, versions: dit.versions });
+  }
+
+  // De la plus longue à la plus courte : la plus précise d'abord, comme pour les
+  // noms.
+  return trouvees.sort((gauche, droite) => droite.cle.length - gauche.cle.length);
+}
+
+/**
+ * Les valeurs en vigueur de la mémoire, aplaties, avec les noms qui les portent.
+ *
+ * Les **noms**, au pluriel : c'est ce pluriel qui dit l'ambiguïté, et c'est lui
+ * qu'on regarde avant de proposer quoi que ce soit.
+ */
+function valeursDeLaMemoire(parSujet) {
+  const parValeur = new Map();
+
+  for (const [nom, versions] of parSujet) {
+    for (const version of versions) {
+      const dite = texte(version?.payload?.value);
+      const valeur = aplati(dite);
+      if (!valeur) continue;
+
+      // `dite` garde l'orthographe de la première version rencontrée : c'est
+      // celle qu'on montrera, et deux versions d'une même valeur repliée ne
+      // diffèrent que par la casse ou les accents.
+      if (!parValeur.has(valeur)) parValeur.set(valeur, { noms: new Set(), versions: [], dite });
+      const dit = parValeur.get(valeur);
+      dit.noms.add(nom);
+      dit.versions.push(version);
+    }
+  }
+
+  return parValeur;
 }
 
 /**

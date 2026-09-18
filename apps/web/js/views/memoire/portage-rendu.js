@@ -399,21 +399,17 @@ function renderCeQuiSeDebat(debat) {
  * —, **ce qu'on demande**, et **ce que ça fait**. Une question sans sa
  * conséquence n'est pas une question, c'est un piège.
  *
- * ## La phrase ne dit plus « dans le titre »
+ * ## Le bloc n'annonce plus rien, parce que chaque ligne le dit
  *
- * Elle le disait quand la reconnaissance ne lisait que le titre. Elle lit
- * maintenant le titre, la description et les commentaires : nommer le titre
- * ferait chercher là un mot qui est ailleurs, et vu à l'écran d'un cas réel où
- * le titre était « CR chantier n°25 », elle était simplement fausse. Chaque
- * ligne dit son propre endroit ; le bloc, lui, dit seulement le nom.
+ * Il a porté successivement « le nom X apparaît dans le titre », puis « dans ce
+ * sujet ». Les deux sont devenus faux : la reconnaissance lit trois endroits, et
+ * elle reconnaît aussi bien un **nom** qu'une **valeur** — « à Montholon » ne
+ * nomme pas la localisation, il en écrit la valeur.
  *
- * ## Le nom se lit sur les lignes qu'il annonce
- *
- * Il ne se reçoit pas d'ailleurs : une phrase qui nomme « Profondeur hors gel »
- * au-dessus d'une liste où figure autre chose fait chercher dans l'intitulé un
- * mot qui n'y est pas (règle 10). Elle le lit donc sur ses propres lignes, et
- * se tait dès qu'elles ne s'accordent pas — plusieurs noms de la mémoire
- * peuvent tenir dans un même titre.
+ * Une annonce qui vaut pour tout le bloc ne peut plus dire vrai de chaque ligne.
+ * Chacune porte donc sa propre phrase, exacte, et le bloc se contente de dire
+ * où regarder. Le nom commun annoncé en tête a disparu avec elle : il répétait
+ * ce que les lignes disent mieux (règle 4).
  *
  * ## Les boutons disent l'acte, pas l'abstraction
  *
@@ -434,12 +430,8 @@ function renderCeQuiSeDebat(debat) {
  * une quatrième.
  */
 function renderCeQuiPorteLeMemeNom(proposes, { occupe, dit }) {
-  const titre = "Ces valeurs portent le même nom";
-
-  const nom = nomCommun(proposes);
-  const pourquoi = nom
-    ? `Le nom « ${nom} » apparaît dans ce ${MOT_A_LECRAN.un}.`
-    : `Des noms de la mémoire apparaissent dans ce ${MOT_A_LECRAN.un}.`;
+  const titre = "La mémoire se reconnaît dans ce sujet";
+  const pourquoi = `Chaque ligne dit ce qui l'a fait remonter.`;
 
   return `
     <section class="details-bloc portage-liste portage-liste--propose" aria-label="${escapeHtml(titre)}">
@@ -551,10 +543,14 @@ function renderUneValeur(portage, { gestes }) {
         }</div>`
         : ""}
       ${texte(ou)
-        // D'où le rapprochement sort — le titre, la description, un commentaire.
+        // D'où le rapprochement sort : par le **nom** ou par la **valeur**, et
+        // dans le titre, la description ou un commentaire. La phrase entière
+        // vient du service qui a reconnu — elle dépend de par où il a reconnu,
+        // et l'écrire ici en ferait une seconde version (règle 10).
+        //
         // L'endroit, jamais le texte : recopier un commentaire ici le sortirait
         // de la conversation où il a été écrit.
-        ? `<div class="portage-liste__ou">Son nom apparaît ${escapeHtml(texte(ou))} de ce ${escapeHtml(MOT_A_LECRAN.un)}.</div>`
+        ? `<div class="portage-liste__ou">${escapeHtml(texte(ou))}</div>`
         : ""}
       ${reste.length || manques
         ? `<details class="portage-liste__histoire">
@@ -570,22 +566,6 @@ function renderUneValeur(portage, { gestes }) {
         : ""}
     </li>
   `;
-}
-
-/**
- * Le nom que ces lignes ont en commun — vide dès qu'elles n'en ont pas un seul.
- *
- * C'est ce nom qui les a fait remonter. Mais un titre peut contenir plusieurs
- * noms de la mémoire, et la reconnaissance rapproche alors des valeurs qui ne
- * s'appellent pas pareil : en nommer une seule ferait chercher dans le titre un
- * mot qui explique la moitié de la liste (règle 5). La phrase générique reste
- * vraie, et c'est tout ce qu'on lui demande.
- */
-function nomCommun(portages = []) {
-  const noms = new Set(portages.map((portage) => texte(portage?.assertion?.payload?.subject)
-    || texte(portage?.assertion?.subject_key)));
-
-  return noms.size === 1 ? [...noms][0] : "";
 }
 
 /**

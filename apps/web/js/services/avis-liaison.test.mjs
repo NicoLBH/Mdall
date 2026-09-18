@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  LIAISON, intituleDeLAvis, liaisonDeLAvis, liaisonsProposees, nomsDunTexte, phraseDeLaLiaison
+  LIAISON, LONGUEUR_MINIMALE, intituleDeLAvis, liaisonDeLAvis, liaisonsProposees,
+  nomsDunTexte, phraseDeLaLiaison, valeursDunTexte
 } from "./avis-liaison.js";
 
 /** La mémoire d'un projet. Aucun nom réel, aucune commune réelle. */
@@ -257,4 +258,106 @@ test("un texte vide ne nomme rien", () => {
   assert.deepEqual(nomsDunTexte("", MEMOIRE), []);
   assert.deepEqual(nomsDunTexte("   ", MEMOIRE), []);
   assert.deepEqual(nomsDunTexte("zone de neige", []), []);
+});
+
+
+/* ── Une valeur écrite dans le texte, et le nom qu'elle désigne ──────────── */
+
+/** Une mémoire où les valeurs sont distinctes et assez longues pour compter. */
+const AVEC_VALEURS = [
+  { id: "loc", superseded_by: null, payload: { subject: "Localisation", value: "Montholon" } },
+  { id: "sol", superseded_by: null, payload: { subject: "Nature du sol", value: "moraine" } },
+  { id: "hg", superseded_by: null, payload: { subject: "Profondeur hors gel", value: "0,69 m" } }
+];
+
+test("une valeur écrite dans le texte désigne son nom", () => {
+  // « Dans la ville de Montholon, les fondations… » ne nomme pas la
+  // localisation : il en écrit la valeur. C'est la manière la plus naturelle
+  // d'écrire un compte rendu, et la reconnaissance passait à côté.
+  const dits = valeursDunTexte("dans la ville de Montholon, les fondations descendent", AVEC_VALEURS);
+
+  // La valeur telle que la mémoire l'écrit : elle s'affiche, et « montholon »
+  // se lirait comme une coquille.
+  assert.deepEqual(dits.map((d) => [d.nom, d.valeur]), [["localisation", "Montholon"]]);
+  assert.deepEqual(dits[0].versions.map((v) => v.id), ["loc"]);
+});
+
+test("une valeur trop courte ne désigne rien", () => {
+  // « C », « A2 », « 3 » sont partout. C'est le même seuil que pour les noms, et
+  // pour la même raison.
+  const memoire = [{ id: "sol", superseded_by: null, payload: { subject: "Classe de sol", value: "C" } }];
+
+  assert.deepEqual(valeursDunTexte("la classe est C dans ce cas", memoire), []);
+  assert.equal(LONGUEUR_MINIMALE, 4, "le seuil des valeurs est celui des noms, et il vit une fois");
+});
+
+test("une valeur que deux noms portent ne désigne rien de sûr", () => {
+  // Le texte ne dit pas laquelle : c'est une vraie ambiguïté, et on ne devine
+  // pas (règle 5).
+  const memoire = [
+    { id: "a", superseded_by: null, payload: { subject: "Classe de sol", value: "moraine" } },
+    { id: "b", superseded_by: null, payload: { subject: "Nature du terrain", value: "moraine" } }
+  ];
+
+  assert.deepEqual(valeursDunTexte("le sol est une moraine", memoire), []);
+});
+
+test("une valeur qui est aussi un nom se laisse à l'autre porte", () => {
+  // Elle se reconnaît déjà par les noms ; la reconnaître deux fois en ferait une
+  // fausse la seconde fois.
+  const memoire = [
+    { id: "a", superseded_by: null, payload: { subject: "Altitude", value: "742,30" } },
+    { id: "b", superseded_by: null, payload: { subject: "Repère du géomètre", value: "Altitude" } }
+  ];
+
+  assert.deepEqual(valeursDunTexte("on relève l'altitude du terrain", memoire), []);
+});
+
+test("les mots entiers valent aussi pour les valeurs", () => {
+  // « moraine » ne se reconnaît pas dans « morainique », ni « argile » dans
+  // « argileux ».
+  const memoire = [{ id: "sol", superseded_by: null, payload: { subject: "Nature du sol", value: "argile" } }];
+
+  assert.deepEqual(valeursDunTexte("un terrain argileux", memoire), []);
+  assert.deepEqual(valeursDunTexte("de l'argile en profondeur", memoire).map((d) => d.nom),
+    ["nature du sol"]);
+});
+
+test("une valeur remplacée ne désigne plus rien", () => {
+  // Elle n'est plus ce que le projet retient : l'index de la mémoire l'écarte
+  // déjà, et c'est là que vit la prudence.
+  const memoire = [{ id: "vieux", superseded_by: "neuf", payload: { subject: "Localisation", value: "Montholon" } }];
+
+  assert.deepEqual(valeursDunTexte("à Montholon", memoire), []);
+});
+
+test("seules les versions qui portent cette valeur se proposent", () => {
+  // Le texte a écrit une valeur ; proposer les autres versions du nom
+  // reviendrait à mettre en débat ce dont il n'a pas parlé.
+  const memoire = [
+    { id: "a", superseded_by: null, payload: { subject: "Nature du sol", value: "moraine" } },
+    { id: "b", superseded_by: null, payload: { subject: "Nature du sol", value: "limon" } }
+  ];
+
+  assert.deepEqual(valeursDunTexte("une moraine compacte", memoire).flatMap((d) => d.versions.map((v) => v.id)),
+    ["a"]);
+});
+
+test("la plus longue d'abord, comme pour les noms", () => {
+  const memoire = [
+    { id: "a", superseded_by: null, payload: { subject: "Nature du sol", value: "moraine" } },
+    { id: "b", superseded_by: null, payload: { subject: "Localisation", value: "Montholon (89110)" } }
+  ];
+
+  assert.deepEqual(
+    valeursDunTexte("à Montholon (89110), une moraine", memoire).map((d) => d.nom),
+    ["localisation", "nature du sol"]
+  );
+});
+
+test("un texte vide ne cite aucune valeur", () => {
+  // Tenu par `nommeEntierement`, qui ne reconnaît rien dans rien. Le retour
+  // anticipé n'ajoute pas de prudence : il épargne les deux index.
+  assert.deepEqual(valeursDunTexte("", AVEC_VALEURS), []);
+  assert.deepEqual(valeursDunTexte("à Montholon", []), []);
 });

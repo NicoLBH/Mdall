@@ -38,9 +38,23 @@
  * Il reçoit le point et ses messages, et rend une lecture. La base est ailleurs.
  */
 
-import { nomsDunTexte } from "./avis-liaison.js";
+import { nomsDunTexte, valeursDunTexte } from "./avis-liaison.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
+
+/**
+ * Comment la mémoire s'est reconnue dans le texte.
+ *
+ * Deux portes, et il faut les distinguer à l'écran : « son nom apparaît » se
+ * relit tout autrement que « sa valeur apparaît ». La seconde est la plus
+ * naturelle à écrire — « à Montholon, les fondations… » — et la plus risquée à
+ * lire, puisqu'une valeur peut être un mot ordinaire. Confondre les deux
+ * priverait celui qui confirme de ce qui lui permet de juger.
+ */
+export const PAR = {
+  NOM: "nom",
+  VALEUR: "valeur"
+};
 
 /** Les endroits d'un point où un nom peut apparaître. */
 export const OU = {
@@ -128,15 +142,31 @@ export function textesDuPoint(point = null, messages = []) {
  */
 export function ceQueLePointNomme({ point = null, messages = [], assertions = [] } = {}) {
   const parNom = new Map();
+  const parValeur = new Map();
 
   for (const { ou, lu, quand } of textesDuPoint(point, messages)) {
     for (const { nom, versions } of nomsDunTexte(lu, assertions)) {
-      if (!parNom.has(nom)) parNom.set(nom, { nom, versions, vu: [] });
+      if (!parNom.has(nom)) parNom.set(nom, { nom, versions, vu: [], par: PAR.NOM, quoi: nom });
       parNom.get(nom).vu.push({ ou, quand });
+    }
+
+    for (const { nom, valeur, versions } of valeursDunTexte(lu, assertions)) {
+      const marque = `${nom}|${valeur}`;
+      if (!parValeur.has(marque)) {
+        parValeur.set(marque, { nom, versions, vu: [], par: PAR.VALEUR, quoi: valeur });
+      }
+      parValeur.get(marque).vu.push({ ou, quand });
     }
   }
 
-  const noms = [...parNom.values()];
+  // **Le nom l'emporte sur sa valeur.** Un texte qui dit « Localisation :
+  // Montholon » nomme deux fois la même chose ; le proposer deux fois ferait
+  // répondre deux fois à une seule question. Et le nom est la reconnaissance la
+  // plus sûre — c'est elle qu'on garde.
+  const noms = [
+    ...parNom.values(),
+    ...[...parValeur.values()].filter((entree) => !parNom.has(entree.nom))
+  ];
 
   return { noms, versions: sansDoublon(noms.flatMap((entree) => entree.versions)) };
 }
@@ -150,6 +180,26 @@ function sansDoublon(versions) {
     vues.add(id);
     return true;
   });
+}
+
+/**
+ * Ce qu'on a reconnu, et où — en une phrase.
+ *
+ * Elle vit ici et pas à l'écran parce qu'elle dépend de **par où** la mémoire
+ * s'est reconnue : deux écrans qui l'écriraient chacun finiraient par ne pas
+ * dire la même chose (règle 10).
+ *
+ * « Sa valeur apparaît » se relit tout autrement que « son nom apparaît » — et
+ * c'est ce qui permet à celui qui confirme de juger, puisqu'une valeur peut être
+ * un mot ordinaire.
+ */
+export function phraseDeLaReconnaissance(entree = null, { mot = "sujet" } = {}) {
+  const ou = phraseDOuOnLaVu(entree?.vu);
+  if (!ou) return "";
+
+  return texte(entree?.par) === PAR.VALEUR
+    ? `Sa valeur « ${texte(entree?.quoi)} » apparaît ${ou} de ce ${mot}.`
+    : `Son nom apparaît ${ou} de ce ${mot}.`;
 }
 
 /**
