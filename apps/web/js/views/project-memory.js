@@ -116,6 +116,8 @@ import { renderCeQuiPorteSurLaValeur, renderLeChemin, renderLeDebatQuiATranche }
   from "./memoire/portage-rendu.js";
 import { phraseDeLaRessemblance, raisonnementsQuiSeRessemblent }
   from "../services/raisonnements-qui-se-ressemblent.js";
+import { formeDunRaisonnement, phraseDeLaForme, phraseDesRefus, pourquoiElleNeVoyagePas }
+  from "../services/forme-dun-raisonnement.js";
 import { liaisonDeLAvis } from "../services/avis-liaison.js";
 import { bindGhActionButtons, bindGhSelectMenus, renderGhActionButton, renderGhSelectMenu } from "./ui/gh-split-button.js";
 import { renderLightTabs, bindLightTabs } from "./ui/light-tabs.js";
@@ -883,6 +885,64 @@ function renderLeRaisonnement(assertion) {
   return `
     ${renderLeChemin({ raisonnement: chemin })}
     ${voisins.length ? renderCeQuiLuiRessemble(voisins) : ""}
+    ${renderCeQuiPourraitVoyager(assertion, chemin)}
+  `;
+}
+
+/**
+ * Ce que ce raisonnement pourrait apporter à un autre projet.
+ *
+ * ## Pourquoi cela se montre avant de partir
+ *
+ * Deux projets ne partagent jamais leurs valeurs ; ils partagent leurs **formes
+ * de raisonnement**. « De l'altitude et de la nature du sol, on tire une
+ * profondeur hors gel » se retrouve sur cent chantiers, et c'est cela qui vaut
+ * d'être mis en commun.
+ *
+ * Mais **aucune règle ne garantit qu'un nom n'est pas propre à un projet** :
+ * « Hauteur sous plafond du bureau de la directrice » est un nom. C'est donc un
+ * humain qui décide, et il ne peut décider que s'il voit **exactement** ce qui
+ * partirait. Cet encadré est là pour cela, et il montre la forme entière, pas un
+ * résumé.
+ *
+ * Rien ne part encore : on regarde. La sortie se signera, comme tout le reste
+ * (règle 1).
+ *
+ * ## Quand elle ne peut pas partir, on dit pourquoi
+ *
+ * « Forme non exportable » n'apprend rien. « Un de ses noms est une partie de
+ * l'ouvrage » se vérifie d'un coup d'œil, et se corrige.
+ */
+function renderCeQuiPourraitVoyager(assertion, chemin) {
+  const assertions = view.assertions === null ? [] : view.assertions;
+  const forme = formeDunRaisonnement(assertion, { assertions });
+
+  if (!forme) {
+    const dit = phraseDesRefus(pourquoiElleNeVoyagePas(chemin, { assertions }));
+    return dit
+      ? `<section class="details-bloc memory-row__forme memory-row__forme--retenue">
+          <div class="details-bloc__label">Ce que ce raisonnement pourrait apporter ailleurs</div>
+          <p class="memory-row__forme-rien">${escapeHtml(dit)}</p>
+        </section>`
+      : "";
+  }
+
+  // Le même bloc que « Par où l'on est passé », juste au-dessus : les deux se
+  // lisent l'un après l'autre, et deux cadres différents feraient croire à deux
+  // natures de choses.
+  return `
+    <details class="details-bloc memory-row__forme">
+      <summary class="details-bloc__label">Ce que ce raisonnement pourrait apporter ailleurs</summary>
+      <p class="memory-row__forme-dit">${escapeHtml(phraseDeLaForme(forme))}</p>
+      <dl class="memory-facts">
+        <dt>Part de</dt><dd>${escapeHtml(forme.entrees.join(" · "))}</dd>
+        <dt>Aboutit à</dt><dd>${escapeHtml(forme.conclusions.join(" · "))}</dd>
+        ${forme.domaine ? `<dt>Domaine</dt><dd>${escapeHtml(forme.domaine)}</dd>` : ""}
+        <dt>Empreinte</dt><dd>${escapeHtml(forme.empreinte)}</dd>
+      </dl>
+      <p class="memory-row__forme-rien">Ni valeur, ni partie de l'ouvrage, ni question, ni date,
+        ni nom de personne : rien de ce projet n'est là. Rien n'est parti — la sortie se signera.</p>
+    </details>
   `;
 }
 
