@@ -236,6 +236,63 @@ function sujetQuiContient(intitule, parSujet) {
 }
 
 /**
+ * **Tous** les noms de la mémoire qu'un texte cite, et pas seulement le premier.
+ *
+ * ## Pourquoi une deuxième porte, à côté de `liaisonDunIntitule`
+ *
+ * Celle-là répond « un sujet ou rien » : c'est ce qu'il faut pour un titre
+ * d'avis, qui nomme une chose. Une description de compte rendu en nomme
+ * plusieurs — « à Chamonix, la profondeur hors gel est de… » en cite deux —, et
+ * n'en rendre qu'un revient à jeter le reste sans le dire (règle 5).
+ *
+ * La doctrine, elle, ne bouge pas : mots entiers, exact, ou rien. Les deux
+ * portes s'ouvrent sur la même reconnaissance, et il n'y en a qu'une à relire.
+ *
+ * ## Un nom contenu dans un autre ne compte pas deux fois
+ *
+ * Si la mémoire porte « Profondeur » et « Profondeur hors gel », un texte qui
+ * dit « profondeur hors gel » les nomme tous les deux au sens strict. Le plus
+ * court est écarté : proposer « Profondeur » sur un texte qui parle de la cote
+ * hors gel est exactement le faux rapprochement que cette reconnaissance
+ * existe pour éviter.
+ *
+ * Le prix est connu : un texte qui cite les deux à deux endroits perd le plus
+ * court. Un rapprochement manqué se voit et se rattrape à la main ; un
+ * rapprochement faux couvre en silence.
+ *
+ * ## Le sens inverse ne s'applique pas ici
+ *
+ * `sujetQuiContient` sert quand l'intitulé est **plus court** que le nom — le
+ * tableau d'un bureau de contrôle qui dit « Neige ». Un paragraphe ne tient
+ * dans aucun nom de la mémoire, et l'y chercher n'aurait aucun sens.
+ *
+ * @returns {{nom: string, versions: object[]}[]} du nom le plus long au plus court
+ */
+export function nomsDunTexte(lu = "", assertions = []) {
+  const cherche = aplati(lu);
+  // Un texte vide ne nommerait rien de toute façon — `nommeEntierement` le
+  // refuse. Ce retour épargne la construction de l'index, rien de plus.
+  if (!cherche) return [];
+
+  // Les versions remplacées n'y entrent pas : c'est là que vit la prudence, et
+  // la redire ici en ferait un second endroit qui décide ce qui vaut encore.
+  const parSujet = sujetsDeLaMemoire(assertions);
+
+  const cites = [...parSujet.keys()]
+    .filter((cle) => nommeEntierement(cherche, cle))
+    .sort((gauche, droite) => droite.length - gauche.length);
+
+  const retenus = [];
+  for (const cle of cites) {
+    if (retenus.some((garde) => nommeEntierement(garde, cle))) continue;
+
+    retenus.push(cle);
+  }
+
+  return retenus.map((cle) => ({ nom: cle, versions: parSujet.get(cle) ?? [] }));
+}
+
+/**
  * Vrai quand l'intitulé contient ce nom, **sur des mots entiers**.
  *
  * `includes` seul reconnaîtrait « sol » dans « solive » et « vent » dans

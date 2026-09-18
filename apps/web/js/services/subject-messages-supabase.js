@@ -344,6 +344,47 @@ async function gatherAttachmentUploadDiagnostics({
   };
 }
 
+/**
+ * Les commentaires d'un point, réduits à ce que la reconnaissance a besoin de
+ * lire.
+ *
+ * ## Pourquoi pas `listMessages`
+ *
+ * Celui-là rend aussi les mentions, les pièces jointes et les réactions : trois
+ * requêtes de plus à chaque ouverture d'un sujet, pour des données qu'on jette.
+ * La reconnaissance ne lit que du texte, et la marque qui dit si elle a le droit
+ * de le lire.
+ *
+ * **La même porte**, une fonction de plus : une seconde porte sur
+ * `subject_messages` serait celle qu'on oublierait de relire le jour où la
+ * confidentialité change.
+ *
+ * ## Ce qui remonte, et ce qui décide
+ *
+ * `visibility` et `deleted_at` **viennent**, ils ne sont pas filtrés ici : c'est
+ * `ce-que-le-point-nomme.js` qui refuse, et une garde de confidentialité qui
+ * vivrait dans la requête serait invisible aux tests.
+ *
+ * `null` quand la lecture échoue, jamais `[]` : « on n'a pas pu lire » n'est pas
+ * « il n'y a pas de commentaire » (règle 5).
+ */
+export async function listerLesCommentairesDunPoint(subjectId) {
+  const vise = normalizeId(subjectId);
+  if (!vise) return null;
+
+  const params = new URLSearchParams();
+  params.set("select", "id,subject_id,body_markdown,created_at,deleted_at,visibility");
+  params.set("subject_id", `eq.${vise}`);
+  params.set("order", "created_at.asc");
+
+  try {
+    const rows = await restFetch("/rest/v1/subject_messages", params);
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return null;
+  }
+}
+
 export function createSubjectMessagesSupabaseRepository() {
   async function listAttachmentsByMessageIds(messageIds = []) {
     const ids = (Array.isArray(messageIds) ? messageIds : [])

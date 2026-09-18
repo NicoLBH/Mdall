@@ -806,6 +806,83 @@ et par la pastille : un seul état, une seule couleur (règle 10). Le halo du
 canevas la recopie — un dessin sur canevas ne lit pas une variable CSS —, et
 c'est le seul endroit où elle se répète.
 
+### Étape 1 de la capitalisation — lire les trois endroits, et tous les noms
+
+#### Ce que la reconnaissance lisait vraiment
+
+```js
+intituleDuPoint = point.title || point.titre || point.description
+```
+
+Le titre **ou** la description : donc le titre seul, la description ne venant
+qu'à défaut de titre. Et dans ce titre, `reconnaitre` gardait `reconnus[0]` —
+**un** nom, le plus long — et jetait les autres. Les commentaires n'étaient
+jamais lus.
+
+Or les variables d'un projet ne sont presque jamais dans le titre. Un compte
+rendu s'appelle « CR chantier n°25 » : il ne nomme rien. Pour le cas le plus
+fréquent, la reconnaissance rendait **zéro**.
+
+#### Elle lit les trois, et dit où
+
+`ce-que-le-point-nomme.js` compose les textes d'un point — titre, description,
+commentaires — et `nomsDunTexte` y trouve **tous** les noms. Chaque nom garde
+**où** il a été vu, et l'écran l'écrit sous la valeur : « Son nom apparaît dans
+la description de ce sujet. »
+
+On ne confirme pas un rapprochement dont on ignore d'où il sort ; et un nom
+trouvé dans le titre ne se relit pas comme un nom venu d'une discussion.
+
+Vérifié au navigateur sur le cas réel — titre « CR chantier n°25 », deux noms
+dans la description, un dans un commentaire : **trois** propositions là où il y
+en avait zéro.
+
+#### Les échanges avec le copilote ne sont jamais lus
+
+`visibility = 'ephemeral'` marque les conversations avec le copilote, privées
+par construction. `messageLisible` les refuse, ainsi que les messages effacés
+(`deleted_at`).
+
+Le refus vit dans le **service**, pas dans la requête : une garde de
+confidentialité qui vivrait dans le SQL serait invisible aux tests, et une garde
+qui dépend de qui appelle n'est pas une garde. Elle est cassée et vue tomber
+comme les autres, et elle tient même sur une casse inattendue — `messageLisible`
+est exportée, et une ligne peut lui venir d'un export relu ou d'une future
+fonction du serveur.
+
+La phrase dit l'**endroit**, jamais le texte : recopier un commentaire dans cet
+écran le sortirait de la conversation où il a été écrit.
+
+#### Deux prudences conservées, une limite assumée
+
+**Un nom contenu dans un autre est écarté.** Si la mémoire porte « Profondeur »
+et « Profondeur hors gel », un texte qui dit la seconde ne propose pas la
+première. Le prix est connu — un texte qui cite les deux à deux endroits perd la
+plus courte — et il est le bon sens : un rapprochement manqué se voit et se
+rattrape, un rapprochement faux couvre en silence.
+
+**Les mots entiers valent toujours.** « Vent » ne se reconnaît pas dans
+« éventuel », ni « Sol » dans « solive ». C'est la même fonction qui le tient
+pour un avis de contrôle et pour un compte rendu.
+
+**Une valeur écrite dans le texte ne reconnaît pas son nom.** « À Chamonix »
+nomme la *valeur* de la localisation, pas la localisation. La reconnaissance
+porte sur les noms de la mémoire et s'arrête là : lire les valeurs accrocherait
+« Chamonix » sur une rue, un nom de personne ou une marque. C'est une limite
+**assumée et testée**, pas un oubli — et c'est elle qu'il faudra lever pour lire
+« à Chamonix » comme une localisation.
+
+#### Ce qui a été trouvé en cassant
+
+Deux morceaux de code mort, retirés : `nomsDunTexte` refiltrait les versions
+remplacées alors que l'index de la mémoire les écarte déjà (règle 4), et la
+garde du texte vide était tenue par `nommeEntierement` — elle ne fait qu'épargner
+la construction de l'index, et le commentaire le dit maintenant.
+
+Et une convention violée, attrapée par sa propre garde : le fichier s'appelait
+`ce-que-le-sujet-nomme.js`. « Sujet » est le mot de l'écran ; le code dit
+« point ». Le test qui tient cette ligne est tombé sur la ligne d'import.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -1025,6 +1102,21 @@ valeur que personne n'a mise en doute.
 | le tableau du débat se dessine | il disparaît | 2 tests |
 | sans opposition, aucun tableau ne redouble la liste | il redouble | 1 test |
 | une valeur sans portée dit l'ouvrage entier | elle laisse la case vide | 1 test |
+| un échange avec le copilote n'est jamais lu | il est lu | 3 tests |
+| la marque du copilote tient quelle que soit sa casse | une autre casse passe | 1 test |
+| un message effacé ne parle plus | il parle | 2 tests |
+| les commentaires d'un autre point ne se mêlent pas | ils se mêlent | 1 test |
+| la description est lue même avec un titre | elle redevient un repli | 4 tests |
+| les commentaires sont lus | ils ne le sont plus | 2 tests |
+| tous les noms d'un texte remontent | un seul remonte | 2 tests |
+| un nom contenu dans un autre est écarté | il revient | 2 tests |
+| les mots entiers valent aussi ici | `includes` suffit | 1 test |
+| les noms sortent du plus long au plus court | l'ordre s'inverse | 2 tests |
+| un nom vu à trois endroits ne compte qu'une fois | il se dédouble | 5 tests |
+| la phrase ne répète pas le même endroit | elle le répète | 1 test |
+| une proposition dit où son nom a été vu | elle se tait | 2 tests |
+| cet endroit se lit sans rien ouvrir | il descend dans le dépliant | 2 tests |
+| sans endroit connu, rien ne s'invente | une phrase vide s'écrit | 1 test |
 
 ---
 
@@ -1060,5 +1152,7 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | l'histoire d'une valeur, et ce qu'on n'en sait pas | `apps/web/js/services/histoire-de-la-valeur.js` |
 | ce qu'un sujet a écarté, et qui se relit | `apps/web/js/services/point-porte-sur.js` |
 | ce qu'un sujet met en débat, et ce qui s'y oppose | `apps/web/js/services/ce-qui-se-debat.js` |
+| tout ce qu'un sujet nomme, et où | `apps/web/js/services/ce-que-le-point-nomme.js` |
+| tous les noms d'un texte | `apps/web/js/services/avis-liaison.js` — `nomsDunTexte` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

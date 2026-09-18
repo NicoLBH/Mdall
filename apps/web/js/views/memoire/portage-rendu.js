@@ -399,6 +399,14 @@ function renderCeQuiSeDebat(debat) {
  * —, **ce qu'on demande**, et **ce que ça fait**. Une question sans sa
  * conséquence n'est pas une question, c'est un piège.
  *
+ * ## La phrase ne dit plus « dans le titre »
+ *
+ * Elle le disait quand la reconnaissance ne lisait que le titre. Elle lit
+ * maintenant le titre, la description et les commentaires : nommer le titre
+ * ferait chercher là un mot qui est ailleurs, et vu à l'écran d'un cas réel où
+ * le titre était « CR chantier n°25 », elle était simplement fausse. Chaque
+ * ligne dit son propre endroit ; le bloc, lui, dit seulement le nom.
+ *
  * ## Le nom se lit sur les lignes qu'il annonce
  *
  * Il ne se reçoit pas d'ailleurs : une phrase qui nomme « Profondeur hors gel »
@@ -418,8 +426,8 @@ function renderCeQuiPorteLeMemeNom(proposes, { occupe, dit }) {
 
   const nom = nomCommun(proposes);
   const pourquoi = nom
-    ? `Le nom « ${nom} » apparaît dans le titre de ce ${MOT_A_LECRAN.un}.`
-    : `Un nom de la mémoire apparaît dans le titre de ce ${MOT_A_LECRAN.un}.`;
+    ? `Le nom « ${nom} » apparaît dans ce ${MOT_A_LECRAN.un}.`
+    : `Des noms de la mémoire apparaissent dans ce ${MOT_A_LECRAN.un}.`;
 
   return `
     <section class="details-bloc portage-liste portage-liste--propose" aria-label="${escapeHtml(titre)}">
@@ -481,7 +489,7 @@ function renderCeQuiPorteLeMemeNom(proposes, { occupe, dit }) {
  * se montre pareil.
  */
 function renderUneValeur(portage, { gestes }) {
-  const { assertion, confirme, histoire = null } = portage ?? {};
+  const { assertion, confirme, histoire = null, ou = "" } = portage ?? {};
   const lignes = lignesDeLHistoire(histoire, { dater: dateEnFrancais });
   const manques = phraseDesLacunesDeLHistoire(histoire?.lacunes);
   const identite = lignes.filter((ligne) => IDENTITE.includes(ligne.quoi));
@@ -497,6 +505,12 @@ function renderUneValeur(portage, { gestes }) {
         ? `<div class="portage-liste__identite">${
           identite.map((ligne) => escapeHtml(ligne.dit)).join(" · ")
         }</div>`
+        : ""}
+      ${texte(ou)
+        // D'où le rapprochement sort — le titre, la description, un commentaire.
+        // L'endroit, jamais le texte : recopier un commentaire ici le sortirait
+        // de la conversation où il a été écrit.
+        ? `<div class="portage-liste__ou">Son nom apparaît ${escapeHtml(texte(ou))} de ce ${escapeHtml(MOT_A_LECRAN.un)}.</div>`
         : ""}
       ${reste.length || manques
         ? `<details class="portage-liste__histoire">

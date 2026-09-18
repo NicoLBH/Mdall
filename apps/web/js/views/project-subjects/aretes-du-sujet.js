@@ -28,6 +28,7 @@ import { RECHERCHE, renderCeQuePorteLeSujet, renderLeChemin } from "../memoire/p
 import { histoireDeLaValeur } from "../../services/histoire-de-la-valeur.js";
 import { raisonnementDuPoint } from "../../services/raisonnement-du-point.js";
 import { ceQueCePointAEcarte, pointOuvert, surQuoiCePointPorte } from "../../services/point-porte-sur.js";
+import { ceQueLePointNomme, phraseDOuOnLaVu } from "../../services/ce-que-le-point-nomme.js";
 import { affirmationsDecideesDans } from "../../services/point-a-tranche.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -70,6 +71,7 @@ export function creuxDesAretes(point = null) {
   return `<div class="aretes-du-sujet"
     data-aretes-du-sujet="${attribut(point?.id)}"
     data-aretes-titre="${attribut(point?.title)}"
+    data-aretes-description="${attribut(point?.description)}"
     data-aretes-statut="${attribut(point?.status)}"></div>`;
 }
 
@@ -145,6 +147,7 @@ export async function remplirLesAretes(hote, { occupe = false } = {}) {
   const point = {
     id: subjectId,
     title: texte(creux.getAttribute("data-aretes-titre")),
+    description: texte(creux.getAttribute("data-aretes-description")),
     status: texte(creux.getAttribute("data-aretes-statut"))
   };
 
@@ -179,13 +182,24 @@ export async function remplirLesAretes(hote, { occupe = false } = {}) {
     nommer: (id) => texte(lu.noms?.get?.(texte(id)))
   });
 
+  // **D'où sort chaque proposition.** « Ce nom apparaît dans la description » et
+  // « dans un commentaire » ne se relisent pas pareil : le premier est ce dont
+  // le sujet parle, le second ce qui est venu dans la discussion. On ne confirme
+  // pas un rapprochement dont on ignore d'où il sort.
+  //
+  // Recalculé au rendu plutôt que gardé de la dernière recherche : gardé, il
+  // disparaîtrait au rechargement et l'écran dirait alors qu'on ne sait pas,
+  // alors qu'on sait.
+  const ouOnLesAVus = ouChaqueNomAEteVu(point, await lireLesCommentaires(subjectId), lu.assertions);
+
   const portages = portees.map((assertion) => {
     const lien = parLien.get(`${subjectId}|${texte(assertion?.id)}`) ?? null;
     return {
       assertion,
       lien,
       confirme: Boolean(texte(lien?.declared_by)),
-      histoire: raconter(assertion)
+      histoire: raconter(assertion),
+      ou: ouOnLesAVus.get(texte(assertion?.id)) ?? ""
     };
   });
 
@@ -265,6 +279,10 @@ export async function chercherSurQuoiCeSujetPorte(hote) {
   const point = {
     id: subjectId,
     title: texte(creux.getAttribute("data-aretes-titre")),
+    // **La description entre dans la reconnaissance.** C'est là que sont les
+    // variables : un compte rendu s'appelle « CR chantier n°25 » et ne nomme
+    // rien, sa description en nomme trois.
+    description: texte(creux.getAttribute("data-aretes-description")),
     project_id: lu.projectId
   };
 
@@ -276,7 +294,7 @@ export async function chercherSurQuoiCeSujetPorte(hote) {
   const { proposerLesPortages } = await import("../../services/portage-reconnaissance.js");
   const bilan = await proposerLesPortages({
     projectId: lu.projectId,
-    confrontations: [{ points: [point], assertions: lu.assertions }],
+    confrontations: [{ points: [point], assertions: lu.assertions, messages: await lireLesCommentaires(subjectId) }],
     liens: lu.liens
   });
 
@@ -316,4 +334,44 @@ async function lireLesNoms(loadAuthors, assertions, liens) {
   } catch {
     return new Map();
   }
+}
+
+/**
+ * Les commentaires d'un sujet, pour la reconnaissance.
+ *
+ * `null` quand on n'a pas pu lire : la reconnaissance lira alors le titre et la
+ * description seuls, ce qui est moins mais reste vrai. Faire échouer l'écran
+ * entier parce qu'un fil n'a pas répondu serait pire.
+ */
+async function lireLesCommentaires(subjectId) {
+  try {
+    const { listerLesCommentairesDunPoint } = await import("../../services/subject-messages-supabase.js");
+    return (await listerLesCommentairesDunPoint(subjectId)) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Pour chaque version reconnue, **où** son nom a été vu — par identifiant.
+ *
+ * La phrase est faite ici et pas dans le rendu parce qu'elle sort du service qui
+ * sait lire les traces : deux façons de l'écrire finiraient par ne pas dire la
+ * même chose (règle 10).
+ */
+function ouChaqueNomAEteVu(point, messages, assertions) {
+  const parVersion = new Map();
+
+  const { noms } = ceQueLePointNomme({ point, messages, assertions });
+  for (const entree of noms) {
+    const dit = phraseDOuOnLaVu(entree.vu);
+    if (!dit) continue;
+
+    for (const version of entree.versions) {
+      const id = texte(version?.id);
+      if (id) parVersion.set(id, dit);
+    }
+  }
+
+  return parVersion;
 }

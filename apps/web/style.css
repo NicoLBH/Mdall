@@ -9864,6 +9864,10 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
    dépliant obligerait à ouvrir cinq volets pour comparer cinq lignes. */
 .portage-liste__identite{ color:var(--muted); font-size:11px; }
 
+/* D'où le rapprochement sort. Il se lit avec l'identité et ne se replie pas :
+   on ne confirme pas un rapprochement dont on ignore d'où il vient. */
+.portage-liste__ou{ color:var(--muted); font-size:11px; font-style:italic; }
+
 /* La question que le bloc pose, et la conséquence de la réponse.
 
    Une question sans sa conséquence n'est pas une question, c'est un piège : on

@@ -44,6 +44,7 @@
  */
 
 import { LIAISON, liaisonDunIntitule, phraseDeLaLiaison } from "./avis-liaison.js";
+import { ceQueLePointNomme, textesDuPoint } from "./ce-que-le-point-nomme.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -90,9 +91,16 @@ export function intituleDuPoint(point = null) {
  * @param {object[]} assertions la mémoire du projet
  * @returns {{assertions: object[], motif: string, phrase: string}}
  */
-export function portagePropose(point = null, assertions = []) {
-  const { assertions: reconnues, motif } = liaisonDunIntitule(intituleDuPoint(point), assertions);
-  return { assertions: reconnues, motif, phrase: phraseDeLaLiaison(motif) };
+export function portagePropose(point = null, assertions = [], { messages = [] } = {}) {
+  const { noms, versions } = ceQueLePointNomme({ point, messages, assertions });
+
+  // Deux silences qui ne se disent pas pareil : un sujet sans un mot à lire, et
+  // un sujet qu'on a lu sans y reconnaître un nom de la mémoire (règle 5).
+  const motif = versions.length
+    ? (versions.length > 1 ? LIAISON.TOUTES_LES_PORTEES : LIAISON.PAR_LE_SUJET)
+    : (textesDuPoint(point, messages).length ? LIAISON.SANS_SUJET : LIAISON.SANS_INTITULE);
+
+  return { assertions: versions, noms, motif, phrase: phraseDeLaLiaison(motif) };
 }
 
 /**
@@ -121,9 +129,9 @@ export function portagePropose(point = null, assertions = []) {
  * @param {object[]} [options.liens] les arêtes déjà écrites, écartées comprises
  * @returns {{aProposer: object[], reconnues: object[], deja: object[], motif: string, phrase: string}}
  */
-export function portageAProposer({ point = null, assertions = [], liens = [] } = {}) {
+export function portageAProposer({ point = null, assertions = [], liens = [], messages = [] } = {}) {
   const pointId = texte(point?.id);
-  const { assertions: reconnues, motif, phrase } = portagePropose(point, assertions);
+  const { assertions: reconnues, noms, motif, phrase } = portagePropose(point, assertions, { messages });
 
   // Tout ce que ce point-là connaît déjà d'une version : rattachée ou refusée.
   // Les deux bloquent, et pour deux raisons opposées — c'est bien pour cela
@@ -137,6 +145,9 @@ export function portageAProposer({ point = null, assertions = [], liens = [] } =
 
   return {
     reconnues,
+    // Les noms voyagent avec les versions : c'est par eux que l'écran dit d'où
+    // sort chaque proposition — « ce nom apparaît dans la description ».
+    noms,
     aProposer: reconnues.filter((assertion) => !connues.has(texte(assertion?.id))),
     deja: reconnues.filter((assertion) => connues.has(texte(assertion?.id))),
     motif,
@@ -452,19 +463,21 @@ export { LIAISON };
 export function portagesDeCesPoints({ confrontations = [], liens = [] } = {}) {
   const parPoint = new Map();
 
-  for (const { points = [], assertions = [] } of Array.isArray(confrontations) ? confrontations : []) {
+  for (const { points = [], assertions = [], messages = [] } of
+    Array.isArray(confrontations) ? confrontations : []) {
     for (const point of Array.isArray(points) ? points : []) {
       const id = texte(point?.id);
       if (!id) continue;
 
-      const dit = portageAProposer({ point, assertions, liens });
-      const avant = parPoint.get(id) ?? { point, aProposer: [], reconnues: [], deja: [] };
+      const dit = portageAProposer({ point, assertions, liens, messages });
+      const avant = parPoint.get(id) ?? { point, aProposer: [], reconnues: [], deja: [], noms: [] };
 
       parPoint.set(id, {
         point,
         aProposer: sansDoublon([...avant.aProposer, ...dit.aProposer]),
         reconnues: sansDoublon([...avant.reconnues, ...dit.reconnues]),
-        deja: sansDoublon([...avant.deja, ...dit.deja])
+        deja: sansDoublon([...avant.deja, ...dit.deja]),
+        noms: nomsSansDoublon([...avant.noms, ...dit.noms])
       });
     }
   }
@@ -473,6 +486,34 @@ export function portagesDeCesPoints({ confrontations = [], liens = [] } = {}) {
   for (const dit of parPoint.values()) combien += dit.aProposer.length;
 
   return { parPoint, combien };
+}
+
+/**
+ * Des noms sans répétition, **et leurs traces réunies**.
+ *
+ * Un point neuf face à une mémoire neuve est dans deux confrontations : le même
+ * nom y est reconnu deux fois. Garder les deux ferait dire « dans le titre et
+ * dans le titre » ; n'en garder qu'un perdrait ce que l'autre avait vu.
+ */
+function nomsSansDoublon(noms) {
+  const parNom = new Map();
+
+  for (const entree of noms) {
+    const nom = texte(entree?.nom);
+    if (!nom) continue;
+
+    if (!parNom.has(nom)) { parNom.set(nom, { ...entree, vu: [] }); }
+    const garde = parNom.get(nom);
+
+    for (const trace of entree?.vu ?? []) {
+      const marque = `${texte(trace?.ou)}|${texte(trace?.quand)}`;
+      if (!garde.vu.some((vue) => `${texte(vue?.ou)}|${texte(vue?.quand)}` === marque)) {
+        garde.vu.push(trace);
+      }
+    }
+  }
+
+  return [...parNom.values()];
 }
 
 /** Des versions sans répétition, dans l'ordre où elles sont apparues. */
