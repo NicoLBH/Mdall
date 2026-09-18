@@ -291,7 +291,14 @@ test("la règle vit sur la barre, et non sur chaque barre", () => {
 
 test("le fil qui porte un nom à saisir ne va pas à la ligne", () => {
   // Le lire sur une seconde ligne ferait perdre de quel dossier il est le bout.
-  assert.match(STYLE, /\.documents-breadcrumb--nomme\{ flex-wrap:nowrap; \}/);
+  //
+  // **Et il prend la place disponible.** Sans `flex-grow`, il restait à sa
+  // taille de contenu — et cette taille est fausse : un `<input>` ne contribue
+  // que sa largeur intrinsèque, une vingtaine de caractères, quelle que soit sa
+  // valeur. Le chemin se coupait alors en « Fic… / Doc… » avec mille six cents
+  // pixels vides à côté.
+  assert.match(STYLE,
+    /\.documents-breadcrumb--nomme\{ flex:1 1 auto; flex-wrap:nowrap; min-width:0; \}/);
 
   const ecran = readFileSync(new URL("../views/project-documents.js", import.meta.url), "utf8");
   assert.match(ecran, /documents-breadcrumb documents-breadcrumb--nomme/,

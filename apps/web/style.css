@@ -22843,10 +22843,19 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
   flex:0 1 auto;
 }
 
-/* Le fil qui porte un nom à saisir ne va pas à la ligne. C'est le chemin qui
-   se serre, et qui coupe par la gauche s'il le faut — il se relit dans
+/* Le fil qui porte un nom à saisir ne va pas à la ligne, et **il prend la place
+   disponible**.
+
+   Sans `flex-grow`, il restait à sa taille de contenu — et cette taille était
+   fausse : un `<input>` ne contribue que sa largeur intrinsèque, une vingtaine
+   de caractères, quelle que soit sa valeur. Le fil se calait donc à ~374px, le
+   champ réclamait ses 200px de minimum, et les deux liens du chemin se
+   coupaient en « Fic… / Doc… » — avec mille six cents pixels vides à côté.
+
+   Il grandit maintenant ; la coupure ne sert plus que sur un écran réellement
+   étroit, et elle coupe par la gauche : le chemin se relit dans
    l'arborescence, le nom qu'on tape ne se relit nulle part. */
-.documents-breadcrumb--nomme{ flex-wrap:nowrap; }
+.documents-breadcrumb--nomme{ flex:1 1 auto; flex-wrap:nowrap; min-width:0; }
 .documents-breadcrumb--nomme .documents-breadcrumb__link{
   min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
