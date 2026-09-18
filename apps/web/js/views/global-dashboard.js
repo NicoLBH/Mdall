@@ -35,6 +35,7 @@ import { fetchMesChantiers } from "../services/project-situations-supabase.js";
 import { lireMesTraces } from "../services/projets-actifs-supabase.js";
 import { actualitesRecentes, projetsLesPlusActifs } from "../services/projets-actifs.js";
 import { monAnneeDeTravail } from "../services/mon-annee-de-travail.js";
+import { brancherLaCarteDeLAnnee, oublierOuLOnRegardait } from "./ui/carte-de-lannee.js";
 import { store } from "../store.js";
 import { deposerLaQuestion } from "../services/question-de-laccueil.js";
 
@@ -74,6 +75,9 @@ export function renderGlobalDashboard(root) {
   vue.traces = [];
   vue.tracesLues = null;
   vue.erreur = "";
+  // Arriver sur l'accueil, c'est y arriver : la carte s'ouvre sur les semaines
+  // récentes, et non là où on l'avait laissée la fois d'avant.
+  oublierOuLOnRegardait();
   redessiner(root);
   charger(root).catch(() => undefined);
 }
@@ -154,6 +158,11 @@ function brancher(root) {
     reglages,
     redessiner: () => redessiner(root)
   });
+
+  // La carte défile : on la pose à droite la première fois, et l'on y revient
+  // où l'on était ensuite. Sans cela, chaque frappe dans la recherche la
+  // ramènerait à droite sous les doigts de qui la parcourt.
+  brancherLaCarteDeLAnnee(root);
 
   bindGhActionButtons();
   bindGhSelectMenus(root, {

@@ -1,4 +1,8 @@
 import { store } from "../store.js";
+import { renderFichierDeCode } from "./ui/fichier-de-code.js";
+import {
+  nomDeLaTranscription, phraseDeLaTranscription, transcriptionDuDocument
+} from "../services/transcription-du-document.js";
 import { PROJECT_TAB_IDS } from "../constants.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import { brancherLaZoneDeDepot } from "./ui/zone-de-depot.js";
@@ -183,7 +187,23 @@ const docsViewState = {
     zoomLevel: 1,
     rotation: 0,
     searchQuery: "",
-    darkMode: false
+    darkMode: false,
+    /**
+     * Ce qu'on regarde du document : sa page, ou ce que le modèle en a lu.
+     *
+     * Deux lectures de la même pièce, et non deux pièces : on bascule de l'une
+     * à l'autre pour les comparer, et c'est tout l'intérêt.
+     */
+    lecture: "pdf",
+    /**
+     * La transcription, lue à la demande.
+     *
+     * `null` : pas encore demandée, ou la lecture a échoué — et les deux se
+     * disent autrement qu'« il n'y en a pas ».
+     */
+    transcription: null,
+    transcriptionLue: false,
+    transcriptionEnCours: false
   },
   currentFolderId: null,
   breadcrumb: [],
@@ -689,6 +709,13 @@ function bindPdfPreviewControls(root) {
       zoomLevelBefore: docsViewState.pdfPreview?.zoomLevel,
       rotationBefore: docsViewState.pdfPreview?.rotation
     });
+    // La bascule d'abord : c'est la seule action qui change **ce qu'on regarde**
+    // plutôt que la façon de le regarder, et la ranger parmi les zooms ferait
+    // chercher longtemps pourquoi elle ne redessine rien.
+    if (action === "basculer-la-lecture") {
+      void basculerLaLecture(root);
+      return;
+    }
     if (action === "rotate-ccw") {
       updatePdfPreviewRotation(root, -90);
       return;
@@ -1741,6 +1768,61 @@ function renderReportPreviewView() {
   `;
 }
 
+/**
+ * La transcription du document, montrée comme un fichier de code.
+ *
+ * ## Pourquoi elle est ici, et pas ailleurs
+ *
+ * Elle était déjà en base — l'Atelier l'écrit en rangeant le compte rendu — et
+ * **rien ne la relisait**. On repayait une restitution pour revoir ce qu'on
+ * avait déjà lu, et payé.
+ *
+ * ## Elle se lit à côté de la page, et se bascule
+ *
+ * C'est une lecture du même document, pas un second document : on passe de l'un
+ * à l'autre pour les comparer. Les ouvrir côte à côte aurait donné deux demi-
+ * colonnes où ni la page ni le texte ne se lisent.
+ *
+ * ## Elle ne se rend pas en HTML
+ *
+ * Une transcription est **ce que le modèle a compris du PDF**. Rendue, elle se
+ * lit comme un document du projet — un titre devient un titre — et l'on ne voit
+ * plus ce qui a été ajouté, déplacé ou inventé : exactement ce qu'on vient
+ * vérifier. Numérotée, elle se cite aussi : « ligne 214 » désigne un endroit.
+ */
+function renderTranscriptionDuDocument(documentItem) {
+  const apercu = docsViewState.pdfPreview ?? {};
+
+  if (apercu.transcriptionEnCours) {
+    return `<div class="documents-pdf-viewer__fallback documents-pdf-viewer__fallback--empty">
+      <p>Lecture de la transcription…</p></div>`;
+  }
+
+  // Lue et vide n'est pas « pas lue » : la première dit de relancer une
+  // restitution, la seconde de réessayer (règle 5).
+  if (!apercu.transcriptionLue) {
+    return `<div class="documents-pdf-viewer__fallback documents-pdf-viewer__fallback--empty">
+      <p>La transcription n'a pas pu être lue. Réessayez dans un instant.</p></div>`;
+  }
+
+  const transcription = transcriptionDuDocument(apercu.transcription);
+  if (!transcription) {
+    return `<div class="documents-pdf-viewer__fallback documents-pdf-viewer__fallback--empty">
+      <p>Ce document n'a pas de transcription. Elle s'écrit en le passant par l'Atelier :
+      c'est là qu'un compte rendu est relu, et ce qu'il en reste est rangé ici.</p></div>`;
+  }
+
+  return `
+    <div class="documents-transcription">
+      <div class="documents-transcription__tete">
+        <b>${escapeHtml(nomDeLaTranscription(documentItem))}</b>
+        <span>${escapeHtml(phraseDeLaTranscription(transcription))}</span>
+      </div>
+      ${renderFichierDeCode(transcription.lignes)}
+    </div>
+  `;
+}
+
 function renderPdfPreviewView() {
   const projectName = String(store.projectForm?.projectName || "Projet");
   const documentItem = decorateDocumentWithPhase(getSelectedPdfDocument());
@@ -1876,6 +1958,22 @@ function renderPdfPreviewView() {
                     </div>
                   </div>
                   <div class="documents-report-table__actions-group documents-report-table__actions-group--end">
+                    ${/*
+                      **La bascule ne s'affiche que s'il y a quelque chose à
+                      voir.** Un bouton qui mène à « pas de transcription » se
+                      clique une fois, et l'on cesse de le regarder.
+                    */""}
+                    ${documentItem?.transcribedAt
+                      ? `
+                        <button
+                          type="button"
+                          class="gh-btn documents-report-table__text-btn${
+                            docsViewState.pdfPreview?.lecture === "transcription" ? " is-active" : ""}"
+                          data-pdf-preview-action="basculer-la-lecture"
+                          title="Ce que le modèle a lu de ce document"
+                        >${docsViewState.pdfPreview?.lecture === "transcription" ? "La page" : "La transcription"}</button>
+                      `
+                      : ""}
                     ${openInBrowserUrl
                       ? `
                         <a
@@ -1905,7 +2003,9 @@ function renderPdfPreviewView() {
 
               <div class="documents-report-table__body documents-report-table__body--pdf">
                 <section class="documents-pdf-viewer">
-                  ${isLoadingPreview
+                  ${docsViewState.pdfPreview?.lecture === "transcription"
+                    ? renderTranscriptionDuDocument(documentItem)
+                    : isLoadingPreview
                     ? `
                       <div class="documents-pdf-viewer__fallback documents-pdf-viewer__fallback--empty">
                         <p>Chargement du PDF depuis Supabase…</p>
@@ -3508,7 +3608,13 @@ async function openPdfPreview(root, documentId) {
     zoomLevel: 1,
     rotation: 0,
     searchQuery: docsViewState.pdfPreview?.searchQuery || "",
-    darkMode: docsViewState.pdfPreview?.darkMode || false
+    darkMode: docsViewState.pdfPreview?.darkMode || false,
+    // **On arrive sur la page.** La transcription se demande ; ouvrir dessus
+    // ferait lire au modèle avant d'avoir regardé le document.
+    lecture: "pdf",
+    transcription: null,
+    transcriptionLue: false,
+    transcriptionEnCours: false
   };
   renderProjectDocumentsContent(root);
 
@@ -3533,6 +3639,47 @@ async function openPdfPreview(root, documentId) {
 
   if (!root?.isConnected || docsViewState.mode !== "pdf-preview") return;
   renderProjectDocumentsContent(root);
+}
+
+/**
+ * Passer de la page à la transcription, et revenir.
+ *
+ * ## La transcription se lit une fois
+ *
+ * Elle ne change pas tant qu'on n'a pas refait de restitution : la relire à
+ * chaque bascule ferait un aller-retour au réseau pour montrer ce qu'on a déjà.
+ *
+ * ## Une lecture ratée se dit, et ne se retente pas toute seule
+ *
+ * `transcriptionLue` reste faux, l'écran l'écrit, et c'est un geste humain qui
+ * redemande. Une relecture automatique boucle sans que personne le voie.
+ */
+async function basculerLaLecture(root) {
+  const apercu = docsViewState.pdfPreview;
+  if (!apercu) return;
+
+  apercu.lecture = apercu.lecture === "transcription" ? "pdf" : "transcription";
+
+  if (apercu.lecture !== "transcription" || apercu.transcriptionLue) {
+    renderProjectDocumentsContent(root);
+    return;
+  }
+
+  apercu.transcriptionEnCours = true;
+  renderProjectDocumentsContent(root);
+
+  const { lireLaTranscription } = await import("../services/transcription-du-document-supabase.js");
+  const lue = await lireLaTranscription(apercu.sourceDocumentId);
+
+  // L'écran a pu changer pendant la lecture : écrire dans un aperçu qu'on a
+  // fermé ferait réapparaître une transcription sur le document suivant.
+  if (docsViewState.pdfPreview !== apercu) return;
+
+  apercu.transcriptionEnCours = false;
+  apercu.transcription = lue;
+  apercu.transcriptionLue = lue !== null;
+
+  if (root?.isConnected) renderProjectDocumentsContent(root);
 }
 
 function closePdfPreview(root) {

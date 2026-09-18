@@ -153,9 +153,50 @@ documents et les mêmes chiffres.
 
 ---
 
-## 6. Ce qui reste à faire
+## 6. Le `.md` en base, et la moitié qui manquait
 
-**Le `.md` en base.** La restitution vit le temps de l'écran : redéposer le même PDF la
-refait, et la repaie. Sa place est à côté du document, dans la chaîne Documents — c'est là
-qu'un identifiant de document existe, et l'agent de l'Atelier n'en a pas. Migration
-additive, et une lecture qui ne recommence pas.
+**Elle était écrite, et personne ne la relisait.** `documents.transcription_markdown` existe
+depuis `202609300001`, et l'Atelier l'écrit en rangeant le compte rendu. Mais aucun écran ne
+la lisait : on repayait une restitution pour revoir ce qu'on avait déjà lu, et déjà payé.
+Une donnée en base que rien n'affiche coûte exactement autant qu'une donnée absente.
+
+La lecture existe maintenant, dans **Fichiers**, sur le document lui-même.
+
+### Comme un fichier de code, et non comme un document
+
+C'est le point, et il n'est pas décoratif. Une transcription est **ce que le modèle a compris
+du PDF**, et on l'ouvre pour la comparer à la page. Rendue en HTML, elle se lit comme un
+document du projet — un titre devient un titre, un tableau devient un tableau — et l'on ne
+voit plus ce qui a été **ajouté, déplacé ou inventé**. C'est exactement ce qu'on vient
+vérifier, et c'est ce que les cinq mesures du §1 comptent.
+
+Numérotée, elle se cite : « ligne 214 » désigne un endroit. Une page rendue ne le permet pas.
+
+### Elle se bascule, elle ne se juxtapose pas
+
+Deux lectures du même document, et non deux documents : on passe de l'une à l'autre. Côte à
+côte, on aurait deux demi-colonnes où ni la page ni le texte ne se lisent.
+
+**On arrive sur la page**, jamais sur la transcription : ouvrir sur ce que le modèle a lu
+ferait lire le modèle avant d'avoir regardé le document.
+
+### Ce qui descend, et ce qui ne descend pas
+
+Le listing d'un dossier prend `transcribed_at` et **pas** `transcription_markdown` : une date
+dit qu'il y a quelque chose à lire, sans le lire. Quarante comptes rendus feraient quarante
+fichiers Markdown au chargement d'un dossier qu'on ouvre pour en lire un seul.
+
+Le texte se lit à la demande, une seule fois par ouverture — il ne change pas tant qu'on n'a
+pas refait de restitution.
+
+### Les classes sont celles de la Mémoire
+
+`memoire-ligne`, `memoire-ligne__num`. Deux écrans dessinent déjà des lignes numérotées ; en
+écrire un troisième jeu aurait fait **trois calages à recaler ensemble**, dont deux
+finiraient en retard sur le premier. Aucune largeur nouvelle.
+
+### Ce qui reste
+
+**La bascule ne s'affiche que sur un document transcrit.** Un PDF déposé directement dans
+Fichiers n'en a pas : il faut le passer par l'Atelier. Ouvrir une restitution depuis Fichiers
+serait la suite naturelle, et elle n'est pas écrite.

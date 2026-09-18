@@ -25,6 +25,18 @@
  * nom de jour à deux endroits (règle 10), et le calculer en JavaScript
  * demanderait de mesurer à chaque redessin ce qu'une requête de média sait déjà.
  *
+ * ## On arrive à droite, sur les mois récents
+ *
+ * Douze mois ne tiennent pas toujours dans la carte, et elle défile. Arriver à
+ * gauche mettrait sous les yeux septembre dernier — c'est-à-dire le mois qu'on
+ * regarde le moins. **Le défilement se pose donc à la fin**, sur les semaines
+ * qui viennent de passer.
+ *
+ * Et il **se retient** : l'écran d'accueil se redessine à chaque frappe dans sa
+ * recherche, et sauter à droite à chaque touche arracherait la carte des mains
+ * de qui est en train de la parcourir. C'est le même défaut que le curseur qui
+ * repart au début d'un champ, et il se corrige de la même façon.
+ *
  * ## Lundi en haut
  *
  * La semaine ISO, celle du calendrier français — comme `activite-des-projets.js`
@@ -63,10 +75,49 @@ export const ANNEE_NON_LUE = "Votre année n'a pas pu être lue.";
  * autres.
  */
 export const JOURS_NOMMES = [
-  { rang: 0, court: "lun.", entier: "lundi" },
-  { rang: 2, court: "mer.", entier: "mercredi" },
-  { rang: 4, court: "ven.", entier: "vendredi" }
+  { rang: 0, court: "lund.", entier: "lundi" },
+  { rang: 2, court: "merc.", entier: "mercredi" },
+  { rang: 4, court: "vend.", entier: "vendredi" }
 ];
+
+/**
+ * Où l'on regardait dans la carte, entre deux rendus.
+ *
+ * `null` : on n'a pas encore regardé, et la carte s'ouvre à droite. Le retenir
+ * ici plutôt que dans l'écran évite qu'un second écran qui monterait la même
+ * carte ait à savoir qu'elle défile.
+ */
+let ouLOnRegardait = null;
+
+/**
+ * Oublier où l'on regardait.
+ *
+ * L'écran l'appelle en se montant : revenir sur l'accueil, c'est y arriver, et
+ * l'on y arrive sur les semaines récentes. Sans cela, une position gardée d'une
+ * visite à l'autre ferait rouvrir l'accueil au milieu de février.
+ */
+export function oublierOuLOnRegardait() {
+  ouLOnRegardait = null;
+}
+
+/**
+ * Poser le défilement, et le suivre.
+ *
+ * À la fin la première fois, là où l'on était ensuite. Le rendu remplace le
+ * cadre à chaque fois : la position ne survit pas toute seule, et c'est pour
+ * cela qu'on la retient.
+ */
+export function brancherLaCarteDeLAnnee(racine) {
+  const defilant = racine?.querySelector?.(".annee-carte__semaines");
+  if (!defilant) return;
+
+  const fin = Math.max(0, defilant.scrollWidth - defilant.clientWidth);
+  defilant.scrollLeft = ouLOnRegardait === null ? fin : Math.min(ouLOnRegardait, fin);
+
+  defilant.addEventListener("scroll", () => {
+    ouLOnRegardait = defilant.scrollLeft;
+  });
+}
 
 /** Le jour de la semaine, lundi = 0. */
 function rangDansLaSemaine(jour) {

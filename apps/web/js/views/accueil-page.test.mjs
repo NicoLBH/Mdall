@@ -463,6 +463,23 @@ test("sans année lue, l'accueil le dit et ne dessine pas de grille", () => {
   assert.equal(html.includes("annee-carte__grille"), false);
 });
 
+test("l'accueil pose le défilement de la carte, et l'oublie en arrivant", () => {
+  // Douze mois ne tiennent pas toujours : la carte défile, et arriver à gauche
+  // mettrait sous les yeux le mois qu'on regarde le moins. Un rendu qui ne
+  // brancherait rien la laisserait au début, et rien ne le dirait.
+  const ecran = readFileSync(new URL("./global-dashboard.js", import.meta.url), "utf8");
+
+  assert.match(ecran, /brancherLaCarteDeLAnnee\(root\);/,
+    "l'écran ne pose pas le défilement de la carte");
+  // Et arriver sur l'accueil, c'est y arriver : une position gardée d'une visite
+  // à l'autre rouvrirait l'écran au milieu de février.
+  const montage = ecran.slice(
+    ecran.indexOf("export function renderGlobalDashboard"), ecran.indexOf("async function charger")
+  );
+  assert.match(montage, /oublierOuLOnRegardait\(\);/,
+    "l'écran garde la position de la carte d'une visite à l'autre");
+});
+
 test("l'année de l'accueil sort des mêmes traces que le reste", () => {
   // Une seconde lecture finirait par ne plus dire la même chose de la même
   // semaine (règle 4), et coûterait un second voyage.

@@ -774,6 +774,10 @@ function mapDocumentRowToViewModel(row = {}) {
     // visible, grisé : un fichier qui existe en base et n'apparaît nulle part
     // est le mensonge qu'on a déjà corrigé une fois.
     corpusState: safeString(row.corpus_state) || "accepted",
+    // **Quand ce document a été transcrit**, et non sa transcription : une date
+    // dit qu'il y a quelque chose à lire, sans le lire. Descendre le Markdown
+    // ici ferait quarante fichiers au chargement d'un dossier de comptes rendus.
+    transcribedAt: safeString(row.transcribed_at || "") || null,
     // La proposition par laquelle ce document est entré, **s'il en a une**.
     //
     // `undefined` est conservé tel quel : toutes les lectures de la table ne
@@ -1222,7 +1226,10 @@ export async function listDocumentDirectory(projectId = "", folderId = null) {
     const folders = allFolders.filter((folder) => safeString(folder.parent_folder_id || "") === safeString(normalizedFolderId || ""));
 
     const fileParams = new URLSearchParams();
-    fileParams.set("select", "id,project_id,folder_id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at,deleted_at,detection_status,detection_reason,detected_kind,detected_kind_label,detected_author,detection_confidence,content_fingerprint,duplicate_of_document_id,reissue_of_document_id,corpus_state,proposition_id");
+    // `transcribed_at` et pas `transcription_markdown` : une date dit qu'il y a
+    // quelque chose à lire, sans le lire. Descendre le Markdown ferait quarante
+    // fichiers au chargement d'un dossier qu'on ouvre pour en lire un seul.
+    fileParams.set("select", "id,project_id,folder_id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at,deleted_at,detection_status,detection_reason,detected_kind,detected_kind_label,detected_author,detection_confidence,content_fingerprint,duplicate_of_document_id,reissue_of_document_id,corpus_state,proposition_id,transcribed_at");
     fileParams.set("project_id", `eq.${backendProjectId}`);
     fileParams.set("deleted_at", "is.null");
     // Un document soumis à une proposition n'est pas encore dans le corpus : le
