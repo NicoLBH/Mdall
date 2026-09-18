@@ -24208,6 +24208,17 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .memory-row__forme-dit{ margin:0 0 8px; color:var(--text); font-size:13px; }
 .memory-row__forme-rien{ margin:8px 0 0; font-size:12px; color:var(--muted); font-style:italic; }
 
+/* Le geste par lequel une forme sort du projet, et ce qu'on en dit. */
+.memory-row__forme-signee{ margin:8px 0 0; font-size:12px; color:var(--text); }
+.memory-row__forme-gestes{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px; }
+/* La phrase qui suit le bouton dit une porte à sens unique : elle n'a pas la
+   marge du haut des autres, elle est sur la ligne du geste. */
+.memory-row__forme-gestes .memory-row__forme-rien{ margin:0; }
+
+/* Ce qu'ailleurs on regarde pour trancher la même chose. Le ton de ce qui vient
+   d'un autre projet, jamais celui de l'alerte : ce n'est pas un reproche. */
+.memory-portage--ailleurs{ color:var(--accent); }
+
 /* Le rang d'un engagement que la variante fait tomber.
 
    Ce qu'on veut voir d'abord n'est pas le plus récent : c'est ce qui fait le
