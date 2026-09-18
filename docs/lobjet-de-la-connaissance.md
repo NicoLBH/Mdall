@@ -1148,6 +1148,68 @@ que la ligne tient. La vérification reste — une seconde ceinture ne coûte ri
 mais le test dit maintenant où vit la prudence, et il éprouve `null` autant que
 `[]`.
 
+### Avant de trancher, ce qu'on a déjà raisonné
+
+#### Une phrase trop optimiste, corrigée
+
+L'étape 4 disait que « l'ancien raisonnement était…, remplacé par… » ne demandait
+rien de plus, la chaîne `supersedes` marchant déjà. C'était vrai en principe et
+faux en pratique : la clé d'un raisonnement est `raisonnement:<question>`, et
+**deux sujets n'écrivent jamais la même question**. Le remplacement ne se
+déclenche donc jamais.
+
+Et il ne faut pas le forcer. Faire périmer un raisonnement par un autre de même
+**signature** serait destructeur : « profondeur hors gel au bâtiment A » et « au
+pignon nord » partent des mêmes valeurs et sont vrais tous les deux. Une
+signature partagée est une invitation à regarder, pas une péremption.
+
+#### Le moment où la capitalisation sert vraiment
+
+Ce n'est pas en relisant la mémoire — c'est **en fermant un sujet**. On sait
+alors sur quoi le débat portait, et on ne sait pas encore ce qu'on va trancher.
+Une fois la décision écrite, il est trop tard pour en tenir compte.
+
+```
+Qu'avez-vous tranché ?
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │ Le projet a déjà raisonné 2 fois à partir des mêmes valeurs : │
+  │ Quelle profondeur hors gel au bâtiment A ?                   │
+  │   → Profondeur hors gel = 0,69 m      12 mars 2026           │
+  │ Profondeur de fondation au pignon nord ?                     │
+  │   → Profondeur hors gel = 0,50 m      4 novembre 2025        │
+  └──────────────────────────────────────────────────────────────┘
+
+La question tranchée   [ Profondeur hors gel : l'entreprise annonce 0,60 m ]
+Ce qu'on retient       [                                                  ]
+```
+
+C'est la question que la stratégie annonçait : « votre raisonnement se
+rapproche-t-il de celui-ci ? Voici ce qui avait été retenu… ».
+
+#### Il informe, il ne pré-remplit rien
+
+**Aucun champ** n'est rempli à partir de ce qu'on montre. Reprendre d'un clic la
+décision d'avant ferait signer une décision que personne n'a reprise, et une
+décision recopiée est pire qu'une décision absente (règle 1). Une garde compte
+les champs pré-remplis : il y en a **un**, le titre du sujet, comme avant.
+
+#### Le départ, et seulement le départ
+
+Les conclusions ne sont pas encore prises : on ne peut comparer que les entrées.
+`ceQuiLesRapproche` dirait « le même » dès que les deux n'aboutissent à rien —
+une ressemblance fabriquée par le calendrier. `raisonnementsPartisDeCesValeurs`
+ne compare donc que le départ, et le dit.
+
+Deux signatures vides ne se répondent pas : c'est le seul cas où le refus des
+entrées vides tient tout seul, et la garde l'éprouve précisément là.
+
+#### Ce qu'on ne montre pas
+
+L'auteur du raisonnement d'avant. Le nommer demanderait une lecture des profils
+de plus, au moment précis où l'on retient quelqu'un devant une fenêtre. La date
+suffit à situer ; la ligne complète se lit dans la Mémoire.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -1428,6 +1490,14 @@ valeur que personne n'a mise en doute.
 | le raisonnement porte ce qu'il a regardé | l'étape reste creuse | 1 test |
 | la fermeture va lire ce qu'il a regardé | elle passe une liste vide | 2 tests |
 | la confidentialité ne descend pas dans le SQL | elle y descend | 1 test |
+| on retrouve ce qui part des mêmes valeurs | rien ne remonte | 2 tests |
+| un départ différent ne remonte pas | il remonte | 1 test |
+| le plus récent d'abord | l'ordre s'inverse | 1 test |
+| deux signatures vides ne se répondent pas | deux ignorances font une ressemblance | 1 test |
+| une remplacée ne se propose pas à la fermeture | elle se propose | 1 test |
+| la fermeture va chercher ce rappel | la fenêtre s'ouvre sans lui | 1 test |
+| la fenêtre dessine le rappel | elle ne le dessine pas | 1 test |
+| le rappel ne pré-remplit aucun champ | il en remplit un | 1 test |
 
 ---
 

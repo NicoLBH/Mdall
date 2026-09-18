@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 
 import {
   RESSEMBLANCE, ceQuiLesRapproche, phraseDeLaRessemblance,
-  raisonnementsQuiSeRessemblent, signatureDunRaisonnement
+  raisonnementsPartisDeCesValeurs, raisonnementsQuiSeRessemblent, signatureDunRaisonnement
 } from "./raisonnements-qui-se-ressemblent.js";
 
 /** Un raisonnement, tel que la fermeture d'un sujet le verse. */
@@ -153,6 +153,72 @@ test("sans rapprochement, la phrase se tait", () => {
 });
 
 
+/* ── Au moment de fermer, ce qu'on a déjà raisonné ───────────────────────── */
+
+const ENTREES = [{ sujet: "Altitude" }, { sujet: "Nature du sol" }];
+
+test("on retrouve ce que le projet a déjà raisonné à partir de ces valeurs", () => {
+  // C'est l'instant exact où cela sert : on sait sur quoi le débat portait, on
+  // ne sait pas encore ce qu'on va trancher. Une fois la décision écrite, il est
+  // trop tard pour en tenir compte.
+  const dejaVu = ligne("r-1", HORS_GEL);
+
+  assert.deepEqual(
+    raisonnementsPartisDeCesValeurs(ENTREES, [dejaVu]).map((l) => l.id),
+    ["r-1"]
+  );
+});
+
+test("un départ différent ne remonte pas", () => {
+  const ailleurs = ligne("r-2", chemin("q", [["Localisation"]], [["Zone de neige"]]));
+
+  assert.deepEqual(raisonnementsPartisDeCesValeurs(ENTREES, [ailleurs]), []);
+});
+
+test("le plus récent d'abord : c'est la dernière fois qu'on s'est posé la question", () => {
+  const vieux = { ...ligne("r-1", HORS_GEL), decided_at: "2024-05-14T10:00:00Z" };
+  const recent = { ...ligne("r-2", HORS_GEL), decided_at: "2026-03-12T10:00:00Z" };
+
+  assert.deepEqual(
+    raisonnementsPartisDeCesValeurs(ENTREES, [vieux, recent]).map((l) => l.id),
+    ["r-2", "r-1"]
+  );
+});
+
+test("sans entrée, la mémoire entière ne se propose pas", () => {
+  // Un sujet dont on ignore les arêtes se verrait offrir tous les raisonnements
+  // du projet, et l'on cesserait de les lire (règle 5).
+  assert.deepEqual(raisonnementsPartisDeCesValeurs([], [ligne("r-1", HORS_GEL)]), []);
+  assert.deepEqual(raisonnementsPartisDeCesValeurs([{ sujet: "  " }], [ligne("r-1", HORS_GEL)]), []);
+
+  // **Et surtout** face à un raisonnement lui aussi sans entrée : là, deux
+  // signatures vides se répondraient « nous partons des mêmes valeurs », et
+  // deux ignorances feraient une ressemblance. C'est le seul cas où le refus
+  // tient tout seul — les autres tombent d'eux-mêmes sur la taille.
+  const creux = ligne("r-0", chemin("Une question sans arête", [], [["Profondeur hors gel"]]));
+  assert.deepEqual(raisonnementsPartisDeCesValeurs([], [creux]), []);
+});
+
+test("un raisonnement sans entrée ne remonte pas non plus", () => {
+  // Sinon deux ignorances se répondraient : celle du sujet qu'on ferme et celle
+  // de la ligne qu'on propose.
+  const creux = ligne("r-1", chemin("q", [], [["Profondeur hors gel"]]));
+
+  assert.deepEqual(raisonnementsPartisDeCesValeurs(ENTREES, [creux]), []);
+});
+
+test("une version remplacée ne se propose pas à la fermeture", () => {
+  const vieux = { ...ligne("r-1", HORS_GEL), superseded_by: "r-2" };
+
+  assert.deepEqual(raisonnementsPartisDeCesValeurs(ENTREES, [vieux]), []);
+});
+
+test("une ligne qui n'est pas un raisonnement ne remonte pas", () => {
+  const valeur = { id: "v-1", superseded_by: null, payload: { subject: "Altitude", value: "742,30" } };
+
+  assert.deepEqual(raisonnementsPartisDeCesValeurs(ENTREES, [valeur]), []);
+});
+
 /* ── L'écran de la Mémoire le montre ─────────────────────────────────────── */
 
 test("la ligne d'un raisonnement dessine son chemin et ce qui lui ressemble", () => {
@@ -177,4 +243,37 @@ test("le chemin est celui du détail d'un sujet, pas un second dessin", () => {
 
   assert.match(ecran, /renderLeChemin[\s\S]{0,200}from "\.\/memoire\/portage-rendu\.js"/,
     "l'écran de la Mémoire redessine le chemin au lieu de lire celui qui existe");
+});
+
+
+/* ── La fenêtre de fermeture le montre ───────────────────────────────────── */
+
+test("la fermeture va chercher ce qu'on a déjà raisonné, avant d'écrire", () => {
+  // Le même défaut invisible qu'ailleurs : un rappel qu'on oublie de passer ne
+  // se voit nulle part, et l'on tranche sans savoir qu'on avait déjà tranché.
+  const source = readFileSync(
+    new URL("../views/project-subjects/project-subjects-actions.js", import.meta.url), "utf8"
+  );
+
+  assert.match(source, /dejaVus: await cequOnADejaRaisonne\(target\.id\)/,
+    "la fenêtre s'ouvre sans ce que le projet a déjà raisonné");
+  assert.match(source, /raisonnementsPartisDeCesValeurs\(entrees, assertions\)/,
+    "rien ne cherche les raisonnements partis des mêmes valeurs");
+});
+
+test("la fenêtre montre ces raisonnements, et ne remplit aucun champ avec", () => {
+  // Reprendre d'un clic la décision d'avant ferait signer une décision que
+  // personne n'a reprise, et une décision recopiée est pire qu'une décision
+  // absente (règle 1).
+  const fenetre = readFileSync(
+    new URL("../views/ui/decision-du-sujet.js", import.meta.url), "utf8"
+  );
+
+  // L'interpolation, pas le nom : la **définition** de la fonction porte le même
+  // nom et ferait passer la garde alors que rien n'est dessiné.
+  assert.match(fenetre, /\$\{renderDejaRaisonne\(dejaVus\)\}/,
+    "la fenêtre ne dessine pas le rappel");
+  // Un seul champ est pré-rempli, et c'est le titre du sujet — comme avant.
+  assert.equal((fenetre.match(/value="\$\{escapeHtml\(/g) ?? []).length, 1,
+    "un champ se pré-remplit à partir du rappel");
 });

@@ -22756,6 +22756,18 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
    « champ obligatoire » : un refus qu'on ne comprend pas se contourne au lieu de
    se corriger. */
 .decision-sujet__manque{ margin:0; color:var(--danger); font-size:12px; }
+
+/* Ce que le projet a déjà raisonné à partir des mêmes valeurs. Il informe et ne
+   pré-remplit rien : la couleur de l'attention, pas celle d'une consigne. */
+.decision-sujet__deja{
+  padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius);
+  display:flex; flex-direction:column; gap:6px;
+}
+.decision-sujet__deja-tete{ color:var(--debat); font-size:11px; }
+.decision-sujet__deja-ligne{
+  display:flex; flex-wrap:wrap; gap:6px; align-items:baseline; font-size:12px; color:var(--text);
+}
+.decision-sujet__deja-ligne i{ color:var(--muted); font-size:11px; }
 .decision-sujet__champ{ display:flex; flex-direction:column; gap:6px; }
 .decision-sujet__champ > span{ color:var(--text); font-size:12px; font-weight:600; }
 .decision-sujet__champ > span i{ color:var(--muted); font-weight:400; font-style:normal; }
