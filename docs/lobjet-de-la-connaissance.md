@@ -1281,6 +1281,123 @@ remonter. »**
 (règle 4). C'est la troisième fois que cette phrase de tête ment ; elle ne dit
 plus rien qu'une ligne puisse contredire.
 
+### Ce qui peut sortir du projet
+
+#### La seule chose qui se capitalise vraiment
+
+Deux projets ne partagent jamais leurs valeurs. L'altitude du collège est
+742,30 ; celle de la médiathèque ne l'est pas, ne le sera jamais, et savoir la
+première n'aide en rien sur la seconde.
+
+Ce qu'ils partagent, c'est la **forme** du raisonnement :
+
+```
+altitude + nature du sol  >  profondeur hors gel
+```
+
+Celle-là se retrouve sur cent chantiers. Elle s'apprend, elle se cherche, elle
+dit à quelqu'un qui n'a jamais ouvert ce projet : *quand tu auras à trancher une
+profondeur hors gel, va chercher l'altitude et la nature du sol.* C'est le
+référentiel de formes de raisonnement, et il n'emporte aucune valeur.
+
+#### La frontière est dans la structure, pas dans un filtre
+
+**Les noms voyagent. Les valeurs, jamais.** « Altitude » est le vocabulaire du
+métier ; « 742,30 » est ce projet-ci.
+
+Cette ligne ne se tient pas par un nettoyage — un nettoyage s'oublie, se contourne,
+et laisse passer ce qu'il n'a pas prévu. Elle se tient parce que
+`services/forme-dun-raisonnement.js` **ne lit que des noms**. Il n'y a pas de
+chemin, dans ce fichier, par lequel une valeur pourrait sortir : il n'en prend
+aucune.
+
+Et **la question ne voyage pas non plus**. « Quelle profondeur hors gel au
+bâtiment A du collège de Montholon ? » est du texte libre : elle porte un lieu,
+un ouvrage, parfois une personne. C'est la chose la plus tentante à emporter —
+elle se lit si bien — et la plus dangereuse. C'est celle qu'une garde surveille
+nommément.
+
+#### Ce qu'aucune règle ne peut garantir, et ce qu'on fait à la place
+
+Un nom **peut** être propre à un projet : « Hauteur sous plafond du bureau de la
+directrice » est un nom, et il ne doit pas sortir. Aucune règle mécanique ne
+distingue cela d'un nom de métier, et prétendre le contraire serait le genre de
+promesse qui discrédite un produit une seule fois.
+
+Le fichier ne décide donc pas seul. Il **prépare une forme et la montre en
+entier**, pour qu'un humain voie exactement ce qui partirait avant que quoi que
+ce soit parte. C'est la règle 1 appliquée à la sortie du projet : *rien ne sort
+sans une proposition signée*, comme rien n'entre sans elle.
+
+Les trois refus ci-dessous ne sont donc pas la sécurité. Ils allègent le travail
+de celui qui signe.
+
+| refus | ce qu'il écarte | pourquoi |
+|---|---|---|
+| un nom qui est une partie de l'ouvrage | « Bâtiment A », « Pignon nord » | ils ne veulent rien dire ailleurs |
+| un nom qui est une valeur du projet | « moraine » comme nom d'entrée | il désignerait ici ce qu'il vaut là-bas |
+| sans entrée, ou sans conclusion | une forme qui part de rien | « on n'a rien conclu » ne se réutilise pas |
+
+Et le refus porte sur **la forme entière**, jamais sur le seul nom fautif :
+retirer un nom en silence donnerait une forme qui n'a jamais existé, et personne
+ne pourrait plus la relire pour la corriger.
+
+#### L'empreinte se lit
+
+`altitude + nature du sol > profondeur hors gel` se compare d'un projet à
+l'autre aussi bien qu'un condensat, et se **relit**. Une empreinte qu'on ne sait
+pas lire est une empreinte qu'on ne sait pas contrôler avant de la laisser
+partir — et le seul moment où le contrôle est possible, c'est avant.
+
+#### La phrase se passe d'articles
+
+« altitude et nature du sol donnent profondeur hors gel » plutôt que « de
+l'altitude et de la nature du sol ». Les articles demanderaient de connaître le
+genre de chaque nom : les deviner les écrirait faux une fois sur trois, et les
+tenir dans une liste ferait de ce fichier un dictionnaire à maintenir. Les noms
+se posent tels que la mémoire les a, et la phrase se construit autour.
+
+#### À l'écran, le même cadre que le chemin
+
+L'encadré se replie, et porte le cadre partagé `details-bloc` — celui de « Par où
+l'on est passé », juste au-dessus. Deux cadres différents feraient croire à deux
+natures de choses, alors que ce sont deux lectures du même raisonnement.
+
+Replié parce que c'est une lecture de contrôle, et non ce qu'on vient chercher.
+Entier une fois ouvert, parce qu'on ne signe pas un résumé.
+
+Quand la forme ne peut pas sortir, **l'encadré reste et dit pourquoi**. « Forme
+non exportable » n'apprend rien et ne se corrige pas ; « un de ses noms est une
+partie de l'ouvrage » se vérifie d'un coup d'œil. Un encadré qui disparaîtrait
+en silence se lirait comme un raisonnement qui n'a rien à apporter.
+
+#### Ce que cette étape ne fait pas encore
+
+**Rien ne part.** Il n'y a ni table, ni export, ni recherche d'un projet à
+l'autre. Ce qui est posé, c'est la forme et la preuve qu'elle ne contient rien
+du projet — et c'était l'ordre à tenir : livrer un chemin de sortie avant que
+l'anonymat soit prouvé aurait mis le produit en jeu sur une promesse invérifiée.
+
+#### Les gardes, et ce qui tombe quand on les casse
+
+| ce qu'on casse | ce qui tombe |
+|---|---|
+| la question part avec la forme | *rien du projet ne se retrouve dans ce qui part*, *la question ne voyage jamais* |
+| les valeurs partent avec les noms | six gardes, dont les deux refus de noms |
+| la portée part avec la forme | *rien du projet ne se retrouve dans ce qui part* |
+| ce qui a été regardé part avec | *rien du projet ne se retrouve dans ce qui part* |
+| l'encadré n'est jamais appelé | *la ligne d'un raisonnement montre ce qui pourrait voyager* |
+| la forme est préparée sans la mémoire | la même — aucun refus ne serait plus possible |
+| le refus se tait | *quand elle ne peut pas partir, l'écran dit pourquoi* |
+| l'écran ajoute la question à l'encadré | la sonde de navigateur, `fuites` |
+
+La dernière ligne dit la division du travail : la garde de service éprouve ce que
+le service produit, la sonde éprouve ce que l'écran **affiche**. Ajouter un champ
+à la forme ne change rien à l'écran — qui ne dessine que quatre lignes nommées —
+et la sonde ne le voit pas ; c'est la garde de service qui le voit. Ajouter une
+ligne à l'écran ne change rien à la forme, et c'est la sonde qui le voit. Aucune
+des deux ne remplace l'autre.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -1324,6 +1441,8 @@ c'est elle qu'il faudra desserrer, pas les moments où elle tourne.
 | les débats par valeur, en une passe | `pointsOuvertsParValeur`, dans `services/point-porte-sur.js` |
 | ce que le cerveau sait d'un débat | `enDebat` et `rang`, dans `services/memoire-cerveau.js` |
 | le halo et sa légende | `views/ui/cerveau-du-projet.js` |
+| la forme qu'un raisonnement peut emporter, et ses refus | `services/forme-dun-raisonnement.js` |
+| l'encadré qui la montre en entier, replié | `renderCeQuiPourraitVoyager`, dans `views/project-memory.js` |
 
 ### Le faux document, et pourquoi il existait
 
