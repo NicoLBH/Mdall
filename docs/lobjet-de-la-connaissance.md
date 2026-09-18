@@ -883,6 +883,72 @@ Et une convention violée, attrapée par sa propre garde : le fichier s'appelait
 `ce-que-le-sujet-nomme.js`. « Sujet » est le mot de l'écran ; le code dit
 « point ». Le test qui tient cette ligne est tombé sur la ligne d'import.
 
+### Étape 2 de la capitalisation — le cul-de-sac devient une porte
+
+#### Ce qu'on ne peut pas deviner
+
+Reconnaître un nom, c'est le trouver **dans la mémoire**. Un nom qui n'y est pas
+est donc introuvable par construction : le système ne peut pas signaler une
+valeur manquante, seulement offrir de la nommer.
+
+Et c'est justement le moment le plus intéressant. « Profondeur hors gel :
+l'entreprise annonce 0,60 m » n'accroche rien précisément parce que la mémoire
+ne sait pas encore ce qu'est une profondeur hors gel. L'écran disait « aucun nom
+de la mémoire reconnu » et s'arrêtait là.
+
+#### La porte, et pourquoi elle reste ouverte
+
+Elle est sous la liste des propositions, et elle y est **toujours** — pas
+seulement quand la reconnaissance échoue. Un sujet peut nommer trois valeurs
+connues et en apporter une quatrième ; n'offrir le geste qu'en cas d'échec le
+ferait dépendre d'un hasard.
+
+```
+Ce sujet apporte-t-il une valeur que la mémoire ne connaît pas encore ?
+                                                   [ Proposer une valeur ]
+```
+
+#### Supposée, jamais acquise
+
+Ce qu'un sujet ouvert avance n'est pas un fait du projet : c'est ce que
+quelqu'un dit, et le débat n'est pas tranché. La ligne entre en
+`NATURE.HYPOTHESE` / `STATUT.SUPPOSE`, et sa provenance dit d'où elle vient — le
+sujet, son auteur, sa date.
+
+La faire entrer comme acquise ferait l'inverse de ce que ce sujet existe pour
+faire : elle réglerait le débat en l'ouvrant.
+
+Elle **ne cite pas** le sujet comme l'ayant tranchée. `reference` porte l'arête
+aval — « cette valeur vient de ce débat-là » — et le débat est ouvert : l'écrire
+ferait lire la valeur comme tranchée par un sujet qui n'a rien tranché (règle 6).
+
+#### Le lien se fait après, et par le nom
+
+Une fois la proposition signée, le nom est dans la mémoire. Si le sujet le porte
+dans son titre, sa description ou un commentaire, **la reconnaissance de l'étape
+1 l'accroche d'elle-même** — c'est pour cela que la fenêtre invite à reprendre
+les mots du sujet, et c'est le seul mécanisme, pas un second.
+
+#### Elle propose, elle ne verse pas
+
+`preparerUneProposition`, la même porte que la décision d'une fermeture. Rien
+n'entre dans la mémoire sans une proposition signée (règle 1), et le service qui
+prépare les lignes ne parle pas à la base.
+
+Un refus dit **pourquoi** : « sans nom, la valeur ne se retrouvera jamais dans la
+mémoire », jamais « champ obligatoire » — un refus qu'on ne comprend pas se
+contourne au lieu de se corriger. Et la fenêtre **ne se ferme pas** sur un champ
+vide : ici le geste *est* la valeur, et renoncer en silence ferait croire qu'on a
+proposé.
+
+#### Un nom de signature, un seul endroit
+
+Fermer un sujet signait « par Ourdine Ferrand » depuis une fonction locale à
+`project-subjects-actions.js`. Proposer une valeur devait signer pareil — et
+reconstruire ce nom ailleurs en aurait fait deux, qui auraient fini par ne pas
+tomber sur le même repli (règle 10). Il vit maintenant dans
+`services/nom-de-qui-parle.js`, pur, et les deux écrans le lisent.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -1117,6 +1183,21 @@ valeur que personne n'a mise en doute.
 | une proposition dit où son nom a été vu | elle se tait | 2 tests |
 | cet endroit se lit sans rien ouvrir | il descend dans le dépliant | 2 tests |
 | sans endroit connu, rien ne s'invente | une phrase vide s'écrit | 1 test |
+| un nom sans valeur et une valeur sans nom se refusent | l'un des deux passe | 4 tests |
+| rien d'autre n'est exigé | le motif devient obligatoire | 1 test |
+| un refus dit pourquoi | il dit « champ obligatoire » | 1 test |
+| ce qu'un débat avance entre comme supposé | il entre comme acquis | 1 test |
+| la provenance dit qui et quand | elle les perd | 1 test |
+| elle ne prétend pas avoir été tranchée | elle cite le sujet en aval | 1 test |
+| une seule ligne, pas une décision | une décision s'écrit à côté | 1 test |
+| un sujet sans intitulé n'écrit pas de guillemets vides | il en écrit | 1 test |
+| le pourquoi ne s'invente pas | il se comble | 1 test |
+| un titre ne s'écrit pas à moitié | il s'écrit quand même | 1 test |
+| « rien reconnu » n'est plus une fin de course | la porte disparaît | 4 tests |
+| la porte reste ouverte même quand on a reconnu | elle ne s'ouvre qu'en cas d'échec | 2 tests |
+| la porte se ferme pendant une écriture | elle reste armée | 2 tests |
+| la porte dit ce qu'elle ouvre | elle se tait | 2 tests |
+| le nom de qui signe se lit à un seul endroit | chaque écran le reconstruit | 4 tests |
 
 ---
 
@@ -1154,5 +1235,8 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | ce qu'un sujet met en débat, et ce qui s'y oppose | `apps/web/js/services/ce-qui-se-debat.js` |
 | tout ce qu'un sujet nomme, et où | `apps/web/js/services/ce-que-le-point-nomme.js` |
 | tous les noms d'un texte | `apps/web/js/services/avis-liaison.js` — `nomsDunTexte` |
+| une valeur qu'un sujet apporte | `apps/web/js/services/valeur-depuis-un-point.js` |
+| la fenêtre qui la demande | `apps/web/js/views/ui/valeur-du-sujet.js` |
+| le nom sous lequel on signe | `apps/web/js/services/nom-de-qui-parle.js` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

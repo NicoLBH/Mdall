@@ -420,6 +420,18 @@ function renderCeQuiSeDebat(debat) {
  * « Oui, celle-ci » et « Non, pas celle-là » se répondent sans rien apprendre.
  * « Confirmer » et « Écarter » demandent de savoir ce qu'on confirme dans un
  * mécanisme dont on ignore tout.
+ *
+ * ## « Rien reconnu » n'est pas une fin de course
+ *
+ * C'était un cul-de-sac : la reconnaissance ne trouvait rien, l'écran le disait,
+ * et il n'y avait plus rien à faire. Or un ${MOT_A_LECRAN.un} qui ne rapproche
+ * rien **apporte** souvent quelque chose — « Profondeur hors gel : l'entreprise
+ * annonce 0,60 m » n'accroche rien parce que la mémoire ne sait pas encore ce
+ * qu'est une profondeur hors gel.
+ *
+ * La porte est donc toujours là, et pas seulement quand rien n'est reconnu : un
+ * ${MOT_A_LECRAN.un} peut très bien nommer trois valeurs connues et en apporter
+ * une quatrième.
  */
 function renderCeQuiPorteLeMemeNom(proposes, { occupe, dit }) {
   const titre = "Ces valeurs portent le même nom";
@@ -452,7 +464,39 @@ function renderCeQuiPorteLeMemeNom(proposes, { occupe, dit }) {
              soit fermé. Écarter la retire, et elle ne sera plus reproposée.</p>`
         : ""}
       ${dit ? `<div class="portage-liste__dit">${escapeHtml(dit)}</div>` : ""}
+      ${renderLaPorteDeLaValeurApportee(proposes.length, occupe)}
     </section>
+  `;
+}
+
+/**
+ * La porte vers ce que la mémoire ne connaît pas encore.
+ *
+ * ## Le système ne peut pas la trouver tout seul
+ *
+ * Reconnaître un nom, c'est le trouver dans la mémoire : un nom qui n'y est pas
+ * est introuvable par construction. Personne ne peut donc **signaler** une
+ * valeur manquante — seulement offrir de la nommer.
+ *
+ * ## La phrase change, la porte reste
+ *
+ * Quand rien n'a été reconnu, c'est la seule chose à faire et la phrase le dit.
+ * Quand des valeurs ont été reconnues, la porte reste ouverte, plus discrète :
+ * un ${MOT_A_LECRAN.un} peut nommer trois valeurs connues et en apporter une
+ * quatrième.
+ */
+function renderLaPorteDeLaValeurApportee(combien, occupe) {
+  const dit = combien
+    ? `Ce ${MOT_A_LECRAN.un} apporte-t-il une autre valeur, que la mémoire ne connaît pas encore ?`
+    : `Ce ${MOT_A_LECRAN.un} apporte-t-il une valeur que la mémoire ne connaît pas encore ?`;
+
+  return `
+    <div class="portage-liste__porte">
+      <span>${escapeHtml(dit)}</span>
+      <button type="button" class="gh-btn gh-btn--sm" data-portage-apporte ${occupe ? "disabled" : ""}>
+        Proposer une valeur
+      </button>
+    </div>
   `;
 }
 

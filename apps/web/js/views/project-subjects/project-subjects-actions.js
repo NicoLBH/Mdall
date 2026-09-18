@@ -1,4 +1,5 @@
 import { normalizeAssigneeIds } from "../../services/subject-assignees-service.js";
+import { nomDeQuiParle } from "../../services/nom-de-qui-parle.js";
 
 export function createProjectSubjectsActions(config) {
   const {
@@ -65,16 +66,12 @@ export function createProjectSubjectsActions(config) {
     console.info("[situation-grid-dropdown] supabase-mutation", payload);
   }
 
+  // Le nom sous lequel quelqu'un engage quelque chose. Il vit dans
+  // `services/nom-de-qui-parle.js` parce que deux écrans le signent : la
+  // fermeture d'un sujet, et la valeur qu'un sujet apporte. Deux constructions
+  // du même nom finiraient par ne pas écrire le même (règle 10).
   function resolveDefaultHumanActorLabel() {
-    const user = store?.user && typeof store.user === "object" ? store.user : {};
-    const firstName = String(user.firstName || "").trim();
-    const lastName = String(user.lastName || "").trim();
-    const fullName = `${firstName} ${lastName}`.trim();
-    return fullName
-      || String(user.fullName || "").trim()
-      || String(user.name || "").trim()
-      || String(user.email || "").trim()
-      || "Human";
+    return nomDeQuiParle(store?.user);
   }
 
   function setSujetKanbanStatus(sujetId, nextStatus, options = {}) {
