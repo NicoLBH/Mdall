@@ -1984,6 +1984,30 @@ La première colonne se **troue en haut** quand la fenêtre ne commence pas un
 lundi. La boucher en décalant les jours ferait passer un mercredi pour un lundi,
 et la carte mentirait sur le rythme — ce qu'elle existe pour montrer.
 
+#### Trois noms de jour à gauche
+
+Sans eux, on voit un rythme sans savoir lequel : une bande sombre en bas peut
+être le week-end, ou deux jours de la semaine où l'on ne fait rien. Lundi,
+mercredi, vendredi suffisent à situer les quatre autres — sept étiquettes sur des
+lignes de onze pixels se touchent, et l'on ne lit plus laquelle va où.
+
+**Les sept lignes sont posées, y compris les muettes.** Ne rendre que les trois
+nommées ferait remonter mercredi contre lundi : les noms désigneraient les
+mauvaises lignes, et un repère faux est pire que pas de repère.
+
+**Le nom entier et sa forme courte sont tous deux dans le balisage**, et c'est la
+feuille qui choisit selon la largeur. L'écrire dans le CSS par `content:` ferait
+vivre un nom de jour à deux endroits (règle 10) ; le calculer en JavaScript
+demanderait de mesurer à chaque redessin ce qu'une requête de média sait déjà. Le
+seuil est celui que la feuille emploie déjà ailleurs — aucune largeur nouvelle.
+
+**La colonne des noms est hors du cadre qui défile.** Dedans, elle partirait avec
+les semaines au premier geste de la souris, et l'on se retrouverait devant une
+grille anonyme — ce que les noms existent pour éviter. Son retrait du haut est
+celui des étiquettes de mois, pour que « lundi » tombe en face de sa ligne et non
+du nom du mois : la sonde relit l'écart entre chaque nom et le centre de sa
+rangée de carrés, et il est nul sur les sept.
+
 #### La tête dit le total **et** les jours
 
 « 1 478 gestes » ne dit pas si c'est trois jours ou trois cents, et c'est
@@ -2038,6 +2062,14 @@ deuxième fois qu'un jeton inventé passe la revue de code et tombe au navigateu
 | la légende oublie la teinte grise | *la légende montre les cinq teintes* |
 | une couleur est écrite dans le dessin | *aucune couleur n'est écrite dans le dessin* |
 | une année non lue dessine sa grille | *elle ne dessine pas de grille* |
+| seules les trois lignes nommées sont posées | *les sept lignes sont posées* |
+| les noms passent dans le cadre qui défile | *ils sont hors du défilement* |
+| la forme entière disparaît du balisage | *chaque nom est là en entier et en abrégé* |
+| la forme courte disparaît du balisage | la même |
+| on nomme mardi et jeudi | *trois jours sont nommés, un sur deux* |
+| les noms passent après les semaines | *ils précèdent les semaines* |
+| la colonne des noms perd son retrait de mois | la sonde, décalage de −14 px sur les sept lignes |
+| le nom entier ne s'affiche jamais | la sonde, forme courte à 1400 px |
 
 Et quatre états au navigateur, couleurs calculées relues : année chargée, année
 d'un seul rythme, année vide, année non lue. Aucune teinte transparente, aucune
@@ -2106,7 +2138,7 @@ c'est elle qu'il faudra desserrer, pas les moments où elle tourne.
 | le corpus, réduit à ce qu'une reconnaissance demande | `services/corpus-du-projet-supabase.js` |
 | ce qu'on compte comme travail, et la teinte d'un jour | `services/mon-annee-de-travail.js` |
 | l'affirmation signée, quatrième trace | `GENRE.AFFIRMATION`, dans `services/projets-actifs.js` |
-| la grille des cinquante-trois semaines | `views/ui/carte-de-lannee.js` |
+| la grille des cinquante-trois semaines, et ses noms de jour | `JOURS_NOMMES`, dans `views/ui/carte-de-lannee.js` |
 
 ### Le faux document, et pourquoi il existait
 

@@ -8,6 +8,23 @@
  * week-end, et une bande sombre en bas dit d'un coup d'œil qu'on ne travaille
  * pas le dimanche. Un ruban de 365 carrés à la file ne dirait rien de cela.
  *
+ * ## Trois noms de jour à gauche
+ *
+ * Sans eux, on voit un rythme sans savoir lequel : une bande sombre en bas peut
+ * être le week-end ou deux jours de la semaine où l'on ne fait rien, et la carte
+ * ne le dit pas. Trois suffisent — lundi, mercredi, vendredi — et une ligne sur
+ * deux laissée vide se lit mieux que sept étiquettes serrées sur onze pixels.
+ *
+ * **Les sept lignes sont posées, y compris les muettes.** Ne rendre que les
+ * trois nommées ferait remonter mercredi contre lundi, et les noms
+ * désigneraient les mauvaises lignes — un repère faux est pire que pas de
+ * repère.
+ *
+ * Le nom entier et sa forme courte sont **tous deux dans le balisage**, et c'est
+ * la feuille qui choisit. Le mettre dans le CSS par `content:` ferait vivre un
+ * nom de jour à deux endroits (règle 10), et le calculer en JavaScript
+ * demanderait de mesurer à chaque redessin ce qu'une requête de média sait déjà.
+ *
  * ## Lundi en haut
  *
  * La semaine ISO, celle du calendrier français — comme `activite-des-projets.js`
@@ -37,6 +54,19 @@ const MOIS = [
 
 /** Ce qu'on dit quand on n'a pas pu lire. */
 export const ANNEE_NON_LUE = "Votre année n'a pas pu être lue.";
+
+/**
+ * Les jours de la semaine qu'on nomme, et à quelle ligne.
+ *
+ * Un sur deux : sept étiquettes sur des lignes de onze pixels se touchent, et
+ * l'on ne lit plus laquelle va où. Trois repères suffisent à situer les quatre
+ * autres.
+ */
+export const JOURS_NOMMES = [
+  { rang: 0, court: "lun.", entier: "lundi" },
+  { rang: 2, court: "mer.", entier: "mercredi" },
+  { rang: 4, court: "ven.", entier: "vendredi" }
+];
 
 /** Le jour de la semaine, lundi = 0. */
 function rangDansLaSemaine(jour) {
@@ -121,6 +151,21 @@ export function renderCarteDeLAnnee(annee = null) {
   const colonnes = colonnesDeLAnnee(annee.jours);
   const etiquettes = new Map(etiquettesDesMois(colonnes).map(({ colonne, dit }) => [colonne, dit]));
 
+  // Les sept lignes, y compris les muettes : ne rendre que les trois nommées
+  // ferait remonter mercredi contre lundi, et les noms désigneraient les
+  // mauvaises lignes.
+  const nomsDesJours = Array.from({ length: 7 }, (_, rang) => {
+    const nomme = JOURS_NOMMES.find((jour) => jour.rang === rang);
+    if (!nomme) return `<span class="annee-carte__nom"></span>`;
+
+    return `
+      <span class="annee-carte__nom">
+        <span class="annee-carte__nom-court">${escapeHtml(nomme.court)}</span>
+        <span class="annee-carte__nom-entier">${escapeHtml(nomme.entier)}</span>
+      </span>
+    `;
+  }).join("");
+
   const grille = colonnes.map((colonne, rang) => `
     <div class="annee-carte__semaine">
       <span class="annee-carte__mois">${escapeHtml(etiquettes.get(rang) ?? "")}</span>
@@ -140,7 +185,16 @@ export function renderCarteDeLAnnee(annee = null) {
         <b>${escapeHtml(phraseDeLAnnee(annee))}</b>
         <span class="annee-carte__quoi">${escapeHtml(CE_QUON_COMPTE)}</span>
       </div>
-      <div class="annee-carte__grille">${grille}</div>
+      ${/*
+        **La colonne des noms est hors du défilement.** Dans le cadre qui défile,
+        elle partirait avec les semaines dès le premier geste de la souris — et
+        l'on se retrouverait devant une grille anonyme, ce que les noms existent
+        pour éviter.
+      */""}
+      <div class="annee-carte__grille">
+        <div class="annee-carte__jours">${nomsDesJours}</div>
+        <div class="annee-carte__semaines">${grille}</div>
+      </div>
       <div class="annee-carte__pied">
         <span>La teinte dit où ce jour se place parmi vos niveaux de charge.</span>
         <span class="annee-carte__legende">Moins ${legende} Plus</span>
