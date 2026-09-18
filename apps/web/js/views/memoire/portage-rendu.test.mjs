@@ -429,8 +429,12 @@ test("une écriture en vol désarme tous les gestes du bloc, et le dit", () => {
   const dit = renderCeQuePorteLeSujet({ portages: [POSE, PROPOSE], occupe: true });
 
   assert.match(dit, /data-portage-cherche disabled/);
+  assert.match(dit, /data-portage-apporte disabled/);
   assert.match(dit, /Recherche…/);
-  assert.equal((dit.match(/disabled/g) ?? []).length, 4);
+  // Retirer du débat · Oui, celle-ci · Non · Chercher · Proposer une valeur.
+  // Le compte est écrit pour qu'un geste ajouté sans être désarmé le fasse
+  // tomber — c'est tout ce qu'on lui demande.
+  assert.equal((dit.match(/disabled/g) ?? []).length, 5);
 });
 
 test("l'histoire se lit dans la liste d'intitulés de la Mémoire, pas une autre", () => {
@@ -446,6 +450,33 @@ test("une valeur sans histoire ne fabrique pas de dépliant vide", () => {
   const dit = renderCeQuePorteLeSujet({ portages: [PROPOSE] });
   assert.doesNotMatch(dit, /<summary>/);
   assert.doesNotMatch(dit, /portage-liste__identite/);
+});
+
+/* ── La porte vers ce que la mémoire ignore ──────────────────────────────── */
+
+test("« rien reconnu » n'est plus une fin de course", () => {
+  // Un sujet qui ne rapproche rien apporte souvent quelque chose : « Profondeur
+  // hors gel : l'entreprise annonce 0,60 m » n'accroche rien parce que la
+  // mémoire ne sait pas encore ce qu'est une profondeur hors gel.
+  const dit = renderCeQuePorteLeSujet({ portages: [] });
+
+  assert.match(dit, /apporte-t-il une valeur que la mémoire ne connaît pas encore \?/);
+  assert.match(dit, /data-portage-apporte/);
+});
+
+test("la porte reste ouverte même quand des valeurs sont reconnues", () => {
+  // Un sujet peut nommer trois valeurs connues et en apporter une quatrième.
+  // Ne l'offrir qu'en cas d'échec ferait dépendre le geste d'un hasard.
+  const dit = renderCeQuePorteLeSujet({ portages: [PROPOSE] });
+
+  assert.match(dit, /apporte-t-il une autre valeur, que la mémoire ne connaît pas encore \?/);
+  assert.match(dit, /data-portage-apporte/);
+});
+
+test("la porte se ferme pendant qu'une écriture vole", () => {
+  const dit = renderCeQuePorteLeSujet({ portages: [], occupe: true });
+
+  assert.match(dit, /data-portage-apporte disabled/);
 });
 
 /* ── D'où le rapprochement sort ──────────────────────────────────────────── */

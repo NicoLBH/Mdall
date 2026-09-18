@@ -313,6 +313,97 @@ export async function chercherSurQuoiCeSujetPorte(hote) {
 }
 
 /**
+ * Proposer une valeur que ce sujet apporte, et que la mémoire ne connaît pas.
+ *
+ * ## Le cul-de-sac devient une porte
+ *
+ * La reconnaissance cherche les noms que la mémoire porte déjà ; un nom absent
+ * est introuvable par construction. C'est donc un humain qui le nomme, et ce
+ * geste est le seul chemin par lequel un sujet complète la mémoire.
+ *
+ * ## Elle propose, elle ne verse pas
+ *
+ * La même règle que partout : rien n'entre dans la mémoire sans une proposition
+ * signée (règle 1). Le geste ouvre une proposition — la même porte que la
+ * décision d'une fermeture, `preparerUneProposition`, et pas une seconde.
+ *
+ * ## Le lien avec le sujet se fait après, et par le nom
+ *
+ * On n'écrit pas ici que ce sujet a tranché la valeur : il n'a rien tranché. Une
+ * fois la proposition signée, le nom est dans la mémoire — et si le sujet le
+ * porte dans son titre, sa description ou un commentaire, la reconnaissance
+ * l'accroche d'elle-même. C'est pour cela que la fenêtre invite à reprendre les
+ * mots du sujet.
+ *
+ * ## Qui parle et comment le dire se reçoivent
+ *
+ * Le nom de l'utilisateur et la façon de signaler une erreur vivent dans l'état
+ * de l'écran, que ce module ne connaît pas — c'est ce qui lui permet d'être
+ * importé et exécuté. Les reconstruire ici en ferait un second endroit qui
+ * décide comment on nomme quelqu'un (règle 4).
+ *
+ * @param {object} hote l'encadré des arêtes
+ * @param {object} [options]
+ * @param {string} [options.par] qui avance la valeur, tel que l'écran le nomme
+ * @param {(dit: string) => void} [options.direLErreur] comment se plaindre
+ */
+export async function proposerLaValeurQuApporteCeSujet(hote, { par = "", direLErreur = null } = {}) {
+  const creux = hote?.querySelector?.("[data-aretes-du-sujet]");
+  if (!creux) return;
+
+  const subjectId = texte(creux.getAttribute("data-aretes-du-sujet"));
+  if (!subjectId) return;
+
+  const titre = texte(creux.getAttribute("data-aretes-titre"));
+
+  const { demanderLaValeurApportee } = await import("../ui/valeur-du-sujet.js");
+  const repondu = await demanderLaValeurApportee({ titre });
+  // Renoncer est un geste : il ne laisse aucune trace, et surtout aucune ligne.
+  if (!repondu) return;
+
+  const lu = await lireLeProjet();
+  if (!lu) return;
+
+  const [
+    { valeurVersableDepuisUnPoint, titreDeLaProposition },
+    { preparerUneProposition }
+  ] = await Promise.all([
+    import("../../services/valeur-depuis-un-point.js"),
+    import("../../services/atelier-proposition.js")
+  ]);
+
+  const affirmations = valeurVersableDepuisUnPoint({
+    sujet: repondu.sujet,
+    valeur: repondu.valeur,
+    pourquoi: repondu.pourquoi,
+    point: { id: subjectId, title: titre },
+    par: texte(par),
+    quand: new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
+  });
+  if (!affirmations.length) return;
+
+  const rendu = await preparerUneProposition({
+    projectId: lu.projectId,
+    titre: titreDeLaProposition(repondu),
+    intro: "Une valeur qu'un sujet apporte et que la mémoire ne connaissait pas. Elle entre "
+      + "comme supposée : le débat reste ouvert, et c'est la fermeture du sujet qui le tranchera.",
+    affirmations
+  });
+
+  if (!rendu?.ok) {
+    // Un échec muet ferait croire que la valeur est proposée, et personne n'irait
+    // la chercher dans une liste où elle n'est pas.
+    direLErreur?.(`La valeur n'a pas pu être proposée : ${rendu?.raison ?? "erreur inconnue"}`);
+    return;
+  }
+
+  // Ce qu'on avait lu ne vaut plus : la mémoire bougera dès la signature, et le
+  // sujet pourra alors accrocher ce nom tout seul.
+  cache = VIDE();
+  await remplirLesAretes(hote);
+}
+
+/**
  * Les noms de tous ceux qui apparaissent sur cet écran.
  *
  * Ceux qui ont versé une valeur **et** ceux qui ont écarté une arête : deux

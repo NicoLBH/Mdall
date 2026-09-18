@@ -9874,6 +9874,14 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
    clique sans savoir ce que le clic fait. */
 .portage-liste__pourquoi{ margin:0 0 10px; color:var(--text); font-size:12px; }
 .portage-liste__consequence{ margin:10px 0 0; color:var(--muted); font-size:11px; }
+
+/* La porte vers ce que la mémoire ne connaît pas encore. Elle se voit sans
+   crier : c'est une possibilité, pas une tâche à faire. */
+.portage-liste__porte{
+  display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;
+  margin-top:10px; padding-top:10px; border-top:1px solid var(--border2);
+  color:var(--muted); font-size:11px;
+}
 .portage-liste--propose{ border-style:dashed; }
 
 /* Un refus se lit, il ne s'offre pas. La pastille prend la place qu'un bouton
@@ -22743,6 +22751,11 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
 .decision-sujet{ max-width:560px; }
 .decision-sujet__lead{ margin:0; color:var(--muted); font-size:12px; line-height:1.5; }
 .decision-sujet__lead b{ color:var(--text); font-weight:600; }
+
+/* Ce qui manque pour proposer, dit sous les champs. Il nomme la raison, jamais
+   « champ obligatoire » : un refus qu'on ne comprend pas se contourne au lieu de
+   se corriger. */
+.decision-sujet__manque{ margin:0; color:var(--danger); font-size:12px; }
 .decision-sujet__champ{ display:flex; flex-direction:column; gap:6px; }
 .decision-sujet__champ > span{ color:var(--text); font-size:12px; font-weight:600; }
 .decision-sujet__champ > span i{ color:var(--muted); font-weight:400; font-style:normal; }

@@ -4,7 +4,10 @@ import { GESTE, gesteDesSujets } from "../../services/gestes-des-sujets.js";
 import { ecranApresUneLecture } from "../../services/rail-des-sujets.js";
 import { escapeHtml as echapper } from "../../utils/escape-html.js";
 import { brancherLaZoneDeDepot } from "../ui/zone-de-depot.js";
-import { chercherSurQuoiCeSujetPorte, oublierLesAretes, remplirLesAretes } from "./aretes-du-sujet.js";
+import {
+  chercherSurQuoiCeSujetPorte, oublierLesAretes, proposerLaValeurQuApporteCeSujet, remplirLesAretes
+} from "./aretes-du-sujet.js";
+import { nomDeQuiParle } from "../../services/nom-de-qui-parle.js";
 import { demanderLOrdreDuBlocage, oublierLOrdreDuBlocage } from "./ordre-du-blocage.js";
 import {
   applyMentionSuggestion,
@@ -1209,11 +1212,32 @@ export function createProjectSubjectsEvents(config) {
     brancherLesGestesDuPortage(root);
   }
 
+  /**
+   * Proposer une valeur que ce sujet apporte, et que la mémoire ignore.
+   *
+   * L'écran sait deux choses que le module des arêtes ne peut pas savoir : le
+   * nom de l'utilisateur, et comment se plaindre. Il les lui donne plutôt que
+   * de l'obliger à les redécouvrir (règle 4).
+   */
+  async function proposerLaValeurApportee(root) {
+    await proposerLaValeurQuApporteCeSujet(root, {
+      par: nomDeQuiParle(store?.user),
+      direLErreur: showError
+    });
+    brancherLesGestesDuPortage(root);
+  }
+
   function brancherLesGestesDuPortage(root) {
     for (const bouton of root?.querySelectorAll?.("[data-portage-cherche]") ?? []) {
       if (bouton.dataset.portageBranche === "1") continue;
       bouton.dataset.portageBranche = "1";
       bouton.addEventListener("click", () => chercherLePortage(root));
+    }
+
+    for (const bouton of root?.querySelectorAll?.("[data-portage-apporte]") ?? []) {
+      if (bouton.dataset.portageBranche === "1") continue;
+      bouton.dataset.portageBranche = "1";
+      bouton.addEventListener("click", () => proposerLaValeurApportee(root));
     }
 
     for (const bouton of root?.querySelectorAll?.("[data-portage-confirme]") ?? []) {
