@@ -53,9 +53,10 @@ import {
   tonDeLaPart
 } from "../../../services/reconstitution-markdown.js";
 import {
-  EXTENSIONS_LISIBLES, estUnFichierTexte, laRestitutionDunTexte
+  EXTENSIONS_LISIBLES, estUnFichierTexte, laRestitutionDunTexte, nomDuFichier
 } from "../../../services/lire-un-fichier-texte.js";
-import { reprendreLeCrALire } from "../../../services/un-cr-a-lire.js";
+import { entreesDuDossier } from "../../../services/choisir-depuis-fichiers.js";
+import { renderChoisirUnFichier } from "../../ui/choisir-un-fichier.js";
 import { PHRASES_DU_RANGEMENT, RANGEE } from "../../../services/restitution-rangee.js";
 import {
   LABEL_DU_CR, QUOI_DU_LABEL, labelDuCrDansLeProjet, labelsAProposer, styleDuLabel
@@ -298,6 +299,14 @@ const etat = {
   panne: "",
   /** Le document déposé, gardé le temps de la lecture. */
   fichier: null,
+  /**
+   * Le choix d'un document déjà dans Fichiers, s'il est ouvert.
+   *
+   * `null` : on ne choisit pas. Sinon `{dossier, breadcrumb, entrees, enCours,
+   * motif}` — et `entrees` vide avec `enCours` faux n'est pas « pas encore
+   * lu » : c'est un dossier qui ne contient rien (règle 5).
+   */
+  choix: null,
   /** L'onglet regardé. Voir `ONGLET`. */
   onglet: ONGLET.RESTITUTION,
   /** Le document restitué. Voir `renderRestitution`. */
@@ -415,39 +424,8 @@ export function renderLectureDesCr(hote) {
   hoteCourant = hote;
   hote.innerHTML = renderLaLecture(etat);
   brancher(hote);
-  prendreCeQueFichiersADepose(hote);
 }
 
-/**
- * Un compte rendu que **Fichiers** a posé là avant de nous y envoyer.
- *
- * ## Pourquoi il arrive par une case, et non par un appel
- *
- * Le geste part de Fichiers — on regarde un `.md`, on veut en relever les
- * points — et il aboutit ici, sur un panneau qui n'était pas monté quand on a
- * cliqué. Fichiers pose donc le texte, navigue, et c'est le montage qui vient
- * le prendre.
- *
- * ## Il ne se reprend qu'une fois
- *
- * `reprendreLeCrALire` vide la case. Sans cela, chaque retour sur ce panneau
- * relancerait la lecture du même document — un appel au modèle, payé, que
- * personne n'a demandé.
- *
- * ## Et jamais par-dessus une lecture en cours
- *
- * Abandonner un appel déjà lancé, c'est le payer pour rien.
- */
-function prendreCeQueFichiersADepose(hote) {
-  if (etat.phase === "lecture") return;
-
-  const attendu = reprendreLeCrALire();
-  if (!attendu) return;
-
-  // Un `File` plutôt qu'un `Blob` : tout le parcours nomme le document par
-  // `fichier.name`, et un `Blob` n'en a pas.
-  void lire(hote, new File([attendu.contenu], attendu.nom, { type: "text/markdown" }));
-}
 
 /**
  * L'écran, dessiné à partir d'un état — et de rien d'autre.
@@ -465,8 +443,8 @@ export function renderLaLecture(vue = etat) {
   return `
     <div class="lecture-cr">
       ${renderEntete(vue)}
-      ${renderDepot(vue)}
-      ${renderCorps(vue)}
+      ${vue.choix ? renderChoisirUnFichier(vue.choix) : renderDepot(vue)}
+      ${vue.choix ? "" : renderCorps(vue)}
     </div>
   `;
 }
@@ -507,7 +485,10 @@ function renderEntete(vue = etat) {
               ? `<label class="gh-btn gh-btn--sm lecture-cr__entete-fichier">
                    ${svgIcon("file", { className: "octicon" })} Un autre document
                    <input type="file" accept="${escapeHtml(ACCEPTE)}" hidden data-lecture-cr-fichier>
-                 </label>`
+                 </label>
+                 <button type="button" class="gh-btn gh-btn--sm" data-lecture-cr-depuis-fichiers>
+                   ${svgIcon("file-directory", { className: "octicon" })} Depuis Fichiers
+                 </button>`
               : ""
           }
           ${renderTransformer({
@@ -575,10 +556,21 @@ function renderDepot(vue) {
           Un PDF, ou un document déjà écrit en texte — <code>.md</code>, <code>.txt</code>.
           Le second se lit sans extraction ni restitution : aucun appel au modèle pour le relire.
         </p>
-        <label class="gh-btn gh-btn--sm lecture-cr__depot-choix">
-          Choisir un document
-          <input type="file" accept="${escapeHtml(ACCEPTE)}" hidden data-lecture-cr-fichier>
-        </label>
+        <span class="lecture-cr__depot-gestes">
+          <label class="gh-btn gh-btn--sm lecture-cr__depot-choix">
+            Choisir un document
+            <input type="file" accept="${escapeHtml(ACCEPTE)}" hidden data-lecture-cr-fichier>
+          </label>
+          ${/*
+            **On descend chercher dans Fichiers, on n'en remonte rien.** Le
+            document est déjà déposé : le ressortir de son dossier pour le
+            redéposer ferait un second exemplaire du même compte rendu, et c'est
+            le genre de doublon qu'on ne remarque qu'au vingtième.
+          */""}
+          <button type="button" class="gh-btn gh-btn--sm" data-lecture-cr-depuis-fichiers>
+            Choisir depuis Fichiers
+          </button>
+        </span>
       `}
     </div>
   `;
@@ -2435,6 +2427,28 @@ function brancher(hote) {
       return;
     }
 
+    if (cible.closest("[data-lecture-cr-depuis-fichiers]")) {
+      void ouvrirLeChoix(hote, "");
+      return;
+    }
+
+    if (cible.closest("[data-choisir-fermer]")) {
+      fermerLeChoix(hote);
+      return;
+    }
+
+    const dossier = cible.closest("[data-choisir-dossier]");
+    if (dossier) {
+      void ouvrirLeChoix(hote, dossier.dataset.choisirDossier || "");
+      return;
+    }
+
+    const document = cible.closest("[data-choisir-document]");
+    if (document) {
+      void prendreLeDocument(hote, document.dataset.choisirDocument || "");
+      return;
+    }
+
     const onglet = cible.closest("[data-lecture-cr-onglet]");
     if (onglet) {
       etat.onglet = texte(onglet.dataset.lectureCrOnglet) || ONGLET.RESTITUTION;
@@ -2499,6 +2513,107 @@ function brancher(hote) {
     detacherLaZone?.();
     detacher = null;
   };
+}
+
+/**
+ * Ouvrir le choix d'un document déjà déposé.
+ *
+ * **Rien de l'onglet Fichiers n'est chargé ici** : on appelle le même service de
+ * lecture de dossiers que lui, et l'on dessine avec ses classes. L'inverse —
+ * un bouton dans Fichiers qui aurait envoyé vers l'Atelier — aurait mis l'écran
+ * de lecture dans les dépendances d'un écran qui ne s'en sert pas, et alourdi
+ * le navigateur de tous pour un bouton que peu utiliseront.
+ */
+async function ouvrirLeChoix(hote, dossierId = "") {
+  etat.choix = {
+    dossier: texte(dossierId), breadcrumb: etat.choix?.breadcrumb ?? [],
+    entrees: [], enCours: true, motif: ""
+  };
+  redessiner(hote);
+
+  const projectId = await projetCourant();
+  if (!projectId) {
+    etat.choix = { ...etat.choix, enCours: false, motif: "Aucun projet ouvert." };
+    redessiner(hote);
+    return;
+  }
+
+  try {
+    // Chargé à la demande : ce module passe par le SDK Supabase, importé depuis
+    // le réseau, qu'une exécution hors navigateur ne saurait résoudre.
+    const { listDocumentDirectory } = await import("../../../services/project-supabase-sync.js");
+    const contenu = await listDocumentDirectory(projectId, texte(dossierId) || null);
+
+    etat.choix = {
+      dossier: texte(dossierId),
+      breadcrumb: Array.isArray(contenu?.breadcrumb) ? contenu.breadcrumb : [],
+      entrees: entreesDuDossier(contenu),
+      enCours: false,
+      motif: ""
+    };
+  } catch (erreur) {
+    // **Le dossier n'est pas vide, on ne sait pas ce qu'il contient.** Afficher
+    // une liste vide se lirait comme une réponse (règle 5).
+    etat.choix = {
+      ...etat.choix, enCours: false,
+      motif: `Ce dossier n'a pas pu être lu (${texte(erreur?.message) || "cause inconnue"}).`
+    };
+  }
+
+  redessiner(hote);
+}
+
+function fermerLeChoix(hote) {
+  etat.choix = null;
+  redessiner(hote);
+}
+
+/**
+ * Prendre un document choisi, et le lire.
+ *
+ * Le texte est **relu au stockage**, et non repris d'un cache : la liste d'un
+ * dossier ne descend pas le contenu des fichiers, et le faire descendrait
+ * quarante documents pour en ouvrir un.
+ */
+async function prendreLeDocument(hote, documentId) {
+  const choisi = (etat.choix?.entrees ?? []).find((entree) => entree.id === texte(documentId));
+  if (!choisi?.choisissable) return;
+
+  etat.choix = { ...etat.choix, enCours: true, motif: "" };
+  redessiner(hote);
+
+  const projectId = await projetCourant();
+
+  try {
+    const [{ listDocumentDirectory }, { lireLeTexteDuFichier }] = await Promise.all([
+      import("../../../services/project-supabase-sync.js"),
+      import("../../../services/fichier-a-la-main-supabase.js")
+    ]);
+
+    const contenu = await listDocumentDirectory(projectId, texte(etat.choix.dossier) || null);
+    const piece = (contenu?.files ?? []).find((fichier) => texte(fichier?.id) === texte(documentId));
+    const lu = piece ? await lireLeTexteDuFichier(piece) : null;
+
+    if (typeof lu !== "string") {
+      etat.choix = {
+        ...etat.choix, enCours: false,
+        motif: "Ce document n'a pas pu être lu. Réessayez dans un instant."
+      };
+      redessiner(hote);
+      return;
+    }
+
+    etat.choix = null;
+    // Un `File` plutôt qu'un `Blob` : tout le parcours nomme le document par
+    // `fichier.name`, et un `Blob` n'en a pas.
+    await lire(hote, new File([lu], nomDuFichier(piece) || choisi.nom, { type: "text/markdown" }));
+  } catch (erreur) {
+    etat.choix = {
+      ...etat.choix, enCours: false,
+      motif: `Ce document n'a pas pu être lu (${texte(erreur?.message) || "cause inconnue"}).`
+    };
+    redessiner(hote);
+  }
 }
 
 /**

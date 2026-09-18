@@ -173,3 +173,58 @@ export function leFichierAEcrire(saisi = "", {
     }
   };
 }
+
+/**
+ * Ce qu'il faut écrire pour **réenregistrer** un fichier qu'on vient de modifier.
+ *
+ * ## Le contenu monte à un chemin neuf, et la ligne suit
+ *
+ * Le stockage refuse d'écraser : il n'y a pas de « poser par-dessus ». Chaque
+ * enregistrement monte donc un objet nouveau, et la ligne du document pointe
+ * désormais sur lui. Le précédent reste dans le seau, orphelin — c'est le prix,
+ * et il est dit ici plutôt que découvert plus tard.
+ *
+ * ## Le chemin porte le moment
+ *
+ * Deux enregistrements du même fichier portent le même nom. Sans quoi les
+ * distinguer, le second échouerait sur un conflit, et l'écran annoncerait un
+ * échec sans que rien ne dise que c'est le chemin qui était pris. `quand` entre
+ * donc, plutôt que d'être lu ici : une fonction qui regarde l'heure ne se
+ * vérifie pas.
+ *
+ * ## Renommer et réécrire sont le même geste
+ *
+ * Le nom part dans la ligne, le texte dans le stockage, et les deux voyagent
+ * ensemble. Les séparer aurait permis un fichier renommé dont le contenu est
+ * resté à l'ancien chemin, ou l'inverse.
+ *
+ * @returns {{nom: string, type: string, contenu: string, scope: string, patch: object}|null}
+ */
+export function leFichierAReecrire(document = null, {
+  saisi = "", contenu = "", folderId = null, dejaLa = [], quand = 0
+} = {}) {
+  const id = texte(document?.id);
+  if (!id) return null;
+
+  // **Le fichier qu'on modifie ne se compte pas parmi les noms pris** : il
+  // porte déjà le sien, et l'y compter refuserait de le garder.
+  const autres = (dejaLa ?? []).filter((piece) => texte(piece?.id) !== id);
+  if (pourquoiOnNePeutPasLEcrire(saisi, { dejaLa: autres }).length) return null;
+
+  const nom = nomComplet(saisi);
+  const type = typeDuFichier(nom);
+  const moment = Number(quand) || 0;
+  if (!moment) return null;
+
+  return {
+    nom,
+    type,
+    contenu: String(contenu ?? ""),
+    scope: `${folderId || "racine"}/ecrit/${moment}`,
+    patch: {
+      filename: nom,
+      original_filename: nom,
+      mime_type: type
+    }
+  };
+}

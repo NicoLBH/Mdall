@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import {
-  EXTENSION_PAR_DEFAUT, REFUS, extensionDe, leFichierAEcrire, nomComplet,
-  phraseDesRefus, pourquoiOnNePeutPasLEcrire, typeDuFichier
+  EXTENSION_PAR_DEFAUT, REFUS, extensionDe, leFichierAEcrire, leFichierAReecrire, nomComplet, phraseDesRefus, pourquoiOnNePeutPasLEcrire, typeDuFichier
 } from "./fichier-a-la-main.js";
 
 /** Ce que le dossier porte déjà. Aucun nom réel. */
@@ -164,17 +163,41 @@ test("le nom se tape au bout du fil d'Ariane", () => {
     ecran.indexOf("function renderDocumentsBreadcrumb"), ecran.indexOf("function renderRepoFolderRow")
   );
 
-  assert.match(fil, /if \(docsViewState\.ecriture\)/, "le fil ne porte pas le champ du nom");
-  assert.match(fil, /data-ecriture-nom/);
+  // **Le même champ sert à nommer un fichier neuf et à renommer celui qu'on
+  // modifie** : deux champs dessinés séparément auraient fini par ne plus se
+  // ressembler, et l'un des deux par sortir du fil.
+  assert.match(fil, /docsViewState\.ecriture\s*$/m, "la création ne remplit plus le fil");
+  assert.match(fil, /data-ecriture-nom/, "le nom du fichier créé");
+  assert.match(fil, /data-edition-nom/, "le nom du fichier renommé");
+  assert.match(fil, /if \(enSaisie\)/, "le fil ne porte pas le champ du nom");
+
   // Et il est **après** le chemin : le nom se lit au bout, là où le fichier ira.
   //
   // Le chemin se cherche d'abord : un `indexOf` qui ne trouve rien rend -1, qui
   // passe toutes les comparaisons « avant » — la garde dirait que l'ordre est
   // bon alors que le chemin a disparu.
   const ouLeChemin = fil.indexOf("${chemin}${sep}");
+  const ouLeChamp = fil.indexOf("${saisie(enSaisie.marque, enSaisie.valeur)}");
   assert.notEqual(ouLeChemin, -1, "le chemin ne précède plus le champ du nom");
-  assert.ok(ouLeChemin < fil.indexOf("data-ecriture-nom"),
-    "le champ du nom passe avant le chemin");
+  assert.notEqual(ouLeChamp, -1, "le champ du nom n'est plus posé au bout du fil");
+  assert.ok(ouLeChemin < ouLeChamp, "le champ du nom passe avant le chemin");
+});
+
+test("le nom du fichier ouvert vit dans le fil, et non dans la barre d'outils", () => {
+  const ecran = readFileSync(new URL("../views/project-documents.js", import.meta.url), "utf8");
+  const fil = ecran.slice(
+    ecran.indexOf("function renderDocumentsBreadcrumb"), ecran.indexOf("function renderRepoFolderRow")
+  );
+  const barre = ecran.slice(
+    ecran.indexOf("function renderLectureDuTexte"), ecran.indexOf("/** Ce qu'on dit du fichier ouvert")
+  );
+
+  // Un même nom à deux endroits finit par diverger (règle 10) — et ici l'un des
+  // deux redisait simplement ce que l'autre montrait déjà.
+  assert.match(fil, /ouvert && !ouvert\.edition \? \[\{ libelle: String\(ouvert\.nom/,
+    "le fil ne porte pas le nom du fichier ouvert");
+  assert.equal(/documents-transcription__tete/.test(barre), false,
+    "le nom est resté dans la barre d'outils");
 });
 
 test("la zone de saisie ne se redessine pas à la frappe", () => {
@@ -252,4 +275,155 @@ test("le fichier téléversé porte le nom qu'on a choisi", () => {
   );
 
   assert.match(transport, /new File\(\[aEcrire\.contenu\], aEcrire\.nom/);
+});
+
+/* ── Réenregistrer un fichier qu'on vient de modifier ──────────────────────
+ *
+ * Le stockage refuse d'écraser : chaque enregistrement monte un objet neuf, et
+ * la ligne du document pointe désormais sur lui.
+ */
+
+const PIECE = { id: "d1", name: "notice.md" };
+
+test("réenregistrer rend le fichier, son chemin, et ce que la ligne reçoit", () => {
+  const aEcrire = leFichierAReecrire(PIECE, {
+    saisi: "notice", contenu: "# Notice", folderId: "f1", quand: 1700000000000
+  });
+
+  assert.equal(aEcrire.nom, "notice.md");
+  assert.equal(aEcrire.type, "text/markdown");
+  assert.equal(aEcrire.contenu, "# Notice");
+  assert.equal(aEcrire.patch.filename, "notice.md");
+  assert.equal(aEcrire.patch.original_filename, "notice.md");
+  assert.equal(aEcrire.patch.mime_type, "text/markdown");
+});
+
+test("le fichier qu'on modifie ne se compte pas parmi les noms pris", () => {
+  // Il porte déjà le sien : l'y compter refuserait de le garder, et l'on ne
+  // pourrait plus enregistrer sans renommer.
+  const aEcrire = leFichierAReecrire(PIECE, {
+    saisi: "notice.md", contenu: "x", dejaLa: [PIECE], quand: 1
+  });
+  assert.notEqual(aEcrire, null);
+});
+
+test("mais un autre fichier du dossier, si", () => {
+  assert.equal(leFichierAReecrire(PIECE, {
+    saisi: "annexe.md", contenu: "x", dejaLa: [PIECE, { id: "d2", name: "annexe.md" }], quand: 1
+  }), null);
+});
+
+test("deux enregistrements du même fichier ne se posent pas au même endroit", () => {
+  // Le stockage refuserait le second sur un conflit de chemin, et l'écran
+  // annoncerait un échec sans que rien ne dise que c'est le nom qui était pris.
+  const un = leFichierAReecrire(PIECE, { saisi: "notice.md", quand: 1700000000000 });
+  const deux = leFichierAReecrire(PIECE, { saisi: "notice.md", quand: 1700000000001 });
+  assert.notEqual(un.scope, deux.scope);
+});
+
+test("le chemin porte le dossier, et la racine se nomme", () => {
+  assert.equal(
+    leFichierAReecrire(PIECE, { saisi: "notice.md", folderId: "f1", quand: 7 }).scope,
+    "f1/ecrit/7"
+  );
+  // `null/ecrit/7` se lirait comme un dossier qui s'appelle « null ».
+  assert.equal(
+    leFichierAReecrire(PIECE, { saisi: "notice.md", folderId: null, quand: 7 }).scope,
+    "racine/ecrit/7"
+  );
+});
+
+test("sans moment, on n'écrit pas", () => {
+  // Une horloge lue dans la fonction ne se vérifie pas ; un moment absent
+  // donnerait deux chemins identiques, donc un conflit muet.
+  assert.equal(leFichierAReecrire(PIECE, { saisi: "notice.md", quand: 0 }), null);
+  assert.equal(leFichierAReecrire(PIECE, { saisi: "notice.md" }), null);
+});
+
+test("sans document, il n'y a rien à réenregistrer", () => {
+  assert.equal(leFichierAReecrire(null, { saisi: "notice.md", quand: 1 }), null);
+  assert.equal(leFichierAReecrire({ name: "notice.md" }, { saisi: "notice.md", quand: 1 }), null);
+});
+
+test("les refus d'un nom neuf valent pour un renommage", () => {
+  // Une seule règle, demandée deux fois — et non deux règles qui finiraient par
+  // ne plus dire la même chose (règle 4).
+  for (const mauvais of ["", "   ", "dossier/notice.md", "..", "photo.png"]) {
+    assert.equal(leFichierAReecrire(PIECE, { saisi: mauvais, quand: 1 }), null, mauvais);
+  }
+});
+
+test("un nom sans extension reçoit .md, comme à la création", () => {
+  assert.equal(leFichierAReecrire(PIECE, { saisi: "notice v2", quand: 1 }).nom, "notice v2.md");
+});
+
+/* ── Le crayon, et ce qu'il ouvre ─────────────────────────────────────────── */
+
+test("le lecteur porte un crayon, et plus de bouton « Fermer »", () => {
+  const ecran = readFileSync(new URL("../views/project-documents.js", import.meta.url), "utf8");
+  const barre = ecran.slice(
+    ecran.indexOf("function renderLectureDuTexte"), ecran.indexOf("/** Ce qu'on dit du fichier ouvert")
+  );
+
+  assert.match(barre, /data-texte-editer/, "le crayon n'est pas là");
+  assert.match(barre, /svgIcon\("pencil"/, "le crayon n'est pas un crayon");
+  // Fermer se fait par le fil d'Ariane et par l'arbre, qui disent en plus où
+  // l'on va. Un bouton qui ne fait que défaire prenait la place du seul geste
+  // qui manquait.
+  assert.equal(/data-texte-fermer/.test(ecran), false, "« Fermer » est encore là");
+});
+
+test("aller ailleurs referme le fichier ouvert, par tous les chemins", () => {
+  const ecran = readFileSync(new URL("../views/project-documents.js", import.meta.url), "utf8");
+
+  // Trois gestes mènent ailleurs — l'arbre, le fil d'Ariane, le nom d'un
+  // dossier dans le tableau — et chacun refermait pour son compte : c'est ainsi
+  // qu'un fichier ouvert serait resté à l'écran sous le chemin d'un autre
+  // dossier.
+  assert.match(ecran, /function allerAilleurs\(\)[\s\S]{0,200}docsViewState\.texte = null;/);
+  const appels = ecran.match(/\ballerAilleurs\(\);/g) ?? [];
+  assert.equal(appels.length, 3, "l'arbre, le fil d'Ariane, le tableau");
+});
+
+test("la modification travaille sur une copie", () => {
+  const ecran = readFileSync(new URL("../views/project-documents.js", import.meta.url), "utf8");
+  const ouvrir = ecran.slice(
+    ecran.indexOf("function ouvrirLEdition"), ecran.indexOf("function fermerLEdition")
+  );
+
+  // Annuler doit rendre le fichier tel qu'il est en base : si l'on retouchait
+  // le contenu lu, il n'y aurait plus rien à quoi revenir.
+  assert.match(ouvrir, /edition: \{ nom: String\(ouvert\.nom \|\| ""\), contenu: ouvert\.contenu/);
+  assert.equal(/ouvert\.contenu\s*=/.test(ouvrir), false, "le contenu lu est écrasé");
+});
+
+test("la zone d'édition ne se redessine pas à la frappe", () => {
+  const ecran = readFileSync(new URL("../views/project-documents.js", import.meta.url), "utf8");
+  const branchement = ecran.slice(
+    ecran.indexOf("if (docsViewState.texte.edition) {"),
+    ecran.indexOf("[data-edition-valider]")
+  );
+
+  assert.match(branchement, /surChangement: \(valeur\) => \{ docsViewState\.texte\.edition\.contenu = valeur; \}/,
+    "le texte ne se retient pas");
+  assert.equal(/surChangement[\s\S]{0,120}renderProjectDocumentsContent/.test(branchement), false,
+    "la zone se redessine à chaque frappe");
+});
+
+test("le texte modifié reste à l'écran quand l'enregistrement échoue", () => {
+  const ecran = readFileSync(new URL("../views/project-documents.js", import.meta.url), "utf8");
+  const enregistrer = ecran.slice(
+    ecran.indexOf("async function enregistrerLEdition"), ecran.indexOf("async function openPdfPreview")
+  );
+  // Borné au bloc d'échec : la suite porte le cas nominal, où l'édition se
+  // referme — une tranche qui va jusqu'au bout y trouverait `edition: null` et
+  // la garde ne dirait plus rien.
+  const debut = enregistrer.indexOf("if (!ecrit.enregistre)");
+  assert.notEqual(debut, -1, "le cas d'échec a disparu");
+  const rate = enregistrer.slice(debut, enregistrer.indexOf("return;", debut));
+
+  // Le perdre ferait recommencer une saisie de trois cents lignes pour une
+  // panne de réseau.
+  assert.match(rate, /edition: \{ \.\.\.edition, enCours: false \}/);
+  assert.equal(/edition: null/.test(rate), false, "l'édition se referme sur un échec");
 });

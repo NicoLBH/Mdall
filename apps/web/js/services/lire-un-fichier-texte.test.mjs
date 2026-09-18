@@ -227,8 +227,8 @@ test("un document de texte déposé dans l'Atelier n'est pas écarté", () => {
   assert.match(ATELIER, /trierLesFichiers\(fichiers, \(candidat\) => estUnDocumentAccepte\(/);
 });
 
-test("les trois gestes du lecteur de texte sont branchés", () => {
-  for (const marque of ["data-texte-lecture", "data-texte-fermer", "data-texte-lire-un-cr"]) {
+test("les gestes du lecteur de texte sont branchés", () => {
+  for (const marque of ["data-texte-lecture", "data-texte-editer"]) {
     assert.match(FICHIERS, new RegExp(`${marque}[\\s>=]`), `${marque} posé dans le gabarit`);
 
     // **Cherché, et écouté.** Un sélecteur qui trouve le bouton sans y poser

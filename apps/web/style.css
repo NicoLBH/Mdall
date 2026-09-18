@@ -25316,6 +25316,38 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 /* Ce que la zone de dépôt accepte, dit sous son invitation. Un `.md` déposé
    ici ne coûte rien : le dire évite de rouvrir le PDF pour le même document. */
 .lecture-cr__depot-aide{margin:4px 0 10px;color:var(--text-muted);max-width:52ch;text-align:center;}
+.lecture-cr__depot-gestes{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;}
+
+/* Le choix d'un document déjà déposé.
+
+   Les lignes sont celles de Fichiers — `documents-repo__row` et ses cellules —
+   avec leur hauteur, leur icône et leur gouttière. Il ne reste ici que le
+   cadre, le chemin et l'extinction de ce qui ne se choisit pas : en redessiner
+   une seconde arborescence aurait fait deux jeux à recaler ensemble, et l'on ne
+   reconnaîtrait pas le rangement d'un écran à l'autre. */
+.choisir-fichier{
+  display:flex; flex-direction:column; min-height:0;
+  /* `--bg`, comme le corps des tableaux de Fichiers. `--panel` n'existe pas :
+     il est employé ailleurs dans cette feuille et n'y retombe sur rien — une
+     couleur qu'on croit poser et qui laisse le fond transparent. */
+  border:1px solid var(--border); border-radius:6px; background:var(--bg);
+}
+.choisir-fichier__tete{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:10px 14px; border-bottom:1px solid var(--border); background:var(--panel2);
+}
+.choisir-fichier__fil{margin:0;min-width:0;overflow:hidden;}
+.choisir-fichier__corps{
+  /* Deux colonnes ici, et non les trois de Fichiers : on choisit un document,
+     on ne le gère pas — il n'y a ni date à comparer ni geste à poser. */
+  --data-table-cols:minmax(220px, 1fr) minmax(180px, 1.4fr);
+  flex:1 1 auto; min-height:0; max-height:52vh; overflow:auto;
+}
+/* Ce qui ne se choisit pas reste lisible, et dit pourquoi au survol. Le
+   masquer ferait paraître vide un dossier qui porte douze comptes rendus. */
+.choisir-fichier__ligne--eteinte{opacity:.5;cursor:default;}
+.choisir-fichier__ligne--eteinte:hover{background:none;}
+
 .lecture-cr__depot-aide code{
   font-family:var(--mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   background:rgba(110,118,129,.12); border-radius:4px; padding:0 4px;

@@ -23,9 +23,9 @@
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import {
-  currentUserId, insertDocumentRow, uploadDocumentToStorage
+  currentUserId, insertDocumentRow, updateDocumentRow, uploadDocumentToStorage
 } from "./document-deposit.js";
-import { leFichierAEcrire } from "./fichier-a-la-main.js";
+import { leFichierAEcrire, leFichierAReecrire } from "./fichier-a-la-main.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 
@@ -87,5 +87,50 @@ export async function lireLeTexteDuFichier(document = null) {
     return await reponse.text();
   } catch {
     return null;
+  }
+}
+
+/**
+ * Enregistrer un fichier qu'on vient de modifier.
+ *
+ * ## Le transport, et rien d'autre
+ *
+ * Tout ce qui se décide — le nom, le type, le chemin de stockage, ce que la
+ * ligne reçoit — vit dans `leFichierAReecrire`, qui est pur et vérifié.
+ *
+ * ## L'ordre : le contenu d'abord, la ligne ensuite
+ *
+ * Si le téléversement échoue, la ligne n'a pas bougé et le fichier est tel
+ * qu'il était. L'inverse — écrire la ligne puis rater le contenu — laisserait un
+ * document qui pointe sur un objet qui n'existe pas.
+ *
+ * @returns {Promise<{enregistre: boolean, document: object|null, motif: string}>}
+ */
+export async function enregistrerLeFichier(document = null, {
+  nom = "", contenu = "", projectId = "", folderId = null, dejaLa = []
+} = {}) {
+  const rate = (motif) => ({ enregistre: false, document: null, motif });
+
+  if (!projectId) return rate("aucun projet");
+  const aEcrire = leFichierAReecrire(document, {
+    saisi: nom, contenu, folderId, dejaLa, quand: Date.now()
+  });
+  if (!aEcrire) return rate("ce nom ne convient pas");
+
+  try {
+    const fichier = new File([aEcrire.contenu], aEcrire.nom, { type: aEcrire.type });
+    const stockage = await uploadDocumentToStorage(fichier, { projectId, scope: aEcrire.scope });
+
+    const ligne = await updateDocumentRow(document.id, {
+      ...aEcrire.patch,
+      storage_bucket: stockage.storage_bucket,
+      storage_path: stockage.storage_path,
+      file_size_bytes: fichier.size || 0
+    }, "id,project_id,folder_id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind");
+
+    if (!ligne?.id) return rate("la ligne n'a pas pu être mise à jour");
+    return { enregistre: true, document: ligne, motif: "" };
+  } catch (erreur) {
+    return rate(String(erreur?.message ?? "") || "cause inconnue");
   }
 }

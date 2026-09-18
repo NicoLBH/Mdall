@@ -41,6 +41,51 @@ entière. Ces fichiers n'ont donc qu'une lecture, et c'est la bonne.
 lire. Un fichier vide est un quatrième cas — c'est une réponse, elle se dit
 (règle 5).
 
+### Le nom vit dans le fil d'Ariane
+
+Il était aussi dans la barre d'outils, à côté des lectures : deux endroits pour
+un même nom, dont l'un redisait ce que l'autre montrait déjà (règle 10). Le fil
+dit en plus **où** est ce fichier — « Fichiers / Documents / Incendie /
+notice.md » —, ce que la barre ne disait pas.
+
+### Le crayon a remplacé « Fermer »
+
+Fermer se fait déjà par le fil d'Ariane et par l'arbre, qui sont là et qui
+disent en plus où l'on va. Un bouton qui ne fait que défaire ce qu'on vient de
+faire prenait la place du seul geste qui manquait : **corriger**.
+
+Le crayon ouvre la modification. Le texte passe dans la même zone de saisie que
+la création d'un fichier neuf, et **le nom repasse en champ dans le fil**, au
+même endroit — écrire un fichier et renommer celui qu'on modifie sont le même
+geste, et deux champs dessinés séparément auraient fini par ne plus se
+ressembler.
+
+Trois choses méritent d'être dites :
+
+- **On travaille sur une copie.** Annuler doit rendre le fichier tel qu'il est
+  en base ; si l'on retouchait le contenu lu, il n'y aurait plus rien à quoi
+  revenir.
+- **Le fichier qu'on modifie ne se compte pas parmi les noms pris.** Il porte
+  déjà le sien : l'y compter refuserait de le garder, et l'on ne pourrait plus
+  enregistrer sans renommer.
+- **Le contenu monte à un chemin neuf.** Le stockage refuse d'écraser : il n'y
+  a pas de « poser par-dessus ». Chaque enregistrement monte un objet nouveau,
+  dont le chemin porte le moment — deux versions du même fichier portent le même
+  nom, et sans quoi les distinguer la seconde échouerait sur un conflit. Le
+  précédent reste dans le seau, orphelin : c'est le prix, et il est dit plutôt
+  que découvert plus tard.
+
+Un enregistrement qui échoue **garde le texte à l'écran**. Le perdre ferait
+recommencer une saisie de trois cents lignes pour une panne de réseau.
+
+### Aller ailleurs referme
+
+Trois gestes mènent ailleurs — l'arbre, le fil d'Ariane, le nom d'un dossier
+dans le tableau — et chacun refermait pour son compte : l'arbre fermait
+l'aperçu d'un PDF, les deux autres ne fermaient rien. C'est ainsi qu'un fichier
+ouvert serait resté à l'écran sous le chemin d'un autre dossier. Ce qu'une
+navigation referme est maintenant dit à un seul endroit (règle 10).
+
 ### Un fichier de texte n'a pas de pages, sauf s'il en porte
 
 Un compte rendu rangé par l'Atelier garde ses marqueurs `<!-- page n -->` :
@@ -73,9 +118,8 @@ Son parcours est donc :
     ouvrir → relever les points → confronter au projet
 
 Deux ouvertures, une seule suite : ce qui vient après ne connaît pas la
-différence. La zone de dépôt de l'Atelier accepte les deux, et un `.md` ouvert
-dans Fichiers porte un bouton « Lire comme un compte rendu » qui y mène
-directement.
+différence. La zone de dépôt accepte les deux, et un bouton
+**« Choisir depuis Fichiers »** ouvre l'arborescence des documents du projet.
 
 ### Ce qui disparaît avec l'extraction, et qu'on n'invente pas
 
@@ -123,22 +167,51 @@ hypothèses. Là, on lui donne un document et l'on regarde ce qui sort : le text
 entier, les lignes numérotées sans trou, la page d'où sort chaque ligne, et
 aucun marqueur resté dans le document.
 
-## Le passage d'un écran à l'autre
+## Choisir depuis Fichiers, et pourquoi dans ce sens
 
-Le geste part de Fichiers et aboutit dans l'Atelier, sur un panneau qui n'est
-pas monté tant qu'on n'y est pas allé : appeler l'Atelier depuis Fichiers
-écrirait dans un écran qui n'existe pas.
+Le premier essai faisait l'inverse : un bouton dans Fichiers posait le texte
+dans une case partagée et envoyait vers l'Atelier. Deux défauts, et le second
+est dirimant.
 
-Fichiers pose donc le texte dans une case (`services/un-cr-a-lire.js`) et
-navigue ; l'Atelier vient la prendre à son montage. **Elle se reprend une seule
-fois** : sans cela, chaque retour sur le panneau relancerait la lecture du même
-document — un appel au modèle, payé, que personne n'a demandé. Et jamais
-par-dessus une lecture en cours : abandonner un appel déjà lancé, c'est le payer
-pour rien.
+D'abord, **le geste était au mauvais endroit** : on ouvre un compte rendu dans
+Fichiers pour le lire, pas pour décider de le faire analyser. La décision se
+prend à l'Atelier, quand on y est venu pour ça.
 
-L'adresse du panneau vit dans `services/route-de-latelier.js`, avec la lecture
-qui lui répond : `#project/<id>/atelier/lire-un-cr`. Composer l'adresse dans
-l'écran l'aurait fait diverger le jour où le panneau change de nom (règle 10).
+Ensuite et surtout, **Fichiers chargeait alors l'Atelier**. Il fallait une case
+partagée entre les deux écrans, donc une route, donc un morceau de l'écran de
+lecture dans les dépendances d'un écran qui ne s'en sert pas. On alourdit le
+navigateur de tous pour un bouton que peu utiliseront — et rien ne le disait :
+l'écran marchait, il était seulement plus lourd à charger.
+
+Ici, rien ne remonte. L'Atelier descend chercher, par le même service de lecture
+de dossiers que l'onglet Fichiers, **chargé à la demande** : qui n'ouvre jamais
+le choix ne le télécharge jamais. Fichiers, lui, ne sait pas que l'Atelier
+existe, et une vérification s'en assure à chaque exécution.
+
+### Ce que la liste montre, et ce qu'elle refuse
+
+Les lignes sont celles de Fichiers — mêmes classes, même hauteur, même icône,
+même gouttière. En redessiner une seconde arborescence aurait fait deux jeux à
+recaler ensemble, et l'on ne reconnaîtrait pas ici le rangement fait là-bas.
+
+Les dossiers d'abord, puis les fichiers, chacun dans l'ordre du **français** :
+trié sur les codes de caractères, on aurait « Zinguerie », « atelier »,
+« Étanchéité » dans cet ordre — majuscules d'abord, accents tout à la fin.
+
+Ce qui ne se choisit pas **s'affiche quand même**, éteint, avec sa raison :
+masquer les PDF ferait paraître vide un dossier qui porte douze comptes rendus,
+et l'on chercherait une panne (règle 5). Deux raisons, et elles ne se confondent
+pas :
+
+| Raison | Ce qu'elle veut dire |
+|---|---|
+| pas du texte | Un PDF se lit très bien à l'Atelier, mais en le déposant : l'extraction part du fichier lui-même. |
+| rien à lire | Aucun contenu n'est attaché à ce document — son dépôt ne s'est pas terminé. |
+
+Et trois phrases pour un dossier qui n'offre rien : « ce dossier est vide »
+quand il l'est, « aucun document de texte ici » quand il ne porte que des PDF,
+« … ouvrez un dossier » quand il porte aussi des dossiers. La première invite à
+déposer, les autres à chercher ailleurs.
 
 ## Ce que cela ne change pas
 
@@ -151,7 +224,13 @@ qui change, c'est **ce qu'on a payé pour les obtenir**.
 `apps/web/js/services/lire-un-fichier-texte.js` — les extensions, les lectures,
 les pages, et ce que l'Atelier reçoit sans appel. Pur.
 
-`apps/web/js/services/un-cr-a-lire.js` — la case entre les deux écrans.
+`apps/web/js/services/choisir-depuis-fichiers.js` — ce qui se choisit, dans
+quel ordre, et ce qu'on dit d'un dossier qui n'offre rien. Pur.
+
+`apps/web/js/views/ui/choisir-un-fichier.js` — la liste, aux classes de Fichiers.
+
+`apps/web/js/services/fichier-a-la-main.js` — `leFichierAReecrire` : ce qu'il
+faut écrire pour réenregistrer un fichier modifié. Pur.
 
 `apps/web/js/services/reconstitution-markdown.js` — `lecturesDeLaRestitution` :
 « Origine » n'existe que face à un PDF.

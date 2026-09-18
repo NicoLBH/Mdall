@@ -25,16 +25,6 @@ const texte = (valeur) => String(valeur ?? "").trim();
 export const ATELIER_COPILOTE = "copilote";
 
 /**
- * La lecture d'un compte rendu, telle que la route la nomme.
- *
- * Fichiers y mène : on ouvre un `.md`, on demande d'en relever les points, et
- * l'on atterrit **sur le panneau**, pas sur la vitrine de l'Atelier. Déposer à
- * l'accueil laisserait un second geste à faire, avec un document en attente
- * qu'aucun écran ne montrerait.
- */
-export const ATELIER_LECTURE_DES_CR = "lire-un-cr";
-
-/**
  * Ce que le quatrième segment de la route désigne.
  *
  * Un nom court et lisible dans la barre d'adresse d'un côté, l'identifiant du
@@ -42,10 +32,7 @@ export const ATELIER_LECTURE_DES_CR = "lire-un-cr";
  * pouvoir mener directement : tout ouvrir par la route ferait treize adresses à
  * maintenir pour des écrans qu'on atteint très bien par la vitrine.
  */
-const PANNEAU_DE_LA_ROUTE = {
-  [ATELIER_COPILOTE]: "studio-copilote",
-  [ATELIER_LECTURE_DES_CR]: "dev-lecture-cr"
-};
+const PANNEAU_DE_LA_ROUTE = { [ATELIER_COPILOTE]: "studio-copilote" };
 
 /**
  * Le panneau à ouvrir d'après la route.
