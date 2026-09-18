@@ -34,6 +34,7 @@ import { bindGhActionButtons, bindGhSelectMenus } from "./ui/gh-split-button.js"
 import { fetchMesChantiers } from "../services/project-situations-supabase.js";
 import { lireMesTraces } from "../services/projets-actifs-supabase.js";
 import { actualitesRecentes, projetsLesPlusActifs } from "../services/projets-actifs.js";
+import { monAnneeDeTravail } from "../services/mon-annee-de-travail.js";
 import { store } from "../store.js";
 import { deposerLaQuestion } from "../services/question-de-laccueil.js";
 
@@ -45,7 +46,16 @@ import { deposerLaQuestion } from "../services/question-de-laccueil.js";
  */
 const vue = {
   projets: null, traces: [], erreur: "", cherche: "",
-  projetChoisi: AUCUN_PROJET, brouillon: ""
+  projetChoisi: AUCUN_PROJET, brouillon: "",
+  /**
+   * Mes traces telles qu'elles ont été lues — `null` : pas lues.
+   *
+   * `traces` retombe sur `[]` pour que le classement et les actualités se
+   * fassent avec ce qui reste. La carte de l'année, elle, ne peut pas : une
+   * grille toute grise dirait « je n'ai rien fait de l'année », ce qui est une
+   * information — et fausse (règle 5). Elle a donc besoin de la lecture brute.
+   */
+  tracesLues: null
 };
 
 /** Le repli et la largeur du rail : des réglages à cet écran. */
@@ -62,6 +72,7 @@ export function renderGlobalDashboard(root) {
 
   vue.projets = null;
   vue.traces = [];
+  vue.tracesLues = null;
   vue.erreur = "";
   redessiner(root);
   charger(root).catch(() => undefined);
@@ -81,6 +92,7 @@ async function charger(root) {
     traces === null ? "Votre activité récente n'a pas pu être lue." : ""
   ].filter(Boolean).join(" ");
   vue.traces = Array.isArray(traces) ? traces : [];
+  vue.tracesLues = Array.isArray(traces) ? traces : null;
 
   redessiner(root);
 }
@@ -101,7 +113,11 @@ function redessiner(root) {
     brouillon: vue.brouillon,
     erreur: vue.erreur,
     railReplie: reglages.replie(),
-    railLargeur: reglages.largeur()
+    railLargeur: reglages.largeur(),
+    // Les **mêmes** traces que le classement et les actualités : une seconde
+    // lecture finirait par ne plus dire la même chose de la même semaine
+    // (règle 4), et coûterait un second voyage.
+    annee: monAnneeDeTravail({ traces: vue.tracesLues })
   });
 
   brancher(root);

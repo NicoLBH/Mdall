@@ -1,10 +1,10 @@
 /**
  * Mes traces de travail, lues en base.
  *
- * ## Trois lectures, pas trente
+ * ## Quatre lectures, pas soixante
  *
  * Une par table, sur tous les projets à la fois. Demander projet par projet
- * aurait fait quarante-cinq requêtes pour quinze projets, à l'ouverture de
+ * aurait fait soixante requêtes pour quinze projets, à l'ouverture de
  * l'accueil — l'écran qu'on voit le plus souvent doit être le moins cher.
  *
  * ## Ce sont **les miennes**, et la base s'en charge
@@ -30,8 +30,17 @@ import { GENRE } from "./projets-actifs.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
-/** Combien de traces on remonte par source. De quoi classer, pas d'archive. */
-const AU_PLUS = 300;
+/**
+ * Combien de traces on remonte par source.
+ *
+ * Il en faut assez pour **une année entière** : la carte de l'accueil couvre
+ * douze mois glissants, et une limite trop basse la tronquerait par son côté le
+ * plus ancien — sans que rien ne le dise, ce qui est la pire des pannes
+ * (règle 5). Mille par source laisse de la marge pour un rythme soutenu ; au
+ * delà, la carte dirait « rien » sur des mois où il y a eu quelque chose, et
+ * c'est une dette qu'on assume en la nommant ici plutôt qu'en la découvrant.
+ */
+const AU_PLUS = 1000;
 
 /**
  * Mes discussions avec le Copilote.
@@ -99,9 +108,38 @@ async function etudes() {
 }
 
 /**
+ * Les affirmations que j'ai signées.
+ *
+ * **Le geste le plus lourd de tous** : c'est lui qui fait entrer quelque chose
+ * dans la mémoire d'un projet. `decided_by` le rattache à un compte sans
+ * ambiguïté — contrairement aux dépôts de documents, dont la table ne dit pas
+ * qui les a faits.
+ */
+async function affirmations(moi = "") {
+  const compte = texte(moi);
+  if (!compte) return [];
+
+  const { data, error } = await supabase
+    .from("project_assertions")
+    .select("project_id,subject_key,payload,decided_at")
+    .eq("decided_by", compte)
+    .order("decided_at", { ascending: false })
+    .limit(AU_PLUS);
+
+  if (error) throw new Error(error.message || "Lecture impossible.");
+
+  return (Array.isArray(data) ? data : []).map((ligne) => ({
+    projet: texte(ligne?.project_id),
+    genre: GENRE.AFFIRMATION,
+    quoi: texte(ligne?.payload?.subject) || texte(ligne?.subject_key) || "Affirmation",
+    quand: texte(ligne?.decided_at)
+  }));
+}
+
+/**
  * Tout ce que j'ai fait, dans l'ordre où ça s'est passé.
  *
- * `null` quand **aucune** des trois lectures n'a abouti : ce n'est pas « je
+ * `null` quand **aucune** des quatre lectures n'a abouti : ce n'est pas « je
  * n'ai rien fait », c'est « je n'ai pas pu regarder », et l'écran ne dit pas la
  * même chose dans les deux cas.
  *
@@ -109,7 +147,9 @@ async function etudes() {
  * @returns {Promise<object[]|null>}
  */
 export async function lireMesTraces(moi = "") {
-  const lues = await Promise.allSettled([discussions(), propositions(moi), etudes()]);
+  const lues = await Promise.allSettled([
+    discussions(), propositions(moi), etudes(), affirmations(moi)
+  ]);
 
   if (lues.every((lue) => lue.status === "rejected")) return null;
 

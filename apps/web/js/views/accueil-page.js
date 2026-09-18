@@ -38,6 +38,7 @@ import { renderGhSelectMenu } from "./ui/gh-split-button.js";
 import { renderActionsAVenirHtml } from "./ui/actions-du-copilote.js";
 import { renderTitreDEcranHtml } from "./ui/titre-decran.js";
 import { GENRE } from "../services/projets-actifs.js";
+import { renderCarteDeLAnnee } from "./ui/carte-de-lannee.js";
 import { LE_COPILOTE } from "../services/ecrans-transversaux.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -75,7 +76,9 @@ export const ACTUALITES = 4;
 const GENRES = {
   [GENRE.DISCUSSION]: { onglet: "atelier/copilote" },
   [GENRE.PROPOSITION]: { onglet: "propositions" },
-  [GENRE.ETUDE]: { onglet: "atelier" }
+  [GENRE.ETUDE]: { onglet: "atelier" },
+  /** Une affirmation signée se relit dans la Mémoire, là où elle est entrée. */
+  [GENRE.AFFIRMATION]: { onglet: "memory" }
 };
 
 const JOUR = 24 * 60 * 60 * 1000;
@@ -332,7 +335,7 @@ function renderActualitesHtml({ actualites, maintenant, lu }) {
 export function renderPageDAccueil({
   projets = null, actifs = [], actualites = [], cherche = "", projetChoisi = AUCUN_PROJET,
   brouillon = "", erreur = "", maintenant = Date.now(),
-  railReplie = false, railLargeur = 248
+  railReplie = false, railLargeur = 248, annee = null
 } = {}) {
   const lu = Array.isArray(projets);
 
@@ -363,6 +366,13 @@ export function renderPageDAccueil({
               <div class="accueil-colonnes__centre">
                 ${renderTitreDEcranHtml({ titre: "Accueil" })}
                 ${renderCopiloteHtml({ projets, projetChoisi, brouillon })}
+                ${/*
+                  **Sous la question, l'année.** Elle répond à ce qu'on ne se
+                  demande pas le matin mais en fin de semaine — « qu'est-ce que
+                  j'ai fait ? ». La mettre au-dessus mettrait un bilan devant
+                  quelqu'un venu poser une question.
+                */""}
+                ${renderCarteDeLAnnee(annee)}
               </div>
               ${renderActualitesHtml({ actualites, maintenant, lu })}
             </div>

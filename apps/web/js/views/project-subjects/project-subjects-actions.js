@@ -1102,24 +1102,53 @@ export function createProjectSubjectsActions(config) {
    * Les messages **et** les pièces jointes : une pièce ne se juge pas sans son
    * message, puisque c'est lui qui dit si l'échange était privé. Sans les deux,
    * rien — et l'étape reste creuse, ce qui est exact.
+   *
+   * Et **le corpus**, pour ce que le fil cite sans l'avoir joint : « cf. l'étude
+   * géotechnique » est la phrase ordinaire, et le document n'est presque jamais
+   * en pièce jointe. Le corpus, lui, peut manquer sans que tout s'arrête : on
+   * montre alors les seules pièces jointes, ce qui est ce qu'on faisait, et l'on
+   * ne prétend pas que rien d'autre n'a été regardé.
    */
   async function ceQueLeSujetARegarde(subjectId) {
     try {
       const [
         { listerLesCommentairesDunPoint, listerLesPiecesJointesDunPoint },
-        { ceQueLePointAExamine }
+        { ceQueLePointAExamine },
+        { listerLeCorpus },
+        { resolveCurrentBackendProjectId }
       ] = await Promise.all([
         import("../../services/subject-messages-supabase.js"),
-        import("../../services/ce-que-le-point-a-examine.js")
+        import("../../services/ce-que-le-point-a-examine.js"),
+        import("../../services/corpus-du-projet-supabase.js"),
+        import("../../services/project-supabase-sync.js")
       ]);
 
-      const [messages, piecesJointes] = await Promise.all([
+      const projectId = String(await resolveCurrentBackendProjectId() || "").trim();
+
+      const [messages, piecesJointes, documents] = await Promise.all([
         listerLesCommentairesDunPoint(subjectId),
-        listerLesPiecesJointesDunPoint(subjectId)
+        listerLesPiecesJointesDunPoint(subjectId),
+        projectId ? listerLeCorpus(projectId) : null
       ]);
       if (messages === null || piecesJointes === null) return [];
 
-      return ceQueLePointAExamine({ point: { id: subjectId }, messages, piecesJointes });
+      const sujet = getNestedSujet(subjectId);
+
+      return ceQueLePointAExamine({
+        // Le titre et la description viennent avec : ce sont deux des trois
+        // endroits où l'on cite un document, et les oublier ferait manquer la
+        // moitié des citations.
+        point: {
+          id: subjectId,
+          title: sujet?.title ?? sujet?.raw?.title,
+          description: sujet?.raw?.description
+        },
+        messages,
+        piecesJointes,
+        // `null` — le corpus n'a pas été lu — donne `[]` : on montre ce qu'on
+        // sait, et l'on ne dit nulle part que rien d'autre n'a été regardé.
+        documents: documents ?? []
+      });
     } catch {
       return [];
     }
