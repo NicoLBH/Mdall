@@ -7,6 +7,14 @@ const ORDERED_LIST_PATTERN = /^\s*\d+[\.)]\s+(.*)$/;
 const CHECKLIST_PATTERN = /^\s*[-*]\s+\[( |x|X)\]\s+(.*)$/;
 const BLOCKQUOTE_PATTERN = /^\s*>\s?(.*)$/;
 const HEADING_PATTERN = /^\s{0,3}(#{1,6})\s+(.+)$/;
+/**
+ * Un trait de séparation : trois tirets, astérisques ou tirets bas ou plus.
+ *
+ * **Le même caractère répété**, et pas un mélange : `-*-` n'est pas un trait,
+ * c'est du texte. Il se cherche **après** le tableau, dont la ligne de
+ * séparation est faite des mêmes tirets — mais porte des barres.
+ */
+const HR_PATTERN = /^\s{0,3}([-*_])[ \t]*(?:\1[ \t]*){2,}$/;
 const FENCE_PATTERN = /^```(.*)$/;
 
 /**
@@ -402,6 +410,13 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
       flushList(listState, html);
       html.push(renderTable(table, options));
       consumedUntil = table.lastIndex;
+      return;
+    }
+
+    if (HR_PATTERN.test(trimmed)) {
+      flushParagraph(paragraphLines, html, options);
+      flushList(listState, html);
+      html.push("<hr>");
       return;
     }
 

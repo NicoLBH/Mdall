@@ -2145,7 +2145,8 @@ function renderCorpsDuTexte(ouvert = {}, lecture = LECTURE_DU_TEXTE.CODE) {
   const lu = leFichierLu(ouvert.contenu);
 
   return lecture === LECTURE_DU_TEXTE.APERCU
-    ? `<div class="documents-texte-apercu md-body">${renderMarkdownToHtml(ouvert.contenu)}</div>`
+    ? `<div class="documents-texte-apercu md-body md-document">${
+      renderMarkdownToHtml(ouvert.contenu)}</div>`
     : `<div class="documents-transcription">${renderFichierDeCode(lu.lignes)}</div>`;
 }
 

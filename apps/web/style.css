@@ -3233,6 +3233,54 @@ body.is-resizing{
   border-bottom:1px solid var(--border);
   font-size:14px;
 }
+/* ── Un document, et non un commentaire ───────────────────────────────────
+
+   `.md-render` est calibré pour un fil de discussion : tous les titres y font
+   14px, la taille du texte courant, parce qu'un `##` dans un commentaire ne
+   doit pas écraser les trois lignes qui l'entourent.
+
+   Une notice ou un compte rendu, c'est l'inverse : **ses titres sont sa
+   structure**. Rendus à la taille du texte, le document « n'a pas l'air rendu »
+   — on ne distingue plus une rubrique d'un paragraphe, et l'aperçu ne sert plus
+   à rien.
+
+   D'où cette variante, portée par les deux écrans qui montrent un document :
+   l'aperçu d'un fichier dans Fichiers, et celui d'une restitution dans
+   l'Atelier. Une seule échelle pour les deux — deux calibrages auraient fait
+   lire le même Markdown de deux façons selon l'écran. */
+.md-document .md-render h1{
+  margin:20px 0 12px; padding-bottom:6px;
+  border-bottom:1px solid var(--border);
+  font-size:22px; font-weight:600; line-height:1.3;
+}
+.md-document .md-render h1:first-child{ margin-top:0; }
+.md-document .md-render h2{
+  margin:20px 0 10px; padding-bottom:5px;
+  border-bottom:1px solid var(--border);
+  font-size:17px; font-weight:600; line-height:1.3;
+}
+.md-document .md-render h3{ margin:16px 0 8px; font-size:15px; font-weight:600; }
+.md-document .md-render h4{ margin:14px 0 6px; font-size:14px; font-weight:600; }
+.md-document .md-render h5,
+.md-document .md-render h6{
+  margin:12px 0 6px; font-size:13px; font-weight:600; color:var(--muted);
+}
+/* Les deux premiers titres ouvrent le document : ils n'ont rien au-dessus dont
+   il faudrait les séparer. */
+.md-document .md-render h2:first-child,
+.md-document .md-render h3:first-child{ margin-top:0; }
+
+/* Un peu d'air entre les blocs : un document se parcourt, un commentaire se
+   lit d'un trait. */
+.md-document .md-render p{ margin:0 0 12px; }
+.md-document .md-render ul,
+.md-document .md-render ol{ margin:0 0 12px 22px; }
+.md-document .md-render li{ margin:4px 0; }
+.md-document .md-render blockquote{ margin:0 0 12px; }
+.md-document .md-render hr{
+  margin:20px 0; border:0; border-top:1px solid var(--border);
+}
+
 .md-render .md-mention-link{
   text-decoration-color:rgb(210,153,34);
   color:rgb(210,153,34);
@@ -25528,6 +25576,9 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .lecture-cr__alerte-tete{display:flex;align-items:center;gap:8px;}
 .lecture-cr__alerte-icone{display:inline-flex;color:var(--fgColor-danger, #f85149);}
 .lecture-cr__alerte-mot{margin:0;flex:1;font-weight:600;color:var(--text);}
+/* La sortie de l'alerte. Sans elle, une panne de la sortie bloquait un écran
+   dont la lecture avait pourtant abouti : il fallait recharger la page. */
+.lecture-cr__alerte-fermer{flex:0 0 auto;}
 .lecture-cr__alerte-panne{
   margin:0;
   padding:8px 10px;

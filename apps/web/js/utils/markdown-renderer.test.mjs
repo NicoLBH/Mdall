@@ -344,3 +344,44 @@ test("hors d'une cellule, un antislash-n reste ce qu'il est", () => {
   assert.match(renderMarkdownToHtml("Chemin : C:\\nouveau\\dossier"), /C:\\nouveau/);
   assert.doesNotMatch(renderMarkdownToHtml("Hors cellule : a\\nb"), /<br>/);
 });
+
+/* ── Le trait de séparation ────────────────────────────────────────────────
+ *
+ * Il manquait, et c'est une lacune ordinaire — jusqu'au jour où l'on a ouvert
+ * une notice dans Fichiers : les `---` s'y affichaient tels quels, et le
+ * document « n'avait pas l'air rendu ».
+ */
+
+test("trois tirets font un trait, pas du texte", () => {
+  const html = renderMarkdownToHtml("Avant\n\n---\n\nAprès");
+  assert.match(html, /<p>Avant<\/p><hr><p>Après<\/p>/);
+});
+
+test("les trois caractères du trait se valent, espacés ou non", () => {
+  for (const trait of ["---", "***", "___", "- - -", "*  *  *", "----------"]) {
+    assert.match(renderMarkdownToHtml(`a\n\n${trait}\n\nb`), /<hr>/, trait);
+  }
+});
+
+test("un mélange de caractères n'est pas un trait", () => {
+  // `-*-` est du texte : le prendre pour un trait effacerait une ligne.
+  assert.doesNotMatch(renderMarkdownToHtml("a\n\n-*-\n\nb"), /<hr>/);
+  // Deux tirets non plus — il en faut trois.
+  assert.doesNotMatch(renderMarkdownToHtml("a\n\n--\n\nb"), /<hr>/);
+});
+
+test("la ligne de séparation d'un tableau reste un tableau", () => {
+  // Elle est faite des mêmes tirets, mais porte des barres : la prendre pour un
+  // trait couperait le tableau en deux morceaux illisibles.
+  const html = renderMarkdownToHtml("| Local | Surface |\n| --- | --- |\n| Hall | 120 m2 |");
+  assert.match(html, /<table/);
+  assert.doesNotMatch(html, /<hr>/);
+});
+
+test("un trait dans un bloc de code reste du texte", () => {
+  // Un extrait de Markdown cité dans un commentaire montre ses traits ; les
+  // rendre les ferait disparaître de l'extrait.
+  const html = renderMarkdownToHtml("```\n---\n```");
+  assert.doesNotMatch(html, /<hr>/);
+  assert.match(html, /---/);
+});

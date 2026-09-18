@@ -178,6 +178,77 @@ async function deposer(portes, projectId, folderId, fichier, { empreinte, markdo
 }
 
 /**
+ * Placer un document **déjà écrit en texte** dans le dossier des comptes rendus.
+ *
+ * ## Pourquoi il ne passe pas par `rangerLaRestitution`
+ *
+ * Celle-ci pose une transcription sur la ligne d'un PDF. Ici il n'y a pas de
+ * PDF, et **le texte est le document** : le recopier dans
+ * `transcription_markdown` ferait deux vérités qui divergeraient à la première
+ * correction (règle 4), et dirait qu'un modèle a lu ce que personne n'a lu.
+ *
+ * ## Ce qu'il faut quand même
+ *
+ * Une **ligne de document**, parce que la proposition s'y accroche : c'est par
+ * elle que chaque point se remonte au compte rendu dont il sort. Un document
+ * déjà dans Fichiers en a une, et n'entre pas ici ; un document déposé depuis
+ * le disque n'en a pas, et c'est celle-là qu'on écrit.
+ *
+ * L'empreinte du texte entre dans la ligne : relire deux fois le même document
+ * ne fait pas deux exemplaires dans le dossier.
+ *
+ * @returns {Promise<{range: boolean, document: object|null, dossier: object|null, motif: string}>}
+ */
+export async function rangerLeDocumentDeTexte({
+  projectId = "", fichier = null, empreinte = "", portes = null
+} = {}) {
+  const rate = (motif) => ({ range: false, document: null, dossier: null, motif });
+
+  if (!projectId) return rate("aucun projet");
+  if (!fichier?.name) return rate("rien à ranger");
+
+  try {
+    const portails = portes ?? (await portesParDefaut());
+
+    const dossier = (await dossierNomme(portails, projectId, DOSSIER_DES_CR))
+      ?? (await portails.creerLeDossier(projectId, null, DOSSIER_DES_CR));
+    if (!dossier?.id) return rate("le dossier n'a pas pu être créé");
+
+    // **Déjà là, on n'y touche pas.** C'est l'empreinte qui le dit, pas le nom :
+    // deux documents différents s'appellent tous deux `notice.md`.
+    const deja = sourceRangee(await fichiersDuDossier(portails, projectId, dossier.id), { empreinte });
+    if (deja) return { range: true, document: deja, dossier, motif: "" };
+
+    const scope = `${dossier.id}/${texte(empreinte).slice(0, 16) || "sans-empreinte"}`;
+    const stockage = await portails.televerser(fichier, { projectId, scope });
+
+    const document = await portails.ecrireLaLigne({
+      project_id: projectId,
+      folder_id: dossier.id,
+      created_by: await portails.qui(),
+      filename: fichier.name,
+      original_filename: fichier.name,
+      mime_type: fichier.type || "text/markdown",
+      storage_bucket: stockage.storage_bucket,
+      storage_path: stockage.storage_path,
+      file_size_bytes: fichier.size || null,
+      upload_status: "uploaded",
+      // **Ni `source_pdf`, ni « écrit à la main ».** C'est un document de texte
+      // apporté tel quel : le dire autrement ferait chercher un original qui
+      // n'existe pas, ou attribuer à quelqu'un une écriture qu'il n'a pas faite.
+      document_kind: "source_texte",
+      content_fingerprint: empreinte || null
+      // Pas de `transcription_markdown` : le fichier **est** son texte.
+    }, "id,filename,content_fingerprint,folder_id,document_kind");
+
+    if (!document?.id) return rate("le document n'a pas pu être écrit");
+    return { range: true, document, dossier, motif: "" };
+  } catch (erreur) {
+    return rate(texte(erreur?.message) || "cause inconnue");
+  }
+}
+
+/**
  * Ranger le compte rendu et sa transcription.
  *
  * Le PDF n'est déposé que s'il n'est pas déjà là ; s'il l'est, c'est sa ligne
