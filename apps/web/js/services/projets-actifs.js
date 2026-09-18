@@ -47,7 +47,17 @@ const texte = (valeur) => String(valeur ?? "").trim();
 export const GENRE = {
   DISCUSSION: "discussion",
   PROPOSITION: "proposition",
-  ETUDE: "etude"
+  ETUDE: "etude",
+  /**
+   * Une affirmation que j'ai signée.
+   *
+   * C'est le geste le plus lourd de tous — c'est lui qui fait entrer quelque
+   * chose dans la mémoire du projet — et il manquait. Il manquait parce que le
+   * classement des projets s'en passe : signer se fait par à-coups, et compter
+   * des jours suffisait. Une carte de l'année, elle, ne peut pas ignorer le seul
+   * geste qui engage.
+   */
+  AFFIRMATION: "affirmation"
 };
 
 /** Combien de jours en arrière on regarde. */

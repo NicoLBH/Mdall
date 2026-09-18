@@ -22,6 +22,9 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+import { monAnneeDeTravail } from "../services/mon-annee-de-travail.js";
 import { readFile } from "node:fs/promises";
 
 import {
@@ -431,4 +434,44 @@ test("la barre du haut dit « Tableau de bord »", async () => {
   const parDefaut = source.slice(source.lastIndexOf("return {"));
   assert.match(parDefaut, /primary: "Tableau de bord"/);
   assert.match(parDefaut, /href: "#dashboard"/, "et c'est bien l'accueil");
+});
+
+/* ── L'année, sur l'accueil ──────────────────────────────────────────────── */
+
+test("l'accueil montre l'année, et sous la question", () => {
+  // Elle répond à ce qu'on ne se demande pas le matin mais en fin de semaine.
+  // Au-dessus, elle mettrait un bilan devant quelqu'un venu poser une question.
+  const annee = monAnneeDeTravail({
+    traces: [{ genre: "proposition", quand: new Date().toISOString() }]
+  });
+  const html = renderPageDAccueil({ projets: [], annee });
+
+  assert.match(html, /annee-carte__grille/);
+  // Après **le champ de la question**, et non après l'ouverture de la colonne :
+  // la colonne s'ouvre avant tout, et s'y comparer laisserait passer une carte
+  // posée en tête.
+  assert.ok(html.indexOf("annee-carte") > html.indexOf(GESTES_DE_LACCUEIL.saisie),
+    "l'année passe devant la question");
+});
+
+test("sans année lue, l'accueil le dit et ne dessine pas de grille", () => {
+  // Une grille toute grise dirait « je n'ai rien fait de l'année », ce qui est
+  // une information — et fausse (règle 5).
+  const html = renderPageDAccueil({ projets: [] });
+
+  assert.match(html, /annee-carte--muette/);
+  assert.equal(html.includes("annee-carte__grille"), false);
+});
+
+test("l'année de l'accueil sort des mêmes traces que le reste", () => {
+  // Une seconde lecture finirait par ne plus dire la même chose de la même
+  // semaine (règle 4), et coûterait un second voyage.
+  const ecran = readFileSync(new URL("./global-dashboard.js", import.meta.url), "utf8");
+
+  assert.match(ecran, /annee: monAnneeDeTravail\(\{ traces: vue\.tracesLues \}\)/,
+    "l'année ne sort pas des traces déjà lues");
+  // Et elle lit la lecture **brute** : `traces` retombe sur `[]`, ce qui ferait
+  // dessiner une année vide sur une lecture ratée.
+  assert.match(ecran, /vue\.tracesLues = Array\.isArray\(traces\) \? traces : null;/,
+    "l'année ne distingue pas « rien fait » de « pas pu lire »");
 });

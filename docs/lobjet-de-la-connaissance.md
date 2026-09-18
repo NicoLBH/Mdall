@@ -1860,6 +1860,189 @@ Et cinq états à l'écran, en 1200 px et 640 px, éprouvés par une sonde qui m
 le vrai module de page : rempli, cherché, rien trouvé, non lu, vide. Aucune fuite
 du projet, aucun débordement.
 
+### « Examine » lit aussi ce qu'on cite sans le joindre
+
+#### La dernière dette de l'étape 1
+
+L'étape « ce qui a été examiné » ne voyait que les **pièces jointes**. Or un
+document du corpus n'est presque jamais joint au fil : il y est **nommé**. « Cf.
+l'étude géotechnique G2 » est la phrase ordinaire, et l'étape restait vide.
+
+#### Un nom d'un seul mot ne se reconnaît pas
+
+« Notes.pdf » a pour racine « notes », qui est un mot de la langue. Le
+reconnaître dans « les notes de calcul de l'entreprise » produirait un
+« examiné » que personne n'a fait — et un faux « on a regardé ceci » couvre en
+silence, ce qui est la faute qu'on refuse partout ici.
+
+Un nom d'un seul mot ne se cherche donc **qu'avec son extension** : personne
+n'écrit « .pdf » par hasard. Deux mots suffisent à faire un nom — « étude
+géotechnique » ne se rencontre pas par accident dans une phrase.
+
+#### Sur des mots entiers, et jamais sur un fragment
+
+« étude de sol » ne se reconnaît pas dans « étude de solidité ». C'est la règle
+de toute reconnaissance de nom dans un texte, et le piège est celui-là : un nom
+de document est souvent le début d'un autre. (C'est l'inverse de la recherche du
+référentiel, qui cherche sur un morceau — on y tape ce dont on se souvient, ici
+on lit un compte rendu.)
+
+#### Deux documents du même nom ne se reconnaissent pas
+
+Le texte en cite un, on ne sait pas lequel, et en désigner un serait un
+rapprochement faux. Le même refus qu'ailleurs pour une valeur que deux noms
+portent.
+
+#### Il dit où il a été cité
+
+« cité dans un commentaire », « cité dans la description ». C'est ce qui permet
+de vérifier la reconnaissance d'un coup d'œil, en allant relire la phrase. « Au
+corpus » n'apprendrait rien : on sait où est le corpus.
+
+#### La conversation avec le copilote ne cite rien
+
+La règle n'est pas réécrite : la lecture des textes passe par `textesDuPoint`,
+qui l'applique par `messageLisible` — et qui refuse aussi les messages effacés.
+
+#### Le corpus peut manquer sans que tout s'arrête
+
+`null` donne `[]` chez l'appelant : on montre les seules pièces jointes, ce qui
+est ce qu'on faisait, et l'on ne prétend nulle part que rien d'autre n'a été
+regardé.
+
+### L'année de travail, sur l'accueil
+
+#### La question, et ce qu'on refuse d'en faire
+
+« Qu'est-ce que j'ai fait cette année ? », posée à soi-même, sur son écran
+d'accueil, et personne d'autre ne la lit. Ce n'est **pas** un indicateur de
+performance, et le service n'a rien pour en devenir un : il ne compare personne à
+personne, et il ne sort d'aucun compte.
+
+#### Ce qui compte comme travail : un geste signé
+
+Un geste qui **porte mon nom** et qui **laisse une trace que quelqu'un d'autre
+peut relire**. Lire, naviguer, filtrer, chercher ne comptent pas : cela ne laisse
+rien, personne ne peut le vérifier, et une mesure qu'on ne peut pas vérifier est
+une mesure qu'on finit par ne plus croire.
+
+| ce qui compte | pourquoi |
+|---|---|
+| une proposition que j'ai ouverte | elle porte mon nom, quelqu'un la relira |
+| une **affirmation que j'ai signée** | c'est ce qui entre en mémoire — le geste le plus lourd |
+| une discussion avec le Copilote | elle est mienne, et la base me la rend |
+| une étude d'utilitaire remplie | idem |
+
+**Aucune pondération.** Faire valoir une signature 3,5 discussions demanderait de
+défendre le 3,5 ; on ne saurait pas, et l'on retoucherait le chiffre un jour au
+hasard. Le même refus qu'ailleurs dans ce projet.
+
+L'affirmation signée **manquait** aux traces : le classement des projets s'en
+passe — signer se fait par à-coups, et compter des jours suffisait — mais une
+carte de l'année ne peut pas ignorer le seul geste qui engage.
+
+#### Ce qu'on ne compte pas, et qu'on dit
+
+**Les dépôts de documents** : la table ne dit pas qui a déposé, et « le projet a
+bougé » n'est pas « j'y ai travaillé ». **Les commentaires écrits sur un sujet** :
+ils comptent, mais la colonne qui les rattache à un compte est facultative, et un
+compte partiel se lirait comme un compte. On le dit plutôt que de faire semblant.
+
+#### La teinte d'un jour : la décision, et sa révision
+
+Un seuil fixe — 1 à 2, 3 à 5, 6 à 10, 11 et plus — est un chiffre qu'on ne sait
+pas justifier, et il ne veut pas dire la même chose pour quelqu'un qui écrit vingt
+commentaires par jour et pour quelqu'un qui signe une proposition par semaine.
+
+La première règle écrite coupait les **jours actifs** en quatre groupes égaux.
+Elle est fausse au bord, et c'est une garde cassée qui l'a montré : avec deux
+jours actifs, **aucun des deux n'atteint jamais le dernier groupe**, et la légende
+ment.
+
+La règle retenue répartit les quatre teintes sur **les niveaux de charge** — les
+nombres de gestes que les journées ont réellement pris, sans les doublons. Trois
+propriétés en découlent, toutes trois éprouvées :
+
+- le jour le plus chargé porte **toujours** la teinte la plus claire ;
+- **répéter un jour ne change aucune teinte** — neuf journées à un geste puis une
+  à deux, ce sont *deux* niveaux, pas dix ;
+- **un seul niveau fait une seule teinte** : qui pose un geste par jour n'a pas de
+  jour chargé, et la carte n'en invente pas.
+
+Les jours à zéro ne comptent pas : les inclure ferait de quelqu'un qui travaille
+deux jours par semaine un niveau de charge à zéro geste, et l'échelle se
+tasserait sur le vide.
+
+#### La forme : des semaines, parce qu'on y lit un rythme
+
+Une colonne par semaine, sept lignes, **lundi en haut** — la semaine ISO, celle
+que `activite-des-projets.js` découpe déjà. C'est la seule disposition où l'on
+voit un rythme : une bande sombre en bas dit d'un coup d'œil qu'on ne travaille
+pas le dimanche. Un ruban de 365 carrés à la file ne dirait rien de cela.
+
+La première colonne se **troue en haut** quand la fenêtre ne commence pas un
+lundi. La boucher en décalant les jours ferait passer un mercredi pour un lundi,
+et la carte mentirait sur le rythme — ce qu'elle existe pour montrer.
+
+#### La tête dit le total **et** les jours
+
+« 1 478 gestes » ne dit pas si c'est trois jours ou trois cents, et c'est
+précisément la différence qu'on veut lire. La carte dit aussi **ce qu'elle
+compte**, en toutes lettres, sous le total.
+
+#### Une année qu'on n'a pas lue n'est pas une année vide
+
+`null`, et la carte dit « votre année n'a pas pu être lue » sans dessiner de
+grille. Une grille toute grise dirait « je n'ai rien fait de l'année », ce qui est
+une information — et fausse (règle 5). L'écran garde donc la lecture **brute** des
+traces à côté de celle qui retombe sur `[]` pour le classement.
+
+#### Une variable de style qui n'existait pas
+
+Les quatre verts ont d'abord été écrits sur `--succes`. Le jeton s'appelle
+`--success` : quatre carrés transparents, aucun test de Node pour le voir, et la
+sonde de navigateur qui relit les **couleurs calculées** l'a attrapé. C'est la
+deuxième fois qu'un jeton inventé passe la revue de code et tombe au navigateur.
+
+#### Les gardes, et ce qui tombe quand on les casse
+
+| ce qu'on casse | ce qui tombe |
+|---|---|
+| un nom d'un seul mot devient cherchable | deux gardes |
+| la reconnaissance ne tient plus aux mots entiers | *sur des mots entiers* |
+| un nom porté par deux documents est arbitré | *deux documents du même nom ne se reconnaissent pas* |
+| un document retiré du corpus se reconnaît encore | *un document retiré ne se reconnaît plus* |
+| les textes se lisent bruts (copilote compris) | quatre gardes |
+| un nom trop court se cherche quand même | *les noms cherchables se disent* |
+| la citation ne dit plus où elle a été vue | deux gardes |
+| un document joint ET cité compte deux fois | *il ne compte qu'une fois, et garde sa place* |
+| on répartit sur les jours, pas les niveaux | *répéter un jour ne change aucune teinte* |
+| les jours vides entrent dans l'échelle | *les jours à zéro ne comptent pas* |
+| les doublons restent dans l'échelle | *les niveaux retirent les doublons* |
+| une échelle d'un seul niveau prend la dernière teinte | *une année d'un seul rythme est d'une seule teinte* |
+| un jour sans geste prend une teinte | deux gardes |
+| la fenêtre ne pose que les jours vus | cinq gardes |
+| ce qui est hors fenêtre compte quand même | *ce qui tombe hors de la fenêtre est ignoré* |
+| une année non lue devient une année vide | *une année non lue n'est pas une année vide* |
+| la phrase ne dit plus le nombre de jours | deux gardes |
+| la fenêtre devient l'année civile | sept gardes |
+| la carte n'est pas appelée | deux gardes |
+| la carte passe au-dessus de la question | *l'accueil la montre sous la question* |
+| l'année sort de traces relues à part | *elle sort des mêmes traces que le reste* |
+| « pas lu » devient « rien fait » | la même |
+| la première colonne se décale au lieu de se trouer | deux gardes |
+| la semaine commence le dimanche | deux gardes |
+| le mois entamé de la 1re colonne s'étiquette | deux gardes |
+| un mois s'écrit à chaque colonne | *un mois n'écrit son nom qu'une fois* |
+| un jour vide n'a pas d'infobulle | *un jour vide se dit vide au survol* |
+| la légende oublie la teinte grise | *la légende montre les cinq teintes* |
+| une couleur est écrite dans le dessin | *aucune couleur n'est écrite dans le dessin* |
+| une année non lue dessine sa grille | *elle ne dessine pas de grille* |
+
+Et quatre états au navigateur, couleurs calculées relues : année chargée, année
+d'un seul rythme, année vide, année non lue. Aucune teinte transparente, aucune
+teinte confondue avec sa voisine, aucun débordement.
+
 ### Ce qui reste
 
 Les deux rangs déclarés que rien n'atteint — le rôle d'un signataire, la nature
@@ -1919,6 +2102,11 @@ c'est elle qu'il faudra desserrer, pas les moments où elle tourne.
 | l'écran du référentiel, et sa page éprouvable | `views/le-referentiel.js`, `views/le-referentiel-page.js` |
 | la cinquième façon de tout regarder | `LE_REFERENTIEL`, dans `services/ecrans-transversaux.js` |
 | le troisième degré de ressemblance, et ce qui le rend lisible | `RESSEMBLANCE.PROCHE` et `valeursCommunes`, dans `services/raisonnements-qui-se-ressemblent.js` |
+| les documents du corpus cités dans un texte | `documentsCitesParLePoint`, dans `services/ce-que-le-point-a-examine.js` |
+| le corpus, réduit à ce qu'une reconnaissance demande | `services/corpus-du-projet-supabase.js` |
+| ce qu'on compte comme travail, et la teinte d'un jour | `services/mon-annee-de-travail.js` |
+| l'affirmation signée, quatrième trace | `GENRE.AFFIRMATION`, dans `services/projets-actifs.js` |
+| la grille des cinquante-trois semaines | `views/ui/carte-de-lannee.js` |
 
 ### Le faux document, et pourquoi il existait
 

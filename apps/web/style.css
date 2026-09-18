@@ -22771,6 +22771,48 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
 /* Ce qu'on a tranché ailleurs en partant des mêmes valeurs. Le même cadre que
    le rappel du projet juste au-dessus : deux cadres différents feraient croire à
    deux natures de choses, alors que ce sont deux relectures avant d'écrire. */
+/* La carte de l'année, sur l'accueil.
+
+   Les quatre verts sont ceux de l'application — `--succes` éclairci par palier.
+   Les écrire ici plutôt qu'en quatre variables nouvelles serait un second jeu de
+   verts à retoucher le jour où celui de l'application change (règle 4) ; ils
+   dérivent donc tous du même. */
+.annee-carte{
+  margin-top:16px; padding:12px 14px;
+  border:1px solid var(--border); border-radius:var(--radius);
+  display:flex; flex-direction:column; gap:10px;
+}
+.annee-carte--muette{ color:var(--muted); font-size:12px; font-style:italic; }
+.annee-carte__tete{ display:flex; flex-direction:column; gap:3px; }
+.annee-carte__tete b{ color:var(--text); font-size:14px; }
+.annee-carte__quoi{ color:var(--muted); font-size:11px; }
+
+/* La grille défile quand elle ne tient pas : cinquante-trois colonnes ne se
+   compriment pas sans que les carrés cessent d'être des carrés. */
+.annee-carte__grille{
+  display:flex; gap:3px; overflow-x:auto; padding-top:14px; padding-bottom:2px;
+}
+.annee-carte__semaine{ display:flex; flex-direction:column; gap:3px; position:relative; }
+/* Le nom du mois est posé au-dessus de sa colonne, hors du flux : dans le flux,
+   il décalerait d'une ligne les sept carrés de sa semaine. */
+.annee-carte__mois{
+  position:absolute; top:-14px; left:0; font-size:10px; color:var(--muted); white-space:nowrap;
+}
+.annee-carte__jour{
+  width:11px; height:11px; border-radius:2px; display:block;
+  background:rgba(110,118,129,.14);
+}
+.annee-carte__jour--hors{ background:transparent; }
+.annee-carte__jour[data-teinte="1"]{ background:color-mix(in srgb, var(--success) 34%, transparent); }
+.annee-carte__jour[data-teinte="2"]{ background:color-mix(in srgb, var(--success) 56%, transparent); }
+.annee-carte__jour[data-teinte="3"]{ background:color-mix(in srgb, var(--success) 78%, transparent); }
+.annee-carte__jour[data-teinte="4"]{ background:var(--success); }
+.annee-carte__pied{
+  display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;
+  font-size:11px; color:var(--muted);
+}
+.annee-carte__legende{ display:inline-flex; align-items:center; gap:3px; }
+
 /* Le référentiel des formes. Rien de neuf en largeur : la liste vit dans le
    contenu de la coquille transversale, comme les tableaux des autres écrans
    sans projet, et les pastilles sont celles de la Mémoire. */
