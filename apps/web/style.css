@@ -22787,10 +22787,34 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
 .annee-carte__tete b{ color:var(--text); font-size:14px; }
 .annee-carte__quoi{ color:var(--muted); font-size:11px; }
 
-/* La grille défile quand elle ne tient pas : cinquante-trois colonnes ne se
-   compriment pas sans que les carrés cessent d'être des carrés. */
-.annee-carte__grille{
+/* La colonne des noms de jour ne défile pas : elle reste devant les yeux quand
+   les semaines glissent. Le retrait du haut est celui des étiquettes de mois,
+   pour que « lun. » tombe en face de sa ligne et non du nom du mois. */
+.annee-carte__grille{ display:flex; gap:6px; align-items:flex-start; }
+.annee-carte__jours{
+  display:flex; flex-direction:column; gap:3px; flex:0 0 auto; padding-top:14px;
+}
+.annee-carte__nom{
+  height:11px; line-height:11px; font-size:10px; color:var(--muted);
+  text-align:right; white-space:nowrap;
+}
+/* Le nom entier quand l'écran le permet, sa forme courte sinon. Les deux sont
+   dans le balisage : un nom de jour écrit dans la feuille vivrait à deux
+   endroits (règle 10). */
+.annee-carte__nom-entier{ display:none; }
+@media (max-width: 1120px){
+  .annee-carte__nom-court{ display:inline; }
+}
+@media (min-width: 1121px){
+  .annee-carte__nom-court{ display:none; }
+  .annee-carte__nom-entier{ display:inline; }
+}
+
+/* Les semaines défilent quand elles ne tiennent pas : cinquante-trois colonnes
+   ne se compriment pas sans que les carrés cessent d'être des carrés. */
+.annee-carte__semaines{
   display:flex; gap:3px; overflow-x:auto; padding-top:14px; padding-bottom:2px;
+  flex:1 1 auto; min-width:0;
 }
 .annee-carte__semaine{ display:flex; flex-direction:column; gap:3px; position:relative; }
 /* Le nom du mois est posé au-dessus de sa colonne, hors du flux : dans le flux,

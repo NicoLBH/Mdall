@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  ANNEE_NON_LUE, colonnesDeLAnnee, etiquettesDesMois, renderCarteDeLAnnee
+  ANNEE_NON_LUE, JOURS_NOMMES, colonnesDeLAnnee, etiquettesDesMois, renderCarteDeLAnnee
 } from "./carte-de-lannee.js";
 import { monAnneeDeTravail } from "../../services/mon-annee-de-travail.js";
 
@@ -130,4 +130,53 @@ test("une année vide dessine sa grille, et la dit vide", () => {
   // sans quoi on ne saurait pas lire la carte le jour où elle se remplit.
   const grille = html.slice(html.indexOf("annee-carte__grille"), html.indexOf("annee-carte__pied"));
   assert.equal(/data-teinte="[1-4]"/.test(grille), false, "une teinte est dessinée sans geste");
+});
+
+/* ── Les noms de jour, à gauche ──────────────────────────────────────────── */
+
+test("trois jours sont nommés, un sur deux", () => {
+  // Sans eux, on voit un rythme sans savoir lequel : une bande sombre en bas
+  // peut être le week-end ou deux jours de la semaine où l'on ne fait rien.
+  // Sept étiquettes sur des lignes de onze pixels se touchent, et l'on ne lit
+  // plus laquelle va où.
+  assert.deepEqual(JOURS_NOMMES.map((jour) => jour.rang), [0, 2, 4]);
+  assert.deepEqual(JOURS_NOMMES.map((jour) => jour.entier), ["lundi", "mercredi", "vendredi"]);
+});
+
+test("les sept lignes sont posées, y compris les muettes", () => {
+  // Ne rendre que les trois nommées ferait remonter mercredi contre lundi, et
+  // les noms désigneraient les mauvaises lignes — un repère faux est pire que
+  // pas de repère.
+  const colonne = renderCarteDeLAnnee(ANNEE)
+    .match(/<div class="annee-carte__jours">([\s\S]*?)<\/div>/)[1];
+
+  assert.equal((colonne.match(/class="annee-carte__nom"/g) ?? []).length, 7);
+});
+
+test("chaque nom est là en entier et en abrégé", () => {
+  // La feuille choisit lequel s'affiche. L'écrire dans le CSS par `content:`
+  // ferait vivre un nom de jour à deux endroits (règle 10).
+  const html = renderCarteDeLAnnee(ANNEE);
+
+  for (const { court, entier } of JOURS_NOMMES) {
+    assert.ok(html.includes(`>${court}<`), `« ${court} » manque`);
+    assert.ok(html.includes(`>${entier}<`), `« ${entier} » manque`);
+  }
+});
+
+test("les noms sont hors du cadre qui défile", () => {
+  // Dedans, ils partiraient avec les semaines au premier geste de la souris, et
+  // l'on se retrouverait devant une grille anonyme — ce qu'ils existent pour
+  // éviter.
+  const html = renderCarteDeLAnnee(ANNEE);
+  const semaines = html.slice(html.indexOf('class="annee-carte__semaines"'));
+
+  assert.equal(semaines.includes("annee-carte__jours"), false,
+    "la colonne des noms est dans le cadre qui défile");
+  assert.ok(html.indexOf("annee-carte__jours") < html.indexOf("annee-carte__semaines"),
+    "la colonne des noms ne précède pas les semaines");
+});
+
+test("une année non lue n'a pas de noms de jour à montrer", () => {
+  assert.equal(renderCarteDeLAnnee(null).includes("annee-carte__jours"), false);
 });
