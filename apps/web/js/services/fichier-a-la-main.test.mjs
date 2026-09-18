@@ -413,16 +413,45 @@ test("le lecteur porte un crayon, et plus de bouton « Fermer »", () => {
   assert.equal(/data-texte-fermer/.test(ecran), false, "« Fermer » est encore là");
 });
 
-test("aller ailleurs referme le fichier ouvert, par tous les chemins", () => {
+test("entrer dans un dossier de Documents se dit à un seul endroit", () => {
+  const ecran = readFileSync(new URL("../views/project-documents.js", import.meta.url), "utf8");
+  const entrer = ecran.slice(
+    ecran.indexOf("async function allerDansLeDossier"), ecran.indexOf("async function allerDansLArbre")
+  );
+
+  // **L'écran se choisit sur la branche.** Trois gestes entrent dans un dossier
+  // — l'arbre, le nom d'un dossier dans le tableau, le fil d'Ariane — et seul
+  // l'arbre disait qu'on est dans Documents : charger le bon dossier n'y
+  // changeait rien, et l'on retombait sur l'accueil de l'onglet.
+  assert.notEqual(entrer.length, 0, "la fonction a changé de nom");
+  assert.match(entrer, /docsViewState\.branche = BRANCHE\.DOCUMENTS;/);
+  // Et un fichier ouvert ne survit pas au changement de dossier : il resterait
+  // à l'écran sous le chemin d'un autre dossier.
+  assert.match(entrer, /docsViewState\.texte = null;/);
+
+  // `await` : la déclaration de la fonction porte les mêmes mots, et la
+  // compter parmi ses appelants en aurait fait quatre pour trois gestes.
+  const appels = ecran.match(/await allerDansLeDossier\(root,/g) ?? [];
+  assert.equal(appels.length, 3, "l'arbre, le fil d'Ariane, le tableau");
+});
+
+test("aucun geste ne charge un dossier de Documents pour son compte", () => {
   const ecran = readFileSync(new URL("../views/project-documents.js", import.meta.url), "utf8");
 
-  // Trois gestes mènent ailleurs — l'arbre, le fil d'Ariane, le nom d'un
-  // dossier dans le tableau — et chacun refermait pour son compte : c'est ainsi
-  // qu'un fichier ouvert serait resté à l'écran sous le chemin d'un autre
-  // dossier.
+  // Un appel direct rechargerait le dossier sans dire où l'on est — c'est le
+  // défaut qu'on vient de réparer, et il se refait en une ligne.
+  const charges = ecran.match(/await loadCurrentDirectory\(\{ forceFolderId/g) ?? [];
+  assert.equal(charges.length, 1, "un geste charge le dossier sans passer par la branche");
+});
+
+test("aller ailleurs referme ce qu'on regardait", () => {
+  const ecran = readFileSync(new URL("../views/project-documents.js", import.meta.url), "utf8");
+
+  // L'arbre emmène vraiment ailleurs : dans une autre branche, dans un fichier
+  // de la Mémoire, à l'accueil. Ce qui était ouvert ne le suit pas.
   assert.match(ecran, /function allerAilleurs\(\)[\s\S]{0,200}docsViewState\.texte = null;/);
   const appels = ecran.match(/\ballerAilleurs\(\);/g) ?? [];
-  assert.equal(appels.length, 3, "l'arbre, le fil d'Ariane, le tableau");
+  assert.equal(appels.length, 1, "seul l'arbre referme");
 });
 
 test("la modification travaille sur une copie", () => {
