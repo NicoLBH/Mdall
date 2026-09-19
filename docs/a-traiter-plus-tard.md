@@ -3879,3 +3879,47 @@ reconstitue les messages absents à partir des citations — en les marquant.
 **Pourquoi c'est repoussé.** Comme aux § 47 et 48 : les quatre se calibrent sur
 des mails réels, qui n'entreront pas dans le dépôt. L'écran (étape 4) montre les
 trous ; c'est lui qui dira lesquels reviennent.
+
+---
+
+## 50. L'écran des mails : ce qui tient, et ce qui attend
+
+**Ce qui existe.** L'étape 4 de [`lire-les-mails.md`](lire-les-mails.md) est
+écrite : l'Atelier porte « Lecture des fils de mails ». On y dépose des `.eml`,
+le fil s'affiche — qui, quand, à qui, ce que chaque message ajoute, ce qu'il
+recopie (replié), ses pièces jointes nommées, et ce qu'on n'a pas su placer.
+**Aucun appel au modèle**, et l'écran le dit. Les mails déposés vont dans un
+dossier « Mails » privé, marqué d'un cadenas dans l'arbre et dans le tableau.
+
+**Ce qui reste dehors, et ce que ça coûte.**
+
+- **La garde du dossier privé n'est pas éprouvable.** Un projet n'a qu'un
+  propriétaire : la politique de lecture ajoutée ne change rien d'observable
+  aujourd'hui, et aucune rupture ne la fait tomber. Elle est écrite d'avance
+  parce que l'écrire après le partage laisserait la correspondance lisible
+  entre-temps. **Le jour où le partage arrivera, cette politique devra être
+  éprouvée pour de bon**, avec deux comptes — c'est la seule façon de savoir si
+  elle garde ce qu'elle prétend garder.
+- **Le bloc de style s'appelle encore `lecture-cr__`** alors qu'il sert
+  maintenant à deux écrans. Le renommer en un nom neutre est un tour de vis
+  mécanique — cent quatre-vingt-neuf règles CSS et deux vues — qu'il valait
+  mieux ne pas mêler à une migration et à un écran neuf. Conséquence tant qu'on
+  ne le fait pas : un nom qui ment un peu, et la tentation, au prochain écran,
+  de se dessiner son propre jeu plutôt que d'hériter d'un nom qui parle d'autre
+  chose.
+- **« Choisir depuis Fichiers » n'existe pas encore ici.** Le lecteur de CR sait
+  aller chercher un document déjà déposé ; l'écran des mails ne prend que ce
+  qu'on lui glisse. Ce sera utile dès qu'on relira un fil rangé la semaine
+  précédente — et cela demande de descendre dans le dossier privé, donc d'y voir
+  clair sur ce que le cadenas autorise.
+- **Le dépôt ne dédoublonne pas contre ce qui est déjà rangé.** Déposer deux
+  fois le même fil range deux fois les mêmes fichiers, sous des noms qui se
+  suffixent `(2)`. Le fil affiché, lui, ne compte le message qu'une fois. Il
+  faudrait comparer au `Message-ID` des mails déjà rangés — donc les relire,
+  donc les redescendre.
+- **Les pièces jointes restent nommées et rien de plus**, comme le plan le
+  refuse explicitement. Les enchaîner au lecteur de CR viendra après.
+
+**Pourquoi c'est repoussé.** Les cinq attendent la même chose : soit le partage
+(la garde), soit l'usage sur des fils réels (le reste). L'ordre du plan tient —
+le relevé (étape 5) avant les commodités.

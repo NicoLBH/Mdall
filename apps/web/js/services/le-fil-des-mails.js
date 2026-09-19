@@ -341,6 +341,26 @@ function laPeriode(un, autre) {
 }
 
 /**
+ * Le moment d'un message, tel qu'on l'affiche.
+ *
+ * Trois cas, et ils ne se ressemblent pas. Un message déposé porte sa date, lue
+ * dans ses en-têtes et rendue dans son fuseau. Un message reconstitué n'a que
+ * le texte qu'un bandeau affichait — on le rend tel quel, sans chercher à en
+ * faire une date. Et un message sans rien le dit, plutôt que de laisser un
+ * blanc qu'on prendrait pour un oubli d'affichage (règle 5).
+ */
+export function phraseDuMoment(message) {
+  const jour = leJourDuMessage(message);
+  if (jour) {
+    const instant = new Date(Date.parse(message.quand) + (message.decalage ?? 0) * 60000);
+    const deuxChiffres = (nombre) => String(nombre).padStart(2, "0");
+    return `${jour.jour} ${MOIS[jour.mois]} ${jour.annee} à ${
+      deuxChiffres(instant.getUTCHours())}:${deuxChiffres(instant.getUTCMinutes())}`;
+  }
+  return texte(message?.quandTexte) || "sans date";
+}
+
+/**
  * Ce qui nomme un fil : son objet, son nombre de messages, sa période.
  *
  * « Étanchéité toiture · 12 messages du 3 au 19 mars 2026 ». Un compte rendu

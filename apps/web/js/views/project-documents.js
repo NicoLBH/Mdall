@@ -29,6 +29,7 @@ import { renderGhInput } from "./ui/gh-input.js";
 import { renderStateDot } from "./ui/status-badges.js";
 import { renderUploadProgressBar } from "./ui/upload-progress.js";
 import { svgIcon } from "../ui/icons.js";
+import { laMarqueDuDossier } from "../services/le-dossier-des-mails.js";
 import { renderDataTableShell, renderDataTableHead, renderDataTableEmptyState } from "./ui/data-table-shell.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { proposeTitle } from "../services/proposition-title.js";
@@ -1554,13 +1555,16 @@ function renderDocumentsBreadcrumb() {
 }
 
 function renderRepoFolderRow(folder) {
+  const marque = laMarqueDuDossier(folder);
+
   return `
     <div class="documents-repo__row documents-repo__row--folder is-clickable" data-folder-id="${escapeHtml(folder.id || "")}" role="button" tabindex="0" aria-label="Ouvrir le dossier">
       <div class="documents-repo__cell documents-repo__cell--name">
         <span class="documents-repo__icon">${getFolderClosedIconSvg()}</span>
         <button type="button" class="documents-repo__name documents-repo__name-trigger js-folder-open-trigger" data-folder-id="${escapeHtml(folder.id || "")}">${escapeHtml(folder.name || "Dossier")}</button>
+        ${marque ? `<span class="documents-repo__marque" title="${escapeHtml(marque.titre)}">${svgIcon(marque.icone, { className: "octicon" })}</span>` : ""}
       </div>
-      <div class="documents-repo__cell documents-repo__cell--message"><div class="documents-repo__message-main">Dossier</div></div>
+      <div class="documents-repo__cell documents-repo__cell--message"><div class="documents-repo__message-main">${marque ? escapeHtml(marque.mot) : "Dossier"}</div></div>
       <div class="documents-repo__cell documents-repo__cell--date">
         <span>${escapeHtml(ilYA(folder.updated_at || folder.created_at) )}</span>
         <button type="button" class="gh-btn gh-btn--sm documents-repo__geste"
@@ -3708,6 +3712,7 @@ function noeudsDesDocuments({ profondeur = 1 } = {}) {
         ouvrable: enfants.length > 0 || pieces.length > 0,
         ouvert,
         actif: dansLesDocuments && String(docsViewState.currentFolderId || "") === id,
+        marque: laMarqueDuDossier(dossier),
         compte: pieces.length || ""
       });
 

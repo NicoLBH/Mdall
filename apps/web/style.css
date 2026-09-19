@@ -26772,3 +26772,59 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .courbe-activite--inconnue{ height:28px; }
 
 .projects-repo__cell--activite{ display:flex; align-items:center; min-width:0; }
+
+/* ── Le fil des mails ──────────────────────────────────────────────────────
+   La coquille est celle du lecteur de CR (`lecture-cr__…`) : même nature
+   d'écran, mêmes largeurs, un seul calibrage à tenir. Ce qui suit ne dessine
+   que ce que le lecteur de CR n'a pas — une suite de messages imbriqués. */
+.fil-mails{display:flex;flex-direction:column;gap:10px;}
+.fil-mails__message{
+  display:flex;flex-direction:column;gap:6px;
+  padding:10px 12px;
+  border:1px solid var(--border);border-radius:6px;
+  background:var(--panel2);
+}
+/* Un message reconstitué à partir d'une citation se voit : il est moins sûr
+   que celui qu'on a déposé, et le filet le dit sans rien masquer. */
+.fil-mails__message.est-reconstitue{border-style:dashed;background:transparent;}
+.fil-mails__tete{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;}
+.fil-mails__moment{color:var(--muted);}
+.fil-mails__qui{font-size:13px;font-weight:600;color:var(--text);}
+.fil-mails__vers{color:var(--muted);}
+.fil-mails__marque{
+  display:inline-flex;align-items:center;gap:4px;
+  margin-left:auto;
+  font-size:11.5px;color:var(--muted);
+}
+.fil-mails__propos{margin:0;font-size:13px;line-height:1.55;color:var(--text);white-space:pre-wrap;}
+.fil-mails__propos.est-vide{color:var(--muted);font-style:italic;}
+.fil-mails__pieces,
+.fil-mails__trous{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;}
+.fil-mails__pieces li{display:flex;align-items:center;gap:6px;color:var(--muted);}
+.fil-mails__trous li{
+  display:flex;align-items:flex-start;gap:6px;
+  font-size:12px;line-height:1.45;
+  color:var(--fgColor-attention, #d29922);
+}
+.fil-mails__trous li .octicon{flex:0 0 auto;margin-top:2px;}
+.fil-mails__voir-cite{
+  align-self:flex-start;
+  display:inline-flex;align-items:center;gap:4px;
+  margin:0;padding:0;border:0;background:none;cursor:pointer;
+  font-size:12px;color:var(--muted);
+}
+.fil-mails__voir-cite:hover{color:var(--text);}
+.fil-mails__cite{
+  margin:0;padding:8px 10px;
+  border-left:2px solid var(--border);
+  color:var(--muted);white-space:pre-wrap;overflow-x:auto;
+}
+/* Le cadenas d'un dossier privé, dans l'arbre et dans le tableau. Même taille,
+   même couleur : c'est la même information, et elle ne doit pas paraître plus
+   grave d'un côté que de l'autre. */
+.documents-tree__marque,
+.documents-repo__marque{
+  display:inline-flex;align-items:center;
+  flex:0 0 auto;margin-left:6px;
+  color:var(--muted);
+}

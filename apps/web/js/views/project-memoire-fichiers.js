@@ -409,6 +409,14 @@ export function renderLigneDArbre(noeud) {
         data-arbre-aller="${escapeHtml(noeud.aller)}">
         <span class="documents-tree__icon-slot">${iconeDuNoeud(noeud)}</span>
         <span class="documents-tree__label">${escapeHtml(noeud.libelle)}</span>
+        ${/*
+          **Un dossier qui se comporte autrement que ses voisins doit se voir.**
+          Le cadenas vient du même endroit que celui du tableau : deux dessins
+          du même état auraient fini par ne plus dire la même chose, et l'un des
+          deux aurait montré un dossier privé comme un dossier ordinaire.
+        */""}
+        ${noeud.marque ? `<span class="documents-tree__marque" title="${escapeHtml(noeud.marque.titre)}">${
+          svgIcon(noeud.marque.icone, { className: "octicon" })}</span>` : ""}
         ${noeud.compte === undefined || noeud.compte === "" ? "" : `<span class="diff-tree__compte">${escapeHtml(String(noeud.compte))}</span>`}
       </button>
     </div>
