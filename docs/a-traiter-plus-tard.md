@@ -3763,3 +3763,41 @@ Voir `docs/lire-un-fichier-de-texte.md`.
 plutôt que d'être redéposés — ce qui en aurait fait un second exemplaire — et le
 parcours est celui d'un PDF déposé. La liste dit à côté de son nom qu'il sera
 extrait puis restitué : c'est le seul des deux choix qui coûte un appel.
+
+---
+
+## 47. Ce que le dépliage d'un mail ne sait pas encore lire
+
+**Ce qui existe.** L'étape 1 de [`lire-les-mails.md`](lire-les-mails.md) est
+écrite : `services/decoder-un-mail.js` et `services/un-mail-deplie.js` déplient
+un `.eml` — en-têtes repliés, adresses, date, objet, chaîne de réponses, choix
+`text/plain` / `text/html`, `base64`, `quoted-printable`, jeux de caractères,
+pièces jointes nommées — et rendent la liste de ce qu'ils n'ont pas su placer.
+
+**Ce qui reste dehors, et ce que ça coûte.**
+
+- **Les noms de pièces jointes coupés en plusieurs paramètres** (`filename*0=`,
+  `filename*1=`, RFC 2231). La forme simple et la forme étendue d'un seul tenant
+  se lisent ; celle-là non. Conséquence : la pièce sort **sans nom**, avec son
+  trou — elle se voit, on ne peut simplement pas l'appeler. Un nom de plus de
+  soixante-dix caractères déclenche ce cas chez certaines messageries.
+- **`format=flowed`** (RFC 3676). Un corps ainsi marqué porte des retours à la
+  ligne d'affichage qu'il faudrait recoller. On ne recolle pas : le texte sort
+  coupé comme il a été envoyé. Ce n'est pas faux, c'est moins lisible — et cela
+  gênera surtout l'étape 2, où une coupure au milieu d'une phrase ressemble à
+  une ligne de citation.
+- **`message/rfc822`**, c'est-à-dire un mail joint à un mail. La partie est
+  aujourd'hui rangée en pièce jointe, nommée et non ouverte. La déplier
+  récursivement donnerait un message de plus dans le fil — c'est exactement ce
+  dont l'étape 3 aura besoin pour un fil transféré en bloc.
+- **Les messages signés ou chiffrés** (`multipart/signed`, `multipart/encrypted`).
+  Le premier se déplie par chance — sa première partie est le message — mais
+  rien ne vérifie la signature, et rien ne le dit. Le second ne donne rien.
+- **`.msg`** (Outlook), déjà noté dans le plan : format binaire propriétaire,
+  il demanderait une bibliothèque de lecture.
+
+**Pourquoi c'est repoussé.** Aucun de ces cas ne se traite à l'aveugle : il
+faut des mails réels pour savoir lesquels arrivent vraiment, et ces mails-là
+n'entreront pas dans le dépôt. L'ordre juste est donc l'écran d'abord (étape 4),
+qui affiche les trous ; on saura alors lesquels reviennent, et on les fermera
+par ordre de fréquence plutôt que par ordre d'imagination.
