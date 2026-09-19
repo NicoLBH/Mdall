@@ -246,3 +246,49 @@ test("un saut de ligne voulu par l'auteur reste", () => {
   const phrase = corps("La cote est arrêtée.", "", "Le calepinage suivra.");
   assert.equal(leProposNettoye(phrase).texte, phrase);
 });
+
+// ── Un courriel réel finit ses lignes par \r\n ─────────────────────────────
+
+const enCourriel = (...lignes) => lignes.join("\r\n");
+
+test("le bandeau s'en va aussi quand les lignes finissent par un retour chariot", () => {
+  // **L'épreuve que les autres ne faisaient pas.** RFC 5322 impose `\r\n`, et
+  // le point d'une expression régulière ne s'applique pas au retour chariot :
+  // un `.*$` s'arrêtait avant le `\r` et ne trouvait jamais la fin de ligne.
+  // Écrites en `\n`, toutes les épreuves passaient ; sur un fil réel, pas un
+  // bandeau n'était retiré.
+  const propre = leProposNettoye(enCourriel(
+    "EXTERNAL SENDER: Do not click any links or open any attachments.",
+    "EXPEDITEUR EXTERNE: Ne cliquez sur aucun lien.",
+    "",
+    "La cote est arrêtée à 12,40."
+  ));
+  assert.equal(propre.bandeaux, 2);
+  assert.equal(propre.texte.includes("EXTERNAL SENDER"), false);
+  assert.equal(propre.texte.includes("EXPEDITEUR EXTERNE"), false);
+});
+
+test("les autres règles de ligne tiennent aussi en retour chariot", () => {
+  // Le pendant : une règle qui ne tomberait qu'en `\n` ne sert à rien.
+  const propre = leProposNettoye(enCourriel(
+    "La cote est arrêtée à 12,40.",
+    "Tél. : +33 1 23 45 67 89",
+    "www.novaclim.example",
+    "[cid:logo@1]",
+    "Bien cordialement"
+  ));
+  assert.equal(propre.texte.includes("+33 1 23 45 67 89"), false);
+  assert.equal(propre.texte.includes("www.novaclim.example"), false);
+  assert.equal(propre.texte.includes(MARQUE_DUNE_IMAGE), false, "la ligne d'image s'en va");
+  assert.equal(propre.images, 1, "mais elle a été comptée");
+  assert.ok(propre.texte.includes("Bien cordialement"));
+});
+
+test("une redirection se déplie aussi en retour chariot", () => {
+  const propre = leProposNettoye(enCourriel(
+    "Voir : https://urldefense.com/v3/__https://a.example/1__;!!x$",
+    "Bien cordialement"
+  ));
+  assert.equal(propre.redirections, 1);
+  assert.ok(propre.texte.includes("https://a.example/1"));
+});

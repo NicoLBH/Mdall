@@ -71,9 +71,15 @@ const IMAGE_EN_LIGNE = /\[cid:[^\]]*\]/g;
  *
  * Il n'est de personne : ni l'auteur ni le destinataire ne l'ont écrit, et il
  * revient à l'identique sur chaque message d'un fil.
+ *
+ * **La fin se lit `[\s\S]*` et non `.*`**, et ce n'est pas un détail : un
+ * courriel se termine par `\r\n`, le point d'une expression régulière ne
+ * s'applique pas au retour chariot, et `.*$` ne franchissait donc jamais le
+ * `\r` qu'une ligne réelle traîne. Le garde-fou passait toutes ses épreuves —
+ * écrites avec des `\n` — et ne retirait pas un seul bandeau d'un vrai fil.
  */
 const BANDEAU_DE_SECURITE =
-  /^\s*(EXTERNAL SENDER|EXPEDITEUR EXTERNE|EXTERNAL E-?MAIL|COURRIEL EXTERNE)\s*:.*$/i;
+  /^\s*(EXTERNAL SENDER|EXPEDITEUR EXTERNE|EXTERNAL E-?MAIL|COURRIEL EXTERNE)\s*:[\s\S]*$/i;
 
 /** Une ligne qui n'est qu'une façon de joindre quelqu'un. */
 const LIGNE_DE_COORDONNEES =
