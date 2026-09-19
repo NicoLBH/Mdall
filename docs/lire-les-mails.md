@@ -385,10 +385,32 @@ lecture : le premier fil déposé doit atterrir au bon endroit, pas dans Documen
 >
 > Ce qui reste : § 50 de [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
-### 5 — Le relevé par le modèle
+### 5 — Le relevé par le modèle · *fait*
 
 Une fonction serveur, la consigne **côté serveur uniquement**, le garde-fou des citations, le
 prix à la requête. Les prises de position s'affichent avec ce qui leur manque.
+
+> `supabase/functions/relever-un-fil/`, sa consigne dans
+> `_shared/prises-du-modele.js`. Le garde-fou des citations est **celui qui
+> existe déjà** (`_shared/citation-verifiee.js`) : une prise dont la phrase ne
+> se retrouve pas dans son message ne franchit pas la porte.
+>
+> **Ce qu'on ne demande pas au modèle, parce qu'on le sait déjà** : qui parle et
+> quand. L'auteur d'une prise est l'auteur du message d'où elle sort, lu dans
+> les en-têtes du `.eml`. Le lui demander en ferait une seconde source, qui
+> finirait par contredire la première (règle 4).
+>
+> **Ce qui monte** : le propos de chaque message, une fois, sans les citations
+> qu'il recopie, sans les destinataires, sans les pièces jointes. C'est ce que
+> les étapes 2 et 3 ont gagné — et c'est aussi ce qui évite de faire monter huit
+> fois la même correspondance privée.
+>
+> Deux défauts trouvés en chemin, écrits dans la PR : le rang du message n'était
+> pas traduit en « page » pour le garde-fou commun, si bien que **toutes** les
+> prises ressortaient « rattachées ailleurs » ; et la garde qui empêche une
+> consigne d'être servie au navigateur ne regardait qu'une liste de fonctions
+> tenue à la main — deux consignes lui échappaient. Les trente ruptures
+> essayées tombent.
 
 ### 6 — Ce qui se dérive, et que le modèle ne déclare pas
 
@@ -502,8 +524,9 @@ expéditeur inconnu. Voir la section ci-dessus.
 | Ce qu'on n'a pas su placer, et sa phrase | `services/trous-dun-mail.js` — pur · *écrit* |
 | Séparer le propos de la citation | `services/ce-quon-cite.js` — pur · *écrit* |
 | Reconstituer le fil | `services/le-fil-des-mails.js` — pur · *écrit* |
-| Ce qu'un fil porte | `services/prises-de-position.js` — pur |
-| Le relevé par le modèle | `supabase/functions/relever-un-fil/` — la consigne y vit seule |
+| Le relevé par le modèle | `supabase/functions/relever-un-fil/` — la consigne y vit seule · *écrit* |
+| Ce qu'un fil porte | `services/prises-de-position.js` — pur · *écrit* |
+| Demander le relevé | `services/prises-par-le-modele.js` · *écrit* |
 | L'écran | `views/studio/dev/lecture-des-mails.js` · *écrit* |
 | Où va un mail, et le cadenas | `services/le-dossier-des-mails.js` — pur · *écrit* |
 | Le dépôt dans le dossier privé | `services/deposer-un-mail-supabase.js` · *écrit* |

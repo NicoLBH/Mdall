@@ -55,6 +55,15 @@ import {
 } from "../../../services/le-fil-des-mails.js";
 import { phraseDuTrou } from "../../../services/trous-dun-mail.js";
 import {
+  ceQueCaDevient, ceQuiManque, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
+  phraseDuReleve, prisesDuMessage, quoiDeLaNature
+} from "../../../services/prises-de-position.js";
+import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
+// Le même formatage de durée que le lecteur de CR et le journal des actions :
+// deux écritures d'une durée finiraient par ne plus s'accorder, et « 1 min 35s »
+// ici contre « 95 s » là ferait douter du chiffre (règle 10).
+import { formatStepDuration } from "../../../services/run-workflow.js";
+import {
   DOSSIER_DES_MAILS, EXTENSION_DUN_MAIL, phraseDuDossierDesMails
 } from "../../../services/le-dossier-des-mails.js";
 
@@ -87,7 +96,15 @@ const etat = {
   motif: "",
   queFaire: "",
   rangement: null,
-  ouverts: new Set()
+  ouverts: new Set(),
+  /**
+   * Le relevé du fil.
+   *
+   * Séparé de la phase du dépliage, et c'est la leçon d'un défaut déjà payé :
+   * un relevé qui échouait en éteignant la phase laissait l'écran sans son
+   * fil, alors que le fil, lui, n'avait rien coûté et n'avait pas bougé.
+   */
+  releve: null
 };
 
 let hoteCourant = null;
@@ -208,7 +225,7 @@ function renderCorps(vue) {
     ${renderAlerte(vue)}
     ${vue.fil ? renderIdentite(vue.fil) : ""}
     ${vue.fil ? renderOnglets(vue) : ""}
-    ${vue.fil ? (vue.onglet === ONGLET.ANALYSE ? renderAnalyse() : renderLeFil(vue)) : ""}
+    ${vue.fil ? (vue.onglet === ONGLET.ANALYSE ? renderAnalyse(vue) : renderLeFil(vue)) : ""}
   `;
 }
 
@@ -284,21 +301,179 @@ function renderOnglets(vue) {
   `;
 }
 
-/** Ce que le modèle en tirera — et ce que ça coûtera. */
-function renderAnalyse() {
+/**
+ * Ce que le modèle tire du fil — et ce que ça a coûté.
+ *
+ * ## Le fil d'abord, l'analyse ensuite
+ *
+ * C'est l'ordre du procédé, et c'est celui du lecteur de CR pour la même
+ * raison : juger des prises sans avoir vu ce dont elles sortent, c'est ce qui
+ * rendait les déceptions inexplicables. L'onglet « Le fil » reste donc ouvert
+ * par défaut, et celui-ci ne se remplit qu'à la demande.
+ *
+ * ## Le prix s'annonce avant, et se dit après
+ *
+ * Avant : ce que le relevé va demander, pour qu'on décide en connaissance de
+ * cause. Après : ce qu'il a réellement coûté, à côté de son résultat. Un prix
+ * qu'il faut aller chercher dans un autre écran n'entre jamais dans la
+ * décision (fondamental 13).
+ */
+function renderAnalyse(vue) {
+  if (vue.releve?.enCours) return renderReleveEnCours();
+  if (!vue.releve?.prises) return renderAvantLeReleve(vue);
+  return renderLesPrises(vue);
+}
+
+function renderAvantLeReleve(vue) {
+  const combien = (vue.fil?.messages ?? []).filter((message) => texte(message.propos)).length;
+
   return `
     <section class="lecture-cr__suite">
-      <h3>Le relevé n'est pas encore écrit</h3>
+      <h3>Relever ce que ce fil porte</h3>
       <p class="lecture-cr__mot">
-        Ce que chacun <strong>constate, demande, engage ou décide</strong>, avec sa citation —
-        plus les questions restées sans réponse et les désaccords, qui se dérivent du fil au
-        lieu d'être demandés au modèle. C'est l'étape suivante.
+        Ce que chacun <strong>constate, demande, engage ou décide</strong>, avec sa citation.
+        Chaque prise sera <strong>vérifiée contre le message d'où elle sort</strong> : ce que le
+        modèle n'a pas su citer ne franchira pas la porte.
       </p>
       <p class="lecture-cr__mot">
-        Jusqu'ici, <strong>rien n'a été payé</strong> : le fil ci-contre a été déplié dans le
-        navigateur, sans un seul appel.
+        ${escapeHtml(`Ce qui monte : le propos de ${combien} message${combien > 1 ? "s" : ""}, une seule fois.`)}
+        Pas les citations qu'ils recopient, pas les destinataires, pas les pièces jointes —
+        le relevé n'en a pas besoin. <strong>C'est le premier appel au modèle de cet écran</strong> ;
+        tout ce qui précède était gratuit.
+      </p>
+      ${vue.releve?.motif ? `
+        <p class="lecture-cr__reserve">${escapeHtml(vue.releve.motif)}</p>
+        ${texte(vue.releve.queFaire) ? `<p class="lecture-cr__mot">${escapeHtml(vue.releve.queFaire)}</p>` : ""}
+        ${texte(vue.releve.panne) ? `
+          <pre class="lecture-cr__alerte-panne mono-small">${escapeHtml(vue.releve.panne)}</pre>
+          <p class="lecture-cr__alerte-aide">
+            Ce diagnostic vient du serveur : il nomme la panne, il ne recopie pas la consigne.
+          </p>
+        ` : ""}
+      ` : ""}
+      <p>
+        <button type="button" class="gh-btn gh-btn--primary gh-btn--sm" data-mails-relever>
+          ${svgIcon("ai-model", { className: "octicon" })}
+          ${vue.releve?.motif ? "Réessayer le relevé" : "Relever ce fil"}
+        </button>
       </p>
     </section>
+  `;
+}
+
+function renderReleveEnCours() {
+  return `
+    <section class="lecture-cr__suite">
+      <h3>${renderSpinnerHtml({ label: "", size: "sm" })} Le modèle relit le fil</h3>
+      <p class="lecture-cr__mot">
+        Le fil ci-contre ne bouge pas : il a été déplié sans appel, et il reste juste quoi
+        qu'il arrive ici.
+      </p>
+    </section>
+  `;
+}
+
+/**
+ * Ce que le relevé a donné.
+ *
+ * Rangé par nature, du plus factuel au plus ouvert — un constat se vérifie, un
+ * désaccord se discute, et l'on regarde d'abord ce qui se vérifie. Les natures
+ * vides ne sortent pas : une rubrique déserte fait chercher ce qui devrait s'y
+ * trouver.
+ */
+function renderLesPrises(vue) {
+  const releve = vue.releve;
+  const groupes = parNature(releve.prises);
+
+  return `
+    <section class="lecture-cr__identite">
+      <h3>${escapeHtml(phraseDuReleve(releve))}</h3>
+      ${renderPrixDuReleve(releve)}
+      ${releve.ecartees > 0 ? `
+        <p class="lecture-cr__reserve">${escapeHtml(
+          `${releve.ecartees} prise${releve.ecartees > 1 ? "s" : ""} n'${
+            releve.ecartees > 1 ? "ont" : "a"} pas franchi la porte : sa citation ne se retrouve `
+          + "dans aucun message. C'est la mesure de ce que ce relevé n'a pas su faire."
+        )}</p>
+      ` : ""}
+      <p>
+        <button type="button" class="gh-btn gh-btn--sm" data-mails-relever>
+          ${svgIcon("sync", { className: "octicon" })} Relever de nouveau
+        </button>
+      </p>
+    </section>
+    ${groupes.length ? groupes.map(renderUneNature).join("") : `
+      <section class="lecture-cr__suite">
+        <p class="lecture-cr__mot">
+          Aucune prise de position n'a été retenue. Ce n'est pas la même chose qu'un fil vide :
+          le fil est là, et c'est le relevé qui n'en a rien tiré.
+        </p>
+      </section>
+    `}
+  `;
+}
+
+/**
+ * Ce que ce relevé-ci a coûté.
+ *
+ * **À la requête, et pas seulement au mois.** Le compteur dit ce qu'un mois a
+ * coûté ; il ne dit pas ce que ce relevé-ci a coûté, au moment précis où l'on
+ * décide s'il valait la peine.
+ */
+function renderPrixDuReleve(releve) {
+  const prix = prixDeLAppel({ model: releve.modele, entree: releve.entree, sortie: releve.sortie });
+  const detail = detailDeLAppel({ model: releve.modele, entree: releve.entree, sortie: releve.sortie });
+
+  return `
+    <p class="lecture-cr__mot" title="${escapeHtml(detail)}">
+      ${escapeHtml(prix.dit)}${releve.dureeMs ? escapeHtml(` · ${formatStepDuration(releve.dureeMs)}`) : ""}
+    </p>
+  `;
+}
+
+function renderUneNature({ nature, prises }) {
+  return `
+    <section class="lecture-cr__rubriques">
+      <h3>
+        ${svgIcon(iconeDeLaNature(nature), { className: "octicon" })}
+        ${escapeHtml(nomDeLaNature(nature))}
+        <span class="lecture-cr__rubrique-compte">${prises.length}</span>
+      </h3>
+      <p class="lecture-cr__mot">
+        ${escapeHtml(quoiDeLaNature(nature))} — ${escapeHtml(ceQueCaDevient(nature))}.
+      </p>
+      <div class="fil-mails">${prises.map(renderUnePrise).join("")}</div>
+    </section>
+  `;
+}
+
+function renderUnePrise(prise) {
+  const manques = ceQuiManque(prise);
+
+  return `
+    <article class="fil-mails__message">
+      <header class="fil-mails__tete">
+        <span class="fil-mails__qui">${escapeHtml(texte(prise.qui) || "auteur inconnu")}</span>
+        <span class="fil-mails__moment mono-small">${escapeHtml(texte(prise.quand) || "sans date")}</span>
+        ${texte(prise.pourQui) ? `<span class="fil-mails__vers mono-small">→ ${escapeHtml(prise.pourQui)}</span>` : ""}
+        ${texte(prise.echeance) ? `<span class="fil-mails__marque">${
+          svgIcon("stopwatch", { className: "octicon" })} ${escapeHtml(prise.echeance)}</span>` : ""}
+      </header>
+      <p class="fil-mails__propos">${escapeHtml(texte(prise.intitule))}</p>
+      ${/*
+        **La citation est sous la prise, toujours.** C'est elle qui la rend
+        vérifiable : une prise sans sa citation demande de croire le modèle
+        sur parole, et c'est précisément ce qu'on refuse.
+      */""}
+      <pre class="fil-mails__cite mono-small">${escapeHtml(texte(prise.citation))}</pre>
+      ${manques.length ? `
+        <ul class="fil-mails__trous">
+          ${manques.map((manque) => `
+            <li>${svgIcon("alert", { className: "octicon" })} ${escapeHtml(phraseDuManque(manque))}</li>
+          `).join("")}
+        </ul>
+      ` : ""}
+    </article>
   `;
 }
 
@@ -327,18 +502,21 @@ function renderVers(message) {
  */
 function renderLeFil(vue) {
   const messages = vue.fil?.messages ?? [];
+  const prises = vue.releve?.prises ?? [];
   if (!messages.length) {
     return `<section class="lecture-cr__suite"><p class="lecture-cr__mot">Ce fil ne porte aucun message.</p></section>`;
   }
 
   return `
     <section class="fil-mails">
-      ${messages.map((message) => renderUnMessage(message, vue.ouverts?.has(message.rang) === true)).join("")}
+      ${messages.map((message) => renderUnMessage(
+        message, vue.ouverts?.has(message.rang) === true, prisesDuMessage(prises, message.rang)
+      )).join("")}
     </section>
   `;
 }
 
-function renderUnMessage(message, ouvert) {
+function renderUnMessage(message, ouvert, prises = []) {
   const reconstitue = message.certitude === CERTITUDE.CITE;
   const vers = renderVers(message);
 
@@ -366,6 +544,21 @@ function renderUnMessage(message, ouvert) {
         <ul class="fil-mails__trous">
           ${message.trous.map((trou) => `
             <li>${svgIcon("alert", { className: "octicon" })} ${escapeHtml(phraseDuTrou(trou))}</li>
+          `).join("")}
+        </ul>
+      ` : ""}
+      ${/*
+        **Ce qu'on a tiré du message, sous le message.** Aller chercher dans
+        l'autre onglet de quelle phrase sort une prise, c'est ce qui rendait
+        les déceptions inexplicables chez le lecteur de CR : on jugeait des
+        points sans voir ce dont ils sortaient.
+      */""}
+      ${prises.length ? `
+        <ul class="fil-mails__prises">
+          ${prises.map((prise) => `
+            <li>${svgIcon(iconeDeLaNature(prise.nature), { className: "octicon" })}
+              <span class="fil-mails__prise-nature">${escapeHtml(nomDeLaNature(prise.nature))}</span>
+              ${escapeHtml(texte(prise.intitule))}</li>
           `).join("")}
         </ul>
       ` : ""}
@@ -406,6 +599,10 @@ async function prendreLesFichiers(fichiers) {
     etat.fil = leFilDesMails(octets);
     etat.fichiers = retenus.map((fichier) => fichier.name);
     etat.ouverts = new Set();
+    // **Le relevé de l'ancien fil ne survit pas au nouveau.** Le garder
+    // afficherait des prises citant des messages qui ne sont plus là, sous un
+    // fil qui ne les porte pas.
+    etat.releve = null;
     etat.phase = "lu";
     if (ecartes.length) {
       refuser({
@@ -453,6 +650,43 @@ async function ranger(fichiers) {
   redessiner();
 }
 
+/**
+ * Demander le relevé.
+ *
+ * **Le fil ne bouge pas pendant ce temps.** Il a été déplié sans appel, il ne
+ * dépend pas de ce relevé, et un échec ici ne doit rien lui coûter : c'est
+ * exactement le défaut qui a bloqué le lecteur de CR, où un refus éteignait la
+ * phase de la lecture entière.
+ */
+async function relever() {
+  if (!etat.fil || etat.releve?.enCours) return;
+
+  etat.releve = { enCours: true };
+  etat.onglet = ONGLET.ANALYSE;
+  redessiner();
+
+  try {
+    const { phraseDuRefus, queFaire, releverLeFil } = await import("../../../services/prises-par-le-modele.js");
+    const lu = await releverLeFil({ filId: texte(etat.fil.objet), messages: etat.fil.messages });
+    etat.releve = lu.ok
+      ? { ...lu, enCours: false }
+      : {
+        enCours: false,
+        motif: phraseDuRefus(lu.motif),
+        queFaire: queFaire(lu.motif),
+        panne: texte(lu.panne)
+      };
+  } catch (erreur) {
+    etat.releve = {
+      enCours: false,
+      motif: "le relevé n'a pas pu être demandé",
+      queFaire: "",
+      panne: String(erreur?.message ?? "")
+    };
+  }
+  redessiner();
+}
+
 function brancher(hote) {
   const zone = hote.querySelector("[data-mails-zone]");
   if (zone) {
@@ -484,6 +718,10 @@ function brancher(hote) {
       else etat.ouverts.add(rang);
       redessiner();
     });
+  });
+
+  hote.querySelectorAll("[data-mails-relever]").forEach((bouton) => {
+    bouton.addEventListener("click", () => { relever(); });
   });
 
   const fermer = hote.querySelector("[data-mails-alerte-fermer]");

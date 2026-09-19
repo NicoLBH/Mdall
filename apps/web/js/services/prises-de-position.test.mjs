@@ -1,0 +1,172 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+import {
+  MANQUE, NATURE, NATURES_DECLAREES, NATURES_DERIVEES, ceQueCaDevient, ceQuiManque,
+  horsNomenclature, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
+  phraseDuReleve, prisesDuMessage, quoiDeLaNature
+} from "./prises-de-position.js";
+
+const prise = (dessus = {}) => ({
+  nature: NATURE.CONSTAT, intitule: "le support est humide", message: 2,
+  citation: "Le support est humide.", qui: "Ourdine Ferrand",
+  quand: "2026-03-12T08:14:00.000Z", pourQui: null, echeance: null,
+  messageVerifie: true, ...dessus
+});
+
+// ── Les sept natures ───────────────────────────────────────────────────────
+
+test("cinq natures sont déclarées, deux se dérivent", () => {
+  assert.equal(NATURES_DECLAREES.length, 5);
+  assert.equal(NATURES_DERIVEES.length, 2);
+  assert.deepEqual([...NATURES_DECLAREES, ...NATURES_DERIVEES].sort(),
+    Object.values(NATURE).sort());
+});
+
+test("les natures que le modèle déclare sont celles que le serveur lui demande", () => {
+  // Deux listes tenues à part auraient divergé : une nature ajoutée d'un côté
+  // serait arrivée à l'écran sans nom, ou demandée sans pouvoir s'afficher.
+  const serveur = readFileSync(
+    new URL("../../../../supabase/functions/_shared/prises-du-modele.js", import.meta.url), "utf8"
+  );
+  for (const nature of NATURES_DECLAREES) {
+    assert.ok(serveur.includes(`: "${nature}"`), `absente du serveur : ${nature}`);
+  }
+});
+
+test("les natures dérivées ne sont pas demandées au modèle", () => {
+  // Les faire déclarer en ferait des inventions ; les calculer sur le fil en
+  // fait des observations.
+  const serveur = readFileSync(
+    new URL("../../../../supabase/functions/_shared/prises-du-modele.js", import.meta.url), "utf8"
+  );
+  for (const nature of NATURES_DERIVEES) {
+    assert.equal(serveur.includes(`: "${nature}"`), false, `demandée au modèle : ${nature}`);
+  }
+});
+
+test("chaque nature porte un nom, ce qu'elle est, et ce qu'elle devient", () => {
+  for (const nature of Object.values(NATURE)) {
+    assert.notEqual(nomDeLaNature(nature), "Sans nature", nature);
+    assert.ok(quoiDeLaNature(nature), nature);
+    assert.ok(ceQueCaDevient(nature), nature);
+  }
+});
+
+test("une nature inconnue garde son code, et ne devient pas « Autre »", () => {
+  // Rangée sous « Autre », elle serait invisible au milieu du reste.
+  assert.equal(nomDeLaNature("remarque"), "remarque");
+  assert.equal(nomDeLaNature(""), "Sans nature");
+});
+
+test("chaque icône de nature existe dans la planche", () => {
+  // Défaut précisément invisible : une icône absente ne lève rien et ne peint
+  // rien. La rubrique paraît juste un peu nue.
+  const planche = readFileSync(new URL("../../assets/icons.svg", import.meta.url), "utf8");
+  for (const nature of Object.values(NATURE)) {
+    assert.ok(planche.includes(`id="${iconeDeLaNature(nature)}"`), nature);
+  }
+});
+
+// ── Ce qui manque ──────────────────────────────────────────────────────────
+
+test("une prise complète ne manque de rien", () => {
+  assert.deepEqual(ceQuiManque(prise()), []);
+});
+
+test("une prise sans auteur ni date le dit", () => {
+  assert.deepEqual(ceQuiManque(prise({ qui: "", quand: "" })),
+    [MANQUE.SANS_AUTEUR, MANQUE.SANS_DATE]);
+});
+
+test("une demande sans destinataire ni échéance le dit", () => {
+  const manques = ceQuiManque(prise({ nature: NATURE.DEMANDE }));
+  assert.deepEqual(manques, [MANQUE.SANS_DESTINATAIRE, MANQUE.SANS_ECHEANCE]);
+});
+
+test("un constat ne se voit pas réclamer un destinataire", () => {
+  // Une source ou un constat n'en a pas : en réclamer un ferait un écran
+  // couvert de reproches sans objet, qu'on cesserait de lire.
+  assert.deepEqual(ceQuiManque(prise({ nature: NATURE.CONSTAT })), []);
+  assert.deepEqual(ceQuiManque(prise({ nature: NATURE.SOURCE })), []);
+});
+
+test("un engagement sans échéance le dit, mais n'a pas de destinataire à donner", () => {
+  assert.deepEqual(ceQuiManque(prise({ nature: NATURE.ENGAGEMENT })), [MANQUE.SANS_ECHEANCE]);
+});
+
+test("une prise rattachée à un autre message le dit", () => {
+  // Son auteur a changé : « BERTRAND affirme » et « Ourdine Ferrand affirme »
+  // ne sont pas la même information.
+  assert.deepEqual(ceQuiManque(prise({ messageVerifie: false })), [MANQUE.MESSAGE_CORRIGE]);
+});
+
+test("chaque manque porte sa phrase", () => {
+  for (const manque of Object.values(MANQUE)) {
+    assert.notEqual(phraseDuManque(manque), "quelque chose manque à cette prise", manque);
+  }
+  assert.equal(phraseDuManque("inconnu"), "quelque chose manque à cette prise");
+});
+
+// ── Le rangement ───────────────────────────────────────────────────────────
+
+test("les prises se rangent par nature, dans l'ordre de l'écran", () => {
+  const groupes = parNature([
+    prise({ nature: NATURE.DEMANDE }), prise(), prise({ nature: NATURE.SOURCE }), prise()
+  ]);
+  assert.deepEqual(groupes.map((groupe) => groupe.nature),
+    [NATURE.CONSTAT, NATURE.DEMANDE, NATURE.SOURCE]);
+  assert.deepEqual(groupes.map((groupe) => groupe.prises.length), [2, 1, 1]);
+});
+
+test("une nature vide ne fait pas de rubrique", () => {
+  // On chercherait ce qui devrait s'y trouver.
+  assert.deepEqual(parNature([prise()]).map((groupe) => groupe.nature), [NATURE.CONSTAT]);
+  assert.deepEqual(parNature([]), []);
+});
+
+test("une prise hors nomenclature se voit, plutôt que de disparaître", () => {
+  const dehors = prise({ nature: "remarque" });
+  assert.deepEqual(parNature([prise(), dehors]).map((groupe) => groupe.nature), [NATURE.CONSTAT]);
+  assert.deepEqual(horsNomenclature([prise(), dehors]), [dehors]);
+});
+
+test("les prises d'un message se retrouvent par son rang", () => {
+  const prises = [prise({ message: 1 }), prise({ message: 2 }), prise({ message: 2 })];
+  assert.equal(prisesDuMessage(prises, 2).length, 2);
+  assert.deepEqual(prisesDuMessage(prises, 9), []);
+});
+
+// ── Ce que le relevé a donné ───────────────────────────────────────────────
+
+test("la phrase du relevé dit le compte", () => {
+  assert.equal(phraseDuReleve({ prises: [prise(), prise()] }), "2 prises de position");
+  assert.equal(phraseDuReleve({ prises: [prise()] }), "1 prise de position");
+  assert.equal(phraseDuReleve({}), "0 prise de position");
+});
+
+test("ce qui a été écarté se dit à côté du résultat, pas au-dessous", () => {
+  assert.equal(
+    phraseDuReleve({ prises: [prise()], ecartees: 2 }),
+    "1 prise de position · 2 écartées faute d'une citation qu'on retrouve"
+  );
+});
+
+test("les prises rattachées ailleurs se comptent aussi", () => {
+  assert.ok(phraseDuReleve({ prises: [prise()], messagesCorriges: 1 })
+    .includes("1 rattachée à un autre message"));
+});
+
+test("une réponse coupée se dit, et ne se compte pas", () => {
+  // On ne sait pas combien il en manque : l'écrire comme un chiffre serait
+  // inventer.
+  const phrase = phraseDuReleve({ prises: [prise()], coupee: true });
+  assert.ok(phrase.includes("on ne sait pas combien"));
+  assert.equal(/\d+ manquante/.test(phrase), false);
+});
+
+test("un relevé sans rien à signaler ne dit que son compte", () => {
+  assert.equal(phraseDuReleve({ prises: [prise()], ecartees: 0, messagesCorriges: 0 }),
+    "1 prise de position");
+});
