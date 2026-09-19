@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 
 import { renderCoquilleTransversale } from "./mon-carnet-coquille.js";
 import { ROUTE_DU_CARNET } from "../services/mon-carnet.js";
+import { MARQUE_DES_SITUATIONS, RACCOURCIS_GLOBAUX } from "../services/raccourcis-de-la-barre.js";
 import { PROJECT_TABS } from "../constants.js";
 
 const VUES = dirname(fileURLToPath(import.meta.url));
@@ -88,14 +89,21 @@ test("les situations ne sont pas un onglet du projet", () => {
   assert.deepEqual(PROJECT_TABS.filter((onglet) => onglet.id === "situations"), []);
 });
 
-/** Et la barre du haut y mène, à côté des projets. */
-test("la barre du haut mène au carnet et aux projets", () => {
-  const entete = readFileSync(join(VUES, "global-header.js"), "utf8");
+/**
+ * Et la barre du haut y mène, à côté des projets.
+ *
+ * **La liste ne se lit plus dans le texte de l'en-tête**, et c'est un progrès :
+ * elle vit dans `raccourcis-de-la-barre.js`, qui s'importe. On l'interroge donc
+ * au lieu de la relire, et le dessin seul reste à lire ici.
+ */
+test("la barre du haut mène aux situations et aux projets", () => {
+  const adresses = RACCOURCIS_GLOBAUX.map((un) => un.href);
+  assert.ok(adresses.includes(ROUTE_DU_CARNET), "le raccourci des situations");
+  assert.ok(adresses.includes("#projects"), "et celui des projets");
 
-  assert.match(entete, /href:\s*ROUTE_DU_CARNET/, "le raccourci du carnet");
-  assert.match(entete, /href:\s*"#projects"/, "et celui des projets");
-  // Le même bouton pour les trois : en dessiner un par raccourci les ferait
-  // diverger de taille.
+  // Le même bouton pour tous : en dessiner un par raccourci les ferait diverger
+  // de taille. Cela, seul le gabarit de l'en-tête peut le dire.
+  const entete = readFileSync(join(VUES, "global-header.js"), "utf8");
   assert.equal(entete.match(/gh-raccourci/g)?.length >= 2, true);
 });
 
@@ -148,15 +156,20 @@ test("le carnet est atteignable : une route, et une entrée de menu", () => {
  * lève pas.** On ne peut pas non plus cliquer ici — il n'y a pas de document.
  */
 test("le raccourci des situations referme la situation ouverte", () => {
-  const entete = readFileSync(join(VUES, "global-header.js"), "utf8");
+  // La marque s'interroge, elle ne se relit plus : c'est le seul raccourci qui
+  // en porte une, et la liste le dit.
+  const marques = RACCOURCIS_GLOBAUX.filter((un) => un.marque);
+  assert.deepEqual(marques.map((un) => un.href), [ROUTE_DU_CARNET],
+    "seul le raccourci des situations porte un geste");
+  assert.equal(marques[0].marque, MARQUE_DES_SITUATIONS);
 
-  assert.match(entete, /marque:\s*"situations"/, "le raccourci doit se laisser reconnaître");
+  const entete = readFileSync(join(VUES, "global-header.js"), "utf8");
   assert.match(
     entete,
-    /closest\?\.\('\[data-raccourci="situations"\]'\)/,
-    "et l'écoute doit le reconnaître"
+    /closest\?\.\(`\[data-raccourci="\$\{MARQUE_DES_SITUATIONS\}"\]`\)/,
+    "et l'écoute doit le reconnaître, par la marque elle-même et non par une copie"
   );
   // Le même geste que le fil d'Ariane, au même endroit : deux façons de revenir
   // à la liste finiraient par ne plus se ressembler (règle 10).
-  assert.match(entete, /globalHeaderSituationsBack[\s\S]{0,200}data-raccourci="situations"/);
+  assert.match(entete, /globalHeaderSituationsBack[\s\S]{0,200}MARQUE_DES_SITUATIONS/);
 });

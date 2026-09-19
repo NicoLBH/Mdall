@@ -439,3 +439,53 @@ rouvre après le rendu** (sans quoi on reclique le bouton entre deux valeurs d'u
 champ à choix multiple). Ils vivent maintenant dans
 `ui/branchement-de-la-requete.js`, et la barre elle-même dans
 `ui/barre-de-requete.js`.
+
+## Ils ont une porte dans la barre du haut
+
+### Le problème
+
+Trois écrans traversent les projets, et **un seul se cliquait**. Les situations
+avaient leur icône dans la barre du haut depuis qu'elles sont sorties du giron
+d'un projet ; tous les sujets et toutes les propositions n'existaient que dans
+le menu de gauche, qu'il faut ouvrir. Deux gestes au lieu d'un, sur les deux
+écrans qu'on ouvre le plus souvent — et un péage qu'on paie cent fois par jour
+finit par décider de ce qu'on fait.
+
+### L'ordre
+
+```
+copilote | sujets | propositions | situations | projets
+```
+
+Il va **de ce qu'on fait vers l'endroit où on le fait**. Le copilote est la
+porte de tout le reste ; les sujets et les propositions sont ce qui est en
+cours ; les situations sont la façon dont on se l'organise ; les projets sont le
+classeur, et l'on n'y descend qu'en sachant déjà ce qu'on y cherche.
+
+**Les projets étaient en tête et passent en queue.** L'entrée la plus générale
+se lit comme la plus importante quand elle est la première, alors qu'elle est
+celle dont on a le moins besoin : on ouvre rarement Mdall pour regarder la liste
+de ses chantiers.
+
+Le copilote reste l'exception de la rangée : il vit dans l'Atelier d'un projet,
+et la barre ne le pose que là. Hors projet, elle commence aux sujets.
+
+### La liste sort de l'en-tête
+
+Elle y était écrite en dur, et l'en-tête parle à l'authentification : **aucune
+épreuve ne pouvait dire ce qu'il contenait ni dans quel ordre.** On le relisait
+à l'œil, c'est-à-dire qu'on ne le vérifiait pas (règle 12). Elle vit maintenant
+dans `services/raccourcis-de-la-barre.js`, qui s'importe — et sept épreuves y
+tiennent l'ordre, la présence d'un nom, l'unicité des dessins, et le fait que
+chaque icône existe dans la planche.
+
+Les noms n'y sont pas écrits : ils viennent de `ecrans-transversaux.js` et de
+`mon-carnet.js`, là où le menu de gauche et les routes les prennent déjà. Une
+quatrième copie d'un mot qui en a trois serait celle qui reste fausse le jour où
+les autres changent (règle 10).
+
+**Un seul raccourci porte un geste** : celui des situations. Son adresse ne
+change pas quand on y est déjà — on est sur `#situations` avec une situation
+ouverte —, donc le navigateur ne prévient personne et l'écran ne bouge pas. Le
+clic doit refermer la sélection lui-même, et la marque qui le permet est
+nommée une seule fois, des deux côtés du branchement.

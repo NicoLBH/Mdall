@@ -35,7 +35,8 @@
 import { CERTITUDE, ORDRE, phraseDuMoment } from "./le-fil-des-mails.js";
 import {
   NATURE, ceQueLeModeleNaPasDit, ceQuiManque, nomDeLaNature, parNature, partReleveeDuMessage,
-  phraseDeLaPart, phraseDeLaTemperature, phraseDuManque, phraseDuReleve, prisesDuMessage
+  phraseDeLaPart, phraseDeLaTemperature, phraseDesSujets, phraseDesSujetsEcartes, phraseDuManque,
+  phraseDuReleve, prisesDuMessage
 } from "./prises-de-position.js";
 import { phraseDuTrou } from "./trous-dun-mail.js";
 
@@ -107,6 +108,16 @@ function unMessage(message, prises, couverture) {
   // pas à faire monter.
   const part = partReleveeDuMessage(couverture, message.rang);
   if (part) lignes.push("", `_${phraseDeLaPart(part)}._`);
+
+  // **Et ce qu'aucune n'a repris, en toutes lettres.** L'export sort pour être
+  // opposé à quelqu'un : un pourcentage lui dit qu'il manque quelque chose, ces
+  // phrases-là lui disent quoi, dans les mots de leur auteur. La politesse y
+  // est, et on ne la retire pas — le lexique qui la retirerait déciderait à la
+  // place du lecteur.
+  if (part?.nonRepris?.length) {
+    lignes.push("", "**Ce qu'aucune citation ne reprend :**", "",
+      ...part.nonRepris.map((phrase) => `- ${phrase}`));
+  }
 
   return lignes.join("\n");
 }
@@ -245,6 +256,17 @@ export function leFilEnTexte({ fil = null, releve = null, fichiers = [] } = {}) 
     morceaux.push(`- **Renvois écartés** : ${releve.renvoisEcartes}`
       + " (le message visé n'existe pas, ou n'est pas antérieur)");
   }
+  // **Les sujets du fil, et combien ils sont.** Trois pour quarante prises est
+  // trop grossier, trente est l'ancien libellé libre revenu : le lecteur doit
+  // pouvoir en juger, et il ne le peut pas sans les voir.
+  const dits = phraseDesSujets(releve.sujets, releve.prises);
+  if (dits) {
+    morceaux.push(`- **Sujets du fil** : ${dits}`);
+    morceaux.push(...(releve.sujets ?? []).map((sujet) =>
+      `  - ${sujet.numero}. ${texte(sujet.intitule)}`));
+  }
+  const perdus = phraseDesSujetsEcartes(releve.sujetsEcartes);
+  if (perdus) morceaux.push(`- **Sujets écartés** : ${perdus}`);
   if (Number(releve.derive?.indecidables) > 0) {
     morceaux.push(`- **Demandes qu'on n'a pas su juger** : ${releve.derive.indecidables}`
       + " (elles ne disent pas sur quoi elles portent)");

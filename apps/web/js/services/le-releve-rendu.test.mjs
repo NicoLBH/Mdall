@@ -123,3 +123,26 @@ test("un refus du fournisseur n'a pas de suite inventée", () => {
   }
   assert.equal(queFaire("inconnu"), "");
 });
+
+// ── Les sujets déclarés ────────────────────────────────────────────────────
+
+test("les sujets du fil descendent tels que le serveur les a rendus", () => {
+  const lu = leReleveLu(rendu({
+    sujets: [{ numero: 1, intitule: "humidité de l'acrotère" }], sujets_ecartes: 0
+  }));
+  assert.deepEqual(lu.sujets, [{ numero: 1, intitule: "humidité de l'acrotère" }]);
+  assert.equal(lu.sujetsEcartes, 0);
+});
+
+test("une réponse sans sujets rend une liste vide, et non une absence de champ", () => {
+  // L'écran boucle dessus : `undefined` le ferait tomber, et le relevé entier
+  // disparaîtrait alors pour un champ que le serveur n'a pas dit.
+  assert.deepEqual(leReleveLu(rendu()).sujets, []);
+});
+
+test("un compte de sujets écartés absent reste nul, et non zéro", () => {
+  // Zéro est une déclaration : « aucune prise n'a raté son rattachement ». Une
+  // version plus ancienne de la fonction n'a rien déclaré du tout (règle 5).
+  assert.equal(leReleveLu(rendu()).sujetsEcartes, null);
+  assert.equal(leReleveLu(rendu({ sujets_ecartes: 3 })).sujetsEcartes, 3);
+});

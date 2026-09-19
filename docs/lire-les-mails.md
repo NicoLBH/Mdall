@@ -806,6 +806,78 @@ coût nul.
 > c'est ce qui a décidé la coupure. Ce qui reste : § 58 de
 > [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
+### 7 septies — Le sujet d'une prise, et ce que le relevé n'a pas pris · *fait*
+
+Deux points ouverts depuis deux fils réels, et qui se tenaient : **le libellé de sujet** que le
+modèle réécrivait à chaque prise, et **la couverture** qui disait qu'un message avait été mal
+relevé sans jamais montrer quoi.
+
+**28 libellés pour 39 prises, et aucune règle sur les lettres ne les rapprochera.** La règle
+actuelle — la suite de mots pleins de l'un se lit d'un tenant dans l'autre — en rapproche
+**quatre** sur les 28, et les quatre tiennent. Mais à la lecture, ces 28 libellés recouvrent
+**dix sujets** : treize d'entre eux parlent du souffle du rotor et de sa combinaison avec le
+vent, quatre de la composante verticale du séisme, trois de l'irrégularité en élévation. La
+règle en récupère donc le cinquième, et **rien ne fera mieux** : « rapport Avg/Ag » et « étude
+sismique verticale » désignent la même question et ne partagent aucune lettre.
+
+> On ne demande plus un libellé. Le modèle **déclare la liste des sujets du
+> fil, une fois**, numérotée ; chaque prise **pointe un numéro**. Deux prises
+> sur la même question le sont alors par construction, et non par comparaison
+> de chaînes.
+>
+> **Et le numéro se vérifie**, comme le renvoi de l'étape précédente : un sujet
+> qui n'est pas dans la liste déclarée est écarté et compté. La prise reste —
+> elle est réelle —, et elle perd son sujet, ce qui la range en « on ne sait
+> pas » plutôt qu'en une réponse inventée (règle 5).
+>
+> Le reste du dépôt ne change pas : `porte_sur` porte toujours un libellé, mais
+> il vient désormais d'une liste fermée. `memeSujet` reste en place et
+> retombe sur l'égalité dans le cas courant.
+
+**La liste se lit à l'écran, et c'est la moitié de l'apport.** Le défaut des 28 libellés était
+invisible : un libellé libre ne paraissait qu'au fond d'une ligne, une prise à la fois, et
+personne ne pouvait voir qu'il y en avait 28. L'écran dit maintenant « ce fil porte sur N sujets
+pour M prises » et les nomme. Trois pour quarante est trop grossier ; trente est l'ancien défaut
+revenu. **Aucun seuil n'est posé** : le lecteur regarde et décide.
+
+**Et un refus est une décision.** « Non, je ne peux pas » est la réponse la plus tranchante du
+second fil, et elle n'apparaissait dans aucune prise — ni dans aucun des trois passages. La
+consigne le dit maintenant en toutes lettres : trancher contre est trancher. C'est un changement
+de ce qu'on demande au modèle, donc **une hypothèse jusqu'à la prochaine mesure**.
+
+**La couverture montre enfin ce qu'elle n'a pas repris.** C'est le garde-fou qui ne dépend
+d'aucun modèle : chaque message est coupé en phrases, et **celles qu'aucune citation ne reprend
+se lisent**, repliées sous le pourcentage, dans les mots de leur auteur. Le refus du second fil y
+serait apparu quoi qu'ait fait le modèle.
+
+> **On ne filtre pas la politesse.** La retirer demanderait un lexique de ce qui
+> ne compte pas, et ce lexique déciderait à la place du lecteur — c'est ainsi
+> qu'on cache une phrase qui comptait. « Bien cordialement » est donc dans la
+> liste, et une liste vide serait un mauvais signe plutôt qu'un bon.
+>
+> La comparaison se fait **sur les mots, jamais sur les lettres** — le piège de
+> la maison : « le vent souffle fort » est une suite de lettres de « le vent
+> souffle fortement » —, **dans les deux sens** — le modèle cite souvent deux
+> phrases d'un trait là où notre découpe en fait deux —, et **une phrase d'un
+> seul mot est toujours montrée** : « Non. » est un mot, et le mot « non » se
+> lit dans presque toutes les citations d'un fil où l'on discute.
+
+**Ce qui se vérifie en cassant** : un numéro de sujet illisible devenu le sujet zéro ; deux
+sujets du même numéro dont le dernier gagne ; un numéro inconnu rattaché au plus proche ; une
+prise sans sujet comptée comme un écart ; la comparaison retombée sur les lettres ; une phrase
+d'un seul mot cachée par une citation ; une énumération sans ponctuation devenue un bloc unique ;
+un lexique qui retire la politesse ; un compte absent devenu un zéro annoncé.
+
+> Les trente-sept ruptures essayées tombent. **Trois ont d'abord été muettes**,
+> et les trois disaient la même chose : le cas de l'épreuve ne tendait pas le
+> piège qu'il prétendait tendre. « vent » contre « ventilation » ne partagent
+> aucune suite de lettres, donc l'épreuve passait avec ou sans les espaces qui
+> bordent la comparaison ; une citation égale à sa phrase satisfait les deux
+> sens de la reconnaissance, donc l'un des deux pouvait disparaître ; et une
+> phrase qui finit par un point se coupe aux points, donc la coupure aux
+> retours à la ligne ne servait à rien. Les trois cas ont été refaits. Ce qui
+> reste : § 59 de [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
+
 ### 8 — La boîte de réception du projet
 
 La porte principale, et le morceau le plus lourd. Elle vient en dernier parce qu'elle se
@@ -913,6 +985,8 @@ expéditeur inconnu. Voir la section ci-dessus.
 | Le relevé par le modèle | `supabase/functions/relever-un-fil/` — la consigne y vit seule · *écrit* |
 | Le réglage qui rend un relevé reproductible | `_shared/reglage-du-modele.js` — pur · *écrit* |
 | Ce que le serveur rend, lu une fois | `services/le-releve-rendu.js` — pur · *écrit* |
+| Les sujets du fil, déclarés puis vérifiés | `_shared/prises-du-modele.js` — `lesSujetsDuFil`, `leSujetVerifie` · *écrit* |
+| Ce qu'aucune citation ne reprend | `_shared/prises-du-modele.js` — `lesPhrasesNonReprises` · *écrit* |
 | Ce qu'un fil porte | `services/prises-de-position.js` — pur · *écrit* |
 | Ce qui se dérive du fil | `services/ce-quon-derive.js` — pur · *écrit* |
 | Demander le relevé | `services/prises-par-le-modele.js` · *écrit* |

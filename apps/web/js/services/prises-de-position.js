@@ -369,7 +369,20 @@ export function partReleveeDuMessage(couverture = [], rang = 0) {
   return {
     caracteres: Number(ligne.caracteres),
     couverts: Number(ligne.couverts) || 0,
-    part: Math.round((Number(ligne.couverts) || 0) / Number(ligne.caracteres) * 100)
+    part: Math.round((Number(ligne.couverts) || 0) / Number(ligne.caracteres) * 100),
+    /**
+     * Les phrases du message qu'aucune citation ne reprend.
+     *
+     * **Le pourcentage disait où regarder ; celles-ci montrent quoi.** Sur un
+     * fil réel, le message à 31 % portait « Non, je ne peux pas » et « c'est un
+     * avis défavorable qui sera émis » — les deux phrases les plus lourdes du
+     * litige, et il fallait rouvrir le mail pour les voir.
+     *
+     * Une liste vide veut dire que tout a été repris, ce qui serait un mauvais
+     * signe : la politesse et la signature n'y sont pas filtrées, et elles ne
+     * devraient être citées par personne.
+     */
+    nonRepris: Array.isArray(ligne.nonRepris) ? ligne.nonRepris : []
   };
 }
 
@@ -377,6 +390,66 @@ export function partReleveeDuMessage(couverture = [], rang = 0) {
 export function phraseDeLaPart(part) {
   if (!part) return "";
   return `${part.part} % de ce message est repris par une citation`;
+}
+
+/**
+ * Ce qu'aucune citation ne reprend, annoncé en une phrase.
+ *
+ * **Le compte, et non les phrases elles-mêmes.** C'est un libellé de bouton :
+ * les phrases se lisent quand on l'ouvre, parce qu'un message en porte souvent
+ * dix et qu'elles noieraient le relevé si elles étaient toujours dépliées.
+ *
+ * Vide quand il n'y a rien à montrer — ce qui, pour ce compte-ci, veut dire que
+ * chaque phrase du message a été reprise par une citation. C'est possible sur
+ * un message d'une ligne ; ailleurs, c'est un signe qu'il faut regarder.
+ */
+export function phraseDeCeQuiNestPasRepris(combien) {
+  const compte = Number(combien) || 0;
+  if (compte <= 0) return "";
+  return `${compte} phrase${compte > 1 ? "s" : ""} qu'aucune citation ne reprend`;
+}
+
+/**
+ * Les sujets du fil, annoncés en une phrase.
+ *
+ * ## Pourquoi ce compte paraît à l'écran
+ *
+ * Le libellé d'une prise était un texte libre, et le modèle en écrivait un
+ * nouveau à chaque fois : **28 pour 39 prises** sur un fil réel. Deux prises
+ * sur la même question ne se rapprochaient donc pas, et l'écran pouvait
+ * affirmer que personne n'avait parlé d'un sujet dont deux messages traitaient.
+ *
+ * Le modèle déclare maintenant la liste une fois, et une prise y pointe un
+ * numéro. **Ce compte est ce qui permet de juger la liste** : trois sujets pour
+ * quarante prises est trop grossier, trente est l'ancien défaut revenu. Sans
+ * lui, on ne pourrait ni l'un ni l'autre.
+ *
+ * Aucun seuil n'est posé : en inventer un ferait dire au compte plus qu'il ne
+ * sait (règle 5).
+ */
+export function phraseDesSujets(sujets = [], prises = []) {
+  const combien = (Array.isArray(sujets) ? sujets : []).length;
+  if (!combien) return "";
+
+  const combienDePrises = (Array.isArray(prises) ? prises : []).length;
+  const pour = combienDePrises
+    ? ` pour ${combienDePrises} prise${combienDePrises > 1 ? "s" : ""}`
+    : "";
+  return `${combien} sujet${combien > 1 ? "s" : ""}${pour}`;
+}
+
+/**
+ * Les prises qui visaient un sujet que personne n'avait déclaré.
+ *
+ * Elles gardent leur place — la citation s'est retrouvée — et **perdent leur
+ * sujet**, ce qui les range en « on ne sait pas » plutôt qu'en une réponse
+ * inventée. Rien quand le serveur n'a pas compté : ne pas savoir ne s'annonce
+ * pas comme un zéro (règle 5).
+ */
+export function phraseDesSujetsEcartes(combien) {
+  if (!Number.isFinite(combien) || combien <= 0) return "";
+  return `${combien} prise${combien > 1 ? "s" : ""} visai${combien > 1 ? "ent" : "t"}`
+    + " un sujet qui n'a pas été déclaré";
 }
 
 /**

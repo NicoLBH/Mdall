@@ -347,3 +347,62 @@ test("un relevé sans température fixée le dit dans l'export", () => {
   const texte = leFilEnTexte({ fil: fil(), releve: RELEVE });
   assert.ok(texte.includes("température non fixée : deux lectures du même fil peuvent différer"));
 });
+
+// ── Les sujets du fil, et ce qui n'a pas été repris ────────────────────────
+
+test("l'export nomme les sujets du fil et les compte", () => {
+  // Le lecteur doit pouvoir juger le découpage : trois sujets pour quarante
+  // prises est trop grossier, trente est l'ancien libellé libre revenu.
+  const texte = leFilEnTexte({
+    fil: fil(),
+    releve: {
+      ...RELEVE,
+      sujets: [{ numero: 1, intitule: "humidité de l'acrotère" },
+        { numero: 2, intitule: "cote du seuil" }]
+    }
+  });
+  assert.ok(texte.includes("**Sujets du fil** : 2 sujets pour 1 prise"), texte);
+  assert.ok(texte.includes("1. humidité de l'acrotère"), texte);
+  assert.ok(texte.includes("2. cote du seuil"), texte);
+});
+
+test("un relevé sans sujets déclarés n'annonce pas zéro sujet", () => {
+  const texte = leFilEnTexte({ fil: fil(), releve: RELEVE });
+  assert.equal(texte.includes("Sujets du fil"), false);
+});
+
+test("les prises qui visaient un sujet non déclaré se disent dans l'export", () => {
+  const texte = leFilEnTexte({
+    fil: fil(),
+    releve: { ...RELEVE, sujets: [{ numero: 1, intitule: "humidité" }], sujetsEcartes: 2 }
+  });
+  assert.ok(texte.includes("**Sujets écartés** : 2 prises visaient"), texte);
+});
+
+test("l'export donne les phrases qu'aucune citation ne reprend", () => {
+  // Il sort pour être opposé à quelqu'un : le pourcentage lui dit qu'il manque
+  // quelque chose, ces phrases-là lui disent quoi.
+  const texte = leFilEnTexte({
+    fil: fil(),
+    releve: {
+      ...RELEVE,
+      couverture: [{
+        message: 2, caracteres: 120, couverts: 44,
+        nonRepris: ["Non, je ne peux pas.", "Bien cordialement."]
+      }]
+    }
+  });
+  assert.ok(texte.includes("**Ce qu'aucune citation ne reprend :**"), texte);
+  assert.ok(texte.includes("- Non, je ne peux pas."), texte);
+  // La politesse y est, et on ne la retire pas : le lexique qui la retirerait
+  // déciderait à la place du lecteur.
+  assert.ok(texte.includes("- Bien cordialement."), texte);
+});
+
+test("un message dont tout a été repris n'ouvre pas de rubrique vide", () => {
+  const texte = leFilEnTexte({
+    fil: fil(),
+    releve: { ...RELEVE, couverture: [{ message: 2, caracteres: 120, couverts: 120, nonRepris: [] }] }
+  });
+  assert.equal(texte.includes("Ce qu'aucune citation ne reprend"), false);
+});
