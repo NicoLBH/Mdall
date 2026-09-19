@@ -150,7 +150,9 @@ async function projetCourant() {
 /**
  * Relever un fil, une fois.
  *
- * @returns {Promise<{ok: true, prises: object[], ecartees: number}|{ok: false, motif: string}>}
+ * @returns {Promise<{ok: true, prises: object[], ecartees: number,
+ *   lesEcartees: object[], muets: number[]|null, oublies: number[]|null}
+ *   |{ok: false, motif: string}>}
  */
 export async function releverLeFil({ filId = "", messages = [] } = {}) {
   const aEnvoyer = messagesAEnvoyer(messages);
@@ -185,7 +187,11 @@ export async function releverLeFil({ filId = "", messages = [] } = {}) {
 
   const rendu = await reponse.json().catch(() => null);
   const prises = Array.isArray(rendu?.prises) ? rendu.prises : [];
-  const ecartees = Array.isArray(rendu?.ecartees) ? rendu.ecartees.length : 0;
+
+  // **Le compte se dérive de la liste, il ne s'écrit pas à côté d'elle.** Deux
+  // nombres qui disent la même chose finissent par ne plus la dire (règle 4).
+  const lesEcartees = Array.isArray(rendu?.ecartees) ? rendu.ecartees : [];
+  const ecartees = lesEcartees.length;
 
   // **Aucune prise retenue, alors que le modèle en a rendu, n'est pas « rien à
   // relever ».** C'est un relevé qui n'a rien su citer, et cela se répare
@@ -199,6 +205,23 @@ export async function releverLeFil({ filId = "", messages = [] } = {}) {
     prises,
     /** Ce que le serveur a jeté faute de citation vérifiable. Se dit, se compte. */
     ecartees,
+    /**
+     * Et **ce que c'était** : intitulé, citation refusée, message visé.
+     *
+     * Sans cela, un compte seul ne dit pas si la porte a protégé — des
+     * inventions jetées — ou si elle a jeté des prises réelles mal recopiées.
+     * Ce sont deux défauts opposés, qui ne se règlent pas dans le même sens.
+     */
+    lesEcartees,
+    /**
+     * Les messages dont le modèle déclare ne rien tirer, et ceux dont il n'a
+     * rien dit du tout.
+     *
+     * `null` quand sa réponse n'a pas rendu compte message par message : on ne
+     * transforme pas une ignorance en zéro (règle 5).
+     */
+    muets: Array.isArray(rendu?.messages_muets) ? rendu.messages_muets : null,
+    oublies: Array.isArray(rendu?.messages_oublies) ? rendu.messages_oublies : null,
     /** Combien de prises ont changé de message — donc d'auteur. */
     messagesCorriges: Number(rendu?.messages_corriges) || 0,
     /** La réponse a-t-elle été coupée ? Des prises manquent alors, en silence. */

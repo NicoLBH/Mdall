@@ -255,6 +255,46 @@ export function phraseDuReleve({ prises = [], ecartees = 0, messagesCorriges = 0
 }
 
 /**
+ * Ce dont le modèle n'a rien tiré, et ce dont il n'a rien dit.
+ *
+ * **Les deux ne se valent pas**, et c'est toute la raison d'être du compte
+ * message par message. Déclarer qu'un message ne porte aucune prise est une
+ * lecture : elle se discute, mais elle a eu lieu. N'en rien dire n'en est pas
+ * une. Les confondre — ce que faisait une liste plate de prises — fait passer
+ * un trou pour un constat de vide (règle 5), et sur un fil réel ce sont
+ * justement les deux messages les plus disputés qui avaient disparu ainsi.
+ *
+ * `sait` est faux quand la réponse du modèle n'a pas cette forme : on ne compte
+ * alors ni muets ni oubliés, parce qu'on ne le sait pas.
+ *
+ * La phrase vit ici et nulle part ailleurs : l'écran et l'export la disent du
+ * même mot (règle 10).
+ */
+export function ceQueLeModeleNaPasDit({ muets = null, oublies = null } = {}) {
+  if (!Array.isArray(muets) || !Array.isArray(oublies)) {
+    return {
+      sait: false,
+      muets: [],
+      oublies: [],
+      phrase: "le modèle n'a pas rendu sa lecture message par message : on ne sait pas s'il en "
+        + "a sauté"
+    };
+  }
+
+  const morceaux = [];
+  if (muets.length) {
+    morceaux.push(`${muets.length} message${muets.length > 1 ? "s" : ""} dont il déclare ne rien `
+      + `tirer (${muets.join(", ")})`);
+  }
+  if (oublies.length) {
+    morceaux.push(`${oublies.length} message${oublies.length > 1 ? "s" : ""} dont il n'a rien dit `
+      + `du tout (${oublies.join(", ")}) — ce n'est pas une lecture, c'est une omission`);
+  }
+
+  return { sait: true, muets, oublies, phrase: morceaux.join(" · ") };
+}
+
+/**
  * Les prises d'un message donné.
  *
  * C'est ce qui permet de montrer, sous chaque message du fil, ce qu'on en a

@@ -62,7 +62,7 @@ import {
 import { phraseDuTrou } from "../../../services/trous-dun-mail.js";
 import {
   NATURE, ceQueCaDevient, ceQuiManque, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
-  phraseDuReleve, prisesDuMessage, quoiDeLaNature
+  ceQueLeModeleNaPasDit, phraseDuReleve, prisesDuMessage, quoiDeLaNature
 } from "../../../services/prises-de-position.js";
 import { ceQuonDerive } from "../../../services/ce-quon-derive.js";
 import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
@@ -445,6 +445,10 @@ function renderReleveEnCours() {
 function renderLesPrises(vue) {
   const releve = vue.releve;
   const groupes = parNature(releve.prises);
+  // **Ce dont le modèle n'a rien dit se lit à côté de ce qu'il a dit.** Un
+  // message sauté ne laisse aucune trace dans les rubriques ci-dessous : s'il
+  // ne se dit pas ici, il ne se dit nulle part.
+  const rienTire = ceQueLeModeleNaPasDit(releve);
 
   return `
     <section class="lecture-cr__identite">
@@ -453,9 +457,14 @@ function renderLesPrises(vue) {
       ${releve.ecartees > 0 ? `
         <p class="lecture-cr__reserve">${escapeHtml(
           `${releve.ecartees} prise${releve.ecartees > 1 ? "s" : ""} n'${
-            releve.ecartees > 1 ? "ont" : "a"} pas franchi la porte : sa citation ne se retrouve `
-          + "dans aucun message. C'est la mesure de ce que ce relevé n'a pas su faire."
+            releve.ecartees > 1 ? "ont" : "a"} pas franchi la porte : ${
+            releve.ecartees > 1 ? "leurs citations ne se retrouvent" : "sa citation ne se retrouve"} `
+          + "dans aucun message. Le texte à emporter les donne, avec la phrase refusée : c'est "
+          + "ce qui permet de voir si la porte a protégé ou si elle a jeté."
         )}</p>
+      ` : ""}
+      ${rienTire.phrase ? `
+        <p class="lecture-cr__reserve">${escapeHtml(`Ce dont rien n'a été tiré : ${rienTire.phrase}.`)}</p>
       ` : ""}
       <p>
         <button type="button" class="gh-btn gh-btn--sm" data-mails-relever>

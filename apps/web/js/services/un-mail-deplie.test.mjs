@@ -611,3 +611,53 @@ test("les octets d'un fichier se déplient comme sa chaîne brute", () => {
   const octets = Uint8Array.from(SIMPLE, (caractere) => caractere.charCodeAt(0));
   assert.deepEqual(unMailDeplie(octets), unMailDeplie(SIMPLE));
 });
+
+// ── Le propos est nettoyé une fois, et là ──────────────────────────────────
+
+const BRUITE = mail(
+  "From: BERTRAND <contact@bertrand.example>",
+  "To: Ourdine Ferrand <o.ferrand@novaclim.example>",
+  "Date: Tue, 3 Mar 2026 08:30:00 +0100",
+  "Subject: Étanchéité toiture",
+  "Message-ID: <c3@bertrand.example>",
+  "",
+  "EXTERNAL SENDER: prudence avec les pièces jointes.",
+  "",
+  "La notice est ici : https://eur03.safelinks.protection.outlook.com/?url="
+    + "https%3A%2F%2Fwww.novaclim.example%2Fnotices%2Fcvc-12.pdf&data=05%7C02%7C",
+  "Le détail en coupe [cid:image018.png@01DD1B52.8A52BFD0] est joint.",
+  ""
+);
+
+test("une redirection est dépliée dans le propos, pas seulement raccourcie", () => {
+  // Le nettoyage vit ici, une fois : l'écran et le modèle lisent le même texte,
+  // et il n'y a pas deux versions du propos qui finiraient par diverger
+  // (règle 4).
+  const deplie = unMailDeplie(BRUITE);
+  assert.ok(deplie.corps.includes("https://www.novaclim.example/notices/cvc-12.pdf"));
+  assert.equal(deplie.corps.includes("safelinks"), false);
+  assert.equal(deplie.nettoyage.redirections, 1);
+});
+
+test("le bandeau d'une passerelle ne descend pas dans le propos", () => {
+  const deplie = unMailDeplie(BRUITE);
+  assert.equal(deplie.corps.includes("EXTERNAL SENDER"), false);
+  assert.equal(deplie.nettoyage.bandeaux, 1);
+});
+
+test("une image collée se compte, et devient un trou", () => {
+  // Dans un échange technique, une formule ou un extrait de norme vit souvent
+  // dans l'image : un relevé qui l'ignore en silence est pire qu'un relevé qui
+  // dit qu'il y a là quelque chose qu'il n'a pas lu (règle 5).
+  const deplie = unMailDeplie(BRUITE);
+  assert.equal(deplie.nettoyage.images, 1);
+  assert.ok(deplie.corps.includes("(image)"));
+  assert.ok(aBien(deplie, TROU.IMAGES_NON_LUES));
+  assert.equal(deplie.trous.find((trou) => trou.quoi === TROU.IMAGES_NON_LUES).detail, "1");
+});
+
+test("un mail sans image ne signale pas d'image non lue", () => {
+  // Le pendant : un trou qui se pose toujours ne dit plus rien.
+  assert.equal(aBien(unMailDeplie(SIMPLE), TROU.IMAGES_NON_LUES), false);
+  assert.equal(unMailDeplie(SIMPLE).nettoyage.images, 0);
+});

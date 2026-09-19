@@ -63,6 +63,24 @@ export const NATURE = {
 /** Ce qu'on écarte en plus de ce que la citation écarte. */
 export const ECART_DE_NATURE = "nature-inconnue";
 
+/**
+ * Pourquoi une prise n'a pas franchi la porte, dit pour un fil de mails.
+ *
+ * **Les phrases du garde-fou commun parlent d'un « document ».** Ici il n'y en
+ * a pas : il y a des messages, et dire à quelqu'un que sa citation « ne se
+ * retrouve pas dans le document » l'enverrait chercher un PDF qui n'existe
+ * pas. Le motif reste le même ; c'est la phrase qui change de métier.
+ *
+ * Elle descend avec l'écartée, plutôt que d'être recopiée au navigateur : le
+ * motif vit d'un seul côté de la cloison (règle 10).
+ */
+export const PHRASES_DE_LECART_DUNE_PRISE = {
+  [ECART.SANS_CITATION]: "cette prise ne cite aucun message",
+  [ECART.INTROUVABLE]: "cette citation ne se retrouve dans aucun message du fil",
+  [ECART.VIDE]: "cette prise ne porte pas d'intitulé",
+  [ECART_DE_NATURE]: "cette nature n'est pas l'une des cinq"
+};
+
 export const CONSIGNES = [
   "Tu lis un fil de courriels d'un chantier de construction et tu en relèves les prises de position. Tu ne juges rien, tu ne résumes rien, tu ne complètes rien.",
   "",
@@ -79,11 +97,16 @@ export const CONSIGNES = [
   "",
   "Un même message peut porter plusieurs prises, ou aucune. Un message qui ne dit que « bien reçu, merci » n'en porte aucune : ne force pas.",
   "",
+  "Tu rends une entrée PAR MESSAGE du fil, dans l'ordre où ils te sont donnés, et tu n'en sautes AUCUN. Un message dont tu ne tires rien reçoit une entrée avec une liste de prises vide : c'est une réponse, et elle est attendue. Ne rien dire d'un message et dire qu'il ne porte rien sont deux choses différentes, et seule la seconde est une lecture.",
+  "",
+  "Pour chaque entrée de message :",
+  "- `message` : le numéro du message, tel qu'il est écrit dans son en-tête.",
+  "- `prises` : ce qu'il porte, éventuellement vide.",
+  "",
   "Pour chaque prise :",
   "- `nature` : l'une des cinq ci-dessus.",
   "- `intitule` : ce qui est pris comme position, en une ligne, DANS LES MOTS DE L'AUTEUR. Ne reformule pas, n'ajoute pas de verbe d'action qui n'y est pas.",
-  "- `message` : le numéro du message d'où elle sort.",
-  "- `citation` : la phrase du message d'où elle sort, RECOPIÉE MOT POUR MOT. Elle sera recherchée dans le texte de ce message : si elle ne s'y retrouve pas, la prise sera écartée.",
+  "- `citation` : la phrase du message, RECOPIÉE MOT POUR MOT. Elle sera recherchée dans le texte de ce message : si elle ne s'y retrouve pas, la prise sera écartée.",
   "- `porte_sur` : sur quoi elle porte, en deux ou trois mots, les mêmes d'une prise à l'autre quand c'est la même chose — « humidité de l'acrotère », « cote du seuil ». C'est ce qui permettra de rapprocher deux prises contraires.",
   "- `pour_qui` : à qui c'est demandé, tel qu'écrit — un nom, une entreprise, « la MOE ». Null pour un constat ou une source.",
   "- `echeance` : le délai annoncé, TEL QU'ÉCRIT — « avant vendredi », « jeudi », « sous 15 jours ». Ne le convertis pas en date. Null s'il n'y en a pas.",
@@ -91,6 +114,19 @@ export const CONSIGNES = [
   "N'invente JAMAIS l'auteur ni la date d'une prise : ils sont déjà connus, ils viennent des en-têtes du message. On ne te les demande pas."
 ].join("\n");
 
+/**
+ * Ce qu'on demande au modèle de rendre.
+ *
+ * **Des messages, qui portent des prises — et non une liste de prises.** La
+ * différence n'est pas cosmétique, et un fil réel l'a payée : sur six
+ * messages, le modèle en a sauté deux, et rien dans sa réponse ne le disait.
+ * Une liste plate ne distingue pas « ce message ne porte aucune prise » de
+ * « je n'ai rien dit de ce message » ; le lecteur, lui, lit les deux comme la
+ * première, et croit qu'un message où le désaccord se jouait était vide
+ * (règle 5).
+ *
+ * Ici, une liste vide est une **déclaration**, et une entrée absente se voit.
+ */
 export const SCHEMA_DES_PRISES = {
   name: "prises_du_fil",
   strict: true,
@@ -98,25 +134,35 @@ export const SCHEMA_DES_PRISES = {
     type: "object",
     additionalProperties: false,
     properties: {
-      prises: {
+      messages: {
         type: "array",
         items: {
           type: "object",
           additionalProperties: false,
           properties: {
-            nature: { type: "string", enum: Object.values(NATURE) },
-            intitule: { type: "string" },
             message: { type: "integer" },
-            citation: { type: "string" },
-            porte_sur: { anyOf: [{ type: "string" }, { type: "null" }] },
-            pour_qui: { anyOf: [{ type: "string" }, { type: "null" }] },
-            echeance: { anyOf: [{ type: "string" }, { type: "null" }] }
+            prises: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  nature: { type: "string", enum: Object.values(NATURE) },
+                  intitule: { type: "string" },
+                  citation: { type: "string" },
+                  porte_sur: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  pour_qui: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  echeance: { anyOf: [{ type: "string" }, { type: "null" }] }
+                },
+                required: ["nature", "intitule", "citation", "porte_sur", "pour_qui", "echeance"]
+              }
+            }
           },
-          required: ["nature", "intitule", "message", "citation", "porte_sur", "pour_qui", "echeance"]
+          required: ["message", "prises"]
         }
       }
     },
-    required: ["prises"]
+    required: ["messages"]
   }
 };
 
@@ -161,6 +207,95 @@ export function messagesEnPages(messages = []) {
   return (Array.isArray(messages) ? messages : [])
     .filter((message) => texte(message?.propos))
     .map((message) => ({ page: Number(message?.rang), text: texte(message.propos) }));
+}
+
+/**
+ * Ce que le modèle a rendu, message par message — et ce dont il n'a rien dit.
+ *
+ * **C'est ici que l'omission cesse d'être silencieuse.** Le schéma demande une
+ * entrée par message ; cette fonction met les prises à plat pour la suite, et
+ * garde de côté les deux choses qu'une liste plate ne pouvait pas dire :
+ *
+ * - `muets` : les messages dont le modèle déclare ne rien tirer. C'est une
+ *   lecture, et elle vaut ce qu'elle vaut — mais c'est une réponse.
+ * - `oublies` : les messages dont il n'a rien dit du tout. Ce n'en est pas
+ *   une, et les confondre avec les premiers ferait passer un trou pour un
+ *   constat de vide (règle 5).
+ *
+ * `parMessage` dit si la réponse avait bien cette forme. Une réponse qui ne
+ * l'a pas — un modèle qui retombe sur l'ancienne liste plate — est lue quand
+ * même, parce que la jeter perdrait des prises réelles ; mais alors on ne sait
+ * ni qui est muet ni qui est oublié, et on le dit plutôt que de compter zéro.
+ */
+export function lesMessagesRendus(rendu, messages = []) {
+  const attendus = (Array.isArray(messages) ? messages : [])
+    .filter((message) => texte(message?.propos))
+    .map((message) => Number(message?.rang))
+    .filter((rang) => Number.isFinite(rang));
+
+  const groupes = Array.isArray(rendu?.messages) ? rendu.messages : null;
+
+  if (!groupes) {
+    const plates = Array.isArray(rendu?.prises) ? rendu.prises : [];
+    return { prises: plates, muets: null, oublies: null, parMessage: false };
+  }
+
+  const prises = [];
+  const vus = new Set();
+  const muets = [];
+
+  for (const groupe of groupes) {
+    // **On lit le nombre, on ne le fabrique pas.** `Number(null)` vaut zéro,
+    // et un groupe sans numéro deviendrait ainsi « le message 0 » : un message
+    // qui n'existe pas, déclaré lu.
+    const rang = groupe?.message;
+    const lisible = Number.isFinite(rang);
+    if (lisible) vus.add(rang);
+
+    const lot = Array.isArray(groupe?.prises) ? groupe.prises : [];
+    // **Le rang du groupe descend dans chaque prise.** C'est le seul endroit
+    // où il est écrit, et c'est de lui que viendront l'auteur et la date.
+    //
+    // **Un numéro illisible ne fait pas perdre les prises du groupe.** La
+    // porte cherchera leur citation dans tout le fil et les rattachera au
+    // message où elle se trouve : jeter une prise réelle parce que son
+    // en-tête est abîmé coûterait plus cher que de la replacer. Ce que le
+    // groupe perd, c'est le droit de dire qu'un message a été lu.
+    for (const prise of lot) prises.push({ ...prise, message: lisible ? rang : null });
+    if (lisible && !lot.length) muets.push(rang);
+  }
+
+  return {
+    prises,
+    muets,
+    oublies: attendus.filter((rang) => !vus.has(rang)),
+    parMessage: true
+  };
+}
+
+/**
+ * Ce qui a été écarté, dit en clair.
+ *
+ * **Un compte ne suffit pas.** « 3 écartées » ne dit pas si le garde-fou a
+ * protégé — trois inventions jetées — ou s'il a jeté trois prises réelles dont
+ * la citation était mal recopiée. Ce sont deux défauts opposés, et l'un se
+ * répare en resserrant la porte, l'autre en la desserrant. Sans l'intitulé et
+ * la citation refusée, on ne peut pas savoir lequel on a.
+ *
+ * Ce qui sort ici est du texte du fil de celui qui l'a déposé, ou une
+ * invention du modèle sur son fil : rien de la consigne, rien du serveur.
+ */
+export function ecarteesAuFormatDuMoteur(ecartees = []) {
+  return (Array.isArray(ecartees) ? ecartees : []).map(({ prise, motif }) => ({
+    motif: texte(motif),
+    /** Le motif en clair, dit pour un fil et non pour un document. */
+    phrase: PHRASES_DE_LECART_DUNE_PRISE[texte(motif)] ?? "",
+    nature: texte(prise?.nature),
+    intitule: texte(prise?.intitule),
+    /** La phrase que le modèle a donnée, et qui ne s'est pas retrouvée. */
+    citation: texte(prise?.citation),
+    message: Number(prise?.message) || null
+  }));
 }
 
 /**

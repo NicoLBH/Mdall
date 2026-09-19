@@ -197,3 +197,65 @@ test("un fil sans objet garde un nom", () => {
   assert.equal(nomDeLExport({ objet: "" }), "fil de mails.md");
   assert.equal(nomDeLExport(null), "fil de mails.md");
 });
+
+// ── Ce qui a été écarté, et ce dont rien n'a été tiré ──────────────────────
+
+const ECARTEE = {
+  motif: "introuvable",
+  phrase: "cette citation ne se retrouve dans aucun message du fil",
+  nature: NATURE.CONSTAT,
+  intitule: "le chantier est arrêté depuis mardi",
+  citation: "Le chantier est arrêté depuis mardi.",
+  message: 2
+};
+
+test("l'export dit ce qui a été écarté, et la phrase qui a été refusée", () => {
+  // **Un compte ne suffit pas.** « 2 écartées » recouvre deux défauts opposés :
+  // des inventions jetées — la porte a protégé — ou des phrases réelles mal
+  // recopiées — la porte a jeté. Seule la citation permet de trancher.
+  const texte = leFilEnTexte({
+    fil: fil(), releve: { ...RELEVE, lesEcartees: [ECARTEE] }
+  });
+  assert.ok(texte.includes("### Ce qui a été écarté (1)"));
+  assert.ok(texte.includes("le chantier est arrêté depuis mardi"));
+  assert.ok(texte.includes("> Le chantier est arrêté depuis mardi."));
+  assert.ok(texte.includes("cette citation ne se retrouve dans aucun message du fil"));
+  assert.ok(texte.includes("(message 2)"));
+});
+
+test("une écartée sur plusieurs lignes ne casse pas la citation", () => {
+  const texte = leFilEnTexte({
+    fil: fil(),
+    releve: { ...RELEVE, lesEcartees: [{ ...ECARTEE, citation: "Deux lignes\nd'un coup." }] }
+  });
+  assert.ok(texte.includes("> Deux lignes d'un coup."));
+});
+
+test("sans écartée, la rubrique ne s'ouvre pas", () => {
+  // Une rubrique déserte fait chercher ce qui devrait s'y trouver.
+  const texte = leFilEnTexte({ fil: fil(), releve: { ...RELEVE, lesEcartees: [] } });
+  assert.equal(texte.includes("Ce qui a été écarté"), false);
+});
+
+test("l'export nomme les messages dont le modèle n'a rien dit", () => {
+  const texte = leFilEnTexte({
+    fil: fil(), releve: { ...RELEVE, muets: [1], oublies: [2] }
+  });
+  assert.ok(texte.includes("### Ce dont rien n'a été tiré"));
+  assert.ok(texte.includes("1 message dont il déclare ne rien tirer (1)"));
+  assert.ok(texte.includes("1 message dont il n'a rien dit du tout (2)"));
+  assert.ok(texte.includes("c'est une omission"),
+    "un message sauté ne se range pas à côté d'un message lu et vide");
+});
+
+test("un relevé complet n'ouvre pas la rubrique de ce qui manque", () => {
+  const texte = leFilEnTexte({ fil: fil(), releve: { ...RELEVE, muets: [], oublies: [] } });
+  assert.equal(texte.includes("Ce dont rien n'a été tiré"), false);
+});
+
+test("un relevé qui n'a pas compté message par message le dit", () => {
+  // Zéro muet et zéro oublié affirmerait une lecture complète qui n'a pas eu
+  // lieu (règle 5).
+  const texte = leFilEnTexte({ fil: fil(), releve: RELEVE });
+  assert.ok(texte.includes("n'a pas rendu sa lecture message par message"));
+});

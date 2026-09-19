@@ -36,7 +36,9 @@ import { panneDuFournisseur } from "../_shared/sujets-du-modele.js";
 import {
   CONSIGNES,
   SCHEMA_DES_PRISES,
+  ecarteesAuFormatDuMoteur,
   filEnTexte,
+  lesMessagesRendus,
   prisesAuFormatDuMoteur,
   verifierLesPrises
 } from "../_shared/prises-du-modele.js";
@@ -190,16 +192,34 @@ serve(async (req) => {
       }, 502);
     }
 
+    // **Le compte, message par message.** Il se fait avant la porte : un
+    // message dont le modèle n'a rien dit n'est pas un message dont les prises
+    // ont été écartées, et seul ce qui est lu ici permet de les distinguer.
+    const rendus = lesMessagesRendus(lu, messages);
+
     // **La porte.** Ce que le modèle n'a pas su citer ne sort pas d'ici.
     const { retenues, ecartees, messagesCorriges } = verifierLesPrises({
-      prises: (lu.prises as unknown[]) ?? [],
+      prises: rendus.prises,
       messages
     });
 
     return reponse({
       prises: prisesAuFormatDuMoteur(retenues, { filId, messages }),
-      /** Ce qui a été jeté, et pourquoi. Se dit, se compte, ne se cache pas. */
-      ecartees: ecartees.map((ecart: { motif: string }) => ecart.motif),
+      /**
+       * Ce qui a été jeté, et pourquoi — **avec ce que c'était**.
+       *
+       * Un compte seul ne dit pas si la porte a protégé ou si elle a jeté.
+       * L'intitulé et la citation refusée le disent, et c'est la seule façon
+       * de régler le garde-fou sur des cas plutôt que sur une impression.
+       */
+      ecartees: ecarteesAuFormatDuMoteur(ecartees),
+      /**
+       * Les messages dont le modèle déclare ne rien tirer, et ceux dont il n'a
+       * rien dit du tout. `null` quand sa réponse n'a pas rendu compte message
+       * par message : ne pas savoir ne s'annonce pas comme un zéro (règle 5).
+       */
+      messages_muets: rendus.muets,
+      messages_oublies: rendus.oublies,
       /**
        * Combien de prises visaient un autre message que celui où leur citation
        * se trouve. Elles sont gardées — la prise est réelle —, mais **leur

@@ -354,7 +354,27 @@ test("un décompte absent n'est pas un relevé gratuit", () => {
 test("ce qui a été écarté se dit, et se compte", () => {
   const html = dessine(analyse({ releve: releve({ ecartees: 2 }) }));
   assert.ok(html.includes("2 écartées faute d&#39;une citation qu&#39;on retrouve"));
-  assert.ok(html.includes("C&#39;est la mesure de ce que ce relevé n&#39;a pas su faire."));
+  assert.ok(html.includes("leurs citations ne se retrouvent dans aucun message"));
+  assert.ok(html.includes("si la porte a protégé ou si elle a jeté"),
+    "l'écran doit renvoyer vers l'endroit où l'on peut le vérifier");
+});
+
+test("une seule écartée ne se dit pas au pluriel", () => {
+  const html = dessine(analyse({ releve: releve({ ecartees: 1 }) }));
+  assert.ok(html.includes("1 prise n&#39;a pas franchi la porte : sa citation ne se retrouve"));
+});
+
+test("l'écran dit les messages dont le modèle n'a rien dit", () => {
+  // Un message sauté ne laisse aucune trace dans les rubriques du relevé : si
+  // l'écran ne le dit pas ici, il ne le dit nulle part.
+  const html = dessine(analyse({ releve: releve({ muets: [1], oublies: [3] }) }));
+  assert.ok(html.includes("Ce dont rien n&#39;a été tiré"));
+  assert.ok(html.includes("1 message dont il n&#39;a rien dit du tout (3)"));
+});
+
+test("un relevé complet n'affiche pas de rubrique de ce qui manque", () => {
+  const html = dessine(analyse({ releve: releve({ muets: [], oublies: [] }) }));
+  assert.equal(html.includes("Ce dont rien n&#39;a été tiré"), false);
 });
 
 test("un relevé qui ne retient rien ne se lit pas comme un fil vide", () => {

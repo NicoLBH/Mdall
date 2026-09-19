@@ -47,6 +47,7 @@
 import {
   JEU_PAR_DEFAUT, decoderLesMotsEncodes, leTexteDuCorps, texteBrutDe, texteDuHtml
 } from "./decoder-un-mail.js";
+import { leProposNettoye } from "./nettoyer-le-propos.js";
 import { TROU, unTrou } from "./trous-dun-mail.js";
 
 /** Les deux formes sous lesquelles un corps peut arriver. */
@@ -338,21 +339,6 @@ function lireLaPartie(partie) {
   return leTexteDuCorps({ texte: partie.corps, encodage: partie.encodage, jeu: partie.jeu || JEU_PAR_DEFAUT });
 }
 
-/**
- * Retirer les lignes vides que le format ajoute autour du propos.
- *
- * Un `.eml` finit par un saut de ligne, et une partie encodée en porte
- * souvent un de plus. Ce ne sont pas des lignes que l'auteur a tapées : les
- * garder ferait terminer chaque message du fil par un blanc, et décalerait la
- * coupure des citations à l'étape suivante.
- *
- * L'indentation d'une ligne, elle, reste : elle peut porter du sens — un
- * tableau posé à la main, un extrait recopié.
- */
-function leCorpsNettoye(brut) {
-  return String(brut ?? "").replace(/^[\r\n]+/, "").replace(/\s+$/, "");
-}
-
 function leCorps(recolte, trous) {
   const choisi = recolte.texte ?? recolte.html;
   if (!choisi) {
@@ -367,8 +353,19 @@ function leCorps(recolte, trous) {
   }
   if (lu.deSecours) trous.push(unTrou(TROU.JEU_DE_SECOURS, "le corps", lu.jeuAnnonce));
   if (forme === FORME_DU_CORPS.HTML) trous.push(unTrou(TROU.CORPS_EN_HTML, "le corps"));
-  const corps = forme === FORME_DU_CORPS.HTML ? texteDuHtml(lu.texte) : leCorpsNettoye(lu.texte);
-  return { corps, formeDuCorps: forme };
+  const brut = forme === FORME_DU_CORPS.HTML ? texteDuHtml(lu.texte) : lu.texte;
+
+  // **Ce que l'auteur n'a pas écrit s'en va ici, une fois pour toutes** — les
+  // lignes vides que le format pose autour du propos comprises : un `.eml`
+  // finit par un saut de ligne, et une partie encodée en porte souvent un de
+  // plus. Les retirer une deuxième fois juste au-dessus ne faisait rien, et
+  // une épreuve l'a montré (règle 10). Le
+  // faire plus tard, au moment de l'envoi au modèle, donnerait deux textes —
+  // celui qu'on montre et celui qu'on fait lire — et ils finiraient par ne
+  // plus dire la même chose (règle 4).
+  const propre = leProposNettoye(brut);
+  if (propre.images > 0) trous.push(unTrou(TROU.IMAGES_NON_LUES, "le corps", String(propre.images)));
+  return { corps: propre.texte, formeDuCorps: forme, nettoyage: propre };
 }
 
 function lesPieces(recolte, trous) {
@@ -420,7 +417,7 @@ export function unMailDeplie(source) {
     return {
       qui: null, a: [], copie: [], quand: "", quandBrut: "", fuseauConnu: false,
       objet: "", objetNu: "", identite: "", enReponseA: "", chaine: [],
-      corps: null, formeDuCorps: "", pieces: [],
+      corps: null, formeDuCorps: "", nettoyage: { redirections: 0, images: 0, bandeaux: 0 }, pieces: [],
       trous: [unTrou(TROU.PAS_UN_MAIL, "le fichier", brut.panne)]
     };
   }
@@ -437,7 +434,7 @@ export function unMailDeplie(source) {
   const identite = valeurDe(enTetes, "message-id");
   if (!identite) trous.push(unTrou(TROU.SANS_IDENTITE, "l'en-tête Message-ID"));
   const objet = unEnTeteLu(enTetes, "subject", trous);
-  const { corps, formeDuCorps } = leCorps(recolte, trous);
+  const { corps, formeDuCorps, nettoyage } = leCorps(recolte, trous);
 
   return {
     qui,
@@ -451,6 +448,8 @@ export function unMailDeplie(source) {
     chaine: lesIdentites(valeurDe(enTetes, "references")),
     corps,
     formeDuCorps,
+    /** Ce qu'on a replié dans le corps : redirections dépliées, images, bandeaux. */
+    nettoyage: nettoyage ?? { redirections: 0, images: 0, bandeaux: 0 },
     pieces: lesPieces(recolte, trous),
     trous
   };
