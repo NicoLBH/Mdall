@@ -4012,3 +4012,48 @@ de quelles prises elle sort.
 **Pourquoi c'est repoussé.** Les cinq se calibrent sur le même chiffre : combien
 de prises un fil réel produit, et combien échappent au rapprochement. Tant qu'on
 ne l'a pas, choisir une règle plus fine serait choisir au hasard.
+
+---
+
+## 53. La proposition d'un fil, et ce qu'elle ne fait pas encore
+
+**Ce qui existe.** L'étape 7 de [`lire-les-mails.md`](lire-les-mails.md) est
+écrite : « Transformer » s'allume dès qu'un relevé a rendu quelque chose, et
+rédige une proposition qui porte les sujets à ouvrir ou à relancer, chacun avec
+la phrase du message d'où il sort et la mention « issu d'un échange privé ». Un
+bouton **emporte** aussi tout ce que l'écran a produit, en Markdown — de quoi
+juger le procédé sur un vrai fil, à côté du `.eml` qui l'a produit.
+
+**Ce qui reste dehors, et ce que ça coûte.**
+
+- **Les constats n'entrent pas en mémoire.** Le tableau des sept natures dit
+  qu'un constat devient « une valeur en mémoire, si elle est signée ». Ce
+  chemin-là existe — c'est celui du versement —, mais il ne prend pas des
+  phrases : il prend des valeurs nommées, avec leur unité et leur zone. Un
+  constat de mail n'en est pas une, et l'y forcer ferait entrer en mémoire du
+  texte libre sous un nom inventé. **C'est le vrai morceau qui reste**, et il
+  demande de trancher comment on passe d'une phrase à une valeur.
+- **Le fil ne se range pas dans la proposition.** Un compte rendu y entre comme
+  document, et c'est par lui que chaque point se vérifie. Le fil, lui, est
+  rangé dans « Mails » — un dossier privé que les autres ne peuvent pas ouvrir.
+  La proposition ne peut donc pas le porter comme le CR : elle porte la
+  citation, et la mention qui dit qu'on n'ira pas plus loin. **C'est
+  exactement l'asymétrie que le plan annonçait à rediscuter.**
+- **Aucun lot, aucune rubrique, aucun label posé.** Un fil ne nomme pas ses lots
+  comme un CR nomme les siens ; les chercher au jugé rangerait des sujets sous
+  des lots qu'ils ne concernent pas. Le label « Échange » est porté par la
+  proposition, pas encore par chaque sujet.
+- **« Ouvrir un sujet » n'est pas branché**, comme sur le lecteur de CR :
+  « Faire une proposition » l'est, et c'est en la signant que les sujets
+  s'ouvrent. L'écran le dit plutôt que de laisser un bouton muet.
+- **L'export part sans rien anonymiser.** C'est voulu — il sert à juger le
+  procédé, et un fil caviardé ne se juge pas —, mais cela veut dire qu'il porte
+  adresses, noms et contenu. L'écran l'avertit au-dessus du bouton. Si ce texte
+  devait un jour servir à autre chose qu'à un examen entre les mains de celui
+  qui l'a produit, il faudrait une seconde forme, réduite.
+
+**Pourquoi c'est repoussé.** Le premier point est un chantier à part entière et
+il touche à la mémoire, pas aux mails. Les autres attendent la même chose que
+les § 51 et 52 : **l'usage sur des fils réels**. C'est précisément ce que le
+bouton « Emporter » rend possible, et c'est la prochaine chose à faire — juger
+avant d'ajouter.

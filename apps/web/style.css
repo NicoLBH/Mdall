@@ -26848,3 +26848,8 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   padding:8px 10px;
   border:1px solid var(--border);border-radius:6px;
 }
+/* Emporter le fil : les gestes d'abord, l'avertissement en dessous. Il se lit
+   au moment du geste, pas dans une page d'aide. */
+.fil-mails__emporter{display:flex;flex-direction:column;gap:4px;margin-top:4px;}
+.fil-mails__emporter-gestes{display:flex;align-items:center;gap:8px;}
+.fil-mails__emporter-mot{color:var(--muted);line-height:1.5;}

@@ -256,6 +256,8 @@ Rien de neuf : c'est la chaîne du CR, et elle se réutilise telle quelle.
 | Les échéances datées | `services/echeances-du-cr.js` |
 | Les fermetures | `services/fermeture-du-cr.js` |
 | Rédiger la proposition | `services/proposition-du-cr.js`, `atelier-proposition.js` |
+| Adapter un fil à cette chaîne | `services/points-du-fil.js` — pur · *écrit* |
+| Emporter ce que l'écran a produit | `services/le-fil-en-texte.js` — pur · *écrit* |
 | L'appliquer à la fusion | `services/appliquer-le-cr.js` |
 
 Ce qui change : le **label**. Un CR porte « CR chantier » ; un fil de mails porterait
@@ -441,10 +443,27 @@ Les questions sans réponse, les désaccords. Sur le fil déplié, en pur, véri
 > Les trente et une ruptures essayées tombent. Ce qui reste : § 52 de
 > [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
-### 7 — La confrontation et la proposition
+### 7 — La confrontation et la proposition · *fait*
 
 Le branchement sur la chaîne existante. Le label « Échange », l'identité du fil. Le point
 porte « issu d'un échange privé ».
+
+> Écrit dans `services/points-du-fil.js` — **un adaptateur, et rien d'autre**.
+> Confronter, rédiger, appliquer : tout cela existe et sert au lecteur de
+> comptes rendus. En écrire un second jeu ferait deux chaînes à tenir d'accord.
+>
+> **Cinq natures ouvrent un sujet** — demande, engagement, décision, question
+> sans réponse, désaccord —, et deux n'en ouvrent pas : un **constat** va en
+> mémoire, par un autre chemin ; une **source** fonde un constat. C'est ce que
+> le tableau des sept natures dit déjà, nature par nature. Ce qui n'est pas
+> porté **se compte**, et l'introduction de la proposition le dit : taire ce
+> qu'on laisse serait promettre ce qu'on ne fait pas.
+>
+> Chaque point porte sa citation, son auteur, sa date — et **« issu d'un échange
+> privé : la source n'est pas ouvrable par les autres »**.
+>
+> Les trente-deux ruptures essayées tombent. Ce qui reste : § 53 de
+> [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
 ### 8 — La boîte de réception du projet
 
