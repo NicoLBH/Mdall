@@ -1,0 +1,248 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  MARQUE_DUNE_IMAGE, deplierUneRedirection, estUneRedirection, leProposNettoye
+} from "./nettoyer-le-propos.js";
+
+// Aucun mail réel : les noms, les sociétés et les domaines sont inventés.
+const corps = (...lignes) => lignes.join("\n");
+
+// ── Déplier une redirection ────────────────────────────────────────────────
+
+test("une adresse ordinaire n'est pas une redirection et ne bouge pas", () => {
+  const nue = "https://www.novaclim.example/notices/cvc-12.pdf";
+  assert.equal(estUneRedirection(nue), false);
+  assert.equal(deplierUneRedirection(nue), nue);
+});
+
+test("une passerelle qui pose la cible en paramètre rend la cible", () => {
+  const enveloppe =
+    "https://eur03.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.novaclim.example" +
+    "%2Fnotices%2Fcvc-12.pdf&data=05%7C02%7C&sdata=abc%3D&reserved=0";
+  assert.equal(estUneRedirection(enveloppe), true);
+  assert.equal(
+    deplierUneRedirection(enveloppe),
+    "https://www.novaclim.example/notices/cvc-12.pdf"
+  );
+});
+
+test("un filtre de liens qui entoure la cible de tirets bas rend la cible", () => {
+  const enveloppe =
+    "https://urldefense.com/v3/__https://www.novaclim.example/notices/cvc-12.pdf__;!!PWAseTJI!abcd$";
+  assert.equal(
+    deplierUneRedirection(enveloppe),
+    "https://www.novaclim.example/notices/cvc-12.pdf"
+  );
+});
+
+test("deux couches empilées se déplient jusqu'à la cible", () => {
+  // Le cas réel : une passerelle de messagerie enveloppe une adresse qu'un
+  // filtre de liens avait déjà enveloppée. S'arrêter à la première couche
+  // rend une deuxième redirection, pas une adresse.
+  const dedans =
+    "https://urldefense.com/v3/__https://www.novaclim.example/notices/cvc-12.pdf__;!!PWAseTJI!abcd$";
+  const dehors =
+    "https://eur03.safelinks.protection.outlook.com/?url=" +
+    encodeURIComponent(dedans) + "&data=05%7C02%7C";
+  assert.equal(
+    deplierUneRedirection(dehors),
+    "https://www.novaclim.example/notices/cvc-12.pdf"
+  );
+});
+
+test("une redirection qu'on ne sait pas déplier revient telle quelle", () => {
+  // On ne devine pas ce qu'elle visait : rendre une adresse fausse serait pire
+  // que rendre une adresse longue.
+  const opaque = "https://eur03.safelinks.protection.outlook.com/?data=05%7C02%7C";
+  assert.equal(deplierUneRedirection(opaque), opaque);
+});
+
+test("une enveloppe qui ne contient pas une adresse ne se déplie pas", () => {
+  // `url=` peut porter autre chose qu'une adresse ; on ne la remplace pas par
+  // un morceau de texte qui n'est pas une cible.
+  const bancale = "https://eur03.safelinks.protection.outlook.com/?url=cvc-12.pdf";
+  assert.equal(deplierUneRedirection(bancale), bancale);
+});
+
+// ── Les redirections dans le texte ─────────────────────────────────────────
+
+test("une redirection dans une phrase se déplie sans emporter la phrase", () => {
+  const propre = leProposNettoye(
+    "Voir la notice ici : https://eur03.safelinks.protection.outlook.com/?url=" +
+    "https%3A%2F%2Fwww.novaclim.example%2Fnotices%2Fcvc-12.pdf&data=05 puis me dire."
+  );
+  assert.equal(
+    propre.texte,
+    "Voir la notice ici : https://www.novaclim.example/notices/cvc-12.pdf puis me dire."
+  );
+  assert.equal(propre.redirections, 1);
+});
+
+test("chaque redirection se compte", () => {
+  const une = "https://urldefense.com/v3/__https://a.example/1__;!!x$";
+  const deux = "https://urldefense.com/v3/__https://a.example/2__;!!x$";
+  const propre = leProposNettoye(`D'abord ${une} ensuite ${deux}`);
+  assert.equal(propre.redirections, 2);
+  assert.equal(propre.texte, "D'abord https://a.example/1 ensuite https://a.example/2");
+});
+
+test("une adresse ordinaire dans le texte ne se compte pas", () => {
+  const propre = leProposNettoye("La notice est sur https://www.novaclim.example/notices/cvc-12.pdf ok");
+  assert.equal(propre.redirections, 0);
+  assert.equal(propre.texte, "La notice est sur https://www.novaclim.example/notices/cvc-12.pdf ok");
+});
+
+// ── Les images en ligne ────────────────────────────────────────────────────
+
+test("une image collée dans le texte devient sa présence, et se compte", () => {
+  const propre = leProposNettoye("Le détail est là [cid:image018.png@01DD1B52.8A52BFD0] en coupe.");
+  assert.equal(propre.texte, `Le détail est là ${MARQUE_DUNE_IMAGE} en coupe.`);
+  assert.equal(propre.images, 1);
+});
+
+test("les images se comptent une par une", () => {
+  // Le compte est ce qui permet de dire qu'on n'a pas lu quelque chose
+  // (règle 5) : s'il s'arrête à un, un message de dix-huit images en annonce
+  // une et ment.
+  const propre = leProposNettoye(
+    "[cid:a@1] au milieu [cid:b@2] du texte [cid:c@3] encore"
+  );
+  assert.equal(propre.images, 3);
+});
+
+test("une ligne qui ne porte plus que des images s'en va", () => {
+  // Une signature d'entreprise pose ses logos sur une ligne à elle : la garder
+  // laisserait « (image) (image) (image) » dans le propos.
+  const propre = leProposNettoye(corps(
+    "La cote est arrêtée à 12,40.",
+    "[cid:logo@1] [cid:certif@2]",
+    "Bien cordialement"
+  ));
+  assert.equal(propre.texte, corps("La cote est arrêtée à 12,40.", "Bien cordialement"));
+  assert.equal(propre.images, 2, "elle s'en va, mais après avoir été comptée");
+});
+
+// ── Le bandeau d'une passerelle ────────────────────────────────────────────
+
+test("un bandeau de sécurité n'est de personne et s'en va", () => {
+  const propre = leProposNettoye(corps(
+    "EXTERNAL SENDER: soyez prudent avant d'ouvrir les pièces jointes.",
+    "",
+    "La cote est arrêtée à 12,40."
+  ));
+  assert.equal(propre.texte, "La cote est arrêtée à 12,40.");
+  assert.equal(propre.bandeaux, 1);
+});
+
+test("le bandeau se reconnaît aussi en français", () => {
+  const propre = leProposNettoye(corps(
+    "EXPEDITEUR EXTERNE : ce message vient de l'extérieur.",
+    "La cote est arrêtée à 12,40."
+  ));
+  assert.equal(propre.texte, "La cote est arrêtée à 12,40.");
+  assert.equal(propre.bandeaux, 1);
+});
+
+test("une phrase qui parle d'un intervenant extérieur n'est pas un bandeau", () => {
+  // « externe » est un mot du métier : un lot peut être confié à une entreprise
+  // extérieure, et la phrase qui le dit est du propos.
+  const phrase = "Le lot CVC est confié à une entreprise externe : NOVACLIM.";
+  const propre = leProposNettoye(phrase);
+  assert.equal(propre.texte, phrase);
+  assert.equal(propre.bandeaux, 0);
+});
+
+// ── Les lignes de coordonnées ──────────────────────────────────────────────
+
+test("une ligne qui n'est qu'un numéro de téléphone s'en va", () => {
+  const propre = leProposNettoye(corps(
+    "Bien cordialement",
+    "Tél. : +33 1 23 45 67 89",
+    "Mob : 06 12 34 56 78"
+  ));
+  assert.equal(propre.texte, "Bien cordialement");
+});
+
+test("une phrase qui annonce un appel reste", () => {
+  // Elle porte un engagement ; la couper le perdrait.
+  const phrase = "Je vous appelle au 06 12 34 56 78 demain matin pour arrêter la cote.";
+  assert.equal(leProposNettoye(phrase).texte, phrase);
+});
+
+test("une ligne qui n'est qu'une adresse de site s'en va", () => {
+  const propre = leProposNettoye(corps(
+    "Bien cordialement",
+    "www.novaclim.example",
+    "Site : https://www.novaclim.example"
+  ));
+  assert.equal(propre.texte, "Bien cordialement");
+});
+
+test("une ligne qui porte une adresse et une phrase reste entière", () => {
+  const phrase = "La notice est sur www.novaclim.example, à la page 4.";
+  assert.equal(leProposNettoye(phrase).texte, phrase);
+});
+
+// ── Ce qu'on ne coupe pas ──────────────────────────────────────────────────
+
+test("la signature reste, et ce qui vit dessous avec elle", () => {
+  // L'arbitrage du module, appuyé sur un cas réel : sous une signature se
+  // trouvait une absence de six semaines, qui est une contrainte de planning.
+  // Couper à la formule de politesse l'aurait emportée.
+  const propre = leProposNettoye(corps(
+    "La cote est arrêtée à 12,40.",
+    "",
+    "Bien cordialement",
+    "Ourdine Ferrand",
+    "Responsable travaux — NOVACLIM",
+    "Je serai en congés du 27/07 au 06/09."
+  ));
+  assert.ok(propre.texte.includes("Je serai en congés du 27/07 au 06/09."));
+  assert.ok(propre.texte.includes("Bien cordialement"));
+  assert.ok(propre.texte.includes("Ourdine Ferrand"));
+});
+
+test("un texte sans rien à retirer ressort identique", () => {
+  const phrase = corps(
+    "La cote du dallage est arrêtée à 12,40 NGF.",
+    "",
+    "Le calepinage suivra lundi."
+  );
+  const propre = leProposNettoye(phrase);
+  assert.equal(propre.texte, phrase);
+  assert.deepEqual(
+    { redirections: propre.redirections, images: propre.images, bandeaux: propre.bandeaux },
+    { redirections: 0, images: 0, bandeaux: 0 }
+  );
+});
+
+test("rien qui entre ne fait rien sortir", () => {
+  assert.deepEqual(leProposNettoye(""), { texte: "", redirections: 0, images: 0, bandeaux: 0 });
+  assert.deepEqual(leProposNettoye(null), { texte: "", redirections: 0, images: 0, bandeaux: 0 });
+});
+
+test("les blancs laissés par ce qu'on retire ne creusent pas de trou", () => {
+  const propre = leProposNettoye(corps(
+    "EXTERNAL SENDER: prudence.",
+    "",
+    "",
+    "La cote est arrêtée à 12,40.",
+    "",
+    "[cid:logo@1]",
+    "",
+    "",
+    "",
+    "Bien cordialement"
+  ));
+  assert.equal(
+    propre.texte,
+    corps("La cote est arrêtée à 12,40.", "", "Bien cordialement")
+  );
+});
+
+test("un saut de ligne voulu par l'auteur reste", () => {
+  // On resserre les trous qu'on creuse, pas les paragraphes qu'il a écrits.
+  const phrase = corps("La cote est arrêtée.", "", "Le calepinage suivra.");
+  assert.equal(leProposNettoye(phrase).texte, phrase);
+});

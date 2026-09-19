@@ -5,7 +5,7 @@ import test from "node:test";
 import {
   MANQUE, NATURE, NATURES_DECLAREES, NATURES_DERIVEES, ceQueCaDevient, ceQuiManque,
   horsNomenclature, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
-  phraseDuReleve, prisesDuMessage, quoiDeLaNature
+  ceQueLeModeleNaPasDit, phraseDuReleve, prisesDuMessage, quoiDeLaNature
 } from "./prises-de-position.js";
 
 const prise = (dessus = {}) => ({
@@ -199,4 +199,34 @@ test("une réponse coupée se dit, et ne se compte pas", () => {
 test("un relevé sans rien à signaler ne dit que son compte", () => {
   assert.equal(phraseDuReleve({ prises: [prise()], ecartees: 0, messagesCorriges: 0 }),
     "1 prise de position");
+});
+
+// ── Ce dont le modèle n'a rien dit ─────────────────────────────────────────
+
+test("un message muet et un message oublié ne se disent pas du même mot", () => {
+  // Déclarer qu'un message ne porte aucune prise est une lecture ; n'en rien
+  // dire n'en est pas une. Les confondre fait passer un trou pour un constat
+  // de vide (règle 5).
+  const dit = ceQueLeModeleNaPasDit({ muets: [1, 4], oublies: [3] });
+  assert.equal(dit.sait, true);
+  assert.ok(dit.phrase.includes("2 messages dont il déclare ne rien tirer (1, 4)"));
+  assert.ok(dit.phrase.includes("1 message dont il n'a rien dit du tout (3)"));
+  assert.ok(dit.phrase.includes("c'est une omission"));
+});
+
+test("un relevé complet ne dit rien, plutôt que de dire zéro", () => {
+  assert.equal(ceQueLeModeleNaPasDit({ muets: [], oublies: [] }).phrase, "");
+});
+
+test("ne pas savoir se dit, et ne se compte pas", () => {
+  const dit = ceQueLeModeleNaPasDit({});
+  assert.equal(dit.sait, false);
+  assert.ok(dit.phrase.includes("message par message"));
+  assert.deepEqual(dit.muets, []);
+  assert.deepEqual(dit.oublies, []);
+});
+
+test("un seul des deux comptes suffit à ouvrir la phrase", () => {
+  assert.ok(ceQueLeModeleNaPasDit({ muets: [2], oublies: [] }).phrase.includes("(2)"));
+  assert.ok(ceQueLeModeleNaPasDit({ muets: [], oublies: [5] }).phrase.includes("(5)"));
 });

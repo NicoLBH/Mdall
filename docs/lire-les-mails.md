@@ -465,6 +465,70 @@ porte « issu d'un échange privé ».
 > Les trente-deux ruptures essayées tombent. Ce qui reste : § 53 de
 > [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
+### 7 bis — Ce qu'un fil réel a coûté, et ce qu'on en a tiré · *fait*
+
+Le bouton « Emporter » de l'étape 7 a servi tout de suite : un fil de six messages entre un
+bureau d'études et un bureau de contrôle est passé dans le procédé, et le résultat a été
+relu ligne à ligne. Trois défauts en sont sortis, et cette étape-ci les répare.
+
+**Le propos était bruité à 41 %.** Trente-sept pour cent du texte envoyé au modèle était des
+adresses de redirection — 587 caractères en médiane pour une adresse qui en vaut soixante —,
+le reste des identifiants d'images collées et un bandeau de sécurité recopié à chaque
+message. Le prix ne s'est pas payé qu'en jetons : **les deux messages les plus bruités — 33 %
+et 42 % de texte utile — sont les deux seuls dont le modèle n'a rien tiré**, alors qu'ils
+portaient la position de départ et le désaccord. Le message le plus propre, 87 % utile, a
+produit plus de la moitié du relevé. Le bruit ne coûte pas : il aveugle.
+
+> Écrit dans `services/nettoyer-le-propos.js` — pur, gratuit, sans appel. Une
+> redirection **se déplie** vers sa cible, à travers les deux couches qui
+> s'empilent en vrai ; une image en ligne devient `(image)` **et se compte** ;
+> un bandeau de passerelle s'en va ; une ligne qui n'est qu'un numéro de
+> téléphone ou qu'une adresse de site n'énonce rien.
+>
+> **On ne coupe pas la signature**, et c'est le même arbitrage qu'à l'étape 2 :
+> sous celle du fil réel se trouvait « je serai en congés du 27/07 au 06/09 »,
+> qui est une contrainte de planning — exactement ce qu'on cherche. Deux lignes
+> courtes coûtent moins cher qu'une phrase perdue.
+>
+> Le nettoyage vit **dans `unMailDeplie`, une fois** : l'écran et le modèle
+> lisent le même texte, et il n'y a pas deux versions du propos qui finiraient
+> par diverger (règle 4). Les images repliées font un trou, parce que dans un
+> échange technique une formule vit souvent dans l'image (règle 5).
+
+**Le modèle pouvait sauter un message sans que rien ne le dise.** Il rendait une liste plate
+de prises ; un message absent de cette liste et un message dont il n'avait rien à tirer se
+ressemblaient trait pour trait. Sur le fil réel, ce sont les deux messages disputés qui
+avaient disparu ainsi.
+
+> Le schéma demande désormais **une entrée par message**, et la consigne exige
+> qu'aucun ne soit sauté. Une liste vide devient une **déclaration** ; une
+> entrée absente se voit. Le serveur redescend les deux listes — les **muets**
+> et les **oubliés** —, que l'écran et l'export disent du même mot. Quand la
+> réponse n'a pas cette forme, on le dit plutôt que de compter zéro (règle 5).
+
+**On ne savait pas ce qui avait été écarté, seulement combien.** Or le même nombre recouvre
+deux défauts opposés : des inventions jetées — la porte a protégé — ou des phrases réelles
+mal recopiées — la porte a jeté. L'un se répare en resserrant la porte, l'autre en la
+desserrant.
+
+> Une écartée redescend maintenant avec son **intitulé**, la **citation
+> refusée**, le message visé et le motif en clair. L'export les liste ; l'écran
+> y renvoie. Le motif est dit pour un fil et non pour un document : il n'y a pas
+> de PDF à aller chercher.
+
+**Ce qui se vérifie en cassant** : une redirection à deux couches qui ne se déplie qu'une
+fois ; « Bien cordialement » emporté avec la signature ; un compte d'images qui s'arrête à un ;
+un message oublié qui passe pour un message muet ; un groupe sans numéro lisible qui devient
+« le message 0 » ; une écartée sans sa citation.
+
+> Les soixante ruptures essayées tombent. Deux d'entre elles ont nommé du code
+> mort — une forme de redirection que la suivante couvrait déjà, un rognage des
+> lignes vides fait deux fois —, retiré avec la raison écrite à sa place. Une
+> troisième a montré qu'un groupe dont le numéro ne se lit pas ne doit pas faire
+> **perdre** ses prises : la porte sait les rattacher au message où leur
+> citation se trouve. Ce qui reste : § 54 de
+> [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
+
 ### 8 — La boîte de réception du projet
 
 La porte principale, et le morceau le plus lourd. Elle vient en dernier parce qu'elle se
@@ -565,6 +629,7 @@ expéditeur inconnu. Voir la section ci-dessus.
 |---|---|
 | Décoder ce qu'un mail transporte | `services/decoder-un-mail.js` — pur · *écrit* |
 | Déplier un `.eml` | `services/un-mail-deplie.js` — pur · *écrit* |
+| Retirer ce que l'auteur n'a pas écrit | `services/nettoyer-le-propos.js` — pur · *écrit* |
 | Ce qu'on n'a pas su placer, et sa phrase | `services/trous-dun-mail.js` — pur · *écrit* |
 | Séparer le propos de la citation | `services/ce-quon-cite.js` — pur · *écrit* |
 | Reconstituer le fil | `services/le-fil-des-mails.js` — pur · *écrit* |

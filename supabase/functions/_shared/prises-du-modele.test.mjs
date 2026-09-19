@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  CONSIGNES, ECART, ECART_DE_NATURE, NATURE, SCHEMA_DES_PRISES,
-  filEnTexte, messagesEnPages, prisesAuFormatDuMoteur, verifierLesPrises
+  CONSIGNES, ECART, ECART_DE_NATURE, NATURE, PHRASES_DE_LECART_DUNE_PRISE, SCHEMA_DES_PRISES,
+  ecarteesAuFormatDuMoteur, filEnTexte, lesMessagesRendus, messagesEnPages,
+  prisesAuFormatDuMoteur, verifierLesPrises
 } from "./prises-du-modele.js";
 
 // Aucun mail réel : les noms, les sociétés et les domaines sont inventés.
@@ -81,17 +82,39 @@ test("la consigne dit que la citation sera vérifiée", () => {
   assert.ok(CONSIGNES.includes("sera écartée"));
 });
 
+const UN_MESSAGE = SCHEMA_DES_PRISES.schema.properties.messages.items;
+const UNE_PRISE = UN_MESSAGE.properties.prises.items;
+
+test("le schéma demande des messages, qui portent des prises", () => {
+  // **C'est la forme qui fait parler l'omission.** Une liste plate de prises
+  // ne distingue pas « ce message ne porte rien » de « je n'ai rien dit de ce
+  // message » ; ici, la première est une entrée à liste vide, et la seconde
+  // est une entrée qui manque.
+  assert.deepEqual([...Object.keys(UN_MESSAGE.properties)].sort(), ["message", "prises"]);
+  assert.deepEqual([...UN_MESSAGE.required].sort(), ["message", "prises"]);
+  assert.equal(SCHEMA_DES_PRISES.schema.properties.prises, undefined,
+    "la liste plate ne doit plus exister : deux formes qui coexistent divergent");
+});
+
 test("le schéma ne demande ni l'auteur ni la date", () => {
-  const champs = Object.keys(SCHEMA_DES_PRISES.schema.properties.prises.items.properties);
+  const champs = Object.keys(UNE_PRISE.properties);
   assert.equal(champs.includes("qui"), false);
   assert.equal(champs.includes("quand"), false);
   assert.deepEqual([...champs].sort(),
-    ["citation", "echeance", "intitule", "message", "nature", "porte_sur", "pour_qui"]);
+    ["citation", "echeance", "intitule", "nature", "porte_sur", "pour_qui"]);
+});
+
+test("le numéro du message ne se demande plus à la prise", () => {
+  // Il vit sur le groupe, et une seule fois : le demander aussi à la prise
+  // laisserait le modèle en annoncer deux différents, et il faudrait choisir
+  // sans savoir (règle 10).
+  assert.equal(UNE_PRISE.properties.message, undefined);
+  assert.equal(UN_MESSAGE.properties.message.type, "integer");
 });
 
 test("le schéma ferme la liste des natures", () => {
-  const permises = SCHEMA_DES_PRISES.schema.properties.prises.items.properties.nature.enum;
-  assert.deepEqual([...permises].sort(), [...Object.values(NATURE)].sort());
+  assert.deepEqual([...UNE_PRISE.properties.nature.enum].sort(),
+    [...Object.values(NATURE)].sort());
 });
 
 // ── La porte : la nature ───────────────────────────────────────────────────
@@ -217,4 +240,142 @@ test("les champs vides sortent à null, et non en chaîne vide", () => {
   assert.equal(rendue.pourQui, null);
   assert.equal(rendue.echeance, null);
   assert.equal(rendue.porteSur, "humidité de l'acrotère");
+});
+
+// ── Le compte, message par message ─────────────────────────────────────────
+
+test("la consigne réclame une entrée par message, y compris vide", () => {
+  assert.ok(CONSIGNES.includes("une entrée PAR MESSAGE"));
+  assert.ok(CONSIGNES.includes("tu n'en sautes AUCUN"));
+  assert.ok(CONSIGNES.includes("liste de prises vide"));
+});
+
+test("le rang du groupe descend dans chacune de ses prises", () => {
+  // La prise ne porte plus son numéro : si le groupe ne le lui donne pas, la
+  // porte ne saura pas dans quel message chercher, et tout ressortira
+  // « rattaché ailleurs ».
+  const { prises } = lesMessagesRendus({
+    messages: [{ message: 2, prises: [prise({ message: undefined })] }]
+  }, MESSAGES);
+  assert.equal(prises.length, 1);
+  assert.equal(prises[0].message, 2);
+});
+
+test("un message déclaré sans prise est muet, et se nomme", () => {
+  const compte = lesMessagesRendus({
+    messages: [{ message: 1, prises: [] }, { message: 2, prises: [prise()] }]
+  }, MESSAGES);
+  assert.deepEqual(compte.muets, [1]);
+  assert.deepEqual(compte.oublies, []);
+  assert.equal(compte.parMessage, true);
+});
+
+test("un message dont le modèle n'a rien dit est oublié, et ce n'est pas la même chose", () => {
+  // C'est ce que l'étape achète : sur une liste plate, ce message-ci et un
+  // message muet se ressemblaient trait pour trait.
+  const compte = lesMessagesRendus({
+    messages: [{ message: 2, prises: [prise()] }]
+  }, MESSAGES);
+  assert.deepEqual(compte.muets, []);
+  assert.deepEqual(compte.oublies, [1], "le message 1 n'a pas été rendu");
+});
+
+test("un message sans propos n'est pas attendu, et ne manque donc pas", () => {
+  // Le troisième message du fil ne porte rien : on ne l'a pas donné à lire, et
+  // reprocher au modèle de n'en rien dire serait lui reprocher notre silence.
+  const compte = lesMessagesRendus({ messages: [{ message: 1, prises: [] }] }, MESSAGES);
+  assert.equal(compte.oublies.includes(3), false);
+  assert.deepEqual(compte.oublies, [2]);
+});
+
+test("une réponse qui n'a pas cette forme est lue, mais on ne prétend pas savoir", () => {
+  // La jeter perdrait des prises réelles ; compter zéro muet et zéro oublié
+  // affirmerait une lecture complète qui n'a pas eu lieu (règle 5).
+  const compte = lesMessagesRendus({ prises: [prise()] }, MESSAGES);
+  assert.equal(compte.prises.length, 1);
+  assert.equal(compte.parMessage, false);
+  assert.equal(compte.muets, null);
+  assert.equal(compte.oublies, null);
+});
+
+test("un groupe sans numéro lisible ne compte pour aucun message", () => {
+  const compte = lesMessagesRendus({
+    messages: [{ message: "deux", prises: [prise()] }, { message: 1, prises: [] }]
+  }, MESSAGES);
+  assert.deepEqual(compte.muets, [1]);
+  assert.deepEqual(compte.oublies, [2], "le message 2 reste sans réponse");
+});
+
+test("un groupe sans numéro lisible ne fait pas perdre ses prises", () => {
+  // Jeter une prise réelle parce que l'en-tête de son groupe est abîmé
+  // coûterait plus cher que de la replacer : la porte sait chercher sa
+  // citation dans tout le fil.
+  const { prises } = lesMessagesRendus({
+    messages: [{ message: null, prises: [prise({ message: undefined })] }]
+  }, MESSAGES);
+  assert.equal(prises.length, 1);
+  assert.equal(prises[0].message, null);
+
+  const { retenues } = verifierLesPrises({ prises, messages: MESSAGES });
+  const [rendue] = prisesAuFormatDuMoteur(retenues, { messages: MESSAGES });
+  assert.equal(rendue.message, 2, "la citation a dit où elle vivait");
+  assert.equal(rendue.qui, "Ourdine Ferrand");
+  assert.equal(rendue.messageVerifie, false, "et cela ne se tait pas");
+});
+
+test("un groupe sans numéro lisible ne déclare aucun message muet", () => {
+  // Il n'a pas dit qu'un message ne portait rien : il n'a pas dit de quel
+  // message il parlait. Ce n'est pas une lecture (règle 5).
+  const compte = lesMessagesRendus({ messages: [{ message: "deux", prises: [] }] }, MESSAGES);
+  assert.deepEqual(compte.muets, []);
+  assert.deepEqual(compte.oublies, [1, 2]);
+});
+
+// ── Ce qui a été écarté, dit en clair ──────────────────────────────────────
+
+test("une écartée ressort avec son intitulé et la citation refusée", () => {
+  // Un compte seul ne dit pas si la porte a protégé ou si elle a jeté.
+  const inventee = prise({ citation: "Le chantier est arrêté depuis mardi." });
+  const { ecartees } = verifierLesPrises({ prises: [inventee], messages: MESSAGES });
+  const [dite] = ecarteesAuFormatDuMoteur(ecartees);
+
+  assert.equal(dite.motif, ECART.INTROUVABLE);
+  assert.equal(dite.intitule, "le support est humide au droit de l'acrotère");
+  assert.equal(dite.citation, "Le chantier est arrêté depuis mardi.");
+  assert.equal(dite.nature, NATURE.CONSTAT);
+  assert.equal(dite.message, 2);
+});
+
+test("le motif descend en clair, et parle de messages, pas d'un document", () => {
+  // Les phrases du garde-fou commun parlent d'un « document » : ici il n'y en
+  // a pas, et l'envoyer chercher un PDF est une fausse piste.
+  const { ecartees } = verifierLesPrises({
+    prises: [prise({ nature: "plainte" })], messages: MESSAGES
+  });
+  const [dite] = ecarteesAuFormatDuMoteur(ecartees);
+  assert.equal(dite.motif, ECART_DE_NATURE);
+  assert.equal(dite.phrase, PHRASES_DE_LECART_DUNE_PRISE[ECART_DE_NATURE]);
+  assert.equal(dite.phrase.includes("document"), false);
+});
+
+test("chaque motif possible a sa phrase, et aucune ne parle d'un document", () => {
+  // Une écartée sans phrase ne dit plus rien de pourquoi elle l'a été. Et une
+  // phrase qui parle d'un « document » — celle du garde-fou commun — enverrait
+  // chercher un PDF là où il n'y a que des messages.
+  for (const motif of [...Object.values(ECART), ECART_DE_NATURE]) {
+    const phrase = PHRASES_DE_LECART_DUNE_PRISE[motif];
+    assert.ok(phrase, `pas de phrase pour ${motif}`);
+    assert.equal(phrase.includes("document"), false, `${motif} parle d'un document`);
+  }
+  assert.ok(PHRASES_DE_LECART_DUNE_PRISE[ECART.INTROUVABLE].includes("message"));
+  assert.ok(PHRASES_DE_LECART_DUNE_PRISE[ECART.SANS_CITATION].includes("message"));
+});
+
+test("une écartée sans intitulé ne perd pas sa citation", () => {
+  const { ecartees } = verifierLesPrises({
+    prises: [prise({ intitule: "" })], messages: MESSAGES
+  });
+  const [dite] = ecarteesAuFormatDuMoteur(ecartees);
+  assert.equal(dite.motif, ECART.VIDE);
+  assert.equal(dite.citation, "Le support est humide au droit de l'acrotère.");
 });

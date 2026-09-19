@@ -4057,3 +4057,48 @@ il touche à la mémoire, pas aux mails. Les autres attendent la même chose que
 les § 51 et 52 : **l'usage sur des fils réels**. C'est précisément ce que le
 bouton « Emporter » rend possible, et c'est la prochaine chose à faire — juger
 avant d'ajouter.
+
+---
+
+## 54. Ce qu'un premier fil réel a laissé ouvert
+
+**Ce qui vient d'être réglé.** Un fil de six messages, passé dans le procédé et relu ligne à
+ligne, a donné trois défauts, tous réparés : le propos bruité à 41 %, un modèle qui pouvait
+sauter un message en silence, et des écartées qu'on ne pouvait que compter. C'est l'étape
+7 bis de [`lire-les-mails.md`](lire-les-mails.md).
+
+**Ce que la même relecture a montré et qu'on n'a pas traité.**
+
+- **Le désaccord du fil n'a pas été vu.** C'était pourtant tout l'enjeu de
+  l'échange. Deux causes se superposent, et il faudra les démêler une par une :
+  les deux messages qui le portaient étaient les plus bruités — ce point-ci est
+  peut-être réglé par le nettoyage, et **c'est à remesurer sur le même fil avant
+  d'ajouter quoi que ce soit** ; mais la dérivation elle-même ne rapproche deux
+  constats que s'ils portent le même `porte_sur`, et rien ne garantit que le
+  modèle le nomme pareil des deux côtés.
+- **Deux « questions sans réponse » sur quatre étaient des offres
+  conditionnelles**, dont une demande contractuelle de commande payante. « Si
+  vous le souhaitez, nous pouvons… » n'est pas une question restée sans réponse :
+  c'est une proposition qui attend une décision, et la ranger sous le même
+  intitulé fait manquer ce qui a un prix. Il y manque une nature, ou une
+  distinction dans la dérivation.
+- **Dix-huit « pièces jointes » étaient des images en ligne.** Les vraies pièces
+  n'étaient pas dans le `.eml` — elles avaient été déposées ailleurs. L'écran
+  annonce donc des documents qui n'existent pas, et se tait sur ceux qui
+  existent. Le compte des images repliées, ajouté à l'étape 7 bis, ne règle que
+  la moitié du sujet : il reste à ne pas appeler « pièce jointe » une image de
+  signature.
+- **La période du fil se lisait « le 24 juillet » pour un échange du 22 au 24.**
+  Les messages reconstitués depuis une citation n'ont pas de date ISO — seulement
+  le texte d'un bandeau —, et le calcul de la période les ignore. Il faudrait
+  soit lire la date du bandeau, soit dire que la période est incomplète plutôt
+  que de la donner fausse (règle 5).
+- **« Ordre : un seul mail déposé » sous-estime ce qu'on sait.** Un fil
+  reconstitué par l'emboîtement des citations a un ordre **certain** — plus
+  certain qu'un ordre par dates. Le mot dit d'où vient le fichier, pas ce qu'on
+  sait de son ordre, et les deux se confondent à l'écran.
+
+**Pourquoi c'est repoussé.** Le premier point se remesure avant de se traiter : le nettoyage
+vient de changer ce que le modèle lit, et ajouter une correction par-dessus sans regarder le
+nouveau résultat serait travailler à l'aveugle. Les autres demandent **d'autres fils** — un
+seul échange ne dit pas si un défaut est une règle ou un accident.

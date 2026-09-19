@@ -34,7 +34,8 @@
 
 import { CERTITUDE, ORDRE, phraseDuMoment } from "./le-fil-des-mails.js";
 import {
-  NATURE, ceQuiManque, nomDeLaNature, parNature, phraseDuManque, phraseDuReleve, prisesDuMessage
+  NATURE, ceQueLeModeleNaPasDit, ceQuiManque, nomDeLaNature, parNature, phraseDuManque,
+  phraseDuReleve, prisesDuMessage
 } from "./prises-de-position.js";
 import { phraseDuTrou } from "./trous-dun-mail.js";
 
@@ -142,6 +143,23 @@ function unePrise(prise) {
 }
 
 /**
+ * Une prise qui n'a pas franchi la porte.
+ *
+ * **Avec sa citation refusée**, et c'est tout l'intérêt. Un compte dit qu'on a
+ * jeté ; la citation dit *quoi*, et permet de trancher entre les deux défauts
+ * opposés que le même nombre recouvre : une invention écartée — la porte a
+ * protégé — ou une phrase réelle mal recopiée — la porte a jeté.
+ */
+function uneEcartee(ecart) {
+  const quoi = [texte(ecart?.nature), texte(ecart?.intitule)].filter(Boolean).join(" — ");
+  const ou = Number(ecart?.message) ? ` (message ${Number(ecart.message)})` : "";
+  const pourquoi = texte(ecart?.phrase) || texte(ecart?.motif);
+  const lignes = [`- **${quoi || "sans intitulé"}**${ou} — ${pourquoi}`];
+  if (texte(ecart?.citation)) lignes.push(`  > ${texte(ecart.citation).split("\n").join(" ")}`);
+  return lignes.join("\n");
+}
+
+/**
  * Le fil et son relevé, en Markdown.
  *
  * `releve` peut être absent : on n'a pas toujours payé un relevé, et l'export
@@ -197,6 +215,21 @@ export function leFilEnTexte({ fil = null, releve = null, fichiers = [] } = {}) 
   if (Number(releve.derive?.indecidables) > 0) {
     morceaux.push(`- **Demandes qu'on n'a pas su juger** : ${releve.derive.indecidables}`
       + " (elles ne disent pas sur quoi elles portent)");
+  }
+
+  // Ce dont le modèle n'a rien tiré, et ce dont il n'a rien dit — du même mot
+  // qu'à l'écran (règle 10).
+  const rienTire = ceQueLeModeleNaPasDit(releve);
+  if (rienTire.phrase) {
+    morceaux.push("", "### Ce dont rien n'a été tiré", "", `- ${rienTire.phrase}`);
+  }
+
+  const jetees = releve.lesEcartees ?? [];
+  if (jetees.length) {
+    morceaux.push("", `### Ce qui a été écarté (${jetees.length})`, "");
+    morceaux.push("Ce que le modèle a rendu et qui n'est pas sorti. La citation est celle "
+      + "qu'il a donnée, telle quelle.", "");
+    for (const ecart of jetees) morceaux.push(uneEcartee(ecart));
   }
 
   for (const groupe of parNature(prises)) {
