@@ -3801,3 +3801,43 @@ faut des mails réels pour savoir lesquels arrivent vraiment, et ces mails-là
 n'entreront pas dans le dépôt. L'ordre juste est donc l'écran d'abord (étape 4),
 qui affiche les trous ; on saura alors lesquels reviennent, et on les fermera
 par ordre de fréquence plutôt que par ordre d'imagination.
+
+---
+
+## 48. La réponse point par point, et les bandeaux qu'on ne connaît pas
+
+**Ce qui existe.** L'étape 2 de [`lire-les-mails.md`](lire-les-mails.md) est
+écrite : `services/ce-quon-cite.js` sépare, dans un message, ce que son auteur a
+ajouté de ce qu'il recopie — les chevrons, quatre formes de bandeau, la
+signature —, avec les niveaux imbriqués et ce que chaque bandeau nomme.
+
+**Ce qui reste dehors, et ce que ça coûte.**
+
+- **La réponse point par point.** Répondre sous chaque ligne citée donne des
+  citations d'une seule ligne, et la règle du bloc les garde dans le propos.
+  C'est le prix assumé du choix : `> 50 m²` dans un devis n'est pas une
+  citation, et aucune règle ne distingue les deux sans deviner. Conséquence :
+  ces messages-là portent leur texte cité en double, **et le disent** (un trou
+  par ligne). Ce qu'il faudrait pour mieux faire, c'est l'étape 3 : si la ligne
+  citée se retrouve mot pour mot dans un message antérieur du fil, ce n'en est
+  plus une supposition. **Ce chantier se rouvre donc à l'étape 3**, avec de quoi
+  le trancher, et pas avant.
+- **Les bandeaux des messageries qu'on ne connaît pas.** La liste couvre le
+  français et l'anglais des messageries courantes. Une messagerie d'entreprise,
+  une langue de plus, une version qui change son libellé : le bandeau passe, et
+  la citation reste dans le propos. L'écran le signale quand des en-têtes
+  traînent (`De :`, `Objet :`) — c'est le seul indice qu'on sache lire sans
+  deviner. La liste s'allongera **sur des mails réels**, pas d'imagination.
+- **Le texte recollé d'un message replié.** Un corps marqué `format=flowed`
+  (§ 47) coupe ses lignes à l'affichage : une phrase coupée au milieu ressemble
+  alors à deux lignes, ce qui gêne ici plus qu'ailleurs.
+- **Les citations en HTML.** Une messagerie qui cite en `<blockquote>` sans
+  chevrons donne, après réduction en texte (étape 1), un bloc qui ne se
+  distingue plus du propos. Il faudrait garder la marque du `blockquote` à la
+  réduction — un chevron, par exemple — plutôt que de la perdre puis d'essayer
+  de la retrouver.
+
+**Pourquoi c'est repoussé.** Les quatre demandent la même chose : **des mails
+réels pour savoir ce qui arrive vraiment**, et ces mails-là n'entreront pas dans
+le dépôt. L'ordre juste reste celui du plan — l'écran d'abord (étape 4), qui
+montre les trous ; on fermera ensuite par ordre de fréquence.

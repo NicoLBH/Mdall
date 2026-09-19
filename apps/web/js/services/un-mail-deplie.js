@@ -47,25 +47,7 @@
 import {
   JEU_PAR_DEFAUT, decoderLesMotsEncodes, leTexteDuCorps, texteBrutDe, texteDuHtml
 } from "./decoder-un-mail.js";
-
-/** Ce qu'on peut ne pas savoir placer, nommé pour que l'écran puisse le dire. */
-export const TROU = {
-  PAS_UN_MAIL: "pas-un-mail",
-  SANS_EXPEDITEUR: "sans-expediteur",
-  SANS_DATE: "sans-date",
-  DATE_ILLISIBLE: "date-illisible",
-  FUSEAU_ABSENT: "fuseau-absent",
-  SANS_IDENTITE: "sans-identite",
-  EN_TETE_INDECHIFFRABLE: "en-tete-indechiffrable",
-  LIGNE_EGAREE: "ligne-egaree",
-  SANS_CORPS: "sans-corps",
-  CORPS_NON_DECODE: "corps-non-decode",
-  CORPS_EN_HTML: "corps-en-html",
-  JEU_DE_SECOURS: "jeu-de-secours",
-  FRONTIERE_ABSENTE: "frontiere-absente",
-  FRONTIERE_NON_FERMEE: "frontiere-non-fermee",
-  PIECE_SANS_NOM: "piece-sans-nom"
-};
+import { TROU, unTrou } from "./trous-dun-mail.js";
 
 /** Les deux formes sous lesquelles un corps peut arriver. */
 export const FORME_DU_CORPS = { TEXTE: "texte", HTML: "html" };
@@ -92,10 +74,6 @@ const FUSEAUX = {
 const PREFIXES_DOBJET = /^\s*(re|ré|rép|rep|fw|fwd|tr|aw|vs|sv)\s*(\[\d+\])?\s*:\s*/i;
 
 const texte = (valeur) => String(valeur ?? "").trim();
-
-function unTrou(quoi, ou, detail) {
-  return detail === undefined ? { quoi, ou } : { quoi, ou, detail };
-}
 
 /**
  * Séparer les en-têtes du corps, en dépliant les lignes repliées.
@@ -476,35 +454,4 @@ export function unMailDeplie(source) {
     pieces: lesPieces(recolte, trous),
     trous
   };
-}
-
-const PHRASES = {
-  [TROU.PAS_UN_MAIL]: "ce fichier n'a pas l'allure d'un mail : aucun en-tête n'y a été reconnu",
-  [TROU.SANS_EXPEDITEUR]: "ce message ne dit pas qui l'a écrit",
-  [TROU.SANS_DATE]: "ce message ne porte pas de date",
-  [TROU.DATE_ILLISIBLE]: "la date de ce message ne se lit pas",
-  [TROU.FUSEAU_ABSENT]: "la date de ce message ne dit pas son fuseau : l'heure affichée peut être décalée",
-  [TROU.SANS_IDENTITE]: "ce message n'a pas d'identifiant : son rang dans le fil se devinera par sa date",
-  [TROU.EN_TETE_INDECHIFFRABLE]: "un en-tête encodé n'a pas pu être lu, et s'affiche tel quel",
-  [TROU.LIGNE_EGAREE]: "une ligne des en-têtes n'a pas été reconnue, et a été laissée de côté",
-  [TROU.SANS_CORPS]: "aucun texte n'a été trouvé dans ce message",
-  [TROU.CORPS_NON_DECODE]: "le corps de ce message n'a pas pu être décodé",
-  [TROU.CORPS_EN_HTML]: "ce message n'existe qu'en HTML : son texte a été réduit, la mise en forme est perdue",
-  [TROU.JEU_DE_SECOURS]: "le jeu de caractères annoncé ne tenait pas : le texte a été lu autrement",
-  [TROU.FRONTIERE_ABSENTE]: "une partie annonce plusieurs morceaux, et sa frontière est introuvable",
-  [TROU.FRONTIERE_NON_FERMEE]: "le message s'arrête avant sa fin : le dernier morceau est peut-être incomplet",
-  [TROU.PIECE_SANS_NOM]: "une pièce jointe n'a pas de nom"
-};
-
-/**
- * La phrase d'un trou.
- *
- * Elle vit ici, et pas dans l'écran : les mêmes trous seront montrés par le
- * fil, par le relevé et par la proposition, et un même manque ne se dit pas de
- * trois façons selon l'endroit (règle 10).
- */
-export function phraseDuTrou(trou) {
-  const connue = PHRASES[trou?.quoi];
-  if (!connue) return "quelque chose n'a pas pu être placé";
-  return trou.ou ? `${connue} (${trou.ou})` : connue;
 }
