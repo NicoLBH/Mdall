@@ -4185,3 +4185,44 @@ laissent nommer : lui donner une **liste fermée** de sujets, tirée du rapport 
 ce qui suppose de savoir la construire ; ou cesser de rapprocher par le sujet et rapprocher par la
 **citation** — ce qui suppose de savoir dire qu'une phrase répond à une autre. Les deux sont des
 chantiers, et aucun ne se tranche sur un seul fil.
+
+
+---
+
+## 57. Ce qu'un second fil a appris, et ce qu'il laisse ouvert
+
+**Ce qui vient d'être réglé.** La queue de lien `tel:`, trois marques de contestation mesurées sur
+deux fils, la part de chaque message qu'une citation reprend, et le renvoi vérifié du modèle vers
+la prise à laquelle il répond. C'est l'étape 7 quinquies de
+[`lire-les-mails.md`](lire-les-mails.md).
+
+**Ce que le second fil laisse ouvert.**
+
+- **Le renvoi n'a pas encore été mesuré.** Il est écrit, vérifié et éprouvé par
+  trente-trois ruptures — mais aucun fil réel n'est encore passé avec. La
+  question qui compte est celle du **sens de l'erreur** : un modèle trop
+  généreux en renvois ferait taire des questions restées sans réponse, ce qui
+  est le pire résultat possible. Le compte des renvois écartés et la mention du
+  signal qui a fermé chaque demande sont là pour que cela se voie ; il faut
+  maintenant regarder.
+- **Le lexique reste un lexique.** Deux fils, deux familles, huit marques.
+  Rien ne dit qu'un troisième échange n'en montrera pas une neuvième, et la
+  seule chose honnête à en dire est qu'on ne la connaît pas encore.
+- **Un refus direct n'est pas relevé du tout.** « Non, je ne peux pas » est la
+  réponse la plus tranchante du fil, et elle n'apparaît dans aucune prise. Ce
+  n'est pas le lexique qui la manque, c'est le relevé. La part relevée par
+  message le **signale** désormais, mais ne le répare pas : il faudrait dire au
+  modèle qu'un refus est une prise de position, ce qui touche à la liste des
+  cinq natures.
+- **Un engagement et une formule de politesse restent rangés en questions sans
+  réponse** (§ 56). Le renvoi n'y change rien : c'est la nature déclarée qui
+  est fausse, pas le rapprochement.
+- **Les points du § 54 tiennent toujours** : la période d'un fil lue sur son
+  dernier jour ; « un seul mail déposé » qui sous-estime un ordre certain ; les
+  images de signature comptées comme pièces jointes.
+
+**Ce que la série de mesures dit, maintenant qu'il y a deux fils.** Un seul échange sert à
+**trouver** un défaut ; il ne sert pas à établir qu'une règle est bonne. Sur les cinq marques
+réglées sur le premier fil, le second en a validé zéro et en a exigé trois autres. La leçon vaut
+pour tout ce qui suit : **chaque règle tirée d'un fil est une hypothèse jusqu'au fil suivant**, et
+le carnet doit le dire plutôt que de laisser croire à un acquis.

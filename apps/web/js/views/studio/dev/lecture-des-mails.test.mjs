@@ -448,6 +448,32 @@ test("une offre conditionnelle se dit, et dit ce qu'elle coûte", () => {
   assert.ok(html.includes("relevée sur « contre-commande »"));
 });
 
+test("l'écran dit, sous chaque message, ce qu'une citation en a repris", () => {
+  // Un message peu relevé n'est pas un message muet, et rien ne le disait : sur
+  // un fil réel, celui qui portait un refus et un avis défavorable a rendu
+  // trois prises — sans aucune des deux phrases.
+  const html = dessine({
+    ...lu(PREMIER, SECOND),
+    releve: releve({ couverture: [{ message: 1, caracteres: 100, couverts: 31 }] })
+  });
+  assert.ok(html.includes("31 % de ce message est repris par une citation"));
+});
+
+test("un message dont on ne sait pas la part n'en affiche pas", () => {
+  const html = dessine({ ...lu(PREMIER, SECOND), releve: releve({ couverture: [] }) });
+  assert.equal(html.includes("repris par une citation"), false);
+});
+
+test("l'écran dit à quel message une prise répond", () => {
+  const html = dessine(analyse({ releve: releve({ prises: [prise({ repondA: 2 })] }) }));
+  assert.ok(html.includes("répond au message 2"));
+});
+
+test("une prise sans renvoi n'affiche pas de ligne vide", () => {
+  const html = dessine(analyse({ releve: releve() }));
+  assert.equal(html.includes("répond au message"), false);
+});
+
 test("une prise sans marque n'affiche pas de ligne vide", () => {
   const html = dessine(analyse({ releve: releve() }));
   assert.equal(html.includes("relevée sur"), false);

@@ -385,3 +385,29 @@ test("une redirection que l'auteur voit se déplie quand même", () => {
   assert.equal(propre.redirections, 1);
   assert.ok(propre.texte.includes("https://a.example/1"));
 });
+
+test("un numéro de téléphone recopié derrière lui-même s'en va", () => {
+  // Un deuxième fil réel a montré une troisième forme de queue : la messagerie
+  // pose aussi l'adresse `tel:` derrière le numéro qu'on lit.
+  const propre = leProposNettoye(
+    "Tel: +33 1 23 45 67 89<tel:+33%201%2023%2045%2067%2089> - E-mail : o.ferrand@novaclim.example"
+  );
+  assert.equal(propre.texte.includes("tel:"), false);
+  assert.ok(propre.texte.includes("+33 1 23 45 67 89"));
+  assert.equal(propre.liensDoubles, 1);
+});
+
+test("le lien d'une image vaut aussi pour un numéro", () => {
+  // La queue d'une image garde son espace, et les trois schémas s'y lisent.
+  const propre = leProposNettoye("[cid:logo@1] <tel:0123456789> et la suite");
+  assert.equal(propre.texte, `${MARQUE_DUNE_IMAGE} et la suite`);
+  assert.equal(propre.liensDoubles, 1);
+});
+
+test("les trois schémas de queue se comptent ensemble", () => {
+  const propre = leProposNettoye(
+    "le guide<https://a.example/g> — o.ferrand@novaclim.example<mailto:o.ferrand@novaclim.example>"
+    + " — 01 23 45 67 89<tel:0123456789>"
+  );
+  assert.equal(propre.liensDoubles, 3);
+});

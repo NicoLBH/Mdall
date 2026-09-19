@@ -38,6 +38,7 @@ import {
   SCHEMA_DES_PRISES,
   ecarteesAuFormatDuMoteur,
   filEnTexte,
+  laPartRelevee,
   lesMessagesRendus,
   prisesAuFormatDuMoteur,
   verifierLesPrises
@@ -198,7 +199,7 @@ serve(async (req) => {
     const rendus = lesMessagesRendus(lu, messages);
 
     // **La porte.** Ce que le modèle n'a pas su citer ne sort pas d'ici.
-    const { retenues, ecartees, messagesCorriges } = verifierLesPrises({
+    const { retenues, ecartees, messagesCorriges, renvoisEcartes } = verifierLesPrises({
       prises: rendus.prises,
       messages
     });
@@ -220,6 +221,22 @@ serve(async (req) => {
        */
       messages_muets: rendus.muets,
       messages_oublies: rendus.oublies,
+      /**
+       * Combien de renvois ne tenaient pas devant le fil — un rang qui n'existe
+       * pas, ou qui n'est pas antérieur. Ils ont été écartés : un renvoi
+       * inventé ferait passer une question restée sans réponse pour une
+       * question répondue.
+       */
+      renvois_ecartes: renvoisEcartes,
+      /**
+       * Quelle part de chaque message une citation reprend.
+       *
+       * **Un message peu relevé n'est pas un message muet**, et rien ne le
+       * disait : sur un fil réel, celui qui portait un refus et un avis
+       * défavorable a rendu trois prises — sans aucune des deux phrases.
+       * Ce n'est pas un taux à faire monter, c'est un écart à regarder.
+       */
+      couverture: laPartRelevee(messages, retenues),
       /**
        * Combien de prises visaient un autre message que celui où leur citation
        * se trouve. Elles sont gardées — la prise est réelle —, mais **leur

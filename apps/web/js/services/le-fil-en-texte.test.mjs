@@ -297,3 +297,39 @@ test("un relevé qui n'a pas compté message par message le dit", () => {
   const texte = leFilEnTexte({ fil: fil(), releve: RELEVE });
   assert.ok(texte.includes("n'a pas rendu sa lecture message par message"));
 });
+
+// ── Ce qu'une citation a repris, et à quoi une prise répond ────────────────
+
+test("l'export dit, sous chaque message, ce qu'une citation en a repris", () => {
+  // Un message peu relevé n'est pas un message muet, et rien ne le disait : sur
+  // un fil réel, celui qui portait un refus et un avis défavorable a rendu
+  // trois prises — sans aucune des deux phrases.
+  const texte = leFilEnTexte({
+    fil: fil(),
+    releve: { ...RELEVE, couverture: [{ message: 1, caracteres: 100, couverts: 31 }] }
+  });
+  assert.ok(texte.includes("31 % de ce message est repris par une citation"));
+});
+
+test("un message dont on ne sait pas la part n'en affiche pas", () => {
+  const texte = leFilEnTexte({ fil: fil(), releve: { ...RELEVE, couverture: [] } });
+  assert.equal(texte.includes("repris par une citation"), false);
+});
+
+test("l'export dit à quel message une prise répond", () => {
+  const texte = leFilEnTexte({
+    fil: fil(),
+    releve: { ...RELEVE, prises: [{ ...RELEVE.prises[0], repondA: 1, repondueParQuel: "renvoi" }] }
+  });
+  assert.ok(texte.includes("**Répond au message** : 1"));
+  assert.ok(texte.includes("**Répondue, su par** : renvoi"),
+    "un renvoi vérifié et un sujet commun ne se valent pas");
+});
+
+test("les renvois qui n'ont pas tenu se disent", () => {
+  // Un renvoi inventé ferait passer une question restée sans réponse pour une
+  // question répondue : c'est le pire résultat possible.
+  const texte = leFilEnTexte({ fil: fil(), releve: { ...RELEVE, renvoisEcartes: 2 } });
+  assert.ok(texte.includes("**Renvois écartés** : 2"));
+  assert.ok(texte.includes("n'est pas antérieur"));
+});

@@ -69,7 +69,8 @@ const URL_DANS_LE_TEXTE = /https?:\/\/[^\s<>()\[\]"]+/g;
  * La queue qu'une messagerie colle derrière un lien.
  *
  * Outlook écrit sa version texte d'un lien en posant l'adresse **derrière** son
- * texte : `le guide<https://…>`, `bcagnin@novaclim.example<mailto:bcagnin@novaclim.example>`.
+ * texte : `le guide<https://…>`, `o.ferrand@novaclim.example<mailto:o.ferrand@novaclim.example>`,
+ * et — un deuxième fil réel l'a montré — `+33 1 23 45 67 89<tel:+33%201%2023…>`.
  * Personne ne l'a tapée, elle double chaque adresse du message, et elle coûte
  * plus cher que des caractères :
  *
@@ -88,7 +89,7 @@ const URL_DANS_LE_TEXTE = /https?:\/\/[^\s<>()\[\]"]+/g;
  * est ici <https://www.novaclim.example/guide> ». Celle-là, l'auteur l'a écrite,
  * et elle reste.
  */
-const QUEUE_DE_LIEN = /(\S)<((?:https?:\/\/|mailto:)[^<>\s]*)>/g;
+const QUEUE_DE_LIEN = /(\S)<((?:https?:\/\/|mailto:|tel:)[^<>\s]*)>/g;
 
 /** `[cid:image018.png@01DD1B52.8A52BFD0]` — une image collée dans le corps. */
 const IMAGE_EN_LIGNE = /\[cid:[^\]]*\]/g;
@@ -123,7 +124,7 @@ const LIGNE_DE_SITE = /^\s*(?:site\s*(?:web)?\s*:\s*)?(?:https?:\/\/|www\.)[^\s]
  * que la marque est la nôtre : rien ne se perd à retirer l'adresse d'un logo.
  */
 const LIEN_DUNE_IMAGE = new RegExp(
-  `${MARQUE_DUNE_IMAGE.replace(/[()]/g, "\\$&")}\\s*<(?:https?:\\/\\/|mailto:)[^<>\\s]*>`, "g");
+  `${MARQUE_DUNE_IMAGE.replace(/[()]/g, "\\$&")}\\s*<(?:https?:\\/\\/|mailto:|tel:)[^<>\\s]*>`, "g");
 
 /** Une ligne qui ne porte plus qu'une ou plusieurs marques d'image. */
 const LIGNE_DIMAGES = new RegExp(`^\\s*(?:${MARQUE_DUNE_IMAGE.replace(/[()]/g, "\\$&")}\\s*)+$`);

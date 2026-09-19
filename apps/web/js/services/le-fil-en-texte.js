@@ -34,8 +34,8 @@
 
 import { CERTITUDE, ORDRE, phraseDuMoment } from "./le-fil-des-mails.js";
 import {
-  NATURE, ceQueLeModeleNaPasDit, ceQuiManque, nomDeLaNature, parNature, phraseDuManque,
-  phraseDuReleve, prisesDuMessage
+  NATURE, ceQueLeModeleNaPasDit, ceQuiManque, nomDeLaNature, parNature, partReleveeDuMessage,
+  phraseDeLaPart, phraseDuManque, phraseDuReleve, prisesDuMessage
 } from "./prises-de-position.js";
 import { phraseDuTrou } from "./trous-dun-mail.js";
 
@@ -67,7 +67,7 @@ function lesDestinataires(message) {
   return `à ${a.join(", ") || "—"}${copie.length ? ` · ${copie.join(", ")} en copie` : ""}`;
 }
 
-function unMessage(message, prises) {
+function unMessage(message, prises, couverture) {
   const lignes = [
     `### Message ${message.rang} — ${unQui({ qui: texte(message?.qui?.nom) || texte(message?.qui?.adresse) })}`,
     "",
@@ -101,6 +101,12 @@ function unMessage(message, prises) {
     lignes.push("", "**Ce qu'on en a tiré :**", "",
       ...prises.map((prise) => `- **${nomDeLaNature(prise.nature)}** — ${texte(prise.intitule)}`));
   }
+
+  // **Ce qu'aucune citation ne reprend.** Un message peu relevé n'est pas un
+  // message muet, et rien ne le disait : à comparer entre les messages du fil,
+  // pas à faire monter.
+  const part = partReleveeDuMessage(couverture, message.rang);
+  if (part) lignes.push("", `_${phraseDeLaPart(part)}._`);
 
   return lignes.join("\n");
 }
@@ -141,6 +147,12 @@ function unePrise(prise) {
   if (texte(prise?.marque)) lignes.push(`- **Marque** : ${texte(prise.marque)}`);
   if (Number.isFinite(Number(prise?.apresElle))) {
     lignes.push(`- **Messages après elle** : ${Number(prise.apresElle)}`);
+  }
+  if (Number(prise?.repondA)) lignes.push(`- **Répond au message** : ${Number(prise.repondA)}`);
+  // **Par quel signal on l'a su.** Un renvoi a été confronté au fil ; un sujet
+  // commun est un libellé que le modèle a écrit deux fois de la même façon.
+  if (texte(prise?.repondueParQuel)) {
+    lignes.push(`- **Répondue, su par** : ${texte(prise.repondueParQuel)}`);
   }
 
   lignes.push("", "**Citation :**", "", decalerEnCitation(prise?.citation));
@@ -203,7 +215,7 @@ export function leFilEnTexte({ fil = null, releve = null, fichiers = [] } = {}) 
   morceaux.push("", "## Les messages", "");
   const prises = releve?.prises ?? [];
   for (const message of fil.messages ?? []) {
-    morceaux.push(unMessage(message, prisesDuMessage(prises, message.rang)), "");
+    morceaux.push(unMessage(message, prisesDuMessage(prises, message.rang), releve?.couverture), "");
   }
 
   morceaux.push("## Le relevé", "");
@@ -223,6 +235,12 @@ export function leFilEnTexte({ fil = null, releve = null, fichiers = [] } = {}) 
   }
   if (Number(releve.messagesCorriges) > 0) {
     morceaux.push(`- **Rattachées à un autre message** : ${releve.messagesCorriges}`);
+  }
+  // Un renvoi inventé ferait passer une question restée sans réponse pour une
+  // question répondue : ce qui n'a pas tenu se dit.
+  if (Number(releve.renvoisEcartes) > 0) {
+    morceaux.push(`- **Renvois écartés** : ${releve.renvoisEcartes}`
+      + " (le message visé n'existe pas, ou n'est pas antérieur)");
   }
   if (Number(releve.derive?.indecidables) > 0) {
     morceaux.push(`- **Demandes qu'on n'a pas su juger** : ${releve.derive.indecidables}`

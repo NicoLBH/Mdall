@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  MARQUE, OFFRE, SUITE, ceQuonDerive, laMarqueDeContestation, laMarqueDuneOffre,
+  MARQUE, OFFRE, PAR, SUITE, ceQuonDerive, laMarqueDeContestation, laMarqueDuneOffre,
   laSuiteDuneDemande, lesContestations, memeSujet
 } from "./ce-quon-derive.js";
 import { NATURE } from "./prises-de-position.js";
@@ -494,4 +494,119 @@ test("un constat qui porte une marque d'offre reste un constat", () => {
   })]);
   assert.equal(derive.offres, 0);
   assert.equal(derive.prises[0].nature, NATURE.CONSTAT);
+});
+
+// ── Contester en français parlé ────────────────────────────────────────────
+
+test("viser le dire de l'autre nommément se reconnaît", () => {
+  // Un second fil a montré une famille que les cinq premières marques ne
+  // voyaient pas : on y conteste sans registre juridique.
+  assert.equal(laMarqueDeContestation({
+    citation: "Elle n'aurait donc rien à voir avec les creux dont vous parlez."
+  }), MARQUE.REPRISE_DU_DIRE);
+  assert.equal(laMarqueDeContestation({
+    citation: "La fuite que vous évoquez vient d'ailleurs."
+  }), MARQUE.REPRISE_DU_DIRE);
+});
+
+test("nier un lien que l'autre a établi se reconnaît, sans le nommer", () => {
+  // « rien à voir » vise le raisonnement de l'autre sans dire « vous » : c'est
+  // la même famille, et elle se relève seule.
+  assert.equal(laMarqueDeContestation({
+    citation: "Cela n'a rien à voir avec les creux constatés."
+  }), MARQUE.REPRISE_DU_DIRE);
+  assert.equal(laMarqueDeContestation({
+    citation: "Cette fuite est sans rapport avec la pose des lès."
+  }), MARQUE.REPRISE_DU_DIRE);
+});
+
+test("démentir ce qui vient d'être avancé se reconnaît", () => {
+  assert.equal(laMarqueDeContestation({
+    citation: "Le temps ne va pas la coller à la place du chalumeau."
+  }), MARQUE.NE_VA_PAS);
+});
+
+test("maintenir malgré ce qui a été dit se reconnaît", () => {
+  assert.equal(laMarqueDeContestation({
+    citation: "Je comprends que les investigations se poursuivent. Pour autant, je demande des essais."
+  }), MARQUE.POUR_AUTANT);
+});
+
+test("« toutefois » n'est pas une marque, et c'est mesuré", () => {
+  // Il ouvre une phrase ordinaire dans un échange technique : « Toutefois, un
+  // hélicoptère peut décoller en présence de vent » ne conteste rien. Il a été
+  // essayé puis écarté pour cette raison.
+  assert.equal(laMarqueDeContestation({
+    citation: "Toutefois, une étude spécifique complémentaire pourra être réalisée."
+  }), "");
+  assert.equal(laMarqueDeContestation({ citation: "Néanmoins, la valeur reste inférieure." }), "");
+});
+
+// ── À quelle prise une demande a reçu réponse ──────────────────────────────
+
+const reponse = (dessus = {}) => prise({ message: 2, ...dessus });
+
+test("un renvoi vérifié suffit, même quand les sujets ne se ressemblent pas", () => {
+  // **C'est tout l'apport.** Sur un fil réel, « rectification de la pose
+  // d'étanchéité » a reçu pour réponse « reprise de la membrane » : les deux
+  // désignent la même chose et ne partagent aucun mot.
+  const question = demande({ message: 1, porteSur: "rectification de la pose d'étanchéité" });
+  const engagement = reponse({
+    nature: NATURE.ENGAGEMENT, porteSur: "reprise de la membrane", repondA: 1
+  });
+  const suite = laSuiteDuneDemande(question, [question, engagement], { dernierMessage: 3 });
+  assert.equal(suite.parQuoi, engagement);
+  assert.equal(suite.suite, SUITE.REPONDUE);
+  assert.equal(suite.parQuel, PAR.RENVOI);
+});
+
+test("le sujet commun reste un signal, et se dit comme tel", () => {
+  const question = demande({ message: 1 });
+  const suite = laSuiteDuneDemande(question, [question, reponse()], { dernierMessage: 3 });
+  assert.equal(suite.suite, SUITE.REPONDUE);
+  assert.equal(suite.parQuel, PAR.SUJET);
+});
+
+test("un renvoi vers une autre demande ne la ferme pas", () => {
+  // Le rang visé doit être celui de la demande, pas un autre.
+  const question = demande({ message: 2 });
+  const ailleurs = reponse({ message: 3, porteSur: "autre chose", repondA: 1 });
+  const suite = laSuiteDuneDemande(question, [question, ailleurs], { dernierMessage: 3 });
+  assert.equal(suite.suite, SUITE.SANS_REPONSE);
+});
+
+test("un renvoi porté par une prise qui ne répond de rien ne ferme rien", () => {
+  // Une source fonde, elle ne tranche pas ; une autre demande est une relance.
+  const question = demande({ message: 1 });
+  const source = reponse({ nature: NATURE.SOURCE, porteSur: "autre chose", repondA: 1 });
+  const relance = { ...demande({ message: 3, porteSur: "autre chose" }), repondA: 1 };
+  const suite = laSuiteDuneDemande(question, [question, source, relance], { dernierMessage: 3 });
+  assert.equal(suite.suite, SUITE.SANS_REPONSE);
+});
+
+test("une demande sans sujet peut être fermée par un renvoi", () => {
+  // Sans renvoi elle sortait en « on ne sait pas » ; le renvoi, lui, se
+  // vérifie, et il suffit.
+  const question = demande({ message: 1, porteSur: null });
+  const suite = laSuiteDuneDemande(question, [question, reponse({ repondA: 1 })], { dernierMessage: 3 });
+  assert.equal(suite.suite, SUITE.REPONDUE);
+  assert.equal(suite.parQuel, PAR.RENVOI);
+});
+
+test("une demande sans sujet ni renvoi reste indécidable", () => {
+  const question = demande({ message: 1, porteSur: null });
+  const suite = laSuiteDuneDemande(question, [question, reponse({ porteSur: "autre chose" })],
+    { dernierMessage: 3 });
+  assert.equal(suite.suite, SUITE.ON_NE_SAIT_PAS);
+  assert.equal(suite.parQuel, null);
+});
+
+test("la dérivation dit par quel signal une demande a été fermée", () => {
+  // Un modèle qui déclarerait des renvois à tort ferait taire des questions
+  // restées sans réponse : cela doit se lire plutôt que se deviner.
+  const question = demande({ message: 1, porteSur: "cote du seuil" });
+  const derive = ceQuonDerive([question, reponse({ porteSur: "reprise du seuil", repondA: 1 })],
+    { dernierMessage: 3 });
+  assert.equal(derive.sansReponse, 0);
+  assert.equal(derive.prises[0].repondueParQuel, PAR.RENVOI);
 });
