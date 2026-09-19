@@ -3841,3 +3841,41 @@ signature —, avec les niveaux imbriqués et ce que chaque bandeau nomme.
 réels pour savoir ce qui arrive vraiment**, et ces mails-là n'entreront pas dans
 le dépôt. L'ordre juste reste celui du plan — l'écran d'abord (étape 4), qui
 montre les trous ; on fermera ensuite par ordre de fréquence.
+
+---
+
+## 49. Ce que le fil ne sait pas encore rapprocher
+
+**Ce qui existe.** L'étape 3 de [`lire-les-mails.md`](lire-les-mails.md) est
+écrite : `services/le-fil-des-mails.js` enchaîne les étapes 1 et 2, dédoublonne,
+range par la chaîne de réponses ou par les dates en disant lequel des deux, et
+reconstitue les messages absents à partir des citations — en les marquant.
+
+**Ce qui reste dehors, et ce que ça coûte.**
+
+- **Rapprocher un message cité d'un message déposé quand les textes diffèrent.**
+  Le rapprochement se fait sur le texte : le cité doit être le début du déposé,
+  et en faire le gros. Une messagerie qui replie les lignes autrement
+  (`format=flowed`, § 47) ou qui insère un `[Texte des messages précédents
+  masqué]` casse ce rapprochement, et **le même message apparaît deux fois** —
+  une fois déposé, une fois reconstitué. Ce n'est pas silencieux : le second
+  porte sa marque. C'est tout de même du bruit dans le fil.
+- **La réponse point par point**, renvoyée ici depuis le § 48. L'idée était
+  qu'une ligne citée isolée se reconnaisse à ce qu'elle figure ailleurs dans le
+  fil. Elle se tient — mais elle ne suffit pas : `> 50 m²` peut très bien
+  figurer dans un message antérieur du fil sans être une citation, et il
+  faudrait au moins une ligne de contexte commune pour trancher. **À reprendre
+  avec des fils réels**, et pas avant : c'est le genre de règle qu'on calibre
+  sur ce qui arrive, pas sur ce qu'on imagine.
+- **Deux fils qu'on dépose ensemble.** Rien ne les sépare : ils forment un fil
+  en plusieurs morceaux, qui le dit (`melange`), et les objets différents se
+  signalent aussi. Les séparer vraiment — rendre deux fils au lieu d'un —
+  demande de trancher ce qu'on fait des messages qui appartiennent aux deux.
+- **Un message cité qui répond à un autre message cité.** L'imbrication donne
+  l'ordre, pas l'arbre : les messages reconstitués sortent tous à la même
+  profondeur, avec leur niveau d'imbrication à côté. Prétendre en déduire un
+  arbre de réponses serait deviner une chaîne qu'on n'a pas.
+
+**Pourquoi c'est repoussé.** Comme aux § 47 et 48 : les quatre se calibrent sur
+des mails réels, qui n'entreront pas dans le dépôt. L'écran (étape 4) montre les
+trous ; c'est lui qui dira lesquels reviennent.
