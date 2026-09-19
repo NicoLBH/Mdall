@@ -22,6 +22,7 @@
  */
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
+import { messagesAEnvoyer } from "./le-fil-des-mails.js";
 import { REFUS, leReleveLu, motifDuStatut, panneLue } from "./le-releve-rendu.js";
 
 const URL_DE_LA_FONCTION = `${getSupabaseUrl()}/functions/v1/relever-un-fil`;
@@ -31,7 +32,14 @@ const texte = (valeur) => String(valeur ?? "").trim();
 // **Tout ce qui se lit sans réseau vit ailleurs, et se réexporte d'ici.** Les
 // appelants n'ont pas à savoir que ce module a été coupé en deux ; ce qui
 // change, c'est que la moitié pure peut désormais s'éprouver (règle 12).
-export { messagesAEnvoyer } from "./le-fil-des-mails.js";
+//
+// **`messagesAEnvoyer` est importé au-dessus, et pas seulement réexporté** :
+// `export { x } from "…"` fait passer le nom vers les appelants **sans le lier
+// ici**. Écrit ainsi, il n'existait pas dans ce fichier, et la première ligne de
+// `releverLeFil` levait « messagesAEnvoyer is not defined » — au clic, jamais
+// avant. Le nom réexporté et le nom employé sont le même, et il ne faut donc
+// pas les confondre avec une seule ligne : voir `scripts/verifie-les-reexports`.
+export { messagesAEnvoyer };
 export {
   PHRASES_DU_REFUS, QUE_FAIRE, REFUS, leReleveLu, motifDuStatut, panneLue, phraseDuRefus, queFaire
 } from "./le-releve-rendu.js";
