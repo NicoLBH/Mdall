@@ -380,6 +380,29 @@ export function phraseDeLaPart(part) {
 }
 
 /**
+ * Ce que la température dit du relevé, en une phrase.
+ *
+ * **Elle ne dit rien de la qualité de la lecture**, et la phrase se garde de le
+ * laisser croire : elle dit seulement si deux lectures du même fil se
+ * ressemblent. Une température fixée ne rend pas le relevé meilleur, elle le
+ * rend unique.
+ *
+ * Elle compte parce qu'un export sort d'ici pour être opposé à quelqu'un. Un
+ * lecteur doit savoir si la citation qu'il a sous les yeux sera encore là au
+ * prochain passage (règle 1), et l'auteur doit savoir s'il peut juger un
+ * réglage sur ce qu'il voit (règle 12).
+ */
+export function phraseDeLaTemperature(temperature) {
+  if (!Number.isFinite(temperature)) {
+    return "température non fixée : deux lectures du même fil peuvent différer";
+  }
+  if (Number(temperature) === 0) {
+    return "température 0 : le même fil rend le même relevé";
+  }
+  return `température ${temperature} : deux lectures du même fil peuvent différer`;
+}
+
+/**
  * Les prises d'un message donné.
  *
  * C'est ce qui permet de montrer, sous chaque message du fil, ce qu'on en a

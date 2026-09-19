@@ -474,6 +474,16 @@ test("une prise sans renvoi n'affiche pas de ligne vide", () => {
   assert.equal(html.includes("répond au message"), false);
 });
 
+test("l'écran dit si le même fil rendrait le même relevé", () => {
+  const html = dessine(analyse({ releve: releve({ temperature: 0 }) }));
+  assert.ok(html.includes("température 0 : le même fil rend le même relevé"));
+});
+
+test("un relevé sans température fixée le dit à l'écran", () => {
+  const html = dessine(analyse({ releve: releve() }));
+  assert.ok(html.includes("température non fixée : deux lectures du même fil peuvent différer"));
+});
+
 test("une prise sans marque n'affiche pas de ligne vide", () => {
   const html = dessine(analyse({ releve: releve() }));
   assert.equal(html.includes("relevée sur"), false);

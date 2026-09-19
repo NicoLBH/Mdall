@@ -33,6 +33,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { requireUser } from "../_shared/require-user.ts";
 import { deposerLaConsommation, jetonsDeLaReponse } from "../_shared/consommation-ia.ts";
 import { panneDuFournisseur } from "../_shared/sujets-du-modele.js";
+import { TEMPERATURE_REPRODUCTIBLE, refuseLaTemperature } from "../_shared/reglage-du-modele.js";
 import {
   CONSIGNES,
   SCHEMA_DES_PRISES,
@@ -113,20 +114,47 @@ serve(async (req) => {
     // une course laisserait l'appel continuer dans le vide, et il serait payé.
     const horloge = AbortSignal.timeout(MAX_SECONDES * 1000);
 
+    /**
+     * L'appel, avec ou sans la température fixée.
+     *
+     * Écrit une fois et appelé deux fois : le second appel n'existe que pour
+     * un modèle qui refuse qu'on lui fixe une température, et il doit être le
+     * même à ce paramètre près (règle 10).
+     */
+    const demander = (temperature: number | null) => fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${openAiApiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: MODELE,
+        instructions: CONSIGNES,
+        input: fil,
+        max_output_tokens: MAX_JETONS,
+        text: { format: { type: "json_schema", ...SCHEMA_DES_PRISES } },
+        ...(temperature === null ? {} : { temperature })
+      }),
+      signal: horloge
+    });
+
+    // **La température tenue, ou rien.** Elle descend telle quelle jusqu'à
+    // l'écran : un relevé qu'on n'a pas pu rendre reproductible ne doit pas
+    // se présenter comme s'il l'était (règle 5).
+    let temperatureTenue: number | null = TEMPERATURE_REPRODUCTIBLE;
+
     let appel: Response;
     try {
-      appel = await fetch("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${openAiApiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: MODELE,
-          instructions: CONSIGNES,
-          input: fil,
-          max_output_tokens: MAX_JETONS,
-          text: { format: { type: "json_schema", ...SCHEMA_DES_PRISES } }
-        }),
-        signal: horloge
-      });
+      appel = await demander(temperatureTenue);
+
+      // **Un modèle de raisonnement refuse qu'on lui fixe une température.**
+      // Le modèle est un réglage : quelqu'un peut en poser un demain, et le
+      // relevé tomberait alors pour un paramètre de trop. On réessaie une
+      // fois, sans elle, et l'on dit qu'elle n'a pas tenu.
+      if (!appel.ok) {
+        const refus = await appel.clone().text().catch(() => "");
+        if (refuseLaTemperature(refus, appel.status)) {
+          temperatureTenue = null;
+          appel = await demander(null);
+        }
+      }
     } catch (erreur) {
       // **Un dépassement n'est pas un refus.** On le dit avec le code qui le
       // dit — 504 — et une cause nommée, pour que l'écran cesse d'annoncer une
@@ -246,6 +274,15 @@ serve(async (req) => {
       /** La réponse a-t-elle été coupée ? Des prises manquent alors, en silence. */
       coupee,
       modele: MODELE,
+      /**
+       * La température que l'appel a tenue, ou `null` si le modèle l'a refusée.
+       *
+       * **C'est ce qui dit si deux lectures du même fil se ressemblent.** Un
+       * relevé qu'on n'a pas pu rendre reproductible ne doit pas se présenter
+       * comme s'il l'était : une citation qui change alors que le document n'a
+       * pas changé n'est plus une preuve (règle 1).
+       */
+      temperature: temperatureTenue,
       /**
        * Ce que ce relevé a consommé.
        *

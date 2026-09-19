@@ -4226,3 +4226,45 @@ la prise à laquelle il répond. C'est l'étape 7 quinquies de
 réglées sur le premier fil, le second en a validé zéro et en a exigé trois autres. La leçon vaut
 pour tout ce qui suit : **chaque règle tirée d'un fil est une hypothèse jusqu'au fil suivant**, et
 le carnet doit le dire plutôt que de laisser croire à un acquis.
+
+
+---
+
+## 58. La reproductibilité, et ce qu'elle n'a pas encore prouvé
+
+**Ce qui vient d'être réglé.** La température fixée à zéro, le refus d'un modèle qui n'en veut
+pas tenu et dit, et la lecture de la réponse du serveur sortie du module qui parle au réseau —
+donc enfin éprouvable. C'est l'étape 7 sexies de [`lire-les-mails.md`](lire-les-mails.md).
+
+**Ce qui reste ouvert, et le premier point est le seul qui compte pour l'instant.**
+
+- **On ne sait pas encore à quoi ressemble le relevé déterministe.** Trois
+  passages ont donné 12, 14 et 17 prises ; celui de la température fixée n'a pas
+  encore été vu. L'attente raisonnée est qu'il se rapproche du plus riche —
+  les passages pauvres viennent de tirages qui s'écartent du chemin le plus
+  probable, et c'est cela qu'on supprime. **Mais c'est une attente, pas une
+  mesure.** Le protocole tient en trois passages du même fil : s'ils sont
+  identiques, la base manquante est acquise ; il reste alors à regarder auquel
+  des trois d'aujourd'hui il ressemble.
+- **Si le relevé déterministe s'avère pauvre**, le double relevé devient le
+  vrai sujet : passer le fil deux fois et prendre l'union, en disant ce qui
+  n'est apparu qu'une fois. Il coûte deux appels, et il ne se décide que sur des
+  chiffres comparables — ce qui était impossible jusqu'ici.
+- **Les autres appels au modèle du dépôt ne fixent pas de température non
+  plus** : la lecture d'un compte rendu, l'extraction des sujets, le titre d'une
+  proposition. Le réglage partagé existe maintenant et les attend, mais les
+  changer sans mesurer serait refaire exactement l'erreur que cette étape
+  répare. Chacun demande son propre protocole.
+- **Toutes les mesures des étapes précédentes sont des tirages uniques**, et
+  restent à refaire une fois la base acquise : la précision du lexique des
+  contestations, les 28 libellés de sujet, les quatre contestations d'un fil.
+  Aucune n'est fausse ; aucune ne vaut ce qu'elle a l'air de valoir.
+- **Toujours ouvert des § 54 à 57** : un refus direct qui n'est pas relevé
+  (« Non, je ne peux pas », absent des trois passages) ; un engagement et une
+  formule de politesse rangés en questions sans réponse ; le renvoi de ⑮ jamais
+  exercé sur un fil réel ; la période d'un fil lue sur son dernier jour.
+
+**Ce que cette étape change dans la façon de travailler.** Jusqu'ici, chaque règle tirée d'un fil
+était une hypothèse jusqu'au fil suivant (§ 57). Il faut ajouter : **elle était aussi une
+hypothèse jusqu'au passage suivant du même fil.** La reproductibilité ne rend pas l'outil
+meilleur — elle rend possible de savoir s'il l'est.

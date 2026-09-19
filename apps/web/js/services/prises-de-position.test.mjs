@@ -6,7 +6,7 @@ import {
   MANQUE, NATURE, NATURES_DECLAREES, NATURES_DERIVEES, ceQueCaDevient, ceQuiManque,
   horsNomenclature, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
   ceQueLeModeleNaPasDit, laCleDeLAuteur, lesPrisesEtLeursAuteurs, partReleveeDuMessage,
-  phraseDeLaPart, phraseDuReleve,
+  phraseDeLaPart, phraseDeLaTemperature, phraseDuReleve,
   prisesDuMessage, quoiDeLaNature
 } from "./prises-de-position.js";
 
@@ -315,4 +315,34 @@ test("la phrase dit ce que le chiffre veut dire, et rien de plus", () => {
 
 test("sans part, pas de phrase", () => {
   assert.equal(phraseDeLaPart(null), "");
+});
+
+// ── Ce que la température dit du relevé ────────────────────────────────────
+
+test("une température fixée à zéro dit que le fil rend le même relevé", () => {
+  assert.equal(phraseDeLaTemperature(0), "température 0 : le même fil rend le même relevé");
+});
+
+test("une température non fixée se dit, plutôt que de se taire", () => {
+  // Un export sort d'ici pour être opposé à quelqu'un : le lecteur doit savoir
+  // si la citation qu'il a sous les yeux sera encore là au prochain passage
+  // (règle 1).
+  for (const rien of [null, undefined, "0", NaN]) {
+    assert.equal(phraseDeLaTemperature(rien),
+      "température non fixée : deux lectures du même fil peuvent différer");
+  }
+});
+
+test("une température non nulle ne se présente pas comme reproductible", () => {
+  // Une valeur basse laisse passer les tirages rares : elle réduit l'écart,
+  // elle ne le ferme pas.
+  assert.ok(phraseDeLaTemperature(0.2).includes("peuvent différer"));
+  assert.ok(phraseDeLaTemperature(0.2).includes("0.2"));
+});
+
+test("la phrase ne prétend rien sur la qualité de la lecture", () => {
+  // Une température fixée ne rend pas le relevé meilleur, elle le rend unique.
+  for (const valeur of [0, 1, null]) {
+    assert.equal(/meilleur|fiable|juste|exact|sûr/.test(phraseDeLaTemperature(valeur)), false);
+  }
 });

@@ -62,8 +62,8 @@ import {
 import { phraseDuTrou } from "../../../services/trous-dun-mail.js";
 import {
   NATURE, ceQueCaDevient, ceQuiManque, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
-  ceQueLeModeleNaPasDit, partReleveeDuMessage, phraseDeLaPart, phraseDuReleve, prisesDuMessage,
-  quoiDeLaNature
+  ceQueLeModeleNaPasDit, partReleveeDuMessage, phraseDeLaPart, phraseDeLaTemperature,
+  phraseDuReleve, prisesDuMessage, quoiDeLaNature
 } from "../../../services/prises-de-position.js";
 import { ceQuonDerive } from "../../../services/ce-quon-derive.js";
 import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
@@ -499,6 +499,11 @@ function renderPrixDuReleve(releve) {
     <p class="lecture-cr__mot" title="${escapeHtml(detail)}">
       ${escapeHtml(prix.dit)}${releve.dureeMs ? escapeHtml(` · ${formatStepDuration(releve.dureeMs)}`) : ""}
     </p>
+    ${/*
+      **Ce que ce relevé vaut comme preuve.** Une citation qui change alors que
+      le document n'a pas changé n'est plus une citation opposable (règle 1).
+    */""}
+    <p class="lecture-cr__mot">${escapeHtml(phraseDeLaTemperature(releve.temperature))}</p>
   `;
 }
 
