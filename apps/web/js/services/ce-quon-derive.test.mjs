@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  POLARITE, SUITE, ceQuonDerive, laSuiteDuneDemande, lesOppositions, memeSujet, polariteDe
+  MARQUE, SUITE, ceQuonDerive, laMarqueDeContestation, laSuiteDuneDemande, lesContestations, memeSujet
 } from "./ce-quon-derive.js";
 import { NATURE } from "./prises-de-position.js";
 
@@ -39,29 +39,53 @@ test("un sujet vide ne ressemble à rien, pas même à un autre sujet vide", () 
 
 // ── Affirmer ou nier ───────────────────────────────────────────────────────
 
-test("une négation en deux morceaux se reconnaît", () => {
-  assert.equal(polariteDe("Rien n'a été relevé au droit de l'acrotère."), POLARITE.NIE);
-  assert.equal(polariteDe("Nous n'avons pas constaté d'humidité."), POLARITE.NIE);
-  assert.equal(polariteDe("Le support n'est jamais resté humide."), POLARITE.NIE);
+// ── Une marque de contestation ─────────────────────────────────────────────
+
+test("prendre position contre le dire de l'autre se reconnaît", () => {
+  assert.equal(laMarqueDeContestation({ intitule: "je ne partage pas votre position" }),
+    MARQUE.NE_PARTAGE_PAS);
+  assert.equal(laMarqueDeContestation({ intitule: "votre appréciation est notée" }),
+    MARQUE.VOTRE_POSITION);
+  assert.equal(laMarqueDeContestation({ intitule: "hypothèse non conforme aux combinaisons" }),
+    MARQUE.PAS_RECEVABLE);
+  assert.equal(laMarqueDeContestation({ intitule: "le maintien de cet avis paraît disproportionné" }),
+    MARQUE.DISPROPORTIONNE);
+  assert.equal(laMarqueDeContestation({ intitule: "vous indiquiez vous-même le contraire" }),
+    MARQUE.RETOURNE_CONTRE);
 });
 
-test("un mot qui nie à lui seul suffit", () => {
-  assert.equal(polariteDe("Aucune trace d'humidité au droit de l'acrotère."), POLARITE.NIE);
-  assert.equal(polariteDe("Reprise sans réserve."), POLARITE.NIE);
+test("la marque se cherche aussi dans la citation, et pas seulement dans l'intitulé", () => {
+  // L'intitulé est du modèle, la citation est de l'auteur : la marque peut
+  // tomber d'un côté comme de l'autre, et n'en lire qu'un en perdrait la moitié.
+  assert.equal(
+    laMarqueDeContestation({
+      intitule: "cote du seuil",
+      citation: "Je ne partage pas votre position sur ce point."
+    }),
+    MARQUE.NE_PARTAGE_PAS
+  );
 });
 
-test("« pas » tout seul n'est pas une négation", () => {
-  // « le pas de vis », « un pas de plus » : la première moitié de la négation
-  // lève le doute, et l'exiger évite d'inventer un désaccord.
-  assert.equal(polariteDe("Le pas de vis est conforme."), POLARITE.AFFIRME);
+test("nier un fait n'est pas contester ce que l'autre a dit", () => {
+  // C'est tout l'écart avec la première version : « le support n'est pas sec »
+  // nie un fait, et un fil réel a rendu quatre-vingt-seize désaccords sur ce
+  // seul critère, dont pas un n'en était un.
+  assert.equal(laMarqueDeContestation({ intitule: "le support n'est pas sec" }), "");
+  assert.equal(laMarqueDeContestation({ intitule: "aucune reprise n'a été faite" }), "");
+  assert.equal(laMarqueDeContestation({ intitule: "rien n'a été relevé au droit de l'acrotère" }), "");
 });
 
-test("une affirmation reste une affirmation", () => {
-  assert.equal(polariteDe("Le support est humide au droit de l'acrotère."), POLARITE.AFFIRME);
-  assert.equal(polariteDe(""), POLARITE.AFFIRME);
+test("les accents et la casse ne cachent pas une marque", () => {
+  assert.equal(laMarqueDeContestation({ intitule: "VOTRE APPRÉCIATION" }), MARQUE.VOTRE_POSITION);
+  assert.equal(laMarqueDeContestation({ intitule: "non-conformé" }), MARQUE.PAS_RECEVABLE);
 });
 
-// ── Une demande, et ce qu'elle devient ─────────────────────────────────────
+test("une prise sans mot ne porte aucune marque", () => {
+  assert.equal(laMarqueDeContestation({}), "");
+  assert.equal(laMarqueDeContestation(null), "");
+});
+
+// ── Ce qu'une demande devient ──────────────────────────────────────────────
 
 test("un constat postérieur sur la même chose répond à la demande", () => {
   const question = demande({ message: 1 });
@@ -129,47 +153,97 @@ test("une demande suivie de trois messages le dit aussi", () => {
 
 // ── Deux constats qui semblent se contredire ───────────────────────────────
 
-const AFFIRME = () => prise({
-  qui: "Ourdine Ferrand", message: 2, intitule: "le support est humide au droit de l'acrotère"
+const CONTESTE = () => prise({
+  qui: "Ourdine Ferrand", message: 2,
+  intitule: "je ne partage pas votre position sur la cote",
+  citation: "Je ne partage pas votre position sur la cote."
 });
-const NIE = () => prise({
-  qui: "BERTRAND", message: 1, intitule: "rien n'a été relevé au droit de l'acrotère"
-});
+const ANTERIEUR = () => prise({ qui: "BERTRAND", message: 1 });
 
-test("deux constats opposés sur la même chose se signalent", () => {
-  const lues = lesOppositions([AFFIRME(), NIE()]);
+test("une prise qui prend position contre se signale", () => {
+  const lues = lesContestations([ANTERIEUR(), CONTESTE()]);
   assert.equal(lues.length, 1);
-  assert.equal(lues[0].porteSur, "humidité de l'acrotère");
-  assert.equal(lues[0].positions.length, 2);
+  assert.equal(lues[0].marque, MARQUE.NE_PARTAGE_PAS);
+  assert.equal(lues[0].prise.message, 2);
 });
 
-test("deux constats du même auteur ne font pas un désaccord", () => {
-  // C'est une précision, ou un changement d'avis. Ce n'est pas la même chose.
-  const lues = lesOppositions([AFFIRME(), { ...NIE(), qui: "Ourdine Ferrand" }]);
-  assert.deepEqual(lues, []);
+test("une prise qui n'en conteste aucune ne se signale pas", () => {
+  // Le pendant : une règle qui trouve toujours quelque chose ne dit rien.
+  assert.deepEqual(lesContestations([ANTERIEUR(), prise({ qui: "Ourdine Ferrand", message: 2 })]), []);
 });
 
-test("deux constats qui affirment la même chose ne se contredisent pas", () => {
-  assert.deepEqual(lesOppositions([AFFIRME(), { ...AFFIRME(), qui: "BERTRAND" }]), []);
+test("une contestation sans sujet ne se rend pas", () => {
+  // Sans `porteSur`, on ne peut dire ni sur quoi elle porte ni qui s'était
+  // exprimé avant : la rendre serait rendre une phrase sans son contexte.
+  assert.deepEqual(lesContestations([{ ...CONTESTE(), porteSur: "" }]), []);
 });
 
-test("deux constats sur des sujets différents ne se contredisent pas", () => {
-  assert.deepEqual(lesOppositions([AFFIRME(), { ...NIE(), porteSur: "cote du seuil" }]), []);
+test("une demande peut contester autant qu'un constat", () => {
+  // « Ne pas maintenir cet avis défavorable » est une demande, et c'est la
+  // forme même du litige sur un fil réel.
+  const lues = lesContestations([{ ...CONTESTE(), nature: NATURE.DEMANDE }]);
+  assert.equal(lues.length, 1);
 });
 
-test("une demande et un constat opposés ne font pas un désaccord", () => {
-  // Le désaccord est entre deux constats : une demande n'affirme rien.
-  assert.deepEqual(lesOppositions([AFFIRME(), { ...NIE(), nature: NATURE.DEMANDE }]), []);
+test("la contestation dit qui s'était exprimé avant elle sur le même sujet", () => {
+  const [lue] = lesContestations([ANTERIEUR(), CONTESTE()]);
+  assert.deepEqual(lue.avant, ["BERTRAND"]);
 });
 
-test("un constat sans sujet ne peut se contredire avec rien", () => {
-  assert.deepEqual(lesOppositions([AFFIRME(), { ...NIE(), porteSur: "" }]), []);
+test("deux affichages d'une même personne ne la rapprochent pas d'elle-même", () => {
+  // Le pendant de l'épreuve précédente : sans clé, deux affichages voisins
+  // — « Ourdine Ferrand » et « ourdine ferrand » — passeraient pour deux
+  // personnes, et l'on rendrait un désaccord de quelqu'un avec lui-même.
+  const [lue] = lesContestations([
+    { ...prise({ message: 1 }), qui: "ourdine ferrand", quiCle: "o.ferrand@novaclim.example" },
+    { ...CONTESTE(), qui: "Ourdine Ferrand", quiCle: "autre@novaclim.example" }
+  ]);
+  assert.deepEqual(lue.avant, ["ourdine ferrand"],
+    "deux clés différentes font deux personnes, quoi que dise l'affichage");
 });
 
-test("une même paire ne sort qu'une fois", () => {
-  const lues = lesOppositions([AFFIRME(), NIE(), { ...NIE(), qui: "Bureau VERIFAS" }]);
-  // Deux négations contre une affirmation : deux paires, pas quatre.
-  assert.equal(lues.length, 2);
+test("elle ne compte pas son propre auteur parmi ceux d'avant", () => {
+  // On ne se contredit pas soi-même : c'est une précision, ou un changement
+  // d'avis.
+  const [lue] = lesContestations([prise({ qui: "Ourdine Ferrand", message: 1 }), CONTESTE()]);
+  assert.deepEqual(lue.avant, []);
+});
+
+test("une même personne sous deux affichages ne fait pas deux personnes", () => {
+  // Un fil réel a porté deux personnes sous quatre identités, et l'une s'est
+  // retrouvée en désaccord avec elle-même.
+  // Les deux affichages diffèrent vraiment — « O. Ferrand » n'est pas
+  // « Ourdine Ferrand » : c'est la clé, et elle seule, qui les rapproche.
+  const [lue] = lesContestations([
+    { ...prise({ message: 1 }), qui: "O. Ferrand", quiCle: "o.ferrand@novaclim.example" },
+    { ...CONTESTE(), qui: "Ourdine Ferrand", quiCle: "o.ferrand@novaclim.example" }
+  ]);
+  assert.deepEqual(lue.avant, []);
+});
+
+test("un auteur qui a parlé deux fois avant n'est nommé qu'une fois", () => {
+  const [lue] = lesContestations([ANTERIEUR(), ANTERIEUR(), CONTESTE()]);
+  assert.deepEqual(lue.avant, ["BERTRAND"]);
+});
+
+test("ce qui vient après la contestation n'est pas ce qu'elle conteste", () => {
+  const [lue] = lesContestations([CONTESTE(), prise({ qui: "BERTRAND", message: 5 })]);
+  assert.deepEqual(lue.avant, []);
+});
+
+test("un autre sujet n'est pas ce qu'elle conteste", () => {
+  const [lue] = lesContestations([
+    { ...ANTERIEUR(), porteSur: "cote du seuil" }, CONTESTE()
+  ]);
+  assert.deepEqual(lue.avant, []);
+});
+
+test("personne avant elle se dit, et ne s'invente pas", () => {
+  // Une contestation peut viser un rapport plutôt qu'un message du fil : c'est
+  // le cas réel, et nommer au jugé prêterait à quelqu'un un propos qu'il n'a
+  // pas tenu (règle 5).
+  const [lue] = lesContestations([CONTESTE()]);
+  assert.deepEqual(lue.avant, []);
 });
 
 // ── Tout ensemble ──────────────────────────────────────────────────────────
@@ -202,41 +276,60 @@ test("une demande qu'on ne sait pas juger se compte à part", () => {
   assert.equal(derive.prises[0].suite, SUITE.ON_NE_SAIT_PAS);
 });
 
-test("un désaccord s'ajoute sans retirer les constats dont il sort", () => {
-  // Un constat reste vrai pour son auteur ; le désaccord est une observation
-  // sur la paire, pas un remplacement.
-  const derive = ceQuonDerive([AFFIRME(), NIE()]);
+test("une prise qui conteste change de nature et ne se dédouble pas", () => {
+  // La laisser aussi dans sa rubrique d'origine ferait lire deux fois la même
+  // phrase, et l'on chercherait en quoi les deux diffèrent.
+  const derive = ceQuonDerive([ANTERIEUR(), CONTESTE()]);
   assert.equal(derive.desaccords, 1);
-  assert.equal(derive.prises.length, 3);
-  assert.equal(derive.prises.filter((prise) => prise.nature === NATURE.CONSTAT).length, 2);
+  assert.equal(derive.prises.length, 2);
+  assert.deepEqual(derive.prises.map((prise) => prise.nature),
+    [NATURE.CONSTAT, NATURE.DESACCORD]);
 });
 
-test("un désaccord porte les deux positions et leurs citations", () => {
-  const derive = ceQuonDerive([AFFIRME(), NIE()]);
+test("un désaccord garde les mots de celui qui conteste", () => {
+  const derive = ceQuonDerive([ANTERIEUR(), CONTESTE()]);
   const desaccord = derive.prises.find((prise) => prise.nature === NATURE.DESACCORD);
-  assert.equal(desaccord.intitule, "humidité de l'acrotère");
-  assert.deepEqual(desaccord.positions.map((position) => position.qui),
-    ["Ourdine Ferrand", "BERTRAND"]);
-  assert.ok(desaccord.positions.every((position) => position.citation));
+  assert.equal(desaccord.qui, "Ourdine Ferrand");
+  assert.equal(desaccord.positions.length, 1);
+  assert.equal(desaccord.positions[0].citation, "Je ne partage pas votre position sur la cote.");
+  assert.deepEqual(desaccord.avant, ["BERTRAND"]);
 });
 
-test("un désaccord se date du plus tardif des deux : c'est là qu'il apparaît", () => {
-  const derive = ceQuonDerive([AFFIRME(), NIE()]);
-  const desaccord = derive.prises.find((prise) => prise.nature === NATURE.DESACCORD);
-  assert.equal(desaccord.message, 2);
+test("un désaccord dit ce qu'il était et quelle marque a parlé", () => {
+  // Rien n'est masqué : la nature a changé, pas le fait — et la règle se juge
+  // sur pièce.
+  const derive = ceQuonDerive([{ ...CONTESTE(), nature: NATURE.DEMANDE }]);
+  const [desaccord] = derive.prises;
+  assert.equal(desaccord.natureDeclaree, NATURE.DEMANDE);
+  assert.equal(desaccord.marque, MARQUE.NE_PARTAGE_PAS);
 });
 
-test("un désaccord ne s'attribue à personne", () => {
-  // Il n'est de personne : il est entre deux personnes.
-  const derive = ceQuonDerive([AFFIRME(), NIE()]);
-  const desaccord = derive.prises.find((prise) => prise.nature === NATURE.DESACCORD);
-  assert.equal(desaccord.qui, null);
+test("une contestation l'emporte sur le jugement d'une demande", () => {
+  // Une demande qui conteste n'est pas d'abord une demande sans réponse : ce
+  // qu'elle porte, c'est le désaccord.
+  const derive = ceQuonDerive([{ ...CONTESTE(), nature: NATURE.DEMANDE }], { dernierMessage: 9 });
+  assert.equal(derive.sansReponse, 0);
+  assert.equal(derive.desaccords, 1);
 });
 
-test("deux désaccords sur le même sujet portent des clés différentes", () => {
-  const derive = ceQuonDerive([AFFIRME(), NIE(), { ...NIE(), qui: "Bureau VERIFAS" }]);
+test("deux contestations portent des clés différentes", () => {
+  const derive = ceQuonDerive([CONTESTE(), CONTESTE()]);
   const cles = derive.prises.filter((prise) => prise.nature === NATURE.DESACCORD).map((prise) => prise.key);
   assert.equal(new Set(cles).size, 2);
+});
+
+test("l'identité d'un auteur vient du fil, et non de son affichage", () => {
+  // Le fil porte l'adresse ; le relevé ne porte qu'un affichage. Sans ce
+  // recollement, la même personne se contredit elle-même.
+  const derive = ceQuonDerive(
+    [{ ...prise({ message: 1 }), qui: "Ourdine FERRAND" }, CONTESTE()],
+    { messages: [
+      { rang: 1, qui: { nom: "Ourdine FERRAND", adresse: "o.ferrand@novaclim.example" } },
+      { rang: 2, qui: { nom: "Ourdine Ferrand", adresse: "O.Ferrand@novaclim.example" } }
+    ] }
+  );
+  const desaccord = derive.prises.find((prise) => prise.nature === NATURE.DESACCORD);
+  assert.deepEqual(desaccord.avant, [], "deux affichages d'une même adresse font une personne");
 });
 
 test("un fil sans rien à dériver ne dérive rien", () => {

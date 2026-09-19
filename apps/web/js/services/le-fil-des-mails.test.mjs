@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   CERTITUDE, ORDRE, empreinteDuTexte, leFilDesMails, leJourDuMessage, leMemeTexte,
   lesMessagesCites, phraseDuFil, unMessageDuFil
+, quiDuneCitation
 } from "./le-fil-des-mails.js";
 import { TROU } from "./trous-dun-mail.js";
 
@@ -406,4 +407,55 @@ test("un fil ordinaire ne porte aucun trou du fil", () => {
 test("les trous de chaque message remontent dans ceux du fil", () => {
   const sansIdentite = CHAINE_A.replace("Message-ID: <a1@bertrand.example>\r\n", "");
   assert.ok(aBien(leFilDesMails([sansIdentite]), TROU.SANS_IDENTITE));
+});
+
+// ── Qui a écrit un message reconstitué d'une citation ──────────────────────
+
+test("le bandeau d'un message cité rend le nom et l'adresse séparés", () => {
+  // Les garder dans la même chaîne donne à la même personne une identité par
+  // forme d'affichage : un fil réel a porté deux personnes sous quatre.
+  assert.deepEqual(quiDuneCitation("Ourdine Ferrand <o.ferrand@novaclim.example>"),
+    { nom: "Ourdine Ferrand", adresse: "o.ferrand@novaclim.example" });
+});
+
+test("un bandeau qui ne nomme qu'une personne ne lui invente pas d'adresse", () => {
+  // « BERTRAND a écrit » ne porte pas d'adresse, et prendre ce nom pour une
+  // adresse serait pire que de ne rien savoir.
+  assert.deepEqual(quiDuneCitation("BERTRAND"), { nom: "BERTRAND", adresse: "" });
+});
+
+test("un chevron au milieu d'un nom n'en fait pas une adresse", () => {
+  // Les chevrons se cherchent à la fin : ailleurs, ils appartiennent au texte.
+  // « SOCOTEC <> VERIFAS » n'est pas un couple nom/adresse.
+  assert.deepEqual(quiDuneCitation("NOVACLIM < VERIFAS"),
+    { nom: "NOVACLIM < VERIFAS", adresse: "" });
+});
+
+test("un bandeau vide ne nomme personne", () => {
+  assert.deepEqual(quiDuneCitation(""), { nom: "", adresse: "" });
+});
+
+test("un message reconstitué porte l'adresse de son auteur, pas une chaîne d'affichage", () => {
+  // L'épreuve qui compte : `quiDuneCitation` peut être juste et n'être appelée
+  // nulle part. Sans elle ici, la même personne prend une identité par forme
+  // d'affichage, et se retrouve en désaccord avec elle-même.
+  const porteur = mail(
+    "From: Ourdine Ferrand <o.ferrand@novaclim.example>",
+    "To: BERTRAND <contact@bertrand.example>",
+    "Date: Thu, 12 Mar 2026 09:14:00 +0100",
+    "Subject: Re: Étanchéité toiture",
+    "Message-ID: <z9@novaclim.example>",
+    "",
+    "La cote est arrêtée à 12,40.",
+    "",
+    "De : BERTRAND <contact@bertrand.example>",
+    "Envoyé : mardi 3 mars 2026 08:30",
+    "À : Ourdine Ferrand <o.ferrand@novaclim.example>",
+    "Objet : Étanchéité toiture",
+    "",
+    "Rien n'a été relevé au droit de l'acrotère.",
+    ""
+  );
+  const cite = leFilDesMails([porteur]).messages.find((message) => message.rang === 1);
+  assert.deepEqual(cite.qui, { nom: "BERTRAND", adresse: "contact@bertrand.example" });
 });

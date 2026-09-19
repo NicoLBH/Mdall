@@ -124,18 +124,27 @@ test("chaque point porte « issu d'un échange privé »", () => {
   }
 });
 
-test("un désaccord porte les deux positions et leurs deux citations", () => {
+test("un désaccord porte les mots de celui qui conteste", () => {
   const desaccord = prise({
-    nature: NATURE.DESACCORD, intitule: "humidité de l'acrotère",
-    positions: [
-      { qui: "Ourdine Ferrand", quand: "12 mars", citation: "Le support est humide." },
-      { qui: "BERTRAND", quand: "3 mars", citation: "Rien n'a été relevé." }
-    ]
+    nature: NATURE.DESACCORD, porteSur: "humidité de l'acrotère", avant: ["BERTRAND"],
+    positions: [{
+      qui: "Ourdine Ferrand", quand: "12 mars",
+      citation: "Je ne partage pas votre position sur l'humidité."
+    }]
   });
   const description = descriptionDuPoint(desaccord);
-  assert.ok(description.includes("Le support est humide."));
-  assert.ok(description.includes("Rien n'a été relevé."));
-  assert.ok(description.includes("Deux constats s'opposent"));
+  assert.ok(description.includes("Je ne partage pas votre position sur l'humidité."));
+  assert.ok(description.includes("Une position est contestée"));
+  assert.ok(description.includes("Se sont exprimés avant sur le même sujet : BERTRAND."));
+});
+
+test("un désaccord que personne n'a précédé le dit", () => {
+  // Nommer au jugé prêterait à quelqu'un un propos qu'il n'a pas tenu.
+  const description = descriptionDuPoint(prise({
+    nature: NATURE.DESACCORD, porteSur: "humidité de l'acrotère", avant: [],
+    positions: [{ qui: "Ourdine Ferrand", citation: "Je ne partage pas votre position." }]
+  }));
+  assert.ok(description.includes("Personne d'autre ne s'est exprimé sur ce sujet"));
 });
 
 test("une question sans réponse dit combien de messages l'ont ignorée", () => {

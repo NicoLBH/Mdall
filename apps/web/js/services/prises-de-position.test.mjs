@@ -5,7 +5,8 @@ import test from "node:test";
 import {
   MANQUE, NATURE, NATURES_DECLAREES, NATURES_DERIVEES, ceQueCaDevient, ceQuiManque,
   horsNomenclature, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
-  ceQueLeModeleNaPasDit, phraseDuReleve, prisesDuMessage, quoiDeLaNature
+  ceQueLeModeleNaPasDit, laCleDeLAuteur, lesPrisesEtLeursAuteurs, phraseDuReleve,
+  prisesDuMessage, quoiDeLaNature
 } from "./prises-de-position.js";
 
 const prise = (dessus = {}) => ({
@@ -229,4 +230,48 @@ test("ne pas savoir se dit, et ne se compte pas", () => {
 test("un seul des deux comptes suffit à ouvrir la phrase", () => {
   assert.ok(ceQueLeModeleNaPasDit({ muets: [2], oublies: [] }).phrase.includes("(2)"));
   assert.ok(ceQueLeModeleNaPasDit({ muets: [], oublies: [5] }).phrase.includes("(5)"));
+});
+
+// ── Une personne, une clé ──────────────────────────────────────────────────
+
+test("l'adresse fait la clé, et la casse n'y change rien", () => {
+  assert.equal(
+    laCleDeLAuteur({ nom: "Ourdine FERRAND", adresse: "O.Ferrand@novaclim.example" }),
+    "o.ferrand@novaclim.example"
+  );
+});
+
+test("deux affichages d'une même adresse font une seule personne", () => {
+  // Un fil réel a porté deux personnes sous quatre identités, et l'une s'est
+  // retrouvée en désaccord avec elle-même.
+  assert.equal(
+    laCleDeLAuteur({ nom: "Ourdine Ferrand", adresse: "o.ferrand@novaclim.example" }),
+    laCleDeLAuteur({ nom: "FERRAND Ourdine", adresse: "o.ferrand@novaclim.example" })
+  );
+});
+
+test("faute d'adresse, le nom sert de clé, aplati", () => {
+  assert.equal(laCleDeLAuteur({ nom: "Ourdine  FERRAND" }), "ourdine ferrand");
+  assert.equal(laCleDeLAuteur("Ourdine FERRAND"), "ourdine ferrand");
+});
+
+test("deux noms écrits autrement restent deux personnes, et c'est dit", () => {
+  // Le prix de l'absence d'adresse. On ne rapproche pas au jugé.
+  assert.notEqual(laCleDeLAuteur({ nom: "Ourdine Ferrand" }), laCleDeLAuteur({ nom: "O. Ferrand" }));
+});
+
+test("chaque prise reçoit l'identité du message d'où elle sort", () => {
+  const [une] = lesPrisesEtLeursAuteurs(
+    [{ message: 2, qui: "Ourdine Ferrand" }],
+    [{ rang: 2, qui: { nom: "Ourdine Ferrand", adresse: "o.ferrand@novaclim.example" } }]
+  );
+  assert.equal(une.quiCle, "o.ferrand@novaclim.example");
+  assert.equal(une.qui, "Ourdine Ferrand", "l'affichage ne bouge pas");
+});
+
+test("une prise dont le message est introuvable retombe sur son affichage", () => {
+  // Elle garde une clé plutôt que rien : sans clé, elle s'apparierait avec
+  // tout le monde.
+  const [une] = lesPrisesEtLeursAuteurs([{ message: 9, qui: "Ourdine FERRAND" }], []);
+  assert.equal(une.quiCle, "ourdine ferrand");
 });

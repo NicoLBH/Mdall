@@ -114,11 +114,18 @@ export function descriptionDuPoint(prise) {
   const nature = texte(prise?.nature);
 
   if (nature === NATURE.DESACCORD) {
-    morceaux.push("Deux constats s'opposent sur ce point.");
+    morceaux.push("Une position est contestée sur ce point.");
     for (const position of prise?.positions ?? []) {
       morceaux.push(`**${qui(position)}**${texte(position?.quand) ? ` — ${texte(position.quand)}` : ""} :`
         + ` « ${texte(position?.citation) || texte(position?.intitule)} »`);
     }
+    const avant = (prise?.avant ?? []).filter(Boolean);
+    // **Qui s'était exprimé avant, et non ce qui est contesté.** La phrase
+    // visée n'est pas toujours dans le fil, et la désigner au jugé prêterait à
+    // quelqu'un un propos qu'il n'a pas tenu.
+    morceaux.push(avant.length
+      ? `Se sont exprimés avant sur le même sujet : ${avant.join(", ")}.`
+      : "Personne d'autre ne s'est exprimé sur ce sujet dans le fil.");
   } else {
     morceaux.push(`**${qui(prise)}**${texte(prise?.quand) ? ` — ${texte(prise.quand)}` : ""} :`
       + ` « ${texte(prise?.citation) || texte(prise?.intitule)} »`);

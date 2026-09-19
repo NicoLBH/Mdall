@@ -255,6 +255,50 @@ export function phraseDuReleve({ prises = [], ecartees = 0, messagesCorriges = 0
 }
 
 /**
+ * Qui a parlé, ramené à une seule clé.
+ *
+ * **L'adresse d'abord.** Une même personne s'affiche de plusieurs façons dans
+ * un fil — « Ourdine Ferrand <o.ferrand@novaclim.example> » dans un bandeau
+ * cité, « Ourdine FERRAND » dans l'en-tête du message déposé. Comparer les
+ * affichages fait d'elle deux personnes, et tout ce qui repose sur « deux
+ * auteurs différents » se trompe : sur un fil réel, six messages de deux
+ * personnes portaient **quatre identités**, et l'un des deux s'est retrouvé en
+ * désaccord avec lui-même.
+ *
+ * Faute d'adresse, le nom sert de clé, aplati. C'est moins sûr, et c'est dit
+ * plutôt que caché : deux noms écrits autrement resteront deux personnes.
+ */
+export function laCleDeLAuteur(qui) {
+  if (typeof qui === "string") return aplatiLeNom(qui);
+  const adresse = texte(qui?.adresse);
+  return adresse ? adresse.toLowerCase() : aplatiLeNom(qui?.nom);
+}
+
+function aplatiLeNom(valeur) {
+  return texte(valeur).normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Les prises, chacune sachant de quelle personne elle vient.
+ *
+ * La clé ne monte jamais au modèle — l'adresse d'un correspondant n'a rien à
+ * faire dans un appel réseau qui n'en a pas besoin. Elle se recolle ici, au
+ * navigateur, à partir du fil qui ne l'a jamais quitté.
+ */
+export function lesPrisesEtLeursAuteurs(prises = [], messages = []) {
+  const parRang = new Map(
+    (Array.isArray(messages) ? messages : [])
+      .map((message) => [Number(message?.rang), laCleDeLAuteur(message?.qui)])
+  );
+
+  return (Array.isArray(prises) ? prises : []).map((prise) => ({
+    ...prise,
+    quiCle: parRang.get(Number(prise?.message)) ?? aplatiLeNom(prise?.qui)
+  }));
+}
+
+/**
  * Ce dont le modèle n'a rien tiré, et ce dont il n'a rien dit.
  *
  * **Les deux ne se valent pas**, et c'est toute la raison d'être du compte

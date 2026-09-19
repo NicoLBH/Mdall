@@ -76,6 +76,14 @@ export function aplati(valeur) {
     .replace(/[“”]/g, '"')
     .replace(/[–—]/g, "-")
     .replace(/\s+/g, " ")
+    // **Les puces d'une liste s'effacent, comme les accents.** Un modèle qui
+    // recopie deux lignes d'une énumération les recolle en une phrase et laisse
+    // tomber le tiret du milieu ; la citation devient introuvable alors que les
+    // deux moitiés sont là, mot pour mot. Un fil réel a fait écarter ainsi la
+    // citation pivot d'un litige. Les deux côtés sont aplatis de la même façon :
+    // ce qui se rapproche est du vrai texte, pas une phrase inventée.
+    .replace(/(^|\s)[-*•·]+(?=\s)/g, "$1")
+    .replace(/\s+/g, " ")
     .trim();
 }
 

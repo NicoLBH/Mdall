@@ -392,46 +392,45 @@ test("les prises se montrent aussi sous le message d'où elles sortent", () => {
 
 // ── Ce qui se dérive ───────────────────────────────────────────────────────
 
-const AFFIRME = prise({
-  nature: NATURE.CONSTAT, qui: "Ourdine Ferrand", message: 2,
-  intitule: "le support est humide au droit de l'acrotère",
-  citation: "Le support est humide au droit de l'acrotère.",
-  porteSur: "humidité de l'acrotère"
+const CONTESTE = prise({
+  qui: "Ourdine Ferrand", message: 2, porteSur: "humidité de l'acrotère",
+  intitule: "je ne partage pas votre position sur l'humidité",
+  citation: "Je ne partage pas votre position sur l'humidité."
 });
-const NIE = prise({
-  nature: NATURE.CONSTAT, qui: "BERTRAND", message: 1,
+const ANTERIEUR = prise({
+  qui: "BERTRAND", message: 1, porteSur: "humidité de l'acrotère",
   intitule: "rien n'a été relevé au droit de l'acrotère",
-  citation: "Rien n'a été relevé au droit de l'acrotère à ce jour.",
-  porteSur: "humidité de l'acrotère"
+  citation: "Rien n'a été relevé au droit de l'acrotère à ce jour."
 });
 
-test("une question sans réponse a sa propre rubrique, et vient en tête de la phrase", () => {
-  // C'est l'apport principal du procédé : le ranger après ce qui a été écarté
-  // le ferait lire en dernier, ou pas du tout.
-  const html = dessine(analyse({
-    releve: releve({ prises: [prise({ nature: NATURE.SANS_REPONSE, natureDeclaree: NATURE.DEMANDE })] })
-  }));
-  assert.ok(html.includes("1 question sans réponse"));
-  assert.ok(html.includes("Question sans réponse"));
-  assert.ok(html.includes("un sujet à ouvrir, et c&#39;est l&#39;apport principal"));
-});
-
-test("un désaccord montre les deux positions et leurs deux citations", () => {
-  // Rien ne prouve que ces deux personnes sont en désaccord : c'est au lecteur
-  // de trancher, et il ne peut le faire qu'en voyant les deux.
+test("un désaccord montre les mots de celui qui conteste", () => {
+  // Ce n'est pas un verdict : on sait qu'il prend position contre quelque
+  // chose, on ne sait pas contre quelle phrase exactement.
   const desaccord = {
-    key: "desaccord:1", nature: NATURE.DESACCORD, intitule: "humidité de l'acrotère",
-    positions: [AFFIRME, NIE], message: 2, qui: null, quand: null, citation: ""
+    key: "desaccord:1", nature: NATURE.DESACCORD, porteSur: "humidité de l'acrotère",
+    intitule: "je ne partage pas votre position sur l'humidité", marque: "ne-partage-pas",
+    positions: [CONTESTE], avant: ["BERTRAND"], message: 2
   };
   const html = dessine(analyse({ releve: releve({ prises: [desaccord] }) }));
   assert.ok(html.includes("1 désaccord possible"));
   assert.ok(html.includes("est-desaccord"));
   // Écrit tel quel dans le gabarit : l'apostrophe reste brute.
-  assert.ok(html.includes("deux constats s'opposent"));
+  assert.ok(html.includes("une position est contestée"));
   assert.ok(html.includes("Ourdine Ferrand"));
-  assert.ok(html.includes("BERTRAND"));
-  assert.ok(html.includes("Rien n&#39;a été relevé au droit de l&#39;acrotère à ce jour."));
-  assert.ok(html.includes("Le support est humide au droit de l&#39;acrotère."));
+  assert.ok(html.includes("Je ne partage pas votre position sur l&#39;humidité."));
+  assert.ok(html.includes("Se sont exprimés avant sur le même sujet : BERTRAND"));
+  assert.ok(html.includes("On ne sait pas laquelle de leurs positions est visée."));
+});
+
+test("une contestation que personne n'a précédée le dit", () => {
+  // Ce qui est contesté peut venir d'un rapport, hors du fil : le taire ferait
+  // croire à une erreur de relevé.
+  const desaccord = {
+    key: "desaccord:1", nature: NATURE.DESACCORD, porteSur: "humidité de l'acrotère",
+    intitule: "je ne partage pas", positions: [CONTESTE], avant: [], message: 2
+  };
+  const html = dessine(analyse({ releve: releve({ prises: [desaccord] }) }));
+  assert.ok(html.includes("ce qui est contesté vient d&#39;ailleurs"));
 });
 
 test("une demande qu'on ne sait pas juger le dit", () => {
@@ -448,13 +447,13 @@ test("ce que le modèle rend passe par la dérivation avant d'être affiché", (
     nature: NATURE.DEMANDE, message: 1, porteSur: "cote du seuil",
     intitule: "confirmer la cote", pourQui: "BERTRAND", echeance: "avant vendredi"
   });
-  const derive = leReleveDerive({ ok: true, prises: [question, AFFIRME, NIE] }, {
+  const derive = leReleveDerive({ ok: true, prises: [question, ANTERIEUR, CONTESTE] }, {
     messages: [{ rang: 1 }, { rang: 2 }]
   });
   assert.equal(derive.derive.sansReponse, 1);
   assert.equal(derive.derive.desaccords, 1);
   assert.deepEqual(derive.prises.map((prise) => prise.nature),
-    [NATURE.SANS_REPONSE, NATURE.CONSTAT, NATURE.CONSTAT, NATURE.DESACCORD]);
+    [NATURE.SANS_REPONSE, NATURE.CONSTAT, NATURE.DESACCORD]);
 
   const html = dessine(analyse({ releve: derive }));
   assert.ok(html.includes("1 question sans réponse"));
