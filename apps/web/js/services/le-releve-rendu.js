@@ -168,6 +168,24 @@ export function leReleveLu(rendu) {
      * messages d'un même fil.
      */
     couverture: Array.isArray(rendu?.couverture) ? rendu.couverture : [],
+    /**
+     * Les sujets que le modèle a déclarés pour ce fil.
+     *
+     * **Le libellé d'une prise était un texte libre**, et il en écrivait 28
+     * pour 39 prises sur un fil réel. La liste est maintenant déclarée une
+     * fois, et une prise y pointe un numéro — ce qui la rend **lisible** : on
+     * voit d'un coup d'œil si le fil a été découpé en trois questions ou en
+     * trente, ce qui était invisible tant que le libellé vivait dans chaque
+     * prise.
+     */
+    sujets: Array.isArray(rendu?.sujets) ? rendu.sujets : [],
+    /**
+     * Combien de prises visaient un sujet que le modèle n'avait pas déclaré.
+     *
+     * `null` quand le serveur ne l'a pas dit : une version plus ancienne de la
+     * fonction ne compte pas zéro, elle ne compte rien (règle 5).
+     */
+    sujetsEcartes: Number.isFinite(rendu?.sujets_ecartes) ? rendu.sujets_ecartes : null,
     /** Combien de renvois du modèle ne tenaient pas devant le fil. */
     renvoisEcartes: Number(rendu?.renvois_ecartes) || 0,
     /** Combien de prises ont changé de message — donc d'auteur. */

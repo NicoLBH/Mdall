@@ -4,7 +4,8 @@ import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { signOut } from "../../assets/js/auth.js";
-import { NOM_DU_CARNET, ROUTE_DU_CARNET, enTeteDuCarnet } from "../services/mon-carnet.js";
+import { enTeteDuCarnet } from "../services/mon-carnet.js";
+import { MARQUE_DES_SITUATIONS, RACCOURCIS_GLOBAUX } from "../services/raccourcis-de-la-barre.js";
 import {
   LE_COPILOTE, TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
 } from "../services/ecrans-transversaux.js";
@@ -153,6 +154,24 @@ function getHeaderModel() {
 }
 
 /**
+ * Un raccourci de la barre du haut.
+ *
+ * **Cinq portes de même nature, donc un seul bouton.** En dessiner un par
+ * raccourci obligerait à les recalibrer ensemble à chaque retouche, et l'un des
+ * cinq finirait d'une autre taille que ses voisins.
+ */
+function renderRaccourci({ href, icone, nom, marque = "" }) {
+  return `
+    <div class="gh-action gh-raccourci">
+      <a class="gh-raccourci__lien" href="${href}" title="${escapeHtml(nom)}" aria-label="${escapeHtml(nom)}"
+        ${marque ? `data-raccourci="${escapeHtml(marque)}"` : ""}>
+        ${icone}
+      </a>
+    </div>
+  `;
+}
+
+/**
  * Le Copilote, à portée de la barre du haut.
  *
  * **C'est le point d'entrée de tout le reste**, et l'atteindre demandait
@@ -169,25 +188,6 @@ function getHeaderModel() {
  * supprimer. Le quatrième segment de la route dit quel panneau ouvrir ; sans
  * lui, l'Atelier ouvre sa vitrine comme d'habitude.
  */
-/**
- * Un raccourci de la barre du haut.
- *
- * **Trois portes de même nature, donc un seul bouton.** En dessiner un par
- * raccourci obligerait à les recalibrer ensemble à chaque retouche, et l'un des
- * trois finirait d'une autre taille que ses voisins.
- */
-function renderRaccourci({ href, icone, nom, marque = "" }) {
-  return `
-    <div class="gh-action gh-raccourci">
-      <a class="gh-raccourci__lien" href="${href}" title="${escapeHtml(nom)}" aria-label="${escapeHtml(nom)}"
-        ${marque ? `data-raccourci="${escapeHtml(marque)}"` : ""}>
-        ${icone}
-      </a>
-    </div>
-  `;
-}
-
-/** Le copilote. Il vit dans l'Atelier d'un projet : hors projet, il n'y a pas où aller. */
 function renderRaccourciCopilote(model = {}) {
   const projectId = String(model?.projectId || "").trim();
   if (!projectId) return "";
@@ -202,34 +202,26 @@ function renderRaccourciCopilote(model = {}) {
 }
 
 /**
- * Mes chantiers, et mon carnet.
+ * Les portes qui ne dépendent d'aucun projet.
  *
- * **Ils sont dans la barre du haut, et non dans les onglets d'un projet.** Une
- * situation est au-dessus des projets : la ranger parmi leurs onglets brouille
- * exactement le message que tout ce plan installe. La barre du haut, elle, ne
- * dit rien sur l'endroit où l'on se trouve — c'est sa place.
+ * **Elles sont dans la barre du haut, et non dans les onglets d'un projet.**
+ * Un sujet, une proposition, une situation traversent les chantiers : les
+ * ranger parmi les onglets de l'un d'eux brouillerait exactement ce que les
+ * écrans transversaux installent. La barre du haut, elle, ne dit rien sur
+ * l'endroit où l'on se trouve — c'est sa place.
  *
- * L'ordre est celui de la lecture : le copilote, les chantiers, le carnet, puis
- * soi. Du plus général au plus personnel.
+ * **La liste et son ordre vivent dans `raccourcis-de-la-barre.js`**, où des
+ * épreuves peuvent les lire. Ici ne reste que le dessin : ce fichier parle à
+ * l'authentification et ne s'importe pas hors d'un navigateur, ce qui rendait
+ * la liste invérifiable tant qu'elle y était écrite (règle 12).
  */
 function renderRaccourcisGlobaux() {
-  return [
-    renderRaccourci({
-      href: "#projects",
-      icone: svgIcon("repo", { className: "octicon octicon-repo" }),
-      nom: "Projets"
-    }),
-    renderRaccourci({
-      href: ROUTE_DU_CARNET,
-      icone: svgIcon("table", { className: "octicon octicon-table" }),
-      nom: NOM_DU_CARNET,
-      // **Il ramène à la liste, même quand on y est déjà.** L'adresse ne change
-      // pas quand une situation est ouverte — on est déjà sur `#situations` —,
-      // donc le navigateur ne prévient personne et l'écran reste sur la
-      // situation. Le clic doit donc **refermer la sélection** lui-même.
-      marque: "situations"
-    })
-  ].join("");
+  return RACCOURCIS_GLOBAUX.map((un) => renderRaccourci({
+    href: un.href,
+    icone: svgIcon(un.icone, { className: `octicon octicon-${un.icone}` }),
+    nom: un.nom,
+    marque: un.marque
+  })).join("");
 }
 
 function renderUserMenu() {
@@ -392,7 +384,7 @@ export function bindGlobalHeader() {
     // Le fil d'Ariane et le raccourci de la barre font la même chose : revenir à
     // la liste. Deux façons de le faire finiraient par ne plus se ressembler.
     const situationsBackBtn = event.target.closest?.("#globalHeaderSituationsBack")
-      || event.target.closest?.('[data-raccourci="situations"]');
+      || event.target.closest?.(`[data-raccourci="${MARQUE_DES_SITUATIONS}"]`);
     const menu = document.getElementById("ghUserMenu");
     const dropdown = document.getElementById("ghUserMenuDropdown");
     const btn = document.getElementById("ghUserMenuBtn");

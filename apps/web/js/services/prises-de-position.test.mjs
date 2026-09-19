@@ -6,7 +6,8 @@ import {
   MANQUE, NATURE, NATURES_DECLAREES, NATURES_DERIVEES, ceQueCaDevient, ceQuiManque,
   horsNomenclature, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
   ceQueLeModeleNaPasDit, laCleDeLAuteur, lesPrisesEtLeursAuteurs, partReleveeDuMessage,
-  phraseDeLaPart, phraseDeLaTemperature, phraseDuReleve,
+  phraseDeCeQuiNestPasRepris, phraseDeLaPart, phraseDeLaTemperature, phraseDesSujets,
+  phraseDesSujetsEcartes, phraseDuReleve,
   prisesDuMessage, quoiDeLaNature
 } from "./prises-de-position.js";
 
@@ -291,7 +292,8 @@ const COUVERTURE = [
 ];
 
 test("la part se calcule sur le message demandé", () => {
-  assert.deepEqual(partReleveeDuMessage(COUVERTURE, 1), { caracteres: 550, couverts: 279, part: 51 });
+  assert.deepEqual(partReleveeDuMessage(COUVERTURE, 1),
+    { caracteres: 550, couverts: 279, part: 51, nonRepris: [] });
   assert.equal(partReleveeDuMessage(COUVERTURE, 2).part, 31);
 });
 
@@ -345,4 +347,68 @@ test("la phrase ne prétend rien sur la qualité de la lecture", () => {
   for (const valeur of [0, 1, null]) {
     assert.equal(/meilleur|fiable|juste|exact|sûr/.test(phraseDeLaTemperature(valeur)), false);
   }
+});
+
+// ── Ce qu'aucune citation ne reprend ───────────────────────────────────────
+
+test("la part porte les phrases qu'aucune citation ne reprend", () => {
+  const [ligne] = [{ message: 4, caracteres: 80, couverts: 20, nonRepris: ["Non, je ne peux pas."] }];
+  assert.deepEqual(partReleveeDuMessage([ligne], 4).nonRepris, ["Non, je ne peux pas."]);
+});
+
+test("un serveur qui ne les dit pas ne rend pas une liste inventée", () => {
+  // Une version plus ancienne de la fonction ne descend pas ce champ ; le
+  // navigateur ne doit pas peindre un repli vide qui promet quelque chose.
+  assert.deepEqual(partReleveeDuMessage([{ message: 4, caracteres: 80, couverts: 20 }], 4).nonRepris,
+    []);
+});
+
+test("le libellé du repli compte les phrases, et s'accorde", () => {
+  assert.equal(phraseDeCeQuiNestPasRepris(1), "1 phrase qu'aucune citation ne reprend");
+  assert.equal(phraseDeCeQuiNestPasRepris(3), "3 phrases qu'aucune citation ne reprend");
+});
+
+test("rien à montrer ne fait pas de bouton", () => {
+  // Un repli qui s'ouvre sur du vide se clique une fois et jamais plus — et le
+  // lecteur cesse alors de cliquer sur les autres.
+  assert.equal(phraseDeCeQuiNestPasRepris(0), "");
+  assert.equal(phraseDeCeQuiNestPasRepris(null), "");
+});
+
+// ── Les sujets du fil ──────────────────────────────────────────────────────
+
+test("les sujets se comptent, et se rapportent au nombre de prises", () => {
+  // Le rapport est ce qui permet d'en juger : quatre sujets pour quarante
+  // prises est un découpage, vingt-huit est l'ancien libellé libre revenu.
+  assert.equal(
+    phraseDesSujets([{ numero: 1, intitule: "humidité" }, { numero: 2, intitule: "cote" }],
+      [1, 2, 3]),
+    "2 sujets pour 3 prises"
+  );
+  assert.equal(phraseDesSujets([{ numero: 1, intitule: "humidité" }], [1]), "1 sujet pour 1 prise");
+});
+
+test("des sujets sans prise se disent quand même", () => {
+  // Une liste déclarée que plus rien ne vise est une information : le modèle a
+  // découpé le fil et n'a rien su y rattacher.
+  assert.equal(phraseDesSujets([{ numero: 1, intitule: "humidité" }], []), "1 sujet");
+});
+
+test("aucun sujet déclaré ne fait pas une phrase qui dit zéro", () => {
+  // Ne rien dire vaut mieux que « 0 sujet » : c'est le cas d'un serveur plus
+  // ancien, et non celui d'un fil qui ne porterait sur rien.
+  assert.equal(phraseDesSujets([], [1, 2]), "");
+  assert.equal(phraseDesSujets(null, null), "");
+});
+
+test("les prises qui visaient un sujet non déclaré se disent, et s'accordent", () => {
+  assert.equal(phraseDesSujetsEcartes(1), "1 prise visait un sujet qui n'a pas été déclaré");
+  assert.equal(phraseDesSujetsEcartes(2), "2 prises visaient un sujet qui n'a pas été déclaré");
+});
+
+test("un compte absent ne devient pas un zéro annoncé", () => {
+  // `null` veut dire que le serveur n'a pas compté, et non qu'il a compté zéro.
+  assert.equal(phraseDesSujetsEcartes(0), "");
+  assert.equal(phraseDesSujetsEcartes(null), "");
+  assert.equal(phraseDesSujetsEcartes(undefined), "");
 });

@@ -90,7 +90,7 @@ export const CONSIGNES = [
   "- `constat` : un fait affirmé — « le support est humide au droit de l'acrotère ».",
   "- `demande` : quelque chose est demandé à quelqu'un — « pouvez-vous confirmer la cote avant vendredi ? ».",
   "- `engagement` : l'auteur s'engage à faire quelque chose — « nous repassons jeudi avec le géomètre ».",
-  "- `decision` : quelque chose est tranché — « on part sur la variante B ».",
+  "- `decision` : quelque chose est tranché — « on part sur la variante B ». UN REFUS EN EST UNE : « non, je ne peux pas », « c'est un avis défavorable qui sera émis », « nous ne validerons pas en l'état ». Trancher contre est trancher, et c'est souvent la prise la plus importante du fil : ne la laisse jamais de côté parce qu'elle est négative.",
   "- `source` : une référence invoquée pour fonder autre chose — « d'après le DTU 43.1 § 5.2 ». La source n'est pas le constat : c'est sa provenance.",
   "",
   "Ce qui n'en est PAS, et que tu laisses de côté : les formules de politesse, les accusés de réception, les signatures, les mentions légales, les réponses automatiques, les confirmations de rendez-vous sans engagement nouveau.",
@@ -98,6 +98,9 @@ export const CONSIGNES = [
   "Un même message peut porter plusieurs prises, ou aucune. Un message qui ne dit que « bien reçu, merci » n'en porte aucune : ne force pas.",
   "",
   "Tu rends une entrée PAR MESSAGE du fil, dans l'ordre où ils te sont donnés, et tu n'en sautes AUCUN. Un message dont tu ne tires rien reçoit une entrée avec une liste de prises vide : c'est une réponse, et elle est attendue. Ne rien dire d'un message et dire qu'il ne porte rien sont deux choses différentes, et seule la seconde est une lecture.",
+  "",
+  "AVANT TOUT, tu déclares `sujets` : la liste des sujets dont ce fil traite, numérotés à partir de 1. Un sujet est une question débattue dans le fil — « humidité de l'acrotère », « cote du seuil », « combinaison du souffle et du vent ». Nomme-le en deux ou trois mots.",
+  "Fais cette liste COURTE : un fil de chantier traite de quelques questions, pas de vingt. Si deux formulations désignent la même question, c'est UN SEUL sujet — ne le dédouble pas parce qu'un message le dit autrement qu'un autre. Une liste aussi longue que le nombre de prises ne rapproche rien, et c'est exactement ce qu'on cherche à éviter.",
   "",
   "Pour chaque entrée de message :",
   "- `message` : le numéro du message, tel qu'il est écrit dans son en-tête.",
@@ -107,7 +110,7 @@ export const CONSIGNES = [
   "- `nature` : l'une des cinq ci-dessus.",
   "- `intitule` : ce qui est pris comme position, en une ligne, DANS LES MOTS DE L'AUTEUR. Ne reformule pas, n'ajoute pas de verbe d'action qui n'y est pas.",
   "- `citation` : la phrase du message, RECOPIÉE MOT POUR MOT. Elle sera recherchée dans le texte de ce message : si elle ne s'y retrouve pas, la prise sera écartée.",
-  "- `porte_sur` : sur quoi elle porte, en deux ou trois mots, les mêmes d'une prise à l'autre quand c'est la même chose — « humidité de l'acrotère », « cote du seuil ». C'est ce qui permettra de rapprocher deux prises contraires.",
+  "- `sujet` : LE NUMÉRO d'un sujet de la liste que tu as déclarée. Pas un libellé : un numéro de cette liste. Null si aucun ne convient — mieux vaut null qu'un rattachement forcé.",
   "- `pour_qui` : à qui c'est demandé, tel qu'écrit — un nom, une entreprise, « la MOE ». Null pour un constat ou une source.",
   "- `echeance` : le délai annoncé, TEL QU'ÉCRIT — « avant vendredi », « jeudi », « sous 15 jours ». Ne le convertis pas en date. Null s'il n'y en a pas.",
   "- `repond_a` : le NUMÉRO DU MESSAGE auquel cette prise répond, quand elle répond à quelque chose qui y a été dit — une question, une demande, une position. Un numéro STRICTEMENT INFÉRIEUR à celui du message où tu la relèves. Null quand elle n'est la réponse de rien. Ne le mets QUE si la prise reprend vraiment ce qui a été dit là : ce numéro sera vérifié, et un renvoi inventé fait disparaître une question restée sans réponse, ce qui est le pire résultat possible.",
@@ -127,6 +130,24 @@ export const CONSIGNES = [
  * (règle 5).
  *
  * Ici, une liste vide est une **déclaration**, et une entrée absente se voit.
+ *
+ * ## Et les sujets sont déclarés avant d'être employés
+ *
+ * **Le libellé d'une prise était un texte libre, et il l'écrivait à chaque
+ * fois.** Sur un fil réel : **28 libellés pour 39 prises**, là où une lecture
+ * humaine en compte dix. « rapport Avg/Ag » et « étude sismique verticale »
+ * désignent la même question et ne partagent aucun mot ; aucune règle sur les
+ * lettres ne les rapprochera — celle qu'on a rapproche quatre paires sur la
+ * vingtaine qu'il faudrait, et la resserrer n'y change rien.
+ *
+ * Le modèle déclare donc **la liste des sujets du fil, une fois**, et chaque
+ * prise **pointe un numéro** de cette liste. Deux prises sur le même sujet le
+ * sont alors par construction et non par comparaison de chaînes.
+ *
+ * **Et le numéro se vérifie**, comme le renvoi : un sujet qui n'est pas dans la
+ * liste déclarée est écarté et compté. La prise reste — elle est réelle —, mais
+ * elle perd son sujet, ce qui la range en « on ne sait pas » plutôt qu'en une
+ * réponse inventée (règle 5).
  */
 export const SCHEMA_DES_PRISES = {
   name: "prises_du_fil",
@@ -135,6 +156,24 @@ export const SCHEMA_DES_PRISES = {
     type: "object",
     additionalProperties: false,
     properties: {
+      /**
+       * Les sujets du fil, déclarés une fois pour toutes.
+       *
+       * Une prise ne porte plus un libellé qu'elle invente : elle pointe un
+       * numéro de cette liste.
+       */
+      sujets: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            numero: { type: "integer" },
+            intitule: { type: "string" }
+          },
+          required: ["numero", "intitule"]
+        }
+      },
       messages: {
         type: "array",
         items: {
@@ -151,12 +190,12 @@ export const SCHEMA_DES_PRISES = {
                   nature: { type: "string", enum: Object.values(NATURE) },
                   intitule: { type: "string" },
                   citation: { type: "string" },
-                  porte_sur: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  sujet: { anyOf: [{ type: "integer" }, { type: "null" }] },
                   pour_qui: { anyOf: [{ type: "string" }, { type: "null" }] },
                   echeance: { anyOf: [{ type: "string" }, { type: "null" }] },
                   repond_a: { anyOf: [{ type: "integer" }, { type: "null" }] }
                 },
-                required: ["nature", "intitule", "citation", "porte_sur", "pour_qui", "echeance",
+                required: ["nature", "intitule", "citation", "sujet", "pour_qui", "echeance",
                   "repond_a"]
               }
             }
@@ -165,11 +204,60 @@ export const SCHEMA_DES_PRISES = {
         }
       }
     },
-    required: ["messages"]
+    required: ["sujets", "messages"]
   }
 };
 
 const texte = (valeur) => String(valeur ?? "").trim();
+
+/**
+ * Les sujets que le modèle a déclarés pour ce fil.
+ *
+ * **On nettoie la liste avant de s'en servir**, et chaque écart répare un
+ * défaut qui, sinon, passerait inaperçu :
+ *
+ * - un numéro illisible ne devient pas zéro — `Number(null)` vaut zéro, et la
+ *   liste aurait alors un « sujet 0 » que personne n'a déclaré ;
+ * - un intitulé vide ne fait pas un sujet : une prise rattachée à lui aurait un
+ *   sujet sans nom, ce qui se lit à l'écran comme une absence de sujet tout en
+ *   comptant comme une identité — deux prises « sans nom » seraient alors le
+ *   même sujet ;
+ * - **le premier gagne** quand deux entrées portent le même numéro. Le dernier
+ *   ferait changer le sens des prises déjà rattachées au même numéro plus haut
+ *   dans la réponse, ce qui est la seule des deux façons de se tromper en
+ *   silence.
+ *
+ * Une réponse sans liste rend une liste vide : aucun rattachement ne tiendra,
+ * et c'est exactement ce qu'on veut dire.
+ */
+export function lesSujetsDuFil(rendu) {
+  const declares = Array.isArray(rendu?.sujets) ? rendu.sujets : [];
+  const vus = new Map();
+
+  for (const sujet of declares) {
+    const numero = sujet?.numero;
+    if (!Number.isFinite(numero)) continue;
+    const intitule = texte(sujet?.intitule);
+    if (!intitule) continue;
+    if (vus.has(numero)) continue;
+    vus.set(numero, { numero, intitule });
+  }
+
+  return [...vus.values()];
+}
+
+/**
+ * Le sujet d'une prise, une fois confronté à la liste déclarée.
+ *
+ * Rend l'intitulé du sujet visé, ou `null`. **On ne rattrape rien** : un numéro
+ * qui n'a pas été déclaré ne dit pas ce qu'il visait, et le plus proche serait
+ * un sujet prêté à quelqu'un qui ne l'a pas nommé.
+ */
+export function leSujetVerifie(prise, parNumero) {
+  const vise = prise?.sujet;
+  if (!Number.isFinite(vise)) return null;
+  return parNumero.get(vise) ?? null;
+}
 
 /**
  * Le renvoi d'une prise vers le message auquel elle répond, s'il tient.
@@ -342,7 +430,7 @@ export function ecarteesAuFormatDuMoteur(ecartees = []) {
  * entier : une prise réelle attribuée au mauvais message ne doit pas se perdre,
  * mais **elle change d'auteur**, ce qui n'est pas anodin. C'est compté.
  */
-export function verifierLesPrises({ prises = [], messages = [] } = {}) {
+export function verifierLesPrises({ prises = [], messages = [], sujets = [] } = {}) {
   const connues = new Set(Object.values(NATURE));
   const recevables = [];
   const horsListe = [];
@@ -374,6 +462,15 @@ export function verifierLesPrises({ prises = [], messages = [] } = {}) {
   );
   let renvoisEcartes = 0;
 
+  // **Les sujets se confrontent à la liste déclarée**, pour la même raison que
+  // les renvois se confrontent au fil : un numéro que personne n'a déclaré
+  // rangerait la prise sous un sujet inventé, et deux prises pourraient s'y
+  // retrouver ensemble sans que rien ne les rapproche vraiment.
+  const parNumero = new Map(
+    (Array.isArray(sujets) ? sujets : []).map((sujet) => [sujet?.numero, texte(sujet?.intitule)])
+  );
+  let sujetsEcartes = 0;
+
   return {
     // **Le rang retenu est celui où la citation se trouve**, pas celui que le
     // modèle a annoncé : c'est de lui que viendront l'auteur et la date, et
@@ -384,13 +481,116 @@ export function verifierLesPrises({ prises = [], messages = [] } = {}) {
       if (rendue.repond_a !== null && rendue.repond_a !== undefined && renvoi === null) {
         renvoisEcartes += 1;
       }
-      return { ...rendue, repond_a: renvoi };
+
+      const sujet = leSujetVerifie(rendue, parNumero);
+      if (Number.isFinite(rendue.sujet) && sujet === null) sujetsEcartes += 1;
+
+      // **Le libellé descend ici, et nulle part ailleurs.** Tout ce qui suit —
+      // l'écran, la dérivation, l'export — lit `porte_sur` comme avant ; ce qui
+      // a changé est d'où il vient, et il vient maintenant d'une liste fermée.
+      return { ...rendue, repond_a: renvoi, porte_sur: sujet };
     }),
     ecartees: [...horsListe, ...ecartes.map(({ ligne, motif }) => ({ prise: ligne, motif }))],
     messagesCorriges: pagesCorrigees,
     /** Combien de renvois ne tenaient pas devant le fil. Se dit, ne se cache pas. */
-    renvoisEcartes
+    renvoisEcartes,
+    /** Combien de prises visaient un sujet que le modèle n'avait pas déclaré. */
+    sujetsEcartes
   };
+}
+
+/**
+ * Un texte réduit à ses mots, bordé d'espaces.
+ *
+ * **Bordé, pour que `includes` compare des mots et non des lettres.** C'est le
+ * piège que ce dépôt a déjà payé ailleurs : « vent » se lit dans
+ * « ventilation », et une comparaison de chaînes rapproche alors deux choses
+ * qui n'ont rien à voir. Avec une espace de chaque côté, `includes` ne peut
+ * plus tomber au milieu d'un mot.
+ *
+ * La ponctuation s'efface aussi, et c'est nécessaire ici : la phrase est
+ * découpée par nous, la citation est recopiée par le modèle, et l'une des deux
+ * porte souvent un point ou une virgule que l'autre n'a pas.
+ */
+function enMots(valeur) {
+  const nu = aplati(valeur).replace(/[^\p{L}\p{N}]+/gu, " ").replace(/\s+/g, " ").trim();
+  return nu ? ` ${nu} ` : "";
+}
+
+/** Combien de mots un texte ainsi réduit porte. */
+const combienDeMots = (borde) => (borde ? borde.trim().split(" ").length : 0);
+
+/**
+ * Le plancher sous lequel une phrase est trop courte pour se reconnaître dans
+ * une citation.
+ *
+ * « Non. » est un mot, et le mot « non » se lit dans presque toutes les
+ * citations d'un fil où l'on discute. Une phrase d'un seul mot serait donc
+ * déclarée reprise par accident — et ce serait précisément celle qu'il fallait
+ * montrer. Sous ce plancher, la phrase paraît dans la liste : **montrer une
+ * phrase de trop coûte moins cher qu'en cacher une.**
+ */
+const ASSEZ_DE_MOTS_POUR_SE_RECONNAITRE = 2;
+
+/**
+ * Le message, coupé en phrases, dans les mots de son auteur.
+ *
+ * On coupe aux retours à la ligne et après un point, un point d'exclamation ou
+ * d'interrogation. **Une abréviation coupe donc une phrase en deux** — « M. »,
+ * « n° 5. » —, et le morceau paraîtra seul dans la liste. C'est le sens de
+ * l'erreur qu'on choisit : un morceau de trop se lit, une phrase cachée ne se
+ * lit pas.
+ */
+export function lesPhrasesDunMessage(propos) {
+  return String(propos ?? "")
+    .split(/\n+/)
+    .flatMap((ligne) => ligne.split(/(?<=[.!?…])\s+/))
+    .map((phrase) => phrase.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Les phrases d'un message qu'aucune citation ne reprend.
+ *
+ * ## Pourquoi un pourcentage ne suffisait pas
+ *
+ * L'étape précédente a appris à dire qu'un message était **peu** relevé : 31 %
+ * quand les autres étaient à 51 %. Elle disait où regarder ; elle ne montrait
+ * rien. Or ce qui manquait à ce message-là était « Non, je ne peux pas » et
+ * « c'est un avis défavorable qui sera émis » — les deux phrases les plus
+ * lourdes du fil. Pour les voir, il fallait rouvrir le mail et relire à côté du
+ * relevé, ce qui est exactement le geste que l'outil devait épargner.
+ *
+ * **Ici, ce que le modèle n'a pas pris se lit.** Sans modèle, sans appel, sans
+ * jugement : le texte du message moins ce que les citations reprennent. Le
+ * lecteur décide lui-même si l'omission compte — et il peut décider sans nous
+ * (fondamental 13).
+ *
+ * ## Ce que la liste contient, et qu'on ne filtre pas
+ *
+ * La politesse, la signature, les salutations y sont. **On ne les retire pas**,
+ * et ce n'est pas une paresse : les retirer demanderait un lexique de ce qui ne
+ * compte pas, et ce lexique déciderait à la place du lecteur — c'est ainsi
+ * qu'on cache une phrase qui comptait. Cent pour cent de reprise serait un
+ * mauvais signe (voir `laPartRelevee`) ; une liste vide ici le serait aussi.
+ */
+export function lesPhrasesNonReprises(propos, citations = []) {
+  const reprises = (Array.isArray(citations) ? citations : [])
+    .map((citation) => enMots(citation))
+    .filter(Boolean);
+
+  return lesPhrasesDunMessage(propos).filter((phrase) => {
+    const lue = enMots(phrase);
+    if (!lue) return false;
+
+    // **Trop courte pour se reconnaître, donc montrée.** Voir le plancher.
+    if (combienDeMots(lue) < ASSEZ_DE_MOTS_POUR_SE_RECONNAITRE) return true;
+
+    // Reprise dans les deux sens : la citation peut tenir dans la phrase — le
+    // modèle n'en a cité qu'un morceau — comme la phrase dans la citation, quand
+    // notre découpe a coupé là où lui ne coupait pas.
+    return !reprises.some((citation) => citation.includes(lue) || lue.includes(citation));
+  });
 }
 
 /**
@@ -445,7 +645,19 @@ export function laPartRelevee(messages = [], retenues = []) {
         vues.add(citation);
         couverts += citation.length;
       }
-      return { message: rang, caracteres: propos.length, couverts };
+      return {
+        message: rang,
+        caracteres: propos.length,
+        couverts,
+        /**
+         * Ce qu'aucune citation ne reprend, dans les mots de l'auteur.
+         *
+         * **C'est le texte du message qui redescend**, pas un texte nouveau :
+         * il est monté du navigateur à l'appel précédent, et rien de la
+         * consigne ne l'accompagne.
+         */
+        nonRepris: lesPhrasesNonReprises(message.propos, prisesDuRang.get(rang) ?? [])
+      };
     });
 }
 

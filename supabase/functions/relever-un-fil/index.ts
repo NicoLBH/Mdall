@@ -41,6 +41,7 @@ import {
   filEnTexte,
   laPartRelevee,
   lesMessagesRendus,
+  lesSujetsDuFil,
   prisesAuFormatDuMoteur,
   verifierLesPrises
 } from "../_shared/prises-du-modele.js";
@@ -226,11 +227,13 @@ serve(async (req) => {
     // ont été écartées, et seul ce qui est lu ici permet de les distinguer.
     const rendus = lesMessagesRendus(lu, messages);
 
+    // **Les sujets du fil se lisent avant les prises**, parce que les prises les
+    // visent : une prise qui pointe un numéro se vérifie contre cette liste-là.
+    const sujets = lesSujetsDuFil(lu);
+
     // **La porte.** Ce que le modèle n'a pas su citer ne sort pas d'ici.
-    const { retenues, ecartees, messagesCorriges, renvoisEcartes } = verifierLesPrises({
-      prises: rendus.prises,
-      messages
-    });
+    const { retenues, ecartees, messagesCorriges, renvoisEcartes, sujetsEcartes } =
+      verifierLesPrises({ prises: rendus.prises, messages, sujets });
 
     return reponse({
       prises: prisesAuFormatDuMoteur(retenues, { filId, messages }),
@@ -256,6 +259,27 @@ serve(async (req) => {
        * question répondue.
        */
       renvois_ecartes: renvoisEcartes,
+      /**
+       * Les sujets que le modèle a déclarés pour ce fil, et ce qu'ils valent.
+       *
+       * **Le libellé d'une prise n'est plus un texte libre.** Il l'était, et il
+       * en écrivait 28 pour 39 prises sur un fil réel — deux prises sur la même
+       * question ne se rapprochaient donc pas. La liste est maintenant déclarée
+       * une fois, et une prise y pointe un numéro.
+       *
+       * Elle redescend parce qu'elle est **lisible** : on voit d'un coup d'œil
+       * si le fil a été découpé en trois questions ou en trente, ce qui était
+       * invisible tant que le libellé vivait dans chaque prise.
+       */
+      sujets,
+      /**
+       * Combien de prises visaient un sujet que le modèle n'avait pas déclaré.
+       *
+       * Elles sont gardées et **perdent leur sujet** : le rattacher au plus
+       * proche prêterait à quelqu'un une position sur une question qu'il n'a
+       * pas nommée (règle 5).
+       */
+      sujets_ecartes: sujetsEcartes,
       /**
        * Quelle part de chaque message une citation reprend.
        *

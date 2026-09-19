@@ -4268,3 +4268,57 @@ donc enfin éprouvable. C'est l'étape 7 sexies de [`lire-les-mails.md`](lire-le
 était une hypothèse jusqu'au fil suivant (§ 57). Il faut ajouter : **elle était aussi une
 hypothèse jusqu'au passage suivant du même fil.** La reproductibilité ne rend pas l'outil
 meilleur — elle rend possible de savoir s'il l'est.
+
+---
+
+## 59. Le sujet déclaré, et ce qui reste un pari
+
+**Ce qui vient d'être réglé.** Le libellé de sujet cesse d'être un texte libre par prise : le
+modèle déclare la liste des sujets du fil, une fois, et chaque prise y pointe un numéro vérifié.
+La couverture d'un message montre désormais **les phrases qu'aucune citation ne reprend**. Et la
+consigne dit qu'un refus est une décision. C'est l'étape 7 septies de
+[`lire-les-mails.md`](lire-les-mails.md).
+
+**Ce qui reste ouvert, et le premier point est le seul qui compte.**
+
+- **Rien de cela n'a encore été mesuré sur un fil réel.** Les 28 libellés sont
+  une mesure ; le découpage que le modèle rendra quand on lui demande une liste
+  fermée n'en est pas une. Deux résultats sont possibles et se lisent tous les
+  deux à l'écran : une liste trop courte, qui souderait des questions
+  différentes — et alors une demande passerait pour répondue par une prise qui
+  n'y répond pas, c'est-à-dire le pire résultat —, ou une liste aussi longue
+  qu'avant, et l'on n'aurait rien gagné. **Le protocole est le même qu'au § 58 :
+  trois passages du même fil**, en regardant d'abord le nombre de sujets, puis
+  les rapprochements qu'ils produisent, un par un.
+- **Le refus n'est pas mesuré non plus.** « Non, je ne peux pas » est absent des
+  trois passages du second fil ; on a changé la consigne, on n'a pas encore
+  regardé. Et la liste des cinq natures n'a pas bougé : si le refus continue de
+  manquer, c'est là qu'il faudra trancher, et ajouter une sixième nature touche
+  à tout l'écran.
+- **Les phrases non reprises n'ont pas de mesure à faire, et c'est leur
+  intérêt** : elles ne dépendent d'aucun modèle. Le seul point à regarder est
+  leur **volume** — combien de phrases un fil réel de six messages en produit,
+  et si un repli reste lisible à cette taille. Si c'est trop, ce n'est pas un
+  seuil qu'il faudra poser mais un ordre : les plus longues d'abord, peut-être.
+- **La découpe en phrases est naïve.** « M. Dupont » et « n° 5. » coupent une
+  phrase en deux, et le morceau paraît seul dans la liste. Le sens de l'erreur
+  est choisi — un morceau de trop se lit, une phrase cachée ne se lit pas —,
+  mais un fil réel dira si le bruit est supportable.
+- **`memeSujet` reste dans le code**, et n'a presque plus rien à faire : les
+  libellés venant d'une liste fermée, l'égalité suffit. On ne l'a pas retiré
+  parce qu'un relevé peut arriver sans liste déclarée — un serveur plus ancien,
+  un modèle qui n'en rend pas —, et qu'il faut alors toujours savoir lire. Le
+  jour où plus rien n'arrive sans liste, c'est du code mort à enlever.
+- **Toujours ouvert des § 54 à 58** : le relevé déterministe jamais observé ; le
+  renvoi de ⑮ jamais exercé sur un fil réel ; un engagement et une formule de
+  politesse rangés en questions sans réponse ; la période d'un fil lue sur son
+  dernier jour ; les autres appels au modèle du dépôt qui ne fixent pas de
+  température.
+
+**Ce que cette étape ajoute à la façon de travailler.** Le § 57 disait qu'une règle tirée d'un
+fil est une hypothèse jusqu'au fil suivant ; le § 58, qu'elle l'est aussi jusqu'au passage
+suivant du même fil. Il faut ajouter un troisième cas, qui est celui-ci : **une règle qu'on
+change dans la consigne n'est pas une règle, c'est une demande.** Le lexique des contestations,
+la part relevée, les phrases non reprises se vérifient en cassant le code ; la liste des sujets
+et le refus ne se vérifient qu'en regardant ce que le modèle en fait. Les premières sont tenues ;
+les secondes sont espérées, et le carnet doit continuer de faire la différence.

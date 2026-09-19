@@ -62,7 +62,8 @@ import {
 import { phraseDuTrou } from "../../../services/trous-dun-mail.js";
 import {
   NATURE, ceQueCaDevient, ceQuiManque, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
-  ceQueLeModeleNaPasDit, partReleveeDuMessage, phraseDeLaPart, phraseDeLaTemperature,
+  ceQueLeModeleNaPasDit, partReleveeDuMessage, phraseDeCeQuiNestPasRepris, phraseDeLaPart,
+  phraseDesSujets, phraseDesSujetsEcartes, phraseDeLaTemperature,
   phraseDuReleve, prisesDuMessage, quoiDeLaNature
 } from "../../../services/prises-de-position.js";
 import { ceQuonDerive } from "../../../services/ce-quon-derive.js";
@@ -105,6 +106,15 @@ const etat = {
   queFaire: "",
   rangement: null,
   ouverts: new Set(),
+  /**
+   * Les messages dont on a déplié ce qu'aucune citation ne reprend.
+   *
+   * **Un jeu à part, et non le même que les citations.** Les deux replis
+   * répondent à deux questions différentes — « qu'est-ce qu'il recopie ? » et
+   * « qu'est-ce qui n'a pas été pris ? » —, et les coudre ensemble ouvrirait
+   * l'un en croyant ouvrir l'autre.
+   */
+  nonRepris: new Set(),
   /**
    * Le relevé du fil.
    *
@@ -467,6 +477,7 @@ function renderLesPrises(vue) {
       ${rienTire.phrase ? `
         <p class="lecture-cr__reserve">${escapeHtml(`Ce dont rien n'a été tiré : ${rienTire.phrase}.`)}</p>
       ` : ""}
+      ${renderLesSujetsDuFil(releve)}
       <p>
         <button type="button" class="gh-btn gh-btn--sm" data-mails-relever>
           ${svgIcon("sync", { className: "octicon" })} Relever de nouveau
@@ -481,6 +492,47 @@ function renderLesPrises(vue) {
         </p>
       </section>
     `}
+  `;
+}
+
+/**
+ * Les sujets sur lesquels le fil porte.
+ *
+ * **Ils étaient invisibles, et c'est ce qui les rendait mauvais.** Le modèle
+ * écrivait un libellé libre par prise — 28 pour 39 prises sur un fil réel — et
+ * personne ne pouvait le voir : le libellé ne paraissait qu'au fond d'une
+ * ligne, une prise à la fois. Deux prises sur la même question ne se
+ * rapprochaient pas, et l'écran allait jusqu'à affirmer que personne n'avait
+ * parlé d'un sujet dont deux messages traitaient.
+ *
+ * La liste est maintenant déclarée une fois, et **elle se lit**. C'est ce qui
+ * permet d'en juger : trois sujets pour quarante prises est trop grossier,
+ * trente est l'ancien défaut revenu. Aucun seuil n'est posé ici — le lecteur
+ * regarde et décide (règle 5).
+ */
+function renderLesSujetsDuFil(releve) {
+  const dits = phraseDesSujets(releve.sujets, releve.prises);
+  if (!dits) return "";
+
+  const perdus = phraseDesSujetsEcartes(releve.sujetsEcartes);
+
+  return `
+    <p class="lecture-cr__mot">${escapeHtml(`Ce fil porte sur ${dits}.`)}</p>
+    <ul class="fil-mails__prises">
+      ${(releve.sujets ?? []).map((sujet) => `
+        <li>${svgIcon("issue-opened", { className: "octicon" })}
+          ${escapeHtml(texte(sujet.intitule))}</li>
+      `).join("")}
+    </ul>
+    ${/*
+      **L'accord se tient sur un seul membre de phrase.** Le compte y est déjà
+      accordé ; la suite reste invariable, sans quoi il faudrait l'accorder deux
+      fois — et c'est la seconde fois qu'on oublie.
+    */""}
+    ${perdus ? `<p class="lecture-cr__reserve">${escapeHtml(
+      `${perdus}. Le relevé les garde, sans sujet : le rattachement au plus proche prêterait `
+      + "à quelqu'un une position sur une question qu'il n'a pas nommée."
+    )}</p>` : ""}
   `;
 }
 
@@ -597,13 +649,13 @@ function renderLeFil(vue) {
     <section class="fil-mails">
       ${messages.map((message) => renderUnMessage(
         message, vue.ouverts?.has(message.rang) === true, prisesDuMessage(prises, message.rang),
-        vue.releve?.couverture ?? []
+        vue.releve?.couverture ?? [], vue.nonRepris?.has(message.rang) === true
       )).join("")}
     </section>
   `;
 }
 
-function renderUnMessage(message, ouvert, prises = [], couverture = []) {
+function renderUnMessage(message, ouvert, prises = [], couverture = [], nonReprisOuvert = false) {
   // **Ce qu'aucune citation ne reprend.** Un message peu relevé n'est pas un
   // message muet, et rien ne le disait : à comparer entre les messages du fil,
   // pas à faire monter — la politesse et la signature ne doivent l'être par
@@ -655,6 +707,15 @@ function renderUnMessage(message, ouvert, prises = [], couverture = []) {
         </ul>
       ` : ""}
       ${part ? `<p class="fil-mails__moment mono-small">${escapeHtml(phraseDeLaPart(part))}</p>` : ""}
+      ${/*
+        **Le pourcentage disait où regarder ; ceci montre quoi.** Sur un fil
+        réel, le message à 31 % portait « Non, je ne peux pas » et « c'est un
+        avis défavorable qui sera émis », et il fallait rouvrir le mail pour les
+        voir. Replié parce qu'un message en porte souvent dix — la politesse et
+        la signature y sont, et on ne les filtre pas : le lexique qui les
+        retirerait déciderait à la place du lecteur.
+      */""}
+      ${renderCeQuiNestPasRepris(message, part, nonReprisOuvert)}
       ${texte(message.cite) ? `
         <button type="button" class="fil-mails__voir-cite" data-mails-citation="${escapeHtml(String(message.rang))}"
           aria-expanded="${ouvert ? "true" : "false"}">
@@ -664,6 +725,32 @@ function renderUnMessage(message, ouvert, prises = [], couverture = []) {
         ${ouvert ? `<pre class="fil-mails__cite mono-small">${escapeHtml(message.cite)}</pre>` : ""}
       ` : ""}
     </article>
+  `;
+}
+
+/**
+ * Ce qu'aucune citation ne reprend, dans un message.
+ *
+ * **Sans modèle, sans appel, sans jugement** : le texte du message moins ce que
+ * les citations en reprennent. Le lecteur décide lui-même si l'omission compte,
+ * et il peut en décider sans nous (fondamental 13).
+ */
+function renderCeQuiNestPasRepris(message, part, ouvert) {
+  const phrases = part?.nonRepris ?? [];
+  const dit = phraseDeCeQuiNestPasRepris(phrases.length);
+  if (!dit) return "";
+
+  return `
+    <button type="button" class="fil-mails__voir-cite" data-mails-non-repris="${
+      escapeHtml(String(message.rang))}" aria-expanded="${ouvert ? "true" : "false"}">
+      ${svgIcon(ouvert ? "chevron-down" : "chevron-right", { className: "octicon" })}
+      ${escapeHtml(`${ouvert ? "Masquer" : "Voir"} les ${dit}`)}
+    </button>
+    ${ouvert ? `
+      <ul class="fil-mails__trous">
+        ${phrases.map((phrase) => `<li>${escapeHtml(phrase)}</li>`).join("")}
+      </ul>
+    ` : ""}
   `;
 }
 
@@ -735,6 +822,7 @@ async function prendreLesFichiers(fichiers) {
     etat.fil = leFilDesMails(octets);
     etat.fichiers = retenus.map((fichier) => fichier.name);
     etat.ouverts = new Set();
+    etat.nonRepris = new Set();
     // **Le relevé de l'ancien fil ne survit pas au nouveau.** Le garder
     // afficherait des prises citant des messages qui ne sont plus là, sous un
     // fil qui ne les porte pas.
@@ -993,6 +1081,15 @@ function brancher(hote) {
       const rang = Number(bouton.getAttribute("data-mails-citation"));
       if (etat.ouverts.has(rang)) etat.ouverts.delete(rang);
       else etat.ouverts.add(rang);
+      redessiner();
+    });
+  });
+
+  hote.querySelectorAll("[data-mails-non-repris]").forEach((bouton) => {
+    bouton.addEventListener("click", () => {
+      const rang = Number(bouton.getAttribute("data-mails-non-repris"));
+      if (etat.nonRepris.has(rang)) etat.nonRepris.delete(rang);
+      else etat.nonRepris.add(rang);
       redessiner();
     });
   });

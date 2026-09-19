@@ -3,9 +3,16 @@ import test from "node:test";
 
 import {
   CONSIGNES, ECART, ECART_DE_NATURE, NATURE, PHRASES_DE_LECART_DUNE_PRISE, SCHEMA_DES_PRISES,
-  ecarteesAuFormatDuMoteur, filEnTexte, laPartRelevee, leRenvoiVerifie, lesMessagesRendus,
-  messagesEnPages, prisesAuFormatDuMoteur, verifierLesPrises
+  ecarteesAuFormatDuMoteur, filEnTexte, laPartRelevee, leRenvoiVerifie, leSujetVerifie,
+  lesMessagesRendus, lesPhrasesDunMessage, lesPhrasesNonReprises, lesSujetsDuFil, messagesEnPages,
+  prisesAuFormatDuMoteur, verifierLesPrises
 } from "./prises-du-modele.js";
+
+/** Les sujets tels que le modèle les déclare en tête de sa réponse. */
+const SUJETS = [
+  { numero: 1, intitule: "humidité de l'acrotère" },
+  { numero: 2, intitule: "cote du seuil" }
+];
 
 // Aucun mail réel : les noms, les sociétés et les domaines sont inventés.
 const MESSAGES = [
@@ -25,7 +32,7 @@ const prise = (dessus = {}) => ({
   intitule: "le support est humide au droit de l'acrotère",
   message: 2,
   citation: "Le support est humide au droit de l'acrotère.",
-  porte_sur: "humidité de l'acrotère",
+  sujet: 1,
   pour_qui: null,
   echeance: null,
   ...dessus
@@ -101,14 +108,13 @@ test("le schéma ne demande ni l'auteur ni la date", () => {
   assert.equal(champs.includes("qui"), false);
   assert.equal(champs.includes("quand"), false);
   assert.deepEqual([...champs].sort(),
-    ["citation", "echeance", "intitule", "nature", "porte_sur", "pour_qui", "repond_a"]);
+    ["citation", "echeance", "intitule", "nature", "pour_qui", "repond_a", "sujet"]);
 });
 
 test("le schéma demande à quel message une prise répond", () => {
-  // **Le seul rapprochement vérifiable.** Le libellé de sujet, lui, est un mot
-  // que le modèle écrit librement : deux fils réels ont montré que « rectification
-  // de la pose d'étanchéité » et « reprise de la membrane » désignent la même
-  // chose sans partager un mot.
+  // **Le rapprochement qui se confronte au fil.** Le sujet, lui, se confronte à
+  // une liste que le modèle a déclarée : c'est mieux qu'un texte libre, mais
+  // c'est toujours lui qui a fait la liste.
   assert.deepEqual(UNE_PRISE.properties.repond_a.anyOf,
     [{ type: "integer" }, { type: "null" }]);
   assert.ok(UNE_PRISE.required.includes("repond_a"),
@@ -246,10 +252,11 @@ test("deux prises identiques d'un même message portent la même empreinte", () 
 });
 
 test("les champs vides sortent à null, et non en chaîne vide", () => {
-  const { retenues } = verifierLesPrises({ prises: [prise()], messages: MESSAGES });
+  const { retenues } = verifierLesPrises({ prises: [prise()], messages: MESSAGES, sujets: SUJETS });
   const [rendue] = prisesAuFormatDuMoteur(retenues, { messages: MESSAGES });
   assert.equal(rendue.pourQui, null);
   assert.equal(rendue.echeance, null);
+  // Le libellé vient de la liste déclarée, et non plus de la prise elle-même.
   assert.equal(rendue.porteSur, "humidité de l'acrotère");
 });
 
@@ -474,4 +481,194 @@ test("un message dont rien n'a été tiré se compte à zéro, et non pas du tou
   const un = laPartRelevee(MESSAGES, []).find((une) => une.message === 1);
   assert.equal(un.couverts, 0);
   assert.ok(un.caracteres > 0);
+});
+
+// ── Les sujets déclarés ────────────────────────────────────────────────────
+
+test("les sujets déclarés se lisent tels quels", () => {
+  assert.deepEqual(lesSujetsDuFil({ sujets: SUJETS }), SUJETS);
+});
+
+test("une réponse sans sujets en rend zéro, et non une liste devinée", () => {
+  assert.deepEqual(lesSujetsDuFil({}), []);
+  assert.deepEqual(lesSujetsDuFil(null), []);
+});
+
+test("un sujet sans numéro lisible ne devient pas le sujet zéro", () => {
+  // `Number(null)` vaut zéro : sans cette garde, la liste porterait un sujet 0
+  // que personne n'a déclaré, et une prise pourrait s'y rattacher.
+  assert.deepEqual(lesSujetsDuFil({ sujets: [{ numero: null, intitule: "cote du seuil" }] }), []);
+  assert.deepEqual(lesSujetsDuFil({ sujets: [{ intitule: "cote du seuil" }] }), []);
+});
+
+test("un sujet sans intitulé n'est pas un sujet", () => {
+  // Deux prises rattachées à un sujet sans nom se liraient comme deux prises
+  // sans sujet, tout en comptant comme le même.
+  assert.deepEqual(lesSujetsDuFil({ sujets: [{ numero: 3, intitule: "   " }] }), []);
+});
+
+test("quand deux sujets portent le même numéro, le premier gagne", () => {
+  // Le dernier changerait le sens des prises déjà rattachées à ce numéro plus
+  // haut dans la réponse — la seule des deux façons de se tromper en silence.
+  assert.deepEqual(lesSujetsDuFil({
+    sujets: [{ numero: 1, intitule: "humidité" }, { numero: 1, intitule: "cote" }]
+  }), [{ numero: 1, intitule: "humidité" }]);
+});
+
+test("un numéro déclaré rend l'intitulé de son sujet", () => {
+  const parNumero = new Map(SUJETS.map((un) => [un.numero, un.intitule]));
+  assert.equal(leSujetVerifie({ sujet: 2 }, parNumero), "cote du seuil");
+});
+
+test("un numéro que personne n'a déclaré ne rend rien", () => {
+  // Et surtout pas le plus proche : ce serait prêter à quelqu'un une position
+  // sur une question qu'il n'a pas nommée.
+  const parNumero = new Map(SUJETS.map((un) => [un.numero, un.intitule]));
+  assert.equal(leSujetVerifie({ sujet: 7 }, parNumero), null);
+  assert.equal(leSujetVerifie({ sujet: null }, parNumero), null);
+  assert.equal(leSujetVerifie({}, parNumero), null);
+});
+
+test("la porte résout le sujet d'une prise contre la liste déclarée", () => {
+  const { retenues, sujetsEcartes } = verifierLesPrises({
+    prises: [prise({ sujet: 2 })], messages: MESSAGES, sujets: SUJETS
+  });
+  assert.equal(retenues[0].porte_sur, "cote du seuil");
+  assert.equal(sujetsEcartes, 0);
+});
+
+test("un sujet non déclaré s'écarte et se compte, sans faire perdre la prise", () => {
+  // La prise est réelle — sa citation s'est retrouvée. C'est son rattachement
+  // qui ne tient pas, et une prise sans sujet se range en « on ne sait pas »
+  // plutôt qu'en une réponse inventée.
+  const { retenues, sujetsEcartes } = verifierLesPrises({
+    prises: [prise({ sujet: 9 })], messages: MESSAGES, sujets: SUJETS
+  });
+  assert.equal(retenues.length, 1);
+  assert.equal(retenues[0].porte_sur, null);
+  assert.equal(sujetsEcartes, 1);
+});
+
+test("une prise qui ne vise aucun sujet ne compte pas comme un écart", () => {
+  // Ne pas rattacher est une réponse ; rater son rattachement en est une autre,
+  // et les confondre ferait monter le compte des écarts sur des prises saines.
+  const { sujetsEcartes } = verifierLesPrises({
+    prises: [prise({ sujet: null })], messages: MESSAGES, sujets: SUJETS
+  });
+  assert.equal(sujetsEcartes, 0);
+});
+
+test("sans liste déclarée, aucun rattachement ne tient", () => {
+  const { retenues, sujetsEcartes } = verifierLesPrises({
+    prises: [prise({ sujet: 1 })], messages: MESSAGES
+  });
+  assert.equal(retenues[0].porte_sur, null);
+  assert.equal(sujetsEcartes, 1);
+});
+
+// ── Ce qu'aucune citation ne reprend ───────────────────────────────────────
+
+test("un message se coupe aux points et aux retours à la ligne", () => {
+  assert.deepEqual(
+    lesPhrasesDunMessage("Le support est humide.\nPouvez-vous confirmer ? Merci."),
+    ["Le support est humide.", "Pouvez-vous confirmer ?", "Merci."]
+  );
+});
+
+test("une énumération sans ponctuation se coupe quand même, ligne à ligne", () => {
+  // **Le cas qui oblige à couper aux retours à la ligne**, et le seul : quand
+  // chaque ligne finit par un point, couper aux points suffit — l'espace qui
+  // suit le point est justement ce retour à la ligne. Une liste de points à
+  // reprendre n'a aucune ponctuation finale, et sans cette coupure-ci elle
+  // deviendrait un bloc unique : un seul morceau qu'une citation quelconque
+  // ferait disparaître en entier.
+  assert.deepEqual(
+    lesPhrasesDunMessage("Points à reprendre\n- membrane décollée\n- acrotère humide"),
+    ["Points à reprendre", "- membrane décollée", "- acrotère humide"]
+  );
+});
+
+test("les phrases gardent les mots de l'auteur, accents et majuscules", () => {
+  assert.deepEqual(lesPhrasesDunMessage("Non, je ne peux pas."), ["Non, je ne peux pas."]);
+});
+
+test("la phrase citée disparaît de la liste, les autres restent", () => {
+  const propos = "Bonjour.\nNon, je ne peux pas.\nC'est un avis défavorable qui sera émis.";
+  const reste = lesPhrasesNonReprises(propos, ["Non, je ne peux pas."]);
+  assert.deepEqual(reste, ["Bonjour.", "C'est un avis défavorable qui sera émis."]);
+});
+
+test("une citation ponctuée autrement reconnaît quand même sa phrase", () => {
+  // La découpe est la nôtre, la citation est recopiée par le modèle : l'une des
+  // deux porte souvent un point ou une virgule que l'autre n'a pas. Comparer les
+  // chaînes telles quelles laisserait la phrase dans la liste alors qu'elle a
+  // bien été relevée.
+  const reste = lesPhrasesNonReprises("Non, je ne peux pas.", ["non je ne peux pas"]);
+  assert.deepEqual(reste, []);
+});
+
+test("une citation qui ne prend qu'un morceau de la phrase la retire aussi", () => {
+  const reste = lesPhrasesNonReprises(
+    "Le support est humide au droit de l'acrotère.", ["le support est humide"]);
+  assert.deepEqual(reste, []);
+});
+
+test("un mot ne se reconnaît pas au milieu d'un autre", () => {
+  // **Le piège de la maison**, et il faut le tendre pour de bon : il ne suffit
+  // pas que les deux textes se ressemblent, il faut que l'un se lise
+  // *littéralement* dans l'autre sans tomber sur une frontière de mot.
+  // « le vent souffle fort » est une suite de lettres de « le vent souffle
+  // fortement ici », et sans les espaces qui bordent la comparaison cette
+  // phrase-là passerait pour citée. Une première version de cette épreuve
+  // comparait deux textes sans rapport : elle passait des deux façons, et ne
+  // prouvait donc rien.
+  const reste = lesPhrasesNonReprises(
+    "Le vent souffle fort.", ["le vent souffle fortement ici, ce jour-là"]);
+  assert.deepEqual(reste, ["Le vent souffle fort."]);
+});
+
+test("une citation plus longue que la phrase la retire quand même", () => {
+  // **L'autre sens de la reconnaissance.** Le modèle cite souvent deux phrases
+  // d'un trait là où notre découpe en fait deux : chacune est alors contenue
+  // dans la citation, et aucune n'est égale à elle. Sans ce sens-là, les deux
+  // ressortiraient comme non reprises alors qu'elles ont été relevées — et le
+  // lecteur irait chercher une omission qui n'existe pas.
+  const reste = lesPhrasesNonReprises(
+    "Non, je ne peux pas. C'est un avis défavorable qui sera émis.",
+    ["Non, je ne peux pas. C'est un avis défavorable qui sera émis."]
+  );
+  assert.deepEqual(reste, []);
+});
+
+test("une phrase d'un seul mot reste montrée, même si ce mot est dans une citation", () => {
+  // « Non. » est la réponse la plus tranchante d'un fil, et le mot « non » se
+  // lit dans presque toutes ses citations. La cacher serait cacher celle qu'il
+  // fallait montrer.
+  const reste = lesPhrasesNonReprises("Non.", ["nous ne validons pas : non, pas en l'état"]);
+  assert.deepEqual(reste, ["Non."]);
+});
+
+test("un message qu'aucune citation ne touche sort entier", () => {
+  const propos = "Le support est humide.\nPouvez-vous confirmer ?";
+  assert.deepEqual(lesPhrasesNonReprises(propos, []),
+    ["Le support est humide.", "Pouvez-vous confirmer ?"]);
+});
+
+test("la couverture dit aussi ce qu'elle n'a pas repris", () => {
+  const messages = [{
+    rang: 1,
+    propos: "Le support est humide au droit de l'acrotère. Bien cordialement."
+  }];
+  const [ligne] = laPartRelevee(messages, [
+    { message: 1, citation: "Le support est humide au droit de l'acrotère." }
+  ]);
+  assert.deepEqual(ligne.nonRepris, ["Bien cordialement."]);
+});
+
+test("la politesse n'est pas retirée de la liste", () => {
+  // La retirer demanderait un lexique de ce qui ne compte pas, et ce lexique
+  // déciderait à la place du lecteur. C'est ainsi qu'on cache une phrase qui
+  // comptait — l'inverse exact de ce que cette liste sert à faire.
+  const [ligne] = laPartRelevee([{ rang: 1, propos: "Merci beaucoup pour votre retour." }], []);
+  assert.deepEqual(ligne.nonRepris, ["Merci beaucoup pour votre retour."]);
 });

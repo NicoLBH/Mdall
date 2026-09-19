@@ -63,7 +63,8 @@ const dessine = (vue) => renderLaLectureDesMails(vue).replace(CACHE, "");
 
 const vue = (dessus = {}) => ({
   phase: "vide", fichiers: [], fil: null, onglet: ONGLET.FIL,
-  motif: "", queFaire: "", rangement: null, ouverts: new Set(), releve: null, ...dessus
+  motif: "", queFaire: "", rangement: null, ouverts: new Set(), nonRepris: new Set(),
+  releve: null, ...dessus
 });
 
 const prise = (dessus = {}) => ({
@@ -568,4 +569,85 @@ test("chaque trou possible du fil a sa phrase à l'écran", () => {
   });
   assert.ok(html.includes("ce fil a été ordonné par ses dates"));
   assert.equal(html.includes("quelque chose n&#39;a pas pu être placé"), false);
+});
+
+// ── Les sujets du fil ──────────────────────────────────────────────────────
+
+test("l'écran nomme les sujets du fil et les compte", () => {
+  // Ils étaient invisibles, et c'est ce qui les rendait mauvais : le libellé
+  // libre ne paraissait qu'au fond d'une ligne, une prise à la fois.
+  const html = dessine(analyse({
+    releve: releve({
+      sujets: [{ numero: 1, intitule: "humidité de l'acrotère" },
+        { numero: 2, intitule: "cote du seuil" }]
+    })
+  }));
+  assert.ok(html.includes("Ce fil porte sur 2 sujets pour 1 prise."), html.slice(0, 400));
+  assert.ok(html.includes("cote du seuil"));
+});
+
+test("un relevé sans sujets déclarés n'annonce pas de découpage", () => {
+  const html = dessine(analyse({ releve: releve() }));
+  assert.equal(html.includes("Ce fil porte sur"), false);
+});
+
+test("l'écran dit les prises qui visaient un sujet non déclaré", () => {
+  const html = dessine(analyse({
+    releve: releve({ sujets: [{ numero: 1, intitule: "humidité" }], sujetsEcartes: 1 })
+  }));
+  assert.ok(html.includes("1 prise visait un sujet qui n&#39;a pas été déclaré")
+    || html.includes("1 prise visait un sujet qui n'a pas été déclaré"), html.slice(0, 400));
+});
+
+// ── Ce qu'aucune citation ne reprend ───────────────────────────────────────
+
+const COUVERTURE_MAIGRE = [{
+  message: 1, caracteres: 200, couverts: 60,
+  nonRepris: ["Non, je ne peux pas.", "Bien cordialement."]
+}];
+
+test("un message peu repris offre de montrer ce qui ne l'a pas été", () => {
+  const html = dessine(vue({
+    ...lu(PREMIER, SECOND), releve: releve({ couverture: COUVERTURE_MAIGRE })
+  }));
+  assert.ok(html.includes("data-mails-non-repris=\"1\""), html.slice(-1500));
+  assert.ok(html.includes("Voir les 2 phrases qu&#39;aucune citation ne reprend"));
+});
+
+test("le repli fermé ne montre pas encore les phrases", () => {
+  // Un message en porte souvent dix : dépliées d'office, elles noieraient le
+  // relevé qu'on est venu lire.
+  const html = dessine(vue({
+    ...lu(PREMIER, SECOND), releve: releve({ couverture: COUVERTURE_MAIGRE })
+  }));
+  assert.equal(html.includes("Non, je ne peux pas."), false);
+});
+
+test("le repli ouvert montre les phrases dans les mots de leur auteur", () => {
+  const html = dessine(vue({
+    ...lu(PREMIER, SECOND),
+    nonRepris: new Set([1]),
+    releve: releve({ couverture: COUVERTURE_MAIGRE })
+  }));
+  assert.ok(html.includes("Non, je ne peux pas."), html.slice(-2000));
+  assert.ok(html.includes("Masquer les 2 phrases"));
+});
+
+test("les deux replis d'un message ne s'ouvrent pas l'un pour l'autre", () => {
+  // « Qu'est-ce qu'il recopie ? » et « qu'est-ce qui n'a pas été pris ? » sont
+  // deux questions : les coudre ensemble ouvrirait l'une en croyant l'autre.
+  const html = dessine(vue({
+    ...lu(PREMIER, SECOND),
+    ouverts: new Set([1, 2]),
+    releve: releve({ couverture: COUVERTURE_MAIGRE })
+  }));
+  assert.equal(html.includes("Non, je ne peux pas."), false);
+});
+
+test("un message dont tout a été repris n'a pas de bouton à cliquer", () => {
+  const html = dessine(vue({
+    ...lu(PREMIER, SECOND),
+    releve: releve({ couverture: [{ message: 1, caracteres: 200, couverts: 200, nonRepris: [] }] })
+  }));
+  assert.equal(html.includes("data-mails-non-repris"), false);
 });
