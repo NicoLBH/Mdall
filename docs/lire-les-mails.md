@@ -521,7 +521,16 @@ fois ; « Bien cordialement » emporté avec la signature ; un compte d'images q
 un message oublié qui passe pour un message muet ; un groupe sans numéro lisible qui devient
 « le message 0 » ; une écartée sans sa citation.
 
-> Les soixante ruptures essayées tombent. Deux d'entre elles ont nommé du code
+> **Un quatrième défaut est sorti du fil lui-même, après coup.** Le garde-fou
+> des bandeaux finissait par `.*$`, et le point d'une expression régulière ne
+> s'applique pas au retour chariot : sur un courriel réel, qui finit ses lignes
+> par `\r\n`, il ne franchissait jamais le `\r` et ne retirait **pas un seul**
+> bandeau. Toutes ses épreuves passaient — elles étaient écrites en `\n`. C'est
+> le piège du jeu d'essai qui recopie les hypothèses du code, et il ne s'est vu
+> que sur un vrai fil : six bandeaux comptés là où le compteur disait zéro. Les
+> épreuves se font désormais **aussi en `\r\n`**.
+>
+> Les soixante et une ruptures essayées tombent. Deux d'entre elles ont nommé du code
 > mort — une forme de redirection que la suivante couvrait déjà, un rognage des
 > lignes vides fait deux fois —, retiré avec la raison écrite à sa place. Une
 > troisième a montré qu'un groupe dont le numéro ne se lit pas ne doit pas faire
