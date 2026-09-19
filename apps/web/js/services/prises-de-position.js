@@ -393,6 +393,46 @@ export function phraseDeLaPart(part) {
 }
 
 /**
+ * D'où vient un diagnostic de panne.
+ *
+ * ## Pourquoi cela doit se dire
+ *
+ * L'écran affirmait, sous **toutes** les pannes : « ce diagnostic vient du
+ * serveur ». Il ne venait pas toujours du serveur. Quand le navigateur lui-même
+ * lève — un nom absent, un module qui ne charge pas —, la phrase envoie
+ * chercher dans les journaux d'une fonction qui n'a jamais été appelée.
+ *
+ * C'est arrivé : `messagesAEnvoyer is not defined` s'est affiché sous cette
+ * phrase-là, et la panne était dans le paquet du navigateur, à une ligne du
+ * clic. **Une explication fausse coûte plus cher qu'une absence
+ * d'explication** : elle ne laisse pas chercher ailleurs.
+ */
+export const DOU = {
+  /** La fonction a répondu, et elle a nommé sa panne. */
+  SERVEUR: "serveur",
+  /** Le navigateur a levé avant d'obtenir une réponse, ou en la lisant. */
+  NAVIGATEUR: "navigateur"
+};
+
+/**
+ * La phrase qui dit d'où vient le diagnostic, et ce qu'on en fait.
+ *
+ * Rien pour une provenance qu'on ne connaît pas : **ne pas savoir d'où vient
+ * une panne ne s'annonce pas comme une certitude** (règle 5). Le texte de la
+ * panne reste affiché, sans la phrase qui l'encadre.
+ */
+export function phraseDeLaProvenance(dOu) {
+  if (dOu === DOU.SERVEUR) {
+    return "Ce diagnostic vient du serveur : il nomme la panne, il ne recopie pas la consigne.";
+  }
+  if (dOu === DOU.NAVIGATEUR) {
+    return "Ce diagnostic vient du navigateur, et non du serveur : la demande n'est jamais "
+      + "partie. Il n'y a rien à chercher dans les journaux de la fonction.";
+  }
+  return "";
+}
+
+/**
  * Ce qu'aucune citation ne reprend, annoncé en une phrase.
  *
  * **Le compte, et non les phrases elles-mêmes.** C'est un libellé de bouton :

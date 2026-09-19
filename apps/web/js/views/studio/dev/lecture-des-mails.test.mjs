@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { ONGLET, leReleveDerive, renderLaLectureDesMails } from "./lecture-des-mails.js";
+import {
+  ONGLET, lePepinDuNavigateur, leRefusDuReleve, leReleveDerive, renderLaLectureDesMails
+} from "./lecture-des-mails.js";
 import { NATURE } from "../../../services/prises-de-position.js";
 import { leFilDesMails } from "../../../services/le-fil-des-mails.js";
 import { TROU } from "../../../services/trous-dun-mail.js";
@@ -650,4 +652,73 @@ test("un message dont tout a été repris n'a pas de bouton à cliquer", () => {
     releve: releve({ couverture: [{ message: 1, caracteres: 200, couverts: 200, nonRepris: [] }] })
   }));
   assert.equal(html.includes("data-mails-non-repris"), false);
+});
+
+// ── D'où vient le diagnostic d'une panne ───────────────────────────────────
+
+test("une panne nommée par le serveur se présente comme telle", () => {
+  const html = dessine(analyse({
+    releve: { enCours: false, motif: "le relevé a été refusé", panne: "HTTP 500", dOu: "serveur" }
+  }));
+  assert.ok(html.includes("HTTP 500"));
+  assert.ok(html.includes("Ce diagnostic vient du serveur"), html.slice(-800));
+});
+
+test("une panne levée par le navigateur ne s'attribue pas au serveur", () => {
+  // Le défaut réel : la phrase était écrite en dur sous toutes les pannes, et
+  // « messagesAEnvoyer is not defined » — une faute du paquet du navigateur,
+  // à une ligne du clic — s'affichait sous « ce diagnostic vient du serveur ».
+  const html = dessine(analyse({
+    releve: {
+      enCours: false, motif: "le relevé n'a pas pu être demandé",
+      panne: "messagesAEnvoyer is not defined", dOu: "navigateur"
+    }
+  }));
+  assert.ok(html.includes("messagesAEnvoyer is not defined"));
+  assert.ok(html.includes("Ce diagnostic vient du navigateur"), html.slice(-800));
+  assert.equal(html.includes("Ce diagnostic vient du serveur"), false);
+});
+
+test("une panne sans provenance connue n'en invente pas une", () => {
+  const html = dessine(analyse({
+    releve: { enCours: false, motif: "le relevé a été refusé", panne: "HTTP 500" }
+  }));
+  assert.ok(html.includes("HTTP 500"));
+  assert.equal(html.includes("Ce diagnostic vient"), false);
+});
+
+// ── Qui a nommé la panne ───────────────────────────────────────────────────
+
+test("un refus du serveur porte sa provenance et la phrase du motif", () => {
+  const etat = leRefusDuReleve({ motif: "injoignable", panne: "HTTP 503" });
+  assert.equal(etat.dOu, "serveur");
+  assert.equal(etat.panne, "HTTP 503");
+  assert.ok(etat.motif);
+  assert.equal(etat.enCours, false);
+});
+
+test("un pépin du navigateur ne se range pas du côté du serveur", () => {
+  // Le défaut réel : la demande n'était jamais partie, et l'écran envoyait
+  // chercher dans les journaux d'une fonction qui n'avait jamais été appelée.
+  const etat = lePepinDuNavigateur(new ReferenceError("messagesAEnvoyer is not defined"));
+  assert.equal(etat.dOu, "navigateur");
+  assert.equal(etat.panne, "messagesAEnvoyer is not defined");
+  assert.equal(etat.motif, "le relevé n'a pas pu être demandé");
+});
+
+test("une panne du navigateur sans message ne fabrique pas de texte", () => {
+  // « undefined » affiché comme diagnostic vaut moins que rien : l'écran dit
+  // alors le motif seul, sans encadrer un mot qui n'explique rien.
+  assert.equal(lePepinDuNavigateur(null).panne, "");
+  assert.equal(lePepinDuNavigateur({}).panne, "");
+});
+
+test("les deux états se distinguent à l'écran, et pas seulement en mémoire", () => {
+  const serveur = dessine(analyse({ releve: leRefusDuReleve({ motif: "refuse", panne: "HTTP 500" }) }));
+  const navigateur = dessine(analyse({
+    releve: lePepinDuNavigateur(new ReferenceError("truc is not defined"))
+  }));
+  assert.ok(serveur.includes("Ce diagnostic vient du serveur"));
+  assert.ok(navigateur.includes("Ce diagnostic vient du navigateur"));
+  assert.equal(navigateur.includes("Ce diagnostic vient du serveur"), false);
 });

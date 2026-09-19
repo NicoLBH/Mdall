@@ -62,10 +62,12 @@ import {
 import { phraseDuTrou } from "../../../services/trous-dun-mail.js";
 import {
   NATURE, ceQueCaDevient, ceQuiManque, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
-  ceQueLeModeleNaPasDit, partReleveeDuMessage, phraseDeCeQuiNestPasRepris, phraseDeLaPart,
+  DOU, ceQueLeModeleNaPasDit, partReleveeDuMessage, phraseDeCeQuiNestPasRepris, phraseDeLaPart,
+  phraseDeLaProvenance,
   phraseDesSujets, phraseDesSujetsEcartes, phraseDeLaTemperature,
   phraseDuReleve, prisesDuMessage, quoiDeLaNature
 } from "../../../services/prises-de-position.js";
+import { phraseDuRefus, queFaire } from "../../../services/le-releve-rendu.js";
 import { ceQuonDerive } from "../../../services/ce-quon-derive.js";
 import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
 // Le même formatage de durée que le lecteur de CR et le journal des actions :
@@ -416,11 +418,17 @@ function renderAvantLeReleve(vue) {
       ${vue.releve?.motif ? `
         <p class="lecture-cr__reserve">${escapeHtml(vue.releve.motif)}</p>
         ${texte(vue.releve.queFaire) ? `<p class="lecture-cr__mot">${escapeHtml(vue.releve.queFaire)}</p>` : ""}
+        ${/*
+          **D'où vient le diagnostic, et non « du serveur » quoi qu'il arrive.**
+          La phrase était écrite en dur sous toutes les pannes ; le jour où le
+          navigateur a levé de lui-même, elle a envoyé chercher dans les
+          journaux d'une fonction qui n'avait jamais été appelée.
+        */""}
         ${texte(vue.releve.panne) ? `
           <pre class="lecture-cr__alerte-panne mono-small">${escapeHtml(vue.releve.panne)}</pre>
-          <p class="lecture-cr__alerte-aide">
-            Ce diagnostic vient du serveur : il nomme la panne, il ne recopie pas la consigne.
-          </p>
+          ${phraseDeLaProvenance(vue.releve.dOu) ? `
+            <p class="lecture-cr__alerte-aide">${escapeHtml(phraseDeLaProvenance(vue.releve.dOu))}</p>
+          ` : ""}
         ` : ""}
       ` : ""}
       <p>
@@ -903,6 +911,41 @@ export function leReleveDerive(lu, fil) {
  * exactement le défaut qui a bloqué le lecteur de CR, où un refus éteignait la
  * phase de la lecture entière.
  */
+/**
+ * Un relevé que le serveur a refusé, mis en état d'écran.
+ *
+ * **Tout ce qui sort de `releverLeFil` a traversé le réseau** : c'est le
+ * serveur qui a nommé la panne, ou qui n'a pas répondu. La provenance se pose
+ * donc ici, une fois, plutôt que d'être affirmée par l'écran quoi qu'il arrive.
+ */
+export function leRefusDuReleve(lu) {
+  return {
+    enCours: false,
+    motif: phraseDuRefus(lu?.motif),
+    queFaire: queFaire(lu?.motif),
+    panne: texte(lu?.panne),
+    dOu: DOU.SERVEUR
+  };
+}
+
+/**
+ * Le navigateur a levé de lui-même, et la demande n'est jamais partie.
+ *
+ * C'est le cas qui a coûté un relevé livré cassé : `messagesAEnvoyer is not
+ * defined` s'affichait sous « ce diagnostic vient du serveur », et l'on
+ * cherchait dans les journaux d'une fonction qui n'avait jamais été appelée.
+ * **Une explication fausse ne laisse pas chercher ailleurs.**
+ */
+export function lePepinDuNavigateur(erreur) {
+  return {
+    enCours: false,
+    motif: "le relevé n'a pas pu être demandé",
+    queFaire: "",
+    panne: String(erreur?.message ?? ""),
+    dOu: DOU.NAVIGATEUR
+  };
+}
+
 async function relever() {
   if (!etat.fil || etat.releve?.enCours) return;
 
@@ -911,23 +954,14 @@ async function relever() {
   redessiner();
 
   try {
-    const { phraseDuRefus, queFaire, releverLeFil } = await import("../../../services/prises-par-le-modele.js");
+    // **Seul l'appel vient de l'import dynamique.** Les phrases du refus vivent
+    // dans le module pur, qui s'importe partout : les prendre ici obligeait à
+    // charger l'authentification pour afficher un texte.
+    const { releverLeFil } = await import("../../../services/prises-par-le-modele.js");
     const lu = await releverLeFil({ filId: texte(etat.fil.objet), messages: etat.fil.messages });
-    etat.releve = lu.ok
-      ? leReleveDerive(lu, etat.fil)
-      : {
-        enCours: false,
-        motif: phraseDuRefus(lu.motif),
-        queFaire: queFaire(lu.motif),
-        panne: texte(lu.panne)
-      };
+    etat.releve = lu.ok ? leReleveDerive(lu, etat.fil) : leRefusDuReleve(lu);
   } catch (erreur) {
-    etat.releve = {
-      enCours: false,
-      motif: "le relevé n'a pas pu être demandé",
-      queFaire: "",
-      panne: String(erreur?.message ?? "")
-    };
+    etat.releve = lePepinDuNavigateur(erreur);
   }
   redessiner();
 }

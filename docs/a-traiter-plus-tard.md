@@ -4322,3 +4322,45 @@ change dans la consigne n'est pas une règle, c'est une demande.** Le lexique de
 la part relevée, les phrases non reprises se vérifient en cassant le code ; la liste des sujets
 et le refus ne se vérifient qu'en regardant ce que le modèle en fait. Les premières sont tenues ;
 les secondes sont espérées, et le carnet doit continuer de faire la différence.
+
+---
+
+## 60. Ce qui ne s'exécute nulle part
+
+**Ce qui vient d'être réglé.** Le relevé d'un fil ne partait plus : un nom réexporté sans être
+lié. La faute est corrigée, un garde-fou la rattrape désormais à l'écriture, et une sonde de
+navigateur exécute enfin le geste complet. L'écran cesse d'attribuer au serveur des pannes qui
+viennent du navigateur. C'est l'étape 7 octies de [`lire-les-mails.md`](lire-les-mails.md).
+
+**Ce qui reste ouvert.**
+
+- **Le trou est plus large que ce module.** Tout fichier qui importe
+  `assets/js/auth.js` est inatteignable pour Node, et il y en a plusieurs
+  dizaines. Ce lot en a sondé **un**. Les autres — le dépôt d'un mail, la
+  synchronisation d'un projet, les conversations du copilote — n'ont toujours
+  aucun moment où leur code s'exécute avant l'écran. La question à trancher
+  n'est pas « faut-il une sonde par module » mais **pourquoi ces modules
+  importent l'authentification au lieu de la recevoir** : un module qui reçoit
+  son transport s'éprouve sans navigateur.
+- **Le garde-fou ne couvre qu'une forme de nom absent.** Un `truc()` jamais
+  déclaré passe sans bruit. Le couvrir demanderait d'analyser le fichier pour
+  de vrai — un outil existant ferait mieux qu'une expression régulière de plus,
+  et c'est le moment d'en parler plutôt que d'en écrire une douzième.
+- **La même phrase fausse vit encore dans le lecteur de CR.**
+  `views/studio/dev/lecture-des-cr.js` affirme aussi « ce diagnostic vient du
+  serveur » sous toutes ses pannes, et il a six `catch`. Le vocabulaire de la
+  provenance est prêt et s'importe ; l'audit de ses six chemins ne l'est pas,
+  et le faire à moitié remplacerait une phrase fausse par une autre.
+- **Ce que la sonde a vérifié au passage mérite une place ailleurs** : ce qui
+  monte au modèle porte `propos`, `quand`, `qui`, `rang`, et rien d'autre.
+  C'est une garantie de confidentialité, et elle ne tient aujourd'hui qu'à une
+  sonde qu'on lance à la main.
+- **Toujours ouvert des § 54 à 59** : rien de ce qui touche au modèle n'a été
+  mesuré sur un fil réel — la liste de sujets, le refus comme décision, le
+  renvoi de ⑮, le relevé déterministe.
+
+**Ce que cette étape ajoute à la façon de travailler.** Le carnet distinguait déjà ce qui se
+vérifie en cassant le code de ce qu'on espère du modèle. Il faut une troisième colonne :
+**ce qui ne s'exécute nulle part.** Un module qu'aucune épreuve ne peut charger n'est ni tenu ni
+espéré — il est simplement non joué, et le nombre d'épreuves du dépôt n'en dit rien. 5 807
+épreuves vertes ont accompagné un écran cassé jusqu'en production.

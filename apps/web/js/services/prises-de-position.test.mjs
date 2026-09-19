@@ -6,7 +6,8 @@ import {
   MANQUE, NATURE, NATURES_DECLAREES, NATURES_DERIVEES, ceQueCaDevient, ceQuiManque,
   horsNomenclature, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
   ceQueLeModeleNaPasDit, laCleDeLAuteur, lesPrisesEtLeursAuteurs, partReleveeDuMessage,
-  phraseDeCeQuiNestPasRepris, phraseDeLaPart, phraseDeLaTemperature, phraseDesSujets,
+  DOU, phraseDeCeQuiNestPasRepris, phraseDeLaPart, phraseDeLaProvenance, phraseDeLaTemperature,
+  phraseDesSujets,
   phraseDesSujetsEcartes, phraseDuReleve,
   prisesDuMessage, quoiDeLaNature
 } from "./prises-de-position.js";
@@ -411,4 +412,28 @@ test("un compte absent ne devient pas un zéro annoncé", () => {
   assert.equal(phraseDesSujetsEcartes(0), "");
   assert.equal(phraseDesSujetsEcartes(null), "");
   assert.equal(phraseDesSujetsEcartes(undefined), "");
+});
+
+// ── D'où vient un diagnostic ───────────────────────────────────────────────
+
+test("un diagnostic du serveur se présente comme tel", () => {
+  assert.match(phraseDeLaProvenance(DOU.SERVEUR), /vient du serveur/);
+});
+
+test("un diagnostic du navigateur ne se fait pas passer pour celui du serveur", () => {
+  // Le défaut réel : « messagesAEnvoyer is not defined » s'est affiché sous
+  // « ce diagnostic vient du serveur ». La demande n'était jamais partie, et la
+  // phrase envoyait chercher dans les journaux d'une fonction jamais appelée.
+  const dit = phraseDeLaProvenance(DOU.NAVIGATEUR);
+  assert.match(dit, /du navigateur/);
+  assert.match(dit, /n'est jamais partie/);
+  assert.equal(/vient du serveur/.test(dit), false);
+});
+
+test("une provenance inconnue ne s'annonce pas comme une certitude", () => {
+  // La panne reste affichée ; c'est la phrase qui l'encadre qui se tait. Ne pas
+  // savoir d'où vient une panne n'autorise pas à trancher (règle 5).
+  assert.equal(phraseDeLaProvenance(""), "");
+  assert.equal(phraseDeLaProvenance(undefined), "");
+  assert.equal(phraseDeLaProvenance("serveur ou navigateur"), "");
 });

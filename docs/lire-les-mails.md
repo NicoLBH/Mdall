@@ -878,6 +878,68 @@ un lexique qui retire la politesse ; un compte absent devenu un zéro annoncé.
 > retours à la ligne ne servait à rien. Les trois cas ont été refaits. Ce qui
 > reste : § 59 de [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
+### 7 octies — Le relevé est parti cassé, et rien ne l'avait vu · *fait*
+
+Un seul mot manquait : `import`. Le module qui demande le relevé écrivait
+
+```js
+export { messagesAEnvoyer } from "./le-fil-des-mails.js";
+```
+
+ce qui fait passer le nom **vers les appelants sans le lier dans le fichier qui l'écrit**. La
+première ligne de `releverLeFil` s'en servait. `node --check` acceptait le fichier, la
+construction passait, les 5 807 épreuves passaient — et le bouton « Relever ce fil » levait
+`messagesAEnvoyer is not defined`.
+
+**Pourquoi rien ne l'a vu.** Ce module parle à l'authentification, dont l'import est une adresse
+`https:` : aucune épreuve de Node ne peut le charger. Entre l'écriture et l'écran, **il n'existait
+aucun moment où ce code s'exécutait**. L'étape 7 sexies avait nommé ce trou et n'en avait bouché
+que la moitié : elle avait sorti la *lecture* du rendu dans un module pur, et laissé le *geste*
+là où personne ne peut l'atteindre.
+
+> Deux garde-fous, pour deux natures de preuve.
+>
+> `scripts/reexports-non-lies.mjs` lit la source, et c'est le cas que la règle
+> de la maison réserve à la lecture de texte : un défaut précisément invisible,
+> dans des fichiers qu'aucune épreuve ne peut charger. Il ne cherche qu'une
+> chose — **un nom réexporté depuis ailleurs, employé dans le corps, importé
+> nulle part** —, et il n'existe pas de cas où ce serait voulu. La détection est
+> pure : neuf cas écrits à la main la tiennent, puisqu'un dépôt sain ne lui
+> donne rien à trouver.
+>
+> Et une **sonde de navigateur** exécute `releverLeFil` pour de bon, le client
+> d'authentification et le réseau bouchés. C'est le seul endroit où ce module
+> tourne. Elle rend la faute mot pour mot quand on la remet, et elle vérifie au
+> passage ce qu'aucune épreuve de Node ne pouvait vérifier : **ce qui monte
+> porte `propos`, `quand`, `qui`, `rang` — et rien d'autre.** Pas de
+> destinataires, pas de pièces jointes, pas d'en-têtes.
+
+**Et l'écran accusait le serveur.** Sous la panne, il affirmait « ce diagnostic vient du
+serveur » — écrit en dur, sous **toutes** les pannes. Ici la demande n'était jamais partie : la
+phrase envoyait chercher dans les journaux d'une fonction qui n'avait jamais été appelée.
+**Une explication fausse coûte plus cher qu'une absence d'explication**, parce qu'elle ne laisse
+pas chercher ailleurs.
+
+> La provenance se pose là où elle est connue : tout ce qui sort de
+> `releverLeFil` a traversé le réseau, tout ce qui tombe dans le `catch` vient
+> du navigateur. Une provenance inconnue **ne dit rien** plutôt que de trancher
+> (règle 5) : la panne reste affichée, c'est la phrase qui l'encadre qui se
+> tait.
+
+**Ce qui se vérifie en cassant** : la faute livrée telle quelle ; le même défaut sur un autre
+nom ; un garde-fou qui ne dit rien, qui compte sa propre ligne comme un emploi, qui perd les
+renommages ou les imports par défaut ; une panne du navigateur rangée du côté du serveur, et
+l'inverse ; un message absent devenu le mot « undefined ».
+
+> Les quinze ruptures essayées tombent. **Cinq ont d'abord été muettes**, et
+> la première était la plus instructive : ma rupture n'était pas la faute
+> réelle — elle laissait `export { x };` sans liaison, ce que le langage refuse
+> à la lecture, là où la vraie faute était `export { x } from "…"`, que le
+> langage accepte. Les quatre autres disaient la même chose : on ne prouve pas
+> une lecture de dépôt sur un dépôt sain, ni un `catch` qu'aucune épreuve
+> n'atteint. Ce qui reste : § 60 de
+> [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
+
 ### 8 — La boîte de réception du projet
 
 La porte principale, et le morceau le plus lourd. Elle vient en dernier parce qu'elle se
@@ -990,6 +1052,7 @@ expéditeur inconnu. Voir la section ci-dessus.
 | Ce qu'un fil porte | `services/prises-de-position.js` — pur · *écrit* |
 | Ce qui se dérive du fil | `services/ce-quon-derive.js` — pur · *écrit* |
 | Demander le relevé | `services/prises-par-le-modele.js` · *écrit* |
+| Un nom réexporté sans être lié | `scripts/reexports-non-lies.mjs` — pur · *écrit* |
 | L'écran | `views/studio/dev/lecture-des-mails.js` · *écrit* |
 | Où va un mail, et le cadenas | `services/le-dossier-des-mails.js` — pur · *écrit* |
 | Le dépôt dans le dossier privé | `services/deposer-un-mail-supabase.js` · *écrit* |
