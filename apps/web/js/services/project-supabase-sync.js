@@ -1073,13 +1073,24 @@ function ensureBackendProjectIdOrThrow(projectId = "") {
   return normalizedProjectId;
 }
 
+/**
+ * Ce qu'on lit d'un dossier, écrit une fois.
+ *
+ * La liste était recopiée à quatre endroits — lister, lister les enfants,
+ * créer, renommer. Ajouter `prive` à trois d'entre eux aurait donné un dossier
+ * privé sans cadenas dans la quatrième vue, c'est-à-dire un dossier privé qui
+ * ressemble à un dossier ordinaire (règle 10).
+ */
+const CHAMPS_DUN_DOSSIER =
+  "id,project_id,parent_folder_id,name,prive,created_at,updated_at,created_by";
+
 export async function listDocumentFolders(projectId = "") {
   const backendProjectId = ensureBackendProjectIdOrThrow(projectId);
   console.info("[documents-folders] list.start", { projectId: backendProjectId, parentFolderId: null });
 
   try {
     const params = new URLSearchParams();
-    params.set("select", "id,project_id,parent_folder_id,name,created_at,updated_at,created_by");
+    params.set("select", CHAMPS_DUN_DOSSIER);
     params.set("project_id", `eq.${backendProjectId}`);
     params.set("order", "name.asc");
     const rows = await restFetch("project_document_folders", params);
@@ -1099,7 +1110,7 @@ export async function listDocumentFolderChildren(projectId = "", parentFolderId 
 
   try {
     const params = new URLSearchParams();
-    params.set("select", "id,project_id,parent_folder_id,name,created_at,updated_at,created_by");
+    params.set("select", CHAMPS_DUN_DOSSIER);
     params.set("project_id", `eq.${backendProjectId}`);
     if (normalizedParentFolderId) {
       params.set("parent_folder_id", `eq.${normalizedParentFolderId}`);
@@ -1117,7 +1128,7 @@ export async function listDocumentFolderChildren(projectId = "", parentFolderId 
   }
 }
 
-export async function createDocumentFolder(projectId = "", parentFolderId = null, name = "") {
+export async function createDocumentFolder(projectId = "", parentFolderId = null, name = "", { prive = false } = {}) {
   const backendProjectId = ensureBackendProjectIdOrThrow(projectId);
   const normalizedParentFolderId = safeString(parentFolderId || "") || null;
   const normalizedName = safeString(name);
@@ -1130,12 +1141,20 @@ export async function createDocumentFolder(projectId = "", parentFolderId = null
     if (duplicate) {
       throw new Error("Un dossier avec ce nom existe déjà dans ce dossier parent.");
     }
+    // **`created_by` était laissé vide.** Un dossier privé sans créateur connu
+    // ne garde personne : la politique de lecture s'appuie dessus, et un
+    // dossier sans propriétaire reste visible de tous — ce qui serait une
+    // garde qui ne garde rien.
+    const parQui = String((await getCurrentUser().catch(() => null))?.id ?? "");
+
     return await restInsert("project_document_folders", {
       project_id: backendProjectId,
       parent_folder_id: normalizedParentFolderId,
-      name: normalizedName
+      name: normalizedName,
+      prive: prive === true,
+      ...(parQui ? { created_by: parQui } : {})
     }, {
-      select: "id,project_id,parent_folder_id,name,created_at,updated_at,created_by"
+      select: CHAMPS_DUN_DOSSIER
     });
   } catch (error) {
     if (String(error?.message || "").toLowerCase().includes("duplicate key")) {
@@ -1173,7 +1192,7 @@ export async function renameDocumentFolder(projectId = "", folderId = "", name =
     }, {
       name: normalizedName
     }, {
-      select: "id,project_id,parent_folder_id,name,created_at,updated_at,created_by"
+      select: CHAMPS_DUN_DOSSIER
     });
     if (!updated) {
       throw new Error("Folder not found or update not allowed.");

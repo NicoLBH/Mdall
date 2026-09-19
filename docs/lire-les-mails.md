@@ -359,13 +359,31 @@ message porte tout, déposé seul.
 > Les vingt-huit ruptures essayées tombent. Ce qui reste : § 49 de
 > [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
-### 4 — L'écran, et le fil affiché
+### 4 — L'écran, et le fil affiché · *fait*
 
 La coquille du lecteur de CR, l'onglet « Le fil », les messages, les trous. Aucun appel
 encore : à ce stade, l'utilitaire **déplie et montre**, gratuitement. C'est déjà utile.
 
 Le dossier « Mails » et son cadenas arrivent ici, avec leur migration et leur politique de
 lecture : le premier fil déposé doit atterrir au bon endroit, pas dans Documents.
+
+> Écrit dans `views/studio/dev/lecture-des-mails.js`, avec la coquille du lecteur de
+> CR — mêmes classes, un seul calibrage à tenir.
+>
+> **Ce que la migration ne prouve pas, et il faut le dire.** Aujourd'hui un projet
+> n'a qu'un propriétaire : personne d'autre ne lit quoi que ce soit, donc la
+> restriction ajoutée ne change rien d'observable et **aucune épreuve ne peut la
+> faire tomber** (règle 12). Elle est écrite quand même, et maintenant, parce que
+> l'ordre inverse est celui qui coûte : le jour où le partage arrive, la
+> correspondance serait lisible par l'équipe pendant tout l'intervalle. C'est
+> écrit dans la migration elle-même, pour qu'on ne la prenne pas pour une garde
+> éprouvée.
+>
+> Ce qui **est** éprouvé : le cadenas vient d'un seul endroit, lu par l'arbre et
+> par le tableau ; le nom d'un mail rangé n'invente pas de date ; et l'écran se
+> dessine dans chacun de ses états. Les trente ruptures essayées tombent.
+>
+> Ce qui reste : § 50 de [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
 ### 5 — Le relevé par le modèle
 
@@ -486,6 +504,8 @@ expéditeur inconnu. Voir la section ci-dessus.
 | Reconstituer le fil | `services/le-fil-des-mails.js` — pur · *écrit* |
 | Ce qu'un fil porte | `services/prises-de-position.js` — pur |
 | Le relevé par le modèle | `supabase/functions/relever-un-fil/` — la consigne y vit seule |
-| L'écran | `views/studio/dev/lecture-des-mails.js` |
-| Le dossier privé | une migration additive : `project_document_folders.prive`, et la politique RLS qui va avec |
+| L'écran | `views/studio/dev/lecture-des-mails.js` · *écrit* |
+| Où va un mail, et le cadenas | `services/le-dossier-des-mails.js` — pur · *écrit* |
+| Le dépôt dans le dossier privé | `services/deposer-un-mail-supabase.js` · *écrit* |
+| Le dossier privé | `202610160001_le_dossier_des_mails_est_prive.sql` — `project_document_folders.prive`, `documents.deposant`, et les deux politiques · *écrit* |
 | La boîte du projet | une fonction serveur qui reçoit, vérifie l'expéditeur, et dépose — à écrire en dernier |

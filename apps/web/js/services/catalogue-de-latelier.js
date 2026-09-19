@@ -271,6 +271,23 @@ export const UTILITAIRES = [
     ajouteLe: "2026-09-12"
   },
   {
+    cible: "dev-lecture-mails",
+    nom: "Lecture des fils de mails",
+    rayon: RAYONS.DEVELOPPEMENT,
+    resume: "Déposer des .eml, voir le fil reconstitué — sans un seul appel au modèle.",
+    entrees: ["Des mails d'un même échange, en .eml"],
+    sorties: [
+      "Le fil remis dans l'ordre, et ce qui l'a ordonné",
+      "Ce que chaque message ajoute, séparé de ce qu'il recopie",
+      "Ce qu'on n'a pas su placer"
+    ],
+    version: "0.1",
+    intelligence: false,
+    aussiALaMain: "Relire les mails dans sa messagerie, dans l'ordre.",
+    mots: ["mail", "eml", "fil", "correspondance", "échange", "discussion", "citation"],
+    ajouteLe: "2026-09-19"
+  },
+  {
     cible: "dev-ranger-sujets",
     nom: "Ranger les sujets par lot",
     rayon: RAYONS.DEVELOPPEMENT,

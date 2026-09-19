@@ -35,6 +35,7 @@ import { renderSeismicGeneral } from "./studio/seismic/seismic-general.js";
 import { renderCtContinuityLab } from "./studio/dev/ct-continuity-lab.js";
 import { renderVariablesMutualisees } from "./studio/dev/variables-mutualisees.js";
 import { renderLectureDesCr } from "./studio/dev/lecture-des-cr.js";
+import { renderLectureDesMails } from "./studio/dev/lecture-des-mails.js";
 import { renderRangerLesSujets } from "./studio/dev/ranger-les-sujets.js";
 import { renderResolutionConflits } from "./studio/conflits/resolution-conflits.js";
 import {
@@ -198,6 +199,9 @@ function getRouterHtml() {
               <section class="project-studio-router__panel" data-side-nav-panel="dev-lecture-cr">
                 <div id="projectStudioLectureCrPanel"></div>
               </section>
+              <section class="project-studio-router__panel" data-side-nav-panel="dev-lecture-mails">
+                <div id="projectStudioLectureMailsPanel"></div>
+              </section>
               <section class="project-studio-router__panel" data-side-nav-panel="dev-ranger-sujets">
                 <div id="projectStudioRangerSujetsPanel"></div>
               </section>
@@ -242,6 +246,7 @@ export function renderProjectStudio(root) {
   const seismicGeneralRoot = root.querySelector("#projectStudioSeismicGeneralPanel");
   const ctContinuityLabRoot = root.querySelector("#projectStudioCtContinuityLabPanel");
   const lectureCrRoot = root.querySelector("#projectStudioLectureCrPanel");
+  const lectureMailsRoot = root.querySelector("#projectStudioLectureMailsPanel");
   const variablesRoot = root.querySelector("#projectStudioVariablesPanel");
   const rangerSujetsRoot = root.querySelector("#projectStudioRangerSujetsPanel");
   const conflitsRoot = root.querySelector("#projectStudioConflitsPanel");
@@ -283,6 +288,7 @@ export function renderProjectStudio(root) {
   // lecture : le panneau était neuf et vide, et la lecture en cours écrivait
   // dans l'ancien élément, détaché. On avait payé deux appels pour rien.
   if (lectureCrRoot) renderLectureDesCr(lectureCrRoot);
+  if (lectureMailsRoot) renderLectureDesMails(lectureMailsRoot);
   if (variablesRoot) renderVariablesMutualisees(variablesRoot);
   if (rangerSujetsRoot) renderRangerLesSujets(rangerSujetsRoot);
   if (conflitsRoot) renderResolutionConflits(conflitsRoot);
@@ -384,6 +390,10 @@ export function renderProjectStudio(root) {
     // niveau du module, donc un document déjà lu se retrouve tel qu'on l'a
     // laissé — redéposer serait repayer un appel.
     if (targetId === "dev-lecture-cr" && lectureCrRoot) renderLectureDesCr(lectureCrRoot);
+    // Même raison pour les mails : le fil déplié vit au niveau du module, donc
+    // on le retrouve tel qu'on l'a laissé. Ici il ne s'agit pas d'éviter une
+    // dépense — le dépliage est gratuit — mais de ne pas redemander le dépôt.
+    if (targetId === "dev-lecture-mails" && lectureMailsRoot) renderLectureDesMails(lectureMailsRoot);
     // Les explorations se relisent à chaque venue : la mémoire a pu bouger
     // dans un autre onglet, et essayer une valeur sur un socle périmé
     // donnerait un raisonnement juste sur un projet qui n'existe plus.
