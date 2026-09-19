@@ -106,7 +106,8 @@ export const MANQUE = {
   SANS_DATE: "sans-date",
   SANS_DESTINATAIRE: "sans-destinataire",
   SANS_ECHEANCE: "sans-echeance",
-  MESSAGE_CORRIGE: "message-corrige"
+  MESSAGE_CORRIGE: "message-corrige",
+  SUITE_INCONNUE: "suite-inconnue"
 };
 
 const PHRASES_DU_MANQUE = {
@@ -114,7 +115,8 @@ const PHRASES_DU_MANQUE = {
   [MANQUE.SANS_DATE]: "son message ne porte pas de date",
   [MANQUE.SANS_DESTINATAIRE]: "elle ne dit pas à qui c'est demandé",
   [MANQUE.SANS_ECHEANCE]: "elle ne dit pas pour quand",
-  [MANQUE.MESSAGE_CORRIGE]: "sa citation a été trouvée dans un autre message que celui annoncé : son auteur a changé"
+  [MANQUE.MESSAGE_CORRIGE]: "sa citation a été trouvée dans un autre message que celui annoncé : son auteur a changé",
+  [MANQUE.SUITE_INCONNUE]: "on ne sait pas si elle a reçu une réponse : elle ne dit pas sur quoi elle porte"
 };
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -152,15 +154,32 @@ export function iconeDeLaNature(code) {
  */
 export function ceQuiManque(prise) {
   const manques = [];
+  const nature = texte(prise?.nature);
+
+  // **Un désaccord n'est de personne : il est entre deux personnes.** Lui
+  // réclamer un auteur et une date ferait deux reproches sur chaque ligne,
+  // pour une chose qui n'en a par nature ni l'un ni l'autre.
+  if (nature === NATURE.DESACCORD) return manques;
+
   if (!texte(prise?.qui)) manques.push(MANQUE.SANS_AUTEUR);
   if (!texte(prise?.quand)) manques.push(MANQUE.SANS_DATE);
 
-  const nature = texte(prise?.nature);
   if (nature === NATURE.DEMANDE) {
     if (!texte(prise?.pourQui)) manques.push(MANQUE.SANS_DESTINATAIRE);
     if (!texte(prise?.echeance)) manques.push(MANQUE.SANS_ECHEANCE);
   }
+  if (nature === NATURE.SANS_REPONSE) {
+    if (!texte(prise?.pourQui)) manques.push(MANQUE.SANS_DESTINATAIRE);
+    if (!texte(prise?.echeance)) manques.push(MANQUE.SANS_ECHEANCE);
+  }
   if (nature === NATURE.ENGAGEMENT && !texte(prise?.echeance)) manques.push(MANQUE.SANS_ECHEANCE);
+
+  // Une demande dont on n'a pas su dire si elle a été reprise. Ce n'est ni
+  // « répondue » ni « restée sans réponse », et le taire ferait croire à la
+  // première (règle 5).
+  if (nature === NATURE.DEMANDE && prise?.suite === "on-ne-sait-pas") {
+    manques.push(MANQUE.SUITE_INCONNUE);
+  }
 
   if (prise?.messageVerifie === false) manques.push(MANQUE.MESSAGE_CORRIGE);
   return manques;
@@ -205,8 +224,22 @@ export function horsNomenclature(prises = []) {
  * résultat, pas au-dessous, sinon on ne le lit jamais.
  */
 export function phraseDuReleve({ prises = [], ecartees = 0, messagesCorriges = 0, coupee = false } = {}) {
-  const combien = (Array.isArray(prises) ? prises : []).length;
+  const liste = Array.isArray(prises) ? prises : [];
+  const combien = liste.length;
+  const combienDe = (nature) => liste.filter((prise) => texte(prise?.nature) === nature).length;
   const morceaux = [`${combien} prise${combien > 1 ? "s" : ""} de position`];
+
+  // **Ce que le fil porte et que personne n'a écrit vient en tête.** C'est
+  // l'apport principal du procédé, et le ranger après ce qui a été écarté le
+  // ferait lire en dernier, ou pas du tout.
+  const sansReponse = combienDe(NATURE.SANS_REPONSE);
+  if (sansReponse > 0) {
+    morceaux.push(`${sansReponse} question${sansReponse > 1 ? "s" : ""} sans réponse`);
+  }
+  const desaccords = combienDe(NATURE.DESACCORD);
+  if (desaccords > 0) {
+    morceaux.push(`${desaccords} désaccord${desaccords > 1 ? "s" : ""} possible${desaccords > 1 ? "s" : ""}`);
+  }
 
   if (ecartees > 0) {
     morceaux.push(`${ecartees} écartée${ecartees > 1 ? "s" : ""} faute d'une citation qu'on retrouve`);

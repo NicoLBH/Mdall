@@ -55,9 +55,10 @@ import {
 } from "../../../services/le-fil-des-mails.js";
 import { phraseDuTrou } from "../../../services/trous-dun-mail.js";
 import {
-  ceQueCaDevient, ceQuiManque, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
+  NATURE, ceQueCaDevient, ceQuiManque, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
   phraseDuReleve, prisesDuMessage, quoiDeLaNature
 } from "../../../services/prises-de-position.js";
+import { ceQuonDerive } from "../../../services/ce-quon-derive.js";
 import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
 // Le même formatage de durée que le lecteur de CR et le journal des actions :
 // deux écritures d'une durée finiraient par ne plus s'accorder, et « 1 min 35s »
@@ -448,6 +449,7 @@ function renderUneNature({ nature, prises }) {
 }
 
 function renderUnePrise(prise) {
+  if (prise.nature === NATURE.DESACCORD) return renderUnDesaccord(prise);
   const manques = ceQuiManque(prise);
 
   return `
@@ -574,6 +576,35 @@ function renderUnMessage(message, ouvert, prises = []) {
   `;
 }
 
+/**
+ * Deux constats qui semblent se contredire.
+ *
+ * **Les deux positions côte à côte, chacune avec sa citation.** Ce n'est pas un
+ * verdict : rien ne prouve que ces deux personnes sont en désaccord, seulement
+ * que l'une nie sur le même sujet ce que l'autre affirme. C'est au lecteur de
+ * trancher, et il ne peut le faire qu'en voyant les deux.
+ */
+function renderUnDesaccord(prise) {
+  return `
+    <article class="fil-mails__message est-desaccord">
+      <header class="fil-mails__tete">
+        <span class="fil-mails__qui">${escapeHtml(texte(prise.intitule))}</span>
+        <span class="fil-mails__vers mono-small">deux constats s'opposent</span>
+      </header>
+      <div class="fil-mails__positions">
+        ${(prise.positions ?? []).map((position) => `
+          <div class="fil-mails__position">
+            <span class="fil-mails__qui">${escapeHtml(texte(position.qui) || "auteur inconnu")}</span>
+            <span class="fil-mails__moment mono-small">${escapeHtml(texte(position.quand) || "sans date")}</span>
+            <p class="fil-mails__propos">${escapeHtml(texte(position.intitule))}</p>
+            <pre class="fil-mails__cite mono-small">${escapeHtml(texte(position.citation))}</pre>
+          </div>
+        `).join("")}
+      </div>
+    </article>
+  `;
+}
+
 // ── Les gestes ─────────────────────────────────────────────────────────────
 
 const lireLesOctets = (fichier) => fichier.arrayBuffer().then((tampon) => new Uint8Array(tampon));
@@ -651,6 +682,25 @@ async function ranger(fichiers) {
 }
 
 /**
+ * Ce qu'un relevé devient une fois dérivé.
+ *
+ * **Exportée, et pour la même raison que le rendu.** Le geste qui demande le
+ * relevé passe par le réseau et ne se met pas à l'épreuve ; ce qu'il fait de la
+ * réponse, si. Laissée dans le geste, la dérivation aurait pu disparaître sans
+ * qu'aucune épreuve ne le voie — et les questions sans réponse avec elle.
+ */
+export function leReleveDerive(lu, fil) {
+  if (!lu?.ok) return null;
+  const dernierMessage = (fil?.messages ?? [])
+    .reduce((haut, message) => Math.max(haut, Number(message?.rang) || 0), 0);
+  // **Ce qui se dérive ne coûte rien.** Les questions sans réponse et les
+  // désaccords se calculent sur ce que le modèle a rendu et sur le fil :
+  // aucun second appel, et chaque ligne dit de quelles prises elle sort.
+  const derive = ceQuonDerive(lu.prises, { dernierMessage });
+  return { ...lu, prises: derive.prises, derive, enCours: false };
+}
+
+/**
  * Demander le relevé.
  *
  * **Le fil ne bouge pas pendant ce temps.** Il a été déplié sans appel, il ne
@@ -669,7 +719,7 @@ async function relever() {
     const { phraseDuRefus, queFaire, releverLeFil } = await import("../../../services/prises-par-le-modele.js");
     const lu = await releverLeFil({ filId: texte(etat.fil.objet), messages: etat.fil.messages });
     etat.releve = lu.ok
-      ? { ...lu, enCours: false }
+      ? leReleveDerive(lu, etat.fil)
       : {
         enCours: false,
         motif: phraseDuRefus(lu.motif),

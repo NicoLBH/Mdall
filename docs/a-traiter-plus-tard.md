@@ -3967,3 +3967,48 @@ Mesurer la qualité d'un relevé, comparer deux modèles, décider quand un rele
 rangé est périmé — rien de cela ne se règle sans fils réels, qui n'entreront pas
 dans le dépôt. L'ordre du plan tient : les deux natures dérivées (étape 6), qui
 ne coûtent rien et se vérifient, avant les commodités qui demandent des mesures.
+
+---
+
+## 52. Ce que la dérivation ne voit pas
+
+**Ce qui existe.** L'étape 6 de [`lire-les-mails.md`](lire-les-mails.md) est
+écrite : `services/ce-quon-derive.js` tire du fil les questions restées sans
+réponse et les désaccords possibles, sans un appel de plus, et chaque ligne dit
+de quelles prises elle sort.
+
+**Ce qui reste dehors, et ce que ça coûte.**
+
+- **Un désaccord sans négation ne se voit pas.** « Le support est sec » contre
+  « le support est humide » affirment tous les deux ; rien dans les mots ne dit
+  qu'ils se contredisent. Il faudrait des contraires **par le sens**, ce qui
+  n'est plus de la dérivation — soit une liste de couples propres au bâtiment
+  (sec/humide, conforme/non conforme, posé/déposé), soit une question au modèle
+  sur une paire déjà rapprochée. **La seconde est la bonne**, parce qu'elle ne
+  coûte qu'un appel sur des paires en petit nombre et qu'on peut lui montrer les
+  deux citations — mais elle demande d'abord de savoir combien de paires un vrai
+  fil produit.
+- **Tout repose sur `porteSur`.** C'est le seul rapprochement dont on dispose, et
+  il vient du modèle : deux prises sur la même chose libellées autrement ne se
+  rapprochent pas, et une demande sans `porteSur` ne se juge pas du tout. Le
+  compte des indécidables est affiché pour qu'on sache combien de fil échappe à
+  la dérivation — **c'est le chiffre à regarder en premier sur un fil réel**.
+- **Une réponse hors du fil ne compte pas.** Une demande à laquelle on a répondu
+  au téléphone, en réunion, ou dans un autre fil ressort « sans réponse ». Ce
+  n'est pas faux — le fil ne la porte pas —, mais cela se dira mal le jour où
+  l'écran proposera d'en faire un sujet. Il faudra un geste pour l'écarter à la
+  main, et ce geste appartient à l'étape 7.
+- **Un changement de décision n'est pas dérivé.** Deux décisions sur la même
+  chose à deux dates — « on part sur la variante B », puis « finalement la
+  A » — sont une information de même famille que le désaccord, et elles ne sont
+  pas dans les sept natures du plan. À rediscuter : est-ce une huitième nature,
+  ou la même que le désaccord vu dans le temps ?
+- **Une demande dans le dernier message est comptée sans réponse.** C'est exact
+  au regard du fil, et `apresElle` dit que rien ne la suit — mais l'écran ne s'en
+  sert pas encore pour la distinguer d'une question ignorée pendant huit
+  messages. Ce sont deux choses très différentes pour qui décide d'ouvrir un
+  sujet.
+
+**Pourquoi c'est repoussé.** Les cinq se calibrent sur le même chiffre : combien
+de prises un fil réel produit, et combien échappent au rapprochement. Tant qu'on
+ne l'a pas, choisir une règle plus fine serait choisir au hasard.

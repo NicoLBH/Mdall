@@ -26837,3 +26837,14 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .fil-mails__prises li .octicon{flex:0 0 auto;margin-top:2px;color:var(--muted);}
 .fil-mails__prise-nature{flex:0 0 auto;font-weight:600;color:var(--muted);}
+/* Un désaccord n'est de personne : il est entre deux personnes. Les deux
+   positions se lisent côte à côte, parce qu'on ne peut trancher qu'en voyant
+   les deux. */
+.fil-mails__message.est-desaccord{border-color:var(--fgColor-attention, #d29922);}
+.fil-mails__positions{display:flex;flex-wrap:wrap;gap:10px;}
+.fil-mails__position{
+  flex:1 1 260px;min-width:0;
+  display:flex;flex-direction:column;gap:4px;
+  padding:8px 10px;
+  border:1px solid var(--border);border-radius:6px;
+}
