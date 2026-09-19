@@ -212,14 +212,16 @@ test("un texte sans rien à retirer ressort identique", () => {
   const propre = leProposNettoye(phrase);
   assert.equal(propre.texte, phrase);
   assert.deepEqual(
-    { redirections: propre.redirections, images: propre.images, bandeaux: propre.bandeaux },
-    { redirections: 0, images: 0, bandeaux: 0 }
+    { redirections: propre.redirections, images: propre.images,
+      bandeaux: propre.bandeaux, liensDoubles: propre.liensDoubles },
+    { redirections: 0, images: 0, bandeaux: 0, liensDoubles: 0 }
   );
 });
 
 test("rien qui entre ne fait rien sortir", () => {
-  assert.deepEqual(leProposNettoye(""), { texte: "", redirections: 0, images: 0, bandeaux: 0 });
-  assert.deepEqual(leProposNettoye(null), { texte: "", redirections: 0, images: 0, bandeaux: 0 });
+  const vide = { texte: "", redirections: 0, images: 0, bandeaux: 0, liensDoubles: 0 };
+  assert.deepEqual(leProposNettoye(""), vide);
+  assert.deepEqual(leProposNettoye(null), vide);
 });
 
 test("les blancs laissés par ce qu'on retire ne creusent pas de trou", () => {
@@ -289,6 +291,97 @@ test("une redirection se déplie aussi en retour chariot", () => {
     "Voir : https://urldefense.com/v3/__https://a.example/1__;!!x$",
     "Bien cordialement"
   ));
+  assert.equal(propre.redirections, 1);
+  assert.ok(propre.texte.includes("https://a.example/1"));
+});
+
+// ── La queue qu'une messagerie colle derrière un lien ──────────────────────
+
+test("l'adresse recopiée derrière un lien s'en va, et se compte", () => {
+  // Outlook écrit sa version texte en posant l'adresse derrière son texte.
+  // Personne ne l'a tapée, et elle double chaque lien du message.
+  const propre = leProposNettoye(
+    "Voir le guide<https://www.novaclim.example/guide> avant vendredi."
+  );
+  assert.equal(propre.texte, "Voir le guide avant vendredi.");
+  assert.equal(propre.liensDoubles, 1);
+});
+
+test("une adresse recopiée derrière elle-même s'en va aussi", () => {
+  const propre = leProposNettoye(
+    "De : Ourdine Ferrand <o.ferrand@novaclim.example<mailto:o.ferrand@novaclim.example>>"
+  );
+  assert.equal(propre.texte, "De : Ourdine Ferrand <o.ferrand@novaclim.example>");
+  assert.equal(propre.liensDoubles, 1);
+});
+
+test("un en-tête cité reste lisible : c'est là tout l'enjeu", () => {
+  // Sans cela, l'adresse ne se découpe plus du nom, et **la même personne
+  // prend deux identités** dans le fil — puis se retrouve en désaccord avec
+  // elle-même.
+  const propre = leProposNettoye(
+    "De : Ourdine Ferrand <o.ferrand@novaclim.example<mailto:o.ferrand@novaclim.example>>"
+  );
+  assert.ok(/<o\.ferrand@novaclim\.example>$/.test(propre.texte));
+  assert.equal(propre.texte.includes("mailto:"), false);
+});
+
+test("une adresse écrite normalement garde la sienne", () => {
+  // Ce qui la protège est le schéma : l'adresse d'un en-tête cité s'écrit sans
+  // `mailto:` devant. Sans cela, on couperait l'adresse de tous les en-têtes
+  // cités, et il n'y aurait plus d'auteur du tout.
+  const entete = "De : Ourdine Ferrand <o.ferrand@novaclim.example>";
+  const propre = leProposNettoye(entete);
+  assert.equal(propre.texte, entete);
+  assert.equal(propre.liensDoubles, 0);
+});
+
+test("une adresse que l'auteur a posée entre chevrons reste", () => {
+  // La convention d'un courriel en texte brut : on encadre une adresse pour la
+  // donner à lire. C'est ce que l'espace protège — et non l'en-tête cité, qui
+  // n'a pas de schéma.
+  const phrase = "Le guide est ici <https://www.novaclim.example/guide>, page 4.";
+  const propre = leProposNettoye(phrase);
+  assert.equal(propre.texte, phrase);
+  assert.equal(propre.liensDoubles, 0);
+});
+
+test("le lien d'une image s'en va avec son espace", () => {
+  // La marque est la nôtre : rien ne se perd à retirer l'adresse d'un logo.
+  const propre = leProposNettoye("[cid:logo@1] <https://www.novaclim.example/> et la suite");
+  assert.equal(propre.texte, `${MARQUE_DUNE_IMAGE} et la suite`);
+  assert.equal(propre.images, 1);
+  assert.equal(propre.liensDoubles, 1);
+});
+
+test("une ligne de logos liés disparaît entièrement", () => {
+  // Le cas réel : un pied de signature pose ses logos sur une ligne à lui,
+  // chacun portant l'adresse du site. Une fois les adresses parties, la ligne
+  // n'est plus que des marques, et elle s'en va.
+  const propre = leProposNettoye([
+    "La cote est arrêtée à 12,40.",
+    "[cid:logo@1]<https://www.novaclim.example/>  [cid:rs@2] <https://www.novaclim.example/rs>",
+    "Bien cordialement"
+  ].join("\n"));
+  assert.equal(propre.texte, "La cote est arrêtée à 12,40.\nBien cordialement");
+  assert.equal(propre.images, 2);
+  assert.equal(propre.liensDoubles, 2);
+});
+
+test("une redirection cachée dans une queue ne se compte pas comme dépliée", () => {
+  // La queue part avant : déplier une adresse qu'on s'apprête à retirer la
+  // compterait comme une redirection du propos, alors qu'elle n'en était pas.
+  const propre = leProposNettoye(
+    "le guide<https://urldefense.com/v3/__https://a.example/1__;!!x$> ok"
+  );
+  assert.equal(propre.texte, "le guide ok");
+  assert.equal(propre.liensDoubles, 1);
+  assert.equal(propre.redirections, 0);
+});
+
+test("une redirection que l'auteur voit se déplie quand même", () => {
+  // Le pendant : ce qui est dans le texte lu par un humain reste à déplier.
+  const propre = leProposNettoye("Voir https://urldefense.com/v3/__https://a.example/1__;!!x$ ok");
   assert.equal(propre.redirections, 1);
   assert.ok(propre.texte.includes("https://a.example/1"));
 });

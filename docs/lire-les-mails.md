@@ -538,6 +538,76 @@ un message oublié qui passe pour un message muet ; un groupe sans numéro lisib
 > citation se trouve. Ce qui reste : § 54 de
 > [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
+### 7 ter — Lire n'était pas trier · *fait*
+
+Le même fil, repassé après l'étape 7 bis. Le nettoyage a tenu ses promesses : **47 prises
+déclarées contre 7, pour 5 601 jetons contre 11 944**, et les deux messages qui n'avaient rien
+donné parlent enfin. Mais l'écran est devenu illisible pour une autre raison — **96 « désaccords
+possibles »**, dont aucun n'en était un. Le procédé savait lire ; il ne savait pas trier.
+
+**Ce que la messagerie colle derrière chaque lien.** Outlook écrit sa version texte en posant
+l'adresse **derrière** son texte : `le guide<https://…>`,
+`o.ferrand@x<mailto:o.ferrand@x>`. Personne ne l'a tapée, elle double chaque lien — 41 sur ce
+seul fil — et elle coûte plus cher que des caractères : un en-tête cité ne se découpe plus, et
+**la même personne prend une identité par forme d'affichage**.
+
+> Écrit dans `services/nettoyer-le-propos.js`. Ce qui la distingue d'un en-tête
+> ordinaire est le **schéma** — `<o.ferrand@x>` n'en a pas —, et une épreuve
+> l'a appris : on avait d'abord cru que c'était l'espace. L'espace protège
+> autre chose, la convention d'un courriel en texte brut où l'on encadre une
+> adresse pour la donner à lire.
+
+**Deux personnes, quatre identités.** Le bandeau d'un message cité porte l'adresse aussi souvent
+que le nom, et les garder dans la même chaîne faisait comparer des affichages. Sur ce fil,
+l'un des deux correspondants s'est retrouvé **en désaccord avec lui-même**.
+
+> `quiDuneCitation` découpe le bandeau ; `laCleDeLAuteur` prend **l'adresse**,
+> minuscule, et le nom aplati à défaut. La clé ne monte jamais au modèle —
+> l'adresse d'un correspondant n'a rien à faire dans un appel qui n'en a pas
+> besoin — : elle se recolle au navigateur, depuis le fil. Après quoi six
+> messages portent deux identités.
+
+**Un désaccord n'est pas deux constats qui divergent : c'est quelqu'un qui conteste.** L'ancien
+critère — même sujet, auteurs différents, polarités opposées — a rendu 96 paires, et pas une
+n'était un désaccord. Resserrer n'a pas sauvé : exiger du vocabulaire commun a fait tomber le
+compte de 96 à 16 **sans en rendre un seul vrai**. Un mécanisme dont la précision est nulle ne
+se règle pas, il se remplace.
+
+> Ce qu'on cherche désormais est une **marque de contestation** : une phrase
+> qui vise le dire de l'autre et non l'ouvrage — « je ne partage pas votre
+> position », « non conforme », « nous paraît disproportionné ». Sur le même
+> fil : **4 prises sur 46**, et ce sont les quatre du litige.
+>
+> **Ce qu'on ne prétend pas savoir : quelle position exacte est contestée.** On
+> a essayé de la désigner, et le candidat le plus proche était faux à chaque
+> fois — ce que conteste le bureau d'études est un avis inscrit dans un
+> rapport, qui n'est dans aucun message. On rend donc la contestation avec ses
+> mots, **et les auteurs qui s'étaient exprimés avant elle sur le même sujet**,
+> sans désigner lequel (règle 5). Une contestation change de nature au lieu de
+> se dédoubler, et dit quelle marque l'a fait relever.
+>
+> Le prix est assumé : **un désaccord exprimé sans aucune de ces marques ne se
+> voit pas**. Une rubrique fausse aux 96/96 coûte plus cher qu'une rubrique qui
+> en manque.
+
+**Une puce ne fait plus échouer une citation.** Trois des quatre écartées du fil étaient de
+vraies phrases légèrement retapées : le modèle avait recollé deux lignes d'une énumération en
+sautant le tiret du milieu. `aplati` efface désormais les puces, **comme il effaçait déjà les
+accents** — des deux côtés, donc sans rien desserrer sur le fond : un mot sauté reste écarté,
+et c'est ce qui doit arriver.
+
+**Ce qui se vérifie en cassant** : une queue de lien qui emporte le texte qui la précède ; un
+en-tête cité dont l'adresse reste collée au nom ; la casse d'une adresse qui fait deux
+personnes ; une négation ordinaire qui redevient une contestation ; une contestation qui
+s'attribue ce que son propre auteur a dit avant ; un tiret dans « au-delà » pris pour une puce.
+
+> Les trente-neuf ruptures essayées tombent. Quatre ont d'abord été muettes, et
+> chacune a nommé une faiblesse : un commentaire qui donnait la mauvaise raison
+> d'un garde-fou, une fonction juste qui pouvait n'être appelée nulle part, un
+> seuil qu'aucun cas n'éprouvait, et deux affichages de fixture trop voisins
+> pour prouver ce qu'ils prétendaient. Ce qui reste : § 55 de
+> [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
+
 ### 8 — La boîte de réception du projet
 
 La porte principale, et le morceau le plus lourd. Elle vient en dernier parce qu'elle se

@@ -109,11 +109,19 @@ function unePrise(prise) {
   const lignes = [];
 
   if (texte(prise?.nature) === NATURE.DESACCORD) {
-    lignes.push(`#### ${texte(prise.intitule)}`, "", "Deux constats s'opposent.", "");
+    lignes.push(`#### ${texte(prise?.porteSur) || texte(prise.intitule)}`, "",
+      "Une position est contestée.", "");
     for (const position of prise.positions ?? []) {
       lignes.push(`- **${unQui(position)}** — ${texte(position?.quand) || "sans date"} : `
         + `${texte(position?.intitule)}`, `  ${decalerEnCitation(position?.citation)}`);
     }
+    if (texte(prise?.marque)) lignes.push("", `- **Marque** : ${texte(prise.marque)}`);
+    const avant = (prise?.avant ?? []).filter(Boolean);
+    // On nomme qui s'était exprimé avant, pas ce qui est contesté : la phrase
+    // visée n'est pas toujours dans le fil (règle 5).
+    lignes.push(avant.length
+      ? `- **Se sont exprimés avant sur ce sujet** : ${avant.join(", ")}`
+      : "- **Se sont exprimés avant sur ce sujet** : personne — ce qui est contesté vient d'ailleurs");
     return lignes.join("\n");
   }
 

@@ -130,21 +130,42 @@ test("l'export porte le compte des demandes qu'on n'a pas su juger", () => {
     .includes("**Demandes qu'on n'a pas su juger** : 1"));
 });
 
-test("un désaccord sort avec ses deux positions", () => {
-  const releve = {
-    ...RELEVE,
-    prises: [{
-      key: "d1", nature: NATURE.DESACCORD, intitule: "humidité de l'acrotère", message: 2,
-      positions: [
-        { qui: "Ourdine Ferrand", quand: "12 mars", intitule: "le support est humide", citation: "Le support est humide." },
-        { qui: "BERTRAND", quand: "3 mars", intitule: "rien n'a été relevé", citation: "Rien n'a été relevé." }
-      ]
-    }]
-  };
-  const texte = leFilEnTexte({ fil: fil(), releve });
-  assert.ok(texte.includes("Deux constats s'opposent."));
+const DESACCORD = {
+  key: "d1", nature: NATURE.DESACCORD, porteSur: "humidité de l'acrotère",
+  intitule: "je ne partage pas votre position sur l'humidité", message: 2,
+  marque: "ne-partage-pas", avant: ["BERTRAND"],
+  positions: [{
+    qui: "Ourdine Ferrand", quand: "12 mars",
+    intitule: "je ne partage pas votre position sur l'humidité",
+    citation: "Je ne partage pas votre position sur l'humidité."
+  }]
+};
+
+test("un désaccord sort avec les mots de celui qui conteste", () => {
+  const texte = leFilEnTexte({ fil: fil(), releve: { ...RELEVE, prises: [DESACCORD] } });
+  assert.ok(texte.includes("Une position est contestée."));
   assert.ok(texte.includes("Ourdine Ferrand"));
-  assert.ok(texte.includes("> Rien n'a été relevé."));
+  assert.ok(texte.includes("> Je ne partage pas votre position sur l'humidité."));
+});
+
+test("un désaccord dit quelle marque l'a fait relever", () => {
+  // De quoi juger la règle sur pièce plutôt que sur parole (règle 12).
+  assert.ok(leFilEnTexte({ fil: fil(), releve: { ...RELEVE, prises: [DESACCORD] } })
+    .includes("**Marque** : ne-partage-pas"));
+});
+
+test("un désaccord nomme qui s'était exprimé avant, sans désigner sa position", () => {
+  const texte = leFilEnTexte({ fil: fil(), releve: { ...RELEVE, prises: [DESACCORD] } });
+  assert.ok(texte.includes("Se sont exprimés avant sur ce sujet** : BERTRAND"));
+});
+
+test("une contestation que personne n'a précédée le dit, plutôt que de se taire", () => {
+  // Ce qui est contesté peut venir d'un rapport, hors du fil. Le taire ferait
+  // croire à une erreur de relevé (règle 5).
+  const texte = leFilEnTexte({
+    fil: fil(), releve: { ...RELEVE, prises: [{ ...DESACCORD, avant: [] }] }
+  });
+  assert.ok(texte.includes("personne — ce qui est contesté vient d'ailleurs"));
 });
 
 test("ce qu'on en a tiré s'affiche aussi sous le message d'où ça sort", () => {

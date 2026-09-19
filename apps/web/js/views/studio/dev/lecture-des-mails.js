@@ -646,19 +646,23 @@ function renderUnMessage(message, ouvert, prises = []) {
 }
 
 /**
- * Deux constats qui semblent se contredire.
+ * Une position prise contre ce qui a été dit.
  *
- * **Les deux positions côte à côte, chacune avec sa citation.** Ce n'est pas un
- * verdict : rien ne prouve que ces deux personnes sont en désaccord, seulement
- * que l'une nie sur le même sujet ce que l'autre affirme. C'est au lecteur de
- * trancher, et il ne peut le faire qu'en voyant les deux.
+ * **Les mots de celui qui conteste, et sa citation.** Ce n'est pas un verdict :
+ * on sait qu'il prend position contre quelque chose, on ne sait pas contre
+ * quelle phrase exactement — ce peut être un avis inscrit dans un rapport, qui
+ * n'est dans aucun message. On nomme donc **qui s'était exprimé avant lui sur
+ * le même sujet**, sans désigner lequel : au jugé, on prêterait à quelqu'un une
+ * position qu'il n'a pas prise (règle 5).
  */
 function renderUnDesaccord(prise) {
+  const avant = (prise.avant ?? []).filter(Boolean);
+
   return `
     <article class="fil-mails__message est-desaccord">
       <header class="fil-mails__tete">
-        <span class="fil-mails__qui">${escapeHtml(texte(prise.intitule))}</span>
-        <span class="fil-mails__vers mono-small">deux constats s'opposent</span>
+        <span class="fil-mails__qui">${escapeHtml(texte(prise.porteSur) || texte(prise.intitule))}</span>
+        <span class="fil-mails__vers mono-small">une position est contestée</span>
       </header>
       <div class="fil-mails__positions">
         ${(prise.positions ?? []).map((position) => `
@@ -670,6 +674,11 @@ function renderUnDesaccord(prise) {
           </div>
         `).join("")}
       </div>
+      <p class="fil-mails__moment mono-small">${escapeHtml(avant.length
+        ? `Se sont exprimés avant sur le même sujet : ${avant.join(", ")}. `
+          + "On ne sait pas laquelle de leurs positions est visée."
+        : "Personne d'autre ne s'est exprimé sur ce sujet dans le fil : ce qui est "
+          + "contesté vient d'ailleurs.")}</p>
     </article>
   `;
 }
@@ -765,7 +774,9 @@ export function leReleveDerive(lu, fil) {
   // **Ce qui se dérive ne coûte rien.** Les questions sans réponse et les
   // désaccords se calculent sur ce que le modèle a rendu et sur le fil :
   // aucun second appel, et chaque ligne dit de quelles prises elle sort.
-  const derive = ceQuonDerive(lu.prises, { dernierMessage });
+  // Le fil descend avec les prises : c'est de lui que vient l'identité d'un
+  // auteur, et elle n'est jamais montée au modèle.
+  const derive = ceQuonDerive(lu.prises, { dernierMessage, messages: fil?.messages ?? [] });
   return { ...lu, prises: derive.prises, derive, enCours: false };
 }
 

@@ -32,20 +32,40 @@
  *
  * ## Un désaccord
  *
- * Deux constats sur la même chose, de deux auteurs différents, dont **l'un nie
- * ce que l'autre affirme**. La polarité se lit sur les marques de négation du
- * français — et c'est tout ce qu'on sait faire sans deviner.
+ * **Ce n'est pas deux constats qui divergent : c'est quelqu'un qui conteste.**
  *
- * Ce qui échappe à cette règle est écrit ici franchement : **un désaccord sans
- * négation ne se voit pas**. « Le support est sec » contre « le support est
- * humide » affirment tous les deux, et rien dans les mots ne dit qu'ils se
- * contredisent. Il faudrait des contraires par le sens, ce qui n'est plus de la
- * dérivation.
+ * La première version cherchait deux constats sur la même chose, de deux
+ * auteurs, dont l'un niait ce que l'autre affirmait. Un fil réel l'a jugée :
+ * sur six messages, elle a rendu **quatre-vingt-seize désaccords, et pas un
+ * seul n'en était un**. La raison tient en une phrase : porter sur le même
+ * sujet et contenir une négation ne fait pas se contredire. « Vitesse de
+ * souffle 15 m : 120 km/h » et « le souffle ne concerne qu'une portion de la
+ * façade » parlent du même rotor sans se contredire en rien.
  *
- * Et ce qu'on rend n'est pas un verdict : **deux constats qui semblent se
- * contredire**, avec les deux citations. C'est au lecteur de trancher —
- * l'affirmer serait prêter à deux personnes un désaccord qu'elles n'ont
- * peut-être pas.
+ * Resserrer le critère ne l'a pas sauvé : exiger du vocabulaire commun a fait
+ * tomber le compte de 96 à 16, **sans en rendre un seul vrai**. Un mécanisme
+ * dont la précision est nulle ne se règle pas, il se remplace.
+ *
+ * Ce qu'on cherche désormais est ce qu'un désaccord **est** : une prise dont
+ * les mots prennent position **contre ce qui a été dit**. « Je ne partage pas
+ * votre position », « cette justification n'est pas suffisante », « hypothèse
+ * non conforme », « nous paraît disproportionné ». Sur le même fil, ce critère
+ * a relevé **quatre prises sur quarante-six** — et ce sont les quatre du
+ * litige.
+ *
+ * ## Ce qu'on ne prétend pas savoir
+ *
+ * **Quelle position exacte est contestée.** On a essayé de la désigner — le
+ * dernier propos d'un autre auteur sur le même sujet — et le candidat le plus
+ * proche était faux à chaque fois : ce que Cagnin conteste est un avis inscrit
+ * dans un rapport, qui n'est dans aucun message. On rend donc la contestation
+ * avec ses mots, et **les auteurs qui s'étaient exprimés avant elle sur le même
+ * sujet**, sans désigner lequel. Nommer au jugé serait prêter à quelqu'un une
+ * position qu'il n'a pas prise (règle 5).
+ *
+ * **Un désaccord exprimé sans aucune de ces marques ne se voit pas.** C'est le
+ * prix, et il est assumé : une rubrique fausse aux quatre-vingt-seize
+ * quatre-vingt-seizièmes coûte plus cher qu'une rubrique qui en manque.
  *
  * ## Il est pur
  *
@@ -53,7 +73,7 @@
  * horloge — et chaque ligne rendue dit de quelles prises elle sort.
  */
 
-import { NATURE } from "./prises-de-position.js";
+import { NATURE, lesPrisesEtLeursAuteurs } from "./prises-de-position.js";
 
 /** Ce qu'on a pu établir d'une demande. */
 export const SUITE = {
@@ -65,32 +85,70 @@ export const SUITE = {
   ON_NE_SAIT_PAS: "on-ne-sait-pas"
 };
 
-/** Ce qu'une phrase fait de ce qu'elle énonce. */
-export const POLARITE = { AFFIRME: "affirme", NIE: "nie" };
-
 /** Ce qui compte comme une réponse à une demande. */
 const REPONDENT = new Set([NATURE.CONSTAT, NATURE.DECISION, NATURE.ENGAGEMENT]);
 
 /**
- * La négation en deux morceaux — « ne … pas », « n'a jamais ».
+ * Les marques d'une contestation.
  *
- * Exigée en deux morceaux parce que « pas » tout seul n'est pas une négation :
- * « le pas de vis », « un pas de plus ». La première moitié lève le doute.
+ * Chacune vise **le dire de l'autre**, et non l'ouvrage : c'est ce qui les
+ * distingue d'une négation ordinaire. « Le support n'est pas sec » nie un fait ;
+ * « votre appréciation nous paraît disproportionnée » nie une position.
+ *
+ * Elles sont nommées une par une, et non repliées en une expression unique :
+ * une marque qui se met à rendre n'importe quoi doit pouvoir être retirée
+ * seule, et l'écran doit pouvoir dire **laquelle** a parlé.
+ *
+ * C'est un lexique, avec ce que cela suppose de fragile — il a été réglé sur un
+ * seul fil, et il faudra le reprendre sur d'autres. Il est cherché dans la
+ * citation **et** dans l'intitulé : la citation porte les mots de l'auteur,
+ * l'intitulé ceux du modèle, et la marque peut tomber d'un côté comme de
+ * l'autre.
  */
-const NEGATION_EN_DEUX = /(^|[^a-zà-ÿ])(n['’]|ne\s)[^.!?]*?\s(pas|plus|jamais|rien|aucune?|personne)(\W|$)/i;
+export const MARQUE = {
+  /** « je ne partage pas votre position », « nous ne souscrivons pas ». */
+  NE_PARTAGE_PAS: "ne-partage-pas",
+  /** La position de l'autre, nommée comme telle : « votre appréciation ». */
+  VOTRE_POSITION: "votre-position",
+  /** « non conforme », « n'est pas suffisant », « n'est pas recevable ». */
+  PAS_RECEVABLE: "pas-recevable",
+  /** « disproportionné », « nous paraît excessif ». */
+  DISPROPORTIONNE: "disproportionne",
+  /** « contrairement à », « vous indiquiez vous-même ». */
+  RETOURNE_CONTRE: "retourne-contre"
+};
 
-/**
- * Les mots qui nient à eux seuls.
- *
- * `sans` est le plus discutable — « sans tarder » ne nie rien de ce qui est
- * constaté. Il est gardé parce que dans un constat de chantier il nie presque
- * toujours quelque chose (« sans reprise », « sans étanchéité »), et parce que
- * le prix d'une opposition montrée à tort est un coup d'œil, là où celui d'une
- * opposition manquée est un désaccord qui passe inaperçu.
- */
-const NIE_SEUL = /(^|[^a-zà-ÿ])(aucune?|rien|n[ée]ant|absence|sans|non)(\W|$)/i;
+const MARQUES = [
+  [MARQUE.NE_PARTAGE_PAS,
+    /\b(?:je|nous|on)\s+ne\s+(?:partage\w*|souscri\w+|suis|sommes)\b|\bne\s+partage\w*\s+pas\b|\bpas\s+d['’]accord\b/],
+  [MARQUE.VOTRE_POSITION,
+    /\b(?:votre|vos)\s+(?:position|appreciation|avis|analyse|lecture|interpretation|conclusion|exigence)\w*/],
+  [MARQUE.PAS_RECEVABLE,
+    /\bnon[-\s]?conforme\w*|\bn['’]?\s?est\s+pas\s+(?:suffisant|justifi|recevable|fond|exact|correct|acceptable)\w*/],
+  [MARQUE.DISPROPORTIONNE,
+    /\bdisproportionne\w*|\b(?:nous|me)\s+para[iî]t\s+(?:excessi|disproportionne|infonde)\w*/],
+  [MARQUE.RETOURNE_CONTRE,
+    /\bcontrairement\s+a\b|\bvous\s+indiquiez\s+vous[-\s]?m[eê]me\b|\bvous[-\s]?m[eê]me\s+(?:indiquiez|ecriviez|reconnaissiez)\b/]
+];
 
 const texte = (valeur) => String(valeur ?? "").trim();
+
+/** Casse et accents effacés : le lexique s'écrit sans eux, une fois. */
+function aplatiPourLeLexique(valeur) {
+  return texte(valeur).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/**
+ * La marque qu'une prise porte, s'il y en a une.
+ *
+ * Rend la première trouvée — un nom, pas un booléen : « pourquoi celle-ci est
+ * rendue » doit pouvoir se lire sans rouvrir le code.
+ */
+export function laMarqueDeContestation(prise) {
+  const lu = `${aplatiPourLeLexique(prise?.citation)} ${aplatiPourLeLexique(prise?.intitule)}`;
+  for (const [nom, forme] of MARQUES) if (forme.test(lu)) return nom;
+  return "";
+}
 
 /**
  * Deux libellés désignent-ils la même chose ?
@@ -107,13 +165,6 @@ export function memeSujet(un, autre) {
 
   const gauche = plat(un);
   return gauche !== "" && gauche === plat(autre);
-}
-
-/** Ce qu'une phrase fait : elle affirme, ou elle nie. */
-export function polariteDe(phrase) {
-  const lu = texte(phrase);
-  if (!lu) return POLARITE.AFFIRME;
-  return NEGATION_EN_DEUX.test(lu) || NIE_SEUL.test(lu) ? POLARITE.NIE : POLARITE.AFFIRME;
 }
 
 function rangDe(prise) {
@@ -156,26 +207,34 @@ export function laSuiteDuneDemande(demande, prises = [], { dernierMessage = 0 } 
  * Une même paire ne sort qu'une fois : trois constats contraires deux à deux
  * donneraient sinon six lignes pour trois positions.
  */
-export function lesOppositions(prises = []) {
-  // Le sujet n'est pas filtré ici : `memeSujet` refuse déjà deux sujets vides
-  // de se ressembler, et un constat sans sujet ne peut donc s'apparier avec
-  // rien. Le filtre avait été écrit, puis retiré : aucune rupture ne le
-  // faisait parler (règle 12).
-  const constats = (Array.isArray(prises) ? prises : [])
-    .filter((prise) => texte(prise?.nature) === NATURE.CONSTAT);
+export function lesContestations(prises = []) {
+  const liste = (Array.isArray(prises) ? prises : []);
 
   const trouvees = [];
-  for (let gauche = 0; gauche < constats.length; gauche += 1) {
-    for (let droite = gauche + 1; droite < constats.length; droite += 1) {
-      const un = constats[gauche];
-      const autre = constats[droite];
-      if (!memeSujet(un.porteSur, autre.porteSur)) continue;
-      if (texte(un.qui) === texte(autre.qui)) continue;
-      if (polariteDe(un.intitule) === polariteDe(autre.intitule)) continue;
-      trouvees.push({ porteSur: texte(un.porteSur), positions: [un, autre] });
-    }
+  for (const prise of liste) {
+    const marque = laMarqueDeContestation(prise);
+    if (!marque) continue;
+    if (!texte(prise?.porteSur)) continue;
+
+    // **Qui s'était exprimé avant, sur la même chose.** Pas « ce qui est
+    // contesté » : on ne le sait pas, et le candidat le plus proche s'est
+    // révélé faux à chaque essai. Des noms et un compte, rien de plus.
+    const avant = [...new Map(liste
+      .filter((autre) => autre !== prise)
+      .filter((autre) => memeSujet(autre?.porteSur, prise?.porteSur))
+      .filter((autre) => cleDe(autre) !== cleDe(prise))
+      .filter((autre) => rangDe(autre) <= rangDe(prise))
+      .map((autre) => [cleDe(autre), texte(autre?.qui) || "auteur inconnu"])
+    ).values()];
+
+    trouvees.push({ prise, marque, avant });
   }
   return trouvees;
+}
+
+/** L'auteur d'une prise, ramené à une clé. Voir `laCleDeLAuteur`. */
+function cleDe(prise) {
+  return texte(prise?.quiCle) || texte(prise?.qui).toLowerCase();
 }
 
 function uneQuestionSansReponse(demande, suite) {
@@ -190,23 +249,26 @@ function uneQuestionSansReponse(demande, suite) {
   };
 }
 
-function unDesaccord(opposition, rang) {
-  const [un, autre] = opposition.positions;
+function unDesaccord(contestation, rang) {
+  const { prise, marque, avant } = contestation;
   return {
-    key: `desaccord:${opposition.porteSur}:${rang + 1}`,
+    ...prise,
+    key: `desaccord:${texte(prise?.key) || rang + 1}`,
     nature: NATURE.DESACCORD,
-    intitule: opposition.porteSur,
-    porteSur: opposition.porteSur,
-    pourQui: null,
-    echeance: null,
-    /** Les deux positions, avec leurs auteurs et leurs citations. */
-    positions: [un, autre],
-    /** Le désaccord se date du plus tardif des deux : c'est là qu'il apparaît. */
-    message: Math.max(rangDe(un), rangDe(autre)),
-    qui: null,
-    quand: null,
-    citation: "",
-    messageVerifie: true
+    /** Ce que le modèle avait déclaré : la nature a changé, pas le fait. */
+    natureDeclaree: texte(prise?.nature),
+    /** La position prise, avec son auteur, sa date et sa citation. */
+    positions: [prise],
+    /** Laquelle des marques a parlé. De quoi juger la règle sur pièce. */
+    marque,
+    /**
+     * Qui s'était exprimé avant, sur le même sujet.
+     *
+     * Des noms, pas une position désignée : on ne sait pas laquelle est
+     * contestée, et la nommer au jugé prêterait à quelqu'un un propos qu'il
+     * n'a pas tenu.
+     */
+    avant
   };
 }
 
@@ -224,12 +286,30 @@ function unDesaccord(opposition, rang) {
  *
  * `trous` dit ce qu'on n'a pas pu dériver, et pourquoi.
  */
-export function ceQuonDerive(prises = [], { dernierMessage = 0 } = {}) {
+export function ceQuonDerive(prises = [], { dernierMessage = 0, messages = [] } = {}) {
   const liste = Array.isArray(prises) ? prises : [];
   const fin = Number(dernierMessage) || liste.reduce((haut, prise) => Math.max(haut, rangDe(prise)), 0);
 
+  // **Chaque prise sait de quelle personne elle vient**, et non seulement sous
+  // quel affichage. La clé se recolle ici, depuis le fil : elle n'est jamais
+  // montée au modèle, qui n'en a que faire. Elle sert au rapprochement et
+  // **ne ressort pas** : ce qui traverse la dérivation sans rien déclencher
+  // doit en ressortir tel quel.
+  const avecLesCles = lesPrisesEtLeursAuteurs(liste, messages);
+
+  // **Les contestations se relèvent sur la liste entière**, avant toute autre
+  // dérivation : ce qui est contesté l'est quelle que soit la nature déclarée,
+  // et une demande peut contester autant qu'un constat.
+  const contestations = new Map(lesContestations(avecLesCles).map((c) => [c.prise, c]));
+
   let indecidables = 0;
-  const avecLesQuestions = liste.map((prise) => {
+  const derivees = liste.map((prise, rang) => {
+    // **Une prise qui conteste change de nature, elle ne se dédouble pas.**
+    // La laisser aussi dans sa rubrique d'origine ferait lire deux fois la même
+    // phrase, et le lecteur chercherait en quoi les deux diffèrent.
+    const contestation = contestations.get(avecLesCles[rang]);
+    if (contestation) return unDesaccord({ ...contestation, prise }, rang);
+
     if (texte(prise?.nature) !== NATURE.DEMANDE) return prise;
     const suite = laSuiteDuneDemande(prise, liste, { dernierMessage: fin });
     if (suite.suite === SUITE.ON_NE_SAIT_PAS) {
@@ -242,12 +322,10 @@ export function ceQuonDerive(prises = [], { dernierMessage = 0 } = {}) {
     return uneQuestionSansReponse(prise, suite);
   });
 
-  const oppositions = lesOppositions(liste);
-
   return {
-    prises: [...avecLesQuestions, ...oppositions.map(unDesaccord)],
-    sansReponse: avecLesQuestions.filter((prise) => texte(prise?.nature) === NATURE.SANS_REPONSE).length,
-    desaccords: oppositions.length,
+    prises: derivees,
+    sansReponse: derivees.filter((prise) => texte(prise?.nature) === NATURE.SANS_REPONSE).length,
+    desaccords: contestations.size,
     /**
      * Combien de demandes n'ont pas pu être jugées, faute de savoir sur quoi
      * elles portent. Elles restent des demandes, et l'écran ne prétend pas

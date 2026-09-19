@@ -39,7 +39,7 @@
 
 import { NATURE, ceQuonCite } from "./ce-quon-cite.js";
 import { TROU, unTrou } from "./trous-dun-mail.js";
-import { unMailDeplie } from "./un-mail-deplie.js";
+import { uneAdresse, unMailDeplie } from "./un-mail-deplie.js";
 
 /** D'où l'on tient un message. */
 export const CERTITUDE = {
@@ -159,6 +159,28 @@ function unDepose(lu, rang) {
   };
 }
 
+/**
+ * Qui a écrit un message qu'on reconstitue d'une citation.
+ *
+ * **Le bandeau d'une messagerie porte l'adresse aussi souvent que le nom**, et
+ * la garder dans la même chaîne que le nom coûte cher : la même personne prend
+ * alors une identité par forme d'affichage — « Ourdine Ferrand
+ * <o.ferrand@novaclim.example> » ici, « Ourdine FERRAND » là —, et tout ce qui
+ * compare deux auteurs se trompe. Un fil réel a montré **deux personnes sous
+ * quatre identités**, et quelqu'un en désaccord avec lui-même.
+ *
+ * Sans chevrons, on garde le nom tel quel : un bandeau qui ne nomme qu'une
+ * personne — « BERTRAND a écrit » — ne porte pas d'adresse, et prendre ce nom
+ * pour une adresse serait pire que de ne rien savoir.
+ */
+const CHEVRONS_A_LA_FIN = /<[^<>]*>\s*$/;
+
+export function quiDuneCitation(valeur) {
+  const lu = String(valeur ?? "").trim();
+  if (!CHEVRONS_A_LA_FIN.test(lu)) return { nom: lu, adresse: "" };
+  return uneAdresse(lu) ?? { nom: lu, adresse: "" };
+}
+
 function unCite(cite, porteur) {
   return {
     certitude: CERTITUDE.CITE,
@@ -166,7 +188,7 @@ function unCite(cite, porteur) {
     identite: "",
     enReponseA: "",
     chaine: [],
-    qui: { nom: cite.texteQui, adresse: "" },
+    qui: quiDuneCitation(cite.texteQui),
     a: [],
     copie: [],
     quand: "",

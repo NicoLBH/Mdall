@@ -4102,3 +4102,45 @@ sauter un message en silence, et des écartées qu'on ne pouvait que compter. C'
 vient de changer ce que le modèle lit, et ajouter une correction par-dessus sans regarder le
 nouveau résultat serait travailler à l'aveugle. Les autres demandent **d'autres fils** — un
 seul échange ne dit pas si un défaut est une règle ou un accident.
+
+
+---
+
+## 55. Le lexique des contestations, et ce qu'il ne voit pas
+
+**Ce qui vient d'être réglé.** La queue de lien qu'une messagerie colle derrière chaque adresse,
+l'identité d'un auteur prise sur son adresse plutôt que sur son affichage, le désaccord relevé à
+une marque de contestation plutôt qu'à deux négations, et la puce qui ne fait plus échouer une
+citation. C'est l'étape 7 ter de [`lire-les-mails.md`](lire-les-mails.md).
+
+**Ce qui reste ouvert, et qui demande d'autres fils.**
+
+- **Le lexique a été réglé sur un seul fil.** Cinq marques, quatre prises
+  relevées, et elles étaient les bonnes — mais une précision de 4/4 sur un
+  échantillon de un ne dit rien du rappel. Il manque la mesure inverse : sur un
+  fil où l'on sait qu'un désaccord existe, combien de fois le lexique le
+  manque-t-il ? Chaque marque est nommée à part précisément pour pouvoir être
+  retirée ou corrigée seule.
+- **Un désaccord poli ne se voit pas.** « Nous comprenons votre lecture, la
+  nôtre diffère » ne porte aucune des cinq marques. C'est la limite annoncée, et
+  il faudra décider si on l'accepte ou si on demande cette nature-là au modèle —
+  sachant que la demander invite à en inventer, et que le garde-fou des
+  citations ne vérifie pas la *relation* entre deux phrases, seulement qu'elles
+  existent.
+- **On ne sait toujours pas ce qui est contesté.** On nomme qui s'était exprimé
+  avant, et c'est tout ce qu'on peut établir. Le jour où une proposition devra
+  porter « X conteste la position Y de Z », il faudra autre chose qu'une
+  dérivation — et probablement admettre que la position visée vit hors du fil,
+  dans un rapport.
+- **`porte_sur` reste le seul rapprochement, et il vient du modèle.** Vingt-sept
+  constats partageaient « effet du rotor » sur ce fil : c'est un *sujet*, pas
+  une *proposition*. Tout ce qui repose dessus — les questions sans réponse
+  comme les contestations — hérite de cette grossièreté.
+
+**Toujours ouvert du § 54** : la période lue « le 24 juillet » pour un fil du 22 au 24 ·
+« un seul mail déposé » qui sous-estime un ordre certain · les images de signature comptées
+comme pièces jointes · les offres conditionnelles rangées en questions sans réponse.
+
+**Pourquoi c'est repoussé.** Tout cela demande la même chose : **d'autres fils**. Un seul
+échange dit qu'un mécanisme est faux — 96 sur 96 le prouvent —, il ne dit pas qu'un mécanisme
+est juste.
