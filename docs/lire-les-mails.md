@@ -299,7 +299,7 @@ rendait les déceptions inexplicables.
 
 Chacune ferme sur quelque chose qui marche, et chacune se vérifie en cassant une règle.
 
-### 1 — Déplier un `.eml`, et rien d'autre
+### 1 — Déplier un `.eml`, et rien d'autre · *fait*
 
 Un service pur : du texte RFC 5322 entre, une discussion sort. Pas d'écran, pas de réseau.
 Les en-têtes, le décodage (`base64`, `quoted-printable`, les jeux de caractères), le choix
@@ -447,7 +447,8 @@ expéditeur inconnu. Voir la section ci-dessus.
 
 | Ce que c'est | Où |
 |---|---|
-| Déplier un `.eml` | `services/un-mail-deplie.js` — pur |
+| Décoder ce qu'un mail transporte | `services/decoder-un-mail.js` — pur · *écrit* |
+| Déplier un `.eml` | `services/un-mail-deplie.js` — pur · *écrit* |
 | Séparer le propos de la citation | `services/ce-quon-cite.js` — pur |
 | Reconstituer le fil | `services/le-fil-des-mails.js` — pur |
 | Ce qu'un fil porte | `services/prises-de-position.js` — pur |
