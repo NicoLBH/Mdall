@@ -102,6 +102,36 @@ test("une prise rattachée à un autre message le dit", () => {
   assert.deepEqual(ceQuiManque(prise({ messageVerifie: false })), [MANQUE.MESSAGE_CORRIGE]);
 });
 
+test("un désaccord ne se voit réclamer ni auteur ni date", () => {
+  // Il n'est de personne : il est entre deux personnes. Lui en réclamer un
+  // ferait deux reproches sur chaque ligne, pour une chose qui n'en a par
+  // nature ni l'un ni l'autre.
+  assert.deepEqual(ceQuiManque({ nature: NATURE.DESACCORD, qui: null, quand: null }), []);
+});
+
+test("une question sans réponse réclame son destinataire et son échéance", () => {
+  // C'est ce qui manquera le jour où elle deviendra un sujet : il faudra bien
+  // que quelqu'un décide d'un qui et d'une date, et il vaut mieux qu'il sache
+  // qu'ils n'étaient pas dans le fil.
+  assert.deepEqual(ceQuiManque(prise({ nature: NATURE.SANS_REPONSE })),
+    [MANQUE.SANS_DESTINATAIRE, MANQUE.SANS_ECHEANCE]);
+  assert.deepEqual(
+    ceQuiManque(prise({ nature: NATURE.SANS_REPONSE, pourQui: "BERTRAND", echeance: "jeudi" })), []
+  );
+});
+
+test("une demande qu'on n'a pas su juger le dit", () => {
+  // Ce n'est ni « répondue » ni « restée sans réponse », et le taire ferait
+  // croire à la première.
+  assert.deepEqual(
+    ceQuiManque(prise({ nature: NATURE.DEMANDE, suite: "on-ne-sait-pas", pourQui: "A", echeance: "jeudi" })),
+    [MANQUE.SUITE_INCONNUE]
+  );
+  assert.deepEqual(
+    ceQuiManque(prise({ nature: NATURE.DEMANDE, suite: "repondue", pourQui: "A", echeance: "jeudi" })), []
+  );
+});
+
 test("chaque manque porte sa phrase", () => {
   for (const manque of Object.values(MANQUE)) {
     assert.notEqual(phraseDuManque(manque), "quelque chose manque à cette prise", manque);

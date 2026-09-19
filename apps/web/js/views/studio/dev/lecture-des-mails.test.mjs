@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { ONGLET, renderLaLectureDesMails } from "./lecture-des-mails.js";
+import { ONGLET, leReleveDerive, renderLaLectureDesMails } from "./lecture-des-mails.js";
 import { NATURE } from "../../../services/prises-de-position.js";
 import { leFilDesMails } from "../../../services/le-fil-des-mails.js";
 import { TROU } from "../../../services/trous-dun-mail.js";
@@ -300,6 +300,93 @@ test("les prises se montrent aussi sous le message d'où elles sortent", () => {
   const html = renderLaLectureDesMails({ ...lu(PREMIER, SECOND), releve: releve() });
   assert.ok(html.includes("fil-mails__prises"));
   assert.ok(html.includes("fil-mails__prise-nature"));
+});
+
+// ── Ce qui se dérive ───────────────────────────────────────────────────────
+
+const AFFIRME = prise({
+  nature: NATURE.CONSTAT, qui: "Ourdine Ferrand", message: 2,
+  intitule: "le support est humide au droit de l'acrotère",
+  citation: "Le support est humide au droit de l'acrotère.",
+  porteSur: "humidité de l'acrotère"
+});
+const NIE = prise({
+  nature: NATURE.CONSTAT, qui: "BERTRAND", message: 1,
+  intitule: "rien n'a été relevé au droit de l'acrotère",
+  citation: "Rien n'a été relevé au droit de l'acrotère à ce jour.",
+  porteSur: "humidité de l'acrotère"
+});
+
+test("une question sans réponse a sa propre rubrique, et vient en tête de la phrase", () => {
+  // C'est l'apport principal du procédé : le ranger après ce qui a été écarté
+  // le ferait lire en dernier, ou pas du tout.
+  const html = renderLaLectureDesMails(analyse({
+    releve: releve({ prises: [prise({ nature: NATURE.SANS_REPONSE, natureDeclaree: NATURE.DEMANDE })] })
+  }));
+  assert.ok(html.includes("1 question sans réponse"));
+  assert.ok(html.includes("Question sans réponse"));
+  assert.ok(html.includes("un sujet à ouvrir, et c&#39;est l&#39;apport principal"));
+});
+
+test("un désaccord montre les deux positions et leurs deux citations", () => {
+  // Rien ne prouve que ces deux personnes sont en désaccord : c'est au lecteur
+  // de trancher, et il ne peut le faire qu'en voyant les deux.
+  const desaccord = {
+    key: "desaccord:1", nature: NATURE.DESACCORD, intitule: "humidité de l'acrotère",
+    positions: [AFFIRME, NIE], message: 2, qui: null, quand: null, citation: ""
+  };
+  const html = renderLaLectureDesMails(analyse({ releve: releve({ prises: [desaccord] }) }));
+  assert.ok(html.includes("1 désaccord possible"));
+  assert.ok(html.includes("est-desaccord"));
+  // Écrit tel quel dans le gabarit : l'apostrophe reste brute.
+  assert.ok(html.includes("deux constats s'opposent"));
+  assert.ok(html.includes("Ourdine Ferrand"));
+  assert.ok(html.includes("BERTRAND"));
+  assert.ok(html.includes("Rien n&#39;a été relevé au droit de l&#39;acrotère à ce jour."));
+  assert.ok(html.includes("Le support est humide au droit de l&#39;acrotère."));
+});
+
+test("une demande qu'on ne sait pas juger le dit", () => {
+  const html = renderLaLectureDesMails(analyse({
+    releve: releve({ prises: [prise({ nature: NATURE.DEMANDE, suite: "on-ne-sait-pas", pourQui: "BERTRAND", echeance: "jeudi" })] })
+  }));
+  assert.ok(html.includes("on ne sait pas si elle a reçu une réponse"));
+});
+
+test("ce que le modèle rend passe par la dérivation avant d'être affiché", () => {
+  // Sans elle, une demande restée sans réponse resterait une demande ordinaire
+  // — et l'apport principal du procédé disparaîtrait sans bruit.
+  const question = prise({
+    nature: NATURE.DEMANDE, message: 1, porteSur: "cote du seuil",
+    intitule: "confirmer la cote", pourQui: "BERTRAND", echeance: "avant vendredi"
+  });
+  const derive = leReleveDerive({ ok: true, prises: [question, AFFIRME, NIE] }, {
+    messages: [{ rang: 1 }, { rang: 2 }]
+  });
+  assert.equal(derive.derive.sansReponse, 1);
+  assert.equal(derive.derive.desaccords, 1);
+  assert.deepEqual(derive.prises.map((prise) => prise.nature),
+    [NATURE.SANS_REPONSE, NATURE.CONSTAT, NATURE.CONSTAT, NATURE.DESACCORD]);
+
+  const html = renderLaLectureDesMails(analyse({ releve: derive }));
+  assert.ok(html.includes("1 question sans réponse"));
+  assert.ok(html.includes("1 désaccord possible"));
+});
+
+test("la longueur du fil vient du fil, pas des prises qu'on en a tirées", () => {
+  // Un fil de cinq messages dont les trois derniers n'ont rien donné : la
+  // demande du premier a bien été suivie de quatre messages qui l'ont ignorée.
+  // Compter sur les prises dirait qu'aucun ne la suit, ce qui est le contraire
+  // de ce qu'on cherche à montrer.
+  const question = prise({ nature: NATURE.DEMANDE, message: 1, porteSur: "cote du seuil" });
+  const derive = leReleveDerive({ ok: true, prises: [question] }, {
+    messages: [{ rang: 1 }, { rang: 2 }, { rang: 3 }, { rang: 4 }, { rang: 5 }]
+  });
+  assert.equal(derive.prises[0].apresElle, 4);
+});
+
+test("un relevé qui a raté ne se dérive pas", () => {
+  assert.equal(leReleveDerive({ ok: false, motif: "refuse" }, { messages: [] }), null);
 });
 
 test("un message sans prise n'en affiche aucune", () => {

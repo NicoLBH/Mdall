@@ -412,9 +412,34 @@ prix à la requête. Les prises de position s'affichent avec ce qui leur manque.
 > tenue à la main — deux consignes lui échappaient. Les trente ruptures
 > essayées tombent.
 
-### 6 — Ce qui se dérive, et que le modèle ne déclare pas
+### 6 — Ce qui se dérive, et que le modèle ne déclare pas · *fait*
 
 Les questions sans réponse, les désaccords. Sur le fil déplié, en pur, vérifiable.
+
+> Écrit dans `services/ce-quon-derive.js`. **Aucun second appel** : les deux se
+> calculent sur ce que le relevé a rendu et sur le fil, et chaque ligne dit de
+> quelles prises elle sort.
+>
+> **Une question sans réponse** : une demande qu'aucun message postérieur ne
+> reprend — un constat, une décision ou un engagement sur la même chose. Une
+> autre demande est une relance, pas une réponse ; une source fonde, elle ne
+> tranche pas. La demande **change de nature** et quitte la rubrique des
+> demandes : une seule ligne, dans la rubrique qui compte.
+>
+> **Ce qu'on n'a pas su juger se dit.** Une demande sans `porteSur` ne se dérive
+> pas : elle sort en « on ne sait pas », qui n'est ni « répondue » ni « restée
+> sans réponse » (règle 5).
+>
+> **Un désaccord**, et la limite est écrite franchement : on rapproche deux
+> constats de deux auteurs sur le même sujet dont **l'un nie ce que l'autre
+> affirme**, la polarité se lisant sur les marques de négation du français. Un
+> désaccord sans négation — « le support est sec » contre « le support est
+> humide » — **ne se voit pas**. Et ce qu'on rend n'est pas un verdict : deux
+> constats qui *semblent* se contredire, avec les deux citations, pour que le
+> lecteur tranche.
+>
+> Les trente et une ruptures essayées tombent. Ce qui reste : § 52 de
+> [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
 ### 7 — La confrontation et la proposition
 
@@ -526,6 +551,7 @@ expéditeur inconnu. Voir la section ci-dessus.
 | Reconstituer le fil | `services/le-fil-des-mails.js` — pur · *écrit* |
 | Le relevé par le modèle | `supabase/functions/relever-un-fil/` — la consigne y vit seule · *écrit* |
 | Ce qu'un fil porte | `services/prises-de-position.js` — pur · *écrit* |
+| Ce qui se dérive du fil | `services/ce-quon-derive.js` — pur · *écrit* |
 | Demander le relevé | `services/prises-par-le-modele.js` · *écrit* |
 | L'écran | `views/studio/dev/lecture-des-mails.js` · *écrit* |
 | Où va un mail, et le cadenas | `services/le-dossier-des-mails.js` — pur · *écrit* |
