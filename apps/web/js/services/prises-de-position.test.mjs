@@ -6,8 +6,8 @@ import {
   MANQUE, NATURE, NATURES_DECLAREES, NATURES_DERIVEES, ceQueCaDevient, ceQuiManque,
   horsNomenclature, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
   ceQueLeModeleNaPasDit, laCleDeLAuteur, lesPrisesEtLeursAuteurs, partReleveeDuMessage,
-  DOU, phraseDeCeQuiNestPasRepris, phraseDeLaPart, phraseDeLaProvenance, phraseDeLaTemperature,
-  phraseDesSujets,
+  DOU, RECOUPEMENT_MESURE, phraseDeCeQuiNestPasRepris, phraseDeLaPart, phraseDeLaProvenance,
+  phraseDeLaTemperature, phraseDesLignesRepetees, phraseDesSujets, phraseDesSujetsDaCote,
   phraseDesSujetsEcartes, phraseDuReleve,
   prisesDuMessage, quoiDeLaNature
 } from "./prises-de-position.js";
@@ -294,7 +294,7 @@ const COUVERTURE = [
 
 test("la part se calcule sur le message demandé", () => {
   assert.deepEqual(partReleveeDuMessage(COUVERTURE, 1),
-    { caracteres: 550, couverts: 279, part: 51, nonRepris: [] });
+    { caracteres: 550, couverts: 279, part: 51, nonRepris: [], lignesRepetees: 0 });
   assert.equal(partReleveeDuMessage(COUVERTURE, 2).part, 31);
 });
 
@@ -322,8 +322,22 @@ test("sans part, pas de phrase", () => {
 
 // ── Ce que la température dit du relevé ────────────────────────────────────
 
-test("une température fixée à zéro dit que le fil rend le même relevé", () => {
-  assert.equal(phraseDeLaTemperature(0), "température 0 : le même fil rend le même relevé");
+test("une température fixée à zéro ne promet plus un relevé identique", () => {
+  // **Le défaut mesuré.** Trois passages du même fichier à température 0 ont
+  // rendu 12, 11 et 11 prises, et trois comptes de jetons différents. L'écran
+  // affirmait « le même fil rend le même relevé » sur les trois.
+  const dit = phraseDeLaTemperature(0);
+  assert.equal(dit.includes("le même fil rend le même relevé"), false, dit);
+  assert.match(dit, /sans être identiques/);
+});
+
+test("la phrase porte la mesure, et dit d'où elle vient", () => {
+  // Un chiffre sans sa provenance se lit comme une garantie. « aux 3 passages
+  // d'un fil réel » dit que c'est une mesure, et sur combien elle porte.
+  const { tenues, relevees, passages } = RECOUPEMENT_MESURE;
+  assert.ok(tenues < relevees, "annoncer que tout tient serait reprendre la promesse d'avant");
+  assert.match(phraseDeLaTemperature(0),
+    new RegExp(`${tenues} prises sur ${relevees} aux ${passages} passages d'un fil réel`));
 });
 
 test("une température non fixée se dit, plutôt que de se taire", () => {
@@ -436,4 +450,65 @@ test("une provenance inconnue ne s'annonce pas comme une certitude", () => {
   assert.equal(phraseDeLaProvenance(""), "");
   assert.equal(phraseDeLaProvenance(undefined), "");
   assert.equal(phraseDeLaProvenance("serveur ou navigateur"), "");
+});
+
+// ── Les lignes qui reviennent, et les sujets d'à côté ──────────────────────
+
+test("le compte des lignes retirées se dit, et s'accorde", () => {
+  assert.match(phraseDesLignesRepetees(1), /^1 ligne de plus revenait à l'identique/);
+  assert.match(phraseDesLignesRepetees(3), /^3 lignes de plus revenaient à l'identique/);
+});
+
+test("aucune ligne retirée ne fait pas de phrase", () => {
+  assert.equal(phraseDesLignesRepetees(0), "");
+  assert.equal(phraseDesLignesRepetees(null), "");
+});
+
+test("la part porte le compte des lignes retirées", () => {
+  const ligne = { message: 4, caracteres: 80, couverts: 20, nonRepris: ["x"], lignesRepetees: 5 };
+  assert.equal(partReleveeDuMessage([ligne], 4).lignesRepetees, 5);
+  // Un serveur plus ancien ne le dit pas, et zéro est alors la valeur juste :
+  // aucune ligne retirée et rien à annoncer se lisent pareil.
+  assert.equal(partReleveeDuMessage([{ message: 4, caracteres: 80, couverts: 20 }], 4).lignesRepetees, 0);
+});
+
+test("les sujets d'à côté se disent, et l'accord suit leur nombre", () => {
+  assert.match(phraseDesSujetsDaCote(["reprise et essais"]),
+    /^le fil a continué sur un autre sujet, où l'on n'a pas cherché : reprise et essais$/);
+  assert.match(phraseDesSujetsDaCote(["a", "b"]), /^le fil a continué sur d'autres sujets/);
+});
+
+test("la phrase dit qu'on n'a pas cherché, et jamais qu'on a trouvé", () => {
+  // Souder deux sujets ferait passer une question pour répondue par une prise
+  // qui n'y répond pas. La phrase doit rester un aveu, pas une réponse.
+  const dit = phraseDesSujetsDaCote(["origine de la fuite"]);
+  assert.match(dit, /n'a pas cherché/);
+  assert.equal(/répond/.test(dit), false, dit);
+});
+
+test("aucun sujet d'à côté ne fait pas de phrase", () => {
+  // Là, « sans réponse » est tout ce qu'il y a à en dire.
+  assert.equal(phraseDesSujetsDaCote([]), "");
+  assert.equal(phraseDesSujetsDaCote(null), "");
+  assert.equal(phraseDesSujetsDaCote([""]), "");
+});
+
+// ── L'intitulé qui ne fait pas foi ─────────────────────────────────────────
+
+test("une prise dont l'intitulé est reformulé le dit", () => {
+  assert.deepEqual(ceQuiManque(prise({ intituleReformule: true })), [MANQUE.INTITULE_REFORMULE]);
+});
+
+test("un désaccord aussi, alors qu'il ne réclame ni auteur ni date", () => {
+  // C'est le titre affiché, et il vaut pour toutes les natures de la même
+  // façon : sortir avant de l'avoir posé l'aurait perdu là où il paraît le plus.
+  assert.deepEqual(ceQuiManque({ nature: NATURE.DESACCORD, intituleReformule: true }),
+    [MANQUE.INTITULE_REFORMULE]);
+  assert.deepEqual(ceQuiManque({ nature: NATURE.DESACCORD }), []);
+});
+
+test("la phrase renvoie à la citation, qui elle est vérifiée", () => {
+  const dit = phraseDuManque(MANQUE.INTITULE_REFORMULE);
+  assert.match(dit, /citation/);
+  assert.notEqual(dit, "quelque chose manque à cette prise");
 });

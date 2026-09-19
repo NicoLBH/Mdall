@@ -35,8 +35,8 @@
 import { CERTITUDE, ORDRE, phraseDuMoment } from "./le-fil-des-mails.js";
 import {
   NATURE, ceQueLeModeleNaPasDit, ceQuiManque, nomDeLaNature, parNature, partReleveeDuMessage,
-  phraseDeLaPart, phraseDeLaTemperature, phraseDesSujets, phraseDesSujetsEcartes, phraseDuManque,
-  phraseDuReleve, prisesDuMessage
+  phraseDeLaPart, phraseDeLaTemperature, phraseDesLignesRepetees, phraseDesSujets,
+  phraseDesSujetsDaCote, phraseDesSujetsEcartes, phraseDuManque, phraseDuReleve, prisesDuMessage
 } from "./prises-de-position.js";
 import { phraseDuTrou } from "./trous-dun-mail.js";
 
@@ -117,6 +117,11 @@ function unMessage(message, prises, couverture) {
   if (part?.nonRepris?.length) {
     lignes.push("", "**Ce qu'aucune citation ne reprend :**", "",
       ...part.nonRepris.map((phrase) => `- ${phrase}`));
+    // **Et combien ont été retirées parce qu'elles reviennent.** Une règle
+    // muette est une règle qu'on ne peut pas juger : le lecteur qui trouve le
+    // compte trop gros sait qu'il doit rouvrir le message.
+    const repetees = phraseDesLignesRepetees(part.lignesRepetees);
+    if (repetees) lignes.push("", `_${repetees}._`);
   }
 
   return lignes.join("\n");
@@ -140,6 +145,10 @@ function unePrise(prise) {
       ? `- **Se sont exprimés avant sur ce sujet** : ${avant.join(", ")}`
       : "- **Se sont exprimés avant sur ce sujet** : aucune autre prise relevée sous ce sujet — "
         + "ce qui est contesté peut venir d'ailleurs, ou d'un intitulé voisin");
+    // **Une seule phrase, la même qu'à l'écran** : la reformuler ici en ferait
+    // une seconde version, qui finirait par ne plus dire la même chose.
+    const ailleurs = phraseDesSujetsDaCote(prise?.ailleurs);
+    if (ailleurs) lignes.push("", `_${ailleurs}._`);
     return lignes.join("\n");
   }
 
@@ -159,12 +168,17 @@ function unePrise(prise) {
   if (Number.isFinite(Number(prise?.apresElle))) {
     lignes.push(`- **Messages après elle** : ${Number(prise.apresElle)}`);
   }
+  const daCote = phraseDesSujetsDaCote(prise?.ailleurs);
   if (Number(prise?.repondA)) lignes.push(`- **Répond au message** : ${Number(prise.repondA)}`);
   // **Par quel signal on l'a su.** Un renvoi a été confronté au fil ; un sujet
   // commun est un libellé que le modèle a écrit deux fois de la même façon.
   if (texte(prise?.repondueParQuel)) {
     lignes.push(`- **Répondue, su par** : ${texte(prise.repondueParQuel)}`);
   }
+
+  // **Où l'on n'a pas cherché.** « Sans réponse » n'a regardé que sous un
+  // sujet ; le dire évite de conclure d'une absence qu'on n'a pas constatée.
+  if (daCote) lignes.push("", `_${daCote}._`);
 
   lignes.push("", "**Citation :**", "", decalerEnCitation(prise?.citation));
 

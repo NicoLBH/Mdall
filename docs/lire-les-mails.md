@@ -940,6 +940,88 @@ l'inverse ; un message absent devenu le mot « undefined ».
 > n'atteint. Ce qui reste : § 60 de
 > [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
+### 7 nonies — Trois passages à température 0, et ce qu'ils ont falsifié · *fait*
+
+Le protocole du § 58 a été exécuté : **trois passages du même fichier**, avec la liste fermée de
+sujets et le refus déclaré comme décision.
+
+| | passage 3 | passage 4 | passage 5 |
+|---|---|---|---|
+| prises | **12** | **11** | **11** |
+| jetons de sortie | 1 085 | 1 011 | 1 013 |
+| désaccords | 4 | 4 | 3 |
+
+**Trois comptes de jetons : trois réponses différentes.** La température supprime le tirage au
+sort du modèle ; elle ne supprime pas tout — l'ordre dans lequel le fournisseur évalue en
+parallèle suffit à faire bouger un relevé long. L'écran affirmait « le même fil rend le même
+relevé » sur les trois.
+
+**Ce que les trois passages acquièrent, en revanche, est considérable.**
+
+- Les **quatre sujets sont identiques aux trois passages**, au mot et à l'ordre près, là où le
+  même fil rendait 28 libellés libres pour 39 prises. La liste fermée tient.
+- **Le refus est relevé aux trois passages** — « Non, je ne peux pas » et « c'est un avis
+  défavorable qui sera émis » manquaient aux trois passages précédents. C'était le point le plus
+  lourd du § 57.
+- La stabilité passe de **9 phrases sur 19 (53 %) à 10 prises sur 12 (83 %)**.
+
+> **Et les deux prises qui flottent se lisent dans l'export qui les perd.** Les
+> couvertures par message sont `38 54 20 41 38`, `38 46 20 41 38`,
+> `38 54 20 31 38` : elles ne bougent qu'aux deux endroits où une prise a
+> disparu, et la phrase perdue est nommée dans « ce qu'aucune citation ne
+> reprend » du passage concerné, et seulement là. **L'omission se lit dans le
+> seul export qu'on a sous les yeux**, sans comparer trois passages.
+
+#### Ce que ces trois passages ont fait changer
+
+**La phrase dit la mesure.** « Température 0 : deux lectures du même fil se recoupent sans être
+identiques — mesuré 10 prises sur 12 aux 3 passages d'un fil réel. » Le chiffre dit d'où il vient
+— un fil, trois passages. Ce n'est pas une garantie, c'est une mesure, et un export qui sort pour
+être opposé à quelqu'un ne doit pas promettre une identité qu'il n'a pas (règle 1).
+
+**L'intitulé est confronté à sa citation.** C'était le seul champ que le modèle écrivait sans
+qu'on le relise, et la même citation a donné trois intitulés, dont un qui **corrigeait la
+grammaire de son auteur** — « viendrait d'une » là où il avait écrit « viendrait une ».
+
+> Les mots de l'intitulé doivent se lire **dans l'ordre** dans ceux de la
+> citation, des trous étant permis : le modèle a le droit de raccourcir, pas
+> d'ajouter ni de déplacer. **Un sac de mots ne suffisait pas**, et c'est
+> mesuré : le `d` ajouté existe ailleurs dans la citation, dans « d'eau ».
+> La prise reste — sa citation est vérifiée, donc elle est réelle ; c'est son
+> titre qui ne fait pas foi, et l'écran le dit.
+
+**« Sans réponse » dit où il n'a pas cherché.** « Merci à l'entreprise de rectifier ce défaut »
+est rangée sans réponse sous *qualité de la pose de l'étanchéité* ; deux messages plus loin,
+« Nous envoyons tout de même quelqu'un aujourd'hui pour reprendre la membrane » est un engagement
+sous *reprise et essais d'étanchéité*. Un lecteur y lit une réponse. Même chose pour le désaccord
+d'Antoine sur *l'origine de la fuite*, dont la position visée est sous *infiltration d'eau sur
+toiture* : **les quatre sujets déclarés sont deux litiges vus des deux bouts.**
+
+> **On ne les fusionne pas.** Souder deux sujets au jugé ferait passer une
+> question pour répondue par une prise qui n'y répond pas — le pire résultat
+> possible, et celui que toute cette étape sert à éviter. On ne désigne pas non
+> plus la prise : on ne sait pas laquelle. **On dit où l'on n'a pas regardé**, et
+> le lecteur y va. Ne pas savoir n'autorise pas à prétendre qu'il n'y a rien
+> (règle 5) ; cela n'autorise pas davantage à deviner.
+
+**Les signatures sortent des listes.** 44 phrases non reprises sur le fil, **dont 20 qui
+reviennent à l'identique** dans un autre message — adresse, téléphone, mention d'impression. Une
+ligne qui revient mot pour mot n'est pas le propos de ce message-ci. Ce n'est pas un lexique de
+ce qui ne compte pas : **la répétition est un fait du fil**, elle se constate. Le compte des
+lignes retirées descend avec la liste — une phrase de fond répétée dans deux messages sortirait
+aussi, et le lecteur qui trouve le compte trop gros sait qu'il doit rouvrir le message.
+
+**Ce qui se vérifie en cassant** : la phrase qui reprend la promesse d'un relevé identique ; un
+intitulé jugé sur un sac de mots ; l'ordre des mots qui cesse de compter ; deux sujets soudés ;
+une demande répondue qui se met à douter ; une ligne vue une seule fois prise pour une
+signature ; le retrait des signatures qui fait bouger le pourcentage.
+
+> Les trente-deux ruptures essayées tombent. **Deux ont d'abord été muettes** :
+> une garde qui ne servait que dans un cas jamais éprouvé — une prise vide des
+> deux côtés —, et un chemin de sortie que mon cas n'atteignait pas, celui du
+> renvoi vérifié. Ce qui reste : § 61 de
+> [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
+
 ### 8 — La boîte de réception du projet
 
 La porte principale, et le morceau le plus lourd. Elle vient en dernier parce qu'elle se
@@ -1049,6 +1131,9 @@ expéditeur inconnu. Voir la section ci-dessus.
 | Ce que le serveur rend, lu une fois | `services/le-releve-rendu.js` — pur · *écrit* |
 | Les sujets du fil, déclarés puis vérifiés | `_shared/prises-du-modele.js` — `lesSujetsDuFil`, `leSujetVerifie` · *écrit* |
 | Ce qu'aucune citation ne reprend | `_shared/prises-du-modele.js` — `lesPhrasesNonReprises` · *écrit* |
+| Les lignes qu'un fil répète | `_shared/prises-du-modele.js` — `lesLignesQuiReviennent` · *écrit* |
+| L'intitulé confronté à sa citation | `_shared/prises-du-modele.js` — `lIntituleSortDesMots` · *écrit* |
+| Où l'on n'a pas cherché | `services/ce-quon-derive.js` — `lesAutresSujets` · *écrit* |
 | Ce qu'un fil porte | `services/prises-de-position.js` — pur · *écrit* |
 | Ce qui se dérive du fil | `services/ce-quon-derive.js` — pur · *écrit* |
 | Demander le relevé | `services/prises-par-le-modele.js` · *écrit* |

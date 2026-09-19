@@ -337,6 +337,52 @@ function rangDe(prise) {
  * s'arrête là. Une demande dans le dernier message n'a pas été ignorée — elle
  * n'a pas encore eu le temps de l'être, et c'est un fait, pas un jugement.
  */
+/**
+ * Les autres sujets sur lesquels le fil a continué.
+ *
+ * ## Pourquoi cela se dit
+ *
+ * « Restée sans réponse » est l'apport principal du procédé, et il repose sur
+ * **deux signaux seulement** : un renvoi que le modèle déclare, et un sujet
+ * partagé. Quand aucun des deux ne parle, on écrit « sans réponse » — et l'on
+ * n'a en réalité regardé que sous un seul sujet.
+ *
+ * Un fil réel l'a montré, aux trois passages. « Merci à l'entreprise de
+ * rectifier ce défaut » est rangée sans réponse sous *qualité de la pose de
+ * l'étanchéité* ; deux messages plus loin, « Nous envoyons tout de même
+ * quelqu'un aujourd'hui pour reprendre la membrane » est un engagement sous
+ * *reprise et essais d'étanchéité*. **Un lecteur y lit une réponse ; la liste
+ * fermée des sujets les avait séparés.**
+ *
+ * ## Ce qu'on rend, et ce qu'on refuse de faire
+ *
+ * Les sujets, rien de plus. **On ne les fusionne pas** : souder deux sujets au
+ * jugé ferait passer une question pour répondue par une prise qui n'y répond
+ * pas — le pire résultat possible, et celui que toute cette étape sert à
+ * éviter. On ne désigne pas non plus la prise : on ne sait pas laquelle.
+ *
+ * On dit **où l'on n'a pas regardé**, et le lecteur y va. Ne pas savoir
+ * n'autorise pas à prétendre qu'il n'y a rien (règle 5) ; cela n'autorise pas
+ * davantage à deviner.
+ *
+ * Une liste vide veut dire que le fil n'a rien porté d'autre : là, « sans
+ * réponse » est tout ce qu'il y a à en dire.
+ */
+export function lesAutresSujets(prise, prises = [], { natures = null, apres = true } = {}) {
+  const sien = texte(prise?.porteSur);
+  const liste = Array.isArray(prises) ? prises : [];
+
+  return [...new Set(liste
+    .filter((autre) => autre !== prise)
+    .filter((autre) => !natures || natures.has(texte(autre?.nature)))
+    .filter((autre) => (apres ? rangDe(autre) > rangDe(prise) : rangDe(autre) <= rangDe(prise)))
+    .map((autre) => texte(autre?.porteSur))
+    .filter(Boolean)
+    // **Pas le sien** : c'est justement celui sous lequel on a déjà cherché,
+    // et le redire ferait croire qu'on a trouvé quelque chose.
+    .filter((sujet) => !memeSujet(sujet, sien)))];
+}
+
 export function laSuiteDuneDemande(demande, prises = [], { dernierMessage = 0 } = {}) {
   const apresElle = Math.max(0, Number(dernierMessage) - rangDe(demande));
   const sujet = texte(demande?.porteSur);
@@ -353,15 +399,29 @@ export function laSuiteDuneDemande(demande, prises = [], { dernierMessage = 0 } 
   // rang qu'il porte a été confronté au fil avant d'arriver ici.
   const parRenvoi = posterieures.find((autre) => Number(autre?.repondA) === rangDe(demande));
   if (parRenvoi) {
-    return { suite: SUITE.REPONDUE, parQuoi: parRenvoi, parQuel: PAR.RENVOI, apresElle };
+    return { suite: SUITE.REPONDUE, parQuoi: parRenvoi, parQuel: PAR.RENVOI, apresElle, ailleurs: [] };
   }
 
-  if (!sujet) return { suite: SUITE.ON_NE_SAIT_PAS, parQuoi: null, parQuel: null, apresElle };
+  if (!sujet) {
+    return { suite: SUITE.ON_NE_SAIT_PAS, parQuoi: null, parQuel: null, apresElle, ailleurs: [] };
+  }
 
   const parLeSujet = posterieures.find((autre) => memeSujet(autre?.porteSur, sujet));
-  return parLeSujet
-    ? { suite: SUITE.REPONDUE, parQuoi: parLeSujet, parQuel: PAR.SUJET, apresElle }
-    : { suite: SUITE.SANS_REPONSE, parQuoi: null, parQuel: null, apresElle };
+  if (parLeSujet) {
+    return { suite: SUITE.REPONDUE, parQuoi: parLeSujet, parQuel: PAR.SUJET, apresElle, ailleurs: [] };
+  }
+
+  return {
+    suite: SUITE.SANS_REPONSE,
+    parQuoi: null,
+    parQuel: null,
+    apresElle,
+    /**
+     * Les sujets sur lesquels le fil a continué, et sous lesquels on n'a pas
+     * cherché. C'est l'aveu de ce que les deux signaux ne couvrent pas.
+     */
+    ailleurs: lesAutresSujets(demande, liste, { natures: REPONDENT })
+  };
 }
 
 /**
@@ -401,7 +461,14 @@ export function lesContestations(prises = []) {
       .map((autre) => [cleDe(autre), texte(autre?.qui) || "auteur inconnu"])
     ).values()];
 
-    trouvees.push({ prise, marque, avant });
+    // **Et quand on n'a trouvé personne, on dit où l'on n'a pas regardé.** Sur
+    // un fil réel, la position contestée était sous un sujet voisin, déclaré à
+    // part par le modèle : *origine de la fuite* d'un côté, *infiltration d'eau
+    // sur toiture* de l'autre — le même litige vu des deux bouts. Les nommer ne
+    // les fusionne pas ; cela dit au lecteur où aller (règle 5).
+    const ailleurs = avant.length ? [] : lesAutresSujets(prise, liste, { apres: false });
+
+    trouvees.push({ prise, marque, avant, ailleurs });
   }
   return trouvees;
 }
@@ -419,7 +486,9 @@ function uneQuestionSansReponse(demande, suite) {
     /** Ce que le modèle avait déclaré. Rien n'est masqué : la nature a changé, pas le fait. */
     natureDeclaree: NATURE.DEMANDE,
     suite: suite.suite,
-    apresElle: suite.apresElle
+    apresElle: suite.apresElle,
+    /** Les sujets sous lesquels le fil a continué, et où l'on n'a pas cherché. */
+    ailleurs: suite.ailleurs ?? []
   };
 }
 

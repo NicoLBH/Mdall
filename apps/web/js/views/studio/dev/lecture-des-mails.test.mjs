@@ -479,7 +479,8 @@ test("une prise sans renvoi n'affiche pas de ligne vide", () => {
 
 test("l'écran dit si le même fil rendrait le même relevé", () => {
   const html = dessine(analyse({ releve: releve({ temperature: 0 }) }));
-  assert.ok(html.includes("température 0 : le même fil rend le même relevé"));
+  assert.ok(html.includes("température 0 : deux lectures du même fil"), html.slice(0, 600));
+  assert.equal(html.includes("le même fil rend le même relevé"), false);
 });
 
 test("un relevé sans température fixée le dit à l'écran", () => {
@@ -721,4 +722,66 @@ test("les deux états se distinguent à l'écran, et pas seulement en mémoire",
   assert.ok(serveur.includes("Ce diagnostic vient du serveur"));
   assert.ok(navigateur.includes("Ce diagnostic vient du navigateur"));
   assert.equal(navigateur.includes("Ce diagnostic vient du serveur"), false);
+});
+
+// ── Ce que les trois passages ont appris ───────────────────────────────────
+
+test("une question sans réponse dit sur quels sujets le fil a continué", () => {
+  const html = dessine(analyse({
+    releve: releve({
+      prises: [prise({
+        nature: NATURE.SANS_REPONSE, natureDeclaree: NATURE.DEMANDE, message: 3,
+        intitule: "Merci à l'entreprise de rectifier ce défaut.",
+        porteSur: "qualité de la pose de l'étanchéité", apresElle: 2,
+        ailleurs: ["reprise et essais d'étanchéité"]
+      })]
+    })
+  }));
+  assert.ok(html.includes("n&#39;a pas cherché") || html.includes("n'a pas cherché"), html.slice(-900));
+  assert.ok(html.includes("reprise et essais d&#39;étanchéité")
+    || html.includes("reprise et essais d'étanchéité"));
+});
+
+test("une question sans réponse sur un fil qui n'a rien porté d'autre se tait", () => {
+  const html = dessine(analyse({
+    releve: releve({
+      prises: [prise({ nature: NATURE.SANS_REPONSE, message: 3, apresElle: 2, ailleurs: [] })]
+    })
+  }));
+  assert.equal(html.includes("n'a pas cherché"), false);
+  assert.equal(html.includes("n&#39;a pas cherché"), false);
+});
+
+test("le repli des phrases non reprises dit combien de signatures il a retirées", () => {
+  const html = dessine(vue({
+    ...lu(PREMIER, SECOND),
+    nonRepris: new Set([1]),
+    releve: releve({
+      couverture: [{
+        message: 1, caracteres: 200, couverts: 60,
+        nonRepris: ["Non, je ne peux pas."], lignesRepetees: 4
+      }]
+    })
+  }));
+  assert.ok(html.includes("4 lignes de plus revenaient à l&#39;identique")
+    || html.includes("4 lignes de plus revenaient à l'identique"), html.slice(-1200));
+});
+
+test("le repli fermé ne dit pas encore le compte des signatures", () => {
+  const html = dessine(vue({
+    ...lu(PREMIER, SECOND),
+    releve: releve({
+      couverture: [{ message: 1, caracteres: 200, couverts: 60, nonRepris: ["x"], lignesRepetees: 4 }]
+    })
+  }));
+  assert.equal(html.includes("revenaient à l'identique"), false);
+  assert.equal(html.includes("revenaient à l&#39;identique"), false);
+});
+
+test("un intitulé qui ne se lit pas dans sa citation est signalé sous la prise", () => {
+  const html = dessine(analyse({
+    releve: releve({ prises: [prise({ intituleReformule: true })] })
+  }));
+  assert.ok(html.includes("c&#39;est la citation qui fait foi")
+    || html.includes("c'est la citation qui fait foi"), html.slice(-900));
 });

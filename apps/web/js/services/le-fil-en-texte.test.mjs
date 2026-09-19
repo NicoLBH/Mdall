@@ -340,7 +340,8 @@ test("l'export dit si le même fil rendrait le même relevé", () => {
   // Il sort pour être opposé à quelqu'un : une citation qui change alors que
   // le document n'a pas changé n'est plus une preuve (règle 1).
   const texte = leFilEnTexte({ fil: fil(), releve: { ...RELEVE, temperature: 0 } });
-  assert.ok(texte.includes("**Reproductibilité** : température 0 : le même fil rend le même relevé"));
+  assert.ok(texte.includes("**Reproductibilité** : température 0 : deux lectures du même fil"), texte);
+  assert.equal(texte.includes("le même fil rend le même relevé"), false);
 });
 
 test("un relevé sans température fixée le dit dans l'export", () => {
@@ -405,4 +406,61 @@ test("un message dont tout a été repris n'ouvre pas de rubrique vide", () => {
     releve: { ...RELEVE, couverture: [{ message: 2, caracteres: 120, couverts: 120, nonRepris: [] }] }
   });
   assert.equal(texte.includes("Ce qu'aucune citation ne reprend"), false);
+});
+
+// ── Ce que l'export a appris des trois passages ────────────────────────────
+
+test("l'export compte les lignes retirées sous la liste", () => {
+  const texte = leFilEnTexte({
+    fil: fil(),
+    releve: {
+      ...RELEVE,
+      couverture: [{
+        message: 2, caracteres: 120, couverts: 44,
+        nonRepris: ["Non, je ne peux pas."], lignesRepetees: 6
+      }]
+    }
+  });
+  assert.ok(texte.includes("- Non, je ne peux pas."), texte);
+  assert.ok(texte.includes("6 lignes de plus revenaient à l'identique"), texte);
+});
+
+test("aucune ligne retirée n'ajoute rien sous la liste", () => {
+  const texte = leFilEnTexte({
+    fil: fil(),
+    releve: {
+      ...RELEVE,
+      couverture: [{ message: 2, caracteres: 120, couverts: 44, nonRepris: ["x"], lignesRepetees: 0 }]
+    }
+  });
+  assert.equal(texte.includes("revenaient à l'identique"), false);
+});
+
+test("l'export dit sur quels autres sujets le fil a continué", () => {
+  // Il sort pour être opposé à quelqu'un : « sans réponse » doit dire ce qu'il
+  // n'a pas vérifié, sous peine de se faire contredire par le fil lui-même.
+  const texte = leFilEnTexte({
+    fil: fil(),
+    releve: {
+      ...RELEVE,
+      prises: [{
+        key: "q1", nature: NATURE.SANS_REPONSE, natureDeclaree: NATURE.DEMANDE,
+        intitule: "Merci à l'entreprise de rectifier ce défaut.",
+        citation: "Merci à l'entreprise de rectifier ce défaut.", message: 2,
+        qui: "Nunc Savoie", quand: "12 mars 2026", porteSur: "qualité de la pose",
+        pourQui: "l'entreprise", echeance: null, messageVerifie: true, apresElle: 2,
+        ailleurs: ["reprise et essais d'étanchéité"]
+      }]
+    }
+  });
+  assert.ok(texte.includes("le fil a continué sur un autre sujet, où l'on n'a pas cherché"), texte);
+  assert.ok(texte.includes("reprise et essais d'étanchéité"));
+});
+
+test("l'export signale un intitulé qui ne se lit pas dans sa citation", () => {
+  const texte = leFilEnTexte({
+    fil: fil(),
+    releve: { ...RELEVE, prises: [{ ...RELEVE.prises[0], intituleReformule: true }] }
+  });
+  assert.ok(texte.includes("son intitulé ne se lit pas dans les mots de sa citation"), texte);
 });

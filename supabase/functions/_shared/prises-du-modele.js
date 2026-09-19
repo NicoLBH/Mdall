@@ -211,6 +211,67 @@ export const SCHEMA_DES_PRISES = {
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /**
+ * L'intitulé d'une prise sort-il des mots de sa citation ?
+ *
+ * ## Le défaut, mesuré sur trois passages du même fil
+ *
+ * La citation est recopiée mot pour mot et **vérifiée** contre le message.
+ * L'intitulé, lui, est le seul champ que le modèle écrit sans qu'on le
+ * confronte à rien — et c'est lui qui devient le titre d'un sujet à l'écran.
+ * La même citation a donné trois intitulés :
+ *
+ * ```
+ * la fuite dont vous parlez viendrait une "ancienne" poche d'eau…
+ * la fuite viendrait d'une "ancienne" poche d'eau…
+ * la fuite viendrait une "ancienne" poche d'eau…
+ * ```
+ *
+ * L'auteur avait écrit « viendrait une ». Le deuxième passage **corrige sa
+ * grammaire**. Corriger silencieusement la syntaxe de quelqu'un dans une pièce
+ * qu'on lui opposera est exactement ce qui discrédite une preuve : la consigne
+ * dit « DANS LES MOTS DE L'AUTEUR », et rien ne le vérifiait.
+ *
+ * ## La règle : une suite, pas un sac
+ *
+ * Les mots de l'intitulé doivent se lire **dans l'ordre** dans ceux de la
+ * citation, des trous étant permis — le modèle a le droit de raccourcir, pas
+ * d'ajouter ni de déplacer.
+ *
+ * **Un sac de mots ne suffisait pas**, et c'est mesuré : la lettre `d` de
+ * « d'une » existe ailleurs dans la citation, dans « d'eau ». Un test qui
+ * demande seulement que chaque mot soit *quelque part* laisse donc passer la
+ * reformulation qu'on cherche. Dans l'ordre, elle tombe : après « viendrait »,
+ * la citation ne porte pas de `d` avant « une ».
+ *
+ * ## Ce qu'on en fait, et ce qu'on n'en fait pas
+ *
+ * **La prise reste.** Sa citation est vérifiée, donc elle est réelle ; c'est son
+ * résumé qui dérive. On le **signale** et on le compte, comme un message
+ * rattaché ailleurs — jeter la prise coûterait plus cher que de dire qu'il faut
+ * lire la citation plutôt que le titre.
+ */
+export function lIntituleSortDesMots(intitule, citation) {
+  const dit = motsNus(intitule);
+  const source = motsNus(citation);
+  if (!dit.length) return false;
+  if (!source.length) return true;
+
+  let ou = 0;
+  for (const mot of dit) {
+    const trouve = source.indexOf(mot, ou);
+    if (trouve < 0) return true;
+    ou = trouve + 1;
+  }
+  return false;
+}
+
+/** Un texte réduit à la suite de ses mots, accents, casse et ponctuation effacés. */
+function motsNus(valeur) {
+  const nu = aplati(valeur).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  return nu ? nu.split(" ") : [];
+}
+
+/**
  * Les sujets que le modèle a déclarés pour ce fil.
  *
  * **On nettoie la liste avant de s'en servir**, et chaque écart répare un
@@ -470,6 +531,7 @@ export function verifierLesPrises({ prises = [], messages = [], sujets = [] } = 
     (Array.isArray(sujets) ? sujets : []).map((sujet) => [sujet?.numero, texte(sujet?.intitule)])
   );
   let sujetsEcartes = 0;
+  let intitulesReformules = 0;
 
   return {
     // **Le rang retenu est celui où la citation se trouve**, pas celui que le
@@ -485,17 +547,25 @@ export function verifierLesPrises({ prises = [], messages = [], sujets = [] } = 
       const sujet = leSujetVerifie(rendue, parNumero);
       if (Number.isFinite(rendue.sujet) && sujet === null) sujetsEcartes += 1;
 
+      // **L'intitulé est confronté à la citation**, seul champ que le modèle
+      // écrivait sans qu'on le relise. La prise reste : c'est son résumé qui
+      // dérive, pas la phrase qu'elle cite.
+      const reformule = lIntituleSortDesMots(rendue?.intitule, rendue?.citation);
+      if (reformule) intitulesReformules += 1;
+
       // **Le libellé descend ici, et nulle part ailleurs.** Tout ce qui suit —
       // l'écran, la dérivation, l'export — lit `porte_sur` comme avant ; ce qui
       // a changé est d'où il vient, et il vient maintenant d'une liste fermée.
-      return { ...rendue, repond_a: renvoi, porte_sur: sujet };
+      return { ...rendue, repond_a: renvoi, porte_sur: sujet, intitule_reformule: reformule };
     }),
     ecartees: [...horsListe, ...ecartes.map(({ ligne, motif }) => ({ prise: ligne, motif }))],
     messagesCorriges: pagesCorrigees,
     /** Combien de renvois ne tenaient pas devant le fil. Se dit, ne se cache pas. */
     renvoisEcartes,
     /** Combien de prises visaient un sujet que le modèle n'avait pas déclaré. */
-    sujetsEcartes
+    sujetsEcartes,
+    /** Combien d'intitulés ne se lisent pas dans les mots de leur citation. */
+    intitulesReformules
   };
 }
 
@@ -574,23 +644,80 @@ export function lesPhrasesDunMessage(propos) {
  * qu'on cache une phrase qui comptait. Cent pour cent de reprise serait un
  * mauvais signe (voir `laPartRelevee`) ; une liste vide ici le serait aussi.
  */
-export function lesPhrasesNonReprises(propos, citations = []) {
+export function lesPhrasesNonReprises(propos, citations = [], quiReviennent = new Set()) {
   const reprises = (Array.isArray(citations) ? citations : [])
     .map((citation) => enMots(citation))
     .filter(Boolean);
 
-  return lesPhrasesDunMessage(propos).filter((phrase) => {
+  const gardees = [];
+  let repetees = 0;
+
+  for (const phrase of lesPhrasesDunMessage(propos)) {
     const lue = enMots(phrase);
-    if (!lue) return false;
+    if (!lue) continue;
+
+    // **Une ligne qui revient à l'identique ailleurs dans le fil sort.** Voir
+    // `lesLignesQuiReviennent` : c'est une signature, pas le propos de
+    // ce message-ci. Elle est comptée, jamais escamotée en silence.
+    if (quiReviennent.has(lue)) { repetees += 1; continue; }
 
     // **Trop courte pour se reconnaître, donc montrée.** Voir le plancher.
-    if (combienDeMots(lue) < ASSEZ_DE_MOTS_POUR_SE_RECONNAITRE) return true;
+    if (combienDeMots(lue) < ASSEZ_DE_MOTS_POUR_SE_RECONNAITRE) { gardees.push(phrase); continue; }
 
     // Reprise dans les deux sens : la citation peut tenir dans la phrase — le
     // modèle n'en a cité qu'un morceau — comme la phrase dans la citation, quand
     // notre découpe a coupé là où lui ne coupait pas.
-    return !reprises.some((citation) => citation.includes(lue) || lue.includes(citation));
-  });
+    const citee = reprises.some((citation) => citation.includes(lue) || lue.includes(citation));
+    if (!citee) gardees.push(phrase);
+  }
+
+  return { phrases: gardees, repetees };
+}
+
+/**
+ * Les lignes qu'un fil répète à l'identique d'un message à l'autre.
+ *
+ * ## Ce qu'elles sont
+ *
+ * Une signature, une adresse, un numéro de téléphone, la mention qui demande de
+ * ne pas imprimer. **Personne ne les écrit pour ce message-ci** : la messagerie
+ * les recolle sous chaque envoi, et elles reviennent mot pour mot.
+ *
+ * Elles noyaient la liste de ce qu'aucune citation ne reprend. Sur un fil réel
+ * de cinq messages : **44 phrases non reprises, dont 20 qui reviennent** — près
+ * de la moitié, et la phrase qui comptait vraiment se lisait en douzième
+ * position derrière une adresse postale.
+ *
+ * ## Pourquoi cette règle-ci et pas un lexique
+ *
+ * Un lexique de ce qui ne compte pas déciderait à la place du lecteur, et c'est
+ * ainsi qu'on cache une phrase qui comptait. **La répétition, elle, est un
+ * fait du fil** : elle se constate, elle ne se juge pas. Rien n'est écrit
+ * d'avance sur ce qu'une signature contient.
+ *
+ * **Ce qu'elle coûte, et qui se dit.** Une phrase de fond répétée dans deux
+ * messages sortirait aussi. C'est possible, et le compte des lignes retirées
+ * est rendu avec la liste plutôt que tu — un lecteur qui trouve le compte trop
+ * gros sait qu'il doit rouvrir le message (règle 5).
+ *
+ * **Elle ne touche pas au pourcentage.** La part relevée mesure ce que les
+ * citations reprennent du message entier, signature comprise ; la liste, elle,
+ * est une aide à la lecture. Les deux ne répondent pas à la même question.
+ */
+export function lesLignesQuiReviennent(messages = []) {
+  const combien = new Map();
+
+  for (const message of Array.isArray(messages) ? messages : []) {
+    // **Une ligne ne compte qu'une fois par message.** Une énumération qui
+    // répète « - » ou une ligne vide ne doit pas se déclarer répétée toute
+    // seule, au sein d'un message unique.
+    for (const lue of new Set(lesPhrasesDunMessage(message?.propos).map(enMots))) {
+      if (!lue) continue;
+      combien.set(lue, (combien.get(lue) ?? 0) + 1);
+    }
+  }
+
+  return new Set([...combien.entries()].filter(([, n]) => n > 1).map(([lue]) => lue));
 }
 
 /**
@@ -622,6 +749,11 @@ export function lesPhrasesNonReprises(propos, citations = []) {
  * version, qui finirait par ne plus dire la même chose (règle 4).
  */
 export function laPartRelevee(messages = [], retenues = []) {
+  // **Les signatures se repèrent sur le fil entier**, et non message par
+  // message : une ligne n'est reconnue comme recollée que parce qu'elle revient
+  // ailleurs. C'est pour cela que ce calcul vit ici, qui voit tous les messages.
+  const quiReviennent = lesLignesQuiReviennent(messages);
+
   const prisesDuRang = new Map();
   for (const prise of Array.isArray(retenues) ? retenues : []) {
     const rang = Number(prise?.message);
@@ -640,11 +772,14 @@ export function laPartRelevee(messages = [], retenues = []) {
       // fois le message.
       const vues = new Set();
       let couverts = 0;
+
       for (const citation of prisesDuRang.get(rang) ?? []) {
         if (!citation || vues.has(citation) || !propos.includes(citation)) continue;
         vues.add(citation);
         couverts += citation.length;
       }
+      const reste = lesPhrasesNonReprises(message.propos, prisesDuRang.get(rang) ?? [], quiReviennent);
+
       return {
         message: rang,
         caracteres: propos.length,
@@ -656,7 +791,16 @@ export function laPartRelevee(messages = [], retenues = []) {
          * il est monté du navigateur à l'appel précédent, et rien de la
          * consigne ne l'accompagne.
          */
-        nonRepris: lesPhrasesNonReprises(message.propos, prisesDuRang.get(rang) ?? [])
+        nonRepris: reste.phrases,
+        /**
+         * Combien de lignes ont été retirées de la liste parce qu'elles
+         * reviennent à l'identique ailleurs dans le fil.
+         *
+         * **Le compte descend avec la liste.** Une phrase de fond répétée dans
+         * deux messages sortirait aussi ; le lecteur qui trouve ce compte trop
+         * gros sait qu'il doit rouvrir le message (règle 5).
+         */
+        lignesRepetees: reste.repetees
       };
     });
 }
@@ -696,6 +840,13 @@ export function prisesAuFormatDuMoteur(retenues = [], { filId = "", messages = [
       quand: texte(message?.quand) || null,
       /** Le message annoncé était-il le bon ? Sinon, l'auteur a changé. */
       messageVerifie: prise?.pageVerifiee === true,
+      /**
+       * L'intitulé se lit-il dans les mots de la citation ?
+       *
+       * `false` est le cas sain. `true` dit que le résumé a ajouté ou déplacé
+       * des mots — il faut alors lire la citation, et non le titre.
+       */
+      intituleReformule: prise?.intitule_reformule === true,
       /**
        * Le message auquel cette prise répond, **une fois confronté au fil**.
        *
