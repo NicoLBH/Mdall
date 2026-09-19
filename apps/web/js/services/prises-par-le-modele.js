@@ -206,6 +206,17 @@ export async function releverLeFil({ filId = "", messages = [] } = {}) {
      */
     muets: Array.isArray(rendu?.messages_muets) ? rendu.messages_muets : null,
     oublies: Array.isArray(rendu?.messages_oublies) ? rendu.messages_oublies : null,
+    /**
+     * Quelle part de chaque message une citation reprend.
+     *
+     * Un message peu relevé n'est pas un message muet, et rien ne le disait.
+     * Ce n'est pas un taux à faire monter — la politesse et la signature ne
+     * doivent être reprises par personne — mais un écart à regarder entre les
+     * messages d'un même fil.
+     */
+    couverture: Array.isArray(rendu?.couverture) ? rendu.couverture : [],
+    /** Combien de renvois du modèle ne tenaient pas devant le fil. */
+    renvoisEcartes: Number(rendu?.renvois_ecartes) || 0,
     /** Combien de prises ont changé de message — donc d'auteur. */
     messagesCorriges: Number(rendu?.messages_corriges) || 0,
     /** La réponse a-t-elle été coupée ? Des prises manquent alors, en silence. */

@@ -62,7 +62,8 @@ import {
 import { phraseDuTrou } from "../../../services/trous-dun-mail.js";
 import {
   NATURE, ceQueCaDevient, ceQuiManque, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
-  ceQueLeModeleNaPasDit, phraseDuReleve, prisesDuMessage, quoiDeLaNature
+  ceQueLeModeleNaPasDit, partReleveeDuMessage, phraseDeLaPart, phraseDuReleve, prisesDuMessage,
+  quoiDeLaNature
 } from "../../../services/prises-de-position.js";
 import { ceQuonDerive } from "../../../services/ce-quon-derive.js";
 import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.js";
@@ -538,6 +539,8 @@ function renderUnePrise(prise) {
       */""}
       ${texte(prise.marque) ? `<p class="fil-mails__moment mono-small">${
         escapeHtml(`relevée sur « ${texte(prise.marque)} »`)}</p>` : ""}
+      ${Number(prise.repondA) ? `<p class="fil-mails__moment mono-small">${
+        escapeHtml(`répond au message ${Number(prise.repondA)}`)}</p>` : ""}
       ${/*
         **La citation est sous la prise, toujours.** C'est elle qui la rend
         vérifiable : une prise sans sa citation demande de croire le modèle
@@ -588,13 +591,19 @@ function renderLeFil(vue) {
   return `
     <section class="fil-mails">
       ${messages.map((message) => renderUnMessage(
-        message, vue.ouverts?.has(message.rang) === true, prisesDuMessage(prises, message.rang)
+        message, vue.ouverts?.has(message.rang) === true, prisesDuMessage(prises, message.rang),
+        vue.releve?.couverture ?? []
       )).join("")}
     </section>
   `;
 }
 
-function renderUnMessage(message, ouvert, prises = []) {
+function renderUnMessage(message, ouvert, prises = [], couverture = []) {
+  // **Ce qu'aucune citation ne reprend.** Un message peu relevé n'est pas un
+  // message muet, et rien ne le disait : à comparer entre les messages du fil,
+  // pas à faire monter — la politesse et la signature ne doivent l'être par
+  // personne.
+  const part = partReleveeDuMessage(couverture, message.rang);
   const reconstitue = message.certitude === CERTITUDE.CITE;
   const vers = renderVers(message);
 
@@ -640,6 +649,7 @@ function renderUnMessage(message, ouvert, prises = []) {
           `).join("")}
         </ul>
       ` : ""}
+      ${part ? `<p class="fil-mails__moment mono-small">${escapeHtml(phraseDeLaPart(part))}</p>` : ""}
       ${texte(message.cite) ? `
         <button type="button" class="fil-mails__voir-cite" data-mails-citation="${escapeHtml(String(message.rang))}"
           aria-expanded="${ouvert ? "true" : "false"}">

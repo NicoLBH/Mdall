@@ -5,7 +5,8 @@ import test from "node:test";
 import {
   MANQUE, NATURE, NATURES_DECLAREES, NATURES_DERIVEES, ceQueCaDevient, ceQuiManque,
   horsNomenclature, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
-  ceQueLeModeleNaPasDit, laCleDeLAuteur, lesPrisesEtLeursAuteurs, phraseDuReleve,
+  ceQueLeModeleNaPasDit, laCleDeLAuteur, lesPrisesEtLeursAuteurs, partReleveeDuMessage,
+  phraseDeLaPart, phraseDuReleve,
   prisesDuMessage, quoiDeLaNature
 } from "./prises-de-position.js";
 
@@ -279,4 +280,39 @@ test("une prise dont le message est introuvable retombe sur son affichage", () =
   // tout le monde.
   const [une] = lesPrisesEtLeursAuteurs([{ message: 9, qui: "Ourdine FERRAND" }], []);
   assert.equal(une.quiCle, "ourdine ferrand");
+});
+
+// ── Ce qu'une citation a repris d'un message ───────────────────────────────
+
+const COUVERTURE = [
+  { message: 1, caracteres: 550, couverts: 279 },
+  { message: 2, caracteres: 703, couverts: 219 },
+  { message: 3, caracteres: 0, couverts: 0 }
+];
+
+test("la part se calcule sur le message demandé", () => {
+  assert.deepEqual(partReleveeDuMessage(COUVERTURE, 1), { caracteres: 550, couverts: 279, part: 51 });
+  assert.equal(partReleveeDuMessage(COUVERTURE, 2).part, 31);
+});
+
+test("un message inconnu n'a pas de part, et n'en reçoit pas une fausse", () => {
+  assert.equal(partReleveeDuMessage(COUVERTURE, 9), null);
+  assert.equal(partReleveeDuMessage([], 1), null);
+});
+
+test("un message sans texte n'a pas de part : une part sur rien n'existe pas", () => {
+  assert.equal(partReleveeDuMessage(COUVERTURE, 3), null);
+});
+
+test("la phrase dit ce que le chiffre veut dire, et rien de plus", () => {
+  // **Pas un taux à faire monter** : la politesse et la signature ne doivent
+  // être reprises par personne. Aucun jugement n'est porté ici (règle 5).
+  const phrase = phraseDeLaPart(partReleveeDuMessage(COUVERTURE, 2));
+  assert.ok(phrase.includes("31 %"));
+  assert.ok(phrase.includes("repris par une citation"));
+  assert.equal(/faible|insuffisant|mauvais/.test(phrase), false);
+});
+
+test("sans part, pas de phrase", () => {
+  assert.equal(phraseDeLaPart(null), "");
 });

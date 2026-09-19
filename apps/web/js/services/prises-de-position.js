@@ -349,6 +349,37 @@ export function ceQueLeModeleNaPasDit({ muets = null, oublies = null } = {}) {
 }
 
 /**
+ * Ce qu'une citation a repris d'un message, en une phrase.
+ *
+ * **Ce n'est pas un taux à faire monter.** Un message porte des formules de
+ * politesse et une signature, qu'aucune prise ne doit reprendre : cent pour
+ * cent serait un mauvais signe. Ce qu'il permet est la comparaison entre les
+ * messages d'un même fil — et sur un fil réel, celui qui portait un refus et
+ * un avis défavorable était **couvert à 31 % quand les autres l'étaient à
+ * 51 %**, sans que rien ne le dise.
+ *
+ * Aucun seuil n'est posé : en inventer un ferait dire au chiffre plus qu'il ne
+ * sait (règle 5).
+ */
+export function partReleveeDuMessage(couverture = [], rang = 0) {
+  const ligne = (Array.isArray(couverture) ? couverture : [])
+    .find((une) => Number(une?.message) === Number(rang));
+  if (!ligne || !Number(ligne?.caracteres)) return null;
+
+  return {
+    caracteres: Number(ligne.caracteres),
+    couverts: Number(ligne.couverts) || 0,
+    part: Math.round((Number(ligne.couverts) || 0) / Number(ligne.caracteres) * 100)
+  };
+}
+
+/** La phrase qui la dit. Elle vit ici, et l'écran comme l'export la lisent. */
+export function phraseDeLaPart(part) {
+  if (!part) return "";
+  return `${part.part} % de ce message est repris par une citation`;
+}
+
+/**
  * Les prises d'un message donné.
  *
  * C'est ce qui permet de montrer, sous chaque message du fil, ce qu'on en a

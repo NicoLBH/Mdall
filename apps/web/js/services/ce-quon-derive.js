@@ -24,11 +24,26 @@
  *   relance, et elle prouve plutôt le contraire.
  * - Une source n'est pas une réponse non plus : elle fonde, elle ne tranche pas.
  *
- * **La même chose**, c'est `porteSur` — le seul rapprochement dont on dispose,
- * et il vient du modèle. Une demande qui n'en porte pas ne se dérive donc pas :
- * elle sort en « on ne sait pas », qui n'est ni « répondue » ni « restée sans
- * réponse ». Ne pas savoir n'autorise pas à prétendre qu'il n'y a rien
- * (règle 5).
+ * **Deux signaux, et ils ne se valent pas.**
+ *
+ * Le premier est `porteSur` : deux prises qui portent le même sujet. Il vient
+ * du modèle, qui écrit ce libellé librement, et deux fils réels ont montré ce
+ * qu'il coûte — « rectification de la pose d'étanchéité » et « reprise de la
+ * membrane » désignent la même chose et ne partagent aucun mot. Sur ce fil,
+ * **trois des quatre « questions sans réponse » avaient reçu une réponse**.
+ *
+ * Le second est `repondA` : le modèle dit à quel message sa prise répond. On
+ * ne le croit pas sur parole — le rang doit exister et être antérieur, sinon
+ * il est écarté au serveur et compté. C'est le seul des deux qu'on puisse
+ * vérifier.
+ *
+ * **On dit lequel a parlé** (`parQuel`). Un modèle qui déclarerait des renvois
+ * à tort ferait taire des questions restées sans réponse — l'apport principal
+ * du procédé —, et cela doit pouvoir se lire plutôt que de se deviner.
+ *
+ * Une demande sans sujet **et** sans renvoi ne se dérive pas : elle sort en
+ * « on ne sait pas », qui n'est ni « répondue » ni « restée sans réponse ». Ne
+ * pas savoir n'autorise pas à prétendre qu'il n'y a rien (règle 5).
  *
  * ## Un désaccord
  *
@@ -85,6 +100,20 @@ export const SUITE = {
   ON_NE_SAIT_PAS: "on-ne-sait-pas"
 };
 
+/**
+ * Par quel signal on a su qu'une demande avait reçu une réponse.
+ *
+ * **Les deux ne se valent pas**, et les confondre cacherait le seul qui se
+ * vérifie. Un renvoi a été confronté au fil ; un sujet commun est un libellé
+ * que le modèle a écrit deux fois de la même façon.
+ */
+export const PAR = {
+  /** Le modèle a dit à quel message cette prise répond, et le rang tenait. */
+  RENVOI: "renvoi",
+  /** Les deux prises portent le même sujet. */
+  SUJET: "sujet"
+};
+
 /** Ce qui compte comme une réponse à une demande. */
 const REPONDENT = new Set([NATURE.CONSTAT, NATURE.DECISION, NATURE.ENGAGEMENT]);
 
@@ -99,11 +128,25 @@ const REPONDENT = new Set([NATURE.CONSTAT, NATURE.DECISION, NATURE.ENGAGEMENT]);
  * une marque qui se met à rendre n'importe quoi doit pouvoir être retirée
  * seule, et l'écran doit pouvoir dire **laquelle** a parlé.
  *
- * C'est un lexique, avec ce que cela suppose de fragile — il a été réglé sur un
- * seul fil, et il faudra le reprendre sur d'autres. Il est cherché dans la
- * citation **et** dans l'intitulé : la citation porte les mots de l'auteur,
- * l'intitulé ceux du modèle, et la marque peut tomber d'un côté comme de
- * l'autre.
+ * ## Deux familles, et un fil pour chacune
+ *
+ * Les cinq premières marques ont été réglées sur un échange formel entre un
+ * bureau d'études et un bureau de contrôle, où l'on conteste en registre
+ * juridique. **Un second fil a montré qu'elles ne voyaient rien d'un échange
+ * de chantier** : quatre contestations réelles, zéro relevée. On y conteste
+ * en français parlé — « le temps **ne va pas** la coller », « elle n'aurait
+ * **rien à voir avec les creux dont vous parlez** ».
+ *
+ * Les trois dernières viennent de là, et chacune a été éprouvée **sur les deux
+ * fils** : aucune ne parle à tort sur le premier. Une quatrième candidate,
+ * « toutefois », a été écartée pour cette raison — elle ouvre une phrase
+ * ordinaire dans l'échange formel.
+ *
+ * C'est un lexique, avec ce que cela suppose de fragile : deux mesures ne font
+ * pas une garantie, et un troisième fil montrera sans doute une troisième
+ * famille. Il est cherché dans la citation **et** dans l'intitulé : la citation
+ * porte les mots de l'auteur, l'intitulé ceux du modèle, et la marque peut
+ * tomber d'un côté comme de l'autre.
  */
 export const MARQUE = {
   /** « je ne partage pas votre position », « nous ne souscrivons pas ». */
@@ -115,7 +158,13 @@ export const MARQUE = {
   /** « disproportionné », « nous paraît excessif ». */
   DISPROPORTIONNE: "disproportionne",
   /** « contrairement à », « vous indiquiez vous-même ». */
-  RETOURNE_CONTRE: "retourne-contre"
+  RETOURNE_CONTRE: "retourne-contre",
+  /** « les creux **dont vous parlez** » : on vise le dire de l'autre, nommément. */
+  REPRISE_DU_DIRE: "reprise-du-dire",
+  /** « le temps **ne va pas** la coller » : on dément ce qui vient d'être avancé. */
+  NE_VA_PAS: "ne-va-pas",
+  /** « **pour autant**, je demande que… » : on maintient malgré ce qui a été dit. */
+  POUR_AUTANT: "pour-autant"
 };
 
 const MARQUES = [
@@ -128,7 +177,13 @@ const MARQUES = [
   [MARQUE.DISPROPORTIONNE,
     /\bdisproportionne\w*|\b(?:nous|me)\s+para[iî]t\s+(?:excessi|disproportionne|infonde)\w*/],
   [MARQUE.RETOURNE_CONTRE,
-    /\bcontrairement\s+a\b|\bvous\s+indiquiez\s+vous[-\s]?m[eê]me\b|\bvous[-\s]?m[eê]me\s+(?:indiquiez|ecriviez|reconnaissiez)\b/]
+    /\bcontrairement\s+a\b|\bvous\s+indiquiez\s+vous[-\s]?m[eê]me\b|\bvous[-\s]?m[eê]me\s+(?:indiquiez|ecriviez|reconnaissiez)\b/],
+  [MARQUE.REPRISE_DU_DIRE,
+    /\b(?:dont|que|desquels?)\s+vous\s+(?:parlez|evoquez|faites\s+etat|indiquez|mentionnez)\b|\bcomme\s+vous\s+l['’]indiquez\b|\brien\s+a\s+voir\b|\bsans\s+rapport\s+avec\b/],
+  [MARQUE.NE_VA_PAS,
+    /\bne\s+(?:va|vont|saurai?[et]?nt?)\s+pas\b/],
+  [MARQUE.POUR_AUTANT,
+    /\bpour\s+autant\b/]
 ];
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -285,20 +340,28 @@ function rangDe(prise) {
 export function laSuiteDuneDemande(demande, prises = [], { dernierMessage = 0 } = {}) {
   const apresElle = Math.max(0, Number(dernierMessage) - rangDe(demande));
   const sujet = texte(demande?.porteSur);
-  if (!sujet) return { suite: SUITE.ON_NE_SAIT_PAS, parQuoi: null, apresElle };
+  const liste = Array.isArray(prises) ? prises : [];
 
   // Une demande ne peut pas se répondre à elle-même, et rien ne l'écarte
   // explicitement : `REPONDENT` ne contient pas les demandes, et un message
   // n'est pas postérieur à lui-même. Une garde de plus a été essayée puis
   // retirée — aucune rupture ne la faisait parler (règle 12).
-  const reprise = (Array.isArray(prises) ? prises : []).find((autre) =>
-    REPONDENT.has(texte(autre?.nature))
-    && rangDe(autre) > rangDe(demande)
-    && memeSujet(autre?.porteSur, sujet));
+  const posterieures = liste.filter((autre) =>
+    REPONDENT.has(texte(autre?.nature)) && rangDe(autre) > rangDe(demande));
 
-  return reprise
-    ? { suite: SUITE.REPONDUE, parQuoi: reprise, apresElle }
-    : { suite: SUITE.SANS_REPONSE, parQuoi: null, apresElle };
+  // **Le renvoi d'abord**, parce que c'est le seul des deux qu'on vérifie : le
+  // rang qu'il porte a été confronté au fil avant d'arriver ici.
+  const parRenvoi = posterieures.find((autre) => Number(autre?.repondA) === rangDe(demande));
+  if (parRenvoi) {
+    return { suite: SUITE.REPONDUE, parQuoi: parRenvoi, parQuel: PAR.RENVOI, apresElle };
+  }
+
+  if (!sujet) return { suite: SUITE.ON_NE_SAIT_PAS, parQuoi: null, parQuel: null, apresElle };
+
+  const parLeSujet = posterieures.find((autre) => memeSujet(autre?.porteSur, sujet));
+  return parLeSujet
+    ? { suite: SUITE.REPONDUE, parQuoi: parLeSujet, parQuel: PAR.SUJET, apresElle }
+    : { suite: SUITE.SANS_REPONSE, parQuoi: null, parQuel: null, apresElle };
 }
 
 /**
@@ -447,7 +510,12 @@ export function ceQuonDerive(prises = [], { dernierMessage = 0, messages = [] } 
       return { ...prise, suite: suite.suite, apresElle: suite.apresElle };
     }
     if (suite.suite === SUITE.REPONDUE) {
-      return { ...prise, suite: suite.suite, apresElle: suite.apresElle, repondueParLaCle: suite.parQuoi?.key ?? null };
+      return {
+        ...prise, suite: suite.suite, apresElle: suite.apresElle,
+        repondueParLaCle: suite.parQuoi?.key ?? null,
+        /** Par quel signal : un renvoi vérifié, ou un sujet commun. */
+        repondueParQuel: suite.parQuel
+      };
     }
     return uneQuestionSansReponse(prise, suite);
   });

@@ -674,6 +674,74 @@ personne n'a parlé.
 > coûtent. Ce qui reste : § 56 de
 > [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
+### 7 quinquies — Un second fil, et ce qu'il a falsifié · *fait*
+
+Le premier contre-exemple de la série. Un échange de chantier entre un architecte, un bureau de
+contrôle et un charpentier — cinq messages, 1 808 jetons — a mis à l'épreuve ce qu'un seul fil
+avait servi à régler. **Le lexique des contestations y a un rappel de zéro.**
+
+**Quatre contestations réelles, aucune relevée.** Le premier fil contestait en registre juridique
+— « je ne partage pas votre position », « non conforme », « disproportionné ». Celui-ci conteste
+en français parlé : « le temps **ne va pas** la coller à la place du chalumeau », « elle n'aurait
+**rien à voir avec les creux dont vous parlez** ». **Deux familles disjointes**, et le lexique n'en
+connaissait qu'une.
+
+> Trois marques de plus, chacune éprouvée **sur les deux fils** : `reprise-du-dire`
+> — viser le dire de l'autre nommément —, `ne-va-pas` et `pour-autant`. Aucune
+> ne parle à tort sur les 85 prises des deux passages du premier fil ; les
+> trois relèvent les contestations du second. Une quatrième candidate,
+> « toutefois », a été écartée sur mesure : elle ouvre une phrase ordinaire
+> dans l'échange formel.
+>
+> Deux mesures ne font pas une garantie, et c'est écrit tel quel dans le code.
+
+**La quatrième n'était pas relevable : elle n'était pas dans le relevé.** Le message où le bureau
+de contrôle répond « **Non, je ne peux pas** » et annonce « **c'est un avis défavorable qui sera
+émis** » ne porte ni l'une ni l'autre dans ses prises. Il en a rendu trois : il n'est donc pas
+muet, et l'étape 7 bis ne signalait rien. **L'omission partielle était invisible.**
+
+> Elle se mesure, et gratuitement : la part de chaque message qu'une citation
+> reprend. Sur ce fil, **31 % pour celui-là, 51 % pour les autres**.
+>
+> Ce n'est **pas un taux à faire monter** — la politesse et la signature ne
+> doivent être reprises par personne, et cent pour cent serait un mauvais
+> signe. C'est un écart à regarder entre les messages d'un même fil. Aucun
+> seuil n'est posé : en inventer un ferait dire au chiffre plus qu'il ne sait
+> (règle 5). Il se calcule là où vit l'aplatissement qui sert déjà à vérifier
+> les citations — le refaire au navigateur en ferait une seconde version
+> (règle 4).
+
+**Trois des quatre « questions sans réponse » avaient reçu une réponse.** « A rectifier avant la
+pose de la couverture » a pour réponse « nous envoyons quelqu'un aujourd'hui pour reprendre la
+membrane » : les deux désignent la même chose et **ne partagent aucun mot**. Le § 56 l'annonçait ;
+ce fil le démontre.
+
+> **On demande désormais au modèle à quelle prise il répond** — le numéro du
+> message, pas un libellé. C'est le premier changement de ce qu'on lui demande
+> depuis l'étape 7 bis, et c'est le seul des deux rapprochements qu'on puisse
+> **vérifier** : le rang doit exister dans le fil et lui être strictement
+> antérieur, sinon il est écarté au serveur et compté.
+>
+> Les deux signaux coexistent, et **on dit lequel a parlé**. Un modèle qui
+> déclarerait des renvois à tort ferait taire des questions restées sans
+> réponse — l'apport principal du procédé —, et cela doit pouvoir se lire
+> plutôt que de se deviner. La consigne le dit au modèle dans ces termes.
+
+**Et une troisième queue de lien.** La messagerie pose aussi l'adresse `tel:` derrière le numéro
+qu'on lit : `+33 1 23 45 67 89<tel:+33%201%2023…>`. Les deux premiers schémas la manquaient.
+
+**Ce qui se vérifie en cassant** : un renvoi vers un message qui n'existe pas, ou qui n'est pas
+antérieur ; une réponse qui précède sa question ; une prise qui se répond à elle-même ; une
+citation qui ne se retrouve pas mais couvre quand même ; deux prises d'une même phrase comptées
+deux fois ; « toutefois » redevenu une marque ; une phrase de couverture qui porte un jugement.
+
+> Les trente-trois ruptures essayées tombent. Trois ont d'abord été muettes :
+> le lien d'une image en `tel:`, « rien à voir » que seul un autre motif
+> couvrait, et — la plus instructive — **un renvoi vers un trou du fil**, qu'un
+> message sans propos laisse au milieu des rangs et que la seule vérification
+> de l'ordre ne voyait pas. Ce qui reste : § 57 de
+> [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
+
 ### 8 — La boîte de réception du projet
 
 La porte principale, et le morceau le plus lourd. Elle vient en dernier parce qu'elle se

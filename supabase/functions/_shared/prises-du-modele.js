@@ -110,6 +110,7 @@ export const CONSIGNES = [
   "- `porte_sur` : sur quoi elle porte, en deux ou trois mots, les mêmes d'une prise à l'autre quand c'est la même chose — « humidité de l'acrotère », « cote du seuil ». C'est ce qui permettra de rapprocher deux prises contraires.",
   "- `pour_qui` : à qui c'est demandé, tel qu'écrit — un nom, une entreprise, « la MOE ». Null pour un constat ou une source.",
   "- `echeance` : le délai annoncé, TEL QU'ÉCRIT — « avant vendredi », « jeudi », « sous 15 jours ». Ne le convertis pas en date. Null s'il n'y en a pas.",
+  "- `repond_a` : le NUMÉRO DU MESSAGE auquel cette prise répond, quand elle répond à quelque chose qui y a été dit — une question, une demande, une position. Un numéro STRICTEMENT INFÉRIEUR à celui du message où tu la relèves. Null quand elle n'est la réponse de rien. Ne le mets QUE si la prise reprend vraiment ce qui a été dit là : ce numéro sera vérifié, et un renvoi inventé fait disparaître une question restée sans réponse, ce qui est le pire résultat possible.",
   "",
   "N'invente JAMAIS l'auteur ni la date d'une prise : ils sont déjà connus, ils viennent des en-têtes du message. On ne te les demande pas."
 ].join("\n");
@@ -152,9 +153,11 @@ export const SCHEMA_DES_PRISES = {
                   citation: { type: "string" },
                   porte_sur: { anyOf: [{ type: "string" }, { type: "null" }] },
                   pour_qui: { anyOf: [{ type: "string" }, { type: "null" }] },
-                  echeance: { anyOf: [{ type: "string" }, { type: "null" }] }
+                  echeance: { anyOf: [{ type: "string" }, { type: "null" }] },
+                  repond_a: { anyOf: [{ type: "integer" }, { type: "null" }] }
                 },
-                required: ["nature", "intitule", "citation", "porte_sur", "pour_qui", "echeance"]
+                required: ["nature", "intitule", "citation", "porte_sur", "pour_qui", "echeance",
+                  "repond_a"]
               }
             }
           },
@@ -167,6 +170,28 @@ export const SCHEMA_DES_PRISES = {
 };
 
 const texte = (valeur) => String(valeur ?? "").trim();
+
+/**
+ * Le renvoi d'une prise vers le message auquel elle répond, s'il tient.
+ *
+ * **On ne croit pas le modèle sur parole.** Le rang doit exister dans le fil et
+ * être **strictement antérieur** à celui où la prise est relevée : une réponse
+ * ne précède pas sa question. Un renvoi qui ne tient pas est écarté et compté —
+ * il ne se corrige pas, parce qu'on ne sait pas ce qu'il visait.
+ *
+ * L'enjeu n'est pas cosmétique : un renvoi inventé fait passer une question
+ * restée sans réponse pour une question répondue, et c'est l'apport principal
+ * du procédé qui disparaîtrait en silence.
+ */
+export function leRenvoiVerifie(prise, rangsConnus) {
+  const vise = prise?.repond_a;
+  if (!Number.isFinite(vise)) return null;
+  if (!rangsConnus.has(vise)) return null;
+
+  const dOu = Number(prise?.message);
+  if (!Number.isFinite(dOu) || vise >= dOu) return null;
+  return vise;
+}
 
 /**
  * Le fil tel qu'on le donne à lire.
@@ -339,14 +364,89 @@ export function verifierLesPrises({ prises = [], messages = [] } = {}) {
     estVide: (ligne) => !texte(ligne?.intitule)
   });
 
+  // **Les renvois se confrontent au fil.** Un rang qui n'existe pas, ou qui
+  // n'est pas antérieur, ne dit rien de ce qu'il visait : il s'écarte.
+  const rangsConnus = new Set(
+    (Array.isArray(messages) ? messages : [])
+      .filter((message) => texte(message?.propos))
+      .map((message) => Number(message?.rang))
+      .filter((rang) => Number.isFinite(rang))
+  );
+  let renvoisEcartes = 0;
+
   return {
     // **Le rang retenu est celui où la citation se trouve**, pas celui que le
     // modèle a annoncé : c'est de lui que viendront l'auteur et la date, et
     // garder l'annonce attribuerait la prise à quelqu'un qui ne l'a pas écrite.
-    retenues: retenus.map((ligne) => ({ ...ligne, message: Number(ligne?.page) || null })),
+    retenues: retenus.map((ligne) => {
+      const rendue = { ...ligne, message: Number(ligne?.page) || null };
+      const renvoi = leRenvoiVerifie(rendue, rangsConnus);
+      if (rendue.repond_a !== null && rendue.repond_a !== undefined && renvoi === null) {
+        renvoisEcartes += 1;
+      }
+      return { ...rendue, repond_a: renvoi };
+    }),
     ecartees: [...horsListe, ...ecartes.map(({ ligne, motif }) => ({ prise: ligne, motif }))],
-    messagesCorriges: pagesCorrigees
+    messagesCorriges: pagesCorrigees,
+    /** Combien de renvois ne tenaient pas devant le fil. Se dit, ne se cache pas. */
+    renvoisEcartes
   };
+}
+
+/**
+ * Quelle part de chaque message une citation reprend.
+ *
+ * ## Pourquoi cela se compte
+ *
+ * L'étape précédente a appris à dire qu'un message n'avait **rien** donné.
+ * Elle ne dit rien d'un message qui a donné **peu** — et c'est là qu'un fil
+ * réel a fait disparaître ce qui comptait le plus : sur un échange de
+ * chantier, le message où le bureau de contrôle répondait « Non, je ne peux
+ * pas » et annonçait « c'est un avis défavorable qui sera émis » a rendu trois
+ * prises, donc il n'était pas muet — et ces deux phrases-là n'y étaient pas.
+ * **Couvert à 31 %, quand les autres l'étaient à 51 %.**
+ *
+ * ## Ce que le compte vaut, et ce qu'il ne vaut pas
+ *
+ * Ce n'est **pas** un taux à faire monter : un message porte des formules de
+ * politesse et une signature, qu'aucune prise ne doit reprendre. Cent pour
+ * cent serait un mauvais signe, pas un bon.
+ *
+ * Ce qu'il permet, c'est la **comparaison** — entre les messages d'un même fil,
+ * où la politesse pèse à peu près pareil. Aucun seuil n'est posé ici : en
+ * inventer un ferait dire au chiffre plus qu'il ne sait (règle 5). On le rend,
+ * et le lecteur juge.
+ *
+ * Il se calcule ici parce que c'est ici que vit l'aplatissement qui sert déjà
+ * à vérifier les citations : le refaire au navigateur en ferait une seconde
+ * version, qui finirait par ne plus dire la même chose (règle 4).
+ */
+export function laPartRelevee(messages = [], retenues = []) {
+  const prisesDuRang = new Map();
+  for (const prise of Array.isArray(retenues) ? retenues : []) {
+    const rang = Number(prise?.message);
+    if (!Number.isFinite(rang)) continue;
+    if (!prisesDuRang.has(rang)) prisesDuRang.set(rang, []);
+    prisesDuRang.get(rang).push(aplati(prise?.citation));
+  }
+
+  return (Array.isArray(messages) ? messages : [])
+    .filter((message) => texte(message?.propos))
+    .map((message) => {
+      const rang = Number(message?.rang);
+      const propos = aplati(message.propos);
+      // **Une citation ne compte que si elle se retrouve**, et chacune une
+      // seule fois : deux prises tirées de la même phrase ne couvrent pas deux
+      // fois le message.
+      const vues = new Set();
+      let couverts = 0;
+      for (const citation of prisesDuRang.get(rang) ?? []) {
+        if (!citation || vues.has(citation) || !propos.includes(citation)) continue;
+        vues.add(citation);
+        couverts += citation.length;
+      }
+      return { message: rang, caracteres: propos.length, couverts };
+    });
 }
 
 /**
@@ -384,6 +484,13 @@ export function prisesAuFormatDuMoteur(retenues = [], { filId = "", messages = [
       quand: texte(message?.quand) || null,
       /** Le message annoncé était-il le bon ? Sinon, l'auteur a changé. */
       messageVerifie: prise?.pageVerifiee === true,
+      /**
+       * Le message auquel cette prise répond, **une fois confronté au fil**.
+       *
+       * C'est le seul rapprochement vérifiable dont on dispose : le libellé de
+       * sujet, lui, est un mot que le modèle écrit librement.
+       */
+      repondA: Number.isFinite(prise?.repond_a) ? prise.repond_a : null,
       /** Deux prises identiques d'un même message se reconnaissent à ceci. */
       empreinte: aplati(`${texte(prise?.nature)} ${intitule}`)
     };

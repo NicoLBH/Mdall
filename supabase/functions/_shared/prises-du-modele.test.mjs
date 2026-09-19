@@ -3,8 +3,8 @@ import test from "node:test";
 
 import {
   CONSIGNES, ECART, ECART_DE_NATURE, NATURE, PHRASES_DE_LECART_DUNE_PRISE, SCHEMA_DES_PRISES,
-  ecarteesAuFormatDuMoteur, filEnTexte, lesMessagesRendus, messagesEnPages,
-  prisesAuFormatDuMoteur, verifierLesPrises
+  ecarteesAuFormatDuMoteur, filEnTexte, laPartRelevee, leRenvoiVerifie, lesMessagesRendus,
+  messagesEnPages, prisesAuFormatDuMoteur, verifierLesPrises
 } from "./prises-du-modele.js";
 
 // Aucun mail réel : les noms, les sociétés et les domaines sont inventés.
@@ -101,7 +101,18 @@ test("le schéma ne demande ni l'auteur ni la date", () => {
   assert.equal(champs.includes("qui"), false);
   assert.equal(champs.includes("quand"), false);
   assert.deepEqual([...champs].sort(),
-    ["citation", "echeance", "intitule", "nature", "porte_sur", "pour_qui"]);
+    ["citation", "echeance", "intitule", "nature", "porte_sur", "pour_qui", "repond_a"]);
+});
+
+test("le schéma demande à quel message une prise répond", () => {
+  // **Le seul rapprochement vérifiable.** Le libellé de sujet, lui, est un mot
+  // que le modèle écrit librement : deux fils réels ont montré que « rectification
+  // de la pose d'étanchéité » et « reprise de la membrane » désignent la même
+  // chose sans partager un mot.
+  assert.deepEqual(UNE_PRISE.properties.repond_a.anyOf,
+    [{ type: "integer" }, { type: "null" }]);
+  assert.ok(UNE_PRISE.required.includes("repond_a"),
+    "facultatif, il ne serait rendu que quand le modèle y pense");
 });
 
 test("le numéro du message ne se demande plus à la prise", () => {
@@ -378,4 +389,89 @@ test("une écartée sans intitulé ne perd pas sa citation", () => {
   const [dite] = ecarteesAuFormatDuMoteur(ecartees);
   assert.equal(dite.motif, ECART.VIDE);
   assert.equal(dite.citation, "Le support est humide au droit de l'acrotère.");
+});
+
+// ── Le renvoi, confronté au fil ────────────────────────────────────────────
+
+const RANGS = new Set([1, 2]);
+
+test("un renvoi vers un message antérieur du fil tient", () => {
+  assert.equal(leRenvoiVerifie({ repond_a: 1, message: 2 }, RANGS), 1);
+});
+
+test("un renvoi vers un message qui n'existe pas ne tient pas", () => {
+  // On ne sait pas ce qu'il visait : le corriger serait deviner.
+  assert.equal(leRenvoiVerifie({ repond_a: 9, message: 2 }, RANGS), null);
+});
+
+test("un renvoi vers un trou du fil ne tient pas non plus", () => {
+  // **Le cas qui échappe à la seule vérification de l'ordre.** Un message sans
+  // propos n'est pas donné à lire : son rang manque au milieu du fil, et un
+  // renvoi qui le vise est antérieur sans exister pour autant.
+  const avecUnTrou = new Set([1, 3]);
+  assert.equal(leRenvoiVerifie({ repond_a: 2, message: 3 }, avecUnTrou), null);
+  assert.equal(leRenvoiVerifie({ repond_a: 0, message: 3 }, avecUnTrou), null);
+  assert.equal(leRenvoiVerifie({ repond_a: 1, message: 3 }, avecUnTrou), 1);
+});
+
+test("une réponse ne précède pas sa question", () => {
+  assert.equal(leRenvoiVerifie({ repond_a: 2, message: 1 }, RANGS), null);
+  assert.equal(leRenvoiVerifie({ repond_a: 2, message: 2 }, RANGS), null,
+    "ni ne se répond à elle-même");
+});
+
+test("une prise sans renvoi n'en reçoit pas", () => {
+  assert.equal(leRenvoiVerifie({ repond_a: null, message: 2 }, RANGS), null);
+  assert.equal(leRenvoiVerifie({ repond_a: "un", message: 2 }, RANGS), null);
+  assert.equal(leRenvoiVerifie({}, RANGS), null);
+});
+
+test("un renvoi qui tient descend avec la prise, et se compte s'il tombe", () => {
+  const bonne = prise({ repond_a: 1 });
+  const mauvaise = prise({ repond_a: 7, intitule: "le support a été repris" });
+  const lu = verifierLesPrises({ prises: [bonne, mauvaise], messages: MESSAGES });
+  assert.equal(lu.renvoisEcartes, 1);
+
+  const rendues = prisesAuFormatDuMoteur(lu.retenues, { messages: MESSAGES });
+  assert.deepEqual(rendues.map((une) => une.repondA), [1, null]);
+});
+
+test("la consigne dit que le renvoi sera vérifié, et ce qu'un renvoi inventé coûte", () => {
+  assert.ok(CONSIGNES.includes("`repond_a`"));
+  assert.ok(CONSIGNES.includes("STRICTEMENT INFÉRIEUR"));
+  assert.ok(CONSIGNES.includes("question restée sans réponse"));
+});
+
+// ── Ce qu'une citation reprend d'un message ────────────────────────────────
+
+test("la part relevée se compte sur ce qui se retrouve vraiment", () => {
+  const part = laPartRelevee(MESSAGES, [
+    { message: 2, citation: "Le support est humide au droit de l'acrotère." },
+    { message: 2, citation: "Le chantier est arrêté." }
+  ]);
+  const deux = part.find((une) => une.message === 2);
+  assert.equal(deux.couverts, 45, "la citation inventée ne couvre rien");
+  assert.ok(deux.caracteres > deux.couverts);
+});
+
+test("deux prises tirées de la même phrase ne la comptent qu'une fois", () => {
+  // Sinon un message court et deux prises jumelles afficheraient plus de cent
+  // pour cent, et le chiffre cesserait de vouloir dire quelque chose.
+  const citation = "Le support est humide au droit de l'acrotère.";
+  const [deux] = laPartRelevee(MESSAGES, [
+    { message: 2, citation }, { message: 2, citation }
+  ]).filter((une) => une.message === 2);
+  assert.equal(deux.couverts, 45);
+});
+
+test("un message sans propos ne se compte pas", () => {
+  // Le troisième message du fil ne porte rien : une part sur zéro n'existe pas.
+  assert.equal(laPartRelevee(MESSAGES, []).some((une) => une.message === 3), false);
+});
+
+test("un message dont rien n'a été tiré se compte à zéro, et non pas du tout", () => {
+  // C'est l'écart qu'on veut voir : un message présent, et couvert à rien.
+  const un = laPartRelevee(MESSAGES, []).find((une) => une.message === 1);
+  assert.equal(un.couverts, 0);
+  assert.ok(un.caracteres > 0);
 });
