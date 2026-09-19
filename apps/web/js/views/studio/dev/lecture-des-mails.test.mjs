@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { ONGLET, renderLaLectureDesMails } from "./lecture-des-mails.js";
+import { NATURE } from "../../../services/prises-de-position.js";
 import { leFilDesMails } from "../../../services/le-fil-des-mails.js";
 import { TROU } from "../../../services/trous-dun-mail.js";
 
@@ -51,7 +52,19 @@ const SECOND = mail(
 
 const vue = (dessus = {}) => ({
   phase: "vide", fichiers: [], fil: null, onglet: ONGLET.FIL,
-  motif: "", queFaire: "", rangement: null, ouverts: new Set(), ...dessus
+  motif: "", queFaire: "", rangement: null, ouverts: new Set(), releve: null, ...dessus
+});
+
+const prise = (dessus = {}) => ({
+  nature: NATURE.CONSTAT, intitule: "le support est humide au droit de l'acrotère",
+  message: 2, citation: "Le support est humide au droit de l'acrotère.",
+  qui: "Ourdine Ferrand", quand: "12 mars 2026", pourQui: null, echeance: null,
+  messageVerifie: true, ...dessus
+});
+
+const releve = (dessus = {}) => ({
+  enCours: false, prises: [prise()], ecartees: 0, messagesCorriges: 0, coupee: false,
+  modele: "gpt-4.1-mini", entree: 4200, sortie: 800, dureeMs: 3400, ...dessus
 });
 
 const lu = (...sources) => vue({ phase: "lu", fil: leFilDesMails(sources), fichiers: ["un.eml"] });
@@ -191,13 +204,107 @@ test("« Transformer » reste éteint tant que le relevé n'existe pas", () => {
   assert.ok(bouton.includes("disabled"), bouton);
 });
 
-test("l'onglet Analyse dit ce qui n'est pas encore écrit, et que rien n'a été payé", () => {
-  const html = renderLaLectureDesMails({ ...lu(PREMIER), onglet: ONGLET.ANALYSE });
-  // Ce titre est écrit tel quel dans le gabarit : son apostrophe n'est pas
-  // échappée, parce qu'elle n'est jamais passée par escapeHtml.
-  assert.ok(html.includes("Le relevé n'est pas encore écrit"));
-  assert.ok(html.includes("rien n'a été payé"));
-  assert.equal(html.includes("fil-mails__message"), false);
+// ── L'analyse : avant, pendant, après ──────────────────────────────────────
+
+const analyse = (dessus = {}) => ({ ...lu(PREMIER, SECOND), onglet: ONGLET.ANALYSE, ...dessus });
+
+test("avant le relevé, l'onglet Analyse dit ce qu'il va demander et ce qu'il va coûter", () => {
+  const html = renderLaLectureDesMails(analyse());
+  assert.ok(html.includes("Relever ce que ce fil porte"));
+  assert.ok(html.includes("C'est le premier appel au modèle de cet écran"));
+  assert.ok(html.includes("data-mails-relever"));
+});
+
+test("avant le relevé, l'écran dit ce qui monte et ce qui ne monte pas", () => {
+  // De la correspondance privée qui monte sans servir est de la correspondance
+  // privée qui monte pour rien.
+  const html = renderLaLectureDesMails(analyse());
+  // Écrit tel quel dans le gabarit : l'apostrophe reste brute.
+  assert.ok(html.includes("Pas les citations qu'ils recopient"));
+  assert.ok(html.includes("pas les destinataires"));
+});
+
+test("pendant le relevé, le fil est dit intact", () => {
+  const html = renderLaLectureDesMails(analyse({ releve: { enCours: true } }));
+  assert.ok(html.includes("Le modèle relit le fil"));
+  assert.ok(html.includes("il a été déplié sans appel"));
+  assert.equal(html.includes("data-mails-relever"), false);
+});
+
+test("un relevé qui rate laisse le fil et propose de réessayer", () => {
+  const html = renderLaLectureDesMails(analyse({
+    releve: { enCours: false, motif: "le relevé a dépassé le temps imparti", queFaire: "Un fil plus court passe." }
+  }));
+  assert.ok(html.includes("le relevé a dépassé le temps imparti"));
+  assert.ok(html.includes("Un fil plus court passe."));
+  assert.ok(html.includes("Réessayer le relevé"));
+  // Le fil, lui, n'a pas bougé : il n'a rien coûté.
+  assert.ok(html.includes("Étanchéité toiture · 2 messages"));
+});
+
+test("après le relevé, chaque prise porte sa citation", () => {
+  // Une prise sans sa citation demande de croire le modèle sur parole, et
+  // c'est précisément ce qu'on refuse.
+  const html = renderLaLectureDesMails(analyse({ releve: releve() }));
+  assert.ok(html.includes("1 prise de position"));
+  assert.ok(html.includes("Constat"));
+  assert.ok(html.includes("fil-mails__cite"));
+  const bloc = html.slice(html.indexOf("fil-mails__cite"));
+  assert.ok(bloc.includes("Le support est humide au droit de l&#39;acrotère."));
+});
+
+test("chaque rubrique dit ce que sa nature deviendrait", () => {
+  const html = renderLaLectureDesMails(analyse({
+    releve: releve({ prises: [prise({ nature: NATURE.DEMANDE, pourQui: "BERTRAND", echeance: "avant vendredi" })] })
+  }));
+  assert.ok(html.includes("un sujet à ouvrir"));
+  assert.ok(html.includes("avant vendredi"));
+  assert.ok(html.includes("BERTRAND"));
+});
+
+test("ce qui manque à une prise s'affiche sur la prise", () => {
+  const html = renderLaLectureDesMails(analyse({
+    releve: releve({ prises: [prise({ nature: NATURE.DEMANDE })] })
+  }));
+  assert.ok(html.includes("elle ne dit pas à qui c&#39;est demandé"));
+  assert.ok(html.includes("elle ne dit pas pour quand"));
+});
+
+test("ce que le relevé a coûté s'affiche à côté de son résultat", () => {
+  // Un prix qu'il faut aller chercher dans un autre écran n'entre jamais dans
+  // la décision.
+  const html = renderLaLectureDesMails(analyse({ releve: releve() }));
+  assert.ok(/\d[,.]\d+\s*€|€/.test(html), "aucun prix affiché");
+  assert.ok(html.includes("3.4 s"));
+});
+
+test("un décompte absent n'est pas un relevé gratuit", () => {
+  const html = renderLaLectureDesMails(analyse({ releve: releve({ entree: null, sortie: null }) }));
+  assert.ok(html.includes("coût non annoncé"));
+});
+
+test("ce qui a été écarté se dit, et se compte", () => {
+  const html = renderLaLectureDesMails(analyse({ releve: releve({ ecartees: 2 }) }));
+  assert.ok(html.includes("2 écartées faute d&#39;une citation qu&#39;on retrouve"));
+  assert.ok(html.includes("C&#39;est la mesure de ce que ce relevé n&#39;a pas su faire."));
+});
+
+test("un relevé qui ne retient rien ne se lit pas comme un fil vide", () => {
+  const html = renderLaLectureDesMails(analyse({ releve: releve({ prises: [] }) }));
+  assert.ok(html.includes("Ce n'est pas la même chose qu'un fil vide"));
+});
+
+test("les prises se montrent aussi sous le message d'où elles sortent", () => {
+  // Aller chercher dans l'autre onglet de quelle phrase sort une prise, c'est
+  // ce qui rendait les déceptions inexplicables chez le lecteur de CR.
+  const html = renderLaLectureDesMails({ ...lu(PREMIER, SECOND), releve: releve() });
+  assert.ok(html.includes("fil-mails__prises"));
+  assert.ok(html.includes("fil-mails__prise-nature"));
+});
+
+test("un message sans prise n'en affiche aucune", () => {
+  const html = renderLaLectureDesMails({ ...lu(PREMIER), releve: releve({ prises: [] }) });
+  assert.equal(html.includes("fil-mails__prises"), false);
 });
 
 test("le rangement se dit pendant qu'il se fait, et pas avant", () => {

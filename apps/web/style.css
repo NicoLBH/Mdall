@@ -26828,3 +26828,12 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   flex:0 0 auto;margin-left:6px;
   color:var(--muted);
 }
+/* Ce qu'on a tiré d'un message, sous le message. Assez discret pour ne pas
+   couvrir le propos, assez visible pour qu'on voie d'où chaque prise sort. */
+.fil-mails__prises{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;}
+.fil-mails__prises li{
+  display:flex;align-items:flex-start;gap:6px;
+  font-size:12px;line-height:1.45;color:var(--text);
+}
+.fil-mails__prises li .octicon{flex:0 0 auto;margin-top:2px;color:var(--muted);}
+.fil-mails__prise-nature{flex:0 0 auto;font-weight:600;color:var(--muted);}

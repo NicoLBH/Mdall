@@ -3923,3 +3923,47 @@ dossier « Mails » privé, marqué d'un cadenas dans l'arbre et dans le tableau
 **Pourquoi c'est repoussé.** Les cinq attendent la même chose : soit le partage
 (la garde), soit l'usage sur des fils réels (le reste). L'ordre du plan tient —
 le relevé (étape 5) avant les commodités.
+
+---
+
+## 51. Le relevé d'un fil : ce qui n'est pas encore mesuré
+
+**Ce qui existe.** L'étape 5 de [`lire-les-mails.md`](lire-les-mails.md) est
+écrite : `supabase/functions/relever-un-fil/` relève les cinq natures que le
+modèle déclare — constat, demande, engagement, décision, source —, chacune
+vérifiée contre le message d'où elle sort. L'écran les affiche par nature, avec
+leur citation, ce qui leur manque, et ce que le relevé a coûté.
+
+**Ce qui reste dehors, et ce que ça coûte.**
+
+- **La qualité du relevé n'est pas mesurée.** On sait combien de prises ont été
+  écartées faute de citation — c'est la mesure de ce que le relevé n'a pas su
+  faire —, mais pas ce qu'il a **manqué** : une demande réelle qu'il n'a pas
+  relevée ne laisse aucune trace. C'est le pendant exact de ce qu'on sait déjà
+  du lecteur de CR, et cela se mesure de la seule façon possible : **sur des
+  fils réels, à l'œil**, en comparant ce qu'on aurait relevé soi-même. Il faut
+  donc l'usage avant l'outil de mesure.
+- **Le modèle n'est pas comparé.** `OPENAI_PRISES_MODEL` se change sans toucher
+  au code, comme pour les CR, mais rien ne conserve ce qu'un relevé a valu d'une
+  fois sur l'autre. Le lecteur de CR a un suivi des lectures qui affiche l'écart
+  avec la précédente ; le même service pourrait servir ici, et c'est le genre de
+  branchement qui se fait quand on a de quoi comparer.
+- **Le relevé n'est pas rangé.** Chaque appel est repayé. Pour un CR, la
+  restitution est rangée parce qu'elle coûte cher ; ici le fil se déplie
+  gratuitement, et seul le relevé coûte — il faudrait donc le ranger **à côté du
+  fil**, dans le dossier privé, avec de quoi reconnaître que c'est le même fil.
+  Ce qui suppose de trancher ce qu'on fait quand un message s'ajoute au fil.
+- **`porte_sur` ne sert encore à rien.** Le modèle le rend, et c'est ce qui
+  permettra à l'étape 6 de rapprocher deux prises contraires. Tant que l'étape 6
+  n'est pas écrite, c'est un champ qu'on paie sans s'en servir — assumé, parce
+  que le redemander plus tard coûterait un second relevé du même fil.
+- **Une prise ne se corrige pas à la main.** On la voit, on la juge, on ne peut
+  ni la reformuler ni la rejeter. C'est l'étape 7 qui ouvrira ce geste, avec la
+  proposition : une prise écartée à la main n'aurait aucun sens tant qu'elle ne
+  va nulle part.
+
+**Pourquoi c'est repoussé.** Les cinq demandent la même chose : **l'usage**.
+Mesurer la qualité d'un relevé, comparer deux modèles, décider quand un relevé
+rangé est périmé — rien de cela ne se règle sans fils réels, qui n'entreront pas
+dans le dépôt. L'ordre du plan tient : les deux natures dérivées (étape 6), qui
+ne coûtent rien et se vérifient, avant les commodités qui demandent des mesures.

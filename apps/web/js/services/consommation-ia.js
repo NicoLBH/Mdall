@@ -211,6 +211,10 @@ export const NATURES = {
     nom: "Échange dans un sujet",
     quoi: "Répondre dans la discussion d'un sujet."
   },
+  "releve-dun-fil": {
+    nom: "Relevé d'un fil de mails",
+    quoi: "Relever ce que chacun constate, demande, engage ou décide dans un échange."
+  },
   "brouillon-de-fermeture": {
     nom: "Brouillon de fermeture",
     quoi: "Relire le fil d'un sujet qu'on ferme, et écrire le brouillon de ce qui a été tranché."
