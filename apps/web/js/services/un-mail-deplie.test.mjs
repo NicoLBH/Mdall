@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { TROU } from "./trous-dun-mail.js";
 import {
-  FORME_DU_CORPS, TROU, decouperLeMultipart, laDateRfc5322, lesAdresses, objetNu,
-  phraseDuTrou, separerLesEnTetes, uneAdresse, unMailDeplie, valeurDe, valeurEtParametres
+  FORME_DU_CORPS, decouperLeMultipart, laDateRfc5322, lesAdresses, objetNu,
+  separerLesEnTetes, uneAdresse, unMailDeplie, valeurDe, valeurEtParametres
 } from "./un-mail-deplie.js";
 
 // Aucun mail réel n'entre ici : les noms, les sociétés et la commune sont
@@ -609,26 +610,4 @@ test("un mail complet ne porte aucun trou", () => {
 test("les octets d'un fichier se déplient comme sa chaîne brute", () => {
   const octets = Uint8Array.from(SIMPLE, (caractere) => caractere.charCodeAt(0));
   assert.deepEqual(unMailDeplie(octets), unMailDeplie(SIMPLE));
-});
-
-// ── Les phrases des trous ──────────────────────────────────────────────────
-
-test("chaque trou possible porte sa phrase", () => {
-  // Ajouter un trou sans sa phrase le ferait s'afficher « quelque chose n'a
-  // pas pu être placé », ce qui n'aide personne.
-  for (const quoi of Object.values(TROU)) {
-    assert.notEqual(phraseDuTrou({ quoi }), "quelque chose n'a pas pu être placé", quoi);
-  }
-});
-
-test("la phrase d'un trou nomme l'endroit", () => {
-  assert.equal(
-    phraseDuTrou({ quoi: TROU.SANS_DATE, ou: "l'en-tête Date" }),
-    "ce message ne porte pas de date (l'en-tête Date)"
-  );
-});
-
-test("un trou inconnu ne fait pas échouer l'affichage", () => {
-  assert.equal(phraseDuTrou({ quoi: "inconnu" }), "quelque chose n'a pas pu être placé");
-  assert.equal(phraseDuTrou(null), "quelque chose n'a pas pu être placé");
 });

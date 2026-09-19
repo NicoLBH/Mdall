@@ -309,7 +309,7 @@ Les en-têtes, le décodage (`base64`, `quoted-printable`, les jeux de caractèr
 corps non décodé ne s'affiche pas vide ; un `multipart` dont on prend le HTML alors que le
 texte existe.
 
-### 2 — Séparer ce qu'on écrit de ce qu'on cite
+### 2 — Séparer ce qu'on écrit de ce qu'on cite · *fait*
 
 Le préfixe `>`, puis les bandeaux des messageries. Ce qu'on n'a pas su couper reste, et se
 marque.
@@ -317,6 +317,20 @@ marque.
 **En cassant** : un bandeau reconnu ne doit pas emporter le message entier ; une ligne qui
 commence par `>` dans un devis (`> 50 m²`) n'est pas une citation — il lui faut le contexte
 d'un bloc.
+
+> Écrit dans `services/ce-quon-cite.js`. Le doute penche toujours du même côté :
+> **dans le doute, c'est du propos**, et un trou le dit. Une conséquence se paie
+> à l'œil, et elle est assumée : dans une réponse point par point, chaque ligne
+> citée seule reste dans le propos, avec sa marque.
+>
+> Deux marques de plus s'y jouent. La **signature** (`-- `) sort du propos :
+> laisser un pied de page y entrer donnerait au relevé des numéros de téléphone
+> à prendre pour des constats. Et les **chevrons referment la citation qu'un
+> bandeau a ouverte** — sans quoi le « Merci, à jeudi » écrit sous la citation
+> serait attribué à quelqu'un d'autre.
+>
+> Les vingt et une ruptures essayées tombent. Ce qui reste : § 48 de
+> [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
 ### 3 — Reconstituer le fil
 
@@ -449,7 +463,8 @@ expéditeur inconnu. Voir la section ci-dessus.
 |---|---|
 | Décoder ce qu'un mail transporte | `services/decoder-un-mail.js` — pur · *écrit* |
 | Déplier un `.eml` | `services/un-mail-deplie.js` — pur · *écrit* |
-| Séparer le propos de la citation | `services/ce-quon-cite.js` — pur |
+| Ce qu'on n'a pas su placer, et sa phrase | `services/trous-dun-mail.js` — pur · *écrit* |
+| Séparer le propos de la citation | `services/ce-quon-cite.js` — pur · *écrit* |
 | Reconstituer le fil | `services/le-fil-des-mails.js` — pur |
 | Ce qu'un fil porte | `services/prises-de-position.js` — pur |
 | Le relevé par le modèle | `supabase/functions/relever-un-fil/` — la consigne y vit seule |
