@@ -4364,3 +4364,52 @@ vérifie en cassant le code de ce qu'on espère du modèle. Il faut une troisiè
 **ce qui ne s'exécute nulle part.** Un module qu'aucune épreuve ne peut charger n'est ni tenu ni
 espéré — il est simplement non joué, et le nombre d'épreuves du dépôt n'en dit rien. 5 807
 épreuves vertes ont accompagné un écran cassé jusqu'en production.
+
+---
+
+## 61. Ce que trois passages ont acquis, et ce qu'ils laissent
+
+**Ce qui vient d'être réglé.** La phrase de reproductibilité dit la mesure au lieu de la promesse.
+L'intitulé est confronté aux mots de sa citation. « Sans réponse » dit sur quels autres sujets le
+fil a continué. Les signatures sortent des listes de ce qu'aucune citation ne reprend. C'est
+l'étape 7 nonies de [`lire-les-mails.md`](lire-les-mails.md).
+
+**Ce que le protocole a acquis, et il faut le dire avant le reste.** La liste fermée de sujets
+tient — quatre sujets identiques aux trois passages, contre 28 libellés libres sur le même fil.
+Le refus est relevé aux trois passages, alors qu'il manquait aux trois précédents. La stabilité
+passe de 53 % à 83 %. **Les deux mécanismes livrés sans mesure au § 59 sont validés.**
+
+**Ce qui reste ouvert.**
+
+- **Le déterminisme n'existe pas, et il faut décider ce qu'on en fait.** Deux
+  prises sur douze flottent. La voie qui reste est celle qu'on avait écartée
+  faute de chiffres comparables : **passer le fil deux fois et prendre
+  l'union**, en disant ce qui n'est apparu qu'une fois. Il coûte deux appels ;
+  on sait maintenant qu'il ramasserait 2 prises de plus sur 12, dont une
+  contestation. Ce n'est plus une hypothèse, c'est un arbitrage prix/rappel.
+- **La liste fermée sépare ce que le litige joint.** Quatre sujets déclarés,
+  deux litiges réels : *infiltration d'eau* et *origine de la fuite* sont le
+  même désaccord ; *qualité de la pose* et *reprise et essais* sont le défaut
+  et sa reprise. **Zéro faux rapprochement, deux manqués.** On dit désormais où
+  l'on n'a pas cherché ; on ne répare rien. Le seul signal qui pourrait les
+  joindre sans deviner est le renvoi vérifié, et le modèle ne l'a pas déclaré
+  là où il aurait dû. C'est à lui qu'il faut revenir, pas au lexique.
+- **Le bruit des signatures est coupé de moitié, pas du tout.** Les 20 lignes
+  répétées sortent ; les 12 phrases du message d'Antoine restent, parce qu'il
+  n'a écrit qu'une fois — et c'est précisément là que se cachait la prise
+  perdue au passage 5. Une signature ne se reconnaît à sa répétition que chez
+  les correspondants réguliers.
+- **La découpe en phrases reste naïve** (§ 59) : « M. » et « n° 5. » coupent
+  une phrase en deux.
+- **Toujours ouvert des § 54 à 60** : le renvoi de ⑮ jamais exercé sur un fil
+  réel — et ce fil vient de montrer qu'il manque là où il compte ; la période
+  d'un fil lue sur son dernier jour ; « un seul mail déposé » quand les cinq
+  messages sont reconstitués ; les images collées jamais lues, dont la fiche
+  d'examen en pièce jointe ; toute la famille des modules qui importent
+  l'authentification et ne s'exécutent nulle part.
+
+**Ce que cette étape ajoute à la façon de travailler.** Le carnet distinguait ce qui se vérifie en
+cassant le code, ce qu'on espère du modèle, et ce qui ne s'exécute nulle part. Il faut nommer ce
+que trois passages viennent de faire : **ils ont validé deux paris et falsifié une promesse, dans
+la même mesure.** Ni le succès ni l'échec n'étaient prévisibles à la lecture du code. C'est la
+seule façon de savoir, et elle coûte trois appels.

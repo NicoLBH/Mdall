@@ -64,7 +64,8 @@ import {
   NATURE, ceQueCaDevient, ceQuiManque, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
   DOU, ceQueLeModeleNaPasDit, partReleveeDuMessage, phraseDeCeQuiNestPasRepris, phraseDeLaPart,
   phraseDeLaProvenance,
-  phraseDesSujets, phraseDesSujetsEcartes, phraseDeLaTemperature,
+  phraseDesLignesRepetees, phraseDesSujets, phraseDesSujetsDaCote, phraseDesSujetsEcartes,
+  phraseDeLaTemperature,
   phraseDuReleve, prisesDuMessage, quoiDeLaNature
 } from "../../../services/prises-de-position.js";
 import { phraseDuRefus, queFaire } from "../../../services/le-releve-rendu.js";
@@ -607,6 +608,15 @@ function renderUnePrise(prise) {
       ${Number(prise.repondA) ? `<p class="fil-mails__moment mono-small">${
         escapeHtml(`répond au message ${Number(prise.repondA)}`)}</p>` : ""}
       ${/*
+        **Où l'on n'a pas cherché.** « Sans réponse » n'a regardé que sous un
+        sujet, et un fil réel a montré la réponse deux messages plus loin, sous
+        un sujet voisin. On ne les fusionne pas — souder ferait passer une
+        question pour répondue par une prise qui n'y répond pas —, on dit où
+        aller (règle 5).
+      */""}
+      ${phraseDesSujetsDaCote(prise.ailleurs) ? `<p class="fil-mails__moment mono-small">${
+        escapeHtml(phraseDesSujetsDaCote(prise.ailleurs))}</p>` : ""}
+      ${/*
         **La citation est sous la prise, toujours.** C'est elle qui la rend
         vérifiable : une prise sans sa citation demande de croire le modèle
         sur parole, et c'est précisément ce qu'on refuse.
@@ -758,6 +768,10 @@ function renderCeQuiNestPasRepris(message, part, ouvert) {
       <ul class="fil-mails__trous">
         ${phrases.map((phrase) => `<li>${escapeHtml(phrase)}</li>`).join("")}
       </ul>
+      ${phraseDesLignesRepetees(part?.lignesRepetees) ? `
+        <p class="fil-mails__moment mono-small">${
+          escapeHtml(phraseDesLignesRepetees(part.lignesRepetees))}</p>
+      ` : ""}
     ` : ""}
   `;
 }
@@ -801,6 +815,10 @@ function renderUnDesaccord(prise) {
         ? `Se sont exprimés avant sur le même sujet : ${avant.join(", ")}. `
           + "On ne sait pas laquelle de leurs positions est visée."
         : "Aucune autre prise n'a été relevée sous ce sujet. Ce qui est contesté peut venir d'ailleurs — d'un rapport, ou d'un message rangé sous un autre intitulé.")}</p>
+      ${phraseDesSujetsDaCote(prise.ailleurs) ? `
+        <p class="fil-mails__moment mono-small">${
+          escapeHtml(phraseDesSujetsDaCote(prise.ailleurs))}</p>
+      ` : ""}
     </article>
   `;
 }

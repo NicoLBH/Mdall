@@ -4,8 +4,8 @@ import test from "node:test";
 import {
   CONSIGNES, ECART, ECART_DE_NATURE, NATURE, PHRASES_DE_LECART_DUNE_PRISE, SCHEMA_DES_PRISES,
   ecarteesAuFormatDuMoteur, filEnTexte, laPartRelevee, leRenvoiVerifie, leSujetVerifie,
-  lesMessagesRendus, lesPhrasesDunMessage, lesPhrasesNonReprises, lesSujetsDuFil, messagesEnPages,
-  prisesAuFormatDuMoteur, verifierLesPrises
+  lIntituleSortDesMots, lesLignesQuiReviennent, lesMessagesRendus, lesPhrasesDunMessage,
+  lesPhrasesNonReprises, lesSujetsDuFil, messagesEnPages, prisesAuFormatDuMoteur, verifierLesPrises
 } from "./prises-du-modele.js";
 
 /** Les sujets tels que le modèle les déclare en tête de sa réponse. */
@@ -594,7 +594,7 @@ test("les phrases gardent les mots de l'auteur, accents et majuscules", () => {
 
 test("la phrase citée disparaît de la liste, les autres restent", () => {
   const propos = "Bonjour.\nNon, je ne peux pas.\nC'est un avis défavorable qui sera émis.";
-  const reste = lesPhrasesNonReprises(propos, ["Non, je ne peux pas."]);
+  const reste = lesPhrasesNonReprises(propos, ["Non, je ne peux pas."]).phrases;
   assert.deepEqual(reste, ["Bonjour.", "C'est un avis défavorable qui sera émis."]);
 });
 
@@ -603,13 +603,13 @@ test("une citation ponctuée autrement reconnaît quand même sa phrase", () => 
   // deux porte souvent un point ou une virgule que l'autre n'a pas. Comparer les
   // chaînes telles quelles laisserait la phrase dans la liste alors qu'elle a
   // bien été relevée.
-  const reste = lesPhrasesNonReprises("Non, je ne peux pas.", ["non je ne peux pas"]);
+  const reste = lesPhrasesNonReprises("Non, je ne peux pas.", ["non je ne peux pas"]).phrases;
   assert.deepEqual(reste, []);
 });
 
 test("une citation qui ne prend qu'un morceau de la phrase la retire aussi", () => {
   const reste = lesPhrasesNonReprises(
-    "Le support est humide au droit de l'acrotère.", ["le support est humide"]);
+    "Le support est humide au droit de l'acrotère.", ["le support est humide"]).phrases;
   assert.deepEqual(reste, []);
 });
 
@@ -623,7 +623,7 @@ test("un mot ne se reconnaît pas au milieu d'un autre", () => {
   // comparait deux textes sans rapport : elle passait des deux façons, et ne
   // prouvait donc rien.
   const reste = lesPhrasesNonReprises(
-    "Le vent souffle fort.", ["le vent souffle fortement ici, ce jour-là"]);
+    "Le vent souffle fort.", ["le vent souffle fortement ici, ce jour-là"]).phrases;
   assert.deepEqual(reste, ["Le vent souffle fort."]);
 });
 
@@ -636,7 +636,7 @@ test("une citation plus longue que la phrase la retire quand même", () => {
   const reste = lesPhrasesNonReprises(
     "Non, je ne peux pas. C'est un avis défavorable qui sera émis.",
     ["Non, je ne peux pas. C'est un avis défavorable qui sera émis."]
-  );
+  ).phrases;
   assert.deepEqual(reste, []);
 });
 
@@ -644,13 +644,13 @@ test("une phrase d'un seul mot reste montrée, même si ce mot est dans une cita
   // « Non. » est la réponse la plus tranchante d'un fil, et le mot « non » se
   // lit dans presque toutes ses citations. La cacher serait cacher celle qu'il
   // fallait montrer.
-  const reste = lesPhrasesNonReprises("Non.", ["nous ne validons pas : non, pas en l'état"]);
+  const reste = lesPhrasesNonReprises("Non.", ["nous ne validons pas : non, pas en l'état"]).phrases;
   assert.deepEqual(reste, ["Non."]);
 });
 
 test("un message qu'aucune citation ne touche sort entier", () => {
   const propos = "Le support est humide.\nPouvez-vous confirmer ?";
-  assert.deepEqual(lesPhrasesNonReprises(propos, []),
+  assert.deepEqual(lesPhrasesNonReprises(propos, []).phrases,
     ["Le support est humide.", "Pouvez-vous confirmer ?"]);
 });
 
@@ -671,4 +671,137 @@ test("la politesse n'est pas retirée de la liste", () => {
   // comptait — l'inverse exact de ce que cette liste sert à faire.
   const [ligne] = laPartRelevee([{ rang: 1, propos: "Merci beaucoup pour votre retour." }], []);
   assert.deepEqual(ligne.nonRepris, ["Merci beaucoup pour votre retour."]);
+});
+
+// ── Les lignes qu'un fil répète ────────────────────────────────────────────
+
+const AVEC_SIGNATURE = [
+  { rang: 1, propos: "Le support est humide.\nBien cordialement,\nNicolas LE BIHAN\nSOCOTEC" },
+  { rang: 2, propos: "Nous repassons jeudi.\nBien cordialement,\nNicolas LE BIHAN\nSOCOTEC" }
+];
+
+test("une ligne qui revient d'un message à l'autre est reconnue", () => {
+  const revient = lesLignesQuiReviennent(AVEC_SIGNATURE);
+  assert.equal(revient.size, 3, [...revient].join(" | "));
+  // Le propos de chaque message, lui, ne revient pas : il est de son auteur,
+  // pour ce message-là.
+  assert.equal([...revient].some((l) => l.includes("humide")), false);
+});
+
+test("une ligne répétée dans un seul message ne compte pas comme une signature", () => {
+  // Une énumération répète ses puces, un devis répète « néant ». Sans cette
+  // garde, un message se déclarerait sa propre signature.
+  const revient = lesLignesQuiReviennent([{ rang: 1, propos: "néant\nnéant\nnéant" }]);
+  assert.equal(revient.size, 0);
+});
+
+test("un fil d'un seul message n'a aucune ligne qui revient", () => {
+  assert.equal(lesLignesQuiReviennent([AVEC_SIGNATURE[0]]).size, 0);
+  assert.equal(lesLignesQuiReviennent([]).size, 0);
+});
+
+test("les lignes qui reviennent sortent de la liste, et se comptent", () => {
+  const [un, deux] = laPartRelevee(AVEC_SIGNATURE, [
+    { message: 1, citation: "Le support est humide." }
+  ]);
+  assert.deepEqual(un.nonRepris, []);
+  assert.equal(un.lignesRepetees, 3);
+  // Le second garde son propos, qu'aucune citation ne reprend.
+  assert.deepEqual(deux.nonRepris, ["Nous repassons jeudi."]);
+  assert.equal(deux.lignesRepetees, 3);
+});
+
+test("le pourcentage ne bouge pas quand des lignes sortent de la liste", () => {
+  // La part mesure ce que les citations reprennent du message entier, signature
+  // comprise ; la liste est une aide à la lecture. Les deux ne répondent pas à
+  // la même question, et les coudre ferait mentir le chiffre.
+  const [avec] = laPartRelevee(AVEC_SIGNATURE, [{ message: 1, citation: "Le support est humide." }]);
+  const [sans] = laPartRelevee([AVEC_SIGNATURE[0]], [{ message: 1, citation: "Le support est humide." }]);
+  assert.equal(avec.caracteres, sans.caracteres);
+  assert.equal(avec.couverts, sans.couverts);
+  assert.equal(sans.lignesRepetees, 0);
+});
+
+// ── L'intitulé confronté aux mots de sa citation ───────────────────────────
+
+const CITATION_REELLE = "Il semblerait que la fuite dont vous parlez viendrait une "
+  + "\"ancienne\" poche d'eau entre osb et pare-vapeur qui n'aurait pas été purgé.";
+
+test("un intitulé qui raccourcit la citation reste fidèle", () => {
+  // Le modèle a le droit de couper — « dont vous parlez » saute —, pas
+  // d'ajouter ni de déplacer.
+  assert.equal(lIntituleSortDesMots(
+    "la fuite viendrait une \"ancienne\" poche d'eau entre osb et pare-vapeur", CITATION_REELLE),
+  false);
+});
+
+test("un intitulé qui corrige la grammaire de l'auteur est signalé", () => {
+  // Le cas réel, sur un des trois passages : l'auteur avait écrit « viendrait
+  // une », le modèle écrit « viendrait d'une ». Corriger silencieusement la
+  // syntaxe de quelqu'un dans une pièce qu'on lui opposera est exactement ce
+  // qui discrédite une preuve.
+  assert.equal(lIntituleSortDesMots(
+    "la fuite viendrait d'une \"ancienne\" poche d'eau entre osb et pare-vapeur", CITATION_REELLE),
+  true);
+});
+
+test("un sac de mots n'aurait pas suffi, et c'est pour cela qu'on lit dans l'ordre", () => {
+  // Le « d » ajouté existe ailleurs dans la citation, dans « d'eau ». Un test
+  // qui demande seulement que chaque mot soit quelque part laisse donc passer
+  // la reformulation qu'on cherche. Cette épreuve pin la raison de l'ordre.
+  const citation = "la poche d'eau est ouverte";
+  assert.equal(lIntituleSortDesMots("la poche d'une eau", citation), true);
+  assert.equal(lIntituleSortDesMots("la poche eau", citation), false);
+});
+
+test("les mots déplacés sont signalés", () => {
+  assert.equal(lIntituleSortDesMots("humide est le support", "Le support est humide."), true);
+});
+
+test("accents, casse et ponctuation ne font pas une reformulation", () => {
+  assert.equal(lIntituleSortDesMots("LE SUPPORT EST HUMIDE", "Le support est humide."), false);
+  assert.equal(lIntituleSortDesMots("le support, est humide !", "Le support est humide."), false);
+});
+
+test("un intitulé vide n'accuse rien, une citation vide accuse tout", () => {
+  // Un intitulé absent est un autre défaut, et il a son propre signalement.
+  // Une citation absente, elle, ne peut rien porter : le titre vient d'ailleurs.
+  assert.equal(lIntituleSortDesMots("", "Le support est humide."), false);
+  assert.equal(lIntituleSortDesMots("le support est humide", ""), true);
+});
+
+test("une prise vide des deux côtés ne reçoit pas un reproche de plus", () => {
+  // **C'est le seul cas où l'ordre des deux gardes se voit**, et une rupture
+  // muette l'a montré : sans la première, une prise sans intitulé et sans
+  // citation serait accusée d'avoir reformulé. Elle est déjà écartée pour
+  // n'avoir pas d'intitulé ; empiler un second reproche ferait chercher un
+  // défaut qui n'existe pas.
+  assert.equal(lIntituleSortDesMots("", ""), false);
+  assert.equal(lIntituleSortDesMots(null, null), false);
+});
+
+test("la porte signale l'intitulé reformulé sans perdre la prise", () => {
+  const { retenues, intitulesReformules } = verifierLesPrises({
+    prises: [prise({ intitule: "au droit humide est le support de l'acrotère" })],
+    messages: MESSAGES, sujets: SUJETS
+  });
+  assert.equal(retenues.length, 1, "la citation est vérifiée : la prise est réelle");
+  assert.equal(retenues[0].intitule_reformule, true);
+  assert.equal(intitulesReformules, 1);
+});
+
+test("un intitulé fidèle ne se compte pas", () => {
+  const { retenues, intitulesReformules } = verifierLesPrises({
+    prises: [prise()], messages: MESSAGES, sujets: SUJETS
+  });
+  assert.equal(retenues[0].intitule_reformule, false);
+  assert.equal(intitulesReformules, 0);
+});
+
+test("le signalement descend jusqu'à la prise rendue", () => {
+  const { retenues } = verifierLesPrises({
+    prises: [prise({ intitule: "humide est le support" })], messages: MESSAGES, sujets: SUJETS
+  });
+  const [rendue] = prisesAuFormatDuMoteur(retenues, { messages: MESSAGES });
+  assert.equal(rendue.intituleReformule, true);
 });

@@ -114,7 +114,16 @@ export const MANQUE = {
   SANS_DESTINATAIRE: "sans-destinataire",
   SANS_ECHEANCE: "sans-echeance",
   MESSAGE_CORRIGE: "message-corrige",
-  SUITE_INCONNUE: "suite-inconnue"
+  SUITE_INCONNUE: "suite-inconnue",
+  /**
+   * L'intitulé ne se lit pas dans les mots de la citation.
+   *
+   * La citation est vérifiée ; l'intitulé était le seul champ que le modèle
+   * écrivait sans qu'on le relise. Trois passages du même fil ont donné trois
+   * intitulés pour une citation, dont un qui **corrigeait la grammaire de son
+   * auteur**. La prise reste ; c'est son titre qui ne fait pas foi.
+   */
+  INTITULE_REFORMULE: "intitule-reformule"
 };
 
 const PHRASES_DU_MANQUE = {
@@ -123,7 +132,8 @@ const PHRASES_DU_MANQUE = {
   [MANQUE.SANS_DESTINATAIRE]: "elle ne dit pas à qui c'est demandé",
   [MANQUE.SANS_ECHEANCE]: "elle ne dit pas pour quand",
   [MANQUE.MESSAGE_CORRIGE]: "sa citation a été trouvée dans un autre message que celui annoncé : son auteur a changé",
-  [MANQUE.SUITE_INCONNUE]: "on ne sait pas si elle a reçu une réponse : elle ne dit pas sur quoi elle porte"
+  [MANQUE.SUITE_INCONNUE]: "on ne sait pas si elle a reçu une réponse : elle ne dit pas sur quoi elle porte",
+  [MANQUE.INTITULE_REFORMULE]: "son intitulé ne se lit pas dans les mots de sa citation : c'est la citation qui fait foi"
 };
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -162,6 +172,11 @@ export function iconeDeLaNature(code) {
 export function ceQuiManque(prise) {
   const manques = [];
   const nature = texte(prise?.nature);
+
+  // **L'intitulé se relit pour toutes les natures**, désaccord compris : c'est
+  // le titre affiché, et il vaut pour toutes de la même façon. Il vient donc
+  // avant la sortie du désaccord, qui ne réclame ni auteur ni date.
+  if (prise?.intituleReformule === true) manques.push(MANQUE.INTITULE_REFORMULE);
 
   // **Un désaccord n'est de personne : il est entre deux personnes.** Lui
   // réclamer un auteur et une date ferait deux reproches sur chaque ligne,
@@ -382,7 +397,15 @@ export function partReleveeDuMessage(couverture = [], rang = 0) {
      * signe : la politesse et la signature n'y sont pas filtrées, et elles ne
      * devraient être citées par personne.
      */
-    nonRepris: Array.isArray(ligne.nonRepris) ? ligne.nonRepris : []
+    nonRepris: Array.isArray(ligne.nonRepris) ? ligne.nonRepris : [],
+    /**
+     * Combien de lignes ont été retirées de cette liste parce qu'elles
+     * reviennent à l'identique ailleurs dans le fil.
+     *
+     * Zéro quand le serveur ne l'a pas dit — c'est aussi la valeur juste :
+     * aucune ligne retirée et rien à annoncer se lisent pareil.
+     */
+    lignesRepetees: Number(ligne.lignesRepetees) || 0
   };
 }
 
@@ -390,6 +413,40 @@ export function partReleveeDuMessage(couverture = [], rang = 0) {
 export function phraseDeLaPart(part) {
   if (!part) return "";
   return `${part.part} % de ce message est repris par une citation`;
+}
+
+/**
+ * Les sujets sous lesquels on n'a pas cherché, dits en une phrase.
+ *
+ * **« Sans réponse » n'a regardé que sous un sujet.** Un fil réel l'a montré :
+ * la réponse existait, deux messages plus loin, sous un sujet voisin que le
+ * modèle avait déclaré à part. On ne fusionne pas — souder ferait passer une
+ * question pour répondue par une prise qui n'y répond pas —, on dit où aller.
+ *
+ * Rien quand le fil n'a rien porté d'autre : là, « sans réponse » est tout ce
+ * qu'il y a à en dire.
+ */
+export function phraseDesSujetsDaCote(sujets = []) {
+  const liste = (Array.isArray(sujets) ? sujets : []).filter(Boolean);
+  if (!liste.length) return "";
+
+  return `le fil a continué sur ${liste.length > 1 ? "d'autres sujets" : "un autre sujet"}, `
+    + `où l'on n'a pas cherché : ${liste.join(", ")}`;
+}
+
+/**
+ * Les lignes retirées d'une liste parce qu'elles reviennent dans le fil.
+ *
+ * **Le compte, parce qu'une règle muette est une règle qu'on ne peut pas
+ * juger.** Une phrase de fond répétée dans deux messages sortirait comme une
+ * signature ; un lecteur qui trouve le compte trop gros sait qu'il doit rouvrir
+ * le message (règle 5).
+ */
+export function phraseDesLignesRepetees(combien) {
+  const compte = Number(combien) || 0;
+  if (compte <= 0) return "";
+  return `${compte} ligne${compte > 1 ? "s" : ""} de plus reven${compte > 1 ? "aient" : "ait"} `
+    + "à l'identique ailleurs dans le fil — une signature, pas un propos";
 }
 
 /**
@@ -497,20 +554,44 @@ export function phraseDesSujetsEcartes(combien) {
  *
  * **Elle ne dit rien de la qualité de la lecture**, et la phrase se garde de le
  * laisser croire : elle dit seulement si deux lectures du même fil se
- * ressemblent. Une température fixée ne rend pas le relevé meilleur, elle le
- * rend unique.
+ * ressemblent. Une température fixée ne rend pas le relevé meilleur.
+ *
+ * ## Elle disait « le même fil rend le même relevé », et c'était faux
+ *
+ * Trois passages du même fichier, à température 0, ont rendu **12, 11 et 11
+ * prises**, et trois comptes de jetons différents. La température supprime le
+ * tirage au sort du modèle ; elle ne supprime pas tout — l'ordre dans lequel le
+ * fournisseur évalue en parallèle suffit à faire bouger un relevé long.
+ *
+ * **Ce qu'on annonce est donc ce qu'on a mesuré, et non ce qu'on espérait.**
+ * L'écart s'est effondré — de 9 phrases sur 19 aux trois passages avant la
+ * température, à 10 prises sur 12 après —, mais un export qui sort pour être
+ * opposé à quelqu'un ne doit pas promettre une identité qu'il n'a pas (règle 1).
+ * Le chiffre dit d'où il vient : **un fil, trois passages**. Ce n'est pas une
+ * garantie, c'est une mesure, et le lire ainsi est tout l'enjeu.
  *
  * Elle compte parce qu'un export sort d'ici pour être opposé à quelqu'un. Un
  * lecteur doit savoir si la citation qu'il a sous les yeux sera encore là au
  * prochain passage (règle 1), et l'auteur doit savoir s'il peut juger un
  * réglage sur ce qu'il voit (règle 12).
  */
+export const RECOUPEMENT_MESURE = {
+  /** Présentes aux trois passages. */
+  tenues: 10,
+  /** Relevées au moins une fois. */
+  relevees: 12,
+  /** Combien de fois le même fil a été relu. */
+  passages: 3
+};
+
 export function phraseDeLaTemperature(temperature) {
   if (!Number.isFinite(temperature)) {
     return "température non fixée : deux lectures du même fil peuvent différer";
   }
   if (Number(temperature) === 0) {
-    return "température 0 : le même fil rend le même relevé";
+    const { tenues, relevees, passages } = RECOUPEMENT_MESURE;
+    return "température 0 : deux lectures du même fil se recoupent sans être identiques — "
+      + `mesuré ${tenues} prises sur ${relevees} aux ${passages} passages d'un fil réel`;
   }
   return `température ${temperature} : deux lectures du même fil peuvent différer`;
 }

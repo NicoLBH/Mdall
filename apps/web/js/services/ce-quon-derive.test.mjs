@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   MARQUE, OFFRE, PAR, SUITE, ceQuonDerive, laMarqueDeContestation, laMarqueDuneOffre,
-  laSuiteDuneDemande, lesContestations, memeSujet
+  laSuiteDuneDemande, lesAutresSujets, lesContestations, memeSujet
 } from "./ce-quon-derive.js";
 import { NATURE } from "./prises-de-position.js";
 
@@ -609,4 +609,118 @@ test("la dérivation dit par quel signal une demande a été fermée", () => {
     { dernierMessage: 3 });
   assert.equal(derive.sansReponse, 0);
   assert.equal(derive.prises[0].repondueParQuel, PAR.RENVOI);
+});
+
+// ── Où l'on n'a pas cherché ────────────────────────────────────────────────
+
+/** Le cas réel, aux trois passages : la réponse était sous un sujet voisin. */
+const LE_FIL_REEL = () => [
+  prise({
+    nature: NATURE.DEMANDE, message: 3, porteSur: "qualité de la pose de l'étanchéité",
+    intitule: "Merci à l'entreprise de rectifier ce défaut.", pourQui: "l'entreprise"
+  }),
+  prise({
+    nature: NATURE.ENGAGEMENT, message: 4, porteSur: "reprise et essais d'étanchéité",
+    intitule: "Nous envoyons quelqu'un aujourd'hui pour reprendre la membrane."
+  })
+];
+
+test("une demande sans réponse dit sur quels autres sujets le fil a continué", () => {
+  // Le défaut mesuré : « Merci à l'entreprise de rectifier ce défaut » est
+  // rangée sans réponse sous son sujet, alors qu'un engagement lui répond deux
+  // messages plus loin — sous un sujet que le modèle avait déclaré à part.
+  const [demande] = LE_FIL_REEL();
+  const suite = laSuiteDuneDemande(demande, LE_FIL_REEL(), { dernierMessage: 5 });
+  assert.equal(suite.suite, SUITE.SANS_REPONSE);
+  assert.deepEqual(suite.ailleurs, ["reprise et essais d'étanchéité"]);
+});
+
+test("on ne fusionne pas les deux sujets : la demande reste sans réponse", () => {
+  // Souder ferait passer une question pour répondue par une prise qui n'y
+  // répond pas — le pire résultat possible, et celui que tout ceci évite.
+  const [demande] = LE_FIL_REEL();
+  const suite = laSuiteDuneDemande(demande, LE_FIL_REEL(), { dernierMessage: 5 });
+  assert.equal(suite.parQuoi, null);
+  assert.equal(suite.parQuel, null);
+});
+
+test("une demande répondue par son sujet n'a rien à dire d'ailleurs", () => {
+  // La rubrique n'existe que pour l'aveu d'une absence : la poser sous une
+  // réponse trouvée ferait douter de la réponse.
+  const demande = prise({ nature: NATURE.DEMANDE, message: 1, porteSur: "cote du seuil" });
+  const suite = laSuiteDuneDemande(demande, [
+    demande, prise({ nature: NATURE.CONSTAT, message: 2, porteSur: "cote du seuil" }),
+    prise({ nature: NATURE.CONSTAT, message: 2, porteSur: "autre chose entièrement" })
+  ], { dernierMessage: 2 });
+  assert.equal(suite.suite, SUITE.REPONDUE);
+  assert.deepEqual(suite.ailleurs, []);
+});
+
+test("une demande répondue par un renvoi non plus", () => {
+  // **Le chemin du renvoi est un second endroit**, et une rupture muette l'a
+  // montré : le cas précédent ne passait que par le sujet, donc la sortie du
+  // renvoi pouvait se mettre à douter d'une réponse vérifiée sans que rien ne
+  // tombe. C'est le signal le plus sûr des deux : il doit être le plus net.
+  const demande = prise({ nature: NATURE.DEMANDE, message: 1, porteSur: "cote du seuil" });
+  const suite = laSuiteDuneDemande(demande, [
+    demande,
+    prise({ nature: NATURE.ENGAGEMENT, message: 2, porteSur: "tout autre chose", repondA: 1 }),
+    prise({ nature: NATURE.CONSTAT, message: 3, porteSur: "un troisième sujet" })
+  ], { dernierMessage: 3 });
+  assert.equal(suite.suite, SUITE.REPONDUE);
+  assert.equal(suite.parQuel, PAR.RENVOI);
+  assert.deepEqual(suite.ailleurs, []);
+});
+
+test("le fil qui ne porte rien d'autre ne fait pas de phrase", () => {
+  // Là, « sans réponse » est tout ce qu'il y a à en dire.
+  const demande = prise({ nature: NATURE.DEMANDE, message: 1, porteSur: "cote du seuil" });
+  const suite = laSuiteDuneDemande(demande, [demande], { dernierMessage: 3 });
+  assert.equal(suite.suite, SUITE.SANS_REPONSE);
+  assert.deepEqual(suite.ailleurs, []);
+});
+
+test("son propre sujet n'est pas un ailleurs", () => {
+  // Le redire ferait croire qu'on a trouvé quelque chose là où l'on a déjà
+  // cherché et rien trouvé.
+  const demande = prise({ nature: NATURE.DEMANDE, message: 1, porteSur: "cote du seuil" });
+  assert.deepEqual(lesAutresSujets(demande, [
+    demande, prise({ nature: NATURE.SOURCE, message: 2, porteSur: "cote du seuil" })
+  ]), []);
+});
+
+test("un sujet sans nom n'est pas un ailleurs", () => {
+  // Une prise que le modèle n'a rattachée à rien n'indique aucune piste : la
+  // citer enverrait chercher sous un sujet qui n'existe pas.
+  const demande = prise({ nature: NATURE.DEMANDE, message: 1, porteSur: "cote du seuil" });
+  assert.deepEqual(lesAutresSujets(demande, [
+    demande, prise({ nature: NATURE.CONSTAT, message: 2, porteSur: null })
+  ]), []);
+});
+
+test("une contestation qui ne trouve personne dit où l'on n'a pas regardé", () => {
+  // L'autre moitié du même défaut : Antoine conteste l'origine de la fuite, et
+  // le constat qu'il vise est rangé sous « infiltration d'eau sur toiture ».
+  const [contestation] = lesContestations([
+    prise({ nature: NATURE.CONSTAT, message: 1, porteSur: "infiltration d'eau sur toiture",
+      intitule: "de l'eau s'est infiltrée", citation: "De l'eau s'est infiltrée.",
+      qui: "Nunc Savoie" }),
+    prise({ nature: NATURE.CONSTAT, message: 4, porteSur: "origine de la fuite",
+      intitule: "elle n'aurait rien à voir avec les creux dont vous parlez",
+      citation: "Elle n'aurait donc rien à voir avec les creux dont vous parlez.",
+      qui: "Antoine TANGUY" })
+  ]);
+  assert.deepEqual(contestation.avant, []);
+  assert.deepEqual(contestation.ailleurs, ["infiltration d'eau sur toiture"]);
+});
+
+test("une contestation qui a trouvé quelqu'un n'a rien à dire d'ailleurs", () => {
+  const [contestation] = lesContestations([
+    prise({ message: 1, porteSur: "humidité de l'acrotère", qui: "Nunc Savoie" }),
+    prise({ message: 2, porteSur: "humidité de l'acrotère", qui: "Nicolas Lebihan",
+      intitule: "le temps ne va pas la coller",
+      citation: "Le temps ne va pas la coller à la place du chalumeau." })
+  ]);
+  assert.deepEqual(contestation.avant, ["Nunc Savoie"]);
+  assert.deepEqual(contestation.ailleurs, []);
 });
