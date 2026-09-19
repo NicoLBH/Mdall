@@ -31,7 +31,7 @@
  */
 
 /**
- * Les sept natures d'une prise de position.
+ * Les huit natures d'une prise de position.
  *
  * L'ordre compte : c'est celui de l'écran, et il va du plus factuel au plus
  * ouvert. Un constat se vérifie, un désaccord se discute — et l'on regarde
@@ -44,7 +44,8 @@ export const NATURE = {
   DECISION: "decision",
   SOURCE: "source",
   SANS_REPONSE: "sans-reponse",
-  DESACCORD: "desaccord"
+  DESACCORD: "desaccord",
+  OFFRE: "offre"
 };
 
 /** Celles que le modèle déclare. Les autres se dérivent du fil (étape 6). */
@@ -53,7 +54,7 @@ export const NATURES_DECLAREES = [
 ];
 
 /** Celles qu'on calcule, et qu'on ne demande pas. */
-export const NATURES_DERIVEES = [NATURE.SANS_REPONSE, NATURE.DESACCORD];
+export const NATURES_DERIVEES = [NATURE.SANS_REPONSE, NATURE.DESACCORD, NATURE.OFFRE];
 
 const LES_NATURES = {
   [NATURE.CONSTAT]: {
@@ -94,9 +95,15 @@ const LES_NATURES = {
   },
   [NATURE.DESACCORD]: {
     nom: "Désaccord",
-    quoi: "deux messages affirment le contraire",
-    devient: "un sujet, avec les deux positions citées",
+    quoi: "quelqu'un prend position contre ce qui a été dit",
+    devient: "un sujet, avec la position contestée et ses mots",
     icone: "git-compare"
+  },
+  [NATURE.OFFRE]: {
+    nom: "Offre conditionnelle",
+    quoi: "une prestation proposée si l'autre la demande — parfois contre commande",
+    devient: "un sujet à décider, et non une question à relancer",
+    icone: "issue-draft"
   }
 };
 
@@ -172,6 +179,9 @@ export function ceQuiManque(prise) {
     if (!texte(prise?.pourQui)) manques.push(MANQUE.SANS_DESTINATAIRE);
     if (!texte(prise?.echeance)) manques.push(MANQUE.SANS_ECHEANCE);
   }
+  // **Une offre n'a pas d'échéance à manquer** : elle attend une décision, pas
+  // une livraison. Lui en réclamer une mettrait un reproche sous chaque ligne.
+  if (nature === NATURE.OFFRE && !texte(prise?.pourQui)) manques.push(MANQUE.SANS_DESTINATAIRE);
   if (nature === NATURE.ENGAGEMENT && !texte(prise?.echeance)) manques.push(MANQUE.SANS_ECHEANCE);
 
   // Une demande dont on n'a pas su dire si elle a été reprise. Ce n'est ni

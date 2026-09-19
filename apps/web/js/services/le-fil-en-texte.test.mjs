@@ -159,13 +159,30 @@ test("un désaccord nomme qui s'était exprimé avant, sans désigner sa positio
   assert.ok(texte.includes("Se sont exprimés avant sur ce sujet** : BERTRAND"));
 });
 
-test("une contestation que personne n'a précédée le dit, plutôt que de se taire", () => {
-  // Ce qui est contesté peut venir d'un rapport, hors du fil. Le taire ferait
-  // croire à une erreur de relevé (règle 5).
+test("une contestation que personne n'a précédée dit ce qu'on a cherché", () => {
+  // **Et non « personne n'a parlé ».** Le rapprochement se fait sur le libellé
+  // de sujet rendu par le modèle ; sur un fil réel, l'écran affirmait que la
+  // position visée venait d'ailleurs alors qu'elle était deux messages plus
+  // haut, sous un intitulé voisin (règle 5).
   const texte = leFilEnTexte({
     fil: fil(), releve: { ...RELEVE, prises: [{ ...DESACCORD, avant: [] }] }
   });
-  assert.ok(texte.includes("personne — ce qui est contesté vient d'ailleurs"));
+  assert.ok(texte.includes("aucune autre prise relevée sous ce sujet"));
+  assert.ok(texte.includes("ou d'un intitulé voisin"));
+  assert.ok(texte.includes("ce qui est contesté peut venir d'ailleurs"));
+});
+
+test("l'export dit la marque qui a fait dériver une prise", () => {
+  // « contre-commande » n'est pas « sur-demande » : l'une a un prix.
+  const offre = {
+    key: "o1", nature: NATURE.OFFRE, natureDeclaree: NATURE.DEMANDE,
+    marque: "contre-commande", intitule: "une étude spécifique sur commande",
+    citation: "Cette prestation devra faire l'objet d'une commande complémentaire.",
+    message: 2, qui: "Ourdine Ferrand", quand: "12 mars", porteSur: "étude spécifique"
+  };
+  const texte = leFilEnTexte({ fil: fil(), releve: { ...RELEVE, prises: [offre] } });
+  assert.ok(texte.includes("**Marque** : contre-commande"));
+  assert.ok(texte.includes("**Déclarée comme** : Demande"));
 });
 
 test("ce qu'on en a tiré s'affiche aussi sous le message d'où ça sort", () => {

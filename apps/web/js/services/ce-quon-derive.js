@@ -150,21 +150,125 @@ export function laMarqueDeContestation(prise) {
   return "";
 }
 
+
+/**
+ * Les marques d'une offre conditionnelle.
+ *
+ * **« Si vous le souhaitez, nous pouvons… » n'est pas une question restée sans
+ * réponse.** C'est une prestation proposée, qui attend une décision — et sur
+ * un fil réel, l'une d'elles exigeait **une commande payante**. Les ranger
+ * sous « question sans réponse » faisait chercher une relance là où il y avait
+ * un devis, et c'est ce qui a le plus de conséquences dans tout le relevé.
+ *
+ * Le modèle les déclare en `demande`, ce qui se comprend : quelque chose est
+ * bien attendu de quelqu'un. Mais ce qui est attendu est un **accord**, pas
+ * une réponse.
+ *
+ * Mesuré sur un fil de 38 prises : deux relevées, et ce sont les deux offres.
+ */
+export const OFFRE = {
+  /** Une commande est exigée : c'est la marque qui a un prix. */
+  CONTRE_COMMANDE: "contre-commande",
+  /** « pourra être réalisée à votre demande ». */
+  SUR_DEMANDE: "sur-demande",
+  /** « si le bureau X souhaite…, nous sommes en mesure de ». */
+  SI_VOUS_SOUHAITEZ: "si-vous-souhaitez"
+};
+
+const OFFRES = [
+  [OFFRE.CONTRE_COMMANDE,
+    /\b(?:devra|devront)\s+faire\s+l['’e]objet\s+d['’e]une\s+commande\b|\bcommande\s+(?:complementaire|specifique|prealable)\w*|\bprestation\s+(?:complementaire|supplementaire)\w*/],
+  [OFFRE.SUR_DEMANDE,
+    /\bpourra?\s+(?:etre|faire)\s+\w+\s+a\s+(?:votre|sa|leur)\s+demande\b|\ba\s+votre\s+demande\b|\bsur\s+demande\b/],
+  [OFFRE.SI_VOUS_SOUHAITEZ,
+    /\bsi\s+(?:vous|le|la|les)\s+[\w\s'’]{0,30}?souhaite\w*\b|\bnous\s+sommes\s+en\s+mesure\s+de\b|\bnous\s+pouvons\s+(?:vous\s+)?(?:proposer|realiser|fournir)\b/]
+];
+
+/**
+ * La marque d'offre qu'une prise porte, s'il y en a une.
+ *
+ * **La plus engageante d'abord** : une offre qui exige une commande est
+ * d'abord cela, quelle que soit la politesse qui l'entoure.
+ */
+export function laMarqueDuneOffre(prise) {
+  const lu = `${aplatiPourLeLexique(prise?.citation)} ${aplatiPourLeLexique(prise?.intitule)}`;
+  for (const [nom, forme] of OFFRES) if (forme.test(lu)) return nom;
+  return "";
+}
+
+/**
+ * Les mots qui ne désignent rien.
+ *
+ * Ils ne servent qu'à lier, et deux libellés qui ne partagent qu'eux ne
+ * partagent rien.
+ */
+const MOTS_VIDES = new Set(("de des du la le les un une et ou a au aux en dans sur sous pour par "
+  + "avec sans ce cette ces son sa ses leur leurs est sont etre").split(" "));
+
+/** Un libellé, réduit à ses mots pleins, accents et casse effacés. */
+function motsDuSujet(valeur) {
+  return String(valeur ?? "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+    .split(" ")
+    .filter((mot) => mot && !MOTS_VIDES.has(mot));
+}
+
+/** Le plancher sous lequel un libellé est trop court pour en désigner un autre. */
+const ASSEZ_DE_MOTS = 2;
+
+/** La suite de mots du plus court se lit-elle d'un tenant dans le plus long ? */
+function seLitDedans(court, long) {
+  if (court.length < ASSEZ_DE_MOTS || court.length > long.length) return false;
+  for (let debut = 0; debut + court.length <= long.length; debut += 1) {
+    if (court.every((mot, rang) => long[debut + rang] === mot)) return true;
+  }
+  return false;
+}
+
 /**
  * Deux libellés désignent-ils la même chose ?
  *
- * Accents, casse et espaces effacés. Rien de plus : `porteSur` vient du modèle,
- * à qui l'on a demandé les **mêmes mots** d'une prise à l'autre quand c'est la
- * même chose. Chercher plus loin — des synonymes, une racine commune —
- * rapprocherait des sujets voisins et rendrait des désaccords qui n'en sont pas.
+ * ## L'égalité exacte ne suffisait pas
+ *
+ * `porteSur` vient du modèle, à qui l'on demande les **mêmes mots** d'une prise
+ * à l'autre quand c'est la même chose. Il ne le fait pas : sur un fil réel,
+ * **28 libellés pour 39 prises**. Le désaccord portait « combinaison souffle et
+ * vent **simultanée** » quand l'autre partie s'était exprimée deux fois sur
+ * « combinaison souffle et vent ». L'écran affirmait alors que **personne**
+ * n'avait parlé du sujet, ce qui était faux.
+ *
+ * ## Ce qu'on a essayé, et pourquoi on ne l'a pas retenu
+ *
+ * Compter les mots pleins communs rejoue la maladie des quatre-vingt-seize
+ * désaccords : à deux mots, « prise en compte action souffle rotor » rejoint
+ * « prise en compte composante verticale sismique » — deux points de rapport
+ * différents, soudés par une locution vide. À trois, « nature souffle rotor et
+ * vent » rejoint « pression vent comparée à souffle rotor ». Mesuré sur les 28
+ * libellés : 41 rapprochements à deux mots, 5 à trois, dont la plupart faux.
+ *
+ * ## Ce qu'on retient : l'un se lit dans l'autre
+ *
+ * Un libellé en désigne un autre quand **sa suite de mots pleins se lit d'un
+ * tenant** dans le sien. Quatre rapprochements sur les mêmes 28 libellés, et
+ * les quatre tiennent.
+ *
+ * Deux garde-fous, et chacun répare un piège réel :
+ *
+ * - **sur les mots, pas sur les lettres** — « vent » ne se lit pas dans
+ *   « ventilation » ;
+ * - **deux mots pleins au moins** — un libellé d'un seul mot désignerait tout
+ *   ce qui le contient.
  */
 export function memeSujet(un, autre) {
-  const plat = (valeur) => String(valeur ?? "")
-    .normalize("NFD").replace(/[̀-ͯ]/g, "")
-    .toLowerCase().replace(/\s+/g, " ").trim();
+  const gauche = motsDuSujet(un);
+  const droite = motsDuSujet(autre);
+  if (!gauche.length || !droite.length) return false;
+  if (gauche.join(" ") === droite.join(" ")) return true;
 
-  const gauche = plat(un);
-  return gauche !== "" && gauche === plat(autre);
+  return gauche.length <= droite.length
+    ? seLitDedans(gauche, droite)
+    : seLitDedans(droite, gauche);
 }
 
 function rangDe(prise) {
@@ -219,6 +323,13 @@ export function lesContestations(prises = []) {
     // **Qui s'était exprimé avant, sur la même chose.** Pas « ce qui est
     // contesté » : on ne le sait pas, et le candidat le plus proche s'est
     // révélé faux à chaque essai. Des noms et un compte, rien de plus.
+    //
+    // Ce qu'on trouve ici dépend de `memeSujet`, donc des libellés que le
+    // modèle a posés. **Une liste vide dit qu'on n'a trouvé personne sous le
+    // même sujet — pas que personne n'a parlé** : la nuance est celle du
+    // fil réel où l'écran affirmait « ce qui est contesté vient d'ailleurs »
+    // alors que la position visée était deux messages plus haut, sous un
+    // libellé voisin (règle 5).
     const avant = [...new Map(liste
       .filter((autre) => autre !== prise)
       .filter((autre) => memeSujet(autre?.porteSur, prise?.porteSur))
@@ -246,6 +357,18 @@ function uneQuestionSansReponse(demande, suite) {
     natureDeclaree: NATURE.DEMANDE,
     suite: suite.suite,
     apresElle: suite.apresElle
+  };
+}
+
+function uneOffre(prise, marque) {
+  return {
+    ...prise,
+    key: `${texte(prise?.key)}:offre`,
+    nature: NATURE.OFFRE,
+    /** Ce que le modèle avait déclaré : la nature a changé, pas le fait. */
+    natureDeclaree: texte(prise?.nature),
+    /** Laquelle des marques a parlé. De quoi juger la règle sur pièce. */
+    marque
   };
 }
 
@@ -311,6 +434,13 @@ export function ceQuonDerive(prises = [], { dernierMessage = 0, messages = [] } 
     if (contestation) return unDesaccord({ ...contestation, prise }, rang);
 
     if (texte(prise?.nature) !== NATURE.DEMANDE) return prise;
+
+    // **Une offre conditionnelle n'attend pas une réponse, mais un accord.**
+    // La juger comme une demande ferait chercher une relance là où il y a un
+    // devis — et l'une d'elles, sur un fil réel, exigeait une commande payante.
+    const offre = laMarqueDuneOffre(prise);
+    if (offre) return uneOffre(prise, offre);
+
     const suite = laSuiteDuneDemande(prise, liste, { dernierMessage: fin });
     if (suite.suite === SUITE.ON_NE_SAIT_PAS) {
       indecidables += 1;
@@ -326,6 +456,8 @@ export function ceQuonDerive(prises = [], { dernierMessage = 0, messages = [] } 
     prises: derivees,
     sansReponse: derivees.filter((prise) => texte(prise?.nature) === NATURE.SANS_REPONSE).length,
     desaccords: contestations.size,
+    /** Combien de prestations proposées attendent une décision. */
+    offres: derivees.filter((prise) => texte(prise?.nature) === NATURE.OFFRE).length,
     /**
      * Combien de demandes n'ont pas pu être jugées, faute de savoir sur quoi
      * elles portent. Elles restent des demandes, et l'écran ne prétend pas

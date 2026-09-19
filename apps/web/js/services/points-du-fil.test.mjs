@@ -144,7 +144,9 @@ test("un désaccord que personne n'a précédé le dit", () => {
     nature: NATURE.DESACCORD, porteSur: "humidité de l'acrotère", avant: [],
     positions: [{ qui: "Ourdine Ferrand", citation: "Je ne partage pas votre position." }]
   }));
-  assert.ok(description.includes("Personne d'autre ne s'est exprimé sur ce sujet"));
+  assert.ok(description.includes("Aucune autre prise n'a été relevée sous ce sujet"));
+  assert.ok(description.includes("ou d'un intitulé voisin"),
+    "on dit ce qu'on a cherché, pas que personne n'a parlé");
 });
 
 test("une question sans réponse dit combien de messages l'ont ignorée", () => {

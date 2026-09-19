@@ -18,11 +18,16 @@ const prise = (dessus = {}) => ({
 
 // ── Les sept natures ───────────────────────────────────────────────────────
 
-test("cinq natures sont déclarées, deux se dérivent", () => {
+test("cinq natures sont déclarées, trois se dérivent", () => {
   assert.equal(NATURES_DECLAREES.length, 5);
-  assert.equal(NATURES_DERIVEES.length, 2);
-  assert.deepEqual([...NATURES_DECLAREES, ...NATURES_DERIVEES].sort(),
-    Object.values(NATURE).sort());
+  assert.deepEqual([...NATURES_DERIVEES].sort(),
+    [NATURE.DESACCORD, NATURE.OFFRE, NATURE.SANS_REPONSE].sort());
+  assert.equal(NATURES_DECLAREES.includes(NATURE.OFFRE), false,
+    "une offre se dérive : la demander au modèle en ferait inventer");
+  assert.equal(
+    [...NATURES_DECLAREES, ...NATURES_DERIVEES].length,
+    new Set(Object.values(NATURE)).size
+  );
 });
 
 test("les natures que le modèle déclare sont celles que le serveur lui demande", () => {

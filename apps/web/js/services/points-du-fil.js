@@ -125,7 +125,8 @@ export function descriptionDuPoint(prise) {
     // quelqu'un un propos qu'il n'a pas tenu.
     morceaux.push(avant.length
       ? `Se sont exprimés avant sur le même sujet : ${avant.join(", ")}.`
-      : "Personne d'autre ne s'est exprimé sur ce sujet dans le fil.");
+      : "Aucune autre prise n'a été relevée sous ce sujet : ce qui est contesté peut venir "
+        + "d'ailleurs, ou d'un intitulé voisin.");
   } else {
     morceaux.push(`**${qui(prise)}**${texte(prise?.quand) ? ` — ${texte(prise.quand)}` : ""} :`
       + ` « ${texte(prise?.citation) || texte(prise?.intitule)} »`);

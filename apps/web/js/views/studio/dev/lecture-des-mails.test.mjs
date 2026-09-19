@@ -430,7 +430,27 @@ test("une contestation que personne n'a précédée le dit", () => {
     intitule: "je ne partage pas", positions: [CONTESTE], avant: [], message: 2
   };
   const html = dessine(analyse({ releve: releve({ prises: [desaccord] }) }));
-  assert.ok(html.includes("ce qui est contesté vient d&#39;ailleurs"));
+  assert.ok(html.includes("Aucune autre prise n&#39;a été relevée sous ce sujet"));
+  assert.ok(html.includes("rangé sous un autre intitulé"),
+    "on dit ce qu'on a cherché, pas que personne n'a parlé");
+});
+
+test("une offre conditionnelle se dit, et dit ce qu'elle coûte", () => {
+  // « contre-commande » n'est pas « sur-demande » : l'une a un prix, et c'est
+  // ce qu'il ne faut pas manquer.
+  const offre = prise({
+    nature: NATURE.OFFRE, natureDeclaree: NATURE.DEMANDE, marque: "contre-commande",
+    intitule: "une étude spécifique sur commande complémentaire",
+    citation: "Cette prestation devra faire l'objet d'une commande complémentaire."
+  });
+  const html = dessine(analyse({ releve: releve({ prises: [offre] }) }));
+  assert.ok(html.includes("Offre conditionnelle"));
+  assert.ok(html.includes("relevée sur « contre-commande »"));
+});
+
+test("une prise sans marque n'affiche pas de ligne vide", () => {
+  const html = dessine(analyse({ releve: releve() }));
+  assert.equal(html.includes("relevée sur"), false);
 });
 
 test("une demande qu'on ne sait pas juger le dit", () => {
