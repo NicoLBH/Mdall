@@ -49,7 +49,13 @@ import { escapeHtml } from "../../../utils/escape-html.js";
 import { svgIcon } from "../../../ui/icons.js";
 import { renderSpinnerHtml } from "../../ui/spinner.js";
 import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.js";
-import { TRANSFORMER, renderTransformer } from "../../ui/transformer.js";
+import { TRANSFORMER, brancheDeLAction, renderTransformer } from "../../ui/transformer.js";
+import { brancherLesBoutonsCopier, renderBoutonCopier } from "../../ui/bouton-copier.js";
+import { leFilEnTexte, nomDeLExport } from "../../../services/le-fil-en-texte.js";
+import {
+  LABEL_DU_FIL, introDuFil, pointsDuFil, titreDeLaProposition
+} from "../../../services/points-du-fil.js";
+import { branchesOuvertes } from "../../../services/branches-ouvertes.js";
 import {
   CERTITUDE, ORDRE, leFilDesMails, phraseDuMoment
 } from "../../../services/le-fil-des-mails.js";
@@ -105,7 +111,11 @@ const etat = {
    * un relevé qui échouait en éteignant la phase laissait l'écran sans son
    * fil, alors que le fil, lui, n'avait rien coûté et n'avait pas bougé.
    */
-  releve: null
+  releve: null,
+  /** Les propositions ouvertes du projet. `null` : on n'a pas pu demander. */
+  branches: [],
+  /** Où en est « Transformer ». Rien tant qu'on n'a rien demandé. */
+  versement: null
 };
 
 let hoteCourant = null;
@@ -162,14 +172,19 @@ function renderEntete(vue) {
             </label>
           ` : ""}
           ${/*
-            **« Transformer » reste éteint.** Le relevé n'existe pas encore :
-            un menu qui s'ouvre sur une liste vide est plus difficile à
-            comprendre qu'un bouton qui ne s'ouvre pas.
+            **Éteint tant qu'il n'y a rien à porter.** Transformer un fil dont
+            on n'a rien relevé proposerait une liste vide, et il n'y a rien de
+            plus difficile à comprendre qu'une proposition qui ne propose rien.
           */""}
-          ${renderTransformer({ id: "lectureMailsTransformer", disabled: true, ouvertes: [] })}
+          ${renderTransformer({
+            id: "lectureMailsTransformer",
+            disabled: !(vue.releve?.prises?.length > 0) || vue.versement?.enCours === true,
+            ouvertes: vue.branches
+          })}
         </div>
       </div>
       ${renderRangement(vue.rangement)}
+      ${renderRangement(vue.versement)}
       <p class="lecture-cr__mot">
         Déposez des <code>.eml</code> : l'écran <strong>reconstitue le fil</strong> et montre,
         message par message, ce que chacun ajoute et ce qu'il recopie.
@@ -223,6 +238,14 @@ function renderCorps(vue) {
   if (vue.phase === "vide" && !vue.motif) return "";
 
   return `
+    ${/*
+      **Le texte à copier est écrit une fois, dans la page, et caché.** Le
+      composant de copie lit ce que le DOM porte : le recalculer au clic
+      donnerait deux textes possibles — celui qu'on a montré et celui qu'on
+      emporte — et ils finiraient par différer (règle 4).
+    */""}
+    ${vue.fil ? `<pre hidden data-copier-source="fil-en-texte">${
+      escapeHtml(leFilEnTexte({ fil: vue.fil, releve: vue.releve, fichiers: vue.fichiers }))}</pre>` : ""}
     ${renderAlerte(vue)}
     ${vue.fil ? renderIdentite(vue.fil) : ""}
     ${vue.fil ? renderOnglets(vue) : ""}
@@ -285,7 +308,44 @@ function renderIdentite(fil) {
           `).join("")}
         </ul>
       ` : ""}
+      ${renderEmporter()}
     </section>
+  `;
+}
+
+/**
+ * Emporter tout ce que l'écran a tiré de ce fil.
+ *
+ * **Pour pouvoir le montrer à quelqu'un qui n'a pas l'écran.** Juger si ce
+ * procédé vaut quelque chose demande de relire, ligne à ligne, ce qu'il a
+ * produit sur un vrai fil — et une capture d'écran coupe, ne se relit pas, et
+ * ne porte pas les trous.
+ *
+ * **L'avertissement est au-dessus du bouton, pas ailleurs.** Ce texte porte de
+ * la correspondance : les adresses, les noms, le contenu des messages. Il sort
+ * du dossier privé par la volonté de celui qui clique, et par elle seule. Un
+ * geste dont on ne mesure pas la portée est un geste qu'on regrette — et la
+ * phrase qui le dit doit se lire au moment du geste, pas dans une page d'aide.
+ */
+function renderEmporter() {
+  return `
+    <div class="fil-mails__emporter">
+      <span class="fil-mails__emporter-gestes">
+        ${renderBoutonCopier({
+          cible: "fil-en-texte",
+          titre: "Copier le fil et son relevé",
+          titreCopie: "Copié"
+        })}
+        <button type="button" class="gh-btn gh-btn--sm" data-mails-telecharger>
+          ${svgIcon("download", { className: "octicon" })} Emporter en Markdown
+        </button>
+      </span>
+      <span class="mono-small fil-mails__emporter-mot">
+        Le fil, les messages, les trous et le relevé — de quoi refaire le jugement à la main.
+        <strong>C'est de la correspondance</strong> : adresses, noms et contenu des messages
+        en sortent avec.
+      </span>
+    </div>
   `;
 }
 
@@ -737,6 +797,126 @@ async function relever() {
   redessiner();
 }
 
+/**
+ * Emporter le texte dans un fichier.
+ *
+ * Le même texte que celui du bouton de copie, lu au même endroit : deux
+ * fabrications donneraient deux vérités du même fil (règle 4).
+ */
+function telecharger(hote) {
+  const source = hote.querySelector("[data-copier-source=\"fil-en-texte\"]");
+  if (!source || !etat.fil) return;
+
+  const lien = document.createElement("a");
+  const url = URL.createObjectURL(new Blob([source.textContent], { type: "text/markdown" }));
+  lien.href = url;
+  lien.download = nomDeLExport(etat.fil);
+  lien.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Porter ce fil dans une proposition.
+ *
+ * **Rien n'entre dans la mémoire ici.** La proposition se rédige, elle ne
+ * s'applique pas : c'est en la signant, ligne à ligne, que les sujets
+ * s'ouvrent. C'est la règle 1, et elle vaut pour cet écran comme pour les
+ * autres.
+ */
+async function transformer({ sujet = false, branche = "" } = {}) {
+  if (sujet) {
+    refuser({
+      motif: "Ouvrir un sujet : pas encore branché depuis cet écran.",
+      queFaire: "« Faire une proposition » l'est : elle porte les prises qui ouvriraient un "
+        + "sujet, et c'est en la signant qu'ils s'ouvrent."
+    });
+    redessiner();
+    return;
+  }
+
+  const prises = etat.releve?.prises ?? [];
+  const points = pointsDuFil(prises);
+  if (!points.length) {
+    refuser({
+      motif: "Ce fil ne porte aucun sujet à ouvrir.",
+      queFaire: "Seules les demandes, les engagements, les décisions, les questions sans "
+        + "réponse et les désaccords deviennent des sujets. Les constats vont en mémoire, "
+        + "par un autre chemin."
+    });
+    redessiner();
+    return;
+  }
+
+  etat.versement = { enCours: true, dit: "Rédaction de la proposition…" };
+  redessiner();
+
+  try {
+    const [{ preparerUneProposition }, { confrontation }, cr] = await Promise.all([
+      import("../../../services/atelier-proposition.js"),
+      import("../../../services/lecture-du-cr.js"),
+      import("../../../services/proposition-du-cr.js")
+    ]);
+    const { resolveCurrentBackendProjectId } = await import("../../../services/project-supabase-sync.js");
+    const projectId = await resolveCurrentBackendProjectId().catch(() => "");
+
+    // **`null` n'est pas « aucun sujet ».** Ne pas avoir pu lire ce que le
+    // projet suit n'autorise pas à dire qu'il ne suit rien : la confrontation
+    // le sait, et rend `null` plutôt que de tout déclarer neuf.
+    const sujets = await sujetsDuProjet(projectId);
+    // Le même aplatissement des titres que le lecteur de CR : deux façons de
+    // rapprocher un titre finiraient par rapprocher deux choses différentes.
+    const { titreAplati } = await import("../../../services/sujets-du-cr.js");
+    const confrontes = confrontation(points, sujets, titreAplati);
+    if (!confrontes) {
+      etat.versement = {
+        enCours: false,
+        dit: "Ce que le projet suit déjà n'a pas pu être lu : sans cela, tout repartirait neuf."
+      };
+      redessiner();
+      return;
+    }
+
+    const rendu = await preparerUneProposition({
+      projectId,
+      propositionId: branche,
+      titre: titreDeLaProposition(etat.fil),
+      intro: introDuFil({ fil: etat.fil, points, prises }),
+      source: `${LABEL_DU_FIL} · ${texte(etat.fil?.objet) || "sans objet"}`,
+      // La chaîne du compte rendu, telle quelle : un second jeu d'items
+      // finirait par proposer autre chose que ce que l'écran a montré.
+      affirmations: cr.itemsDuCompteRendu({ confrontes })
+    });
+
+    etat.versement = rendu?.ok
+      ? { enCours: false, dit: `Proposition prête : ${points.length} sujet${
+        points.length > 1 ? "s" : ""} à signer.` }
+      : { enCours: false, dit: texte(rendu?.raison) || "La proposition n'a pas pu être écrite." };
+  } catch (erreur) {
+    etat.versement = {
+      enCours: false,
+      dit: `La proposition n'a pas pu être écrite : ${String(erreur?.message ?? "cause inconnue")}`
+    };
+  }
+  redessiner();
+}
+
+/**
+ * Ce que le projet suit déjà. `null` quand on n'a pas pu demander.
+ *
+ * **Les mêmes titres que l'analyse d'une proposition**, et que le lecteur de
+ * comptes rendus. Confronter ici sur une autre liste ferait dire à l'écran
+ * autre chose que ce qui se passera à la fusion (règle 4).
+ */
+async function sujetsDuProjet(projectId) {
+  if (!texte(projectId)) return null;
+  try {
+    const { listProjectSubjectTitles } = await import("../../../services/propositions-supabase.js");
+    return await listProjectSubjectTitles(projectId);
+  } catch {
+    return null;
+  }
+}
+
 function brancher(hote) {
   const zone = hote.querySelector("[data-mails-zone]");
   if (zone) {
@@ -772,6 +952,19 @@ function brancher(hote) {
 
   hote.querySelectorAll("[data-mails-relever]").forEach((bouton) => {
     bouton.addEventListener("click", () => { relever(); });
+  });
+
+  const emporter = hote.querySelector("[data-mails-telecharger]");
+  if (emporter) emporter.addEventListener("click", () => telecharger(hote));
+
+  brancherLesBoutonsCopier(hote);
+
+  hote.addEventListener("ghaction:action", (evenement) => {
+    const quoi = evenement.detail?.action ?? "";
+    const branche = brancheDeLAction(quoi);
+    if (quoi === TRANSFORMER.SUJET || quoi === TRANSFORMER.PROPOSITION || branche) {
+      void transformer({ sujet: quoi === TRANSFORMER.SUJET, branche });
+    }
   });
 
   const fermer = hote.querySelector("[data-mails-alerte-fermer]");
