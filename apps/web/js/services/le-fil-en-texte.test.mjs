@@ -333,3 +333,17 @@ test("les renvois qui n'ont pas tenu se disent", () => {
   assert.ok(texte.includes("**Renvois écartés** : 2"));
   assert.ok(texte.includes("n'est pas antérieur"));
 });
+
+// ── Ce que l'export dit de sa propre reproductibilité ──────────────────────
+
+test("l'export dit si le même fil rendrait le même relevé", () => {
+  // Il sort pour être opposé à quelqu'un : une citation qui change alors que
+  // le document n'a pas changé n'est plus une preuve (règle 1).
+  const texte = leFilEnTexte({ fil: fil(), releve: { ...RELEVE, temperature: 0 } });
+  assert.ok(texte.includes("**Reproductibilité** : température 0 : le même fil rend le même relevé"));
+});
+
+test("un relevé sans température fixée le dit dans l'export", () => {
+  const texte = leFilEnTexte({ fil: fil(), releve: RELEVE });
+  assert.ok(texte.includes("température non fixée : deux lectures du même fil peuvent différer"));
+});

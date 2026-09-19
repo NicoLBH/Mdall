@@ -742,6 +742,70 @@ deux fois ; « toutefois » redevenu une marque ; une phrase de couverture qui p
 > de l'ordre ne voyait pas. Ce qui reste : § 57 de
 > [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
+### 7 sexies — Le même fil ne rendait pas deux fois le même relevé · *fait*
+
+Trois passages du **même fichier**, sans rien changer au code, ont rendu **12, 14 et 17 prises**.
+Sur les 19 phrases relevées au moins une fois, **9 seulement l'étaient aux trois passages**. Et
+au plus pauvre, la position contestée du litige — « selon les ouvriers, la jonction se fera avec
+le temps » — n'apparaissait nulle part : l'écran montrait la réfutation et pas ce qu'elle
+réfutait.
+
+**La cause n'était pas le modèle, c'était un réglage qu'on n'avait jamais posé.** Aucun appel au
+modèle, dans tout le dépôt, ne fixait la température. Le défaut du fournisseur s'appliquait.
+
+> **La température ne change pas ce que le modèle comprend.** À chaque mot, il
+> dispose d'un classement de ce qui pourrait suivre ; ce classement est sa
+> lecture du fil, et il est le même d'un appel à l'autre. La température décide
+> seulement comment on y pioche : à 1 on tire au sort, à 0 on prend le premier.
+>
+> **Mais un relevé est une liste.** Des centaines de fois, le modèle choisit
+> entre « j'ouvre une prise de plus » et « je referme ». À température libre,
+> chacun de ces points est un coup de dé — et dès qu'un dé tombe du mauvais
+> côté, tout ce qui suit en découle : le modèle referme, puis continue de façon
+> parfaitement cohérente sur un relevé plus court. Il n'a rien mal compris, il
+> a arrêté de lister un cran trop tôt.
+
+**Pourquoi c'est de la doctrine et pas du confort.** Règle 1 : rien n'entre dans la mémoire sans
+une proposition signée, et une proposition porte des citations comme preuves. **Une preuve qui
+change alors que le document n'a pas changé n'est pas une preuve.** Et règle 12 : on ne peut
+vérifier aucune règle de lecture tant que deux lectures du même fil diffèrent — ce qui veut dire
+que toutes les mesures des étapes précédentes sont des tirages uniques, et le carnet le dit
+maintenant.
+
+> Zéro, et non une valeur basse : une valeur basse laisse passer les tirages
+> rares, qui sont précisément ceux qui coupent une liste trop tôt.
+>
+> **Ce qu'elle ne garantit pas** est écrit dans le module : elle ne rend pas le
+> relevé meilleur, elle le rend **unique**. Si le tirage déterministe est
+> pauvre, il le sera à chaque fois. Et le fournisseur peut changer le modèle
+> derrière le même nom.
+>
+> Un modèle de raisonnement refuse qu'on lui fixe une température, et le modèle
+> est un réglage : l'appel réessaie **une fois** sans elle, et **dit** qu'elle
+> n'a pas tenu. L'écran et l'export portent la phrase — l'export surtout, qui
+> sort pour être opposé à quelqu'un.
+
+**Et le contrat entre le serveur et l'écran est devenu éprouvable.** Une rupture muette l'a
+montré : on pouvait retirer un champ entier de la réponse sans qu'une seule épreuve ne tombe,
+parce que la lecture vivait dans le module qui importe l'authentification — inimportable hors
+d'un navigateur.
+
+> `services/le-releve-rendu.js` : ce qu'il y a à comprendre d'une réponse se lit
+> sans clé ni appel. Une douzaine de champs, chacun avec sa règle pour ne pas
+> mentir quand il manque — un compte absent ne devient pas zéro, une liste
+> absente ne devient pas vide quand le vide voudrait dire autre chose (règle 5).
+> Le module du réseau les réexporte : les appelants ne voient pas la coupure.
+
+**Ce qui se vérifie en cassant** : une température basse mais non nulle ; une panne quelconque
+prise pour un refus de la température ; une température refusée qui se présente comme
+reproductible ; un compte absent devenu une déclaration de vide ; un coût non annoncé devenu un
+coût nul.
+
+> Les dix-sept ruptures essayées tombent. Deux ont d'abord été muettes, et
+> toutes deux visaient le module que l'authentification rendait inatteignable —
+> c'est ce qui a décidé la coupure. Ce qui reste : § 58 de
+> [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
+
 ### 8 — La boîte de réception du projet
 
 La porte principale, et le morceau le plus lourd. Elle vient en dernier parce qu'elle se
@@ -847,6 +911,8 @@ expéditeur inconnu. Voir la section ci-dessus.
 | Séparer le propos de la citation | `services/ce-quon-cite.js` — pur · *écrit* |
 | Reconstituer le fil | `services/le-fil-des-mails.js` — pur · *écrit* |
 | Le relevé par le modèle | `supabase/functions/relever-un-fil/` — la consigne y vit seule · *écrit* |
+| Le réglage qui rend un relevé reproductible | `_shared/reglage-du-modele.js` — pur · *écrit* |
+| Ce que le serveur rend, lu une fois | `services/le-releve-rendu.js` — pur · *écrit* |
 | Ce qu'un fil porte | `services/prises-de-position.js` — pur · *écrit* |
 | Ce qui se dérive du fil | `services/ce-quon-derive.js` — pur · *écrit* |
 | Demander le relevé | `services/prises-par-le-modele.js` · *écrit* |

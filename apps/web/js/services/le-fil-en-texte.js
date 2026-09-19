@@ -35,7 +35,7 @@
 import { CERTITUDE, ORDRE, phraseDuMoment } from "./le-fil-des-mails.js";
 import {
   NATURE, ceQueLeModeleNaPasDit, ceQuiManque, nomDeLaNature, parNature, partReleveeDuMessage,
-  phraseDeLaPart, phraseDuManque, phraseDuReleve, prisesDuMessage
+  phraseDeLaPart, phraseDeLaTemperature, phraseDuManque, phraseDuReleve, prisesDuMessage
 } from "./prises-de-position.js";
 import { phraseDuTrou } from "./trous-dun-mail.js";
 
@@ -227,6 +227,9 @@ export function leFilEnTexte({ fil = null, releve = null, fichiers = [] } = {}) 
 
   morceaux.push(phraseDuReleve(releve), "");
   if (texte(releve.modele)) morceaux.push(`- **Modèle** : ${texte(releve.modele)}`);
+  // **Ce texte sort pour être opposé à quelqu'un.** Il doit dire si la citation
+  // qu'on y lit sera encore là au prochain passage.
+  morceaux.push(`- **Reproductibilité** : ${phraseDeLaTemperature(releve.temperature)}`);
   if (Number.isFinite(Number(releve.entree))) morceaux.push(`- **Jetons d'entrée** : ${releve.entree}`);
   if (Number.isFinite(Number(releve.sortie))) morceaux.push(`- **Jetons de sortie** : ${releve.sortie}`);
   if (Number(releve.dureeMs) > 0) morceaux.push(`- **Durée** : ${Math.round(releve.dureeMs)} ms`);
