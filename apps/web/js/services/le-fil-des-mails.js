@@ -441,3 +441,41 @@ export function leFilDesMails(sources) {
   };
   return { ...fil, phrase: phraseDuFil(fil) };
 }
+
+/**
+ * Ce qu'un message devient pour le relevé : son rang, son propos, son auteur.
+ *
+ * **Il vit ici, et non près du réseau.** Il est pur — un fil entre, une liste
+ * sort —, et ce qu'il laisse passer est ce qui quitte le navigateur : cela
+ * doit pouvoir s'éprouver sans clé ni appel.
+ *
+ * **Et rien de plus.** Les destinataires, les adresses, les pièces jointes et
+ * les citations restent au navigateur : le relevé n'en a pas besoin, et de la
+ * correspondance privée qui monte sans servir est de la correspondance privée
+ * qui monte pour rien.
+ */
+export function messagesAEnvoyer(messages = []) {
+  return (Array.isArray(messages) ? messages : [])
+    .filter((message) => texte(message?.propos))
+    .map((message) => ({
+      rang: Number(message?.rang) || 0,
+      propos: texte(message.propos),
+      qui: texte(message?.qui?.nom) || texte(message?.qui?.adresse) || "",
+      /**
+       * **La date se dit d'une seule façon, et c'est celle de l'écran.**
+       *
+       * `quand` porte une date ISO quand le message a été déposé, et rien du
+       * tout quand il a été reconstitué d'une citation — où c'est
+       * `quandTexte` qui parle, en français. Prendre l'un ou l'autre faisait
+       * remonter deux formats : sur un fil réel, trente-huit prises datées
+       * « mercredi 22 juillet 2026 12:48 » et une datée
+       * `2026-07-24T10:58:11.000Z`, sur la même page que l'en-tête de son
+       * propre message qui disait « 24 juillet 2026 à 10:58 ».
+       *
+       * Une valeur écrite à deux endroits finit par diverger (règle 4) : elle
+       * n'a plus qu'un endroit, et c'est `phraseDuMoment`.
+       */
+      quand: phraseDuMoment(message)
+    }));
+}
+

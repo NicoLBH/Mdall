@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  MARQUE, SUITE, ceQuonDerive, laMarqueDeContestation, laSuiteDuneDemande, lesContestations, memeSujet
+  MARQUE, OFFRE, SUITE, ceQuonDerive, laMarqueDeContestation, laMarqueDuneOffre,
+  laSuiteDuneDemande, lesContestations, memeSujet
 } from "./ce-quon-derive.js";
 import { NATURE } from "./prises-de-position.js";
 
@@ -23,21 +24,78 @@ const demande = (dessus = {}) => prise({ nature: NATURE.DEMANDE, intitule: "conf
 // ── Le même sujet ──────────────────────────────────────────────────────────
 
 test("les accents, la casse et les espaces ne font pas deux sujets", () => {
-  assert.equal(memeSujet("Humidité de l'acrotère", "humidite  de l'acrotere"), true);
+  assert.equal(memeSujet("Humidité de l'Acrotère", "humidite de l acrotere"), true);
 });
 
 test("deux sujets voisins restent deux sujets", () => {
-  // Chercher des synonymes rapprocherait des sujets voisins, et rendrait des
-  // désaccords qui n'en sont pas.
-  assert.equal(memeSujet("humidité de l'acrotère", "humidité du seuil"), false);
+  assert.equal(memeSujet("humidité de l'acrotère", "cote du seuil"), false);
 });
 
 test("un sujet vide ne ressemble à rien, pas même à un autre sujet vide", () => {
   assert.equal(memeSujet("", ""), false);
-  assert.equal(memeSujet(null, null), false);
+  assert.equal(memeSujet(null, "humidité"), false);
 });
 
-// ── Affirmer ou nier ───────────────────────────────────────────────────────
+test("un libellé qui se lit d'un tenant dans un autre désigne la même chose", () => {
+  // **L'égalité exacte ne suffisait pas.** Sur un fil réel, 28 libellés pour
+  // 39 prises : le désaccord portait « combinaison souffle et vent simultanée »
+  // quand l'autre partie s'était exprimée sur « combinaison souffle et vent »,
+  // et l'écran affirmait que personne n'avait parlé du sujet.
+  assert.equal(memeSujet("combinaison souffle et vent",
+    "combinaison souffle et vent simultanée"), true);
+  assert.equal(memeSujet("fondations remise", "fondations remise sous charge sismique"), true);
+  assert.equal(memeSujet("action du rotor", "pression de vent et action du rotor"), true,
+    "au milieu comme au début");
+});
+
+test("deux libellés qui ne partagent qu'une locution vide restent distincts", () => {
+  // C'est la maladie des quatre-vingt-seize désaccords : compter les mots
+  // communs soude « prise en compte action souffle rotor » et « prise en
+  // compte composante verticale sismique », qui sont deux points du rapport.
+  assert.equal(memeSujet("prise en compte action souffle rotor",
+    "prise en compte composante verticale sismique"), false);
+  assert.equal(memeSujet("nature souffle rotor et vent",
+    "pression vent comparée à souffle rotor"), false);
+});
+
+test("des mots présents mais dispersés ne font pas le même sujet", () => {
+  // **Ils doivent se suivre.** « combinaison vent » ne dit pas ce que dit
+  // « combinaison souffle et vent » : il en omet le souffle, qui est tout
+  // l'objet du litige. Se contenter de retrouver les mots, où qu'ils soient,
+  // soude deux sujets que rien ne rapproche.
+  assert.equal(memeSujet("combinaison vent", "combinaison souffle et vent"), false);
+  assert.equal(memeSujet("pression rotor", "pression de vent et action du rotor"), false);
+});
+
+test("deux mots de liaison différents ne font pas deux sujets", () => {
+  // Le modèle écrit « de » une fois sur deux. Les compter ferait de
+  // « fondations remise » et « fondations de la remise » deux choses.
+  assert.equal(memeSujet("fondations remise", "fondations de la remise"), true);
+  assert.equal(memeSujet("cote seuil", "la cote du seuil"), true);
+});
+
+test("une suite de mots de liaison ne désigne rien", () => {
+  // Le pendant : si les liaisons comptaient comme des mots pleins, « de la »
+  // atteindrait le plancher de deux mots et désignerait tout ce qui la porte.
+  assert.equal(memeSujet("de la", "pression de la vanne"), false);
+});
+
+test("le rapprochement se fait sur les mots, pas sur les lettres", () => {
+  // « vent » se lit dans « ventilation » : sur les lettres, la section de
+  // ventilation rejoindrait le vent de calcul.
+  assert.equal(memeSujet("section ventilation", "pression de vent"), false);
+});
+
+test("un libellé d'un seul mot ne désigne pas ce qui le contient", () => {
+  // Sinon il désignerait tout : « vent » rejoindrait chaque libellé du fil.
+  assert.equal(memeSujet("vent", "combinaison souffle et vent"), false);
+  assert.equal(memeSujet("rotor", "action du rotor"), false);
+});
+
+test("deux mots pleins suffisent, et les mots de liaison ne comptent pas", () => {
+  assert.equal(memeSujet("souffle rotor", "calcul du souffle rotor"), true);
+  assert.equal(memeSujet("point 65", "point 57"), false);
+});
 
 // ── Une marque de contestation ─────────────────────────────────────────────
 
@@ -360,4 +418,80 @@ test("le dernier message se déduit des prises quand on ne le dit pas", () => {
 test("la dérivation ne touche pas aux prises qu'elle laisse passer", () => {
   const constat = prise();
   assert.deepEqual(ceQuonDerive([constat]).prises[0], constat);
+});
+
+// ── Une offre conditionnelle ───────────────────────────────────────────────
+
+test("une prestation proposée contre commande se reconnaît", () => {
+  // **C'est la marque qui a un prix**, et c'est ce qui a le plus de
+  // conséquences dans tout le relevé.
+  assert.equal(laMarqueDuneOffre({
+    citation: "Cette prestation devra faire l'objet d'une commande complémentaire spécifique."
+  }), OFFRE.CONTRE_COMMANDE);
+});
+
+test("une prestation proposée sur demande se reconnaît", () => {
+  assert.equal(laMarqueDuneOffre({
+    citation: "Une étude complémentaire pourra être réalisée à votre demande."
+  }), OFFRE.SUR_DEMANDE);
+});
+
+test("une prestation proposée si l'autre le souhaite se reconnaît", () => {
+  assert.equal(laMarqueDuneOffre({
+    citation: "Si le bureau de contrôle souhaite une justification, nous sommes en mesure de la produire."
+  }), OFFRE.SI_VOUS_SOUHAITEZ);
+});
+
+test("la marque qui engage une commande l'emporte sur la politesse qui l'entoure", () => {
+  assert.equal(laMarqueDuneOffre({
+    citation: "Si vous le souhaitez nous pouvons réaliser cette étude ; elle devra faire "
+      + "l'objet d'une commande complémentaire."
+  }), OFFRE.CONTRE_COMMANDE);
+});
+
+test("une demande ordinaire ne porte aucune marque d'offre", () => {
+  // Le pendant : un lexique qui trouve toujours quelque chose ne dit rien.
+  assert.equal(laMarqueDuneOffre({ citation: "Pouvez-vous confirmer la cote avant vendredi ?" }), "");
+  assert.equal(laMarqueDuneOffre({ intitule: "produire une analyse modale spatiale" }), "");
+  assert.equal(laMarqueDuneOffre({}), "");
+});
+
+test("une offre quitte les questions sans réponse", () => {
+  // « Si vous le souhaitez, nous pouvons… » n'attend pas une relance, mais un
+  // accord — et sur un fil réel, l'une exigeait une commande payante.
+  const offre = demande({
+    message: 1, citation: "Cette prestation devra faire l'objet d'une commande complémentaire."
+  });
+  const derive = ceQuonDerive([offre], { dernierMessage: 5 });
+  assert.equal(derive.sansReponse, 0);
+  assert.equal(derive.offres, 1);
+  assert.deepEqual(derive.prises.map((prise) => prise.nature), [NATURE.OFFRE]);
+});
+
+test("une offre dit ce qu'elle était et quelle marque a parlé", () => {
+  const derive = ceQuonDerive([demande({
+    message: 1, citation: "Une étude pourra être réalisée à votre demande."
+  })], { dernierMessage: 5 });
+  const [rendue] = derive.prises;
+  assert.equal(rendue.natureDeclaree, NATURE.DEMANDE);
+  assert.equal(rendue.marque, OFFRE.SUR_DEMANDE);
+  assert.notEqual(rendue.key, "");
+});
+
+test("une vraie demande reste jugée comme telle", () => {
+  // Le pendant : si toute demande devenait une offre, l'apport principal du
+  // procédé disparaîtrait.
+  const derive = ceQuonDerive([demande({ message: 1 })], { dernierMessage: 5 });
+  assert.equal(derive.offres, 0);
+  assert.equal(derive.sansReponse, 1);
+});
+
+test("un constat qui porte une marque d'offre reste un constat", () => {
+  // L'offre se dérive d'une demande : requalifier un constat ferait entrer
+  // dans la rubrique des choses qui n'attendent rien.
+  const derive = ceQuonDerive([prise({
+    message: 1, citation: "Cette prestation devra faire l'objet d'une commande."
+  })]);
+  assert.equal(derive.offres, 0);
+  assert.equal(derive.prises[0].nature, NATURE.CONSTAT);
 });

@@ -3,8 +3,8 @@ import test from "node:test";
 
 import {
   CERTITUDE, ORDRE, empreinteDuTexte, leFilDesMails, leJourDuMessage, leMemeTexte,
-  lesMessagesCites, phraseDuFil, unMessageDuFil
-, quiDuneCitation
+  lesMessagesCites, messagesAEnvoyer, phraseDuFil, phraseDuMoment, quiDuneCitation,
+  unMessageDuFil
 } from "./le-fil-des-mails.js";
 import { TROU } from "./trous-dun-mail.js";
 
@@ -458,4 +458,43 @@ test("un message reconstitué porte l'adresse de son auteur, pas une chaîne d'a
   );
   const cite = leFilDesMails([porteur]).messages.find((message) => message.rang === 1);
   assert.deepEqual(cite.qui, { nom: "BERTRAND", adresse: "contact@bertrand.example" });
+});
+
+// ── Ce qui monte au modèle ─────────────────────────────────────────────────
+
+const DEUX = () => leFilDesMails([PREMIER, SECOND]);
+
+test("la date qui monte est celle que l'écran affiche, et pas une autre", () => {
+  // **Un message déposé porte une date ISO, un message cité n'en porte pas.**
+  // Prendre l'un ou l'autre faisait remonter deux formats : sur un fil réel,
+  // trente-huit prises datées « mercredi 22 juillet 2026 12:48 » et une datée
+  // `2026-07-24T10:58:11.000Z` — sur la même page que l'en-tête de son propre
+  // message, qui disait « 24 juillet 2026 à 10:58 » (règle 4).
+  const fil = DEUX();
+  for (const envoye of messagesAEnvoyer(fil.messages)) {
+    const message = fil.messages.find((une) => une.rang === envoye.rang);
+    assert.equal(envoye.quand, phraseDuMoment(message));
+    assert.equal(/^\d{4}-\d{2}-\d{2}T/.test(envoye.quand), false, "aucune date ISO ne monte");
+  }
+});
+
+test("un message déposé et un message cité datent du même mot", () => {
+  const dates = messagesAEnvoyer(DEUX().messages).map((message) => message.quand);
+  assert.equal(dates.length, 2);
+  for (const date of dates) assert.match(date, /\d{4}/);
+  assert.equal(new Set(dates.map((date) => /^\d{4}-/.test(date))).size, 1,
+    "les deux formes se disent de la même façon");
+});
+
+test("un message sans propos ne monte pas", () => {
+  // Ce qui monte est de la correspondance privée : ce qui ne sert pas au
+  // relevé n'a pas à quitter le navigateur.
+  const fil = DEUX();
+  const avecUnVide = [...fil.messages, { rang: 9, propos: "   ", qui: {}, quand: "" }];
+  assert.equal(messagesAEnvoyer(avecUnVide).length, 2);
+});
+
+test("ce qui monte ne porte que le rang, le propos, l'auteur et la date", () => {
+  const [monte] = messagesAEnvoyer(DEUX().messages);
+  assert.deepEqual(Object.keys(monte).sort(), ["propos", "quand", "qui", "rang"]);
 });

@@ -532,6 +532,13 @@ function renderUnePrise(prise) {
       </header>
       <p class="fil-mails__propos">${escapeHtml(texte(prise.intitule))}</p>
       ${/*
+        **La marque qui a fait dériver la prise.** Une offre relevée « contre
+        commande » n'est pas la même chose qu'une offre relevée « sur demande » :
+        l'une a un prix. La règle se juge sur pièce (règle 12).
+      */""}
+      ${texte(prise.marque) ? `<p class="fil-mails__moment mono-small">${
+        escapeHtml(`relevée sur « ${texte(prise.marque)} »`)}</p>` : ""}
+      ${/*
         **La citation est sous la prise, toujours.** C'est elle qui la rend
         vérifiable : une prise sans sa citation demande de croire le modèle
         sur parole, et c'est précisément ce qu'on refuse.
@@ -654,6 +661,12 @@ function renderUnMessage(message, ouvert, prises = []) {
  * n'est dans aucun message. On nomme donc **qui s'était exprimé avant lui sur
  * le même sujet**, sans désigner lequel : au jugé, on prêterait à quelqu'un une
  * position qu'il n'a pas prise (règle 5).
+ *
+ * **Et quand on n'a trouvé personne, on dit qu'on n'a trouvé personne — pas que
+ * personne n'a parlé.** Le rapprochement se fait sur le libellé de sujet rendu
+ * par le modèle ; un fil réel affirmait « ce qui est contesté vient d'ailleurs »
+ * alors que la position visée était deux messages plus haut, sous un intitulé
+ * voisin.
  */
 function renderUnDesaccord(prise) {
   const avant = (prise.avant ?? []).filter(Boolean);
@@ -677,8 +690,7 @@ function renderUnDesaccord(prise) {
       <p class="fil-mails__moment mono-small">${escapeHtml(avant.length
         ? `Se sont exprimés avant sur le même sujet : ${avant.join(", ")}. `
           + "On ne sait pas laquelle de leurs positions est visée."
-        : "Personne d'autre ne s'est exprimé sur ce sujet dans le fil : ce qui est "
-          + "contesté vient d'ailleurs.")}</p>
+        : "Aucune autre prise n'a été relevée sous ce sujet. Ce qui est contesté peut venir d'ailleurs — d'un rapport, ou d'un message rangé sous un autre intitulé.")}</p>
     </article>
   `;
 }

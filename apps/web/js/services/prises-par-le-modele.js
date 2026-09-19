@@ -22,12 +22,15 @@
  */
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
+import { messagesAEnvoyer } from "./le-fil-des-mails.js";
 
 const URL_DE_LA_FONCTION = `${getSupabaseUrl()}/functions/v1/relever-un-fil`;
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /** Pourquoi le relevé n'a pas eu lieu. Nommés : un écran doit pouvoir le dire. */
+export { messagesAEnvoyer } from "./le-fil-des-mails.js";
+
 export const REFUS = {
   /** Le fil ne porte aucun texte à relever. */
   SANS_TEXTE: "sans-texte",
@@ -115,25 +118,6 @@ export function motifDuStatut(statut = 0) {
   if (code === 404) return REFUS.INJOIGNABLE;
   if (DELAIS_DEPASSES.has(code)) return REFUS.TROP_LONG;
   return REFUS.REFUSE;
-}
-
-/**
- * Ce qu'un message devient pour le relevé : son rang, son propos, son auteur.
- *
- * **Et rien de plus.** Les destinataires, les adresses, les pièces jointes et
- * les citations restent au navigateur : le relevé n'en a pas besoin, et de la
- * correspondance privée qui monte sans servir est de la correspondance privée
- * qui monte pour rien.
- */
-export function messagesAEnvoyer(messages = []) {
-  return (Array.isArray(messages) ? messages : [])
-    .filter((message) => texte(message?.propos))
-    .map((message) => ({
-      rang: Number(message?.rang) || 0,
-      propos: texte(message.propos),
-      qui: texte(message?.qui?.nom) || texte(message?.qui?.adresse) || "",
-      quand: texte(message?.quand) || texte(message?.quandTexte) || ""
-    }));
 }
 
 async function projetCourant() {

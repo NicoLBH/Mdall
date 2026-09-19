@@ -4144,3 +4144,44 @@ comme pièces jointes · les offres conditionnelles rangées en questions sans r
 **Pourquoi c'est repoussé.** Tout cela demande la même chose : **d'autres fils**. Un seul
 échange dit qu'un mécanisme est faux — 96 sur 96 le prouvent —, il ne dit pas qu'un mécanisme
 est juste.
+
+
+---
+
+## 56. Ce que le rapprochement des sujets ne répare pas
+
+**Ce qui vient d'être réglé.** La date dite d'une seule façon, le rapprochement de deux libellés
+voisins, le refus d'affirmer que personne n'a parlé, et l'offre conditionnelle sortie des
+questions sans réponse. C'est l'étape 7 quater de [`lire-les-mails.md`](lire-les-mails.md).
+
+**Ce que le troisième passage laisse ouvert.**
+
+- **Deux demandes réelles restent comptées sans réponse, alors qu'on y a
+  répondu.** Le bureau de contrôle demande « une vérification verticale locale »
+  et « une analyse modale spatiale » ; le bureau d'études répond au message
+  suivant, sous le libellé « prise en compte irrégularité élévation ». Aucune
+  règle de rapprochement fondée sur les mots ne peut relier ces trois-là :
+  **elles ne partagent rien**. C'est la limite de `porte_sur`, et elle ne se
+  franchira pas en resserrant ou en desserrant une expression régulière.
+- **Un engagement déclaré comme une demande devient une question sans
+  réponse.** « Les autres avis feront l'objet de justifications ultérieures »
+  est une promesse, pas une question. L'observation — rien dans la suite ne la
+  reprend — reste juste ; c'est l'étiquette qui ment.
+- **Une formule de politesse aussi.** « En espérant que ces éléments
+  permettront de clore ce point » n'attend pas de réponse. Elle est la
+  quatrième des quatre qui restent.
+- **Le lexique des contestations reste mesuré sur un seul fil.** Précision 1/1
+  sur son unique cas ; rappel inconnu. Il faut un échange où un désaccord est
+  formulé **poliment**, sans aucune des cinq marques, pour savoir ce qu'il
+  manque.
+- **Les trois points du § 54 tiennent toujours** : la période lue « le 24
+  juillet » pour un fil du 22 au 24 ; « un seul mail déposé » qui sous-estime un
+  ordre certain ; les images de signature comptées comme pièces jointes.
+
+**Ce que cela dit du chemin.** Trois passages ont déplacé le maillon faible trois fois : le bruit,
+puis le tri, puis le libellé de sujet. Il est maintenant **à l'endroit où le modèle écrit en toute
+liberté**, et aucun garde-fou posé après lui ne le rattrapera. Les deux suites possibles se
+laissent nommer : lui donner une **liste fermée** de sujets, tirée du rapport ou du fil lui-même —
+ce qui suppose de savoir la construire ; ou cesser de rapprocher par le sujet et rapprocher par la
+**citation** — ce qui suppose de savoir dire qu'une phrase répond à une autre. Les deux sont des
+chantiers, et aucun ne se tranche sur un seul fil.

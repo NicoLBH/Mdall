@@ -121,7 +121,8 @@ function unePrise(prise) {
     // visée n'est pas toujours dans le fil (règle 5).
     lignes.push(avant.length
       ? `- **Se sont exprimés avant sur ce sujet** : ${avant.join(", ")}`
-      : "- **Se sont exprimés avant sur ce sujet** : personne — ce qui est contesté vient d'ailleurs");
+      : "- **Se sont exprimés avant sur ce sujet** : aucune autre prise relevée sous ce sujet — "
+        + "ce qui est contesté peut venir d'ailleurs, ou d'un intitulé voisin");
     return lignes.join("\n");
   }
 
@@ -135,6 +136,9 @@ function unePrise(prise) {
   if (texte(prise?.natureDeclaree)) {
     lignes.push(`- **Déclarée comme** : ${nomDeLaNature(prise.natureDeclaree)}`);
   }
+  // La marque qui a fait dériver la prise : « contre-commande » n'est pas
+  // « sur-demande », l'une a un prix. La règle se juge sur pièce (règle 12).
+  if (texte(prise?.marque)) lignes.push(`- **Marque** : ${texte(prise.marque)}`);
   if (Number.isFinite(Number(prise?.apresElle))) {
     lignes.push(`- **Messages après elle** : ${Number(prise.apresElle)}`);
   }

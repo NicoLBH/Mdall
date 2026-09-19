@@ -608,6 +608,72 @@ s'attribue ce que son propre auteur a dit avant ; un tiret dans « au-delà » p
 > pour prouver ce qu'ils prétendaient. Ce qui reste : § 55 de
 > [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
+### 7 quater — Le maillon faible a bougé · *fait*
+
+Troisième passage du même fil. Le tri tient — **39 prises lisibles contre 144, zéro écartée, un
+seul désaccord et c'est le vrai**, pour 5 016 jetons d'entrée contre 11 944 au départ. Mais
+l'écran affirmait encore trois choses fausses, et elles venaient toutes du même endroit.
+
+**Une date en deux formats, sur la même page.** Un message déposé porte une date ISO, un message
+reconstitué d'une citation n'en porte pas — c'est le texte du bandeau qui parle. Ce qui montait
+au modèle prenait l'un ou l'autre : trente-huit prises datées « mercredi 22 juillet 2026 12:48 »
+et une datée `2026-07-24T10:58:11.000Z`, sur la même page que l'en-tête de son propre message qui
+disait « 24 juillet 2026 à 10:58 ».
+
+> La date n'a plus qu'un endroit, `phraseDuMoment`, et l'écran, l'export et le
+> modèle la lisent tous là (règle 4). `messagesAEnvoyer` a quitté le module qui
+> parle au réseau pour rejoindre le fil : il est pur, **et ce qu'il laisse
+> passer est ce qui quitte le navigateur** — cela doit pouvoir s'éprouver sans
+> clé ni appel.
+
+**`porte_sur` est devenu le point de rupture unique.** 28 libellés pour 39 prises. Le désaccord
+portait « combinaison souffle et vent **simultanée** » quand l'autre partie s'était exprimée deux
+fois sur « combinaison souffle et vent » : l'écran affirmait que **personne** n'avait parlé du
+sujet, et envoyait chercher ailleurs ce qui était deux messages plus haut.
+
+> **Réglé sur mesures, comme l'étape précédente.** Compter les mots pleins
+> communs rejoue la maladie des quatre-vingt-seize désaccords : à deux mots,
+> « prise en compte action souffle rotor » rejoint « prise en compte composante
+> verticale sismique » — deux points du rapport soudés par une locution vide ;
+> 41 rapprochements sur les 28 libellés. À trois mots, 5, dont la plupart faux.
+>
+> Ce qu'on retient : **la suite de mots pleins de l'un se lit d'un tenant dans
+> l'autre**. Quatre rapprochements sur les mêmes libellés, et les quatre
+> tiennent. Deux garde-fous, chacun pour un piège réel : sur les mots et non
+> sur les lettres — « vent » ne se lit pas dans « ventilation » — et deux mots
+> pleins au moins, sans quoi un libellé d'un seul mot désignerait tout.
+>
+> Le désaccord du fil dit désormais « Nicolas Lebihan » là où il disait
+> « personne ».
+
+**Et quand on ne trouve personne, on dit qu'on n'a trouvé personne.** Pas que personne n'a parlé :
+le rapprochement dépend des libellés que le modèle a posés, et conclure de l'un à l'autre est une
+inférence qu'on ne peut pas faire (règle 5).
+
+**Une offre conditionnelle n'est pas une question sans réponse.** « Si vous le souhaitez, nous
+pouvons… », « pourra être réalisée à votre demande », « devra faire l'objet d'une commande » : ce
+qui est attendu est un **accord**, pas une réponse — et sur ce fil, l'une des deux exigeait une
+**commande payante**. Les ranger sous « question sans réponse » faisait chercher une relance là où
+il y avait un devis.
+
+> Une huitième nature, **dérivée** et non demandée : `offre`. Le modèle les
+> déclare en `demande`, ce qui se comprend — quelque chose est bien attendu de
+> quelqu'un. Trois marques nommées, dont `contre-commande`, celle qui a un
+> prix ; la marque se lit à l'écran et dans l'export, pour que la règle se juge
+> sur pièce (règle 12). Mesuré : deux relevées sur 38 prises, et ce sont les
+> deux offres. Le compte des questions sans réponse tombe de 6 à 4.
+
+**Ce qui se vérifie en cassant** : une date ISO qui remonte au modèle ; l'égalité exacte qui
+revient ; des mots présents mais dispersés qui font le même sujet ; « de la » qui atteint le
+plancher de deux mots ; la politesse qui l'emporte sur la commande ; l'écran qui réaffirme que
+personne n'a parlé.
+
+> Les vingt-sept ruptures essayées tombent. Deux ont d'abord été muettes, et
+> les deux visaient ⑩ : aucune épreuve ne distinguait « les mots se suivent »
+> de « les mots sont présents », ni ne montrait ce que les mots de liaison
+> coûtent. Ce qui reste : § 56 de
+> [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
+
 ### 8 — La boîte de réception du projet
 
 La porte principale, et le morceau le plus lourd. Elle vient en dernier parce qu'elle se
