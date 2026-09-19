@@ -40,7 +40,12 @@ export const TROU = {
   PIECE_SANS_NOM: "piece-sans-nom",
   CHEVRON_ISOLE: "chevron-isole",
   BANDEAU_PROBABLE: "bandeau-probable",
-  RIEN_QUE_DES_CITATIONS: "rien-que-des-citations"
+  RIEN_QUE_DES_CITATIONS: "rien-que-des-citations",
+  FIL_ORDONNE_PAR_DATES: "fil-ordonne-par-dates",
+  FIL_EN_PLUSIEURS_MORCEAUX: "fil-en-plusieurs-morceaux",
+  FIL_A_PLUSIEURS_OBJETS: "fil-a-plusieurs-objets",
+  MESSAGE_RECONSTITUE: "message-reconstitue",
+  MESSAGE_SANS_PLACE: "message-sans-place"
 };
 
 /** Un trou : ce qui manque, où, et ce qui était écrit à cet endroit. */
@@ -66,7 +71,12 @@ const PHRASES = {
   [TROU.PIECE_SANS_NOM]: "une pièce jointe n'a pas de nom",
   [TROU.CHEVRON_ISOLE]: "une ligne commence par « > » sans faire bloc : elle a été gardée dans le propos",
   [TROU.BANDEAU_PROBABLE]: "des en-têtes de message traînent dans le propos : une citation n'a pas été reconnue",
-  [TROU.RIEN_QUE_DES_CITATIONS]: "ce message n'ajoute rien de son auteur : il ne fait que citer"
+  [TROU.RIEN_QUE_DES_CITATIONS]: "ce message n'ajoute rien de son auteur : il ne fait que citer",
+  [TROU.FIL_ORDONNE_PAR_DATES]: "ce fil a été ordonné par ses dates, faute de chaîne de réponses",
+  [TROU.FIL_EN_PLUSIEURS_MORCEAUX]: "ce fil vient en plusieurs morceaux : les dates les ont rapprochés, la chaîne de réponses ne les relie pas",
+  [TROU.FIL_A_PLUSIEURS_OBJETS]: "ces messages n'ont pas tous le même objet : ce n'est peut-être pas un seul fil",
+  [TROU.MESSAGE_RECONSTITUE]: "ce message n'a pas été déposé : il a été reconstitué à partir d'une citation, avec la date que la messagerie affichait et sans ses destinataires",
+  [TROU.MESSAGE_SANS_PLACE]: "ce message n'a pas de date et rien ne le relie aux autres : sa place dans le fil est celle du dépôt"
 };
 
 /**

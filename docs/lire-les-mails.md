@@ -332,7 +332,7 @@ d'un bloc.
 > Les vingt et une ruptures essayées tombent. Ce qui reste : § 48 de
 > [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
-### 3 — Reconstituer le fil
+### 3 — Reconstituer le fil · *fait*
 
 `In-Reply-To` et `References` d'abord, les dates ensuite, et l'écran dit lequel des deux. Les
 doublons — le même message recopié dans huit citations — n'apparaissent **qu'une fois**, à sa
@@ -340,6 +340,24 @@ place.
 
 **En cassant** : deux messages de même date mais de chaîne différente ; un fil où le dernier
 message porte tout, déposé seul.
+
+> Écrit dans `services/le-fil-des-mails.js`, qui enchaîne les étapes 1 et 2 : des
+> `.eml` entrent, un fil sort. `ordre` porte laquelle des deux façons a fait le
+> travail — `chaine`, `dates`, `melange`, ou `unique` pour un mail seul.
+>
+> **Quand deux exemplaires s'opposent, le déposé gagne** : il a sa vraie date,
+> ses destinataires et ses pièces jointes, là où la citation n'a que ce que la
+> messagerie a recopié. Un message reconstitué porte `certitude: "cite"`, une
+> date qui n'est qu'un texte, et son trou.
+>
+> Une chose qui n'était pas dans le plan et qu'il a fallu trancher : **le rang
+> vient de la chaîne, la période vient des dates**. Un message écrit d'un
+> téléphone mal réglé se range après celui auquel il répond, mais sa date compte
+> quand même dans « du 3 au 19 mars ». Confondre les deux ferait courir la
+> période à l'envers.
+>
+> Les vingt-huit ruptures essayées tombent. Ce qui reste : § 49 de
+> [`a-traiter-plus-tard.md`](a-traiter-plus-tard.md).
 
 ### 4 — L'écran, et le fil affiché
 
@@ -465,7 +483,7 @@ expéditeur inconnu. Voir la section ci-dessus.
 | Déplier un `.eml` | `services/un-mail-deplie.js` — pur · *écrit* |
 | Ce qu'on n'a pas su placer, et sa phrase | `services/trous-dun-mail.js` — pur · *écrit* |
 | Séparer le propos de la citation | `services/ce-quon-cite.js` — pur · *écrit* |
-| Reconstituer le fil | `services/le-fil-des-mails.js` — pur |
+| Reconstituer le fil | `services/le-fil-des-mails.js` — pur · *écrit* |
 | Ce qu'un fil porte | `services/prises-de-position.js` — pur |
 | Le relevé par le modèle | `supabase/functions/relever-un-fil/` — la consigne y vit seule |
 | L'écran | `views/studio/dev/lecture-des-mails.js` |
