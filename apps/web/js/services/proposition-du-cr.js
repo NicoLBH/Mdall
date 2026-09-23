@@ -271,6 +271,11 @@ export function pointsAOuvrir(confrontes = [], { leJour = "" } = {}) {
  *   que la lecture les a rendues
  * @param {object[]} [options.rangements] les sujets déjà ouverts à ranger sous
  *   leur lot — ce que `rattrapageAProposer` a rendu
+ * @param {object|null} [options.identite] le numéro et la date du compte rendu.
+ *   **C'est la source de tout ce que la proposition porte, et sa date.** Un
+ *   sujet ouvert ou fermé sans savoir de quel document ni de quel jour il vient
+ *   ne se relit pas : on ne peut ni le replacer dans le temps, ni retrouver la
+ *   page qui le justifie.
  */
 export function itemsDuCompteRendu({
   confrontes = [],
@@ -281,6 +286,7 @@ export function itemsDuCompteRendu({
   disparition = null,
   rubriques = [],
   rangements = [],
+  identite = null,
   luPar = ""
 } = {}) {
   return [
@@ -304,7 +310,7 @@ export function itemsDuCompteRendu({
     // Les fermetures en dernier : un sujet se ferme après avoir reçu ce que ce
     // compte rendu en dit, sans quoi la dernière chose écrite dans son fil
     // serait antérieure à sa fermeture.
-    ...fermetureItems({ confrontes, disparition })
+    ...fermetureItems({ confrontes, disparition, identite })
   ];
 }
 
@@ -594,9 +600,23 @@ export function objectifItems(objectifs = []) {
  *   n'en prend rien quand `connu` est faux : ne pas savoir d'où viennent les
  *   sujets n'autorise pas à les déclarer disparus
  */
-export function fermetureItems({ confrontes = [], disparition = null } = {}) {
+export function fermetureItems({ confrontes = [], disparition = null, identite = null } = {}) {
   const { fermes } = fermeturesDuCompteRendu(Array.isArray(confrontes) ? confrontes : []);
   const vus = new Set();
+
+  /**
+   * D'où vient cette fermeture, et de quel jour.
+   *
+   * **Le numéro seul ne suffit pas.** « CR n° 20 » ne dit pas quand il s'est
+   * tenu, et c'est la date qui permet de relire une fermeture : un sujet fermé
+   * par un document de mars, retrouvé dans un document de septembre, n'a pas la
+   * même histoire selon lequel des deux est arrivé le premier. Chaînes vides
+   * quand le document ne les porte pas — on ne devine ni l'un ni l'autre.
+   */
+  const source = {
+    sourceNumero: texte(identite?.numero),
+    sourceLe: texte(identite?.tenueLe)
+  };
 
   const dites = fermes
     .map((point) => ({ point, sujetId: texte(point?.sujet?.id) }))
@@ -606,6 +626,7 @@ export function fermetureItems({ confrontes = [], disparition = null } = {}) {
     .map(({ point, sujetId }) => affirmation(ITEM_TYPE.FERMETURE, sujetId, {
       sujetId,
       titre: texte(point?.titre),
+      ...source,
       motif: FERMETURE.DITE,
       // La phrase du document, mot pour mot. C'est elle qui justifie la
       // fermeture, et c'est elle qu'on écrira dans le fil du sujet.
@@ -623,6 +644,7 @@ export function fermetureItems({ confrontes = [], disparition = null } = {}) {
       return affirmation(ITEM_TYPE.FERMETURE, sujetId, {
         sujetId,
         titre: texte(sujet?.title ?? sujet?.titre),
+        ...source,
         motif: FERMETURE.DEDUITE,
         signe: "",
         reference: null,

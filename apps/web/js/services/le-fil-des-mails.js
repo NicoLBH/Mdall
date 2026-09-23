@@ -348,10 +348,23 @@ export function leJourDuMessage(message) {
   return { annee: local.getUTCFullYear(), mois: local.getUTCMonth(), jour: local.getUTCDate() };
 }
 
+/**
+ * Un bout de fil, écrit comme on le lit : « 11 septembre 2026 ».
+ *
+ * **Une seule écriture pour la période et pour la date d'un constat.** Le relevé
+ * dit qu'une question est restée sans réponse ; il doit dire **à quelle date**,
+ * et cette date est le dernier jour du fil. Deux façons de l'écrire finiraient
+ * par ne plus s'accorder — « 11 septembre » ici, « 11/09/2026 » là (règle 4).
+ */
+export function leJourDit(bout) {
+  if (!bout) return "";
+  return `${bout.jour} ${MOIS[bout.mois]} ${bout.annee}`;
+}
+
 function laPeriode(un, autre) {
   if (!un || !autre) return "";
   if (un.annee === autre.annee && un.mois === autre.mois && un.jour === autre.jour) {
-    return `le ${un.jour} ${MOIS[un.mois]} ${un.annee}`;
+    return `le ${leJourDit(un)}`;
   }
   if (un.annee !== autre.annee) {
     return `du ${un.jour} ${MOIS[un.mois]} ${un.annee} au ${autre.jour} ${MOIS[autre.mois]} ${autre.annee}`;

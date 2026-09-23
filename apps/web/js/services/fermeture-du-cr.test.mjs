@@ -10,6 +10,18 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { laPlaceDeLaSource } from "./la-chronologie-des-sources.js";
+
+/**
+ * Le compte rendu du présent : rien de plus récent n'est connu.
+ *
+ * **Il s'écrit maintenant dans chaque épreuve**, et c'est le point de tout ce
+ * lot : déduire une fermeture d'un silence exige de savoir qu'on est au
+ * présent. Une épreuve qui ne le disait pas déduisait sans le savoir — et c'est
+ * exactement ce que faisait l'écran quand on lui donnait le compte rendu n° 20
+ * après le n° 57.
+ */
+const EN_TETE = laPlaceDeLaSource({ date: "2026-09-03", connues: ["2026-06-01"] });
 
 import {
   EFFETS_DE_LA_FERMETURE, FERMETURE, PHRASES_DE_LA_FERMETURE, fermetureDuPoint,
@@ -83,7 +95,8 @@ test("un sujet qui n'apparaît plus se relève", () => {
   const disparition = sujetsDisparus({
     confrontes: [{ titre: "Étanchéité", sujet: { id: "s-1" } }],
     sujetsDuProjet: SUJETS,
-    sujetsDuLabel: ["s-1", "s-2"]
+    sujetsDuLabel: ["s-1", "s-2"],
+    placement: EN_TETE
   });
 
   assert.equal(disparition.connu, true);
@@ -101,7 +114,8 @@ test("la fermeture déduite s'annonce comme déduite, et réversible", () => {
   const dite = phraseDesDisparus(sujetsDisparus({
     confrontes: [{ sujet: { id: "s-1" } }],
     sujetsDuProjet: SUJETS,
-    sujetsDuLabel: ["s-1", "s-2"]
+    sujetsDuLabel: ["s-1", "s-2"],
+    placement: EN_TETE
   }));
 
   assert.match(dite, /fermerait/);
@@ -117,10 +131,10 @@ test("la fermeture déduite s'annonce comme déduite, et réversible", () => {
 test("la phrase des disparus s'accorde au nombre", () => {
   const une = phraseDesDisparus(sujetsDisparus({
     confrontes: [{ sujet: { id: "s-1" } }, { sujet: { id: "s-2" } }],
-    sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1", "s-2", "s-3"]
+    sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1", "s-2", "s-3"], placement: EN_TETE
   }));
   const plusieurs = phraseDesDisparus(sujetsDisparus({
-    confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1", "s-2", "s-3"]
+    confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1", "s-2", "s-3"], placement: EN_TETE
   }));
 
   assert.match(une, /1 sujet suivi depuis les comptes rendus n'apparaît pas/);
@@ -154,7 +168,7 @@ test("la fermeture déduite ne se confond pas avec la fermeture dite", () => {
  */
 test("un sujet qui ne vient pas d'un compte rendu ne disparaît pas", () => {
   const disparition = sujetsDisparus({
-    confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1"]
+    confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1"], placement: EN_TETE
   });
 
   assert.deepEqual(disparition.disparus.map((sujet) => sujet.id), ["s-1"]);
@@ -181,12 +195,16 @@ test("sans le label, aucune disparition ne se relève", () => {
 
 test("chaque situation a sa phrase, et elles diffèrent", () => {
   const dites = [
-    phraseDesDisparus(sujetsDisparus({ confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: null })),
-    phraseDesDisparus(sujetsDisparus({ confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: [] })),
     phraseDesDisparus(sujetsDisparus({
-      confrontes: [{ sujet: { id: "s-1" } }], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1"]
+      confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: null, placement: EN_TETE })),
+    phraseDesDisparus(sujetsDisparus({
+      confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: [], placement: EN_TETE })),
+    phraseDesDisparus(sujetsDisparus({
+      confrontes: [{ sujet: { id: "s-1" } }], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1"],
+      placement: EN_TETE
     })),
-    phraseDesDisparus(sujetsDisparus({ confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1"] }))
+    phraseDesDisparus(sujetsDisparus({
+      confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1"], placement: EN_TETE }))
   ];
 
   assert.equal(new Set(dites).size, 4);
@@ -258,4 +276,87 @@ test("une fermeture passe par la même porte que le bouton de l'écran", async (
   assert.match(code, /issue:close:realized/);
   // Et surtout : plus de PATCH direct sur la table.
   assert.doesNotMatch(code, /method:\s*"PATCH"/);
+});
+
+// ── Un document du passé ne fait disparaître personne ──────────────────────
+
+/** Le compte rendu n° 20, déposé après le n° 57 : le défaut rapporté, tel quel. */
+const RETROSPECTIF = laPlaceDeLaSource({
+  date: "12 mars 2026", connues: ["2026-06-01", "2026-09-03"]
+});
+
+test("le compte rendu 20 déposé après le 57 ne ferme rien par son silence", () => {
+  // Les sujets nés entre les deux sont absents du n° 20 parce qu'ils
+  // n'existaient pas encore. La déduction les fermait tous : le dépôt d'une
+  // archive suffisait à vider un projet.
+  const disparition = sujetsDisparus({
+    confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1", "s-2", "s-3"],
+    placement: RETROSPECTIF
+  });
+
+  assert.equal(disparition.connu, true, "la comparaison a bien eu lieu");
+  assert.equal(disparition.suivis, 3, "les sujets suivis se comptent quand même");
+  assert.deepEqual(disparition.disparus, [], "et aucun n'est déclaré disparu");
+});
+
+test("le même compte rendu, en tête, ferme comme avant", () => {
+  // Le contrepoint : sans lui, on ne saurait pas si la garde protège ou si elle
+  // a simplement éteint la règle.
+  const disparition = sujetsDisparus({
+    confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1", "s-2", "s-3"],
+    placement: EN_TETE
+  });
+  assert.equal(disparition.disparus.length, 3);
+});
+
+test("la phrase dit pourquoi rien n'a été comparé, et nomme la date", () => {
+  const dite = phraseDesDisparus(sujetsDisparus({
+    confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1", "s-2", "s-3"],
+    placement: RETROSPECTIF
+  }));
+
+  assert.match(dite, /ne sont pas comparés/);
+  assert.match(dite, /2026-09-03/, "la date qui l'a fait reculer se nomme");
+  // Et surtout : elle ne promet pas de fermeture.
+  assert.equal(/fermerait/.test(dite), false, dite);
+});
+
+test("un document non daté ne ferme pas davantage", () => {
+  // Ne pas savoir où placer un document n'autorise pas à le traiter comme le
+  // dernier — ce serait le cas le plus dangereux, puisqu'il fermerait.
+  const disparition = sujetsDisparus({
+    confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1"],
+    placement: laPlaceDeLaSource({ date: "", connues: ["2026-09-03"] })
+  });
+  assert.deepEqual(disparition.disparus, []);
+  assert.match(phraseDesDisparus(disparition), /n'est pas daté/);
+});
+
+test("sans avoir pu lire l'histoire du projet, on ne déduit pas non plus", () => {
+  // `null` n'est pas `[]` : « on n'a pas pu lire » n'est pas « il n'y en a
+  // aucun ». Le défaut penche du côté où l'erreur se voit.
+  const disparition = sujetsDisparus({
+    confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1"],
+    placement: laPlaceDeLaSource({ date: "2026-09-03", connues: null })
+  });
+  assert.deepEqual(disparition.disparus, []);
+  assert.match(phraseDesDisparus(disparition), /pas pu lire les comptes rendus/);
+});
+
+test("un appelant qui oublie de dire où il est ne déduit rien", () => {
+  // Le défaut du paramètre est le refus, et non la déduction : personne ne doit
+  // pouvoir récupérer par omission la seule révision qui efface des sujets.
+  const disparition = sujetsDisparus({
+    confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1", "s-2", "s-3"]
+  });
+  assert.deepEqual(disparition.disparus, []);
+});
+
+test("le placement redescend avec la disparition", () => {
+  // L'écran en a besoin pour dire pourquoi : le recalculer de son côté ferait
+  // une seconde version de la même question (règle 4).
+  const disparition = sujetsDisparus({
+    confrontes: [], sujetsDuProjet: SUJETS, sujetsDuLabel: ["s-1"], placement: RETROSPECTIF
+  });
+  assert.equal(disparition.placement, RETROSPECTIF);
 });

@@ -57,14 +57,15 @@ import {
 } from "../../../services/points-du-fil.js";
 import { branchesOuvertes } from "../../../services/branches-ouvertes.js";
 import {
-  CERTITUDE, ORDRE, leFilDesMails, phraseDuMoment
+  CERTITUDE, ORDRE, leFilDesMails, leJourDit, phraseDuMoment
 } from "../../../services/le-fil-des-mails.js";
 import { phraseDuTrou } from "../../../services/trous-dun-mail.js";
 import {
   NATURE, ceQueCaDevient, ceQuiManque, iconeDeLaNature, nomDeLaNature, parNature, phraseDuManque,
   DOU, ceQueLeModeleNaPasDit, partReleveeDuMessage, phraseDeCeQuiNestPasRepris, phraseDeLaPart,
   phraseDeLaProvenance,
-  phraseDesLignesRepetees, phraseDesSujets, phraseDesSujetsDaCote, phraseDesSujetsEcartes,
+  phraseDuConstatDate, phraseDesLignesRepetees, phraseDesSujets, phraseDesSujetsDaCote,
+  phraseDesSujetsEcartes,
   phraseDeLaTemperature,
   phraseDuReleve, prisesDuMessage, quoiDeLaNature
 } from "../../../services/prises-de-position.js";
@@ -617,6 +618,13 @@ function renderUnePrise(prise) {
       ${phraseDesSujetsDaCote(prise.ailleurs) ? `<p class="fil-mails__moment mono-small">${
         escapeHtml(phraseDesSujetsDaCote(prise.ailleurs))}</p>` : ""}
       ${/*
+        **Une absence de réponse est datée.** Elle s'arrête au dernier message
+        du fil ; lue six mois plus tard, elle se lirait comme un état présent.
+      */""}
+      ${prise.nature === NATURE.SANS_REPONSE && phraseDuConstatDate(prise.constateAu) ? `
+        <p class="fil-mails__moment mono-small">${
+          escapeHtml(phraseDuConstatDate(prise.constateAu))}</p>` : ""}
+      ${/*
         **La citation est sous la prise, toujours.** C'est elle qui la rend
         vérifiable : une prise sans sa citation demande de croire le modèle
         sur parole, et c'est précisément ce qu'on refuse.
@@ -917,8 +925,27 @@ export function leReleveDerive(lu, fil) {
   // aucun second appel, et chaque ligne dit de quelles prises elle sort.
   // Le fil descend avec les prises : c'est de lui que vient l'identité d'un
   // auteur, et elle n'est jamais montée au modèle.
-  const derive = ceQuonDerive(lu.prises, { dernierMessage, messages: fil?.messages ?? [] });
-  return { ...lu, prises: derive.prises, derive, enCours: false };
+  // **Le jour où l'observation s'arrête descend avec elle.** Sans lui, « sans
+  // réponse » se lit comme un état présent, quelle que soit l'ancienneté du fil.
+  const constateAu = leJourDit(fil?.fin);
+  const derive = ceQuonDerive(lu.prises, {
+    dernierMessage, messages: fil?.messages ?? [], constateAu
+  });
+  return {
+    ...lu,
+    prises: derive.prises,
+    derive,
+    enCours: false,
+    /**
+     * Le jour où l'observation s'arrête.
+     *
+     * **Un relevé est daté, et « sans réponse » avec lui.** Le fil s'achève à
+     * son dernier message ; ce qui s'est dit après n'y est pas. Sans cette
+     * date, un fil de mars relu en septembre laisse croire qu'une question est
+     * encore sans réponse aujourd'hui.
+     */
+    constateAu
+  };
 }
 
 /**

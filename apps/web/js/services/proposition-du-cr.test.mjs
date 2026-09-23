@@ -904,3 +904,56 @@ test("une vue s'identifie par sa requête", () => {
   assert.deepEqual(items.map((item) => item.itemKey), ["label:LOT", "label:LOT"]);
   assert.equal(items.length, 2, "une vue sans requête ne se propose pas");
 });
+
+// ── Une fermeture est sourcée et datée ─────────────────────────────────────
+
+test("une fermeture dite porte le document qui la justifie et son jour", () => {
+  // Sans les deux, une fermeture ne se relit pas : on ne peut ni la replacer
+  // dans le temps, ni retrouver la page qui la fonde.
+  const [item] = fermetureItems({
+    confrontes: [{
+      sort: SORT.RELANCE, titre: "Chape", reference: "12.03",
+      sujet: { id: "sujet-chape" }, faitLe: "12/09/2025"
+    }],
+    identite: { numero: "57", tenueLe: "3 septembre 2026" }
+  });
+  assert.equal(item.payload.sourceNumero, "57");
+  assert.equal(item.payload.sourceLe, "3 septembre 2026");
+});
+
+test("une fermeture déduite porte la même source", () => {
+  // C'est elle qu'on relira en premier : une déduction sans date ne se discute
+  // pas, faute de savoir de quand elle date.
+  const [item] = fermetureItems({
+    confrontes: [],
+    disparition: { connu: true, suivis: 1, disparus: [{ id: "s-9", title: "Acrotère" }] },
+    identite: { numero: "57", tenueLe: "3 septembre 2026" }
+  });
+  assert.equal(item.payload.motif, "deduite");
+  assert.equal(item.payload.sourceLe, "3 septembre 2026");
+});
+
+test("un document sans identité lisible ne s'en voit pas inventer une", () => {
+  const [item] = fermetureItems({
+    confrontes: [{
+      sort: SORT.RELANCE, titre: "Chape", reference: "12.03",
+      sujet: { id: "sujet-chape" }, faitLe: "12/09/2025"
+    }]
+  });
+  assert.equal(item.payload.sourceNumero, "");
+  assert.equal(item.payload.sourceLe, "");
+});
+
+test("l'identité traverse jusqu'aux items de la proposition", () => {
+  // Le chemin complet : sans cela, la source se poserait dans `fermetureItems`
+  // et n'arriverait jamais, parce que personne ne la lui passerait.
+  const items = itemsDuCompteRendu({
+    confrontes: [{
+      sort: SORT.RELANCE, titre: "Chape", reference: "12.03",
+      sujet: { id: "sujet-chape" }, faitLe: "12/09/2025"
+    }],
+    identite: { numero: "57", tenueLe: "3 septembre 2026" }
+  });
+  const fermeture = items.find((item) => item.payload?.motif);
+  assert.equal(fermeture?.payload?.sourceLe, "3 septembre 2026");
+});

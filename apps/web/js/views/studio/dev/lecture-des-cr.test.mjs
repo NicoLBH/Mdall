@@ -1289,6 +1289,11 @@ function unEtatFermetures(surcharge = {}) {
     phase: "lue", pagesLues: PAGES, onglet: "analyse", md: uneRestitution(),
     lots: [], labels: [], objectifs: [],
     confrontes: lecture.points.map((point) => ({ ...point, sort: SORT.NOUVEAU, sujet: null, par: "" })),
+    // **L'écran dit maintenant d'où il regarde.** Une disparition ne se déduit
+    // que depuis le présent : sans cette liste, l'état est « on n'a pas pu lire
+    // l'histoire du projet », et rien n'est comparé. C'est le défaut du compte
+    // rendu n° 20 déposé après le n° 57, et la garde tient aussi ici.
+    comptesRendusDejaLus: [{ tenue_le: "2025-03-10" }],
     ...surcharge,
     lecture: { ...lecture, ...(surcharge.lecture ?? {}) }
   });
@@ -1361,6 +1366,11 @@ function unEtatLiens(liens = [], surcharge = {}) {
     phase: "lue", pagesLues: PAGES, onglet: "analyse", md: uneRestitution(),
     lots: [], labels: [], objectifs: [],
     confrontes: lecture.points.map((point) => ({ ...point, sort: SORT.NOUVEAU, sujet: null, par: "" })),
+    // **L'écran dit maintenant d'où il regarde.** Une disparition ne se déduit
+    // que depuis le présent : sans cette liste, l'état est « on n'a pas pu lire
+    // l'histoire du projet », et rien n'est comparé. C'est le défaut du compte
+    // rendu n° 20 déposé après le n° 57, et la garde tient aussi ici.
+    comptesRendusDejaLus: [{ tenue_le: "2025-03-10" }],
     ...surcharge,
     lecture: { ...lecture, ...(surcharge.lecture ?? {}) }
   });
@@ -1907,4 +1917,38 @@ test("un refus ne touche pas à la phase de la lecture", async () => {
 
   assert.notEqual(refus.length, 0);
   assert.equal(/etat\.phase/.test(refus), false, "le refus écrit la phase de la lecture");
+});
+
+/**
+ * **Le compte rendu n° 20 déposé après le n° 57.**
+ *
+ * Les sujets nés entre les deux sont absents du n° 20 parce qu'ils n'existaient
+ * pas encore. L'écran les fermait tous : déposer une archive suffisait à vider
+ * un projet. Une disparition ne se déduit que depuis le présent.
+ */
+test("un compte rendu antérieur à ceux déjà lus ne ferme rien par son silence", () => {
+  const html = renderLaLecture(unEtatFermetures({
+    sujetsDuProjet: [{ id: "s-1", title: "Étanchéité toiture" }, { id: "s-2", title: "Linteaux" }],
+    sujetsDuLabel: ["s-1", "s-2"],
+    // Le document est du 25/06/2025 ; le projet en a déjà lu un de septembre.
+    comptesRendusDejaLus: [{ tenue_le: "2025-09-03" }]
+  }));
+
+  assert.match(html, commeAffichee("ne sont pas comparés"));
+  assert.match(html, /2025-09-03/, "la date qui l'a fait reculer se nomme");
+  // Et surtout : l'écran ne promet plus de fermer.
+  assert.doesNotMatch(html, commeAffichee("sur cette déduction, et non sur une phrase du document"));
+});
+
+test("sans avoir pu lire les comptes rendus du projet, l'écran ne ferme pas davantage", () => {
+  // `null` n'est pas « il n'y en a aucun » : ne pas savoir où l'on est n'ouvre
+  // pas la seule révision qui efface des sujets.
+  const html = renderLaLecture(unEtatFermetures({
+    sujetsDuProjet: [{ id: "s-1", title: "Étanchéité toiture" }],
+    sujetsDuLabel: ["s-1"],
+    comptesRendusDejaLus: null
+  }));
+
+  assert.match(html, commeAffichee("pas pu lire les comptes rendus"));
+  assert.doesNotMatch(html, commeAffichee("sur cette déduction, et non sur une phrase du document"));
 });

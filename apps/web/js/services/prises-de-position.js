@@ -416,6 +416,31 @@ export function phraseDeLaPart(part) {
 }
 
 /**
+ * La date à laquelle une absence de réponse a été constatée.
+ *
+ * ## Pourquoi « sans réponse » a besoin d'un jour
+ *
+ * Un relevé dit qu'une demande est restée sans réponse. **Sans réponse
+ * quand ?** Le fil s'arrête à son dernier message, et c'est là que
+ * l'observation s'arrête aussi. Un fil de mars relu en septembre ne dit rien de
+ * septembre — et lu six mois plus tard, « sans réponse » se lit pourtant comme
+ * un état présent.
+ *
+ * C'est le même défaut que la fermeture d'un sujet absent d'un compte rendu
+ * ancien : **une observation datée qu'on lit comme si elle était d'aujourd'hui**
+ * (voir `la-chronologie-des-sources.js`). Ici, la réparation est une phrase : on
+ * ne peut pas savoir ce qui s'est dit après le dernier message du fil, et le
+ * dire vaut mieux que de laisser croire qu'on le sait (règle 5).
+ *
+ * Rien quand le fil ne porte pas de date : on n'en invente pas une.
+ */
+export function phraseDuConstatDate(quand) {
+  const jour = texte(quand);
+  if (!jour) return "";
+  return `constaté au ${jour}, dernier message du fil — ce qui s'est dit après ne s'y trouve pas`;
+}
+
+/**
  * Les sujets sous lesquels on n'a pas cherché, dits en une phrase.
  *
  * **« Sans réponse » n'a regardé que sous un sujet.** Un fil réel l'a montré :

@@ -71,6 +71,9 @@ import {
   phraseDesDisparus, sujetsDisparus
 } from "../../../services/fermeture-du-cr.js";
 import {
+  laPlaceDeLaSource, lesJoursDesSources
+} from "../../../services/la-chronologie-des-sources.js";
+import {
   NOMS_DU_LIEN, QUOI_DU_LIEN, liensDeLaLecture, phraseDesLiens, verifierLesLiens
 } from "../../../services/liens-du-cr.js";
 import {
@@ -1904,12 +1907,36 @@ function renderLaSituation(vue) {
  * d'autre. Les deux blocs restent donc séparés, et le second dit de quoi il est
  * fait : d'une absence, pas d'une phrase.
  */
+/**
+ * Où ce compte rendu se place dans le temps du projet.
+ *
+ * **Un seul endroit le calcule, et trois s'en servent** : le bloc des
+ * fermetures, le compte de ce qu'on fermerait, et la proposition elle-même.
+ * Trois calculs finiraient par ne plus s'accorder, et l'écran promettrait une
+ * chose quand la proposition en porterait une autre (règle 4).
+ *
+ * `deja` est `null` tant qu'on n'a pas pu lire les comptes rendus du projet :
+ * on se comporte alors comme en tête, pour ne pas cesser en silence de relever
+ * des disparitions réelles.
+ */
+function placementDuCompteRendu(vue) {
+  return laPlaceDeLaSource({
+    date: texte(vue?.lecture?.identite?.tenueLe),
+    connues: vue?.comptesRendusDejaLus
+      ? lesJoursDesSources(vue.comptesRendusDejaLus)
+      // `null` traverse : le moteur en tire « on ne sait pas où l'on est »,
+      // et refuse de fermer sur un silence.
+      : null
+  });
+}
+
 function renderLesFermetures(vue, points) {
   const { fermes, retenus } = fermeturesDuCompteRendu(points);
   const disparition = sujetsDisparus({
     confrontes: Array.isArray(vue.confrontes) ? vue.confrontes : [],
     sujetsDuProjet: vue.sujetsDuProjet,
-    sujetsDuLabel: vue.sujetsDuLabel
+    sujetsDuLabel: vue.sujetsDuLabel,
+    placement: placementDuCompteRendu(vue)
   });
 
   if (fermes.length === 0 && retenus.length === 0 && !disparition.connu) return "";
@@ -2105,7 +2132,8 @@ function renderCeQuOnFermerait(vue) {
   const disparition = sujetsDisparus({
     confrontes: Array.isArray(vue?.confrontes) ? vue.confrontes : [],
     sujetsDuProjet: vue?.sujetsDuProjet,
-    sujetsDuLabel: vue?.sujetsDuLabel
+    sujetsDuLabel: vue?.sujetsDuLabel,
+    placement: placementDuCompteRendu(vue)
   });
   const disparus = disparition.connu ? disparition.disparus ?? [] : [];
   if (fermes.length === 0 && disparus.length === 0) return "";
@@ -2764,6 +2792,7 @@ async function lire(hote, fichier, piece = null) {
   etat.structure = null;
   etat.sujetsDuProjet = null;
   etat.sujetsDuLabel = null;
+  etat.comptesRendusDejaLus = null;
   etat.situations = null;
   etat.deplie = "";
   etat.motif = "";
@@ -2859,6 +2888,10 @@ async function lire(hote, fichier, piece = null) {
     // leur variation d'un compte rendu à l'autre qui dit que la lecture a
     // dérivé. On conserve donc celle-ci, et l'on compare à celle d'avant.
     etat.suivi = await suivreCetteLecture(etat.lecture);
+    // **Ce sont les dates des documents, pas celles des dépôts.** Un compte
+    // rendu tenu en mars et classé en septembre reste de mars, et c'est mars
+    // qui décide de ce qu'il a le droit de fermer.
+    etat.comptesRendusDejaLus = etat.suivi?.lectures ?? null;
 
     etat.etape = "projet";
     redessiner(hote);
@@ -2930,14 +2963,22 @@ async function suivreCetteLecture(lecture) {
     const projet = await resolveCurrentBackendProjectId();
     if (!projet) return null;
 
-    const avant = suivi.laLecturePrecedente(await base.listerLesLectures(projet));
+    // **La même lecture sert deux fois.** Les comptes rendus déjà lus disent
+    // l'écart de cette lecture-ci, et ils disent aussi **où ce document se
+    // place dans le temps** : deux appels en rendraient deux listes, et l'écran
+    // pourrait se croire en tête sur l'une et derrière sur l'autre (règle 4).
+    //
+    // `null` n'est pas `[]` : ne pas avoir pu lire n'est pas « il n'y en a
+    // aucun », et le moteur de chronologie s'en sert pour refuser de déduire.
+    const lectures = await base.listerLesLectures(projet);
+    const avant = suivi.laLecturePrecedente(lectures);
 
     // L'écriture ne conditionne pas l'affichage : une lecture qu'on n'a pas su
     // conserver se compare quand même à celle d'avant.
     void base.conserverUneLecture(suivi.lectureAConserver(lecture, { projectId: projet }));
 
     const ecarts = suivi.ecartsDeLaLecture(lecture?.mesure, avant?.mesures);
-    return { ecarts, phrase: suivi.phraseDuSuivi(avant, ecarts) };
+    return { ecarts, phrase: suivi.phraseDuSuivi(avant, ecarts), lectures };
   } catch {
     return null;
   }
@@ -3448,8 +3489,12 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
         disparition: sujetsDisparus({
           confrontes: Array.isArray(etat.confrontes) ? etat.confrontes : [],
           sujetsDuProjet: etat.sujetsDuProjet,
-          sujetsDuLabel: etat.sujetsDuLabel
-        })
+          sujetsDuLabel: etat.sujetsDuLabel,
+          placement: placementDuCompteRendu(etat)
+        }),
+        // **La source de tout ce que la proposition porte, et sa date.** Une
+        // fermeture qu'on ne peut ni sourcer ni dater ne se relit pas.
+        identite: etat.lecture?.identite ?? null
       })
     });
 

@@ -724,3 +724,25 @@ test("une contestation qui a trouvé quelqu'un n'a rien à dire d'ailleurs", () 
   assert.deepEqual(contestation.avant, ["Nunc Savoie"]);
   assert.deepEqual(contestation.ailleurs, []);
 });
+
+// ── Une question sans réponse porte la date de son constat ─────────────────
+
+test("une question sans réponse dit à quel jour l'observation s'arrête", () => {
+  // Le fil s'achève à son dernier message ; ce qui s'est dit après n'y est pas.
+  // Sans cette date, un fil de mars relu en septembre laisse croire qu'une
+  // question est encore sans réponse aujourd'hui.
+  const demande = prise({ nature: NATURE.DEMANDE, message: 1, porteSur: "cote du seuil" });
+  const { prises } = ceQuonDerive([demande], {
+    dernierMessage: 3, constateAu: "12 mars 2026"
+  });
+
+  const sansReponse = prises.find((une) => une.nature === NATURE.SANS_REPONSE);
+  assert.ok(sansReponse, "la demande devait se dériver en question sans réponse");
+  assert.equal(sansReponse.constateAu, "12 mars 2026");
+});
+
+test("un fil qu'on ne sait pas dater ne s'en voit pas inventer une", () => {
+  const demande = prise({ nature: NATURE.DEMANDE, message: 1, porteSur: "cote du seuil" });
+  const { prises } = ceQuonDerive([demande], { dernierMessage: 3 });
+  assert.equal(prises.find((une) => une.nature === NATURE.SANS_REPONSE).constateAu, "");
+});
