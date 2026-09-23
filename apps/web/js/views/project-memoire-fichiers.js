@@ -29,7 +29,7 @@ import { renderSideResizer } from "./ui/side-resizer.js";
 import { renderBoutonCopier } from "./ui/bouton-copier.js";
 import { agentDeLaFonction } from "../services/memoire-applications.js";
 import { domicilesDesNoms, versementsHorsDomicile } from "../services/memoire-domiciles.js";
-import { valeursCorrigees, exceptionsInutiles } from "../services/memoire-valeurs.js";
+import { valeursCorrigees, versementsRetrospectifs, exceptionsInutiles } from "../services/memoire-valeurs.js";
 import { fichierQuiDeclare, fichierOuEcrire, fonctionAEcrire, FICHIER_DES_VARIABLES } from "../services/memoire-domiciles.js";
 import {
   morceauxSurlignes, lignesQuiPortent, rangVoisin, passagesAutourDe, phraseCherchee, porteLaPhrase
@@ -113,8 +113,13 @@ export function preparerLaMemoire(assertions = []) {
   // aujourd'hui, et figeront une valeur le jour où le général changera.
   const inutiles = exceptionsInutiles(assertions);
 
+  // Les valeurs lues dans un document antérieur à celui qui fait foi. Elles ne
+  // sont pas « refaites » : elles sont arrivées après coup, et les présenter
+  // comme des corrections ferait relire le passé pour du présent.
+  const apresCoup = versementsRetrospectifs(assertions);
+
   return {
-    dossiers, racine, ouEcrit, conflits, corrections, inutiles,
+    dossiers, racine, ouEcrit, conflits, corrections, inutiles, apresCoup,
     fichiers: [...fichiersDeLaMemoire(assertions), ...racine]
   };
 }
@@ -1296,6 +1301,15 @@ export function renderFichier(fichier, {
    */
   inutiles = [],
   /**
+   * Les valeurs venues d'un document antérieur — `versementsRetrospectifs()`.
+   *
+   * Elles figurent aussi parmi les corrections, parce qu'elles ne sont plus en
+   * vigueur. Mais elles n'ont **rien corrigé** : elles ont été versées après, et
+   * lues avant. Les taire ferait croire qu'on a changé d'avis ; les dire nomme
+   * un décalage de saisie, qui se rattrape autrement.
+   */
+  apresCoup = [],
+  /**
    * Ce qu'on cherche dans ce fichier — `{ouverte, mot, rang}`.
    *
    * `variables-du-projet.ref` fait dix-sept cents lignes, et la seule façon d'y
@@ -1420,6 +1434,8 @@ export function renderFichier(fichier, {
     .filter((change) => dIci.has(cleDuSujet(change.nom)));
   const repetees = (Array.isArray(inutiles) ? inutiles : [])
     .filter((vaine) => dIci.has(cleDuSujet(vaine.nom)));
+  const tardives = (Array.isArray(apresCoup) ? apresCoup : [])
+    .filter((tardive) => dIci.has(cleDuSujet(tardive.nom)));
   const zonesFigees = repetees.reduce((total, vaine) => total + vaine.zones.length, 0);
 
   return `
@@ -1529,6 +1545,23 @@ export function renderFichier(fichier, {
                  escapeHtml(mesureEnFrancais(change.apres) || "—")})`).join(", ")}${
                  changees.length > 3 ? "…" : ""}.
                Seule la dernière s'affiche ; les précédentes sont dans l'origine de la ligne.
+             </p>`
+          : ""
+      }
+      ${
+        // Un versement tardif n'est pas un changement d'avis. Le confondre avec
+        // une correction ferait chercher qui a tranché, alors que personne n'a
+        // tranché : quelqu'un a simplement saisi tard un document ancien.
+        tardives.length
+          ? `<p class="memoire-fichier__manquants memoire-fichier__manquants--double">
+               ${svgIcon("history", { className: "octicon" })}
+               <b>${tardives.length}</b> valeur${tardives.length > 1 ? "s" : ""} ${
+                 tardives.length > 1 ? "viennent" : "vient"} d'un document antérieur à celui qui fait foi —
+               ${tardives.slice(0, 3).map((tardive) => escapeHtml(tardive.nom)).join(", ")}${
+                 tardives.length > 3 ? "…" : ""}.
+               ${tardives.length > 1 ? "Versées" : "Versée"} après, ${
+                 tardives.length > 1 ? "elles n'ont" : "elle n'a"} rien remplacé :
+               c'est la date du document qui ordonne, pas celle de la saisie.
              </p>`
           : ""
       }

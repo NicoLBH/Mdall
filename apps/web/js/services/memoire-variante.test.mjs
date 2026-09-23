@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 
 import {
   consequencesDeLaVariante, differencesDuTableau, laMemoireABouge, memoireAvecLaVariante,
-  resumeParColonne, valeursSubstituables, variantePourLEcran
+  phraseDeCeQueLaVarianteSuppose, resumeParColonne, surQuoiLaVarianteRepose, valeursSubstituables,
+  variantePourLEcran
 } from "./memoire-variante.js";
 
 /** L'altitude du site, telle que le projet la pose. Aucun nom réel nulle part. */
@@ -458,7 +459,12 @@ test("une variante retient l'état de la mémoire sur laquelle elle a été fait
   });
   const gardee = variantePourLEcran({ consequences, at: "2026-02-01T10:00:00Z" });
 
-  assert.deepEqual(gardee.depart, [{ sujet: "Altitude du site", depuis: "490 m", vers: "890 m" }]);
+  assert.deepEqual(gardee.depart, [{
+    sujet: "Altitude du site", depuis: "490 m", vers: "890 m", valeurId: "ddb-altitude",
+    // La valeur de départ ne dit pas de quel document elle sort : on retient la
+    // date du versement, et on dit que c'est celle-là (règle 5).
+    poseeAu: "2026-01-10", dateePar: "versement"
+  }]);
   assert.equal(gardee.recalculees, 1);
   assert.equal(gardee.calculeeAu, "2026-02-01T10:00:00Z");
 
@@ -660,4 +666,77 @@ test("varier la ligne entière, c'est varier toutes ses colonnes", () => {
 
   assert.equal(rendu.ok, true);
   assert.deepEqual(rendu.depart.map((entree) => entree.vers), ["Ailleurs", "11111"]);
+});
+
+/* ── Une hypothèse posée sur une valeur qu'on a revue depuis ─────────────── */
+
+/** L'altitude, mais qui dit de quel document elle sort. */
+const altitudeDuDocument = (id, dite, jour, saisiLe) => ({
+  id, kind: "base-datum", subject_key: "altitude-du-site", nature: "donnee-de-base",
+  status: "assumed", superseded_by: null, decided_at: saisiLe,
+  statement: `Altitude du site : ${dite}`,
+  payload: {
+    subject: "Altitude du site", value: dite, declared: true,
+    provenance: { quoi: `relevé ${id}`, le: jour }
+  }
+});
+
+test("une variante dit quand un document plus récent a revu ce dont elle part", () => {
+  // La variante répond à la question posée ce jour-là. Un mois plus tard, un
+  // relevé plus récent a revu l'altitude : elle conclut sur un projet qui
+  // n'existe plus, et sans un mot elle a l'air d'être d'aujourd'hui.
+  const deMars = altitudeDuDocument("ddb-altitude", "490 m", "2026-03-04", "2026-03-10T09:00:00Z");
+  const memoire = [deMars, horsGel("0.99 m", 490)];
+
+  const gardee = variantePourLEcran({
+    consequences: consequencesDeLaVariante({
+      assertions: memoire,
+      substitutions: essayer("ddb-altitude", "890 m"),
+      relectures: repondu([{ assertion: memoire[1], avant: "0.99 m", apres: "1.09 m" }])
+    })
+  });
+
+  // Elle a retenu de quand vient ce dont elle part, et que c'est un document.
+  assert.deepEqual(gardee.depart[0].poseeAu, "2026-03-04");
+  assert.equal(gardee.depart[0].dateePar, "document");
+
+  // Rien n'a bougé : la variante suppose ce que le projet dit encore.
+  assert.deepEqual(surQuoiLaVarianteRepose(gardee, memoire), []);
+  assert.equal(phraseDeCeQueLaVarianteSuppose(gardee, memoire), "");
+
+  // Un relevé de juin, versé depuis. L'altitude n'est plus celle-là.
+  const deJuin = altitudeDuDocument("ddb-altitude-2", "512 m", "2026-06-12", "2026-06-20T09:00:00Z");
+  assert.deepEqual(surQuoiLaVarianteRepose(gardee, [...memoire, deJuin]), [
+    { sujet: "Altitude du site", luLe: "2026-03-04", revuLe: "2026-06-12" }
+  ]);
+  const phrase = phraseDeCeQueLaVarianteSuppose(gardee, [...memoire, deJuin]);
+  assert.match(phrase, /Altitude du site \(du 2026-03-04, revu au 2026-06-12\)/);
+  assert.match(phrase, /la refaire sur la mémoire d'aujourd'hui donnera un autre résultat/);
+});
+
+test("un versement plus tardif d'un document plus ancien ne périme pas la variante", () => {
+  // C'est le défaut même : la date de saisie ne dit rien du chantier. Un relevé
+  // de janvier saisi en septembre n'a pas revu le relevé de mars.
+  const deMars = altitudeDuDocument("ddb-altitude", "490 m", "2026-03-04", "2026-03-10T09:00:00Z");
+  const memoire = [deMars, horsGel("0.99 m", 490)];
+
+  const gardee = variantePourLEcran({
+    consequences: consequencesDeLaVariante({
+      assertions: memoire,
+      substitutions: essayer("ddb-altitude", "890 m"),
+      relectures: repondu([{ assertion: memoire[1], avant: "0.99 m", apres: "1.09 m" }])
+    })
+  });
+
+  const deJanvier = altitudeDuDocument("ddb-altitude-0", "470 m", "2026-01-08", "2026-09-20T09:00:00Z");
+  assert.deepEqual(surQuoiLaVarianteRepose(gardee, [...memoire, deJanvier]), []);
+  // Et `laMemoireABouge` dit quand même que quelque chose s'est passé : les deux
+  // questions ne sont pas la même, et l'une ne remplace pas l'autre.
+  assert.equal(laMemoireABouge(gardee, [...memoire, deJanvier]), true);
+});
+
+test("sans variante, on ne suppose rien", () => {
+  // L'écran appelle ces deux-là à chaque rendu, variante ou pas.
+  assert.deepEqual(surQuoiLaVarianteRepose(null, [altitude("490 m")]), []);
+  assert.equal(phraseDeCeQueLaVarianteSuppose(null, [altitude("490 m")]), "");
 });

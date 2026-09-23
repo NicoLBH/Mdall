@@ -144,7 +144,9 @@ import { ouvrirLePlanDeRecalcul } from "./ui/fenetre-plan.js";
 import { planDeRecalcul } from "../services/memoire-plan.js";
 import { OU, estServi, libelleDeLUsage, usagesDe } from "../services/usages-du-rejeu.js";
 import { quandLaVarianteChange, varianteEnCours } from "../services/variante-en-cours.js";
-import { laMemoireABouge, memoireAvecLaVariante } from "../services/memoire-variante.js";
+import {
+  laMemoireABouge, memoireAvecLaVariante, phraseDeCeQueLaVarianteSuppose
+} from "../services/memoire-variante.js";
 
 /**
  * Les champs interrogeables de la mémoire.
@@ -2775,7 +2777,11 @@ function renderContent(root) {
       <section class="project-simple-page project-simple-page--memory"
       style="--project-rail-width:${railWidth(view.navWidth, view.navCollapsed)}px">
         <div class="propositions-shell overlay-chrome overlay-chrome--proposition" data-memory-chrome>
-          ${renderBandeauVariante(varianteEnCours(), { aBouge: laMemoireABouge(varianteEnCours(), view.memoire ?? []), seulement: view.varianteSeulement })}
+          ${renderBandeauVariante(varianteEnCours(), {
+            aBouge: laMemoireABouge(varianteEnCours(), view.memoire ?? []),
+            suppose: phraseDeCeQueLaVarianteSuppose(varianteEnCours(), view.memoire ?? []),
+            seulement: view.varianteSeulement
+          })}
           ${renderMemoryDetail(view.assertions, view.open)}
         </div>
       </section>
@@ -2807,7 +2813,11 @@ function renderContent(root) {
     <section class="project-simple-page project-simple-page--memory"
       style="--project-rail-width:${railWidth(view.navWidth, view.navCollapsed)}px">
       <div class="propositions-shell">
-        ${renderBandeauVariante(varianteEnCours(), { aBouge: laMemoireABouge(varianteEnCours(), view.memoire ?? []), seulement: view.varianteSeulement })}
+        ${renderBandeauVariante(varianteEnCours(), {
+            aBouge: laMemoireABouge(varianteEnCours(), view.memoire ?? []),
+            suppose: phraseDeCeQueLaVarianteSuppose(varianteEnCours(), view.memoire ?? []),
+            seulement: view.varianteSeulement
+          })}
 
         <div class="project-rail-layout${view.navCollapsed ? " project-rail-layout--collapsed" : ""}">
           ${renderMemoryNav()}

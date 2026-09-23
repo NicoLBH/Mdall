@@ -47,6 +47,7 @@
 
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { normalizeZoneKey } from "./project-zones.js";
+import { laValeurQuiFaitFoi, ordreDesValeurs } from "./le-temps-des-valeurs.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -71,12 +72,6 @@ function portee(assertion = {}) {
   return [...zonesDe(assertion)].sort().join("\u0000");
 }
 
-/** Quand un versement a été fait. Sans date, il passe pour le plus ancien. */
-function quand(assertion = {}) {
-  const dit = texte(assertion?.decided_at) || texte(assertion?.created_at);
-  const date = dit ? Date.parse(dit) : Number.NaN;
-  return Number.isFinite(date) ? date : Number.NEGATIVE_INFINITY;
-}
 
 /** Ce qu'un versement affirme, réduit à ce qui se compare. */
 function dit(assertion = {}) {
@@ -90,9 +85,16 @@ function dit(assertion = {}) {
  * garderaient deux lignes différentes, et le fichier changerait d'un rendu à
  * l'autre sans que rien n'ait été versé.
  */
-function duPlusRecent(gauche, droite) {
-  return quand(droite) - quand(gauche)
-    || texte(droite?.id).localeCompare(texte(gauche?.id), "en", { numeric: true });
+/**
+ * Du plus récent au plus ancien — **le document d'abord, le versement ensuite**.
+ *
+ * L'ordre vit dans `le-temps-des-valeurs.js` et nulle part ailleurs : les trois
+ * juges de ce fichier s'en servent tels quels. Deux tris écrits à deux endroits
+ * finiraient par diverger, et l'écran montrerait une ligne pendant que le calcul
+ * en consommerait une autre (règle 4).
+ */
+function duPlusRecent(versements = []) {
+  return ordreDesValeurs(versements).ordonnees.map((une) => une.assertion);
 }
 
 /** Une affirmation qui ne porte pas de valeur — une règle — ne s'éclipse pas. */
@@ -122,7 +124,16 @@ export function versementsEclipses(assertions = []) {
 
   for (const versements of parNom.values()) {
     if (versements.length < 2) continue;
-    const ordonnes = versements.slice().sort(duPlusRecent);
+
+    // **Le document le plus récent fait foi, et non le dernier versé.** Une
+    // valeur lue dans un rapport de mars, saisie en septembre, écrasait celle
+    // de juin : le projet cessait de dire ce qu'il disait la veille, sans que
+    // rien ne le signale (voir `le-temps-des-valeurs.js`).
+    //
+    // Tant qu'aucun versement ne porte la date de son document, l'ordre ne
+    // change pas : basculer sur une information absente ferait changer de sens
+    // toute la mémoire déjà versée.
+    const ordonnes = duPlusRecent(versements);
 
     for (let rang = 1; rang < ordonnes.length; rang += 1) {
       const ancien = ordonnes[rang];
@@ -135,6 +146,49 @@ export function versementsEclipses(assertions = []) {
   }
 
   return eclipses;
+}
+
+/**
+ * Les versements qui viennent d'un document antérieur à celui qui fait foi.
+ *
+ * **Ce ne sont pas des valeurs remplacées : ce sont des valeurs arrivées après
+ * coup.** Elles ont été versées plus tard et lues dans un document plus ancien.
+ * Elles restent dans l'histoire — elles sont vraies de leur jour — mais elles
+ * ne disent pas ce que le projet dit aujourd'hui, et l'écran doit pouvoir le
+ * dire au lieu de les présenter comme corrigées.
+ *
+ * @returns {{id: string, nom: string, enVigueur: object, retrospectif: object}[]}
+ */
+export function versementsRetrospectifs(assertions = []) {
+  const parNom = new Map();
+  for (const assertion of (Array.isArray(assertions) ? assertions : []).filter(porteUneValeur)) {
+    const cle = cleDuSujet(texte(assertion?.payload?.subject) || texte(assertion?.subject_key));
+    if (!parNom.has(cle)) parNom.set(cle, []);
+    parNom.get(cle).push(assertion);
+  }
+
+  const trouves = [];
+
+  for (const [nom, versements] of parNom.entries()) {
+    // **On ne compare que ce qui porte la même chose.** Deux versements de
+    // portées différentes ne se contredisent pas : l'un vaut pour une zone que
+    // l'autre ne couvre pas.
+    const parPortee = new Map();
+    for (const versement of versements) {
+      const sienne = portee(versement);
+      if (!parPortee.has(sienne)) parPortee.set(sienne, []);
+      parPortee.get(sienne).push(versement);
+    }
+
+    for (const candidats of parPortee.values()) {
+      const { enVigueur, retrospectives } = laValeurQuiFaitFoi(candidats);
+      for (const retrospectif of retrospectives) {
+        trouves.push({ id: texte(retrospectif?.id), nom, enVigueur, retrospectif });
+      }
+    }
+  }
+
+  return trouves;
 }
 
 /**
@@ -160,7 +214,7 @@ export function valeursCorrigees(assertions = []) {
   const corrections = [];
 
   for (const versements of parNom.values()) {
-    const ordonnes = versements.slice().sort(duPlusRecent);
+    const ordonnes = duPlusRecent(versements);
     const vivant = ordonnes.find((assertion) => !eclipses.has(texte(assertion.id)));
     if (!vivant) continue;
 
@@ -215,7 +269,7 @@ export function versementQuiVaut(candidats = [], zone = "") {
   const voulue = normalizeZoneKey(zone);
   const dits = (Array.isArray(candidats) ? candidats : []).filter(porteUneValeur);
 
-  const parRecence = (liste) => liste.slice().sort(duPlusRecent)[0] ?? null;
+  const parRecence = (liste) => duPlusRecent(liste)[0] ?? null;
 
   // Ce qui nomme cette zone, d'abord. Puis ce qui vaut partout.
   const dansLaZone = voulue ? dits.filter((assertion) => zonesDe(assertion).has(voulue)) : [];

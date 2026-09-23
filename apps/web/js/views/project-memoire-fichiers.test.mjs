@@ -591,3 +591,53 @@ test("les trois lectures d'un fichier sont offertes", () => {
   const html = renderFichier(premierFichier([donnee("altitude", "Altitude du site", "13 m")]), {});
   for (const libelle of ["Code", "Origine", "Emplois"]) assert.match(html, new RegExp(`>${libelle}<`));
 });
+
+/* ── Une valeur venue d'un document antérieur à celui qui fait foi ───────── */
+
+/** La même donnée, mais qui dit de quel document elle sort. */
+const dune = (id, sujet, valeur, { du, saisiLe }) => ({
+  ...donnee(id, sujet, valeur),
+  decided_at: saisiLe,
+  payload: {
+    subject: sujet, value: valeur, declared: true,
+    provenance: { type: "document", quoi: `rapport ${id}`, le: du }
+  }
+});
+
+test("le fichier distingue une valeur corrigée d'une valeur arrivée après coup", () => {
+  // Le défaut : « 0,50 m → 0,80 m, une valeur a été refaite » envoyait chercher
+  // qui avait tranché. Personne n'avait tranché : quelqu'un avait saisi en
+  // septembre un relevé de mars, et la mémoire s'était mise à dire le passé.
+  const assertions = [
+    dune("alt", "Altitude du site", "0,80 m", { du: "2026-06-12", saisiLe: "2026-07-01T08:00:00Z" }),
+    dune("alt2", "Altitude du site", "0,50 m", { du: "2026-03-04", saisiLe: "2026-09-20T08:00:00Z" })
+  ];
+  const memoire = preparerLaMemoire(assertions);
+
+  const html = renderFichier(premierFichier(assertions), {
+    corrections: memoire.corrections,
+    apresCoup: memoire.apresCoup
+  });
+
+  assert.match(html, /vient d'un document antérieur à celui qui fait foi/);
+  assert.match(html, /Altitude du site/);
+  assert.match(html, /c'est la date du document qui ordonne, pas celle de la saisie/);
+});
+
+test("sans date de document, le fichier parle encore de correction et non de décalage", () => {
+  // La dégradation est choisie : deux valeurs qu'on ne sait dater que par leur
+  // saisie n'ont pas de décalage chronologique à montrer.
+  const assertions = [
+    donnee("alt", "Altitude du site", "0,50 m"),
+    { ...donnee("alt2", "Altitude du site", "0,80 m"), decided_at: "2026-09-20T08:00:00Z" }
+  ];
+  const memoire = preparerLaMemoire(assertions);
+
+  const html = renderFichier(premierFichier(assertions), {
+    corrections: memoire.corrections,
+    apresCoup: memoire.apresCoup
+  });
+
+  assert.doesNotMatch(html, /document antérieur/);
+  assert.match(html, /a été refaite par un versement plus récent/);
+});

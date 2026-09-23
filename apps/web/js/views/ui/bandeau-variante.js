@@ -27,6 +27,7 @@ import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
 import { abandonnerLaVariante } from "../../services/variante-en-cours.js";
 
+const texte = (valeur) => String(valeur ?? "").trim();
 const accorde = (compte, singulier, pluriel) => (compte > 1 ? pluriel : singulier);
 
 /**
@@ -35,8 +36,9 @@ const accorde = (compte, singulier, pluriel) => (compte > 1 ? pluriel : singulie
  * @param {object|null} variante celle qu'on essaie
  * @param {object} [options]
  * @param {boolean} [options.aBouge] la mémoire a changé depuis le calcul
+ * @param {string} [options.suppose] ce dont elle part et qu'un document plus récent a revu
  */
-export function renderBandeauVariante(variante, { aBouge = false, seulement = false } = {}) {
+export function renderBandeauVariante(variante, { aBouge = false, seulement = false, suppose = "" } = {}) {
   if (!variante) return "";
 
   const touchees = Number(variante.recalculees ?? 0) + Number(variante.aRevoir ?? 0);
@@ -60,6 +62,18 @@ export function renderBandeauVariante(variante, { aBouge = false, seulement = fa
           ? `<span class="variante-bandeau__perime">
               ${svgIcon("alert", { className: "octicon" })}
               La mémoire a bougé depuis ce calcul : ces conséquences ne valent plus.
+            </span>`
+          : ""
+      }
+      ${
+        // « La mémoire a bougé » dit qu'il s'est passé quelque chose, n'importe
+        // quoi. Celle-ci nomme **ce dont la variante part** et depuis quel
+        // document il a été revu : c'est la seule des deux qui dise si
+        // l'hypothèse porte encore sur quelque chose.
+        texte(suppose)
+          ? `<span class="variante-bandeau__perime">
+              ${svgIcon("history", { className: "octicon" })}
+              ${escapeHtml(texte(suppose))}
             </span>`
           : ""
       }
