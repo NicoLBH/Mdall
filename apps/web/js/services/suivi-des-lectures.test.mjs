@@ -192,7 +192,11 @@ test("la lecture se conserve, et ses écarts atteignent les chiffres", async () 
   // La lecture est conservée, et comparée à la précédente.
   assert.match(source, /etat\.suivi = await suivreCetteLecture\(etat\.lecture\)/);
   assert.match(source, /conserverUneLecture\(suivi\.lectureAConserver\(/);
-  assert.match(source, /laLecturePrecedente\(await base\.listerLesLectures\(projet\)\)/);
+  // La liste sert deux fois : l'écart de cette lecture-ci, et la place du
+  // document dans le temps du projet. Un second appel en rendrait deux listes,
+  // et l'écran pourrait se croire en tête sur l'une et derrière sur l'autre.
+  assert.match(source, /const lectures = await base\.listerLesLectures\(projet\)/);
+  assert.match(source, /laLecturePrecedente\(lectures\)/);
 
   // Et les écarts descendent jusqu'aux chiffres.
   assert.match(source, /renderMesure\(vue\.lecture\.mesure, vue\.lecture\.ecartes, vue\.suivi/);

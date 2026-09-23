@@ -478,9 +478,17 @@ function cleDe(prise) {
   return texte(prise?.quiCle) || texte(prise?.qui).toLowerCase();
 }
 
-function uneQuestionSansReponse(demande, suite) {
+function uneQuestionSansReponse(demande, suite, constateAu = "") {
   return {
     ...demande,
+    /**
+     * Le jour où l'observation s'arrête — le dernier du fil.
+     *
+     * **« Sans réponse » n'est pas un état, c'est un constat daté.** Le fil
+     * s'achève à son dernier message, et ce qui s'est dit après n'y figure pas.
+     * Lu six mois plus tard sans sa date, il se lirait comme le présent.
+     */
+    constateAu: texte(constateAu),
     key: `${demande.key}:sans-reponse`,
     nature: NATURE.SANS_REPONSE,
     /** Ce que le modèle avait déclaré. Rien n'est masqué : la nature a changé, pas le fait. */
@@ -541,7 +549,9 @@ function unDesaccord(contestation, rang) {
  *
  * `trous` dit ce qu'on n'a pas pu dériver, et pourquoi.
  */
-export function ceQuonDerive(prises = [], { dernierMessage = 0, messages = [] } = {}) {
+export function ceQuonDerive(
+  prises = [], { dernierMessage = 0, messages = [], constateAu = "" } = {}
+) {
   const liste = Array.isArray(prises) ? prises : [];
   const fin = Number(dernierMessage) || liste.reduce((haut, prise) => Math.max(haut, rangDe(prise)), 0);
 
@@ -586,7 +596,7 @@ export function ceQuonDerive(prises = [], { dernierMessage = 0, messages = [] } 
         repondueParQuel: suite.parQuel
       };
     }
-    return uneQuestionSansReponse(prise, suite);
+    return uneQuestionSansReponse(prise, suite, constateAu);
   });
 
   return {

@@ -36,7 +36,8 @@ import { CERTITUDE, ORDRE, phraseDuMoment } from "./le-fil-des-mails.js";
 import {
   NATURE, ceQueLeModeleNaPasDit, ceQuiManque, nomDeLaNature, parNature, partReleveeDuMessage,
   phraseDeLaPart, phraseDeLaTemperature, phraseDesLignesRepetees, phraseDesSujets,
-  phraseDesSujetsDaCote, phraseDesSujetsEcartes, phraseDuManque, phraseDuReleve, prisesDuMessage
+  phraseDesSujetsDaCote, phraseDesSujetsEcartes, phraseDuConstatDate, phraseDuManque,
+  phraseDuReleve, prisesDuMessage
 } from "./prises-de-position.js";
 import { phraseDuTrou } from "./trous-dun-mail.js";
 
@@ -169,6 +170,9 @@ function unePrise(prise) {
     lignes.push(`- **Messages après elle** : ${Number(prise.apresElle)}`);
   }
   const daCote = phraseDesSujetsDaCote(prise?.ailleurs);
+  // **L'export sort pour être opposé à quelqu'un**, parfois des mois plus tard.
+  // « Sans réponse » sans sa date se lirait alors comme un état présent.
+  const constate = phraseDuConstatDate(prise?.constateAu);
   if (Number(prise?.repondA)) lignes.push(`- **Répond au message** : ${Number(prise.repondA)}`);
   // **Par quel signal on l'a su.** Un renvoi a été confronté au fil ; un sujet
   // commun est un libellé que le modèle a écrit deux fois de la même façon.
@@ -178,6 +182,7 @@ function unePrise(prise) {
 
   // **Où l'on n'a pas cherché.** « Sans réponse » n'a regardé que sous un
   // sujet ; le dire évite de conclure d'une absence qu'on n'a pas constatée.
+  if (constate) lignes.push("", `_${constate}._`);
   if (daCote) lignes.push("", `_${daCote}._`);
 
   lignes.push("", "**Citation :**", "", decalerEnCitation(prise?.citation));

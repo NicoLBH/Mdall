@@ -4413,3 +4413,42 @@ cassant le code, ce qu'on espère du modèle, et ce qui ne s'exécute nulle part
 que trois passages viennent de faire : **ils ont validé deux paris et falsifié une promesse, dans
 la même mesure.** Ni le succès ni l'échec n'étaient prévisibles à la lecture du code. C'est la
 seule façon de savoir, et elle coûte trois appels.
+
+---
+
+## 62. Le temps des documents, et ce qui n'y est pas encore soumis
+
+**Ce qui vient d'être réglé.** Un compte rendu antérieur à ceux déjà lus ne
+ferme plus aucun sujet par son silence ; chaque fermeture proposée porte le
+document qui la justifie et son jour ; une question restée sans réponse dit à
+quelle date l'observation s'arrête. Le moteur vit dans
+`services/la-chronologie-des-sources.js`, et le plan complet dans
+[`la-chronologie-des-sources.md`](la-chronologie-des-sources.md).
+
+**Ce qui reste ouvert, et c'est le plus gros du sujet.**
+
+- **Trois branchements sur cinq manquent** : la mémoire, les raisonnements, les
+  hypothèses. Le défaut y est le même — une information ancienne arrivée après
+  une récente — mais il ne s'y exprime pas par une absence : il s'y exprime par
+  une **contradiction silencieuse**. Deux valeurs pour la même chose se
+  départagent aujourd'hui par l'ordre d'arrivée. C'est un chantier plus lourd
+  que celui-ci, parce qu'il touche à ce qui est déjà versé.
+- **Rien de tout cela n'a encore été mesuré sur un vrai dépôt désordonné.** Le
+  défaut a été rapporté, pas observé ici : je n'ai pas de projet avec vingt
+  comptes rendus. Le protocole tient en un geste — déposer le n° 20 après le
+  n° 57 sur un projet réel, et regarder ce que l'écran annonce avant de signer.
+- **Une fermeture dite reste acceptée depuis le passé**, et c'est un choix qui
+  peut se discuter. « Fait le 12 mars » est un fait daté, et le lecteur le signe
+  avec la date sous les yeux ; mais si le n° 57 montrait le sujet rouvert, la
+  proposition le refermerait quand même. Le jour où l'état d'un sujet portera sa
+  propre date, cette fermeture-là devra aussi reculer.
+- **La date du document se lit sur le document.** Un compte rendu dont l'en-tête
+  n'est pas lisible tombe en `SANS_DATE` et cesse de fermer — c'est le bon sens
+  de l'erreur, mais cela veut dire qu'une lecture d'en-tête ratée éteint la
+  règle en silence. L'écran le dit ; personne ne garantit qu'on le lise.
+
+**Ce que cette étape ajoute à la façon de travailler.** Le carnet distinguait ce
+qui se vérifie en cassant le code, ce qu'on espère du modèle, et ce qui ne
+s'exécute nulle part. Il faut nommer une quatrième chose : **ce qui est vrai
+dans l'ordre et faux dans le désordre.** Aucune épreuve qui dépose les documents
+dans le bon ordre ne peut voir ce défaut — et c'est ainsi qu'il a vécu jusqu'ici.

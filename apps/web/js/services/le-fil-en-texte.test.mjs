@@ -464,3 +464,34 @@ test("l'export signale un intitulé qui ne se lit pas dans sa citation", () => {
   });
   assert.ok(texte.includes("son intitulé ne se lit pas dans les mots de sa citation"), texte);
 });
+
+// ── Un constat daté ────────────────────────────────────────────────────────
+
+test("l'export date la question restée sans réponse", () => {
+  // Il sort pour être opposé à quelqu'un, parfois des mois plus tard. « Sans
+  // réponse » sans sa date se lirait alors comme un état présent.
+  const texte = leFilEnTexte({
+    fil: fil(),
+    releve: {
+      ...RELEVE,
+      prises: [{
+        key: "q1", nature: NATURE.SANS_REPONSE, natureDeclaree: NATURE.DEMANDE,
+        intitule: "confirmer la cote avant vendredi",
+        citation: "Pouvez-vous confirmer la cote avant vendredi ?", message: 2,
+        qui: "Ourdine Ferrand", quand: "12 mars 2026", porteSur: "cote du seuil",
+        pourQui: "BERTRAND", echeance: null, messageVerifie: true, apresElle: 1,
+        constateAu: "12 mars 2026"
+      }]
+    }
+  });
+  assert.ok(texte.includes("constaté au 12 mars 2026, dernier message du fil"), texte);
+  assert.ok(texte.includes("ce qui s'est dit après ne s'y trouve pas"));
+});
+
+test("un fil qu'on ne sait pas dater n'ajoute rien", () => {
+  const texte = leFilEnTexte({
+    fil: fil(),
+    releve: { ...RELEVE, prises: [{ ...RELEVE.prises[0], constateAu: "" }] }
+  });
+  assert.equal(texte.includes("constaté au"), false);
+});

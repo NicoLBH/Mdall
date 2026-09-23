@@ -8,6 +8,7 @@ import {
   ceQueLeModeleNaPasDit, laCleDeLAuteur, lesPrisesEtLeursAuteurs, partReleveeDuMessage,
   DOU, RECOUPEMENT_MESURE, phraseDeCeQuiNestPasRepris, phraseDeLaPart, phraseDeLaProvenance,
   phraseDeLaTemperature, phraseDesLignesRepetees, phraseDesSujets, phraseDesSujetsDaCote,
+  phraseDuConstatDate,
   phraseDesSujetsEcartes, phraseDuReleve,
   prisesDuMessage, quoiDeLaNature
 } from "./prises-de-position.js";
@@ -511,4 +512,26 @@ test("la phrase renvoie à la citation, qui elle est vérifiée", () => {
   const dit = phraseDuManque(MANQUE.INTITULE_REFORMULE);
   assert.match(dit, /citation/);
   assert.notEqual(dit, "quelque chose manque à cette prise");
+});
+
+// ── Un constat porte sa date ───────────────────────────────────────────────
+
+test("« sans réponse » dit à quel jour l'observation s'arrête", () => {
+  // Un fil de mars relu en septembre ne dit rien de septembre. Sans sa date,
+  // « sans réponse » se lit comme un état présent.
+  const dit = phraseDuConstatDate("11 septembre 2026");
+  assert.match(dit, /constaté au 11 septembre 2026/);
+  assert.match(dit, /dernier message du fil/);
+});
+
+test("la phrase dit aussi ce qu'elle ne sait pas", () => {
+  // Elle ne dit pas « la question est sans réponse » : elle dit qu'après cette
+  // date, le fil ne porte rien (règle 5).
+  assert.match(phraseDuConstatDate("3 mars 2026"), /ce qui s'est dit après ne s'y trouve pas/);
+});
+
+test("un fil sans date ne s'en voit pas inventer une", () => {
+  assert.equal(phraseDuConstatDate(""), "");
+  assert.equal(phraseDuConstatDate(null), "");
+  assert.equal(phraseDuConstatDate("   "), "");
 });

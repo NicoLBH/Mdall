@@ -56,6 +56,9 @@
  */
 
 import { jourEcrit } from "./echeances-du-cr.js";
+import {
+  PLACE, fermeParAbsence, phraseDeCeQuelleNeFeraPas, phraseDeLaPlace
+} from "./la-chronologie-des-sources.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -182,22 +185,43 @@ export function fermeturesDuCompteRendu(points = []) {
  * sujets n'autorise pas à les déclarer disparus (règle 5) : on rend alors
  * `connu: false`, et l'écran dit pourquoi la liste est vide.
  *
+ * ## Et un document du passé ne fait disparaître personne
+ *
+ * C'est le défaut que le n° 20 déposé après le n° 57 a montré : les sujets nés
+ * entre les deux sont absents du n° 20 parce qu'ils **n'existaient pas encore**,
+ * et la déduction les fermait tous. Le dépôt d'une archive suffisait à vider un
+ * projet.
+ *
+ * Une disparition ne se relève donc **que depuis la tête** — voir
+ * `la-chronologie-des-sources.js`. Ailleurs, on rend `disparus: []` et l'on dit
+ * pourquoi : ce n'est pas « aucun sujet n'a disparu », c'est « la question ne se
+ * pose pas depuis ce document ».
+ *
  * @param {object} options
  * @param {object[]} options.confrontes la lecture confrontée aux sujets
  * @param {object[]|null} options.sujetsDuProjet — `null` : on n'a pas pu lire
  * @param {string[]|null} options.sujetsDuLabel les identifiants des sujets qui
  *   portent le label du compte rendu — `null` : on ne sait pas
- * @returns {{connu: boolean, disparus: object[], suivis: number}}
+ * @param {object|null} options.placement où ce document se place dans le temps
+ * @returns {{connu: boolean, disparus: object[], suivis: number, placement: object|null}}
  */
 export function sujetsDisparus({
-  confrontes = [], sujetsDuProjet = null, sujetsDuLabel = null
+  confrontes = [], sujetsDuProjet = null, sujetsDuLabel = null, placement = null
 } = {}) {
   if (!Array.isArray(sujetsDuProjet) || !Array.isArray(sujetsDuLabel)) {
-    return { connu: false, disparus: [], suivis: 0 };
+    return { connu: false, disparus: [], suivis: 0, placement };
   }
 
   const porteLeLabel = new Set(sujetsDuLabel.map(texte).filter(Boolean));
   const suivis = sujetsDuProjet.filter((sujet) => porteLeLabel.has(texte(sujet?.id)));
+
+  // **Sans placement, on ne déduit pas.** Un appelant qui oublie de dire où le
+  // document se place ne doit pas récupérer la seule révision qui efface des
+  // sujets : le défaut penche du côté où l'erreur se voit (règle 5).
+  const place = placement?.place ?? PLACE.SANS_REPERE;
+  if (!fermeParAbsence(place)) {
+    return { connu: true, suivis: suivis.length, disparus: [], placement };
+  }
 
   const retrouves = new Set(
     (Array.isArray(confrontes) ? confrontes : [])
@@ -208,7 +232,8 @@ export function sujetsDisparus({
   return {
     connu: true,
     suivis: suivis.length,
-    disparus: suivis.filter((sujet) => !retrouves.has(texte(sujet?.id)))
+    disparus: suivis.filter((sujet) => !retrouves.has(texte(sujet?.id))),
+    placement
   };
 }
 
@@ -227,6 +252,17 @@ export function phraseDesDisparus(disparition = {}) {
   const combien = disparition.disparus?.length ?? 0;
   if (disparition.suivis === 0) {
     return "Aucun sujet du projet ne vient encore d'un compte rendu : il n'y a rien à comparer.";
+  }
+
+  // **Un document qui n'est pas le présent ne fait disparaître personne**, et
+  // la phrase dit laquelle des deux choses est vraie : ce n'est pas « aucun
+  // sujet n'a disparu », c'est « la question ne se pose pas depuis ici ».
+  const place = disparition.placement?.place ?? PLACE.SANS_REPERE;
+  if (!fermeParAbsence(place)) {
+    const ou = phraseDeLaPlace(disparition.placement ?? {});
+    return `Les ${disparition.suivis} sujets suivis depuis les comptes rendus ne sont pas comparés à `
+      + `celui-ci : ${ou || "sa place dans le temps du projet est inconnue"}. `
+      + phraseDeCeQuelleNeFeraPas(disparition.placement ?? {});
   }
   if (combien === 0) {
     return `Les ${disparition.suivis} sujets suivis depuis les comptes rendus figurent tous dans celui-ci.`;
