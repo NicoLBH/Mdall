@@ -4452,3 +4452,47 @@ qui se vérifie en cassant le code, ce qu'on espère du modèle, et ce qui ne
 s'exécute nulle part. Il faut nommer une quatrième chose : **ce qui est vrai
 dans l'ordre et faux dans le désordre.** Aucune épreuve qui dépose les documents
 dans le bon ordre ne peut voir ce défaut — et c'est ainsi qu'il a vécu jusqu'ici.
+
+## 63. Le moteur est branché partout, et presque rien ne le nourrit
+
+**Ce qui vient d'être fait.** Les trois branchements manquants du § 62 sont
+posés. Une valeur lue dans un rapport de mars et saisie en septembre n'écrase
+plus celle de juin ; une conclusion qui repose sur une valeur revue depuis le
+dit et nomme le sujet ; une variante retient de quand vient ce dont elle part et
+signale qu'un document plus récent l'a revu. Le moteur commun vit dans
+`services/le-temps-des-valeurs.js` ; les cinq lignes du tableau de
+[`la-chronologie-des-sources.md`](la-chronologie-des-sources.md) sont faites.
+
+**Le trou, et il est le sujet entier.** La règle s'appuie sur
+`payload.provenance.le` — la date du document d'où la valeur sort. **Presque
+aucune valeur en mémoire ne la porte.** Le seul endroit qui écrit un `le` est
+`raisonnement-du-point.js`, et c'est la date de la décision, pas celle d'un
+document. Ni la lecture des comptes rendus, ni celle des mails ne la posent sur
+les valeurs qu'elles versent.
+
+Le moteur le sait et se tait : tant qu'aucun candidat n'est daté d'un document,
+l'ordre ne change pas. C'est la bonne dégradation — basculer sur une information
+absente aurait changé le sens de toute la mémoire déjà versée —, mais il faut le
+dire franchement : **aujourd'hui, sur un projet réel, ce branchement ne change
+rien.** Il attend sa donnée.
+
+**Ce qu'il reste à faire, dans cet ordre.**
+
+- **Poser `provenance.le` au versement.** Chaque valeur tirée d'un compte rendu
+  ou d'un mail doit emporter la date **du document**, celle que
+  `leJourDeLaSource` sait déjà lire. C'est le seul travail qui rende les trois
+  branchements visibles, et il est petit : la lecture connaît cette date, elle
+  la perd en route.
+- **Ne rien inventer sur l'existant.** Une valeur déjà versée sans date de
+  document n'en recevra pas une après coup : la déduire de son `decided_at`
+  reviendrait à réintroduire exactement la confusion qu'on répare (règle 5).
+  L'ancienne mémoire restera ordonnée comme avant, et c'est correct.
+- **Mesurer.** Comme au § 62, rien n'a été observé sur un vrai dépôt désordonné.
+  Le protocole est le même : verser deux relevés contradictoires du même sujet,
+  le plus ancien en dernier, et regarder ce que l'écran dit avant de signer.
+
+**Deux gardes morts retirés en passant.** La batterie de ruptures a montré que
+deux conditions de `cequiAEteRevuDepuis` ne pouvaient pas tomber : la comparaison
+des deux jours les couvrait déjà. Une consigne qu'aucune rupture ne fait voir est
+une intention (règle 12) — elles sont parties, et la condition qui reste porte
+les trois cas.

@@ -5,7 +5,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { versementsEclipses, valeursCorrigees, versementQuiVaut, valeursDeLaPortee } from "./memoire-valeurs.js";
+import {
+  versementsEclipses, versementsRetrospectifs, valeursCorrigees, versementQuiVaut, valeursDeLaPortee
+} from "./memoire-valeurs.js";
 import { fichiersDeLaMemoire } from "./memoire-blame.js";
 import { valeurDuSujet } from "./memoire-raisonnement.js";
 
@@ -25,6 +27,70 @@ test("deux fois la même zone : seul le dernier versement vaut", () => {
   assert.deepEqual([...versementsEclipses([vieux, neuf])], ["v1"]);
   // L'ordre dans lequel on les lit ne compte pas : c'est la date qui tranche.
   assert.deepEqual([...versementsEclipses([neuf, vieux])], ["v1"]);
+});
+
+/**
+ * Le même versement, mais qui dit **de quel document** il sort.
+ *
+ * `verse()` ne pose que `decided_at` : la date de saisie. Celui-ci pose en plus
+ * `provenance.le`, la date du document lu — et les deux diffèrent exprès, sans
+ * quoi le test ne saurait pas laquelle des deux a servi à trancher.
+ */
+const verseDuDocument = (id, { du, saisiLe, zones = [], valeur = "0,5 m" }) => {
+  const versement = verse(id, { le: saisiLe, zones, valeur });
+  versement.payload.provenance = { quoi: `rapport ${id}`, le: du };
+  return versement;
+};
+
+test("une valeur lue dans un document antérieur n'écrase pas celle qui fait foi", () => {
+  // Le défaut : le rapport de mars, saisi en septembre, passait devant le
+  // rapport de juin saisi en juillet. Le projet cessait de dire ce qu'il disait
+  // la veille, et rien ne le signalait.
+  const deJuin = verseDuDocument("juin", { du: "2026-06-12", saisiLe: "2026-07-01T08:00:00Z", zones: ["batiment-a"], valeur: "0,8 m" });
+  const deMars = verseDuDocument("mars", { du: "2026-03-04", saisiLe: "2026-09-20T08:00:00Z", zones: ["batiment-a"], valeur: "0,5 m" });
+
+  // Versé en dernier, mais lu dans le plus ancien des deux documents.
+  assert.deepEqual([...versementsEclipses([deJuin, deMars])], ["mars"]);
+  assert.equal(versementQuiVaut([deJuin, deMars], "batiment-a").id, "juin");
+  assert.equal(valeursDeLaPortee([deJuin, deMars], "batiment-a").get("h0 retenu pour le departement").id, "juin");
+});
+
+test("sans date de document, l'ordre du versement tranche comme avant", () => {
+  // La dégradation est choisie : presque rien en mémoire ne porte la date de
+  // son document. Basculer sur une information absente changerait le sens de
+  // toute la mémoire déjà versée, en silence.
+  const vieux = verse("v1", { le: "2026-09-07T08:00:00Z", zones: ["batiment-a"] });
+  const neuf = verse("v2", { le: "2026-09-09T08:00:00Z", zones: ["batiment-a"], valeur: "0,8 m" });
+
+  assert.equal(versementQuiVaut([neuf, vieux], "batiment-a").id, "v2");
+  assert.deepEqual([...versementsEclipses([neuf, vieux])], ["v1"]);
+});
+
+test("la valeur arrivée après coup se distingue d'une valeur corrigée", () => {
+  const deJuin = verseDuDocument("juin", { du: "2026-06-12", saisiLe: "2026-07-01T08:00:00Z", zones: ["batiment-a"], valeur: "0,8 m" });
+  const deMars = verseDuDocument("mars", { du: "2026-03-04", saisiLe: "2026-09-20T08:00:00Z", zones: ["batiment-a"], valeur: "0,5 m" });
+
+  const apresCoup = versementsRetrospectifs([deJuin, deMars]);
+  assert.equal(apresCoup.length, 1);
+  assert.equal(apresCoup[0].id, "mars");
+  assert.equal(apresCoup[0].enVigueur.id, "juin");
+
+  // Une valeur simplement remplacée n'est pas rétrospective : elle a été
+  // corrigée, ce qui ne se lit pas pareil.
+  const anciens = [
+    verse("v1", { le: "2026-09-07T08:00:00Z", zones: ["batiment-a"] }),
+    verse("v2", { le: "2026-09-09T08:00:00Z", zones: ["batiment-a"], valeur: "0,8 m" })
+  ];
+  assert.deepEqual(versementsRetrospectifs(anciens), []);
+});
+
+test("deux portées différentes ne se départagent pas entre elles", () => {
+  // Un document de mars sur le bâtiment B n'arrive pas « après coup » derrière
+  // un document de juin sur le bâtiment A : les deux ne disent pas la même chose.
+  const a = verseDuDocument("a", { du: "2026-06-12", saisiLe: "2026-07-01T08:00:00Z", zones: ["batiment-a"] });
+  const b = verseDuDocument("b", { du: "2026-03-04", saisiLe: "2026-09-20T08:00:00Z", zones: ["batiment-b"] });
+
+  assert.deepEqual(versementsRetrospectifs([a, b]), []);
 });
 
 test("deux portées différentes ne s'éclipsent pas", () => {

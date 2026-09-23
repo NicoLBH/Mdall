@@ -314,3 +314,58 @@ test("une hypothèse ne prend pas de complément", () => {
     "supposée, en attendant mieux"
   );
 });
+
+/* ── Ce qu'un document plus récent a revu depuis ─────────────────────────── */
+
+/** Une valeur qui dit de quel document elle sort, et non seulement quand on l'a saisie. */
+const duDocument = (id, sujet, dite, jour) =>
+  valeur(id, sujet, dite, { provenance: { quoi: `rapport ${id}`, le: jour } });
+
+test("une conclusion dit qu'elle a lu une valeur revue depuis", () => {
+  // La conclusion garde ce que l'altitude valait alors — c'est tout l'intérêt
+  // de la mémoire. Mais un document plus récent l'a revue depuis : la
+  // conclusion mêle deux instants, et sans un mot elle a l'air d'aujourd'hui.
+  const lue = duDocument("v-alt", "Altitude", "742,30", "2026-03-04");
+  const revue = duDocument("v-alt2", "Altitude", "744,10", "2026-06-12");
+  const conclusion = valeur("v-hg", "Profondeur hors gel", "0,80 m");
+
+  const dit = new Map(lignesDeLHistoire(histoireDeLaValeur(conclusion, {
+    assertions: [lue, revue, conclusion],
+    applications: [{ output_assertion_id: "v-hg", input_assertion_id: "v-alt", input_subject: "Altitude" }]
+  })).map((ligne) => [ligne.quoi, ligne.dit]));
+
+  // Elle nomme le sujet : « repose sur une valeur revue » enverrait tout relire.
+  assert.match(dit.get("Revu depuis"), /Altitude \(lu au 2026-03-04, revu au 2026-06-12\)/);
+  // Et rien n'a été recalculé : la conclusion vaut toujours ce qu'elle valait.
+  assert.equal(dit.get("Elle a lu"), "Altitude = 742,30");
+});
+
+test("une conclusion qui a lu la valeur qui fait foi ne dit rien", () => {
+  // La rubrique ne paraît pas : une conclusion à jour n'a pas à se justifier.
+  const ancienne = duDocument("v-alt", "Altitude", "742,30", "2026-03-04");
+  const enVigueur = duDocument("v-alt2", "Altitude", "744,10", "2026-06-12");
+  const conclusion = valeur("v-hg", "Profondeur hors gel", "0,80 m");
+
+  const lignes = lignesDeLHistoire(histoireDeLaValeur(conclusion, {
+    assertions: [ancienne, enVigueur, conclusion],
+    applications: [{ output_assertion_id: "v-hg", input_assertion_id: "v-alt2", input_subject: "Altitude" }]
+  }));
+
+  assert.equal(lignes.find((ligne) => ligne.quoi === "Revu depuis"), undefined);
+});
+
+test("sans date de document, on ne prétend pas qu'une conclusion est dépassée", () => {
+  // Les deux valeurs ne portent que leur date de saisie. Dire que la conclusion
+  // repose sur une valeur revue serait affirmer une comparaison qu'on ne sait
+  // pas faire — et ne pas savoir n'autorise pas à prétendre (règle 5).
+  const lue = valeur("v-alt", "Altitude", "742,30");
+  const autre = { ...valeur("v-alt2", "Altitude", "744,10"), decided_at: "2026-06-12T08:00:00Z" };
+  const conclusion = valeur("v-hg", "Profondeur hors gel", "0,80 m");
+
+  const lignes = lignesDeLHistoire(histoireDeLaValeur(conclusion, {
+    assertions: [lue, autre, conclusion],
+    applications: [{ output_assertion_id: "v-hg", input_assertion_id: "v-alt", input_subject: "Altitude" }]
+  }));
+
+  assert.equal(lignes.find((ligne) => ligne.quoi === "Revu depuis"), undefined);
+});

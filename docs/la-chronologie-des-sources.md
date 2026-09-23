@@ -77,25 +77,63 @@ réf. 2024-03-01 » — et sans l'ancrage, la référence l'emporterait.
 | La fermeture d'un sujet absent d'un compte rendu | **fait** |
 | La source et la date sur chaque fermeture proposée | **fait** |
 | La date du constat sur une question restée sans réponse | **fait** |
-| Les valeurs versées en mémoire | à faire |
-| Les raisonnements et leurs lectures enregistrées | à faire |
-| Les hypothèses et les variantes | à faire |
+| Les valeurs versées en mémoire | **fait** |
+| Les raisonnements et leurs lectures enregistrées | **fait** |
+| Les hypothèses et les variantes | **fait** |
 
-### Ce que les trois branchements restants demandent
+## Le même moteur, transposé aux valeurs
 
-**La mémoire.** Une valeur versée porte déjà sa provenance ; il lui manque la
-date **du document** d'où elle vient, distincte de celle du versement. Deux
-valeurs contradictoires ne se départagent aujourd'hui que par l'ordre d'arrivée,
-qui est justement celui dont on vient de montrer qu'il ment.
+`le-temps-des-valeurs.js` reprend la règle telle quelle, un cran plus bas. Deux
+dates, la même hiérarchie :
 
-**Les raisonnements.** Une règle lit des valeurs ; si l'une d'elles vient d'un
-document antérieur à une autre déjà lue, la conclusion mêle deux instants. Le
-rejeu à blanc existe et saurait le dire : il lui manque de savoir **à quelle
-date il rejoue**.
+- **la date du document** — `payload.provenance.le`. C'est elle qui ordonne.
+- **la date du versement** — `decided_at`. Elle dit quand quelqu'un a eu le temps
+  de saisir, et rien du chantier.
 
-**Les hypothèses.** Une variante suppose un état du projet. Elle devrait porter
-la date à laquelle elle a été posée, et se signaler quand une source plus
-récente l'a périmée — plutôt que de rester vraie indéfiniment.
+Et l'on dit toujours **laquelle des deux a servi** (`DATEE_PAR`). Une valeur dont
+on ne connaît que la date de versement n'est pas une valeur datée de son
+document : les deux ne se relisent pas pareil (règle 5).
+
+### La dégradation est choisie, et sans surprise
+
+Presque aucune valeur déjà en mémoire ne porte la date de son document. Si
+l'ordre basculait d'un coup sur une date que personne n'a renseignée, toute la
+mémoire changerait de sens en silence — le défaut même qu'on répare.
+
+Donc : **tant qu'aucun candidat ne porte de date de document, on ordonne comme
+avant**. Le comportement ne change que là où l'information existe.
+
+### Les trois branchements
+
+**La mémoire.** `memoire-valeurs.js` ne trie plus par date de saisie : ses trois
+juges — ce qui est éclipsé, ce qui a été corrigé, ce qui vaut dans une zone —
+passent tous par `ordreDesValeurs`, à un seul endroit (règle 4). Une valeur lue
+dans un rapport de mars et saisie en septembre n'écrase plus celle de juin.
+
+Et l'écran ne les confond pas : une valeur **corrigée** est un changement d'avis,
+une valeur **arrivée après coup** est un décalage de saisie, qui se rattrape
+autrement. `versementsRetrospectifs()` nomme les secondes ; le fichier les dit à
+part, avec l'icône de l'histoire et non celle de l'alerte.
+
+**Les raisonnements.** Une conclusion garde ce que ses entrées valaient alors —
+c'est tout l'intérêt de la mémoire, et recalculer en douce déciderait à la place
+de quelqu'un (règle 1). Mais une conclusion qui repose sur une valeur qu'un
+document plus récent a revue **mêle deux instants** : elle a l'air d'être
+d'aujourd'hui. L'histoire d'une valeur porte désormais une rubrique
+« Revu depuis », juste sous « Elle a lu », et elle **nomme les sujets** — « repose
+sur une valeur revue » sans dire laquelle envoie tout relire.
+
+**Les hypothèses.** Une variante retient maintenant **de quand vient ce dont elle
+part**, et d'où cette date sort. Le bandeau dit deux choses qu'il ne faut pas
+confondre :
+
+- « la mémoire a bougé » — il s'est passé quelque chose, n'importe quoi ;
+- « cette variante part d'une valeur revue depuis par un document plus récent » —
+  et c'est la seule des deux qui dise si l'hypothèse porte encore sur quelque
+  chose.
+
+On ne la refait pas d'office : elle répond à la question posée ce jour-là, et la
+recalculer répondrait à une autre. Elle le dit, et on la refait d'un geste.
 
 ## Ce que ce moteur ne fait pas
 

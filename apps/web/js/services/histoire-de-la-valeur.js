@@ -46,6 +46,7 @@ import { PROVENANCE } from "./memoire-en-texte.js";
 import { zonesLisibles, histoireDeLaLigne } from "./memoire-blame.js";
 import { ceQuiCouvre } from "./ce-qui-couvre.js";
 import { leDebatQuiATranche } from "./point-a-tranche.js";
+import { cequiAEteRevuDepuis, phraseDeCeQuiAEteRevu } from "./le-temps-des-valeurs.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -284,7 +285,17 @@ export function histoireDeLaValeur(assertion = null, {
     decision: charge.decision ?? null,
     debat: leDebatQuiATranche({ assertion, points }),
     examens,
-    avant
+    avant,
+    /**
+     * Ce que cette conclusion a lu, et qu'un document plus récent a revu depuis.
+     *
+     * **On ne recalcule pas.** Une conclusion garde ce que ses entrées valaient
+     * alors — c'est tout l'intérêt de la mémoire, et recalculer en douce
+     * déciderait à la place de quelqu'un (règle 1). Mais une conclusion qui
+     * repose sur une valeur revue mêle deux instants sans le dire. On le dit, et
+     * le rejeu existe pour la refaire.
+     */
+    revuDepuis: cequiAEteRevuDepuis(entrees, assertions)
   };
 
   // **Plusieurs versions du même nom se comptent ici**, et pas chez l'appelant.
@@ -389,6 +400,12 @@ export function lignesDeLHistoire(histoire = null, { dater = null } = {}) {
         .join(" · ")
     });
   }
+
+  // **Juste sous « Elle a lu »**, parce que c'est cette ligne-là qu'elle
+  // corrige : on vient de lire ce que la règle a pris, et on apprend dans la
+  // foulée que l'une de ces valeurs a changé depuis.
+  const revu = phraseDeCeQuiAEteRevu(histoire.revuDepuis);
+  if (revu) lignes.push({ quoi: "Revu depuis", dit: revu });
 
   const ecartes = (histoire.decision?.ecartes ?? [])
     .map((ecarte) => texte(ecarte?.quoi)).filter(Boolean);

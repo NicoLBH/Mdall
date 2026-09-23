@@ -67,6 +67,9 @@ import { dependancesDesApplications } from "./memoire-applications.js";
 import { rejouerLesRegles } from "./memoire-rejeu.js";
 import { natureDuNoeud, sortiesDesRegles, NOEUD } from "./memoire-plan.js";
 import { phraseDuRefus } from "./utilitaires-rejeu.js";
+import {
+  DATEE_PAR, leJourDuneValeur, cequiAEteRevuDepuis, phraseDuneHypothesePosteeSurDuPasse
+} from "./le-temps-des-valeurs.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const idDe = (assertion) => texte(assertion?.id);
@@ -426,7 +429,10 @@ export function consequencesDeLaVariante({
     if (!texte(valeur)) {
       return { ok: false, raison: "Une variante a besoin d'une valeur : c'est elle qu'on essaie." };
     }
-    depart.push({ ...entree, vers: texte(valeur) });
+    // **Sur quoi l'hypothèse est posée, et de quand.** Une variante part d'un
+    // état de la mémoire ; sans la date de cet état, on ne peut plus dire, en
+    // la relisant, si elle répond encore à une question du projet d'aujourd'hui.
+    depart.push({ ...entree, vers: texte(valeur), poseeSur: leJourDuneValeur(entree.assertion) });
   }
 
   if (!depart.length) return { ok: false, raison: "Rien n'a été changé : il n'y a pas de variante." };
@@ -821,7 +827,15 @@ export function variantePourLEcran({ consequences = null, par = null, at = "" } 
     // réapplique sans redemander, et sans rien recalculer de son côté.
     relectures: consequences.relectures,
     depart: consequences.depart.map((entree) => ({
-      sujet: entree.sujet, depuis: entree.valeur, vers: entree.vers
+      sujet: entree.sujet,
+      depuis: entree.valeur,
+      vers: entree.vers,
+      // Gardés avec la variante, parce qu'elle se relit longtemps après, sur un
+      // autre écran, sans les conséquences qui l'ont produite. Sans eux, la
+      // question « ce dont elle part vaut-il encore ? » n'a plus de réponse.
+      valeurId: champDeLIdentifiant(entree.id).id,
+      poseeAu: entree.poseeSur?.jour ?? "",
+      dateePar: entree.poseeSur?.par ?? DATEE_PAR.RIEN
     })),
     recalculees: consequences.recalculees.length + consequences.rejouees.length,
     confirmees: consequences.confirmees,
@@ -840,6 +854,37 @@ export function variantePourLEcran({ consequences = null, par = null, at = "" } 
  * Une variante n'est vraie que de la mémoire sur laquelle elle a été faite, et
  * une variante périmée a exactement le même air qu'une variante fraîche.
  */
+/**
+ * Ce dont la variante part, et qu'un document plus récent a revu depuis.
+ *
+ * **Ce n'est pas `laMemoireABouge`.** Celle-là dit qu'il s'est passé quelque
+ * chose, n'importe quoi, depuis le calcul — un versement dans un tout autre
+ * domaine suffit. Celle-ci nomme **les valeurs de départ** que le projet ne dit
+ * plus, et depuis quel document : c'est la seule des deux qui dise si
+ * l'hypothèse porte encore sur quelque chose.
+ *
+ * On ne refait rien. Une variante répond à la question posée ce jour-là, et la
+ * recalculer en douce répondrait à une autre (règle 1).
+ *
+ * @returns {{sujet: string, luLe: string, revuLe: string}[]}
+ */
+export function surQuoiLaVarianteRepose(variante = null, assertions = []) {
+  if (!variante) return [];
+
+  // Le même vocabulaire que les raisonnements : une variante lit des valeurs
+  // comme une règle en lit, et le décalage se mesure pareil.
+  return cequiAEteRevuDepuis(
+    (Array.isArray(variante.depart) ? variante.depart : [])
+      .map((entree) => ({ sujet: entree?.sujet, valeurId: entree?.valeurId })),
+    assertions
+  );
+}
+
+/** Ce que la variante suppose encore, en une phrase. Vide quand rien n'a bougé. */
+export function phraseDeCeQueLaVarianteSuppose(variante = null, assertions = []) {
+  return phraseDuneHypothesePosteeSurDuPasse(surQuoiLaVarianteRepose(variante, assertions));
+}
+
 export function laMemoireABouge(variante = null, assertions = []) {
   if (!variante) return false;
   const enVigueur = currentAssertions(Array.isArray(assertions) ? assertions : []);
