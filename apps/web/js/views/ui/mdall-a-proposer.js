@@ -111,6 +111,17 @@ export function renderMdallAProposer(blocs = [], {
  * ──────────────────────────────────────────────────────────────────────────── */
 
 /**
+ * Ce qu'on dit d'un dépôt qui ne touche pas à la mémoire.
+ *
+ * **Écrit une fois, et lu par tous ceux qui ont à le dire.** La lecture d'un
+ * compte rendu et celle d'un fil de mails le disent toutes les deux ; deux
+ * formulations pour le même fait finiraient par ne plus dire la même chose, et
+ * l'une des deux aurait tort sans qu'on sache laquelle (règle 10).
+ */
+export const RIEN_DANS_LA_MEMOIRE =
+  "Rien n'entre dans la mémoire du projet : ce dépôt ne porte que du suivi.";
+
+/**
  * Ce qu'une proposition portera, partagé en deux.
  *
  * `memoire` : les lignes qui affirment quelque chose sur le projet — celles qui
@@ -162,5 +173,5 @@ export function phraseDeLaPart({ memoire = [], suivi = [] } = {}) {
   // ne touche pas à la mémoire du projet, et rien d'autre ne le dirait.
   return valeurs
     ? `${suite}${valeurs} ${valeurs > 1 ? "lignes entreront" : "ligne entrera"} dans la mémoire du projet.`
-    : `${suite}Rien n'entre dans la mémoire du projet : ce dépôt ne porte que du suivi.`;
+    : `${suite}${RIEN_DANS_LA_MEMOIRE}`;
 }

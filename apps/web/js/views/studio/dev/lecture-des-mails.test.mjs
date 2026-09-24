@@ -8,6 +8,12 @@ import {
 import { NATURE } from "../../../services/prises-de-position.js";
 import { leFilDesMails } from "../../../services/le-fil-des-mails.js";
 import { TROU } from "../../../services/trous-dun-mail.js";
+import { SORT } from "../../../services/lecture-du-cr.js";
+import { itemsDuCompteRendu } from "../../../services/proposition-du-cr.js";
+import {
+  RIEN_DANS_LA_MEMOIRE, partDeLaProposition, phraseDeLaPart
+} from "../../ui/mdall-a-proposer.js";
+import { escapeHtml } from "../../../utils/escape-html.js";
 
 // Aucun mail réel : les noms, les sociétés et les domaines sont inventés.
 const mail = (...lignes) => lignes.join("\r\n");
@@ -784,4 +790,77 @@ test("un intitulé qui ne se lit pas dans sa citation est signalé sous la prise
   }));
   assert.ok(html.includes("c&#39;est la citation qui fait foi")
     || html.includes("c'est la citation qui fait foi"), html.slice(-900));
+});
+
+// ── Ce que la proposition portera, dit avant le clic ───────────────────────
+
+/**
+ * **Un fil de mails n'écrit rien dans la mémoire du projet.** Il ouvre des
+ * sujets et en relance d'autres : du suivi, et rien que du suivi.
+ *
+ * Le taire serait le pire des deux mondes : celui qui vient de voir le Copilote
+ * écrire du Mdall sous son bouton croirait qu'un fil de mails en écrit aussi.
+ */
+/** Une prise qui devient un sujet — un constat, lui, ne porte rien à ouvrir. */
+const uneDemande = (dessus = {}) => prise({
+  nature: NATURE.DEMANDE, intitule: "reprendre l'étanchéité de l'acrotère", ...dessus
+});
+
+test("l'écran dit que ce fil ne touche pas à la mémoire du projet", () => {
+  const html = renderLaLectureDesMails({
+    ...lu(PREMIER, SECOND), releve: releve({ prises: [uneDemande()] })
+  });
+
+  assert.match(html, /1 point à porter/);
+  assert.match(html, /ouvrira un sujet ou en relancera un déjà ouvert/);
+  assert.ok(html.includes(escapeHtml(RIEN_DANS_LA_MEMOIRE)));
+});
+
+test("et il se tait tant qu'il n'y a rien à porter", () => {
+  // Une phrase qui annonce zéro point se lit comme une panne du relevé.
+  assert.doesNotMatch(renderLaLectureDesMails(lu(PREMIER, SECOND)), /à porter/);
+  assert.doesNotMatch(
+    renderLaLectureDesMails({ ...lu(PREMIER, SECOND), releve: releve({ prises: [] }) }),
+    /à porter/
+  );
+  // Un constat n'ouvre pas de sujet : il va en mémoire par un autre chemin.
+  assert.doesNotMatch(
+    renderLaLectureDesMails({ ...lu(PREMIER, SECOND), releve: releve() }),
+    /à porter/
+  );
+});
+
+/**
+ * **C'est vrai quoi que la confrontation décide**, et c'est ce qui rend
+ * l'annonce tenable : le partage ouvrir / relancer se fait au clic, mais les
+ * deux sorts sont de l'intendance. Une valeur qui apparaîtrait par l'un des
+ * deux ferait mentir la phrase, et personne ne s'en apercevrait.
+ */
+test("ni un point neuf ni un point relancé n'entre dans la mémoire", () => {
+  const unPoint = { titre: "Reprendre l'étanchéité de l'acrotère", citation: "acrotère non étanchée" };
+
+  for (const confronte of [
+    { ...unPoint, sort: SORT.NOUVEAU, sujet: null, par: "" },
+    { ...unPoint, sort: SORT.RELANCE, sujetId: "s-1", sujet: { id: "s-1" }, par: "" }
+  ]) {
+    const part = partDeLaProposition(itemsDuCompteRendu({ confrontes: [confronte] }));
+    assert.deepEqual(part.memoire, [], `${confronte.sort} : ${JSON.stringify(part)}`);
+  }
+});
+
+test("la phrase « rien dans la mémoire » vit à un seul endroit", () => {
+  // La lecture des comptes rendus la dit aussi. Deux formulations pour le même
+  // fait finiraient par ne plus dire la même chose, et l'une des deux aurait
+  // tort sans qu'on sache laquelle (règle 10).
+  assert.ok(phraseDeLaPart({ memoire: [], suivi: [{ nature: "sujet", combien: 1 }] })
+    .endsWith(RIEN_DANS_LA_MEMOIRE));
+});
+
+test("ce que le fil a nommé est échappé, jamais injecté", () => {
+  const html = renderLaLectureDesMails({
+    ...lu(PREMIER, SECOND),
+    releve: releve({ prises: [uneDemande({ intitule: "<img src=x onerror=\"x\">" })] })
+  });
+
+  assert.doesNotMatch(html, /<img /);
 });
