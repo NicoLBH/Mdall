@@ -454,6 +454,36 @@ export function renderProposition(brouillon = null, { depose = false, depot = nu
   `;
 }
 
+/** Ce qu'il y a à faire d'un panneau qui apparaît, change, ou s'en va. */
+export const POSE = {
+  /** Il n'était pas là et n'a rien à dire : **surtout ne rien faire**. */
+  RIEN: "rien",
+  /** Il n'était pas là et a quelque chose à dire : on le pose. */
+  POSER: "poser",
+  /** Il était là et a changé : on le remplace. */
+  REMPLACER: "remplacer",
+  /** Il était là et n'a plus rien à dire : on le retire. */
+  RETIRER: "retirer"
+};
+
+/**
+ * Ce qu'on fait d'un panneau qui naît, change ou meurt.
+ *
+ * ## Pourquoi cette décision est une fonction, et pure
+ *
+ * Le cas « ni panneau, ni rien à écrire » se rabattait sur un redessin entier
+ * de l'écran. Or redessiner rebranche, et brancher déclenche un changement :
+ * l'écran s'appelait lui-même jusqu'à épuiser la pile, et ne s'ouvrait pas.
+ *
+ * Ce cas-là est le plus banal de tous — c'est celui du brouillon vide, à
+ * l'ouverture — et aucune épreuve de rendu ne pouvait le voir, parce que le
+ * défaut n'est pas dans ce qui se dessine. Sorti ici, il se nomme et il tombe.
+ */
+export function poseDuPanneau({ present = false, aEcrire = false } = {}) {
+  if (!present) return aEcrire ? POSE.POSER : POSE.RIEN;
+  return aEcrire ? POSE.REMPLACER : POSE.RETIRER;
+}
+
 /** L'écran entier, sans un seul appel. */
 export function renderEcrireEnMdall(brouillon = null, {
   lecture = "code", largeur = LARGEUR_PAR_DEFAUT, bac = false, reponses = {}, lance = false,
@@ -604,16 +634,39 @@ function dessiner(racine) {
   brancher(racine);
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * Les redessins ciblés
+ *
+ * ## Aucun d'eux n'appelle `dessiner`, et ce n'est pas une élégance
+ *
+ * `dessiner` rebranche l'écran, et **brancher déclenche un changement** :
+ * `brancherLaSaisieDeCode` appelle `surChangement` une fois à la pose, pour que
+ * la gouttière parte avec le bon nombre de lignes. Un redessin ciblé qui se
+ * rabattrait sur `dessiner` se rappellerait donc lui-même, sans fin — et
+ * l'écran ne s'ouvrirait pas du tout.
+ *
+ * C'est arrivé : « Maximum call stack size exceeded » au chargement, sur un
+ * brouillon vide, parce que le panneau de proposition n'existait pas encore et
+ * qu'il n'y avait rien à écrire non plus. Aucune épreuve de rendu ne pouvait le
+ * voir : le défaut n'est pas dans ce qui se dessine, il est dans **quand ça se
+ * rebranche**.
+ *
+ * Un redessin ciblé pose, remplace, retire — ou ne fait rien. Jamais plus.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
 /**
  * Redessiner **le seul volet de droite**.
  *
  * Réécrire l'écran entier à chaque frappe emporterait le curseur de la zone de
  * gauche au premier caractère tapé. On ne redessine donc que ce qui change, et
  * jamais la zone où le doigt est posé.
+ *
+ * Sans volet, il n'y a rien à remplacer : un brouillon sans fichier n'a ni
+ * onglet ni zone de code, donc personne pour demander ce redessin.
  */
 function redessinerLeVolet(racine) {
   const ancien = racine.querySelector(".brouillon-volet");
-  if (!ancien) { dessiner(racine); return; }
+  if (!ancien) return;
 
   debrancherSaisie?.();
   const neuf = document.createElement("div");
@@ -641,36 +694,49 @@ function redessinerLaVerification(racine) {
 }
 
 /**
+ * Redessiner **le seul panneau de proposition**.
+ *
+ * Il change à chaque frappe — le compte des lignes, ce qui reste dehors — et
+ * réécrire l'écran entier pour cela emporterait le curseur.
+ *
+ * **Il naît avec la première ligne écrite et meurt avec la dernière effacée.**
+ * Les quatre cas se décident dans `poseDuPanneau`, qui est pure et s'éprouve :
+ * c'est celui où il n'y a ni panneau ni rien à écrire qui avait fait tomber
+ * l'écran, et un `dessiner` de secours n'en était pas un (voir la règle en tête
+ * de section).
+ */
+function redessinerLaProposition(racine) {
+  const ancien = racine.querySelector(".brouillon-propose");
+  const html = renderProposition(etat.brouillon, { depose: etat.depose, depot: etat.depot });
+
+  const pose = poseDuPanneau({ present: Boolean(ancien), aEcrire: Boolean(html) });
+  if (pose === POSE.RIEN) return;
+  if (pose === POSE.RETIRER) { ancien.remove(); return; }
+
+  const neuf = document.createElement("div");
+  neuf.innerHTML = html;
+  const fabrique = neuf.firstElementChild;
+  // Du HTML qui ne produit aucun élément : on garde ce qui est à l'écran
+  // plutôt que de le remplacer par rien.
+  if (!fabrique) return;
+
+  // Le panneau ferme l'écran : c'est le dernier bloc du rendu, et une pose qui
+  // l'insérerait ailleurs le ferait changer de place entre un redessin ciblé et
+  // un redessin entier.
+  if (pose === POSE.REMPLACER) ancien.replaceWith(fabrique);
+  else racine.querySelector(".brouillon")?.append(fabrique);
+
+  fabrique.querySelector("[data-brouillon-proposer]")
+    ?.addEventListener("click", () => { void proposerAuProjet(racine); });
+}
+
+/**
  * Redessiner le bac d'essai seul.
  *
  * Réécrire l'écran entier à chaque réponse emporterait le curseur du champ
  * qu'on est en train de remplir — et c'est le champ suivant qu'on veut
  * atteindre, pas le début de la page.
  */
-/**
- * Redessiner **le seul panneau de proposition**.
- *
- * Il change à chaque frappe — le compte des lignes, ce qui reste dehors — et
- * réécrire l'écran entier pour cela emporterait le curseur.
- */
-function redessinerLaProposition(racine) {
-  const ancien = racine.querySelector(".brouillon-propose");
-  const html = renderProposition(etat.brouillon, { depose: etat.depose, depot: etat.depot });
-
-  // Le panneau naît avec la première ligne écrite, et disparaît avec la
-  // dernière effacée : dans les deux cas il n'y a rien à remplacer sur place.
-  if (!ancien || !html) { dessiner(racine); return; }
-
-  const neuf = document.createElement("div");
-  neuf.innerHTML = html;
-  const remplacant = neuf.firstElementChild;
-  if (!remplacant) { dessiner(racine); return; }
-
-  ancien.replaceWith(remplacant);
-  remplacant.querySelector("[data-brouillon-proposer]")
-    ?.addEventListener("click", () => { void proposerAuProjet(racine); });
-}
-
 function redessinerLeBac(racine) {
   const ancien = racine.querySelector(".bac");
   if (!etat.bac) { ancien?.remove(); return; }
@@ -680,8 +746,17 @@ function redessinerLeBac(racine) {
   const fabrique = neuf.firstElementChild;
   if (!fabrique) return;
 
-  if (ancien) ancien.replaceWith(fabrique);
-  else racine.querySelector(".brouillon")?.append(fabrique);
+  if (ancien) {
+    ancien.replaceWith(fabrique);
+  } else {
+    // **Avant le panneau de proposition**, parce que le rendu le met là. Un
+    // `append` mettrait le bac d'essai sous « Proposer au projet » dès que ce
+    // panneau existe, et l'ordre de l'écran dépendrait alors de celui des
+    // clics (règle 4 : le rendu est la seule vérité de cet ordre).
+    const propose = racine.querySelector(".brouillon-propose");
+    if (propose) propose.before(fabrique);
+    else racine.querySelector(".brouillon")?.append(fabrique);
+  }
   brancherLeBac(racine);
 }
 
