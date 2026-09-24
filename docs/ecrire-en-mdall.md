@@ -357,8 +357,25 @@ ne fait pas semblant du contraire. Ce qui fait qu'un raisonnement se retrouve
 ailleurs reste la proposition — elle porte un auteur, une date et une signature,
 ce qu'un fichier dans un dossier n'a jamais eu.
 
-Reste à trancher : veut-on quand même déposer le brouillon au corpus, et sous
-quelle nature, ou suffit-il qu'il aille au projet par la proposition ?
+**Tranché : le brouillon reste dans le navigateur.** Ce qui fait qu'un
+raisonnement se retrouve ailleurs est la proposition, et elle seule.
+
+#### Un redessin ciblé n'appelle jamais le redessin entier
+
+Le panneau de proposition se redessinait seul à chaque frappe, et se rabattait
+sur un redessin entier quand il n'existait pas encore. Or **redessiner
+rebranche, et brancher déclenche un changement** : `brancherLaSaisieDeCode`
+appelle `surChangement` une fois à la pose, pour que la gouttière parte avec le
+bon nombre de lignes. L'écran s'appelait donc lui-même jusqu'à épuiser la pile.
+
+Le cas fautif était le plus banal de tous — le brouillon vide, à l'ouverture —
+et **aucune épreuve de rendu ne pouvait le voir** : le défaut n'est pas dans ce
+qui se dessine, il est dans quand ça se rebranche.
+
+La règle vaut pour tous les redessins ciblés de l'écran : ils posent,
+remplacent, retirent, ou ne font rien. La décision est sortie dans
+`poseDuPanneau`, qui est pure et s'éprouve ; et une épreuve relit le source pour
+tenir la règle elle-même, ce qu'aucune épreuve de rendu ne sait faire.
 
 ### Lot 8 — Les trois producteurs passent par l'écrivain
 
