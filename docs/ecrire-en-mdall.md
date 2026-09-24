@@ -511,3 +511,57 @@ projet » — et cela existe déjà, c'est la variante. La frontière entre les 
 quarante blocs Mdall. Repliés par défaut, ils tiennent ; mais il faudra
 probablement choisir ce qui s'ouvre tout seul — les règles, peut-être, et pas
 les valeurs simples, puisque c'est le raisonnement qu'on ne voit pas.
+
+
+---
+
+## Après le plan : l'écran, à l'usage
+
+Les huit lots sont livrés. Ce qui suit vient de son usage réel, et ne figurait
+dans aucun d'eux.
+
+### « Coder » ne rendait rien, et le défaut n'était pas dans l'appel
+
+L'Atelier **réécrit son routeur entier** à chaque redessin : le panneau de cet
+écran est alors un élément neuf, et celui qu'un appel en cours tenait est
+détaché. La transcription écrivait donc son résultat dans un élément que plus
+personne ne regardait — `racine.isConnected` était faux, et l'on ne dessinait
+rien du tout. On cliquait « Coder », et il ne se passait jamais rien : ni
+fichier, ni message, ni refus.
+
+Le même défaut avait déjà coûté deux appels payés à la lecture des comptes
+rendus, et son commentaire le dit depuis dans `project-studio.js`. La règle :
+**on ne garde pas l'élément à travers un `await`** — on le retrouve par son
+identifiant, qui lui ne change pas.
+
+Le bouton tourne désormais pour de bon : un vrai rouet plutôt que trois points,
+parce qu'un bouton qui change de libellé sans rien montrer laisse croire qu'il
+n'a pas pris le clic — et l'on clique une seconde fois.
+
+### Les messages se rassemblent dans une console
+
+Ils vivaient en **quatre endroits** : les remarques de la lecture sous les
+volets, ce que le modèle n'a pas su écrire sous la zone de gauche, ce qu'une
+fonction ne sait pas dans le bac, ce qui reste dehors sous « Proposer au
+projet ». Quatre fois la même question — *qu'est-ce qui ne va pas ?* — et quatre
+endroits où chercher. On lisait l'écran de haut en bas pour savoir si quelque
+chose clochait, et l'on ratait celui des quatre qu'on n'avait pas déplié.
+
+`console-du-brouillon.js` les rassemble, les range par gravité, et n'en invente
+aucun. Une ligne par message : **d'où** elle vient, **où** c'est, **quoi** en un
+mot, et ce qui se dit. Elle se lit en bas, comme celle d'un navigateur ; d'un
+clic elle passe en **troisième volet**, à droite du code, pour lire les deux
+côte à côte. Un seul rendu pour les deux places — et jamais aux deux à la fois.
+
+Une ligne illisible n'y paraît qu'une fois : la lecture la dit déjà, au même
+endroit et mieux, et la proposition qui l'écarte n'a pas à la redire. Sinon
+l'éparpillement aurait seulement changé de place.
+
+### Le titre prend le format de la maison
+
+`lecture-cr__entete` et ses classes, comme la lecture des comptes rendus et
+celle des mails. **« Proposer au projet » monte sur la ligne du titre**, à
+droite : c'est le geste qui engage, et le chercher en bas de page après trois
+volets ferait manquer la seule porte vers la mémoire. Il ne paraît que
+lorsqu'il y a quelque chose à proposer — un bouton éteint en permanence dans
+l'en-tête devient un décor qu'on cesse de voir.

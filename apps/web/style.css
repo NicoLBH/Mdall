@@ -26991,100 +26991,78 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    Une liste, pas un tableau : chaque remarque est une phrase, et un tableau de
    phrases se lit mal. Le renvoi — `fichier:ligne` — est un bouton, parce qu'il
    emmène ; le reste est du texte. */
-.brouillon-verif{
+/* La console : tout ce que l'écran a à dire, au même endroit.
+
+   Elle se lit comme celle d'un navigateur — une ligne par message, la plus
+   grave en tête —, et elle se déplace à droite d'un clic. Rien de neuf : les
+   couleurs du projet, la police du code pour les emplacements. */
+.brouillon-console{
   border-top:1px solid var(--border);
   padding:10px 14px 14px;
 }
-.brouillon-verif--muette{
-  display:flex; align-items:center; gap:8px; margin:0;
-  color:var(--muted); font-size:12px;
+.brouillon-console__tete{
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  margin-bottom:8px;
 }
-.brouillon-verif__phrase{
-  display:flex; align-items:center; gap:8px; margin:0 0 8px;
-  font-size:12px; color:var(--text);
+.brouillon-console__phrase{
+  display:inline-flex; align-items:center; gap:8px;
+  flex:1 1 20ch; min-width:0; font-size:12px; color:var(--text);
 }
-.brouillon-verif__liste{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }
-.brouillon-verif__ligne{
+.brouillon-console__place{ flex:0 0 auto; }
+/* Déplacée à droite, il ne reste en bas que la phrase : la liste vit dans le
+   volet, et l'afficher deux fois serait exactement ce qu'on répare. */
+.brouillon-console.est-deplacee{ padding-bottom:10px; }
+
+.brouillon-console__liste{
+  list-style:none; margin:0; padding:0;
+  display:flex; flex-direction:column; gap:2px;
+}
+.brouillon-console__ligne{
   display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;
+  padding:3px 6px; border-radius:6px;
   font-size:12px; line-height:1.5;
 }
-.brouillon-verif__ou{
-  flex:0 0 auto; padding:0; border:0; background:transparent; cursor:pointer;
-  color:var(--accent, var(--borderColor-accent-emphasis));
-  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace); font-size:11px;
-}
-.brouillon-verif__ou:hover{ text-decoration:underline; }
-/* La nature de la remarque, en un mot : on parcourt la colonne avant de lire
-   les phrases, et c'est ainsi qu'on trouve les trois qui comptent. */
-.brouillon-verif__quoi{
+.brouillon-console__ligne:nth-child(odd){ background:rgba(110,118,129,.07); }
+.brouillon-console__niveau{ flex:0 0 auto; display:inline-flex; align-items:center; }
+.brouillon-console__ligne--refus .brouillon-console__niveau{ color:var(--danger, #d1242f); }
+.brouillon-console__ligne--remarque .brouillon-console__niveau{ color:var(--attention, #9a6700); }
+.brouillon-console__ligne--fait .brouillon-console__niveau{ color:var(--muted); }
+/* D'où vient la ligne, en un mot : on parcourt la colonne avant de lire les
+   phrases, et c'est ainsi qu'on trouve celles qui comptent. */
+.brouillon-console__source{
   flex:0 0 auto; padding:0 6px; border-radius:999px;
   background:rgba(110,118,129,.14); color:var(--muted); font-size:10px;
   text-transform:uppercase; letter-spacing:.03em;
 }
-.brouillon-verif__dit{ flex:1 1 20ch; min-width:0; color:var(--text); }
-
-
-/* Ce que la transcription a rendu, et surtout ce qu'elle n'a pas su écrire.
-
-   Les lacunes ne sont pas une note de bas de page : c'est la moitié de ce qu'on
-   vient chercher, et elles se lisent sans être dépliées. */
-.brouillon-transcrit{
-  border-top:1px solid var(--border);
-  padding:10px 14px 12px;
-}
-.brouillon-transcrit__phrase{
-  display:flex; align-items:center; gap:8px; margin:0;
-  font-size:12px; color:var(--text);
-}
-.brouillon-transcrit--refus{
-  display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0;
-  font-size:12px; color:var(--muted);
-}
-.brouillon-transcrit__panne{
-  flex:1 1 20ch; min-width:0;
+.brouillon-console__ou{
+  flex:0 0 auto; padding:0; border:0; background:transparent; cursor:pointer;
+  color:var(--accent, var(--borderColor-accent-emphasis));
   font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace); font-size:11px;
 }
-.brouillon-transcrit__lacunes{
-  list-style:none; margin:8px 0 0; padding:0;
-  display:flex; flex-direction:column; gap:6px;
-}
-.brouillon-transcrit__lacunes li{
-  display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;
-  font-size:12px; line-height:1.5;
-}
-.brouillon-transcrit__phrase-dite{ flex:0 1 auto; color:var(--text); }
-.brouillon-transcrit__pourquoi{ flex:1 1 20ch; min-width:0; color:var(--muted); }
+.brouillon-console__ou:hover{ text-decoration:underline; }
+.brouillon-console__quoi{ flex:0 0 auto; color:var(--text); }
+.brouillon-console__dit{ flex:1 1 20ch; min-width:0; color:var(--muted); }
 
-/* « Proposer au projet » : la seule porte vers la mémoire.
+/* Le troisième volet : la console à côté du code, avec sa poignée.
 
-   Ce qui reste dehors se lit **à côté du bouton**, pas après le clic : un nom
-   déclaré sans valeur, une ligne refusée. L'apprendre une fois la proposition
-   ouverte reviendrait à l'apprendre trop tard. */
-.brouillon-propose{
-  border-top:1px solid var(--border);
-  padding:12px 14px 16px;
+   Il prend les classes du volet de code — même cadre, même en-tête —, et sa
+   largeur se tire comme celle de la zone de gauche. */
+/* `display:contents` : la poignée et le volet deviennent des cases de la
+   grille du corps, alors qu'ils se posent et se retirent **ensemble**. Deux
+   frères à poser à la main se désynchronisent au premier redessin ciblé. */
+.brouillon__console-volet{ display:contents; }
+/* La troisième colonne n'existe que lorsque la console y est : une colonne
+   vide laisserait un vide à droite du code, qu'on prendrait pour un défaut. */
+.brouillon[data-console="volet"] .brouillon__corps{
+  grid-template-columns:
+    var(--brouillon-dit-width, 460px) minmax(0, 1fr) var(--brouillon-console-width, 380px);
 }
-.brouillon-propose__geste{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-.brouillon-propose__phrase{ flex:1 1 24ch; min-width:0; color:var(--muted); font-size:12px; }
-.brouillon-propose__dehors{
-  list-style:none; margin:10px 0 0; padding:0;
-  display:flex; flex-direction:column; gap:4px;
+.brouillon-volet--console{ min-width:0; overflow:auto; border-left:1px solid var(--border); }
+.brouillon-volet--console .brouillon-console__liste{ padding:8px 10px 12px; }
+/* Elle se tire depuis son bord gauche, comme celle de la zone de français. */
+.brouillon__console-volet > .brouillon__poignee.side-resizer__handle{
+  left:auto; right:calc(var(--brouillon-console-width, 380px) - 4px);
 }
-.brouillon-propose__dehors li{
-  display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;
-  font-size:12px; line-height:1.5;
-}
-.brouillon-propose__quoi{ flex:0 0 auto; color:var(--text); }
-.brouillon-propose__ou{
-  flex:0 0 auto; color:var(--muted); font-size:11px;
-  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace);
-}
-.brouillon-propose__pourquoi{ flex:1 1 20ch; min-width:0; color:var(--muted); }
-.brouillon-propose__depot{
-  display:flex; align-items:center; gap:8px; margin:10px 0 0;
-  font-size:12px; color:var(--text);
-}
-.brouillon-propose__depot--refus{ color:var(--muted); }
 
 /* Le bac d'essai : le formulaire déduit, puis ce que les fonctions répondent.
 
