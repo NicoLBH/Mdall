@@ -46,18 +46,18 @@ import {
   brouillonNeuf, fichierOuvert, avecLeFichier, avecLeDit, ouvertSur, brouillonEcrit, langageDuFichier,
   fichiersRemplis, brouillonRange, brouillonRelu
 } from "../../../services/brouillon-mdall.js";
-import {
-  verifierLeBrouillon, phraseDeLaVerification, MOTS_DE_LENNUI
-} from "../../../services/verification-du-brouillon.js";
 import { champsDuBrouillon, SAISIE } from "../../../services/formulaire-du-brouillon.js";
 import {
   lancerLeBrouillon, fonctionsDuBrouillon, phraseDuLancement, ISSUE, MOTS_DE_LISSUE
 } from "../../../services/bac-dessai.js";
-import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
-import { REFUS, phraseDeLaTranscription } from "../../../services/le-mdall-rendu.js";
+import { renderSpinnerHtml } from "../../ui/spinner.js";
 import {
-  aProposerDuBrouillon, introDeLaProposition, phraseDeLEcart, phraseDeLaProposition,
-  titreDeLaProposition
+  MOTS_DE_LA_SOURCE, NIVEAU, laConsole, phraseDeLaConsole
+} from "../../../services/console-du-brouillon.js";
+import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
+import { REFUS } from "../../../services/le-mdall-rendu.js";
+import {
+  aProposerDuBrouillon, introDeLaProposition, titreDeLaProposition
 } from "../../../services/proposition-du-brouillon.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -70,6 +70,9 @@ const INVITE = "La zone de vent vaut 1, 2, 3 ou 4.\n"
 const LARGEUR_MIN = 280;
 const LARGEUR_MAX = 900;
 const LARGEUR_PAR_DEFAUT = 460;
+const LARGEUR_CONSOLE_MIN = 240;
+const LARGEUR_CONSOLE_MAX = 720;
+const LARGEUR_CONSOLE_PAR_DEFAUT = 380;
 
 /**
  * Les lignes d'un fichier, prêtes à colorer.
@@ -162,48 +165,6 @@ export function renderVoletDuCode(brouillon = null, { lecture = "code" } = {}) {
             invite: "fonction Vitesse de référence(zones, Zone de vent) {\n   …\n}"
           })
       }
-    </div>
-  `;
-}
-
-/**
- * Ce que la lecture du projet refuse, posé à côté de la ligne.
- *
- * **Rien ne bloque.** Un brouillon à demi juste se corrige ; un brouillon
- * refusé en bloc se rejette, et l'on recommence à zéro.
- *
- * **Le silence se dit aussi.** Un écran qui n'affiche rien quand tout va bien
- * laisse croire qu'il n'a pas regardé — et l'on apprend alors à ne plus lui
- * faire confiance quand il parle.
- */
-export function renderVerification(brouillon = null) {
-  const remplis = fichiersRemplis(brouillon);
-  const remarques = verifierLeBrouillon(remplis);
-  const phrase = phraseDeLaVerification(remarques, { fichiers: remplis.length });
-
-  if (!remarques.length) {
-    return `<p class="brouillon-verif brouillon-verif--muette">
-      ${svgIcon(remplis.length ? "check" : "eye", { className: "octicon" })} ${escapeHtml(phrase)}
-    </p>`;
-  }
-
-  return `
-    <div class="brouillon-verif">
-      <p class="brouillon-verif__phrase">
-        ${svgIcon("alert", { className: "octicon" })} ${escapeHtml(phrase)}
-      </p>
-      <ul class="brouillon-verif__liste">
-        ${remarques.map((remarque) => `
-          <li class="brouillon-verif__ligne">
-            <button type="button" class="brouillon-verif__ou"
-              data-brouillon-aller="${escapeHtml(remarque.fichier)}">
-              ${escapeHtml(remarque.fichier)}${remarque.ligne ? `:${remarque.ligne}` : ""}
-            </button>
-            <span class="brouillon-verif__quoi">${escapeHtml(MOTS_DE_LENNUI[remarque.quoi] ?? remarque.quoi)}</span>
-            <span class="brouillon-verif__dit">${escapeHtml(remarque.dit)}</span>
-          </li>
-        `).join("")}
-      </ul>
     </div>
   `;
 }
@@ -348,112 +309,6 @@ export function renderBacDessai(brouillon = null, { reponses = {}, lance = false
   `;
 }
 
-/**
- * Ce que la transcription a rendu — et surtout ce qu'elle n'a pas su écrire.
- *
- * **La moitié de ce qu'on vient chercher est ce qui manque.** Une phrase du
- * français qui disparaît sans un mot laisse croire qu'elle a été codée, et l'on
- * ne s'en aperçoit qu'au moment où le raisonnement manque — six mois plus tard.
- */
-export function renderTranscription(rendu = null) {
-  if (!rendu) return "";
-
-  if (!rendu.ok) {
-    return `
-      <p class="brouillon-transcrit brouillon-transcrit--refus">
-        ${svgIcon("alert", { className: "octicon" })}
-        ${escapeHtml(phraseDeLaTranscription(rendu))}
-        ${rendu.panne ? `<span class="brouillon-transcrit__panne">${escapeHtml(rendu.panne)}</span>` : ""}
-      </p>
-    `;
-  }
-
-  return `
-    <div class="brouillon-transcrit">
-      <p class="brouillon-transcrit__phrase">
-        ${svgIcon("check", { className: "octicon" })} ${escapeHtml(phraseDeLaTranscription(rendu))}
-      </p>
-      ${
-        rendu.lacunes.length
-          ? `<ul class="brouillon-transcrit__lacunes">
-               ${rendu.lacunes.map((lacune) => `
-                 <li>
-                   <span class="brouillon-transcrit__phrase-dite">« ${escapeHtml(lacune.phrase)} »</span>
-                   <span class="brouillon-transcrit__pourquoi">${escapeHtml(lacune.pourquoi)}</span>
-                 </li>
-               `).join("")}
-             </ul>`
-          : ""
-      }
-    </div>
-  `;
-}
-
-/**
- * « Proposer au projet » : la seule porte vers la mémoire.
- *
- * > « On ne doit RIEN verser DIRECTEMENT dans la mémoire, JAMAIS ! »
- *
- * Le bouton n'écrit rien. Il ouvre une **proposition**, relue ligne à ligne et
- * signée comme les autres — c'est le chemin de tout le monde, et il n'y en a
- * pas d'autre depuis cet écran (règle 1).
- *
- * **Ce qui reste dehors se lit avant de cliquer.** Un nom déclaré sans valeur,
- * une ligne que la lecture refuse : l'apprendre une fois la proposition ouverte
- * reviendrait à l'apprendre trop tard, et à croire qu'on a proposé le brouillon
- * entier (règle 5).
- */
-export function renderProposition(brouillon = null, { depose = false, depot = null } = {}) {
-  const fichiers = fichiersRemplis(brouillon);
-  if (!fichiers.length) return "";
-
-  const { affirmations, sansRetour } = aProposerDuBrouillon(fichiers);
-  const arme = affirmations.length > 0 && !depose;
-
-  return `
-    <div class="brouillon-propose">
-      <div class="brouillon-propose__geste">
-        <button type="button" class="gh-btn gh-btn--sm" data-brouillon-proposer${arme ? "" : " disabled"}
-          title="${escapeHtml(
-            depose ? "Proposition en cours…"
-            : affirmations.length ? "Ouvrir une proposition portant ces lignes"
-            : "Rien de ce brouillon n'affirme quelque chose sur le projet")}">
-          ${svgIcon("git-pull-request", { className: "octicon" })}
-          ${depose ? "…" : "Proposer au projet"}
-        </button>
-        <span class="brouillon-propose__phrase">
-          ${escapeHtml(phraseDeLaProposition({ affirmations, sansRetour }))}
-        </span>
-      </div>
-
-      ${
-        sansRetour.length
-          ? `<ul class="brouillon-propose__dehors">
-               ${sansRetour.map((ecart) => `
-                 <li>
-                   <span class="brouillon-propose__quoi">${escapeHtml(ecart.quoi)}</span>
-                   ${ecart.ligne
-                     ? `<span class="brouillon-propose__ou">${escapeHtml(ecart.fichier)}:${ecart.ligne}</span>`
-                     : ""}
-                   <span class="brouillon-propose__pourquoi">${escapeHtml(phraseDeLEcart(ecart))}</span>
-                 </li>
-               `).join("")}
-             </ul>`
-          : ""
-      }
-
-      ${
-        depot
-          ? `<p class="brouillon-propose__depot${depot.ok ? "" : " brouillon-propose__depot--refus"}">
-               ${svgIcon(depot.ok ? "check" : "alert", { className: "octicon" })}
-               ${escapeHtml(depot.dit)}
-             </p>`
-          : ""
-      }
-    </div>
-  `;
-}
-
 /** Ce qu'il y a à faire d'un panneau qui apparaît, change, ou s'en va. */
 export const POSE = {
   /** Il n'était pas là et n'a rien à dire : **surtout ne rien faire**. */
@@ -484,18 +339,152 @@ export function poseDuPanneau({ present = false, aEcrire = false } = {}) {
   return aEcrire ? POSE.REMPLACER : POSE.RETIRER;
 }
 
+/**
+ * « Proposer au projet », sur la ligne du titre.
+ *
+ * **C'est le geste qui engage**, et il se tient là où les autres écrans posent
+ * les leurs : à droite du titre. Le chercher en bas de page après avoir fait
+ * défiler trois volets ferait manquer la seule porte vers la mémoire.
+ *
+ * Il ne paraît que lorsqu'il y a quelque chose à proposer : un bouton éteint en
+ * permanence dans l'en-tête devient un décor qu'on cesse de voir.
+ */
+export function renderProposer(brouillon = null, { depose = false } = {}) {
+  const { affirmations } = aProposerDuBrouillon(fichiersRemplis(brouillon));
+  if (!affirmations.length) return "";
+
+  return `
+    <button type="button" class="gh-btn gh-btn--sm" data-brouillon-proposer${depose ? " disabled" : ""}
+      title="${escapeHtml(depose ? "Proposition en cours…"
+        : `Ouvrir une proposition portant ${affirmations.length} ${
+          affirmations.length > 1 ? "lignes" : "ligne"}`)}">
+      ${depose
+        ? `${renderSpinnerHtml({ label: "Proposition en cours", size: "sm" })} Proposition…`
+        : `${svgIcon("git-pull-request", { className: "octicon" })} Proposer au projet`}
+    </button>
+  `;
+}
+
+/**
+ * La console : tout ce que l'écran a à dire, en bas, comme dans un navigateur.
+ *
+ * ## Pourquoi elle remplace quatre blocs
+ *
+ * Les messages vivaient en quatre endroits — la vérification, ce que le modèle
+ * n'a pas su écrire, ce qu'une fonction ne sait pas, ce qui reste dehors. Quatre
+ * fois la même question, et quatre endroits où chercher : on lisait l'écran de
+ * haut en bas pour savoir si quelque chose clochait, et l'on ratait celui des
+ * quatre qu'on n'avait pas déplié.
+ *
+ * Ce qu'ils disaient est intact : `console-du-brouillon.js` les rassemble, les
+ * range par gravité, et n'en invente aucun.
+ *
+ * ## Elle se déplace à droite, et c'est le même contenu
+ *
+ * Un troisième volet quand on veut lire le code et les messages côte à côte ;
+ * en bas le reste du temps, parce qu'une console se lit sous ce qu'elle
+ * commente. **Un seul rendu pour les deux places** — deux mises en page du même
+ * contenu divergeraient à la première ligne ajoutée (règle 10).
+ */
+export function renderLignesDeLaConsole(lignes = []) {
+  return (Array.isArray(lignes) ? lignes : []).map((ligne) => `
+    <li class="brouillon-console__ligne brouillon-console__ligne--${escapeHtml(ligne.niveau)}">
+      <span class="brouillon-console__niveau">
+        ${svgIcon(ligne.niveau === NIVEAU.FAIT ? "check" : "alert", { className: "octicon" })}
+      </span>
+      <span class="brouillon-console__source">${escapeHtml(MOTS_DE_LA_SOURCE[ligne.source] ?? ligne.source)}</span>
+      ${ligne.fichier
+        ? `<button type="button" class="brouillon-console__ou"
+             data-brouillon-aller="${escapeHtml(ligne.fichier)}">
+             ${escapeHtml(ligne.fichier)}${ligne.ligne ? `:${ligne.ligne}` : ""}
+           </button>`
+        : ""}
+      <span class="brouillon-console__quoi">${escapeHtml(ligne.quoi)}</span>
+      <span class="brouillon-console__dit">${escapeHtml(ligne.dit)}</span>
+    </li>
+  `).join("");
+}
+
+/** La console en bas de l'écran. Vide quand elle est partie dans le volet. */
+export function renderConsole(lignes = [], { volet = false } = {}) {
+  const toutes = Array.isArray(lignes) ? lignes : [];
+
+  return `
+    <div class="brouillon-console${volet && toutes.length ? " est-deplacee" : ""}">
+      <div class="brouillon-console__tete">
+        <span class="brouillon-console__phrase">
+          ${svgIcon(toutes.some((une) => une.niveau !== NIVEAU.FAIT) ? "alert" : "check",
+            { className: "octicon" })}
+          ${escapeHtml(phraseDeLaConsole(toutes))}
+        </span>
+        ${toutes.length ? `
+          <button type="button" class="gh-btn gh-btn--sm brouillon-console__place"
+            data-brouillon-console-place aria-pressed="${volet}"
+            title="${escapeHtml(volet
+              ? "Remettre la console sous les volets"
+              : "Mettre la console à droite, à côté du code")}">
+            ${svgIcon("file-diff", { className: "octicon" })} ${volet ? "En bas" : "À droite"}
+          </button>` : ""}
+      </div>
+      ${volet && toutes.length
+        ? ""
+        : `<ul class="brouillon-console__liste">${renderLignesDeLaConsole(toutes)}</ul>`}
+    </div>
+  `;
+}
+
+/**
+ * La console en troisième volet, à droite du code.
+ *
+ * **Un seul élément**, poignée comprise : il paraît et disparaît d'un clic, et
+ * deux frères à poser ensemble se désynchronisent au premier redessin ciblé.
+ */
+export function renderVoletDeLaConsole(lignes = [], { volet = false } = {}) {
+  const toutes = Array.isArray(lignes) ? lignes : [];
+  if (!volet || !toutes.length) return "";
+
+  return `
+    <div class="brouillon__console-volet">
+      ${renderSideResizer({ id: "brouillonConsoleResizer", className: "brouillon__poignee" })}
+      <div class="brouillon-volet brouillon-volet--console">
+        <div class="brouillon-volet__tete">
+          <span class="brouillon-volet__langue">console</span>
+          <span class="brouillon-volet__quoi">${escapeHtml(phraseDeLaConsole(toutes))}</span>
+        </div>
+        <ul class="brouillon-console__liste">${renderLignesDeLaConsole(toutes)}</ul>
+      </div>
+    </div>
+  `;
+}
+
 /** L'écran entier, sans un seul appel. */
 export function renderEcrireEnMdall(brouillon = null, {
   lecture = "code", largeur = LARGEUR_PAR_DEFAUT, bac = false, reponses = {}, lance = false,
-  transcrit = false, rendu = null, depose = false, depot = null
+  transcrit = false, rendu = null, depose = false, depot = null, volet = false,
+  largeurConsole = LARGEUR_CONSOLE_PAR_DEFAUT
 } = {}) {
   const ecrit = brouillonEcrit(brouillon);
+  const lignes = laConsole({
+    fichiers: fichiersRemplis(brouillon), reponses, lance, rendu, depot
+  });
 
   return `
-    <section class="brouillon" style="--brouillon-dit-width:${Math.round(largeur)}px">
-      <header class="brouillon__tete">
-        <h2 class="brouillon__titre">Écrire en Mdall</h2>
-        <p class="brouillon__quoi">
+    <section class="brouillon" data-console="${volet && lignes.length ? "volet" : "bas"}"
+      style="--brouillon-dit-width:${Math.round(largeur)}px; --brouillon-console-width:${
+        Math.round(largeurConsole)}px">
+      ${/*
+        **Le titre au format des autres écrans de l'Atelier**, et ses classes :
+        la lecture des comptes rendus et celle des mails les portent déjà. Un
+        troisième jeu ferait un troisième calibrage à refaire à chaque retouche.
+      */""}
+      <header class="lecture-cr__entete">
+        <div class="lecture-cr__entete-ligne">
+          <h2 class="lecture-cr__titre">Écrire en Mdall</h2>
+          <div class="lecture-cr__entete-actions">
+            ${renderProposer(brouillon, { depose })}
+          </div>
+        </div>
+        <p class="lecture-cr__mot">
           Dites ce que vous voulez poser, en français. Le code s'écrit à droite —
           et <b>rien ne s'écrit dans le projet</b> : pour cela il faut une proposition, signée.
         </p>
@@ -513,7 +502,9 @@ export function renderEcrireEnMdall(brouillon = null, {
                 transcrit ? "Transcription en cours…"
                 : texte(brouillon?.dit) ? "Mettre cette phrase en Mdall"
                 : "Écrivez d'abord ce que vous voulez poser"}">
-              ${svgIcon("ai-model", { className: "octicon" })} ${transcrit ? "…" : "Coder"}
+              ${transcrit
+                ? `${renderSpinnerHtml({ label: "Transcription en cours", size: "sm" })} Transcription…`
+                : `${svgIcon("ai-model", { className: "octicon" })} Coder`}
             </button>
             <span class="brouillon__note">
               L'IA accélère ; elle n'est jamais le seul chemin. Vous pouvez écrire
@@ -527,19 +518,18 @@ export function renderEcrireEnMdall(brouillon = null, {
                 : ""
             }
           </div>
-          ${renderTranscription(rendu)}
         </div>
 
         ${renderSideResizer({ id: "brouillonResizer", className: "brouillon__poignee" })}
 
         ${renderVoletDuCode(brouillon, { lecture })}
-      </div>
 
-      ${renderVerification(brouillon)}
+        ${renderVoletDeLaConsole(lignes, { volet })}
+      </div>
 
       ${bac ? renderBacDessai(brouillon, { reponses, lance }) : ""}
 
-      ${renderProposition(brouillon, { depose, depot })}
+      ${renderConsole(lignes, { volet })}
     </section>
   `;
 }
@@ -577,8 +567,36 @@ const etat = {
    * tant qu'on n'a rien tenté — un écran qui annoncerait une proposition que
    * personne n'a demandée décrirait une écriture qui n'a pas eu lieu.
    */
-  depot: null
+  depot: null,
+  /** La console est-elle à droite, en troisième volet ? Sinon, elle est en bas. */
+  volet: false,
+  largeurConsole: LARGEUR_CONSOLE_PAR_DEFAUT
 };
+
+/**
+ * L'élément vivant de cet écran, **retrouvé plutôt que retenu**.
+ *
+ * ## Le défaut que ça répare : « Coder » ne rendait rien
+ *
+ * L'Atelier réécrit son routeur entier à chaque redessin : le panneau de cet
+ * écran est alors **un élément neuf**, et celui qu'un appel en cours tenait est
+ * détaché. La transcription écrivait donc son résultat dans un élément que plus
+ * personne ne regardait — `racine.isConnected` était faux, et l'on ne dessinait
+ * rien du tout. On cliquait « Coder », et il ne se passait jamais rien : ni
+ * fichier, ni message, ni refus.
+ *
+ * Le même défaut avait déjà coûté deux appels payés à la lecture des comptes
+ * rendus, et son commentaire le dit depuis (`project-studio.js`).
+ *
+ * **On ne garde donc pas l'élément à travers un `await`.** On le retrouve par
+ * son identifiant, qui lui ne change pas.
+ */
+const OU_EST_LECRAN = "projectStudioEcrireEnMdallPanel";
+
+function ecranVivant(racine = null) {
+  if (racine?.isConnected) return racine;
+  return document.getElementById(OU_EST_LECRAN);
+}
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Le brouillon se garde, dans ce navigateur
@@ -615,6 +633,7 @@ function reprendreLeBrouillon() {
 
 let debrancherSaisie = null;
 let debrancherPoignee = null;
+let debrancherConsole = null;
 
 function dessiner(racine) {
   debrancherSaisie?.();
@@ -629,7 +648,9 @@ function dessiner(racine) {
     transcrit: etat.transcrit,
     rendu: etat.rendu,
     depose: etat.depose,
-    depot: etat.depot
+    depot: etat.depot,
+    volet: etat.volet,
+    largeurConsole: etat.largeurConsole
   });
   brancher(racine);
 }
@@ -673,61 +694,76 @@ function redessinerLeVolet(racine) {
   neuf.innerHTML = renderVoletDuCode(etat.brouillon, { lecture: etat.lecture });
   if (neuf.firstElementChild) ancien.replaceWith(neuf.firstElementChild);
   brancherLeVolet(racine);
-  redessinerLaVerification(racine);
+  redessinerLaConsole(racine);
 }
 
 /**
- * Relire le brouillon, et redire ce qui ne va pas.
+ * Redessiner **la seule console**, et ce qui en dépend.
  *
- * **À chaque frappe, et c'est gratuit** : la vérification ne demande rien à
- * personne, elle relit avec le lecteur du projet. Une correction qu'il faudrait
- * demander ne se demanderait pas, et l'on écrirait longtemps à côté.
- */
-function redessinerLaVerification(racine) {
-  const ancienne = racine.querySelector(".brouillon-verif");
-  const neuve = document.createElement("div");
-  neuve.innerHTML = renderVerification(etat.brouillon);
-  if (ancienne && neuve.firstElementChild) {
-    ancienne.replaceWith(neuve.firstElementChild);
-    brancherLesRenvois(racine);
-  }
-}
-
-/**
- * Redessiner **le seul panneau de proposition**.
- *
- * Il change à chaque frappe — le compte des lignes, ce qui reste dehors — et
+ * Elle change à chaque frappe — une remarque paraît, une autre s'en va — et
  * réécrire l'écran entier pour cela emporterait le curseur.
  *
- * **Il naît avec la première ligne écrite et meurt avec la dernière effacée.**
- * Les quatre cas se décident dans `poseDuPanneau`, qui est pure et s'éprouve :
- * c'est celui où il n'y a ni panneau ni rien à écrire qui avait fait tomber
- * l'écran, et un `dessiner` de secours n'en était pas un (voir la règle en tête
- * de section).
+ * Trois choses bougent ensemble et se posent séparément : la console du bas,
+ * qui est toujours là ; le volet de droite, qui **naît avec la première ligne
+ * et meurt avec la dernière** ; et le bouton « Proposer au projet », qui ne
+ * paraît que lorsqu'il y a quelque chose à proposer. Les quatre cas du volet se
+ * décident dans `poseDuPanneau`, qui est pure et s'éprouve — c'est celui où il
+ * n'y a ni volet ni rien à écrire qui avait fait tomber l'écran, et un
+ * `dessiner` de secours n'en était pas un (voir la règle en tête de section).
  */
-function redessinerLaProposition(racine) {
-  const ancien = racine.querySelector(".brouillon-propose");
-  const html = renderProposition(etat.brouillon, { depose: etat.depose, depot: etat.depot });
+function redessinerLaConsole(racine) {
+  const lignes = laConsole({
+    fichiers: fichiersRemplis(etat.brouillon),
+    reponses: etat.reponses, lance: etat.lance, rendu: etat.rendu, depot: etat.depot
+  });
 
+  // **La troisième colonne se déclare sur le cadre**, pas sur le volet : c'est
+  // la grille du corps qui la crée, et elle ne peut pas la déduire d'un enfant
+  // qui est en `display:contents`.
+  racine.querySelector(".brouillon")
+    ?.setAttribute("data-console", etat.volet && lignes.length ? "volet" : "bas");
+
+  remplacer(racine, ".brouillon-console", renderConsole(lignes, { volet: etat.volet }));
+  remplacer(racine, ".lecture-cr__entete-actions",
+    `<div class="lecture-cr__entete-actions">${
+      renderProposer(etat.brouillon, { depose: etat.depose })}</div>`);
+
+  const ancien = racine.querySelector(".brouillon__console-volet");
+  const html = renderVoletDeLaConsole(lignes, { volet: etat.volet });
   const pose = poseDuPanneau({ present: Boolean(ancien), aEcrire: Boolean(html) });
-  if (pose === POSE.RIEN) return;
-  if (pose === POSE.RETIRER) { ancien.remove(); return; }
 
+  if (pose === POSE.RETIRER) {
+    debrancherConsole?.();
+    debrancherConsole = null;
+    ancien.remove();
+  } else if (pose !== POSE.RIEN) {
+    const fabrique = enElement(html);
+    // Du HTML qui ne produit aucun élément : on garde ce qui est à l'écran
+    // plutôt que de le remplacer par rien.
+    if (fabrique) {
+      if (pose === POSE.REMPLACER) ancien.replaceWith(fabrique);
+      // Le volet ferme le corps : c'est le dernier des trois, et une pose qui
+      // l'insérerait ailleurs le ferait changer de place entre un redessin
+      // ciblé et un redessin entier.
+      else racine.querySelector(".brouillon__corps")?.append(fabrique);
+    }
+  }
+
+  brancherLaConsole(racine);
+}
+
+/** Le premier élément d'un fragment de HTML, ou `null` s'il n'en produit aucun. */
+function enElement(html) {
   const neuf = document.createElement("div");
-  neuf.innerHTML = html;
-  const fabrique = neuf.firstElementChild;
-  // Du HTML qui ne produit aucun élément : on garde ce qui est à l'écran
-  // plutôt que de le remplacer par rien.
-  if (!fabrique) return;
+  neuf.innerHTML = String(html ?? "");
+  return neuf.firstElementChild;
+}
 
-  // Le panneau ferme l'écran : c'est le dernier bloc du rendu, et une pose qui
-  // l'insérerait ailleurs le ferait changer de place entre un redessin ciblé et
-  // un redessin entier.
-  if (pose === POSE.REMPLACER) ancien.replaceWith(fabrique);
-  else racine.querySelector(".brouillon")?.append(fabrique);
-
-  fabrique.querySelector("[data-brouillon-proposer]")
-    ?.addEventListener("click", () => { void proposerAuProjet(racine); });
+/** Remplacer un bloc par son nouveau rendu, s'il est à l'écran et qu'il en a un. */
+function remplacer(racine, selecteur, html) {
+  const ancien = racine.querySelector(selecteur);
+  const fabrique = html ? enElement(html) : null;
+  if (ancien && fabrique) ancien.replaceWith(fabrique);
 }
 
 /**
@@ -788,8 +824,15 @@ function brancherLeBac(racine) {
   }
 }
 
-/** Cliquer une remarque ouvre le fichier où elle se trouve. */
-function brancherLesRenvois(racine) {
+/**
+ * La console : ses renvois, sa place, et sa poignée.
+ *
+ * Elle se rebranche à chaque redessin ciblé, parce qu'elle est réécrite à
+ * chaque frappe. Les écoutes partent avec les éléments qu'elles portaient ;
+ * seule la poignée se débranche à la main, parce qu'elle écoute la fenêtre.
+ */
+function brancherLaConsole(racine) {
+  // Cliquer une ligne ouvre le fichier où elle se trouve.
   for (const bouton of racine.querySelectorAll("[data-brouillon-aller]")) {
     bouton.addEventListener("click", () => {
       etat.brouillon = ouvertSur(etat.brouillon, bouton.dataset.brouillonAller);
@@ -797,6 +840,34 @@ function brancherLesRenvois(racine) {
       redessinerLeVolet(racine);
     });
   }
+
+  racine.querySelector("[data-brouillon-console-place]")?.addEventListener("click", () => {
+    etat.volet = !etat.volet;
+    redessinerLaConsole(racine);
+  });
+
+  racine.querySelector("[data-brouillon-proposer]")?.addEventListener("click", () => {
+    void proposerAuProjet(racine);
+  });
+
+  debrancherConsole?.();
+  const poignee = racine.querySelector("#brouillonConsoleResizer");
+  debrancherConsole = poignee
+    ? bindSideResizer({
+      handle: poignee,
+      guide: racine.querySelector("#brouillonConsoleResizerGuide"),
+      getWidth: () => etat.largeurConsole,
+      // **Elle se tire depuis la gauche** : la console est à droite du code, et
+      // élargir la console rétrécit le code, pas l'inverse.
+      onResize: (largeur) => {
+        etat.largeurConsole = largeur;
+        racine.querySelector(".brouillon")
+          ?.style.setProperty("--brouillon-console-width", `${Math.round(largeur)}px`);
+      },
+      min: LARGEUR_CONSOLE_MIN,
+      max: LARGEUR_CONSOLE_MAX
+    })
+    : null;
 }
 
 function brancherLeVolet(racine) {
@@ -808,17 +879,15 @@ function brancherLeVolet(racine) {
         if (!ouvert) return;
         etat.brouillon = avecLeFichier(etat.brouillon, ouvert.nom, contenu);
         garderLeBrouillon();
-        // On ne redessine **que** la vérification : réécrire le volet
-        // emporterait le curseur au premier caractère tapé.
-        redessinerLaVerification(racine);
         // Le code a changé : un verdict laissé à l'écran décrirait un brouillon
         // qui n'existe plus, et c'est exactement le genre d'écran qu'on croit.
         if (etat.lance) { etat.lance = false; redessinerLeBac(racine); }
-        // Et ce que porte « Proposer au projet » change avec lui : le compte des
-        // lignes, ce qui reste dehors, et la trace d'une proposition faite d'un
-        // brouillon qu'on vient de modifier.
+        // Et la trace d'une proposition faite d'un brouillon qu'on vient de
+        // modifier ne décrit plus rien.
         etat.depot = null;
-        redessinerLaProposition(racine);
+        // On ne redessine **que** la console : réécrire le volet emporterait le
+        // curseur au premier caractère tapé.
+        redessinerLaConsole(racine);
       }
     })
     : null;
@@ -848,7 +917,7 @@ function brancherLeVolet(racine) {
 
 function brancher(racine) {
   brancherLeVolet(racine);
-  brancherLesRenvois(racine);
+  brancherLaConsole(racine);
   brancherLeBac(racine);
 
   const dit = racine.querySelector("[data-brouillon-dit]");
@@ -906,12 +975,12 @@ function brancher(racine) {
  * Le bouton se désarme pendant. Deux clics feraient deux appels payés, dont le
  * second écraserait le premier sans que rien ne le dise.
  */
-async function transcrire(racine) {
+async function transcrire(depuis) {
   if (etat.transcrit || !texte(etat.brouillon?.dit)) return;
 
   etat.transcrit = true;
   etat.rendu = null;
-  dessiner(racine);
+  dessinerOuEstLecran(depuis);
 
   try {
     const { ecrireEnMdall } = await import("../../../services/mdall-par-le-modele.js");
@@ -945,7 +1014,23 @@ async function transcrire(racine) {
   }
 
   etat.transcrit = false;
-  if (racine.isConnected) dessiner(racine);
+  dessinerOuEstLecran(depuis);
+}
+
+/**
+ * Dessiner l'écran entier, là où il se trouve **maintenant**.
+ *
+ * Ce n'est pas un redessin ciblé : c'est `dessiner` après un appel, et il
+ * rebranche tout — ce qui est voulu ici, parce qu'un appel qui aboutit change
+ * les fichiers, les onglets, la console et le bouton à la fois.
+ *
+ * Un appel dure ; l'Atelier peut se redessiner pendant. Écrire dans l'élément
+ * qu'on tenait au départ revient alors à écrire dans le vide, et le résultat
+ * d'un appel payé se perd sans un mot (règle 5).
+ */
+function dessinerOuEstLecran(depuis) {
+  const vivant = ecranVivant(depuis);
+  if (vivant) dessiner(vivant);
 }
 
 /**
@@ -964,7 +1049,7 @@ async function transcrire(racine) {
  * Il n'est ni effacé ni vidé : ce qui est resté dehors — un nom déclaré sans
  * valeur, une ligne refusée — est justement ce qu'on va continuer d'écrire.
  */
-async function proposerAuProjet(racine) {
+async function proposerAuProjet(depuis) {
   if (etat.depose) return;
 
   const { affirmations } = aProposerDuBrouillon(fichiersRemplis(etat.brouillon));
@@ -972,7 +1057,7 @@ async function proposerAuProjet(racine) {
 
   etat.depose = true;
   etat.depot = null;
-  dessiner(racine);
+  dessinerOuEstLecran(depuis);
 
   try {
     const { resolveCurrentBackendProjectId } = await import("../../../services/project-supabase-sync.js");
@@ -1008,7 +1093,7 @@ async function proposerAuProjet(racine) {
   }
 
   etat.depose = false;
-  if (racine.isConnected) dessiner(racine);
+  dessinerOuEstLecran(depuis);
 }
 
 export function renderEcrireEnMdallEcran(racine, { force = false } = {}) {

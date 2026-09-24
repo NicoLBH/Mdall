@@ -7,13 +7,16 @@ import assert from "node:assert/strict";
 
 import {
   lignesDuFichier, renderOngletsDuBrouillon, renderVoletDuCode, renderEcrireEnMdall,
-  renderVerification, renderFormulaire, renderResultats, renderBacDessai, renderTranscription,
-  renderProposition, POSE, poseDuPanneau
+  renderFormulaire, renderResultats, renderBacDessai, renderConsole, renderProposer,
+  renderVoletDeLaConsole, POSE, poseDuPanneau
 } from "./ecrire-en-mdall.js";
+import { laConsole } from "../../../services/console-du-brouillon.js";
 import { REFUS, laTranscriptionLue } from "../../../services/le-mdall-rendu.js";
 import { champsDuBrouillon } from "../../../services/formulaire-du-brouillon.js";
 import { lancerLeBrouillon } from "../../../services/bac-dessai.js";
-import { brouillonNeuf, avecLeFichier, avecLeDit, ouvertSur } from "../../../services/brouillon-mdall.js";
+import {
+  brouillonNeuf, avecLeFichier, avecLeDit, ouvertSur, fichiersRemplis
+} from "../../../services/brouillon-mdall.js";
 
 const AVEC_UNE_REGLE = ouvertSur(avecLeFichier(brouillonNeuf(), "essai.ref", [
   "fonction Vitesse de référence(zones, Zone de vent) {",
@@ -233,21 +236,6 @@ const AVEC_UNE_DECLARATION = ouvertSur(avecLeFichier(
   ].join("\n")
 ), "essai.ref");
 
-test("le correcteur dit son silence plutôt que de ne rien afficher", () => {
-  // Un écran muet quand tout va bien laisse croire qu'il n'a pas regardé — et
-  // l'on apprend alors à ne plus le croire quand il parle.
-  assert.match(renderVerification(brouillonNeuf()), /Rien à vérifier/);
-  assert.match(renderVerification(AVEC_UNE_DECLARATION), /Tout se lit/);
-});
-
-test("une remarque porte son fichier et sa ligne, et ils emmènent", () => {
-  const casse = ouvertSur(avecLeFichier(brouillonNeuf(), "essai.ref", "du français ici"), "essai.ref");
-  const html = renderVerification(casse);
-
-  assert.match(html, /data-brouillon-aller="essai\.ref"/);
-  assert.match(html, />\s*essai\.ref:1\s*</);
-});
-
 test("un domaine fermé devient une vraie liste déroulante", () => {
   // Sans un mot d'affichage dans le langage : le nom est l'étiquette, la
   // description est l'aide, le domaine est la liste.
@@ -320,106 +308,7 @@ test("ce qu'on répond est échappé, dans une liste comme dans un champ", () =>
 
 /* ── Ce que la transcription a rendu ─────────────────────────────────────── */
 
-test("avant toute transcription, l'écran n'annonce rien", () => {
-  // Une ligne vide sous le bouton se lirait comme un résultat.
-  assert.equal(renderTranscription(null), "");
-});
-
-test("ce que le modèle n'a pas su écrire s'affiche, phrase et raison", () => {
-  // C'est la moitié de ce qu'on vient chercher : une phrase du français qui
-  // disparaît sans un mot laisse croire qu'elle a été codée, et l'on ne s'en
-  // aperçoit qu'au moment où le raisonnement manque.
-  const html = renderTranscription(laTranscriptionLue({
-    fichiers: [{ nom: "essai.ref", contenu: "fonction A(zones) {\n}\n" }],
-    lacunes: [{ phrase: "multiplie la surface par 0,7", pourquoi: "Mdall ne calcule pas." }],
-    temperature: 0
-  }));
-
-  assert.match(html, /multiplie la surface par 0,7/);
-  assert.match(html, /Mdall ne calcule pas\./);
-  assert.match(html, /1 fichier écrit/);
-});
-
-test("un refus dit sa phrase et la panne nommée, sans les confondre", () => {
-  const html = renderTranscription({ ok: false, motif: REFUS.REFUSE, panne: "delai_depasse" });
-
-  assert.match(html, /il faut être connecté au projet/);
-  assert.match(html, /brouillon-transcrit__panne">delai_depasse/);
-});
-
-test("ce que le modèle a rendu est échappé, jamais injecté", () => {
-  // Le modèle écrit du texte libre : sa lacune passe par l'écran comme
-  // n'importe quelle saisie.
-  const html = renderTranscription(laTranscriptionLue({
-    fichiers: [{ nom: "essai.ref", contenu: "fonction A(zones) {\n}\n" }],
-    lacunes: [{ phrase: "<img src=x onerror=\"x\">", pourquoi: "<script>alert(1)</script>" }],
-    temperature: 0
-  }));
-
-  assert.doesNotMatch(html, /<img /);
-  assert.doesNotMatch(html, /<script>/);
-});
-
-/* ── « Proposer au projet » : la seule porte ─────────────────────────────── */
-
 const AVEC_UNE_DONNEE = avecLeFichier(brouillonNeuf(), "essai.ddb", "Altitude du site = 890 m");
-
-test("sans rien d'écrit, le panneau n'existe pas", () => {
-  // Un bouton « Proposer » sur un brouillon vide se clique une fois pour rien.
-  assert.equal(renderProposition(brouillonNeuf(), {}), "");
-  assert.equal(renderProposition(null, {}), "");
-});
-
-test("le bouton s'arme dès qu'une ligne affirme quelque chose", () => {
-  const html = renderProposition(AVEC_UNE_DONNEE, {});
-
-  assert.match(html, /data-brouillon-proposer/);
-  assert.doesNotMatch(html, /data-brouillon-proposer disabled/);
-  assert.match(html, /1 ligne à proposer/);
-  assert.match(html, /Rien n&#39;entre sans signature|Rien n'entre sans signature/);
-});
-
-test("un brouillon qui n'affirme rien ne s'arme pas, et dit pourquoi", () => {
-  // Une phrase du français qu'on a oublié de coder se lit comme un nom nu : le
-  // proposer porterait une ligne que personne ne peut relire.
-  const html = renderProposition(avecLeFichier(brouillonNeuf(), "essai.ddb", "la zone de vent vaut trois"), {});
-
-  assert.match(html, /data-brouillon-proposer disabled/);
-  assert.match(html, /aucune ligne du brouillon n&#39;affirme|aucune ligne du brouillon n'affirme/);
-});
-
-test("ce qui reste dehors se lit à côté du bouton, pas après le clic", () => {
-  // L'apprendre une fois la proposition ouverte reviendrait à l'apprendre trop
-  // tard, et à croire qu'on a proposé le brouillon entier.
-  const brouillon = avecLeFichier(
-    avecLeFichier(brouillonNeuf(), "essai.ddb", "Altitude du site = 890 m"),
-    "variables-du-projet.ref",
-    "const Zone de vent = {\n   type: \"texte\",\n};"
-  );
-
-  const html = renderProposition(brouillon, {});
-  assert.match(html, /brouillon-propose__dehors/);
-  assert.match(html, /Zone de vent/);
-  assert.match(html, /1 reste dehors/);
-});
-
-test("pendant l'ouverture, le bouton se désarme", () => {
-  // Deux clics ouvriraient deux propositions portant les mêmes lignes.
-  const html = renderProposition(AVEC_UNE_DONNEE, { depose: true });
-
-  assert.match(html, /data-brouillon-proposer disabled/);
-  assert.match(html, /Proposition en cours/);
-});
-
-test("ce que la proposition a donné se dit, dans un sens comme dans l'autre", () => {
-  const fait = renderProposition(AVEC_UNE_DONNEE, { depot: { ok: true, dit: "Proposition n° 12 ouverte." } });
-  assert.match(fait, /Proposition n° 12 ouverte\./);
-  assert.doesNotMatch(fait, /brouillon-propose__depot--refus/);
-
-  const refus = renderProposition(AVEC_UNE_DONNEE, { depot: { ok: false, dit: "Ce projet n'est pas relié à la base." } });
-  assert.match(refus, /brouillon-propose__depot--refus/);
-  assert.match(refus, /pas relié à la base/);
-});
 
 test("l'écran dit que rien n'entre sans signature, et pas seulement dans son code", () => {
   // « On ne doit RIEN verser DIRECTEMENT dans la mémoire, JAMAIS. »
@@ -429,28 +318,6 @@ test("l'écran dit que rien n'entre sans signature, et pas seulement dans son co
   assert.match(html, /signature|signée|signer/);
 });
 
-test("ce qui reste dehors est échappé, jamais injecté", () => {
-  const html = renderProposition(
-    avecLeFichier(brouillonNeuf(), "essai.ddb", "Altitude = 890 m\n<img src=x onerror=\"x\">"),
-    {}
-  );
-
-  assert.doesNotMatch(html, /<img /);
-});
-
-/* ── Le redessin ciblé, et le défaut qui fermait l'écran ─────────────────── */
-
-/**
- * **« Maximum call stack size exceeded » au chargement, sur un brouillon
- * vide.** Le panneau de proposition n'existait pas encore, et il n'y avait rien
- * à écrire non plus ; le redessin ciblé se rabattait alors sur un redessin
- * entier. Or redessiner rebranche, et brancher **déclenche un changement** —
- * `brancherLaSaisieDeCode` appelle `surChangement` une fois à la pose, pour que
- * la gouttière parte avec le bon nombre de lignes. L'écran s'appelait donc
- * lui-même jusqu'à épuiser la pile, et ne s'ouvrait pas du tout.
- *
- * Le cas fautif est le plus banal de tous : celui de l'écran à l'ouverture.
- */
 test("sans panneau et sans rien à écrire, on ne fait rien — surtout pas tout redessiner", () => {
   assert.equal(poseDuPanneau({ present: false, aEcrire: false }), POSE.RIEN);
 });
@@ -495,18 +362,147 @@ test("aucun redessin ciblé n'appelle le redessin entier", async () => {
   }
 });
 
-test("le bac d'essai se lit avant « Proposer au projet », et le rendu en décide", () => {
-  // Les deux blocs se posent à des moments différents — le bac à « Lancer »,
-  // le panneau à la frappe — et chacun s'insère en DOM. Sans un ordre écrit
+test("le bac d'essai se lit avant la console, et le rendu en décide", () => {
+  // Les deux blocs se posent à des moments différents — le bac à « Lancer », la
+  // console à la frappe — et chacun s'insère en DOM. Sans un ordre écrit
   // quelque part, il dépendrait de celui des clics. C'est le rendu qui le dit,
   // et les poses s'y rangent.
-  const html = renderEcrireEnMdall(
-    avecLeFichier(brouillonNeuf(), "essai.ddb", "Altitude du site = 890 m"),
-    { bac: true }
-  );
+  const html = renderEcrireEnMdall(AVEC_UNE_DONNEE, { bac: true });
 
-  assert.ok(html.includes("bac"), "le bac n'est pas dessiné");
-  assert.ok(html.includes("brouillon-propose"), "le panneau n'est pas dessiné");
-  assert.ok(html.indexOf('class="bac"') < html.indexOf('class="brouillon-propose"'),
-    "le panneau de proposition passe avant le bac d'essai");
+  assert.ok(html.includes('class="bac"'), "le bac n'est pas dessiné");
+  assert.ok(html.includes("brouillon-console"), "la console n'est pas dessinée");
+  assert.ok(html.indexOf('class="bac"') < html.indexOf('class="brouillon-console'),
+    "la console passe avant le bac d'essai");
+});
+
+/* ── Le titre, et le geste qui engage ────────────────────────────────────── */
+
+test("le titre prend le format des autres écrans de l'Atelier", () => {
+  // « Il faut mutualiser ces classes, c'est pénible sinon de toujours tout
+  //   recalibrer entre les différents écrans. »
+  const html = renderEcrireEnMdall(AVEC_UNE_DONNEE, {});
+
+  for (const classe of ["lecture-cr__entete", "lecture-cr__entete-ligne", "lecture-cr__titre",
+    "lecture-cr__entete-actions"]) {
+    assert.ok(new RegExp(`class="${classe}[ "]`).test(html), `classe absente : ${classe}`);
+  }
+  assert.match(html, /<h2 class="lecture-cr__titre">Écrire en Mdall<\/h2>/);
+});
+
+test("« Proposer au projet » se tient sur la ligne du titre, à droite", () => {
+  // C'est le geste qui engage. Le chercher en bas de page après trois volets
+  // ferait manquer la seule porte vers la mémoire.
+  const html = renderEcrireEnMdall(AVEC_UNE_DONNEE, {});
+  const actions = html.indexOf('class="lecture-cr__entete-actions"');
+
+  assert.ok(actions > 0, "la ligne de titre n'a pas ses actions");
+  assert.ok(html.indexOf("data-brouillon-proposer") > actions, "le bouton n'est pas dans la ligne de titre");
+  assert.ok(html.indexOf("data-brouillon-proposer") < html.indexOf("brouillon__corps"),
+    "le bouton est passé sous les volets");
+});
+
+test("rien à proposer : le bouton ne paraît pas plutôt que de s'éteindre", () => {
+  // Un bouton éteint en permanence dans l'en-tête devient un décor qu'on cesse
+  // de voir.
+  assert.equal(renderProposer(brouillonNeuf(), {}), "");
+  assert.match(renderProposer(AVEC_UNE_DONNEE, {}), /data-brouillon-proposer/);
+});
+
+test("pendant la proposition, le bouton se désarme et tourne", () => {
+  // Deux clics ouvriraient deux propositions portant les mêmes lignes.
+  const html = renderProposer(AVEC_UNE_DONNEE, { depose: true });
+
+  assert.match(html, /data-brouillon-proposer disabled/);
+  assert.match(html, /ui-spinner/);
+});
+
+/* ── Le bouton vert tourne ───────────────────────────────────────────────── */
+
+test("« Coder » montre un vrai rouet pendant la transcription, pas trois points", () => {
+  // Un bouton qui change de libellé sans rien montrer laisse croire qu'il n'a
+  // pas pris le clic — et l'on clique une seconde fois.
+  const html = renderEcrireEnMdall(avecLeDit(brouillonNeuf(), "un essai"), { transcrit: true });
+
+  assert.match(html, /data-brouillon-coder disabled/);
+  assert.match(html, /ui-spinner/);
+  assert.match(html, /Transcription…/);
+});
+
+/* ── La console ──────────────────────────────────────────────────────────── */
+
+const AVEC_UN_DEFAUT = avecLeFichier(brouillonNeuf(), "essai.ref", [
+  "fonction vitesse de reference(zones, région de vent) {",
+  "   si (région de vent = 1)",
+  "   renvoyer vitesse vent",
+  "}"
+].join("\n"));
+
+test("la console rassemble tout ce que l'écran a à dire", () => {
+  const html = renderEcrireEnMdall(AVEC_UN_DEFAUT, {});
+
+  assert.match(html, /brouillon-console__liste/);
+  assert.match(html, /nom jamais déclaré/);
+  assert.match(html, /essai\.ref:3/);
+});
+
+test("une ligne de console porte d'où elle vient, où c'est, et ce qui se dit", () => {
+  const [ligne] = laConsole({ fichiers: [{ nom: "essai.ref", contenu: "   si (x = 1)" }] });
+  const html = renderConsole([ligne], {});
+
+  assert.match(html, /brouillon-console__source">\s*lecture/);
+  assert.match(html, /data-brouillon-aller="essai\.ref"/);
+  assert.match(html, new RegExp(`brouillon-console__ligne--${ligne.niveau}`));
+});
+
+test("un brouillon sans rien à dire garde sa console, et dit qu'il n'a rien à dire", () => {
+  // Un écran muet laisse croire qu'il n'a pas regardé — et l'on apprend alors à
+  // ne plus lui faire confiance quand il parle.
+  const html = renderConsole([], {});
+
+  assert.match(html, /brouillon-console/);
+  assert.match(html, /Rien à signaler/);
+  // Rien à déplacer : le bouton de place ne paraît pas.
+  assert.doesNotMatch(html, /data-brouillon-console-place/);
+});
+
+test("la console se déplace à droite, et ne s'affiche jamais aux deux places", () => {
+  // Deux fois la même liste serait exactement l'éparpillement qu'on répare, en
+  // pire.
+  const lignes = laConsole({ fichiers: fichiersRemplis(AVEC_UN_DEFAUT) });
+
+  const enBas = renderEcrireEnMdall(AVEC_UN_DEFAUT, { volet: false });
+  assert.equal((enBas.match(/brouillon-console__liste/g) ?? []).length, 1);
+  assert.doesNotMatch(enBas, /brouillon-volet--console/);
+
+  const aDroite = renderEcrireEnMdall(AVEC_UN_DEFAUT, { volet: true });
+  assert.equal((aDroite.match(/brouillon-console__liste/g) ?? []).length, 1);
+  assert.match(aDroite, /brouillon-volet--console/);
+  assert.ok(lignes.length > 0);
+});
+
+test("la troisième colonne se déclare sur le cadre, et seulement quand elle sert", () => {
+  // Une colonne vide laisserait un vide à droite du code, qu'on prendrait pour
+  // un défaut.
+  assert.match(renderEcrireEnMdall(AVEC_UN_DEFAUT, { volet: true }), /data-console="volet"/);
+  assert.match(renderEcrireEnMdall(AVEC_UN_DEFAUT, { volet: false }), /data-console="bas"/);
+  // Rien à montrer : la console reste en bas, quoi qu'on ait demandé.
+  assert.match(renderEcrireEnMdall(brouillonNeuf(), { volet: true }), /data-console="bas"/);
+  assert.equal(renderVoletDeLaConsole([], { volet: true }), "");
+});
+
+test("la largeur du troisième volet se pose par une variable, pas en dur", () => {
+  assert.match(renderEcrireEnMdall(AVEC_UN_DEFAUT, { volet: true, largeurConsole: 512 }),
+    /--brouillon-console-width:512px/);
+});
+
+test("ce qu'un message rapporte est échappé, jamais injecté", () => {
+  // Une ligne de console porte du texte venu d'un fichier tapé à la main, et
+  // d'un modèle.
+  const html = renderConsole(laConsole({
+    fichiers: [{ nom: "essai.ddb", contenu: "Altitude = 890 m\n<img src=x onerror=\"x\">" }],
+    rendu: { ok: false, motif: "en-panne", panne: "<script>alert(1)</script>" }
+  }), {});
+
+  assert.doesNotMatch(html, /<img /);
+  assert.doesNotMatch(html, /<script>/);
 });
