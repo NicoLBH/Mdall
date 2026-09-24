@@ -40,7 +40,7 @@ import { escapeHtml } from "../../../utils/escape-html.js";
 import { svgIcon } from "../../../ui/icons.js";
 import { renderSaisieDeCode, brancherLaSaisieDeCode } from "../../ui/saisie-de-code.js";
 import { renderSideResizer, bindSideResizer } from "../../ui/side-resizer.js";
-import { renderLignesDeCode } from "../../ui/code-mdall.js";
+import { renderJetons } from "../../ui/code-mdall.js";
 import { jetonsDeLaLigne } from "../../../services/memoire-en-lecture.js";
 import {
   brouillonNeuf, fichierOuvert, avecLeFichier, avecLeDit, ouvertSur, brouillonEcrit, langageDuFichier,
@@ -54,6 +54,7 @@ import { renderSpinnerHtml } from "../../ui/spinner.js";
 import {
   MOTS_DE_LA_SOURCE, NIVEAU, laConsole, phraseDeLaConsole
 } from "../../../services/console-du-brouillon.js";
+import { majLaFenetreDeDetails, ouvrirLaFenetreDeDetails } from "../../ui/fenetre-de-details.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 import { REFUS } from "../../../services/le-mdall-rendu.js";
 import {
@@ -86,6 +87,65 @@ export function lignesDuFichier(contenu = "") {
   const tout = String(contenu ?? "").replace(/\r\n?/g, "\n");
   if (!tout) return [];
   return tout.split("\n").map((ligne, rang) => ({ rang: rang + 1, jetons: jetonsDeLaLigne(ligne) }));
+}
+
+/**
+ * Ce qu'on peint sous la zone de saisie.
+ *
+ * **Les mêmes jetons que la Mémoire**, par le module mutualisé : une ligne
+ * qu'on écrit et la même ligne relue doivent prendre exactement les mêmes
+ * couleurs, sinon écrire et relire ne se superposent pas.
+ *
+ * Une ligne vide garde sa hauteur — un `\n` seul ne fait pas de ligne dans un
+ * `<pre>` qui se termine par lui — et un dernier retour chariot en ajoute une :
+ * sans ce saut final, la couche remonte d'une ligne dès qu'on tape Entrée en
+ * fin de fichier.
+ *
+ * Pas de normalisation des retours de Windows : `jetonsDeLaLigne` avale déjà le
+ * `\r`, et le compte de lignes ne change pas. Une seconde serait une consigne
+ * qu'aucun cas ne peut faire tomber (règle 12).
+ */
+export function colorerDuMdall(contenu = "") {
+  return `${String(contenu ?? "").split("\n")
+    .map((ligne) => `<span class="saisie-code__ligne">${
+      ligne ? renderJetons(jetonsDeLaLigne(ligne)) : "&nbsp;"}</span>`)
+    .join("\n")}\n`;
+}
+
+/**
+ * Les deux gestes de la zone de français : « Coder », et « Tout effacer ».
+ *
+ * **Ils se redessinent seuls à la frappe.** « Coder » s'arme dès qu'il y a une
+ * phrase, « Tout effacer » paraît dès qu'il y a quelque chose à perdre : les
+ * laisser attendre un redessin entier les figeait dans l'état du dernier — et
+ * après « Tout effacer », « Coder » restait éteint quoi qu'on écrive.
+ */
+export function renderGestes(brouillon = null, { transcrit = false } = {}) {
+  const dit = texte(brouillon?.dit);
+
+  return `
+    <div class="brouillon__gestes">
+      <button type="button" class="gh-btn gh-btn--primary gh-btn--sm" data-brouillon-coder${
+        dit && !transcrit ? "" : " disabled"}
+        title="${escapeHtml(
+          transcrit ? "Transcription en cours…"
+          : dit ? "Mettre cette phrase en Mdall"
+          : "Écrivez d'abord ce que vous voulez poser")}">
+        ${transcrit
+          ? `${renderSpinnerHtml({ label: "Transcription en cours", size: "sm" })} Transcription…`
+          : `${svgIcon("ai-model", { className: "octicon" })} Coder`}
+      </button>
+      <span class="brouillon__note">
+        L'IA accélère ; elle n'est jamais le seul chemin. Vous pouvez écrire
+        directement à droite : l'écran colore et vérifie ce que vous tapez.
+      </span>
+      ${brouillonEcrit(brouillon)
+        ? `<button type="button" class="gh-btn gh-btn--sm brouillon__vider" data-brouillon-vider>
+             ${svgIcon("trash", { className: "octicon" })} Tout effacer
+           </button>`
+        : ""}
+    </div>
+  `;
 }
 
 /** Le bandeau d'onglets : un par fichier du brouillon, et pas un de plus. */
@@ -124,11 +184,10 @@ export function renderOngletsDuBrouillon(brouillon = null) {
  * casserait le collage, la sélection et l'annulation — et le collage est
  * justement le geste pour lequel cette zone existe.
  */
-export function renderVoletDuCode(brouillon = null, { lecture = "code" } = {}) {
+export function renderVoletDuCode(brouillon = null) {
   const fichier = fichierOuvert(brouillon);
   if (!fichier) return "";
 
-  const lignes = lignesDuFichier(fichier.contenu);
   // Un bouton qui lancerait le vide ne dirait rien ; désactivé, il dit
   // pourquoi, et c'est la moitié de ce qu'un débutant a besoin d'entendre.
   const aLancer = fonctionsDuBrouillon(fichiersRemplis(brouillon)).length > 0;
@@ -138,12 +197,6 @@ export function renderVoletDuCode(brouillon = null, { lecture = "code" } = {}) {
       <div class="brouillon-volet__barre">
         <span class="brouillon-onglets">${renderOngletsDuBrouillon(brouillon)}</span>
         <span class="brouillon-volet__espace"></span>
-        <span class="brouillon-lectures">
-          ${[["code", "Code"], ["rendu", "Rendu"]].map(([cle, mot]) => `
-            <button type="button" class="memoire-lecture${lecture === cle ? " is-active" : ""}"
-              data-brouillon-lecture="${cle}" aria-pressed="${lecture === cle}">${mot}</button>
-          `).join("")}
-        </span>
         <button type="button" class="gh-btn gh-btn--sm" data-brouillon-lancer${
           aLancer ? "" : " disabled"}
           title="${aLancer ? "Lancer les fonctions de ce brouillon" : "Écrivez une fonction : il n'y a rien à lancer"}">
@@ -154,17 +207,20 @@ export function renderVoletDuCode(brouillon = null, { lecture = "code" } = {}) {
         ${escapeHtml(fichier.quoi)} — <span class="brouillon-volet__langue">${
           escapeHtml(langageDuFichier(fichier.nom))}</span>
       </p>
-      ${
-        lecture === "rendu"
-          ? (lignes.length
-            ? renderLignesDeCode(lignes)
-            : `<div class="fichier-code fichier-code--vide">Ce fichier est vide. Écrivez-y, ou passez par « Coder ».</div>`)
-          : renderSaisieDeCode({
-            contenu: fichier.contenu,
-            marque: "data-brouillon-code",
-            invite: "fonction Vitesse de référence(zones, Zone de vent) {\n   …\n}"
-          })
-      }
+      ${/*
+        **Une seule lecture, et elle est colorée.** « Code » et « Rendu »
+        montraient le même fichier deux fois : l'un pour écrire, l'autre pour
+        relire en couleur. On basculait donc pour voir ce qu'on venait de taper,
+        et l'on tapait en noir et blanc. La couleur se pose maintenant sous la
+        zone, à la frappe — il n'y a plus qu'une lecture, et c'est celle où l'on
+        écrit.
+      */""}
+      ${renderSaisieDeCode({
+        contenu: fichier.contenu,
+        marque: "data-brouillon-code",
+        invite: "fonction Vitesse de référence(zones, Zone de vent) {\n   …\n}",
+        colorer: colorerDuMdall
+      })}
     </div>
   `;
 }
@@ -459,11 +515,10 @@ export function renderVoletDeLaConsole(lignes = [], { volet = false } = {}) {
 
 /** L'écran entier, sans un seul appel. */
 export function renderEcrireEnMdall(brouillon = null, {
-  lecture = "code", largeur = LARGEUR_PAR_DEFAUT, bac = false, reponses = {}, lance = false,
+  largeur = LARGEUR_PAR_DEFAUT, reponses = {}, lance = false,
   transcrit = false, rendu = null, depose = false, depot = null, volet = false,
   largeurConsole = LARGEUR_CONSOLE_PAR_DEFAUT
 } = {}) {
-  const ecrit = brouillonEcrit(brouillon);
   const lignes = laConsole({
     fichiers: fichiersRemplis(brouillon), reponses, lance, rendu, depot
   });
@@ -495,39 +550,15 @@ export function renderEcrireEnMdall(brouillon = null, {
           <p class="brouillon__intitule">Ce que vous voulez dire</p>
           <textarea class="brouillon__zone" data-brouillon-dit spellcheck="true"
             placeholder="${escapeHtml(INVITE)}">${escapeHtml(String(brouillon?.dit ?? ""))}</textarea>
-          <div class="brouillon__gestes">
-            <button type="button" class="gh-btn gh-btn--primary gh-btn--sm" data-brouillon-coder${
-              texte(brouillon?.dit) && !transcrit ? "" : " disabled"}
-              title="${
-                transcrit ? "Transcription en cours…"
-                : texte(brouillon?.dit) ? "Mettre cette phrase en Mdall"
-                : "Écrivez d'abord ce que vous voulez poser"}">
-              ${transcrit
-                ? `${renderSpinnerHtml({ label: "Transcription en cours", size: "sm" })} Transcription…`
-                : `${svgIcon("ai-model", { className: "octicon" })} Coder`}
-            </button>
-            <span class="brouillon__note">
-              L'IA accélère ; elle n'est jamais le seul chemin. Vous pouvez écrire
-              directement à droite : l'écran colore et vérifie ce que vous tapez.
-            </span>
-            ${
-              ecrit
-                ? `<button type="button" class="gh-btn gh-btn--sm brouillon__vider" data-brouillon-vider>
-                     ${svgIcon("trash", { className: "octicon" })} Tout effacer
-                   </button>`
-                : ""
-            }
-          </div>
+          ${renderGestes(brouillon, { transcrit })}
         </div>
 
         ${renderSideResizer({ id: "brouillonResizer", className: "brouillon__poignee" })}
 
-        ${renderVoletDuCode(brouillon, { lecture })}
+        ${renderVoletDuCode(brouillon)}
 
         ${renderVoletDeLaConsole(lignes, { volet })}
       </div>
-
-      ${bac ? renderBacDessai(brouillon, { reponses, lance }) : ""}
 
       ${renderConsole(lignes, { volet })}
     </section>
@@ -544,10 +575,7 @@ export function renderEcrireEnMdall(brouillon = null, {
 
 const etat = {
   brouillon: brouillonNeuf(),
-  lecture: "code",
   largeur: LARGEUR_PAR_DEFAUT,
-  /** Le bac d'essai ne paraît qu'une fois demandé : il n'a rien à dire avant. */
-  bac: false,
   /** Ce qu'on a répondu au formulaire, par nom de variable. */
   reponses: {},
   /** A-t-on lancé ? Tant que non, on ne montre aucun verdict. */
@@ -640,9 +668,7 @@ function dessiner(racine) {
   debrancherPoignee?.();
 
   racine.innerHTML = renderEcrireEnMdall(etat.brouillon, {
-    lecture: etat.lecture,
     largeur: etat.largeur,
-    bac: etat.bac,
     reponses: etat.reponses,
     lance: etat.lance,
     transcrit: etat.transcrit,
@@ -691,7 +717,7 @@ function redessinerLeVolet(racine) {
 
   debrancherSaisie?.();
   const neuf = document.createElement("div");
-  neuf.innerHTML = renderVoletDuCode(etat.brouillon, { lecture: etat.lecture });
+  neuf.innerHTML = renderVoletDuCode(etat.brouillon);
   if (neuf.firstElementChild) ancien.replaceWith(neuf.firstElementChild);
   brancherLeVolet(racine);
   redessinerLaConsole(racine);
@@ -752,6 +778,36 @@ function redessinerLaConsole(racine) {
   brancherLaConsole(racine);
 }
 
+/**
+ * Redessiner **la seule rangée de boutons** de la zone de français.
+ *
+ * Elle porte « Coder », qui s'arme dès qu'il y a une phrase, et « Tout
+ * effacer », qui paraît dès qu'il y a quelque chose à perdre. Les deux
+ * dépendent de ce qu'on est en train de taper, et réécrire l'écran pour eux
+ * emporterait le curseur de la zone d'à côté.
+ */
+function redessinerLesGestes(racine) {
+  remplacer(racine, ".brouillon__gestes",
+    renderGestes(etat.brouillon, { transcrit: etat.transcrit }));
+  brancherLesGestes(racine);
+}
+
+/** « Coder » et « Tout effacer ». */
+function brancherLesGestes(racine) {
+  racine.querySelector("[data-brouillon-coder]")
+    ?.addEventListener("click", () => { void transcrire(racine); });
+
+  racine.querySelector("[data-brouillon-vider]")?.addEventListener("click", () => {
+    // Une demi-heure de travail ne s'efface pas sur un clic mal visé.
+    if (!window.confirm("Effacer ce brouillon ? Ce qui est écrit ici sera perdu.")) return;
+    etat.brouillon = brouillonNeuf();
+    etat.depot = null;
+    etat.rendu = null;
+    garderLeBrouillon();
+    dessiner(racine);
+  });
+}
+
 /** Le premier élément d'un fragment de HTML, ou `null` s'il n'en produit aucun. */
 function enElement(html) {
   const neuf = document.createElement("div");
@@ -767,38 +823,64 @@ function remplacer(racine, selecteur, html) {
 }
 
 /**
- * Redessiner le bac d'essai seul.
+ * Le bac d'essai, en plein écran.
  *
- * Réécrire l'écran entier à chaque réponse emporterait le curseur du champ
- * qu'on est en train de remplir — et c'est le champ suivant qu'on veut
- * atteindre, pas le début de la page.
+ * ## Pourquoi une fenêtre, et celle de l'application
+ *
+ * Lancer, c'est **regarder un résultat** : le formulaire, ce que chaque
+ * fonction conclut, et la trace de ce qu'elle a lu. Posé en bas de l'écran,
+ * cela passait sous les volets, et l'on faisait défiler pour voir la réponse à
+ * la question qu'on venait de poser — en perdant de vue le code qui l'a
+ * produite.
+ *
+ * `#detailsModal` attend dans le document depuis toujours : son voile, sa
+ * croix, sa fermeture au clavier et son ombre sont déjà réglés. En dessiner une
+ * seconde reviendrait à recalibrer tout cela contre la première, et à les faire
+ * diverger au premier réglage (règle 10).
+ *
+ * ## Elle se rejoue à chaque réponse, sans se refermer
+ *
+ * On change une valeur, la fenêtre relance et se remplit — `majLaFenetreDeDetails`
+ * ne remplace que le contenu. Rouvrir refermerait d'abord, et l'on perdrait le
+ * défilement au milieu d'une trace de vingt lignes.
  */
-function redessinerLeBac(racine) {
-  const ancien = racine.querySelector(".bac");
-  if (!etat.bac) { ancien?.remove(); return; }
+function ouvrirLeBac(racine) {
+  const corps = ouvrirLaFenetreDeDetails({
+    titreHtml: escapeHtml("Bac d'essai"),
+    metaHtml: escapeHtml("Remplissez ce qui manque. Rien ne s'écrit : un « enregistre » dit où irait le résultat, et n'y va pas."),
+    corpsHtml: renderBacDessai(etat.brouillon, { reponses: etat.reponses, lance: etat.lance }),
+    className: "details-modal--plein",
+    surFermeture: () => { etat.lance = false; }
+  });
 
-  const neuf = document.createElement("div");
-  neuf.innerHTML = renderBacDessai(etat.brouillon, { reponses: etat.reponses, lance: etat.lance });
-  const fabrique = neuf.firstElementChild;
-  if (!fabrique) return;
-
-  if (ancien) {
-    ancien.replaceWith(fabrique);
-  } else {
-    // **Avant le panneau de proposition**, parce que le rendu le met là. Un
-    // `append` mettrait le bac d'essai sous « Proposer au projet » dès que ce
-    // panneau existe, et l'ordre de l'écran dépendrait alors de celui des
-    // clics (règle 4 : le rendu est la seule vérité de cet ordre).
-    const propose = racine.querySelector(".brouillon-propose");
-    if (propose) propose.before(fabrique);
-    else racine.querySelector(".brouillon")?.append(fabrique);
-  }
-  brancherLeBac(racine);
+  if (corps) brancherLeBac(corps, racine);
 }
 
-/** Le formulaire : ce qu'on répond entre dans l'état, sans redessiner. */
-function brancherLeBac(racine) {
-  for (const saisie of racine.querySelectorAll("[data-bac-champ]")) {
+/**
+ * Remettre à jour ce que la fenêtre montre.
+ *
+ * Silencieux si elle est fermée : un résultat recalculé pour personne ne coûte
+ * rien, et le vérifier à chaque frappe coûterait plus que de le laisser passer.
+ */
+function redessinerLeBac(racine) {
+  // Pas de garde sur l'ouverture : `majLaFenetreDeDetails` rend `null` quand
+  // rien n'est ouvert, et l'on ne branche rien sur `null`. Une seconde
+  // vérification ne pourrait tomber sur aucun cas (règle 12).
+  const corps = majLaFenetreDeDetails({
+    corpsHtml: renderBacDessai(etat.brouillon, { reponses: etat.reponses, lance: etat.lance })
+  });
+  if (corps) brancherLeBac(corps, racine);
+}
+
+/**
+ * Le formulaire : ce qu'on répond entre dans l'état.
+ *
+ * `hote` est le corps de la fenêtre — c'est là que les champs vivent —, et
+ * `racine` l'écran, parce que la console dit aussi ce que le lancement a
+ * répondu et qu'elle est derrière.
+ */
+function brancherLeBac(hote, racine) {
+  for (const saisie of hote.querySelectorAll("[data-bac-champ]")) {
     const nom = saisie.dataset.bacChamp;
 
     // Les deux boutons d'un champ logique : ils portent leur valeur, et il faut
@@ -807,6 +889,7 @@ function brancherLeBac(racine) {
       saisie.addEventListener("click", () => {
         etat.reponses = { ...etat.reponses, [nom]: saisie.dataset.bacValeur };
         redessinerLeBac(racine);
+        redessinerLaConsole(racine);
       });
       continue;
     }
@@ -819,7 +902,11 @@ function brancherLeBac(racine) {
       etat.reponses = { ...etat.reponses, [nom]: saisie.value };
       // Une réponse change ce que les fonctions concluraient : un verdict
       // laissé à l'écran décrirait l'essai d'avant.
-      if (etat.lance) { etat.lance = false; redessinerLeBac(racine); }
+      if (etat.lance) {
+        etat.lance = false;
+        redessinerLeBac(racine);
+        redessinerLaConsole(racine);
+      }
     });
   }
 }
@@ -836,7 +923,6 @@ function brancherLaConsole(racine) {
   for (const bouton of racine.querySelectorAll("[data-brouillon-aller]")) {
     bouton.addEventListener("click", () => {
       etat.brouillon = ouvertSur(etat.brouillon, bouton.dataset.brouillonAller);
-      etat.lecture = "code";
       redessinerLeVolet(racine);
     });
   }
@@ -901,49 +987,30 @@ function brancherLeVolet(racine) {
 
   const lancer = racine.querySelector("[data-brouillon-lancer]");
   lancer?.addEventListener("click", () => {
-    etat.bac = true;
     etat.lance = true;
-    redessinerLeBac(racine);
-    racine.querySelector(".bac")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    ouvrirLeBac(racine);
+    // La console dit aussi ce que le lancement a répondu : elle le dit derrière
+    // la fenêtre, et on la retrouve en la refermant.
+    redessinerLaConsole(racine);
   });
-
-  for (const bouton of racine.querySelectorAll("[data-brouillon-lecture]")) {
-    bouton.addEventListener("click", () => {
-      etat.lecture = bouton.dataset.brouillonLecture === "rendu" ? "rendu" : "code";
-      redessinerLeVolet(racine);
-    });
-  }
 }
 
 function brancher(racine) {
   brancherLeVolet(racine);
   brancherLaConsole(racine);
-  brancherLeBac(racine);
 
   const dit = racine.querySelector("[data-brouillon-dit]");
-  // Pas de redessin ici : on note ce qui est tapé, et l'écran ne bouge pas sous
-  // les doigts. Le seul bouton qui apparaît — « Tout effacer » — se montre au
-  // prochain redessin, et l'attendre ne coûte rien.
   dit?.addEventListener("input", () => {
     etat.brouillon = avecLeDit(etat.brouillon, dit.value);
     garderLeBrouillon();
+    // **Et les boutons se remettent à jour**, sans toucher à la zone où le
+    // doigt est posé. Sans cela, « Coder » gardait l'état qu'il avait au
+    // dernier redessin entier : après « Tout effacer », il restait éteint quoi
+    // qu'on écrive, et le clic ne faisait rien — sans un mot pour le dire.
+    redessinerLesGestes(racine);
   });
 
-  const coder = racine.querySelector("[data-brouillon-coder]");
-  coder?.addEventListener("click", () => { void transcrire(racine); });
-
-  const vider = racine.querySelector("[data-brouillon-vider]");
-  vider?.addEventListener("click", () => {
-    // Une demi-heure de travail ne s'efface pas sur un clic mal visé.
-    if (!window.confirm("Effacer ce brouillon ? Ce qui est écrit ici sera perdu.")) return;
-    etat.brouillon = brouillonNeuf();
-    etat.depot = null;
-    garderLeBrouillon();
-    dessiner(racine);
-  });
-
-  const proposer = racine.querySelector("[data-brouillon-proposer]");
-  proposer?.addEventListener("click", () => { void proposerAuProjet(racine); });
+  brancherLesGestes(racine);
 
   const poignee = racine.querySelector("#brouillonResizer");
   debrancherPoignee = poignee
@@ -993,7 +1060,6 @@ async function transcrire(depuis) {
       // On ouvre le premier fichier écrit : rester sur un onglet vide ferait
       // croire que rien n'est arrivé.
       etat.brouillon = ouvertSur(etat.brouillon, rendu.fichiers[0].nom);
-      etat.lecture = "code";
     }
 
     etat.rendu = rendu;

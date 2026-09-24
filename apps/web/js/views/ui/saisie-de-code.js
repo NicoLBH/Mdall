@@ -24,6 +24,23 @@
  * Un fichier vide a une première ligne : c'est là qu'on va écrire. Une
  * gouttière vide se lirait comme une zone qui n'accepte rien.
  *
+ * ## La couleur se pose **derrière**, jamais à la place
+ *
+ * Colorer au fil de la frappe demande de dessiner des jetons ; les dessiner
+ * *dans* la zone de saisie obligerait à reconstruire la saisie, donc à perdre
+ * tout ce qu'on vient de dire. On peint donc une couche colorée **sous** la
+ * zone, et l'on rend le texte de la zone transparent : le curseur, la
+ * sélection, le collage et l'annulation restent ceux du navigateur, et ce qu'on
+ * voit est coloré.
+ *
+ * Les deux couches doivent tomber au caractère près — même police, même
+ * interligne, même retrait, même retour à la ligne —, et leur défilement se
+ * cale dans les deux sens. Un décalage d'un pixel se voit tout de suite ; c'est
+ * ce qui rend ce montage sûr plutôt que fragile.
+ *
+ * **La couleur est facultative.** Sans fonction pour colorer, la zone reste ce
+ * qu'elle était : les autres écrans qui s'en servent ne changent pas.
+ *
  * ## Les classes sont celles de la Mémoire
  *
  * `memoire-ligne__num`, comme le fichier de code qui la relit. Le numéro d'une
@@ -53,20 +70,30 @@ export function renderGouttiere(combien = 1) {
  * @param {string} [options.contenu] ce qui est déjà écrit
  * @param {string} [options.marque] l'attribut par lequel l'appelant la retrouve
  * @param {string} [options.invite] ce qu'on lit quand elle est vide
+ * @param {(contenu: string) => string} [options.colorer] de quoi peindre la
+ *   couche du dessous. Absente : la zone reste en noir et blanc.
  */
 export function renderSaisieDeCode({
-  contenu = "", marque = "data-saisie-de-code", invite = ""
+  contenu = "", marque = "data-saisie-de-code", invite = "", colorer = null
 } = {}) {
+  const colore = typeof colorer === "function";
+
   return `
-    <div class="saisie-code">
+    <div class="saisie-code${colore ? " saisie-code--coloree" : ""}">
       <div class="saisie-code__gouttiere" data-saisie-gouttiere>${
         renderGouttiere(combienDeLignes(contenu))}</div>
-      <textarea
-        class="saisie-code__zone"
-        ${marque}
-        spellcheck="false"
-        placeholder="${escapeHtml(invite)}"
-      >${escapeHtml(String(contenu ?? ""))}</textarea>
+      <div class="saisie-code__corps">
+        ${colore
+          ? `<pre class="saisie-code__couleur" data-saisie-couleur aria-hidden="true">${
+            colorer(String(contenu ?? ""))}</pre>`
+          : ""}
+        <textarea
+          class="saisie-code__zone"
+          ${marque}
+          spellcheck="false"
+          placeholder="${escapeHtml(invite)}"
+        >${escapeHtml(String(contenu ?? ""))}</textarea>
+      </div>
     </div>
   `;
 }
@@ -78,26 +105,46 @@ export function renderSaisieDeCode({
  * où `keyup` raterait un collage à la souris, qui est justement le geste pour
  * lequel cette zone existe.
  *
+ * La couche colorée suit de la même façon, **et dans les deux sens** : elle est
+ * sous la zone, au pixel près, et un décalage horizontal se voit autant qu'un
+ * décalage vertical.
+ *
  * @returns {() => void} de quoi débrancher.
  */
-export function brancherLaSaisieDeCode(racine, { surChangement = null } = {}) {
+export function brancherLaSaisieDeCode(racine, { surChangement = null, colorer = null } = {}) {
   const zone = racine?.querySelector?.(".saisie-code__zone");
   const gouttiere = racine?.querySelector?.("[data-saisie-gouttiere]");
   if (!zone || !gouttiere) return () => undefined;
 
-  const suivre = () => {
-    gouttiere.innerHTML = renderGouttiere(combienDeLignes(zone.value));
+  const couleur = typeof colorer === "function"
+    ? racine.querySelector("[data-saisie-couleur]")
+    : null;
+
+  const caler = () => {
     // La gouttière est un bloc à part : sans ce calage, elle reste en haut
     // pendant que le texte descend, et les numéros désignent d'autres lignes.
     gouttiere.scrollTop = zone.scrollTop;
+    if (couleur) {
+      couleur.scrollTop = zone.scrollTop;
+      couleur.scrollLeft = zone.scrollLeft;
+    }
+  };
+
+  const suivre = () => {
+    gouttiere.innerHTML = renderGouttiere(combienDeLignes(zone.value));
+    // **La couleur se repeint avant de se caler.** Repeinte après, elle se
+    // recale sur une hauteur qui vient de changer, et saute d'une ligne.
+    if (couleur) couleur.innerHTML = colorer(zone.value);
+    caler();
     surChangement?.(zone.value);
   };
 
   zone.addEventListener("input", suivre);
-  zone.addEventListener("scroll", () => { gouttiere.scrollTop = zone.scrollTop; });
+  zone.addEventListener("scroll", caler);
   suivre();
 
   return () => {
     zone.removeEventListener("input", suivre);
+    zone.removeEventListener("scroll", caler);
   };
 }

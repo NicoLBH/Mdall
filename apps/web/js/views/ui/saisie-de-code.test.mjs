@@ -109,3 +109,46 @@ test("sans zone à l'écran, le branchement ne casse rien", () => {
   assert.doesNotThrow(() => brancherLaSaisieDeCode({ querySelector: () => null }));
   assert.doesNotThrow(() => brancherLaSaisieDeCode(null));
 });
+
+/* ── La couleur se pose derrière, jamais à la place ──────────────────────── */
+
+/** Un coloreur de papier : il marque ce qu'il reçoit, et rien de plus. */
+const enCouleur = (contenu) => String(contenu)
+  .split("\n").map((ligne) => `<span class="t">${ligne || "&nbsp;"}</span>`).join("\n");
+
+test("sans coloreur, la zone reste exactement ce qu'elle était", () => {
+  // Les autres écrans qui s'en servent ne changent pas : la couleur est un
+  // supplément, pas une refonte.
+  const html = renderSaisieDeCode({ contenu: "fonction A() {" });
+
+  assert.doesNotMatch(html, /saisie-code--coloree/);
+  assert.doesNotMatch(html, /data-saisie-couleur/);
+});
+
+test("avec un coloreur, la couche se pose sous la zone, et la zone reste une zone", () => {
+  // Reconstruire la saisie casserait le collage, la sélection et l'annulation :
+  // c'est un `<textarea>`, et il le reste.
+  const html = renderSaisieDeCode({ contenu: "fonction A() {", colorer: enCouleur });
+
+  assert.match(html, /saisie-code--coloree/);
+  assert.match(html, /data-saisie-couleur/);
+  assert.match(html, /<textarea/);
+  // La couche est cachée aux lecteurs d'écran : le texte, ils le lisent dans la
+  // zone, et l'entendre deux fois n'apprend rien.
+  assert.match(html, /aria-hidden="true"/);
+  // Et elle vient **avant** la zone, donc dessous.
+  assert.ok(html.indexOf("data-saisie-couleur") < html.indexOf("<textarea"));
+});
+
+test("la couche porte ce que le coloreur a peint, pas le texte brut", () => {
+  const html = renderSaisieDeCode({ contenu: "si (x = 1)", colorer: enCouleur });
+  assert.match(html, /<span class="t">si \(x = 1\)<\/span>/);
+});
+
+test("le coloreur reçoit le contenu tel quel, y compris vide", () => {
+  const vus = [];
+  renderSaisieDeCode({ contenu: "", colorer: (contenu) => { vus.push(contenu); return ""; } });
+  renderSaisieDeCode({ contenu: null, colorer: (contenu) => { vus.push(contenu); return ""; } });
+
+  assert.deepEqual(vus, ["", ""]);
+});

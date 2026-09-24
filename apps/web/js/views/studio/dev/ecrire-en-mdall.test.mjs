@@ -8,8 +8,9 @@ import assert from "node:assert/strict";
 import {
   lignesDuFichier, renderOngletsDuBrouillon, renderVoletDuCode, renderEcrireEnMdall,
   renderFormulaire, renderResultats, renderBacDessai, renderConsole, renderProposer,
-  renderVoletDeLaConsole, POSE, poseDuPanneau
+  renderVoletDeLaConsole, renderGestes, colorerDuMdall, POSE, poseDuPanneau
 } from "./ecrire-en-mdall.js";
+import { renderLignesDeCode } from "../../ui/code-mdall.js";
 import { laConsole } from "../../../services/console-du-brouillon.js";
 import { REFUS, laTranscriptionLue } from "../../../services/le-mdall-rendu.js";
 import { champsDuBrouillon } from "../../../services/formulaire-du-brouillon.js";
@@ -85,22 +86,6 @@ test("en lecture « Code », le volet offre une zone de saisie modifiable", () =
   assert.match(html, /fonction Vitesse de référence/);
 });
 
-test("en lecture « Rendu », le volet colore au lieu de laisser écrire", () => {
-  const html = renderVoletDuCode(AVEC_UNE_REGLE, { lecture: "rendu" });
-
-  assert.doesNotMatch(html, /<textarea/);
-  assert.match(html, /class="mdall-mot-condition">si<\/span>/);
-  assert.match(html, /class="memoire-ligne__num">1<\/span>/);
-});
-
-test("un fichier vide en « Rendu » dit qu'il est vide, et par où le remplir", () => {
-  // Un cadre blanc se lit « panne ».
-  const html = renderVoletDuCode(brouillonNeuf(), { lecture: "rendu" });
-
-  assert.match(html, /Ce fichier est vide/);
-  assert.match(html, /Coder/);
-});
-
 test("le volet dit ce que porte le fichier ouvert, et dans quelle langue", () => {
   assert.match(renderVoletDuCode(AVEC_UNE_REGLE, {}), /Les règles — ce qui se raisonne/);
   assert.match(renderVoletDuCode(AVEC_UNE_REGLE, {}), /brouillon-volet__langue">regle/);
@@ -120,7 +105,7 @@ test("« Coder » ne s'arme que lorsqu'il y a une phrase à transcrire", () => {
   // comprenne. Désactivé, il dit pourquoi dans son infobulle.
   const vide = renderEcrireEnMdall(brouillonNeuf(), {});
   assert.match(vide, /data-brouillon-coder disabled/);
-  assert.match(vide, /title="Écrivez d'abord ce que vous voulez poser"/);
+  assert.match(vide, /Écrivez d&#39;abord ce que vous voulez poser/);
 
   const avec = renderEcrireEnMdall(avecLeDit(brouillonNeuf(), "la zone de vent vaut 3"), {});
   assert.doesNotMatch(avec, /data-brouillon-coder disabled/);
@@ -165,15 +150,6 @@ test("ce qui est tapé dans la zone de français est échappé, jamais injecté"
   assert.doesNotMatch(html, /<script>/);
   assert.match(html, /&lt;\/textarea&gt;/);
 });
-
-test("ce qui est tapé dans un fichier est échappé aussi, dans les deux lectures", () => {
-  const brouillon = ouvertSur(avecLeFichier(brouillonNeuf(), "essai.ref", '<img src=x onerror="x">'), "essai.ref");
-
-  assert.doesNotMatch(renderVoletDuCode(brouillon, { lecture: "code" }), /<img /);
-  assert.doesNotMatch(renderVoletDuCode(brouillon, { lecture: "rendu" }), /<img /);
-});
-
-/* ── Les cas que la batterie a trouvés muets ─────────────────────────────── */
 
 test("un retour chariot seul sépare des lignes, il n'en fait pas une seule", () => {
   // Une zone de saisie ne rend jamais de `\r` — le navigateur normalise. Mais
@@ -362,21 +338,6 @@ test("aucun redessin ciblé n'appelle le redessin entier", async () => {
   }
 });
 
-test("le bac d'essai se lit avant la console, et le rendu en décide", () => {
-  // Les deux blocs se posent à des moments différents — le bac à « Lancer », la
-  // console à la frappe — et chacun s'insère en DOM. Sans un ordre écrit
-  // quelque part, il dépendrait de celui des clics. C'est le rendu qui le dit,
-  // et les poses s'y rangent.
-  const html = renderEcrireEnMdall(AVEC_UNE_DONNEE, { bac: true });
-
-  assert.ok(html.includes('class="bac"'), "le bac n'est pas dessiné");
-  assert.ok(html.includes("brouillon-console"), "la console n'est pas dessinée");
-  assert.ok(html.indexOf('class="bac"') < html.indexOf('class="brouillon-console'),
-    "la console passe avant le bac d'essai");
-});
-
-/* ── Le titre, et le geste qui engage ────────────────────────────────────── */
-
 test("le titre prend le format des autres écrans de l'Atelier", () => {
   // « Il faut mutualiser ces classes, c'est pénible sinon de toujours tout
   //   recalibrer entre les différents écrans. »
@@ -505,4 +466,90 @@ test("ce qu'un message rapporte est échappé, jamais injecté", () => {
 
   assert.doesNotMatch(html, /<img /);
   assert.doesNotMatch(html, /<script>/);
+});
+
+/* ── Une seule lecture, et elle est colorée ──────────────────────────────── */
+
+test("le volet n'a plus qu'une lecture : celle où l'on écrit", () => {
+  // « Code » et « Rendu » montraient le même fichier deux fois. On basculait
+  // pour voir ce qu'on venait de taper, et l'on tapait en noir et blanc.
+  const html = renderVoletDuCode(AVEC_UNE_REGLE);
+
+  assert.doesNotMatch(html, /data-brouillon-lecture/);
+  assert.match(html, /<textarea/);
+  assert.match(html, /saisie-code--coloree/);
+});
+
+test("ce qu'on écrit prend les couleurs de la Mémoire, à la frappe", () => {
+  // Une ligne qu'on écrit et la même ligne relue doivent prendre exactement les
+  // mêmes couleurs, sinon écrire et relire ne se superposent pas.
+  const peint = colorerDuMdall("   si (Zone de vent = 3)");
+  const relu = renderLignesDeCode(lignesDuFichier("   si (Zone de vent = 3)"));
+
+  for (const type of ["mot-condition", "sujet", "valeur", "operateur"]) {
+    assert.match(peint, new RegExp(`mdall-${type}`), `${type} absent de la saisie`);
+    assert.match(relu, new RegExp(`mdall-${type}`), `${type} absent du rendu`);
+  }
+});
+
+test("une ligne vide garde sa hauteur, et un retour final sa ligne", () => {
+  // Sans cela, la couche remonte d'une ligne dès qu'on tape Entrée en fin de
+  // fichier — et le texte coloré ne tombe plus sur le texte tapé.
+  assert.match(colorerDuMdall("a\n\nb"), /&nbsp;/);
+  assert.ok(colorerDuMdall("a").endsWith("\n"), "la couche ne finit pas par un saut");
+  assert.equal(colorerDuMdall("").split("\n").length, colorerDuMdall("\n").split("\n").length - 1);
+});
+
+/* ── « Coder » se réarme à la frappe ─────────────────────────────────────── */
+
+test("les gestes se dessinent seuls, et « Coder » suit ce qu'on tape", () => {
+  // **Le défaut que ça répare.** Les boutons n'étaient redessinés qu'à un
+  // redessin entier : après « Tout effacer », « Coder » restait éteint quoi
+  // qu'on écrive, et le clic ne faisait rien — sans un mot pour le dire.
+  assert.match(renderGestes(brouillonNeuf(), {}), /data-brouillon-coder disabled/);
+  assert.doesNotMatch(renderGestes(avecLeDit(brouillonNeuf(), "un essai"), {}),
+    /data-brouillon-coder disabled/);
+});
+
+test("« Tout effacer » ne paraît que lorsqu'il y a quelque chose à perdre", () => {
+  assert.doesNotMatch(renderGestes(brouillonNeuf(), {}), /data-brouillon-vider/);
+  assert.match(renderGestes(avecLeDit(brouillonNeuf(), "un essai"), {}), /data-brouillon-vider/);
+});
+
+test("la rangée de gestes est un seul bloc, remplaçable d'un coup", () => {
+  // C'est ce qui permet de la redessiner sans toucher à la zone d'à côté, où le
+  // doigt est posé.
+  const html = renderGestes(avecLeDit(brouillonNeuf(), "un essai"), {}).trim();
+
+  assert.ok(html.startsWith('<div class="brouillon__gestes">'), html.slice(0, 40));
+  assert.ok(html.endsWith("</div>"));
+});
+
+/* ── Le bac d'essai part en plein écran ──────────────────────────────────── */
+
+test("l'écran ne porte plus le bac : « Lancer » l'ouvre en fenêtre", () => {
+  // Posé en bas, il passait sous les volets : on faisait défiler pour voir la
+  // réponse à la question qu'on venait de poser, en perdant de vue le code.
+  const html = renderEcrireEnMdall(AVEC_UNE_REGLE, { lance: true });
+
+  assert.doesNotMatch(html, /class="bac"/);
+  assert.match(html, /data-brouillon-lancer/);
+});
+
+test("le bac se rend toujours, pour la fenêtre qui le porte", () => {
+  const html = renderBacDessai(AVEC_UNE_REGLE, { reponses: { "Zone de vent": "3" }, lance: true });
+
+  assert.match(html, /class="bac"/);
+  assert.match(html, /bac-formulaire/);
+});
+
+/* ── La console reste sous les yeux ──────────────────────────────────────── */
+
+test("la console garde sa tête même repliée à droite, pour qu'on puisse la ramener", () => {
+  // Sans elle, le bouton de place partirait avec la liste et l'on ne pourrait
+  // plus remettre la console en bas.
+  const html = renderEcrireEnMdall(AVEC_UN_DEFAUT, { volet: true });
+
+  assert.match(html, /brouillon-console est-deplacee/);
+  assert.match(html, /data-brouillon-console-place/);
 });

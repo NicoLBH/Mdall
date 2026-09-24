@@ -22900,6 +22900,35 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
 }
 .saisie-code__zone::placeholder{ color:var(--muted); }
 
+/* La couleur, peinte **sous** la zone de saisie.
+
+   Les deux couches doivent tomber au caractère près : même police, même
+   interligne, même retrait, même `white-space`. Tout ce qui les distingue se
+   voit comme un décalage, et un décalage d'un pixel suffit à rendre la saisie
+   pénible. Elles partagent donc `font:inherit` et les mêmes valeurs, écrites
+   une fois pour les deux. */
+.saisie-code__corps{ position:relative; flex:1 1 auto; min-width:0; display:flex; }
+.saisie-code__corps > .saisie-code__zone{ position:relative; z-index:1; }
+.saisie-code__couleur{
+  position:absolute; inset:0; z-index:0;
+  padding:10px 12px; margin:0; border:0;
+  font:inherit; line-height:var(--saisie-ligne);
+  white-space:pre; overflow:hidden;
+  pointer-events:none; color:var(--text);
+}
+/* Le texte de la zone devient transparent, et son curseur reste visible :
+   c'est ce qui permet d'écrire dans un texte coloré sans reconstruire la
+   saisie — donc sans perdre le collage, la sélection et l'annulation. */
+.saisie-code--coloree .saisie-code__zone{
+  color:transparent; caret-color:var(--text);
+}
+/* La sélection, elle, doit rester lisible : transparente, elle laisserait un
+   bloc de couleur sans texte. */
+.saisie-code--coloree .saisie-code__zone::selection{
+  background:rgba(84,174,255,.35); color:var(--text);
+}
+.saisie-code__ligne{ display:block; min-height:var(--saisie-ligne); }
+
 /* Un fichier de texte, rendu, dans Fichiers.
 
    Il reprend `md-body` — le même rendu que l'aperçu d'une restitution dans
@@ -26996,10 +27025,46 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    Elle se lit comme celle d'un navigateur — une ligne par message, la plus
    grave en tête —, et elle se déplace à droite d'un clic. Rien de neuf : les
    couleurs du projet, la police du code pour les emplacements. */
+/* **Fixe, en bas de la fenêtre, comme celle d'un navigateur.**
+
+   Dans le flux, elle descendait sous les volets : on faisait défiler la page
+   pour lire un message qui commente le code qu'on venait de perdre de vue.
+   Fixée, elle reste sous les yeux, et c'est elle qui défile quand elle est
+   longue — pas la page.
+
+   `--brouillon-console-haut` dit ce qu'elle occupe : le corps de l'écran s'en
+   réserve autant en bas, sans quoi la dernière ligne du code passerait dessous
+   et ne se lirait jamais. */
+/* Le bac d'essai, en plein écran, dans la fenêtre de l'application.
+
+   Elle sait déjà être une fenêtre ; cette classe ne fait qu'une chose : lui
+   dire de prendre toute la place. Lancer, c'est regarder un résultat — le
+   formulaire, ce que chaque fonction conclut, et la trace de ce qu'elle a lu —
+   et une trace de vingt lignes dans quatre cents pixels ne se lit pas. */
+#detailsModal.details-modal--plein .modal__inner{
+  width:100%; height:100%; max-width:none; max-height:none; border-radius:0;
+}
+#detailsModal.details-modal--plein .modal__body{ padding:0; overflow:auto; }
+.details-modal--plein .bac{ border-top:0; }
+
+.brouillon{ --brouillon-console-haut:34vh; }
 .brouillon-console{
+  position:fixed; left:0; right:0; bottom:0; z-index:3;
+  max-height:var(--brouillon-console-haut); overflow:auto;
   border-top:1px solid var(--border);
+  background:var(--bg, var(--canvas-default, #0d1117));
   padding:10px 14px 14px;
 }
+/* Sa tête ne défile pas avec ses lignes : le compte et le bouton de place
+   restent là où on les a laissés. */
+.brouillon-console__tete{
+  position:sticky; top:-10px; z-index:1;
+  background:inherit; padding-top:10px; margin-top:-10px;
+}
+/* Déplacée à droite, il ne reste en bas que sa tête : elle se replie sur une
+   barre mince, et le corps de l'écran récupère la place. */
+.brouillon[data-console="volet"]{ --brouillon-console-haut:48px; }
+.brouillon__corps{ padding-bottom:var(--brouillon-console-haut); }
 .brouillon-console__tete{
   display:flex; align-items:center; gap:10px; flex-wrap:wrap;
   margin-bottom:8px;
