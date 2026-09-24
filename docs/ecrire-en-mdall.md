@@ -565,3 +565,53 @@ droite : c'est le geste qui engage, et le chercher en bas de page après trois
 volets ferait manquer la seule porte vers la mémoire. Il ne paraît que
 lorsqu'il y a quelque chose à proposer — un bouton éteint en permanence dans
 l'en-tête devient un décor qu'on cesse de voir.
+
+
+### L'éditeur colore au fil de la frappe, et « Rendu » s'en va
+
+« Code » et « Rendu » montraient **le même fichier deux fois** : l'un pour
+écrire, l'autre pour relire en couleur. On basculait donc pour voir ce qu'on
+venait de taper, et l'on tapait en noir et blanc.
+
+La couleur se pose maintenant **sous** la zone de saisie : une couche peinte des
+mêmes jetons que la Mémoire, et le texte de la zone rendu transparent, curseur
+gardé. Le collage, la sélection, l'annulation et le clavier des correcteurs
+restent ceux du navigateur — reconstruire la saisie les aurait tous perdus, et
+c'est le geste pour lequel cette zone existe.
+
+Les deux couches tombent au caractère près : même police, même interligne, même
+retrait, même `white-space`, et le défilement se cale dans les deux sens. Un
+décalage d'un pixel se voit tout de suite.
+
+La couleur est **facultative** dans le composant partagé : les autres écrans qui
+s'en servent ne changent pas.
+
+### Le bac d'essai passe en plein écran
+
+Lancer, c'est regarder un résultat — le formulaire, ce que chaque fonction
+conclut, et la trace de ce qu'elle a lu. Posé en bas de l'écran, cela passait
+sous les volets : on faisait défiler pour voir la réponse à la question qu'on
+venait de poser, en perdant de vue le code qui l'a produite.
+
+Il vit dans `#detailsModal`, la fenêtre de l'application, qui sait déjà être une
+fenêtre. Elle se remplit à nouveau à chaque réponse **sans se refermer** :
+rouvrir refermerait d'abord, et l'on perdrait le défilement au milieu d'une
+trace de vingt lignes.
+
+### La console se fixe en bas
+
+Dans le flux, elle descendait sous les volets : on faisait défiler la page pour
+lire un message qui commente le code qu'on venait de perdre de vue. Fixée en bas
+de la fenêtre, elle reste sous les yeux, et c'est elle qui défile quand elle est
+longue — pas la page. Le corps de l'écran se réserve sa hauteur, sans quoi la
+dernière ligne du code passerait dessous.
+
+### « Coder » restait éteint après « Tout effacer »
+
+Les boutons de la zone de français n'étaient redessinés qu'à un **redessin
+entier**. Après « Tout effacer », « Coder » gardait l'état qu'il avait alors —
+éteint —, et il le gardait quoi qu'on écrive ensuite : le clic ne faisait rien,
+sans un mot pour le dire.
+
+La rangée de gestes est maintenant un bloc à elle, redessiné à la frappe sans
+toucher à la zone où le doigt est posé.
