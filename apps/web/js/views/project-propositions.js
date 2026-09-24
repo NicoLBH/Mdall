@@ -24,6 +24,10 @@ import {
   setProjectViewHeader
 } from "./project-shell-chrome.js";
 import { bindOverlayChromeCompact, renderOverlayChromeHead } from "./ui/overlay-chrome.js";
+import { renderLignesDeCode } from "./ui/code-mdall.js";
+import {
+  blocsDeLaProposition, blocsAOuvrir, PHRASES_SANS_BLOC
+} from "./ui/mdall-de-la-proposition.js";
 import { brancherLesBoutonsCopier, renderBoutonCopier } from "./ui/bouton-copier.js";
 import { bindGhActionButtons, renderGhActionButton } from "./ui/gh-split-button.js";
 import { bindLightTabs, renderLightTabs } from "./ui/light-tabs.js";
@@ -109,10 +113,7 @@ import {
 } from "../services/proposition-review.js";
 import { MOTS_DU_GENRE } from "../services/rubriques-du-cr.js";
 import {
-  CHANGEMENT,
-  CHANGEMENT_LABELS,
   affirmationsDUneProposition,
-  resumeDuTableau,
   tableauAvantApres
 } from "../services/proposition-avant-apres.js";
 import {
@@ -3444,66 +3445,58 @@ function renderAnalysis(proposition, review) {
  * saisie.
  * ──────────────────────────────────────────────────────────────────────────── */
 
-const CHANGEMENT_TONES = {
-  [CHANGEMENT.NOUVEAU]: "avant-apres__tag--nouveau",
-  [CHANGEMENT.CORRECTION]: "avant-apres__tag--correction",
-  [CHANGEMENT.RETRAIT]: "avant-apres__tag--retrait",
-  [CHANGEMENT.IDENTIQUE]: "avant-apres__tag--identique",
-  [CHANGEMENT.INCONNU]: "avant-apres__tag--inconnu"
-};
+/**
+ * Le tableau avant / après vivait ici, et **ne s'affichait plus depuis
+ * `6e3591ab`** : le moteur de comparaison des repères l'a remplacé dans
+ * l'onglet, et l'appel est parti sans la fonction. Soixante lignes qui avaient
+ * l'air vivantes, et qu'on relisait en croyant lire ce que l'écran montre.
+ *
+ * Ce qu'il montrait est couvert : `reperesDAffirmations()` compare les mêmes
+ * lignes champ par champ — avec enfin leur citation —, et la section ci-dessous
+ * en donne le Mdall.
+ */
 
-/** Une case vide se dit, elle ne se laisse pas blanche : blanc se lit « bug ». */
-function renderCellule(valeur, absence) {
-  return valeur
-    ? `<span class="avant-apres__valeur">${escapeHtml(valeur)}</span>`
-    : `<span class="avant-apres__vide">${escapeHtml(absence)}</span>`;
-}
+/**
+ * Ce que la proposition écrira, en Mdall.
+ *
+ * ## Ce que le tableau du dessus ne dit pas
+ *
+ * « Altitude du site · 490 m → 890 m » répond très bien à « qu'est-ce qui
+ * bouge ». Il ne dit pas **d'où vient 890**, quelle règle l'a conclu, ce
+ * qu'elle a lu, ni sur quelle citation elle s'appuie — et l'on signe donc une
+ * décision sans voir le raisonnement qui l'a produite.
+ *
+ * Ce raisonnement est entièrement dans ce que la proposition porte. Il
+ * n'était écrit nulle part dans une langue qui se lise.
+ *
+ * ## Replié, sauf ce qu'on ne voit nulle part ailleurs
+ *
+ * Quarante blocs dépliés d'office feraient une page qu'on fait défiler sans la
+ * lire, c'est-à-dire le défaut qu'on répare. **Les règles s'ouvrent** — une
+ * valeur se lit déjà dans le tableau, un raisonnement ne se lit nulle part.
+ *
+ * `<details>` plutôt qu'un pliage à nous : le navigateur le donne, il survit
+ * au redessin, et aucun état d'écran n'a besoin d'exister pour lui.
+ */
+function renderMdallDeLaProposition(tableau) {
+  const blocs = blocsDeLaProposition(tableau?.lignes ?? [], { ouEcrit: tableau?.ouEcrit ?? null });
+  if (!blocs.length) return "";
 
-function renderAvantApres(proposition, review) {
-  const tableau = review.avantApres;
-  const lignes = tableau?.lignes ?? [];
-  if (!lignes.length) return "";
+  const ouverts = blocsAOuvrir(blocs);
 
-  // Sur une proposition fusionnée, « aujourd'hui » désignerait un état qui
-  // contient déjà ce qu'elle a écrit : les colonnes se nomment autrement.
-  const fusionnee = proposition?.status === PROPOSITION.MERGED;
-  const enteteGauche = fusionnee ? "Avant" : "Ce que le projet dit aujourd'hui";
-  const enteteDroite = fusionnee ? "Après" : "Ce que cette proposition dit";
-  const absenceGauche = fusionnee ? "rien avant" : "le projet ne dit rien";
-  const absenceDroite = "sort de la mémoire";
-
-  let domaineCourant = null;
-  const corps = lignes
-    .map((ligne) => {
-      const enTete =
-        ligne.domaineLabel !== domaineCourant
-          ? `<tr class="avant-apres__domaine"><th colspan="4" scope="colgroup">${escapeHtml(ligne.domaineLabel)}</th></tr>`
-          : "";
-      domaineCourant = ligne.domaineLabel;
-
-      const portee = Array.isArray(ligne.zones) && ligne.zones.length ? ligne.zones.join(", ") : "";
-      const appui = [ligne.source, ligne.article].filter(Boolean).join(" · ");
-
-      return `
-        ${enTete}
-        <tr class="avant-apres__ligne avant-apres__ligne--${escapeHtml(ligne.changement)}">
-          <th scope="row" class="avant-apres__sujet">
-            <span class="avant-apres__titre">${escapeHtml(ligne.sujet)}</span>
-            ${portee ? `<span class="avant-apres__portee">${escapeHtml(portee)}</span>` : ""}
-            ${appui ? `<span class="avant-apres__appui">${escapeHtml(appui)}</span>` : ""}
-          </th>
-          <td class="avant-apres__avant">${renderCellule(ligne.avant, absenceGauche)}</td>
-          <td class="avant-apres__apres">${renderCellule(ligne.apres, absenceDroite)}</td>
-          <td class="avant-apres__etat">
-            <span class="avant-apres__tag ${CHANGEMENT_TONES[ligne.changement] ?? ""}">${escapeHtml(
-              CHANGEMENT_LABELS[ligne.changement] ?? ligne.changement
-            )}</span>
-            ${ligne.refusee ? `<span class="avant-apres__refus">écartée</span>` : ""}
-          </td>
-        </tr>
-      `;
-    })
-    .join("");
+  const corps = blocs.map((bloc) => `
+    <details class="mdall-bloc"${ouverts.has(bloc.cle) ? " open" : ""}>
+      <summary class="mdall-bloc__tete">
+        <span class="mdall-bloc__sujet">${escapeHtml(bloc.sujet)}</span>
+        ${bloc.fichier ? `<span class="mdall-bloc__fichier">${escapeHtml(bloc.fichier)}</span>` : ""}
+      </summary>
+      ${
+        bloc.sansBloc
+          ? `<p class="review-empty-note">${escapeHtml(PHRASES_SANS_BLOC[bloc.sansBloc] ?? "")}</p>`
+          : renderLignesDeCode(bloc.lignes)
+      }
+    </details>
+  `).join("");
 
   return `
     <section class="review-block">
@@ -3511,33 +3504,13 @@ function renderAvantApres(proposition, review) {
         <div class="review-block__head review-block__head--plain">
           <div class="review-block__headbody">
             <h3 class="review-block__title">
-              Affirmations
-              <span class="review-block__count">${lignes.length}</span>
+              Ce que la mémoire écrira
+              <span class="review-block__count">${blocs.length}</span>
             </h3>
-            <span class="review-block__state">${escapeHtml(resumeDuTableau(tableau))}</span>
+            <span class="review-block__state">Le raisonnement, dans la langue du projet — rien n'est encore écrit.</span>
           </div>
         </div>
-        <div class="avant-apres__scroll">
-          <table class="avant-apres">
-            <thead>
-              <tr>
-                <th scope="col">Sujet</th>
-                <th scope="col">${escapeHtml(enteteGauche)}</th>
-                <th scope="col">${escapeHtml(enteteDroite)}</th>
-                <th scope="col">Ce qui change</th>
-              </tr>
-            </thead>
-            <tbody>${corps}</tbody>
-          </table>
-        </div>
-        ${
-          tableau.memoireLue
-            ? ""
-            : `<p class="review-silent__note">
-                 La mémoire du projet n'a pas pu être lue : la colonne de gauche manque, et aucune ligne
-                 ne prétend être nouvelle. Rouvrir la proposition relira.
-               </p>`
-        }
+        <div class="mdall-blocs">${corps}</div>
       </div>
     </section>
   `;
@@ -4106,6 +4079,7 @@ function renderChanges(proposition, review) {
       ${renderDiffTree(groupes, ouverte)}
       <div class="diff-corps">
         ${groupes.map(renderDiffGroupe).join("")}
+        ${renderMdallDeLaProposition(review.avantApres)}
       </div>
     </div>
     ${renderDiffCommentBox(proposition, review)}

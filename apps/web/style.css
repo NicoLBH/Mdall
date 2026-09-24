@@ -26853,3 +26853,41 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .fil-mails__emporter{display:flex;flex-direction:column;gap:4px;margin-top:4px;}
 .fil-mails__emporter-gestes{display:flex;align-items:center;gap:8px;}
 .fil-mails__emporter-mot{color:var(--muted);line-height:1.5;}
+
+/* Ce que la mémoire écrira, sous le diff d'une proposition.
+
+   Rien de neuf sous le capot : les lignes sont des `.memoire-ligne` dans un
+   `.fichier-code`, exactement comme dans l'onglet Mémoire. Le numéro d'une
+   ligne qu'on lit ici et celui de la même ligne dans son fichier tombent donc
+   au même endroit — les recalibrer séparément est précisément ce qu'on ne veut
+   plus faire.
+
+   Ce qui s'ajoute, c'est le pliage : `<details>`, que le navigateur donne, qui
+   survit au redessin, et pour lequel aucun état d'écran n'a besoin d'exister. */
+.mdall-blocs{ display:flex; flex-direction:column; gap:8px; }
+.mdall-bloc{
+  border:1px solid var(--border); border-radius:var(--radius);
+  background:var(--surface, transparent); overflow:hidden;
+}
+.mdall-bloc__tete{
+  display:flex; align-items:baseline; gap:10px;
+  padding:8px 12px; cursor:pointer;
+  font-size:13px; color:var(--text);
+}
+.mdall-bloc__tete::-webkit-details-marker{ display:none; }
+/* Le chevron est celui de `<details>`, tourné par le navigateur. On lui donne
+   seulement sa place, pour que le sujet commence toujours à la même colonne. */
+.mdall-bloc__tete::before{
+  content:"›"; display:inline-block; width:10px;
+  color:var(--muted); transition:transform .12s ease;
+}
+.mdall-bloc[open] > .mdall-bloc__tete::before{ transform:rotate(90deg); }
+.mdall-bloc__tete:hover{ background:rgba(110,118,129,.08); }
+.mdall-bloc__sujet{ font-weight:600; }
+/* Le fichier de destination, en clair : c'est la moitié de la question qu'on se
+   pose devant un bloc — qu'est-ce qui s'écrit, et *où*. */
+.mdall-bloc__fichier{
+  margin-left:auto; color:var(--muted); font-size:11px;
+  font-family:var(--mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+}
+.mdall-bloc > .fichier-code{ border-top:1px solid var(--border); }

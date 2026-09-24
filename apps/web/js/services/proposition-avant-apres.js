@@ -165,9 +165,27 @@ function sujetDe(porteur, cle) {
   return texte(payload.subject) || texte(porteur?.statement) || cle;
 }
 
-/** Un retrait se reconnaît à son statut, ou à ce que l'item porte. */
+/**
+ * Un retrait, c'est **une affirmation que le projet perd**.
+ *
+ * ## Refuser n'est pas retirer, et l'écran disait le contraire
+ *
+ * Un item refusé pendant la revue comptait ici comme un retrait. Une ligne
+ * nouvelle qu'on refuse s'affichait donc « Retrait » — c'est-à-dire « le projet
+ * perd cette valeur » —, alors qu'il ne la perd pas : **elle n'entre pas**.
+ * Rien ne sort, rien ne change, et l'on annonçait une perte.
+ *
+ * Le champ qui devait faire la différence, `refusee`, ne pouvait jamais valoir
+ * vrai : il demandait `refused` **et** pas un retrait, et `refused` suffisait
+ * alors à faire un retrait. Une consigne qu'aucun cas ne peut atteindre est une
+ * intention (règle 12).
+ *
+ * Un retrait se reconnaît donc à ce que l'item **demande** — `payload.retrait`
+ * —, et, du côté d'une proposition fusionnée, à la ligne qu'elle a écrite et
+ * que la mémoire a écartée.
+ */
 function estUnRetrait(item) {
-  return statutDe(item) === "refused" || item?.payload?.retrait === true;
+  return item?.payload?.retrait === true;
 }
 
 /** Le rang d'un domaine, les inconnus en dernier — l'ordre du métier. */
@@ -250,6 +268,22 @@ export function tableauAvantApres({ proposition = null, items = [], assertions =
 
     return {
       cle,
+      /**
+       * **L'objet dont cette ligne parle**, tel que le tableau l'a choisi.
+       *
+       * Les champs qui suivent en sont des extraits, pour les deux colonnes.
+       * Écrire le Mdall de cette ligne demande davantage — la citation, la page,
+       * le tableau d'une fonction native, la version de l'agent — et recopier
+       * ces champs-là ici en ferait une seconde vérité qui divergerait au
+       * premier ajout (règle 4).
+       *
+       * On rend donc **ce que le tableau a déjà tranché** : l'affirmation quand
+       * la proposition est ouverte, la ligne réellement écrite quand elle est
+       * fusionnée. Un seul endroit décide ce que cette proposition dit de ce
+       * sujet, et c'est ici.
+       */
+      porteur: apresPorteur ?? null,
+      porteurAvant: avantPorteur ?? null,
       sujet: sujetDe(apresPorteur, cle) || sujetDe(avantPorteur, cle),
       domaine: domain,
       domaineLabel: domainLabel(domain),
@@ -304,14 +338,35 @@ export function tableauAvantApres({ proposition = null, items = [], assertions =
       regleAvant: avantPorteur?.payload?.regle ?? null,
       provenance: item?.payload?.provenance ?? apresPorteur?.payload?.provenance ?? null,
       provenanceAvant: avantPorteur?.payload?.provenance ?? null,
+      /**
+       * **La citation, et la date d'un constat.**
+       *
+       * Le diff du dépôt les demandait — `champsDuBloc` sait écrire
+       * `parce que: "…"` et `le: …` — et le tableau ne les a jamais produits.
+       * Quatre champs lus, jamais écrits : la preuve d'une affirmation
+       * n'apparaissait donc **nulle part** dans les Changements, et c'est la
+       * seule ligne qui permet de vérifier plutôt que de croire.
+       *
+       * Rien ne le signalait, parce qu'un champ absent vaut `undefined` et
+       * qu'`undefined` se tait.
+       */
+      preuve: texte(item?.payload?.citation) || texte(apresPorteur?.payload?.citation) || "",
+      preuveAvant: texte(avantPorteur?.payload?.citation) || "",
+      le: texte(item?.payload?.le) || texte(apresPorteur?.payload?.le) || "",
+      leAvant: texte(avantPorteur?.payload?.le) || "",
       statut: texte(item?.payload?.statut) || texte(apresPorteur?.payload?.statut) || "",
       statutAvant: texte(avantPorteur?.payload?.statut) || "",
       avant,
       apres,
       changement,
-      // Un refus décidé pendant la revue : la ligne ne sera pas versée. On la
-      // montre quand même — une ligne écartée en silence se relit mal.
-      refusee: statutDe(item) === "refused" && !estUnRetrait(item)
+      /**
+       * Un refus décidé pendant la revue : la ligne ne sera pas versée.
+       *
+       * On la montre quand même — une ligne écartée en silence se relit mal —
+       * et elle garde sa vraie nature : un ajout refusé reste un ajout qui
+       * n'aura pas lieu, pas une valeur que le projet perd.
+       */
+      refusee: statutDe(item) === "refused" && !retrait
     };
   });
 
@@ -326,7 +381,21 @@ export function tableauAvantApres({ proposition = null, items = [], assertions =
     if (ligne.changement in compte) compte[ligne.changement] += 1;
   }
 
-  return { lignes, memoireLue, compte };
+  return {
+    lignes,
+    memoireLue,
+    compte,
+    /**
+     * Où chaque nom est écrit, tel que le tableau l'a consulté.
+     *
+     * Écrire le Mdall d'une ligne demande ce registre — un `importe` doit
+     * nommer le fichier qui déclare son entrée, un `enregistre` celui qui
+     * recevra le résultat. Le recalculer chez l'appelant ferait deux registres,
+     * et le code affiché nommerait des fichiers que la mémoire ne crée pas
+     * (règle 10).
+     */
+    ouEcrit: domiciles
+  };
 }
 
 /**

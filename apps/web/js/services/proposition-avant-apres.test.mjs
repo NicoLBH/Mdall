@@ -6,6 +6,7 @@ import {
   NATURES_DINTENDANCE
 } from "./proposition-avant-apres.js";
 import { ITEM_TYPE } from "./proposition-review.js";
+import { reperesDAffirmations } from "./depot-carburants.js";
 
 const OUVERTE = { id: "p1", number: 4, title: "Incendie habitation", status: "open" };
 
@@ -215,4 +216,55 @@ test("une nature écrite prime sur celle qu'on déduirait du type", () => {
 
   assert.equal(lignes[0].nature, "contrainte");
   assert.equal(lignes[0].domaineLabel, "Incendie");
+});
+
+/* ── La citation arrive jusqu'au diff ────────────────────────────────────── */
+
+test("la preuve d'une affirmation entre dans le diff, et sa date aussi", () => {
+  // **Le défaut que ce lot ferme.** `champsDuBloc` sait écrire `parce que: "…"`
+  // et `le: …` depuis toujours ; `reperesDAffirmations` les lui demandait sur
+  // `ligne.preuve` et `ligne.le` ; et le tableau ne les a **jamais produits**.
+  //
+  // Quatre champs lus, jamais écrits : la preuve d'une affirmation
+  // n'apparaissait nulle part dans les Changements — c'est-à-dire la seule
+  // ligne qui permet de vérifier plutôt que de croire. Rien ne le signalait,
+  // parce qu'un champ absent vaut `undefined` et qu'`undefined` se tait.
+  const { lignes } = tableauAvantApres({
+    proposition: OUVERTE,
+    items: [item("altitude-du-site", "890 m", {
+      payload: {
+        subject: "Altitude du site", value: "890 m", nature: "constat", domain: "sol",
+        citation: "cote NGF au droit du bâtiment A : 890,00 m",
+        le: "12 mars 2026"
+      }
+    })],
+    assertions: []
+  });
+
+  assert.equal(lignes[0].preuve, "cote NGF au droit du bâtiment A : 890,00 m");
+  assert.equal(lignes[0].le, "12 mars 2026");
+
+  // Et elles arrivent bien jusqu'aux champs que le diff compare.
+  const { apres } = reperesDAffirmations({ lignes });
+  assert.equal(apres[0].champs["parce que"].includes("cote NGF au droit du bâtiment A"), true);
+  assert.equal(apres[0].champs["le"].includes("12 mars 2026"), true);
+});
+
+test("ce que la valeur d'avant prouvait se compare à ce que la nouvelle prouve", () => {
+  // Une citation qui change sans que la valeur bouge est un changement : on
+  // cite encore un texte qui ne dit plus la même chose. Sans `preuveAvant`, le
+  // diff comparait la nouvelle preuve à rien, et annonçait un ajout.
+  const avant = assertion("a1", "altitude-du-site", "890 m", {
+    payload: { subject: "Altitude du site", value: "890 m", citation: "relevé provisoire" }
+  });
+  const { lignes } = tableauAvantApres({
+    proposition: OUVERTE,
+    items: [item("altitude-du-site", "890 m", {
+      payload: { subject: "Altitude du site", value: "890 m", nature: "contrainte", domain: "sol", citation: "relevé définitif" }
+    })],
+    assertions: [avant]
+  });
+
+  assert.equal(lignes[0].preuveAvant, "relevé provisoire");
+  assert.equal(lignes[0].preuve, "relevé définitif");
 });

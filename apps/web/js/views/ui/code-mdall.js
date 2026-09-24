@@ -119,3 +119,33 @@ export function contexteDuSujet(sujet, { resolution = "", variables = null } = {
 
   return lignes.join("\n");
 }
+
+/**
+ * Des lignes de code, numérotées et colorées — un fichier, ou un bloc.
+ *
+ * Les classes sont **celles de la Mémoire** : `memoire-ligne`,
+ * `memoire-ligne__num`, `memoire-ligne__code`. Le numéro d'une ligne qu'on lit
+ * dans une proposition et celui de la même ligne dans son fichier doivent
+ * tomber au même endroit, faute de quoi les deux écrans ne se superposent plus
+ * et chacun se recalibre dans son coin.
+ *
+ * @param {{rang?: number, jetons: object[]}[]} lignes
+ * @param {object} [options] passées telles quelles à `renderJetons`
+ */
+export function renderLignesDeCode(lignes = [], options = {}) {
+  const lues = Array.isArray(lignes) ? lignes : [];
+  if (!lues.length) return "";
+
+  const corps = lues.map((ligne, rang) => `
+    <div class="memoire-ligne">
+      <span class="memoire-ligne__num">${Number(ligne?.rang) || rang + 1}</span>
+      <span class="memoire-ligne__code">${
+        // Une ligne vide garde sa hauteur : sans l'espace insécable elle se
+        // replierait à zéro pixel, et les numéros ne tomberaient plus en face.
+        renderJetons(ligne?.jetons ?? [], options) || "&nbsp;"
+      }</span>
+    </div>
+  `).join("");
+
+  return `<div class="fichier-code">${corps}</div>`;
+}
