@@ -56,6 +56,7 @@ import {
   LABEL_DU_FIL, introDuFil, pointsDuFil, titreDeLaProposition
 } from "../../../services/points-du-fil.js";
 import { branchesOuvertes } from "../../../services/branches-ouvertes.js";
+import { RIEN_DANS_LA_MEMOIRE } from "../../ui/mdall-a-proposer.js";
 import {
   CERTITUDE, ORDRE, leFilDesMails, leJourDit, phraseDuMoment
 } from "../../../services/le-fil-des-mails.js";
@@ -200,6 +201,7 @@ function renderEntete(vue) {
       </div>
       ${renderRangement(vue.rangement)}
       ${renderRangement(vue.versement)}
+      ${renderCeQueLaPropositionPortera(vue)}
       <p class="lecture-cr__mot">
         Déposez des <code>.eml</code> : l'écran <strong>reconstitue le fil</strong> et montre,
         message par message, ce que chacun ajoute et ce qu'il recopie.
@@ -207,6 +209,42 @@ function renderEntete(vue) {
         page : aucun appel au modèle. ${escapeHtml(phraseDuDossierDesMails())}
       </p>
     </header>
+  `;
+}
+
+/**
+ * Ce que la proposition portera, dit avant le clic.
+ *
+ * ## Un fil de mails n'écrit rien dans la mémoire du projet
+ *
+ * Il ouvre des sujets et en relance d'autres : du **suivi**, et rien que du
+ * suivi. C'est vrai quoi que la confrontation décide — les deux sorts qu'un
+ * point peut prendre, ouvrir et relancer, sont de l'intendance — et une épreuve
+ * le tient sur les deux.
+ *
+ * Le taire serait le pire des deux mondes : celui qui vient de voir le Copilote
+ * écrire du Mdall sous son bouton croirait qu'un fil de mails en écrit aussi,
+ * et chercherait longtemps où (règle 5).
+ *
+ * ## Le partage ouvrir / relancer ne se dit pas ici, et c'est délibéré
+ *
+ * Il demande de savoir ce que le projet suit déjà, ce qui se demande au serveur
+ * **au clic**. Annoncer « 12 sujets à ouvrir » avant d'avoir confronté serait
+ * une borne haute présentée comme un compte : on en ouvrirait trois, et neuf
+ * relances passeraient pour des ouvertures perdues.
+ */
+function renderCeQueLaPropositionPortera(vue) {
+  const points = pointsDuFil(vue?.releve?.prises ?? []);
+  if (!points.length) return "";
+
+  return `
+    <p class="lecture-cr__mot">
+      ${escapeHtml(`${points.length} ${points.length > 1 ? "points" : "point"} à porter — `)}
+      ${escapeHtml(points.length > 1 ? "chacun ouvrira un sujet ou en relancera un déjà ouvert, "
+        : "il ouvrira un sujet ou en relancera un déjà ouvert, ")}
+      ${escapeHtml("selon ce que le projet suit. ")}
+      <strong>${escapeHtml(RIEN_DANS_LA_MEMOIRE)}</strong>
+    </p>
   `;
 }
 

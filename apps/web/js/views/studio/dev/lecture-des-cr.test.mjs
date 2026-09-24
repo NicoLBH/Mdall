@@ -21,7 +21,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { renderLaLecture, reservesDeLaRestitution } from "./lecture-des-cr.js";
+import { matiereDuCompteRendu, renderLaLecture, reservesDeLaRestitution } from "./lecture-des-cr.js";
+import { itemsDuCompteRendu } from "../../../services/proposition-du-cr.js";
+import { partDeLaProposition, phraseDeLaPart } from "../../ui/mdall-a-proposer.js";
+import { blocsAProposer } from "../../ui/mdall-de-la-proposition.js";
+import { escapeHtml } from "../../../utils/escape-html.js";
 import {
   LECTURE, assemblerLeMarkdown, fideliteDeLaReconstitution
 } from "../../../services/reconstitution-markdown.js";
@@ -1951,4 +1955,152 @@ test("sans avoir pu lire les comptes rendus du projet, l'écran ne ferme pas dav
 
   assert.match(html, commeAffichee("pas pu lire les comptes rendus"));
   assert.doesNotMatch(html, commeAffichee("sur cette déduction, et non sur une phrase du document"));
+});
+
+/* ── Ce que la proposition portera, compté sur ses propres lignes ────────── */
+
+const texteNonVide = (valeur) => typeof valeur === "string" && valeur.trim().length > 0;
+
+/**
+ * **La promesse et la proposition viennent maintenant du même endroit.**
+ * L'écran recomptait les lots, les labels et les jalons depuis les points ; le
+ * clic les recomposait pour `itemsDuCompteRendu`. Deux comptes pour la même
+ * question, et c'est celui qu'on ne regarde pas qui a raison (règle 4).
+ */
+test("l'écran annonce les lignes que la proposition portera, nommément", () => {
+  // **Les comptes sont écrits en dur, et c'est délibéré.** Les recalculer avec
+  // la fonction qu'on éprouve comparerait le code à lui-même : la promesse et
+  // la proposition bougeraient ensemble, et l'épreuve ne tomberait jamais.
+  const html = renderLaLecture(unEtatApport({ lots: [{ code: "GO", label: "Gros oeuvre" }] }));
+
+  // Un lot que le projet ne connaît pas — « 05 — CHARPENTE ».
+  assert.match(html, /1 lot à ouvrir/);
+  // « Urgent », posé sur un point, et « CR chantier », posé sur tous.
+  assert.match(html, /2 labels à poser/);
+  // Les deux points neufs du compte rendu.
+  assert.match(html, /2 sujets à ouvrir/);
+});
+
+test("ce que la proposition portera est ce que l'écran vient d'annoncer", () => {
+  // La promesse et la proposition viennent maintenant de la même fonction. Ce
+  // que l'épreuve tient, c'est que le clic n'appelle rien d'autre : la matière
+  // est bâtie une fois, et le document en est le seul écart.
+  const vue = unEtatApport({ lots: [{ code: "GO", label: "Gros oeuvre" }] });
+
+  const annonce = phraseDeLaPart(partDeLaProposition(
+    itemsDuCompteRendu(matiereDuCompteRendu(vue, { document: null }))
+  ));
+  assert.ok(renderLaLecture(vue).includes(escapeHtml(annonce)), `l'écran ne dit pas « ${annonce} »`);
+
+  // Et avec le document rangé, la même liste plus lui — exactement une ligne.
+  const auClic = itemsDuCompteRendu(matiereDuCompteRendu(vue, { document: { id: "doc-1" } }));
+  const aLEcran = itemsDuCompteRendu(matiereDuCompteRendu(vue, { document: null }));
+
+  assert.equal(auClic.length, aLEcran.length + 1);
+  assert.deepEqual(auClic.filter((un) => un.itemType !== "document"), aLEcran);
+});
+
+/**
+ * **Un compte rendu n'écrit rien dans la mémoire du projet**, et c'est une
+ * découverte de ce lot : tout ce qu'il propose est de l'intendance — un
+ * document au corpus, des sujets, des lots, des labels, des jalons.
+ *
+ * Le taire serait le pire des deux mondes : celui qui vient de voir le Copilote
+ * écrire du Mdall sous son bouton croirait que le compte rendu en écrit aussi.
+ */
+test("un compte rendu dit qu'il ne touche pas à la mémoire du projet", () => {
+  const vue = unEtatApport({ lots: [{ code: "GO", label: "Gros oeuvre" }] });
+
+  const part = partDeLaProposition(itemsDuCompteRendu(matiereDuCompteRendu(vue, { document: null })));
+  assert.deepEqual(part.memoire, [], "un compte rendu ne devrait porter aucune affirmation");
+
+  assert.match(renderLaLecture(vue), /ne porte que du suivi/);
+});
+
+test("les sujets disparus se comptent dans ce que la proposition portera", () => {
+  // Sans eux, l'annonce serait en dessous de la proposition d'autant de
+  // fermetures — et c'est justement ce que l'écran promet depuis le début :
+  // « la proposition les fermerait ».
+  const vue = unEtatFermetures({
+    sujetsDuProjet: [{ id: "s-1", title: "Étanchéité toiture" }, { id: "s-2", title: "Linteaux" }],
+    sujetsDuLabel: ["s-1", "s-2"]
+  });
+
+  const part = partDeLaProposition(itemsDuCompteRendu(matiereDuCompteRendu(vue, { document: null })));
+  const fermetures = part.suivi.find((un) => un.nature === "fermeture")?.combien ?? 0;
+
+  assert.equal(fermetures, 2, JSON.stringify(part.suivi));
+  assert.match(renderLaLecture(vue), /2 sujets à fermer/);
+});
+
+test("une fermeture porte la source et la date du compte rendu qui la déduit", () => {
+  // Une fermeture qu'on ne peut ni sourcer ni dater ne se relit pas : six mois
+  // plus tard, personne ne saura de quelle réunion on a déduit ce silence.
+  const vue = unEtatFermetures({
+    sujetsDuProjet: [{ id: "s-1", title: "Étanchéité toiture" }],
+    sujetsDuLabel: ["s-1"]
+  });
+
+  const items = itemsDuCompteRendu(matiereDuCompteRendu(vue, { document: null }));
+  const fermeture = items.find((un) => un.itemType === "fermeture");
+
+  assert.ok(fermeture, "aucune fermeture proposée");
+  assert.ok(
+    Object.values(fermeture.payload ?? {}).some((valeur) => texteNonVide(valeur)),
+    `une fermeture sans rien qui la source : ${JSON.stringify(fermeture.payload)}`
+  );
+  assert.deepEqual(
+    matiereDuCompteRendu(vue, { document: null }).identite,
+    vue.lecture.identite
+  );
+});
+
+test("les jalons et les fermetures que le compte rendu porte se comptent aussi", () => {
+  // Les lots et les labels ne suffisaient pas à le prouver : chaque source de
+  // la matière doit se voir tomber séparément, sinon la moitié de ce que
+  // `matiereDuCompteRendu` rassemble pourrait disparaître en silence.
+  const vue = unEtatApport({
+    lots: [{ code: "GO", label: "Gros oeuvre" }],
+    lecture: { rubriques: [{ intitule: "Lot n° 5 : Charpente", numero: "5" }] }
+  });
+
+  const part = partDeLaProposition(itemsDuCompteRendu(matiereDuCompteRendu(vue, { document: null })));
+  const compte = (nature) => part.suivi.find((un) => un.nature === nature)?.combien ?? 0;
+
+  assert.equal(compte("rubrique"), 1, JSON.stringify(part.suivi));
+  // Une rubrique vient avec la vue qui l'ouvre : un rangement sans elle est un
+  // classement que personne ne peut ouvrir.
+  assert.equal(compte("vue"), 1, JSON.stringify(part.suivi));
+});
+
+test("et il n'a donc aucun bloc Mdall à montrer : l'écrivain le dit en ne rendant rien", () => {
+  // Écrire un bloc pour un sujet à ouvrir rendrait un bloc sans nom ni valeur,
+  // qui se lirait comme une mémoire qu'on s'apprête à écrire et qu'on n'écrit
+  // pas.
+  const vue = unEtatApport({ lots: [{ code: "GO", label: "Gros oeuvre" }] });
+  const items = itemsDuCompteRendu(matiereDuCompteRendu(vue, { document: { id: "doc-1" } }));
+
+  assert.ok(items.length > 0, "le compte rendu ne porterait aucune ligne");
+  assert.deepEqual(blocsAProposer(items, {}), []);
+});
+
+test("la matière est la même vue deux fois, et le document en est le seul écart", () => {
+  // C'est ce qui rend la promesse tenable : l'écran appelle la fonction sans le
+  // document — il n'est rangé qu'au clic —, le clic l'appelle avec. Tout le
+  // reste est identique, sans quoi l'écart serait silencieux.
+  const vue = unEtatApport({ lots: [{ code: "GO", label: "Gros oeuvre" }] });
+
+  const { document: sansDoc, ...aLEcran } = matiereDuCompteRendu(vue, { document: null });
+  const { document: avecDoc, ...auClic } = matiereDuCompteRendu(vue, { document: { id: "doc-1" } });
+
+  assert.deepEqual(aLEcran, auClic);
+  assert.equal(sansDoc, null);
+  assert.deepEqual(avecDoc, { id: "doc-1" });
+});
+
+test("sans rien à porter, l'écran ne dit rien plutôt que de compter des zéros", () => {
+  // Une phrase qui compte zéro de tout se lit comme une panne, alors qu'il n'y
+  // a simplement rien à proposer.
+  assert.equal(phraseDeLaPart({ memoire: [], suivi: [] }), "");
+  assert.equal(phraseDeLaPart({}), "");
 });
