@@ -164,6 +164,37 @@ const TABLEAU_FERMANT = /^\]\s*;?$/;
 const APPEL_DAGENT = /^résultat\s*=\s*(agent-D|agent-IA)\s*\((.*)\)\s*;?$/i;
 /** `résultat = agent-D (` — l'appel qui s'ouvre, ses arguments dessous. */
 const APPEL_DAGENT_OUVRANT = /^résultat\s*=\s*(agent-D|agent-IA)\s*\($/i;
+/**
+ * `const Zone de vent = {` — une **déclaration de variable** qui s'ouvre.
+ *
+ * ## Le fichier qui s'écrivait et ne se relisait pas
+ *
+ * `variables-du-projet.ref` s'engendre depuis les autres fichiers, et personne
+ * ne le reparsait : la lecture refusait donc chacune de ses lignes — `type`
+ * n'est pas une provenance, `déjà utilisé dans` n'ouvre rien — sans que ça se
+ * voie nulle part, puisque rien ne le lui demandait.
+ *
+ * Le bac d'essai, lui, laisse **écrire** une déclaration à la main. Un fichier
+ * qu'on vient de taper et qui se fait refuser ligne à ligne n'apprend rien : il
+ * dit que le langage se contredit. `lire(écrire(G)) = G` vaut pour cette forme
+ * comme pour les autres.
+ */
+const DECLARATION_OUVRANTE = /^const\s+(.+?)\s*=$/i;
+/**
+ * Les champs d'une déclaration, et le fait que la liste soit **fermée**.
+ *
+ * Un champ inconnu se refuse : c'est ce qui distingue une déclaration d'un sac.
+ * Sans cette fermeture, `typo: "mesure"` passerait sans un mot et la variable
+ * n'aurait pas de type — on chercherait longtemps pourquoi elle ne se compare
+ * à rien.
+ */
+const CHAMPS_DE_LA_DECLARATION = new Set([
+  "type", "unité", "unite", "description", "utilisation",
+  "valeurs possibles", "ce que le projet en dit"
+]);
+/** `déjà utilisé dans: [` et `structure attendue: [` — ce qui s'ouvre en liste. */
+const LISTES_DE_LA_DECLARATION = /^(déjà utilisé dans|deja utilise dans|structure attendue)\s*:\s*\[\]?,?$/i;
+
 /** `const Profondeur hors gel à retenir;` — une locale déclarée, pas encore posée. */
 const LOCALE_VIDE = /^const\s+(.+?)\s*;$/i;
 /**
@@ -492,6 +523,7 @@ export function lireUneTete(ligne = "") {
 export function lireUnFichier(contenu = "") {
   const lignes = String(contenu ?? "").split(/\r?\n/);
   const blocs = [];
+  const declarations = [];
   const refus = [];
   let chemin = "";
   let zone = "";
@@ -511,6 +543,10 @@ export function lireUnFichier(contenu = "") {
   // déduit de la signature — sauf l'utilitaire et sa version, qui sont ce qui
   // permet de refaire le calcul.
   let calcul = false;
+  // La déclaration de variable en cours. Elle ne produit **aucun bloc** : ce
+  // fichier définit des noms, il n'affirme rien sur le projet. En faire des
+  // affirmations donnerait à chaque nom une valeur qu'il n'a pas.
+  let declaration = null;
   /**
    * Le tableau de valeurs en cours de lecture, avec la pile de ce qu'il ouvre.
    *
@@ -570,6 +606,31 @@ export function lireUnFichier(contenu = "") {
 
     const { ferme, ouvre, corps } = bornesDe(brute);
     if (!corps && !ferme) return;
+
+    // **Une déclaration de variable, tant qu'elle est ouverte.** Elle passe
+    // avant les bornes : son `};` fermerait sinon « le bloc courant, ou la
+    // zone », et ses champs se liraient comme des provenances — c'est
+    // exactement ce qui faisait refuser `variables-du-projet.ref` ligne à
+    // ligne, dans un fichier que le projet engendre lui-même.
+    if (declaration) {
+      // `};` — la fermeture d'une déclaration. `bornesDe` ne la connaît pas :
+      // un bloc ordinaire finit par `}` tout court, et lui apprendre le
+      // point-virgule changerait la lecture de tous les fichiers pour un besoin
+      // qui n'existe qu'ici.
+      if (ferme || corps === "};") { declarations.push(declaration); declaration = null; return; }
+      if (estUnCommentaire(corps)) return;
+      lireUnChampDeclare(declaration, corps, {
+        refuser: (raison) => refus.push({ ligne: numero, texte: corps, raison })
+      });
+      return;
+    }
+
+    const ouvreUneDeclaration = ouvre ? corps.match(DECLARATION_OUVRANTE) : null;
+    if (ouvreUneDeclaration) {
+      fermer();
+      declaration = { nom: texte(ouvreUneDeclaration[1]), valeurs: [] };
+      return;
+    }
 
     // Une accolade seule ferme ce qui est ouvert : le bloc courant s'il y en a
     // un, la zone sinon. On ne la refuse jamais — une borne en trop est une
@@ -783,7 +844,70 @@ export function lireUnFichier(contenu = "") {
   });
 
   fermer();
-  return { chemin, blocs, refus };
+
+  // Une déclaration laissée ouverte — l'accolade fermante manque — se rend
+  // quand même : ce qu'elle porte a été lu, et le taire ferait disparaître une
+  // variable entière pour une borne oubliée.
+  if (declaration) declarations.push(declaration);
+
+  return { chemin, blocs, declarations, refus };
+}
+
+/**
+ * Un champ d'une déclaration de variable.
+ *
+ * ## La liste est fermée, et c'est tout l'intérêt
+ *
+ * Un champ inconnu se refuse. Sans cette fermeture, `typo: "mesure"` passerait
+ * sans un mot : la variable n'aurait pas de type, et l'on chercherait longtemps
+ * pourquoi elle ne se compare à rien.
+ *
+ * ## Ce qui s'ouvre en liste se lit, et ne se garde pas
+ *
+ * `déjà utilisé dans` se **recalcule** à chaque nouvelle utilisation, et
+ * `structure attendue` décrit un tableau. Les relire ici pour les reposer en
+ * ferait deux vérités qui divergeraient au premier usage (règle 4). On les
+ * traverse donc sans les retenir — mais sans les refuser non plus, sans quoi un
+ * fichier engendré par le projet se ferait refuser par le projet.
+ */
+export function lireUnChampDeclare(declaration, corps = "", { refuser = null } = {}) {
+  const dit = texte(corps);
+  if (!dit) return;
+
+  // Ce qui ouvre ou ferme une liste, et ce qu'elle contient. On passe.
+  if (LISTES_DE_LA_DECLARATION.test(dit) || LISTE_FERMANTE.test(dit) || CHAMP_OUVRANT.test(dit)) return;
+
+  const champ = dit.match(CHAMP_DENREGISTREMENT);
+  if (!champ) {
+    // Une entrée de liste : `Vitesse de référence (vent.ref)`. Elle ne porte
+    // rien qu'on garde, et la refuser ferait refuser le fichier que le projet
+    // engendre lui-même.
+    if (/^[^:]+\s*\([^)]*\)\s*,?$/.test(dit)) return;
+    refuser?.("cette ligne n'est pas un champ de déclaration.");
+    return;
+  }
+
+  const cle = texte(champ[1]).toLowerCase();
+  if (!CHAMPS_DE_LA_DECLARATION.has(cle)) {
+    refuser?.(`« ${texte(champ[1])} » n'est pas un champ d'une déclaration.`);
+    return;
+  }
+
+  const brut = texte(champ[2]).replace(/,$/, "");
+
+  // **Le domaine fermé d'un nom.** Il s'écrit comme partout ailleurs dans le
+  // langage — `"1" ou "2" ou "3"` —, et non entre crochets : une seconde façon
+  // d'énumérer ferait deux grammaires pour la même idée.
+  if (cle === "valeurs possibles") {
+    declaration.valeurs = brut.split(/\s+ou\s+/i)
+      .map((morceau) => lireUneValeur(texte(morceau)).valeur)
+      .filter(Boolean);
+    return;
+  }
+
+  const { valeur } = lireUneValeur(brut);
+  if (cle === "unité" || cle === "unite") declaration.unite = valeur;
+  else declaration[cle === "ce que le projet en dit" ? "ceQueLeProjetEnDit" : cle] = valeur;
 }
 
 /**
@@ -925,6 +1049,70 @@ export function jetonsDeLaLigne(ligne = "") {
       { type: JETON.MOT_NATIF, texte: ouvreUnAppelDAgent[1] },
       { type: JETON.NEUTRE, texte: " " },
       { type: JETON.PONCTUATION, texte: "(" }];
+  }
+
+  /**
+   * `const Zone de vent = {` — la tête d'une déclaration de variable.
+   *
+   * Elle passe **avant** la lecture d'une tête de bloc : sans cela,
+   * « const Zone de vent » devenait un sujet d'un seul tenant, et le mot du
+   * langage se colorait comme un nom du projet.
+   */
+  const ouvreUneDeclarationLue = nu.match(/^const\s+(.+?)\s*=\s*\{$/i);
+  if (ouvreUneDeclarationLue) {
+    return [...marge,
+      { type: JETON.MOT_CONST, texte: "const" },
+      { type: JETON.NEUTRE, texte: " " },
+      { type: JETON.SUJET, texte: texte(ouvreUneDeclarationLue[1]) },
+      { type: JETON.NEUTRE, texte: " " },
+      { type: JETON.OPERATEUR, texte: OPERATEUR.EGAL },
+      { type: JETON.NEUTRE, texte: " " },
+      { type: JETON.PONCTUATION, texte: "{" }];
+  }
+
+  /** `};` — la fin d'une déclaration. Deux ponctuations, et rien d'autre. */
+  if (nu === "};") {
+    return [...marge, { type: JETON.PONCTUATION, texte: "}" }, { type: JETON.PONCTUATION, texte: ";" }];
+  }
+
+  /**
+   * Un champ de déclaration : `type:`, `valeurs possibles:`, `description:`…
+   *
+   * ## Pourquoi leur liste, et pas le contexte
+   *
+   * Cette lecture est **sans mémoire** : elle voit une ligne, jamais le bloc
+   * qui l'entoure. Sans ce détour, `description:` se lisait comme un sujet du
+   * projet — et la Mémoire, qui colore en rouge ce qu'aucune ligne ne déclare,
+   * peignait en rouge **chaque champ de chaque déclaration**. Un fichier
+   * entièrement en alerte n'alerte plus de rien.
+   *
+   * La liste est celle du lecteur, à un seul endroit (règle 10).
+   */
+  const champDeclare = nu.match(CHAMP_DENREGISTREMENT);
+  const cleDeclaree = texte(champDeclare?.[1]).toLowerCase();
+  if (champDeclare && (CHAMPS_DE_LA_DECLARATION.has(cleDeclaree) || LISTES_DE_LA_DECLARATION.test(nu))) {
+    const virguleFinale = /,\s*$/.test(nu) ? [{ type: JETON.PONCTUATION, texte: "," }] : [];
+    const dit = texte(champDeclare[2]).replace(/,$/, "");
+
+    // `déjà utilisé dans: [` et `structure attendue: [` ouvrent une liste : on
+    // rend le crochet tel quel plutôt que de le citer comme une valeur.
+    const valeursDites = /^\[/.test(dit)
+      ? [{ type: JETON.PONCTUATION, texte: dit }]
+      : dit.split(/\s+ou\s+/i).flatMap((morceau, place) => [
+        ...(place ? [
+          { type: JETON.NEUTRE, texte: " " },
+          { type: JETON.MOT_CONDITION, texte: "ou" },
+          { type: JETON.NEUTRE, texte: " " }
+        ] : []),
+        { type: JETON.VALEUR, texte: texte(morceau) }
+      ]);
+
+    return [...marge,
+      { type: JETON.LOCALE, texte: texte(champDeclare[1]) },
+      { type: JETON.PONCTUATION, texte: ":" },
+      { type: JETON.NEUTRE, texte: " " },
+      ...valeursDites,
+      ...virguleFinale];
   }
 
   // `const X;` — une locale déclarée, pas encore posée.

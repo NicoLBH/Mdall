@@ -1194,7 +1194,7 @@ export function lignesDeStructure(champs = null, profondeur = 1) {
  */
 export function blocDeVariable({
   nom = "", type = "", unite = "", description = "", utilisation = "", usages = [], structure = null,
-  ceQueLeProjetEnDit = null
+  ceQueLeProjetEnDit = null, valeurs = []
 } = {}, profondeur = 0) {
   const dit = texte(nom);
   if (!dit) return [];
@@ -1224,6 +1224,36 @@ export function blocDeVariable({
 
   lignes.push(champ("type", texte(type) || "inconnu"));
   if (texte(unite)) lignes.push(champ("unité", texte(unite)));
+
+  /**
+   * **Le domaine d'un nom : ce qu'il a le droit de valoir.**
+   *
+   * Une zone de vent à `7` passait jusqu'ici sans un mot. Avec un domaine
+   * déclaré, elle se signale — c'est la même famille de garde-fou que « deux
+   * unités ne se comparent pas ».
+   *
+   * Il s'écrit comme les choix fermés d'un tableau, avec le même `ou` :
+   * `"1" ou "2" ou "3"`. Une seconde façon d'énumérer — des crochets, par
+   * exemple — ferait deux grammaires pour la même idée (règle 4), et celle
+   * qu'on lit le moins finirait par ne plus être comprise.
+   *
+   * Absent quand il n'y en a pas : un champ vide ferait croire à un domaine
+   * fermé dont on aurait oublié les valeurs.
+   */
+  const admises = (Array.isArray(valeurs) ? valeurs : []).map(texte).filter(Boolean);
+  if (admises.length) {
+    lignes.push([
+      espace(RETRAIT.repeat(dedans)),
+      jeton(JETON.LOCALE, "valeurs possibles"),
+      jeton(JETON.PONCTUATION, ":"),
+      espace(),
+      ...admises.flatMap((valeur, place) => [
+        ...(place ? [espace(), jeton(JETON.MOT_CONDITION, "ou"), espace()] : []),
+        jeton(JETON.VALEUR, `"${valeur}"`)
+      ]),
+      jeton(JETON.PONCTUATION, ",")
+    ]);
+  }
   lignes.push(champ("description", texte(description) || À_DÉCRIRE.description));
   lignes.push(champ("utilisation", texte(utilisation) || À_DÉCRIRE.utilisation));
 

@@ -273,7 +273,14 @@ function explicationsVersees(fichiers = []) {
       // tableau » n'apprend rien tant qu'on ignore ce qu'il y a dans une ligne,
       // et c'est ce qu'il faut savoir pour appeler la fonction qui l'attend.
       const structure = Array.isArray(payload.structure) ? payload.structure : null;
-      if (description || utilisation || structure) dites.set(cle, { description, utilisation, structure });
+      // Le domaine d'un nom — ce qu'il a le droit de valoir — se **déclare**
+      // avec l'affirmation, comme sa description. Le déduire des valeurs déjà
+      // versées ferait une liste fermée de ce qu'on a vu jusqu'ici, et la
+      // première valeur nouvelle et légitime se signalerait comme une faute.
+      const valeurs = Array.isArray(payload.valeursPossibles) ? payload.valeursPossibles : null;
+      if (description || utilisation || structure || valeurs) {
+        dites.set(cle, { description, utilisation, structure, valeurs });
+      }
     }
   }
 
