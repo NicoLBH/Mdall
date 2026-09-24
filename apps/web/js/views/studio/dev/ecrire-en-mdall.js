@@ -38,8 +38,12 @@ import { renderSideResizer, bindSideResizer } from "../../ui/side-resizer.js";
 import { renderLignesDeCode } from "../../ui/code-mdall.js";
 import { jetonsDeLaLigne } from "../../../services/memoire-en-lecture.js";
 import {
-  brouillonNeuf, fichierOuvert, avecLeFichier, avecLeDit, ouvertSur, brouillonEcrit, langageDuFichier
+  brouillonNeuf, fichierOuvert, avecLeFichier, avecLeDit, ouvertSur, brouillonEcrit, langageDuFichier,
+  fichiersRemplis
 } from "../../../services/brouillon-mdall.js";
+import {
+  verifierLeBrouillon, phraseDeLaVerification, MOTS_DE_LENNUI
+} from "../../../services/verification-du-brouillon.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -144,6 +148,48 @@ export function renderVoletDuCode(brouillon = null, { lecture = "code" } = {}) {
   `;
 }
 
+/**
+ * Ce que la lecture du projet refuse, posé à côté de la ligne.
+ *
+ * **Rien ne bloque.** Un brouillon à demi juste se corrige ; un brouillon
+ * refusé en bloc se rejette, et l'on recommence à zéro.
+ *
+ * **Le silence se dit aussi.** Un écran qui n'affiche rien quand tout va bien
+ * laisse croire qu'il n'a pas regardé — et l'on apprend alors à ne plus lui
+ * faire confiance quand il parle.
+ */
+export function renderVerification(brouillon = null) {
+  const remplis = fichiersRemplis(brouillon);
+  const remarques = verifierLeBrouillon(remplis);
+  const phrase = phraseDeLaVerification(remarques, { fichiers: remplis.length });
+
+  if (!remarques.length) {
+    return `<p class="brouillon-verif brouillon-verif--muette">
+      ${svgIcon(remplis.length ? "check" : "eye", { className: "octicon" })} ${escapeHtml(phrase)}
+    </p>`;
+  }
+
+  return `
+    <div class="brouillon-verif">
+      <p class="brouillon-verif__phrase">
+        ${svgIcon("alert", { className: "octicon" })} ${escapeHtml(phrase)}
+      </p>
+      <ul class="brouillon-verif__liste">
+        ${remarques.map((remarque) => `
+          <li class="brouillon-verif__ligne">
+            <button type="button" class="brouillon-verif__ou"
+              data-brouillon-aller="${escapeHtml(remarque.fichier)}">
+              ${escapeHtml(remarque.fichier)}${remarque.ligne ? `:${remarque.ligne}` : ""}
+            </button>
+            <span class="brouillon-verif__quoi">${escapeHtml(MOTS_DE_LENNUI[remarque.quoi] ?? remarque.quoi)}</span>
+            <span class="brouillon-verif__dit">${escapeHtml(remarque.dit)}</span>
+          </li>
+        `).join("")}
+      </ul>
+    </div>
+  `;
+}
+
 /** L'écran entier, sans un seul appel. */
 export function renderEcrireEnMdall(brouillon = null, { lecture = "code", largeur = LARGEUR_PAR_DEFAUT } = {}) {
   const ecrit = brouillonEcrit(brouillon);
@@ -186,6 +232,8 @@ export function renderEcrireEnMdall(brouillon = null, { lecture = "code", largeu
 
         ${renderVoletDuCode(brouillon, { lecture })}
       </div>
+
+      ${renderVerification(brouillon)}
     </section>
   `;
 }
@@ -234,6 +282,35 @@ function redessinerLeVolet(racine) {
   neuf.innerHTML = renderVoletDuCode(etat.brouillon, { lecture: etat.lecture });
   if (neuf.firstElementChild) ancien.replaceWith(neuf.firstElementChild);
   brancherLeVolet(racine);
+  redessinerLaVerification(racine);
+}
+
+/**
+ * Relire le brouillon, et redire ce qui ne va pas.
+ *
+ * **À chaque frappe, et c'est gratuit** : la vérification ne demande rien à
+ * personne, elle relit avec le lecteur du projet. Une correction qu'il faudrait
+ * demander ne se demanderait pas, et l'on écrirait longtemps à côté.
+ */
+function redessinerLaVerification(racine) {
+  const ancienne = racine.querySelector(".brouillon-verif");
+  const neuve = document.createElement("div");
+  neuve.innerHTML = renderVerification(etat.brouillon);
+  if (ancienne && neuve.firstElementChild) {
+    ancienne.replaceWith(neuve.firstElementChild);
+    brancherLesRenvois(racine);
+  }
+}
+
+/** Cliquer une remarque ouvre le fichier où elle se trouve. */
+function brancherLesRenvois(racine) {
+  for (const bouton of racine.querySelectorAll("[data-brouillon-aller]")) {
+    bouton.addEventListener("click", () => {
+      etat.brouillon = ouvertSur(etat.brouillon, bouton.dataset.brouillonAller);
+      etat.lecture = "code";
+      redessinerLeVolet(racine);
+    });
+  }
 }
 
 function brancherLeVolet(racine) {
@@ -242,7 +319,11 @@ function brancherLeVolet(racine) {
     ? brancherLaSaisieDeCode(zone, {
       surChangement: (contenu) => {
         const ouvert = fichierOuvert(etat.brouillon);
-        if (ouvert) etat.brouillon = avecLeFichier(etat.brouillon, ouvert.nom, contenu);
+        if (!ouvert) return;
+        etat.brouillon = avecLeFichier(etat.brouillon, ouvert.nom, contenu);
+        // On ne redessine **que** la vérification : réécrire le volet
+        // emporterait le curseur au premier caractère tapé.
+        redessinerLaVerification(racine);
       }
     })
     : null;
@@ -264,6 +345,7 @@ function brancherLeVolet(racine) {
 
 function brancher(racine) {
   brancherLeVolet(racine);
+  brancherLesRenvois(racine);
 
   const dit = racine.querySelector("[data-brouillon-dit]");
   // Pas de redessin ici : on note ce qui est tapé, et l'écran ne bouge pas sous

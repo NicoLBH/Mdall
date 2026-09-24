@@ -767,6 +767,15 @@ export function lireUnFichier(contenu = "") {
       courant = {
         sujet: tete.sujet, valeur: tete.valeur, unite: tete.unite,
         zone: dansLeTableau ? texte(dansLeTableau[1]) : zone,
+        /**
+         * **Où ce bloc commence, dans le fichier lu.**
+         *
+         * Un refus porte son numéro de ligne depuis toujours ; un bloc, non. Ce
+         * qui se reproche à un bloc — une condition sur un nom que rien ne
+         * déclare, une fonction qui ne dit pas où va son résultat — n'avait donc
+         * nulle part où se poser, et l'écran renvoyait chercher.
+         */
+        ligne: numero,
         accolade: ouvre,
         conditions: [], alors: "", sinon: "", sauf: [],
         provenance: null, preuve: "", statut: "", le: "",
