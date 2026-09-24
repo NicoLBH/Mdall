@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import {
   lignesDuFichier, renderOngletsDuBrouillon, renderVoletDuCode, renderEcrireEnMdall,
   renderVerification, renderFormulaire, renderResultats, renderBacDessai, renderTranscription,
-  renderProposition
+  renderProposition, POSE, poseDuPanneau
 } from "./ecrire-en-mdall.js";
 import { REFUS, laTranscriptionLue } from "../../../services/le-mdall-rendu.js";
 import { champsDuBrouillon } from "../../../services/formulaire-du-brouillon.js";
@@ -436,4 +436,77 @@ test("ce qui reste dehors est échappé, jamais injecté", () => {
   );
 
   assert.doesNotMatch(html, /<img /);
+});
+
+/* ── Le redessin ciblé, et le défaut qui fermait l'écran ─────────────────── */
+
+/**
+ * **« Maximum call stack size exceeded » au chargement, sur un brouillon
+ * vide.** Le panneau de proposition n'existait pas encore, et il n'y avait rien
+ * à écrire non plus ; le redessin ciblé se rabattait alors sur un redessin
+ * entier. Or redessiner rebranche, et brancher **déclenche un changement** —
+ * `brancherLaSaisieDeCode` appelle `surChangement` une fois à la pose, pour que
+ * la gouttière parte avec le bon nombre de lignes. L'écran s'appelait donc
+ * lui-même jusqu'à épuiser la pile, et ne s'ouvrait pas du tout.
+ *
+ * Le cas fautif est le plus banal de tous : celui de l'écran à l'ouverture.
+ */
+test("sans panneau et sans rien à écrire, on ne fait rien — surtout pas tout redessiner", () => {
+  assert.equal(poseDuPanneau({ present: false, aEcrire: false }), POSE.RIEN);
+});
+
+test("le panneau naît avec la première ligne, et meurt avec la dernière effacée", () => {
+  assert.equal(poseDuPanneau({ present: false, aEcrire: true }), POSE.POSER);
+  assert.equal(poseDuPanneau({ present: true, aEcrire: false }), POSE.RETIRER);
+  assert.equal(poseDuPanneau({ present: true, aEcrire: true }), POSE.REMPLACER);
+});
+
+test("sans rien qu'on lui dise, la pose ne fait rien", () => {
+  // L'appelant qui oublie ses deux arguments ne doit pas déclencher le seul cas
+  // qui touche au DOM sans qu'on le lui ait demandé.
+  assert.equal(poseDuPanneau(), POSE.RIEN);
+  assert.equal(poseDuPanneau({}), POSE.RIEN);
+});
+
+/**
+ * **Cette épreuve relit le source, et c'est l'exception qui le justifie.**
+ *
+ * Une épreuve de rendu ne peut pas voir ce défaut : il n'est pas dans ce qui se
+ * dessine, il est dans **quand ça se rebranche**. Il ne se voit qu'avec un
+ * navigateur, ou ici — et il est parti en production une fois.
+ *
+ * La règle qu'elle tient : un redessin ciblé pose, remplace, retire, ou ne fait
+ * rien. Il n'appelle jamais `dessiner`, qui rebranche et rappellerait le
+ * redessin ciblé.
+ */
+test("aucun redessin ciblé n'appelle le redessin entier", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  // Le corps de chaque `function redessinerX(...)`, jusqu'à l'accolade de fin
+  // posée en première colonne — la convention du fichier, et celle du projet.
+  const cibles = [...source.matchAll(/\nfunction (redessiner\w+)\([^)]*\) \{\n([\s\S]*?)\n\}\n/g)];
+
+  assert.ok(cibles.length >= 3, `trop peu de redessins ciblés trouvés : ${cibles.length}`);
+
+  for (const [, nom, corps] of cibles) {
+    assert.doesNotMatch(corps, /\bdessiner\(/, `${nom} appelle dessiner : l'écran se rappellera sans fin`);
+  }
+});
+
+test("le bac d'essai se lit avant « Proposer au projet », et le rendu en décide", () => {
+  // Les deux blocs se posent à des moments différents — le bac à « Lancer »,
+  // le panneau à la frappe — et chacun s'insère en DOM. Sans un ordre écrit
+  // quelque part, il dépendrait de celui des clics. C'est le rendu qui le dit,
+  // et les poses s'y rangent.
+  const html = renderEcrireEnMdall(
+    avecLeFichier(brouillonNeuf(), "essai.ddb", "Altitude du site = 890 m"),
+    { bac: true }
+  );
+
+  assert.ok(html.includes("bac"), "le bac n'est pas dessiné");
+  assert.ok(html.includes("brouillon-propose"), "le panneau n'est pas dessiné");
+  assert.ok(html.indexOf('class="bac"') < html.indexOf('class="brouillon-propose"'),
+    "le panneau de proposition passe avant le bac d'essai");
 });
