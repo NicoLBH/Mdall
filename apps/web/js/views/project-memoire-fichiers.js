@@ -32,9 +32,10 @@ import { domicilesDesNoms, versementsHorsDomicile } from "../services/memoire-do
 import { valeursCorrigees, versementsRetrospectifs, exceptionsInutiles } from "../services/memoire-valeurs.js";
 import { fichierQuiDeclare, fichierOuEcrire, fonctionAEcrire, FICHIER_DES_VARIABLES } from "../services/memoire-domiciles.js";
 import {
-  morceauxSurlignes, lignesQuiPortent, rangVoisin, passagesAutourDe, phraseCherchee, porteLaPhrase
+  lignesQuiPortent, rangVoisin, passagesAutourDe, phraseCherchee, porteLaPhrase
 } from "../services/memoire-recherche-texte.js";
 import { renderBoutonHaut } from "./ui/bouton-haut.js";
+import { renderJetons, contexteDuSujet } from "./ui/code-mdall.js";
 import {
   blocDAffirmation, blocDeRegle, blocDeFonction, lignesDeTableau,
   cheminDeFichier, nomDeFichier, couperLUnite, estMesuree, mesureEnFrancais,
@@ -56,6 +57,15 @@ import {
 } from "../services/memoire-identifiants.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
+
+/**
+ * La coloration vit dans `ui/code-mdall.js` depuis que trois écrans en ont
+ * besoin. Elle reste nommée ici parce que c'est par ce nom que la Mémoire et
+ * ses épreuves l'ont toujours appelée — et **c'est un import, pas un renvoi
+ * de façade** : `export { x } from "…"` ne crée aucune liaison locale, et l'on
+ * a déjà livré un « n'est pas défini » de cette façon-là.
+ */
+export { contexteDuSujet };
 
 /** Un jeton, comme l'écriture en fabrique. Voir `memoire-en-texte.js`. */
 const jeton = (type, contenu) => ({ type, texte: contenu });
@@ -2124,91 +2134,6 @@ export function jetonsDeLAssertion(assertion = {}) {
   // L'espace qui précédait l'accolade n'a plus rien à séparer.
   while (tete.length && !tete[tete.length - 1].texte.trim()) tete.pop();
   return tete;
-}
-
-/**
- * Les jetons d'une ligne, colorés.
- *
- * Un sujet porte en plus **ce qu'il vaut** : il se pose, il renvoie à quelque
- * chose de connu, ou il renvoie à rien. C'est cette dernière couleur qui
- * transforme la mémoire en quelque chose qui se vérifie en la lisant — une
- * condition qui porte sur une donnée jamais versée se voit sans la chercher.
- */
-function renderJetons(jetons = [], { declares = null, variables = null, mot = "" } = {}) {
-  return jetons
-    .map((entree) => {
-      const resolution = entree.type === "sujet"
-        ? resolutionDuSujet(entree.texte, { jetons, declares })
-        : "";
-      const classes = `mdall-${escapeHtml(entree.type)}${resolution ? ` mdall-sujet--${resolution}` : ""}`;
-      const dit = entree.type === "sujet" ? contexteDuSujet(entree.texte, { resolution, variables }) : "";
-      // Le mot cherché se surligne **dans** son jeton : la coloration reste
-      // celle du langage, et le surlignage se pose par-dessus. Surligner la
-      // ligne entière aurait effacé la grammaire au moment où l'on en a le plus
-      // besoin — celui où l'on cherche quelque chose.
-      const corps = mot ? renderSurligne(entree.texte, mot) : escapeHtml(entree.texte);
-      return `<span class="${classes}"${dit ? ` title="${escapeHtml(dit)}"` : ""}>${corps}</span>`;
-    })
-    .join("");
-}
-
-/** Un texte, avec le mot cherché entouré d'une marque. */
-function renderSurligne(chaine, mot) {
-  return morceauxSurlignes(chaine, mot)
-    .map((morceau) => (morceau.trouve
-      ? `<mark class="memoire-trouve">${escapeHtml(morceau.texte)}</mark>`
-      : escapeHtml(morceau.texte)))
-    .join("");
-}
-
-/**
- * Ce qu'un nom dit de lui-même, au survol.
- *
- * ## Pourquoi cela ne peut pas attendre
- *
- * « Hauteur du plancher bas » et « Hauteur du dernier plancher » sont deux
- * variables ; à la lecture d'une condition, on ne sait pas laquelle on regarde
- * sans aller ouvrir le fichier qui la déclare. Se tromper entre deux noms
- * voisins ne se voit pas : la règle reste vraie d'apparence, et fausse.
- *
- * Le survol donne donc ce que l'écran de suivi des variables donne — ce qu'elle
- * vaut aujourd'hui, où elle est déclarée, combien de fois elle sert — sans
- * quitter la ligne qu'on lit.
- */
-export function contexteDuSujet(sujet, { resolution = "", variables = null } = {}) {
-  const nom = texte(sujet);
-  if (!nom) return "";
-
-  const variable = variables instanceof Map ? variables.get(cleDuSujet(nom)) : null;
-  if (!variable) {
-    return resolution === "inconnu"
-      ? `${nom}\nAucune ligne de la mémoire ne la déclare : ce renvoi ne mène nulle part.`
-      : "";
-  }
-
-  const lignes = [nom];
-  const { type, unite } = typeDeLaValeur(variable.valeur);
-  lignes.push([type, unite].filter(Boolean).join(" · "));
-
-  if (variable.declaree) {
-    lignes.push(`vaut ${variable.valeur || "—"}`);
-    lignes.push(`déclarée dans ${variable.declarePar}`);
-  } else {
-    lignes.push("personne ne l'a versée");
-  }
-
-  // Les fonctions qui l'emploient, nommément : savoir dans quel fichier
-  // chercher ne dit pas quoi y lire, et c'est ce qu'on veut avant de réutiliser
-  // un nom ou d'en créer un autre.
-  const usages = Array.isArray(variable.usages) ? variable.usages : [];
-  lignes.push(usages.length
-    ? `${usages.length} usage${usages.length > 1 ? "s" : ""} — ${
-        usages.map((usage) => `${usage.fonction} (${usage.fichier})`).join(", ")}`
-    : variable.citeePar.length
-      ? `${variable.citeePar.length} fichier${variable.citeePar.length > 1 ? "s" : ""} — ${variable.citeePar.join(", ")}`
-      : "aucun usage");
-
-  return lignes.join("\n");
 }
 
 function formatDate(valeur) {
