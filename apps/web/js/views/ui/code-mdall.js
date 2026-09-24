@@ -149,3 +149,23 @@ export function renderLignesDeCode(lignes = [], options = {}) {
 
   return `<div class="fichier-code">${corps}</div>`;
 }
+
+/**
+ * Une ligne de Mdall, en texte nu.
+ *
+ * **C'est ce qui permet de relire ce qu'on vient d'écrire.** Une ligne rendue
+ * par `lignesDeLAssertion` est une suite de jetons colorés ; la remettre bout à
+ * bout redonne le fichier tel qu'il se tape au clavier — et c'est cette
+ * chaîne-là que `lireUnFichier` sait relire.
+ *
+ * Écrit une fois, ici, parce que trois écrans en ont besoin et qu'une boucle
+ * recopiée dans chacun finirait par n'être la même nulle part (règle 10).
+ */
+export function texteDeLaLigne(ligne) {
+  return (ligne?.jetons ?? []).map((jeton) => String(jeton?.texte ?? "")).join("");
+}
+
+/** Plusieurs lignes, en texte nu, séparées comme dans un fichier. */
+export function texteDesLignes(lignes = []) {
+  return (Array.isArray(lignes) ? lignes : []).map(texteDeLaLigne).join("\n");
+}

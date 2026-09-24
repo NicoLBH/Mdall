@@ -66,6 +66,9 @@ import { phraseDeLaProvenance } from "./provenance-lisible.js";
 import {
   aProposerDeLaConversation, phraseDeLaProposition, phraseDesSansRetour
 } from "../../../services/copilote-versement.js";
+import { blocsAProposer } from "../../ui/mdall-de-la-proposition.js";
+import { renderBlocsMdall } from "../../ui/mdall-a-proposer.js";
+import { domicilesDesNoms } from "../../../services/memoire-domiciles.js";
 import { routeDeLEcran } from "../../../../vendor/utilitaires/ecrans-du-projet.js";
 import { routeOuAller } from "../../../services/copilote-navigation.js";
 import { aRetenirDuResultat, executerUtilitaire } from "../../../services/utilitaires-service.js";
@@ -994,7 +997,7 @@ function renderExecution(execution, message = 0, rang = 0) {
         </p>
         ${renderRemise(execution)}
         ${renderRemiseIncendie(execution)}
-        ${renderAProposer(execution, index)}
+        ${renderAProposer(execution, index, { ouEcrit: ouEcritDuProjet() })}
       </div>
     </div>
   `;
@@ -1037,6 +1040,21 @@ function renderRemise(execution) {
 }
 
 /**
+ * Où chaque nom du projet est écrit, tel que la mémoire le sait.
+ *
+ * **Sans lui, une valeur déjà versée s'afficherait dans le fichier qu'elle
+ * vise, et non dans celui où elle vit.** Un nom ne déménage pas au deuxième
+ * versement (règle 10), et l'aperçu doit dire ce qui arrivera, pas ce qu'on
+ * aurait fait la première fois.
+ *
+ * Vide tant qu'aucune question n'a été posée : la mémoire n'a pas été lue, et
+ * l'on ne prétend pas savoir où les noms habitent (règle 5).
+ */
+function ouEcritDuProjet() {
+  return domicilesDesNoms(ensureState().assertionsConnues ?? []);
+}
+
+/**
  * De quoi proposer au projet ce que la conversation vient de lui apprendre.
  *
  * Quelqu'un a donné une valeur — dans le formulaire, ou en passant dans sa
@@ -1047,8 +1065,19 @@ function renderRemise(execution) {
  * **Il ne verse rien.** Il ouvre une proposition, que quelqu'un relira et
  * signera — ou pas. C'est la règle 1, et c'est ce qui donne à la valeur un
  * auteur et une date au lieu d'une ligne apparue toute seule.
+ *
+ * ## Et l'on voit ce qu'elle écrira, avant de cliquer
+ *
+ * « Proposer 3 valeurs au projet » dit combien, et rien d'autre : ni sous quel
+ * nom, ni avec quelle provenance, ni dans quel fichier. On cliquait donc à
+ * l'aveugle sur une écriture — ce que la règle 1 cherche justement à empêcher.
+ *
+ * Le Mdall que ces valeurs écriront est **déterministe et déjà écrit** :
+ * `blocsAProposer` passe par `itemsDeProposition`, c'est-à-dire par l'appel
+ * même que le clic fera. Aucun modèle, aucun jeton payé, et aucun risque que
+ * l'aperçu montre autre chose que ce qui sera versé (règle 4).
  */
-function renderAProposer(execution, index = 0) {
+function renderAProposer(execution, index = 0, { ouEcrit = null } = {}) {
   if (execution?.statut !== "fait") return "";
 
   const { affirmations, sansRetour } = aProposerDeLaConversation(execution);
@@ -1072,6 +1101,7 @@ function renderAProposer(execution, index = 0) {
         ? `<em>${escapeHtml(affirmations.map((a) => a.sujet).join(", "))}</em>`
         : ""}
     </button>
+    ${renderBlocsMdall(blocsAProposer(affirmations, { ouEcrit }))}
     ${dit ? `<p class="copilote-outil__note">${escapeHtml(dit)}</p>` : ""}
   `;
 }
