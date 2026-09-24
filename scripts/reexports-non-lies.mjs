@@ -30,6 +30,75 @@
  * main.
  */
 
+/**
+ * Le fichier, sans ses commentaires.
+ *
+ * ## Pourquoi il faut les retirer
+ *
+ * Cette lecture cherche un motif **dans du texte**, et un commentaire est du
+ * texte. Le module qui explique ce garde-fou cite forcément la forme qu'il
+ * traque — c'est ainsi qu'on documente un piège —, et le garde-fou s'accusait
+ * alors lui-même, sur un nom d'exemple.
+ *
+ * Un faux positif est pire qu'un silence ici : celui qui le rencontre ne sait
+ * pas distinguer l'alerte juste de l'alerte sur de la prose, et il **désarme le
+ * garde-fou** — qui existe parce qu'un « n'est pas défini » est parti en
+ * production sans que rien ne le voie.
+ *
+ * ## Il connaît les chaînes, et c'est indispensable
+ *
+ * `import … from "https://deno.land/…"` porte un `//` **dans une chaîne**.
+ * Couper bêtement à chaque `//` emporterait la fin de la ligne d'import, donc
+ * l'import lui-même, et le garde-fou accuserait un nom pourtant lié.
+ *
+ * On marche donc caractère par caractère, en sachant si l'on est dans une
+ * chaîne — simple, double, ou gabarit — avant de reconnaître un commentaire.
+ * Les caractères retirés sont remplacés par des espaces plutôt que supprimés :
+ * les positions ne bougent pas, et un motif ne se recolle pas par-dessus le
+ * trou.
+ */
+export function sansLesCommentaires(source) {
+  const texte = String(source ?? "");
+  const sortie = [];
+
+  let chaine = "";
+  let ligne = false;
+  let bloc = false;
+
+  for (let rang = 0; rang < texte.length; rang += 1) {
+    const ici = texte[rang];
+    const apres = texte[rang + 1] ?? "";
+
+    if (ligne) {
+      if (ici === "\n") { ligne = false; sortie.push(ici); } else sortie.push(" ");
+      continue;
+    }
+
+    if (bloc) {
+      if (ici === "*" && apres === "/") { bloc = false; sortie.push("  "); rang += 1; }
+      else sortie.push(ici === "\n" ? ici : " ");
+      continue;
+    }
+
+    if (chaine) {
+      sortie.push(ici);
+      // Une contre-oblique neutralise le caractère suivant : sans cela,
+      // `"il a dit \"non\""` refermerait la chaîne au milieu.
+      if (ici === "\\") { sortie.push(apres); rang += 1; continue; }
+      if (ici === chaine) chaine = "";
+      continue;
+    }
+
+    if (ici === '"' || ici === "'" || ici === "`") { chaine = ici; sortie.push(ici); continue; }
+    if (ici === "/" && apres === "/") { ligne = true; sortie.push(" "); continue; }
+    if (ici === "/" && apres === "*") { bloc = true; sortie.push(" "); continue; }
+
+    sortie.push(ici);
+  }
+
+  return sortie.join("");
+}
+
 /** Les noms d'une liste entre accolades, `a as b` compris — on garde ce qui sort. */
 export function nomsDeLaListe(liste) {
   return String(liste ?? "").split(",")
@@ -63,7 +132,9 @@ const declare = (nom) => new RegExp(
  * @returns {string[]} les noms qui lèveront « is not defined » au premier appel
  */
 export function lesReexportsNonLies(source) {
-  const texte = String(source ?? "");
+  // **Les commentaires d'abord.** Voir `sansLesCommentaires` : le module qui
+  // documente ce piège en cite la forme, et le garde-fou s'accusait lui-même.
+  const texte = sansLesCommentaires(source);
 
   const reexportes = [...texte.matchAll(REEXPORTS)].flatMap(([, liste]) => nomsDeLaListe(liste));
   if (!reexportes.length) return [];

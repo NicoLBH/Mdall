@@ -17,7 +17,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { lesReexportsNonLies, nomsDeLaListe } from "./reexports-non-lies.mjs";
+import { lesReexportsNonLies, nomsDeLaListe, sansLesCommentaires } from "./reexports-non-lies.mjs";
 
 const racine = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dossiers = [
@@ -134,4 +134,77 @@ test("aucun nom réexporté et employé n'est resté sans import", async () => {
   assert.deepEqual(coupables, [],
     "réexporté depuis ailleurs, employé ici, jamais importé — « is not defined » au premier appel :\n"
     + coupables.join("\n"));
+});
+
+/* ── Un commentaire est du texte, et ce garde-fou lit du texte ───────────── */
+
+test("un réexport cité dans un commentaire n'accuse personne", () => {
+  // C'est le cas qui a fait tomber le garde-fou sur lui-même : le module qui
+  // documente ce piège en cite forcément la forme. Un faux positif est pire
+  // qu'un silence — celui qui le rencontre désarme le garde plutôt que de
+  // distinguer l'alerte juste de l'alerte sur de la prose.
+  const source = [
+    '/**',
+    ' * `export { machin } from "./ailleurs.js";` ne lie rien ici.',
+    ' */',
+    'export function faire() { return machin; }'
+  ].join("\n");
+
+  assert.deepEqual(lesReexportsNonLies(source), []);
+});
+
+test("un emploi caché dans un commentaire ne compte pas comme un emploi", () => {
+  // L'autre sens : le nom est bien réexporté sans liaison, mais le seul endroit
+  // qui le « nomme » est une phrase. Rien ne lèvera « n'est pas défini ».
+  const source = [
+    'import { autre } from "./autre.js";',
+    'export { machin } from "./ailleurs.js";',
+    'export const truc = autre;',
+    '// on pourrait se servir de machin un jour'
+  ].join("\n");
+
+  assert.deepEqual(lesReexportsNonLies(source), []);
+});
+
+test("le `//` d'une adresse ne coupe pas la ligne qui la porte", () => {
+  // Le piège de la correction elle-même : couper à chaque `//` emporterait la
+  // fin d'un `import … from "https://…"`, donc l'import — et le garde-fou
+  // accuserait un nom pourtant lié.
+  const source = [
+    'import { serve } from "https://deno.land/std@0.224.0/http/server.ts";',
+    'export { serve } from "https://deno.land/std@0.224.0/http/server.ts";',
+    'export const lancer = () => serve();'
+  ].join("\n");
+
+  assert.deepEqual(lesReexportsNonLies(source), []);
+  assert.match(sansLesCommentaires(source), /https:\/\/deno\.land/);
+});
+
+test("la faute reste attrapée quand elle voisine un commentaire", () => {
+  const source = [
+    '// ce module parle à l\'authentification, aucune épreuve ne l\'importe',
+    'export { messagesAEnvoyer } from "./le-fil-des-mails.js";',
+    'export function relever() { return messagesAEnvoyer(); }'
+  ].join("\n");
+
+  assert.deepEqual(lesReexportsNonLies(source), ["messagesAEnvoyer"]);
+});
+
+test("les commentaires partent, le code reste à sa place", () => {
+  // Les positions ne bougent pas : un motif ne doit pas se recoller par-dessus
+  // le trou qu'on vient de faire.
+  const source = 'const a = 1; /* ceci */ const b = 2;';
+  const net = sansLesCommentaires(source);
+
+  assert.equal(net.length, source.length);
+  assert.doesNotMatch(net, /ceci/);
+  assert.match(net, /^const a = 1;\s+const b = 2;$/);
+});
+
+test("une chaîne qui contient une contre-oblique ne referme pas trop tôt", () => {
+  // `"il a dit \"non\""` : sans la contre-oblique, la chaîne se fermerait au
+  // milieu et la suite se lirait comme du code.
+  const source = 'const dit = "il a dit \\"// pas un commentaire\\"";';
+
+  assert.equal(sansLesCommentaires(source), source);
 });
