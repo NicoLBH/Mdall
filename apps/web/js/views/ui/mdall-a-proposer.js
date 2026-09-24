@@ -23,6 +23,9 @@
  */
 
 import { escapeHtml } from "../../utils/escape-html.js";
+import { itemsAPorter } from "../../services/atelier-proposition.js";
+import { affirmationsDUneProposition } from "../../services/proposition-avant-apres.js";
+import { motDeLaNature } from "../../services/proposition-review.js";
 import { renderLignesDeCode } from "./code-mdall.js";
 import { PHRASES_SANS_BLOC, blocsAOuvrir } from "./mdall-de-la-proposition.js";
 
@@ -88,4 +91,76 @@ export function renderMdallAProposer(blocs = [], {
       </div>
     </section>
   `;
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Ce qu'une proposition portera : la mémoire d'un côté, le suivi de l'autre
+ *
+ * **Tout ce qui se propose ne s'écrit pas en Mdall, et c'est une découverte du
+ * lot.** Une lecture de compte rendu ne rend que de l'intendance : un document
+ * qui entre au corpus, des sujets à ouvrir, des lots, des labels, des jalons.
+ * Aucune valeur du projet, donc **aucun bloc Mdall** — jamais, pas seulement
+ * quand le compte rendu est pauvre.
+ *
+ * Laisser l'écran muet là-dessus serait le pire des deux mondes : celui qui
+ * vient de voir le Copilote écrire du Mdall croirait que le compte rendu en
+ * écrit aussi, et chercherait longtemps où. On le dit donc (règle 5) — et la
+ * distinction est vraie et utile : un compte rendu fait du secrétariat, il ne
+ * touche pas à la mémoire.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Ce qu'une proposition portera, partagé en deux.
+ *
+ * `memoire` : les lignes qui affirment quelque chose sur le projet — celles qui
+ * s'écrivent en Mdall. `suivi` : le reste, compté par nature.
+ *
+ * **Il part de `itemsAPorter`**, l'appel même que le clic fera : compter depuis
+ * une autre liste ferait promettre une chose et en proposer une autre (règle 4).
+ * C'est le défaut que ce lot répare, et les deux écrans qui proposaient
+ * l'annonçaient déjà dans leurs commentaires sans pouvoir l'éviter.
+ */
+export function partDeLaProposition(recues = []) {
+  const items = itemsAPorter(recues);
+  const memoire = affirmationsDUneProposition(items);
+  const cles = new Set(memoire.map((item) => item));
+
+  const parNature = new Map();
+  for (const item of items) {
+    if (cles.has(item)) continue;
+    const nature = texte(item?.itemType ?? item?.item_type);
+    if (!nature) continue;
+    parNature.set(nature, (parNature.get(nature) ?? 0) + 1);
+  }
+
+  return {
+    memoire,
+    suivi: [...parNature].map(([nature, combien]) => ({ nature, combien }))
+  };
+}
+
+/**
+ * Ce que la proposition portera, en une phrase.
+ *
+ * `""` quand elle ne porte rien : une phrase qui compte zéro de tout se lit
+ * comme une panne, alors qu'il n'y a simplement rien à proposer.
+ */
+export function phraseDeLaPart({ memoire = [], suivi = [] } = {}) {
+  const valeurs = Array.isArray(memoire) ? memoire.length : 0;
+  // Pas de filtre sur le compte : `partDeLaProposition` ne range une nature
+  // qu'en la comptant, et une nature à zéro n'existe donc pas. La retirer
+  // serait une consigne qu'aucun cas ne peut faire tomber (règle 12).
+  const dits = (Array.isArray(suivi) ? suivi : [])
+    .map((un) => `${un.combien} ${motDeLaNature(un.nature, un.combien)}`);
+
+  if (!valeurs && !dits.length) return "";
+
+  const suite = dits.length ? `${dits.join(" · ")}. ` : "";
+
+  // **Zéro valeur se dit, et ne se tait pas.** C'est l'information : ce dépôt
+  // ne touche pas à la mémoire du projet, et rien d'autre ne le dirait.
+  return valeurs
+    ? `${suite}${valeurs} ${valeurs > 1 ? "lignes entreront" : "ligne entrera"} dans la mémoire du projet.`
+    : `${suite}Rien n'entre dans la mémoire du projet : ce dépôt ne porte que du suivi.`;
 }

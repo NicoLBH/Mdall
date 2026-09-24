@@ -264,6 +264,34 @@ function porteesDeLAvis(valeur) {
   return liste.length ? liste : null;
 }
 
+/**
+ * Les lignes qu'une proposition portera, quelle que soit la forme reçue.
+ *
+ * ## Deux formes, et il faut les deux
+ *
+ * Les utilitaires et le Copilote rendent des **affirmations** — un sujet, une
+ * valeur, une provenance —, qu'il faut mettre en items. La lecture d'un compte
+ * rendu rend des **items** tout faits, parce qu'elle propose du suivi que
+ * personne n'écrit en valeurs : un sujet à ouvrir, un lot, un label.
+ *
+ * ## Pourquoi cette fonction existe
+ *
+ * Le tri vivait dans `preparerUneProposition`. Un aperçu qui veut montrer ce
+ * qui sera porté devait donc le refaire — et deux tris finissent par ne plus
+ * trier pareil, le jour où l'un apprend une troisième forme (règle 4). On
+ * montrerait alors une chose et l'on verserait l'autre, ce qui est pire que de
+ * ne rien montrer.
+ */
+export function itemsAPorter(recues = []) {
+  const toutes = Array.isArray(recues) ? recues : [];
+  // **Le premier décide pour le lot.** Un appelant ne mélange pas les deux
+  // formes : il tient l'une ou l'autre, et lire chaque entrée séparément
+  // laisserait passer un mélange qu'aucun appelant n'a voulu.
+  return toutes.length && toutes[0]?.itemType
+    ? sansDoublonDItems(toutes)
+    : itemsDeProposition(toutes);
+}
+
 export function itemsDeProposition(affirmations = []) {
   return sansDoublonDItems((Array.isArray(affirmations) ? affirmations : [])
     .filter((affirmation) => texte(affirmation?.sujet) && texte(affirmation?.valeur))
@@ -488,9 +516,7 @@ export async function preparerUneProposition({
           : { ...affirmation, zones: portees }
       ));
 
-  const items = Array.isArray(situees) && situees.length && situees[0]?.itemType
-    ? sansDoublonDItems(situees)
-    : itemsDeProposition(situees);
+  const items = itemsAPorter(situees);
   if (!items.length) return { ok: false, raison: "Il n'y a rien à proposer." };
 
   const base = await import("./propositions-supabase.js");

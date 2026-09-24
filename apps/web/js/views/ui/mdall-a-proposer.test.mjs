@@ -11,7 +11,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { blocsAProposer } from "./mdall-de-la-proposition.js";
-import { SOUS_LE_TITRE, renderBlocsMdall, renderMdallAProposer } from "./mdall-a-proposer.js";
+import {
+  SOUS_LE_TITRE, partDeLaProposition, phraseDeLaPart, renderBlocsMdall, renderMdallAProposer
+} from "./mdall-a-proposer.js";
 import { texteDeLaLigne, texteDesLignes } from "./code-mdall.js";
 import { lireUnFichier } from "../../services/memoire-en-lecture.js";
 import { domicilesDesNoms } from "../../services/memoire-domiciles.js";
@@ -241,4 +243,93 @@ test("ce qu'un producteur a nommé est échappé, jamais injecté", () => {
 
   assert.doesNotMatch(html, /<img /);
   assert.doesNotMatch(html, /<script>/);
+});
+
+/* ── Ce qu'une proposition porte : la mémoire d'un côté, le suivi de l'autre ── */
+
+/** Ce qu'une lecture de compte rendu rend : de l'intendance, et rien d'autre. */
+const DU_SUIVI = [
+  { itemType: "document", itemKey: "d-1", payload: { filename: "CR12.pdf" } },
+  { itemType: "sujet", itemKey: "p-1", payload: { titre: "Reprendre l'acrotère" } },
+  { itemType: "sujet", itemKey: "p-2", payload: { titre: "Reprise en sous-œuvre" } },
+  { itemType: "lot", itemKey: "3", payload: { intitule: "Charpente" } }
+];
+
+test("le suivi se compte par nature, et n'entre pas dans la mémoire", () => {
+  const part = partDeLaProposition(DU_SUIVI);
+
+  assert.deepEqual(part.memoire, []);
+  assert.deepEqual(part.suivi, [
+    { nature: "document", combien: 1 },
+    { nature: "sujet", combien: 2 },
+    { nature: "lot", combien: 1 }
+  ]);
+});
+
+test("zéro valeur se dit, et ne se tait pas", () => {
+  // C'est l'information : ce dépôt ne touche pas à la mémoire du projet, et
+  // rien d'autre ne le dirait. Celui qui vient de voir le Copilote écrire du
+  // Mdall croirait sinon que le compte rendu en écrit aussi.
+  const dit = phraseDeLaPart(partDeLaProposition(DU_SUIVI));
+
+  assert.match(dit, /1 document/);
+  assert.match(dit, /2 sujets à ouvrir/);
+  assert.match(dit, /Rien n'entre dans la mémoire du projet/);
+});
+
+test("des valeurs se comptent à part, et se disent au singulier comme au pluriel", () => {
+  const une = phraseDeLaPart(partDeLaProposition([UNE_VALEUR]));
+  assert.match(une, /1 ligne entrera dans la mémoire du projet/);
+  assert.doesNotMatch(une, /lignes entreront/);
+
+  const deux = phraseDeLaPart(partDeLaProposition([UNE_VALEUR, UNE_REGLE]));
+  assert.match(deux, /2 lignes entreront dans la mémoire du projet/);
+});
+
+test("mémoire et suivi se lisent ensemble quand une proposition porte les deux", () => {
+  const dit = phraseDeLaPart(partDeLaProposition([...DU_SUIVI, {
+    itemType: "base_datum", itemKey: "altitude-du-site",
+    payload: { subject: "Altitude du site", value: "890 m", nature: NATURE.DONNEE_BASE }
+  }]));
+
+  assert.match(dit, /1 document/);
+  assert.match(dit, /1 ligne entrera dans la mémoire/);
+  assert.doesNotMatch(dit, /ne porte que du suivi/);
+  // Et la valeur ne se compte **qu'une fois** : la voir passer aussi dans le
+  // suivi ferait lire « 1 donnée de base » à côté de « 1 ligne entrera ».
+  assert.deepEqual(
+    partDeLaProposition([...DU_SUIVI, {
+      itemType: "base_datum", itemKey: "altitude-du-site",
+      payload: { subject: "Altitude du site", value: "890 m", nature: NATURE.DONNEE_BASE }
+    }]).suivi.map((un) => un.nature).sort(),
+    ["document", "lot", "sujet"]
+  );
+});
+
+test("le compte part des lignes qui partiront, pas d'une liste tenue à côté", () => {
+  // Deux comptes pour la même question : on promet une chose et l'on en propose
+  // une autre, et c'est celui qu'on ne regarde pas qui a raison (règle 4).
+  // Deux affirmations de même clé ne font qu'une ligne — et donc qu'une.
+  const part = partDeLaProposition([UNE_VALEUR, { ...UNE_VALEUR, valeur: "900 m" }]);
+  assert.equal(part.memoire.length, 1);
+});
+
+test("rien à porter ne compte pas des zéros", () => {
+  assert.deepEqual(partDeLaProposition([]), { memoire: [], suivi: [] });
+  assert.deepEqual(partDeLaProposition(null), { memoire: [], suivi: [] });
+  assert.equal(phraseDeLaPart(partDeLaProposition([])), "");
+});
+
+test("l'intendance ne passe pas par l'écrivain : elle n'a pas de Mdall", () => {
+  // Un sujet ouvert, un lot, un label : des mouvements du suivi, pas des
+  // valeurs du projet. Leur écrire un bloc rendrait des blocs sans nom ni
+  // valeur, qui se liraient comme une mémoire qu'on s'apprête à écrire.
+  assert.deepEqual(blocsAProposer(DU_SUIVI, {}), []);
+
+  // Et ce qui affirme quelque chose passe, même mêlé à du suivi.
+  const blocs = blocsAProposer([...DU_SUIVI, {
+    itemType: "base_datum", itemKey: "altitude-du-site",
+    payload: { subject: "Altitude du site", value: "890 m", nature: NATURE.DONNEE_BASE }
+  }], {});
+  assert.deepEqual(blocs.map((un) => un.sujet), ["Altitude du site"]);
 });

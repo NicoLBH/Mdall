@@ -66,6 +66,8 @@ import {
 import { TRANSFORMER, brancheDeLAction, renderTransformer } from "../../ui/transformer.js";
 import { branchesOuvertes, oublierLesBranches } from "../../../services/branches-ouvertes.js";
 import { lotsAProposer, phraseDesLots } from "../../../services/lots-du-cr.js";
+import { itemsDuCompteRendu } from "../../../services/proposition-du-cr.js";
+import { partDeLaProposition, phraseDeLaPart } from "../../ui/mdall-a-proposer.js";
 import {
   EFFETS_DE_LA_FERMETURE, FERMETURE, PHRASES_DE_LA_FERMETURE, fermeturesDuCompteRendu,
   phraseDesDisparus, sujetsDisparus
@@ -1583,6 +1585,55 @@ function renderAmbiguites(points) {
 
 
 /**
+ * Tout ce que la proposition portera, rassemblé une seule fois.
+ *
+ * ## Pourquoi cette fonction existe
+ *
+ * L'écran annonçait « Ce que ce compte rendu apporterait » en recomptant les
+ * lots, les labels, les jalons et les fermetures **depuis les points** ; le
+ * clic, lui, les recomposait pour `itemsDuCompteRendu`. Deux comptes pour la
+ * même question : on promettait une chose et l'on en proposait une autre, et
+ * c'est le compte qu'on ne regarde pas qui a raison (règle 4). Les commentaires
+ * du site d'appel le disaient déjà, sans pouvoir l'éviter.
+ *
+ * Elle est donc écrite ici, et les deux l'appellent.
+ *
+ * ## Le document est le seul argument du dehors
+ *
+ * Il n'existe qu'une fois le compte rendu rangé dans Fichiers, c'est-à-dire au
+ * clic. À l'écran, on passe celui qui est déjà rangé s'il y en a un, et rien
+ * sinon : l'annonce est alors en dessous **d'exactement une ligne**, celle du
+ * document lui-même — que l'écran nomme par ailleurs, et qui n'entre de toute
+ * façon pas dans la mémoire.
+ */
+export function matiereDuCompteRendu(vue, { document: doc = null } = {}) {
+  const points = Array.isArray(vue?.lecture?.points) ? vue.lecture.points : [];
+  const rubriques = Array.isArray(vue?.lecture?.rubriques) ? vue.lecture.rubriques : [];
+  const confrontes = Array.isArray(vue?.confrontes) ? vue.confrontes : [];
+
+  return {
+    confrontes,
+    document: doc,
+    lots: lotsAProposer(points, vue?.lots),
+    rubriques,
+    labels: labelsAProposer(points, vue?.labels, rubriques),
+    objectifs: objectifsAProposer(points, {
+      tenueLe: texte(vue?.lecture?.identite?.tenueLe), objectifsDuProjet: vue?.objectifs
+    }),
+    luPar: texte(vue?.lecture?.luPar),
+    disparition: sujetsDisparus({
+      confrontes,
+      sujetsDuProjet: vue?.sujetsDuProjet,
+      sujetsDuLabel: vue?.sujetsDuLabel,
+      placement: placementDuCompteRendu(vue)
+    }),
+    // **La source de tout ce que la proposition porte, et sa date.** Une
+    // fermeture qu'on ne peut ni sourcer ni dater ne se relit pas.
+    identite: vue?.lecture?.identite ?? null
+  };
+}
+
+/**
  * Ce que ce compte rendu apporterait au projet, hors sujets.
  *
  * ## Un lot manquant ne se voit pas
@@ -1618,12 +1669,37 @@ function renderCeQueLeCrApporte(vue) {
       ${renderLesFermetures(vue, points)}
       ${renderLaSituation(vue)}
       ${""}
+      ${renderCeQueLaPropositionPortera(vue)}
       <p class="lecture-cr__mot">
         Rien de tout cela n'est écrit : ni lot ajouté, ni label créé, ni label posé. C'est ce que
         la proposition porterait, et c'est quelqu'un qui la signe.
       </p>
     </section>
   `;
+}
+
+/**
+ * Ce que la proposition portera, compté sur **ses propres lignes**.
+ *
+ * ## Une découverte de ce lot : un compte rendu n'écrit rien dans la mémoire
+ *
+ * Toutes les lignes qu'il propose sont de l'**intendance** — un document au
+ * corpus, des sujets à ouvrir ou à relancer, des lots, des labels, des jalons.
+ * Aucune n'affirme quoi que ce soit sur l'ouvrage, donc **aucune ne s'écrit en
+ * Mdall**. Ce n'est pas un manque : un compte rendu fait du secrétariat.
+ *
+ * Le taire serait le pire des deux mondes. Celui qui vient de voir le Copilote
+ * écrire du Mdall sous son bouton croirait que le compte rendu en écrit aussi,
+ * et chercherait longtemps où. On le dit donc, et l'on dit aussi le reste
+ * (règle 5).
+ */
+function renderCeQueLaPropositionPortera(vue) {
+  const dit = phraseDeLaPart(partDeLaProposition(
+    itemsDuCompteRendu(matiereDuCompteRendu(vue, { document: vue?.rangement?.document ?? null }))
+  ));
+  if (!dit) return "";
+
+  return `<p class="lecture-cr__mot">${escapeHtml(dit)}</p>`;
 }
 
 /** Les lots que le compte rendu nomme, et ceux qui manquent au projet. */
@@ -3464,38 +3540,14 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
       titre: cr.titreDeLaProposition({ nom: etat.lecture?.nom, identite: etat.lecture?.identite }),
       intro: cr.introDuCompteRendu({ confrontes: etat.confrontes, nom: etat.lecture?.nom }),
       source: texte(etat.lecture?.nom) || "compte rendu de chantier",
-      // **Tout ce que l'écran vient de montrer**, et à partir des mêmes
-      // sources. La proposition ne portait que le document et les points neufs :
-      // les lots manquants, les labels, les objectifs et les trente-sept points
-      // reportés restaient à l'écran, sous une phrase qui promettait qu'ils
-      // entreraient. Ils n'entraient pas.
-      affirmations: cr.itemsDuCompteRendu({
-        confrontes: etat.confrontes,
-        document: range.document,
-        lots: lotsAProposer(points, etat.lots),
-        // **Les mêmes rubriques que celles que le tableau vient de montrer.**
-        // Les relire ailleurs ferait promettre un rangement et en proposer un
-        // autre (règle 4).
-        rubriques: Array.isArray(etat.lecture?.rubriques) ? etat.lecture.rubriques : [],
-        labels: labelsAProposer(points, etat.labels, etat.lecture?.rubriques ?? []),
-        objectifs: objectifsAProposer(points, {
-          tenueLe: texte(etat.lecture?.identite?.tenueLe), objectifsDuProjet: etat.objectifs
-        }),
-        luPar: texte(etat.lecture?.luPar),
-        // Ce que l'écran annonce depuis le début — « la proposition les
-        // fermerait » — et qu'elle ne portait pas. La même source que le bloc
-        // « Les fermetures », sinon l'écran promettrait une chose et la
-        // proposition en porterait une autre (règle 4).
-        disparition: sujetsDisparus({
-          confrontes: Array.isArray(etat.confrontes) ? etat.confrontes : [],
-          sujetsDuProjet: etat.sujetsDuProjet,
-          sujetsDuLabel: etat.sujetsDuLabel,
-          placement: placementDuCompteRendu(etat)
-        }),
-        // **La source de tout ce que la proposition porte, et sa date.** Une
-        // fermeture qu'on ne peut ni sourcer ni dater ne se relit pas.
-        identite: etat.lecture?.identite ?? null
-      })
+      // **Exactement ce que l'écran vient d'annoncer**, et pas seulement « les
+      // mêmes sources » : la même fonction, appelée deux fois. La proposition
+      // ne portait que le document et les points neufs ; les lots manquants,
+      // les labels, les jalons et les trente-sept points reportés restaient à
+      // l'écran, sous une phrase qui promettait qu'ils entreraient.
+      affirmations: cr.itemsDuCompteRendu(
+        matiereDuCompteRendu(etat, { document: range.document })
+      )
     });
 
     if (!rendu.ok) {
