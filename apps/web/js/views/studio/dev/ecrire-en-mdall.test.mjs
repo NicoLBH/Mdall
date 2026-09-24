@@ -6,8 +6,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  lignesDuFichier, renderOngletsDuBrouillon, renderVoletDuCode, renderEcrireEnMdall
+  lignesDuFichier, renderOngletsDuBrouillon, renderVoletDuCode, renderEcrireEnMdall,
+  renderVerification, renderFormulaire, renderResultats, renderBacDessai
 } from "./ecrire-en-mdall.js";
+import { champsDuBrouillon } from "../../../services/formulaire-du-brouillon.js";
+import { lancerLeBrouillon } from "../../../services/bac-dessai.js";
 import { brouillonNeuf, avecLeFichier, avecLeDit, ouvertSur } from "../../../services/brouillon-mdall.js";
 
 const AVEC_UNE_REGLE = ouvertSur(avecLeFichier(brouillonNeuf(), "essai.ref", [
@@ -190,4 +193,108 @@ test("ce qu'un fichier dit de lui-même est échappé aussi", () => {
 
   assert.doesNotMatch(html, /onmouseover="x/);
   assert.match(html, /&quot; onmouseover=/);
+});
+
+/* ── Le correcteur, et le bac d'essai ────────────────────────────────────── */
+
+const AVEC_UNE_DECLARATION = ouvertSur(avecLeFichier(
+  avecLeFichier(brouillonNeuf(), "variables-du-projet.ref", [
+    "const Zone de vent = {",
+    '   type: "texte",',
+    '   valeurs possibles: "1" ou "2" ou "3" ou "4",',
+    '   description: "Zone de vent de la commune.",',
+    "};"
+  ].join("\n")),
+  "essai.ref", [
+    "fonction Vitesse de référence(zones, Zone de vent) {",
+    '   si (Zone de vent = "3")',
+    '   alors ("120 km/h");',
+    '   sinon ("100 km/h");',
+    "}"
+  ].join("\n")
+), "essai.ref");
+
+test("le correcteur dit son silence plutôt que de ne rien afficher", () => {
+  // Un écran muet quand tout va bien laisse croire qu'il n'a pas regardé — et
+  // l'on apprend alors à ne plus le croire quand il parle.
+  assert.match(renderVerification(brouillonNeuf()), /Rien à vérifier/);
+  assert.match(renderVerification(AVEC_UNE_DECLARATION), /Tout se lit/);
+});
+
+test("une remarque porte son fichier et sa ligne, et ils emmènent", () => {
+  const casse = ouvertSur(avecLeFichier(brouillonNeuf(), "essai.ref", "du français ici"), "essai.ref");
+  const html = renderVerification(casse);
+
+  assert.match(html, /data-brouillon-aller="essai\.ref"/);
+  assert.match(html, />\s*essai\.ref:1\s*</);
+});
+
+test("un domaine fermé devient une vraie liste déroulante", () => {
+  // Sans un mot d'affichage dans le langage : le nom est l'étiquette, la
+  // description est l'aide, le domaine est la liste.
+  const champs = champsDuBrouillon(AVEC_UNE_DECLARATION.fichiers.filter((un) => un.contenu));
+  const html = renderFormulaire(champs, {});
+
+  assert.match(html, /<select[^>]*data-bac-champ="Zone de vent"/);
+  assert.equal((html.match(/<option value="[1-4]"/g) ?? []).length, 4);
+  assert.match(html, /title="Zone de vent de la commune\."/);
+});
+
+test("un nom non déclaré se remplit quand même, et le dit", () => {
+  const champs = champsDuBrouillon([{ nom: "essai.ref", contenu: [
+    "fonction Fondations(zones, Portance du sol) {",
+    "   si (Portance du sol >= 0,2 MPa)",
+    '   alors ("superficielles");',
+    "}"
+  ].join("\n") }]);
+
+  assert.match(renderFormulaire(champs, {}), /non déclaré/);
+  assert.match(renderFormulaire(champs, {}), /<input type="text"[^>]*data-bac-champ="Portance du sol"/);
+});
+
+test("« indécidable » s'écrit comme tel, jamais comme « faux »", () => {
+  // C'est l'intérêt de l'écran : une entrée qui manque n'est pas une entrée
+  // fausse, et c'est par cette réponse-là qu'on apprend le langage.
+  const remplis = AVEC_UNE_DECLARATION.fichiers.filter((un) => un.contenu);
+  const html = renderResultats(lancerLeBrouillon(remplis));
+
+  assert.match(html, /bac-trace__verite--indécidable/);
+  assert.doesNotMatch(html, /bac-trace__verite--faux/);
+  assert.match(html, /ne sait pas/);
+});
+
+test("avec la réponse, la fonction conclut et montre ce qu'elle a lu", () => {
+  const remplis = AVEC_UNE_DECLARATION.fichiers.filter((un) => un.contenu);
+  const html = renderResultats(lancerLeBrouillon(remplis, { "Zone de vent": "3" }));
+
+  assert.match(html, /120 km\/h/);
+  assert.match(html, /bac-trace__verite--vrai/);
+  assert.match(html, /Zone de vent = 3/);
+});
+
+test("le bac ne montre aucun verdict tant qu'on n'a pas lancé", () => {
+  // Un verdict affiché sans qu'on l'ait demandé décrirait un essai qu'on n'a
+  // pas fait.
+  const avant = renderBacDessai(AVEC_UNE_DECLARATION, { reponses: {}, lance: false });
+
+  assert.match(avant, /data-bac-champ/);
+  assert.doesNotMatch(avant, /bac-resultat/);
+});
+
+test("le bouton « Lancer » ne s'active que s'il y a une fonction à lancer", () => {
+  // Un bouton qui lancerait le vide ne dirait rien ; désactivé, il dit
+  // pourquoi.
+  assert.match(renderVoletDuCode(brouillonNeuf(), {}), /data-brouillon-lancer disabled/);
+  assert.doesNotMatch(renderVoletDuCode(AVEC_UNE_DECLARATION, {}), /data-brouillon-lancer disabled/);
+});
+
+test("ce qu'on répond est échappé, dans une liste comme dans un champ", () => {
+  const champs = [
+    { nom: "A", cle: "a", saisie: "texte", unite: "", choix: [], aide: "", declare: true },
+    { nom: "B", cle: "b", saisie: "liste", unite: "", choix: ['"><script>alert(1)</script>'], aide: "", declare: true }
+  ];
+  const html = renderFormulaire(champs, { A: '"><script>alert(1)</script>' });
+
+  assert.doesNotMatch(html, /<script>/);
+  assert.match(html, /&lt;script&gt;/);
 });

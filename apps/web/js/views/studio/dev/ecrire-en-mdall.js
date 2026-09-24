@@ -44,6 +44,10 @@ import {
 import {
   verifierLeBrouillon, phraseDeLaVerification, MOTS_DE_LENNUI
 } from "../../../services/verification-du-brouillon.js";
+import { champsDuBrouillon, SAISIE } from "../../../services/formulaire-du-brouillon.js";
+import {
+  lancerLeBrouillon, fonctionsDuBrouillon, phraseDuLancement, ISSUE, MOTS_DE_LISSUE
+} from "../../../services/bac-dessai.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -112,6 +116,9 @@ export function renderVoletDuCode(brouillon = null, { lecture = "code" } = {}) {
   if (!fichier) return "";
 
   const lignes = lignesDuFichier(fichier.contenu);
+  // Un bouton qui lancerait le vide ne dirait rien ; désactivé, il dit
+  // pourquoi, et c'est la moitié de ce qu'un débutant a besoin d'entendre.
+  const aLancer = fonctionsDuBrouillon(fichiersRemplis(brouillon)).length > 0;
 
   return `
     <div class="brouillon-volet">
@@ -124,8 +131,9 @@ export function renderVoletDuCode(brouillon = null, { lecture = "code" } = {}) {
               data-brouillon-lecture="${cle}" aria-pressed="${lecture === cle}">${mot}</button>
           `).join("")}
         </span>
-        <button type="button" class="gh-btn gh-btn--sm" data-brouillon-lancer disabled
-          title="Le bac d'essai arrive au lot suivant">
+        <button type="button" class="gh-btn gh-btn--sm" data-brouillon-lancer${
+          aLancer ? "" : " disabled"}
+          title="${aLancer ? "Lancer les fonctions de ce brouillon" : "Écrivez une fonction : il n'y a rien à lancer"}">
           ${svgIcon("play", { className: "octicon" })} Lancer
         </button>
       </div>
@@ -190,8 +198,150 @@ export function renderVerification(brouillon = null) {
   `;
 }
 
+/**
+ * Le formulaire, déduit des déclarations — et un champ par entrée qui manque.
+ *
+ * Aucun mot d'affichage n'entre dans le langage : le nom est l'étiquette, la
+ * description est l'aide, le domaine est la liste. Voir
+ * `formulaire-du-brouillon.js`.
+ */
+export function renderFormulaire(champs = [], reponses = {}) {
+  if (!champs.length) return "";
+
+  return `
+    <div class="bac-formulaire">
+      ${champs.map((champ) => {
+        const donnee = String(reponses?.[champ.nom] ?? "");
+        const marque = `data-bac-champ="${escapeHtml(champ.nom)}"`;
+        const aide = champ.aide ? ` title="${escapeHtml(champ.aide)}"` : "";
+
+        const saisie = champ.saisie === SAISIE.LISTE
+          ? `<select class="gh-input bac-formulaire__saisie" ${marque}>
+               <option value=""${donnee ? "" : " selected"}>—</option>
+               ${champ.choix.map((choix) => `
+                 <option value="${escapeHtml(choix)}"${donnee === choix ? " selected" : ""}>${escapeHtml(choix)}</option>
+               `).join("")}
+             </select>`
+          : champ.saisie === SAISIE.LOGIQUE
+            ? `<span class="bac-formulaire__logique">
+                 ${["oui", "non"].map((mot) => `
+                   <button type="button" class="gh-btn gh-btn--sm${donnee === mot ? " est-actif" : ""}"
+                     ${marque} data-bac-valeur="${mot}" aria-pressed="${donnee === mot}">${mot}</button>
+                 `).join("")}
+               </span>`
+            : `<input type="text" class="gh-input bac-formulaire__saisie" ${marque}
+                 value="${escapeHtml(donnee)}" placeholder="${escapeHtml(champ.saisie === SAISIE.MESURE ? "un nombre" : "")}">`;
+
+        return `
+          <label class="bac-formulaire__champ"${aide}>
+            <span class="bac-formulaire__nom">
+              ${escapeHtml(champ.nom)}
+              ${
+                // Un nom qu'aucune ligne ne déclare se remplit quand même — le
+                // refuser rendrait la règle indécidable pour toujours —, mais
+                // l'écran dit que ce qu'on tape là ne tient sur rien.
+                champ.declare ? "" : `<span class="bac-formulaire__nu">non déclaré</span>`
+              }
+            </span>
+            <span class="bac-formulaire__entree">
+              ${saisie}
+              ${champ.unite ? `<span class="bac-formulaire__unite">${escapeHtml(champ.unite)}</span>` : ""}
+            </span>
+          </label>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+/** Ce qu'une clause valait, en un mot — et `indécidable` s'y dit comme tel. */
+function motDeLaVerite(verite) {
+  if (verite === true) return "vrai";
+  if (verite === false) return "faux";
+  return "indécidable";
+}
+
+/**
+ * Ce que chaque fonction conclut, et ce qu'elle a lu pour le conclure.
+ *
+ * **La trace n'est pas un détail** : une règle qui rend un verdict sans montrer
+ * sa lecture n'apprend rien, et c'est par elle qu'on comprend le langage.
+ */
+export function renderResultats(resultats = []) {
+  if (!resultats.length) return "";
+
+  return `
+    <div class="bac-resultats">
+      <p class="bac-resultats__phrase">${escapeHtml(phraseDuLancement(resultats))}</p>
+      ${resultats.map((resultat) => `
+        <div class="bac-resultat bac-resultat--${escapeHtml(resultat.issue)}">
+          <p class="bac-resultat__tete">
+            <b>${escapeHtml(resultat.sujet)}</b>
+            <span class="bac-resultat__issue">${escapeHtml(MOTS_DE_LISSUE[resultat.issue] ?? resultat.issue)}</span>
+            ${resultat.valeur ? `<span class="bac-resultat__valeur">${escapeHtml(resultat.valeur)}</span>` : ""}
+          </p>
+          ${
+            resultat.issue === ISSUE.AU_SERVEUR
+              ? `<p class="bac-resultat__note">Sa loi n'est pas dans le texte : elle s'appelle, elle ne se relit pas.</p>`
+              : `<ul class="bac-resultat__trace">
+                   ${resultat.lectures.map((lecture) => `
+                     <li>
+                       <span class="bac-trace__clause">${escapeHtml(lecture.sujet)} ${escapeHtml(lecture.operateur)} ${
+                         escapeHtml(lecture.attendu.join(" ou "))}</span>
+                       <span class="bac-trace__lu">${lecture.connu ? escapeHtml(lecture.lu) : "rien"}</span>
+                       <span class="bac-trace__verite bac-trace__verite--${motDeLaVerite(lecture.verite)}">${
+                         motDeLaVerite(lecture.verite)}</span>
+                       ${lecture.pourquoi ? `<span class="bac-trace__pourquoi">${escapeHtml(lecture.pourquoi)}</span>` : ""}
+                     </li>
+                   `).join("")}
+                 </ul>`
+          }
+          ${
+            resultat.ou.length
+              ? `<p class="bac-resultat__note">Irait dans la mémoire sous ${
+                  resultat.ou.map((nom) => `« ${escapeHtml(nom)} »`).join(", ")} — rien n'est écrit ici.</p>`
+              : ""
+          }
+          ${
+            // Un `et` et un `ou` sur la même règle se lisent de gauche à droite,
+            // sans priorité. Inventer une priorité que le lecteur ne voit pas
+            // serait la pire des libertés ; on signale, et il relit.
+            resultat.melange
+              ? `<p class="bac-resultat__note">Cette règle mêle « et » et « ou » : ils se lisent de gauche à droite, sans priorité.</p>`
+              : ""
+          }
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+/** Le bac d'essai : le formulaire, puis ce que les fonctions répondent. */
+export function renderBacDessai(brouillon = null, { reponses = {}, lance = false } = {}) {
+  const remplis = fichiersRemplis(brouillon);
+  const champs = champsDuBrouillon(remplis);
+  const resultats = lance ? lancerLeBrouillon(remplis, reponses) : [];
+
+  return `
+    <section class="bac">
+      <div class="bac__tete">
+        <h3 class="bac__titre">Bac d'essai</h3>
+        <span class="bac__quoi">Remplissez ce qui manque, et lancez. Rien ne s'écrit.</span>
+      </div>
+      ${
+        champs.length
+          ? renderFormulaire(champs, reponses)
+          : `<p class="review-empty-note">Rien à remplir : ce brouillon ne lit aucune entrée.</p>`
+      }
+      ${lance ? renderResultats(resultats) : ""}
+    </section>
+  `;
+}
+
 /** L'écran entier, sans un seul appel. */
-export function renderEcrireEnMdall(brouillon = null, { lecture = "code", largeur = LARGEUR_PAR_DEFAUT } = {}) {
+export function renderEcrireEnMdall(brouillon = null, {
+  lecture = "code", largeur = LARGEUR_PAR_DEFAUT, bac = false, reponses = {}, lance = false
+} = {}) {
   const ecrit = brouillonEcrit(brouillon);
 
   return `
@@ -234,6 +384,8 @@ export function renderEcrireEnMdall(brouillon = null, { lecture = "code", largeu
       </div>
 
       ${renderVerification(brouillon)}
+
+      ${bac ? renderBacDessai(brouillon, { reponses, lance }) : ""}
     </section>
   `;
 }
@@ -249,7 +401,13 @@ export function renderEcrireEnMdall(brouillon = null, { lecture = "code", largeu
 const etat = {
   brouillon: brouillonNeuf(),
   lecture: "code",
-  largeur: LARGEUR_PAR_DEFAUT
+  largeur: LARGEUR_PAR_DEFAUT,
+  /** Le bac d'essai ne paraît qu'une fois demandé : il n'a rien à dire avant. */
+  bac: false,
+  /** Ce qu'on a répondu au formulaire, par nom de variable. */
+  reponses: {},
+  /** A-t-on lancé ? Tant que non, on ne montre aucun verdict. */
+  lance: false
 };
 
 let debrancherSaisie = null;
@@ -261,7 +419,10 @@ function dessiner(racine) {
 
   racine.innerHTML = renderEcrireEnMdall(etat.brouillon, {
     lecture: etat.lecture,
-    largeur: etat.largeur
+    largeur: etat.largeur,
+    bac: etat.bac,
+    reponses: etat.reponses,
+    lance: etat.lance
   });
   brancher(racine);
 }
@@ -302,6 +463,55 @@ function redessinerLaVerification(racine) {
   }
 }
 
+/**
+ * Redessiner le bac d'essai seul.
+ *
+ * Réécrire l'écran entier à chaque réponse emporterait le curseur du champ
+ * qu'on est en train de remplir — et c'est le champ suivant qu'on veut
+ * atteindre, pas le début de la page.
+ */
+function redessinerLeBac(racine) {
+  const ancien = racine.querySelector(".bac");
+  if (!etat.bac) { ancien?.remove(); return; }
+
+  const neuf = document.createElement("div");
+  neuf.innerHTML = renderBacDessai(etat.brouillon, { reponses: etat.reponses, lance: etat.lance });
+  const fabrique = neuf.firstElementChild;
+  if (!fabrique) return;
+
+  if (ancien) ancien.replaceWith(fabrique);
+  else racine.querySelector(".brouillon")?.append(fabrique);
+  brancherLeBac(racine);
+}
+
+/** Le formulaire : ce qu'on répond entre dans l'état, sans redessiner. */
+function brancherLeBac(racine) {
+  for (const saisie of racine.querySelectorAll("[data-bac-champ]")) {
+    const nom = saisie.dataset.bacChamp;
+
+    // Les deux boutons d'un champ logique : ils portent leur valeur, et il faut
+    // redessiner pour que l'autre se dépresse.
+    if (saisie.dataset.bacValeur !== undefined) {
+      saisie.addEventListener("click", () => {
+        etat.reponses = { ...etat.reponses, [nom]: saisie.dataset.bacValeur };
+        redessinerLeBac(racine);
+      });
+      continue;
+    }
+
+    // Une liste se redessine — le choix se voit dans la liste elle-même, et
+    // rien d'autre ne bouge. Un champ de texte ne se redessine pas : le curseur
+    // y est posé.
+    const evenement = saisie.tagName === "SELECT" ? "change" : "input";
+    saisie.addEventListener(evenement, () => {
+      etat.reponses = { ...etat.reponses, [nom]: saisie.value };
+      // Une réponse change ce que les fonctions concluraient : un verdict
+      // laissé à l'écran décrirait l'essai d'avant.
+      if (etat.lance) { etat.lance = false; redessinerLeBac(racine); }
+    });
+  }
+}
+
 /** Cliquer une remarque ouvre le fichier où elle se trouve. */
 function brancherLesRenvois(racine) {
   for (const bouton of racine.querySelectorAll("[data-brouillon-aller]")) {
@@ -324,6 +534,9 @@ function brancherLeVolet(racine) {
         // On ne redessine **que** la vérification : réécrire le volet
         // emporterait le curseur au premier caractère tapé.
         redessinerLaVerification(racine);
+        // Le code a changé : un verdict laissé à l'écran décrirait un brouillon
+        // qui n'existe plus, et c'est exactement le genre d'écran qu'on croit.
+        if (etat.lance) { etat.lance = false; redessinerLeBac(racine); }
       }
     })
     : null;
@@ -334,6 +547,14 @@ function brancherLeVolet(racine) {
       redessinerLeVolet(racine);
     });
   }
+
+  const lancer = racine.querySelector("[data-brouillon-lancer]");
+  lancer?.addEventListener("click", () => {
+    etat.bac = true;
+    etat.lance = true;
+    redessinerLeBac(racine);
+    racine.querySelector(".bac")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
 
   for (const bouton of racine.querySelectorAll("[data-brouillon-lecture]")) {
     bouton.addEventListener("click", () => {
@@ -346,6 +567,7 @@ function brancherLeVolet(racine) {
 function brancher(racine) {
   brancherLeVolet(racine);
   brancherLesRenvois(racine);
+  brancherLeBac(racine);
 
   const dit = racine.querySelector("[data-brouillon-dit]");
   // Pas de redessin ici : on note ce qui est tapé, et l'écran ne bouge pas sous

@@ -27022,3 +27022,62 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   text-transform:uppercase; letter-spacing:.03em;
 }
 .brouillon-verif__dit{ flex:1 1 20ch; min-width:0; color:var(--text); }
+
+/* Le bac d'essai : le formulaire déduit, puis ce que les fonctions répondent.
+
+   Rien de neuf : `gh-input` pour les saisies, `gh-btn` pour les choix, et les
+   couleurs du projet pour les trois valeurs de vérité. */
+.bac{ border-top:1px solid var(--border); padding:12px 14px 16px; }
+.bac__tete{ display:flex; align-items:baseline; gap:10px; margin-bottom:10px; }
+.bac__titre{ margin:0; font-size:13px; }
+.bac__quoi{ color:var(--muted); font-size:11px; }
+
+.bac-formulaire{
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
+  gap:10px 16px; margin-bottom:14px;
+}
+.bac-formulaire__champ{ display:flex; flex-direction:column; gap:4px; min-width:0; }
+.bac-formulaire__nom{ display:flex; align-items:baseline; gap:6px; font-size:12px; }
+/* Un nom qu'aucune ligne ne déclare se remplit quand même — le refuser rendrait
+   la règle indécidable pour toujours —, mais l'écran dit qu'il ne tient sur rien. */
+.bac-formulaire__nu{
+  padding:0 5px; border-radius:999px;
+  background:rgba(210,153,34,.18); color:var(--muted); font-size:10px;
+}
+.bac-formulaire__entree{ display:flex; align-items:center; gap:6px; min-width:0; }
+.bac-formulaire__saisie{ flex:1 1 auto; min-width:0; }
+.bac-formulaire__unite{
+  flex:0 0 auto; color:var(--muted); font-size:11px;
+  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace);
+}
+.bac-formulaire__logique{ display:inline-flex; gap:4px; }
+.bac-formulaire__logique .est-actif{ border-color:var(--borderColor-accent-emphasis); }
+
+.bac-resultats{ display:flex; flex-direction:column; gap:8px; }
+.bac-resultats__phrase{ margin:0; font-size:12px; color:var(--text); }
+.bac-resultat{
+  border:1px solid var(--border); border-radius:var(--radius);
+  padding:8px 10px; display:flex; flex-direction:column; gap:6px;
+}
+/* Ce qui ne sait pas se voit en premier : c'est ce qu'on vient corriger. */
+.bac-resultat--indecidable{ border-color:rgba(210,153,34,.5); }
+.bac-resultat__tete{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin:0; font-size:12px; }
+.bac-resultat__issue{ color:var(--muted); font-size:11px; }
+.bac-resultat__valeur{
+  padding:1px 7px; border-radius:999px; background:rgba(110,118,129,.14);
+  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace); font-size:11px;
+}
+.bac-resultat__note{ margin:0; color:var(--muted); font-size:11px; }
+.bac-resultat__trace{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px; }
+.bac-resultat__trace li{
+  display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;
+  font-size:11px; font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace);
+}
+.bac-trace__clause{ color:var(--text); }
+.bac-trace__lu{ color:var(--muted); }
+/* Trois valeurs, trois couleurs — et « indécidable » n'est pas « faux ». */
+.bac-trace__verite{ padding:0 5px; border-radius:999px; font-size:10px; }
+.bac-trace__verite--vrai{ background:rgba(63,185,80,.18); color:var(--succes, #3fb950); }
+.bac-trace__verite--faux{ background:rgba(110,118,129,.18); color:var(--muted); }
+.bac-trace__verite--indécidable{ background:rgba(210,153,34,.22); color:#d29922; }
+.bac-trace__pourquoi{ color:var(--muted); font-family:inherit; }
