@@ -254,6 +254,23 @@ export const UTILITAIRES = [
     ajouteLe: "2026-08-07"
   },
   {
+    cible: "dev-ecrire-en-mdall",
+    nom: "Écrire en Mdall",
+    rayon: RAYONS.DEVELOPPEMENT,
+    resume: "Dire un raisonnement en français, le voir écrit dans la langue du projet, et le lancer.",
+    entrees: ["Ce que vous voulez poser, en français"],
+    sorties: [
+      "Les fichiers Mdall — règles, déclarations, données de base",
+      "Ce qui ne se lit pas, ligne par ligne",
+      "Ce que chaque fonction conclut, et ce qu'elle a lu pour le conclure"
+    ],
+    version: "0.1",
+    intelligence: true,
+    aussiALaMain: "Écrire directement dans le volet de droite : il colore et vérifie sans rien demander à un modèle.",
+    mots: ["mdall", "langage", "règle", "fonction", "code", "écrire", "transcrire", "essai"],
+    ajouteLe: "2026-09-24"
+  },
+  {
     cible: "dev-lecture-cr",
     nom: "Lecture des comptes rendus",
     rayon: RAYONS.DEVELOPPEMENT,

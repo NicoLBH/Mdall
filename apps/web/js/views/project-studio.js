@@ -35,6 +35,7 @@ import { renderSeismicGeneral } from "./studio/seismic/seismic-general.js";
 import { renderCtContinuityLab } from "./studio/dev/ct-continuity-lab.js";
 import { renderVariablesMutualisees } from "./studio/dev/variables-mutualisees.js";
 import { renderLectureDesCr } from "./studio/dev/lecture-des-cr.js";
+import { renderEcrireEnMdallEcran } from "./studio/dev/ecrire-en-mdall.js";
 import { renderLectureDesMails } from "./studio/dev/lecture-des-mails.js";
 import { renderRangerLesSujets } from "./studio/dev/ranger-les-sujets.js";
 import { renderResolutionConflits } from "./studio/conflits/resolution-conflits.js";
@@ -208,6 +209,9 @@ function getRouterHtml() {
               <section class="project-studio-router__panel" data-side-nav-panel="dev-variables">
                 <div id="projectStudioVariablesPanel"></div>
               </section>
+              <section class="project-studio-router__panel" data-side-nav-panel="dev-ecrire-en-mdall">
+                <div id="projectStudioEcrireEnMdallPanel"></div>
+              </section>
 
             </div>
         </div>
@@ -246,6 +250,7 @@ export function renderProjectStudio(root) {
   const seismicGeneralRoot = root.querySelector("#projectStudioSeismicGeneralPanel");
   const ctContinuityLabRoot = root.querySelector("#projectStudioCtContinuityLabPanel");
   const lectureCrRoot = root.querySelector("#projectStudioLectureCrPanel");
+  const ecrireEnMdallRoot = root.querySelector("#projectStudioEcrireEnMdallPanel");
   const lectureMailsRoot = root.querySelector("#projectStudioLectureMailsPanel");
   const variablesRoot = root.querySelector("#projectStudioVariablesPanel");
   const rangerSujetsRoot = root.querySelector("#projectStudioRangerSujetsPanel");
@@ -288,6 +293,7 @@ export function renderProjectStudio(root) {
   // lecture : le panneau était neuf et vide, et la lecture en cours écrivait
   // dans l'ancien élément, détaché. On avait payé deux appels pour rien.
   if (lectureCrRoot) renderLectureDesCr(lectureCrRoot);
+  if (ecrireEnMdallRoot) renderEcrireEnMdallEcran(ecrireEnMdallRoot);
   if (lectureMailsRoot) renderLectureDesMails(lectureMailsRoot);
   if (variablesRoot) renderVariablesMutualisees(variablesRoot);
   if (rangerSujetsRoot) renderRangerLesSujets(rangerSujetsRoot);
@@ -390,6 +396,11 @@ export function renderProjectStudio(root) {
     // niveau du module, donc un document déjà lu se retrouve tel qu'on l'a
     // laissé — redéposer serait repayer un appel.
     if (targetId === "dev-lecture-cr" && lectureCrRoot) renderLectureDesCr(lectureCrRoot);
+    // Le brouillon **ne se redessine pas** à la venue : il vit au niveau du
+    // module, et le refaire effacerait ce qu'on est en train d'écrire. C'est
+    // l'inverse des écrans qui lisent la mémoire — eux doivent se rafraîchir,
+    // lui doit se retrouver tel qu'on l'a laissé.
+    if (targetId === "dev-ecrire-en-mdall" && ecrireEnMdallRoot) renderEcrireEnMdallEcran(ecrireEnMdallRoot);
     // Même raison pour les mails : le fil déplié vit au niveau du module, donc
     // on le retrouve tel qu'on l'a laissé. Ici il ne s'agit pas d'éviter une
     // dépense — le dépliage est gratuit — mais de ne pas redemander le dépôt.

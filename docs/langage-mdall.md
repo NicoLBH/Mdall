@@ -579,6 +579,51 @@ const Hauteur du plancher bas = {
 | **utilisation** | ce à quoi il **sert**, et selon quel texte |
 | **déjà utilisé dans** | les fonctions qui l'emploient, et leurs fichiers |
 
+### `valeurs possibles` : ce qu'un nom a le droit de valoir
+
+Facultatif, et il ne se déduit de rien.
+
+```
+const Zone de vent = {
+   type: "texte",
+   valeurs possibles: "1" ou "2" ou "3" ou "4",
+   description: "Zone de vent de la commune, au sens de l'annexe nationale de l'Eurocode 1.",
+   utilisation: "Entrée de la vitesse de référence."
+};
+```
+
+**Le même `ou` que partout ailleurs.** Les choix fermés d'un tableau s'écrivent
+déjà ainsi (`structure attendue`), et une seconde façon d'énumérer — des
+crochets, par exemple — ferait deux grammaires pour la même idée : celle qu'on
+lit le moins finirait par ne plus être comprise.
+
+**Il ne se devine pas.** Rassembler les valeurs déjà versées ferait une liste
+fermée de ce qu'on a vu jusqu'ici, et la première valeur nouvelle et légitime se
+signalerait comme une faute — on apprendrait vite à ne plus lire le signal. Il se
+déclare, ou il n'existe pas (règle 5).
+
+Deux choses en découlent :
+
+- **une valeur hors du domaine se signale.** Une zone de vent à `7` passait
+  jusqu'ici sans un mot. C'est la même famille de garde-fou que « deux unités ne
+  se comparent pas ».
+- **un écran peut en faire un choix.** Le bac d'essai en tire une liste
+  déroulante, sans qu'un seul mot d'affichage entre dans le langage : le nom est
+  l'étiquette, la description est l'aide, le domaine est la liste.
+
+### Cette déclaration se relit
+
+`variables-du-projet.ref` s'engendre depuis les autres fichiers, et personne ne
+le reparsait : la lecture refusait donc chacune de ses lignes — `type` n'est pas
+une provenance, `déjà utilisé dans` n'ouvre rien — sans que cela se voie, puisque
+rien ne le lui demandait.
+
+Un fichier qu'on vient de taper à la main et qui se fait refuser ligne à ligne
+n'apprend rien : il dit que le langage se contredit. `lire(écrire(G)) = G` vaut
+donc pour cette forme comme pour les autres, et **la liste des champs est
+fermée** — `typo: "mesure"` se refuse, plutôt que de laisser une variable sans
+type qu'on chercherait longtemps.
+
 Les trois premiers se **déduisent** des valeurs déjà versées ; les deux suivants
 ne se déduisent de rien et se versent avec l'affirmation ; le dernier se
 recalcule à chaque nouvelle utilisation. Ce qui manque porte, à sa place, un

@@ -398,6 +398,17 @@ export function definitionsDesVariables(variables = [], explications = null, nat
         // Et sa forme, quand c'est un tableau. Elle ne se déduit d'aucune
         // valeur : elle se verse avec l'affirmation, et se relit ici.
         structure: Array.isArray(dit?.structure) && dit.structure.length ? dit.structure : null,
+        /**
+         * Le domaine d'un nom : ce qu'il a le droit de valoir.
+         *
+         * **Il ne se devine pas**, et c'est tout l'intérêt. Rassembler les
+         * valeurs déjà versées en ferait une liste fermée de ce qu'on a vu
+         * jusqu'ici : la première valeur nouvelle et légitime se signalerait
+         * comme une faute, et l'on apprendrait à ne plus lire le signal.
+         *
+         * Il se déclare, ou il n'existe pas (règle 5).
+         */
+        valeurs: Array.isArray(dit?.valeurs) ? dit.valeurs.map(texte).filter(Boolean) : [],
         usages: Array.isArray(variable?.usages) ? variable.usages : [],
         /**
          * Ce que le projet **porte** à son sujet, par nature.
