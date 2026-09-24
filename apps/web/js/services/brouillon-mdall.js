@@ -141,3 +141,80 @@ export function fichiersRemplis(brouillon = null) {
   const fichiers = Array.isArray(brouillon?.fichiers) ? brouillon.fichiers : [];
   return fichiers.filter((fichier) => texte(fichier.contenu));
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Le brouillon se garde
+ *
+ * Un rechargement de page perdait tout : une demi-heure de travail, et rien
+ * pour dire qu'elle avait existé. Ce qui suit met le brouillon sous une forme
+ * qu'on range et relit — où on le range est l'affaire de l'écran, ce qu'il
+ * contient est l'affaire d'ici, et cela s'éprouve sans navigateur.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * La version de ce qu'on écrit.
+ *
+ * **Un brouillon relu sans savoir de quand il date est un brouillon qu'on
+ * interprète.** Le jour où le langage gagne un quatrième fichier, ce nombre
+ * change, et ce qui a été gardé avant se relit quand même — ligne à ligne,
+ * plutôt qu'en bloc.
+ */
+export const VERSION_DU_BROUILLON = 1;
+
+/** Le brouillon, mis sous une forme qu'on range. */
+export function brouillonRange(brouillon = null) {
+  return JSON.stringify({
+    version: VERSION_DU_BROUILLON,
+    dit: String(brouillon?.dit ?? ""),
+    // **Seul le contenu voyage.** `quoi` explique le fichier et vit dans
+    // `FICHIERS_DU_BROUILLON` : le ranger ici ferait deux explications du même
+    // fichier, et celle qu'on a gardée l'an dernier aurait raison (règle 10).
+    fichiers: (Array.isArray(brouillon?.fichiers) ? brouillon.fichiers : [])
+      .map((fichier) => ({ nom: texte(fichier?.nom), contenu: String(fichier?.contenu ?? "") }))
+      .filter((fichier) => fichier.nom),
+    ouvert: texte(brouillon?.ouvert)
+  });
+}
+
+/**
+ * Un brouillon relu de ce qui a été rangé.
+ *
+ * `null` quand rien ne s'en lit : rendre un brouillon vide ferait disparaître
+ * ce qui était gardé sans qu'un mot le dise, et l'on chercherait longtemps ce
+ * qu'on croyait avoir écrit (règle 5).
+ *
+ * **Il part toujours d'un brouillon neuf.** Un fichier que la forme rangée ne
+ * porte pas — parce qu'il est arrivé depuis — existe quand même, vide : c'est
+ * un onglet de plus, pas un écran cassé.
+ */
+export function brouillonRelu(range = "") {
+  let lu = null;
+  try {
+    lu = JSON.parse(String(range ?? ""));
+  } catch {
+    return null;
+  }
+
+  // `JSON.parse("null")` rend `null`, et tout ce qui suit lirait dedans. Le
+  // reste est déjà total : une chaîne, un nombre, une liste n'ont ni `fichiers`
+  // ni `dit`, et rendent un brouillon vide — c'est-à-dire `null`, plus bas.
+  if (!lu) return null;
+
+  const contenus = new Map(
+    (Array.isArray(lu.fichiers) ? lu.fichiers : [])
+      .map((fichier) => [texte(fichier?.nom), String(fichier?.contenu ?? "")])
+  );
+
+  const neuf = brouillonNeuf();
+  const brouillon = {
+    dit: String(lu.dit ?? ""),
+    fichiers: neuf.fichiers.map((fichier) => ({ ...fichier, contenu: contenus.get(fichier.nom) ?? "" })),
+    ouvert: neuf.ouvert
+  };
+
+  // Rien d'écrit : c'est un brouillon neuf, et le rendre ferait écraser celui
+  // qu'on a peut-être en cours par du vide.
+  if (!brouillonEcrit(brouillon)) return null;
+
+  return ouvertSur(brouillon, texte(lu.ouvert));
+}

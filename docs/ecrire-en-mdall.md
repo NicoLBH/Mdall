@@ -326,7 +326,39 @@ répondre. Ce qui ne se lit pas part avec son refus attaché, jamais en silence.
 
 ### Lot 7 — Le brouillon se garde, et se propose
 
-Le fichier dans `Documents/`, et « Proposer au projet ».
+« Proposer au projet » ouvre une **proposition** portant ce que le brouillon
+affirme : les données de base avec leur provenance et leur citation, les règles
+avec leurs conditions et leur `sinon`. C'est l'inverse exact de
+`memoire-en-texte.js`, et il se fait avec **le lecteur du projet** — écrire un
+second analyseur donnerait deux grammaires du même langage.
+
+Ce qui ne devient pas une affirmation se **nomme**, à côté du bouton et avant le
+clic : un nom déclaré sans valeur, une ligne que la lecture refuse, une phrase
+du français qu'on a oublié de coder et qui se lit comme un nom nu. Les laisser
+disparaître ferait croire qu'on a proposé le brouillon entier.
+
+**Ce qui sort d'ici est `supposé`**, règle comme valeur — sauf si le fichier
+écrit son statut. Le donner pour acquis ferait entrer au projet, sous le même
+mot que ce qui a été relu et signé, ce que quelqu'un vient de taper pour
+essayer.
+
+#### `Documents/` : ce qui a été fait à la place, et pourquoi
+
+Le plan disait « par le chemin de création à la main qui existe déjà ». **Ce
+chemin n'existe pas** : tout ce qui entre au corpus y entre par un fichier
+déposé, inspecté et reconnu. Et il y a une raison de ne pas l'inventer pour
+l'occasion — le corpus est fait de pièces qu'on **cite**, et citer un brouillon
+comme preuve d'un raisonnement est exactement ce que `docs/fondamentaux.md`
+interdit.
+
+Le brouillon est donc gardé **dans le navigateur** : un rechargement ne perd
+plus une demi-heure de travail. C'est un filet, pas une sauvegarde, et l'écran
+ne fait pas semblant du contraire. Ce qui fait qu'un raisonnement se retrouve
+ailleurs reste la proposition — elle porte un auteur, une date et une signature,
+ce qu'un fichier dans un dossier n'a jamais eu.
+
+Reste à trancher : veut-on quand même déposer le brouillon au corpus, et sous
+quelle nature, ou suffit-il qu'il aille au projet par la proposition ?
 
 ### Lot 8 — Les trois producteurs passent par l'écrivain
 

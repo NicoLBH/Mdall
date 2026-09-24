@@ -13,22 +13,27 @@
  * essayer**. Un raisonnement qu'on écrit sans pouvoir le lancer est une
  * intention (règle 12).
  *
- * ## Ce lot-ci n'appelle rien
+ * ## On peut s'en servir sans jamais appeler le modèle
  *
- * Ni modèle, ni exécution. Les deux volets, la poignée, la saisie à gauche, les
- * onglets à droite, et la coloration du langage — celle de la Mémoire, prise au
- * module mutualisé plutôt que recopiée.
+ * Les deux volets, la poignée, la saisie à gauche, les onglets à droite, et la
+ * coloration du langage — celle de la Mémoire, prise au module mutualisé plutôt
+ * que recopiée. **On tape donc du Mdall à la main et on le voit prendre ses
+ * couleurs, se vérifier, se lancer**, ce qui est la porte sans modèle du
+ * fondamental 13. « Coder » accélère ; il n'est pas le chemin.
  *
- * **On peut donc déjà taper du Mdall à la main et le voir prendre ses
- * couleurs**, ce qui est la porte sans modèle du fondamental 13. « Coder » est
- * présent et dit qu'il n'est pas branché : un bouton qui ne ferait rien en
- * silence se cliquerait deux fois avant qu'on comprenne.
- *
- * ## Rien ne sort d'ici
+ * ## Rien ne sort d'ici sans une signature
  *
  * Le bac d'essai n'écrit nulle part — ni dans la mémoire, ni dans les fichiers
- * du projet. Le seul chemin vers le projet est celui de tout le monde : une
- * proposition, examinée et signée (règle 1).
+ * du projet. Un `enregistre` y dit « ceci irait dans `vent.ctr` » et n'y va
+ * pas. Le seul chemin vers le projet est celui de tout le monde : « Proposer au
+ * projet » ouvre une **proposition**, relue ligne à ligne et signée (règle 1).
+ *
+ * ## Le brouillon se garde, et seulement ici
+ *
+ * Un rechargement perdait une demi-heure de travail sans qu'un mot le dise. Il
+ * est désormais gardé **dans ce navigateur** : c'est un filet, pas une
+ * sauvegarde, et l'écran ne fait pas semblant du contraire. Ce qui fait qu'un
+ * raisonnement se retrouve ailleurs reste la proposition.
  */
 
 import { escapeHtml } from "../../../utils/escape-html.js";
@@ -39,7 +44,7 @@ import { renderLignesDeCode } from "../../ui/code-mdall.js";
 import { jetonsDeLaLigne } from "../../../services/memoire-en-lecture.js";
 import {
   brouillonNeuf, fichierOuvert, avecLeFichier, avecLeDit, ouvertSur, brouillonEcrit, langageDuFichier,
-  fichiersRemplis
+  fichiersRemplis, brouillonRange, brouillonRelu
 } from "../../../services/brouillon-mdall.js";
 import {
   verifierLeBrouillon, phraseDeLaVerification, MOTS_DE_LENNUI
@@ -50,6 +55,10 @@ import {
 } from "../../../services/bac-dessai.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 import { REFUS, phraseDeLaTranscription } from "../../../services/le-mdall-rendu.js";
+import {
+  aProposerDuBrouillon, introDeLaProposition, phraseDeLEcart, phraseDeLaProposition,
+  titreDeLaProposition
+} from "../../../services/proposition-du-brouillon.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -380,10 +389,75 @@ export function renderTranscription(rendu = null) {
   `;
 }
 
+/**
+ * « Proposer au projet » : la seule porte vers la mémoire.
+ *
+ * > « On ne doit RIEN verser DIRECTEMENT dans la mémoire, JAMAIS ! »
+ *
+ * Le bouton n'écrit rien. Il ouvre une **proposition**, relue ligne à ligne et
+ * signée comme les autres — c'est le chemin de tout le monde, et il n'y en a
+ * pas d'autre depuis cet écran (règle 1).
+ *
+ * **Ce qui reste dehors se lit avant de cliquer.** Un nom déclaré sans valeur,
+ * une ligne que la lecture refuse : l'apprendre une fois la proposition ouverte
+ * reviendrait à l'apprendre trop tard, et à croire qu'on a proposé le brouillon
+ * entier (règle 5).
+ */
+export function renderProposition(brouillon = null, { depose = false, depot = null } = {}) {
+  const fichiers = fichiersRemplis(brouillon);
+  if (!fichiers.length) return "";
+
+  const { affirmations, sansRetour } = aProposerDuBrouillon(fichiers);
+  const arme = affirmations.length > 0 && !depose;
+
+  return `
+    <div class="brouillon-propose">
+      <div class="brouillon-propose__geste">
+        <button type="button" class="gh-btn gh-btn--sm" data-brouillon-proposer${arme ? "" : " disabled"}
+          title="${escapeHtml(
+            depose ? "Proposition en cours…"
+            : affirmations.length ? "Ouvrir une proposition portant ces lignes"
+            : "Rien de ce brouillon n'affirme quelque chose sur le projet")}">
+          ${svgIcon("git-pull-request", { className: "octicon" })}
+          ${depose ? "…" : "Proposer au projet"}
+        </button>
+        <span class="brouillon-propose__phrase">
+          ${escapeHtml(phraseDeLaProposition({ affirmations, sansRetour }))}
+        </span>
+      </div>
+
+      ${
+        sansRetour.length
+          ? `<ul class="brouillon-propose__dehors">
+               ${sansRetour.map((ecart) => `
+                 <li>
+                   <span class="brouillon-propose__quoi">${escapeHtml(ecart.quoi)}</span>
+                   ${ecart.ligne
+                     ? `<span class="brouillon-propose__ou">${escapeHtml(ecart.fichier)}:${ecart.ligne}</span>`
+                     : ""}
+                   <span class="brouillon-propose__pourquoi">${escapeHtml(phraseDeLEcart(ecart))}</span>
+                 </li>
+               `).join("")}
+             </ul>`
+          : ""
+      }
+
+      ${
+        depot
+          ? `<p class="brouillon-propose__depot${depot.ok ? "" : " brouillon-propose__depot--refus"}">
+               ${svgIcon(depot.ok ? "check" : "alert", { className: "octicon" })}
+               ${escapeHtml(depot.dit)}
+             </p>`
+          : ""
+      }
+    </div>
+  `;
+}
+
 /** L'écran entier, sans un seul appel. */
 export function renderEcrireEnMdall(brouillon = null, {
   lecture = "code", largeur = LARGEUR_PAR_DEFAUT, bac = false, reponses = {}, lance = false,
-  transcrit = false, rendu = null
+  transcrit = false, rendu = null, depose = false, depot = null
 } = {}) {
   const ecrit = brouillonEcrit(brouillon);
 
@@ -434,6 +508,8 @@ export function renderEcrireEnMdall(brouillon = null, {
       ${renderVerification(brouillon)}
 
       ${bac ? renderBacDessai(brouillon, { reponses, lance }) : ""}
+
+      ${renderProposition(brouillon, { depose, depot })}
     </section>
   `;
 }
@@ -463,8 +539,49 @@ const etat = {
    * lieu. `null` tant qu'on n'a rien demandé : un écran qui annoncerait un
    * résultat qu'on n'a pas demandé décrirait un essai qui n'existe pas.
    */
-  rendu: null
+  rendu: null,
+  /** Une proposition est-elle en train de s'ouvrir ? Le bouton se désarme. */
+  depose: false,
+  /**
+   * Ce que la dernière tentative de proposition a donné : `{ok, dit}`. `null`
+   * tant qu'on n'a rien tenté — un écran qui annoncerait une proposition que
+   * personne n'a demandée décrirait une écriture qui n'a pas eu lieu.
+   */
+  depot: null
 };
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Le brouillon se garde, dans ce navigateur
+ *
+ * Un rechargement perdait une demi-heure de travail sans qu'un mot le dise.
+ * Ce qui est gardé ici ne quitte **pas** ce navigateur : ce n'est pas une
+ * sauvegarde, c'est un filet. Le chemin qui fait d'un brouillon quelque chose
+ * qui se retrouve ailleurs reste la proposition, et elle se signe.
+ *
+ * Tout passe par un `try` : un navigateur en navigation privée, un stockage
+ * plein, un site dont on a effacé les données — chacun lève, et aucun n'est une
+ * raison de ne pas afficher l'écran.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+const OU_LE_GARDER = "mdall:brouillon-ecrire-en-mdall";
+
+function garderLeBrouillon() {
+  try {
+    if (!brouillonEcrit(etat.brouillon)) window.localStorage.removeItem(OU_LE_GARDER);
+    else window.localStorage.setItem(OU_LE_GARDER, brouillonRange(etat.brouillon));
+  } catch {
+    // Rien à faire, et surtout rien à dire : l'écran marche sans ce filet, et
+    // une alerte à chaque frappe serait pire que la perte qu'elle annonce.
+  }
+}
+
+function reprendreLeBrouillon() {
+  try {
+    return brouillonRelu(window.localStorage.getItem(OU_LE_GARDER));
+  } catch {
+    return null;
+  }
+}
 
 let debrancherSaisie = null;
 let debrancherPoignee = null;
@@ -480,7 +597,9 @@ function dessiner(racine) {
     reponses: etat.reponses,
     lance: etat.lance,
     transcrit: etat.transcrit,
-    rendu: etat.rendu
+    rendu: etat.rendu,
+    depose: etat.depose,
+    depot: etat.depot
   });
   brancher(racine);
 }
@@ -528,6 +647,30 @@ function redessinerLaVerification(racine) {
  * qu'on est en train de remplir — et c'est le champ suivant qu'on veut
  * atteindre, pas le début de la page.
  */
+/**
+ * Redessiner **le seul panneau de proposition**.
+ *
+ * Il change à chaque frappe — le compte des lignes, ce qui reste dehors — et
+ * réécrire l'écran entier pour cela emporterait le curseur.
+ */
+function redessinerLaProposition(racine) {
+  const ancien = racine.querySelector(".brouillon-propose");
+  const html = renderProposition(etat.brouillon, { depose: etat.depose, depot: etat.depot });
+
+  // Le panneau naît avec la première ligne écrite, et disparaît avec la
+  // dernière effacée : dans les deux cas il n'y a rien à remplacer sur place.
+  if (!ancien || !html) { dessiner(racine); return; }
+
+  const neuf = document.createElement("div");
+  neuf.innerHTML = html;
+  const remplacant = neuf.firstElementChild;
+  if (!remplacant) { dessiner(racine); return; }
+
+  ancien.replaceWith(remplacant);
+  remplacant.querySelector("[data-brouillon-proposer]")
+    ?.addEventListener("click", () => { void proposerAuProjet(racine); });
+}
+
 function redessinerLeBac(racine) {
   const ancien = racine.querySelector(".bac");
   if (!etat.bac) { ancien?.remove(); return; }
@@ -589,12 +732,18 @@ function brancherLeVolet(racine) {
         const ouvert = fichierOuvert(etat.brouillon);
         if (!ouvert) return;
         etat.brouillon = avecLeFichier(etat.brouillon, ouvert.nom, contenu);
+        garderLeBrouillon();
         // On ne redessine **que** la vérification : réécrire le volet
         // emporterait le curseur au premier caractère tapé.
         redessinerLaVerification(racine);
         // Le code a changé : un verdict laissé à l'écran décrirait un brouillon
         // qui n'existe plus, et c'est exactement le genre d'écran qu'on croit.
         if (etat.lance) { etat.lance = false; redessinerLeBac(racine); }
+        // Et ce que porte « Proposer au projet » change avec lui : le compte des
+        // lignes, ce qui reste dehors, et la trace d'une proposition faite d'un
+        // brouillon qu'on vient de modifier.
+        etat.depot = null;
+        redessinerLaProposition(racine);
       }
     })
     : null;
@@ -631,7 +780,10 @@ function brancher(racine) {
   // Pas de redessin ici : on note ce qui est tapé, et l'écran ne bouge pas sous
   // les doigts. Le seul bouton qui apparaît — « Tout effacer » — se montre au
   // prochain redessin, et l'attendre ne coûte rien.
-  dit?.addEventListener("input", () => { etat.brouillon = avecLeDit(etat.brouillon, dit.value); });
+  dit?.addEventListener("input", () => {
+    etat.brouillon = avecLeDit(etat.brouillon, dit.value);
+    garderLeBrouillon();
+  });
 
   const coder = racine.querySelector("[data-brouillon-coder]");
   coder?.addEventListener("click", () => { void transcrire(racine); });
@@ -641,8 +793,13 @@ function brancher(racine) {
     // Une demi-heure de travail ne s'efface pas sur un clic mal visé.
     if (!window.confirm("Effacer ce brouillon ? Ce qui est écrit ici sera perdu.")) return;
     etat.brouillon = brouillonNeuf();
+    etat.depot = null;
+    garderLeBrouillon();
     dessiner(racine);
   });
+
+  const proposer = racine.querySelector("[data-brouillon-proposer]");
+  proposer?.addEventListener("click", () => { void proposerAuProjet(racine); });
 
   const poignee = racine.querySelector("#brouillonResizer");
   debrancherPoignee = poignee
@@ -696,6 +853,9 @@ async function transcrire(racine) {
     }
 
     etat.rendu = rendu;
+    // Ce que le modèle vient d'écrire n'a rien à voir avec la proposition faite
+    // d'avant : la laisser à l'écran décrirait un brouillon qui n'existe plus.
+    if (rendu.ok) { etat.depot = null; garderLeBrouillon(); }
   } catch (erreur) {
     // **Une panne du navigateur se dit comme telle.** Le module d'appel ne
     // remonte que ce que le serveur a nommé ; ce qui casse ici — un import qui
@@ -713,10 +873,80 @@ async function transcrire(racine) {
   if (racine.isConnected) dessiner(racine);
 }
 
+/**
+ * Ouvrir une proposition portant ce que le brouillon affirme.
+ *
+ * ## Le seul chemin, et il ne s'abrège pas
+ *
+ * Rien n'est versé ici : `preparerUneProposition` ouvre une proposition
+ * **ouverte**, que quelqu'un relit ligne à ligne et signe — ou pas. C'est le
+ * même chemin que le Copilote et que la lecture d'un compte rendu, et c'est
+ * délibérément le même : une seconde porte vers la mémoire serait une seconde
+ * porte à surveiller (règle 1).
+ *
+ * ## Le brouillon reste
+ *
+ * Il n'est ni effacé ni vidé : ce qui est resté dehors — un nom déclaré sans
+ * valeur, une ligne refusée — est justement ce qu'on va continuer d'écrire.
+ */
+async function proposerAuProjet(racine) {
+  if (etat.depose) return;
+
+  const { affirmations } = aProposerDuBrouillon(fichiersRemplis(etat.brouillon));
+  if (!affirmations.length) return;
+
+  etat.depose = true;
+  etat.depot = null;
+  dessiner(racine);
+
+  try {
+    const { resolveCurrentBackendProjectId } = await import("../../../services/project-supabase-sync.js");
+    const projet = await resolveCurrentBackendProjectId();
+
+    if (!projet) {
+      etat.depot = { ok: false, dit: "Ce projet n'est pas relié à la base : rien ne peut lui être proposé." };
+    } else {
+      const { preparerUneProposition } = await import("../../../services/atelier-proposition.js");
+      const rendu = await preparerUneProposition({
+        projectId: projet,
+        titre: titreDeLaProposition(affirmations),
+        intro: introDeLaProposition(affirmations),
+        affirmations,
+        // Vide veut dire « partout ». Une portée écrite dans un bloc garde le
+        // dernier mot : c'est le fichier qui sait où sa règle s'applique.
+        zones: []
+      });
+
+      etat.depot = rendu?.ok
+        ? { ok: true, dit: `Proposition n° ${rendu.proposition?.number ?? "—"} ouverte. `
+            + "Rien n'est entré dans la mémoire : il faut la signer." }
+        : { ok: false, dit: rendu?.raison || "La proposition n'a pas pu être préparée." };
+    }
+  } catch (erreur) {
+    // **Une panne du navigateur se dit comme telle.** Ce qui casse ici — un
+    // import qui échoue, une session expirée — n'a aucune raison de passer pour
+    // un refus de la proposition (règle 5).
+    etat.depot = {
+      ok: false,
+      dit: erreur instanceof Error ? erreur.message : "La proposition n'a pas pu être préparée."
+    };
+  }
+
+  etat.depose = false;
+  if (racine.isConnected) dessiner(racine);
+}
+
 export function renderEcrireEnMdallEcran(racine, { force = false } = {}) {
   if (!racine) return;
   if (!force && racine.dataset.brouillonMonte === "true") return;
   racine.dataset.brouillonMonte = "true";
+
+  // Ce qui a été gardé ne reprend que sur un écran qui n'a rien : revenir sur
+  // l'onglet avec un brouillon en cours ne doit pas l'écraser par celui d'hier.
+  if (!brouillonEcrit(etat.brouillon)) {
+    const garde = reprendreLeBrouillon();
+    if (garde) etat.brouillon = garde;
+  }
 
   dessiner(racine);
 

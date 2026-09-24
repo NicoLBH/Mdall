@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 
 import {
   lignesDuFichier, renderOngletsDuBrouillon, renderVoletDuCode, renderEcrireEnMdall,
-  renderVerification, renderFormulaire, renderResultats, renderBacDessai, renderTranscription
+  renderVerification, renderFormulaire, renderResultats, renderBacDessai, renderTranscription,
+  renderProposition
 } from "./ecrire-en-mdall.js";
 import { REFUS, laTranscriptionLue } from "../../../services/le-mdall-rendu.js";
 import { champsDuBrouillon } from "../../../services/formulaire-du-brouillon.js";
@@ -357,4 +358,82 @@ test("ce que le modèle a rendu est échappé, jamais injecté", () => {
 
   assert.doesNotMatch(html, /<img /);
   assert.doesNotMatch(html, /<script>/);
+});
+
+/* ── « Proposer au projet » : la seule porte ─────────────────────────────── */
+
+const AVEC_UNE_DONNEE = avecLeFichier(brouillonNeuf(), "essai.ddb", "Altitude du site = 890 m");
+
+test("sans rien d'écrit, le panneau n'existe pas", () => {
+  // Un bouton « Proposer » sur un brouillon vide se clique une fois pour rien.
+  assert.equal(renderProposition(brouillonNeuf(), {}), "");
+  assert.equal(renderProposition(null, {}), "");
+});
+
+test("le bouton s'arme dès qu'une ligne affirme quelque chose", () => {
+  const html = renderProposition(AVEC_UNE_DONNEE, {});
+
+  assert.match(html, /data-brouillon-proposer/);
+  assert.doesNotMatch(html, /data-brouillon-proposer disabled/);
+  assert.match(html, /1 ligne à proposer/);
+  assert.match(html, /Rien n&#39;entre sans signature|Rien n'entre sans signature/);
+});
+
+test("un brouillon qui n'affirme rien ne s'arme pas, et dit pourquoi", () => {
+  // Une phrase du français qu'on a oublié de coder se lit comme un nom nu : le
+  // proposer porterait une ligne que personne ne peut relire.
+  const html = renderProposition(avecLeFichier(brouillonNeuf(), "essai.ddb", "la zone de vent vaut trois"), {});
+
+  assert.match(html, /data-brouillon-proposer disabled/);
+  assert.match(html, /aucune ligne du brouillon n&#39;affirme|aucune ligne du brouillon n'affirme/);
+});
+
+test("ce qui reste dehors se lit à côté du bouton, pas après le clic", () => {
+  // L'apprendre une fois la proposition ouverte reviendrait à l'apprendre trop
+  // tard, et à croire qu'on a proposé le brouillon entier.
+  const brouillon = avecLeFichier(
+    avecLeFichier(brouillonNeuf(), "essai.ddb", "Altitude du site = 890 m"),
+    "variables-du-projet.ref",
+    "const Zone de vent = {\n   type: \"texte\",\n};"
+  );
+
+  const html = renderProposition(brouillon, {});
+  assert.match(html, /brouillon-propose__dehors/);
+  assert.match(html, /Zone de vent/);
+  assert.match(html, /1 reste dehors/);
+});
+
+test("pendant l'ouverture, le bouton se désarme", () => {
+  // Deux clics ouvriraient deux propositions portant les mêmes lignes.
+  const html = renderProposition(AVEC_UNE_DONNEE, { depose: true });
+
+  assert.match(html, /data-brouillon-proposer disabled/);
+  assert.match(html, /Proposition en cours/);
+});
+
+test("ce que la proposition a donné se dit, dans un sens comme dans l'autre", () => {
+  const fait = renderProposition(AVEC_UNE_DONNEE, { depot: { ok: true, dit: "Proposition n° 12 ouverte." } });
+  assert.match(fait, /Proposition n° 12 ouverte\./);
+  assert.doesNotMatch(fait, /brouillon-propose__depot--refus/);
+
+  const refus = renderProposition(AVEC_UNE_DONNEE, { depot: { ok: false, dit: "Ce projet n'est pas relié à la base." } });
+  assert.match(refus, /brouillon-propose__depot--refus/);
+  assert.match(refus, /pas relié à la base/);
+});
+
+test("l'écran dit que rien n'entre sans signature, et pas seulement dans son code", () => {
+  // « On ne doit RIEN verser DIRECTEMENT dans la mémoire, JAMAIS. »
+  const html = renderEcrireEnMdall(AVEC_UNE_DONNEE, {});
+
+  assert.match(html, /data-brouillon-proposer/);
+  assert.match(html, /signature|signée|signer/);
+});
+
+test("ce qui reste dehors est échappé, jamais injecté", () => {
+  const html = renderProposition(
+    avecLeFichier(brouillonNeuf(), "essai.ddb", "Altitude = 890 m\n<img src=x onerror=\"x\">"),
+    {}
+  );
+
+  assert.doesNotMatch(html, /<img /);
 });
