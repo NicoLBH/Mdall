@@ -384,9 +384,41 @@ A** — ils rendent des structures, pas de la prose. Ce lot ne consomme pas un
 jeton de modèle : il fait converger trois façons d'écrire vers une seule.
 
 C'est le lot le plus risqué du plan, parce qu'il touche trois chemins en
-production. Il mérite probablement d'être découpé en trois PR, une par
-producteur, et il ne se commence pas avant que le lot 1 ait tourné sur de vraies
-propositions.
+production. Il est donc découpé en **trois PR, une par producteur**, chacune
+ajoutant un aperçu et ne retirant rien.
+
+#### Ce que chacune des trois fait, et ne fait pas
+
+Chaque producteur montre, **avant le clic**, le Mdall que sa proposition
+écrira. Aucun d'eux ne change ce qu'il propose : le bouton, les affirmations, la
+proposition ouverte sont exactement les mêmes. On ajoute ce qui se lit, on ne
+touche pas à ce qui s'écrit — c'est ce qui rend ces trois PR relisables une par
+une, et réversibles.
+
+#### L'écrivain est celui des Changements, une porte plus tôt
+
+`blocsAProposer()` ne répond pas à sa façon : elle met les affirmations dans la
+forme que `blocsDeLaProposition()` attend, et **l'appelle**. Deux écrivains
+diraient deux choses le jour où l'un gagne une ligne (règle 4) — et c'est
+précisément ce que ce lot existe pour empêcher.
+
+Elle passe par `itemsDeProposition()`, **l'appel même que le clic fera**. Écrire
+l'aperçu depuis les affirmations brutes le ferait diverger de la proposition
+réelle au premier champ que l'atelier filtre : on montrerait une chose et l'on
+verserait l'autre, ce qui est pire que de ne rien montrer.
+
+#### La boucle se ferme
+
+`lire(écrire(G)) = G` : ce que la voie déterministe écrit est relu par
+`lireUnFichier` — le lecteur du projet —, **sans un seul refus**, et ce qui en
+ressort est ce qu'on avait mis. C'est l'épreuve que le plan annonçait comme
+gratuite pour la voie A ; elle l'est, et elle est écrite.
+
+| PR | ce qu'elle porte |
+| --- | --- |
+| 8a | `blocsAProposer` · `mdall-a-proposer.js` · le Copilote · les Changements repassent par le panneau partagé |
+| 8b | la lecture des comptes rendus |
+| 8c | la lecture des mails |
 
 ---
 

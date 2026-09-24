@@ -44,6 +44,8 @@
 import { lignesDeLAssertion } from "../project-memoire-fichiers.js";
 import { CHANGEMENT } from "../../services/proposition-avant-apres.js";
 import { cleDuSujet } from "../../services/memoire-identifiants.js";
+import { itemsDeProposition } from "../../services/atelier-proposition.js";
+import { rangementDuVersement } from "../../services/memoire-domiciles.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -206,4 +208,72 @@ export function blocsAOuvrir(blocs = []) {
     .filter((bloc) => bloc.lignes.some((ligne) => ligne.nature === "regle"))
     .map((bloc) => bloc.cle)
     .filter(Boolean));
+}
+
+/**
+ * Le Mdall que des affirmations écriront — **avant** qu'une proposition existe.
+ *
+ * ## Le même écrivain, une porte plus tôt
+ *
+ * `blocsDeLaProposition` répond à « qu'écrira cette proposition ? », et elle
+ * suppose donc une proposition. Les trois producteurs du système — le Copilote,
+ * la lecture des comptes rendus, la lecture des mails — posent la question un
+ * cran avant : **qu'écrira ce que je m'apprête à proposer ?** Ils ont des
+ * affirmations, pas encore de lignes de tableau.
+ *
+ * Cette fonction ne répond pas à sa façon : elle met les affirmations dans la
+ * forme que l'autre attend, et **l'appelle**. Deux écrivains diraient deux
+ * choses le jour où l'un gagne une ligne (règle 4), et c'est précisément ce que
+ * ce lot existe pour empêcher — trois producteurs, un seul écrivain.
+ *
+ * ## Elles passent par `itemsDeProposition`, et c'est le point
+ *
+ * Le même appel que `preparerUneProposition` fera au clic. Écrire l'aperçu
+ * depuis les affirmations brutes le ferait diverger de la proposition réelle au
+ * premier champ que l'atelier filtre — on montrerait une chose et l'on
+ * verserait l'autre, ce qui est pire que de ne rien montrer.
+ *
+ * ## `inconnu`, parce qu'on n'a comparé à rien
+ *
+ * Aucune de ces lignes n'a encore été confrontée à la mémoire : dire « Nouveau »
+ * affirmerait que le projet ne porte pas déjà ce sujet, ce que personne n'a
+ * vérifié (règle 5). Le tableau le dira, après.
+ *
+ * @param {object[]} affirmations ce qu'un producteur s'apprête à proposer
+ * @param {object} [options]
+ * @param {Map|null} [options.ouEcrit] les domiciles des noms, pour que les
+ *   `importe` et les `enregistre` nomment de vrais fichiers
+ * @param {Map|null} [options.auteurs] pour signer une décision d'un nom lisible
+ * @returns {{cle, sujet, changement, fichier, lignes, sansBloc}[]}
+ */
+export function blocsAProposer(affirmations = [], { ouEcrit = null, auteurs = null } = {}) {
+  // Pas de garde sur `ouEcrit` : `rangementDuVersement` et
+  // `registreAvecLaProposition` refusent déjà ce qui n'est pas une `Map`. Une
+  // troisième vérification serait une consigne qu'aucun cas ne peut faire
+  // tomber (règle 12).
+  const lignes = itemsDeProposition(affirmations).map((item) => {
+    const payload = item?.payload ?? {};
+    const referentiel = payload.referentiel === true;
+
+    return {
+      cle: texte(item?.itemKey),
+      sujet: texte(payload.subject),
+      changement: CHANGEMENT.INCONNU,
+      referentiel,
+      // Où cette ligne ira, calculé **comme la mémoire le calcule** : par le
+      // domicile du nom, registre consulté. Un second calcul ici pourrait
+      // nommer un fichier que la mémoire ne crée pas (règle 10).
+      rangement: rangementDuVersement({
+        nature: texte(payload.nature),
+        domain: texte(payload.domain),
+        payload: { subject: texte(payload.subject), referentiel }
+      }, ouEcrit),
+      // Une affirmation qu'on n'a pas encore proposée n'a pas été refusée : il
+      // n'y a pas eu de revue.
+      refusee: false,
+      porteur: { item_key: texte(item?.itemKey), nature: texte(payload.nature), payload }
+    };
+  });
+
+  return blocsDeLaProposition(lignes, { ouEcrit, auteurs });
 }
