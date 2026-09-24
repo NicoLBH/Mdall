@@ -403,6 +403,27 @@ gratuite pour la voie A ; elle l'est, et elle est écrite.
 | 8b | la lecture des comptes rendus |
 | 8c | la lecture des mails |
 
+#### Ce que le lot 8b a trouvé : un compte rendu n'écrit rien dans la mémoire
+
+**Toutes** les lignes qu'une lecture de compte rendu propose sont de
+l'intendance — un document au corpus, des sujets à ouvrir ou à relancer, des
+lots, des labels, des jalons, des fermetures. Aucune n'affirme quoi que ce soit
+sur l'ouvrage, donc **aucune ne s'écrit en Mdall**. Ce n'est pas une pauvreté du
+lot : un compte rendu fait du secrétariat.
+
+Le plan supposait le contraire. Le taire serait pourtant le pire des deux
+mondes : celui qui vient de voir le Copilote écrire du Mdall sous son bouton
+croirait que le compte rendu en écrit aussi, et chercherait longtemps où. La
+convergence pour ce producteur est donc **que l'écrivain le dise** — et il le
+dit, en ne rendant aucun bloc et en nommant ce qui part malgré tout.
+
+Au passage, le vrai défaut de cet écran : il annonçait « ce que ce compte rendu
+apporterait » en recomptant lots, labels, jalons et fermetures **depuis les
+points**, quand le clic les recomposait pour `itemsDuCompteRendu`. Deux comptes
+pour la même question, et c'est celui qu'on ne regarde pas qui a raison
+(règle 4). Les commentaires du site d'appel le disaient déjà, sans pouvoir
+l'éviter. `matiereDuCompteRendu` est écrite une fois, et les deux l'appellent.
+
 ---
 
 ## Ce qu'on réutilise, et ce qui reste à écrire

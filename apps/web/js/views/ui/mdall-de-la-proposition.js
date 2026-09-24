@@ -42,9 +42,9 @@
  */
 
 import { lignesDeLAssertion } from "../project-memoire-fichiers.js";
-import { CHANGEMENT } from "../../services/proposition-avant-apres.js";
+import { CHANGEMENT, affirmationsDUneProposition } from "../../services/proposition-avant-apres.js";
 import { cleDuSujet } from "../../services/memoire-identifiants.js";
-import { itemsDeProposition } from "../../services/atelier-proposition.js";
+import { itemsAPorter } from "../../services/atelier-proposition.js";
 import { rangementDuVersement } from "../../services/memoire-domiciles.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -226,12 +226,14 @@ export function blocsAOuvrir(blocs = []) {
  * choses le jour où l'un gagne une ligne (règle 4), et c'est précisément ce que
  * ce lot existe pour empêcher — trois producteurs, un seul écrivain.
  *
- * ## Elles passent par `itemsDeProposition`, et c'est le point
+ * ## Elles passent par `itemsAPorter`, et c'est le point
  *
- * Le même appel que `preparerUneProposition` fera au clic. Écrire l'aperçu
- * depuis les affirmations brutes le ferait diverger de la proposition réelle au
- * premier champ que l'atelier filtre — on montrerait une chose et l'on
- * verserait l'autre, ce qui est pire que de ne rien montrer.
+ * Le même appel que `preparerUneProposition` fera au clic, et il accepte les
+ * deux formes : les affirmations d'un utilitaire comme les items tout faits
+ * d'une lecture de compte rendu. Écrire l'aperçu depuis les affirmations brutes
+ * le ferait diverger de la proposition réelle au premier champ que l'atelier
+ * filtre — on montrerait une chose et l'on verserait l'autre, ce qui est pire
+ * que de ne rien montrer.
  *
  * ## `inconnu`, parce qu'on n'a comparé à rien
  *
@@ -251,7 +253,12 @@ export function blocsAProposer(affirmations = [], { ouEcrit = null, auteurs = nu
   // `registreAvecLaProposition` refusent déjà ce qui n'est pas une `Map`. Une
   // troisième vérification serait une consigne qu'aucun cas ne peut faire
   // tomber (règle 12).
-  const lignes = itemsDeProposition(affirmations).map((item) => {
+  // **L'intendance n'a pas de Mdall, et lui en écrire un serait mentir.** Un
+  // sujet ouvert, un lot, un label, un document qui entre au corpus : ce sont
+  // des mouvements du suivi, pas des valeurs du projet. Les faire passer par
+  // l'écrivain rendrait des blocs sans nom ni valeur, qui se liraient comme
+  // une mémoire qu'on s'apprête à écrire et qu'on n'écrit pas.
+  const lignes = affirmationsDUneProposition(itemsAPorter(affirmations)).map((item) => {
     const payload = item?.payload ?? {};
     const referentiel = payload.referentiel === true;
 
