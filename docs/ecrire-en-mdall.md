@@ -424,6 +424,32 @@ pour la même question, et c'est celui qu'on ne regarde pas qui a raison
 (règle 4). Les commentaires du site d'appel le disaient déjà, sans pouvoir
 l'éviter. `matiereDuCompteRendu` est écrite une fois, et les deux l'appellent.
 
+#### Le lot 8c : un fil de mails non plus
+
+Même conclusion, et elle se prouve autrement : un fil de mails ne rend que des
+`sujet` et des `relance`, et **les deux sorts sont de l'intendance**. Une
+épreuve le tient sur l'un comme sur l'autre, donc quoi que la confrontation
+décide au clic.
+
+Ce qui ne se dit **pas** à l'écran, et c'est délibéré : le partage ouvrir /
+relancer. Il demande de savoir ce que le projet suit déjà, ce qui se demande au
+serveur au clic. Annoncer « 12 sujets à ouvrir » avant d'avoir confronté serait
+une borne haute présentée comme un compte — on en ouvrirait trois, et neuf
+relances passeraient pour des ouvertures perdues (règle 5).
+
+#### Le bilan du lot 8, contre ce que le plan supposait
+
+| producteur | ce qu'il écrit en Mdall |
+| --- | --- |
+| le Copilote | **des valeurs**, avec leur provenance et leur citation |
+| la lecture des comptes rendus | rien — du suivi |
+| la lecture des mails | rien — du suivi |
+
+Le plan tenait les trois pour équivalents. Ils ne le sont pas, et la
+convergence n'en est pas moins réelle : **le même écrivain répond aux trois**,
+et pour deux d'entre eux sa réponse est « rien, et voici pourquoi ». Un écrivain
+qui ne sait dire que ce qu'il écrit laisserait deux écrans sur trois muets.
+
 ---
 
 ## Ce qu'on réutilise, et ce qui reste à écrire
