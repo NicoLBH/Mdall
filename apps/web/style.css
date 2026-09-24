@@ -26891,3 +26891,97 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   font-family:var(--mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
 }
 .mdall-bloc > .fichier-code{ border-top:1px solid var(--border); }
+
+/* Écrire en Mdall — le français à gauche, les fichiers à droite.
+
+   La grille est celle de la Mémoire (`memoire-layout`) : deux colonnes, une
+   largeur portée par une variable, une poignée entre les deux. On ne réinvente
+   ni les bornes ni la hauteur — `--documents-content-height` est celle que
+   l'écran a mesurée, et une soustraction approchée laisserait un filet qui
+   s'arrête au-dessus du bas. */
+.brouillon{ display:flex; flex-direction:column; min-width:0; }
+.brouillon__tete{ padding:16px 20px 10px; }
+.brouillon__titre{ margin:0; font-size:16px; }
+.brouillon__quoi{ margin:6px 0 0; color:var(--muted); font-size:12px; max-width:72ch; }
+
+.brouillon__corps{
+  position:relative;
+  display:grid;
+  grid-template-columns:var(--brouillon-dit-width, 460px) minmax(0, 1fr);
+  align-items:stretch;
+  border-top:1px solid var(--border);
+  min-height:var(--documents-content-height, calc(100vh - var(--app-top) - 220px));
+}
+.brouillon__dit{
+  position:relative;
+  display:flex; flex-direction:column; min-width:0;
+  border-right:1px solid var(--border);
+}
+.brouillon__intitule{
+  margin:0; padding:10px 14px 6px;
+  color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em;
+}
+/* Du français, donc pas de police à chasse fixe et pas de `white-space:pre` :
+   ce n'est pas du code, et le présenter comme tel ferait hésiter sur ce qu'on
+   attend. C'est l'exacte différence avec le volet de droite. */
+.brouillon__zone{
+  flex:1 1 auto; min-height:220px; resize:none;
+  padding:0 14px 12px; border:0; background:transparent; color:var(--text);
+  font-family:inherit; font-size:13px; line-height:1.55;
+}
+.brouillon__zone:focus{ outline:none; }
+.brouillon__gestes{
+  display:flex; align-items:center; flex-wrap:wrap; gap:10px;
+  padding:10px 14px; border-top:1px solid var(--border);
+}
+.brouillon__note{ color:var(--muted); font-size:11px; max-width:44ch; }
+.brouillon__vider{ margin-left:auto; }
+
+/* La poignée déborde sur les deux colonnes pour être saisissable sans viser le
+   trait — comme celle du rail, et pour la même raison. */
+.brouillon__poignee.side-resizer__handle{
+  position:absolute; top:0; left:calc(var(--brouillon-dit-width, 460px) - 4px);
+  width:9px; height:100%; cursor:col-resize; z-index:1;
+}
+.brouillon__corps > .side-resizer__guide{
+  position:fixed; top:var(--app-top); bottom:0; width:2px;
+  background:var(--borderColor-accent-emphasis); display:none; pointer-events:none; z-index:4;
+}
+
+.brouillon-volet{ display:flex; flex-direction:column; min-width:0; }
+.brouillon-volet__barre{
+  display:flex; align-items:center; gap:8px;
+  padding:6px 12px; border-bottom:1px solid var(--border);
+}
+.brouillon-volet__espace{ flex:1 1 auto; }
+.brouillon-volet__quoi{
+  margin:0; padding:6px 14px; color:var(--muted); font-size:11px;
+  border-bottom:1px solid var(--border);
+}
+.brouillon-volet__langue{ font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace); }
+.brouillon-volet > .saisie-code,
+.brouillon-volet > .fichier-code{ flex:1 1 auto; min-height:0; }
+
+.brouillon-onglets{ display:flex; align-items:center; gap:4px; min-width:0; overflow:auto; }
+.brouillon-onglet{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:4px 10px; border:1px solid transparent; border-radius:var(--radius);
+  background:transparent; color:var(--muted); cursor:pointer;
+  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace); font-size:11px;
+  white-space:nowrap;
+}
+.brouillon-onglet:hover{ background:rgba(110,118,129,.08); color:var(--text); }
+.brouillon-onglet.est-actif{ border-color:var(--border); background:rgba(110,118,129,.12); color:var(--text); }
+/* Le compte de lignes dit qu'il y a quelque chose sans ouvrir l'onglet : trois
+   onglets identiques ne disent pas lequel porte le travail. */
+.brouillon-onglet__compte{
+  padding:0 5px; border-radius:999px;
+  background:rgba(110,118,129,.18); font-size:10px;
+}
+.brouillon-lectures{ display:inline-flex; gap:2px; }
+
+@media (max-width:900px){
+  .brouillon__corps{ grid-template-columns:minmax(0, 1fr); }
+  .brouillon__dit{ border-right:0; border-bottom:1px solid var(--border); }
+  .brouillon__poignee.side-resizer__handle{ display:none; }
+}
