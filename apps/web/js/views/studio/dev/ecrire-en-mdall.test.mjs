@@ -7,8 +7,9 @@ import assert from "node:assert/strict";
 
 import {
   lignesDuFichier, renderOngletsDuBrouillon, renderVoletDuCode, renderEcrireEnMdall,
-  renderVerification, renderFormulaire, renderResultats, renderBacDessai
+  renderVerification, renderFormulaire, renderResultats, renderBacDessai, renderTranscription
 } from "./ecrire-en-mdall.js";
+import { REFUS, laTranscriptionLue } from "../../../services/le-mdall-rendu.js";
 import { champsDuBrouillon } from "../../../services/formulaire-du-brouillon.js";
 import { lancerLeBrouillon } from "../../../services/bac-dessai.js";
 import { brouillonNeuf, avecLeFichier, avecLeDit, ouvertSur } from "../../../services/brouillon-mdall.js";
@@ -110,14 +111,31 @@ test("sans fichier, le volet ne rend rien plutôt que de rendre un cadre", () =>
 
 /* ── L'écran entier ──────────────────────────────────────────────────────── */
 
-test("les deux boutons qui appellent quelque chose sont désactivés, et le disent", () => {
+test("« Coder » ne s'arme que lorsqu'il y a une phrase à transcrire", () => {
   // Un bouton qui ne fait rien en silence se clique deux fois avant qu'on
-  // comprenne. Ils arriveront aux lots suivants.
-  const html = renderEcrireEnMdall(brouillonNeuf(), {});
+  // comprenne. Désactivé, il dit pourquoi dans son infobulle.
+  const vide = renderEcrireEnMdall(brouillonNeuf(), {});
+  assert.match(vide, /data-brouillon-coder disabled/);
+  assert.match(vide, /title="Écrivez d'abord ce que vous voulez poser"/);
+
+  const avec = renderEcrireEnMdall(avecLeDit(brouillonNeuf(), "la zone de vent vaut 3"), {});
+  assert.doesNotMatch(avec, /data-brouillon-coder disabled/);
+});
+
+test("pendant la transcription, « Coder » se désarme", () => {
+  // Deux clics feraient deux appels payés, dont le second écraserait le premier
+  // sans que rien ne le dise.
+  const html = renderEcrireEnMdall(avecLeDit(brouillonNeuf(), "un essai"), { transcrit: true });
 
   assert.match(html, /data-brouillon-coder disabled/);
-  assert.match(html, /data-brouillon-lancer disabled/);
-  assert.match(html, /Pas encore branché/);
+  assert.match(html, /Transcription en cours/);
+});
+
+test("l'écran rappelle que l'IA n'est pas le seul chemin", () => {
+  // Fondamental 13, à l'écran et pas seulement dans le code : l'autre porte est
+  // à côté, et il faut qu'on la voie.
+  assert.match(renderEcrireEnMdall(brouillonNeuf(), {}), /jamais le seul chemin/);
+  assert.match(renderEcrireEnMdall(brouillonNeuf(), {}), /écrire\s+directement à droite/);
 });
 
 test("l'écran dit que rien ne s'écrit dans le projet", () => {
@@ -297,4 +315,46 @@ test("ce qu'on répond est échappé, dans une liste comme dans un champ", () =>
 
   assert.doesNotMatch(html, /<script>/);
   assert.match(html, /&lt;script&gt;/);
+});
+
+/* ── Ce que la transcription a rendu ─────────────────────────────────────── */
+
+test("avant toute transcription, l'écran n'annonce rien", () => {
+  // Une ligne vide sous le bouton se lirait comme un résultat.
+  assert.equal(renderTranscription(null), "");
+});
+
+test("ce que le modèle n'a pas su écrire s'affiche, phrase et raison", () => {
+  // C'est la moitié de ce qu'on vient chercher : une phrase du français qui
+  // disparaît sans un mot laisse croire qu'elle a été codée, et l'on ne s'en
+  // aperçoit qu'au moment où le raisonnement manque.
+  const html = renderTranscription(laTranscriptionLue({
+    fichiers: [{ nom: "essai.ref", contenu: "fonction A(zones) {\n}\n" }],
+    lacunes: [{ phrase: "multiplie la surface par 0,7", pourquoi: "Mdall ne calcule pas." }],
+    temperature: 0
+  }));
+
+  assert.match(html, /multiplie la surface par 0,7/);
+  assert.match(html, /Mdall ne calcule pas\./);
+  assert.match(html, /1 fichier écrit/);
+});
+
+test("un refus dit sa phrase et la panne nommée, sans les confondre", () => {
+  const html = renderTranscription({ ok: false, motif: REFUS.REFUSE, panne: "delai_depasse" });
+
+  assert.match(html, /il faut être connecté au projet/);
+  assert.match(html, /brouillon-transcrit__panne">delai_depasse/);
+});
+
+test("ce que le modèle a rendu est échappé, jamais injecté", () => {
+  // Le modèle écrit du texte libre : sa lacune passe par l'écran comme
+  // n'importe quelle saisie.
+  const html = renderTranscription(laTranscriptionLue({
+    fichiers: [{ nom: "essai.ref", contenu: "fonction A(zones) {\n}\n" }],
+    lacunes: [{ phrase: "<img src=x onerror=\"x\">", pourquoi: "<script>alert(1)</script>" }],
+    temperature: 0
+  }));
+
+  assert.doesNotMatch(html, /<img /);
+  assert.doesNotMatch(html, /<script>/);
 });

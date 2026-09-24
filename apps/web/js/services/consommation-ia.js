@@ -218,6 +218,10 @@ export const NATURES = {
   "brouillon-de-fermeture": {
     nom: "Brouillon de fermeture",
     quoi: "Relire le fil d'un sujet qu'on ferme, et écrire le brouillon de ce qui a été tranché."
+  },
+  "ecrire-en-mdall": {
+    nom: "Écriture en Mdall",
+    quoi: "Mettre en Mdall une intention écrite en français, dans le bac d'essai."
   }
 };
 

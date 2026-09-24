@@ -49,6 +49,7 @@ import {
   lancerLeBrouillon, fonctionsDuBrouillon, phraseDuLancement, ISSUE, MOTS_DE_LISSUE
 } from "../../../services/bac-dessai.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
+import { REFUS, phraseDeLaTranscription } from "../../../services/le-mdall-rendu.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -338,9 +339,51 @@ export function renderBacDessai(brouillon = null, { reponses = {}, lance = false
   `;
 }
 
+/**
+ * Ce que la transcription a rendu — et surtout ce qu'elle n'a pas su écrire.
+ *
+ * **La moitié de ce qu'on vient chercher est ce qui manque.** Une phrase du
+ * français qui disparaît sans un mot laisse croire qu'elle a été codée, et l'on
+ * ne s'en aperçoit qu'au moment où le raisonnement manque — six mois plus tard.
+ */
+export function renderTranscription(rendu = null) {
+  if (!rendu) return "";
+
+  if (!rendu.ok) {
+    return `
+      <p class="brouillon-transcrit brouillon-transcrit--refus">
+        ${svgIcon("alert", { className: "octicon" })}
+        ${escapeHtml(phraseDeLaTranscription(rendu))}
+        ${rendu.panne ? `<span class="brouillon-transcrit__panne">${escapeHtml(rendu.panne)}</span>` : ""}
+      </p>
+    `;
+  }
+
+  return `
+    <div class="brouillon-transcrit">
+      <p class="brouillon-transcrit__phrase">
+        ${svgIcon("check", { className: "octicon" })} ${escapeHtml(phraseDeLaTranscription(rendu))}
+      </p>
+      ${
+        rendu.lacunes.length
+          ? `<ul class="brouillon-transcrit__lacunes">
+               ${rendu.lacunes.map((lacune) => `
+                 <li>
+                   <span class="brouillon-transcrit__phrase-dite">« ${escapeHtml(lacune.phrase)} »</span>
+                   <span class="brouillon-transcrit__pourquoi">${escapeHtml(lacune.pourquoi)}</span>
+                 </li>
+               `).join("")}
+             </ul>`
+          : ""
+      }
+    </div>
+  `;
+}
+
 /** L'écran entier, sans un seul appel. */
 export function renderEcrireEnMdall(brouillon = null, {
-  lecture = "code", largeur = LARGEUR_PAR_DEFAUT, bac = false, reponses = {}, lance = false
+  lecture = "code", largeur = LARGEUR_PAR_DEFAUT, bac = false, reponses = {}, lance = false,
+  transcrit = false, rendu = null
 } = {}) {
   const ecrit = brouillonEcrit(brouillon);
 
@@ -360,13 +403,17 @@ export function renderEcrireEnMdall(brouillon = null, {
           <textarea class="brouillon__zone" data-brouillon-dit spellcheck="true"
             placeholder="${escapeHtml(INVITE)}">${escapeHtml(String(brouillon?.dit ?? ""))}</textarea>
           <div class="brouillon__gestes">
-            <button type="button" class="gh-btn gh-btn--primary gh-btn--sm" data-brouillon-coder disabled
-              title="La transcription arrive dans un lot suivant">
-              ${svgIcon("ai-model", { className: "octicon" })} Coder
+            <button type="button" class="gh-btn gh-btn--primary gh-btn--sm" data-brouillon-coder${
+              texte(brouillon?.dit) && !transcrit ? "" : " disabled"}
+              title="${
+                transcrit ? "Transcription en cours…"
+                : texte(brouillon?.dit) ? "Mettre cette phrase en Mdall"
+                : "Écrivez d'abord ce que vous voulez poser"}">
+              ${svgIcon("ai-model", { className: "octicon" })} ${transcrit ? "…" : "Coder"}
             </button>
             <span class="brouillon__note">
-              Pas encore branché. En attendant, écrivez directement à droite :
-              l'écran colore et vérifie ce que vous tapez.
+              L'IA accélère ; elle n'est jamais le seul chemin. Vous pouvez écrire
+              directement à droite : l'écran colore et vérifie ce que vous tapez.
             </span>
             ${
               ecrit
@@ -376,6 +423,7 @@ export function renderEcrireEnMdall(brouillon = null, {
                 : ""
             }
           </div>
+          ${renderTranscription(rendu)}
         </div>
 
         ${renderSideResizer({ id: "brouillonResizer", className: "brouillon__poignee" })}
@@ -407,7 +455,15 @@ const etat = {
   /** Ce qu'on a répondu au formulaire, par nom de variable. */
   reponses: {},
   /** A-t-on lancé ? Tant que non, on ne montre aucun verdict. */
-  lance: false
+  lance: false,
+  /** La transcription est-elle en cours ? Le bouton le dit, et se désarme. */
+  transcrit: false,
+  /**
+   * Ce que la dernière transcription a rendu — ou pourquoi elle n'a pas eu
+   * lieu. `null` tant qu'on n'a rien demandé : un écran qui annoncerait un
+   * résultat qu'on n'a pas demandé décrirait un essai qui n'existe pas.
+   */
+  rendu: null
 };
 
 let debrancherSaisie = null;
@@ -422,7 +478,9 @@ function dessiner(racine) {
     largeur: etat.largeur,
     bac: etat.bac,
     reponses: etat.reponses,
-    lance: etat.lance
+    lance: etat.lance,
+    transcrit: etat.transcrit,
+    rendu: etat.rendu
   });
   brancher(racine);
 }
@@ -575,6 +633,9 @@ function brancher(racine) {
   // prochain redessin, et l'attendre ne coûte rien.
   dit?.addEventListener("input", () => { etat.brouillon = avecLeDit(etat.brouillon, dit.value); });
 
+  const coder = racine.querySelector("[data-brouillon-coder]");
+  coder?.addEventListener("click", () => { void transcrire(racine); });
+
   const vider = racine.querySelector("[data-brouillon-vider]");
   vider?.addEventListener("click", () => {
     // Une demi-heure de travail ne s'efface pas sur un clic mal visé.
@@ -597,6 +658,59 @@ function brancher(racine) {
       max: LARGEUR_MAX
     })
     : null;
+}
+
+/**
+ * Demander la transcription, et poser ce qui revient.
+ *
+ * ## Ce qui revient ne remplace pas ce qu'on a écrit
+ *
+ * Seuls les fichiers que le modèle a **remplis** sont posés. Écraser un fichier
+ * qu'il a laissé vide effacerait ce qu'on venait d'écrire à la main, et c'est
+ * précisément ce qu'on ne veut pas perdre.
+ *
+ * ## L'appel n'est fait qu'une fois à la fois
+ *
+ * Le bouton se désarme pendant. Deux clics feraient deux appels payés, dont le
+ * second écraserait le premier sans que rien ne le dise.
+ */
+async function transcrire(racine) {
+  if (etat.transcrit || !texte(etat.brouillon?.dit)) return;
+
+  etat.transcrit = true;
+  etat.rendu = null;
+  dessiner(racine);
+
+  try {
+    const { ecrireEnMdall } = await import("../../../services/mdall-par-le-modele.js");
+    const rendu = await ecrireEnMdall({ dit: etat.brouillon.dit });
+
+    if (rendu.ok) {
+      for (const fichier of rendu.fichiers) {
+        etat.brouillon = avecLeFichier(etat.brouillon, fichier.nom, fichier.contenu);
+      }
+      // On ouvre le premier fichier écrit : rester sur un onglet vide ferait
+      // croire que rien n'est arrivé.
+      etat.brouillon = ouvertSur(etat.brouillon, rendu.fichiers[0].nom);
+      etat.lecture = "code";
+    }
+
+    etat.rendu = rendu;
+  } catch (erreur) {
+    // **Une panne du navigateur se dit comme telle.** Le module d'appel ne
+    // remonte que ce que le serveur a nommé ; ce qui casse ici — un import qui
+    // échoue, une session expirée — n'a aucune raison de passer pour un refus
+    // du modèle (règle 5).
+    etat.rendu = {
+      ok: false,
+      motif: REFUS.EN_PANNE,
+      panne: erreur instanceof Error ? erreur.message : "La transcription n'a pas pu être demandée.",
+      coupee: false
+    };
+  }
+
+  etat.transcrit = false;
+  if (racine.isConnected) dessiner(racine);
 }
 
 export function renderEcrireEnMdallEcran(racine, { force = false } = {}) {
