@@ -24,10 +24,8 @@ import {
   setProjectViewHeader
 } from "./project-shell-chrome.js";
 import { bindOverlayChromeCompact, renderOverlayChromeHead } from "./ui/overlay-chrome.js";
-import { renderLignesDeCode } from "./ui/code-mdall.js";
-import {
-  blocsDeLaProposition, blocsAOuvrir, PHRASES_SANS_BLOC
-} from "./ui/mdall-de-la-proposition.js";
+import { blocsDeLaProposition } from "./ui/mdall-de-la-proposition.js";
+import { SOUS_LE_TITRE, renderMdallAProposer } from "./ui/mdall-a-proposer.js";
 import { brancherLesBoutonsCopier, renderBoutonCopier } from "./ui/bouton-copier.js";
 import { bindGhActionButtons, renderGhActionButton } from "./ui/gh-split-button.js";
 import { bindLightTabs, renderLightTabs } from "./ui/light-tabs.js";
@@ -3479,41 +3477,10 @@ function renderAnalysis(proposition, review) {
  * au redessin, et aucun état d'écran n'a besoin d'exister pour lui.
  */
 function renderMdallDeLaProposition(tableau) {
-  const blocs = blocsDeLaProposition(tableau?.lignes ?? [], { ouEcrit: tableau?.ouEcrit ?? null });
-  if (!blocs.length) return "";
-
-  const ouverts = blocsAOuvrir(blocs);
-
-  const corps = blocs.map((bloc) => `
-    <details class="mdall-bloc"${ouverts.has(bloc.cle) ? " open" : ""}>
-      <summary class="mdall-bloc__tete">
-        <span class="mdall-bloc__sujet">${escapeHtml(bloc.sujet)}</span>
-        ${bloc.fichier ? `<span class="mdall-bloc__fichier">${escapeHtml(bloc.fichier)}</span>` : ""}
-      </summary>
-      ${
-        bloc.sansBloc
-          ? `<p class="review-empty-note">${escapeHtml(PHRASES_SANS_BLOC[bloc.sansBloc] ?? "")}</p>`
-          : renderLignesDeCode(bloc.lignes)
-      }
-    </details>
-  `).join("");
-
-  return `
-    <section class="review-block">
-      <div class="review-panel">
-        <div class="review-block__head review-block__head--plain">
-          <div class="review-block__headbody">
-            <h3 class="review-block__title">
-              Ce que la mémoire écrira
-              <span class="review-block__count">${blocs.length}</span>
-            </h3>
-            <span class="review-block__state">Le raisonnement, dans la langue du projet — rien n'est encore écrit.</span>
-          </div>
-        </div>
-        <div class="mdall-blocs">${corps}</div>
-      </div>
-    </section>
-  `;
+  return renderMdallAProposer(
+    blocsDeLaProposition(tableau?.lignes ?? [], { ouEcrit: tableau?.ouEcrit ?? null }),
+    { quoi: SOUS_LE_TITRE.PROPOSEE }
+  );
 }
 
 /** Ce qui change : les contradictions d'abord, puis les affirmations. */
