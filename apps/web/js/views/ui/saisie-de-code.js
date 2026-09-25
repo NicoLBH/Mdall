@@ -41,6 +41,13 @@
  * **La couleur est facultative.** Sans fonction pour colorer, la zone reste ce
  * qu'elle était : les autres écrans qui s'en servent ne changent pas.
  *
+ * ## Les propositions aussi sont facultatives
+ *
+ * `propose` pose le réceptacle de la liste, et rien de plus — ce qui la
+ * remplit vit dans `propositions-de-saisie.js`, et ce qui décide de son
+ * contenu dans `services/mdall-completion.js`. Une zone qui n'en veut pas n'en
+ * porte pas le balisage, et son clavier n'est touché par rien.
+ *
  * ## Les classes sont celles de la Mémoire
  *
  * `memoire-ligne__num`, comme le fichier de code qui la relit. Le numéro d'une
@@ -74,7 +81,7 @@ export function renderGouttiere(combien = 1) {
  *   couche du dessous. Absente : la zone reste en noir et blanc.
  */
 export function renderSaisieDeCode({
-  contenu = "", marque = "data-saisie-de-code", invite = "", colorer = null
+  contenu = "", marque = "data-saisie-de-code", invite = "", colorer = null, propose = false
 } = {}) {
   const colore = typeof colorer === "function";
 
@@ -93,6 +100,17 @@ export function renderSaisieDeCode({
           spellcheck="false"
           placeholder="${escapeHtml(invite)}"
         >${escapeHtml(String(contenu ?? ""))}</textarea>
+        ${/*
+          **La liste des propositions, dans le corps et non dans le document.**
+          Posée ailleurs, elle se placerait par rapport à la fenêtre et
+          resterait en l'air dès que l'écran défile. Ici elle suit la zone, et
+          son `hidden` la tient hors de portée du clavier tant qu'elle ne sert
+          pas.
+        */""}
+        ${propose
+          ? `<div class="saisie-code__propositions" role="listbox"
+               aria-label="Propositions" data-saisie-propositions hidden></div>`
+          : ""}
       </div>
     </div>
   `;
