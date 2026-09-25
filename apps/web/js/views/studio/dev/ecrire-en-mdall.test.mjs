@@ -12,7 +12,7 @@ import {
   renderActionsDuTitre, hauteurDuCadre, HAUTEUR_MINIMALE, MARGE_DU_BAS, GESTE,
   renderTeteDeLaConsole, marquesDuChoixLogique, CLASSE_DU_CHOIX, leBacEstLa,
   MODE, PROPOSER_DIT, renderEssaiDeLutilitaire, renderTitreDuBrouillon, renderFicheDeLetabli, renderVerdictDeLetabli,
-  renderDeduitDeLetabli, renderListeDeLetabli, GESTE_DE_LETABLI
+  renderDeduitDeLetabli, renderListeDeLetabli, GESTE_DE_LETABLI, jeuDecoutes
 } from "./ecrire-en-mdall.js";
 import { ficheDuBrouillon, ceQueLenregistrementFait } from "../../../services/utilitaire-de-letabli.js";
 import { renderLignesDeCode } from "../../ui/code-mdall.js";
@@ -1433,4 +1433,128 @@ test("les deux consoles se tirent dans le sens du geste", () => {
   // pas tiré, la console fait la taille de ce qu'elle dit, et partir d'un nombre
   // supposé ferait sauter le panneau au premier pixel de glissé.
   assert.match(corps, /etat\.hauteurConsole \|\| Math\.round\(bande\.offsetHeight\)/);
+});
+
+/* ── Les écoutes qui se rejouent à la frappe ──────────────────────────────────
+ *
+ * **Le défaut était double, et insaisissable à la relecture.** Deux
+ * branchements de cet écran se rejouent à chaque frappe : la console, parce que
+ * ses lignes changent ; la ligne du titre, parce que ses gestes dépendent de ce
+ * qu'on vient d'écrire. Tous deux tenaient sur « une écoute part avec l'élément
+ * qu'elle portait » — vrai quand l'élément est remplacé, faux quand il survit,
+ * et il survit chaque fois que `poserLePanneau` n'a rien à poser.
+ *
+ * À l'écran : le bouton qui range la console à droite ne répondait pas (deux
+ * écoutes dès le montage, donc un clic basculait deux fois), et les gestes du
+ * menu partaient en autant d'exemplaires qu'on avait tapé de caractères.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Un élément qui retient ses écoutes et sait les compter. */
+function uneCible() {
+  const posees = [];
+  return {
+    addEventListener: (quoi, fait) => posees.push({ quoi, fait }),
+    removeEventListener: (quoi, fait) => {
+      const rang = posees.findIndex((une) => une.quoi === quoi && une.fait === fait);
+      if (rang >= 0) posees.splice(rang, 1);
+    },
+    declencher: (quoi, evenement = {}) => {
+      // Une copie : une écoute qui se débranche pendant la diffusion ne doit pas
+      // décaler celles qui suivent.
+      for (const une of [...posees]) if (une.quoi === quoi) une.fait(evenement);
+    },
+    combien: () => posees.length
+  };
+}
+
+test("un jeu d'écoutes rejoué ne laisse qu'un exemplaire de chaque geste", () => {
+  // C'est tout le défaut : sans le `defaire`, un clic sur « ranger la console à
+  // droite » basculait deux fois et la console ne bougeait pas.
+  const cible = uneCible();
+  const jeu = jeuDecoutes();
+  let comptes = 0;
+
+  for (const _ of [1, 2, 3]) {
+    jeu.defaire();
+    jeu.poser(cible, "click", () => { comptes += 1; });
+  }
+
+  assert.equal(cible.combien(), 1, "les écoutes s'accumulent");
+  cible.declencher("click");
+  assert.equal(comptes, 1, "un clic a déclenché plusieurs fois le même geste");
+});
+
+test("sans le jeu, elles s'accumulent — ce qui dit ce qu'il répare", () => {
+  // Le contre-exemple est ici parce que l'épreuve d'au-dessus ne prouve rien
+  // seule : une fausse cible qui n'ajouterait jamais rien la passerait aussi.
+  const cible = uneCible();
+  let comptes = 0;
+  for (const _ of [1, 2, 3]) cible.addEventListener("click", () => { comptes += 1; });
+
+  cible.declencher("click");
+  assert.equal(comptes, 3);
+});
+
+test("un jeu retire tout ce qu'il a posé, et rien d'autre", () => {
+  const console_ = uneCible();
+  const titre = uneCible();
+  const jeu = jeuDecoutes();
+  const autre = jeuDecoutes();
+
+  jeu.poser(console_, "click", () => {});
+  jeu.poser(titre, "ghaction:action", () => {});
+  autre.poser(titre, "click", () => {});
+
+  jeu.defaire();
+  assert.equal(console_.combien(), 0);
+  // Celle de l'autre jeu reste : deux jeux se défont séparément, sinon
+  // redessiner la console emporterait les gestes du titre.
+  assert.equal(titre.combien(), 1);
+});
+
+test("défaire deux fois ne retire pas ce qu'on vient de poser", () => {
+  // Un `defaire` gardait sa liste : appelé deux fois, le second retirait
+  // l'écoute posée entre les deux.
+  const cible = uneCible();
+  const jeu = jeuDecoutes();
+
+  jeu.defaire();
+  jeu.poser(cible, "click", () => {});
+  jeu.defaire();
+  jeu.poser(cible, "click", () => {});
+  jeu.defaire();
+
+  assert.equal(cible.combien(), 0);
+});
+
+test("une cible absente ne pose rien, et ne fait pas tomber l'écran", () => {
+  // « Lancer » n'existe pas à l'essai, « Faire une proposition » pas à
+  // l'écriture : le branchement passe sur des cibles absentes à chaque fois.
+  const jeu = jeuDecoutes();
+  jeu.poser(null, "click", () => {});
+  jeu.poser(undefined, "click", () => {});
+  jeu.defaire();
+});
+
+test("les deux branchements rejoués commencent par se défaire", () => {
+  // **Aucun rendu ne montre une écoute en double.** Ce défaut ne se voyait qu'à
+  // l'usage — et il se voyait mal : une frappe de plus et le bouton marchait,
+  // deux et il ne marchait plus.
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  for (const [quoi, jeu] of [
+    ["function brancherLaConsole(racine) {", "ecoutesDeLaConsole"],
+    ["function brancherLaLigneDuTitre(racine) {", "ecoutesDuTitre"]
+  ]) {
+    const debut = source.indexOf(quoi);
+    assert.ok(debut > 0, `${quoi} est introuvable`);
+    const corps = source.slice(debut, source.indexOf("\n}\n", debut));
+
+    assert.match(corps, new RegExp(`${jeu}\\.defaire\\(\\);`),
+      `${quoi} rejoué laisserait ses écoutes derrière lui`);
+    // Et plus une seule écoute posée à la main : une seule suffirait à ramener
+    // le défaut, et elle serait la dernière qu'on penserait à regarder.
+    assert.doesNotMatch(corps, /\?\.addEventListener\(/, quoi);
+    assert.doesNotMatch(corps, /^\s*\w+\.addEventListener\(/m, quoi);
+  }
 });

@@ -1318,3 +1318,31 @@ voulez dire, **ou faire** », et elle monte jusqu'à la base, sur la version —
 Le composant partagé savait déjà tirer dans les deux sens et sur les deux axes ;
 ce qu'on n'avait jamais éprouvé, c'est **ce que `sens` et `axe` font**. Il a
 maintenant ses propres épreuves, avec un faux DOM de vingt lignes.
+
+### Les écoutes s'accumulaient à chaque frappe, et c'était insaisissable
+
+Trouvé en essayant la console au navigateur : **le bouton qui la range à droite
+ne répondait pas.**
+
+Deux branchements de cet écran se rejouent à chaque frappe — la console, parce
+que ses lignes changent ; la ligne du titre, parce que ses gestes dépendent de ce
+qu'on vient d'écrire. Tous deux tenaient sur une promesse : « une écoute part
+avec l'élément qu'elle portait ». Elle est vraie quand l'élément est remplacé, et
+**fausse quand il survit** — c'est-à-dire chaque fois que `poserLePanneau` n'a
+rien à poser, donc presque toujours.
+
+Deux écoutes étaient donc posées dès le montage : l'éditeur de code annonce un
+premier changement en se branchant, ce qui rejoue la console, et `brancher` la
+branche à nouveau juste après. Un clic basculait deux fois, et la console ne
+bougeait pas. **Une frappe de plus et elle marchait ; deux, et elle ne marchait
+plus** — de quoi chercher longtemps.
+
+L'autre moitié était plus grave : les gestes du menu partaient en autant
+d'exemplaires qu'on avait tapé de caractères. Vérifié au navigateur avant
+correction — « Tout effacer » demandait confirmation deux fois. « Faire une
+proposition » aurait ouvert autant de propositions.
+
+Le commentaire du menu mettait en garde contre exactement cela — « une écoute
+posée sur l'écran s'accumulerait à chaque `dessiner` » — et l'accumulation
+arrivait par l'autre porte. On ne compte donc plus sur la mort des éléments :
+`jeuDecoutes()` retient ce qu'il a posé et le retire avant de reposer (règle 12).

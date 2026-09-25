@@ -181,7 +181,14 @@ test("le wiki dit que « sinon si » n'existe pas, et la lecture le refuse", () 
   const limites = WIKI_DU_LANGAGE.find((une) => une.id === "limites");
   const dit = JSON.stringify(limites);
 
-  assert.match(dit, /sinon si/, "le wiki ne nomme pas la forme qu'on écrit pourtant");
+  // **Sur l'énoncé de la limite, pas n'importe où dans la section.** Une garde
+  // qui se contentait d'un `sinon si` quelque part passait encore quand la puce
+  // s'intitulait « pas de branche enchaînée » — un titre dans lequel personne
+  // ne reconnaît la forme qu'il vient d'écrire, et c'est tout le sujet.
+  assert.match(dit, /pas de `sinon si`/,
+    "le wiki ne nomme pas la forme qu'on écrit pourtant");
+  assert.match(dit, /refusée à la lecture/,
+    "le wiki dit que ça n'existe pas, sans dire ce qui se passe si on l'écrit");
 
   // Et ce que le wiki annonce, la lecture le fait — sinon on enseignerait une
   // limite qui n'en est pas une (règle 12).

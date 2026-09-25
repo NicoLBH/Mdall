@@ -1349,6 +1349,63 @@ let debrancherSaisie = null;
 let debrancherPoignee = null;
 let debrancherConsole = null;
 let debrancherHauteurConsole = null;
+
+/**
+ * Un jeu d'écoutes qui **se défait avant de se refaire**.
+ *
+ * ## Le défaut qu'il répare, et il était double
+ *
+ * Deux branchements de cet écran se rejouent à chaque frappe — la console,
+ * parce que ses lignes changent ; la ligne du titre, parce que ses gestes
+ * dépendent de ce qu'on vient d'écrire. Ils tenaient tous les deux sur une
+ * promesse : « une écoute part avec l'élément qu'elle portait ». Vraie quand
+ * l'élément est remplacé ; fausse quand il survit — et il survit chaque fois
+ * que `poserLePanneau` n'a rien à poser, c'est-à-dire presque toujours.
+ *
+ * Ce qu'on voyait à l'écran :
+ *
+ *  - **le bouton qui range la console à droite ne répondait pas.** Deux écoutes
+ *    dès le montage — l'éditeur de code annonce un premier changement en se
+ *    branchant, et `brancher` branche la console juste après —, donc un clic
+ *    basculait deux fois et la console ne bougeait pas. Une frappe de plus, et
+ *    elle marchait ; deux, et elle ne marchait plus. C'était insaisissable ;
+ *  - **les gestes du menu partaient en plusieurs exemplaires.** Une écoute par
+ *    caractère tapé : « Faire une proposition » en aurait ouvert autant, et
+ *    « Tout effacer » aurait demandé confirmation autant de fois.
+ *
+ * Le commentaire du menu mettait en garde contre exactement cela — « une écoute
+ * posée sur l'écran s'accumulerait à chaque `dessiner` » — et l'accumulation
+ * arrivait par l'autre porte. On ne compte donc plus sur la mort des éléments :
+ * on retire ce qu'on a posé (règle 12).
+ *
+ * @returns {{poser: Function, defaire: Function}}
+ */
+export function jeuDecoutes() {
+  let defaire = [];
+
+  return {
+    /** Retirer tout ce que ce jeu avait posé. Sans effet s'il n'avait rien. */
+    defaire() {
+      for (const une of defaire) une();
+      defaire = [];
+    },
+    /**
+     * Poser une écoute, et retenir de quoi la retirer.
+     *
+     * Une cible absente ne pose rien — un `?.` de plus à chaque appel dirait la
+     * même chose trois fois.
+     */
+    poser(cible, quoi, fait) {
+      if (!cible) return;
+      cible.addEventListener(quoi, fait);
+      defaire.push(() => cible.removeEventListener(quoi, fait));
+    }
+  };
+}
+
+/** Les deux jeux de cet écran : ceux qui se rejouent à la frappe. */
+const ecoutesDeLaConsole = jeuDecoutes();
+const ecoutesDuTitre = jeuDecoutes();
 let debrancherPropositions = null;
 
 function dessiner(racine) {
@@ -1484,11 +1541,13 @@ function redessinerLaConsole(racine) {
  * cessait de répondre à la première frappe, sans rien dire.
  */
 function brancherLaLigneDuTitre(racine) {
-  racine.querySelector("[data-brouillon-proposer]")?.addEventListener("click", () => {
+  ecoutesDuTitre.defaire();
+
+  ecoutesDuTitre.poser(racine.querySelector("[data-brouillon-proposer]"), "click", () => {
     void proposerAuProjet(racine);
   });
 
-  racine.querySelector("[data-brouillon-lancer]")?.addEventListener("click", () => {
+  ecoutesDuTitre.poser(racine.querySelector("[data-brouillon-lancer]"), "click", () => {
     ouvrirLeBac(racine);
     // La console dit aussi ce que le lancement a répondu : elle le dit derrière
     // la fenêtre, et on la retrouve en la refermant.
@@ -1499,8 +1558,8 @@ function brancherLaLigneDuTitre(racine) {
   // l'écoute part avec l'élément au redessin suivant — là où une écoute posée
   // sur l'écran s'accumulerait à chaque `dessiner`, et effacerait le brouillon
   // autant de fois qu'il y a eu de transcriptions.
-  racine.querySelector(".lecture-cr__entete-actions")
-    ?.addEventListener("ghaction:action", (evenement) => {
+  ecoutesDuTitre.poser(racine.querySelector(".lecture-cr__entete-actions"),
+    "ghaction:action", (evenement) => {
       const geste = evenement.detail?.action;
       if (geste === GESTE.VIDER) viderLeBrouillon(racine);
       if (geste === GESTE.WIKI) ouvrirLeWikiMdall();
@@ -2063,15 +2122,17 @@ function brancherLeBac(hote, racine) {
  * seule la poignée se débranche à la main, parce qu'elle écoute la fenêtre.
  */
 function brancherLaConsole(racine) {
+  ecoutesDeLaConsole.defaire();
+
   // Cliquer une ligne ouvre le fichier où elle se trouve.
   for (const bouton of racine.querySelectorAll("[data-brouillon-aller]")) {
-    bouton.addEventListener("click", () => {
+    ecoutesDeLaConsole.poser(bouton, "click", () => {
       etat.brouillon = ouvertSur(etat.brouillon, bouton.dataset.brouillonAller);
       redessinerLeVolet(racine);
     });
   }
 
-  racine.querySelector("[data-brouillon-console-place]")?.addEventListener("click", () => {
+  ecoutesDeLaConsole.poser(racine.querySelector("[data-brouillon-console-place]"), "click", () => {
     etat.volet = !etat.volet;
     redessinerLaConsole(racine);
   });
