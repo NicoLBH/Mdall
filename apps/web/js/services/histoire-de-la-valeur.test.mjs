@@ -369,3 +369,50 @@ test("sans date de document, on ne prétend pas qu'une conclusion est dépassée
 
   assert.equal(lignes.find((ligne) => ligne.quoi === "Revu depuis"), undefined);
 });
+
+/* ── L'outil personnel dont une valeur est venue ─────────────────────────── */
+
+const AVEC_UN_OUTIL = {
+  id: "a1",
+  subject_key: "couleur du volet",
+  decided_at: "2026-10-18T09:00:00Z",
+  decided_by: "moi",
+  payload: {
+    subject: "Couleur du volet",
+    value: "violet",
+    atelier: "Écrire en Mdall",
+    etabli: { id: "abc", version: "2", nom: "Volets en bois" }
+  }
+};
+
+test("l'histoire dit de quel outil personnel la valeur est venue, et dans quelle version", () => {
+  // **Six mois plus tard, on lit « Couleur du volet = violet » sans savoir si
+  // quelqu'un l'a tapée un jeudi soir ou si elle sort d'un outil qu'on
+  // réemploie de projet en projet.**
+  const histoire = histoireDeLaValeur(AVEC_UN_OUTIL, {});
+
+  assert.deepEqual(histoire.etabli, { id: "abc", version: "2", nom: "Volets en bois" });
+
+  const ligne = lignesDeLHistoire(histoire).find((une) => une.quoi === "Écrite avec");
+  assert.ok(ligne, "l'histoire ne dit pas avec quoi la valeur a été écrite");
+  assert.match(ligne.dit, /Volets en bois/);
+  assert.match(ligne.dit, /v2/);
+  assert.match(ligne.dit, /à la main/, "c'est ce qui la distingue d'un calcul d'agent");
+});
+
+test("une marque incomplète ne se garde pas : elle ne retrouverait rien", () => {
+  // Filtrée plutôt que recopiée, comme la règle et la décision. Un identifiant
+  // sans version ne se compare à rien ; une version sans identifiant ne
+  // retrouve pas l'outil ; un nom absent ne se lit pas.
+  for (const marque of [{ id: "abc" }, { version: "2" }, { id: "abc", version: "2" }, null, "abc"]) {
+    const histoire = histoireDeLaValeur({ ...AVEC_UN_OUTIL, payload: { ...AVEC_UN_OUTIL.payload, etabli: marque } }, {});
+    assert.equal(histoire.etabli, null, JSON.stringify(marque));
+  }
+});
+
+test("une valeur qui ne vient d'aucun outil personnel ne porte pas la ligne", () => {
+  const sans = { ...AVEC_UN_OUTIL, payload: { subject: "Altitude du site", value: "890 m" } };
+  const lignes = lignesDeLHistoire(histoireDeLaValeur(sans, {}));
+
+  assert.equal(lignes.some((une) => une.quoi === "Écrite avec"), false);
+});

@@ -384,6 +384,10 @@ export function provenanceDuBrouillon(utilitaire = null, brouillon = null) {
 
   const quoi = ceQueLenregistrementFait(utilitaire, fichiersDeLutilitaire(brouillon));
   return {
+    // L'identifiant voyage avec : c'est lui qui retrouvera l'outil le jour où
+    // l'on voudra comparer ce que le projet tient à ce que l'établi est devenu.
+    // Un nom ne suffit pas — il se renomme.
+    id: texte(utilitaire.id),
     nom: texte(utilitaire.nom),
     version: texte(utilitaire.version) || "1",
     modifie: quoi.quoi === "monte"

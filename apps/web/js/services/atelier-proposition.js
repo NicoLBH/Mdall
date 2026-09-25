@@ -95,6 +95,40 @@ export function provenanceRetenue(provenance) {
  * que **cet appel-là** a rendu. Le jour où l'une des cotes est corrigée à la
  * main, l'écart entre les deux est précisément ce qu'on veut voir.
  */
+/**
+ * La marque d'un utilitaire de l'établi, quand la ligne en vient.
+ *
+ * ## Pourquoi un champ à elle, et pas `utilitaire`
+ *
+ * `utilitaire` porte la référence d'un outil **du dépôt** — `nom_V1` —, et
+ * tout ce qui la lit la cherche dans le catalogue. Y glisser `etabli:<id>` en
+ * ferait un nom que le catalogue ne connaît pas : chaque lecteur y verrait un
+ * utilitaire inconnu, et non un outil personnel. Un champ qui porte deux sens
+ * finit par n'en porter aucun (règle 10).
+ *
+ * ## Ce qu'elle garde, et pourquoi ces trois-là
+ *
+ * L'**identifiant**, parce que c'est lui qui retrouve l'outil ; la **version**,
+ * parce que c'est elle qu'on comparera le jour où l'établi aura avancé ; le
+ * **nom**, parce qu'il se lit — un identifiant ne dit rien à personne, et
+ * l'outil peut avoir été retiré de l'établi depuis.
+ *
+ * ## Elle n'y est que si le texte est bien celui de cette version
+ *
+ * Une ligne repriṣe d'une `v2` puis modifiée n'est pas la `v2` : l'appelant ne
+ * pose alors aucune marque, et la comparer plus tard ne dirait rien de juste.
+ * C'est la même règle que la phrase de provenance, décidée au même endroit.
+ */
+export function etabliRetenu(etabli) {
+  if (!etabli || typeof etabli !== "object") return null;
+
+  const id = texte(etabli.id);
+  const version = texte(etabli.version);
+  if (!id || !version) return null;
+
+  return { id, version, nom: texte(etabli.nom) || null };
+}
+
 export function agentRetenu(agent) {
   if (!agent || typeof agent !== "object") return null;
 
@@ -381,6 +415,11 @@ export function itemsDeProposition(affirmations = []) {
           // raisonnement, et ce qui dit six mois plus tard avec quelle version
           // ces cotes ont été trouvées.
           utilitaire: texte(affirmation.utilitaire) || null,
+          // Et si elle vient d'un utilitaire **de l'établi** : lequel, et dans
+          // quelle version. C'est ce qui permettra de dire, le jour où l'établi
+          // aura avancé, que le projet tient une version d'avant — et de
+          // proposer celle d'après, sans rien réécrire tout seul.
+          etabli: etabliRetenu(affirmation.etabli),
           lectures: lecturesRetenues(affirmation.lectures),
           // Un **tableau**, quand la valeur en est un. Un calcul qui dimensionne
           // vingt massifs ne rend pas une valeur, et l'éclater en cent quarante

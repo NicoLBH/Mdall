@@ -241,7 +241,7 @@ test("un utilitaire repris sans retouche annonce sa version telle quelle", () =>
   const courant = { id: "a", nom: "TVA des travaux", version: 2, fichiers: fichiersDeLutilitaire(BROUILLON) };
 
   assert.deepEqual(provenanceDuBrouillon(courant, BROUILLON),
-    { nom: "TVA des travaux", version: "2", modifie: false });
+    { id: "a", nom: "TVA des travaux", version: "2", modifie: false });
 });
 
 test("un texte modifié depuis la reprise ne se fait pas passer pour sa version", () => {
@@ -252,7 +252,7 @@ test("un texte modifié depuis la reprise ne se fait pas passer pour sa version"
   const retouche = avecLeFichier(BROUILLON, "essai.ddb", "Altitude du site = 890 m");
 
   assert.deepEqual(provenanceDuBrouillon(courant, retouche),
-    { nom: "TVA des travaux", version: "2", modifie: true });
+    { id: "a", nom: "TVA des travaux", version: "2", modifie: true });
 });
 
 test("une version absente vaut v1, jamais rien", () => {

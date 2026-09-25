@@ -19,6 +19,7 @@ import {
   natureDuFichier,
   phraseDeLEcart,
   phraseDeLaProposition,
+  marqueDeLetabli,
   sourceDuBrouillon,
   titreDeLaProposition
 } from "./proposition-du-brouillon.js";
@@ -401,4 +402,50 @@ test("la provenance se retrouve dans la description que le relecteur lit", () =>
   assert.match(description, /Volets en bois/);
   assert.match(description, /_.*v2.*_/);
   assert.match(description, /Couleur du volet/);
+});
+
+/* ── Chaque ligne emporte l'outil dont elle vient ────────────────────────── */
+
+const VENUE = { id: "abc", nom: "Volets en bois", version: "2", modifie: false };
+
+const UN_BROUILLON = [{ nom: "essai.ref", contenu: [
+  "fonction Couleur du volet(zones, Matière du volet) {",
+  '   si (Matière du volet = "bois")',
+  '   alors ("violet");',
+  "}"
+].join("\n") }];
+
+test("la marque porte les trois choses qui servent, et rien d'autre", () => {
+  // L'identifiant retrouve l'outil — un nom se renomme ; la version se
+  // comparera le jour où l'établi aura avancé ; le nom se lit, parce qu'un
+  // identifiant ne dit rien à personne.
+  assert.deepEqual(marqueDeLetabli(VENUE), { id: "abc", version: "2", nom: "Volets en bois" });
+
+  assert.equal(marqueDeLetabli(null), null);
+  assert.equal(marqueDeLetabli({ nom: "Sans id", version: "2" }), null);
+  assert.equal(marqueDeLetabli({ id: "abc", version: "2" }), null, "sans nom, elle ne se lit pas");
+});
+
+test("une ligne reprise puis modifiée ne porte aucune marque", () => {
+  // **Elle n'est plus celle de la version qu'elle nommerait.** La marquer
+  // ferait croire, six mois plus tard, que le projet tient cette version-là.
+  assert.equal(marqueDeLetabli({ ...VENUE, modifie: true }), null);
+});
+
+test("la marque descend sur chaque affirmation du brouillon", () => {
+  // Elle voyage avec elles : la proposition passe, les lignes restent, et c'est
+  // dans la mémoire du projet qu'on voudra savoir de quel outil elles venaient.
+  const { affirmations } = aProposerDuBrouillon(UN_BROUILLON, { venue: VENUE });
+
+  assert.equal(affirmations.length, 1);
+  assert.deepEqual(affirmations[0].etabli, { id: "abc", version: "2", nom: "Volets en bois" });
+  assert.equal(affirmations[0].atelier, ATELIER, "et elle n'écrase pas d'où vient le geste");
+});
+
+test("un brouillon anonyme ne marque rien", () => {
+  const { affirmations } = aProposerDuBrouillon(UN_BROUILLON);
+  assert.equal(affirmations[0].etabli, null);
+
+  const modifie = aProposerDuBrouillon(UN_BROUILLON, { venue: { ...VENUE, modifie: true } });
+  assert.equal(modifie.affirmations[0].etabli, null);
 });

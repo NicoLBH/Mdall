@@ -124,7 +124,7 @@ function statutDuBloc(bloc) {
  * partageraient la même clé, et verser l'une périmerait l'autre — la règle
  * effacerait sa propre conclusion.
  */
-function affirmationDuBloc(bloc, { nature, declaration }) {
+function affirmationDuBloc(bloc, { nature, declaration, marque = null }) {
   const conditions = Array.isArray(bloc?.conditions) ? bloc.conditions : [];
   const raisonne = conditions.length > 0 || Boolean(bloc?.agent);
 
@@ -138,7 +138,10 @@ function affirmationDuBloc(bloc, { nature, declaration }) {
     // La portée telle que le fichier la porte. Vide veut dire « partout » :
     // c'est une portée, pas une absence de réponse.
     zones: texte(bloc?.zone) ? [texte(bloc.zone)] : [],
-    atelier: ATELIER
+    atelier: ATELIER,
+    // `null` pour un brouillon anonyme, et pour une ligne reprise puis
+    // modifiée : elle n'est plus celle de la version qu'elle nommerait.
+    etabli: marque
   };
 
   if (raisonne) {
@@ -185,8 +188,12 @@ function affirmationDuBloc(bloc, { nature, declaration }) {
  * @returns {{affirmations: object[], sansRetour: {quoi: string, motif: string,
  *   dit: string, fichier: string, ligne: number}[]}}
  */
-export function aProposerDuBrouillon(fichiers = []) {
+export function aProposerDuBrouillon(fichiers = [], { venue = null } = {}) {
   const declarations = declarationsParNom(fichiers);
+  // **La marque de l'établi, posée sur chaque ligne.** Elle voyage avec elles :
+  // la proposition passe, les lignes restent, et c'est dans la mémoire du
+  // projet qu'on voudra savoir plus tard de quel outil elles venaient.
+  const marque = marqueDeLetabli(venue);
   const affirmations = [];
   const sansRetour = [];
   const renseignes = new Set();
@@ -213,7 +220,9 @@ export function aProposerDuBrouillon(fichiers = []) {
       const sujet = texte(bloc?.sujet);
       if (!sujet) continue;
 
-      const affirmation = affirmationDuBloc(bloc, { nature, declaration: declarations.get(sujet) });
+      const affirmation = affirmationDuBloc(bloc, {
+        nature, declaration: declarations.get(sujet), marque
+      });
 
       // Un bloc qui nomme sans rien dire n'entre pas : la proposition porterait
       // une ligne vide, que personne ne saurait relire ni refuser. C'est aussi
@@ -247,6 +256,22 @@ export function aProposerDuBrouillon(fichiers = []) {
 /** Ce qu'on dit d'une ligne restée dehors : la raison du lecteur, ou la nôtre. */
 export function phraseDeLEcart(ecart) {
   return texte(ecart?.dit) || PHRASES_DE_LECART[texte(ecart?.motif)] || "";
+}
+
+/**
+ * La marque que chaque ligne emporte, quand elle vient d'un outil de l'établi.
+ *
+ * **Rien si le texte a bougé.** Une ligne reprise d'une `v2` puis modifiée
+ * n'est pas la `v2` : la marquer ainsi ferait croire, six mois plus tard, que
+ * le projet tient cette version-là — et la comparer à celle de l'établi ne
+ * dirait rien de juste. C'est la même règle que la phrase de provenance, et
+ * elle se décide sur la même réponse (règle 10).
+ */
+export function marqueDeLetabli(venue = null) {
+  const nom = texte(venue?.nom);
+  if (!nom || !texte(venue?.id) || venue?.modifie) return null;
+
+  return { id: texte(venue.id), version: texte(venue.version) || "1", nom };
 }
 
 /**
