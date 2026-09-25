@@ -10,7 +10,7 @@ import {
   brouillonDesFichiers, ceQueLenregistrementFait, cequiManque, cibleDeLetabli,
   entreesDeLutilitaire, estDeLetabli, ficheDuBrouillon, fichiersDeLutilitaire,
   idDeLaCible, motsDeLutilitaire, phraseDeLenregistrement, rayonDeLutilitaire,
-  sortiesDeLutilitaire, utilitaireDeLetabli
+  provenanceDuBrouillon, sortiesDeLutilitaire, utilitaireDeLetabli
 } from "./utilitaire-de-letabli.js";
 import { brouillonNeuf, avecLeFichier, fichierOuvert } from "./brouillon-mdall.js";
 import { RAYONS } from "./catalogue-de-latelier.js";
@@ -227,4 +227,34 @@ test("enregistrer deux fois le même texte ne monte pas de version", () => {
   // Une seule ligne de plus, et il monte.
   const plus = fichiersDeLutilitaire(avecLeFichier(BROUILLON, "essai.ddb", "Altitude du site = 890 m"));
   assert.equal(ceQueLenregistrementFait(courant, plus).quoi, "monte");
+});
+
+/* ── D'où vient ce qu'on propose ─────────────────────────────────────────── */
+
+test("un brouillon anonyme n'a pas de provenance à annoncer", () => {
+  assert.equal(provenanceDuBrouillon(null, BROUILLON), null);
+  assert.equal(provenanceDuBrouillon({ nom: "Sans id" }, BROUILLON), null);
+});
+
+test("un utilitaire repris sans retouche annonce sa version telle quelle", () => {
+  const courant = { id: "a", nom: "TVA des travaux", version: 2, fichiers: fichiersDeLutilitaire(BROUILLON) };
+
+  assert.deepEqual(provenanceDuBrouillon(courant, BROUILLON),
+    { nom: "TVA des travaux", version: "2", modifie: false });
+});
+
+test("un texte modifié depuis la reprise ne se fait pas passer pour sa version", () => {
+  // **Le piège.** On reprend la v2, on ajoute une ligne, on propose : ce qui
+  // entre dans le projet n'est pas la v2, et la comparer plus tard à celle de
+  // l'établi ne dirait rien de juste.
+  const courant = { id: "a", nom: "TVA des travaux", version: 2, fichiers: fichiersDeLutilitaire(BROUILLON) };
+  const retouche = avecLeFichier(BROUILLON, "essai.ddb", "Altitude du site = 890 m");
+
+  assert.deepEqual(provenanceDuBrouillon(courant, retouche),
+    { nom: "TVA des travaux", version: "2", modifie: true });
+});
+
+test("une version absente vaut v1, jamais rien", () => {
+  const courant = { id: "a", nom: "X", fichiers: [] };
+  assert.equal(provenanceDuBrouillon(courant, brouillonNeuf()).version, "1");
 });

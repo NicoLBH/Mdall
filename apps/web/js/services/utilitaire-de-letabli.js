@@ -287,6 +287,31 @@ export function ceQueLenregistrementFait(courant = null, fichiers = []) {
     : { quoi: "monte", version, versVersion: version + 1 };
 }
 
+/**
+ * D'où vient un brouillon qu'on s'apprête à proposer.
+ *
+ * `null` pour un brouillon anonyme. Pour un utilitaire repris : son nom, sa
+ * version, **et le fait que le texte ait bougé depuis**.
+ *
+ * ## Le piège
+ *
+ * On reprend la `v2`, on modifie deux lignes, on propose. Annoncer « v2 »
+ * serait faux : ce qui entre dans le projet n'est pas la `v2`, et la comparer
+ * plus tard à celle de l'établi ne dirait rien de juste. La question se pose
+ * exactement comme à l'enregistrement — le texte a-t-il changé ? — et se
+ * répond au même endroit (règle 10).
+ */
+export function provenanceDuBrouillon(utilitaire = null, brouillon = null) {
+  if (!utilitaire?.id) return null;
+
+  const quoi = ceQueLenregistrementFait(utilitaire, fichiersDeLutilitaire(brouillon));
+  return {
+    nom: texte(utilitaire.nom),
+    version: texte(utilitaire.version) || "1",
+    modifie: quoi.quoi === "monte"
+  };
+}
+
 /** Ce que l'écran dit de l'enregistrement à venir. */
 export function phraseDeLenregistrement(quoi = null) {
   if (quoi?.quoi === "neuf") return "Il entrera sur votre établi en v1.";

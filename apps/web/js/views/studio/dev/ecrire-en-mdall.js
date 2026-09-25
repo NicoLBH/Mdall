@@ -65,7 +65,7 @@ import {
 import { ouvrirLeWikiMdall } from "../../ui/wiki-mdall.js";
 import {
   MANQUE, PHRASE_DU_MANQUE, ficheDuBrouillon, brouillonDesFichiers,
-  ceQueLenregistrementFait, phraseDeLenregistrement, rayonDeLutilitaire
+  ceQueLenregistrementFait, phraseDeLenregistrement, provenanceDuBrouillon, rayonDeLutilitaire
 } from "../../../services/utilitaire-de-letabli.js";
 import { NOM_DU_RAYON, RAYONS } from "../../../services/catalogue-de-latelier.js";
 // **L'établi se charge à l'usage.** `etabli-supabase.js` importe `auth.js`, qui
@@ -75,7 +75,7 @@ import { NOM_DU_RAYON, RAYONS } from "../../../services/catalogue-de-latelier.js
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 import { REFUS } from "../../../services/le-mdall-rendu.js";
 import {
-  aProposerDuBrouillon, introDeLaProposition, titreDeLaProposition
+  aProposerDuBrouillon, introDeLaProposition, sourceDuBrouillon, titreDeLaProposition
 } from "../../../services/proposition-du-brouillon.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -1975,10 +1975,17 @@ async function proposerAuProjet(depuis) {
       etat.depot = { ok: false, dit: "Ce projet n'est pas relié à la base : rien ne peut lui être proposé." };
     } else {
       const { preparerUneProposition } = await import("../../../services/atelier-proposition.js");
+      // D'où vient ce qu'on propose — décidé par le service, pas ici : la
+      // question « le texte a-t-il bougé depuis la version reprise ? » est la
+      // même qu'à l'enregistrement, et deux réponses divergeraient (règle 10).
+      const venue = provenanceDuBrouillon(etat.utilitaire, etat.brouillon);
       const rendu = await preparerUneProposition({
         projectId: projet,
-        titre: titreDeLaProposition(affirmations),
-        intro: introDeLaProposition(affirmations),
+        titre: titreDeLaProposition(affirmations, venue),
+        intro: introDeLaProposition(affirmations, venue),
+        // **La proposition dit d'où elle vient**, comme celle d'un compte rendu
+        // nomme son document et celle d'un fil nomme son objet.
+        source: sourceDuBrouillon(venue),
         affirmations,
         // Vide veut dire « partout ». Une portée écrite dans un bloc garde le
         // dernier mot : c'est le fichier qui sait où sa règle s'applique.
