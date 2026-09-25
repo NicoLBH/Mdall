@@ -42,14 +42,22 @@ import { svgIcon } from "../../ui/icons.js";
 import { renderLightTabs } from "../ui/light-tabs.js";
 import { renderSideNavGroup, renderSideNavItem } from "../ui/side-nav-layout.js";
 import {
-  ICONE_DU_RAYON, NOM_DU_RAYON, ajoutsRecents, chercherDansLatelier,
-  rayonsDuCatalogue, vedettesDeLatelier
+  ICONE_DU_RAYON, NOM_DU_RAYON, ajoutsRecents, ceuxDeLetabli, chercherDansLatelier,
+  rayonsDuCatalogue, toutLAtelier, vedettesDeLatelier
 } from "../../services/catalogue-de-latelier.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
-/** Les deux façons de ranger ce qu'on n'a pas cherché. */
-export const RANGEMENT = { RECOMMANDE: "recommande", RECENT: "recent" };
+/**
+ * Les trois façons de ranger ce qu'on n'a pas cherché.
+ *
+ * **« Mon établi » n'est pas un rangement de plus, c'est une origine.** Il ne
+ * réordonne pas la même liste : il ne garde que ce qu'on a écrit soi-même. Il
+ * se pose au même endroit parce que c'est le même geste — choisir ce qu'on
+ * regarde — et qu'une seconde rangée d'onglets pour une seule question en
+ * ferait deux à calibrer l'une contre l'autre (règle 10).
+ */
+export const RANGEMENT = { RECOMMANDE: "recommande", RECENT: "recent", ETABLI: "etabli" };
 
 /**
  * L'initiale qui tient lieu d'icône.
@@ -160,12 +168,10 @@ function renderVedette(utilitaire) {
  * @param {string} [etat.rangement] `RANGEMENT.*`
  */
 export function renderVitrineDeLatelier({
-  recherche = "", rayon = "", rangement = RANGEMENT.RECOMMANDE, ouvertures = null
+  recherche = "", rayon = "", rangement = RANGEMENT.RECOMMANDE, ouvertures = null, etabli = null
 } = {}) {
   const cherche = texte(recherche);
-  const trouves = chercherDansLatelier(cherche);
-  const retenus = rayon ? trouves.filter((utilitaire) => utilitaire.rayon === rayon) : trouves;
-  const ranges = rangement === RANGEMENT.RECENT ? ajoutsRecents(retenus) : retenus;
+  const ranges = cequiSeMontre({ recherche: cherche, rayon, rangement, etabli });
 
   return `
     <div class="atelier-vitrine">
@@ -173,17 +179,43 @@ export function renderVitrineDeLatelier({
 
       <div class="atelier-corps">
         <aside class="atelier-rayons settings-nav" aria-label="Rayons de l'Atelier">
-          ${renderRayons(rayon)}
+          ${renderRayons(rayon, etabli)}
         </aside>
 
         <div class="atelier-etals">
-          ${cherche || rayon ? "" : renderVedettes(ouvertures)}
+          ${/*
+            **Les vedettes s'effacent dès qu'on a demandé quelque chose** — une
+            recherche, un rayon, ou son propre établi. Elles répondent à « que
+            contient l'Atelier ? », pas à la question qu'on vient de poser : six
+            outils du dépôt au-dessus de « Mon établi » mettent en avant
+            exactement ce qu'on n'a pas demandé.
+          */""}
+          ${cherche || rayon || rangement === RANGEMENT.ETABLI ? "" : renderVedettes(ouvertures, etabli)}
           ${renderRangement(rangement)}
-          ${renderGrille(ranges, cherche)}
+          ${renderGrille(ranges, cherche, { rangement, etabli })}
         </div>
       </div>
     </div>
   `;
+}
+
+/**
+ * Ce que la vitrine montre : le dépôt et l'établi, cherchés et rangés ensemble.
+ *
+ * **Pur, et éprouvé à part.** C'est la seule décision de cet écran — le reste
+ * est du balisage —, et elle porte la question qui compte : est-ce que ce qu'on
+ * a écrit soi-même se cherche comme le reste ?
+ */
+export function cequiSeMontre({
+  recherche = "", rayon = "", rangement = RANGEMENT.RECOMMANDE, etabli = null
+} = {}) {
+  const tout = toutLAtelier(etabli);
+  const trouves = chercherDansLatelier(recherche, tout);
+  const retenus = rayon ? trouves.filter((utilitaire) => utilitaire.rayon === rayon) : trouves;
+
+  if (rangement === RANGEMENT.ETABLI) return ceuxDeLetabli(retenus);
+  if (rangement === RANGEMENT.RECENT) return ajoutsRecents(retenus);
+  return retenus;
 }
 
 /**
@@ -226,7 +258,7 @@ function renderBandeau(recherche) {
  * restreint ce qu'on voit ; lui donner le même attribut ferait chercher un
  * panneau qui n'existe pas.
  */
-function renderRayons(rayonRetenu) {
+function renderRayons(rayonRetenu, etabli = null) {
   const retenu = texte(rayonRetenu);
 
   const entree = (valeur, label, iconName) => renderSideNavItem({
@@ -240,7 +272,10 @@ function renderRayons(rayonRetenu) {
     className: "settings-nav__group atelier-rayons__group",
     items: [
       entree("", "Tout", "grid-apps"),
-      ...rayonsDuCatalogue().map((rayon) => entree(
+      // Les rayons de **tout** l'Atelier : un utilitaire de l'établi rangé dans
+      // « Incendie » doit faire paraître ce rayon même si le dépôt n'en a
+      // aucun — sinon on le range là où l'on ne peut pas l'ouvrir.
+      ...rayonsDuCatalogue(toutLAtelier(etabli)).map((rayon) => entree(
         rayon,
         NOM_DU_RAYON[rayon] ?? rayon,
         ICONE_DU_RAYON[rayon] ?? "gear"
@@ -262,8 +297,8 @@ function renderRayons(rayonRetenu) {
  * et sur un rayon, ils montreraient des utilitaires d'un autre rayon, ce qui se
  * lit comme un filtre qui ne marche pas.
  */
-function renderVedettes(ouvertures) {
-  const vedettes = vedettesDeLatelier(undefined, ouvertures);
+function renderVedettes(ouvertures, etabli = null) {
+  const vedettes = vedettesDeLatelier(toutLAtelier(etabli), ouvertures);
   if (vedettes.length === 0) return "";
 
   return `
@@ -277,7 +312,8 @@ function renderRangement(rangement) {
   return renderLightTabs({
     tabs: [
       { id: RANGEMENT.RECOMMANDE, label: "Recommandé" },
-      { id: RANGEMENT.RECENT, label: "Ajouté récemment" }
+      { id: RANGEMENT.RECENT, label: "Ajouté récemment" },
+      { id: RANGEMENT.ETABLI, label: "Mon établi" }
     ],
     activeTabId: texte(rangement) || RANGEMENT.RECOMMANDE,
     ariaLabel: "Comment ranger les agents",
@@ -290,7 +326,26 @@ function renderRangement(rangement) {
  * laisse croire que l'Atelier est vide, ou que la recherche est cassée
  * (règle 5).
  */
-function renderGrille(utilitaires, recherche) {
+function renderGrille(utilitaires, recherche, { rangement = RANGEMENT.RECOMMANDE, etabli = null } = {}) {
+  /**
+   * **Trois vides qui ne disent pas la même chose.** Un établi qu'on n'a pas su
+   * lire, un établi qui n'a rien, et une recherche sans résultat : les
+   * confondre ferait réécrire un outil qu'on possède déjà (règle 5).
+   */
+  if (rangement === RANGEMENT.ETABLI && utilitaires.length === 0) {
+    return `
+      <section class="atelier-grille atelier-grille--vide">
+        ${etabli === null
+          ? `<p>Votre établi n'a pas pu être lu. Rien n'est perdu : revenez dans un instant.</p>`
+          : `<p>Votre établi est vide.</p>
+             <p class="atelier-grille__vide-aide">
+               Écrivez du Mdall dans « Écrire du Mdall », puis « Enregistrer dans l'Atelier ».
+               Ce que vous y posez vous suit dans tous vos projets, et n'entre dans la mémoire d'aucun.
+             </p>`}
+      </section>
+    `;
+  }
+
   if (utilitaires.length === 0) {
     return `
       <section class="atelier-grille atelier-grille--vide">

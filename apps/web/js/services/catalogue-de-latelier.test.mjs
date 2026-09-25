@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   ICONE_DU_RAYON, NOM_DU_RAYON, RAYONS, UTILITAIRES, VEDETTES_AU_PLUS, ajoutsRecents,
-  chercherDansLatelier, rayonsDuCatalogue, sansAccent, utilitaireParCible, vedettesDeLatelier
+  ceuxDeLetabli, chercherDansLatelier, rayonsDuCatalogue, sansAccent, toutLAtelier,
+  utilitaireParCible, vedettesDeLatelier
 } from "./catalogue-de-latelier.js";
 
 /* ── Ce qu'on cherche, et comment ────────────────────────────────────────── */
@@ -259,4 +260,70 @@ test("les compteurs d'ouverture ne gardent rien de personnel", () => {
   assert.doesNotMatch(migration, /for (insert|update|all)\b/);
   // Additive : rien n'est supprimé ni renommé.
   assert.doesNotMatch(migration, /\bdrop\s+(table|column)\b/i);
+});
+
+/* ── Deux sources, un seul Atelier ───────────────────────────────────────── */
+
+const MIEN = {
+  cible: "etabli:abc", nom: "Volets en bois", rayon: RAYONS.EXPLORATION,
+  resume: "Le violet obligatoire.", entrees: ["Matière du volet"], sorties: ["Couleur du volet"],
+  version: "2", intelligence: false, aussiALaMain: "Le lire.",
+  mots: ["volet", "bois", "couleur"], ajouteLe: "2026-10-17", deLetabli: true, id: "abc"
+};
+
+test("l'Atelier de quelqu'un, c'est le dépôt et son établi", () => {
+  const tout = toutLAtelier([MIEN]);
+
+  assert.equal(tout.length, UTILITAIRES.length + 1);
+  // **Ce qu'on a écrit soi-même passe en tête** : on le cherche en le sachant
+  // là, alors qu'on parcourt le dépôt.
+  assert.equal(tout[0].cible, "etabli:abc");
+
+  // Sans établi — pas encore lu, ou vide —, c'est le catalogue, ni plus ni moins.
+  assert.deepEqual(toutLAtelier(null), [...UTILITAIRES]);
+  assert.deepEqual(toutLAtelier([]), [...UTILITAIRES]);
+});
+
+test("un utilitaire de l'établi se cherche comme les autres", () => {
+  const tout = toutLAtelier([MIEN]);
+
+  // Par son nom, par ce qu'il lit, par ce qu'il conclut — comme le reste.
+  assert.deepEqual(chercherDansLatelier("volets", tout).map((un) => un.cible), ["etabli:abc"]);
+  assert.deepEqual(chercherDansLatelier("couleur", tout).map((un) => un.cible), ["etabli:abc"]);
+  // Et il ne répond pas à ce qui ne le concerne pas.
+  assert.equal(chercherDansLatelier("sismique", tout).some((un) => un.deLetabli), false);
+});
+
+test("on sait dire ce qui vient de l'établi, et rien d'autre", () => {
+  assert.deepEqual(ceuxDeLetabli(toutLAtelier([MIEN])).map((un) => un.id), ["abc"]);
+  assert.deepEqual(ceuxDeLetabli(UTILITAIRES), []);
+  assert.deepEqual(ceuxDeLetabli(null), []);
+});
+
+test("l'établi n'entre jamais en vedette, et ce n'est pas une question de rang", () => {
+  // **Les vedettes se comptent sur ce que la profession ouvre.** Un utilitaire
+  // personnel n'est ouvert que par une personne : l'y faire figurer
+  // demanderait de compter ses ouvertures dans `atelier_ouvertures`, que tout
+  // le monde lit — c'est-à-dire de publier l'existence de ce que quelqu'un
+  // garde pour lui. La table promet le contraire.
+  const beaucoup = { "etabli:abc": 9999 };
+  const vedettes = vedettesDeLatelier(toutLAtelier([MIEN]), beaucoup);
+
+  assert.equal(vedettes.some((un) => un.deLetabli), false,
+    vedettes.map((un) => un.cible).join(", "));
+  assert.equal(vedettes.length, VEDETTES_AU_PLUS);
+});
+
+test("un rayon que seul l'établi occupe paraît quand même", () => {
+  // Sinon on range un outil dans un rayon qu'on ne peut pas ouvrir.
+  const incendie = { ...MIEN, rayon: RAYONS.INCENDIE };
+  assert.ok(rayonsDuCatalogue(toutLAtelier([incendie])).includes(RAYONS.INCENDIE));
+});
+
+test("« Ajouté récemment » mêle les deux sources par leur date", () => {
+  const vieux = { ...MIEN, cible: "etabli:vieux", id: "vieux", ajouteLe: "2000-01-01" };
+  const ranges = ajoutsRecents(toutLAtelier([vieux]));
+
+  assert.equal(ranges[ranges.length - 1].cible, "etabli:vieux",
+    "un outil de 2000 ne passe pas devant ceux de cette année");
 });

@@ -415,7 +415,12 @@ export const VEDETTES_AU_PLUS = 6;
  * @returns {object[]} les plus ouverts d'abord
  */
 export function vedettesDeLatelier(utilitaires = UTILITAIRES, ouvertures = null) {
-  const liste = Array.isArray(utilitaires) ? utilitaires : [];
+  // **L'établi n'entre pas en vedette**, et ce n'est pas une question de rang :
+  // les vedettes se comptent sur ce que *la profession* ouvre, et un utilitaire
+  // personnel n'est ouvert que par une personne. L'y faire figurer demanderait
+  // de compter ses ouvertures dans une table que tout le monde lit — c'est-à-
+  // dire de publier l'existence de ce que quelqu'un garde pour lui.
+  const liste = (Array.isArray(utilitaires) ? utilitaires : []).filter((un) => !un?.deLetabli);
   const combien = (cible) => {
     if (ouvertures instanceof Map) return Number(ouvertures.get(cible) ?? 0);
     return Number(ouvertures?.[cible] ?? 0);
@@ -441,6 +446,36 @@ export function vedettesDeLatelier(utilitaires = UTILITAIRES, ouvertures = null)
 export function ajoutsRecents(utilitaires = UTILITAIRES) {
   return [...(Array.isArray(utilitaires) ? utilitaires : [])]
     .sort((gauche, droite) => texte(droite?.ajouteLe).localeCompare(texte(gauche?.ajouteLe)));
+}
+
+/**
+ * Tout ce qu'un Atelier contient pour qui le regarde : le dépôt, puis son établi.
+ *
+ * ## Pourquoi deux sources, et une seule liste
+ *
+ * Le catalogue du dépôt est le même pour tout le monde ; l'établi est à celui
+ * qui regarde. Ce sont deux origines, et **une seule chose** : un utilitaire.
+ * Les garder séparés jusqu'à l'écran aurait demandé une seconde grille, une
+ * seconde recherche et un second classement — qui auraient divergé du premier
+ * au premier réglage (règle 10).
+ *
+ * ## L'établi passe en tête
+ *
+ * Ce qu'on a écrit soi-même, on le cherche en le sachant là. Le dépôt, on le
+ * parcourt. À égalité de tout le reste, ce qui est à soi se trouve d'abord.
+ *
+ * **Sauf en vedette** : les vedettes se comptent sur ce que la profession
+ * ouvre, et un établi n'est ouvert que par une personne. Voir
+ * `vedettesDeLatelier`, qui les écarte.
+ */
+export function toutLAtelier(etabli = null, utilitaires = UTILITAIRES) {
+  const miens = Array.isArray(etabli) ? etabli : [];
+  return [...miens, ...(Array.isArray(utilitaires) ? utilitaires : [])];
+}
+
+/** Ce qui vient de l'établi de celui qui regarde, et rien d'autre. */
+export function ceuxDeLetabli(utilitaires = []) {
+  return (Array.isArray(utilitaires) ? utilitaires : []).filter((un) => un?.deLetabli);
 }
 
 /** Les rayons présents, dans l'ordre où ils sont déclarés. */
