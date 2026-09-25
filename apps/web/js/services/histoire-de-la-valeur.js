@@ -107,6 +107,22 @@ const GENRE_DE_LA_PROVENANCE = {
 };
 
 /**
+ * La marque d'un utilitaire personnel, telle qu'on la garde d'une charge.
+ *
+ * Filtrée plutôt que recopiée, comme la règle et la décision : une marque
+ * sans identifiant ne retrouve rien, une marque sans version ne se compare à
+ * rien, et un nom absent ne se lit pas. Les trois, ou aucune.
+ */
+function marqueGardee(etabli) {
+  if (!etabli || typeof etabli !== "object") return null;
+
+  const id = texte(etabli.id);
+  const version = texte(etabli.version);
+  const nom = texte(etabli.nom);
+  return id && version && nom ? { id, version, nom } : null;
+}
+
+/**
  * D'où sort cette valeur.
  *
  * La **provenance enregistrée** d'abord : c'est ce que celui qui a versé a dit,
@@ -281,6 +297,18 @@ export function histoireDeLaValeur(assertion = null, {
       page: Number.isFinite(Number(charge.page)) ? Number(charge.page) : null
     },
     entrees,
+    /**
+     * L'outil personnel d'où cette ligne est venue, s'il y en a un.
+     *
+     * **Six mois plus tard, on lit « Couleur du volet = violet » sans savoir
+     * si quelqu'un l'a tapée un jeudi soir ou si elle sort d'un outil qu'on
+     * réemploie de projet en projet.** La marque le dit, avec la version
+     * exacte — c'est elle qu'on comparera le jour où l'établi aura avancé.
+     *
+     * Filtrée plutôt que recopiée : une marque sans identifiant ne retrouve
+     * rien, et une marque sans version ne se compare à rien.
+     */
+    etabli: marqueGardee(charge.etabli),
     regle: charge.regle ?? null,
     decision: charge.decision ?? null,
     debat: leDebatQuiATranche({ assertion, points }),
@@ -381,6 +409,15 @@ export function lignesDeLHistoire(histoire = null, { dater = null } = {}) {
 
   const origine = phraseDeLOrigine(histoire.origine);
   if (origine) lignes.push({ quoi: "Origine", dit: origine });
+
+  // L'outil personnel dont elle sort, et sa version. Il se lit juste après
+  // l'origine : c'est la même question, posée un cran plus près.
+  if (histoire.etabli) {
+    lignes.push({
+      quoi: "Écrite avec",
+      dit: `« ${histoire.etabli.nom} » v${histoire.etabli.version} — un utilitaire écrit à la main`
+    });
+  }
 
   if (histoire.debat?.phrase) lignes.push({ quoi: "Débat", dit: histoire.debat.phrase });
 

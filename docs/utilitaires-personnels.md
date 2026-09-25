@@ -296,12 +296,29 @@ celle de l'établi ne dirait rien de juste. La provenance dit donc « repris et
 modifié depuis » — et la question « le texte a-t-il bougé ? » se répond au
 même endroit qu'à l'enregistrement, jamais deux fois.
 
-### Ce que ce lot ne fait pas, et que le lot F devra faire
+### La trace que du code peut lire *(faite)*
 
-La provenance est **une phrase**, faite pour être relue par un humain. Pour que
-le projet sache plus tard que l'établi a avancé, il faudra une trace que du
-code puisse lire — pas une ligne à analyser. C'est le lot F, et il le dira
-lui-même.
+La phrase de provenance se relit par un humain ; pour que le projet sache plus
+tard que l'établi a avancé, il fallait une trace **structurée**.
+
+**Aucune migration n'a été nécessaire** : la charge d'une affirmation est du
+`jsonb`, et elle porte déjà `agent`, `regle`, `decision`, `utilitaire`. Elle
+gagne `etabli` — l'identifiant, la version, le nom —, filtré plutôt que
+recopié comme les autres : les trois, ou aucune.
+
+**Pourquoi un champ à elle, et pas `utilitaire`.** Celui-là porte la référence
+d'un outil **du dépôt** — `nom_V1` —, et tout ce qui la lit la cherche dans le
+catalogue. Y glisser `etabli:<id>` en ferait un nom que le catalogue ne connaît
+pas : chaque lecteur y verrait un utilitaire inconnu, et non un outil personnel.
+Un champ qui porte deux sens finit par n'en porter aucun (règle 10).
+
+**Elle n'y est que si le texte est bien celui de cette version** : une ligne
+reprise d'une `v2` puis modifiée ne porte aucune marque — la même règle que la
+phrase, décidée sur la même réponse.
+
+Et elle **se lit déjà** : l'histoire d'une valeur porte une ligne de plus,
+« Écrite avec « Volets en bois » v2 — un utilitaire écrit à la main », juste
+après son origine. C'est la même question, posée un cran plus près.
 
 Une fois versée, la règle est **au projet** : elle vit dans sa mémoire, elle se
 relit, se compare, se rejoue, et elle se capitalise comme les autres. L'établi
@@ -327,6 +344,17 @@ signé.
 ---
 
 ## Lot F — Dire qu'une version plus récente existe
+
+> **La trace existe désormais** (lot D) : chaque ligne versée depuis l'établi
+> porte l'identifiant de son outil et sa version, et l'histoire d'une valeur la
+> montre. Ce qui reste est de **comparer** — et de le dire.
+>
+> Le service qui compare a été écrit, puis retiré : rien ne l'appelait encore.
+> On n'ajoute pas du code que personne n'appelle, même juste. Il reviendra avec
+> son écran, et l'écran est la seule vraie question : **qui** a besoin de
+> l'entendre, et **où**. La mémoire du projet, pour son auteur, est la réponse
+> la plus probable — c'est là que la ligne « Écrite avec » se lit déjà, et il
+> lui manque une phrase et la lecture de l'établi.
 
 ### Ce qui n'existe pas encore, et qu'on croyait acquis
 

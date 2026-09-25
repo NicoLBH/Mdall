@@ -1116,6 +1116,12 @@ test("la proposition emporte d'où elle vient, version comprise", async () => {
   // a-t-il bougé depuis la version reprise ? » est la même qu'à
   // l'enregistrement, et deux réponses divergeraient (règle 10).
   assert.match(depot[1].length ? source : "", /provenanceDuBrouillon\(etat\.utilitaire, etat\.brouillon\)/);
+
+  // **Et chaque ligne emporte la marque de son outil.** La proposition passe,
+  // les lignes restent : c'est dans la mémoire du projet qu'on voudra savoir
+  // plus tard de quel utilitaire — et de quelle version — elles venaient.
+  assert.match(source, /aProposerDuBrouillon\(fichiersRemplis\(etat\.brouillon\), \{ venue \}\)/,
+    "les lignes partent sans savoir de quel outil elles viennent");
 });
 
 test("après un enregistrement réussi, l'écran ne parle pas du prochain clic", () => {

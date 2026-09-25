@@ -2009,7 +2009,11 @@ function dessinerOuEstLecran(depuis) {
 async function proposerAuProjet(depuis) {
   if (etat.depose) return;
 
-  const { affirmations } = aProposerDuBrouillon(fichiersRemplis(etat.brouillon));
+  // **La provenance se décide avant de construire les lignes** : c'est elle qui
+  // dit si chacune peut porter la marque de sa version, ou si le texte a bougé
+  // depuis et qu'elle ne le peut pas.
+  const venue = provenanceDuBrouillon(etat.utilitaire, etat.brouillon);
+  const { affirmations } = aProposerDuBrouillon(fichiersRemplis(etat.brouillon), { venue });
   if (!affirmations.length) return;
 
   etat.depose = true;
@@ -2024,10 +2028,6 @@ async function proposerAuProjet(depuis) {
       etat.depot = { ok: false, dit: "Ce projet n'est pas relié à la base : rien ne peut lui être proposé." };
     } else {
       const { preparerUneProposition } = await import("../../../services/atelier-proposition.js");
-      // D'où vient ce qu'on propose — décidé par le service, pas ici : la
-      // question « le texte a-t-il bougé depuis la version reprise ? » est la
-      // même qu'à l'enregistrement, et deux réponses divergeraient (règle 10).
-      const venue = provenanceDuBrouillon(etat.utilitaire, etat.brouillon);
       const rendu = await preparerUneProposition({
         projectId: projet,
         titre: titreDeLaProposition(affirmations, venue),

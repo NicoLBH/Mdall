@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  cleDAffirmation, itemsDeProposition, descriptionDeLaProposition, provenanceRetenue,
-  sansDoublonDItems } from "./atelier-proposition.js";
+  cleDAffirmation, etabliRetenu, itemsDeProposition, descriptionDeLaProposition,
+  provenanceRetenue, sansDoublonDItems } from "./atelier-proposition.js";
 
 const DEGRE = {
   sujet: "Degré coupe-feu des planchers",
@@ -151,4 +151,35 @@ test("deux écritures d'une même zone n'en font qu'une", () => {
   // qu'une, et la seconde périmerait la première.
   const [item] = itemsDeProposition([{ ...DEGRE, zones: ["Bâtiment A", "bâtiment a"] }]);
   assert.deepEqual(item.payload.zones, ["Bâtiment A"]);
+});
+
+/* ── La marque d'un outil personnel voyage avec la ligne ─────────────────── */
+
+test("la marque de l'établi entre dans la charge, filtrée plutôt que recopiée", () => {
+  // Comme la règle, la décision et l'agent : ce qu'on n'a pas déclaré ne
+  // voyage pas. Une marque sans identifiant ne retrouve rien, et une marque
+  // sans version ne se compare à rien.
+  assert.deepEqual(etabliRetenu({ id: "abc", version: "2", nom: "Volets en bois" }),
+    { id: "abc", version: "2", nom: "Volets en bois" });
+
+  assert.equal(etabliRetenu(null), null);
+  assert.equal(etabliRetenu({ version: "2" }), null);
+  assert.equal(etabliRetenu({ id: "abc" }), null);
+  // Le nom peut manquer — l'outil a pu être renommé ou retiré — mais il ne
+  // s'invente pas.
+  assert.deepEqual(etabliRetenu({ id: "abc", version: "2" }), { id: "abc", version: "2", nom: null });
+});
+
+test("elle arrive jusqu'à l'item qu'on versera", () => {
+  const [item] = itemsDeProposition([{
+    sujet: "Couleur du volet", valeur: "violet",
+    etabli: { id: "abc", version: "2", nom: "Volets en bois" }
+  }]);
+
+  assert.deepEqual(item.payload.etabli, { id: "abc", version: "2", nom: "Volets en bois" });
+});
+
+test("une ligne qui ne vient d'aucun outil personnel n'en invente pas un", () => {
+  const [item] = itemsDeProposition([{ sujet: "Altitude du site", valeur: "890 m" }]);
+  assert.equal(item.payload.etabli, null);
 });
