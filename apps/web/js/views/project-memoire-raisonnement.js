@@ -61,6 +61,8 @@
 import { escapeHtml } from "../utils/escape-html.js";
 import { svgIcon } from "../ui/icons.js";
 import { dessinerGrapheLiaisons } from "./ui/graphe-liaisons.js";
+import { renderJetons } from "./ui/code-mdall.js";
+import { profondeursDuRetrait, niveauxDesPaires } from "../services/mdall-retrait.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -153,24 +155,6 @@ export function espaceParDefaut() {
   };
 }
 
-/**
- * Les jetons d'une ligne, colorés comme dans un fichier.
- *
- * Le même balisage que la Mémoire en lecture : `mdall-<type>`. Un second jeu de
- * classes donnerait deux façons de colorer le même langage, et la seconde
- * finirait par ne plus ressembler à la première.
- */
-function renderJetons(jetons = [], paires = null) {
-  return (jetons ?? [])
-    .map((jeton, index) => {
-      const teinte = paires?.get(index);
-      const classes = `mdall-${escapeHtml(jeton.type)}${
-        teinte === undefined ? "" : ` raison-paire raison-paire--${teinte}`}`;
-      return `<span class="${classes}">${escapeHtml(jeton.texte)}</span>`;
-    })
-    .join("");
-}
-
 /** Ce que le projet dit d'une ligne, dit court. */
 function renderEtat(entree) {
   if (!entree?.sujet) return "";
@@ -206,8 +190,8 @@ function renderGrille(lignes = [], trace = [], ancres = new Map()) {
         ${ancre ? `data-raison-ancre="${escapeHtml(ancre)}"` : ""} data-raison-rang="${rang}">
         <span class="raison-ligne__etat">${renderEtat(dite)}</span>
         <span class="raison-ligne__num">${rang + 1}</span>
-        <span class="raison-ligne__code" style="--raison-crans:${retraits[rang] ?? 0}">${
-          renderJetons(ligne.jetons, paires.get(rang))}</span>
+        <span class="raison-ligne__code code-retrait" style="--mdall-crans:${retraits[rang] ?? 0}">${
+          renderJetons(ligne.jetons, { paires: paires.get(rang) })}</span>
       </div>
     `;
   }).join("");
@@ -223,102 +207,6 @@ function renderGrille(lignes = [], trace = [], ancres = new Map()) {
       ${rangees}
     </div>
   `;
-}
-
-/** Le retrait d'un niveau, en espaces. C'est celui que l'écriture pose. */
-const PAS_DU_RETRAIT = 3;
-
-/**
- * De combien de crans chaque ligne est en retrait.
- *
- * ## À quoi cela sert
- *
- * À tirer un filet vertical par cran, comme dans un éditeur de code. Les
- * couleurs apparient une borne à sa jumelle ; le filet, lui, montre **l'étendue
- * du bloc** — où il commence, jusqu'où il descend. Sur une fonction qui tient
- * sur trente lignes, c'est ce qui évite de remonter à la main pour savoir de
- * quel `si` dépend le `enregistre` qu'on lit.
- *
- * ## Les lignes vides héritent
- *
- * Une ligne vide au milieu d'un bloc n'a pas de retrait à elle. Lui en donner
- * zéro couperait les filets en deux et ferait croire à deux blocs là où il n'y
- * en a qu'un. Elle prend donc le plus petit de ses deux voisins — c'est le
- * niveau qui les contient tous les deux.
- *
- * @returns {number[]} un cran par ligne
- */
-export function profondeursDuRetrait(lignes = []) {
-  const dites = (Array.isArray(lignes) ? lignes : []).map((ligne) => {
-    const texteDeLaLigne = (ligne?.jetons ?? []).map((jeton) => String(jeton?.texte ?? "")).join("");
-    if (!texteDeLaLigne.trim()) return null;
-    return Math.floor((texteDeLaLigne.length - texteDeLaLigne.trimStart().length) / PAS_DU_RETRAIT);
-  });
-
-  return dites.map((crans, rang) => {
-    if (crans !== null) return crans;
-
-    const avant = dites.slice(0, rang).reverse().find((autre) => autre !== null);
-    const apres = dites.slice(rang + 1).find((autre) => autre !== null);
-    if (avant === undefined || apres === undefined) return 0;
-    return Math.min(avant, apres);
-  });
-}
-
-/** Ce qui ouvre un niveau, et ce qui le ferme. */
-const OUVRANTS = new Set(["(", "[", "{"]);
-const FERMANTS = new Set([")", "]", "}"]);
-
-/** Combien de teintes tournent avant de se répéter. Au-delà, on ne distingue plus. */
-const TEINTES_DE_PAIRE = 3;
-
-/**
- * Le niveau d'imbrication de chaque borne, ligne par ligne.
- *
- * ## Pourquoi les colorer
- *
- * Une fonction Mdall imbrique trois niveaux — `si (…)`, `alors (`, `enregistre
- * (` — et se ferme sur trois lignes qui ne portent que `)`, `);`, `}`. Sans
- * couleur, retrouver quelle fermeture répond à quelle ouverture se fait en
- * comptant à voix basse, et l'on se trompe d'un cran une fois sur trois.
- *
- * La teinte tourne avec la profondeur, comme dans un éditeur de code : une
- * ouverture et sa fermeture portent la même, et deux niveaux voisins n'ont
- * jamais la même.
- *
- * Une fermeture orpheline — il y en a, dans un extrait de code — ne prend
- * aucune teinte plutôt qu'une fausse : mentir sur l'appariement est pire que de
- * ne rien dire.
- *
- * @returns {Map<number, Map<number, number>>} rang de ligne → index du jeton → teinte
- */
-export function niveauxDesPaires(lignes = []) {
-  const parLigne = new Map();
-  const pile = [];
-  let profondeur = 0;
-
-  const marquer = (rang, index, teinte) => {
-    if (!parLigne.has(rang)) parLigne.set(rang, new Map());
-    parLigne.get(rang).set(index, teinte);
-  };
-
-  (Array.isArray(lignes) ? lignes : []).forEach((ligne, rang) => {
-    (ligne?.jetons ?? []).forEach((jeton, index) => {
-      const dit = texte(jeton?.texte);
-      if (OUVRANTS.has(dit)) {
-        const teinte = profondeur % TEINTES_DE_PAIRE;
-        marquer(rang, index, teinte);
-        pile.push(teinte);
-        profondeur += 1;
-        return;
-      }
-      if (!FERMANTS.has(dit) || pile.length === 0) return;
-      marquer(rang, index, pile.pop());
-      profondeur -= 1;
-    });
-  });
-
-  return parLigne;
 }
 
 /**

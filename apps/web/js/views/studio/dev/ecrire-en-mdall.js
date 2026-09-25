@@ -46,6 +46,7 @@ import { renderGhActionButton, bindGhActionButtons } from "../../ui/gh-split-but
 import { renderJetons } from "../../ui/code-mdall.js";
 import { jetonsDeLaLigne } from "../../../services/memoire-en-lecture.js";
 import { jetonsEcrits } from "../../../services/mdall-en-ecriture.js";
+import { niveauxDesPaires } from "../../../services/mdall-retrait.js";
 import {
   brouillonNeuf, fichierOuvert, avecLeFichier, avecLeDit, ouvertSur, brouillonEcrit, langageDuFichier,
   fichiersRemplis, brouillonRange, brouillonRelu
@@ -133,8 +134,18 @@ export function lignesDuFichier(contenu = "") {
  * (règle 12).
  */
 export function colorerDuMdall(contenu = "") {
-  return `${String(contenu ?? "").split("\n")
-    .map((ligne) => renderJetons(jetonsEcrits(ligne)))
+  const lignes = String(contenu ?? "").split("\n").map((ligne) => ({ jetons: jetonsEcrits(ligne) }));
+
+  /**
+   * **Les paires se calculent sur le fichier entier**, et non ligne à ligne :
+   * une `(` s'apparie à une `)` qui est souvent trente lignes plus bas. C'est
+   * le même calcul que dans la Mémoire, les Changements et le raisonnement —
+   * un seul, et partagé (règle 10).
+   */
+  const paires = niveauxDesPaires(lignes);
+
+  return `${lignes
+    .map((ligne, rang) => renderJetons(ligne.jetons, { paires: paires.get(rang) }))
     .join("\n")}\n`;
 }
 

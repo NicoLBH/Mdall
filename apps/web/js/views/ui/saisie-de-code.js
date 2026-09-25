@@ -56,11 +56,34 @@
  */
 
 import { escapeHtml } from "../../utils/escape-html.js";
+import { profondeursDuTexte, poserUnRetrait } from "../../services/mdall-retrait.js";
 
 /** Combien de lignes un texte occupe. Au moins une : celle où l'on va écrire. */
 export function combienDeLignes(contenu = "") {
   const tout = String(contenu ?? "").replace(/\r\n?/g, "\n");
   return tout ? tout.split("\n").length : 1;
+}
+
+/**
+ * Les filets de retrait, **une couche à part**.
+ *
+ * ## Pourquoi pas dans la couche colorée
+ *
+ * Elle est un `<pre>`, et chaque ligne y occupe exactement une ligne : y poser
+ * un bloc par ligne pour porter un dégradé en ferait deux, et le code
+ * s'afficherait à double interligne — c'est le défaut qu'on a réparé.
+ *
+ * Cette couche-ci ne porte **aucun texte** : une division par ligne, haute d'un
+ * interligne, avec le nombre de crans de sa ligne. Les lignes ne se replient
+ * pas (`white-space:pre`) et l'interligne est une longueur, donc une pile de
+ * divisions tombe exactement en face du texte.
+ *
+ * Le dégradé, lui, est celui de tout le monde : `.code-retrait`.
+ */
+export function renderFiletsDuRetrait(contenu = "") {
+  return profondeursDuTexte(contenu)
+    .map((crans) => `<div class="saisie-code__filet code-retrait" style="--mdall-crans:${crans}"></div>`)
+    .join("");
 }
 
 /** La gouttière : un numéro par ligne, à partir de 1. */
@@ -90,6 +113,10 @@ export function renderSaisieDeCode({
       <div class="saisie-code__gouttiere" data-saisie-gouttiere>${
         renderGouttiere(combienDeLignes(contenu))}</div>
       <div class="saisie-code__corps">
+        ${colore
+          ? `<div class="saisie-code__retraits" data-saisie-retraits aria-hidden="true">${
+            renderFiletsDuRetrait(String(contenu ?? ""))}</div>`
+          : ""}
         ${colore
           ? `<pre class="saisie-code__couleur" data-saisie-couleur aria-hidden="true">${
             colorer(String(contenu ?? ""))}</pre>`
@@ -137,6 +164,7 @@ export function brancherLaSaisieDeCode(racine, { surChangement = null, colorer =
   const couleur = typeof colorer === "function"
     ? racine.querySelector("[data-saisie-couleur]")
     : null;
+  const filets = racine?.querySelector?.("[data-saisie-retraits]");
 
   const caler = () => {
     // La gouttière est un bloc à part : sans ce calage, elle reste en haut
@@ -146,6 +174,10 @@ export function brancherLaSaisieDeCode(racine, { surChangement = null, colorer =
       couleur.scrollTop = zone.scrollTop;
       couleur.scrollLeft = zone.scrollLeft;
     }
+    if (filets) {
+      filets.scrollTop = zone.scrollTop;
+      filets.scrollLeft = zone.scrollLeft;
+    }
   };
 
   const suivre = () => {
@@ -153,16 +185,51 @@ export function brancherLaSaisieDeCode(racine, { surChangement = null, colorer =
     // **La couleur se repeint avant de se caler.** Repeinte après, elle se
     // recale sur une hauteur qui vient de changer, et saute d'une ligne.
     if (couleur) couleur.innerHTML = colorer(zone.value);
+    if (filets) filets.innerHTML = renderFiletsDuRetrait(zone.value);
     caler();
     surChangement?.(zone.value);
   };
 
+  /**
+   * La tabulation pose un cran de retrait, Maj+Tab en retire un.
+   *
+   * **Jamais une tabulation** : le langage s'indente de trois espaces, et une
+   * zone qui en poserait une ferait un fichier que la lecture ne compte pas
+   * pareil.
+   *
+   * `defaultPrevented` est la seule condition : quand une liste de propositions
+   * est ouverte, c'est elle qui prend Tab — elle est branchée avant et l'a déjà
+   * arrêtée. Deux écouteurs sur la même touche sans ce contrat se seraient
+   * disputé le geste, et l'un des deux aurait gagné au hasard de l'ordre de
+   * branchement.
+   */
+  const auRetrait = (evenement) => {
+    if (evenement.key !== "Tab" || evenement.defaultPrevented) return;
+    evenement.preventDefault();
+
+    const pose = poserUnRetrait({
+      contenu: zone.value,
+      debut: zone.selectionStart,
+      fin: zone.selectionEnd,
+      sens: evenement.shiftKey ? -1 : 1
+    });
+
+    zone.value = pose.contenu;
+    zone.selectionStart = pose.debut;
+    zone.selectionEnd = pose.fin;
+    // Les trois couches suivent par l'événement, comme à la frappe : les
+    // remettre à jour ici en ferait un second endroit qui décide (règle 10).
+    zone.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
   zone.addEventListener("input", suivre);
   zone.addEventListener("scroll", caler);
+  zone.addEventListener("keydown", auRetrait);
   suivre();
 
   return () => {
     zone.removeEventListener("input", suivre);
     zone.removeEventListener("scroll", caler);
+    zone.removeEventListener("keydown", auRetrait);
   };
 }

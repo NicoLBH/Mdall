@@ -77,8 +77,14 @@ test("aucune touche n'est interceptée quand la liste est fermée", async () => 
   assert.ok(sortie < premierPreventDefault,
     "une touche est interceptée avant d'avoir vérifié que la liste est ouverte");
 
-  // Et les cinq touches sont nommées, pas devinées.
-  for (const touche of ["Escape", "ArrowDown", "ArrowUp", "Enter", "Tab"]) {
+  // Et les quatre touches sont nommées, pas devinées.
+  for (const touche of ["Escape", "ArrowDown", "ArrowUp", "Enter"]) {
     assert.ok(auClavier.includes(`"${touche}"`), `touche absente : ${touche}`);
   }
+
+  // **Tab n'est pas des leurs.** Il pose un cran de retrait ; la liste se
+  // referme et le laisse passer. Le lui prendre créait un piège : la liste se
+  // rouvre après chaque retrait, et un second Tab posait une proposition au
+  // lieu du second cran.
+  assert.match(auClavier, /if \(evenement\.key === "Tab"\) \{ fermer\(\); return; \}/);
 });

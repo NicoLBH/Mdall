@@ -19,7 +19,7 @@
  */
 
 import { escapeHtml } from "../../utils/escape-html.js";
-import { renderJetons } from "./code-mdall.js";
+import { renderLignesDeCode } from "./code-mdall.js";
 import { jetonsEcrits } from "../../services/mdall-en-ecriture.js";
 import { WIKI_DU_LANGAGE, sommaireDuWiki } from "../../contenus/wiki-du-langage-mdall.js";
 import { ouvrirLaFenetreDeDetails } from "./fenetre-de-details.js";
@@ -37,20 +37,17 @@ export function renderTexteDuWiki(texte = "") {
     .replace(/`([^`]+)`/g, '<code class="wiki-mdall__mot">$1</code>');
 }
 
-/** Un exemple de Mdall, numéroté et coloré comme dans l'éditeur. */
+/**
+ * Un exemple de Mdall, numéroté et coloré comme dans l'éditeur.
+ *
+ * **Filets et paires compris** : un exemple du wiki se lit comme le même code
+ * dans la Mémoire ou dans la zone d'écriture, sans quoi on l'apprendrait sous
+ * une forme qu'on ne retrouverait nulle part.
+ */
 export function renderExempleDuWiki(code = "") {
-  const lignes = String(code ?? "").split("\n");
+  const lignes = String(code ?? "").split("\n").map((ligne) => ({ jetons: jetonsEcrits(ligne) }));
 
-  return `
-    <div class="fichier-code wiki-mdall__code">
-      ${lignes.map((ligne, rang) => `
-        <div class="memoire-ligne">
-          <span class="memoire-ligne__num">${rang + 1}</span>
-          <span class="memoire-ligne__code">${renderJetons(jetonsEcrits(ligne)) || "&nbsp;"}</span>
-        </div>
-      `).join("")}
-    </div>
-  `;
+  return renderLignesDeCode(lignes, { className: "wiki-mdall__code" });
 }
 
 /** Un bloc, quel qu'il soit. Un bloc d'un genre inconnu ne rend rien. */
