@@ -582,7 +582,7 @@ export function lireUnFichier(contenu = "") {
   const fermer = () => {
     if (courant) {
       // `accolade` sert à la lecture, pas au sens : elle ne ressort pas.
-      const { accolade, agent, utilitaire, version, enregistre, tableau, ...bloc } = courant;
+      const { accolade, conclue, agent, utilitaire, version, enregistre, tableau, ...bloc } = courant;
       // Un tableau ne ressort que s'il y en a un : le champ vide sur toutes les
       // affirmations ferait croire que chacune en porte un.
       if (Array.isArray(tableau) && tableau.length) bloc.tableau = tableau;
@@ -801,6 +801,9 @@ export function lireUnFichier(contenu = "") {
         ligne: numero,
         accolade: ouvre,
         conditions: [], alors: "", sinon: "", sauf: [],
+        // Où chaque issue a été posée, pour refuser la seconde en la situant.
+        // Sert à la lecture seule, et ne ressort pas du bloc.
+        conclue: {},
         // Les valeurs que la fonction pose en les calculant, dans l'ordre où
         // elles sont écrites : la seconde peut lire la première.
         calculs: [],
@@ -877,8 +880,44 @@ export function lireUnFichier(contenu = "") {
     }
 
     if (mot === "alors" || mot === "sinon") {
+      /**
+       * **« sinon si (…) » n'existe pas, et l'avaler était le pire.**
+       *
+       * Une fonction porte une condition et deux issues ; elle n'enchaîne pas
+       * les branches. Écrite quand même, la ligne se lisait comme une
+       * conclusion dont la **valeur** était le texte `si (Type de TVA =
+       * "neuf")`. La fonction concluait donc une phrase au lieu d'un taux,
+       * celles qui la lisaient ne savaient plus quoi en faire, et rien nulle
+       * part ne disait pourquoi (règle 5). Un cas marchait, l'autre non.
+       *
+       * Une conclusion ordinaire commence par sa parenthèse ou par sa valeur :
+       * aucune ne commence par le mot `si`.
+       */
+      if (/^si\b/i.test(reste)) {
+        refus.push({
+          ligne: numero,
+          texte: corps,
+          raison: `« ${mot} si » n'existe pas : une fonction pose une condition et deux issues, « alors » et « sinon ».`
+        });
+        return;
+      }
+
+      // **Une seconde issue du même nom écrasait la première, sans un mot.**
+      // Deux `alors` dans une fonction, et elle concluait le dernier écrit :
+      // la valeur qu'on lisait à l'écran n'était pas celle qu'on croyait avoir
+      // écrite, et le fichier avait l'air juste.
+      if (courant.conclue[mot]) {
+        refus.push({
+          ligne: numero,
+          texte: corps,
+          raison: `« ${mot} » est déjà posé ligne ${courant.conclue[mot]} : une fonction ne conclut qu'une fois par issue.`
+        });
+        return;
+      }
+
       const lue = lireUneValeur(sansBornes(reste).corps);
       courant[mot] = lue.unite ? `${lue.valeur} ${lue.unite}` : lue.valeur;
+      courant.conclue[mot] = numero;
       return;
     }
 

@@ -92,6 +92,17 @@ const LARGEUR_PAR_DEFAUT = 460;
 const LARGEUR_CONSOLE_MIN = 240;
 const LARGEUR_CONSOLE_MAX = 720;
 const LARGEUR_CONSOLE_PAR_DEFAUT = 380;
+/**
+ * Les bornes de la hauteur de la console du bas.
+ *
+ * **Pas de hauteur par défaut, et c'est voulu.** Tant qu'on n'a pas tiré, la
+ * console fait la taille de ce qu'elle a à dire, plafonnée par la feuille de
+ * style — une console vide qui prendrait 180 px du bas de l'écran volerait de
+ * la place au code pour n'y rien montrer. Le glissé pose une hauteur ferme, et
+ * elle le reste jusqu'à ce qu'on la retire.
+ */
+const HAUTEUR_CONSOLE_MIN = 72;
+const HAUTEUR_CONSOLE_MAX = 720;
 
 /**
  * Les lignes d'un fichier, prêtes à colorer.
@@ -586,6 +597,14 @@ export const GESTE = {
   /** Passer de l'essai à l'écriture : ouvrir le capot. */
   MODIFIER: "brouillon-modifier",
   /**
+   * Refermer le capot : revenir à ce que l'utilitaire fait.
+   *
+   * **Il ne paraît que pour un utilitaire de l'établi.** Un brouillon qu'on n'a
+   * jamais enregistré n'a pas d'essai à retrouver : l'écriture est chez lui, et
+   * « Lancer » ouvre déjà son bac dans une fenêtre.
+   */
+  ESSAYER: "brouillon-essayer",
+  /**
    * Ouvrir le wiki du langage.
    *
    * **C'est la porte sans modèle.** On écrit du Mdall à la main sur cet écran ;
@@ -665,7 +684,27 @@ export function renderActionsDuTitre(
             label: "Modifier",
             title: "Ouvrir le code de cet utilitaire, et le lancer à la main"
           }]
-          : [{
+          : [...(utilitaire?.id
+            ? [{
+              /**
+               * **Le retour, que « Modifier » n'avait pas.**
+               *
+               * On entrait dans le code par le menu et l'on en sortait par
+               * l'Atelier : rouvrir l'outil depuis la vitrine le remettait à
+               * l'essai. Cela marchait, et c'était un détour de trois clics
+               * hors de l'écran pour revenir à l'écran d'à côté — on s'en
+               * apercevait à l'usage, en faisant l'aller-retour vingt fois.
+               */
+              action: GESTE.ESSAYER,
+              icon: svgIcon("beaker", { className: "octicon" }),
+              label: "Revenir à l'essai",
+              title: "Refermer le code, et revenir à ce que cet utilitaire fait"
+            }, {
+              // Revenir n'engage rien ; ce qui suit engage. Le trait dit lequel
+              // des deux on est en train de choisir.
+              separator: true
+            }]
+            : []), {
             action: GESTE.PROPOSER,
             icon: svgIcon("git-pull-request", { className: "octicon" }),
             label: PROPOSER_DIT,
@@ -770,6 +809,18 @@ export function renderTeteDeLaConsole(lignes = [], { volet = false } = {}) {
 
   return `
     <div class="brouillon-console__tete">
+      ${/*
+        **La poignée de hauteur, et seulement en bas.** À droite, la console se
+        tire par son bord gauche — c'est une largeur —, et deux poignées sur le
+        même élément se disputeraient le même bord.
+
+        Elle vit dans la tête parce que la tête est collante : elle reste au
+        bord haut de la console quand ses lignes défilent, et une poignée qui
+        part avec le défilement ne se retrouve plus.
+      */""}
+      ${volet ? "" : renderSideResizer({
+        id: "brouillonConsoleHauteur", className: "brouillon-console__poignee"
+      })}
       <span class="brouillon-console__nom">console</span>
       <span class="brouillon-console__phrase">
         ${svgIcon(toutes.some((une) => une.niveau !== NIVEAU.FAIT) ? "alert" : "check",
@@ -1035,7 +1086,8 @@ export function renderListeDeLetabli(liste = null) {
 export function renderEcrireEnMdall(brouillon = null, {
   largeur = LARGEUR_PAR_DEFAUT, reponses = {}, lance = false,
   transcrit = false, rendu = null, depose = false, depot = null, volet = false,
-  largeurConsole = LARGEUR_CONSOLE_PAR_DEFAUT, utilitaire = null, mode = MODE.ECRITURE
+  largeurConsole = LARGEUR_CONSOLE_PAR_DEFAUT, hauteurConsole = 0,
+  utilitaire = null, mode = MODE.ECRITURE
 } = {}) {
   const lignes = laConsole({
     fichiers: fichiersRemplis(brouillon), reponses, lance, rendu, depot
@@ -1044,7 +1096,11 @@ export function renderEcrireEnMdall(brouillon = null, {
   return `
     <section class="brouillon" data-console="${volet ? "volet" : "bas"}"
       style="--brouillon-dit-width:${Math.round(largeur)}px; --brouillon-console-width:${
-        Math.round(largeurConsole)}px">
+        Math.round(largeurConsole)}px${/*
+        **Rien tant qu'on n'a pas tiré.** La déclarer à zéro écraserait le
+        plafond de la feuille de style par une console d'aucune hauteur ; ne pas
+        la déclarer laisse la console faire la taille de ce qu'elle dit.
+      */""}${hauteurConsole ? `; --brouillon-console-height:${Math.round(hauteurConsole)}px` : ""}">
       ${/*
         **Le titre au format des autres écrans de l'Atelier**, et ses classes :
         la lecture des comptes rendus et celle des mails les portent déjà. Un
@@ -1060,7 +1116,13 @@ export function renderEcrireEnMdall(brouillon = null, {
       ${mode === MODE.ESSAI ? renderEssaiDeLutilitaire(brouillon, { reponses, utilitaire, lance }) : `
       <div class="brouillon__corps">
         <div class="brouillon__dit">
-          <p class="brouillon__intitule">Ce que vous voulez dire</p>
+          ${/*
+            **« ou faire », parce que c'est ce qu'on y écrit.** « Ce que vous
+            voulez dire » se lisait comme une consigne de rédaction ; on y écrit
+            ce que l'outil doit faire, et c'est le cahier des charges de
+            l'utilitaire — gardé avec lui, et rendu quand on le reprend.
+          */""}
+          <p class="brouillon__intitule">Ce que vous voulez dire, ou faire</p>
           <textarea class="brouillon__zone" data-brouillon-dit spellcheck="true"
             placeholder="${escapeHtml(INVITE)}">${escapeHtml(String(brouillon?.dit ?? ""))}</textarea>
           ${renderGestes(brouillon, { transcrit })}
@@ -1170,7 +1232,12 @@ const etat = {
   mode: MODE.ECRITURE,
   /** La console est-elle à droite, en troisième volet ? Sinon, elle est en bas. */
   volet: false,
-  largeurConsole: LARGEUR_CONSOLE_PAR_DEFAUT
+  largeurConsole: LARGEUR_CONSOLE_PAR_DEFAUT,
+  /**
+   * La hauteur de la console du bas, **une fois qu'on l'a tirée**. `0` tant
+   * qu'on ne l'a pas fait : voir `HAUTEUR_CONSOLE_MIN`.
+   */
+  hauteurConsole: 0
 };
 
 /**
@@ -1281,6 +1348,64 @@ function mesurerLaHauteur(racine) {
 let debrancherSaisie = null;
 let debrancherPoignee = null;
 let debrancherConsole = null;
+let debrancherHauteurConsole = null;
+
+/**
+ * Un jeu d'écoutes qui **se défait avant de se refaire**.
+ *
+ * ## Le défaut qu'il répare, et il était double
+ *
+ * Deux branchements de cet écran se rejouent à chaque frappe — la console,
+ * parce que ses lignes changent ; la ligne du titre, parce que ses gestes
+ * dépendent de ce qu'on vient d'écrire. Ils tenaient tous les deux sur une
+ * promesse : « une écoute part avec l'élément qu'elle portait ». Vraie quand
+ * l'élément est remplacé ; fausse quand il survit — et il survit chaque fois
+ * que `poserLePanneau` n'a rien à poser, c'est-à-dire presque toujours.
+ *
+ * Ce qu'on voyait à l'écran :
+ *
+ *  - **le bouton qui range la console à droite ne répondait pas.** Deux écoutes
+ *    dès le montage — l'éditeur de code annonce un premier changement en se
+ *    branchant, et `brancher` branche la console juste après —, donc un clic
+ *    basculait deux fois et la console ne bougeait pas. Une frappe de plus, et
+ *    elle marchait ; deux, et elle ne marchait plus. C'était insaisissable ;
+ *  - **les gestes du menu partaient en plusieurs exemplaires.** Une écoute par
+ *    caractère tapé : « Faire une proposition » en aurait ouvert autant, et
+ *    « Tout effacer » aurait demandé confirmation autant de fois.
+ *
+ * Le commentaire du menu mettait en garde contre exactement cela — « une écoute
+ * posée sur l'écran s'accumulerait à chaque `dessiner` » — et l'accumulation
+ * arrivait par l'autre porte. On ne compte donc plus sur la mort des éléments :
+ * on retire ce qu'on a posé (règle 12).
+ *
+ * @returns {{poser: Function, defaire: Function}}
+ */
+export function jeuDecoutes() {
+  let defaire = [];
+
+  return {
+    /** Retirer tout ce que ce jeu avait posé. Sans effet s'il n'avait rien. */
+    defaire() {
+      for (const une of defaire) une();
+      defaire = [];
+    },
+    /**
+     * Poser une écoute, et retenir de quoi la retirer.
+     *
+     * Une cible absente ne pose rien — un `?.` de plus à chaque appel dirait la
+     * même chose trois fois.
+     */
+    poser(cible, quoi, fait) {
+      if (!cible) return;
+      cible.addEventListener(quoi, fait);
+      defaire.push(() => cible.removeEventListener(quoi, fait));
+    }
+  };
+}
+
+/** Les deux jeux de cet écran : ceux qui se rejouent à la frappe. */
+const ecoutesDeLaConsole = jeuDecoutes();
+const ecoutesDuTitre = jeuDecoutes();
 let debrancherPropositions = null;
 
 function dessiner(racine) {
@@ -1299,6 +1424,7 @@ function dessiner(racine) {
     depot: etat.depot,
     volet: etat.volet,
     largeurConsole: etat.largeurConsole,
+    hauteurConsole: etat.hauteurConsole,
     utilitaire: etat.utilitaire,
     mode: etat.mode
   });
@@ -1415,11 +1541,13 @@ function redessinerLaConsole(racine) {
  * cessait de répondre à la première frappe, sans rien dire.
  */
 function brancherLaLigneDuTitre(racine) {
-  racine.querySelector("[data-brouillon-proposer]")?.addEventListener("click", () => {
+  ecoutesDuTitre.defaire();
+
+  ecoutesDuTitre.poser(racine.querySelector("[data-brouillon-proposer]"), "click", () => {
     void proposerAuProjet(racine);
   });
 
-  racine.querySelector("[data-brouillon-lancer]")?.addEventListener("click", () => {
+  ecoutesDuTitre.poser(racine.querySelector("[data-brouillon-lancer]"), "click", () => {
     ouvrirLeBac(racine);
     // La console dit aussi ce que le lancement a répondu : elle le dit derrière
     // la fenêtre, et on la retrouve en la refermant.
@@ -1430,8 +1558,8 @@ function brancherLaLigneDuTitre(racine) {
   // l'écoute part avec l'élément au redessin suivant — là où une écoute posée
   // sur l'écran s'accumulerait à chaque `dessiner`, et effacerait le brouillon
   // autant de fois qu'il y a eu de transcriptions.
-  racine.querySelector(".lecture-cr__entete-actions")
-    ?.addEventListener("ghaction:action", (evenement) => {
+  ecoutesDuTitre.poser(racine.querySelector(".lecture-cr__entete-actions"),
+    "ghaction:action", (evenement) => {
       const geste = evenement.detail?.action;
       if (geste === GESTE.VIDER) viderLeBrouillon(racine);
       if (geste === GESTE.WIKI) ouvrirLeWikiMdall();
@@ -1441,6 +1569,7 @@ function brancherLaLigneDuTitre(racine) {
       if (geste === GESTE.ETABLI) ouvrirLaFicheDeLetabli(racine);
       if (geste === GESTE.REPRENDRE) void ouvrirLetabli(racine);
       if (geste === GESTE.MODIFIER) ouvrirLeCode(racine);
+      if (geste === GESTE.ESSAYER) refermerLeCode(racine);
     });
 }
 
@@ -1605,7 +1734,9 @@ function ouvrirLaFicheDeLetabli(racine) {
   const corps = ouvrirLaFenetreDeDetails({
     titreHtml: escapeHtml(etat.utilitaire?.id ? "Reprendre sur votre établi" : "Enregistrer sur votre établi"),
     metaHtml: escapeHtml("Il paraîtra dans tous vos projets, et dans la mémoire d'aucun."),
-    corpsHtml: renderFicheDeLetabli(fiche, { quoi: ceQueLenregistrementFait(etat.utilitaire, fiche.fichiers) }),
+    corpsHtml: renderFicheDeLetabli(fiche, {
+      quoi: ceQueLenregistrementFait(etat.utilitaire, fiche.fichiers, fiche.dit)
+    }),
     surGeste: (geste) => {
       if (geste === GESTE_DE_LETABLI.GARDER) void garderSurLetabli(racine);
     }
@@ -1666,7 +1797,7 @@ function redessinerLeVerdictDeLaFiche() {
 
   const fiche = ficheDuMoment();
   remplacer(corps, ".etabli-fiche__verdict", renderVerdictDeLetabli(fiche, {
-    quoi: ceQueLenregistrementFait(etat.utilitaire, fiche.fichiers),
+    quoi: ceQueLenregistrementFait(etat.utilitaire, fiche.fichiers, fiche.dit),
     garde: etat.garde
   }));
 }
@@ -1692,7 +1823,11 @@ async function garderSurLetabli(racine) {
     nom: fiche.nom,
     resume: fiche.resume,
     rayon: fiche.rayon,
-    fichiers: fiche.fichiers
+    fichiers: fiche.fichiers,
+    // **Le cahier des charges monte avec le code.** Sans lui, rouvrir pour
+    // modifier rendait un Mdall sans l'intention qui l'a produit — et « Coder »
+    // part de cette zone-là.
+    dit: fiche.dit
   });
 
   if (!pose.ok) {
@@ -1775,7 +1910,7 @@ export function reprendreLutilitaire(racine, trouve = null, { mode = MODE.ESSAI 
   if (brouillonEcrit(etat.brouillon) && etat.utilitaire?.id !== trouve.id
     && !window.confirm(`Reprendre « ${trouve.nom} » ? Ce qui est écrit ici sera remplacé.`)) return false;
 
-  etat.brouillon = brouillonDesFichiers(trouve.fichiers);
+  etat.brouillon = brouillonDesFichiers(trouve.fichiers, { dit: trouve.dit });
   etat.utilitaire = trouve;
   // **On l'ouvre à l'essai.** C'est pour cela qu'on l'ouvre : lui poser une
   // question. Son code est derrière « Modifier », pour qui vient le changer.
@@ -1842,17 +1977,26 @@ function ouvrirLeBac(racine) {
 
 /**
  * Ouvrir le capot : passer de l'essai à l'écriture.
- *
- * **On ne revient pas en arrière par un second geste.** Rouvrir l'outil depuis
- * l'Atelier le remet à l'essai, et c'est le chemin par lequel on y était ; un
- * bouton « Revenir à l'essai » ajouterait une bascule à tenir à jour pour dire
- * ce que l'Atelier dit déjà.
  */
 function ouvrirLeCode(racine) {
   etat.mode = MODE.ECRITURE;
   // On quitte l'essai : le verdict n'est plus à l'écran, et « Lancer » le
   // rouvrira dans sa fenêtre quand on le demandera.
   etat.lance = false;
+  dessiner(racine);
+}
+
+/**
+ * Refermer le capot : revenir à ce que l'utilitaire fait.
+ *
+ * **L'exact inverse d'`ouvrirLeCode`, et c'est pour cela qu'il est écrit à côté
+ * de lui** : deux bascules qui vivent à deux endroits finissent par ne plus
+ * remettre le même état. `reprendreLutilitaire` pose les mêmes deux valeurs
+ * pour la même raison — à l'essai, le bac **est** la vue, et il est lancé.
+ */
+function refermerLeCode(racine) {
+  etat.mode = MODE.ESSAI;
+  etat.lance = true;
   dessiner(racine);
 }
 
@@ -1978,15 +2122,17 @@ function brancherLeBac(hote, racine) {
  * seule la poignée se débranche à la main, parce qu'elle écoute la fenêtre.
  */
 function brancherLaConsole(racine) {
+  ecoutesDeLaConsole.defaire();
+
   // Cliquer une ligne ouvre le fichier où elle se trouve.
   for (const bouton of racine.querySelectorAll("[data-brouillon-aller]")) {
-    bouton.addEventListener("click", () => {
+    ecoutesDeLaConsole.poser(bouton, "click", () => {
       etat.brouillon = ouvertSur(etat.brouillon, bouton.dataset.brouillonAller);
       redessinerLeVolet(racine);
     });
   }
 
-  racine.querySelector("[data-brouillon-console-place]")?.addEventListener("click", () => {
+  ecoutesDeLaConsole.poser(racine.querySelector("[data-brouillon-console-place]"), "click", () => {
     etat.volet = !etat.volet;
     redessinerLaConsole(racine);
   });
@@ -2000,8 +2146,18 @@ function brancherLaConsole(racine) {
       handle: poignee,
       guide: racine.querySelector("#brouillonConsoleResizerGuide"),
       getWidth: () => etat.largeurConsole,
-      // **Elle se tire depuis la gauche** : la console est à droite du code, et
-      // élargir la console rétrécit le code, pas l'inverse.
+      /**
+       * **`sens: -1`, parce qu'elle se tire par son bord gauche.**
+       *
+       * La console est collée au bord droit et sa poignée est du côté opposé à
+       * celui qui bouge : tirer vers la gauche l'élargit. Sans ce sens, le
+       * composant ajoutait le déplacement tel quel, et la largeur **diminuait**
+       * quand la souris partait à gauche — le panneau faisait l'inverse du
+       * geste, et l'on tirait de plus en plus loin en croyant s'être trompé de
+       * bord. Le commentaire disait déjà la bonne règle ; le code ne la passait
+       * pas (règle 12 : une consigne qu'on ne vérifie pas est une intention).
+       */
+      sens: -1,
       onResize: (largeur) => {
         etat.largeurConsole = largeur;
         racine.querySelector(".brouillon")
@@ -2009,6 +2165,42 @@ function brancherLaConsole(racine) {
       },
       min: LARGEUR_CONSOLE_MIN,
       max: LARGEUR_CONSOLE_MAX
+    })
+    : null;
+
+  brancherLaHauteurDeLaConsole(racine);
+}
+
+/**
+ * La poignée de hauteur de la console du bas.
+ *
+ * ## Pourquoi la hauteur de départ se mesure, et ne se retient pas
+ *
+ * Tant qu'on n'a pas tiré, la console fait la taille de ce qu'elle dit. Partir
+ * d'un nombre retenu ferait sauter le panneau au premier pixel de glissé, d'une
+ * hauteur de deux lignes à la hauteur supposée — on n'aurait plus prise sur ce
+ * qu'on voit. Ce qu'on tire, c'est le bord qui est à l'écran.
+ */
+function brancherLaHauteurDeLaConsole(racine) {
+  debrancherHauteurConsole?.();
+  const poignee = racine.querySelector("#brouillonConsoleHauteur");
+  const bande = racine.querySelector(".brouillon-console");
+
+  debrancherHauteurConsole = poignee && bande
+    ? bindSideResizer({
+      handle: poignee,
+      guide: racine.querySelector("#brouillonConsoleHauteurGuide"),
+      axe: "y",
+      // Elle est en bas et se tire par son bord haut : monter l'agrandit.
+      sens: -1,
+      getWidth: () => etat.hauteurConsole || Math.round(bande.offsetHeight),
+      onResize: (hauteur) => {
+        etat.hauteurConsole = hauteur;
+        racine.querySelector(".brouillon")
+          ?.style.setProperty("--brouillon-console-height", `${Math.round(hauteur)}px`);
+      },
+      min: HAUTEUR_CONSOLE_MIN,
+      max: HAUTEUR_CONSOLE_MAX
     })
     : null;
 }

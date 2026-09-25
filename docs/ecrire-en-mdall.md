@@ -116,7 +116,7 @@ Un écran de l'Atelier, rayon **Développements**, cible `dev-ecrire-en-mdall`.
 │  Écrire en Mdall      [Proposer au projet] [▶ Lancer] [⋯]                │
 │  Dites ce que vous voulez poser, en français. Le code s'écrit à droite.  │
 ├──────────────────────────────────────────────────────────────────────────┤
-│  ┌─ Ce que vous voulez dire ────┐ │ ┌─ essai.ref ──────────────────────┐ │
+│  ┌─ … dire, ou faire ───────────┐ │ ┌─ essai.ref ──────────────────────┐ │
 │  │                              │ │ │ [essai.ref] [variables] [.ddb]   │ │
 │  │  La zone de vent vaut 1, 2,  │ │ ├──────────────────────────────────┤ │
 │  │  3 ou 4. Si elle vaut 3, la  │◀▶│ │  1  fonction Vitesse de réf…     │ │
@@ -1251,3 +1251,98 @@ documentation lui a montré. C'est arrivé au wiki ; la même épreuve tient ici
   retrouve sa place — le même renvoi que le bouton du titre, pas une seconde
   façon de proposer — et « Enregistrer dans l'Atelier » y paraît **éteint**, avec
   ce qu'il attend : l'établi, lot B de `docs/utilitaires-personnels.md`.
+
+### « sinon si » : la forme que la langue n'a pas, et qu'elle avalait
+
+Un utilitaire de TVA marchait pour « existant » et pas pour « neuf ». Le modèle
+avait écrit :
+
+```
+si (Type de TVA = "existant")
+alors (5,5 %);
+sinon si (Type de TVA = "neuf")
+alors (20 %);
+```
+
+La langue n'enchaîne pas les branches : une fonction porte **une** condition et
+**deux** issues. Rien ne le refusait pour autant. La lecture prenait
+`sinon si (Type de TVA = "neuf")` pour une conclusion, et sa **valeur** pour le
+texte `si (Type de TVA = "neuf")` — la fonction concluait donc une phrase au lieu
+d'un taux, `Prix TTC` répondait « ne sait pas encore », et rien nulle part ne
+disait pourquoi (règle 5). Pire : le second `alors (20 %)` écrasait le premier en
+silence, de sorte que le cas qui « marchait » rendait le mauvais taux.
+
+Trois choses changent, et elles disent la même :
+
+- **la lecture refuse** `sinon si`, en nommant la forme et en disant ce qui
+  existe. Elle refuse aussi une **seconde issue du même nom**, en situant la
+  première par son numéro de ligne ;
+- **la consigne du modèle l'interdit**, et dit quoi faire à la place : deux cas
+  s'écrivent `si (…) alors (A); sinon (B);` — c'est presque toujours ce que la
+  phrase demande —, et un troisième cas se déclare dans
+  `ce_que_je_nai_pas_su_ecrire` plutôt que de s'inventer une branche. Refuser à
+  la lecture sans l'apprendre au modèle aurait laissé l'utilisateur devant un
+  refus qu'il n'a pas causé ;
+- **le wiki le nomme** dans « ce que le langage ne sait pas écrire ». Il disait
+  « pas de condition imbriquée » ; personne n'y reconnaît la forme qu'il vient
+  d'écrire.
+
+Une épreuve tient les trois ensemble : celle de la consigne et celle du wiki
+relancent la lecture sur cet exemple. Un interdit annoncé quelque part et pas
+appliqué est une intention (règle 12).
+
+### Le cahier des charges se garde, et la zone dit ce qu'elle est
+
+Voir `docs/utilitaires-personnels.md`, « Le cahier des charges se garde avec le
+code ». En deux mots : la zone de français s'appelle désormais « Ce que vous
+voulez dire, **ou faire** », et elle monte jusqu'à la base, sur la version — la
+`v3` répond à son cahier des charges, pas à celui de la `v5`.
+
+### La console se tire dans le sens du geste, et en hauteur
+
+- **À droite, elle faisait l'inverse du geste.** Elle est collée au bord droit et
+  sa poignée est du côté opposé à celui qui bouge : tirer vers la gauche doit
+  l'élargir. Le commentaire du code le disait déjà ; le sens n'était pas passé au
+  composant, qui ajoutait le déplacement tel quel. On tirait donc de plus en plus
+  loin en croyant s'être trompé de bord (règle 12).
+- **En bas, elle ne se tirait pas du tout.** Elle a maintenant une poignée de
+  hauteur, sur son bord haut, dans sa tête — qui est collante, de sorte que la
+  poignée reste au bord quand les lignes défilent.
+- **Aucune hauteur par défaut.** Tant qu'on n'a pas tiré, la console fait la
+  taille de ce qu'elle dit, plafonnée par la feuille de style : une console vide
+  qui prendrait 180 px du bas de l'écran volerait de la place au code pour n'y
+  rien montrer. Et la hauteur de départ du glissé **se mesure** sur ce qui est à
+  l'écran, au lieu de partir d'un nombre supposé qui ferait sauter le panneau au
+  premier pixel.
+
+Le composant partagé savait déjà tirer dans les deux sens et sur les deux axes ;
+ce qu'on n'avait jamais éprouvé, c'est **ce que `sens` et `axe` font**. Il a
+maintenant ses propres épreuves, avec un faux DOM de vingt lignes.
+
+### Les écoutes s'accumulaient à chaque frappe, et c'était insaisissable
+
+Trouvé en essayant la console au navigateur : **le bouton qui la range à droite
+ne répondait pas.**
+
+Deux branchements de cet écran se rejouent à chaque frappe — la console, parce
+que ses lignes changent ; la ligne du titre, parce que ses gestes dépendent de ce
+qu'on vient d'écrire. Tous deux tenaient sur une promesse : « une écoute part
+avec l'élément qu'elle portait ». Elle est vraie quand l'élément est remplacé, et
+**fausse quand il survit** — c'est-à-dire chaque fois que `poserLePanneau` n'a
+rien à poser, donc presque toujours.
+
+Deux écoutes étaient donc posées dès le montage : l'éditeur de code annonce un
+premier changement en se branchant, ce qui rejoue la console, et `brancher` la
+branche à nouveau juste après. Un clic basculait deux fois, et la console ne
+bougeait pas. **Une frappe de plus et elle marchait ; deux, et elle ne marchait
+plus** — de quoi chercher longtemps.
+
+L'autre moitié était plus grave : les gestes du menu partaient en autant
+d'exemplaires qu'on avait tapé de caractères. Vérifié au navigateur avant
+correction — « Tout effacer » demandait confirmation deux fois. « Faire une
+proposition » aurait ouvert autant de propositions.
+
+Le commentaire du menu mettait en garde contre exactement cela — « une écoute
+posée sur l'écran s'accumulerait à chaque `dessiner` » — et l'accumulation
+arrivait par l'autre porte. On ne compte donc plus sur la mort des éléments :
+`jeuDecoutes()` retient ce qu'il a posé et le retire avant de reposer (règle 12).

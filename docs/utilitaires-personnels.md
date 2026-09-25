@@ -517,7 +517,7 @@ bac, les mêmes gestes ; ce qui change, c'est ce qu'on montre en grand.
 | --- | --- | --- |
 | ce qu'on voit | le français à gauche, les fichiers à droite | le formulaire et ce que les règles concluent |
 | sur la ligne du titre | « Lancer » | « Faire une proposition » |
-| dans le menu | « Faire une proposition » | « Modifier » |
+| dans le menu | « Revenir à l'essai », « Faire une proposition » | « Modifier » |
 | la console | en bas ou à droite | aucune |
 
 **Un geste ne paraît qu'une fois.** « Faire une proposition » était en bouton
@@ -528,6 +528,42 @@ passe en bouton, parce que c'est le geste qui engage — et il quitte le menu.
 **Et l'on ne lance pas ce qui est lancé.** À l'essai, la réponse se refait à
 chaque champ rempli : un bouton « Lancer » dirait de faire ce qui est fait.
 
-**Le retour se fait par où l'on est venu.** Rouvrir l'outil depuis l'Atelier le
-remet à l'essai ; un bouton « Revenir à l'essai » ajouterait une bascule à tenir
-à jour pour dire ce que l'Atelier dit déjà.
+**L'aller-retour se fait par le menu, dans les deux sens.** On avait d'abord
+laissé le retour à l'Atelier : rouvrir l'outil depuis la vitrine le remet à
+l'essai, et c'était vrai. C'était aussi un détour de trois clics hors de l'écran
+pour revenir à l'écran d'à côté, et cela s'est vu à l'usage — en faisant
+l'aller-retour vingt fois. « Revenir à l'essai » est donc dans le menu, en face
+de « Modifier ».
+
+Il ne paraît que pour un utilitaire de l'établi : un brouillon qu'on n'a jamais
+enregistré n'a pas d'essai à retrouver, l'écriture est chez lui, et « Lancer »
+ouvre déjà son bac dans une fenêtre.
+
+## Le cahier des charges se garde avec le code
+
+La zone de français de l'écran s'appelait « Ce que vous voulez dire » ; elle
+s'appelle maintenant « Ce que vous voulez dire, **ou faire** ». Le mot manquait,
+et il disait tout : on n'y rédige pas une phrase, on y écrit **ce que l'outil
+doit faire**. C'est le cahier des charges de l'utilitaire.
+
+L'établi ne le gardait pas. Trois cent cinquante lignes écrites une après-midi,
+l'utilitaire enregistré, l'onglet fermé : au retour, la zone était vide. Et comme
+le seul bouton qui sache réécrire du Mdall — « Coder » — part de cette zone-là,
+rouvrir pour modifier laissait deux choix : réécrire de mémoire ce qu'on avait
+mis des heures à formuler, ou ne plus toucher à l'outil.
+
+**Il se pose sur la version, non sur la fiche.** Il aurait été plus court de le
+ranger à côté du résumé, dans l'identité de l'outil. Ç'aurait été dire qu'il
+décrit l'outil en général, alors qu'il décrit ce qu'on a écrit ce jour-là : la
+`v3` répond à son cahier des charges, pas à celui de la `v5`.
+
+Conséquence assumée : **corriger le cahier des charges sans toucher au Mdall
+monte d'une version.** C'est juste — ce qu'on a écrit a changé, et une version ne
+se réécrit jamais. Sans cette montée, le seul moyen de corriger le cahier des
+charges d'une version déjà posée serait de l'écraser.
+
+**En revanche, cela ne se propose pas comme un code modifié.** Ce qui entre dans
+la mémoire d'un projet, c'est le Mdall. Dire « v2 modifiée » pour une phrase de
+français corrigée décrirait un code différent de celui qu'on verse, et le
+comparer plus tard à l'établi ne dirait rien de juste. Les deux questions se
+posent au même endroit, et se distinguent par ce qu'on lui donne à comparer.

@@ -12,7 +12,7 @@ import {
   renderActionsDuTitre, hauteurDuCadre, HAUTEUR_MINIMALE, MARGE_DU_BAS, GESTE,
   renderTeteDeLaConsole, marquesDuChoixLogique, CLASSE_DU_CHOIX, leBacEstLa,
   MODE, PROPOSER_DIT, renderEssaiDeLutilitaire, renderTitreDuBrouillon, renderFicheDeLetabli, renderVerdictDeLetabli,
-  renderDeduitDeLetabli, renderListeDeLetabli, GESTE_DE_LETABLI
+  renderDeduitDeLetabli, renderListeDeLetabli, GESTE_DE_LETABLI, jeuDecoutes
 } from "./ecrire-en-mdall.js";
 import { ficheDuBrouillon, ceQueLenregistrementFait } from "../../../services/utilitaire-de-letabli.js";
 import { renderLignesDeCode } from "../../ui/code-mdall.js";
@@ -1308,6 +1308,13 @@ test("ouvrir un outil le met à l'essai, lancé, et la ligne du titre se rebranc
     "l'essai s'ouvrirait non lancé, et le verdict partirait à la première frappe");
   assert.match(reprendre, /\{ mode = MODE\.ESSAI \} = \{\}/,
     "l'essai doit être ce qu'on obtient sans rien demander");
+  // **Et le cahier des charges revient avec le code.** Le service sait le
+  // rendre, l'écran sait l'afficher, et entre les deux il suffisait de ne pas
+  // le passer pour qu'il se perde — sans qu'aucun rendu ni aucune fonction pure
+  // ne puisse le voir. C'est la perte qu'on vient de réparer, et elle se
+  // referait là.
+  assert.match(reprendre, /brouillonDesFichiers\(trouve\.fichiers, \{ dit: trouve\.dit \}\)/,
+    "l'outil se rouvre sans son cahier des charges");
 
   const titre = source.indexOf("function redessinerLaLigneDuTitre(racine) {");
   assert.ok(titre > 0, "redessinerLaLigneDuTitre est introuvable");
@@ -1315,4 +1322,315 @@ test("ouvrir un outil le met à l'essai, lancé, et la ligne du titre se rebranc
 
   assert.match(ligne, /brancherLaLigneDuTitre\(racine\);/,
     "la ligne se réécrit sans se rebrancher : le menu cessera de répondre");
+});
+
+/* ── Sortir du mode édition ──────────────────────────────────────────────── */
+
+test("on entre dans le code par le menu, et on en sort par le menu", () => {
+  // **L'aller-retour manquait.** On ouvrait le code par « Modifier » et l'on en
+  // sortait par l'Atelier : rouvrir l'outil depuis la vitrine le remettait à
+  // l'essai. Cela marchait, et c'était un détour de trois clics hors de l'écran
+  // pour revenir à l'écran d'à côté.
+  const ecriture = renderActionsDuTitre(POUR_LETABLI, { mode: MODE.ECRITURE, utilitaire: UN_OUTIL });
+
+  assert.ok(ecriture.includes(GESTE.ESSAYER), "on ne peut pas refermer le code");
+  assert.match(ecriture, /Revenir à l&#39;essai|Revenir à l'essai/);
+  assert.equal(ecriture.includes(GESTE.MODIFIER), false, "« Modifier » n'a pas de sens : on y est");
+
+  // Et à l'essai, l'inverse exactement : on y est, il n'y a rien à refermer.
+  const essai = renderActionsDuTitre(POUR_LETABLI, { mode: MODE.ESSAI, utilitaire: UN_OUTIL });
+  assert.equal(essai.includes(GESTE.ESSAYER), false);
+  assert.ok(essai.includes(GESTE.MODIFIER));
+});
+
+test("un brouillon qu'on n'a jamais enregistré n'a pas d'essai à retrouver", () => {
+  // L'écriture est chez lui, et « Lancer » ouvre déjà son bac dans une fenêtre.
+  // Une entrée qui renverrait à un essai inexistant montrerait une vue vide.
+  const anonyme = renderActionsDuTitre(POUR_LETABLI, { mode: MODE.ECRITURE });
+
+  assert.equal(anonyme.includes(GESTE.ESSAYER), false);
+  assert.match(anonyme, /data-brouillon-lancer/, "il reste de quoi lancer");
+});
+
+test("refermer le code remet exactement ce que reprendre un outil pose", () => {
+  // **Deux bascules qui vivent à deux endroits finissent par ne plus remettre le
+  // même état.** À l'essai, le bac **est** la vue, et il est lancé : ce drapeau
+  // est celui que le redessin ciblé relit à chaque champ rempli, et à faux le
+  // verdict se retire de l'écran à la première frappe (règle 4).
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  const debut = source.indexOf("function refermerLeCode(racine) {");
+  assert.ok(debut > 0, "refermerLeCode est introuvable");
+  const corps = source.slice(debut, source.indexOf("\n}\n", debut));
+
+  assert.match(corps, /etat\.mode = MODE\.ESSAI;/);
+  assert.match(corps, /etat\.lance = true;/,
+    "l'essai s'ouvrirait non lancé, et le verdict partirait à la première frappe");
+});
+
+/* ── Le cahier des charges, à l'écran ────────────────────────────────────── */
+
+test("la zone de français dit qu'on y écrit aussi ce qu'on veut faire", () => {
+  // « Ce que vous voulez dire » se lisait comme une consigne de rédaction. On y
+  // écrit ce que l'outil doit faire : c'est le cahier des charges.
+  const ecran = renderEcrireEnMdall(POUR_LETABLI, {});
+
+  assert.match(ecran, /Ce que vous voulez dire, ou faire/);
+});
+
+test("le cahier des charges revient dans sa zone quand on rouvre l'outil", () => {
+  // **La perte qu'on répare.** Trois cent cinquante lignes écrites une
+  // après-midi, l'outil enregistré, l'onglet fermé : la zone était vide au
+  // retour — et le seul bouton qui sache réécrire du Mdall part de là.
+  const CAHIER = "Le violet est obligatoire sur les volets en bois.\n";
+  const ecran = renderEcrireEnMdall(avecLeDit(POUR_LETABLI, CAHIER), { utilitaire: UN_OUTIL });
+
+  assert.match(ecran, /Le violet est obligatoire sur les volets en bois\./);
+  // Dans la zone, et non ailleurs : c'est elle qu'on relit et qu'on corrige.
+  const zone = ecran.slice(ecran.indexOf("data-brouillon-dit"));
+  assert.match(zone.slice(0, zone.indexOf("</textarea>")), /Le violet est obligatoire/);
+});
+
+/* ── La console : sa largeur et sa hauteur ───────────────────────────────── */
+
+test("la console du bas porte une poignée de hauteur, celle de droite non", () => {
+  // À droite, elle se tire par son bord gauche — c'est une largeur —, et deux
+  // poignées sur le même élément se disputeraient le même bord.
+  const bas = renderConsole(laConsole({ fichiers: fichiersRemplis(POUR_LETABLI) }), { volet: false });
+  assert.match(bas, /id="brouillonConsoleHauteur"/);
+  assert.match(bas, /brouillon-console__poignee/);
+
+  const droite = renderVoletDeLaConsole(laConsole({ fichiers: fichiersRemplis(POUR_LETABLI) }), { volet: true });
+  assert.doesNotMatch(droite, /brouillonConsoleHauteur/);
+  // Elle garde la sienne, celle de la largeur.
+  assert.match(droite, /id="brouillonConsoleResizer"/);
+});
+
+test("la hauteur ne se déclare qu'une fois tirée", () => {
+  // Déclarée à zéro, elle écraserait le plafond de la feuille de style par une
+  // console d'aucune hauteur. Absente, la console fait la taille de ce qu'elle
+  // dit — une console vide ne vole pas le bas de l'écran pour n'y rien montrer.
+  assert.doesNotMatch(renderEcrireEnMdall(POUR_LETABLI, {}), /--brouillon-console-height/);
+  assert.match(renderEcrireEnMdall(POUR_LETABLI, { hauteurConsole: 260 }),
+    /--brouillon-console-height:260px/);
+});
+
+/**
+ * **Cette épreuve relit le source, et le défaut qu'elle garde le justifie.**
+ *
+ * Le sens d'un glissé ne se voit dans aucun rendu : la console était tirée par
+ * son bord gauche, le commentaire le disait, et le code ne passait pas le sens
+ * au composant — le panneau rétrécissait quand la souris l'élargissait. C'est
+ * exactement la règle 12 : une consigne qu'on ne vérifie pas est une intention.
+ */
+test("les deux consoles se tirent dans le sens du geste", () => {
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  const largeur = source.indexOf("const poignee = racine.querySelector(\"#brouillonConsoleResizer\");");
+  assert.ok(largeur > 0, "la poignée de largeur est introuvable");
+  assert.match(source.slice(largeur, source.indexOf("\n}\n", largeur)), /^\s*sens: -1,$/m,
+    "la console de droite s'élargit quand la souris la rétrécit");
+
+  const hauteur = source.indexOf("function brancherLaHauteurDeLaConsole(racine) {");
+  assert.ok(hauteur > 0, "la poignée de hauteur est introuvable");
+  const corps = source.slice(hauteur, source.indexOf("\n}\n", hauteur));
+  assert.match(corps, /axe: "y",/, "une hauteur se tire de haut en bas");
+  assert.match(corps, /^\s*sens: -1,$/m, "la console du bas grandit quand on monte sa poignée");
+  // **La hauteur de départ se mesure**, elle ne se retient pas : tant qu'on n'a
+  // pas tiré, la console fait la taille de ce qu'elle dit, et partir d'un nombre
+  // supposé ferait sauter le panneau au premier pixel de glissé.
+  assert.match(corps, /etat\.hauteurConsole \|\| Math\.round\(bande\.offsetHeight\)/);
+});
+
+/* ── Les écoutes qui se rejouent à la frappe ──────────────────────────────────
+ *
+ * **Le défaut était double, et insaisissable à la relecture.** Deux
+ * branchements de cet écran se rejouent à chaque frappe : la console, parce que
+ * ses lignes changent ; la ligne du titre, parce que ses gestes dépendent de ce
+ * qu'on vient d'écrire. Tous deux tenaient sur « une écoute part avec l'élément
+ * qu'elle portait » — vrai quand l'élément est remplacé, faux quand il survit,
+ * et il survit chaque fois que `poserLePanneau` n'a rien à poser.
+ *
+ * À l'écran : le bouton qui range la console à droite ne répondait pas (deux
+ * écoutes dès le montage, donc un clic basculait deux fois), et les gestes du
+ * menu partaient en autant d'exemplaires qu'on avait tapé de caractères.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Un élément qui retient ses écoutes, sait les compter, et compte les retraits. */
+function uneCible() {
+  const posees = [];
+  const cible = {
+    /**
+     * **Les retraits se comptent, et pas seulement ce qui reste.** Retirer deux
+     * fois la même écoute est sans effet : un jeu qui repasserait sur tout ce
+     * qu'il a jamais posé laisserait le même compte final, et l'on ne verrait
+     * rien. Ce qu'on veut voir, c'est qu'il ne repasse pas.
+     */
+    retraits: 0,
+    addEventListener: (quoi, fait) => posees.push({ quoi, fait }),
+    removeEventListener: (quoi, fait) => {
+      cible.retraits += 1;
+      const rang = posees.findIndex((une) => une.quoi === quoi && une.fait === fait);
+      if (rang >= 0) posees.splice(rang, 1);
+    },
+    declencher: (quoi, evenement = {}) => {
+      // Une copie : une écoute qui se débranche pendant la diffusion ne doit pas
+      // décaler celles qui suivent.
+      for (const une of [...posees]) if (une.quoi === quoi) une.fait(evenement);
+    },
+    combien: () => posees.length
+  };
+  return cible;
+}
+
+test("un jeu d'écoutes rejoué ne laisse qu'un exemplaire de chaque geste", () => {
+  // C'est tout le défaut : sans le `defaire`, un clic sur « ranger la console à
+  // droite » basculait deux fois et la console ne bougeait pas.
+  const cible = uneCible();
+  const jeu = jeuDecoutes();
+  let comptes = 0;
+
+  for (const _ of [1, 2, 3]) {
+    jeu.defaire();
+    jeu.poser(cible, "click", () => { comptes += 1; });
+  }
+
+  assert.equal(cible.combien(), 1, "les écoutes s'accumulent");
+  cible.declencher("click");
+  assert.equal(comptes, 1, "un clic a déclenché plusieurs fois le même geste");
+});
+
+test("sans le jeu, elles s'accumulent — ce qui dit ce qu'il répare", () => {
+  // Le contre-exemple est ici parce que l'épreuve d'au-dessus ne prouve rien
+  // seule : une fausse cible qui n'ajouterait jamais rien la passerait aussi.
+  const cible = uneCible();
+  let comptes = 0;
+  for (const _ of [1, 2, 3]) cible.addEventListener("click", () => { comptes += 1; });
+
+  cible.declencher("click");
+  assert.equal(comptes, 3);
+});
+
+test("un jeu retire tout ce qu'il a posé, et rien d'autre", () => {
+  const console_ = uneCible();
+  const titre = uneCible();
+  const jeu = jeuDecoutes();
+  const autre = jeuDecoutes();
+
+  jeu.poser(console_, "click", () => {});
+  jeu.poser(titre, "ghaction:action", () => {});
+  autre.poser(titre, "click", () => {});
+
+  jeu.defaire();
+  assert.equal(console_.combien(), 0);
+  // Celle de l'autre jeu reste : deux jeux se défont séparément, sinon
+  // redessiner la console emporterait les gestes du titre.
+  assert.equal(titre.combien(), 1);
+});
+
+test("défaire ne repasse pas sur ce qu'il a déjà retiré", () => {
+  // **Le compte final ne suffit pas à le dire.** Un jeu qui garderait sa liste
+  // après l'avoir défaite retirerait à nouveau, à chaque frappe, tout ce qu'il a
+  // jamais posé — sans effet visible, puisque retirer deux fois ne fait rien.
+  // Le dommage est ailleurs : la liste grossit d'une entrée par frappe, et
+  // chaque entrée retient l'élément détaché qu'elle visait.
+  const cible = uneCible();
+  const jeu = jeuDecoutes();
+
+  jeu.poser(cible, "click", () => {});
+  jeu.defaire();
+  jeu.poser(cible, "click", () => {});
+  jeu.defaire();
+  jeu.poser(cible, "click", () => {});
+  jeu.defaire();
+
+  assert.equal(cible.retraits, 3, "le jeu repasse sur des écoutes déjà retirées");
+  assert.equal(cible.combien(), 0);
+});
+
+test("défaire deux fois ne retire pas ce qu'on vient de poser", () => {
+  // Un `defaire` gardait sa liste : appelé deux fois, le second retirait
+  // l'écoute posée entre les deux.
+  const cible = uneCible();
+  const jeu = jeuDecoutes();
+
+  jeu.defaire();
+  jeu.poser(cible, "click", () => {});
+  jeu.defaire();
+  jeu.poser(cible, "click", () => {});
+  jeu.defaire();
+
+  assert.equal(cible.combien(), 0);
+});
+
+test("une cible absente ne pose rien, et ne fait pas tomber l'écran", () => {
+  // « Lancer » n'existe pas à l'essai, « Faire une proposition » pas à
+  // l'écriture : le branchement passe sur des cibles absentes à chaque fois.
+  const jeu = jeuDecoutes();
+  jeu.poser(null, "click", () => {});
+  jeu.poser(undefined, "click", () => {});
+  jeu.defaire();
+});
+
+test("les deux branchements rejoués commencent par se défaire", () => {
+  // **Aucun rendu ne montre une écoute en double.** Ce défaut ne se voyait qu'à
+  // l'usage — et il se voyait mal : une frappe de plus et le bouton marchait,
+  // deux et il ne marchait plus.
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  for (const [quoi, jeu] of [
+    ["function brancherLaConsole(racine) {", "ecoutesDeLaConsole"],
+    ["function brancherLaLigneDuTitre(racine) {", "ecoutesDuTitre"]
+  ]) {
+    const debut = source.indexOf(quoi);
+    assert.ok(debut > 0, `${quoi} est introuvable`);
+    const corps = source.slice(debut, source.indexOf("\n}\n", debut));
+
+    assert.match(corps, new RegExp(`${jeu}\\.defaire\\(\\);`),
+      `${quoi} rejoué laisserait ses écoutes derrière lui`);
+    // Et plus une seule écoute posée à la main : une seule suffirait à ramener
+    // le défaut, et elle serait la dernière qu'on penserait à regarder.
+    assert.doesNotMatch(corps, /\?\.addEventListener\(/, quoi);
+    assert.doesNotMatch(corps, /^\s*\w+\.addEventListener\(/m, quoi);
+  }
+
+  // **Et ce sont bien deux jeux, pas deux noms pour le même.** La console
+  // branche la ligne du titre **après** avoir posé ses propres écoutes : un seul
+  // jeu partagé, et le `defaire` du titre retirerait ce que la console vient de
+  // poser — le bouton de place et les renvois de la console mourraient à chaque
+  // redessin. L'épreuve d'au-dessus ne le verrait pas : les deux noms y sont
+  // toujours écrits.
+  assert.match(source, /const ecoutesDeLaConsole = jeuDecoutes\(\);/);
+  assert.match(source, /const ecoutesDuTitre = jeuDecoutes\(\);/);
+});
+
+test("le cahier des charges fait l'aller-retour entier, sans trou au milieu", () => {
+  // **Trois maillons, et aucun rendu ne montre les deux du milieu.** Le service
+  // pur sait porter le cahier des charges, la base sait l'écrire et le relire,
+  // l'écran sait l'afficher — et il suffisait que l'écran ne le passe pas pour
+  // qu'il se perde entre les deux. Chacun des trois s'éprouve chez lui ; le
+  // câblage, lui, ne s'éprouvait nulle part, et c'est précisément la perte qu'on
+  // vient de réparer.
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  // Il monte : ce qu'on envoie à l'établi.
+  const garde = source.indexOf("async function garderSurLetabli(racine) {");
+  assert.ok(garde > 0, "garderSurLetabli est introuvable");
+  assert.match(source.slice(garde, source.indexOf("\n}\n", garde)), /^\s*dit: fiche\.dit$/m,
+    "on enregistre l'utilitaire sans son cahier des charges");
+
+  // Il redescend : ce qu'on remet dans la zone. L'autre épreuve le dit aussi,
+  // sur `reprendreLutilitaire` ; les deux bouts se lisent ici ensemble, parce
+  // que c'est l'aller **et** le retour qui font la conservation.
+  const reprendre = source.indexOf("export function reprendreLutilitaire");
+  assert.match(source.slice(reprendre, source.indexOf("\n}\n", reprendre)),
+    /brouillonDesFichiers\(trouve\.fichiers, \{ dit: trouve\.dit \}\)/,
+    "on rouvre l'utilitaire sans son cahier des charges");
+
+  // Et les deux verdicts de la fiche comparent la même chose que la base : sans
+  // cela, l'écran annoncerait « inchangé » là où la base monte une version.
+  assert.equal(
+    (source.match(/ceQueLenregistrementFait\(etat\.utilitaire, fiche\.fichiers, fiche\.dit\)/g) ?? []).length,
+    2, "un des deux verdicts ignore le cahier des charges"
+  );
 });

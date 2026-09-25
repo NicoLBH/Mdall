@@ -617,3 +617,94 @@ test("un nom passé en argument n'est pas un texte cité", () => {
   assert.ok(jetons.some((j) => j.type === "nom-local" && j.texte === "Profondeur hors gel à retenir"));
   assert.ok(!jetons.some((j) => j.type === "valeur"));
 });
+
+test("« sinon si » se refuse, plutôt que de conclure une phrase", () => {
+  // Le défaut tel qu'il s'est vu : un utilitaire de TVA marchait pour
+  // « existant » et pas pour « neuf ». La ligne `sinon si (…)` était lue comme
+  // une conclusion dont la valeur était le texte `si (Type de TVA = "neuf")` —
+  // la fonction concluait une phrase au lieu d'un taux, et rien ne le disait.
+  const lu = lireUnFichier([
+    "fonction Taux de TVA(zones, Type de TVA) {",
+    '   si (Type de TVA = "existant")',
+    "   alors (5,5 %);",
+    '   sinon si (Type de TVA = "neuf")',
+    "   alors (20 %);",
+    "}"
+  ].join("\n"));
+
+  const chaine = lu.refus.find((un) => un.ligne === 4);
+  assert.ok(chaine, "« sinon si » est passé sans un mot");
+  assert.match(chaine.raison, /« sinon si » n'existe pas/);
+
+  // Et surtout : la fonction ne conclut plus une phrase.
+  assert.equal(lu.blocs[0].sinon, "");
+});
+
+test("une seconde issue du même nom se refuse en situant la première", () => {
+  // Elle écrasait la première sans un mot : la fonction concluait ce qu'on
+  // avait écrit en dernier, et le fichier avait l'air juste.
+  const lu = lireUnFichier([
+    "fonction Taux de TVA(zones, Type de TVA) {",
+    '   si (Type de TVA = "existant")',
+    "   alors (5,5 %);",
+    "   alors (20 %);",
+    "}"
+  ].join("\n"));
+
+  const double = lu.refus.find((un) => un.ligne === 4);
+  assert.ok(double, "la seconde conclusion est passée sans un mot");
+  assert.match(double.raison, /déjà posé ligne 3/);
+
+  // La première tient : c'est celle qu'on a écrite en connaissance de cause.
+  assert.equal(lu.blocs[0].alors, "5,5 %");
+});
+
+test("« alors » et « sinon » se posent chacun une fois, dans la même fonction", () => {
+  // Le refus ne doit pas mordre sur la forme juste : deux issues de noms
+  // différents sont ce qu'une règle a de plus ordinaire.
+  const lu = lireUnFichier([
+    "fonction Taux de TVA(zones, Type de TVA) {",
+    '   si (Type de TVA = "existant")',
+    "   alors (5,5 %);",
+    "   sinon (20 %);",
+    "}"
+  ].join("\n"));
+
+  assert.deepEqual(lu.refus, []);
+  assert.equal(lu.blocs[0].alors, "5,5 %");
+  assert.equal(lu.blocs[0].sinon, "20 %");
+});
+
+test("deux fonctions concluent chacune la sienne", () => {
+  // La mémoire de « déjà posé » appartient au bloc, pas au fichier : sans cela
+  // le second `alors` du fichier serait refusé comme un doublon du premier.
+  const lu = lireUnFichier([
+    "fonction Taux de TVA(zones, Type de TVA) {",
+    '   si (Type de TVA = "existant")',
+    "   alors (5,5 %);",
+    "}",
+    "",
+    "fonction Taux de taxe de séjour(zones, Catégorie) {",
+    '   si (Catégorie = "hôtel")',
+    "   alors (2 %);",
+    "}"
+  ].join("\n"));
+
+  assert.deepEqual(lu.refus, []);
+  assert.equal(lu.blocs.length, 2);
+  assert.equal(lu.blocs[0].alors, "5,5 %");
+  assert.equal(lu.blocs[1].alors, "2 %");
+});
+
+test("le bloc lu ne porte pas la mémoire de lecture des issues", () => {
+  // `conclue` sert à refuser la seconde ; sorti du bloc, il finirait versé en
+  // mémoire et lu comme quelque chose que la règle affirme.
+  const lu = lireUnFichier([
+    "fonction Taux de TVA(zones, Type de TVA) {",
+    '   si (Type de TVA = "existant")',
+    "   alors (5,5 %);",
+    "}"
+  ].join("\n"));
+
+  assert.ok(!("conclue" in lu.blocs[0]), "la mémoire de lecture ressort du bloc");
+});

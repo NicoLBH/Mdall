@@ -14,7 +14,7 @@ import {
   provenanceDuBrouillon, refusDeLaBase, uneVersionPlusRecente,
   sortiesDeLutilitaire, utilitaireDeLetabli
 } from "./utilitaire-de-letabli.js";
-import { brouillonNeuf, avecLeFichier, fichierOuvert } from "./brouillon-mdall.js";
+import { brouillonNeuf, avecLeDit, avecLeFichier, fichierOuvert } from "./brouillon-mdall.js";
 import { RAYONS } from "./catalogue-de-latelier.js";
 import { UTILITAIRES } from "./catalogue-de-latelier.js";
 
@@ -414,4 +414,86 @@ test("l'outil se nomme par ce que l'établi porte aujourd'hui", () => {
   // l'outil tel qu'on le retrouvera, pas tel qu'il s'appelait.
   const renomme = uneVersionPlusRecente(TENUE, [{ id: "abc", nom: "Volets bois et PVC", version: "3" }]);
   assert.equal(renomme.nom, "Volets bois et PVC");
+});
+
+/* ── Le cahier des charges ───────────────────────────────────────────────────
+ *
+ * La zone de français est le cahier des charges de l'utilitaire. Elle ne montait
+ * pas jusqu'à la base : trois cent cinquante lignes écrites une après-midi,
+ * l'utilitaire enregistré, l'onglet fermé — et au retour, la zone était vide.
+ * Comme le seul bouton qui sache réécrire du Mdall part de cette zone, rouvrir
+ * pour modifier ne laissait que deux choix : réécrire de mémoire, ou ne plus
+ * toucher à l'outil.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Un cahier des charges, avec sa ligne vide de fin — on en laisse en écrivant. */
+const CAHIER = "Le prix TTC, selon le type de travaux.\nExistant : 5,5 %. Neuf : 20 %.\n";
+
+test("la fiche emporte le cahier des charges, sans le rogner", () => {
+  // **Sans le rogner** : une zone de français se termine souvent par une ligne
+  // vide qu'on a laissée là en écrivant. La couper ferait monter une version
+  // pour un retour à la ligne.
+  const fiche = ficheDuBrouillon(avecLeDit(BROUILLON, CAHIER), { nom: "TVA", resume: "Le taux." });
+
+  assert.equal(fiche.dit, CAHIER);
+  // Et elle ne l'invente pas quand il n'y en a pas.
+  assert.equal(ficheDuBrouillon(BROUILLON, { nom: "TVA" }).dit, "");
+});
+
+test("reprendre un utilitaire rend son cahier des charges avec son code", () => {
+  const repris = brouillonDesFichiers(fichiersDeLutilitaire(BROUILLON), { dit: CAHIER });
+
+  assert.equal(repris.dit, CAHIER);
+  // Le code revient comme avant : le cahier des charges s'ajoute, il ne remplace
+  // rien.
+  assert.equal(repris.fichiers.find((un) => un.nom === "essai.ref").contenu, REGLES);
+});
+
+test("un utilitaire sans cahier des charges se reprend sur une zone vide", () => {
+  // Les versions posées avant qu'on le garde n'en ont pas. Une zone vide se lit
+  // comme une zone vide ; inventer une phrase ferait croire qu'on a écrit
+  // quelque chose qu'on n'a pas écrit (règle 5).
+  assert.equal(brouillonDesFichiers(fichiersDeLutilitaire(BROUILLON)).dit, "");
+  assert.equal(brouillonDesFichiers([], { dit: undefined }).dit, "");
+});
+
+test("un outil de l'établi porte le cahier des charges de sa version", () => {
+  const outil = utilitaireDeLetabli(
+    { id: "11111111-1111-4111-8111-111111111111", nom: "TVA", version: 3 },
+    fichiersDeLutilitaire(BROUILLON), CAHIER
+  );
+
+  assert.equal(outil.dit, CAHIER);
+  // Et jamais `undefined` : la zone lirait « undefined » à l'écran.
+  assert.equal(utilitaireDeLetabli({ id: "x", nom: "TVA" }, []).dit, "");
+});
+
+test("corriger le cahier des charges monte d'une version", () => {
+  // **Ce qu'on a écrit a changé.** Une version ne se réécrit jamais : sans cette
+  // montée, le seul moyen de corriger le cahier des charges d'une version déjà
+  // posée serait de l'écraser.
+  const fichiers = fichiersDeLutilitaire(BROUILLON);
+  const courant = { id: "un-outil", version: 2, fichiers, dit: CAHIER };
+
+  assert.deepEqual(ceQueLenregistrementFait(courant, fichiers, CAHIER),
+    { quoi: "inchange", version: 2 });
+  assert.deepEqual(ceQueLenregistrementFait(courant, fichiers, `${CAHIER}Et les frais de port.\n`),
+    { quoi: "monte", version: 2, versVersion: 3 });
+});
+
+test("corriger le cahier des charges ne se propose pas comme un code modifié", () => {
+  // **Seul le Mdall entre dans le projet.** Dire « v2 modifiée » pour une phrase
+  // de français corrigée décrirait un code différent de celui qu'on verse — et
+  // le comparer plus tard à l'établi ne dirait rien de juste.
+  const outil = {
+    id: "un-outil", nom: "TVA", version: "2",
+    fichiers: fichiersDeLutilitaire(BROUILLON), dit: CAHIER
+  };
+
+  const ditAutrement = avecLeDit(BROUILLON, `${CAHIER}Et les frais de port.\n`);
+  assert.equal(provenanceDuBrouillon(outil, ditAutrement).modifie, false);
+
+  // Le code retouché, lui, se signale.
+  const codeAutrement = avecLeDit(avecLeFichier(BROUILLON, "essai.ref", `${REGLES}\n`), CAHIER);
+  assert.equal(provenanceDuBrouillon(outil, codeAutrement).modifie, true);
 });
