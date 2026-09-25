@@ -32,6 +32,7 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { morceauxSurlignes } from "../../services/memoire-recherche-texte.js";
 import { resolutionDuSujet, cleDuSujet, typeDeLaValeur } from "../../services/memoire-identifiants.js";
+import { profondeursDuRetrait, niveauxDesPaires } from "../../services/mdall-retrait.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -43,13 +44,23 @@ const texte = (valeur) => String(valeur ?? "").trim();
  * transforme la mémoire en quelque chose qui se vérifie en la lisant — une
  * condition qui porte sur une donnée jamais versée se voit sans la chercher.
  */
-export function renderJetons(jetons = [], { declares = null, variables = null, mot = "" } = {}) {
+export function renderJetons(jetons = [], { declares = null, variables = null, mot = "", paires = null } = {}) {
   return jetons
-    .map((entree) => {
+    .map((entree, index) => {
       const resolution = entree.type === "sujet"
         ? resolutionDuSujet(entree.texte, { jetons, declares })
         : "";
-      const classes = `mdall-${escapeHtml(entree.type)}${resolution ? ` mdall-sujet--${resolution}` : ""}`;
+      /**
+       * La teinte de la paire, quand l'appelant l'a calculée.
+       *
+       * Une ouverture et sa fermeture portent la même : sans elle, retrouver
+       * quelle `)` répond à quelle `(` se fait en comptant à voix basse, et
+       * l'on se trompe d'un cran une fois sur trois. Une fermeture orpheline
+       * n'en prend aucune plutôt qu'une fausse.
+       */
+      const teinte = paires?.get?.(index);
+      const classes = `mdall-${escapeHtml(entree.type)}${resolution ? ` mdall-sujet--${resolution}` : ""}${
+        teinte === undefined ? "" : ` mdall-paire mdall-paire--${teinte}`}`;
       const dit = entree.type === "sujet" ? contexteDuSujet(entree.texte, { resolution, variables }) : "";
       // Le mot cherché se surligne **dans** son jeton : la coloration reste
       // celle du langage, et le surlignage se pose par-dessus. Surligner la
@@ -132,22 +143,28 @@ export function contexteDuSujet(sujet, { resolution = "", variables = null } = {
  * @param {{rang?: number, jetons: object[]}[]} lignes
  * @param {object} [options] passées telles quelles à `renderJetons`
  */
-export function renderLignesDeCode(lignes = [], options = {}) {
+export function renderLignesDeCode(lignes = [], { className = "", ...options } = {}) {
   const lues = Array.isArray(lignes) ? lignes : [];
   if (!lues.length) return "";
+
+  // **Les filets et les paires se calculent sur le fichier entier**, et non
+  // ligne à ligne : un cran dit l'étendue d'un bloc, et une borne s'apparie à
+  // une jumelle qui est souvent trente lignes plus bas.
+  const crans = profondeursDuRetrait(lues);
+  const paires = niveauxDesPaires(lues);
 
   const corps = lues.map((ligne, rang) => `
     <div class="memoire-ligne">
       <span class="memoire-ligne__num">${Number(ligne?.rang) || rang + 1}</span>
-      <span class="memoire-ligne__code">${
+      <span class="memoire-ligne__code code-retrait" style="--mdall-crans:${crans[rang] ?? 0}">${
         // Une ligne vide garde sa hauteur : sans l'espace insécable elle se
         // replierait à zéro pixel, et les numéros ne tomberaient plus en face.
-        renderJetons(ligne?.jetons ?? [], options) || "&nbsp;"
+        renderJetons(ligne?.jetons ?? [], { ...options, paires: paires.get(rang) }) || "&nbsp;"
       }</span>
     </div>
   `).join("");
 
-  return `<div class="fichier-code">${corps}</div>`;
+  return `<div class="fichier-code${className ? ` ${className}` : ""}">${corps}</div>`;
 }
 
 /**

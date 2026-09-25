@@ -35,6 +35,7 @@ import {
   lignesQuiPortent, rangVoisin, passagesAutourDe, phraseCherchee, porteLaPhrase
 } from "../services/memoire-recherche-texte.js";
 import { renderBoutonHaut } from "./ui/bouton-haut.js";
+import { profondeursDuRetrait, niveauxDesPaires } from "../services/mdall-retrait.js";
 import { renderJetons, contexteDuSujet } from "./ui/code-mdall.js";
 import {
   blocDAffirmation, blocDeRegle, blocDeFonction, lignesDeTableau,
@@ -1358,7 +1359,15 @@ export function renderFichier(fichier, {
     : [];
   const courant = trouves.includes(Number(recherche?.rang)) ? Number(recherche.rang) : (trouves[0] ?? null);
 
-  const corps = lignes.map((ligne) => {
+  // **Les filets et les paires, sur le fichier entier.** Un cran dit l'étendue
+  // d'un bloc, et une borne s'apparie à une jumelle qui est souvent trente
+  // lignes plus bas : les calculer ligne à ligne ne dirait rien. C'est le même
+  // calcul que dans l'espace de raisonnement, la zone d'écriture et les
+  // Changements — un seul, et partagé (règle 10).
+  const crans = profondeursDuRetrait(lignes);
+  const paires = niveauxDesPaires(lignes);
+
+  const corps = lignes.map((ligne, rangDansLeFichier) => {
     const porteuse = ligne.assertion ?? ligneDuVersement(lignes, ligne.versement);
     const blame = porteuse ? blameDeLaLigne(porteuse, auteurs) : null;
     const replie = pliable && ligne.ouvre && plies.has(ligne.ouvre);
@@ -1418,7 +1427,10 @@ export function renderFichier(fichier, {
               : `<span class="memoire-ligne__caret" aria-hidden="true"></span>`
             : ""
         }
-        <span class="memoire-ligne__code">${renderJetons(ligne.jetons, { declares, variables, mot: cherche })}${
+        <span class="memoire-ligne__code code-retrait" style="--mdall-crans:${crans[rangDansLeFichier] ?? 0}">${
+          renderJetons(ligne.jetons, {
+            declares, variables, mot: cherche, paires: paires.get(rangDansLeFichier)
+          })}${
           ligne.ouvre
             ? `<span class="memoire-ligne__replie" aria-hidden="true">${svgIcon("fold", { className: "octicon" })}</span>`
             : ""

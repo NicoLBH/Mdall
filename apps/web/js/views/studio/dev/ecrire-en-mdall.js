@@ -39,11 +39,14 @@
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { svgIcon } from "../../../ui/icons.js";
 import { renderSaisieDeCode, brancherLaSaisieDeCode } from "../../ui/saisie-de-code.js";
+import { brancherLesPropositions } from "../../ui/propositions-de-saisie.js";
+import { contexteDuBrouillon } from "../../../services/mdall-completion.js";
 import { renderSideResizer, bindSideResizer } from "../../ui/side-resizer.js";
 import { renderGhActionButton, bindGhActionButtons } from "../../ui/gh-split-button.js";
 import { renderJetons } from "../../ui/code-mdall.js";
 import { jetonsDeLaLigne } from "../../../services/memoire-en-lecture.js";
 import { jetonsEcrits } from "../../../services/mdall-en-ecriture.js";
+import { niveauxDesPaires } from "../../../services/mdall-retrait.js";
 import {
   brouillonNeuf, fichierOuvert, avecLeFichier, avecLeDit, ouvertSur, brouillonEcrit, langageDuFichier,
   fichiersRemplis, brouillonRange, brouillonRelu
@@ -131,8 +134,18 @@ export function lignesDuFichier(contenu = "") {
  * (règle 12).
  */
 export function colorerDuMdall(contenu = "") {
-  return `${String(contenu ?? "").split("\n")
-    .map((ligne) => renderJetons(jetonsEcrits(ligne)))
+  const lignes = String(contenu ?? "").split("\n").map((ligne) => ({ jetons: jetonsEcrits(ligne) }));
+
+  /**
+   * **Les paires se calculent sur le fichier entier**, et non ligne à ligne :
+   * une `(` s'apparie à une `)` qui est souvent trente lignes plus bas. C'est
+   * le même calcul que dans la Mémoire, les Changements et le raisonnement —
+   * un seul, et partagé (règle 10).
+   */
+  const paires = niveauxDesPaires(lignes);
+
+  return `${lignes
+    .map((ligne, rang) => renderJetons(ligne.jetons, { paires: paires.get(rang) }))
     .join("\n")}\n`;
 }
 
@@ -228,7 +241,12 @@ export function renderVoletDuCode(brouillon = null) {
         contenu: fichier.contenu,
         marque: "data-brouillon-code",
         invite: "fonction Vitesse de référence(zones, Zone de vent) {\n   …\n}",
-        colorer: colorerDuMdall
+        colorer: colorerDuMdall,
+        // **On écrit du Mdall ici, et personne ne connaît la grammaire par
+        // cœur.** La chercher dans le wiki à chaque ligne reviendrait à dire
+        // que seul le modèle sait écrire — et c'est précisément ce que cet
+        // écran existe pour démentir (fondamental 13).
+        propose: true
       })}
     </div>
   `;
@@ -879,9 +897,11 @@ function mesurerLaHauteur(racine) {
 let debrancherSaisie = null;
 let debrancherPoignee = null;
 let debrancherConsole = null;
+let debrancherPropositions = null;
 
 function dessiner(racine) {
   debrancherSaisie?.();
+  debrancherPropositions?.();
   debrancherPoignee?.();
   mesurerLaHauteur(racine);
 
@@ -934,6 +954,7 @@ function redessinerLeVolet(racine) {
   if (!ancien) return;
 
   debrancherSaisie?.();
+  debrancherPropositions?.();
   const neuf = document.createElement("div");
   neuf.innerHTML = renderVoletDuCode(etat.brouillon);
   if (neuf.firstElementChild) ancien.replaceWith(neuf.firstElementChild);
@@ -1224,6 +1245,25 @@ function brancherLaConsole(racine) {
 
 function brancherLeVolet(racine) {
   const zone = racine.querySelector(".brouillon-volet .saisie-code");
+
+  debrancherPropositions?.();
+  debrancherPropositions = zone
+    ? brancherLesPropositions(zone, {
+      /**
+       * Le contexte est demandé **à chaque frappe**, et non retenu ici : on
+       * vient peut-être d'écrire la déclaration qu'on veut voir proposée, et
+       * un contexte pris au branchement daterait d'avant.
+       */
+      contexte: () => {
+        const saisie = zone.querySelector(".saisie-code__zone");
+        return contexteDuBrouillon(fichiersRemplis(etat.brouillon), {
+          contenu: saisie?.value ?? "",
+          position: saisie?.selectionStart ?? 0
+        });
+      }
+    })
+    : null;
+
   debrancherSaisie = zone
     ? brancherLaSaisieDeCode(zone, {
       // **Sans lui, on écrivait en noir sur noir.** Le rendu posait bien la
