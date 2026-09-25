@@ -138,3 +138,30 @@ test("le navigateur n'envoie jamais de numéro de version", () => {
   assert.doesNotMatch(SOURCE, /p_version/);
   assert.doesNotMatch(SOURCE, /version:/);
 });
+
+test("un refus de la base remonte avec son corps, et non comme un silence", () => {
+  // **Le défaut que ça répare.** Un `409` — un nom déjà pris — se perdait dans
+  // un `catch` qui rendait `null`, et l'écran disait « réessayez ». Réessayer
+  // échouait exactement pareil : rien dans l'écran ne pouvait dire qu'il
+  // suffisait de changer trois lettres.
+  assert.match(SOURCE, /erreur\.dit = await reponse\.json\(\)/,
+    "le corps de l'erreur est jeté : personne ne saura ce que la base a refusé");
+  assert.match(SOURCE, /refusDeLaBase\(erreur\?\.dit\)/);
+
+  // Et l'enregistrement rend un refus nommé, jamais `null` tout court : « ça
+  // n'a pas marché » n'est pas une réponse.
+  const debut = SOURCE.indexOf("export async function enregistrerSurLetabli");
+  const garder = SOURCE.slice(debut, SOURCE.indexOf("\n}\n", debut));
+  assert.doesNotMatch(garder, /return null;/);
+  assert.match(garder, /ok: true, utilitaire/);
+  assert.match(garder, /ok: false, motif:/);
+});
+
+test("la lecture, elle, rend toujours null ou une liste", () => {
+  // Les deux questions ne se posent pas pareil : une liste qu'on n'a pas pu
+  // lire n'a pas de motif à donner — on ne sait pas, et c'est tout.
+  const debut = SOURCE.indexOf("export async function listerLetabli");
+  const lister = SOURCE.slice(debut, SOURCE.indexOf("\n}\n", debut));
+  assert.match(lister, /return null;/);
+  assert.doesNotMatch(lister, /motif/);
+});

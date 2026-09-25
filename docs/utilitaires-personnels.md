@@ -173,6 +173,34 @@ mémoire, pas dans le cerveau, pas dans les recherches du projet.
 - « Reprendre un utilitaire… », dans le même menu, ouvre l'établi et remet ses
   fichiers dans l'écran. Il demande avant d'écraser un brouillon en cours.
 
+### Ce qu'on n'avait pas vu, et qui s'est vu à l'usage
+
+**Un nom déjà pris n'est pas une panne.** La table porte `unique (owner_id,
+nom)` ; enregistrer un second utilitaire du même nom rendait donc un `409` que
+le module avalait, et l'écran disait « il n'a pas pu être enregistré,
+réessayez ». Réessayer échouait exactement pareil : on cherchait une panne de
+réseau là où il suffisait de changer trois lettres.
+
+Trois choses en découlent, et elles valent au-delà de l'établi :
+
+- **Ce que la base refuse se rapporte, il ne s'avale pas.** L'appel emporte le
+  corps de l'erreur avec l'échec, et l'enregistrement rend un refus **nommé** :
+  « ça n'a pas marché » n'est pas une réponse.
+- **On regarde quelle unicité a été heurtée**, pas seulement le code `23505`.
+  Deux existent : le nom, et le numéro d'une version. La seconde ne se heurte
+  qu'en cas de course, et dire « ce nom est pris » enverrait renommer un outil
+  dont le nom n'a rien fait (règle 5).
+- **On le dit avant le clic quand on le sait.** L'établi se lit pendant qu'on
+  remplit la fiche, et le nom pris s'annonce dès la frappe. À `null` — pas
+  encore lu, ou lecture ratée — on ne bloque rien : la base tranchera, c'est
+  elle qui porte la contrainte. Et la comparaison est la sienne : le nom rogné,
+  la casse comprise, sinon l'écran refuserait un nom que la base accepte.
+
+**Un refus ne se dit pas deux fois.** Le clic échoue, l'établi est relu dans la
+foulée, et la fiche sait désormais le dire d'elle-même : garder les deux
+phrases faisait chercher deux problèmes là où il n'y en a qu'un. Et après un
+enregistrement réussi, l'écran cesse de parler du prochain clic.
+
 ### Ce que ce lot a appris
 
 **Le numéro de version ne se calcule pas dans le navigateur.** Lu puis écrit

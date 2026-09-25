@@ -64,8 +64,9 @@ import {
 } from "../../ui/fenetre-de-details.js";
 import { ouvrirLeWikiMdall } from "../../ui/wiki-mdall.js";
 import {
-  MANQUE, PHRASE_DU_MANQUE, ficheDuBrouillon, brouillonDesFichiers,
-  ceQueLenregistrementFait, phraseDeLenregistrement, provenanceDuBrouillon, rayonDeLutilitaire
+  MANQUE, PHRASE_DU_MANQUE, PHRASE_DU_REFUS, REFUS_DE_LETABLI, ficheDuBrouillon,
+  brouillonDesFichiers, ceQueLenregistrementFait, phraseDeLenregistrement,
+  provenanceDuBrouillon, rayonDeLutilitaire
 } from "../../../services/utilitaire-de-letabli.js";
 import { NOM_DU_RAYON, RAYONS } from "../../../services/catalogue-de-latelier.js";
 // **L'établi se charge à l'usage.** `etabli-supabase.js` importe `auth.js`, qui
@@ -852,13 +853,31 @@ export function renderDeduitDeLetabli(fiche = null) {
 export function renderVerdictDeLetabli(fiche = null, { quoi = null, garde = null } = {}) {
   const manques = fiche?.manques ?? [];
 
+  /**
+   * **Ce qui vient d'arriver passe devant ce qui arriverait.** Juste après un
+   * enregistrement réussi, annoncer « le texte n'a pas changé, il restera en
+   * v1 » fait douter de ce qu'on vient de lire : on parle du prochain clic, et
+   * rien ne le dit. Un échec, lui, garde ce qui manque sous les yeux — c'est
+   * précisément ce qu'il faut corriger.
+   */
+  const fait = garde?.ok === true;
+
+  /**
+   * **Un refus ne se dit pas deux fois.** Le clic échoue parce que le nom est
+   * pris ; l'établi est relu dans la foulée, et la fiche sait désormais le dire
+   * d'elle-même. Garder les deux phrases affichait la même chose en double, et
+   * faisait chercher deux problèmes là où il n'y en a qu'un. Ce qu'il faut
+   * corriger l'emporte sur ce qui vient d'échouer.
+   */
+  const redit = garde?.ok === false && manques.length > 0;
+
   return `
     <div class="etabli-fiche__verdict">
-      ${garde
+      ${garde && !redit
         ? `<p class="etabli-fiche__phrase etabli-fiche__phrase--${garde.ok ? "fait" : "rate"}">${
           escapeHtml(garde.dit)}</p>`
         : ""}
-      ${manques.length
+      ${fait ? "" : manques.length
         ? `<ul class="etabli-fiche__manques">${manques
           .map((manque) => `<li>${escapeHtml(PHRASE_DU_MANQUE[manque] ?? manque)}</li>`).join("")}</ul>`
         : `<p class="etabli-fiche__phrase">${escapeHtml(phraseDeLenregistrement(quoi))}</p>`}
@@ -1385,7 +1404,12 @@ function ficheDuMoment() {
   return ficheDuBrouillon(etat.brouillon, {
     nom: ficheEnCours?.nom ?? etat.utilitaire?.nom ?? "",
     resume: ficheEnCours?.resume ?? etat.utilitaire?.resume ?? "",
-    rayon: ficheEnCours?.rayon ?? etat.utilitaire?.rayon ?? ""
+    rayon: ficheEnCours?.rayon ?? etat.utilitaire?.rayon ?? "",
+    // **Ce qu'on sait déjà de l'établi sert à prévenir avant le clic.** À
+    // `null`, on ne sait pas : on ne bloque rien, et c'est la base qui
+    // tranchera — c'est elle qui porte la contrainte.
+    id: etat.utilitaire?.id ?? "",
+    etabli: etat.etabli
   });
 }
 
@@ -1415,7 +1439,29 @@ function ouvrirLaFicheDeLetabli(racine) {
     }
   });
 
-  if (corps) brancherLaFiche(corps);
+  if (!corps) return;
+  brancherLaFiche(corps);
+  // **L'établi se lit pendant qu'on remplit la fiche**, pour pouvoir dire tout
+  // de suite qu'un nom est déjà pris. Sans cela on le découvre après avoir
+  // cliqué, et l'on cherche une panne là où il suffit de changer trois lettres.
+  void assurerLetabli();
+}
+
+/**
+ * Lire l'établi, si on ne l'a pas déjà.
+ *
+ * Silencieux quand la lecture échoue : on ne sait alors pas si le nom est
+ * libre, et l'on ne bloque pas pour autant — la base tranchera (règle 5).
+ */
+async function assurerLetabli() {
+  if (etat.etabli !== null) return;
+
+  const { listerLetabli } = await import("../../../services/etabli-supabase.js");
+  const lus = await listerLetabli();
+  if (!lus) return;
+
+  etat.etabli = lus;
+  redessinerLeVerdictDeLaFiche();
 }
 
 /**
@@ -1477,19 +1523,22 @@ async function garderSurLetabli(racine) {
     fichiers: fiche.fichiers
   });
 
-  if (!pose) {
-    // **On ne dit pas que c'est enregistré quand on n'en sait rien.** Une
-    // fenêtre qui se referme sur un échec silencieux fait perdre le travail
-    // qu'on croyait en sûreté (règle 5).
-    etat.garde = { ok: false, dit: "Il n'a pas pu être enregistré. Rien n'est perdu : réessayez." };
+  if (!pose.ok) {
+    // **On ne dit pas que c'est enregistré quand on n'en sait rien**, et l'on
+    // ne dit pas « réessayez » quand réessayer échouera pareil : un nom déjà
+    // pris se corrige en trois lettres, et il faut le dire (règle 5).
+    etat.garde = { ok: false, dit: PHRASE_DU_REFUS[pose.motif] ?? PHRASE_DU_REFUS[REFUS_DE_LETABLI.PANNE] };
+    // Et l'établi est relu : s'il porte déjà ce nom, la fiche le dira d'elle-même.
+    etat.etabli = null;
     redessinerLeVerdictDeLaFiche();
+    void assurerLetabli();
     return;
   }
 
-  etat.utilitaire = pose;
+  etat.utilitaire = pose.utilitaire;
   // L'établi qu'on avait lu ne décrit plus ce qu'il contient.
   etat.etabli = null;
-  etat.garde = { ok: true, dit: `Enregistré sur votre établi en v${pose.version}.` };
+  etat.garde = { ok: true, dit: `Enregistré sur votre établi en v${pose.utilitaire.version}.` };
   redessinerLeVerdictDeLaFiche();
   redessinerLaConsole(racine);
 }
