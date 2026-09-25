@@ -719,3 +719,46 @@ test("un écran déjà monté remesure sa hauteur à la venue", () => {
   assert.ok(garde.includes("mesurerLaHauteur(racine)"),
     "la sortie anticipée ne remesure pas : le cadre gardera la hauteur prise caché");
 });
+
+/* ── Ce qui est peint est ce qui est écrit ───────────────────────────────── */
+
+/** Le texte que la couche colorée montre vraiment, balises ôtées. */
+function texteDeLaCouche(html) {
+  return String(html)
+    .replace(/<[^>]*>/g, "")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&");
+}
+
+test("la couche colorée montre exactement les caractères de la zone", () => {
+  // **Le défaut que ça répare, et il passait pour un défaut de clavier.** La
+  // couche se pose sous un texte transparent : si elle ne peint pas les mêmes
+  // caractères, le curseur va où le texte est et l'œil vise où la peinture est.
+  // « On ne peut pas se déplacer avec les flèches », « des doubles guillemets
+  // s'affichent », « impossible d'écrire entre les guillemets » : c'était cela.
+  const tape = [
+    "fonction Prix TTC(zones, Prix HT) {",
+    '   si (Prix HT > 0 €)',
+    '   alors ("Prix HT * 1,2");',
+    "   importe (variable: Prix HT);",
+    "   // un reste à écrire : \"",
+    "}   "
+  ].join("\n");
+
+  assert.equal(texteDeLaCouche(colorerDuMdall(tape)), `${tape}\n`);
+});
+
+test("la couche suit la frappe, caractère par caractère", () => {
+  // La saisie rejouée du premier au dernier caractère : c'est à mi-mot que la
+  // recomposition inventait des guillemets.
+  const ligne = '   si (Zone de vent = "3")';
+
+  for (let jusqua = 0; jusqua <= ligne.length; jusqua += 1) {
+    const tape = ligne.slice(0, jusqua);
+    assert.equal(texteDeLaCouche(colorerDuMdall(tape)), `${tape}\n`,
+      `désaligné après ${jusqua} caractères`);
+  }
+  assert.equal(ligne.length, 26);
+});
