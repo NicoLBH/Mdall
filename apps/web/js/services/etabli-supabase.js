@@ -139,15 +139,19 @@ function laDerniereVersion(ligne = null) {
 export async function enregistrerSurLetabli({
   id = "", nom = "", resume = "", rayon = "", fichiers = [], dit = ""
 } = {}) {
-  const dit = texte(nom);
+  // `dit` est le cahier des charges, en paramètre : le nom de l'outil s'appelle
+  // donc `sonNom`. Les deux se sont un temps appelés pareil, et le module ne se
+  // chargeait plus du tout — voir l'épreuve qui relit la syntaxe de tous les
+  // modules du navigateur.
+  const sonNom = texte(nom);
   const gardes = Array.isArray(fichiers) ? fichiers : [];
-  if (!dit || !gardes.length) return { ok: false, motif: REFUS_DE_LETABLI.PANNE };
+  if (!sonNom || !gardes.length) return { ok: false, motif: REFUS_DE_LETABLI.PANNE };
 
   try {
     const ligne = await appel("rpc/etabli_enregistrer", {
       method: "POST",
       body: {
-        p_nom: dit,
+        p_nom: sonNom,
         p_fichiers: gardes,
         p_id: texte(id) || null,
         p_resume: texte(resume),

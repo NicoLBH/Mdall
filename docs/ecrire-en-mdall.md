@@ -1346,3 +1346,57 @@ Le commentaire du menu mettait en garde contre exactement cela — « une écout
 posée sur l'écran s'accumulerait à chaque `dessiner` » — et l'accumulation
 arrivait par l'autre porte. On ne compte donc plus sur la mort des éléments :
 `jeuDecoutes()` retient ce qu'il a posé et le retire avant de reposer (règle 12).
+
+### Deux défauts livrés en production, et ce qu'ils apprennent
+
+La ronde précédente est partie avec deux fautes. Elles n'avaient rien en commun,
+sauf de n'avoir été vues par personne.
+
+#### La consigne disait au modèle de renoncer
+
+Pour empêcher `sinon si`, la consigne ajoutait : « Pour un troisième cas, le
+langage ne sait pas : mets la phrase dans `ce_que_je_nai_pas_su_ecrire` ». Or une
+TVA française a couramment **trois** taux — 5,5 %, 10 %, 20 %. Le modèle
+renonçait donc à la fonction entière, et l'écran ne créait plus aucune fonction :
+plus rien à lancer, ni à proposer, ni à garder.
+
+**La forme à trois cas existe, et elle marche.** On découpe en deux fonctions :
+la première tranche deux cas, la seconde lit sa conclusion par une locale et
+tranche le troisième. La consigne la montre maintenant, et une épreuve la
+**lance** — elle vérifie que les trois cas concluent et qu'aucun taux n'est
+demandé à la main. Enseigner une syntaxe sans l'éprouver, c'est précisément ce
+qu'on venait de faire (règle 12).
+
+La locale est nécessaire : `sinon (Taux hors neuf)` rendrait le **texte** « Taux
+hors neuf », parce qu'une conclusion ne nomme que ce que sa propre fonction a
+calculé. `calcule Repli = Taux hors neuf;` est l'idiome que le wiki documente
+déjà. Reste une verrue d'affichage : le taux relayé se lit `0,055` au lieu de
+`5,5 %`, le pourcentage étant un facteur d'échelle et non une unité pour le
+calcul. Les prix sont justes ; c'est à reprendre.
+
+#### Un paramètre a masqué une locale, et le module ne se chargeait plus
+
+`enregistrerSurLetabli` a reçu un paramètre `dit` — le cahier des charges — alors
+qu'elle déclarait déjà `const dit = texte(nom)` dans son corps. C'est une
+**erreur de syntaxe** : le module ne se charge pas, et plus aucun utilitaire ne
+pouvait être enregistré sur l'établi.
+
+**Pourquoi rien ne l'a vue.** Soixante-six modules de `apps/web/js` importent
+`assets/js/auth.js`, qui vient du CDN de Supabase : aucune épreuve ne peut les
+**charger**. Elles les relisent au mieux comme du texte — ce que fait l'épreuve
+de l'établi, qui vérifiait ligne à ligne ce que ce module envoie à la base, dans
+un fichier que le moteur JavaScript n'avait jamais accepté de lire.
+
+Une faute de frappe a donc traversé six mille épreuves, trente-huit mutations,
+et un essai au navigateur qui portait sur un autre écran.
+
+`syntaxe-du-navigateur.test.mjs` ferme l'angle mort : **tout module du dépôt doit
+au moins se lire**. `vm.SourceTextModule` analyse sans exécuter et sans résoudre
+les imports — on ne demande pas au module de marcher, on lui demande d'être du
+JavaScript. Un seul processus enfant pour six cents fichiers, parce que
+`node --check` par fichier ajouterait quatorze secondes à une suite qui en dure
+quinze.
+
+La leçon de fond : **une épreuve qui relit un fichier comme du texte ne prouve
+pas que ce fichier existe pour le moteur.** Les deux façons de se tromper sont
+désormais couvertes séparément.

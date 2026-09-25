@@ -184,11 +184,15 @@ fonction Vitesse de référence(zones, Zone de vent) {
   qu'on veut.
 - **\`sinon si (…)\` n'existe pas.** Une fonction a **une** condition et **deux**
   issues. Pour deux cas, \`si (…) alors (A); sinon (B);\` suffit — et c'est
-  presque toujours ce que la phrase demande. Pour un troisième cas, le langage
-  ne sait pas : mets la phrase dans \`ce_que_je_nai_pas_su_ecrire\`, plutôt
-  qu'une troisième branche que la lecture refusera ;
+  presque toujours ce que la phrase demande. **Pour trois cas ou plus, on
+  découpe en deux fonctions**, et cela s'écrit : voir « Trois cas, deux
+  fonctions » plus bas ;
 - **une seule \`alors\` et une seule \`sinon\` par fonction.** Une seconde est
   refusée, elle aussi.
+- **n'abandonne jamais une fonction parce qu'elle a trop de cas.** Découpe. Ce
+  qui se déclare dans \`ce_que_je_nai_pas_su_ecrire\`, c'est ce que le langage ne
+  sait pas **faire** — une boucle, une moyenne sur une liste, une table de mille
+  lignes —, jamais un raisonnement qui tient en deux fonctions.
 - comparateurs : \`=\` \`!=\` \`<=\` \`>=\` \`<\` \`>\` \`parmi\`
   \`renseigné\` \`non renseigné\`. Une mesure porte son unité :
   \`<= 28 m\`.
@@ -258,6 +262,39 @@ fonction Prix TTC(zones, Prix HT, Taux de TVA) {
   \`depuis:\` est le fichier où la fonction qui le conclut est écrite ;
 - **ne déclare pas** dans \`variables-du-projet.ref\` un nom qu'une fonction
   conclut : il est déduit, il ne se demande pas. \`const\` est pour les entrées.
+
+# Trois cas, deux fonctions
+
+Trois taux de TVA — existant, rénovation, neuf — ne tiennent pas dans une
+fonction. La première en tranche deux, la seconde lit sa conclusion et tranche
+le troisième :
+
+\`\`\`
+fonction Taux hors neuf(zones, Type de TVA) {
+   // Le taux des travaux qui ne sont pas du neuf.
+   importe (variable: Type de TVA, depuis: variables-du-projet.ref, zones: zones);
+   si (Type de TVA = "existant")
+   alors (5,5 %);
+   sinon (10 %);
+}
+
+fonction Taux de TVA(zones, Type de TVA, Taux hors neuf) {
+   // Le taux applicable, le neuf mis à part.
+   importe (variable: Type de TVA, depuis: variables-du-projet.ref, zones: zones);
+   importe (variable: Taux hors neuf, depuis: essai.ref, zones: zones);
+   calcule Repli = Taux hors neuf;
+   si (Type de TVA = "neuf")
+   alors (20 %);
+   sinon (Repli);
+}
+\`\`\`
+
+- la seconde fonction **pose une locale** — \`calcule Repli = Taux hors neuf;\` —
+  parce qu'une conclusion ne nomme que ce que sa propre fonction a calculé.
+  \`sinon (Taux hors neuf)\` rendrait le **texte** « Taux hors neuf » ;
+- le cas le plus simple à isoler va dans la seconde fonction : celui qui se
+  décide d'un seul test ;
+- pour quatre cas, on ajoute une fonction de plus, sur le même modèle.
 
 # Ce qui se demande, et ce qui se déduit
 
