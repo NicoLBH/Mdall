@@ -27341,3 +27341,39 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .bac-calcul__vaut{ flex:0 0 auto; color:var(--text); font-weight:600; }
 .bac-calcul__doute{ color:var(--attention, #9a6700); font-weight:400; }
+
+/* La liste qui se déplie sous le curseur, pendant qu'on écrit du Mdall.
+
+   Elle est **dans le corps de la saisie**, et non dans le document : posée
+   ailleurs, elle se placerait par rapport à la fenêtre et resterait en l'air dès
+   que l'écran défile. Sa position se calcule au caractère — la zone est à
+   chasse fixe et son interligne est une longueur — et non en reconstruisant un
+   miroir du texte. */
+.saisie-code__propositions{
+  position:absolute; z-index:5;
+  min-width:220px; max-width:420px; max-height:212px; overflow:auto;
+  display:flex; flex-direction:column;
+  border:1px solid var(--border); border-radius:var(--radius);
+  background:var(--bg, var(--canvas-default, #0d1117));
+  box-shadow:0 8px 24px rgba(1,4,9,.6);
+}
+.saisie-code__propositions[hidden]{ display:none; }
+
+.saisie-proposition{
+  display:flex; align-items:baseline; gap:10px;
+  padding:5px 10px; border:0; background:transparent; cursor:pointer;
+  text-align:left; white-space:nowrap;
+}
+.saisie-proposition:hover{ background:rgba(110,118,129,.12); }
+/* Celle qu'Entrée poserait. Elle se voit sans survol : on choisit aux flèches,
+   et un surlignage qui ne suivrait que la souris ne dirait rien au clavier. */
+.saisie-proposition.est-choisie{ background:rgba(56,139,253,.18); }
+.saisie-proposition__texte{
+  flex:0 0 auto; color:var(--text);
+  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace); font-size:12px;
+}
+.saisie-proposition__quoi{
+  flex:1 1 auto; min-width:0; text-align:right;
+  color:var(--muted); font-size:11px;
+  overflow:hidden; text-overflow:ellipsis;
+}
