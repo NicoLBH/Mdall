@@ -1456,12 +1456,20 @@ test("les deux consoles se tirent dans le sens du geste", () => {
  * menu partaient en autant d'exemplaires qu'on avait tapé de caractères.
  * ──────────────────────────────────────────────────────────────────────────── */
 
-/** Un élément qui retient ses écoutes et sait les compter. */
+/** Un élément qui retient ses écoutes, sait les compter, et compte les retraits. */
 function uneCible() {
   const posees = [];
-  return {
+  const cible = {
+    /**
+     * **Les retraits se comptent, et pas seulement ce qui reste.** Retirer deux
+     * fois la même écoute est sans effet : un jeu qui repasserait sur tout ce
+     * qu'il a jamais posé laisserait le même compte final, et l'on ne verrait
+     * rien. Ce qu'on veut voir, c'est qu'il ne repasse pas.
+     */
+    retraits: 0,
     addEventListener: (quoi, fait) => posees.push({ quoi, fait }),
     removeEventListener: (quoi, fait) => {
+      cible.retraits += 1;
       const rang = posees.findIndex((une) => une.quoi === quoi && une.fait === fait);
       if (rang >= 0) posees.splice(rang, 1);
     },
@@ -1472,6 +1480,7 @@ function uneCible() {
     },
     combien: () => posees.length
   };
+  return cible;
 }
 
 test("un jeu d'écoutes rejoué ne laisse qu'un exemplaire de chaque geste", () => {
@@ -1519,6 +1528,26 @@ test("un jeu retire tout ce qu'il a posé, et rien d'autre", () => {
   assert.equal(titre.combien(), 1);
 });
 
+test("défaire ne repasse pas sur ce qu'il a déjà retiré", () => {
+  // **Le compte final ne suffit pas à le dire.** Un jeu qui garderait sa liste
+  // après l'avoir défaite retirerait à nouveau, à chaque frappe, tout ce qu'il a
+  // jamais posé — sans effet visible, puisque retirer deux fois ne fait rien.
+  // Le dommage est ailleurs : la liste grossit d'une entrée par frappe, et
+  // chaque entrée retient l'élément détaché qu'elle visait.
+  const cible = uneCible();
+  const jeu = jeuDecoutes();
+
+  jeu.poser(cible, "click", () => {});
+  jeu.defaire();
+  jeu.poser(cible, "click", () => {});
+  jeu.defaire();
+  jeu.poser(cible, "click", () => {});
+  jeu.defaire();
+
+  assert.equal(cible.retraits, 3, "le jeu repasse sur des écoutes déjà retirées");
+  assert.equal(cible.combien(), 0);
+});
+
 test("défaire deux fois ne retire pas ce qu'on vient de poser", () => {
   // Un `defaire` gardait sa liste : appelé deux fois, le second retirait
   // l'écoute posée entre les deux.
@@ -1564,6 +1593,15 @@ test("les deux branchements rejoués commencent par se défaire", () => {
     assert.doesNotMatch(corps, /\?\.addEventListener\(/, quoi);
     assert.doesNotMatch(corps, /^\s*\w+\.addEventListener\(/m, quoi);
   }
+
+  // **Et ce sont bien deux jeux, pas deux noms pour le même.** La console
+  // branche la ligne du titre **après** avoir posé ses propres écoutes : un seul
+  // jeu partagé, et le `defaire` du titre retirerait ce que la console vient de
+  // poser — le bouton de place et les renvois de la console mourraient à chaque
+  // redessin. L'épreuve d'au-dessus ne le verrait pas : les deux noms y sont
+  // toujours écrits.
+  assert.match(source, /const ecoutesDeLaConsole = jeuDecoutes\(\);/);
+  assert.match(source, /const ecoutesDuTitre = jeuDecoutes\(\);/);
 });
 
 test("le cahier des charges fait l'aller-retour entier, sans trou au milieu", () => {
