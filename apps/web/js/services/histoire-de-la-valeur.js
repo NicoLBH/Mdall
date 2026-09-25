@@ -42,6 +42,7 @@
  */
 
 import { NATURE, classifyAssertion, natureIndefinie } from "./assertion-taxonomy.js";
+import { phraseDeLaVersion, uneVersionPlusRecente } from "./utilitaire-de-letabli.js";
 import { PROVENANCE } from "./memoire-en-texte.js";
 import { zonesLisibles, histoireDeLaLigne } from "./memoire-blame.js";
 import { ceQuiCouvre } from "./ce-qui-couvre.js";
@@ -256,7 +257,15 @@ function garnirLesEntrees(entrees, assertions) {
  * @param {(id: string) => string} [options.nommer] comment afficher un identifiant
  */
 export function histoireDeLaValeur(assertion = null, {
-  assertions = [], applications = [], actes = null, points = [], versements = [], nommer = null
+  assertions = [], applications = [], actes = null, points = [], versements = [], nommer = null,
+  /**
+   * L'établi de celui qui regarde, quand l'écran a pu le lire.
+   *
+   * Il ne sert qu'à une chose : dire qu'une version plus récente de l'outil
+   * existe. `null` — pas lu, ou lecture ratée — ne se lit pas comme « à
+   * jour » : on ne sait pas, et l'on se tait (règle 5).
+   */
+  etabli = null
 } = {}) {
   if (!assertion) return null;
 
@@ -309,6 +318,13 @@ export function histoireDeLaValeur(assertion = null, {
      * rien, et une marque sans version ne se compare à rien.
      */
     etabli: marqueGardee(charge.etabli),
+    /**
+     * Et si cet outil a avancé depuis. **On signale, on ne met rien à jour** :
+     * ce qui est ici y est entré par une proposition signée, et le remplacer
+     * parce qu'un numéro a bougé serait écrire dans la mémoire sans que
+     * personne l'ait décidé (règle 1).
+     */
+    etabliAvance: uneVersionPlusRecente(marqueGardee(charge.etabli), etabli),
     regle: charge.regle ?? null,
     decision: charge.decision ?? null,
     debat: leDebatQuiATranche({ assertion, points }),
@@ -413,9 +429,16 @@ export function lignesDeLHistoire(histoire = null, { dater = null } = {}) {
   // L'outil personnel dont elle sort, et sa version. Il se lit juste après
   // l'origine : c'est la même question, posée un cran plus près.
   if (histoire.etabli) {
+    // **La lignée qui a avancé se dit sur la même ligne**, et non sur une
+    // seconde : c'est la même chose qu'on lit — d'où vient cette valeur, et où
+    // en est l'outil qui l'a écrite. Deux lignes feraient chercher deux faits.
+    const avance = phraseDeLaVersion(histoire.etabliAvance);
     lignes.push({
       quoi: "Écrite avec",
-      dit: `« ${histoire.etabli.nom} » v${histoire.etabli.version} — un utilitaire écrit à la main`
+      dit: [
+        `« ${histoire.etabli.nom} » v${histoire.etabli.version} — un utilitaire écrit à la main`,
+        avance
+      ].filter(Boolean).join(" · ")
     });
   }
 

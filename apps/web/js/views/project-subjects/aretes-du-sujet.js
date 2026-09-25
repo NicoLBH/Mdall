@@ -52,9 +52,53 @@ let cache = VIDE();
  */
 let recherches = new Map();
 
+/**
+ * L'établi de celui qui regarde, lu une fois par venue dans le projet.
+ *
+ * ## À quoi il sert ici, et à rien d'autre
+ *
+ * Une valeur versée depuis un utilitaire personnel porte sa marque — quel
+ * outil, quelle version. L'établi dit **où cette lignée en est aujourd'hui** :
+ * le projet tient la `v2`, l'outil est passé en `v3`, et personne ne le disait.
+ *
+ * ## `null` ne veut pas dire « à jour »
+ *
+ * Pas encore lu, ou lecture ratée : on ignore où la lignée en est, et l'écran
+ * se tait plutôt que de rassurer à tort (règle 5). Un sujet s'ouvre, qu'on
+ * ait pu lire l'établi ou non.
+ *
+ * ## Une fois, et non par sujet
+ *
+ * Il ne dépend d'aucun sujet. Le relire à chaque dépliage ferait une requête
+ * par ligne ouverte pour rendre à chaque fois la même réponse.
+ */
+let etabli = null;
+let etabliEnCours = false;
+
 /** Repartir de zéro à la prochaine ouverture. */
 export function oublierLesAretes() {
   cache = VIDE();
+  etabli = null;
+}
+
+/**
+ * Lire l'établi, si on ne l'a pas déjà.
+ *
+ * Silencieux sur un échec : le dépliage n'attend pas après lui, et une valeur
+ * se lit très bien sans savoir où en est l'outil qui l'a écrite.
+ */
+async function assurerLetabli() {
+  if (etabli !== null || etabliEnCours) return;
+  etabliEnCours = true;
+
+  try {
+    const { listerLetabli } = await import("../../services/etabli-supabase.js");
+    etabli = await listerLetabli();
+  } catch {
+    // Un sujet s'ouvre, qu'on ait pu lire l'établi ou non.
+  } finally {
+    etabliEnCours = false;
+  }
 }
 
 const attribut = (valeur) => texte(valeur).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -171,7 +215,12 @@ export async function remplirLesAretes(hote, { occupe = false } = {}) {
   // Tout est déjà enregistré : la règle, ce qu'elle a lu, la citation, la
   // décision et ses écartés, qui et quand. Il n'y a rien à résumer, seulement à
   // lire.
+  // **L'établi, avant de raconter.** Il ne change rien à ce qu'on lit ; il
+  // ajoute une phrase quand l'outil qui a écrit une valeur a avancé depuis.
+  await assurerLetabli();
+
   const raconter = (assertion) => histoireDeLaValeur(assertion, {
+    etabli,
     assertions: lu.assertions,
     applications: lu.applications ?? [],
     actes: lu.actes,

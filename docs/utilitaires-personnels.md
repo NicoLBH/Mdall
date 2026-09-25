@@ -343,18 +343,48 @@ signé.
 
 ---
 
-## Lot F — Dire qu'une version plus récente existe
+## Lot F — Dire qu'une version plus récente existe *(fait)*
 
-> **La trace existe désormais** (lot D) : chaque ligne versée depuis l'établi
-> porte l'identifiant de son outil et sa version, et l'histoire d'une valeur la
-> montre. Ce qui reste est de **comparer** — et de le dire.
->
-> Le service qui compare a été écrit, puis retiré : rien ne l'appelait encore.
-> On n'ajoute pas du code que personne n'appelle, même juste. Il reviendra avec
-> son écran, et l'écran est la seule vraie question : **qui** a besoin de
-> l'entendre, et **où**. La mémoire du projet, pour son auteur, est la réponse
-> la plus probable — c'est là que la ligne « Écrite avec » se lit déjà, et il
-> lui manque une phrase et la lecture de l'établi.
+### Où cela se dit, et pourquoi là
+
+**Dans la mémoire du projet**, sur la ligne « Écrite avec » que le lot D avait
+posée — celle qui déplie l'histoire d'une valeur :
+
+> **Écrite avec** — « Volets en bois » v2 — un utilitaire écrit à la main ·
+> votre établi est en v3 — rien n'a été changé ici
+
+**Sur la même ligne, et non une seconde** : c'est la même chose qu'on lit —
+d'où vient cette valeur, et où en est l'outil qui l'a écrite. Deux lignes
+feraient chercher deux faits.
+
+La phrase dit que **rien n'a bougé ici**. Sans cela, on lit « votre établi est
+en v3 » et l'on se demande laquelle des deux le projet tient — alors que c'est
+précisément ce que la ligne vient de dire.
+
+### On signale, on ne met jamais à jour
+
+Ce qui est dans la mémoire d'un projet y est entré par une proposition signée.
+Le remplacer parce qu'un numéro a bougé serait écrire dans la mémoire sans que
+personne l'ait décidé (règle 1). L'écran dit ; l'utilisateur décide ; et ce
+qu'il décide repasse par le chemin de tout le monde — rouvrir l'outil depuis
+l'Atelier, et le proposer.
+
+### Trois façons de ne pas savoir, et aucune ne se dit « à jour »
+
+L'établi qu'on n'a pas pu lire, la marque sans version, l'outil retiré de
+l'établi : dans les trois cas on **ignore** où la lignée en est, et l'écran se
+tait. Répondre « non » ferait passer pour à jour ce qu'on n'a pas regardé
+(règle 5). Un sujet s'ouvre, qu'on ait pu lire l'établi ou non.
+
+`v10` se compare bien à `v2`, comme au catalogue du dépôt : comparés comme du
+texte, une montée de version passerait pour un retour en arrière, en silence.
+
+### Ce que ce lot n'a pas eu à faire
+
+Le service écrit puis retiré au lot D est revenu **tel quel** : il attendait son
+écran, il l'a. C'est la preuve que le retirer était juste — on ne perd rien à
+attendre un appelant, et l'on évite d'entretenir du code dont personne ne sait
+plus s'il est encore vrai.
 
 ### Ce qui n'existe pas encore, et qu'on croyait acquis
 
