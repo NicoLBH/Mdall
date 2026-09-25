@@ -53,6 +53,7 @@
 
 import { OPERATEUR, couperLUnite, lireUnNombre } from "./memoire-en-texte.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
+import { calculer, ecrireLeCalcul, phraseDuRefus } from "./mdall-calcul.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -83,7 +84,17 @@ export const DOUTE = {
    * calculé. Une confirmation qu'on n'a pas obtenue est pire qu'un silence :
    * elle apprend à croire l'écran.
    */
-  LOI_NON_ECRITE: "loi-non-ecrite"
+  LOI_NON_ECRITE: "loi-non-ecrite",
+  /**
+   * Un `calcule` qui ne veut rien dire.
+   *
+   * Pas une entrée qui manque — cela reste `ENTREE_ABSENTE` —, mais une
+   * arithmétique que le langage refuse : deux unités qui ne se composent pas,
+   * une division par zéro, une parenthèse ouverte. La règle ne conclut rien, et
+   * il faut dire **pourquoi** plutôt que de laisser croire qu'une valeur
+   * manque : on chercherait la valeur, et elle est là.
+   */
+  CALCUL_REFUSE: "calcul-refuse"
 };
 
 const PHRASES = {
@@ -91,6 +102,7 @@ const PHRASES = {
   [DOUTE.PAS_UN_NOMBRE]: "cette comparaison attend des nombres",
   [DOUTE.UNITES_INCOMPARABLES]: "les deux côtés ne sont pas dans la même unité",
   [DOUTE.OPERATEUR_INCONNU]: "cet opérateur n'est pas du langage",
+  [DOUTE.CALCUL_REFUSE]: "ce calcul ne se fait pas",
   [DOUTE.LOI_NON_ECRITE]: "la loi de cette fonction n'est pas écrite : elle se refait au serveur"
 };
 
@@ -227,6 +239,101 @@ function combiner(traces) {
 }
 
 /**
+ * Les valeurs qu'une fonction pose en les calculant, dans l'ordre.
+ *
+ * ## Pourquoi dans l'ordre, et pourquoi chacune voit les précédentes
+ *
+ * `calcule TVA = Prix HT * 20%;` puis `calcule Prix TTC = Prix HT + TVA;` :
+ * la seconde lit la première. C'est tout l'intérêt — on décompose un calcul en
+ * étapes qu'on peut nommer, et chaque étape se lit à l'écran. Les évaluer sans
+ * ordre demanderait de résoudre un graphe de dépendances, ce qui rendrait
+ * indécidable le sens d'un fichier qu'on lit de haut en bas.
+ *
+ * ## Une locale qui ne se calcule pas n'existe pas
+ *
+ * Elle n'est pas posée à zéro, ni à une chaîne vide : **elle est absente**, et
+ * les conditions qui la lisent deviennent indécidables. C'est la même règle que
+ * pour une entrée qui manque, et pour la même raison — une valeur inventée est
+ * indiscernable d'une valeur juste (règle 5).
+ *
+ * @returns {{lire: Function, noms: Set<string>, manquants: string[],
+ *   doutes: string[], traces: object[]}}
+ */
+export function poserLesLocales(calculs = [], lire = () => ({ connu: false, valeur: "" })) {
+  const poses = new Map();
+  const noms = new Set();
+  const manquants = [];
+  const doutes = [];
+  const traces = [];
+
+  const lireAvecLesLocales = (sujet) => {
+    const cle = cleDuSujet(sujet);
+    if (poses.has(cle)) return poses.get(cle);
+    return lire(sujet) ?? { connu: false, valeur: "" };
+  };
+
+  for (const calcul of Array.isArray(calculs) ? calculs : []) {
+    const nom = texte(calcul?.nom);
+    if (!nom) continue;
+    noms.add(cleDuSujet(nom));
+
+    const rendu = calculer(texte(calcul?.expression), lireAvecLesLocales);
+    const ecrit = ecrireLeCalcul(rendu);
+
+    traces.push({
+      nom,
+      expression: texte(calcul?.expression),
+      ligne: Number(calcul?.ligne) || 0,
+      connu: rendu.connu,
+      valeur: ecrit,
+      refus: texte(rendu.refus),
+      pourquoi: rendu.refus ? phraseDuRefus(rendu.refus, rendu.ou) : "",
+      manquants: rendu.manquants ?? []
+    });
+
+    if (rendu.refus) { doutes.push(DOUTE.CALCUL_REFUSE); continue; }
+    if (!rendu.connu) { manquants.push(...(rendu.manquants ?? [])); continue; }
+
+    poses.set(cleDuSujet(nom), { connu: true, valeur: ecrit });
+  }
+
+  return {
+    lire: lireAvecLesLocales,
+    noms,
+    /**
+     * Ce qu'aucun calcul n'a pu lire, **noms des locales compris**.
+     *
+     * Le tri se fait chez l'appelant : une locale manque aussi bien à un calcul
+     * qui la lit qu'à une condition qui la teste, et les deux se filtrent au
+     * même endroit — `evaluerLaRegle`. Un second filtre ici ne faisait tomber
+     * aucun cas de plus (règle 12), et deux décisions sur une même question
+     * auraient fini par ne plus dire la même chose (règle 10).
+     */
+    manquants: [...new Set(manquants)],
+    doutes,
+    traces
+  };
+}
+
+/**
+ * Ce qu'une conclusion vaut quand elle **nomme une locale**.
+ *
+ * `alors (Prix TTC);` rend la valeur calculée ; `alors ("3e famille B");` rend
+ * son texte, comme toujours. La règle est décidable et tient en une ligne : on
+ * ne regarde que les noms que **cette fonction** a posés, jamais ceux du
+ * projet. Sans cette borne, `alors (Zone de vent)` cesserait d'être une chaîne
+ * du jour où quelqu'un verse une valeur pour ce sujet, et un fichier changerait
+ * de sens sans avoir bougé.
+ */
+export function conclusionDeLaRegle(dit = "", locales = null) {
+  const brut = texte(dit);
+  if (!brut || !locales?.noms?.has(cleDuSujet(brut))) return brut;
+
+  const lue = locales.lire(brut);
+  return lue?.connu ? texte(lue.valeur) : "";
+}
+
+/**
  * Exécuter une règle.
  *
  * @param {object} regle l'affirmation qui porte l'instantané — `payload.regle`
@@ -257,11 +364,16 @@ export function evaluerLaRegle(regle = {}, lire = () => ({ connu: false, valeur:
   }
 
   const bloc = regle?.payload?.regle ?? {};
-  const alors = texte(regle?.payload?.value);
-  const sinon = texte(bloc?.sinon);
+
+  // **Les locales d'abord.** Une condition peut porter sur une valeur que la
+  // fonction vient de calculer, et une conclusion peut la nommer.
+  const locales = poserLesLocales(bloc?.calculs, lire);
+
+  const alors = conclusionDeLaRegle(regle?.payload?.value, locales);
+  const sinon = conclusionDeLaRegle(bloc?.sinon, locales);
 
   const tracer = (condition) => ({
-    ...evaluerLaCondition(condition, lire(texte(condition?.sujet)) ?? { connu: false, valeur: "" }),
+    ...evaluerLaCondition(condition, locales.lire(texte(condition?.sujet)) ?? { connu: false, valeur: "" }),
     joint: texte(condition?.joint)
   });
 
@@ -280,9 +392,25 @@ export function evaluerLaRegle(regle = {}, lire = () => ({ connu: false, valeur:
   // s'applique. Un doute d'un côté ou de l'autre suffit à ne pas trancher.
   const tient = et(posee.verite, ecartee === null ? null : !ecartee);
 
-  const manquants = [...conditions, ...exceptions]
-    .filter((trace) => trace.doute === DOUTE.ENTREE_ABSENTE)
-    .map((trace) => trace.sujet);
+  const manquants = [
+    // Ce qu'un calcul n'a pas pu lire compte autant que ce qu'une condition
+    // n'a pas pu lire : c'est la même question posée à l'écran, et la taire
+    // ferait un formulaire qui ne demande pas ce dont il a besoin.
+    ...locales.manquants,
+    ...[...conditions, ...exceptions]
+      .filter((trace) => trace.doute === DOUTE.ENTREE_ABSENTE)
+      .map((trace) => trace.sujet)
+  ]
+    /**
+     * **Une locale ne se demande jamais**, où qu'elle manque.
+     *
+     * Une condition qui porte sur une valeur que le calcul n'a pas su poser la
+     * déclare absente, comme n'importe quelle entrée. Mais personne ne peut la
+     * saisir : elle se calcule. La laisser passer ferait un champ qu'on ne sait
+     * pas remplir — et il masquerait l'entrée réellement absente, deux lignes
+     * plus haut, qui est celle qu'il faut fournir.
+     */
+    .filter((nom) => !locales.noms.has(cleDuSujet(nom)));
 
   return {
     decidable: tient !== null,
@@ -304,7 +432,19 @@ export function evaluerLaRegle(regle = {}, lire = () => ({ connu: false, valeur:
     exceptions,
     manquants: [...new Set(manquants)],
     melange: posee.melange,
-    doutes: [...new Set([...conditions, ...exceptions].map((trace) => trace.doute).filter(Boolean))]
+    doutes: [...new Set([
+      ...locales.doutes,
+      ...[...conditions, ...exceptions].map((trace) => trace.doute)
+    ].filter(Boolean))],
+    /**
+     * Ce que chaque `calcule` a donné, dans l'ordre.
+     *
+     * C'est la trace du calcul, et elle compte autant que celle des
+     * conditions : une règle qui rend un verdict sans montrer sa lecture
+     * n'apprend rien, et un nombre sorti de nulle part est exactement ce qu'on
+     * refuse à un agent.
+     */
+    calculs: locales.traces
   };
 }
 

@@ -11,7 +11,7 @@ import {
 import { WIKI_DU_LANGAGE, sommaireDuWiki, exemplesDuWiki } from "../../contenus/wiki-du-langage-mdall.js";
 import { lireUnFichier } from "../../services/memoire-en-lecture.js";
 import { calculer } from "../../services/mdall-calcul.js";
-import { lecteurDeValeurs } from "../../services/memoire-evaluateur.js";
+import { lancerLeBrouillon } from "../../services/bac-dessai.js";
 
 /* ── Ce qu'il enseigne, le langage le lit ────────────────────────────────── */
 
@@ -28,24 +28,47 @@ test("chaque exemple du wiki est du Mdall que la lecture accepte", () => {
   }
 });
 
-test("les calculs que le wiki montre sont ceux que le calcul rend", () => {
-  // Le wiki annonce 1 440 € pour 1 200 € de prix hors taxes : la promesse se
-  // vérifie ici, sinon elle vieillit toute seule.
-  const lire = lecteurDeValeurs({ "Prix HT": "1200 €", "Niveau du sol": "108,2 m" });
-
-  assert.equal(calculer("Prix HT * 20%", lire).nombre, 240);
-  assert.equal(calculer("Prix HT + Prix HT * 20%", lire).nombre, 1440);
-  assert.equal(calculer("Niveau du sol + 1 m", lire).nombre, 109.2);
-
-  // Et le tableau du wiki annonce bien ces nombres-là : une promesse écrite
+test("les exemples entiers du wiki concluent ce que le wiki annonce", () => {
+  // **On lance les règles du wiki pour de vrai.** Il promet 1 440 € pour
+  // 1 200 € hors taxes, et 109,2 m pour un sol à 108,2 m. Une promesse écrite
   // dans une prose que rien ne relit vieillit toute seule.
-  const calcul = WIKI_DU_LANGAGE.find((une) => une.id === "calcul");
-  const annonces = calcul.blocs
-    .filter((bloc) => bloc.quoi === "table")
-    .flatMap((bloc) => bloc.lignes.flat()).join(" ");
+  const essais = [
+    {
+      section: "exemple-tva",
+      reponses: { "Prix HT": "1200 €" },
+      attendu: "1440 €",
+      etapes: ["240 €", "1440 €"],
+      annonce: ["1 440 €", "TVA = 240 €", "Prix TTC = 1440 €"]
+    },
+    {
+      section: "exemple-inondable",
+      reponses: { "Zone inondable": "oui", "Niveau du sol": "108,2 m" },
+      attendu: "109,2 m",
+      etapes: ["109,2 m"],
+      annonce: ["109,2 m", "108,2 m"]
+    }
+  ];
 
-  assert.match(annonces, /1440 €/);
-  assert.match(annonces, /240 €/);
+  for (const { section, reponses, attendu, etapes, annonce } of essais) {
+    const regles = exemplesDuWiki()
+      .filter((un) => un.section === section && un.code.startsWith("fonction"));
+    assert.equal(regles.length, 1, `§${section} : une règle et une seule`);
+
+    const [resultat] = lancerLeBrouillon([{ nom: "essai.ref", contenu: regles[0].code }], reponses);
+    assert.equal(resultat.valeur, attendu, `§${section} ne conclut pas ${attendu}`);
+    assert.deepEqual(resultat.calculs.map((un) => un.valeur), etapes);
+
+    // **Et la prose annonce chacun de ces chiffres, écrits en dur des deux
+    // côtés.** Les déduire du lancement ferait une épreuve qui bouge avec ce
+    // qu'elle mesure : la prose et le calcul se vérifieraient l'un l'autre en
+    // rond, et personne ne dirait lequel a tort.
+    const dit = WIKI_DU_LANGAGE.find((une) => une.id === section).blocs
+      .filter((bloc) => bloc.quoi === "texte").map((bloc) => bloc.texte).join(" ");
+
+    for (const chiffre of annonce) {
+      assert.ok(dit.includes(chiffre), `§${section} n'annonce plus « ${chiffre} »`);
+    }
+  }
 });
 
 test("les refus que le wiki montre sont ceux que le calcul refuse", () => {
@@ -66,8 +89,8 @@ test("le wiki dit ce qu'est Mdall, à quoi il sert et comment il marche", () => 
   for (const attendu of ["quoi", "pourquoi", "comment", "affirmation", "nom", "fonction", "calcul"]) {
     assert.ok(noms.includes(attendu), `section absente : ${attendu}`);
   }
-  assert.ok(noms.some((un) => un.startsWith("exemple-")),
-    "il faut au moins un exemple d'application entier");
+  assert.ok(noms.filter((un) => un.startsWith("exemple-")).length >= 2,
+    "il faut des exemples d'application entiers, et plus d'un");
   // **Et il dit aussi ce qu'il ne sait pas faire.** Une documentation qui ne
   // montre que ce qui marche apprend à se méfier d'elle.
   assert.ok(noms.includes("limites"), "le wiki ne dit pas où le langage s'arrête");

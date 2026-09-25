@@ -48,8 +48,10 @@ import {
   ligneDAffirmation, ligneDeDonnee, ligneDeCondition, ligneDeConsequence,
   ligneDeProvenance, ligneDePreuve, ligneDeStatut, ligneDeDate, ligneDeNote, ligneDeLocale,
   ligneDImport, ligneDeDecision, ligneDeFonction, ligneDeLocaleVide, ligneDAffectation,
-  jetonsDeValeur, AGENT, AGENTS
+  jetonsDeValeur, AGENT, AGENTS, VERBES
 } from "./memoire-en-texte.js";
+import { lireUnCalcul, phraseDuRefus } from "./mdall-calcul.js";
+import { jetonsEcrits } from "./mdall-en-ecriture.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -92,7 +94,7 @@ const CONSTATS = new Map([
  */
 const TETES = [
   "sauf si", "parce que:", "statut:", "fichier:", "note:", "le:", "zone:",
-  "fonction", "soit", "alors", "sinon", "si", "et", "ou", "non",
+  "fonction", "soit", "calcule", "alors", "sinon", "si", "et", "ou", "non",
   ...PROVENANCES.map((type) => `${type}:`)
 ];
 
@@ -123,6 +125,27 @@ export function lireUneLocale(reste = "") {
   const nom = texte(coupe[1]);
   const { valeur } = lireUneValeur(texte(coupe[2]));
   return nom && valeur ? { nom, valeur } : null;
+}
+
+/**
+ * Un calcul de fonction : `calcule Prix TTC = Prix HT + TVA;`
+ *
+ * **L'expression ne se met pas entre guillemets** : ce n'est pas un texte, c'est
+ * une arithmétique qui se lit, se rejoue et se vérifie. Elle est rendue telle
+ * qu'elle est écrite — la lire ici reviendrait à la lire deux fois, et c'est
+ * `mdall-calcul.js` qui sait le faire, au moment de l'évaluer.
+ *
+ * `null` quand la ligne ne pose aucun nom ou aucune expression : l'appelant la
+ * refuse en la nommant, plutôt que d'inventer un calcul vide.
+ */
+export function lireUnCalculDeFonction(reste = "") {
+  const dit = texte(reste).replace(/;\s*$/, "");
+  const coupe = dit.match(/^(.*?)\s*=\s*([\s\S]*)$/);
+  if (!coupe) return null;
+
+  const nom = texte(coupe[1]);
+  const expression = texte(coupe[2]);
+  return nom && expression ? { nom, expression } : null;
 }
 
 /**
@@ -572,7 +595,7 @@ export function lireUnFichier(contenu = "") {
       // a qu'un appel — et l'appel n'apparaît qu'après elles dans le fichier,
       // d'où ce tri à la fermeture plutôt qu'à la lecture.
       blocs.push(agent
-        ? { ...bloc, conditions: [], alors: "", sinon: "", sauf: [], agent, utilitaire, version, enregistre }
+        ? { ...bloc, conditions: [], alors: "", sinon: "", sauf: [], calculs: [], agent, utilitaire, version, enregistre }
         : bloc);
     }
     courant = null;
@@ -778,6 +801,9 @@ export function lireUnFichier(contenu = "") {
         ligne: numero,
         accolade: ouvre,
         conditions: [], alors: "", sinon: "", sauf: [],
+        // Les valeurs que la fonction pose en les calculant, dans l'ordre où
+        // elles sont écrites : la seconde peut lire la première.
+        calculs: [],
         provenance: null, preuve: "", statut: "", le: "",
         // Ce qu'une fonction qui appelle un agent porte, et qu'une règle n'a
         // pas : quel agent, de quoi le refaire, et ce qu'elle a rangé.
@@ -808,6 +834,33 @@ export function lireUnFichier(contenu = "") {
       if (locale.nom.toLowerCase() === "parce que") { courant.preuve = locale.valeur; return; }
       if (PROVENANCES.includes(locale.nom)) { courant.provenance = { type: locale.nom, quoi: locale.valeur }; return; }
       refus.push({ ligne: numero, texte: corps, raison: `« ${locale.nom} » n'est pas une provenance connue.` });
+      return;
+    }
+
+    // `calcule Prix TTC = Prix HT + TVA;` — une valeur que la fonction pose en
+    // la calculant, pour elle seule. Elle ne sort que par `alors` et par
+    // `enregistre` : il n'y a pas de seconde porte vers la mémoire (règle 1).
+    if (mot === "calcule") {
+      const calcul = lireUnCalculDeFonction(reste);
+      if (!calcul) {
+        refus.push({ ligne: numero, texte: corps, raison: "ce calcul ne pose ni nom ni expression." });
+        return;
+      }
+
+      // **Le calcul est lu ici, et refusé ici s'il ne se lit pas.** Une
+      // expression fausse laissée passer jusqu'au lancement ferait une règle
+      // qui ne conclut rien sans qu'on sache pourquoi (règle 5).
+      const lu = lireUnCalcul(calcul.expression);
+      if (!lu.ok) {
+        refus.push({
+          ligne: numero,
+          texte: corps,
+          raison: `« ${calcul.nom} » ne se calcule pas : ${phraseDuRefus(lu.motif, lu.ou)}.`
+        });
+        return;
+      }
+
+      courant.calculs.push({ ...calcul, ligne: numero });
       return;
     }
 
@@ -1198,6 +1251,17 @@ export function jetonsDeLaLigne(ligne = "") {
       ...(reference ? [{ type: JETON.NOM_LOCAL, texte: dit }] : jetonsDeValeur(lue.valeur, lue.unite)),
       ...virgule];
   }
+
+  /**
+   * `calcule Prix TTC = Prix HT + TVA;`
+   *
+   * **La ligne entière part au peintre de la saisie.** Lui seul découpe une
+   * expression au caractère près — opérateurs, parenthèses, nombres, unités —,
+   * et il le fait déjà pour la zone de code. Recomposer la ligne ici en
+   * donnerait une seconde lecture, qui divergerait de la première au premier
+   * signe ajouté au langage (règle 10).
+   */
+  if (mot === VERBES.CALCULE) return jetonsEcrits(brute);
 
   // `soit texte = "…";` — une locale de règle. Le nom porte le sens, la valeur
   // se cite : on la relit pour la réécrire telle qu'elle était.

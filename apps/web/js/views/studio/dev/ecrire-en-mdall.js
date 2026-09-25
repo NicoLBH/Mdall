@@ -290,6 +290,36 @@ export function renderFormulaire(champs = [], reponses = {}) {
   `;
 }
 
+/**
+ * Ce que chaque `calcule` a donné, avant les conditions qui s'en servent.
+ *
+ * **Une règle qui rend un nombre sans montrer d'où il vient n'apprend rien.**
+ * C'est ce qu'on refuse à un agent ; on ne va pas l'accepter d'une règle sous
+ * prétexte qu'elle est écrite. Chaque étape se lit : son nom, son expression
+ * telle qu'elle est tapée, et ce qu'elle vaut — ou pourquoi elle ne vaut rien.
+ */
+export function renderCalculs(calculs = []) {
+  const tous = Array.isArray(calculs) ? calculs : [];
+  if (!tous.length) return "";
+
+  return `
+    <ul class="bac-calculs">
+      ${tous.map((calcul) => `
+        <li class="bac-calcul${calcul.refus ? " bac-calcul--refuse" : ""}">
+          <span class="bac-calcul__nom">${escapeHtml(calcul.nom)}</span>
+          <span class="bac-calcul__expression">${renderJetons(jetonsEcrits(calcul.expression))}</span>
+          <span class="bac-calcul__vaut">${
+            calcul.connu
+              ? escapeHtml(calcul.valeur)
+              : `<span class="bac-calcul__doute">${
+                escapeHtml(calcul.pourquoi || "ne sait pas encore")}</span>`
+          }</span>
+        </li>
+      `).join("")}
+    </ul>
+  `;
+}
+
 /** Ce qu'une clause valait, en un mot — et `indécidable` s'y dit comme tel. */
 function motDeLaVerite(verite) {
   if (verite === true) return "vrai";
@@ -324,6 +354,7 @@ export function renderResultats(resultats = []) {
             <span class="bac-resultat__issue">${escapeHtml(MOTS_DE_LISSUE[resultat.issue] ?? resultat.issue)}</span>
             ${resultat.valeur ? `<span class="bac-resultat__valeur">${escapeHtml(resultat.valeur)}</span>` : ""}
           </p>
+          ${renderCalculs(resultat.calculs)}
           ${
             resultat.issue === ISSUE.AU_SERVEUR
               ? `<p class="bac-resultat__note">Sa loi n'est pas dans le texte : elle s'appelle, elle ne se relit pas.</p>`

@@ -36,6 +36,7 @@
 
 import { lireUnFichier } from "./memoire-en-lecture.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
+import { lireUnCalcul, nomsDuCalcul } from "./mdall-calcul.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -100,20 +101,42 @@ export function valeursPosees(fichiers = []) {
 export function nomsLus(fichiers = []) {
   const lus = [];
   const vus = new Set();
+  /**
+   * Les noms que les fonctions **posent** en les calculant.
+   *
+   * Ils se lisent comme les autres — une condition peut porter dessus — mais
+   * ils ne se demandent pas : ils se calculent. Un champ « TVA » dans le
+   * formulaire serait un champ qu'on ne sait pas remplir, et qui masquerait
+   * l'entrée réellement absente.
+   */
+  const poses = new Set();
+
+  const retenir = (nom) => {
+    const cle = cleDuSujet(nom);
+    if (!cle || vus.has(cle)) return;
+    vus.add(cle);
+    lus.push(texte(nom));
+  };
 
   for (const fichier of Array.isArray(fichiers) ? fichiers : []) {
     for (const bloc of lireUnFichier(fichier?.contenu ?? "").blocs ?? []) {
+      for (const calcul of bloc?.calculs ?? []) {
+        poses.add(cleDuSujet(calcul?.nom));
+
+        // Ce qu'un calcul lit se demande comme ce qu'une condition lit : c'est
+        // la même question posée à l'écran, et la taire ferait un formulaire
+        // qui ne demande pas ce dont il a besoin.
+        const lu = lireUnCalcul(texte(calcul?.expression));
+        if (lu.ok) nomsDuCalcul(lu.arbre).forEach(retenir);
+      }
+
       for (const condition of [...(bloc?.conditions ?? []), ...(bloc?.sauf ?? [])]) {
-        const nom = texte(condition?.sujet);
-        const cle = cleDuSujet(nom);
-        if (!cle || vus.has(cle)) continue;
-        vus.add(cle);
-        lus.push(nom);
+        retenir(condition?.sujet);
       }
     }
   }
 
-  return lus;
+  return lus.filter((nom) => !poses.has(cleDuSujet(nom)));
 }
 
 /**

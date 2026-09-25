@@ -114,14 +114,19 @@ On te donne une phrase ou un paragraphe en français. Tu rends des fichiers Mdal
 
 # Ce que Mdall fait, et ne fait pas
 
-Mdall **compare et conclut**. Il ne calcule pas : il n'a ni boucle, ni variable
-locale, ni arithmétique. Une loi qui ne s'écrit pas en conditions est un
-**agent**, qui s'appelle et dont la loi n'est pas dans le fichier.
+Mdall **compare, calcule et conclut**. Il n'a ni boucle, ni condition imbriquée.
+Une loi qui ne s'écrit ni en conditions ni en calculs est un **agent**, qui
+s'appelle et dont la loi n'est pas dans le fichier.
 
-Si une phrase demande un calcul — « multiplie la surface par 0,7 », « fais la
-moyenne » —, **ne l'invente pas** : mets-la dans \`ce_que_je_nai_pas_su_ecrire\`
-avec la raison. Une arithmétique inventée est indiscernable d'une arithmétique
-juste, et personne ne s'en apercevra.
+Ce qu'il calcule s'écrit avec \`calcule\` (voir plus bas) : les quatre
+opérations, la puissance, les parenthèses, le pourcentage en suffixe, et sept
+fonctions — \`racine\`, \`abs\`, \`arrondi\`, \`plafond\`, \`plancher\`, \`min\`, \`max\`.
+
+Ce qu'il ne calcule pas : tout le reste. Une moyenne sur une liste, une
+intégration, une recherche dans une table de mille lignes, une boucle. Si une
+phrase en demande une, **ne l'invente pas** : mets-la dans
+\`ce_que_je_nai_pas_su_ecrire\` avec la raison. Une arithmétique inventée est
+indiscernable d'une arithmétique juste, et personne ne s'en apercevra.
 
 # Les trois fichiers
 
@@ -179,6 +184,36 @@ fonction Vitesse de référence(zones, Zone de vent) {
 - comparateurs : \`=\` \`!=\` \`<=\` \`>=\` \`<\` \`>\` \`parmi\`
   \`renseigné\` \`non renseigné\`. Une mesure porte son unité :
   \`<= 28 m\`.
+
+# Un calcul, dans une fonction
+
+\`\`\`
+fonction Prix TTC(zones, Prix HT) {
+   // Le prix toutes taxes, au taux normal.
+   importe (variable: Prix HT, depuis: variables-du-projet.ref, zones: zones);
+   calcule TVA = Prix HT * 20%;
+   calcule Prix TTC = Prix HT + TVA;
+   si (Prix HT >= 0 €)
+   alors (Prix TTC);
+}
+\`\`\`
+
+- \`calcule <Nom> = <expression>;\` pose une valeur **pour cette fonction
+  seule**. Elle se lit ensuite dans une condition et dans un \`alors\`, comme
+  n'importe quel nom ;
+- les \`calcule\` se posent **après les \`importe\`** et **avant le \`si\`**, dans
+  l'ordre où ils se lisent : le second peut lire le premier ;
+- **l'expression ne se met pas entre guillemets.** Ce n'est pas un texte ;
+- signes : \`+\` \`-\` \`*\` \`/\` \`^\`, les parenthèses, et \`20%\` qui vaut
+  \`0,2\` — écris \`Prix HT * 20%\`, jamais \`Prix HT * 0.2\` ;
+- fonctions : \`racine\` \`abs\` \`arrondi\` \`plafond\` \`plancher\` \`min\` \`max\`.
+  Leurs arguments se séparent d'un **point-virgule**, parce que la virgule est
+  décimale : \`arrondi(Cote ; 2)\`, \`min(A ; B)\` ;
+- **les unités doivent se composer.** \`3 m + 2\` est refusé, \`3 m * 2 m\` vaut
+  des \`m²\`, \`2 m * 3 €\` est refusé. Écris l'unité sur chaque nombre qui en a
+  une : \`Niveau du sol + 1 m\`, et non \`Niveau du sol + 1\` ;
+- \`calcule\` n'écrit rien dans le projet : ce qui sort passe par \`alors\`,
+  comme toujours.
 
 # Une donnée de base
 
