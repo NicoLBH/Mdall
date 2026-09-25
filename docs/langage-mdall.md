@@ -1042,3 +1042,98 @@ Le seul vrai danger d'une variante est **d'oublier qu'on y est**.
 | `apps/web/js/views/ui/fenetre-plan.js` | montre le plan — la forme du raisonnement, et sa frontière |
 | `apps/web/js/services/memoire-audit.js` | le rejeu à blanc : chaque règle contre ce que le projet affirme |
 | `apps/web/js/views/ui/fenetre-audit.js` | le verdict d'ensemble, et les quatre issues |
+
+---
+
+## L'arithmétique
+
+### Pourquoi elle n'existait pas
+
+Mdall comparait et concluait ; il ne calculait pas. La consigne donnée au modèle
+le disait mot pour mot — « ne l'invente pas » —, et pour une bonne raison :
+**une arithmétique inventée est indiscernable d'une arithmétique juste**, et
+personne ne s'en aperçoit. Tant qu'aucun calcul n'était écrit, la seule façon
+d'en obtenir un était d'appeler un **agent**, dont la loi n'est pas dans le
+fichier mais dont le résultat se rejoue.
+
+Mais une TVA à 20 %, une surface, un plancher bas pris à un mètre au-dessus du
+sol — ce sont les phrases les plus ordinaires d'un projet. Les renvoyer toutes à
+un agent revient à dire que le langage ne sait pas écrire ce qu'on lui demande
+le plus souvent.
+
+L'interdit n'est donc pas levé : il est **déplacé**. Ce qui s'écrit en Mdall se
+lit, se rejoue et se vérifie ligne à ligne, comme une condition. Ce qui ne s'y
+écrit pas reste un agent.
+
+### Ce qui s'écrit
+
+| | |
+| --- | --- |
+| `+` `-` `*` `/` | et `×` `÷` pour qui les a sous la main |
+| `^` | la puissance, associative à droite : `2^3^2` vaut `2^9` |
+| `20%` | un **suffixe**, pas un opérateur : `20%` vaut `0,2`, sans unité |
+| `(` `)` | les priorités, sinon celles des mathématiques |
+| `racine` `abs` `arrondi` `plafond` `plancher` `min` `max` | les sept fonctions |
+
+```
+soit TVA = Prix HT * 20%;
+soit Prix TTC = Prix HT + TVA;
+soit Diagonale = racine(Largeur ^ 2 + Longueur ^ 2);
+soit Cote = arrondi(Niveau du sol + 1 m ; 2);
+```
+
+**La virgule est décimale**, comme partout ailleurs dans la mémoire : on écrit
+`0,2`. Elle ne peut donc pas séparer aussi les arguments d'une fonction —
+`min(1,5)` serait le minimum de un et cinq, ou bien un et demi, sans qu'aucune
+règle ne tranche. Les arguments se séparent d'un **point-virgule** :
+`min(1,5; 2)`. Une virgule à cette place est refusée en le disant, plutôt que de
+choisir au hasard entre deux lectures.
+
+Le **modulo** n'existe pas. Il n'a pas d'emploi dans un projet de construction,
+et il aurait ajouté une seconde lecture à un signe qui en a déjà une.
+
+### Les trois choses qu'un calcul ne fait jamais
+
+**1. Il ne devine pas une valeur qui manque.** Un nom sans valeur rend
+`indécidable`, jamais zéro. `Number("")` vaut zéro, et une altitude à zéro se
+calcule sans broncher jusqu'à une cote de fondation fausse.
+
+C'est plus subtil qu'il n'y paraît : « 3e famille B » commence par un chiffre, et
+la lecture des nombres gratte les chiffres de ce qu'on lui donne — elle en
+tirerait **3**, et « Famille × 2 » vaudrait six. Une famille de bâtiment n'est
+pas le nombre trois. C'est `estMesuree` qui tranche, le même jugement que la
+mémoire porte déjà sur ses propres valeurs.
+
+**2. Il ne compose pas une unité qu'il ne sait pas composer.**
+
+| ce qu'on écrit | ce qu'on obtient |
+| --- | --- |
+| `3 m + 2 m` | `5 m` |
+| `3 m + 2` | refus — *ces deux unités ne se composent pas* |
+| `3 m * 2` | `6 m` |
+| `3 m * 2 m` | `6 m²` |
+| `6 m² / 2 m` | `3 m` |
+| `2 m * 3 €` | refus — personne n'a demandé des mètres-euros |
+| `3 m ^ 2` | `9 m²` |
+| `8 m³ ^ (1/3)` | `2 m` |
+| `4 m ^ 0,5` | refus — la racine d'un mètre n'a pas de nom |
+| `120 km/h + 10 km/h` | `130 km/h` |
+| `120 km/h * 2 km/h` | refus — une unité composée est opaque |
+
+`m`, `m²`, `m³` sont la même unité à trois exposants ; les composer est donc de
+l'addition d'exposants. Tout le reste — `km/h`, `MPa` — est **opaque** : on sait
+l'ajouter à elle-même et la multiplier par un nombre nu, et l'on refuse le reste
+plutôt que d'inventer une algèbre que personne n'a demandée.
+
+**3. Il ne rend jamais l'infini ni `NaN`.** Une division par zéro est un refus
+nommé, pas une valeur qui traverse trois écrans avant de se voir. Douze chiffres
+significatifs à l'écriture : `0,1 + 0,2` s'écrit `0,3`, et non
+`0,30000000000000004` — le bruit du binaire ferait douter d'un calcul juste.
+
+### Les douze refus
+
+Chacun a son nom et sa phrase : `vide`, `caractère inconnu`, `parenthèse`,
+`membre manquant`, `reste`, `virgule d'argument`, `fonction inconnue`,
+`arguments`, `unités`, `division par zéro`, `puissance et unité`,
+`hors domaine`. Un calcul qui ne veut rien dire est **refusé**, jamais arrondi
+vers quelque chose qui y ressemble.
