@@ -269,3 +269,45 @@ test("la consigne interdit « sinon si », que la lecture refuse", () => {
   assert.ok(lu.refus.some((un) => /« sinon si » n'existe pas/.test(un.raison)),
     "la consigne l'interdit et la lecture l'accepte");
 });
+
+test("l'exemple à trois cas conclut les trois, et n'en demande aucun à la main", () => {
+  // **Le défaut que ça répare, et il était grave.** La consigne disait « pour un
+  // troisième cas, le langage ne sait pas : mets la phrase dans
+  // ce_que_je_nai_pas_su_ecrire ». Or une TVA française a couramment trois taux.
+  // Le modèle renonçait donc à la fonction entière, et l'écran ne créait plus
+  // aucune fonction — donc plus rien à lancer, ni à enregistrer sur l'établi.
+  //
+  // La forme existe. On la montre, et on la lance ici : enseigner une syntaxe
+  // sans l'éprouver, c'est ce qu'on venait de faire (règle 12).
+  const trois = EXEMPLES.find((un) => un.includes("Taux hors neuf"));
+  assert.ok(trois, "la consigne ne montre pas comment écrire trois cas");
+
+  const fichiers = [{ nom: "essai.ref", contenu: trois }];
+
+  // Le taux ne se demande pas : les deux fonctions le concluent.
+  const demandes = champsDuBrouillon(fichiers).map((un) => un.nom);
+  assert.deepEqual(demandes, ["Type de TVA"], `demandé à tort : ${demandes.join(", ")}`);
+
+  const conclut = (type) => {
+    const lance = lancerLeBrouillon(fichiers, { "Type de TVA": type });
+    const taux = lance.find((un) => un.sujet === "Taux de TVA");
+    return { issue: taux.issue, valeur: taux.valeur };
+  };
+
+  // Le neuf tranche dans la seconde fonction ; les deux autres remontent de la
+  // première par la locale. Les trois concluent — c'est tout l'enjeu.
+  assert.deepEqual(conclut("neuf"), { issue: ISSUE.TIENT, valeur: "20 %" });
+  assert.equal(conclut("existant").issue, ISSUE.SINON);
+  assert.equal(conclut("rénovation").issue, ISSUE.SINON);
+  // Et ce ne sont pas trois fois la même réponse : le repli suit bien le cas.
+  assert.notDeepEqual(conclut("existant").valeur, conclut("rénovation").valeur);
+});
+
+test("la consigne dit de découper, jamais d'abandonner la fonction", () => {
+  // C'est la phrase qui a cassé l'écran : lue comme une permission de renoncer,
+  // elle faisait rendre un brouillon sans une seule fonction.
+  assert.match(CONSIGNES, /Pour trois cas ou plus, on\s*\n?\s*découpe en deux fonctions/);
+  assert.match(CONSIGNES, /n'abandonne jamais une fonction parce qu'elle a trop de cas/);
+  // Et elle dit ce qui, lui, se déclare vraiment en lacune.
+  assert.match(CONSIGNES, /ce que le langage ne\s*\n?\s*sait pas \*\*faire\*\*/);
+});
