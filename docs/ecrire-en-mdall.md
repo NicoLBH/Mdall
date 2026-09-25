@@ -1086,3 +1086,78 @@ Elle ne vérifie pas qu'un écran porte les filets : elle vérifie que **les qua
 rendus annoncent exactement les mêmes crans** et apparient les bornes de la même
 façon, contre une liste écrite en dur. Le jour où l'on ajoute un écran qui
 montre du code, c'est là qu'on s'apercevra qu'il a été oublié.
+
+### Le bac d'essai se rejoue à la frappe
+
+#### Le défaut, et ce qu'il révélait
+
+On ouvrait le bac, on tapait un prix — et le champ perdait le focus au premier
+caractère, pendant que le verdict disparaissait. Il fallait refermer la fenêtre,
+relancer, et lire alors un résultat calculé sur la réponse d'avant.
+
+Les deux symptômes n'en faisaient qu'un. Chaque frappe éteignait `lance`, puis
+remplaçait **tout le contenu de la fenêtre** par un bac fraîchement rendu : le
+champ où le doigt était posé mourait avec le reste, et le verdict, rendu sous
+condition de `lance`, n'était pas réécrit.
+
+Le raisonnement d'origine tenait pourtant debout : *une réponse change ce que
+les fonctions concluraient, donc un verdict laissé à l'écran décrirait l'essai
+d'avant.* La conclusion était fausse d'une marche : il ne fallait pas **retirer**
+le verdict, il fallait le **rejouer**.
+
+#### Ce qu'on redessine désormais, et rien d'autre
+
+Le formulaire porte déjà ce qu'on a tapé — c'est le navigateur qui le tient —,
+et le réécrire ne lui apprendrait rien. Seul le bloc `.bac-resultats` dépend de
+la réponse : il se pose, se remplace ou se retire comme n'importe quel panneau
+ciblé, à l'intérieur du corps de la fenêtre.
+
+Les deux boutons d'un champ logique se marquent **en place** : le voisin se
+dépresse sans que le formulaire soit refait, parce que le refaire emporterait le
+curseur du champ de texte d'à côté.
+
+#### Trois gardes, et ce qu'elles interdisent
+
+- **La marque du bouton se nomme une seule fois.** Elle se pose au rendu et au
+  clic ; écrite deux fois, elle divergerait au premier réglage (règle 4). Une
+  épreuve vérifie en plus que la feuille de style connaît bien ce nom-là.
+- **Le bloc du verdict est le même des deux côtés.** Le bac entier et le
+  redessin ciblé rendent exactement la même chose — sinon le redessin
+  empilerait un second verdict au lieu de remplacer le premier.
+- **La fenêtre est prêtée.** Le wiki du langage s'ouvre dans la même, à un clic
+  du bac dans le même menu : on ne pose un verdict que si le bac y est.
+
+#### Le drapeau qui retombait
+
+`ouvrirLeBac` levait `lance` avant d'ouvrir. Or ouvrir referme ce qui l'était, et
+la fermeture rend ce qu'elle retenait : `surFermeture` remettait `lance` à faux
+juste après. La fenêtre montrait alors un verdict que l'état disait n'avoir
+jamais lancé, et la première réponse tapée le retirait. On referme d'abord, on
+lève ensuite.
+
+#### L'épreuve relit le source, et c'est l'exception qui le justifie
+
+Le défaut n'est pas dans ce qui se dessine : le formulaire était juste, le
+verdict était juste. Il est dans **ce qu'on réécrit**. Aucune épreuve de rendu ne
+peut voir cela, et il est parti en production. Une épreuve relit donc le corps de
+`brancherLeBac` et refuse qu'il rende le bac entier, remplace le contenu de la
+fenêtre, ou éteigne `lance` ; une autre relit `ouvrirLeBac` et vérifie l'ordre
+des deux lignes.
+
+Un banc de dix mutations a remis chacun de ces défauts un par un : les dix sont
+vus. Un essai au clavier, dans Chromium, tape quatre caractères et vérifie à
+chaque frappe que le focus et le curseur n'ont pas bougé, que le verdict se
+refait, et qu'il n'y en a jamais deux.
+
+### Le wiki dit comment l'éditeur aide
+
+L'auto-complétion, Ctrl+Espace, les flèches, Tab et Maj+Tab, les couleurs et les
+filets : rien de tout cela n'était écrit nulle part, et l'on ne devine pas une
+liste qui ne se montre qu'après trois lettres. Le wiki du langage porte donc une
+section de plus — **Écrire sans connaître la grammaire par cœur** —, avec le
+tableau des six touches et ce que la liste propose selon l'endroit de la ligne.
+
+Elle dit aussi ce que l'éditeur ne fait **pas** : il ne complète rien de
+lui-même, et les touches de la liste ne sont prises que lorsqu'elle est ouverte.
+C'est la porte sans modèle du fondamental 13 : on tape tout à la main, et la
+liste ne fait que rappeler ce qu'on aurait pu chercher dans cette page.
