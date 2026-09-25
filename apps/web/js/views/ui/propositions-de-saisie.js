@@ -8,13 +8,22 @@
  * sous le curseur, et écoute cinq touches. C'est tout, et c'est voulu : un
  * composant qui déciderait aussi ne se casserait jamais au bon endroit.
  *
- * ## Les cinq touches, et rien d'autre
+ * ## Les quatre touches, et rien d'autre
  *
- * ↑ ↓ pour choisir, Entrée et Tab pour poser, Échap pour refermer. **Elles ne
- * sont interceptées que si la liste est ouverte**, et aucune autre ne l'est
- * jamais. La zone de code a déjà passé pour cassée une fois parce qu'une couche
+ * ↑ ↓ pour choisir, Entrée pour poser, Échap pour refermer. **Elles ne sont
+ * interceptées que si la liste est ouverte**, et aucune autre ne l'est jamais.
+ * La zone de code a déjà passé pour cassée une fois parce qu'une couche
  * d'affichage ne rendait pas ce qu'on tapait ; on ne va pas recommencer en
  * mangeant des flèches.
+ *
+ * ## Tab n'en fait pas partie, et c'est un choix
+ *
+ * Il pose un **cran de retrait** — c'est le geste qu'on attend d'une touche de
+ * tabulation dans du code, et le langage s'indente de trois espaces. Le lui
+ * prendre pour choisir dans une liste créait un piège : la liste se rouvre
+ * après chaque retrait, si bien qu'un second Tab posait une proposition au lieu
+ * du second cran qu'on venait chercher. La liste se **referme** donc sur Tab,
+ * et laisse passer la touche.
  *
  * ## Elle se place au caractère, et c'est le seul calcul
  *
@@ -186,7 +195,10 @@ export function brancherLesPropositions(racine, { contexte = null, surChangement
       redessiner();
       return;
     }
-    if (evenement.key === "Enter" || evenement.key === "Tab") {
+    // Tab pose un cran de retrait : on referme, et on laisse passer.
+    if (evenement.key === "Tab") { fermer(); return; }
+
+    if (evenement.key === "Enter") {
       evenement.preventDefault();
       poser(choisie);
     }

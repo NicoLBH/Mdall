@@ -22388,19 +22388,40 @@ body.memoire-raisonnement-plein-ecran .project-tabs{
 
    Un dégradé répété plutôt que des éléments : trois cents lignes feraient neuf
    cents nœuds de plus dans le DOM pour dessiner neuf cents traits d'un pixel. */
-.raison-ligne__code{
-  padding:0 12px;
-  white-space:pre;
+/* ── Le filet de retrait : une seule règle, partout où l'on lit du Mdall ────
+
+   Un filet vertical par cran. Les couleurs apparient une borne à sa jumelle ;
+   le filet, lui, montre **l'étendue du bloc** — où il commence, jusqu'où il
+   descend. Sur une fonction de trente lignes, c'est ce qui évite de remonter à
+   la main pour savoir de quel `si` dépend le `enregistre` qu'on lit.
+
+   Il vivait dans l'espace de raisonnement, et n'en sortait pas. On lit du Mdall
+   à cinq endroits : la Mémoire — pour toutes les extensions —, les Changements,
+   le wiki, la zone d'écriture, et le raisonnement. Cinq dégradés recopiés
+   auraient divergé au premier réglage, et c'est celui qu'on ne regarde pas qui
+   aurait raison (règle 4).
+
+   `--mdall-crans` dit combien de crans la ligne porte ; `--mdall-cran`, la
+   largeur d'un cran — trois caractères, comme `PAS_DU_RETRAIT`. */
+.code-retrait{
   background-image:repeating-linear-gradient(
     to right,
-    var(--raison-guide, rgba(110,118,129,.32)) 0 1px,
-    transparent 1px calc(var(--raison-cran, 3ch))
+    var(--mdall-guide, rgba(110,118,129,.32)) 0 1px,
+    transparent 1px var(--mdall-cran, 3ch)
   );
   background-repeat:no-repeat;
   /* Exactement le nombre de crans de la ligne : au-delà, le filet dirait un
      bloc qui n'existe pas. */
-  background-size:calc(var(--raison-crans, 0) * var(--raison-cran, 3ch)) 100%;
-  background-position:12px 0;
+  background-size:calc(var(--mdall-crans, 0) * var(--mdall-cran, 3ch)) 100%;
+  background-position:var(--mdall-retrait-depart, 0) 0;
+}
+
+.raison-ligne__code{
+  padding:0 12px;
+  white-space:pre;
+  /* Le code du raisonnement est en retrait de douze pixels : le filet part de
+     là, et non du bord de la cellule. */
+  --mdall-retrait-depart:12px;
 }
 /* La tête de grille n'est pas du code : elle n'a pas de retrait à montrer. */
 .raison-ligne--tete .raison-ligne__code{ background-image:none; }
@@ -22456,10 +22477,10 @@ body.memoire-raisonnement-plein-ecran .project-tabs{
    Trois teintes qui tournent avec la profondeur, comme dans un éditeur de
    code : une ouverture et sa fermeture portent la même, deux niveaux voisins
    n'ont jamais la même. */
-.raison-paire{ font-weight:600; }
-.raison-paire--0{ color:#ffd700; }
-.raison-paire--1{ color:#da70d6; }
-.raison-paire--2{ color:#179fff; }
+.mdall-paire{ font-weight:600; }
+.mdall-paire--0{ color:#ffd700; }
+.mdall-paire--1{ color:#da70d6; }
+.mdall-paire--2{ color:#179fff; }
 
 /* ── Les teintes d'une rangée ───────────────────────────────────────────────
    Elles se posent en **couleur de fond**, jamais en image : la cellule de code
@@ -27376,4 +27397,24 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   flex:1 1 auto; min-width:0; text-align:right;
   color:var(--muted); font-size:11px;
   overflow:hidden; text-overflow:ellipsis;
+}
+
+/* Les filets de retrait, sous la zone d'écriture.
+
+   Une couche sans texte : une division par ligne, haute d'un interligne, qui
+   porte le nombre de crans de sa ligne. Elle ne peut pas vivre dans la couche
+   colorée — celle-ci est un `<pre>` où chaque ligne occupe exactement une
+   ligne, et y poser un bloc par ligne en ferait deux (c'est le défaut du double
+   interligne qu'on a réparé). Le dégradé, lui, est celui de tout le monde :
+   `.code-retrait`. */
+.saisie-code__retraits{
+  position:absolute; inset:0; z-index:0;
+  padding:10px 12px; margin:0;
+  overflow:hidden; pointer-events:none;
+}
+.saisie-code__filet{
+  height:var(--saisie-ligne);
+  /* Le filet part du bord du texte, et la zone a déjà son retrait : la couche
+     le porte, pas chaque ligne. */
+  --mdall-retrait-depart:0;
 }

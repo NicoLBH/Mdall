@@ -2,8 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  renderEspaceDuRaisonnement, ancresDuCode, espaceParDefaut, BORNES, niveauxDesPaires
+  renderEspaceDuRaisonnement, ancresDuCode, espaceParDefaut, BORNES
 } from "./project-memoire-raisonnement.js";
+// **Les filets et les paires ont quitté cet écran.** Ils servent partout où
+// l'on lit du Mdall ; les éprouver depuis la vue qui les a vus naître ferait
+// croire qu'ils lui appartiennent encore.
+import { niveauxDesPaires } from "../services/mdall-retrait.js";
 
 /** Une ligne de code, telle que l'écriture la rend. */
 const ligne = (...jetons) => ({ jetons: jetons.map(([type, texte]) => ({ type, texte })) });
