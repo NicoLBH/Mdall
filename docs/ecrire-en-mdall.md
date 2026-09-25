@@ -747,3 +747,73 @@ Chromium — page montée à deux cents pixels du haut, fenêtre de 1440×900, u
 fichier de cent vingt-deux lignes — avant et après, dans les deux positions de
 la console : débord de la page, hauteur de la couche colorée contre celle du
 texte, et la case de la grille où le troisième volet atterrit.
+
+### Ce qui passait pour un défaut de clavier
+
+Rapporté ainsi : « on ne peut pas se déplacer avec les flèches du clavier,
+parfois des doubles guillemets s'affichent et il n'est pas possible d'écrire
+entre les guillemets… idem pour les retours à la ligne, pas toujours
+possibles ».
+
+Le clavier marchait. La **couche colorée** ne peignait pas ce qui était écrit.
+
+Elle était peinte par `jetonsDeLaLigne`, qui lit une ligne, la comprend et la
+**recompose** dans sa forme canonique. C'est exactement ce qu'il faut pour
+relire la mémoire : la ligne qu'on montre est celle que le projet tient pour
+vraie, quelle que soit la façon dont elle a été tapée. Sous une zone de saisie,
+c'est un défaut, et il est grave — la couche se pose **sous** un texte rendu
+transparent, et le curseur va où le texte est pendant que l'œil vise où la
+peinture est.
+
+| ce qu'on tape | ce qui se peignait |
+| --- | --- |
+| `si (A = "3")` | `si (A = 3)` — les guillemets disparaissent |
+| `si (A = "3` (on tape) | `si (A = ""3"` — **des guillemets apparaissent** |
+| `fonction P` (on tape) | `fonction P()` — **des parenthèses apparaissent** |
+| `alors ("120 km/h");` | `alors (120 km/h);` |
+| `importe (variable: X);` | `importe (variable: X, depuis: inconnu, zones: zones);` |
+| `soit TVA = Prix HT * 0,2` | `soit TVA = "Prix HT * 0,2";` |
+| `si (x = 1)` + espaces | l'espace final est mangé |
+| `}` | coloré en nom de sujet |
+
+Mesuré au clavier dans un Chromium, sur une fonction de cinq lignes : **62
+frappes sur 110 peignaient autre chose que ce qui venait d'être tapé**. Après :
+zéro.
+
+#### Un second peintre, et une seule loi
+
+`services/mdall-en-ecriture.js` — `jetonsEcrits(ligne)`. Sa loi tient en une
+phrase : **ce qui est peint est exactement ce qui est écrit**. La concaténation
+des jetons rend la ligne, caractère pour caractère, y compris à moitié tapée, y
+compris fausse, y compris vide. Rien n'est ajouté, rien n'est retiré, rien n'est
+normalisé — un caractère qu'il ne sait pas nommer est peint neutre plutôt
+qu'abandonné, parce qu'un trou dans la couche est exactement le défaut qu'on
+répare.
+
+Il ne comprend rien, et c'est voulu : dire si la ligne est juste est le travail
+de la console, qui lit le fichier pour de bon. Un colorateur qui refuserait de
+peindre ce qu'il ne comprend pas laisserait sans couleur la moitié de ligne en
+train de naître, c'est-à-dire au moment où l'on en a le plus besoin.
+
+Les couleurs, elles, restent celles de la Mémoire : mêmes types de jetons, et un
+vocabulaire pris aux listes partagées — `MOTS`, `VERBES`, `PROVENANCES`,
+`AGENTS` — plutôt qu'à une copie qui divergerait au premier mot ajouté au
+langage (règles 4 et 10).
+
+Deux nuances de contexte, que la recomposition n'avait pas à trancher :
+
+- **Les mots qui ouvrent une ligne ne comptent qu'en tête.** « le », « note »,
+  « zone », « si » sont des mots français ordinaires ; les colorer partout ferait
+  clignoter « Hauteur de la note de calcul ». Ceux qui **relient** — « et »,
+  « ou », « non » — valent partout, parce qu'ils font le sens au milieu d'une
+  condition comme d'une liste de valeurs possibles.
+- **Une unité se reconnaît à sa place** : elle suit un nombre. « 890 m » en a
+  une, « 3 ou 4 » n'en a pas.
+
+#### L'épreuve, c'est la frappe
+
+Une épreuve rejoue la saisie d'un fichier d'essai **du premier au dernier
+caractère** et exige l'égalité à chaque frappe — six cent quatre fois. Une autre
+fait la même chose sur le rendu de l'écran, balises ôtées : le texte de la
+couche doit être celui de la zone. C'est la loi, écrite au seul endroit où elle
+se casse.

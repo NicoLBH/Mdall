@@ -43,6 +43,7 @@ import { renderSideResizer, bindSideResizer } from "../../ui/side-resizer.js";
 import { renderGhActionButton, bindGhActionButtons } from "../../ui/gh-split-button.js";
 import { renderJetons } from "../../ui/code-mdall.js";
 import { jetonsDeLaLigne } from "../../../services/memoire-en-lecture.js";
+import { jetonsEcrits } from "../../../services/mdall-en-ecriture.js";
 import {
   brouillonNeuf, fichierOuvert, avecLeFichier, avecLeDit, ouvertSur, brouillonEcrit, langageDuFichier,
   fichiersRemplis, brouillonRange, brouillonRelu
@@ -93,9 +94,21 @@ export function lignesDuFichier(contenu = "") {
 /**
  * Ce qu'on peint sous la zone de saisie.
  *
- * **Les mêmes jetons que la Mémoire**, par le module mutualisé : une ligne
- * qu'on écrit et la même ligne relue doivent prendre exactement les mêmes
- * couleurs, sinon écrire et relire ne se superposent pas.
+ * ## Ce qui est peint est exactement ce qui est écrit
+ *
+ * La couche colorée se pose **sous** le texte de la zone, dont les caractères
+ * sont transparents. Si elle ne peint pas les mêmes caractères, le curseur et
+ * ce qu'on voit se désalignent, et l'écart grandit le long de la ligne.
+ *
+ * C'est ce qui arrivait : la couche était peinte par `jetonsDeLaLigne`, qui
+ * **recompose** la ligne dans sa forme canonique — c'est son travail, et il est
+ * juste pour relire la mémoire. Sous une saisie, il effaçait les guillemets
+ * qu'on venait de taper, en ajoutait qu'on n'avait pas tapés, complétait un
+ * `importe` de trois champs, mangeait les espaces en fin de ligne. On croyait
+ * le clavier cassé : les flèches ne se déplaçaient plus, on ne pouvait pas
+ * écrire entre deux guillemets, les retours à la ligne ne prenaient pas. Le
+ * clavier marchait ; le curseur allait où le texte est, et l'œil visait où la
+ * peinture était. Voir `mdall-en-ecriture.js`, qui porte le tableau des écarts.
  *
  * ## Une ligne du fichier occupe **une** ligne à l'écran
  *
@@ -111,13 +124,14 @@ export function lignesDuFichier(contenu = "") {
  * Le dernier retour chariot est conservé : sans lui, la couche remonte d'une
  * ligne dès qu'on tape Entrée en fin de fichier.
  *
- * Pas de normalisation des retours de Windows : `jetonsDeLaLigne` avale déjà le
- * `\r`, et le compte de lignes ne change pas. Une seconde serait une consigne
- * qu'aucun cas ne peut faire tomber (règle 12).
+ * Pas de normalisation des retours de Windows : un `\r` est un caractère comme
+ * un autre pour qui peint ce qu'il reçoit, et le compte de lignes ne change
+ * pas. Une seconde serait une consigne qu'aucun cas ne peut faire tomber
+ * (règle 12).
  */
 export function colorerDuMdall(contenu = "") {
   return `${String(contenu ?? "").split("\n")
-    .map((ligne) => renderJetons(jetonsDeLaLigne(ligne)))
+    .map((ligne) => renderJetons(jetonsEcrits(ligne)))
     .join("\n")}\n`;
 }
 
