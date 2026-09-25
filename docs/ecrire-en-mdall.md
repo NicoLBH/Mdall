@@ -1015,3 +1015,74 @@ la liste des propositions à vide *avant* d'appeler `fermer`, et la garde « si
 rien n'est ouvert, ne rien faire » croyait donc n'avoir rien à fermer. On tapait
 `//` au milieu d'une ligne, et trois noms du projet restaient affichés sous un
 commentaire.
+
+### La tabulation, et les filets de retrait
+
+#### Tab pose un cran, Maj+Tab en retire un
+
+**Jamais une tabulation** : le langage s'indente de trois espaces, et une zone
+qui en poserait une ferait un fichier que la lecture ne compte pas pareil.
+
+Le cran se pose **en tête de ligne**, jamais au curseur : trois espaces là où
+l'on est couperaient le mot qu'on écrit. Une sélection qui traverse plusieurs
+lignes les décale toutes — c'est ce qu'on attend en déplaçant un bloc — et une
+sélection qui s'arrête au tout début d'une ligne ne la prend pas. Maj+Tab sur
+une ligne sans retrait ne mange pas le premier mot, et le curseur ne remonte
+jamais avant le début de sa ligne.
+
+**La liste des propositions a rendu Tab.** Elle le prenait pour choisir, et cela
+créait un piège : la liste se rouvre après chaque retrait, si bien qu'un second
+Tab posait une proposition au lieu du second cran qu'on venait chercher. Entrée
+et le clic posent ; Tab indente, toujours. Le contrat entre les deux écouteurs
+tient en un mot : la tabulation ne fait rien si quelqu'un l'a **déjà arrêtée**.
+
+#### Les filets, mutualisés
+
+Les deux fonctions vivaient dans l'espace de raisonnement — le détail d'une
+proposition, « comment on en est arrivé là » — et n'en sortaient pas. On lit du
+Mdall à **cinq** endroits :
+
+| où | ce qu'il montre |
+| --- | --- |
+| la **Mémoire** | tous les fichiers, toutes les extensions |
+| les **Changements** d'une proposition | ce que la machine écrira |
+| le **wiki** du langage | ses exemples |
+| la **zone d'écriture** | ce qu'on tape |
+| l'**espace de raisonnement** | le raisonnement d'une valeur |
+
+`services/mdall-retrait.js` porte maintenant les trois calculs, purs :
+`profondeursDuRetrait` — un cran par ligne, les lignes vides héritant du niveau
+qui les contient —, `niveauxDesPaires` — une ouverture et sa fermeture de la
+même teinte, une fermeture orpheline d'aucune —, et `poserUnRetrait`, la
+tabulation.
+
+Une **seule** règle CSS les trace : `.code-retrait`, avec `--mdall-crans` pour
+le nombre de crans et `--mdall-cran` pour leur largeur. Cinq dégradés recopiés
+auraient divergé au premier réglage, et c'est celui qu'on ne regarde pas qui
+aurait raison (règle 4).
+
+Au passage, l'espace de raisonnement avait aussi **son propre `renderJetons`**,
+recopié du mutualisé avec la teinte des paires en plus. Il n'en a plus : c'est
+le rendu partagé qui sait apparier, et les classes `raison-paire` sont devenues
+`mdall-paire`, comme tout ce qui colore ce langage.
+
+#### La zone d'écriture a une couche de plus
+
+Les filets ne peuvent pas vivre dans la couche colorée : c'est un `<pre>` où
+chaque ligne occupe exactement une ligne, et y poser un bloc par ligne en ferait
+deux — c'est le défaut du double interligne qu'on a réparé.
+
+Une couche à part, donc, **sans aucun texte** : une division par ligne, haute
+d'un interligne, portant le nombre de crans de sa ligne. Les lignes ne se
+replient pas et l'interligne est une longueur, si bien qu'une pile de divisions
+tombe exactement en face du texte — mesuré dans un Chromium : 19 px pour 19 px.
+
+Et la loi de la zone tient toujours : **ce qui est peint est exactement ce qui
+est écrit**. Une teinte se pose sur un jeton ; elle n'en crée pas.
+
+#### L'épreuve qui tient la mutualisation
+
+Elle ne vérifie pas qu'un écran porte les filets : elle vérifie que **les quatre
+rendus annoncent exactement les mêmes crans** et apparient les bornes de la même
+façon, contre une liste écrite en dur. Le jour où l'on ajoute un écran qui
+montre du code, c'est là qu'on s'apercevra qu'il a été oublié.
