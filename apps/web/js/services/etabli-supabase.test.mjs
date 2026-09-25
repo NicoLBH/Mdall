@@ -165,3 +165,99 @@ test("la lecture, elle, rend toujours null ou une liste", () => {
   assert.match(lister, /return null;/);
   assert.doesNotMatch(lister, /motif/);
 });
+
+/* ── Le cahier des charges ───────────────────────────────────────────────────
+ *
+ * La zone de français est le cahier des charges de l'utilitaire, et elle ne
+ * montait pas jusqu'à la base. Ce que cette migration promet ne se voit dans
+ * aucun rendu : une colonne nouvelle, une comparaison qui la prend en compte,
+ * et une signature de fonction refaite plutôt que doublée.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+const SQL_DU_CAHIER = readFileSync(
+  fileURLToPath(new URL(
+    "../../../../supabase/migrations/202610180001_le_cahier_des_charges_dun_utilitaire.sql",
+    import.meta.url
+  )),
+  "utf8"
+);
+
+test("le cahier des charges se pose sur la version, jamais sur la fiche", () => {
+  // La `v3` répond à son cahier des charges, pas à celui de la `v5`. Posé sur
+  // l'identité, il aurait décrit l'outil en général — et relire une version
+  // avec l'intention d'une autre, c'est relire deux choses qui ne se
+  // correspondent pas, et le croire.
+  assert.match(SQL_DU_CAHIER, /alter table public\.etabli_versions\s*\n\s*add column if not exists dit text not null default ''/);
+  assert.doesNotMatch(SQL_DU_CAHIER, /alter table public\.etabli_utilitaires/);
+
+  // `default ''` et non `null` : les versions déjà posées n'en ont pas, et « pas
+  // de cahier des charges » est une zone vide, non une inconnue (règle 5).
+  assert.doesNotMatch(SQL_DU_CAHIER, /add column if not exists dit text\s*;/);
+});
+
+test("le cahier des charges compte dans la montée de version", () => {
+  // Une version ne se réécrit jamais. Sans cette comparaison, le seul moyen de
+  // corriger le cahier des charges d'une version déjà posée serait de l'écraser.
+  const fonction = SQL_DU_CAHIER.slice(
+    SQL_DU_CAHIER.indexOf("create or replace function public.etabli_enregistrer")
+  );
+
+  assert.match(fonction, /select v\.fichiers, v\.dit into derniere, dernier_dit/);
+  assert.match(fonction, /coalesce\(dernier_dit, ''\) is distinct from coalesce\(p_dit, ''\)/);
+  // Et il s'écrit dans les deux chemins : la v1 comme la suivante.
+  assert.equal(
+    (fonction.match(/insert into public\.etabli_versions \(utilitaire_id, version, fichiers, dit\)/g) ?? []).length,
+    2, "un des deux enregistrements perd le cahier des charges"
+  );
+});
+
+test("la fonction est refaite, et non doublée", () => {
+  // **Ajouté avec une valeur par défaut, `p_dit` aurait fabriqué une seconde
+  // fonction du même nom** : l'ancienne à cinq arguments, la nouvelle à six, et
+  // un appel qui en nomme cinq aurait convenu aux deux. PostgreSQL refuse alors
+  // de choisir, et l'enregistrement aurait cessé de marcher sans qu'une ligne de
+  // code ait bougé.
+  assert.match(SQL_DU_CAHIER,
+    /drop function if exists public\.etabli_enregistrer\(text, jsonb, uuid, text, text\);/);
+
+  // Le droit d'exécution se repose sur la nouvelle signature : la révocation et
+  // l'octroi portent le nombre d'arguments, et l'ancien couple est parti avec
+  // l'ancienne fonction.
+  assert.match(SQL_DU_CAHIER,
+    /grant execute on function public\.etabli_enregistrer\(text, jsonb, uuid, text, text, text\) to authenticated;/);
+
+  // Elle reste `security invoker` : une seconde porte à garder séparément n'a
+  // pas plus de raison d'exister aujourd'hui qu'hier.
+  assert.match(SQL_DU_CAHIER, /security invoker/);
+  assert.doesNotMatch(SQL_DU_CAHIER, /security definer/);
+});
+
+test("la migration du cahier des charges est additive, et le dit", () => {
+  assert.match(SQL_DU_CAHIER, /[Aa]dditive/);
+  assert.doesNotMatch(SQL_DU_CAHIER, /\bdrop table\b/i);
+  assert.doesNotMatch(SQL_DU_CAHIER, /\bdrop column\b/i);
+  // Et elle dit pourquoi la fonction, elle, se retire : c'est du code, pas des
+  // données — sans quoi la ligne se lirait dans six mois comme une exception
+  // qu'on s'est autorisée sans raison.
+  assert.match(SQL_DU_CAHIER, /Aucune\s*\n?--\s*donnée n'est en jeu/);
+});
+
+test("le navigateur lit et renvoie le cahier des charges de la version", () => {
+  // Les deux se lisent ensemble : pris dans deux passes, l'un pourrait venir de
+  // la v3 et l'autre de la v4 — et l'on relirait un code avec l'intention d'un
+  // autre.
+  assert.match(SOURCE, /etabli_versions\(version,fichiers,dit\)/);
+
+  const debut = SOURCE.indexOf("function laDerniereVersion");
+  const derniere = SOURCE.slice(debut, SOURCE.indexOf("\n}\n", debut));
+  assert.match(derniere, /dit: String\(derniere\?\.dit \?\? ""\)/);
+  // Une ligne sans version rend une paire vide, pas `undefined` : la zone
+  // afficherait « undefined » à l'écran.
+  assert.match(derniere, /return \{ fichiers: \[\], dit: "" \};/);
+
+  // Et il l'envoie **sans le rogner** : une zone de français se termine souvent
+  // par une ligne vide qu'on a laissée là en écrivant, et `texte()` la couperait
+  // — ce qui monterait une version pour un retour à la ligne.
+  assert.match(SOURCE, /p_dit: String\(dit \?\? ""\)/);
+  assert.doesNotMatch(SOURCE, /p_dit: texte\(/);
+});

@@ -114,7 +114,8 @@ On te donne une phrase ou un paragraphe en français. Tu rends des fichiers Mdal
 
 # Ce que Mdall fait, et ne fait pas
 
-Mdall **compare, calcule et conclut**. Il n'a ni boucle, ni condition imbriquée.
+Mdall **compare, calcule et conclut**. Il n'a ni boucle, ni condition
+imbriquée, ni branche enchaînée.
 Une loi qui ne s'écrit ni en conditions ni en calculs est un **agent**, qui
 s'appelle et dont la loi n'est pas dans le fichier.
 
@@ -181,6 +182,13 @@ fonction Vitesse de référence(zones, Zone de vent) {
 - \`alors (…)\` conclut ; \`sinon (…)\` est facultatif. **Sans \`sinon\`, une
   règle dont les conditions ne tiennent pas ne dit rien** — c'est parfois ce
   qu'on veut.
+- **\`sinon si (…)\` n'existe pas.** Une fonction a **une** condition et **deux**
+  issues. Pour deux cas, \`si (…) alors (A); sinon (B);\` suffit — et c'est
+  presque toujours ce que la phrase demande. Pour un troisième cas, le langage
+  ne sait pas : mets la phrase dans \`ce_que_je_nai_pas_su_ecrire\`, plutôt
+  qu'une troisième branche que la lecture refusera ;
+- **une seule \`alors\` et une seule \`sinon\` par fonction.** Une seconde est
+  refusée, elle aussi.
 - comparateurs : \`=\` \`!=\` \`<=\` \`>=\` \`<\` \`>\` \`parmi\`
   \`renseigné\` \`non renseigné\`. Une mesure porte son unité :
   \`<= 28 m\`.

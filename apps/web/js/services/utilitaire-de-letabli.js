@@ -36,7 +36,7 @@
  */
 
 import {
-  brouillonNeuf, avecLeFichier, ouvertSur, fichiersRemplis, fichierOuvert
+  brouillonNeuf, avecLeFichier, avecLeDit, ouvertSur, fichiersRemplis, fichierOuvert
 } from "./brouillon-mdall.js";
 import { champsDuBrouillon } from "./formulaire-du-brouillon.js";
 import { fonctionsDuBrouillon } from "./bac-dessai.js";
@@ -183,13 +183,25 @@ export function fichiersDeLutilitaire(brouillon = null) {
     .sort((gauche, droite) => gauche.nom.localeCompare(droite.nom, "fr"));
 }
 
-/** Un brouillon reconstruit à partir des fichiers gardés. */
-export function brouillonDesFichiers(fichiers = []) {
+/**
+ * Un brouillon reconstruit à partir de ce qu'on a gardé.
+ *
+ * ## Le cahier des charges revient avec le code
+ *
+ * `dit` est la zone de français : ce qu'on voulait dire ou faire. Elle ne
+ * revenait pas, et c'était une perte sèche — le seul bouton qui sache réécrire
+ * du Mdall part de cette zone-là, et on la retrouvait vide après des heures de
+ * travail. Réécrire de mémoire trois cents lignes de cahier des charges n'est
+ * pas une option ; ne plus toucher à l'outil non plus.
+ */
+export function brouillonDesFichiers(fichiers = [], { dit = "" } = {}) {
   const gardes = Array.isArray(fichiers) ? fichiers : [];
   let brouillon = gardes.reduce(
     (courant, fichier) => avecLeFichier(courant, texte(fichier?.nom), String(fichier?.contenu ?? "")),
     brouillonNeuf()
   );
+
+  brouillon = avecLeDit(brouillon, String(dit ?? ""));
 
   // **On rouvre sur les règles quand il y en a**, et sur le premier fichier
   // rempli sinon. Rouvrir sur un onglet vide donne l'impression d'avoir perdu
@@ -297,6 +309,12 @@ export function ficheDuBrouillon(
     resume: texte(resume),
     rayon: rayonDeLutilitaire(rayon),
     fichiers,
+    /**
+     * Le cahier des charges tel qu'il est, **sans le rogner** : la fiche est ce
+     * qu'on envoie, et une zone de français se termine souvent par une ligne
+     * vide qu'on a laissée en écrivant.
+     */
+    dit: String(brouillon?.dit ?? ""),
     entrees: entreesDeLutilitaire(fichiers),
     sorties: sortiesDeLutilitaire(fichiers),
     mots: motsDeLutilitaire(fichiers),
@@ -317,7 +335,7 @@ export function ficheDuBrouillon(
  *  - **`entrees`, `sorties`, `mots`** — déduits du texte gardé, jamais de ce
  *    que quelqu'un a tapé dans un champ.
  */
-export function utilitaireDeLetabli(ligne = null, fichiers = []) {
+export function utilitaireDeLetabli(ligne = null, fichiers = [], dit = "") {
   const id = texte(ligne?.id);
   if (!id) return null;
 
@@ -341,6 +359,13 @@ export function utilitaireDeLetabli(ligne = null, fichiers = []) {
     deLetabli: true,
     id,
     fichiers: gardes,
+    /**
+     * Le cahier des charges de cette version, tel qu'il a été enregistré.
+     *
+     * Il voyage avec les fichiers parce qu'il en est inséparable : rouvrir pour
+     * modifier sans lui remet devant un code sans son intention.
+     */
+    dit: String(dit ?? ""),
     modifieLe: texte(ligne?.updated_at).slice(0, 10)
   };
 }
@@ -354,10 +379,22 @@ export function utilitaireDeLetabli(ligne = null, fichiers = []) {
  * passer — garder tel quel, ou monter d'une version — sans prétendre savoir
  * lequel sortira.
  */
-export function ceQueLenregistrementFait(courant = null, fichiers = []) {
+export function ceQueLenregistrementFait(courant = null, fichiers = [], dit = "") {
   if (!courant?.id) return { quoi: "neuf", version: 1 };
 
-  const memes = JSON.stringify(courant.fichiers ?? []) === JSON.stringify(fichiers ?? []);
+  /**
+   * **Le cahier des charges compte comme le texte.** Corriger l'un sans l'autre
+   * monte quand même d'une version : ce qu'on a écrit a changé, et la version
+   * précédente doit rester lisible telle qu'elle était. Le taire aurait laissé
+   * le seul moyen de réécrire le cahier des charges d'une version déjà posée :
+   * l'écraser.
+   *
+   * Un appelant qui ne se demande que si le **Mdall** a bougé passe le cahier
+   * des charges de l'utilitaire lui-même : les deux termes sont alors égaux, et
+   * seuls les fichiers décident. C'est ce que fait `provenanceDuBrouillon`.
+   */
+  const memes = JSON.stringify(courant.fichiers ?? []) === JSON.stringify(fichiers ?? [])
+    && texte(courant.dit) === texte(dit);
   const version = Number(courant.version) || 1;
 
   return memes
@@ -382,7 +419,14 @@ export function ceQueLenregistrementFait(courant = null, fichiers = []) {
 export function provenanceDuBrouillon(utilitaire = null, brouillon = null) {
   if (!utilitaire?.id) return null;
 
-  const quoi = ceQueLenregistrementFait(utilitaire, fichiersDeLutilitaire(brouillon));
+  // **Seul le Mdall entre dans le projet.** On passe donc le cahier des charges
+  // de l'utilitaire lui-même : la question n'est pas « a-t-on retouché quelque
+  // chose », c'est « ce qui va être versé diffère-t-il de la version annoncée ».
+  // Dire « modifié » pour une phrase de français corrigée décrirait un code
+  // différent de celui qu'on verse.
+  const quoi = ceQueLenregistrementFait(
+    utilitaire, fichiersDeLutilitaire(brouillon), utilitaire.dit
+  );
   return {
     // L'identifiant voyage avec : c'est lui qui retrouvera l'outil le jour où
     // l'on voudra comparer ce que le projet tient à ce que l'établi est devenu.

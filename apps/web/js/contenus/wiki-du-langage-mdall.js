@@ -409,6 +409,11 @@ export const WIKI_DU_LANGAGE = [
         + "poteaux ne s'écrit pas ;",
       "**pas de condition imbriquée** : `si` … `alors` … et c'est tout. Une "
         + "arborescence de décisions se découpe en plusieurs fonctions ;",
+      "**pas de `sinon si`** : une fonction a une condition et deux issues, "
+        + "`alors` et `sinon`, chacune posée une seule fois. La ligne "
+        + "`sinon si (…)` est **refusée à la lecture** — elle l'était lue "
+        + "auparavant comme une conclusion valant le texte « si (…) », et la "
+        + "fonction concluait une phrase au lieu d'une valeur ;",
       "**pas de fonction que vous définissez** : les sept sont celles-là ;",
       "**une conclusion ne nomme que ce que sa fonction a calculé** — `alors "
         + "(Niveau du sol)` rend le texte « Niveau du sol ». Pour conclure avec la "

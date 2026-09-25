@@ -1316,3 +1316,121 @@ test("ouvrir un outil le met à l'essai, lancé, et la ligne du titre se rebranc
   assert.match(ligne, /brancherLaLigneDuTitre\(racine\);/,
     "la ligne se réécrit sans se rebrancher : le menu cessera de répondre");
 });
+
+/* ── Sortir du mode édition ──────────────────────────────────────────────── */
+
+test("on entre dans le code par le menu, et on en sort par le menu", () => {
+  // **L'aller-retour manquait.** On ouvrait le code par « Modifier » et l'on en
+  // sortait par l'Atelier : rouvrir l'outil depuis la vitrine le remettait à
+  // l'essai. Cela marchait, et c'était un détour de trois clics hors de l'écran
+  // pour revenir à l'écran d'à côté.
+  const ecriture = renderActionsDuTitre(POUR_LETABLI, { mode: MODE.ECRITURE, utilitaire: UN_OUTIL });
+
+  assert.ok(ecriture.includes(GESTE.ESSAYER), "on ne peut pas refermer le code");
+  assert.match(ecriture, /Revenir à l&#39;essai|Revenir à l'essai/);
+  assert.equal(ecriture.includes(GESTE.MODIFIER), false, "« Modifier » n'a pas de sens : on y est");
+
+  // Et à l'essai, l'inverse exactement : on y est, il n'y a rien à refermer.
+  const essai = renderActionsDuTitre(POUR_LETABLI, { mode: MODE.ESSAI, utilitaire: UN_OUTIL });
+  assert.equal(essai.includes(GESTE.ESSAYER), false);
+  assert.ok(essai.includes(GESTE.MODIFIER));
+});
+
+test("un brouillon qu'on n'a jamais enregistré n'a pas d'essai à retrouver", () => {
+  // L'écriture est chez lui, et « Lancer » ouvre déjà son bac dans une fenêtre.
+  // Une entrée qui renverrait à un essai inexistant montrerait une vue vide.
+  const anonyme = renderActionsDuTitre(POUR_LETABLI, { mode: MODE.ECRITURE });
+
+  assert.equal(anonyme.includes(GESTE.ESSAYER), false);
+  assert.match(anonyme, /data-brouillon-lancer/, "il reste de quoi lancer");
+});
+
+test("refermer le code remet exactement ce que reprendre un outil pose", () => {
+  // **Deux bascules qui vivent à deux endroits finissent par ne plus remettre le
+  // même état.** À l'essai, le bac **est** la vue, et il est lancé : ce drapeau
+  // est celui que le redessin ciblé relit à chaque champ rempli, et à faux le
+  // verdict se retire de l'écran à la première frappe (règle 4).
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  const debut = source.indexOf("function refermerLeCode(racine) {");
+  assert.ok(debut > 0, "refermerLeCode est introuvable");
+  const corps = source.slice(debut, source.indexOf("\n}\n", debut));
+
+  assert.match(corps, /etat\.mode = MODE\.ESSAI;/);
+  assert.match(corps, /etat\.lance = true;/,
+    "l'essai s'ouvrirait non lancé, et le verdict partirait à la première frappe");
+});
+
+/* ── Le cahier des charges, à l'écran ────────────────────────────────────── */
+
+test("la zone de français dit qu'on y écrit aussi ce qu'on veut faire", () => {
+  // « Ce que vous voulez dire » se lisait comme une consigne de rédaction. On y
+  // écrit ce que l'outil doit faire : c'est le cahier des charges.
+  const ecran = renderEcrireEnMdall(POUR_LETABLI, {});
+
+  assert.match(ecran, /Ce que vous voulez dire, ou faire/);
+});
+
+test("le cahier des charges revient dans sa zone quand on rouvre l'outil", () => {
+  // **La perte qu'on répare.** Trois cent cinquante lignes écrites une
+  // après-midi, l'outil enregistré, l'onglet fermé : la zone était vide au
+  // retour — et le seul bouton qui sache réécrire du Mdall part de là.
+  const CAHIER = "Le violet est obligatoire sur les volets en bois.\n";
+  const ecran = renderEcrireEnMdall(avecLeDit(POUR_LETABLI, CAHIER), { utilitaire: UN_OUTIL });
+
+  assert.match(ecran, /Le violet est obligatoire sur les volets en bois\./);
+  // Dans la zone, et non ailleurs : c'est elle qu'on relit et qu'on corrige.
+  const zone = ecran.slice(ecran.indexOf("data-brouillon-dit"));
+  assert.match(zone.slice(0, zone.indexOf("</textarea>")), /Le violet est obligatoire/);
+});
+
+/* ── La console : sa largeur et sa hauteur ───────────────────────────────── */
+
+test("la console du bas porte une poignée de hauteur, celle de droite non", () => {
+  // À droite, elle se tire par son bord gauche — c'est une largeur —, et deux
+  // poignées sur le même élément se disputeraient le même bord.
+  const bas = renderConsole(laConsole({ fichiers: fichiersRemplis(POUR_LETABLI) }), { volet: false });
+  assert.match(bas, /id="brouillonConsoleHauteur"/);
+  assert.match(bas, /brouillon-console__poignee/);
+
+  const droite = renderVoletDeLaConsole(laConsole({ fichiers: fichiersRemplis(POUR_LETABLI) }), { volet: true });
+  assert.doesNotMatch(droite, /brouillonConsoleHauteur/);
+  // Elle garde la sienne, celle de la largeur.
+  assert.match(droite, /id="brouillonConsoleResizer"/);
+});
+
+test("la hauteur ne se déclare qu'une fois tirée", () => {
+  // Déclarée à zéro, elle écraserait le plafond de la feuille de style par une
+  // console d'aucune hauteur. Absente, la console fait la taille de ce qu'elle
+  // dit — une console vide ne vole pas le bas de l'écran pour n'y rien montrer.
+  assert.doesNotMatch(renderEcrireEnMdall(POUR_LETABLI, {}), /--brouillon-console-height/);
+  assert.match(renderEcrireEnMdall(POUR_LETABLI, { hauteurConsole: 260 }),
+    /--brouillon-console-height:260px/);
+});
+
+/**
+ * **Cette épreuve relit le source, et le défaut qu'elle garde le justifie.**
+ *
+ * Le sens d'un glissé ne se voit dans aucun rendu : la console était tirée par
+ * son bord gauche, le commentaire le disait, et le code ne passait pas le sens
+ * au composant — le panneau rétrécissait quand la souris l'élargissait. C'est
+ * exactement la règle 12 : une consigne qu'on ne vérifie pas est une intention.
+ */
+test("les deux consoles se tirent dans le sens du geste", () => {
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  const largeur = source.indexOf("const poignee = racine.querySelector(\"#brouillonConsoleResizer\");");
+  assert.ok(largeur > 0, "la poignée de largeur est introuvable");
+  assert.match(source.slice(largeur, source.indexOf("\n}\n", largeur)), /^\s*sens: -1,$/m,
+    "la console de droite s'élargit quand la souris la rétrécit");
+
+  const hauteur = source.indexOf("function brancherLaHauteurDeLaConsole(racine) {");
+  assert.ok(hauteur > 0, "la poignée de hauteur est introuvable");
+  const corps = source.slice(hauteur, source.indexOf("\n}\n", hauteur));
+  assert.match(corps, /axe: "y",/, "une hauteur se tire de haut en bas");
+  assert.match(corps, /^\s*sens: -1,$/m, "la console du bas grandit quand on monte sa poignée");
+  // **La hauteur de départ se mesure**, elle ne se retient pas : tant qu'on n'a
+  // pas tiré, la console fait la taille de ce qu'elle dit, et partir d'un nombre
+  // supposé ferait sauter le panneau au premier pixel de glissé.
+  assert.match(corps, /etat\.hauteurConsole \|\| Math\.round\(bande\.offsetHeight\)/);
+});

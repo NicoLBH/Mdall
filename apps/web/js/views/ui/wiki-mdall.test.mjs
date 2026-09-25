@@ -171,3 +171,28 @@ test("un tableau rend son en-tête et ses lignes", () => {
   assert.equal((html.match(/<th>/g) ?? []).length, 2);
   assert.equal((html.match(/<td>/g) ?? []).length, 4);
 });
+
+test("le wiki dit que « sinon si » n'existe pas, et la lecture le refuse", () => {
+  // **La limite qu'on a découverte à l'usage.** Un utilitaire de TVA marchait
+  // pour « existant » et pas pour « neuf » : `sinon si (…)` était lu comme une
+  // conclusion valant le texte « si (…) », et la fonction concluait une phrase
+  // au lieu d'un taux. Le wiki disait « pas de condition imbriquée » ; personne
+  // n'y reconnaît la forme qu'on vient d'écrire.
+  const limites = WIKI_DU_LANGAGE.find((une) => une.id === "limites");
+  const dit = JSON.stringify(limites);
+
+  assert.match(dit, /sinon si/, "le wiki ne nomme pas la forme qu'on écrit pourtant");
+
+  // Et ce que le wiki annonce, la lecture le fait — sinon on enseignerait une
+  // limite qui n'en est pas une (règle 12).
+  const lu = lireUnFichier([
+    "fonction Taux de TVA(zones, Type de TVA) {",
+    '   si (Type de TVA = "existant")',
+    "   alors (5,5 %);",
+    '   sinon si (Type de TVA = "neuf")',
+    "   alors (20 %);",
+    "}"
+  ].join("\n"));
+  assert.ok(lu.refus.some((un) => /« sinon si » n'existe pas/.test(un.raison)),
+    "le wiki l'annonce refusé et la lecture l'accepte");
+});

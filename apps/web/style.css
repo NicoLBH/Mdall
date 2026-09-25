@@ -27132,11 +27132,40 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    plafond, et c'est elle qui défile quand elle est longue. */
 .brouillon-console{
   flex:0 0 auto;
-  max-height:34vh; overflow:auto;
+  /* **Les deux propriétés lisent la même variable**, et c'est ce qui permet de
+     n'en déclarer aucune tant qu'on n'a pas tiré : sans elle, la console fait
+     la taille de ce qu'elle dit, plafonnée à 34vh. Une hauteur posée sans lever
+     le plafond n'aurait rien donné au-delà — on aurait tiré dans le vide. */
+  height:var(--brouillon-console-height, auto);
+  max-height:var(--brouillon-console-height, 34vh);
+  overflow:auto;
   border-top:1px solid var(--border);
   background:var(--bg, var(--canvas-default, #0d1117));
   padding:10px 14px 14px;
 }
+/* La poignée de hauteur : sur le bord haut de la console, débordant sur la
+   largeur entière pour être saisissable sans viser le trait.
+
+   Elle est **dans la tête**, qui est collante : ainsi elle reste au bord haut
+   quand les lignes défilent. Les marges négatives annulent le retrait de la
+   console — la poignée doit être sur son bord, pas à l'intérieur. */
+.brouillon-console__poignee.side-resizer__handle{
+  /* La tête est tirée sur le bord haut de la console par sa marge négative : la
+     poignée se pose donc **à cheval sur ce bord**, moitié dessus moitié dessous,
+     comme celle du corps déborde sur ses deux colonnes. Descendue à l'intérieur,
+     il faudrait viser le trait ; montée plus haut, on saisirait le volet de code
+     qui est au-dessus. */
+  position:absolute; top:-5px; left:-14px; right:-14px;
+  height:10px; cursor:row-resize; z-index:2;
+}
+/* Le guide d'une hauteur est un trait **horizontal** : il dit à quelle ligne on
+   va tomber. Celui du corps est vertical, et les deux ne se ressemblent que par
+   leur couleur. */
+.brouillon-console .side-resizer__guide{
+  position:fixed; left:0; right:0; height:2px; width:auto;
+  background:var(--borderColor-accent-emphasis); display:none; pointer-events:none; z-index:4;
+}
+
 /* Sa tête ne défile pas avec ses lignes : le nom, le compte et le bouton de
    place restent là où on les a laissés. */
 .brouillon-console__tete{

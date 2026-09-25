@@ -245,3 +245,27 @@ test("l'exemple de chaînage de la consigne conclut vraiment, sans rien demander
   assert.equal(prix.issue, ISSUE.TIENT);
   assert.equal(prix.valeur, "144 €");
 });
+
+test("la consigne interdit « sinon si », que la lecture refuse", () => {
+  // **Le défaut vu à l'écran, une fois de plus.** Un utilitaire de TVA marchait
+  // pour « existant » et pas pour « neuf » : le modèle avait écrit
+  // `sinon si (Type de TVA = "neuf")`, forme que la langue n'a pas. Le refuser
+  // à la lecture ne suffit pas — le modèle le réécrirait au prochain essai, et
+  // l'utilisateur en serait quitte pour un refus qu'il n'a pas causé.
+  assert.match(CONSIGNES, /`sinon si \(…\)` n'existe pas/);
+  // Et il dit quoi faire à la place, sinon la consigne n'est qu'une porte close.
+  assert.match(CONSIGNES, /ce_que_je_nai_pas_su_ecrire/);
+
+  // Ce que la lecture en fait, pour que l'interdit et le refus soient la même
+  // chose et non deux intentions parallèles (règle 4).
+  const lu = lireUnFichier([
+    "fonction Taux de TVA(zones, Type de TVA) {",
+    '   si (Type de TVA = "existant")',
+    "   alors (5,5 %);",
+    '   sinon si (Type de TVA = "neuf")',
+    "   alors (20 %);",
+    "}"
+  ].join("\n"));
+  assert.ok(lu.refus.some((un) => /« sinon si » n'existe pas/.test(un.raison)),
+    "la consigne l'interdit et la lecture l'accepte");
+});

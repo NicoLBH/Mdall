@@ -79,11 +79,17 @@ async function appel(chemin, { method = "GET", body = null, headers = {}, params
 export async function listerLetabli() {
   try {
     const lignes = (await appel("etabli_utilitaires", {
-      params: { select: `${COLONNES},etabli_versions(version,fichiers)`, order: "updated_at.desc" }
+      params: {
+        select: `${COLONNES},etabli_versions(version,fichiers,dit)`,
+        order: "updated_at.desc"
+      }
     })) ?? [];
 
     return lignes
-      .map((ligne) => utilitaireDeLetabli(ligne, fichiersDeLaDerniere(ligne)))
+      .map((ligne) => {
+        const derniere = laDerniereVersion(ligne);
+        return utilitaireDeLetabli(ligne, derniere.fichiers, derniere.dit);
+      })
       .filter(Boolean);
   } catch {
     return null;
@@ -91,20 +97,28 @@ export async function listerLetabli() {
 }
 
 /**
- * Les fichiers de la version courante, parmi celles qui sont venues.
+ * La version courante, parmi celles qui sont venues : son texte **et son cahier
+ * des charges**.
  *
  * La base rend les versions dans l'ordre qu'elle veut ; on prend celle dont le
  * numéro est le plus haut plutôt que la dernière du tableau — un ordre supposé
  * est un ordre qui change le jour où la requête change.
+ *
+ * Les deux se lisent ensemble parce qu'ils appartiennent à la même version :
+ * pris dans deux passes, l'un pourrait venir de la `v3` et l'autre de la `v4`,
+ * et l'on relirait un code avec l'intention d'un autre.
  */
-function fichiersDeLaDerniere(ligne = null) {
+function laDerniereVersion(ligne = null) {
   const versions = Array.isArray(ligne?.etabli_versions) ? ligne.etabli_versions : [];
-  if (!versions.length) return [];
+  if (!versions.length) return { fichiers: [], dit: "" };
 
   const derniere = versions.reduce(
     (haute, une) => ((Number(une?.version) || 0) > (Number(haute?.version) || 0) ? une : haute)
   );
-  return Array.isArray(derniere?.fichiers) ? derniere.fichiers : [];
+  return {
+    fichiers: Array.isArray(derniere?.fichiers) ? derniere.fichiers : [],
+    dit: String(derniere?.dit ?? "")
+  };
 }
 
 /**
@@ -123,7 +137,7 @@ function fichiersDeLaDerniere(ligne = null) {
  * @returns {Promise<{ok: boolean, utilitaire?: object, motif?: string}>}
  */
 export async function enregistrerSurLetabli({
-  id = "", nom = "", resume = "", rayon = "", fichiers = []
+  id = "", nom = "", resume = "", rayon = "", fichiers = [], dit = ""
 } = {}) {
   const dit = texte(nom);
   const gardes = Array.isArray(fichiers) ? fichiers : [];
@@ -137,14 +151,21 @@ export async function enregistrerSurLetabli({
         p_fichiers: gardes,
         p_id: texte(id) || null,
         p_resume: texte(resume),
-        p_rayon: texte(rayon) || "exploration"
+        p_rayon: texte(rayon) || "exploration",
+        /**
+         * Le cahier des charges, **non rogné**. `texte()` couperait les blancs
+         * de bord — et une zone de français se termine souvent par une ligne
+         * vide qu'on a laissée là exprès, en écrivant. Le rendre autrement
+         * qu'on l'a tapé ferait monter une version pour un retour à la ligne.
+         */
+        p_dit: String(dit ?? "")
       }
     });
 
     // La fonction rend une ligne ; certaines passerelles l'enveloppent dans un
     // tableau. On accepte les deux plutôt que d'en supposer une.
     const rendue = Array.isArray(ligne) ? ligne[0] : ligne;
-    const utilitaire = utilitaireDeLetabli(rendue, gardes);
+    const utilitaire = utilitaireDeLetabli(rendue, gardes, String(dit ?? ""));
 
     // Une réponse sans ligne : `p_id` ne désigne aucun des siens. Ce n'est pas
     // une panne, c'est un utilitaire qu'on n'a pas — et le dire « réessayez »
