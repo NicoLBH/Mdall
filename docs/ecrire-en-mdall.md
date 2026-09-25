@@ -956,3 +956,62 @@ Quatre gardes muettes sur seize, et chacune était un vrai trou :
 Une cinquième correction est venue du même banc : le filtre qui empêche de
 demander une locale existait à **deux** endroits, et l'un des deux ne faisait
 tomber aucun cas. Il n'en reste qu'un (règles 10 et 12).
+
+### L'auto-complétion
+
+On écrit du Mdall à la main sur cet écran ; personne ne connaît la grammaire par
+cœur, et la chercher dans le wiki à chaque ligne reviendrait à dire que seul le
+modèle sait écrire.
+
+Ce n'est pas un environnement de développement, et c'est délibéré. Quatre
+situations, et rien de plus :
+
+| là où l'on est | ce qui se propose |
+| --- | --- |
+| en tête de ligne, une lettre tapée | les mots du langage — `fonction`, `calcule`, `sauf si`… |
+| dans une condition, un `calcule`, un `alors` | les noms **déclarés** et les locales calculées plus haut |
+| derrière un comparateur | les **valeurs possibles** du nom comparé, et elles seules |
+| derrière `depuis:`, `dans:`, `statut:` | les fichiers du brouillon, les statuts du langage |
+
+Chaque proposition de plus est une chose à apprendre et à documenter, et un
+écran qui propose tout ne propose rien.
+
+#### Trois choses qu'elle ne fait jamais
+
+**Elle ne propose pas ce qui n'existe pas.** Un nom qui n'est déclaré nulle part
+et qu'aucun brouillon ne pose ne se propose pas : une complétion inventée se
+tape plus vite qu'elle ne se vérifie, et l'on écrirait des renvois vers rien.
+
+**Elle ne parle pas dans une chaîne ni dans un commentaire.** Ce qu'on écrit là
+est du texte, et le langage n'a rien à y dire.
+
+**Elle n'intercepte aucune touche quand elle est fermée.** ↑ ↓ pour choisir,
+Entrée et Tab pour poser, Échap pour refermer — et uniquement si la liste est
+ouverte. Ctrl+Espace la demande sans avoir rien tapé. La zone de code a déjà
+passé pour cassée une fois parce qu'une couche d'affichage ne rendait pas ce
+qu'on tapait ; on ne va pas recommencer en mangeant des flèches.
+
+#### Ce qui décide, et ce qui montre
+
+`services/mdall-completion.js` décide : une ligne, une colonne, ce que le projet
+déclare, ce que la fonction pose — et une liste sort. Il est **pur**, donc il se
+casse et se répare sans navigateur.
+
+`views/ui/propositions-de-saisie.js` montre. Il place la liste **au caractère** :
+la zone est à chasse fixe et son interligne est une longueur, pas un facteur, si
+bien que la colonne du curseur fois la largeur d'un caractère donne la position
+exacte — sans reconstruire un miroir du texte. La largeur se mesure une fois,
+sur la zone elle-même : la déduire de la police écrite dans le CSS ferait deux
+vérités pour une seule chose.
+
+Le contexte est redemandé **à chaque frappe** : on vient peut-être d'écrire la
+déclaration qu'on veut voir proposée.
+
+#### Ce que le navigateur a trouvé
+
+Un vrai défaut, que les épreuves de rendu ne pouvaient pas voir : la liste
+**restait à l'écran** quand il n'y avait plus rien à proposer. `montrer` remettait
+la liste des propositions à vide *avant* d'appeler `fermer`, et la garde « si
+rien n'est ouvert, ne rien faire » croyait donc n'avoir rien à fermer. On tapait
+`//` au milieu d'une ligne, et trois noms du projet restaient affichés sous un
+commentaire.
