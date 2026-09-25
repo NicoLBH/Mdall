@@ -552,24 +552,29 @@ export function renderLignesDeLaConsole(lignes = []) {
   `).join("");
 }
 
-/** La console en bas de l'écran. Vide quand elle est partie dans le volet. */
-export function renderConsole(lignes = [], { volet = false } = {}) {
+/**
+ * La tête de la console : son nom, ce qu'elle compte, et le bouton de place.
+ *
+ * **Un seul rendu pour ses deux places.** Deux têtes écrites séparément —
+ * l'une pour le bas, l'autre pour le volet — auraient divergé à la première
+ * ligne ajoutée, et le bouton qui ramène la console aurait fini par ne plus
+ * ressembler à celui qui l'envoie (règle 10).
+ *
+ * Elle porte son nom, `console`, comme le volet de code porte celui de son
+ * fichier : une bande de messages sans titre en bas d'un écran se lit comme un
+ * pied de page, et l'on n'y cherche rien.
+ */
+export function renderTeteDeLaConsole(lignes = [], { volet = false } = {}) {
   const toutes = Array.isArray(lignes) ? lignes : [];
 
   return `
-    <div class="brouillon-console${volet ? " est-deplacee" : ""}">
-      <div class="brouillon-console__tete">
-        <span class="brouillon-console__phrase">
-          ${svgIcon(toutes.some((une) => une.niveau !== NIVEAU.FAIT) ? "alert" : "check",
-            { className: "octicon" })}
-          ${escapeHtml(phraseDeLaConsole(toutes))}
-        </span>
-      ${/*
-        **Toujours là, même sans une ligne.** Il ne paraissait qu'avec un
-        message : on ne pouvait donc ranger la console à droite qu'au moment où
-        elle avait quelque chose à dire, c'est-à-dire au pire moment. C'est un
-        réglage de l'écran, pas une réaction à son contenu.
-      */""}
+    <div class="brouillon-console__tete">
+      <span class="brouillon-console__nom">console</span>
+      <span class="brouillon-console__phrase">
+        ${svgIcon(toutes.some((une) => une.niveau !== NIVEAU.FAIT) ? "alert" : "check",
+          { className: "octicon" })}
+        ${escapeHtml(phraseDeLaConsole(toutes))}
+      </span>
       <button type="button" class="gh-btn gh-btn--sm brouillon-console__place"
         data-brouillon-console-place aria-pressed="${volet}"
         title="${escapeHtml(volet
@@ -577,10 +582,27 @@ export function renderConsole(lignes = [], { volet = false } = {}) {
           : "Mettre la console à droite, à côté du code")}">
         ${svgIcon("file-diff", { className: "octicon" })} ${volet ? "En bas" : "À droite"}
       </button>
-      </div>
-      ${volet
-        ? ""
-        : `<ul class="brouillon-console__liste">${renderLignesDeLaConsole(toutes)}</ul>`}
+    </div>
+  `;
+}
+
+/**
+ * La console en bas de l'écran.
+ *
+ * **Rien du tout quand elle est partie à droite.** Il en restait sa tête, pour
+ * qu'on puisse la ramener — et cela laissait une bande de plus en bas de
+ * l'écran, qui répétait le compte que le volet affichait déjà. Le bouton qui la
+ * ramène est maintenant dans sa tête à elle, là où elle se trouve : une console
+ * emporte ses commandes, elle ne laisse pas un moignon derrière elle.
+ */
+export function renderConsole(lignes = [], { volet = false } = {}) {
+  if (volet) return "";
+  const toutes = Array.isArray(lignes) ? lignes : [];
+
+  return `
+    <div class="brouillon-console">
+      ${renderTeteDeLaConsole(toutes, { volet })}
+      <ul class="brouillon-console__liste">${renderLignesDeLaConsole(toutes)}</ul>
     </div>
   `;
 }
@@ -611,10 +633,7 @@ export function renderVoletDeLaConsole(lignes = [], { volet = false } = {}) {
     <div class="brouillon__console-volet">
       ${renderSideResizer({ id: "brouillonConsoleResizer", className: "brouillon__poignee" })}
       <div class="brouillon-volet brouillon-volet--console">
-        <div class="brouillon-volet__tete">
-          <span class="brouillon-volet__langue">console</span>
-          <span class="brouillon-volet__quoi">${escapeHtml(phraseDeLaConsole(toutes))}</span>
-        </div>
+        ${renderTeteDeLaConsole(toutes, { volet })}
         <ul class="brouillon-console__liste">${renderLignesDeLaConsole(toutes)}</ul>
       </div>
     </div>
@@ -645,10 +664,6 @@ export function renderEcrireEnMdall(brouillon = null, {
           <h2 class="lecture-cr__titre">Écrire en Mdall</h2>
           ${renderActionsDuTitre(brouillon, { depose })}
         </div>
-        <p class="lecture-cr__mot">
-          Dites ce que vous voulez poser, en français. Le code s'écrit à droite —
-          et <b>rien ne s'écrit dans le projet</b> : pour cela il faut une proposition, signée.
-        </p>
       </header>
 
       <div class="brouillon__corps">
@@ -904,30 +919,19 @@ function redessinerLaConsole(racine) {
   racine.querySelector(".brouillon")
     ?.setAttribute("data-console", etat.volet ? "volet" : "bas");
 
-  remplacer(racine, ".brouillon-console", renderConsole(lignes, { volet: etat.volet }));
   remplacer(racine, ".lecture-cr__entete-actions",
     renderActionsDuTitre(etat.brouillon, { depose: etat.depose }));
 
-  const ancien = racine.querySelector(".brouillon__console-volet");
-  const html = renderVoletDeLaConsole(lignes, { volet: etat.volet });
-  const pose = poseDuPanneau({ present: Boolean(ancien), aEcrire: Boolean(html) });
+  // **Les deux places de la console naissent et meurent ensemble**, et c'est la
+  // même pose des deux côtés : l'une paraît quand l'autre s'en va.
+  poserLePanneau(racine, ".brouillon-console",
+    renderConsole(lignes, { volet: etat.volet }), { dans: ".brouillon" });
 
-  if (pose === POSE.RETIRER) {
-    debrancherConsole?.();
-    debrancherConsole = null;
-    ancien.remove();
-  } else if (pose !== POSE.RIEN) {
-    const fabrique = enElement(html);
-    // Du HTML qui ne produit aucun élément : on garde ce qui est à l'écran
-    // plutôt que de le remplacer par rien.
-    if (fabrique) {
-      if (pose === POSE.REMPLACER) ancien.replaceWith(fabrique);
-      // Le volet ferme le corps : c'est le dernier des trois, et une pose qui
-      // l'insérerait ailleurs le ferait changer de place entre un redessin
-      // ciblé et un redessin entier.
-      else racine.querySelector(".brouillon__corps")?.append(fabrique);
-    }
-  }
+  const pose = poserLePanneau(racine, ".brouillon__console-volet",
+    renderVoletDeLaConsole(lignes, { volet: etat.volet }), { dans: ".brouillon__corps" });
+
+  // La poignée du volet écoute la fenêtre : elle ne part pas avec son élément.
+  if (pose === POSE.RETIRER) { debrancherConsole?.(); debrancherConsole = null; }
 
   brancherLaConsole(racine);
 }
@@ -979,6 +983,34 @@ function enElement(html) {
   const neuf = document.createElement("div");
   neuf.innerHTML = String(html ?? "");
   return neuf.firstElementChild;
+}
+
+/**
+ * Poser, remplacer ou retirer un panneau qui naît et meurt avec un réglage.
+ *
+ * Les quatre cas se décident dans `poseDuPanneau`, qui est pure et s'éprouve —
+ * c'est celui où il n'y a ni panneau ni rien à écrire qui avait fait tomber
+ * l'écran (voir la règle en tête de section).
+ *
+ * `dans` dit où poser le panneau qui naît. Il ferme toujours son hôte : une
+ * pose qui l'insérerait ailleurs le ferait changer de place entre un redessin
+ * ciblé et un redessin entier.
+ */
+function poserLePanneau(racine, selecteur, html, { dans = "" } = {}) {
+  const ancien = racine.querySelector(selecteur);
+  const pose = poseDuPanneau({ present: Boolean(ancien), aEcrire: Boolean(html) });
+
+  if (pose === POSE.RIEN) return pose;
+  if (pose === POSE.RETIRER) { ancien.remove(); return pose; }
+
+  // Du HTML qui ne produit aucun élément : on garde ce qui est à l'écran plutôt
+  // que de le remplacer par rien.
+  const fabrique = enElement(html);
+  if (!fabrique) return POSE.RIEN;
+
+  if (pose === POSE.REMPLACER) ancien.replaceWith(fabrique);
+  else racine.querySelector(dans)?.append(fabrique);
+  return pose;
 }
 
 /** Remplacer un bloc par son nouveau rendu, s'il est à l'écran et qu'il en a un. */

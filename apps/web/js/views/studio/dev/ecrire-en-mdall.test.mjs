@@ -9,7 +9,8 @@ import {
   lignesDuFichier, renderOngletsDuBrouillon, renderVoletDuCode, renderEcrireEnMdall,
   renderFormulaire, renderResultats, renderBacDessai, renderConsole, renderProposer,
   renderVoletDeLaConsole, renderGestes, colorerDuMdall, POSE, poseDuPanneau,
-  renderActionsDuTitre, hauteurDuCadre, HAUTEUR_MINIMALE, MARGE_DU_BAS, GESTE
+  renderActionsDuTitre, hauteurDuCadre, HAUTEUR_MINIMALE, MARGE_DU_BAS, GESTE,
+  renderTeteDeLaConsole
 } from "./ecrire-en-mdall.js";
 import { renderLignesDeCode } from "../../ui/code-mdall.js";
 import { readFileSync } from "node:fs";
@@ -123,10 +124,17 @@ test("pendant la transcription, « Coder » se désarme", () => {
   assert.match(html, /Transcription en cours/);
 });
 
-test("l'écran dit que rien ne s'écrit dans le projet", () => {
-  // « On ne doit RIEN verser DIRECTEMENT dans la mémoire, JAMAIS. » Le bac
-  // d'essai doit le porter à l'écran, pas seulement dans son code.
-  assert.match(renderEcrireEnMdall(brouillonNeuf(), {}), /rien ne s'écrit dans le projet/);
+test("l'écran dit que rien n'entre sans signature, au moment où cela compte", () => {
+  // « On ne doit RIEN verser DIRECTEMENT dans la mémoire, JAMAIS. » Une phrase
+  // permanente sous le titre le disait à un écran vide, c'est-à-dire à personne,
+  // et elle se lisait une fois puis jamais. La console le dit **quand il y a
+  // quelque chose à verser**, ce qui est le seul moment où on l'entend.
+  const vide = renderEcrireEnMdall(brouillonNeuf(), {});
+  assert.doesNotMatch(vide, /lecture-cr__mot/);
+
+  const ecrit = renderEcrireEnMdall(
+    avecLeFichier(brouillonNeuf(), "essai.ddb", "Altitude du site = 890 m"), {});
+  assert.match(ecrit, /rien n(&#39;|')entre sans signature/);
 });
 
 test("« Tout effacer » vit dans le menu du titre, et s'éteint quand il n'y a rien", () => {
@@ -626,13 +634,38 @@ test("le bac se rend toujours, pour la fenêtre qui le porte", () => {
 
 /* ── La console reste sous les yeux ──────────────────────────────────────── */
 
-test("la console garde sa tête même repliée à droite, pour qu'on puisse la ramener", () => {
-  // Sans elle, le bouton de place partirait avec la liste et l'on ne pourrait
-  // plus remettre la console en bas.
-  const html = renderEcrireEnMdall(AVEC_UN_DEFAUT, { volet: true });
+test("la console emporte ses commandes, et ne laisse pas un moignon en bas", () => {
+  // **Le défaut que ça répare.** Il restait en bas sa tête seule, pour qu'on
+  // puisse la ramener : une bande de plus, qui répétait le compte que le volet
+  // affichait déjà. Le bouton qui la ramène est dans sa tête à elle, là où elle
+  // se trouve.
+  const aDroite = renderEcrireEnMdall(AVEC_UN_DEFAUT, { volet: true });
 
-  assert.match(html, /brouillon-console est-deplacee/);
-  assert.match(html, /data-brouillon-console-place/);
+  assert.doesNotMatch(aDroite, /class="brouillon-console"/);
+  assert.equal((aDroite.match(/data-brouillon-console-place/g) ?? []).length, 1);
+  assert.ok(aDroite.indexOf("data-brouillon-console-place") > aDroite.indexOf("brouillon-volet--console"),
+    "le bouton de place n'est pas dans le volet");
+
+  // Et en bas, elle est entière : sa tête et sa liste.
+  const enBas = renderEcrireEnMdall(AVEC_UN_DEFAUT, { volet: false });
+  assert.match(enBas, /class="brouillon-console"/);
+  assert.equal((enBas.match(/data-brouillon-console-place/g) ?? []).length, 1);
+});
+
+test("la console porte son nom, à ses deux places", () => {
+  // Une bande de messages sans titre en bas d'un écran se lit comme un pied de
+  // page, et l'on n'y cherche rien.
+  assert.match(renderConsole([], {}), /brouillon-console__nom">console</);
+  assert.match(renderVoletDeLaConsole([], { volet: true }), /brouillon-console__nom">console</);
+});
+
+test("une seule tête pour les deux places, et un seul bouton dedans", () => {
+  // Deux têtes écrites séparément auraient divergé à la première ligne
+  // ajoutée, et le bouton qui ramène la console aurait fini par ne plus
+  // ressembler à celui qui l'envoie (règle 10).
+  assert.match(renderTeteDeLaConsole([], { volet: false }), /À droite/);
+  assert.match(renderTeteDeLaConsole([], { volet: true }), /En bas/);
+  assert.match(renderTeteDeLaConsole([], { volet: true }), /aria-pressed="true"/);
 });
 
 /* ── L'ordre des gestes, et la note qui s'en va ──────────────────────────── */
