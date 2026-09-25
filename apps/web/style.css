@@ -22873,7 +22873,10 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
      dériverait d'une ligne entière au bout de douze. Elle est donc fixée ici,
      en pixels, et les deux colonnes la lisent. */
   --saisie-ligne:19px;
-  display:flex; align-items:stretch; height:100%; min-height:320px;
+  /* `min-height` en variable : dans une page qui défile, un plancher donne à la
+     zone une taille utile ; dans une colonne qui tient dans la fenêtre, il la
+     pousse dehors. Chaque écran dit ce qu'il veut. */
+  display:flex; align-items:stretch; height:100%; min-height:var(--saisie-plancher, 320px);
   font-family:var(--mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
   font-size:12px; line-height:var(--saisie-ligne);
 }
@@ -26928,22 +26931,37 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    ni les bornes ni la hauteur — `--documents-content-height` est celle que
    l'écran a mesurée, et une soustraction approchée laisserait un filet qui
    s'arrête au-dessus du bas. */
-.brouillon{ display:flex; flex-direction:column; min-width:0; }
-.brouillon__tete{ padding:16px 20px 10px; }
-.brouillon__titre{ margin:0; font-size:16px; }
-.brouillon__quoi{ margin:6px 0 0; color:var(--muted); font-size:12px; max-width:72ch; }
+/* `brouillon__tete`, `__titre` et `__quoi` s'en sont allées avec l'en-tête :
+   celui-ci prend `lecture-cr__entete`, comme les deux autres écrans de
+   l'Atelier. */
 
+/* ── L'écran tient dans la fenêtre, et ce sont ses zones qui défilent ───────
+
+   **La page ne défile plus.** Elle le faisait, et tout partait de travers : on
+   faisait défiler pour lire une ligne de code, et l'en-tête, les onglets et la
+   console s'en allaient avec. Trois zones défilent, chacune chez elle — le
+   français, le code, la console — et le cadre, lui, ne bouge pas.
+
+   `--brouillon-hauteur` est mesurée au rendu depuis la position réelle du
+   cadre, comme l'onglet Fichiers le fait déjà pour la sienne : une hauteur
+   calculée à l'avance se trompe dès que la chrome se replie. */
+.brouillon{
+  display:flex; flex-direction:column;
+  height:var(--brouillon-hauteur, calc(100vh - var(--app-top) - 140px));
+  min-height:360px; overflow:hidden;
+}
+.brouillon > .lecture-cr__entete{ flex:0 0 auto; }
 .brouillon__corps{
   position:relative;
+  flex:1 1 auto; min-height:0;
   display:grid;
   grid-template-columns:var(--brouillon-dit-width, 460px) minmax(0, 1fr);
   align-items:stretch;
   border-top:1px solid var(--border);
-  min-height:var(--documents-content-height, calc(100vh - var(--app-top) - 220px));
 }
 .brouillon__dit{
   position:relative;
-  display:flex; flex-direction:column; min-width:0;
+  display:flex; flex-direction:column; min-width:0; min-height:0;
   border-right:1px solid var(--border);
 }
 .brouillon__intitule{
@@ -26954,17 +26972,20 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    ce n'est pas du code, et le présenter comme tel ferait hésiter sur ce qu'on
    attend. C'est l'exacte différence avec le volet de droite. */
 .brouillon__zone{
-  flex:1 1 auto; min-height:220px; resize:none;
+  /* `min-height:0` plutôt qu'une hauteur plancher : dans une colonne qui tient
+     dans la fenêtre, un plancher pousse les boutons dehors sur un portable. */
+  flex:1 1 auto; min-height:0; overflow:auto; resize:none;
   padding:0 14px 12px; border:0; background:transparent; color:var(--text);
   font-family:inherit; font-size:13px; line-height:1.55;
 }
 .brouillon__zone:focus{ outline:none; }
+/* Les deux gestes à droite : « Tout effacer » en gris, puis le vert. Le geste
+   qui engage finit la ligne, là où l'œil finit. */
 .brouillon__gestes{
-  display:flex; align-items:center; flex-wrap:wrap; gap:10px;
+  flex:0 0 auto;
+  display:flex; align-items:center; justify-content:flex-end; gap:8px;
   padding:10px 14px; border-top:1px solid var(--border);
 }
-.brouillon__note{ color:var(--muted); font-size:11px; max-width:44ch; }
-.brouillon__vider{ margin-left:auto; }
 
 /* La poignée déborde sur les deux colonnes pour être saisissable sans viser le
    trait — comme celle du rail, et pour la même raison. */
@@ -26977,7 +26998,17 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   background:var(--borderColor-accent-emphasis); display:none; pointer-events:none; z-index:4;
 }
 
-.brouillon-volet{ display:flex; flex-direction:column; min-width:0; }
+.brouillon-volet{ display:flex; flex-direction:column; min-width:0; min-height:0; }
+.brouillon-volet__barre,
+.brouillon-volet > .brouillon-volet__quoi{ flex:0 0 auto; }
+/* La saisie prend ce qui reste et défile chez elle : c'est la seule zone de
+   code de l'écran, et c'est elle qu'on fait défiler quand le fichier est long. */
+.brouillon-volet > .saisie-code{
+  flex:1 1 auto;
+  /* Pas de plancher ici : la colonne est déjà bornée par la fenêtre, et un
+     plancher de 320 px pousserait la console dehors sur un portable. */
+  --saisie-plancher:0; min-height:0;
+}
 .brouillon-volet__barre{
   display:flex; align-items:center; gap:8px;
   padding:6px 12px; border-bottom:1px solid var(--border);
@@ -27025,16 +27056,6 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    Elle se lit comme celle d'un navigateur — une ligne par message, la plus
    grave en tête —, et elle se déplace à droite d'un clic. Rien de neuf : les
    couleurs du projet, la police du code pour les emplacements. */
-/* **Fixe, en bas de la fenêtre, comme celle d'un navigateur.**
-
-   Dans le flux, elle descendait sous les volets : on faisait défiler la page
-   pour lire un message qui commente le code qu'on venait de perdre de vue.
-   Fixée, elle reste sous les yeux, et c'est elle qui défile quand elle est
-   longue — pas la page.
-
-   `--brouillon-console-haut` dit ce qu'elle occupe : le corps de l'écran s'en
-   réserve autant en bas, sans quoi la dernière ligne du code passerait dessous
-   et ne se lirait jamais. */
 /* Le bac d'essai, en plein écran, dans la fenêtre de l'application.
 
    Elle sait déjà être une fenêtre ; cette classe ne fait qu'une chose : lui
@@ -27047,10 +27068,17 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 #detailsModal.details-modal--plein .modal__body{ padding:0; overflow:auto; }
 .details-modal--plein .bac{ border-top:0; }
 
-.brouillon{ --brouillon-console-haut:34vh; }
+/* **La dernière rangée du cadre, comme celle d'un navigateur.**
+
+   Elle était `position:fixed`, ce qui la sortait du cadre : le corps devait
+   alors se réserver sa hauteur en rembourrage, et ce rembourrage restait là
+   même quand la console n'avait qu'une ligne — un grand vide sans bordure sous
+   le code. Maintenant que l'écran tient dans la fenêtre, elle est simplement la
+   dernière rangée : elle occupe ce qu'elle occupe, sans jamais dépasser son
+   plafond, et c'est elle qui défile quand elle est longue. */
 .brouillon-console{
-  position:fixed; left:0; right:0; bottom:0; z-index:3;
-  max-height:var(--brouillon-console-haut); overflow:auto;
+  flex:0 0 auto;
+  max-height:34vh; overflow:auto;
   border-top:1px solid var(--border);
   background:var(--bg, var(--canvas-default, #0d1117));
   padding:10px 14px 14px;
@@ -27061,10 +27089,9 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   position:sticky; top:-10px; z-index:1;
   background:inherit; padding-top:10px; margin-top:-10px;
 }
-/* Déplacée à droite, il ne reste en bas que sa tête : elle se replie sur une
-   barre mince, et le corps de l'écran récupère la place. */
-.brouillon[data-console="volet"]{ --brouillon-console-haut:48px; }
-.brouillon__corps{ padding-bottom:var(--brouillon-console-haut); }
+/* Déplacée à droite, il ne reste en bas que sa tête : une barre mince, et le
+   corps de l'écran récupère la place. */
+.brouillon[data-console="volet"] .brouillon-console{ max-height:none; overflow:visible; }
 .brouillon-console__tete{
   display:flex; align-items:center; gap:10px; flex-wrap:wrap;
   margin-bottom:8px;

@@ -152,3 +152,26 @@ test("le coloreur reçoit le contenu tel quel, y compris vide", () => {
 
   assert.deepEqual(vus, ["", ""]);
 });
+
+/**
+ * **Le défaut que ça répare : on écrivait en noir sur noir.**
+ *
+ * Le rendu posait bien la couche colorée, mais l'appelant ne passait pas son
+ * coloreur au branchement : rien ne la repeignait à la frappe. Or le texte de
+ * la zone est transparent — c'est ce qui permet de voir la couleur dessous — et
+ * l'on tapait donc dans le vide, visiblement.
+ *
+ * L'épreuve tient le contrat des deux côtés : une zone rendue colorée **doit**
+ * être branchée avec un coloreur, et une zone qui n'en a pas ne doit pas
+ * cacher son texte.
+ */
+test("une zone rendue colorée porte la couche que la frappe repeindra", () => {
+  const avec = renderSaisieDeCode({ contenu: "si (x = 1)", colorer: enCouleur });
+  const sans = renderSaisieDeCode({ contenu: "si (x = 1)" });
+
+  // La classe qui rend le texte transparent et la couche à repeindre vont
+  // ensemble : l'une sans l'autre, on écrit sans se voir écrire.
+  assert.equal(avec.includes("saisie-code--coloree"), avec.includes("data-saisie-couleur"));
+  assert.equal(sans.includes("saisie-code--coloree"), sans.includes("data-saisie-couleur"));
+  assert.equal(sans.includes("saisie-code--coloree"), false);
+});
