@@ -27434,3 +27434,58 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
      le porte, pas chaque ligne. */
   --mdall-retrait-depart:0;
 }
+
+/* ── L'établi : la fiche qu'on remplit, et la liste qu'on rouvre ───────────
+   Deux fenêtres qui empruntent `#detailsModal`, comme le bac d'essai et le
+   wiki. Elles lisent la gouttière de la fenêtre plutôt que d'en recopier une :
+   le contenu commence où commence le titre qui le nomme. */
+.etabli-fiche{
+  display:flex; flex-direction:column; gap:14px;
+  padding:16px max(var(--overlay-gouttiere, 24px), calc((100% - var(--overlay-largeur, 1280px)) / 2));
+}
+.etabli-fiche__champ{ display:flex; flex-direction:column; gap:4px; min-width:0; max-width:640px; }
+.etabli-fiche__nom{ font-size:12px; color:var(--muted); }
+.etabli-fiche__resume{ resize:vertical; min-height:48px; font-family:inherit; }
+
+/* Ce que le code dit de lui, et que personne n'a tapé. */
+.etabli-deduit{
+  display:flex; flex-direction:column; gap:6px;
+  padding:10px 12px; border:1px solid var(--border); border-radius:6px;
+  background:rgba(110,118,129,.06);
+}
+.etabli-deduit__tete{ margin:0; font-size:12px; color:var(--muted); }
+.etabli-deduit__ligne{ display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+.etabli-deduit__quoi{ min-width:140px; font-size:12px; color:var(--muted); }
+.etabli-deduit__valeurs{ display:flex; gap:6px; flex-wrap:wrap; min-width:0; }
+.etabli-deduit__valeurs code{
+  padding:1px 6px; border-radius:999px;
+  background:rgba(110,118,129,.16); font-size:12px;
+}
+.etabli-deduit__rien{ color:var(--muted); font-style:italic; font-size:12px; }
+
+.etabli-fiche__verdict{ display:flex; flex-direction:column; gap:8px; }
+.etabli-fiche__manques{ margin:0; padding-left:18px; color:var(--muted); font-size:13px; }
+.etabli-fiche__phrase{ margin:0; font-size:13px; color:var(--muted); }
+.etabli-fiche__phrase--fait{ color:var(--fgSuccess, #3fb950); }
+.etabli-fiche__phrase--rate{ color:var(--fgDanger, #f85149); }
+.etabli-fiche__gestes{ display:flex; gap:8px; }
+
+/* La liste : un bouton par outil, qui dit ce qu'il prend et ce qu'il rend. */
+.etabli-liste{
+  list-style:none; margin:0;
+  padding:16px max(var(--overlay-gouttiere, 24px), calc((100% - var(--overlay-largeur, 1280px)) / 2));
+  display:flex; flex-direction:column; gap:8px;
+}
+.etabli-liste__item{
+  display:flex; flex-direction:column; gap:3px; width:100%; text-align:left;
+  padding:10px 12px; border:1px solid var(--border); border-radius:6px;
+  background:transparent; color:inherit; cursor:pointer;
+}
+.etabli-liste__item:hover{ background:rgba(110,118,129,.12); border-color:var(--borderColor-accent-emphasis, #1f6feb); }
+.etabli-liste__nom{ display:flex; align-items:baseline; gap:8px; font-weight:600; }
+.etabli-liste__version{ color:var(--muted); font-weight:400; }
+.etabli-liste__resume{ color:var(--muted); font-size:13px; }
+.etabli-liste__quoi{ color:var(--muted); font-size:12px; }
+
+/* Le titre de l'écran dit sur quelle version on travaille. */
+.brouillon__version{ margin-left:8px; color:var(--muted); font-weight:400; }

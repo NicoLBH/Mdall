@@ -93,7 +93,7 @@ l'établi possible sans rien reprendre — voir « Ce qui a été tranché ».
 
 ---
 
-## Lot B — L'établi : garder un utilitaire
+## Lot B — L'établi : garder un utilitaire *(fait)*
 
 ### Le nom
 
@@ -161,24 +161,53 @@ mémoire, pas dans le cerveau, pas dans les recherches du projet.
 
 ### L'écran
 
-- « Enregistrer dans l'Atelier », dans le menu de la ligne du titre — l'entrée
-  est déjà là, éteinte, et dit ce qu'elle attend.
-- Une fenêtre : le nom, la description, et ce que le brouillon prend et rend,
-  **montré** avant d'enregistrer. On voit ce qu'on signe.
-- Sur un utilitaire déjà enregistré : « Enregistrer » monte d'une version, et
-  l'écran dit laquelle.
+- « Enregistrer dans l'Atelier », dans le menu de la ligne du titre.
+- Une fenêtre : le nom, la description, le rayon — et **ce que le code dit de
+  lui**, montré avant d'enregistrer. On voit ce qu'on signe.
+- Sur un utilitaire déjà posé : « Enregistrer » monte d'une version, et l'écran
+  dit laquelle **avant** de le faire — « il passera de v1 à v2 », ou « le texte
+  n'a pas changé : il restera en v1 ».
+- Le titre de l'écran dit sur quel utilitaire on travaille, et dans quelle
+  version. Sans cette ligne, on revient le lendemain et rien ne dit qu'on
+  réécrit un outil déjà posé : on en fabrique un second du même nom.
+- « Reprendre un utilitaire… », dans le même menu, ouvre l'établi et remet ses
+  fichiers dans l'écran. Il demande avant d'écraser un brouillon en cours.
+
+### Ce que ce lot a appris
+
+**Le numéro de version ne se calcule pas dans le navigateur.** Lu puis écrit
+ici, deux enregistrements simultanés produiraient le même numéro, et la
+contrainte d'unicité ferait échouer le second sans que personne sache pourquoi.
+C'est la base qui décide, dans une fonction `security invoker` — donc soumise à
+la même politique que le reste, et qui ne peut pas servir à écrire sur l'établi
+d'un autre. L'écran **annonce** ce qui va se passer ; il ne le décide pas.
+
+**Une lecture ratée ne se lit pas comme un établi vide.** La première dit qu'on
+ne sait pas, la seconde qu'il n'y a rien : confondre les deux ferait réécrire
+un outil qu'on possède déjà (règle 5).
+
+**Ce qu'il prend suit le texte, et c'est vérifiable à l'écran.** En ajoutant
+une affirmation au brouillon — « Matière du volet = "bois" » —, l'outil cesse
+de demander cette entrée : il la pose lui-même. Un champ recopié à la main
+dirait encore qu'il la prend.
 
 ---
 
-## Lot C — Le retrouver, le rouvrir, le reprendre
+## Lot C — Le retrouver depuis l'Atelier
 
-- L'onglet **« Mon établi »** dans l'Atelier, à droite de « Ajouté récemment ».
-- Une ligne par utilitaire : son nom, sa description, sa version, ce qu'il prend
-  et ce qu'il rend, et quand il a bougé pour la dernière fois.
-- Il paraît **dans tous mes projets**, à l'identique : c'est le même établi.
-- Le rouvrir remet ses fichiers dans « Écrire du Mdall », et l'écran dit qu'on
-  reprend `v3` de tel utilitaire — pas un brouillon anonyme.
+Le retrouver et le rouvrir **depuis l'écran d'écriture** est fait (lot B). Ce
+qui reste est de le retrouver là où l'on cherche un outil :
+
+- L'onglet **« Mon établi »** dans la vitrine, à droite de « Ajouté récemment ».
+- La vitrine lira **deux sources** au lieu d'une constante — le catalogue du
+  dépôt, et l'établi de celui qui regarde. C'est le seul endroit qui touche à
+  l'existant, et c'est une couture : un utilitaire de l'établi porte déjà
+  exactement les champs d'une entrée du catalogue, et une épreuve le tient.
+- La recherche de l'Atelier le trouve sous ce qu'il lit et ce qu'il conclut.
+- Sa cible est `etabli:<id>` : elle ne peut être confondue avec aucune cible du
+  dépôt, et c'est ce qui dira à l'Atelier d'ouvrir « Écrire du Mdall » dessus.
 - L'historique des versions se lit, et une version se relit telle qu'elle était.
+  La table les porte toutes ; rien ne les montre encore.
 
 ---
 
