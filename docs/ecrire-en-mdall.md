@@ -848,3 +848,52 @@ Les deux places de la console naissent et meurent maintenant par la même pose �
 `poserLePanneau`, adossée à `poseDuPanneau` —, l'une paraissant quand l'autre
 s'en va. Mesuré dans un Chromium : le cadre va de 0 à 1440 comme son panneau, et
 le titre garde ses 32 px.
+
+### Le wiki du langage, dans le menu du titre
+
+« Langage Mdall », au-dessus de « Tout effacer ». Il ouvre en pleine fenêtre ce
+que le langage fait, à quoi il sert, comment il fonctionne, puis sa syntaxe et
+deux exemples entiers.
+
+**C'est la porte sans modèle.** On écrit du Mdall à la main sur cet écran ;
+encore faut-il savoir comment il s'écrit, et le chercher dans le dépôt pendant
+qu'on tape n'est pas une réponse. L'IA accélère ; elle n'est jamais le seul
+chemin (fondamental 13) — et une documentation qu'on n'a pas sous la main fait
+de l'IA le seul chemin.
+
+#### Le contenu est une donnée, pas un texte à interpréter
+
+`js/contenus/wiki-du-langage-mdall.js` : des sections, des paragraphes, des
+tableaux, des exemples. Corriger une phrase ne touche pas l'écran qui la montre,
+et ajouter une section ne demande pas de le relire.
+
+Un Markdown chargé au vol remplissait la même condition et en ajoutait trois
+qu'on n'a pas demandées : un aller-retour réseau avant de pouvoir lire la
+documentation du produit, un rendu Markdown de plus à calibrer, et un écran vide
+le jour où la requête échoue. La documentation d'un langage ne peut pas manquer.
+
+#### Les exemples sont du Mdall que la lecture accepte
+
+Une épreuve les relit **tous** avec `lireUnFichier` et refuse un wiki qui
+enseignerait une syntaxe que le langage ne connaît pas. Elle a servi
+immédiatement : la première version montrait `enregistre (sujet: …, vers: …);`
+sur une ligne et `soit TVA = Prix HT * 20%;` dans une fonction — deux formes que
+la lecture refuse, la seconde parce que `soit` est déjà pris : **il déclare une
+provenance**, et le nom de la locale *est* le type. Une documentation fausse est
+pire que pas de documentation : on recopie l'exemple, il est refusé, et l'on
+cesse de croire l'écran.
+
+Une seconde épreuve vérifie les **résultats** que le wiki annonce : il promet
+1 440 € pour 1 200 € hors taxes, et c'est le moteur de calcul qui le confirme.
+Une promesse écrite dans une prose que rien ne relit vieillit toute seule.
+
+Les exemples se colorent avec `jetonsEcrits`, le peintre de la **saisie** — et
+non celui de la mémoire, qui recompose. On recopie un exemple du wiki dans la
+zone de code, et il garde exactement le même aspect sous les doigts.
+
+#### Il dit aussi où le langage s'arrête
+
+Une section entière, « Ce que le langage ne sait pas encore écrire », reprend
+mot pour mot deux phrases qu'on aimerait poser — la TVA et le plancher bas en
+zone inondable — et montre ce que le Mdall en fait aujourd'hui. Une
+documentation qui ne montre que ce qui marche apprend à se méfier d'elle.
