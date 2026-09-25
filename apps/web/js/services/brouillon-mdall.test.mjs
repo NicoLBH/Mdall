@@ -193,3 +193,60 @@ test("un brouillon où rien n'est écrit ne se garde pas", () => {
 test("la version est écrite : un brouillon relu sans savoir de quand il date s'interprète", () => {
   assert.equal(JSON.parse(brouillonRange(brouillonNeuf())).version, VERSION_DU_BROUILLON);
 });
+
+/* ── Écrire, lire, lancer : rien de tout cela ne connaît de projet ───────── */
+
+/**
+ * **Cette épreuve marche le graphe des importations, et c'est ce qui la
+ * justifie.**
+ *
+ * La question posée était : « si l'on n'ouvre l'écran que depuis un projet
+ * aujourd'hui, se prive-t-on de l'ouvrir hors projet demain, ou faudra-t-il
+ * tout reprendre ? »
+ *
+ * La réponse tient à une seule chose, et elle ne se voit dans aucun rendu :
+ * **le cœur — écrire, relire, déduire le formulaire, lancer — ne doit toucher
+ * ni le magasin, ni la base, ni le projet courant**. Tant que c'est vrai,
+ * ouvrir l'écran ailleurs coûte une route, comme les sept écrans qui vivent
+ * déjà sans projet. Le jour où une seule de ces lignes lit `store.js` « parce
+ * que c'est pratique », la porte se referme — et personne ne s'en apercevra
+ * avant d'essayer.
+ *
+ * Elle marche le graphe plutôt que de lire un texte : un import ajouté trois
+ * modules plus loin compte autant qu'un import ajouté ici.
+ */
+test("le cœur du brouillon ne touche ni le magasin, ni la base, ni le projet", async () => {
+  const { readFileSync, existsSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const path = await import("node:path");
+
+  const ici = path.dirname(fileURLToPath(import.meta.url));
+  const vus = new Map();
+
+  const marcher = (fichier, chemin) => {
+    if (vus.has(fichier)) return;
+    vus.set(fichier, chemin);
+    if (!existsSync(fichier)) return;
+
+    for (const trouve of readFileSync(fichier, "utf8").matchAll(/^\s*import[^;]*?from\s+"([^"]+)"/gm)) {
+      const vers = trouve[1];
+      if (!vers.startsWith(".")) continue;
+      marcher(path.normalize(path.join(path.dirname(fichier), vers)), [...chemin, fichier]);
+    }
+  };
+
+  // Les quatre portes du cœur : le brouillon lui-même, ce qu'on lui demande,
+  // ce qu'il conclut, et ce que l'éditeur propose en écrivant.
+  for (const depart of [
+    "brouillon-mdall.js", "formulaire-du-brouillon.js", "bac-dessai.js", "mdall-completion.js"
+  ]) marcher(path.join(ici, depart), []);
+
+  const interdits = /(^|\/)store\.js$|supabase|(^|\/)auth\.js$|(^|\/)demo-context\.js$|(^|\/)project-/;
+  const fautifs = [...vus.keys()].filter((un) => interdits.test(un));
+
+  assert.deepEqual(fautifs.map((un) => path.relative(ici, un)), [],
+    fautifs.map((un) => [...vus.get(un), un].map((etape) => path.basename(etape)).join(" → ")).join("\n"));
+
+  // Et le cœur reste petit : s'il enflait, la question se reposerait.
+  assert.ok(vus.size <= 30, `le cœur touche ${vus.size} modules`);
+});
