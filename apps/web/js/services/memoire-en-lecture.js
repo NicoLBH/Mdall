@@ -990,6 +990,47 @@ export function dependancesDuBloc(bloc = {}) {
 }
 
 /**
+ * Les noms qu'un bloc **produit** : son sujet, et ceux où il dit s'enregistrer.
+ *
+ * ## Pourquoi les deux, et pourquoi ici
+ *
+ * Une fonction conclut sous son propre nom ; un `enregistre (Cote: …, dans:
+ * …)` dit qu'elle conclut aussi sous celui-là. Les deux sont **déduits**, et
+ * aucun des deux ne se demande : un formulaire qui offrirait un champ « Taux
+ * de TVA » alors qu'une règle le conclut ferait taper à la main la réponse
+ * qu'on venait chercher — c'est le défaut qu'on a vu à l'écran.
+ *
+ * Le graphe des blocs le savait à moitié : il appelait « produit » le sujet du
+ * bloc, et ignorait ses `enregistre`. Un seul endroit le dit maintenant, et
+ * tout le monde y lit la même chose (règle 10).
+ */
+export function nomsProduitsParLeBloc(bloc = {}) {
+  return [...new Set([
+    texte(bloc?.sujet),
+    ...(bloc?.enregistre ?? []).map((sortie) => texte(sortie?.sujet))
+  ].filter(Boolean))];
+}
+
+/**
+ * Ce qu'un bloc **conclut par lui-même**, et que le bac peut donc calculer.
+ *
+ * ## Pourquoi ce n'est pas tout ce qu'il produit
+ *
+ * Une fonction qui appelle un agent **range** des résultats sans les calculer :
+ * sa loi n'est pas dans le fichier (fondamental 9), et personne ici ne sait ce
+ * qu'elle rendrait. Les retirer du formulaire priverait d'un champ qu'on veut
+ * justement remplir à la main pour éprouver ce qui en dépend — et la règle
+ * d'en face resterait indécidable pour toujours, sans qu'un mot dise pourquoi.
+ *
+ * La mémoire du projet, elle, **les produit** : l'agent y est appelé pour de
+ * bon. Les deux questions sont donc différentes, et se posent séparément.
+ */
+export function nomsConclusParLeBloc(bloc = {}) {
+  if (texte(bloc?.agent)) return [];
+  return nomsProduitsParLeBloc(bloc);
+}
+
+/**
  * Le graphe d'un jeu de blocs : qui a besoin de quoi.
  *
  * Un sujet qu'aucun bloc ne produit est une **entrée** : c'est ce qu'il faudra
@@ -998,7 +1039,7 @@ export function dependancesDuBloc(bloc = {}) {
  */
 export function grapheDesBlocs(blocs = []) {
   const liste = Array.isArray(blocs) ? blocs : [];
-  const produits = new Set(liste.map((bloc) => texte(bloc?.sujet)).filter(Boolean));
+  const produits = new Set(liste.flatMap(nomsProduitsParLeBloc));
   const liens = [];
   const entrees = new Set();
 

@@ -463,6 +463,16 @@ export function evaluerUnCalcul(arbre = null, lire = () => ({ connu: false, vale
     const lu = lireUnNombre(nombre);
     if (!Number.isFinite(lu)) return indecidable([arbre.nom]);
 
+    // **Un pourcentage lu vaut ce qu'un pourcentage écrit vaut.** `20 %` tapé
+    // dans l'expression donne `0,2` sans unité — c'est la tokenisation, plus
+    // haut. Lu dans un nom, il valait 20 avec « % » pour unité, et
+    // `Prix HT * Taux de TVA` était refusé pour des unités qui ne se composent
+    // pas… alors que la même ligne avec `20 %` en toutes lettres passait. La
+    // même écriture doit valoir la même chose des deux côtés (règle 4), sans
+    // quoi une règle change de sens selon qu'on lui donne son taux à la main
+    // ou qu'une autre fonction le conclut.
+    if (unite === "%") return mesure(lu / 100, "");
+
     return mesure(lu, unite);
   }
 

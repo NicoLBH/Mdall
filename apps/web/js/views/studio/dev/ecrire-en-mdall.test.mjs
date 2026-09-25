@@ -767,12 +767,43 @@ test("une seule tête pour les deux places, et un seul bouton dedans", () => {
   // Deux têtes écrites séparément auraient divergé à la première ligne
   // ajoutée, et le bouton qui ramène la console aurait fini par ne plus
   // ressembler à celui qui l'envoie (règle 10).
-  assert.match(renderTeteDeLaConsole([], { volet: false }), /À droite/);
-  assert.match(renderTeteDeLaConsole([], { volet: true }), /En bas/);
-  assert.match(renderTeteDeLaConsole([], { volet: true }), /aria-pressed="true"/);
+  //
+  // **Le bouton montre la disposition, il ne nomme plus la manœuvre.** « À
+  // droite » disait le geste ; l'icône dit vers quoi le clic emmène, et c'est
+  // celle des panneaux, partagée avec les autres écrans qui en montrent.
+  const enBas = renderTeteDeLaConsole([], { volet: false });
+  const aDroite = renderTeteDeLaConsole([], { volet: true });
+
+  assert.match(enBas, /#panneau-droite-masque/);
+  assert.match(aDroite, /#panneaux-code-seul/);
+  assert.match(aDroite, /aria-pressed="true"/);
+
+  // Sans mot, il lui faut un nom : un bouton muet ne se lit pas au clavier.
+  assert.match(enBas, /aria-label="[^"]+"/);
+  assert.match(aDroite, /aria-label="[^"]+"/);
 });
 
 /* ── L'ordre des gestes, et la note qui s'en va ──────────────────────────── */
+
+test("le menu porte les deux gestes qui engagent, et dit lequel attend encore", () => {
+  // « Proposer au projet » reste sur la ligne du titre **et** se retrouve dans
+  // le menu : c'est le même renvoi, appelé de deux endroits — pas une seconde
+  // façon de proposer (règle 10).
+  const html = renderActionsDuTitre(avecLeDit(AVEC_UNE_DONNEE, "un essai"), {});
+
+  assert.match(html, /Proposer au projet/);
+  assert.ok(html.includes(GESTE.PROPOSER), "le menu ne porte pas le geste de proposition");
+
+  // L'établi n'existe pas encore (lot B). L'entrée est **éteinte et présente** :
+  // un menu dont les entrées paraissent et disparaissent se rouvre pour
+  // vérifier, et l'on finit par ne plus savoir ce qu'il contient.
+  assert.ok(html.includes(GESTE.ETABLI), "le menu ne porte pas l'enregistrement sur l'établi");
+  assert.match(html, /Enregistrer dans l&#39;Atelier|Enregistrer dans l'Atelier/);
+
+  // Sur un brouillon vide, il n'y a rien à proposer et l'entrée le dit.
+  const vide = renderActionsDuTitre(brouillonNeuf(), {});
+  assert.match(vide, /Il n&#39;y a rien à proposer|Il n'y a rien à proposer/);
+});
 
 test("le kebab se pose à droite de « Lancer », et porte le menu", () => {
   // C'est ce que l'écran demande : les gestes d'abord, et ce qu'on va chercher

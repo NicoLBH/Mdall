@@ -20,6 +20,9 @@ import {
   lacunesDuModele
 } from "./mdall-du-modele.js";
 
+import { lireUnFichier } from "../../../apps/web/js/services/memoire-en-lecture.js";
+import { lancerLeBrouillon, ISSUE } from "../../../apps/web/js/services/bac-dessai.js";
+import { champsDuBrouillon } from "../../../apps/web/js/services/formulaire-du-brouillon.js";
 import { FICHIERS_DU_BROUILLON } from "../../../apps/web/js/services/brouillon-mdall.js";
 import { EXTENSIONS, EXTENSION_REGLE } from "../../../apps/web/js/services/memoire-rangement.js";
 
@@ -193,4 +196,52 @@ test("les lacunes remontent nettoyées, et celle qui n'a pas de phrase tombe", (
 test("un modèle qui ne déclare aucune lacune rend une liste vide, pas une panne", () => {
   assert.deepEqual(lacunesDuModele({ fichiers: [] }), []);
   assert.deepEqual(lacunesDuModele(null), []);
+});
+
+/* ── Ce que la consigne montre est du Mdall que la lecture accepte ───────── */
+
+/** Les exemples encadrés de la consigne, tels qu'on les donne à lire au modèle. */
+const EXEMPLES = [...CONSIGNES.matchAll(/```\n([\s\S]*?)```/g)].map((une) => une[1]);
+
+test("chaque exemple de la consigne se lit sans un refus", () => {
+  // **Un exemple faux est pire qu'une consigne absente** : le modèle le copie,
+  // et l'on passe la journée à chercher pourquoi le langage refuse ce que sa
+  // propre documentation lui a montré. C'est arrivé au wiki ; la même épreuve
+  // tient ici, et c'est la seule façon de ne pas se fier à la relecture.
+  assert.ok(EXEMPLES.length >= 5, `trop peu d'exemples trouvés : ${EXEMPLES.length}`);
+
+  for (const [rang, exemple] of EXEMPLES.entries()) {
+    assert.deepEqual(lireUnFichier(exemple).refus, [],
+      `l'exemple ${rang + 1} de la consigne ne se lit pas :\n${exemple}`);
+  }
+});
+
+test("la consigne interdit l'appel de fonction, et montre le chaînage à la place", () => {
+  // **C'est le défaut qu'on a vu à l'écran.** Faute de savoir enchaîner, le
+  // modèle inventait `Taux de TVA(zones, Type de TVA)` : la ligne ne se lisait
+  // pas, et le formulaire demandait alors « taux » à la main — c'est-à-dire la
+  // réponse que la phrase demandait de déduire.
+  assert.match(CONSIGNES, /pas d'appel de fonction/i);
+  assert.match(CONSIGNES, /conclut \*\*sous son propre nom\*\*/);
+  // Et il dit de ne pas déclarer en entrée ce qu'une fonction conclut.
+  assert.match(CONSIGNES, /ne déclare pas\*\*/i);
+});
+
+test("l'exemple de chaînage de la consigne conclut vraiment, sans rien demander de trop", () => {
+  // La consigne montre deux fonctions dont la seconde lit la première. Si le
+  // langage ne savait pas le faire, on enseignerait au modèle une syntaxe qui
+  // ne marche pas — ce qui est exactement ce qu'on vient de corriger.
+  const chaine = EXEMPLES.find((un) => un.includes("Taux de TVA") && un.includes("Prix TTC"));
+  assert.ok(chaine, "la consigne ne montre pas d'exemple de chaînage");
+
+  const fichiers = [{ nom: "essai.ref", contenu: chaine }];
+
+  // Le taux est déduit : il ne fait pas partie de ce qu'on demande.
+  const demandes = champsDuBrouillon(fichiers).map((un) => un.nom);
+  assert.deepEqual(demandes.includes("Taux de TVA"), false, `demandé à tort : ${demandes.join(", ")}`);
+
+  const lance = lancerLeBrouillon(fichiers, { "Prix HT": "120 €", "Type de TVA": "neuf" });
+  const prix = lance.find((un) => un.sujet === "Prix TTC");
+  assert.equal(prix.issue, ISSUE.TIENT);
+  assert.equal(prix.valeur, "144 €");
 });

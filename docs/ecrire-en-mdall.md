@@ -1161,3 +1161,93 @@ Elle dit aussi ce que l'éditeur ne fait **pas** : il ne complète rien de
 lui-même, et les touches de la liste ne sont prises que lorsqu'elle est ouverte.
 C'est la porte sans modèle du fondamental 13 : on tape tout à la main, et la
 liste ne fait que rappeler ce qu'on aurait pu chercher dans cette page.
+
+### Ce qui se demande, et ce qui se déduit
+
+#### Le défaut, et ce qu'il révélait
+
+On écrit en français : « on saisit un prix hors taxe, on choisit entre existant
+et neuf, selon le cas on calcule la TVA et on affiche le taux, le montant et le
+prix TTC ». Le bac affichait alors trois champs — dont un **taux**, marqué « non
+déclaré », à remplir à la main. C'est-à-dire la réponse qu'on venait chercher.
+
+Le modèle avait écrit `calcule taux = Taux de TVA(zones, Type de TVA);` : un
+**appel de fonction**, que le langage ne connaît pas. La ligne était refusée à la
+lecture — la console le disait —, `taux` restait donc un nom que le brouillon lit
+et que personne ne pose, et le formulaire, qui demande exactement cela, en
+faisait un champ.
+
+#### Pourquoi ce n'était pas un vocabulaire d'affichage qui manquait
+
+La demande naturelle est « qu'on puisse déclarer les inputs qu'on veut montrer ».
+Le plan l'avait déjà refusée, et la raison tient toujours : « Zone de vent »
+serait alors déclaré une fois comme variable et une fois comme étiquette, et le
+jour où la description change, l'une des deux ne suivra pas (règle 10).
+
+Ce qui manquait est plus petit et plus profond. Le lecteur portait la réponse
+depuis toujours, dans `grapheDesBlocs` : **un sujet qu'aucun bloc ne produit est
+une entrée**. Ni le formulaire ni le bac ne s'en servaient.
+
+#### Le chaînage, sans un mot de plus dans le langage
+
+**La conclusion d'une fonction vaut pour son nom**, et les autres fonctions du
+même lancement la lisent comme n'importe quel nom. C'est déjà ce que fait la
+mémoire du projet, où la conclusion d'une règle est versée comme valeur de son
+sujet et relue par les suivantes. Le bac ne faisait pas ce que la mémoire fait ;
+il le fait, et c'est la même valeur au même nom (règle 4).
+
+Le lancement se joue donc **en passes** : tout le monde est évalué avec ce qu'on
+sait, et l'on recommence si l'on sait quelque chose de plus. Une passe par
+fonction suffit — chaque passe en achève au moins une — et borne la boucle : une
+chaîne circulaire s'arrête et dit qu'elle ne sait pas, au lieu de tourner.
+
+Trois règles en découlent, et elles se disent en une phrase chacune :
+
+- **Ce qu'une règle conclut ne se demande pas.** Le formulaire ne porte plus que
+  les vraies entrées — le sujet de chaque bloc et ses `enregistre` en sortent.
+- **Une réponse du formulaire gagne sur une conclusion.** Le formulaire est là
+  pour varier ce qu'on ne veut pas écrire ; l'inverse le rendrait décoratif.
+- **Une fonction qui ne sait pas n'apprend rien.** Poser son `sinon` comme une
+  valeur serait indiscernable d'un résultat calculé (règle 5).
+
+#### Deux corrections que le chaînage a mises au jour
+
+- **L'unité déclarée part avec la réponse.** L'écran montre « € » à droite du
+  champ parce que la déclaration le dit ; on tapait « 120 » et c'est « 120 » qui
+  partait. `si (Prix HT >= 0 €)` comparait alors une mesure à un nombre nu, et le
+  verdict annonçait « 250 » là où la mémoire aurait écrit « 250 € ». Un texte
+  n'en prend pas, une valeur qui porte déjà la sienne la garde.
+- **Un pourcentage lu vaut un pourcentage écrit.** `20 %` tapé dans l'expression
+  vaut `0,2` sans unité ; lu dans un nom, il valait 20 avec « % » pour unité, et
+  `Prix HT * Taux de TVA` était refusé pour des unités qui ne se composent pas —
+  alors que la même ligne écrite en toutes lettres passait. Une règle changeait
+  de sens selon qu'on lui donnait son taux à la main ou qu'une autre le concluait.
+
+#### La consigne du modèle l'enseigne, et une épreuve relit ses exemples
+
+La consigne interdit désormais l'appel inventé, montre le chaînage, et dit ce qui
+se déclare — les entrées — et ce qui ne se déclare pas : les conclusions. Elle
+dit aussi qu'il n'y a **aucun mot d'affichage à écrire**, et comment obtenir
+l'écran voulu sans en écrire un.
+
+Une épreuve relit **tous** les exemples encadrés de la consigne avec le lecteur
+du projet, et lance celui du chaînage pour vérifier qu'il conclut bien 144 € sans
+rien demander de trop. Un exemple faux est pire qu'une consigne absente : le
+modèle le copie, et l'on cherche pourquoi le langage refuse ce que sa propre
+documentation lui a montré. C'est arrivé au wiki ; la même épreuve tient ici.
+
+### Trois retouches d'écran
+
+- **La gouttière de la fenêtre est nommée une seule fois.** Le bac d'essai
+  commençait à 14 px du bord quand le titre qui le nomme se pose à 24 px, et
+  l'œil le voyait. `--overlay-gouttiere` est déclarée sur la fenêtre ; l'en-tête
+  et le bac la lisent.
+- **Les deux places de la console se disent par leur icône.** « À droite » et
+  « En bas » nommaient la manœuvre ; `panneau-droite-masque` et
+  `panneaux-code-seul` montrent la disposition vers laquelle le clic emmène, et
+  ce sont celles des autres écrans qui montrent des panneaux. Le bouton garde un
+  `aria-label` : un bouton muet ne se lit pas au clavier.
+- **Le menu porte les deux gestes qui engagent.** « Proposer au projet » y
+  retrouve sa place — le même renvoi que le bouton du titre, pas une seconde
+  façon de proposer — et « Enregistrer dans l'Atelier » y paraît **éteint**, avec
+  ce qu'il attend : l'établi, lot B de `docs/utilitaires-personnels.md`.

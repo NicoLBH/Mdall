@@ -516,6 +516,22 @@ export const GESTE = {
   /** Repartir d'un brouillon neuf. Il demande confirmation. */
   VIDER: "brouillon-vider",
   /**
+   * Proposer au projet — le même geste que le bouton de la ligne du titre.
+   *
+   * **Le même renvoi, pas une seconde façon de proposer.** Le bouton reste là
+   * où il est ; le menu ouvre la même porte pour qui la cherche dans le menu.
+   */
+  PROPOSER: "brouillon-proposer",
+  /**
+   * Enregistrer l'utilitaire sur l'établi, pour le retrouver dans tout projet.
+   *
+   * **Éteint tant que l'établi n'existe pas** (lot B du plan, voir
+   * `docs/utilitaires-personnels.md`). Un menu dont les entrées paraissent et
+   * disparaissent se rouvre pour vérifier ; une entrée éteinte qui dit ce
+   * qu'elle attend se lit une fois et s'oublie.
+   */
+  ETABLI: "brouillon-etabli",
+  /**
    * Ouvrir le wiki du langage.
    *
    * **C'est la porte sans modèle.** On écrit du Mdall à la main sur cet écran ;
@@ -559,6 +575,9 @@ export function renderActionsDuTitre(brouillon = null, { depose = false } = {}) 
   // Il y a quelque chose à lire : le bac peut s'ouvrir, et dire ce qu'il trouve.
   const aLancer = fichiersRemplis(brouillon).length > 0;
   const aPerdre = brouillonEcrit(brouillon);
+  // La même question que celle du bouton, posée sur les mêmes fichiers : deux
+  // réponses divergeraient le jour où l'une des deux change (règle 4).
+  const aProposer = aProposerDuBrouillon(fichiersRemplis(brouillon)).affirmations.length > 0;
 
   return `
     <div class="lecture-cr__entete-actions">
@@ -577,6 +596,24 @@ export function renderActionsDuTitre(brouillon = null, { depose = false } = {}) 
         menuOnly: true,
         size: "sm",
         items: [{
+          action: GESTE.PROPOSER,
+          icon: svgIcon("git-pull-request", { className: "octicon" }),
+          label: "Proposer au projet",
+          disabled: !aProposer || depose,
+          title: aProposer
+            ? "Ouvrir une proposition portant ce brouillon : elle sera relue et signée"
+            : "Il n'y a rien à proposer : écrivez d'abord du Mdall"
+        }, {
+          action: GESTE.ETABLI,
+          icon: svgIcon("tools", { className: "octicon" }),
+          label: "Enregistrer dans l'Atelier",
+          // Ce que le lot B apportera. Dire « bientôt » vaut mieux que ne rien
+          // dire : on cherche ce geste, et une absence ne s'explique pas.
+          disabled: true,
+          title: "Bientôt : garder cet utilitaire sur votre établi, et le retrouver dans tous vos projets"
+        }, {
+          separator: true
+        }, {
           action: GESTE.WIKI,
           icon: svgIcon("book", { className: "octicon" }),
           label: "Langage Mdall",
@@ -664,12 +701,20 @@ export function renderTeteDeLaConsole(lignes = [], { volet = false } = {}) {
           { className: "octicon" })}
         ${escapeHtml(phraseDeLaConsole(toutes))}
       </span>
-      <button type="button" class="gh-btn gh-btn--sm brouillon-console__place"
+      ${/*
+        **L'icône dit la disposition, le mot disait la manœuvre.** « À droite »
+        et « En bas » nommaient le geste ; l'écran a déjà deux icônes qui
+        nomment les deux dispositions — celles des panneaux, partagées avec les
+        autres écrans qui en montrent. On montre donc ce vers quoi le clic
+        emmène, et non le nom de la colonne où l'on atterrit.
+      */""}
+      <button type="button" class="gh-btn gh-btn--sm gh-btn--icon brouillon-console__place"
         data-brouillon-console-place aria-pressed="${volet}"
+        aria-label="${escapeHtml(volet ? "Remettre la console sous les volets" : "Mettre la console à droite")}"
         title="${escapeHtml(volet
           ? "Remettre la console sous les volets"
           : "Mettre la console à droite, à côté du code")}">
-        ${svgIcon("file-diff", { className: "octicon" })} ${volet ? "En bas" : "À droite"}
+        ${svgIcon(volet ? "panneaux-code-seul" : "panneau-droite-masque", { className: "octicon" })}
       </button>
     </div>
   `;
@@ -1296,6 +1341,9 @@ function brancherLaConsole(racine) {
       const geste = evenement.detail?.action;
       if (geste === GESTE.VIDER) viderLeBrouillon(racine);
       if (geste === GESTE.WIKI) ouvrirLeWikiMdall();
+      // Le même renvoi que le bouton de la ligne du titre : une seule façon de
+      // proposer, appelée de deux endroits (règle 10).
+      if (geste === GESTE.PROPOSER) void proposerAuProjet(racine);
     });
 
   debrancherConsole?.();

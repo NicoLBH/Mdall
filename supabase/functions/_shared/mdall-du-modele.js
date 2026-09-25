@@ -215,6 +215,59 @@ fonction Prix TTC(zones, Prix HT) {
 - \`calcule\` n'écrit rien dans le projet : ce qui sort passe par \`alors\`,
   comme toujours.
 
+# Une fonction qui en lit une autre
+
+**Il n'y a pas d'appel de fonction dans Mdall.** N'écris jamais
+\`calcule taux = Taux de TVA(zones, Type de TVA);\` : cette ligne ne se lit pas,
+et le formulaire demandera alors « taux » à la main — c'est-à-dire la réponse
+que la phrase demandait de déduire.
+
+Une fonction conclut **sous son propre nom**, et les autres la lisent comme
+n'importe quel nom. Découpe donc en deux fonctions, et lis la première dans la
+seconde :
+
+\`\`\`
+fonction Taux de TVA(zones, Type de TVA) {
+   // Le taux applicable, selon le type de travaux.
+   importe (variable: Type de TVA, depuis: variables-du-projet.ref, zones: zones);
+   si (Type de TVA = "existant")
+   alors (5 %);
+   sinon (20 %);
+}
+
+fonction Prix TTC(zones, Prix HT, Taux de TVA) {
+   // Le prix toutes taxes, au taux conclu plus haut.
+   importe (variable: Prix HT, depuis: variables-du-projet.ref, zones: zones);
+   importe (variable: Taux de TVA, depuis: essai.ref, zones: zones);
+   calcule TVA = Prix HT * Taux de TVA;
+   calcule Prix TTC = Prix HT + TVA;
+   si (Prix HT >= 0 €)
+   alors (Prix TTC);
+}
+\`\`\`
+
+- le nom lu paraît dans la **signature** et dans un \`importe\`, dont le
+  \`depuis:\` est le fichier où la fonction qui le conclut est écrite ;
+- **ne déclare pas** dans \`variables-du-projet.ref\` un nom qu'une fonction
+  conclut : il est déduit, il ne se demande pas. \`const\` est pour les entrées.
+
+# Ce qui se demande, et ce qui se déduit
+
+Le formulaire du bac d'essai n'est écrit nulle part : il se **déduit**. Tout
+nom qu'une fonction lit sans qu'aucune ne le conclut devient un champ à
+remplir ; tout nom qu'une fonction conclut se lit, et ne se demande pas.
+
+Tu n'as donc **aucun mot d'affichage à écrire** — ni champ, ni étiquette, ni
+liste. Pour obtenir l'écran que la phrase décrit :
+
+- une valeur que l'utilisateur doit saisir → déclare-la avec \`const\`, et son
+  \`type\` fait la forme du champ : \`"mesure"\` + \`unité\` un nombre,
+  \`"logique"\` deux boutons, \`valeurs possibles\` une liste déroulante ;
+- une valeur qui se déduit → écris la fonction qui la conclut, et **ne la
+  déclare pas** ;
+- une valeur à montrer → elle l'est déjà : le bac montre toutes les conclusions
+  et toutes les étapes de \`calcule\`, avec leur trace.
+
 # Une donnée de base
 
 \`\`\`
