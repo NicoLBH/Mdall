@@ -40,6 +40,7 @@ import { escapeHtml } from "../../../utils/escape-html.js";
 import { svgIcon } from "../../../ui/icons.js";
 import { renderSaisieDeCode, brancherLaSaisieDeCode } from "../../ui/saisie-de-code.js";
 import { renderSideResizer, bindSideResizer } from "../../ui/side-resizer.js";
+import { renderGhActionButton, bindGhActionButtons } from "../../ui/gh-split-button.js";
 import { renderJetons } from "../../ui/code-mdall.js";
 import { jetonsDeLaLigne } from "../../../services/memoire-en-lecture.js";
 import {
@@ -48,7 +49,7 @@ import {
 } from "../../../services/brouillon-mdall.js";
 import { champsDuBrouillon, SAISIE } from "../../../services/formulaire-du-brouillon.js";
 import {
-  lancerLeBrouillon, fonctionsDuBrouillon, phraseDuLancement, ISSUE, MOTS_DE_LISSUE
+  lancerLeBrouillon, phraseDuLancement, ISSUE, MOTS_DE_LISSUE
 } from "../../../services/bac-dessai.js";
 import { renderSpinnerHtml } from "../../ui/spinner.js";
 import {
@@ -96,10 +97,19 @@ export function lignesDuFichier(contenu = "") {
  * qu'on écrit et la même ligne relue doivent prendre exactement les mêmes
  * couleurs, sinon écrire et relire ne se superposent pas.
  *
- * Une ligne vide garde sa hauteur — un `\n` seul ne fait pas de ligne dans un
- * `<pre>` qui se termine par lui — et un dernier retour chariot en ajoute une :
- * sans ce saut final, la couche remonte d'une ligne dès qu'on tape Entrée en
- * fin de fichier.
+ * ## Une ligne du fichier occupe **une** ligne à l'écran
+ *
+ * Chaque ligne était enveloppée dans un `<span>` rendu `display:block`, et les
+ * spans étaient séparés par un `\n`. Dans un `<pre>`, cela fait **deux** : le
+ * bloc, puis le retour. Le code s'affichait donc à double interligne, et la
+ * gouttière — qui compte les lignes du texte, elle — s'arrêtait au milieu.
+ *
+ * Il n'y a donc plus de span par ligne : les jetons se suivent, séparés du même
+ * `\n` que le texte de la zone. C'est le `<pre>` qui fait les lignes, comme il
+ * les fait dans la zone de saisie, et les deux couches tombent d'aplomb.
+ *
+ * Le dernier retour chariot est conservé : sans lui, la couche remonte d'une
+ * ligne dès qu'on tape Entrée en fin de fichier.
  *
  * Pas de normalisation des retours de Windows : `jetonsDeLaLigne` avale déjà le
  * `\r`, et le compte de lignes ne change pas. Une seconde serait une consigne
@@ -107,33 +117,26 @@ export function lignesDuFichier(contenu = "") {
  */
 export function colorerDuMdall(contenu = "") {
   return `${String(contenu ?? "").split("\n")
-    .map((ligne) => `<span class="saisie-code__ligne">${
-      ligne ? renderJetons(jetonsDeLaLigne(ligne)) : "&nbsp;"}</span>`)
+    .map((ligne) => renderJetons(jetonsDeLaLigne(ligne)))
     .join("\n")}\n`;
 }
 
 /**
- * Les deux gestes de la zone de français : « Coder », et « Tout effacer ».
+ * Le geste de la zone de français : « Coder », et lui seul.
  *
- * **Ils se redessinent seuls à la frappe.** « Coder » s'arme dès qu'il y a une
- * phrase, « Tout effacer » paraît dès qu'il y a quelque chose à perdre : les
- * laisser attendre un redessin entier les figeait dans l'état du dernier — et
- * après « Tout effacer », « Coder » restait éteint quoi qu'on écrive.
+ * **Il se redessine seul à la frappe.** Il s'arme dès qu'il y a une phrase ; le
+ * laisser attendre un redessin entier le figeait dans l'état du dernier — et
+ * après « Tout effacer », il restait éteint quoi qu'on écrive.
  *
- * **L'ordre : « Tout effacer », puis « Coder ».** Le geste qui engage se pose
- * en dernier, à droite, là où l'œil finit — et le geste qui détruit reste gris,
- * à côté, jamais sous le doigt qui vise le vert.
+ * **« Tout effacer » a quitté cette rangée** pour le menu de la ligne du titre.
+ * Un geste qui détruit tout le brouillon ne se range pas à côté du geste qu'on
+ * répète : il se range où l'on va le chercher exprès.
  */
 export function renderGestes(brouillon = null, { transcrit = false } = {}) {
   const dit = texte(brouillon?.dit);
 
   return `
     <div class="brouillon__gestes">
-      ${brouillonEcrit(brouillon)
-        ? `<button type="button" class="gh-btn gh-btn--sm brouillon__vider" data-brouillon-vider>
-             ${svgIcon("trash", { className: "octicon" })} Tout effacer
-           </button>`
-        : ""}
       <button type="button" class="gh-btn gh-btn--primary gh-btn--sm" data-brouillon-coder${
         dit && !transcrit ? "" : " disabled"}
         title="${escapeHtml(
@@ -188,20 +191,11 @@ export function renderVoletDuCode(brouillon = null) {
   const fichier = fichierOuvert(brouillon);
   if (!fichier) return "";
 
-  // Un bouton qui lancerait le vide ne dirait rien ; désactivé, il dit
-  // pourquoi, et c'est la moitié de ce qu'un débutant a besoin d'entendre.
-  const aLancer = fonctionsDuBrouillon(fichiersRemplis(brouillon)).length > 0;
-
   return `
     <div class="brouillon-volet">
       <div class="brouillon-volet__barre">
         <span class="brouillon-onglets">${renderOngletsDuBrouillon(brouillon)}</span>
         <span class="brouillon-volet__espace"></span>
-        <button type="button" class="gh-btn gh-btn--sm" data-brouillon-lancer${
-          aLancer ? "" : " disabled"}
-          title="${aLancer ? "Lancer les fonctions de ce brouillon" : "Écrivez une fonction : il n'y a rien à lancer"}">
-          ${svgIcon("play", { className: "octicon" })} Lancer
-        </button>
       </div>
       <p class="brouillon-volet__quoi">
         ${escapeHtml(fichier.quoi)} — <span class="brouillon-volet__langue">${
@@ -295,12 +289,20 @@ function motDeLaVerite(verite) {
  * sa lecture n'apprend rien, et c'est par elle qu'on comprend le langage.
  */
 export function renderResultats(resultats = []) {
-  if (!resultats.length) return "";
+  const tous = Array.isArray(resultats) ? resultats : [];
 
   return `
     <div class="bac-resultats">
-      <p class="bac-resultats__phrase">${escapeHtml(phraseDuLancement(resultats))}</p>
-      ${resultats.map((resultat) => `
+      ${/*
+        **La phrase se dit même sans un seul résultat.** Un brouillon qui ne
+        porte que des affirmations n'a rien à évaluer, et l'écran se taisait :
+        on avait cliqué « Lancer », et la fenêtre montrait un formulaire sans un
+        mot sur ce qu'elle venait de faire. `phraseDuLancement` sait le dire —
+        « le brouillon ne raisonne pas encore » —, et c'est exactement ce qu'un
+        débutant a besoin d'entendre (règle 5).
+      */""}
+      <p class="bac-resultats__phrase">${escapeHtml(phraseDuLancement(tous))}</p>
+      ${tous.map((resultat) => `
         <div class="bac-resultat bac-resultat--${escapeHtml(resultat.issue)}">
           <p class="bac-resultat__tete">
             <b>${escapeHtml(resultat.sujet)}</b>
@@ -421,6 +423,81 @@ export function renderProposer(brouillon = null, { depose = false } = {}) {
   `;
 }
 
+/** Ce que le menu de la ligne du titre sait faire. Un nom vit à un seul
+ *  endroit : celui qui le rend et celui qui l'écoute lisent la même constante
+ *  (règle 10). */
+export const GESTE = {
+  /** Repartir d'un brouillon neuf. Il demande confirmation. */
+  VIDER: "brouillon-vider"
+};
+
+/**
+ * Les gestes de la ligne du titre : proposer, lancer, et le reste dans le kebab.
+ *
+ * ## Pourquoi « Lancer » est monté ici
+ *
+ * Il vivait dans la barre d'onglets du volet de droite, à côté des noms de
+ * fichiers — c'est-à-dire au milieu de l'écran, dans une barre qui sert à
+ * choisir un fichier et non à agir. Les trois gestes de l'écran se tiennent
+ * maintenant sur la même ligne, celle du titre, comme sur les autres écrans de
+ * l'Atelier.
+ *
+ * ## Il s'arme dès qu'il y a du Mdall, et pas seulement une fonction
+ *
+ * Il ne s'armait que si le brouillon portait une **fonction** — une règle avec
+ * des conditions ou un agent. Un brouillon qui ne pose que des affirmations,
+ * ce qui est le cas du premier qu'on écrit, laissait donc un bouton éteint sans
+ * qu'aucun mot ne dise pourquoi : on le croyait cassé, et c'était l'écran qui
+ * ne savait pas se faire comprendre (règle 5). Il ouvre maintenant le bac dès
+ * qu'il y a quelque chose à lire, et **c'est le bac qui dit ce qu'il trouve** —
+ * « le brouillon ne raisonne pas encore » est une réponse, pas un silence.
+ *
+ * ## Le kebab est celui des autres écrans
+ *
+ * `renderGhActionButton` en `menuOnly`, comme l'en-tête de Documents et le
+ * titre d'une situation. Un second menu écrit ici aurait son idée de
+ * l'ouverture, du survol et de la fermeture au clavier, et il faudrait les
+ * recalibrer l'un contre l'autre à chaque retouche.
+ */
+export function renderActionsDuTitre(brouillon = null, { depose = false } = {}) {
+  // Il y a quelque chose à lire : le bac peut s'ouvrir, et dire ce qu'il trouve.
+  const aLancer = fichiersRemplis(brouillon).length > 0;
+  const aPerdre = brouillonEcrit(brouillon);
+
+  return `
+    <div class="lecture-cr__entete-actions">
+      ${renderProposer(brouillon, { depose })}
+      <button type="button" class="gh-btn gh-btn--sm" data-brouillon-lancer${
+        aLancer ? "" : " disabled"}
+        title="${escapeHtml(aLancer
+          ? "Ouvrir le bac d'essai : rien ne s'écrit"
+          : "Écrivez d'abord du Mdall : il n'y a rien à lancer")}">
+        ${svgIcon("play", { className: "octicon" })} Lancer
+      </button>
+      ${renderGhActionButton({
+        id: "brouillonKebab",
+        icon: svgIcon("kebab-horizontal", { className: "octicon" }),
+        iconOnly: true,
+        menuOnly: true,
+        size: "sm",
+        items: [{
+          action: GESTE.VIDER,
+          icon: svgIcon("trash", { className: "octicon" }),
+          label: "Tout effacer",
+          danger: true,
+          // Éteint plutôt qu'absent : un menu dont les entrées apparaissent et
+          // disparaissent se rouvre pour vérifier, et l'on finit par ne plus
+          // savoir ce qu'il contient.
+          disabled: !aPerdre,
+          title: aPerdre
+            ? "Effacer ce brouillon : ce qui est écrit ici sera perdu"
+            : "Il n'y a rien à effacer"
+        }]
+      })}
+    </div>
+  `;
+}
+
 /**
  * La console : tout ce que l'écran a à dire, en bas, comme dans un navigateur.
  *
@@ -466,7 +543,7 @@ export function renderConsole(lignes = [], { volet = false } = {}) {
   const toutes = Array.isArray(lignes) ? lignes : [];
 
   return `
-    <div class="brouillon-console${volet && toutes.length ? " est-deplacee" : ""}">
+    <div class="brouillon-console${volet ? " est-deplacee" : ""}">
       <div class="brouillon-console__tete">
         <span class="brouillon-console__phrase">
           ${svgIcon(toutes.some((une) => une.niveau !== NIVEAU.FAIT) ? "alert" : "check",
@@ -487,7 +564,7 @@ export function renderConsole(lignes = [], { volet = false } = {}) {
         ${svgIcon("file-diff", { className: "octicon" })} ${volet ? "En bas" : "À droite"}
       </button>
       </div>
-      ${volet && toutes.length
+      ${volet
         ? ""
         : `<ul class="brouillon-console__liste">${renderLignesDeLaConsole(toutes)}</ul>`}
     </div>
@@ -499,10 +576,22 @@ export function renderConsole(lignes = [], { volet = false } = {}) {
  *
  * **Un seul élément**, poignée comprise : il paraît et disparaît d'un clic, et
  * deux frères à poser ensemble se désynchronisent au premier redessin ciblé.
+ *
+ * ## Elle se range à droite même quand elle n'a rien à dire
+ *
+ * Le volet ne paraissait qu'avec un message, et le cadre ne déclarait sa
+ * troisième colonne que dans ce cas : **on ne pouvait donc déplacer la console
+ * qu'au moment où elle avait quelque chose à dire**. Or on range son écran
+ * d'abord et l'on écrit ensuite ; à l'ouverture, où le brouillon est vide, le
+ * bouton de place ne faisait rien du tout.
+ *
+ * C'est un réglage de l'écran, pas une réaction à son contenu : il ne dépend
+ * que de `volet`. Vide, le volet dit qu'il n'a rien à signaler — ce que la
+ * console du bas disait déjà pour la même raison.
  */
 export function renderVoletDeLaConsole(lignes = [], { volet = false } = {}) {
   const toutes = Array.isArray(lignes) ? lignes : [];
-  if (!volet || !toutes.length) return "";
+  if (!volet) return "";
 
   return `
     <div class="brouillon__console-volet">
@@ -529,7 +618,7 @@ export function renderEcrireEnMdall(brouillon = null, {
   });
 
   return `
-    <section class="brouillon" data-console="${volet && lignes.length ? "volet" : "bas"}"
+    <section class="brouillon" data-console="${volet ? "volet" : "bas"}"
       style="--brouillon-dit-width:${Math.round(largeur)}px; --brouillon-console-width:${
         Math.round(largeurConsole)}px">
       ${/*
@@ -540,9 +629,7 @@ export function renderEcrireEnMdall(brouillon = null, {
       <header class="lecture-cr__entete">
         <div class="lecture-cr__entete-ligne">
           <h2 class="lecture-cr__titre">Écrire en Mdall</h2>
-          <div class="lecture-cr__entete-actions">
-            ${renderProposer(brouillon, { depose })}
-          </div>
+          ${renderActionsDuTitre(brouillon, { depose })}
         </div>
         <p class="lecture-cr__mot">
           Dites ce que vous voulez poser, en français. Le code s'écrit à droite —
@@ -664,18 +751,50 @@ function reprendreLeBrouillon() {
   }
 }
 
+/** Le cadre ne descend jamais sous cette hauteur : en dessous, les trois zones
+ *  n'ont plus la place de montrer une ligne. */
+export const HAUTEUR_MINIMALE = 360;
+/** Ce qu'on laisse sous le cadre, pour que sa bordure basse se voie. */
+export const MARGE_DU_BAS = 8;
+
 /**
- * La hauteur du cadre, mesurée depuis sa position réelle.
+ * La hauteur du cadre, déduite de sa position réelle — ou **rien**.
  *
- * **L'écran tient dans la fenêtre, et ce sont ses zones qui défilent.** Une
- * hauteur calculée à l'avance — `100vh` moins une constante — se trompe dès que
- * la chrome du projet se replie ou qu'un bandeau paraît, et laisse alors une
+ * ## L'écran tient dans la fenêtre, et ce sont ses zones qui défilent
+ *
+ * Une hauteur calculée à l'avance — `100vh` moins une constante — se trompe dès
+ * que la chrome du projet se replie ou qu'un bandeau paraît, et laisse alors une
  * bande vide en bas ou pousse la console dehors. L'onglet Fichiers mesure déjà
  * la sienne de cette façon, et pour la même raison.
+ *
+ * ## `null` quand la mesure ne veut rien dire, et c'est tout le défaut
+ *
+ * L'Atelier dessine **tous** ses panneaux au montage, y compris ceux qu'on ne
+ * regarde pas : le nôtre est alors caché, et `getBoundingClientRect().top` vaut
+ * `0`. On en tirait la hauteur de la fenêtre entière, et le panneau, une fois
+ * ouvert deux cents pixels plus bas, dépassait d'autant.
+ *
+ * Deux défauts en un, et c'est pour cela qu'ils étaient rapportés ensemble :
+ * **la page entière défilait** — c'est le cadre qui la débordait — et **la zone
+ * de code ne défilait plus du tout**, parce qu'elle était plus grande que son
+ * contenu. On faisait défiler la page pour lire une ligne de code, et l'en-tête
+ * partait avec.
+ *
+ * On ne pose donc rien : le repli du CSS tient jusqu'à la première mesure
+ * honnête, qui a lieu à la venue (règle 5 — ne pas savoir n'autorise pas à
+ * prétendre qu'on sait).
  */
+export function hauteurDuCadre({ haut = 0, fenetre = 0 } = {}) {
+  if (!(haut > 0) || !(fenetre > 0)) return null;
+  return Math.max(HAUTEUR_MINIMALE, Math.floor(fenetre - haut - MARGE_DU_BAS));
+}
+
 function mesurerLaHauteur(racine) {
-  const haut = racine?.getBoundingClientRect?.().top ?? 0;
-  const hauteur = Math.max(360, Math.floor((window.innerHeight || 0) - haut - 8));
+  const hauteur = hauteurDuCadre({
+    haut: racine?.getBoundingClientRect?.().top ?? 0,
+    fenetre: window.innerHeight || 0
+  });
+  if (hauteur === null) return;
   racine.style.setProperty("--brouillon-hauteur", `${hauteur}px`);
 }
 
@@ -765,15 +884,15 @@ function redessinerLaConsole(racine) {
   });
 
   // **La troisième colonne se déclare sur le cadre**, pas sur le volet : c'est
-  // la grille du corps qui la crée, et elle ne peut pas la déduire d'un enfant
-  // qui est en `display:contents`.
+  // la grille du corps qui la crée, et un enfant ne déclare pas la colonne dans
+  // laquelle il tombe. Elle ne dépend que du réglage, jamais du contenu : sinon
+  // l'on ne peut ranger la console à droite qu'au moment où elle parle.
   racine.querySelector(".brouillon")
-    ?.setAttribute("data-console", etat.volet && lignes.length ? "volet" : "bas");
+    ?.setAttribute("data-console", etat.volet ? "volet" : "bas");
 
   remplacer(racine, ".brouillon-console", renderConsole(lignes, { volet: etat.volet }));
   remplacer(racine, ".lecture-cr__entete-actions",
-    `<div class="lecture-cr__entete-actions">${
-      renderProposer(etat.brouillon, { depose: etat.depose })}</div>`);
+    renderActionsDuTitre(etat.brouillon, { depose: etat.depose }));
 
   const ancien = racine.querySelector(".brouillon__console-volet");
   const html = renderVoletDeLaConsole(lignes, { volet: etat.volet });
@@ -813,20 +932,32 @@ function redessinerLesGestes(racine) {
   brancherLesGestes(racine);
 }
 
-/** « Coder » et « Tout effacer ». */
+/** « Coder ». Le seul geste de cette rangée. */
 function brancherLesGestes(racine) {
   racine.querySelector("[data-brouillon-coder]")
     ?.addEventListener("click", () => { void transcrire(racine); });
+}
 
-  racine.querySelector("[data-brouillon-vider]")?.addEventListener("click", () => {
-    // Une demi-heure de travail ne s'efface pas sur un clic mal visé.
-    if (!window.confirm("Effacer ce brouillon ? Ce qui est écrit ici sera perdu.")) return;
-    etat.brouillon = brouillonNeuf();
-    etat.depot = null;
-    etat.rendu = null;
-    garderLeBrouillon();
-    dessiner(racine);
-  });
+/**
+ * Repartir d'un brouillon neuf.
+ *
+ * Un redessin entier, et voulu : tout change à la fois — les onglets, le code,
+ * la console, les gestes du titre. Ce n'est pas un redessin ciblé, et ce n'est
+ * pas l'un d'eux qui l'appelle (voir la règle en tête de section).
+ */
+function viderLeBrouillon(racine) {
+  if (!brouillonEcrit(etat.brouillon)) return;
+  // Une demi-heure de travail ne s'efface pas sur un clic mal visé.
+  if (!window.confirm("Effacer ce brouillon ? Ce qui est écrit ici sera perdu.")) return;
+
+  etat.brouillon = brouillonNeuf();
+  etat.depot = null;
+  etat.rendu = null;
+  // Un verdict rendu sur un brouillon qui n'existe plus décrirait un essai que
+  // personne n'a fait.
+  etat.lance = false;
+  garderLeBrouillon();
+  dessiner(racine);
 }
 
 /** Le premier élément d'un fragment de HTML, ou `null` s'il n'en produit aucun. */
@@ -957,6 +1088,23 @@ function brancherLaConsole(racine) {
     void proposerAuProjet(racine);
   });
 
+  racine.querySelector("[data-brouillon-lancer]")?.addEventListener("click", () => {
+    etat.lance = true;
+    ouvrirLeBac(racine);
+    // La console dit aussi ce que le lancement a répondu : elle le dit derrière
+    // la fenêtre, et on la retrouve en la refermant.
+    redessinerLaConsole(racine);
+  });
+
+  // **Le menu, écouté sur le bloc qui le porte.** `ghaction:action` remonte, et
+  // l'écoute part avec l'élément au redessin suivant — là où une écoute posée
+  // sur l'écran s'accumulerait à chaque `dessiner`, et effacerait le brouillon
+  // autant de fois qu'il y a eu de transcriptions.
+  racine.querySelector(".lecture-cr__entete-actions")
+    ?.addEventListener("ghaction:action", (evenement) => {
+      if (evenement.detail?.action === GESTE.VIDER) viderLeBrouillon(racine);
+    });
+
   debrancherConsole?.();
   const poignee = racine.querySelector("#brouillonConsoleResizer");
   debrancherConsole = poignee
@@ -1010,18 +1158,13 @@ function brancherLeVolet(racine) {
       redessinerLeVolet(racine);
     });
   }
-
-  const lancer = racine.querySelector("[data-brouillon-lancer]");
-  lancer?.addEventListener("click", () => {
-    etat.lance = true;
-    ouvrirLeBac(racine);
-    // La console dit aussi ce que le lancement a répondu : elle le dit derrière
-    // la fenêtre, et on la retrouve en la refermant.
-    redessinerLaConsole(racine);
-  });
 }
 
 function brancher(racine) {
+  // L'écoute des menus mutualisés, posée une fois pour l'application entière :
+  // le composant garde son drapeau, et un second appel ne fait rien.
+  bindGhActionButtons();
+
   brancherLeVolet(racine);
   brancherLaConsole(racine);
 
@@ -1190,7 +1333,17 @@ async function proposerAuProjet(depuis) {
 
 export function renderEcrireEnMdallEcran(racine, { force = false } = {}) {
   if (!racine) return;
-  if (!force && racine.dataset.brouillonMonte === "true") return;
+
+  if (!force && racine.dataset.brouillonMonte === "true") {
+    // **On remesure, même sans redessiner.** L'Atelier dessine tous ses panneaux
+    // au montage ; le nôtre était alors caché, et sa position ne voulait rien
+    // dire. Le brouillon, lui, ne se redessine pas à la venue — il vit au niveau
+    // du module, et le refaire effacerait ce qu'on est en train d'écrire. C'est
+    // donc ici, et seulement ici, que le cadre apprend sa vraie hauteur.
+    mesurerLaHauteur(racine);
+    return;
+  }
+
   racine.dataset.brouillonMonte = "true";
 
   // Ce qui a été gardé ne reprend que sur un écran qui n'a rien : revenir sur

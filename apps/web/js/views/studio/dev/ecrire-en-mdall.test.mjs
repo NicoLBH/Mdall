@@ -8,7 +8,8 @@ import assert from "node:assert/strict";
 import {
   lignesDuFichier, renderOngletsDuBrouillon, renderVoletDuCode, renderEcrireEnMdall,
   renderFormulaire, renderResultats, renderBacDessai, renderConsole, renderProposer,
-  renderVoletDeLaConsole, renderGestes, colorerDuMdall, POSE, poseDuPanneau
+  renderVoletDeLaConsole, renderGestes, colorerDuMdall, POSE, poseDuPanneau,
+  renderActionsDuTitre, hauteurDuCadre, HAUTEUR_MINIMALE, MARGE_DU_BAS, GESTE
 } from "./ecrire-en-mdall.js";
 import { renderLignesDeCode } from "../../ui/code-mdall.js";
 import { readFileSync } from "node:fs";
@@ -128,9 +129,16 @@ test("l'écran dit que rien ne s'écrit dans le projet", () => {
   assert.match(renderEcrireEnMdall(brouillonNeuf(), {}), /rien ne s'écrit dans le projet/);
 });
 
-test("« Tout effacer » ne paraît que lorsqu'il y a quelque chose à perdre", () => {
-  assert.doesNotMatch(renderEcrireEnMdall(brouillonNeuf(), {}), /data-brouillon-vider/);
-  assert.match(renderEcrireEnMdall(avecLeDit(brouillonNeuf(), "un essai"), {}), /data-brouillon-vider/);
+test("« Tout effacer » vit dans le menu du titre, et s'éteint quand il n'y a rien", () => {
+  // Un geste qui détruit tout le brouillon ne se range pas à côté du geste
+  // qu'on répète : il se range où l'on va le chercher exprès.
+  const vide = renderEcrireEnMdall(brouillonNeuf(), {});
+  assert.match(vide, new RegExp(`data-menu-action="${GESTE.VIDER}"[^>]*\\n?\\s*disabled`));
+
+  const avec = renderEcrireEnMdall(avecLeDit(brouillonNeuf(), "un essai"), {});
+  assert.match(avec, new RegExp(`data-menu-action="${GESTE.VIDER}"`));
+  assert.doesNotMatch(avec.slice(avec.indexOf(`data-menu-action="${GESTE.VIDER}"`)).slice(0, 200),
+    /disabled/);
 });
 
 test("la largeur du volet gauche se pose par une variable, pas en dur", () => {
@@ -259,11 +267,41 @@ test("le bac ne montre aucun verdict tant qu'on n'a pas lancé", () => {
   assert.doesNotMatch(avant, /bac-resultat/);
 });
 
-test("le bouton « Lancer » ne s'active que s'il y a une fonction à lancer", () => {
-  // Un bouton qui lancerait le vide ne dirait rien ; désactivé, il dit
-  // pourquoi.
-  assert.match(renderVoletDuCode(brouillonNeuf(), {}), /data-brouillon-lancer disabled/);
-  assert.doesNotMatch(renderVoletDuCode(AVEC_UNE_DECLARATION, {}), /data-brouillon-lancer disabled/);
+test("« Lancer » s'arme dès qu'il y a du Mdall, pas seulement une fonction", () => {
+  // **Le défaut que ça répare : le bouton était inopérant.** Il ne s'armait que
+  // si le brouillon portait une fonction — une règle avec des conditions. Un
+  // brouillon qui ne pose que des affirmations, ce qui est le cas du premier
+  // qu'on écrit, laissait donc un bouton éteint qu'on croyait cassé.
+  assert.match(renderActionsDuTitre(brouillonNeuf(), {}), /data-brouillon-lancer disabled/);
+  assert.doesNotMatch(renderActionsDuTitre(AVEC_UNE_DECLARATION, {}), /data-brouillon-lancer disabled/);
+
+  // Une seule donnée, aucune fonction : il s'arme, et c'est le bac qui dira
+  // qu'il n'y a rien à raisonner.
+  const donnee = avecLeFichier(brouillonNeuf(), "essai.ddb", "Altitude du site = 890 m");
+  assert.doesNotMatch(renderActionsDuTitre(donnee, {}), /data-brouillon-lancer disabled/);
+  assert.equal(lancerLeBrouillon(fichiersRemplis(donnee)).length, 0);
+});
+
+test("« Lancer » a quitté la barre des onglets pour la ligne du titre", () => {
+  // Il vivait dans la barre qui sert à choisir un fichier, c'est-à-dire au
+  // milieu de l'écran. Les trois gestes se tiennent sur la même ligne.
+  assert.doesNotMatch(renderVoletDuCode(AVEC_UNE_DECLARATION), /data-brouillon-lancer/);
+
+  const html = renderEcrireEnMdall(AVEC_UNE_DECLARATION, {});
+  assert.ok(html.indexOf("data-brouillon-lancer") > html.indexOf('class="lecture-cr__entete-actions"'),
+    "« Lancer » n'est pas dans la ligne de titre");
+  assert.ok(html.indexOf("data-brouillon-lancer") < html.indexOf("brouillon__corps"),
+    "« Lancer » est passé sous les volets");
+});
+
+test("le bac dit ce qu'il trouve, même quand il ne trouve rien à lancer", () => {
+  // Un écran muet laisse croire que le clic n'a pas pris. « Lancer » sur un
+  // brouillon qui ne raisonne pas doit répondre, pas se taire (règle 5).
+  const donnee = avecLeFichier(brouillonNeuf(), "essai.ddb", "Altitude du site = 890 m");
+  const html = renderBacDessai(donnee, { reponses: {}, lance: true });
+
+  assert.match(html, /ne raisonne pas encore/);
+  assert.doesNotMatch(html, /class="bac-resultat /);
 });
 
 test("ce qu'on répond est échappé, dans une liste comme dans un champ", () => {
@@ -439,14 +477,30 @@ test("la console se déplace à droite, et ne s'affiche jamais aux deux places",
   assert.ok(lignes.length > 0);
 });
 
-test("la troisième colonne se déclare sur le cadre, et seulement quand elle sert", () => {
-  // Une colonne vide laisserait un vide à droite du code, qu'on prendrait pour
-  // un défaut.
+test("la troisième colonne se déclare sur le cadre, et ne dépend que du réglage", () => {
   assert.match(renderEcrireEnMdall(AVEC_UN_DEFAUT, { volet: true }), /data-console="volet"/);
   assert.match(renderEcrireEnMdall(AVEC_UN_DEFAUT, { volet: false }), /data-console="bas"/);
-  // Rien à montrer : la console reste en bas, quoi qu'on ait demandé.
-  assert.match(renderEcrireEnMdall(brouillonNeuf(), { volet: true }), /data-console="bas"/);
-  assert.equal(renderVoletDeLaConsole([], { volet: true }), "");
+});
+
+test("une console vide se range à droite quand on le demande", () => {
+  // **Le défaut que ça répare.** Le volet ne paraissait qu'avec un message, et
+  // le cadre ne déclarait sa colonne que dans ce cas : on ne pouvait donc
+  // déplacer la console qu'au moment où elle avait quelque chose à dire,
+  // c'est-à-dire au pire moment. Or on range son écran d'abord, et l'on écrit
+  // ensuite — à l'ouverture, le bouton de place ne faisait rien du tout.
+  assert.match(renderEcrireEnMdall(brouillonNeuf(), { volet: true }), /data-console="volet"/);
+
+  const html = renderVoletDeLaConsole([], { volet: true });
+  assert.match(html, /brouillon-volet--console/);
+  assert.match(html, /Rien à signaler/);
+  // Et jamais aux deux places : la liste du bas s'en va avec le volet.
+  assert.equal((renderEcrireEnMdall(brouillonNeuf(), { volet: true })
+    .match(/brouillon-console__liste/g) ?? []).length, 1);
+});
+
+test("hors du volet, le troisième panneau ne rend rien plutôt qu'un cadre vide", () => {
+  assert.equal(renderVoletDeLaConsole([], { volet: false }), "");
+  assert.equal(renderVoletDeLaConsole(laConsole({ fichiers: fichiersRemplis(AVEC_UN_DEFAUT) }), {}), "");
 });
 
 test("la largeur du troisième volet se pose par une variable, pas en dur", () => {
@@ -490,12 +544,36 @@ test("ce qu'on écrit prend les couleurs de la Mémoire, à la frappe", () => {
   }
 });
 
-test("une ligne vide garde sa hauteur, et un retour final sa ligne", () => {
-  // Sans cela, la couche remonte d'une ligne dès qu'on tape Entrée en fin de
-  // fichier — et le texte coloré ne tombe plus sur le texte tapé.
-  assert.match(colorerDuMdall("a\n\nb"), /&nbsp;/);
+test("une ligne du fichier occupe une ligne à l'écran, jamais deux", () => {
+  // **Le défaut que ça répare.** Chaque ligne était un `<span>` en
+  // `display:block`, et les spans étaient séparés par un `\n` : dans un `<pre>`,
+  // cela fait deux lignes. Le code s'affichait à double interligne, et la
+  // gouttière — qui compte les lignes du texte, elle — s'arrêtait au milieu.
+  //
+  // Les comptes sont écrits en dur : les déduire de `colorerDuMdall` ferait une
+  // épreuve qui bouge avec ce qu'elle mesure.
+  assert.equal(colorerDuMdall("a\n\nb").split("\n").length, 4);
+  assert.equal(colorerDuMdall("a").split("\n").length, 2);
+  assert.equal(colorerDuMdall("").split("\n").length, 2);
+
+  // Le compte de la couche colorée est celui de la gouttière, sans quoi les
+  // numéros cessent de désigner les lignes qu'ils montrent.
+  const quatre = "fonction X(zones) {\n\n   si (A = 1)\n}";
+  assert.equal(colorerDuMdall(quatre).split("\n").length - 1, lignesDuFichier(quatre).length);
+});
+
+test("une ligne vide ne porte aucun jeton, et n'en invente pas", () => {
+  // Un `&nbsp;` de bourrage donnait sa hauteur à la ligne vide du temps où
+  // chaque ligne était un bloc. Dans un `<pre>`, c'est le retour qui la fait —
+  // et un espace insécable de plus décalerait la couche d'un caractère.
+  const peint = colorerDuMdall("a\n\nb");
+
+  assert.doesNotMatch(peint, /&nbsp;/);
+  assert.equal(peint.split("\n")[1], "");
+});
+
+test("la couche finit par un retour, sans quoi elle remonte d'une ligne", () => {
   assert.ok(colorerDuMdall("a").endsWith("\n"), "la couche ne finit pas par un saut");
-  assert.equal(colorerDuMdall("").split("\n").length, colorerDuMdall("\n").split("\n").length - 1);
 });
 
 /* ── « Coder » se réarme à la frappe ─────────────────────────────────────── */
@@ -509,9 +587,14 @@ test("les gestes se dessinent seuls, et « Coder » suit ce qu'on tape", () => {
     /data-brouillon-coder disabled/);
 });
 
-test("« Tout effacer » ne paraît que lorsqu'il y a quelque chose à perdre", () => {
-  assert.doesNotMatch(renderGestes(brouillonNeuf(), {}), /data-brouillon-vider/);
-  assert.match(renderGestes(avecLeDit(brouillonNeuf(), "un essai"), {}), /data-brouillon-vider/);
+test("la rangée de gestes ne porte plus que « Coder »", () => {
+  // « Tout effacer » est monté dans le menu du titre : le laisser aussi ici
+  // ferait deux chemins pour un geste, et deux libellés qui finiraient par ne
+  // plus dire la même chose (règle 10).
+  const html = renderGestes(avecLeDit(brouillonNeuf(), "un essai"), {});
+
+  assert.match(html, /data-brouillon-coder/);
+  assert.doesNotMatch(html, /Tout effacer/);
 });
 
 test("la rangée de gestes est un seul bloc, remplaçable d'un coup", () => {
@@ -554,13 +637,19 @@ test("la console garde sa tête même repliée à droite, pour qu'on puisse la r
 
 /* ── L'ordre des gestes, et la note qui s'en va ──────────────────────────── */
 
-test("« Tout effacer » se pose à gauche du vert, jamais sous le doigt qui le vise", () => {
-  // Le geste qui engage se pose en dernier, à droite, là où l'œil finit ; le
-  // geste qui détruit reste gris, à côté.
-  const html = renderGestes(avecLeDit(brouillonNeuf(), "un essai"), {});
+test("le kebab se pose à droite de « Lancer », et porte le menu", () => {
+  // C'est ce que l'écran demande : les gestes d'abord, et ce qu'on va chercher
+  // exprès au bout de la ligne.
+  const html = renderActionsDuTitre(avecLeDit(AVEC_UNE_DONNEE, "un essai"), {});
 
-  assert.ok(html.indexOf("data-brouillon-vider") < html.indexOf("data-brouillon-coder"),
-    "le bouton vert passe avant « Tout effacer »");
+  assert.ok(html.indexOf("data-brouillon-proposer") < html.indexOf("data-brouillon-lancer"),
+    "« Lancer » passe avant « Proposer au projet »");
+  assert.ok(html.indexOf("data-brouillon-lancer") < html.indexOf('data-action-id="brouillonKebab"'),
+    "le kebab n'est pas à droite de « Lancer »");
+  // Le composant mutualisé, pas un second menu écrit ici : un menu de plus
+  // aurait son idée de l'ouverture et de la fermeture au clavier.
+  assert.match(html, /class="gh-action gh-action--single"/);
+  assert.match(html, /class="gh-menu" role="menu"/);
 });
 
 test("la rangée de gestes ne porte plus de leçon", () => {
@@ -582,4 +671,51 @@ test("le volet branche son coloreur, sans quoi l'on écrit en noir sur noir", ()
 
   assert.match(branchement.slice(0, 400), /colorer:\s*colorerDuMdall/,
     "le coloreur ne descend pas jusqu'au branchement : la couche ne se repeindra pas");
+});
+
+/* ── La hauteur du cadre : mesurée, ou pas posée ──────────────────────────── */
+
+test("la hauteur se déduit de la position réelle du cadre", () => {
+  // L'écran tient dans la fenêtre et ce sont ses zones qui défilent : une
+  // hauteur calculée à l'avance se trompe dès que la chrome se replie.
+  assert.equal(hauteurDuCadre({ haut: 200, fenetre: 900 }), 900 - 200 - MARGE_DU_BAS);
+});
+
+test("une mesure prise sur un panneau caché ne pose rien du tout", () => {
+  // **Le défaut que ça répare, et c'en est deux.** L'Atelier dessine tous ses
+  // panneaux au montage, y compris ceux qu'on ne regarde pas : le nôtre est
+  // alors caché, et sa position vaut 0. On en tirait la hauteur de la fenêtre
+  // entière, et le cadre, ouvert deux cents pixels plus bas, dépassait
+  // d'autant : **la page entière défilait**, et **la zone de code ne défilait
+  // plus du tout**, parce qu'elle était plus grande que son contenu.
+  //
+  // Ne pas savoir n'autorise pas à prétendre qu'on sait (règle 5) : on ne pose
+  // rien, et le repli du CSS tient jusqu'à la venue.
+  assert.equal(hauteurDuCadre({ haut: 0, fenetre: 900 }), null);
+  assert.equal(hauteurDuCadre({ haut: -40, fenetre: 900 }), null);
+  assert.equal(hauteurDuCadre({ haut: 200, fenetre: 0 }), null);
+  assert.equal(hauteurDuCadre({}), null);
+  assert.equal(hauteurDuCadre(), null);
+});
+
+test("le cadre ne descend jamais sous sa hauteur minimale", () => {
+  // Sous ce plancher, les trois zones n'ont plus la place de montrer une ligne :
+  // mieux vaut un cadre qui dépasse et défile qu'un cadre illisible.
+  assert.equal(hauteurDuCadre({ haut: 700, fenetre: 800 }), HAUTEUR_MINIMALE);
+});
+
+/**
+ * **Cette épreuve relit le source, et c'est l'exception qui le justifie.**
+ *
+ * Le défaut ne se voit pas dans le rendu : il est dans le fait qu'un écran déjà
+ * monté ne remesurait jamais. On revenait sur l'onglet, le cadre gardait la
+ * hauteur qu'il avait pris caché, et la page défilait pour toujours.
+ */
+test("un écran déjà monté remesure sa hauteur à la venue", () => {
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+  const depart = source.indexOf("export function renderEcrireEnMdallEcran");
+  const garde = source.slice(depart, source.indexOf("racine.dataset.brouillonMonte = \"true\";", depart));
+
+  assert.ok(garde.includes("mesurerLaHauteur(racine)"),
+    "la sortie anticipée ne remesure pas : le cadre gardera la hauteur prise caché");
 });
