@@ -1075,11 +1075,72 @@ lit, se rejoue et se vérifie ligne à ligne, comme une condition. Ce qui ne s'y
 | `(` `)` | les priorités, sinon celles des mathématiques |
 | `racine` `abs` `arrondi` `plafond` `plancher` `min` `max` | les sept fonctions |
 
+### `calcule` : le verbe qui porte un calcul
+
 ```
-soit TVA = Prix HT * 20%;
-soit Prix TTC = Prix HT + TVA;
-soit Diagonale = racine(Largeur ^ 2 + Longueur ^ 2);
-soit Cote = arrondi(Niveau du sol + 1 m ; 2);
+fonction Prix TTC(zones, Prix HT) {
+   // Le prix toutes taxes, au taux normal.
+   importe (variable: Prix HT, depuis: prix.ddb, zones: zones);
+   calcule TVA = Prix HT * 20%;
+   calcule Prix TTC = Prix HT + TVA;
+   si (Prix HT >= 0 €)
+   alors (Prix TTC);
+   sinon ("rien à facturer");
+}
+```
+
+`calcule <Nom> = <expression>;` pose une valeur **pour cette fonction seule**.
+Elle se lit ensuite comme n'importe quel nom : dans une condition, et dans un
+`alors`.
+
+**Ce n'est pas `soit`.** `soit` est pris, et il ne porte pas ce sens : le nom de
+sa locale **est** un type de provenance — `soit texte = …`, `soit règle = …`,
+`soit parce que = …`. Écrire `soit TVA = Prix HT * 20%` demanderait au lecteur
+de deviner, à chaque ligne, si le nom désigne une provenance ou une valeur ; la
+lecture refusait d'ailleurs « TVA n'est pas une provenance connue ». `calcule`
+dit ce qu'il fait, se range avec les autres verbes du métier — `importe`,
+`enregistre` —, et ne peut se confondre avec rien.
+
+**L'expression ne se met pas entre guillemets** : ce n'est pas un texte, c'est
+une arithmétique qui se rejoue. Une expression citée est refusée à la lecture.
+
+Les `calcule` se posent après les `importe` et avant le `si`, **dans l'ordre où
+ils se lisent** : le second peut lire le premier. C'est tout l'intérêt — on
+décompose un calcul en étapes qu'on peut nommer, et chaque étape se lit à
+l'écran quand on lance.
+
+Une valeur calculée **vit dans sa fonction** : pas de déclaration, personne ne
+la cherche ailleurs, son absence n'est pas une lacune. Pour aller au projet,
+elle passe par `alors` et par `enregistre`, comme toute conclusion — il n'y a
+pas de seconde porte vers la mémoire (règle 1).
+
+### Trois choses qu'une locale calculée ne fait jamais
+
+**Elle ne vaut pas zéro quand on n'a pas pu la calculer.** Elle n'existe pas, et
+les conditions qui la lisent deviennent indécidables. Poser un zéro ferait tenir
+une règle sur une valeur que personne n'a.
+
+**Elle ne se demande pas dans le formulaire.** Ce serait un champ qu'on ne sait
+pas remplir, et il masquerait l'entrée réellement absente deux lignes plus haut.
+Ce qu'un calcul **lit**, en revanche, se demande comme ce qu'une condition lit.
+
+**Elle ne cache pas son travail.** Le bac d'essai montre chaque étape — son nom,
+son expression telle qu'elle est tapée, ce qu'elle vaut. Une règle qui rend un
+nombre sans montrer d'où il vient n'apprend rien ; c'est ce qu'on refuse à un
+agent, et on ne l'accepte pas davantage d'un calcul écrit.
+
+### Une conclusion ne nomme que ce que sa fonction a calculé
+
+`alors (Prix TTC)` rend la valeur calculée. `alors (Niveau du sol)` — un nom du
+**projet** — rend le texte « Niveau du sol », comme avant.
+
+C'est délibéré : sans cette borne, un fichier changerait de sens le jour où
+quelqu'un verse une valeur pour ce sujet. Pour conclure avec la valeur d'un nom
+du projet, on la pose, et cela se lit :
+
+```
+   calcule Cote = Niveau du sol;
+   alors (Cote);
 ```
 
 **La virgule est décimale**, comme partout ailleurs dans la mémoire : on écrit

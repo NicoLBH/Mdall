@@ -86,6 +86,7 @@ const EN_TETE = new Map([
   [VERBES.IMPORTE, JETON.MOT_IMPORTE],
   [VERBES.ENREGISTRE, JETON.MOT_NATIF],
   [VERBES.DECISION, JETON.MOT_NATIF],
+  [VERBES.CALCULE, JETON.MOT_NATIF],
   ...PROVENANCES.map((mot) => [mot, JETON.PROVENANCE])
 ].map(([mot, type]) => [String(mot).toLowerCase(), type]));
 

@@ -72,7 +72,11 @@ function commeUneRegle(bloc) {
       regle: {
         conditions: Array.isArray(bloc?.conditions) ? bloc.conditions : [],
         sinon: texte(bloc?.sinon),
-        sauf: Array.isArray(bloc?.sauf) ? bloc.sauf : []
+        sauf: Array.isArray(bloc?.sauf) ? bloc.sauf : [],
+        // Les valeurs que la fonction pose en les calculant. Sans elles,
+        // l'évaluateur ne verrait ni ce que la règle calcule, ni ce que sa
+        // conclusion nomme.
+        calculs: Array.isArray(bloc?.calculs) ? bloc.calculs : []
       },
       ...(bloc?.agent ? { agent: { genre: texte(bloc.agent), utilitaire: texte(bloc.utilitaire) } } : {})
     }
@@ -87,7 +91,11 @@ export function fonctionsDuBrouillon(fichiers = []) {
     for (const bloc of lireUnFichier(fichier?.contenu ?? "").blocs ?? []) {
       // Une affirmation ne raisonne pas : elle pose. La lancer reviendrait à
       // évaluer une valeur contre elle-même.
-      if (!(bloc?.conditions ?? []).length && !bloc?.agent) continue;
+      //
+      // **Un calcul raisonne**, lui : une fonction sans condition qui pose
+      // `calcule TVA = Prix HT * 20%` a quelque chose à rendre, et la laisser
+      // dehors reviendrait à dire que l'arithmétique n'est pas du langage.
+      if (!(bloc?.conditions ?? []).length && !(bloc?.calculs ?? []).length && !bloc?.agent) continue;
       fonctions.push({ fichier: texte(fichier?.nom), bloc });
     }
   }
@@ -142,6 +150,14 @@ export function lancerLeBrouillon(fichiers = [], reponses = null) {
         pourquoi: trace.doute ? phraseDuDoute(trace.doute) : ""
       })),
       manquants: evaluation.manquants ?? [],
+      /**
+       * Ce que chaque `calcule` a donné, dans l'ordre où il est écrit.
+       *
+       * La trace du calcul, au même titre que celle des conditions : un nombre
+       * sorti de nulle part est exactement ce qu'on refuse à un agent, et l'on
+       * ne va pas l'accepter d'une règle sous prétexte qu'elle est écrite.
+       */
+      calculs: evaluation.calculs ?? [],
       // Un `et` et un `ou` sur la même règle se lisent de gauche à droite, sans
       // priorité. Le référentiel n'en produit pas ; une règle écrite à la main
       // qui en contient mérite d'être relue, et on le dit.

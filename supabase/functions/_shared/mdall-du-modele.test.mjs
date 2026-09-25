@@ -87,11 +87,27 @@ test("la consigne nomme les trois fichiers, et dit ce que chacun porte", () => {
   }
 });
 
-test("la consigne interdit d'inventer une arithmétique", () => {
-  // Mdall compare et conclut ; il ne calcule pas. Une arithmétique inventée est
-  // indiscernable d'une arithmétique juste, et personne ne s'en apercevrait.
+test("la consigne enseigne l'arithmétique que le langage sait lire", () => {
+  // Elle l'interdisait mot pour mot ; le langage sait maintenant calculer, et
+  // une consigne qui dirait encore le contraire ferait mettre une TVA à 20 %
+  // dans « ce que je n'ai pas su écrire ».
+  assert.match(CONSIGNES, /calcule <Nom> = <expression>;/);
+  assert.match(CONSIGNES, /Prix HT \* 20%/);
+  for (const fonction of ["racine", "abs", "arrondi", "plafond", "plancher", "min", "max"]) {
+    assert.ok(CONSIGNES.includes(fonction), `la consigne ne nomme pas ${fonction}`);
+  }
+  // Et les deux pièges que le langage refuse, dits au modèle plutôt que
+  // découverts au lancement : le point-virgule, et les unités.
+  assert.match(CONSIGNES, /point-virgule/);
+  assert.match(CONSIGNES, /3 m \+ 2. est refusé/);
+});
+
+test("la consigne interdit toujours d'inventer ce qu'elle ne sait pas écrire", () => {
+  // Une arithmétique inventée reste indiscernable d'une arithmétique juste :
+  // ce qui a changé, c'est la frontière, pas la règle.
   assert.match(CONSIGNES, /ne l'invente pas/i);
   assert.match(CONSIGNES, /ce_que_je_nai_pas_su_ecrire/);
+  assert.match(CONSIGNES, /boucle/);
 });
 
 test("la consigne interdit d'inventer une provenance", () => {

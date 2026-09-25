@@ -177,13 +177,27 @@ export const WIKI_DU_LANGAGE = [
 
   section("calcul", "L'arithmétique", [
     dit("Mdall sait calculer, et il refuse de calculer ce qu'il ne sait pas "
-      + "calculer. Une expression se lit ainsi :"),
-    table(["l'expression", "ce qu'elle rend"], [
-      ["`Prix HT * 20%`", "`240 €`, si le prix vaut 1 200 €"],
-      ["`Prix HT + Prix HT * 20%`", "`1440 €`"],
-      ["`racine(Largeur ^ 2 + Longueur ^ 2)`", "la diagonale, en mètres"],
-      ["`arrondi(Niveau du sol + 1 m ; 2)`", "la cote, à deux décimales"]
-    ]),
+      + "calculer. Le verbe est **`calcule`** : il pose une valeur **pour cette "
+      + "fonction seule**, et cette valeur se lit ensuite comme n'importe quel "
+      + "nom — dans une condition, et dans un `alors`."),
+    code(
+      "   calcule TVA = Prix HT * 20%;",
+      "   calcule Prix TTC = Prix HT + TVA;",
+      "   calcule Diagonale = racine(Largeur ^ 2 + Longueur ^ 2);",
+      "   calcule Cote = arrondi(Niveau du sol + 1 m ; 2);"
+    ),
+    dit("Les `calcule` se posent après les `importe` et avant le `si`, **dans "
+      + "l'ordre où ils se lisent** : le second peut lire le premier. C'est tout "
+      + "l'intérêt — on décompose un calcul en étapes qu'on peut nommer, et "
+      + "chaque étape se lit à l'écran quand on lance."),
+    dit("**Ce n'est pas `soit`**, qui est pris : le nom d'un `soit` *est* un type "
+      + "de provenance — `soit texte = …`, `soit règle = …`. Et **l'expression ne "
+      + "se met pas entre guillemets** : ce n'est pas un texte, c'est une "
+      + "arithmétique qui se rejoue."),
+    dit("Une valeur calculée **ne sort pas toute seule** : elle vit dans sa "
+      + "fonction, n'a pas de déclaration, et personne ne la cherche ailleurs. "
+      + "Pour aller au projet, elle passe par `alors` et par `enregistre`, comme "
+      + "toute conclusion — il n'y a pas de seconde porte vers la mémoire."),
     table(["ce qui s'écrit", "ce que cela veut dire"], [
       ["`+` `-` `*` `/`", "et `×` `÷` pour qui les a sous la main"],
       ["`^`", "la puissance : `2^3^2` vaut `2^9`, comme en mathématiques"],
@@ -246,35 +260,73 @@ export const WIKI_DU_LANGAGE = [
       + "cela irait**, et n'y va pas.")
   ]),
 
-  section("limites", "Ce que le langage ne sait pas encore écrire", [
-    dit("Une documentation qui ne dit que ce qui marche apprend à se méfier d'elle. "
-      + "Voici, mot pour mot, deux phrases qu'on aimerait écrire et ce que le "
-      + "langage en fait aujourd'hui."),
-    dit("**« Un prix, puis un calcul de TVA à 20 %, on affiche le résultat en "
-      + "euros. »** Les deux noms se déclarent, la donnée s'écrit, et le calcul "
-      + "`Prix HT * 20%` se lit et se vérifie. Ce qui manque est le **mot** qui le "
-      + "porte dans une règle : `soit` est pris — il déclare une provenance —, et "
-      + "un `alors` ne reçoit aujourd'hui qu'une valeur écrite, non une expression."),
-    dit("**« Si la situation du projet est en zone inondable, le plancher bas du "
-      + "niveau le plus bas doit être 1 m au-dessus du niveau du sol. »** La "
-      + "condition s'écrit sans peine ; la conclusion `Niveau du sol + 1 m` se "
-      + "calcule, mais ne se pose pas encore dans le `alors`."),
+  section("exemple-tva", "Un exemple entier : la TVA", [
+    dit("« Je veux une zone de saisie où l'on renseigne un prix, puis un calcul de "
+      + "TVA à 20 %, on affiche le résultat du calcul en euros. »"),
+    dit("Le nom d'abord, déclaré dans `variables-du-projet.ref` :"),
     code(
-      "fonction Plancher bas surélevé(zones, Zone inondable) {",
+      "const Prix HT = {",
+      "   type: \"mesure\",",
+      "   unité: \"€\",",
+      "   description: \"Prix hors taxes saisi par l'utilisateur.\",",
+      "};"
+    ),
+    dit("Puis la règle :"),
+    code(
+      "fonction Prix TTC(zones, Prix HT) {",
+      "   // Le prix toutes taxes, au taux normal.",
+      "   importe (variable: Prix HT, depuis: prix.ddb, zones: zones);",
+      "   calcule TVA = Prix HT * 20%;",
+      "   calcule Prix TTC = Prix HT + TVA;",
+      "   si (Prix HT >= 0 €)",
+      "   alors (Prix TTC);",
+      "   sinon (\"rien à facturer\");",
+      "}"
+    ),
+    dit("Pour 1 200 € hors taxes, le bac d'essai conclut **1 440 €**, et montre les "
+      + "deux étapes : `TVA = 240 €`, puis `Prix TTC = 1440 €`. Une règle qui rend "
+      + "un nombre sans montrer d'où il vient n'apprend rien — c'est ce qu'on "
+      + "refuse à un agent, et on ne l'accepte pas davantage d'un calcul écrit.")
+  ]),
+
+  section("exemple-inondable", "Un exemple entier : la zone inondable", [
+    dit("« Si la situation du projet est en zone inondable, le plancher bas du "
+      + "niveau le plus bas doit être 1 m au-dessus du niveau du sol. »"),
+    code(
+      "fonction Cote du plancher bas(zones, Zone inondable, Niveau du sol) {",
       "   importe (variable: Zone inondable, depuis: site.ddb, zones: zones);",
+      "   importe (variable: Niveau du sol, depuis: site.ddb, zones: zones);",
+      "   calcule Cote imposée = Niveau du sol + 1 m;",
       "   si (Zone inondable = \"oui\")",
-      "   alors (\"1 m au-dessus du niveau du sol\");",
+      "   alors (Cote imposée);",
       "   sinon (\"sans exigence\");",
       "}"
     ),
-    dit("Écrit ainsi, le projet **retient l'exigence** et sait la retrouver — mais "
-      + "la cote reste une phrase, et non un nombre qu'on peut comparer à celle du "
-      + "plan. C'est exactement ce que le branchement du calcul viendra changer."),
-    dit("Remarquez au passage ce que la phrase française ne disait pas, et que le "
-      + "Mdall oblige à dire : **d'où vient** l'information « zone inondable », **où "
-      + "va** la conclusion, et ce qui se passe **hors** zone inondable. Un "
-      + "raisonnement qu'on écrit se révèle toujours plus précis que celui qu'on "
-      + "croyait avoir.")
+    dit("Pour un sol à 108,2 m, la règle conclut **109,2 m** — un nombre qu'on peut "
+      + "comparer à la cote du plan, et non une phrase qu'il faudrait relire."),
+    dit("Remarquez ce que la phrase française ne disait pas, et que le Mdall oblige "
+      + "à dire : **d'où vient** l'information « zone inondable », **où va** la "
+      + "conclusion, et ce qui se passe **hors** zone inondable. Un raisonnement "
+      + "qu'on écrit se révèle toujours plus précis que celui qu'on croyait avoir.")
+  ]),
+
+  section("limites", "Ce que le langage ne sait pas écrire", [
+    dit("Une documentation qui ne dit que ce qui marche apprend à se méfier d'elle."),
+    liste(
+      "**Pas de boucle**, et pas de liste à parcourir : une moyenne sur trente "
+        + "poteaux ne s'écrit pas ;",
+      "**pas de condition imbriquée** : `si` … `alors` … et c'est tout. Une "
+        + "arborescence de décisions se découpe en plusieurs fonctions ;",
+      "**pas de fonction que vous définissez** : les sept sont celles-là ;",
+      "**une conclusion ne nomme que ce que sa fonction a calculé** — `alors "
+        + "(Niveau du sol)` rend le texte « Niveau du sol ». Pour conclure avec la "
+        + "valeur d'un nom du projet, on la pose : `calcule Cote = Niveau du sol;`. "
+        + "Sinon un fichier changerait de sens le jour où quelqu'un verse une "
+        + "valeur pour ce sujet."
+    ),
+    dit("Une loi qui ne s'écrit ni en conditions ni en calculs est un **agent** : "
+      + "elle s'appelle, sa loi n'est pas dans le fichier, et ce qu'elle rend se "
+      + "conserve. C'est la frontière, et elle est franche.")
   ]),
 
   section("commentaire", "Les commentaires, et le reste", [

@@ -897,3 +897,62 @@ Une section entière, « Ce que le langage ne sait pas encore écrire », repren
 mot pour mot deux phrases qu'on aimerait poser — la TVA et le plancher bas en
 zone inondable — et montre ce que le Mdall en fait aujourd'hui. Une
 documentation qui ne montre que ce qui marche apprend à se méfier d'elle.
+
+### L'arithmétique entre dans le langage : `calcule`
+
+Le moteur de calcul existait, pur et éprouvé, mais ne se branchait sur rien.
+Voici le verbe qui le porte.
+
+```
+fonction Prix TTC(zones, Prix HT) {
+   importe (variable: Prix HT, depuis: prix.ddb, zones: zones);
+   calcule TVA = Prix HT * 20%;
+   calcule Prix TTC = Prix HT + TVA;
+   si (Prix HT >= 0 €)
+   alors (Prix TTC);
+}
+```
+
+Pour 1 200 € hors taxes, le bac conclut **1 440 €** et montre ses deux étapes.
+Et la seconde phrase d'essai — « si la situation du projet est en zone
+inondable, le plancher bas doit être 1 m au-dessus du niveau du sol » — conclut
+**109,2 m** pour un sol à 108,2 m : un nombre qu'on peut comparer à la cote du
+plan, et non une phrase qu'il faudrait relire.
+
+Voir `docs/langage-mdall.md` pour la grammaire, et le wiki de l'écran pour la
+version qu'on lit en travaillant.
+
+#### Ce que ce lot touche, et pourquoi si peu
+
+- **la lecture** — un mot de tête de plus, une branche, `bloc.calculs`. Une
+  expression qui ne se lit pas est **refusée à la lecture**, avec sa raison : la
+  laisser passer jusqu'au lancement ferait une règle qui ne conclut rien sans
+  qu'on sache pourquoi ;
+- **l'évaluateur** — `poserLesLocales` calcule les locales dans l'ordre et rend
+  un lecteur augmenté. `evaluerLaRegle` ne change pas de forme : il lit ce
+  lecteur-là au lieu de l'autre, si bien que **tout ce qui évalue une règle** en
+  profite, le rejeu compris ;
+- **la couleur** — une seule ligne : le peintre de la saisie prend la ligne
+  entière. Lui seul découpe une expression au caractère près, et il le fait déjà
+  pour la zone de code ;
+- **le formulaire** — il demande ce qu'un calcul lit, et jamais ce qu'il pose ;
+- **la consigne du modèle** — elle interdisait l'arithmétique mot pour mot.
+
+Rien dans la mémoire, rien dans les propositions, rien dans les migrations : une
+valeur calculée sort par `alors`, comme toute conclusion.
+
+#### Ce que le banc de mutations a trouvé
+
+Quatre gardes muettes sur seize, et chacune était un vrai trou :
+
+- une locale posée à **zéro** quand le calcul n'aboutit pas — aucune épreuve ne
+  la voyait, parce qu'aucune ne faisait porter une condition sur une locale
+  indécidable ;
+- ce qu'un calcul lit **et qu'aucune condition ne nomme** ne remontait pas au
+  formulaire ;
+- une expression **citée** passait pour une expression ;
+- un calcul refusé qui ne se dit pas.
+
+Une cinquième correction est venue du même banc : le filtre qui empêche de
+demander une locale existait à **deux** endroits, et l'un des deux ne faisait
+tomber aucun cas. Il n'en reste qu'un (règles 10 et 12).

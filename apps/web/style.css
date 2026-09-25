@@ -27314,3 +27314,30 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   }
   .wiki-mdall__corps{ padding:16px; }
 }
+
+/* Ce que chaque `calcule` a donné, sous le verdict d'une fonction.
+
+   Trois colonnes : le nom posé, l'expression telle qu'elle est tapée — colorée
+   par le peintre de la saisie, comme partout —, et ce qu'elle vaut. Un nombre
+   sans sa lecture n'apprend rien, et c'est ce qu'on refuse à un agent. */
+.bac-calculs{
+  list-style:none; margin:6px 0 8px; padding:0;
+  display:flex; flex-direction:column; gap:2px;
+}
+.bac-calcul{
+  display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+  padding:3px 8px; border-radius:6px;
+  background:rgba(110,118,129,.07);
+  font-size:12px; line-height:1.5;
+}
+.bac-calcul--refuse{ background:rgba(248,81,73,.10); }
+.bac-calcul__nom{
+  flex:0 0 auto; color:rgb(210,168,255);
+  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace); font-size:11px;
+}
+.bac-calcul__expression{
+  flex:1 1 20ch; min-width:0;
+  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace); font-size:11px;
+}
+.bac-calcul__vaut{ flex:0 0 auto; color:var(--text); font-weight:600; }
+.bac-calcul__doute{ color:var(--attention, #9a6700); font-weight:400; }

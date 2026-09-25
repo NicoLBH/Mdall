@@ -685,7 +685,30 @@ export function ligneDeConsequence(mot, valeur = "", unite = "", profondeur = 1,
 export const VERBES = {
   IMPORTE: "importe",
   ENREGISTRE: "enregistre",
-  DECISION: "décision humaine assumée"
+  DECISION: "décision humaine assumée",
+  /**
+   * `calcule Prix TTC = Prix HT + TVA;` — une valeur qu'on **pose en la
+   * calculant**, pour la fonction et pour elle seule.
+   *
+   * ## Pourquoi un verbe de plus, et pas `soit`
+   *
+   * `soit` est pris, et il ne porte pas ce sens : le nom de sa locale **est**
+   * un type de provenance — `soit texte = …`, `soit règle = …`, `soit parce
+   * que = …`. Écrire `soit TVA = Prix HT * 20%` demanderait au lecteur de
+   * deviner, à chaque ligne, si le nom désigne une provenance ou une valeur, et
+   * la lecture refusait d'ailleurs « TVA n'est pas une provenance connue ».
+   *
+   * `calcule` dit ce qu'il fait, se range avec les autres verbes du métier, et
+   * ne peut se confondre avec rien.
+   *
+   * ## Ce qu'une locale calculée est, et n'est pas
+   *
+   * Elle vit **dans sa fonction**. Ce n'est pas un nom du projet : elle n'a pas
+   * de déclaration, personne ne la cherche ailleurs, et son absence n'est pas
+   * une lacune. Pour sortir, elle passe par `alors` et par `enregistre`, comme
+   * toute conclusion — il n'y a pas de seconde porte vers la mémoire (règle 1).
+   */
+  CALCULE: "calcule"
 };
 
 /**
@@ -925,6 +948,40 @@ export function ligneDeLocale(nom = "", valeur = "", profondeur = 1) {
     jeton(JETON.OPERATEUR, OPERATEUR.EGAL),
     espace(),
     jeton(JETON.VALEUR, `"${quoi.replace(/^["\u00ab]\s*/, "").replace(/\s*["\u00bb]$/, "")}"`),
+    jeton(JETON.PONCTUATION, ";")
+  ];
+}
+
+/**
+ * `calcule Prix TTC = Prix HT + TVA;`
+ *
+ * La même forme que `soit`, au verbe près — et **l'expression ne se met pas
+ * entre guillemets** : ce n'est pas un texte, c'est un calcul qui se lit, se
+ * rejoue et se vérifie. Un `soit` cite une provenance ; un `calcule` porte une
+ * arithmétique.
+ */
+export function ligneDeCalcul(nom = "", expression = "", profondeur = 1) {
+  const quoi = texte(expression);
+  if (!texte(nom) || !quoi) return null;
+
+  return [
+    espace(RETRAIT.repeat(Math.max(1, profondeur))),
+    jeton(JETON.MOT_NATIF, VERBES.CALCULE),
+    espace(),
+    jeton(JETON.NOM_LOCAL, texte(nom)),
+    espace(),
+    jeton(JETON.OPERATEUR, OPERATEUR.EGAL),
+    espace(),
+    /**
+     * L'expression en **un seul jeton**.
+     *
+     * Ce module écrit le texte canonique ; c'est `texteDesLignes` qui le rend,
+     * et un texte ne se colore pas. La coloration fine de l'expression est le
+     * travail du peintre de la saisie, qui découpe au caractère près — et il
+     * ne peut pas être appelé d'ici sans que les deux modules s'importent l'un
+     * l'autre. La lecture s'en charge, et délègue la ligne entière.
+     */
+    jeton(JETON.VALEUR, quoi),
     jeton(JETON.PONCTUATION, ";")
   ];
 }
