@@ -24592,6 +24592,15 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .project-simple-scroll--atelier .project-studio-router__panel{padding:24px 32px 40px;}
 .project-simple-scroll--atelier .project-studio-router__panel[data-side-nav-panel="atelier-vitrine"]{padding:0;}
 /*
+ * **Écrire en Mdall va jusqu'au bord, comme la vitrine.** Le retrait du panneau
+ * mettait ses trois volets et sa console en retrait aussi, alors que ce sont
+ * des zones de travail : un fichier de code qui ne touche pas le bord perd
+ * trente-deux pixels de ligne de chaque côté, et la console flotte au milieu de
+ * rien. Le retrait passe donc dans le titre — celui-ci le porte pour lui seul,
+ * comme le font les autres écrans de l'Atelier qui se dessinent en plein.
+ */
+.project-simple-scroll--atelier .project-studio-router__panel[data-side-nav-panel="dev-ecrire-en-mdall"]{padding:0;}
+/*
  * **Le Copilote va jusqu'au bord.** Le panneau réservait quarante pixels sous
  * lui — le retrait d'un écran qui défile, juste partout ailleurs. Ici la saisie
  * est déjà en bas et ne défile pas : ces quarante pixels étaient du vide sous
@@ -26949,7 +26958,10 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   height:var(--brouillon-hauteur, calc(100vh - var(--app-top) - 140px));
   min-height:360px; overflow:hidden;
 }
-.brouillon > .lecture-cr__entete{ flex:0 0 auto; }
+/* Le retrait que le panneau ne porte plus : il est ici, et seulement ici. La
+   valeur est celle des autres écrans de l'Atelier — la changer d'un côté sans
+   l'autre ferait sauter le titre entre deux écrans voisins. */
+.brouillon > .lecture-cr__entete{ flex:0 0 auto; padding:24px 32px 12px; }
 .brouillon__corps{
   position:relative;
   flex:1 1 auto; min-height:0;
@@ -27088,28 +27100,28 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   background:var(--bg, var(--canvas-default, #0d1117));
   padding:10px 14px 14px;
 }
-/* Sa tête ne défile pas avec ses lignes : le compte et le bouton de place
-   restent là où on les a laissés. */
+/* Sa tête ne défile pas avec ses lignes : le nom, le compte et le bouton de
+   place restent là où on les a laissés. */
 .brouillon-console__tete{
   position:sticky; top:-10px; z-index:1;
   background:inherit; padding-top:10px; margin-top:-10px;
-}
-/* Déplacée à droite, il ne reste en bas que sa tête : une barre mince, et le
-   corps de l'écran récupère la place. */
-.brouillon[data-console="volet"] .brouillon-console{ max-height:none; overflow:visible; }
-.brouillon-console__tete{
   display:flex; align-items:center; gap:10px; flex-wrap:wrap;
   margin-bottom:8px;
+}
+/* Son nom, comme un volet porte celui de son fichier : une bande de messages
+   sans titre en bas d'un écran se lit comme un pied de page, et l'on n'y
+   cherche rien. */
+.brouillon-console__nom{
+  flex:0 0 auto;
+  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size:11px; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.04em;
 }
 .brouillon-console__phrase{
   display:inline-flex; align-items:center; gap:8px;
   flex:1 1 20ch; min-width:0; font-size:12px; color:var(--text);
 }
 .brouillon-console__place{ flex:0 0 auto; }
-/* Déplacée à droite, il ne reste en bas que la phrase : la liste vit dans le
-   volet, et l'afficher deux fois serait exactement ce qu'on répare. */
-.brouillon-console.est-deplacee{ padding-bottom:10px; }
-
 .brouillon-console__liste{
   list-style:none; margin:0; padding:0;
   display:flex; flex-direction:column; gap:2px;
@@ -27168,6 +27180,18 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .brouillon-volet--console{ min-width:0; overflow:auto; border-left:1px solid var(--border); }
 .brouillon-volet--console .brouillon-console__liste{ padding:8px 10px 12px; }
+/* La même tête qu'en bas, au retrait du volet : c'est le même bloc, et il ne
+   doit pas se recalibrer d'une place à l'autre (règle 10). */
+.brouillon-volet--console .brouillon-console__tete{
+  padding:10px 10px 0; margin:0 0 4px;
+  background:var(--bg, var(--canvas-default, #0d1117));
+  top:0;
+}
+/* Dans une colonne de 380 px, le compte et le bouton ne tiennent pas sur la
+   même ligne : la phrase passe dessous plutôt que de comprimer le bouton qui
+   ramène la console — c'est lui qu'on vient chercher. */
+.brouillon-volet--console .brouillon-console__place{ margin-left:auto; }
+.brouillon-volet--console .brouillon-console__phrase{ order:3; flex:1 1 100%; }
 /* Elle se tire depuis son bord gauche, comme celle de la zone de français — et
    ce bord est celui de sa case, non celui du corps : plus de soustraction à
    refaire quand la largeur change. */

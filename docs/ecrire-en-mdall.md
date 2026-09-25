@@ -817,3 +817,34 @@ caractère** et exige l'égalité à chaque frappe — six cent quatre fois. Une
 fait la même chose sur le rendu de l'écran, balises ôtées : le texte de la
 couche doit être celui de la zone. C'est la loi, écrite au seul endroit où elle
 se casse.
+
+### La forme de l'écran : cinq retouches
+
+- **La leçon sous le titre s'en va.** « Dites ce que vous voulez poser, en
+  français… » se lisait une fois, puis jamais, et elle disait à un écran vide ce
+  qui ne compte qu'une fois qu'on a écrit. Ce que la doctrine impose — rien
+  n'entre sans signature — est dit par la **console**, au moment où il y a
+  quelque chose à verser : « 1 ligne prête à proposer — rien n'entre sans
+  signature ». C'est le seul moment où on l'entend.
+- **La console emporte ses commandes.** Rangée à droite, il en restait en bas la
+  tête seule, pour qu'on puisse la ramener : une bande de plus, qui répétait le
+  compte que le volet affichait déjà. Le bouton qui la ramène est maintenant
+  dans sa tête à elle, là où elle se trouve.
+- **Une seule tête pour ses deux places.** `renderTeteDeLaConsole` : le nom, le
+  compte, le bouton. Deux têtes écrites séparément auraient divergé à la
+  première ligne ajoutée, et le bouton qui ramène la console aurait fini par ne
+  plus ressembler à celui qui l'envoie (règle 10).
+- **Elle porte son nom**, `console`, comme un volet porte celui de son fichier.
+  Une bande de messages sans titre en bas d'un écran se lit comme un pied de
+  page, et l'on n'y cherche rien.
+- **Le retrait passe du panneau au titre.** Le panneau du routeur met tous les
+  écrans de l'Atelier en retrait de 32 px ; ici, cela mettait aussi en retrait
+  les trois volets et la console, qui sont des zones de travail. Un fichier de
+  code perdait trente-deux pixels de ligne de chaque côté. Le panneau de cet
+  écran n'a plus de retrait — comme la vitrine —, et c'est son titre qui le
+  porte, à la même valeur que les autres.
+
+Les deux places de la console naissent et meurent maintenant par la même pose —
+`poserLePanneau`, adossée à `poseDuPanneau` —, l'une paraissant quand l'autre
+s'en va. Mesuré dans un Chromium : le cadre va de 0 à 1440 comme son panneau, et
+le titre garde ses 32 px.
