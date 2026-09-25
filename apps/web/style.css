@@ -482,6 +482,15 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 
 /* Details fullscreen modal */
 .modal__inner{
+  /* **La gouttière de la fenêtre, nommée une seule fois.** Le titre et la croix
+     se posent ainsi : un rembourrage de 24 px, et une bande centrée de 1280 px
+     au plus. Sur un grand écran, le titre commence donc à 80 px du bord — et
+     le bac d'essai commençait à 24, ce que l'œil voyait immédiatement.
+
+     Ce qu'on met dans le corps lit ces deux valeurs plutôt que d'en recopier
+     une : le jour où la bande s'élargit, le contenu suit (règle 4). */
+  --overlay-gouttiere:24px;
+  --overlay-largeur:1280px;
   width:100%;
   margin:0;
   display:flex;
@@ -490,7 +499,7 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 }
 
 .modal__head{
-  padding:12px 24px;
+  padding:12px var(--overlay-gouttiere);
   border-bottom:1px solid var(--border);
   background:var(--headbg);
 }
@@ -507,7 +516,7 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 }
 
 #detailsModal .overlay-chrome__bar{
-  max-width:1280px;
+  max-width:var(--overlay-largeur);
   margin:0 auto;
 }
 
@@ -27104,7 +27113,14 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   width:100%; height:100%; max-width:none; max-height:none; border-radius:0;
 }
 #detailsModal.details-modal--plein .modal__body{ padding:0; overflow:auto; }
-.details-modal--plein .bac{ border-top:0; }
+/* **Le contenu commence où commence le titre.** C'est la même mise en page que
+   l'en-tête, dite en une ligne : jamais moins que la gouttière, et de quoi
+   centrer la bande quand l'écran est plus large qu'elle. Une valeur recopiée
+   aurait tenu tant que personne ne touche à l'en-tête. */
+.details-modal--plein .bac{
+  border-top:0;
+  padding-inline:max(var(--overlay-gouttiere), calc((100% - var(--overlay-largeur)) / 2));
+}
 
 /* **La dernière rangée du cadre, comme celle d'un navigateur.**
 

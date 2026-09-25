@@ -23,6 +23,18 @@
  * répond « je ne sais pas » au lieu de conclure `sinon`. C'est par cette
  * réponse-là qu'on apprend le langage, pas par une documentation.
  *
+ * ## Une fonction lit ce qu'une autre conclut
+ *
+ * C'est ce qui manquait, et cela se voyait à l'écran : on écrivait « selon le
+ * cas, le taux de TVA vaut 5 % ou 20 % », une règle le concluait — et le bac
+ * demandait quand même un « taux » à taper à la main. Le modèle, lui, inventait
+ * un appel de fonction que le langage ne connaît pas.
+ *
+ * Le langage n'avait besoin d'aucun mot de plus : **la conclusion d'une règle
+ * vaut pour son sujet**, exactement comme dans la mémoire du projet, où elle
+ * est versée et relue par les autres. Le bac ne faisait pas ce que la mémoire
+ * fait ; il le fait maintenant, et c'est la même valeur au même nom (règle 4).
+ *
  * ## Rien ne s'écrit
  *
  * Un `enregistre` dit « ceci irait dans `vent.ctr` » et n'y va pas. Le même
@@ -30,7 +42,8 @@
  * changé d'un caractère.
  */
 
-import { lireUnFichier } from "./memoire-en-lecture.js";
+import { lireUnFichier, nomsConclusParLeBloc } from "./memoire-en-lecture.js";
+import { cleDuSujet } from "./memoire-identifiants.js";
 import { evaluerLaRegle, lecteurDeValeurs, phraseDuDoute } from "./memoire-evaluateur.js";
 import { valeursDuLancement } from "./formulaire-du-brouillon.js";
 
@@ -111,9 +124,73 @@ export function fonctionsDuBrouillon(fichiers = []) {
  * @returns {{sujet, fichier, ligne, issue, valeur, ou, lectures, manquants, doutes}[]}
  */
 export function lancerLeBrouillon(fichiers = [], reponses = null) {
-  const lire = lecteurDeValeurs(valeursDuLancement(fichiers, reponses));
+  const fonctions = fonctionsDuBrouillon(fichiers);
+  const valeurs = new Map(valeursDuLancement(fichiers, reponses));
 
-  return fonctionsDuBrouillon(fichiers).map(({ fichier, bloc }) => {
+  let resultats = [];
+
+  /**
+   * On rejoue tant qu'une conclusion neuve paraît.
+   *
+   * ## Pourquoi des passes, et pas un tri des dépendances
+   *
+   * Un tri demanderait de décider ce qu'un fichier signifie **avant** de le
+   * lire de haut en bas, et de trancher les cycles qu'un humain finira par
+   * écrire. Une passe ne décide rien : elle évalue tout le monde avec ce qu'on
+   * sait, et recommence si l'on sait quelque chose de plus.
+   *
+   * **Elle s'arrête d'elle-même** : on ne remplace jamais une valeur, on n'en
+   * ajoute que de nouvelles, et il y a un nombre fini de noms. La borne à une
+   * passe par fonction ne fait que le dire à l'œil — une chaîne de `n`
+   * fonctions se résout en `n` passes au pire, chaque passe en achevant au
+   * moins une. Un cycle s'arrête là : ce qui reste indécidable le reste, et le
+   * dit (règle 5).
+   */
+  for (let passe = 0; passe < Math.max(1, fonctions.length); passe += 1) {
+    resultats = unePasse(fonctions, valeurs);
+
+    const neuves = conclusionsNeuves(fonctions, resultats, valeurs);
+    if (!neuves.size) break;
+    for (const [cle, valeur] of neuves) valeurs.set(cle, valeur);
+  }
+
+  return resultats;
+}
+
+/**
+ * Ce que les conclusions de cette passe apprennent — et rien qu'elles.
+ *
+ * **Une réponse du formulaire gagne toujours.** C'est ce qu'on vient
+ * d'essayer : une conclusion qui l'écraserait ferait un formulaire décoratif,
+ * et l'on ne comprendrait pas pourquoi changer un champ ne change rien.
+ *
+ * Une fonction qui ne sait pas n'apprend rien non plus : **une conclusion vide
+ * n'est pas une valeur**. La poser quand même ferait lire « rien » comme une
+ * réponse connue, et la règle d'en face conclurait sur du vide — ce que le bac
+ * d'essai existe précisément pour empêcher (règle 5). Une seule garde le dit :
+ * une règle qui ne sait pas rend une conclusion vide, et un agent aussi.
+ */
+function conclusionsNeuves(fonctions, resultats, valeurs) {
+  const neuves = new Map();
+
+  resultats.forEach((resultat, rang) => {
+    if (!resultat.valeur) return;
+
+    for (const nom of nomsConclusParLeBloc(fonctions[rang]?.bloc ?? {})) {
+      const cle = cleDuSujet(nom);
+      if (!cle || valeurs.has(cle) || neuves.has(cle)) continue;
+      neuves.set(cle, resultat.valeur);
+    }
+  });
+
+  return neuves;
+}
+
+/** Toutes les fonctions, évaluées avec ce qu'on sait à cet instant. */
+function unePasse(fonctions, valeurs) {
+  const lire = lecteurDeValeurs(valeurs);
+
+  return fonctions.map(({ fichier, bloc }) => {
     const evaluation = evaluerLaRegle(commeUneRegle(bloc), lire);
 
     const issue = bloc?.agent

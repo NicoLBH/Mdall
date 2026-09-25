@@ -29,14 +29,26 @@
  * deux, et les deux divergeraient au premier essai — c'est la même valeur à
  * deux endroits (règle 4). Le formulaire ne porte donc que ce qui **manque**.
  *
+ * ## Ni ce qu'une règle conclut
+ *
+ * C'est le même principe, et c'est le défaut qu'on a vu à l'écran : on écrit
+ * « selon le cas, le taux de TVA vaut 5 % ou 20 % », une fonction le conclut —
+ * et le formulaire offrait quand même un champ « taux », non déclaré, à
+ * remplir à la main. On tapait donc la réponse qu'on venait chercher.
+ *
+ * Le graphe des blocs le disait déjà : **un sujet qu'aucun bloc ne produit est
+ * une entrée**. C'est cette phrase-là, appliquée. Un nom que le brouillon
+ * conclut est déduit ; il se lit, il ne se demande pas.
+ *
  * ## Il est pur
  *
  * Des fichiers entrent, des champs sortent. Aucun DOM, aucun réseau.
  */
 
-import { lireUnFichier } from "./memoire-en-lecture.js";
+import { lireUnFichier, nomsConclusParLeBloc } from "./memoire-en-lecture.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { lireUnCalcul, nomsDuCalcul } from "./mdall-calcul.js";
+import { couperLUnite, estMesuree } from "./memoire-en-texte.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -111,6 +123,21 @@ export function nomsLus(fichiers = []) {
    */
   const poses = new Set();
 
+  /**
+   * Les noms que le brouillon **produit** : le sujet de chaque bloc, et ceux
+   * où il dit s'enregistrer.
+   *
+   * Ils ne se demandent pas : une affirmation les pose, une règle les conclut.
+   * C'est la définition d'une entrée que `grapheDesBlocs` porte depuis
+   * toujours — « un sujet qu'aucun bloc ne produit » —, lue au même endroit
+   * que lui (règle 10).
+   *
+   * **Un agent n'en produit aucun ici.** Il range un résultat qu'il ne calcule
+   * pas dans le fichier : le bac ne saurait pas le rendre, et l'on veut donc
+   * pouvoir le taper à la main pour éprouver ce qui en dépend.
+   */
+  const produits = new Set();
+
   const retenir = (nom) => {
     const cle = cleDuSujet(nom);
     if (!cle || vus.has(cle)) return;
@@ -120,6 +147,8 @@ export function nomsLus(fichiers = []) {
 
   for (const fichier of Array.isArray(fichiers) ? fichiers : []) {
     for (const bloc of lireUnFichier(fichier?.contenu ?? "").blocs ?? []) {
+      for (const nom of nomsConclusParLeBloc(bloc)) produits.add(cleDuSujet(nom));
+
       for (const calcul of bloc?.calculs ?? []) {
         poses.add(cleDuSujet(calcul?.nom));
 
@@ -136,7 +165,38 @@ export function nomsLus(fichiers = []) {
     }
   }
 
-  return lus.filter((nom) => !poses.has(cleDuSujet(nom)));
+  return lus.filter((nom) => {
+    const cle = cleDuSujet(nom);
+    return !poses.has(cle) && !produits.has(cle);
+  });
+}
+
+/**
+ * La réponse, avec l'unité que sa déclaration annonce.
+ *
+ * ## Le défaut que ça répare
+ *
+ * L'écran montre « € » à droite du champ, parce que la déclaration porte
+ * `unité: "€"`. On tape donc « 120 », et c'est « 120 » qui partait : le calcul
+ * travaillait en nombres nus, `Prix HT >= 0 €` devenait une comparaison entre
+ * un nombre et une mesure, et le verdict annonçait « 250 » là où la mémoire
+ * aurait écrit « 250 € ». L'unité était à l'écran et nulle part ailleurs.
+ *
+ * On ne touche à rien d'autre : un texte n'en prend pas, une valeur qui porte
+ * déjà la sienne la garde — ce qu'on a tapé est ce qu'on a voulu dire, même
+ * lorsque ce n'est pas l'unité déclarée. Le calcul, lui, sait déjà refuser
+ * deux unités qui ne se composent pas, et c'est à lui de le dire.
+ */
+export function reponseAvecSonUnite(dite = "", declaration = null) {
+  const valeur = texte(dite);
+  const unite = texte(declaration?.unite);
+  if (!valeur || !unite) return valeur;
+
+  // « 3e famille B » n'est pas une mesure : lui coller « € » en ferait une, et
+  // le calcul se mettrait à compter dessus (règle 5).
+  if (!estMesuree(valeur)) return valeur;
+
+  return couperLUnite(valeur).unite ? valeur : `${valeur} ${unite}`;
 }
 
 /**
@@ -188,11 +248,14 @@ export function champsDuBrouillon(fichiers = []) {
  */
 export function valeursDuLancement(fichiers = [], reponses = null) {
   const valeurs = new Map(valeursPosees(fichiers));
+  const declarations = declarationsDuBrouillon(fichiers);
   const dites = reponses instanceof Map ? reponses : new Map(Object.entries(reponses ?? {}));
 
   for (const [nom, valeur] of dites) {
     const cle = cleDuSujet(texte(nom));
-    if (cle && texte(valeur)) valeurs.set(cle, texte(valeur));
+    // L'unité est à l'écran, à droite du champ : elle doit partir avec ce
+    // qu'on tape, sinon elle ne sert qu'à décorer.
+    if (cle && texte(valeur)) valeurs.set(cle, reponseAvecSonUnite(valeur, declarations.get(cle)));
   }
 
   return valeurs;

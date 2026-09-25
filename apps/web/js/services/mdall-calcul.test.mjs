@@ -281,3 +281,25 @@ test("lire et évaluer sont deux gestes, et le premier ne lit rien", () => {
   assert.equal(evaluerUnCalcul(lu.arbre, () => ({ connu: false, valeur: "" })).connu, false);
   assert.equal(evaluerUnCalcul(lu.arbre, LIRE).nombre, 240);
 });
+
+test("un pourcentage lu dans un nom vaut ce qu'un pourcentage écrit vaut", () => {
+  // **Le défaut que ça répare.** `20 %` tapé dans l'expression vaut `0,2` sans
+  // unité. Lu dans un nom — parce qu'une autre fonction l'a conclu —, il valait
+  // 20 avec « % » pour unité, et `Prix HT * Taux de TVA` était refusé pour des
+  // unités qui ne se composent pas… alors que la même ligne avec `20 %` en
+  // toutes lettres passait. Une règle changeait donc de sens selon qu'on lui
+  // donnait son taux à la main ou qu'une autre le concluait (règle 4).
+  const lire = (nom) => (nom === "Taux de TVA"
+    ? { connu: true, valeur: "20 %" }
+    : { connu: true, valeur: "120 €" });
+
+  const lu = calculer("Prix HT * Taux de TVA", lire);
+  assert.equal(lu.refus, "");
+  assert.equal(ecrireLeCalcul(lu), "24 €");
+
+  // Et c'est bien la même chose qu'écrit en toutes lettres.
+  assert.equal(ecrireLeCalcul(calculer("120 € * 20 %")), "24 €");
+
+  // Les autres unités ne bougent pas : « 3 m » lu reste trois mètres.
+  assert.equal(ecrireLeCalcul(calculer("A * 2", () => ({ connu: true, valeur: "3 m" }))), "6 m");
+});

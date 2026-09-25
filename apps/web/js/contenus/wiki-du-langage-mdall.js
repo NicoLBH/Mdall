@@ -222,6 +222,56 @@ export const WIKI_DU_LANGAGE = [
       + "se calcule sans broncher jusqu'à une cote de fondation fausse.")
   ]),
 
+  section("chainage", "Une fonction lit ce qu'une autre conclut", [
+    dit("**Il n'y a pas d'appel de fonction dans Mdall.** `calcule taux = Taux de TVA(…)` "
+      + "ne se lit pas, et n'existera pas : un langage où une fonction en appelle une autre "
+      + "demande une pile, un ordre d'exécution et des cas d'arrêt — trois choses qu'on ne "
+      + "relit pas dix-huit mois plus tard."),
+    dit("Une fonction conclut **sous son propre nom**, et les autres la lisent comme "
+      + "n'importe quel nom du projet. C'est déjà ce que fait la mémoire : la conclusion "
+      + "d'une règle y est versée comme valeur de son sujet, et les règles suivantes la "
+      + "relisent. Découpez donc en deux, et lisez la première dans la seconde."),
+    code(
+      "fonction Taux de TVA(zones, Type de TVA) {",
+      "   // Le taux applicable, selon le type de travaux.",
+      "   importe (variable: Type de TVA, depuis: variables-du-projet.ref, zones: zones);",
+      '   si (Type de TVA = "existant")',
+      "   alors (5 %);",
+      "   sinon (20 %);",
+      "}",
+      "",
+      "fonction Prix TTC(zones, Prix HT, Taux de TVA) {",
+      "   // Le prix toutes taxes, au taux conclu plus haut.",
+      "   importe (variable: Prix HT, depuis: variables-du-projet.ref, zones: zones);",
+      "   importe (variable: Taux de TVA, depuis: essai.ref, zones: zones);",
+      "   calcule TVA = Prix HT * Taux de TVA;",
+      "   calcule Prix TTC = Prix HT + TVA;",
+      "   si (Prix HT >= 0 €)",
+      "   alors (Prix TTC);",
+      "}"
+    ),
+    dit("Pour 120 € en neuf, le bac conclut **24 €** de TVA et **144 €** au total — et "
+      + "il ne demande que deux choses : le prix, et le type de travaux."),
+    dit("**C'est cela qui décide de ce qu'on vous demande.** Le formulaire du bac d'essai "
+      + "n'est écrit nulle part : un nom qu'une fonction lit sans qu'aucune ne le conclut "
+      + "devient un champ ; un nom qu'une fonction conclut se lit, et ne se demande pas. "
+      + "Si le bac vous réclame une valeur que vous pensiez déduite, c'est qu'**aucune "
+      + "fonction ne la conclut** — la règle manque, ou son nom ne s'écrit pas pareil des "
+      + "deux côtés."),
+    liste(
+      "le nom lu paraît dans la **signature** et dans un `importe`, dont le `depuis:` est "
+        + "le fichier où vit la fonction qui le conclut ;",
+      "**ne déclarez pas** avec `const` un nom qu'une fonction conclut : `const` est pour "
+        + "les entrées, et déclarer une conclusion en ferait une question ;",
+      "un pourcentage conclu se lit comme un pourcentage écrit : `alors (20 %)` puis "
+        + "`Prix HT * Taux de TVA` donne bien un cinquième du prix ;",
+      "une chaîne circulaire ne tourne pas : le bac s'arrête et dit qu'il ne sait pas."
+    ),
+    dit("Rien ne se demande non plus pour **montrer** : le bac montre toutes les "
+      + "conclusions et toutes les étapes de `calcule`, avec leur trace. Il n'y a pas de "
+      + "verbe d'affichage à écrire, et il n'y en aura pas.")
+  ]),
+
   section("exemple-vent", "Un exemple entier : la zone de vent", [
     dit("Deux fichiers, et le raisonnement tient. D'abord le nom, déclaré une fois "
       + "dans `variables-du-projet.ref` :"),
