@@ -22930,7 +22930,6 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
 .saisie-code--coloree .saisie-code__zone::selection{
   background:rgba(84,174,255,.35); color:var(--text);
 }
-.saisie-code__ligne{ display:block; min-height:var(--saisie-ligne); }
 
 /* Un fichier de texte, rendu, dans Fichiers.
 
@@ -26993,7 +26992,13 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   position:absolute; top:0; left:calc(var(--brouillon-dit-width, 460px) - 4px);
   width:9px; height:100%; cursor:col-resize; z-index:1;
 }
-.brouillon__corps > .side-resizer__guide{
+/* **Les deux guides, pas seulement le premier.** Celui de la console vit dans
+   `.brouillon__console-volet` ; écrit en `>`, ce sélecteur ne le voyait pas, il
+   restait donc un bloc en flux — et il prenait la troisième case de la grille,
+   qui renvoyait la console à la ligne, sous la zone de français. C'est le défaut
+   « la console atterrit à gauche ». Un guide est fixe : il ne prend de place
+   nulle part, et il n'a aucune raison d'être décrit deux fois (règle 10). */
+.brouillon__corps .side-resizer__guide{
   position:fixed; top:var(--app-top); bottom:0; width:2px;
   background:var(--borderColor-accent-emphasis); display:none; pointer-events:none; z-index:4;
 }
@@ -27139,10 +27144,22 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 
    Il prend les classes du volet de code — même cadre, même en-tête —, et sa
    largeur se tire comme celle de la zone de gauche. */
-/* `display:contents` : la poignée et le volet deviennent des cases de la
-   grille du corps, alors qu'ils se posent et se retirent **ensemble**. Deux
-   frères à poser à la main se désynchronisent au premier redessin ciblé. */
-.brouillon__console-volet{ display:contents; }
+/* **Une seule case de la grille, poignée comprise.**
+
+   Il était en `display:contents`, pour que le volet tombe dans la troisième
+   colonne tout en restant un seul élément à poser et à retirer. Mais alors ses
+   enfants deviennent des cases : la poignée est absolue et n'en prend pas, son
+   guide — que le sélecteur du corps ne voyait pas — en prenait une, et le volet
+   se retrouvait en quatrième position, c'est-à-dire à la ligne, **à gauche, sous
+   la zone de français**.
+
+   Il est donc une case à lui, positionnée pour que sa poignée s'accroche à son
+   bord gauche. Un élément, une colonne : il n'y a plus d'arithmétique à tenir. */
+.brouillon__console-volet{
+  position:relative;
+  display:flex; min-width:0; min-height:0;
+}
+.brouillon__console-volet > .brouillon-volet--console{ flex:1 1 auto; min-width:0; }
 /* La troisième colonne n'existe que lorsque la console y est : une colonne
    vide laisserait un vide à droite du code, qu'on prendrait pour un défaut. */
 .brouillon[data-console="volet"] .brouillon__corps{
@@ -27151,9 +27168,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .brouillon-volet--console{ min-width:0; overflow:auto; border-left:1px solid var(--border); }
 .brouillon-volet--console .brouillon-console__liste{ padding:8px 10px 12px; }
-/* Elle se tire depuis son bord gauche, comme celle de la zone de français. */
+/* Elle se tire depuis son bord gauche, comme celle de la zone de français — et
+   ce bord est celui de sa case, non celui du corps : plus de soustraction à
+   refaire quand la largeur change. */
 .brouillon__console-volet > .brouillon__poignee.side-resizer__handle{
-  left:auto; right:calc(var(--brouillon-console-width, 380px) - 4px);
+  left:-4px; right:auto;
 }
 
 /* Le bac d'essai : le formulaire déduit, puis ce que les fonctions répondent.

@@ -112,17 +112,26 @@ voit écrit sur son propre projet, avant de l'écrire soi-même.
 Un écran de l'Atelier, rayon **Développements**, cible `dev-ecrire-en-mdall`.
 
 ```
-┌─ Écrire en Mdall ────────────────────────────────────────────────────────┐
-│  ┌─ Ce que vous voulez dire ────┐ │ ┌─ Ce que cela donne ──────────────┐ │
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Écrire en Mdall      [Proposer au projet] [▶ Lancer] [⋯]                │
+│  Dites ce que vous voulez poser, en français. Le code s'écrit à droite.  │
+├──────────────────────────────────────────────────────────────────────────┤
+│  ┌─ Ce que vous voulez dire ────┐ │ ┌─ essai.ref ──────────────────────┐ │
 │  │                              │ │ │ [essai.ref] [variables] [.ddb]   │ │
-│  │  La zone de vent vaut 1, 2,  │ │ │                       ▶ Lancer   │ │
-│  │  3 ou 4. Si elle vaut 3, la  │◀▶│ ├──────────────────────────────────┤ │
-│  │  vitesse de référence est    │ │ │  1  fonction Vitesse de réf…     │ │
-│  │  120 km/h.                   │ │ │  2     // La vitesse de réf…     │ │
-│  └──────────────────────────────┘ │ │  3     importe (variable: …      │ │
-│  [ Coder ]                        │ └──────────────────────────────────┘ │
+│  │  La zone de vent vaut 1, 2,  │ │ ├──────────────────────────────────┤ │
+│  │  3 ou 4. Si elle vaut 3, la  │◀▶│ │  1  fonction Vitesse de réf…     │ │
+│  │  vitesse de référence est    │ │ │  2     // La vitesse de réf…     │ │
+│  │  120 km/h.                   │ │ │  3     importe (variable: …      │ │
+│  └──────────────────────────────┘ │ └──────────────────────────────────┘ │
+│                       [ Coder ]   │                                      │
+├──────────────────────────────────────────────────────────────────────────┤
+│  ✓ 2 lignes — rien à corriger.                        [ À droite ]       │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
+
+Les trois gestes se tiennent sur la **ligne du titre**, comme sur les autres
+écrans de l'Atelier ; le menu `⋯` porte « Tout effacer ». La console est la
+dernière rangée, et se range en troisième volet d'un clic.
 
 **Le volet droit est modifiable** — c'est `saisie-de-code.js`, celle qui sert
 déjà à écrire un fichier à la main. On corrige la transcription sans repasser
@@ -650,8 +659,91 @@ ensuite, et ne se voit qu'avec un navigateur — ou là.
   on ne pouvait donc ranger la console à droite qu'au moment où elle avait
   quelque chose à dire, c'est-à-dire au pire moment. C'est un réglage de
   l'écran, pas une réaction à son contenu.
-- **« Tout effacer » puis « Coder », à droite.** Le geste qui engage finit la
-  ligne, là où l'œil finit ; le geste qui détruit reste gris, à côté, jamais
-  sous le doigt qui vise le vert.
+- **« Tout effacer » est monté dans le menu du titre.** Un geste qui détruit
+  tout le brouillon ne se range pas à côté du geste qu'on répète : il se range
+  où l'on va le chercher exprès.
 - **La leçon sous les boutons s'en va.** Une phrase de trois lignes se lit une
   fois, puis jamais — et elle occupait la place que les boutons demandaient.
+
+### La gouttière s'arrêtait au milieu du code
+
+La couche colorée enveloppait chaque ligne dans un `<span>` rendu
+`display:block`, et joignait les spans d'un `\n`. Dans un `<pre>`, cela fait
+**deux** lignes : le bloc, puis le retour. Le code s'affichait donc à double
+interligne, tandis que la gouttière — qui compte les lignes du **texte**, elle —
+s'arrêtait à la moitié du fichier.
+
+Mesuré dans un navigateur, sur cent vingt-deux lignes : la couche faisait
+4 656 px pour un texte de 2 338 px, soit exactement le double. Il n'y a plus de
+span par ligne ; c'est le `<pre>` qui fait les lignes, comme il les fait dans la
+zone de saisie, et les deux couches tombent d'aplomb au pixel.
+
+### La page défilait encore, et la zone de code plus du tout
+
+L'Atelier dessine **tous** ses panneaux au montage, y compris ceux qu'on ne
+regarde pas. Le nôtre était donc caché quand il s'est mesuré, et
+`getBoundingClientRect().top` valait `0` : on en tirait la hauteur de la fenêtre
+entière. Ouvert deux cents pixels plus bas, le cadre dépassait d'autant — la
+page défilait de 192 px, et la zone de code, plus grande que la fenêtre, n'avait
+plus de raison de défiler chez elle.
+
+Deux corrections, et la seconde est celle qui manquait :
+
+- `hauteurDuCadre` rend **`null`** quand la position ne veut rien dire. Ne pas
+  savoir n'autorise pas à prétendre qu'on sait (règle 5) : le repli du CSS tient
+  jusqu'à la première mesure honnête.
+- **L'écran remesure à chaque venue**, même déjà monté. Il ne se *redessine* pas
+  à la venue — son brouillon vit au niveau du module, et le refaire effacerait
+  ce qu'on écrit —, si bien que rien ne remesurait jamais : le cadre gardait
+  pour toujours la hauteur qu'il avait prise caché.
+
+### La console atterrissait à gauche, sous la zone de français
+
+Le troisième volet était en `display:contents`, pour tomber dans la troisième
+colonne tout en restant **un seul élément** à poser et à retirer. Mais alors ses
+enfants deviennent les cases de la grille : sa poignée est absolue et n'en prend
+aucune, son **guide** — que le sélecteur `.brouillon__corps > .side-resizer__guide`
+ne voyait pas, puisqu'il n'est plus un enfant direct — restait un bloc en flux
+et prenait la troisième case. Le volet passait quatrième, c'est-à-dire à la
+ligne : mesuré à `x=0, y=648` au lieu de `x=1060, y=271`.
+
+Il est maintenant **une case à lui**, positionnée pour que sa poignée s'accroche
+à son bord gauche — plus d'arithmétique à tenir quand la largeur change —, et le
+sélecteur du guide couvre les deux poignées au lieu d'une (règle 10).
+
+### On ne pouvait ranger la console à droite qu'au moment où elle parlait
+
+Le volet ne paraissait qu'avec un message, et le cadre ne déclarait sa troisième
+colonne que dans ce cas. Or on range son écran d'abord et l'on écrit ensuite :
+à l'ouverture, où le brouillon est vide, le bouton de place ne faisait rien du
+tout. C'est un réglage de l'écran, pas une réaction à son contenu : il ne dépend
+plus que de `volet`, et un volet vide dit qu'il n'a rien à signaler — ce que la
+console du bas disait déjà pour la même raison.
+
+### « Lancer » était inopérant
+
+Il ne s'armait que si le brouillon portait une **fonction** — une règle avec des
+conditions, ou un agent. Un brouillon qui ne pose que des affirmations, ce qui
+est le cas du premier qu'on écrit, laissait donc un bouton éteint qu'on croyait
+cassé.
+
+Il s'arme maintenant dès qu'il y a du Mdall à lire, et **c'est le bac qui dit ce
+qu'il trouve** : « Aucune fonction à lancer : le brouillon ne raisonne pas
+encore » est une réponse, pas un silence (règle 5). La phrase existait déjà dans
+`phraseDuLancement` ; le rendu la taisait quand la liste était vide.
+
+Il a aussi changé de place : il vivait dans la barre d'onglets du volet de
+droite, c'est-à-dire au milieu de l'écran, dans une barre qui sert à choisir un
+fichier et non à agir. Il est sur la ligne du titre, et le **kebab** est à sa
+droite — `renderGhActionButton` en `menuOnly`, celui de l'en-tête de Documents et
+du titre d'une situation. Un second menu écrit ici aurait son idée de
+l'ouverture, du survol et de la fermeture au clavier.
+
+### Ce que la mise en page se laisse mesurer
+
+Les trois défauts ci-dessus sont invisibles à une épreuve de rendu : ils sont
+dans ce que le moteur de style fait du balisage. Ils ont été mesurés dans un
+Chromium — page montée à deux cents pixels du haut, fenêtre de 1440×900, un
+fichier de cent vingt-deux lignes — avant et après, dans les deux positions de
+la console : débord de la page, hauteur de la couche colorée contre celle du
+texte, et la case de la grille où le troisième volet atterrit.
