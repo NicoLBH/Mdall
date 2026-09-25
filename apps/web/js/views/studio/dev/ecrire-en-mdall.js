@@ -57,6 +57,7 @@ import {
   MOTS_DE_LA_SOURCE, NIVEAU, laConsole, phraseDeLaConsole
 } from "../../../services/console-du-brouillon.js";
 import { majLaFenetreDeDetails, ouvrirLaFenetreDeDetails } from "../../ui/fenetre-de-details.js";
+import { ouvrirLeWikiMdall } from "../../ui/wiki-mdall.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 import { REFUS } from "../../../services/le-mdall-rendu.js";
 import {
@@ -442,7 +443,17 @@ export function renderProposer(brouillon = null, { depose = false } = {}) {
  *  (règle 10). */
 export const GESTE = {
   /** Repartir d'un brouillon neuf. Il demande confirmation. */
-  VIDER: "brouillon-vider"
+  VIDER: "brouillon-vider",
+  /**
+   * Ouvrir le wiki du langage.
+   *
+   * **C'est la porte sans modèle.** On écrit du Mdall à la main sur cet écran ;
+   * encore faut-il savoir comment il s'écrit, et le chercher dans le dépôt
+   * pendant qu'on tape n'est pas une réponse. L'IA accélère ; elle n'est jamais
+   * le seul chemin (fondamental 13), et une documentation qu'on n'a pas sous la
+   * main fait de l'IA le seul chemin.
+   */
+  WIKI: "brouillon-wiki"
 };
 
 /**
@@ -495,6 +506,13 @@ export function renderActionsDuTitre(brouillon = null, { depose = false } = {}) 
         menuOnly: true,
         size: "sm",
         items: [{
+          action: GESTE.WIKI,
+          icon: svgIcon("book", { className: "octicon" }),
+          label: "Langage Mdall",
+          title: "Ce que le langage fait, à quoi il sert, et comment il s'écrit"
+        }, {
+          separator: true
+        }, {
           action: GESTE.VIDER,
           icon: svgIcon("trash", { className: "octicon" }),
           label: "Tout effacer",
@@ -1148,7 +1166,9 @@ function brancherLaConsole(racine) {
   // autant de fois qu'il y a eu de transcriptions.
   racine.querySelector(".lecture-cr__entete-actions")
     ?.addEventListener("ghaction:action", (evenement) => {
-      if (evenement.detail?.action === GESTE.VIDER) viderLeBrouillon(racine);
+      const geste = evenement.detail?.action;
+      if (geste === GESTE.VIDER) viderLeBrouillon(racine);
+      if (geste === GESTE.WIKI) ouvrirLeWikiMdall();
     });
 
   debrancherConsole?.();
