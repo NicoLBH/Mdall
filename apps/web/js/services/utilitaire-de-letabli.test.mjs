@@ -10,7 +10,8 @@ import {
   brouillonDesFichiers, ceQueLenregistrementFait, cequiManque, cibleDeLetabli,
   entreesDeLutilitaire, estDeLetabli, ficheDuBrouillon, fichiersDeLutilitaire,
   idDeLaCible, motsDeLutilitaire, phraseDeLenregistrement, rayonDeLutilitaire,
-  PHRASE_DU_REFUS, REFUS_DE_LETABLI, nomDejaPris, provenanceDuBrouillon, refusDeLaBase,
+  PHRASE_DU_REFUS, REFUS_DE_LETABLI, nomDejaPris, numeroDeVersion, phraseDeLaVersion,
+  provenanceDuBrouillon, refusDeLaBase, uneVersionPlusRecente,
   sortiesDeLutilitaire, utilitaireDeLetabli
 } from "./utilitaire-de-letabli.js";
 import { brouillonNeuf, avecLeFichier, fichierOuvert } from "./brouillon-mdall.js";
@@ -358,4 +359,59 @@ test("la fiche dit que le nom est pris, et le bouton s'éteint", () => {
   // Et sans établi lu, on laisse la base trancher.
   const muette = ficheDuBrouillon(BROUILLON, { nom: "Volets en bois", resume: "Le violet." });
   assert.deepEqual(muette.manques, []);
+});
+
+/* ── Une version plus récente existe-t-elle ? ────────────────────────────── */
+
+const MON_ETABLI = [{ id: "abc", nom: "Volets en bois", version: "3" }];
+const TENUE = { id: "abc", version: "2", nom: "Volets en bois" };
+
+test("v10 passe après v2, et non avant", () => {
+  // Comparer les textes rendrait « v10 » antérieur à « v2 », et une montée de
+  // version passerait pour un retour en arrière — silencieusement.
+  assert.equal(numeroDeVersion("v10"), 10);
+  assert.equal(numeroDeVersion("2"), 2);
+  assert.equal(numeroDeVersion("V7"), 7);
+  assert.equal(numeroDeVersion(""), 0);
+  assert.equal(numeroDeVersion("zéro"), 0);
+  assert.equal(numeroDeVersion("0"), 0, "une version zéro n'existe pas : la base commence à 1");
+
+  assert.deepEqual(uneVersionPlusRecente({ id: "abc", version: "2" }, [{ id: "abc", nom: "X", version: "10" }]),
+    { nom: "X", tenue: 2, derniere: 10 });
+});
+
+test("le projet tient une version d'avant, et l'écran le dit", () => {
+  assert.deepEqual(uneVersionPlusRecente(TENUE, MON_ETABLI),
+    { nom: "Volets en bois", tenue: 2, derniere: 3 });
+
+  const phrase = phraseDeLaVersion(uneVersionPlusRecente(TENUE, MON_ETABLI));
+  assert.match(phrase, /v3/);
+  // **Elle dit que rien n'a bougé ici.** Sans cela, on lit « votre établi est
+  // en v3 » et l'on se demande laquelle des deux le projet tient.
+  assert.match(phrase, /rien n&#39;a été changé ici|rien n'a été changé ici/);
+});
+
+test("à jour, elle ne dit rien : il n'y a rien à dire", () => {
+  assert.equal(uneVersionPlusRecente(TENUE, [{ id: "abc", nom: "X", version: "2" }]), null);
+  // Et une version plus ancienne sur l'établi non plus — ce serait un autre
+  // problème, et l'inventer ici ne le réglerait pas.
+  assert.equal(uneVersionPlusRecente(TENUE, [{ id: "abc", nom: "X", version: "1" }]), null);
+  assert.equal(phraseDeLaVersion(null), "");
+});
+
+test("ce qu'on ignore ne se lit pas comme « à jour »", () => {
+  // **Trois façons de ne pas savoir**, et aucune ne se dit « à jour » :
+  // l'établi qu'on n'a pas lu, la marque sans version, l'outil qu'on n'a plus.
+  assert.equal(uneVersionPlusRecente(TENUE, null), null, "établi non lu");
+  assert.equal(uneVersionPlusRecente({ id: "abc" }, MON_ETABLI), null, "marque sans version");
+  assert.equal(uneVersionPlusRecente({ version: "2" }, MON_ETABLI), null, "marque sans identifiant");
+  assert.equal(uneVersionPlusRecente(TENUE, []), null, "outil retiré de l'établi");
+  assert.equal(uneVersionPlusRecente(null, MON_ETABLI), null);
+});
+
+test("l'outil se nomme par ce que l'établi porte aujourd'hui", () => {
+  // Il a pu être renommé depuis : « votre établi est en v3 » désigne alors
+  // l'outil tel qu'on le retrouvera, pas tel qu'il s'appelait.
+  const renomme = uneVersionPlusRecente(TENUE, [{ id: "abc", nom: "Volets bois et PVC", version: "3" }]);
+  assert.equal(renomme.nom, "Volets bois et PVC");
 });

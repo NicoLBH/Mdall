@@ -394,6 +394,76 @@ export function provenanceDuBrouillon(utilitaire = null, brouillon = null) {
   };
 }
 
+/**
+ * Le numéro d'une version, pour comparer `v2` à `v10`.
+ *
+ * Comparer les textes rendrait `v10` antérieur à `v2`, et une montée de version
+ * passerait pour un retour en arrière — silencieusement. C'est la même raison
+ * qu'au catalogue du dépôt, où la fonction porte le même nom.
+ */
+export function numeroDeVersion(version = "") {
+  const lu = Number.parseInt(texte(version).replace(/^v/i, ""), 10);
+  return Number.isFinite(lu) && lu > 0 ? lu : 0;
+}
+
+/**
+ * Une version plus récente existe-t-elle sur l'établi de celui qui regarde ?
+ *
+ * ## La question, et à qui elle se pose
+ *
+ * Le projet tient une règle venue de « Volets en bois » `v2`. L'établi est
+ * passé en `v3` — on a corrigé l'outil sur un autre chantier. Rien ne le
+ * disait : la règle restait à l'écran comme si elle était à jour, et son
+ * auteur ne s'en apercevait qu'en rouvrant son outil.
+ *
+ * ## Elle ne met jamais rien à jour
+ *
+ * Ce qui est dans la mémoire d'un projet y est entré par une proposition
+ * signée. Le remplacer parce qu'un numéro a bougé serait écrire dans la
+ * mémoire sans que personne l'ait décidé (règle 1). On signale ; l'utilisateur
+ * décide ; et ce qu'il décide repasse par le chemin de tout le monde.
+ *
+ * ## Elle rend `null` plutôt que « non » quand elle ne sait pas
+ *
+ * Un établi qu'on n'a pas pu lire, une marque sans version, un outil retiré de
+ * l'établi : dans les trois cas on **ignore** où la lignée en est. Répondre
+ * « non » ferait passer pour à jour ce qu'on n'a pas regardé (règle 5).
+ *
+ * @param {{id?: string, version?: string|number, nom?: string}|null} marque ce
+ *   que la ligne porte, tel que la proposition l'a écrit
+ * @param {object[]|null} etabli l'établi de celui qui regarde
+ * @returns {{nom: string, tenue: number, derniere: number}|null}
+ */
+export function uneVersionPlusRecente(marque = null, etabli = null) {
+  if (!Array.isArray(etabli)) return null;
+
+  const id = texte(marque?.id);
+  const tenue = numeroDeVersion(marque?.version);
+  if (!id || !tenue) return null;
+
+  const outil = etabli.find((un) => texte(un?.id) === id);
+  // Retiré de l'établi, ou à quelqu'un d'autre : on ne sait pas où sa lignée
+  // en est, et se taire vaut mieux que rassurer à tort.
+  if (!outil) return null;
+
+  const derniere = numeroDeVersion(outil.version);
+  if (!derniere || derniere <= tenue) return null;
+
+  return { nom: texte(outil.nom) || texte(marque?.nom), tenue, derniere };
+}
+
+/**
+ * Ce que l'écran ajoute quand la lignée a avancé.
+ *
+ * **Elle dit que rien n'a bougé ici.** Sans cela, on lit « votre établi est en
+ * v3 » et l'on se demande laquelle des deux le projet tient — alors que c'est
+ * précisément ce que la ligne vient de dire.
+ */
+export function phraseDeLaVersion(avance = null) {
+  if (!avance) return "";
+  return `votre établi est en v${avance.derniere} — rien n'a été changé ici`;
+}
+
 /** Ce que l'écran dit de l'enregistrement à venir. */
 export function phraseDeLenregistrement(quoi = null) {
   if (quoi?.quoi === "neuf") return "Il entrera sur votre établi en v1.";

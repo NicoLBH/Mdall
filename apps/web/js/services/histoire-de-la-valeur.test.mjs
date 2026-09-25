@@ -416,3 +416,38 @@ test("une valeur qui ne vient d'aucun outil personnel ne porte pas la ligne", ()
 
   assert.equal(lignes.some((une) => une.quoi === "Écrite avec"), false);
 });
+
+test("quand l'outil a avancé, la ligne le dit — sur la même ligne", () => {
+  // **La même chose qu'on lit** : d'où vient cette valeur, et où en est l'outil
+  // qui l'a écrite. Deux lignes feraient chercher deux faits.
+  const histoire = histoireDeLaValeur(AVEC_UN_OUTIL, {
+    etabli: [{ id: "abc", nom: "Volets en bois", version: "3" }]
+  });
+
+  const ligne = lignesDeLHistoire(histoire).find((une) => une.quoi === "Écrite avec");
+  assert.match(ligne.dit, /v2/, "ce que le projet tient");
+  assert.match(ligne.dit, /v3/, "et où en est l'établi");
+  assert.match(ligne.dit, /rien n'a été changé ici/);
+  assert.equal(lignesDeLHistoire(histoire).filter((une) => une.quoi === "Écrite avec").length, 1);
+});
+
+test("à jour, ou qu'on ne sait pas : l'écran ne dit rien de plus", () => {
+  // Se taire vaut mieux que rassurer à tort. Un établi qu'on n'a pas pu lire
+  // et un outil à jour ne se distinguent pas à l'écran — et c'est voulu : dans
+  // les deux cas, il n'y a rien à faire.
+  for (const etabli of [null, [], [{ id: "abc", nom: "Volets en bois", version: "2" }]]) {
+    const histoire = histoireDeLaValeur(AVEC_UN_OUTIL, { etabli });
+    const ligne = lignesDeLHistoire(histoire).find((une) => une.quoi === "Écrite avec");
+
+    assert.equal(histoire.etabliAvance, null, JSON.stringify(etabli));
+    assert.doesNotMatch(ligne.dit, /établi est en/, JSON.stringify(etabli));
+  }
+});
+
+test("une valeur qui ne vient d'aucun outil ne parle jamais de version", () => {
+  const sans = { ...AVEC_UN_OUTIL, payload: { subject: "Altitude du site", value: "890 m" } };
+  const histoire = histoireDeLaValeur(sans, { etabli: [{ id: "abc", nom: "X", version: "9" }] });
+
+  assert.equal(histoire.etabliAvance, null);
+  assert.equal(lignesDeLHistoire(histoire).some((une) => /établi/.test(une.dit)), false);
+});
