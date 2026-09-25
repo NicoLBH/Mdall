@@ -86,6 +86,11 @@ C'est la réponse de fond à « je ne sais pas comment lui faire comprendre que 
 veux une TVA déduite » : on n'a rien à lui faire comprendre de plus — **on écrit
 la règle qui la déduit**, et le champ disparaît de lui-même.
 
+Ce lot a une conséquence qu'on n'avait pas cherchée, et qui décide du reste :
+**le cœur du brouillon est pur**. Il lit des fichiers, il rend des champs et des
+conclusions, et il ne connaît ni projet, ni base, ni magasin. C'est ce qui rend
+l'établi possible sans rien reprendre — voir « Ce qui a été tranché ».
+
 ---
 
 ## Lot B — L'établi : garder un utilitaire
@@ -118,6 +123,32 @@ sera lu par les mêmes écrans :
 « Ce qu'il prend » et « ce qu'il rend » **ne se saisissent pas** : ils se
 déduisent du code, par le graphe du lot A. Une entrée recopiée à la main
 divergerait du code au premier ajout d'une condition.
+
+### Il entre dans le catalogue, il n'en fabrique pas un second
+
+Un utilitaire de l'établi se lit sur les mêmes écrans que les autres : la
+vitrine, la recherche, la fiche. Il doit donc rendre **exactement la forme
+qu'une entrée du catalogue porte** (`catalogue-de-latelier.js`), sans quoi il
+faudrait une seconde grille, une seconde fiche et une seconde recherche, et les
+trois divergeraient au premier réglage (règle 10) :
+
+| le champ du catalogue | d'où il vient, pour un utilitaire de l'établi |
+| --- | --- |
+| `cible` | la route qui rouvre le brouillon — son identifiant, comme ailleurs |
+| `nom` | demandé à l'enregistrement |
+| `resume` | la description demandée |
+| `rayon` | choisi à l'enregistrement, dans la liste existante |
+| `entrees` | **déduit** : `champsDuBrouillon` |
+| `sorties` | **déduit** : ce que ses fonctions concluent |
+| `version` | `1`, puis `2` à chaque enregistrement qui change le texte |
+| `intelligence` | `false` : le Mdall d'un brouillon ne fait qu'appeler et calculer ; `true` le jour où il appelle un agent |
+| `aussiALaMain` | le code lui-même — il est lisible, c'est tout l'objet du langage |
+| `mots` | les noms que ses règles lisent et concluent, déduits eux aussi |
+| `ajouteLe` | la date du premier enregistrement |
+
+La vitrine devra donc lire **deux sources** au lieu d'une constante — le
+catalogue du dépôt, et l'établi de celui qui regarde. C'est le seul endroit du
+lot B qui touche à l'existant, et c'est une couture, pas une refonte.
 
 ### Le magasin
 
@@ -182,13 +213,102 @@ signé.
 
 ---
 
+## Lot F — Dire qu'une version plus récente existe
+
+### Ce qui n'existe pas encore, et qu'on croyait acquis
+
+« On procède comme avec les autres utilitaires : on indique la version, on
+signale qu'elle a changé, on propose de mettre à jour, l'utilisateur décide. »
+
+Les deux premiers tiers sont vrais, le troisième **n'existe nulle part**, et il
+faut le dire avant de bâtir dessus :
+
+- une contrainte déduite cite bien **son utilitaire et sa version** ; la fiche
+  de l'Atelier affiche bien `v1` ;
+- `derniereVersion(lignée)` et `numeroDeVersion()` sont écrits et éprouvés
+  (`apps/web/js/utilitaires/catalogue.js`) — la lignée est le nom sans sa
+  version, et `V10` s'y compare correctement à `V2` ;
+- mais **personne ne les appelle**. Aucun écran ne dit aujourd'hui « cette
+  valeur a été déduite par la `V1`, la `V2` existe ». On monte une version, et
+  ce que la précédente a conclu reste à l'écran sans un mot.
+
+### Ce que ce lot fait, et pour tout le monde
+
+Un seul service pur répond à la question, quelle que soit la provenance :
+*cette chose a été produite par tel utilitaire en telle version ; une plus
+récente existe-t-elle, et laquelle ?* Un seul endroit décide (règle 10), et il
+sert les trois cas :
+
+| ce qui porte une version | ce qu'on signale |
+| --- | --- |
+| une contrainte déduite par un utilitaire natif | sa ligne de provenance dit que la lignée a avancé |
+| une règle versée depuis l'établi | le projet dit que l'établi a une version de plus |
+| un utilitaire de l'établi qu'on rouvre | l'écran dit sur quelle version on repart |
+
+**On signale, on ne met jamais à jour tout seul.** Le geste est proposé ;
+l'utilisateur décide, et ce qu'il décide passe par le chemin de tout le monde —
+une proposition relue et signée. Rien ne se réécrit dans la mémoire d'un projet
+parce qu'un numéro a bougé, et rien ne se réécrit dans l'établi de quelqu'un
+parce qu'un projet a corrigé sa copie.
+
+C'est la réponse à « que devient l'établi quand une version versée est ensuite
+corrigée au projet ? » : les deux gardent leur version, **les deux se le
+disent**, et chacun reprend celle de l'autre quand il le veut.
+
+---
+
+## Ce qui a été tranché
+
+### L'établi ne s'ouvre que depuis un projet — et cela n'endette rien
+
+La question posée était la bonne : *si l'on n'ouvre l'écran que depuis un projet
+aujourd'hui, se prive-t-on de l'ouvrir hors projet demain, ou faudra-t-il tout
+reprendre ?*
+
+**Non, et ce n'est pas une opinion.** Trois constats :
+
+1. **Le cœur est déjà sans projet.** Écrire, relire, déduire le formulaire,
+   lancer, proposer une complétion : quatre portes, quinze modules en tout, et
+   **aucun** ne touche le magasin, la base, l'authentification ni le projet
+   courant. Le bac est une fonction pure de ses fichiers et de ses réponses.
+   C'est la partie qui coûterait cher à défaire ; elle est déjà faite.
+2. **Un écran sans projet n'est pas une nouveauté.** Sept en vivent déjà —
+   `dashboard`, `projects`, `situations`, tous les sujets, toutes les
+   propositions, le Copilote transversal, le référentiel —, et ils se
+   reconnaissent tous à la même marque : `currentProjectId` nul. Ouvrir l'établi
+   ailleurs, c'est une route de plus sur un patron éprouvé.
+3. **Le magasin ne portera aucun projet.** C'est déjà ce que ce plan dit, et
+   `atelier_ouvertures` en est le précédent : une table de l'Atelier qui ne sait
+   ni qui, ni quand, ni sur quel projet.
+
+Ce qui est, et restera, lié au projet : **« Proposer au projet »**, qui a besoin
+d'un projet par définition, et le cadre de l'Atelier dans lequel l'écran est
+posé. Rien d'autre.
+
+**Le garde-fou.** Une épreuve marche le graphe des importations depuis les
+quatre portes du cœur et refuse qu'aucune d'elles atteigne le magasin, la base,
+l'authentification ou un module de projet — fût-ce trois modules plus loin. Elle
+tient aussi le cœur sous trente modules. C'est elle qui garde la porte ouverte :
+sans elle, la première ligne écrite « parce que c'est pratique » la refermerait
+sans que personne s'en aperçoive avant d'essayer (règle 12).
+
+### Une version versée puis corrigée au projet
+
+On fait comme pour les autres utilitaires : **les deux gardent leur version, et
+les deux se le disent**. Rien ne remonte tout seul dans l'établi de quelqu'un,
+rien ne se réécrit tout seul dans la mémoire d'un projet ; l'écran signale que
+les deux ont divergé et propose le geste, l'utilisateur décide, et ce qu'il
+décide passe par une proposition signée.
+
+La machinerie est à écrire : c'est le lot F, et il servira d'abord aux
+utilitaires natifs, qui en manquent depuis le début.
+
+---
+
 ## Ce qui reste à trancher
 
-- **Un utilitaire de l'établi se lance-t-il sans projet ?** Il n'a besoin de
-  rien d'autre que ses entrées : rien ne l'en empêche. À confirmer à l'usage.
 - **Deux utilisateurs, la même règle.** L'entreprise voudra un jour un étage
   au-dessus de l'établi — un fonds commun. Ce n'est pas ce plan, et l'établi ne
   doit rien faire qui l'empêche.
-- **Que devient l'établi quand une version est versée puis corrigée au projet ?**
-  On ne remonte rien automatiquement : ce serait écrire dans l'établi de
-  quelqu'un sans le lui demander. L'écran peut dire que les deux ont divergé.
+- **Quand ouvrir l'établi hors projet ?** Quand quelqu'un en aura besoin : la
+  porte est gardée ouverte, elle ne coûte rien à laisser fermée.
