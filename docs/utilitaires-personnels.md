@@ -262,9 +262,7 @@ l'enregistrement a échoué.
 
 ### Ce qui reste de ce lot
 
-L'historique des versions : la table les porte toutes, rien ne les montre
-encore. Une version se relira telle qu'elle était, et c'est ce qui permettra de
-dire à un projet qui a signé la `v2` ce que la `v3` a changé (lot F).
+L'historique des versions est porté à **À faire plus tard**, en bas de ce plan.
 
 ---
 
@@ -476,6 +474,24 @@ utilitaires natifs, qui en manquent depuis le début.
 
 ---
 
+## À faire plus tard
+
+Ce qui est décidé, qui ne bloque personne, et qu'on fera quand il gênera.
+
+### L'historique des versions
+
+La table les porte **toutes** : `etabli_versions` garde le texte de chaque
+version, et une version ne se réécrit jamais. Rien ne les montre encore.
+
+Ce qu'il faudra : lire la `v1` après avoir écrit la `v3`, et comparer deux
+versions ligne à ligne — le diff du Mdall existe déjà, c'est celui des
+propositions. Cela dira aussi à un projet qui a signé la `v2` **ce que** la `v3`
+a changé, là où l'écran ne dit aujourd'hui que **qu'elle** a changé.
+
+Rien n'est perdu en attendant : le texte est gardé, et c'est le plus dur.
+
+---
+
 ## Ce qui reste à trancher
 
 - **Deux utilisateurs, la même règle.** L'entreprise voudra un jour un étage
@@ -483,3 +499,35 @@ utilitaires natifs, qui en manquent depuis le début.
   doit rien faire qui l'empêche.
 - **Quand ouvrir l'établi hors projet ?** Quand quelqu'un en aura besoin : la
   porte est gardée ouverte, elle ne coûte rien à laisser fermée.
+
+---
+
+## L'écran d'un utilitaire : s'en servir, ou l'ouvrir
+
+**On ouvre un outil de son établi pour lui poser une question**, pas pour lire
+son code. Tomber sur le code quand on venait poser une question, c'est ouvrir le
+capot pour démarrer — et c'est ce que l'écran faisait.
+
+L'écran a donc deux façons de se tenir, et non deux écrans : deux écrans
+auraient deux titres, deux barres de gestes et deux calibrages à refaire l'un
+contre l'autre au premier réglage (règle 10). C'est le même brouillon, le même
+bac, les mêmes gestes ; ce qui change, c'est ce qu'on montre en grand.
+
+| | à l'écriture | à l'essai |
+| --- | --- | --- |
+| ce qu'on voit | le français à gauche, les fichiers à droite | le formulaire et ce que les règles concluent |
+| sur la ligne du titre | « Lancer » | « Faire une proposition » |
+| dans le menu | « Faire une proposition » | « Modifier » |
+| la console | en bas ou à droite | aucune |
+
+**Un geste ne paraît qu'une fois.** « Faire une proposition » était en bouton
+*et* dans le menu : deux chemins pour une porte, et l'un des deux finit par ne
+plus ressembler à l'autre. À l'écriture il reste dans le menu ; à l'essai il
+passe en bouton, parce que c'est le geste qui engage — et il quitte le menu.
+
+**Et l'on ne lance pas ce qui est lancé.** À l'essai, la réponse se refait à
+chaque champ rempli : un bouton « Lancer » dirait de faire ce qui est fait.
+
+**Le retour se fait par où l'on est venu.** Rouvrir l'outil depuis l'Atelier le
+remet à l'essai ; un bouton « Revenir à l'essai » ajouterait une bascule à tenir
+à jour pour dire ce que l'Atelier dit déjà.

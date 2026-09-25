@@ -444,17 +444,25 @@ export function renderResultats(resultats = []) {
 }
 
 /** Le bac d'essai : le formulaire, puis ce que les fonctions répondent. */
-export function renderBacDessai(brouillon = null, { reponses = {}, lance = false } = {}) {
+export function renderBacDessai(brouillon = null, { reponses = {}, lance = false, tete = true } = {}) {
   const remplis = fichiersRemplis(brouillon);
   const champs = champsDuBrouillon(remplis);
   const resultats = lance ? lancerLeBrouillon(remplis, reponses) : [];
 
   return `
     <section class="bac">
+      ${/*
+        **Sa tête ne paraît que dans la fenêtre.** Quand le bac **est** l'écran,
+        le titre au-dessus nomme déjà l'outil et sa description dit ce qu'il
+        fait : un second titre « Bac d'essai » ferait lire deux fois la même
+        chose. Et « lancez » y serait faux — il n'y a rien à lancer, la réponse
+        se refait à chaque champ.
+      */""}
+      ${tete ? `
       <div class="bac__tete">
         <h3 class="bac__titre">Bac d'essai</h3>
         <span class="bac__quoi">Remplissez ce qui manque, et lancez. Rien ne s'écrit.</span>
-      </div>
+      </div>` : ""}
       ${
         champs.length
           ? renderFormulaire(champs, reponses)
@@ -516,10 +524,41 @@ export function renderProposer(brouillon = null, { depose = false } = {}) {
           affirmations.length > 1 ? "lignes" : "ligne"}`)}">
       ${depose
         ? `${renderSpinnerHtml({ label: "Proposition en cours", size: "sm" })} Proposition…`
-        : `${svgIcon("git-pull-request", { className: "octicon" })} Proposer au projet`}
+        : `${svgIcon("git-pull-request", { className: "octicon" })} ${PROPOSER_DIT}`}
     </button>
   `;
 }
+
+/**
+ * Les deux façons de se tenir devant un utilitaire.
+ *
+ * ## Pourquoi un mode, et non deux écrans
+ *
+ * Écrire un outil et **s'en servir** ne sont pas la même chose. On ouvre
+ * « Écrire du Mdall » pour écrire ; on ouvre un outil de son établi pour lui
+ * poser une question. Tomber sur le code quand on venait poser une question,
+ * c'est ouvrir le capot pour démarrer.
+ *
+ * Deux écrans auraient deux titres, deux barres de gestes et deux calibrages à
+ * refaire l'un contre l'autre au premier réglage (règle 10). C'est le même
+ * brouillon, le même bac, les mêmes gestes : ce qui change, c'est ce qu'on
+ * montre en grand.
+ */
+export const MODE = {
+  /** Le français à gauche, les fichiers à droite. C'est là qu'on écrit. */
+  ECRITURE: "ecriture",
+  /** Le formulaire et ce que les règles concluent. C'est là qu'on s'en sert. */
+  ESSAI: "essai"
+};
+
+/**
+ * Ce que le geste de proposition s'appelle, ici comme ailleurs.
+ *
+ * **C'est l'intitulé de la maison** : le transformateur d'un sujet, le rangement
+ * des sujets et la lecture d'un fil le nomment tous ainsi. Un second nom pour
+ * le même geste ferait croire à deux gestes.
+ */
+export const PROPOSER_DIT = "Faire une proposition";
 
 /** Ce que le menu de la ligne du titre sait faire. Un nom vit à un seul
  *  endroit : celui qui le rend et celui qui l'écoute lisent la même constante
@@ -544,6 +583,8 @@ export const GESTE = {
   ETABLI: "brouillon-etabli",
   /** Reprendre un utilitaire déjà posé sur son établi. */
   REPRENDRE: "brouillon-reprendre",
+  /** Passer de l'essai à l'écriture : ouvrir le capot. */
+  MODIFIER: "brouillon-modifier",
   /**
    * Ouvrir le wiki du langage.
    *
@@ -584,39 +625,55 @@ export const GESTE = {
  * l'ouverture, du survol et de la fermeture au clavier, et il faudrait les
  * recalibrer l'un contre l'autre à chaque retouche.
  */
-export function renderActionsDuTitre(brouillon = null, { depose = false, utilitaire = null } = {}) {
+export function renderActionsDuTitre(
+  brouillon = null, { depose = false, utilitaire = null, mode = MODE.ECRITURE } = {}
+) {
   // Il y a quelque chose à lire : le bac peut s'ouvrir, et dire ce qu'il trouve.
   const aLancer = fichiersRemplis(brouillon).length > 0;
   const aPerdre = brouillonEcrit(brouillon);
   // La même question que celle du bouton, posée sur les mêmes fichiers : deux
   // réponses divergeraient le jour où l'une des deux change (règle 4).
   const aProposer = aProposerDuBrouillon(fichiersRemplis(brouillon)).affirmations.length > 0;
+  const essai = mode === MODE.ESSAI;
 
   return `
     <div class="lecture-cr__entete-actions">
-      ${renderProposer(brouillon, { depose })}
-      <button type="button" class="gh-btn gh-btn--sm" data-brouillon-lancer${
+      ${/*
+        **Un geste ne paraît qu'une fois.** À l'écriture, proposer est dans le
+        menu — l'avoir aussi en bouton faisait deux chemins pour une porte. À
+        l'essai, c'est l'inverse : on vient pour s'en servir, et proposer est le
+        geste qui engage ; il passe donc en bouton, et quitte le menu.
+      */""}
+      ${essai ? renderProposer(brouillon, { depose }) : ""}
+      ${essai ? "" : `<button type="button" class="gh-btn gh-btn--sm" data-brouillon-lancer${
         aLancer ? "" : " disabled"}
         title="${escapeHtml(aLancer
           ? "Ouvrir le bac d'essai : rien ne s'écrit"
           : "Écrivez d'abord du Mdall : il n'y a rien à lancer")}">
         ${svgIcon("play", { className: "octicon" })} Lancer
-      </button>
+      </button>`}
       ${renderGhActionButton({
         id: "brouillonKebab",
         icon: svgIcon("kebab-horizontal", { className: "octicon" }),
         iconOnly: true,
         menuOnly: true,
         size: "sm",
-        items: [{
-          action: GESTE.PROPOSER,
-          icon: svgIcon("git-pull-request", { className: "octicon" }),
-          label: "Proposer au projet",
-          disabled: !aProposer || depose,
-          title: aProposer
-            ? "Ouvrir une proposition portant ce brouillon : elle sera relue et signée"
-            : "Il n'y a rien à proposer : écrivez d'abord du Mdall"
-        }, {
+        items: [...(essai
+          ? [{
+            action: GESTE.MODIFIER,
+            icon: svgIcon("pencil", { className: "octicon" }),
+            label: "Modifier",
+            title: "Ouvrir le code de cet utilitaire, et le lancer à la main"
+          }]
+          : [{
+            action: GESTE.PROPOSER,
+            icon: svgIcon("git-pull-request", { className: "octicon" }),
+            label: PROPOSER_DIT,
+            disabled: !aProposer || depose,
+            title: aProposer
+              ? "Ouvrir une proposition portant ce brouillon : elle sera relue et signée"
+              : "Il n'y a rien à proposer : écrivez d'abord du Mdall"
+          }]), {
           action: GESTE.ETABLI,
           icon: svgIcon("tools", { className: "octicon" }),
           label: utilitaire?.id ? "Enregistrer sur l'établi" : "Enregistrer dans l'Atelier",
@@ -978,7 +1035,7 @@ export function renderListeDeLetabli(liste = null) {
 export function renderEcrireEnMdall(brouillon = null, {
   largeur = LARGEUR_PAR_DEFAUT, reponses = {}, lance = false,
   transcrit = false, rendu = null, depose = false, depot = null, volet = false,
-  largeurConsole = LARGEUR_CONSOLE_PAR_DEFAUT, utilitaire = null
+  largeurConsole = LARGEUR_CONSOLE_PAR_DEFAUT, utilitaire = null, mode = MODE.ECRITURE
 } = {}) {
   const lignes = laConsole({
     fichiers: fichiersRemplis(brouillon), reponses, lance, rendu, depot
@@ -996,10 +1053,11 @@ export function renderEcrireEnMdall(brouillon = null, {
       <header class="lecture-cr__entete">
         <div class="lecture-cr__entete-ligne">
           <h2 class="lecture-cr__titre">${renderTitreDuBrouillon(utilitaire)}</h2>
-          ${renderActionsDuTitre(brouillon, { depose, utilitaire })}
+          ${renderActionsDuTitre(brouillon, { depose, utilitaire, mode })}
         </div>
       </header>
 
+      ${mode === MODE.ESSAI ? renderEssaiDeLutilitaire(brouillon, { reponses, utilitaire, lance }) : `
       <div class="brouillon__corps">
         <div class="brouillon__dit">
           <p class="brouillon__intitule">Ce que vous voulez dire</p>
@@ -1016,7 +1074,42 @@ export function renderEcrireEnMdall(brouillon = null, {
       </div>
 
       ${renderConsole(lignes, { volet })}
+    `}
     </section>
+  `;
+}
+
+/**
+ * L'utilitaire, tel qu'on s'en sert.
+ *
+ * ## Pourquoi c'est le bac, en grand
+ *
+ * On ouvre un outil de son établi pour **lui poser une question**, pas pour
+ * lire son code. Tomber sur le code, c'est ouvrir le capot pour démarrer — et
+ * c'est ce que l'écran faisait.
+ *
+ * Le bac d'essai est exactement cette vue-là : le formulaire déduit, ce que
+ * chaque règle conclut, et la trace de ce qu'elle a lu. Il se rend **ici**
+ * plutôt que dans une fenêtre, parce qu'il n'y a plus rien derrière lui à
+ * regarder. Le même rendu des deux côtés : une seconde version divergerait au
+ * premier réglage (règle 10).
+ *
+ * ## Il est lancé d'emblée
+ *
+ * « Lancer » n'a pas de sens ici : on vient s'en servir, et la réponse se
+ * refait à chaque champ rempli. Le bouton n'est donc pas sur la ligne du
+ * titre — il dirait de faire ce qui est déjà fait.
+ */
+export function renderEssaiDeLutilitaire(
+  brouillon = null, { reponses = {}, utilitaire = null, lance = true } = {}
+) {
+  return `
+    <div class="brouillon__essai">
+      ${texte(utilitaire?.resume)
+        ? `<p class="brouillon__essai-quoi">${escapeHtml(texte(utilitaire.resume))}</p>`
+        : ""}
+      ${renderBacDessai(brouillon, { reponses, lance, tete: false })}
+    </div>
   `;
 }
 
@@ -1067,6 +1160,14 @@ const etat = {
   etabli: null,
   /** Ce que le dernier enregistrement a donné : `{ok, dit}`, ou `null`. */
   garde: null,
+  /**
+   * Écrit-on l'outil, ou s'en sert-on ?
+   *
+   * À l'écriture par défaut : « Écrire du Mdall » s'ouvre pour écrire. Ouvrir
+   * un outil de l'établi depuis l'Atelier le met à l'essai — on vient lui poser
+   * une question, pas lire son code.
+   */
+  mode: MODE.ECRITURE,
   /** La console est-elle à droite, en troisième volet ? Sinon, elle est en bas. */
   volet: false,
   largeurConsole: LARGEUR_CONSOLE_PAR_DEFAUT
@@ -1198,7 +1299,8 @@ function dessiner(racine) {
     depot: etat.depot,
     volet: etat.volet,
     largeurConsole: etat.largeurConsole,
-    utilitaire: etat.utilitaire
+    utilitaire: etat.utilitaire,
+    mode: etat.mode
   });
   brancher(racine);
 }
@@ -1261,6 +1363,20 @@ function redessinerLeVolet(racine) {
  * `dessiner` de secours n'en était pas un (voir la règle en tête de section).
  */
 function redessinerLaConsole(racine) {
+  /**
+   * **À l'essai, il n'y a pas de console — et il ne doit pas en pousser une.**
+   * `poserLePanneau` pose ce qui n'est pas là : appelé ici sans garde, il
+   * ferait apparaître au bas de l'écran d'essai une console que le rendu n'a
+   * jamais dessinée, et qu'aucun redessin entier ne retirerait.
+   *
+   * La ligne du titre, elle, se remet bien à jour : ses gestes dépendent de ce
+   * qu'on vient de remplir.
+   */
+  if (etat.mode === MODE.ESSAI) {
+    redessinerLaLigneDuTitre(racine);
+    return;
+  }
+
   const lignes = laConsole({
     fichiers: fichiersRemplis(etat.brouillon),
     reponses: etat.reponses, lance: etat.lance, rendu: etat.rendu, depot: etat.depot
@@ -1273,10 +1389,7 @@ function redessinerLaConsole(racine) {
   racine.querySelector(".brouillon")
     ?.setAttribute("data-console", etat.volet ? "volet" : "bas");
 
-  remplacer(racine, ".lecture-cr__entete-actions",
-    renderActionsDuTitre(etat.brouillon, { depose: etat.depose, utilitaire: etat.utilitaire }));
-  remplacer(racine, ".lecture-cr__titre", `<h2 class="lecture-cr__titre">${
-    renderTitreDuBrouillon(etat.utilitaire)}</h2>`);
+  redessinerLaLigneDuTitre(racine);
 
   // **Les deux places de la console naissent et meurent ensemble**, et c'est la
   // même pose des deux côtés : l'une paraît quand l'autre s'en va.
@@ -1290,6 +1403,63 @@ function redessinerLaConsole(racine) {
   if (pose === POSE.RETIRER) { debrancherConsole?.(); debrancherConsole = null; }
 
   brancherLaConsole(racine);
+}
+
+/**
+ * Les gestes de la ligne du titre : le bouton qui engage, et le menu.
+ *
+ * **Ils se rebranchent avec elle.** La ligne se réécrit — on enregistre, on
+ * reprend un outil, on remplit un champ —, et les écoutes partent avec les
+ * éléments qu'elles portaient. Laissées dans le branchement de la console, elles
+ * ne revenaient pas à l'essai, où la console ne se redessine pas : le menu
+ * cessait de répondre à la première frappe, sans rien dire.
+ */
+function brancherLaLigneDuTitre(racine) {
+  racine.querySelector("[data-brouillon-proposer]")?.addEventListener("click", () => {
+    void proposerAuProjet(racine);
+  });
+
+  racine.querySelector("[data-brouillon-lancer]")?.addEventListener("click", () => {
+    ouvrirLeBac(racine);
+    // La console dit aussi ce que le lancement a répondu : elle le dit derrière
+    // la fenêtre, et on la retrouve en la refermant.
+    redessinerLaConsole(racine);
+  });
+
+  // **Le menu, écouté sur le bloc qui le porte.** `ghaction:action` remonte, et
+  // l'écoute part avec l'élément au redessin suivant — là où une écoute posée
+  // sur l'écran s'accumulerait à chaque `dessiner`, et effacerait le brouillon
+  // autant de fois qu'il y a eu de transcriptions.
+  racine.querySelector(".lecture-cr__entete-actions")
+    ?.addEventListener("ghaction:action", (evenement) => {
+      const geste = evenement.detail?.action;
+      if (geste === GESTE.VIDER) viderLeBrouillon(racine);
+      if (geste === GESTE.WIKI) ouvrirLeWikiMdall();
+      // Le même renvoi que le bouton de la ligne du titre : une seule façon de
+      // proposer, appelée de deux endroits (règle 10).
+      if (geste === GESTE.PROPOSER) void proposerAuProjet(racine);
+      if (geste === GESTE.ETABLI) ouvrirLaFicheDeLetabli(racine);
+      if (geste === GESTE.REPRENDRE) void ouvrirLetabli(racine);
+      if (geste === GESTE.MODIFIER) ouvrirLeCode(racine);
+    });
+}
+
+/**
+ * Redessiner **la seule ligne du titre** : son intitulé et ses gestes.
+ *
+ * Les deux bougent ensemble et pour la même raison — on vient d'enregistrer,
+ * de reprendre un outil, ou de remplir un champ qui change ce qu'on peut
+ * proposer. Les séparer ferait un titre qui dit « v2 » au-dessus d'un menu qui
+ * croit encore écrire un brouillon neuf.
+ */
+function redessinerLaLigneDuTitre(racine) {
+  remplacer(racine, ".lecture-cr__entete-actions",
+    renderActionsDuTitre(etat.brouillon, {
+      depose: etat.depose, utilitaire: etat.utilitaire, mode: etat.mode
+    }));
+  remplacer(racine, ".lecture-cr__titre", `<h2 class="lecture-cr__titre">${
+    renderTitreDuBrouillon(etat.utilitaire)}</h2>`);
+  brancherLaLigneDuTitre(racine);
 }
 
 /**
@@ -1332,6 +1502,8 @@ function viderLeBrouillon(racine) {
   // version par un brouillon vide.
   etat.utilitaire = null;
   etat.garde = null;
+  // Plus d'outil à essayer : l'écran revient à ce qu'il est par défaut.
+  etat.mode = MODE.ECRITURE;
   // Un verdict rendu sur un brouillon qui n'existe plus décrirait un essai que
   // personne n'a fait.
   etat.lance = false;
@@ -1597,7 +1769,7 @@ function reprendreDeLetabli(racine, id) {
  *
  * @returns {boolean} faux si l'on a renoncé à écraser le brouillon en cours
  */
-export function reprendreLutilitaire(racine, trouve = null) {
+export function reprendreLutilitaire(racine, trouve = null, { mode = MODE.ESSAI } = {}) {
   if (!racine || !trouve?.id) return false;
 
   if (brouillonEcrit(etat.brouillon) && etat.utilitaire?.id !== trouve.id
@@ -1605,9 +1777,19 @@ export function reprendreLutilitaire(racine, trouve = null) {
 
   etat.brouillon = brouillonDesFichiers(trouve.fichiers);
   etat.utilitaire = trouve;
-  // Un verdict, une transcription et une trace de proposition rendus sur un
-  // autre brouillon ne décrivent plus rien.
-  etat.lance = false;
+  // **On l'ouvre à l'essai.** C'est pour cela qu'on l'ouvre : lui poser une
+  // question. Son code est derrière « Modifier », pour qui vient le changer.
+  etat.mode = mode;
+  /**
+   * **À l'essai, le bac est lancé : c'est la vue elle-même.** Ce drapeau n'est
+   * pas qu'un réglage de rendu — c'est lui que le redessin ciblé relit à
+   * chaque champ rempli. À faux, le verdict se retirait de l'écran à la
+   * première frappe : le rendu disait « lancé » et l'état disait le contraire
+   * (règle 4).
+   */
+  etat.lance = mode === MODE.ESSAI;
+  // Une transcription et une trace de proposition rendues sur un autre
+  // brouillon ne décrivent plus rien.
   etat.rendu = null;
   etat.depot = null;
   garderLeBrouillon();
@@ -1659,6 +1841,22 @@ function ouvrirLeBac(racine) {
 }
 
 /**
+ * Ouvrir le capot : passer de l'essai à l'écriture.
+ *
+ * **On ne revient pas en arrière par un second geste.** Rouvrir l'outil depuis
+ * l'Atelier le remet à l'essai, et c'est le chemin par lequel on y était ; un
+ * bouton « Revenir à l'essai » ajouterait une bascule à tenir à jour pour dire
+ * ce que l'Atelier dit déjà.
+ */
+function ouvrirLeCode(racine) {
+  etat.mode = MODE.ECRITURE;
+  // On quitte l'essai : le verdict n'est plus à l'écran, et « Lancer » le
+  // rouvrira dans sa fenêtre quand on le demandera.
+  etat.lance = false;
+  dessiner(racine);
+}
+
+/**
  * Le bac est-il **dans** ce corps de fenêtre ?
  *
  * La fenêtre est prêtée : le wiki du langage s'ouvre dans la même. Y poser un
@@ -1674,10 +1872,23 @@ export function leBacEstLa(corps = null) {
   return Boolean(corps?.querySelector?.(".bac"));
 }
 
-/** Le corps de la fenêtre, **et seulement quand c'est le bac qu'elle montre**. */
+/**
+ * Où le bac se tient, quand il est quelque part.
+ *
+ * **Deux endroits, jamais les deux à la fois** : dans la fenêtre, quand on l'a
+ * lancé depuis l'écriture ; dans l'écran lui-même, quand on se sert de
+ * l'outil — et là il n'y a pas de bouton pour l'ouvrir en fenêtre. On le
+ * cherche donc là où il est, plutôt que de tenir un drapeau qui dirait où il
+ * devrait être (règle 4).
+ *
+ * La fenêtre reste prioritaire quand elle est ouverte : c'est elle qu'on
+ * regarde, et le bac de l'écran serait derrière.
+ */
 function corpsDuBac() {
-  const corps = document.getElementById("detailsBodyModal");
-  return leBacEstLa(corps) ? corps : null;
+  const fenetre = document.getElementById("detailsBodyModal");
+  if (leBacEstLa(fenetre)) return fenetre;
+
+  return document.querySelector(".bac")?.parentElement ?? null;
 }
 
 /**
@@ -1780,32 +1991,7 @@ function brancherLaConsole(racine) {
     redessinerLaConsole(racine);
   });
 
-  racine.querySelector("[data-brouillon-proposer]")?.addEventListener("click", () => {
-    void proposerAuProjet(racine);
-  });
-
-  racine.querySelector("[data-brouillon-lancer]")?.addEventListener("click", () => {
-    ouvrirLeBac(racine);
-    // La console dit aussi ce que le lancement a répondu : elle le dit derrière
-    // la fenêtre, et on la retrouve en la refermant.
-    redessinerLaConsole(racine);
-  });
-
-  // **Le menu, écouté sur le bloc qui le porte.** `ghaction:action` remonte, et
-  // l'écoute part avec l'élément au redessin suivant — là où une écoute posée
-  // sur l'écran s'accumulerait à chaque `dessiner`, et effacerait le brouillon
-  // autant de fois qu'il y a eu de transcriptions.
-  racine.querySelector(".lecture-cr__entete-actions")
-    ?.addEventListener("ghaction:action", (evenement) => {
-      const geste = evenement.detail?.action;
-      if (geste === GESTE.VIDER) viderLeBrouillon(racine);
-      if (geste === GESTE.WIKI) ouvrirLeWikiMdall();
-      // Le même renvoi que le bouton de la ligne du titre : une seule façon de
-      // proposer, appelée de deux endroits (règle 10).
-      if (geste === GESTE.PROPOSER) void proposerAuProjet(racine);
-      if (geste === GESTE.ETABLI) ouvrirLaFicheDeLetabli(racine);
-      if (geste === GESTE.REPRENDRE) void ouvrirLetabli(racine);
-    });
+  brancherLaLigneDuTitre(racine);
 
   debrancherConsole?.();
   const poignee = racine.querySelector("#brouillonConsoleResizer");
@@ -1889,6 +2075,10 @@ function brancher(racine) {
 
   brancherLeVolet(racine);
   brancherLaConsole(racine);
+  // **À l'essai, le formulaire est dans l'écran** : ce sont les mêmes champs et
+  // le même branchement que dans la fenêtre, appelés sur l'écran plutôt que sur
+  // elle. Un second branchement pour la même chose divergerait (règle 10).
+  if (etat.mode === MODE.ESSAI) brancherLeBac(racine, racine);
 
   const dit = racine.querySelector("[data-brouillon-dit]");
   dit?.addEventListener("input", () => {
