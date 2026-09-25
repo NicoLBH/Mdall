@@ -204,10 +204,18 @@ test("le cahier des charges compte dans la montée de version", () => {
 
   assert.match(fonction, /select v\.fichiers, v\.dit into derniere, dernier_dit/);
   assert.match(fonction, /coalesce\(dernier_dit, ''\) is distinct from coalesce\(p_dit, ''\)/);
-  // Et il s'écrit dans les deux chemins : la v1 comme la suivante.
+  // **Et il s'écrit dans les deux chemins : la v1 comme la suivante.** Sur les
+  // valeurs, pas sur la liste des colonnes — une colonne déclarée et jamais
+  // remplie laisse la v1 sans cahier des charges, et rien ne le dit : c'est
+  // précisément le premier enregistrement, celui qu'on fait après avoir écrit
+  // le cahier des charges, qui le perdrait.
   assert.equal(
-    (fonction.match(/insert into public\.etabli_versions \(utilitaire_id, version, fichiers, dit\)/g) ?? []).length,
-    2, "un des deux enregistrements perd le cahier des charges"
+    (fonction.match(/values \(ligne\.id, 1, p_fichiers, coalesce\(p_dit, ''\)\)/g) ?? []).length,
+    1, "la v1 s'écrit sans son cahier des charges"
+  );
+  assert.equal(
+    (fonction.match(/values \(ligne\.id, ligne\.version, p_fichiers, coalesce\(p_dit, ''\)\)/g) ?? []).length,
+    1, "la version suivante s'écrit sans son cahier des charges"
   );
 });
 
