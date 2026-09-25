@@ -117,19 +117,19 @@ const CHAINE = /^"(?:[^"\\]|\\.)*"?/;
 /** Un nombre, à la virgule comme au point : on écrit « 0,2 » en France. */
 const NOMBRE = /^\d+(?:[.,]\d+)*/;
 /** Un chemin de fichier du projet, cité dans un `importe` ou un `enregistre`. */
-const CHEMIN = /^[\wÀ-ÿ-]+\.(?:ref|ddb|ctr|md)\b/i;
+const CHEMIN = /^[\wÀ-ÖØ-öø-ÿ-]+\.(?:ref|ddb|ctr|md)\b/i;
 /**
  * Un mot : lettres accentuées comprises, et le tiret **à l'intérieur** de
  * « agent-D ». Jamais en tête : `a - b` porte une soustraction, pas un mot qui
  * commencerait par un tiret — et elle se colorait en nom de sujet.
  */
-const MOT = /^[\wÀ-ÿ'’][\wÀ-ÿ'’-]*/;
+const MOT = /^[\wÀ-ÖØ-öø-ÿ'’][\wÀ-ÖØ-öø-ÿ'’-]*/;
 /** Les comparateurs et l'arithmétique, les plus longs d'abord. */
 const OPERATEUR = /^(?:<=|>=|!=|[=<>≠≤≥+\-*/^%])/;
 const PONCTUATION = /^[(),;:]/;
 const ACCOLADE = /^[{}[\]]/;
 /** Une unité, juste derrière un nombre : « m », « km/h », « m² », « € », « % ». */
-const UNITE = /^(?:[A-Za-zÀ-ÿ°µ]+(?:\/[A-Za-zÀ-ÿ]+)?[²³]?|%|€)/;
+const UNITE = /^(?:[A-Za-zÀ-ÖØ-öø-ÿ°µ]+(?:\/[A-Za-zÀ-ÖØ-öø-ÿ]+)?[²³]?|%|€)/;
 
 /**
  * Les jetons d'une ligne **telle qu'elle est tapée**.
