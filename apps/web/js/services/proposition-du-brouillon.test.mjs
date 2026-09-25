@@ -19,8 +19,10 @@ import {
   natureDuFichier,
   phraseDeLEcart,
   phraseDeLaProposition,
+  sourceDuBrouillon,
   titreDeLaProposition
 } from "./proposition-du-brouillon.js";
+import { descriptionDeLaProposition } from "./atelier-proposition.js";
 import { NATURE } from "./assertion-taxonomy.js";
 import { PROVENANCE, STATUT } from "./memoire-en-texte.js";
 import { cleDAffirmation, itemsDeProposition } from "./atelier-proposition.js";
@@ -324,4 +326,79 @@ test("l'intro compte les règles à part des valeurs, et rappelle que rien n'est
   // Les deux moitiés comptent : ce qui est entré, et ce qui ne l'est pas.
   assert.match(dit, /Rien n'est entré dans la mémoire/);
   assert.match(dit, /n'écrit que si elle est signée/);
+});
+
+/* ── La proposition dit d'où elle vient ──────────────────────────────────── */
+
+const UNE_LIGNE = [{ sujet: "Couleur du volet", valeur: "violet", article: "", zones: [] }];
+
+test("un brouillon anonyme dit au moins qu'il vient du bac d'essai", () => {
+  // Une proposition d'un compte rendu nomme son document ; celle d'un fil de
+  // mails nomme son objet. Celle du bac ne disait rien du tout.
+  assert.equal(sourceDuBrouillon(null), ATELIER);
+  assert.equal(sourceDuBrouillon({}), ATELIER);
+});
+
+test("un utilitaire de l'établi se nomme, avec sa version", () => {
+  // Six mois plus tard, on lit « Couleur du volet = violet » dans la mémoire
+  // sans savoir si quelqu'un l'a tapée un jeudi soir ou si elle sort d'un outil
+  // qu'on réemploie de projet en projet.
+  const dit = sourceDuBrouillon({ nom: "Volets en bois", version: "2" });
+
+  assert.match(dit, /Volets en bois/);
+  assert.match(dit, /v2/);
+  assert.ok(dit.startsWith(ATELIER), dit);
+  assert.doesNotMatch(dit, /modifi/);
+});
+
+test("un texte modifié depuis la version reprise ne se fait pas passer pour elle", () => {
+  // **Le piège.** On reprend la v2, on modifie, on propose : dire « v2 » serait
+  // faux, et la comparer plus tard à celle de l'établi ne dirait rien de juste.
+  const dit = sourceDuBrouillon({ nom: "Volets en bois", version: "2", modifie: true });
+
+  assert.match(dit, /v2/);
+  assert.match(dit, /modifié depuis/);
+});
+
+test("une version absente vaut v1 plutôt que « vundefined »", () => {
+  assert.match(sourceDuBrouillon({ nom: "Volets en bois" }), /v1/);
+});
+
+test("le titre nomme l'outil quand il y en a un, et ce qu'on propose sinon", () => {
+  // Dans une liste de propositions, « 3 lignes écrites en Mdall » ne distingue
+  // pas deux outils proposés le même jour.
+  assert.match(titreDeLaProposition(UNE_LIGNE, { nom: "Volets en bois", version: "2" }),
+    /Volets en bois/);
+  assert.match(titreDeLaProposition(UNE_LIGNE), /Couleur du volet/);
+
+  // Rien à proposer : pas de titre, même avec un utilitaire ouvert.
+  assert.equal(titreDeLaProposition([], { nom: "Volets en bois" }), "");
+});
+
+test("l'intro dit de quel utilitaire et de quelle version les lignes viennent", () => {
+  const dit = introDeLaProposition(UNE_LIGNE, { nom: "Volets en bois", version: "3" });
+
+  assert.match(dit, /Volets en bois/);
+  assert.match(dit, /v3/);
+  assert.match(dit, /hors de tout projet/, "l'établi n'appartient à aucun chantier, et cela se dit");
+  assert.match(dit, /signée/, "et rien n'entre sans signature");
+
+  // Sans utilitaire, elle ne parle de rien qui n'existe pas.
+  assert.doesNotMatch(introDeLaProposition(UNE_LIGNE), /utilitaire/);
+});
+
+test("la provenance se retrouve dans la description que le relecteur lit", () => {
+  // Le champ `source` existe depuis les comptes rendus : c'est le même, et il
+  // se rend au même endroit. En écrire un second aurait fait deux lignes de
+  // provenance, dont l'une aurait fini par mentir (règle 10).
+  const utilitaire = { nom: "Volets en bois", version: "2" };
+  const description = descriptionDeLaProposition({
+    intro: introDeLaProposition(UNE_LIGNE, utilitaire),
+    affirmations: UNE_LIGNE,
+    source: sourceDuBrouillon(utilitaire)
+  });
+
+  assert.match(description, /Volets en bois/);
+  assert.match(description, /_.*v2.*_/);
+  assert.match(description, /Couleur du volet/);
 });

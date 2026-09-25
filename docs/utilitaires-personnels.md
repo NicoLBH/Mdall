@@ -240,13 +240,40 @@ dire à un projet qui a signé la `v2` ce que la `v3` a changé (lot F).
 
 ---
 
-## Lot D — Le proposer à un projet
+## Lot D — Le proposer à un projet *(fait)*
 
-Le bouton existe et fait déjà ce qu'il faut : « Proposer au projet » ouvre une
-proposition portant les fichiers, relue ligne à ligne et signée. Ce lot n'ajoute
-qu'une chose : **la proposition dit d'où elle vient** — « utilitaire *Volets en
-bois*, `v3`, de votre établi » —, comme une proposition issue d'un PDF dit de
-quel PDF elle sort.
+Le bouton existait et faisait déjà ce qu'il faut : « Proposer au projet » ouvre
+une proposition portant les fichiers, relue ligne à ligne et signée. Ce lot
+n'ajoute qu'une chose : **la proposition dit d'où elle vient**, comme celle d'un
+compte rendu nomme son document et celle d'un fil nomme son objet.
+
+Le champ existait aussi — `source`, celui des comptes rendus et des mails — et
+se rend déjà en italique sous la description. En écrire un second aurait fait
+deux lignes de provenance, dont l'une aurait fini par mentir (règle 10).
+
+- Le **titre** nomme l'outil quand il y en a un : dans une liste de
+  propositions, « 3 lignes écrites en Mdall » ne distingue pas deux outils
+  proposés le même jour.
+- L'**intro** dit de quel utilitaire et de quelle version les lignes viennent,
+  et qu'il est gardé hors de tout projet.
+- La ligne de **provenance** porte le tout : « Écrire en Mdall · utilitaire
+  « X » v2 ». Un brouillon anonyme dit au moins « Écrire en Mdall » — il ne
+  disait rien du tout jusqu'ici.
+
+### Le piège qu'il fallait voir
+
+On reprend la `v2`, **on modifie le texte**, on propose. Annoncer « v2 » serait
+faux : ce qui entre dans le projet n'est pas la `v2`, et la comparer plus tard à
+celle de l'établi ne dirait rien de juste. La provenance dit donc « repris et
+modifié depuis » — et la question « le texte a-t-il bougé ? » se répond au
+même endroit qu'à l'enregistrement, jamais deux fois.
+
+### Ce que ce lot ne fait pas, et que le lot F devra faire
+
+La provenance est **une phrase**, faite pour être relue par un humain. Pour que
+le projet sache plus tard que l'établi a avancé, il faudra une trace que du
+code puisse lire — pas une ligne à analyser. C'est le lot F, et il le dira
+lui-même.
 
 Une fois versée, la règle est **au projet** : elle vit dans sa mémoire, elle se
 relit, se compare, se rejoue, et elle se capitalise comme les autres. L'établi

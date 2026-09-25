@@ -1090,3 +1090,30 @@ test("l'établi se charge à l'usage, jamais en tête de fichier", async () => {
     "l'établi est importé en tête : l'écran n'est plus éprouvable hors navigateur");
   assert.match(source, /await import\("\.\.\/\.\.\/\.\.\/services\/etabli-supabase\.js"\)/);
 });
+
+/**
+ * **Cette épreuve relit le source, et c'est l'exception qui le justifie.**
+ *
+ * Ce qu'une proposition emporte ne se voit dans aucun rendu : c'est ce qu'on
+ * envoie. Une provenance oubliée ne casse rien, ne se voit nulle part, et se
+ * découvre six mois plus tard dans la mémoire — devant une règle dont personne
+ * ne sait d'où elle vient.
+ */
+test("la proposition emporte d'où elle vient, version comprise", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  const depot = source.match(/const rendu = await preparerUneProposition\(\{([\s\S]*?)\}\);/);
+  assert.ok(depot, "l'appel à preparerUneProposition est introuvable");
+
+  assert.match(depot[1], /source: sourceDuBrouillon\(/,
+    "la proposition part sans dire d'où elle vient");
+  assert.match(depot[1], /titreDeLaProposition\(affirmations, venue\)/);
+  assert.match(depot[1], /introDeLaProposition\(affirmations, venue\)/);
+
+  // La provenance se décide dans le service, pas ici : la question « le texte
+  // a-t-il bougé depuis la version reprise ? » est la même qu'à
+  // l'enregistrement, et deux réponses divergeraient (règle 10).
+  assert.match(depot[1].length ? source : "", /provenanceDuBrouillon\(etat\.utilitaire, etat\.brouillon\)/);
+});

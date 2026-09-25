@@ -249,10 +249,50 @@ export function phraseDeLEcart(ecart) {
   return texte(ecart?.dit) || PHRASES_DE_LECART[texte(ecart?.motif)] || "";
 }
 
+/**
+ * D'où vient ce qu'on propose — la ligne qu'on relit sous la proposition.
+ *
+ * ## Pourquoi elle compte
+ *
+ * Une proposition issue d'un compte rendu dit de quel compte rendu ; une
+ * proposition issue d'un fil de mails dit lequel. Une règle écrite à la main ne
+ * disait rien : six mois plus tard, on lit « Couleur du volet = violet » dans
+ * la mémoire sans savoir si quelqu'un l'a tapée un jeudi soir ou si elle sort
+ * d'un outil qu'on réemploie de projet en projet.
+ *
+ * ## Le piège qu'elle évite
+ *
+ * On reprend la `v2` d'un utilitaire, **on modifie le texte**, on propose. Dire
+ * « v2 » serait faux : ce qui entre dans le projet n'est pas la `v2`, et la
+ * comparer plus tard à celle de l'établi ne dirait rien de juste. On le dit
+ * donc : repris de la `v2`, et modifié depuis.
+ *
+ * ## Ce qu'elle ne dit pas
+ *
+ * **Le reste de l'établi.** Proposer un outil, c'est partager cet outil-là ;
+ * cela ne dit rien des autres, ni de ce qu'on garde pour soi.
+ *
+ * @param {{nom?: string, version?: string|number, modifie?: boolean}|null} utilitaire
+ */
+export function sourceDuBrouillon(utilitaire = null) {
+  const nom = texte(utilitaire?.nom);
+  if (!nom) return ATELIER;
+
+  const version = texte(utilitaire?.version) || "1";
+  const depuis = utilitaire?.modifie ? ", repris et modifié depuis" : "";
+  return `${ATELIER} · utilitaire « ${nom} » v${version}${depuis}`;
+}
+
 /** Le titre de la proposition qu'un brouillon ouvre. */
-export function titreDeLaProposition(affirmations = []) {
+export function titreDeLaProposition(affirmations = [], utilitaire = null) {
   const tous = Array.isArray(affirmations) ? affirmations : [];
   if (!tous.length) return "";
+
+  // **Le nom de l'outil passe devant**, quand il y en a un : dans une liste de
+  // propositions, « 3 lignes écrites en Mdall » ne distingue pas deux outils
+  // proposés le même jour.
+  const nom = texte(utilitaire?.nom);
+  if (nom) return `« ${nom} », écrit en Mdall`;
 
   return tous.length === 1
     ? `« ${tous[0].sujet} », écrit en Mdall`
@@ -260,7 +300,7 @@ export function titreDeLaProposition(affirmations = []) {
 }
 
 /** Ce que la proposition dit d'elle-même, avant qu'on la lise. */
-export function introDeLaProposition(affirmations = []) {
+export function introDeLaProposition(affirmations = [], utilitaire = null) {
   const tous = Array.isArray(affirmations) ? affirmations : [];
   const regles = tous.filter((une) => une.referentiel === true).length;
   const valeurs = tous.length - regles;
@@ -269,7 +309,13 @@ export function introDeLaProposition(affirmations = []) {
   if (valeurs) dits.push(`${valeurs} ${valeurs > 1 ? "valeurs" : "valeur"}`);
   if (regles) dits.push(`${regles} ${regles > 1 ? "règles" : "règle"}`);
 
-  return `${dits.join(" et ")} écrites dans le bac d'essai « Écrire en Mdall ». `
+  const nom = texte(utilitaire?.nom);
+  const venu = nom
+    ? ` Elles viennent de l'utilitaire « ${nom} » (v${texte(utilitaire?.version) || "1"}${
+      utilitaire?.modifie ? ", modifié depuis" : ""}), écrit à la main et gardé hors de tout projet.`
+    : "";
+
+  return `${dits.join(" et ")} écrites dans le bac d'essai « Écrire en Mdall ».${venu} `
     + "Rien n'est entré dans la mémoire du projet : cette proposition n'écrit que si elle est signée.";
 }
 
