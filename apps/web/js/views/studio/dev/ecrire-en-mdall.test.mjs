@@ -11,7 +11,7 @@ import {
   renderVoletDeLaConsole, renderGestes, colorerDuMdall, POSE, poseDuPanneau,
   renderActionsDuTitre, hauteurDuCadre, HAUTEUR_MINIMALE, MARGE_DU_BAS, GESTE,
   renderTeteDeLaConsole, marquesDuChoixLogique, CLASSE_DU_CHOIX, leBacEstLa,
-  renderTitreDuBrouillon, renderFicheDeLetabli, renderVerdictDeLetabli,
+  MODE, PROPOSER_DIT, renderEssaiDeLutilitaire, renderTitreDuBrouillon, renderFicheDeLetabli, renderVerdictDeLetabli,
   renderDeduitDeLetabli, renderListeDeLetabli, GESTE_DE_LETABLI
 } from "./ecrire-en-mdall.js";
 import { ficheDuBrouillon, ceQueLenregistrementFait } from "../../../services/utilitaire-de-letabli.js";
@@ -438,7 +438,7 @@ test("l'écran dit que rien n'entre sans signature, et pas seulement dans son co
   // « On ne doit RIEN verser DIRECTEMENT dans la mémoire, JAMAIS. »
   const html = renderEcrireEnMdall(AVEC_UNE_DONNEE, {});
 
-  assert.match(html, /data-brouillon-proposer/);
+  assert.ok(html.includes(GESTE.PROPOSER), "la seule porte vers la mémoire n'est plus là");
   assert.match(html, /signature|signée|signer/);
 });
 
@@ -498,16 +498,22 @@ test("le titre prend le format des autres écrans de l'Atelier", () => {
   assert.match(html, /<h2 class="lecture-cr__titre">Écrire en Mdall<\/h2>/);
 });
 
-test("« Proposer au projet » se tient sur la ligne du titre, à droite", () => {
+test("« Faire une proposition » se tient sur la ligne du titre, à droite", () => {
   // C'est le geste qui engage. Le chercher en bas de page après trois volets
   // ferait manquer la seule porte vers la mémoire.
-  const html = renderEcrireEnMdall(AVEC_UNE_DONNEE, {});
+  //
+  // **À l'essai seulement** : à l'écriture, il est dans le menu, et l'avoir
+  // aux deux endroits faisait deux chemins pour une porte.
+  const html = renderEcrireEnMdall(AVEC_UNE_DONNEE, { mode: MODE.ESSAI });
   const actions = html.indexOf('class="lecture-cr__entete-actions"');
 
   assert.ok(actions > 0, "la ligne de titre n'a pas ses actions");
   assert.ok(html.indexOf("data-brouillon-proposer") > actions, "le bouton n'est pas dans la ligne de titre");
-  assert.ok(html.indexOf("data-brouillon-proposer") < html.indexOf("brouillon__corps"),
-    "le bouton est passé sous les volets");
+
+  // À l'écriture, le bouton s'efface : le menu le porte.
+  const ecriture = renderEcrireEnMdall(AVEC_UNE_DONNEE, {});
+  assert.doesNotMatch(ecriture, /data-brouillon-proposer/);
+  assert.ok(ecriture.includes(GESTE.PROPOSER), "le menu ne porte plus le geste non plus");
 });
 
 test("rien à proposer : le bouton ne paraît pas plutôt que de s'éteindre", () => {
@@ -789,12 +795,13 @@ test("une seule tête pour les deux places, et un seul bouton dedans", () => {
 /* ── L'ordre des gestes, et la note qui s'en va ──────────────────────────── */
 
 test("le menu porte les deux gestes qui engagent, et dit lequel attend encore", () => {
-  // « Proposer au projet » reste sur la ligne du titre **et** se retrouve dans
-  // le menu : c'est le même renvoi, appelé de deux endroits — pas une seconde
-  // façon de proposer (règle 10).
+  // **À l'écriture, proposer est dans le menu, et là seulement.** Il était
+  // aussi en bouton sur la ligne du titre : deux chemins pour une porte, et
+  // l'un des deux finit par ne plus ressembler à l'autre.
   const html = renderActionsDuTitre(avecLeDit(AVEC_UNE_DONNEE, "un essai"), {});
 
-  assert.match(html, /Proposer au projet/);
+  assert.match(html, /Faire une proposition/);
+  assert.doesNotMatch(html, /data-brouillon-proposer/);
   assert.ok(html.includes(GESTE.PROPOSER), "le menu ne porte pas le geste de proposition");
 
   // L'établi n'existe pas encore (lot B). L'entrée est **éteinte et présente** :
@@ -1191,4 +1198,121 @@ test("l'écran dit le refus que la base a donné, et n'en invente pas un autre",
   // Et l'établi se relit après un refus : s'il porte déjà ce nom, la fiche le
   // dira d'elle-même au lieu d'attendre le clic suivant.
   assert.match(garder, /assurerLetabli\(\)/);
+});
+
+/* ── Les deux façons de se tenir devant un utilitaire ────────────────────── */
+
+const UN_OUTIL = { id: "abc", nom: "Volets en bois", version: 2, resume: "Le violet obligatoire." };
+
+test("ouvrir un outil de l'établi montre ce qu'il fait, pas son code", () => {
+  // **On ouvre un outil pour lui poser une question**, pas pour lire son code.
+  // Tomber sur le code, c'est ouvrir le capot pour démarrer.
+  const essai = renderEcrireEnMdall(POUR_LETABLI, { mode: MODE.ESSAI, utilitaire: UN_OUTIL, lance: true });
+
+  assert.match(essai, /class="bac"/, "le bac d'essai n'est pas à l'écran");
+  assert.doesNotMatch(essai, /brouillon__corps/, "les volets de code sont encore là");
+  assert.doesNotMatch(essai, /data-brouillon-code/, "la zone de code est encore là");
+  assert.match(essai, /Le violet obligatoire/, "ce que l'outil fait ne se lit pas");
+});
+
+test("à l'essai, on ne lance pas : c'est déjà lancé", () => {
+  // « Lancer » dirait de faire ce qui est fait : la réponse se refait à chaque
+  // champ rempli.
+  const essai = renderActionsDuTitre(POUR_LETABLI, { mode: MODE.ESSAI, utilitaire: UN_OUTIL });
+
+  assert.doesNotMatch(essai, /data-brouillon-lancer/);
+  assert.match(essai, new RegExp(PROPOSER_DIT));
+  assert.ok(essai.includes(GESTE.MODIFIER), "le menu n'offre pas d'ouvrir le code");
+
+  // Et à l'écriture, l'inverse exactement.
+  const ecriture = renderActionsDuTitre(POUR_LETABLI, {});
+  assert.match(ecriture, /data-brouillon-lancer/);
+  assert.equal(ecriture.includes(GESTE.MODIFIER), false, "« Modifier » n'a pas de sens : on y est");
+});
+
+test("le bac de l'essai est celui de la fenêtre, pas un second", () => {
+  // Une seconde version divergerait au premier réglage (règle 10).
+  const dedans = renderEssaiDeLutilitaire(POUR_LETABLI, { reponses: {}, utilitaire: UN_OUTIL, lance: true });
+  assert.ok(dedans.includes(renderBacDessai(POUR_LETABLI, { reponses: {}, lance: true, tete: false })));
+
+  // **Sa tête reste à la fenêtre.** Ici, le titre au-dessus nomme déjà l'outil,
+  // et « lancez » serait faux : il n'y a rien à lancer.
+  assert.doesNotMatch(dedans, /Bac d&#39;essai|Bac d'essai/);
+  assert.doesNotMatch(dedans, /et lancez/);
+  assert.match(renderBacDessai(POUR_LETABLI, { lance: true }), /Bac d&#39;essai|Bac d'essai/);
+});
+
+test("l'essai est lancé d'emblée : il montre ce que les règles concluent", () => {
+  // Sinon on ouvrirait un outil sur un formulaire muet, sans rien pour dire
+  // qu'il faut encore demander quelque chose.
+  const essai = renderEssaiDeLutilitaire(POUR_LETABLI, { reponses: { "Matière du volet": "bois" }, lance: true });
+
+  assert.match(essai, /bac-resultats/);
+  assert.match(essai, /Couleur du volet/);
+});
+
+test("un outil sans description ne laisse pas une ligne vide", () => {
+  const nu = renderEssaiDeLutilitaire(POUR_LETABLI, { reponses: {}, utilitaire: { id: "a", nom: "X" } });
+  assert.doesNotMatch(nu, /brouillon__essai-quoi/);
+});
+
+/**
+ * **Cette épreuve relit le source, et c'est l'exception qui le justifie.**
+ *
+ * Le mode ne se voit pas dans un rendu : il se voit dans ce qu'on branche et
+ * dans ce qu'on repose. Deux défauts s'y logent sans bruit — un formulaire à
+ * l'écran que personne n'écoute, et une console qui pousse sous un écran qui
+ * n'en a pas.
+ */
+test("à l'essai, le formulaire est écouté et aucune console ne pousse", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  const debut = source.indexOf("function brancher(racine) {");
+  const brancher = source.slice(debut, source.indexOf("\n}\n", debut));
+  assert.match(brancher, /if \(etat\.mode === MODE\.ESSAI\) brancherLeBac\(racine, racine\);/,
+    "le formulaire de l'essai n'est écouté par personne");
+
+  const console_ = source.indexOf("function redessinerLaConsole(racine) {");
+  const corps = source.slice(console_, source.indexOf("\n}\n", console_));
+  assert.match(corps, /if \(etat\.mode === MODE\.ESSAI\) \{[\s\S]*?return;/,
+    "une console pousserait au bas d'un écran qui n'en dessine aucune");
+});
+
+/**
+ * **Cette épreuve relit le source, et c'est l'exception qui le justifie.**
+ *
+ * Trois défauts se logent dans ce qu'on ne dessine pas, et le dernier est parti
+ * en essai au clavier avant d'être vu :
+ *
+ *  - l'outil ouvert **sans** passer à l'essai — on tombe sur son code, ce que
+ *    cette ronde existe pour corriger ;
+ *  - l'essai ouvert **non lancé** — le rendu dit « lancé », l'état dit le
+ *    contraire, et le verdict se retire de l'écran à la première frappe ;
+ *  - la ligne du titre **réécrite sans se rebrancher** — le menu cesse de
+ *    répondre au premier champ rempli, sans un mot.
+ */
+test("ouvrir un outil le met à l'essai, lancé, et la ligne du titre se rebranche", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  const debut = source.indexOf("export function reprendreLutilitaire");
+  assert.ok(debut > 0, "reprendreLutilitaire est introuvable");
+  const reprendre = source.slice(debut, source.indexOf("\n}\n", debut));
+
+  assert.match(reprendre, /etat\.mode = mode;/,
+    "l'outil s'ouvre sur son code : on venait lui poser une question");
+  assert.match(reprendre, /etat\.lance = mode === MODE\.ESSAI;/,
+    "l'essai s'ouvrirait non lancé, et le verdict partirait à la première frappe");
+  assert.match(reprendre, /\{ mode = MODE\.ESSAI \} = \{\}/,
+    "l'essai doit être ce qu'on obtient sans rien demander");
+
+  const titre = source.indexOf("function redessinerLaLigneDuTitre(racine) {");
+  assert.ok(titre > 0, "redessinerLaLigneDuTitre est introuvable");
+  const ligne = source.slice(titre, source.indexOf("\n}\n", titre));
+
+  assert.match(ligne, /brancherLaLigneDuTitre\(racine\);/,
+    "la ligne se réécrit sans se rebrancher : le menu cessera de répondre");
 });

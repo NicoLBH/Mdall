@@ -27489,3 +27489,23 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 
 /* Le titre de l'écran dit sur quelle version on travaille. */
 .brouillon__version{ margin-left:8px; color:var(--muted); font-weight:400; }
+
+/* ── L'utilitaire, tel qu'on s'en sert ─────────────────────────────────────
+   Le bac d'essai en grand, à la place des deux volets. On ouvre un outil de
+   son établi pour lui poser une question, pas pour lire son code : c'est cette
+   vue-là qui est l'objet de l'outil, et le code est derrière « Modifier ».
+
+   Il défile seul, comme les volets qu'il remplace : c'est le cadre qui tient
+   dans la fenêtre, et ses zones qui bougent. */
+.brouillon__essai{
+  flex:1 1 auto; min-height:0; overflow:auto;
+  padding:0 32px 32px;
+}
+/* Le bac n'a plus de trait au-dessus : il n'y a rien avant lui, et sa gouttière
+   est celle de l'écran — la sienne le décalerait du titre qui le nomme. */
+.brouillon__essai .bac{ border-top:0; padding-left:0; padding-right:0; }
+/* Ce que l'outil fait, en une phrase, avant le formulaire. C'est la description
+   qu'on a donnée en l'enregistrant : la redire ailleurs la ferait diverger. */
+.brouillon__essai-quoi{
+  margin:0 0 14px; color:var(--muted); font-size:13px;
+}
