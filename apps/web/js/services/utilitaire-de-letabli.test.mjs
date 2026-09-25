@@ -10,7 +10,8 @@ import {
   brouillonDesFichiers, ceQueLenregistrementFait, cequiManque, cibleDeLetabli,
   entreesDeLutilitaire, estDeLetabli, ficheDuBrouillon, fichiersDeLutilitaire,
   idDeLaCible, motsDeLutilitaire, phraseDeLenregistrement, rayonDeLutilitaire,
-  provenanceDuBrouillon, sortiesDeLutilitaire, utilitaireDeLetabli
+  PHRASE_DU_REFUS, REFUS_DE_LETABLI, nomDejaPris, provenanceDuBrouillon, refusDeLaBase,
+  sortiesDeLutilitaire, utilitaireDeLetabli
 } from "./utilitaire-de-letabli.js";
 import { brouillonNeuf, avecLeFichier, fichierOuvert } from "./brouillon-mdall.js";
 import { RAYONS } from "./catalogue-de-latelier.js";
@@ -257,4 +258,104 @@ test("un texte modifié depuis la reprise ne se fait pas passer pour sa version"
 test("une version absente vaut v1, jamais rien", () => {
   const courant = { id: "a", nom: "X", fichiers: [] };
   assert.equal(provenanceDuBrouillon(courant, brouillonNeuf()).version, "1");
+});
+
+/* ── Ce que la base refuse, et pourquoi ──────────────────────────────────── */
+
+test("un nom déjà pris se dit comme tel, et pas comme une panne", () => {
+  // **Le défaut que ça répare.** Enregistrer un second utilitaire du même nom
+  // rendait un 409 que le module avalait : l'écran disait « réessayez », et
+  // réessayer échouait exactement pareil. On cherchait une panne de réseau là
+  // où il suffisait de changer trois lettres.
+  assert.equal(refusDeLaBase({
+    code: "23505",
+    details: 'Key (owner_id, nom)=(…, Volets en bois) already exists.',
+    message: 'duplicate key value violates unique constraint "etabli_utilitaires_owner_id_nom_key"'
+  }), REFUS_DE_LETABLI.NOM_PRIS);
+
+  // Le message seul suffit : exiger les deux ferait dépendre la phrase d'un
+  // format qu'on ne maîtrise pas.
+  assert.equal(refusDeLaBase({
+    code: "23505",
+    message: 'duplicate key value violates unique constraint "etabli_utilitaires_owner_id_nom_key"'
+  }), REFUS_DE_LETABLI.NOM_PRIS);
+});
+
+test("l'autre unicité de l'établi n'envoie pas renommer un outil", () => {
+  // `unique (utilitaire_id, version)` ne se heurte qu'en cas de course. Dire
+  // « ce nom est pris » enverrait corriger un nom qui n'a rien fait (règle 5).
+  assert.equal(refusDeLaBase({
+    code: "23505",
+    details: "Key (utilitaire_id, version)=(…, 2) already exists.",
+    message: 'duplicate key value violates unique constraint "etabli_versions_utilitaire_id_version_key"'
+  }), REFUS_DE_LETABLI.PANNE);
+
+  // Et tout le reste est une panne : une session expirée, un refus qu'on ne
+  // sait pas lire, rien du tout.
+  assert.equal(refusDeLaBase({ code: "42501" }), REFUS_DE_LETABLI.PANNE);
+  assert.equal(refusDeLaBase(null), REFUS_DE_LETABLI.PANNE);
+  assert.equal(refusDeLaBase(), REFUS_DE_LETABLI.PANNE);
+});
+
+test("chaque refus a une phrase, et chaque manque aussi", () => {
+  for (const motif of Object.values(REFUS_DE_LETABLI)) {
+    assert.ok(PHRASE_DU_REFUS[motif], `« ${motif} » n'a rien à dire à l'écran`);
+  }
+  for (const manque of Object.values(MANQUE)) {
+    assert.ok(PHRASE_DU_MANQUE[manque], `« ${manque} » n'a rien à dire à l'écran`);
+  }
+  // Celle du nom pris invite à en changer — ou à reprendre l'autre.
+  assert.match(PHRASE_DU_REFUS[REFUS_DE_LETABLI.NOM_PRIS], /autre nom/);
+  assert.match(PHRASE_DU_REFUS[REFUS_DE_LETABLI.NOM_PRIS], /version/);
+});
+
+/* ── Le nom pris se dit avant le clic, quand on le sait ──────────────────── */
+
+const SUR_LETABLI = [
+  { id: "abc", nom: "Volets en bois" },
+  { id: "def", nom: "TVA des travaux" }
+];
+
+test("un nom que l'établi porte déjà se voit avant d'enregistrer", () => {
+  assert.equal(nomDejaPris("Volets en bois", "", SUR_LETABLI), true);
+  assert.equal(nomDejaPris("  Volets en bois  ", "", SUR_LETABLI), true, "le nom est rogné, comme dans la base");
+  assert.equal(nomDejaPris("Volets en PVC", "", SUR_LETABLI), false);
+  assert.equal(nomDejaPris("", "", SUR_LETABLI), false, "un nom vide manque, il n'est pas pris");
+});
+
+test("son propre nom n'est pas pris : c'est le sien", () => {
+  // Reprendre un utilitaire et l'enregistrer doit marcher — c'est ce qui monte
+  // une version.
+  assert.equal(nomDejaPris("Volets en bois", "abc", SUR_LETABLI), false);
+  assert.equal(nomDejaPris("Volets en bois", "autre", SUR_LETABLI), true);
+});
+
+test("on ne bloque pas ce qu'on ne sait pas", () => {
+  // `null` veut dire « pas encore lu ». Refuser dans ce cas empêcherait
+  // d'enregistrer quand la lecture a échoué, alors que la base aurait accepté.
+  assert.equal(nomDejaPris("Volets en bois", "", null), false);
+  assert.equal(nomDejaPris("Volets en bois", ""), false);
+});
+
+test("la casse compte, comme dans la base", () => {
+  // Ignorer la casse ici ferait refuser à l'écran un nom que la base accepte —
+  // et l'on chercherait longtemps pourquoi.
+  assert.equal(nomDejaPris("volets en bois", "", SUR_LETABLI), false);
+});
+
+test("la fiche dit que le nom est pris, et le bouton s'éteint", () => {
+  const prise = ficheDuBrouillon(BROUILLON, {
+    nom: "Volets en bois", resume: "Le violet obligatoire.", etabli: SUR_LETABLI
+  });
+  assert.deepEqual(prise.manques, [MANQUE.NOM_PRIS]);
+
+  // Le sien passe : c'est lui qu'on reprend.
+  const sienne = ficheDuBrouillon(BROUILLON, {
+    nom: "Volets en bois", resume: "Le violet obligatoire.", id: "abc", etabli: SUR_LETABLI
+  });
+  assert.deepEqual(sienne.manques, []);
+
+  // Et sans établi lu, on laisse la base trancher.
+  const muette = ficheDuBrouillon(BROUILLON, { nom: "Volets en bois", resume: "Le violet." });
+  assert.deepEqual(muette.manques, []);
 });

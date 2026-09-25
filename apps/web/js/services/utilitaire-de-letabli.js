@@ -58,15 +58,87 @@ export const MANQUE = {
   /** Pas une ligne de Mdall : il n'y a rien à garder. */
   MDALL: "mdall",
   /** Aucune description : dans six mois, le nom seul ne dira plus rien. */
-  RESUME: "resume"
+  RESUME: "resume",
+  /** Un autre utilitaire de l'établi porte déjà ce nom. */
+  NOM_PRIS: "nom-pris"
 };
 
 /** Ce que chaque manque dit à l'écran. */
 export const PHRASE_DU_MANQUE = {
   [MANQUE.NOM]: "Donnez-lui un nom : c'est sous celui-là que vous le retrouverez.",
   [MANQUE.MDALL]: "Il n'y a pas une ligne de Mdall à garder.",
-  [MANQUE.RESUME]: "Dites en une phrase ce qu'il fait : dans six mois, son nom seul ne le dira plus."
+  [MANQUE.RESUME]: "Dites en une phrase ce qu'il fait : dans six mois, son nom seul ne le dira plus.",
+  [MANQUE.NOM_PRIS]: "Vous avez déjà un utilitaire de ce nom sur votre établi. "
+    + "Donnez-lui un autre nom — ou reprenez celui qui existe, et enregistrez : il montera d'une version."
 };
+
+/**
+ * Ce que la base a refusé, et pourquoi.
+ *
+ * ## Le défaut que ça répare
+ *
+ * Enregistrer un second utilitaire du même nom rendait un `409` que le module
+ * avalait : l'écran disait « il n'a pas pu être enregistré, réessayez », et
+ * réessayer échouait exactement pareil. On cherchait une panne de réseau là
+ * où il suffisait de changer trois lettres.
+ *
+ * ## Pourquoi on regarde la contrainte, et pas seulement le code
+ *
+ * `23505` dit « cette ligne existe déjà », sans dire laquelle. Deux unicités
+ * existent sur l'établi : le nom, et le numéro d'une version. La seconde ne se
+ * heurte qu'en cas de course — dire « ce nom est pris » dans ce cas-là
+ * enverrait renommer un outil dont le nom n'a rien fait (règle 5).
+ */
+export const REFUS_DE_LETABLI = {
+  /** Un utilitaire de ce nom est déjà sur cet établi. */
+  NOM_PRIS: "nom-pris",
+  /** Tout le reste : une panne, une session expirée, un refus qu'on ne sait pas lire. */
+  PANNE: "panne"
+};
+
+export const PHRASE_DU_REFUS = {
+  [REFUS_DE_LETABLI.NOM_PRIS]: PHRASE_DU_MANQUE[MANQUE.NOM_PRIS],
+  [REFUS_DE_LETABLI.PANNE]: "Il n'a pas pu être enregistré. Rien n'est perdu : réessayez."
+};
+
+/**
+ * Le refus que porte une réponse de la base.
+ *
+ * @param {{code?: string, details?: string, message?: string}|null} dit le corps
+ *   d'erreur, tel que PostgREST le rend
+ */
+export function refusDeLaBase(dit = null) {
+  if (texte(dit?.code) !== "23505") return REFUS_DE_LETABLI.PANNE;
+
+  // La contrainte d'unicité du nom s'appelle `etabli_utilitaires_owner_id_nom_key`,
+  // et le détail cite les colonnes heurtées. L'une ou l'autre suffit ; exiger
+  // les deux ferait dépendre la phrase d'un format de message.
+  const ou = `${texte(dit?.details)} ${texte(dit?.message)}`;
+  return /owner_id,\s*nom|owner_id_nom_key/.test(ou)
+    ? REFUS_DE_LETABLI.NOM_PRIS
+    : REFUS_DE_LETABLI.PANNE;
+}
+
+/**
+ * Ce nom est-il déjà pris sur cet établi ?
+ *
+ * **On ne bloque pas ce qu'on ne sait pas.** `etabli` à `null` veut dire « pas
+ * encore lu » : refuser dans ce cas empêcherait d'enregistrer quand la lecture
+ * a échoué, alors que la base, elle, aurait accepté (règle 5). Elle tranche de
+ * toute façon — c'est elle qui porte la contrainte.
+ *
+ * La comparaison est celle de la base : le nom **rogné**, et la casse compte.
+ * Ignorer la casse ici ferait refuser à l'écran un nom que la base accepte.
+ */
+export function nomDejaPris(nom = "", id = "", etabli = null) {
+  if (!Array.isArray(etabli)) return false;
+
+  const dit = texte(nom);
+  if (!dit) return false;
+
+  const sien = texte(id);
+  return etabli.some((un) => texte(un?.nom) === dit && texte(un?.id) !== sien);
+}
 
 /**
  * Le préfixe des cibles de l'établi.
@@ -196,11 +268,15 @@ export function rayonDeLutilitaire(valeur = "") {
  *
  * @returns {string[]} les codes de `MANQUE`, dans l'ordre où on les corrige
  */
-export function cequiManque(brouillon = null, { nom = "", resume = "" } = {}) {
+export function cequiManque(brouillon = null, { nom = "", resume = "", id = "", etabli = null } = {}) {
   const manques = [];
   if (!texte(nom)) manques.push(MANQUE.NOM);
   if (!texte(resume)) manques.push(MANQUE.RESUME);
   if (!fichiersDeLutilitaire(brouillon).length) manques.push(MANQUE.MDALL);
+  // **Dit avant le clic, quand on le sait.** La base refuse de toute façon ;
+  // l'apprendre après avoir cliqué fait chercher une panne là où il suffit de
+  // changer trois lettres.
+  if (nomDejaPris(nom, id, etabli)) manques.push(MANQUE.NOM_PRIS);
   return manques;
 }
 
@@ -211,7 +287,9 @@ export function cequiManque(brouillon = null, { nom = "", resume = "" } = {}) {
  * prend, ce qu'il rend et ce sous quoi on le cherchera se déduisent, et se
  * montrent avant l'enregistrement plutôt que d'être découverts sur la fiche.
  */
-export function ficheDuBrouillon(brouillon = null, { nom = "", resume = "", rayon = "" } = {}) {
+export function ficheDuBrouillon(
+  brouillon = null, { nom = "", resume = "", rayon = "", id = "", etabli = null } = {}
+) {
   const fichiers = fichiersDeLutilitaire(brouillon);
 
   return {
@@ -222,7 +300,7 @@ export function ficheDuBrouillon(brouillon = null, { nom = "", resume = "", rayo
     entrees: entreesDeLutilitaire(fichiers),
     sorties: sortiesDeLutilitaire(fichiers),
     mots: motsDeLutilitaire(fichiers),
-    manques: cequiManque(brouillon, { nom, resume })
+    manques: cequiManque(brouillon, { nom, resume, id, etabli })
   };
 }
 

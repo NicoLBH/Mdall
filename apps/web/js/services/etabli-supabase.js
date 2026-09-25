@@ -19,7 +19,9 @@
  */
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
-import { utilitaireDeLetabli } from "./utilitaire-de-letabli.js";
+import {
+  REFUS_DE_LETABLI, refusDeLaBase, utilitaireDeLetabli
+} from "./utilitaire-de-letabli.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 
@@ -47,7 +49,15 @@ async function appel(chemin, { method = "GET", body = null, headers = {}, params
     ...(body ? { body: JSON.stringify(body) } : {})
   });
 
-  if (!reponse.ok) throw new Error(`${chemin} (${reponse.status})`);
+  if (!reponse.ok) {
+    // **Ce que la base refuse se rapporte, il ne s'avale pas.** Un nom déjà
+    // pris rendait un `409` que l'écran traduisait en « réessayez » — et
+    // réessayer échouait exactement pareil. Le corps de l'erreur dit laquelle
+    // des deux unicités a été heurtée ; on l'emporte avec l'échec.
+    const erreur = new Error(`${chemin} (${reponse.status})`);
+    erreur.dit = await reponse.json().catch(() => null);
+    throw erreur;
+  }
   return reponse.status === 204 ? null : reponse.json().catch(() => null);
 }
 
@@ -105,14 +115,19 @@ function fichiersDeLaDerniere(ligne = null) {
  * aucune. Fait en trois appels depuis ici, un échec au milieu laisserait un
  * utilitaire dont la version annoncée n'existe pas.
  *
- * @returns {Promise<object|null>} l'utilitaire tel qu'il est désormais, ou `null`
+ * ## Elle rend un refus, jamais un silence
+ *
+ * « Ça n'a pas marché » n'est pas une réponse : un nom déjà pris se corrige en
+ * trois lettres, une panne se réessaie, et l'écran ne peut pas le deviner.
+ *
+ * @returns {Promise<{ok: boolean, utilitaire?: object, motif?: string}>}
  */
 export async function enregistrerSurLetabli({
   id = "", nom = "", resume = "", rayon = "", fichiers = []
 } = {}) {
   const dit = texte(nom);
   const gardes = Array.isArray(fichiers) ? fichiers : [];
-  if (!dit || !gardes.length) return null;
+  if (!dit || !gardes.length) return { ok: false, motif: REFUS_DE_LETABLI.PANNE };
 
   try {
     const ligne = await appel("rpc/etabli_enregistrer", {
@@ -129,9 +144,14 @@ export async function enregistrerSurLetabli({
     // La fonction rend une ligne ; certaines passerelles l'enveloppent dans un
     // tableau. On accepte les deux plutôt que d'en supposer une.
     const rendue = Array.isArray(ligne) ? ligne[0] : ligne;
-    return utilitaireDeLetabli(rendue, gardes);
-  } catch {
-    return null;
+    const utilitaire = utilitaireDeLetabli(rendue, gardes);
+
+    // Une réponse sans ligne : `p_id` ne désigne aucun des siens. Ce n'est pas
+    // une panne, c'est un utilitaire qu'on n'a pas — et le dire « réessayez »
+    // ferait réessayer sans fin.
+    return utilitaire ? { ok: true, utilitaire } : { ok: false, motif: REFUS_DE_LETABLI.PANNE };
+  } catch (erreur) {
+    return { ok: false, motif: refusDeLaBase(erreur?.dit) };
   }
 }
 

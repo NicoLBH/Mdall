@@ -1117,3 +1117,72 @@ test("la proposition emporte d'où elle vient, version comprise", async () => {
   // l'enregistrement, et deux réponses divergeraient (règle 10).
   assert.match(depot[1].length ? source : "", /provenanceDuBrouillon\(etat\.utilitaire, etat\.brouillon\)/);
 });
+
+test("après un enregistrement réussi, l'écran ne parle pas du prochain clic", () => {
+  // Annoncer « le texte n'a pas changé, il restera en v1 » juste après avoir
+  // enregistré fait douter de ce qu'on vient de lire : cette phrase parle du
+  // prochain enregistrement, et rien ne le dit.
+  const fiche = ficheDuBrouillon(POUR_LETABLI, { nom: "Volets", resume: "Le violet." });
+  const quoi = { quoi: "inchange", version: 1 };
+
+  const fait = renderVerdictDeLetabli(fiche, { quoi, garde: { ok: true, dit: "Enregistré en v1." } });
+  assert.match(fait, /Enregistré en v1/);
+  assert.doesNotMatch(fait, /n&#39;a pas changé|n'a pas changé/);
+
+  // Un échec, lui, garde sous les yeux ce qu'il faut corriger — et **ne redit
+  // pas** ce que la liste dit déjà : le clic échoue parce que le nom est pris,
+  // l'établi est relu dans la foulée, et la fiche le sait maintenant. Deux fois
+  // la même phrase fait chercher deux problèmes là où il n'y en a qu'un.
+  const sansNom = ficheDuBrouillon(POUR_LETABLI, { nom: "", resume: "" });
+  const rate = renderVerdictDeLetabli(sansNom, { quoi, garde: { ok: false, dit: "Ce nom est pris." } });
+  assert.doesNotMatch(rate, /Ce nom est pris/);
+  assert.match(rate, /Donnez-lui un nom/);
+
+  // Une panne, elle, n'a rien dans la liste pour la dire : elle s'affiche.
+  const complete = ficheDuBrouillon(POUR_LETABLI, { nom: "Volets", resume: "Le violet." });
+  const panne = renderVerdictDeLetabli(complete, { quoi, garde: { ok: false, dit: "Rien n'est perdu." } });
+  assert.match(panne, /Rien n&#39;est perdu|Rien n'est perdu/);
+});
+
+test("le nom pris se lit dans la fiche, et éteint le bouton", () => {
+  const prise = ficheDuBrouillon(POUR_LETABLI, {
+    nom: "Volets en bois", resume: "Le violet.", etabli: [{ id: "autre", nom: "Volets en bois" }]
+  });
+  const html = renderVerdictDeLetabli(prise, { quoi: null });
+
+  assert.match(html, /déjà un utilitaire de ce nom/);
+  assert.match(html, /autre nom/);
+  assert.match(html, /disabled/);
+});
+
+/**
+ * **Cette épreuve relit le source, et c'est l'exception qui le justifie.**
+ *
+ * C'est le défaut qu'on a vu en production : enregistrer un second utilitaire
+ * du même nom rendait un `409`, et l'écran disait « réessayez ». Réessayer
+ * échouait exactement pareil. Le défaut n'est pas dans ce qui se dessine — la
+ * phrase s'affichait très bien — il est dans **laquelle** on affiche, et aucune
+ * épreuve de rendu ne peut le voir.
+ */
+test("l'écran dit le refus que la base a donné, et n'en invente pas un autre", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  const debut = source.indexOf("async function garderSurLetabli");
+  assert.ok(debut > 0, "garderSurLetabli est introuvable");
+  const garder = source.slice(debut, source.indexOf("\n}\n", debut));
+
+  assert.match(garder, /PHRASE_DU_REFUS\[pose\.motif\]/,
+    "l'écran n'affiche pas le refus que la base a donné");
+  // Les commentaires ont le droit de nommer le défaut qu'ils expliquent : on
+  // regarde le code, pas ce qu'on en dit.
+  const code = garder.split("\n").filter((ligne) => !ligne.trimStart().startsWith("//")).join("\n");
+  assert.doesNotMatch(code, /réessayez/,
+    "une phrase écrite en dur ici dira « réessayez » sur un nom déjà pris");
+  assert.match(garder, /if \(!pose\.ok\)/, "un refus doit se reconnaître, pas se deviner");
+
+  // Et l'établi se relit après un refus : s'il porte déjà ce nom, la fiche le
+  // dira d'elle-même au lieu d'attendre le clic suivant.
+  assert.match(garder, /assurerLetabli\(\)/);
+});
