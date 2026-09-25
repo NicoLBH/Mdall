@@ -59,7 +59,7 @@ import { renderSpinnerHtml } from "../../ui/spinner.js";
 import {
   MOTS_DE_LA_SOURCE, NIVEAU, laConsole, phraseDeLaConsole
 } from "../../../services/console-du-brouillon.js";
-import { majLaFenetreDeDetails, ouvrirLaFenetreDeDetails } from "../../ui/fenetre-de-details.js";
+import { fermerLaFenetreDeDetails, ouvrirLaFenetreDeDetails } from "../../ui/fenetre-de-details.js";
 import { ouvrirLeWikiMdall } from "../../ui/wiki-mdall.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 import { REFUS } from "../../../services/le-mdall-rendu.js";
@@ -252,6 +252,25 @@ export function renderVoletDuCode(brouillon = null) {
   `;
 }
 
+/** La classe qui dit, à l'écran, lequel des deux boutons d'un champ logique est pressé. */
+export const CLASSE_DU_CHOIX = "est-actif";
+
+/**
+ * Ce qui marque le bouton choisi d'un champ logique — au rendu comme au clic.
+ *
+ * ## Pourquoi une fonction pour une classe et un attribut
+ *
+ * Cliquer « oui » ne redessine plus le formulaire : il emporterait le curseur
+ * du champ d'à côté (voir `brancherLeBac`). Les deux boutons se marquent donc
+ * **en place**, et la marque se pose à deux endroits — ici au rendu, et là au
+ * clic. Écrite deux fois, elle divergerait au premier réglage (règle 4) : le
+ * jour où la classe change de nom, le bouton cesserait de se presser sans
+ * qu'un mot le dise.
+ */
+export function marquesDuChoixLogique(actif = false) {
+  return { classe: actif ? CLASSE_DU_CHOIX : "", presse: String(Boolean(actif)) };
+}
+
 /**
  * Le formulaire, déduit des déclarations — et un champ par entrée qui manque.
  *
@@ -278,10 +297,13 @@ export function renderFormulaire(champs = [], reponses = {}) {
              </select>`
           : champ.saisie === SAISIE.LOGIQUE
             ? `<span class="bac-formulaire__logique">
-                 ${["oui", "non"].map((mot) => `
-                   <button type="button" class="gh-btn gh-btn--sm${donnee === mot ? " est-actif" : ""}"
-                     ${marque} data-bac-valeur="${mot}" aria-pressed="${donnee === mot}">${mot}</button>
-                 `).join("")}
+                 ${["oui", "non"].map((mot) => {
+                   const marques = marquesDuChoixLogique(donnee === mot);
+                   return `
+                   <button type="button" class="gh-btn gh-btn--sm ${marques.classe}"
+                     ${marque} data-bac-valeur="${mot}" aria-pressed="${marques.presse}">${mot}</button>
+                 `;
+                 }).join("")}
                </span>`
             : `<input type="text" class="gh-input bac-formulaire__saisie" ${marque}
                  value="${escapeHtml(donnee)}" placeholder="${escapeHtml(champ.saisie === SAISIE.MESURE ? "un nombre" : "")}">`;
@@ -1106,13 +1128,21 @@ function remplacer(racine, selecteur, html) {
  * seconde reviendrait à recalibrer tout cela contre la première, et à les faire
  * diverger au premier réglage (règle 10).
  *
- * ## Elle se rejoue à chaque réponse, sans se refermer
+ * ## Elle se rejoue à chaque réponse, sans rien réécrire d'autre
  *
- * On change une valeur, la fenêtre relance et se remplit — `majLaFenetreDeDetails`
- * ne remplace que le contenu. Rouvrir refermerait d'abord, et l'on perdrait le
- * défilement au milieu d'une trace de vingt lignes.
+ * On change une valeur, et **seuls les résultats se reposent** : le formulaire
+ * reste celui qui est à l'écran, avec le curseur là où il est (voir
+ * `redessinerLesResultats`).
  */
 function ouvrirLeBac(racine) {
+  // **Refermer d'abord, lever le drapeau ensuite.** Ouvrir referme ce qui
+  // l'était, et la fermeture rend ce qu'elle retenait : `surFermeture` remet
+  // `lance` à faux. Levé avant, il retombait — la fenêtre montrait alors un
+  // verdict que l'état disait n'avoir jamais lancé, et la première réponse
+  // tapée le retirait de l'écran.
+  fermerLaFenetreDeDetails();
+  etat.lance = true;
+
   const corps = ouvrirLaFenetreDeDetails({
     titreHtml: escapeHtml("Bac d'essai"),
     metaHtml: escapeHtml("Remplissez ce qui manque. Rien ne s'écrit : un « enregistre » dit où irait le résultat, et n'y va pas."),
@@ -1125,19 +1155,67 @@ function ouvrirLeBac(racine) {
 }
 
 /**
- * Remettre à jour ce que la fenêtre montre.
+ * Le bac est-il **dans** ce corps de fenêtre ?
  *
- * Silencieux si elle est fermée : un résultat recalculé pour personne ne coûte
- * rien, et le vérifier à chaque frappe coûterait plus que de le laisser passer.
+ * La fenêtre est prêtée : le wiki du langage s'ouvre dans la même. Y poser un
+ * verdict sans regarder ce qu'elle porte l'écrirait au milieu d'un article, et
+ * ce n'est pas une inquiétude de principe — les deux s'ouvrent depuis le même
+ * menu, à un clic l'un de l'autre.
+ *
+ * La fenêtre vide son corps en se refermant : c'est donc le bac lui-même, à
+ * l'écran, qui dit s'il est là — et non un drapeau qu'il faudrait tenir à jour
+ * en deux endroits (règle 4).
  */
-function redessinerLeBac(racine) {
-  // Pas de garde sur l'ouverture : `majLaFenetreDeDetails` rend `null` quand
-  // rien n'est ouvert, et l'on ne branche rien sur `null`. Une seconde
-  // vérification ne pourrait tomber sur aucun cas (règle 12).
-  const corps = majLaFenetreDeDetails({
-    corpsHtml: renderBacDessai(etat.brouillon, { reponses: etat.reponses, lance: etat.lance })
-  });
-  if (corps) brancherLeBac(corps, racine);
+export function leBacEstLa(corps = null) {
+  return Boolean(corps?.querySelector?.(".bac"));
+}
+
+/** Le corps de la fenêtre, **et seulement quand c'est le bac qu'elle montre**. */
+function corpsDuBac() {
+  const corps = document.getElementById("detailsBodyModal");
+  return leBacEstLa(corps) ? corps : null;
+}
+
+/**
+ * Rejouer **les seuls résultats** du bac, sans toucher au formulaire.
+ *
+ * ## Le défaut que ça répare
+ *
+ * On remplaçait tout le contenu de la fenêtre à chaque frappe. Le champ où le
+ * doigt était posé mourait avec : le curseur partait au premier caractère, et
+ * il fallait taper la suite dans un champ qu'il fallait recliquer. Pire, le
+ * verdict était **retiré** de l'écran au lieu d'être rejoué — donc la réponse
+ * qu'on venait d'écrire n'était jamais lue, et il fallait refermer la fenêtre
+ * puis relancer pour la voir prise en compte.
+ *
+ * Le formulaire porte déjà ce qu'on a tapé : c'est le navigateur qui le tient,
+ * et le réécrire ne lui apprendrait rien. Seuls les résultats dépendent de la
+ * réponse, et eux seuls se reposent — posés, remplacés ou retirés comme
+ * n'importe quel panneau (voir la règle en tête de section).
+ *
+ * Silencieux si la fenêtre est fermée : un résultat recalculé pour personne ne
+ * coûte rien, et l'on écrit du code sans le bac ouvert la plupart du temps.
+ */
+function redessinerLesResultats() {
+  const corps = corpsDuBac();
+  if (!corps) return POSE.RIEN;
+
+  const resultats = etat.lance
+    ? lancerLeBrouillon(fichiersRemplis(etat.brouillon), etat.reponses)
+    : [];
+
+  return poserLePanneau(corps, ".bac-resultats",
+    etat.lance ? renderResultats(resultats) : "", { dans: ".bac" });
+}
+
+/** Marquer en place le bouton pressé d'un champ logique, et dépresser l'autre. */
+function marquerLeChoixLogique(hote, nom, choisie) {
+  for (const bouton of hote.querySelectorAll("[data-bac-champ][data-bac-valeur]")) {
+    if (bouton.dataset.bacChamp !== nom) continue;
+    const marques = marquesDuChoixLogique(bouton.dataset.bacValeur === choisie);
+    bouton.classList.toggle(CLASSE_DU_CHOIX, Boolean(marques.classe));
+    bouton.setAttribute("aria-pressed", marques.presse);
+  }
 }
 
 /**
@@ -1151,30 +1229,28 @@ function brancherLeBac(hote, racine) {
   for (const saisie of hote.querySelectorAll("[data-bac-champ]")) {
     const nom = saisie.dataset.bacChamp;
 
-    // Les deux boutons d'un champ logique : ils portent leur valeur, et il faut
-    // redessiner pour que l'autre se dépresse.
+    // Les deux boutons d'un champ logique : ils portent leur valeur, et c'est
+    // le voisin qu'il faut dépresser — en place, sans redessiner le formulaire.
     if (saisie.dataset.bacValeur !== undefined) {
       saisie.addEventListener("click", () => {
         etat.reponses = { ...etat.reponses, [nom]: saisie.dataset.bacValeur };
-        redessinerLeBac(racine);
+        marquerLeChoixLogique(hote, nom, saisie.dataset.bacValeur);
+        redessinerLesResultats();
         redessinerLaConsole(racine);
       });
       continue;
     }
 
-    // Une liste se redessine — le choix se voit dans la liste elle-même, et
-    // rien d'autre ne bouge. Un champ de texte ne se redessine pas : le curseur
-    // y est posé.
+    // **Ni la liste ni le champ de texte ne se redessinent.** Ils portent déjà
+    // ce qu'on vient de choisir — c'est le navigateur qui le tient —, et les
+    // remplacer ferait partir le curseur au milieu d'un nombre.
     const evenement = saisie.tagName === "SELECT" ? "change" : "input";
     saisie.addEventListener(evenement, () => {
       etat.reponses = { ...etat.reponses, [nom]: saisie.value };
-      // Une réponse change ce que les fonctions concluraient : un verdict
-      // laissé à l'écran décrirait l'essai d'avant.
-      if (etat.lance) {
-        etat.lance = false;
-        redessinerLeBac(racine);
-        redessinerLaConsole(racine);
-      }
+      // Une réponse change ce que les fonctions concluraient : le verdict se
+      // rejoue sur le champ, et non au prochain clic sur « Lancer ».
+      redessinerLesResultats();
+      redessinerLaConsole(racine);
     });
   }
 }
@@ -1205,7 +1281,6 @@ function brancherLaConsole(racine) {
   });
 
   racine.querySelector("[data-brouillon-lancer]")?.addEventListener("click", () => {
-    etat.lance = true;
     ouvrirLeBac(racine);
     // La console dit aussi ce que le lancement a répondu : elle le dit derrière
     // la fenêtre, et on la retrouve en la refermant.
@@ -1276,9 +1351,10 @@ function brancherLeVolet(racine) {
         if (!ouvert) return;
         etat.brouillon = avecLeFichier(etat.brouillon, ouvert.nom, contenu);
         garderLeBrouillon();
-        // Le code a changé : un verdict laissé à l'écran décrirait un brouillon
-        // qui n'existe plus, et c'est exactement le genre d'écran qu'on croit.
-        if (etat.lance) { etat.lance = false; redessinerLeBac(racine); }
+        // Le code a changé : un verdict laissé tel quel décrirait un brouillon
+        // qui n'existe plus. Il se rejoue — c'est le même essai, sur le code
+        // qu'on vient d'écrire — au lieu de disparaître de l'écran.
+        redessinerLesResultats();
         // Et la trace d'une proposition faite d'un brouillon qu'on vient de
         // modifier ne décrit plus rien.
         etat.depot = null;

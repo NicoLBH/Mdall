@@ -10,7 +10,7 @@ import {
   renderFormulaire, renderResultats, renderBacDessai, renderConsole, renderProposer,
   renderVoletDeLaConsole, renderGestes, colorerDuMdall, POSE, poseDuPanneau,
   renderActionsDuTitre, hauteurDuCadre, HAUTEUR_MINIMALE, MARGE_DU_BAS, GESTE,
-  renderTeteDeLaConsole
+  renderTeteDeLaConsole, marquesDuChoixLogique, CLASSE_DU_CHOIX, leBacEstLa
 } from "./ecrire-en-mdall.js";
 import { renderLignesDeCode } from "../../ui/code-mdall.js";
 import { readFileSync } from "node:fs";
@@ -310,6 +310,110 @@ test("le bac dit ce qu'il trouve, même quand il ne trouve rien à lancer", () =
 
   assert.match(html, /ne raisonne pas encore/);
   assert.doesNotMatch(html, /class="bac-resultat /);
+});
+
+/* ── Une réponse se lit tout de suite, et sans perdre le curseur ─────────── */
+
+test("le bloc des résultats porte le nom sous lequel on va le remplacer", () => {
+  // **Le défaut que ça répare : on remplaçait tout le contenu de la fenêtre à
+  // chaque frappe**, donc le champ où le doigt était posé. Le redessin ne
+  // repose plus que `.bac-resultats` — ce qui suppose que les deux rendus
+  // produisent exactement le même bloc. Écrit deux fois, il divergerait au
+  // premier réglage, et l'on empilerait deux verdicts au lieu d'en remplacer un
+  // (règle 4).
+  const reponses = { "Zone de vent": "3" };
+  const attendu = renderResultats(lancerLeBrouillon(fichiersRemplis(AVEC_UNE_DECLARATION), reponses));
+  const html = renderBacDessai(AVEC_UNE_DECLARATION, { reponses, lance: true });
+
+  assert.match(attendu, /^\s*<div class="bac-resultats">/);
+  assert.ok(html.includes(attendu), "le bac ne montre pas le bloc que le redessin repose");
+  assert.equal((html.match(/class="bac-resultats"/g) ?? []).length, 1);
+});
+
+test("le verdict ne se pose que dans une fenêtre qui montre bien le bac", () => {
+  // La fenêtre est prêtée : le wiki du langage s'ouvre dans la même, à un clic
+  // du bac dans le même menu. Y écrire un verdict le poserait au milieu d'un
+  // article — et l'on ne s'en apercevrait qu'à l'écran.
+  assert.equal(leBacEstLa({ querySelector: (quoi) => (quoi === ".bac" ? {} : null) }), true);
+  assert.equal(leBacEstLa({ querySelector: () => null }), false);
+  assert.equal(leBacEstLa(null), false);
+  assert.equal(leBacEstLa(), false);
+});
+
+test("les marques du choix logique se nomment une seule fois", () => {
+  // Cliquer « oui » ne redessine plus le formulaire — il emporterait le curseur
+  // du champ d'à côté —, il marque les deux boutons en place. La classe et
+  // l'attribut se posent donc au rendu et au clic : une seule fonction les dit.
+  assert.deepEqual(marquesDuChoixLogique(true), { classe: CLASSE_DU_CHOIX, presse: "true" });
+  assert.deepEqual(marquesDuChoixLogique(false), { classe: "", presse: "false" });
+  assert.deepEqual(marquesDuChoixLogique(), { classe: "", presse: "false" });
+
+  // Et c'est **la** classe de la feuille de style : renommée ici seulement, le
+  // bouton se presserait sans que rien ne change à l'écran.
+  const css = readFileSync(fileURLToPath(new URL("../../../../style.css", import.meta.url)), "utf8");
+  assert.ok(css.includes(`.bac-formulaire__logique .${CLASSE_DU_CHOIX}`),
+    `la feuille de style ne connaît pas « ${CLASSE_DU_CHOIX} »`);
+});
+
+test("le bouton répondu est pressé, l'autre ne l'est pas", () => {
+  const champs = [
+    { nom: "Zone inondable", cle: "zone-inondable", saisie: "logique", unite: "", choix: [], aide: "", declare: true }
+  ];
+  const html = renderFormulaire(champs, { "Zone inondable": "oui" });
+
+  // Chaque bouton, de la balise ouvrante jusqu'à son mot.
+  const boutons = [...html.matchAll(/<button[\s\S]*?<\/button>/g)].map((un) => un[0]);
+  const oui = boutons.find((un) => un.includes('data-bac-valeur="oui"')) ?? "";
+  const non = boutons.find((un) => un.includes('data-bac-valeur="non"')) ?? "";
+
+  assert.match(oui, new RegExp(CLASSE_DU_CHOIX));
+  assert.match(oui, /aria-pressed="true"/);
+  assert.doesNotMatch(non, new RegExp(CLASSE_DU_CHOIX));
+  assert.match(non, /aria-pressed="false"/);
+});
+
+/**
+ * **Cette épreuve relit le source, et c'est l'exception qui le justifie.**
+ *
+ * Le défaut n'est pas dans ce qui se dessine : le formulaire était juste, les
+ * résultats étaient justes. Il est dans **ce qu'on réécrit** — tout le contenu
+ * de la fenêtre à chaque frappe. Le champ mourait avec, le curseur partait au
+ * premier caractère, et le verdict était retiré de l'écran au lieu d'être
+ * rejoué : il fallait refermer la fenêtre et relancer pour voir sa réponse
+ * prise en compte. Aucune épreuve de rendu ne peut voir cela, et il est parti
+ * en production.
+ */
+test("le formulaire du bac ne réécrit jamais tout le contenu de la fenêtre", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  const branchement = source.match(/\nfunction brancherLeBac\([^)]*\) \{\n([\s\S]*?)\n\}\n/);
+  assert.ok(branchement, "brancherLeBac est introuvable");
+
+  assert.doesNotMatch(branchement[1], /renderBacDessai\(/,
+    "brancherLeBac redessine tout le bac : le champ où le doigt est posé mourrait avec");
+  assert.doesNotMatch(branchement[1], /majLaFenetreDeDetails\(/,
+    "brancherLeBac remplace le contenu de la fenêtre : le curseur partirait à la frappe");
+  assert.doesNotMatch(branchement[1], /etat\.lance = false/,
+    "une réponse éteint le verdict : elle ne serait jamais lue");
+
+  // Le redessin ciblé ne repose que le verdict, et il ne peut le faire que si
+  // la fenêtre montre bien le bac — le wiki du langage s'ouvre dans la même.
+  const resultats = source.match(/\nfunction redessinerLesResultats\([^)]*\) \{\n([\s\S]*?)\n\}\n/);
+  assert.ok(resultats, "redessinerLesResultats est introuvable");
+  assert.match(resultats[1], /"\.bac-resultats"/);
+  assert.match(resultats[1], /corpsDuBac\(\)/);
+
+  // **Ouvrir referme ce qui l'était, et la fermeture rend ce qu'elle retenait**
+  // — `surFermeture` remet `lance` à faux. Le drapeau levé avant retombait
+  // donc, et la fenêtre montrait un verdict que l'état disait n'avoir jamais
+  // lancé : la première réponse tapée le retirait de l'écran.
+  const ouverture = source.match(/\nfunction ouvrirLeBac\([^)]*\) \{\n([\s\S]*?)\n\}\n/);
+  assert.ok(ouverture, "ouvrirLeBac est introuvable");
+  assert.ok(ouverture[1].indexOf("fermerLaFenetreDeDetails()") >= 0
+    && ouverture[1].indexOf("fermerLaFenetreDeDetails()") < ouverture[1].indexOf("etat.lance = true"),
+  "ouvrirLeBac lève le drapeau avant de refermer : il retombera");
 });
 
 test("ce qu'on répond est échappé, dans une liste comme dans un champ", () => {

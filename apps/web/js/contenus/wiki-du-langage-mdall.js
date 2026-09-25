@@ -310,6 +310,48 @@ export const WIKI_DU_LANGAGE = [
       + "qu'on écrit se révèle toujours plus précis que celui qu'on croyait avoir.")
   ]),
 
+  section("editeur", "Écrire sans connaître la grammaire par cœur", [
+    dit("Tout ce qui précède se tape à la main, et rien n'oblige à s'en souvenir : "
+      + "dans « Écrire du Mdall », **une liste se déplie sous le curseur** dès les "
+      + "premières lettres d'un mot. Trois suffisent — `fonc` propose `fonction` — et "
+      + "la liste dit de chaque proposition ce qu'elle est : un mot du langage, un nom "
+      + "du projet, une valeur possible, un fichier."),
+    dit("Ce qu'elle propose dépend de **l'endroit de la ligne**, et non de ce que vous "
+      + "avez tapé la veille :"),
+    liste(
+      "en début de ligne, les mots qui peuvent l'ouvrir — `fonction`, `soit`, "
+        + "`calcule`, `si`, `alors`, `enregistre` ;",
+      "après une parenthèse ou un opérateur, les **noms** que le projet déclare et "
+        + "ceux que le brouillon vient de poser avec `calcule` ;",
+      "après un `=`, les **valeurs possibles** du nom comparé, quand il en déclare ;",
+      "après `importe` ou `enregistre`, les **fichiers** du brouillon."
+    ),
+    dit("Rien ne s'écrit sans que vous l'ayez choisi : la liste propose, elle ne "
+      + "complète pas d'elle-même. Et si elle ne se montre pas — parce qu'aucun mot "
+      + "n'est commencé —, **Ctrl+Espace** la demande."),
+    table(["Touche", "Ce qu'elle fait"], [
+      ["↑ ↓", "choisir dans la liste"],
+      ["Entrée", "poser la proposition choisie"],
+      ["Échap", "refermer la liste, et garder ce qui est tapé"],
+      ["Ctrl+Espace", "demander la liste, même sans avoir rien commencé"],
+      ["Tab", "poser un cran de retrait — trois espaces, ceux du langage"],
+      ["Maj+Tab", "retirer un cran"]
+    ]),
+    dit("**Les touches de la liste ne sont prises que lorsqu'elle est ouverte.** Les "
+      + "flèches déplacent le curseur le reste du temps, et Tab pose toujours un "
+      + "retrait : la liste se referme et laisse passer la touche, faute de quoi un "
+      + "second Tab poserait un mot au lieu du second cran qu'on venait chercher."),
+    dit("Deux choses se dessinent en plus du texte, et ne s'écrivent pas : les "
+      + "**couleurs**, qui distinguent un mot du langage d'un nom du projet, et les "
+      + "**filets verticaux** qui relient une parenthèse ou une accolade à celle qui "
+      + "la ferme. Ce sont les mêmes que dans la Mémoire : un brouillon se lit comme "
+      + "un fichier du projet, et non comme du texte dans une zone grise."),
+    dit("Le bac d'essai, lui, se rejoue **à chaque réponse** : on change un nombre, "
+      + "et le verdict se réécrit sous le formulaire sans qu'il faille relancer. Rien "
+      + "n'y est écrit dans le projet — un `enregistre` dit où irait la conclusion, "
+      + "et n'y va pas.")
+  ]),
+
   section("limites", "Ce que le langage ne sait pas écrire", [
     dit("Une documentation qui ne dit que ce qui marche apprend à se méfier d'elle."),
     liste(
