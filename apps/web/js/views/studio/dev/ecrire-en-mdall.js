@@ -1531,10 +1531,28 @@ async function ouvrirLetabli(racine) {
  */
 function reprendreDeLetabli(racine, id) {
   const trouve = (etat.etabli ?? []).find((un) => un.id === String(id ?? ""));
-  if (!trouve) return;
+  if (trouve) reprendreLutilitaire(racine, trouve);
+}
+
+/**
+ * Reprendre cet utilitaire-là, d'où qu'il vienne.
+ *
+ * **C'est la porte de l'Atelier.** Une fiche de la vitrine porte `etabli:<id>` ;
+ * le routeur ouvre cet écran et lui passe l'entrée qu'il a déjà lue, plutôt
+ * que de la relire. Le menu de l'écran passe par ici aussi : deux chemins pour
+ * un même geste finiraient par diverger (règle 4).
+ *
+ * **On demande avant d'écraser.** Le brouillon en cours n'est nulle part
+ * ailleurs : le remplacer sans un mot ferait perdre ce qu'on était en train
+ * d'écrire, et c'est exactement ce que l'établi existe pour empêcher.
+ *
+ * @returns {boolean} faux si l'on a renoncé à écraser le brouillon en cours
+ */
+export function reprendreLutilitaire(racine, trouve = null) {
+  if (!racine || !trouve?.id) return false;
 
   if (brouillonEcrit(etat.brouillon) && etat.utilitaire?.id !== trouve.id
-    && !window.confirm(`Reprendre « ${trouve.nom} » ? Ce qui est écrit ici sera remplacé.`)) return;
+    && !window.confirm(`Reprendre « ${trouve.nom} » ? Ce qui est écrit ici sera remplacé.`)) return false;
 
   etat.brouillon = brouillonDesFichiers(trouve.fichiers);
   etat.utilitaire = trouve;
@@ -1546,6 +1564,7 @@ function reprendreDeLetabli(racine, id) {
   garderLeBrouillon();
   fermerLaFenetreDeDetails();
   dessiner(racine);
+  return true;
 }
 
 /**

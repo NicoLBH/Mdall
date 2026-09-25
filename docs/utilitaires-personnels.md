@@ -193,21 +193,50 @@ dirait encore qu'il la prend.
 
 ---
 
-## Lot C — Le retrouver depuis l'Atelier
+## Lot C — Le retrouver depuis l'Atelier *(fait)*
 
-Le retrouver et le rouvrir **depuis l'écran d'écriture** est fait (lot B). Ce
-qui reste est de le retrouver là où l'on cherche un outil :
+La vitrine lit **deux sources** au lieu d'une constante : le catalogue du dépôt,
+et l'établi de celui qui regarde. Ce n'est pas une greffe — un utilitaire de
+l'établi porte exactement les champs d'une entrée du catalogue, et une épreuve
+le tient champ par champ.
 
-- L'onglet **« Mon établi »** dans la vitrine, à droite de « Ajouté récemment ».
-- La vitrine lira **deux sources** au lieu d'une constante — le catalogue du
-  dépôt, et l'établi de celui qui regarde. C'est le seul endroit qui touche à
-  l'existant, et c'est une couture : un utilitaire de l'établi porte déjà
-  exactement les champs d'une entrée du catalogue, et une épreuve le tient.
-- La recherche de l'Atelier le trouve sous ce qu'il lit et ce qu'il conclut.
-- Sa cible est `etabli:<id>` : elle ne peut être confondue avec aucune cible du
-  dépôt, et c'est ce qui dira à l'Atelier d'ouvrir « Écrire du Mdall » dessus.
-- L'historique des versions se lit, et une version se relit telle qu'elle était.
-  La table les porte toutes ; rien ne les montre encore.
+- L'onglet **« Mon établi »**, à droite de « Ajouté récemment ». Ce n'est pas
+  un rangement de plus, c'est une **origine** : il ne réordonne pas la même
+  liste, il ne garde que ce qu'on a écrit soi-même.
+- **Ce qui est à soi passe en tête.** On cherche ce qu'on a écrit en le sachant
+  là ; le dépôt, on le parcourt.
+- La recherche le trouve sous ce qu'il lit et ce qu'il conclut, comme le reste.
+- Un rayon que **seul** l'établi occupe paraît dans le rail : sinon on range un
+  outil là où l'on ne peut pas l'ouvrir.
+- Sa cible est `etabli:<id>` — confondable avec aucune cible du dépôt. Le
+  routeur ouvre « Écrire du Mdall » **dessus**, avec l'entrée qu'il a déjà lue.
+
+### Ce que ce lot a appris
+
+**Un utilitaire de l'établi n'entre jamais en vedette, et ce n'est pas une
+question de rang.** Les vedettes se comptent dans `atelier_ouvertures`, que
+**tout le monde lit**, et dont la table promet qu'« une ligne ne peut désigner
+personne ». Y compter l'ouverture d'un outil personnel y écrirait
+`etabli:<id>` : l'existence de ce que quelqu'un garde pour lui, et la fréquence
+à laquelle il s'en sert. Le routeur sort donc **avant** le comptage, et une
+épreuve relit ce chemin — aucun rendu ne peut voir ce défaut, il est dans ce
+qu'on envoie.
+
+**Les vedettes s'effacent sur « Mon établi »**, comme elles s'effacent déjà sur
+une recherche : six outils du dépôt au-dessus de son propre établi mettent en
+avant exactement ce qu'on n'a pas demandé.
+
+**L'établi se relit à chaque venue**, contrairement aux compteurs. Un compteur
+bouge d'une unité et une rangée qui se réordonne sous le doigt cesse d'être un
+repère ; l'établi, lui, vient peut-être de gagner l'outil qu'on a enregistré
+dans l'onglet d'à côté — et ne pas le montrer ferait croire que
+l'enregistrement a échoué.
+
+### Ce qui reste de ce lot
+
+L'historique des versions : la table les porte toutes, rien ne les montre
+encore. Une version se relira telle qu'elle était, et c'est ce qui permettra de
+dire à un projet qui a signé la `v2` ce que la `v3` a changé (lot F).
 
 ---
 

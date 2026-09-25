@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { RANGEMENT, renderVitrineDeLatelier, vignetteDeLUtilitaire } from "./vitrine-de-latelier.js";
+import {
+  RANGEMENT, cequiSeMontre, renderVitrineDeLatelier, vignetteDeLUtilitaire
+} from "./vitrine-de-latelier.js";
 import { RAYONS, UTILITAIRES } from "../../services/catalogue-de-latelier.js";
 import { escapeHtml } from "../../utils/escape-html.js";
 
@@ -494,4 +496,123 @@ test("au téléphone, la marge et la largeur se retirent ensemble", () => {
     /\.project-rail-layout__content\{ margin-left:0; width:100%; \}/,
     "les deux, ou aucune"
   );
+});
+
+/* ── L'établi dans la vitrine ────────────────────────────────────────────── */
+
+const MIEN = {
+  cible: "etabli:abc", nom: "Volets en bois", rayon: RAYONS.EXPLORATION,
+  resume: "Le violet obligatoire.", entrees: ["Matière du volet"], sorties: ["Couleur du volet"],
+  version: "2", intelligence: false, aussiALaMain: "Le lire.",
+  mots: ["volet", "bois", "couleur"], ajouteLe: "2026-10-17", deLetabli: true, id: "abc"
+};
+
+test("l'onglet « Mon établi » se pose à droite d'« Ajouté récemment »", () => {
+  const html = renderVitrineDeLatelier({ etabli: [MIEN] });
+
+  assert.ok(html.indexOf("Ajouté récemment") < html.indexOf("Mon établi"),
+    "« Mon établi » passe avant « Ajouté récemment »");
+  assert.match(html, new RegExp(`data-light-tab-target="${RANGEMENT.ETABLI}"`));
+});
+
+test("ce qu'on a écrit soi-même se montre dans la vitrine, avec sa version", () => {
+  const html = renderVitrineDeLatelier({ etabli: [MIEN] });
+
+  assert.match(html, /Volets en bois/);
+  assert.match(html, /v2/);
+  assert.match(html, /data-side-nav-target="etabli:abc"/);
+  // Et le reste du dépôt est toujours là : l'établi s'ajoute, il ne remplace pas.
+  for (const utilitaire of UTILITAIRES) {
+    assert.ok(html.includes(escapeHtml(utilitaire.nom)), utilitaire.nom);
+  }
+});
+
+test("« Mon établi » ne garde que ce qui est à soi", () => {
+  const montre = cequiSeMontre({ rangement: RANGEMENT.ETABLI, etabli: [MIEN] });
+
+  assert.deepEqual(montre.map((un) => un.cible), ["etabli:abc"]);
+
+  // Les deux autres onglets montrent tout, l'établi compris.
+  assert.ok(cequiSeMontre({ etabli: [MIEN] }).length > 1);
+  assert.ok(cequiSeMontre({ rangement: RANGEMENT.RECENT, etabli: [MIEN] }).length > 1);
+});
+
+test("un établi vide et un établi qu'on n'a pas su lire ne disent pas la même chose", () => {
+  // **Trois vides différents**, et les confondre ferait réécrire un outil
+  // qu'on possède déjà (règle 5).
+  const vide = renderVitrineDeLatelier({ rangement: RANGEMENT.ETABLI, etabli: [] });
+  const muet = renderVitrineDeLatelier({ rangement: RANGEMENT.ETABLI, etabli: null });
+
+  assert.match(vide, /Votre établi est vide/);
+  assert.match(vide, /Enregistrer dans l&#39;Atelier|Enregistrer dans l'Atelier/);
+  assert.doesNotMatch(vide, /pas pu être lu/);
+
+  assert.match(muet, /n&#39;a pas pu être lu|n'a pas pu être lu/);
+  assert.doesNotMatch(muet, /est vide/);
+
+  // Et aucun des deux ne se dit comme une recherche sans résultat.
+  const rien = renderVitrineDeLatelier({ recherche: "xyzzy" });
+  assert.match(rien, /Aucun utilitaire ne répond/);
+});
+
+test("l'établi se cherche dans la barre de l'Atelier", () => {
+  const html = renderVitrineDeLatelier({ recherche: "volets", etabli: [MIEN] });
+
+  assert.match(html, /Volets en bois/);
+  assert.doesNotMatch(html, /Étude d&#39;impact/, "la recherche ne rend pas le reste du dépôt");
+});
+
+test("les vedettes s'effacent sur « Mon établi »", () => {
+  // Elles répondent à « que contient l'Atelier ? », pas à la question qu'on
+  // vient de poser : six outils du dépôt au-dessus de son propre établi
+  // mettent en avant exactement ce qu'on n'a pas demandé.
+  const accueil = renderVitrineDeLatelier({ etabli: [MIEN] });
+  const mien = renderVitrineDeLatelier({ rangement: RANGEMENT.ETABLI, etabli: [MIEN] });
+
+  assert.match(accueil, /atelier-vedettes/);
+  assert.doesNotMatch(mien, /atelier-vedettes/);
+});
+
+test("un rayon que seul l'établi occupe paraît dans le rail", () => {
+  // **« Documents » n'est occupé par aucun outil du dépôt.** Un utilitaire de
+  // l'établi rangé là doit faire paraître le rayon : sinon on le range dans un
+  // rayon qu'on ne peut pas ouvrir, et il devient introuvable autrement qu'en
+  // le cherchant par son nom — c'est-à-dire en le sachant déjà.
+  const sansLui = renderVitrineDeLatelier({});
+  const avecLui = renderVitrineDeLatelier({ etabli: [{ ...MIEN, rayon: RAYONS.DOCUMENTS }] });
+
+  assert.doesNotMatch(sansLui, new RegExp(`data-atelier-rayon="${RAYONS.DOCUMENTS}"`));
+  assert.match(avecLui, new RegExp(`data-atelier-rayon="${RAYONS.DOCUMENTS}"`));
+});
+
+test("l'établi ne paraît jamais dans la rangée des vedettes", () => {
+  // Les vedettes se comptent sur ce que la profession ouvre ; un utilitaire
+  // personnel n'est ouvert que par une personne, et le compter reviendrait à
+  // publier son existence dans une table que tout le monde lit.
+  const html = renderVitrineDeLatelier({ etabli: [MIEN], ouvertures: { "etabli:abc": 9999 } });
+  const vedettes = html.slice(html.indexOf("atelier-vedettes"), html.indexOf("atelier-rangement"));
+
+  assert.doesNotMatch(vedettes, /Volets en bois/);
+});
+
+/**
+ * **Cette épreuve relit le source, et c'est l'exception qui le justifie.**
+ *
+ * `atelier_ouvertures` se lit par tout le monde, et sa table promet qu'« une
+ * ligne ne peut désigner personne ». Une ouverture d'utilitaire de l'établi
+ * comptée là y écrirait `etabli:<id>` — c'est-à-dire l'existence de ce que
+ * quelqu'un garde pour lui, et la fréquence à laquelle il s'en sert. Aucun
+ * rendu ne peut voir ce défaut : il est dans ce qu'on envoie.
+ */
+test("ouvrir un utilitaire de l'établi n'écrit rien dans le compteur public", async () => {
+  const source = lis("../project-studio.js");
+  const debut = source.indexOf("if (estDeLetabli(targetId)) {");
+  assert.ok(debut > 0, "le routeur ne reconnaît pas une cible d'établi");
+
+  const branche = source.slice(debut, source.indexOf("\n    }\n", debut));
+  assert.doesNotMatch(branche, /noterLOuvertureDe/,
+    "une ouverture de l'établi est comptée dans une table que tout le monde lit");
+
+  // Et elle sort avant le comptage, plutôt que de compter puis de se raviser.
+  assert.ok(debut < source.indexOf("noterLOuvertureDe(targetId)"));
 });

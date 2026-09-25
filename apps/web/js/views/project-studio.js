@@ -35,7 +35,8 @@ import { renderSeismicGeneral } from "./studio/seismic/seismic-general.js";
 import { renderCtContinuityLab } from "./studio/dev/ct-continuity-lab.js";
 import { renderVariablesMutualisees } from "./studio/dev/variables-mutualisees.js";
 import { renderLectureDesCr } from "./studio/dev/lecture-des-cr.js";
-import { renderEcrireEnMdallEcran } from "./studio/dev/ecrire-en-mdall.js";
+import { renderEcrireEnMdallEcran, reprendreLutilitaire } from "./studio/dev/ecrire-en-mdall.js";
+import { estDeLetabli } from "../services/utilitaire-de-letabli.js";
 import { renderLectureDesMails } from "./studio/dev/lecture-des-mails.js";
 import { renderRangerLesSujets } from "./studio/dev/ranger-les-sujets.js";
 import { renderResolutionConflits } from "./studio/conflits/resolution-conflits.js";
@@ -239,6 +240,7 @@ export function renderProjectStudio(root) {
   if (vitrineRoot) {
     dessinerLaVitrine(vitrineRoot);
     assurerLesOuvertures(vitrineRoot);
+    relireLetabli(vitrineRoot);
   }
 
   const copiloteRoot = root.querySelector("#projectStudioCopilotePanel");
@@ -366,6 +368,29 @@ export function renderProjectStudio(root) {
 
     const targetId = String(button.dataset.sideNavTarget || "").trim();
     if (!targetId) return;
+
+    /**
+     * **Un utilitaire de l'établi n'est pas un panneau.** Sa cible est
+     * `etabli:<id>` : il n'existe aucun panneau de ce nom, et en fabriquer un
+     * par outil enregistré reviendrait à faire porter à la mise en page ce
+     * que l'écran d'écriture sait déjà faire. On ouvre donc « Écrire du
+     * Mdall » **sur lui**, avec l'entrée qu'on a déjà lue.
+     *
+     * Rien n'est compté : `atelier_ouvertures` se lit par tout le monde, et
+     * une ligne `etabli:<id>` y publierait l'existence de ce que quelqu'un
+     * garde pour lui — ce que cette table promet de ne pas faire.
+     */
+    if (estDeLetabli(targetId)) {
+      const trouve = (vitrineEtat.etabli ?? []).find((un) => un.cible === targetId);
+      if (!trouve || !ecrireEnMdallRoot) return;
+      afficherPanneau(root, "dev-ecrire-en-mdall");
+      renderEcrireEnMdallEcran(ecrireEnMdallRoot);
+      reprendreLutilitaire(ecrireEnMdallRoot, trouve);
+      panneauCourant = "dev-ecrire-en-mdall";
+      marquerActif(root, "dev-ecrire-en-mdall");
+      registerProjectScrollSources(ascenseursDuRouteur());
+      return;
+    }
 
     // Le routeur de panneaux n'entend que les boutons qu'il a vus au montage :
     // la bascule se fait donc ici, sur le DOM tel qu'il est maintenant.
@@ -536,7 +561,15 @@ function noterLOuvertureDe(targetId) {
  * l'Atelier se redessine entièrement à plusieurs occasions, et une recherche
  * perdue au redessin obligerait à la retaper sans qu'on comprenne pourquoi.
  */
-const vitrineEtat = { recherche: "", rayon: "", rangement: RANGEMENT.RECOMMANDE, ouvertures: null };
+const vitrineEtat = {
+  recherche: "", rayon: "", rangement: RANGEMENT.RECOMMANDE, ouvertures: null,
+  /**
+   * L'établi de celui qui regarde. `null` tant qu'on ne l'a pas lu **ou que la
+   * lecture a échoué** : la vitrine dit alors qu'elle ne sait pas, et non que
+   * l'établi est vide (règle 5).
+   */
+  etabli: null
+};
 
 /**
  * Les compteurs d'ouverture, lus une fois, puis gardés.
@@ -549,6 +582,7 @@ const vitrineEtat = { recherche: "", rayon: "", rangement: RANGEMENT.RECOMMANDE,
  * un repère. Ils se relisent au prochain passage dans l'Atelier.
  */
 let ouverturesEnCours = false;
+let etabliEnCours = false;
 
 function assurerLesOuvertures(hote) {
   if (ouverturesEnCours || vitrineEtat.ouvertures !== null) return;
@@ -580,6 +614,39 @@ function assurerLesOuvertures(hote) {
 function dessinerLaVitrine(hote) {
   if (!hote) return;
   hote.innerHTML = renderVitrineDeLatelier(vitrineEtat);
+}
+
+/**
+ * L'établi, relu à chaque venue dans l'Atelier.
+ *
+ * **Contrairement aux compteurs, il se relit.** Un compteur bouge d'une unité
+ * et une rangée qui se réordonne sous le doigt cesse d'être un repère ;
+ * l'établi, lui, vient peut-être de gagner l'outil qu'on a enregistré dans
+ * l'onglet d'à côté — et ne pas le montrer ferait croire que
+ * l'enregistrement a échoué.
+ *
+ * On garde ce qu'on avait pendant la lecture : la vitrine ne clignote pas.
+ */
+function relireLetabli(hote) {
+  if (etabliEnCours) return;
+  etabliEnCours = true;
+
+  (async () => {
+    try {
+      const { listerLetabli } = await import("../services/etabli-supabase.js");
+      const lus = await listerLetabli();
+      // `null` : la base n'a pas répondu. On ne remplace pas ce qu'on avait par
+      // rien — mais on ne prétend pas non plus que l'établi est vide.
+      if (lus === null && vitrineEtat.etabli !== null) return;
+
+      vitrineEtat.etabli = lus;
+      dessinerLaVitrine(hote);
+    } catch {
+      // Un Atelier se parcourt, qu'on ait pu lire l'établi ou non.
+    } finally {
+      etabliEnCours = false;
+    }
+  })();
 }
 
 /**
