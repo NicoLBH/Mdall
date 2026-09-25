@@ -10,8 +10,11 @@ import {
   renderFormulaire, renderResultats, renderBacDessai, renderConsole, renderProposer,
   renderVoletDeLaConsole, renderGestes, colorerDuMdall, POSE, poseDuPanneau,
   renderActionsDuTitre, hauteurDuCadre, HAUTEUR_MINIMALE, MARGE_DU_BAS, GESTE,
-  renderTeteDeLaConsole, marquesDuChoixLogique, CLASSE_DU_CHOIX, leBacEstLa
+  renderTeteDeLaConsole, marquesDuChoixLogique, CLASSE_DU_CHOIX, leBacEstLa,
+  renderTitreDuBrouillon, renderFicheDeLetabli, renderVerdictDeLetabli,
+  renderDeduitDeLetabli, renderListeDeLetabli, GESTE_DE_LETABLI
 } from "./ecrire-en-mdall.js";
+import { ficheDuBrouillon, ceQueLenregistrementFait } from "../../../services/utilitaire-de-letabli.js";
 import { renderLignesDeCode } from "../../ui/code-mdall.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -929,4 +932,161 @@ test("la couche suit la frappe, caractère par caractère", () => {
       `désaligné après ${jusqua} caractères`);
   }
   assert.equal(ligne.length, 26);
+});
+
+/* ── L'établi : ce qu'on garde, et ce qu'on rouvre ───────────────────────── */
+
+const POUR_LETABLI = avecLeFichier(brouillonNeuf(), "essai.ref", [
+  "fonction Couleur du volet(zones, Matière du volet) {",
+  '   si (Matière du volet = "bois")',
+  '   alors ("violet");',
+  "}"
+].join("\n"));
+
+test("le titre dit sur quel utilitaire on travaille, et dans quelle version", () => {
+  // **Un brouillon anonyme et une v3 reprise ne se ressemblent pas.** Sans
+  // cette ligne, on revient le lendemain et rien ne dit qu'on est en train de
+  // réécrire un outil déjà posé : on en fabrique un second du même nom.
+  assert.equal(renderTitreDuBrouillon(null), "Écrire en Mdall");
+  assert.equal(renderTitreDuBrouillon({ nom: "" }), "Écrire en Mdall");
+
+  const titre = renderTitreDuBrouillon({ id: "a", nom: "Volets en bois", version: 3 });
+  assert.match(titre, /Volets en bois/);
+  assert.match(titre, /v3/);
+});
+
+test("le titre d'un utilitaire est échappé comme le reste", () => {
+  assert.doesNotMatch(renderTitreDuBrouillon({ id: "a", nom: "<script>alert(1)</script>", version: 1 }), /<script>/);
+});
+
+test("la fiche montre ce que le code dit, et que personne n'a tapé", () => {
+  // Ce qu'il prend et ce qu'il rend se **déduisent** : les faire saisir les
+  // ferait diverger du texte au premier ajout d'une condition (règle 4).
+  const fiche = ficheDuBrouillon(POUR_LETABLI, { nom: "Volets en bois", resume: "Le violet obligatoire." });
+  const html = renderFicheDeLetabli(fiche, { quoi: ceQueLenregistrementFait(null, fiche.fichiers) });
+
+  assert.match(html, /data-etabli-nom/);
+  assert.match(html, /data-etabli-resume/);
+  assert.match(html, /data-etabli-rayon/);
+  assert.match(html, /Il prend[\s\S]*Matière du volet/);
+  assert.match(html, /Il rend[\s\S]*Couleur du volet/);
+  assert.match(html, /v1/);
+  assert.doesNotMatch(html, /disabled/, "rien ne manque : le bouton s'arme");
+});
+
+test("le bouton d'enregistrement reste éteint tant qu'il manque quelque chose", () => {
+  // Un bouton éteint sans un mot laisse chercher ce qui cloche.
+  const sansNom = ficheDuBrouillon(POUR_LETABLI, { nom: "", resume: "" });
+  const html = renderVerdictDeLetabli(sansNom, { quoi: null });
+
+  assert.match(html, /disabled/);
+  assert.match(html, /nom/);
+  assert.match(html, /six mois/, "la description dit pourquoi elle est demandée");
+  assert.ok(html.includes(GESTE_DE_LETABLI.GARDER));
+});
+
+test("ce qui n'a rien à montrer le dit, plutôt que de laisser un vide", () => {
+  // Une ligne vide se lit comme un écran cassé (règle 5).
+  const html = renderDeduitDeLetabli(ficheDuBrouillon(brouillonNeuf(), {}));
+  assert.equal((html.match(/etabli-deduit__rien/g) ?? []).length, 3);
+});
+
+test("un établi qu'on n'a pas su lire ne se lit pas comme un établi vide", () => {
+  // La première phrase dit qu'on ne sait pas, la seconde qu'il n'y a rien.
+  // Confondre les deux ferait réécrire un outil qu'on possède déjà.
+  assert.match(renderListeDeLetabli(null), /n&#39;a pas pu être lu|n'a pas pu être lu/);
+  assert.match(renderListeDeLetabli([]), /vide/);
+  assert.doesNotMatch(renderListeDeLetabli([]), /pas pu être lu/);
+});
+
+test("chaque outil de l'établi dit son nom, sa version, ce qu'il prend et ce qu'il rend", () => {
+  const html = renderListeDeLetabli([{
+    id: "abc", nom: "Volets en bois", resume: "Le violet obligatoire.", version: "2",
+    entrees: ["Matière du volet"], sorties: ["Couleur du volet"]
+  }]);
+
+  assert.match(html, /Volets en bois/);
+  assert.match(html, /v2/);
+  assert.match(html, /prend Matière du volet/);
+  assert.match(html, /rend Couleur du volet/);
+  assert.match(html, /data-etabli-id="abc"/);
+  assert.ok(html.includes(GESTE_DE_LETABLI.REPRENDRE));
+});
+
+test("un outil qui ne prend rien et ne rend rien le dit", () => {
+  const html = renderListeDeLetabli([{
+    id: "abc", nom: "Vide", resume: "", version: "1", entrees: [], sorties: []
+  }]);
+
+  assert.match(html, /ne prend rien/);
+  assert.match(html, /ne rend rien/);
+});
+
+test("ce qui vient de l'établi est échappé, nom comme description", () => {
+  const html = renderListeDeLetabli([{
+    id: '"><script>alert(1)</script>', nom: '<img src=x onerror=1>', resume: "<b>gras</b>",
+    version: "1", entrees: [], sorties: []
+  }]);
+
+  assert.doesNotMatch(html, /<script>/);
+  assert.doesNotMatch(html, /<img /);
+  assert.match(html, /&lt;script&gt;/);
+});
+
+test("le menu propose de garder et de reprendre, et dit quand il n'y a rien à garder", () => {
+  const avecDuMdall = renderActionsDuTitre(POUR_LETABLI, {});
+  assert.ok(avecDuMdall.includes(GESTE.ETABLI));
+  assert.ok(avecDuMdall.includes(GESTE.REPRENDRE));
+  assert.doesNotMatch(avecDuMdall, /il n&#39;y a rien à garder/);
+
+  const vide = renderActionsDuTitre(brouillonNeuf(), {});
+  assert.match(vide, /il n&#39;y a rien à garder/);
+
+  // Sur un utilitaire déjà posé, le geste dit qu'on le reprend.
+  const repris = renderActionsDuTitre(POUR_LETABLI, { utilitaire: { id: "a", nom: "X", version: 2 } });
+  assert.match(repris, /Enregistrer sur l&#39;établi|Enregistrer sur l'établi/);
+});
+
+/**
+ * **Cette épreuve relit le source, et c'est l'exception qui le justifie.**
+ *
+ * Le défaut n'est pas dans ce qui se dessine : c'est le même que celui du bac
+ * d'essai — réécrire toute la fenêtre à chaque frappe emporte le curseur du
+ * champ où le doigt est posé. Aucune épreuve de rendu ne peut le voir, et il
+ * est déjà parti en production une fois.
+ */
+test("la fiche de l'établi ne réécrit jamais toute la fenêtre à la frappe", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  const branchement = source.match(/\nfunction brancherLaFiche\([^)]*\) \{\n([\s\S]*?)\n\}\n/);
+  assert.ok(branchement, "brancherLaFiche est introuvable");
+
+  assert.doesNotMatch(branchement[1], /renderFicheDeLetabli\(/,
+    "la fiche se redessine entière : le curseur partirait à chaque frappe");
+  assert.doesNotMatch(branchement[1], /majLaFenetreDeDetails\(/,
+    "la fiche remplace le contenu de la fenêtre : le curseur partirait");
+
+  const verdict = source.match(/\nfunction redessinerLeVerdictDeLaFiche\([^)]*\) \{\n([\s\S]*?)\n\}\n/);
+  assert.ok(verdict, "redessinerLeVerdictDeLaFiche est introuvable");
+  assert.match(verdict[1], /"\.etabli-fiche__verdict"/);
+  assert.match(verdict[1], /corpsDeLaFiche\(\)/);
+});
+
+/**
+ * **Celle-ci aussi relit le source.** L'établi parle à la base ; l'écran doit
+ * rester éprouvable hors navigateur. `auth.js` va chercher Supabase sur un
+ * CDN : importé en tête, il rendrait ce fichier impossible à charger ici, et
+ * les soixante-quinze épreuves au-dessus tomberaient d'un coup.
+ */
+test("l'établi se charge à l'usage, jamais en tête de fichier", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  const tete = source.slice(0, source.indexOf("const texte ="));
+  assert.doesNotMatch(tete, /^import .*etabli-supabase/m,
+    "l'établi est importé en tête : l'écran n'est plus éprouvable hors navigateur");
+  assert.match(source, /await import\("\.\.\/\.\.\/\.\.\/services\/etabli-supabase\.js"\)/);
 });

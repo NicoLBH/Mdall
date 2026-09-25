@@ -59,8 +59,19 @@ import { renderSpinnerHtml } from "../../ui/spinner.js";
 import {
   MOTS_DE_LA_SOURCE, NIVEAU, laConsole, phraseDeLaConsole
 } from "../../../services/console-du-brouillon.js";
-import { fermerLaFenetreDeDetails, ouvrirLaFenetreDeDetails } from "../../ui/fenetre-de-details.js";
+import {
+  fermerLaFenetreDeDetails, majLaFenetreDeDetails, ouvrirLaFenetreDeDetails
+} from "../../ui/fenetre-de-details.js";
 import { ouvrirLeWikiMdall } from "../../ui/wiki-mdall.js";
+import {
+  MANQUE, PHRASE_DU_MANQUE, ficheDuBrouillon, brouillonDesFichiers,
+  ceQueLenregistrementFait, phraseDeLenregistrement, rayonDeLutilitaire
+} from "../../../services/utilitaire-de-letabli.js";
+import { NOM_DU_RAYON, RAYONS } from "../../../services/catalogue-de-latelier.js";
+// **L'établi se charge à l'usage.** `etabli-supabase.js` importe `auth.js`, qui
+// va chercher Supabase sur un CDN : importé en tête, il rendrait cet écran
+// impossible à éprouver hors navigateur — c'est déjà pourquoi la transcription
+// et la proposition se chargent de la même façon.
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 import { REFUS } from "../../../services/le-mdall-rendu.js";
 import {
@@ -525,12 +536,13 @@ export const GESTE = {
   /**
    * Enregistrer l'utilitaire sur l'établi, pour le retrouver dans tout projet.
    *
-   * **Éteint tant que l'établi n'existe pas** (lot B du plan, voir
-   * `docs/utilitaires-personnels.md`). Un menu dont les entrées paraissent et
-   * disparaissent se rouvre pour vérifier ; une entrée éteinte qui dit ce
-   * qu'elle attend se lit une fois et s'oublie.
+   * L'établi n'appartient à aucun chantier : ce qu'on y pose paraît dans tous
+   * ses projets, et n'entre dans la mémoire d'aucun — le seul chemin reste la
+   * proposition signée.
    */
   ETABLI: "brouillon-etabli",
+  /** Reprendre un utilitaire déjà posé sur son établi. */
+  REPRENDRE: "brouillon-reprendre",
   /**
    * Ouvrir le wiki du langage.
    *
@@ -571,7 +583,7 @@ export const GESTE = {
  * l'ouverture, du survol et de la fermeture au clavier, et il faudrait les
  * recalibrer l'un contre l'autre à chaque retouche.
  */
-export function renderActionsDuTitre(brouillon = null, { depose = false } = {}) {
+export function renderActionsDuTitre(brouillon = null, { depose = false, utilitaire = null } = {}) {
   // Il y a quelque chose à lire : le bac peut s'ouvrir, et dire ce qu'il trouve.
   const aLancer = fichiersRemplis(brouillon).length > 0;
   const aPerdre = brouillonEcrit(brouillon);
@@ -606,11 +618,16 @@ export function renderActionsDuTitre(brouillon = null, { depose = false } = {}) 
         }, {
           action: GESTE.ETABLI,
           icon: svgIcon("tools", { className: "octicon" }),
-          label: "Enregistrer dans l'Atelier",
-          // Ce que le lot B apportera. Dire « bientôt » vaut mieux que ne rien
-          // dire : on cherche ce geste, et une absence ne s'explique pas.
-          disabled: true,
-          title: "Bientôt : garder cet utilitaire sur votre établi, et le retrouver dans tous vos projets"
+          label: utilitaire?.id ? "Enregistrer sur l'établi" : "Enregistrer dans l'Atelier",
+          disabled: !aLancer,
+          title: aLancer
+            ? "Garder cet utilitaire sur votre établi : il paraîtra dans tous vos projets, et dans la mémoire d'aucun"
+            : "Écrivez d'abord du Mdall : il n'y a rien à garder"
+        }, {
+          action: GESTE.REPRENDRE,
+          icon: svgIcon("repo", { className: "octicon" }),
+          label: "Reprendre un utilitaire…",
+          title: "Rouvrir un utilitaire de votre établi"
         }, {
           separator: true
         }, {
@@ -774,11 +791,175 @@ export function renderVoletDeLaConsole(lignes = [], { volet = false } = {}) {
   `;
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * L'établi
+ *
+ * Ce qu'un utilitaire de l'établi **est** vit dans `utilitaire-de-letabli.js`,
+ * qui est pur et ne connaît ni projet ni base. Ici, on le montre.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Les gestes des deux fenêtres de l'établi, nommés à un seul endroit (règle 10). */
+export const GESTE_DE_LETABLI = {
+  GARDER: "etabli-garder",
+  REPRENDRE: "etabli-reprendre"
+};
+
+/**
+ * Le titre de l'écran — et sur quel utilitaire on travaille.
+ *
+ * **Un brouillon anonyme et une `v3` reprise ne se ressemblent pas.** Sans
+ * cette ligne, on enregistre, on revient le lendemain, et rien à l'écran ne dit
+ * qu'on réécrit un outil déjà posé : on en fabrique un second du même nom sans
+ * le savoir.
+ */
+export function renderTitreDuBrouillon(utilitaire = null) {
+  if (!utilitaire?.id) return "Écrire en Mdall";
+
+  return `${escapeHtml(utilitaire.nom)} <span class="brouillon__version mono-small">v${
+    escapeHtml(String(utilitaire.version ?? 1))}</span>`;
+}
+
+/** Ce que le code dit de lui, et que personne n'a tapé. */
+export function renderDeduitDeLetabli(fiche = null) {
+  const dire = (titre, valeurs) => `
+    <div class="etabli-deduit__ligne">
+      <span class="etabli-deduit__quoi">${escapeHtml(titre)}</span>
+      <span class="etabli-deduit__valeurs">${
+        valeurs.length
+          ? valeurs.map((une) => `<code>${escapeHtml(une)}</code>`).join(" ")
+          : `<span class="etabli-deduit__rien">rien</span>`
+      }</span>
+    </div>
+  `;
+
+  return `
+    <div class="etabli-deduit">
+      <p class="etabli-deduit__tete">Déduit de votre code — rien à remplir :</p>
+      ${dire("Il prend", fiche?.entrees ?? [])}
+      ${dire("Il rend", fiche?.sorties ?? [])}
+      ${dire("On le cherchera sous", fiche?.mots ?? [])}
+    </div>
+  `;
+}
+
+/**
+ * Ce qui manque, ce que l'enregistrement fera, et le bouton.
+ *
+ * **C'est le seul morceau qu'une frappe redessine.** Réécrire toute la fiche
+ * emporterait le curseur du champ où le doigt est posé — c'est le défaut qu'on
+ * vient de corriger sur le bac d'essai, et on ne va pas le refaire ici.
+ */
+export function renderVerdictDeLetabli(fiche = null, { quoi = null, garde = null } = {}) {
+  const manques = fiche?.manques ?? [];
+
+  return `
+    <div class="etabli-fiche__verdict">
+      ${garde
+        ? `<p class="etabli-fiche__phrase etabli-fiche__phrase--${garde.ok ? "fait" : "rate"}">${
+          escapeHtml(garde.dit)}</p>`
+        : ""}
+      ${manques.length
+        ? `<ul class="etabli-fiche__manques">${manques
+          .map((manque) => `<li>${escapeHtml(PHRASE_DU_MANQUE[manque] ?? manque)}</li>`).join("")}</ul>`
+        : `<p class="etabli-fiche__phrase">${escapeHtml(phraseDeLenregistrement(quoi))}</p>`}
+      <div class="etabli-fiche__gestes">
+        <button type="button" class="gh-btn gh-btn--sm gh-btn--primary"
+          data-geste="${GESTE_DE_LETABLI.GARDER}"${manques.length ? " disabled" : ""}>
+          ${svgIcon("tools", { className: "octicon" })} Enregistrer
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * La fiche qu'on remplit avant de poser un outil sur l'établi.
+ *
+ * ## On voit ce qu'on signe
+ *
+ * Le nom et la description se saisissent ; **ce qu'il prend, ce qu'il rend et
+ * ce sous quoi on le cherchera se déduisent du code** et se montrent ici. Les
+ * faire saisir les ferait diverger du texte au premier ajout d'une condition
+ * (règle 4) ; les taire ferait découvrir sur la fiche ce qu'on croyait avoir
+ * écrit.
+ */
+export function renderFicheDeLetabli(fiche = null, { quoi = null, garde = null } = {}) {
+  if (!fiche) return "";
+
+  return `
+    <section class="etabli-fiche">
+      <label class="etabli-fiche__champ">
+        <span class="etabli-fiche__nom">Son nom</span>
+        <input type="text" class="gh-input" data-etabli-nom
+          value="${escapeHtml(fiche.nom)}" placeholder="Volets en bois">
+      </label>
+
+      <label class="etabli-fiche__champ">
+        <span class="etabli-fiche__nom">Ce qu'il fait</span>
+        <textarea class="gh-input etabli-fiche__resume" data-etabli-resume rows="2"
+          placeholder="En une phrase : ce qu'il déduit, et de quoi.">${escapeHtml(fiche.resume)}</textarea>
+      </label>
+
+      <label class="etabli-fiche__champ">
+        <span class="etabli-fiche__nom">Son rayon</span>
+        <select class="gh-input" data-etabli-rayon>
+          ${Object.values(RAYONS).map((rayon) => `
+            <option value="${escapeHtml(rayon)}"${rayon === fiche.rayon ? " selected" : ""}>${
+              escapeHtml(NOM_DU_RAYON[rayon] ?? rayon)}</option>
+          `).join("")}
+        </select>
+      </label>
+
+      ${renderDeduitDeLetabli(fiche)}
+      ${renderVerdictDeLetabli(fiche, { quoi, garde })}
+    </section>
+  `;
+}
+
+/**
+ * L'établi, tel qu'on le rouvre.
+ *
+ * **Une lecture qui a échoué ne se lit pas comme un établi vide** : la première
+ * dit qu'on ne sait pas, la seconde qu'il n'y a rien. Confondre les deux ferait
+ * réécrire un outil qu'on possède déjà (règle 5).
+ */
+export function renderListeDeLetabli(liste = null) {
+  if (liste === null) {
+    return `<p class="review-empty-note">Votre établi n'a pas pu être lu. Rien n'est perdu : réessayez.</p>`;
+  }
+
+  if (!liste.length) {
+    return `<p class="review-empty-note">Votre établi est vide. Écrivez du Mdall, puis « Enregistrer ».</p>`;
+  }
+
+  return `
+    <ul class="etabli-liste">
+      ${liste.map((un) => `
+        <li>
+          <button type="button" class="etabli-liste__item"
+            data-geste="${GESTE_DE_LETABLI.REPRENDRE}" data-etabli-id="${escapeHtml(un.id)}">
+            <span class="etabli-liste__nom">
+              ${escapeHtml(un.nom)}
+              <span class="etabli-liste__version mono-small">v${escapeHtml(String(un.version))}</span>
+            </span>
+            <span class="etabli-liste__resume">${escapeHtml(un.resume)}</span>
+            <span class="etabli-liste__quoi">
+              ${un.entrees.length ? `prend ${escapeHtml(un.entrees.join(", "))}` : "ne prend rien"}
+              ·
+              ${un.sorties.length ? `rend ${escapeHtml(un.sorties.join(", "))}` : "ne rend rien"}
+            </span>
+          </button>
+        </li>
+      `).join("")}
+    </ul>
+  `;
+}
+
 /** L'écran entier, sans un seul appel. */
 export function renderEcrireEnMdall(brouillon = null, {
   largeur = LARGEUR_PAR_DEFAUT, reponses = {}, lance = false,
   transcrit = false, rendu = null, depose = false, depot = null, volet = false,
-  largeurConsole = LARGEUR_CONSOLE_PAR_DEFAUT
+  largeurConsole = LARGEUR_CONSOLE_PAR_DEFAUT, utilitaire = null
 } = {}) {
   const lignes = laConsole({
     fichiers: fichiersRemplis(brouillon), reponses, lance, rendu, depot
@@ -795,8 +976,8 @@ export function renderEcrireEnMdall(brouillon = null, {
       */""}
       <header class="lecture-cr__entete">
         <div class="lecture-cr__entete-ligne">
-          <h2 class="lecture-cr__titre">Écrire en Mdall</h2>
-          ${renderActionsDuTitre(brouillon, { depose })}
+          <h2 class="lecture-cr__titre">${renderTitreDuBrouillon(utilitaire)}</h2>
+          ${renderActionsDuTitre(brouillon, { depose, utilitaire })}
         </div>
       </header>
 
@@ -851,6 +1032,22 @@ const etat = {
    * personne n'a demandée décrirait une écriture qui n'a pas eu lieu.
    */
   depot: null,
+  /**
+   * L'utilitaire de l'établi qu'on est en train d'écrire, s'il y en a un.
+   *
+   * `null` pour un brouillon qui n'a jamais été posé sur l'établi. C'est ce qui
+   * distingue « enregistrer » de « reprendre » : sans lui, chaque
+   * enregistrement fabriquerait un outil de plus au lieu d'une version de plus.
+   */
+  utilitaire: null,
+  /**
+   * L'établi tel qu'on l'a lu. `null` tant qu'on ne l'a pas demandé **ou que la
+   * lecture a échoué** : un établi vide et un établi qu'on n'a pas su lire
+   * n'appellent pas la même phrase (règle 5).
+   */
+  etabli: null,
+  /** Ce que le dernier enregistrement a donné : `{ok, dit}`, ou `null`. */
+  garde: null,
   /** La console est-elle à droite, en troisième volet ? Sinon, elle est en bas. */
   volet: false,
   largeurConsole: LARGEUR_CONSOLE_PAR_DEFAUT
@@ -981,7 +1178,8 @@ function dessiner(racine) {
     depose: etat.depose,
     depot: etat.depot,
     volet: etat.volet,
-    largeurConsole: etat.largeurConsole
+    largeurConsole: etat.largeurConsole,
+    utilitaire: etat.utilitaire
   });
   brancher(racine);
 }
@@ -1057,7 +1255,9 @@ function redessinerLaConsole(racine) {
     ?.setAttribute("data-console", etat.volet ? "volet" : "bas");
 
   remplacer(racine, ".lecture-cr__entete-actions",
-    renderActionsDuTitre(etat.brouillon, { depose: etat.depose }));
+    renderActionsDuTitre(etat.brouillon, { depose: etat.depose, utilitaire: etat.utilitaire }));
+  remplacer(racine, ".lecture-cr__titre", `<h2 class="lecture-cr__titre">${
+    renderTitreDuBrouillon(etat.utilitaire)}</h2>`);
 
   // **Les deux places de la console naissent et meurent ensemble**, et c'est la
   // même pose des deux côtés : l'une paraît quand l'autre s'en va.
@@ -1108,6 +1308,11 @@ function viderLeBrouillon(racine) {
   etat.brouillon = brouillonNeuf();
   etat.depot = null;
   etat.rendu = null;
+  // **On quitte aussi l'utilitaire qu'on reprenait.** Le garder ferait croire
+  // qu'on travaille encore dessus, et le prochain enregistrement écraserait sa
+  // version par un brouillon vide.
+  etat.utilitaire = null;
+  etat.garde = null;
   // Un verdict rendu sur un brouillon qui n'existe plus décrirait un essai que
   // personne n'a fait.
   etat.lance = false;
@@ -1155,6 +1360,192 @@ function remplacer(racine, selecteur, html) {
   const ancien = racine.querySelector(selecteur);
   const fabrique = html ? enElement(html) : null;
   if (ancien && fabrique) ancien.replaceWith(fabrique);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * L'établi : les deux fenêtres, et ce qu'elles font
+ *
+ * Elles empruntent `#detailsModal`, comme le bac d'essai et le wiki : son
+ * voile, sa croix, sa fermeture au clavier et son ombre sont déjà réglés. En
+ * dessiner une troisième reviendrait à recalibrer tout cela contre les deux
+ * autres (règle 10).
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Ce que la fiche a sous les yeux tant qu'elle est ouverte. */
+let ficheEnCours = null;
+
+/** Le corps de la fenêtre, **et seulement quand c'est la fiche qu'elle montre**. */
+function corpsDeLaFiche() {
+  const corps = document.getElementById("detailsBodyModal");
+  return corps?.querySelector(".etabli-fiche") ? corps : null;
+}
+
+/** Ce que la fiche vaut à cet instant, d'après le brouillon et ce qu'on a tapé. */
+function ficheDuMoment() {
+  return ficheDuBrouillon(etat.brouillon, {
+    nom: ficheEnCours?.nom ?? etat.utilitaire?.nom ?? "",
+    resume: ficheEnCours?.resume ?? etat.utilitaire?.resume ?? "",
+    rayon: ficheEnCours?.rayon ?? etat.utilitaire?.rayon ?? ""
+  });
+}
+
+/**
+ * Ouvrir la fiche : ce qu'on va garder, avant de le garder.
+ *
+ * Le nom et la description partent de l'utilitaire ouvert quand il y en a un —
+ * reprendre un outil, c'est le reprendre, pas le rebaptiser.
+ */
+function ouvrirLaFicheDeLetabli(racine) {
+  fermerLaFenetreDeDetails();
+
+  ficheEnCours = {
+    nom: etat.utilitaire?.nom ?? "",
+    resume: etat.utilitaire?.resume ?? "",
+    rayon: etat.utilitaire?.rayon ?? ""
+  };
+  etat.garde = null;
+
+  const fiche = ficheDuMoment();
+  const corps = ouvrirLaFenetreDeDetails({
+    titreHtml: escapeHtml(etat.utilitaire?.id ? "Reprendre sur votre établi" : "Enregistrer sur votre établi"),
+    metaHtml: escapeHtml("Il paraîtra dans tous vos projets, et dans la mémoire d'aucun."),
+    corpsHtml: renderFicheDeLetabli(fiche, { quoi: ceQueLenregistrementFait(etat.utilitaire, fiche.fichiers) }),
+    surGeste: (geste) => {
+      if (geste === GESTE_DE_LETABLI.GARDER) void garderSurLetabli(racine);
+    }
+  });
+
+  if (corps) brancherLaFiche(corps);
+}
+
+/**
+ * Les champs de la fiche.
+ *
+ * **Une frappe ne redessine que le verdict.** Réécrire la fiche entière
+ * emporterait le curseur du champ où le doigt est posé — c'est le défaut qu'on
+ * vient de corriger sur le bac d'essai, et on ne va pas le refaire ici.
+ */
+function brancherLaFiche(hote) {
+  const champs = [
+    ["[data-etabli-nom]", "nom", "input"],
+    ["[data-etabli-resume]", "resume", "input"],
+    ["[data-etabli-rayon]", "rayon", "change"]
+  ];
+
+  for (const [quoi, champ, evenement] of champs) {
+    hote.querySelector(quoi)?.addEventListener(evenement, (ev) => {
+      ficheEnCours = { ...ficheEnCours, [champ]: ev.target.value };
+      etat.garde = null;
+      redessinerLeVerdictDeLaFiche();
+    });
+  }
+}
+
+/** Reposer le seul verdict de la fiche — jamais la fiche. */
+function redessinerLeVerdictDeLaFiche() {
+  const corps = corpsDeLaFiche();
+  if (!corps) return;
+
+  const fiche = ficheDuMoment();
+  remplacer(corps, ".etabli-fiche__verdict", renderVerdictDeLetabli(fiche, {
+    quoi: ceQueLenregistrementFait(etat.utilitaire, fiche.fichiers),
+    garde: etat.garde
+  }));
+}
+
+/**
+ * Poser l'utilitaire sur l'établi.
+ *
+ * **Le numéro de version ne se décide pas ici.** La base compare le texte au
+ * précédent, monte la version s'il a changé, et écrit dans les deux tables —
+ * ou dans aucune. Lu puis écrit par le navigateur, deux enregistrements
+ * simultanés produiraient deux fois le même numéro.
+ */
+async function garderSurLetabli(racine) {
+  const fiche = ficheDuMoment();
+  if (fiche.manques.length) return;
+
+  etat.garde = { ok: true, dit: "Enregistrement…" };
+  redessinerLeVerdictDeLaFiche();
+
+  const { enregistrerSurLetabli } = await import("../../../services/etabli-supabase.js");
+  const pose = await enregistrerSurLetabli({
+    id: etat.utilitaire?.id ?? "",
+    nom: fiche.nom,
+    resume: fiche.resume,
+    rayon: fiche.rayon,
+    fichiers: fiche.fichiers
+  });
+
+  if (!pose) {
+    // **On ne dit pas que c'est enregistré quand on n'en sait rien.** Une
+    // fenêtre qui se referme sur un échec silencieux fait perdre le travail
+    // qu'on croyait en sûreté (règle 5).
+    etat.garde = { ok: false, dit: "Il n'a pas pu être enregistré. Rien n'est perdu : réessayez." };
+    redessinerLeVerdictDeLaFiche();
+    return;
+  }
+
+  etat.utilitaire = pose;
+  // L'établi qu'on avait lu ne décrit plus ce qu'il contient.
+  etat.etabli = null;
+  etat.garde = { ok: true, dit: `Enregistré sur votre établi en v${pose.version}.` };
+  redessinerLeVerdictDeLaFiche();
+  redessinerLaConsole(racine);
+}
+
+/** Ouvrir l'établi, pour y reprendre un utilitaire. */
+async function ouvrirLetabli(racine) {
+  fermerLaFenetreDeDetails();
+
+  const corps = ouvrirLaFenetreDeDetails({
+    titreHtml: escapeHtml("Votre établi"),
+    metaHtml: escapeHtml("Vos utilitaires, dans tous vos projets. Rien ici n'est dans la mémoire d'un chantier."),
+    corpsHtml: `<p class="review-empty-note">${escapeHtml("Lecture de votre établi…")}</p>`,
+    surGeste: (geste, evenement) => {
+      if (geste !== GESTE_DE_LETABLI.REPRENDRE) return;
+      const bouton = evenement.target.closest?.("[data-etabli-id]");
+      if (bouton) reprendreDeLetabli(racine, bouton.dataset.etabliId);
+    }
+  });
+  if (!corps) return;
+
+  const { listerLetabli } = await import("../../../services/etabli-supabase.js");
+  etat.etabli = await listerLetabli();
+
+  // La fenêtre a pu être refermée pendant la lecture : `majLaFenetreDeDetails`
+  // rend `null` quand il n'y a rien d'ouvert, et l'on n'écrit pas dans `null`.
+  majLaFenetreDeDetails({
+    titreHtml: escapeHtml("Votre établi"),
+    metaHtml: escapeHtml("Vos utilitaires, dans tous vos projets. Rien ici n'est dans la mémoire d'un chantier."),
+    corpsHtml: renderListeDeLetabli(etat.etabli)
+  });
+}
+
+/**
+ * Reprendre un utilitaire de l'établi dans l'écran.
+ *
+ * **On demande avant d'écraser.** Le brouillon en cours n'est nulle part
+ * ailleurs : le remplacer sans un mot ferait perdre ce qu'on était en train
+ * d'écrire, et c'est exactement ce que l'établi existe pour empêcher.
+ */
+function reprendreDeLetabli(racine, id) {
+  const trouve = (etat.etabli ?? []).find((un) => un.id === String(id ?? ""));
+  if (!trouve) return;
+
+  if (brouillonEcrit(etat.brouillon) && etat.utilitaire?.id !== trouve.id
+    && !window.confirm(`Reprendre « ${trouve.nom} » ? Ce qui est écrit ici sera remplacé.`)) return;
+
+  etat.brouillon = brouillonDesFichiers(trouve.fichiers);
+  etat.utilitaire = trouve;
+  // Un verdict, une transcription et une trace de proposition rendus sur un
+  // autre brouillon ne décrivent plus rien.
+  etat.lance = false;
+  etat.rendu = null;
+  etat.depot = null;
+  garderLeBrouillon();
+  fermerLaFenetreDeDetails();
+  dessiner(racine);
 }
 
 /**
@@ -1344,6 +1735,8 @@ function brancherLaConsole(racine) {
       // Le même renvoi que le bouton de la ligne du titre : une seule façon de
       // proposer, appelée de deux endroits (règle 10).
       if (geste === GESTE.PROPOSER) void proposerAuProjet(racine);
+      if (geste === GESTE.ETABLI) ouvrirLaFicheDeLetabli(racine);
+      if (geste === GESTE.REPRENDRE) void ouvrirLetabli(racine);
     });
 
   debrancherConsole?.();
