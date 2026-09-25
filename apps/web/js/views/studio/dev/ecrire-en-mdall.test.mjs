@@ -1308,6 +1308,13 @@ test("ouvrir un outil le met à l'essai, lancé, et la ligne du titre se rebranc
     "l'essai s'ouvrirait non lancé, et le verdict partirait à la première frappe");
   assert.match(reprendre, /\{ mode = MODE\.ESSAI \} = \{\}/,
     "l'essai doit être ce qu'on obtient sans rien demander");
+  // **Et le cahier des charges revient avec le code.** Le service sait le
+  // rendre, l'écran sait l'afficher, et entre les deux il suffisait de ne pas
+  // le passer pour qu'il se perde — sans qu'aucun rendu ni aucune fonction pure
+  // ne puisse le voir. C'est la perte qu'on vient de réparer, et elle se
+  // referait là.
+  assert.match(reprendre, /brouillonDesFichiers\(trouve\.fichiers, \{ dit: trouve\.dit \}\)/,
+    "l'outil se rouvre sans son cahier des charges");
 
   const titre = source.indexOf("function redessinerLaLigneDuTitre(racine) {");
   assert.ok(titre > 0, "redessinerLaLigneDuTitre est introuvable");
@@ -1557,4 +1564,35 @@ test("les deux branchements rejoués commencent par se défaire", () => {
     assert.doesNotMatch(corps, /\?\.addEventListener\(/, quoi);
     assert.doesNotMatch(corps, /^\s*\w+\.addEventListener\(/m, quoi);
   }
+});
+
+test("le cahier des charges fait l'aller-retour entier, sans trou au milieu", () => {
+  // **Trois maillons, et aucun rendu ne montre les deux du milieu.** Le service
+  // pur sait porter le cahier des charges, la base sait l'écrire et le relire,
+  // l'écran sait l'afficher — et il suffisait que l'écran ne le passe pas pour
+  // qu'il se perde entre les deux. Chacun des trois s'éprouve chez lui ; le
+  // câblage, lui, ne s'éprouvait nulle part, et c'est précisément la perte qu'on
+  // vient de réparer.
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+
+  // Il monte : ce qu'on envoie à l'établi.
+  const garde = source.indexOf("async function garderSurLetabli(racine) {");
+  assert.ok(garde > 0, "garderSurLetabli est introuvable");
+  assert.match(source.slice(garde, source.indexOf("\n}\n", garde)), /^\s*dit: fiche\.dit$/m,
+    "on enregistre l'utilitaire sans son cahier des charges");
+
+  // Il redescend : ce qu'on remet dans la zone. L'autre épreuve le dit aussi,
+  // sur `reprendreLutilitaire` ; les deux bouts se lisent ici ensemble, parce
+  // que c'est l'aller **et** le retour qui font la conservation.
+  const reprendre = source.indexOf("export function reprendreLutilitaire");
+  assert.match(source.slice(reprendre, source.indexOf("\n}\n", reprendre)),
+    /brouillonDesFichiers\(trouve\.fichiers, \{ dit: trouve\.dit \}\)/,
+    "on rouvre l'utilitaire sans son cahier des charges");
+
+  // Et les deux verdicts de la fiche comparent la même chose que la base : sans
+  // cela, l'écran annoncerait « inchangé » là où la base monte une version.
+  assert.equal(
+    (source.match(/ceQueLenregistrementFait\(etat\.utilitaire, fiche\.fichiers, fiche\.dit\)/g) ?? []).length,
+    2, "un des deux verdicts ignore le cahier des charges"
+  );
 });
