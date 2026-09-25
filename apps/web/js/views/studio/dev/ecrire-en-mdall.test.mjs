@@ -11,6 +11,8 @@ import {
   renderVoletDeLaConsole, renderGestes, colorerDuMdall, POSE, poseDuPanneau
 } from "./ecrire-en-mdall.js";
 import { renderLignesDeCode } from "../../ui/code-mdall.js";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { laConsole } from "../../../services/console-du-brouillon.js";
 import { REFUS, laTranscriptionLue } from "../../../services/le-mdall-rendu.js";
 import { champsDuBrouillon } from "../../../services/formulaire-du-brouillon.js";
@@ -118,13 +120,6 @@ test("pendant la transcription, « Coder » se désarme", () => {
 
   assert.match(html, /data-brouillon-coder disabled/);
   assert.match(html, /Transcription en cours/);
-});
-
-test("l'écran rappelle que l'IA n'est pas le seul chemin", () => {
-  // Fondamental 13, à l'écran et pas seulement dans le code : l'autre porte est
-  // à côté, et il faut qu'on la voie.
-  assert.match(renderEcrireEnMdall(brouillonNeuf(), {}), /jamais le seul chemin/);
-  assert.match(renderEcrireEnMdall(brouillonNeuf(), {}), /écrire\s+directement à droite/);
 });
 
 test("l'écran dit que rien ne s'écrit dans le projet", () => {
@@ -422,8 +417,11 @@ test("un brouillon sans rien à dire garde sa console, et dit qu'il n'a rien à 
 
   assert.match(html, /brouillon-console/);
   assert.match(html, /Rien à signaler/);
-  // Rien à déplacer : le bouton de place ne paraît pas.
-  assert.doesNotMatch(html, /data-brouillon-console-place/);
+  // **Et le bouton de place reste là.** Il ne paraissait qu'avec un message :
+  // on ne pouvait donc ranger la console à droite qu'au moment où elle avait
+  // quelque chose à dire, c'est-à-dire au pire moment. C'est un réglage de
+  // l'écran, pas une réaction à son contenu.
+  assert.match(html, /data-brouillon-console-place/);
 });
 
 test("la console se déplace à droite, et ne s'affiche jamais aux deux places", () => {
@@ -552,4 +550,36 @@ test("la console garde sa tête même repliée à droite, pour qu'on puisse la r
 
   assert.match(html, /brouillon-console est-deplacee/);
   assert.match(html, /data-brouillon-console-place/);
+});
+
+/* ── L'ordre des gestes, et la note qui s'en va ──────────────────────────── */
+
+test("« Tout effacer » se pose à gauche du vert, jamais sous le doigt qui le vise", () => {
+  // Le geste qui engage se pose en dernier, à droite, là où l'œil finit ; le
+  // geste qui détruit reste gris, à côté.
+  const html = renderGestes(avecLeDit(brouillonNeuf(), "un essai"), {});
+
+  assert.ok(html.indexOf("data-brouillon-vider") < html.indexOf("data-brouillon-coder"),
+    "le bouton vert passe avant « Tout effacer »");
+});
+
+test("la rangée de gestes ne porte plus de leçon", () => {
+  // Une phrase de trois lignes sous deux boutons se lit une fois, puis jamais —
+  // et elle occupait la place que les boutons demandaient.
+  const html = renderGestes(avecLeDit(brouillonNeuf(), "un essai"), {});
+
+  assert.doesNotMatch(html, /brouillon__note/);
+  assert.doesNotMatch(html, /seul chemin/);
+});
+
+test("le volet branche son coloreur, sans quoi l'on écrit en noir sur noir", () => {
+  // **Cette épreuve relit le source, et c'est l'exception qui le justifie.** Le
+  // défaut ne se voit pas dans le rendu — la couche est bien posée — mais dans
+  // ce qui la repeint ensuite. Il ne se voit qu'avec un navigateur, ou ici, et
+  // il est parti en production une fois.
+  const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
+  const branchement = source.slice(source.indexOf("brancherLaSaisieDeCode(zone"));
+
+  assert.match(branchement.slice(0, 400), /colorer:\s*colorerDuMdall/,
+    "le coloreur ne descend pas jusqu'au branchement : la couche ne se repeindra pas");
 });

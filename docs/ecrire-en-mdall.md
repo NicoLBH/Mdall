@@ -615,3 +615,43 @@ sans un mot pour le dire.
 
 La rangée de gestes est maintenant un bloc à elle, redessiné à la frappe sans
 toucher à la zone où le doigt est posé.
+
+
+### L'écran tient dans la fenêtre, et ce sont ses zones qui défilent
+
+La page défilait, et tout partait de travers : on faisait défiler pour lire une
+ligne de code, et l'en-tête, les onglets et la console s'en allaient avec.
+
+Le cadre tient donc dans la fenêtre, et **trois zones défilent chacune chez
+elle** : le français, le code, la console. Sa hauteur est mesurée au rendu
+depuis sa position réelle — une hauteur calculée à l'avance se trompe dès que la
+chrome du projet se replie — et elle se remesure quand la fenêtre change de
+taille.
+
+La console était `position:fixed`, ce qui la sortait du cadre : le corps devait
+alors se réserver sa hauteur en rembourrage, et ce rembourrage restait là même
+quand elle n'avait qu'une ligne — un grand vide sans bordure sous le code. Elle
+est maintenant simplement **la dernière rangée**.
+
+### On écrivait en noir sur noir
+
+Le rendu posait bien la couche colorée, mais l'appelant **ne passait pas son
+coloreur au branchement** : rien ne la repeignait à la frappe. Or le texte de la
+zone est transparent — c'est ce qui permet de voir la couleur dessous — et l'on
+tapait donc dans le vide, visiblement.
+
+Une épreuve relit le source pour tenir le branchement : le défaut ne se voit pas
+dans le rendu, puisque la couche y est bien posée. Il est dans ce qui la repeint
+ensuite, et ne se voit qu'avec un navigateur — ou là.
+
+### Trois détails de forme
+
+- **Le bouton de place est toujours là.** Il ne paraissait qu'avec un message :
+  on ne pouvait donc ranger la console à droite qu'au moment où elle avait
+  quelque chose à dire, c'est-à-dire au pire moment. C'est un réglage de
+  l'écran, pas une réaction à son contenu.
+- **« Tout effacer » puis « Coder », à droite.** Le geste qui engage finit la
+  ligne, là où l'œil finit ; le geste qui détruit reste gris, à côté, jamais
+  sous le doigt qui vise le vert.
+- **La leçon sous les boutons s'en va.** Une phrase de trois lignes se lit une
+  fois, puis jamais — et elle occupait la place que les boutons demandaient.

@@ -119,12 +119,21 @@ export function colorerDuMdall(contenu = "") {
  * phrase, « Tout effacer » paraît dès qu'il y a quelque chose à perdre : les
  * laisser attendre un redessin entier les figeait dans l'état du dernier — et
  * après « Tout effacer », « Coder » restait éteint quoi qu'on écrive.
+ *
+ * **L'ordre : « Tout effacer », puis « Coder ».** Le geste qui engage se pose
+ * en dernier, à droite, là où l'œil finit — et le geste qui détruit reste gris,
+ * à côté, jamais sous le doigt qui vise le vert.
  */
 export function renderGestes(brouillon = null, { transcrit = false } = {}) {
   const dit = texte(brouillon?.dit);
 
   return `
     <div class="brouillon__gestes">
+      ${brouillonEcrit(brouillon)
+        ? `<button type="button" class="gh-btn gh-btn--sm brouillon__vider" data-brouillon-vider>
+             ${svgIcon("trash", { className: "octicon" })} Tout effacer
+           </button>`
+        : ""}
       <button type="button" class="gh-btn gh-btn--primary gh-btn--sm" data-brouillon-coder${
         dit && !transcrit ? "" : " disabled"}
         title="${escapeHtml(
@@ -135,15 +144,6 @@ export function renderGestes(brouillon = null, { transcrit = false } = {}) {
           ? `${renderSpinnerHtml({ label: "Transcription en cours", size: "sm" })} Transcription…`
           : `${svgIcon("ai-model", { className: "octicon" })} Coder`}
       </button>
-      <span class="brouillon__note">
-        L'IA accélère ; elle n'est jamais le seul chemin. Vous pouvez écrire
-        directement à droite : l'écran colore et vérifie ce que vous tapez.
-      </span>
-      ${brouillonEcrit(brouillon)
-        ? `<button type="button" class="gh-btn gh-btn--sm brouillon__vider" data-brouillon-vider>
-             ${svgIcon("trash", { className: "octicon" })} Tout effacer
-           </button>`
-        : ""}
     </div>
   `;
 }
@@ -473,14 +473,19 @@ export function renderConsole(lignes = [], { volet = false } = {}) {
             { className: "octicon" })}
           ${escapeHtml(phraseDeLaConsole(toutes))}
         </span>
-        ${toutes.length ? `
-          <button type="button" class="gh-btn gh-btn--sm brouillon-console__place"
-            data-brouillon-console-place aria-pressed="${volet}"
-            title="${escapeHtml(volet
-              ? "Remettre la console sous les volets"
-              : "Mettre la console à droite, à côté du code")}">
-            ${svgIcon("file-diff", { className: "octicon" })} ${volet ? "En bas" : "À droite"}
-          </button>` : ""}
+      ${/*
+        **Toujours là, même sans une ligne.** Il ne paraissait qu'avec un
+        message : on ne pouvait donc ranger la console à droite qu'au moment où
+        elle avait quelque chose à dire, c'est-à-dire au pire moment. C'est un
+        réglage de l'écran, pas une réaction à son contenu.
+      */""}
+      <button type="button" class="gh-btn gh-btn--sm brouillon-console__place"
+        data-brouillon-console-place aria-pressed="${volet}"
+        title="${escapeHtml(volet
+          ? "Remettre la console sous les volets"
+          : "Mettre la console à droite, à côté du code")}">
+        ${svgIcon("file-diff", { className: "octicon" })} ${volet ? "En bas" : "À droite"}
+      </button>
       </div>
       ${volet && toutes.length
         ? ""
@@ -659,6 +664,21 @@ function reprendreLeBrouillon() {
   }
 }
 
+/**
+ * La hauteur du cadre, mesurée depuis sa position réelle.
+ *
+ * **L'écran tient dans la fenêtre, et ce sont ses zones qui défilent.** Une
+ * hauteur calculée à l'avance — `100vh` moins une constante — se trompe dès que
+ * la chrome du projet se replie ou qu'un bandeau paraît, et laisse alors une
+ * bande vide en bas ou pousse la console dehors. L'onglet Fichiers mesure déjà
+ * la sienne de cette façon, et pour la même raison.
+ */
+function mesurerLaHauteur(racine) {
+  const haut = racine?.getBoundingClientRect?.().top ?? 0;
+  const hauteur = Math.max(360, Math.floor((window.innerHeight || 0) - haut - 8));
+  racine.style.setProperty("--brouillon-hauteur", `${hauteur}px`);
+}
+
 let debrancherSaisie = null;
 let debrancherPoignee = null;
 let debrancherConsole = null;
@@ -666,6 +686,7 @@ let debrancherConsole = null;
 function dessiner(racine) {
   debrancherSaisie?.();
   debrancherPoignee?.();
+  mesurerLaHauteur(racine);
 
   racine.innerHTML = renderEcrireEnMdall(etat.brouillon, {
     largeur: etat.largeur,
@@ -960,6 +981,11 @@ function brancherLeVolet(racine) {
   const zone = racine.querySelector(".brouillon-volet .saisie-code");
   debrancherSaisie = zone
     ? brancherLaSaisieDeCode(zone, {
+      // **Sans lui, on écrivait en noir sur noir.** Le rendu posait bien la
+      // couche colorée, mais rien ne la repeignait à la frappe : le texte de la
+      // zone est transparent — c'est ce qui permet de voir la couleur dessous —
+      // et l'on tapait donc dans le vide, visiblement.
+      colorer: colorerDuMdall,
       surChangement: (contenu) => {
         const ouvert = fichierOuvert(etat.brouillon);
         if (!ouvert) return;
@@ -1175,6 +1201,15 @@ export function renderEcrireEnMdallEcran(racine, { force = false } = {}) {
   }
 
   dessiner(racine);
+
+  // **La fenêtre change de taille, le cadre suit.** Sans cela, replier la
+  // barre latérale ou tourner un portable laisse la console hors de l'écran.
+  if (!racine.dataset.brouillonMesure) {
+    racine.dataset.brouillonMesure = "1";
+    window.addEventListener("resize", () => {
+      if (racine.isConnected) mesurerLaHauteur(racine);
+    });
+  }
 
   registerProjectPrimaryScrollSource(
     racine.closest("#projectStudioRouterScroll") || document.getElementById("projectStudioRouterScroll")
