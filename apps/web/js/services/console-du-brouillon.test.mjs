@@ -108,6 +108,59 @@ test("une transcription qui a abouti laisse une trace, et c'est un fait", () => 
   assert.match(fait.dit, /1 fichier écrit/);
 });
 
+test("une transcription sans une seule règle le dit, au lieu d'annoncer une réussite", () => {
+  // **Le défaut tel qu'il s'est vu.** « Si nature des volets = bois alors
+  // couleur des volets = violet » a rendu les deux déclarations, aucune règle,
+  // et aucune lacune. La console disait « 1 fichier écrit » — ce qui se lit
+  // comme une réussite —, et l'on cherchait son raisonnement dans un onglet
+  // vide.
+  const lignes = laConsole({
+    fichiers: [],
+    rendu: {
+      ok: true, fichiers: [{ nom: "variables-du-projet.ref" }],
+      lacunes: [], coupee: false, temperature: 0
+    }
+  });
+
+  const muette = lignes.find((une) => une.quoi === "aucune règle");
+  assert.ok(muette, "une transcription sans règle passe pour une réussite");
+  assert.equal(muette.niveau, NIVEAU.REMARQUE);
+  assert.match(muette.dit, /rien de déclaré comme non écrit/);
+  // Elle dit quoi faire : relancer, ou l'écrire soi-même. L'IA accélère, elle
+  // n'est jamais le seul chemin (fondamental 13).
+  assert.match(muette.dit, /à la main/);
+});
+
+test("une transcription qui écrit des règles ne dit rien de plus", () => {
+  // Sans cette épreuve, la ligne d'au-dessus pourrait paraître toujours, et la
+  // console crierait à chaque transcription réussie.
+  const lignes = laConsole({
+    fichiers: [],
+    rendu: {
+      ok: true, fichiers: [{ nom: "variables-du-projet.ref" }, { nom: "essai.ref" }],
+      lacunes: [], coupee: false, temperature: 0
+    }
+  });
+
+  assert.equal(lignes.some((une) => une.quoi === "aucune règle"), false);
+});
+
+test("sans règle mais avec une lacune, la console renvoie à la lacune", () => {
+  // Le modèle a dit pourquoi : la ligne ne doit pas laisser croire qu'il s'est
+  // tu, ni répéter ce qu'il a déjà expliqué.
+  const lignes = laConsole({
+    fichiers: [],
+    rendu: {
+      ok: true, fichiers: [{ nom: "essai.ddb" }],
+      lacunes: [{ phrase: "Multiplie la surface par 0,7", pourquoi: "pas de forme en Mdall" }],
+      coupee: false, temperature: 0
+    }
+  });
+
+  const muette = lignes.find((une) => une.quoi === "aucune règle");
+  assert.match(muette.dit, /voyez ce que le modèle dit n'avoir pas su écrire/);
+});
+
 /* ── Ce que le lancement a répondu ───────────────────────────────────────── */
 
 test("rien du lancement tant qu'on n'a pas lancé", () => {

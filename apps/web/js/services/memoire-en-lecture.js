@@ -51,6 +51,10 @@ import {
   jetonsDeValeur, AGENT, AGENTS, VERBES
 } from "./memoire-en-texte.js";
 import { lireUnCalcul, phraseDuRefus } from "./mdall-calcul.js";
+// La clé d'un sujet vient d'un seul endroit : comparer « Couleur des volets » à
+// « couleur des volets » avec une seconde normalisation écrite ici finirait par
+// ne plus dire la même chose que celle du projet (règle 10).
+import { cleDuSujet } from "./memoire-identifiants.js";
 import { jetonsEcrits } from "./mdall-en-ecriture.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -582,7 +586,28 @@ export function lireUnFichier(contenu = "") {
   const fermer = () => {
     if (courant) {
       // `accolade` sert à la lecture, pas au sens : elle ne ressort pas.
-      const { accolade, conclue, agent, utilitaire, version, enregistre, tableau, ...bloc } = courant;
+      const { accolade, conclue, affecte, agent, utilitaire, version, enregistre, tableau, ...bloc } = courant;
+
+      /**
+       * **Sans agent, une affectation en branche se refuse.**
+       *
+       * Une fonction conclut **sous son propre nom** : elle n'a pas à se le
+       * réaffecter, et la valeur qu'elle pose est ce qui suit `alors`. Le dire
+       * ici plutôt que de l'avaler est tout l'écart entre une règle qu'on
+       * corrige en trois secondes et une règle qui « conclut » le vide.
+       */
+      if (!agent) {
+        for (const ligne of affecte ?? []) {
+          const sienne = cleDuSujet(ligne.sujet) === cleDuSujet(bloc.sujet);
+          refus.push({
+            ligne: ligne.ligne,
+            texte: ligne.texte,
+            raison: sienne
+              ? `une fonction conclut sous son nom : écrivez « alors (${ligne.valeur}); » sans « ${ligne.sujet} = ».`
+              : `« ${ligne.sujet} » ne se pose pas ici : une branche conclut une valeur, elle n'affecte pas un autre nom.`
+          });
+        }
+      }
       // Un tableau ne ressort que s'il y en a un : le champ vide sur toutes les
       // affirmations ferait croire que chacune en porte un.
       if (Array.isArray(tableau) && tableau.length) bloc.tableau = tableau;
@@ -720,7 +745,30 @@ export function lireUnFichier(contenu = "") {
     // On peut donc les reconnaître sans savoir encore qu'un agent sera appelé
     // plus bas.
     if (courant && LOCALE_VIDE.test(corps)) return;
-    if (courant && AFFECTATION.test(corps)) return;
+
+    /**
+     * **Une branche qui affecte se retient, elle ne s'oublie plus.**
+     *
+     * `alors (X = importe (…));` appartient à une fonction qui appelle un
+     * agent : ses branches disent seulement quelle entrée retenir, et tout ce
+     * qu'elles portent se déduit de la signature. On les passe donc.
+     *
+     * Mais `alors (Couleur des volets = "violet");` dans une règle ordinaire est
+     * **la transcription la plus littérale de la phrase française** — « alors
+     * couleur des volets = violet » —, et c'est la première chose qu'on écrit.
+     * Passée de la même façon, elle ne laissait rien : la fonction gardait sa
+     * condition, ne concluait plus rien, et l'écran annonçait « conclut » suivi
+     * du vide. Aucun refus, aucune trace (règle 5).
+     *
+     * On ne peut pas trancher ici : l'appel à l'agent s'écrit **après** les
+     * branches. On retient donc la ligne, et c'est la fermeture du bloc qui
+     * décide — comme elle décide déjà du reste pour la même raison.
+     */
+    const affecte = courant ? corps.match(AFFECTATION) : null;
+    if (affecte) {
+      courant.affecte.push({ ligne: numero, texte: corps, sujet: texte(affecte[2]), valeur: texte(affecte[3]) });
+      return;
+    }
 
     const ouvreUneConclusion = corps.match(CONCLUSION_OUVRANTE);
     if (ouvreUneConclusion && courant) { conclusion = ouvreUneConclusion[1].toLowerCase(); return; }
@@ -804,6 +852,10 @@ export function lireUnFichier(contenu = "") {
         // Où chaque issue a été posée, pour refuser la seconde en la situant.
         // Sert à la lecture seule, et ne ressort pas du bloc.
         conclue: {},
+        // Les branches qui affectent au lieu de conclure. On ne peut les juger
+        // qu'à la fermeture : l'appel à l'agent qui les rendrait légitimes
+        // s'écrit après elles.
+        affecte: [],
         // Les valeurs que la fonction pose en les calculant, dans l'ordre où
         // elles sont écrites : la seconde peut lire la première.
         calculs: [],
@@ -897,7 +949,16 @@ export function lireUnFichier(contenu = "") {
         refus.push({
           ligne: numero,
           texte: corps,
-          raison: `« ${mot} si » n'existe pas : une fonction pose une condition et deux issues, « alors » et « sinon ».`
+          /**
+           * **Un refus dit quoi écrire, sinon il laisse devant un mur.**
+           *
+           * Deux cas — « existant » ou « neuf » — s'écrivent avec un `sinon`
+           * qui ne répète pas la condition : c'est presque toujours ce que la
+           * phrase demandait, et la correction tient en un mot. Trois cas se
+           * découpent. Le dire ici évite d'aller chercher dans le wiki ce que
+           * la ligne refusée aurait pu dire elle-même.
+           */
+          raison: `« ${mot} si » n'existe pas. Pour deux cas, écrivez « sinon (la valeur); » sans répéter la condition. Pour trois cas ou plus, découpez en deux fonctions.`
         });
         return;
       }

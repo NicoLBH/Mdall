@@ -303,11 +303,44 @@ test("l'exemple à trois cas conclut les trois, et n'en demande aucun à la main
   assert.notDeepEqual(conclut("existant").valeur, conclut("rénovation").valeur);
 });
 
-test("la consigne dit de découper, jamais d'abandonner la fonction", () => {
+test("la consigne dit de découper, jamais d'abandonner la règle", () => {
   // C'est la phrase qui a cassé l'écran : lue comme une permission de renoncer,
   // elle faisait rendre un brouillon sans une seule fonction.
-  assert.match(CONSIGNES, /Pour trois cas ou plus, on\s*\n?\s*découpe en deux fonctions/);
-  assert.match(CONSIGNES, /n'abandonne jamais une fonction parce qu'elle a trop de cas/);
-  // Et elle dit ce qui, lui, se déclare vraiment en lacune.
-  assert.match(CONSIGNES, /ce que le langage ne\s*\n?\s*sait pas \*\*faire\*\*/);
+  assert.match(CONSIGNES, /trois cas se découpent en deux fonctions/);
+  assert.match(CONSIGNES, /N'abandonne jamais une règle parce\s*\n?\s*qu'elle a trop de cas/);
+});
+
+test("la consigne dit, avant toute grammaire, qu'une règle devient une fonction", () => {
+  // **Le défaut vu à l'écran, et il est resté après deux rondes.** « Si nature
+  // des volets = bois alors couleur des volets = violet » rendait les deux
+  // déclarations et aucune règle. Le modèle avait déclaré la conclusion comme
+  // une entrée : il n'avait pas vu qu'il y avait une fonction à écrire.
+  //
+  // La phrase est donc dans la section des fichiers, avant la grammaire — pas
+  // dans une puce au milieu de dix autres.
+  const fichiers = CONSIGNES.indexOf("# Les trois fichiers");
+  const grammaire = CONSIGNES.indexOf("# Une déclaration de nom");
+  assert.ok(fichiers > 0 && grammaire > fichiers);
+
+  const section = CONSIGNES.slice(fichiers, grammaire);
+  assert.match(section, /une règle devient une\s*\n?\s*fonction dans `essai\.ref`/);
+  // Et elle dit l'autre moitié : ce qu'une règle conclut ne se déclare pas.
+  assert.match(section, /ne se déclare pas dans/);
+  // Sur l'exemple même qui a échoué, pour qu'on ne le relise pas en diagonale.
+  assert.match(section, /nature\s*\n?\s*des volets/i);
+});
+
+test("la consigne interdit la conclusion qui affecte, que la lecture refuse", () => {
+  // `alors (Couleur des volets = "violet")` est la transcription la plus
+  // littérale de la phrase française — et elle était avalée sans un mot.
+  assert.match(CONSIGNES, /une conclusion pose une valeur, pas une affectation/);
+
+  const lu = lireUnFichier([
+    "fonction Couleur des volets(zones, Nature des volets) {",
+    '   si (Nature des volets = "bois")',
+    '   alors (Couleur des volets = "violet");',
+    "}"
+  ].join("\n"));
+  assert.ok(lu.refus.some((un) => /conclut sous son nom/.test(un.raison)),
+    "la consigne l'interdit et la lecture l'accepte");
 });
