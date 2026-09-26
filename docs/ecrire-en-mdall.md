@@ -1400,3 +1400,73 @@ quinze.
 La leçon de fond : **une épreuve qui relit un fichier comme du texte ne prouve
 pas que ce fichier existe pour le moteur.** Les deux façons de se tromper sont
 désormais couvertes séparément.
+
+### Le diagnostic de la troisième ronde : deux silences, et un que je n'ai pas pu lever
+
+Signalé à l'usage : « le système n'arrive pas à reconnaître une fonction aussi
+simple que si la nature des volets = bois alors couleur des volets = violet », et
+la TVA qui ne calcule toujours rien quand on choisit « neuf ».
+
+#### Ce que les captures établissent
+
+L'onglet `essai.ref` était **vide** — ce qu'on y lisait est l'invite de
+l'éditeur, pas du code. Le modèle avait rendu **un seul fichier** : les deux
+déclarations, dont celle du nom que la règle devait conclure. Et il **n'avait
+rien déclaré** dans `ce_que_je_nai_pas_su_ecrire`.
+
+Le chemin entre la réponse et l'écran a été relu : `transcrire()` pose tout
+fichier qui porte du texte, et n'en écarte aucun. Le fichier de règles n'est donc
+jamais arrivé.
+
+#### Le silence qu'on a pu lever : une conclusion qui affecte
+
+La transcription la plus littérale de la phrase française s'écrit :
+
+```
+si (Nature des volets = "bois")
+alors (Couleur des volets = "violet");
+```
+
+C'est la première chose qu'on tape, et **la lecture l'avalait sans un mot**. La
+forme `alors (X = Y)` existe pour les fonctions qui appellent un **agent** — ses
+branches disent seulement quelle entrée retenir —, et le lecteur la passait dans
+tous les cas. La fonction gardait sa condition, ne concluait plus rien, et
+l'écran annonçait « conclut » suivi du vide (règle 5).
+
+On ne peut pas trancher à la ligne : l'appel à l'agent s'écrit **après** les
+branches. La ligne se retient donc, et c'est la fermeture du bloc qui décide —
+comme elle décide déjà du reste, pour la même raison. Sans agent, elle est
+refusée, et **le refus dit quoi écrire** : `alors ("violet");`.
+
+C'est la troisième ligne de cette famille : une ligne acceptée dont il ne reste
+rien. `sinon si`, la seconde `alors`, et maintenant l'affectation en branche. La
+règle à retenir : **si le lecteur ne sait pas quoi faire d'une ligne, il la
+refuse en la nommant. Il ne la passe jamais.**
+
+#### Le silence qu'on n'a pas pu lever : le modèle
+
+Pourquoi le modèle n'a écrit aucune fonction ne se démontre pas d'ici — la clé
+vit au serveur, et rien dans le dépôt ne rejoue un appel. Ce qui a été fait :
+
+- **l'essentiel est passé avant la grammaire.** « Une phrase qui dit *si … alors
+  …* est une règle, et une règle devient une fonction dans `essai.ref` », avec
+  l'exemple des volets, dans la section des trois fichiers ;
+- **une contradiction a été retirée.** Les rondes précédentes avaient ajouté
+  « une fonction a **une** condition et **deux** issues », deux lignes après
+  « `sinon` est facultatif » — et la règle des volets n'a qu'une issue ;
+- **les trois puces empilées dans la section la plus importante ont été
+  ramenées à deux.** Une consigne qui grossit sur un cas rare dilue le cas
+  courant.
+
+Ce sont des améliorations, pas une preuve. La preuve est au clavier.
+
+#### Le silence rendu audible
+
+La console disait « 1 fichier écrit », ce qui se lit comme une réussite. Elle dit
+maintenant, quand aucun `essai.ref` n'est revenu : **« aucune fonction écrite, et
+rien de déclaré comme non écrit »** — et elle rappelle qu'on peut relancer, ou
+l'écrire à la main. L'IA accélère ; elle n'est jamais le seul chemin
+(fondamental 13).
+
+Elle ne le dit pas comme une faute : « l'altitude du site est 890 m » est une
+donnée, pas une règle. Elle le dit, et laisse juge celui qui a écrit la phrase.

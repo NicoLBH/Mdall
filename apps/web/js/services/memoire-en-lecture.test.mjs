@@ -708,3 +708,95 @@ test("le bloc lu ne porte pas la mémoire de lecture des issues", () => {
 
   assert.ok(!("conclue" in lu.blocs[0]), "la mémoire de lecture ressort du bloc");
 });
+
+/* ── Une branche qui affecte au lieu de conclure ─────────────────────────────
+ *
+ * « Si nature des volets = bois alors couleur des volets = violet » : la
+ * transcription la plus littérale de cette phrase écrit
+ * `alors (Couleur des volets = "violet");`. C'est la première chose qu'on tape,
+ * et la lecture l'avalait — la fonction gardait sa condition, ne concluait plus
+ * rien, et l'écran annonçait « conclut » suivi du vide (règle 5).
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+test("une conclusion qui affecte se refuse, et dit quoi écrire", () => {
+  const lu = lireUnFichier([
+    "fonction Couleur des volets(zones, Nature des volets) {",
+    "   importe (variable: Nature des volets, depuis: variables-du-projet.ref, zones: zones);",
+    '   si (Nature des volets = "bois")',
+    '   alors (Couleur des volets = "violet");',
+    "}"
+  ].join("\n"));
+
+  const refus = lu.refus.find((un) => un.ligne === 4);
+  assert.ok(refus, "l'affectation est passée sans un mot");
+  // **Le refus dit la correction.** Sans elle, on relit la ligne vingt fois
+  // sans voir ce qu'elle a de faux : elle dit exactement ce que la phrase dit.
+  assert.match(refus.raison, /conclut sous son nom/);
+  assert.match(refus.raison, /alors \("violet"\)/);
+
+  // Et la fonction reste là, avec sa condition : on corrige une ligne, pas tout.
+  assert.equal(lu.blocs.length, 1);
+  assert.equal(lu.blocs[0].conditions.length, 1);
+});
+
+test("affecter un autre nom que le sien se refuse autrement", () => {
+  // Ce n'est pas la même faute : là on a oublié que la fonction conclut sous
+  // son nom ; ici on croit qu'une branche peut écrire ailleurs. Le dire pareil
+  // enverrait chercher la mauvaise correction.
+  const lu = lireUnFichier([
+    "fonction Couleur des volets(zones, Nature des volets) {",
+    '   si (Nature des volets = "bois")',
+    '   alors (Teinte du bardage = "violet");',
+    "}"
+  ].join("\n"));
+
+  const refus = lu.refus.find((un) => un.ligne === 3);
+  assert.ok(refus);
+  assert.match(refus.raison, /« Teinte du bardage » ne se pose pas ici/);
+});
+
+test("une fonction qui appelle un agent garde ses branches, sans un refus", () => {
+  // **C'est pour elles que la forme existe.** Ses branches disent seulement
+  // quelle entrée retenir, et tout ce qu'elles portent se déduit de la
+  // signature. Les refuser ferait refuser tout le référentiel des fondations.
+  // Le texte est celui que le projet écrit lui-même, et non une syntaxe
+  // recopiée à la main : une copie qui dérive ferait passer l'épreuve sur une
+  // forme que personne n'écrit (règle 4).
+  const ecrit = texteDesLignes(blocDeFonction(FONCTION_AVEC_AGENT));
+  assert.match(ecrit, /alors \(.+ = .+\)/, "la fixture ne porte plus de branche qui affecte");
+
+  const lu = lireUnFichier(ecrit);
+  assert.deepEqual(lu.refus, [], "les branches d'un appel d'agent ne se refusent pas");
+  assert.ok(lu.blocs[0].agent, "l'appel d'agent ne se lit plus");
+});
+
+test("la mémoire des affectations ne ressort pas du bloc", () => {
+  // Sortie, elle finirait versée en mémoire et lue comme quelque chose que la
+  // règle affirme.
+  const lu = lireUnFichier([
+    "fonction Couleur des volets(zones, Nature des volets) {",
+    '   si (Nature des volets = "bois")',
+    '   alors ("violet");',
+    "}"
+  ].join("\n"));
+
+  assert.ok(!("affecte" in lu.blocs[0]), "la mémoire de lecture ressort du bloc");
+});
+
+test("le refus de « sinon si » dit ce qu'il faut écrire à la place", () => {
+  // Un refus qui nomme la faute sans nommer la correction laisse devant un mur :
+  // deux cas s'écrivent avec un `sinon` qui ne répète pas la condition, et la
+  // correction tient en un mot.
+  const lu = lireUnFichier([
+    "fonction Taux de TVA(zones, Type de TVA) {",
+    '   si (Type de TVA = "existant")',
+    "   alors (5,5 %);",
+    '   sinon si (Type de TVA = "neuf")',
+    "   alors (20 %);",
+    "}"
+  ].join("\n"));
+
+  const refus = lu.refus.find((un) => un.ligne === 4);
+  assert.match(refus.raison, /Pour deux cas, écrivez « sinon \(la valeur\); »/);
+  assert.match(refus.raison, /trois cas ou plus, découpez en deux fonctions/);
+});

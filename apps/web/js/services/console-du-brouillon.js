@@ -29,6 +29,7 @@ import { MOTS_DE_LENNUI, verifierLeBrouillon } from "./verification-du-brouillon
 import { ISSUE, lancerLeBrouillon } from "./bac-dessai.js";
 import { PHRASES_DU_REFUS } from "./le-mdall-rendu.js";
 import { ECARTE, aProposerDuBrouillon, phraseDeLEcart } from "./proposition-du-brouillon.js";
+import { FICHIERS_DU_BROUILLON } from "./brouillon-mdall.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -141,6 +142,33 @@ function lignesDeLaTranscription(rendu) {
       source: SOURCE.TRANSCRIPTION,
       quoi: "pas reproductible",
       dit: "Le modèle a refusé qu'on lui fixe une température : la même phrase peut rendre autre chose."
+    }));
+  }
+
+  /**
+   * **Une transcription sans une seule fonction se dit.**
+   *
+   * Le défaut tel qu'il s'est vu : « Si nature des volets = bois alors couleur
+   * des volets = violet ». Le modèle a rendu les deux déclarations, aucune
+   * règle, et **n'a rien déclaré n'avoir su écrire**. La console annonçait
+   * « 1 fichier écrit », ce qui se lit comme une réussite — et l'on cherchait
+   * son raisonnement dans un onglet vide.
+   *
+   * Ce n'est pas toujours une faute : « l'altitude du site est 890 m » est une
+   * donnée, pas une règle. La ligne le dit donc sans accuser, et laisse juge
+   * celui qui vient d'écrire la phrase (règle 5).
+   */
+  const REGLES = FICHIERS_DU_BROUILLON[1].nom;
+  if (!rendu.fichiers.some((un) => texte(un?.nom) === REGLES)) {
+    lignes.push(ligne({
+      niveau: NIVEAU.REMARQUE,
+      source: SOURCE.TRANSCRIPTION,
+      quoi: "aucune règle",
+      ou: REGLES,
+      dit: (rendu.lacunes ?? []).length
+        ? `Aucune fonction écrite dans ${REGLES} : voyez ce que le modèle dit n'avoir pas su écrire.`
+        : `Aucune fonction écrite dans ${REGLES}, et rien de déclaré comme non écrit.`
+          + " Si votre phrase porte une règle, relancez « Coder » ou écrivez-la à la main."
     }));
   }
 

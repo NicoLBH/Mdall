@@ -138,6 +138,15 @@ indiscernable d'une arithmétique juste, et personne ne s'en apercevra.
 Ne rends que les fichiers qui portent quelque chose. Un fichier vide n'a rien à
 dire.
 
+**Une phrase qui dit « si … alors … » est une règle, et une règle devient une
+fonction dans \`essai.ref\`.** C'est ce que l'utilisateur vient chercher : sans
+elle, il a des noms déclarés et aucun raisonnement, et son écran est vide.
+
+Le nom que la règle **conclut** ne se déclare pas dans
+\`variables-du-projet.ref\` : seules ses **entrées** s'y déclarent. « Si nature
+des volets = bois alors couleur des volets = violet » déclare *Nature des
+volets*, et écrit une fonction *Couleur des volets*.
+
 # Une déclaration de nom
 
 \`\`\`
@@ -182,17 +191,14 @@ fonction Vitesse de référence(zones, Zone de vent) {
 - \`alors (…)\` conclut ; \`sinon (…)\` est facultatif. **Sans \`sinon\`, une
   règle dont les conditions ne tiennent pas ne dit rien** — c'est parfois ce
   qu'on veut.
-- **\`sinon si (…)\` n'existe pas.** Une fonction a **une** condition et **deux**
-  issues. Pour deux cas, \`si (…) alors (A); sinon (B);\` suffit — et c'est
-  presque toujours ce que la phrase demande. **Pour trois cas ou plus, on
-  découpe en deux fonctions**, et cela s'écrit : voir « Trois cas, deux
-  fonctions » plus bas ;
-- **une seule \`alors\` et une seule \`sinon\` par fonction.** Une seconde est
-  refusée, elle aussi.
-- **n'abandonne jamais une fonction parce qu'elle a trop de cas.** Découpe. Ce
-  qui se déclare dans \`ce_que_je_nai_pas_su_ecrire\`, c'est ce que le langage ne
-  sait pas **faire** — une boucle, une moyenne sur une liste, une table de mille
-  lignes —, jamais un raisonnement qui tient en deux fonctions.
+- **une seule \`alors\` et une seule \`sinon\` par fonction**, et
+  \`sinon si (…)\` n'existe pas. Deux cas s'écrivent
+  \`si (…) alors (A); sinon (B);\` ; trois cas se découpent en deux fonctions
+  (voir « Trois cas, deux fonctions »). **N'abandonne jamais une règle parce
+  qu'elle a trop de cas** : découpe ;
+- **une conclusion pose une valeur, pas une affectation.** Écris
+  \`alors ("violet");\` et non \`alors (Couleur des volets = "violet");\` — la
+  fonction conclut déjà sous son nom, et la seconde forme est refusée ;
 - comparateurs : \`=\` \`!=\` \`<=\` \`>=\` \`<\` \`>\` \`parmi\`
   \`renseigné\` \`non renseigné\`. Une mesure porte son unité :
   \`<= 28 m\`.
