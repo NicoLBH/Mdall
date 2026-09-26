@@ -126,6 +126,11 @@ function statutDuBloc(bloc) {
  */
 function affirmationDuBloc(bloc, { nature, declaration, marque = null }) {
   const conditions = Array.isArray(bloc?.conditions) ? bloc.conditions : [];
+  const brancheS = (Array.isArray(bloc?.sinonSi) ? bloc.sinonSi : [])
+    .map((branche) => ({
+      conditions: Array.isArray(branche?.conditions) ? branche.conditions : [],
+      alors: texte(branche?.alors)
+    }));
   const raisonne = conditions.length > 0 || Boolean(bloc?.agent);
 
   const commun = {
@@ -151,7 +156,19 @@ function affirmationDuBloc(bloc, { nature, declaration, marque = null }) {
       // sur la ligne `alors`, et une valeur écrite à deux endroits diverge.
       valeur: texte(bloc?.alors),
       referentiel: true,
-      regle: { conditions, sinon: texte(bloc?.sinon), sauf: Array.isArray(bloc?.sauf) ? bloc.sauf : [] },
+      /**
+       * **Les branches voyagent avec la règle.**
+       *
+       * Sans elles, une règle à trois cas versée au projet n'en porterait qu'un :
+       * la mémoire tiendrait une règle plus étroite que celle qu'on a relue et
+       * signée, et le rejeu conclurait autre chose que le bac d'essai.
+       */
+      regle: {
+        conditions,
+        ...(brancheS.length ? { sinonSi: brancheS } : {}),
+        sinon: texte(bloc?.sinon),
+        sauf: Array.isArray(bloc?.sauf) ? bloc.sauf : []
+      },
       ...(bloc?.agent ? { agent: { genre: texte(bloc.agent), utilitaire: texte(bloc.utilitaire) } } : {}),
       ...(texte(bloc?.utilitaire) ? { utilitaire: texte(bloc.utilitaire) } : {}),
       // Une règle n'a pas de nature : elle en produit une.

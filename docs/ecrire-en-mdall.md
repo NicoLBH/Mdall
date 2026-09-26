@@ -1470,3 +1470,81 @@ l'écrire à la main. L'IA accélère ; elle n'est jamais le seul chemin
 
 Elle ne le dit pas comme une faute : « l'altitude du site est 890 m » est une
 donnée, pas une règle. Elle le dit, et laisse juge celui qui a écrit la phrase.
+
+## « sinon si » entre dans le langage
+
+Après deux rondes à le refuser, la décision est prise : **c'est la forme que
+tout le monde écrit**, et la refuser coûtait une ronde à chaque fois qu'un
+humain ou un modèle la tapait.
+
+```
+fonction Taux de TVA(zones, Type de TVA) {
+   importe (variable: Type de TVA, depuis: variables-du-projet.ref, zones: zones);
+   si (Type de TVA = "existant")
+   alors (5,5 %);
+   sinon si (Type de TVA = "rénovation")
+   alors (10 %);
+   sinon si (Type de TVA = "neuf")
+   alors (20 %);
+}
+```
+
+### La tête ne bouge pas
+
+Une règle porte `conditions` et `alors` comme depuis toujours : c'est sa
+**première branche**. Les suivantes se rangent dans `sinonSi`, un tableau de
+`{conditions, alors}`, et le champ **ne paraît que s'il y en a**.
+
+C'est ce qui rend le changement supportable : une règle à une branche a
+exactement la forme qu'elle avait, toute la mémoire continue de la lire, et rien
+n'a eu à changer pour les milliers de règles qui n'enchaînent pas.
+
+### La première branche qui tient l'emporte
+
+L'ordre écrit **est** le sens. Le cas le plus particulier se range donc en
+premier, le plus général en dernier.
+
+### Une branche qu'on ne sait pas trancher arrête la lecture
+
+C'est le point délicat, et c'est la règle 5 appliquée à la lettre. `si A alors
+X; sinon si B alors Y;` avec un `A` qu'on ne sait pas lire : on ne passe **pas**
+à `B`. Le faire reviendrait à dire « A est faux » alors qu'on n'en sait rien, et
+à conclure `Y` sur une supposition.
+
+Conséquence utile : une branche qu'on n'a pas atteinte ne réclame pas ses
+entrées. Le formulaire du bac, lui, les offre quand même — il ne sait pas
+d'avance quelle branche sera prise, et c'est `dependancesDuBloc` qui le lui dit.
+
+### `sauf si` écarte la règle entière
+
+Une exception qui ne vaudrait que pour un cas sur trois ne serait pas une
+exception de la règle : ce serait une condition de plus sur une branche.
+
+### Ce qu'il a fallu traverser
+
+Une règle voyage loin, et une branche oubliée en route ne fait pas de bruit —
+elle fait une règle plus étroite que celle qu'on a signée. Chacun de ces points
+a son épreuve et sa mutation :
+
+| où | ce qui se serait perdu |
+| --- | --- |
+| lecture | les branches elles-mêmes |
+| écriture | l'aller-retour, et la signature qui déclare ce que les branches lisent |
+| coloration | `sinon si` en gris au milieu d'une fonction colorée |
+| évaluation | la première qui tient, l'arrêt sur l'indécidable, `sauf si` |
+| bac d'essai | la trace : une condition fausse au-dessus d'une conclusion juste |
+| vérification | un nom cité seulement dans une branche, déclaré nulle part |
+| graphe et cerveau | une arête manquante, une complexité sous-estimée |
+| propositions | une règle à trois cas versée au projet avec un seul |
+
+**Ce qu'une règle lit se dit maintenant à un seul endroit.** Le motif
+« conditions + sauf » était recopié dans quatre modules ; le jour où `sinon si`
+est arrivé, chacun des quatre devait y penser. `clausesDeLaRegle` le dit une
+fois, dans le lecteur du langage (règle 10).
+
+### Et la verrue du `0,055` disparaît
+
+L'idiome à deux fonctions qu'on enseignait pour contourner l'absence de chaîne
+passait par `calcule Repli = Taux hors neuf;`, et le pourcentage y perdait son
+signe : le bac affichait `0,055` au lieu de `5,5 %`. La chaîne n'a pas de
+relais, donc pas de perte. Elle est plus simple **et** plus juste.

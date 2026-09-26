@@ -618,26 +618,97 @@ test("un nom passé en argument n'est pas un texte cité", () => {
   assert.ok(!jetons.some((j) => j.type === "valeur"));
 });
 
-test("« sinon si » se refuse, plutôt que de conclure une phrase", () => {
-  // Le défaut tel qu'il s'est vu : un utilitaire de TVA marchait pour
-  // « existant » et pas pour « neuf ». La ligne `sinon si (…)` était lue comme
-  // une conclusion dont la valeur était le texte `si (Type de TVA = "neuf")` —
-  // la fonction concluait une phrase au lieu d'un taux, et rien ne le disait.
+test("« sinon si » enchaîne les branches, et la première qui tient l'emporte", () => {
+  // **L'histoire de ce mot.** Il était lu comme un `sinon` suivi d'un texte :
+  // la fonction concluait la phrase « si (Type de TVA = "neuf") » au lieu d'un
+  // taux. Il a ensuite été refusé — ce qui laissait devant un mur, puisque
+  // c'est la forme que tout le monde écrit. Il est maintenant de la langue.
   const lu = lireUnFichier([
     "fonction Taux de TVA(zones, Type de TVA) {",
     '   si (Type de TVA = "existant")',
     "   alors (5,5 %);",
+    '   sinon si (Type de TVA = "rénovation")',
+    "   alors (10 %);",
     '   sinon si (Type de TVA = "neuf")',
     "   alors (20 %);",
+    "   sinon (0 %);",
     "}"
   ].join("\n"));
 
-  const chaine = lu.refus.find((un) => un.ligne === 4);
-  assert.ok(chaine, "« sinon si » est passé sans un mot");
-  assert.match(chaine.raison, /« sinon si » n'existe pas/);
+  assert.deepEqual(lu.refus, []);
 
-  // Et surtout : la fonction ne conclut plus une phrase.
-  assert.equal(lu.blocs[0].sinon, "");
+  const [bloc] = lu.blocs;
+  // La tête ne bouge pas : toute la mémoire la lit depuis toujours, et une
+  // règle à une branche ne doit pas changer de forme.
+  assert.deepEqual(bloc.conditions.map((une) => une.valeur[0]), ["existant"]);
+  assert.equal(bloc.alors, "5,5 %");
+  assert.equal(bloc.sinon, "0 %");
+
+  assert.deepEqual(bloc.sinonSi.map((une) => [une.conditions[0].valeur[0], une.alors]),
+    [["rénovation", "10 %"], ["neuf", "20 %"]]);
+});
+
+test("une règle sans branche ne porte pas de champ de branches", () => {
+  // Posé vide sur toutes les affirmations, il ferait croire que chacune
+  // enchaîne — et il faudrait lire sa longueur pour savoir que non.
+  const lu = lireUnFichier([
+    "fonction Couleur des volets(zones, Nature des volets) {",
+    '   si (Nature des volets = "bois")',
+    '   alors ("violet");',
+    "}"
+  ].join("\n"));
+
+  assert.ok(!("sinonSi" in lu.blocs[0]));
+});
+
+test("une branche porte ses propres « et », pas celles de la précédente", () => {
+  // **Le piège.** Rangées dans la tête, les clauses d'une branche auraient
+  // ajouté une condition à celle d'avant : la règle aurait changé de sens sans
+  // qu'une ligne paraisse fausse.
+  const lu = lireUnFichier([
+    "fonction Régime(zones, Type, Surface) {",
+    '   si (Type = "A")',
+    "   alors (1);",
+    '   sinon si (Type = "B")',
+    "   et (Surface >= 100 m²)",
+    "   alors (2);",
+    "}"
+  ].join("\n"));
+
+  assert.deepEqual(lu.refus, []);
+  assert.equal(lu.blocs[0].conditions.length, 1, "la clause de la branche est tombée dans la tête");
+  assert.deepEqual(lu.blocs[0].sinonSi[0].conditions.map((une) => une.sujet), ["Type", "Surface"]);
+  assert.equal(lu.blocs[0].sinonSi[0].conditions[1].joint, "et");
+});
+
+test("« sinon si » sans « si » avant lui se refuse", () => {
+  // Une chaîne qui commence par son milieu n'a pas de premier cas : la lire
+  // comme une tête ferait une règle dont l'ordre ne veut plus rien dire.
+  const lu = lireUnFichier([
+    "fonction Régime(zones, Type) {",
+    '   sinon si (Type = "B")',
+    "   alors (2);",
+    "}"
+  ].join("\n"));
+
+  assert.match(lu.refus[0].raison, /« sinon si » suit un « si »/);
+});
+
+test("une branche écrite après le « sinon » final se refuse", () => {
+  // Elle ne serait jamais atteinte, et le taire ferait une règle dont une
+  // partie ne s'applique jamais — sans qu'aucun écran ne le dise.
+  const lu = lireUnFichier([
+    "fonction Régime(zones, Type) {",
+    '   si (Type = "A")',
+    "   alors (1);",
+    "   sinon (9);",
+    '   sinon si (Type = "B")',
+    "   alors (2);",
+    "}"
+  ].join("\n"));
+
+  const refus = lu.refus.find((un) => un.ligne === 5);
+  assert.match(refus.raison, /ne serait jamais atteinte/);
 });
 
 test("une seconde issue du même nom se refuse en situant la première", () => {
@@ -783,20 +854,55 @@ test("la mémoire des affectations ne ressort pas du bloc", () => {
   assert.ok(!("affecte" in lu.blocs[0]), "la mémoire de lecture ressort du bloc");
 });
 
-test("le refus de « sinon si » dit ce qu'il faut écrire à la place", () => {
-  // Un refus qui nomme la faute sans nommer la correction laisse devant un mur :
-  // deux cas s'écrivent avec un `sinon` qui ne répète pas la condition, et la
-  // correction tient en un mot.
-  const lu = lireUnFichier([
-    "fonction Taux de TVA(zones, Type de TVA) {",
-    '   si (Type de TVA = "existant")',
-    "   alors (5,5 %);",
-    '   sinon si (Type de TVA = "neuf")',
-    "   alors (20 %);",
-    "}"
-  ].join("\n"));
 
-  const refus = lu.refus.find((un) => un.ligne === 4);
-  assert.match(refus.raison, /Pour deux cas, écrivez « sinon \(la valeur\); »/);
-  assert.match(refus.raison, /trois cas ou plus, découpez en deux fonctions/);
+test("lire(écrire(G)) = G — une règle à branches traverse le texte sans rien perdre", () => {
+  // **L'aller-retour est ce qui rend le fichier fiable.** Une règle relue, puis
+  // réécrite par le projet, doit dire exactement la même chose : sinon un
+  // enregistrement, un diff ou une proposition la rabote d'une branche, et la
+  // mémoire tient une règle plus étroite que celle qu'on a signée.
+  const REGLE = {
+    sujet: "Taux de TVA",
+    quoi: "Le taux applicable, selon le type de travaux.",
+    conditions: [{ sujet: "Type de TVA", operateur: OPERATEUR.EGAL, valeur: ["existant"], unite: "", logique: false }],
+    alors: "5,5 %",
+    sinonSi: [
+      {
+        conditions: [
+          { sujet: "Type de TVA", operateur: OPERATEUR.EGAL, valeur: ["rénovation"], unite: "", logique: false },
+          { sujet: "Surface", operateur: OPERATEUR.AU_MOINS, valeur: ["100"], unite: "m²", logique: false, joint: "et" }
+        ],
+        alors: "10 %"
+      },
+      {
+        conditions: [{ sujet: "Type de TVA", operateur: OPERATEUR.EGAL, valeur: ["neuf"], unite: "", logique: false }],
+        alors: "20 %"
+      }
+    ],
+    sinon: "0 %",
+    sauf: [{ sujet: "Exonéré", operateur: OPERATEUR.EGAL, valeur: ["oui"], unite: "", logique: false }]
+  };
+
+  const { blocs, refus } = lireUnFichier(texteDesLignes(blocDeRegle(REGLE)));
+  assert.deepEqual(refus, []);
+
+  const [bloc] = blocs;
+  assert.deepEqual(bloc.conditions, REGLE.conditions);
+  assert.equal(bloc.alors, REGLE.alors);
+  assert.deepEqual(bloc.sinonSi, REGLE.sinonSi);
+  assert.equal(bloc.sinon, REGLE.sinon);
+  assert.deepEqual(bloc.sauf, REGLE.sauf);
+});
+
+test("la signature d'une règle à branches porte ce que les branches lisent", () => {
+  // Une entrée qui n'apparaît que dans un `sinon si` doit paraître dans la
+  // signature : sans elle, le fichier ne dit plus de quoi la fonction a besoin,
+  // et l'on croit la connaître en lisant sa première ligne.
+  const ecrit = texteDesLignes(blocDeRegle({
+    sujet: "Régime",
+    conditions: [{ sujet: "Type", operateur: OPERATEUR.EGAL, valeur: ["A"] }],
+    alors: "1",
+    sinonSi: [{ conditions: [{ sujet: "Surface", operateur: OPERATEUR.AU_MOINS, valeur: ["100"], unite: "m²" }], alors: "2" }]
+  }));
+
+  assert.match(ecrit.split("\n")[0], /Régime\(zones, Type, Surface\)/);
 });

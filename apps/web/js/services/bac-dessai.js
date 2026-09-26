@@ -84,6 +84,15 @@ function commeUneRegle(bloc) {
       value: texte(bloc?.alors),
       regle: {
         conditions: Array.isArray(bloc?.conditions) ? bloc.conditions : [],
+        /**
+         * **Les branches enchaînées descendent avec le reste.**
+         *
+         * Sans elles, l'évaluateur ne voyait que la première : « existant »
+         * concluait, et « neuf » tombait sur le `sinon` — c'est-à-dire sur
+         * rien. La règle avait deux cas sur trois qui ne servaient à rien, et
+         * l'écran n'en disait pas un mot.
+         */
+        sinonSi: Array.isArray(bloc?.sinonSi) ? bloc.sinonSi : [],
         sinon: texte(bloc?.sinon),
         sauf: Array.isArray(bloc?.sauf) ? bloc.sauf : [],
         // Les valeurs que la fonction pose en les calculant. Sans elles,
@@ -217,7 +226,21 @@ function unePasse(fonctions, valeurs) {
       ou: (bloc?.enregistre ?? []).map((sortie) => texte(sortie?.sujet)).filter(Boolean),
       // La trace : ce qu'elle a lu, et ce que chaque clause valait. Une règle
       // qui rend un verdict sans montrer sa lecture n'apprend rien.
-      lectures: [...evaluation.conditions, ...evaluation.exceptions].map((trace) => ({
+      /**
+       * Les branches enchaînées y sont **dans l'ordre où elles ont été lues**.
+       *
+       * Sans elles, une règle à trois cas concluait « 20 % » et ne montrait que
+       * la lecture du premier cas, qui est faux : on voyait une condition
+       * fausse au-dessus d'une conclusion juste, sans rien pour les relier.
+       *
+       * Celles qu'on n'a pas atteintes n'y sont pas : la règle ne les a pas
+       * lues, et les afficher ferait croire qu'elle les a pesées.
+       */
+      lectures: [
+        ...evaluation.conditions,
+        ...(evaluation.sinonSi ?? []).flatMap((branche) => branche.conditions ?? []),
+        ...evaluation.exceptions
+      ].map((trace) => ({
         sujet: texte(trace.sujet),
         operateur: texte(trace.operateur),
         attendu: (trace.attendu ?? []).map(texte).filter(Boolean),

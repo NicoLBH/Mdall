@@ -246,70 +246,6 @@ test("l'exemple de chaînage de la consigne conclut vraiment, sans rien demander
   assert.equal(prix.valeur, "144 €");
 });
 
-test("la consigne interdit « sinon si », que la lecture refuse", () => {
-  // **Le défaut vu à l'écran, une fois de plus.** Un utilitaire de TVA marchait
-  // pour « existant » et pas pour « neuf » : le modèle avait écrit
-  // `sinon si (Type de TVA = "neuf")`, forme que la langue n'a pas. Le refuser
-  // à la lecture ne suffit pas — le modèle le réécrirait au prochain essai, et
-  // l'utilisateur en serait quitte pour un refus qu'il n'a pas causé.
-  assert.match(CONSIGNES, /`sinon si \(…\)` n'existe pas/);
-  // Et il dit quoi faire à la place, sinon la consigne n'est qu'une porte close.
-  assert.match(CONSIGNES, /ce_que_je_nai_pas_su_ecrire/);
-
-  // Ce que la lecture en fait, pour que l'interdit et le refus soient la même
-  // chose et non deux intentions parallèles (règle 4).
-  const lu = lireUnFichier([
-    "fonction Taux de TVA(zones, Type de TVA) {",
-    '   si (Type de TVA = "existant")',
-    "   alors (5,5 %);",
-    '   sinon si (Type de TVA = "neuf")',
-    "   alors (20 %);",
-    "}"
-  ].join("\n"));
-  assert.ok(lu.refus.some((un) => /« sinon si » n'existe pas/.test(un.raison)),
-    "la consigne l'interdit et la lecture l'accepte");
-});
-
-test("l'exemple à trois cas conclut les trois, et n'en demande aucun à la main", () => {
-  // **Le défaut que ça répare, et il était grave.** La consigne disait « pour un
-  // troisième cas, le langage ne sait pas : mets la phrase dans
-  // ce_que_je_nai_pas_su_ecrire ». Or une TVA française a couramment trois taux.
-  // Le modèle renonçait donc à la fonction entière, et l'écran ne créait plus
-  // aucune fonction — donc plus rien à lancer, ni à enregistrer sur l'établi.
-  //
-  // La forme existe. On la montre, et on la lance ici : enseigner une syntaxe
-  // sans l'éprouver, c'est ce qu'on venait de faire (règle 12).
-  const trois = EXEMPLES.find((un) => un.includes("Taux hors neuf"));
-  assert.ok(trois, "la consigne ne montre pas comment écrire trois cas");
-
-  const fichiers = [{ nom: "essai.ref", contenu: trois }];
-
-  // Le taux ne se demande pas : les deux fonctions le concluent.
-  const demandes = champsDuBrouillon(fichiers).map((un) => un.nom);
-  assert.deepEqual(demandes, ["Type de TVA"], `demandé à tort : ${demandes.join(", ")}`);
-
-  const conclut = (type) => {
-    const lance = lancerLeBrouillon(fichiers, { "Type de TVA": type });
-    const taux = lance.find((un) => un.sujet === "Taux de TVA");
-    return { issue: taux.issue, valeur: taux.valeur };
-  };
-
-  // Le neuf tranche dans la seconde fonction ; les deux autres remontent de la
-  // première par la locale. Les trois concluent — c'est tout l'enjeu.
-  assert.deepEqual(conclut("neuf"), { issue: ISSUE.TIENT, valeur: "20 %" });
-  assert.equal(conclut("existant").issue, ISSUE.SINON);
-  assert.equal(conclut("rénovation").issue, ISSUE.SINON);
-  // Et ce ne sont pas trois fois la même réponse : le repli suit bien le cas.
-  assert.notDeepEqual(conclut("existant").valeur, conclut("rénovation").valeur);
-});
-
-test("la consigne dit de découper, jamais d'abandonner la règle", () => {
-  // C'est la phrase qui a cassé l'écran : lue comme une permission de renoncer,
-  // elle faisait rendre un brouillon sans une seule fonction.
-  assert.match(CONSIGNES, /trois cas se découpent en deux fonctions/);
-  assert.match(CONSIGNES, /N'abandonne jamais une règle parce\s*\n?\s*qu'elle a trop de cas/);
-});
-
 test("la consigne dit, avant toute grammaire, qu'une règle devient une fonction", () => {
   // **Le défaut vu à l'écran, et il est resté après deux rondes.** « Si nature
   // des volets = bois alors couleur des volets = violet » rendait les deux
@@ -343,4 +279,36 @@ test("la consigne interdit la conclusion qui affecte, que la lecture refuse", ()
   ].join("\n"));
   assert.ok(lu.refus.some((un) => /conclut sous son nom/.test(un.raison)),
     "la consigne l'interdit et la lecture l'accepte");
+});
+
+test("l'exemple à plusieurs cas conclut les trois, et n'en demande aucun à la main", () => {
+  // **`sinon si` est entré dans le langage**, et la consigne le montre. Un
+  // exemple qu'on ne lance pas est une intention : celui-ci tourne ici, sur les
+  // trois cas, et vérifie qu'aucun taux n'est demandé à la main.
+  const chaine = EXEMPLES.find((un) => un.includes("sinon si"));
+  assert.ok(chaine, "la consigne ne montre pas comment écrire plusieurs cas");
+
+  const fichiers = [{ nom: "essai.ref", contenu: chaine }];
+  assert.deepEqual(lireUnFichier(chaine).refus, [], "l'exemple ne se lit pas");
+  assert.deepEqual(champsDuBrouillon(fichiers).map((un) => un.nom), ["Type de TVA"]);
+
+  const conclut = (type) => {
+    const taux = lancerLeBrouillon(fichiers, { "Type de TVA": type })
+      .find((un) => un.sujet === "Taux de TVA");
+    return { issue: taux.issue, valeur: taux.valeur };
+  };
+
+  assert.deepEqual(conclut("existant"), { issue: ISSUE.TIENT, valeur: "5,5 %" });
+  assert.deepEqual(conclut("rénovation"), { issue: ISSUE.TIENT, valeur: "10 %" });
+  assert.deepEqual(conclut("neuf"), { issue: ISSUE.TIENT, valeur: "20 %" });
+});
+
+test("la consigne enseigne l'enchaînement, et dit que l'ordre fait le sens", () => {
+  // Sans l'ordre, une chaîne dont la branche la plus générale vient en premier
+  // ne donne jamais la main aux suivantes — et rien ne le dirait.
+  assert.match(CONSIGNES, /autant qu'il en faut/);
+  assert.match(CONSIGNES, /première branche qui tient l'emporte/);
+  assert.match(CONSIGNES, /n'abandonne jamais une règle parce\s*\n?\s*qu'elle a beaucoup de cas/i);
+  // Et elle ne dit plus le contraire.
+  assert.doesNotMatch(CONSIGNES, /ni branche enchaînée/);
 });

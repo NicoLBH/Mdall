@@ -230,3 +230,100 @@ test("un sujet absent se distingue d'un sujet vide", () => {
   // La clé se normalise : deux écritures d'un même nom désignent la même entrée.
   assert.deepEqual(rempli("hauteur du  plancher  bas"), { connu: true, valeur: "26 m" });
 });
+
+/* ── Les branches enchaînées ─────────────────────────────────────────────────
+ *
+ * `si A alors X; sinon si B alors Y; sinon Z;` — la première branche qui tient
+ * l'emporte, et l'ordre écrit est donc le sens.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Une règle à branches, montée comme la mémoire la porte. */
+const enchainee = (sinonSi, { sinon = "", sauf = [] } = {}) => ({
+  id: "r-Taux de TVA",
+  payload: {
+    subject: "Taux de TVA",
+    value: "5,5 %",
+    referentiel: true,
+    regle: {
+      conditions: [{ sujet: "Type", operateur: OPERATEUR.EGAL, valeur: "existant" }],
+      sinonSi, sinon, sauf
+    }
+  }
+});
+
+const BRANCHES = [
+  { conditions: [{ sujet: "Type", operateur: OPERATEUR.EGAL, valeur: "rénovation" }], alors: "10 %" },
+  { conditions: [{ sujet: "Type", operateur: OPERATEUR.EGAL, valeur: "neuf" }], alors: "20 %" }
+];
+
+test("la première branche qui tient l'emporte, et elle seule conclut", () => {
+  for (const [type, attendu, rang] of [
+    ["existant", "5,5 %", 0], ["rénovation", "10 %", 1], ["neuf", "20 %", 2]
+  ]) {
+    const rendu = evaluerLaRegle(enchainee(BRANCHES), lireDepuis({ Type: type }));
+    assert.equal(rendu.tient, true, type);
+    assert.equal(rendu.valeur, attendu, type);
+    assert.equal(rendu.branche, rang, type);
+  }
+});
+
+test("aucune branche ne tenant, c'est le « sinon » — ou rien", () => {
+  const avec = evaluerLaRegle(enchainee(BRANCHES, { sinon: "0 %" }), lireDepuis({ Type: "autre" }));
+  assert.equal(avec.tient, false);
+  assert.equal(avec.valeur, "0 %");
+  assert.equal(avec.branche, -1);
+
+  // Sans `sinon`, la règle ne dit **rien** : lui faire conclure une valeur vide
+  // effacerait ce que le projet tient, et une valeur effacée se lit comme une
+  // valeur.
+  const sans = evaluerLaRegle(enchainee(BRANCHES), lireDepuis({ Type: "autre" }));
+  assert.equal(sans.applique, false);
+  assert.equal(sans.valeur, "");
+});
+
+test("une branche qu'on ne sait pas trancher arrête la lecture", () => {
+  // **Le point délicat.** Passer à la branche suivante reviendrait à dire « la
+  // première est fausse » alors qu'on n'en sait rien, et à conclure sur une
+  // supposition. La règle est indécidable, et elle le dit (règle 5).
+  const rendu = evaluerLaRegle(enchainee(BRANCHES), lireDepuis({}));
+
+  assert.equal(rendu.tient, null);
+  assert.equal(rendu.valeur, "");
+  assert.equal(rendu.branche, -1);
+  // Et l'on n'a pas lu les suivantes : on s'est arrêté à la première.
+  assert.deepEqual(rendu.sinonSi, []);
+});
+
+test("une branche qu'on n'a pas atteinte ne réclame pas ses entrées", () => {
+  // La règle n'en a pas eu besoin : les demander ferait un formulaire qui
+  // réclame des valeurs dont la réponse ne dépend pas.
+  const autreNom = [
+    { conditions: [{ sujet: "Surface", operateur: OPERATEUR.AU_MOINS, valeur: "100", unite: "m²" }], alors: "10 %" }
+  ];
+  const rendu = evaluerLaRegle(enchainee(autreNom), lireDepuis({ Type: "existant" }));
+
+  assert.equal(rendu.valeur, "5,5 %");
+  assert.deepEqual(rendu.manquants, [], "une branche jamais lue réclame une entrée");
+});
+
+test("« sauf si » écarte la règle entière, branches comprises", () => {
+  // Une exception qui ne vaudrait que pour un cas sur trois ne serait pas une
+  // exception de la règle : ce serait une condition de plus sur une branche.
+  const sauf = [{ sujet: "Exonéré", operateur: OPERATEUR.EGAL, valeur: "oui" }];
+  const rendu = evaluerLaRegle(
+    enchainee(BRANCHES, { sinon: "0 %", sauf }),
+    lireDepuis({ Type: "neuf", Exonéré: "oui" })
+  );
+
+  assert.equal(rendu.tient, false, "la branche « neuf » a pris la main malgré l'exception");
+  assert.equal(rendu.valeur, "0 %");
+});
+
+test("la trace porte ce que chaque branche a lu, dans l'ordre", () => {
+  // Sans elle, l'écran montre une condition fausse au-dessus d'une conclusion
+  // juste, et rien pour les relier.
+  const rendu = evaluerLaRegle(enchainee(BRANCHES), lireDepuis({ Type: "neuf" }));
+
+  assert.deepEqual(rendu.conditions.map((une) => une.verite), [false]);
+  assert.deepEqual(rendu.sinonSi.map((une) => une.verite), [false, true]);
+});

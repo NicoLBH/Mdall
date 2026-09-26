@@ -97,7 +97,12 @@ const CONSTATS = new Map([
  * lirait comme un statut.
  */
 const TETES = [
-  "sauf si", "parce que:", "statut:", "fichier:", "note:", "le:", "zone:",
+  // **« sinon si » avant « sinon »**, comme « sauf si » avant « si ». Lu comme
+  // un « sinon » suivi d'un texte, il devenait une conclusion dont la valeur
+  // était la condition écrite — la fonction concluait une phrase au lieu d'un
+  // taux. C'est un mot de la langue à part entière, et il se reconnaît ici,
+  // une fois, pour la lecture comme pour la couleur (règle 10).
+  "sinon si", "sauf si", "parce que:", "statut:", "fichier:", "note:", "le:", "zone:",
   "fonction", "soit", "calcule", "alors", "sinon", "si", "et", "ou", "non",
   ...PROVENANCES.map((type) => `${type}:`)
 ];
@@ -586,7 +591,25 @@ export function lireUnFichier(contenu = "") {
   const fermer = () => {
     if (courant) {
       // `accolade` sert à la lecture, pas au sens : elle ne ressort pas.
-      const { accolade, conclue, affecte, agent, utilitaire, version, enregistre, tableau, ...bloc } = courant;
+      const {
+        accolade, conclue, affecte, branche, sinonSi,
+        agent, utilitaire, version, enregistre, tableau, ...bloc
+      } = courant;
+
+      /**
+       * **Les branches ne sortent que s'il y en a.**
+       *
+       * Une règle à une seule branche garde exactement la forme qu'elle avait :
+       * `conditions` et `alors`. Poser un tableau vide sur toutes les
+       * affirmations ferait croire que chacune enchaîne, et il faudrait aller
+       * lire sa longueur pour savoir que non.
+       *
+       * `ligne` et `conclue` servent à la lecture — situer un refus, refuser une
+       * seconde conclusion — et ne disent rien du sens : ils ne ressortent pas.
+       */
+      const enchainees = (sinonSi ?? [])
+        .map(({ conditions, alors }) => ({ conditions, alors }));
+      if (enchainees.length) bloc.sinonSi = enchainees;
 
       /**
        * **Sans agent, une affectation en branche se refuse.**
@@ -856,6 +879,22 @@ export function lireUnFichier(contenu = "") {
         // qu'à la fermeture : l'appel à l'agent qui les rendrait légitimes
         // s'écrit après elles.
         affecte: [],
+        /**
+         * **Les branches qui suivent la première.**
+         *
+         * `si A alors X; sinon si B alors Y; sinon Z;` — la première branche
+         * reste `conditions` et `alors`, parce que c'est ce que toute la
+         * mémoire lit depuis toujours et qu'une règle à une branche ne change
+         * pas de forme. Les suivantes se rangent ici, dans l'ordre où elles
+         * sont écrites : **la première qui tient l'emporte**, et l'ordre est
+         * donc le sens.
+         *
+         * Vide, le champ ne ressort pas du bloc : le poser sur toutes les
+         * affirmations ferait croire que chacune enchaîne.
+         */
+        sinonSi: [],
+        /** Où vont les conditions et la conclusion qu'on lit : la tête, ou une branche. */
+        branche: null,
         // Les valeurs que la fonction pose en les calculant, dans l'ordre où
         // elles sont écrites : la seconde peut lire la première.
         calculs: [],
@@ -931,54 +970,74 @@ export function lireUnFichier(contenu = "") {
       return;
     }
 
-    if (mot === "alors" || mot === "sinon") {
-      /**
-       * **« sinon si (…) » n'existe pas, et l'avaler était le pire.**
-       *
-       * Une fonction porte une condition et deux issues ; elle n'enchaîne pas
-       * les branches. Écrite quand même, la ligne se lisait comme une
-       * conclusion dont la **valeur** était le texte `si (Type de TVA =
-       * "neuf")`. La fonction concluait donc une phrase au lieu d'un taux,
-       * celles qui la lisaient ne savaient plus quoi en faire, et rien nulle
-       * part ne disait pourquoi (règle 5). Un cas marchait, l'autre non.
-       *
-       * Une conclusion ordinaire commence par sa parenthèse ou par sa valeur :
-       * aucune ne commence par le mot `si`.
-       */
-      if (/^si\b/i.test(reste)) {
+    /**
+     * `sinon si (Type de TVA = "neuf")` — une branche de plus.
+     *
+     * **La première qui tient l'emporte**, et l'ordre est donc le sens. Une
+     * branche s'ouvre ici, et tout ce qui suit — ses `et`, ses `ou`, son
+     * `alors` — va dedans jusqu'à la suivante.
+     */
+    if (mot === "sinon si") {
+      if (!courant.conditions.length) {
         refus.push({
-          ligne: numero,
-          texte: corps,
-          /**
-           * **Un refus dit quoi écrire, sinon il laisse devant un mur.**
-           *
-           * Deux cas — « existant » ou « neuf » — s'écrivent avec un `sinon`
-           * qui ne répète pas la condition : c'est presque toujours ce que la
-           * phrase demandait, et la correction tient en un mot. Trois cas se
-           * découpent. Le dire ici évite d'aller chercher dans le wiki ce que
-           * la ligne refusée aurait pu dire elle-même.
-           */
-          raison: `« ${mot} si » n'existe pas. Pour deux cas, écrivez « sinon (la valeur); » sans répéter la condition. Pour trois cas ou plus, découpez en deux fonctions.`
+          ligne: numero, texte: corps,
+          raison: "« sinon si » suit un « si » : écrivez d'abord la première condition."
+        });
+        return;
+      }
+      // Après le `sinon` final, il n'y a plus de branche à ouvrir : ce qui
+      // suivrait ne serait jamais atteint, et le taire ferait une règle dont
+      // une partie ne s'applique jamais.
+      if (courant.conclue.sinon) {
+        refus.push({
+          ligne: numero, texte: corps,
+          raison: `« sinon » est déjà posé ligne ${courant.conclue.sinon} : une branche écrite après lui ne serait jamais atteinte.`
         });
         return;
       }
 
+      const condition = lireUneCondition(sansBornes(reste).corps);
+      if (!condition) {
+        refus.push({ ligne: numero, texte: corps, raison: "cette condition ne compare rien." });
+        return;
+      }
+
+      courant.sinonSi.push({ conditions: [condition], alors: "", ligne: numero, conclue: 0 });
+      courant.branche = courant.sinonSi.length - 1;
+      return;
+    }
+
+    if (mot === "alors" || mot === "sinon") {
+      // **Une conclusion se pose là où la branche est ouverte.** `alors` suit
+      // la dernière condition écrite ; `sinon` ferme la chaîne et appartient à
+      // la règle entière, quelle que soit la branche en cours.
+      const dansUneBranche = mot === "alors" && courant.branche !== null;
+      const ou = dansUneBranche ? courant.sinonSi[courant.branche] : null;
+
       // **Une seconde issue du même nom écrasait la première, sans un mot.**
-      // Deux `alors` dans une fonction, et elle concluait le dernier écrit :
-      // la valeur qu'on lisait à l'écran n'était pas celle qu'on croyait avoir
+      // Deux `alors` dans une même branche, et elle concluait le dernier
+      // écrit : la valeur qu'on lisait n'était pas celle qu'on croyait avoir
       // écrite, et le fichier avait l'air juste.
-      if (courant.conclue[mot]) {
+      const deja = ou ? ou.conclue : courant.conclue[mot];
+      if (deja) {
         refus.push({
           ligne: numero,
           texte: corps,
-          raison: `« ${mot} » est déjà posé ligne ${courant.conclue[mot]} : une fonction ne conclut qu'une fois par issue.`
+          raison: `« ${mot} » est déjà posé ligne ${deja} : une branche ne conclut qu'une fois.`
         });
         return;
       }
 
       const lue = lireUneValeur(sansBornes(reste).corps);
-      courant[mot] = lue.unite ? `${lue.valeur} ${lue.unite}` : lue.valeur;
+      const valeur = lue.unite ? `${lue.valeur} ${lue.unite}` : lue.valeur;
+
+      if (ou) { ou.alors = valeur; ou.conclue = numero; return; }
+
+      courant[mot] = valeur;
       courant.conclue[mot] = numero;
+      // Le `sinon` final ferme la chaîne : ce qui suit ne se range plus dans
+      // une branche.
+      if (mot === "sinon") courant.branche = null;
       return;
     }
 
@@ -988,9 +1047,21 @@ export function lireUnFichier(contenu = "") {
         refus.push({ ligne: numero, texte: corps, raison: "cette condition ne compare rien." });
         return;
       }
-      if (mot === "sauf si") courant.sauf.push(condition);
-      else if (mot === "si") courant.conditions.push(condition);
-      else courant.conditions.push({ ...condition, joint: mot });
+      // `sauf si` écarte la **règle entière**, pas une branche : c'est ce que
+      // le mot veut dire, et le ranger dans la branche en cours ferait une
+      // exception qui ne vaudrait que pour un cas sur trois.
+      if (mot === "sauf si") { courant.sauf.push(condition); return; }
+
+      // `si` rouvre la tête : c'est la première branche, et elle se réécrit si
+      // quelqu'un la pose deux fois — ce que le refus de la seconde `alors`
+      // attrapera.
+      if (mot === "si") { courant.branche = null; courant.conditions.push(condition); return; }
+
+      // `et` / `ou` / `non` prolongent la **branche ouverte**, pas la première.
+      // Rangés dans la tête, `sinon si (A) et (B)` aurait ajouté une clause à
+      // la condition d'avant — et la règle aurait changé de sens sans un mot.
+      const ou = courant.branche === null ? courant : courant.sinonSi[courant.branche];
+      ou.conditions.push({ ...condition, joint: mot });
       return;
     }
 
@@ -1081,12 +1152,34 @@ export function lireUnChampDeclare(declaration, corps = "", { refuser = null } =
  * penser.
  */
 export function dependancesDuBloc(bloc = {}) {
-  const sujets = [
-    ...(bloc?.conditions ?? []).map((condition) => texte(condition?.sujet)),
-    ...(bloc?.sauf ?? []).map((condition) => texte(condition?.sujet))
-  ].filter(Boolean);
+  const sujets = clausesDeLaRegle(bloc).map((condition) => texte(condition?.sujet)).filter(Boolean);
 
   return [...new Set(sujets)];
+}
+
+/**
+ * **Toutes les clauses d'une règle** : sa première branche, celles qui
+ * l'enchaînent, et ses exceptions.
+ *
+ * ## Pourquoi ça vit ici, et à un seul endroit
+ *
+ * `conditions` et `sauf` étaient concaténés à la main dans quatre modules. Le
+ * jour où `sinon si` est entré dans le langage, chacun des quatre devait y
+ * penser — et celui qui l'oublie ne se trompe pas bruyamment : il construit un
+ * graphe où un nom lu par une branche n'a pas d'arête, une règle dont une
+ * entrée n'est jamais demandée, un rejeu qui ne se déclenche pas quand cette
+ * entrée change. Rien ne tombe, tout est faux (règle 10).
+ *
+ * Elle prend le **bloc** — `payload.regle`, ou un bloc lu d'un fichier : les
+ * deux portent la même forme, et c'est cette forme-là qu'on interroge.
+ */
+export function clausesDeLaRegle(bloc = {}) {
+  return [
+    ...(Array.isArray(bloc?.conditions) ? bloc.conditions : []),
+    ...(Array.isArray(bloc?.sinonSi) ? bloc.sinonSi : [])
+      .flatMap((branche) => (Array.isArray(branche?.conditions) ? branche.conditions : [])),
+    ...(Array.isArray(bloc?.sauf) ? bloc.sauf : [])
+  ];
 }
 
 /**
@@ -1419,7 +1512,11 @@ export function jetonsDeLaLigne(ligne = "") {
     return [...marge, ...ligneDeConsequence(mot, lue.valeur, lue.unite, 0, { regle: borne }).slice(1)];
   }
 
-  if (mot === "si" || mot === "et" || mot === "ou" || mot === "non" || mot === "sauf si") {
+  // `sinon si (…)` se colore comme une condition, parce que c'en est une. Sans
+  // cette ligne elle tombait dans « ce qu'on ne sait pas lire » et s'affichait
+  // en gris au milieu d'une fonction colorée.
+  if (mot === "si" || mot === "et" || mot === "ou" || mot === "non"
+    || mot === "sauf si" || mot === "sinon si") {
     const { corps, borne } = sansBornes(reste);
     const condition = lireUneCondition(corps);
     if (condition) return [...marge, ...ligneDeCondition(mot, condition, 0, { regle: borne }).slice(1)];
