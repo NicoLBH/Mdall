@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 import {
   READER,
@@ -281,4 +284,33 @@ test("« Raisonnements » ne promet plus les règles qu'il ne montre pas", () =>
   // Et celui des règles dit ce qu'une règle est, et ce qu'elle n'est pas.
   assert.match(readerLead(READER.RULES), /Une règle n'affirme rien/);
   assert.equal(readerLabel(READER.RULES), "Règles");
+});
+
+test("chaque lecture du rail a sa requête, et son vocabulaire dans la barre", () => {
+  /**
+   * **Cette épreuve relit l'écran, et c'est l'exception qui le justifie.**
+   *
+   * `project-memory.js` ne se charge pas ici, et rien dans un rendu ne montre
+   * ce défaut-là : le bouton du rail s'affiche, on clique, et il écrit dans la
+   * barre une requête que la barre ne sait pas lire. La liste ne bouge pas, et
+   * aucun message ne dit pourquoi.
+   *
+   * Les deux moitiés vont ensemble : une lecture sans requête ne se corrige pas
+   * au clavier, et une requête sans vocabulaire ne se lit pas.
+   */
+  const source = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "views", "project-memory.js"),
+    "utf8"
+  );
+
+  const filtres = source.slice(source.indexOf("const READER_FILTERS = {"), source.indexOf("};", source.indexOf("const READER_FILTERS = {")));
+  for (const lecture of READERS) {
+    assert.match(filtres, new RegExp(`\\[READER\\.${
+      Object.keys(READER).find((cle) => READER[cle] === lecture)}\\]`),
+      `la lecture « ${readerLabel(lecture)} » n'a pas de requête équivalente`);
+  }
+
+  // Et le champ que la lecture des règles emploie existe dans la barre : sans
+  // lui, `regle:oui` se lit comme du texte libre et ne filtre rien.
+  assert.match(source, /\{ key: "regle", label: "Règles", values: \[\{ value: "oui"/);
 });
