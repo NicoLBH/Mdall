@@ -648,3 +648,53 @@ perdait entre le service pur, la base et l'écran. La leçon se répète assez p
 s'éprouve que par le code qui le porte.** Quand le module ne se charge pas — il
 parle à la base, ou il vit au serveur —, c'est l'exception qui justifie de relire
 le source.
+
+## Une règle versée n'apparaissait nulle part dans le rail
+
+Question posée à l'usage : « j'invente un utilitaire, je le verse au projet, la
+proposition dit qu'elle ajoute une fonction — et dans "Raisonnements" je ne vois
+rien. C'est quoi un raisonnement si une fonction logique n'y a pas sa place ? »
+
+### Le vocabulaire était juste, et l'écran le trahissait
+
+Dans `assertion-taxonomy.js`, les deux mots ne désignent pas la même chose :
+
+- **un raisonnement** est *le chemin* — « une suite d'étapes dont certaines sont
+  des décisions humaines ». Il n'affirme rien : il dit **comment** on est arrivé
+  à ce qu'on affirme. Sa valeur est là : un chemin qui traverse une décision ne
+  se rejoue pas tout seul ;
+- **une règle** est *une étape* de ce chemin. Elle se rejoue seule, elle est
+  tranchée par son propre texte, et elle **n'a pas de nature** : « c'est un
+  texte, pas un fait constaté ».
+
+Une fonction Mdall est donc une règle, pas un raisonnement. La distinction est
+bonne, et elle se perdrait si on la rangeait sous « Raisonnements ».
+
+### Mais le rail n'avait aucune entrée pour les règles
+
+Sept lectures — Tout, Contraintes, Décisions, Raisonnements, Constats,
+Hypothèses, Données de base — et **toutes filtrent par nature**. Une règle n'en
+ayant pas, elle ne tombait sous aucune. Elle n'existait que dans « Tout », noyée
+dans mille lignes.
+
+Pire : l'intitulé de « Raisonnements » promettait « **les règles enchaînées** ».
+Il décrivait autre chose que ce qu'il listait — et c'est précisément ce qui
+envoyait chercher au mauvais endroit. Une phrase qui ment sur ce qu'elle montre
+coûte plus cher qu'une phrase absente.
+
+**« Règles » est donc une lecture du rail**, rangée juste après « Raisonnements »
+— le chemin, puis les étapes qu'il traverse. Elle se tape aussi : `regle:oui`,
+parce qu'une lecture du rail sans requête équivalente serait la seule à ne pas se
+corriger au clavier.
+
+### « Une règle » était écrite huit fois
+
+`assertion?.payload?.referentiel === true`, dans huit modules. Le jour où
+l'instantané changerait de nom, sept d'entre eux chercheraient encore l'ancien —
+sans rien casser, en rendant simplement des listes plus courtes. C'est le mode de
+défaillance le plus cher : aucun écran ne tombe, tout est un peu faux.
+
+`estUneRegle` le dit maintenant une fois, dans la taxonomie — qui est l'endroit
+où l'on dit **ce qu'une affirmation est**. Et une épreuve relit le dossier pour
+refuser la neuvième copie : c'est elle qui a trouvé les quatre dernières, que la
+relecture avait manquées.

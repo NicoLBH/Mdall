@@ -39,6 +39,7 @@ import { sujetDe, valeurDuSujet } from "./memoire-raisonnement.js";
 import { VERDICT, lecteurDeValeurs, rejouerLaRegle } from "./memoire-evaluateur.js";
 import { ordreDeLaZone } from "./memoire-plan.js";
 import { jalonsDuRejeu } from "./raisonnement-jalonne.js";
+import { estUneRegle } from "./assertion-taxonomy.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -51,7 +52,6 @@ const texte = (valeur) => String(valeur ?? "").trim();
  */
 export const TOURS_MAX = 30;
 
-const estUneRegle = (assertion) => assertion?.payload?.referentiel === true;
 const enVigueur = (assertion) => !texte(assertion?.superseded_by);
 
 /** Les zones d'une affirmation, en clés, ou `[]` pour « partout ». */

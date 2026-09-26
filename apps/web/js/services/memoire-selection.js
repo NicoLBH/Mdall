@@ -68,7 +68,12 @@ export function selectionDeLaMemoire(assertions = [], {
 
   // Les constats en cours ne se disent pas par une nature : c'est un constat
   // qu'aucune levée n'a fermé. Ce filtre-là s'applique donc à part.
-  const depart = filters.ouverts === "oui" ? readerRows(lignes, READER.FINDINGS) : lignes;
+  let depart = filters.ouverts === "oui" ? readerRows(lignes, READER.FINDINGS) : lignes;
+
+  // **Une règle ne se dit pas par une nature** : elle n'en a pas. Ce filtre-là
+  // s'applique donc à part, comme celui des constats en cours — et sans lui,
+  // une fonction versée n'apparaissait sous aucune lecture du rail.
+  if (filters.regle === "oui") depart = readerRows(depart, READER.RULES);
 
   const cherchees = typeof chercher === "function"
     ? chercher(depart, {

@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 import {
   DOMAIN,
@@ -9,6 +12,7 @@ import {
   SETTLED_BY,
   UNCLASSIFIED_LABEL,
   classifyAssertion,
+  estUneRegle,
   domainLabel,
   filterByTaxonomy,
   natureFromKind,
@@ -260,4 +264,38 @@ test("une nature que rien ne tranche dit pourquoi, chacune à sa façon", () => 
   // Une nature qu'un tranchant désigne n'a rien à dire ici.
   assert.equal(sansTranchantLabel(NATURE.CONTRAINTE), "");
   assert.equal(sansTranchantLabel("supposition"), "");
+});
+
+/* ── Ce qu'est une règle ─────────────────────────────────────────────────── */
+
+test("une règle se reconnaît à son instantané, et pas à une nature", () => {
+  // **Elle n'en a pas, et c'est voulu.** Une règle n'affirme rien sur
+  // l'ouvrage : c'est un texte qui dit comment une valeur se déduit. Lui donner
+  // une nature ferait passer un raisonnement écrit pour un fait constaté.
+  const regle = { payload: { subject: "Taux de TVA", value: "5,5 %", referentiel: true } };
+  const valeur = { payload: { subject: "Profondeur hors gel", value: "0,47 m" } };
+
+  assert.equal(estUneRegle(regle), true);
+  assert.equal(estUneRegle(valeur), false);
+  assert.equal(estUneRegle({}), false);
+  assert.equal(estUneRegle(null), false);
+
+  // Et elle n'en reçoit pas non plus par déduction.
+  assert.equal(classifyAssertion(regle).nature, null);
+});
+
+test("« une règle » ne se redéfinit nulle part ailleurs", () => {
+  // **Elle était écrite quatre fois**, dans quatre modules. Le jour où
+  // l'instantané changerait de nom, trois d'entre eux chercheraient encore
+  // l'ancien — sans rien casser, en rendant simplement des listes plus courtes.
+  // C'est le mode de défaillance le plus cher : aucun écran ne tombe, tout est
+  // un peu faux (règle 10).
+  const dossier = dirname(fileURLToPath(import.meta.url));
+
+  const copies = readdirSync(dossier)
+    .filter((nom) => nom.endsWith(".js") && nom !== "assertion-taxonomy.js")
+    .filter((nom) => /payload\?\.referentiel === true/.test(readFileSync(join(dossier, nom), "utf8")));
+
+  assert.deepEqual(copies, [],
+    `ces modules redéfinissent « une règle » au lieu de l'importer :\n  ${copies.join("\n  ")}`);
 });

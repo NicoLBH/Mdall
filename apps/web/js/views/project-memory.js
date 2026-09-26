@@ -185,6 +185,8 @@ const MEMORY_FIELDS = [
     { value: "assumees", token: "assumées", label: "Assumées" },
     { value: "ecartees", token: "écartées", label: "Écartées" }
   ] },
+  // Une règle n'est pas une nature : elle a son champ, et il se tape.
+  { key: "regle", label: "Règles", values: [{ value: "oui", label: "Seulement" }] },
   { key: "ouverts", label: "Constats", values: [{ value: "oui", label: "En cours" }] },
   { key: "remplacees", label: "Remplacées", values: [{ value: "oui", label: "Montrées" }] }
 ];
@@ -208,6 +210,11 @@ const READER_FILTERS = {
   // du rail à ne pas se corriger au clavier.
   [READER.DECISIONS]: { nature: NATURE.DECISION },
   [READER.REASONINGS]: { nature: NATURE.RAISONNEMENT },
+  // **Une règle n'a pas de nature**, et son filtre ne peut donc pas s'écrire
+  // avec `nature:`. Il s'écrit quand même — `regle:oui` se tape dans la barre —,
+  // parce qu'une lecture du rail sans requête équivalente serait la seule à ne
+  // pas se corriger au clavier.
+  [READER.RULES]: { regle: "oui" },
   [READER.FINDINGS]: { nature: NATURE.CONSTAT, ouverts: "oui" },
   [READER.BASE_DATA]: { nature: NATURE.DONNEE_BASE }
 };
@@ -468,6 +475,7 @@ const READER_ICONS = {
   // chaînes écrites à la main finiraient par ne plus montrer la même chose.
   [READER.DECISIONS]: ICONE_DE_LA_DECISION,
   [READER.REASONINGS]: "project-roadmap",
+  [READER.RULES]: "code",
   [READER.FINDINGS]: "tools",
   [READER.BASE_DATA]: "north-star"
 };
@@ -1917,6 +1925,7 @@ function titreDeLaLecture() {
     [READER.CONSTRAINTS]: "Contraintes du projet",
     [READER.DECISIONS]: "Décisions du projet",
     [READER.REASONINGS]: "Raisonnements du projet",
+    [READER.RULES]: "Règles du projet",
     [READER.FINDINGS]: "Constats du projet",
     [READER.BASE_DATA]: "Données de base du projet"
   };

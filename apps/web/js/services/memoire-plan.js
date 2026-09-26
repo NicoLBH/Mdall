@@ -45,6 +45,7 @@ import { zonesLisibles } from "./memoire-blame.js";
 import { normalizeZoneKey } from "./project-zones.js";
 import { sujetDe } from "./memoire-raisonnement.js";
 import { lecturesDeLaRegle, agentDeLaFonction } from "./memoire-applications.js";
+import { estUneRegle } from "./assertion-taxonomy.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -58,7 +59,6 @@ export const NOEUD = {
   OPAQUE: "opaque"
 };
 
-const estUneRegle = (assertion) => assertion?.payload?.referentiel === true;
 const enVigueur = (assertion) => !texte(assertion?.superseded_by);
 
 /** Les zones d'une affirmation, en clés, ou `[]` pour « partout ». */

@@ -51,7 +51,7 @@
  * valeur la dérive de ceux qui l'ont précédé.
  */
 
-import { classifyAssertion } from "./assertion-taxonomy.js";
+import { classifyAssertion, estUneRegle } from "./assertion-taxonomy.js";
 import { zonesLisibles } from "./memoire-blame.js";
 import { versementsEclipses } from "./memoire-valeurs.js";
 import { mesureEnFrancais } from "./memoire-en-texte.js";
@@ -74,7 +74,6 @@ import {
 const texte = (valeur) => String(valeur ?? "").trim();
 const idDe = (assertion) => texte(assertion?.id);
 
-const estUneRegle = (assertion) => assertion?.payload?.referentiel === true;
 
 /**
  * Les valeurs qu'on peut faire varier : le **socle**, et lui seul.

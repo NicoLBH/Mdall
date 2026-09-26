@@ -51,7 +51,7 @@ import { currentAssertions, titreDeLAffirmation } from "./project-memory.js";
 import { emploisParAffirmation, impactDe, lecturesDeLaRegle, agentDeLaFonction } from "./memoire-applications.js";
 import { dependancesDeLaMemoire } from "./memoire-raisonnement.js";
 import { utilitaireByReference } from "../utilitaires/catalogue.js";
-import { DOMAINS, domainLabel } from "./assertion-taxonomy.js";
+import { DOMAINS, domainLabel, estUneRegle } from "./assertion-taxonomy.js";
 import { VERDICT, auditerLaMemoire } from "./memoire-audit.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { zonesLisibles } from "./memoire-blame.js";
@@ -61,7 +61,6 @@ import { pointsOuvertsParValeur } from "./point-porte-sur.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
-const estUneRegle = (assertion) => assertion?.payload?.referentiel === true;
 
 /**
  * Ce qu'un nœud est, du point de vue du dessin.
