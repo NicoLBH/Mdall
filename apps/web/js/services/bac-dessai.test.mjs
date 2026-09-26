@@ -506,3 +506,45 @@ test("une chaîne de trois se résout, et une conclusion vide ne bloque pas la p
   assert.deepEqual(lance.map((un) => un.valeur), ["2", "II", "oui"]);
   assert.deepEqual(lance.map((un) => un.issue), [ISSUE.TIENT, ISSUE.TIENT, ISSUE.TIENT]);
 });
+
+/* ── Les branches enchaînées, dans le bac ────────────────────────────────── */
+
+/** Une règle dont **chaque branche lit un nom différent**. C'est le point :
+ *  avec le même sujet partout, oublier une branche ne se voit nulle part. */
+const ENCHAINEE = { nom: "essai.ref", contenu: [
+  "fonction Régime(zones, Type, Surface, Hauteur) {",
+  '   si (Type = "A")',
+  "   alors (1);",
+  "   sinon si (Surface >= 100 m²)",
+  "   alors (2);",
+  "   sinon si (Hauteur >= 8 m)",
+  "   alors (3);",
+  "}"
+].join("\n") };
+
+test("le formulaire demande ce que les branches lisent, pas seulement la première", () => {
+  // **Le défaut que ça garde.** Un nom qui n'apparaît que dans un `sinon si`
+  // n'était offert nulle part : la règle répondait « je ne sais pas » et rien à
+  // l'écran ne permettait d'y remédier.
+  const noms = champsDuBrouillon([ENCHAINEE]).map((un) => un.nom);
+
+  assert.deepEqual(noms, ["Type", "Surface", "Hauteur"]);
+});
+
+test("la trace montre ce que chaque branche a lu, dans l'ordre", () => {
+  // Sans elle, l'écran montrait une condition fausse au-dessus d'une conclusion
+  // juste, et rien pour les relier : on voyait « Type = A → faux » puis « 3 ».
+  const [resultat] = lancerLeBrouillon([ENCHAINEE], { Type: "B", Surface: "50 m²", Hauteur: "9 m" });
+
+  assert.equal(resultat.valeur, "3");
+  assert.deepEqual(resultat.lectures.map((une) => [une.sujet, une.verite]),
+    [["Type", false], ["Surface", false], ["Hauteur", true]]);
+});
+
+test("une branche qu'on n'a pas atteinte ne paraît pas dans la trace", () => {
+  // La règle ne l'a pas lue : l'afficher ferait croire qu'elle l'a pesée.
+  const [resultat] = lancerLeBrouillon([ENCHAINEE], { Type: "A", Surface: "50 m²", Hauteur: "9 m" });
+
+  assert.equal(resultat.valeur, "1");
+  assert.deepEqual(resultat.lectures.map((une) => une.sujet), ["Type"]);
+});

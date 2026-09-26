@@ -1548,3 +1548,30 @@ L'idiome à deux fonctions qu'on enseignait pour contourner l'absence de chaîne
 passait par `calcule Repli = Taux hors neuf;`, et le pourcentage y perdait son
 signe : le bac affichait `0,055` au lieu de `5,5 %`. La chaîne n'a pas de
 relais, donc pas de perte. Elle est plus simple **et** plus juste.
+
+### Ce que la batterie a trouvé, et que la relecture n'aurait pas vu
+
+Trois mutations sont passées sans faire tomber une seule épreuve. Chacune
+désignait un trou réel.
+
+**Un second `si` s'ajoutait en silence.** `si (A)` puis `si (B)` dans une même
+règle était lu comme « A **et** B », sans qu'un `et` soit écrit nulle part. Le
+refus se prend **à la fermeture du bloc**, parce qu'une fonction qui appelle un
+agent porte légitimement un `si` par entrée et que l'appel s'écrit après elles.
+C'est le troisième usage de ce mécanisme — avec les branches qui affectent et la
+seconde conclusion —, et il tient désormais lieu de règle : *ce qui ne se juge
+qu'en connaissant la fin du bloc se juge à la fin du bloc.*
+
+**Mes fixtures n'éprouvaient pas ce qu'elles prétendaient.** Tous mes exemples
+de chaîne lisaient le **même** sujet dans chaque branche — `Type de TVA` partout.
+Oublier une branche ne changeait donc ni le formulaire ni la trace, et deux
+mutations passaient. Une règle dont chaque branche lit un nom différent les
+attrape toutes les deux. C'est la leçon la plus coûteuse de la ronde : *une
+fixture qui ne varie pas ce qu'elle mesure ne mesure rien.*
+
+**Et le formulaire était le cinquième endroit** à recopier « conditions + sauf ».
+Le corriger dans quatre modules ne suffisait pas : un nom qui n'apparaissait que
+dans un `sinon si` n'était offert nulle part, la règle répondait « je ne sais
+pas », et rien à l'écran ne permettait d'y remédier. C'est exactement ce que
+`clausesDeLaRegle` existe pour empêcher — et il aura fallu une mutation pour
+trouver le cinquième.

@@ -45,7 +45,7 @@
  * Des fichiers entrent, des champs sortent. Aucun DOM, aucun réseau.
  */
 
-import { lireUnFichier, nomsConclusParLeBloc } from "./memoire-en-lecture.js";
+import { lireUnFichier, nomsConclusParLeBloc, clausesDeLaRegle } from "./memoire-en-lecture.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { lireUnCalcul, nomsDuCalcul } from "./mdall-calcul.js";
 import { couperLUnite, estMesuree } from "./memoire-en-texte.js";
@@ -159,9 +159,14 @@ export function nomsLus(fichiers = []) {
         if (lu.ok) nomsDuCalcul(lu.arbre).forEach(retenir);
       }
 
-      for (const condition of [...(bloc?.conditions ?? []), ...(bloc?.sauf ?? [])]) {
-        retenir(condition?.sujet);
-      }
+      // **Les branches enchaînées lisent, elles aussi.** Un nom qui n'apparaît
+      // que dans un `sinon si` n'était offert nulle part : la règle répondait
+      // « je ne sais pas » et rien à l'écran ne permettait d'y remédier.
+      //
+      // Le motif « conditions + sauf » était recopié dans cinq modules ; il se
+      // dit maintenant dans le lecteur du langage, et tout le monde y lit la
+      // même chose (règle 10).
+      for (const condition of clausesDeLaRegle(bloc)) retenir(condition?.sujet);
     }
   }
 
