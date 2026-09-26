@@ -172,34 +172,34 @@ test("un tableau rend son en-tête et ses lignes", () => {
   assert.equal((html.match(/<td>/g) ?? []).length, 4);
 });
 
-test("le wiki dit que « sinon si » n'existe pas, et la lecture le refuse", () => {
-  // **La limite qu'on a découverte à l'usage.** Un utilitaire de TVA marchait
-  // pour « existant » et pas pour « neuf » : `sinon si (…)` était lu comme une
-  // conclusion valant le texte « si (…) », et la fonction concluait une phrase
-  // au lieu d'un taux. Le wiki disait « pas de condition imbriquée » ; personne
-  // n'y reconnaît la forme qu'on vient d'écrire.
+test("le wiki enseigne l'enchaînement, et la lecture le lit", () => {
+  // **La limite qu'on a fini par lever.** Un utilitaire de TVA ne marchait que
+  // pour un cas sur deux : `sinon si (…)` était lu comme une conclusion valant
+  // le texte « si (…) ». On l'a d'abord refusé — ce qui laissait devant un mur,
+  // puisque c'est la forme que tout le monde écrit. Il est de la langue.
   const limites = WIKI_DU_LANGAGE.find((une) => une.id === "limites");
-  const dit = JSON.stringify(limites);
+  assert.doesNotMatch(JSON.stringify(limites), /pas de `sinon si`/,
+    "le wiki annonce une limite qui n'en est plus une");
 
-  // **Sur l'énoncé de la limite, pas n'importe où dans la section.** Une garde
-  // qui se contentait d'un `sinon si` quelque part passait encore quand la puce
-  // s'intitulait « pas de branche enchaînée » — un titre dans lequel personne
-  // ne reconnaît la forme qu'il vient d'écrire, et c'est tout le sujet.
-  assert.match(dit, /pas de `sinon si`/,
-    "le wiki ne nomme pas la forme qu'on écrit pourtant");
-  assert.match(dit, /refusée à la lecture/,
-    "le wiki dit que ça n'existe pas, sans dire ce qui se passe si on l'écrit");
+  const fonction = WIKI_DU_LANGAGE.find((une) => une.id === "fonction");
+  const dit = JSON.stringify(fonction);
+  assert.match(dit, /sinon si/, "le wiki n'enseigne pas l'enchaînement");
+  assert.match(dit, /première branche qui tient l'emporte/,
+    "sans l'ordre, une chaîne mal rangée ne donne jamais la main aux suivantes");
 
-  // Et ce que le wiki annonce, la lecture le fait — sinon on enseignerait une
-  // limite qui n'en est pas une (règle 12).
-  const lu = lireUnFichier([
-    "fonction Taux de TVA(zones, Type de TVA) {",
-    '   si (Type de TVA = "existant")',
-    "   alors (5,5 %);",
-    '   sinon si (Type de TVA = "neuf")',
-    "   alors (20 %);",
-    "}"
-  ].join("\n"));
-  assert.ok(lu.refus.some((un) => /« sinon si » n'existe pas/.test(un.raison)),
-    "le wiki l'annonce refusé et la lecture l'accepte");
+  // Et ce que le wiki montre, le langage le lit et le conclut — les exemples du
+  // wiki sont relus et lancés par les épreuves d'au-dessus, celle-ci vérifie
+  // que celui de l'enchaînement en fait partie.
+  const chaine = exemplesDuWiki().find(({ code }) => code.includes("sinon si"));
+  assert.ok(chaine, "l'exemple d'enchaînement n'est pas un exemple encadré");
+  assert.deepEqual(lireUnFichier(chaine.code).refus, []);
+
+  // Et il conclut les trois cas : un exemple qu'on ne lance pas est une
+  // intention, et c'est exactement ce qui nous a coûté deux rondes.
+  const fichiers = [{ nom: "essai.ref", contenu: chaine.code }];
+  const taux = (type) => lancerLeBrouillon(fichiers, { "Type de TVA": type })
+    .find((un) => un.sujet === "Taux de TVA")?.valeur;
+  assert.equal(taux("existant"), "5,5 %");
+  assert.equal(taux("rénovation"), "10 %");
+  assert.equal(taux("neuf"), "20 %");
 });

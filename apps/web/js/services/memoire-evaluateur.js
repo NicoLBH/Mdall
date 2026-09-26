@@ -369,7 +369,6 @@ export function evaluerLaRegle(regle = {}, lire = () => ({ connu: false, valeur:
   // fonction vient de calculer, et une conclusion peut la nommer.
   const locales = poserLesLocales(bloc?.calculs, lire);
 
-  const alors = conclusionDeLaRegle(regle?.payload?.value, locales);
   const sinon = conclusionDeLaRegle(bloc?.sinon, locales);
 
   const tracer = (condition) => ({
@@ -377,27 +376,82 @@ export function evaluerLaRegle(regle = {}, lire = () => ({ connu: false, valeur:
     joint: texte(condition?.joint)
   });
 
-  const conditions = (Array.isArray(bloc.conditions) ? bloc.conditions : []).map(tracer);
   const exceptions = (Array.isArray(bloc.sauf) ? bloc.sauf : []).map(tracer);
 
-  const posee = combiner(conditions);
   // Les exceptions se lisent en « ou » entre elles : *une* suffit à écarter la
   // règle. C'est ce que « sauf si » veut dire, et les enchaîner en « et »
   // demanderait qu'elles se produisent toutes ensemble.
+  //
+  // Elles écartent la **règle entière**, branches comprises : « sauf si » ne
+  // vaut pas pour un cas sur trois.
   const ecartee = exceptions.length
     ? exceptions.map((trace) => trace.verite).reduce(ou, false)
     : false;
 
-  // La règle tient si ses conditions tiennent **et** qu'aucune exception ne
+  /**
+   * **Les branches, dans l'ordre : la première qui tient l'emporte.**
+   *
+   * La tête est la première — `conditions` et `alors` —, et `sinonSi` porte les
+   * suivantes. C'est l'ordre écrit qui fait le sens.
+   *
+   * ## Une branche indécidable arrête tout, et c'est le point délicat
+   *
+   * `si A alors X; sinon si B alors Y;` avec A qu'on ne sait pas lire : on ne
+   * peut **pas** passer à B. Le faire reviendrait à dire « A est faux » alors
+   * qu'on n'en sait rien, et à conclure Y sur une supposition. La règle est
+   * indécidable, et elle le dit (règle 5).
+   *
+   * ## Une branche qu'on n'a pas atteinte ne se lit pas
+   *
+   * Les entrées qu'elle seule demande ne comptent donc pas parmi les
+   * manquants : la règle n'en a pas eu besoin. Le formulaire, lui, les offre
+   * quand même — il ne sait pas d'avance quelle branche sera prise, et c'est
+   * `dependancesDuBloc` qui le lui dit.
+   */
+  const branches = [
+    { conditions: Array.isArray(bloc.conditions) ? bloc.conditions : [], alors: regle?.payload?.value },
+    ...(Array.isArray(bloc.sinonSi) ? bloc.sinonSi : [])
+      .map((branche) => ({
+        conditions: Array.isArray(branche?.conditions) ? branche.conditions : [],
+        alors: branche?.alors
+      }))
+  ];
+
+  const lues = [];
+  let retenue = -1;
+  let indecise = false;
+
+  for (const [rang, branche] of branches.entries()) {
+    const traces = branche.conditions.map(tracer);
+    const posee = combiner(traces);
+    lues.push({ conditions: traces, verite: posee.verite, melange: posee.melange });
+
+    if (posee.verite === null) { indecise = true; break; }
+    if (posee.verite === true) { retenue = rang; break; }
+  }
+
+  const posee = lues[0] ?? { verite: null, melange: false };
+
+  // La règle tient si **une** de ses branches tient, et qu'aucune exception ne
   // s'applique. Un doute d'un côté ou de l'autre suffit à ne pas trancher.
-  const tient = et(posee.verite, ecartee === null ? null : !ecartee);
+  const prise = indecise ? null : retenue >= 0;
+  const tient = et(prise, ecartee === null ? null : !ecartee);
+
+  const conditions = lues[0]?.conditions ?? [];
+  // Ce que chaque branche a lu, dans l'ordre où on les a lues. La tête est
+  // déjà dans `conditions` ; les suivantes n'avaient nulle part où se dire, et
+  // l'écran montrait une règle qui conclut sans montrer pourquoi.
+  const branchesLues = lues.slice(1);
+  const alors = conclusionDeLaRegle(
+    retenue >= 0 ? branches[retenue].alors : regle?.payload?.value, locales
+  );
 
   const manquants = [
     // Ce qu'un calcul n'a pas pu lire compte autant que ce qu'une condition
     // n'a pas pu lire : c'est la même question posée à l'écran, et la taire
     // ferait un formulaire qui ne demande pas ce dont il a besoin.
     ...locales.manquants,
-    ...[...conditions, ...exceptions]
+    ...[...lues.flatMap((une) => une.conditions), ...exceptions]
       .filter((trace) => trace.doute === DOUTE.ENTREE_ABSENTE)
       .map((trace) => trace.sujet)
   ]
@@ -429,12 +483,19 @@ export function evaluerLaRegle(regle = {}, lire = () => ({ connu: false, valeur:
     // `sinon` reviendrait à conclure une règle qu'on n'a pas pu évaluer.
     valeur: tient === true ? alors : tient === false ? sinon : "",
     conditions,
+    /**
+     * Ce que les branches suivantes ont lu, dans l'ordre. Vide quand la règle
+     * n'en a pas, ou quand la première a tranché avant qu'on les atteigne.
+     */
+    sinonSi: branchesLues,
+    /** Quelle branche a conclu : `0` pour la tête, `-1` quand aucune. */
+    branche: retenue,
     exceptions,
     manquants: [...new Set(manquants)],
     melange: posee.melange,
     doutes: [...new Set([
       ...locales.doutes,
-      ...[...conditions, ...exceptions].map((trace) => trace.doute)
+      ...[...lues.flatMap((une) => une.conditions), ...exceptions].map((trace) => trace.doute)
     ].filter(Boolean))],
     /**
      * Ce que chaque `calcule` a donné, dans l'ordre.

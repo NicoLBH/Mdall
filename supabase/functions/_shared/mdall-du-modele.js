@@ -115,7 +115,7 @@ On te donne une phrase ou un paragraphe en français. Tu rends des fichiers Mdal
 # Ce que Mdall fait, et ne fait pas
 
 Mdall **compare, calcule et conclut**. Il n'a ni boucle, ni condition
-imbriquée, ni branche enchaînée.
+imbriquée.
 Une loi qui ne s'écrit ni en conditions ni en calculs est un **agent**, qui
 s'appelle et dont la loi n'est pas dans le fichier.
 
@@ -191,11 +191,11 @@ fonction Vitesse de référence(zones, Zone de vent) {
 - \`alors (…)\` conclut ; \`sinon (…)\` est facultatif. **Sans \`sinon\`, une
   règle dont les conditions ne tiennent pas ne dit rien** — c'est parfois ce
   qu'on veut.
-- **une seule \`alors\` et une seule \`sinon\` par fonction**, et
-  \`sinon si (…)\` n'existe pas. Deux cas s'écrivent
-  \`si (…) alors (A); sinon (B);\` ; trois cas se découpent en deux fonctions
-  (voir « Trois cas, deux fonctions »). **N'abandonne jamais une règle parce
-  qu'elle a trop de cas** : découpe ;
+- **plusieurs cas s'enchaînent avec \`sinon si (…)\`**, autant qu'il en faut, et
+  \`sinon (…)\` ferme la chaîne. **La première branche qui tient l'emporte** :
+  l'ordre que tu écris est le sens. Voir « Plusieurs cas » plus bas ;
+- **une seule \`alors\` par branche.** Une seconde est refusée ;
+- **n'abandonne jamais une règle parce qu'elle a beaucoup de cas** : enchaîne ;
 - **une conclusion pose une valeur, pas une affectation.** Écris
   \`alors ("violet");\` et non \`alors (Couleur des volets = "violet");\` — la
   fonction conclut déjà sous son nom, et la seconde forme est refusée ;
@@ -269,38 +269,31 @@ fonction Prix TTC(zones, Prix HT, Taux de TVA) {
 - **ne déclare pas** dans \`variables-du-projet.ref\` un nom qu'une fonction
   conclut : il est déduit, il ne se demande pas. \`const\` est pour les entrées.
 
-# Trois cas, deux fonctions
+# Plusieurs cas
 
-Trois taux de TVA — existant, rénovation, neuf — ne tiennent pas dans une
-fonction. La première en tranche deux, la seconde lit sa conclusion et tranche
-le troisième :
+Trois taux de TVA — existant, rénovation, neuf — tiennent dans **une** fonction :
 
 \`\`\`
-fonction Taux hors neuf(zones, Type de TVA) {
-   // Le taux des travaux qui ne sont pas du neuf.
+fonction Taux de TVA(zones, Type de TVA) {
+   // Le taux applicable, selon le type de travaux.
    importe (variable: Type de TVA, depuis: variables-du-projet.ref, zones: zones);
    si (Type de TVA = "existant")
    alors (5,5 %);
-   sinon (10 %);
-}
-
-fonction Taux de TVA(zones, Type de TVA, Taux hors neuf) {
-   // Le taux applicable, le neuf mis à part.
-   importe (variable: Type de TVA, depuis: variables-du-projet.ref, zones: zones);
-   importe (variable: Taux hors neuf, depuis: essai.ref, zones: zones);
-   calcule Repli = Taux hors neuf;
-   si (Type de TVA = "neuf")
+   sinon si (Type de TVA = "rénovation")
+   alors (10 %);
+   sinon si (Type de TVA = "neuf")
    alors (20 %);
-   sinon (Repli);
 }
 \`\`\`
 
-- la seconde fonction **pose une locale** — \`calcule Repli = Taux hors neuf;\` —
-  parce qu'une conclusion ne nomme que ce que sa propre fonction a calculé.
-  \`sinon (Taux hors neuf)\` rendrait le **texte** « Taux hors neuf » ;
-- le cas le plus simple à isoler va dans la seconde fonction : celui qui se
-  décide d'un seul test ;
-- pour quatre cas, on ajoute une fonction de plus, sur le même modèle.
+- **la première branche qui tient l'emporte.** Range donc le cas le plus
+  particulier en premier, et le plus général en dernier ;
+- \`sinon (…)\` à la fin donne la valeur quand aucune branche ne tient. Sans lui,
+  une règle dont aucune branche ne tient ne dit **rien** — c'est parfois ce
+  qu'on veut ;
+- une branche porte ses \`et\` / \`ou\` comme la première :
+  \`sinon si (A) et (B)\` ;
+- \`sauf si (…)\` écarte la **règle entière**, pas une branche.
 
 # Ce qui se demande, et ce qui se déduit
 

@@ -61,6 +61,8 @@
  */
 
 import { cleDuSujet } from "./memoire-identifiants.js";
+// Ce qu'une règle lit se dit dans le lecteur du langage, et nulle part ailleurs.
+import { clausesDeLaRegle } from "./memoire-en-lecture.js";
 import { zonesLisibles } from "./memoire-blame.js";
 import { normalizeZoneKey } from "./project-zones.js";
 import { sujetDe } from "./memoire-raisonnement.js";
@@ -141,11 +143,7 @@ export function lecturesDeLaRegle(regle = {}) {
     return lecturesDeLUtilitaire(regle);
   }
 
-  const bloc = regle?.payload?.regle ?? {};
-  const toutes = [
-    ...(Array.isArray(bloc.conditions) ? bloc.conditions : []),
-    ...(Array.isArray(bloc.sauf) ? bloc.sauf : [])
-  ];
+  const toutes = clausesDeLaRegle(regle?.payload?.regle);
 
   return toutes
     .map((condition) => texte(condition?.sujet))

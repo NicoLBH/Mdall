@@ -75,6 +75,10 @@ const EN_TETE = new Map([
   ["sauf si", JETON.MOT_EXCEPTION],
   ["si", JETON.MOT_CONDITION],
   ["alors", JETON.MOT_CONDITION],
+  // « sinon si » avant « sinon », comme dans la langue : le peintre de la
+  // saisie lit les mots du plus long au plus court, et « sinon » seul aurait
+  // pris les deux premières lettres de la forme enchaînée.
+  ["sinon si", JETON.MOT_CONDITION],
   ["sinon", JETON.MOT_CONDITION],
   ["parce que", JETON.MOT_RAISON],
   ["statut", JETON.MOT_STATUT],

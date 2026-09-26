@@ -197,7 +197,15 @@ export function verifierLeBrouillon(fichiers = []) {
     if (ennui) remarques.push({ fichier: nom, texte: "", ...ennui });
 
     for (const bloc of lu.blocs) {
-      for (const condition of [...(bloc?.conditions ?? []), ...(bloc?.sauf ?? [])]) {
+      // Les conditions des branches enchaînées comptent comme les autres : un
+      // nom cité seulement dans un `sinon si` et déclaré nulle part passerait
+      // sans un mot, et la règle « ne saurait pas » sans dire pourquoi.
+      const clauses = [
+        ...(bloc?.conditions ?? []),
+        ...(bloc?.sinonSi ?? []).flatMap((branche) => branche?.conditions ?? []),
+        ...(bloc?.sauf ?? [])
+      ];
+      for (const condition of clauses) {
         const cite = texte(condition?.sujet);
         const cle = cleDuSujet(cite);
         if (!cle) continue;

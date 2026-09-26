@@ -1361,12 +1361,28 @@ export function complexiteDeLaRegle(regle = {}) {
   const sujets = new Set(lecturesDeLaRegle(regle).map(cleDuSujet).filter(Boolean));
   const zones = Array.isArray(regle?.zones) ? regle.zones.filter(Boolean) : [];
 
+  const enchainees = Array.isArray(bloc.sinonSi) ? bloc.sinonSi : [];
+
   const detail = {
-    conditions: conditions.length,
+    /**
+     * Toutes les clauses, branches comprises.
+     *
+     * Ne compter que la tête donnerait la même complexité à « si A alors X » et
+     * à une règle de quatre branches — et c'est justement celle-là qu'on relit
+     * trois fois avant de la comprendre.
+     */
+    conditions: conditions.length
+      + enchainees.reduce((total, une) => total + (une?.conditions ?? []).length, 0),
     sujets: sujets.size,
     exceptions: exceptions.length,
-    /** Une règle qui a deux issues se relit deux fois. */
-    deuxIssues: texte(bloc.sinon) !== "",
+    /**
+     * Combien d'issues, au-delà de la première.
+     *
+     * Une règle qui a deux issues se relit deux fois ; une règle à quatre
+     * branches se relit quatre fois, et il faut tenir l'ordre en tête — c'est
+     * ce que la chaîne coûte, et elle ne coûte rien d'autre.
+     */
+    issues: enchainees.length + (texte(bloc.sinon) !== "" ? 1 : 0),
     zones: zones.length
   };
 
@@ -1375,6 +1391,6 @@ export function complexiteDeLaRegle(regle = {}) {
     // Les exceptions comptent double : on les lit après avoir tenu tout le reste
     // en tête, et c'est là qu'on se trompe.
     total: detail.conditions + detail.sujets + detail.exceptions * 2
-      + (detail.deuxIssues ? 1 : 0) + detail.zones
+      + detail.issues + detail.zones
   };
 }

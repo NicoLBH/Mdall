@@ -188,8 +188,27 @@ export function regleRetenue(regle) {
   const sauf = (Array.isArray(regle.sauf) ? regle.sauf : []).map(conditionRetenue).filter(Boolean);
   const sinon = texte(regle.sinon);
 
-  if (!conditions.length && !sauf.length && !sinon) return null;
-  return { conditions, sinon, sauf };
+  /**
+   * **Les branches passent la porte avec le reste.**
+   *
+   * Une règle à trois cas dont on ne retiendrait que la première branche
+   * entrerait dans la mémoire plus étroite qu'elle n'a été relue et signée : le
+   * projet conclurait autre chose que le bac d'essai, et sur la seule foi d'une
+   * proposition qu'on croit avoir lue en entier (règle 1).
+   *
+   * Une branche sans conclusion ne se garde pas : elle ne dirait rien, et
+   * mangerait le tour des suivantes.
+   */
+  const sinonSi = (Array.isArray(regle.sinonSi) ? regle.sinonSi : [])
+    .map((branche) => ({
+      conditions: (Array.isArray(branche?.conditions) ? branche.conditions : [])
+        .map(conditionRetenue).filter(Boolean),
+      alors: texte(branche?.alors)
+    }))
+    .filter((branche) => branche.conditions.length && branche.alors);
+
+  if (!conditions.length && !sauf.length && !sinon && !sinonSi.length) return null;
+  return { conditions, ...(sinonSi.length ? { sinonSi } : {}), sinon, sauf };
 }
 
 /** Une condition : un sujet, un comparateur connu, ce à quoi il compare. */

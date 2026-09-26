@@ -147,8 +147,29 @@ export const WIKI_DU_LANGAGE = [
     dit("`si` pose la condition, `alors` la conclusion, `sinon` ce qu'il advient "
       + "autrement. `et`, `ou` et `non` relient ; ils se lisent **de gauche à droite, "
       + "sans priorité**, et l'écran le signale quand une règle les mêle."),
+    dit("**Plusieurs cas s'enchaînent avec `sinon si`**, autant qu'il en faut. La "
+      + "**première branche qui tient l'emporte** : l'ordre écrit est le sens, et "
+      + "le cas le plus particulier se range donc en premier."),
+    code(
+      "fonction Taux de TVA(zones, Type de TVA) {",
+      "   // Le taux applicable, selon le type de travaux.",
+      "   importe (variable: Type de TVA, depuis: variables-du-projet.ref, zones: zones);",
+      "   si (Type de TVA = \"existant\")",
+      "   alors (5,5 %);",
+      "   sinon si (Type de TVA = \"rénovation\")",
+      "   alors (10 %);",
+      "   sinon si (Type de TVA = \"neuf\")",
+      "   alors (20 %);",
+      "}"
+    ),
+    dit("Une branche porte ses propres `et` et `ou`. Un `sinon (…)` final donne la "
+      + "valeur quand aucune branche ne tient ; sans lui, la règle ne dit **rien** "
+      + "— ce qui est parfois exactement ce qu'on veut. Et **une branche qu'on ne "
+      + "sait pas trancher arrête la lecture** : si la première condition ne se "
+      + "décide pas, on ne passe pas à la suivante, parce que ce serait supposer "
+      + "qu'elle est fausse."),
     dit("`sauf si` borne la règle — une exception qui reprend la main sur la "
-      + "conclusion :"),
+      + "conclusion, **quelle que soit la branche** :"),
     code(
       "fonction Famille du bâtiment(zones, Hauteur du plancher bas) {",
       "   si (Hauteur du plancher bas > 8 m)",
@@ -407,13 +428,8 @@ export const WIKI_DU_LANGAGE = [
     liste(
       "**Pas de boucle**, et pas de liste à parcourir : une moyenne sur trente "
         + "poteaux ne s'écrit pas ;",
-      "**pas de condition imbriquée** : `si` … `alors` … et c'est tout. Une "
-        + "arborescence de décisions se découpe en plusieurs fonctions ;",
-      "**pas de `sinon si`** : une fonction a une condition et deux issues, "
-        + "`alors` et `sinon`, chacune posée une seule fois. La ligne "
-        + "`sinon si (…)` est **refusée à la lecture** — elle l'était lue "
-        + "auparavant comme une conclusion valant le texte « si (…) », et la "
-        + "fonction concluait une phrase au lieu d'une valeur ;",
+      "**pas de condition imbriquée** : une branche ne contient pas une autre "
+        + "branche. Les cas s'enchaînent à plat, avec `sinon si` ;",
       "**pas de fonction que vous définissez** : les sept sont celles-là ;",
       "**une conclusion ne nomme que ce que sa fonction a calculé** — `alors "
         + "(Niveau du sol)` rend le texte « Niveau du sol ». Pour conclure avec la "

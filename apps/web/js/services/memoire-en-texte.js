@@ -1634,11 +1634,19 @@ export function ligneDeZone(zone = TOUTES_ZONES, profondeur = 0) {
  * @param {number} profondeur le cran d'indentation du bloc, dans sa zone
  */
 export function blocDeRegle({
-  sujet = "", quoi = "", conditions = [], alors = "", sinon = "", sauf = [],
+  sujet = "", quoi = "", conditions = [], alors = "", sinonSi = [], sinon = "", sauf = [],
   provenance = null, preuve = "", importe = [], enregistre = null, portee = PORTEE_DUNE_FONCTION
 } = {}, profondeur = 0) {
   const dedans = profondeur + 1;
-  const toutes = [...(Array.isArray(conditions) ? conditions : []), ...(Array.isArray(sauf) ? sauf : [])];
+  const enchainees = (Array.isArray(sinonSi) ? sinonSi : []).filter(Boolean);
+  const toutes = [
+    ...(Array.isArray(conditions) ? conditions : []),
+    // **Les branches lisent aussi**, et la signature les porte : une fonction
+    // dont une entrée n'apparaît que dans un `sinon si` ne la déclarerait nulle
+    // part, et le fichier ne dirait plus de quoi elle a besoin.
+    ...enchainees.flatMap((branche) => Array.isArray(branche?.conditions) ? branche.conditions : []),
+    ...(Array.isArray(sauf) ? sauf : [])
+  ];
 
   const commeUneRegle = { regle: true };
 
@@ -1674,16 +1682,26 @@ export function blocDeRegle({
   // La conclusion, et ce qu'on en fait. Un `enregistre` répond à la question
   // qui vient toujours après « alors quoi ? » : où est-ce écrit, et pour quelle
   // partie de l'ouvrage.
-  if (texte(alors)) {
-    corps.push(...(enregistre
-      ? lignesDeConclusion("alors", { ...enregistre, sujet: texte(enregistre.sujet) || texte(sujet), valeur: alors, zones: portee }, dedans)
-      : [ligneDeConsequence("alors", alors, "", dedans, commeUneRegle)]));
+  /** Une conclusion, avec ou sans son `enregistre`. Écrite une fois pour toutes
+   *  les branches : deux façons de poser un `alors` divergeraient. */
+  const conclure = (mot, valeur) => (enregistre
+    ? lignesDeConclusion(mot, { ...enregistre, sujet: texte(enregistre.sujet) || texte(sujet), valeur, zones: portee }, dedans)
+    : [ligneDeConsequence(mot, valeur, "", dedans, commeUneRegle)]);
+
+  if (texte(alors)) corps.push(...conclure("alors", alors));
+
+  // **Les branches enchaînées, dans l'ordre écrit** : c'est l'ordre qui fait le
+  // sens, et les réordonner changerait la règle.
+  for (const branche of enchainees) {
+    (Array.isArray(branche?.conditions) ? branche.conditions : []).forEach((condition, rang) => {
+      corps.push(ligneDeCondition(
+        rang === 0 ? "sinon si" : (condition.joint || "et"), condition, dedans, commeUneRegle
+      ));
+    });
+    if (texte(branche?.alors)) corps.push(...conclure("alors", branche.alors));
   }
-  if (texte(sinon)) {
-    corps.push(...(enregistre
-      ? lignesDeConclusion("sinon", { ...enregistre, sujet: texte(enregistre.sujet) || texte(sujet), valeur: sinon, zones: portee }, dedans)
-      : [ligneDeConsequence("sinon", sinon, "", dedans, commeUneRegle)]));
-  }
+
+  if (texte(sinon)) corps.push(...conclure("sinon", sinon));
 
   for (const exception of (Array.isArray(sauf) ? sauf : [sauf]).filter(Boolean)) {
     corps.push(ligneDeCondition("sauf si", exception, dedans, commeUneRegle));

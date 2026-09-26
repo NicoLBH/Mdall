@@ -41,6 +41,8 @@ import { zonesLisibles } from "./memoire-blame.js";
 import { normalizeZoneKey } from "./project-zones.js";
 import { versementQuiVaut } from "./memoire-valeurs.js";
 import { lecturesDeLaRegle, sortiesDeLaFonction } from "./memoire-applications.js";
+// Ce qu'une règle lit se dit dans le lecteur du langage, et nulle part ailleurs.
+import { clausesDeLaRegle } from "./memoire-en-lecture.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -211,10 +213,9 @@ export function chaineDuRaisonnement(sujet, assertions = [], { zone = "" } = {})
       return;
     }
 
-    const conditions = [
-      ...(regle.payload?.regle?.conditions ?? []),
-      ...(regle.payload?.regle?.sauf ?? [])
-    ];
+    // Les branches enchaînées lisent, elles aussi : sans elles, un nom cité
+    // seulement dans un `sinon si` n'aurait pas d'arête dans le graphe.
+    const conditions = clausesDeLaRegle(regle.payload?.regle);
     for (const condition of conditions) descendre(texte(condition?.sujet));
 
     // Après ses entrées : on lit ce dont elle a besoin avant elle.
@@ -338,10 +339,9 @@ export function grapheDuRaisonnement(sujet, assertions = [], { zone = "", ouEcri
     if (!cle || poses.has(`regle:${cle}`)) continue;
     poses.add(`regle:${cle}`);
 
-    const conditions = [
-      ...(regle.payload?.regle?.conditions ?? []),
-      ...(regle.payload?.regle?.sauf ?? [])
-    ];
+    // Les branches enchaînées lisent, elles aussi : sans elles, un nom cité
+    // seulement dans un `sinon si` n'aurait pas d'arête dans le graphe.
+    const conditions = clausesDeLaRegle(regle.payload?.regle);
 
     const entrees = [];
     const demande = [];

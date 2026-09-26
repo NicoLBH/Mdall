@@ -584,7 +584,7 @@ test("la complexité compte ce qu'il faut tenir en tête, et les exceptions comp
   // C'est là qu'on se trompe : on lit l'exception après avoir tenu tout le reste.
   const simple = regle("Degré CF", "CF 1 h", [["Classement", "3e famille B"]]);
   assert.deepEqual(complexiteDeLaRegle(simple), {
-    conditions: 1, sujets: 1, exceptions: 0, deuxIssues: false, zones: 0, total: 2
+    conditions: 1, sujets: 1, exceptions: 0, issues: 0, zones: 0, total: 2
   });
 
   const tordue = {
@@ -604,8 +604,37 @@ test("la complexité compte ce qu'il faut tenir en tête, et les exceptions comp
   };
 
   assert.deepEqual(complexiteDeLaRegle(tordue), {
-    conditions: 2, sujets: 3, exceptions: 1, deuxIssues: true, zones: 2, total: 10
+    conditions: 2, sujets: 3, exceptions: 1, issues: 1, zones: 2, total: 10
   });
+});
+
+test("une règle qui enchaîne des branches coûte ce que ses branches coûtent", () => {
+  // **Le compte des issues, et non plus « en a-t-elle deux ? ».** Une règle à
+  // quatre branches se relit quatre fois, et il faut en tenir l'ordre en tête :
+  // la compter comme « si A alors X ; sinon Y » dirait qu'elle est aussi simple,
+  // et l'écran des règles à relire la rangerait au même endroit.
+  const simple = regle("Taux de TVA", "5,5 %", [["Type de TVA", "existant"]]);
+  const enchainee = {
+    ...simple,
+    payload: {
+      ...simple.payload,
+      regle: {
+        conditions: [{ sujet: "Type de TVA", operateur: "=", valeur: "existant" }],
+        sinonSi: [
+          { conditions: [{ sujet: "Type de TVA", operateur: "=", valeur: "rénovation" }], alors: "10 %" },
+          { conditions: [{ sujet: "Type de TVA", operateur: "=", valeur: "neuf" }], alors: "20 %" }
+        ],
+        sauf: [],
+        sinon: ""
+      }
+    }
+  };
+
+  const compte = complexiteDeLaRegle(enchainee);
+  assert.equal(compte.conditions, 3, "les clauses des branches ne comptent pas");
+  assert.equal(compte.issues, 2, "les branches ne comptent pas comme des issues");
+  assert.ok(compte.total > complexiteDeLaRegle(simple).total,
+    "une règle à trois branches coûte comme une règle à une");
 });
 
 test("une règle appliquée devient un nœud, entre ses entrées et sa sortie", () => {
