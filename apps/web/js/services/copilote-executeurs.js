@@ -30,6 +30,7 @@
 import { executerLaVariante } from "./copilote-variante.js";
 import { executerLeCerveau } from "./copilote-cerveau.js";
 import { executerLaNavigation } from "./copilote-navigation.js";
+import { executerUnUtilitaireDeLetabli } from "./copilote-etabli.js";
 
 /** Ce que le navigateur sait faire, rangé sous le rôle que le serveur emploie. */
 export const EXECUTEURS_DU_NAVIGATEUR = {
@@ -42,7 +43,19 @@ export const EXECUTEURS_DU_NAVIGATEUR = {
   // Il ne déplace personne : il reconnaît le projet et rend l'adresse. Le
   // déplacement a lieu quand le tour est fini et la réponse enregistrée —
   // partir au milieu emporterait la conversation qu'on écrit.
-  navigation: ({ entrees, dire }) => executerLaNavigation({ entrees, onEtape: dire })
+  navigation: ({ entrees, dire }) => executerLaNavigation({ entrees, onEtape: dire }),
+
+  /**
+   * Un utilitaire de l'établi, lancé ici.
+   *
+   * **C'est le seul rôle qui a besoin du nom de l'outil.** Les trois autres
+   * font une chose et une seule ; celui-ci en fait autant qu'il y a
+   * d'utilitaires, et le serveur nomme lequel. L'établi voyage avec l'appel
+   * plutôt que d'être relu : il a déjà été lu pour déclarer les outils, et le
+   * relire ici rendrait peut-être autre chose que ce que le modèle a vu.
+   */
+  etabli: ({ nom, entrees, etabli, dire }) =>
+    executerUnUtilitaireDeLetabli({ nom, entrees, etabli, onEtape: dire })
 };
 
 /** Ce que le navigateur annonce savoir faire. La même table, lue autrement. */

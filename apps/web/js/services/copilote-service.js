@@ -44,6 +44,7 @@
 import { store } from "../store.js";
 import { buildAssistContext } from "./copilote-context.js";
 import { contexteTransversal } from "./copilote-contexte-transversal.js";
+import { declarationsDeLetabli } from "./etabli-du-copilote.js";
 import { executerUtilitaire } from "./utilitaires-service.js";
 import { regimeDeLaMemoire } from "../../vendor/utilitaires/regime-incendie.js";
 import {
@@ -216,6 +217,19 @@ export async function sendAssistMessage(message, {
   const context = transversal ? await contexteTransversal() : await buildAssistContext();
 
   /**
+   * **L'établi, hors projet et nulle part ailleurs.**
+   *
+   * C'est la cloison, dite ici en une ligne plutôt que laissée à la forme du
+   * contexte : le contexte d'un projet n'en porte pas, et même s'il en portait
+   * un jour, il ne partirait pas. Un utilitaire personnel n'entre dans la
+   * mémoire d'un chantier que par une proposition signée.
+   *
+   * Le serveur le revérifie de son côté : une garantie qui tient sur un seul
+   * des deux déploiements n'en est pas tout à fait une.
+   */
+  const etabli = transversal ? (context.etabli ?? []) : [];
+
+  /**
    * **Les affirmations de la mémoire, au niveau de la fonction.**
    *
    * Elles servent bien plus bas — les utilitaires s'en pré-remplissent, et le
@@ -266,6 +280,10 @@ export async function sendAssistMessage(message, {
         // que ce qu'elle saura faire. Sans cela, un outil déployé côté serveur
         // avant le site était appelé, puis exécuté de travers.
         browser_roles: ROLES_QUE_CE_NAVIGATEUR_SAIT,
+        // **Les utilitaires que cette personne a écrits**, déclarés comme
+        // outils. Ils n'existent pas dans le dépôt et le serveur ne peut pas
+        // les deviner : seule cette page les a lus. Vide sur un projet.
+        etabli_tools: declarationsDeLetabli(etabli),
         // **Le régime de sécurité incendie de ce projet**, quand il n'y en a
         // qu'un. C'est ce qui décide quel agent incendie le modèle se verra
         // offrir : le laisser deviner sur la formulation de la question ferait
@@ -346,8 +364,15 @@ export async function sendAssistMessage(message, {
         }
 
         const { resultat, pourLeModele } = await executer({
+          // **Le nom de l'outil**, pour le seul rôle qui en a besoin : l'établi
+          // en offre autant qu'il y a d'utilitaires, et le rôle seul ne dit pas
+          // lequel. Les trois autres l'ignorent.
+          nom: appel?.name,
           entrees: safeJsonParse(appel?.arguments) ?? {},
           assertions,
+          // Celui qui a servi à déclarer les outils, et non une relecture : la
+          // seconde pourrait rendre autre chose que ce que le modèle a vu.
+          etabli,
           projectId,
           dire
         });

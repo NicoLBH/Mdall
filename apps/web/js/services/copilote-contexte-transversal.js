@@ -39,18 +39,47 @@ import { profilDeTravail } from "./profil-de-travail.js";
  *   que `buildAssistContext()` là où l'appelant la lit.
  */
 export async function contexteTransversal() {
-  const [projets, traces] = await Promise.all([
+  /**
+   * **L'établi se lit ici, et pas dans le contexte d'un projet.**
+   *
+   * C'est la cloison, et elle est structurelle : le contexte d'un projet ne
+   * lit pas l'établi, donc il n'a rien à en envoyer. Un utilitaire personnel
+   * n'entre dans la mémoire d'un chantier que par une proposition signée, et
+   * le Copilote d'un projet le lit alors comme une règle **du projet**.
+   *
+   * `null` quand la lecture a échoué : on ne dit pas « votre établi est vide »
+   * à quelqu'un qui y a posé douze outils (règle 5). La section ne paraît
+   * alors pas, et rien ne prétend l'avoir regardé.
+   */
+  const lireLetabli = async () => {
+    const module = await import("./etabli-supabase.js");
+    return module.listerLetabli();
+  };
+
+  const [projets, traces, etabli] = await Promise.all([
     fetchMesChantiers().catch(() => []),
-    lireMesTraces(store.user?.id || "").catch(() => null)
+    lireMesTraces(store.user?.id || "").catch(() => null),
+    lireLetabli().catch(() => null)
   ]);
+
+  const outils = Array.isArray(etabli) ? etabli : [];
 
   const memoire = profilDeTravail({
     nom: store.user?.name || "",
     projets: Array.isArray(projets) ? projets : [],
-    traces: Array.isArray(traces) ? traces : []
+    traces: Array.isArray(traces) ? traces : [],
+    etabli: outils
   });
 
   return {
+    /**
+     * L'établi tel qu'il a servi à écrire le profil.
+     *
+     * Il repart avec la question, pour déclarer les outils **et** pour les
+     * exécuter : relu au moment de l'appel, il pourrait rendre autre chose que
+     * ce que le modèle a vu.
+     */
+    etabli: outils,
     memoire: {
       lue: memoire.lue,
       texte: memoire.texte,

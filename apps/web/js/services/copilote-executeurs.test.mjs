@@ -7,8 +7,10 @@ import {
 } from "./copilote-executeurs.js";
 import {
   DECLARATIONS_DU_NAVIGATEUR, ROLES_DU_NAVIGATEUR, ROLES_HISTORIQUES,
+  ROLES_QUE_LE_SERVEUR_NOMME, PREFIXE_DE_LETABLI, ROLE_DE_LETABLI,
   declarationsPourCeNavigateur, roleDuNavigateur
 } from "../../../../supabase/functions/_shared/utilitaires/variante-outil.js";
+import { PREFIXE_DE_LOUTIL, nomDeLoutil } from "./etabli-du-copilote.js";
 
 /* ── Les deux tables se répondent ────────────────────────────────────────── */
 
@@ -17,8 +19,11 @@ test("chaque rôle que le serveur écrit est un rôle que le navigateur sait ex�
   // fait. Un outil ajouté d'un côté seulement partait au navigateur avec un
   // rôle qu'il ne connaissait pas — et l'ancien aiguillage, « cerveau ou sinon
   // variante », lançait alors l'outil d'à côté.
+  // La table fixe **et** la famille préfixée : les outils de l'établi entrent
+  // par un préfixe parce que leurs noms ne sont pas écrits dans le dépôt, et
+  // c'est une porte qu'il faut garder comme les autres.
   assert.deepEqual(
-    [...Object.values(ROLES_DU_NAVIGATEUR)].sort(),
+    [...ROLES_QUE_LE_SERVEUR_NOMME].sort(),
     [...ROLES_QUE_CE_NAVIGATEUR_SAIT].sort()
   );
 
@@ -101,4 +106,54 @@ test("le navigateur route sur le rôle, et n'apprend aucun nom d'outil", () => {
     assert.ok(!client.includes(nom), `${nom} est écrit dans le navigateur`);
     assert.ok(!executeurs.includes(nom), `${nom} est écrit dans la table des exécuteurs`);
   }
+});
+
+/* ── La famille de l'établi ──────────────────────────────────────────────── */
+
+test("le préfixe de l'établi est le même des deux côtés", () => {
+  // **Il est écrit deux fois, et il le faut.** Le module qui le porte au
+  // serveur est de l'orchestration : il n'est pas copié dans le navigateur, et
+  // ne doit pas l'être. Deux écritures d'un même fait divergent (règle 4) —
+  // celle-ci ne peut pas, parce que l'épreuve les confronte en vrai.
+  assert.equal(PREFIXE_DE_LOUTIL, PREFIXE_DE_LETABLI);
+});
+
+test("un outil de l'établi s'exécute au navigateur, sous son rôle", () => {
+  // Le serveur ne connaît pas le nom de ces outils : il les reconnaît à leur
+  // préfixe, et nomme le rôle. Sans cela, ils partaient au serveur — qui ne
+  // sait pas lire du Mdall — et l'appel tombait devant l'utilisateur.
+  const nom = nomDeLoutil({ id: "11111111-1111-4111-8111-111111111111" });
+
+  assert.equal(roleDuNavigateur(nom), ROLE_DE_LETABLI);
+  assert.equal(typeof EXECUTEURS_DU_NAVIGATEUR[ROLE_DE_LETABLI], "function");
+});
+
+test("un nom qui n'est pas de la famille ne prend pas son rôle", () => {
+  // La porte est ouverte à une famille, pas à tout le monde : un agent natif
+  // qui s'appellerait « etabli » sans tiret bas partirait au navigateur, qui
+  // n'en a pas le code.
+  assert.equal(roleDuNavigateur("etabli"), "");
+  assert.equal(roleDuNavigateur("dimensionnement_fondations"), "");
+  assert.equal(roleDuNavigateur(""), "");
+});
+
+test("l'aiguillage passe le nom de l'outil et l'établi du tour", () => {
+  // **Cette épreuve relit le source, et deux défauts le justifient.**
+  // `copilote-service.js` parle à la base et ne se charge pas ici, et aucun
+  // rendu ne montre ce qu'un exécuteur reçoit. Or :
+  //
+  //  - **sans le nom**, le rôle « etabli » ne sait pas lequel des utilitaires
+  //    lancer. Il en offre autant qu'il y en a ; les trois autres rôles font
+  //    une chose et une seule, et n'en ont jamais eu besoin ;
+  //  - **sans l'établi du tour**, l'exécuteur n'a rien à chercher dedans. Celui
+  //    qui a servi à déclarer les outils est le seul qui corresponde à ce que
+  //    le modèle a vu : une relecture pourrait rendre autre chose.
+  const source = readFileSync(new URL("./copilote-service.js", import.meta.url), "utf8");
+
+  const debut = source.indexOf("const { resultat, pourLeModele } = await executer({");
+  assert.ok(debut > 0, "l'appel de l'exécuteur est introuvable");
+  const appel = source.slice(debut, source.indexOf("});", debut));
+
+  assert.match(appel, /^\s*nom: appel\?\.name,$/m, "l'exécuteur ne sait pas quel outil lancer");
+  assert.match(appel, /^\s*etabli,$/m, "l'exécuteur n'a pas l'établi du tour");
 });

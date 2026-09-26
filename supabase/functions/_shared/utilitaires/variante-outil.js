@@ -68,9 +68,36 @@ export const ROLES_DU_NAVIGATEUR = {
  */
 export const OUTILS_DU_NAVIGATEUR = Object.keys(ROLES_DU_NAVIGATEUR);
 
+/**
+ * Les outils de l'**établi** : une famille, et non des noms.
+ *
+ * Les trois outils d'au-dessus sont écrits dans le dépôt : leurs noms tiennent
+ * dans une table. Ceux de l'établi sont les utilitaires que la personne a
+ * écrits elle-même — leur nombre et leurs noms ne sont connus qu'au moment de
+ * la question, et ils arrivent avec elle. On les reconnaît donc à leur préfixe.
+ *
+ * C'est la seule famille ouverte, et elle le reste : le préfixe est le seul
+ * moyen pour un outil d'entrer au navigateur sans être écrit ici.
+ */
+export const PREFIXE_DE_LETABLI = "etabli_";
+export const ROLE_DE_LETABLI = "etabli";
+
+/**
+ * Tous les rôles que le serveur peut nommer — la table fixe, et la famille.
+ *
+ * C'est cette liste que le navigateur doit savoir exécuter, et l'épreuve
+ * compare les deux. Sans elle, la famille serait entrée par une porte que
+ * personne ne garde (règle 4).
+ */
+export const ROLES_QUE_LE_SERVEUR_NOMME = [
+  ...new Set([...Object.values(ROLES_DU_NAVIGATEUR), ROLE_DE_LETABLI])
+];
+
 /** Le rôle d'un outil au navigateur, ou `""` quand il tourne au serveur. */
 export function roleDuNavigateur(nom) {
-  return ROLES_DU_NAVIGATEUR[String(nom ?? "").trim()] ?? "";
+  const dit = String(nom ?? "").trim();
+  if (dit.startsWith(PREFIXE_DE_LETABLI)) return ROLE_DE_LETABLI;
+  return ROLES_DU_NAVIGATEUR[dit] ?? "";
 }
 
 /** La déclaration passée au modèle, dans la forme qu'attend l'API. */
