@@ -21,7 +21,8 @@ const CHAMPS = [
     { value: "incendie", label: "Incendie" },
     { value: "structure", label: "Structure" }
   ] },
-  { key: "ouverts", label: "Ouverts", values: [{ value: "oui", label: "oui" }] }
+  { key: "ouverts", label: "Ouverts", values: [{ value: "oui", label: "oui" }] },
+  { key: "regle", label: "Règles", values: [{ value: "oui", label: "Seulement" }] }
 ];
 
 const ligne = (id, nature, domain, dessus = {}) => ({
@@ -111,4 +112,27 @@ test("un filtre ou du texte libre restreignent, et se disent", () => {
   // douze affirmations, et l'on chercherait longtemps ce qui manque.
   assert.equal(laRequeteRestreint("nature:decision", CHAMPS), true);
   assert.equal(laRequeteRestreint("altitude", CHAMPS), true);
+});
+
+test("« regle:oui » ne garde que les règles", () => {
+  // **Une lecture du rail sans requête équivalente serait la seule à ne pas se
+  // corriger au clavier.** Le filtre s'écrit donc, comme celui des constats en
+  // cours — et pour la même raison : ce qu'il désigne n'est pas une nature.
+  const regle = {
+    id: "r", status: "assumed",
+    payload: { subject: "Mettre alèse sur lit", value: "oui", referentiel: true }
+  };
+  const valeur = {
+    id: "v", status: "assumed",
+    payload: { subject: "Profondeur hors gel", value: "0,47 m" }
+  };
+
+  const gardees = selectionDeLaMemoire([regle, valeur], {
+    query: "regle:oui", champs: CHAMPS
+  });
+
+  assert.deepEqual(gardees.map((une) => une.id), ["r"]);
+
+  // Sans le filtre, les deux restent : il ne se pose que si on le demande.
+  assert.equal(selectionDeLaMemoire([regle, valeur], { query: "", champs: CHAMPS }).length, 2);
 });

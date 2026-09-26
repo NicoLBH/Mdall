@@ -37,7 +37,7 @@
  * non classées aurait l'air complète en étant fausse.
  */
 
-import { DOMAINS, NATURE, classifyAssertion, domainLabel } from "./assertion-taxonomy.js";
+import { DOMAINS, NATURE, classifyAssertion, domainLabel, estUneRegle } from "./assertion-taxonomy.js";
 import { MEMORY, currentAssertions } from "./project-memory.js";
 
 /**
@@ -53,6 +53,17 @@ export const READER = {
   CONSTRAINTS: "constraints",
   DECISIONS: "decisions",
   REASONINGS: "reasonings",
+  /**
+   * Les règles appliquées : le Mdall que le projet porte.
+   *
+   * **Ce n'est pas une nature**, et c'est pour cela qu'il a fallu une lecture à
+   * lui. Une règle n'affirme rien sur l'ouvrage — c'est un texte qui dit
+   * comment une valeur se déduit —, elle n'est donc ni constat, ni hypothèse,
+   * ni contrainte. Elle n'apparaissait sous aucune lecture du rail, et l'on
+   * cherchait sa fonction versée sous « Raisonnements », qui promettait
+   * pourtant « les règles enchaînées ».
+   */
+  RULES: "rules",
   FINDINGS: "findings",
   BASE_DATA: "base-data"
 };
@@ -73,6 +84,8 @@ export const READERS = [
   READER.CONSTRAINTS,
   READER.DECISIONS,
   READER.REASONINGS,
+  // Juste après : le chemin, puis les étapes qui le composent.
+  READER.RULES,
   READER.FINDINGS,
   READER.HYPOTHESES,
   READER.BASE_DATA
@@ -84,6 +97,7 @@ const READER_LABELS = {
   [READER.CONSTRAINTS]: "Contraintes",
   [READER.DECISIONS]: "Décisions",
   [READER.REASONINGS]: "Raisonnements",
+  [READER.RULES]: "Règles",
   [READER.FINDINGS]: "Constats",
   [READER.BASE_DATA]: "Données de base"
 };
@@ -103,7 +117,9 @@ const READER_LEADS = {
   [READER.DECISIONS]:
     "Ce que des humains ont tranché, et ce qu'ils ont écarté en le faisant. Une décision ne porte pas la valeur : la valeur la cite.",
   [READER.REASONINGS]:
-    "Par où le projet est passé : les règles enchaînées, et les endroits où quelqu'un a dû choisir. C'est là qu'on voit ce qu'une donnée nouvelle remet en cause.",
+    "Par où le projet est passé : le chemin qui mène à une valeur, et les endroits où quelqu'un a dû choisir. Les règles qu'il traverse se lisent à côté, sous « Règles ».",
+  [READER.RULES]:
+    "Le Mdall que le projet porte : ce qui se déduit, et de quoi. Une règle n'affirme rien — elle dit comment une valeur se calcule, et la valeur la cite.",
   [READER.FINDINGS]:
     "Ce qui reste ouvert : les avis et remarques que rien n'est encore venu lever.",
   [READER.BASE_DATA]:
@@ -176,6 +192,11 @@ export function readerRows(assertions = [], reader = READER.ALL) {
       (assertion) => classifyAssertion(assertion).nature === voulue
     );
   }
+
+  // **Une règle se reconnaît à son instantané, pas à une nature.** Elle n'en a
+  // pas : `classifyAssertion` rendrait `null` pour toutes, et la lecture serait
+  // vide alors que la mémoire en porte.
+  if (reader === READER.RULES) return currentAssertions(lignes).filter(estUneRegle);
 
   if (reader === READER.FINDINGS) return currentAssertions(lignes).filter(isOpenFinding);
 

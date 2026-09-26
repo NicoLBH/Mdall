@@ -41,7 +41,7 @@
  */
 
 import { cheminDeRangement, extensionDeRangement } from "./memoire-rangement.js";
-import { NATURE, classifyAssertion } from "./assertion-taxonomy.js";
+import { NATURE, classifyAssertion, estUneRegle } from "./assertion-taxonomy.js";
 import { cheminDeFichier } from "./memoire-en-texte.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 
@@ -49,7 +49,7 @@ const texte = (valeur) => String(valeur ?? "").trim();
 
 /** Le rangement qu'une affirmation se donne à elle-même, sans registre. */
 export function rangementVise(assertion = {}) {
-  const referentiel = assertion?.payload?.referentiel === true;
+  const referentiel = estUneRegle(assertion);
   const chemin = cheminDeRangement({
     nature: assertion?.nature, domain: assertion?.domain, referentiel
   });
@@ -87,7 +87,7 @@ function declareUnNom(assertion) {
  * emmènerait toutes ses valeurs dans le `.ref` ou le `.dec` de son domaine.
  */
 function neePorteLaValeur(assertion) {
-  return assertion?.payload?.referentiel === true
+  return estUneRegle(assertion)
     || classifyAssertion(assertion).nature === NATURE.DECISION;
 }
 

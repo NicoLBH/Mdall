@@ -550,6 +550,31 @@ export function natureFromKind(kind) {
  *
  * @returns {{nature: string|null, domain: string|null, natureDerived: boolean}}
  */
+/**
+ * Cette affirmation est-elle une **règle appliquée** ?
+ *
+ * ## Pourquoi ce n'est pas une nature, et pourquoi ça vit quand même ici
+ *
+ * Une règle n'affirme rien sur l'ouvrage : c'est un **texte** qui dit comment
+ * une valeur se déduit. Elle n'est donc ni un constat, ni une hypothèse, ni une
+ * contrainte — et lui donner l'une de ces natures ferait passer un raisonnement
+ * écrit pour un fait observé.
+ *
+ * Mais c'est bien une façon de classer ce que la mémoire porte, au même titre
+ * que les natures, et cela se lit au même endroit qu'elles.
+ *
+ * ## Elle était écrite quatre fois
+ *
+ * `memoire-applications.js`, `memoire-rejeu.js`, `memoire-cerveau.js` et
+ * `memoire-plan.js` portaient chacun sa copie. Le jour où l'instantané d'une
+ * règle changerait de nom, trois d'entre eux continueraient de chercher
+ * l'ancien — sans rien casser, en rendant simplement des listes plus courtes
+ * (règle 10).
+ */
+export function estUneRegle(assertion = {}) {
+  return assertion?.payload?.referentiel === true;
+}
+
 export function classifyAssertion(assertion = {}) {
   const ecrite = normalizeNature(assertion.nature);
   const deduite = ecrite ? null : natureFromKind(assertion.kind);

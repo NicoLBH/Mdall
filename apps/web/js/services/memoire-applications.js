@@ -67,6 +67,7 @@ import { zonesLisibles } from "./memoire-blame.js";
 import { normalizeZoneKey } from "./project-zones.js";
 import { sujetDe } from "./memoire-raisonnement.js";
 import { utilitaireByReference } from "../utilitaires/catalogue.js";
+import { estUneRegle } from "./assertion-taxonomy.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -78,8 +79,6 @@ export const RESOLUTION = {
   RECONSTRUIT: "reconstruit"
 };
 
-/** Une règle appliquée se reconnaît à son instantané. */
-const estUneRegle = (assertion) => assertion?.payload?.referentiel === true;
 
 /** Ce qui vaut encore : une ligne remplacée ne décrit plus l'état. */
 const enVigueur = (assertion) => !texte(assertion?.superseded_by);

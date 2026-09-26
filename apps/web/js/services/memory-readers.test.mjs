@@ -177,10 +177,11 @@ test("chaque lecture porte un nom et une promesse", () => {
 /* ── Décisions et raisonnements : déclarés, vides, et qui disent pourquoi ── */
 
 test("le rail suit un seul ordre, celui que le projet a demandé", () => {
-  // Tout, puis ce qui s'impose, ce qu'on a tranché, le chemin qui y mène, ce
-  // qu'on a vu, ce qu'on suppose, ce que le projet est.
+  // Tout, puis ce qui s'impose, ce qu'on a tranché, le chemin qui y mène, **les
+  // règles qu'il traverse**, ce qu'on a vu, ce qu'on suppose, ce que le projet
+  // est.
   assert.deepEqual(READERS, [
-    "all", "constraints", "decisions", "reasonings", "findings", "hypotheses", "base-data"
+    "all", "constraints", "decisions", "reasonings", "rules", "findings", "hypotheses", "base-data"
   ]);
 
   // Aucune lecture hors du rail : une lecture qu'aucune entrée ne montre serait
@@ -214,4 +215,70 @@ test("les deux entrées vides disent pourquoi elles sont vides", () => {
   const raisonnements = describeEmptyReader(READER.REASONINGS);
   assert.match(raisonnements, /traverse des décisions humaines/);
   assert.match(raisonnements, /rien ne le devinera à partir du graphe/);
+});
+
+/* ── Les règles ont leur lecture ─────────────────────────────────────────────
+ *
+ * **Le défaut tel qu'il s'est vu.** On écrit un utilitaire, on en fait une
+ * proposition, on la fusionne — et la fonction n'apparaît nulle part dans le
+ * rail. On la cherche sous « Raisonnements », qui promettait pourtant « les
+ * règles enchaînées », et l'on n'y trouve rien : une règle **n'a pas de
+ * nature**, elle ne peut donc tomber sous aucune lecture qui filtre par nature.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Une règle versée : « si j'ai acheté une alèse, il faut la mettre ». */
+const regle = (patch = {}) => ({
+  id: patch.id ?? "r",
+  subject_key: "mettre-alese-sur-lit",
+  statement: "Mettre alèse sur lit = oui",
+  status: "assumed",
+  payload: {
+    subject: "Mettre alèse sur lit",
+    value: "oui",
+    referentiel: true,
+    regle: { conditions: [{ sujet: "Acheté alèse de lit", operateur: "=", valeur: ["oui"] }], sinon: "", sauf: [] }
+  },
+  ...patch
+});
+
+test("une règle versée se lit sous « Règles »", () => {
+  const memoire = [regle(), hypothese({ id: "h" }), avis({ id: "a" })];
+
+  assert.deepEqual(readerRows(memoire, READER.RULES).map((une) => une.id), ["r"]);
+});
+
+test("une règle ne tombe sous aucune lecture qui filtre par nature", () => {
+  // Ce n'est pas un oubli : une règle n'affirme rien sur l'ouvrage. Lui donner
+  // une nature ferait passer un texte pour un fait constaté.
+  const memoire = [regle()];
+
+  for (const lecture of [
+    READER.CONSTRAINTS, READER.DECISIONS, READER.REASONINGS,
+    READER.FINDINGS, READER.HYPOTHESES, READER.BASE_DATA
+  ]) {
+    assert.deepEqual(readerRows(memoire, lecture), [], lecture);
+  }
+
+  // Et « Tout » la montre, évidemment : elle est dans la mémoire.
+  assert.equal(readerRows(memoire, READER.ALL).length, 1);
+});
+
+test("une règle remplacée ne se lit plus", () => {
+  // Comme partout : une ligne remplacée ne décrit plus l'état du projet.
+  const memoire = [regle({ id: "vieille", superseded_by: "r" }), regle({ id: "r" })];
+
+  assert.deepEqual(readerRows(memoire, READER.RULES).map((une) => une.id), ["r"]);
+});
+
+test("« Raisonnements » ne promet plus les règles qu'il ne montre pas", () => {
+  // **C'est l'intitulé qui envoyait chercher au mauvais endroit.** Il disait
+  // « les règles enchaînées » et filtrait sur une nature qu'aucune règle ne
+  // porte. Une phrase qui décrit autre chose que ce qu'elle liste coûte plus
+  // cher qu'une phrase absente.
+  assert.doesNotMatch(readerLead(READER.REASONINGS), /règles enchaînées/);
+  assert.match(readerLead(READER.REASONINGS), /sous « Règles »/);
+
+  // Et celui des règles dit ce qu'une règle est, et ce qu'elle n'est pas.
+  assert.match(readerLead(READER.RULES), /Une règle n'affirme rien/);
+  assert.equal(readerLabel(READER.RULES), "Règles");
 });

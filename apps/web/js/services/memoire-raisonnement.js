@@ -43,6 +43,7 @@ import { versementQuiVaut } from "./memoire-valeurs.js";
 import { lecturesDeLaRegle, sortiesDeLaFonction } from "./memoire-applications.js";
 // Ce qu'une règle lit se dit dans le lecteur du langage, et nulle part ailleurs.
 import { clausesDeLaRegle } from "./memoire-en-lecture.js";
+import { estUneRegle } from "./assertion-taxonomy.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -51,8 +52,6 @@ export function sujetDe(assertion) {
   return texte(assertion?.payload?.subject) || texte(assertion?.subject_key);
 }
 
-/** Une règle appliquée se reconnaît à son instantané. */
-const estUneRegle = (assertion) => assertion?.payload?.referentiel === true;
 
 /** Ce qui vaut encore : une ligne remplacée ne décrit plus l'état. */
 const enVigueur = (assertion) => !texte(assertion?.superseded_by);
