@@ -35,6 +35,7 @@
  */
 
 import { GENRE, phraseDesJours, projetsLesPlusActifs } from "./projets-actifs.js";
+import { sectionDeLetabli } from "./etabli-du-copilote.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -64,7 +65,7 @@ function leJour(quand = "") {
  *   projet : l'appelant n'a pas à savoir laquelle des deux il envoie.
  */
 export function profilDeTravail({
-  nom = "", projets = [], traces = [], maintenant = Date.now()
+  nom = "", projets = [], traces = [], etabli = [], maintenant = Date.now()
 } = {}) {
   const tous = Array.isArray(projets) ? projets : [];
   const nomsDesProjets = Object.fromEntries(
@@ -132,6 +133,17 @@ export function profilDeTravail({
     );
   }
 
+  /**
+   * **L'établi, avant « ce que tu n'as pas ».**
+   *
+   * L'ordre compte : la section suivante dit qu'aucune mémoire de projet n'est
+   * jointe, et l'établi n'en est pas une — c'est ce que la personne a écrit
+   * elle-même, qui ne vaut pour aucun chantier. Rangé après, il se lirait comme
+   * une exception à une interdiction, ce qui est la pire façon de la dire.
+   */
+  const leSien = sectionDeLetabli(etabli);
+  if (leSien) lignes.push("", leSien);
+
   lignes.push(
     "",
     "## Ce que tu n'as pas",
@@ -147,7 +159,8 @@ export function profilDeTravail({
       + "propose de continuer là-bas. Le Copilote d'un projet, lui, lit sa mémoire.",
     "",
     "Ce sur quoi tu peux répondre ici : l'organisation du travail, la méthode, "
-      + "ce que l'application sait faire, et ce que les listes ci-dessus disent."
+      + "ce que l'application sait faire, ce que les listes ci-dessus disent, et "
+      + "ce que les utilitaires de son établi concluent quand tu les lances."
   );
 
   return { texte: lignes.join("\n"), lue: true };

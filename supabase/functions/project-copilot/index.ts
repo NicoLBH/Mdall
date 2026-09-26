@@ -63,7 +63,7 @@ import { requireUser } from "../_shared/require-user.ts";
 import { deposerLaConsommation } from "../_shared/consommation-ia.ts";
 import { declarationsPourModele } from "../_shared/utilitaires/catalogue.js";
 import {
-  CONSIGNES_VARIANTE, OUTILS_DU_NAVIGATEUR, declarationsPourCeNavigateur, roleDuNavigateur
+  CONSIGNES_VARIANTE, PREFIXE_DE_LETABLI, declarationsPourCeNavigateur, roleDuNavigateur
 } from "../_shared/utilitaires/variante-outil.js";
 import { CONSIGNES_CERVEAU } from "../_shared/utilitaires/cerveau-outil.js";
 import { CONSIGNES_NAVIGATION } from "../_shared/utilitaires/navigation-outil.js";
@@ -96,6 +96,20 @@ type CopilotRequest = {
    * d'outils : il n'en apprend donc aucun. Absent, c'est un navigateur d'avant.
    */
   browser_roles?: string[];
+  /**
+   * Les utilitaires de l'**établi**, déclarés par le navigateur.
+   *
+   * Ils n'existent pas dans le dépôt : ce sont ceux que la personne a écrits
+   * elle-même, et seule sa page peut les lire — la politique de la table est
+   * propriétaire seul. Elle les déclare donc avec sa question, et c'est elle
+   * qui les exécutera.
+   *
+   * **Ils ne sont offerts que hors projet**, et c'est vérifié ici plutôt que
+   * promis dans une consigne : un utilitaire personnel n'entre dans la mémoire
+   * d'un chantier que par une proposition signée, et le Copilote d'un projet
+   * n'a donc rien à en connaître.
+   */
+  etabli_tools?: ToolDeclaration[];
   /**
    * Le régime de sécurité incendie du projet, quand sa mémoire n'en porte qu'un.
    * Il décide quels agents incendie sont déclarés au modèle. Vide, ils le sont
@@ -279,7 +293,12 @@ function extractToolCalls(payload: unknown) {
       // s'exécute au navigateur — le moteur de variante, qui y est déjà —, et
       // c'est le serveur qui le sait : le navigateur n'a pas à connaître le nom
       // des outils pour router, ce qui reviendrait à lui en apprendre un.
-      ou: OUTILS_DU_NAVIGATEUR.includes(texte(item.name)) ? "navigateur" : "serveur",
+      // **Le rôle décide, et lui seul.** `OUTILS_DU_NAVIGATEUR.includes(…)`
+      // disait la même chose que `roleDuNavigateur(…)`, en deux endroits — et
+      // les outils de l'établi, dont les noms ne sont pas écrits dans le dépôt,
+      // ne pouvaient pas figurer dans la liste. Une seule lecture, donc, celle
+      // qui connaît aussi la famille préfixée (règle 10).
+      ou: roleDuNavigateur(texte(item.name)) ? "navigateur" : "serveur",
       /**
        * **Lequel d'entre eux, dit ici aussi.**
        *
@@ -445,7 +464,26 @@ serve(async (req) => {
   // consigne dans le prompt — une consigne se contourne —, c'est une liste plus
   // courte. Le régime vient de la mémoire du projet, que la page a lue et
   // transmise comme elle transmet la mémoire elle-même.
+  /**
+   * L'établi, **hors projet et nulle part ailleurs**.
+   *
+   * La cloison ne tient pas sur une consigne — une consigne se contourne —,
+   * elle tient sur une liste plus courte : sur une conversation de projet, ces
+   * outils ne sont pas déclarés, donc jamais appelés.
+   *
+   * Le préfixe est vérifié : il décide où l'outil s'exécute, et une déclaration
+   * qui s'appellerait comme un agent natif le masquerait pour ce tour-là.
+   */
+  const outilsDeLetabli = projectId
+    ? []
+    : (Array.isArray(payload.etabli_tools) ? payload.etabli_tools : [])
+      .filter((outil) => texte(outil?.name).startsWith(PREFIXE_DE_LETABLI));
+
   const outils = [
+    // **L'établi passe devant.** Hors projet, ce que la personne a écrit
+    // elle-même est ce qui la concerne le plus, et le plafond ne doit pas le
+    // faire disparaître derrière un catalogue d'agents.
+    ...outilsDeLetabli,
     ...declarationsPourCeNavigateur(payload.browser_roles),
     ...declarationsPourModele({ regimeIncendie: texte(payload.fire_regime) })
   ]

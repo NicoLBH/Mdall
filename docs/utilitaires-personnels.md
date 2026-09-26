@@ -325,19 +325,77 @@ signé une version, mon établi continue sa vie.
 
 ---
 
-## Lot E — Le Copilote sait qu'elle est là
+## Lot E — Le Copilote et l'établi *(fait)*
 
-> « Quels impacts si les volets passent de PVC à bois ? »
-> — « Alors la couleur devra être violette. »
+### Deux Copilotes, deux accès — et c'est la décision
 
-Rien de spécial à écrire : une règle versée au projet est **une règle du
-projet**, et le Copilote interroge déjà la mémoire du projet. Ce lot est donc
-surtout une épreuve : on verse l'utilitaire des volets, on pose la question, et
-l'on vérifie que la réponse cite la règle et sa provenance.
+**Le Copilote d'un projet n'a accès à un utilitaire de l'établi que s'il y a été
+versé.** Une règle versée est une règle **du projet** : il la lit comme les
+autres, avec sa provenance et la proposition qui l'a fait entrer. Un utilitaire
+qui n'a pas été versé ne le concerne pas, et le lui donner ferait répondre sur un
+chantier avec un outil que personne n'y a signé (règle 1).
 
-Ce qui reste à faire pour de vrai : que la trace de la réponse dise **de quelle
-proposition** la règle est venue, pour qu'on remonte de la réponse à ce qu'on a
-signé.
+**Le Copilote de tous les projets a l'établi entier.** Il ne parle d'aucun
+chantier : il parle à son propriétaire, de son travail. Son établi y a sa place,
+et c'est même ce qu'il a de plus utile à offrir.
+
+### Il ne les cite pas : il les lance
+
+C'était le point à trancher. « Connaître » l'établi n'aurait servi à rien — le
+Copilote aurait répondu « vous avez un utilitaire de TVA, allez le lancer ». Ce
+qu'on veut, c'est la réponse.
+
+Chaque utilitaire devient donc un **outil** offert au modèle, et le navigateur
+l'exécute. C'est possible parce que du Mdall se lance **sans réseau et sans
+modèle** : le lecteur du langage et l'évaluateur sont déjà dans la page, et le
+bac d'essai s'en sert à chaque frappe. Le serveur ne fait que ce qu'il est seul à
+savoir faire — décider qu'il faut l'appeler, et lequel.
+
+> « Si mon prix de travaux dans l'existant est de 3 200 €, combien en TTC ? »
+> — « 3 376 €, avec un taux de 5,5 % et 176 € de TVA, calculé par votre
+> utilitaire **Calcul de TVA v3**. »
+
+### Il dit lequel, et dans quelle version
+
+Une réponse obtenue avec un outil personnel doit dire lequel. Sans cela, on ne
+sait plus si le chiffre vient d'une règle qu'on a écrite soi-même ou du modèle —
+et les deux ne se vérifient pas du tout de la même façon (fondamental 13).
+
+Le nom et la version sont donc dans trois endroits qui se renforcent : la
+**description de l'outil**, lue au moment de choisir ; le **profil de travail**,
+lu au moment de rédiger ; et le **résultat lui-même**, qui les rend sous la main
+avec le rappel de les citer. Une consigne qu'on peut suivre sans effort se suit
+plus souvent (règle 12).
+
+Le fil de la conversation l'affiche aussi, dans « ce que le copilote a fait » :
+« Utilitaire de votre établi — Calcul de TVA v3 ».
+
+### La cloison tient sur deux listes, pas sur une consigne
+
+Le site et le serveur ne se déploient pas ensemble : une garantie qui tient sur
+un seul des deux n'en est pas tout à fait une.
+
+1. **le navigateur** ne déclare l'établi que sur une discussion sans projet — et
+   le contexte d'un projet ne le lit même pas ;
+2. **le serveur** ignore ces déclarations dès qu'un projet est nommé, et refuse
+   celles dont le nom ne porte pas le préfixe de la famille — sans quoi une
+   déclaration nommée comme un agent natif le masquerait pour ce tour-là.
+
+`copilote-cloison.test.mjs` lit les deux codes et casse la construction quand une
+porte s'ouvre.
+
+### Ce qui manque se demande, et ne s'invente pas
+
+Aucune entrée d'un outil de l'établi n'est déclarée « requise ». Un schéma qui
+exige tout fait **remplir** tout : le modèle met une valeur plausible pour que
+l'appel parte. Laissées libres, les entrées manquantes reviennent dans « ce qui
+manque », et le modèle a de quoi poser la question au lieu d'y répondre à la
+place de la personne (règle 5).
+
+### Ce qui reste
+
+Que la trace de la réponse dise **de quelle proposition** une règle versée est
+venue, pour qu'on remonte de la réponse à ce qu'on a signé.
 
 ---
 

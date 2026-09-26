@@ -234,3 +234,50 @@ test("plus rien ne pointe vers le webhook n8n", () => {
     assert.doesNotMatch(source, /n8n\.cloud/, `${cheminRelatif(chemin)} appelle encore n8n`);
   }
 });
+
+/* ── L'établi ne franchit pas la cloison d'un projet ──────────────────────────
+ *
+ * **La garantie, dite en toutes lettres.** Le Copilote d'un projet n'a accès à
+ * un utilitaire de l'établi que s'il y a été **versé**, par une proposition
+ * relue et signée — il lit alors une règle du projet, pas un outil de
+ * quelqu'un. Le Copilote de tous les projets, lui, a l'établi entier.
+ *
+ * Cela ne tient pas sur une consigne — une consigne se contourne —, mais sur
+ * deux listes plus courtes, des deux côtés d'un déploiement qui n'est pas
+ * simultané. Ce fichier lit les deux.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+test("le navigateur n'envoie l'établi que sur une discussion sans projet", () => {
+  const source = lire(join(SERVICES, "copilote-service.js"));
+
+  assert.match(source, /const etabli = transversal \? \(context\.etabli \?\? \[\]\) : \[\];/,
+    "l'établi part sans regarder si la discussion porte sur un projet");
+  // Et c'est bien cette variable-là qui est déclarée, pas le contexte brut.
+  assert.match(source, /etabli_tools: declarationsDeLetabli\(etabli\),/);
+});
+
+test("le contexte d'un projet ne lit pas l'établi du tout", () => {
+  // La cloison est d'abord structurelle : ce qui n'est pas lu ne peut pas
+  // partir. Le reste n'est que ceinture.
+  const source = lire(join(SERVICES, "copilote-context.js"));
+
+  assert.doesNotMatch(source, /etabli/i, "le contexte d'un projet touche à l'établi");
+});
+
+test("le serveur n'offre les outils de l'établi qu'en l'absence de projet", () => {
+  // **La seconde serrure.** Le site et le serveur ne se déploient pas ensemble :
+  // une garantie qui tient sur un seul des deux n'en est pas tout à fait une.
+  const source = lire(join(RACINE, "supabase", "functions", "project-copilot", "index.ts"));
+
+  assert.match(source, /const outilsDeLetabli = projectId\s*\n?\s*\?\s*\[\]/,
+    "les outils de l'établi sont offerts même sur un projet");
+});
+
+test("une déclaration venue du navigateur ne peut pas se faire passer pour un agent", () => {
+  // Les outils de l'établi arrivent avec la question : sans le filtre du
+  // préfixe, une déclaration nommée comme un agent natif le masquerait pour ce
+  // tour-là, et le modèle appellerait autre chose que ce qu'il croit.
+  const source = lire(join(RACINE, "supabase", "functions", "project-copilot", "index.ts"));
+
+  assert.match(source, /\.filter\(\(outil\) => texte\(outil\?\.name\)\.startsWith\(PREFIXE_DE_LETABLI\)\)/);
+});
