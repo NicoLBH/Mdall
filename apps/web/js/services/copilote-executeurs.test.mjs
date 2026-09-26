@@ -136,3 +136,24 @@ test("un nom qui n'est pas de la famille ne prend pas son rôle", () => {
   assert.equal(roleDuNavigateur("dimensionnement_fondations"), "");
   assert.equal(roleDuNavigateur(""), "");
 });
+
+test("l'aiguillage passe le nom de l'outil et l'établi du tour", () => {
+  // **Cette épreuve relit le source, et deux défauts le justifient.**
+  // `copilote-service.js` parle à la base et ne se charge pas ici, et aucun
+  // rendu ne montre ce qu'un exécuteur reçoit. Or :
+  //
+  //  - **sans le nom**, le rôle « etabli » ne sait pas lequel des utilitaires
+  //    lancer. Il en offre autant qu'il y en a ; les trois autres rôles font
+  //    une chose et une seule, et n'en ont jamais eu besoin ;
+  //  - **sans l'établi du tour**, l'exécuteur n'a rien à chercher dedans. Celui
+  //    qui a servi à déclarer les outils est le seul qui corresponde à ce que
+  //    le modèle a vu : une relecture pourrait rendre autre chose.
+  const source = readFileSync(new URL("./copilote-service.js", import.meta.url), "utf8");
+
+  const debut = source.indexOf("const { resultat, pourLeModele } = await executer({");
+  assert.ok(debut > 0, "l'appel de l'exécuteur est introuvable");
+  const appel = source.slice(debut, source.indexOf("});", debut));
+
+  assert.match(appel, /^\s*nom: appel\?\.name,$/m, "l'exécuteur ne sait pas quel outil lancer");
+  assert.match(appel, /^\s*etabli,$/m, "l'exécuteur n'a pas l'établi du tour");
+});

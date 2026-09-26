@@ -114,3 +114,42 @@ test("un projet sans nom ni ville se dit quand même", () => {
   assert.match(texte, /p-z/);
   assert.ok(!texte.includes("undefined"));
 });
+
+/* ── L'établi, dans le profil ────────────────────────────────────────────── */
+
+const UN_OUTIL = {
+  id: "11111111-1111-4111-8111-111111111111",
+  nom: "Calcul de TVA", version: "3",
+  resume: "Le prix TTC selon la nature des travaux.",
+  entrees: ["Type de TVA", "Prix HT"], sorties: ["Taux de TVA", "Prix TTC"]
+};
+
+test("le profil porte l'établi, et le range avant « ce que tu n'as pas »", () => {
+  // **Le câblage, et pas seulement la section.** `sectionDeLetabli` s'éprouve
+  // chez elle ; qu'elle arrive jusqu'au profil ne s'éprouvait nulle part, et il
+  // suffisait de ne pas l'y pousser pour que le Copilote n'en sache rien.
+  const { texte } = profilDeTravail({ nom: "A.", projets: [], etabli: [UN_OUTIL] });
+
+  assert.match(texte, /## Votre établi/);
+  assert.match(texte, /Calcul de TVA/);
+
+  // **L'ordre compte.** La section suivante dit qu'aucune mémoire de projet
+  // n'est jointe ; l'établi n'en est pas une. Rangé après, il se lirait comme
+  // une exception à une interdiction.
+  assert.ok(texte.indexOf("## Votre établi") < texte.indexOf("## Ce que tu n'as pas"));
+});
+
+test("sans établi, le profil n'en parle pas", () => {
+  const { texte } = profilDeTravail({ nom: "A.", projets: [] });
+
+  assert.doesNotMatch(texte, /Votre établi/);
+});
+
+test("le profil dit qu'on peut répondre avec ce que les utilitaires concluent", () => {
+  // Sans cette phrase, la section « ce que tu n'as pas » se lit comme une
+  // interdiction générale, et le modèle s'abstient de lancer l'outil qu'on
+  // vient de lui offrir.
+  const { texte } = profilDeTravail({ nom: "A.", projets: [], etabli: [UN_OUTIL] });
+
+  assert.match(texte, /ce que les utilitaires de son établi concluent quand tu les lances/);
+});

@@ -625,3 +625,26 @@ la mémoire d'un projet, c'est le Mdall. Dire « v2 modifiée » pour une phrase
 français corrigée décrirait un code différent de celui qu'on verse, et le
 comparer plus tard à l'établi ne dirait rien de juste. Les deux questions se
 posent au même endroit, et se distinguent par ce qu'on lui donne à comparer.
+
+### Ce que la batterie a trouvé, et le motif qu'elle dessine
+
+Vingt-six mutations, vingt et une attrapées. **Les cinq qui sont passées étaient
+toutes du câblage** — pas une seule dans la logique pure :
+
+- le profil ne poussait plus la section de l'établi ;
+- le contexte transverse ne lisait plus l'établi ;
+- une lecture ratée se lisait comme un établi vide ;
+- l'exécuteur ne recevait plus le nom de l'outil à lancer ;
+- ni l'établi du tour, dans lequel le chercher.
+
+Chaque pièce était éprouvée chez elle : `sectionDeLetabli` rend bien le texte,
+`reponseDeLutilitaire` calcule bien, l'exécuteur annonce bien la version. Les
+**coutures** entre elles ne l'étaient pas, et il suffisait d'en défaire une pour
+que le Copilote ne sache plus rien de l'établi — sans qu'une épreuve bronche.
+
+C'est le même motif que deux rondes plus tôt, quand le cahier des charges se
+perdait entre le service pur, la base et l'écran. La leçon se répète assez pour
+être écrite : **une fonction pure s'éprouve par son résultat ; un câblage ne
+s'éprouve que par le code qui le porte.** Quand le module ne se charge pas — il
+parle à la base, ou il vit au serveur —, c'est l'exception qui justifie de relire
+le source.

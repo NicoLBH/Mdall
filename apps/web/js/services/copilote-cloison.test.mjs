@@ -281,3 +281,21 @@ test("une déclaration venue du navigateur ne peut pas se faire passer pour un a
 
   assert.match(source, /\.filter\(\(outil\) => texte\(outil\?\.name\)\.startsWith\(PREFIXE_DE_LETABLI\)\)/);
 });
+
+test("le contexte transverse lit l'établi, et distingue « vide » de « pas lu »", () => {
+  // **Cette épreuve relit le source**, et c'est l'exception qui le justifie :
+  // ce module parle à la base et ne se charge pas ici. Deux choses s'y perdent
+  // en silence — l'établi qu'on ne lit pas, et la lecture ratée qui se ferait
+  // passer pour un établi vide. Ni l'une ni l'autre ne se voit dans un rendu.
+  const source = lire(join(SERVICES, "copilote-contexte-transversal.js"));
+
+  assert.match(source, /lireLetabli\(\)\.catch\(\(\) => null\)/,
+    "l'établi n'est pas lu, ou une lecture ratée fait tomber tout l'envoi");
+  assert.match(source, /const outils = Array\.isArray\(etabli\) \? etabli : \[\];/,
+    "une lecture ratée se lirait comme un établi vide (règle 5)");
+  // Et il repart avec le contexte : c'est lui qui déclarera les outils, et qui
+  // les exécutera. Relu au moment de l'appel, il pourrait rendre autre chose
+  // que ce que le modèle a vu.
+  assert.match(source, /^\s*etabli: outils,$/m);
+  assert.match(source, /etabli: outils$/m, "le profil est écrit sans l'établi");
+});
