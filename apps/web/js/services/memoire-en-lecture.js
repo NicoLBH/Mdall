@@ -592,7 +592,7 @@ export function lireUnFichier(contenu = "") {
     if (courant) {
       // `accolade` sert à la lecture, pas au sens : elle ne ressort pas.
       const {
-        accolade, conclue, affecte, branche, sinonSi,
+        accolade, conclue, affecte, branche, siEnTrop, sinonSi,
         agent, utilitaire, version, enregistre, tableau, ...bloc
       } = courant;
 
@@ -620,6 +620,22 @@ export function lireUnFichier(contenu = "") {
        * corrige en trois secondes et une règle qui « conclut » le vide.
        */
       if (!agent) {
+        /**
+         * **Un second `si` se refuse, il ne s'ajoute pas en silence.**
+         *
+         * `si (A)` puis `si (B)` était lu comme « A **et** B », sans qu'un `et`
+         * soit écrit nulle part : le fichier disait autre chose que ce qu'il
+         * montrait. C'est la maladie de cette ronde — une ligne acceptée dont
+         * il ne reste pas ce qu'on croit.
+         */
+        for (const ligne of siEnTrop ?? []) {
+          refus.push({
+            ligne: ligne.ligne,
+            texte: ligne.texte,
+            raison: "« si » est déjà posé : écrivez « et (…) » pour ajouter une clause, ou « sinon si (…) » pour un autre cas."
+          });
+        }
+
         for (const ligne of affecte ?? []) {
           const sienne = cleDuSujet(ligne.sujet) === cleDuSujet(bloc.sujet);
           refus.push({
@@ -895,6 +911,10 @@ export function lireUnFichier(contenu = "") {
         sinonSi: [],
         /** Où vont les conditions et la conclusion qu'on lit : la tête, ou une branche. */
         branche: null,
+        // Les `si` posés après le premier. Légitimes dans une fonction qui
+        // appelle un agent, jamais dans une règle — et on ne le sait qu'à la
+        // fermeture.
+        siEnTrop: [],
         // Les valeurs que la fonction pose en les calculant, dans l'ordre où
         // elles sont écrites : la seconde peut lire la première.
         calculs: [],
@@ -1052,10 +1072,27 @@ export function lireUnFichier(contenu = "") {
       // exception qui ne vaudrait que pour un cas sur trois.
       if (mot === "sauf si") { courant.sauf.push(condition); return; }
 
-      // `si` rouvre la tête : c'est la première branche, et elle se réécrit si
-      // quelqu'un la pose deux fois — ce que le refus de la seconde `alors`
-      // attrapera.
-      if (mot === "si") { courant.branche = null; courant.conditions.push(condition); return; }
+      /**
+       * **Un second `si` se refuse, il ne s'ajoute pas en silence.**
+       *
+       * `si (A)` puis `si (B)` était lu comme « A **et** B », sans qu'un `et`
+       * soit écrit nulle part : le fichier disait autre chose que ce qu'il
+       * montrait. C'est la même maladie que `sinon si` avalé — une ligne
+       * acceptée dont il ne reste pas ce qu'on croit.
+       *
+       * Une fonction a donc **un** `si`, prolongé par `et` / `ou` / `non`, puis
+       * autant de `sinon si` qu'il faut.
+       */
+      if (mot === "si") {
+        // On ne peut pas trancher ici : une fonction qui appelle un **agent**
+        // porte un `si` par entrée — « si cette entrée est renseignée, la
+        // retenir, sinon l'importer » —, et l'appel s'écrit après elles. On
+        // retient donc la ligne, et la fermeture décide, comme pour les
+        // branches qui affectent.
+        if (courant.conditions.length) courant.siEnTrop.push({ ligne: numero, texte: corps });
+        courant.conditions.push(condition);
+        return;
+      }
 
       // `et` / `ou` / `non` prolongent la **branche ouverte**, pas la première.
       // Rangés dans la tête, `sinon si (A) et (B)` aurait ajouté une clause à

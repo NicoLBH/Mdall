@@ -906,3 +906,35 @@ test("la signature d'une règle à branches porte ce que les branches lisent", (
 
   assert.match(ecrit.split("\n")[0], /Régime\(zones, Type, Surface\)/);
 });
+
+test("un second « si » dans une règle se refuse, et dit quoi écrire", () => {
+  // **`si (A)` puis `si (B)` était lu comme « A et B »**, sans qu'un `et` soit
+  // écrit nulle part : le fichier disait autre chose que ce qu'il montrait.
+  // C'est la maladie de cette ronde — une ligne acceptée dont il ne reste pas
+  // ce qu'on croit.
+  const lu = lireUnFichier([
+    "fonction Régime(zones, Type, Surface) {",
+    '   si (Type = "A")',
+    "   si (Surface >= 100 m²)",
+    "   alors (1);",
+    "}"
+  ].join("\n"));
+
+  const refus = lu.refus.find((un) => un.ligne === 3);
+  assert.ok(refus, "le second « si » est passé sans un mot");
+  assert.match(refus.raison, /« et \(…\) » pour ajouter une clause/);
+  assert.match(refus.raison, /« sinon si \(…\) » pour un autre cas/);
+});
+
+test("une fonction qui appelle un agent porte un « si » par entrée, sans un refus", () => {
+  // **C'est sa forme normale** : « si cette entrée est renseignée, la retenir,
+  // sinon l'importer », une fois par entrée. Refuser le second `si` ici
+  // refuserait tout le référentiel des fondations — et c'est pourquoi la
+  // décision se prend à la fermeture, quand on sait enfin qu'un agent est
+  // appelé.
+  const ecrit = texteDesLignes(blocDeFonction(FONCTION_AVEC_AGENT));
+  assert.ok((ecrit.match(/^\s*si \(/gm) ?? []).length > 1,
+    "la fixture ne porte plus qu'un seul « si » : l'épreuve ne garde plus rien");
+
+  assert.deepEqual(lireUnFichier(ecrit).refus, []);
+});
