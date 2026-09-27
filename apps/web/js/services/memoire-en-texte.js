@@ -418,12 +418,21 @@ export const MOTS = [
   // `pour chaque` ouvre une boucle : le même calcul répété sur une suite de
   // valeurs, dont il sort un tableau. Voir `boucle-du-mdall.js`.
   "pour chaque",
+  // `courbe` ouvre un abaque : des points, et la règle entre eux. Ses deux
+  // déclarations disent comment on lit entre les points, et ce qu'on fait
+  // au-delà. Voir `courbe-du-mdall.js`.
+  "courbe", "entre les points", "hors bornes",
   "si", "et", "ou", "non", "alors", "sinon",
   ...Object.values(PROVENANCE)
 ];
 
 /** Le mot qui ouvre une boucle. Il vit ici, avec les autres mots du langage. */
 export const POUR_CHAQUE = "pour chaque";
+
+/** Le mot qui ouvre un abaque, et les deux champs qu'il porte obligatoirement. */
+export const COURBE = "courbe";
+export const ENTRE_LES_POINTS = "entre les points";
+export const HORS_BORNES = "hors bornes";
 
 /**
  * Les agrégats : ce qu'on lit d'une colonne du tableau qu'une boucle rend.
@@ -485,9 +494,28 @@ const espace = (largeur = " ") => jeton(JETON.NEUTRE, largeur);
  * « 490,03 m » se coupe, « CF 1/2 h » ne se coupe pas — c'est un degré, pas une
  * mesure, et le couper produirait « CF » suivi de « 1/2 h ». La coupe n'a lieu
  * que si tout ce qui précède l'espace est un nombre.
+ *
+ * ## Le degré se colle au nombre, et lui seul
+ *
+ * **Personne n'écrit « 30 ° ».** Un abaque de norme porte `0°`, `30°`, `45°`,
+ * et une courbe recopiée à l'espace près cesserait de ressembler à sa figure —
+ * ce qui est tout l'intérêt de la recopier. `0°` se lisait donc comme le
+ * **nombre zéro**, l'unité perdue en silence, et deux angles en degrés se
+ * comparaient à un angle en radians sans un mot.
+ *
+ * Le signe `°` est la seule unité qu'on colle, parce que c'est la seule qu'on
+ * ne peut pas confondre avec le début d'un nom : aucun sujet du projet ne
+ * commence par un degré. `20%`, `120€` restent non coupés — `%` est un suffixe
+ * du calcul avant d'être une unité, et l'euro s'écrit avec son espace.
  */
+const DEGRE_COLLE = /^(-?[\d]+(?:[.,\s]\d+)*)(°C?)$/;
+
 export function couperLUnite(valeur) {
   const brut = texte(valeur);
+
+  const colle = brut.match(DEGRE_COLLE);
+  if (colle) return { nombre: colle[1], unite: colle[2] };
+
   const trouve = brut.match(/^(-?[\d]+(?:[.,\s]\d+)*)\s+(.+)$/);
   if (!trouve) return { nombre: brut, unite: "" };
   return { nombre: trouve[1], unite: trouve[2] };
@@ -1748,7 +1776,7 @@ export function ligneDeZone(zone = TOUTES_ZONES, profondeur = 0) {
  */
 export function blocDeRegle({
   sujet = "", quoi = "", conditions = [], alors = "", sinonSi = [], sinon = "", sauf = [],
-  selon = [], calculs = [], boucle = null,
+  selon = [], calculs = [], boucle = null, courbe = null,
   provenance = null, preuve = "", importe = [], enregistre = null, portee = PORTEE_DUNE_FONCTION
 } = {}, profondeur = 0) {
   const dedans = profondeur + 1;
@@ -1792,6 +1820,26 @@ export function blocDeRegle({
   // La conclusion, et ce qu'on en fait. Un `enregistre` répond à la question
   // qui vient toujours après « alors quoi ? » : où est-ce écrit, et pour quelle
   // partie de l'ouvrage.
+  /**
+   * **Un abaque se réécrit comme un abaque.**
+   *
+   * Ses deux déclarations et ses points : c'est toute sa loi, et il n'y a rien
+   * d'autre à écrire. Les réduire à la valeur qu'il a conclue ferait de la
+   * fonction une affirmation, et l'on ne pourrait plus la comparer à sa figure
+   * — ce pour quoi on l'a écrite ainsi.
+   */
+  if (courbe) {
+    const champ = (cle, valeur) => {
+      const ligne = ligneDuChampDeLaCourbe(cle, valeur, dedans);
+      if (ligne) corps.push(ligne);
+    };
+    const avantLaCourbe = corps.length;
+    champ(ENTRE_LES_POINTS, courbe.entre);
+    champ(HORS_BORNES, courbe.hors);
+    corps.push(...lignesDesPoints(courbe.points, dedans));
+    if (corps.length > avantLaCourbe) corps.push(ligneVide());
+  }
+
   /**
    * **Ce que la fonction calcule, et la boucle qui la nourrit.**
    *
@@ -1880,11 +1928,19 @@ export function blocDeRegle({
   // La portée est un paramètre, et le premier : une même règle s'applique à
   // plusieurs parties de l'ouvrage, et la recopier par zone en ferait trois
   // règles à maintenir pour un seul raisonnement.
-  const entrees = [texte(portee) || PORTEE_DUNE_FONCTION, ...toutes.map((condition) => condition?.sujet)];
+  const entrees = [
+    texte(portee) || PORTEE_DUNE_FONCTION,
+    // **Une courbe déclare son abscisse dans sa signature**, et nulle part
+    // ailleurs : elle n'a pas de condition d'où la déduire.
+    ...(courbe ? [texte(courbe.selon)] : []),
+    ...toutes.map((condition) => condition?.sujet)
+  ].filter(Boolean);
 
   const tete = [
     espace(RETRAIT.repeat(Math.max(0, profondeur))),
-    ...ligneDeDonnee(sujet, entrees, commeUneRegle)
+    ...(courbe
+      ? ligneDeCourbe(sujet, entrees)
+      : ligneDeDonnee(sujet, entrees, commeUneRegle))
   ];
 
   // Le commentaire vit **dans** la fonction, en première ligne. Au-dessus, il
@@ -1893,6 +1949,11 @@ export function blocDeRegle({
   // l'explication derrière. Une fonction auto-portée emporte ce qu'elle dit
   // d'elle-même.
   const dit = ligneDeCommentaire(quoi, dedans);
+
+  // **Pas de ligne vide juste avant l'accolade fermante.** Chaque section du
+  // corps pose la sienne pour se séparer de la suivante ; la dernière n'a rien
+  // à séparer, et le blanc se lirait comme une section oubliée.
+  while (corps.length && !corps[corps.length - 1]?.length) corps.pop();
 
   return corps.length || dit
     ? [
@@ -2190,6 +2251,70 @@ export function ligneDeFonction(nom = "", entrees = []) {
   ];
 }
 
+
+/**
+ * `courbe Coefficient de forme(zones, Pente du versant) {`
+ *
+ * **Le même dessin qu'une fonction**, au mot près : une courbe en est une,
+ * écrite autrement. Deux façons de poser une signature divergeraient au premier
+ * réglage, et l'on aurait deux têtes à recalibrer l'une contre l'autre.
+ */
+export function ligneDeCourbe(nom = "", entrees = []) {
+  return [
+    jeton(JETON.MOT_FONCTION, COURBE),
+    ...ligneDeFonction(nom, entrees).slice(1)
+  ];
+}
+
+/**
+ * `entre les points: linéaire` — une des deux déclarations d'une courbe.
+ *
+ * Le mot est une étiquette du langage, sa valeur un mot fermé : les mêmes deux
+ * couleurs que `statut:` et `le:`, qui sont la même chose.
+ */
+export function ligneDuChampDeLaCourbe(cle = "", valeur = "", profondeur = 1) {
+  const quoi = texte(valeur);
+  if (!texte(cle) || !quoi) return null;
+
+  return [
+    espace(RETRAIT.repeat(Math.max(1, profondeur))),
+    jeton(JETON.LOCALE, `${texte(cle)}:`),
+    espace(),
+    jeton(JETON.STATUT, quoi)
+  ];
+}
+
+/**
+ * `|  0° | 0,80 |` — un point d'une courbe.
+ *
+ * **Les colonnes s'alignent**, comme celles d'un barème : un abaque se compare
+ * à sa figure d'un coup d'œil, et des cases qui dansent d'une ligne à l'autre
+ * obligent à lire chiffre par chiffre. La largeur se calcule sur l'ensemble des
+ * points — c'est pourquoi ils s'écrivent tous ensemble, et non un par un.
+ */
+export function lignesDesPoints(points = [], profondeur = 1) {
+  const tous = (Array.isArray(points) ? points : [])
+    .map((un) => [texte(un?.x), texte(un?.y)])
+    .filter(([x, y]) => x && y);
+  if (!tous.length) return [];
+
+  const large = [0, 1].map((colonne) => Math.max(...tous.map(([...cases]) => cases[colonne].length)));
+
+  return tous.map(([x, y]) => [
+    espace(RETRAIT.repeat(Math.max(1, profondeur))),
+    jeton(JETON.PONCTUATION, "|"),
+    espace(),
+    // L'abscisse est ce qu'on compare, l'ordonnée ce qu'on conclut : les deux
+    // couleurs d'un barème, pour la même raison.
+    jeton(JETON.OPERATEUR, x),
+    espace(" ".repeat(large[0] - x.length + 1)),
+    jeton(JETON.PONCTUATION, "|"),
+    espace(),
+    jeton(JETON.VALEUR, y),
+    espace(" ".repeat(large[1] - y.length + 1)),
+    jeton(JETON.PONCTUATION, "|")
+  ]);
+}
 
 /**
  * Le nom sous lequel une fonction reçoit sa portée.

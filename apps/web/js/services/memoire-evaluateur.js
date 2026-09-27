@@ -60,6 +60,7 @@ import { convertir } from "./unites-du-metier.js";
 import {
   REFUS_DE_LA_BOUCLE, agregerUneColonne, valeursDeLaBoucle, phraseDuRefusDeLaBoucle
 } from "./boucle-du-mdall.js";
+import { interpoler, phraseDuRefusDeLaCourbe, pointsDeLaCourbe } from "./courbe-du-mdall.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -80,6 +81,11 @@ export const DOUTE = {
   UNITES_INCOMPARABLES: "unites-incomparables",
   /** Un opérateur que ce module ne connaît pas. */
   OPERATEUR_INCONNU: "operateur-inconnu",
+  /**
+   * Une courbe qui ne conclut pas : la valeur lue sort de ses points, ou elle
+   * ne mesure pas ce que la courbe trace.
+   */
+  COURBE_MUETTE: "courbe-muette",
   /**
    * Un agrégat qui ne rend rien : le tableau est vide, ou sa colonne ne porte
    * aucune valeur qu'on sache lire.
@@ -117,6 +123,7 @@ const PHRASES = {
   [DOUTE.PAS_UN_NOMBRE]: "cette comparaison attend des nombres",
   [DOUTE.UNITES_INCOMPARABLES]: "les deux côtés ne mesurent pas la même chose",
   [DOUTE.OPERATEUR_INCONNU]: "cet opérateur n'est pas du langage",
+  [DOUTE.COURBE_MUETTE]: "la courbe ne conclut pas pour cette valeur",
   [DOUTE.TABLEAU_MUET]: "le tableau ne porte aucune valeur à lire dans cette colonne",
   [DOUTE.CALCUL_REFUSE]: "ce calcul ne se fait pas",
   [DOUTE.LOI_NON_ECRITE]: "la loi de cette fonction n'est pas écrite : elle se refait au serveur"
@@ -626,6 +633,16 @@ export function evaluerLaRegle(regle = {}, lire = () => ({ connu: false, valeur:
 
   const bloc = regle?.payload?.regle ?? {};
 
+  /**
+   * **Une courbe se lit, elle ne se branche pas.**
+   *
+   * Un barème se déplie en `si … sinon si …`, et c'est ce qui permet à tout le
+   * reste de n'en rien savoir. Une interpolation, non : entre deux points il
+   * n'y a aucune branche, il y a une droite. La courbe a donc sa lecture, ici,
+   * et elle rend ce qu'une fonction rend — une valeur, une trace, un doute.
+   */
+  if (bloc?.courbe) return evaluerLaCourbe(bloc.courbe, lire);
+
   // **Les locales d'abord.** Une condition peut porter sur une valeur que la
   // fonction vient de calculer, et une conclusion peut la nommer. La boucle se
   // déroule parmi elles, à sa place dans le fichier.
@@ -778,6 +795,85 @@ export function evaluerLaRegle(regle = {}, lire = () => ({ connu: false, valeur:
      */
     tableau: locales.tableau
   };
+}
+
+/**
+ * Lire une courbe : où tombe la valeur, et ce que la courbe y vaut.
+ *
+ * **Elle rend la forme d'une fonction**, et c'est ce qui compte : l'écran, la
+ * trace, le rejeu et le graphe n'ont pas à savoir qu'une courbe existe. Ce qui
+ * la distingue tient dans deux champs de plus — `points` et `lecture` —, que
+ * seul l'écran qui la dessine regarde.
+ *
+ * @returns {{decidable: boolean, tient: boolean|null, valeur: string, ...}}
+ */
+export function evaluerLaCourbe(courbe = null, lire = () => ({ connu: false, valeur: "" })) {
+  const selon = texte(courbe?.selon);
+  const lus = pointsDeLaCourbe(courbe?.points);
+
+  const rendu = (quoi) => ({
+    decidable: quoi.decidable ?? false,
+    tient: quoi.tient ?? null,
+    applique: null,
+    valeur: quoi.valeur ?? "",
+    conditions: [],
+    exceptions: [],
+    branches: [],
+    manquants: quoi.manquants ?? [],
+    melange: false,
+    doutes: quoi.doutes ?? [],
+    calculs: [],
+    tableau: null,
+    /** Les points, tels qu'ils ont été écrits : l'écran les dessine. */
+    points: lus.points,
+    /** Où la lecture est tombée, et ce qu'elle a trouvé. */
+    lecture: quoi.lecture ?? null
+  });
+
+  // Une courbe que la lecture du fichier a refusée n'arrive pas jusqu'ici ; si
+  // elle y arrive, c'est qu'elle vient d'ailleurs, et l'on ne devine pas.
+  if (lus.refus) {
+    return rendu({
+      doutes: [DOUTE.COURBE_MUETTE],
+      lecture: { pourquoi: phraseDuRefusDeLaCourbe(lus.refus, lus.ou) }
+    });
+  }
+
+  const lue = lire(selon) ?? { connu: false, valeur: "" };
+  if (!lue.connu) {
+    return rendu({
+      manquants: selon ? [selon] : [],
+      doutes: [DOUTE.ENTREE_ABSENTE],
+      lecture: { sujet: selon, pourquoi: PHRASES[DOUTE.ENTREE_ABSENTE] }
+    });
+  }
+
+  const trouve = interpoler(lus, lue.valeur, { entre: courbe?.entre, hors: courbe?.hors });
+  if (!trouve.connu) {
+    return rendu({
+      doutes: [DOUTE.COURBE_MUETTE],
+      lecture: { sujet: selon, lu: texte(lue.valeur), pourquoi: trouve.pourquoi }
+    });
+  }
+
+  /**
+   * **Une courbe qui a lu tient.** Elle n'a pas de condition à satisfaire : sa
+   * loi est de rendre une valeur pour une autre, et elle l'a rendue. Dire
+   * « indécidable » d'une lecture réussie ferait chercher un défaut là où il
+   * n'y en a pas.
+   */
+  return rendu({
+    decidable: true,
+    tient: true,
+    valeur: trouve.valeur,
+    lecture: {
+      sujet: selon,
+      lu: texte(lue.valeur),
+      sur: trouve.sur,
+      entre: trouve.entre,
+      borne: trouve.borne
+    }
+  });
 }
 
 /**

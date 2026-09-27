@@ -22,6 +22,8 @@ import {
 
 import { lireUnFichier, lireUneCondition } from "../../../apps/web/js/services/memoire-en-lecture.js";
 import { PHRASE_DE_LAGREGAT } from "../../../apps/web/js/services/memoire-en-texte.js";
+import { ENTRE, HORS } from "../../../apps/web/js/services/courbe-du-mdall.js";
+import { evaluerLaCourbe } from "../../../apps/web/js/services/memoire-evaluateur.js";
 import { evaluerLaCondition } from "../../../apps/web/js/services/memoire-evaluateur.js";
 import { lancerLeBrouillon, ISSUE } from "../../../apps/web/js/services/bac-dessai.js";
 import { calculer, ecrireLeCalcul } from "../../../apps/web/js/services/mdall-calcul.js";
@@ -294,6 +296,47 @@ test("la consigne dit les cinq agrégats, et pas un de plus", () => {
   // Et les gardes, dits avant le lancement plutôt que découverts après.
   assert.match(CONSIGNES, /pas de zéro/);
   assert.match(CONSIGNES, /200 lignes/);
+});
+
+test("chaque abaque de la consigne se lit, et se lit vraiment quelque part", () => {
+  /**
+   * **Un exemple faux est pire qu'une consigne absente** : le modèle le copie,
+   * et l'on passe la journée à chercher pourquoi le langage refuse ce que sa
+   * propre documentation lui a montré. Une courbe dont les points seraient dans
+   * le désordre, ou dont une déclaration manquerait, passerait la relecture
+   * humaine sans un mot — mais pas celle du lecteur du langage (règle 12).
+   */
+  const courbes = EXEMPLES
+    .flatMap((exemple) => lireUnFichier(exemple).blocs)
+    .filter((bloc) => bloc.courbe);
+
+  assert.ok(courbes.length >= 1, "la consigne n'enseigne plus d'abaque");
+
+  for (const bloc of courbes) {
+    assert.ok(bloc.courbe.selon, `« ${bloc.sujet} » ne dit pas ce qu'elle lit`);
+    assert.ok(bloc.courbe.entre, `« ${bloc.sujet} » ne déclare pas son interpolation`);
+    assert.ok(bloc.courbe.hors, `« ${bloc.sujet} » ne déclare pas ce qu'elle fait hors bornes`);
+
+    // Et elle conclut vraiment : une courbe qu'on montre sans pouvoir la lire
+    // enseignerait une forme qui ne sert à rien.
+    const lu = evaluerLaCourbe(bloc.courbe, (sujet) => (sujet === bloc.courbe.selon
+      ? { connu: true, valeur: bloc.courbe.points[0].x }
+      : { connu: false, valeur: "" }));
+    assert.equal(lu.valeur, bloc.courbe.points[0].y,
+      `« ${bloc.sujet} » ne rend pas son premier point`);
+  }
+});
+
+test("la consigne dit les quatre mots d'une courbe, et la faute qu'ils évitent", () => {
+  // Un mot enseigné que le langage ne lit pas est pire qu'une absence : le
+  // modèle l'écrit, et la ligne est refusée par la documentation elle-même.
+  for (const mot of [...Object.values(ENTRE), ...Object.values(HORS)]) {
+    assert.ok(CONSIGNES.includes(mot), `la consigne ne nomme pas « ${mot} »`);
+  }
+  assert.match(CONSIGNES, /entre les points:/);
+  assert.match(CONSIGNES, /hors bornes:/);
+  // Et la raison, dite plutôt que supposée : c'est la faute la plus chère.
+  assert.match(CONSIGNES, /plausible/);
 });
 
 test("la consigne interdit l'appel de fonction, et montre le chaînage à la place", () => {

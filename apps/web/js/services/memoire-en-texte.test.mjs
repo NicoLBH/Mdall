@@ -31,6 +31,34 @@ test("estMesuree distingue une cote d'une catégorie", () => {
   assert.deepEqual(couperLUnite("490,03 m"), { nombre: "490,03", unite: "m" });
 });
 
+test("le degré se colle au nombre, et lui seul", () => {
+  /**
+   * **Personne n'écrit « 30 ° ».** Un abaque de norme porte `0°`, `30°`, `45°`,
+   * et une courbe recopiée à l'espace près cesserait de ressembler à sa figure
+   * — ce qui est tout l'intérêt de la recopier. `0°` se lisait comme le nombre
+   * zéro, l'unité perdue en silence, et deux angles en degrés se comparaient à
+   * un angle en radians sans un mot.
+   */
+  assert.deepEqual(couperLUnite("30°"), { nombre: "30", unite: "°" });
+  assert.deepEqual(couperLUnite("-5°"), { nombre: "-5", unite: "°" });
+  assert.deepEqual(couperLUnite("0,5°"), { nombre: "0,5", unite: "°" });
+  assert.deepEqual(couperLUnite("20°C"), { nombre: "20", unite: "°C" });
+  // Écrit avec son espace, il se lit comme avant : les deux formes disent la
+  // même chose.
+  assert.deepEqual(couperLUnite("30 °"), { nombre: "30", unite: "°" });
+
+  /**
+   * **Et lui seul.** `%` est un suffixe du calcul avant d'être une unité — `20%`
+   * y vaut `0,2` —, et l'euro s'écrit avec son espace. Les coller ferait changer
+   * de sens à des valeurs versées depuis des mois.
+   */
+  assert.deepEqual(couperLUnite("20%"), { nombre: "20%", unite: "" });
+  assert.deepEqual(couperLUnite("120€"), { nombre: "120€", unite: "" });
+  // Et rien qui ressemble à un degré sans en être un : « 3e famille B » reste
+  // entier, comme il l'a toujours été.
+  assert.deepEqual(couperLUnite("3e famille B"), { nombre: "3e famille B", unite: "" });
+});
+
 test("la portée n'est plus sur la ligne : c'est le dossier qui la porte", () => {
   assert.equal(
     clair(ligneDAffirmation({ sujet: "Degré coupe-feu", valeur: "CF 1 h" })),

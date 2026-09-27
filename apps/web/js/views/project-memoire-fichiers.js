@@ -2020,6 +2020,10 @@ export function lignesDeLAssertion(assertion = {}, profondeur = 0, {
        */
       calculs: payload.regle.calculs ?? [],
       boucle: payload.regle.boucle ?? null,
+      // Et son abaque : une courbe réduite à la valeur qu'elle a conclue
+      // deviendrait une affirmation, et l'on ne pourrait plus la comparer à sa
+      // figure d'origine — ce pour quoi on l'a écrite ainsi.
+      courbe: payload.regle.courbe ?? null,
       sinon: texte(payload.regle.sinon),
       sauf: exceptions,
       provenance: provenanceDeLAssertion(assertion, { auteurs }),

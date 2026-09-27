@@ -310,6 +310,44 @@ s'éloigne de la fin (\`de 10 à 1 par pas de 1\` — écris-le \`par pas de -1\
 bornes qui ne mesurent pas la même chose, et un tableau de plus de 200 lignes —
 au-delà, il ne se relit plus, et c'est tout l'intérêt de cette forme.
 
+# Un abaque : \`courbe\`
+
+Les normes sont pleines de **figures** — un coefficient selon une pente, une
+pression selon une hauteur. Recopie-les en points plutôt qu'en arithmétique :
+le contrôleur compare la courbe à sa figure, il ne relit pas une régression.
+
+\`\`\`
+courbe Coefficient de forme(zones, Pente du versant) {
+   // NF EN 1991-1-3, figure 5.1 — toiture à un versant.
+   texte: NF EN 1991-1-3, annexe nationale
+   entre les points: linéaire
+   hors bornes: refuse
+   |  0° | 0,8 |
+   | 30° | 0,8 |
+   | 60° | 0   |
+}
+\`\`\`
+
+**Une courbe est une fonction**, écrite autrement : elle lit le nom de sa
+signature et conclut sous le sien. Les autres fonctions la lisent comme
+n'importe quel nom — il n'y a pas d'appel, ici non plus.
+
+- **les deux déclarations sont obligatoires**, et c'est tout l'objet de la
+  forme. \`entre les points:\` vaut \`linéaire\` ou \`en escalier\` (un palier) ;
+  \`hors bornes:\` vaut \`refuse\` ou \`borne\` (la valeur de l'extrémité) ;
+- **écris \`hors bornes: refuse\`** sauf si le texte dit le contraire. Une courbe
+  donnée de 0 à 60° prolongée jusqu'à 75° rend un nombre parfaitement
+  plausible, qui ne vient d'aucun texte : c'est la faute la plus chère ;
+- **un point par ligne, deux cases** : l'abscisse, puis ce que la courbe vaut ;
+- **les abscisses montent**, strictement. Deux points au même endroit donneraient
+  deux valeurs pour une lecture ;
+- **au moins deux points**, et chaque colonne mesure une seule chose ;
+- le degré se colle au nombre — \`30°\` —, comme sur la figure.
+
+N'écris **jamais** une régression ni un polynôme pour remplacer un abaque : les
+valeurs qui en sortiraient ne se retrouvent dans aucun texte, et personne ne
+pourrait dire d'où elles viennent.
+
 # Une fonction qui en lit une autre
 
 **Il n'y a pas d'appel de fonction dans Mdall.** N'écris jamais

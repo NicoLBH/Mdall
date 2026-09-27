@@ -48,12 +48,16 @@ import {
   ligneDAffirmation, ligneDeDonnee, ligneDeCondition, ligneDeConsequence,
   ligneDeProvenance, ligneDePreuve, ligneDeStatut, ligneDeDate, ligneDeNote, ligneDeLocale,
   ligneDImport, ligneDeDecision, ligneDeFonction, ligneDeLocaleVide, ligneDAffectation,
-  jetonsDeValeur, AGENT, AGENTS, VERBES, POUR_CHAQUE
+  ligneDeCourbe, ligneDuChampDeLaCourbe,
+  jetonsDeValeur, AGENT, AGENTS, VERBES, POUR_CHAQUE, PORTEE_DUNE_FONCTION
 } from "./memoire-en-texte.js";
 import { lireUnCalcul, nomsDuCalcul, phraseDuRefus } from "./mdall-calcul.js";
 import {
   bornesLitterales, lireUnAgregat, lireUnePourChaque, phraseDuRefusDeLaBoucle, valeursDeLaBoucle
 } from "./boucle-du-mdall.js";
+import {
+  DIT_DE_LENTRE, DIT_DU_HORS, lireUnPoint, phraseDuRefusDeLaCourbe, pointsDeLaCourbe
+} from "./courbe-du-mdall.js";
 // La clé d'un sujet vient d'un seul endroit : comparer « Couleur des volets » à
 // « couleur des volets » avec une seconde normalisation écrite ici finirait par
 // ne plus dire la même chose que celle du projet (règle 10).
@@ -111,6 +115,9 @@ const TETES = [
   // `pour chaque` ouvre une **boucle** : le même calcul répété sur une suite de
   // valeurs, dont il sort un tableau. Voir `boucle-du-mdall.js`.
   "pour chaque",
+  // `entre les points:` et `hors bornes:` sont les deux déclarations d'une
+  // courbe. Elles passent avant les mots courts, comme tous les mots composés.
+  "entre les points:", "hors bornes:",
   "fonction", "soit", "calcule", "selon", "alors", "sinon", "si", "et", "ou", "non",
   ...PROVENANCES.map((type) => `${type}:`)
 ];
@@ -603,17 +610,33 @@ export function lireUneTete(ligne = "") {
   // d'appel qui le porte. Le mot est encore lu pour ne pas refuser un fichier
   // écrit avant, et il ne se conserve pas.
   const regle = /^fonction\s+/i.test(brut);
-  const dit = regle ? texte(brut.replace(/^fonction\s+(?:native\s+)?/i, "")) : brut;
+
+  /**
+   * `courbe Coefficient de forme(zones, Pente du versant) {`
+   *
+   * **Une courbe est une fonction**, écrite autrement : elle lit une entrée et
+   * conclut sous son nom, comme toutes les autres. Le mot dit seulement sous
+   * quelle forme elle a été écrite — des points et deux déclarations plutôt que
+   * des conditions —, exactement comme `selon` le dit d'un barème.
+   */
+  const courbe = /^courbe\s+/i.test(brut);
+  const dit = regle
+    ? texte(brut.replace(/^fonction\s+(?:native\s+)?/i, ""))
+    : (courbe ? texte(brut.replace(/^courbe\s+/i, "")) : brut);
 
   const egal = dit.match(/^(.*?)\s*=\s*(.*)$/);
   // Pas de `=` : c'est la tête d'une règle, avec sa signature éventuelle.
   if (!egal) {
     const { sujet, entrees } = lireUneSignature(dit);
-    return { sujet, valeur: "", unite: "", entrees, regle: regle || entrees.length > 0 };
+    return {
+      sujet, valeur: "", unite: "", entrees, courbe, regle: regle || courbe || entrees.length > 0
+    };
   }
 
   const lue = lireUneValeur(egal[2]);
-  return { sujet: texte(egal[1]), valeur: lue.valeur, unite: lue.unite, entrees: [], regle };
+  return {
+    sujet: texte(egal[1]), valeur: lue.valeur, unite: lue.unite, entrees: [], courbe, regle
+  };
 }
 
 /**
@@ -666,8 +689,44 @@ export function lireUnFichier(contenu = "") {
       // `accolade` sert à la lecture, pas au sens : elle ne ressort pas.
       const {
         accolade, conclue, affecte, branche, siEnTrop, sinonSi, selon,
-        agent, utilitaire, version, enregistre, tableau, boucle, boucleOuverte, ...bloc
+        agent, utilitaire, version, enregistre, tableau, boucle, boucleOuverte,
+        courbe, ...bloc
       } = courant;
+
+      /**
+       * **Une courbe se vérifie entière, et à sa fermeture.**
+       *
+       * Ses deux déclarations et ses points s'écrivent après sa tête : on ne
+       * peut juger ni de leur présence ni de leur ordre avant d'avoir tout lu.
+       * Ce qui manque se dit **ici**, une fois, plutôt qu'au lancement — une
+       * courbe fausse laissée passer rend un nombre plausible, et personne ne
+       * saurait d'où il sort (règle 5).
+       */
+      if (courbe) {
+        const manque = [
+          ...(courbe.selon ? [] : ["le nom qu'elle lit, dans sa signature"]),
+          ...(courbe.entre ? [] : ["« entre les points: » (linéaire, ou en escalier)"]),
+          ...(courbe.hors ? [] : ["« hors bornes: » (refuse, ou borne)"])
+        ];
+
+        const lus = pointsDeLaCourbe(courbe.points);
+
+        if (manque.length) {
+          refus.push({
+            ligne: bloc.ligne,
+            texte: `courbe ${bloc.sujet}`,
+            raison: `il manque à cette courbe ${manque.join(" et ")} : une interpolation se déclare.`
+          });
+        } else if (lus.refus) {
+          refus.push({
+            ligne: bloc.ligne,
+            texte: `courbe ${bloc.sujet}`,
+            raison: `cette courbe ne se lit pas : ${phraseDuRefusDeLaCourbe(lus.refus, lus.ou)}.`
+          });
+        } else {
+          bloc.courbe = courbe;
+        }
+      }
 
       /**
        * **Une boucle sans corps ne rend rien**, et se refuse en le disant.
@@ -956,6 +1015,25 @@ export function lireUnFichier(contenu = "") {
      * sans dire ce qui manque.
      */
     if (corps.startsWith("|")) {
+      /**
+       * **Une ligne de courbe est un point**, et elle passe avant le barème :
+       * les deux s'écrivent `| … | … |`, et c'est le mot de tête du bloc qui
+       * décide lequel des deux on lit. Une seule notation pour les tableaux du
+       * langage, et pas deux à apprendre.
+       */
+      if (courant?.courbe) {
+        const point = lireUnPoint(casesDuBareme(corps));
+        if (!point) {
+          refus.push({
+            ligne: numero, texte: corps,
+            raison: "un point d'une courbe a deux cases : « | 30° | 0,80 | »."
+          });
+          return;
+        }
+        courant.courbe.points.push(point);
+        return;
+      }
+
       if (!courant || !courant.selon.length) {
         refus.push({
           ligne: numero, texte: corps,
@@ -1154,6 +1232,31 @@ export function lireUnFichier(contenu = "") {
         boucle: null,
         /** Le corps de la boucle est-il encore en train de s'écrire ? */
         boucleOuverte: false,
+        /**
+         * L'abaque de la fonction, quand elle est écrite en courbe.
+         *
+         * **`courbe` est une marque d'écriture, comme `selon`** : la fonction
+         * lit une entrée et conclut sous son nom, exactement comme les autres.
+         * Ce qui change est la façon dont sa loi est posée — des points et deux
+         * déclarations plutôt que des conditions.
+         */
+        courbe: tete?.courbe
+          ? {
+            /**
+             * **L'abscisse, prise à la signature.** Une fonction ordinaire
+             * déduit ses entrées de ses conditions — une courbe n'en a pas, et
+             * c'est sa signature qui dit ce qu'elle lit. La première entrée qui
+             * n'est pas la portée : il n'y en a qu'une, et une courbe à deux
+             * entrées serait un abaque à double entrée, c'est-à-dire un barème.
+             */
+            selon: texte((tete.entrees ?? [])
+              .map(texte)
+              .find((une) => une && une !== PORTEE_DUNE_FONCTION)),
+            entre: "",
+            hors: "",
+            points: []
+          }
+          : null,
         /** Où vont les conditions et la conclusion qu'on lit : la tête, ou une branche. */
         branche: null,
         // Les `si` posés après le premier. Légitimes dans une fonction qui
@@ -1305,6 +1408,39 @@ export function lireUnFichier(contenu = "") {
 
       courant.boucle = { ...tete, calculs: [], ligne: numero, retrait: retraitDe(brute) };
       courant.boucleOuverte = true;
+      return;
+    }
+
+    /**
+     * `entre les points: linéaire` et `hors bornes: refuse`
+     *
+     * **Les deux se déclarent, et c'est tout l'objet de la forme.** Deux abaques
+     * dessinés pareil se lisent différemment — une droite, ou un palier — et
+     * rien dans les points ne le dit. Quant à `hors bornes`, c'est la faute
+     * classique : une courbe donnée de 0 à 60° prolongée jusqu'à 75° rend un
+     * nombre parfaitement plausible, qui ne vient d'aucun texte.
+     */
+    if (mot === "entre les points:" || mot === "hors bornes:") {
+      if (!courant.courbe) {
+        refus.push({
+          ligne: numero, texte: corps,
+          raison: `« ${mot.slice(0, -1)} » ne se dit que d'une courbe : écrivez « courbe ${
+            courant.sujet || "…"}(…) ».`
+        });
+        return;
+      }
+
+      const connus = mot === "entre les points:" ? DIT_DE_LENTRE : DIT_DU_HORS;
+      const dit = reste.toLowerCase();
+      if (!Object.hasOwn(connus, dit)) {
+        refus.push({
+          ligne: numero, texte: corps,
+          raison: `« ${reste} » ne se lit pas : ${Object.keys(connus).map((un) => `« ${un} »`).join(" ou ")}.`
+        });
+        return;
+      }
+
+      courant.courbe[mot === "entre les points:" ? "entre" : "hors"] = dit;
       return;
     }
 
@@ -1610,6 +1746,15 @@ export function nomsLusParLeBloc(bloc = {}) {
     lireLexpression(calcul?.expression);
   }
 
+  /**
+   * **Une courbe lit son abscisse, et c'est tout ce qu'elle lit.**
+   *
+   * Elle n'a ni condition ni calcul : sans cette ligne, le formulaire du bac
+   * n'offrait **aucun champ** devant un abaque, et la fonction restait
+   * indécidable pour toujours sans qu'un mot dise laquelle des valeurs manque.
+   */
+  retenir(bloc?.courbe?.selon);
+
   for (const condition of clausesDeLaRegle(bloc)) retenir(condition?.sujet);
 
   return lus;
@@ -1838,6 +1983,12 @@ export function jetonsDeLaLigne(ligne = "") {
   if (mot === "statut:") return [...marge, ...(ligneDeStatut(reste, 0) ?? []).slice(1)];
   if (mot === "le:") return [...marge, ...(ligneDeDate(reste, 0) ?? []).slice(1)];
 
+  // Les deux déclarations d'une courbe : une étiquette du langage, et un mot
+  // fermé. Les mêmes couleurs que `statut:`, qui est la même chose.
+  if (mot === "entre les points:" || mot === "hors bornes:") {
+    return [...marge, ...(ligneDuChampDeLaCourbe(mot.slice(0, -1), reste, 0) ?? []).slice(1)];
+  }
+
   // Les lignes d'un `.ref` qui s'étalent : on les rend telles qu'elles sont
   // écrites. Elles n'ont rien à recomposer — leur contenu est déductible —,
   // mais elles ont tout à colorer.
@@ -2058,6 +2209,9 @@ export function jetonsDeLaLigne(ligne = "") {
   const borne = ouvrante ? [{ type: JETON.NEUTRE, texte: " " }, { type: JETON.ACCOLADE, texte: "{" }] : [];
 
   const tete = lireUneTete(sansAccolade);
+  // `courbe X(zones, Y) {` — le mot du langage, puis la signature d'une
+  // fonction, parce que c'en est une.
+  if (tete?.courbe) return [...marge, ...ligneDeCourbe(tete.sujet, tete.entrees), ...borne];
   if (tete?.regle && /^fonction\s/i.test(nu)) return [...marge, ...ligneDeFonction(tete.sujet, tete.entrees), ...borne];
   if (tete?.regle) return [...marge, ...ligneDeDonnee(tete.sujet, tete.entrees, { regle: false }), ...borne];
   if (tete?.entrees?.length) return [...marge, ...ligneDeDonnee(tete.sujet, tete.entrees), ...borne];
