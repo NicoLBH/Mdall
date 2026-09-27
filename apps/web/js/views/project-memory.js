@@ -88,6 +88,7 @@ import {
   UNCLASSIFIED_LABEL,
   classifyAssertion,
   domainLabel,
+  estUneRegle,
   filterByTaxonomy,
   natureLabel,
   summarizeTaxonomy
@@ -131,7 +132,17 @@ import { renderOverlayChromeHead, bindOverlayChromeCompact } from "./ui/overlay-
 import { enClair } from "../services/memoire-en-texte.js";
 import { lignesDeLAssertion, ouChaqueValeurEstEcrite, ouChaqueLigneEstEcrite } from "./project-memoire-fichiers.js";
 import { fichiersDeLaMemoire, zonesLisibles } from "../services/memoire-blame.js";
-import { chaineDuRaisonnement, traceDesLignes, grapheDuRaisonnement } from "../services/memoire-raisonnement.js";
+import { chaineDuRaisonnement, sujetDe, traceDesLignes, grapheDuRaisonnement } from "../services/memoire-raisonnement.js";
+import { decisionPortee } from "../services/decision-remise-en-question.js";
+import {
+  AUTORITES,
+  FORMES,
+  autoriteCourte,
+  formeCourte,
+  motDeLaLigne,
+  phraseDuRejeu,
+  rejeuDuSujet
+} from "../services/axes-de-la-memoire.js";
 import { tracerLesLiens } from "./ui/graphe-liaisons.js";
 import {
   renderEspaceDuRaisonnement, ancresDuCode, espaceParDefaut, BORNES, VUES
@@ -185,8 +196,19 @@ const MEMORY_FIELDS = [
     { value: "assumees", token: "assumées", label: "Assumées" },
     { value: "ecartees", token: "écartées", label: "Écartées" }
   ] },
-  // Une règle n'est pas une nature : elle a son champ, et il se tape.
-  { key: "regle", label: "Règles", values: [{ value: "oui", label: "Seulement" }] },
+  // Les deux axes que la nature mélangeait, et qui se tapent maintenant chacun
+  // pour soi. `autorite:` est ce que la puce de la ligne affiche — une puce qu'on
+  // ne peut pas interroger est un cul-de-sac. `forme:` est l'axe de complexité :
+  // ce qu'on pose, ce qu'on déduit.
+  { key: "autorite", label: "Autorité", values: [
+    ...AUTORITES.map((autorite) => ({ value: autorite, token: jeton(autoriteCourte(autorite)), label: autoriteCourte(autorite) }))
+  ] },
+  { key: "forme", label: "Forme", values: [
+    ...FORMES.map((forme) => ({ value: forme, token: jeton(formeCourte(forme)), label: formeCourte(forme) }))
+  ] },
+  // Une fonction n'est pas une nature : elle a son champ, et il se tape. Le mot
+  // de l'écran est « fonction » — celui du langage ; « règle » reste dans le code.
+  { key: "fonction", label: "Fonctions", values: [{ value: "oui", label: "Seulement" }] },
   { key: "ouverts", label: "Constats", values: [{ value: "oui", label: "En cours" }] },
   { key: "remplacees", label: "Remplacées", values: [{ value: "oui", label: "Montrées" }] }
 ];
@@ -210,11 +232,11 @@ const READER_FILTERS = {
   // du rail à ne pas se corriger au clavier.
   [READER.DECISIONS]: { nature: NATURE.DECISION },
   [READER.REASONINGS]: { nature: NATURE.RAISONNEMENT },
-  // **Une règle n'a pas de nature**, et son filtre ne peut donc pas s'écrire
-  // avec `nature:`. Il s'écrit quand même — `regle:oui` se tape dans la barre —,
+  // **Une fonction n'a pas de nature**, et son filtre ne peut donc pas s'écrire
+  // avec `nature:`. Il s'écrit quand même — `fonction:oui` se tape dans la barre —,
   // parce qu'une lecture du rail sans requête équivalente serait la seule à ne
   // pas se corriger au clavier.
-  [READER.RULES]: { regle: "oui" },
+  [READER.RULES]: { fonction: "oui" },
   [READER.FINDINGS]: { nature: NATURE.CONSTAT, ouverts: "oui" },
   [READER.BASE_DATA]: { nature: NATURE.DONNEE_BASE }
 };
@@ -475,7 +497,11 @@ const READER_ICONS = {
   // chaînes écrites à la main finiraient par ne plus montrer la même chose.
   [READER.DECISIONS]: ICONE_DE_LA_DECISION,
   [READER.REASONINGS]: "project-roadmap",
-  [READER.RULES]: "code",
+  // `markdown-code`, et non `code` : **il n'y a pas d'icône « code » dans la
+  // planche**. Le rail affichait donc un carré vide depuis qu'il a une lecture
+  // des fonctions, et rien ne le disait — un `<use>` qui ne résout pas ne jette
+  // pas, il ne dessine rien. Une épreuve le refuse maintenant.
+  [READER.RULES]: "markdown-code",
   [READER.FINDINGS]: "tools",
   [READER.BASE_DATA]: "north-star"
 };
@@ -506,13 +532,31 @@ const NATURE_ICON = {
 
 function marqueDeLaLigne(assertion) {
   const { nature } = classifyAssertion(assertion);
-  const icone = NATURE_ICON[String(nature ?? "")];
+
+  // **Le dessin suit la même échelle que le mot, et dans le même ordre.** Une
+  // fonction versée porte le `kind` d'une donnée de base — c'est par lui qu'elle
+  // entre en mémoire —, et une valeur tranchée par un humain porte la nature de
+  // la valeur produite. Les deux recevaient donc l'étoile des données de base :
+  // l'une sous un rail qui annonçait des fonctions, l'autre à côté d'une puce qui
+  // disait « Décidé ». Deux dessins pour un mot font douter du mot.
+  //
+  // L'échelle est celle d'`autoriteDe` : la fonction, puis le choix humain, puis
+  // la nature. Deux ordres finiraient par ne plus se ressembler (règle 10).
+  const icone = estUneRegle(assertion)
+    ? READER_ICONS[READER.RULES]
+    : decisionPortee(assertion)
+      ? READER_ICONS[READER.DECISIONS]
+      : NATURE_ICON[String(nature ?? "")];
+
+  const { mot, connu } = motDeLaLigne(assertion);
+
   return {
     icone: icone ?? kindIcon(assertion?.kind),
-    // L'infobulle dit la nature quand on la connaît, la provenance sinon : le
-    // mot doit correspondre au dessin.
-    titre: icone ? natureLabel(nature) : kindLabel(assertion?.kind),
-    nature: icone ? String(nature) : ""
+    // L'infobulle dit **le mot de la puce**, jamais un autre : le dessin, la
+    // puce et l'infobulle doivent nommer la même chose, sinon on croit que l'un
+    // des trois en sait plus.
+    titre: icone && connu ? mot : kindLabel(assertion?.kind),
+    nature: icone ? String(nature ?? "") : ""
   };
 }
 
@@ -660,11 +704,19 @@ function renderTableHead() {
           { value: "attachment", label: "Rattachements" },
           { value: "document", label: "Documents" }
         ], filtres.provenance ?? "")}
-        ${menu("memoryNature", [
-          { value: "", label: "Nature" },
-          ...NATURES.map((nature) => ({ value: nature, label: natureLabel(nature) })),
-          { value: "none", label: `${UNCLASSIFIED_LABEL}e` }
-        ], filtres.nature ?? "")}
+        ${/* **Le menu offre l'axe que la ligne affiche.** Il offrait la nature —
+             « Donnée de base », « Raisonnement » —, et aucune ligne ne porte plus
+             ces mots : on cochait un mot pour voir apparaître un autre. La nature
+             reste interrogeable au clavier, `nature:raisonnement` : c'est la
+             colonne de la base, et rien ne la cache. */""}
+        ${menu("memoryAutorite", [
+          { value: "", label: "Autorité" },
+          ...AUTORITES.map((autorite) => ({ value: autorite, label: autoriteCourte(autorite) }))
+        ], filtres.autorite ?? "")}
+        ${menu("memoryForme", [
+          { value: "", label: "Forme" },
+          ...FORMES.map((forme) => ({ value: forme, label: formeCourte(forme) }))
+        ], filtres.forme ?? "")}
         ${menu("memoryDomain", [
           { value: "", label: "Domaine" },
           ...DOMAINS.map((domaine) => ({ value: domaine, label: domainLabel(domaine) })),
@@ -1196,9 +1248,21 @@ function renderDependentsCount(assertion) {
  * Deux étiquettes, et la seconde compte autant quand elle est vide : « non
  * classé » se lit, il ne se cache pas. Une mémoire dont on ne voit pas les
  * trous se croit complète.
+ *
+ * ## Une seule étiquette de vocabulaire, et c'est l'autorité
+ *
+ * Elle disait la **nature**, et la nature mélangeait deux axes : `donnee-de-base`
+ * est une provenance, `raisonnement` est une forme. D'où une ligne chipée
+ * « Donnée de base » sous un rail qui annonçait « Règles » — le même objet,
+ * deux mots qui avaient l'air de se contredire.
+ *
+ * Elle dit maintenant **d'où l'affirmation tient son autorité**, ce qui est la
+ * seule chose qui ne se voit pas en lisant la ligne. Le reste — sa forme — se
+ * lit dans l'objet lui-même, et son rejeu dans son détail.
  */
 function renderTaxonomy(assertion) {
-  const { nature, domain } = classifyAssertion(assertion);
+  const { domain } = classifyAssertion(assertion);
+  const { mot, connu } = motDeLaLigne(assertion);
 
   const etiquette = (texte, modificateur) =>
     `<span class="memory-tag memory-tag--${modificateur}">${escapeHtml(texte)}</span>`;
@@ -1209,7 +1273,7 @@ function renderTaxonomy(assertion) {
   const portee = describeZonesOf(assertion, view.assertions ?? []);
 
   return `
-    ${nature ? etiquette(natureLabel(nature), "nature") : etiquette(UNCLASSIFIED_LABEL, "unknown")}
+    ${etiquette(mot, connu ? "nature" : "unknown")}
     ${domain ? etiquette(domainLabel(domain), "domain") : etiquette("Sans domaine", "unknown")}
     ${etiquette(portee, zonesOf(assertion).length ? "zone" : "unknown")}
   `;
@@ -1341,7 +1405,7 @@ function redessinerLaListe(root) {
  * écran à l'autre les mêmes pastilles, aux mêmes couleurs.
  */
 function pastillesDuDetail(assertion) {
-  const { nature, domain } = classifyAssertion(assertion);
+  const { domain } = classifyAssertion(assertion);
   const portees = zonesOf(assertion);
 
   // La valeur en bleu, sans bordure, dans la fonte à chasse fixe : elle se
@@ -1350,10 +1414,31 @@ function pastillesDuDetail(assertion) {
   const pastille = (valeur, vide) =>
     `<span class="memory-tag memory-tag--valeur mono${vide ? " memory-tag--unknown" : ""}">${escapeHtml(valeur)}</span>`;
 
+  // **Le badge de rejeu**, et c'est la phrase qui compte : « se recalcule seule »
+  // ou « s'arrête sur une décision d'untel, le 12/03 ». C'est la seule chose de
+  // tout ce vocabulaire qu'aucun autre outil ne sait dire, et elle vivait jusqu'ici
+  // cachée dans la définition d'un mot de taxonomie. Elle est déduite de la
+  // chaîne, jamais déclarée — et vide quand rien ne déduit cette valeur : « se
+  // recalcule seule » d'un constat relevé à la main serait un mensonge poli.
+  const { mot, connu } = motDeLaLigne(assertion);
+  const rejeu = rejeuDuSujet(sujetDe(assertion), view.assertions ?? [], { zone: portees[0] ?? "" });
+  const ditLeRejeu = phraseDuRejeu(rejeu);
+
   return [
     { label: "Provenance", html: pastille(kindLabel(assertion.kind) || "Inconnue", !assertion.kind) },
-    { label: "Nature", html: pastille(nature ? natureLabel(nature) : UNCLASSIFIED_LABEL, !nature) },
+    // « D'un texte », « Décidé », « Constaté » — et le même mot que sur la ligne,
+    // parce qu'un détail qui renomme ce que la liste vient de dire fait douter
+    // qu'on regarde la même affirmation.
+    { label: "Autorité", html: pastille(mot, !connu) },
     { label: "Domaine", html: pastille(domain ? domainLabel(domain) : "Sans domaine", !domain) },
+    // **Un arrêt n'est pas un vide.** Le trait discontinu dit « cette case est
+    // vide » partout ailleurs sur cet écran ; l'employer ici ferait lire comme
+    // une lacune ce qui est au contraire l'information la plus chère que le
+    // projet garde. Une chaîne qui s'arrête a donc sa couleur à elle.
+    ...(ditLeRejeu
+      ? [{ label: "Rejeu", html: `<span class="memory-tag memory-tag--valeur mono${
+          rejeu.seule ? "" : " memory-tag--arret"}">${escapeHtml(ditLeRejeu)}</span>` }]
+      : []),
     // Pas d'« État » : la pastille qui ouvre la ligne dit déjà « Assumé », et le
     // répéter deux centimètres plus loin fait relire pour rien.
     {
@@ -2474,7 +2559,7 @@ function renderRaisonnement(courante) {
   // La définition de zone ensuite, quand le projet en a une. La clé en dernier
   // recours — mieux vaut une clé qu'un vide.
   const zoneEnClair = zone ? (zonesLisibles(courante)[0] || zoneLabel(zone, assertions)) : "";
-  const sujet = String(courante?.payload?.subject ?? courante?.subject_key ?? "").trim();
+  const sujet = sujetDe(courante);
   const { fonctions, entrees, manquants } = chaineDuRaisonnement(sujet, assertions, { zone });
 
   if (!fonctions.length) {
@@ -3624,7 +3709,8 @@ function bind(root) {
     onChange: (id, value) => {
       const champ = {
         memoryKind: "provenance",
-        memoryNature: "nature",
+        memoryAutorite: "autorite",
+        memoryForme: "forme",
         memoryDomain: "domaine",
         memoryStatus: "etat"
       }[id];

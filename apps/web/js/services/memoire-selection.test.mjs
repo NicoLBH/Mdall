@@ -9,7 +9,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { selectionDeLaMemoire, laRequeteRestreint } from "./memoire-selection.js";
-import { NATURE } from "./assertion-taxonomy.js";
+import { NATURE, SETTLED_BY } from "./assertion-taxonomy.js";
+import { FORME } from "./axes-de-la-memoire.js";
 
 /** Le vocabulaire des `champ:valeur`, réduit à ce que ces cas emploient. */
 const CHAMPS = [
@@ -22,7 +23,16 @@ const CHAMPS = [
     { value: "structure", label: "Structure" }
   ] },
   { key: "ouverts", label: "Ouverts", values: [{ value: "oui", label: "oui" }] },
-  { key: "regle", label: "Règles", values: [{ value: "oui", label: "Seulement" }] }
+  { key: "fonction", label: "Fonctions", values: [{ value: "oui", label: "Seulement" }] },
+  { key: "autorite", label: "Autorité", values: [
+    { value: SETTLED_BY.TIERS, token: "d'un-texte", label: "D'un texte" },
+    { value: SETTLED_BY.ARBITRAGE, token: "décidé", label: "Décidé" },
+    { value: SETTLED_BY.PROJET, token: "du-projet", label: "Du projet" }
+  ] },
+  { key: "forme", label: "Forme", values: [
+    { value: FORME.POSEE, token: "posée", label: "Posée" },
+    { value: FORME.DEDUITE, token: "déduite", label: "Déduite" }
+  ] }
 ];
 
 const ligne = (id, nature, domain, dessus = {}) => ({
@@ -114,7 +124,7 @@ test("un filtre ou du texte libre restreignent, et se disent", () => {
   assert.equal(laRequeteRestreint("altitude", CHAMPS), true);
 });
 
-test("« regle:oui » ne garde que les règles", () => {
+test("« fonction:oui » ne garde que les fonctions", () => {
   // **Une lecture du rail sans requête équivalente serait la seule à ne pas se
   // corriger au clavier.** Le filtre s'écrit donc, comme celui des constats en
   // cours — et pour la même raison : ce qu'il désigne n'est pas une nature.
@@ -128,11 +138,64 @@ test("« regle:oui » ne garde que les règles", () => {
   };
 
   const gardees = selectionDeLaMemoire([regle, valeur], {
-    query: "regle:oui", champs: CHAMPS
+    query: "fonction:oui", champs: CHAMPS
   });
 
   assert.deepEqual(gardees.map((une) => une.id), ["r"]);
 
   // Sans le filtre, les deux restent : il ne se pose que si on le demande.
   assert.equal(selectionDeLaMemoire([regle, valeur], { query: "", champs: CHAMPS }).length, 2);
+});
+
+test("les deux axes que la nature mélangeait se filtrent chacun pour soi", () => {
+  // **La puce de la ligne dit l'autorité** : une puce qu'on ne peut pas
+  // interroger est un cul-de-sac — on lit « D'un texte » sur douze lignes sans
+  // pouvoir demander les autres.
+  const fonction = {
+    id: "f", kind: "base-datum", status: "assumed",
+    payload: {
+      subject: "Zones climatiques d'après la commune", value: "H1a", referentiel: true,
+      regle: { conditions: [{ sujet: "Commune", operateur: "=", valeur: ["x"] }], sauf: [] }
+    }
+  };
+  const tranchee = {
+    id: "d", kind: "base-datum", status: "assumed",
+    payload: {
+      subject: "Couleur des volets", value: "violet",
+      provenance: { type: "décision", quoi: "Couleur des volets", par: "Ourdine Ferrand", le: "12/03" }
+    }
+  };
+  const posee = {
+    id: "p", kind: "base-datum", status: "assumed",
+    payload: { subject: "Commune", value: "Montholon (89110)" }
+  };
+
+  const memoire = [fonction, tranchee, posee];
+
+  // Chaque axe retient ce qui est à lui, et les trois lignes se répartissent :
+  // une requête qui rendrait tout, ou rien, ne mesurerait pas le filtre.
+  assert.deepEqual(
+    selectionDeLaMemoire(memoire, { query: "autorite:d'un-texte", champs: CHAMPS }).map((une) => une.id),
+    ["f"]
+  );
+  assert.deepEqual(
+    selectionDeLaMemoire(memoire, { query: "autorite:décidé", champs: CHAMPS }).map((une) => une.id),
+    ["d"]
+  );
+  assert.deepEqual(
+    selectionDeLaMemoire(memoire, { query: "forme:déduite", champs: CHAMPS }).map((une) => une.id),
+    ["f"]
+  );
+  assert.deepEqual(
+    selectionDeLaMemoire(memoire, { query: "forme:posée", champs: CHAMPS }).map((une) => une.id),
+    ["d", "p"]
+  );
+
+  // **Les deux axes se cumulent avec la nature**, et ne la remplacent pas : la
+  // colonne reste interrogeable, et une requête qui pose les deux rend
+  // l'intersection. Sans cela, le dernier filtre écrit gagnerait en silence.
+  assert.deepEqual(
+    selectionDeLaMemoire(memoire, { query: "nature:contrainte autorite:d'un-texte", champs: CHAMPS }).map((une) => une.id),
+    []
+  );
 });

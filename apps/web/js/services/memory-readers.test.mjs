@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { ICONE_DE_LA_DECISION } from "./assertion-taxonomy.js";
 
 import {
   READER,
@@ -273,17 +274,25 @@ test("une règle remplacée ne se lit plus", () => {
   assert.deepEqual(readerRows(memoire, READER.RULES).map((une) => une.id), ["r"]);
 });
 
-test("« Raisonnements » ne promet plus les règles qu'il ne montre pas", () => {
+test("« Raisonnements » ne promet plus les fonctions qu'il ne montre pas", () => {
   // **C'est l'intitulé qui envoyait chercher au mauvais endroit.** Il disait
   // « les règles enchaînées » et filtrait sur une nature qu'aucune règle ne
   // porte. Une phrase qui décrit autre chose que ce qu'elle liste coûte plus
   // cher qu'une phrase absente.
   assert.doesNotMatch(readerLead(READER.REASONINGS), /règles enchaînées/);
-  assert.match(readerLead(READER.REASONINGS), /sous « Règles »/);
+  assert.match(readerLead(READER.REASONINGS), /sous « Fonctions »/);
 
-  // Et celui des règles dit ce qu'une règle est, et ce qu'elle n'est pas.
-  assert.match(readerLead(READER.RULES), /Une règle n'affirme rien/);
-  assert.equal(readerLabel(READER.RULES), "Règles");
+  // Et celui des fonctions dit ce qu'une fonction est, et ce qu'elle n'est pas.
+  assert.match(readerLead(READER.RULES), /Une fonction n'affirme rien/);
+
+  // **Le mot de l'écran est « fonction ».** « Règles » servait trois choses à la
+  // fois — l'objet, son autorité, la lecture du rail —, et c'est ce qui rendait
+  // l'écran illisible. Le code garde `RULES` : c'est le mot du langage.
+  assert.equal(readerLabel(READER.RULES), "Fonctions");
+
+  // Et aucune lecture du rail ne s'appelle plus « Règles » : deux mots pour un
+  // objet est exactement le défaut qu'on corrige.
+  assert.deepEqual(READERS.map(readerLabel).filter((mot) => /^Règles$/.test(mot)), []);
 });
 
 test("chaque lecture du rail a sa requête, et son vocabulaire dans la barre", () => {
@@ -305,12 +314,65 @@ test("chaque lecture du rail a sa requête, et son vocabulaire dans la barre", (
 
   const filtres = source.slice(source.indexOf("const READER_FILTERS = {"), source.indexOf("};", source.indexOf("const READER_FILTERS = {")));
   for (const lecture of READERS) {
-    assert.match(filtres, new RegExp(`\\[READER\\.${
-      Object.keys(READER).find((cle) => READER[cle] === lecture)}\\]`),
+    const nom = Object.keys(READER).find((cle) => READER[cle] === lecture);
+    const pose = new RegExp(`\\[READER\\.${nom}\\]:\\s*\\{([^}]*)\\}`);
+
+    assert.match(filtres, pose,
       `la lecture « ${readerLabel(lecture)} » n'a pas de requête équivalente`);
+
+    // **Et cette requête filtre quelque chose.** Une entrée présente mais vide
+    // passait cette épreuve : le bouton du rail s'allumait, écrivait une requête
+    // sans filtre, et la liste ne bougeait pas. C'est le même défaut qu'une
+    // absence, en plus difficile à voir — une mutation qui vidait l'accolade
+    // n'a fait tomber aucun cas.
+    //
+    // « Tout » est la seule qui n'a rien à poser : c'est sa définition.
+    const dedans = filtres.match(pose)[1].trim();
+    if (lecture === READER.ALL) assert.equal(dedans, "");
+    else assert.match(dedans, /:/,
+      `la lecture « ${readerLabel(lecture)} » écrit une requête qui ne filtre rien`);
   }
 
-  // Et le champ que la lecture des règles emploie existe dans la barre : sans
-  // lui, `regle:oui` se lit comme du texte libre et ne filtre rien.
-  assert.match(source, /\{ key: "regle", label: "Règles", values: \[\{ value: "oui"/);
+  // Et le champ que la lecture des fonctions emploie existe dans la barre : sans
+  // lui, `fonction:oui` se lit comme du texte libre et ne filtre rien.
+  assert.match(source, /\{ key: "fonction", label: "Fonctions", values: \[\{ value: "oui"/);
+
+  // Les deux axes que la puce affiche se tapent aussi : une puce qu'on ne peut
+  // pas interroger est un cul-de-sac — on lit « D'un texte » sur douze lignes
+  // sans pouvoir demander les autres.
+  assert.match(source, /\{ key: "autorite", label: "Autorité"/);
+  assert.match(source, /\{ key: "forme", label: "Forme"/);
+});
+
+test("chaque lecture du rail a une icône qui existe dans la planche", () => {
+  /**
+   * **Défaut précisément invisible, et il avait déjà eu lieu.** La lecture des
+   * fonctions était née avec l'icône `code`, qui n'est pas dans la planche : un
+   * `<use>` qui ne résout pas ne lève rien et ne peint rien. Le rail affichait
+   * un carré vide, et aucune épreuve ne pouvait le voir — c'est exactement le
+   * genre de défaut pour lequel on se permet de relire un fichier comme du
+   * texte.
+   */
+  const ici = dirname(fileURLToPath(import.meta.url));
+  const source = readFileSync(join(ici, "..", "views", "project-memory.js"), "utf8");
+  const planche = readFileSync(join(ici, "..", "..", "assets", "icons.svg"), "utf8");
+
+  const debut = source.indexOf("const READER_ICONS = {");
+  const bloc = source.slice(debut, source.indexOf("};", debut));
+
+  // Une icône par lecture : une lecture oubliée ici s'afficherait sans marque.
+  for (const lecture of READERS) {
+    const nom = Object.keys(READER).find((cle) => READER[cle] === lecture);
+    assert.match(bloc, new RegExp(`\\[READER\\.${nom}\\]`),
+      `la lecture « ${readerLabel(lecture)} » n'a pas d'icône`);
+  }
+
+  // Et chaque nom cité est dans la planche. `ICONE_DE_LA_DECISION` est une
+  // constante : elle se vérifie par sa valeur, pas par le texte du fichier.
+  const nommees = [...bloc.matchAll(/"([a-z0-9-]+)"/g)].map((trouve) => trouve[1]);
+  assert.ok(nommees.length >= READERS.length - 1, "les icônes ne se lisent plus dans le fichier");
+
+  for (const nom of [...nommees, ICONE_DE_LA_DECISION]) {
+    assert.ok(planche.includes(`id="${nom}"`), `l'icône « ${nom} » n'est pas dans la planche`);
+  }
 });

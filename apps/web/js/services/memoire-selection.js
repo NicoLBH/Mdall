@@ -19,11 +19,11 @@
  *
  * ## Ce qui est **dans** la sélection, et ce qui n'y est pas
  *
- * La requête est la seule mémoire du filtrage — `nature:`, `domaine:`,
- * `provenance:`, `etat:`, `ouverts:`, `remplacees:`, plus le texte libre. Le
- * rail de gauche n'est pas un second état : il **écrit** dans la requête, et il
- * se rallume en la relisant. C'est ce qui a permis d'y brancher le cerveau sans
- * rien inventer.
+ * La requête est la seule mémoire du filtrage — `nature:`, `autorite:`,
+ * `forme:`, `domaine:`, `provenance:`, `etat:`, `ouverts:`, `fonction:`,
+ * `remplacees:`, plus le texte libre. Le rail de gauche n'est pas un second
+ * état : il **écrit** dans la requête, et il se rallume en la relisant. C'est ce
+ * qui a permis d'y brancher le cerveau sans rien inventer.
  *
  * « À revérifier » s'applique **par-dessus** : c'est une urgence, pas une
  * catégorie.
@@ -35,6 +35,7 @@
  */
 
 import { filterByTaxonomy } from "./assertion-taxonomy.js";
+import { autoriteDe, formeDe } from "./axes-de-la-memoire.js";
 import { READER, readerRows } from "./memory-readers.js";
 import { parseQuery } from "./query-bar.js";
 
@@ -73,7 +74,7 @@ export function selectionDeLaMemoire(assertions = [], {
   // **Une règle ne se dit pas par une nature** : elle n'en a pas. Ce filtre-là
   // s'applique donc à part, comme celui des constats en cours — et sans lui,
   // une fonction versée n'apparaissait sous aucune lecture du rail.
-  if (filters.regle === "oui") depart = readerRows(depart, READER.RULES);
+  if (filters.fonction === "oui") depart = readerRows(depart, READER.RULES);
 
   const cherchees = typeof chercher === "function"
     ? chercher(depart, {
@@ -89,9 +90,19 @@ export function selectionDeLaMemoire(assertions = [], {
     domain: filters.domaine ?? ""
   });
 
+  // Les deux axes que la nature mélangeait. Ils se filtrent **après** elle et
+  // non à sa place : `nature:` reste la colonne de la base, et une requête qui
+  // pose les deux — `nature:contrainte autorite:d'un-texte` — doit rendre
+  // l'intersection, pas la dernière écrite.
+  const parAxe = filtrees.filter((assertion) => {
+    if (filters.autorite && autoriteDe(assertion) !== filters.autorite) return false;
+    if (filters.forme && formeDe(assertion) !== filters.forme) return false;
+    return true;
+  });
+
   // « À revérifier » se coche par-dessus les autres filtres : c'est une urgence,
   // pas une catégorie.
-  return pending && typeof aRevoir === "function" ? aRevoir(filtrees) : filtrees;
+  return pending && typeof aRevoir === "function" ? aRevoir(parAxe) : parAxe;
 }
 
 /**

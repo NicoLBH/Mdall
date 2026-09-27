@@ -16,6 +16,7 @@
  *    elles se vérifient.
  *  - **Les décisions** — « qu'a-t-on tranché, et qu'a-t-on écarté ? ».
  *  - **Les raisonnements** — « par où est-on passé pour en arriver là ? ».
+ *  - **Les fonctions** — « comment cette valeur se calcule-t-elle ? ».
  *  - **Les constats en cours** — « qu'est-ce qui reste ouvert ? ». Le suivi des
  *    avis du bureau de contrôle, généralisé à toutes les sources.
  *  - **Les hypothèses** — « sur quoi bâtit-on ? ». C'est le document qu'on
@@ -54,14 +55,21 @@ export const READER = {
   DECISIONS: "decisions",
   REASONINGS: "reasonings",
   /**
-   * Les règles appliquées : le Mdall que le projet porte.
+   * Les fonctions du projet : le Mdall qu'il porte.
    *
    * **Ce n'est pas une nature**, et c'est pour cela qu'il a fallu une lecture à
-   * lui. Une règle n'affirme rien sur l'ouvrage — c'est un texte qui dit
+   * lui. Une fonction n'affirme rien sur l'ouvrage — c'est un texte qui dit
    * comment une valeur se déduit —, elle n'est donc ni constat, ni hypothèse,
    * ni contrainte. Elle n'apparaissait sous aucune lecture du rail, et l'on
    * cherchait sa fonction versée sous « Raisonnements », qui promettait
    * pourtant « les règles enchaînées ».
+   *
+   * **À l'écran on dit « fonction », dans le code on dit « règle ».** Le mot
+   * « règle » a servi trois choses à la fois — l'objet, son autorité, la lecture
+   * du rail —, et c'est ce qui rendait l'écran illisible : on lisait « Règles »
+   * dans le rail et « Donnée de base » sur la ligne, pour le même objet. Le code
+   * garde `RULES` et `estUneRegle` : c'est le mot du langage, et il ne s'affiche
+   * pas.
    */
   RULES: "rules",
   FINDINGS: "findings",
@@ -97,7 +105,7 @@ const READER_LABELS = {
   [READER.CONSTRAINTS]: "Contraintes",
   [READER.DECISIONS]: "Décisions",
   [READER.REASONINGS]: "Raisonnements",
-  [READER.RULES]: "Règles",
+  [READER.RULES]: "Fonctions",
   [READER.FINDINGS]: "Constats",
   [READER.BASE_DATA]: "Données de base"
 };
@@ -117,9 +125,9 @@ const READER_LEADS = {
   [READER.DECISIONS]:
     "Ce que des humains ont tranché, et ce qu'ils ont écarté en le faisant. Une décision ne porte pas la valeur : la valeur la cite.",
   [READER.REASONINGS]:
-    "Par où le projet est passé : le chemin qui mène à une valeur, et les endroits où quelqu'un a dû choisir. Les règles qu'il traverse se lisent à côté, sous « Règles ».",
+    "Les chemins que le projet a enregistrés : une suite d'étapes dont certaines sont des choix humains. Les fonctions qu'un chemin traverse se lisent à côté, sous « Fonctions » ; ce qu'une valeur coûte à recalculer se lit dans son détail, sous « Rejeu ».",
   [READER.RULES]:
-    "Le Mdall que le projet porte : ce qui se déduit, et de quoi. Une règle n'affirme rien — elle dit comment une valeur se calcule, et la valeur la cite.",
+    "Le Mdall que le projet porte : ce qui se déduit, et de quoi. Une fonction n'affirme rien — elle dit comment une valeur se calcule, et la valeur la cite.",
   [READER.FINDINGS]:
     "Ce qui reste ouvert : les avis et remarques que rien n'est encore venu lever.",
   [READER.BASE_DATA]:
