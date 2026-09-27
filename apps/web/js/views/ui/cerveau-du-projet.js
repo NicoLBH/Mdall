@@ -57,11 +57,9 @@ import { RANG } from "../../services/ce-qui-couvre.js";
 import { phraseDesPointsOuverts } from "../../services/point-porte-sur.js";
 import { phraseDeCeQueCaRouvre } from "../../services/ce-que-ca-rouvre.js";
 import {
-  GENRE, avalDeLaRegle, cerveauDuProjet, chaleurDuLien, chaleurDuNoeud, dansLEnveloppe, dilaterLEnveloppe,
-  dispositionDuCerveau, dispositionEclatee, dispositionEnVolume, domainesDuCerveau, enveloppeConvexe,
-  noeudsIsoles,
-  ondeDepuis, partDeLaMemoire, pencherVersLesDomaines, phraseDuSignal, separerLesGenres, signauxDeLAudit,
-  valeursDeLOnde
+  GENRE, avalDeLaRegle, ceQuiPorte, cerveauDuProjet, chaleurDuLien, chaleurDuNoeud, composerLeCerveau,
+  dansLEnveloppe, dilaterLEnveloppe, domainesDuCerveau, enveloppeConvexe, noeudsIsoles,
+  ondeDepuis, phraseDuSignal, signauxDeLAudit, valeursDeLOnde
 } from "../../services/memoire-cerveau.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -452,7 +450,53 @@ function renderChoix(nom, actif, options) {
   `;
 }
 
-function renderBarre(isoles) {
+/**
+ * Ce que la ligne du bas dit quand rien n'est ni retenu ni allumé.
+ *
+ * **Au module, et non dans la fermeture de l'écran.** C'est une phrase pure —
+ * elle ne lit que l'état —, et une phrase qu'aucune épreuve ne peut appeler est
+ * une phrase qui se met à mentir sans que rien ne tombe. C'est exactement ce qui
+ * est arrivé : le pliage est arrivé, la phrase a continué d'expliquer l'onde, et
+ * il a fallu cocher la case dans un navigateur pour s'en apercevoir.
+ *
+ * @param {object} etat ce que l'écran regarde en ce moment
+ * @returns {string} du HTML court, déjà échappé
+ */
+export function phraseDeCeQuOnRegarde(etat = {}) {
+  /**
+   * **Ce que le pliage ne montre pas, dit là où on s'en aperçoit.**
+   *
+   * L'onde suit l'aval, et l'aval est justement ce qu'on vient de plier :
+   * cliquer un nœud gardé lance une onde qui sort du dessin. Ce n'est pas un
+   * défaut du pliage — on regarde ce qui porte, pas ce qui suit —, mais se taire
+   * ferait croire à une onde qui s'arrête, c'est-à-dire à un projet où rien ne
+   * découle de rien.
+   */
+  if (etat.replier) {
+    return `Vous regardez ce qui porte le projet. <b>L'onde suit l'aval</b>, et l'aval est plié :
+      elle sortira du dessin. Décochez pour la suivre.`;
+  }
+
+  if (etat.mode === "onde") {
+    return `Cliquez une valeur : l'onde remonte ce qui en découle, une strate à la fois.
+      Cliquez un secteur : il reste seul allumé.
+      Molette pour zoomer, glissé pour ${enTroisD(etat) ? "tourner" : "déplacer"}.`;
+  }
+
+  const combien = etat.signales?.size ?? 0;
+  return `${
+    etat.mode === "vivant"
+      ? "Le projet bat tout seul, et s'arrête dès que vous le survolez. Un clic lance l'onde."
+      : "Le projet pense tout seul, sans s'arrêter."
+  } ${
+    combien
+      ? `<b>${combien} ${accorde(combien, "valeur bat", "valeurs battent")} en rouge</b> :
+         ${escapeHtml(phraseDuSignal([...etat.signales.values()][0]))}${combien > 1 ? ", entre autres" : ""}.`
+      : "<b>L'audit ne signale rien.</b>"
+  }`;
+}
+
+function renderBarre(isoles, porte = 0, plies = 0) {
   return `
     <div class="cerveau__barre">
       ${renderChoix("vue", "strates", [
@@ -485,6 +529,27 @@ function renderBarre(isoles) {
         <input type="checkbox" data-cerveau-domaines checked>
         <span>Grouper par domaine</span>
       </label>
+      ${
+        /**
+         * **Replier le détail** : ne garder que ce qui porte le projet.
+         *
+         * Le geste n'est offert que s'il y a quelque chose à garder. Une case
+         * qui viderait le dessin sur un projet sans débat versé serait un piège,
+         * et il vaut mieux ne rien offrir qu'offrir cela.
+         *
+         * Le nombre est dans le libellé : « ne montrer que 7 » ne dit pas la
+         * même chose selon qu'on en plie douze ou trois cents, et c'est
+         * justement ce qu'on vient chercher.
+         */
+        porte && plies
+          ? `<label class="cerveau__isoles">
+              <input type="checkbox" data-cerveau-replier>
+              <span>Ne montrer que les <b>${porte}</b> qui portent le projet
+                <small>${plies} ${accorde(plies, "pliée", "pliées")} : ${
+                  accorde(plies, "elle ne rouvre", "elles ne rouvrent")} aucun choix humain</small></span>
+            </label>`
+          : ""
+      }
       ${
         // Les isolés se comptent et se remettent. Leur absence de lien a deux
         // causes qui ne se confondent pas, et l'écran ne choisit pas pour vous.
@@ -605,7 +670,7 @@ function renderLacunes(cerveau) {
  * Les compteurs, eux, **passent** dans le rail quand il est ouvert : les répéter
  * en deux endroits ferait deux vérités à tenir d'accord.
  */
-function renderCadre(cerveau, isoles, signales, selection = "") {
+function renderCadre(cerveau, isoles, signales, selection = "", porte = 0) {
   const { cycles } = cerveau;
 
   // Le rail est le **frère** de la colonne du dessin, pas son voisin sous la
@@ -633,7 +698,7 @@ function renderCadre(cerveau, isoles, signales, selection = "") {
             : ""
         }
 
-        ${renderBarre(isoles)}
+        ${renderBarre(isoles, porte, porte ? cerveau.noeuds.length - porte : 0)}
 
         <hr class="cerveau__filet">
 
@@ -2083,7 +2148,7 @@ export function ouvrirLeCerveau({
 
   const hote = document.createElement("div");
   if (encastre) hote.className = "cerveau-encastre";
-  hote.innerHTML = renderCadre(cerveau, isoles.size, [...signales.keys()].length, selection);
+  hote.innerHTML = renderCadre(cerveau, isoles.size, [...signales.keys()].length, selection, ceQuiPorte(cerveau).size);
   (cadre ?? document.body).appendChild(hote);
   if (!encastre) ouverte = hote;
 
@@ -2117,6 +2182,15 @@ export function ouvrirLeCerveau({
     parDomaine: true,
     /** Les règles dessinées comme des nœuds, entre leurs entrées et leur sortie. */
     avecLesFonctions: true,
+    /**
+     * Ne garder que ce qui porte le projet.
+     *
+     * Faux au départ, et ce n'est pas une préférence de goût : on ouvre cet
+     * écran pour voir **la forme entière** — combien de strates, où est le
+     * socle, jusqu'où une valeur se propage. Le pliage répond à l'autre
+     * question, celle qu'on se pose ensuite, et il se demande.
+     */
+    replier: false,
     /** Couché ou debout : de quel côté la mémoire se sépare du raisonnement. */
     orientation: "horizontal",
     /** La mémoire d'un côté, le raisonnement de l'autre. */
@@ -2195,31 +2269,18 @@ export function ouvrirLeCerveau({
   };
 
   const recomposer = () => {
-    const retenus = etat.montrerLesIsoles
-      ? cerveau
-      : { ...cerveau, noeuds: cerveau.noeuds.filter((noeud) => !isoles.has(noeud.id)) };
-
-    const brutes = etat.vue === "volume"
-      ? dispositionEnVolume(retenus)
-      : etat.vue === "eclatee"
-        ? dispositionEclatee(retenus)
-        : dispositionDuCerveau(retenus);
-    etat.domaines = domainesDuCerveau(retenus);
-    // Les domaines d'abord, les hémisphères ensuite : le pliage garde l'ordre des
-    // bandes, si bien qu'un domaine se retrouve à la même hauteur relative dans
-    // les deux moitiés. L'inverse plierait des bandes qui n'existent pas encore.
-    const penchees = etat.parDomaine ? pencherVersLesDomaines(brutes, retenus) : brutes;
-    // Dans la pile, la hauteur porte déjà la strate : plier les genres dessus
-    // écraserait ce que la vue est venue montrer — chaque nœud recevrait sa
-    // propre hauteur et il n'y aurait plus de disque du tout. Les règles y ont de
-    // toute façon leurs propres étages.
-    const parGenre = etat.parGenre && etat.vue !== "eclatee";
-    etat.partDeLaMemoire = parGenre ? partDeLaMemoire(penchees) : 0;
-    etat.places = separerLesGenres(penchees, { actif: parGenre });
-    etat.deuxHemispheres = etat.partDeLaMemoire > 0;
-    etat.parId = new Map(etat.places.map((noeud) => [noeud.id, noeud]));
-    const dedans = new Set(etat.places.map((noeud) => noeud.id));
-    etat.liens = cerveau.liens.filter((lien) => dedans.has(lien.de) && dedans.has(lien.vers));
+    // **Toute la décision est dans le service**, où une épreuve peut l'appeler.
+    // Elle ne l'était pas : ce qu'on dessine vivait dans cette fermeture, et une
+    // mutation qui lui faisait ignorer les deux gestes traversait la suite
+    // entière sans faire tomber un cas.
+    Object.assign(etat, composerLeCerveau(cerveau, {
+      isoles,
+      montrerLesIsoles: etat.montrerLesIsoles,
+      replier: etat.replier,
+      vue: etat.vue,
+      parDomaine: etat.parDomaine,
+      parGenre: etat.parGenre
+    }));
   };
 
   etat.montrerLesIsoles = false;
@@ -2713,25 +2774,7 @@ export function ouvrirLeCerveau({
   };
 
   /** Ce que la ligne du bas dit quand rien n'est ni retenu ni allumé. */
-  const phraseDuRepos = () => {
-    if (etat.mode === "onde") {
-      return `Cliquez une valeur : l'onde remonte ce qui en découle, une strate à la fois.
-        Cliquez un secteur : il reste seul allumé.
-        Molette pour zoomer, glissé pour ${enTroisD(etat) ? "tourner" : "déplacer"}.`;
-    }
-
-    const combien = etat.signales.size;
-    return `${
-      etat.mode === "vivant"
-        ? "Le projet bat tout seul, et s'arrête dès que vous le survolez. Un clic lance l'onde."
-        : "Le projet pense tout seul, sans s'arrêter."
-    } ${
-      combien
-        ? `<b>${combien} ${accorde(combien, "valeur bat", "valeurs battent")} en rouge</b> :
-           ${escapeHtml(phraseDuSignal([...etat.signales.values()][0]))}${combien > 1 ? ", entre autres" : ""}.`
-        : "<b>L'audit ne signale rien.</b>"
-    }`;
-  };
+  const phraseDuRepos = () => phraseDeCeQuOnRegarde(etat);
 
   const changerDeMode = (mode) => {
     if (etat.mode === mode) return;
@@ -2971,6 +3014,23 @@ export function ouvrirLeCerveau({
       recomposer();
     });
   }
+  const caseDuPliage = hote.querySelector("[data-cerveau-replier]");
+  if (caseDuPliage) {
+    caseDuPliage.addEventListener("change", () => {
+      etat.replier = caseDuPliage.checked;
+      // Les impulsions en cours visaient des nœuds qui ne sont peut-être plus
+      // dessinés : les garder ferait battre des cartes absentes.
+      etat.impulsions = [];
+      etat.secteurChoisi = null;
+      recomposer();
+      recadrer();
+      // **Et la ligne du bas se refait.** Sans cela, le dessin se replie et la
+      // phrase continue d'expliquer l'onde — qui vient précisément de sortir du
+      // dessin. Ce trou-là ne s'est vu qu'en cochant la case dans un navigateur.
+      dit.innerHTML = phraseDuRepos();
+    });
+  }
+
   const casedesIsoles = hote.querySelector("[data-cerveau-isoles]");
   if (casedesIsoles) {
     casedesIsoles.addEventListener("change", () => {
@@ -3009,5 +3069,6 @@ export function ouvrirLeCerveau({
 /** Pour les pages d'essai : le cadre seul, sans boucle ni pointeur. */
 export function __renderCerveauPourPreview(assertions, applications) {
   const cerveau = cerveauDuProjet(assertions, applications, { avecLesFonctions: true });
-  return renderCadre(cerveau, noeudsIsoles(cerveau).size, signauxDeLAudit(assertions).size);
+  return renderCadre(cerveau, noeudsIsoles(cerveau).size, signauxDeLAudit(assertions).size,
+    "", ceQuiPorte(cerveau).size);
 }

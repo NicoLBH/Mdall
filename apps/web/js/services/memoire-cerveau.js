@@ -750,6 +750,146 @@ export function noeudsIsoles(cerveau = {}) {
   );
 }
 
+/**
+ * Ce qui porte le projet : les nœuds qu'on garde quand on replie le détail.
+ *
+ * ## Pourquoi un graphe a besoin qu'on l'autorise à cacher
+ *
+ * Le cerveau encode le nombre de liens — une topologie. Or quatre cents nœuds
+ * qui comptent tous pareil font une image, pas un instrument : on voit des
+ * équilibres, on ne voit pas où regarder. Un graphe devient lisible à l'instant
+ * où il a le droit de cacher, et il lui fallait pour cela un poids qu'il n'avait
+ * pas. Il l'a : ce que chaque nœud rouvre s'il change.
+ *
+ * ## Replier ne coupe aucune chaîne, et ce n'est pas une chance
+ *
+ * C'est le point qui rend ce pliage honnête, et il se démontre.
+ *
+ * `ceQueCaRouvre` part des valeurs débattues et **remonte** le graphe : ce qui
+ * porte est donc exactement l'ensemble des ancêtres des choix humains. Un tel
+ * ensemble est **fermé vers l'amont** — si un nœud est gardé, tout ce dont il
+ * découle l'est aussi, par construction. Aucun chemin entre deux nœuds gardés ne
+ * peut donc passer par un nœud plié.
+ *
+ * C'est ce qui permet de filtrer les liens comme on filtre ceux des isolés, sans
+ * rien relier à travers : un dessin qui cacherait un maillon et laisserait le
+ * trait par-dessus mentirait sur la forme du raisonnement, et c'est exactement
+ * ce que cet écran refuse ailleurs. Une épreuve le vérifie sur le graphe
+ * dessiné plutôt que de s'en remettre à ce paragraphe (règle 12).
+ *
+ * ## Ce que le pliage ne dit pas
+ *
+ * **L'onde suit l'aval**, et l'aval est justement ce qu'on vient de plier :
+ * cliquer un nœud replié montre une onde qui sort du dessin. Ce n'est pas un
+ * défaut du pliage, c'est son sens — on regarde ce qui porte, pas ce qui suit —
+ * mais l'écran le dit plutôt que de laisser croire à une onde qui s'arrête.
+ *
+ * @returns {Set<string>} les identifiants gardés. Vide quand aucun débat n'est
+ *   versé : il n'y a alors rien à replier, et l'écran n'offre pas le geste.
+ */
+export function ceQuiPorte(cerveau = {}) {
+  return new Set(
+    (Array.isArray(cerveau?.noeuds) ? cerveau.noeuds : [])
+      .filter((noeud) => Number(noeud?.rouvre ?? 0) > 0)
+      .map((noeud) => texte(noeud.id))
+      .filter(Boolean)
+  );
+}
+
+/**
+ * Les nœuds que l'écran dessine, une fois dit ce qu'on veut voir.
+ *
+ * **Les deux filtrages sont du même ordre, et c'est ce qui les rend sûrs.** Un
+ * isolé n'a aucun lien ; ce qui porte est fermé vers l'amont. Dans les deux cas,
+ * aucun chemin entre deux nœuds gardés ne passe par un nœud retiré — on peut
+ * donc filtrer les liens sur les deux bouts, sans rien relier à travers.
+ *
+ * Écrit ici plutôt que dans la boucle de l'écran : c'est la seule décision de ce
+ * dessin qui change **ce qu'on voit**, et une décision pareille ne doit pas
+ * vivre dans une fermeture qu'aucune épreuve ne peut appeler.
+ *
+ * @param {object} cerveau le graphe entier
+ * @param {object} [options]
+ * @param {Set<string>} [options.isoles] les nœuds qu'aucun lien ne touche
+ * @param {boolean} [options.montrerLesIsoles] les remettre
+ * @param {boolean} [options.replier] ne garder que ce qui porte le projet
+ * @returns {object[]} les nœuds à dessiner, dans l'ordre du graphe
+ */
+export function noeudsDessines(cerveau = {}, {
+  isoles = new Set(), montrerLesIsoles = false, replier = false
+} = {}) {
+  const tous = Array.isArray(cerveau?.noeuds) ? cerveau.noeuds : [];
+  const porte = replier ? ceQuiPorte(cerveau) : null;
+
+  return tous.filter((noeud) => {
+    const id = texte(noeud?.id);
+    if (!montrerLesIsoles && isoles.has(id)) return false;
+    return !porte || porte.has(id);
+  });
+}
+
+/**
+ * Ce que l'écran dessine, une fois dit ce qu'on veut voir : nœuds placés, liens
+ * gardés, domaines, hémisphères.
+ *
+ * ## Pourquoi cette fonction existe
+ *
+ * Elle vivait dans une fermeture de l'écran, et **aucune épreuve ne pouvait
+ * l'appeler**. On l'a mesuré : une mutation qui lui faisait ignorer les deux
+ * gestes — replier, remettre les isolés — traversait les six mille épreuves sans
+ * en faire tomber une. C'est pourtant la seule décision de ce dessin qui change
+ * *ce qu'on voit*.
+ *
+ * Toutes les pièces qu'elle assemble étaient déjà pures et éprouvées ; c'était
+ * l'assemblage qui ne l'était pas. *Une fonction pure s'éprouve par son
+ * résultat ; un câblage ne s'éprouve que par le code qui le porte.*
+ *
+ * ## L'ordre n'est pas indifférent
+ *
+ * Les **domaines d'abord, les hémisphères ensuite** : le pliage garde l'ordre
+ * des bandes, si bien qu'un domaine se retrouve à la même hauteur relative dans
+ * les deux moitiés. L'inverse plierait des bandes qui n'existent pas encore.
+ *
+ * Et dans la vue éclatée, la hauteur porte déjà la strate : plier les genres
+ * dessus écraserait ce que la vue est venue montrer.
+ *
+ * @returns {{places, liens, domaines, partDeLaMemoire, deuxHemispheres, parId}}
+ */
+export function composerLeCerveau(cerveau = {}, {
+  isoles = new Set(), montrerLesIsoles = false, replier = false,
+  vue = "strates", parDomaine = true, parGenre = true
+} = {}) {
+  const retenus = {
+    ...cerveau,
+    noeuds: noeudsDessines(cerveau, { isoles, montrerLesIsoles, replier })
+  };
+
+  const brutes = vue === "volume"
+    ? dispositionEnVolume(retenus)
+    : vue === "eclatee"
+      ? dispositionEclatee(retenus)
+      : dispositionDuCerveau(retenus);
+
+  const penchees = parDomaine ? pencherVersLesDomaines(brutes, retenus) : brutes;
+
+  const enGenres = parGenre && vue !== "eclatee";
+  const part = enGenres ? partDeLaMemoire(penchees) : 0;
+  const places = separerLesGenres(penchees, { actif: enGenres });
+  const dedans = new Set(places.map((noeud) => noeud.id));
+
+  return {
+    places,
+    domaines: domainesDuCerveau(retenus),
+    partDeLaMemoire: part,
+    deuxHemispheres: part > 0,
+    parId: new Map(places.map((noeud) => [noeud.id, noeud])),
+    // Les deux bouts dedans, et rien de relié à travers : c'est ce que
+    // `noeudsDessines` autorise, et rien d'autre.
+    liens: (Array.isArray(cerveau?.liens) ? cerveau.liens : [])
+      .filter((lien) => dedans.has(lien.de) && dedans.has(lien.vers))
+  };
+}
+
 /* ────────────────────────────────────────────────────────────────────────────
  * Ce que l'audit signale
  * ────────────────────────────────────────────────────────────────────────── */
