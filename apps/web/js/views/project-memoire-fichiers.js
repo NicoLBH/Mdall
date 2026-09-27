@@ -1986,13 +1986,29 @@ export function lignesDeLAssertion(assertion = {}, profondeur = 0, {
       // D'où viennent ses entrées : le fichier qui déclare chacune, quand la
       // mémoire le sait. À défaut le dictionnaire, qui les liste toutes — même
       // celles que personne n'a versées, et c'est là qu'on le verra.
-      importe: [...conditions, ...exceptions]
+      importe: [
+        ...conditions,
+        // Une entrée qui n'apparaît que dans une branche se déclare aussi :
+        // sans elle, la fonction ne dit plus de quoi elle a besoin.
+        ...(payload.regle.sinonSi ?? []).flatMap((branche) => branche?.conditions ?? []),
+        ...exceptions
+      ]
         .map((condition) => texte(condition?.sujet))
         .filter(Boolean)
         .filter((nom, rang, tous) => tous.indexOf(nom) === rang)
         .map((nom) => ({ variable: nom, depuis: fichierQuiDeclare(nom, ouEcrit) })),
       conditions,
       alors: brute,
+      /**
+       * **Les branches, et la forme sous laquelle la règle a été écrite.**
+       *
+       * Elles manquaient : une règle versée avec trois cas se réécrivait ici
+       * avec un seul, et les deux autres disparaissaient de l'écran des
+       * fichiers sans un mot. La fonction avait l'air simple, et elle ne l'était
+       * pas — c'est exactement la maladie que cette langue refuse ailleurs.
+       */
+      sinonSi: payload.regle.sinonSi ?? [],
+      selon: payload.regle.selon ?? [],
       sinon: texte(payload.regle.sinon),
       sauf: exceptions,
       provenance: provenanceDeLAssertion(assertion, { auteurs }),

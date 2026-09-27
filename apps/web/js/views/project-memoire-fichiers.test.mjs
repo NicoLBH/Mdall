@@ -641,3 +641,68 @@ test("sans date de document, le fichier parle encore de correction et non de dé
   assert.doesNotMatch(html, /document antérieur/);
   assert.match(html, /a été refaite par un versement plus récent/);
 });
+
+test("une règle versée réécrit toutes ses branches, pas seulement la première", () => {
+  /**
+   * **Elles manquaient, et personne ne le voyait.** Une règle versée avec trois
+   * cas se réécrivait ici avec un seul : les deux autres disparaissaient de
+   * l'écran des fichiers sans un mot, et la fonction avait l'air simple alors
+   * qu'elle ne l'était pas.
+   *
+   * C'est le câblage entre la mémoire et son écriture — la seule chose qu'une
+   * fonction pure ne peut pas éprouver.
+   */
+  const texte = enTexte({
+    subject_key: "taux-de-tva",
+    payload: {
+      subject: "Taux de TVA", value: "5,5 %",
+      regle: {
+        conditions: [{ sujet: "Type de TVA", operateur: "=", valeur: ["existant"] }],
+        sinonSi: [
+          { conditions: [{ sujet: "Type de TVA", operateur: "=", valeur: ["rénovation"] }], alors: "10 %" },
+          { conditions: [{ sujet: "Nature du local", operateur: "=", valeur: ["neuf"] }], alors: "20 %" }
+        ],
+        sinon: "à trancher", sauf: []
+      }
+    }
+  });
+
+  assert.match(texte, /sinon si \(Type de TVA = "rénovation"\)/);
+  // Une mesure s'écrit sans guillemets : c'est la langue, et la branche la suit.
+  assert.match(texte, /alors \(10 %\)/);
+  assert.match(texte, /sinon si \(Nature du local = "neuf"\)/);
+  assert.match(texte, /alors \(20 %\)/);
+
+  // **Et la signature déclare ce que les branches lisent.** Une entrée qui
+  // n'apparaît que dans un `sinon si` ne se déclarait nulle part : la fonction
+  // ne disait plus de quoi elle a besoin.
+  assert.match(texte, /importe \(variable: Nature du local/);
+});
+
+test("un barème versé revient un barème, et non quarante « sinon si »", () => {
+  // Sans cela, la forme ne servirait qu'une fois : le tableau recopié d'un
+  // arrêté ne se rapprocherait plus jamais de son texte.
+  const texte = enTexte({
+    subject_key: "degre",
+    payload: {
+      subject: "Degré coupe-feu", value: "CF 1/2 h",
+      regle: {
+        selon: ["Famille", "Hauteur"],
+        conditions: [
+          { sujet: "Famille", operateur: "=", valeur: ["3e famille A"] },
+          { sujet: "Hauteur", operateur: "<=", valeur: ["28"], unite: "m" }
+        ],
+        sinonSi: [{
+          conditions: [{ sujet: "Famille", operateur: "=", valeur: ["4e famille"] }],
+          alors: "CF 1 h"
+        }],
+        sinon: "non traité", sauf: []
+      }
+    }
+  });
+
+  assert.match(texte, /selon \(Famille, Hauteur\)/);
+  assert.match(texte, /\| 3e famille A \| <= 28 m \| CF 1\/2 h \|/);
+  assert.match(texte, /\| 4e famille\s+\|\s+\| CF 1 h \|/);
+  assert.doesNotMatch(texte, /sinon si/);
+});

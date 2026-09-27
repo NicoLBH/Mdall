@@ -103,7 +103,9 @@ const TETES = [
   // taux. C'est un mot de la langue à part entière, et il se reconnaît ici,
   // une fois, pour la lecture comme pour la couleur (règle 10).
   "sinon si", "sauf si", "parce que:", "statut:", "fichier:", "note:", "le:", "zone:",
-  "fonction", "soit", "calcule", "alors", "sinon", "si", "et", "ou", "non",
+  // `selon` ouvre un **barème** : le tableau d'une norme, recopié tel qu'il est
+  // imprimé. Voir `lireUneLigneDeBareme`.
+  "fonction", "soit", "calcule", "selon", "alors", "sinon", "si", "et", "ou", "non",
   ...PROVENANCES.map((type) => `${type}:`)
 ];
 
@@ -516,6 +518,71 @@ export function lireUneCondition(corps = "") {
   };
 }
 
+/** Une case qui porte son comparateur : `≤ 28 m`, `> 50`, `parmi …`. */
+const CASE_COMPARANTE = /^(≤|≥|≠|<=|>=|<>|!=|==|=|<|>|parmi\s)/i;
+
+/**
+ * Une clause d'un barème : la case d'un tableau, sous le nom de sa colonne.
+ *
+ * Une case s'écrit comme le texte réglementaire l'imprime — `≤ 28 m`,
+ * `3e famille B`, `renseigné` —, c'est-à-dire **sans répéter le sujet** : il est
+ * en tête de colonne, une fois. On le remet devant, et c'est `lireUneCondition`
+ * qui fait le reste : la syntaxe d'une condition vit à un seul endroit, et un
+ * second analyseur finirait par accepter ici ce qu'il refuse ailleurs (règle 10).
+ *
+ * ## Une case nue est un **libellé**, jamais une mesure
+ *
+ * C'est la seule règle du barème, et elle vient d'un défaut qu'on a vu tourner :
+ * `3e famille B` se lisait comme le nombre **3** suivi de l'unité
+ * « e famille B ». Deux lignes voisines — `3e famille A` et `3e famille B` —
+ * portaient donc la même valeur, et le barème tombait dans son `sinon` sans un
+ * mot. Un tableau qui a l'air juste et répond à côté est ce que cette langue
+ * refuse partout ailleurs.
+ *
+ * Dans un barème, donc : **une case sans comparateur est un libellé, cité tel
+ * quel.** Pour comparer un nombre, on écrit son comparateur — `≤ 28 m`, ou
+ * `= 28 m` si l'on veut l'égalité. C'est ainsi que les normes impriment leurs
+ * colonnes, et cela se dit en une phrase.
+ *
+ * Le `ou` d'une case reste une disjonction — `bois ou métal` —, comme partout.
+ *
+ * @returns {object|null} la condition, ou `null` si la case ne compare rien
+ */
+export function clauseDuBareme(sujet = "", cellule = "") {
+  const nom = texte(sujet);
+  const dite = texte(cellule);
+  if (!nom || !dite) return null;
+
+  // Un comparateur écrit, ou un constat : la case se lit telle quelle, et les
+  // mesures y gardent leur unité.
+  if (CASE_COMPARANTE.test(dite) || CONSTATS.has(dite.toLowerCase())) {
+    return lireUneCondition(`${nom} ${dite}`);
+  }
+
+  // Un libellé, cité. Les chevrons plutôt que les guillemets : une case peut
+  // porter un guillemet — `pare-flamme 1/2 h "PF"` —, et refermer la citation
+  // au milieu du libellé le couperait en deux sans rien dire.
+  if (dite.includes("»")) return null;
+  const morceaux = dite.split(/\s+ou\s+/i).map(texte).filter(Boolean);
+  return lireUneCondition(`${nom} = ${morceaux.map((un) => `«${un}»`).join(" ou ")}`);
+}
+
+/**
+ * Les cases d'une ligne de barème : `| 3e famille B | ≤ 28 m | CF 1 h |`.
+ *
+ * Les barres du début et de la fin sont facultatives — un tableau se recopie
+ * d'un texte, et tous ne les impriment pas. Ce qui compte est ce qu'il y a
+ * entre.
+ */
+export function casesDuBareme(ligne = "") {
+  return texte(ligne)
+    .replace(/;\s*$/, "")
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map(texte);
+}
+
 /** Une ligne de tête : `Sujet = valeur @ zone`, ou `Sujet` seul pour une règle. */
 export function lireUneTete(ligne = "") {
   const brut = texte(ligne);
@@ -592,7 +659,7 @@ export function lireUnFichier(contenu = "") {
     if (courant) {
       // `accolade` sert à la lecture, pas au sens : elle ne ressort pas.
       const {
-        accolade, conclue, affecte, branche, siEnTrop, sinonSi,
+        accolade, conclue, affecte, branche, siEnTrop, sinonSi, selon,
         agent, utilitaire, version, enregistre, tableau, ...bloc
       } = courant;
 
@@ -647,6 +714,9 @@ export function lireUnFichier(contenu = "") {
           });
         }
       }
+      // Les colonnes d'un barème ne ressortent que s'il y en a : le champ vide
+      // sur toutes les affirmations ferait croire que chacune est un tableau.
+      if (Array.isArray(selon) && selon.length) bloc.selon = selon;
       // Un tableau ne ressort que s'il y en a un : le champ vide sur toutes les
       // affirmations ferait croire que chacune en porte un.
       if (Array.isArray(tableau) && tableau.length) bloc.tableau = tableau;
@@ -839,6 +909,115 @@ export function lireUnFichier(contenu = "") {
 
     const { mot, reste } = teteDe(corps);
 
+    /**
+     * **Une ligne de barème.** `| 3e famille B | ≤ 28 m | CF 1 h |`
+     *
+     * Elle passe avant tout le reste parce qu'elle n'ouvre par aucun mot de la
+     * langue : laissée descendre, elle finirait dans « aucun mot de la langue
+     * n'ouvre cette ligne », et l'on refuserait un tableau entier ligne à ligne
+     * sans dire ce qui manque.
+     */
+    if (corps.startsWith("|")) {
+      if (!courant || !courant.selon.length) {
+        refus.push({
+          ligne: numero, texte: corps,
+          raison: "une ligne de barème se pose sous un « selon (…) » qui nomme ses colonnes."
+        });
+        return;
+      }
+
+      const cases = casesDuBareme(corps);
+      const attendues = courant.selon.length + 1;
+      if (cases.length !== attendues) {
+        refus.push({
+          ligne: numero, texte: corps,
+          raison: `ce barème a ${courant.selon.length} ${
+            courant.selon.length > 1 ? "colonnes" : "colonne"} et une conclusion : `
+            + `${attendues} cases attendues, ${cases.length} écrite${cases.length > 1 ? "s" : ""}.`
+        });
+        return;
+      }
+
+      const conclusion = cases[attendues - 1];
+      if (!conclusion) {
+        refus.push({
+          ligne: numero, texte: corps,
+          raison: "la dernière case d'un barème est ce qu'il conclut, et elle est vide."
+        });
+        return;
+      }
+
+      /**
+       * **Une case vide ne contraint rien**, et c'est ce que les normes
+       * impriment : une ligne qui vaut quelle que soit la hauteur laisse la
+       * colonne blanche. L'inventer en « = vide » ferait une ligne qui ne tient
+       * jamais, et le barème aurait l'air juste.
+       */
+      const clauses = [];
+      for (let colonne = 0; colonne < courant.selon.length; colonne += 1) {
+        const cellule = cases[colonne];
+        if (!cellule) continue;
+
+        const clause = clauseDuBareme(courant.selon[colonne], cellule);
+        if (!clause) {
+          refus.push({
+            ligne: numero, texte: corps,
+            raison: `la case « ${cellule} » ne compare rien sous « ${courant.selon[colonne]} ».`
+          });
+          return;
+        }
+        clauses.push(clause);
+      }
+
+      // La première ligne reste la tête de la règle, les suivantes enchaînent :
+      // exactement la forme d'un `si … sinon si …`, et pour la même raison —
+      // une règle à une seule ligne ne change pas de forme.
+      if (!courant.conditions.length && !courant.conclue.alors) {
+        courant.conditions = clauses;
+        courant.alors = lireUneValeur(conclusion).valeur;
+        courant.conclue.alors = numero;
+        return;
+      }
+
+      courant.sinonSi.push({ conditions: clauses, alors: lireUneValeur(conclusion).valeur, ligne: numero, conclue: numero });
+      courant.branche = courant.sinonSi.length - 1;
+      return;
+    }
+
+    /**
+     * **`selon` ouvre un barème**, et nomme ses colonnes une fois pour toutes.
+     *
+     * C'est la forme d'un texte réglementaire : un tableau à double entrée et
+     * quelques notes. Écrit en `si … sinon si …`, l'article 96 de l'arrêté de
+     * 1986 fait quarante lignes que personne ne compare à l'original ; écrit
+     * ici, il **ressemble à l'arrêté**, et le contrôleur lit les deux côte à
+     * côte.
+     */
+    if (mot === "selon" && courant) {
+      if (courant.selon.length) {
+        refus.push({ ligne: numero, texte: corps, raison: "cette fonction a déjà un « selon » : un barème a un seul jeu de colonnes." });
+        return;
+      }
+      /**
+       * **Un barème ou des branches, jamais les deux.** Mêler un `si` et un
+       * tableau donnerait une règle qu'on ne peut lire ni comme l'un ni comme
+       * l'autre — et dont l'ordre des cas ne se verrait nulle part.
+       */
+      if (courant.conditions.length || courant.sinonSi.length) {
+        refus.push({ ligne: numero, texte: corps, raison: "cette fonction a déjà une condition : un barème s'écrit seul, sans « si »." });
+        return;
+      }
+
+      const colonnes = sansBornes(reste).corps.split(",").map(texte).filter(Boolean);
+      if (!colonnes.length) {
+        refus.push({ ligne: numero, texte: corps, raison: "« selon » nomme les colonnes du barème : « selon (Famille, Hauteur) »." });
+        return;
+      }
+
+      courant.selon = colonnes;
+      return;
+    }
+
     if (mot === "fichier:") { fermer(); chemin = reste; return; }
     // Une note ne porte jamais de sens : elle ne rouvre ni ne ferme rien.
     if (mot === "note:") return;
@@ -909,6 +1088,19 @@ export function lireUnFichier(contenu = "") {
          * affirmations ferait croire que chacune enchaîne.
          */
         sinonSi: [],
+        /**
+         * Les colonnes d'un barème, quand la fonction en est un.
+         *
+         * **C'est une marque d'écriture, pas une seconde donnée.** Les lignes du
+         * tableau se rangent dans `conditions` et `sinonSi` comme n'importe
+         * quelles branches — l'évaluateur, la trace, le graphe et le rejeu n'en
+         * savent rien et n'ont pas à en savoir. Ce champ dit seulement **sous
+         * quelle forme la fonction a été écrite**, pour la réécrire ainsi.
+         *
+         * Garder les cases à côté des branches en ferait deux vérités, et deux
+         * vérités finissent par diverger (règle 4).
+         */
+        selon: [],
         /** Où vont les conditions et la conclusion qu'on lit : la tête, ou une branche. */
         branche: null,
         // Les `si` posés après le premier. Légitimes dans une fonction qui
@@ -1016,6 +1208,14 @@ export function lireUnFichier(contenu = "") {
         return;
       }
 
+      if (courant.selon.length) {
+        refus.push({
+          ligne: numero, texte: corps,
+          raison: "« sinon si » ne s'écrit pas dans un barème : ajoutez une ligne « | … | »."
+        });
+        return;
+      }
+
       const condition = lireUneCondition(sansBornes(reste).corps);
       if (!condition) {
         refus.push({ ligne: numero, texte: corps, raison: "cette condition ne compare rien." });
@@ -1062,6 +1262,17 @@ export function lireUnFichier(contenu = "") {
     }
 
     if (mot === "si" || mot === "et" || mot === "ou" || mot === "non" || mot === "sauf si") {
+      // `sauf si` reste admis : il écarte la règle entière, et les normes en
+      // portent — « sauf pour les bâtiments existants ». Les autres, non : un
+      // barème dit ses cas dans ses lignes.
+      if (courant?.selon.length && mot !== "sauf si") {
+        refus.push({
+          ligne: numero, texte: corps,
+          raison: `« ${mot} » ne s'écrit pas dans un barème : ajoutez une ligne « | … | » ou retirez le « selon ».`
+        });
+        return;
+      }
+
       const condition = lireUneCondition(sansBornes(reste).corps);
       if (!condition) {
         refus.push({ ligne: numero, texte: corps, raison: "cette condition ne compare rien." });
@@ -1347,7 +1558,64 @@ export function jetonsDeLaLigne(ligne = "") {
   // recomposer — et le rendre autrement le ferait mentir.
   if (estUnCommentaire(nu)) return [...marge, { type: JETON.COMMENTAIRE, texte: nu }];
 
+  /**
+   * **Une ligne de barème, colorée comme elle se lit.**
+   *
+   * Sans ce cas, une ligne `| … | … |` tombait dans la lecture d'une tête et
+   * s'affichait en un seul bloc gris : le tableau qu'on vient d'écrire pour
+   * être comparé à sa norme ne se distinguait plus d'un commentaire.
+   *
+   * Les barres sont de la ponctuation, les cases des conditions, la dernière
+   * une valeur — exactement ce qu'elles sont une fois lues, et les mêmes
+   * couleurs que partout ailleurs dans la langue.
+   */
+  if (nu.startsWith("|")) {
+    // Les segments **bruts**, avec leurs blancs : c'est ce qui permet de
+    // recomposer la ligne au caractère près, alignement compris. Retrouver
+    // chaque case par une expression régulière échouerait dès que deux colonnes
+    // portent le même mot — `| oui | oui |` est un tableau parfaitement normal.
+    const fin = nu.endsWith("|") ? -1 : undefined;
+    const segments = nu.slice(1, fin).split("|");
+
+    return [
+      ...marge,
+      ...segments.flatMap((segment, rang) => {
+        const avant = (segment.match(/^\s*/) ?? [""])[0];
+        const apres = segment.length > avant.length ? (segment.match(/\s*$/) ?? [""])[0] : "";
+        const cellule = texte(segment);
+
+        return [
+          { type: JETON.PONCTUATION, texte: "|" },
+          ...(avant ? [{ type: JETON.NEUTRE, texte: avant }] : []),
+          // Les cases sont des conditions, la dernière est ce qu'on conclut :
+          // deux couleurs, les mêmes que partout ailleurs dans la langue.
+          ...(cellule
+            ? [{ type: rang === segments.length - 1 ? JETON.VALEUR : JETON.OPERATEUR, texte: cellule }]
+            : []),
+          ...(apres ? [{ type: JETON.NEUTRE, texte: apres }] : [])
+        ];
+      }),
+      ...(fin === -1 ? [{ type: JETON.PONCTUATION, texte: "|" }] : [])
+    ];
+  }
+
   const { mot, reste } = teteDe(nu);
+
+  // `selon (Famille, Hauteur)` — le mot de la règle, puis les colonnes, qui
+  // sont des sujets comme ceux d'une condition.
+  if (mot === "selon") {
+    const colonnes = sansBornes(reste).corps.split(",").map(texte).filter(Boolean);
+    return [
+      ...marge,
+      { type: JETON.MOT_CONDITION, texte: "selon" },
+      { type: JETON.NEUTRE, texte: " " },
+      { type: JETON.PONCTUATION, texte: "(" },
+      ...colonnes.flatMap((nom, rang) => (rang === 0
+        ? [{ type: JETON.SUJET, texte: nom }]
+        : [{ type: JETON.PONCTUATION, texte: "," }, { type: JETON.NEUTRE, texte: " " }, { type: JETON.SUJET, texte: nom }])),
+      { type: JETON.PONCTUATION, texte: ")" }
+    ];
+  }
 
   const type = mot.endsWith(":") ? mot.slice(0, -1) : "";
   if (PROVENANCES.includes(type)) {

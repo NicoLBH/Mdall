@@ -191,6 +191,8 @@ fonction Vitesse de référence(zones, Zone de vent) {
 - \`alors (…)\` conclut ; \`sinon (…)\` est facultatif. **Sans \`sinon\`, une
   règle dont les conditions ne tiennent pas ne dit rien** — c'est parfois ce
   qu'on veut.
+- **quand la loi est un tableau, écris un tableau** avec \`selon (…)\` et des
+  lignes \`| … | … |\`. Voir « Quand la loi est un tableau » plus bas ;
 - **plusieurs cas s'enchaînent avec \`sinon si (…)\`**, autant qu'il en faut, et
   \`sinon (…)\` ferme la chaîne. **La première branche qui tient l'emporte** :
   l'ordre que tu écris est le sens. Voir « Plusieurs cas » plus bas ;
@@ -294,6 +296,43 @@ fonction Taux de TVA(zones, Type de TVA) {
 - une branche porte ses \`et\` / \`ou\` comme la première :
   \`sinon si (A) et (B)\` ;
 - \`sauf si (…)\` écarte la **règle entière**, pas une branche.
+
+# Quand la loi est un tableau, écris un tableau
+
+Une norme, un DTU, un Eurocode, un arrêté : c'est presque toujours un tableau à
+double entrée. Écrit en \`sinon si\`, l'article fait quarante lignes que personne
+ne compare à l'original. **\`selon\` nomme les colonnes une fois, et chaque ligne
+du texte devient une ligne du barème** :
+
+\`\`\`
+fonction Degré coupe-feu des blocs-portes(zones, Famille, Hauteur du plancher bas) {
+   // Arrêté du 31 janvier 1986, article 96.
+   importe (variable: Famille, depuis: variables-du-projet.ref, zones: zones);
+   importe (variable: Hauteur du plancher bas, depuis: variables-du-projet.ref, zones: zones);
+   selon (Famille, Hauteur du plancher bas)
+      | 3e famille A | <= 28 m | CF 1/2 h |
+      | 3e famille B | <= 28 m | CF 1 h   |
+      | 4e famille   | > 28 m  | CF 1 h   |
+   sinon ("non traité");
+}
+\`\`\`
+
+- les colonnes se lisent **dans l'ordre de \`selon\`**, et la **dernière case de
+  chaque ligne est ce qu'elle conclut** ;
+- la **première ligne qui tient l'emporte**, comme pour \`sinon si\` : un barème
+  *est* une suite de branches, écrite autrement ;
+- une **case blanche ne contraint rien** — c'est ce qu'impriment les normes
+  quand une ligne vaut quelle que soit la colonne ;
+- **une case nue est un libellé, jamais une mesure.** \`3e famille B\` se lit tel
+  quel ; pour comparer un nombre, écris son comparateur — \`<= 28 m\`, ou
+  \`= 28 m\` pour l'égalité ;
+- une case porte un \`ou\` comme ailleurs : \`bois ou métal\` ;
+- un barème s'écrit **seul** : pas de \`si\` ni de \`sinon si\` à côté. \`sinon (…)\`
+  et \`sauf si (…)\` restent, eux — ils valent pour le tableau entier.
+
+**Quand emploies-tu un barème plutôt que des \`sinon si\` ?** Dès que la phrase
+décrit un tableau, ou que tu écrirais trois branches ou plus qui comparent les
+**mêmes** noms. En dessous, \`si … sinon si\` se lit mieux.
 
 # Ce qui se demande, et ce qui se déduit
 

@@ -146,6 +146,10 @@
  */
 
 import { valeursDeclarees } from "./tableau-structure.js";
+// La clé d'un sujet vit à un seul endroit : rapprocher une case de sa colonne
+// avec une normalisation maison finirait par ne plus dire la même chose que
+// la lecture (règle 10).
+import { cleDuSujet } from "./memoire-identifiants.js";
 
 /**
  * La version de l'écriture. Elle change quand la façon d'écrire change.
@@ -405,6 +409,9 @@ export const MOTS = [
   // l'ouvre, `soit` déclare ce qui la fonde, `const` définit un nom du projet.
   // Voir l'en-tête, « L'identité de l'écriture, et pourquoi elle a bougé ».
   "fonction", "soit", "const",
+  // `selon` ouvre un barème : le tableau d'une norme, recopié tel qu'il est
+  // imprimé. Ses lignes s'écrivent `| … | … |`.
+  "selon",
   "si", "et", "ou", "non", "alors", "sinon",
   ...Object.values(PROVENANCE)
 ];
@@ -1635,6 +1642,7 @@ export function ligneDeZone(zone = TOUTES_ZONES, profondeur = 0) {
  */
 export function blocDeRegle({
   sujet = "", quoi = "", conditions = [], alors = "", sinonSi = [], sinon = "", sauf = [],
+  selon = [],
   provenance = null, preuve = "", importe = [], enregistre = null, portee = PORTEE_DUNE_FONCTION
 } = {}, profondeur = 0) {
   const dedans = profondeur + 1;
@@ -1675,10 +1683,6 @@ export function blocDeRegle({
   // deux se lisent comme une seule suite d'instructions.
   if (corps.length > localesDebut) corps.push(ligneVide());
 
-  (Array.isArray(conditions) ? conditions : []).forEach((condition, rang) => {
-    corps.push(ligneDeCondition(rang === 0 ? "si" : (condition.joint || "et"), condition, dedans, commeUneRegle));
-  });
-
   // La conclusion, et ce qu'on en fait. Un `enregistre` répond à la question
   // qui vient toujours après « alors quoi ? » : où est-ce écrit, et pour quelle
   // partie de l'ouvrage.
@@ -1688,17 +1692,37 @@ export function blocDeRegle({
     ? lignesDeConclusion(mot, { ...enregistre, sujet: texte(enregistre.sujet) || texte(sujet), valeur, zones: portee }, dedans)
     : [ligneDeConsequence(mot, valeur, "", dedans, commeUneRegle)]);
 
-  if (texte(alors)) corps.push(...conclure("alors", alors));
+  /**
+   * **Un barème se réécrit comme un barème.**
+   *
+   * Ses lignes sont rangées dans `conditions` et `sinonSi` comme n'importe
+   * quelles branches — c'est ce qui permet à l'évaluateur, à la trace et au
+   * graphe de n'en rien savoir. `selon` dit seulement sous quelle forme la
+   * fonction a été écrite. Sans ce détour, un tableau de quarante lignes
+   * recopié d'un arrêté revenait en quatre-vingts lignes de `sinon si`, et
+   * personne ne le rapprochait plus de son texte.
+   */
+  const colonnes = (Array.isArray(selon) ? selon : []).map(texte).filter(Boolean);
 
-  // **Les branches enchaînées, dans l'ordre écrit** : c'est l'ordre qui fait le
-  // sens, et les réordonner changerait la règle.
-  for (const branche of enchainees) {
-    (Array.isArray(branche?.conditions) ? branche.conditions : []).forEach((condition, rang) => {
-      corps.push(ligneDeCondition(
-        rang === 0 ? "sinon si" : (condition.joint || "et"), condition, dedans, commeUneRegle
-      ));
+  if (colonnes.length) {
+    corps.push(...lignesDuBareme(colonnes, [{ conditions, alors }, ...enchainees], dedans));
+  } else {
+    (Array.isArray(conditions) ? conditions : []).forEach((condition, rang) => {
+      corps.push(ligneDeCondition(rang === 0 ? "si" : (condition.joint || "et"), condition, dedans, commeUneRegle));
     });
-    if (texte(branche?.alors)) corps.push(...conclure("alors", branche.alors));
+
+    if (texte(alors)) corps.push(...conclure("alors", alors));
+
+    // **Les branches enchaînées, dans l'ordre écrit** : c'est l'ordre qui fait
+    // le sens, et les réordonner changerait la règle.
+    for (const branche of enchainees) {
+      (Array.isArray(branche?.conditions) ? branche.conditions : []).forEach((condition, rang) => {
+        corps.push(ligneDeCondition(
+          rang === 0 ? "sinon si" : (condition.joint || "et"), condition, dedans, commeUneRegle
+        ));
+      });
+      if (texte(branche?.alors)) corps.push(...conclure("alors", branche.alors));
+    }
   }
 
   if (texte(sinon)) corps.push(...conclure("sinon", sinon));
@@ -1732,6 +1756,94 @@ export function blocDeRegle({
         ligneFermante(profondeur)
       ]
     : [tete];
+}
+
+/**
+ * La case d'un barème, telle qu'on la réécrit.
+ *
+ * **Elle doit se relire à l'identique.** Une case nue est un libellé — c'est la
+ * règle du barème à la lecture —, donc une égalité sans unité se réécrit nue.
+ * Tout le reste porte son comparateur, et c'est par lui que la relecture saura
+ * qu'il s'agit d'une mesure et non d'un libellé.
+ */
+function caseDuBareme(condition = null) {
+  if (!condition) return "";
+
+  const operateur = texte(condition.operateur) || OPERATEUR.EGAL;
+  if (operateur === OPERATEUR.RENSEIGNE || operateur === OPERATEUR.NON_RENSEIGNE) return operateur;
+
+  const valeurs = (Array.isArray(condition.valeur) ? condition.valeur : [condition.valeur])
+    .map(texte).filter(Boolean);
+  const unite = texte(condition.unite);
+  const dites = valeurs.join(" ou ");
+
+  // Un libellé : nu, comme la norme l'imprime.
+  if (operateur === OPERATEUR.EGAL && !unite) return dites;
+
+  return `${operateur} ${dites}${unite ? ` ${unite}` : ""}`;
+}
+
+/**
+ * Un barème : le tableau d'une norme, recopié tel qu'il est imprimé.
+ *
+ * ## Pourquoi les colonnes sont alignées
+ *
+ * Un tableau qu'on ne peut pas lire en colonnes n'est plus un tableau — c'est
+ * une suite de lignes, et l'œil ne compare plus rien. L'alignement n'est donc
+ * pas de la coquetterie : c'est **ce pour quoi cette forme existe**, comparer
+ * la fonction au texte réglementaire côte à côte.
+ *
+ * @param {string[]} selon les colonnes, nommées une fois
+ * @param {{conditions: object[], alors: string}[]} branches les lignes, dans
+ *   l'ordre écrit — et l'ordre est le sens : la première qui tient l'emporte
+ */
+export function lignesDuBareme(selon = [], branches = [], profondeur = 1) {
+  const colonnes = (Array.isArray(selon) ? selon : []).map(texte).filter(Boolean);
+  if (!colonnes.length) return [];
+
+  const rangees = (Array.isArray(branches) ? branches : []).map((branche) => {
+    const par = new Map(
+      (Array.isArray(branche?.conditions) ? branche.conditions : [])
+        .map((condition) => [cleDuSujet(texte(condition?.sujet)), condition])
+    );
+    return [
+      // Une colonne sans condition dans cette ligne ne contraint rien : la case
+      // reste blanche, comme dans la norme.
+      ...colonnes.map((nom) => caseDuBareme(par.get(cleDuSujet(nom)) ?? null)),
+      texte(branche?.alors)
+    ];
+  });
+
+  const largeurs = colonnes.map((_, rang) =>
+    Math.max(...rangees.map((rangee) => rangee[rang].length), 0));
+
+  const bourre = (dit, rang) => dit + " ".repeat(Math.max(0, largeurs[rang] - dit.length));
+
+  return [
+    [
+      espace(RETRAIT.repeat(Math.max(1, profondeur))),
+      jeton(JETON.MOT_CONDITION, "selon"),
+      espace(),
+      jeton(JETON.PONCTUATION, "("),
+      ...colonnes.flatMap((nom, rang) => (rang === 0
+        ? [jeton(JETON.SUJET, nom)]
+        : [jeton(JETON.PONCTUATION, ","), espace(), jeton(JETON.SUJET, nom)])),
+      jeton(JETON.PONCTUATION, ")")
+    ],
+    ...rangees.map((rangee) => [
+      espace(RETRAIT.repeat(Math.max(1, profondeur) + 1)),
+      ...rangee.flatMap((dit, rang) => [
+        jeton(JETON.PONCTUATION, "|"),
+        espace(),
+        // La conclusion est une valeur, les cases sont des conditions : deux
+        // couleurs, comme partout ailleurs dans la langue.
+        jeton(rang === colonnes.length ? JETON.VALEUR : JETON.OPERATEUR,
+          rang === colonnes.length ? dit : bourre(dit, rang)),
+        espace()
+      ]),
+      jeton(JETON.PONCTUATION, "|")
+    ])
+  ];
 }
 
 /**
