@@ -112,6 +112,27 @@ test("ce que rien ne tranche parle par sa forme, jamais par son autorité", () =
   assert.equal(autoriteDe(chemin), null);
   assert.deepEqual(motDeLaLigne(chemin), { mot: "Déduite", axe: AXE.FORME, connu: true });
 
+  // **Et une nature qui l'affirme passe devant sa provenance.** Un raisonnement
+  // versé porte `provenance: décision` — c'est bien un humain qui a débattu et
+  // signé —, et il se lisait donc « Décidé », comme la valeur qu'il explique :
+  // le chemin et son aboutissement portaient le même mot, et l'on revenait à la
+  // confusion qu'on venait de retirer. « Rien ne le tranche » n'est pas une
+  // absence d'information, c'est une affirmation sur lui.
+  const versé = {
+    nature: NATURE.RAISONNEMENT,
+    payload: {
+      subject: "Quelle zone retient-on ?", value: "Quelle zone retient-on ?",
+      provenance: { type: "décision", quoi: "…", par: "Ourdine Ferrand", le: "12/03" },
+      raisonnement: { question: "Quelle zone retient-on ?", porteSur: [], examine: [], produit: [] }
+    }
+  };
+  assert.equal(autoriteDe(versé), null);
+  assert.equal(motDeLaLigne(versé).mot, "Déduite");
+
+  // Sans sa nature, la même ligne redit « Décidé » : c'est bien la nature qui
+  // tranche ici, et non l'absence de provenance.
+  assert.equal(motDeLaLigne({ ...versé, nature: "" }).mot, "Décidé");
+
   // Ce qu'on ne sait pas se dit avec le mot de partout (règle 5), et sur l'axe
   // de l'autorité : c'est celui qu'on interrogeait.
   assert.deepEqual(motDeLaLigne({ payload: {} }), {

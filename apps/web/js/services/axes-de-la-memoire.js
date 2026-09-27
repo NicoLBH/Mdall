@@ -132,11 +132,28 @@ export const AUTORITES = [
  *    c'était le mot qui l'effaçait. `decisionPortee` connaît les deux lignes —
  *    la décision et la valeur —, et c'est elle qu'on interroge.
  * 3. **La nature**, pour tout le reste.
+ *
+ * ## Et une nature que rien ne tranche passe devant la provenance
+ *
+ * Deux natures déclarent que **rien ne les tranche**, et ce n'est pas une
+ * absence d'information : c'est une affirmation sur elles. Un raisonnement
+ * n'affirme rien sur l'ouvrage — il dit par où l'on est arrivé —, une intendance
+ * non plus.
+ *
+ * Or un raisonnement versé porte `provenance: décision` : c'est bien un humain
+ * qui a débattu et signé. Lu avant la nature, cela le chipait « Décidé », comme
+ * la valeur qu'il explique — le chemin et son aboutissement portaient le même
+ * mot, et l'on revenait à la confusion qu'on venait de retirer. La nature passe
+ * donc devant, et c'est la **forme** qui parle pour ces deux-là.
  */
 export function autoriteDe(assertion = {}) {
   if (estUneRegle(assertion)) return SETTLED_BY.TIERS;
+
+  const { nature } = classifyAssertion(assertion);
+  if (nature && settledBy(nature) === null) return null;
+
   if (decisionPortee(assertion)) return SETTLED_BY.ARBITRAGE;
-  return settledBy(classifyAssertion(assertion).nature);
+  return settledBy(nature);
 }
 
 /** L'autorité, en un mot. Vide quand rien ne tranche l'affirmation. */

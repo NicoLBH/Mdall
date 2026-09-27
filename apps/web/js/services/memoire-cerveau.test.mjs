@@ -132,8 +132,57 @@ test("chaque nœud porte sa nature, et le compte les sépare", () => {
   assert.equal(cerveau.profondeur, 2);
   assert.deepEqual(cerveau.compte, {
     socle: 2, rejouables: 2, opaques: 1, fonctions: 0, auServeur: 1, familles: 0,
-    reglesSansEntree: 0, conclusionsSansValeur: 0, liens: 3, poidsMax: 3
+    reglesSansEntree: 0, conclusionsSansValeur: 0, liens: 3, poidsMax: 3,
+    // Cette mémoire ne porte aucun raisonnement versé : personne n'a tranché,
+    // donc rien à rouvrir. C'est exact, et c'est la moitié inverse du cas
+    // suivant — sans elle, un compte qui marquerait tout passerait l'épreuve.
+    quiRouvrent: 0
   });
+});
+
+test("un nœud dit combien de choix humains il rouvre s'il change", () => {
+  /**
+   * **C'est le poids qui manquait au dessin.** Le cerveau encodait le nombre de
+   * liens ; cent quatre-vingt-treize nœuds qui comptent tous pareil font une
+   * image, pas un instrument. Celui-ci dit ce que se tromper coûte.
+   *
+   * Le choix se lit dans le **raisonnement** versé — la troisième ligne que la
+   * fermeture d'un sujet pose —, parce que c'est la seule qui dise sous quelles
+   * valeurs on a tranché.
+   */
+  const debat = {
+    id: "choix", subject_key: "choix", status: "assumed", superseded_by: null, decided_at: at,
+    statement: "Quelle profondeur retient-on ?", nature: "raisonnement",
+    payload: {
+      subject: "Quelle profondeur retient-on ?", value: "Quelle profondeur retient-on ?",
+      provenance: { type: "décision", quoi: "…", par: "Ourdine Ferrand", le: "12/03" },
+      raisonnement: {
+        question: "Quelle profondeur retient-on ?",
+        porteSur: [{ sujet: "Profondeur hors gel", valeur: "0.71 m" }],
+        examine: [], decision: null, produit: []
+      }
+    }
+  };
+
+  const cerveau = cerveauDuProjet([...memoire(), debat], lectures());
+  const parId = new Map(cerveau.noeuds.map((noeud) => [noeud.id, noeud]));
+
+  // L'altitude détermine la cote hors gel, sur laquelle on a débattu : la
+  // changer oblige à rouvrir le débat. Personne ne tient cette chaîne de tête.
+  assert.equal(parId.get("alt").rouvre, 1);
+  assert.equal(parId.get("gel").rouvre, 1);
+  assert.equal(parId.get("alt").choix[0].par, "Ourdine Ferrand");
+
+  // **Et l'aval ne rouvre rien.** Les fondations découlent du débat, elles ne le
+  // fondent pas : les changer ne redemande rien à personne. C'est la définition
+  // du détail, et c'est ce qui rend le chiffre lisible.
+  assert.equal(parId.get("fond").rouvre, 0);
+  assert.deepEqual(parId.get("fond").choix, []);
+
+  // La branche voisine non plus : le débat ne portait pas sur elle.
+  assert.equal(parId.get("cls").rouvre, 0);
+
+  assert.equal(cerveau.compte.quiRouvrent, 2);
 });
 
 test("un nœud opaque dit s'il sait se rejouer au serveur", () => {
