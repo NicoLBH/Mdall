@@ -98,7 +98,11 @@ function commeUneRegle(bloc) {
         // Les valeurs que la fonction pose en les calculant. Sans elles,
         // l'évaluateur ne verrait ni ce que la règle calcule, ni ce que sa
         // conclusion nomme.
-        calculs: Array.isArray(bloc?.calculs) ? bloc.calculs : []
+        calculs: Array.isArray(bloc?.calculs) ? bloc.calculs : [],
+        // Et sa boucle, quand elle en a une : sans elle, les agrégats qui la
+        // lisent restent muets et la fonction ne conclut rien — sans qu'un mot
+        // dise que c'est le tableau qui manque.
+        boucle: bloc?.boucle ?? null
       },
       ...(bloc?.agent ? { agent: { genre: texte(bloc.agent), utilitaire: texte(bloc.utilitaire) } } : {})
     }
@@ -258,6 +262,9 @@ function unePasse(fonctions, valeurs) {
        * ne va pas l'accepter d'une règle sous prétexte qu'elle est écrite.
        */
       calculs: evaluation.calculs ?? [],
+      // Le tableau que la boucle a déroulé, quand la fonction en porte une :
+      // c'est le **travail** de la fonction, et l'écran le montre.
+      tableau: evaluation.tableau ?? null,
       // Un `et` et un `ou` sur la même règle se lisent de gauche à droite, sans
       // priorité. Le référentiel n'en produit pas ; une règle écrite à la main
       // qui en contient mérite d'être relue, et on le dit.

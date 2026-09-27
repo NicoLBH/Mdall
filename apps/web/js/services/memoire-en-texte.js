@@ -220,7 +220,10 @@ export const JETON = {
   UNITE: "unite",
   /** `=`, `≤`, `≥`, `<`, `>`, `≠` — la comparaison, ou l'affectation. */
   OPERATEUR: "operateur",
-  /** `si`, `et`, `ou`, `non`, `alors`, `sinon` — les mots de la règle. */
+  /**
+   * `si`, `et`, `ou`, `non`, `alors`, `sinon`, `pour chaque` — les mots de la
+   * règle, ceux qui décident de ce qui se lit et de combien de fois.
+   */
   MOT_CONDITION: "mot-condition",
   /** `sauf si` — le mot qui borne la règle. */
   MOT_EXCEPTION: "mot-exception",
@@ -412,9 +415,62 @@ export const MOTS = [
   // `selon` ouvre un barème : le tableau d'une norme, recopié tel qu'il est
   // imprimé. Ses lignes s'écrivent `| … | … |`.
   "selon",
+  // `pour chaque` ouvre une boucle : le même calcul répété sur une suite de
+  // valeurs, dont il sort un tableau. Voir `boucle-du-mdall.js`.
+  "pour chaque",
   "si", "et", "ou", "non", "alors", "sinon",
   ...Object.values(PROVENANCE)
 ];
+
+/** Le mot qui ouvre une boucle. Il vit ici, avec les autres mots du langage. */
+export const POUR_CHAQUE = "pour chaque";
+
+/**
+ * Les agrégats : ce qu'on lit d'une colonne du tableau qu'une boucle rend.
+ *
+ * **Ce sont `sum`, `max`, `min`, `moyenne` et `compte`**, et ils s'écrivent en
+ * français exprès. Une fonction nommée `somme(…)` appelle à être enchaînée —
+ * `somme(max(…))` —, et cinq enchaînements plus loin plus personne ne relit la
+ * ligne. « la somme de Moment » ne se compose pas, et c'est voulu : le mot
+ * choisi décide du style qu'on écrira pendant dix ans.
+ */
+export const AGREGAT = {
+  SOMME: "somme",
+  PLUS_GRAND: "plus-grand",
+  PLUS_PETIT: "plus-petit",
+  MOYENNE: "moyenne",
+  COMBIEN: "combien"
+};
+
+/**
+ * La phrase de chaque agrégat, la plus longue d'abord.
+ *
+ * L'ordre garde la même discipline que les mots de tête du langage : on cherche
+ * du plus long au plus court, une fois, à un seul endroit.
+ */
+export const PHRASE_DE_LAGREGAT = [
+  ["le plus grand de", AGREGAT.PLUS_GRAND],
+  ["le plus petit de", AGREGAT.PLUS_PETIT],
+  ["la moyenne de", AGREGAT.MOYENNE],
+  ["le nombre de", AGREGAT.COMBIEN],
+  ["la somme de", AGREGAT.SOMME]
+];
+
+/** Ce qu'un agrégat dit de lui-même, à l'écran. */
+export const DIT_DE_LAGREGAT = {
+  [AGREGAT.SOMME]: "Le total d'une colonne du tableau",
+  [AGREGAT.PLUS_GRAND]: "La plus grande valeur d'une colonne",
+  [AGREGAT.PLUS_PETIT]: "La plus petite valeur d'une colonne",
+  [AGREGAT.MOYENNE]: "La moyenne d'une colonne",
+  [AGREGAT.COMBIEN]: "Combien de lignes ont une valeur dans cette colonne"
+};
+
+/** Un agrégat, réécrit tel qu'il se tape : `le plus grand de Moment`. */
+export function phraseDeLAgregat(agregat = {}) {
+  const dite = PHRASE_DE_LAGREGAT.find(([, quoi]) => quoi === agregat?.quoi)?.[0] ?? "";
+  const colonne = String(agregat?.colonne ?? "").trim();
+  return dite && colonne ? `${dite} ${colonne}` : colonne;
+}
 
 /** La zone de ce qui vaut partout. Le premier bloc d'un fichier, toujours. */
 export const TOUTES_ZONES = "Toutes zones";
@@ -956,6 +1012,56 @@ export function ligneDeLocale(nom = "", valeur = "", profondeur = 1) {
     espace(),
     jeton(JETON.VALEUR, `"${quoi.replace(/^["\u00ab]\s*/, "").replace(/\s*["\u00bb]$/, "")}"`),
     jeton(JETON.PONCTUATION, ";")
+  ];
+}
+
+/**
+ * `pour chaque Portée de 2 m à 90 m par pas de 2 m`
+ *
+ * La tête d'une boucle. Elle ne porte **pas** de point-virgule : elle ouvre un
+ * corps, comme `si` ouvre une conclusion — et ce qui ouvre ne se termine pas.
+ */
+export function ligneDePourChaque(boucle = null, profondeur = 1) {
+  const nom = texte(boucle?.nom);
+  const de = texte(boucle?.de);
+  const a = texte(boucle?.a);
+  const pas = texte(boucle?.pas);
+  if (!nom || !de || !a || !pas) return null;
+
+  /**
+   * Une borne : un nombre avec son unité, ou un **nom du projet**.
+   *
+   * Les deux se colorent comme ce qu'ils sont, et comme le peintre de la saisie
+   * les colore déjà : une borne qui vient du projet peinte en valeur ferait
+   * deux lectures de la même ligne, et la couleur cesserait de dire où aller
+   * chercher (règle 10).
+   */
+  const borne = (dite) => {
+    const coupe = couperLUnite(dite);
+    if (!Number.isFinite(lireUnNombre(coupe.nombre))) return [jeton(JETON.SUJET, dite)];
+    return coupe.unite
+      ? [jeton(JETON.VALEUR, coupe.nombre), espace(), jeton(JETON.UNITE, coupe.unite)]
+      : [jeton(JETON.VALEUR, dite)];
+  };
+
+  return [
+    espace(RETRAIT.repeat(Math.max(1, profondeur))),
+    jeton(JETON.MOT_CONDITION, POUR_CHAQUE),
+    espace(),
+    // Le nom de la variable est une **locale** : il ne vit que dans sa fonction.
+    jeton(JETON.NOM_LOCAL, nom),
+    espace(),
+    jeton(JETON.MOT_CONDITION, "de"),
+    espace(),
+    ...borne(de),
+    espace(),
+    jeton(JETON.MOT_CONDITION, "à"),
+    espace(),
+    ...borne(a),
+    espace(),
+    jeton(JETON.MOT_CONDITION, "par pas de"),
+    espace(),
+    ...borne(pas)
   ];
 }
 
@@ -1642,7 +1748,7 @@ export function ligneDeZone(zone = TOUTES_ZONES, profondeur = 0) {
  */
 export function blocDeRegle({
   sujet = "", quoi = "", conditions = [], alors = "", sinonSi = [], sinon = "", sauf = [],
-  selon = [],
+  selon = [], calculs = [], boucle = null,
   provenance = null, preuve = "", importe = [], enregistre = null, portee = PORTEE_DUNE_FONCTION
 } = {}, profondeur = 0) {
   const dedans = profondeur + 1;
@@ -1686,6 +1792,46 @@ export function blocDeRegle({
   // La conclusion, et ce qu'on en fait. Un `enregistre` répond à la question
   // qui vient toujours après « alors quoi ? » : où est-ce écrit, et pour quelle
   // partie de l'ouvrage.
+  /**
+   * **Ce que la fonction calcule, et la boucle qui la nourrit.**
+   *
+   * Elles ne s'écrivaient pas. Une fonction versée qui posait `calcule TVA =
+   * Prix HT * 20%` se réécrivait ici **sans une seule de ses lignes de
+   * calcul** : l'écran des fichiers montrait une fonction qui conclut `Prix
+   * TTC` sans que rien ne dise ce que `Prix TTC` vaut. Le défaut est de la même
+   * famille que les branches oubliées, et il se voyait aussi peu.
+   *
+   * L'ordre est celui du fichier — le numéro de ligne —, parce que c'est lui
+   * qui fait le sens : ce qu'on a écrit au-dessus de la boucle la nourrit, ce
+   * qu'on écrit en dessous lit son tableau.
+   */
+  const rang = (un) => Number(un?.ligne) || 0;
+  const aEcrire = [
+    ...(Array.isArray(calculs) ? calculs : []).filter(Boolean).map((un) => ({ quoi: "calcul", un })),
+    ...(boucle ? [{ quoi: "boucle", un: boucle }] : [])
+  ].sort((un, autre) => rang(un.un) - rang(autre.un));
+
+  const avantLesCalculs = corps.length;
+  for (const { quoi, un } of aEcrire) {
+    if (quoi === "boucle") {
+      const tete = ligneDePourChaque(un, dedans);
+      if (!tete) continue;
+      corps.push(tete);
+      // Le corps de la boucle s'écrit **trois espaces plus loin** : c'est ce
+      // qui dit où il s'arrête, et la lecture n'a pas d'autre marque.
+      for (const calcul of Array.isArray(un.calculs) ? un.calculs : []) {
+        const ligne = ligneDeCalcul(calcul?.nom, calcul?.expression, dedans + 1);
+        if (ligne) corps.push(ligne);
+      }
+      continue;
+    }
+    // Un agrégat est un calcul dont l'expression est une phrase : les deux
+    // s'écrivent de la même façon, parce qu'ils se lisent de la même façon.
+    const ligne = ligneDeCalcul(un?.nom, un?.agregat ? phraseDeLAgregat(un.agregat) : un?.expression, dedans);
+    if (ligne) corps.push(ligne);
+  }
+  if (corps.length > avantLesCalculs) corps.push(ligneVide());
+
   /** Une conclusion, avec ou sans son `enregistre`. Écrite une fois pour toutes
    *  les branches : deux façons de poser un `alors` divergeraient. */
   const conclure = (mot, valeur) => (enregistre

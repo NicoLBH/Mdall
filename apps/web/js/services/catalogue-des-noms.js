@@ -52,6 +52,7 @@ import { lireUnFichier, nomsConclusParLeBloc, nomsLusParLeBloc } from "./memoire
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { valeursPosees } from "./formulaire-du-brouillon.js";
 import { FONCTIONS } from "./mdall-calcul.js";
+import { DIT_DE_LAGREGAT, PHRASE_DE_LAGREGAT } from "./memoire-en-texte.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -73,6 +74,8 @@ export const ORIGINE = {
   POSE: "pose",
   /** Une fonction du langage : `racine`, `arrondi`, `min`. */
   FONCTION: "fonction",
+  /** Un agrégat : `le plus grand de`, `la somme de`. */
+  AGREGAT: "agregat",
   /** Un utilitaire de l'établi le conclut. À reprendre pour s'en servir. */
   ETABLI: "etabli"
 };
@@ -84,6 +87,7 @@ export const NOM_DE_LORIGINE = {
   [ORIGINE.CONCLU]: "Conclu par une fonction d'ici",
   [ORIGINE.POSE]: "Posé par ce brouillon",
   [ORIGINE.FONCTION]: "Les fonctions du langage",
+  [ORIGINE.AGREGAT]: "Lire le tableau d'un « pour chaque »",
   [ORIGINE.ETABLI]: "Sur votre établi"
 };
 
@@ -100,13 +104,14 @@ export const DIT_DE_LORIGINE = {
   [ORIGINE.CONCLU]: "Nommez-le dans une autre fonction : c'est ainsi qu'on enchaîne.",
   [ORIGINE.POSE]: "Une valeur posée sans condition : elle se lit comme les autres.",
   [ORIGINE.FONCTION]: "Elles s'écrivent dans un calcul, et leurs arguments se séparent d'un point-virgule.",
+  [ORIGINE.AGREGAT]: "Une boucle rend un tableau ; ces phrases en lisent une colonne.",
   [ORIGINE.ETABLI]: "Ces noms-là vivent ailleurs : reprenez l'utilitaire pour vous en servir."
 };
 
 /** L'ordre des rayons : ce qui est à portée de main d'abord. */
 export const ORDRE_DES_ORIGINES = [
   ORIGINE.LOCALE, ORIGINE.DECLARE, ORIGINE.CONCLU, ORIGINE.POSE,
-  ORIGINE.FONCTION, ORIGINE.ETABLI
+  ORIGINE.FONCTION, ORIGINE.AGREGAT, ORIGINE.ETABLI
 ];
 
 /** Une entrée du catalogue, avec tous ses champs à leur place. */
@@ -232,6 +237,23 @@ export function nomsDuLangage() {
 }
 
 /**
+ * Les agrégats, pris au langage.
+ *
+ * **Ils ne se proposent pas comme des noms** — on ne les *nomme* pas, on les
+ * écrit —, et ils paraissent quand même au catalogue : c'est là qu'on cherche
+ * ce que le langage sait faire d'un tableau, et personne ne devinera « le plus
+ * grand de » sans l'avoir vu une fois.
+ */
+export function agregatsDuLangage() {
+  return PHRASE_DE_LAGREGAT.map(([phrase, quoi]) => entree({
+    nom: phrase,
+    origine: ORIGINE.AGREGAT,
+    dit: DIT_DE_LAGREGAT[quoi],
+    comme: `calcule Le plus fort = ${phrase} Moment;`
+  }));
+}
+
+/**
  * Les noms que les utilitaires de l'établi concluent.
  *
  * **Ce qu'ils lisent est dit aussi**, parce que c'est la première question
@@ -286,23 +308,30 @@ export function catalogueDesNoms({ fichiers = [], etabli = null, locales = [] } 
     ...posees,
     ...duBrouillon,
     ...nomsDuLangage(),
+    ...agregatsDuLangage(),
     ...nomsDeLetabli(etabli).filter((une) => !connus.has(cleDuSujet(une.nom)))
   ];
 }
 
 /**
- * Ce qui se **lit d'ici**, et donc ce qui se propose sous le curseur.
+ * Ce qui se **nomme ici**, et donc ce qui se propose sous le curseur.
  *
- * Un nom de l'établi ne se lit pas : l'utilitaire vit dans un autre brouillon,
- * et le proposer à la frappe ferait écrire une fonction qui lit un nom que
- * personne ne conclut — une règle indécidable pour toujours, sans qu'un mot
- * dise pourquoi. Il se **parcourt** donc, et ne se propose pas : c'est la seule
- * différence entre les deux lectures du catalogue, et elle est dite ici, une
- * fois.
+ * Deux rayons se parcourent sans se proposer, et pour deux raisons différentes :
+ *
+ *  - **un nom de l'établi ne se lit pas d'ici.** L'utilitaire vit dans un autre
+ *    brouillon ; le proposer à la frappe ferait écrire une fonction qui lit un
+ *    nom que personne ne conclut — une règle indécidable pour toujours, sans
+ *    qu'un mot dise pourquoi.
+ *  - **un agrégat n'est pas un nom.** « le plus grand de » est une phrase qu'on
+ *    écrit dans un calcul ; la proposer là où une condition attend un sujet
+ *    donnerait `si (le plus grand de = …)`, qui ne veut rien dire.
+ *
+ * C'est toute la différence entre les deux lectures du catalogue, et elle est
+ * dite ici, une fois.
  */
 export function nomsLisiblesDIci(catalogue = []) {
   return (Array.isArray(catalogue) ? catalogue : [])
-    .filter((une) => une.origine !== ORIGINE.ETABLI);
+    .filter((une) => une.origine !== ORIGINE.ETABLI && une.origine !== ORIGINE.AGREGAT);
 }
 
 /** Une chaîne repliée pour chercher : casse, accents et espaces pliés. */

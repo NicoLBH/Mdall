@@ -4573,3 +4573,18 @@ la réécrire. L'écran d'écriture ne tient aucune mémoire de projet — le ba
 d'essai demande à la main ce qu'aucune fonction du brouillon ne conclut —, si
 bien que le travail n'est pas dans le catalogue : c'est une lecture de la mémoire
 qui manque à cet écran-là.
+
+**`pour chaque` ne parcourt qu'une suite de nombres.** Il répète de deux mètres à
+quatre-vingt-dix par pas de deux (`docs/pour-chaque-et-les-agregats.md`) ; il ne
+sait pas dire « pour chaque niveau du bâtiment » ni « pour chaque massif de la
+nomenclature ». Ce n'est pas une limite du langage mais du **modèle** : il n'y a
+pas de nomenclature — bâtiment › niveau › zone › local › ouvrage —, et la zone en
+fait aujourd'hui la moitié. C'est le seul point de la liste des améliorations du
+langage qui touche au modèle, et il mérite sa propre décision.
+
+**Un agrégat ne se propose pas sous le curseur.** Il se parcourt au catalogue des
+noms, parce que ce n'est pas un nom : proposer « le plus grand de » là où une
+condition attend un sujet donnerait `si (le plus grand de = …)`. Le proposer
+**après le `=` d'un `calcule`** serait juste, et demande un état de plus dans
+`ceQuAttendLaLigne` — la liste ne connaît aujourd'hui que « un mot », « un nom »,
+« une valeur », « un fichier », « un statut ».

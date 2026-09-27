@@ -27444,6 +27444,28 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    Trois colonnes : le nom posé, l'expression telle qu'elle est tapée — colorée
    par le peintre de la saisie, comme partout —, et ce qu'elle vaut. Un nombre
    sans sa lecture n'apprend rien, et c'est ce qu'on refuse à un agent. */
+/* ── Le tableau qu'une boucle déroule ──────────────────────────────────────
+   Tout le gain de « pour chaque » est qu'on relit les lignes une à une contre
+   la note de calcul d'origine : il se montre donc en entier, et une case qu'on
+   n'a pas su calculer reste à sa place plutôt que de raccourcir la suite. */
+.bac-tableau{
+  margin:6px 0 8px; border-collapse:collapse; font-size:12px; line-height:1.5;
+  font-variant-numeric:tabular-nums;
+}
+.bac-tableau__titre{
+  caption-side:top; text-align:left; color:var(--muted); font-size:11px; padding-bottom:4px;
+}
+.bac-tableau th, .bac-tableau td{
+  padding:2px 10px 2px 0; text-align:right; white-space:nowrap;
+}
+.bac-tableau thead th{
+  color:rgb(210,168,255); font-weight:600;
+  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace); font-size:11px;
+  border-bottom:1px solid var(--border);
+}
+.bac-tableau tbody th{ color:var(--muted); font-weight:400; }
+.bac-tableau__vide{ color:var(--muted); }
+
 .bac-calculs{
   list-style:none; margin:6px 0 8px; padding:0;
   display:flex; flex-direction:column; gap:2px;

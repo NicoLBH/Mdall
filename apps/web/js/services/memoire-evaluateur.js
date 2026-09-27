@@ -51,10 +51,15 @@
  * ne pose pas de problème : c'est l'écriture usuelle.
  */
 
-import { OPERATEUR, couperLUnite, lireUnNombre } from "./memoire-en-texte.js";
+import {
+  DIT_DE_LAGREGAT, OPERATEUR, couperLUnite, lireUnNombre, phraseDeLAgregat
+} from "./memoire-en-texte.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { calculer, ecrireLeCalcul, phraseDuRefus } from "./mdall-calcul.js";
 import { convertir } from "./unites-du-metier.js";
+import {
+  REFUS_DE_LA_BOUCLE, agregerUneColonne, valeursDeLaBoucle, phraseDuRefusDeLaBoucle
+} from "./boucle-du-mdall.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -75,6 +80,11 @@ export const DOUTE = {
   UNITES_INCOMPARABLES: "unites-incomparables",
   /** Un opérateur que ce module ne connaît pas. */
   OPERATEUR_INCONNU: "operateur-inconnu",
+  /**
+   * Un agrégat qui ne rend rien : le tableau est vide, ou sa colonne ne porte
+   * aucune valeur qu'on sache lire.
+   */
+  TABLEAU_MUET: "tableau-muet",
   /**
    * Une fonction native : sa loi n'est pas dans le texte, et ne peut pas y être.
    *
@@ -107,6 +117,7 @@ const PHRASES = {
   [DOUTE.PAS_UN_NOMBRE]: "cette comparaison attend des nombres",
   [DOUTE.UNITES_INCOMPARABLES]: "les deux côtés ne mesurent pas la même chose",
   [DOUTE.OPERATEUR_INCONNU]: "cet opérateur n'est pas du langage",
+  [DOUTE.TABLEAU_MUET]: "le tableau ne porte aucune valeur à lire dans cette colonne",
   [DOUTE.CALCUL_REFUSE]: "ce calcul ne se fait pas",
   [DOUTE.LOI_NON_ECRITE]: "la loi de cette fonction n'est pas écrite : elle se refait au serveur"
 };
@@ -280,6 +291,163 @@ function combiner(traces) {
 }
 
 /**
+ * Dérouler une boucle : une ligne par valeur, une colonne par `calcule`.
+ *
+ * ## Une ligne se calcule comme une fonction entière
+ *
+ * Le corps de la boucle est une suite de `calcule`, et chacun voit les
+ * précédents — exactement la règle de `poserLesLocales`, appelée ici avec la
+ * variable de boucle posée en plus. Une seconde façon d'évaluer une suite de
+ * calculs aurait fini par ne plus dire la même chose que la première (règle 10).
+ *
+ * ## Ce qu'une ligne qui ne se calcule pas devient
+ *
+ * Elle reste dans le tableau, **avec sa case vide**. La retirer ferait un
+ * tableau plus court que la suite annoncée, et l'on ne verrait pas laquelle des
+ * quarante-cinq portées a échoué — c'est précisément la ligne qu'on cherche.
+ *
+ * @returns {{nom: string, colonnes: string[], lignes: object[],
+ *   refus: string, pourquoi: string, manquants: string[], doutes: string[]}}
+ */
+export function deroulerLaBoucle(boucle = null, lire = () => ({ connu: false, valeur: "" })) {
+  const nom = texte(boucle?.nom);
+  const corps = Array.isArray(boucle?.calculs) ? boucle.calculs : [];
+  const vide = {
+    nom, colonnes: [], lignes: [], refus: "", pourquoi: "", manquants: [], doutes: []
+  };
+  if (!nom || !corps.length) return vide;
+
+  /**
+   * **Les bornes se calculent avant de dérouler.**
+   *
+   * Chacune est une expression comme une autre — un nombre écrit, un nom du
+   * projet, ou `Portée / 2`. Elle passe donc par le calculateur, et la suite se
+   * construit sur ce qu'il rend. Une borne qu'on ne sait pas lire n'est pas
+   * zéro : le tableau n'existe pas, et il le dit.
+   */
+  const bornes = {};
+  const manquantes = [];
+  for (const cote of ["de", "a", "pas"]) {
+    const rendu = calculer(texte(boucle?.[cote]), lire);
+    if (!rendu.connu) {
+      manquantes.push(...(rendu.manquants ?? []));
+      bornes[cote] = "";
+      continue;
+    }
+    bornes[cote] = ecrireLeCalcul(rendu);
+  }
+
+  if (!bornes.de || !bornes.a || !bornes.pas) {
+    return {
+      ...vide,
+      refus: REFUS_DE_LA_BOUCLE.PAS_UN_NOMBRE,
+      pourquoi: manquantes.length
+        ? `il manque ${[...new Set(manquantes)].join(", ")} pour savoir jusqu'où aller`
+        : "une des bornes ne se calcule pas",
+      manquants: [...new Set(manquantes)],
+      doutes: [DOUTE.TABLEAU_MUET]
+    };
+  }
+
+  const suite = valeursDeLaBoucle(bornes);
+  if (suite.refus) {
+    return {
+      ...vide,
+      refus: suite.refus,
+      pourquoi: phraseDuRefusDeLaBoucle(suite.refus, suite.ou),
+      doutes: [DOUTE.TABLEAU_MUET]
+    };
+  }
+
+  const colonnes = corps.map((un) => texte(un?.nom)).filter(Boolean);
+  const lignes = [];
+  const manquants = new Set();
+  const doutes = new Set();
+
+  for (const valeur of suite.valeurs) {
+    // La variable de boucle se lit comme n'importe quel nom, et **elle seule
+    // change d'une ligne à l'autre** : tout le reste vient de la fonction.
+    const lireIci = (sujet) => (cleDuSujet(sujet) === cleDuSujet(nom)
+      ? { connu: true, valeur: valeur.dite }
+      : lire(sujet) ?? { connu: false, valeur: "" });
+
+    const posees = poserLesLocales(corps, lireIci);
+    for (const manque of posees.manquants) manquants.add(manque);
+    for (const doute of posees.doutes) doutes.add(doute);
+
+    lignes.push({
+      valeur: valeur.dite,
+      cases: posees.traces.map((trace) => ({
+        nom: trace.nom, valeur: trace.valeur, connu: trace.connu, pourquoi: trace.pourquoi
+      }))
+    });
+  }
+
+  return {
+    nom,
+    colonnes,
+    lignes,
+    refus: "",
+    pourquoi: "",
+    /**
+     * Ce que la boucle n'a pas pu lire, **dit une fois**. Quarante-cinq lignes
+     * qui manquent toutes de la même charge répartie ne font pas quarante-cinq
+     * entrées à demander : elles en font une.
+     *
+     * La variable de boucle n'y figure jamais : `lireIci` la connaît à chaque
+     * ligne, et rien ne peut donc la déclarer absente.
+     */
+    manquants: [...manquants],
+    doutes: [...doutes]
+  };
+}
+
+/**
+ * Ce qu'un agrégat vaut sur un tableau donné.
+ *
+ * **Une colonne qu'on ne trouve pas n'est pas une colonne vide.** Elle se dit,
+ * avec ce que le tableau porte vraiment : c'est une faute de frappe neuf fois
+ * sur dix, et la taire ferait chercher dans la boucle un défaut qui est dans
+ * son nom.
+ *
+ * @returns {{connu: boolean, valeur: string, pourquoi: string}}
+ */
+export function agregatDuTableau(agregat = {}, tableau = null) {
+  const colonne = texte(agregat?.colonne);
+  const quoi = texte(agregat?.quoi);
+
+  if (!tableau || tableau.refus) {
+    return {
+      connu: false,
+      valeur: "",
+      pourquoi: tableau?.pourquoi || "cette fonction n'a pas de « pour chaque » à lire"
+    };
+  }
+
+  if (!tableau.colonnes.some((une) => cleDuSujet(une) === cleDuSujet(colonne))) {
+    return {
+      connu: false,
+      valeur: "",
+      pourquoi: tableau.colonnes.length
+        ? `le tableau n'a pas de colonne « ${colonne} » — il porte ${tableau.colonnes.join(", ")}`
+        : `le tableau n'a pas de colonne « ${colonne} »`
+    };
+  }
+
+  // Les cases vides descendent avec les autres : c'est `agregerUneColonne` qui
+  // décide qu'une ligne sans valeur ne compte pas, et elle le décide une fois.
+  const cellules = tableau.lignes.map((une) => une.cases
+    .find((case_) => cleDuSujet(case_.nom) === cleDuSujet(colonne)));
+
+  const rendu = agregerUneColonne(quoi, cellules);
+  return {
+    connu: rendu.connu,
+    valeur: rendu.valeur,
+    pourquoi: rendu.connu ? "" : `${DIT_DE_LAGREGAT[quoi] ?? "cet agrégat"} : rien à lire dans « ${colonne} »`
+  };
+}
+
+/**
  * Les valeurs qu'une fonction pose en les calculant, dans l'ordre.
  *
  * ## Pourquoi dans l'ordre, et pourquoi chacune voit les précédentes
@@ -300,7 +468,7 @@ function combiner(traces) {
  * @returns {{lire: Function, noms: Set<string>, manquants: string[],
  *   doutes: string[], traces: object[]}}
  */
-export function poserLesLocales(calculs = [], lire = () => ({ connu: false, valeur: "" })) {
+export function poserLesLocales(calculs = [], lire = () => ({ connu: false, valeur: "" }), boucle = null) {
   const poses = new Map();
   const noms = new Set();
   const manquants = [];
@@ -313,10 +481,55 @@ export function poserLesLocales(calculs = [], lire = () => ({ connu: false, vale
     return lire(sujet) ?? { connu: false, valeur: "" };
   };
 
+  /**
+   * **La boucle se déroule à sa place, et sa place est son numéro de ligne.**
+   *
+   * Ce qu'on a écrit au-dessus d'elle la nourrit — `calcule q = Charge * 1,35`
+   * puis une boucle qui lit `q` —, et ce qu'on écrit en dessous lit son
+   * tableau. On lit de haut en bas, comme partout dans ce langage ; l'ordre
+   * n'a pas d'autre règle à apprendre.
+   */
+  const ouElleTombe = boucle ? Number(boucle.ligne) || 0 : Infinity;
+  let tableau = null;
+
+  const derouler = () => {
+    if (tableau || !boucle) return;
+    tableau = deroulerLaBoucle(boucle, lireAvecLesLocales);
+    manquants.push(...tableau.manquants);
+    doutes.push(...tableau.doutes);
+  };
+
   for (const calcul of Array.isArray(calculs) ? calculs : []) {
     const nom = texte(calcul?.nom);
     if (!nom) continue;
+    if ((Number(calcul?.ligne) || 0) > ouElleTombe) derouler();
     noms.add(cleDuSujet(nom));
+
+    /**
+     * **Un agrégat lit le tableau ; un calcul lit des nombres.** Les deux
+     * posent une locale de la même façon — un nom, une valeur, une trace —, et
+     * c'est ce qui permet à tout ce qui suit de ne pas savoir lequel des deux
+     * l'a posée.
+     */
+    if (calcul?.agregat) {
+      derouler();
+      const rendu = agregatDuTableau(calcul.agregat, tableau);
+
+      traces.push({
+        nom,
+        expression: phraseDeLAgregat(calcul.agregat),
+        ligne: Number(calcul?.ligne) || 0,
+        connu: rendu.connu,
+        valeur: rendu.valeur,
+        refus: "",
+        pourquoi: rendu.connu ? "" : rendu.pourquoi,
+        manquants: []
+      });
+
+      if (!rendu.connu) { doutes.push(DOUTE.TABLEAU_MUET); continue; }
+      poses.set(cleDuSujet(nom), { connu: true, valeur: rendu.valeur });
+      continue;
+    }
 
     const rendu = calculer(texte(calcul?.expression), lireAvecLesLocales);
     const ecrit = ecrireLeCalcul(rendu);
@@ -338,8 +551,15 @@ export function poserLesLocales(calculs = [], lire = () => ({ connu: false, vale
     poses.set(cleDuSujet(nom), { connu: true, valeur: ecrit });
   }
 
+  // Une boucle qu'aucun agrégat ne lit se déroule quand même : son tableau est
+  // le travail, et l'écran le montre. La taire ferait une fonction dont la
+  // moitié du texte n'a laissé aucune trace.
+  derouler();
+
   return {
     lire: lireAvecLesLocales,
+    /** Le tableau de la boucle, quand la fonction en porte une. */
+    tableau,
     noms,
     /**
      * Ce qu'aucun calcul n'a pu lire, **noms des locales compris**.
@@ -407,8 +627,9 @@ export function evaluerLaRegle(regle = {}, lire = () => ({ connu: false, valeur:
   const bloc = regle?.payload?.regle ?? {};
 
   // **Les locales d'abord.** Une condition peut porter sur une valeur que la
-  // fonction vient de calculer, et une conclusion peut la nommer.
-  const locales = poserLesLocales(bloc?.calculs, lire);
+  // fonction vient de calculer, et une conclusion peut la nommer. La boucle se
+  // déroule parmi elles, à sa place dans le fichier.
+  const locales = poserLesLocales(bloc?.calculs, lire, bloc?.boucle ?? null);
 
   const sinon = conclusionDeLaRegle(bloc?.sinon, locales);
 
@@ -546,7 +767,16 @@ export function evaluerLaRegle(regle = {}, lire = () => ({ connu: false, valeur:
      * n'apprend rien, et un nombre sorti de nulle part est exactement ce qu'on
      * refuse à un agent.
      */
-    calculs: locales.traces
+    calculs: locales.traces,
+    /**
+     * Le tableau que la boucle a déroulé, ou `null`.
+     *
+     * **C'est le travail de la fonction**, et non un détail d'exécution : les
+     * quarante-cinq lignes sont ce qu'on relit contre la note de calcul
+     * d'origine. Les taire reviendrait à rendre un total sans montrer ce qu'il
+     * totalise — exactement le tableur qu'on remplace.
+     */
+    tableau: locales.tableau
   };
 }
 

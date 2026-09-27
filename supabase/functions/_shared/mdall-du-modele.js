@@ -247,6 +247,69 @@ fonction Prix TTC(zones, Prix HT) {
 - \`calcule\` n'écrit rien dans le projet : ce qui sort passe par \`alors\`,
   comme toujours.
 
+# Répéter un calcul : \`pour chaque\`
+
+\`\`\`
+fonction Volume le plus gros(zones, Section, Hauteur maximale) {
+   // Le poteau le plus volumineux de la trame.
+   importe (variable: Section, depuis: variables-du-projet.ref, zones: zones);
+
+   pour chaque Hauteur de 2,5 m à Hauteur maximale par pas de 0,5 m
+      calcule Volume = Hauteur * Section;
+
+   calcule Le plus gros = le plus grand de Volume;
+   si (Le plus gros > 0 m³)
+   alors (Le plus gros);
+}
+\`\`\`
+
+**Une boucle produit un tableau, jamais une variable qui s'accumule.** Une ligne
+par valeur, une colonne par \`calcule\` de son corps. N'écris jamais
+\`soit total = total + x\` : cela ne se relit pas.
+
+- **la tête s'écrit en toutes lettres** : \`pour chaque <nom> de <début> à <fin>
+  par pas de <pas>\`. Les trois bornes peuvent être des nombres, des noms du
+  projet, ou des calculs ;
+- **le corps s'écrit trois espaces plus loin**, et c'est ce qui dit où il
+  s'arrête. La première ligne qui n'est pas un \`calcule\` le referme ;
+- **une seule boucle par fonction.** Deux niveaux demandent deux fonctions, comme
+  il n'y a pas de condition imbriquée ;
+- **on ne sort pas d'une boucle en avance**, et elle ne se lit pas elle-même : sa
+  variable n'existe que dans son corps.
+
+Le tableau se lit ensuite par un **agrégat**, et c'est la seule façon d'en tirer
+une valeur :
+
+\`\`\`
+fonction Descente de charge(zones, Charge par niveau, Nombre de niveaux) {
+   // Ce qui arrive en pied de poteau, niveau par niveau.
+   importe (variable: Charge par niveau, depuis: variables-du-projet.ref, zones: zones);
+
+   pour chaque Niveau de 1 à Nombre de niveaux par pas de 1
+      calcule Charge du niveau = Charge par niveau * Niveau;
+
+   calcule Charge en pied = la somme de Charge du niveau;
+   calcule La plus forte = le plus grand de Charge du niveau;
+   calcule Combien = le nombre de Charge du niveau;
+   si (Charge en pied > 0 kN)
+   alors (Charge en pied);
+}
+\`\`\`
+
+Les cinq phrases, et il n'y en a pas d'autres : \`la somme de\`,
+\`le plus grand de\`, \`le plus petit de\`, \`la moyenne de\`, \`le nombre de\`.
+
+- **ils nomment une colonne du tableau**, jamais un nom du projet ;
+- ils s'écrivent **après** la boucle, au même retrait que \`pour chaque\` ;
+- une ligne qu'on n'a pas su calculer **ne compte pas** : elle ne vaut pas zéro,
+  et \`le nombre de\` dit combien il en reste ;
+- ils ne se composent pas : \`la somme de la moyenne de …\` ne se lit pas.
+
+Ce qui est refusé, et dit avant le lancement : un pas de zéro, un pas qui
+s'éloigne de la fin (\`de 10 à 1 par pas de 1\` — écris-le \`par pas de -1\`), des
+bornes qui ne mesurent pas la même chose, et un tableau de plus de 200 lignes —
+au-delà, il ne se relit plus, et c'est tout l'intérêt de cette forme.
+
 # Une fonction qui en lit une autre
 
 **Il n'y a pas d'appel de fonction dans Mdall.** N'écris jamais

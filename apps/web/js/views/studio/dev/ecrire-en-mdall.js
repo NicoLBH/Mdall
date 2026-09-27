@@ -384,6 +384,62 @@ export function renderCalculs(calculs = []) {
   `;
 }
 
+/**
+ * Le tableau qu'une boucle a déroulé.
+ *
+ * ## Pourquoi un vrai tableau, et pas un résumé
+ *
+ * Tout le gain de `pour chaque` est qu'on **relit les lignes une à une** contre
+ * la note de calcul d'origine. N'en montrer que l'agrégat rendrait un total
+ * qu'il faudrait croire — c'est-à-dire exactement le tableur qu'on remplace, et
+ * la raison pour laquelle une boucle produit un tableau plutôt qu'une variable
+ * qui s'accumule.
+ *
+ * ## Une ligne qui n'a pas su se calculer reste
+ *
+ * Avec sa case vide, et ce qu'elle dit au survol. La retirer ferait un tableau
+ * plus court que la suite annoncée, et l'on ne verrait pas **laquelle** des
+ * quarante-cinq portées a échoué — c'est précisément la ligne qu'on cherche.
+ */
+export function renderTableauDeLaBoucle(tableau = null) {
+  if (!tableau?.nom) return "";
+
+  if (tableau.refus) {
+    return `<p class="bac-resultat__note">${escapeHtml(
+      `Le tableau de « ${tableau.nom} » ne s'est pas déroulé : ${tableau.pourquoi}.`
+    )}</p>`;
+  }
+
+  if (!tableau.lignes.length) return "";
+
+  return `
+    <table class="bac-tableau">
+      <caption class="bac-tableau__titre">${escapeHtml(
+        `${tableau.lignes.length} ${tableau.lignes.length > 1 ? "lignes" : "ligne"}, une par ${tableau.nom}`
+      )}</caption>
+      <thead>
+        <tr>
+          <th scope="col">${escapeHtml(tableau.nom)}</th>
+          ${tableau.colonnes.map((nom) => `<th scope="col">${escapeHtml(nom)}</th>`).join("")}
+        </tr>
+      </thead>
+      <tbody>
+        ${tableau.lignes.map((ligne) => `
+          <tr>
+            <th scope="row">${escapeHtml(ligne.valeur)}</th>
+            ${tableau.colonnes.map((nom) => {
+              const case_ = ligne.cases.find((une) => une.nom === nom);
+              return `<td${case_?.connu ? "" : ' class="bac-tableau__vide"'}${
+                case_?.connu || !case_?.pourquoi ? "" : ` title="${escapeHtml(case_.pourquoi)}"`}>${
+                case_?.connu ? escapeHtml(case_.valeur) : "—"}</td>`;
+            }).join("")}
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
 /** Ce qu'une clause valait, en un mot — et `indécidable` s'y dit comme tel. */
 function motDeLaVerite(verite) {
   if (verite === true) return "vrai";
@@ -418,6 +474,12 @@ export function renderResultats(resultats = []) {
             <span class="bac-resultat__issue">${escapeHtml(MOTS_DE_LISSUE[resultat.issue] ?? resultat.issue)}</span>
             ${resultat.valeur ? `<span class="bac-resultat__valeur">${escapeHtml(resultat.valeur)}</span>` : ""}
           </p>
+          ${/*
+            **Le tableau avant les agrégats.** On lit ce qui a été calculé, puis
+            ce qu'on en tire : l'ordre inverse ferait lire un total avant de
+            savoir ce qu'il totalise.
+          */""}
+          ${renderTableauDeLaBoucle(resultat.tableau)}
           ${renderCalculs(resultat.calculs)}
           ${
             resultat.issue === ISSUE.AU_SERVEUR
