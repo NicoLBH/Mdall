@@ -4563,3 +4563,13 @@ grandeur plutôt qu'une grandeur unique — le travail est connu, il n'est pas p
 et le faire à moitié ferait accepter des conversions fausses, ce qui est pire que
 de refuser (`docs/les-unites-du-metier.md`). Même chose pour `°C`, dont la
 conversion est un décalage et non un facteur.
+
+**Le catalogue des noms ne lit pas la mémoire du projet.** Il montre ce que le
+brouillon déclare, conclut et pose, les fonctions du langage, et ce que l'établi
+garde (`docs/le-catalogue-des-noms.md`). Ce que le projet a **signé** est une
+quatrième source, et c'est celle qui manque : une fonction versée conclut sous
+son nom, et une fonction qu'on écrit aujourd'hui devrait pouvoir la nommer sans
+la réécrire. L'écran d'écriture ne tient aucune mémoire de projet — le bac
+d'essai demande à la main ce qu'aucune fonction du brouillon ne conclut —, si
+bien que le travail n'est pas dans le catalogue : c'est une lecture de la mémoire
+qui manque à cet écran-là.

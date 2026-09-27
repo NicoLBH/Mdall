@@ -45,9 +45,8 @@
  * Des fichiers entrent, des champs sortent. Aucun DOM, aucun réseau.
  */
 
-import { lireUnFichier, nomsConclusParLeBloc, clausesDeLaRegle } from "./memoire-en-lecture.js";
+import { lireUnFichier, nomsConclusParLeBloc, nomsLusParLeBloc } from "./memoire-en-lecture.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
-import { lireUnCalcul, nomsDuCalcul } from "./mdall-calcul.js";
 import { couperLUnite, estMesuree } from "./memoire-en-texte.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -73,8 +72,16 @@ function saisieDe(declaration) {
   return SAISIE.TEXTE;
 }
 
-/** Tout ce que les fichiers d'un brouillon déclarent, par clé de nom. */
-export function declarationsDuBrouillon(fichiers = []) {
+/**
+ * Tout ce que les fichiers d'un brouillon déclarent, par clé de nom.
+ *
+ * **Elle ne sort plus du module.** Ce que l'écran d'écriture propose passe
+ * maintenant par le catalogue des noms, qui voit aussi ce que les fonctions
+ * concluent ; garder une porte ouverte sur les seules déclarations inviterait un
+ * second consommateur à contourner le catalogue, et les deux listes cesseraient
+ * de dire la même chose (règle 10).
+ */
+function declarationsDuBrouillon(fichiers = []) {
   const table = new Map();
 
   for (const fichier of Array.isArray(fichiers) ? fichiers : []) {
@@ -149,24 +156,21 @@ export function nomsLus(fichiers = []) {
     for (const bloc of lireUnFichier(fichier?.contenu ?? "").blocs ?? []) {
       for (const nom of nomsConclusParLeBloc(bloc)) produits.add(cleDuSujet(nom));
 
-      for (const calcul of bloc?.calculs ?? []) {
-        poses.add(cleDuSujet(calcul?.nom));
+      for (const calcul of bloc?.calculs ?? []) poses.add(cleDuSujet(calcul?.nom));
 
-        // Ce qu'un calcul lit se demande comme ce qu'une condition lit : c'est
-        // la même question posée à l'écran, et la taire ferait un formulaire
-        // qui ne demande pas ce dont il a besoin.
-        const lu = lireUnCalcul(texte(calcul?.expression));
-        if (lu.ok) nomsDuCalcul(lu.arbre).forEach(retenir);
-      }
-
-      // **Les branches enchaînées lisent, elles aussi.** Un nom qui n'apparaît
-      // que dans un `sinon si` n'était offert nulle part : la règle répondait
-      // « je ne sais pas » et rien à l'écran ne permettait d'y remédier.
-      //
-      // Le motif « conditions + sauf » était recopié dans cinq modules ; il se
-      // dit maintenant dans le lecteur du langage, et tout le monde y lit la
-      // même chose (règle 10).
-      for (const condition of clausesDeLaRegle(bloc)) retenir(condition?.sujet);
+      /**
+       * **Ce qu'une fonction lit se lit à un seul endroit.**
+       *
+       * Ce qu'un calcul prend se demande comme ce qu'une condition compare, et
+       * les branches enchaînées lisent elles aussi — un nom qui n'apparaît que
+       * dans un `sinon si` n'était offert nulle part, et la règle répondait
+       * « je ne sais pas » sans qu'un mot dise pourquoi.
+       *
+       * Le parcours vit dans le lecteur du langage, parce que le catalogue des
+       * noms pose la même question par fonction : deux parcours cesseraient un
+       * jour de voir la même chose (règle 10).
+       */
+      nomsLusParLeBloc(bloc).forEach(retenir);
     }
   }
 

@@ -1040,6 +1040,26 @@ test("ce qui vient de l'établi est échappé, nom comme description", () => {
   assert.match(html, /&lt;script&gt;/);
 });
 
+test("le menu ouvre le catalogue des noms, brouillon vide compris", () => {
+  /**
+   * **C'est la porte de la composition.** Mdall n'a pas d'appel de fonction :
+   * enchaîner, c'est nommer ce qu'une autre fonction conclut, et l'on ne compose
+   * pas avec ce qu'on ne sait pas nommer. Le geste est donc **toujours armé** :
+   * même devant un brouillon vide, il montre les fonctions du langage et ce que
+   * l'établi garde, qui est exactement ce qu'on vient chercher quand on ne sait
+   * pas par quoi commencer.
+   */
+  for (const brouillon of [POUR_LETABLI, brouillonNeuf()]) {
+    const html = renderActionsDuTitre(brouillon, {});
+    assert.ok(html.includes(GESTE.CATALOGUE), "le menu n'ouvre pas le catalogue des noms");
+    assert.doesNotMatch(
+      html.slice(html.indexOf(`data-menu-action="${GESTE.CATALOGUE}"`)).slice(0, 200),
+      /disabled/,
+      "le catalogue s'ouvre même sans rien avoir écrit"
+    );
+  }
+});
+
 test("le menu propose de garder et de reprendre, et dit quand il n'y a rien à garder", () => {
   const avecDuMdall = renderActionsDuTitre(POUR_LETABLI, {});
   assert.ok(avecDuMdall.includes(GESTE.ETABLI));

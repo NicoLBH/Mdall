@@ -27558,21 +27558,49 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .etabli-fiche__gestes{ display:flex; gap:8px; }
 
 /* La liste : un bouton par outil, qui dit ce qu'il prend et ce qu'il rend. */
-.etabli-liste{
+/* ── Une liste de fiches cliquables, dans une fenêtre ──────────────────────
+   Un nom, une précision à côté, une phrase dessous, et une ligne de détail.
+   L'établi s'en sert pour ses utilitaires, le catalogue des noms pour ce qu'on
+   peut nommer : la forme est la même, et deux familles de classes se seraient
+   recalibrées l'une contre l'autre à chaque retouche. Elle ne porte donc le nom
+   d'aucun des deux écrans. */
+.fiches{
   list-style:none; margin:0;
   padding:16px max(var(--overlay-gouttiere, 24px), calc((100% - var(--overlay-largeur, 1280px)) / 2));
   display:flex; flex-direction:column; gap:8px;
 }
-.etabli-liste__item{
+.fiches__item{
   display:flex; flex-direction:column; gap:3px; width:100%; text-align:left;
   padding:10px 12px; border:1px solid var(--border); border-radius:6px;
   background:transparent; color:inherit; cursor:pointer;
 }
-.etabli-liste__item:hover{ background:rgba(110,118,129,.12); border-color:var(--borderColor-accent-emphasis, #1f6feb); }
-.etabli-liste__nom{ display:flex; align-items:baseline; gap:8px; font-weight:600; }
-.etabli-liste__version{ color:var(--muted); font-weight:400; }
-.etabli-liste__resume{ color:var(--muted); font-size:13px; }
-.etabli-liste__quoi{ color:var(--muted); font-size:12px; }
+.fiches__item:hover{ background:rgba(110,118,129,.12); border-color:var(--borderColor-accent-emphasis, #1f6feb); }
+.fiches__nom{ display:flex; align-items:baseline; gap:8px; font-weight:600; }
+.fiches__apart{ color:var(--muted); font-weight:400; }
+.fiches__resume{ color:var(--muted); font-size:13px; }
+.fiches__quoi{ color:var(--muted); font-size:12px; }
+
+/* ── Le catalogue des noms ────────────────────────────────────────────────
+   La barre de recherche et les titres de rayon ; tout le reste est `.fiches`,
+   parce que c'est la même liste. */
+.catalogue-noms__barre{
+  position:sticky; top:0; z-index:1;
+  display:flex; align-items:center; gap:12px;
+  padding:12px max(var(--overlay-gouttiere, 24px), calc((100% - var(--overlay-largeur, 1280px)) / 2));
+  background:var(--bg, canvas); border-bottom:1px solid var(--border);
+}
+.catalogue-noms__cherche{ flex:1 1 auto; min-width:0; }
+.catalogue-noms__compte{ color:var(--muted); font-size:12px; white-space:nowrap; }
+.catalogue-noms__rayon{ padding-top:8px; }
+.catalogue-noms__titre{
+  display:flex; align-items:center; gap:8px; margin:0; font-size:13px; font-weight:600;
+  padding:8px max(var(--overlay-gouttiere, 24px), calc((100% - var(--overlay-largeur, 1280px)) / 2)) 0;
+}
+.catalogue-noms__dit{
+  margin:2px 0 0; color:var(--muted); font-size:12px;
+  padding:0 max(var(--overlay-gouttiere, 24px), calc((100% - var(--overlay-largeur, 1280px)) / 2));
+}
+.catalogue-noms__rayon .fiches{ padding-top:8px; padding-bottom:0; }
 
 /* Le titre de l'écran dit sur quelle version on travaille. */
 .brouillon__version{ margin-left:8px; color:var(--muted); font-weight:400; }

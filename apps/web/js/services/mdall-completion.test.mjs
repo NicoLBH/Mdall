@@ -10,17 +10,45 @@ import {
   appliquerLaProposition, ouEstLeCurseur, localesAuDessus, contexteDuBrouillon,
   ATTEND, QUOI
 } from "./mdall-completion.js";
+import { ORIGINE, catalogueDesNoms, nomsLisiblesDIci } from "./catalogue-des-noms.js";
 
-const DECLARES = [
-  { nom: "Zone de vent", valeurs: ["1", "2", "3", "4"], description: "Zone de vent de la commune." },
-  { nom: "Prix HT", valeurs: [], description: "Prix hors taxes." },
-  { nom: "Niveau du sol", valeurs: [], description: "Cote NGF du terrain." }
-];
+/**
+ * **Le catalogue se déduit d'un vrai brouillon**, et non d'objets écrits à la
+ * main : une liste façonnée ici prendrait les hypothèses du code pour des faits,
+ * et cesserait d'éprouver la lecture du langage le jour où elle change.
+ */
+const VARIABLES = [
+  "const Zone de vent = {",
+  '   type: "texte",',
+  '   valeurs possibles: "1" ou "2" ou "3" ou "4",',
+  '   description: "Zone de vent de la commune.",',
+  "};",
+  "",
+  "const Prix HT = {",
+  '   type: "mesure",',
+  '   unité: "€",',
+  '   description: "Prix hors taxes.",',
+  "};",
+  "",
+  "const Niveau du sol = {",
+  '   type: "mesure",',
+  '   unité: "m",',
+  '   description: "Cote NGF du terrain.",',
+  "};"
+].join("\n");
+
+const CATALOGUE = catalogueDesNoms({
+  fichiers: [{ nom: "variables-du-projet.ref", contenu: VARIABLES }],
+  locales: ["TVA"]
+});
 
 const propose = (ligne, colonne = ligne.length, reste = {}) =>
   propositionsDeSaisie({
-    ligne, colonne, declares: DECLARES, locales: ["TVA"], fichiers: ["essai.ref", "prix.ddb"], ...reste
+    ligne, colonne, catalogue: CATALOGUE, fichiers: ["essai.ref", "prix.ddb"], ...reste
   }).map((une) => une.texte);
+
+/** Un catalogue de noms nus, pour les épreuves qui ne parlent que du rangement. */
+const nomsNus = (...noms) => noms.map((nom) => ({ nom, origine: ORIGINE.DECLARE }));
 
 /* ── Ce que la ligne attend ──────────────────────────────────────────────── */
 
@@ -80,7 +108,7 @@ test("les noms déclarés se proposent dans une condition, et les locales avec",
   assert.deepEqual(propose("   alors (TV"), ["TVA"]);
   // Le nom du projet et la locale se distinguent, parce qu'ils ne se cherchent
   // pas au même endroit.
-  const [une] = propositionsDeSaisie({ ligne: "   alors (TV", colonne: 12, locales: ["TVA"] });
+  const [une] = propositionsDeSaisie({ ligne: "   alors (TV", colonne: 12, catalogue: CATALOGUE });
   assert.equal(une.quoi, QUOI.LOCALE);
 });
 
@@ -93,9 +121,71 @@ test("derrière un comparateur, on ne propose que le domaine du nom comparé", (
   assert.deepEqual(propose("   si (Prix HT > "), []);
 });
 
+test("chaque origine lisible sait quelle sorte elle est sous le curseur", () => {
+  /**
+   * La liste sous le curseur dit la **sorte** de ce qu'elle propose — « nom du
+   * projet », « calculé ici ». Une origine ajoutée au catalogue sans sorte
+   * tomberait sur le défaut et se dirait « nom du projet » : c'est plausible, et
+   * donc indiscernable d'un vrai nom du projet.
+   */
+  const catalogue = catalogueDesNoms({
+    fichiers: [{ nom: "variables-du-projet.ref", contenu: VARIABLES }],
+    locales: ["TVA"]
+  });
+  const origines = new Set(nomsLisiblesDIci(catalogue).map((une) => une.origine));
+
+  // Le brouillon d'épreuve ne porte pas toutes les origines : on éprouve la
+  // carte sur celles qu'il porte, et l'on vérifie qu'aucune lisible n'y manque.
+  for (const origine of Object.values(ORIGINE)) {
+    if (origine === ORIGINE.ETABLI) continue;
+    const dessus = propositionsDeSaisie({
+      ligne: "   si (X", colonne: 8, catalogue: [{ nom: "Xavier", origine }]
+    });
+    assert.equal(dessus.length, 1, `${origine} ne se propose plus`);
+    assert.notEqual(dessus[0].quoi, undefined, `pas de sorte : ${origine}`);
+  }
+  assert.ok(origines.size >= 2, "l'épreuve ne porte plus qu'une seule origine");
+
+  // Et une origine que ce module ne connaît pas ne prend pas la sorte d'une
+  // autre : l'écran ne dit rien plutôt que de dire faux.
+  const inconnue = propositionsDeSaisie({
+    ligne: "   si (X", colonne: 8, catalogue: [{ nom: "Xavier", origine: "venue-dailleurs" }]
+  });
+  assert.equal(inconnue[0].quoi, undefined);
+});
+
+test("un nom de l'établi ne se propose pas : il ne se lit pas d'ici", () => {
+  /**
+   * **C'est la seule différence entre le catalogue qu'on parcourt et la liste
+   * sous le curseur**, et elle n'est pas cosmétique : un utilitaire gardé vit
+   * dans un autre brouillon. Proposer son nom ferait écrire une fonction qui
+   * lit un nom que personne ne conclut ici, et la règle resterait indécidable
+   * pour toujours sans qu'un mot dise pourquoi.
+   */
+  const catalogue = catalogueDesNoms({
+    fichiers: [{ nom: "variables-du-projet.ref", contenu: VARIABLES }],
+    etabli: [{
+      id: "u1", nom: "Descente de charge", version: "3", resume: "La charge en pied.",
+      entrees: ["Portée (m)"], sorties: ["Charge en pied"]
+    }]
+  });
+
+  // Il est bien au catalogue — c'est pour cela qu'on peut le parcourir.
+  assert.ok(catalogue.some((une) => une.nom === "Charge en pied"));
+  // Et il ne se propose pas, alors que le nom déclaré juste à côté se propose.
+  assert.deepEqual(
+    propositionsDeSaisie({ ligne: "   si (Charge", colonne: 13, catalogue }).map((u) => u.texte),
+    []
+  );
+  assert.deepEqual(
+    propositionsDeSaisie({ ligne: "   si (Prix", colonne: 11, catalogue }).map((u) => u.texte),
+    ["Prix HT"]
+  );
+});
+
 test("un nom qui n'existe nulle part ne se propose jamais", () => {
   assert.deepEqual(propose("   si (Zzz"), []);
-  assert.deepEqual(propose("   si (Hauteur", 13, { declares: [], locales: [] }), []);
+  assert.deepEqual(propose("   si (Hauteur", 13, { catalogue: [] }), []);
 });
 
 test("rien ne se propose dans un commentaire ni dans une chaîne", () => {
@@ -106,9 +196,9 @@ test("rien ne se propose dans un commentaire ni dans une chaîne", () => {
 test("ce qui commence par ce qu'on tape passe devant ce qui le contient", () => {
   // **L'ordre alphabétique dirait le contraire**, et c'est ce qui rend cette
   // épreuve utile : on cherche d'abord ce qu'on a commencé à écrire.
-  const declares = [{ nom: "Altitude du bas" }, { nom: "bas de pente" }];
+  const catalogue = nomsNus("Altitude du bas", "bas de pente");
   assert.deepEqual(
-    propositionsDeSaisie({ ligne: "   si (bas", colonne: 10, declares }).map((u) => u.texte),
+    propositionsDeSaisie({ ligne: "   si (bas", colonne: 10, catalogue }).map((u) => u.texte),
     ["bas de pente", "Altitude du bas"]
   );
 });
@@ -119,10 +209,10 @@ test("la casse et les accents ne comptent pas", () => {
 });
 
 test("on ne propose jamais plus que ce qui se lit d'un coup d'œil", () => {
-  const beaucoup = Array.from({ length: 40 }, (_, rang) => ({ nom: `Nom ${rang}` }));
-  assert.equal(propositionsDeSaisie({ ligne: "   si (Nom", colonne: 10, declares: beaucoup }).length, 8);
+  const beaucoup = nomsNus(...Array.from({ length: 40 }, (_, rang) => `Nom ${rang}`));
+  assert.equal(propositionsDeSaisie({ ligne: "   si (Nom", colonne: 10, catalogue: beaucoup }).length, 8);
   assert.equal(
-    propositionsDeSaisie({ ligne: "   si (Nom", colonne: 10, declares: beaucoup, combien: 3 }).length, 3
+    propositionsDeSaisie({ ligne: "   si (Nom", colonne: 10, catalogue: beaucoup, combien: 3 }).length, 3
   );
 });
 
@@ -183,7 +273,12 @@ test("une locale écrite plus bas ne se propose pas plus haut", () => {
   assert.deepEqual(localesAuDessus(FONCTIONS, tot), []);
 });
 
-test("le contexte se déduit du brouillon, déclarations comprises", () => {
+test("le contexte assemble le catalogue, déclarations et locales comprises", () => {
+  /**
+   * **C'est le seul endroit où la liste s'assemble.** Le panneau qu'on parcourt
+   * et la liste sous le curseur sortent tous les deux d'ici : deux assemblages
+   * voisins montreraient un jour deux choses différentes (règle 10).
+   */
   const variables = [
     "const Zone de vent = {",
     '   type: "texte",',
@@ -196,16 +291,31 @@ test("le contexte se déduit du brouillon, déclarations comprises", () => {
     { contenu: FONCTIONS, position: FONCTIONS.indexOf("   si (") + 7 }
   );
 
-  assert.deepEqual(contexte.declares, [
-    { nom: "Zone de vent", valeurs: ["1", "2"], description: "La zone de vent." }
-  ]);
-  assert.deepEqual(contexte.locales, ["TVA", "Prix TTC"]);
+  const trouve = (nom) => contexte.catalogue.find((une) => une.nom === nom);
+
+  assert.deepEqual(trouve("Zone de vent"), {
+    nom: "Zone de vent", origine: ORIGINE.DECLARE, dit: "La zone de vent.",
+    lit: [], unite: "", valeurs: ["1", "2"], ou: "variables-du-projet.ref", comme: ""
+  });
+  // Les locales de la fonction où l'on écrit, et elles passent devant : ce qui
+  // est sous le curseur est ce qu'on cherche le plus souvent.
+  assert.deepEqual(
+    contexte.catalogue.filter((une) => une.origine === ORIGINE.LOCALE).map((une) => une.nom),
+    ["TVA", "Prix TTC"]
+  );
+  // **Et ce qu'une autre fonction conclut**, qui est tout l'objet du catalogue :
+  // sans lui, enchaîner demande de se souvenir de ce qu'on a écrit plus haut.
+  assert.equal(trouve("Autre")?.origine, ORIGINE.CONCLU);
+  assert.equal(trouve("Autre")?.ou, "essai.ref");
   assert.deepEqual(contexte.fichiers, ["variables-du-projet.ref", "essai.ref"]);
 });
 
 test("un brouillon vide ne propose rien, et ne casse rien", () => {
   const contexte = contexteDuBrouillon([], {});
-  assert.deepEqual(contexte, { declares: [], locales: [], fichiers: [] });
+  // Le langage reste : ses fonctions ne dépendent d'aucun brouillon.
+  assert.deepEqual(contexte.catalogue.map((une) => une.origine),
+    contexte.catalogue.map(() => ORIGINE.FONCTION));
+  assert.deepEqual(contexte.fichiers, []);
   assert.deepEqual(propositionsDeSaisie({ ligne: "   si (A", colonne: 8 }), []);
 });
 
