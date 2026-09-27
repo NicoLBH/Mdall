@@ -37,6 +37,7 @@
 import { MOTS, VERBES, PROVENANCES, STATUTS, PORTEE_DUNE_FONCTION } from "./memoire-en-texte.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { ORIGINE, catalogueDesNoms, nomsLisiblesDIci } from "./catalogue-des-noms.js";
+import { lireUnePourChaque } from "./boucle-du-mdall.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -108,6 +109,8 @@ const MOTS_DU_LANGAGE = [...new Set([
 const COMPARATEUR = /(?:<=|>=|!=|[=<>≠≤≥]|\bparmi\b|\bou\b)\s*$/i;
 /** Les mots qui ouvrent une condition, et derrière lesquels un **nom** vient. */
 const OUVRE_UNE_CONDITION = /(?:^|\s)(?:si|et|ou|non|sauf si)\s*\($/i;
+/** Une tête de boucle, et ce qu'elle porte : le nom, puis ses bornes. */
+const OUVRE_UNE_BOUCLE = /^\s*pour\s+chaque\s+(.+)$/i;
 
 /**
  * Le morceau de ligne qu'on est en train d'écrire.
@@ -341,9 +344,23 @@ export function localesAuDessus(contenu = "", position = 0) {
   // en train de poser n'est pas encore posé : se le proposer à soi-même ferait
   // écrire `calcule TVA = TVA`, qui ne veut rien dire.
   const poses = [];
+  const retenir = (nom) => {
+    const dit = texte(nom);
+    if (dit && !poses.includes(dit)) poses.push(dit);
+  };
+
   for (let ou = tete; ou < Math.min(rang, lignes.length); ou += 1) {
-    const trouve = (lignes[ou] ?? "").match(/^\s*calcule\s+(.+?)\s*=/i);
-    if (trouve && !poses.includes(texte(trouve[1]))) poses.push(texte(trouve[1]));
+    const ligne = lignes[ou] ?? "";
+    retenir(ligne.match(/^\s*calcule\s+(.+?)\s*=/i)?.[1]);
+    /**
+     * **La variable d'une boucle est une locale comme une autre.**
+     *
+     * `pour chaque Portée de 2 m à 90 m` lui donne une valeur par ligne, et
+     * c'est le nom qu'on écrit le plus souvent dans le corps de la boucle. Ne
+     * pas le proposer là où il est le plus utile serait la pire des absences.
+     */
+    const ouvreUneBoucle = ligne.match(OUVRE_UNE_BOUCLE);
+    if (ouvreUneBoucle) retenir(lireUnePourChaque(ouvreUneBoucle[1])?.nom);
   }
   return poses;
 }

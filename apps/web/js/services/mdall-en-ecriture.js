@@ -53,7 +53,9 @@
  * de naître sans couleur, ce qui est le moment où l'on en a le plus besoin.
  */
 
-import { JETON, MOTS, VERBES, PROVENANCES, AGENTS, PORTEE_DUNE_FONCTION } from "./memoire-en-texte.js";
+import {
+  JETON, MOTS, VERBES, PROVENANCES, AGENTS, PHRASE_DE_LAGREGAT, POUR_CHAQUE, PORTEE_DUNE_FONCTION
+} from "./memoire-en-texte.js";
 
 /**
  * Les mots qui ouvrent une ligne, et ce qu'ils valent.
@@ -115,6 +117,20 @@ const COMPOSES = [...EN_TETE.keys(), ...PARTOUT.keys()]
   .filter((mot) => mot.includes(" "))
   .sort((un, autre) => autre.length - un.length);
 
+/**
+ * Les phrases des agrégats — `le plus grand de`, `la somme de`.
+ *
+ * **Elles ne se colorent qu'après le `=` d'un `calcule`.** « la somme de » est
+ * une suite de mots français ordinaires : la colorer partout ferait clignoter
+ * trois mots au milieu d'un nom de sujet, et le langage cesserait de se voir
+ * là où il est. Derrière un `=`, elle ne peut être que ce qu'elle est.
+ */
+const AGREGATS = PHRASE_DE_LAGREGAT.map(([phrase]) => phrase)
+  .sort((un, autre) => autre.length - un.length);
+
+/** Le troisième mot d'une tête de boucle, et il en fait trois : c'est un mot. */
+const PAR_PAS_DE = "par pas de";
+
 /** Un blanc. Il compte : une indentation de trois espaces se voit. */
 const BLANCS = /^[ \t]+/;
 /** Une chaîne, **ouverte comprise** : on tape le premier guillemet avant l'autre. */
@@ -153,16 +169,63 @@ export function jetonsEcrits(ligne = "") {
   let enTete = true;
   // Le dernier jeton qui n'est pas un blanc : il dit si un mot est une unité.
   let precedent = null;
+  // Un `calcule` dont le `=` est passé : ce qui suit peut être un agrégat.
+  let attendUneValeur = false;
+  /**
+   * Où l'on en est dans une tête de boucle : `""` hors d'une, `"nom"` tant
+   * qu'on écrit le nom de la variable, `"bornes"` une fois le premier `de`
+   * passé.
+   *
+   * **Sans cet état, la tête entière se peignait en noms de sujet** : `de`, `à`
+   * et `par pas de` sont des mots du langage à cet endroit-là, et des mots
+   * français ordinaires partout ailleurs. Le nom, lui, est une **locale** — il
+   * ne vit que dans sa fonction, et le peindre comme un sujet du projet le
+   * ferait souligner comme un renvoi sans déclaration.
+   */
+  let dansLaBoucle = "";
 
   const avancer = (type, texte) => {
     poser(type, texte);
     reste = reste.slice(texte.length);
-    if (type !== JETON.NEUTRE) { enTete = false; precedent = { type, texte }; }
+    if (type !== JETON.NEUTRE) {
+      const bas = String(texte).toLowerCase();
+      if (enTete) {
+        attendUneValeur = bas === VERBES.CALCULE;
+        dansLaBoucle = bas === POUR_CHAQUE ? "nom" : "";
+      } else if (dansLaBoucle === "nom" && bas === "de") {
+        dansLaBoucle = "bornes";
+      }
+      enTete = false;
+      precedent = { type, texte };
+    }
   };
 
   while (reste) {
     const blanc = reste.match(BLANCS);
     if (blanc) { avancer(JETON.NEUTRE, blanc[0]); continue; }
+
+    /**
+     * **Un agrégat se peint d'un seul tenant**, et comme un verbe du langage :
+     * c'en est un. Découpé en quatre mots, « le plus grand de » se serait peint
+     * en quatre noms de sujet, et l'on aurait cru lire quatre renvois vers rien.
+     */
+    if (attendUneValeur && precedent?.texte === "=") {
+      const agregat = AGREGATS.find((phrase) => reste.toLowerCase().startsWith(`${phrase} `));
+      if (agregat) { avancer(JETON.MOT_NATIF, reste.slice(0, agregat.length)); continue; }
+    }
+
+    /**
+     * **« par pas de » est un mot, et se peint d'un seul tenant.**
+     *
+     * Découpé en trois, ses deux espaces restaient neutres au milieu d'un mot
+     * du langage — et le module qui **écrit** la même ligne, lui, le pose
+     * entier. Les deux peintres se seraient tus sur ce désaccord, et la même
+     * fonction aurait changé de couleur selon l'écran qui la montre (règle 10).
+     */
+    if (dansLaBoucle === "bornes" && reste.toLowerCase().startsWith(`${PAR_PAS_DE} `)) {
+      avancer(JETON.MOT_CONDITION, reste.slice(0, PAR_PAS_DE.length));
+      continue;
+    }
 
     // Un commentaire prend la fin de la ligne, telle quelle : il n'y a rien à
     // interpréter derrière, et rien à colorer autrement.
@@ -186,7 +249,10 @@ export function jetonsEcrits(ligne = "") {
 
     const mot = reste.match(MOT);
     if (mot) {
-      avancer(typeDuMot(mot[0], { enTete, precedent, suivi: reste.slice(mot[0].length) }), mot[0]);
+      avancer(
+        typeDuMot(mot[0], { enTete, precedent, suivi: reste.slice(mot[0].length), dansLaBoucle }),
+        mot[0]
+      );
       continue;
     }
 
@@ -208,11 +274,20 @@ export function jetonsEcrits(ligne = "") {
   return jetons;
 }
 
+/** Les mots qui articulent une tête de boucle, et qui n'y sont pas des sujets. */
+const ARTICULE_LA_BOUCLE = new Set(["de", "à", "a"]);
+
 /** Ce qu'un mot vaut, à cet endroit de la ligne. */
-function typeDuMot(mot, { enTete = false, precedent = null, suivi = "" } = {}) {
+function typeDuMot(mot, { enTete = false, precedent = null, suivi = "", dansLaBoucle = "" } = {}) {
   const bas = mot.toLowerCase();
 
   if (enTete && EN_TETE.has(bas)) return EN_TETE.get(bas);
+
+  if (dansLaBoucle) {
+    if (ARTICULE_LA_BOUCLE.has(bas)) return JETON.MOT_CONDITION;
+    // Le nom de la variable est une locale : il ne vit que dans sa fonction.
+    if (dansLaBoucle === "nom") return JETON.NOM_LOCAL;
+  }
 
   // **Un mot collé à un deux-points est une étiquette**, et non un sujet :
   // `type:`, `unité:`, `variable:`, `depuis:`, `vers:`. Il passe avant les mots

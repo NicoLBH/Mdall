@@ -159,6 +159,19 @@ export function nomsLus(fichiers = []) {
       for (const calcul of bloc?.calculs ?? []) poses.add(cleDuSujet(calcul?.nom));
 
       /**
+       * **Une boucle pose sa variable et ses colonnes.**
+       *
+       * `pour chaque Hauteur de 2,5 m à 4 m par pas de 0,5 m` donne à `Hauteur`
+       * une valeur par ligne : la demander à l'écran ferait un champ qui ne
+       * veut rien dire, et qui masquerait l'entrée réellement absente. Ses
+       * colonnes se calculent, exactement comme les autres locales.
+       */
+      if (bloc?.boucle) {
+        poses.add(cleDuSujet(bloc.boucle.nom));
+        for (const calcul of bloc.boucle.calculs ?? []) poses.add(cleDuSujet(calcul?.nom));
+      }
+
+      /**
        * **Ce qu'une fonction lit se lit à un seul endroit.**
        *
        * Ce qu'un calcul prend se demande comme ce qu'une condition compare, et

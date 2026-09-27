@@ -291,6 +291,66 @@ export const WIKI_DU_LANGAGE = [
       + "se calcule sans broncher jusqu'à une cote de fondation fausse.")
   ]),
 
+  section("boucle", "Répéter un calcul : « pour chaque »", [
+    dit("Beaucoup de ce qu'on écrit est la même formule appliquée à une suite de "
+      + "valeurs : un moment pour chaque portée de 2 à 90 mètres, une descente de "
+      + "charge niveau par niveau, un dimensionnement pour chaque diamètre. "
+      + "**`pour chaque` répète, et ce qui en sort est un tableau.**"),
+    code(
+      "fonction Volume le plus gros(zones, Section, Hauteur maximale) {",
+      "   // Le poteau le plus volumineux de la trame.",
+      "   importe (variable: Section, depuis: variables-du-projet.ref, zones: zones);",
+      "",
+      "   pour chaque Hauteur de 2,5 m à Hauteur maximale par pas de 0,5 m",
+      "      calcule Volume = Hauteur * Section;",
+      "",
+      "   calcule Le plus gros = le plus grand de Volume;",
+      "   si (Le plus gros > 0 m³)",
+      "   alors (Le plus gros);",
+      "}"
+    ),
+    dit("**Une boucle produit un tableau, jamais une variable qui s'accumule.** "
+      + "Un accumulateur — « total = total + x » — ne se relit pas : il faut "
+      + "simuler l'exécution dans sa tête pour savoir ce qu'il vaut à la fin. Les "
+      + "quarante-cinq lignes d'un tableau, elles, se **voient**, et se comparent "
+      + "une à une à la note de calcul d'origine. C'est toute la différence entre "
+      + "un langage qu'on relit et un langage qu'on exécute."),
+    table(["ce qu'on écrit", "ce que cela veut dire"], [
+      ["`pour chaque <nom> de <début> à <fin> par pas de <pas>`", "la tête, en toutes lettres"],
+      ["les trois bornes", "un nombre, un nom du projet, ou un calcul"],
+      ["le corps, **trois espaces plus loin**", "un `calcule` par colonne du tableau"],
+      ["la première ligne qui n'est pas un `calcule`", "referme le corps"]
+    ]),
+    dit("Le tableau se lit ensuite par un **agrégat**, et c'est la seule façon "
+      + "d'en tirer une valeur. Ils s'écrivent après la boucle, au même retrait "
+      + "qu'elle :"),
+    table(["la phrase", "ce qu'elle rend"], [
+      ["`la somme de Volume`", "le total de la colonne"],
+      ["`le plus grand de Volume`", "la plus grande valeur"],
+      ["`le plus petit de Volume`", "la plus petite"],
+      ["`la moyenne de Volume`", "la moyenne"],
+      ["`le nombre de Volume`", "combien de lignes ont une valeur"]
+    ]),
+    dit("Ce sont `sum`, `max`, `min`, `moyenne` et `compte`, **et ils s'écrivent "
+      + "en français exprès** : une fonction nommée `somme(…)` appelle à être "
+      + "enchaînée, et cinq enchaînements plus loin plus personne ne relit la "
+      + "ligne. Le mot choisi décide du style qu'on écrira pendant dix ans."),
+    dit("**Une ligne qu'on n'a pas su calculer ne compte pas** — et elle ne vaut "
+      + "pas zéro. Un total qui compterait les trous serait plus petit que la "
+      + "réalité, et rien ne le dirait. La ligne reste au tableau, sa case vide, "
+      + "pour qu'on voie **laquelle** des quarante-cinq a échoué."),
+    dit("Quatre choses se refusent, et se disent **avant** le lancement : un pas "
+      + "de zéro ; un pas qui s'éloigne de la fin — `de 10 à 1 par pas de 1` "
+      + "s'écrit `par pas de -1` ; des bornes qui ne mesurent pas la même chose ; "
+      + "et un tableau de plus de 200 lignes. Cette dernière n'est pas une limite "
+      + "technique : au-delà, le tableau ne se relit plus, et c'est tout l'intérêt "
+      + "de cette forme."),
+    dit("**Une seule boucle par fonction**, comme il n'y a pas de condition "
+      + "imbriquée : deux niveaux demandent deux fonctions. Et l'on ne sort pas "
+      + "d'une boucle en avance — le tableau fait ce qu'il annonce, et l'on lit "
+      + "la ligne qui compte.")
+  ]),
+
   section("chainage", "Une fonction lit ce qu'une autre conclut", [
     dit("**Il n'y a pas d'appel de fonction dans Mdall.** `calcule taux = Taux de TVA(…)` "
       + "ne se lit pas, et n'existera pas : un langage où une fonction en appelle une autre "

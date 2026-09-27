@@ -21,6 +21,7 @@ import {
 } from "./mdall-du-modele.js";
 
 import { lireUnFichier, lireUneCondition } from "../../../apps/web/js/services/memoire-en-lecture.js";
+import { PHRASE_DE_LAGREGAT } from "../../../apps/web/js/services/memoire-en-texte.js";
 import { evaluerLaCondition } from "../../../apps/web/js/services/memoire-evaluateur.js";
 import { lancerLeBrouillon, ISSUE } from "../../../apps/web/js/services/bac-dessai.js";
 import { calculer, ecrireLeCalcul } from "../../../apps/web/js/services/mdall-calcul.js";
@@ -251,6 +252,48 @@ test("chaque exemple de la consigne se lit sans un refus", () => {
     assert.deepEqual(lireUnFichier(exemple).refus, [],
       `l'exemple ${rang + 1} de la consigne ne se lit pas :\n${exemple}`);
   }
+});
+
+test("chaque boucle de la consigne produit les colonnes que ses agrégats lisent", () => {
+  /**
+   * **Un agrégat qui nomme une colonne que la boucle ne produit pas est muet**,
+   * et la fonction ne conclut rien. Montré au modèle, l'exemple lui enseigne
+   * une incohérence qu'il recopiera — et l'on passera la journée à chercher
+   * pourquoi une fonction qui « a l'air juste » ne rend rien.
+   *
+   * La vérification se fait contre le **lecteur du langage**, et non contre une
+   * relecture : c'est la règle 12 appliquée à ce qu'on enseigne.
+   */
+  const avecUneBoucle = EXEMPLES
+    .flatMap((exemple) => lireUnFichier(exemple).blocs)
+    .filter((bloc) => bloc.boucle);
+
+  assert.ok(avecUneBoucle.length >= 2, `la consigne n'enseigne plus que ${avecUneBoucle.length} boucles`);
+
+  for (const bloc of avecUneBoucle) {
+    const colonnes = bloc.boucle.calculs.map((un) => un.nom);
+    assert.ok(colonnes.length, `la boucle de « ${bloc.sujet} » ne calcule rien`);
+
+    const agregats = (bloc.calculs ?? []).filter((un) => un.agregat);
+    assert.ok(agregats.length, `« ${bloc.sujet} » déroule un tableau que personne ne lit`);
+
+    for (const { agregat } of agregats) {
+      assert.ok(colonnes.includes(agregat.colonne),
+        `« ${bloc.sujet} » lit une colonne « ${agregat.colonne} » que sa boucle ne produit pas`);
+    }
+  }
+});
+
+test("la consigne dit les cinq agrégats, et pas un de plus", () => {
+  // Une phrase enseignée que le langage ne lit pas est pire qu'une absence : le
+  // modèle l'écrit, et la ligne est refusée par la documentation elle-même.
+  for (const [phrase] of PHRASE_DE_LAGREGAT) {
+    assert.ok(CONSIGNES.includes(phrase), `la consigne ne nomme pas « ${phrase} »`);
+  }
+  assert.match(CONSIGNES, /pour chaque <nom> de <début> à <fin>\s*\n?\s*par pas de <pas>/);
+  // Et les gardes, dits avant le lancement plutôt que découverts après.
+  assert.match(CONSIGNES, /pas de zéro/);
+  assert.match(CONSIGNES, /200 lignes/);
 });
 
 test("la consigne interdit l'appel de fonction, et montre le chaînage à la place", () => {

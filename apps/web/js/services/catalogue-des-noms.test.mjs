@@ -11,10 +11,11 @@ import assert from "node:assert/strict";
 
 import {
   ORIGINE, NOM_DE_LORIGINE, DIT_DE_LORIGINE, ORDRE_DES_ORIGINES,
-  catalogueDesNoms, chercherUnNom, nomsDeLetabli, nomsDuBrouillon, nomsDuLangage,
-  nomsLisiblesDIci, phraseDuCatalogue, rayonsDesNoms
+  agregatsDuLangage, catalogueDesNoms, chercherUnNom, nomsDeLetabli, nomsDuBrouillon,
+  nomsDuLangage, nomsLisiblesDIci, phraseDuCatalogue, rayonsDesNoms
 } from "./catalogue-des-noms.js";
 import { FONCTIONS } from "./mdall-calcul.js";
+import { PHRASE_DE_LAGREGAT } from "./memoire-en-texte.js";
 
 const VARIABLES = [
   "const Type de TVA = {",
@@ -230,17 +231,47 @@ test("un nom de l'établi se parcourt, et ne se propose pas sous le curseur", ()
   const catalogue = catalogueDesNoms({ fichiers: FICHIERS, etabli: ETABLI });
   assert.ok(catalogue.some((une) => une.origine === ORIGINE.ETABLI));
   assert.ok(!nomsLisiblesDIci(catalogue).some((une) => une.origine === ORIGINE.ETABLI));
-  // Tout le reste se lit d'ici, et passe.
+
+  /**
+   * **Un agrégat non plus, et pour une autre raison** : ce n'est pas un nom.
+   * « le plus grand de » est une phrase qu'on écrit dans un calcul ; la
+   * proposer là où une condition attend un sujet donnerait « si (le plus grand
+   * de = … ) », qui ne veut rien dire.
+   */
+  assert.ok(catalogue.some((une) => une.origine === ORIGINE.AGREGAT));
+  assert.ok(!nomsLisiblesDIci(catalogue).some((une) => une.origine === ORIGINE.AGREGAT));
+
+  // Tout le reste se nomme d'ici, et passe.
+  const parcourus = [ORIGINE.ETABLI, ORIGINE.AGREGAT];
   assert.equal(
     nomsLisiblesDIci(catalogue).length,
-    catalogue.filter((une) => une.origine !== ORIGINE.ETABLI).length
+    catalogue.filter((une) => !parcourus.includes(une.origine)).length
   );
 });
 
 test("un brouillon vide laisse le langage, et rien d'autre", () => {
+  // Les fonctions et les agrégats ne dépendent d'aucun brouillon : ils sont là
+  // avant qu'on ait écrit une ligne, et c'est ce qu'on vient chercher quand on
+  // ne sait pas par quoi commencer.
   const catalogue = catalogueDesNoms({});
-  assert.deepEqual(catalogue.map((une) => une.origine), catalogue.map(() => ORIGINE.FONCTION));
+  assert.deepEqual(
+    [...new Set(catalogue.map((une) => une.origine))],
+    [ORIGINE.FONCTION, ORIGINE.AGREGAT]
+  );
   assert.deepEqual(catalogueDesNoms(), catalogue);
+});
+
+test("chaque agrégat vient du langage, et montre comment on l'écrit", () => {
+  // Les recopier ici ferait un catalogue qui ne montre pas l'agrégat qu'on
+  // vient d'ajouter au langage, et personne ne verrait pourquoi (règle 10).
+  const dits = agregatsDuLangage();
+  assert.deepEqual(dits.map((une) => une.nom), PHRASE_DE_LAGREGAT.map(([phrase]) => phrase));
+
+  for (const une of dits) {
+    assert.equal(une.origine, ORIGINE.AGREGAT);
+    assert.ok(une.dit, `${une.nom} n'a pas de phrase`);
+    assert.ok(une.comme.includes(une.nom), `${une.nom} ne montre pas comment on l'écrit`);
+  }
 });
 
 /* ── Chercher, et ranger ─────────────────────────────────────────────────── */
@@ -315,7 +346,7 @@ test("un rayon vide ne paraît pas, et chacun porte son titre", () => {
   // titres.
   const rayons = rayonsDesNoms(catalogueDesNoms({ fichiers: FICHIERS, etabli: ETABLI }));
   assert.deepEqual(rayons.map((un) => un.origine),
-    [ORIGINE.DECLARE, ORIGINE.CONCLU, ORIGINE.POSE, ORIGINE.FONCTION, ORIGINE.ETABLI]);
+    [ORIGINE.DECLARE, ORIGINE.CONCLU, ORIGINE.POSE, ORIGINE.FONCTION, ORIGINE.AGREGAT, ORIGINE.ETABLI]);
 
   for (const rayon of rayons) {
     assert.ok(rayon.titre, `${rayon.origine} n'a pas de titre`);

@@ -2472,5 +2472,6 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | le barème : la loi qui est un tableau | `docs/le-bareme-dune-norme.md` |
 | les unités, et ce qui se convertit en quoi | `docs/les-unites-du-metier.md` |
 | ce qu'on peut nommer en écrivant du Mdall | `docs/le-catalogue-des-noms.md` |
+| répéter un calcul, et lire son tableau | `docs/pour-chaque-et-les-agregats.md` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

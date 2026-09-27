@@ -44,6 +44,7 @@ export const ICONE_DE_LORIGINE = {
   [ORIGINE.CONCLU]: "git-branch",
   [ORIGINE.POSE]: "north-star",
   [ORIGINE.FONCTION]: "markdown-code",
+  [ORIGINE.AGREGAT]: "table",
   [ORIGINE.ETABLI]: "tools"
 };
 

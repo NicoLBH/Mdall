@@ -2009,6 +2009,17 @@ export function lignesDeLAssertion(assertion = {}, profondeur = 0, {
        */
       sinonSi: payload.regle.sinonSi ?? [],
       selon: payload.regle.selon ?? [],
+      /**
+       * **Ce que la fonction calcule, et sa boucle.**
+       *
+       * Elles manquaient aussi, et depuis plus longtemps : une fonction versée
+       * qui pose `calcule TVA = Prix HT * 20%` se réécrivait ici **sans une
+       * seule de ses lignes de calcul**. L'écran montrait une fonction qui
+       * conclut sans que rien ne dise d'où sort ce qu'elle conclut — et comme
+       * le reste du fichier était juste, personne ne cherchait là.
+       */
+      calculs: payload.regle.calculs ?? [],
+      boucle: payload.regle.boucle ?? null,
       sinon: texte(payload.regle.sinon),
       sauf: exceptions,
       provenance: provenanceDeLAssertion(assertion, { auteurs }),

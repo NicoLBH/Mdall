@@ -48,9 +48,12 @@ import {
   ligneDAffirmation, ligneDeDonnee, ligneDeCondition, ligneDeConsequence,
   ligneDeProvenance, ligneDePreuve, ligneDeStatut, ligneDeDate, ligneDeNote, ligneDeLocale,
   ligneDImport, ligneDeDecision, ligneDeFonction, ligneDeLocaleVide, ligneDAffectation,
-  jetonsDeValeur, AGENT, AGENTS, VERBES
+  jetonsDeValeur, AGENT, AGENTS, VERBES, POUR_CHAQUE
 } from "./memoire-en-texte.js";
 import { lireUnCalcul, nomsDuCalcul, phraseDuRefus } from "./mdall-calcul.js";
+import {
+  bornesLitterales, lireUnAgregat, lireUnePourChaque, phraseDuRefusDeLaBoucle, valeursDeLaBoucle
+} from "./boucle-du-mdall.js";
 // La clé d'un sujet vient d'un seul endroit : comparer « Couleur des volets » à
 // « couleur des volets » avec une seconde normalisation écrite ici finirait par
 // ne plus dire la même chose que celle du projet (règle 10).
@@ -105,6 +108,9 @@ const TETES = [
   "sinon si", "sauf si", "parce que:", "statut:", "fichier:", "note:", "le:", "zone:",
   // `selon` ouvre un **barème** : le tableau d'une norme, recopié tel qu'il est
   // imprimé. Voir `lireUneLigneDeBareme`.
+  // `pour chaque` ouvre une **boucle** : le même calcul répété sur une suite de
+  // valeurs, dont il sort un tableau. Voir `boucle-du-mdall.js`.
+  "pour chaque",
   "fonction", "soit", "calcule", "selon", "alors", "sinon", "si", "et", "ou", "non",
   ...PROVENANCES.map((type) => `${type}:`)
 ];
@@ -660,8 +666,29 @@ export function lireUnFichier(contenu = "") {
       // `accolade` sert à la lecture, pas au sens : elle ne ressort pas.
       const {
         accolade, conclue, affecte, branche, siEnTrop, sinonSi, selon,
-        agent, utilitaire, version, enregistre, tableau, ...bloc
+        agent, utilitaire, version, enregistre, tableau, boucle, boucleOuverte, ...bloc
       } = courant;
+
+      /**
+       * **Une boucle sans corps ne rend rien**, et se refuse en le disant.
+       *
+       * On ne peut le savoir qu'à la fermeture : le corps s'écrit après la
+       * tête. Laisser passer ferait un tableau d'une seule colonne — la suite
+       * des valeurs — que personne n'a demandé, et les agrégats qui le lisent
+       * resteraient indécidables sans qu'un mot dise pourquoi (règle 5).
+       */
+      if (boucle && !boucle.calculs.length) {
+        refus.push({
+          ligne: boucle.ligne,
+          texte: `pour chaque ${boucle.nom}`,
+          raison: "cette boucle ne calcule rien : écrivez un « calcule » trois espaces plus loin."
+        });
+      } else if (boucle) {
+        // `retrait` sert à la lecture — savoir où le corps s'arrête — et ne dit
+        // rien du sens : il ne ressort pas.
+        const { retrait, ...suite } = boucle;
+        bloc.boucle = suite;
+      }
 
       /**
        * **Les branches ne sortent que s'il y en a.**
@@ -910,6 +937,17 @@ export function lireUnFichier(contenu = "") {
     const { mot, reste } = teteDe(corps);
 
     /**
+     * **Le corps d'une boucle est une suite ininterrompue de `calcule`.**
+     *
+     * La première ligne qui n'en est pas un la referme, où qu'elle soit
+     * indentée : un `si` ou un `alors` appartiennent à la fonction, pas à la
+     * boucle. Sans cette fermeture, un `calcule` écrit plus bas et plus loin —
+     * dans un `alors (`, par exemple — se serait glissé dans le corps, et le
+     * tableau aurait gagné une colonne que personne n'a écrite.
+     */
+    if (courant?.boucleOuverte && mot !== "calcule") courant.boucleOuverte = false;
+
+    /**
      * **Une ligne de barème.** `| 3e famille B | ≤ 28 m | CF 1 h |`
      *
      * Elle passe avant tout le reste parce qu'elle n'ouvre par aucun mot de la
@@ -1101,6 +1139,21 @@ export function lireUnFichier(contenu = "") {
          * vérités finissent par diverger (règle 4).
          */
         selon: [],
+        /**
+         * La boucle de la fonction, et elle est seule.
+         *
+         * **Elle ne se range pas dans `calculs`.** Ce que la fonction pose est
+         * une suite de valeurs, et le tableau qui en sort est autre chose : le
+         * mettre parmi les calculs ferait à chaque lecteur de `calculs` une
+         * forme de plus à connaître, pour un objet qui n'en est pas un.
+         *
+         * Ce qui décide de l'ordre est le **numéro de ligne** : ce qu'on a
+         * écrit au-dessus de la boucle la nourrit, ce qu'on écrit en dessous lit
+         * son tableau. On lit de haut en bas, comme partout dans ce langage.
+         */
+        boucle: null,
+        /** Le corps de la boucle est-il encore en train de s'écrire ? */
+        boucleOuverte: false,
         /** Où vont les conditions et la conclusion qu'on lit : la tête, ou une branche. */
         branche: null,
         // Les `si` posés après le premier. Légitimes dans une fonction qui
@@ -1153,6 +1206,37 @@ export function lireUnFichier(contenu = "") {
         return;
       }
 
+      /**
+       * **Le corps d'une boucle s'écrit plus loin qu'elle.**
+       *
+       * C'est ce qui dit où il s'arrête, et c'est la seule chose que
+       * l'indentation décide dans ce langage. Elle s'y prête : trois espaces en
+       * font déjà partie, et le corps d'une boucle est justement ce qu'on
+       * indente sans y penser. Un agrégat écrit au même retrait que le `pour
+       * chaque` est donc **hors** de la boucle — ce qu'il doit être, puisqu'il
+       * lit le tableau entier.
+       */
+      const dansLaBoucle = courant.boucle
+        && courant.boucleOuverte
+        && retraitDe(brute) > courant.boucle.retrait;
+
+      // **Un agrégat n'est pas une expression.** `le plus grand de Moment` lit
+      // une colonne du tableau ; le calculateur, lui, ne connaît que des
+      // nombres et des noms. Les deux formes se distinguent ici, une fois.
+      const agregat = dansLaBoucle ? null : lireUnAgregat(calcul.expression);
+      if (agregat) {
+        if (!courant.boucle) {
+          refus.push({
+            ligne: numero, texte: corps,
+            raison: `« ${calcul.nom} » lit un tableau, et cette fonction n'a pas de « pour chaque ».`
+          });
+          return;
+        }
+        courant.boucleOuverte = false;
+        courant.calculs.push({ nom: calcul.nom, agregat, ligne: numero });
+        return;
+      }
+
       // **Le calcul est lu ici, et refusé ici s'il ne se lit pas.** Une
       // expression fausse laissée passer jusqu'au lancement ferait une règle
       // qui ne conclut rien sans qu'on sache pourquoi (règle 5).
@@ -1166,7 +1250,61 @@ export function lireUnFichier(contenu = "") {
         return;
       }
 
+      if (dansLaBoucle) {
+        courant.boucle.calculs.push({ ...calcul, ligne: numero });
+        return;
+      }
+
+      courant.boucleOuverte = false;
       courant.calculs.push({ ...calcul, ligne: numero });
+      return;
+    }
+
+    /**
+     * `pour chaque Portée de 2 m à 90 m par pas de 2 m` — une boucle, et son
+     * tableau.
+     *
+     * **Une seule par fonction.** Deux niveaux demandent deux fonctions, comme
+     * il n'y a pas de condition imbriquée : une boucle dans une boucle est
+     * exactement ce qu'on ne relit plus dix-huit mois après.
+     */
+    if (mot === "pour chaque") {
+      if (courant.boucle) {
+        refus.push({
+          ligne: numero, texte: corps,
+          raison: "une fonction ne porte qu'un « pour chaque » : écrivez-en deux."
+        });
+        return;
+      }
+
+      const tete = lireUnePourChaque(reste);
+      if (!tete) {
+        refus.push({
+          ligne: numero, texte: corps,
+          raison: "une boucle s'écrit « pour chaque <nom> de <début> à <fin> par pas de <pas> »."
+        });
+        return;
+      }
+
+      /**
+       * **Ce qui est écrit en clair se vérifie ici, et pas au lancement.** Un
+       * pas nul ou un tableau de dix mille lignes laissé passer ferait une
+       * fonction qui ne conclut rien sans qu'on sache pourquoi (règle 5).
+       *
+       * Une borne qui est un **nom** ne se vérifie qu'au lancement : sa valeur
+       * vient du projet, et la lecture d'un fichier ne connaît aucune valeur.
+       */
+      const suite = bornesLitterales(tete) ? valeursDeLaBoucle(tete) : { refus: "" };
+      if (suite.refus) {
+        refus.push({
+          ligne: numero, texte: corps,
+          raison: `« ${tete.nom} » ne se déroule pas : ${phraseDuRefusDeLaBoucle(suite.refus, suite.ou)}.`
+        });
+        return;
+      }
+
+      courant.boucle = { ...tete, calculs: [], ligne: numero, retrait: retraitDe(brute) };
+      courant.boucleOuverte = true;
       return;
     }
 
@@ -1445,9 +1583,31 @@ export function nomsLusParLeBloc(bloc = {}) {
     lus.push(dit);
   };
 
-  for (const calcul of Array.isArray(bloc?.calculs) ? bloc.calculs : []) {
-    const lu = lireUnCalcul(texte(calcul?.expression));
+  const lireLexpression = (expression) => {
+    const lu = lireUnCalcul(texte(expression));
     if (lu.ok) nomsDuCalcul(lu.arbre).forEach(retenir);
+  };
+
+  /**
+   * Un agrégat lit une **colonne du tableau**, pas un nom du projet — et il n'a
+   * rien à déclarer ici : il ne porte aucune expression, seulement une phrase
+   * et une colonne. Rien ne se lit donc de lui, sans qu'on ait à l'écarter.
+   */
+  for (const calcul of Array.isArray(bloc?.calculs) ? bloc.calculs : []) {
+    lireLexpression(calcul?.expression);
+  }
+
+  /**
+   * **Une boucle lit, et par deux endroits.**
+   *
+   * Ses bornes d'abord — `de 0 m à Portée par pas de 0,5 m` a besoin de la
+   * portée —, puis son corps. Les taire ferait une fonction dont on ne demande
+   * jamais ce qu'il lui faut : elle resterait indécidable, et l'écran ne dirait
+   * pas quoi remplir.
+   */
+  for (const borne of ["de", "a", "pas"]) lireLexpression(bloc?.boucle?.[borne]);
+  for (const calcul of Array.isArray(bloc?.boucle?.calculs) ? bloc.boucle.calculs : []) {
+    lireLexpression(calcul?.expression);
   }
 
   for (const condition of clausesDeLaRegle(bloc)) retenir(condition?.sujet);
@@ -1851,6 +2011,16 @@ export function jetonsDeLaLigne(ligne = "") {
    * signe ajouté au langage (règle 10).
    */
   if (mot === VERBES.CALCULE) return jetonsEcrits(brute);
+
+  /**
+   * `pour chaque Portée de 2 m à 90 m par pas de 2 m`
+   *
+   * **La même main que pour un `calcule`.** Sa tête porte des nombres, des
+   * unités et les mots qui les articulent, et le peintre de la saisie sait déjà
+   * les découper au caractère près. Une seconde lecture écrite ici divergerait
+   * de la première au premier signe ajouté au langage (règle 10).
+   */
+  if (mot === POUR_CHAQUE) return jetonsEcrits(brute);
 
   // `soit texte = "…";` — une locale de règle. Le nom porte le sens, la valeur
   // se cite : on la relit pour la réécrire telle qu'elle était.

@@ -136,8 +136,10 @@ test("chaque origine lisible sait quelle sorte elle est sous le curseur", () => 
 
   // Le brouillon d'épreuve ne porte pas toutes les origines : on éprouve la
   // carte sur celles qu'il porte, et l'on vérifie qu'aucune lisible n'y manque.
+  // Deux rayons se parcourent sans se proposer : l'établi, qui ne se lit pas
+  // d'ici, et les agrégats, qui ne sont pas des noms.
   for (const origine of Object.values(ORIGINE)) {
-    if (origine === ORIGINE.ETABLI) continue;
+    if (origine === ORIGINE.ETABLI || origine === ORIGINE.AGREGAT) continue;
     const dessus = propositionsDeSaisie({
       ligne: "   si (X", colonne: 8, catalogue: [{ nom: "Xavier", origine }]
     });
@@ -312,9 +314,10 @@ test("le contexte assemble le catalogue, déclarations et locales comprises", ()
 
 test("un brouillon vide ne propose rien, et ne casse rien", () => {
   const contexte = contexteDuBrouillon([], {});
-  // Le langage reste : ses fonctions ne dépendent d'aucun brouillon.
-  assert.deepEqual(contexte.catalogue.map((une) => une.origine),
-    contexte.catalogue.map(() => ORIGINE.FONCTION));
+  // Le langage reste : ses fonctions et ses agrégats ne dépendent d'aucun
+  // brouillon.
+  assert.deepEqual([...new Set(contexte.catalogue.map((une) => une.origine))],
+    [ORIGINE.FONCTION, ORIGINE.AGREGAT]);
   assert.deepEqual(contexte.fichiers, []);
   assert.deepEqual(propositionsDeSaisie({ ligne: "   si (A", colonne: 8 }), []);
 });
