@@ -27444,20 +27444,48 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    Trois colonnes : le nom posé, l'expression telle qu'elle est tapée — colorée
    par le peintre de la saisie, comme partout —, et ce qu'elle vaut. Un nombre
    sans sa lecture n'apprend rien, et c'est ce qu'on refuse à un agent. */
-/* ── L'abaque d'une courbe ─────────────────────────────────────────────────
-   Le dessin est la vérification : un abaque se compare à sa figure d'origine
-   d'un coup d'œil, là où onze couples de nombres demandent de les tracer dans
-   sa tête. Les nombres exacts sont dessous, dans le tableau des points. */
-.bac-courbe{ margin:8px 0; max-width:340px; }
-.bac-courbe__trace{ display:block; width:100%; height:auto; }
-.bac-courbe__ligne{ stroke:rgb(110,168,254); stroke-width:1.5; }
-.bac-courbe__point{ fill:rgb(110,168,254); }
-.bac-courbe__lu{ fill:var(--bg, canvas); stroke:rgb(210,168,255); stroke-width:2; }
-.bac-courbe__bornes{
+/* ── Un graphique, et il n'y en a qu'un ────────────────────────────────────
+   L'abaque d'une courbe et le tableau d'une boucle se dessinent pareil : des
+   séries de points sur une grille. Deux familles de classes se seraient
+   recalibrées l'une contre l'autre à chaque retouche.
+
+   Le dessin est la vérification : il se compare à sa figure d'origine d'un
+   coup d'œil, là où onze couples de nombres demandent de les tracer dans sa
+   tête. Les nombres exacts sont dessous, dans le tableau. */
+.graphique{ margin:8px 0; max-width:340px; }
+.graphique__trace{ display:block; width:100%; height:auto; }
+.graphique__ligne{ stroke-width:1.5; }
+.graphique__ligne--une, .graphique__point--une{ stroke:rgb(110,168,254); fill:rgb(110,168,254); }
+.graphique__ligne--deux, .graphique__point--deux{ stroke:rgb(126,231,135); fill:rgb(126,231,135); }
+.graphique__ligne--trois, .graphique__point--trois{ stroke:rgb(255,166,87); fill:rgb(255,166,87); }
+.graphique__ligne--une, .graphique__ligne--deux, .graphique__ligne--trois{ fill:none; }
+.graphique__barre--une{ fill:rgb(110,168,254); }
+.graphique__barre--deux{ fill:rgb(126,231,135); }
+.graphique__barre--trois{ fill:rgb(255,166,87); }
+.graphique__lu{ fill:var(--bg, canvas); stroke:rgb(210,168,255); stroke-width:2; }
+.graphique__bornes{
   display:flex; justify-content:space-between;
   color:var(--muted); font-size:11px; padding:0 8px;
   font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace);
 }
+.graphique__legende{
+  list-style:none; margin:4px 0 0; padding:0 8px;
+  display:flex; flex-wrap:wrap; gap:10px; font-size:11px;
+}
+.graphique__nom{ display:flex; align-items:center; gap:4px; color:var(--muted); }
+.graphique__nom::before{ content:""; width:8px; height:2px; background:currentColor; }
+.graphique__nom--une{ color:rgb(110,168,254); }
+.graphique__nom--deux{ color:rgb(126,231,135); }
+.graphique__nom--trois{ color:rgb(255,166,87); }
+
+/* Les boutons qui choisissent comment on regarde un tableau. */
+.bac-lectures{ display:flex; gap:4px; margin:6px 0 2px; }
+.bac-lecture{
+  padding:2px 8px; border:1px solid var(--border); border-radius:6px;
+  background:transparent; color:var(--muted); cursor:pointer; font-size:11px;
+}
+.bac-lecture:hover{ background:rgba(110,118,129,.12); }
+.bac-lecture.est-actif{ color:var(--fg, inherit); border-color:var(--borderColor-accent-emphasis, #1f6feb); }
 /* Les deux points qui encadrent la lecture : c'est la ligne qu'on cherche. */
 .bac-tableau--courbe{ max-width:340px; }
 .bac-tableau__retenue{ background:rgba(110,168,254,.12); }

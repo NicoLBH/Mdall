@@ -58,6 +58,7 @@ import {
 import {
   DIT_DE_LENTRE, DIT_DU_HORS, lireUnPoint, phraseDuRefusDeLaCourbe, pointsDeLaCourbe
 } from "./courbe-du-mdall.js";
+import { LECTURE, lectureDite } from "./graphique-dune-table.js";
 // La clé d'un sujet vient d'un seul endroit : comparer « Couleur des volets » à
 // « couleur des volets » avec une seconde normalisation écrite ici finirait par
 // ne plus dire la même chose que celle du projet (règle 10).
@@ -117,7 +118,7 @@ const TETES = [
   "pour chaque",
   // `entre les points:` et `hors bornes:` sont les deux déclarations d'une
   // courbe. Elles passent avant les mots courts, comme tous les mots composés.
-  "entre les points:", "hors bornes:",
+  "entre les points:", "hors bornes:", "se lit en:",
   "fonction", "soit", "calcule", "selon", "alors", "sinon", "si", "et", "ou", "non",
   ...PROVENANCES.map((type) => `${type}:`)
 ];
@@ -1233,6 +1234,13 @@ export function lireUnFichier(contenu = "") {
         /** Le corps de la boucle est-il encore en train de s'écrire ? */
         boucleOuverte: false,
         /**
+         * La lecture du tableau que la fonction suggère, s'il y en a une.
+         *
+         * **Une suggestion, jamais une contrainte** : elle décide de ce qui
+         * s'ouvre en premier, et de rien d'autre.
+         */
+        seLitEn: "",
+        /**
          * L'abaque de la fonction, quand elle est écrite en courbe.
          *
          * **`courbe` est une marque d'écriture, comme `selon`** : la fonction
@@ -1441,6 +1449,29 @@ export function lireUnFichier(contenu = "") {
       }
 
       courant.courbe[mot === "entre les points:" ? "entre" : "hors"] = dit;
+      return;
+    }
+
+    /**
+     * `se lit en: courbe` — la lecture que la fonction **suggère**.
+     *
+     * **Elle ne dessine rien**, et c'est tout le parti pris : un graphique
+     * n'est pas une construction du langage, c'est une façon de regarder un
+     * tableau, choisie à la lecture. Cette ligne dit seulement laquelle s'ouvre
+     * en premier — l'auteur sait ce que son tableau veut dire, et le lecteur
+     * change d'avis d'un clic.
+     */
+    if (mot === "se lit en:") {
+      const dite = lectureDite(reste);
+      if (!dite) {
+        refus.push({
+          ligne: numero, texte: corps,
+          raison: `« ${reste} » ne se lit pas : ${
+            Object.values(LECTURE).map((un) => `« ${un} »`).join(", ")}.`
+        });
+        return;
+      }
+      courant.seLitEn = dite;
       return;
     }
 

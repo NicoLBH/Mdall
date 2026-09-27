@@ -23,6 +23,7 @@ import {
 import { lireUnFichier, lireUneCondition } from "../../../apps/web/js/services/memoire-en-lecture.js";
 import { PHRASE_DE_LAGREGAT } from "../../../apps/web/js/services/memoire-en-texte.js";
 import { ENTRE, HORS } from "../../../apps/web/js/services/courbe-du-mdall.js";
+import { LECTURE, lectureDite } from "../../../apps/web/js/services/graphique-dune-table.js";
 import { evaluerLaCourbe } from "../../../apps/web/js/services/memoire-evaluateur.js";
 import { evaluerLaCondition } from "../../../apps/web/js/services/memoire-evaluateur.js";
 import { lancerLeBrouillon, ISSUE } from "../../../apps/web/js/services/bac-dessai.js";
@@ -337,6 +338,45 @@ test("la consigne dit les quatre mots d'une courbe, et la faute qu'ils évitent"
   assert.match(CONSIGNES, /hors bornes:/);
   // Et la raison, dite plutôt que supposée : c'est la faute la plus chère.
   assert.match(CONSIGNES, /plausible/);
+});
+
+test("la consigne dit les trois lectures, et le lecteur les reconnaît toutes", () => {
+  /**
+   * **Un mot enseigné que le langage ne lit pas est pire qu'une absence** : le
+   * modèle l'écrit, et la ligne est refusée par la documentation elle-même. Ici
+   * la faute serait muette dans l'autre sens aussi — une lecture que le lecteur
+   * accepte et que la consigne ne nomme pas ne sera jamais écrite (règle 12).
+   */
+  for (const une of Object.values(LECTURE)) {
+    assert.ok(CONSIGNES.includes(`\`${une}\``), `la consigne ne nomme pas « ${une} »`);
+    assert.equal(lectureDite(une), une, `le lecteur ne reconnaît pas « ${une} »`);
+  }
+  assert.match(CONSIGNES, /se lit en:/);
+
+  // Et la consigne interdit le verbe d'affichage, qui est la forme que le modèle
+  // proposerait de lui-même : c'est tout le parti pris de cet objet.
+  assert.match(CONSIGNES, /n['’]est pas une construction du langage/);
+});
+
+test("l'exemple de lecture de la consigne se range vraiment, et son tableau se dessine", () => {
+  /**
+   * **Un exemple faux est pire qu'une consigne absente.** Une ligne `se lit en:`
+   * mal placée — après la boucle, ou sur une fonction qui n'en porte pas —
+   * passerait la relecture humaine sans un mot, et le modèle la recopierait.
+   */
+  const exemple = EXEMPLES.find((un) => un.includes("se lit en:"));
+  assert.ok(exemple, "la consigne n'enseigne plus de lecture");
+
+  const lu = lireUnFichier(exemple);
+  assert.deepEqual(lu.refus, []);
+
+  const bloc = lu.blocs.find((un) => un.seLitEn);
+  assert.ok(bloc, "la ligne enseignée ne se range sur aucune fonction");
+  assert.equal(lectureDite(bloc.seLitEn), bloc.seLitEn);
+
+  // Et elle porte bien une boucle : une suggestion sans tableau ne dessinerait
+  // rien, et l'on enseignerait une ligne qui ne sert à rien.
+  assert.ok(bloc.boucle, `« ${bloc.sujet} » suggère une lecture sans porter de boucle`);
 });
 
 test("la consigne interdit l'appel de fonction, et montre le chaînage à la place", () => {

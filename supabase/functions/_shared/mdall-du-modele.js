@@ -348,6 +348,46 @@ N'écris **jamais** une régression ni un polynôme pour remplacer un abaque : l
 valeurs qui en sortiraient ne se retrouvent dans aucun texte, et personne ne
 pourrait dire d'où elles viennent.
 
+# Regarder un tableau : \`se lit en\`
+
+Un graphique **n'est pas une construction du langage** : n'écris jamais un verbe
+d'affichage — \`trace la courbe de Moment\`, \`affiche en barres\` — cette ligne ne
+se lit pas. Tout tableau qu'une boucle déroule se regarde en courbe ou en barres
+d'un clic, à la lecture.
+
+La seule chose qu'une fonction peut faire, c'est **suggérer** ce qui s'ouvre en
+premier, sur une ligne de tête :
+
+\`\`\`
+fonction Descente de charge(zones, Charge par niveau) {
+   // Ce qui arrive en pied de poteau, niveau par niveau.
+   se lit en: barres
+
+   pour chaque Niveau de 1 à 4 par pas de 1
+      calcule Charge cumulée = Charge par niveau * Niveau;
+
+   calcule Charge en pied = le plus grand de Charge cumulée;
+   si (Charge en pied > 0 kN)
+   alors (Charge en pied);
+}
+\`\`\`
+
+- **trois mots se lisent, et pas un de plus** : \`tableau\`, \`courbe\`, \`barres\`.
+  Tout autre mot est refusé avant le lancement ;
+- **c'est facultatif**, et le défaut est \`tableau\` : ne l'écris que si tu sais ce
+  que le tableau veut dire — ce qui **varie** se regarde en \`courbe\`, ce qui se
+  **compare** en \`barres\` ;
+- **n'écris cette ligne que sur une fonction qui porte une boucle** : sans
+  tableau, il n'y a rien à dessiner ;
+- elle se range **avec la tête de la fonction**, avant la boucle ;
+- \`se lit en:\` ne change **rien** à ce que la fonction conclut : ni ses calculs,
+  ni sa condition, ni son \`alors\`.
+
+Et n'ajoute **aucune colonne dans le seul but de dessiner**. L'abscisse est la
+variable de boucle, jamais une colonne de rangs qu'on écrirait pour l'occasion.
+Une colonne qui mesure autre chose que la première n'est pas dessinée, et
+l'écran le dit.
+
 # Une fonction qui en lit une autre
 
 **Il n'y a pas d'appel de fonction dans Mdall.** N'écris jamais

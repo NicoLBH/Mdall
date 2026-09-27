@@ -146,6 +146,7 @@
  */
 
 import { valeursDeclarees } from "./tableau-structure.js";
+import { SE_LIT_EN, lectureDite } from "./graphique-dune-table.js";
 // La clé d'un sujet vit à un seul endroit : rapprocher une case de sa colonne
 // avec une normalisation maison finirait par ne plus dire la même chose que
 // la lecture (règle 10).
@@ -422,6 +423,9 @@ export const MOTS = [
   // déclarations disent comment on lit entre les points, et ce qu'on fait
   // au-delà. Voir `courbe-du-mdall.js`.
   "courbe", "entre les points", "hors bornes",
+  // `se lit en:` ne dessine rien : il dit quelle lecture du tableau s'ouvre en
+  // premier. Voir `graphique-dune-table.js`.
+  "se lit en",
   "si", "et", "ou", "non", "alors", "sinon",
   ...Object.values(PROVENANCE)
 ];
@@ -1776,7 +1780,7 @@ export function ligneDeZone(zone = TOUTES_ZONES, profondeur = 0) {
  */
 export function blocDeRegle({
   sujet = "", quoi = "", conditions = [], alors = "", sinonSi = [], sinon = "", sauf = [],
-  selon = [], calculs = [], boucle = null, courbe = null,
+  selon = [], calculs = [], boucle = null, courbe = null, seLitEn = "",
   provenance = null, preuve = "", importe = [], enregistre = null, portee = PORTEE_DUNE_FONCTION
 } = {}, profondeur = 0) {
   const dedans = profondeur + 1;
@@ -1820,6 +1824,19 @@ export function blocDeRegle({
   // La conclusion, et ce qu'on en fait. Un `enregistre` répond à la question
   // qui vient toujours après « alors quoi ? » : où est-ce écrit, et pour quelle
   // partie de l'ouvrage.
+  /**
+   * **La lecture que la fonction suggère se réécrit aussi.**
+   *
+   * Elle ne dessine rien et ne change aucun verdict — mais la perdre ferait
+   * rouvrir un tableau de chiffres là où l'auteur avait écrit « en barres », et
+   * personne ne saurait que la fonction disait autre chose. Elle se pose en
+   * tête, avec ce qui fonde la fonction plutôt qu'avec ce qu'elle fait.
+   */
+  if (lectureDite(seLitEn)) {
+    corps.push(ligneDuChampDeLaCourbe(SE_LIT_EN, lectureDite(seLitEn), dedans));
+    corps.push(ligneVide());
+  }
+
   /**
    * **Un abaque se réécrit comme un abaque.**
    *

@@ -2474,5 +2474,6 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | ce qu'on peut nommer en écrivant du Mdall | `docs/le-catalogue-des-noms.md` |
 | répéter un calcul, et lire son tableau | `docs/pour-chaque-et-les-agregats.md` |
 | un abaque, et la règle entre ses points | `docs/la-courbe-et-linterpolation.md` |
+| regarder un tableau en courbe ou en barres | `docs/le-graphique-comme-lecture.md` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

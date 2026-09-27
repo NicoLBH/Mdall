@@ -46,7 +46,12 @@ import { renderGhActionButton, bindGhActionButtons } from "../../ui/gh-split-but
 import { renderJetons } from "../../ui/code-mdall.js";
 import { jetonsDeLaLigne } from "../../../services/memoire-en-lecture.js";
 import { couperLUnite, lireUnNombre } from "../../../services/memoire-en-texte.js";
-import { phraseDeLaLecture, traceDeLaCourbe } from "../../../services/courbe-du-mdall.js";
+import { phraseDeLaLecture } from "../../../services/courbe-du-mdall.js";
+import { traceDesSeries } from "../../../services/trace-dun-graphique.js";
+import {
+  DIT_DE_LA_LECTURE, LECTURE, lectureRetenue, lecturesPossibles, phraseDesEcartees, seriesDuTableau
+} from "../../../services/graphique-dune-table.js";
+import { renderGraphique } from "../../ui/graphique.js";
 import { jetonsEcrits } from "../../../services/mdall-en-ecriture.js";
 import { niveauxDesPaires } from "../../../services/mdall-retrait.js";
 import {
@@ -386,6 +391,61 @@ export function renderCalculs(calculs = []) {
   `;
 }
 
+/** La marque des boutons qui choisissent comment on regarde un tableau. */
+export const MARQUE_DE_LA_LECTURE = "data-bac-lecture";
+
+/**
+ * Les trois façons de regarder un tableau, offertes à celui qui le lit.
+ *
+ * **Le choix est à la lecture, et c'est tout le parti pris** : rien ne s'écrit
+ * dans la fonction pour obtenir un dessin, et *tous* les tableaux gagnent le
+ * dessin d'un coup — y compris ceux écrits avant que cela n'existe.
+ *
+ * On n'offre pas un dessin impossible : un bouton qui ouvre un cadre vide
+ * apprend à ne plus cliquer sur les boutons.
+ */
+export function renderLecturesDuTableau(resultat = null, choisie = "") {
+  const offertes = lecturesPossibles(resultat?.tableau);
+  if (offertes.length < 2) return "";
+
+  return `
+    <div class="bac-lectures" role="group" aria-label="Comment regarder ce tableau">
+      ${offertes.map((une) => `
+        <button type="button" class="bac-lecture${une === choisie ? " est-actif" : ""}"
+          ${MARQUE_DE_LA_LECTURE}="${escapeHtml(une)}"
+          data-bac-sujet="${escapeHtml(texte(resultat?.sujet))}"
+          aria-pressed="${une === choisie}"
+          title="${escapeHtml(DIT_DE_LA_LECTURE[une] ?? "")}">${escapeHtml(une)}</button>
+      `).join("")}
+    </div>
+  `;
+}
+
+/**
+ * Le dessin d'un tableau, dans la lecture choisie.
+ *
+ * **Les colonnes écartées se disent.** Les taire ferait un dessin qui a l'air
+ * complet : on compterait trois courbes là où le tableau en a quatre, sans
+ * qu'un mot dise laquelle manque (règle 5).
+ */
+export function renderGraphiqueDuTableau(tableau = null, lecture = "") {
+  if (lecture !== LECTURE.COURBE && lecture !== LECTURE.BARRES) return "";
+
+  const { abscisse, series, ecartees } = seriesDuTableau(tableau);
+  if (!series.length) return "";
+
+  const bouts = series[0].points;
+  const dessin = renderGraphique(traceDesSeries(series, { depuisZero: lecture === LECTURE.BARRES }), {
+    barres: lecture === LECTURE.BARRES,
+    titre: `Le tableau de ${abscisse}, en ${lecture}`,
+    bornes: [bouts[0].dit, bouts[bouts.length - 1].dit],
+    legende: true
+  });
+
+  const tues = phraseDesEcartees(ecartees);
+  return `${dessin}${tues ? `<p class="bac-resultat__note">${escapeHtml(tues)}</p>` : ""}`;
+}
+
 /**
  * Le tableau qu'une boucle a déroulé.
  *
@@ -442,9 +502,6 @@ export function renderTableauDeLaBoucle(tableau = null) {
   `;
 }
 
-/** Le cadre du tracé, en unités de la vue : large, plat, et sans axes chiffrés. */
-const CADRE = { largeur: 320, hauteur: 110, marge: 10 };
-
 /**
  * L'abaque d'une courbe, tracé.
  *
@@ -488,39 +545,21 @@ export function renderCourbe(resultat = null) {
       ? { x: lireUnNombre(couperLUnite(lu.lu).nombre), y: lireUnNombre(couperLUnite(resultat.valeur).nombre) }
       : {});
 
-  const { points: poses, lu: marque } = traceDeLaCourbe(
-    { points }, { x: surLaCourbe.x ?? null, y: surLaCourbe.y ?? null }
+  /**
+   * **Le même dessin que celui d'un tableau**, et il n'y en a qu'un : un abaque
+   * est une série de points, comme une colonne de tableau en est une. Deux
+   * rendus écrits séparément auraient chacun leur cadre et leur trait, et il
+   * aurait fallu les recalibrer l'un contre l'autre (règle 10).
+   */
+  return renderGraphique(
+    traceDesSeries([{ nom: "", points }], {
+      marque: { x: surLaCourbe.x ?? null, y: surLaCourbe.y ?? null }
+    }),
+    {
+      titre: `La courbe, de ${points[0].dit} à ${points[points.length - 1].dit}`,
+      bornes: [points[0].dit, points[points.length - 1].dit]
+    }
   );
-
-  const { largeur, hauteur, marge } = CADRE;
-  // L'ordonnée se retourne : un canevas compte du haut, une courbe monte.
-  const ou = (point) => [
-    marge + point.x * (largeur - 2 * marge),
-    hauteur - marge - point.y * (hauteur - 2 * marge)
-  ];
-
-  const chemin = poses.map((point, rang) => `${rang ? "L" : "M"}${ou(point).map(Math.round).join(" ")}`).join(" ");
-
-  return `
-    <figure class="bac-courbe">
-      <svg viewBox="0 0 ${largeur} ${hauteur}" class="bac-courbe__trace"
-        role="img" aria-label="${escapeHtml(`La courbe, de ${points[0].dit} à ${points[points.length - 1].dit}`)}">
-        <path d="${chemin}" class="bac-courbe__ligne" fill="none" />
-        ${poses.map((point) => {
-          const [x, y] = ou(point);
-          return `<circle cx="${Math.round(x)}" cy="${Math.round(y)}" r="2.5" class="bac-courbe__point">
-            <title>${escapeHtml(`${point.dit} → ${point.vaut}`)}</title>
-          </circle>`;
-        }).join("")}
-        ${marque ? `<circle cx="${Math.round(ou(marque)[0])}" cy="${Math.round(ou(marque)[1])}" r="4"
-          class="bac-courbe__lu"><title>${escapeHtml(`${lu.lu} → ${resultat.valeur}`)}</title></circle>` : ""}
-      </svg>
-      <figcaption class="bac-courbe__bornes">
-        <span>${escapeHtml(points[0].dit)}</span>
-        <span>${escapeHtml(points[points.length - 1].dit)}</span>
-      </figcaption>
-    </figure>
-  `;
 }
 
 /**
@@ -566,6 +605,21 @@ export function renderPointsDeLaCourbe(resultat = null) {
       )}</p>`
       : ""}
   `;
+}
+
+/**
+ * Comment on regarde le tableau de cette fonction.
+ *
+ * Ce qu'on a choisi à la main d'abord ; à défaut, ce que la fonction suggère ;
+ * à défaut, le tableau — c'est lui qui se compare au texte d'origine, et c'est
+ * la vérification. Un dessin qui s'ouvrirait tout seul ferait croire qu'on a
+ * vérifié parce qu'on a regardé.
+ */
+function lectureDu(resultat = null) {
+  return lectureRetenue(resultat?.tableau, {
+    choisie: etat.lectures[texte(resultat?.sujet)],
+    suggeree: resultat?.seLitEn
+  });
 }
 
 /** Ce qu'une clause valait, en un mot — et `indécidable` s'y dit comme tel. */
@@ -614,7 +668,15 @@ export function renderResultats(resultats = []) {
           */""}
           ${renderCourbe(resultat)}
           ${renderPointsDeLaCourbe(resultat)}
-          ${renderTableauDeLaBoucle(resultat.tableau)}
+          ${/*
+            **Les boutons au-dessus, le dessin ou le tableau dessous.** On
+            choisit d'abord comment on regarde, et l'on regarde ensuite : les
+            mettre en dessous ferait lire le tableau avant de savoir qu'on
+            pouvait le voir autrement.
+          */""}
+          ${renderLecturesDuTableau(resultat, lectureDu(resultat))}
+          ${renderGraphiqueDuTableau(resultat.tableau, lectureDu(resultat))}
+          ${lectureDu(resultat) === LECTURE.TABLEAU ? renderTableauDeLaBoucle(resultat.tableau) : ""}
           ${renderCalculs(resultat.calculs)}
           ${
             resultat.issue === ISSUE.AU_SERVEUR
@@ -1401,6 +1463,15 @@ const etat = {
   largeur: LARGEUR_PAR_DEFAUT,
   /** Ce qu'on a répondu au formulaire, par nom de variable. */
   reponses: {},
+  /**
+   * Comment on regarde le tableau de chaque fonction, par sujet.
+   *
+   * **Vide au départ, et c'est la fonction qui suggère** : `se lit en: courbe`
+   * décide de ce qui s'ouvre en premier. Ce qu'on a choisi à la main gagne
+   * ensuite, et ne se perd pas à la frappe suivante — un dessin qui se
+   * refermerait à chaque caractère tapé ne se regarderait jamais.
+   */
+  lectures: {},
   /** A-t-on lancé ? Tant que non, on ne montre aucun verdict. */
   lance: false,
   /** La transcription est-elle en cours ? Le bouton le dit, et se désarme. */
@@ -2269,6 +2340,41 @@ function corpsDuBac() {
  * Silencieux si la fenêtre est fermée : un résultat recalculé pour personne ne
  * coûte rien, et l'on écrit du code sans le bac ouvert la plupart du temps.
  */
+/**
+ * Les boutons qui choisissent comment on regarde un tableau.
+ *
+ * ## Une seule écoute, sur le bac, et non une par bouton
+ *
+ * Les boutons vivent **dans** le panneau des résultats, et ce panneau est
+ * remplacé à chaque frappe du formulaire : des écoutes posées sur eux partiraient
+ * avec lui, et le second clic ne ferait rien. C'est le pire des défauts — on
+ * croit avoir mal visé, et l'on reclique.
+ *
+ * Le rebranchement après chaque redessin en serait la réponse, mais c'est une
+ * réponse qu'il faut se rappeler de donner à chaque nouveau chemin de redessin.
+ * **Une écoute posée une fois sur le bac** n'a rien à se rappeler : le panneau
+ * peut être remplacé autant de fois qu'on veut.
+ */
+export function brancherLesLectures(hote, surChoix = null) {
+  hote?.addEventListener?.("click", (evenement) => {
+    const bouton = evenement.target?.closest?.(`[${MARQUE_DE_LA_LECTURE}]`);
+    if (!bouton) return;
+    surChoix?.(bouton.dataset.bacSujet, bouton.getAttribute(MARQUE_DE_LA_LECTURE));
+  });
+}
+
+/**
+ * Retenir la lecture choisie, et redessiner les résultats.
+ *
+ * **Le choix ne touche ni au formulaire ni aux réponses.** Regarder un tableau
+ * autrement ne change rien à ce que les fonctions concluent, et réécrire le
+ * formulaire emporterait le curseur du champ où le doigt est posé.
+ */
+function choisirLaLecture(sujet, lecture) {
+  etat.lectures = { ...etat.lectures, [sujet]: lecture };
+  redessinerLesResultats();
+}
+
 function redessinerLesResultats() {
   const corps = corpsDuBac();
   if (!corps) return POSE.RIEN;
@@ -2299,6 +2405,8 @@ function marquerLeChoixLogique(hote, nom, choisie) {
  * répondu et qu'elle est derrière.
  */
 function brancherLeBac(hote, racine) {
+  brancherLesLectures(hote, choisirLaLecture);
+
   for (const saisie of hote.querySelectorAll("[data-bac-champ]")) {
     const nom = saisie.dataset.bacChamp;
 
