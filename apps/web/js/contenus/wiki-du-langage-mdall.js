@@ -168,6 +168,35 @@ export const WIKI_DU_LANGAGE = [
       + "sait pas trancher arrête la lecture** : si la première condition ne se "
       + "décide pas, on ne passe pas à la suivante, parce que ce serait supposer "
       + "qu'elle est fausse."),
+    dit("**Quand la loi est un tableau, on écrit un tableau.** Une norme, un DTU, "
+      + "un Eurocode, un arrêté : c'est presque toujours un tableau à double "
+      + "entrée et trois notes. Écrit en `sinon si`, l'article fait quarante "
+      + "lignes que personne ne compare à l'original. `selon` nomme les colonnes "
+      + "une fois, et chaque ligne du texte devient une ligne du barème — la "
+      + "fonction **ressemble au texte**, et se relit à côté de lui."),
+    code(
+      "fonction Degré coupe-feu des blocs-portes(zones, Famille, Hauteur du plancher bas) {",
+      "   // Arrêté du 31 janvier 1986, article 96.",
+      "   selon (Famille, Hauteur du plancher bas)",
+      "      | 3e famille A | <= 28 m | CF 1/2 h |",
+      "      | 3e famille B | <= 28 m | CF 1 h   |",
+      "      | 4e famille   | > 28 m  | CF 1 h   |",
+      "   sinon (\"non traité\");",
+      "}"
+    ),
+    dit("Les colonnes se lisent dans l'ordre de `selon`, et **la dernière case de "
+      + "chaque ligne est ce qu'elle conclut**. La première ligne qui tient "
+      + "l'emporte, comme pour `sinon si` : un barème *est* une suite de branches, "
+      + "écrite autrement. Une **case blanche ne contraint rien** — c'est ce "
+      + "qu'impriment les normes quand une ligne vaut quelle que soit la colonne."),
+    dit("Une règle, une seule : **une case nue est un libellé, jamais une mesure**. "
+      + "`3e famille B` se lit tel quel ; pour comparer un nombre, on écrit son "
+      + "comparateur — `<= 28 m`, ou `= 28 m` pour l'égalité. Sans cette règle, "
+      + "`3e famille B` se lirait « 3 » suivi de l'unité « e famille B », et deux "
+      + "lignes voisines porteraient la même valeur."),
+    dit("Un barème s'écrit **seul** : pas de `si` ni de `sinon si` à côté, sinon on "
+      + "ne peut lire la règle ni comme l'un ni comme l'autre. `sinon` et "
+      + "`sauf si` restent, eux : ils valent pour le tableau entier."),
     dit("`sauf si` borne la règle — une exception qui reprend la main sur la "
       + "conclusion, **quelle que soit la branche** :"),
     code(
@@ -429,7 +458,8 @@ export const WIKI_DU_LANGAGE = [
       "**Pas de boucle**, et pas de liste à parcourir : une moyenne sur trente "
         + "poteaux ne s'écrit pas ;",
       "**pas de condition imbriquée** : une branche ne contient pas une autre "
-        + "branche. Les cas s'enchaînent à plat, avec `sinon si` ;",
+        + "branche. Les cas s'enchaînent à plat, avec `sinon si` — ou en barème, "
+        + "avec `selon` ;",
       "**pas de fonction que vous définissez** : les sept sont celles-là ;",
       "**une conclusion ne nomme que ce que sa fonction a calculé** — `alors "
         + "(Niveau du sol)` rend le texte « Niveau du sol ». Pour conclure avec la "

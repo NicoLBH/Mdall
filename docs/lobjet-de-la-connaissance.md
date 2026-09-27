@@ -2469,5 +2469,6 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | ce qui compte dans une mémoire, et ce qui est du détail | `docs/ce-qui-compte-dans-une-memoire.md` |
 | la note qui dit où regarder | `docs/la-note-de-la-memoire.md` |
 | replier le détail du cerveau | `docs/replier-le-detail-du-cerveau.md` |
+| le barème : la loi qui est un tableau | `docs/le-bareme-dune-norme.md` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |
