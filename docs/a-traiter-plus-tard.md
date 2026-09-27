@@ -4547,3 +4547,19 @@ porte » appelle la recomposition, et aucune épreuve de Node ne coche une case.
 Le geste est vérifié dans Chromium en mesurant l'encre du canevas avant et
 après. Tant qu'aucune épreuve de navigateur n'est au dépôt, ce lien-là se
 revérifie à la main à chaque fois qu'on touche à cet écran.
+
+**Le doute d'unité ne nomme pas les grandeurs, alors que le refus le fait.** Un
+calcul refusé dit « une longueur et une force — m et kN » ; une condition
+indécidable pour la même raison dit « les deux côtés ne mesurent pas la même
+chose ». La phrase est honnête, mais elle en dit moins. La cause est de structure :
+un refus de calcul porte un `ou` libre, tandis qu'un doute est un **code** dont la
+phrase se lit dans une table (`DOUTE`, règle 10) — et y glisser un détail par cas
+demande un second champ que rien ne lit aujourd'hui. Le travail est donc dans le
+verdict, pas dans la phrase.
+
+**Une algèbre d'unités composées.** `kN/m` et `N/mm` sont la même chose, et le
+langage les refuse l'une à l'autre. Les composer demande de porter un exposant par
+grandeur plutôt qu'une grandeur unique — le travail est connu, il n'est pas petit,
+et le faire à moitié ferait accepter des conversions fausses, ce qui est pire que
+de refuser (`docs/les-unites-du-metier.md`). Même chose pour `°C`, dont la
+conversion est un décalage et non un facteur.

@@ -229,9 +229,21 @@ fonction Prix TTC(zones, Prix HT) {
 - fonctions : \`racine\` \`abs\` \`arrondi\` \`plafond\` \`plancher\` \`min\` \`max\`.
   Leurs arguments se séparent d'un **point-virgule**, parce que la virgule est
   décimale : \`arrondi(Cote ; 2)\`, \`min(A ; B)\` ;
-- **les unités doivent se composer.** \`3 m + 2\` est refusé, \`3 m * 2 m\` vaut
-  des \`m²\`, \`2 m * 3 €\` est refusé. Écris l'unité sur chaque nombre qui en a
-  une : \`Niveau du sol + 1 m\`, et non \`Niveau du sol + 1\` ;
+- **deux unités d'une même grandeur se convertissent, deux grandeurs
+  différentes se refusent.** \`0,71 m + 35 cm\` vaut \`1,06 m\` — deux longueurs —,
+  \`1 h - 30 min\` vaut \`0,5 h\`, et le résultat garde l'unité de **gauche**.
+  \`3 m + 2 kN\` est refusé : une longueur et une force. La règle vaut aussi dans
+  une condition — \`si (Hauteur <= 2 m)\` tient pour une hauteur de \`150 cm\` ;
+- **écris l'unité sur chaque nombre qui en a une** : \`Niveau du sol + 1 m\`, et
+  non \`Niveau du sol + 1\`. Une somme dont un seul côté porte une unité est
+  refusée : \`3 m + 2\` est refusé — deux quoi ? Un produit, lui, accepte un
+  facteur nu : \`2 * 3 m\` vaut \`6 m\` ;
+- **la casse d'une unité compte** : \`mN\` est un millinewton, \`MN\` un
+  méganewton. Les unités connues sont celles du métier — \`mm\` à \`km\`, \`m²\`,
+  \`m³\`, \`ha\`, \`L\`, \`g\` \`kg\` \`t\`, \`N\` \`daN\` \`kN\` \`MN\`, \`Pa\` à \`GPa\` et
+  \`bar\`, \`s\` \`min\` \`h\` \`j\`, \`W\` \`kW\` \`MW\`, \`°\`. Une unité **composée**
+  comme \`kN/m\` reste opaque : elle ne se convertit pas, et ne se compare qu'à
+  une unité écrite exactement pareil ;
 - \`calcule\` n'écrit rien dans le projet : ce qui sort passe par \`alors\`,
   comme toujours.
 

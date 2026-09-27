@@ -9,8 +9,9 @@ import {
   renderTexteDuWiki, renderExempleDuWiki, renderBlocDuWiki, renderSommaireDuWiki, renderWikiMdall
 } from "./wiki-mdall.js";
 import { WIKI_DU_LANGAGE, sommaireDuWiki, exemplesDuWiki } from "../../contenus/wiki-du-langage-mdall.js";
-import { lireUnFichier } from "../../services/memoire-en-lecture.js";
-import { calculer } from "../../services/mdall-calcul.js";
+import { lireUnFichier, lireUneCondition } from "../../services/memoire-en-lecture.js";
+import { calculer, ecrireLeCalcul } from "../../services/mdall-calcul.js";
+import { evaluerLaCondition } from "../../services/memoire-evaluateur.js";
 import { lancerLeBrouillon } from "../../services/bac-dessai.js";
 
 /* ── Ce qu'il enseigne, le langage le lit ────────────────────────────────── */
@@ -77,6 +78,60 @@ test("les refus que le wiki montre sont ceux que le calcul refuse", () => {
   }
   assert.equal(calculer("3 m * 2 m").unite, "m²");
   assert.equal(calculer("6 m² / 2 m").unite, "m");
+});
+
+test("chaque ligne du tableau d'arithmétique se calcule vraiment", () => {
+  /**
+   * **Le tableau se relit contre le calculateur, et non contre une seconde
+   * liste.** Il annonce des conversions — `0,71 m + 35 cm` vaut `1,06 m` —, et
+   * une règle qu'on changerait sans rouvrir le wiki enseignerait un résultat
+   * faux à celui qui recopie. C'est la règle 12 appliquée à l'écran, et non à
+   * un fichier de doctrine.
+   *
+   * Seules les lignes qui portent un calcul entier sont éprouvées : une ligne
+   * qui montre un `si` parle de l'évaluateur, pas du calculateur.
+   */
+  const lignes = WIKI_DU_LANGAGE
+    .flatMap((une) => une.blocs)
+    .filter((bloc) => bloc.quoi === "table")
+    .flatMap((bloc) => bloc.lignes)
+    .map(([ecrit, obtenu]) => [/^`([^`]+)`$/.exec(String(ecrit))?.[1] ?? "", String(obtenu)])
+    .filter(([ecrit]) => /[+\-*/^]/.test(ecrit) && /\d/.test(ecrit));
+
+  assert.ok(lignes.length >= 9, `le wiki n'annonce plus que ${lignes.length} calculs`);
+
+  for (const [ecrit, obtenu] of lignes) {
+    const issu = calculer(ecrit);
+    if (obtenu.startsWith("refus")) {
+      assert.ok(issu.refus, `le wiki annonce « ${ecrit} » refusé, et il passe`);
+      continue;
+    }
+    const [, annonce] = /^`([^`]+)`/.exec(obtenu) ?? [];
+    assert.ok(annonce, `le wiki n'annonce aucun résultat lisible pour « ${ecrit} »`);
+    assert.equal(ecrireLeCalcul(issu), annonce, `le wiki annonce ${ecrit} = ${annonce}`);
+  }
+});
+
+test("la conversion que le wiki montre dans une condition tient vraiment", () => {
+  // Cette ligne du tableau ne parle pas du calculateur mais de l'évaluateur, et
+  // elle ne tient **que** si le seuil est ramené : le nombre nu comparerait 150
+  // à 2, et rendrait faux.
+  const dites = WIKI_DU_LANGAGE
+    .flatMap((une) => une.blocs)
+    .filter((bloc) => bloc.quoi === "table")
+    .flatMap((bloc) => bloc.lignes)
+    .map(([ecrit]) => /^`si \(([^`]+)\)` avec `([^`]+)`$/.exec(String(ecrit)))
+    .filter(Boolean);
+
+  assert.equal(dites.length, 1, "le wiki ne montre plus la conversion dans une condition");
+
+  for (const [, clause, mesure] of dites) {
+    assert.equal(
+      evaluerLaCondition(lireUneCondition(clause), { connu: true, valeur: mesure }).verite,
+      true,
+      `le wiki annonce que « ${clause} » tient pour ${mesure}`
+    );
+  }
 });
 
 /* ── Le contenu, et sa mise en page ──────────────────────────────────────── */

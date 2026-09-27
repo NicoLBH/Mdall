@@ -20,8 +20,10 @@ import {
   lacunesDuModele
 } from "./mdall-du-modele.js";
 
-import { lireUnFichier } from "../../../apps/web/js/services/memoire-en-lecture.js";
+import { lireUnFichier, lireUneCondition } from "../../../apps/web/js/services/memoire-en-lecture.js";
+import { evaluerLaCondition } from "../../../apps/web/js/services/memoire-evaluateur.js";
 import { lancerLeBrouillon, ISSUE } from "../../../apps/web/js/services/bac-dessai.js";
+import { calculer, ecrireLeCalcul } from "../../../apps/web/js/services/mdall-calcul.js";
 import { champsDuBrouillon } from "../../../apps/web/js/services/formulaire-du-brouillon.js";
 import { FICHIERS_DU_BROUILLON } from "../../../apps/web/js/services/brouillon-mdall.js";
 import { EXTENSIONS, EXTENSION_REGLE } from "../../../apps/web/js/services/memoire-rangement.js";
@@ -103,6 +105,41 @@ test("la consigne enseigne l'arithmétique que le langage sait lire", () => {
   // découverts au lancement : le point-virgule, et les unités.
   assert.match(CONSIGNES, /point-virgule/);
   assert.match(CONSIGNES, /3 m \+ 2. est refusé/);
+});
+
+test("chaque exemple de calcul de la consigne se vérifie contre le calculateur", () => {
+  // Une consigne qu'on ne vérifie pas est une intention (règle 12). Les
+  // exemples ne sont pas relus contre une seconde liste — ils sont **calculés**,
+  // si bien qu'un exemple faux, ou une règle de conversion qu'on changerait
+  // sans rouvrir la consigne, tombe ici.
+  const section = (CONSIGNES.match(/# Un calcul, dans une fonction([\s\S]*?)\n# /) ?? [])[1] ?? "";
+  assert.ok(section, "la consigne n'a plus de section « Un calcul »");
+
+  const vaut = [...section.matchAll(/`([^`]+)`\s+(?:qui\s+)?vaut\s+`([^`]+)`/g)];
+  assert.ok(vaut.length >= 4, `la consigne n'enseigne plus que ${vaut.length} calculs`);
+  for (const [, expression, annonce] of vaut) {
+    assert.equal(
+      ecrireLeCalcul(calculer(expression)),
+      annonce,
+      `la consigne annonce ${expression} = ${annonce}`
+    );
+  }
+
+  const refuses = [...section.matchAll(/`([^`]+)` est refusé/g)];
+  assert.ok(refuses.length >= 2, "la consigne ne montre plus les calculs refusés");
+  for (const [, expression] of refuses) {
+    assert.equal(calculer(expression).connu, false, `${expression} n'est plus refusé`);
+  }
+
+  // La conversion vaut aussi dans une condition, et la consigne le dit : c'est
+  // le lecteur puis l'évaluateur qui le confirment, pas une relecture.
+  const [, clause, mesure] = section.match(/`si \(([^`]+)\)` tient pour [^`]+ de `([^`]+)`/) ?? [];
+  assert.ok(clause, "la consigne ne montre plus la conversion dans une condition");
+  assert.equal(
+    evaluerLaCondition(lireUneCondition(clause), { connu: true, valeur: mesure }).verite,
+    true,
+    `la consigne annonce que « ${clause} » tient pour ${mesure}`
+  );
 });
 
 test("la consigne interdit toujours d'inventer ce qu'elle ne sait pas écrire", () => {

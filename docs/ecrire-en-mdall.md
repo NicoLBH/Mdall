@@ -216,7 +216,7 @@ Ce champ n'est pas un artifice pour fabriquer une liste déroulante :
 
 - **Il rend une valeur vérifiable.** Une zone de vent à `7` passe aujourd'hui
   sans un mot. Avec un domaine déclaré, elle se signale — même famille de
-  garde-fou que « deux unités ne se comparent pas ».
+  garde-fou que « deux grandeurs ne se comparent pas ».
 - **Il ferme une liste que le modèle aurait ouverte.** C'est ce que la liste
   fermée des sujets a apporté à la lecture des comptes rendus : quatre sujets
   identiques sur trois passages, contre vingt-huit libellés libres.

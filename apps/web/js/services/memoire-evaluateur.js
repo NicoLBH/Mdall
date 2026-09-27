@@ -54,6 +54,7 @@
 import { OPERATEUR, couperLUnite, lireUnNombre } from "./memoire-en-texte.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { calculer, ecrireLeCalcul, phraseDuRefus } from "./mdall-calcul.js";
+import { convertir } from "./unites-du-metier.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -66,7 +67,11 @@ export const DOUTE = {
   ENTREE_ABSENTE: "entree-absente",
   /** Une comparaison de nombres sur ce qui n'est pas un nombre. */
   PAS_UN_NOMBRE: "pas-un-nombre",
-  /** Deux unités différentes de part et d'autre du signe. */
+  /**
+   * Deux unités qui **ne mesurent pas la même chose**, de part et d'autre du
+   * signe. Deux unités d'une même grandeur, elles, se ramènent l'une à l'autre :
+   * `26 m` et `2800 cm` sont deux longueurs, et se comparent.
+   */
   UNITES_INCOMPARABLES: "unites-incomparables",
   /** Un opérateur que ce module ne connaît pas. */
   OPERATEUR_INCONNU: "operateur-inconnu",
@@ -100,7 +105,7 @@ export const DOUTE = {
 const PHRASES = {
   [DOUTE.ENTREE_ABSENTE]: "personne n'a versé de valeur pour ce sujet",
   [DOUTE.PAS_UN_NOMBRE]: "cette comparaison attend des nombres",
-  [DOUTE.UNITES_INCOMPARABLES]: "les deux côtés ne sont pas dans la même unité",
+  [DOUTE.UNITES_INCOMPARABLES]: "les deux côtés ne mesurent pas la même chose",
   [DOUTE.OPERATEUR_INCONNU]: "cet opérateur n'est pas du langage",
   [DOUTE.CALCUL_REFUSE]: "ce calcul ne se fait pas",
   [DOUTE.LOI_NON_ECRITE]: "la loi de cette fonction n'est pas écrite : elle se refait au serveur"
@@ -120,7 +125,26 @@ export function phraseDuDoute(code) {
  * loin : rapprocher « CF 1 h » de « CF 1h » demanderait de deviner.
  */
 function memeValeur(gauche, droite) {
-  return cleDuSujet(gauche) === cleDuSujet(droite);
+  if (cleDuSujet(gauche) === cleDuSujet(droite)) return true;
+
+  /**
+   * **Deux mesures égales s'écrivent parfois différemment.** `= 26 m` contre
+   * `2600 cm` est la même hauteur, et le texte disait non. On ne compare des
+   * nombres que si **les deux** côtés en sont, et si leurs unités mesurent la
+   * même chose : `CF 1 h` et `CF 60 min` restent deux textes, parce que ce n'en
+   * sont pas — ce sont des degrés, et les couper produirait « CF » suivi d'une
+   * durée.
+   */
+  const ici = couperLUnite(texte(gauche));
+  const la = couperLUnite(texte(droite));
+  if (!ici.unite || !la.unite) return false;
+
+  const a = lireUnNombre(ici.nombre);
+  const b = lireUnNombre(la.nombre);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+
+  const porte = convertir(b, la.unite, ici.unite);
+  return porte !== null && a === porte;
 }
 
 /** Les valeurs attendues d'une condition, toujours comme une liste. */
@@ -145,15 +169,32 @@ function comparerDesNombres(operateur, lue, attendue, uniteDeclaree) {
   // Le seuil porte souvent son unité à part — `unite: "m"` sur la condition —
   // plutôt que dans son texte. Les deux écritures disent la même chose.
   const uniteAttendue = droite.unite || texte(uniteDeclaree);
-  if (gauche.unite && uniteAttendue && !memeValeur(gauche.unite, uniteAttendue)) {
+
+  /**
+   * **Deux unités d'une même grandeur se ramènent l'une à l'autre.**
+   *
+   * `26 m <= 2800 cm` était un doute : deux longueurs, et l'écran renvoyait
+   * chercher. C'est le cas le plus commun de tous — une cote en centimètres
+   * dans un plan, un seuil en mètres dans une norme —, et il bloquait la règle
+   * entière.
+   *
+   * Ce qui ne se ramène pas reste un doute, et c'est ce qui compte : une
+   * longueur comparée à une force ne devient pas comparable parce qu'on sait
+   * maintenant convertir.
+   */
+  const porte = convertir(b, uniteAttendue, gauche.unite);
+  if (gauche.unite && uniteAttendue && porte === null) {
     return { verite: null, doute: DOUTE.UNITES_INCOMPARABLES };
   }
 
+  // Sans unité d'un côté, il n'y a rien à ramener : le seuil vaut ce qu'il dit.
+  const seuil = porte === null ? b : porte;
+
   switch (operateur) {
-    case OPERATEUR.AU_PLUS: return { verite: a <= b, doute: "" };
-    case OPERATEUR.AU_MOINS: return { verite: a >= b, doute: "" };
-    case OPERATEUR.MOINS_DE: return { verite: a < b, doute: "" };
-    case OPERATEUR.PLUS_DE: return { verite: a > b, doute: "" };
+    case OPERATEUR.AU_PLUS: return { verite: a <= seuil, doute: "" };
+    case OPERATEUR.AU_MOINS: return { verite: a >= seuil, doute: "" };
+    case OPERATEUR.MOINS_DE: return { verite: a < seuil, doute: "" };
+    case OPERATEUR.PLUS_DE: return { verite: a > seuil, doute: "" };
     default: return { verite: null, doute: DOUTE.OPERATEUR_INCONNU };
   }
 }

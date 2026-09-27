@@ -48,6 +48,10 @@
  * n'aurait fait qu'ajouter une lecture possible à un signe qui en a déjà une.
  */
 
+import {
+  auJusteNecessaire, convertir, ecrireUneUnite, lireUneUnite, memeGrandeur, phraseDesUnites
+} from "./unites-du-metier.js";
+
 import { lireUnNombre, mesureEnFrancais, estMesuree, couperLUnite } from "./memoire-en-texte.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -125,34 +129,14 @@ export const FONCTIONS = {
  *
  * `m`, `m²`, `m³` sont la même unité à trois exposants ; les composer est alors
  * de l'addition d'exposants, et non une table de cas. Tout le reste — `km/h`,
- * `MPa` — est **opaque** : on sait l'additionner à elle-même et la multiplier
- * par un nombre nu, et l'on refuse le reste plutôt que d'inventer une algèbre
- * que personne n'a demandée.
+ * `MPa` — est **opaque** pour la composition : on sait l'additionner à elle-même
+ * et la multiplier par un nombre nu, et l'on refuse le reste plutôt que
+ * d'inventer une algèbre que personne n'a demandée.
+ *
+ * **Le vocabulaire des unités vit dans `unites-du-metier.js`** — lire une unité,
+ * l'écrire, savoir ce qu'elle mesure et la convertir. Ce fichier s'en sert ; il
+ * ne le redit pas (règle 10).
  * ──────────────────────────────────────────────────────────────────────────── */
-
-const EXPOSANTS = { "²": 2, "³": 3 };
-const SIGNES_DE_LEXPOSANT = { 2: "²", 3: "³" };
-
-/** `m²` → `{ base: "m", exposant: 2 }`. Une unité opaque garde l'exposant 1. */
-export function lireUneUnite(unite = "") {
-  const brut = texte(unite);
-  if (!brut) return { base: "", exposant: 0, opaque: false };
-
-  const trouve = brut.match(/^([A-Za-zÀ-ÖØ-öø-ÿ°µ]+)([²³])$/);
-  if (trouve) return { base: trouve[1], exposant: EXPOSANTS[trouve[2]], opaque: false };
-  if (/^[A-Za-zÀ-ÖØ-öø-ÿ°µ€]+$/.test(brut)) return { base: brut, exposant: 1, opaque: false };
-
-  // `km/h`, `kN/m²`, `%` : on ne sait ni les élever ni les composer entre
-  // elles. On ne prétend pas le contraire.
-  return { base: brut, exposant: 1, opaque: true };
-}
-
-/** `{ base: "m", exposant: 2 }` → `m²`. Un exposant qu'on ne sait pas écrire refuse. */
-export function ecrireUneUnite({ base = "", exposant = 0 } = {}) {
-  if (!base || exposant === 0) return "";
-  if (exposant === 1) return base;
-  return SIGNES_DE_LEXPOSANT[exposant] ? `${base}${SIGNES_DE_LEXPOSANT[exposant]}` : null;
-}
 
 /** L'unité d'un produit ou d'un quotient, ou `null` si elle ne se compose pas. */
 function composerLesUnites(gauche, droite, sens) {
@@ -241,9 +225,18 @@ function decouper(source) {
       }
 
       // L'unité suit le nombre, et **une seule** : au-delà, ce serait un nom.
+      /**
+       * **Un mot n'est une fonction que s'il ouvre une parenthèse.**
+       *
+       * `min` est le nom d'une fonction **et** celui d'une minute, et le nom
+       * gagnait : `1 h - 30 min` se refusait sur « min », alors qu'une durée en
+       * minutes est ce qu'on écrit tous les jours dans un degré coupe-feu. La
+       * parenthèse tranche sans ambiguïté — `min(2; 3)` appelle, `30 min`
+       * mesure —, et c'est le seul critère dont on ait besoin.
+       */
       const unite = apresBlanc.match(UNITE);
-      const colle = unite && !FONCTIONS[unite[0].toLowerCase()]
-        && !apresBlanc.slice(unite[0].length).trimStart().startsWith("(");
+      const appelle = unite && apresBlanc.slice(unite[0].length).trimStart().startsWith("(");
+      const colle = Boolean(unite) && !appelle;
       if (colle) reste = apresBlanc.slice(unite[0].length);
 
       jetons.push({ type: "nombre", valeur, unite: colle ? unite[0] : "", texte: nombre[0] });
@@ -507,23 +500,65 @@ function evaluerUnSigne(arbre, lire) {
   if (arret) return arret;
 
   if (arbre.signe === "+" || arbre.signe === "-") {
-    // **On n'additionne que ce qui est dans la même unité.** `3 m + 2` n'est
-    // pas cinq mètres : c'est une ligne qu'il faut relire.
-    if (texte(gauche.unite) !== texte(droite.unite)) {
-      return refuse(REFUS_DU_CALCUL.UNITES, `${gauche.unite || "sans unité"} et ${droite.unite || "sans unité"}`);
+    /**
+     * **On n'additionne que ce qui mesure la même chose.** `3 m + 2 kN` n'est
+     * pas cinq de quoi que ce soit : c'est une ligne qu'il faut relire.
+     *
+     * Mais `0,71 m + 35 cm` en est bien cinq : ce sont deux longueurs, et
+     * c'est le cas le plus commun de tous — une cote en centimètres dans un
+     * plan, une portée en mètres dans une note. Il était refusé, et refuser ce
+     * qui est juste finit par apprendre à contourner la langue.
+     *
+     * **Le résultat garde l'unité de gauche** : c'est celle qu'on a écrite en
+     * premier, donc celle dans laquelle on pense la ligne.
+     */
+    const ici = texte(gauche.unite);
+    const la = texte(droite.unite);
+
+    // **Une seule des deux porte une unité : on refuse, comme avant.** `3 m + 2`
+    // n'est pas cinq mètres — deux quoi ? C'est une ligne qu'il faut relire, et
+    // la conversion n'y change rien. Un produit, lui, accepte un facteur nu :
+    // `2 * 3 m` fait six mètres, et c'est une autre opération.
+    if (Boolean(ici) !== Boolean(la)) {
+      return refuse(REFUS_DU_CALCUL.UNITES, phraseDesUnites(gauche.unite, droite.unite));
     }
-    const somme = arbre.signe === "+" ? gauche.nombre + droite.nombre : gauche.nombre - droite.nombre;
-    return mesure(somme, gauche.unite);
+
+    const portee = ici === la ? droite.nombre : convertir(droite.nombre, la, ici);
+    if (portee === null) {
+      return refuse(REFUS_DU_CALCUL.UNITES, phraseDesUnites(gauche.unite, droite.unite));
+    }
+
+    const somme = arbre.signe === "+" ? gauche.nombre + portee : gauche.nombre - portee;
+    return mesure(somme, ici);
   }
 
   if (arbre.signe === "*" || arbre.signe === "/") {
     if (arbre.signe === "/" && droite.nombre === 0) return refuse(REFUS_DU_CALCUL.DIVISION_PAR_ZERO);
 
-    const unite = composerLesUnites(gauche.unite, droite.unite, arbre.signe === "*" ? 1 : -1);
-    if (unite === null) {
-      return refuse(REFUS_DU_CALCUL.UNITES, `${gauche.unite || "sans unité"} et ${droite.unite || "sans unité"}`);
+    /**
+     * **Deux longueurs se multiplient, même écrites différemment.**
+     * `3 m * 40 cm` fait 1,2 m², et non un refus : on ramène la droite dans
+     * l'unité de gauche, puis on compose les exposants comme avant.
+     *
+     * **Mais on ne ramène que ce qui a vraiment une unité à ramener.** Un
+     * facteur nu — `120 € * 0,05` — n'en a pas, et lui prêter celle de gauche
+     * donnait `6 €²` : un prix au carré, sur le calcul le plus banal du dépôt.
+     * C'est ce qui est arrivé au premier essai.
+     */
+    const aRamener = Boolean(texte(gauche.unite)) && Boolean(texte(droite.unite))
+      && memeGrandeur(gauche.unite, droite.unite);
+
+    const portee = aRamener ? convertir(droite.nombre, droite.unite, gauche.unite) : droite.nombre;
+    if (portee === null) {
+      return refuse(REFUS_DU_CALCUL.UNITES, phraseDesUnites(gauche.unite, droite.unite));
     }
-    const produit = arbre.signe === "*" ? gauche.nombre * droite.nombre : gauche.nombre / droite.nombre;
+    const uniteDroite = aRamener ? texte(gauche.unite) : droite.unite;
+
+    const unite = composerLesUnites(gauche.unite, uniteDroite, arbre.signe === "*" ? 1 : -1);
+    if (unite === null) {
+      return refuse(REFUS_DU_CALCUL.UNITES, phraseDesUnites(gauche.unite, droite.unite));
+    }
+    const produit = arbre.signe === "*" ? gauche.nombre * portee : gauche.nombre / portee;
     return mesure(produit, unite);
   }
 
@@ -630,8 +665,9 @@ export function calculer(source = "", lire = () => ({ connu: false, valeur: "" }
 export function ecrireLeCalcul({ connu = false, nombre = null, unite = "" } = {}) {
   if (!connu || !Number.isFinite(nombre)) return "";
 
-  // Douze décimales : ce qui reste au-delà est le bruit du binaire, pas une
-  // précision. `0,1 + 0,2` doit s'écrire `0,3`, comme on l'a demandé.
-  const arrondi = Number(nombre.toPrecision(12));
+  // Ce qui reste au-delà de douze chiffres significatifs est le bruit du
+  // binaire, pas une précision. La règle vit avec les unités : l'égalité de deux
+  // mesures la suit aussi, et deux règles divergeraient (règle 10).
+  const arrondi = auJusteNecessaire(nombre);
   return mesureEnFrancais(unite ? `${arrondi} ${unite}` : `${arrondi}`);
 }
