@@ -7,8 +7,10 @@ import assert from "node:assert/strict";
 
 import {
   lireUnCalcul, evaluerUnCalcul, calculer, ecrireLeCalcul, nomsDuCalcul,
-  lireUneUnite, ecrireUneUnite, phraseDuRefus, REFUS_DU_CALCUL, FONCTIONS
+  phraseDuRefus, REFUS_DU_CALCUL, FONCTIONS
 } from "./mdall-calcul.js";
+// Lire et écrire une unité a déménagé : le vocabulaire d'une unité précède ce
+// qu'on en fait, et les trois lecteurs s'en servent.
 import { lecteurDeValeurs } from "./memoire-evaluateur.js";
 
 const LIRE = lecteurDeValeurs({
@@ -125,6 +127,28 @@ test("on n'additionne que ce qui est dans la même unité", () => {
   assert.match(calculer("3 m + 2 €").ou, /m et €/);
 });
 
+test("deux unités d'une même grandeur se ramènent, et le résultat garde celle de gauche", () => {
+  /**
+   * **C'est le cas le plus commun de tous, et il était refusé** : une cote en
+   * centimètres dans un plan, une portée en mètres dans une note. Refuser ce
+   * qui est juste finit par apprendre à contourner la langue.
+   *
+   * Chacune de ces lignes ne tient que **si la conversion a lieu** : le nombre
+   * nu donnerait un autre résultat, et non le même par chance.
+   */
+  assert.equal(dit("0,71 m + 35 cm"), "1,06 m");
+  // L'ordre décide de l'unité rendue, pas du nombre : la même somme, lue de
+  // l'autre côté, fait 106 centimètres.
+  assert.equal(dit("35 cm + 0,71 m"), "106 cm");
+  assert.equal(dit("1 h - 30 min"), "0,5 h");
+  assert.equal(dit("3 m * 40 cm"), "1,2 m²");
+  assert.equal(dit("2 t + 500 kg"), "2,5 t");
+  // Deux grandeurs différentes ne deviennent pas comparables parce qu'on sait
+  // convertir, et le refus nomme ce qu'elles mesurent.
+  assert.equal(refusDe("3 m + 2 kN"), REFUS_DU_CALCUL.UNITES);
+  assert.match(calculer("3 m + 2 kN").ou, /une longueur et une force/);
+});
+
 test("un produit compose les unités, ou refuse de les composer", () => {
   assert.equal(dit("3 m * 2"), "6 m");
   assert.equal(dit("3 m * 2 m"), "6 m²");
@@ -159,17 +183,6 @@ test("une puissance suit l'unité quand l'unité peut la suivre", () => {
 test("min et max comparent, donc ils exigent la même unité", () => {
   assert.equal(refusDe("min(3 m; 5 €)"), REFUS_DU_CALCUL.UNITES);
   assert.equal(refusDe("max(3 m; 5)"), REFUS_DU_CALCUL.UNITES);
-});
-
-test("une unité se lit et se réécrit avec son exposant", () => {
-  assert.deepEqual(lireUneUnite("m²"), { base: "m", exposant: 2, opaque: false });
-  assert.deepEqual(lireUneUnite("m"), { base: "m", exposant: 1, opaque: false });
-  assert.deepEqual(lireUneUnite(""), { base: "", exposant: 0, opaque: false });
-  assert.equal(lireUneUnite("km/h").opaque, true);
-  assert.equal(ecrireUneUnite({ base: "m", exposant: 3 }), "m³");
-  assert.equal(ecrireUneUnite({ base: "m", exposant: 0 }), "");
-  // Au-delà du cube, aucun signe ne s'écrit : on ne rend pas « m4 ».
-  assert.equal(ecrireUneUnite({ base: "m", exposant: 4 }), null);
 });
 
 /* ── Les trois issues ne se confondent jamais ────────────────────────────── */

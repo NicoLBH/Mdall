@@ -259,15 +259,34 @@ export const WIKI_DU_LANGAGE = [
       + "aussi les arguments d'une fonction — `min(1,5)` serait le minimum de un et "
       + "cinq, ou bien un et demi. Les arguments se séparent d'un **point-virgule** : "
       + "`min(1,5; 2)`."),
-    dit("**Les unités se composent, ou se refusent.** Il n'y a pas de troisième issue :"),
+    dit("**Deux unités d'une même grandeur se convertissent ; deux grandeurs "
+      + "différentes se refusent.** C'est toute la règle, et elle vaut aussi bien "
+      + "dans un calcul que dans une condition — une cote en centimètres dans un "
+      + "plan et un seuil en mètres dans une norme se comparent."),
     table(["ce qu'on écrit", "ce qu'on obtient"], [
       ["`3 m + 2 m`", "`5 m`"],
-      ["`3 m + 2`", "refus — ces deux unités ne se composent pas"],
-      ["`3 m * 2 m`", "`6 m²`"],
+      ["`0,71 m + 35 cm`", "`1,06 m` — deux longueurs, et le résultat garde l'unité de gauche"],
+      ["`1 h - 30 min`", "`0,5 h`"],
+      ["`si (Hauteur <= 2 m)` avec `150 cm`", "vrai — 150 cm valent 1,50 m"],
+      ["`3 m + 2 kN`", "refus — une longueur et une force"],
+      ["`3 m + 2`", "refus — deux quoi ? Un produit accepte un facteur nu, pas une somme"],
+      ["`3 m * 40 cm`", "`1,2 m²`"],
       ["`6 m² / 2 m`", "`3 m`"],
       ["`2 m * 3 €`", "refus — personne n'a demandé des mètres-euros"],
       ["`10 / 0`", "refus — on ne divise pas par zéro"]
     ]),
+    dit("Les unités connues sont celles du métier : longueurs (`mm` à `km`), "
+      + "surfaces et volumes (`m²`, `m³`, `ha`, `L`), masses (`g`, `kg`, `t`), "
+      + "forces (`N`, `daN`, `kN`, `MN`), pressions (`Pa` à `GPa`, `bar`), durées "
+      + "(`s`, `min`, `h`, `j`), puissances (`W`, `kW`, `MW`) et l'angle (`°`). "
+      + "**La casse compte** : `mN` est un millinewton, `MN` un méganewton — un "
+      + "facteur d'un milliard."),
+    dit("Trois choses que le langage ne fait **pas**, et les dire vaut mieux que de "
+      + "les faire à moitié : il ne compose pas `kN/m` avec `N/mm` — deux unités "
+      + "composées ne se comparent que si elles s'écrivent pareil ; il ne convertit "
+      + "pas les températures — `0 °C` ne vaut pas `0 K`, et le décalage n'est pas "
+      + "un facteur ; et il ne devine aucun symbole — `dN` mal orthographié ne "
+      + "devient pas `daN`, il reste inconnu."),
     dit("Et un nom sans valeur reste **indécidable**, jamais zéro. Une altitude à zéro "
       + "se calcule sans broncher jusqu'à une cote de fondation fausse.")
   ]),

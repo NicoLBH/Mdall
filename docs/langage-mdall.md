@@ -605,8 +605,8 @@ déclare, ou il n'existe pas (règle 5).
 Deux choses en découlent :
 
 - **une valeur hors du domaine se signale.** Une zone de vent à `7` passait
-  jusqu'ici sans un mot. C'est la même famille de garde-fou que « deux unités ne
-  se comparent pas ».
+  jusqu'ici sans un mot. C'est la même famille de garde-fou que « deux grandeurs
+  ne se comparent pas ».
 - **un écran peut en faire un choix.** Le bac d'essai en tire une liste
   déroulante, sans qu'un seul mot d'affichage entre dans le langage : le nom est
   l'étiquette, la description est l'aide, le domaine est la liste.
@@ -1165,12 +1165,18 @@ tirerait **3**, et « Famille × 2 » vaudrait six. Une famille de bâtiment n'e
 pas le nombre trois. C'est `estMesuree` qui tranche, le même jugement que la
 mémoire porte déjà sur ses propres valeurs.
 
-**2. Il ne compose pas une unité qu'il ne sait pas composer.**
+**2. Deux unités d'une même grandeur se convertissent ; deux grandeurs
+différentes se refusent.**
 
 | ce qu'on écrit | ce qu'on obtient |
 | --- | --- |
 | `3 m + 2 m` | `5 m` |
-| `3 m + 2` | refus — *ces deux unités ne se composent pas* |
+| `0,71 m + 35 cm` | `1,06 m` — deux longueurs |
+| `35 cm + 0,71 m` | `106 cm` — l'unité de **gauche** |
+| `1 h - 30 min` | `0,5 h` |
+| `3 m * 40 cm` | `1,2 m²` |
+| `3 m + 2` | refus — deux quoi ? |
+| `3 m + 2 kN` | refus — *une longueur et une force* |
 | `3 m * 2` | `6 m` |
 | `3 m * 2 m` | `6 m²` |
 | `6 m² / 2 m` | `3 m` |
@@ -1182,9 +1188,13 @@ mémoire porte déjà sur ses propres valeurs.
 | `120 km/h * 2 km/h` | refus — une unité composée est opaque |
 
 `m`, `m²`, `m³` sont la même unité à trois exposants ; les composer est donc de
-l'addition d'exposants. Tout le reste — `km/h`, `MPa` — est **opaque** : on sait
-l'ajouter à elle-même et la multiplier par un nombre nu, et l'on refuse le reste
-plutôt que d'inventer une algèbre que personne n'a demandée.
+l'addition d'exposants, et le carré d'un facteur est son carré — `1 m = 100 cm`
+donne `1 m² = 10 000 cm²` sans qu'on l'écrive.
+
+Une unité **composée** — `km/h`, `kN/m` — reste **opaque** : on sait l'ajouter à
+elle-même et la multiplier par un nombre nu, et l'on refuse le reste plutôt que
+d'inventer une algèbre dimensionnelle que personne n'a demandée. La table et ses
+trois renoncements : `docs/les-unites-du-metier.md`.
 
 **3. Il ne rend jamais l'infini ni `NaN`.** Une division par zéro est un refus
 nommé, pas une valeur qui traverse trois écrans avant de se voir. Douze chiffres

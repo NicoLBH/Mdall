@@ -23,6 +23,49 @@ test("l'égalité plie la casse, les accents et les espaces", () => {
   assert.equal(evaluerLaCondition(clause, lu("2e famille")).verite, false);
 });
 
+test("deux mesures égales écrites autrement sont égales, un libellé reste un libellé", () => {
+  /**
+   * `= 26 m` contre `2600 cm` est la même hauteur, et l'égalité disait non : le
+   * texte plié ne rapproche pas deux écritures d'un même nombre. Une valeur
+   * versée en centimètres faisait alors échouer une règle qui l'attendait en
+   * mètres, sans un mot.
+   *
+   * **La conversion est symétrique**, seuil et valeur pouvant être écrits dans
+   * l'une ou l'autre unité, et elle suit la même précision que l'affichage :
+   * `35 cm` ramenés en mètres valent `0,35` et non `0,35000000000000003`, sinon
+   * l'écran montrerait deux valeurs identiques en les disant différentes.
+   */
+  const egale = (attendue, lue) =>
+    evaluerLaCondition({ sujet: "Hauteur", operateur: OPERATEUR.EGAL, valeur: attendue }, lu(lue)).verite;
+
+  assert.equal(egale("2600 cm", "26 m"), true);
+  assert.equal(egale("26 m", "2600 cm"), true);
+  assert.equal(egale("0,35 m", "35 cm"), true);
+  assert.equal(egale("35 cm", "0,35 m"), true);
+  assert.equal(egale("26 m", "2601 cm"), false);
+  // Deux grandeurs différentes ne sont pas égales, et ne le deviennent pas.
+  assert.equal(egale("26 m", "26 kN"), false);
+
+  /**
+   * **Un libellé n'est pas une mesure, et la lecture des nombres ne le sait
+   * pas.** `lireUnNombre` gratte les chiffres de ce qu'on lui donne : elle tire
+   * `60` de « EI 60 » comme de « CF 60 », et `1` de « CF 1 h ». Deux
+   * classements coupe-feu différents se diraient donc **égaux** si l'on
+   * comparait leurs nombres.
+   *
+   * Ce qui l'en empêche est la présence d'une unité **des deux côtés** : « EI 60 »
+   * n'en a pas — `60` n'est pas suivi d'un symbole, c'est un degré —, et la
+   * comparaison retombe sur le texte, où les deux diffèrent.
+   */
+  assert.equal(egale("EI 60", "CF 60"), false);
+  assert.equal(egale("CF 60 min", "CF 1 h"), false);
+  assert.equal(egale("3e famille B", "3e famille B"), true);
+
+  // Et ce qui porte une unité sans porter un nombre lisible ne se compare pas
+  // non plus : `1.2.3 m` n'est pas un nombre, et on ne devine pas lequel.
+  assert.equal(egale("1.2.3 m", "1,23 m"), false);
+});
+
 test("une liste se lit « ou », que l'opérateur soit « = » ou « parmi »", () => {
   const valeurs = ["3e famille A", "3e famille B"];
   assert.equal(evaluerLaCondition({ sujet: "C", operateur: OPERATEUR.EGAL, valeur: valeurs }, lu("3e famille B")).verite, true);
@@ -41,14 +84,46 @@ test("les comparaisons lisent le nombre sous l'unité et la virgule", () => {
   assert.equal(evaluerLaCondition({ sujet: "A", operateur: OPERATEUR.PLUS_DE, valeur: "900" }, lu("1 200 m")).verite, true);
 });
 
-test("deux unités différentes rendent la comparaison indécidable, pas fausse", () => {
-  // Comparer 26 à 28 rendrait « vrai » par accident, et une cote de fondation
-  // fausse se lit exactement comme une cote juste.
-  const clause = { sujet: "Hauteur", operateur: OPERATEUR.AU_PLUS, valeur: "28", unite: "m" };
-  const rendu = evaluerLaCondition(clause, lu("26 cm"));
+test("deux unités d'une même grandeur se ramènent l'une à l'autre", () => {
+  /**
+   * **C'était un doute, et c'était le cas le plus commun de tous** : une cote
+   * en centimètres dans un plan, un seuil en mètres dans une norme. La règle
+   * entière restait indécidable, et l'écran renvoyait chercher.
+   *
+   * Comparer 26 à 28 rendrait « vrai » par accident — c'est pour cela que la
+   * comparaison ne se fait **qu'après** conversion, jamais sur les nombres nus.
+   */
+  const seuil = { sujet: "Hauteur", operateur: OPERATEUR.AU_PLUS, valeur: "28", unite: "m" };
+
+  assert.equal(evaluerLaCondition(seuil, lu("26 cm")).verite, true);
+  // 2 900 cm valent 29 m : plus que le seuil, et donc faux. Sans conversion, le
+  // nombre nu 2 900 aurait aussi rendu faux — mais pour la mauvaise raison, et
+  // 26 cm aurait rendu vrai pour la mauvaise raison aussi.
+  assert.equal(evaluerLaCondition(seuil, lu("2900 cm")).verite, false);
+  assert.equal(evaluerLaCondition(seuil, lu("26 m")).verite, true);
+
+  /**
+   * **Les trois lignes ci-dessus tiendraient aussi sans conversion**, et pour
+   * la mauvaise raison : 26 et 2 900 tombent du bon côté de 28 par accident.
+   * Celle-ci ne tient **que** si le seuil est ramené — 2 m font 200 cm, et
+   * 150 cm y sont ; le nombre nu comparerait 150 à 2 et rendrait faux.
+   */
+  const deuxMetres = { sujet: "Hauteur", operateur: OPERATEUR.AU_PLUS, valeur: "2", unite: "m" };
+  assert.equal(evaluerLaCondition(deuxMetres, lu("150 cm")).verite, true);
+  assert.equal(evaluerLaCondition(deuxMetres, lu("250 cm")).verite, false);
+});
+
+test("deux grandeurs différentes rendent la comparaison indécidable, pas fausse", () => {
+  // Ce qui ne se ramène pas reste un doute, et c'est ce qui compte : une
+  // longueur comparée à une force ne devient pas comparable parce qu'on sait
+  // maintenant convertir. Une cote de fondation fausse se lit exactement comme
+  // une cote juste.
+  const clause = { sujet: "Hauteur", operateur: OPERATEUR.AU_PLUS, valeur: "28", unite: "kN" };
+  const rendu = evaluerLaCondition(clause, lu("26 m"));
+
   assert.equal(rendu.verite, null);
   assert.equal(rendu.doute, DOUTE.UNITES_INCOMPARABLES);
-  assert.match(phraseDuDoute(rendu.doute), /même unité/);
+  assert.match(phraseDuDoute(rendu.doute), /ne mesurent pas la même chose/);
 });
 
 test("une comparaison de nombres sur ce qui n'en est pas ne tranche rien", () => {
