@@ -18906,6 +18906,50 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 .memory-counts__item--unclassified:hover{ color:var(--accent); }
 
+/* ── La note de la mémoire ─────────────────────────────────────────────────
+   Ce qu'il faut savoir d'une mémoire avant de la lire. Des phrases, pas des
+   cases : une grille de chiffres se parcourt sans se lire, et c'est exactement
+   ce qu'on cherche à éviter. Trois colonnes quand la place le permet, empilées
+   sinon — l'ordre de lecture ne change pas. */
+.memory-note{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
+  gap:16px;
+  margin-top:12px;
+  padding:16px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--bg);
+}
+
+.memory-note__partie{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.memory-note__titre{ font-size:13px; color:var(--text); }
+.memory-note__chapeau{ font-size:11.5px; color:var(--muted); margin-bottom:6px; }
+.memory-note__lignes{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.memory-note__ligne{ font-size:13px; line-height:1.4; }
+
+/* Une phrase qui ouvre la liste. Un lien, pas un bouton : c'est une phrase
+   qu'on lit d'abord, et le soulignement au survol suffit à dire qu'elle mène
+   quelque part. */
+.memory-note__aller{
+  display:inline;
+  padding:0; border:none; background:none;
+  font:inherit; text-align:left; color:var(--accent, #4493f8);
+  cursor:pointer;
+}
+.memory-note__aller:hover{ text-decoration:underline; }
+.memory-note__aller:focus-visible{ outline:2px solid var(--accent, #4493f8); outline-offset:2px; border-radius:3px; }
+
+/* Ce qui ne s'ouvre pas, et pourquoi. Le gris dit « ceci ne mène nulle part »,
+   la phrase en dessous dit que ce n'est pas un oubli. */
+.memory-note__inerte{ color:var(--text); }
+.memory-note__pourquoi{ display:block; font-size:11.5px; color:var(--muted); }
+
+/* La dernière partie est le détail : ce qui se compte et ne se lit pas. Elle
+   s'efface d'un ton — la regarder ne doit rien coûter. */
+.memory-note__partie--detail .memory-note__titre,
+.memory-note__partie--detail .memory-note__ligne{ color:var(--muted); }
+
 .memory-counts{
   display:flex;
   gap:20px;

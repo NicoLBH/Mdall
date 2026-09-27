@@ -32,6 +32,10 @@ const CHAMPS = [
   { key: "forme", label: "Forme", values: [
     { value: FORME.POSEE, token: "posée", label: "Posée" },
     { value: FORME.DEDUITE, token: "déduite", label: "Déduite" }
+  ] },
+  { key: "rouvre", label: "Rouvre", values: [
+    { value: "oui", label: "Un choix humain" },
+    { value: "non", label: "Rien" }
   ] }
 ];
 
@@ -198,4 +202,60 @@ test("les deux axes que la nature mélangeait se filtrent chacun pour soi", () =
     selectionDeLaMemoire(memoire, { query: "nature:contrainte autorite:d'un-texte", champs: CHAMPS }).map((une) => une.id),
     []
   );
+});
+
+test("« rouvre: » partage la mémoire en deux, et se calcule sur le projet entier", () => {
+  /**
+   * **C'est le chiffre que la note met en tête, ouvert dans la liste.** Un
+   * nombre qu'on ne peut pas ouvrir est un cul-de-sac : on le lit, on le croit,
+   * et l'on ne peut rien en faire.
+   */
+  const commune = {
+    id: "com", kind: "base-datum", status: "assumed", domain: "structure",
+    payload: { subject: "Commune", value: "Montholon (89110)" }
+  };
+  const regle = {
+    id: "r", kind: "base-datum", status: "assumed", domain: "incendie",
+    payload: {
+      subject: "Zone climatique", value: "H1a", referentiel: true,
+      regle: { conditions: [{ sujet: "Commune", operateur: "=", valeur: ["x"] }], sauf: [] }
+    }
+  };
+  const zone = {
+    id: "zon", kind: "base-datum", status: "assumed", domain: "incendie",
+    payload: { subject: "Zone climatique", value: "H1a" }
+  };
+  const ailleurs = {
+    id: "ail", kind: "base-datum", status: "assumed", domain: "structure",
+    payload: { subject: "Portance du sol", value: "0,20 MPa" }
+  };
+  const debat = {
+    id: "deb", kind: "base-datum", status: "assumed", nature: NATURE.RAISONNEMENT, domain: "incendie",
+    payload: {
+      subject: "Quelle zone ?", value: "Quelle zone ?",
+      provenance: { type: "décision", quoi: "…", par: "Ourdine Ferrand", le: "12/03" },
+      raisonnement: {
+        question: "Quelle zone ?", porteSur: [{ sujet: "Zone climatique", valeur: "H1a" }],
+        examine: [], decision: null, produit: []
+      }
+    }
+  };
+
+  const memoire = [commune, regle, zone, ailleurs, debat];
+  const ids = (query) => selectionDeLaMemoire(memoire, { query, champs: CHAMPS }).map((une) => une.id).sort();
+
+  assert.deepEqual(ids("rouvre:oui"), ["com", "r", "zon"]);
+  // Les deux se complètent sans reste : un lecteur qui les additionne doit
+  // retrouver la mémoire qu'il a sous les yeux.
+  assert.deepEqual(ids("rouvre:non"), ["ail", "deb"]);
+  assert.equal(ids("rouvre:oui").length + ids("rouvre:non").length, memoire.length);
+
+  /**
+   * **Et il se calcule sur le projet entier, jamais sur ce qui reste.** Ce
+   * qu'une valeur rouvre dépend de la chaîne du projet, pas de ce qu'on
+   * regarde : posé sur la sélection, le débat sortirait avec le domaine
+   * « incendie » et la commune n'aurait plus rien à rouvrir — le chiffre de la
+   * note ne se retrouverait plus dans la liste qu'il vient d'ouvrir.
+   */
+  assert.deepEqual(ids("domaine:structure rouvre:oui"), ["com"]);
 });

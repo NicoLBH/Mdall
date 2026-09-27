@@ -93,7 +93,9 @@ const lier = (specifier, referent) => /^https?:/.test(specifier)
   await ecran.link(lier);
   await ecran.evaluate();
 
-  const { renderMemoryList, renderMemoryDetail, __setMemoryStateForPreview } = ecran.namespace;
+  const {
+    renderMemoryList, renderMemoryDetail, renderMemoryForPreview, __setMemoryStateForPreview
+  } = ecran.namespace;
 
   const le = "2026-03-12T10:00:00Z";
   const LIGNES = [
@@ -137,7 +139,14 @@ const lier = (specifier, referent) => /^https?:/.test(specifier)
           porteSur: [{ sujet: "Classement du bâtiment", valeur: "3e famille B" }],
           examine: [], decision: null, produit: []
         }
-      } }
+      } },
+    // Une fonction qui lit un nom que personne n'a versé : c'est le trou du
+    // raisonnement, et la seule ligne de la note qui n'ouvre aucune liste.
+    { id: "f2", kind: "base-datum", subject_key: "regle:cote-hors-gel", superseded_by: null,
+      status: "assumed", domain: "sol", decided_at: le,
+      statement: "Cote hors gel : 0,71 m",
+      payload: { subject: "Cote hors gel", value: "0,71 m", referentiel: true,
+        regle: { conditions: [{ sujet: "Altitude du site", operateur: "=", valeur: ["13 m"] }], sauf: [] } } }
   ];
 
   __setMemoryStateForPreview({ assertions: LIGNES, dependencies: [], acts: [] });
@@ -149,7 +158,11 @@ const lier = (specifier, referent) => /^https?:/.test(specifier)
     constat: renderMemoryDetail(LIGNES, { kind: LIGNES[3].kind, subjectKey: LIGNES[3].subject_key }),
     // La valeur sur laquelle le débat portait : c'est elle qui doit dire ce
     // qu'il faudra rouvrir si elle change.
-    debattue: renderMemoryDetail(LIGNES, { kind: LIGNES[2].kind, subjectKey: LIGNES[2].subject_key })
+    debattue: renderMemoryDetail(LIGNES, { kind: LIGNES[2].kind, subjectKey: LIGNES[2].subject_key }),
+    // L'accueil de la mémoire, avec sa note — et le même écran une fois filtré,
+    // où elle n'a plus lieu d'être.
+    accueil: renderMemoryForPreview(LIGNES),
+    filtre: renderMemoryForPreview(LIGNES, { reader: "hypotheses" })
   }));
 })().catch((erreur) => {
   process.stderr.write(String(erreur && erreur.stack ? erreur.stack : erreur));
@@ -189,7 +202,7 @@ test("chaque ligne porte un mot, et c'est celui de son autorité", () => {
   // annonçait « Règles » — le même objet, deux mots qui se contredisaient.
   const puces = [...rendu.liste.matchAll(/memory-tag--nature">([^<]+)</g)].map((un) => un[1]);
 
-  assert.deepEqual(puces, ["D'un texte", "Décidé", "Du projet", "Constaté", "Déduite"]);
+  assert.deepEqual(puces, ["D'un texte", "Décidé", "Du projet", "Constaté", "Déduite", "D'un texte"]);
 
   // **Le dernier mot vient de la forme, et non de l'autorité.** Un raisonnement
   // versé porte `provenance: décision` — c'est bien un humain qui a débattu —,
@@ -212,7 +225,7 @@ test("l'icône d'une ligne dessine ce que sa puce nomme", () => {
   const marques = [...rendu.liste.matchAll(/memory-row__mark[^"]*"\s*\n?\s*title="([^"]+)"/g)]
     .map((un) => un[1]);
 
-  assert.deepEqual(marques, ["D'un texte", "Décidé", "Du projet", "Constaté", "Déduite"]);
+  assert.deepEqual(marques, ["D'un texte", "Décidé", "Du projet", "Constaté", "Déduite", "D'un texte"]);
 
   // Et une fonction porte l'icône des fonctions, jamais l'étoile des données de
   // base : son `kind` la rangeait là, et le rail annonçait autre chose.
@@ -222,7 +235,8 @@ test("l'icône d'une ligne dessine ce que sa puce nomme", () => {
   const dessins = [...rendu.liste.matchAll(/memory-row__mark[\s\S]{0,400}?#([a-z0-9-]+)"/g)]
     .map((un) => un[1]);
 
-  assert.deepEqual(dessins, ["markdown-code", "git-compare", "north-star", "tools", "project-roadmap"]);
+  assert.deepEqual(dessins,
+    ["markdown-code", "git-compare", "north-star", "tools", "project-roadmap", "markdown-code"]);
 });
 
 test("le détail nomme l'autorité, et ne redit pas la nature", () => {
@@ -281,4 +295,38 @@ test("ce qui ne rouvre rien n'en dit rien, et ne s'excuse pas", () => {
   // ne se répète pas ligne à ligne.
   assert.doesNotMatch(rendu.constat, /Si ça change/);
   assert.doesNotMatch(rendu.constat, /à rouvrir/);
+});
+
+test("l'accueil de la mémoire dit où regarder avant de dire ce qu'il y a", () => {
+  /**
+   * **C'est la porte d'entrée, pas une quatrième vue.** La liste est un
+   * inventaire, le cerveau une topologie ; aucun des deux n'est un jugement. La
+   * note l'est, et chacune de ses phrases ouvre la liste qu'elle décrit.
+   */
+  assert.match(rendu.accueil, /Ce qui tient le projet/);
+  assert.match(rendu.accueil, /Ce qui demande quelque chose/);
+  assert.match(rendu.accueil, /Le détail/);
+
+  // Le chiffre de tête, et il se clique : un nombre qu'on ne peut pas ouvrir
+  // est un cul-de-sac — on le lit, on le croit, et l'on ne peut rien en faire.
+  assert.match(rendu.accueil, /data-memory-note="rouvre:oui"/);
+  // Le singulier et le pluriel s'écrivent : « 1 affirmation(s) » fait lire deux
+  // mots pour n'en retenir aucun.
+  assert.match(rendu.accueil, /1 affirmation rouvre un choix humain si elle change/);
+  assert.match(rendu.accueil, /data-memory-note="rouvre:non"/);
+
+  // **Et la ligne qui n'ouvre rien dit pourquoi.** Les noms qu'une fonction lit
+  // et que personne n'a versés ne sont dans aucune liste : ils n'existent pas en
+  // mémoire, c'est tout le problème. Une phrase muette des deux côtés serait un
+  // cul-de-sac silencieux.
+  assert.match(rendu.accueil, /qu'une fonction lit et que personne n'a versé/);
+  assert.match(rendu.accueil, /aucune liste ne peut le montrer : il n'est pas en mémoire/);
+});
+
+test("la note s'efface dès qu'un filtre est posé", () => {
+  // Dès qu'un filtre est posé on ne cherche plus où regarder : on vérifie, et
+  // c'est la liste qui fait ce métier. Une note qui resterait au-dessus d'une
+  // liste filtrée compterait le projet entier au-dessus de douze lignes.
+  assert.doesNotMatch(rendu.filtre, /Ce qui tient le projet/);
+  assert.doesNotMatch(rendu.filtre, /data-memory-note=/);
 });
