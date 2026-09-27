@@ -102,7 +102,10 @@ function commeUneRegle(bloc) {
         // Et sa boucle, quand elle en a une : sans elle, les agrégats qui la
         // lisent restent muets et la fonction ne conclut rien — sans qu'un mot
         // dise que c'est le tableau qui manque.
-        boucle: bloc?.boucle ?? null
+        boucle: bloc?.boucle ?? null,
+        // Et son abaque, quand elle est écrite en courbe : sans lui, la
+        // fonction n'a plus ni loi ni points, et elle ne conclut rien.
+        courbe: bloc?.courbe ?? null
       },
       ...(bloc?.agent ? { agent: { genre: texte(bloc.agent), utilitaire: texte(bloc.utilitaire) } } : {})
     }
@@ -121,7 +124,11 @@ export function fonctionsDuBrouillon(fichiers = []) {
       // **Un calcul raisonne**, lui : une fonction sans condition qui pose
       // `calcule TVA = Prix HT * 20%` a quelque chose à rendre, et la laisser
       // dehors reviendrait à dire que l'arithmétique n'est pas du langage.
-      if (!(bloc?.conditions ?? []).length && !(bloc?.calculs ?? []).length && !bloc?.agent) continue;
+      // **Une courbe raisonne**, elle aussi : sa loi est dans ses points, et
+      // elle rend une valeur pour une autre. La laisser dehors reviendrait à
+      // dire qu'un abaque n'est pas un raisonnement.
+      if (!(bloc?.conditions ?? []).length && !(bloc?.calculs ?? []).length
+        && !bloc?.agent && !bloc?.courbe) continue;
       fonctions.push({ fichier: texte(fichier?.nom), bloc });
     }
   }
@@ -265,6 +272,10 @@ function unePasse(fonctions, valeurs) {
       // Le tableau que la boucle a déroulé, quand la fonction en porte une :
       // c'est le **travail** de la fonction, et l'écran le montre.
       tableau: evaluation.tableau ?? null,
+      // Les points d'une courbe et où la lecture est tombée : c'est ce qu'on
+      // compare à la figure d'origine, et l'écran les dessine.
+      points: evaluation.points ?? [],
+      lecture: evaluation.lecture ?? null,
       // Un `et` et un `ou` sur la même règle se lisent de gauche à droite, sans
       // priorité. Le référentiel n'en produit pas ; une règle écrite à la main
       // qui en contient mérite d'être relue, et on le dit.

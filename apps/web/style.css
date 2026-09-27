@@ -27444,6 +27444,25 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    Trois colonnes : le nom posé, l'expression telle qu'elle est tapée — colorée
    par le peintre de la saisie, comme partout —, et ce qu'elle vaut. Un nombre
    sans sa lecture n'apprend rien, et c'est ce qu'on refuse à un agent. */
+/* ── L'abaque d'une courbe ─────────────────────────────────────────────────
+   Le dessin est la vérification : un abaque se compare à sa figure d'origine
+   d'un coup d'œil, là où onze couples de nombres demandent de les tracer dans
+   sa tête. Les nombres exacts sont dessous, dans le tableau des points. */
+.bac-courbe{ margin:8px 0; max-width:340px; }
+.bac-courbe__trace{ display:block; width:100%; height:auto; }
+.bac-courbe__ligne{ stroke:rgb(110,168,254); stroke-width:1.5; }
+.bac-courbe__point{ fill:rgb(110,168,254); }
+.bac-courbe__lu{ fill:var(--bg, canvas); stroke:rgb(210,168,255); stroke-width:2; }
+.bac-courbe__bornes{
+  display:flex; justify-content:space-between;
+  color:var(--muted); font-size:11px; padding:0 8px;
+  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace);
+}
+/* Les deux points qui encadrent la lecture : c'est la ligne qu'on cherche. */
+.bac-tableau--courbe{ max-width:340px; }
+.bac-tableau__retenue{ background:rgba(110,168,254,.12); }
+.bac-tableau__retenue th, .bac-tableau__retenue td{ color:var(--fg, inherit); }
+
 /* ── Le tableau qu'une boucle déroule ──────────────────────────────────────
    Tout le gain de « pour chaque » est qu'on relit les lignes une à une contre
    la note de calcul d'origine : il se montre donc en entier, et une case qu'on

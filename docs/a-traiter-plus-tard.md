@@ -4588,3 +4588,12 @@ condition attend un sujet donnerait `si (le plus grand de = …)`. Le proposer
 **après le `=` d'un `calcule`** serait juste, et demande un état de plus dans
 `ceQuAttendLaLigne` — la liste ne connaît aujourd'hui que « un mot », « un nom »,
 « une valeur », « un fichier », « un statut ».
+
+**Une courbe n'a qu'une entrée.** Un abaque à double entrée — un coefficient
+selon la zone **et** l'altitude — s'écrit aujourd'hui en barème, c'est-à-dire par
+paliers : on perd l'interpolation sur l'un des deux axes
+(`docs/la-courbe-et-linterpolation.md`). Interpoler sur deux axes est un travail
+connu, et il demande surtout de décider **ce qu'on montre** : une surface ne se
+relit pas comme une courbe, et le gain de cette forme est précisément qu'on la
+compare à sa figure d'un coup d'œil. Le verrou est donc à l'écran, pas dans le
+calcul.

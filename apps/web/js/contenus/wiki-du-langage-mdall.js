@@ -351,6 +351,52 @@ export const WIKI_DU_LANGAGE = [
       + "la ligne qui compte.")
   ]),
 
+  section("courbe", "Un abaque : « courbe »", [
+    dit("Les normes sont pleines de **figures** : un coefficient de forme selon "
+      + "la pente, un coefficient d'exposition selon l'altitude, une pression "
+      + "selon la hauteur. Les transcrire en arithmétique donne une suite de "
+      + "produits que **personne ne peut comparer à la figure d'origine** — un "
+      + "contrôleur technique regarde une courbe, il ne relit pas une régression."),
+    code(
+      "courbe Coefficient de forme(zones, Pente du versant) {",
+      "   // NF EN 1991-1-3, figure 5.1 — toiture à un versant.",
+      "   texte: NF EN 1991-1-3, annexe nationale",
+      "   entre les points: linéaire",
+      "   hors bornes: refuse",
+      "   |  0° | 0,8 |",
+      "   | 30° | 0,8 |",
+      "   | 60° | 0   |",
+      "}"
+    ),
+    dit("**Une courbe est une fonction**, écrite autrement : elle lit le nom de "
+      + "sa signature et conclut sous le sien. Les autres la lisent comme "
+      + "n'importe quel nom — il n'y a pas d'appel, ici non plus. L'écran la "
+      + "**dessine**, et montre entre quels deux points votre valeur est tombée."),
+    dit("**Les deux déclarations sont obligatoires, et c'est tout l'objet de la "
+      + "forme.** L'interpolation est déclarée, donc vérifiable :"),
+    table(["ce qu'on écrit", "ce que cela veut dire"], [
+      ["`entre les points: linéaire`", "une droite entre les deux points qui encadrent la valeur"],
+      ["`entre les points: en escalier`", "la valeur du point atteint, jusqu'au suivant — un palier"],
+      ["`hors bornes: refuse`", "au-delà des points écrits, la courbe ne conclut pas"],
+      ["`hors bornes: borne`", "au-delà, la valeur de l'extrémité — quand le texte le dit"]
+    ]),
+    dit("**Écrivez `refuse` sauf si le texte dit le contraire.** C'est la faute "
+      + "la plus chère : une courbe donnée de 0 à 60° prolongée jusqu'à 75° rend "
+      + "un nombre parfaitement plausible, qui ne vient d'aucun texte — et "
+      + "personne ne peut dire d'où il sort."),
+    dit("Un point par ligne, deux cases : l'abscisse, puis ce que la courbe vaut. "
+      + "**Les abscisses montent, strictement** — deux points au même endroit "
+      + "donneraient deux valeurs pour une lecture, et une abscisse qui redescend "
+      + "est une ligne recopiée dans le désordre. Il en faut au moins deux, et "
+      + "chaque colonne mesure une seule chose."),
+    dit("Le degré se colle au nombre — `30°` —, comme sur la figure. C'est la "
+      + "seule unité qu'on écrit ainsi : `26 m` garde son espace."),
+    dit("**Le langage n'ajuste aucune loi** : pas de régression, pas de spline, "
+      + "pas de polynôme. Ce qui n'est pas entre deux points écrits n'existe pas. "
+      + "Une courbe lissée rendrait des valeurs que le texte d'origine ne porte "
+      + "pas, et c'est précisément ce qu'on refuse à un agent.")
+  ]),
+
   section("chainage", "Une fonction lit ce qu'une autre conclut", [
     dit("**Il n'y a pas d'appel de fonction dans Mdall.** `calcule taux = Taux de TVA(…)` "
       + "ne se lit pas, et n'existera pas : un langage où une fonction en appelle une autre "

@@ -45,6 +45,8 @@ import { renderSideResizer, bindSideResizer } from "../../ui/side-resizer.js";
 import { renderGhActionButton, bindGhActionButtons } from "../../ui/gh-split-button.js";
 import { renderJetons } from "../../ui/code-mdall.js";
 import { jetonsDeLaLigne } from "../../../services/memoire-en-lecture.js";
+import { couperLUnite, lireUnNombre } from "../../../services/memoire-en-texte.js";
+import { phraseDeLaLecture, traceDeLaCourbe } from "../../../services/courbe-du-mdall.js";
 import { jetonsEcrits } from "../../../services/mdall-en-ecriture.js";
 import { niveauxDesPaires } from "../../../services/mdall-retrait.js";
 import {
@@ -440,6 +442,132 @@ export function renderTableauDeLaBoucle(tableau = null) {
   `;
 }
 
+/** Le cadre du tracé, en unités de la vue : large, plat, et sans axes chiffrés. */
+const CADRE = { largeur: 320, hauteur: 110, marge: 10 };
+
+/**
+ * L'abaque d'une courbe, tracé.
+ *
+ * ## Pourquoi un dessin, et pas seulement des nombres
+ *
+ * **Le dessin est la vérification.** Un abaque se compare à sa figure d'origine
+ * d'un coup d'œil ; relire onze couples de nombres demande de les tracer dans
+ * sa tête, et c'est exactement ce que la forme existe pour éviter. Le contrôleur
+ * regarde la courbe ; il ne relit pas une régression.
+ *
+ * ## Il n'a pas d'axes chiffrés, et c'est voulu
+ *
+ * Les nombres sont **sous** le dessin, dans le tableau des points, où ils se
+ * lisent exactement. Les répéter en graduations ferait deux lectures du même
+ * fait, dont l'une approximative — et c'est celle-là qu'on croirait.
+ *
+ * Ce qui décide de la forme vit dans `traceDeLaCourbe`, qui est pur et
+ * s'éprouve ; ici on pose les points sur une grille, et rien de plus.
+ */
+export function renderCourbe(resultat = null) {
+  const points = resultat?.points ?? [];
+  if (points.length < 2) return "";
+
+  const lu = resultat?.lecture;
+
+  /**
+   * **La marque se pose sur la courbe, toujours.**
+   *
+   * Une lecture bornée — `hors bornes: borne` — a été prise **hors** des points
+   * écrits, et la poser à sa vraie abscisse étirait le tracé jusqu'à elle : les
+   * deux bornes affichées sous le dessin cessaient alors d'être aux deux bouts,
+   * et le cadre annonçait une courbe plus large que celle qui est écrite.
+   *
+   * Ce qui s'est passé se dit en mots — la légende et la ligne mise en évidence
+   * —, et le dessin montre ce que la courbe a **conclu** : son extrémité.
+   */
+  const borne = lu?.borne ? points.find((un) => un.dit === lu.borne) : null;
+  const surLaCourbe = borne
+    ? { x: borne.x, y: borne.y }
+    : (lu?.lu && resultat?.valeur
+      ? { x: lireUnNombre(couperLUnite(lu.lu).nombre), y: lireUnNombre(couperLUnite(resultat.valeur).nombre) }
+      : {});
+
+  const { points: poses, lu: marque } = traceDeLaCourbe(
+    { points }, { x: surLaCourbe.x ?? null, y: surLaCourbe.y ?? null }
+  );
+
+  const { largeur, hauteur, marge } = CADRE;
+  // L'ordonnée se retourne : un canevas compte du haut, une courbe monte.
+  const ou = (point) => [
+    marge + point.x * (largeur - 2 * marge),
+    hauteur - marge - point.y * (hauteur - 2 * marge)
+  ];
+
+  const chemin = poses.map((point, rang) => `${rang ? "L" : "M"}${ou(point).map(Math.round).join(" ")}`).join(" ");
+
+  return `
+    <figure class="bac-courbe">
+      <svg viewBox="0 0 ${largeur} ${hauteur}" class="bac-courbe__trace"
+        role="img" aria-label="${escapeHtml(`La courbe, de ${points[0].dit} à ${points[points.length - 1].dit}`)}">
+        <path d="${chemin}" class="bac-courbe__ligne" fill="none" />
+        ${poses.map((point) => {
+          const [x, y] = ou(point);
+          return `<circle cx="${Math.round(x)}" cy="${Math.round(y)}" r="2.5" class="bac-courbe__point">
+            <title>${escapeHtml(`${point.dit} → ${point.vaut}`)}</title>
+          </circle>`;
+        }).join("")}
+        ${marque ? `<circle cx="${Math.round(ou(marque)[0])}" cy="${Math.round(ou(marque)[1])}" r="4"
+          class="bac-courbe__lu"><title>${escapeHtml(`${lu.lu} → ${resultat.valeur}`)}</title></circle>` : ""}
+      </svg>
+      <figcaption class="bac-courbe__bornes">
+        <span>${escapeHtml(points[0].dit)}</span>
+        <span>${escapeHtml(points[points.length - 1].dit)}</span>
+      </figcaption>
+    </figure>
+  `;
+}
+
+/**
+ * Les points d'une courbe, et où la lecture est tombée.
+ *
+ * **La trace dit entre quels deux points on est**, et c'est ce qu'on regarde en
+ * premier : un abaque se vérifie en retrouvant la ligne du tableau, pas en
+ * refaisant le calcul.
+ */
+export function renderPointsDeLaCourbe(resultat = null) {
+  const points = resultat?.points ?? [];
+  if (!points.length) return "";
+
+  const lu = resultat?.lecture ?? {};
+  const dansLIntervalle = (point, rang) => {
+    if (lu.sur) return point.dit === lu.sur;
+    if (lu.borne) return point.dit === lu.borne;
+    if (!lu.entre) return false;
+    return point.dit === lu.entre.de || point.dit === lu.entre.a;
+  };
+
+  return `
+    <table class="bac-tableau bac-tableau--courbe">
+      ${/*
+        **Où la lecture est tombée passe avant le compte des points.** C'est la
+        ligne qu'on cherche, et la seule qui se compare au texte d'origine.
+      */""}
+      <caption class="bac-tableau__titre">${escapeHtml(
+        [phraseDeLaLecture(lu), `${points.length} points`].filter(Boolean).join(" · ")
+      )}</caption>
+      <tbody>
+        ${points.map((point, rang) => `
+          <tr${dansLIntervalle(point, rang) ? ' class="bac-tableau__retenue"' : ""}>
+            <th scope="row">${escapeHtml(point.dit)}</th>
+            <td>${escapeHtml(point.vaut)}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+    ${lu.borne
+      ? `<p class="bac-resultat__note">${escapeHtml(
+        "La valeur lue sort des points écrits : « hors bornes: borne » dit de prendre celle de l'extrémité."
+      )}</p>`
+      : ""}
+  `;
+}
+
 /** Ce qu'une clause valait, en un mot — et `indécidable` s'y dit comme tel. */
 function motDeLaVerite(verite) {
   if (verite === true) return "vrai";
@@ -479,6 +607,13 @@ export function renderResultats(resultats = []) {
             ce qu'on en tire : l'ordre inverse ferait lire un total avant de
             savoir ce qu'il totalise.
           */""}
+          ${/*
+            **Le dessin avant les points.** On reconnaît la figure, puis on
+            vérifie les nombres : l'ordre inverse fait relire onze couples avant
+            de savoir de quelle courbe il s'agit.
+          */""}
+          ${renderCourbe(resultat)}
+          ${renderPointsDeLaCourbe(resultat)}
           ${renderTableauDeLaBoucle(resultat.tableau)}
           ${renderCalculs(resultat.calculs)}
           ${
