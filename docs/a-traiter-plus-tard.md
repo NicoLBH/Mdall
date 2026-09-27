@@ -4496,3 +4496,54 @@ deux conditions de `cequiAEteRevuDepuis` ne pouvaient pas tomber : la comparaiso
 des deux jours les couvrait déjà. Une consigne qu'aucune rupture ne fait voir est
 une intention (règle 12) — elles sont parties, et la condition qui reste porte
 les trois cas.
+
+## 64. Ce que les quatre lots de la lecture laissent ouvert
+
+Les quatre lots — le vocabulaire à un seul axe, « ce que ça rouvre », la note de
+la mémoire, le pliage du cerveau — sont livrés. Ce qui suit n'a pas été fait, et
+chaque point dit pourquoi il compte.
+
+**La trace d'une réponse ne dit pas de quelle proposition vient la fonction.**
+Une fonction versée cite son texte réglementaire ; elle ne cite pas la
+proposition qu'un humain a signée pour la faire entrer. Or c'est le seul chemin
+qui permette de remonter d'une réponse du copilote à **ce qu'on a signé** — et
+c'est précisément ce qu'on demande quand une valeur surprend. Sans lui, la
+signature existe en base et ne se rejoint pas depuis l'écran.
+
+**L'écran d'accueil.** Le rail, le copilote et les actualités n'ont pas d'entrée
+commune. Chaque écran sait se montrer ; aucun ne dit par où commencer. La note de
+la mémoire vient de prouver que ce genre d'objet se dérive de ce qui existe déjà
+(`docs/la-note-de-la-memoire.md`) — l'accueil est le même travail, un cran plus
+haut.
+
+**Le chargement en `vm` n'a servi qu'à deux écrans.** Soixante-six modules
+importent Supabase par un CDN et ne peuvent donc pas se charger dans une épreuve.
+`project-memory-au-chargement.test.mjs` montre qu'on sait le faire : on résout
+les chemins sur le disque, tout ce qui vient d'un CDN devient un module muet, et
+le navigateur est un mandataire qui répond à tout sans rien faire. Le porter aux
+autres écrans est mécanique, et chaque portage a jusqu'ici trouvé un défaut que
+rien d'autre ne voyait — six mutations sur neuf pour la Mémoire, deux décisions
+entières pour le cerveau.
+
+**La note n'a que deux lignes sous « Ce qui demande quelque chose ».** L'audit
+sait déjà dire ce qu'elle tait : *N valeurs contredisent la fonction qui les
+conclut* (`VERDICT.DIFFERENTE`), *N fonctions ne peuvent pas conclure faute d'une
+entrée* (`VERDICT.INDECIDABLE`), *N calculs d'utilitaire reposent sur une entrée
+qui a bougé depuis* (`perimees`). Ces trois-là sont les plus actionnables de
+toute la mémoire, et elles manquent pour une seule raison : **elles n'ont pas
+d'écran où atterrir.** Les ajouter sans requête ferait trois lignes inertes
+d'affilée, et une note dont la moitié ne mène nulle part apprend à ne pas la
+lire. Le travail n'est donc pas dans la note : c'est une lecture de l'audit qui
+manque.
+
+**Un garde qui ne s'éprouve pas, et il est nommé.** La remontée de
+`ce-que-ca-rouvre.js` s'arrête sur ce qu'elle a déjà vu ; sans ce garde, un
+graphe qui se lit en rond ne rend pas un mauvais compte — il **pend**, et aucun
+délai n'interrompt une boucle synchrone. Le cas existe et il est écrit ; il est
+dit ici pour qu'on ne le prenne pas un jour pour un cas qui garde quelque chose.
+
+**Un geste qui ne s'éprouve qu'au clavier.** Cocher « ne montrer que ce qui
+porte » appelle la recomposition, et aucune épreuve de Node ne coche une case.
+Le geste est vérifié dans Chromium en mesurant l'encre du canevas avant et
+après. Tant qu'aucune épreuve de navigateur n'est au dépôt, ce lien-là se
+revérifie à la main à chaque fois qu'on touche à cet écran.
