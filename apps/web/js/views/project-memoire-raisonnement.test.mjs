@@ -200,3 +200,28 @@ test("le bandeau porte le constat et ses caractéristiques", () => {
   assert.match(html, /Colonne sèche : exigée/);
   assert.match(html, /raison-espace__pastilles/);
 });
+
+test("la colonne de code s'appelle « Les fonctions », et la vue garde son nom", () => {
+  /**
+   * **C'est l'ambiguïté vue à l'écran, et elle tenait en deux mots empilés.**
+   * Le panneau s'intitulait « Comment on en est arrivé là », et la colonne
+   * juste dessous « Le raisonnement » — alors qu'elle montre du Mdall,
+   * `fonction … { … }`. Un objet nommé deux fois, à deux centimètres d'écart,
+   * fait croire à deux choses.
+   *
+   * Le partage est celui-ci, et il vaut pour tout l'écran : **le nom de la vue
+   * dit un chemin, le nom de l'objet dit une fonction.** Un chemin est une
+   * façon de regarder ; ce n'est pas une espèce d'objet.
+   */
+  const html = renderEspaceDuRaisonnement({
+    graphe: GRAPHE, lignes: CODE, trace: TRACE, etat: espaceParDefaut()
+  });
+
+  const tete = html.slice(html.indexOf("raison-ligne--tete"), html.indexOf('data-raison-rang="0"'));
+  assert.match(tete, /Les fonctions/);
+  assert.doesNotMatch(tete, /Le raisonnement/);
+
+  // Et la vue, elle, garde son nom : c'est bien la question qu'on se pose en
+  // l'ouvrant, et la retirer perdrait ce qu'on venait chercher.
+  assert.match(html, /Comment on en est arrivé là/);
+});

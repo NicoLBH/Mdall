@@ -17734,6 +17734,15 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   color:var(--muted);
 }
 
+/* Une chaîne qui s'arrête sur un choix humain. **Ce n'est pas une lacune** : le
+   trait discontinu du vide se lirait comme un manque, alors que c'est ce que le
+   projet garde de plus précieux — un nom, une date, et les possibles d'alors.
+   L'ambre le dit : quelque chose attend quelqu'un, et rien n'est en faute. */
+.memory-tag--valeur.memory-tag--arret{
+  background:rgba(210, 153, 34, 0.12);
+  color:rgb(210, 153, 34);
+}
+
 /* La zone prend la place de la clé métier, à droite du titre : la clé n'était
    que la translittération de ce qui est écrit au-dessus, la zone ne se lisait
    nulle part alors qu'elle change tout. */

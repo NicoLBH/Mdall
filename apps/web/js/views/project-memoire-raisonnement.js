@@ -170,8 +170,8 @@ function renderEtat(entree) {
 /**
  * Le code et les valeurs, en une grille.
  *
- * Trois cellules par rangée, dans l'ordre où l'œil les prend : le raisonnement,
- * son numéro, ce que le projet en dit. Un seul défilement horizontal pour les
+ * Trois cellules par rangée, dans l'ordre où l'œil les prend : les fonctions,
+ * leur numéro, ce que le projet en dit. Un seul défilement horizontal pour les
  * trois — c'est le conteneur qui l'a, pas les colonnes.
  */
 function renderGrille(lignes = [], trace = [], ancres = new Map()) {
@@ -202,7 +202,12 @@ function renderGrille(lignes = [], trace = [], ancres = new Map()) {
         <span class="raison-ligne__etat">Ce que le projet dit aujourd'hui</span>
         <span class="raison-ligne__num raison-ligne__num--poignee" data-raison-poignee="etat"
           title="Tirez pour changer le partage" aria-label="Changer le partage entre les valeurs et le code">⋮</span>
-        <span class="raison-ligne__code">Le raisonnement</span>
+        ${/* **« Les fonctions », et non « Le raisonnement ».** Cette colonne montre
+             du Mdall — `fonction … { … }` —, et l'intitulé annonçait un
+             raisonnement : on lisait deux mots pour un seul objet, l'un au-dessus
+             de l'autre. « Comment on en est arrivé là » reste le nom de la **vue**,
+             en haut : un chemin est une façon de regarder, pas une espèce d'objet. */""}
+        <span class="raison-ligne__code">Les fonctions</span>
       </div>
       ${rangees}
     </div>
