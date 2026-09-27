@@ -338,7 +338,12 @@ export const WIKI_DU_LANGAGE = [
     ),
     dit("Rien ne se demande non plus pour **montrer** : le bac montre toutes les "
       + "conclusions et toutes les étapes de `calcule`, avec leur trace. Il n'y a pas de "
-      + "verbe d'affichage à écrire, et il n'y en aura pas.")
+      + "verbe d'affichage à écrire, et il n'y en aura pas."),
+    dit("**Et pour savoir ce qu'on peut nommer, on n'a rien à retenir.** Le menu de "
+      + "l'écran d'écriture ouvre « Ce que je peux nommer » : ce que ce brouillon déclare, "
+      + "conclut et pose, les fonctions du langage, et ce que votre établi garde — avec, "
+      + "pour chaque fonction, **ce qu'elle lit**. Un clic pose le nom là où vous écriviez. "
+      + "On ne compose pas avec ce qu'on ne sait pas nommer.")
   ]),
 
   section("exemple-vent", "Un exemple entier : la zone de vent", [

@@ -63,6 +63,7 @@ import {
   fermerLaFenetreDeDetails, majLaFenetreDeDetails, ouvrirLaFenetreDeDetails
 } from "../../ui/fenetre-de-details.js";
 import { ouvrirLeWikiMdall } from "../../ui/wiki-mdall.js";
+import { ouvrirLeCatalogueDeLecriture } from "../../ui/catalogue-de-lecriture.js";
 import {
   MANQUE, PHRASE_DU_MANQUE, PHRASE_DU_REFUS, REFUS_DE_LETABLI, ficheDuBrouillon,
   brouillonDesFichiers, ceQueLenregistrementFait, phraseDeLenregistrement,
@@ -613,7 +614,17 @@ export const GESTE = {
    * le seul chemin (fondamental 13), et une documentation qu'on n'a pas sous la
    * main fait de l'IA le seul chemin.
    */
-  WIKI: "brouillon-wiki"
+  WIKI: "brouillon-wiki",
+  /**
+   * Parcourir ce qu'on peut nommer.
+   *
+   * **C'est la porte de la composition.** Mdall n'a pas d'appel de fonction :
+   * une fonction conclut sous son nom, et les autres la lisent comme n'importe
+   * quel nom. Enchaîner, c'est donc nommer ce qu'une autre conclut — et rien à
+   * l'écran ne disait ce que les autres fonctions du brouillon concluent. On
+   * ne compose pas avec ce qu'on ne sait pas nommer.
+   */
+  CATALOGUE: "brouillon-catalogue"
 };
 
 /**
@@ -727,6 +738,11 @@ export function renderActionsDuTitre(
           title: "Rouvrir un utilitaire de votre établi"
         }, {
           separator: true
+        }, {
+          action: GESTE.CATALOGUE,
+          icon: svgIcon("search", { className: "octicon" }),
+          label: "Ce que je peux nommer…",
+          title: "Parcourir les noms de ce brouillon, du langage et de votre établi"
         }, {
           action: GESTE.WIKI,
           icon: svgIcon("book", { className: "octicon" }),
@@ -1060,17 +1076,17 @@ export function renderListeDeLetabli(liste = null) {
   }
 
   return `
-    <ul class="etabli-liste">
+    <ul class="fiches">
       ${liste.map((un) => `
         <li>
-          <button type="button" class="etabli-liste__item"
+          <button type="button" class="fiches__item"
             data-geste="${GESTE_DE_LETABLI.REPRENDRE}" data-etabli-id="${escapeHtml(un.id)}">
-            <span class="etabli-liste__nom">
+            <span class="fiches__nom">
               ${escapeHtml(un.nom)}
-              <span class="etabli-liste__version mono-small">v${escapeHtml(String(un.version))}</span>
+              <span class="fiches__apart mono-small">v${escapeHtml(String(un.version))}</span>
             </span>
-            <span class="etabli-liste__resume">${escapeHtml(un.resume)}</span>
-            <span class="etabli-liste__quoi">
+            <span class="fiches__resume">${escapeHtml(un.resume)}</span>
+            <span class="fiches__quoi">
               ${un.entrees.length ? `prend ${escapeHtml(un.entrees.join(", "))}` : "ne prend rien"}
               ·
               ${un.sorties.length ? `rend ${escapeHtml(un.sorties.join(", "))}` : "ne rend rien"}
@@ -1563,6 +1579,7 @@ function brancherLaLigneDuTitre(racine) {
       const geste = evenement.detail?.action;
       if (geste === GESTE.VIDER) viderLeBrouillon(racine);
       if (geste === GESTE.WIKI) ouvrirLeWikiMdall();
+      if (geste === GESTE.CATALOGUE) ouvrirLeCatalogue(racine);
       // Le même renvoi que le bouton de la ligne du titre : une seule façon de
       // proposer, appelée de deux endroits (règle 10).
       if (geste === GESTE.PROPOSER) void proposerAuProjet(racine);
@@ -2205,25 +2222,53 @@ function brancherLaHauteurDeLaConsole(racine) {
     : null;
 }
 
+/** La zone où l'on écrit du Mdall, ou `null` si le volet n'est pas à l'écran. */
+function zoneDuCode(racine) {
+  return racine?.querySelector(".brouillon-volet .saisie-code .saisie-code__zone") ?? null;
+}
+
+/**
+ * Ce qu'on peut nommer, **maintenant et là où le curseur est**.
+ *
+ * Demandé à chaque frappe et à chaque ouverture du catalogue, jamais retenu :
+ * on vient peut-être d'écrire la fonction qu'on veut voir proposée, et un
+ * contexte pris au branchement daterait d'avant.
+ *
+ * **La liste sous le curseur et le panneau qu'on parcourt partent d'ici tous
+ * les deux.** Deux appels voisins finiraient par ne plus montrer la même chose,
+ * et c'est la pire des divergences : celle où l'écran propose un nom que le
+ * parcours ne montre pas (règle 10).
+ */
+function contexteIci(racine) {
+  const saisie = zoneDuCode(racine);
+  return contexteDuBrouillon(fichiersRemplis(etat.brouillon), {
+    contenu: saisie?.value ?? "",
+    position: saisie?.selectionStart ?? 0,
+    etabli: etat.etabli
+  });
+}
+
+/**
+ * Ouvrir le catalogue des noms.
+ *
+ * **L'établi se lit après l'ouverture**, et non avant : tout ce qui vient du
+ * brouillon et du langage est déjà là, et c'est ce qu'on cherche neuf fois sur
+ * dix. Attendre la base laisserait l'écran sans réponse sur un clic.
+ */
+function ouvrirLeCatalogue(racine) {
+  ouvrirLeCatalogueDeLecriture({
+    catalogue: () => contexteIci(racine).catalogue,
+    zone: () => zoneDuCode(racine),
+    lireLetabli: etat.etabli === null ? () => assurerLetabli() : null
+  });
+}
+
 function brancherLeVolet(racine) {
   const zone = racine.querySelector(".brouillon-volet .saisie-code");
 
   debrancherPropositions?.();
   debrancherPropositions = zone
-    ? brancherLesPropositions(zone, {
-      /**
-       * Le contexte est demandé **à chaque frappe**, et non retenu ici : on
-       * vient peut-être d'écrire la déclaration qu'on veut voir proposée, et
-       * un contexte pris au branchement daterait d'avant.
-       */
-      contexte: () => {
-        const saisie = zone.querySelector(".saisie-code__zone");
-        return contexteDuBrouillon(fichiersRemplis(etat.brouillon), {
-          contenu: saisie?.value ?? "",
-          position: saisie?.selectionStart ?? 0
-        });
-      }
-    })
+    ? brancherLesPropositions(zone, { contexte: () => contexteIci(racine) })
     : null;
 
   debrancherSaisie = zone

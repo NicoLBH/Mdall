@@ -107,21 +107,39 @@ export function phraseDuRefus(code, quoi = "") {
 }
 
 /**
- * Les fonctions de base, et le nombre d'arguments que chacune prend.
+ * Les fonctions de base : combien d'arguments chacune prend, ce qu'elle fait,
+ * et comment on l'écrit.
  *
  * Elles sont peu nombreuses **exprès**. Chaque fonction de plus est une loi de
  * plus qu'il faut enseigner, écrire dans le wiki, et qu'un relecteur doit
  * connaître pour signer. Celles-ci répondent aux phrases qu'on écrit vraiment :
  * une racine, un arrondi, une borne.
+ *
+ * **Ce qu'elle fait est dit ici, avec elle.** Une fonction se propose à
+ * l'écriture et se parcourt dans le catalogue des noms ; une phrase écrite là
+ * plutôt qu'ici ne suivrait pas la fonction qu'on ajoute au langage, et le
+ * catalogue montrerait un nom sans savoir en dire quoi que ce soit (règle 10).
  */
 export const FONCTIONS = {
-  racine: { arguments: [1] },
-  abs: { arguments: [1] },
-  arrondi: { arguments: [1, 2] },
-  plafond: { arguments: [1] },
-  plancher: { arguments: [1] },
-  min: { arguments: [2, 3, 4, 5, 6, 7, 8] },
-  max: { arguments: [2, 3, 4, 5, 6, 7, 8] }
+  racine: { arguments: [1], dit: "La racine carrée", comme: "racine(Surface)" },
+  abs: { arguments: [1], dit: "La valeur sans son signe", comme: "abs(Écart)" },
+  arrondi: {
+    arguments: [1, 2],
+    dit: "Arrondir, au nombre de décimales qu'on donne",
+    comme: "arrondi(Cote ; 2)"
+  },
+  plafond: { arguments: [1], dit: "L'entier au-dessus", comme: "plafond(Nombre de rangs)" },
+  plancher: { arguments: [1], dit: "L'entier en dessous", comme: "plancher(Nombre de rangs)" },
+  min: {
+    arguments: [2, 3, 4, 5, 6, 7, 8],
+    dit: "Le plus petit de deux valeurs ou davantage",
+    comme: "min(Portée ; 6 m)"
+  },
+  max: {
+    arguments: [2, 3, 4, 5, 6, 7, 8],
+    dit: "Le plus grand de deux valeurs ou davantage",
+    comme: "max(Charge ; 1,5 kN)"
+  }
 };
 
 /* ────────────────────────────────────────────────────────────────────────────

@@ -46,7 +46,8 @@ const MOTS_DE_LA_NATURE = {
   [QUOI.LOCALE]: "calculé ici",
   [QUOI.VALEUR]: "valeur possible",
   [QUOI.FICHIER]: "fichier",
-  [QUOI.STATUT]: "statut"
+  [QUOI.STATUT]: "statut",
+  [QUOI.FONCTION]: "fonction du langage"
 };
 
 /**
@@ -132,11 +133,11 @@ export function brancherLesPropositions(racine, { contexte = null, surChangement
   const montrer = () => {
     const { rang, colonne } = ouEstLeCurseur(zone.value, zone.selectionStart);
     const ligne = zone.value.split("\n")[rang] ?? "";
-    const { declares, locales, fichiers } = contexte() ?? {};
+    const { catalogue, fichiers } = contexte() ?? {};
 
     // On décide **avant** de toucher à l'état : `fermer` doit pouvoir lire ce
     // qui était ouvert, et non ce qu'on vient de calculer.
-    const trouvees = propositionsDeSaisie({ ligne, colonne, declares, locales, fichiers });
+    const trouvees = propositionsDeSaisie({ ligne, colonne, catalogue, fichiers });
     if (!trouvees.length) return fermer();
 
     ouvertes = trouvees;

@@ -50,7 +50,7 @@ import {
   ligneDImport, ligneDeDecision, ligneDeFonction, ligneDeLocaleVide, ligneDAffectation,
   jetonsDeValeur, AGENT, AGENTS, VERBES
 } from "./memoire-en-texte.js";
-import { lireUnCalcul, phraseDuRefus } from "./mdall-calcul.js";
+import { lireUnCalcul, nomsDuCalcul, phraseDuRefus } from "./mdall-calcul.js";
 // La clé d'un sujet vient d'un seul endroit : comparer « Couleur des volets » à
 // « couleur des volets » avec une seconde normalisation écrite ici finirait par
 // ne plus dire la même chose que celle du projet (règle 10).
@@ -1403,6 +1403,56 @@ export function dependancesDuBloc(bloc = {}) {
   const sujets = clausesDeLaRegle(bloc).map((condition) => texte(condition?.sujet)).filter(Boolean);
 
   return [...new Set(sujets)];
+}
+
+/**
+ * Tous les noms qu'un bloc **lit** : ses calculs d'abord, ses clauses ensuite.
+ *
+ * ## Pourquoi ce n'est pas `dependancesDuBloc`
+ *
+ * `dependancesDuBloc` rend les sujets des **conditions**, et c'est ce que le
+ * graphe veut : une arête dit « cette valeur décide de celle-là ». Un nom lu
+ * dans un `calcule` ne décide de rien — il est **pris**, et il faut quand même
+ * l'avoir. Le formulaire, lui, doit demander les deux : une règle dont
+ * l'arithmétique lit un nom qu'on n'offre nulle part reste indécidable, et
+ * l'écran ne dit pas pourquoi.
+ *
+ * ## Pourquoi ça vit ici
+ *
+ * Ce parcours était écrit dans `nomsLus`, qui en tirait le formulaire du bac
+ * d'essai. Le catalogue des noms pose la **même** question par fonction — que
+ * lit celle-ci ? —, et une seconde lecture écrite ailleurs cesserait un jour de
+ * voir ce que la première voit : un `sinon si` ajouté au langage, une branche
+ * oubliée, et l'un des deux écrans se met à mentir sans tomber (règle 10).
+ *
+ * **L'ordre est celui du formulaire** : ce qu'un calcul prend vient avant ce
+ * qu'une condition compare, parce que c'est l'ordre dans lequel les champs se
+ * sont toujours présentés.
+ *
+ * Il rend les noms **tels qu'ils sont lus**, sans écarter ceux que le bloc pose
+ * lui-même : qui est une entrée et qui est une locale se décide en regardant
+ * tout le brouillon, pas un bloc seul.
+ */
+export function nomsLusParLeBloc(bloc = {}) {
+  const lus = [];
+  const vus = new Set();
+
+  const retenir = (nom) => {
+    const dit = texte(nom);
+    const cle = cleDuSujet(dit);
+    if (!cle || vus.has(cle)) return;
+    vus.add(cle);
+    lus.push(dit);
+  };
+
+  for (const calcul of Array.isArray(bloc?.calculs) ? bloc.calculs : []) {
+    const lu = lireUnCalcul(texte(calcul?.expression));
+    if (lu.ok) nomsDuCalcul(lu.arbre).forEach(retenir);
+  }
+
+  for (const condition of clausesDeLaRegle(bloc)) retenir(condition?.sujet);
+
+  return lus;
 }
 
 /**

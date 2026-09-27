@@ -36,7 +36,7 @@
 
 import { MOTS, VERBES, PROVENANCES, STATUTS, PORTEE_DUNE_FONCTION } from "./memoire-en-texte.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
-import { declarationsDuBrouillon } from "./formulaire-du-brouillon.js";
+import { ORIGINE, catalogueDesNoms, nomsLisiblesDIci } from "./catalogue-des-noms.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -53,7 +53,30 @@ export const QUOI = {
   /** Un fichier du brouillon ou du projet. */
   FICHIER: "fichier",
   /** Un statut du langage. */
-  STATUT: "statut"
+  STATUT: "statut",
+  /** Une fonction du langage : `racine`, `arrondi`, `min`. */
+  FONCTION: "fonction"
+};
+
+/**
+ * Ce qu'une origine du catalogue devient sous le curseur.
+ *
+ * Le catalogue distingue six provenances, parce qu'on les parcourt ; la liste
+ * sous le curseur n'en montre que la sorte, parce qu'on la lit du coin de
+ * l'œil. Ce qui est **posé par le brouillon** se lit comme un nom du projet :
+ * la nuance intéresse celui qui parcourt, pas celui qui tape.
+ *
+ * **Une origine absente d'ici ne prend pas la sorte d'une autre.** Un défaut
+ * plausible — « nom du projet » — serait indiscernable d'un vrai nom du projet,
+ * et l'on croirait pouvoir lire ce qui ne se lit pas d'ici. Elle sort donc sans
+ * sorte, et l'écran ne dit rien plutôt que de dire faux (règle 5).
+ */
+const QUOI_DE_LORIGINE = {
+  [ORIGINE.LOCALE]: QUOI.LOCALE,
+  [ORIGINE.DECLARE]: QUOI.NOM,
+  [ORIGINE.CONCLU]: QUOI.NOM,
+  [ORIGINE.POSE]: QUOI.NOM,
+  [ORIGINE.FONCTION]: QUOI.FONCTION
 };
 
 /** Ce que le contexte attend à cet endroit de la ligne. */
@@ -168,14 +191,13 @@ function rangDe(candidat, cherche) {
  * @param {object} contexte
  * @param {string} contexte.ligne la ligne en cours
  * @param {number} contexte.colonne où est le curseur dans cette ligne
- * @param {{nom: string, valeurs?: string[], description?: string}[]} [contexte.declares]
- *   les noms que le projet déclare, avec leur domaine s'il est fermé
- * @param {string[]} [contexte.locales] les noms que la fonction pose
+ * @param {{nom: string, origine: string, valeurs?: string[], dit?: string}[]} [contexte.catalogue]
+ *   tout ce qu'on peut nommer là où l'on écrit, tel que `catalogueDesNoms` le rend
  * @param {string[]} [contexte.fichiers] les fichiers qu'on peut citer
  * @param {number} [contexte.combien] combien au plus
  */
 export function propositionsDeSaisie({
-  ligne = "", colonne = 0, declares = [], locales = [], fichiers = [], combien = 8
+  ligne = "", colonne = 0, catalogue = [], fichiers = [], combien = 8
 } = {}) {
   const attendu = ceQuAttendLaLigne(ligne, colonne);
   if (attendu === ATTEND.RIEN) return [];
@@ -201,12 +223,22 @@ export function propositionsDeSaisie({
     candidats.push(...MOTS_DU_LANGAGE.map((un) => ({ texte: un, quoi: QUOI.MOT, dit: "" })));
   }
 
+  /**
+   * **Le catalogue est la liste, et il n'y en a qu'une.** Ce qu'on parcourt et
+   * ce qui se propose sous le curseur répondent à la même question ; deux
+   * listes finiraient par ne plus dire la même chose, et l'écran proposerait un
+   * nom que le parcours ne montre pas (règle 10).
+   *
+   * La seule différence est dite par `nomsLisiblesDIci` : un nom de l'établi se
+   * parcourt et ne se propose pas, parce qu'il ne se lit pas d'ici.
+   */
+  const lisibles = nomsLisiblesDIci(catalogue);
+
   if (attendu === ATTEND.NOM) {
-    candidats.push(...locales.map((un) => ({
-      texte: texte(un), quoi: QUOI.LOCALE, dit: "calculé dans cette fonction"
-    })));
-    candidats.push(...declares.map((une) => ({
-      texte: texte(une?.nom), quoi: QUOI.NOM, dit: texte(une?.description)
+    candidats.push(...lisibles.map((une) => ({
+      texte: texte(une?.nom),
+      quoi: QUOI_DE_LORIGINE[une?.origine],
+      dit: texte(une?.dit)
     })));
   }
 
@@ -215,7 +247,7 @@ export function propositionsDeSaisie({
     // valeurs du projet derrière un `=` ferait une liste où l'on ne trouve
     // rien, et où l'on choisirait la mauvaise.
     const sujet = sujetCompare(ligne, colonne);
-    const declaration = declares.find((une) => repli(une?.nom) === repli(sujet));
+    const declaration = lisibles.find((une) => repli(une?.nom) === repli(sujet));
     candidats.push(...(declaration?.valeurs ?? []).map((une) => ({
       texte: `"${texte(une)}"`, quoi: QUOI.VALEUR, dit: texte(sujet)
     })));
@@ -319,20 +351,32 @@ export function localesAuDessus(contenu = "", position = 0) {
 /**
  * Le contexte d'un brouillon, là où le curseur est.
  *
- * Il est ici, et non dans la vue, parce qu'il **se décide** : quels noms sont
- * déclarés, quelles locales sont en portée, quels fichiers on peut citer. La
- * vue n'a qu'à montrer ce qui sort.
+ * ## C'est le seul endroit où le catalogue s'assemble
+ *
+ * Il est ici, et non dans la vue, parce qu'il **se décide** : ce que le
+ * brouillon déclare, conclut et pose, les locales en portée, ce que l'établi
+ * garde, et les fichiers qu'on peut citer. La vue n'a qu'à montrer ce qui sort.
+ *
+ * **La liste qu'on parcourt et celle qui se propose sortent d'ici toutes les
+ * deux.** Le panneau du catalogue et la liste sous le curseur appellent cette
+ * fonction, et non deux assemblages voisins : c'est ce qui garantit qu'ils
+ * montrent la même chose (règle 10).
+ *
+ * @param {{nom: string, contenu: string}[]} fichiers les fichiers du brouillon
+ * @param {object} [ou] où l'on écrit, et ce qu'on a gardé
+ * @param {string} [ou.contenu] le texte du fichier ouvert
+ * @param {number} [ou.position] où le curseur y est
+ * @param {object[]|null} [ou.etabli] les utilitaires gardés, s'ils sont lus
  */
-export function contexteDuBrouillon(fichiers = [], { contenu = "", position = 0 } = {}) {
+export function contexteDuBrouillon(fichiers = [], { contenu = "", position = 0, etabli = null } = {}) {
   const tous = Array.isArray(fichiers) ? fichiers : [];
 
   return {
-    declares: [...declarationsDuBrouillon(tous).values()].map((une) => ({
-      nom: texte(une?.nom),
-      valeurs: (une?.valeurs ?? []).map(texte).filter(Boolean),
-      description: texte(une?.description)
-    })).filter((une) => une.nom),
-    locales: localesAuDessus(contenu, position),
+    catalogue: catalogueDesNoms({
+      fichiers: tous,
+      etabli,
+      locales: localesAuDessus(contenu, position)
+    }),
     fichiers: tous.map((un) => texte(un?.nom)).filter(Boolean)
   };
 }
