@@ -5,7 +5,8 @@ import {
   GENRE, SIGNAL, avalDeLaRegle, cerveauDuProjet, chaleurDuLien, chaleurDuNoeud, complexiteDeLaRegle,
   dispositionDuCerveau, dispositionEnVolume, dansLEnveloppe, dilaterLEnveloppe, domainesDuCerveau,
   enveloppeConvexe, famillesParSujet, graineDe, lecturesAvecLesFonctions, liensDuRaisonnement,
-  dispositionEclatee, noeudsIsoles, ondeDepuis, partDeLaMemoire, pasDuRaisonnement,
+  dispositionEclatee, noeudsIsoles, noeudsDessines, ondeDepuis, partDeLaMemoire, pasDuRaisonnement, ceQuiPorte,
+  composerLeCerveau,
   pencherVersLesDomaines, phraseDuSignal, separerLesGenres, signauxDeLAudit, stratesDuGraphe,
   valeursDeLOnde
 } from "./memoire-cerveau.js";
@@ -1225,4 +1226,194 @@ test("un débat en cours n'a pas tranché : il n'allume pas l'anneau", () => {
   const cerveau = cerveauDuProjet([tranchee], null, { points: [UN_SUJET("p-ouvert", "open")] });
 
   assert.equal(noeudDe(cerveau, "v-hg").rang, RANG.RIEN);
+});
+
+
+/* ── Replier le détail ───────────────────────────────────────────────────── */
+
+test("ce qui porte est exactement ce qui rouvre un choix, et rien d'autre", () => {
+  // Le cerveau encode le nombre de liens — une topologie. Quatre cents nœuds qui
+  // comptent tous pareil font une image, pas un instrument : il lui fallait un
+  // poids pour savoir quoi cacher.
+  const debat = {
+    id: "choix", subject_key: "choix", status: "assumed", superseded_by: null, decided_at: at,
+    statement: "Quelle profondeur retient-on ?", nature: "raisonnement",
+    payload: {
+      subject: "Quelle profondeur retient-on ?", value: "Quelle profondeur retient-on ?",
+      provenance: { type: "décision", quoi: "…", par: "Ourdine Ferrand", le: "12/03" },
+      raisonnement: {
+        question: "Quelle profondeur retient-on ?",
+        porteSur: [{ sujet: "Profondeur hors gel", valeur: "0.71 m" }],
+        examine: [], decision: null, produit: []
+      }
+    }
+  };
+
+  const cerveau = cerveauDuProjet([...memoire(), debat], lectures());
+  const porte = ceQuiPorte(cerveau);
+
+  // L'altitude détermine la cote débattue : les deux portent. Les fondations en
+  // découlent, elles ne la fondent pas — c'est le détail, et il se plie.
+  assert.deepEqual([...porte].sort(), ["alt", "gel"]);
+  assert.equal(porte.has("fond"), false);
+  assert.equal(porte.has("cls"), false);
+
+  // Sans débat versé, rien ne porte : l'écran n'a alors pas de geste à offrir,
+  // et il vaut mieux qu'il n'en offre aucun qu'un qui viderait le dessin.
+  assert.equal(ceQuiPorte(cerveauDuProjet(memoire(), lectures())).size, 0);
+});
+
+test("replier le détail ne coupe aucune chaîne", () => {
+  /**
+   * **C'est la propriété qui rend ce pliage honnête, et elle se vérifie.**
+   *
+   * `ceQueCaRouvre` remonte depuis les valeurs débattues : ce qui porte est donc
+   * l'ensemble des **ancêtres** des choix humains, et un tel ensemble est fermé
+   * vers l'amont. Aucun chemin entre deux nœuds gardés ne peut passer par un
+   * nœud plié — on peut donc filtrer les liens comme ceux des isolés, sans rien
+   * relier à travers.
+   *
+   * Un dessin qui cacherait un maillon en laissant le trait par-dessus mentirait
+   * sur la forme du raisonnement. On ne s'en remet pas au raisonnement : on le
+   * mesure sur le graphe dessiné (règle 12).
+   */
+  const debat = (question, sujet) => ({
+    id: `c-${question}`, subject_key: question, status: "assumed", superseded_by: null,
+    decided_at: at, statement: question, nature: "raisonnement",
+    payload: {
+      subject: question, value: question,
+      provenance: { type: "décision", quoi: question, par: "Ourdine Ferrand", le: "12/03" },
+      raisonnement: {
+        question, porteSur: [{ sujet, valeur: "" }], examine: [], decision: null, produit: []
+      }
+    }
+  });
+
+  // Deux débats, à deux étages différents : de quoi produire un ensemble gardé
+  // qui n'est ni une strate ni une branche.
+  const cerveau = cerveauDuProjet(
+    [...memoire(), debat("Quelle cote ?", "Profondeur hors gel"), debat("Quel degré ?", "Degré CF")],
+    lectures(),
+    { avecLesFonctions: true }
+  );
+
+  const porte = ceQuiPorte(cerveau);
+  assert.ok(porte.size > 0 && porte.size < cerveau.noeuds.length, "le pliage ne mesure rien");
+
+  const amont = new Map();
+  for (const lien of cerveau.liens) {
+    if (!amont.has(lien.vers)) amont.set(lien.vers, []);
+    amont.get(lien.vers).push(lien.de);
+  }
+
+  // **Fermé vers l'amont** : ce dont un nœud gardé découle est gardé aussi.
+  for (const id of porte) {
+    for (const parent of amont.get(id) ?? []) {
+      assert.ok(porte.has(parent), `« ${parent} » est plié alors que « ${id} » en découle`);
+    }
+  }
+
+  // Et le graphe replié se tient tout seul : aucun lien ne pend dans le vide.
+  const replies = cerveau.liens.filter((lien) => porte.has(lien.de) && porte.has(lien.vers));
+  for (const lien of replies) {
+    assert.ok(porte.has(lien.de) && porte.has(lien.vers), "un lien replié pend dans le vide");
+  }
+
+  // Un nœud gardé qui avait un amont le garde : le pliage n'orpheline personne.
+  for (const id of porte) {
+    const avait = (amont.get(id) ?? []).length;
+    const garde = replies.filter((lien) => lien.vers === id).length;
+    assert.equal(garde, avait, `« ${id} » a perdu ${avait - garde} entrée(s) en repliant`);
+  }
+});
+
+test("ce que l'écran dessine suit les deux gestes, et les cumule", () => {
+  /**
+   * **C'est la seule décision de ce dessin qui change ce qu'on voit**, et elle
+   * vivait dans une fermeture qu'aucune épreuve ne pouvait appeler. Les deux
+   * filtrages se cumulent : un isolé remis qui ne porte rien reste plié, sinon
+   * cocher « montrer les isolés » ramènerait du détail par la bande.
+   */
+  const debat = {
+    id: "choix", subject_key: "choix", status: "assumed", superseded_by: null, decided_at: at,
+    statement: "Quelle cote ?", nature: "raisonnement",
+    payload: {
+      subject: "Quelle cote ?", value: "Quelle cote ?",
+      provenance: { type: "décision", quoi: "…", par: "Ourdine Ferrand", le: "12/03" },
+      raisonnement: {
+        question: "Quelle cote ?", porteSur: [{ sujet: "Profondeur hors gel", valeur: "0.71 m" }],
+        examine: [], decision: null, produit: []
+      }
+    }
+  };
+
+  // « choix » et « seul » ne sont touchés par aucun lien : ce sont les isolés.
+  const seul = dit("seul", "Nom d'usage", "Bâtiment nord");
+  const cerveau = cerveauDuProjet([...memoire(), debat, seul], lectures());
+  const isoles = noeudsIsoles(cerveau);
+  const vus = (options) => noeudsDessines(cerveau, { isoles, ...options }).map((n) => n.id).sort();
+
+  // Par défaut : tout sauf les isolés.
+  assert.deepEqual(vus({}), ["alt", "cf", "cls", "fond", "gel"]);
+
+  // Les isolés remis : ils reviennent, et rien d'autre ne bouge.
+  assert.deepEqual(vus({ montrerLesIsoles: true }), ["alt", "cf", "choix", "cls", "fond", "gel", "seul"]);
+
+  // Replié : seul ce qui porte reste. L'altitude détermine la cote débattue.
+  assert.deepEqual(vus({ replier: true }), ["alt", "gel"]);
+
+  // **Et les deux se cumulent** : remettre les isolés ne ramène pas le détail.
+  assert.deepEqual(vus({ replier: true, montrerLesIsoles: true }), ["alt", "gel"]);
+
+  // Sans débat versé, replier ne garderait rien : c'est pour cela que l'écran
+  // n'offre pas le geste. Le service, lui, répond la vérité.
+  const sansDebat = cerveauDuProjet(memoire(), lectures());
+  assert.deepEqual(noeudsDessines(sansDebat, { replier: true }), []);
+});
+
+test("ce que l'écran compose suit les gestes, et ses liens ne pendent pas", () => {
+  /**
+   * **C'était la seule décision de ce dessin qu'aucune épreuve ne pouvait
+   * appeler.** Une mutation qui lui faisait ignorer les deux gestes traversait
+   * la suite entière sans en faire tomber une. Toutes les pièces assemblées ici
+   * étaient pourtant pures et éprouvées : c'était l'assemblage qui ne l'était
+   * pas.
+   */
+  const debat = {
+    id: "choix", subject_key: "choix", status: "assumed", superseded_by: null, decided_at: at,
+    statement: "Quelle cote ?", nature: "raisonnement",
+    payload: {
+      subject: "Quelle cote ?", value: "Quelle cote ?",
+      provenance: { type: "décision", quoi: "…", par: "Ourdine Ferrand", le: "12/03" },
+      raisonnement: {
+        question: "Quelle cote ?", porteSur: [{ sujet: "Profondeur hors gel", valeur: "0.71 m" }],
+        examine: [], decision: null, produit: []
+      }
+    }
+  };
+
+  const cerveau = cerveauDuProjet([...memoire(), debat], lectures());
+  const isoles = noeudsIsoles(cerveau);
+
+  const entier = composerLeCerveau(cerveau, { isoles });
+  const plie = composerLeCerveau(cerveau, { isoles, replier: true });
+
+  assert.deepEqual(entier.places.map((n) => n.id).sort(), ["alt", "cf", "cls", "fond", "gel"]);
+  assert.deepEqual(plie.places.map((n) => n.id).sort(), ["alt", "gel"]);
+
+  // **Aucun lien ne pend**, dans l'un comme dans l'autre : les deux bouts sont
+  // dessinés, et rien n'est relié par-dessus un maillon caché.
+  for (const { places, liens } of [entier, plie]) {
+    const dedans = new Set(places.map((noeud) => noeud.id));
+    for (const lien of liens) {
+      assert.ok(dedans.has(lien.de) && dedans.has(lien.vers), `${lien.de} → ${lien.vers} pend`);
+    }
+  }
+
+  // Et le pliage garde le lien qui reste : l'altitude mène toujours à la cote.
+  assert.deepEqual(plie.liens.map((lien) => `${lien.de}>${lien.vers}`), ["alt>gel"]);
+
+  // Chaque nœud dessiné se retrouve par son identifiant : sans cela, l'onde et
+  // le survol viseraient des cartes que l'écran ne sait plus placer.
+  assert.equal(plie.parId.size, plie.places.length);
 });

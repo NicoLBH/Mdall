@@ -9,7 +9,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { __renderCerveauPourPreview } from "./cerveau-du-projet.js";
+import { __renderCerveauPourPreview, phraseDeCeQuOnRegarde } from "./cerveau-du-projet.js";
 
 const at = "2026-01-10T09:00:00Z";
 
@@ -115,4 +115,65 @@ test("une mémoire sans débat versé ne compte pas zéro, elle se tait", () => 
 
   // Le reste du bandeau, lui, compte comme avant : c'est bien le même bandeau.
   assert.match(html, /affirmations/);
+});
+
+test("le geste de replier ne s'offre que s'il y a quelque chose à garder", () => {
+  /**
+   * **Une case qui viderait le dessin serait un piège.** Sur un projet sans
+   * débat versé, rien ne porte : offrir « ne montrer que ce qui porte »
+   * effacerait tout, et l'on chercherait longtemps ce qu'on a cassé. Il vaut
+   * mieux ne rien offrir qu'offrir cela.
+   */
+  const sansDebat = __renderCerveauPourPreview(MEMOIRE, LECTURES);
+  assert.doesNotMatch(sansDebat, /data-cerveau-replier/);
+
+  const avecDebat = __renderCerveauPourPreview(
+    [...MEMOIRE, debat("Quelle zone retient-on ?", ["Zone climatique"])],
+    LECTURES
+  );
+  assert.match(avecDebat, /data-cerveau-replier/);
+});
+
+test("la case dit ce qu'elle garde et ce qu'elle plie", () => {
+  // « Ne montrer que 3 » ne dit pas la même chose selon qu'on en plie deux ou
+  // trois cents, et c'est justement ce qu'on vient chercher.
+  const html = __renderCerveauPourPreview(
+    [...MEMOIRE, debat("Quelle zone retient-on ?", ["Zone climatique"])],
+    LECTURES
+  );
+
+  const etiquette = html.slice(
+    html.indexOf("data-cerveau-replier"),
+    html.indexOf("</label>", html.indexOf("data-cerveau-replier"))
+  );
+
+  // Trois nœuds portent — la commune, la zone débattue et la fonction qui la
+  // conclut —, trois se plient : le débat lui-même, l'isolant et sa fonction.
+  assert.match(etiquette, /Ne montrer que les <b>3<\/b> qui portent le projet/);
+  assert.match(etiquette, /3 pliées : elles ne rouvrent aucun choix humain/);
+});
+
+test("la ligne du bas dit ce que le pliage ne montre pas", () => {
+  /**
+   * **L'onde suit l'aval, et l'aval est justement ce qu'on vient de plier.**
+   * Cliquer un nœud gardé lance une onde qui sort du dessin. Ce n'est pas un
+   * défaut du pliage — on regarde ce qui porte, pas ce qui suit —, mais se taire
+   * ferait croire à une onde qui s'arrête, c'est-à-dire à un projet où rien ne
+   * découle de rien.
+   *
+   * Ce trou ne s'est vu qu'en cochant la case dans un navigateur : la phrase
+   * était écrite, et rien ne la redemandait.
+   */
+  const replie = phraseDeCeQuOnRegarde({ replier: true, mode: "vivant", signales: new Map() });
+  assert.match(replie, /Vous regardez ce qui porte le projet/);
+  assert.match(replie, /l'aval est plié/);
+
+  // Dépliée, la phrase redit ce qu'elle disait : le pliage ne la remplace pas.
+  const entiere = phraseDeCeQuOnRegarde({ replier: false, mode: "vivant", signales: new Map() });
+  assert.match(entiere, /Le projet bat tout seul/);
+  assert.doesNotMatch(entiere, /porte le projet/);
+
+  // Et en mode onde, elle explique l'onde — qui est alors bien là.
+  const onde = phraseDeCeQuOnRegarde({ replier: false, mode: "onde", vue: "strates", signales: new Map() });
+  assert.match(onde, /l'onde remonte ce qui en découle/);
 });
