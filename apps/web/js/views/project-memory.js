@@ -145,6 +145,7 @@ import {
   rejeuDuSujet
 } from "../services/axes-de-la-memoire.js";
 import { ceQueCaRouvre, phraseDeCeQueCaRouvre } from "../services/ce-que-ca-rouvre.js";
+import { noteDeLaMemoire } from "../services/note-de-la-memoire.js";
 import { tracerLesLiens } from "./ui/graphe-liaisons.js";
 import {
   renderEspaceDuRaisonnement, ancresDuCode, espaceParDefaut, BORNES, VUES
@@ -211,6 +212,13 @@ const MEMORY_FIELDS = [
   // Une fonction n'est pas une nature : elle a son champ, et il se tape. Le mot
   // de l'écran est « fonction » — celui du langage ; « règle » reste dans le code.
   { key: "fonction", label: "Fonctions", values: [{ value: "oui", label: "Seulement" }] },
+  // **Ce que la note met en tête se tape aussi.** Un chiffre qu'on ne peut pas
+  // ouvrir est un cul-de-sac : on le lit, on le croit, et l'on ne peut rien en
+  // faire. Les deux valeurs partagent la mémoire en deux, sans reste.
+  { key: "rouvre", label: "Rouvre", values: [
+    { value: "oui", label: "Un choix humain" },
+    { value: "non", label: "Rien" }
+  ] },
   { key: "ouverts", label: "Constats", values: [{ value: "oui", label: "En cours" }] },
   { key: "remplacees", label: "Remplacées", values: [{ value: "oui", label: "Montrées" }] }
 ];
@@ -560,6 +568,59 @@ function marqueDeLaLigne(assertion) {
     titre: icone && connu ? mot : kindLabel(assertion?.kind),
     nature: icone ? String(nature ?? "") : ""
   };
+}
+
+/**
+ * La note : ce qu'il faut savoir de cette mémoire avant de la lire.
+ *
+ * ## Pourquoi elle n'apparaît que sur la mémoire entière
+ *
+ * **C'est une porte d'entrée, pas une quatrième vue.** Dès qu'un filtre est
+ * posé, on ne cherche plus où regarder : on vérifie, et c'est la liste qui fait
+ * ce métier-là. Une note qui resterait affichée au-dessus d'une liste filtrée
+ * compterait le projet entier au-dessus de douze lignes, et l'on croirait que
+ * ses chiffres décrivent ce qu'on a sous les yeux.
+ *
+ * ## Chaque chiffre ouvre la liste, sauf un
+ *
+ * Une phrase qui donne un nombre sans permettre d'aller voir est un cul-de-sac.
+ * Les noms qu'une fonction lit et que personne n'a versés font exception, et ce
+ * n'est pas un oubli : ils ne sont dans aucune liste — ils n'existent pas en
+ * mémoire, c'est tout le problème. L'écran le dit plutôt que de proposer un
+ * bouton qui ouvrirait le vide (règle 5).
+ */
+function renderNote() {
+  if (laRequeteRestreint(view.query, MEMORY_FIELDS)) return "";
+
+  const note = noteDeLaMemoire(view.assertions ?? [], { liens: view.dependencies ?? [] });
+  if (note.vide || !note.parties.length) return "";
+
+  return `
+    <section class="memory-note" aria-label="Ce qu'il faut savoir de cette mémoire">
+      ${note.parties.map((partie) => `
+        <div class="memory-note__partie memory-note__partie--${escapeHtml(partie.id)}">
+          <b class="memory-note__titre">${escapeHtml(partie.titre)}</b>
+          <small class="memory-note__chapeau">${escapeHtml(partie.chapeau)}</small>
+          <ul class="memory-note__lignes">
+            ${partie.lignes.map((ligne) => `
+              <li class="memory-note__ligne">
+                ${ligne.requete
+                  ? `<button type="button" class="memory-note__aller" data-memory-note="${
+                      escapeHtml(ligne.requete)}">${escapeHtml(ligne.phrase)}</button>`
+                  // Sans requête, la phrase se lit et ne se clique pas — et la
+                  // raison vient avec elle, accordée, plutôt qu'écrite ici au
+                  // pluriel sous une phrase au singulier.
+                  : `<span class="memory-note__inerte">${escapeHtml(ligne.phrase)}</span>${
+                      ligne.pourquoi
+                        ? `<small class="memory-note__pourquoi">${escapeHtml(ligne.pourquoi)}</small>`
+                        : ""}`}
+              </li>
+            `).join("")}
+          </ul>
+        </div>
+      `).join("")}
+    </section>
+  `;
 }
 
 function renderCounts(resume, vocabulaire, enAttente = 0, plan = { derivees: 0 }) {
@@ -1894,7 +1955,12 @@ export function renderMemoryForPreview(assertions = [], {
   if (projet) view.projectId = projet;
   if (Array.isArray(recherches)) view.recherches = recherches;
   return `<div class="project-rail-layout${collapsed ? " project-rail-layout--collapsed" : ""}">${
-    renderMemoryNav()}<div class="project-rail-layout__content">${renderSearch()}${renderReaderLead()}</div></div>`;
+    renderMemoryNav()}<div class="project-rail-layout__content">${
+      renderSearch()}${renderReaderLead()}${
+      // La note fait partie de l'accueil de la mémoire : une page d'essai qui
+      // l'ignorerait ne montrerait que la moitié de ce qu'on regarde en
+      // arrivant, et c'est justement la moitié qui dit où regarder.
+      renderNote()}</div></div>`;
 }
 
 /**
@@ -2958,6 +3024,7 @@ function renderContent(root) {
             ${view.notice ? `<div class="propositions-empty propositions-empty--warn"><p>${escapeHtml(view.notice)}</p></div>` : ""}
 
             ${renderCounts(resume, vocabulaire, enAttente, plan)}
+            ${renderNote()}
             ${renderSearch()}
             ${renderList(lignes, view.page)}
           </div>
@@ -3556,6 +3623,22 @@ function bind(root) {
   root.querySelector("[data-memory-plan]")?.addEventListener("click", () => {
     ouvrirLePlanDeRecalcul({ assertions: view.assertions ?? [] });
   });
+
+  /**
+   * Chaque phrase de la note ouvre la liste qu'elle décrit.
+   *
+   * La requête est **écrite dans la barre**, et non appliquée en coulisse :
+   * c'est ce qui permet de la corriger, de l'étendre, de la copier. Un filtre
+   * posé sans que rien ne l'affiche ferait chercher longtemps pourquoi la liste
+   * est courte — et le rail se rallume tout seul en la relisant.
+   */
+  for (const bouton of root.querySelectorAll("[data-memory-note]")) {
+    bouton.addEventListener("click", () => {
+      view.query = bouton.getAttribute("data-memory-note") ?? "";
+      view.page = 1;
+      renderContent(root);
+    });
+  }
 
   for (const bouton of root.querySelectorAll("[data-memory-pending]")) {
     bouton.addEventListener("click", () => {

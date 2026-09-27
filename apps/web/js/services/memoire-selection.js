@@ -20,10 +20,10 @@
  * ## Ce qui est **dans** la sélection, et ce qui n'y est pas
  *
  * La requête est la seule mémoire du filtrage — `nature:`, `autorite:`,
- * `forme:`, `domaine:`, `provenance:`, `etat:`, `ouverts:`, `fonction:`,
- * `remplacees:`, plus le texte libre. Le rail de gauche n'est pas un second
- * état : il **écrit** dans la requête, et il se rallume en la relisant. C'est ce
- * qui a permis d'y brancher le cerveau sans rien inventer.
+ * `forme:`, `rouvre:`, `domaine:`, `provenance:`, `etat:`, `ouverts:`,
+ * `fonction:`, `remplacees:`, plus le texte libre. Le rail de gauche n'est pas
+ * un second état : il **écrit** dans la requête, et il se rallume en la
+ * relisant. C'est ce qui a permis d'y brancher le cerveau sans rien inventer.
  *
  * « À revérifier » s'applique **par-dessus** : c'est une urgence, pas une
  * catégorie.
@@ -36,6 +36,7 @@
 
 import { filterByTaxonomy } from "./assertion-taxonomy.js";
 import { autoriteDe, formeDe } from "./axes-de-la-memoire.js";
+import { ceQueCaRouvre } from "./ce-que-ca-rouvre.js";
 import { READER, readerRows } from "./memory-readers.js";
 import { parseQuery } from "./query-bar.js";
 
@@ -100,9 +101,26 @@ export function selectionDeLaMemoire(assertions = [], {
     return true;
   });
 
+  /**
+   * Ce que la note met en tête, ouvert dans la liste.
+   *
+   * Calculé sur **la mémoire entière**, jamais sur ce que les filtres ont déjà
+   * retenu : ce qu'une valeur rouvre dépend de la chaîne du projet, pas de ce
+   * qu'on regarde. Le calculer sur la sélection ferait dire « rien à rouvrir »
+   * dès qu'un domaine est coché, et le chiffre de la note ne se retrouverait
+   * plus dans la liste qu'il vient d'ouvrir.
+   */
+  const rouvre = texte(filters.rouvre);
+  if (!rouvre) return pending && typeof aRevoir === "function" ? aRevoir(parAxe) : parAxe;
+
+  const rouvert = ceQueCaRouvre(lignes);
+  const parRejeu = parAxe.filter(
+    (assertion) => rouvert.has(texte(assertion?.id)) === (rouvre === "oui")
+  );
+
   // « À revérifier » se coche par-dessus les autres filtres : c'est une urgence,
   // pas une catégorie.
-  return pending && typeof aRevoir === "function" ? aRevoir(parAxe) : parAxe;
+  return pending && typeof aRevoir === "function" ? aRevoir(parRejeu) : parRejeu;
 }
 
 /**
