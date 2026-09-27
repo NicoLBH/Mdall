@@ -55,6 +55,7 @@ import { svgIcon } from "../../ui/icons.js";
 import { NOEUD } from "../../services/memoire-plan.js";
 import { RANG } from "../../services/ce-qui-couvre.js";
 import { phraseDesPointsOuverts } from "../../services/point-porte-sur.js";
+import { phraseDeCeQueCaRouvre } from "../../services/ce-que-ca-rouvre.js";
 import {
   GENRE, avalDeLaRegle, cerveauDuProjet, chaleurDuLien, chaleurDuNoeud, dansLEnveloppe, dilaterLEnveloppe,
   dispositionDuCerveau, dispositionEclatee, dispositionEnVolume, domainesDuCerveau, enveloppeConvexe,
@@ -75,12 +76,24 @@ const TENUE = { onde: 3200, battement: 1800 };
 const POULS = 1100;
 
 /**
- * Les trois natures, et leur traitement.
+ * Les trois façons de se refaire, et leur traitement.
  *
  * Ce sont les couleurs de la mémoire — un écran qui inventerait les siennes
  * demanderait d'apprendre deux langages pour une seule chose.
+ *
+ * ## Elles s'appelaient « les natures », et c'était le mot d'à côté
+ *
+ * Socle, rejouable, opaque ne disent pas ce qu'une affirmation **est** — ils
+ * disent si on sait la refaire. La liste de la Mémoire, elle, emploie « nature »
+ * pour la colonne de la base — constat, hypothèse, contrainte. Deux écrans, un
+ * mot, deux sens : on lisait « Nature » ici, on cochait « Nature » là-bas, et
+ * l'on obtenait autre chose.
+ *
+ * C'est **le rejeu**, et c'est le mot que la liste emploie déjà pour la même
+ * idée : *se recalcule seule, s'arrête sur une décision*. Un vocabulaire, deux
+ * écrans.
  */
-const NATURES = {
+const MOTS_DU_REJEU = {
   [NOEUD.SOCLE]: { nom: "Socle", trait: "#3fb950", quoi: "ce que le projet pose, suppose ou constate" },
   [NOEUD.REJOUABLE]: { nom: "Rejouable", trait: "#58a6ff", quoi: "une règle du projet le conclut : il se rejoue ici" },
   [NOEUD.OPAQUE]: { nom: "Opaque", trait: "#8b949e", quoi: "un agent le déduit : on sait qu'il dépend" }
@@ -146,7 +159,7 @@ const ANNEAU_DU_RANG = {
 /**
  * La couleur d'une impulsion, selon ce que l'écran est en train de dire.
  *
- * En **nature**, le bleu : c'est la couleur de ce qui se rejoue, et l'onde parle
+ * En **rejeu**, le bleu : c'est la couleur de ce qui se rejoue, et l'onde parle
  * de rejeu.
  *
  * En **chaleur**, surtout pas de bleu pour une valeur : un écran entièrement
@@ -161,7 +174,7 @@ const ANNEAU_DU_RANG = {
  * regarde.
  */
 const ECLAT = {
-  nature: {
+  rejeu: {
     valeur: { vif: "88,166,255", coeur: "160,205,255" },
     fonction: { vif: "163,113,247", coeur: "208,178,255" }
   },
@@ -173,7 +186,7 @@ const ECLAT = {
 
 /** L'éclat de la famille d'un nœud, dans la couleur en cours. */
 function eclatDeLaFamille(couleur, genre) {
-  const table = ECLAT[couleur] ?? ECLAT.nature;
+  const table = ECLAT[couleur] ?? ECLAT.rejeu;
   return genre === GENRE.FONCTION ? table.fonction : table.valeur;
 }
 
@@ -365,9 +378,9 @@ function renderLegende(cerveau, signales) {
   const auServeur = cerveau.compte.auServeur;
 
   return `
-    <div class="cerveau-legende" data-cerveau-legende="nature">
-      ${Object.entries(NATURES).map(([nature, quoi]) => `
-        <span class="cerveau-legende__item cerveau-legende__item--${nature}">
+    <div class="cerveau-legende" data-cerveau-legende="rejeu">
+      ${Object.entries(MOTS_DU_REJEU).map(([rejeu, quoi]) => `
+        <span class="cerveau-legende__item cerveau-legende__item--${rejeu}">
           <i style="--trait:${quoi.trait}"></i>
           <b>${escapeHtml(quoi.nom)}</b>
           <small>${escapeHtml(quoi.quoi)}</small>
@@ -456,8 +469,8 @@ function renderBarre(isoles) {
         { cle: "horizontal", nom: "Couché", icone: "sort-asc", quoi: "La mémoire au-dessus du raisonnement, le raisonnement se lit de gauche à droite." },
         { cle: "vertical", nom: "Debout", icone: "sort-desc", quoi: "La mémoire à gauche du raisonnement, le raisonnement descend — la coupe d'un cerveau vue de face." }
       ])}
-      ${renderChoix("couleur", "nature", [
-        { cle: "nature", nom: "Nature", icone: "labels-distribution", quoi: "Socle, rejouable, opaque : ce que chaque valeur est." },
+      ${renderChoix("couleur", "rejeu", [
+        { cle: "rejeu", nom: "Rejeu", icone: "labels-distribution", quoi: "Socle, rejouable, opaque : ce qui se refait tout seul, et ce qui ne se refait pas." },
         { cle: "chaleur", nom: "Chaleur", icone: "fire", quoi: "Du froid au brûlant selon ce qui passe par là. Le rouge reste à ce que l'audit signale." }
       ])}
       <label class="cerveau__isoles">
@@ -498,6 +511,7 @@ function renderBarre(isoles) {
 function renderResume(cerveau) {
   const valeurs = cerveau.noeuds.filter((noeud) => noeud.genre !== GENRE.FONCTION).length;
   const pas = cerveau.pasDeRaisonnement;
+  const rouvrent = cerveau.compte.quiRouvrent;
 
   return `
     ${valeurs} ${accorde(valeurs, "affirmation", "affirmations")}
@@ -510,6 +524,21 @@ function renderResume(cerveau) {
       cerveau.enregistres
         ? `· la plus longue chaîne traverse <b>${pas}</b> ${accorde(pas, "règle", "règles")}`
         : "· la longueur des chaînes n'est pas mesurable ici"
+    }
+    ${
+      // **La seule phrase de ce bandeau qui dise où regarder.** Les autres
+      // comptent ce qu'il y a ; celle-ci dit ce que se tromper coûte. Un
+      // inventaire et une topologie ne sont pas des jugements, et c'est ce qui
+      // manquait à cet écran : sur quatre cents affirmations, une poignée
+      // oblige quelqu'un à reprendre une décision si elle bouge — le reste se
+      // refait tout seul.
+      //
+      // Zéro ne s'écrit pas : « 0 affirmation n'en rouvre aucune » se lit comme
+      // une mesure alors que c'est le plus souvent l'absence de débat versé.
+      rouvrent
+        ? `· <b>${rouvrent}</b> ${accorde(rouvrent, "en rouvre", "en rouvrent")} un choix humain
+           ${accorde(rouvrent, "si elle change", "si elles changent")}`
+        : ""
     }
   `;
 }
@@ -1184,7 +1213,7 @@ function dessiner(ctx, etat, largeur, hauteur, temps) {
     const rayon = rayonDe(noeud) * (enTroisD(etat) ? borne(k, 0.45, 1.8) : 1);
     const trait = noeud.genre === GENRE.FONCTION
       ? `rgb(${REGLE})`
-      : NATURES[noeud.nature]?.trait ?? "#8b949e";
+      : MOTS_DU_REJEU[noeud.nature]?.trait ?? "#8b949e";
     const eclat = eclats.get(noeud.id) ?? 0;
     const signal = signales.get(noeud.id);
 
@@ -2084,7 +2113,7 @@ export function ouvrirLeCerveau({
   const etat = {
     vue: "strates",
     mode: "vivant",
-    couleur: "nature",
+    couleur: "rejeu",
     parDomaine: true,
     /** Les règles dessinées comme des nœuds, entre leurs entrées et leur sortie. */
     avecLesFonctions: true,
@@ -2605,7 +2634,7 @@ export function ouvrirLeCerveau({
   };
 
   const montrerLaBulle = (noeud, evenement) => {
-    const nature = NATURES[noeud.nature];
+    const rejeu = MOTS_DU_REJEU[noeud.nature];
     const signal = etat.signales.get(noeud.id);
     const fonction = noeud.genre === GENRE.FONCTION;
 
@@ -2634,6 +2663,16 @@ export function ouvrirLeCerveau({
             : `<span class="cerveau-bulle__compte">aucun emploi connu · strate ${noeud.strate}</span>`
       }
       ${!fonction && noeud.famille ? renderFamille(noeud) : ""}
+      ${
+        // Ce que ce nœud rouvre, et qui l'a tranché. C'est le seul chiffre de
+        // cette bulle qui ne compte pas des liens : il compte ce qu'il faudra
+        // redemander à quelqu'un. Un nœud qui ne rouvre rien n'en dit rien —
+        // c'est le cas de presque tous, et le répéter ferait du bruit.
+        noeud.rouvre
+          ? `<span class="cerveau-bulle__rouvre">${escapeHtml(phraseDeCeQueCaRouvre(noeud))}${
+              noeud.choix[0]?.par ? ` — ${escapeHtml(noeud.choix[0].par)}` : ""}</span>`
+          : ""
+      }
       ${
         // Ce que le halo montre, en toutes lettres. La phrase vient de là où le
         // mot de l'écran est écrit une fois : le code dit « point », l'écran

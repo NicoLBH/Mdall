@@ -2466,5 +2466,6 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | la fenêtre qui la demande | `apps/web/js/views/ui/valeur-du-sujet.js` |
 | le nom sous lequel on signe | `apps/web/js/services/nom-de-qui-parle.js` |
 | les trois axes d'une affirmation, et le mot de l'écran | `docs/les-trois-axes-dune-affirmation.md` |
+| ce qui compte dans une mémoire, et ce qui est du détail | `docs/ce-qui-compte-dans-une-memoire.md` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

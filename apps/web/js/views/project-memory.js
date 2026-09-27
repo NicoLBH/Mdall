@@ -85,6 +85,7 @@ import {
   ICONE_DE_LA_DECISION,
   NATURE,
   NATURES,
+  SETTLED_BY,
   UNCLASSIFIED_LABEL,
   classifyAssertion,
   domainLabel,
@@ -133,16 +134,17 @@ import { enClair } from "../services/memoire-en-texte.js";
 import { lignesDeLAssertion, ouChaqueValeurEstEcrite, ouChaqueLigneEstEcrite } from "./project-memoire-fichiers.js";
 import { fichiersDeLaMemoire, zonesLisibles } from "../services/memoire-blame.js";
 import { chaineDuRaisonnement, sujetDe, traceDesLignes, grapheDuRaisonnement } from "../services/memoire-raisonnement.js";
-import { decisionPortee } from "../services/decision-remise-en-question.js";
 import {
   AUTORITES,
   FORMES,
   autoriteCourte,
+  autoriteDe,
   formeCourte,
   motDeLaLigne,
   phraseDuRejeu,
   rejeuDuSujet
 } from "../services/axes-de-la-memoire.js";
+import { ceQueCaRouvre, phraseDeCeQueCaRouvre } from "../services/ce-que-ca-rouvre.js";
 import { tracerLesLiens } from "./ui/graphe-liaisons.js";
 import {
   renderEspaceDuRaisonnement, ancresDuCode, espaceParDefaut, BORNES, VUES
@@ -544,7 +546,7 @@ function marqueDeLaLigne(assertion) {
   // la nature. Deux ordres finiraient par ne plus se ressembler (règle 10).
   const icone = estUneRegle(assertion)
     ? READER_ICONS[READER.RULES]
-    : decisionPortee(assertion)
+    : autoriteDe(assertion) === SETTLED_BY.ARBITRAGE
       ? READER_ICONS[READER.DECISIONS]
       : NATURE_ICON[String(nature ?? "")];
 
@@ -1424,6 +1426,20 @@ function pastillesDuDetail(assertion) {
   const rejeu = rejeuDuSujet(sujetDe(assertion), view.assertions ?? [], { zone: portees[0] ?? "" });
   const ditLeRejeu = phraseDuRejeu(rejeu);
 
+  // **L'autre sens, et c'est celui qui dit ce que la ligne pèse.** Le rejeu dit
+  // ce qui la tient — en amont, ce qu'elle traverse. Celui-ci dit ce qu'elle
+  // tient : combien de choix humains il faudra rouvrir si elle change. Les deux
+  // ensemble donnent la seule définition de l'important qui ne soit pas
+  // arbitraire — voir `services/ce-que-ca-rouvre.js`.
+  //
+  // On passe ce que l'écran a lu en base ; le module tranche — ce qui est
+  // enregistré l'emporte, le déduit prend le relais. La règle est écrite là-bas,
+  // une seule fois : un écran qui aurait oublié le repli aurait annoncé « rien à
+  // rouvrir » sur toute une mémoire, sans que rien ne le dise.
+  const rouvre = ceQueCaRouvre(view.assertions ?? [], { liens: view.dependencies ?? [] })
+    .get(texteDe(assertion?.id));
+  const ditCeQueCaRouvre = phraseDeCeQueCaRouvre(rouvre);
+
   return [
     { label: "Provenance", html: pastille(kindLabel(assertion.kind) || "Inconnue", !assertion.kind) },
     // « D'un texte », « Décidé », « Constaté » — et le même mot que sur la ligne,
@@ -1438,6 +1454,15 @@ function pastillesDuDetail(assertion) {
     ...(ditLeRejeu
       ? [{ label: "Rejeu", html: `<span class="memory-tag memory-tag--valeur mono${
           rejeu.seule ? "" : " memory-tag--arret"}">${escapeHtml(ditLeRejeu)}</span>` }]
+      : []),
+    // **Ce qui ne rouvre rien ne s'affiche pas.** « Aucun choix à rouvrir » sur
+    // la quasi-totalité des lignes serait du bruit, et le bruit fait ignorer le
+    // reste. Le détail se compte dans le bandeau, il ne se répète pas ligne à
+    // ligne. La couleur de l'arrêt, elle, est la même que celle du rejeu : c'est
+    // la même chose qu'elles signalent — quelque chose attend quelqu'un.
+    ...(ditCeQueCaRouvre
+      ? [{ label: "Si ça change", html: `<span class="memory-tag memory-tag--valeur mono memory-tag--arret">${
+          escapeHtml(ditCeQueCaRouvre)}</span>` }]
       : []),
     // Pas d'« État » : la pastille qui ouvre la ligne dit déjà « Assumé », et le
     // répéter deux centimètres plus loin fait relire pour rien.

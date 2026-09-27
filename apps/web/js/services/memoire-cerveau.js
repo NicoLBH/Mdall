@@ -50,6 +50,7 @@ import { NOEUD, natureDuNoeud, sortiesDesRegles } from "./memoire-plan.js";
 import { currentAssertions, titreDeLAffirmation } from "./project-memory.js";
 import { emploisParAffirmation, impactDe, lecturesDeLaRegle, agentDeLaFonction } from "./memoire-applications.js";
 import { dependancesDeLaMemoire } from "./memoire-raisonnement.js";
+import { ceQueCaRouvre } from "./ce-que-ca-rouvre.js";
 import { utilitaireByReference } from "../utilitaires/catalogue.js";
 import { DOMAINS, domainLabel, estUneRegle } from "./assertion-taxonomy.js";
 import { VERDICT, auditerLaMemoire } from "./memoire-audit.js";
@@ -320,6 +321,32 @@ export function cerveauDuProjet(
 
   const pasDeRaisonnement = pasDuRaisonnement(enVigueur, applications);
 
+  /**
+   * Ce que chaque affirmation rouvre si elle change.
+   *
+   * **C'est le poids qui manquait au dessin.** Le cerveau encode le nombre de
+   * liens — une topologie —, et une topologie ne dit pas où regarder : cent
+   * quatre-vingt-treize nœuds qui comptent tous pareil font une image, pas un
+   * instrument. Celui-ci dit ce que se tromper coûte : combien de choix humains
+   * il faudra reprendre. Voir `services/ce-que-ca-rouvre.js`.
+   *
+   * **Le graphe est celui que l'écran dessine**, et pas un second qu'on
+   * dériverait ici. `liensDuRaisonnement` a déjà tranché la question : les
+   * lectures enregistrées quand il y en a, les dépendances déduites des règles
+   * sinon. Deux graphes côte à côte finiraient par ne plus dire la même chose de
+   * qui dépend de qui, et le chiffre contredirait le dessin sous les yeux du
+   * lecteur (règle 4).
+   *
+   * Cela compte vraiment ici : une cote produite par un **utilitaire** n'a
+   * aucune dépendance déduite des règles — c'est un agent qui l'a posée —, et
+   * seule la lecture enregistrée dit de quelle altitude elle découle. Le graphe
+   * dérivé aurait donc annoncé « rien à rouvrir » d'une altitude dont tout un
+   * débat dépendait.
+   */
+  const rouvert = ceQueCaRouvre(enVigueur, {
+    liens: liens.map((lien) => ({ assertion_id: lien.vers, depends_on_assertion_id: lien.de }))
+  });
+
   const emplois = emploisParAffirmation(Array.isArray(lues) ? lues : []);
   const dedans = new Set(ids);
   const familles = famillesParSujet(valeurs);
@@ -442,6 +469,16 @@ export function cerveauDuProjet(
       // comme les autres.
       lectures: emplois.get(id)?.lectures ?? 0,
       /**
+       * Combien de choix humains ce nœud rouvre s'il change, et lesquels.
+       *
+       * `0` et un tableau vide quand il ne rouvre rien — c'est-à-dire pour
+       * l'immense majorité : **c'est la définition du détail**, et elle est
+       * bonne à dire. Un nœud qu'on change sans redemander à personne est un
+       * nœud que la machine refait en silence.
+       */
+      rouvre: rouvert.get(id)?.combien ?? 0,
+      choix: rouvert.get(id)?.choix ?? [],
+      /**
        * Ce qui touche ce nœud, et dans quel sens.
        *
        * `sortant` est sa **dispersion** : combien de choses partent de lui. C'est
@@ -487,6 +524,14 @@ export function cerveauDuProjet(
     // Ceux des opaques que le serveur sait refaire : le compte honnête de ce
     // qu'une variante rendra vraiment.
     auServeur: noeuds.filter((n) => n.rejouable).length,
+    /**
+     * Les nœuds qui rouvrent au moins un choix humain s'ils changent.
+     *
+     * **C'est la première phrase qu'un humain peut lire sur une mémoire** :
+     * « sur quatre cents affirmations, sept obligent quelqu'un à reprendre une
+     * décision ». Le reste se refait tout seul, et n'a pas à être regardé.
+     */
+    quiRouvrent: noeuds.filter((n) => n.rouvre > 0).length,
     /**
      * Les sujets qui valent plusieurs choses à la fois, selon la zone.
      *

@@ -119,7 +119,25 @@ const lier = (specifier, referent) => /^https?:/.test(specifier)
     { id: "c1", kind: "avis", subject_key: "fissure-en-pignon", superseded_by: null,
       status: "assumed", domain: "structure", decided_at: le,
       statement: "Fissure en pignon : traversante",
-      payload: { subject: "Fissure en pignon", value: "traversante", status: "REPORTED" } }
+      payload: { subject: "Fissure en pignon", value: "traversante", status: "REPORTED" } },
+    // Le raisonnement versé par la fermeture d'un sujet : la seule ligne qui
+    // dise **sous quelles valeurs** un humain a tranché.
+    { id: "x1", kind: "base-datum", subject_key: "quel-classement", superseded_by: null,
+      // La nature est une **colonne**, comme la base la porte : la ranger dans
+      // le payload ferait passer cette ligne pour une donnée de base, et la
+      // fixture n'éprouverait pas ce qu'elle croit éprouver.
+      nature: "raisonnement",
+      status: "assumed", domain: "incendie", decided_at: le,
+      statement: "Quel classement retient-on ?",
+      payload: {
+        subject: "Quel classement retient-on ?", value: "Quel classement retient-on ?",
+        provenance: { type: "décision", quoi: "…", par: "Ourdine Ferrand", le: "12/03" },
+        raisonnement: {
+          question: "Quel classement retient-on ?",
+          porteSur: [{ sujet: "Classement du bâtiment", valeur: "3e famille B" }],
+          examine: [], decision: null, produit: []
+        }
+      } }
   ];
 
   __setMemoryStateForPreview({ assertions: LIGNES, dependencies: [], acts: [] });
@@ -128,7 +146,10 @@ const lier = (specifier, referent) => /^https?:/.test(specifier)
     liste: renderMemoryList(LIGNES, 1),
     fonction: renderMemoryDetail(LIGNES, { kind: LIGNES[0].kind, subjectKey: LIGNES[0].subject_key }),
     tranchee: renderMemoryDetail(LIGNES, { kind: LIGNES[1].kind, subjectKey: LIGNES[1].subject_key }),
-    constat: renderMemoryDetail(LIGNES, { kind: LIGNES[3].kind, subjectKey: LIGNES[3].subject_key })
+    constat: renderMemoryDetail(LIGNES, { kind: LIGNES[3].kind, subjectKey: LIGNES[3].subject_key }),
+    // La valeur sur laquelle le débat portait : c'est elle qui doit dire ce
+    // qu'il faudra rouvrir si elle change.
+    debattue: renderMemoryDetail(LIGNES, { kind: LIGNES[2].kind, subjectKey: LIGNES[2].subject_key })
   }));
 })().catch((erreur) => {
   process.stderr.write(String(erreur && erreur.stack ? erreur.stack : erreur));
@@ -168,7 +189,15 @@ test("chaque ligne porte un mot, et c'est celui de son autorité", () => {
   // annonçait « Règles » — le même objet, deux mots qui se contredisaient.
   const puces = [...rendu.liste.matchAll(/memory-tag--nature">([^<]+)</g)].map((un) => un[1]);
 
-  assert.deepEqual(puces, ["D'un texte", "Décidé", "Du projet", "Constaté"]);
+  assert.deepEqual(puces, ["D'un texte", "Décidé", "Du projet", "Constaté", "Déduite"]);
+
+  // **Le dernier mot vient de la forme, et non de l'autorité.** Un raisonnement
+  // versé porte `provenance: décision` — c'est bien un humain qui a débattu —,
+  // et il se chipait donc « Décidé », comme la valeur qu'il explique. Le chemin
+  // et son aboutissement portaient le même mot. Mais sa nature déclare que
+  // **rien ne le tranche**, et une nature qui l'affirme passe devant sa
+  // provenance : c'est la forme qui parle pour lui.
+  assert.match(rendu.liste, /Quel classement retient-on \?/);
 
   // Et aucun mot de nature ne subsiste sur une ligne : c'est le mélange qu'on
   // retire, pas seulement le mot d'une ligne.
@@ -183,7 +212,7 @@ test("l'icône d'une ligne dessine ce que sa puce nomme", () => {
   const marques = [...rendu.liste.matchAll(/memory-row__mark[^"]*"\s*\n?\s*title="([^"]+)"/g)]
     .map((un) => un[1]);
 
-  assert.deepEqual(marques, ["D'un texte", "Décidé", "Du projet", "Constaté"]);
+  assert.deepEqual(marques, ["D'un texte", "Décidé", "Du projet", "Constaté", "Déduite"]);
 
   // Et une fonction porte l'icône des fonctions, jamais l'étoile des données de
   // base : son `kind` la rangeait là, et le rail annonçait autre chose.
@@ -193,7 +222,7 @@ test("l'icône d'une ligne dessine ce que sa puce nomme", () => {
   const dessins = [...rendu.liste.matchAll(/memory-row__mark[\s\S]{0,400}?#([a-z0-9-]+)"/g)]
     .map((un) => un[1]);
 
-  assert.deepEqual(dessins, ["markdown-code", "git-compare", "north-star", "tools"]);
+  assert.deepEqual(dessins, ["markdown-code", "git-compare", "north-star", "tools", "project-roadmap"]);
 });
 
 test("le détail nomme l'autorité, et ne redit pas la nature", () => {
@@ -226,4 +255,30 @@ test("une valeur que rien ne déduit ne prétend pas se recalculer", () => {
   // pas du tout — un « — » se lirait comme une lacune.
   assert.doesNotMatch(rendu.constat, /Rejeu/);
   assert.doesNotMatch(rendu.constat, /se recalcule/);
+});
+
+test("le détail d'une valeur débattue dit ce qu'il faudra rouvrir", () => {
+  /**
+   * **C'est l'autre sens, et c'est celui qui dit ce que la ligne pèse.** Le
+   * rejeu dit ce qui la tient — en amont, ce qu'elle traverse. Celui-ci dit ce
+   * qu'elle tient : combien de choix humains il faudra reprendre si elle change.
+   *
+   * Les deux ensemble donnent la seule définition de l'important qui ne soit pas
+   * arbitraire : *est important ce qui, s'il change, oblige un humain à rouvrir
+   * un choix.*
+   */
+  assert.match(rendu.debattue, /Si ça change/);
+  assert.match(rendu.debattue, /1 choix humain à rouvrir/);
+
+  // La couleur de l'arrêt, jamais celle du vide : ce n'est pas une lacune, c'est
+  // ce que le projet garde de plus cher.
+  assert.match(rendu.debattue, /memory-tag--arret/);
+});
+
+test("ce qui ne rouvre rien n'en dit rien, et ne s'excuse pas", () => {
+  // « Aucun choix à rouvrir » sur la quasi-totalité des lignes serait du bruit,
+  // et le bruit fait ignorer le reste. Le détail se compte dans le bandeau, il
+  // ne se répète pas ligne à ligne.
+  assert.doesNotMatch(rendu.constat, /Si ça change/);
+  assert.doesNotMatch(rendu.constat, /à rouvrir/);
 });
