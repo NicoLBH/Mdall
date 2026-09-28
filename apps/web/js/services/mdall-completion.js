@@ -189,6 +189,32 @@ function rangDe(candidat, cherche) {
 }
 
 /**
+ * Ce qui passe devant, à égalité de recherche.
+ *
+ * **Ce qu'on ne retient pas, c'est ce que ce projet-ci contient.** `abs`,
+ * `racine` et `arrondi` sont sept et ne changent jamais ; ce que le brouillon
+ * conclut trente lignes plus haut change à chaque minute, et c'est exactement
+ * ce qu'on vient chercher dans une liste.
+ *
+ * Triés par ordre alphabétique seul, les sept mots du langage prenaient six des
+ * huit places de la liste — et la fonction qu'on venait d'écrire n'y figurait
+ * pas. On ouvrait la liste, on n'y voyait rien d'utile, et l'on apprenait à ne
+ * plus l'ouvrir : le catalogue existait, et personne ne l'avait jamais vu
+ * proposer un nom du projet.
+ */
+const PRIORITE = {
+  [QUOI.LOCALE]: 0,
+  [QUOI.NOM]: 0,
+  [QUOI.VALEUR]: 0,
+  [QUOI.FICHIER]: 0,
+  [QUOI.STATUT]: 0,
+  [QUOI.MOT]: 1,
+  [QUOI.FONCTION]: 1
+};
+
+const priorite = (quoi) => PRIORITE[quoi] ?? 0;
+
+/**
  * Ce qu'on propose, là où le curseur est.
  *
  * @param {object} contexte
@@ -273,7 +299,9 @@ export function propositionsDeSaisie({
     })
     .map((une) => ({ ...une, rang: rangDe(une.texte, mot) }))
     .filter((une) => une.rang >= 0)
-    .sort((une, autre) => une.rang - autre.rang || une.texte.localeCompare(autre.texte, "fr"))
+    .sort((une, autre) => une.rang - autre.rang
+      || priorite(une.quoi) - priorite(autre.quoi)
+      || une.texte.localeCompare(autre.texte, "fr"))
     .slice(0, Math.max(1, combien))
     .map(({ rang, ...reste }) => reste);
 }
@@ -330,6 +358,32 @@ export function ouEstLeCurseur(contenu = "", position = 0) {
  * une locale ne vit que dans la sienne, et la proposer ailleurs ferait écrire
  * un renvoi vers rien.
  */
+/**
+ * La fonction dans laquelle le curseur se trouve, s'il y en a une.
+ *
+ * **Une fonction ne peut pas se lire elle-même.** Mdall n'a pas d'appel : une
+ * fonction conclut sous son nom, et le nommer dans son propre corps est une
+ * circularité — la règle reste indécidable, ou, pire, elle lit la valeur que
+ * le projet tenait d'une version précédente d'elle-même, et l'on obtient un
+ * résultat parfaitement plausible qui ne vient de nulle part.
+ *
+ * Se la proposer à soi-même menait donc droit dans ce piège, d'un clic.
+ */
+export function fonctionAutourDuCurseur(contenu = "", position = 0) {
+  const lignes = String(contenu ?? "").split("\n");
+  const { rang } = ouEstLeCurseur(contenu, position);
+
+  for (let ou = Math.min(rang, lignes.length - 1); ou >= 0; ou -= 1) {
+    // Un abaque se referme sur la même circularité, et s'ouvre par un autre mot.
+    const tete = /^\s*(?:fonction|courbe)\s+([^(]+)\(/i.exec(lignes[ou] ?? "");
+    if (tete) return texte(tete[1]);
+    // Une accolade fermante en colonne zéro clôt la fonction précédente : au-delà,
+    // on n'est plus dedans, et ce qu'elle conclut redevient nommable.
+    if (/^\}/.test(lignes[ou] ?? "") && ou < rang) return "";
+  }
+  return "";
+}
+
 export function localesAuDessus(contenu = "", position = 0) {
   const lignes = String(contenu ?? "").split("\n");
   const { rang } = ouEstLeCurseur(contenu, position);
@@ -385,15 +439,38 @@ export function localesAuDessus(contenu = "", position = 0) {
  * @param {number} [ou.position] où le curseur y est
  * @param {object[]|null} [ou.etabli] les utilitaires gardés, s'ils sont lus
  */
+/**
+ * Le catalogue, privé de **ce que la fonction qu'on écrit conclut**.
+ *
+ * **Et de cela seulement.** Une fonction pose très souvent une locale qui porte
+ * son propre nom — `calcule Prix TTC = …` puis `alors (Prix TTC)` —, et c'est
+ * ainsi qu'elle conclut : la lui retirer l'empêcherait d'écrire sa dernière
+ * ligne. Ce qu'on retire est le nom **qu'elle conclut**, c'est-à-dire elle-même
+ * vue de l'extérieur : le nommer dans son propre corps est une circularité.
+ */
+function sansSoiMeme(catalogue = [], soi = "") {
+  const sien = texte(soi);
+  if (!sien) return catalogue;
+  return catalogue.filter((une) =>
+    une?.origine !== ORIGINE.CONCLU || repli(une?.nom) !== repli(sien));
+}
+
 export function contexteDuBrouillon(fichiers = [], { contenu = "", position = 0, etabli = null } = {}) {
   const tous = Array.isArray(fichiers) ? fichiers : [];
 
   return {
-    catalogue: catalogueDesNoms({
-      fichiers: tous,
-      etabli,
-      locales: localesAuDessus(contenu, position)
-    }),
+    /**
+     * **Ce qu'on peut nommer ici, moins la fonction qu'on écrit.**
+     *
+     * Elle est retirée des deux lectures à la fois — la liste sous le curseur
+     * et le panneau qu'on parcourt —, parce qu'elles répondent à la même
+     * question et qu'un nom proposé d'un côté et absent de l'autre est la pire
+     * des divergences (règle 10).
+     */
+    catalogue: sansSoiMeme(
+      catalogueDesNoms({ fichiers: tous, etabli, locales: localesAuDessus(contenu, position) }),
+      fonctionAutourDuCurseur(contenu, position)
+    ),
     fichiers: tous.map((un) => texte(un?.nom)).filter(Boolean)
   };
 }

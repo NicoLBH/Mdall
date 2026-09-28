@@ -394,7 +394,16 @@ export const WIKI_DU_LANGAGE = [
     dit("**Le langage n'ajuste aucune loi** : pas de régression, pas de spline, "
       + "pas de polynôme. Ce qui n'est pas entre deux points écrits n'existe pas. "
       + "Une courbe lissée rendrait des valeurs que le texte d'origine ne porte "
-      + "pas, et c'est précisément ce qu'on refuse à un agent.")
+      + "pas, et c'est précisément ce qu'on refuse à un agent."),
+    dit("**Un abaque se verse au projet**, comme une fonction : c'est une loi, "
+      + "et le projet la tient avec ses points et ses deux déclarations. Toute "
+      + "fonction qui nomme « Coefficient de forme » lit alors ce que la courbe "
+      + "conclut pour la pente que le projet tient. Le recopier de projet en "
+      + "projet lui donnerait plusieurs domiciles : corrigé ici, il resterait "
+      + "faux là-bas, et rien ne dirait lequel fait foi."),
+    dit("**Il ne conclut rien tant qu'on ne l'a pas lu**, et c'est normal : ce "
+      + "que le projet tient d'un abaque, ce sont ses points. La valeur, elle, "
+      + "naît de la lecture — et c'est la fonction qui le nomme qui la demande.")
   ]),
 
   section("graphique", "Regarder un tableau : « se lit en »", [
@@ -500,6 +509,38 @@ export const WIKI_DU_LANGAGE = [
     dit("Et si le projet ne porte pas encore ses entrées, l'écran **dit ce qui "
       + "manque** plutôt que d'afficher quatre lignes de tirets — qui se "
       + "liraient comme « cette fonction ne produit rien ».")
+  ]),
+
+  section("catalogue", "Retrouver ce qu'on peut nommer", [
+    dit("**Composer, c'est nommer ce qu'une autre fonction conclut** — et l'on "
+      + "ne compose pas avec ce qu'on ne sait pas nommer. L'écran d'écriture "
+      + "répond donc à cette question-là, à deux moments."),
+    dit("**Pendant que vous écrivez**, une liste se déplie sous le curseur dès "
+      + "qu'un nom est attendu : après `si (`, après un `=`, dans un `calcule`. "
+      + "Les noms de votre brouillon passent en premier — ce sont eux qu'on "
+      + "oublie —, puis les mots et les fonctions du langage. ↑ ↓ pour choisir, "
+      + "Entrée pour poser, Échap pour refermer."),
+    dit("**Quand vous cherchez sans savoir quoi**, le menu « … » de la ligne du "
+      + "titre ouvre « Ce que je peux nommer… » : le même contenu, en panneau "
+      + "qu'on parcourt rayon par rayon, avec une recherche. On y cherche par un "
+      + "mot qu'on a en tête — « TVA », « portée » —, et il peut être dans ce "
+      + "que l'entrée dit ou dans ce qu'elle lit."),
+    dit("**Les deux lisent la même liste.** Deux réponses finiraient par "
+      + "différer, et c'est la pire des divergences : celle où l'écran propose "
+      + "un nom que le parcours ne montre pas."),
+    dit("**Ce qu'on y trouve** : ce que les fonctions de votre brouillon "
+      + "concluent, ce que vos `calcule` posent au-dessus du curseur, les noms "
+      + "déclarés du projet avec leurs valeurs possibles, les fonctions du "
+      + "langage, et ce que votre établi contient."),
+    dit("**Un nom de l'établi se voit et ne se propose pas** : il vit dans un "
+      + "autre brouillon, et il faut le **reprendre** pour s'en servir. Le taire "
+      + "ferait écrire une fonction qui lit un nom que personne ne conclut, et "
+      + "la règle resterait indécidable."),
+    dit("**Une fonction ne se propose jamais à elle-même.** La nommer dans son "
+      + "propre corps est une circularité : elle resterait indécidable, ou pire, "
+      + "elle lirait ce que le projet tenait d'une version précédente d'elle-même. "
+      + "La locale qui porte son nom, elle, reste offerte — c'est ainsi qu'elle "
+      + "conclut.")
   ]),
 
   section("chainage", "Une fonction lit ce qu'une autre conclut", [

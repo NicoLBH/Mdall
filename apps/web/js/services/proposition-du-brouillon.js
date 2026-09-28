@@ -131,7 +131,18 @@ function affirmationDuBloc(bloc, { nature, declaration, marque = null }) {
       conditions: Array.isArray(branche?.conditions) ? branche.conditions : [],
       alors: texte(branche?.alors)
     }));
-  const raisonne = conditions.length > 0 || Boolean(bloc?.agent);
+  /**
+   * **Un abaque est une loi, au même titre qu'un barème.**
+   *
+   * Il n'a pas de condition — ce n'est pas une absence de raisonnement, c'est
+   * une autre façon de l'écrire : ses points *sont* sa loi. Le ranger parmi les
+   * affirmations le faisait écarter « sans valeur » au versement, si bien
+   * qu'une courbe relue et signée ne pouvait **pas entrer dans la mémoire d'un
+   * projet**. Elle vivait sur l'établi, et il fallait la recopier à la main
+   * dans chaque projet qui s'en sert — c'est-à-dire tout ce que cette langue
+   * existe pour éviter.
+   */
+  const raisonne = conditions.length > 0 || Boolean(bloc?.agent) || Boolean(bloc?.courbe);
 
   const commun = {
     sujet: texte(bloc?.sujet),
@@ -152,8 +163,15 @@ function affirmationDuBloc(bloc, { nature, declaration, marque = null }) {
   if (raisonne) {
     return {
       ...commun,
-      // Ce que la règle conclut. Elle le porte une fois : l'écriture le remet
-      // sur la ligne `alors`, et une valeur écrite à deux endroits diverge.
+      /**
+       * Ce que la règle conclut. Elle le porte une fois : l'écriture le remet
+       * sur la ligne `alors`, et une valeur écrite à deux endroits diverge.
+       *
+       * **Une courbe ne conclut rien tant qu'on ne l'a pas lue**, et son vide
+       * est une phrase, pas un manque : ce que le projet tient d'elle, ce sont
+       * ses points. Lui inventer une valeur — le premier point, un résumé —
+       * ferait tenir au projet une affirmation que personne n'a signée.
+       */
       valeur: texte(bloc?.alors),
       referentiel: true,
       /**
@@ -184,6 +202,15 @@ function affirmationDuBloc(bloc, { nature, declaration, marque = null }) {
         ...(Array.isArray(bloc?.calculs) && bloc.calculs.length ? { calculs: bloc.calculs } : {}),
         ...(bloc?.boucle ? { boucle: bloc.boucle } : {}),
         ...(Array.isArray(bloc?.selon) && bloc.selon.length ? { selon: bloc.selon } : {}),
+        /**
+         * **L'abaque voyage entier, points compris.**
+         *
+         * Sans lui, une courbe versée serait une règle sans condition et sans
+         * loi : un nom, et rien pour dire ce qu'il vaut. L'écran des fichiers
+         * sait déjà la réécrire, et l'évaluateur sait déjà la lire — c'est ce
+         * qui manquait pour la leur donner.
+         */
+        ...(bloc?.courbe ? { courbe: bloc.courbe } : {}),
         ...(texte(bloc?.seLitEn) ? { seLitEn: texte(bloc.seLitEn) } : {}),
         sinon: texte(bloc?.sinon),
         sauf: Array.isArray(bloc?.sauf) ? bloc.sauf : []
@@ -260,10 +287,19 @@ export function aProposerDuBrouillon(fichiers = [], { venue = null } = {}) {
         nature, declaration: declarations.get(sujet), marque
       });
 
-      // Un bloc qui nomme sans rien dire n'entre pas : la proposition porterait
-      // une ligne vide, que personne ne saurait relire ni refuser. C'est aussi
-      // ce que devient une phrase en français qu'on a oublié de coder.
-      if (!texte(affirmation.valeur)) {
+      /**
+       * **Un bloc qui nomme sans rien dire n'entre pas** : la proposition
+       * porterait une ligne vide, que personne ne saurait relire ni refuser.
+       * C'est aussi ce que devient une phrase en français qu'on a oublié de
+       * coder.
+       *
+       * La question n'est donc pas « a-t-il une valeur », mais **« y a-t-il
+       * quelque chose à relire »** — et les deux se confondaient jusqu'ici.
+       * Un abaque n'a pas de valeur et se relit très bien : ses points *sont*
+       * ce qu'on signe. Le confondre avec une ligne vide le tenait hors de
+       * toute mémoire de projet.
+       */
+      if (!texte(affirmation.valeur) && !affirmation.regle?.courbe) {
         sansRetour.push({
           quoi: sujet, motif: ECARTE.SANS_VALEUR, dit: "",
           fichier: nom, ligne: Number(bloc?.ligne) || 0
