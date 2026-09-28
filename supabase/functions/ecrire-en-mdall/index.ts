@@ -39,7 +39,9 @@ import {
   CONSIGNES,
   SCHEMA_DU_MDALL,
   fichiersDuModele,
-  lacunesDuModele
+  lacunesDuModele,
+  ceQueLeProjetSaitLu,
+  phraseDeCeQuiEstConnu
 } from "../_shared/mdall-du-modele.js";
 
 const openAiApiKey = Deno.env.get("OPENAI_API_KEY")!;
@@ -109,12 +111,25 @@ serve(async (req) => {
     const body = await req.json();
     const dit = String(body?.dit ?? "").trim().slice(0, MAX_CARACTERES);
 
-    // **Le projet ne sert qu'au compteur.** La transcription n'en a pas besoin :
-    // elle ne voit qu'une phrase. Son absence range l'appel hors projet plutôt
-    // que de l'attribuer au hasard.
+    // **Le projet sert au compteur.** Son absence range l'appel hors projet
+    // plutôt que de l'attribuer au hasard.
     const projectId = String(body?.project_id ?? "").trim() || null;
 
     if (!dit) return reponse({ error: "dit is required" }, 400);
+
+    /**
+     * Ce que le projet conclut déjà, tel que l'écran l'a réuni.
+     *
+     * **Sans lui, « lance la fonction existante dans la mémoire du projet » ne
+     * peut pas s'écrire** : le modèle ne sait pas qu'elle existe, ni ce qu'elle
+     * lit. Il écrit donc la seule chose qu'on puisse écrire quand on ne sait
+     * pas — un appel de fonction —, et le langage n'en a pas.
+     *
+     * Il se relit ici plutôt que de se croire : ce qui monte d'un navigateur
+     * n'est jamais ce qu'on suppose, et une liste de trois cents noms ferait
+     * une consigne où la phrase se perd.
+     */
+    const connu = ceQueLeProjetSaitLu(body?.connu);
 
     const horloge = AbortSignal.timeout(MAX_SECONDES * 1000);
 
@@ -131,7 +146,9 @@ serve(async (req) => {
       body: JSON.stringify({
         model: MODELE,
         instructions: CONSIGNES,
-        input: dit,
+        // La consigne enseigne la grammaire ; ce que le projet sait est un
+        // **fait de ce projet-ci**, et il se met avec la phrase.
+        input: `${phraseDeCeQuiEstConnu(connu)}${dit}`,
         max_output_tokens: MAX_JETONS,
         text: { format: { type: "json_schema", ...SCHEMA_DU_MDALL } },
         ...(temperature === null ? {} : { temperature })

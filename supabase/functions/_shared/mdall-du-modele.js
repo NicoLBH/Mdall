@@ -620,3 +620,70 @@ export function lacunesDuModele(lu) {
     }))
     .filter((lacune) => lacune.phrase);
 }
+
+/**
+ * Ce que le projet conclut déjà, relu de ce qui monte, et dit au modèle.
+ *
+ * ## Pourquoi ce n'est pas dans la consigne
+ *
+ * La consigne enseigne la **grammaire** : elle est la même pour tous les
+ * projets, et elle se met en cache. Ce que ce projet-ci a signé est un
+ * **fait**, il change à chaque versement, et il se met avec la phrase.
+ *
+ * ## Pourquoi on le relit plutôt que de le croire
+ *
+ * Ce qui monte d'un navigateur n'est jamais ce qu'on suppose. Une liste de
+ * trois cents noms ferait une consigne où la phrase se perd, et un objet mal
+ * formé ferait tomber la transcription entière sur un champ qu'on n'avait pas
+ * prévu.
+ */
+
+/** Combien de fonctions au plus. Au-delà, on dit combien il en reste. */
+export const FONCTIONS_AU_PLUS = 80;
+
+const mot = (valeur) => String(valeur ?? "").trim();
+
+/** Ce que le projet sait, ramené à ce qu'on sait lire. */
+export function ceQueLeProjetSaitLu(brut = null) {
+  const fonctions = (Array.isArray(brut?.fonctions) ? brut.fonctions : [])
+    .map((une) => ({
+      nom: mot(une?.nom),
+      lit: (Array.isArray(une?.lit) ? une.lit : []).map(mot).filter(Boolean),
+      rend: mot(une?.rend),
+      forme: mot(une?.forme)
+    }))
+    .filter((une) => une.nom)
+    .slice(0, FONCTIONS_AU_PLUS);
+
+  const deplus = Number(brut?.deplus);
+  return { fonctions, deplus: Number.isFinite(deplus) && deplus > 0 ? Math.floor(deplus) : 0 };
+}
+
+/**
+ * La phrase qui précède la demande. Vide quand le projet ne conclut rien.
+ *
+ * **Elle dit aussi comment s'en servir**, parce que c'est là que la faute se
+ * commet : on demande de « lancer » une fonction existante, et un modèle qui
+ * connaît d'autres langages écrit un appel. Le langage n'en a pas — on nomme.
+ */
+export function phraseDeCeQuiEstConnu(connu = null) {
+  const fonctions = connu?.fonctions ?? [];
+  if (!fonctions.length) return "";
+
+  const lignes = fonctions.map((une) => {
+    const lit = une.lit.length ? ` — lit ${une.lit.join(", ")}` : "";
+    const rend = une.rend ? ` — rend ${une.rend}` : "";
+    return `- ${une.nom}${lit}${rend}`;
+  });
+
+  const reste = connu.deplus
+    ? `\n(et ${connu.deplus} autre${connu.deplus > 1 ? "s" : ""} que cette liste ne montre pas)`
+    : "";
+
+  return `Ce projet a déjà signé ces fonctions. Elles existent : ne les réécris pas, `
+    + `et ne les appelle pas — **nomme-les**, comme n'importe quel nom.\n`
+    + `${lignes.join("\n")}${reste}\n\n`
+    + `Pour t'en servir : \`calcule X = Couleur des volets;\` ou \`si (Couleur des volets = "gris")\`. `
+    + `Déclare dans ta signature ce que tu lis d'elles, et ce qu'elles lisent `
+    + `devient une entrée de ta fonction.\n\n`;
+}

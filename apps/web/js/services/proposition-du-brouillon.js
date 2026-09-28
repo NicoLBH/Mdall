@@ -149,7 +149,13 @@ function affirmationDuBloc(bloc, { nature, declaration, marque = null }) {
     // Ce que la déclaration explique du nom : à quoi il sert, ce qu'il désigne.
     // Sans eux, un projet de douze mille noms devient un projet où chacun
     // recrée le sien plutôt que de chercher celui qui existe.
-    quoi: texte(declaration?.description),
+    //
+    // **Une fonction, elle, se décrit dans son premier commentaire** — c'est le
+    // seul endroit où elle peut le faire, une fonction n'ayant pas de
+    // déclaration. Le laisser sur le brouillon aurait fait verser une fonction
+    // muette, et l'écran des fichiers l'aurait relue sans savoir à quoi elle
+    // sert.
+    quoi: texte(declaration?.description) || texte(bloc?.quoi),
     utilisation: texte(declaration?.utilisation),
     // La portée telle que le fichier la porte. Vide veut dire « partout » :
     // c'est une portée, pas une absence de réponse.

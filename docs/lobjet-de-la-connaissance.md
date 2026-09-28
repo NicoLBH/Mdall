@@ -2480,5 +2480,6 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | le pourcentage à travers un nom, et les fonctions versées qu'on réutilise | `docs/le-pourcentage-et-la-quatrieme-source.md` |
 | ce qu'une fonction attend, dit pendant qu'on l'écrit | `docs/laide-a-la-signature.md` |
 | ce qu'une fonction annonce, et ce qui le vérifie | `docs/ce-quune-fonction-annonce.md` |
+| ce que le modèle sait du projet, et corriger une fonction versée | `docs/se-servir-du-projet.md` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

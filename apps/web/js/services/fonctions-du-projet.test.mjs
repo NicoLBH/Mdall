@@ -198,21 +198,27 @@ test("deux règles du même sujet ne se proposent qu'une fois", () => {
   assert.equal(utiles.length, 1);
 
   /**
-   * **C'est la première qui répond, et c'est un choix, pas un hasard.**
+   * **C'est la plus récente qui répond, et c'est un choix, pas un hasard.**
    *
-   * Il n'y en a pas de bon : sans zone, rien ne distingue les deux. Ce qui
-   * compte est que ce soit **stable** — un essai dont le verdict change d'une
-   * frappe à l'autre selon l'ordre où la base a rendu ses lignes serait pire
-   * qu'un essai qui se trompe toujours pareil.
+   * Entre deux **zones**, il n'y a pas de bon choix : sans zone, rien ne les
+   * distingue. Ce qui compte est que ce soit **stable** — un essai dont le
+   * verdict change d'une frappe à l'autre selon l'ordre où la base a rendu ses
+   * lignes serait pire qu'un essai qui se trompe toujours pareil.
+   *
+   * Entre deux **versions du même sujet**, en revanche, il y en a un seul : la
+   * dernière. C'est elle qu'on reprend pour corriger, et c'est pour elle que
+   * ce départage a cessé d'être « la première rendue » — voir `reglesParSujet`.
+   * Le même juge répond aux deux questions, parce qu'il n'y en a qu'une :
+   * laquelle fait foi (règle 4).
    */
-  assert.equal(utiles[0].bloc.alors, "120 €", "ce n'est plus la première qui répond");
+  assert.equal(utiles[0].bloc.alors, "200 €", "ce n'est plus la plus récente qui répond");
 
   // Et l'essai ne rend qu'un verdict pour ce sujet : deux ne diraient pas
   // lequel fait foi.
   const rendu = lancerLeBrouillon(FICHIERS,
     { "Nombre de volets": "4", "Couleur des volets": "gris" }, { memoire });
   assert.equal(rendu.filter((un) => un.sujet === "Prix unitaire du volet").length, 1);
-  assert.equal(rendu.find((un) => un.sujet === "Prix des volets")?.valeur, "480 €");
+  assert.equal(rendu.find((un) => un.sujet === "Prix des volets")?.valeur, "800 €");
 });
 
 /* ── Ce que l'écriture en fait ───────────────────────────────────────────── */

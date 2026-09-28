@@ -10,10 +10,17 @@
  *
  * ## Ce qui monte
  *
- * La phrase, et le projet pour le compteur. Rien d'autre : la transcription
- * n'a pas besoin de la mémoire du projet pour écrire une règle, et faire
- * monter une mémoire entière à chaque essai serait payer cher une chose qui ne
- * sert pas.
+ * La phrase, le projet pour le compteur, et **ce que le projet conclut déjà**.
+ *
+ * Ce dernier manquait, et c'était le défaut : « lance la fonction existante
+ * dans la mémoire du projet » ne peut pas s'écrire par un modèle qui ne sait
+ * pas qu'elle existe, ni ce qu'elle lit. Il écrivait donc un **appel de
+ * fonction** — la seule chose qu'on peut écrire quand on ne sait pas —, et le
+ * langage n'en a pas.
+ *
+ * **La mémoire entière ne monte pas pour autant** : seulement les fonctions
+ * signées, avec ce que chacune lit et rend. Aucune valeur, aucune citation,
+ * aucun auteur. Voir `ce-que-le-projet-sait.js`.
  *
  * ## Ce qui se lit sans réseau vit ailleurs
  *
@@ -26,6 +33,7 @@
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { REFUS, laTranscriptionLue, motifDuStatut, panneLue } from "./le-mdall-rendu.js";
+import { ceQueLeProjetSait, leProjetSaitQuelqueChose } from "./ce-que-le-projet-sait.js";
 
 const URL_DE_LA_FONCTION = `${getSupabaseUrl()}/functions/v1/ecrire-en-mdall`;
 
@@ -57,16 +65,25 @@ async function projetCourant() {
  * @returns {Promise<{ok: true, fichiers, lacunes, temperature, modele, coupee}
  *   |{ok: false, motif: string, panne: string, coupee: boolean}>}
  */
-export async function ecrireEnMdall({ dit = "" } = {}) {
+export async function ecrireEnMdall({ dit = "", memoire = null } = {}) {
   const phrase = texte(dit);
   if (!phrase) return { ok: false, motif: REFUS.SANS_TEXTE, panne: "", coupee: false };
+
+  // Ce que le projet conclut déjà. Vide quand on ne l'a pas lu : un projet dont
+  // la mémoire n'est pas là et un projet qui ne conclut rien s'écrivent pareil
+  // au modèle — il n'a rien à reprendre dans les deux cas.
+  const su = ceQueLeProjetSait(memoire ?? []);
 
   let reponse = null;
   try {
     reponse = await fetch(URL_DE_LA_FONCTION, {
       method: "POST",
       headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ project_id: await projetCourant(), dit: phrase })
+      body: JSON.stringify({
+        project_id: await projetCourant(),
+        dit: phrase,
+        ...(leProjetSaitQuelqueChose(su) ? { connu: su } : {})
+      })
     });
   } catch {
     // Rien n'est parti, donc rien n'a été facturé. Le dire évite de réessayer

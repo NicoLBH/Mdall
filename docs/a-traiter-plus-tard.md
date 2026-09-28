@@ -4603,8 +4603,8 @@ grandeurs : les cadres empilés répondent pour un nuage, pas pour une grille de
 seize. C'est une question d'écran, pas de calcul.
 
 **Une fonction versée se rejoue sans ses zones.** L'écran d'écriture prend la
-première règle en vigueur par sujet
-(`docs/le-pourcentage-et-la-quatrieme-source.md`). Un projet qui conclut
+**dernière** règle en vigueur par sujet — celle qui fait foi, quelles que
+soient ses zones (`docs/se-servir-du-projet.md`). Un projet qui conclut
 « Couleur des volets » différemment par bâtiment en a plusieurs, et l'essai n'en
 montre qu'une — sans dire laquelle. Ce n'est pas un oubli de câblage : le bac
 d'essai n'a **pas de zone**, parce qu'on y essaie une fonction, pas un ouvrage.
@@ -4639,3 +4639,41 @@ maintenant avec leur fichier et leur numéro
 main dans la zone d'écriture. Un clic qui pose le curseur sur la ligne fautive
 est le geste qu'on attend d'un éditeur, et il demande de relier deux panneaux
 qui ne se connaissent pas aujourd'hui.
+
+**Le domaine fermé d'un nom déclaré ne monte pas au modèle.** Ce qui monte avec
+la phrase est la liste des fonctions que le projet a signées, avec ce que
+chacune lit et rend (`docs/se-servir-du-projet.md`). Les noms **déclarés** n'y
+sont pas : leurs valeurs possibles vivent dans `variables-du-projet.ref`, qui
+s'engendre à la lecture des fichiers et non dans les assertions. Le modèle sait
+donc qu'une fonction lit `Matériau`, sans savoir que `Matériau` vaut « bois » ou
+« pvc » — et il écrira « bois massif » une fois sur trois. Le faire demande de
+reconstruire ce fichier côté écran, ou de porter le domaine sur l'affirmation au
+versement ; c'est une vraie décision, pas un branchement.
+
+**Une fonction reprise revient sans les déclarations des noms qu'elle lit.** Son
+texte entier revient dans `essai.ref`, et `variables-du-projet.ref` reste vide :
+le volet affiche « nom jamais déclaré » pour chaque entrée. Ça ne bloque rien et
+l'essai tourne, mais c'est une liste de remarques qu'on n'a pas causées, sur un
+texte qu'on vient de reprendre — exactement le moment où l'on doute d'avoir
+cassé quelque chose. Les ramener demande de savoir ce que chaque nom désigne, ce
+qui est la même question que ci-dessus.
+
+**Le dédoublonnage d'une signature est écrit trois fois.** « Cette liste de
+paramètres se dédoublonne-t-elle ? » reçoit trois réponses sur le chemin :
+`nomsLusParLeBloc`, puis `blocDeRegle`, puis `ligneDeDonnee`. On l'a découvert
+en cassant : il faut les casser **toutes les trois** pour qu'un test tombe,
+c'est-à-dire qu'en casser une ne se voit jamais. Deux de ces gardes ne
+défendent donc rien, et l'on ne saura laquelle compte que le jour où la
+troisième partira — c'est la règle 4 sous une autre forme. N'en garder qu'une
+demande de décider laquelle, et `ligneDeFonction` complique le choix : elle
+**ne doit pas** dédoublonner, puisqu'elle colore la ligne telle qu'on l'a
+tapée, `(zones, A, A)` compris.
+
+**Un barème ne distingue pas le texte « 3 » du nombre 3.** La colonne de
+conclusion d'un `selon` s'écrit nue — `| a | CF 1/2 h |`, `| b | à vérifier |`
+—, sans guillemets, contrairement à ce que pose un `alors (…)`. Une norme dont
+une case vaut littéralement `"3"` — un classement, pas une quantité — se
+relirait donc comme le nombre 3. Personne ne l'a rencontré, et la forme nue est
+ce qui rend un barème recopiable depuis l'imprimé : la corriger demande de
+choisir entre deux écritures qui se ressemblent trop, et de décider ce qu'on
+fait des barèmes déjà versés.

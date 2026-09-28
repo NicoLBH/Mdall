@@ -598,6 +598,40 @@ export const WIKI_DU_LANGAGE = [
       + "Une fonction versée, elle, conclut dans **ce** projet.")
   ]),
 
+  section("corriger", "Corriger une fonction déjà versée", [
+    dit("**Une fonction versée se reprend, elle ne se récrit pas.** Vous avez "
+      + "signé « Couleur des volets », et vous voulez lui ajouter ce qu'elle "
+      + "rend. La retaper de mémoire en ferait une seconde du même nom : le "
+      + "projet en tiendrait deux, et la plus ancienne continuerait de répondre "
+      + "quelque part."),
+    dit("**Le chemin** : menu « … » de la ligne du titre, puis « Reprendre une "
+      + "fonction du projet… ». Le panneau liste ce que le projet a signé — le "
+      + "nom, la phrase qui dit à quoi elle sert, ce qu'elle lit et ce qu'elle "
+      + "rend. Cliquez : son texte entier revient dans `essai.ref`, tel qu'il "
+      + "se relit."),
+    dit("**Corrigez, puis reproposez.** C'est le chemin de tout le monde — une "
+      + "proposition relue ligne à ligne, puis signée. Rien n'est modifié en "
+      + "place, et tant que vous n'avez pas signé, c'est l'ancienne version qui "
+      + "vaut. Une fois signée, la nouvelle remplace l'ancienne : même nom, même "
+      + "portée, la dernière fait foi. L'ancienne reste lisible dans l'origine "
+      + "de la ligne — c'est son histoire, pas une seconde vérité."),
+    code("fonction Couleur des volets(zones, Matériau) {",
+      "   // La couleur imposée par le fournisseur, selon la matière.",
+      "   rend: \"gris\" ou \"blanc\"",
+      "",
+      "   selon (Matériau)",
+      "      | bois | gris |",
+      "      | pvc  | blanc |",
+      "}"),
+    dit("**Le premier commentaire revient avec elle**, parce que c'est lui qui "
+      + "dit à quoi elle sert. Les suivants aussi : ils expliquent pourquoi telle "
+      + "condition existe, et c'est à côté d'elle qu'ils ont un sens."),
+    dit("**Ce qui ne revient pas** : les déclarations des noms qu'elle lit. "
+      + "Elles vivent dans `variables-du-projet.ref`, pas dans la fonction. "
+      + "Vous verrez donc « nom jamais déclaré » dans le volet des remarques — "
+      + "elles ne bloquent rien, et l'essai tourne quand même.")
+  ]),
+
   section("chainage", "Une fonction lit ce qu'une autre conclut", [
     dit("**Il n'y a pas d'appel de fonction dans Mdall.** `calcule taux = Taux de TVA(…)` "
       + "ne se lit pas, et n'existera pas : un langage où une fonction en appelle une autre "
