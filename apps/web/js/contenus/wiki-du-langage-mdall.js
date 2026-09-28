@@ -632,43 +632,57 @@ export const WIKI_DU_LANGAGE = [
       + "elles ne bloquent rien, et l'essai tourne quand même.")
   ]),
 
-  section("pas-dappel", "Il n'y a pas d'appel de fonction", [
-    dit("**C'est la faute que tout le monde commet**, et elle vient d'ailleurs : "
-      + "tous les autres langages écrivent `Couleur des volets(Matériau)`. Ici, "
-      + "non. Une fonction ne **prend** rien : elle **lit** les noms qui "
-      + "existent autour d'elle."),
-    code("// FAUX — il n'y a pas d'appel, et aucune parenthèse après un nom",
-      "calcule x = Couleur des volets(Matériau);",
+  section("appeler", "Appeler une fonction sur d'autres noms", [
+    dit("**Une fonction se sert de deux façons**, et elles ne disent pas la même "
+      + "chose. On peut la **nommer** — elle lit alors ses propres noms, ceux de "
+      + "sa signature. Ou on peut l'**appeler** — elle lit alors ce qu'on lui "
+      + "donne."),
+    code("// La nommer : elle lit « Nature des volets », le nom qu'elle a déclaré",
+      "calcule x = Couleur des volets;",
       "",
-      "// JUSTE — on la nomme, comme n'importe quel nom",
-      "calcule x = Couleur des volets;"),
-    dit("**Seules sept fonctions prennent des parenthèses**, et ce sont celles du "
-      + "langage : `racine`, `abs`, `arrondi`, `plafond`, `plancher`, `min`, "
-      + "`max`. Tout le reste est un nom, et un nom se nomme seul."),
-    dit("**La conséquence, qui surprend au début** : on ne peut pas lui donner un "
-      + "autre nom que celui qu'elle lit. Si « Couleur des volets » lit "
-      + "« Nature des volets », c'est « Nature des volets » qui doit exister — "
-      + "la déclarer, ou l'écrire dans le formulaire de l'essai. Lui passer "
-      + "« Matériau » à la place n'a pas de forme, parce que cela n'a pas de sens : "
-      + "la fonction dit elle-même ce qu'elle lit, une fois, dans sa signature."),
-    dit("**C'est voulu.** Une fonction qui prend des arguments s'appelle depuis "
-      + "dix endroits avec dix valeurs différentes, et l'on ne sait plus laquelle "
-      + "le projet tient pour vraie. Ici, un nom vaut une chose à la fois, et "
-      + "c'est tout ce qu'il y a à relire."),
-    dit("Le volet des remarques le dit maintenant en toutes lettres, avec la "
-      + "ligne qu'il fallait écrire — dans un `calcule`, dans un `si (…)`, ou "
-      + "seule sur sa ligne.")
+      "// L'appeler : elle lit « Matériau » à la place",
+      "calcule x = Couleur des volets(zones, Matériau);"),
+    dit("**C'est ce qui rend une fonction réutilisable.** Sans l'appel, "
+      + "« Couleur des volets » ne sait lire qu'un seul nom : celui qu'elle a "
+      + "déclaré. Une seconde série de volets, nommée autrement, demanderait une "
+      + "seconde fonction qui dit la même chose — et à dix noms, le projet "
+      + "tiendrait dix copies d'un même raisonnement, dont neuf vieilliraient "
+      + "sans qu'on s'en aperçoive."),
+    dit("**L'ordre est celui de la signature**, et la portée vient toujours en "
+      + "premier. `fonction Couleur des volets(zones, Nature des volets)` s'appelle "
+      + "donc avec deux valeurs : la portée, puis ce qui remplace "
+      + "« Nature des volets ». Si vous n'en donnez pas le bon nombre, l'écran "
+      + "vous rappelle la signature attendue."),
+    dit("**Un appel se pose dans un `calcule`**, jamais seul sur sa ligne et pas "
+      + "encore dans un `si (…)` : un appel ne conclut rien par lui-même, il rend "
+      + "une valeur — et une valeur a besoin d'un nom pour qu'on s'en serve."),
+    code("calcule teinte = Couleur des volets(zones, Matériau);",
+      "si (teinte = \"violet\")",
+      "alors (\"conforme au nuancier\");",
+      "sinon (\"à valider\");"),
+    dit("**Ce que l'appel ne fait pas** : il n'écrit rien et ne conclut sous aucun "
+      + "nom. « Couleur des volets » continue de conclure sous son seul nom dans "
+      + "la mémoire — un appel répond à une question de passage, il n'ajoute pas "
+      + "une seconde vérité."),
+    dit("**Ce qu'elle ne déclare pas, elle continue de le lire dehors.** On ne "
+      + "remplace que ce que la signature annonce ; les autres noms qu'une "
+      + "fonction lit se lisent là où on l'appelle, comme avant."),
+    dit("**Et une fonction ne s'appelle pas elle-même** : il n'y a pas de "
+      + "récursion dans ce langage. Une fonction qui se rappelle, directement ou "
+      + "par une autre, reste simplement sans réponse.")
   ]),
 
   section("chainage", "Une fonction lit ce qu'une autre conclut", [
-    dit("**Il n'y a pas d'appel de fonction dans Mdall.** `calcule taux = Taux de TVA(…)` "
-      + "ne se lit pas, et n'existera pas : un langage où une fonction en appelle une autre "
-      + "demande une pile, un ordre d'exécution et des cas d'arrêt — trois choses qu'on ne "
-      + "relit pas dix-huit mois plus tard."),
-    dit("Une fonction conclut **sous son propre nom**, et les autres la lisent comme "
-      + "n'importe quel nom du projet. C'est déjà ce que fait la mémoire : la conclusion "
-      + "d'une règle y est versée comme valeur de son sujet, et les règles suivantes la "
-      + "relisent. Découpez donc en deux, et lisez la première dans la seconde."),
+    dit("**Le chaînage est la façon ordinaire de composer**, et elle se lit sans "
+      + "rien connaître : une fonction conclut **sous son propre nom**, et les "
+      + "autres la lisent comme n'importe quel nom du projet. C'est déjà ce que "
+      + "fait la mémoire — la conclusion d'une règle y est versée comme valeur de "
+      + "son sujet, et les règles suivantes la relisent. Découpez donc en deux, et "
+      + "lisez la première dans la seconde."),
+    dit("**Quand le nom ne tombe pas juste**, appelez-la plutôt que de la "
+      + "réécrire : voir « Appeler une fonction sur d'autres noms ». Le chaînage "
+      + "reste la forme à préférer quand les noms s'accordent — il n'y a rien à "
+      + "tenir dans sa tête, chaque ligne se lit seule."),
     code(
       "fonction Taux de TVA(zones, Type de TVA) {",
       "   // Le taux applicable, selon le type de travaux.",

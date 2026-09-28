@@ -49,11 +49,15 @@ alors que c'est la phrase entière qui est de la mauvaise forme.
 Le bac dit maintenant **« Rien ne se lance : 1 ligne n'a pas été comprise »**, et
 montre la ligne, avec son fichier, son numéro et sa raison — là où l'on regarde.
 
-Et une ligne écrite comme un appel a son propre refus :
+Et une ligne écrite comme un appel avait alors son propre refus :
 
 > il n'y a pas d'appel de fonction : « Couleur des volets » se nomme, comme
 > n'importe quel nom. Écrivez « calcule … = Couleur des volets; » ou « si
 > (Couleur des volets …) » selon ce que vous voulez en faire.
+
+*(Cette phrase n'existe plus : une fonction s'appelle depuis. Ce qui reste vrai
+est qu'un appel seul sur sa ligne ne conclut rien, et le refus le dit —
+`docs/appeler-une-fonction.md`.)*
 
 C'est la faute que la forme appelle — on connaît les fonctions des autres
 langages — et le message donne la ligne à écrire.

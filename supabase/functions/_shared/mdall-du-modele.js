@@ -329,8 +329,8 @@ courbe Coefficient de forme(zones, Pente du versant) {
 \`\`\`
 
 **Une courbe est une fonction**, écrite autrement : elle lit le nom de sa
-signature et conclut sous le sien. Les autres fonctions la lisent comme
-n'importe quel nom — il n'y a pas d'appel, ici non plus.
+signature et conclut sous le sien. Les autres fonctions la nomment, ou
+l'appellent, exactement comme les autres.
 
 - **les deux déclarations sont obligatoires**, et c'est tout l'objet de la
   forme. \`entre les points:\` vaut \`linéaire\` ou \`en escalier\` (un palier) ;
@@ -451,14 +451,12 @@ l'écran le dit.
 
 # Une fonction qui en lit une autre
 
-**Il n'y a pas d'appel de fonction dans Mdall.** N'écris jamais
-\`calcule taux = Taux de TVA(zones, Type de TVA);\` : cette ligne ne se lit pas,
-et le formulaire demandera alors « taux » à la main — c'est-à-dire la réponse
-que la phrase demandait de déduire.
+Il y a **deux façons**, et elles ne disent pas la même chose.
 
-Une fonction conclut **sous son propre nom**, et les autres la lisent comme
-n'importe quel nom. Découpe donc en deux fonctions, et lis la première dans la
-seconde :
+**La nommer.** Une fonction conclut **sous son propre nom**, et les autres la lisent
+comme n'importe quel nom. C'est la forme à préférer quand les noms s'accordent :
+il n'y a rien à tenir dans sa tête, chaque ligne se lit seule. Découpe en deux
+fonctions, et lis la première dans la seconde :
 
 \`\`\`
 fonction Taux de TVA(zones, Type de TVA) {
@@ -484,6 +482,24 @@ fonction Prix TTC(zones, Prix HT, Taux de TVA) {
   \`depuis:\` est le fichier où la fonction qui le conclut est écrite ;
 - **ne déclare pas** dans \`variables-du-projet.ref\` un nom qu'une fonction
   conclut : il est déduit, il ne se demande pas. \`const\` est pour les entrées.
+
+**L'appeler.** Quand le nom que tu as n'est pas celui que la fonction a déclaré,
+donne-lui le tien plutôt que de réécrire la fonction :
+
+\`\`\`
+calcule teinte = Couleur des volets(zones, Matériau);
+si (teinte = "violet")
+alors ("conforme au nuancier");
+sinon ("à valider");
+\`\`\`
+
+- l'ordre est celui de la **signature**, et \`zones\` vient toujours en premier ;
+- donne **exactement** autant de valeurs que la signature en déclare ;
+- un appel se pose dans un \`calcule\`, **jamais** seul sur sa ligne ni dans un
+  \`si (…)\` : il rend une valeur, il ne conclut rien ;
+- une fonction **ne s'appelle pas elle-même** : il n'y a pas de récursion ;
+- ce que la fonction lit **sans l'avoir déclaré** continue de se lire là où tu
+  l'appelles : on ne remplace que ce que la signature annonce.
 
 # Plusieurs cas
 
@@ -699,18 +715,24 @@ export function phraseDeCeQuiEstConnu(connu = null) {
    * qu'ont tous les autres langages. On montre donc la faute **et** sa
    * correction, côte à côte.
    */
+  const lit = (fonctions[0]?.lit ?? []).map(mot).filter(Boolean);
+  const premiere = lit[0] || "Nature";
+
   return `Ce projet a déjà signé ces fonctions. Elles existent : ne les réécris pas, `
-    + `et ne les appelle pas — **nomme-les**, comme n'importe quel nom.\n`
+    + `sers-t'en.\n`
     + `${lignes.join("\n")}${reste}\n\n`
-    + `Il n'y a **aucun appel de fonction** dans ce langage, et aucune parenthèse `
-    + `après un nom :\n`
-    + `- FAUX : \`calcule X = ${une}(zones, Matériau);\`\n`
-    + `- FAUX : \`si (${une}(Matériau) = "gris")\`\n`
-    + `- JUSTE : \`calcule X = ${une};\`\n`
-    + `- JUSTE : \`si (${une} = "gris")\`\n\n`
-    + `Une fonction ne prend pas d'argument : elle **lit les noms qui existent `
-    + `autour d'elle**. Tu ne peux donc pas lui passer un autre nom que celui `
-    + `qu'elle lit — si elle lit \`Matériau\`, c'est \`Matériau\` qui doit exister. `
-    + `Déclare dans ta signature ce que tu lis d'elles, et ce qu'elles lisent `
-    + `devient une entrée de ta fonction.\n\n`;
+    + `Deux façons de t'en servir, et elles ne disent pas la même chose :\n`
+    + `- **La nommer** — \`calcule X = ${une};\` — elle lit alors ses propres noms, `
+    + `ceux de sa signature.\n`
+    + `- **L'appeler** — \`calcule X = ${une}(zones, Autre nom);\` — elle lit alors `
+    + `ce que tu lui donnes, dans l'ordre de sa signature. C'est ce qu'il faut `
+    + `quand le nom que tu as n'est pas celui qu'elle a déclaré : `
+    + `\`${une}\` lit \`${premiere}\`, et tu peux lui donner n'importe quel nom `
+    + `à la place.\n\n`
+    + `**La portée d'abord, toujours** : \`zones\` est le premier paramètre de toute `
+    + `signature, donc le premier argument de tout appel. Donne exactement autant `
+    + `de valeurs que la signature en déclare.\n\n`
+    + `**Un appel se pose dans un \`calcule\`**, jamais seul sur sa ligne et jamais `
+    + `dans un \`si (…)\` : \`calcule x = ${une}(zones, Autre nom);\` puis `
+    + `\`si (x = "…")\`.\n\n`;
 }

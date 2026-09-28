@@ -1,9 +1,9 @@
 # Le catalogue : on ne compose pas avec ce qu'on ne sait pas nommer
 
-**À quoi sert cette page :** Mdall n'a pas d'appel de fonction. Composer, c'est
-donc exactement une chose — **nommer ce qu'une autre fonction conclut**. Cette
-page dit pourquoi cela ne se produisait jamais, ce que le catalogue met à
-portée, et la seule réserve qu'il porte.
+**À quoi sert cette page :** composer, en Mdall, commence par **nommer ce
+qu'une autre fonction conclut**. Cette page dit pourquoi cela ne se produisait
+jamais, ce que le catalogue met à portée, et la seule réserve qu'il porte.
+(Une fonction s'**appelle** aussi, depuis : `docs/appeler-une-fonction.md`.)
 
 Elle a été écrite en vérifiant le code, pas de mémoire.
 

@@ -28,23 +28,18 @@ const COMME_UN_APPEL = `fonction Test(zones, Matériau) {
 
 test("une ligne écrite comme un appel se refuse, et dit quoi écrire à la place", () => {
   /**
-   * **C'est la faute que la forme appelle.** On connaît les fonctions des
-   * autres langages, on écrit `Couleur des volets(Matériau);`, et toute la
-   * fonction disparaissait derrière « aucun mot de la langue n'ouvre cette
-   * ligne ». C'est vrai, et cela fait relire la grammaire en cherchant le mot
-   * qui manque — alors que la phrase entière est de la mauvaise forme.
+   * **Un appel s'écrit, et ne conclut rien tout seul.** Une fonction du projet
+   * s'appelle pour s'en servir, et s'en servir veut dire poser sa réponse
+   * quelque part. Toute la fonction disparaissait derrière « aucun mot de la
+   * langue n'ouvre cette ligne » — vrai, et sans rapport avec ce qui manque.
    */
   const refus = lireUnFichier(COMME_UN_APPEL).refus;
 
   assert.equal(refus.length, 1);
   assert.equal(refus[0].ligne, 3);
-  assert.match(refus[0].raison, /il n'y a pas d'appel de fonction/);
-  // Une seule phrase pour cette faute, où qu'on la commette : elle vient de
-  // `phraseDuRefus`, et ne se réécrit pas ici (règle 10).
-  assert.match(refus[0].raison, /Écrivez « Couleur des volets » seul/);
-  // **La ligne à écrire**, dans les deux formes où l'on s'en sert.
-  assert.match(refus[0].raison, /calcule … = Couleur des volets;/);
-  assert.match(refus[0].raison, /si \(Couleur des volets …\)/);
+  assert.match(refus[0].raison, /un appel ne conclut rien tout seul/);
+  // **La ligne à écrire**, avec le nom qu'on venait d'appeler.
+  assert.match(refus[0].raison, /calcule … = Couleur des volets\(…\);/);
 });
 
 test("les lignes du langage qui portent des parenthèses ne passent pas pour un appel", () => {
@@ -88,7 +83,7 @@ test("le bac d'essai donne bien les refus à son panneau", () => {
 
   assert.match(html, /Rien ne se lance : 1 ligne n&#39;a pas été comprise/);
   assert.match(html, /essai\.ref · ligne 3/);
-  assert.match(html, /il n&#39;y a pas d&#39;appel de fonction/);
+  assert.match(html, /un appel ne conclut rien tout seul/);
 });
 
 /* ── Ce que le bac en dit ────────────────────────────────────────────────── */
@@ -124,7 +119,7 @@ test("le panneau des résultats porte la ligne refusée, avec où elle est", () 
 
   assert.match(html, /essai\.ref · ligne 3/);
   assert.match(html, /Couleur des volets\(Matériau\);/);
-  assert.match(html, /il n&#39;y a pas d&#39;appel de fonction/);
+  assert.match(html, /un appel ne conclut rien tout seul/);
 
   // Sans refus, rien ne s'ajoute : un panneau qui annonce des ennuis qu'il n'a
   // pas s'apprend à ne plus se lire.

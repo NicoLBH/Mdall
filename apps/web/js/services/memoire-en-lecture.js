@@ -51,7 +51,10 @@ import {
   ligneDeCourbe, ligneDuChampDeLaCourbe,
   jetonsDeValeur, AGENT, AGENTS, VERBES, POUR_CHAQUE, PORTEE_DUNE_FONCTION
 } from "./memoire-en-texte.js";
-import { lireUnCalcul, nomsDuCalcul, phraseDuRefus, FONCTIONS, REFUS_DU_CALCUL } from "./mdall-calcul.js";
+import {
+  lireUnCalcul, nomsDuCalcul, phraseDuRefus, FONCTIONS, REFUS_DU_CALCUL,
+  fonctionsAppeleesDuCalcul
+} from "./mdall-calcul.js";
 import {
   bornesLitterales, lireUnAgregat, lireUnePourChaque, phraseDuRefusDeLaBoucle, valeursDeLaBoucle
 } from "./boucle-du-mdall.js";
@@ -498,11 +501,20 @@ function bornesDe(ligne) {
  */
 function raisonDeLaCondition(corps = "") {
   const nomme = nomAppeleDans(corps);
-  // **La phrase vient d'un seul endroit.** Écrite ici en propres mots, la même
-  // faute recevait deux explications selon qu'on l'avait commise dans un
-  // `calcule` ou dans un `si` — et celle qu'on corrigerait un jour ne serait
-  // pas forcément celle qu'on lit (règle 10).
-  return nomme ? `${phraseDuRefus(REFUS_DU_CALCUL.APPEL, nomme)}.` : "cette condition ne compare rien.";
+  /**
+   * **Une condition compare un nom, pas un appel.**
+   *
+   * `si (Couleur des volets(zones, Matériau) = "violet")` est ce qu'on écrit
+   * naturellement, et ce n'est pas encore une forme du langage : une condition
+   * porte un **sujet**, et l'appel se fait un cran plus haut, dans un
+   * `calcule`. Le dire avec la ligne qu'il fallait écrire vaut mieux que
+   * « cette condition ne compare rien », qui envoyait chercher un `=` qui est
+   * là.
+   */
+  return nomme
+    ? `une condition compare un nom : posez l'appel au-dessus, `
+      + `« calcule x = ${nomme}(…); », puis comparez « x ».`
+    : "cette condition ne compare rien.";
 }
 
 /** La profondeur d'indentation d'une ligne, en pas. */
@@ -1844,11 +1856,13 @@ export function lireUnFichier(contenu = "") {
      */
     const nomme = nomAppeleDans(corps);
     if (nomme) {
+      // **Un appel seul ne conclut rien.** Une fonction du projet s'appelle
+      // pour s'en servir, et s'en servir veut dire poser sa réponse quelque
+      // part : dans une locale, qu'une condition compare ensuite.
       refus.push({
         ligne: numero, texte: corps,
-        raison: `${phraseDuRefus(REFUS_DU_CALCUL.APPEL, nomme)} : `
-          + `« calcule … = ${nomme}; » ou « si (${nomme} …) » `
-          + `selon ce que vous voulez en faire.`
+        raison: `un appel ne conclut rien tout seul : posez sa réponse dans une `
+          + `locale, « calcule … = ${nomme}(…); », puis servez-vous-en.`
       });
       return;
     }
@@ -1965,6 +1979,46 @@ export function dependancesDuBloc(bloc = {}) {
  * lui-même : qui est une entrée et qui est une locale se décide en regardant
  * tout le brouillon, pas un bloc seul.
  */
+/**
+ * **Où vivent les expressions d'un bloc**, et rien d'autre.
+ *
+ * Deux questions se posent dessus — « quels noms y figurent ? » et « quelles
+ * fonctions y sont appelées ? » —, et elles doivent voir exactement les mêmes
+ * endroits. Deux parcours écrits séparément cesseraient un jour de se
+ * ressembler : une borne de boucle ajoutée ici, oubliée là, et l'un des deux
+ * se mettrait à mentir sans tomber (règle 10).
+ */
+function expressionsDuBloc(bloc = {}) {
+  return [
+    ...(Array.isArray(bloc?.calculs) ? bloc.calculs : []).map((un) => un?.expression),
+    ...["de", "a", "pas"].map((borne) => bloc?.boucle?.[borne]),
+    ...(Array.isArray(bloc?.boucle?.calculs) ? bloc.boucle.calculs : []).map((un) => un?.expression)
+  ].map(texte).filter(Boolean);
+}
+
+/**
+ * **Les fonctions du projet que ce bloc appelle.**
+ *
+ * Elles sont lues — il faut les avoir pour répondre — mais ce ne sont **pas
+ * des entrées** : on ne les déclare pas dans sa signature, et le formulaire ne
+ * les demande pas. C'est la différence entre « de quoi ai-je besoin ? » et
+ * « que dois-je annoncer ? », et elle n'existait pas tant que rien ne
+ * s'appelait.
+ */
+export function fonctionsAppeleesParLeBloc(bloc = {}) {
+  const appelees = [];
+
+  for (const expression of expressionsDuBloc(bloc)) {
+    const lu = lireUnCalcul(expression);
+    if (!lu.ok) continue;
+    for (const nom of fonctionsAppeleesDuCalcul(lu.arbre)) {
+      if (!appelees.some((une) => cleDuSujet(une) === cleDuSujet(nom))) appelees.push(nom);
+    }
+  }
+
+  return appelees;
+}
+
 export function nomsLusParLeBloc(bloc = {}) {
   const lus = [];
   const vus = new Set();
@@ -1987,22 +2041,15 @@ export function nomsLusParLeBloc(bloc = {}) {
    * rien à déclarer ici : il ne porte aucune expression, seulement une phrase
    * et une colonne. Rien ne se lit donc de lui, sans qu'on ait à l'écarter.
    */
-  for (const calcul of Array.isArray(bloc?.calculs) ? bloc.calculs : []) {
-    lireLexpression(calcul?.expression);
-  }
-
   /**
-   * **Une boucle lit, et par deux endroits.**
+   * Les calculs, les bornes d'une boucle et son corps — `expressionsDuBloc` dit
+   * où ils sont, une fois pour les deux questions qu'on pose dessus.
    *
-   * Ses bornes d'abord — `de 0 m à Portée par pas de 0,5 m` a besoin de la
-   * portée —, puis son corps. Les taire ferait une fonction dont on ne demande
-   * jamais ce qu'il lui faut : elle resterait indécidable, et l'écran ne dirait
-   * pas quoi remplir.
+   * Une boucle lit par deux endroits : ses bornes d'abord — `de 0 m à Portée
+   * par pas de 0,5 m` a besoin de la portée —, puis son corps. Les taire ferait
+   * une fonction dont on ne demande jamais ce qu'il lui faut.
    */
-  for (const borne of ["de", "a", "pas"]) lireLexpression(bloc?.boucle?.[borne]);
-  for (const calcul of Array.isArray(bloc?.boucle?.calculs) ? bloc.boucle.calculs : []) {
-    lireLexpression(calcul?.expression);
-  }
+  for (const expression of expressionsDuBloc(bloc)) lireLexpression(expression);
 
   /**
    * **Une courbe lit son abscisse, et c'est tout ce qu'elle lit.**
@@ -2553,5 +2600,20 @@ export function nomsPosesParLeBloc(bloc = {}) {
 export function entreesDuBloc(bloc = {}) {
   const siens = nomsPosesParLeBloc(bloc);
 
-  return nomsLusParLeBloc(bloc).filter((nom) => !siens.has(cleDuSujet(nom)));
+  /**
+   * **Une fonction qu'on appelle n'est pas une entrée**, et la portée non plus.
+   *
+   * `calcule x = Couleur des volets(zones, Matériau);` lit trois noms : la
+   * fonction, la portée et la matière. Un seul est une entrée. Sans cet écart,
+   * la vérification réclamait `Teinte du lot B(zones, Couleur des volets,
+   * zones, Matériau)` — une signature où la portée paraît deux fois et où l'on
+   * déclare comme donnée à fournir une fonction que le projet possède déjà.
+   */
+  const appelees = new Set(fonctionsAppeleesParLeBloc(bloc).map(cleDuSujet));
+  const portee = cleDuSujet(PORTEE_DUNE_FONCTION);
+
+  return nomsLusParLeBloc(bloc).filter((nom) => {
+    const cle = cleDuSujet(nom);
+    return !siens.has(cle) && !appelees.has(cle) && cle !== portee;
+  });
 }

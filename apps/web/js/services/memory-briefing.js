@@ -56,10 +56,12 @@ import {
   UNCLASSIFIED_LABEL,
   classifyAssertion,
   domainLabel,
+  estUneRegle,
   natureLabel,
   sansTranchantLabel,
   settledByLabel
 } from "./assertion-taxonomy.js";
+import { texteDeLaFonctionVersee } from "./fonctions-du-projet.js";
 import { dependenciesOf, needsReview } from "./assertion-dependencies.js";
 import { HYPOTHESIS_STATE, stateLabel, stateOf } from "./memoire-actes.js";
 import { definedZones, describeZonesOf, zonesOf } from "./project-zones.js";
@@ -206,6 +208,42 @@ function socles(assertion, dependencies, parId) {
   return dependenciesOf(assertion?.id, dependencies)
     .map((id) => texte(parId.get(id)?.subject_key))
     .filter(Boolean);
+}
+
+/**
+ * **Ce que le projet déduit**, avec le texte de chaque fonction.
+ *
+ * Le texte, et pas seulement la conclusion : c'est lui qui dit ce que la
+ * fonction lit et sous quelle condition elle répond. Sans lui, « Couleur des
+ * volets : violet » ne permet de répondre à aucune question qui commence par
+ * « et si ». Avec lui, la dépendance est lisible, et les questions d'impact se
+ * répondent sur ce que le projet a signé — pas sur une supposition.
+ *
+ * `texteDeLaFonctionVersee` est le **même** écrivain que celui de l'écran des
+ * fichiers : le copilote lit exactement ce qu'un humain relit, et une réponse
+ * peut se vérifier ligne à ligne (règle 10).
+ */
+function blocDesFonctions(fonctions) {
+  const dites = fonctions.map((assertion) => {
+    const ecrit = texteDeLaFonctionVersee(assertion);
+    const nom = texte(assertion?.payload?.subject) || texte(assertion?.subject_key);
+    // Une fonction dont le texte ne se reconstruit pas — un agent, une forme
+    // qu'on ne sait pas réécrire — se nomme quand même : la taire ferait croire
+    // que le projet ne la porte pas (règle 5).
+    return ecrit
+      ? `### ${nom}\n\n\u0060\u0060\u0060\n${ecrit}\n\u0060\u0060\u0060`
+      : `### ${nom}\n\nSon texte ne se relit pas ici.`;
+  });
+
+  return [
+    "## Ce que le projet déduit",
+    "",
+    "Ce sont ses **fonctions** : elles ne disent pas ce qui est vrai, elles disent "
+      + "comment une valeur se déduit de ce qui l'est. Leur texte est celui qui "
+      + "fait foi. Pour savoir ce que change une entrée, lis ce qu'elles lisent.",
+    "",
+    dites.join("\n\n")
+  ].join("\n");
 }
 
 /**
@@ -400,7 +438,22 @@ export function buildMemoryBriefing({
 
   const parNature = new Map(BRIEFING_NATURES.map((nature) => [nature, []]));
   const sansNature = [];
+  /**
+   * **Les fonctions du projet se rangent à part**, et avec leur corps.
+   *
+   * Elles tombaient dans « Non classé », réduites à leur conclusion :
+   * « Couleur des volets : violet ». Le copilote voyait donc la réponse et
+   * jamais **la question** — ni ce que la fonction lit, ni sous quelle
+   * condition elle conclut cela. « Quel impact si la nature des volets passe de
+   * bois à alu ? » devenait littéralement sans réponse, et il disait, à juste
+   * titre au vu de ce qu'on lui donnait, que la mémoire n'en disait rien.
+   *
+   * Une règle n'est pas une nature (voir `estUneRegle`) : c'est un texte qui
+   * dit **comment** une valeur se déduit. Elle mérite sa section, et son texte.
+   */
+  const fonctions = [];
   for (const assertion of toutesCourantes) {
+    if (estUneRegle(assertion)) { fonctions.push(assertion); continue; }
     const { nature } = classifyAssertion(assertion);
     if (nature && parNature.has(nature)) parNature.get(nature).push(assertion);
     else sansNature.push(assertion);
@@ -417,6 +470,7 @@ export function buildMemoryBriefing({
       ...parNature.get(NATURE.DONNEE_BASE),
       ...parNature.get(NATURE.CONTRAINTE),
       ...parNature.get(NATURE.HYPOTHESE),
+      ...fonctions,
       ...sansNature
     ]
   };
@@ -443,6 +497,9 @@ export function buildMemoryBriefing({
       const cle = nature === NATURE.INTENDANCE ? "intendance" : nature === NATURE.CONSTAT ? "constats" : "socle";
       return bloc(nature, parNature.get(nature).filter((assertion) => retenue(assertion, cle)), contexte);
     }).filter(Boolean);
+
+    const gardeesFonctions = fonctions.filter((assertion) => retenue(assertion, "socle"));
+    if (gardeesFonctions.length) blocs.push(blocDesFonctions(gardeesFonctions));
 
     const restantSansNature = sansNature.filter((assertion) => retenue(assertion, "socle"));
     if (restantSansNature.length) {

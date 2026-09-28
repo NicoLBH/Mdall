@@ -454,15 +454,29 @@ test("l'exemple de lecture de la consigne se range vraiment, et son tableau se d
   assert.ok(bloc.boucle, `« ${bloc.sujet} » suggère une lecture sans porter de boucle`);
 });
 
-test("la consigne interdit l'appel de fonction, et montre le chaînage à la place", () => {
-  // **C'est le défaut qu'on a vu à l'écran.** Faute de savoir enchaîner, le
-  // modèle inventait `Taux de TVA(zones, Type de TVA)` : la ligne ne se lisait
-  // pas, et le formulaire demandait alors « taux » à la main — c'est-à-dire la
-  // réponse que la phrase demandait de déduire.
-  assert.match(CONSIGNES, /pas d'appel de fonction/i);
+test("la consigne montre les deux façons de se servir d'une fonction", () => {
+  /**
+   * **Le chaînage d'abord**, parce qu'il se lit sans rien connaître : chaque
+   * ligne se lit seule. L'appel ensuite, pour le cas où le nom qu'on a n'est
+   * pas celui que la fonction a déclaré — sans lui, on réécrit la fonction, et
+   * le projet en tient deux.
+   */
   assert.match(CONSIGNES, /conclut \*\*sous son propre nom\*\*/);
+  assert.match(CONSIGNES, /\*\*L'appeler\.\*\*/);
+  assert.match(CONSIGNES, /Couleur des volets\(zones, Matériau\)/);
+
+  // Ce qu'un appel exige, et ce qu'il n'est pas.
+  assert.match(CONSIGNES, /l'ordre est celui de la \*\*signature\*\*/);
+  assert.match(CONSIGNES, /jamais\*\* seul sur sa ligne/);
+  assert.match(CONSIGNES, /ne s'appelle pas elle-même/);
+
   // Et il dit de ne pas déclarer en entrée ce qu'une fonction conclut.
   assert.match(CONSIGNES, /ne déclare pas\*\*/i);
+
+  // **Plus aucune phrase n'interdit l'appel.** La consigne enseignerait sinon
+  // une langue qui n'est plus la nôtre, et c'est la faute la plus chère : on ne
+  // la voit pas tomber, on voit seulement le modèle écrire faux.
+  assert.doesNotMatch(CONSIGNES, /pas d'appel/i);
 });
 
 test("l'exemple de chaînage de la consigne conclut vraiment, sans rien demander de trop", () => {

@@ -113,17 +113,21 @@ test("les arguments se séparent d'un point-virgule, et la virgule le dit", () =
 
 test("une fonction qu'on n'a pas, ou mal servie, se refuse", () => {
   /**
-   * **`moyenne(1; 2)` est un appel**, et se dit comme tel. Il se refusait par
-   * « ce qui suit ne se rattache à rien — ( », qui est vrai et n'apprend rien :
-   * on relit sa ligne en cherchant l'opérateur qui manque, alors que la seule
-   * chose à savoir est que `moyenne` n'est pas du langage. La phrase nomme
-   * celles qui le sont.
+   * **`moyenne(1; 2)` se lit maintenant comme un appel du projet.**
+   *
+   * Ce n'était pas distinguable tant que rien ne s'appelait : tout nom suivi
+   * d'une parenthèse était la faute. Depuis qu'une fonction du projet s'appelle
+   * vraiment, la question redevient la bonne — **celle-ci existe-t-elle ?** —,
+   * et c'est le lecteur, qui connaît le projet, qui répond. La lecture, elle,
+   * n'a plus de raison de refuser.
    */
-  assert.equal(refusDe("moyenne(1; 2)"), REFUS_DU_CALCUL.APPEL);
-  assert.match(phraseDuRefus(REFUS_DU_CALCUL.APPEL, "moyenne"), /seules racine.*max prennent/);
-  assert.match(phraseDuRefus(REFUS_DU_CALCUL.APPEL, "moyenne"), /Écrivez « moyenne » seul/);
-  // Sans nom sous la main, la phrase reste une phrase.
-  assert.match(phraseDuRefus(REFUS_DU_CALCUL.APPEL), /se nomme seul/);
+  const lu = lireUnCalcul("moyenne(1; 2)");
+  assert.equal(lu.ok, true);
+  assert.equal(lu.arbre.quoi, "appel-du-projet");
+  assert.equal(lu.arbre.nom, "moyenne");
+  // Et c'est à l'évaluation qu'on apprend que le projet ne l'a pas.
+  assert.equal(calculer("moyenne(1; 2)", () => ({ connu: false, valeur: "" })).connu, false);
+  assert.match(phraseDuRefus(REFUS_DU_CALCUL.APPEL, "moyenne"), /pas de fonction de ce nom/);
   assert.equal(refusDe("racine(4; 2)"), REFUS_DU_CALCUL.ARGUMENTS);
   assert.equal(refusDe("min(4)"), REFUS_DU_CALCUL.ARGUMENTS);
 });

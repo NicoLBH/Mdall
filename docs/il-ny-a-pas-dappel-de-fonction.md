@@ -1,5 +1,16 @@
 # Il n'y a pas d'appel de fonction, et le dire trois fois ne suffisait pas
 
+> **Cette page a été renversée par la ronde suivante.** Une fonction **s'appelle**
+> désormais : voir `docs/appeler-une-fonction.md`. Ce qui suit reste vrai comme
+> récit — les quatre défauts décrits ont existé et trois d'entre eux sont
+> toujours corrigés (l'espace devant la parenthèse, les locales prises pour des
+> noms inconnus, les messages qui ne nommaient pas la faute). Seul le premier a
+> changé de nature : ce n'était pas une faute, c'était une forme qui manquait.
+>
+> On ne réécrit pas cette page. Une doctrine qu'on corrige en silence ne laisse
+> pas voir sur quoi on s'est trompé, et c'est précisément ce qu'on veut pouvoir
+> relire.
+
 **À quoi sert cette page :** au troisième tour sur le même sujet, la question
 a cessé d'être « pourquoi le modèle écrit-il un appel ? » pour devenir
 **« pourquoi l'écran ne le dit-il pas ? »**. Les deux réponses sont ici.

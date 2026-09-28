@@ -69,10 +69,14 @@ Jusqu'ici, cette ligne donnait « ce qui suit ne se rattache à rien — ( », p
 au lancement, « personne n'a versé de valeur pour ce sujet ». Les deux sont
 vrais et aucun ne dit la chose utile.
 
-L'aide la dit **là où la faute se commet** :
+L'aide la disait **là où la faute se commet** :
 
 > Il n'y a pas d'appel de fonction : écrivez « Couleur des volets » seul, sans
 > parenthèses.
+
+*(Ce n'était pas une faute mais une forme qui manquait : une fonction s'appelle
+depuis — `docs/appeler-une-fonction.md`. L'aide montre toujours ce qu'elle lit,
+et c'est désormais **l'ordre dans lequel on lui donne ses valeurs**.)*
 
 Et elle continue d'afficher ce que la fonction lit — c'est ce qu'on était venu
 chercher.
