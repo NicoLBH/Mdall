@@ -68,6 +68,27 @@ function enLignes(series) {
 }
 
 /**
+ * Des points seuls, sans trait : un **nuage**.
+ *
+ * **Le trait est justement ce qu'on retire.** Une ligne brisée dit un ordre —
+ * ceci puis cela —, et un nuage répond à une autre question : qu'est-ce qui va
+ * avec quoi. Relier ses points dans l'ordre des lignes ferait lire une
+ * progression là où l'on regarde une forme.
+ */
+function enNuage(series) {
+  return series.map((une, rang) => {
+    const teinte = TEINTES[rang % TEINTES.length];
+    return une.points.map((point) => {
+      const [x, y] = ou(point);
+      return `<circle cx="${Math.round(x)}" cy="${Math.round(y)}" r="3"
+        class="graphique__point graphique__point--${teinte}"><title>${escapeHtml(
+        `${une.nom ? `${une.nom} · ` : ""}${point.dit} → ${point.vaut}`
+      )}</title></circle>`;
+    }).join("");
+  }).join("");
+}
+
+/**
  * Des barres, groupées par abscisse.
  *
  * **Elles partent du bas du cadre, et non du plus petit point.** Une barre dit
@@ -97,30 +118,42 @@ function enBarres(series) {
   }).join("");
 }
 
+/** Les trois façons de poser des séries sur un cadre. */
+export const FORME = { LIGNES: "lignes", BARRES: "barres", NUAGE: "nuage" };
+
+const PINCEAUX = {
+  [FORME.LIGNES]: enLignes,
+  [FORME.BARRES]: enBarres,
+  [FORME.NUAGE]: enNuage
+};
+
 /**
- * Le dessin d'un tracé, en lignes ou en barres.
+ * Le dessin d'un tracé : en lignes, en barres ou en nuage.
  *
  * @param {object} trace ce que `traceDesSeries` rend
  * @param {object} quoi
- * @param {boolean} [quoi.barres] des barres plutôt que des lignes
+ * @param {string} [quoi.forme] une valeur de `FORME` — des lignes par défaut
  * @param {string} [quoi.titre] ce que le dessin représente, pour qui l'écoute
  * @param {string[]} [quoi.bornes] les deux bouts de l'abscisse, en clair
  * @param {boolean} [quoi.legende] nommer les séries sous le dessin
+ * @param {string} [quoi.cadre] ce que ce cadre mesure, quand plusieurs s'empilent
  */
 export function renderGraphique(trace = null, {
-  barres = false, titre = "", bornes = [], legende = false
+  forme = FORME.LIGNES, titre = "", bornes = [], legende = false, cadre = ""
 } = {}) {
   const series = trace?.series ?? [];
   if (!series.length) return "";
 
   const { largeur, hauteur } = CADRE;
   const marque = trace.marque;
+  const pinceau = PINCEAUX[forme] ?? enLignes;
 
   return `
     <figure class="graphique">
+      ${cadre ? `<figcaption class="graphique__cadre">${escapeHtml(cadre)}</figcaption>` : ""}
       <svg viewBox="0 0 ${largeur} ${hauteur}" class="graphique__trace"
         role="img" aria-label="${escapeHtml(titre)}">
-        ${barres ? enBarres(series) : enLignes(series)}
+        ${pinceau(series)}
         ${marque ? `<circle cx="${Math.round(ou(marque)[0])}" cy="${Math.round(ou(marque)[1])}"
           r="4" class="graphique__lu" />` : ""}
       </svg>
@@ -137,5 +170,54 @@ export function renderGraphique(trace = null, {
            </ul>`
         : ""}
     </figure>
+  `;
+}
+
+/**
+ * Plusieurs cadres empilés, sur une seule abscisse.
+ *
+ * **Les bornes se disent une fois, sous le dernier cadre.** Les répéter sous
+ * chacun donnerait trois lectures du même fait, et ferait croire que chaque
+ * cadre a la sienne — ce qui est exactement ce que l'empilement promet de ne
+ * pas faire.
+ *
+ * @param {object} trace ce que `traceDesGroupes` rend
+ */
+export function renderGraphiquesEmpiles(trace = null, {
+  forme = FORME.LIGNES, titre = "", bornes = [], legende = false
+} = {}) {
+  const groupes = trace?.groupes ?? [];
+  if (!groupes.length) return "";
+
+  const seul = groupes.length === 1;
+
+  /**
+   * Ce qu'un cadre annonce.
+   *
+   * **Il nomme sa colonne quand il n'en porte qu'une.** La légende ne paraît
+   * qu'à partir de deux séries — une seule se nommerait elle-même —, si bien
+   * qu'un cadre solitaire n'aurait dit que sa grandeur : deux cadres empilés
+   * annonçant « une force » et « une longueur » sans jamais nommer les deux
+   * colonnes du tableau qu'on est en train de regarder.
+   */
+  const annonce = (un) => {
+    const quoi = un.dit || `en ${un.unite}`;
+    return un.series.length === 1 && un.series[0].nom
+      ? `${un.series[0].nom} · ${quoi}`
+      : quoi;
+  };
+
+  return `
+    <div class="graphique-pile">
+      ${groupes.map((un, rang) => renderGraphique(un, {
+        forme,
+        legende,
+        titre: seul ? titre : `${titre} — ${annonce(un)}`,
+        // Sous le dernier seulement : l'abscisse est commune, et la dire trois
+        // fois ferait croire qu'il y en a trois.
+        bornes: rang === groupes.length - 1 ? bornes : [],
+        cadre: seul ? "" : annonce(un)
+      })).join("")}
+    </div>
   `;
 }

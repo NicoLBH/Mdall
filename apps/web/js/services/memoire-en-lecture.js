@@ -58,7 +58,7 @@ import {
 import {
   DIT_DE_LENTRE, DIT_DU_HORS, lireUnPoint, phraseDuRefusDeLaCourbe, pointsDeLaCourbe
 } from "./courbe-du-mdall.js";
-import { LECTURE, lectureDite } from "./graphique-dune-table.js";
+import { lectureSuggeree } from "./graphique-dune-table.js";
 // La clé d'un sujet vient d'un seul endroit : comparer « Couleur des volets » à
 // « couleur des volets » avec une seconde normalisation écrite ici finirait par
 // ne plus dire la même chose que celle du projet (règle 10).
@@ -1460,15 +1460,15 @@ export function lireUnFichier(contenu = "") {
      * tableau, choisie à la lecture. Cette ligne dit seulement laquelle s'ouvre
      * en premier — l'auteur sait ce que son tableau veut dire, et le lecteur
      * change d'avis d'un clic.
+     *
+     * **Le nuage ne se suggère pas**, et son refus le dit plutôt que de le
+     * ranger parmi les fautes de frappe : il choisit son abscisse parmi les
+     * colonnes, et ce choix-là n'est pas dans le texte de la fonction.
      */
     if (mot === "se lit en:") {
-      const dite = lectureDite(reste);
+      const { dite, raison } = lectureSuggeree(reste);
       if (!dite) {
-        refus.push({
-          ligne: numero, texte: corps,
-          raison: `« ${reste} » ne se lit pas : ${
-            Object.values(LECTURE).map((un) => `« ${un} »`).join(", ")}.`
-        });
+        refus.push({ ligne: numero, texte: corps, raison });
         return;
       }
       courant.seLitEn = dite;

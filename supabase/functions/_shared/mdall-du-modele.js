@@ -372,8 +372,8 @@ fonction Descente de charge(zones, Charge par niveau) {
 }
 \`\`\`
 
-- **trois mots se lisent, et pas un de plus** : \`tableau\`, \`courbe\`, \`barres\`.
-  Tout autre mot est refusé avant le lancement ;
+- **trois mots se suggèrent, et pas un de plus** : \`tableau\`, \`courbe\`,
+  \`barres\`. Tout autre mot est refusé avant le lancement ;
 - **c'est facultatif**, et le défaut est \`tableau\` : ne l'écris que si tu sais ce
   que le tableau veut dire — ce qui **varie** se regarde en \`courbe\`, ce qui se
   **compare** en \`barres\` ;
@@ -382,6 +382,18 @@ fonction Descente de charge(zones, Charge par niveau) {
 - elle se range **avec la tête de la fonction**, avant la boucle ;
 - \`se lit en:\` ne change **rien** à ce que la fonction conclut : ni ses calculs,
   ni sa condition, ni son \`alors\`.
+
+**N'écris jamais \`se lit en: nuage\`.** Le nuage existe — il dessine une
+colonne contre une autre —, mais il **ne se suggère pas** : il choisit son
+abscisse parmi les colonnes, et ce choix se fait à la lecture, d'un clic sous le
+tableau. L'écrire serait porter dans la fonction une intention de mise en page,
+ce que le parti pris refuse.
+
+De même, il n'y a **rien à écrire pour qu'un tableau à deux grandeurs se
+dessine**. Une colonne en mètres et une en kilonewtons se rangent d'elles-mêmes
+en deux cadres empilés sur la même abscisse. N'essaie pas de les ramener à une
+seule unité pour « qu'elles tiennent sur le même graphique » : tu changerais ce
+que la fonction conclut pour une raison de mise en page.
 
 Et n'ajoute **aucune colonne dans le seul but de dessiner**. L'abscisse est la
 variable de boucle, jamais une colonne de rangs qu'on écrirait pour l'occasion.

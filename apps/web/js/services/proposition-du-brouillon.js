@@ -166,6 +166,25 @@ function affirmationDuBloc(bloc, { nature, declaration, marque = null }) {
       regle: {
         conditions,
         ...(brancheS.length ? { sinonSi: brancheS } : {}),
+        /**
+         * **Le raisonnement voyage entier, ou il ne voyage pas.**
+         *
+         * Ces quatre-là manquaient, et le défaut était muet des deux côtés :
+         * l'écran des fichiers sait réécrire une boucle, ses agrégats, un
+         * barème et une suggestion de lecture — il lisait des champs que rien
+         * n'écrivait jamais. Une fonction versée y paraissait donc **plus
+         * simple qu'elle n'est** : la condition et le `alors` étaient justes,
+         * et les quinze lignes qui les produisent avaient disparu.
+         *
+         * C'est la faute la plus chère de cette famille, parce qu'elle ne se
+         * voit pas : rien n'est faux à l'écran, il manque seulement ce qui
+         * explique. Et la mémoire ne pouvait plus rejouer ce qu'elle tient,
+         * puisqu'elle ne le tenait plus (règle 5).
+         */
+        ...(Array.isArray(bloc?.calculs) && bloc.calculs.length ? { calculs: bloc.calculs } : {}),
+        ...(bloc?.boucle ? { boucle: bloc.boucle } : {}),
+        ...(Array.isArray(bloc?.selon) && bloc.selon.length ? { selon: bloc.selon } : {}),
+        ...(texte(bloc?.seLitEn) ? { seLitEn: texte(bloc.seLitEn) } : {}),
         sinon: texte(bloc?.sinon),
         sauf: Array.isArray(bloc?.sauf) ? bloc.sauf : []
       },

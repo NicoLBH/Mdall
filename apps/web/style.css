@@ -27478,8 +27478,53 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .graphique__nom--deux{ color:rgb(126,231,135); }
 .graphique__nom--trois{ color:rgb(255,166,87); }
 
+
+/* Ce qu'une fonction versée déroule, sous son texte.
+
+   L'écran des fichiers réécrivait une boucle sans jamais la dérouler : une
+   fonction dont tout l'intérêt est son tableau s'y lisait comme quinze lignes
+   de grammaire. Le panneau se pose **sous** le texte — le fichier est ce qui
+   est versé, le tableau est ce qu'il produit — et s'en détache par son fond,
+   pour qu'on ne le prenne pas pour une ligne de plus du fichier. */
+.memoire-rejeu{
+  margin:12px 0 0; padding:12px 16px;
+  border-top:1px solid var(--border); background:rgba(110,118,129,.05);
+}
+.memoire-rejeu__tete{ margin:0 0 10px; }
+.memoire-rejeu__tete b{ display:block; font-size:13px; }
+.memoire-rejeu__tete p{ margin:2px 0 0; color:var(--muted); font-size:12px; }
+.memoire-rejeu__fonction + .memoire-rejeu__fonction{
+  margin-top:14px; padding-top:12px; border-top:1px dashed var(--border);
+}
+.memoire-rejeu__sujet{ margin:0 0 4px; font-size:12px; }
+.memoire-rejeu__zone{
+  margin:8px 0 2px; color:var(--muted); font-size:11px;
+  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace);
+}
+.memoire-rejeu__muet{ margin:2px 0; color:var(--muted); font-size:12px; }
+
+/* Plusieurs cadres empilés, sur une seule abscisse.
+
+   Deux grandeurs ne tiennent pas sur une grille : elles se croiseraient là où
+   elles ne se croisent pas. Un second axe à droite reviendrait au même, en plus
+   discret — deux échelles choisies séparément placent le croisement où l'on
+   veut. Empilés, les cadres ne se croisent jamais, et ce qu'on compare est la
+   forme à la même abscisse. Le filet à gauche les tient ensemble : sans lui, on
+   lirait deux dessins sans rapport. */
+.graphique-pile{ max-width:340px; }
+.graphique-pile .graphique{ margin:0; max-width:none; }
+.graphique-pile .graphique + .graphique{
+  margin-top:2px; border-top:1px dashed var(--border);
+}
+.graphique__cadre{
+  color:var(--muted); font-size:11px; padding:4px 8px 0;
+}
+
 /* Les boutons qui choisissent comment on regarde un tableau. */
 .bac-lectures{ display:flex; gap:4px; margin:6px 0 2px; }
+/* Contre quoi dessiner le nuage : la seule lecture qui pose une question. */
+.bac-abscisses{ display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin:0 0 2px; }
+.bac-abscisses__quoi{ color:var(--muted); font-size:11px; }
 .bac-lecture{
   padding:2px 8px; border:1px solid var(--border); border-radius:6px;
   background:transparent; color:var(--muted); cursor:pointer; font-size:11px;

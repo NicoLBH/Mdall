@@ -47,11 +47,16 @@ import { renderJetons } from "../../ui/code-mdall.js";
 import { jetonsDeLaLigne } from "../../../services/memoire-en-lecture.js";
 import { couperLUnite, lireUnNombre } from "../../../services/memoire-en-texte.js";
 import { phraseDeLaLecture } from "../../../services/courbe-du-mdall.js";
-import { traceDesSeries } from "../../../services/trace-dun-graphique.js";
+import { traceDesGroupes, traceDesSeries } from "../../../services/trace-dun-graphique.js";
 import {
-  DIT_DE_LA_LECTURE, LECTURE, lectureRetenue, lecturesPossibles, phraseDesEcartees, seriesDuTableau
+  DIT_DE_LA_LECTURE, LECTURE, abscissesPossibles, choixGarde, lectureRetenue,
+  lecturesPossibles, phraseDesCadres, phraseDesEcartees, seriesDuTableau
 } from "../../../services/graphique-dune-table.js";
 import { renderGraphique } from "../../ui/graphique.js";
+export {
+  renderGraphiqueDuTableau, renderLectureDuTableau, renderTableauDeLaBoucle
+} from "../../ui/tableau-dune-boucle.js";
+import { renderLectureDuTableau } from "../../ui/tableau-dune-boucle.js";
 import { jetonsEcrits } from "../../../services/mdall-en-ecriture.js";
 import { niveauxDesPaires } from "../../../services/mdall-retrait.js";
 import {
@@ -394,8 +399,11 @@ export function renderCalculs(calculs = []) {
 /** La marque des boutons qui choisissent comment on regarde un tableau. */
 export const MARQUE_DE_LA_LECTURE = "data-bac-lecture";
 
+/** La marque des boutons qui choisissent l'abscisse d'un nuage. */
+export const MARQUE_DE_LABSCISSE = "data-bac-abscisse";
+
 /**
- * Les trois façons de regarder un tableau, offertes à celui qui le lit.
+ * Les façons de regarder un tableau, offertes à celui qui le lit.
  *
  * **Le choix est à la lecture, et c'est tout le parti pris** : rien ne s'écrit
  * dans la fonction pour obtenir un dessin, et *tous* les tableaux gagnent le
@@ -403,102 +411,54 @@ export const MARQUE_DE_LA_LECTURE = "data-bac-lecture";
  *
  * On n'offre pas un dessin impossible : un bouton qui ouvre un cadre vide
  * apprend à ne plus cliquer sur les boutons.
+ *
+ * **Le nuage traîne une question de plus** — contre quoi ? —, et elle s'ouvre
+ * sous les lectures, une fois qu'il est choisi. La poser d'avance encombrerait
+ * les trois autres d'un choix qu'elles ne font pas.
  */
-export function renderLecturesDuTableau(resultat = null, choisie = "") {
-  const offertes = lecturesPossibles(resultat?.tableau);
+export function renderLecturesDuTableau(resultat = null, retenue = null) {
+  const tableau = resultat?.tableau ?? null;
+  const offertes = lecturesPossibles(tableau);
   if (offertes.length < 2) return "";
+
+  const sujet = escapeHtml(texte(resultat?.sujet));
+  const choisie = texte(retenue?.lecture);
 
   return `
     <div class="bac-lectures" role="group" aria-label="Comment regarder ce tableau">
       ${offertes.map((une) => `
         <button type="button" class="bac-lecture${une === choisie ? " est-actif" : ""}"
           ${MARQUE_DE_LA_LECTURE}="${escapeHtml(une)}"
-          data-bac-sujet="${escapeHtml(texte(resultat?.sujet))}"
+          data-bac-sujet="${sujet}"
           aria-pressed="${une === choisie}"
           title="${escapeHtml(DIT_DE_LA_LECTURE[une] ?? "")}">${escapeHtml(une)}</button>
       `).join("")}
     </div>
+    ${choisie === LECTURE.NUAGE ? renderAbscissesDuNuage(tableau, sujet, texte(retenue?.abscisse)) : ""}
   `;
 }
 
 /**
- * Le dessin d'un tableau, dans la lecture choisie.
+ * Contre quoi dessiner le nuage.
  *
- * **Les colonnes écartées se disent.** Les taire ferait un dessin qui a l'air
- * complet : on compterait trois courbes là où le tableau en a quatre, sans
- * qu'un mot dise laquelle manque (règle 5).
+ * **C'est la seule lecture qui pose une question**, parce que c'est la seule
+ * dont l'abscisse n'est pas écrite dans la fonction. Les trois autres prennent
+ * la variable de boucle, et il n'y a rien à demander.
  */
-export function renderGraphiqueDuTableau(tableau = null, lecture = "") {
-  if (lecture !== LECTURE.COURBE && lecture !== LECTURE.BARRES) return "";
-
-  const { abscisse, series, ecartees } = seriesDuTableau(tableau);
-  if (!series.length) return "";
-
-  const bouts = series[0].points;
-  const dessin = renderGraphique(traceDesSeries(series, { depuisZero: lecture === LECTURE.BARRES }), {
-    barres: lecture === LECTURE.BARRES,
-    titre: `Le tableau de ${abscisse}, en ${lecture}`,
-    bornes: [bouts[0].dit, bouts[bouts.length - 1].dit],
-    legende: true
-  });
-
-  const tues = phraseDesEcartees(ecartees);
-  return `${dessin}${tues ? `<p class="bac-resultat__note">${escapeHtml(tues)}</p>` : ""}`;
-}
-
-/**
- * Le tableau qu'une boucle a déroulé.
- *
- * ## Pourquoi un vrai tableau, et pas un résumé
- *
- * Tout le gain de `pour chaque` est qu'on **relit les lignes une à une** contre
- * la note de calcul d'origine. N'en montrer que l'agrégat rendrait un total
- * qu'il faudrait croire — c'est-à-dire exactement le tableur qu'on remplace, et
- * la raison pour laquelle une boucle produit un tableau plutôt qu'une variable
- * qui s'accumule.
- *
- * ## Une ligne qui n'a pas su se calculer reste
- *
- * Avec sa case vide, et ce qu'elle dit au survol. La retirer ferait un tableau
- * plus court que la suite annoncée, et l'on ne verrait pas **laquelle** des
- * quarante-cinq portées a échoué — c'est précisément la ligne qu'on cherche.
- */
-export function renderTableauDeLaBoucle(tableau = null) {
-  if (!tableau?.nom) return "";
-
-  if (tableau.refus) {
-    return `<p class="bac-resultat__note">${escapeHtml(
-      `Le tableau de « ${tableau.nom} » ne s'est pas déroulé : ${tableau.pourquoi}.`
-    )}</p>`;
-  }
-
-  if (!tableau.lignes.length) return "";
+export function renderAbscissesDuNuage(tableau = null, sujet = "", choisie = "") {
+  const possibles = abscissesPossibles(tableau);
+  if (!possibles.length) return "";
 
   return `
-    <table class="bac-tableau">
-      <caption class="bac-tableau__titre">${escapeHtml(
-        `${tableau.lignes.length} ${tableau.lignes.length > 1 ? "lignes" : "ligne"}, une par ${tableau.nom}`
-      )}</caption>
-      <thead>
-        <tr>
-          <th scope="col">${escapeHtml(tableau.nom)}</th>
-          ${tableau.colonnes.map((nom) => `<th scope="col">${escapeHtml(nom)}</th>`).join("")}
-        </tr>
-      </thead>
-      <tbody>
-        ${tableau.lignes.map((ligne) => `
-          <tr>
-            <th scope="row">${escapeHtml(ligne.valeur)}</th>
-            ${tableau.colonnes.map((nom) => {
-              const case_ = ligne.cases.find((une) => une.nom === nom);
-              return `<td${case_?.connu ? "" : ' class="bac-tableau__vide"'}${
-                case_?.connu || !case_?.pourquoi ? "" : ` title="${escapeHtml(case_.pourquoi)}"`}>${
-                case_?.connu ? escapeHtml(case_.valeur) : "—"}</td>`;
-            }).join("")}
-          </tr>
-        `).join("")}
-      </tbody>
-    </table>
+    <div class="bac-abscisses" role="group" aria-label="Contre quelle colonne">
+      <span class="bac-abscisses__quoi">contre</span>
+      ${possibles.map((une) => `
+        <button type="button" class="bac-lecture${une === choisie ? " est-actif" : ""}"
+          ${MARQUE_DE_LABSCISSE}="${escapeHtml(une)}"
+          data-bac-sujet="${sujet}"
+          aria-pressed="${une === choisie}">${escapeHtml(une)}</button>
+      `).join("")}
+    </div>
   `;
 }
 
@@ -616,8 +576,10 @@ export function renderPointsDeLaCourbe(resultat = null) {
  * vérifié parce qu'on a regardé.
  */
 function lectureDu(resultat = null) {
+  const garde = etat.lectures[texte(resultat?.sujet)] ?? {};
   return lectureRetenue(resultat?.tableau, {
-    choisie: etat.lectures[texte(resultat?.sujet)],
+    choisie: garde.lecture,
+    abscisse: garde.abscisse,
     suggeree: resultat?.seLitEn
   });
 }
@@ -649,7 +611,12 @@ export function renderResultats(resultats = []) {
         débutant a besoin d'entendre (règle 5).
       */""}
       <p class="bac-resultats__phrase">${escapeHtml(phraseDuLancement(tous))}</p>
-      ${tous.map((resultat) => `
+      ${tous.map((resultat) => {
+        // **La lecture se décide une fois par résultat.** Trois appels séparés
+        // rendraient trois décisions, et il suffirait qu'une seule change pour
+        // que les boutons disent une chose et le dessin une autre (règle 10).
+        const retenue = lectureDu(resultat);
+        return `
         <div class="bac-resultat bac-resultat--${escapeHtml(resultat.issue)}">
           <p class="bac-resultat__tete">
             <b>${escapeHtml(resultat.sujet)}</b>
@@ -674,9 +641,8 @@ export function renderResultats(resultats = []) {
             mettre en dessous ferait lire le tableau avant de savoir qu'on
             pouvait le voir autrement.
           */""}
-          ${renderLecturesDuTableau(resultat, lectureDu(resultat))}
-          ${renderGraphiqueDuTableau(resultat.tableau, lectureDu(resultat))}
-          ${lectureDu(resultat) === LECTURE.TABLEAU ? renderTableauDeLaBoucle(resultat.tableau) : ""}
+          ${renderLecturesDuTableau(resultat, retenue)}
+          ${renderLectureDuTableau(resultat.tableau, retenue)}
           ${renderCalculs(resultat.calculs)}
           ${
             resultat.issue === ISSUE.AU_SERVEUR
@@ -709,7 +675,8 @@ export function renderResultats(resultats = []) {
               : ""
           }
         </div>
-      `).join("")}
+      `;
+      }).join("")}
     </div>
   `;
 }
@@ -2357,9 +2324,21 @@ function corpsDuBac() {
  */
 export function brancherLesLectures(hote, surChoix = null) {
   hote?.addEventListener?.("click", (evenement) => {
-    const bouton = evenement.target?.closest?.(`[${MARQUE_DE_LA_LECTURE}]`);
-    if (!bouton) return;
-    surChoix?.(bouton.dataset.bacSujet, bouton.getAttribute(MARQUE_DE_LA_LECTURE));
+    /**
+     * **Les deux boutons passent par la même écoute**, et c'est la même raison
+     * qu'au-dessus : l'abscisse d'un nuage vit dans le même panneau remplacé,
+     * et une seconde écoute posée ailleurs serait un second endroit à se
+     * rappeler de rebrancher.
+     */
+    const lecture = evenement.target?.closest?.(`[${MARQUE_DE_LA_LECTURE}]`);
+    if (lecture) {
+      surChoix?.(lecture.dataset.bacSujet, { lecture: lecture.getAttribute(MARQUE_DE_LA_LECTURE) });
+      return;
+    }
+
+    const abscisse = evenement.target?.closest?.(`[${MARQUE_DE_LABSCISSE}]`);
+    if (!abscisse) return;
+    surChoix?.(abscisse.dataset.bacSujet, { abscisse: abscisse.getAttribute(MARQUE_DE_LABSCISSE) });
   });
 }
 
@@ -2370,8 +2349,13 @@ export function brancherLesLectures(hote, surChoix = null) {
  * autrement ne change rien à ce que les fonctions concluent, et réécrire le
  * formulaire emporterait le curseur du champ où le doigt est posé.
  */
-function choisirLaLecture(sujet, lecture) {
-  etat.lectures = { ...etat.lectures, [sujet]: lecture };
+function choisirLaLecture(sujet, quoi = {}) {
+  // Ce qu'on garde d'un clic est une règle nommée, et elle s'éprouve seule :
+  // voir `choixGarde`.
+  etat.lectures = {
+    ...etat.lectures,
+    [texte(sujet)]: choixGarde(etat.lectures[texte(sujet)], quoi)
+  };
   redessinerLesResultats();
 }
 

@@ -146,7 +146,7 @@
  */
 
 import { valeursDeclarees } from "./tableau-structure.js";
-import { SE_LIT_EN, lectureDite } from "./graphique-dune-table.js";
+import { SE_LIT_EN, lectureSuggeree } from "./graphique-dune-table.js";
 // La clé d'un sujet vit à un seul endroit : rapprocher une case de sa colonne
 // avec une normalisation maison finirait par ne plus dire la même chose que
 // la lecture (règle 10).
@@ -1832,8 +1832,10 @@ export function blocDeRegle({
    * personne ne saurait que la fonction disait autre chose. Elle se pose en
    * tête, avec ce qui fonde la fonction plutôt qu'avec ce qu'elle fait.
    */
-  if (lectureDite(seLitEn)) {
-    corps.push(ligneDuChampDeLaCourbe(SE_LIT_EN, lectureDite(seLitEn), dedans));
+  // **On ne réécrit que ce qui se suggère.** Un « nuage » arrivé là par une
+  // charge ancienne s'écrirait dans un fichier que le lecteur refuserait ensuite.
+  if (lectureSuggeree(seLitEn).dite) {
+    corps.push(ligneDuChampDeLaCourbe(SE_LIT_EN, lectureSuggeree(seLitEn).dite, dedans));
     corps.push(ligneVide());
   }
 
