@@ -51,7 +51,7 @@ import {
   ligneDeCourbe, ligneDuChampDeLaCourbe,
   jetonsDeValeur, AGENT, AGENTS, VERBES, POUR_CHAQUE, PORTEE_DUNE_FONCTION
 } from "./memoire-en-texte.js";
-import { lireUnCalcul, nomsDuCalcul, phraseDuRefus } from "./mdall-calcul.js";
+import { lireUnCalcul, nomsDuCalcul, phraseDuRefus, FONCTIONS, REFUS_DU_CALCUL } from "./mdall-calcul.js";
 import {
   bornesLitterales, lireUnAgregat, lireUnePourChaque, phraseDuRefusDeLaBoucle, valeursDeLaBoucle
 } from "./boucle-du-mdall.js";
@@ -133,6 +133,44 @@ const TETES = [
 export function estUnCommentaire(ligne = "") {
   const dit = texte(ligne);
   return dit.startsWith("//") || dit.startsWith("/*") || dit.startsWith("*");
+}
+
+/**
+ * Le nom qu'on a cru pouvoir appeler dans cette ligne, s'il y en a un.
+ *
+ * **La faute la plus fréquente de tout le langage**, et la seule qui vienne
+ * d'ailleurs : `Couleur des volets(Matériau)` est ce qu'écrit quiconque
+ * connaît un autre langage. Elle apparaît sous trois formes — seule sur sa
+ * ligne, dans un `calcule`, dans un `si (…)` — et il faut la reconnaître aux
+ * trois endroits. Le motif vit donc ici, une fois (règle 10).
+ *
+ * Les fonctions du langage — `racine(…)`, `arrondi(…)` — ne comptent pas :
+ * elles s'appellent vraiment, et ce sont les seules.
+ */
+export function nomAppeleDans(corps = "") {
+  // **On parcourt, on ne s'arrête pas au premier.** `si(Couleur des volets(…))`
+  // porte deux parenthèses collées : la première suit un mot de la langue, et
+  // rendre « rien » là-dessus taisait l'appel qui suivait.
+  // La borne de gauche se **regarde** sans se consommer : dans `si(Couleur…(`,
+  // la parenthèse de `si` est aussi celle qui ouvre le nom suivant, et la
+  // manger rendait « des volets » là où le nom est « Couleur des volets ».
+  //
+  // **Le nom est collé à sa parenthèse**, et c'est ce qui distingue un appel du
+  // reste : `Couleur des volets(Matériau)` en est un, `truc (A) machin` n'en
+  // est pas. Sans cette exigence, toute ligne portant une parenthèse quelque
+  // part se faisait dénoncer comme un appel — un écran qui crie à tort cesse
+  // d'être lu, ce qui est le défaut qu'on corrige, à l'envers.
+  const motif = /(?<=^|[\s(=<>+\-*/])([^\s(),;=<>+\-*/](?:[^(),;=<>+\-*/]*[^\s(),;=<>+\-*/])?)\(/g;
+
+  for (const trouve of texte(corps).matchAll(motif)) {
+    const nomme = texte(trouve[1]);
+    if (!nomme) continue;
+    if (TETES.includes(nomme.toLowerCase())) continue;
+    if (Object.prototype.hasOwnProperty.call(FONCTIONS, nomme.toLowerCase())) continue;
+    return nomme;
+  }
+
+  return "";
 }
 
 /**
@@ -451,18 +489,60 @@ function bornesDe(ligne) {
   };
 }
 
+/**
+ * Pourquoi cette condition ne se lit pas.
+ *
+ * Un appel de fonction se nomme, parce que c'est la faute qu'on vient de
+ * commettre et non un oubli de comparateur : « cette condition ne compare
+ * rien » envoyait chercher un `=` qui était là.
+ */
+function raisonDeLaCondition(corps = "") {
+  const nomme = nomAppeleDans(corps);
+  // **La phrase vient d'un seul endroit.** Écrite ici en propres mots, la même
+  // faute recevait deux explications selon qu'on l'avait commise dans un
+  // `calcule` ou dans un `si` — et celle qu'on corrigerait un jour ne serait
+  // pas forcément celle qu'on lit (règle 10).
+  return nomme ? `${phraseDuRefus(REFUS_DU_CALCUL.APPEL, nomme)}.` : "cette condition ne compare rien.";
+}
+
 /** La profondeur d'indentation d'une ligne, en pas. */
 function retraitDe(ligne) {
   const blancs = (String(ligne).match(/^[\t ]*/) ?? [""])[0].replace(/\t/g, RETRAIT);
   return Math.floor(blancs.length / RETRAIT.length);
 }
 
-/** Le mot de tête d'une ligne, et ce qui le suit. */
+/**
+ * **Les mots dont ce qui suit s'écrit entre parenthèses.**
+ *
+ * Eux seuls acceptent d'être collés à leur parenthèse — `si(A > 0)`. Pour les
+ * autres, `calcule(` ou `fonction(` ne veut rien dire, et l'accepter ferait
+ * lire une ligne que personne n'a voulu écrire.
+ */
+const TETES_A_PARENTHESE = ["sinon si", "sauf si", "selon", "alors", "sinon", "si", "et", "ou", "non"];
+
+/**
+ * Le mot de tête d'une ligne, et ce qui le suit.
+ *
+ * ## Pourquoi l'espace n'est pas obligatoire devant une parenthèse
+ *
+ * `si(A > 0)` se refusait par « aucun mot de la langue n'ouvre cette ligne ».
+ * C'est faux : le mot est là, il manque une espace. La phrase envoyait relire
+ * la grammaire pour une touche non frappée, et c'est la ligne **entière** qui
+ * disparaissait du raisonnement — sans que rien ne dise laquelle des deux
+ * fautes on avait commise.
+ *
+ * Un espace de moins n'est pas un autre sens : il n'y a rien à trancher, donc
+ * rien à refuser. L'écriture, elle, pose toujours l'espace — la forme
+ * canonique reste unique, c'est la **lecture** qui est indulgente.
+ */
 export function teteDe(ligne = "") {
   const nu = texte(ligne);
   for (const mot of TETES) {
     if (nu.toLowerCase() === mot) return { mot, reste: "" };
     if (nu.toLowerCase().startsWith(`${mot} `)) return { mot, reste: texte(nu.slice(mot.length)) };
+    if (TETES_A_PARENTHESE.includes(mot) && nu.toLowerCase().startsWith(`${mot}(`)) {
+      return { mot, reste: texte(nu.slice(mot.length)) };
+    }
   }
   return { mot: "", reste: nu };
 }
@@ -550,6 +630,12 @@ export function lireUneCondition(corps = "") {
 
   const sujet = texte(signe[1]);
   if (!sujet) return null;
+  // **Un nom ne porte pas de parenthèse.** `si (Couleur des volets(Matériau) =
+  // "gris")` donnerait sinon une condition portant sur un sujet nommé
+  // « (Couleur des volets(Matériau) » : une condition acceptée sur un nom que
+  // personne n'a écrit, et qui resterait indécidable pour toujours. L'appelant
+  // la refuse en disant ce qu'il fallait écrire.
+  if (/[()]/.test(sujet)) return null;
 
   const operateur = COMPARATEURS.get(texte(signe[2]).toLowerCase()) ?? OPERATEUR.EGAL;
   const morceaux = texte(signe[3]).split(/\s+ou\s+/i).map(texte).filter(Boolean);
@@ -1425,7 +1511,13 @@ export function lireUnFichier(contenu = "") {
         refus.push({
           ligne: numero,
           texte: corps,
-          raison: `« ${calcul.nom} » ne se calcule pas : ${phraseDuRefus(lu.motif, lu.ou)}.`
+          // **Un appel se dit seul.** « x ne se calcule pas : il n'y a pas
+          // d'appel de fonction : … » fait deux fois deux points pour une
+          // phrase, et le premier morceau n'apprend rien : ce n'est pas `x`
+          // qui pose problème, c'est la forme de ce qu'on lui donne.
+          raison: lu.motif === REFUS_DU_CALCUL.APPEL
+            ? `${phraseDuRefus(lu.motif, lu.ou)}.`
+            : `« ${calcul.nom} » ne se calcule pas : ${phraseDuRefus(lu.motif, lu.ou)}.`
         });
         return;
       }
@@ -1634,7 +1726,7 @@ export function lireUnFichier(contenu = "") {
 
       const condition = lireUneCondition(sansBornes(reste).corps);
       if (!condition) {
-        refus.push({ ligne: numero, texte: corps, raison: "cette condition ne compare rien." });
+        refus.push({ ligne: numero, texte: corps, raison: raisonDeLaCondition(corps) });
         return;
       }
 
@@ -1691,7 +1783,7 @@ export function lireUnFichier(contenu = "") {
 
       const condition = lireUneCondition(sansBornes(reste).corps);
       if (!condition) {
-        refus.push({ ligne: numero, texte: corps, raison: "cette condition ne compare rien." });
+        refus.push({ ligne: numero, texte: corps, raison: raisonDeLaCondition(corps) });
         return;
       }
       // `sauf si` écarte la **règle entière**, pas une branche : c'est ce que
@@ -1750,14 +1842,13 @@ export function lireUnFichier(contenu = "") {
      * les autres la **nomment**. Le dire ici, avec la ligne qu'il fallait
      * écrire, vaut dix pages lues trois semaines plus tôt.
      */
-    const commeUnAppel = /^([^\s(][^(]*)\(([^)]*)\)\s*;?\s*$/.exec(corps);
-    if (commeUnAppel && !TETES.includes(texte(commeUnAppel[1]).toLowerCase())) {
-      const nomme = texte(commeUnAppel[1]);
+    const nomme = nomAppeleDans(corps);
+    if (nomme) {
       refus.push({
         ligne: numero, texte: corps,
-        raison: `il n'y a pas d'appel de fonction : « ${nomme} » se nomme, `
-          + `comme n'importe quel nom. Écrivez « calcule … = ${nomme}; » `
-          + `ou « si (${nomme} …) » selon ce que vous voulez en faire.`
+        raison: `${phraseDuRefus(REFUS_DU_CALCUL.APPEL, nomme)} : `
+          + `« calcule … = ${nomme}; » ou « si (${nomme} …) » `
+          + `selon ce que vous voulez en faire.`
       });
       return;
     }
@@ -2416,7 +2507,26 @@ function ligneDeSectionLue(chemin) {
  * @param {object} bloc tel que `lireUnFichier` le rend
  * @returns {string[]} les noms qu'il faut lui donner, dans l'ordre où ils viennent
  */
-export function entreesDuBloc(bloc = {}) {
+/**
+ * Les noms que ce bloc **pose lui-même** : ses locales, et son propre nom.
+ *
+ * ## Pourquoi c'est une question à part
+ *
+ * Deux endroits se la posent, et pour deux raisons différentes : la signature,
+ * qui ne doit pas déclarer ce que la fonction se donne ; et la vérification du
+ * brouillon, qui ne doit pas crier « nom jamais déclaré » sur une locale. La
+ * seconde ne se la posait pas du tout — `calcule x = …;` puis `si (x …)`, la
+ * forme la plus courante de toute la langue, portait une remarque fausse à
+ * chaque fois. Une console qui crie à tort cesse d'être lue.
+ *
+ * **Elles sont locales, et le restent** : ce n'est pas un ensemble de noms du
+ * projet, c'est ce que *ce* bloc-ci se donne. Les verser dans les noms déclarés
+ * du brouillon laisserait la fonction d'à côté lire un `x` qui n'existe pas
+ * chez elle.
+ *
+ * @returns {Set<string>} des clés de sujet
+ */
+export function nomsPosesParLeBloc(bloc = {}) {
   const siens = new Set();
 
   // Ce qu'elle pose en le calculant : une locale ne se demande pas.
@@ -2433,6 +2543,15 @@ export function entreesDuBloc(bloc = {}) {
 
   // Et elle-même : une fonction conclut sous son nom, elle ne se lit pas.
   siens.add(cleDuSujet(bloc?.sujet));
+
+  // Pas de `delete("")` : les deux appelants écartent déjà la clé vide avant
+  // d'interroger cet ensemble, et une garde qu'on ne peut pas faire tomber est
+  // une garde dont personne ne saura si elle sert (règle 4).
+  return siens;
+}
+
+export function entreesDuBloc(bloc = {}) {
+  const siens = nomsPosesParLeBloc(bloc);
 
   return nomsLusParLeBloc(bloc).filter((nom) => !siens.has(cleDuSujet(nom)));
 }

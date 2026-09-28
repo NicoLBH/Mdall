@@ -74,6 +74,16 @@ export const REFUS_DU_CALCUL = {
   FONCTION_INCONNUE: "fonction-inconnue",
   /** Le mauvais nombre d'arguments. */
   ARGUMENTS: "arguments",
+  /**
+   * **Un appel de fonction**, que ce langage n'a pas.
+   *
+   * `Couleur des volets(Matériau)` est ce qu'écrit quiconque connaît un autre
+   * langage — et c'est de très loin la faute la plus fréquente. Elle se
+   * refusait par « ce qui suit ne se rattache à rien — ( », qui est vrai et
+   * n'apprend rien : on relit sa ligne en cherchant l'opérateur qui manque,
+   * alors que c'est la **forme entière** qui n'existe pas ici.
+   */
+  APPEL: "appel",
   /** Deux unités qu'on ne sait pas additionner, ni composer. */
   UNITES: "unites",
   /** Une division par zéro. */
@@ -94,6 +104,7 @@ const PHRASES_DU_REFUS = {
     "la virgule est décimale : les arguments se séparent d'un point-virgule",
   [REFUS_DU_CALCUL.FONCTION_INCONNUE]: "cette fonction n'est pas du langage",
   [REFUS_DU_CALCUL.ARGUMENTS]: "cette fonction n'attend pas ce nombre d'arguments",
+  [REFUS_DU_CALCUL.APPEL]: "il n'y a pas d'appel de fonction",
   [REFUS_DU_CALCUL.UNITES]: "ces deux unités ne se composent pas",
   [REFUS_DU_CALCUL.DIVISION_PAR_ZERO]: "on ne divise pas par zéro",
   [REFUS_DU_CALCUL.PUISSANCE_ET_UNITE]: "cette puissance ne s'applique pas à cette unité",
@@ -103,6 +114,30 @@ const PHRASES_DU_REFUS = {
 /** Ce qu'un refus dit, en français. */
 export function phraseDuRefus(code, quoi = "") {
   const dit = PHRASES_DU_REFUS[code] ?? "ce calcul ne se lit pas";
+
+  /**
+   * **Le seul refus qui dit quoi écrire à la place.**
+   *
+   * Parce que c'est le seul où la faute n'est pas un oubli mais une habitude
+   * prise ailleurs : on ne la corrige pas en relisant sa ligne, on la corrige
+   * en apprenant qu'une fonction Mdall ne prend rien. Elle lit les noms qui
+   * existent autour d'elle — c'est tout le contrat, et il tient en une phrase.
+   */
+  if (code === REFUS_DU_CALCUL.APPEL) {
+    const nomme = texte(quoi);
+    // **La liste se prend aux fonctions elles-mêmes**, et ne se recopie pas :
+    // celle qu'on ajouterait au langage manquerait ici sans que rien ne le
+    // dise, et la phrase enseignerait une langue qui n'est plus la nôtre
+    // (règle 10).
+    const seules = `seules ${Object.keys(FONCTIONS).join(", ")} prennent des parenthèses`;
+
+    return nomme
+      ? `${dit} : ${seules}. Écrivez « ${nomme} » seul — une fonction lit les `
+        + `noms qui existent autour d'elle`
+      : `${dit} : ${seules}. Un nom du projet se nomme seul — une fonction lit `
+        + `les noms qui existent autour d'elle`;
+  }
+
   return quoi ? `${dit} — ${quoi}` : dit;
 }
 
@@ -214,6 +249,18 @@ export function lireUnCalcul(source = "") {
   if (reste) {
     if (reste.type === "virgule") return refuser(REFUS_DU_CALCUL.VIRGULE_ARGUMENT, reste.texte);
     if (reste.type === "ferme") return refuser(REFUS_DU_CALCUL.PARENTHESE, reste.texte);
+    /**
+     * **Une parenthèse juste après un nom est un appel**, et rien d'autre.
+     *
+     * Les fonctions du langage — `racine`, `arrondi` — se lisent bien avant
+     * d'arriver ici : ce qui reste est un nom du projet suivi d'une
+     * parenthèse, c'est-à-dire exactement la forme qu'on écrit quand on croit
+     * pouvoir lui passer une valeur. Le dire ici la traite partout d'un coup :
+     * dans un `calcule`, dans un `si (…)`, dans un `alors (…)`.
+     */
+    if (reste.type === "ouvre") {
+      return refuser(REFUS_DU_CALCUL.APPEL, arbre.arbre?.quoi === "nom" ? arbre.arbre.nom : "");
+    }
     return refuser(REFUS_DU_CALCUL.RESTE, reste.texte);
   }
 

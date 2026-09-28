@@ -4677,3 +4677,21 @@ relirait donc comme le nombre 3. Personne ne l'a rencontré, et la forme nue est
 ce qui rend un barème recopiable depuis l'imprimé : la corriger demande de
 choisir entre deux écritures qui se ressemblent trop, et de décider ce qu'on
 fait des barèmes déjà versés.
+
+**Le volet des remarques ne sait pas ce que le projet a signé.**
+`verifierLeBrouillon` ne reçoit que des fichiers : il peut dire « il n'y a pas
+d'appel de fonction », il ne peut pas ajouter « et « Couleur des volets » lit
+« Nature des volets », qui doit exister ». C'est pourtant la phrase qui
+débloquerait vraiment, parce que la faute suivante est toujours la même : on
+retire les parenthèses, et la fonction reste indécidable faute du nom qu'elle
+lit. Lui passer la mémoire est faisable — le bac la reçoit déjà — et demande de
+décider ce qu'un brouillon vérifié **sans** mémoire doit dire alors, pour que la
+même page ne rende pas deux verdicts.
+
+**Une fonction versée ne se propose pas encore depuis la signature qu'on
+tape.** Écrire `fonction F(zones, ` déplie ce que le projet sait ; écrire
+`Couleur des volets` au milieu d'un `calcule` ne montre pas ce que cette
+fonction-là lit. C'est exactement le moment où l'on aurait besoin de savoir
+qu'elle attend « Nature des volets » — et c'est l'aide à la signature, qui
+existe, appliquée à un nom qu'on **nomme** plutôt qu'à une fonction qu'on
+écrit.

@@ -632,6 +632,34 @@ export const WIKI_DU_LANGAGE = [
       + "elles ne bloquent rien, et l'essai tourne quand même.")
   ]),
 
+  section("pas-dappel", "Il n'y a pas d'appel de fonction", [
+    dit("**C'est la faute que tout le monde commet**, et elle vient d'ailleurs : "
+      + "tous les autres langages écrivent `Couleur des volets(Matériau)`. Ici, "
+      + "non. Une fonction ne **prend** rien : elle **lit** les noms qui "
+      + "existent autour d'elle."),
+    code("// FAUX — il n'y a pas d'appel, et aucune parenthèse après un nom",
+      "calcule x = Couleur des volets(Matériau);",
+      "",
+      "// JUSTE — on la nomme, comme n'importe quel nom",
+      "calcule x = Couleur des volets;"),
+    dit("**Seules sept fonctions prennent des parenthèses**, et ce sont celles du "
+      + "langage : `racine`, `abs`, `arrondi`, `plafond`, `plancher`, `min`, "
+      + "`max`. Tout le reste est un nom, et un nom se nomme seul."),
+    dit("**La conséquence, qui surprend au début** : on ne peut pas lui donner un "
+      + "autre nom que celui qu'elle lit. Si « Couleur des volets » lit "
+      + "« Nature des volets », c'est « Nature des volets » qui doit exister — "
+      + "la déclarer, ou l'écrire dans le formulaire de l'essai. Lui passer "
+      + "« Matériau » à la place n'a pas de forme, parce que cela n'a pas de sens : "
+      + "la fonction dit elle-même ce qu'elle lit, une fois, dans sa signature."),
+    dit("**C'est voulu.** Une fonction qui prend des arguments s'appelle depuis "
+      + "dix endroits avec dix valeurs différentes, et l'on ne sait plus laquelle "
+      + "le projet tient pour vraie. Ici, un nom vaut une chose à la fois, et "
+      + "c'est tout ce qu'il y a à relire."),
+    dit("Le volet des remarques le dit maintenant en toutes lettres, avec la "
+      + "ligne qu'il fallait écrire — dans un `calcule`, dans un `si (…)`, ou "
+      + "seule sur sa ligne.")
+  ]),
+
   section("chainage", "Une fonction lit ce qu'une autre conclut", [
     dit("**Il n'y a pas d'appel de fonction dans Mdall.** `calcule taux = Taux de TVA(…)` "
       + "ne se lit pas, et n'existera pas : un langage où une fonction en appelle une autre "

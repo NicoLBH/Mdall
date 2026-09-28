@@ -112,7 +112,18 @@ test("les arguments se séparent d'un point-virgule, et la virgule le dit", () =
 });
 
 test("une fonction qu'on n'a pas, ou mal servie, se refuse", () => {
-  assert.equal(refusDe("moyenne(1; 2)"), REFUS_DU_CALCUL.RESTE);
+  /**
+   * **`moyenne(1; 2)` est un appel**, et se dit comme tel. Il se refusait par
+   * « ce qui suit ne se rattache à rien — ( », qui est vrai et n'apprend rien :
+   * on relit sa ligne en cherchant l'opérateur qui manque, alors que la seule
+   * chose à savoir est que `moyenne` n'est pas du langage. La phrase nomme
+   * celles qui le sont.
+   */
+  assert.equal(refusDe("moyenne(1; 2)"), REFUS_DU_CALCUL.APPEL);
+  assert.match(phraseDuRefus(REFUS_DU_CALCUL.APPEL, "moyenne"), /seules racine.*max prennent/);
+  assert.match(phraseDuRefus(REFUS_DU_CALCUL.APPEL, "moyenne"), /Écrivez « moyenne » seul/);
+  // Sans nom sous la main, la phrase reste une phrase.
+  assert.match(phraseDuRefus(REFUS_DU_CALCUL.APPEL), /se nomme seul/);
   assert.equal(refusDe("racine(4; 2)"), REFUS_DU_CALCUL.ARGUMENTS);
   assert.equal(refusDe("min(4)"), REFUS_DU_CALCUL.ARGUMENTS);
 });
@@ -250,7 +261,7 @@ test("chaque refus a sa phrase, et aucune n'est muette", () => {
     assert.ok(phrase.length > 8, `refus sans phrase : ${code}`);
     assert.notEqual(phrase, "ce calcul ne se lit pas", `refus sans phrase propre : ${code}`);
   }
-  assert.equal(Object.keys(REFUS_DU_CALCUL).length, 12);
+  assert.equal(Object.keys(REFUS_DU_CALCUL).length, 13);
 });
 
 /* ── Ce qu'un calcul demande avant d'être lancé ──────────────────────────── */
