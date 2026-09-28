@@ -139,13 +139,20 @@ test("la phrase dit ce qui existe, et comment s'en servir", () => {
   const dit = phraseDeCeQuiEstConnu(ceQueLeProjetSaitLu(ceQueLeProjetSait(memoireDe(COULEUR))));
 
   assert.match(dit, /Couleur des volets — lit Matériau — rend gris ou blanc/);
-  assert.match(dit, /ne les appelle pas/);
-  assert.match(dit, /nomme-les/);
-  // La ligne à écrire, dans les deux formes où l'on s'en sert.
+
+  /**
+   * **Les deux façons de s'en servir**, parce qu'elles ne disent pas la même
+   * chose : nommée, elle lit ses propres noms ; appelée, elle lit ceux qu'on
+   * lui donne. C'est la seconde qui manquait, et son absence faisait réécrire
+   * la fonction dès que le nom qu'on avait n'était pas le sien.
+   */
   assert.match(dit, /calcule X = Couleur des volets;/);
-  assert.match(dit, /si \(Couleur des volets = "gris"\)/);
-  // Et ce que cela fait à sa propre signature.
-  assert.match(dit, /Déclare dans ta signature/);
+  assert.match(dit, /calcule X = Couleur des volets\(zones, Autre nom\);/);
+  // Elle nomme ce que la fonction lit : c'est cela qu'on remplace.
+  assert.match(dit, /lit `Matériau`/);
+  // Et ce qu'un appel exige.
+  assert.match(dit, /La portée d'abord, toujours/);
+  assert.match(dit, /se pose dans un `calcule`/);
 
   // Un projet qui ne conclut rien n'ajoute rien à la phrase.
   assert.equal(phraseDeCeQuiEstConnu(null), "");

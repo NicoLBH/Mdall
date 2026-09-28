@@ -75,13 +75,13 @@ export const REFUS_DU_CALCUL = {
   /** Le mauvais nombre d'arguments. */
   ARGUMENTS: "arguments",
   /**
-   * **Un appel de fonction**, que ce langage n'a pas.
+   * **Une fonction qu'on appelle et que le projet n'a pas.**
    *
-   * `Couleur des volets(Matériau)` est ce qu'écrit quiconque connaît un autre
-   * langage — et c'est de très loin la faute la plus fréquente. Elle se
-   * refusait par « ce qui suit ne se rattache à rien — ( », qui est vrai et
-   * n'apprend rien : on relit sa ligne en cherchant l'opérateur qui manque,
-   * alors que c'est la **forme entière** qui n'existe pas ici.
+   * `moyenne(1; 2)`, ou un nom mal orthographié. Ce n'était pas distinguable
+   * hier, parce que rien ne s'appelait : tout nom suivi d'une parenthèse était
+   * la faute. Depuis qu'une fonction du projet s'appelle vraiment, la question
+   * redevient la bonne — **celle-ci existe-t-elle ?** — et `ou` porte le nom
+   * qu'on a écrit.
    */
   APPEL: "appel",
   /** Deux unités qu'on ne sait pas additionner, ni composer. */
@@ -104,7 +104,7 @@ const PHRASES_DU_REFUS = {
     "la virgule est décimale : les arguments se séparent d'un point-virgule",
   [REFUS_DU_CALCUL.FONCTION_INCONNUE]: "cette fonction n'est pas du langage",
   [REFUS_DU_CALCUL.ARGUMENTS]: "cette fonction n'attend pas ce nombre d'arguments",
-  [REFUS_DU_CALCUL.APPEL]: "il n'y a pas d'appel de fonction",
+  [REFUS_DU_CALCUL.APPEL]: "ce projet n'a pas de fonction de ce nom",
   [REFUS_DU_CALCUL.UNITES]: "ces deux unités ne se composent pas",
   [REFUS_DU_CALCUL.DIVISION_PAR_ZERO]: "on ne divise pas par zéro",
   [REFUS_DU_CALCUL.PUISSANCE_ET_UNITE]: "cette puissance ne s'applique pas à cette unité",
@@ -114,29 +114,6 @@ const PHRASES_DU_REFUS = {
 /** Ce qu'un refus dit, en français. */
 export function phraseDuRefus(code, quoi = "") {
   const dit = PHRASES_DU_REFUS[code] ?? "ce calcul ne se lit pas";
-
-  /**
-   * **Le seul refus qui dit quoi écrire à la place.**
-   *
-   * Parce que c'est le seul où la faute n'est pas un oubli mais une habitude
-   * prise ailleurs : on ne la corrige pas en relisant sa ligne, on la corrige
-   * en apprenant qu'une fonction Mdall ne prend rien. Elle lit les noms qui
-   * existent autour d'elle — c'est tout le contrat, et il tient en une phrase.
-   */
-  if (code === REFUS_DU_CALCUL.APPEL) {
-    const nomme = texte(quoi);
-    // **La liste se prend aux fonctions elles-mêmes**, et ne se recopie pas :
-    // celle qu'on ajouterait au langage manquerait ici sans que rien ne le
-    // dise, et la phrase enseignerait une langue qui n'est plus la nôtre
-    // (règle 10).
-    const seules = `seules ${Object.keys(FONCTIONS).join(", ")} prennent des parenthèses`;
-
-    return nomme
-      ? `${dit} : ${seules}. Écrivez « ${nomme} » seul — une fonction lit les `
-        + `noms qui existent autour d'elle`
-      : `${dit} : ${seules}. Un nom du projet se nomme seul — une fonction lit `
-        + `les noms qui existent autour d'elle`;
-  }
 
   return quoi ? `${dit} — ${quoi}` : dit;
 }
@@ -249,18 +226,6 @@ export function lireUnCalcul(source = "") {
   if (reste) {
     if (reste.type === "virgule") return refuser(REFUS_DU_CALCUL.VIRGULE_ARGUMENT, reste.texte);
     if (reste.type === "ferme") return refuser(REFUS_DU_CALCUL.PARENTHESE, reste.texte);
-    /**
-     * **Une parenthèse juste après un nom est un appel**, et rien d'autre.
-     *
-     * Les fonctions du langage — `racine`, `arrondi` — se lisent bien avant
-     * d'arriver ici : ce qui reste est un nom du projet suivi d'une
-     * parenthèse, c'est-à-dire exactement la forme qu'on écrit quand on croit
-     * pouvoir lui passer une valeur. Le dire ici la traite partout d'un coup :
-     * dans un `calcule`, dans un `si (…)`, dans un `alors (…)`.
-     */
-    if (reste.type === "ouvre") {
-      return refuser(REFUS_DU_CALCUL.APPEL, arbre.arbre?.quoi === "nom" ? arbre.arbre.nom : "");
-    }
     return refuser(REFUS_DU_CALCUL.RESTE, reste.texte);
   }
 
@@ -415,7 +380,57 @@ function lireUnTerme(etat) {
 
   if (jeton.type === "nom") {
     etat.rang += 1;
-    return { ok: true, arbre: { quoi: "nom", nom: jeton.nom } };
+
+    /**
+     * **Un nom suivi d'une parenthèse appelle une fonction du projet.**
+     *
+     * C'est la seule façon de réutiliser une fonction ailleurs que là où elle a
+     * été écrite. Sans elle, `Couleur des volets` ne sait lire que
+     * `Nature des volets` — le nom exact qu'elle a déclaré —, et une seconde
+     * série de volets, nommée autrement, demandait **une seconde fonction**
+     * qui dit la même chose. À dix noms, le projet tient dix copies d'un même
+     * raisonnement, et c'est très exactement ce que cette langue existe pour
+     * éviter.
+     *
+     * L'appel ne verse rien : il **évalue**, et son résultat va dans la locale
+     * qui le reçoit. La fonction, elle, continue de conclure sous son seul nom
+     * dans la mémoire (règle 10) — un appel n'ajoute pas une seconde vérité,
+     * il répond à une question de passage.
+     */
+    if (etat.jetons[etat.rang]?.type !== "ouvre") {
+      return { ok: true, arbre: { quoi: "nom", nom: jeton.nom } };
+    }
+    etat.rang += 1;
+
+    const donnes = [];
+    if (etat.jetons[etat.rang]?.type === "ferme") {
+      etat.rang += 1;
+      return { ok: true, arbre: { quoi: "appel-du-projet", nom: jeton.nom, arguments: donnes } };
+    }
+
+    for (;;) {
+      const argument = lireUneSomme(etat);
+      if (!argument.ok) return argument;
+      donnes.push(argument.arbre);
+
+      const suivant = etat.jetons[etat.rang];
+      /**
+       * **La virgule sépare ici, et c'est sans ambiguïté.**
+       *
+       * Une virgule décimale ne produit jamais ce jeton : `1,5` est avalé
+       * entier par le lecteur de nombres. Ce qui reste est donc toujours un
+       * séparateur — et c'est celui qu'on écrit, puisque la signature de la
+       * fonction s'écrit elle-même `(zones, Nature des volets)`. Le
+       * point-virgule reste admis : c'est celui des fonctions du langage.
+       */
+      if (suivant?.type === "separateur" || suivant?.type === "virgule") { etat.rang += 1; continue; }
+      break;
+    }
+
+    if (etat.jetons[etat.rang]?.type !== "ferme") return refuser(REFUS_DU_CALCUL.PARENTHESE, jeton.nom);
+    etat.rang += 1;
+
+    return { ok: true, arbre: { quoi: "appel-du-projet", nom: jeton.nom, arguments: donnes } };
   }
 
   if (jeton.type === "ouvre") {
@@ -466,6 +481,75 @@ export function nomsDuCalcul(arbre = null) {
     if (noeud.quoi === "oppose") return parcourir(noeud.dessous);
     if (noeud.quoi === "binaire") { parcourir(noeud.gauche); parcourir(noeud.droite); return; }
     if (noeud.quoi === "appel") noeud.arguments.forEach(parcourir);
+    // **Un appel lit la fonction, et ce qu'on lui donne.** La fonction, parce
+    // qu'il faut l'avoir pour répondre ; ce qu'on lui donne, parce que c'est
+    // au formulaire de le demander — et c'est tout : ce que la fonction lit
+    // **chez elle** ne se demande plus, puisqu'on vient de le lui fournir.
+    if (noeud.quoi === "appel-du-projet") {
+      if (!noms.includes(noeud.nom)) noms.push(noeud.nom);
+      noeud.arguments.forEach(parcourir);
+    }
+  };
+  parcourir(arbre);
+  return noms;
+}
+
+/**
+ * **Un calcul qui ne fait que nommer ne calcule rien : il reprend.**
+ *
+ * `calcule x = Couleur des volets(zones, Matériau);` ne demande aucune
+ * arithmétique — il demande **la valeur**, telle qu'elle est. Et cette
+ * valeur-là est « violet » : un texte, qu'aucune mesure ne saurait porter.
+ *
+ * L'évaluation ordinaire la déclarait donc indécidable, et toute fonction qui
+ * conclut un mot — une couleur, un classement, un degré coupe-feu, c'est-à-dire
+ * la moitié d'un projet — ne pouvait pas être reprise dans une locale. On ne
+ * s'en apercevait pas : rien ne le disait, la ligne restait simplement sans
+ * réponse.
+ *
+ * **Seulement quand ce n'est pas une mesure** : une mesure continue de passer
+ * par l'arithmétique, qui la met dans sa forme canonique. Deux écritures pour
+ * le même nombre finiraient par ne plus se comparer (règle 4).
+ *
+ * @returns {{connu: boolean, valeur: string}|null} `null` si ce n'est pas une
+ *   reprise, ou si ce qu'on reprend est une mesure.
+ */
+export function repriseDirecte(arbre = null, lire = () => ({ connu: false, valeur: "" })) {
+  if (arbre?.quoi === "nom") {
+    const lue = lire(arbre.nom);
+    if (!lue?.connu || estMesuree(lue.valeur)) return null;
+    return { connu: true, valeur: texte(lue.valeur) };
+  }
+
+  if (arbre?.quoi !== "appel-du-projet") return null;
+
+  const donnees = valeursDonnees(arbre.arguments, lire);
+  if (donnees.some((une) => une.refus || !une.connu)) return null;
+
+  const lue = lire(arbre.nom, donnees.map((une) => une.valeur));
+  if (!lue?.connu || estMesuree(lue.valeur)) return null;
+  return { connu: true, valeur: texte(lue.valeur) };
+}
+
+/**
+ * Les fonctions du projet qu'une expression appelle.
+ *
+ * **Lues, mais pas des entrées.** Il faut les avoir pour répondre, et on ne les
+ * déclare pas dans sa signature : c'est le projet qui les porte, pas celui qui
+ * remplit le formulaire. Les fonctions du **langage** n'y sont pas — `racine`
+ * n'est à personne.
+ */
+export function fonctionsAppeleesDuCalcul(arbre = null) {
+  const noms = [];
+  const parcourir = (noeud) => {
+    if (!noeud) return;
+    if (noeud.quoi === "oppose") return parcourir(noeud.dessous);
+    if (noeud.quoi === "binaire") { parcourir(noeud.gauche); parcourir(noeud.droite); return; }
+    if (noeud.quoi === "appel") { noeud.arguments.forEach(parcourir); return; }
+    if (noeud.quoi === "appel-du-projet") {
+      if (!noms.includes(noeud.nom)) noms.push(noeud.nom);
+      noeud.arguments.forEach(parcourir);
+    }
   };
   parcourir(arbre);
   return noms;
@@ -541,8 +625,71 @@ export function evaluerUnCalcul(arbre = null, lire = () => ({ connu: false, vale
 
   if (arbre.quoi === "binaire") return evaluerUnSigne(arbre, lire);
   if (arbre.quoi === "appel") return evaluerUnAppel(arbre, lire);
+  if (arbre.quoi === "appel-du-projet") return evaluerUnAppelDuProjet(arbre, lire);
 
   return refuse(REFUS_DU_CALCUL.RESTE, arbre.quoi);
+}
+
+/**
+ * **Ce qu'on donne à une fonction du projet** : des valeurs, telles qu'elles
+ * s'écrivent.
+ *
+ * Pas des mesures. `Couleur des volets(zones, Matériau)` passe « bois » —
+ * un texte, qu'aucune arithmétique ne saurait porter. Les évaluer en nombres
+ * rendrait toute fonction qui lit un domaine fermé indécidable, c'est-à-dire
+ * la plupart.
+ *
+ * Un nom se donne donc **tel qu'il vaut** ; une expression se calcule et
+ * s'écrit ensuite, parce qu'une expression n'a pas d'autre forme.
+ */
+function valeursDonnees(donnes, lire) {
+  return (Array.isArray(donnes) ? donnes : []).map((argument) => {
+    if (argument?.quoi === "nom") {
+      const lue = lire(argument.nom);
+      return lue?.connu ? { connu: true, valeur: texte(lue.valeur), nom: argument.nom } : { connu: false, valeur: "", nom: argument.nom };
+    }
+
+    const rendu = evaluerUnCalcul(argument, lire);
+    if (rendu.refus) return { connu: false, valeur: "", refus: rendu.refus, ou: rendu.ou, nom: "" };
+    if (!rendu.connu) return { connu: false, valeur: "", manquants: rendu.manquants ?? [], nom: "" };
+    return { connu: true, valeur: ecrireLeCalcul(rendu), nom: "" };
+  });
+}
+
+/**
+ * Une fonction du projet, appliquée à ce qu'on lui donne.
+ *
+ * **C'est le lecteur qui l'applique**, et non ce fichier : lui seul sait quelles
+ * fonctions le projet porte et comment les rejouer. Ici, on évalue ce qu'on
+ * donne, on le lui tend, et l'on relit sa réponse exactement comme on relit la
+ * valeur d'un nom — une conclusion est une valeur, d'où qu'elle vienne.
+ *
+ * Un lecteur qui ne sait pas appeler rend `{connu: false}` : la ligne reste
+ * indécidable en nommant la fonction, plutôt que de rendre un nombre que
+ * personne n'a calculé (règle 5).
+ */
+function evaluerUnAppelDuProjet(arbre, lire) {
+  const donnees = valeursDonnees(arbre.arguments, lire);
+
+  const casse = donnees.find((une) => une.refus);
+  if (casse) return refuse(casse.refus, casse.ou);
+
+  const manque = donnees.filter((une) => !une.connu);
+  if (manque.length) {
+    return indecidable(manque.flatMap((une) => (une.nom ? [une.nom] : une.manquants ?? [])));
+  }
+
+  const lue = lire(arbre.nom, donnees.map((une) => une.valeur));
+  if (lue?.refus) return refuse(lue.refus, texte(lue.ou));
+  if (!lue?.connu) return indecidable([arbre.nom]);
+
+  if (!estMesuree(lue.valeur)) return indecidable([arbre.nom]);
+
+  const { nombre, unite } = couperLUnite(lue.valeur);
+  const lu = lireUnNombre(nombre);
+  if (!Number.isFinite(lu)) return indecidable([arbre.nom]);
+
+  return mesure(unite === "%" ? lu / 100 : lu, unite === "%" ? "" : unite);
 }
 
 /** Les deux membres, et le premier aveu l'emporte sur le second. */

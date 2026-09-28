@@ -45,7 +45,10 @@
  * Des fichiers entrent, des champs sortent. Aucun DOM, aucun réseau.
  */
 
-import { lireUnFichier, nomsConclusParLeBloc, nomsLusParLeBloc } from "./memoire-en-lecture.js";
+import {
+  lireUnFichier, nomsConclusParLeBloc, nomsLusParLeBloc, fonctionsAppeleesParLeBloc
+} from "./memoire-en-lecture.js";
+import { PORTEE_DUNE_FONCTION } from "./memoire-en-texte.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { reglesVerseesUtiles } from "./fonctions-du-projet.js";
 import { couperLUnite, estMesuree } from "./memoire-en-texte.js";
@@ -146,9 +149,20 @@ export function nomsLus(fichiers = [], { memoire = null } = {}) {
    */
   const produits = new Set();
 
+  /**
+   * **La portée ne se demande pas**, et les fonctions qu'on appelle non plus.
+   *
+   * `zones` est le premier argument de tout appel, et c'est une portée : le bac
+   * d'essai n'en a pas, et un champ « zones » à remplir à la main ne veut rien
+   * dire. Une fonction appelée, elle, est **lue** — il faut l'avoir pour
+   * répondre — mais c'est le projet qui la porte : la demander serait demander
+   * de taper à la main ce qu'on vient d'écrire trois lignes plus haut.
+   */
+  const jamais = new Set([cleDuSujet(PORTEE_DUNE_FONCTION)]);
+
   const retenir = (nom) => {
     const cle = cleDuSujet(nom);
-    if (!cle || vus.has(cle)) return;
+    if (!cle || vus.has(cle) || jamais.has(cle)) return;
     vus.add(cle);
     lus.push(texte(nom));
   };
@@ -158,6 +172,9 @@ export function nomsLus(fichiers = [], { memoire = null } = {}) {
       for (const nom of nomsConclusParLeBloc(bloc)) produits.add(cleDuSujet(nom));
 
       for (const calcul of bloc?.calculs ?? []) poses.add(cleDuSujet(calcul?.nom));
+
+      // Ce que le bloc **appelle** : lu, jamais demandé. Voir `jamais`.
+      for (const nom of fonctionsAppeleesParLeBloc(bloc)) produits.add(cleDuSujet(nom));
 
       /**
        * **Une boucle pose sa variable et ses colonnes.**

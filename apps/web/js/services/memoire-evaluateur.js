@@ -55,7 +55,7 @@ import {
   DIT_DE_LAGREGAT, OPERATEUR, couperLUnite, lireUnNombre, phraseDeLAgregat
 } from "./memoire-en-texte.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
-import { calculer, ecrireLeCalcul, phraseDuRefus } from "./mdall-calcul.js";
+import { calculer, ecrireLeCalcul, phraseDuRefus, lireUnCalcul, repriseDirecte } from "./mdall-calcul.js";
 import { convertir } from "./unites-du-metier.js";
 import {
   REFUS_DE_LA_BOUCLE, agregerUneColonne, valeursDeLaBoucle, phraseDuRefusDeLaBoucle
@@ -374,7 +374,9 @@ export function deroulerLaBoucle(boucle = null, lire = () => ({ connu: false, va
   for (const valeur of suite.valeurs) {
     // La variable de boucle se lit comme n'importe quel nom, et **elle seule
     // change d'une ligne à l'autre** : tout le reste vient de la fonction.
-    const lireIci = (sujet) => (cleDuSujet(sujet) === cleDuSujet(nom)
+    const lireIci = (sujet, donnees) => (donnees !== undefined
+      ? lire(sujet, donnees) ?? { connu: false, valeur: "" }
+      : cleDuSujet(sujet) === cleDuSujet(nom)
       ? { connu: true, valeur: valeur.dite }
       : lire(sujet) ?? { connu: false, valeur: "" });
 
@@ -482,7 +484,16 @@ export function poserLesLocales(calculs = [], lire = () => ({ connu: false, vale
   const doutes = [];
   const traces = [];
 
-  const lireAvecLesLocales = (sujet) => {
+  /**
+   * **Une enveloppe laisse passer ce qu'on donne à une fonction.**
+   *
+   * `lire` répond à deux questions depuis qu'une fonction s'appelle : « que
+   * vaut ce nom ? » et « que vaut cette fonction, appliquée à ceci ? ». Une
+   * enveloppe qui n'en transmet qu'une rend la seconde muette — et l'appel
+   * restait indécidable sans qu'un mot dise pourquoi (règle 5).
+   */
+  const lireAvecLesLocales = (sujet, donnees) => {
+    if (donnees !== undefined) return lire(sujet, donnees) ?? { connu: false, valeur: "" };
     const cle = cleDuSujet(sujet);
     if (poses.has(cle)) return poses.get(cle);
     return lire(sujet) ?? { connu: false, valeur: "" };
@@ -535,6 +546,26 @@ export function poserLesLocales(calculs = [], lire = () => ({ connu: false, vale
 
       if (!rendu.connu) { doutes.push(DOUTE.TABLEAU_MUET); continue; }
       poses.set(cleDuSujet(nom), { connu: true, valeur: rendu.valeur });
+      continue;
+    }
+
+    /**
+     * **Une reprise passe avant l'arithmétique.**
+     *
+     * `calcule x = Couleur des volets(zones, Matériau);` ne calcule rien : il
+     * reprend une valeur, et cette valeur est un mot. L'arithmétique la
+     * déclarait indécidable, et toute fonction qui conclut une couleur, un
+     * classement ou un degré coupe-feu restait inutilisable dans une locale
+     * sans qu'un mot le dise (règle 5).
+     */
+    const lu = lireUnCalcul(texte(calcul?.expression));
+    const reprise = lu.ok ? repriseDirecte(lu.arbre, lireAvecLesLocales) : null;
+    if (reprise) {
+      traces.push({
+        nom, expression: texte(calcul?.expression), ligne: Number(calcul?.ligne) || 0,
+        connu: true, valeur: reprise.valeur, refus: "", pourquoi: "", manquants: []
+      });
+      poses.set(cleDuSujet(nom), { connu: true, valeur: reprise.valeur });
       continue;
     }
 

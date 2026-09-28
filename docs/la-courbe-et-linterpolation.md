@@ -39,7 +39,7 @@ courbe Coefficient de forme(zones, Pente du versant) {
 `courbe` est une **marque d'écriture**, comme `selon` l'est d'un barème : la
 fonction lit le nom de sa signature et conclut sous le sien, exactement comme
 toutes les autres. Les fonctions suivantes la lisent comme n'importe quel nom —
-il n'y a pas d'appel, ici non plus.
+elle se nomme ou s'appelle comme les autres (`docs/appeler-une-fonction.md`).
 
 Ce qui change est la façon dont sa loi est posée. Et c'est le seul endroit où
 cette différence compte : l'écran, la trace, le rejeu et le graphe n'ont pas à
