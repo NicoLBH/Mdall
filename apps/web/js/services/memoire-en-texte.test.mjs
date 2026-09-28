@@ -31,7 +31,7 @@ test("estMesuree distingue une cote d'une catégorie", () => {
   assert.deepEqual(couperLUnite("490,03 m"), { nombre: "490,03", unite: "m" });
 });
 
-test("le degré se colle au nombre, et lui seul", () => {
+test("le degré et le pourcentage se collent au nombre", () => {
   /**
    * **Personne n'écrit « 30 ° ».** Un abaque de norme porte `0°`, `30°`, `45°`,
    * et une courbe recopiée à l'espace près cesserait de ressembler à sa figure
@@ -48,11 +48,30 @@ test("le degré se colle au nombre, et lui seul", () => {
   assert.deepEqual(couperLUnite("30 °"), { nombre: "30", unite: "°" });
 
   /**
-   * **Et lui seul.** `%` est un suffixe du calcul avant d'être une unité — `20%`
-   * y vaut `0,2` —, et l'euro s'écrit avec son espace. Les coller ferait changer
-   * de sens à des valeurs versées depuis des mois.
+   * **Le pourcentage aussi, et il l'a payé cher.**
+   *
+   * Il était laissé non coupé au motif qu'il est « un suffixe du calcul avant
+   * d'être une unité ». C'était vrai dans une expression — `Prix HT * 20%` se
+   * tokenise très bien — et faux partout ailleurs : un pourcentage **ne pouvait
+   * pas être lu depuis un nom**, et un barème qui conclut `20%` rendait mille
+   * euros fois vingt au lieu de vingt pour cent de mille euros.
+   *
+   * `lireUneValeur`, lui, coupait `20%` sans difficulté : deux lectures de la
+   * même chaîne ne disaient pas la même chose, et c'est toujours celle qui se
+   * tait qui gagne (règle 4).
+   *
+   * **Ce que cela change pour ce qui est versé** : rien de ce qui est écrit, ni
+   * de ce qui s'affiche — `20%` reste `20%` à l'écran. Une valeur textuelle qui
+   * s'écrirait `20%` se lira désormais comme une mesure ; c'est la même
+   * ambiguïté que porte déjà `26 m`, et elle se tranche comme toujours par les
+   * guillemets.
    */
-  assert.deepEqual(couperLUnite("20%"), { nombre: "20%", unite: "" });
+  assert.deepEqual(couperLUnite("20%"), { nombre: "20", unite: "%" });
+  assert.deepEqual(couperLUnite("20 %"), { nombre: "20", unite: "%" });
+  assert.equal(estMesuree("20%"), true);
+
+  // **L'euro reste non collé**, et il est seul dans ce cas : il s'écrit avec son
+  // espace partout, et rien ne le lit jamais autrement.
   assert.deepEqual(couperLUnite("120€"), { nombre: "120€", unite: "" });
   // Et rien qui ressemble à un degré sans en être un : « 3e famille B » reste
   // entier, comme il l'a toujours été.

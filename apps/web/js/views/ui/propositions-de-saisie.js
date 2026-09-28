@@ -47,7 +47,10 @@ const MOTS_DE_LA_NATURE = {
   [QUOI.VALEUR]: "valeur possible",
   [QUOI.FICHIER]: "fichier",
   [QUOI.STATUT]: "statut",
-  [QUOI.FONCTION]: "fonction du langage"
+  [QUOI.FONCTION]: "fonction du langage",
+  // **Pas « nom du projet »** : celui-ci n'est pas une valeur versée, c'est une
+  // fonction signée qui se rejouera sur les réponses qu'on donne.
+  [QUOI.VERSE]: "fonction du projet"
 };
 
 /**

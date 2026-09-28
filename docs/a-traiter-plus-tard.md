@@ -4564,16 +4564,6 @@ et le faire à moitié ferait accepter des conversions fausses, ce qui est pire 
 de refuser (`docs/les-unites-du-metier.md`). Même chose pour `°C`, dont la
 conversion est un décalage et non un facteur.
 
-**Le catalogue des noms ne lit pas la mémoire du projet.** Il montre ce que le
-brouillon déclare, conclut et pose, les fonctions du langage, et ce que l'établi
-garde (`docs/le-catalogue-des-noms.md`). Ce que le projet a **signé** est une
-quatrième source, et c'est celle qui manque : une fonction versée conclut sous
-son nom, et une fonction qu'on écrit aujourd'hui devrait pouvoir la nommer sans
-la réécrire. L'écran d'écriture ne tient aucune mémoire de projet — le bac
-d'essai demande à la main ce qu'aucune fonction du brouillon ne conclut —, si
-bien que le travail n'est pas dans le catalogue : c'est une lecture de la mémoire
-qui manque à cet écran-là.
-
 **`pour chaque` ne parcourt qu'une suite de nombres.** Il répète de deux mètres à
 quatre-vingt-dix par pas de deux (`docs/pour-chaque-et-les-agregats.md`) ; il ne
 sait pas dire « pour chaque niveau du bâtiment » ni « pour chaque massif de la
@@ -4612,22 +4602,18 @@ serait la suite naturelle, et elle demande de décider ce qu'on fait des
 grandeurs : les cadres empilés répondent pour un nuage, pas pour une grille de
 seize. C'est une question d'écran, pas de calcul.
 
-**Un pourcentage ne traverse pas un nom, et il se tait.** `calcule TVA = Prix
-HT * 20%` fonctionne : `20%` est un littéral que le calculateur comprend. Mais
-un pourcentage **conclu par une fonction** ne traverse pas : une ligne de barème
-`| rénovation | 10% |` conclut `10`, le signe est perdu à la lecture, et la
-fonction qui écrit `Prix HT * Taux de TVA` rend **11 000 €** là où elle devait
-rendre 1 100 €. Rien ne refuse, rien ne prévient : c'est un résultat plausible
-et faux, exactement ce que cette langue existe pour empêcher.
+**Une fonction versée se rejoue sans ses zones.** L'écran d'écriture prend la
+première règle en vigueur par sujet
+(`docs/le-pourcentage-et-la-quatrieme-source.md`). Un projet qui conclut
+« Couleur des volets » différemment par bâtiment en a plusieurs, et l'essai n'en
+montre qu'une — sans dire laquelle. Ce n'est pas un oubli de câblage : le bac
+d'essai n'a **pas de zone**, parce qu'on y essaie une fonction, pas un ouvrage.
+Lui en donner une est une vraie décision d'écran — un sélecteur de plus, et la
+question de ce qu'il vaut par défaut.
 
-Deux questions, et la seconde dépend de la première. **Que vaut `10%` comme
-valeur ?** Un nombre sans unité vaudrait 0,1 et se multiplierait bien, mais
-s'afficherait `0,1` partout où l'auteur a écrit `10%`. Une unité `%` demande de
-décider ce que `€ × %` donne, c'est-à-dire d'entrer dans l'algèbre des unités
-composées — déjà en attente ici. Et **où trancher** : au lecteur du barème, qui
-perd le signe, ou au calculateur, qui ne sait pas lire un `%` porté par un nom.
-
-En attendant, un barème qui doit servir à multiplier se conclut en
-**coefficient** — `| rénovation | 1,1 |` —, ce qui se relit très bien contre le
-texte d'origine. Le dire est la seule chose honnête tant que le refus n'est pas
-écrit.
+**L'euro ne se colle pas au nombre.** `120€` n'est pas lu comme une mesure, là
+où `120 €`, `20%` et `30°` le sont. C'est cohérent avec ce qui s'écrit — l'euro
+porte son espace partout dans le projet —, mais c'est une exception de plus à
+retenir, et quelqu'un la rencontrera en recopiant un devis. La coller demande de
+vérifier qu'aucun nom ne commence par `€`, ce qui est probablement vrai, et de
+décider si `$` et `£` suivent.

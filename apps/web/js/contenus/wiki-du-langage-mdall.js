@@ -540,7 +540,16 @@ export const WIKI_DU_LANGAGE = [
       + "propre corps est une circularité : elle resterait indécidable, ou pire, "
       + "elle lirait ce que le projet tenait d'une version précédente d'elle-même. "
       + "La locale qui porte son nom, elle, reste offerte — c'est ainsi qu'elle "
-      + "conclut.")
+      + "conclut."),
+    dit("**Une fonction déjà versée dans la mémoire du projet s'y trouve aussi**, "
+      + "au rayon « Versé dans la mémoire du projet ». Nommez-la comme n'importe "
+      + "quel nom : il n'y a rien à importer, et surtout pas un `importe (fonction: …)` "
+      + "— cette ligne n'existe pas. L'essai la **rejoue** sur les réponses que "
+      + "vous donnez, et le formulaire vous demande ce qu'elle lit plutôt que ce "
+      + "qu'elle conclut."),
+    dit("C'est la différence avec l'établi : un utilitaire de l'établi se "
+      + "parcourt et ne se propose pas, parce qu'il vit dans un autre brouillon. "
+      + "Une fonction versée, elle, conclut dans **ce** projet.")
   ]),
 
   section("chainage", "Une fonction lit ce qu'une autre conclut", [

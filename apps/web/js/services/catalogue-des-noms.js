@@ -77,7 +77,15 @@ export const ORIGINE = {
   /** Un agrégat : `le plus grand de`, `la somme de`. */
   AGREGAT: "agregat",
   /** Un utilitaire de l'établi le conclut. À reprendre pour s'en servir. */
-  ETABLI: "etabli"
+  ETABLI: "etabli",
+  /**
+   * Une fonction **versée dans la mémoire de ce projet** le conclut.
+   *
+   * C'était la quatrième source, et la seule qui manquait. Elle se lit d'ici —
+   * contrairement à l'établi : la règle est dans ce projet, sur les valeurs de
+   * ce projet, et le bac d'essai la rejoue pour le montrer.
+   */
+  PROJET: "projet"
 };
 
 /** Le titre de chaque rayon du catalogue, à l'écran. */
@@ -88,7 +96,8 @@ export const NOM_DE_LORIGINE = {
   [ORIGINE.POSE]: "Posé par ce brouillon",
   [ORIGINE.FONCTION]: "Les fonctions du langage",
   [ORIGINE.AGREGAT]: "Lire le tableau d'un « pour chaque »",
-  [ORIGINE.ETABLI]: "Sur votre établi"
+  [ORIGINE.ETABLI]: "Sur votre établi",
+  [ORIGINE.PROJET]: "Versé dans la mémoire du projet"
 };
 
 /**
@@ -105,13 +114,14 @@ export const DIT_DE_LORIGINE = {
   [ORIGINE.POSE]: "Une valeur posée sans condition : elle se lit comme les autres.",
   [ORIGINE.FONCTION]: "Elles s'écrivent dans un calcul, et leurs arguments se séparent d'un point-virgule.",
   [ORIGINE.AGREGAT]: "Une boucle rend un tableau ; ces phrases en lisent une colonne.",
-  [ORIGINE.ETABLI]: "Ces noms-là vivent ailleurs : reprenez l'utilitaire pour vous en servir."
+  [ORIGINE.ETABLI]: "Ces noms-là vivent ailleurs : reprenez l'utilitaire pour vous en servir.",
+  [ORIGINE.PROJET]: "Le projet les a signés : nommez-les, l'essai les rejoue sur vos réponses."
 };
 
 /** L'ordre des rayons : ce qui est à portée de main d'abord. */
 export const ORDRE_DES_ORIGINES = [
   ORIGINE.LOCALE, ORIGINE.DECLARE, ORIGINE.CONCLU, ORIGINE.POSE,
-  ORIGINE.FONCTION, ORIGINE.AGREGAT, ORIGINE.ETABLI
+  ORIGINE.PROJET, ORIGINE.FONCTION, ORIGINE.AGREGAT, ORIGINE.ETABLI
 ];
 
 /** Une entrée du catalogue, avec tous ses champs à leur place. */
@@ -295,7 +305,7 @@ export function nomsDeLetabli(etabli = null) {
  * pas un nom qu'on lit, c'est un mot qu'on écrit. Un nom de brouillon qui
  * s'appellerait `min` ne l'effacerait donc pas du catalogue.
  */
-export function catalogueDesNoms({ fichiers = [], etabli = null, locales = [] } = {}) {
+export function catalogueDesNoms({ fichiers = [], etabli = null, locales = [], projet = null } = {}) {
   const posees = (Array.isArray(locales) ? locales : [])
     .map((nom) => entree({ nom, origine: ORIGINE.LOCALE }))
     .filter((une) => une.nom);
@@ -307,10 +317,36 @@ export function catalogueDesNoms({ fichiers = [], etabli = null, locales = [] } 
   return [
     ...posees,
     ...duBrouillon,
+    /**
+     * **Ce que le projet a signé, juste après le brouillon.**
+     *
+     * Devant le langage, parce que c'est ce qu'on cherche ; derrière le
+     * brouillon, parce qu'une fonction qu'on est en train de réécrire doit
+     * répondre par la version qu'on essaie, pas par celle d'hier.
+     */
+    ...nomsDuProjet(projet).filter((une) => !connus.has(cleDuSujet(une.nom))),
     ...nomsDuLangage(),
     ...agregatsDuLangage(),
     ...nomsDeLetabli(etabli).filter((une) => !connus.has(cleDuSujet(une.nom)))
   ];
+}
+
+/**
+ * Ce que la mémoire du projet conclut.
+ *
+ * `null` tant qu'on ne l'a pas demandée : un projet dont la mémoire n'est pas
+ * lue et un projet qui ne conclut rien n'appellent pas la même phrase, et le
+ * rayon ne paraît que lorsqu'il a quelque chose à montrer (règle 5).
+ */
+function nomsDuProjet(projet) {
+  return (Array.isArray(projet) ? projet : []).map((une) => entree({
+    nom: texte(une?.nom),
+    origine: ORIGINE.PROJET,
+    lit: Array.isArray(une?.lit) ? une.lit : [],
+    // Ce qu'elle est, en un mot : on ne relit pas un abaque comme une cascade
+    // de « si », et la fiche le dit avant qu'on l'ouvre.
+    dit: texte(une?.forme) ? `un ${texte(une.forme)} du projet` : ""
+  })).filter((une) => une.nom);
 }
 
 /**
@@ -325,6 +361,10 @@ export function catalogueDesNoms({ fichiers = [], etabli = null, locales = [] } 
  *  - **un agrégat n'est pas un nom.** « le plus grand de » est une phrase qu'on
  *    écrit dans un calcul ; la proposer là où une condition attend un sujet
  *    donnerait `si (le plus grand de = …)`, qui ne veut rien dire.
+ *
+ * **Une fonction versée, elle, se propose** — et c'est toute la différence avec
+ * l'établi : elle conclut dans ce projet, sur les valeurs de ce projet, et le
+ * bac d'essai la rejoue.
  *
  * C'est toute la différence entre les deux lectures du catalogue, et elle est
  * dite ici, une fois.
