@@ -55,6 +55,14 @@ export const QUOI = {
   FICHIER: "fichier",
   /** Un statut du langage. */
   STATUT: "statut",
+  /**
+   * Un nom que la **mémoire du projet** conclut.
+   *
+   * Distinct d'un nom du projet ordinaire, et pour une raison qu'on veut lire
+   * sous le curseur : celui-ci n'est pas une valeur qu'on a versée, c'est une
+   * **fonction signée** qui se rejouera sur les réponses qu'on donne.
+   */
+  VERSE: "verse",
   /** Une fonction du langage : `racine`, `arrondi`, `min`. */
   FONCTION: "fonction"
 };
@@ -73,6 +81,7 @@ export const QUOI = {
  * sorte, et l'écran ne dit rien plutôt que de dire faux (règle 5).
  */
 const QUOI_DE_LORIGINE = {
+  [ORIGINE.PROJET]: QUOI.VERSE,
   [ORIGINE.LOCALE]: QUOI.LOCALE,
   [ORIGINE.DECLARE]: QUOI.NOM,
   [ORIGINE.CONCLU]: QUOI.NOM,
@@ -206,6 +215,7 @@ const PRIORITE = {
   [QUOI.LOCALE]: 0,
   [QUOI.NOM]: 0,
   [QUOI.VALEUR]: 0,
+  [QUOI.VERSE]: 0,
   [QUOI.FICHIER]: 0,
   [QUOI.STATUT]: 0,
   [QUOI.MOT]: 1,
@@ -455,7 +465,9 @@ function sansSoiMeme(catalogue = [], soi = "") {
     une?.origine !== ORIGINE.CONCLU || repli(une?.nom) !== repli(sien));
 }
 
-export function contexteDuBrouillon(fichiers = [], { contenu = "", position = 0, etabli = null } = {}) {
+export function contexteDuBrouillon(fichiers = [], {
+  contenu = "", position = 0, etabli = null, projet = null
+} = {}) {
   const tous = Array.isArray(fichiers) ? fichiers : [];
 
   return {
@@ -468,7 +480,7 @@ export function contexteDuBrouillon(fichiers = [], { contenu = "", position = 0,
      * des divergences (règle 10).
      */
     catalogue: sansSoiMeme(
-      catalogueDesNoms({ fichiers: tous, etabli, locales: localesAuDessus(contenu, position) }),
+      catalogueDesNoms({ fichiers: tous, etabli, projet, locales: localesAuDessus(contenu, position) }),
       fonctionAutourDuCurseur(contenu, position)
     ),
     fichiers: tous.map((un) => texte(un?.nom)).filter(Boolean)

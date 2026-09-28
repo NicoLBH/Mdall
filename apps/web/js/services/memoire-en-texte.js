@@ -507,17 +507,27 @@ const espace = (largeur = " ") => jeton(JETON.NEUTRE, largeur);
  * **nombre zéro**, l'unité perdue en silence, et deux angles en degrés se
  * comparaient à un angle en radians sans un mot.
  *
- * Le signe `°` est la seule unité qu'on colle, parce que c'est la seule qu'on
- * ne peut pas confondre avec le début d'un nom : aucun sujet du projet ne
- * commence par un degré. `20%`, `120€` restent non coupés — `%` est un suffixe
- * du calcul avant d'être une unité, et l'euro s'écrit avec son espace.
+ * ## Le pourcentage aussi, et il l'a payé cher
+ *
+ * `%` était laissé non coupé, au motif qu'il est « un suffixe du calcul avant
+ * d'être une unité ». C'était vrai dans une expression — `Prix HT * 20%` se
+ * tokenise très bien — et faux partout ailleurs : **un pourcentage ne pouvait
+ * pas être lu depuis un nom.**
+ *
+ * Le prix en était un résultat plausible et faux. `lireUneValeur`, lui, coupait
+ * `20%` sans difficulté : deux lectures de la même chaîne ne disaient pas la
+ * même chose, et c'est toujours celle qui se tait qui gagne (règle 4).
+ *
+ * Comme le degré, `%` ne peut pas se confondre avec le début d'un nom : aucun
+ * sujet du projet ne commence par un signe de pourcentage. `120€` reste non
+ * coupé — l'euro s'écrit avec son espace, et il est le seul de sa famille.
  */
-const DEGRE_COLLE = /^(-?[\d]+(?:[.,\s]\d+)*)(°C?)$/;
+const UNITE_COLLEE = /^(-?[\d]+(?:[.,\s]\d+)*)(°C?|%)$/;
 
 export function couperLUnite(valeur) {
   const brut = texte(valeur);
 
-  const colle = brut.match(DEGRE_COLLE);
+  const colle = brut.match(UNITE_COLLEE);
   if (colle) return { nombre: colle[1], unite: colle[2] };
 
   const trouve = brut.match(/^(-?[\d]+(?:[.,\s]\d+)*)\s+(.+)$/);

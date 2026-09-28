@@ -42,7 +42,8 @@
  * changé d'un caractère.
  */
 
-import { lireUnFichier, nomsConclusParLeBloc } from "./memoire-en-lecture.js";
+import { lireUnFichier, nomsConclusParLeBloc, nomsLusParLeBloc } from "./memoire-en-lecture.js";
+import { reglesVerseesUtiles } from "./fonctions-du-projet.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { evaluerLaRegle, lecteurDeValeurs, phraseDuDoute } from "./memoire-evaluateur.js";
 import { valeursDuLancement } from "./formulaire-du-brouillon.js";
@@ -116,6 +117,38 @@ function commeUneRegle(bloc) {
 }
 
 /** Les fonctions d'un brouillon : celles qui raisonnent, et elles seules. */
+/**
+ * Les fonctions versées que ce brouillon a besoin de rejouer.
+ *
+ * **Elles portent le nom du projet pour fichier**, et non celui d'un fichier du
+ * brouillon : l'écran doit pouvoir dire d'où vient un verdict qu'on n'a pas
+ * écrit. Les confondre ferait chercher dans son propre texte une ligne qui n'y
+ * est pas.
+ */
+function fonctionsVerseesUtiles(fichiers, siennes, memoire) {
+  if (!Array.isArray(memoire) || !memoire.length) return [];
+
+  const lus = [];
+  const conclus = [];
+  for (const { bloc } of siennes) {
+    lus.push(...nomsLusParLeBloc(bloc));
+    conclus.push(...nomsConclusParLeBloc(bloc));
+  }
+  // Ce que les affirmations du brouillon posent compte aussi comme « sien » :
+  // une valeur écrite à la main l'emporte sur ce que le projet déduit.
+  for (const fichier of Array.isArray(fichiers) ? fichiers : []) {
+    for (const bloc of lireUnFichier(fichier?.contenu ?? "").blocs ?? []) {
+      conclus.push(...nomsConclusParLeBloc(bloc));
+    }
+  }
+
+  return reglesVerseesUtiles(memoire, { lus, conclus })
+    .map(({ bloc }) => ({ fichier: FICHIER_DU_PROJET, bloc, versee: true }));
+}
+
+/** D'où vient un verdict que le brouillon n'a pas écrit. */
+export const FICHIER_DU_PROJET = "mémoire du projet";
+
 export function fonctionsDuBrouillon(fichiers = []) {
   const fonctions = [];
 
@@ -142,12 +175,29 @@ export function fonctionsDuBrouillon(fichiers = []) {
 /**
  * Ce que chaque fonction du brouillon conclut, et ce qu'elle a lu pour cela.
  *
+ * ## Les fonctions versées jouent avec
+ *
+ * **Une fonction versée est une fonction.** Le brouillon qui nomme
+ * « Couleur des volets » ne doit pas demander la couleur des volets à la main :
+ * le projet sait la déduire, et c'est tout l'objet de l'avoir signée. Les
+ * règles versées dont le brouillon a besoin sont donc jouées **avec** lui, dans
+ * les mêmes passes — une chaîne mi-brouillon mi-mémoire se résout comme une
+ * chaîne entière, parce que c'en est une.
+ *
+ * Elles ne sont pas **toutes** jouées : voir `reglesVerseesUtiles`. Et ce que
+ * le brouillon conclut lui-même gagne toujours — on écrit peut-être une
+ * nouvelle version de cette fonction-là, et c'est celle qu'on essaie qui doit
+ * répondre.
+ *
  * @param {{nom: string, contenu: string}[]} fichiers
  * @param {Map|object} reponses ce que le formulaire a recueilli
+ * @param {object} [comment]
+ * @param {object[]} [comment.memoire] les assertions du projet, quand on les a
  * @returns {{sujet, fichier, ligne, issue, valeur, ou, lectures, manquants, doutes}[]}
  */
-export function lancerLeBrouillon(fichiers = [], reponses = null) {
-  const fonctions = fonctionsDuBrouillon(fichiers);
+export function lancerLeBrouillon(fichiers = [], reponses = null, { memoire = null } = {}) {
+  const siennes = fonctionsDuBrouillon(fichiers);
+  const fonctions = [...siennes, ...fonctionsVerseesUtiles(fichiers, siennes, memoire)];
   const valeurs = new Map(valeursDuLancement(fichiers, reponses));
 
   let resultats = [];
@@ -213,7 +263,7 @@ function conclusionsNeuves(fonctions, resultats, valeurs) {
 function unePasse(fonctions, valeurs) {
   const lire = lecteurDeValeurs(valeurs);
 
-  return fonctions.map(({ fichier, bloc }) => {
+  return fonctions.map(({ fichier, bloc, versee = false }) => {
     const evaluation = evaluerLaRegle(commeUneRegle(bloc), lire);
 
     const issue = bloc?.agent
@@ -225,6 +275,15 @@ function unePasse(fonctions, valeurs) {
     return {
       sujet: texte(bloc?.sujet),
       fichier,
+      /**
+       * **Vient-elle de la mémoire du projet ?**
+       *
+       * L'écran doit pouvoir le dire : un verdict qu'on n'a pas écrit, présenté
+       * comme les siens, ferait chercher dans son propre texte une ligne qui
+       * n'y est pas. Et c'est aussi une bonne nouvelle à montrer — le projet
+       * sait déjà faire cela, on n'a pas à le réécrire.
+       */
+      versee,
       ligne: Number(bloc?.ligne) || 0,
       issue,
       /**

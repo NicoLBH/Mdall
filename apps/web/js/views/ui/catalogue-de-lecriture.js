@@ -45,7 +45,9 @@ export const ICONE_DE_LORIGINE = {
   [ORIGINE.POSE]: "north-star",
   [ORIGINE.FONCTION]: "markdown-code",
   [ORIGINE.AGREGAT]: "table",
-  [ORIGINE.ETABLI]: "tools"
+  [ORIGINE.ETABLI]: "tools",
+  // Le sceau : ce que le projet a **signé**, et qui vaut donc pour lui.
+  [ORIGINE.PROJET]: "attestation"
 };
 
 /** La marque d'un nom qu'on peut poser, et celle du corps de la fenêtre. */

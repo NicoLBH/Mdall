@@ -477,6 +477,24 @@ export function lireUneSignature(ligne = "") {
  * Leur absence dit « ceci se mesure » : le nombre et son unité se séparent, et
  * l'on peut comparer 26 m à 28 m sans comparer des chaînes.
  */
+/**
+ * Ce qu'une ligne de barème conclut, **avec son unité**.
+ *
+ * `lireUneValeur` sépare le nombre de son unité, et le barème n'en gardait que
+ * le nombre : `| rénovation | 20 € |` concluait **20**. Toute ligne de barème
+ * qui conclut une mesure perdait donc ce qu'elle mesure, et la fonction qui la
+ * nommait multipliait des nombres nus — mille euros fois vingt, au lieu de
+ * vingt pour cent de mille euros. Rien ne refusait : un résultat plausible et
+ * faux, ce qui est la seule faute que cette langue ne pardonne pas.
+ *
+ * Elle conclut donc **ce qui est écrit**, exactement comme `alors (20 €)` :
+ * les guillemets d'un texte tombent, l'unité d'une mesure reste.
+ */
+function conclusionDuBareme(brut = "") {
+  const lue = lireUneValeur(brut);
+  return lue.citee ? lue.valeur : texte(brut);
+}
+
 export function lireUneValeur(brut = "") {
   const dit = texte(brut);
   if (!dit) return { valeur: "", unite: "", citee: false };
@@ -1091,12 +1109,14 @@ export function lireUnFichier(contenu = "") {
       // une règle à une seule ligne ne change pas de forme.
       if (!courant.conditions.length && !courant.conclue.alors) {
         courant.conditions = clauses;
-        courant.alors = lireUneValeur(conclusion).valeur;
+        courant.alors = conclusionDuBareme(conclusion);
         courant.conclue.alors = numero;
         return;
       }
 
-      courant.sinonSi.push({ conditions: clauses, alors: lireUneValeur(conclusion).valeur, ligne: numero, conclue: numero });
+      courant.sinonSi.push({
+        conditions: clauses, alors: conclusionDuBareme(conclusion), ligne: numero, conclue: numero
+      });
       courant.branche = courant.sinonSi.length - 1;
       return;
     }

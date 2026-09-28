@@ -2477,5 +2477,6 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | regarder un tableau en courbe ou en barres | `docs/le-graphique-comme-lecture.md` |
 | le nuage, les cadres empilés, le rejeu d'une fonction versée | `docs/le-nuage-les-cadres-et-le-rejeu.md` |
 | un abaque versé au projet, et le catalogue qu'on voit | `docs/labaque-qui-se-verse.md` |
+| le pourcentage à travers un nom, et les fonctions versées qu'on réutilise | `docs/le-pourcentage-et-la-quatrieme-source.md` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

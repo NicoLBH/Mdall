@@ -41,6 +41,7 @@ import { svgIcon } from "../../../ui/icons.js";
 import { renderSaisieDeCode, brancherLaSaisieDeCode } from "../../ui/saisie-de-code.js";
 import { brancherLesPropositions } from "../../ui/propositions-de-saisie.js";
 import { contexteDuBrouillon } from "../../../services/mdall-completion.js";
+import { nomsConclusParLeProjet } from "../../../services/fonctions-du-projet.js";
 import { renderSideResizer, bindSideResizer } from "../../ui/side-resizer.js";
 import { renderGhActionButton, bindGhActionButtons } from "../../ui/gh-split-button.js";
 import { renderJetons } from "../../ui/code-mdall.js";
@@ -682,10 +683,14 @@ export function renderResultats(resultats = []) {
 }
 
 /** Le bac d'essai : le formulaire, puis ce que les fonctions répondent. */
-export function renderBacDessai(brouillon = null, { reponses = {}, lance = false, tete = true } = {}) {
+export function renderBacDessai(brouillon = null, {
+  reponses = {}, lance = false, tete = true, memoire = null
+} = {}) {
   const remplis = fichiersRemplis(brouillon);
-  const champs = champsDuBrouillon(remplis);
-  const resultats = lance ? lancerLeBrouillon(remplis, reponses) : [];
+  // **Les fonctions versées jouent avec.** Le brouillon qui nomme « Couleur des
+  // volets » ne doit pas la demander à la main : le projet sait la déduire.
+  const champs = champsDuBrouillon(remplis, { memoire });
+  const resultats = lance ? lancerLeBrouillon(remplis, reponses, { memoire }) : [];
 
   return `
     <section class="bac">
@@ -1471,6 +1476,14 @@ const etat = {
    * n'appellent pas la même phrase (règle 5).
    */
   etabli: null,
+  /**
+   * Ce que la mémoire du projet a signé. `null` tant qu'on ne l'a pas lue.
+   *
+   * Un projet dont la mémoire n'est pas lue et un projet qui ne conclut rien
+   * n'appellent pas la même phrase : le rayon du catalogue ne paraît que
+   * lorsqu'il a quelque chose à montrer (règle 5).
+   */
+  memoire: null,
   /** Ce que le dernier enregistrement a donné : `{ok, dit}`, ou `null`. */
   garde: null,
   /**
@@ -2008,6 +2021,34 @@ function ouvrirLaFicheDeLetabli(racine) {
  * Silencieux quand la lecture échoue : on ne sait alors pas si le nom est
  * libre, et l'on ne bloque pas pour autant — la base tranchera (règle 5).
  */
+/**
+ * Lire la mémoire du projet, une fois.
+ *
+ * **Après l'ouverture, et non avant** : tout ce qui vient du brouillon et du
+ * langage est déjà là, et c'est ce qu'on cherche neuf fois sur dix. Attendre la
+ * base laisserait l'écran sans réponse sur une frappe.
+ *
+ * Un échec laisse `null` : « la mémoire n'est pas lue » et « le projet ne
+ * conclut rien » ne se disent pas pareil, et le rayon se tait plutôt que
+ * d'annoncer un projet vide (règle 5).
+ */
+async function assurerLaMemoire() {
+  if (etat.memoire !== null) return;
+
+  // Le même chemin que « Proposer au projet » : un seul endroit décide quel
+  // projet on regarde (règle 10).
+  const { resolveCurrentBackendProjectId } = await import("../../../services/project-supabase-sync.js");
+  const projet = await resolveCurrentBackendProjectId().catch(() => null);
+  if (!projet) return;
+
+  const { listProjectAssertions } = await import("../../../services/project-memory-supabase.js");
+  const lues = await listProjectAssertions(projet).catch(() => null);
+  if (!lues) return;
+
+  etat.memoire = lues;
+  redessinerLesResultats();
+}
+
 async function assurerLetabli() {
   if (etat.etabli !== null) return;
 
@@ -2364,7 +2405,7 @@ function redessinerLesResultats() {
   if (!corps) return POSE.RIEN;
 
   const resultats = etat.lance
-    ? lancerLeBrouillon(fichiersRemplis(etat.brouillon), etat.reponses)
+    ? lancerLeBrouillon(fichiersRemplis(etat.brouillon), etat.reponses, { memoire: etat.memoire })
     : [];
 
   return poserLePanneau(corps, ".bac-resultats",
@@ -2533,7 +2574,10 @@ function contexteIci(racine) {
   return contexteDuBrouillon(fichiersRemplis(etat.brouillon), {
     contenu: saisie?.value ?? "",
     position: saisie?.selectionStart ?? 0,
-    etabli: etat.etabli
+    etabli: etat.etabli,
+    // Ce que le projet a signé : la quatrième source, et la seule qui se lit
+    // vraiment d'ici — le bac d'essai la rejoue.
+    projet: nomsConclusParLeProjet(etat.memoire ?? [])
   });
 }
 
@@ -2799,6 +2843,19 @@ export function renderEcrireEnMdallEcran(racine, { force = false } = {}) {
   }
 
   dessiner(racine);
+
+  /**
+   * **Ce que le projet a signé, lu dès l'ouverture.**
+   *
+   * Pas seulement à l'ouverture du catalogue, comme l'établi : la mémoire
+   * change ce que le **formulaire demande** et ce que le bac **conclut**. Ne la
+   * lire qu'au moment où l'on parcourt les noms ferait un écran qui réclame la
+   * couleur des volets tant qu'on n'a pas ouvert un panneau sans rapport.
+   *
+   * Elle ne bloque rien : l'écran est déjà dessiné, et il se redessine quand
+   * elle arrive.
+   */
+  assurerLaMemoire();
 
   // **La fenêtre change de taille, le cadre suit.** Sans cela, replier la
   // barre latérale ou tourner un portable laisse la console hors de l'écran.

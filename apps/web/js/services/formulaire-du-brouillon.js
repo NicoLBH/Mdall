@@ -47,6 +47,7 @@
 
 import { lireUnFichier, nomsConclusParLeBloc, nomsLusParLeBloc } from "./memoire-en-lecture.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
+import { reglesVerseesUtiles } from "./fonctions-du-projet.js";
 import { couperLUnite, estMesuree } from "./memoire-en-texte.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -117,7 +118,7 @@ export function valeursPosees(fichiers = []) {
 }
 
 /** Tous les noms que les règles d'un brouillon lisent, dans l'ordre de lecture. */
-export function nomsLus(fichiers = []) {
+export function nomsLus(fichiers = [], { memoire = null } = {}) {
   const lus = [];
   const vus = new Set();
   /**
@@ -187,6 +188,28 @@ export function nomsLus(fichiers = []) {
     }
   }
 
+  /**
+   * **Ce que le projet déduit ne se demande pas ; ce qu'il lit, si.**
+   *
+   * Le brouillon qui nomme « Prix unitaire du volet » ne doit pas voir un champ
+   * pour lui : une fonction versée le conclut, et le taper à la main
+   * reviendrait à répondre soi-même la question qu'on avait signée. En
+   * revanche, **la couleur des volets, qu'elle lit, est bien une entrée** — et
+   * sans ce second temps le formulaire n'offrirait aucun moyen de faire varier
+   * ce qu'on essaie.
+   */
+  for (const { bloc } of reglesVerseesUtiles(memoire ?? [], {
+    lus, conclus: [...produits, ...poses]
+  })) {
+    for (const nom of nomsConclusParLeBloc(bloc)) produits.add(cleDuSujet(nom));
+    for (const calcul of bloc?.calculs ?? []) poses.add(cleDuSujet(calcul?.nom));
+    if (bloc?.boucle) {
+      poses.add(cleDuSujet(bloc.boucle.nom));
+      for (const calcul of bloc.boucle.calculs ?? []) poses.add(cleDuSujet(calcul?.nom));
+    }
+    nomsLusParLeBloc(bloc).forEach(retenir);
+  }
+
   return lus.filter((nom) => {
     const cle = cleDuSujet(nom);
     return !poses.has(cle) && !produits.has(cle);
@@ -227,11 +250,11 @@ export function reponseAvecSonUnite(dite = "", declaration = null) {
  * @param {{nom: string, contenu: string}[]} fichiers
  * @returns {{nom, cle, saisie, unite, choix, aide, declare}[]}
  */
-export function champsDuBrouillon(fichiers = []) {
+export function champsDuBrouillon(fichiers = [], { memoire = null } = {}) {
   const declarations = declarationsDuBrouillon(fichiers);
   const posees = valeursPosees(fichiers);
 
-  return nomsLus(fichiers)
+  return nomsLus(fichiers, { memoire })
     // Ce que le brouillon dit déjà est une réponse. Le redemander en ferait
     // deux, et les deux divergeraient au premier essai (règle 4).
     .filter((nom) => !posees.has(cleDuSujet(nom)))
