@@ -43,10 +43,12 @@ const nombres = (valeurs) => valeurs.filter((un) => Number.isFinite(un));
  * @param {object} [comment]
  * @param {{x: number, y: number}} [comment.marque] un point à poser sur la grille
  * @param {boolean} [comment.depuisZero] l'ordonnée part de zéro — voir plus bas
+ * @param {number[]} [comment.bornesX] une abscisse imposée, pour empiler
+ *   plusieurs cadres sur la même — voir `traceDesGroupes`
  * @returns {{series: object[], marque: {x: number, y: number}|null,
  *   bornes: {x: number[], y: number[]}}}
  */
-export function traceDesSeries(series = [], { marque = null, depuisZero = false } = {}) {
+export function traceDesSeries(series = [], { marque = null, depuisZero = false, bornesX = null } = {}) {
   const toutes = (Array.isArray(series) ? series : [])
     .map((une) => ({
       nom: String(une?.nom ?? ""),
@@ -80,7 +82,17 @@ export function traceDesSeries(series = [], { marque = null, depuisZero = false 
    */
   const bas = Math.min(...ys);
   const bornes = {
-    x: [Math.min(...xs), Math.max(...xs)],
+    /**
+     * **L'abscisse peut être imposée**, et c'est ce qui autorise à empiler
+     * plusieurs cadres. Chacun garde son échelle d'ordonnée — c'est justement
+     * pour cela qu'ils sont séparés —, mais un point d'un cadre et le point de
+     * même abscisse du cadre d'en dessous doivent tomber l'un sous l'autre. Des
+     * abscisses calculées séparément ne le feraient pas dès qu'une colonne
+     * manque une ligne.
+     */
+    x: Array.isArray(bornesX) && bornesX.length === 2 && nombres(bornesX).length === 2
+      ? [bornesX[0], bornesX[1]]
+      : [Math.min(...xs), Math.max(...xs)],
     y: [depuisZero ? Math.min(0, bas) : bas, Math.max(...ys)]
   };
 
@@ -101,4 +113,47 @@ export function traceDesSeries(series = [], { marque = null, depuisZero = false 
       : null,
     bornes
   };
+}
+
+/**
+ * Plusieurs cadres empilés, sur **une seule abscisse**.
+ *
+ * ## Pourquoi empiler plutôt qu'un second axe
+ *
+ * Une colonne en mètres cubes et une en tonnes ne tiennent pas sur une grille :
+ * elles se croiseraient là où elles ne se croisent pas. La réponse habituelle
+ * est un **second axe à droite** — et c'est la façon la plus commune de faire
+ * lire une corrélation qui n'existe pas, parce que deux échelles choisies
+ * séparément placent le croisement exactement où l'on veut. Il n'y a rien à
+ * vérifier dans un tel dessin : il dit ce que son auteur a décidé.
+ *
+ * Empilés, les deux cadres ne se croisent jamais. Ce qu'on compare est ce qui
+ * se compare vraiment : **la forme**, à la même abscisse, ce qui monte pendant
+ * que l'autre descend. Et chaque cadre garde une échelle qu'on peut lire seule.
+ *
+ * L'abscisse est commune, et calculée sur **tous** les groupes : une colonne
+ * qui manque une ligne ne doit pas décaler son cadre d'un cran par rapport à
+ * celui d'en dessous.
+ *
+ * @param {{unite: string, dit: string, series: object[]}[]} groupes
+ * @returns {{groupes: object[], bornes: {x: number[]}}}
+ */
+export function traceDesGroupes(groupes = [], { depuisZero = false } = {}) {
+  const tous = (Array.isArray(groupes) ? groupes : [])
+    .filter((un) => Array.isArray(un?.series) && un.series.length);
+
+  const xs = nombres(tous.flatMap((un) => un.series
+    .flatMap((une) => (Array.isArray(une?.points) ? une.points : []).map((point) => point?.x))));
+
+  if (!xs.length) return { groupes: [], bornes: { x: [0, 0] } };
+  const bornesX = [Math.min(...xs), Math.max(...xs)];
+
+  const dessines = tous
+    .map((un) => {
+      const trace = traceDesSeries(un.series, { depuisZero, bornesX });
+      return { unite: String(un?.unite ?? ""), dit: String(un?.dit ?? ""), ...trace };
+    })
+    .filter((un) => un.series.length);
+
+  return { groupes: dessines, bornes: { x: bornesX } };
 }

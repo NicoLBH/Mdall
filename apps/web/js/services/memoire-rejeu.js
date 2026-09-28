@@ -36,7 +36,7 @@ import { zonesLisibles } from "./memoire-blame.js";
 import { normalizeZoneKey } from "./project-zones.js";
 import { valeursDeLaPortee } from "./memoire-valeurs.js";
 import { sujetDe, valeurDuSujet } from "./memoire-raisonnement.js";
-import { VERDICT, lecteurDeValeurs, rejouerLaRegle } from "./memoire-evaluateur.js";
+import { VERDICT, evaluerLaRegle, lecteurDeValeurs, rejouerLaRegle } from "./memoire-evaluateur.js";
 import { ordreDeLaZone } from "./memoire-plan.js";
 import { jalonsDuRejeu } from "./raisonnement-jalonne.js";
 import { estUneRegle } from "./assertion-taxonomy.js";
@@ -275,4 +275,65 @@ export function rejouerLesRegles(assertions = [], { substitutions = new Map(), a
     jalons: Array.isArray(actes) ? jalonsDuRejeu({ conclusions: trouvailles, actes }) : null,
     indecidables, sansObjet, cycles, tours, borne
   };
+}
+
+/**
+ * Le tableau qu'une règle versée déroule, zone par zone.
+ *
+ * ## Pourquoi cela manquait
+ *
+ * L'écran des fichiers **réécrit** une fonction versée : sa boucle, ses
+ * agrégats, sa suggestion de lecture. Il n'en déroulait aucune — si bien qu'une
+ * fonction dont tout l'intérêt est son tableau s'y lisait comme quinze lignes
+ * de grammaire, et qu'il fallait la recopier dans le bac d'essai pour voir ce
+ * qu'elle produit. Une mémoire qui garde le raisonnement sans jamais le rejouer
+ * demande de croire ce qu'elle dit.
+ *
+ * ## Une zone à la fois, et sur ce que le projet tient
+ *
+ * Une variable n'a pas *une* valeur, elle en a une par partie d'ouvrage : le
+ * tableau du bâtiment A et celui du bâtiment B ne sont pas le même travail. On
+ * déroule donc **une fois par zone où la règle s'applique**.
+ *
+ * **On ne rejoue pas jusqu'au point fixe** ici, et c'est voulu : `rejouerLesRegles`
+ * répond à « que deviendrait le projet si », et cet écran-ci répond à « qu'est-ce
+ * que cette fonction donne **sur ce que le projet tient aujourd'hui** ». Faire
+ * tourner les règles les unes dans les autres rendrait un tableau qui n'est
+ * écrit nulle part, sur un écran qui montre ce qui est écrit.
+ *
+ * ## Une zone où l'on ne sait pas se dit
+ *
+ * Une fonction dont les entrées ne sont pas versées ne rend pas un tableau
+ * vide : elle rend ce qui lui manque. Se taire ferait lire l'absence de dessin
+ * comme une fonction sans tableau (règle 5).
+ *
+ * @param {object} regle l'assertion qui porte la règle
+ * @param {object[]} assertions la mémoire du projet
+ * @returns {{zone: string, tableau: object|null, manquants: string[]}[]}
+ */
+export function tableauxDUneRegle(regle = null, assertions = []) {
+  if (!estUneRegle(regle) || !regle?.payload?.regle?.boucle) return [];
+
+  const toutes = (Array.isArray(assertions) ? assertions : []).filter(enVigueur);
+  // Les zones que la règle déclare ; à défaut `""`, qui vaut partout et qui est
+  // une portée à part entière, pas un défaut.
+  const zones = porteesDe(regle).length ? porteesDe(regle) : [""];
+
+  return zones.map((zone) => {
+    const valeurs = valeursDeLaZone(toutes, zone, new Map());
+    const evaluation = evaluerLaRegle(regle, lecteurDeValeurs(valeurs));
+
+    return {
+      zone,
+      /**
+       * Le tableau, **même quand la règle ne conclut pas**.
+       *
+       * Une condition fausse n'empêche pas la boucle d'avoir tourné, et son
+       * tableau est le travail : le cacher parce que la conclusion ne s'applique
+       * pas ferait disparaître de l'écran ce qu'on était venu y lire.
+       */
+      tableau: evaluation.tableau ?? null,
+      manquants: evaluation.manquants ?? []
+    };
+  });
 }

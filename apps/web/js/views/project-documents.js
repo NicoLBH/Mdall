@@ -3497,7 +3497,18 @@ function renderBrancheMemoire() {
     corrections: memoire.corrections ?? [],
     // Et les exceptions qui répètent le général : un piège qui se referme le
     // jour où la valeur générale change.
-    inutiles: memoire.inutiles ?? []
+    inutiles: memoire.inutiles ?? [],
+    /**
+     * La mémoire **entière**, pour rejouer une fonction versée.
+     *
+     * Une fonction qui porte une boucle se lisait ici comme quinze lignes de
+     * grammaire : l'écran réécrivait sa boucle et ses agrégats sans jamais les
+     * dérouler, et il fallait la recopier dans le bac d'essai pour voir ce
+     * qu'elle produit. Le tableau se déroule sur **ce que le projet tient**, et
+     * cela demande de les avoir toutes — les entrées d'une règle vivent dans
+     * d'autres fichiers que celui qu'on regarde.
+     */
+    assertions: docsViewState.memoireAssertions ?? []
   };
 
   // Un fichier se cherche **avant** de conclure qu'on est dans un dossier : la

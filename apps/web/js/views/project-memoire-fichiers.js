@@ -35,6 +35,10 @@ import {
   lignesQuiPortent, rangVoisin, passagesAutourDe, phraseCherchee, porteLaPhrase
 } from "../services/memoire-recherche-texte.js";
 import { renderBoutonHaut } from "./ui/bouton-haut.js";
+import { renderLectureDuTableau } from "./ui/tableau-dune-boucle.js";
+import { tableauxDUneRegle } from "../services/memoire-rejeu.js";
+import { lectureQuiVaDeSoi } from "../services/graphique-dune-table.js";
+import { estUneRegle } from "../services/assertion-taxonomy.js";
 import { profondeursDuRetrait, niveauxDesPaires } from "../services/mdall-retrait.js";
 import { renderJetons, contexteDuSujet } from "./ui/code-mdall.js";
 import {
@@ -1344,7 +1348,15 @@ export function renderFichier(fichier, {
    */
   emplois = null,
   /** De quoi nommer les fonctions qui emploient : identifiant → sujet. */
-  sujets = new Map()
+  sujets = new Map(),
+  /**
+   * La mémoire **entière**, pour dérouler les boucles des fonctions versées.
+   *
+   * Vide, le fichier se lit comme avant : le tableau ne paraît pas, et rien ne
+   * ment. Les entrées d'une fonction vivent dans d'autres fichiers que celui
+   * qu'on regarde, et il faut donc les avoir toutes.
+   */
+  assertions = []
 } = {}) {
   const bornes = bornesDuFichier(fichier.lignes);
   const clair = fichierEnClair(fichier, { enClair: enClairDesJetons, ouEcrit });
@@ -1620,6 +1632,12 @@ export function renderFichier(fichier, {
         ${corps || `<p class="review-empty-note">Ce fichier ne porte plus aucune valeur : tout ce qu'il contenait a été remplacé ou écarté.</p>`}
       </div>
       ${
+        // **Sous le texte, jamais à sa place.** Le fichier est ce qui est versé,
+        // et le tableau est ce qu'il produit : les intervertir ferait lire un
+        // résultat avant la règle qui le produit.
+        lecture === LECTURE.CODE ? renderRejeuDesFonctions(fichier, assertions) : ""
+      }
+      ${
         // Ce qui a quitté le présent sans que rien ne le remplace. Ce n'est pas
         // un refus — c'est un travail qui a eu lieu, et qui ne décrit plus le
         // projet d'aujourd'hui. Il descend ici, avec son motif, plutôt que de
@@ -1653,6 +1671,131 @@ export function renderFichier(fichier, {
       }
     </section>
   `;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Rejouer une fonction versée
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Le tableau que les fonctions de ce fichier déroulent, sur ce que le projet tient.
+ *
+ * ## Pourquoi cela manquait
+ *
+ * Cet écran **réécrit** une fonction versée : sa boucle, ses agrégats, sa
+ * suggestion de lecture. Il n'en déroulait aucune. Une fonction dont tout
+ * l'intérêt est son tableau — quarante-cinq portées, une par ligne — s'y lisait
+ * comme quinze lignes de grammaire, et il fallait la recopier dans le bac
+ * d'essai pour voir ce qu'elle produit.
+ *
+ * `se lit en: barres` s'y relisait déjà, et ne dessinait rien : on gardait la
+ * phrase de l'auteur sans jamais la servir.
+ *
+ * ## Ce qu'il montre, et ce qu'il ne montre pas
+ *
+ * **Ce que le projet tient aujourd'hui**, et rien d'autre : les valeurs versées,
+ * lues zone par zone. Ce n'est pas un bac d'essai — on n'y répond à aucune
+ * question, on regarde ce qui est écrit. Une fonction dont les entrées ne sont
+ * pas versées le dit plutôt que de montrer un tableau vide (règle 5).
+ *
+ * Le dessin suit la suggestion de la fonction, et s'arrête là : les boutons du
+ * bac choisissent une lecture, et ce choix n'a pas d'état ici — un écran de
+ * lecture ne garde pas ce qu'on a cliqué.
+ */
+export function renderRejeuDesFonctions(fichier = null, assertions = []) {
+  const toutes = Array.isArray(assertions) ? assertions : [];
+  if (!toutes.length) return "";
+
+  const fonctions = (fichier?.lignes ?? [])
+    .map((ligne) => ligne?.assertion ?? ligne)
+    .filter((une) => estUneRegle(une) && une?.payload?.regle?.boucle);
+
+  if (!fonctions.length) return "";
+
+  const blocs = fonctions.map((regle) => {
+    const sujet = texte(regle?.payload?.subject) || texte(regle?.subject_key);
+    const seLitEn = texte(regle?.payload?.regle?.seLitEn);
+    const rejeux = tableauxDUneRegle(regle, toutes);
+    if (!rejeux.length) return "";
+
+    return `
+      <article class="memoire-rejeu__fonction">
+        <h4 class="memoire-rejeu__sujet">${escapeHtml(sujet)}</h4>
+        ${rejeux.map((rejeu) => renderRejeuDUneZone(rejeu, seLitEn, rejeux.length > 1)).join("")}
+      </article>
+    `;
+  }).filter(Boolean).join("");
+
+  if (!blocs) return "";
+
+  return `
+    <section class="memoire-rejeu">
+      <header class="memoire-rejeu__tete">
+        <b>Ce que ${fonctions.length > 1 ? "ces fonctions déroulent" : "cette fonction déroule"}</b>
+        <p>Sur les valeurs que le projet tient aujourd'hui, et rien d'autre : c'est
+           une lecture, pas un essai. Une entrée qui change ici change le tableau.</p>
+      </header>
+      ${blocs}
+    </section>
+  `;
+}
+
+/**
+ * Le tableau d'une zone, ou ce qui a manqué pour le dérouler.
+ *
+ * **Une variable n'a pas une valeur, elle en a une par partie d'ouvrage** : le
+ * tableau du bâtiment A et celui du bâtiment B ne sont pas le même travail. Ne
+ * montrer que le premier ferait lire la descente de charge d'un bâtiment sous
+ * le nom de l'autre.
+ */
+function renderRejeuDUneZone(rejeu = null, seLitEn = "", nommerLaZone = false) {
+  const tableau = rejeu?.tableau ?? null;
+  // `""` vaut partout, et c'est une portée à part entière, pas un défaut.
+  const ou = texte(rejeu?.zone) || "partout";
+  const tete = nommerLaZone ? `<p class="memoire-rejeu__zone">${escapeHtml(ou)}</p>` : "";
+
+  /**
+   * **Un tableau dont aucune case n'est connue n'est pas un tableau.**
+   *
+   * La boucle a tourné — elle tourne toujours, ses bornes sont écrites dans la
+   * fonction —, et chaque ligne porte une case vide. L'afficher rendrait quatre
+   * lignes de tirets, qui se lisent comme « cette fonction ne produit rien »
+   * alors que la vérité est « le projet ne porte pas encore ses entrées »
+   * (règle 5).
+   *
+   * Une case connue sur quatre, en revanche, se montre : c'est là qu'on voit
+   * **laquelle** des lignes a échoué, et c'est précisément celle qu'on cherche.
+   */
+  const rien = !(tableau?.lignes ?? []).some((une) =>
+    (une?.cases ?? []).some((quoi) => quoi?.connu));
+
+  if (!tableau || tableau.refus || !tableau.lignes?.length || rien) {
+    const manquants = (rejeu?.manquants ?? []).filter(Boolean);
+    return `
+      ${tete}
+      <p class="memoire-rejeu__muet">${escapeHtml(
+        manquants.length
+          ? `Rien à dérouler ${nommerLaZone ? `${ou} ` : ""}: le projet ne porte pas ${
+            manquants.slice(0, 3).map((un) => `« ${un} »`).join(", ")}${
+            manquants.length > 3 ? "…" : ""}.`
+          : texte(tableau?.pourquoi)
+            ? `Le tableau ne s'est pas déroulé : ${tableau.pourquoi}.`
+            : "Rien à dérouler : le projet ne porte pas encore ses entrées."
+      )}</p>
+    `;
+  }
+
+  /**
+   * **La lecture que la fonction suggère, et rien de plus.**
+   *
+   * Le bac offre les quatre d'un clic ; ici il n'y a rien à cliquer, parce
+   * qu'un écran de lecture ne garde pas ce qu'on a choisi. Ignorer la
+   * suggestion ferait ouvrir quarante-cinq lignes de chiffres là où l'auteur
+   * avait écrit « en barres » — et c'est exactement ce que cette ligne existe
+   * pour éviter.
+   */
+  const retenue = { lecture: lectureQuiVaDeSoi(tableau, seLitEn), abscisse: "" };
+  return `${tete}${renderLectureDuTableau(tableau, retenue)}`;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────

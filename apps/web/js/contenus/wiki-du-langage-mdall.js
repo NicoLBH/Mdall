@@ -447,7 +447,59 @@ export const WIKI_DU_LANGAGE = [
       + "approximative — et c'est celle-là qu'on croirait."),
     dit("Un tableau d'une seule ligne n'offre pas de bouton : un dessin d'un "
       + "seul point n'est pas un dessin. Et un abaque écrit en `courbe` se "
-      + "dessine aussi, sans rien déclarer — c'est le même dessin.")
+      + "dessine aussi, sans rien déclarer — c'est le même dessin."),
+    dit("**Une quatrième lecture ne se suggère pas** : le **nuage**, qui dessine "
+      + "une colonne contre une autre. Les trois premières prennent l'abscisse "
+      + "de la boucle, et il n'y a rien à demander ; un nuage choisit la sienne, "
+      + "et ce choix ne peut venir que de vous. Il s'ouvre d'un clic, et "
+      + "`se lit en: nuage` est refusé — ce serait porter dans la fonction une "
+      + "intention de mise en page."),
+    dit("Ses points **ne sont pas reliés**, et c'est le point : une ligne brisée "
+      + "dit un ordre, un nuage montre une forme. Au survol, chaque point dit de "
+      + "quelle ligne il vient — sans quoi on lirait un nuage sans savoir lequel "
+      + "de ses points est la troisième ligne."),
+    dit("**Attention à ce qu'un nuage n'est pas ici.** Dans un tableau Mdall, "
+      + "chaque colonne est une fonction de la variable de boucle : il n'y a ni "
+      + "bruit, ni échantillon, ni dispersion. Vous n'y lisez pas une "
+      + "corrélation — vous y lisez une relation exacte entre deux colonnes qui "
+      + "descendent du même paramètre.")
+  ]),
+
+  section("cadres", "Deux grandeurs : deux cadres, jamais deux échelles", [
+    dit("Une colonne en mètres et une en kilonewtons ne tiennent pas sur la même "
+      + "grille : elles se croiseraient là où elles ne se croisent pas. Elles se "
+      + "rangent donc chacune dans **son cadre**, et les cadres s'empilent sur "
+      + "**la même abscisse**. Vous n'avez rien à écrire pour cela."),
+    dit("**Le second axe à droite aurait été la réponse habituelle, et c'est "
+      + "justement ce qu'on refuse.** Deux échelles choisies séparément placent "
+      + "le croisement des deux courbes exactement où l'on veut : décalez l'une "
+      + "de vingt pour cent, elles se croisent vingt lignes plus loin. Le dessin "
+      + "reste parfaitement lisible, et il ne dit plus rien de vérifiable — il "
+      + "dit ce que son auteur a décidé."),
+    dit("Empilés, les cadres ne se croisent jamais. Ce qu'on compare est ce qui "
+      + "se compare vraiment : **la forme**, à la même abscisse — ce qui monte "
+      + "pendant que l'autre descend. Les bornes se disent une fois, sous le "
+      + "dernier cadre."),
+    dit("C'est la même famille de faute que la barre qui ne part pas de zéro, en "
+      + "plus difficile à voir : un graphique honnête ne laisse pas son auteur "
+      + "choisir où deux courbes se croisent.")
+  ]),
+
+  section("rejeu", "Relire une fonction versée, et voir son tableau", [
+    dit("Une fonction versée se relit dans la **Mémoire** du projet, avec sa "
+      + "boucle, ses calculs et sa suggestion de lecture. Sous son texte, "
+      + "l'écran **déroule son tableau** — sur les valeurs que le projet tient "
+      + "aujourd'hui, et rien d'autre."),
+    dit("**Ce n'est pas un bac d'essai** : on n'y répond à aucune question. "
+      + "C'est une lecture. Une entrée qui change dans la mémoire change ce "
+      + "tableau, et c'est tout l'intérêt — on voit ce que la fonction fait du "
+      + "projet réel, sans la recopier ailleurs."),
+    dit("**Un tableau par zone.** Une variable n'a pas une valeur, elle en a une "
+      + "par partie d'ouvrage : la descente de charge du bâtiment A et celle du "
+      + "bâtiment B ne sont pas le même travail."),
+    dit("Et si le projet ne porte pas encore ses entrées, l'écran **dit ce qui "
+      + "manque** plutôt que d'afficher quatre lignes de tirets — qui se "
+      + "liraient comme « cette fonction ne produit rien ».")
   ]),
 
   section("chainage", "Une fonction lit ce qu'une autre conclut", [

@@ -4598,25 +4598,26 @@ relit pas comme une courbe, et le gain de cette forme est précisément qu'on la
 compare à sa figure d'un coup d'œil. Le verrou est donc à l'écran, pas dans le
 calcul.
 
-**Un tableau ne se regarde pas en nuage de points.** Les trois lectures — le
-tableau, la courbe, les barres — dessinent toutes les colonnes **contre
-l'abscisse de la boucle** (`docs/le-graphique-comme-lecture.md`). Dessiner une
-colonne contre une autre est une autre question : elle se posera peut-être un
-jour devant un tableau qu'on a, et elle demande de choisir l'abscisse à l'écran —
-ce que le parti pris actuel refuse justement de faire par défaut. Elle ne se
-décide pas d'avance.
+**Un abaque ne se verse pas.** Une `courbe` proposée à la mémoire est écartée
+« sans-valeur » : elle ne conclut rien tant qu'on ne l'a pas lue, et le
+versement attend une valeur. Ce n'est pas un oubli de câblage — c'est une vraie
+question de modèle : une courbe est une **loi**, comme un barème, et ce que le
+projet en tient devrait être ses points, pas un nombre. Le barème s'en tire
+parce que ses lignes se lisent en branches ; une courbe n'a pas cet équivalent,
+et lui en fabriquer un par paliers perdrait justement l'interpolation
+(`docs/la-courbe-et-linterpolation.md`). Tant que ce n'est pas tranché, un
+abaque vit dans l'établi et pas dans la mémoire d'un projet.
 
-**Deux grandeurs ne se dessinent pas ensemble.** Une colonne en mètres cubes et
-une en tonnes sur une grille se croisent là où elles ne se croisent pas : la
-seconde est écartée, et nommée. Un second axe à droite serait la réponse
-habituelle, et c'est aussi la façon la plus commune de faire lire une corrélation
-qui n'existe pas — deux échelles choisies indépendamment placent le croisement
-où l'on veut. Si cela se fait un jour, ce sera **deux dessins empilés partageant
-leur abscisse**, jamais deux échelles dans un cadre.
+**Le rejeu d'une fonction versée ne choisit pas sa lecture.** L'écran des
+fichiers suit la suggestion de la fonction et s'arrête là
+(`docs/le-nuage-les-cadres-et-le-rejeu.md`). Offrir les quatre lectures d'un
+clic demanderait d'y tenir un état — quel tableau on regarde comment —, et un
+écran de lecture qui garde ce qu'on a cliqué n'est plus tout à fait un écran de
+lecture. La question vaut d'être posée le jour où quelqu'un aura vraiment voulu
+changer de lecture depuis cet écran-là, et pas avant.
 
-**Un dessin ne se verse pas dans la mémoire.** Ce qui est versé, c'est la
-fonction et sa suggestion de lecture ; l'écran des fichiers relit `se lit en:`
-mais ne dessine pas encore le tableau — il n'y déroule aucune boucle. Le travail
-n'est pas dans le dessin, qui est mutualisé : c'est un rejeu de la fonction
-versée qui manque à cet écran-là, avec les réponses qu'il faudrait bien prendre
-quelque part.
+**Un nuage ne compare que deux colonnes à la fois.** L'abscisse se choisit,
+l'ordonnée est tout le reste. Une matrice — chaque colonne contre chaque autre —
+serait la suite naturelle, et elle demande de décider ce qu'on fait des
+grandeurs : les cadres empilés répondent pour un nuage, pas pour une grille de
+seize. C'est une question d'écran, pas de calcul.

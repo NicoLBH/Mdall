@@ -2475,5 +2475,6 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | répéter un calcul, et lire son tableau | `docs/pour-chaque-et-les-agregats.md` |
 | un abaque, et la règle entre ses points | `docs/la-courbe-et-linterpolation.md` |
 | regarder un tableau en courbe ou en barres | `docs/le-graphique-comme-lecture.md` |
+| le nuage, les cadres empilés, le rejeu d'une fonction versée | `docs/le-nuage-les-cadres-et-le-rejeu.md` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

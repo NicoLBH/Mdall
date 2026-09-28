@@ -23,7 +23,7 @@ import {
 import { lireUnFichier, lireUneCondition } from "../../../apps/web/js/services/memoire-en-lecture.js";
 import { PHRASE_DE_LAGREGAT } from "../../../apps/web/js/services/memoire-en-texte.js";
 import { ENTRE, HORS } from "../../../apps/web/js/services/courbe-du-mdall.js";
-import { LECTURE, lectureDite } from "../../../apps/web/js/services/graphique-dune-table.js";
+import { LECTURE, SUGGESTIBLES, lectureDite, lectureSuggeree } from "../../../apps/web/js/services/graphique-dune-table.js";
 import { evaluerLaCourbe } from "../../../apps/web/js/services/memoire-evaluateur.js";
 import { evaluerLaCondition } from "../../../apps/web/js/services/memoire-evaluateur.js";
 import { lancerLeBrouillon, ISSUE } from "../../../apps/web/js/services/bac-dessai.js";
@@ -340,22 +340,41 @@ test("la consigne dit les quatre mots d'une courbe, et la faute qu'ils évitent"
   assert.match(CONSIGNES, /plausible/);
 });
 
-test("la consigne dit les trois lectures, et le lecteur les reconnaît toutes", () => {
+test("la consigne dit les lectures qui se suggèrent, et le lecteur les accepte", () => {
   /**
    * **Un mot enseigné que le langage ne lit pas est pire qu'une absence** : le
    * modèle l'écrit, et la ligne est refusée par la documentation elle-même. Ici
    * la faute serait muette dans l'autre sens aussi — une lecture que le lecteur
    * accepte et que la consigne ne nomme pas ne sera jamais écrite (règle 12).
    */
-  for (const une of Object.values(LECTURE)) {
+  for (const une of SUGGESTIBLES) {
     assert.ok(CONSIGNES.includes(`\`${une}\``), `la consigne ne nomme pas « ${une} »`);
-    assert.equal(lectureDite(une), une, `le lecteur ne reconnaît pas « ${une} »`);
+    assert.equal(lectureSuggeree(une).dite, une, `le lecteur refuse « ${une} »`);
   }
   assert.match(CONSIGNES, /se lit en:/);
 
   // Et la consigne interdit le verbe d'affichage, qui est la forme que le modèle
   // proposerait de lui-même : c'est tout le parti pris de cet objet.
   assert.match(CONSIGNES, /n['’]est pas une construction du langage/);
+});
+
+test("la consigne interdit de suggérer un nuage, et le lecteur le refuse aussi", () => {
+  /**
+   * **C'est la seule lecture qui existe et qui ne se suggère pas.** Le modèle
+   * l'écrirait de lui-même — c'est une lecture, elle a un nom —, et chaque
+   * fonction portant la ligne serait refusée au lancement. L'interdire d'un
+   * côté sans le refuser de l'autre laisserait l'un des deux dériver (règle 12).
+   */
+  assert.ok(CONSIGNES.includes("se lit en: nuage"), "la consigne ne met pas en garde");
+  assert.match(CONSIGNES, /ne se suggère pas/);
+
+  assert.equal(lectureDite("nuage"), LECTURE.NUAGE, "le nuage n'est plus une lecture");
+  assert.equal(lectureSuggeree("nuage").dite, "", "le lecteur accepte une suggestion interdite");
+  assert.ok(!SUGGESTIBLES.includes(LECTURE.NUAGE));
+
+  // Et la consigne dit ce qu'il ne faut surtout pas faire à la place : ramener
+  // deux grandeurs à une seule unité change ce que la fonction conclut.
+  assert.match(CONSIGNES, /deux cadres empilés/);
 });
 
 test("l'exemple de lecture de la consigne se range vraiment, et son tableau se dessine", () => {
