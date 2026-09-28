@@ -170,23 +170,72 @@ test("une signature refermée n'est plus une signature", () => {
 
 /* ── La faute que la forme appelle ───────────────────────────────────────── */
 
-test("une parenthèse après un nom de fonction se dit, là où elle se commet", () => {
+test("une parenthèse après un nom de fonction montre l'ordre de l'appel", () => {
   /**
-   * **C'est la faute que la forme appelle.** On connaît les fonctions des
-   * autres langages, on tape `Couleur des volets(`, et l'on attend une liste
-   * d'arguments. Mdall n'appelle pas — il nomme —, et l'écran le dit là où la
-   * faute se commet plutôt que dans une page lue trois semaines plus tôt.
+   * **C'est la question qu'on se pose la parenthèse ouverte**, et l'aide ne
+   * répondait pas à celle-là : elle disait *ce que* la fonction lit, jamais
+   * **dans quel ordre**. Depuis qu'on lui donne des valeurs, l'ordre est
+   * l'information — et c'est sa signature qui le dit, portée comprise.
    */
   const ligne = "   calcule X = Couleur des volets(";
   const aide = aideDeLaSignature(ligne, ligne.length, catalogue());
 
-  assert.equal(aide.quoi, "nom");
+  assert.equal(aide.quoi, "appel");
   assert.equal(aide.appel, true);
-  // Et elle dit quand même ce que la fonction lit : on est venu chercher cela.
-  assert.deepEqual(aide.lit.map((une) => une.nom), ["Matière du volet"]);
+  // **La portée d'abord** : c'est ce que `lit` n'a jamais dit, et ce qu'on
+  // oublie de donner.
+  assert.deepEqual(aide.lit.map((une) => une.nom), ["zones", "Matière du volet"]);
+  assert.equal(aide.rang, 0, "on écrit la première valeur");
 
-  assert.match(renderAideDeLaSignature(aide), /Il n'y a pas d'appel de fonction/);
-  assert.match(renderAideDeLaSignature(aide), /« Couleur des volets » seul/);
+  const dessinee = renderAideDeLaSignature(aide);
+  assert.match(dessinee, /s'appelle avec, dans cet ordre/);
+  assert.match(dessinee, /la portée d'abord, puis 1 valeur/);
+  assert.doesNotMatch(dessinee, /pas d'appel de fonction/);
+});
+
+test("le rang suit la virgule qu'on vient de passer", () => {
+  // C'est ce qui surligne la valeur qu'on est en train d'écrire : sans lui, la
+  // liste est un rappel, pas une aide.
+  const ligne = "   calcule X = Couleur des volets(zones, ";
+  const aide = aideDeLaSignature(ligne, ligne.length, catalogue());
+
+  assert.equal(aide.rang, 1);
+  assert.match(renderAideDeLaSignature(aide), /est-actif[^]*Matière du volet/);
+});
+
+test("la portée se décrit, et d'un seul endroit", () => {
+  /**
+   * **Aucun projet ne déclare `zones`** — c'est un mot de la langue —, et sans
+   * une phrase elle paraissait nue dans la liste : le premier paramètre de
+   * toute signature, sans rien pour dire ce qu'on y met.
+   *
+   * La phrase était écrite dans la branche de la signature ; l'appel en aurait
+   * eu une seconde, et l'une des deux aurait fini par dire autre chose
+   * (règle 10). Les deux la lisent donc au même endroit, et c'est ce que ce
+   * test tient.
+   */
+  const dansUnAppel = aideDeLaSignature(
+    "   calcule X = Couleur des volets(", "   calcule X = Couleur des volets(".length, catalogue());
+
+  const dansUneSignature = aideDeLaSignature(
+    "fonction Essai(", "fonction Essai(".length, catalogue());
+
+  assert.match(dansUnAppel.lit[0].dit, /la portée/);
+  assert.equal(dansUnAppel.lit[0].nom, dansUneSignature.lit[0].nom);
+  assert.equal(dansUnAppel.lit[0].dit, dansUneSignature.lit[0].dit,
+    "deux phrases pour la portée finiraient par ne plus dire la même chose");
+});
+
+test("nommée sans parenthèse, elle dit ce qu'elle lit, sans ordre", () => {
+  // Les deux formes existent, et ne répondent pas à la même question : nommée,
+  // elle lit ses propres noms ; appelée, ceux qu'on lui donne.
+  const ligne = "   calcule X = Couleur des volets";
+  const aide = aideDeLaSignature(ligne, ligne.length, catalogue());
+
+  assert.equal(aide.quoi, "nom");
+  assert.equal(aide.appel, false);
+  assert.deepEqual(aide.lit.map((une) => une.nom), ["Matière du volet"]);
+  assert.equal(aide.rang, -1, "il n'y a pas de rang hors d'un appel");
 });
 
 test("une parenthèse ordinaire ne se prend pas pour un appel", () => {

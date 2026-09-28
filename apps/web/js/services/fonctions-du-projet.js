@@ -33,7 +33,7 @@
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { estUneRegle } from "./assertion-taxonomy.js";
 import { laValeurQuiFaitFoi } from "./le-temps-des-valeurs.js";
-import { entreesDuBloc, nomsLusParLeBloc } from "./memoire-en-lecture.js";
+import { entreesDuBloc, nomsLusParLeBloc, parametresDuBloc } from "./memoire-en-lecture.js";
 import { blocDeRegle, texteDesLignes } from "./memoire-en-texte.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -165,6 +165,9 @@ export function nomsConclusParLeProjet(assertions = []) {
      * déjà : la même question n'a pas deux réponses (règle 4).
      */
     lit: entreesDuBloc(bloc),
+    // L'ordre dans lequel on lui donne ses valeurs, portée comprise : c'est ce
+    // qu'un appel mire, et `lit` ne le dit pas.
+    parametres: parametresDuBloc(bloc),
     seLitEn: bloc.seLitEn,
     // De quoi dire « c'est un abaque » ou « ça déroule un tableau » sur la
     // fiche : on ne relit pas une courbe comme on relit une cascade de `si`.

@@ -27627,10 +27627,6 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .saisie-signature__entree span{ color:var(--muted); }
 /* Ce qu'on obtiendra en la nommant : l'autre moitié de la question. */
-.saisie-signature__rend{
-  margin:5px 0 0; padding-top:4px; border-top:1px solid var(--border);
-  color:var(--muted);
-}
 .saisie-signature__rend span{
   color:var(--fg, inherit);
   font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace);
@@ -27638,10 +27634,13 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 /* Celle qu'on est en train d'écrire, dans une signature. */
 .saisie-signature__entree.est-actif b{ color:var(--fg, inherit); font-weight:600; }
 .saisie-signature__entree.est-actif span{ color:var(--fg, inherit); }
-/* La faute que la forme appelle : on la nomme là où elle se commet. */
-.saisie-signature__faute{
-  margin:6px 0 0; padding-top:5px; border-top:1px solid var(--border);
-  color:rgb(255,166,87);
+/* Ce que l'aide ajoute sous la liste : ce qu'elle rend, l'ordre d'un appel.
+   Une seule règle pour les deux — elles se posent au même endroit et se lisent
+   pareil, et deux calibrages finiraient par ne plus se ressembler. */
+.saisie-signature__rend,
+.saisie-signature__note{
+  margin:5px 0 0; padding-top:4px; border-top:1px solid var(--border);
+  color:var(--muted);
 }
 
 .saisie-proposition{

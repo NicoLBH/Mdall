@@ -52,10 +52,13 @@
  */
 
 import {
-  DIT_DE_LAGREGAT, OPERATEUR, couperLUnite, lireUnNombre, phraseDeLAgregat
+  DIT_DE_LAGREGAT, OPERATEUR, PORTEE_DUNE_FONCTION, couperLUnite, lireUnNombre, phraseDeLAgregat
 } from "./memoire-en-texte.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
-import { calculer, ecrireLeCalcul, phraseDuRefus, lireUnCalcul, repriseDirecte } from "./mdall-calcul.js";
+import {
+  calculer, ecrireLeCalcul, phraseDuRefus, lireUnCalcul, repriseDirecte, valeurDUneExpression,
+  REFUS_DU_CALCUL
+} from "./mdall-calcul.js";
 import { convertir } from "./unites-du-metier.js";
 import {
   REFUS_DE_LA_BOUCLE, agregerUneColonne, valeursDeLaBoucle, phraseDuRefusDeLaBoucle
@@ -681,8 +684,24 @@ export function evaluerLaRegle(regle = {}, lire = () => ({ connu: false, valeur:
 
   const sinon = conclusionDeLaRegle(bloc?.sinon, locales);
 
+  /**
+   * **Ce que la clause compare** : un nom, ou un appel.
+   *
+   * `si (Couleur des volets(zones, Matériau) = "violet")` évalue l'appel et
+   * compare sa réponse ; `si (Hauteur > 1 m)` lit un nom, comme toujours. La
+   * réponse d'un appel est une valeur — mot ou mesure —, et se compare donc
+   * exactement comme une valeur lue.
+   */
+  const lueDeLaClause = (condition) => {
+    if (!condition?.appel?.arbre) {
+      return locales.lire(texte(condition?.sujet)) ?? { connu: false, valeur: "" };
+    }
+    const rendu = valeurDUneExpression(condition.appel.arbre, locales.lire);
+    return { connu: Boolean(rendu.connu), valeur: texte(rendu.valeur) };
+  };
+
   const tracer = (condition) => ({
-    ...evaluerLaCondition(condition, locales.lire(texte(condition?.sujet)) ?? { connu: false, valeur: "" }),
+    ...evaluerLaCondition(condition, lueDeLaClause(condition)),
     joint: texte(condition?.joint)
   });
 
@@ -965,6 +984,117 @@ export function rejouerLaRegle(regle = {}, lire = () => ({ connu: false, valeur:
  * même entrée. Un sujet absent rend `{connu: false}` — et non une chaîne vide,
  * qui se lirait comme une valeur.
  */
+/**
+ * Le lecteur, augmenté de ce que le projet sait **faire**.
+ *
+ * ## Pourquoi une fonction s'appelle
+ *
+ * Sans appel, `Couleur des volets` ne sait lire qu'un seul nom : celui qu'elle
+ * a déclaré. Une seconde série de volets, nommée autrement, demandait une
+ * seconde fonction qui dit la même chose — et à dix noms, le projet tient dix
+ * copies d'un même raisonnement, dont neuf vieilliront sans qu'on s'en
+ * aperçoive.
+ *
+ * ## Pourquoi il vit ici, et plus dans le bac
+ *
+ * **Deux endroits rejouent des fonctions** : le bac d'essai, sur ce qu'on tape,
+ * et le rejeu de la mémoire, sur ce que le projet tient — par zone. Écrit dans
+ * le bac seul, l'appel n'existait pas dans le rejeu : une fonction qui en
+ * appelle une autre devenait **indécidable le jour où on la versait**, et rien
+ * ne le disait. On ne verse pas une fonction pour qu'elle cesse de répondre.
+ *
+ * ## Ce qu'un appel fait, et ce qu'il ne fait pas
+ *
+ * Il **substitue** : ce que la fonction déclare lire est lié à ce qu'on lui
+ * donne, et son corps est rejoué tel quel. Il n'écrit rien, ne conclut sous
+ * aucun nom, et ne verse rien (règle 10). Ce qui n'est pas déclaré continue de
+ * se lire dehors : on ne remplace que ce que la signature annonce.
+ *
+ * @param {Function} lireSimple le lecteur de base, pour les noms
+ * @param {Map} fonctions `clé du sujet → {regle, parametres}`
+ * @param {object} [comment]
+ * @param {Function} [comment.pourLaZone] un lecteur de base **pour une zone**,
+ *   quand les valeurs y sont rangées ainsi. `null` là où la zone n'existe pas —
+ *   le bac d'essai, où l'on essaie une fonction et non un ouvrage.
+ */
+export function lecteurQuiSaitAppeler(lireSimple, fonctions = new Map(), { pourLaZone = null, enCours = new Set() } = {}) {
+  const portees = fonctions instanceof Map ? fonctions : new Map();
+
+  return (sujet, donnees) => {
+    /**
+     * **La portée est toujours connue, et vide veut dire « toutes zones ».**
+     *
+     * Elle est le premier paramètre de toute signature, donc le premier
+     * argument de tout appel. Sans cette ligne, un appel restait indécidable
+     * sur son **premier** argument, et le formulaire réclamait qu'on tape
+     * « zones » à la main.
+     */
+    if (cleDuSujet(sujet) === cleDuSujet(PORTEE_DUNE_FONCTION)) {
+      return { connu: true, valeur: texte(lireSimple(sujet)?.valeur) };
+    }
+
+
+    if (donnees === undefined) return lireSimple(sujet);
+
+    const cle = cleDuSujet(sujet);
+    const sienne = portees.get(cle);
+    if (!sienne) return { connu: false, valeur: "", refus: REFUS_DU_CALCUL.APPEL, ou: texte(sujet) };
+
+    const parametres = sienne.parametres ?? [];
+    if (parametres.length !== donnees.length) {
+      return {
+        connu: false, valeur: "", refus: REFUS_DU_CALCUL.ARGUMENTS,
+        ou: `« ${texte(sujet)} » s'écrit (${parametres.join(", ")})`
+      };
+    }
+
+    /**
+     * **Une fonction qui s'appelle elle-même ne finirait jamais.**
+     *
+     * Directement, ou par une autre qui la rappelle. On ne la refuse pas : on
+     * la rend indécidable en la nommant, ce qui est la vérité — et un langage
+     * sans récursion n'a pas à en inventer une (règle 5).
+     */
+    if (enCours.has(cle)) return { connu: false, valeur: "" };
+
+    /**
+     * **La zone voyage avec l'appel, là où les valeurs en ont une.**
+     *
+     * `Couleur des volets(Bâtiment B, Matériau)` doit lire les valeurs du
+     * bâtiment B — c'est tout l'intérêt : la même fonction, deux bâtiments,
+     * deux réponses. Là où rien n'est rangé par zone, `pourLaZone` est absent
+     * et la portée reste une valeur liée comme les autres.
+     */
+    const zone = texte(donnees[0]?.alias ?? donnees[0]?.valeur);
+    const dessous = (pourLaZone && zone ? pourLaZone(zone) : null) ?? lireSimple;
+
+    /**
+     * **Un nom donné est un alias, pas une valeur.**
+     *
+     * Ce que la fonction lit sous son propre nom se lit sous celui qu'on lui a
+     * donné — et se lit **là où elle lit**, donc dans la zone qu'on lui a
+     * donnée. Lier la valeur de l'appelant ferait rendre la même chose à
+     * `F(Bâtiment A, Matériau)` et `F(Bâtiment B, Matériau)`.
+     *
+     * La portée, elle, est un lieu : elle se lie telle qu'elle est écrite.
+     */
+    const liees = new Map(parametres.map((nom, rang) => [cleDuSujet(nom), donnees[rang] ?? {}]));
+    const dedans = lecteurQuiSaitAppeler(
+      (nom) => {
+        const liee = liees.get(cleDuSujet(nom));
+        if (!liee) return dessous(nom);
+        if (liee.alias === undefined) return { connu: Boolean(texte(liee.valeur)), valeur: texte(liee.valeur) };
+        return dessous(liee.alias);
+      },
+      portees,
+      { pourLaZone, enCours: new Set([...enCours, cle]) }
+    );
+
+    const evaluation = evaluerLaRegle(sienne.regle, dedans);
+    return { connu: Boolean(texte(evaluation.valeur)), valeur: texte(evaluation.valeur) };
+  };
+}
+
 export function lecteurDeValeurs(valeurs = new Map()) {
   const table = valeurs instanceof Map ? valeurs : new Map(Object.entries(valeurs ?? {}));
   const parCle = new Map([...table.entries()].map(([sujet, valeur]) => [cleDuSujet(sujet), texte(valeur)]));

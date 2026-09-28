@@ -152,7 +152,10 @@ test("la phrase dit ce qui existe, et comment s'en servir", () => {
   assert.match(dit, /lit `Matériau`/);
   // Et ce qu'un appel exige.
   assert.match(dit, /La portée d'abord, toujours/);
-  assert.match(dit, /se pose dans un `calcule`/);
+  assert.match(dit, /se pose où l'on s'en sert/);
+  // Les deux formes, depuis qu'une condition porte un appel.
+  assert.match(dit, /si \(Couleur des volets\(zones, Autre nom\) = "…"\)/);
+  assert.match(dit, /calcule x = Couleur des volets\(zones, Autre nom\);/);
 
   // Un projet qui ne conclut rien n'ajoute rien à la phrase.
   assert.equal(phraseDeCeQuiEstConnu(null), "");

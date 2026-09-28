@@ -42,12 +42,16 @@
  * changé d'un caractère.
  */
 
-import { lireUnFichier, nomsConclusParLeBloc, nomsLusParLeBloc, entreesDuBloc } from "./memoire-en-lecture.js";
+import {
+  lireUnFichier, nomsConclusParLeBloc, nomsLusParLeBloc, parametresDuBloc
+} from "./memoire-en-lecture.js";
 import { reglesVerseesUtiles } from "./fonctions-du-projet.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { PORTEE_DUNE_FONCTION } from "./memoire-en-texte.js";
 import { REFUS_DU_CALCUL } from "./mdall-calcul.js";
-import { evaluerLaRegle, lecteurDeValeurs, phraseDuDoute } from "./memoire-evaluateur.js";
+import {
+  evaluerLaRegle, lecteurDeValeurs, lecteurQuiSaitAppeler, phraseDuDoute
+} from "./memoire-evaluateur.js";
 import { valeursDuLancement } from "./formulaire-du-brouillon.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -261,108 +265,25 @@ function conclusionsNeuves(fonctions, resultats, valeurs) {
   return neuves;
 }
 
-/**
- * **Ce qu'une fonction déclare, dans l'ordre, portée comprise.**
- *
- * C'est sa signature — la ligne qu'on lit avant de s'en servir. Un brouillon la
- * porte telle qu'elle est écrite ; une fonction versée ne garde pas sa ligne,
- * et on la reconstruit de ce qu'elle lit, la portée devant. Les deux répondent
- * à la même question, et c'est cette réponse-là qui dit dans quel ordre on
- * donne les valeurs.
- */
-export function parametresDuBloc(bloc = {}) {
-  const ecrite = (Array.isArray(bloc?.signature) ? bloc.signature : []).map(texte).filter(Boolean);
-  if (ecrite.length) return ecrite;
-  return [PORTEE_DUNE_FONCTION, ...entreesDuBloc(bloc)];
-}
-
-/**
- * Le lecteur, augmenté de ce que le projet sait **faire**.
- *
- * ## Pourquoi une fonction s'appelle
- *
- * Sans appel, `Couleur des volets` ne sait lire qu'un seul nom : celui qu'elle
- * a déclaré. Une seconde série de volets, nommée autrement, demandait **une
- * seconde fonction** qui dit la même chose — et à dix noms, le projet tient dix
- * copies d'un même raisonnement, dont neuf vieilliront sans qu'on s'en
- * aperçoive. Une fonction doit être détachable des noms sur lesquels on l'a
- * écrite, sans quoi elle n'est pas une fonction : c'est un cas particulier.
- *
- * ## Ce qu'un appel fait, et ce qu'il ne fait pas
- *
- * Il **substitue** : ce que la fonction déclare lire est lié à ce qu'on lui
- * donne, et son corps est rejoué tel quel. Il n'écrit rien, ne conclut sous
- * aucun nom, et ne verse rien — la fonction continue de conclure sous son seul
- * nom dans la mémoire (règle 10). Un appel répond à une question de passage.
- *
- * ## Ce qui n'est pas lié reste lu dehors
- *
- * Une fonction qui lit trois noms et n'en déclare qu'un garde les deux autres :
- * ils se lisent dans l'environnement de l'appelant, comme avant. On ne
- * substitue que ce qui est déclaré.
- */
-function lecteurQuiSaitAppeler(lireSimple, fonctions, enCours = new Set()) {
-  const parCle = new Map();
-  for (const { bloc } of Array.isArray(fonctions) ? fonctions : []) {
-    const cle = cleDuSujet(texte(bloc?.sujet));
-    if (cle && !parCle.has(cle)) parCle.set(cle, bloc);
-  }
-
-  return (sujet, donnees) => {
-    /**
-     * **La portée est toujours connue, et vide veut dire « toutes zones ».**
-     *
-     * Elle est le premier paramètre de toute signature, donc le premier
-     * argument de tout appel — et le bac d'essai, lui, n'a pas de zone : on y
-     * essaie une fonction, pas un ouvrage. Sans cette ligne, `Couleur des
-     * volets(zones, Matériau)` restait indécidable sur son **premier**
-     * argument, et le formulaire réclamait qu'on tape « zones » à la main.
-     */
-    if (cleDuSujet(sujet) === cleDuSujet(PORTEE_DUNE_FONCTION)) {
-      return { connu: true, valeur: texte(lireSimple(sujet)?.valeur) };
-    }
-
-    if (donnees === undefined) return lireSimple(sujet);
-
-    const cle = cleDuSujet(sujet);
-    const bloc = parCle.get(cle);
-    if (!bloc) return { connu: false, valeur: "", refus: REFUS_DU_CALCUL.APPEL, ou: texte(sujet) };
-
-    const parametres = parametresDuBloc(bloc);
-    if (parametres.length !== donnees.length) {
-      return {
-        connu: false, valeur: "", refus: REFUS_DU_CALCUL.ARGUMENTS,
-        ou: `« ${texte(bloc.sujet)} » s'écrit (${parametres.join(", ")})`
-      };
-    }
-
-    /**
-     * **Une fonction qui s'appelle elle-même ne finirait jamais.**
-     *
-     * Directement, ou par une autre qui la rappelle. On ne la refuse pas : on
-     * la rend indécidable en la nommant, ce qui est la vérité — le bac ne sait
-     * pas ce qu'elle vaut, et un langage sans récursion n'a pas à en inventer
-     * une (règle 5).
-     */
-    if (enCours.has(cle)) return { connu: false, valeur: "" };
-
-    const liees = new Map(parametres.map((nom, rang) => [cleDuSujet(nom), texte(donnees[rang])]));
-    const dessous = lecteurQuiSaitAppeler(
-      (nom) => (liees.has(cleDuSujet(nom))
-        ? { connu: Boolean(liees.get(cleDuSujet(nom))), valeur: liees.get(cleDuSujet(nom)) }
-        : lireSimple(nom)),
-      fonctions,
-      new Set([...enCours, cle])
-    );
-
-    const evaluation = evaluerLaRegle(commeUneRegle(bloc), dessous);
-    return { connu: Boolean(texte(evaluation.valeur)), valeur: texte(evaluation.valeur) };
-  };
-}
-
 /** Toutes les fonctions, évaluées avec ce qu'on sait à cet instant. */
 function unePasse(fonctions, valeurs) {
-  const lire = lecteurQuiSaitAppeler(lecteurDeValeurs(valeurs), fonctions);
+  /**
+   * **Le bac n'a pas de zone** : la portée passée à un appel est liée comme une
+   * valeur, et rien ne s'en sert ici. C'est le rejeu de la mémoire qui lui
+   * donne son sens, parce que là-bas les valeurs sont rangées par zone.
+   */
+  /**
+   * Ce que le bac sait **faire** : ses fonctions, par sujet, avec l'ordre dans
+   * lequel on leur donne leurs valeurs.
+   */
+  const siennes = new Map();
+  for (const { bloc } of fonctions) {
+    const cle = cleDuSujet(texte(bloc?.sujet));
+    if (!cle || siennes.has(cle)) continue;
+    siennes.set(cle, { regle: commeUneRegle(bloc), parametres: parametresDuBloc(bloc) });
+  }
+
+  const lire = lecteurQuiSaitAppeler(lecteurDeValeurs(valeurs), siennes);
 
   return fonctions.map(({ fichier, bloc, versee = false }) => {
     const evaluation = evaluerLaRegle(commeUneRegle(bloc), lire);

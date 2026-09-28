@@ -546,6 +546,25 @@ export function aideDeLaSignature(ligne = "", colonne = 0, catalogue = []) {
   /** Ce qu'on sait d'une entrée : son domaine, son unité, ce qu'elle dit. */
   const entree = (nom) => {
     const su = trouver(nom);
+    /**
+     * **La portée se dit elle-même**, et d'un seul endroit.
+     *
+     * Aucun projet ne la déclare — c'est un mot de la langue —, et sans cette
+     * ligne elle paraissait nue dans la liste : le premier paramètre de toute
+     * signature, sans un mot pour dire ce qu'on y met. La phrase était écrite
+     * dans la branche de la signature ; l'appel en aurait eu une seconde, et
+     * l'une des deux aurait fini par dire autre chose (règle 10).
+     */
+    if (repli(nom) === repli(PORTEE_DUNE_FONCTION)) {
+      return {
+        nom: texte(nom),
+        valeurs: [],
+        unite: "",
+        dit: "la portée : à quelles parties d'ouvrage elle s'applique",
+        deduite: false
+      };
+    }
+
     return {
       nom: texte(nom),
       valeurs: su?.valeurs ?? [],
@@ -568,8 +587,7 @@ export function aideDeLaSignature(ligne = "", colonne = 0, catalogue = []) {
       quoi: "signature",
       nom,
       // `zones` d'abord et toujours : c'est la portée de la fonction.
-      lit: [{ nom: "zones", valeurs: [], unite: "", dit: "la portée : à quelles parties d'ouvrage elle s'applique", deduite: false },
-        ...(sienne?.lit ?? []).map(entree)],
+      lit: [entree(PORTEE_DUNE_FONCTION), ...(sienne?.lit ?? []).map(entree)],
       rend: sienne?.rend ?? null,
       // Où l'on en est : la virgule qu'on vient de passer donne le rang.
       rang: dedans.split(",").length - 1,
@@ -577,10 +595,40 @@ export function aideDeLaSignature(ligne = "", colonne = 0, catalogue = []) {
     };
   }
 
+  /**
+   * ── Dans un appel : « dans quel ordre je lui donne ses valeurs ? »
+   *
+   * **C'est la question qu'on se pose la parenthèse ouverte**, et l'aide ne
+   * répondait pas à celle-là : elle disait *ce que* la fonction lit, jamais
+   * **dans quel ordre**. Depuis qu'on lui donne des valeurs, l'ordre est
+   * l'information — et c'est sa signature qui le dit, portée comprise.
+   *
+   * On cherche la parenthèse ouverte la plus proche, et ce qui la précède : ce
+   * qu'on a tapé depuis donne le rang, à la virgule près.
+   */
+  const dansUnAppel = /([^\s(),;=<>+\-*/][^(),;=<>+\-*/]*)\(([^()]*)$/.exec(avant);
+  if (dansUnAppel) {
+    const appelee = trouver(texte(dansUnAppel[1]));
+    const parametres = appelee?.parametres ?? [];
+
+    if (parametres.length) {
+      return {
+        quoi: "appel",
+        nom: appelee.nom,
+        lit: parametres.map(entree),
+        rend: appelee.rend ?? null,
+        // Où l'on en est : la virgule qu'on vient de passer donne le rang. Le
+        // point-virgule aussi — les deux séparent (voir la lecture d'un appel).
+        rang: dansUnAppel[2].split(/[,;]/).length - 1,
+        appel: true
+      };
+    }
+  }
+
   // ── Sur un nom, ailleurs : « de quoi cette fonction a-t-elle besoin ? »
   //
   // On regarde le nom que le curseur touche — celui qu'on vient d'écrire, ou
-  // celui devant lequel on a ouvert une parenthèse de trop.
+  // celui devant lequel on a ouvert une parenthèse.
   const ouvre = /([^\s(),;=<>+\-*/][^(),;=<>+\-*/]*)\($/.exec(avant);
   const nom = texte(ouvre ? ouvre[1] : motEnCours(entiere, colonne).mot);
   if (!nom) return null;
@@ -602,13 +650,7 @@ export function aideDeLaSignature(ligne = "", colonne = 0, catalogue = []) {
      */
     rend: sienne.rend ?? null,
     rang: -1,
-    /**
-     * **A-t-on ouvert une parenthèse ?**
-     *
-     * C'est la faute que la forme appelle, et l'aide la nomme là où elle se
-     * commet : `Couleur des volets(` n'est pas un appel, parce qu'il n'y a pas
-     * d'appel. On écrit le nom, seul.
-     */
-    appel: Boolean(ouvre)
+    // On la nomme, on ne l'appelle pas : `lit` suffit, et il n'y a pas de rang.
+    appel: false
   };
 }

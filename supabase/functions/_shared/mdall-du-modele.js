@@ -495,8 +495,11 @@ sinon ("à valider");
 
 - l'ordre est celui de la **signature**, et \`zones\` vient toujours en premier ;
 - donne **exactement** autant de valeurs que la signature en déclare ;
-- un appel se pose dans un \`calcule\`, **jamais** seul sur sa ligne ni dans un
-  \`si (…)\` : il rend une valeur, il ne conclut rien ;
+- un appel se pose où l'on s'en sert — dans un \`calcule\`, ou directement dans
+  un \`si (…)\` —, **jamais** seul sur sa ligne : il rend une valeur, il ne
+  conclut rien ;
+- la portée dit **où lire** : \`Couleur des volets(Bâtiment B, Matériau)\` lit le
+  matériau du bâtiment B. Écris \`zones\` pour rester là où tu es ;
 - une fonction **ne s'appelle pas elle-même** : il n'y a pas de récursion ;
 - ce que la fonction lit **sans l'avoir déclaré** continue de se lire là où tu
   l'appelles : on ne remplace que ce que la signature annonce.
@@ -732,7 +735,8 @@ export function phraseDeCeQuiEstConnu(connu = null) {
     + `**La portée d'abord, toujours** : \`zones\` est le premier paramètre de toute `
     + `signature, donc le premier argument de tout appel. Donne exactement autant `
     + `de valeurs que la signature en déclare.\n\n`
-    + `**Un appel se pose dans un \`calcule\`**, jamais seul sur sa ligne et jamais `
-    + `dans un \`si (…)\` : \`calcule x = ${une}(zones, Autre nom);\` puis `
-    + `\`si (x = "…")\`.\n\n`;
+    + `**Un appel se pose où l'on s'en sert** — dans un \`calcule\`, ou directement `
+    + `dans un \`si (…)\` — et **jamais** seul sur sa ligne :\n`
+    + `- \`si (${une}(zones, Autre nom) = "…")\`\n`
+    + `- ou \`calcule x = ${une}(zones, Autre nom);\` puis \`si (x = "…")\`\n\n`;
 }

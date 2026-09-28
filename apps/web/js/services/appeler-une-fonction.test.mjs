@@ -21,10 +21,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { lireUnFichier, entreesDuBloc, fonctionsAppeleesParLeBloc } from "./memoire-en-lecture.js";
+import {
+  lireUnFichier, entreesDuBloc, fonctionsAppeleesParLeBloc, parametresDuBloc
+} from "./memoire-en-lecture.js";
+import { blocDeRegle, texteDesLignes } from "./memoire-en-texte.js";
 import { lireUnCalcul, nomsDuCalcul } from "./mdall-calcul.js";
 import { verifierLeBrouillon } from "./verification-du-brouillon.js";
-import { lancerLeBrouillon, parametresDuBloc } from "./bac-dessai.js";
+import { lancerLeBrouillon } from "./bac-dessai.js";
 import { nomsLus } from "./formulaire-du-brouillon.js";
 
 const refusDe = (source) => lireUnFichier(source).refus.map((un) => un.raison);
@@ -268,21 +271,90 @@ test("un appel seul sur sa ligne ne conclut rien, et le dit", () => {
   assert.match(dit[0], /calcule … = Couleur des volets\(…\);/);
 });
 
-test("un appel dans une condition renvoie au « calcule »", () => {
+test("une condition porte un appel, et le repose telle qu'elle a été écrite", () => {
   /**
-   * **Une condition compare un nom, pas un appel.** C'est une forme que le
-   * langage n'a pas encore, et « cette condition ne compare rien » envoyait
-   * chercher un `=` qui est là.
+   * **C'est la forme qu'on écrit naturellement**, et il fallait passer par une
+   * locale : une ligne de plus que la langue n'exige pas.
+   *
+   * Le **sujet** reste le nom de la fonction, et l'appel voyage à côté : tout
+   * ce qui lit un sujet comme un nom — le graphe, la recherche d'un nom jamais
+   * déclaré — continue de lire un nom. Ranger la ligne entière dans `sujet`
+   * aurait fait porter la moitié du projet sur un nom que personne n'a écrit.
    */
+  const source = `fonction Teinte(zones, Matériau) {
+   si (Couleur des volets(zones, Matériau) = "violet")
+   alors ("conforme");
+   sinon ("à valider");
+}
+`;
+
+  assert.deepEqual(refusDe(source), []);
+
+  const bloc = lireUnFichier(source).blocs[0];
+  assert.equal(bloc.conditions[0].sujet, "Couleur des volets");
+  assert.equal(bloc.conditions[0].appel.ecrit, "Couleur des volets(zones, Matériau)");
+  assert.deepEqual(bloc.conditions[0].valeur, ["violet"]);
+
+  // Et elle se réécrit au caractère près : un second écrivain d'expressions
+  // finirait par ne plus poser les parenthèses comme le premier (règle 4).
+  assert.match(texteDesLignes(blocDeRegle({
+    sujet: bloc.sujet, conditions: bloc.conditions, alors: bloc.alors,
+    sinon: bloc.sinon, signature: ["zones", "Matériau"]
+  })), /^   si \(Couleur des volets\(zones, Matériau\) = "violet"\)$/m);
+});
+
+test("une condition qui porte un appel le joue vraiment", () => {
+  const source = `fonction Couleur des volets(zones, Nature des volets) {
+   si (Nature des volets = "bois")
+   alors ("violet");
+   sinon ("blanc");
+}
+
+fonction Teinte(zones, Matériau) {
+   si (Couleur des volets(zones, Matériau) = "violet")
+   alors ("conforme");
+   sinon ("à valider");
+}
+`;
+
+  assert.equal(lancerLeBrouillon([{ nom: "essai.ref", contenu: source }], { "Matériau": "bois" })
+    .find((un) => un.sujet === "Teinte")?.valeur, "conforme");
+  assert.equal(lancerLeBrouillon([{ nom: "essai.ref", contenu: source }], { "Matériau": "alu" })
+    .find((un) => un.sujet === "Teinte")?.valeur, "à valider");
+});
+
+test("ce qu'une clause appelle se lit, et ne se demande pas", () => {
+  /**
+   * Une clause qui porte un appel lit **tout ce que l'appel nomme** : la
+   * fonction, et ce qu'on lui donne. Ne retenir que le sujet ferait une
+   * fonction dont on ne demande jamais les entrées de son propre appel.
+   */
+  const bloc = lireUnFichier(`fonction Teinte(zones, Matériau) {
+   si (Couleur des volets(zones, Matériau) = "violet")
+   alors ("conforme");
+}
+`).blocs[0];
+
+  assert.deepEqual(fonctionsAppeleesParLeBloc(bloc), ["Couleur des volets"]);
+  assert.deepEqual(entreesDuBloc(bloc), ["Matériau"]);
+  assert.deepEqual(nomsLus([{ nom: "essai.ref", contenu: `fonction Teinte(zones, Matériau) {
+   si (Couleur des volets(zones, Matériau) = "violet")
+   alors ("conforme");
+}
+` }]), ["Matériau"]);
+});
+
+test("ce qui n'est pas un appel lisible garde son refus", () => {
+  // Un nom ne porte pas de parenthèse : une condition acceptée sur un tel nom
+  // resterait indécidable pour toujours (règle 5).
   const dit = refusDe(`fonction F(zones, Matériau) {
-   si (Couleur des volets(Matériau) = "gris")
+   si (Couleur des volets(Matériau = "gris")
    alors (1);
 }
 `);
 
   assert.equal(dit.length, 1);
-  assert.match(dit[0], /une condition compare un nom/);
-  assert.match(dit[0], /calcule x = Couleur des volets\(…\);/);
+  assert.match(dit[0], /cet appel ne se lit pas/);
 });
 
 /* ── Ce qu'une fonction annonce, et ce qu'elle réclame ───────────────────── */
@@ -378,4 +450,136 @@ fonction Prix TTC(zones, Prix HT) {
 ` }]);
 
   assert.deepEqual(dites.filter((une) => une.quoi === "nom-inconnu"), []);
+});
+
+/* ── Ce qu'on donne, comparé à ce que la fonction sait lire ──────────────── */
+
+const AVEC_DOMAINES = `const Nature des volets = {
+   type: "texte",
+   valeurs possibles: "bois" ou "pvc",
+   description: "La matière du volet, au sens du fournisseur.",
+};
+
+const Matériau = {
+   type: "texte",
+   valeurs possibles: "bois" ou "alu" ou "pvc",
+   description: "La matière retenue au lot B.",
+};
+
+fonction Couleur des volets(zones, Nature des volets) {
+   si (Nature des volets = "bois")
+   alors ("violet");
+   sinon ("blanc");
+}
+`;
+
+const donnees = (source) => verifierLeBrouillon([{ nom: "essai.ref", contenu: source }])
+  .filter((une) => une.quoi === "donne-hors-du-domaine");
+
+test("on prévient quand la fonction ne connaîtra jamais ce qu'on lui donne", () => {
+  /**
+   * **C'est la faute que l'appel rend possible.** Tant qu'une fonction ne
+   * lisait que ses propres noms, son domaine et celui qu'elle lit étaient le
+   * même. `Matériau` peut valoir « alu », que `Couleur des volets` ne connaît
+   * pas : pour « alu », elle répondra son `sinon` — un résultat parfaitement
+   * plausible, et faux, que rien ne signalait.
+   */
+  const dites = donnees(`${AVEC_DOMAINES}
+fonction Teinte(zones, Matériau) {
+   calcule x = Couleur des volets(zones, Matériau);
+   si (x = "violet")
+   alors ("conforme");
+}
+`);
+
+  assert.equal(dites.length, 1);
+  assert.match(dites[0].dit, /« Couleur des volets » lit « Nature des volets »/);
+  assert.match(dites[0].dit, /ne vaut que « bois », « pvc »/);
+  assert.match(dites[0].dit, /peut valoir « alu »/);
+  assert.match(dites[0].dit, /répondra son « sinon »/);
+  assert.equal(dites[0].texte, "Matériau");
+});
+
+test("une clause qui appelle est contrôlée comme un calcul qui appelle", () => {
+  // Les deux formes existent : la faute ne dépend pas de l'endroit où on la
+  // commet, et le contrôle ne doit pas non plus (règle 4).
+  assert.equal(donnees(`${AVEC_DOMAINES}
+fonction Teinte(zones, Matériau) {
+   si (Couleur des volets(zones, Matériau) = "violet")
+   alors ("conforme");
+}
+`).length, 1);
+});
+
+test("un domaine compris dans l'autre ne se reproche pas", () => {
+  // Crier à tort apprend à ne plus lire l'écran, et c'est le défaut qu'on
+  // corrige ailleurs, à l'envers.
+  assert.deepEqual(donnees(`const Nature des volets = {
+   type: "texte",
+   valeurs possibles: "bois" ou "alu" ou "pvc",
+   description: "La matière du volet.",
+};
+
+const Matériau = {
+   type: "texte",
+   valeurs possibles: "bois" ou "pvc",
+   description: "La matière retenue au lot B.",
+};
+
+fonction Couleur des volets(zones, Nature des volets) {
+   si (Nature des volets = "bois")
+   alors ("violet");
+   sinon ("blanc");
+}
+
+fonction Teinte(zones, Matériau) {
+   calcule x = Couleur des volets(zones, Matériau);
+   si (x = "violet")
+   alors ("conforme");
+}
+`), []);
+});
+
+test("sans deux domaines fermés, on se tait", () => {
+  /**
+   * Il en faut **deux** pour qu'il y ait une comparaison à faire. Ne pas savoir
+   * n'autorise pas à prétendre qu'il n'y a rien, ni l'inverse (règle 5).
+   */
+  assert.deepEqual(donnees(`const Nature des volets = {
+   type: "texte",
+   valeurs possibles: "bois" ou "pvc",
+   description: "La matière du volet.",
+};
+
+fonction Couleur des volets(zones, Nature des volets) {
+   si (Nature des volets = "bois")
+   alors ("violet");
+   sinon ("blanc");
+}
+
+fonction Teinte(zones, Matériau) {
+   calcule x = Couleur des volets(zones, Matériau);
+   si (x = "violet")
+   alors ("conforme");
+}
+`), [], "« Matériau » n'a pas de domaine : il n'y a rien à comparer");
+});
+
+test("la portée n'est pas comparée : elle dit où, pas quoi", () => {
+  /**
+   * Sans cet écart, le premier paramètre — `zones` — se comparait au premier
+   * argument, et l'on décalait tout le contrôle d'un rang : on reprochait à
+   * « Matériau » ce que « Nature des volets » n'a jamais dit.
+   */
+  const dites = donnees(`${AVEC_DOMAINES}
+fonction Teinte(zones, Matériau) {
+   calcule x = Couleur des volets(zones, Matériau);
+   si (x = "violet")
+   alors ("conforme");
+}
+`);
+
+  assert.equal(dites.length, 1, "une seule remarque, sur le bon paramètre");
+  assert.match(dites[0].dit, /lit « Nature des volets »/);
+  assert.doesNotMatch(dites[0].dit, /« zones »/);
 });

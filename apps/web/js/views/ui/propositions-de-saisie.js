@@ -78,10 +78,10 @@ function ditDeCeQuElleRend(rend) {
 /**
  * L'aide à la signature, en HTML. Vide quand il n'y a rien à dire.
  *
- * **Elle nomme la faute quand on l'a commise.** `Couleur des volets(` n'est pas
- * un appel, parce qu'il n'y a pas d'appel dans ce langage : on écrit le nom,
- * seul. Le dire ici, là où la faute se commet, vaut dix pages lues trois
- * semaines plus tôt.
+ * **Trois questions, et l'aide répond à celle qu'on pose.** En écrivant une
+ * signature : « avec quoi s'écrit-elle ? ». Sur un nom : « que lit-elle ? ». La
+ * parenthèse ouverte : « **dans quel ordre** je lui donne ses valeurs ? » —
+ * celle-là manquait, et c'est la seule qui compte une fois qu'on appelle.
  */
 export function renderAideDeLaSignature(aide = null) {
   if (!aide?.lit?.length) return "";
@@ -95,7 +95,9 @@ export function renderAideDeLaSignature(aide = null) {
   return `
     <p class="saisie-signature__tete">
       ${escapeHtml(aide.nom)}<span>${
-        aide.quoi === "signature" ? "s'écrit avec" : "lit"}</span>
+        aide.quoi === "signature" ? "s'écrit avec"
+          : aide.quoi === "appel" ? "s'appelle avec, dans cet ordre"
+          : "lit"}</span>
     </p>
     <ul class="saisie-signature__entrees">${entrees}</ul>
     ${/*
@@ -107,9 +109,14 @@ export function renderAideDeLaSignature(aide = null) {
       ? `<p class="saisie-signature__rend">rend
            <span>${escapeHtml(ditDeCeQuElleRend(aide.rend))}</span></p>`
       : ""}
+    ${/*
+      **La portée d'abord, et on ne le devine pas.** `zones` est le premier
+      paramètre de toute signature ; qui découvre l'appel commence par donner
+      la matière et se demande ensuite pourquoi le compte ne tombe pas juste.
+    */""}
     ${aide.appel
-      ? `<p class="saisie-signature__faute">Il n'y a pas d'appel de fonction :
-           écrivez « ${escapeHtml(aide.nom)} » seul, sans parenthèses.</p>`
+      ? `<p class="saisie-signature__note">la portée d'abord, puis ${
+           aide.lit.length - 1} valeur${aide.lit.length > 2 ? "s" : ""}</p>`
       : ""}
   `;
 }
