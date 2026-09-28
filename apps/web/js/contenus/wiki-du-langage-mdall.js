@@ -397,6 +397,59 @@ export const WIKI_DU_LANGAGE = [
       + "pas, et c'est précisément ce qu'on refuse à un agent.")
   ]),
 
+  section("graphique", "Regarder un tableau : « se lit en »", [
+    dit("Une boucle rend un tableau, et quarante-cinq lignes de chiffres "
+      + "répondent exactement à la question posée sans **rien montrer** : une "
+      + "descente de charge qui double d'un niveau à l'autre, une pression qui "
+      + "plafonne, ce sont des formes — et une colonne de nombres ne donne pas "
+      + "de forme."),
+    dit("**Un graphique n'est pas une construction du langage, c'est une façon "
+      + "de regarder un tableau.** Rien ne s'écrit pour obtenir un dessin : "
+      + "tout tableau qu'une boucle déroule se regarde en courbe ou en barres, "
+      + "d'un clic, sous le tableau. Les fonctions écrites avant que cela "
+      + "n'existe se dessinent aussi — il n'y en a aucune à rouvrir."),
+    dit("La seule chose qu'une fonction peut faire, c'est **suggérer** ce qui "
+      + "s'ouvre en premier :"),
+    code(
+      "fonction Descente de charge(zones, Charge par niveau) {",
+      "   // Ce qui arrive en pied de poteau, niveau par niveau.",
+      "   se lit en: barres",
+      "",
+      "   pour chaque Niveau de 1 à 4 par pas de 1",
+      "      calcule Charge cumulée = Charge par niveau * Niveau;",
+      "",
+      "   calcule Charge en pied = le plus grand de Charge cumulée;",
+      "   si (Charge en pied > 0 kN)",
+      "   alors (Charge en pied);",
+      "}"
+    ),
+    dit("`se lit en:` **ne dessine rien** : il dit laquelle des trois lectures "
+      + "s'ouvre la première. Vous savez ce que votre tableau veut dire ; le "
+      + "lecteur change d'avis d'un clic."),
+    table(["ce qu'on écrit", "ce qu'on voit d'abord"], [
+      ["`se lit en: tableau`", "les lignes en clair — c'est aussi le défaut"],
+      ["`se lit en: courbe`", "une ligne brisée par colonne : ce qui **varie** se voit"],
+      ["`se lit en: barres`", "une barre par ligne : ce qui se **compare** se voit"]
+    ]),
+    dit("**Sans cette ligne, c'est le tableau qui s'ouvre**, et ce n'est pas de "
+      + "la timidité : c'est lui qui se compare au texte d'origine, et c'est la "
+      + "vérification. Un dessin qui s'ouvrirait tout seul ferait croire qu'on a "
+      + "vérifié parce qu'on a regardé."),
+    dit("**L'abscisse ne se choisit pas** : c'est la variable de boucle, ce qui "
+      + "change d'une ligne à l'autre. Les colonnes se dessinent contre elle, et "
+      + "une colonne qui **mesure autre chose** que la première n'est pas "
+      + "dessinée — deux grandeurs sur une grille se croisent là où elles ne se "
+      + "croisent pas. L'écran nomme celles qu'il a écartées ; il ne les tait "
+      + "pas."),
+    dit("Le dessin n'a **pas d'axes chiffrés**, et c'est voulu : les nombres "
+      + "sont dans le tableau, où ils se lisent exactement. Les répéter en "
+      + "graduations ferait deux lectures du même fait, dont l'une "
+      + "approximative — et c'est celle-là qu'on croirait."),
+    dit("Un tableau d'une seule ligne n'offre pas de bouton : un dessin d'un "
+      + "seul point n'est pas un dessin. Et un abaque écrit en `courbe` se "
+      + "dessine aussi, sans rien déclarer — c'est le même dessin.")
+  ]),
+
   section("chainage", "Une fonction lit ce qu'une autre conclut", [
     dit("**Il n'y a pas d'appel de fonction dans Mdall.** `calcule taux = Taux de TVA(…)` "
       + "ne se lit pas, et n'existera pas : un langage où une fonction en appelle une autre "

@@ -105,7 +105,10 @@ function commeUneRegle(bloc) {
         boucle: bloc?.boucle ?? null,
         // Et son abaque, quand elle est écrite en courbe : sans lui, la
         // fonction n'a plus ni loi ni points, et elle ne conclut rien.
-        courbe: bloc?.courbe ?? null
+        courbe: bloc?.courbe ?? null,
+        // La lecture suggérée voyage avec la règle : versée, elle se relit
+        // telle qu'elle a été signée.
+        seLitEn: texte(bloc?.seLitEn)
       },
       ...(bloc?.agent ? { agent: { genre: texte(bloc.agent), utilitaire: texte(bloc.utilitaire) } } : {})
     }
@@ -276,6 +279,10 @@ function unePasse(fonctions, valeurs) {
       // compare à la figure d'origine, et l'écran les dessine.
       points: evaluation.points ?? [],
       lecture: evaluation.lecture ?? null,
+      // La lecture du tableau que la fonction **suggère**. Elle ne dessine
+      // rien : elle dit ce qui s'ouvre en premier, et le lecteur change d'avis
+      // d'un clic.
+      seLitEn: texte(bloc?.seLitEn),
       // Un `et` et un `ou` sur la même règle se lisent de gauche à droite, sans
       // priorité. Le référentiel n'en produit pas ; une règle écrite à la main
       // qui en contient mérite d'être relue, et on le dit.

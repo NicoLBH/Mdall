@@ -278,7 +278,7 @@ test("une lecture bornée se marque sur la courbe, et n'étire pas le tracé", (
   assert.equal(rendu.lecture.borne, "60°");
 
   const dessin = renderCourbe(rendu);
-  const cercles = [...dessin.matchAll(/<circle cx="(\d+)"[^>]*class="bac-courbe__(point|lu)"/g)];
+  const cercles = [...dessin.matchAll(/<circle cx="(\d+)"[^>]*class="graphique__(point|lu)[^"]*"/g)];
   const dernierPoint = cercles.filter(([, , quoi]) => quoi === "point").at(-1);
   const marque = cercles.find(([, , quoi]) => quoi === "lu");
 
@@ -297,7 +297,7 @@ test("la courbe se dessine dans le bon sens, et la lecture s'y pose", () => {
   const [rendu] = lancerLeBrouillon(FICHIERS, { "Pente du versant": "30°" });
   const dessin = renderCourbe(rendu);
 
-  const cercles = [...dessin.matchAll(/<circle cx="(\d+)" cy="(\d+)"[^>]*class="bac-courbe__(point|lu)"/g)]
+  const cercles = [...dessin.matchAll(/<circle cx="(\d+)" cy="(\d+)"[^>]*class="graphique__(point|lu)[^"]*"/g)]
     .map(([, x, y, quoi]) => ({ x: Number(x), y: Number(y), quoi }));
   const points = cercles.filter((un) => un.quoi === "point");
 

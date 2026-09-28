@@ -42,6 +42,7 @@
 
 import { couperLUnite, estMesuree, lireUnNombre, mesureEnFrancais } from "./memoire-en-texte.js";
 import { auJusteNecessaire, convertir, phraseDesUnites } from "./unites-du-metier.js";
+import { traceDesSeries } from "./trace-dun-graphique.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -356,24 +357,18 @@ export function phraseDeLaLecture(lecture = null) {
  */
 export function traceDeLaCourbe(courbe = null, { x = null, y = null } = {}) {
   const points = courbe?.points ?? [];
-  if (points.length < 2) return { points: [], lu: null, bornes: { x: [0, 0], y: [0, 0] } };
+  const vide = { points: [], lu: null, bornes: { x: [0, 0], y: [0, 0] } };
+  if (points.length < 2) return vide;
 
-  const xs = points.map((un) => un.x);
-  const ys = points.map((un) => un.y);
-  const bornes = {
-    x: [Math.min(...xs, x ?? Infinity), Math.max(...xs, x ?? -Infinity)],
-    y: [Math.min(...ys, y ?? Infinity), Math.max(...ys, y ?? -Infinity)]
-  };
+  /**
+   * **Un abaque est une série, et une seule.** La géométrie est celle de tous
+   * les dessins du langage — le tableau d'une boucle en porte plusieurs —, et
+   * elle vit à un seul endroit : deux cadres écrits séparément se seraient
+   * recalibrés l'un contre l'autre à chaque retouche (règle 10).
+   */
+  const trace = traceDesSeries([{ nom: "", points }], { marque: { x, y } });
+  const une = trace.series[0];
+  if (!une) return vide;
 
-  const sur = (valeur, [bas, haut]) => (haut === bas ? 0.5 : (valeur - bas) / (haut - bas));
-
-  return {
-    points: points.map((un) => ({
-      x: sur(un.x, bornes.x), y: sur(un.y, bornes.y), dit: un.dit, vaut: un.vaut
-    })),
-    lu: Number.isFinite(x) && Number.isFinite(y)
-      ? { x: sur(x, bornes.x), y: sur(y, bornes.y) }
-      : null,
-    bornes
-  };
+  return { points: une.points, lu: trace.marque, bornes: trace.bornes };
 }

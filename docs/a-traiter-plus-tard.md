@@ -4597,3 +4597,26 @@ connu, et il demande surtout de décider **ce qu'on montre** : une surface ne se
 relit pas comme une courbe, et le gain de cette forme est précisément qu'on la
 compare à sa figure d'un coup d'œil. Le verrou est donc à l'écran, pas dans le
 calcul.
+
+**Un tableau ne se regarde pas en nuage de points.** Les trois lectures — le
+tableau, la courbe, les barres — dessinent toutes les colonnes **contre
+l'abscisse de la boucle** (`docs/le-graphique-comme-lecture.md`). Dessiner une
+colonne contre une autre est une autre question : elle se posera peut-être un
+jour devant un tableau qu'on a, et elle demande de choisir l'abscisse à l'écran —
+ce que le parti pris actuel refuse justement de faire par défaut. Elle ne se
+décide pas d'avance.
+
+**Deux grandeurs ne se dessinent pas ensemble.** Une colonne en mètres cubes et
+une en tonnes sur une grille se croisent là où elles ne se croisent pas : la
+seconde est écartée, et nommée. Un second axe à droite serait la réponse
+habituelle, et c'est aussi la façon la plus commune de faire lire une corrélation
+qui n'existe pas — deux échelles choisies indépendamment placent le croisement
+où l'on veut. Si cela se fait un jour, ce sera **deux dessins empilés partageant
+leur abscisse**, jamais deux échelles dans un cadre.
+
+**Un dessin ne se verse pas dans la mémoire.** Ce qui est versé, c'est la
+fonction et sa suggestion de lecture ; l'écran des fichiers relit `se lit en:`
+mais ne dessine pas encore le tableau — il n'y déroule aucune boucle. Le travail
+n'est pas dans le dessin, qui est mutualisé : c'est un rejeu de la fonction
+versée qui manque à cet écran-là, avec les réponses qu'il faudrait bien prendre
+quelque part.

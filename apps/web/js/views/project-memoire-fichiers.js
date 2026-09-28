@@ -2024,6 +2024,9 @@ export function lignesDeLAssertion(assertion = {}, profondeur = 0, {
       // deviendrait une affirmation, et l'on ne pourrait plus la comparer à sa
       // figure d'origine — ce pour quoi on l'a écrite ainsi.
       courbe: payload.regle.courbe ?? null,
+      // Et la lecture qu'elle suggère : la perdre ferait rouvrir un tableau de
+      // chiffres là où l'auteur avait écrit « en barres ».
+      seLitEn: payload.regle.seLitEn ?? "",
       sinon: texte(payload.regle.sinon),
       sauf: exceptions,
       provenance: provenanceDeLAssertion(assertion, { auteurs }),
