@@ -13,6 +13,7 @@ import { lireUnFichier, lireUneCondition } from "../../services/memoire-en-lectu
 import { calculer, ecrireLeCalcul } from "../../services/mdall-calcul.js";
 import { evaluerLaCondition } from "../../services/memoire-evaluateur.js";
 import { lancerLeBrouillon } from "../../services/bac-dessai.js";
+import { LECTURE, lectureQuiVaDeSoi, lecturesPossibles } from "../../services/graphique-dune-table.js";
 
 /* ── Ce qu'il enseigne, le langage le lit ────────────────────────────────── */
 
@@ -70,6 +71,85 @@ test("les exemples entiers du wiki concluent ce que le wiki annonce", () => {
       assert.ok(dit.includes(chiffre), `§${section} n'annonce plus « ${chiffre} »`);
     }
   }
+});
+
+test("les trois exemples à essayer donnent bien ce que le wiki fait attendre", () => {
+  /**
+   * **Le wiki dit ce qu'on doit voir : « 72 kN », « 0,4 », « 1100 € ».**
+   *
+   * C'est une promesse faite à quelqu'un qui va copier trois lignes pour
+   * vérifier que le produit marche. Si elle vieillit, elle fait exactement le
+   * contraire de ce pour quoi on l'a écrite : on croit avoir mal recopié, et
+   * l'on cesse de faire confiance à l'écran plutôt qu'à la page (règle 12).
+   */
+  const essais = [
+    {
+      quoi: "Descente de charge",
+      reponses: { "Charge par niveau": "12 kN" },
+      attendu: "72 kN",
+      annonce: ["12 kN", "72 kN"],
+      // Le tableau se déroule, et il porte bien deux grandeurs : c'est lui qui
+      // fait les deux cadres empilés que la page décrit.
+      colonnes: ["Charge cumulée", "Hauteur atteinte"],
+      lignes: 6,
+      /**
+       * **La page promet « barres pressé ».** C'est `se lit en:` qui l'ouvre,
+       * et sans la ligne l'exemple rendrait six lignes de chiffres là où la
+       * page annonce un dessin — on croirait avoir mal recopié.
+       */
+      ouvre: LECTURE.BARRES
+    },
+    {
+      quoi: "Coefficient de forme",
+      reponses: { "Pente du versant": "45°" },
+      attendu: "0,4",
+      annonce: ["45°", "0,4"]
+    },
+    {
+      quoi: "Prix TTC",
+      reponses: { "Type de travaux": "rénovation", "Prix HT": "1000 €" },
+      attendu: "1100 €",
+      annonce: ["1000 €", "1100 €", "1200 €", "10%"]
+    }
+  ];
+
+  const codes = exemplesDuWiki().filter((un) => un.section === "essayer");
+  assert.equal(codes.length, essais.length, "les exemples à essayer ont changé de nombre");
+
+  const dit = WIKI_DU_LANGAGE.find((une) => une.id === "essayer").blocs
+    .flatMap((bloc) => (bloc.quoi === "texte" ? [bloc.texte] : bloc.points ?? []))
+    .join(" ");
+
+  for (const [rang, essai] of essais.entries()) {
+    const resultats = lancerLeBrouillon([{ nom: "essai.ref", contenu: codes[rang].code }], essai.reponses);
+    const rendu = resultats.find((un) => un.sujet === essai.quoi);
+    assert.ok(rendu, `${essai.quoi} n'est plus dans l'exemple ${rang + 1}`);
+    assert.equal(rendu.valeur, essai.attendu, `${essai.quoi} ne conclut plus ${essai.attendu}`);
+
+    if (essai.colonnes) {
+      assert.deepEqual(rendu.tableau?.colonnes, essai.colonnes);
+      assert.equal(rendu.tableau?.lignes?.length, essai.lignes);
+    }
+
+    if (essai.ouvre) {
+      assert.equal(lectureQuiVaDeSoi(rendu.tableau, rendu.seLitEn), essai.ouvre,
+        `${essai.quoi} n'ouvre plus ${essai.ouvre}`);
+      // Et les quatre lectures s'offrent : la page dit « quatre boutons ».
+      assert.equal(lecturesPossibles(rendu.tableau).length, 4);
+    }
+
+    // Et la prose annonce chacun de ces chiffres, écrits en dur des deux côtés.
+    for (const chiffre of essai.annonce) {
+      assert.ok(dit.includes(chiffre), `§essayer n'annonce plus « ${chiffre} »`);
+    }
+  }
+
+  // **Le refus hors bornes est une promesse aussi**, et la plus importante des
+  // trois : elle dit que le langage ne prolonge pas une courbe.
+  const [hors] = lancerLeBrouillon([{ nom: "essai.ref", contenu: codes[1].code }],
+    { "Pente du versant": "75°" });
+  assert.equal(hors.valeur, "", "la courbe conclut au-delà de ses points");
+  assert.match(dit, /refuse/);
 });
 
 test("les refus que le wiki montre sont ceux que le calcul refuse", () => {

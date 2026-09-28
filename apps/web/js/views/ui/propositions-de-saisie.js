@@ -36,7 +36,7 @@
 
 import { escapeHtml } from "../../utils/escape-html.js";
 import {
-  propositionsDeSaisie, appliquerLaProposition, ouEstLeCurseur, QUOI
+  aideDeLaSignature, propositionsDeSaisie, appliquerLaProposition, ouEstLeCurseur, QUOI
 } from "../../services/mdall-completion.js";
 
 /** Ce qu'on montre à droite d'une proposition, selon ce qu'elle est. */
@@ -52,6 +52,52 @@ const MOTS_DE_LA_NATURE = {
   // fonction signée qui se rejouera sur les réponses qu'on donne.
   [QUOI.VERSE]: "fonction du projet"
 };
+
+/**
+ * Ce qu'une entrée dit d'elle-même, en un mot.
+ *
+ * **Le domaine d'abord, quand il est fermé.** Savoir qu'il faut « la matière du
+ * volet » ne sert à rien si l'on ignore qu'elle vaut « bois », « pvc » ou
+ * « alu » : c'est justement le moment où l'on s'apprête à taper l'une des
+ * trois. Une entrée déduite se dit telle plutôt que de laisser chercher un
+ * champ qui ne paraîtra jamais.
+ */
+function ditDeLentree(une) {
+  if (une?.valeurs?.length) return une.valeurs.join(", ");
+  if (une?.deduite) return "déduit par une autre fonction";
+  if (une?.unite) return `en ${une.unite}`;
+  return String(une?.dit ?? "");
+}
+
+/**
+ * L'aide à la signature, en HTML. Vide quand il n'y a rien à dire.
+ *
+ * **Elle nomme la faute quand on l'a commise.** `Couleur des volets(` n'est pas
+ * un appel, parce qu'il n'y a pas d'appel dans ce langage : on écrit le nom,
+ * seul. Le dire ici, là où la faute se commet, vaut dix pages lues trois
+ * semaines plus tôt.
+ */
+export function renderAideDeLaSignature(aide = null) {
+  if (!aide?.lit?.length) return "";
+
+  const entrees = aide.lit.map((une, rang) => `
+    <li class="saisie-signature__entree${rang === aide.rang ? " est-actif" : ""}">
+      <b>${escapeHtml(une.nom)}</b>${
+        ditDeLentree(une) ? `<span>${escapeHtml(ditDeLentree(une))}</span>` : ""}
+    </li>`).join("");
+
+  return `
+    <p class="saisie-signature__tete">
+      ${escapeHtml(aide.nom)}<span>${
+        aide.quoi === "signature" ? "s'écrit avec" : "lit"}</span>
+    </p>
+    <ul class="saisie-signature__entrees">${entrees}</ul>
+    ${aide.appel
+      ? `<p class="saisie-signature__faute">Il n'y a pas d'appel de fonction :
+           écrivez « ${escapeHtml(aide.nom)} » seul, sans parenthèses.</p>`
+      : ""}
+  `;
+}
 
 /**
  * La liste, en HTML. Vide quand il n'y a rien à proposer.
@@ -87,6 +133,12 @@ export function renderPropositions(propositions = [], choisie = 0) {
 export function brancherLesPropositions(racine, { contexte = null, surChangement = null } = {}) {
   const zone = racine?.querySelector?.(".saisie-code__zone");
   const liste = racine?.querySelector?.("[data-saisie-propositions]");
+  /**
+   * **L'aide passe par la même écoute que la liste**, et ce n'est pas une
+   * économie : une seconde écoute serait un second endroit à se rappeler de
+   * rebrancher, et l'écran des résultats a déjà coûté ce défaut-là une fois.
+   */
+  const signature = racine?.querySelector?.("[data-saisie-signature]") ?? null;
   if (!zone || !liste || typeof contexte !== "function") return () => undefined;
 
   let ouvertes = [];
@@ -106,6 +158,7 @@ export function brancherLesPropositions(racine, { contexte = null, surChangement
     choisie = 0;
     liste.hidden = true;
     liste.innerHTML = "";
+    if (signature) { signature.hidden = true; signature.innerHTML = ""; }
   };
 
   /** La largeur d'un caractère, mesurée sur la zone — une fois, et gardée. */
@@ -129,8 +182,21 @@ export function brancherLesPropositions(racine, { contexte = null, surChangement
     const gauche = parseFloat(style.paddingLeft) || 0;
     const haut = parseFloat(style.paddingTop) || 0;
 
-    liste.style.left = `${Math.max(0, gauche + colonne * mesurerLeCaractere() - zone.scrollLeft)}px`;
-    liste.style.top = `${haut + (rang + 1) * hauteurDeLigne - zone.scrollTop}px`;
+    const x = Math.max(0, gauche + colonne * mesurerLeCaractere() - zone.scrollLeft);
+    const y = haut + rang * hauteurDeLigne - zone.scrollTop;
+
+    liste.style.left = `${x}px`;
+    liste.style.top = `${y + hauteurDeLigne}px`;
+
+    /**
+     * **L'aide monte, la liste descend.** C'est la place qu'elle occupe dans
+     * tous les éditeurs, et pour une raison : posées du même côté, elles se
+     * recouvrent, et c'est toujours celle qu'on ne regardait pas qui passe
+     * devant. La ligne qu'on écrit reste visible entre les deux.
+     */
+    if (!signature || signature.hidden) return;
+    signature.style.left = `${x}px`;
+    signature.style.top = `${Math.max(0, y - signature.offsetHeight - 4)}px`;
   };
 
   const montrer = () => {
@@ -141,7 +207,26 @@ export function brancherLesPropositions(racine, { contexte = null, surChangement
     // On décide **avant** de toucher à l'état : `fermer` doit pouvoir lire ce
     // qui était ouvert, et non ce qu'on vient de calculer.
     const trouvees = propositionsDeSaisie({ ligne, colonne, catalogue, fichiers });
-    if (!trouvees.length) return fermer();
+
+    /**
+     * **L'aide paraît même sans proposition**, et c'est tout son intérêt : on
+     * vient d'écrire le nom en entier, la liste n'a plus rien à proposer, et
+     * c'est exactement l'instant où l'on se demande ce que la fonction attend.
+     */
+    const aide = renderAideDeLaSignature(aideDeLaSignature(ligne, colonne, catalogue));
+    if (signature) {
+      signature.innerHTML = aide;
+      signature.hidden = !aide;
+    }
+
+    if (!trouvees.length) {
+      ouvertes = [];
+      choisie = 0;
+      liste.hidden = true;
+      liste.innerHTML = "";
+      if (aide) placer(rang, colonne);
+      return undefined;
+    }
 
     ouvertes = trouvees;
     choisie = 0;

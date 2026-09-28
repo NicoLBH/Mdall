@@ -4617,3 +4617,21 @@ porte son espace partout dans le projet —, mais c'est une exception de plus à
 retenir, et quelqu'un la rencontrera en recopiant un devis. La coller demande de
 vérifier qu'aucun nom ne commence par `€`, ce qui est probablement vrai, et de
 décider si `$` et `£` suivent.
+
+**L'aide à la signature ne dit pas ce que la fonction conclut.** Elle dit ce
+qu'elle lit, avec le domaine de chaque entrée
+(`docs/laide-a-la-signature.md`) — pas ce qu'on obtiendra en la nommant : une
+couleur ? une épaisseur en centimètres ? un vrai ou faux ? Le catalogue le sait
+parfois (l'unité d'un nom déclaré), et pas toujours : ce qu'une fonction conclut
+n'est écrit nulle part tant qu'elle n'a pas tourné. Le déduire de son `alors`
+marcherait pour un barème et pas pour une chaîne de `calcule`. La vraie réponse
+est probablement une **déclaration de ce qu'une fonction produit** — un `rend:`
+dans sa tête —, et c'est une addition au langage, pas à l'écran.
+
+**La signature ne lie rien.** Une fonction dont le corps lit un nom absent de sa
+signature fonctionne quand même, et l'inverse aussi : `fonction F(zones, A)` qui
+ne lit jamais `A` ne se fait rien dire. L'aide à la signature rend l'écart
+visible pendant qu'on écrit, mais rien ne le **vérifie** : ce serait une
+remarque de plus dans `verifierLeBrouillon`, du genre « sa signature annonce A,
+son corps lit B ». Petit travail, vraie question : faut-il refuser, ou seulement
+le dire ?
