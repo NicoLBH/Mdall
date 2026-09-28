@@ -1793,7 +1793,20 @@ export function ligneDeZone(zone = TOUTES_ZONES, profondeur = 0) {
 export function blocDeRegle({
   sujet = "", quoi = "", conditions = [], alors = "", sinonSi = [], sinon = "", sauf = [],
   selon = [], calculs = [], boucle = null, courbe = null, seLitEn = "", rend = null,
-  provenance = null, preuve = "", importe = [], enregistre = null, portee = PORTEE_DUNE_FONCTION
+  provenance = null, preuve = "", importe = [], enregistre = null, portee = PORTEE_DUNE_FONCTION,
+  /**
+   * Ce que la signature annonce, quand l'appelant le sait mieux que nous.
+   *
+   * **Par défaut elle se déduit des conditions**, et c'est faux dès qu'une
+   * fonction lit par un `calcule` : `calcule TVA = Prix HT * Taux de TVA` ne
+   * pose aucune condition, et la signature réécrite perdait les deux noms. Le
+   * défaut ne se voyait pas — la fonction tourne très bien sans signature
+   * juste —, et il se voit maintenant que la signature est vérifiée.
+   *
+   * L'appelant qui tient le bloc entier connaît ses vraies entrées
+   * (`entreesDuBloc`) ; celui qui n'a que des morceaux garde la déduction.
+   */
+  signature = null
 } = {}, profondeur = 0) {
   const dedans = profondeur + 1;
   const enchainees = (Array.isArray(sinonSi) ? sinonSi : []).filter(Boolean);
@@ -1975,13 +1988,17 @@ export function blocDeRegle({
   // La portée est un paramètre, et le premier : une même règle s'applique à
   // plusieurs parties de l'ouvrage, et la recopier par zone en ferait trois
   // règles à maintenir pour un seul raisonnement.
-  const entrees = [
-    texte(portee) || PORTEE_DUNE_FONCTION,
-    // **Une courbe déclare son abscisse dans sa signature**, et nulle part
-    // ailleurs : elle n'a pas de condition d'où la déduire.
-    ...(courbe ? [texte(courbe.selon)] : []),
-    ...toutes.map((condition) => condition?.sujet)
-  ].filter(Boolean);
+  const entrees = (Array.isArray(signature) && signature.length
+    ? [texte(portee) || PORTEE_DUNE_FONCTION, ...signature.map(texte)]
+    : [
+      texte(portee) || PORTEE_DUNE_FONCTION,
+      // **Une courbe déclare son abscisse dans sa signature**, et nulle part
+      // ailleurs : elle n'a pas de condition d'où la déduire.
+      ...(courbe ? [texte(courbe.selon)] : []),
+      ...toutes.map((condition) => condition?.sujet)
+    ])
+    .filter(Boolean)
+    .filter((une, rang, tous) => tous.indexOf(une) === rang);
 
   const tete = [
     espace(RETRAIT.repeat(Math.max(0, profondeur))),
@@ -2064,6 +2081,16 @@ export function lignesDuBareme(selon = [], branches = [], profondeur = 1) {
       // Une colonne sans condition dans cette ligne ne contraint rien : la case
       // reste blanche, comme dans la norme.
       ...colonnes.map((nom) => caseDuBareme(par.get(cleDuSujet(nom)) ?? null)),
+      /**
+       * **La conclusion s'écrit nue**, comme la norme l'imprime : `CF 1/2 h`,
+       * `à vérifier`, `20 €`. C'est la forme du barème, et elle diffère de
+       * celle d'un `alors (…)`, qui cite ses textes — un tableau recopié d'un
+       * arrêté doit ressembler au tableau de l'arrêté.
+       *
+       * Ce qui reste dehors est un cas qu'on ne sait pas trancher : une ligne
+       * qui conclut le **texte** « 3 » et une qui conclut le **nombre** trois
+       * s'écrivent pareil. C'est dit dans `à traiter plus tard`.
+       */
       texte(branche?.alors)
     ];
   });

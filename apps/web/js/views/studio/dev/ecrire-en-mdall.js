@@ -41,7 +41,7 @@ import { svgIcon } from "../../../ui/icons.js";
 import { renderSaisieDeCode, brancherLaSaisieDeCode } from "../../ui/saisie-de-code.js";
 import { brancherLesPropositions } from "../../ui/propositions-de-saisie.js";
 import { contexteDuBrouillon } from "../../../services/mdall-completion.js";
-import { nomsConclusParLeProjet } from "../../../services/fonctions-du-projet.js";
+import { nomsConclusParLeProjet, texteDeLaFonctionVersee, laFonctionVersee } from "../../../services/fonctions-du-projet.js";
 import { renderSideResizer, bindSideResizer } from "../../ui/side-resizer.js";
 import { renderGhActionButton, bindGhActionButtons } from "../../ui/gh-split-button.js";
 import { renderJetons } from "../../ui/code-mdall.js";
@@ -865,6 +865,19 @@ export const GESTE = {
   ETABLI: "brouillon-etabli",
   /** Reprendre un utilitaire déjà posé sur son établi. */
   REPRENDRE: "brouillon-reprendre",
+  /**
+   * Reprendre une fonction **déjà versée dans ce projet**, pour la modifier.
+   *
+   * Une fonction versée se relisait, se rejouait, se nommait — et ne se
+   * modifiait pas. Y ajouter un `rend:` ou corriger une ligne de barème
+   * demandait de la réécrire de mémoire, en espérant n'avoir rien oublié. Une
+   * fonction qu'on ne peut pas changer est une fonction qu'on remplace par une
+   * autre qui lui ressemble, et le projet en tient deux (règle 10).
+   *
+   * Rien n'est modifié en place : le texte revient au brouillon, et le seul
+   * chemin vers la mémoire reste la proposition signée (règle 1).
+   */
+  REPRENDRE_DU_PROJET: "brouillon-reprendre-du-projet",
   /** Passer de l'essai à l'écriture : ouvrir le capot. */
   MODIFIER: "brouillon-modifier",
   /**
@@ -1006,6 +1019,11 @@ export function renderActionsDuTitre(
           icon: svgIcon("repo", { className: "octicon" }),
           label: "Reprendre un utilitaire…",
           title: "Rouvrir un utilitaire de votre établi"
+        }, {
+          action: GESTE.REPRENDRE_DU_PROJET,
+          icon: svgIcon("attestation", { className: "octicon" }),
+          label: "Reprendre une fonction du projet…",
+          title: "Rouvrir une fonction que ce projet a signée, pour la modifier"
         }, {
           separator: true
         }, {
@@ -1198,6 +1216,55 @@ export const GESTE_DE_LETABLI = {
   GARDER: "etabli-garder",
   REPRENDRE: "etabli-reprendre"
 };
+
+/** Reprendre une fonction que ce projet a signée. */
+export const GESTE_DU_PROJET = { REPRENDRE: "projet-reprendre" };
+
+/**
+ * Les fonctions que ce projet a signées, telles qu'on les rouvre.
+ *
+ * **Une mémoire qu'on n'a pas lue ne se lit pas comme un projet sans
+ * fonction** : la première dit qu'on ne sait pas, la seconde qu'il n'y a rien.
+ * Confondre les deux ferait réécrire une fonction que le projet possède déjà
+ * (règle 5).
+ */
+export function renderLesFonctionsDuProjet(memoire = null) {
+  if (memoire === null) {
+    return `<p class="review-empty-note">La mémoire du projet n'a pas pu être lue. Rien n'est perdu : réessayez.</p>`;
+  }
+
+  const fonctions = nomsConclusParLeProjet(memoire);
+  if (!fonctions.length) {
+    return `<p class="review-empty-note">Ce projet n'a encore signé aucune fonction. Écrivez-en une, puis « Proposer au projet ».</p>`;
+  }
+
+  return `
+    <ul class="fiches">
+      ${fonctions.map((une) => `
+        <li>
+          <button type="button" class="fiches__item"
+            data-geste="${GESTE_DU_PROJET.REPRENDRE}" data-projet-sujet="${escapeHtml(une.nom)}">
+            <span class="fiches__nom">
+              ${escapeHtml(une.nom)}
+              ${une.forme ? `<span class="fiches__apart mono-small">${escapeHtml(une.forme)}</span>` : ""}
+            </span>
+            ${une.quoi ? `<span class="fiches__resume">${escapeHtml(une.quoi)}</span>` : ""}
+            <span class="fiches__quoi">
+              ${une.lit.length ? `lit ${escapeHtml(une.lit.join(", "))}` : "ne lit rien"}
+              ${ditDeCeQuElleRend(une.rend) ? ` · rend ${escapeHtml(ditDeCeQuElleRend(une.rend))}` : ""}
+            </span>
+          </button>
+        </li>
+      `).join("")}
+    </ul>
+  `;
+}
+
+/** Ce qu'une fonction annonce rendre, en un mot. */
+function ditDeCeQuElleRend(rend) {
+  if (rend?.valeurs?.length) return rend.valeurs.join(", ");
+  return texte(rend?.unite) ? `une mesure en ${rend.unite}` : "";
+}
 
 /**
  * Le titre de l'écran — et sur quel utilitaire on travaille.
@@ -1872,6 +1939,7 @@ function brancherLaLigneDuTitre(racine) {
       if (geste === GESTE.PROPOSER) void proposerAuProjet(racine);
       if (geste === GESTE.ETABLI) ouvrirLaFicheDeLetabli(racine);
       if (geste === GESTE.REPRENDRE) void ouvrirLetabli(racine);
+      if (geste === GESTE.REPRENDRE_DU_PROJET) void ouvrirLesFonctionsDuProjet(racine);
       if (geste === GESTE.MODIFIER) ouvrirLeCode(racine);
       if (geste === GESTE.ESSAYER) refermerLeCode(racine);
     });
@@ -2208,6 +2276,78 @@ async function ouvrirLetabli(racine) {
     metaHtml: escapeHtml("Vos utilitaires, dans tous vos projets. Rien ici n'est dans la mémoire d'un chantier."),
     corpsHtml: renderListeDeLetabli(etat.etabli)
   });
+}
+
+/**
+ * Ouvrir les fonctions que ce projet a signées.
+ *
+ * **La mémoire se lit après l'ouverture**, comme l'établi : elle est déjà là
+ * neuf fois sur dix — l'écran la lit au montage —, et attendre la base
+ * laisserait la fenêtre vide sur un clic.
+ */
+async function ouvrirLesFonctionsDuProjet(racine) {
+  fermerLaFenetreDeDetails();
+
+  const tete = {
+    titreHtml: escapeHtml("Les fonctions de ce projet"),
+    metaHtml: escapeHtml(
+      "Ce que le projet a signé. La reprendre l'ouvre ici pour la modifier — "
+      + "rien n'est changé dans la mémoire tant qu'une proposition n'est pas signée."
+    )
+  };
+
+  const corps = ouvrirLaFenetreDeDetails({
+    ...tete,
+    corpsHtml: etat.memoire === null
+      ? `<p class="review-empty-note">${escapeHtml("Lecture de la mémoire du projet…")}</p>`
+      : renderLesFonctionsDuProjet(etat.memoire),
+    surGeste: (geste, evenement) => {
+      if (geste !== GESTE_DU_PROJET.REPRENDRE) return;
+      const bouton = evenement.target.closest?.("[data-projet-sujet]");
+      if (bouton) reprendreDuProjet(racine, bouton.dataset.projetSujet);
+    }
+  });
+  if (!corps) return;
+
+  await assurerLaMemoire();
+  majLaFenetreDeDetails({ ...tete, corpsHtml: renderLesFonctionsDuProjet(etat.memoire) });
+}
+
+/**
+ * Reprendre une fonction versée dans le brouillon, pour la modifier.
+ *
+ * **Rien n'est modifié en place.** Son texte revient dans `essai.ref`, et le
+ * seul chemin vers la mémoire reste celui de tout le monde : une proposition
+ * relue ligne à ligne et signée (règle 1). La version reprise remplacera
+ * l'ancienne quand elle sera signée, pas avant.
+ */
+function reprendreDuProjet(racine, sujet) {
+  const nom = texte(sujet);
+  // **Laquelle des versions, c'est la mémoire qui le dit** — pas un second
+  // `find` écrit ici, qui prenait la première rendue par la base et ramenait
+  // donc le texte d'avant la dernière correction (règle 10).
+  const ecrit = texteDeLaFonctionVersee(laFonctionVersee(etat.memoire ?? [], nom));
+  if (!ecrit) return;
+
+  // **On demande avant d'écraser.** Le brouillon en cours n'est nulle part
+  // ailleurs : le remplacer sans un mot ferait perdre une demi-heure d'écriture.
+  if (brouillonEcrit(etat.brouillon)
+    && !window.confirm(`Reprendre « ${nom} » ? Ce qui est écrit ici sera remplacé.`)) return;
+
+  etat.brouillon = brouillonDesFichiers([{ nom: FICHIERS_DU_BROUILLON.REGLES, contenu: ecrit }], {
+    dit: `Modifier « ${nom} », déjà versée dans la mémoire du projet.`
+  });
+  // **Ce n'est pas un utilitaire de l'établi** : le titre ne doit pas annoncer
+  // qu'on travaille sur une version gardée ailleurs.
+  etat.utilitaire = null;
+  etat.mode = MODE.ECRITURE;
+  etat.lance = false;
+  etat.rendu = null;
+  etat.depot = null;
+  etat.garde = null;
+
+  fermerLaFenetreDeDetails();
+  dessiner(racine);
 }
 
 /**
@@ -2744,7 +2884,10 @@ async function transcrire(depuis) {
 
   try {
     const { ecrireEnMdall } = await import("../../../services/mdall-par-le-modele.js");
-    const rendu = await ecrireEnMdall({ dit: etat.brouillon.dit });
+    // **Ce que le projet conclut monte avec la phrase.** Sans lui, « lance la
+    // fonction existante » ne peut pas s'écrire : le modèle ne sait pas qu'elle
+    // existe, et il invente un appel que le langage n'a pas.
+    const rendu = await ecrireEnMdall({ dit: etat.brouillon.dit, memoire: etat.memoire });
 
     if (rendu.ok) {
       for (const fichier of rendu.fichiers) {

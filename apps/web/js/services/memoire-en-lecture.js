@@ -136,6 +136,21 @@ export function estUnCommentaire(ligne = "") {
 }
 
 /**
+ * Ce qu'un commentaire dit, sans ses marques.
+ *
+ * `// La couleur imposée par le fournisseur` rend la phrase seule : c'est elle
+ * qu'on garde, et `ligneDeCommentaire` repose le `//`. Les retirer à deux
+ * endroits finirait par ne plus retirer la même chose (règle 10).
+ */
+export function phraseDuCommentaire(ligne = "") {
+  return texte(texte(ligne)
+    .replace(/^\/\/+/, "")
+    .replace(/^\/\*+/, "")
+    .replace(/\*+\/$/, "")
+    .replace(/^\*+/, ""));
+}
+
+/**
  * Une locale de règle : `soit texte = "…";`
  *
  * Le nom porte le sens — c'est le type de provenance, ou `parce que`. Rendre
@@ -906,7 +921,14 @@ export function lireUnFichier(contenu = "") {
     // Un commentaire ne dit rien au raisonnement : il ne ferme ni n'ouvre, et
     // il ne se refuse jamais. Le refuser serait dire qu'écrire pour soi est une
     // faute.
-    if (estUnCommentaire(corps)) return;
+    //
+    // Le premier d'une fonction est une exception : c'est **ce qu'elle dit
+    // d'elle-même**, et l'écriture le repose (voir `quoi` sur le bloc). Les
+    // suivants restent ce qu'on écrit pour soi.
+    if (estUnCommentaire(corps)) {
+      if (courant && !courant.quoi) courant.quoi = phraseDuCommentaire(corps);
+      return;
+    }
 
     // Les formes d'un `.ref` qui s'étalent sur plusieurs lignes. Tout ce qu'un
     // `importe` et un `enregistre` portent se **déduit** — la variable est le
@@ -1260,6 +1282,18 @@ export function lireUnFichier(contenu = "") {
          * s'ouvre en premier, et de rien d'autre.
          */
         seLitEn: "",
+        /**
+         * **Ce que la fonction dit d'elle-même** — son premier commentaire.
+         *
+         * L'écriture la pose (`// La couleur imposée par le fournisseur`) et la
+         * lecture la jetait : une fonction versée puis reprise revenait nue, et
+         * l'on réécrivait de mémoire la phrase qui disait à quoi elle sert. Un
+         * aller sans retour n'est pas une écriture, c'est une perte (règle 4).
+         *
+         * Le **premier** seulement : les suivants disent pourquoi telle
+         * condition existe, ce qui est autre chose que ce que la fonction fait.
+         */
+        quoi: "",
         /**
          * L'abaque de la fonction, quand elle est écrite en courbe.
          *
