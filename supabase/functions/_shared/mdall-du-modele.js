@@ -680,10 +680,37 @@ export function phraseDeCeQuiEstConnu(connu = null) {
     ? `\n(et ${connu.deplus} autre${connu.deplus > 1 ? "s" : ""} que cette liste ne montre pas)`
     : "";
 
+  /**
+   * **L'exemple porte un nom de ce projet-ci**, et non un nom inventé.
+   *
+   * Une consigne qui montre `calcule X = Couleur des volets;` à un projet qui
+   * n'a pas de volets enseigne une règle abstraite ; la même phrase écrite avec
+   * la fonction que l'utilisateur vient de signer montre **sa** ligne, prête à
+   * copier.
+   */
+  const une = mot(fonctions[0]?.nom) || "Nom de la fonction";
+
+  /**
+   * **Le contre-exemple, écrit en toutes lettres.**
+   *
+   * « ne les appelle pas » était déjà là, et ne suffisait pas : le modèle a
+   * écrit `Couleur des volets(zones, Matériau);` malgré la phrase. Une règle
+   * énoncée pèse moins qu'une forme montrée — surtout contre une habitude
+   * qu'ont tous les autres langages. On montre donc la faute **et** sa
+   * correction, côte à côte.
+   */
   return `Ce projet a déjà signé ces fonctions. Elles existent : ne les réécris pas, `
     + `et ne les appelle pas — **nomme-les**, comme n'importe quel nom.\n`
     + `${lignes.join("\n")}${reste}\n\n`
-    + `Pour t'en servir : \`calcule X = Couleur des volets;\` ou \`si (Couleur des volets = "gris")\`. `
+    + `Il n'y a **aucun appel de fonction** dans ce langage, et aucune parenthèse `
+    + `après un nom :\n`
+    + `- FAUX : \`calcule X = ${une}(zones, Matériau);\`\n`
+    + `- FAUX : \`si (${une}(Matériau) = "gris")\`\n`
+    + `- JUSTE : \`calcule X = ${une};\`\n`
+    + `- JUSTE : \`si (${une} = "gris")\`\n\n`
+    + `Une fonction ne prend pas d'argument : elle **lit les noms qui existent `
+    + `autour d'elle**. Tu ne peux donc pas lui passer un autre nom que celui `
+    + `qu'elle lit — si elle lit \`Matériau\`, c'est \`Matériau\` qui doit exister. `
     + `Déclare dans ta signature ce que tu lis d'elles, et ce qu'elles lisent `
     + `devient une entrée de ta fonction.\n\n`;
 }

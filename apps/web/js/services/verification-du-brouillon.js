@@ -27,7 +27,7 @@
  * écrit, avant même de répondre au navigateur.
  */
 
-import { entreesDuBloc, lireUnFichier } from "./memoire-en-lecture.js";
+import { entreesDuBloc, lireUnFichier, nomsPosesParLeBloc } from "./memoire-en-lecture.js";
 import { PORTEE_DUNE_FONCTION, couperLUnite, estMesuree } from "./memoire-en-texte.js";
 import { memeGrandeur } from "./unites-du-metier.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
@@ -399,10 +399,24 @@ export function verifierLeBrouillon(fichiers = []) {
         ...(bloc?.sinonSi ?? []).flatMap((branche) => branche?.conditions ?? []),
         ...(bloc?.sauf ?? [])
       ];
+      /**
+       * **Ce que la fonction se donne elle-même n'est déclaré nulle part, et
+       * c'est normal.** `calcule x = Prix HT * 1,2;` puis `si (x > 0)` est la
+       * forme la plus courante de toute la langue, et elle portait « x n'est
+       * déclaré nulle part » à chaque fois. Une console qui crie à tort cesse
+       * d'être lue, et les vraies remarques se perdent avec les fausses.
+       *
+       * Elles restent **locales** : elles ne rejoignent pas les noms déclarés
+       * du brouillon, sans quoi la fonction d'à côté pourrait lire un `x` qui
+       * n'existe pas chez elle.
+       */
+      const siennes = nomsPosesParLeBloc(bloc);
+
       for (const condition of clauses) {
         const cite = texte(condition?.sujet);
         const cle = cleDuSujet(cite);
         if (!cle) continue;
+        if (siennes.has(cle)) continue;
 
         if (!declares.has(cle)) {
           remarques.push({

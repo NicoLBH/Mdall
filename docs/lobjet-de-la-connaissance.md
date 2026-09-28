@@ -2481,5 +2481,6 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | ce qu'une fonction attend, dit pendant qu'on l'écrit | `docs/laide-a-la-signature.md` |
 | ce qu'une fonction annonce, et ce qui le vérifie | `docs/ce-quune-fonction-annonce.md` |
 | ce que le modèle sait du projet, et corriger une fonction versée | `docs/se-servir-du-projet.md` |
+| pourquoi une fonction ne s'appelle pas, et ce que l'écran en dit | `docs/il-ny-a-pas-dappel-de-fonction.md` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

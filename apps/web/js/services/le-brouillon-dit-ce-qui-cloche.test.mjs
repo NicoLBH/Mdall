@@ -39,7 +39,9 @@ test("une ligne écrite comme un appel se refuse, et dit quoi écrire à la plac
   assert.equal(refus.length, 1);
   assert.equal(refus[0].ligne, 3);
   assert.match(refus[0].raison, /il n'y a pas d'appel de fonction/);
-  assert.match(refus[0].raison, /« Couleur des volets » se nomme/);
+  // Une seule phrase pour cette faute, où qu'on la commette : elle vient de
+  // `phraseDuRefus`, et ne se réécrit pas ici (règle 10).
+  assert.match(refus[0].raison, /Écrivez « Couleur des volets » seul/);
   // **La ligne à écrire**, dans les deux formes où l'on s'en sert.
   assert.match(refus[0].raison, /calcule … = Couleur des volets;/);
   assert.match(refus[0].raison, /si \(Couleur des volets …\)/);
