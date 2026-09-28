@@ -81,6 +81,9 @@ test("une déclaration entre au catalogue avec ce qu'elle dit d'elle-même", () 
     // nom vaut.
     rend: null,
     lit: [],
+    // **Un nom déclaré ne s'appelle pas** : il n'a pas de signature, donc pas
+    // d'ordre à donner. C'est une fonction qui en a un.
+    parametres: [],
     unite: "",
     valeurs: ["neuf", "rénovation", "existant"],
     ou: "variables-du-projet.ref",
@@ -167,6 +170,9 @@ test("un utilitaire de l'établi entre par ce qu'il conclut, version comprise", 
     // et ce qu'il lit, jamais sa promesse. On ne l'invente pas (règle 5).
     rend: null,
     lit: ["Portée (m)", "Charge d'exploitation (kN/m²)"],
+    // **Un utilitaire de l'établi ne s'appelle pas d'ici** : il vit dans un
+    // autre brouillon, et sa fiche ne porte pas sa signature.
+    parametres: [],
     unite: "",
     valeurs: [],
     ou: "Descente de charge v3",

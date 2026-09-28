@@ -502,18 +502,15 @@ function bornesDe(ligne) {
 function raisonDeLaCondition(corps = "") {
   const nomme = nomAppeleDans(corps);
   /**
-   * **Une condition compare un nom, pas un appel.**
+   * **Une condition porte un appel depuis qu'un appel existe.**
    *
-   * `si (Couleur des volets(zones, Matériau) = "violet")` est ce qu'on écrit
-   * naturellement, et ce n'est pas encore une forme du langage : une condition
-   * porte un **sujet**, et l'appel se fait un cran plus haut, dans un
-   * `calcule`. Le dire avec la ligne qu'il fallait écrire vaut mieux que
-   * « cette condition ne compare rien », qui envoyait chercher un `=` qui est
-   * là.
+   * Ce qui tombe ici est donc un appel qui ne se **lit** pas — une parenthèse
+   * oubliée, une virgule de trop. Le dire ainsi vaut mieux que « cette
+   * condition ne compare rien », qui envoyait chercher un `=` qui est là.
    */
   return nomme
-    ? `une condition compare un nom : posez l'appel au-dessus, `
-      + `« calcule x = ${nomme}(…); », puis comparez « x ».`
+    ? `cet appel ne se lit pas : « ${nomme}(…) » — vérifiez ses parenthèses `
+      + `et ce que vous lui donnez.`
     : "cette condition ne compare rien.";
 }
 
@@ -616,6 +613,22 @@ export function lireUneValeur(brut = "") {
 }
 
 /**
+ * L'appel qu'un sujet de condition porte, s'il en porte un.
+ *
+ * `ecrit` est la ligne telle qu'elle a été tapée : c'est elle que l'écriture
+ * repose, au caractère près. `arbre` est ce qu'on évalue, et ce dont on tire
+ * les noms lus. Une seule lecture, deux usages.
+ */
+function appelDuSujet(dite = "") {
+  if (!dite.includes("(")) return null;
+
+  const lu = lireUnCalcul(dite);
+  if (!lu.ok || lu.arbre?.quoi !== "appel-du-projet") return null;
+
+  return { ecrit: texte(dite), arbre: lu.arbre };
+}
+
+/**
  * Une condition : `Sujet ≤ 28 m`, `Voie-engins parmi "a" ou "b"`.
  *
  * ## Le piège du « ou »
@@ -640,14 +653,32 @@ export function lireUneCondition(corps = "") {
     ?? dit.match(/^(.*?)\s+(parmi)\s+(.*)$/i);
   if (!signe) return null;
 
-  const sujet = texte(signe[1]);
+  const dite = texte(signe[1]);
+  if (!dite) return null;
+
+  /**
+   * **Une condition peut porter sur un appel.**
+   *
+   * `si (Couleur des volets(zones, Matériau) = "violet")` est ce qu'on écrit
+   * naturellement, et il fallait jusqu'ici passer par une locale. Une ligne de
+   * plus que la langue n'exige pas vraiment.
+   *
+   * **Le sujet reste le nom de la fonction**, et l'appel voyage à côté. Tout ce
+   * qui lit un sujet comme un nom — le graphe des dépendances, la recherche
+   * d'un nom jamais déclaré, la liste de ce qu'un bloc lit — continue donc de
+   * lire un nom, et ne voit pas la différence. Ranger la ligne entière dans
+   * `sujet` aurait fait porter la moitié du projet sur un nom que personne n'a
+   * écrit.
+   *
+   * Ce qui n'est **pas** un appel garde son refus : un nom ne porte pas de
+   * parenthèse, et une condition acceptée sur un tel nom resterait indécidable
+   * pour toujours (règle 5).
+   */
+  const appel = appelDuSujet(dite);
+  if (!appel && /[()]/.test(dite)) return null;
+
+  const sujet = appel ? appel.arbre.nom : dite;
   if (!sujet) return null;
-  // **Un nom ne porte pas de parenthèse.** `si (Couleur des volets(Matériau) =
-  // "gris")` donnerait sinon une condition portant sur un sujet nommé
-  // « (Couleur des volets(Matériau) » : une condition acceptée sur un nom que
-  // personne n'a écrit, et qui resterait indécidable pour toujours. L'appelant
-  // la refuse en disant ce qu'il fallait écrire.
-  if (/[()]/.test(sujet)) return null;
 
   const operateur = COMPARATEURS.get(texte(signe[2]).toLowerCase()) ?? OPERATEUR.EGAL;
   const morceaux = texte(signe[3]).split(/\s+ou\s+/i).map(texte).filter(Boolean);
@@ -655,6 +686,7 @@ export function lireUneCondition(corps = "") {
 
   return {
     sujet,
+    ...(appel ? { appel } : {}),
     operateur,
     valeur: lues.map((lue) => lue.valeur),
     unite: lues.find((lue) => lue.unite)?.unite ?? "",
@@ -2005,15 +2037,50 @@ function expressionsDuBloc(bloc = {}) {
  * « que dois-je annoncer ? », et elle n'existait pas tant que rien ne
  * s'appelait.
  */
-export function fonctionsAppeleesParLeBloc(bloc = {}) {
-  const appelees = [];
+/**
+ * Les appels qu'un bloc porte dans ses expressions, en arbres.
+ *
+ * `fonctionsAppeleesParLeBloc` n'en garde que les noms ; la vérification, elle,
+ * a besoin de **ce qu'on leur donne**. Même parcours, deux besoins — et un
+ * second parcours écrit ailleurs cesserait un jour de voir les mêmes endroits
+ * (règle 10).
+ */
+export function appelsDesExpressions(bloc = {}) {
+  const arbres = [];
+
+  const parcourir = (noeud) => {
+    if (!noeud) return;
+    if (noeud.quoi === "oppose") return parcourir(noeud.dessous);
+    if (noeud.quoi === "binaire") { parcourir(noeud.gauche); parcourir(noeud.droite); return; }
+    if (noeud.quoi === "appel") { noeud.arguments.forEach(parcourir); return; }
+    if (noeud.quoi === "appel-du-projet") { arbres.push(noeud); noeud.arguments.forEach(parcourir); }
+  };
 
   for (const expression of expressionsDuBloc(bloc)) {
     const lu = lireUnCalcul(expression);
-    if (!lu.ok) continue;
-    for (const nom of fonctionsAppeleesDuCalcul(lu.arbre)) {
+    if (lu.ok) parcourir(lu.arbre);
+  }
+
+  return arbres;
+}
+
+export function fonctionsAppeleesParLeBloc(bloc = {}) {
+  const appelees = [];
+
+  const garder = (arbre) => {
+    for (const nom of fonctionsAppeleesDuCalcul(arbre)) {
       if (!appelees.some((une) => cleDuSujet(une) === cleDuSujet(nom))) appelees.push(nom);
     }
+  };
+
+  for (const expression of expressionsDuBloc(bloc)) {
+    const lu = lireUnCalcul(expression);
+    if (lu.ok) garder(lu.arbre);
+  }
+
+  // Une clause peut porter un appel, elle aussi : `si (Couleur des volets(…))`.
+  for (const condition of clausesDeLaRegle(bloc)) {
+    if (condition?.appel?.arbre) garder(condition.appel.arbre);
   }
 
   return appelees;
@@ -2060,7 +2127,16 @@ export function nomsLusParLeBloc(bloc = {}) {
    */
   retenir(bloc?.courbe?.selon);
 
-  for (const condition of clausesDeLaRegle(bloc)) retenir(condition?.sujet);
+  /**
+   * **Une clause qui porte un appel lit tout ce que l'appel nomme** : la
+   * fonction, et ce qu'on lui donne. Ne retenir que le sujet ferait une
+   * fonction dont on ne demande jamais les entrées de son propre appel — elle
+   * resterait indécidable, et le formulaire ne dirait pas quoi remplir.
+   */
+  for (const condition of clausesDeLaRegle(bloc)) {
+    if (condition?.appel?.arbre) nomsDuCalcul(condition.appel.arbre).forEach(retenir);
+    else retenir(condition?.sujet);
+  }
 
   return lus;
 }
@@ -2595,6 +2671,21 @@ export function nomsPosesParLeBloc(bloc = {}) {
   // d'interroger cet ensemble, et une garde qu'on ne peut pas faire tomber est
   // une garde dont personne ne saura si elle sert (règle 4).
   return siens;
+}
+
+/**
+ * **Ce qu'une fonction déclare, dans l'ordre, portée comprise.**
+ *
+ * C'est sa signature — la ligne qu'on lit avant de s'en servir. Un brouillon la
+ * porte telle qu'elle est écrite ; une fonction versée ne garde pas sa ligne,
+ * et on la reconstruit de ce qu'elle lit, la portée devant. Les deux répondent
+ * à la même question, et c'est cette réponse-là qui dit dans quel ordre on
+ * donne les valeurs.
+ */
+export function parametresDuBloc(bloc = {}) {
+  const ecrite = (Array.isArray(bloc?.signature) ? bloc.signature : []).map(texte).filter(Boolean);
+  if (ecrite.length) return ecrite;
+  return [PORTEE_DUNE_FONCTION, ...entreesDuBloc(bloc)];
 }
 
 export function entreesDuBloc(bloc = {}) {

@@ -526,7 +526,7 @@ export function repriseDirecte(arbre = null, lire = () => ({ connu: false, valeu
   const donnees = valeursDonnees(arbre.arguments, lire);
   if (donnees.some((une) => une.refus || !une.connu)) return null;
 
-  const lue = lire(arbre.nom, donnees.map((une) => une.valeur));
+  const lue = lire(arbre.nom, donnees);
   if (!lue?.connu || estMesuree(lue.valeur)) return null;
   return { connu: true, valeur: texte(lue.valeur) };
 }
@@ -553,6 +553,33 @@ export function fonctionsAppeleesDuCalcul(arbre = null) {
   };
   parcourir(arbre);
   return noms;
+}
+
+/**
+ * Ce qu'une expression vaut, **mot ou mesure**.
+ *
+ * Une reprise d'abord — un nom, un appel —, l'arithmétique ensuite. Les deux
+ * rendent la même chose : une valeur écrite, telle que la mémoire l'écrit.
+ *
+ * **Deux endroits la posaient** : la locale d'un `calcule`, et maintenant le
+ * sujet d'une condition. Écrite deux fois, elle aurait fini par ne plus dire la
+ * même chose selon qu'on compare un appel ou qu'on le range (règle 4).
+ *
+ * @returns {{connu: boolean, valeur: string, refus: string, ou: string,
+ *   manquants: string[]}}
+ */
+export function valeurDUneExpression(arbre = null, lire = () => ({ connu: false, valeur: "" })) {
+  const reprise = repriseDirecte(arbre, lire);
+  if (reprise) return { connu: true, valeur: reprise.valeur, refus: "", ou: "", manquants: [] };
+
+  const rendu = evaluerUnCalcul(arbre, lire);
+  return {
+    connu: Boolean(rendu.connu),
+    valeur: ecrireLeCalcul(rendu),
+    refus: texte(rendu.refus),
+    ou: texte(rendu.ou),
+    manquants: rendu.manquants ?? []
+  };
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -631,28 +658,32 @@ export function evaluerUnCalcul(arbre = null, lire = () => ({ connu: false, vale
 }
 
 /**
- * **Ce qu'on donne à une fonction du projet** : des valeurs, telles qu'elles
- * s'écrivent.
+ * **Ce qu'on donne à une fonction du projet.**
  *
- * Pas des mesures. `Couleur des volets(zones, Matériau)` passe « bois » —
- * un texte, qu'aucune arithmétique ne saurait porter. Les évaluer en nombres
- * rendrait toute fonction qui lit un domaine fermé indécidable, c'est-à-dire
- * la plupart.
+ * ## On donne des noms, pas des valeurs
  *
- * Un nom se donne donc **tel qu'il vaut** ; une expression se calcule et
- * s'écrit ensuite, parce qu'une expression n'a pas d'autre forme.
+ * `Couleur des volets(zones, Matériau)` dit : « là où tu lis
+ * `Nature des volets`, lis `Matériau` ». C'est une **substitution de noms**, et
+ * c'est ce qui la rend utile — la valeur, elle, se lit là où la lecture se
+ * fait. Passer la valeur d'ici figerait l'appel dans l'environnement de
+ * l'appelant, et `F(Bâtiment A, Matériau)` rendrait la même chose que
+ * `F(Bâtiment B, Matériau)` : la portée ne servirait à rien.
+ *
+ * Un argument qui n'est pas un nom — un calcul, un nombre — n'a pas d'autre
+ * forme qu'une valeur : on le calcule ici, puisqu'il n'est écrit qu'ici.
+ *
+ * @returns {{alias?: string, valeur?: string, connu: boolean}[]}
  */
 function valeursDonnees(donnes, lire) {
   return (Array.isArray(donnes) ? donnes : []).map((argument) => {
-    if (argument?.quoi === "nom") {
-      const lue = lire(argument.nom);
-      return lue?.connu ? { connu: true, valeur: texte(lue.valeur), nom: argument.nom } : { connu: false, valeur: "", nom: argument.nom };
-    }
+    // **Un nom voyage tel quel.** C'est le lecteur d'en face qui le résoudra,
+    // là où il lit — et donc dans la zone qu'on lui a donnée, s'il y en a une.
+    if (argument?.quoi === "nom") return { alias: texte(argument.nom), connu: true };
 
     const rendu = evaluerUnCalcul(argument, lire);
-    if (rendu.refus) return { connu: false, valeur: "", refus: rendu.refus, ou: rendu.ou, nom: "" };
-    if (!rendu.connu) return { connu: false, valeur: "", manquants: rendu.manquants ?? [], nom: "" };
-    return { connu: true, valeur: ecrireLeCalcul(rendu), nom: "" };
+    if (rendu.refus) return { connu: false, valeur: "", refus: rendu.refus, ou: rendu.ou };
+    if (!rendu.connu) return { connu: false, valeur: "", manquants: rendu.manquants ?? [] };
+    return { connu: true, valeur: ecrireLeCalcul(rendu) };
   });
 }
 
@@ -675,11 +706,9 @@ function evaluerUnAppelDuProjet(arbre, lire) {
   if (casse) return refuse(casse.refus, casse.ou);
 
   const manque = donnees.filter((une) => !une.connu);
-  if (manque.length) {
-    return indecidable(manque.flatMap((une) => (une.nom ? [une.nom] : une.manquants ?? [])));
-  }
+  if (manque.length) return indecidable(manque.flatMap((une) => une.manquants ?? []));
 
-  const lue = lire(arbre.nom, donnees.map((une) => une.valeur));
+  const lue = lire(arbre.nom, donnees);
   if (lue?.refus) return refuse(lue.refus, texte(lue.ou));
   if (!lue?.connu) return indecidable([arbre.nom]);
 

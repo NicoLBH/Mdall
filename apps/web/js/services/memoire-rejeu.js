@@ -36,7 +36,11 @@ import { zonesLisibles } from "./memoire-blame.js";
 import { normalizeZoneKey } from "./project-zones.js";
 import { valeursDeLaPortee } from "./memoire-valeurs.js";
 import { sujetDe, valeurDuSujet } from "./memoire-raisonnement.js";
-import { VERDICT, evaluerLaRegle, lecteurDeValeurs, rejouerLaRegle } from "./memoire-evaluateur.js";
+import {
+  VERDICT, evaluerLaRegle, lecteurDeValeurs, lecteurQuiSaitAppeler, rejouerLaRegle
+} from "./memoire-evaluateur.js";
+import { parametresDuBloc } from "./memoire-en-lecture.js";
+import { blocDeLaRegleVersee } from "./fonctions-du-projet.js";
 import { ordreDeLaZone } from "./memoire-plan.js";
 import { jalonsDuRejeu } from "./raisonnement-jalonne.js";
 import { estUneRegle } from "./assertion-taxonomy.js";
@@ -151,6 +155,60 @@ export function rejouerLesRegles(assertions = [], { substitutions = new Map(), a
   let tours = 0;
   let borne = false;
 
+  /**
+   * **Ce que la mémoire sait faire**, pour les appels.
+   *
+   * Une fonction versée qui en appelle une autre était **indécidable ici** :
+   * l'appel n'existait que dans le bac d'essai. On versait une fonction, et
+   * elle cessait de répondre — sans qu'un mot le dise. Les règles ne changent
+   * pas d'une zone à l'autre : la carte se fait une fois.
+   */
+  const savoirFaire = new Map();
+  for (const regle of toutes) {
+    if (!estUneRegle(regle)) continue;
+    const cle = cleDuSujet(sujetDe(regle));
+    if (!cle || savoirFaire.has(cle)) continue;
+    savoirFaire.set(cle, { regle, parametres: parametresDuBloc(blocDeLaRegleVersee(regle)) });
+  }
+
+  /**
+   * **La zone voyage avec l'appel.** `Couleur des volets(Bâtiment B, Matériau)`
+   * lit les valeurs du bâtiment B — la même fonction, deux bâtiments, deux
+   * réponses. C'est ici que cela a un sens, et nulle part ailleurs : c'est ici
+   * que les valeurs sont rangées par zone.
+   *
+   * Une zone qu'on ne connaît pas rend `null` : on lit alors comme on lisait,
+   * plutôt que de répondre sur une mémoire vide qu'on aurait inventée (règle 5).
+   */
+  const connues = new Set(toutes.flatMap(porteesDe));
+  const pourLaZone = (dite) => {
+    const cle = normalizeZoneKey(dite);
+    /**
+     * **Toutes les zones que la mémoire connaît**, et pas seulement celles
+     * qu'une règle déclare. Le rejeu tourne par zone **de règle** ; un appel,
+     * lui, peut nommer un bâtiment dont seules les **valeurs** parlent — et
+     * c'est justement le cas qui vaut la peine : la même règle, écrite pour
+     * tout l'ouvrage, interrogée bâtiment par bâtiment.
+     *
+     * Une zone qu'on ne connaît pas rend `null` : on lit alors comme on lisait,
+     * plutôt que de répondre sur une mémoire vide qu'on aurait inventée
+     * (règle 5).
+     */
+    if (!cle) return null;
+
+    /**
+     * **Une zone nommée qu'on ne connaît pas fait taire l'appel.**
+     *
+     * Se rabattre sur les valeurs de l'appelant rendrait une réponse
+     * parfaitement plausible **pour le mauvais endroit** — la faute que cette
+     * langue ne pardonne pas. On demandait le bâtiment Z ; on ne répond pas
+     * avec le bâtiment courant sous prétexte qu'on l'a sous la main (règle 5).
+     */
+    if (!connues.has(cle)) return () => ({ connu: false, valeur: "" });
+
+    return lecteurDeValeurs(valeursDeLaZone(toutes, cle, imposees));
+  };
+
   for (const zone of porteesDuRejeu(toutes)) {
     const regles = reglesDeLaZone(toutes, zone);
     if (!regles.length) continue;
@@ -170,7 +228,8 @@ export function rejouerLesRegles(assertions = [], { substitutions = new Map(), a
       if (toursDeLaZone > TOURS_MAX) { borne = true; tourne = true; break; }
 
       for (const regle of regles) {
-        const rendu = rejouerLaRegle(regle, lecteurDeValeurs(valeurs));
+        const rendu = rejouerLaRegle(regle,
+          lecteurQuiSaitAppeler(lecteurDeValeurs(valeurs), savoirFaire, { pourLaZone }));
         const sortie = sortieDeLaRegle(regle, toutes, zone);
 
         if (rendu.verdict === VERDICT.INDECIDABLE) {

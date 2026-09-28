@@ -653,13 +653,32 @@ export const WIKI_DU_LANGAGE = [
       + "donc avec deux valeurs : la portée, puis ce qui remplace "
       + "« Nature des volets ». Si vous n'en donnez pas le bon nombre, l'écran "
       + "vous rappelle la signature attendue."),
-    dit("**Un appel se pose dans un `calcule`**, jamais seul sur sa ligne et pas "
-      + "encore dans un `si (…)` : un appel ne conclut rien par lui-même, il rend "
-      + "une valeur — et une valeur a besoin d'un nom pour qu'on s'en serve."),
-    code("calcule teinte = Couleur des volets(zones, Matériau);",
-      "si (teinte = \"violet\")",
+    dit("**Un appel se pose où l'on s'en sert** : dans un `calcule`, ou "
+      + "directement dans un `si (…)`. Jamais seul sur sa ligne — un appel ne "
+      + "conclut rien par lui-même, il rend une valeur."),
+    code("// Dans une condition, directement",
+      "si (Couleur des volets(zones, Matériau) = \"violet\")",
       "alors (\"conforme au nuancier\");",
-      "sinon (\"à valider\");"),
+      "sinon (\"à valider\");",
+      "",
+      "// Ou rangé dans une locale, quand on s'en sert deux fois",
+      "calcule teinte = Couleur des volets(zones, Matériau);",
+      "si (teinte = \"violet\")",
+      "alors (\"conforme au nuancier\");"),
+    dit("**L'écran vous prévient si la fonction ne connaîtra jamais ce que vous "
+      + "lui donnez.** Si « Couleur des volets » lit un nom qui vaut « bois » ou "
+      + "« pvc » et que vous lui passez un nom qui peut valoir « alu », elle "
+      + "répondra son `sinon` pour « alu » — un résultat plausible, et faux. Le "
+      + "volet des remarques le dit, avec les valeurs en cause."),
+    dit("**La portée dit où lire.** `Couleur des volets(Bâtiment B, Matériau)` "
+      + "lit le matériau **du bâtiment B** : la même fonction, deux bâtiments, "
+      + "deux réponses. Dans le bac d'essai il n'y a pas de zone — on y essaie "
+      + "une fonction, pas un ouvrage —, et c'est en relisant la mémoire du "
+      + "projet que la portée prend son sens. Une zone que le projet ne connaît "
+      + "pas fait taire l'appel plutôt que de répondre pour ailleurs."),
+    dit("**En tapant la parenthèse, l'écran montre l'ordre** : la portée "
+      + "d'abord, puis ce que la signature déclare, avec la valeur que vous "
+      + "êtes en train d'écrire en évidence."),
     dit("**Ce que l'appel ne fait pas** : il n'écrit rien et ne conclut sous aucun "
       + "nom. « Couleur des volets » continue de conclure sous son seul nom dans "
       + "la mémoire — un appel répond à une question de passage, il n'ajoute pas "

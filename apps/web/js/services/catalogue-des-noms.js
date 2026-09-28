@@ -48,7 +48,9 @@
  * qui lit un nom que personne ne conclut, et la règle resterait indécidable.
  */
 
-import { lireUnFichier, nomsConclusParLeBloc, nomsLusParLeBloc } from "./memoire-en-lecture.js";
+import {
+  lireUnFichier, nomsConclusParLeBloc, nomsLusParLeBloc, parametresDuBloc
+} from "./memoire-en-lecture.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { valeursPosees } from "./formulaire-du-brouillon.js";
 import { FONCTIONS } from "./mdall-calcul.js";
@@ -125,7 +127,10 @@ export const ORDRE_DES_ORIGINES = [
 ];
 
 /** Une entrée du catalogue, avec tous ses champs à leur place. */
-function entree({ nom, origine, dit = "", lit = [], unite = "", valeurs = [], ou = "", comme = "", rend = null }) {
+function entree({
+  nom, origine, dit = "", lit = [], parametres = [], unite = "",
+  valeurs = [], ou = "", comme = "", rend = null
+}) {
   return {
     nom: texte(nom),
     origine,
@@ -139,6 +144,15 @@ function entree({ nom, origine, dit = "", lit = [], unite = "", valeurs = [], ou
      */
     rend: rend ?? null,
     lit: (Array.isArray(lit) ? lit : []).map(texte).filter(Boolean),
+    /**
+     * **L'ordre dans lequel on lui donne ses valeurs**, portée comprise.
+     *
+     * Ce n'est pas `lit` : `lit` dit *ce qu'*elle lit, en écartant la portée et
+     * sans suivre la signature. Un appel, lui, mire la signature — et c'est
+     * l'ordre qu'on cherche en tapant la parenthèse. Vide pour un nom qui n'est
+     * pas une fonction.
+     */
+    parametres: (Array.isArray(parametres) ? parametres : []).map(texte).filter(Boolean),
     unite: texte(unite),
     valeurs: (Array.isArray(valeurs) ? valeurs : []).map(texte).filter(Boolean),
     /** Le fichier du brouillon, ou l'utilitaire de l'établi : d'où ça vient. */
@@ -211,6 +225,16 @@ export function nomsDuBrouillon(fichiers = []) {
           // lui-même : l'y forcer serait une seconde façon de dire la même
           // chose, qui cesserait un jour de dire pareil.
           lit,
+          /**
+           * **L'ordre dans lequel on lui donne ses valeurs**, portée comprise.
+           *
+           * `lit` dit *ce qu'*une fonction lit ; depuis qu'on peut la lui
+           * donner, ce qu'on veut savoir en tapant la parenthèse est **dans
+           * quel ordre**. Ce n'est pas la même question : `lit` écarte la
+           * portée et ne suit pas la signature, qui est justement ce qu'un
+           * appel mire.
+           */
+          parametres: parametresDuBloc(bloc),
           unite: texte(bloc?.unite),
           // Ce que la fonction annonce rendre : l'aide à la signature le
           // montre, et c'est la question qu'on se pose juste avant de la nommer.
@@ -354,6 +378,7 @@ function nomsDuProjet(projet) {
     nom: texte(une?.nom),
     origine: ORIGINE.PROJET,
     lit: Array.isArray(une?.lit) ? une.lit : [],
+    parametres: Array.isArray(une?.parametres) ? une.parametres : [],
     rend: une?.rend ?? null,
     // Ce qu'elle est, en un mot : on ne relit pas un abaque comme une cascade
     // de « si », et la fiche le dit avant qu'on l'ouvre.

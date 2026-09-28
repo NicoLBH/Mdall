@@ -714,7 +714,15 @@ export function ligneDeCondition(mot, condition = {}, profondeur = 1, { regle = 
   // sur la dernière ferait bouger deux lignes dès qu'on en ajoute une, et le
   // diff ne dirait plus « une condition de plus ».
   if (regle) jetons.push(jeton(JETON.PONCTUATION, "("));
-  jetons.push(jeton(JETON.SUJET, texte(condition.sujet)));
+  /**
+   * **Une clause qui porte un appel le repose tel qu'il a été écrit.**
+   *
+   * `sujet` ne tient que le nom de la fonction — c'est ce que tout le reste lit
+   * comme un nom —, et la ligne entière vit dans `appel.ecrit`. Réécrire
+   * l'appel depuis son arbre demanderait un second écrivain d'expressions, qui
+   * finirait par ne plus poser les parenthèses comme le premier (règle 4).
+   */
+  jetons.push(jeton(JETON.SUJET, texte(condition.appel?.ecrit) || texte(condition.sujet)));
 
   const fermer = () => { if (regle) jetons.push(jeton(JETON.PONCTUATION, ")")); };
 

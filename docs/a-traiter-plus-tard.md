@@ -4696,32 +4696,27 @@ qu'elle attend « Nature des volets » — et c'est l'aide à la signature, qui
 existe, appliquée à un nom qu'on **nomme** plutôt qu'à une fonction qu'on
 écrit.
 
-**Un appel ne s'écrit pas encore dans un `si (…)`.** `si (Couleur des
-volets(zones, Matériau) = "violet")` est la forme qu'on écrit naturellement, et
-il faut aujourd'hui passer par une locale — `calcule teinte = …;` puis
-`si (teinte = …)`. Le refus le dit avec la ligne à écrire, donc personne ne
-reste bloqué ; mais c'est une ligne de plus que la langue n'exige pas vraiment.
-Le faire demande que le **sujet** d'une condition puisse être une expression, ce
-qui touche la lecture, l'évaluation, la couleur et le graphe des dépendances —
-partout où l'on suppose aujourd'hui qu'une condition porte sur un nom.
+**Le contrôle des domaines ne voit que le brouillon.** « Cette fonction ne saura
+jamais répondre pour ce nom-là » se dit quand la fonction appelée est écrite dans
+les fichiers qu'on vérifie (`docs/la-portee-dun-appel.md`). Appelée depuis la
+**mémoire** du projet — le cas le plus courant une fois qu'on verse — elle
+échappe au contrôle : `verifierLeBrouillon` ne reçoit que des fichiers. C'est la
+même limite que pour « et cette fonction lit tel nom, qui doit exister », et elle
+se lèverait du même geste : donner la mémoire à la vérification, et décider ce
+qu'un brouillon vérifié **sans** mémoire doit dire alors, pour que la même page
+ne rende pas deux verdicts.
 
-**Rien ne vérifie qu'un appel donne des valeurs du bon domaine.** `Couleur des
-volets` lit `Nature des volets`, déclaré « bois » ou « pvc » ; on peut lui
-donner `Matériau`, qui vaut « alu ». La fonction répondra `sinon`, ce qui est
-plausible et peut-être faux. Le domaine fermé du paramètre est connu — il est
-dans `variables-du-projet.ref` —, et le comparer à celui de ce qu'on donne dirait
-« cette fonction ne saura jamais répondre "violet" pour ce nom-là ». C'est le
-même contrôle que `hors-du-domaine`, appliqué à un appel.
+**Le domaine d'un argument calculé ne se contrôle pas.** `F(zones, Matériau)` se
+compare ; un calcul, non — faute d'un nom déclaré à interroger. C'est assumé : un
+calcul n'a pas de domaine fermé, et lui en inventer un serait affirmer ce qu'on
+ignore. Ce qui manque vraiment serait le domaine **de ce qu'une fonction rend** :
+`rend:` le dit déjà quand il est écrit, et personne ne le compare encore à ce
+qu'un appelant en attend.
 
-**L'aide à la signature ne montre pas encore l'ordre d'un appel.** Elle dit ce
-qu'une fonction lit ; depuis qu'on lui donne des valeurs, ce qu'on veut savoir
-en tapant la parenthèse est **dans quel ordre**. C'est la même donnée —
-`parametresDuBloc` la rend déjà — et c'est un branchement d'écran, pas une
-question ouverte.
-
-**Une fonction appelée avec des zones différentes n'est pas encore une
-question.** `Couleur des volets(Bâtiment A, Matériau)` passe la portée comme
-n'importe quelle valeur, et rien ne s'en sert : le bac d'essai n'a pas de zone,
-et l'évaluateur ne restreint rien. C'est cohérent avec ce qui existe, et c'est
-la moitié de l'intérêt de l'appel qui dort — la même fonction, deux bâtiments,
-deux réponses.
+**Le bac d'essai n'a toujours pas de zone**, et c'est voulu : on y essaie une
+fonction, pas un ouvrage. La portée d'un appel y est donc liée comme une valeur
+et ne restreint rien — c'est en relisant la mémoire que la zone joue
+(`docs/la-portee-dun-appel.md`). Lui en donner une est une vraie décision
+d'écran : un sélecteur de plus, et la question de ce qu'il vaut par défaut. Tant
+qu'on ne l'a pas prise, un essai ne peut pas montrer « la même fonction, deux
+bâtiments, deux réponses » — seul le rejeu de la mémoire le montre.

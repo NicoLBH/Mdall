@@ -27,7 +27,10 @@
  * écrit, avant même de répondre au navigateur.
  */
 
-import { entreesDuBloc, lireUnFichier, nomsPosesParLeBloc } from "./memoire-en-lecture.js";
+import {
+  entreesDuBloc, lireUnFichier, nomsPosesParLeBloc, parametresDuBloc,
+  clausesDeLaRegle, appelsDesExpressions
+} from "./memoire-en-lecture.js";
 import { PORTEE_DUNE_FONCTION, couperLUnite, estMesuree } from "./memoire-en-texte.js";
 import { memeGrandeur } from "./unites-du-metier.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
@@ -75,6 +78,19 @@ export const ENNUI = {
    */
   SIGNATURE: "signature",
   /**
+   * **Une fonction appelée sur un nom dont elle ne connaît pas les valeurs.**
+   *
+   * `Couleur des volets` lit `Nature des volets`, qui vaut « bois » ou « pvc ».
+   * On l'appelle sur `Matériau`, qui vaut « bois », « alu » ou « pvc ». Pour
+   * « alu », la fonction répondra son `sinon` — un résultat parfaitement
+   * plausible, et faux, que rien ne signale.
+   *
+   * C'est la faute que l'appel rend possible : tant qu'une fonction ne lisait
+   * que ses propres noms, son domaine et celui qu'elle lit étaient le même.
+   * C'est le même contrôle que `hors-du-domaine`, porté sur un appel.
+   */
+  DONNE_HORS_DU_DOMAINE: "donne-hors-du-domaine",
+  /**
    * Une fonction conclut autre chose que ce qu'elle annonce rendre.
    *
    * **`rend:` est la seule chose qu'on lit avant de se servir d'une fonction**,
@@ -94,7 +110,8 @@ export const MOTS_DE_LENNUI = {
   [ENNUI.MAUVAISE_EXTENSION]: "mauvais fichier",
   [ENNUI.SANS_VALEUR]: "ne dit rien",
   [ENNUI.SIGNATURE]: "signature",
-  [ENNUI.REND]: "ne rend pas ce qu'elle annonce"
+  [ENNUI.REND]: "ne rend pas ce qu'elle annonce",
+  [ENNUI.DONNE_HORS_DU_DOMAINE]: "valeur que la fonction ne connaît pas"
 };
 
 /** L'extension d'un nom de fichier, ou `""`. La liste se dérive du rangement. */
@@ -134,6 +151,65 @@ export function nomsDeclares(fichiers = []) {
   }
 
   return noms;
+}
+
+/**
+ * Ce qu'on donne à une fonction, comparé à ce qu'elle sait lire.
+ *
+ * **La faute que l'appel rend possible.** Tant qu'une fonction ne lisait que
+ * ses propres noms, son domaine et celui qu'elle lit étaient le même. Depuis
+ * qu'on lui donne un autre nom, les deux peuvent diverger — et la fonction
+ * répond alors son `sinon` sur les valeurs qu'elle ne connaît pas, sans que
+ * rien ne le dise. Un résultat plausible et faux est la seule faute que cette
+ * langue ne pardonne pas.
+ *
+ * **On ne parle que de ce qu'on sait.** Il faut deux domaines fermés — celui du
+ * paramètre et celui de ce qu'on donne — pour qu'il y ait une comparaison à
+ * faire. À défaut on se tait : ne pas savoir n'autorise pas à prétendre qu'il
+ * n'y a rien, ni l'inverse (règle 5).
+ *
+ * **Les fonctions de la mémoire restent hors de portée** : ce fichier ne reçoit
+ * que des fichiers. C'est dit dans `à traiter plus tard`.
+ */
+function ceQuOnDonneAuxAppels(bloc, { fichier, blocs, domaines }) {
+  const dites = [];
+  const ligne = Number(bloc?.ligne) || 0;
+
+  const arbres = [
+    ...appelsDesExpressions(bloc),
+    ...clausesDeLaRegle(bloc).map((condition) => condition?.appel?.arbre).filter(Boolean)
+  ];
+
+  for (const arbre of arbres) {
+    const appelee = blocs.get(cleDuSujet(texte(arbre?.nom)));
+    if (!appelee) continue;
+
+    // La portée ne porte pas de domaine : elle dit où, pas quoi.
+    const parametres = parametresDuBloc(appelee).slice(1);
+    const donnes = (Array.isArray(arbre?.arguments) ? arbre.arguments : []).slice(1);
+
+    parametres.forEach((parametre, rang) => {
+      const donne = donnes[rang];
+      if (donne?.quoi !== "nom") return;
+
+      const attendues = domaines.get(cleDuSujet(parametre));
+      const offertes = domaines.get(cleDuSujet(donne.nom));
+      if (!attendues?.length || !offertes?.length) return;
+
+      const jamais = offertes.filter((une) => !attendues.includes(une));
+      if (!jamais.length) return;
+
+      dites.push({
+        fichier, ligne, quoi: ENNUI.DONNE_HORS_DU_DOMAINE, texte: texte(donne.nom),
+        dit: `« ${texte(arbre.nom)} » lit « ${parametre} », qui ne vaut que `
+          + `${attendues.map((une) => `« ${une} »`).join(", ")}. `
+          + `« ${texte(donne.nom)} » peut valoir ${jamais.map((une) => `« ${une} »`).join(", ")} : `
+          + `pour ces valeurs-là, elle répondra son « sinon » sans rien en dire.`
+      });
+    });
+  }
+
+  return dites;
 }
 
 /** Les domaines fermés déclarés par le brouillon : `clé du nom → valeurs`. */
@@ -367,6 +443,16 @@ export function verifierLeBrouillon(fichiers = []) {
   const declares = nomsDeclares(tous);
   const domaines = domainesDeclares(tous);
 
+  // Les fonctions du brouillon, par sujet : c'est chez elles qu'on lit ce qu'un
+  // appel devrait recevoir.
+  const parBloc = new Map();
+  for (const fichier of tous) {
+    for (const bloc of lireUnFichier(fichier?.contenu ?? "").blocs ?? []) {
+      const cle = cleDuSujet(texte(bloc?.sujet));
+      if (cle && !parBloc.has(cle)) parBloc.set(cle, bloc);
+    }
+  }
+
   const remarques = [];
 
   for (const fichier of tous) {
@@ -382,6 +468,10 @@ export function verifierLeBrouillon(fichiers = []) {
 
     const ennui = ennuiDExtension(fichier, lu);
     if (ennui) remarques.push({ fichier: nom, texte: "", ...ennui });
+
+    for (const bloc of lu.blocs ?? []) {
+      remarques.push(...ceQuOnDonneAuxAppels(bloc, { fichier: nom, blocs: parBloc, domaines }));
+    }
 
     for (const bloc of lu.blocs) {
       remarques.push(...ennuisDeLaSignature(bloc).map((ennui) => ({
