@@ -69,6 +69,12 @@ function ditDeLentree(une) {
   return String(une?.dit ?? "");
 }
 
+/** Ce qu'une fonction annonce rendre, en un mot. Vide quand elle ne le dit pas. */
+function ditDeCeQuElleRend(rend) {
+  if (rend?.valeurs?.length) return rend.valeurs.join(", ");
+  return String(rend?.unite ?? "") ? `une mesure en ${rend.unite}` : "";
+}
+
 /**
  * L'aide à la signature, en HTML. Vide quand il n'y a rien à dire.
  *
@@ -92,6 +98,15 @@ export function renderAideDeLaSignature(aide = null) {
         aide.quoi === "signature" ? "s'écrit avec" : "lit"}</span>
     </p>
     <ul class="saisie-signature__entrees">${entrees}</ul>
+    ${/*
+      **Ce qu'on obtiendra en la nommant.** C'est l'autre moitié de la
+      question : savoir qu'une fonction lit la matière du volet ne dit pas si
+      l'on obtient une couleur, une épaisseur ou un vrai/faux.
+    */""}
+    ${ditDeCeQuElleRend(aide.rend)
+      ? `<p class="saisie-signature__rend">rend
+           <span>${escapeHtml(ditDeCeQuElleRend(aide.rend))}</span></p>`
+      : ""}
     ${aide.appel
       ? `<p class="saisie-signature__faute">Il n'y a pas d'appel de fonction :
            écrivez « ${escapeHtml(aide.nom)} » seul, sans parenthèses.</p>`

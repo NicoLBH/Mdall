@@ -2174,6 +2174,8 @@ export function lignesDeLAssertion(assertion = {}, profondeur = 0, {
       // Et la lecture qu'elle suggère : la perdre ferait rouvrir un tableau de
       // chiffres là où l'auteur avait écrit « en barres ».
       seLitEn: payload.regle.seLitEn ?? "",
+      // Et ce qu'elle annonce rendre : c'est ce qu'on lit avant de la nommer.
+      rend: payload.regle.rend ?? null,
       sinon: texte(payload.regle.sinon),
       sauf: exceptions,
       provenance: provenanceDeLAssertion(assertion, { auteurs }),

@@ -4618,20 +4618,24 @@ retenir, et quelqu'un la rencontrera en recopiant un devis. La coller demande de
 vérifier qu'aucun nom ne commence par `€`, ce qui est probablement vrai, et de
 décider si `$` et `£` suivent.
 
-**L'aide à la signature ne dit pas ce que la fonction conclut.** Elle dit ce
-qu'elle lit, avec le domaine de chaque entrée
-(`docs/laide-a-la-signature.md`) — pas ce qu'on obtiendra en la nommant : une
-couleur ? une épaisseur en centimètres ? un vrai ou faux ? Le catalogue le sait
-parfois (l'unité d'un nom déclaré), et pas toujours : ce qu'une fonction conclut
-n'est écrit nulle part tant qu'elle n'a pas tourné. Le déduire de son `alors`
-marcherait pour un barème et pas pour une chaîne de `calcule`. La vraie réponse
-est probablement une **déclaration de ce qu'une fonction produit** — un `rend:`
-dans sa tête —, et c'est une addition au langage, pas à l'écran.
+**`rend:` ne se déduit pas quand il manque.** Une fonction qui conclut toujours
+`12 kN`, `24 kN`, `36 kN` rend visiblement des kilonewtons, et l'écran pourrait
+le dire sans qu'on l'écrive (`docs/ce-quune-fonction-annonce.md`). On ne le
+déduit pas, et c'est volontaire pour l'instant : une promesse **déduite** d'un
+texte qu'on est en train d'écrire changerait à chaque frappe, et l'on ne saurait
+plus laquelle des deux — la déduite ou l'écrite — fait foi le jour où elles
+divergent. Le faire demande de décider qui gagne, et de le montrer.
 
-**La signature ne lie rien.** Une fonction dont le corps lit un nom absent de sa
-signature fonctionne quand même, et l'inverse aussi : `fonction F(zones, A)` qui
-ne lit jamais `A` ne se fait rien dire. L'aide à la signature rend l'écart
-visible pendant qu'on écrit, mais rien ne le **vérifie** : ce serait une
-remarque de plus dans `verifierLeBrouillon`, du genre « sa signature annonce A,
-son corps lit B ». Petit travail, vraie question : faut-il refuser, ou seulement
-le dire ?
+**Une conclusion qui nomme un `calcule` ne se compare pas au `rend:`.** Sa
+valeur dépend des réponses, et on ne la connaît qu'au lancement. Le bac, lui,
+la connaît : il pourrait vérifier la promesse **après** avoir lancé, et dire
+« vous annonciez des kN, elle a conclu 3 m ». C'est le contrôle qui attrape les
+vrais cas — la plupart des fonctions concluent une locale. Il demande de
+décider ce qu'on fait d'un verdict qui tient mais ment sur sa forme.
+
+**Les refus du brouillon ne mènent pas à leur ligne.** Le bac les montre
+maintenant avec leur fichier et leur numéro
+(`docs/ce-quune-fonction-annonce.md`), et il faut encore aller les chercher à la
+main dans la zone d'écriture. Un clic qui pose le curseur sur la ligne fautive
+est le geste qu'on attend d'un éditeur, et il demande de relier deux panneaux
+qui ne se connaissent pas aujourd'hui.

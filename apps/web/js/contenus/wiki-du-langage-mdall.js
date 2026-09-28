@@ -200,7 +200,7 @@ export const WIKI_DU_LANGAGE = [
     dit("`sauf si` borne la règle — une exception qui reprend la main sur la "
       + "conclusion, **quelle que soit la branche** :"),
     code(
-      "fonction Famille du bâtiment(zones, Hauteur du plancher bas) {",
+      "fonction Famille du bâtiment(zones, Hauteur du plancher bas, Nombre de logements) {",
       "   si (Hauteur du plancher bas > 8 m)",
       "   alors (\"3e famille\");",
       "   sauf si (Nombre de logements <= 2)",
@@ -511,6 +511,52 @@ export const WIKI_DU_LANGAGE = [
       + "liraient comme « cette fonction ne produit rien ».")
   ]),
 
+  section("annonce", "Ce qu'une fonction annonce : sa signature, et ce qu'elle rend", [
+    dit("**La signature annonce tout ce que la fonction lit**, et rien d'autre. "
+      + "`zones` en premier et toujours — c'est la **portée**, les parties "
+      + "d'ouvrage auxquelles elle s'applique —, puis chaque nom que son corps "
+      + "lit, y compris ceux qu'une autre fonction conclut."),
+    code(
+      "fonction Prix TTC(zones, Prix HT, Taux de TVA) {",
+      "   calcule TVA = Prix HT * Taux de TVA;",
+      "   calcule Prix TTC = Prix HT + TVA;",
+      "   si (Prix TTC > 0 €)",
+      "   alors (Prix TTC);",
+      "}"
+    ),
+    dit("Ce qu'elle **pose elle-même** n'y figure pas : `TVA` et `Prix TTC` sont "
+      + "des `calcule`, la variable d'une boucle et ses colonnes aussi. On "
+      + "annonce ce qu'il faut lui **donner**, jamais ce qu'elle fabrique."),
+    dit("**Elle est vérifiée, et les deux sens comptent.** Une entrée lue sans "
+      + "être annoncée fait lire une fonction plus simple qu'elle n'est ; une "
+      + "entrée annoncée dont rien ne se sert fait relire le corps trois fois "
+      + "pour la chercher. L'écran refuse les deux, et vous donne la ligne à "
+      + "écrire."),
+    dit("**`rend:` dit ce qu'on obtient en la nommant**, et c'est facultatif. "
+      + "Sans lui, on sait ce qu'une fonction lit sans savoir si elle rend une "
+      + "couleur, une épaisseur en centimètres ou un vrai/faux."),
+    code(
+      "fonction Couleur des volets(zones, Matériau) {",
+      "   rend: \"gris\" ou \"blanc\"",
+      "",
+      "   si (Matériau = \"bois\")",
+      "   alors (\"gris\");",
+      "   sinon (\"blanc\");",
+      "}"
+    ),
+    table(["ce qu'on écrit", "ce que cela promet"], [
+      ["`rend: \"gris\" ou \"blanc\"`", "les valeurs possibles, entre guillemets"],
+      ["`rend: kN`", "une mesure, dans cette unité"],
+      ["(rien)", "on ne sait pas, et l'écran ne l'invente pas"]
+    ]),
+    dit("**Il est vérifié lui aussi** : chaque conclusion écrite doit tenir la "
+      + "promesse. Une fonction qui annonce `rend: kN` et conclut `\"3e famille "
+      + "B\"` est refusée avant le lancement — une déclaration qu'on ne vérifie "
+      + "pas est une intention."),
+    dit("Une conclusion qui **nomme un `calcule`** ne se compare pas : sa valeur "
+      + "dépend de vos réponses, et on ne la connaît qu'au lancement.")
+  ]),
+
   section("catalogue", "Retrouver ce qu'on peut nommer", [
     dit("**Composer, c'est nommer ce qu'une autre fonction conclut** — et l'on "
       + "ne compose pas avec ce qu'on ne sait pas nommer. L'écran d'écriture "
@@ -805,7 +851,7 @@ export const WIKI_DU_LANGAGE = [
       "   | construction | 20% |",
       "}",
       "",
-      "fonction Prix TTC(zones, Prix HT) {",
+      "fonction Prix TTC(zones, Prix HT, Taux de TVA) {",
       "   // Il n'y a pas d'appel : on nomme ce qu'une autre fonction conclut.",
       "   calcule TVA = Prix HT * Taux de TVA;",
       "   calcule Prix TTC = Prix HT + TVA;",

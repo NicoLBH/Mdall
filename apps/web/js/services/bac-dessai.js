@@ -358,8 +358,23 @@ function unePasse(fonctions, valeurs) {
  * qui conclut a fait son travail, une règle qui ne sait pas dit qu'il manque
  * quelque chose — et c'est cela qu'on veut corriger.
  */
-export function phraseDuLancement(resultats = []) {
+export function phraseDuLancement(resultats = [], { refus = [] } = {}) {
   const tous = Array.isArray(resultats) ? resultats : [];
+  const rates = (Array.isArray(refus) ? refus : []).filter(Boolean);
+
+  /**
+   * **« Le brouillon ne raisonne pas encore » était faux, et c'est le pire.**
+   *
+   * Il raisonnait : il portait une ligne que la lecture a refusée. On lisait
+   * donc « il n'y a rien » là où il fallait lire « il y a quelque chose, et je
+   * ne l'ai pas compris » — et l'on cherchait ce qu'on avait oublié d'écrire au
+   * lieu de regarder la ligne qui clochait (règle 5).
+   */
+  if (!tous.length && rates.length) {
+    return `Rien ne se lance : ${rates.length} ${
+      rates.length > 1 ? "lignes n'ont pas été comprises" : "ligne n'a pas été comprise"}.`;
+  }
+
   if (!tous.length) return "Aucune fonction à lancer : le brouillon ne raisonne pas encore.";
 
   const sansReponse = tous.filter((un) => un.issue === ISSUE.INDECIDABLE).length;

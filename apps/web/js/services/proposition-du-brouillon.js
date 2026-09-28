@@ -212,6 +212,10 @@ function affirmationDuBloc(bloc, { nature, declaration, marque = null }) {
          */
         ...(bloc?.courbe ? { courbe: bloc.courbe } : {}),
         ...(texte(bloc?.seLitEn) ? { seLitEn: texte(bloc.seLitEn) } : {}),
+        // **Ce que la fonction annonce rendre.** C'est la première chose qu'on
+        // lit avant de s'en servir : la perdre ferait relire, dans la mémoire,
+        // une fonction qui ne promet plus rien.
+        ...(bloc?.rend ? { rend: bloc.rend } : {}),
         sinon: texte(bloc?.sinon),
         sauf: Array.isArray(bloc?.sauf) ? bloc.sauf : []
       },

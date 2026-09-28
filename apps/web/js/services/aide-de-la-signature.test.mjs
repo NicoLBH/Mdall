@@ -31,6 +31,8 @@ const Hauteur sous plafond = {
 `;
 
 const BROUILLON = `fonction Couleur des volets(zones, Matière du volet) {
+   rend: "gris" ou "blanc"
+
    selon (Matière du volet)
    | bois | "gris"  |
    | pvc  | "blanc" |
@@ -264,4 +266,40 @@ test("l'éditeur pose bien l'aide, et par la même écoute que la liste", async 
     "l'aide ne suit pas la frappe");
   assert.equal((vue.match(/zone\.addEventListener\("input"/g) ?? []).length, 1,
     "une seconde écoute sur la frappe : il y aurait deux endroits à rebrancher");
+});
+
+/* ── Ce qu'on obtient en la nommant ──────────────────────────────────────── */
+
+test("l'aide dit ce que la fonction rend, et le dessine", () => {
+  /**
+   * **C'est l'autre moitié de la question.** Savoir qu'une fonction lit la
+   * matière du volet ne dit pas si l'on obtient une couleur, une épaisseur en
+   * centimètres ou un vrai/faux — et c'est ce qu'on veut savoir avant de la
+   * nommer.
+   */
+  const ligne = "   si (Couleur des volets";
+  const aide = aideDeLaSignature(ligne, ligne.length, catalogue());
+
+  assert.deepEqual(aide.rend, { valeurs: ["gris", "blanc"], unite: "" });
+  assert.match(renderAideDeLaSignature(aide), /rend\s*<span>gris, blanc<\/span>/);
+});
+
+test("une unité annoncée se dit comme une mesure", () => {
+  const avecUnite = BROUILLON.replace('rend: "gris" ou "blanc"', "rend: kN");
+  const ligne = "   si (Couleur des volets";
+  const aide = aideDeLaSignature(ligne, ligne.length, catalogue(avecUnite));
+
+  assert.deepEqual(aide.rend, { valeurs: [], unite: "kN" });
+  assert.match(renderAideDeLaSignature(aide), /une mesure en kN/);
+});
+
+test("une fonction qui ne promet rien ne promet rien", () => {
+  // **On ne l'invente pas** (règle 5) : une promesse déduite d'un texte qu'on
+  // est en train d'écrire changerait à chaque frappe.
+  const sansRend = BROUILLON.replace('   rend: "gris" ou "blanc"\n\n', "");
+  const ligne = "   si (Couleur des volets";
+  const aide = aideDeLaSignature(ligne, ligne.length, catalogue(sansRend));
+
+  assert.equal(aide.rend, null);
+  assert.doesNotMatch(renderAideDeLaSignature(aide), /rend/);
 });

@@ -298,7 +298,7 @@ test("le contexte assemble le catalogue, déclarations et locales comprises", ()
 
   assert.deepEqual(trouve("Zone de vent"), {
     nom: "Zone de vent", origine: ORIGINE.DECLARE, dit: "La zone de vent.",
-    lit: [], unite: "", valeurs: ["1", "2"], ou: "variables-du-projet.ref", comme: ""
+    rend: null, lit: [], unite: "", valeurs: ["1", "2"], ou: "variables-du-projet.ref", comme: ""
   });
   // Les locales de la fonction où l'on écrit, et elles passent devant : ce qui
   // est sous le curseur est ce qu'on cherche le plus souvent.

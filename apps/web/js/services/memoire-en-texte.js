@@ -426,6 +426,8 @@ export const MOTS = [
   // `se lit en:` ne dessine rien : il dit quelle lecture du tableau s'ouvre en
   // premier. Voir `graphique-dune-table.js`.
   "se lit en",
+  // `rend:` dit ce que la fonction conclut : un domaine fermé, ou une unité.
+  "rend",
   "si", "et", "ou", "non", "alors", "sinon",
   ...Object.values(PROVENANCE)
 ];
@@ -1790,7 +1792,7 @@ export function ligneDeZone(zone = TOUTES_ZONES, profondeur = 0) {
  */
 export function blocDeRegle({
   sujet = "", quoi = "", conditions = [], alors = "", sinonSi = [], sinon = "", sauf = [],
-  selon = [], calculs = [], boucle = null, courbe = null, seLitEn = "",
+  selon = [], calculs = [], boucle = null, courbe = null, seLitEn = "", rend = null,
   provenance = null, preuve = "", importe = [], enregistre = null, portee = PORTEE_DUNE_FONCTION
 } = {}, profondeur = 0) {
   const dedans = profondeur + 1;
@@ -1844,6 +1846,22 @@ export function blocDeRegle({
    */
   // **On ne réécrit que ce qui se suggère.** Un « nuage » arrivé là par une
   // charge ancienne s'écrirait dans un fichier que le lecteur refuserait ensuite.
+  /**
+   * **Ce que la fonction rend, réécrit tel qu'elle l'annonçait.**
+   *
+   * C'est la première chose qu'on lit avant de se servir d'une fonction : la
+   * perdre au versement ferait relire, dans la mémoire du projet, une fonction
+   * qui ne promet plus rien.
+   */
+  if ((rend?.valeurs ?? []).length || texte(rend?.unite)) {
+    corps.push(ligneDuChampDeLaCourbe(REND,
+      rend.valeurs.length
+        ? rend.valeurs.map((une) => `"${texte(une)}"`).join(" ou ")
+        : texte(rend.unite),
+      dedans));
+    corps.push(ligneVide());
+  }
+
   if (lectureSuggeree(seLitEn).dite) {
     corps.push(ligneDuChampDeLaCourbe(SE_LIT_EN, lectureSuggeree(seLitEn).dite, dedans));
     corps.push(ligneVide());
@@ -2353,6 +2371,9 @@ export function lignesDesPoints(points = [], profondeur = 1) {
  * lirait comme si elle changeait de portée en cours de route.
  */
 export const PORTEE_DUNE_FONCTION = "zones";
+
+/** Le mot qui déclare ce qu'une fonction conclut. */
+export const REND = "rend";
 
 /** Le nom de la locale qui porte l'entrée retenue pour un appel. */
 export function nomARetenir(entree = "") {

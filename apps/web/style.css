@@ -27626,6 +27626,15 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace); font-weight:400;
 }
 .saisie-signature__entree span{ color:var(--muted); }
+/* Ce qu'on obtiendra en la nommant : l'autre moitié de la question. */
+.saisie-signature__rend{
+  margin:5px 0 0; padding-top:4px; border-top:1px solid var(--border);
+  color:var(--muted);
+}
+.saisie-signature__rend span{
+  color:var(--fg, inherit);
+  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace);
+}
 /* Celle qu'on est en train d'écrire, dans une signature. */
 .saisie-signature__entree.est-actif b{ color:var(--fg, inherit); font-weight:600; }
 .saisie-signature__entree.est-actif span{ color:var(--fg, inherit); }

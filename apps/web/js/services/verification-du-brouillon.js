@@ -27,7 +27,9 @@
  * écrit, avant même de répondre au navigateur.
  */
 
-import { lireUnFichier } from "./memoire-en-lecture.js";
+import { entreesDuBloc, lireUnFichier } from "./memoire-en-lecture.js";
+import { PORTEE_DUNE_FONCTION, couperLUnite, estMesuree } from "./memoire-en-texte.js";
+import { memeGrandeur } from "./unites-du-metier.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { EXTENSIONS, EXTENSION_REGLE } from "./memoire-rangement.js";
 
@@ -57,7 +59,30 @@ export const ENNUI = {
    * une phrase d'un nom nu, et l'on n'a pas à le savoir : les deux sont
    * incomplets, et c'est cela qu'on dit.
    */
-  SANS_VALEUR: "sans-valeur"
+  SANS_VALEUR: "sans-valeur",
+  /**
+   * La signature d'une fonction n'annonce pas ce qu'elle lit — ou l'inverse.
+   *
+   * **La signature est la première chose qu'un relecteur regarde**, et elle ne
+   * liait rien : une fonction dont le corps lit « Matériau » alors que sa
+   * signature n'annonce que `zones` marchait très bien. Le fichier versé
+   * annonçait donc une fonction qui n'existe pas, et personne ne pouvait le
+   * savoir sans relire tout son corps — ce que la signature existe précisément
+   * pour éviter.
+   *
+   * L'autre sens compte autant : une signature qui annonce une entrée dont la
+   * fonction ne se sert jamais fait chercher où elle sert.
+   */
+  SIGNATURE: "signature",
+  /**
+   * Une fonction conclut autre chose que ce qu'elle annonce rendre.
+   *
+   * **`rend:` est la seule chose qu'on lit avant de se servir d'une fonction**,
+   * et une déclaration qu'on ne vérifie pas est une intention (règle 12). Une
+   * fonction qui annonce `rend: kN` et conclut « 3e famille B » ment à
+   * l'endroit exact où l'on décide de la nommer.
+   */
+  REND: "rend"
 };
 
 /** Ce qu'on en dit, en tête de remarque. */
@@ -67,7 +92,9 @@ export const MOTS_DE_LENNUI = {
   [ENNUI.SANS_DESTINATION]: "sans destination",
   [ENNUI.HORS_DU_DOMAINE]: "hors du domaine",
   [ENNUI.MAUVAISE_EXTENSION]: "mauvais fichier",
-  [ENNUI.SANS_VALEUR]: "ne dit rien"
+  [ENNUI.SANS_VALEUR]: "ne dit rien",
+  [ENNUI.SIGNATURE]: "signature",
+  [ENNUI.REND]: "ne rend pas ce qu'elle annonce"
 };
 
 /** L'extension d'un nom de fichier, ou `""`. La liste se dérive du rangement. */
@@ -170,9 +197,169 @@ function ennuiDExtension(fichier, { blocs, declarations }) {
  * @param {{nom: string, contenu: string}[]} fichiers ceux qui portent quelque chose
  * @returns {{fichier: string, ligne: number, quoi: string, dit: string, texte: string}[]}
  */
+/**
+ * Ce qu'une signature annonce, et ce que la fonction lit vraiment.
+ *
+ * ## Pourquoi on refuse plutôt que de laisser passer
+ *
+ * La signature ne **lie** rien : une fonction dont le corps lit un nom qu'elle
+ * n'annonce pas marche très bien. C'est précisément pour cela qu'il faut la
+ * vérifier — rien d'autre ne le fera, et c'est la première chose qu'un
+ * relecteur regarde. Un fichier versé qui annonce une fonction qui n'existe pas
+ * est exactement ce que cette langue existe pour empêcher.
+ *
+ * ## Les deux sens comptent
+ *
+ * **Ce qui manque** fait lire une fonction plus simple qu'elle n'est : on croit
+ * savoir ce qu'il faut lui donner, et il faut autre chose.
+ *
+ * **Ce qui est en trop** fait chercher où l'entrée sert. On relit le corps
+ * trois fois, on ne la trouve pas, et l'on finit par douter de sa propre
+ * lecture.
+ *
+ * ## Et la phrase dit quoi faire
+ *
+ * Nos lecteurs ne sont pas des professionnels du code : « signature invalide »
+ * n'apprend rien. La remarque donne donc **la ligne à écrire**.
+ */
+/**
+ * Ce qu'une fonction annonce rendre, comparé à ce qu'elle conclut.
+ *
+ * **On ne la lance pas pour le savoir** : on regarde les conclusions écrites —
+ * le `alors`, le `sinon`, et chaque branche. Ce sont elles qu'on relit, et ce
+ * sont elles qui doivent tenir la promesse. Une fonction dont une seule branche
+ * sort du domaine annoncé est déjà fausse, même si les autres tiennent.
+ *
+ * Une conclusion qui **nomme une locale** ne se compare pas : sa valeur dépend
+ * des réponses, et l'on ne la connaît qu'au lancement. La refuser ici
+ * interdirait `alors (Prix TTC)`, qui est la forme la plus courante du langage.
+ */
+function ennuisDeCeQuElleRend(bloc = {}) {
+  const rend = bloc?.rend;
+  if (!rend) return [];
+
+  const sujet = texte(bloc?.sujet);
+  const locales = new Set([
+    ...(bloc?.calculs ?? []).map((un) => cleDuSujet(un?.nom)),
+    cleDuSujet(bloc?.boucle?.nom)
+  ].filter(Boolean));
+
+  const conclusions = [
+    texte(bloc?.alors),
+    texte(bloc?.sinon),
+    ...(bloc?.sinonSi ?? []).map((branche) => texte(branche?.alors))
+  ].filter(Boolean).filter((une) => !locales.has(cleDuSujet(une)));
+
+  const ennuis = [];
+
+  for (const dite of conclusions) {
+    if (rend.valeurs.length) {
+      if (rend.valeurs.some((une) => cleDuSujet(une) === cleDuSujet(dite))) continue;
+      ennuis.push({
+        texte: sujet,
+        dit: `« ${sujet} » annonce rendre ${rend.valeurs.map((une) => `« ${une} »`).join(" ou ")}, `
+          + `et conclut « ${dite} ». Ajoutez-la au « rend: », ou corrigez la conclusion.`
+      });
+      continue;
+    }
+
+    // Une unité annoncée : la conclusion doit porter la même grandeur.
+    const { unite } = couperLUnite(dite);
+    if (!estMesuree(dite)) {
+      ennuis.push({
+        texte: sujet,
+        dit: `« ${sujet} » annonce rendre une mesure en ${rend.unite}, et conclut `
+          + `« ${dite} », qui n'est pas une mesure. Une mesure s'écrit nue — « 12 ${rend.unite} ».`
+      });
+      continue;
+    }
+    if (!memeGrandeur(unite, rend.unite)) {
+      ennuis.push({
+        texte: sujet,
+        dit: `« ${sujet} » annonce rendre des ${rend.unite}, et conclut « ${dite} ». `
+          + `Ces deux unités ne mesurent pas la même chose.`
+      });
+    }
+  }
+
+  return ennuis;
+}
+
+function ennuisDeLaSignature(bloc = {}) {
+  // Une affirmation n'a pas de signature, et un bloc sans parenthèses n'en
+  // déclare aucune : il n'y a rien à comparer, et exiger d'en écrire une
+  // ferait crier sur chaque ligne de données.
+  if (!Array.isArray(bloc?.signature) || !bloc.signature.length) return [];
+
+  const dites = bloc.signature.map(texte).filter((une) => une !== PORTEE_DUNE_FONCTION);
+  /**
+   * **Une signature annonce tout ce que la fonction lit**, qu'un autre le
+   * déduise ou non.
+   *
+   * On avait d'abord écarté les noms qu'une autre fonction conclut, au motif
+   * qu'ils ne se saisissent pas. C'était une invention : le langage écrit
+   * `fonction Prix TTC(zones, Prix HT, Taux de TVA)` partout, et il a raison —
+   * ce qu'une fonction lit ne dépend pas de ce que quelqu'un a écrit à côté.
+   * Une signature qui changerait de sens parce qu'on a ajouté une fonction
+   * ailleurs ne voudrait plus rien dire.
+   *
+   * Ce qui se saisit, c'est une autre question, et c'est le formulaire qui y
+   * répond — jamais la signature.
+   */
+  const attendues = entreesDuBloc(bloc);
+
+  const cles = (noms) => new Set(noms.map(cleDuSujet));
+  const manquantes = attendues.filter((une) => !cles(dites).has(cleDuSujet(une)));
+  const enTrop = dites.filter((une) => !cles(attendues).has(cleDuSujet(une)));
+
+  const ennuis = [];
+  const sujet = texte(bloc?.sujet);
+  const juste = [PORTEE_DUNE_FONCTION, ...attendues].join(", ");
+
+  /**
+   * **La portée s'écrit en premier, et elle s'écrit.**
+   *
+   * C'est sous ce nom qu'une fonction reçoit les parties d'ouvrage auxquelles
+   * elle s'applique — la signature, l'`importe`, l'appel d'un agent et
+   * l'`enregistre` écrivent tous le même mot. Une fonction qui l'omet se lit
+   * comme si elle valait partout, ce qui n'est presque jamais ce qu'on veut,
+   * et c'est la première question qu'on se pose devant une parenthèse ouverte.
+   */
+  if (!bloc.signature.map(texte).includes(PORTEE_DUNE_FONCTION)) {
+    ennuis.push({
+      texte: sujet,
+      dit: `« ${sujet} » n'annonce pas sa portée. Elle s'écrit « ${
+        PORTEE_DUNE_FONCTION} », et toujours en premier — `
+        + `écrivez : ${sujet}(${juste}).`
+    });
+  }
+
+  if (manquantes.length) {
+    ennuis.push({
+      texte: sujet,
+      dit: `« ${sujet} » lit ${manquantes.map((une) => `« ${une} »`).join(", ")}, `
+        + `mais sa signature ne ${manquantes.length > 1 ? "les annonce" : "l'annonce"} pas. `
+        + `Écrivez : ${sujet}(${juste}).`
+    });
+  }
+
+  if (enTrop.length) {
+    ennuis.push({
+      texte: sujet,
+      dit: `la signature de « ${sujet} » annonce ${
+        enTrop.map((une) => `« ${une} »`).join(", ")}, `
+        + `${enTrop.length > 1 ? "dont elle ne se sert" : "dont elle ne se sert"} jamais. `
+        + `Écrivez : ${sujet}(${juste}).`
+    });
+  }
+
+  return ennuis;
+}
+
 export function verifierLeBrouillon(fichiers = []) {
   const tous = (Array.isArray(fichiers) ? fichiers : []).filter((fichier) => texte(fichier?.contenu));
   if (!tous.length) return [];
+
 
   // **Tous les fichiers d'abord.** Une règle du `.ref` lit un nom déclaré dans
   // le `.ddb` : vérifier fichier par fichier ferait crier au nom inconnu sur
@@ -197,6 +384,13 @@ export function verifierLeBrouillon(fichiers = []) {
     if (ennui) remarques.push({ fichier: nom, texte: "", ...ennui });
 
     for (const bloc of lu.blocs) {
+      remarques.push(...ennuisDeLaSignature(bloc).map((ennui) => ({
+        fichier: nom, ligne: Number(bloc?.ligne) || 0, quoi: ENNUI.SIGNATURE, ...ennui
+      })));
+      remarques.push(...ennuisDeCeQuElleRend(bloc).map((ennui) => ({
+        fichier: nom, ligne: Number(bloc?.ligne) || 0, quoi: ENNUI.REND, ...ennui
+      })));
+
       // Les conditions des branches enchaînées comptent comme les autres : un
       // nom cité seulement dans un `sinon si` et déclaré nulle part passerait
       // sans un mot, et la règle « ne saurait pas » sans dire pourquoi.

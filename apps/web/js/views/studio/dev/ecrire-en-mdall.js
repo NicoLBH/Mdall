@@ -45,7 +45,7 @@ import { nomsConclusParLeProjet } from "../../../services/fonctions-du-projet.js
 import { renderSideResizer, bindSideResizer } from "../../ui/side-resizer.js";
 import { renderGhActionButton, bindGhActionButtons } from "../../ui/gh-split-button.js";
 import { renderJetons } from "../../ui/code-mdall.js";
-import { jetonsDeLaLigne } from "../../../services/memoire-en-lecture.js";
+import { jetonsDeLaLigne, lireUnFichier } from "../../../services/memoire-en-lecture.js";
 import { couperLUnite, lireUnNombre } from "../../../services/memoire-en-texte.js";
 import { phraseDeLaLecture } from "../../../services/courbe-du-mdall.js";
 import { traceDesGroupes, traceDesSeries } from "../../../services/trace-dun-graphique.js";
@@ -598,8 +598,9 @@ function motDeLaVerite(verite) {
  * **La trace n'est pas un détail** : une règle qui rend un verdict sans montrer
  * sa lecture n'apprend rien, et c'est par elle qu'on comprend le langage.
  */
-export function renderResultats(resultats = []) {
+export function renderResultats(resultats = [], { refus = [] } = {}) {
   const tous = Array.isArray(resultats) ? resultats : [];
+  const rates = (Array.isArray(refus) ? refus : []).filter(Boolean);
 
   return `
     <div class="bac-resultats">
@@ -611,7 +612,30 @@ export function renderResultats(resultats = []) {
         « le brouillon ne raisonne pas encore » —, et c'est exactement ce qu'un
         débutant a besoin d'entendre (règle 5).
       */""}
-      <p class="bac-resultats__phrase">${escapeHtml(phraseDuLancement(tous))}</p>
+      <p class="bac-resultats__phrase">${escapeHtml(phraseDuLancement(tous, { refus: rates }))}</p>
+      ${/*
+        **Les lignes refusées, ici et pas seulement à la console.**
+        Elles y étaient déjà, rassemblées avec le reste — et la console est un
+        autre panneau, qu'on n'a pas forcément ouvert. On lançait donc un
+        brouillon dont une ligne entière avait été écartée, on lisait « le
+        brouillon ne raisonne pas encore », et rien à l'écran ne disait
+        laquelle. C'est le seul endroit où l'on regarde après avoir cliqué.
+      */""}
+      ${rates.length
+        ? `<ul class="bac-resultats__refus">
+             ${rates.slice(0, 4).map((un) => `
+               <li>
+                 <span class="bac-refus__ou">${escapeHtml(texte(un.fichier))}${
+                   un.ligne ? ` · ligne ${un.ligne}` : ""}</span>
+                 <code>${escapeHtml(texte(un.texte))}</code>
+                 <span class="bac-refus__dit">${escapeHtml(texte(un.raison))}</span>
+               </li>`).join("")}
+             ${rates.length > 4
+               ? `<li class="bac-refus__reste">et ${rates.length - 4} autre${
+                   rates.length - 4 > 1 ? "s" : ""} — la console les porte toutes.</li>`
+               : ""}
+           </ul>`
+        : ""}
       ${tous.map((resultat) => {
         // **La lecture se décide une fois par résultat.** Trois appels séparés
         // rendraient trois décisions, et il suffirait qu'une seule change pour
@@ -682,6 +706,21 @@ export function renderResultats(resultats = []) {
   `;
 }
 
+/**
+ * Ce que la lecture a refusé, avec le fichier et la ligne.
+ *
+ * **Une fois, pour les deux chemins qui dessinent le panneau** : le rendu
+ * entier et le redessin ciblé. Deux parcours voisins finiraient par ne plus
+ * montrer les mêmes lignes, et c'est l'écran qui est là pour dire ce qui
+ * cloche (règle 10).
+ */
+function refusDuBrouillon(fichiers = []) {
+  return (Array.isArray(fichiers) ? fichiers : []).flatMap((fichier) =>
+    (lireUnFichier(fichier?.contenu ?? "").refus ?? []).map((un) => ({
+      ...un, fichier: texte(fichier?.nom)
+    })));
+}
+
 /** Le bac d'essai : le formulaire, puis ce que les fonctions répondent. */
 export function renderBacDessai(brouillon = null, {
   reponses = {}, lance = false, tete = true, memoire = null
@@ -711,7 +750,7 @@ export function renderBacDessai(brouillon = null, {
           ? renderFormulaire(champs, reponses)
           : `<p class="review-empty-note">Rien à remplir : ce brouillon ne lit aucune entrée.</p>`
       }
-      ${lance ? renderResultats(resultats) : ""}
+      ${lance ? renderResultats(resultats, { refus: refusDuBrouillon(remplis) }) : ""}
     </section>
   `;
 }
@@ -2409,7 +2448,10 @@ function redessinerLesResultats() {
     : [];
 
   return poserLePanneau(corps, ".bac-resultats",
-    etat.lance ? renderResultats(resultats) : "", { dans: ".bac" });
+    etat.lance
+      ? renderResultats(resultats, { refus: refusDuBrouillon(fichiersRemplis(etat.brouillon)) })
+      : "",
+    { dans: ".bac" });
 }
 
 /** Marquer en place le bouton pressé d'un champ logique, et dépresser l'autre. */

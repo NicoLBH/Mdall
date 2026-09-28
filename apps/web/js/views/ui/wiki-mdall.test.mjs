@@ -13,6 +13,7 @@ import { lireUnFichier, lireUneCondition } from "../../services/memoire-en-lectu
 import { calculer, ecrireLeCalcul } from "../../services/mdall-calcul.js";
 import { evaluerLaCondition } from "../../services/memoire-evaluateur.js";
 import { lancerLeBrouillon } from "../../services/bac-dessai.js";
+import { ENNUI, verifierLeBrouillon } from "../../services/verification-du-brouillon.js";
 import { LECTURE, lectureQuiVaDeSoi, lecturesPossibles } from "../../services/graphique-dune-table.js";
 
 /* ── Ce qu'il enseigne, le langage le lit ────────────────────────────────── */
@@ -150,6 +151,23 @@ test("les trois exemples à essayer donnent bien ce que le wiki fait attendre", 
     { "Pente du versant": "75°" });
   assert.equal(hors.valeur, "", "la courbe conclut au-delà de ses points");
   assert.match(dit, /refuse/);
+});
+
+test("chaque signature du wiki annonce ce que sa fonction lit vraiment", () => {
+  /**
+   * **La signature ne lie rien**, et c'est pour cela qu'elle dérive. Le wiki en
+   * portait deux fausses — une fonction qui lisait « Nombre de logements » sans
+   * l'annoncer, et un `Prix TTC` qui lisait un taux absent de sa signature.
+   * Personne ne l'avait vu, parce que les exemples **tournent** : c'est
+   * justement la famille de défaut qu'un lancement ne peut pas attraper.
+   *
+   * Un exemple faux est pire qu'une absence : on le recopie (règle 12).
+   */
+  for (const { section, code } of exemplesDuWiki()) {
+    const ennuis = verifierLeBrouillon([{ nom: "essai.ref", contenu: code }])
+      .filter((une) => une.quoi === ENNUI.SIGNATURE);
+    assert.deepEqual(ennuis.map((une) => une.dit), [], `§${section}`);
+  }
 });
 
 test("les refus que le wiki montre sont ceux que le calcul refuse", () => {
