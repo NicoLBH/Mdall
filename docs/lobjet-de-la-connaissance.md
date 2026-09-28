@@ -2478,5 +2478,6 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | le nuage, les cadres empilés, le rejeu d'une fonction versée | `docs/le-nuage-les-cadres-et-le-rejeu.md` |
 | un abaque versé au projet, et le catalogue qu'on voit | `docs/labaque-qui-se-verse.md` |
 | le pourcentage à travers un nom, et les fonctions versées qu'on réutilise | `docs/le-pourcentage-et-la-quatrieme-source.md` |
+| ce qu'une fonction attend, dit pendant qu'on l'écrit | `docs/laide-a-la-signature.md` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

@@ -1,0 +1,267 @@
+/**
+ * Ce qu'une fonction attend, dit pendant qu'on l'écrit.
+ *
+ * **On nomme une fonction, et l'on ne sait plus ce qu'elle lit.** La réponse est
+ * au catalogue, à trois clics — trois clics au milieu d'une ligne qu'on tape,
+ * c'est une réponse qu'on ne va pas chercher. On tape un nom plausible, et la
+ * règle reste indécidable sans qu'un mot dise pourquoi.
+ *
+ * **Les catalogues viennent d'un vrai brouillon lu**, jamais d'objets façonnés
+ * ici : une entrée écrite à la main prendrait les hypothèses du code pour des
+ * faits.
+ */
+
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import { aideDeLaSignature, contexteDuBrouillon } from "./mdall-completion.js";
+import { renderAideDeLaSignature } from "../views/ui/propositions-de-saisie.js";
+
+const VARIABLES = `const Matière du volet = {
+   type: "texte",
+   valeurs possibles: "bois" ou "pvc" ou "alu",
+   description: "Ce dont les volets sont faits.",
+};
+
+const Hauteur sous plafond = {
+   type: "mesure",
+   unité: "m",
+   description: "La hauteur libre.",
+};
+`;
+
+const BROUILLON = `fonction Couleur des volets(zones, Matière du volet) {
+   selon (Matière du volet)
+   | bois | "gris"  |
+   | pvc  | "blanc" |
+}
+
+fonction Volume(zones, Surface) {
+   calcule Cubage = Surface * Hauteur sous plafond;
+   si (Cubage > 0 m³)
+   alors (Cubage);
+}
+`;
+
+/**
+ * Le catalogue que l'écran d'écriture tient vraiment.
+ *
+ * **Le curseur se pose à la fin, hors de toute fonction.** Posé dedans, la
+ * fonction qui l'entoure est retirée du catalogue — elle ne peut pas se lire
+ * elle-même —, et l'épreuve chercherait un nom que l'écran a raison de cacher.
+ */
+const catalogue = (contenu = BROUILLON) => contexteDuBrouillon(
+  [{ nom: "essai.ref", contenu }, { nom: "variables-du-projet.ref", contenu: VARIABLES }],
+  { contenu, position: contenu.length }
+).catalogue;
+
+/* ── Sur un nom : de quoi cette fonction a-t-elle besoin ? ───────────────── */
+
+test("nommer une fonction dit ce qu'elle lit, et ce que ses entrées valent", () => {
+  /**
+   * **Savoir qu'il faut la matière du volet ne sert à rien si l'on ignore
+   * qu'elle vaut « bois », « pvc » ou « alu ».** C'est justement le moment où
+   * l'on s'apprête à taper l'une des trois.
+   */
+  const ligne = "   si (Couleur des volets";
+  const aide = aideDeLaSignature(ligne, ligne.length, catalogue());
+
+  assert.equal(aide.quoi, "nom");
+  assert.equal(aide.nom, "Couleur des volets");
+  assert.deepEqual(aide.lit.map((une) => une.nom), ["Matière du volet"]);
+  assert.deepEqual(aide.lit[0].valeurs, ["bois", "pvc", "alu"]);
+  assert.equal(aide.appel, false);
+});
+
+test("une entrée mesurée dit son unité plutôt qu'un domaine qu'elle n'a pas", () => {
+  const ligne = "   calcule X = Volume";
+  const aide = aideDeLaSignature(ligne, ligne.length, catalogue());
+
+  const hauteur = aide?.lit?.find((une) => une.nom === "Hauteur sous plafond");
+  assert.ok(hauteur, "Volume ne dit plus ce qu'il lit");
+  assert.deepEqual(hauteur.valeurs, []);
+  assert.equal(hauteur.unite, "m");
+
+  // **Et elle se lit à l'écran** : une unité connue du catalogue et tue par le
+  // rendu ne sert à personne.
+  assert.match(renderAideDeLaSignature(aide), /Hauteur sous plafond<\/b><span>en m<\/span>/);
+});
+
+test("une entrée qu'une autre fonction conclut se dit déduite", () => {
+  /**
+   * **Sinon on cherche un champ qui ne paraîtra jamais.** Le formulaire ne la
+   * demandera pas — c'est une fonction qui la pose —, et l'on croit l'écran
+   * cassé.
+   */
+  const enchaine = `${BROUILLON}
+fonction Peinture(zones, Prix au litre) {
+   calcule Coût = Prix au litre * Couleur des volets;
+   si (Coût > 0 €)
+   alors (Coût);
+}
+`;
+  const ligne = "   calcule Y = Peinture";
+  const aide = aideDeLaSignature(ligne, ligne.length, catalogue(enchaine));
+
+  const deduite = aide.lit.find((une) => une.nom === "Couleur des volets");
+  assert.equal(deduite?.deduite, true);
+});
+
+test("un nom qui n'est pas une fonction ne dit rien", () => {
+  // Une aide qui paraîtrait sur chaque nom du projet serait un panneau qui
+  // clignote à chaque frappe, et l'on apprendrait à ne plus le lire.
+  const ligne = "   si (Matière du volet";
+  assert.equal(aideDeLaSignature(ligne, ligne.length, catalogue()), null);
+  assert.equal(aideDeLaSignature("   si (", 7, catalogue()), null);
+  assert.equal(aideDeLaSignature("", 0, catalogue()), null);
+  assert.equal(aideDeLaSignature("   si (Couleur des volets", 25, []), null);
+});
+
+test("un commentaire ne dit rien : le langage n'a rien à y faire", () => {
+  // **Le nom y est écrit tel quel**, et c'est ce qu'il faut pour éprouver la
+  // garde : « // voir Couleur des volets » ne se serait pas lu comme un nom de
+  // toute façon, et l'épreuve aurait tenu sans que la garde existe.
+  const ligne = "   // Couleur des volets";
+  assert.equal(aideDeLaSignature(ligne, ligne.length, catalogue()), null);
+
+  // Hors du commentaire, le même nom parle.
+  const nu = "   si (Couleur des volets";
+  assert.ok(aideDeLaSignature(nu, nu.length, catalogue()));
+});
+
+/* ── Dans la signature : qu'est-ce que j'écris entre les parenthèses ? ───── */
+
+test("la signature dit zones en premier, puis ce que le corps lit", () => {
+  /**
+   * **`zones` d'abord et toujours** : c'est la portée, et une fonction qui
+   * l'oublie ne s'applique à rien de nommé. C'est la première question qu'on se
+   * pose devant une parenthèse ouverte, et elle n'avait aucune réponse à
+   * l'écran.
+   */
+  const ligne = "fonction Couleur des volets(";
+  const aide = aideDeLaSignature(ligne, ligne.length, catalogue());
+
+  assert.equal(aide.quoi, "signature");
+  assert.deepEqual(aide.lit.map((une) => une.nom), ["zones", "Matière du volet"]);
+  assert.equal(aide.rang, 0, "on est sur la première case");
+});
+
+test("la case où l'on écrit se marque, et elle avance avec les virgules", () => {
+  const apres = "fonction Couleur des volets(zones, ";
+  assert.equal(aideDeLaSignature(apres, apres.length, catalogue()).rang, 1);
+
+  const encore = "fonction Couleur des volets(zones, Matière du volet, ";
+  assert.equal(aideDeLaSignature(encore, encore.length, catalogue()).rang, 2);
+});
+
+test("un abaque a une signature comme une fonction", () => {
+  const ligne = "courbe Couleur des volets(";
+  assert.equal(aideDeLaSignature(ligne, ligne.length, catalogue()).quoi, "signature");
+});
+
+test("une signature refermée n'est plus une signature", () => {
+  // Au-delà de la parenthèse fermante on écrit autre chose, et l'aide doit se
+  // taire plutôt que de rester collée en haut de l'écran.
+  const ligne = "fonction Couleur des volets(zones, Matière du volet) {";
+  assert.equal(aideDeLaSignature(ligne, ligne.length, catalogue()), null);
+});
+
+/* ── La faute que la forme appelle ───────────────────────────────────────── */
+
+test("une parenthèse après un nom de fonction se dit, là où elle se commet", () => {
+  /**
+   * **C'est la faute que la forme appelle.** On connaît les fonctions des
+   * autres langages, on tape `Couleur des volets(`, et l'on attend une liste
+   * d'arguments. Mdall n'appelle pas — il nomme —, et l'écran le dit là où la
+   * faute se commet plutôt que dans une page lue trois semaines plus tôt.
+   */
+  const ligne = "   calcule X = Couleur des volets(";
+  const aide = aideDeLaSignature(ligne, ligne.length, catalogue());
+
+  assert.equal(aide.quoi, "nom");
+  assert.equal(aide.appel, true);
+  // Et elle dit quand même ce que la fonction lit : on est venu chercher cela.
+  assert.deepEqual(aide.lit.map((une) => une.nom), ["Matière du volet"]);
+
+  assert.match(renderAideDeLaSignature(aide), /Il n'y a pas d'appel de fonction/);
+  assert.match(renderAideDeLaSignature(aide), /« Couleur des volets » seul/);
+});
+
+test("une parenthèse ordinaire ne se prend pas pour un appel", () => {
+  // `si (` et `alors (` ouvrent des parenthèses toute la journée : les
+  // dénoncer ferait un écran qui crie à tort, et l'on cesserait de le lire.
+  for (const ligne of ["   si (", "   alors (", "   calcule X = 2 * ("]) {
+    const aide = aideDeLaSignature(ligne, ligne.length, catalogue());
+    assert.ok(!aide?.appel, `« ${ligne} » passe pour un appel`);
+  }
+});
+
+/* ── Ce que l'écran en fait ──────────────────────────────────────────────── */
+
+test("l'aide se dessine, et se tait quand il n'y a rien à dire", () => {
+  const ligne = "   si (Couleur des volets";
+  const html = renderAideDeLaSignature(aideDeLaSignature(ligne, ligne.length, catalogue()));
+
+  assert.match(html, /Couleur des volets/);
+  assert.match(html, /bois, pvc, alu/);
+
+  /**
+   * **La tête dit à laquelle des deux questions elle répond.**
+   *
+   * « lit » devant un nom : voilà ce dont cette fonction a besoin. « s'écrit
+   * avec » dans une signature : voilà ce qu'on tape entre les parenthèses. Les
+   * dire pareil ferait lire « Couleur des volets lit zones », qui est faux.
+   */
+  assert.match(html, /<span>lit<\/span>/);
+  assert.doesNotMatch(html, /s&#39;écrit avec|s'écrit avec/);
+
+  const dansLaSignature = "fonction Couleur des volets(";
+  const signature = renderAideDeLaSignature(
+    aideDeLaSignature(dansLaSignature, dansLaSignature.length, catalogue()));
+  assert.match(signature, /s&#39;écrit avec|s'écrit avec/);
+  assert.doesNotMatch(signature, /<span>lit<\/span>/);
+  assert.doesNotMatch(html, /pas d'appel/);
+
+  assert.equal(renderAideDeLaSignature(null), "");
+  assert.equal(renderAideDeLaSignature({ nom: "X", lit: [] }), "");
+  assert.equal(renderAideDeLaSignature(), "");
+});
+
+test("la case où l'on écrit se voit dans le rendu", () => {
+  const ligne = "fonction Couleur des volets(zones, ";
+  const html = renderAideDeLaSignature(aideDeLaSignature(ligne, ligne.length, catalogue()));
+
+  // Une seule, et c'est la seconde : `zones` est derrière nous.
+  assert.equal((html.match(/est-actif/g) ?? []).length, 1);
+  assert.match(html, /est-actif[^>]*>\s*<b>Matière du volet<\/b>/);
+});
+
+test("l'éditeur pose bien l'aide, et par la même écoute que la liste", async () => {
+  /**
+   * **Cette épreuve relit le source, et c'est l'exception qui le justifie.**
+   *
+   * Une aide parfaitement écrite que rien ne montre laisse exactement l'écran
+   * d'avant, et une aide posée par une **seconde** écoute serait un second
+   * endroit à se rappeler de rebrancher — le panneau des résultats a déjà coûté
+   * ce défaut-là une fois.
+   */
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const vue = readFileSync(
+    fileURLToPath(new URL("../views/ui/propositions-de-saisie.js", import.meta.url)), "utf8");
+  const saisie = readFileSync(
+    fileURLToPath(new URL("../views/ui/saisie-de-code.js", import.meta.url)), "utf8");
+
+  assert.match(saisie, /data-saisie-signature/, "la zone de code n'a nulle part où poser l'aide");
+  assert.match(vue, /renderAideDeLaSignature\(aideDeLaSignature\(ligne, colonne, catalogue\)\)/,
+    "l'aide n'est jamais calculée : rien ne paraîtrait");
+
+  // Une seule écoute sur la frappe, et l'aide passe dedans.
+  const debut = vue.indexOf("const montrer = () => {");
+  assert.ok(debut > 0, "montrer est introuvable");
+  assert.match(vue.slice(debut, vue.indexOf("\n  };", debut)), /signature\.hidden = !aide;/,
+    "l'aide ne suit pas la frappe");
+  assert.equal((vue.match(/zone\.addEventListener\("input"/g) ?? []).length, 1,
+    "une seconde écoute sur la frappe : il y aurait deux endroits à rebrancher");
+});

@@ -737,6 +737,93 @@ export const WIKI_DU_LANGAGE = [
       + "et n'y va pas.")
   ]),
 
+  section("essayer", "Trois exemples à essayer, et ce qu'on doit voir", [
+    dit("Copiez-les dans **Écrire du Mdall**, répondez au formulaire, et "
+      + "comparez. Si ce que vous voyez ne correspond pas à ce qui est écrit "
+      + "ici, c'est un défaut — et le dire est plus utile que de s'en "
+      + "accommoder."),
+
+    dit("**1. Un tableau, deux grandeurs, et les quatre façons de le regarder.**"),
+    code(
+      "fonction Descente de charge(zones, Charge par niveau) {",
+      "   // Ce qui arrive en pied de poteau, niveau par niveau.",
+      "   se lit en: barres",
+      "",
+      "   pour chaque Niveau de 1 à 6 par pas de 1",
+      "      calcule Charge cumulée = Charge par niveau * Niveau;",
+      "      calcule Hauteur atteinte = Niveau * 2,8 m;",
+      "",
+      "   calcule Charge en pied = le plus grand de Charge cumulée;",
+      "   si (Charge en pied > 0 kN)",
+      "   alors (Charge en pied);",
+      "}"
+    ),
+    dit("Répondez **12 kN**. La fonction conclut **72 kN**."),
+    liste(
+      "**Quatre boutons** — tableau, courbe, barres, nuage — et « barres » "
+        + "pressé : c'est `se lit en:` qui décide de ce qui s'ouvre.",
+      "**Deux cadres empilés**, « Charge cumulée · une force » et « Hauteur "
+        + "atteinte · une longueur », séparés d'un pointillé. Ils ne se "
+        + "croisent jamais, et l'abscisse **1 → 6** ne s'écrit qu'une fois, "
+        + "sous le second.",
+      "Sous eux, la phrase qui dit pourquoi il y a deux cadres.",
+      "**Nuage** ouvre une ligne « contre » : choisissez une colonne, les "
+        + "points ne sont pas reliés, et chacun dit au survol de quel niveau "
+        + "il vient.",
+      "**Tableau** rend les six lignes, et le dessin disparaît : on choisit, "
+        + "on ne montre pas les deux."
+    ),
+
+    dit("**2. Un abaque, et ce qu'il refuse.**"),
+    code(
+      "courbe Coefficient de forme(zones, Pente du versant) {",
+      "   // NF EN 1991-1-3, figure 5.1 — toiture à un versant.",
+      "   texte: NF EN 1991-1-3, annexe nationale",
+      "   entre les points: linéaire",
+      "   hors bornes: refuse",
+      "   |  0° | 0,8 |",
+      "   | 30° | 0,8 |",
+      "   | 60° | 0   |",
+      "}"
+    ),
+    dit("Répondez **45°**. La courbe conclut **0,4**."),
+    liste(
+      "Un palier de 0° à 30°, puis une descente jusqu'à 60°.",
+      "Un **rond** posé entre 30° et 60°, et la phrase « lu entre 30° et 60° ».",
+      "Les **deux lignes encadrantes surlignées** dans la table des points.",
+      "Répondez **75°** : elle **refuse**. C'est `hors bornes: refuse`, et "
+        + "c'est la faute la plus chère qu'un abaque évite — un nombre "
+        + "plausible qui ne vient d'aucun texte."
+    ),
+
+    dit("**3. Une fonction qui en lit une autre, et un pourcentage.**"),
+    code(
+      "fonction Taux de TVA(zones, Type de travaux) {",
+      "   // Le taux applicable, selon la nature des travaux.",
+      "   selon (Type de travaux)",
+      "   | rénovation   | 10% |",
+      "   | construction | 20% |",
+      "}",
+      "",
+      "fonction Prix TTC(zones, Prix HT) {",
+      "   // Il n'y a pas d'appel : on nomme ce qu'une autre fonction conclut.",
+      "   calcule TVA = Prix HT * Taux de TVA;",
+      "   calcule Prix TTC = Prix HT + TVA;",
+      "   si (Prix TTC > 0 €)",
+      "   alors (Prix TTC);",
+      "}"
+    ),
+    dit("Répondez **rénovation** et **1000 €**. Vous devez lire **1100 €** — et "
+      + "**1200 €** en construction."),
+    liste(
+      "Le formulaire ne demande que « Type de travaux » et « Prix HT » : il a "
+        + "compris que le taux se déduit.",
+      "`Taux de TVA` conclut **10%**, avec son signe : un barème conclut ce "
+        + "qui est écrit, unité comprise.",
+      "Aucune parenthèse nulle part : `Taux de TVA` se **nomme**."
+    )
+  ]),
+
   section("limites", "Ce que le langage ne sait pas écrire", [
     dit("Une documentation qui ne dit que ce qui marche apprend à se méfier d'elle."),
     liste(

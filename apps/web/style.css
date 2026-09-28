@@ -27597,6 +27597,44 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .saisie-code__propositions[hidden]{ display:none; }
 
+/* Ce qu'une fonction attend, au-dessus du curseur.
+
+   L'aide monte, la liste descend : posées du même côté elles se recouvrent, et
+   c'est toujours celle qu'on ne regardait pas qui passe devant. La ligne qu'on
+   écrit reste visible entre les deux.
+
+   Elle ne se clique pas — `pointer-events:none` —, parce qu'elle recouvre le
+   texte : un clic dedans déplacerait le curseur là où l'on croyait viser la
+   ligne du dessus. */
+.saisie-code__signature{
+  position:absolute; z-index:6; pointer-events:none;
+  min-width:220px; max-width:460px;
+  padding:6px 10px;
+  border:1px solid var(--border); border-radius:var(--radius);
+  background:var(--bg, var(--canvas-default, #0d1117));
+  box-shadow:0 8px 24px rgba(1,4,9,.6);
+  font-size:11px;
+}
+.saisie-code__signature[hidden]{ display:none; }
+.saisie-signature__tete{
+  margin:0 0 4px; font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace);
+}
+.saisie-signature__tete span{ margin-left:6px; color:var(--muted); font-family:inherit; }
+.saisie-signature__entrees{ list-style:none; margin:0; padding:0; display:grid; gap:2px; }
+.saisie-signature__entree{ display:flex; align-items:baseline; gap:8px; }
+.saisie-signature__entree b{
+  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace); font-weight:400;
+}
+.saisie-signature__entree span{ color:var(--muted); }
+/* Celle qu'on est en train d'écrire, dans une signature. */
+.saisie-signature__entree.est-actif b{ color:var(--fg, inherit); font-weight:600; }
+.saisie-signature__entree.est-actif span{ color:var(--fg, inherit); }
+/* La faute que la forme appelle : on la nomme là où elle se commet. */
+.saisie-signature__faute{
+  margin:6px 0 0; padding-top:5px; border-top:1px solid var(--border);
+  color:rgb(255,166,87);
+}
+
 .saisie-proposition{
   display:flex; align-items:baseline; gap:10px;
   padding:5px 10px; border:0; background:transparent; cursor:pointer;

@@ -136,7 +136,15 @@ export function renderSaisieDeCode({
         */""}
         ${propose
           ? `<div class="saisie-code__propositions" role="listbox"
-               aria-label="Propositions" data-saisie-propositions hidden></div>`
+               aria-label="Propositions" data-saisie-propositions hidden></div>
+             ${/*
+               **Ce que la fonction attend, au-dessus de la liste.**
+               C'est la place qu'elle occupe dans tous les éditeurs, et pour une
+               raison : la liste descend sous le curseur, l'aide monte au-dessus,
+               et les deux se lisent ensemble sans se recouvrir.
+             */""}
+             <div class="saisie-code__signature" role="status"
+               aria-live="polite" data-saisie-signature hidden></div>`
           : ""}
       </div>
     </div>

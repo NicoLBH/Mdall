@@ -486,3 +486,119 @@ export function contexteDuBrouillon(fichiers = [], {
     fichiers: tous.map((un) => texte(un?.nom)).filter(Boolean)
   };
 }
+
+/**
+ * Ce qu'une fonction attend, dit pendant qu'on l'écrit.
+ *
+ * ## Le verrou
+ *
+ * **On nomme une fonction, et l'on ne sait plus ce qu'elle lit.** « Couleur des
+ * volets » demande-t-elle la matière ? l'exposition ? Et quelles matières
+ * existe-t-il — bois, pvc, alu ? La réponse est au catalogue, à trois clics ;
+ * trois clics au milieu d'une ligne qu'on est en train de taper, c'est une
+ * réponse qu'on ne va pas chercher. On tape un nom plausible, et la règle reste
+ * indécidable sans qu'un mot dise pourquoi.
+ *
+ * C'est l'aide à la signature des éditeurs de code, et elle répond ici à deux
+ * questions, pas une.
+ *
+ * ## Deux endroits, deux questions
+ *
+ * **Dans la signature** — `fonction Couleur des volets(` — la question est
+ * « qu'est-ce que j'écris entre les parenthèses ? ». La réponse est `zones`,
+ * puis ce que le corps lit. `zones` d'abord et toujours : c'est la portée, et
+ * une fonction qui l'oublie ne s'applique à rien de nommé.
+ *
+ * **Sur un nom, ailleurs** — dans une condition, dans un `calcule` — la
+ * question est « de quoi cette fonction a-t-elle besoin ? ». La réponse est ce
+ * qu'elle lit, avec le **domaine** de chaque entrée quand il est fermé : savoir
+ * qu'il faut la matière ne sert à rien si l'on ignore qu'elle vaut « bois »,
+ * « pvc » ou « alu ».
+ *
+ * ## Elle rappelle qu'il n'y a pas d'appel
+ *
+ * C'est la faute que la forme elle-même appelle : on connaît les fonctions des
+ * autres langages, on tape `Couleur des volets(`, et l'on attend une liste
+ * d'arguments. Mdall n'appelle pas — il **nomme**. L'aide le dit là où la faute
+ * se commet, plutôt que dans une page qu'on aura lue trois semaines plus tôt.
+ */
+
+/** Une fonction est-elle en train d'être déclarée sur cette ligne ? */
+const OUVRE_UNE_SIGNATURE = /^\s*(fonction|courbe)\s+([^(]*)\(([^)]*)$/i;
+
+/**
+ * Ce que l'aide doit dire, là où le curseur est. `null` quand il n'y a rien à
+ * dire — et c'est le cas le plus fréquent, qui doit rester silencieux.
+ *
+ * @param {string} ligne la ligne en cours
+ * @param {number} colonne où est le curseur
+ * @param {object[]} catalogue tout ce qu'on peut nommer, tel que `catalogueDesNoms` le rend
+ * @returns {{quoi: string, nom: string, lit: object[], rang: number, appel: boolean}|null}
+ */
+export function aideDeLaSignature(ligne = "", colonne = 0, catalogue = []) {
+  const entiere = String(ligne ?? "");
+  const avant = entiere.slice(0, Math.max(0, colonne));
+  if (avant.trimStart().startsWith("//")) return null;
+
+  const tous = Array.isArray(catalogue) ? catalogue : [];
+  const trouver = (nom) => tous.find((une) => repli(une?.nom) === repli(nom)) ?? null;
+
+  /** Ce qu'on sait d'une entrée : son domaine, son unité, ce qu'elle dit. */
+  const entree = (nom) => {
+    const su = trouver(nom);
+    return {
+      nom: texte(nom),
+      valeurs: su?.valeurs ?? [],
+      unite: texte(su?.unite),
+      dit: texte(su?.dit),
+      // Une entrée qu'une autre fonction conclut ne se tape pas : elle se
+      // déduit. Le dire évite de chercher un champ qui ne paraîtra jamais.
+      deduite: Boolean(su && su.origine !== ORIGINE.DECLARE && (su.lit ?? []).length)
+    };
+  };
+
+  // ── Dans la signature : « qu'est-ce que j'écris entre les parenthèses ? »
+  const signature = OUVRE_UNE_SIGNATURE.exec(avant);
+  if (signature) {
+    const nom = texte(signature[2]);
+    const dedans = signature[3];
+    const sienne = trouver(nom);
+
+    return {
+      quoi: "signature",
+      nom,
+      // `zones` d'abord et toujours : c'est la portée de la fonction.
+      lit: [{ nom: "zones", valeurs: [], unite: "", dit: "la portée : à quelles parties d'ouvrage elle s'applique", deduite: false },
+        ...(sienne?.lit ?? []).map(entree)],
+      // Où l'on en est : la virgule qu'on vient de passer donne le rang.
+      rang: dedans.split(",").length - 1,
+      appel: false
+    };
+  }
+
+  // ── Sur un nom, ailleurs : « de quoi cette fonction a-t-elle besoin ? »
+  //
+  // On regarde le nom que le curseur touche — celui qu'on vient d'écrire, ou
+  // celui devant lequel on a ouvert une parenthèse de trop.
+  const ouvre = /([^\s(),;=<>+\-*/][^(),;=<>+\-*/]*)\($/.exec(avant);
+  const nom = texte(ouvre ? ouvre[1] : motEnCours(entiere, colonne).mot);
+  if (!nom) return null;
+
+  const sienne = trouver(nom);
+  if (!sienne || !(sienne.lit ?? []).length) return null;
+
+  return {
+    quoi: "nom",
+    nom: sienne.nom,
+    lit: sienne.lit.map(entree),
+    rang: -1,
+    /**
+     * **A-t-on ouvert une parenthèse ?**
+     *
+     * C'est la faute que la forme appelle, et l'aide la nomme là où elle se
+     * commet : `Couleur des volets(` n'est pas un appel, parce qu'il n'y a pas
+     * d'appel. On écrit le nom, seul.
+     */
+    appel: Boolean(ouvre)
+  };
+}
