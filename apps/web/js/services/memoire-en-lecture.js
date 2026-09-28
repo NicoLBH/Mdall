@@ -118,7 +118,7 @@ const TETES = [
   "pour chaque",
   // `entre les points:` et `hors bornes:` sont les deux déclarations d'une
   // courbe. Elles passent avant les mots courts, comme tous les mots composés.
-  "entre les points:", "hors bornes:", "se lit en:",
+  "entre les points:", "hors bornes:", "se lit en:", "rend:",
   "fonction", "soit", "calcule", "selon", "alors", "sinon", "si", "et", "ou", "non",
   ...PROVENANCES.map((type) => `${type}:`)
 ];
@@ -1285,6 +1285,21 @@ export function lireUnFichier(contenu = "") {
             points: []
           }
           : null,
+        /**
+         * **La signature, telle qu'elle est écrite.**
+         *
+         * Elle était lue et jetée : le bloc ne gardait que ce que son corps
+         * lit. On ne pouvait donc ni la montrer, ni la comparer à ce que la
+         * fonction lit vraiment — et une signature qui annonce autre chose que
+         * le corps est un mensonge dans le seul endroit qu'un relecteur
+         * regarde en premier.
+         *
+         * `zones` en fait partie : c'est la portée, elle s'écrit, et la retirer
+         * ici en ferait un cas de plus à traiter partout ailleurs.
+         */
+        signature: (tete?.entrees ?? []).map(texte).filter(Boolean),
+        /** Ce que la fonction déclare conclure : `{valeurs, unite}`, ou `null`. */
+        rend: null,
         /** Où vont les conditions et la conclusion qu'on lit : la tête, ou une branche. */
         branche: null,
         // Les `si` posés après le premier. Légitimes dans une fonction qui
@@ -1485,6 +1500,48 @@ export function lireUnFichier(contenu = "") {
      * ranger parmi les fautes de frappe : il choisit son abscisse parmi les
      * colonnes, et ce choix-là n'est pas dans le texte de la fonction.
      */
+    /**
+     * `rend: "gris" ou "blanc"` — **ce que la fonction conclut.**
+     *
+     * ## Le verrou
+     *
+     * Une fonction disait ce qu'elle **lit**, jamais ce qu'elle **rend**. On
+     * nommait « Couleur des volets » sans savoir si l'on obtiendrait une
+     * couleur, une épaisseur en centimètres ou un vrai/faux — et la seule façon
+     * de l'apprendre était de lire tout son corps, ou de la lancer.
+     *
+     * ## Elle s'écrit comme un nom se déclare
+     *
+     * Un domaine fermé — `"gris" ou "blanc"` — ou une unité — `kN`, `m`, `%`.
+     * Ce sont les deux formes que le langage emploie déjà pour dire la même
+     * chose d'un `const` : une seconde grammaire pour la même idée ferait deux
+     * façons d'énoncer un domaine (règle 10).
+     *
+     * ## Elle se vérifie, sinon ce serait une intention
+     *
+     * Une fonction qui annonce `rend: kN` et conclut « 3e famille B » ment dans
+     * le seul endroit qu'on lit avant de s'en servir. Le contrôle vit dans la
+     * vérification du brouillon — c'est là qu'on sait ce qu'elle conclut
+     * vraiment (règle 12).
+     */
+    if (mot === "rend:") {
+      const dite = texte(reste).replace(/;$/, "");
+      if (!dite) {
+        refus.push({
+          ligne: numero, texte: corps,
+          raison: "« rend: » dit ce que la fonction conclut : une unité — « rend: kN » — "
+            + "ou les valeurs possibles — « rend: \"gris\" ou \"blanc\" »."
+        });
+        return;
+      }
+
+      // Des guillemets : c'est un domaine fermé. Sans eux : une unité.
+      courant.rend = /"/.test(dite)
+        ? { valeurs: dite.split(/\s+ou\s+/i).map((un) => lireUneValeur(texte(un)).valeur).filter(Boolean), unite: "" }
+        : { valeurs: [], unite: dite };
+      return;
+    }
+
     if (mot === "se lit en:") {
       const { dite, raison } = lectureSuggeree(reste);
       if (!dite) {
@@ -1643,6 +1700,31 @@ export function lireUnFichier(contenu = "") {
     if (mot.endsWith(":") || /^[^\s:]+:\s/.test(corps)) {
       const propose = mot.endsWith(":") ? mot.slice(0, -1) : corps.split(":")[0];
       refus.push({ ligne: numero, texte: corps, raison: `« ${propose} » n'est pas une provenance connue.` });
+      return;
+    }
+
+    /**
+     * **La faute que la forme appelle : on a écrit un appel de fonction.**
+     *
+     * `Couleur des volets(Matériau);` est ce qu'écrit quiconque connaît un
+     * autre langage — et c'est une ligne entière, la seule de la fonction, qui
+     * disparaissait derrière « aucun mot de la langue n'ouvre cette ligne ».
+     * C'est vrai, et cela n'apprend rien : on relit la grammaire en cherchant
+     * le mot qui manque, alors que la phrase entière est de la mauvaise forme.
+     *
+     * Il n'y a pas d'appel dans Mdall : une fonction conclut sous son nom, et
+     * les autres la **nomment**. Le dire ici, avec la ligne qu'il fallait
+     * écrire, vaut dix pages lues trois semaines plus tôt.
+     */
+    const commeUnAppel = /^([^\s(][^(]*)\(([^)]*)\)\s*;?\s*$/.exec(corps);
+    if (commeUnAppel && !TETES.includes(texte(commeUnAppel[1]).toLowerCase())) {
+      const nomme = texte(commeUnAppel[1]);
+      refus.push({
+        ligne: numero, texte: corps,
+        raison: `il n'y a pas d'appel de fonction : « ${nomme} » se nomme, `
+          + `comme n'importe quel nom. Écrivez « calcule … = ${nomme}; » `
+          + `ou « si (${nomme} …) » selon ce que vous voulez en faire.`
+      });
       return;
     }
 
@@ -2281,4 +2363,42 @@ function ligneDeSectionLue(chemin) {
     { type: JETON.NEUTRE, texte: " " },
     { type: JETON.SECTION, texte: texte(chemin) }
   ];
+}
+
+/**
+ * Ce qu'une fonction lit **du dehors** : ses vraies entrées.
+ *
+ * ## Pourquoi ce n'est pas `nomsLusParLeBloc`
+ *
+ * Celui-là rend tout ce que le texte nomme, locales comprises : `Prix TTC` y
+ * lit « Prix HT », « Taux de TVA », « TVA » et « Prix TTC » — alors qu'il ne lit
+ * du dehors que les deux premiers. Les trois autres, il les pose lui-même.
+ *
+ * C'est la distinction dont dépend tout ce qui se dit à l'utilisateur : ce que
+ * le formulaire demande, ce que l'aide à la signature annonce, et ce qu'une
+ * signature doit déclarer. Écrite trois fois, elle aurait donné trois réponses
+ * différentes à la même question (règle 10).
+ *
+ * @param {object} bloc tel que `lireUnFichier` le rend
+ * @returns {string[]} les noms qu'il faut lui donner, dans l'ordre où ils viennent
+ */
+export function entreesDuBloc(bloc = {}) {
+  const siens = new Set();
+
+  // Ce qu'elle pose en le calculant : une locale ne se demande pas.
+  for (const calcul of Array.isArray(bloc?.calculs) ? bloc.calculs : []) {
+    siens.add(cleDuSujet(calcul?.nom));
+  }
+
+  // **Une boucle pose sa variable et ses colonnes.** `Niveau` a une valeur par
+  // ligne : la demander ferait un champ qui ne veut rien dire.
+  if (bloc?.boucle) {
+    siens.add(cleDuSujet(bloc.boucle.nom));
+    for (const calcul of bloc.boucle.calculs ?? []) siens.add(cleDuSujet(calcul?.nom));
+  }
+
+  // Et elle-même : une fonction conclut sous son nom, elle ne se lit pas.
+  siens.add(cleDuSujet(bloc?.sujet));
+
+  return nomsLusParLeBloc(bloc).filter((nom) => !siens.has(cleDuSujet(nom)));
 }

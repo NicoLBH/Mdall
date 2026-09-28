@@ -59,6 +59,7 @@ export function blocDeLaRegleVersee(assertion = null) {
     boucle: regle.boucle ?? null,
     courbe: regle.courbe ?? null,
     seLitEn: texte(regle.seLitEn),
+    rend: regle.rend ?? null,
     alors: texte(payload.value),
     sinon: texte(regle.sinon),
     // **Un agent versé reste un agent** : sa loi n'est pas dans le fichier, et
@@ -98,7 +99,10 @@ export function nomsConclusParLeProjet(assertions = []) {
     seLitEn: bloc.seLitEn,
     // De quoi dire « c'est un abaque » ou « ça déroule un tableau » sur la
     // fiche : on ne relit pas une courbe comme on relit une cascade de `si`.
-    forme: bloc.courbe ? "courbe" : bloc.boucle ? "boucle" : bloc.selon.length ? "barème" : ""
+    forme: bloc.courbe ? "courbe" : bloc.boucle ? "boucle" : bloc.selon.length ? "barème" : "",
+    // Ce qu'elle annonce rendre : l'aide à la signature le montre, et c'est la
+    // question qu'on se pose juste avant de la nommer.
+    rend: bloc.rend ?? null
   })).filter((une) => une.nom);
 }
 

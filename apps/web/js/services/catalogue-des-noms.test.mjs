@@ -76,6 +76,10 @@ test("une déclaration entre au catalogue avec ce qu'elle dit d'elle-même", () 
     nom: "Type de TVA",
     origine: ORIGINE.DECLARE,
     dit: "Le type de travaux.",
+    // **Un nom déclaré ne rend rien** : il se saisit. C'est une fonction qui
+    // rend, et `rend` les distingue là où `unite` et `valeurs` disent ce qu'un
+    // nom vaut.
+    rend: null,
     lit: [],
     unite: "",
     valeurs: ["neuf", "rénovation", "existant"],
@@ -159,6 +163,9 @@ test("un utilitaire de l'établi entre par ce qu'il conclut, version comprise", 
     nom: "Charge en pied",
     origine: ORIGINE.ETABLI,
     dit: "La charge en pied de poteau.",
+    // **L'établi ne dit pas ce qu'un utilitaire rend** : sa fiche porte son nom
+    // et ce qu'il lit, jamais sa promesse. On ne l'invente pas (règle 5).
+    rend: null,
     lit: ["Portée (m)", "Charge d'exploitation (kN/m²)"],
     unite: "",
     valeurs: [],

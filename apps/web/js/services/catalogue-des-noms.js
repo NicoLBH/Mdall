@@ -125,11 +125,19 @@ export const ORDRE_DES_ORIGINES = [
 ];
 
 /** Une entrée du catalogue, avec tous ses champs à leur place. */
-function entree({ nom, origine, dit = "", lit = [], unite = "", valeurs = [], ou = "", comme = "" }) {
+function entree({ nom, origine, dit = "", lit = [], unite = "", valeurs = [], ou = "", comme = "", rend = null }) {
   return {
     nom: texte(nom),
     origine,
     dit: texte(dit),
+    /**
+     * Ce qu'une fonction annonce **rendre** : `{valeurs, unite}`, ou `null`.
+     *
+     * `unite` et `valeurs`, au-dessus, disent ce qu'un **nom déclaré** vaut ;
+     * celui-ci dit ce qu'une **fonction conclut**. Les confondre ferait
+     * annoncer qu'on peut saisir ce qui se déduit.
+     */
+    rend: rend ?? null,
     lit: (Array.isArray(lit) ? lit : []).map(texte).filter(Boolean),
     unite: texte(unite),
     valeurs: (Array.isArray(valeurs) ? valeurs : []).map(texte).filter(Boolean),
@@ -204,6 +212,9 @@ export function nomsDuBrouillon(fichiers = []) {
           // chose, qui cesserait un jour de dire pareil.
           lit,
           unite: texte(bloc?.unite),
+          // Ce que la fonction annonce rendre : l'aide à la signature le
+          // montre, et c'est la question qu'on se pose juste avant de la nommer.
+          rend: bloc?.rend ?? null,
           ou
         }));
       }
@@ -343,6 +354,7 @@ function nomsDuProjet(projet) {
     nom: texte(une?.nom),
     origine: ORIGINE.PROJET,
     lit: Array.isArray(une?.lit) ? une.lit : [],
+    rend: une?.rend ?? null,
     // Ce qu'elle est, en un mot : on ne relit pas un abaque comme une cascade
     // de « si », et la fiche le dit avant qu'on l'ouvre.
     dit: texte(une?.forme) ? `un ${texte(une.forme)} du projet` : ""

@@ -22,6 +22,7 @@ import {
 
 import { lireUnFichier, lireUneCondition } from "../../../apps/web/js/services/memoire-en-lecture.js";
 import { aProposerDuBrouillon } from "../../../apps/web/js/services/proposition-du-brouillon.js";
+import { ENNUI, verifierLeBrouillon } from "../../../apps/web/js/services/verification-du-brouillon.js";
 import { PHRASE_DE_LAGREGAT } from "../../../apps/web/js/services/memoire-en-texte.js";
 import { ENTRE, HORS } from "../../../apps/web/js/services/courbe-du-mdall.js";
 import { LECTURE, SUGGESTIBLES, lectureDite, lectureSuggeree } from "../../../apps/web/js/services/graphique-dune-table.js";
@@ -329,6 +330,37 @@ test("chaque abaque de la consigne se lit, et se lit vraiment quelque part", () 
   }
 });
 
+test("chaque signature de la consigne annonce ce que sa fonction lit", () => {
+  /**
+   * **Un exemple faux est pire qu'une consigne absente** : le modèle le copie,
+   * et le brouillon est refusé par la documentation qui le lui a montré. La
+   * signature est la seule chose du langage qui ne se vérifie pas d'elle-même
+   * au lancement — elle ne lie rien —, et c'est donc la seule qui dérive sans
+   * bruit (règle 12).
+   */
+  for (const [rang, exemple] of EXEMPLES.entries()) {
+    const ennuis = verifierLeBrouillon([{ nom: "essai.ref", contenu: exemple }])
+      .filter((une) => une.quoi === ENNUI.SIGNATURE || une.quoi === ENNUI.REND);
+    assert.deepEqual(ennuis.map((une) => une.dit), [], `exemple ${rang + 1}`);
+  }
+});
+
+test("la consigne enseigne la signature et « rend: », et le langage les lit", () => {
+  // Un mot enseigné que le langage ne lit pas est pire qu'une absence.
+  assert.match(CONSIGNES, /`zones` en premier et toujours/);
+  assert.match(CONSIGNES, /annonce tout ce que la fonction lit/);
+  assert.match(CONSIGNES, /rend: "gris" ou "blanc"/);
+  assert.match(CONSIGNES, /rend: kN/);
+
+  // Et l'exemple qui les porte se lit, avec sa promesse.
+  const avecRend = EXEMPLES.find((un) => un.includes("rend:"));
+  assert.ok(avecRend, "la consigne n'enseigne plus « rend: »");
+
+  const lu = lireUnFichier(avecRend);
+  assert.deepEqual(lu.refus, []);
+  assert.deepEqual(lu.blocs[0].rend, { valeurs: ["gris", "blanc"], unite: "" });
+});
+
 test("la consigne dit qu'un abaque se verse, et le versement l'accepte", () => {
   /**
    * **Une consigne qui dirait le contraire de ce que le code fait est pire
@@ -437,7 +469,16 @@ test("l'exemple de chaînage de la consigne conclut vraiment, sans rien demander
   // La consigne montre deux fonctions dont la seconde lit la première. Si le
   // langage ne savait pas le faire, on enseignerait au modèle une syntaxe qui
   // ne marche pas — ce qui est exactement ce qu'on vient de corriger.
-  const chaine = EXEMPLES.find((un) => un.includes("Taux de TVA") && un.includes("Prix TTC"));
+  /**
+   * **Deux fonctions, et c'est ce qui fait le chaînage.** Chercher les deux
+   * noms suffisait tant qu'un seul exemple les portait ; la consigne en montre
+   * un autre où « Taux de TVA » est une entrée, et l'épreuve s'est mise à
+   * l'éprouver lui — en exigeant qu'un nom qu'il faut vraiment saisir ne soit
+   * pas demandé.
+   */
+  const chaine = EXEMPLES.find((un) =>
+    (un.match(/^fonction /gm) ?? []).length === 2
+    && un.includes("Taux de TVA") && un.includes("Prix TTC"));
   assert.ok(chaine, "la consigne ne montre pas d'exemple de chaînage");
 
   const fichiers = [{ nom: "essai.ref", contenu: chaine }];

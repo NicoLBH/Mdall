@@ -354,6 +354,49 @@ nomme \`Coefficient de forme\` lit ensuite ce qu'elle conclut. N'essaie donc pas
 de la convertir en barème « pour qu'elle puisse être enregistrée » : tu perdrais
 l'interpolation, et c'est tout ce pour quoi cette forme existe.
 
+# Ce qu'une fonction annonce
+
+**La signature annonce tout ce que la fonction lit**, et rien d'autre. Elle
+s'écrit \`fonction Nom(zones, …)\` : \`zones\` en premier et toujours — c'est la
+portée —, puis chaque nom que le corps lit, y compris ceux qu'une autre fonction
+conclut.
+
+Elle est **vérifiée** : une entrée lue sans être annoncée, ou annoncée sans être
+lue, est refusée avant le lancement. Ne mets donc jamais un nom « au cas où », et
+n'en oublie aucun.
+
+Ce qu'elle **pose elle-même** n'y figure pas : un \`calcule\`, la variable d'une
+boucle et ses colonnes sont des locales, pas des entrées.
+
+\`\`\`
+fonction Prix TTC(zones, Prix HT, Taux de TVA) {
+   calcule TVA = Prix HT * Taux de TVA;
+   calcule Prix TTC = Prix HT + TVA;
+   si (Prix TTC > 0 €)
+   alors (Prix TTC);
+}
+\`\`\`
+
+**\`rend:\` dit ce que la fonction conclut**, et c'est facultatif. Deux formes, et
+ce sont celles d'une déclaration de nom : un domaine fermé, ou une unité.
+
+\`\`\`
+fonction Couleur des volets(zones, Matériau) {
+   rend: "gris" ou "blanc"
+
+   si (Matériau = "bois")
+   alors ("gris");
+   sinon ("blanc");
+}
+\`\`\`
+
+- \`rend: "gris" ou "blanc"\` — les valeurs possibles, entre guillemets ;
+- \`rend: kN\` — une unité, sans guillemets ;
+- il est **vérifié** : chaque conclusion écrite doit tenir la promesse. Une
+  fonction qui annonce \`rend: kN\` et conclut \`"3e famille B"\` est refusée ;
+- ne l'écris que si tu sais ce que la fonction rend. Une promesse fausse est
+  pire qu'une promesse absente.
+
 # Regarder un tableau : \`se lit en\`
 
 Un graphique **n'est pas une construction du langage** : n'écris jamais un verbe

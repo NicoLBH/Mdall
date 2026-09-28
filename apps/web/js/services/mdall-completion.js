@@ -570,6 +570,7 @@ export function aideDeLaSignature(ligne = "", colonne = 0, catalogue = []) {
       // `zones` d'abord et toujours : c'est la portée de la fonction.
       lit: [{ nom: "zones", valeurs: [], unite: "", dit: "la portée : à quelles parties d'ouvrage elle s'applique", deduite: false },
         ...(sienne?.lit ?? []).map(entree)],
+      rend: sienne?.rend ?? null,
       // Où l'on en est : la virgule qu'on vient de passer donne le rang.
       rang: dedans.split(",").length - 1,
       appel: false
@@ -591,6 +592,15 @@ export function aideDeLaSignature(ligne = "", colonne = 0, catalogue = []) {
     quoi: "nom",
     nom: sienne.nom,
     lit: sienne.lit.map(entree),
+    /**
+     * **Ce qu'on obtiendra en la nommant.**
+     *
+     * C'est l'autre moitié de la question, et elle manquait : savoir qu'une
+     * fonction lit la matière du volet ne dit pas si l'on obtient une couleur,
+     * une épaisseur en centimètres ou un vrai/faux. `null` quand la fonction
+     * ne l'annonce pas — on ne l'invente pas (règle 5).
+     */
+    rend: sienne.rend ?? null,
     rang: -1,
     /**
      * **A-t-on ouvert une parenthèse ?**
