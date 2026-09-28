@@ -4598,16 +4598,6 @@ relit pas comme une courbe, et le gain de cette forme est précisément qu'on la
 compare à sa figure d'un coup d'œil. Le verrou est donc à l'écran, pas dans le
 calcul.
 
-**Un abaque ne se verse pas.** Une `courbe` proposée à la mémoire est écartée
-« sans-valeur » : elle ne conclut rien tant qu'on ne l'a pas lue, et le
-versement attend une valeur. Ce n'est pas un oubli de câblage — c'est une vraie
-question de modèle : une courbe est une **loi**, comme un barème, et ce que le
-projet en tient devrait être ses points, pas un nombre. Le barème s'en tire
-parce que ses lignes se lisent en branches ; une courbe n'a pas cet équivalent,
-et lui en fabriquer un par paliers perdrait justement l'interpolation
-(`docs/la-courbe-et-linterpolation.md`). Tant que ce n'est pas tranché, un
-abaque vit dans l'établi et pas dans la mémoire d'un projet.
-
 **Le rejeu d'une fonction versée ne choisit pas sa lecture.** L'écran des
 fichiers suit la suggestion de la fonction et s'arrête là
 (`docs/le-nuage-les-cadres-et-le-rejeu.md`). Offrir les quatre lectures d'un
@@ -4621,3 +4611,23 @@ l'ordonnée est tout le reste. Une matrice — chaque colonne contre chaque autr
 serait la suite naturelle, et elle demande de décider ce qu'on fait des
 grandeurs : les cadres empilés répondent pour un nuage, pas pour une grille de
 seize. C'est une question d'écran, pas de calcul.
+
+**Un pourcentage ne traverse pas un nom, et il se tait.** `calcule TVA = Prix
+HT * 20%` fonctionne : `20%` est un littéral que le calculateur comprend. Mais
+un pourcentage **conclu par une fonction** ne traverse pas : une ligne de barème
+`| rénovation | 10% |` conclut `10`, le signe est perdu à la lecture, et la
+fonction qui écrit `Prix HT * Taux de TVA` rend **11 000 €** là où elle devait
+rendre 1 100 €. Rien ne refuse, rien ne prévient : c'est un résultat plausible
+et faux, exactement ce que cette langue existe pour empêcher.
+
+Deux questions, et la seconde dépend de la première. **Que vaut `10%` comme
+valeur ?** Un nombre sans unité vaudrait 0,1 et se multiplierait bien, mais
+s'afficherait `0,1` partout où l'auteur a écrit `10%`. Une unité `%` demande de
+décider ce que `€ × %` donne, c'est-à-dire d'entrer dans l'algèbre des unités
+composées — déjà en attente ici. Et **où trancher** : au lecteur du barème, qui
+perd le signe, ou au calculateur, qui ne sait pas lire un `%` porté par un nom.
+
+En attendant, un barème qui doit servir à multiplier se conclut en
+**coefficient** — `| rénovation | 1,1 |` —, ce qui se relit très bien contre le
+texte d'origine. Le dire est la seule chose honnête tant que le refus n'est pas
+écrit.

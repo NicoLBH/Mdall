@@ -9,6 +9,7 @@ import {
   propositionsDeSaisie, motEnCours, ceQuAttendLaLigne, sujetCompare,
   appliquerLaProposition, ouEstLeCurseur, localesAuDessus, contexteDuBrouillon,
   ATTEND, QUOI
+, fonctionAutourDuCurseur
 } from "./mdall-completion.js";
 import { ORIGINE, catalogueDesNoms, nomsLisiblesDIci } from "./catalogue-des-noms.js";
 
@@ -333,4 +334,96 @@ test("une ligne vide ne déplie pas les quarante mots du langage", () => {
   // Les autres contextes proposent sans rien attendre : c'est tout l'intérêt.
   assert.deepEqual(propose("   si (Zone de vent = "), ['"1"', '"2"', '"3"', '"4"']);
   assert.ok(propose("   importe (depuis: ").length > 0);
+});
+
+/* ── Ce qui passe devant ─────────────────────────────────────────────────── */
+
+const DEUX_FONCTIONS = [
+  'fonction Taux de TVA(zones, Type de travaux) {',
+  '   si (Type de travaux = "rénovation")',
+  "   alors (10%);",
+  "}",
+  "",
+  "fonction Prix TTC(zones, Prix HT) {",
+  "   si ("
+].join("\n");
+
+test("sans rien taper, ce sont les noms du projet qu'on voit d'abord", () => {
+  /**
+   * **C'est le défaut qui rendait le catalogue invisible.** Triés par ordre
+   * alphabétique seul, les sept mots du langage — `abs`, `arrondi`, `max`,
+   * `min`, `plafond`, `plancher`, `racine` — prenaient six des huit places, et
+   * la fonction qu'on venait d'écrire n'y figurait pas. On ouvrait la liste, on
+   * n'y voyait rien d'utile, et l'on apprenait à ne plus l'ouvrir.
+   *
+   * Ce qu'on ne retient pas, c'est ce que **ce projet-ci** contient ; `racine`
+   * et `abs` sont sept et ne changent jamais.
+   */
+  const contexte = contexteDuBrouillon([{ nom: "essai.ref", contenu: DEUX_FONCTIONS }], {
+    contenu: DEUX_FONCTIONS, position: DEUX_FONCTIONS.length
+  });
+  const ligne = DEUX_FONCTIONS.split("\n").pop();
+  const trouvees = propositionsDeSaisie({ ligne, colonne: ligne.length, catalogue: contexte.catalogue });
+
+  assert.equal(trouvees[0].texte, "Taux de TVA", "les mots du langage passent encore devant");
+  assert.equal(trouvees[0].quoi, QUOI.NOM);
+
+  // Les mots du langage restent offerts : ils passent derrière, ils ne partent pas.
+  assert.ok(trouvees.some((une) => une.quoi === QUOI.FONCTION), "le langage a disparu de la liste");
+});
+
+test("une fonction ne se propose pas à elle-même", () => {
+  /**
+   * **Mdall n'a pas d'appel** : une fonction conclut sous son nom, et le nommer
+   * dans son propre corps est une circularité. La règle reste indécidable —
+   * ou, pire, elle lit ce que le projet tenait d'une version précédente
+   * d'elle-même, et l'on obtient un nombre parfaitement plausible qui ne vient
+   * de nulle part.
+   */
+  const contexte = contexteDuBrouillon([{ nom: "essai.ref", contenu: DEUX_FONCTIONS }], {
+    contenu: DEUX_FONCTIONS, position: DEUX_FONCTIONS.length
+  });
+
+  assert.equal(fonctionAutourDuCurseur(DEUX_FONCTIONS, DEUX_FONCTIONS.length), "Prix TTC");
+  assert.ok(!contexte.catalogue.some((une) => une.nom === "Prix TTC" && une.origine === ORIGINE.CONCLU),
+    "la fonction qu'on écrit se propose à elle-même");
+
+  // Et l'autre reste là : c'est tout l'objet du catalogue.
+  assert.ok(contexte.catalogue.some((une) => une.nom === "Taux de TVA"));
+});
+
+test("une fonction garde la locale qui porte son propre nom", () => {
+  /**
+   * **C'est ainsi qu'elle conclut** : `calcule Prix TTC = …` puis
+   * `alors (Prix TTC)`. La lui retirer l'empêcherait d'écrire sa dernière
+   * ligne — ce qu'on retire est le nom qu'elle **conclut**, c'est-à-dire
+   * elle-même vue du dehors, jamais ce qu'elle vient de poser.
+   */
+  const avecLocale = [
+    "fonction Prix TTC(zones, Prix HT) {",
+    "   calcule Prix TTC = Prix HT * 1,2;",
+    "   si ("
+  ].join("\n");
+
+  const contexte = contexteDuBrouillon([{ nom: "essai.ref", contenu: avecLocale }], {
+    contenu: avecLocale, position: avecLocale.length
+  });
+
+  const sien = contexte.catalogue.filter((une) => une.nom === "Prix TTC");
+  assert.equal(sien.length, 1, "la locale a disparu avec la conclusion");
+  assert.equal(sien[0].origine, ORIGINE.LOCALE);
+});
+
+test("hors de toute fonction, il n'y a pas de soi-même", () => {
+  assert.equal(fonctionAutourDuCurseur("", 0), "");
+  assert.equal(fonctionAutourDuCurseur("const Zone de vent = {\n};\n", 5), "");
+
+  // Une accolade fermante en colonne zéro clôt la fonction : au-delà, ce
+  // qu'elle conclut redevient nommable.
+  const apres = "fonction A(zones, B) {\n   si (B > 0)\n   alors (1);\n}\n\n";
+  assert.equal(fonctionAutourDuCurseur(apres, apres.length), "");
+
+  // Et un abaque se referme sur la même circularité.
+  const abaque = "courbe Coefficient(zones, Pente) {\n   entre les points: linéaire\n";
+  assert.equal(fonctionAutourDuCurseur(abaque, abaque.length), "Coefficient");
 });

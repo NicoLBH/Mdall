@@ -348,6 +348,12 @@ N'écris **jamais** une régression ni un polynôme pour remplacer un abaque : l
 valeurs qui en sortiraient ne se retrouvent dans aucun texte, et personne ne
 pourrait dire d'où elles viennent.
 
+**Une courbe est une loi que le projet tient**, au même titre qu'une fonction :
+elle se verse avec ses points et ses deux déclarations, et toute fonction qui
+nomme \`Coefficient de forme\` lit ensuite ce qu'elle conclut. N'essaie donc pas
+de la convertir en barème « pour qu'elle puisse être enregistrée » : tu perdrais
+l'interpolation, et c'est tout ce pour quoi cette forme existe.
+
 # Regarder un tableau : \`se lit en\`
 
 Un graphique **n'est pas une construction du langage** : n'écris jamais un verbe

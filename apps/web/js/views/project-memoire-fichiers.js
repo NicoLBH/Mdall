@@ -2134,6 +2134,10 @@ export function lignesDeLAssertion(assertion = {}, profondeur = 0, {
         // Une entrée qui n'apparaît que dans une branche se déclare aussi :
         // sans elle, la fonction ne dit plus de quoi elle a besoin.
         ...(payload.regle.sinonSi ?? []).flatMap((branche) => branche?.conditions ?? []),
+        // **Un abaque lit une entrée sans la tester** : elle est dans sa
+        // signature, jamais dans une condition. La taire ferait la seule
+        // fonction du langage qui ne dit pas d'où vient ce qu'elle lit.
+        ...(payload.regle.courbe?.selon ? [{ sujet: payload.regle.courbe.selon }] : []),
         ...exceptions
       ]
         .map((condition) => texte(condition?.sujet))

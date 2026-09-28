@@ -237,7 +237,11 @@ export function verifierLeBrouillon(fichiers = []) {
       // la lecture a prise pour un nom.
       const nu = !texte(bloc?.valeur) && !(bloc?.conditions ?? []).length
         && !bloc?.agent && !texte(bloc?.alors) && !texte(bloc?.sinon)
-        && !(bloc?.enregistre ?? []).length;
+        && !(bloc?.enregistre ?? []).length
+        // **Un abaque n'a rien de tout cela et dit beaucoup** : ses points sont
+        // sa loi. Le ranger ici le faisait annoncer « ne dit rien » sous une
+        // courbe de onze points relevés dans une norme.
+        && !bloc?.courbe;
       if (nu) {
         remarques.push({
           fichier: nom, ligne: Number(bloc?.ligne) || 0, quoi: ENNUI.SANS_VALEUR,

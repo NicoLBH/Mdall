@@ -21,6 +21,7 @@ import {
 } from "./mdall-du-modele.js";
 
 import { lireUnFichier, lireUneCondition } from "../../../apps/web/js/services/memoire-en-lecture.js";
+import { aProposerDuBrouillon } from "../../../apps/web/js/services/proposition-du-brouillon.js";
 import { PHRASE_DE_LAGREGAT } from "../../../apps/web/js/services/memoire-en-texte.js";
 import { ENTRE, HORS } from "../../../apps/web/js/services/courbe-du-mdall.js";
 import { LECTURE, SUGGESTIBLES, lectureDite, lectureSuggeree } from "../../../apps/web/js/services/graphique-dune-table.js";
@@ -326,6 +327,29 @@ test("chaque abaque de la consigne se lit, et se lit vraiment quelque part", () 
     assert.equal(lu.valeur, bloc.courbe.points[0].y,
       `« ${bloc.sujet} » ne rend pas son premier point`);
   }
+});
+
+test("la consigne dit qu'un abaque se verse, et le versement l'accepte", () => {
+  /**
+   * **Une consigne qui dirait le contraire de ce que le code fait est pire
+   * qu'une absence** : le modèle convertirait ses abaques en barèmes « pour
+   * qu'ils puissent être enregistrés », et l'on perdrait l'interpolation —
+   * c'est-à-dire tout ce pour quoi cette forme existe (règle 12).
+   */
+  assert.match(CONSIGNES, /une loi que le projet tient/);
+  // La consigne est repliée à quatre-vingts colonnes : la phrase traverse une
+  // fin de ligne, et une épreuve qui l'ignorerait tomberait au premier retour.
+  assert.match(CONSIGNES, /convertir en barème/);
+  assert.match(CONSIGNES, /tu perdrais\s+l['’]interpolation/);
+
+  // Et c'est vrai : l'abaque de la consigne se verse vraiment.
+  const abaque = EXEMPLES.find((un) => un.trim().startsWith("courbe "));
+  assert.ok(abaque, "la consigne n'enseigne plus d'abaque");
+
+  const rendu = aProposerDuBrouillon([{ nom: "essai.ref", contenu: abaque }]);
+  assert.deepEqual(rendu.sansRetour, []);
+  assert.equal(rendu.affirmations[0]?.referentiel, true);
+  assert.ok(rendu.affirmations[0]?.regle?.courbe?.points?.length >= 2);
 });
 
 test("la consigne dit les quatre mots d'une courbe, et la faute qu'ils évitent", () => {
