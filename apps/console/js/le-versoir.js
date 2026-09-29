@@ -19,10 +19,14 @@
  * vu. Verser au fil du dépôt aurait été plus court d'un clic, et faux : toutes
  * les archives qu'on ouvre ne méritent pas d'être gardées.
  *
- * Et ce qui part ne va pas dans la mémoire d'un chantier — il va dans
- * l'archive des pièces, qui ne connaît aucun projet
- * (`services/larchive-des-pieces.js`). Ce qui entre un jour dans la mémoire y
- * entrera par une proposition signée, comme tout le reste (règle 1).
+ * Ce qui part, c'est **le message et ses pièces** : le fichier d'origine, la
+ * forme qu'on en a lue, les octets des pièces, et le lien entre les deux. Un
+ * plan sans son message n'a pas de provenance, et la provenance est ce qu'on ne
+ * reconstitue pas après coup (`services/larchive-des-messages.js`).
+ *
+ * Et cela ne va pas dans la mémoire d'un chantier : l'archive ne connaît aucun
+ * projet. Ce qui entre un jour dans la mémoire y entrera par une proposition
+ * signée, comme tout le reste (règle 1).
  *
  * ## Il ne dessine que ce qu'il a lu
  *
@@ -34,13 +38,17 @@
 import { unMsgDeplie } from "../partage/js/services/un-msg-deplie.js";
 import {
   inventaireDunMessage, inventaireDuVersoir, phraseDeCeQuOnNeSaitPasRapprocher,
-  phraseDeCeQuiSeRepete, phraseDuVersoir, poidsDit
+  phraseDeCeQuiSeRepete, phraseDesImagesDeSignature, phraseDuVersoir, poidsDit
 } from "../partage/js/services/linventaire-du-versoir.js";
 import {
   lesEmpreintes, marquerLesRepetitions
 } from "../partage/js/services/le-dedoublonnage.js";
 import { phraseDuVersement } from "../partage/js/services/larchive-des-pieces.js";
 import { verserLesPieces } from "../partage/js/services/larchive-des-pieces-supabase.js";
+import { phraseDuVersementDesMessages } from "../partage/js/services/larchive-des-messages.js";
+import { verserLesMessages } from "../partage/js/services/larchive-des-messages-supabase.js";
+import { empreinteDunMessage } from "../partage/js/services/le-dedoublonnage.js";
+import { sha256Hex, sha256HexBytes } from "../partage/js/utils/sha256.js";
 import { phraseDuTrou } from "../partage/js/services/trous-dun-mail.js";
 
 const echapper = (valeur) => String(valeur ?? "")
@@ -96,12 +104,15 @@ export function renderLeVersoir() {
  * apprend à ne plus lire les boutons.
  */
 function renderLeGesteDeVerser(inventaire) {
-  if (!inventaire.documents && !inventaire.vignettes) return "";
+  // **Un message sans pièce se verse aussi** : c'est le propos qui fait
+  // l'épisode, pas les plans. Le bouton n'apparaît que s'il y a quelque chose,
+  // et un message déposé est déjà quelque chose.
+  if (!inventaire.messages) return "";
 
   return `
     <p class="conso-usages__mot">
       <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" id="versoirVerser">
-        Verser les pièces dans l'archive
+        Verser dans l'archive
       </button>
       <span class="forme-reference__sur mono-small" id="versoirBilan"></span>
     </p>
@@ -116,21 +127,10 @@ function renderUnePiece(piece) {
   </li>`;
 }
 
-/**
- * **Les images de signature se disent en une ligne, jamais une par une.**
- *
- * Sur le message réel qui a servi de référence, elles étaient huit, toutes
- * identiques à deux près, et elles remplissaient l'écran. On vient ici chercher
- * un plan : le faire chercher au milieu de huit logos, c'est rater la seule
- * chose que cet écran doit montrer. Elles sont gardées — on ne jette rien —,
- * elles ne sont simplement pas détaillées.
- */
+/** Les images de signature, en une ligne. La phrase vit dans le service. */
 function renderLesVignettes(un) {
-  if (!un.vignettes.length) return "";
-  return `<p class="forme-manques">${echapper(
-    `${un.vignettes.length} ${un.vignettes.length > 1 ? "images" : "image"} de signature`
-    + ` (${poidsDit(un.poidsDesVignettes)}) : gardées, mais ce ne sont pas des documents`
-  )}</p>`;
+  const dite = phraseDesImagesDeSignature(un.vignettes.length, un.poidsDesVignettes);
+  return dite ? `<p class="forme-manques">${echapper(dite)}</p>` : "";
 }
 
 /**
@@ -222,9 +222,10 @@ export function monterLeVersoir(hote) {
   if (!zone || !champ || !ou) return;
 
   const lus = [];
-  // Les octets des pièces, gardés à part de l'inventaire : celui-ci ne porte
-  // que des nombres, et le versement a besoin de la matière.
+  // La matière, gardée à part de l'inventaire : celui-ci ne porte que des
+  // nombres, et le versement a besoin des octets.
   const pieces = [];
+  const messages = [];
 
   const lire = async (fichiers) => {
     for (const fichier of fichiers) {
@@ -235,13 +236,29 @@ export function monterLeVersoir(hote) {
       // mégaoctets à chaque fichier déposé.
       const empreintes = await lesEmpreintes(lu);
       lus.push(inventaireDunMessage(lu, fichier.name, empreintes));
-      (lu.pieces ?? []).forEach((une, rang) => pieces.push({
+
+      const siennes = (lu.pieces ?? []).map((une, rang) => ({
         empreinte: empreintes.pieces[rang] ?? "",
         octets: une.octets,
         nom: une.nom,
         type: une.type,
-        taille: une.taille
+        taille: une.taille,
+        dansLeTexte: une.dansLeTexte
       }));
+      pieces.push(...siennes);
+
+      messages.push({
+        // **Deux empreintes, et ce ne sont pas deux noms d'une chose.** Celle du
+        // message dit que deux dépôts parlent du même échange ; celle de ses
+        // octets dit où le fichier est rangé. Deux exports du même message
+        // donnent deux fichiers et un seul message.
+        empreinte: await sha256Hex(empreinteDunMessage(lu)) ?? "",
+        octetsEmpreinte: await sha256HexBytes(octets) ?? "",
+        octetsDuFichier: octets,
+        fichier: fichier.name,
+        lu,
+        pieces: siennes
+      });
     }
     // **Dans l'ordre du temps**, et non dans celui où l'explorateur les a
     // rendus : une archive se relit comme une chronologie.
@@ -270,15 +287,26 @@ export function monterLeVersoir(hote) {
     bouton.disabled = true;
     if (bilan) bilan.textContent = "versement…";
 
-    const fait = await verserLesPieces(pieces);
+    // **Les pièces d'abord, les messages ensuite.** Un lien n'a de sens que si
+    // ses deux bouts existent : versés dans l'autre ordre, les premiers liens
+    // pointeraient vers des pièces absentes.
+    const desPieces = await verserLesPieces(pieces);
+    const desMessages = desPieces.lu
+      ? await verserLesMessages(messages)
+      : { lu: false };
     bouton.disabled = false;
     if (!bilan) return;
 
     // **Une archive qu'on n'a pas pu lire ne se dit pas « rien à verser ».**
     // Sans savoir ce qui est déjà là, on ne verse pas — et l'on explique.
-    bilan.textContent = fait.lu
-      ? (phraseDuVersement(fait) || "tout était déjà là")
-      : "l'archive n'a pas répondu : rien n'a été versé";
+    if (!desPieces.lu || !desMessages.lu) {
+      bilan.textContent = "l'archive n'a pas répondu : rien n'a été versé";
+      return;
+    }
+
+    const dit = [phraseDuVersementDesMessages(desMessages), phraseDuVersement(desPieces)]
+      .filter(Boolean).join(" · ");
+    bilan.textContent = dit || "tout était déjà là";
   });
 
   for (const quoi of ["dragenter", "dragover"]) {

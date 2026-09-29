@@ -30,8 +30,9 @@ comme tel ; tout le reste est à faire.
 | la porte de la console — une adresse, et rien d'autre | table `administrateurs`, `services/la-porte-de-la-console.js` | « suis-je administrateur ? », et jamais « qui l'est ? » |
 | le site de la console, construit à part | `apps/console`, `scripts/prepare-console.mjs`, `npm run build:console` | un autre bâtiment, servi sous `console/` |
 | son premier écran : **le versoir** | `apps/console/js/le-versoir.js`, `services/linventaire-du-versoir.js` | on dépose des `.msg`, on voit ce qu'ils portent, rien ne part sans un clic |
-| son second : **l'archive** | `apps/console/js/larchive.js`, `services/larchive-des-pieces.js` | ce qui a été versé, et les PDF s'y ouvrent |
+| son second : **l'archive** | `apps/console/js/larchive.js`, `services/larchive-des-pieces.js` | les messages dans l'ordre du temps, leurs pièces, et les PDF s'y ouvrent |
 | le casier des pièces | Supabase Storage `archives` + `pieces_archivees` | les octets gardés, nommés par leur empreinte |
+| l'archive de fondement | `messages_archives`, `pieces_des_messages`, casier `messages/` | le fichier d'origine, la forme lue, et quel message portait quelle pièce |
 
 **Ce qui n'existe pas du tout :** aucune table `organisations`, `comptes`,
 `plans` ni `abonnements`. **Aucun rôle** : il y a une porte, pas un rôle — voir
@@ -188,6 +189,26 @@ d'archives que l'administrateur ouvre lui-même pour nourrir la prédiction, à
 côté de l'interface des utilisateurs (`docs/nourrir-mdall.md`). Aucune politique
 de projet ne le connaît, et il ne connaît aucun projet. La section suivante —
 ce que la console ne lit jamais — n'en est pas entamée d'un pouce.
+
+Cela vaut aussi de l'**archive de fondement**, qui garde désormais les messages
+eux-mêmes : leur fichier d'origine, leur propos, et le lien vers les pièces
+qu'ils portaient. C'est la matière la plus sensible que Mdall conserve, et elle
+mérite qu'on redise ce qui la tient :
+
+- **réservée aux administrateurs**, par `est_administrateur()` — un booléen sur
+  l'appelant, jamais une liste ;
+- **aucune politique de modification ni de suppression**, sur aucune des
+  tables ;
+- **les adresses des destinataires ne sont pas dans la table** : seulement leur
+  nombre. Rien ne sait s'en servir aujourd'hui, et une colonne qu'aucun code ne
+  lit finit par fuir sans avoir jamais servi. Le fichier d'origine les porte
+  toujours, pour le jour où une raison précise de les lire apparaîtra ;
+- **elle ne touche à aucun projet.** Les conversations avec le copilote, les
+  messages des sujets et la mémoire des chantiers lui sont étrangers, dans les
+  deux sens.
+
+La durée de conservation et la réponse à une demande d'effacement restent à
+décider (§ 6), et c'est maintenant qu'elles pèsent.
 
 ## 3. Ce que la console ne lit jamais
 

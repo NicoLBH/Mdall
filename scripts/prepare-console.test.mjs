@@ -131,14 +131,16 @@ test("le versoir montre les documents un par un, et les signatures en une ligne"
   assert.doesNotMatch(message, /un\.vignettes\.map/);
   assert.match(message, /renderLesVignettes\(un\)/);
 
-  // Et elles ne sont pas « écartées » : rien n'est jeté, c'est tout le principe
-  // de cette page — la phrase le disait, et c'était faux.
+  // **Et la phrase n'est pas écrite ici.** Deux écrans la disent — le versoir et
+  // l'archive —, donc elle vit dans le service, avec le poids qu'elle affiche.
+  // Écrite deux fois, elle a effectivement divergé : l'archive listait les huit
+  // logos un par un (règle 4).
   const vignettes = source.slice(
     source.indexOf("function renderLesVignettes(un)"),
     source.indexOf("function renderUnMessage(un)")
   );
-  assert.match(vignettes, /gardées/);
-  assert.doesNotMatch(vignettes, /écart/);
+  assert.match(vignettes, /phraseDesImagesDeSignature\(/);
+  assert.doesNotMatch(vignettes, /images de signature/);
 
   // **Rien ne part de cet écran de lui-même.** Il ne parle à personne : pas de
   // `fetch`, pas de client de base. Le seul départ possible est le versement,
@@ -158,6 +160,46 @@ test("le versoir montre les documents un par un, et les signatures en une ligne"
  * cent archives pour regarder ce qu'elles portent, et toutes ne méritent pas
  * d'être gardées.
  */
+/**
+ * **Les pièces d'abord, les messages ensuite.**
+ *
+ * Un lien n'a de sens que si ses deux bouts existent : versés dans l'autre
+ * ordre, les premiers liens pointeraient vers des pièces absentes — et rien à
+ * l'écran ne le dirait.
+ */
+test("le versoir verse les pièces avant les messages, et s'arrête si les pièces échouent", async () => {
+  const source = await readFile(
+    new URL("../apps/console/js/le-versoir.js", import.meta.url), "utf8");
+  const geste = source.slice(source.indexOf('closest?.("#versoirVerser")'));
+
+  assert.ok(geste.indexOf("verserLesPieces(pieces)") < geste.indexOf("verserLesMessages(messages)"),
+    "les pièces se versent avant les messages");
+  // Et si les pièces n'ont pas pu être versées, les messages ne partent pas :
+  // leurs liens n'auraient rien à désigner.
+  assert.match(geste, /desPieces\.lu\s*\n?\s*\?\s*await verserLesMessages\(messages\)/);
+  assert.match(geste, /!desPieces\.lu \|\| !desMessages\.lu/);
+});
+
+/**
+ * **Deux empreintes par message, et ce ne sont pas deux noms d'une chose.**
+ *
+ * Celle du message dit que deux dépôts parlent du même échange ; celle de ses
+ * octets dit où le fichier est rangé. Les confondre ferait perdre l'un ou
+ * l'autre — deux exports du même message donnent deux fichiers et un message.
+ */
+test("le versoir calcule l'identité du message et l'empreinte de son fichier", async () => {
+  const source = await readFile(
+    new URL("../apps/console/js/le-versoir.js", import.meta.url), "utf8");
+  const lecture = source.slice(source.indexOf("const lire = async (fichiers)"),
+    source.indexOf("choisir?.addEventListener"));
+
+  assert.match(lecture, /empreinte: await sha256Hex\(empreinteDunMessage\(lu\)\)/);
+  assert.match(lecture, /octetsEmpreinte: await sha256HexBytes\(octets\)/);
+  // Le fichier d'origine part avec : c'est la source qu'on relira le jour où
+  // l'on saura lire mieux.
+  assert.match(lecture, /octetsDuFichier: octets/);
+});
+
 test("le versoir ne verse que sur un clic, et dit ce qu'il n'a pas pu faire", async () => {
   const source = await readFile(
     new URL("../apps/console/js/le-versoir.js", import.meta.url), "utf8");
@@ -173,7 +215,7 @@ test("le versoir ne verse que sur un clic, et dit ce qu'il n'a pas pu faire", as
   // relancerait tout.
   assert.match(geste, /bouton\.disabled = true/);
   // Une archive qu'on n'a pas pu lire ne se dit pas « rien à verser ».
-  assert.match(geste, /fait\.lu/);
+  assert.match(geste, /n'a pas répondu/);
 });
 
 /**
@@ -199,11 +241,41 @@ test("l'archive ouvre ses PDF avec le lecteur de Mdall, pas avec le sien", async
   // au dessin de la liste ni à son montage, ne les réclame — seul le
   // gestionnaire du clic le fait.
   const avantLeClic = source.slice(source.indexOf("function renderLaListe("),
-    source.indexOf("liste.addEventListener"));
+    source.indexOf("const ouvrir = async"));
   assert.doesNotMatch(avantLeClic, /octetsDeLaPiece/);
 
-  const auClic = source.slice(source.indexOf("liste.addEventListener"));
+  const auClic = source.slice(source.indexOf("const ouvrir = async"));
   assert.match(auClic, /octetsDeLaPiece\(empreinte\)/);
+
+  // **Un seul chemin pour ouvrir un PDF**, que le bouton vienne de la liste des
+  // pièces ou d'un message : deux gestionnaires auraient fini par ne plus
+  // ouvrir de la même façon (règle 4).
+  assert.match(source, /liste\.addEventListener\("click", ouvrir\)/);
+  assert.match(source, /hoteDesMessages\.addEventListener\("click", ouvrir\)/);
+});
+
+/**
+ * **L'archive dit les mêmes choses que le versoir, de la même façon.**
+ *
+ * Elle a d'abord listé les huit images de signature une par une, là où le
+ * versoir les repliait depuis deux tours : la règle était écrite à un endroit
+ * et pas à l'autre. Elle vit maintenant dans le service, et les deux écrans s'y
+ * adossent.
+ */
+test("l'archive replie les images de signature comme le versoir", async () => {
+  const source = await readFile(
+    new URL("../apps/console/js/larchive.js", import.meta.url), "utf8");
+
+  const message = source.slice(source.indexOf("function renderUnMessage(un)"),
+    source.indexOf("function renderLesMessages("));
+
+  // Les documents un par un…
+  assert.match(message, /documents\.map\(renderUneLigne\)/);
+  // …les images de signature jamais.
+  assert.doesNotMatch(message, /vignettes\.map/);
+  assert.match(message, /phraseDesImagesDeSignature\(/);
+  // Et ce qui les sépare vient de ce que le message déclarait, pas du type.
+  assert.match(message, /une\.dansLeTexte/);
 });
 
 /**
