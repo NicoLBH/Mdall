@@ -63,7 +63,10 @@ import { convertir } from "./unites-du-metier.js";
 import {
   REFUS_DE_LA_BOUCLE, agregerUneColonne, valeursDeLaBoucle, phraseDuRefusDeLaBoucle
 } from "./boucle-du-mdall.js";
-import { interpoler, phraseDuRefusDeLaCourbe, pointsDeLaCourbe } from "./courbe-du-mdall.js";
+import {
+  interpoler, phraseDuRefusDeLaCourbe, pointsDeLaCourbe,
+  nappeDesCases, interpolerLaNappe, phraseDuRefusDeLaNappe
+} from "./courbe-du-mdall.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -859,7 +862,19 @@ export function evaluerLaRegle(regle = {}, lire = () => ({ connu: false, valeur:
  */
 export function evaluerLaCourbe(courbe = null, lire = () => ({ connu: false, valeur: "" })) {
   const selon = texte(courbe?.selon);
-  const lus = pointsDeLaCourbe(courbe?.points);
+  /**
+   * **Une nappe est une famille de courbes, une par colonne.**
+   *
+   * La seconde entrée choisit — ou interpole — la courbe ; puis on lit cette
+   * courbe. C'est ainsi qu'on lit un abaque imprimé, et c'est pour cela que
+   * tout ce qui suit ne change pas : ce qu'on rend est une courbe et sa
+   * lecture, exactement comme avant.
+   */
+  const parColonne = texte(courbe?.parColonne);
+  const lus = parColonne
+    ? nappeDesCases(courbe?.colonnes ?? [], courbe?.points ?? [])
+    : pointsDeLaCourbe(courbe?.points);
+  const direPourquoi = parColonne ? phraseDuRefusDeLaNappe : phraseDuRefusDeLaCourbe;
 
   const rendu = (quoi) => ({
     decidable: quoi.decidable ?? false,
@@ -874,8 +889,16 @@ export function evaluerLaCourbe(courbe = null, lire = () => ({ connu: false, val
     doutes: quoi.doutes ?? [],
     calculs: [],
     tableau: null,
-    /** Les points, tels qu'ils ont été écrits : l'écran les dessine. */
-    points: lus.points,
+    /**
+     * Les points, tels qu'ils ont été écrits : l'écran les dessine.
+     *
+     * Pour une nappe, ce sont ceux de la **courbe lue** — celle de la colonne
+     * où l'on se trouve. Une surface ne se compare pas à une figure d'un coup
+     * d'œil ; la courbe où l'on est, si.
+     */
+    points: quoi.points ?? lus.points ?? [],
+    /** La nappe entière, quand c'en est une : l'écran montre aussi son tableau. */
+    nappe: parColonne ? lus : null,
     /** Où la lecture est tombée, et ce qu'elle a trouvé. */
     lecture: quoi.lecture ?? null
   });
@@ -885,22 +908,41 @@ export function evaluerLaCourbe(courbe = null, lire = () => ({ connu: false, val
   if (lus.refus) {
     return rendu({
       doutes: [DOUTE.COURBE_MUETTE],
-      lecture: { pourquoi: phraseDuRefusDeLaCourbe(lus.refus, lus.ou) }
+      lecture: { pourquoi: direPourquoi(lus.refus, lus.ou) }
     });
   }
 
   const lue = lire(selon) ?? { connu: false, valeur: "" };
-  if (!lue.connu) {
+  const laColonne = parColonne ? (lire(parColonne) ?? { connu: false, valeur: "" }) : { connu: true, valeur: "" };
+
+  /**
+   * **Les deux entrées manquantes se nomment ensemble.** N'en dire qu'une
+   * ferait remplir un champ pour découvrir qu'il en manquait un second — et
+   * l'abaque reste muet pour une raison qu'on croyait avoir corrigée.
+   */
+  const manquants = [
+    ...(lue.connu ? [] : [selon]),
+    ...(laColonne.connu ? [] : [parColonne])
+  ].filter(Boolean);
+
+  if (manquants.length) {
     return rendu({
-      manquants: selon ? [selon] : [],
+      manquants,
       doutes: [DOUTE.ENTREE_ABSENTE],
-      lecture: { sujet: selon, pourquoi: PHRASES[DOUTE.ENTREE_ABSENTE] }
+      lecture: { sujet: manquants.join(" et "), pourquoi: PHRASES[DOUTE.ENTREE_ABSENTE] }
     });
   }
 
-  const trouve = interpoler(lus, lue.valeur, { entre: courbe?.entre, hors: courbe?.hors });
+  const comment = { entre: courbe?.entre, hors: courbe?.hors };
+  const trouve = parColonne
+    ? interpolerLaNappe(lus, lue.valeur, laColonne.valeur, comment)
+    : interpoler(lus, lue.valeur, comment);
+
   if (!trouve.connu) {
     return rendu({
+      // Pour une nappe : les points de la courbe où l'on s'est placé, quand on
+      // a su s'y placer. C'est ce que l'écran dessine, et ce qu'on relit.
+      points: trouve.courbe?.points ?? lus.points ?? [],
       doutes: [DOUTE.COURBE_MUETTE],
       lecture: { sujet: selon, lu: texte(lue.valeur), pourquoi: trouve.pourquoi }
     });
@@ -916,12 +958,21 @@ export function evaluerLaCourbe(courbe = null, lire = () => ({ connu: false, val
     decidable: true,
     tient: true,
     valeur: trouve.valeur,
+    points: trouve.courbe?.points ?? lus.points ?? [],
     lecture: {
       sujet: selon,
       lu: texte(lue.valeur),
       sur: trouve.sur,
       entre: trouve.entre,
-      borne: trouve.borne
+      borne: trouve.borne,
+      /**
+       * **Le premier des deux pas**, quand c'est une nappe : sur quelle courbe
+       * on s'est placé. Sans lui, la trace montre une lecture exacte sur une
+       * courbe que personne n'a écrite.
+       */
+      ...(parColonne
+        ? { parColonne, luParColonne: texte(laColonne.valeur), colonne: trouve.colonne }
+        : {})
     }
   });
 }

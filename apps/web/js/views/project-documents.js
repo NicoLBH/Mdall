@@ -128,6 +128,14 @@ const docsViewState = {
   memoireQuery: "",
   /** Code ou Origine. */
   memoireLecture: "code",
+  /**
+   * La partie d'ouvrage dont on veut voir le rejeu, dans un fichier.
+   *
+   * Vide — « toutes » — au départ : c'est ce que l'écran faisait avant d'avoir
+   * un sélecteur, et partir sur un bâtiment ferait croire qu'une fonction n'en
+   * déroule qu'un. C'est une portée à part entière, pas une absence.
+   */
+  memoireRejeuZone: "",
   /** Les blocs repliés du fichier ouvert, par leur identifiant. */
   memoirePlies: new Set(),
   /**
@@ -3045,6 +3053,22 @@ function bindLaMemoire(root) {
     });
   }
 
+  /**
+   * **Montre-moi le bâtiment B.** Le rejeu tourne zone par zone et les empilait
+   * toutes : sur un projet à six bâtiments, c'est six tableaux à faire défiler
+   * pour retrouver celui qu'on cherchait.
+   *
+   * Le choix se garde d'un fichier à l'autre — on regarde un bâtiment, pas un
+   * fichier —, et une zone que le fichier ouvert ne déroule pas retombe sur
+   * « toutes » au rendu, là où l'on sait ce qui existe vraiment.
+   */
+  for (const choix of root.querySelectorAll("[data-memoire-rejeu-zone]")) {
+    choix.addEventListener("change", () => {
+      docsViewState.memoireRejeuZone = choix.value || "";
+      renderProjectDocumentsContent(root);
+    });
+  }
+
   // Le pliage ne repasse pas par un rendu : replier cent blocs redessinerait
   // cinq cents lignes pour en cacher quatre cents, et la page sauterait.
   for (const bouton of root.querySelectorAll("[data-memoire-plier-bloc]")) {
@@ -3533,6 +3557,7 @@ function renderBrancheMemoire() {
             ? docsViewState.memoireLecture : LECTURE.CODE,
           plies: docsViewState.memoirePlies ?? new Set(),
           recherche: docsViewState.memoireCherche,
+          zoneDuRejeu: docsViewState.memoireRejeuZone,
           ...emploisDeLaMemoire(),
           ...contexte
         })

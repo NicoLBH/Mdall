@@ -49,7 +49,7 @@
  */
 
 import {
-  lireUnFichier, nomsConclusParLeBloc, nomsLusParLeBloc, parametresDuBloc
+  lireUnFichier, nomsConclusParLeBloc, nomsLusParLeBloc, parametresDuBloc, ceQuElleAnnonce
 } from "./memoire-en-lecture.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { valeursPosees } from "./formulaire-du-brouillon.js";
@@ -238,7 +238,10 @@ export function nomsDuBrouillon(fichiers = []) {
           unite: texte(bloc?.unite),
           // Ce que la fonction annonce rendre : l'aide à la signature le
           // montre, et c'est la question qu'on se pose juste avant de la nommer.
-          rend: bloc?.rend ?? null,
+          // Ce que la fonction annonce rendre — écrit, ou à défaut déduit de ce
+          // qu'elle conclut. L'aide à la signature le montre, et c'est la
+          // question qu'on se pose juste avant de la nommer.
+          rend: ceQuElleAnnonce(bloc),
           ou
         }));
       }

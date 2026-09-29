@@ -372,3 +372,298 @@ export function traceDeLaCourbe(courbe = null, { x = null, y = null } = {}) {
 
   return { points: une.points, lu: trace.marque, bornes: trace.bornes };
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * L'abaque à double entrée
+ *
+ * ## Le verrou
+ *
+ * Les Eurocodes n'ont pas que des courbes : ils ont des **nappes** — un
+ * coefficient d'exposition selon l'altitude **et** la zone de vent, une
+ * pression selon la hauteur **et** la catégorie de terrain. Elles s'écrivaient
+ * en barème, c'est-à-dire par paliers : on perdait l'interpolation sur l'un des
+ * deux axes, et l'on rendait la valeur d'un seuil là où le texte d'origine
+ * trace une droite.
+ *
+ * ## Ce qu'on montre, qui était le vrai verrou
+ *
+ * « Interpoler sur deux axes » est un travail connu ; ce qui ne l'était pas,
+ * c'est **ce qu'on relit ensuite**. Une surface ne se compare pas à une figure
+ * d'un coup d'œil, et le gain de cette écriture est précisément là.
+ *
+ * > **Une nappe est une famille de courbes, une par colonne — et on la lit
+ * > comme l'ingénieur lit l'abaque imprimé : on se place sur une courbe, puis
+ * > on la lit.**
+ *
+ * La seconde entrée choisit (ou interpole) **une courbe**, et cette courbe est
+ * une courbe ordinaire : elle se dessine, se trace et se relit avec tout ce qui
+ * existe déjà. La trace dit les deux pas — « entre les colonnes 1 et 2 », puis
+ * « entre 500 m et 1000 m » —, et l'on retrouve les quatre cases du tableau
+ * d'origine.
+ *
+ * Rien de neuf dans le calcul, donc : deux interpolations qu'on sait faire,
+ * dans l'ordre où on les lit.
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Les cases d'une nappe, lues et vérifiées.
+ *
+ * L'en-tête porte les valeurs de la **seconde** entrée, sa première case vide :
+ * c'est le coin du tableau, et il n'y a rien à y écrire.
+ *
+ * ```
+ * |        |    1 |    2 |    3 |
+ * |    0 m | 1,00 | 1,05 | 1,10 |
+ * | 1000 m | 1,25 | 1,35 | 1,45 |
+ * ```
+ *
+ * **Tout se vérifie ici**, comme pour une courbe : les deux axes montent, les
+ * unités de chaque axe sont les mêmes, et chaque ligne a autant de cases que
+ * l'en-tête. Une nappe fausse laissée passer jusqu'au lancement rendrait un
+ * nombre plausible, et personne ne saurait d'où il sort (règle 5).
+ *
+ * @param {string[]} entetes la première ligne, coin compris
+ * @param {{x: string, valeurs: string[]}[]} lignes les autres
+ * @returns {{colonnes: {z: number, dit: string}[],
+ *   lignes: {x: number, dit: string, valeurs: number[], dits: string[]}[],
+ *   uniteX: string, uniteY: string, uniteZ: string, refus: string, ou: string}}
+ */
+export function nappeDesCases(entetes = [], lignes = []) {
+  const refuse = (refus, ou = "") => ({
+    colonnes: [], lignes: [], uniteX: "", uniteY: "", uniteZ: "", refus, ou
+  });
+
+  // Le coin, puis au moins deux colonnes : une nappe d'une seule colonne est
+  // une courbe, et elle s'écrit comme une courbe.
+  const tetes = (Array.isArray(entetes) ? entetes : []).map(texte);
+  const dits = tetes.slice(1);
+  if (dits.length < 2) return refuse(REFUS_DE_LA_NAPPE.TROP_ETROITE);
+  if (texte(tetes[0])) return refuse(REFUS_DE_LA_NAPPE.COIN, tetes[0]);
+
+  const rangees = (Array.isArray(lignes) ? lignes : []);
+  if (rangees.length < 2) return refuse(REFUS_DE_LA_COURBE.TROP_COURTE);
+
+  // ── Les colonnes : la seconde entrée, qui monte elle aussi ───────────────
+  const brutesZ = dits.map(mesureDe);
+  for (const une of brutesZ) {
+    if (!Number.isFinite(une.nombre)) return refuse(REFUS_DE_LA_COURBE.PAS_UN_NOMBRE, une.dite);
+  }
+
+  const uniteZ = brutesZ[0].unite;
+  const colonnes = [];
+  for (const une of brutesZ) {
+    const z = convertir(une.nombre, une.unite, uniteZ);
+    if (z === null) return refuse(REFUS_DE_LA_COURBE.UNITES, phraseDesUnites(uniteZ, une.unite));
+    if (colonnes.length && z <= colonnes[colonnes.length - 1].z) {
+      return refuse(REFUS_DE_LA_NAPPE.DESORDRE_DES_COLONNES, une.dite);
+    }
+    colonnes.push({ z, dit: une.dite });
+  }
+
+  // ── Les lignes : la première entrée, et les cases ────────────────────────
+  let uniteX = "";
+  let uniteY = "";
+  const lues = [];
+
+  for (const rangee of rangees) {
+    const cases = (Array.isArray(rangee?.valeurs) ? rangee.valeurs : []).map(texte);
+    if (cases.length !== colonnes.length) {
+      return refuse(REFUS_DE_LA_NAPPE.LIGNE_BANCALE, texte(rangee?.x));
+    }
+
+    const abscisse = mesureDe(rangee?.x);
+    if (!Number.isFinite(abscisse.nombre)) {
+      return refuse(REFUS_DE_LA_COURBE.PAS_UN_NOMBRE, abscisse.dite);
+    }
+    if (!lues.length) uniteX = abscisse.unite;
+
+    const x = convertir(abscisse.nombre, abscisse.unite, uniteX);
+    if (x === null) return refuse(REFUS_DE_LA_COURBE.UNITES, phraseDesUnites(uniteX, abscisse.unite));
+    if (lues.length && x <= lues[lues.length - 1].x) {
+      return refuse(REFUS_DE_LA_COURBE.DESORDRE, abscisse.dite);
+    }
+
+    const valeurs = [];
+    for (const dite of cases) {
+      const quoi = mesureDe(dite);
+      if (!Number.isFinite(quoi.nombre)) return refuse(REFUS_DE_LA_COURBE.PAS_UN_NOMBRE, quoi.dite);
+      if (!lues.length && !valeurs.length) uniteY = quoi.unite;
+
+      const y = convertir(quoi.nombre, quoi.unite, uniteY);
+      if (y === null) return refuse(REFUS_DE_LA_COURBE.UNITES, phraseDesUnites(uniteY, quoi.unite));
+      valeurs.push(y);
+    }
+
+    lues.push({ x, dit: abscisse.dite, valeurs, dits: cases });
+  }
+
+  return { colonnes, lignes: lues, uniteX, uniteY, uniteZ, refus: "", ou: "" };
+}
+
+/** Ce qu'une nappe refuse, en plus de ce qu'une courbe refuse. */
+export const REFUS_DE_LA_NAPPE = {
+  /** Une seule colonne : c'est une courbe, et elle s'écrit comme une courbe. */
+  TROP_ETROITE: "trop-etroite",
+  /** Le coin de l'en-tête porte quelque chose : il n'y a rien à y écrire. */
+  COIN: "coin",
+  /** Les valeurs de la seconde entrée ne montent pas. */
+  DESORDRE_DES_COLONNES: "desordre-des-colonnes",
+  /** Une ligne n'a pas autant de cases que l'en-tête a de colonnes. */
+  LIGNE_BANCALE: "ligne-bancale",
+  /** La seconde entrée sort des colonnes écrites, et la nappe refuse. */
+  HORS_DES_COLONNES: "hors-des-colonnes"
+};
+
+/** Ce qu'un refus de nappe dit, en français. */
+export function phraseDuRefusDeLaNappe(code, quoi = "") {
+  const dit = texte(quoi);
+
+  switch (code) {
+    case REFUS_DE_LA_NAPPE.TROP_ETROITE:
+      return "un abaque à double entrée demande au moins deux colonnes : une seule est une courbe, "
+        + "et s'écrit comme une courbe";
+    case REFUS_DE_LA_NAPPE.COIN:
+      return `le coin de l'en-tête porte « ${dit} » : il n'y a rien à y écrire, `
+        + "les colonnes commencent après";
+    case REFUS_DE_LA_NAPPE.DESORDRE_DES_COLONNES:
+      return `les colonnes ne montent pas : « ${dit} » vient après une valeur plus grande`;
+    case REFUS_DE_LA_NAPPE.LIGNE_BANCALE:
+      return `la ligne « ${dit} » n'a pas autant de cases que l'en-tête a de colonnes`;
+    case REFUS_DE_LA_NAPPE.HORS_DES_COLONNES:
+      return `${dit} : l'abaque refuse d'aller au-delà de ce qui est écrit`;
+    default:
+      return phraseDuRefusDeLaCourbe(code, quoi);
+  }
+}
+
+/**
+ * La courbe d'une nappe, à la valeur de sa seconde entrée.
+ *
+ * **C'est le premier des deux pas, et c'est celui qu'on montre.** L'ingénieur
+ * devant un abaque imprimé choisit d'abord sa courbe — « je suis en zone 2 » —,
+ * puis la lit. Entre deux colonnes, la courbe est la moyenne pondérée des deux,
+ * point par point : c'est ce que trace la règle à la main entre deux traits du
+ * document.
+ *
+ * @returns {{courbe: {points, uniteX, uniteY}|null, sur: string,
+ *   entre: {de: string, a: string}|null, borne: string,
+ *   refus: string, pourquoi: string}}
+ */
+export function courbeDeLaColonne(nappe = null, lue = "", { entre = ENTRE.LINEAIRE, hors = HORS.REFUSE } = {}) {
+  const colonnes = nappe?.colonnes ?? [];
+  const lignes = nappe?.lignes ?? [];
+  const rien = (refus, ou = "") => ({
+    courbe: null, sur: "", entre: null, borne: "",
+    refus, pourquoi: phraseDuRefusDeLaNappe(refus, ou)
+  });
+
+  if (colonnes.length < 2 || lignes.length < 2) return rien(REFUS_DE_LA_NAPPE.TROP_ETROITE);
+
+  const mesure = mesureDe(lue);
+  if (!Number.isFinite(mesure.nombre)) return rien(REFUS_DE_LA_COURBE.LECTURE, mesure.dite || "rien");
+
+  const z = convertir(mesure.nombre, mesure.unite, nappe.uniteZ);
+  if (z === null) return rien(REFUS_DE_LA_COURBE.UNITES, phraseDesUnites(nappe.uniteZ, mesure.unite));
+
+  const premiere = colonnes[0];
+  const derniere = colonnes[colonnes.length - 1];
+
+  /** La courbe faite des valeurs d'une colonne, ou de deux colonnes pesées. */
+  const courbeDe = (prendre) => ({
+    points: lignes.map((ligne) => {
+      const y = prendre(ligne);
+      return { x: ligne.x, y, dit: ligne.dit, vaut: ecrire(y, nappe.uniteY) };
+    }),
+    uniteX: nappe.uniteX,
+    uniteY: nappe.uniteY
+  });
+
+  if (z < premiere.z || z > derniere.z) {
+    if (hors === HORS.REFUSE) {
+      return rien(REFUS_DE_LA_NAPPE.HORS_DES_COLONNES,
+        `« ${mesure.dite} » sort des colonnes, qui vont de ${premiere.dit} à ${derniere.dit}`);
+    }
+    const bout = z < premiere.z ? 0 : colonnes.length - 1;
+    return {
+      courbe: courbeDe((ligne) => ligne.valeurs[bout]),
+      sur: "", entre: null, borne: colonnes[bout].dit, refus: "", pourquoi: ""
+    };
+  }
+
+  let rang = 0;
+  while (rang < colonnes.length - 1 && colonnes[rang + 1].z <= z) rang += 1;
+
+  const de = colonnes[rang];
+  const a = colonnes[rang + 1] ?? de;
+
+  // Tomber sur une colonne écrite n'est pas tomber entre deux : la colonne du
+  // tableau se retrouve telle quelle, et c'est ce qu'on veut voir en premier.
+  if (z === de.z) {
+    return {
+      courbe: courbeDe((ligne) => ligne.valeurs[rang]),
+      sur: de.dit, entre: null, borne: "", refus: "", pourquoi: ""
+    };
+  }
+
+  // **En escalier sur la seconde entrée aussi.** `entre les points:` vaut pour
+  // les deux axes : un tableau à seuils l'est dans les deux sens, et déclarer
+  // deux interpolations pour un seul tableau ferait deux choses à vérifier là
+  // où le texte d'origine n'en dit qu'une.
+  if (entre === ENTRE.ESCALIER) {
+    return {
+      courbe: courbeDe((ligne) => ligne.valeurs[rang]),
+      sur: "", entre: { de: de.dit, a: a.dit }, borne: "", refus: "", pourquoi: ""
+    };
+  }
+
+  const part = (z - de.z) / (a.z - de.z);
+  return {
+    courbe: courbeDe((ligne) =>
+      ligne.valeurs[rang] + part * (ligne.valeurs[rang + 1] - ligne.valeurs[rang])),
+    sur: "", entre: { de: de.dit, a: a.dit }, borne: "", refus: "", pourquoi: ""
+  };
+}
+
+/**
+ * Ce qu'une nappe conclut pour deux valeurs lues.
+ *
+ * Les deux pas, dans l'ordre où on les lit : la colonne d'abord — elle donne
+ * une courbe —, puis la courbe. La trace porte les deux, parce qu'un abaque se
+ * vérifie en retrouvant ses cases, pas en refaisant le calcul.
+ *
+ * @returns {{connu, valeur, refus, pourquoi, sur, entre, borne, colonne, courbe}}
+ */
+export function interpolerLaNappe(nappe = null, lue = "", selon = "", comment = {}) {
+  const colonne = courbeDeLaColonne(nappe, selon, comment);
+  if (!colonne.courbe) {
+    return {
+      connu: false, valeur: "", refus: colonne.refus, pourquoi: colonne.pourquoi,
+      sur: "", entre: null, borne: "", colonne, courbe: null
+    };
+  }
+
+  const lecture = interpoler(colonne.courbe, lue, comment);
+  return { ...lecture, colonne, courbe: colonne.courbe };
+}
+
+/**
+ * Où la lecture d'une nappe est tombée, dit en français — **les deux pas**.
+ *
+ * « sur la colonne 2, lu entre 500 m et 1000 m » : on retrouve les deux cases
+ * du tableau, et l'on vérifie qu'elles sont bien celles du texte d'origine.
+ */
+export function phraseDeLaLectureDeLaNappe(lecture = null) {
+  const ou = [];
+
+  const colonne = lecture?.colonne;
+  if (texte(colonne?.sur)) ou.push(`sur la colonne ${texte(colonne.sur)}`);
+  else if (texte(colonne?.borne)) ou.push(`hors des colonnes : celle de ${texte(colonne.borne)}`);
+  else if (colonne?.entre?.de && colonne?.entre?.a) {
+    ou.push(`entre les colonnes ${texte(colonne.entre.de)} et ${texte(colonne.entre.a)}`);
+  }
+
+  const dans = phraseDeLaLecture(lecture);
+  if (dans) ou.push(dans);
+
+  return ou.join(", ");
+}

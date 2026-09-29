@@ -138,6 +138,29 @@ test("une unité ne se reconnaît qu'à sa place : derrière un nombre", () => {
   assert.equal(typeDe("Mur = ossature", "ossature"), "sujet");
 });
 
+test("les unités qui ne sont pas des mots se colorent comme les autres", () => {
+  /**
+   * `°`, `°C`, `%` et `€` ne passent pas par le découpage en mots : ils
+   * tombaient donc en gris — et `20%` se colorait même en **opérateur**, alors
+   * que `28 m` s'allume juste à côté. Quatre unités éteintes au milieu d'une
+   * ligne colorée, et l'on cherche ce qu'on a mal écrit.
+   */
+  assert.equal(typeDe("Prix HT = 120 €", "€"), "unite");
+  assert.equal(typeDe("Prix HT = 120€", "€"), "unite");
+  assert.equal(typeDe("   si (Pente > 30°)", "°"), "unite");
+  assert.equal(typeDe("   si (Consigne > 18 °C)", "°C"), "unite");
+  assert.equal(typeDe("   calcule TVA = Prix HT * 20%;", "%"), "unite");
+
+  /**
+   * **Et seulement derrière un nombre.** Un `%` qui ne suit pas un nombre
+   * reste ce qu'il était : rien ne dit qu'il mesure quoi que ce soit.
+   */
+  assert.equal(typeDe("   calcule R = A % B;", "%"), "operateur");
+
+  // La ligne se recompose au caractère près, comme toutes les autres.
+  assert.equal(recompose("Prix HT = 120€ + 30 €"), "Prix HT = 120€ + 30 €");
+});
+
 test("une chaîne se colore dès le premier guillemet, avant le second", () => {
   // C'est l'état de toute chaîne qu'on est en train d'écrire.
   assert.equal(typeDe('   alors ("120', '"120'), "valeur");

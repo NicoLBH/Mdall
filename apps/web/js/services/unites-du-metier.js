@@ -132,59 +132,122 @@ export function nomDeLaGrandeur(grandeur) {
  * **La casse compte**, et c'est voulu : `M` est méga, `m` est milli. Confondre
  * `mN` et `MN` est un facteur d'un milliard.
  */
+/**
+ * Les unités de base : **ce qu'elles mesurent**, et ce qu'elles valent dans la
+ * référence du métier.
+ *
+ * ## Une dimension, pas une grandeur
+ *
+ * Chaque unité porte un **exposant par grandeur fondamentale** plutôt qu'une
+ * grandeur unique. C'est ce qui manquait pour composer : `kN/m` et `N/mm` sont
+ * la même chose — une force par unité de longueur —, et le langage les refusait
+ * l'une à l'autre parce qu'aucune des deux n'était au tableau.
+ *
+ * Les grandeurs **dérivées** se disent donc en fondamentales : une surface est
+ * une longueur au carré, une pression est une force par une surface. Elles
+ * gardent leur nom à l'écran (« une pression »), et se comparent désormais à ce
+ * qui les compose : `1 MPa` vaut `1000 kN/m²`, et les deux s'additionnent.
+ *
+ * ## La référence est celle du métier
+ *
+ * Le mètre, le kilogramme, le **kilonewton** — on dimensionne en kN, pas en N —,
+ * l'heure, le degré, le kilowatt. Ce choix ne change aucun calcul : il décide
+ * seulement de l'unité qu'un résultat porte quand rien ne l'impose.
+ *
+ * **La casse compte**, et c'est voulu : `M` est méga, `m` est milli. Confondre
+ * `mN` et `MN` est un facteur d'un milliard.
+ */
 const UNITES = new Map(Object.entries({
   // Longueur — référence : le mètre.
-  mm: { grandeur: GRANDEUR.LONGUEUR, facteur: 0.001 },
-  cm: { grandeur: GRANDEUR.LONGUEUR, facteur: 0.01 },
-  dm: { grandeur: GRANDEUR.LONGUEUR, facteur: 0.1 },
-  m: { grandeur: GRANDEUR.LONGUEUR, facteur: 1 },
-  km: { grandeur: GRANDEUR.LONGUEUR, facteur: 1000 },
+  mm: { dimension: { [GRANDEUR.LONGUEUR]: 1 }, facteur: 0.001 },
+  cm: { dimension: { [GRANDEUR.LONGUEUR]: 1 }, facteur: 0.01 },
+  dm: { dimension: { [GRANDEUR.LONGUEUR]: 1 }, facteur: 0.1 },
+  m: { dimension: { [GRANDEUR.LONGUEUR]: 1 }, facteur: 1 },
+  km: { dimension: { [GRANDEUR.LONGUEUR]: 1 }, facteur: 1000 },
 
   // Surface et volume que la puissance d'une longueur ne donne pas.
-  ha: { grandeur: GRANDEUR.SURFACE, facteur: 10000 },
-  a: { grandeur: GRANDEUR.SURFACE, facteur: 100 },
-  L: { grandeur: GRANDEUR.VOLUME, facteur: 0.001 },
-  mL: { grandeur: GRANDEUR.VOLUME, facteur: 0.000001 },
+  ha: { dimension: { [GRANDEUR.LONGUEUR]: 2 }, facteur: 10000 },
+  a: { dimension: { [GRANDEUR.LONGUEUR]: 2 }, facteur: 100 },
+  L: { dimension: { [GRANDEUR.LONGUEUR]: 3 }, facteur: 0.001 },
+  mL: { dimension: { [GRANDEUR.LONGUEUR]: 3 }, facteur: 0.000001 },
 
   // Masse — référence : le kilogramme.
-  g: { grandeur: GRANDEUR.MASSE, facteur: 0.001 },
-  kg: { grandeur: GRANDEUR.MASSE, facteur: 1 },
-  t: { grandeur: GRANDEUR.MASSE, facteur: 1000 },
+  g: { dimension: { [GRANDEUR.MASSE]: 1 }, facteur: 0.001 },
+  kg: { dimension: { [GRANDEUR.MASSE]: 1 }, facteur: 1 },
+  t: { dimension: { [GRANDEUR.MASSE]: 1 }, facteur: 1000 },
 
-  // Force — référence : le kilonewton, celui des descentes de charge.
-  N: { grandeur: GRANDEUR.FORCE, facteur: 0.001 },
-  daN: { grandeur: GRANDEUR.FORCE, facteur: 0.01 },
-  kN: { grandeur: GRANDEUR.FORCE, facteur: 1 },
-  MN: { grandeur: GRANDEUR.FORCE, facteur: 1000 },
+  /**
+   * Force — référence : le kilonewton, celui des descentes de charge.
+   *
+   * **Elle est fondamentale ici, et pas dérivée de la masse.** Le système
+   * international la tire d'une masse et d'une accélération ; ce métier ne
+   * convertit jamais l'une en l'autre — il n'y a pas de `g` dans le langage —,
+   * et les lier ferait accepter `3 kg + 2 kN` sur un facteur qu'aucune ligne
+   * n'écrit. Refuser reste la bonne réponse (règle 5).
+   */
+  N: { dimension: { [GRANDEUR.FORCE]: 1 }, facteur: 0.001 },
+  daN: { dimension: { [GRANDEUR.FORCE]: 1 }, facteur: 0.01 },
+  kN: { dimension: { [GRANDEUR.FORCE]: 1 }, facteur: 1 },
+  MN: { dimension: { [GRANDEUR.FORCE]: 1 }, facteur: 1000 },
 
-  // Pression et contrainte — référence : le mégapascal, celui des bétons.
-  Pa: { grandeur: GRANDEUR.PRESSION, facteur: 0.000001 },
-  kPa: { grandeur: GRANDEUR.PRESSION, facteur: 0.001 },
-  MPa: { grandeur: GRANDEUR.PRESSION, facteur: 1 },
-  GPa: { grandeur: GRANDEUR.PRESSION, facteur: 1000 },
-  bar: { grandeur: GRANDEUR.PRESSION, facteur: 0.1 },
+  /**
+   * Pression et contrainte — **une force par une surface**, en kN/m².
+   *
+   * C'est là que la composition se gagne : `1 MPa` vaut `1000 kN/m²`, et les
+   * deux écritures se rencontrent tous les jours — le béton en MPa, la descente
+   * de charge en kN/m². Elles se refusaient l'une à l'autre.
+   */
+  Pa: { dimension: { [GRANDEUR.FORCE]: 1, [GRANDEUR.LONGUEUR]: -2 }, facteur: 0.001 },
+  kPa: { dimension: { [GRANDEUR.FORCE]: 1, [GRANDEUR.LONGUEUR]: -2 }, facteur: 1 },
+  MPa: { dimension: { [GRANDEUR.FORCE]: 1, [GRANDEUR.LONGUEUR]: -2 }, facteur: 1000 },
+  GPa: { dimension: { [GRANDEUR.FORCE]: 1, [GRANDEUR.LONGUEUR]: -2 }, facteur: 1000000 },
+  bar: { dimension: { [GRANDEUR.FORCE]: 1, [GRANDEUR.LONGUEUR]: -2 }, facteur: 100 },
 
   // Durée — référence : l'heure, celle des degrés coupe-feu.
-  s: { grandeur: GRANDEUR.TEMPS, facteur: 1 / 3600 },
-  min: { grandeur: GRANDEUR.TEMPS, facteur: 1 / 60 },
-  h: { grandeur: GRANDEUR.TEMPS, facteur: 1 },
-  j: { grandeur: GRANDEUR.TEMPS, facteur: 24 },
+  s: { dimension: { [GRANDEUR.TEMPS]: 1 }, facteur: 1 / 3600 },
+  min: { dimension: { [GRANDEUR.TEMPS]: 1 }, facteur: 1 / 60 },
+  h: { dimension: { [GRANDEUR.TEMPS]: 1 }, facteur: 1 },
+  j: { dimension: { [GRANDEUR.TEMPS]: 1 }, facteur: 24 },
 
-  // Puissance — référence : le kilowatt.
-  W: { grandeur: GRANDEUR.PUISSANCE, facteur: 0.001 },
-  kW: { grandeur: GRANDEUR.PUISSANCE, facteur: 1 },
-  MW: { grandeur: GRANDEUR.PUISSANCE, facteur: 1000 },
+  /**
+   * Puissance — référence : le kilowatt.
+   *
+   * **Fondamentale elle aussi.** Un watt est un joule par seconde, et un joule
+   * un newton-mètre : la dériver ferait convertir `kW` en `kN·m/h`, que
+   * personne n'écrit et que le lexique ne sait pas lire. Elle ne se compare
+   * donc qu'à elle-même, ce qui est le comportement d'hier.
+   */
+  W: { dimension: { [GRANDEUR.PUISSANCE]: 1 }, facteur: 0.001 },
+  kW: { dimension: { [GRANDEUR.PUISSANCE]: 1 }, facteur: 1 },
+  MW: { dimension: { [GRANDEUR.PUISSANCE]: 1 }, facteur: 1000 },
 
-  // Angle, et la température qui ne se convertit qu'à elle-même.
-  "°": { grandeur: GRANDEUR.ANGLE, facteur: 1 },
-  "°C": { grandeur: GRANDEUR.TEMPERATURE, facteur: 1 }
+  // Angle, et la température qui ne se convertit qu'à elle-même — un degré
+  // Celsius est un facteur **et** un décalage, et ce modèle est multiplicatif.
+  "\u00b0": { dimension: { [GRANDEUR.ANGLE]: 1 }, facteur: 1 },
+  "\u00b0C": { dimension: { [GRANDEUR.TEMPERATURE]: 1 }, facteur: 1 }
 }));
 
-/** Ce qu'un exposant fait à la grandeur d'une longueur. Ailleurs : rien. */
-const PUISSANCES_DE_LA_LONGUEUR = {
-  2: GRANDEUR.SURFACE,
-  3: GRANDEUR.VOLUME
-};
+/**
+ * Les dimensions qui portent un nom, pour que l'écran puisse les dire.
+ *
+ * « une longueur et une force » se comprend ; « m et kN » demande de réfléchir,
+ * et c'est au moment où l'on est pressé qu'on lit ce message. Une dimension qui
+ * n'est pas là-dedans — `kN/m` — n'a pas de nom français : on montre alors les
+ * symboles, plutôt que d'inventer « une force par longueur », qui n'apprend
+ * rien de plus que `kN/m`.
+ */
+const NOMMEES = [
+  [{ [GRANDEUR.LONGUEUR]: 1 }, GRANDEUR.LONGUEUR],
+  [{ [GRANDEUR.LONGUEUR]: 2 }, GRANDEUR.SURFACE],
+  [{ [GRANDEUR.LONGUEUR]: 3 }, GRANDEUR.VOLUME],
+  [{ [GRANDEUR.MASSE]: 1 }, GRANDEUR.MASSE],
+  [{ [GRANDEUR.FORCE]: 1 }, GRANDEUR.FORCE],
+  [{ [GRANDEUR.FORCE]: 1, [GRANDEUR.LONGUEUR]: -2 }, GRANDEUR.PRESSION],
+  [{ [GRANDEUR.TEMPS]: 1 }, GRANDEUR.TEMPS],
+  [{ [GRANDEUR.ANGLE]: 1 }, GRANDEUR.ANGLE],
+  [{ [GRANDEUR.PUISSANCE]: 1 }, GRANDEUR.PUISSANCE],
+  [{ [GRANDEUR.TEMPERATURE]: 1 }, GRANDEUR.TEMPERATURE]
+];
 
 /**
  * Ce qui, dans un nombre, est de la précision — et ce qui est du bruit.
@@ -203,42 +266,112 @@ export function auJusteNecessaire(nombre) {
   return Number.isFinite(nombre) ? Number(nombre.toPrecision(12)) : nombre;
 }
 
+/** Le même vecteur, sans ses exposants nuls, et toujours dans le même ordre. */
+function rangee(dimension = {}) {
+  return Object.entries(dimension)
+    .filter(([, exposant]) => exposant !== 0)
+    .sort(([une], [autre]) => (une < autre ? -1 : une > autre ? 1 : 0));
+}
+
+/**
+ * Le nom d'une dimension : celui du métier quand elle en a un, sinon une
+ * signature qui ne sert qu'à comparer.
+ *
+ * La signature n'est **jamais montrée** : elle est là pour que deux unités qui
+ * mesurent la même chose se reconnaissent, et `nomDeLaGrandeur` ne la traduit
+ * pas — l'écran retombe alors sur les symboles, qui sont plus clairs.
+ */
+function nomDeLaDimension(dimension = {}) {
+  const dite = rangee(dimension);
+  if (!dite.length) return "";
+
+  for (const [connue, nom] of NOMMEES) {
+    const autre = rangee(connue);
+    if (autre.length !== dite.length) continue;
+    if (autre.every(([quoi, exposant], rang) =>
+      dite[rang][0] === quoi && dite[rang][1] === exposant)) return nom;
+  }
+
+  return dite.map(([quoi, exposant]) => `${quoi}^${exposant}`).join("·");
+}
+
+/** `m²` en `{m: 2}`, avec son facteur élevé d'autant. */
+function elever({ dimension, facteur }, exposant) {
+  const eleve = {};
+  for (const [quoi, combien] of Object.entries(dimension)) eleve[quoi] = combien * exposant;
+  return { dimension: eleve, facteur: facteur ** exposant };
+}
+
+/** `kN` sur `m` : les exposants se soustraient, les facteurs se divisent. */
+function diviser(haut, bas) {
+  const dimension = { ...haut.dimension };
+  for (const [quoi, combien] of Object.entries(bas.dimension)) {
+    dimension[quoi] = (dimension[quoi] ?? 0) - combien;
+  }
+  return { dimension, facteur: haut.facteur / bas.facteur };
+}
+
+/** Un morceau d'unité écrit — `m`, `m²`, `mm³` — lu en dimension et facteur. */
+function unMorceau(dit = "") {
+  const trouve = texte(dit).match(/^([A-Za-zÀ-ÖØ-öø-ÿ°µ]+)([²³]?)$/);
+  if (!trouve) return null;
+
+  const connue = UNITES.get(trouve[1]);
+  if (!connue) return null;
+
+  const exposant = EXPOSANTS[trouve[2]] ?? 1;
+  return elever(connue, exposant);
+}
+
+/**
+ * Ce qu'une unité écrite **mesure**, et ce qu'elle vaut dans la référence.
+ *
+ * Les formes lues sont celles que le langage écrit : `m`, `m²`, `kN/m`,
+ * `N/mm²`. Un symbole inconnu, un `%`, un `€` n'y sont pas — ils ne se
+ * convertissent à rien et ne se comparent qu'à eux-mêmes, ce qui est le
+ * comportement d'hier et la bonne réponse : deviner ferait pire que refuser.
+ *
+ * @returns {{dimension: object, facteur: number}|null}
+ */
+function dimensionDeLUnite(unite = "") {
+  const dite = texte(unite);
+  if (!dite) return null;
+
+  const barre = dite.indexOf("/");
+  if (barre < 0) return unMorceau(dite);
+
+  const haut = unMorceau(dite.slice(0, barre));
+  const bas = unMorceau(dite.slice(barre + 1));
+  if (!haut || !bas) return null;
+
+  return diviser(haut, bas);
+}
+
 /**
  * La grandeur d'une unité écrite, et ce qu'elle vaut dans la référence.
  *
  * @returns {{grandeur: string, facteur: number}|null} `null` quand l'unité
- *   n'est pas au tableau — un symbole inconnu, ou une unité composée comme
- *   `kN/m`, que ce fichier ne prétend pas savoir convertir.
+ *   n'est pas lisible — un symbole inconnu, `%`, `€`. Ce fichier ne prétend pas
+ *   savoir ce qu'ils mesurent.
  */
 export function grandeurDeLUnite(unite = "") {
-  const dite = texte(unite);
-  if (!dite) return null;
+  const lue = dimensionDeLUnite(unite);
+  if (!lue) return null;
 
-  // Une unité composée — `kN/m`, `%` — sort de `lireUneUnite` entière, base
-  // comprise : elle ne peut donc pas être au tableau, et le tableau la refuse
-  // sans qu'on ait à tester l'opacité une seconde fois.
-  const { base, exposant } = lireUneUnite(dite);
-  const connue = UNITES.get(base);
-  if (!connue) return null;
-
-  if (exposant === 1) return { grandeur: connue.grandeur, facteur: connue.facteur };
-
-  // **Le carré d'un facteur est son carré**, et il n'y a que la longueur qui
-  // s'élève : un `kg²` ne veut rien dire dans ce métier, et lui inventer une
-  // grandeur ferait accepter une conversion que personne ne peut vérifier.
-  if (connue.grandeur !== GRANDEUR.LONGUEUR) return null;
-
-  const grandeur = PUISSANCES_DE_LA_LONGUEUR[exposant];
+  const grandeur = nomDeLaDimension(lue.dimension);
+  // `m/m` n'est plus une grandeur : c'est un nombre nu, et le rendre comparable
+  // à toute autre dimension vide ferait additionner un rapport de longueurs à
+  // un rapport de forces. On refuse, comme pour un symbole inconnu.
   if (!grandeur) return null;
 
-  return { grandeur, facteur: connue.facteur ** exposant };
+  return { grandeur, facteur: lue.facteur };
 }
 
 /**
  * Deux unités mesurent-elles la même chose ?
  *
- * Deux unités inconnues du tableau — `kN/m`, ou un symbole mal orthographié —
- * ne se comparent que si elles s'écrivent **exactement** pareil. C'est le
+ * Deux unités illisibles — `%`, `€`, ou un symbole mal orthographié — ne se
+ * comparent que si elles s'écrivent **exactement** pareil. C'est le
  * comportement d'avant, et il reste : deviner ferait pire que refuser.
  */
 export function memeGrandeur(une = "", autre = "") {
@@ -257,8 +390,8 @@ export function memeGrandeur(une = "", autre = "") {
  * Un nombre, porté d'une unité à une autre.
  *
  * @returns {number|null} `null` quand les deux ne mesurent pas la même chose,
- *   ou quand l'une des deux n'est pas au tableau. L'appelant refuse alors, il
- *   ne rend pas le nombre tel quel — un mètre pris pour un centimètre est une
+ *   ou quand l'une des deux n'est pas lisible. L'appelant refuse alors, il ne
+ *   rend pas le nombre tel quel — un mètre pris pour un centimètre est une
  *   erreur d'un facteur cent, et elle ne se voit pas.
  */
 export function convertir(nombre, de = "", vers = "") {
@@ -284,6 +417,9 @@ export function convertir(nombre, de = "", vers = "") {
  * Nommer les **grandeurs** plutôt que les symboles : « une longueur et une
  * force » se comprend d'un coup d'œil, « m et kN » demande de réfléchir — et
  * c'est au moment où l'on est pressé qu'on lit ce message.
+ *
+ * Une dimension composée n'a pas de nom français : `kN/m` se dit `kN/m`, et
+ * c'est plus clair que « une force par longueur ».
  */
 export function phraseDesUnites(une = "", autre = "") {
   const gauche = texte(une) || "sans unité";

@@ -329,8 +329,10 @@ test("l'aide dit ce que la fonction rend, et le dessine", () => {
   const ligne = "   si (Couleur des volets";
   const aide = aideDeLaSignature(ligne, ligne.length, catalogue());
 
-  assert.deepEqual(aide.rend, { valeurs: ["gris", "blanc"], unite: "" });
+  // `deduit: false` : c'est écrit, et l'écrite gagne toujours.
+  assert.deepEqual(aide.rend, { valeurs: ["gris", "blanc"], unite: "", deduit: false });
   assert.match(renderAideDeLaSignature(aide), /rend\s*<span>gris, blanc<\/span>/);
+  assert.doesNotMatch(renderAideDeLaSignature(aide), /déduit/);
 });
 
 test("une unité annoncée se dit comme une mesure", () => {
@@ -338,16 +340,37 @@ test("une unité annoncée se dit comme une mesure", () => {
   const ligne = "   si (Couleur des volets";
   const aide = aideDeLaSignature(ligne, ligne.length, catalogue(avecUnite));
 
-  assert.deepEqual(aide.rend, { valeurs: [], unite: "kN" });
+  assert.deepEqual(aide.rend, { valeurs: [], unite: "kN", deduit: false });
   assert.match(renderAideDeLaSignature(aide), /une mesure en kN/);
 });
 
-test("une fonction qui ne promet rien ne promet rien", () => {
-  // **On ne l'invente pas** (règle 5) : une promesse déduite d'un texte qu'on
-  // est en train d'écrire changerait à chaque frappe.
+test("sans `rend:`, ce qu'elle conclut se déduit — et se dit déduit", () => {
+  /**
+   * **On le déduisait pas du tout, et c'était un excès de prudence.** Une
+   * fonction dont toutes les branches concluent « gris » ou « blanc » rend
+   * visiblement l'un des deux, et le taire laissait l'écran muet là où il sait.
+   *
+   * Ce qu'on refusait vraiment était de **confondre les deux** : une promesse
+   * déduite d'un texte qu'on est en train d'écrire change à chaque frappe, et
+   * la présenter comme une promesse ferait compter sur un engagement que
+   * personne n'a pris. Elle se dit donc « déduit », et l'écrite gagne toujours.
+   */
   const sansRend = BROUILLON.replace('   rend: "gris" ou "blanc"\n\n', "");
   const ligne = "   si (Couleur des volets";
   const aide = aideDeLaSignature(ligne, ligne.length, catalogue(sansRend));
+
+  assert.deepEqual(aide.rend, { valeurs: ["gris", "blanc"], unite: "", deduit: true });
+  assert.match(renderAideDeLaSignature(aide), /gris, blanc \(déduit\)/);
+});
+
+test("ce qu'on ne peut pas déduire reste tu", () => {
+  /**
+   * `alors (Cubage)` nomme une locale : sa valeur dépend des réponses, et l'on
+   * ne la connaît qu'au lancement. Deviner ferait annoncer des mètres sur une
+   * fonction qui rend des euros (règle 5).
+   */
+  const ligne = "   si (Volume";
+  const aide = aideDeLaSignature(ligne, ligne.length, catalogue());
 
   assert.equal(aide.rend, null);
   assert.doesNotMatch(renderAideDeLaSignature(aide), /rend/);

@@ -348,6 +348,33 @@ N'écris **jamais** une régression ni un polynôme pour remplacer un abaque : l
 valeurs qui en sortiraient ne se retrouvent dans aucun texte, et personne ne
 pourrait dire d'où elles viennent.
 
+## Un abaque à **double entrée**
+
+Une figure qui donne un coefficient selon deux choses — l'altitude **et** la
+zone de vent — s'écrit avec deux entrées dans sa signature, et une ligne
+d'en-tête dont le coin est vide :
+
+\`\`\`
+courbe Coefficient d'exposition(zones, Altitude, Zone de vent) {
+   entre les points: linéaire
+   hors bornes: refuse
+   |        |    1 |    2 |    3 |
+   |    0 m | 1,00 | 1,05 | 1,10 |
+   |  500 m | 1,10 | 1,18 | 1,25 |
+   | 1000 m | 1,25 | 1,35 | 1,45 |
+}
+\`\`\`
+
+- **c'est la signature qui décide** : deux entrées après \`zones\`, deux axes. La
+  première est la colonne de gauche, la seconde est l'en-tête ;
+- **le coin de l'en-tête reste vide** — il n'y a rien à y écrire ;
+- **les colonnes montent** elles aussi, strictement, et chaque ligne a autant de
+  cases que l'en-tête a de colonnes ;
+- \`entre les points:\` et \`hors bornes:\` valent pour les **deux** axes.
+
+N'écris **pas** un barème pour une figure à deux entrées : un barème rend la
+valeur d'un palier là où la figure trace une droite.
+
 **Une courbe est une loi que le projet tient**, au même titre qu'une fonction :
 elle se verse avec ses points et ses deux déclarations, et toute fonction qui
 nomme \`Coefficient de forme\` lit ensuite ce qu'elle conclut. N'essaie donc pas

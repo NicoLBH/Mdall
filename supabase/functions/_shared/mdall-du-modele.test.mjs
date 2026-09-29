@@ -23,7 +23,9 @@ import {
 import { lireUnFichier, lireUneCondition } from "../../../apps/web/js/services/memoire-en-lecture.js";
 import { aProposerDuBrouillon } from "../../../apps/web/js/services/proposition-du-brouillon.js";
 import { ENNUI, verifierLeBrouillon } from "../../../apps/web/js/services/verification-du-brouillon.js";
-import { PHRASE_DE_LAGREGAT } from "../../../apps/web/js/services/memoire-en-texte.js";
+import {
+  PHRASE_DE_LAGREGAT, couperLUnite, lireUnNombre
+} from "../../../apps/web/js/services/memoire-en-texte.js";
 import { ENTRE, HORS } from "../../../apps/web/js/services/courbe-du-mdall.js";
 import { LECTURE, SUGGESTIBLES, lectureDite, lectureSuggeree } from "../../../apps/web/js/services/graphique-dune-table.js";
 import { evaluerLaCourbe } from "../../../apps/web/js/services/memoire-evaluateur.js";
@@ -320,14 +322,47 @@ test("chaque abaque de la consigne se lit, et se lit vraiment quelque part", () 
     assert.ok(bloc.courbe.entre, `« ${bloc.sujet} » ne déclare pas son interpolation`);
     assert.ok(bloc.courbe.hors, `« ${bloc.sujet} » ne déclare pas ce qu'elle fait hors bornes`);
 
+    /**
+     * **Un abaque à double entrée a deux axes, et la consigne en enseigne un.**
+     * Son premier point est la case en haut à gauche : la première ligne, la
+     * première colonne.
+     */
+    const premier = bloc.courbe.parColonne
+      ? { x: bloc.courbe.points[0].x, z: bloc.courbe.colonnes[1], y: bloc.courbe.points[0].valeurs[0] }
+      : { x: bloc.courbe.points[0].x, z: "", y: bloc.courbe.points[0].y };
+
+    if (bloc.courbe.parColonne) {
+      assert.ok(bloc.courbe.colonnes?.length > 2,
+        `« ${bloc.sujet} » n'a pas d'en-tête de colonnes`);
+      assert.equal(bloc.courbe.colonnes[0], "",
+        `« ${bloc.sujet} » écrit quelque chose dans le coin de son en-tête`);
+    }
+
     // Et elle conclut vraiment : une courbe qu'on montre sans pouvoir la lire
     // enseignerait une forme qui ne sert à rien.
-    const lu = evaluerLaCourbe(bloc.courbe, (sujet) => (sujet === bloc.courbe.selon
-      ? { connu: true, valeur: bloc.courbe.points[0].x }
-      : { connu: false, valeur: "" }));
-    assert.equal(lu.valeur, bloc.courbe.points[0].y,
+    const lu = evaluerLaCourbe(bloc.courbe, (sujet) => {
+      if (sujet === bloc.courbe.selon) return { connu: true, valeur: premier.x };
+      if (bloc.courbe.parColonne && sujet === bloc.courbe.parColonne) {
+        return { connu: true, valeur: premier.z };
+      }
+      return { connu: false, valeur: "" };
+    });
+    /**
+     * **On compare des nombres, pas des écritures.** Une case écrite `1,00` se
+     * rend `1` : c'est la mise en forme du langage, pas un désaccord — et une
+     * épreuve qui regarderait la chaîne tomberait sur un zéro de décoration.
+     */
+    assert.equal(lireUnNombre(couperLUnite(lu.valeur).nombre), lireUnNombre(couperLUnite(premier.y).nombre),
       `« ${bloc.sujet} » ne rend pas son premier point`);
+    assert.equal(couperLUnite(lu.valeur).unite, couperLUnite(premier.y).unite,
+      `« ${bloc.sujet} » ne rend pas son premier point dans son unité`);
   }
+
+  // La consigne enseigne bien les **deux** formes : une courbe, et une nappe.
+  assert.ok(courbes.some((bloc) => !bloc.courbe.parColonne),
+    "la consigne n'enseigne plus d'abaque à une entrée");
+  assert.ok(courbes.some((bloc) => bloc.courbe.parColonne),
+    "la consigne n'enseigne plus d'abaque à double entrée");
 });
 
 test("chaque signature de la consigne annonce ce que sa fonction lit", () => {

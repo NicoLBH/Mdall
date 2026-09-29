@@ -49,6 +49,8 @@ import { reglesVerseesUtiles } from "./fonctions-du-projet.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { normalizeZoneKey, zonesConnuesDuProjet } from "./project-zones.js";
 import { REFUS_DU_CALCUL } from "./mdall-calcul.js";
+import { couperLUnite, estMesuree } from "./memoire-en-texte.js";
+import { memeGrandeur } from "./unites-du-metier.js";
 import {
   evaluerLaRegle, lecteurDeValeurs, lecteurQuiSaitAppeler, phraseDuDoute
 } from "./memoire-evaluateur.js";
@@ -325,6 +327,41 @@ function conclusionsNeuves(fonctions, resultats, valeurs) {
   return neuves;
 }
 
+/**
+ * Ce qui, dans le verdict, dément ce que la fonction annonçait.
+ *
+ * Vide quand elle tient parole, quand elle n'a rien promis, ou quand elle n'a
+ * rien conclu — « elle ne sait pas » n'est pas « elle ment ».
+ *
+ * @returns {string} la phrase à montrer, ou `""`.
+ */
+function cePourquoiElleMent(bloc = {}, valeur = "") {
+  const rend = bloc?.rend;
+  const dite = texte(valeur);
+  if (!rend || !dite) return "";
+
+  const sujet = texte(bloc?.sujet);
+
+  if (rend.valeurs?.length) {
+    if (rend.valeurs.some((une) => cleDuSujet(une) === cleDuSujet(dite))) return "";
+    return `« ${sujet} » annonce rendre ${rend.valeurs.map((une) => `« ${une} »`).join(" ou ")}, `
+      + `et vient de conclure « ${dite} ».`;
+  }
+
+  if (!texte(rend.unite)) return "";
+
+  if (!estMesuree(dite)) {
+    return `« ${sujet} » annonce rendre une mesure en ${rend.unite}, `
+      + `et vient de conclure « ${dite} », qui n'est pas une mesure.`;
+  }
+
+  const { unite } = couperLUnite(dite);
+  if (memeGrandeur(unite, rend.unite)) return "";
+
+  return `« ${sujet} » annonce rendre des ${rend.unite}, et vient de conclure « ${dite} » : `
+    + `ces deux unités ne mesurent pas la même chose.`;
+}
+
 /** Toutes les fonctions, évaluées avec ce qu'on sait à cet instant. */
 function unePasse(fonctions, valeurs, pourLaZone = null, venues = new Map()) {
   /**
@@ -437,6 +474,22 @@ function unePasse(fonctions, valeurs, pourLaZone = null, venues = new Map()) {
       // priorité. Le référentiel n'en produit pas ; une règle écrite à la main
       // qui en contient mérite d'être relue, et on le dit.
       melange: Boolean(evaluation.melange),
+      /**
+       * **La promesse, vérifiée là où on la connaît enfin.**
+       *
+       * `rend: kN` se compare aux conclusions écrites, et s'arrête à celles qui
+       * nomment un `calcule` : leur valeur dépend des réponses, et l'on ne la
+       * connaît qu'au lancement. Or c'est **la plupart des fonctions** — la
+       * forme la plus courante du langage est `alors (Prix TTC)` —, et le
+       * contrôle qui attrape les vrais cas ne pouvait donc pas exister avant
+       * qu'on lance.
+       *
+       * Ici on a lancé. Vide quand il n'y a rien à dire : pas de `rend:`
+       * écrit, ou rien de conclu. On ne vérifie **jamais** une promesse déduite
+       * contre les conclusions dont elle est tirée — elle tiendrait toujours,
+       * et l'on aurait une garde qui ne peut pas tomber (règle 4).
+       */
+      promesse: cePourquoiElleMent(bloc, texte(evaluation.valeur)),
       doutes: (evaluation.doutes ?? []).map(phraseDuDoute).filter(Boolean)
     };
   });

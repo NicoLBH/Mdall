@@ -27401,6 +27401,33 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .bac-projet__bouge{ color:#d29922; }
 
 .bac-resultats{ display:flex; flex-direction:column; gap:8px; }
+
+/* **Ce que la lecture a refusé**, avant les verdicts : c'est ce qu'on vient
+   corriger, et une ligne écartée ne raisonne pas du tout. Elle n'avait aucun
+   calibrage — la liste sortait en puces de navigateur au milieu d'un écran
+   dessiné. */
+.bac-resultats__refus{
+  list-style:none; margin:0; padding:8px 10px; display:flex; flex-direction:column; gap:6px;
+  border:1px solid rgba(210,153,34,.5); border-radius:var(--radius);
+  background:rgba(210,153,34,.06); font-size:11px;
+}
+.bac-resultats__refus li{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin:0; }
+.bac-resultats__refus code{
+  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace);
+  color:var(--text); background:rgba(110,118,129,.14); padding:0 5px; border-radius:var(--radius);
+}
+.bac-refus__dit{ color:var(--muted); flex:1 1 200px; min-width:0; }
+.bac-refus__reste{ color:var(--muted); }
+/* Où la ligne se trouve. **Un bouton quand on peut y aller** : le clic pose le
+   curseur dessus, et c'est le geste qu'on attend d'un éditeur. Un mot, pas un
+   bouton dessiné — le même calibrage que « revenir au projet » et que
+   « relire ». */
+.bac-refus__ou{ flex:0 0 auto; color:var(--muted); }
+button.bac-refus__ou--mene{
+  padding:0; border:0; background:transparent; font:inherit; cursor:pointer;
+  color:var(--borderColor-accent-emphasis, #4493f8); text-decoration:underline;
+}
+button.bac-refus__ou--mene:hover{ color:var(--fg, inherit); }
 .bac-resultats__phrase{ margin:0; font-size:12px; color:var(--text); }
 .bac-resultat{
   border:1px solid var(--border); border-radius:var(--radius);
@@ -27415,6 +27442,14 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace); font-size:11px;
 }
 .bac-resultat__note{ margin:0; color:var(--muted); font-size:11px; }
+/* **Elle ne rend pas ce qu'elle annonce.** Le verdict tient peut-être, et il
+   ment sur sa forme : c'est la seule chose qu'on lit avant de se servir d'une
+   fonction, et elle se lit en ocre comme tout ce dont il faut faire quelque
+   chose. */
+.bac-resultat__ment{
+  margin:0; padding:4px 8px; border-radius:var(--radius);
+  background:rgba(210,153,34,.12); color:#d29922; font-size:11px;
+}
 .bac-resultat__trace{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px; }
 .bac-resultat__trace li{
   display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;
@@ -27558,6 +27593,13 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .memoire-rejeu__tete{ margin:0 0 10px; }
 .memoire-rejeu__tete b{ display:block; font-size:13px; }
 .memoire-rejeu__tete p{ margin:2px 0 0; color:var(--muted); font-size:12px; }
+/* **Quelle partie d'ouvrage on regarde.** Sous la phrase qui dit ce qu'on lit :
+   c'est le fond sur lequel les tableaux se lisent, comme « Où l'on se place »
+   dans le bac d'essai — et le même calibrage, pour ne pas avoir deux
+   sélecteurs de zone à recaler l'un contre l'autre. */
+.memoire-rejeu__choix{ display:flex; align-items:center; gap:8px; margin:8px 0 0; }
+.memoire-rejeu__choix span{ flex:0 0 auto; color:var(--muted); font-size:12px; }
+.memoire-rejeu__choix select{ flex:1 1 auto; min-width:0; max-width:360px; }
 .memoire-rejeu__fonction + .memoire-rejeu__fonction{
   margin-top:14px; padding-top:12px; border-top:1px dashed var(--border);
 }

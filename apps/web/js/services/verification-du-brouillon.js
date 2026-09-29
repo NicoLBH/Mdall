@@ -29,12 +29,15 @@
 
 import {
   entreesDuBloc, lireUnFichier, nomsPosesParLeBloc, parametresDuBloc,
-  clausesDeLaRegle, appelsDesExpressions
+  clausesDeLaRegle, appelsDesExpressions, ceQuElleAnnonce
 } from "./memoire-en-lecture.js";
-import { PORTEE_DUNE_FONCTION, couperLUnite, estMesuree } from "./memoire-en-texte.js";
+import {
+  PORTEE_DUNE_FONCTION, couperLUnite, estMesuree, OPERATEUR
+} from "./memoire-en-texte.js";
 import { memeGrandeur } from "./unites-du-metier.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { EXTENSIONS, EXTENSION_REGLE } from "./memoire-rangement.js";
+import { blocsDesFonctionsVersees } from "./fonctions-du-projet.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -98,7 +101,20 @@ export const ENNUI = {
    * fonction qui annonce `rend: kN` et conclut « 3e famille B » ment à
    * l'endroit exact où l'on décide de la nommer.
    */
-  REND: "rend"
+  REND: "rend",
+  /**
+   * **Ce qu'une fonction rend ne peut pas être ce qu'on attend d'elle.**
+   *
+   * `rend:` dit ce qu'une fonction conclut, et personne ne le comparait à ce
+   * qu'un appelant en attend. `si (Couleur des volets(zones, M) = "violet")`
+   * sur une fonction qui annonce `rend: "gris" ou "blanc"` est une condition
+   * qui ne tiendra **jamais** — et rien ne le disait : elle répond « faux »
+   * tranquillement, et l'on cherche l'erreur dans les valeurs.
+   *
+   * C'est le même contrôle que `donne-hors-du-domaine`, de l'autre côté de
+   * l'appel.
+   */
+  REND_HORS_DU_DOMAINE: "rend-hors-du-domaine"
 };
 
 /** Ce qu'on en dit, en tête de remarque. */
@@ -111,7 +127,8 @@ export const MOTS_DE_LENNUI = {
   [ENNUI.SANS_VALEUR]: "ne dit rien",
   [ENNUI.SIGNATURE]: "signature",
   [ENNUI.REND]: "ne rend pas ce qu'elle annonce",
-  [ENNUI.DONNE_HORS_DU_DOMAINE]: "valeur que la fonction ne connaît pas"
+  [ENNUI.DONNE_HORS_DU_DOMAINE]: "valeur que la fonction ne connaît pas",
+  [ENNUI.REND_HORS_DU_DOMAINE]: "ne rendra jamais cette valeur"
 };
 
 /** L'extension d'un nom de fichier, ou `""`. La liste se dérive du rangement. */
@@ -168,8 +185,10 @@ export function nomsDeclares(fichiers = []) {
  * faire. À défaut on se tait : ne pas savoir n'autorise pas à prétendre qu'il
  * n'y a rien, ni l'inverse (règle 5).
  *
- * **Les fonctions de la mémoire restent hors de portée** : ce fichier ne reçoit
- * que des fichiers. C'est dit dans `à traiter plus tard`.
+ * **Les fonctions de la mémoire comptent**, depuis que la vérification les
+ * reçoit : c'est le cas le plus courant une fois qu'on verse, et il échappait
+ * entièrement au contrôle. Sans mémoire, on se tait sur elles — une remarque ne
+ * disparaît jamais parce qu'on en sait plus, elle s'ajoute.
  */
 function ceQuOnDonneAuxAppels(bloc, { fichier, blocs, domaines }) {
   const dites = [];
@@ -179,6 +198,26 @@ function ceQuOnDonneAuxAppels(bloc, { fichier, blocs, domaines }) {
     ...appelsDesExpressions(bloc),
     ...clausesDeLaRegle(bloc).map((condition) => condition?.appel?.arbre).filter(Boolean)
   ];
+
+  /** Ce qu'un argument peut valoir : un nom a son domaine, un appel a son `rend:`. */
+  const cePeutValoir = (donne) => {
+    if (donne?.quoi === "nom") return domaines.get(cleDuSujet(donne.nom)) ?? null;
+    /**
+     * **Un argument calculé n'a pas de domaine — sauf quand c'est un appel.**
+     *
+     * On l'avait noté comme une limite assumée : un calcul n'a pas de domaine
+     * fermé, et lui en inventer un serait affirmer ce qu'on ignore. Mais
+     * `F(zones, G(zones, X))` n'est pas un calcul : `G` dit ce qu'elle rend, et
+     * c'est exactement le domaine qu'on cherchait.
+     */
+    if (donne?.quoi !== "appel-du-projet") return null;
+    const rendue = blocs.get(cleDuSujet(texte(donne?.nom)));
+    return rendue ? (ceQuElleAnnonce(rendue)?.valeurs ?? null) : null;
+  };
+
+  const nommerLArgument = (donne) => donne?.quoi === "appel-du-projet"
+    ? `${texte(donne.nom)}(…)`
+    : texte(donne?.nom);
 
   for (const arbre of arbres) {
     const appelee = blocs.get(cleDuSujet(texte(arbre?.nom)));
@@ -190,22 +229,80 @@ function ceQuOnDonneAuxAppels(bloc, { fichier, blocs, domaines }) {
 
     parametres.forEach((parametre, rang) => {
       const donne = donnes[rang];
-      if (donne?.quoi !== "nom") return;
 
       const attendues = domaines.get(cleDuSujet(parametre));
-      const offertes = domaines.get(cleDuSujet(donne.nom));
+      const offertes = cePeutValoir(donne);
       if (!attendues?.length || !offertes?.length) return;
 
       const jamais = offertes.filter((une) => !attendues.includes(une));
       if (!jamais.length) return;
 
       dites.push({
-        fichier, ligne, quoi: ENNUI.DONNE_HORS_DU_DOMAINE, texte: texte(donne.nom),
+        fichier, ligne, quoi: ENNUI.DONNE_HORS_DU_DOMAINE, texte: nommerLArgument(donne),
         dit: `« ${texte(arbre.nom)} » lit « ${parametre} », qui ne vaut que `
           + `${attendues.map((une) => `« ${une} »`).join(", ")}. `
-          + `« ${texte(donne.nom)} » peut valoir ${jamais.map((une) => `« ${une} »`).join(", ")} : `
+          + `« ${nommerLArgument(donne)} » peut valoir ${jamais.map((une) => `« ${une} »`).join(", ")} : `
           + `pour ces valeurs-là, elle répondra son « sinon » sans rien en dire.`
       });
+    });
+  }
+
+  dites.push(...ceQuUnAppelNeRendraJamais(bloc, { fichier, blocs }));
+
+  return dites;
+}
+
+/**
+ * Ce qu'on attend d'un appel, comparé à ce qu'il peut rendre.
+ *
+ * ## Le défaut
+ *
+ * `si (Couleur des volets(zones, Matériau) = "violet")`, sur une fonction qui
+ * annonce `rend: "gris" ou "blanc"`, est une condition qui ne tiendra
+ * **jamais**. Rien ne le disait : elle répond « faux » tranquillement, et l'on
+ * cherche l'erreur dans les valeurs pendant une demi-heure.
+ *
+ * C'est le contrôle des domaines, de l'autre côté de l'appel : `rend:` disait
+ * déjà ce qu'une fonction conclut, et personne ne le comparait à ce qu'un
+ * appelant en attend.
+ *
+ * ## Ce qu'on ne dit pas
+ *
+ * **Rien sur une promesse déduite.** Une fonction sans `rend:` écrit rend ce
+ * que ses branches concluent, et comparer une attente à cette déduction
+ * refuserait un texte qu'on est en train d'écrire — la branche qui manque est
+ * peut-être la prochaine ligne. On n'éprouve que ce qui est **promis**.
+ *
+ * **Rien sur une mesure.** `> 3 m` contre `rend: kN` est une faute d'unité, et
+ * c'est le doute de l'évaluateur qui la dit, au bon endroit. Un second contrôle
+ * ici rendrait deux phrases pour une faute (règle 10).
+ */
+function ceQuUnAppelNeRendraJamais(bloc, { fichier, blocs }) {
+  const dites = [];
+  const ligne = Number(bloc?.ligne) || 0;
+
+  for (const condition of clausesDeLaRegle(bloc)) {
+    const nom = texte(condition?.appel?.arbre?.nom);
+    if (!nom || condition?.operateur !== OPERATEUR.EGAL) continue;
+
+    const appelee = blocs.get(cleDuSujet(nom));
+    const promet = appelee?.rend;
+    if (!promet?.valeurs?.length) continue;
+
+    const attendues = (condition?.valeur ?? []).map(texte).filter(Boolean);
+    if (!attendues.length) continue;
+
+    const jamais = attendues.filter((une) =>
+      !promet.valeurs.some((rendue) => cleDuSujet(rendue) === cleDuSujet(une)));
+    // Une seule attente possible suffit : la clause peut tenir, et l'on n'a
+    // rien à dire de celles qui l'accompagnent.
+    if (jamais.length !== attendues.length) continue;
+
+    dites.push({
+      fichier, ligne, quoi: ENNUI.REND_HORS_DU_DOMAINE, texte: nom,
+      dit: `« ${nom} » annonce rendre ${promet.valeurs.map((une) => `« ${une} »`).join(" ou ")}. `
+        + `Cette clause attend ${jamais.map((une) => `« ${une} »`).join(" ou ")} : `
+        + `elle ne tiendra jamais.`
     });
   }
 
@@ -432,7 +529,7 @@ function ennuisDeLaSignature(bloc = {}) {
   return ennuis;
 }
 
-export function verifierLeBrouillon(fichiers = []) {
+export function verifierLeBrouillon(fichiers = [], { memoire = null } = {}) {
   const tous = (Array.isArray(fichiers) ? fichiers : []).filter((fichier) => texte(fichier?.contenu));
   if (!tous.length) return [];
 
@@ -443,13 +540,36 @@ export function verifierLeBrouillon(fichiers = []) {
   const declares = nomsDeclares(tous);
   const domaines = domainesDeclares(tous);
 
-  // Les fonctions du brouillon, par sujet : c'est chez elles qu'on lit ce qu'un
-  // appel devrait recevoir.
-  const parBloc = new Map();
+  /**
+   * Les fonctions qu'un appel peut nommer, par sujet : c'est chez elles qu'on
+   * lit ce qu'il devrait recevoir, et ce qu'on en obtiendra.
+   *
+   * ## Celles de la mémoire comptent, et c'était le trou
+   *
+   * « Cette fonction ne saura jamais répondre pour ce nom-là » ne se disait que
+   * d'une fonction **écrite dans les fichiers qu'on vérifie**. Appelée depuis la
+   * mémoire du projet — le cas le plus courant une fois qu'on verse — elle
+   * échappait au contrôle : on obtenait le silence, qui se lit comme « tout va
+   * bien ».
+   *
+   * ## Sans mémoire, on se tait — et le verdict ne se renverse jamais
+   *
+   * Une page vérifiée sans mémoire ne dit rien de ces appels-là ; avec, elle en
+   * dit davantage. **Aucune remarque ne disparaît parce qu'on en sait plus** :
+   * elles s'ajoutent, jamais ne se retirent. C'est ce qui empêche la même page
+   * de rendre deux verdicts contraires selon qu'on a lu la base ou non.
+   *
+   * **Le brouillon gagne** sur la mémoire : c'est la version qu'on est en train
+   * d'écrire, et une fonction reprise pour être corrigée doit être lue telle
+   * qu'on vient de la corriger.
+   */
+  const parBloc = new Map(blocsDesFonctionsVersees(Array.isArray(memoire) ? memoire : []));
+  const siennes = new Set();
   for (const fichier of tous) {
     for (const bloc of lireUnFichier(fichier?.contenu ?? "").blocs ?? []) {
       const cle = cleDuSujet(texte(bloc?.sujet));
-      if (cle && !parBloc.has(cle)) parBloc.set(cle, bloc);
+      if (!cle) continue;
+      if (!siennes.has(cle)) { siennes.add(cle); parBloc.set(cle, bloc); }
     }
   }
 

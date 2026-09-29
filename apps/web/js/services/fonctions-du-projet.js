@@ -33,7 +33,9 @@
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { estUneRegle } from "./assertion-taxonomy.js";
 import { laValeurQuiFaitFoi } from "./le-temps-des-valeurs.js";
-import { entreesDuBloc, nomsLusParLeBloc, parametresDuBloc } from "./memoire-en-lecture.js";
+import {
+  entreesDuBloc, nomsLusParLeBloc, parametresDuBloc, ceQuElleAnnonce
+} from "./memoire-en-lecture.js";
 import { blocDeRegle, texteDesLignes } from "./memoire-en-texte.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -117,6 +119,21 @@ function reglesParSujet(assertions = []) {
 }
 
 /**
+ * Les fonctions que le projet a signées, par clé de sujet : `clé → bloc`.
+ *
+ * **Pour la vérification du brouillon**, qui ne voyait que les fichiers : une
+ * fonction appelée depuis la mémoire — le cas le plus courant une fois qu'on
+ * verse — échappait entièrement au contrôle des domaines et des signatures.
+ * C'est la même question que se pose le bac d'essai, et elle a déjà sa réponse
+ * ici : on la rend, plutôt que d'en écrire une seconde (règle 10).
+ */
+export function blocsDesFonctionsVersees(assertions = []) {
+  const par = new Map();
+  for (const [cle, { bloc }] of reglesParSujet(assertions)) par.set(cle, bloc);
+  return par;
+}
+
+/**
  * La fonction versée qui porte ce nom — celle qui fait foi.
  *
  * **Un seul endroit décide laquelle** (règle 10). L'écran la cherchait
@@ -174,7 +191,7 @@ export function nomsConclusParLeProjet(assertions = []) {
     forme: bloc.courbe ? "courbe" : bloc.boucle ? "boucle" : bloc.selon.length ? "barème" : "",
     // Ce qu'elle annonce rendre : l'aide à la signature le montre, et c'est la
     // question qu'on se pose juste avant de la nommer.
-    rend: bloc.rend ?? null
+    rend: ceQuElleAnnonce(bloc)
   })).filter((une) => une.nom);
 }
 

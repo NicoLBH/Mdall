@@ -389,8 +389,32 @@ export const WIKI_DU_LANGAGE = [
       + "donneraient deux valeurs pour une lecture, et une abscisse qui redescend "
       + "est une ligne recopiée dans le désordre. Il en faut au moins deux, et "
       + "chaque colonne mesure une seule chose."),
-    dit("Le degré se colle au nombre — `30°` —, comme sur la figure. C'est la "
-      + "seule unité qu'on écrit ainsi : `26 m` garde son espace."),
+    dit("Le degré se colle au nombre — `30°` —, comme sur la figure. Le "
+      + "pourcentage et l'euro aussi : `20%`, `120€`. `26 m` garde son espace."),
+    dit("**Un abaque à double entrée** — un coefficient selon l'altitude **et** "
+      + "la zone de vent — s'écrit avec deux entrées dans sa signature, et une "
+      + "ligne d'en-tête dont le coin reste vide :"),
+    code(
+      "courbe Coefficient d'exposition(zones, Altitude, Zone de vent) {",
+      "   entre les points: linéaire",
+      "   hors bornes: refuse",
+      "   |        |    1 |    2 |    3 |",
+      "   |    0 m | 1,00 | 1,05 | 1,10 |",
+      "   |  500 m | 1,10 | 1,18 | 1,25 |",
+      "   | 1000 m | 1,25 | 1,35 | 1,45 |",
+      "}"
+    ),
+    dit("**C'est la signature qui décide**, pas la forme du tableau : deux "
+      + "entrées après `zones`, deux axes. La première est la colonne de "
+      + "gauche, la seconde est l'en-tête — et les colonnes montent elles "
+      + "aussi. `entre les points:` et `hors bornes:` valent pour les deux."),
+    dit("**On le lit comme on lit l'abaque imprimé** : la seconde entrée choisit "
+      + "une courbe — entre deux colonnes, la courbe est tracée entre les deux, "
+      + "comme la règle qu'on pose à la main —, puis on lit cette courbe. "
+      + "L'écran la dessine, et dit les deux pas : « entre les colonnes 1 et 2, "
+      + "lu entre 500 m et 1000 m ». N'écrivez pas un barème pour une figure à "
+      + "deux entrées : un barème rend la valeur d'un palier là où la figure "
+      + "trace une droite."),
     dit("**Le langage n'ajuste aucune loi** : pas de régression, pas de spline, "
       + "pas de polynôme. Ce qui n'est pas entre deux points écrits n'existe pas. "
       + "Une courbe lissée rendrait des valeurs que le texte d'origine ne porte "
