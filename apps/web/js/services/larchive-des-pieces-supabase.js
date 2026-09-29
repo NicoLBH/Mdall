@@ -26,18 +26,37 @@ import {
 const REGISTRE = "pieces_archivees";
 
 /**
- * Les empreintes que l'archive porte déjà.
+ * Parmi **celles-ci**, lesquelles l'archive porte-t-elle déjà ?
  *
- * On lit le **registre**, pas le casier : une table répond en une requête là
- * où lister des objets demande de les parcourir par pages.
+ * ## La question qu'on ne pose plus, et pourquoi
+ *
+ * On demandait « que contient l'archive ? », d'un coup. Or **Supabase plafonne
+ * toute réponse à mille lignes, en silence** : au-delà, l'ensemble rendu
+ * cessait d'être celui de l'archive, le dédoublonnage ne voyait plus ce qui
+ * était là, et **tout se reversait**. Le versement aurait dit « réussi » et
+ * coûté deux fois, sans un mot.
+ *
+ * La bonne question est bornée, et elle l'est par nature : on ne demande jamais
+ * plus que ce qu'on s'apprête à verser. Elle tient donc quelle que soit la
+ * taille de l'archive — cent pièces ou cent mille.
+ *
+ * On interroge le **registre** et non le casier : une table répond en une
+ * requête là où lister des objets demande de les parcourir par pages.
  *
  * `null` quand la lecture échoue — et non un ensemble vide, qui ferait croire
  * que l'archive est neuve et reverserait tout (règle 5).
  *
+ * @param {Iterable<string>} empreintes celles qu'on s'apprête à verser
  * @returns {Promise<Set<string>|null>}
  */
-export async function lesEmpreintesDejaLa() {
-  const { data, error } = await supabase.from(REGISTRE).select("empreinte");
+export async function lesEmpreintesConnues(empreintes = []) {
+  const demandees = [...new Set([...(empreintes ?? [])].map((une) => String(une ?? "")).filter(Boolean))];
+  // Rien à demander : la réponse est connue sans aller la chercher.
+  if (!demandees.length) return new Set();
+
+  const { data, error } = await supabase.from(REGISTRE)
+    .select("empreinte")
+    .in("empreinte", demandees);
   if (error) return null;
   return new Set((Array.isArray(data) ? data : []).map((une) => String(une?.empreinte ?? "")));
 }
@@ -50,7 +69,8 @@ export async function lesEmpreintesDejaLa() {
  *   sansEmpreinte: number, lu: boolean}>}
  */
 export async function verserLesPieces(pieces = []) {
-  const connues = await lesEmpreintesDejaLa();
+  const connues = await lesEmpreintesConnues(
+    (Array.isArray(pieces) ? pieces : []).map((une) => une?.empreinte));
   // **On ne verse pas à l'aveugle.** Sans savoir ce qui est déjà là, tout
   // remonterait — cinq mégaoctets par plan, cent fois par archive.
   if (!connues) {

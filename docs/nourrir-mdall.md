@@ -451,10 +451,10 @@ faux.
 
 ### Ce qui reste, dans l'ordre
 
-1. **Absorber à l'échelle, puis poser le pont vers l'épisode.** Détaillé au
-   § 8 bis. `episodeDuProjet` mange des affirmations signées d'un projet, pas
-   des mails : le pont n'existe pas. Et avant lui, le convoi — dont un défaut
-   déjà présent qui reverse tout au-delà de mille pièces.
+1. **Le pont vers l'épisode.** Détaillé au § 8 bis. `episodeDuProjet` mange des
+   affirmations signées d'un projet, pas des mails : le pont n'existe pas.
+   *(L'absorption à l'échelle — le convoi — est faite, défaut des mille lignes
+   compris.)*
 2. **Retirer les citations avant d'empreindre le propos** : `ceQuonCite` sait
    déjà les séparer. Aujourd'hui l'empreinte porte sur le corps entier, donc
    deux exemplaires d'un même message dont la citation a grossi comptent pour
@@ -536,9 +536,12 @@ Un constat tiré d'un mail devra donc porter un domaine **lu**, jamais deviné.
 C'est une contrainte, et c'est une chance : elle interdit d'emblée la boîte
 noire qui chuchote « incendie » sans pouvoir dire pourquoi.
 
-### A. Absorber — le convoi
+### A. Absorber — le convoi *(fait)*
 
-#### Ce qui casse en premier, et c'est déjà là
+> `services/le-convoi.js`, `services/un-zip-deplie.js`,
+> `apps/console/js/le-convoi-ecran.js`.
+
+#### Ce qui cassait en premier
 
 `lesEmpreintesDejaLa` et `lesMessagesDejaLa` demandent **toutes** les empreintes
 d'un coup. Or Supabase plafonne toute réponse à **mille lignes, en silence** :
@@ -548,7 +551,8 @@ fois.
 
 Le correctif est aussi la forme qui passe à l'échelle : ne jamais demander « que
 contient l'archive ? », mais « parmi **ces cinquante-là**, lesquelles connais-tu
-déjà ? ». Une question bornée, quelle que soit la taille de l'archive.
+déjà ? ». Une question bornée **par nature** — on ne demande jamais plus que ce
+qu'on s'apprête à verser —, donc qui tient à cent mille.
 
 #### Les trois autres murs
 
@@ -570,6 +574,52 @@ peut pas exploiter. C'est de l'irrattrapable, comme le journal des refus.
 **Et le dossier et le `.zip` reviennent au programme.** On les avait mis de côté
 « si le besoin se confirme » : il se confirme. Cent archives ne se choisissent
 pas fichier par fichier dans un sélecteur.
+
+#### Le `.zip`, et pourquoi il ne coûte rien non plus
+
+Un `.zip` n'est pas opaque : c'est un **annuaire à la fin du fichier** qui dit,
+pour chaque entrée, son nom, sa taille et où ses octets commencent. Le seul
+calcul est la décompression, et le navigateur la fait lui-même
+(`DecompressionStream`). Aucune bibliothèque, aucun appel.
+
+Et c'est ce qui rend le convoi possible sur une archive : **lire ce qu'elle
+contient ne coûte presque rien** — quelques kilo-octets de la fin —, puis on
+décompresse **un message à la fois**, à mesure qu'on verse. Décompresser deux
+gigaoctets d'un coup referait le mur qu'on vient d'abattre.
+
+Deux méthodes sont lues — stocké et dégonflé, ce que produisent Windows, 7-Zip
+et macOS. Toute autre est **refusée et nommée**, jamais devinée — même quand ses
+octets se laisseraient dégonfler : la méthode déclarée dit qu'un autre
+traitement était attendu, et rendre des octets plausibles serait pire que de
+n'en rendre aucun. Les archives Zip64 se refusent de même.
+
+> **Ce que le format réel a appris, et qu'aucune épreuve n'aurait trouvé.**
+> `zip(1)` écrit des noms en UTF-8 **sans poser le drapeau qui le dit**. S'y
+> fier seul transformait « Réunion 04.msg » en « RÃ©union 04.msg » : le fichier
+> paraissait absent du dépôt. On lit donc en UTF-8 **quand les octets
+> l'acceptent** — « ces octets sont-ils de l'UTF-8 bien formé ? » est une
+> question de fait, pas une intuition — et dans l'encodage du poste sinon.
+
+#### Deux gestes, parce que ce sont deux besoins
+
+Le **versoir** sert à *regarder* : une poignée de messages, dépliés, comptés, et
+l'on décide. Il garde leurs octets, et c'est très bien pour dix fichiers.
+
+Le **convoi** sert à *absorber* : mille quatre cents messages qu'on ne regardera
+pas un par un. Ce qu'on regarde alors n'est plus la matière, **c'est le compte
+rendu** — et il fallait le dire plutôt que de faire semblant. Mélanger les deux
+dans une seule zone ferait choisir le mauvais mode sans le savoir.
+
+#### Ce qu'il reste à faire de cet étage
+
+- **Un journal durable.** Celui du convoi vit dans la page : il sert à
+  diagnostiquer un convoi en cours, et c'est déjà l'essentiel. Un convoi de six
+  heures relu le lendemain demanderait une table.
+- **Plusieurs versements à la fois.** Aujourd'hui un message après l'autre. Un
+  parallélisme borné — quatre, pas plus : un navigateur ne tient que six
+  connexions par hôte — diviserait le temps d'autant.
+- **Les archives de plus de quatre gigaoctets** (Zip64), qui se refusent
+  proprement mais ne se lisent pas.
 
 ### B. Montrer — et le but de l'écran est de pouvoir refuser
 
@@ -624,8 +674,9 @@ premier.
 
 ### L'ordre que je propose
 
-1. **Le convoi** — le défaut des mille lignes, les lots, la reprise, le journal,
-   le dossier et le `.zip`. Sans lui, rien de ce qui suit ne tient à l'échelle.
+1. ~~**Le convoi**~~ — *fait*. Le défaut des mille lignes, les lots qui
+   relâchent, la reprise par l'archive elle-même, le journal, le dossier et le
+   `.zip`.
 2. **Le pont** `episodeDuneArchive`, avec les règles de domaine les plus sûres
    (les références citées), et **la mesure lancée dessus**. C'est le premier
    chiffre réel.

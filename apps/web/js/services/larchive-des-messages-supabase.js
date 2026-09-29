@@ -35,13 +35,22 @@ const LIENS = "pieces_des_messages";
 const REGISTRE_DES_PIECES = "pieces_archivees";
 
 /**
- * Les messages que l'archive porte déjà.
+ * Parmi **ceux-ci**, lesquels l'archive porte-t-elle déjà ?
+ *
+ * La question bornée, pour la raison dite au long dans
+ * `larchive-des-pieces-supabase.js` : demander « que contient l'archive ? » se
+ * faisait plafonner à mille lignes **en silence**, et reversait tout au-delà.
  *
  * `null` quand la lecture échoue — et non un ensemble vide, qui ferait croire
- * que l'archive est neuve et reverserait tout (règle 5).
+ * que l'archive est neuve (règle 5).
  */
-export async function lesMessagesDejaLa() {
-  const { data, error } = await supabase.from(REGISTRE).select("empreinte");
+export async function lesMessagesConnus(empreintes = []) {
+  const demandees = [...new Set([...(empreintes ?? [])].map((un) => String(un ?? "")).filter(Boolean))];
+  if (!demandees.length) return new Set();
+
+  const { data, error } = await supabase.from(REGISTRE)
+    .select("empreinte")
+    .in("empreinte", demandees);
   if (error) return null;
   return new Set((Array.isArray(data) ? data : []).map((un) => String(un?.empreinte ?? "")));
 }
@@ -63,7 +72,8 @@ function dejaEcrit(erreur) {
  *   liens: number, sansEmpreinte: number, lu: boolean}>}
  */
 export async function verserLesMessages(messages = []) {
-  const connus = await lesMessagesDejaLa();
+  const connus = await lesMessagesConnus(
+    (Array.isArray(messages) ? messages : []).map((un) => un?.empreinte));
   // **On ne verse pas à l'aveugle.** Sans savoir ce qui est déjà là, tout
   // remonterait.
   if (!connus) {
