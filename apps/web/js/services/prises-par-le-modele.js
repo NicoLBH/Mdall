@@ -24,6 +24,7 @@
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { messagesAEnvoyer } from "./le-fil-des-mails.js";
 import { REFUS, leReleveLu, motifDuStatut, panneLue } from "./le-releve-rendu.js";
+import { noterLeRefusDunAppel } from "./journal-des-refus-supabase.js";
 
 const URL_DE_LA_FONCTION = `${getSupabaseUrl()}/functions/v1/relever-un-fil`;
 
@@ -78,10 +79,18 @@ export async function releverLeFil({ filId = "", messages = [] } = {}) {
       })
     });
   } catch {
+    // **Ce qui n'aboutit pas se compte, comme ce qui aboutit.** Le motif rendu
+    // ici s'affiche une seconde et meurt ; le journal garde le genre de la
+    // panne, jamais son texte (`services/journal-des-refus.js`).
+    noterLeRefusDunAppel({ url: URL_DE_LA_FONCTION, statut: 0, projectId: await projetCourant() });
     return { ok: false, motif: REFUS.INJOIGNABLE, panne: "", coupee: false };
   }
 
   if (!reponse.ok) {
+    noterLeRefusDunAppel({
+      url: URL_DE_LA_FONCTION, statut: reponse.status, projectId: await projetCourant()
+    });
+
     const refuse = await reponse.json().catch(() => null);
     return {
       ok: false,

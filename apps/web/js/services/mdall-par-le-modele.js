@@ -34,6 +34,7 @@
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { REFUS, laTranscriptionLue, motifDuStatut, panneLue } from "./le-mdall-rendu.js";
 import { ceQueLeProjetSait, leProjetSaitQuelqueChose } from "./ce-que-le-projet-sait.js";
+import { noterLeRefusDunAppel } from "./journal-des-refus-supabase.js";
 
 const URL_DE_LA_FONCTION = `${getSupabaseUrl()}/functions/v1/ecrire-en-mdall`;
 
@@ -86,12 +87,20 @@ export async function ecrireEnMdall({ dit = "", memoire = null } = {}) {
       })
     });
   } catch {
+    // **Ce qui n'aboutit pas se compte, comme ce qui aboutit.** Le motif rendu
+    // ici s'affiche une seconde et meurt ; le journal garde le genre de la
+    // panne, jamais son texte (`services/journal-des-refus.js`).
+    noterLeRefusDunAppel({ url: URL_DE_LA_FONCTION, statut: 0, projectId: await projetCourant() });
     // Rien n'est parti, donc rien n'a été facturé. Le dire évite de réessayer
     // en craignant de payer deux fois.
     return { ok: false, motif: REFUS.INJOIGNABLE, panne: "", coupee: false };
   }
 
   if (!reponse.ok) {
+    noterLeRefusDunAppel({
+      url: URL_DE_LA_FONCTION, statut: reponse.status, projectId: await projetCourant()
+    });
+
     const refuse = await reponse.json().catch(() => null);
     return {
       ok: false,

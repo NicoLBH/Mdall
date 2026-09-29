@@ -275,7 +275,12 @@ export function renderProjectInsights(root) {
  * et par soi, et afficher qui a consommé quoi ferait du compteur un outil de
  * surveillance — ce que sa table refuse déjà de rendre possible.
  */
-const consommationDuProjetLue = { projetId: "", appels: null, enCours: false, echec: false };
+const consommationDuProjetLue = {
+  projetId: "", appels: null, enCours: false, echec: false,
+  // Le journal des pannes du mois, et son échec à part : une lecture ratée du
+  // compteur ne dit rien de celle du journal.
+  refus: null, refusEchec: false
+};
 
 function dessinerLaConsommation(root) {
   const hote = root?.querySelector?.("#projectInsightsConsommation");
@@ -296,25 +301,35 @@ function dessinerLaConsommation(root) {
 
   (async () => {
     try {
-      const [{ consommationDuProjet }, { resolveCurrentBackendProjectId }] = await Promise.all([
-        import("../services/consommation-ia-supabase.js"),
-        import("../services/project-supabase-sync.js")
-      ]);
+      const [{ consommationDuProjet }, { resolveCurrentBackendProjectId }, { refusDuProjet }] =
+        await Promise.all([
+          import("../services/consommation-ia-supabase.js"),
+          import("../services/project-supabase-sync.js"),
+          import("../services/journal-des-refus-supabase.js")
+        ]);
 
       // **Deux identifiants, et il faut le bon.** La route porte celui du
       // frontal, la base classe tout par un UUID : passer le premier rendrait
       // une liste vide, qui ressemble à « rien n'a été consommé ».
       const backendProjectId = await resolveCurrentBackendProjectId();
       const bornes = bornesDuMois(moisEnCours());
-      const lues = backendProjectId
-        ? await consommationDuProjet({ projectId: backendProjectId, ...bornes })
-        : null;
+      // **Les deux lectures ensemble.** Ce qui a coûté et ce qui n'a pas abouti
+      // se lisent d'un même mouvement ; en série, on attendrait deux fois pour
+      // un seul écran.
+      const [lues, pannes] = await Promise.all([
+        backendProjectId ? consommationDuProjet({ projectId: backendProjectId, ...bornes }) : null,
+        backendProjectId ? refusDuProjet({ projectId: backendProjectId, ...bornes }) : null
+      ]);
 
       consommationDuProjetLue.echec = lues === null;
       consommationDuProjetLue.appels = lues;
+      consommationDuProjetLue.refusEchec = pannes === null;
+      consommationDuProjetLue.refus = pannes;
     } catch {
       consommationDuProjetLue.echec = true;
       consommationDuProjetLue.appels = null;
+      consommationDuProjetLue.refusEchec = true;
+      consommationDuProjetLue.refus = null;
     } finally {
       consommationDuProjetLue.enCours = false;
       peindreLaConsommation(hote);
@@ -341,6 +356,7 @@ function peindreLaConsommation(hote) {
     parProjets: false,
     titreDuTotal: `Ce projet — ${mois}`,
     detailDuTotal: "Tous les collaborateurs de ce projet.",
+    refus: consommationDuProjetLue.refusEchec ? null : (consommationDuProjetLue.refus ?? []),
     enTeteHtml: appels === null || !moi ? "" : renderCarteDeConsommation({
       total: partDeLaPersonne(appels, moi),
       titre: "Ma part sur ce projet",

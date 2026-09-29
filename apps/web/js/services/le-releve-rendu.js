@@ -25,6 +25,8 @@
  * Un objet entre, un état d'écran sort. Aucun réseau, aucune horloge.
  */
 
+import { MOTIF_DU_REFUS, motifDuRefus } from "./journal-des-refus.js";
+
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /** Pourquoi le relevé n'a pas eu lieu. Nommés : un écran doit pouvoir le dire. */
@@ -102,18 +104,22 @@ export function panneLue(rendu, statutHttp) {
 }
 
 /**
- * Les codes qui disent « on a cessé d'attendre », et non « je refuse ».
+ * Ce qu'un code de réponse dit du relevé.
  *
- * `408` vient du serveur, `504` et `524` d'une passerelle. Aucun ne porte de
- * cause : l'afficher comme un refus muet fait chercher un problème ailleurs.
+ * **La lecture du code vit ailleurs**, dans `journal-des-refus.js`, et une
+ * seule fois : c'est elle que le journal d'exploitation note, et deux lectures
+ * d'un même code finiraient par ne plus dire la même chose — l'écran montrerait
+ * « refusé » là où le journal noterait « surcharge » (règle 4).
+ *
+ * Ce qui reste ici est la **projection** sur les trois issues que le relevé
+ * connaît : ce qui n'a pas répondu, ce qui a dépassé, et tout le reste, qui est
+ * un refus. Un relevé n'a rien à faire d'un quota ou d'une taille : il les
+ * subit de la même façon.
  */
-const DELAIS_DEPASSES = new Set([408, 504, 524]);
-
-/** Ce qu'un code de réponse dit du relevé. */
 export function motifDuStatut(statut = 0) {
-  const code = Number(statut) || 0;
-  if (code === 404) return REFUS.INJOIGNABLE;
-  if (DELAIS_DEPASSES.has(code)) return REFUS.TROP_LONG;
+  const genre = motifDuRefus(statut);
+  if (genre === MOTIF_DU_REFUS.INJOIGNABLE) return REFUS.INJOIGNABLE;
+  if (genre === MOTIF_DU_REFUS.TROP_LONG) return REFUS.TROP_LONG;
   return REFUS.REFUSE;
 }
 

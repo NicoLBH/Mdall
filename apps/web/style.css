@@ -25259,6 +25259,45 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   color:var(--muted);
 }
 
+/* Ce qui n'a pas abouti. Même coquille que « Par usage » juste au-dessus — c'est
+   la même nature de bloc, et en dessiner un second jeu ferait deux calibrages à
+   recaler ensemble à chaque retouche. */
+.conso-refus{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  padding:20px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:rgb(21, 27, 35);
+}
+.conso-refus__titre{margin:0;font-size:14px;font-weight:600;color:var(--text);}
+.conso-refus__mot{margin:0;font-size:12.5px;color:var(--muted);max-width:78ch;}
+.conso-refus__liste{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
+
+/* Le compte d'abord, à largeur fixe : les chiffres s'alignent, et l'œil compare
+   sans lire. */
+.conso-refus__ligne{
+  display:grid;
+  grid-template-columns:3ch minmax(0,1fr) minmax(0,16rem);
+  gap:10px;
+  align-items:baseline;
+  min-width:0;
+}
+@media (max-width: 720px){
+  .conso-refus__ligne{grid-template-columns:3ch minmax(0,1fr);}
+  .conso-refus__ou{grid-column:2;}
+}
+.conso-refus__combien{color:var(--text);text-align:right;}
+.conso-refus__quoi{display:flex;flex-direction:column;gap:1px;min-width:0;}
+.conso-refus__quoi b{font-size:13.5px;font-weight:600;color:var(--text);}
+/* Le remède, sur la même ligne : un tableau de pannes sans geste à faire se subit. */
+.conso-refus__quoi i{font-style:normal;font-size:12px;color:var(--muted);}
+.conso-refus__ou{
+  color:var(--muted);min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
 /* L'attente porte le spinner de l'application : une phrase seule ne bouge pas,
    et l'on ne sait pas si l'écran travaille ou s'il s'est arrêté là. */
 .conso-vide--attente{

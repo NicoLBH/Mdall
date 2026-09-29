@@ -32,6 +32,7 @@ import { getNiceChartTicks, renderSvgLineChart } from "../../utils/svg-line-char
 import {
   CHANGE, TARIFS, enEuros, enJetons, parJour, parNature, parProjet, tarifDuModele, totalDesAppels
 } from "../../services/consommation-ia.js";
+import { phraseDesRefus, refusParMotif } from "../../services/journal-des-refus.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -233,6 +234,65 @@ export function renderRepartitionParNature(lignes = [], { titre = "Par usage" } 
 }
 
 /**
+ * Ce qui n'a pas abouti — le pendant du compteur, et il manquait.
+ *
+ * ## Pourquoi c'est ici, à côté de ce qui a coûté
+ *
+ * Un écran qui ne montre que ce qui a réussi donne une vue fausse du mois :
+ * trois lectures de rapport qui n'ont jamais abouti ne coûtent rien et ont
+ * pourtant fait perdre une matinée. Et surtout, chacun voyait sa propre panne,
+ * une seconde, dans son coin — personne ne savait qu'elle était arrivée dix
+ * fois à quatre personnes le même matin.
+ *
+ * ## Le genre, jamais le texte
+ *
+ * Le journal ne garde que huit genres de panne, un nom de fonction et un
+ * instant (`services/journal-des-refus.js`). Il n'y a donc rien à filtrer ici :
+ * ce qu'on affiche est tout ce qui existe.
+ *
+ * ## Et le remède, sur la même ligne
+ *
+ * Un tableau de pannes sans geste à faire se subit. « Le fournisseur a demandé
+ * de revenir plus tard » se répare en attendant ; « la session ne valait plus »
+ * se répare en se reconnectant. Le dire là où on le lit évite de le chercher.
+ *
+ * **Zéro ne s'écrit pas**, et `null` non plus : une période sans panne et une
+ * période qu'on n'a pas pu lire ne se disent pas pareil (règle 5).
+ */
+export function renderCeQuiNAPasAbouti(refus = null, { titre = "Ce qui n'a pas abouti" } = {}) {
+  if (refus === null) {
+    return `<section class="conso-refus conso-refus--muette">
+      <h3 class="conso-refus__titre">${escapeHtml(titre)}</h3>
+      <p class="conso-refus__mot">Le journal des pannes n'a pas pu être lu. Ce n'est pas
+      « aucune panne » : c'est quelque chose qu'on ne sait pas.</p>
+    </section>`;
+  }
+
+  const genres = refusParMotif(refus);
+  if (!genres.length) return "";
+
+  return `
+    <section class="conso-refus">
+      <h3 class="conso-refus__titre">${escapeHtml(titre)}</h3>
+      <p class="conso-refus__mot">${escapeHtml(phraseDesRefus(refus))}. Rien du contenu
+      n'est gardé : le journal note le genre de la panne, la fonction et l'instant.</p>
+      <ul class="conso-refus__liste">
+        ${genres.map((genre) => `
+          <li class="conso-refus__ligne">
+            <span class="conso-refus__combien mono-small">${escapeHtml(String(genre.combien))}</span>
+            <span class="conso-refus__quoi">
+              <b>${escapeHtml(genre.dit)}</b>
+              <i>${escapeHtml(genre.remede)}</i>
+            </span>
+            <span class="conso-refus__ou mono-small">${escapeHtml(genre.fonctions.join(" · "))}</span>
+          </li>
+        `).join("")}
+      </ul>
+    </section>
+  `;
+}
+
+/**
  * Le tarif retenu, en clair.
  *
  * **Un montant qu'on ne peut pas refaire est une rumeur** (c'est toute la
@@ -312,6 +372,8 @@ function renderRienADire(mot) {
  *
  * @param {object} options
  * @param {object[]|null} options.appels `null` quand la lecture a échoué
+ * @param {object[]|null} [options.refus] le journal des pannes de la période,
+ *   `null` quand on n'a pas pu le lire — ce qui n'est pas « aucune panne »
  * @param {string} options.mois `AAAA-MM`
  * @param {{du: string, au: string}} options.bornes
  * @param {boolean} [options.parProjets] montrer la répartition par projet
@@ -320,7 +382,7 @@ function renderRienADire(mot) {
  */
 export function renderConsommation({
   appels = null, bornes = { du: "", au: "" }, parProjets = false, nomDuProjet = null,
-  titreDuTotal = "Ce mois-ci", detailDuTotal = "", enTeteHtml = ""
+  titreDuTotal = "Ce mois-ci", detailDuTotal = "", enTeteHtml = "", refus = null
 } = {}) {
   if (appels === null) return renderLectureImpossible();
 
@@ -333,6 +395,7 @@ export function renderConsommation({
       ${enTeteHtml}
       ${renderCarteDeConsommation({ total, titre: titreDuTotal, detail: detailDuTotal })}
       ${renderRepartitionParNature(parNature(appels))}
+      ${renderCeQuiNAPasAbouti(refus)}
       ${renderCourbeDesJours(jours, { titre: "Consommation par jour" })}
       ${parProjets ? renderRepartitionParProjet(parProjet(appels, nomDuProjet)) : ""}
       ${renderTarifApplique(modeles)}

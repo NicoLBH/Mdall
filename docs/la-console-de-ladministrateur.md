@@ -25,11 +25,21 @@ comme tel ; tout le reste est à faire.
 | les exécutions d'utilitaires | table `project_runs` | ce que l'Atelier a tourné |
 | l'effacement d'un compte | fonction de bord `delete-account` | le droit à l'effacement, déjà outillé |
 
+| le journal des pannes — fonction, genre, code, instant, **jamais le message** | table `refus_des_fonctions`, `services/journal-des-refus.js` | ce qui n'a pas abouti |
+
 **Ce qui n'existe pas du tout :** aucune table `organisations`, `comptes`,
-`plans` ni `abonnements`. Aucun rôle administrateur. Et **aucune trace
-persistée d'un échec** : les vingt-cinq fonctions de bord renvoient
-`{ ok: false, motif }`, et ce motif meurt dans le navigateur de celui qui l'a
-subi.
+`plans` ni `abonnements`. Aucun rôle administrateur.
+
+> **Le journal des pannes existe depuis peu**, et c'est le premier des quatre
+> indispensables de la section 5. Il est écrit **par le navigateur**, ce qui est
+> l'inverse du compteur de consommation : les pannes les plus graves — le
+> portail en panne, le réseau coupé — n'atteignent jamais une fonction de bord,
+> et son silence ressemble alors à celui d'une journée sans incident.
+>
+> Ce que cela pourrait ouvrir est fermé par un **domaine fermé de huit genres**,
+> vérifié par la base elle-même : aucun texte libre n'entre dans ce journal, donc
+> rien du contenu d'un projet ne peut en sortir. Il reste à l'étendre aux
+> fonctions que le premier lot n'a pas couvertes.
 
 ## 2. Où vivent ces écrans, et comment on y entre
 
@@ -195,10 +205,13 @@ réponse ; la facturation la suit.
 Quatre, et le critère de sélection est simple : **ce qui est irrattrapable si on
 ne le fait pas maintenant.**
 
-**1. Le journal des refus.** Une table additive, une ligne dans `_shared`,
-et toutes les fonctions de bord en héritent. C'est la seule alerte qui existe,
-et c'est de l'information qui **disparaît chaque jour où on ne l'écrit pas**.
-Le plus petit des quatre, et le plus urgent.
+**1. Le journal des refus — *fait*.** `refus_des_fonctions`, le domaine fermé
+des huit genres, et les six appels au modèle qui le nourrissent. C'est de
+l'information qui **disparaît chaque jour où on ne l'écrit pas**.
+
+Deux choses restent : **l'étendre** aux autres fonctions (l'Établi, le copilote,
+les dépôts de pièces), et **décider sa durée de conservation** — un journal
+utile six mois devient un passif ensuite (§ 6).
 
 **2. La date d'entrée et la dernière trace de chaque compte.** Sans elles,
 aucune cohorte ne se reconstitue — on ne saura jamais qui est parti la première
@@ -275,6 +288,9 @@ fais différemment si ce nombre double ?*
   qu'on puisse regarder son projet ? (piste : un diagnostic **que l'utilisateur
   lance lui-même** et dont il choisit d'envoyer le résultat.)
 - La sauvegarde et la restauration d'un projet, et qui a le droit de la demander.
-- Le statut des fonctions de bord : une page publique d'état du service.
+- Le statut des fonctions de bord : une page publique d'état du service — le
+  journal des pannes en donne désormais la matière.
+- Le seuil qui fait une alerte : à partir de combien de pannes du même genre,
+  dans quel délai, prévient-on quelqu'un ? (et par quel canal.)
 - Les plafonds : que se passe-t-il quand un compte dépasse sa consommation ?
 - La migration d'un projet d'une organisation à une autre.
