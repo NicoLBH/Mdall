@@ -672,10 +672,17 @@ export const WIKI_DU_LANGAGE = [
       + "volet des remarques le dit, avec les valeurs en cause."),
     dit("**La portée dit où lire.** `Couleur des volets(Bâtiment B, Matériau)` "
       + "lit le matériau **du bâtiment B** : la même fonction, deux bâtiments, "
-      + "deux réponses. Dans le bac d'essai il n'y a pas de zone — on y essaie "
-      + "une fonction, pas un ouvrage —, et c'est en relisant la mémoire du "
-      + "projet que la portée prend son sens. Une zone que le projet ne connaît "
-      + "pas fait taire l'appel plutôt que de répondre pour ailleurs."),
+      + "deux réponses. Écrivez `zones` pour rester là où vous êtes."),
+    dit("**Et l'essai a un « Où l'on se place ».** Le bac commence sur « toutes "
+      + "zones » — il ne se place nulle part tant qu'on ne le lui dit pas. "
+      + "Choisissez un bâtiment, et les champs se remplissent de ce que le "
+      + "projet tient pour lui : chacun le dit sous lui, « du projet : alu ». "
+      + "Ce que vous tapez par-dessus gagne toujours, et vaut dans toutes les "
+      + "zones — c'est vous qui essayez."),
+    dit("**Une zone que le projet ne connaît pas fait taire l'appel**, même "
+      + "quand la réponse est sous la main. Répondre avec le bâtiment courant "
+      + "serait plausible et faux, et une faute de frappe dans un nom de "
+      + "bâtiment ne se verrait jamais."),
     dit("**En tapant la parenthèse, l'écran montre l'ordre** : la portée "
       + "d'abord, puis ce que la signature déclare, avec la valeur que vous "
       + "êtes en train d'écrire en évidence."),

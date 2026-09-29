@@ -33,7 +33,7 @@
 
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { zonesLisibles } from "./memoire-blame.js";
-import { normalizeZoneKey } from "./project-zones.js";
+import { normalizeZoneKey, zonesConnuesDuProjet } from "./project-zones.js";
 import { valeursDeLaPortee } from "./memoire-valeurs.js";
 import { sujetDe, valeurDuSujet } from "./memoire-raisonnement.js";
 import {
@@ -180,7 +180,7 @@ export function rejouerLesRegles(assertions = [], { substitutions = new Map(), a
    * Une zone qu'on ne connaît pas rend `null` : on lit alors comme on lisait,
    * plutôt que de répondre sur une mémoire vide qu'on aurait inventée (règle 5).
    */
-  const connues = new Set(toutes.flatMap(porteesDe));
+  const connues = zonesConnuesDuProjet(toutes);
   const pourLaZone = (dite) => {
     const cle = normalizeZoneKey(dite);
     /**

@@ -241,8 +241,30 @@ test("le cœur du brouillon ne touche ni le magasin, ni la base, ni le projet", 
     "brouillon-mdall.js", "formulaire-du-brouillon.js", "bac-dessai.js", "mdall-completion.js"
   ]) marcher(path.join(ici, depart), []);
 
+  /**
+   * **`project-zones.js` est du vocabulaire, pas de la plomberie.**
+   *
+   * Le préfixe `project-` est une bonne heuristique — toute la famille va au
+   * magasin ou à la base —, et elle se trompe sur celui-là : il ne fait que
+   * normaliser des clés de zone, et n'importe rien. Le bac en a besoin depuis
+   * qu'il lit ce que le projet tient **pour une zone**, et la seule autre voie
+   * serait de redécider ailleurs laquelle des valeurs vaut (règle 10).
+   *
+   * L'exception se vérifie elle-même, deux lignes plus bas : le jour où ce
+   * fichier importe quoi que ce soit, la garde le reprend.
+   */
+  const TOLERE = "project-zones.js";
+
   const interdits = /(^|\/)store\.js$|supabase|(^|\/)auth\.js$|(^|\/)demo-context\.js$|(^|\/)project-/;
-  const fautifs = [...vus.keys()].filter((un) => interdits.test(un));
+  const fautifs = [...vus.keys()]
+    .filter((un) => interdits.test(un))
+    .filter((un) => path.basename(un) !== TOLERE);
+
+  // La tolérance ne tient que tant que le fichier reste pur.
+  const tolere = path.join(ici, TOLERE);
+  assert.deepEqual(
+    [...readFileSync(tolere, "utf8").matchAll(/^\s*import[^;]*?from\s+"/gm)], [],
+    `${TOLERE} n'est plus pur : la garde doit le reprendre`);
 
   assert.deepEqual(fautifs.map((un) => path.relative(ici, un)), [],
     fautifs.map((un) => [...vus.get(un), un].map((etape) => path.basename(etape)).join(" → ")).join("\n"));

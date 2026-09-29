@@ -27346,11 +27346,22 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .bac-formulaire__entree{ display:flex; align-items:center; gap:6px; min-width:0; }
 .bac-formulaire__saisie{ flex:1 1 auto; min-width:0; }
+/* Ce que le projet tient déjà pour ce nom, dans la zone choisie : c'est la
+   valeur qui servira si l'on ne tape rien, et un essai qui répond sur une
+   valeur venue de nulle part ne se relit pas. Même calibrage que l'unité —
+   elles se posent au même endroit et se lisent pareil. */
+.bac-formulaire__projet,
 .bac-formulaire__unite{
   flex:0 0 auto; color:var(--muted); font-size:11px;
   font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace);
 }
 .bac-formulaire__logique{ display:inline-flex; gap:4px; }
+
+/* Où l'on se place pour essayer. Il précède le formulaire : c'est le fond sur
+   lequel tout le reste se lit. */
+.bac-zone{ display:flex; align-items:center; gap:8px; margin:0 0 10px; }
+.bac-zone__quoi{ flex:0 0 auto; color:var(--muted); font-size:12px; }
+.bac-zone__choix{ flex:1 1 auto; min-width:0; max-width:360px; }
 .bac-formulaire__logique .est-actif{ border-color:var(--borderColor-accent-emphasis); }
 
 .bac-resultats{ display:flex; flex-direction:column; gap:8px; }

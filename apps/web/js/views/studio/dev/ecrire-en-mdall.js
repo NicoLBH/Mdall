@@ -65,6 +65,7 @@ import {
   fichiersRemplis, brouillonRange, brouillonRelu
 } from "../../../services/brouillon-mdall.js";
 import { champsDuBrouillon, SAISIE } from "../../../services/formulaire-du-brouillon.js";
+import { zoneChoices, normalizeZoneKey } from "../../../services/project-zones.js";
 import {
   lancerLeBrouillon, phraseDuLancement, ISSUE, MOTS_DE_LISSUE
 } from "../../../services/bac-dessai.js";
@@ -360,6 +361,16 @@ export function renderFormulaire(champs = [], reponses = {}) {
               ${saisie}
               ${champ.unite ? `<span class="bac-formulaire__unite">${escapeHtml(champ.unite)}</span>` : ""}
             </span>
+            ${/*
+              **Ce que le projet tient déjà, et qui servira si l'on ne tape
+              rien.** Le taire ferait répondre l'essai sur une valeur venue de
+              nulle part : on la montre, avec d'où elle vient (règle 5). Dès
+              qu'on a tapé, c'est la réponse tapée qui vaut, et le rappel n'a
+              plus rien à dire.
+            */""}
+            ${champ.duProjet && !donnee
+              ? `<span class="bac-formulaire__projet">du projet : ${escapeHtml(champ.duProjet)}</span>`
+              : ""}
           </label>
         `;
       }).join("")}
@@ -723,13 +734,13 @@ function refusDuBrouillon(fichiers = []) {
 
 /** Le bac d'essai : le formulaire, puis ce que les fonctions répondent. */
 export function renderBacDessai(brouillon = null, {
-  reponses = {}, lance = false, tete = true, memoire = null
+  reponses = {}, lance = false, tete = true, memoire = null, zone = ""
 } = {}) {
   const remplis = fichiersRemplis(brouillon);
   // **Les fonctions versées jouent avec.** Le brouillon qui nomme « Couleur des
   // volets » ne doit pas la demander à la main : le projet sait la déduire.
-  const champs = champsDuBrouillon(remplis, { memoire });
-  const resultats = lance ? lancerLeBrouillon(remplis, reponses, { memoire }) : [];
+  const champs = champsDuBrouillon(remplis, { memoire, zone });
+  const resultats = lance ? lancerLeBrouillon(remplis, reponses, { memoire, zone }) : [];
 
   return `
     <section class="bac">
@@ -745,6 +756,7 @@ export function renderBacDessai(brouillon = null, {
         <h3 class="bac__titre">Bac d'essai</h3>
         <span class="bac__quoi">Remplissez ce qui manque, et lancez. Rien ne s'écrit.</span>
       </div>` : ""}
+      ${renderChoixDeLaZone(memoire, zone)}
       ${
         champs.length
           ? renderFormulaire(champs, reponses)
@@ -752,6 +764,55 @@ export function renderBacDessai(brouillon = null, {
       }
       ${lance ? renderResultats(resultats, { refus: refusDuBrouillon(remplis) }) : ""}
     </section>
+  `;
+}
+
+/** Le geste : on change de partie d'ouvrage. */
+export const GESTE_DE_LA_ZONE = "bac-zone";
+
+/**
+ * **Où l'on se place pour essayer.**
+ *
+ * ## Pourquoi le bac en a besoin
+ *
+ * Le bac n'avait pas de zone, et c'était cohérent : on y essaie une fonction,
+ * pas un ouvrage. Mais depuis qu'une fonction s'appelle avec une portée, la
+ * moitié de ce qu'elle sait faire ne pouvait pas s'y montrer — « la même
+ * fonction, deux bâtiments, deux réponses » ne se voyait que dans le rejeu de
+ * la mémoire, c'est-à-dire **après** avoir versé.
+ *
+ * ## Ce qu'il change, et ce qu'il ne change pas
+ *
+ * Il donne au bac le **fond** : ce que le projet tient pour cette partie
+ * d'ouvrage. Ce qu'on tape par-dessus gagne toujours — c'est la main sur le
+ * volant, et un essai où la réponse qu'on vient d'écrire serait ignorée ne
+ * s'expliquerait pas.
+ *
+ * ## Pourquoi « toutes zones » par défaut
+ *
+ * Parce que c'est ce que le bac faisait hier. Partir sur un bâtiment ferait
+ * changer de réponse tous les essais en cours sans que personne l'ait demandé,
+ * et « toutes zones » est une portée à part entière — pas une absence.
+ *
+ * Il ne paraît pas quand le projet n'a pas de zone : un sélecteur à un seul
+ * choix est un sélecteur qui fait douter de son propre écran.
+ */
+export function renderChoixDeLaZone(memoire = null, zone = "") {
+  const choix = zoneChoices(Array.isArray(memoire) ? memoire : []);
+  if (choix.length < 2) return "";
+
+  const ici = normalizeZoneKey(zone);
+
+  return `
+    <label class="bac-zone">
+      <span class="bac-zone__quoi">Où l'on se place</span>
+      <select class="gh-input bac-zone__choix" data-geste="${GESTE_DE_LA_ZONE}">
+        ${choix.map((une) => `
+          <option value="${escapeHtml(une.key)}"${normalizeZoneKey(une.key) === ici ? " selected" : ""}>
+            ${escapeHtml(une.label)}
+          </option>`).join("")}
+      </select>
+    </label>
   `;
 }
 
@@ -1550,6 +1611,15 @@ const etat = {
    * refermerait à chaque caractère tapé ne se regarderait jamais.
    */
   lectures: {},
+  /**
+   * **Où l'on se place pour essayer.**
+   *
+   * Vide — « toutes zones » — au départ, parce que c'est ce que le bac faisait
+   * avant d'avoir un sélecteur : partir sur un bâtiment ferait changer de
+   * réponse tous les essais en cours sans que personne l'ait demandé. C'est
+   * une portée à part entière, pas une absence.
+   */
+  zone: "",
   /** A-t-on lancé ? Tant que non, on ne montre aucun verdict. */
   lance: false,
   /** La transcription est-elle en cours ? Le bouton le dit, et se désarme. */
@@ -2439,7 +2509,16 @@ function ouvrirLeBac(racine) {
   const corps = ouvrirLaFenetreDeDetails({
     titreHtml: escapeHtml("Bac d'essai"),
     metaHtml: escapeHtml("Remplissez ce qui manque. Rien ne s'écrit : un « enregistre » dit où irait le résultat, et n'y va pas."),
-    corpsHtml: renderBacDessai(etat.brouillon, { reponses: etat.reponses, lance: etat.lance }),
+    /**
+     * **La mémoire manquait ici**, et le formulaire en disait autre chose que
+     * les résultats : `redessinerLesResultats` la passait, pas ce premier
+     * rendu. Le bac demandait donc à la main un nom qu'une fonction versée
+     * conclut — c'est-à-dire de répondre soi-même la question qu'on avait
+     * signée —, puis le champ disparaissait à la première frappe.
+     */
+    corpsHtml: renderBacDessai(etat.brouillon, {
+      reponses: etat.reponses, lance: etat.lance, memoire: etat.memoire, zone: etat.zone
+    }),
     className: "details-modal--plein",
     surFermeture: () => { etat.lance = false; }
   });
@@ -2584,7 +2663,8 @@ function redessinerLesResultats() {
   if (!corps) return POSE.RIEN;
 
   const resultats = etat.lance
-    ? lancerLeBrouillon(fichiersRemplis(etat.brouillon), etat.reponses, { memoire: etat.memoire })
+    ? lancerLeBrouillon(fichiersRemplis(etat.brouillon), etat.reponses,
+        { memoire: etat.memoire, zone: etat.zone })
     : [];
 
   return poserLePanneau(corps, ".bac-resultats",
@@ -2611,8 +2691,37 @@ function marquerLeChoixLogique(hote, nom, choisie) {
  * `racine` l'écran, parce que la console dit aussi ce que le lancement a
  * répondu et qu'elle est derrière.
  */
+/**
+ * **Changer de zone refait le bac entier**, et c'est la seule chose qui le
+ * fasse.
+ *
+ * Un champ ne redessine **jamais** : le doigt est posé dessus, et le curseur
+ * partirait au milieu d'un nombre. La zone, elle, n'est pas un champ — c'est un
+ * choix délibéré, fait une fois —, et tout change avec : ce que le projet tient
+ * pour cette partie d'ouvrage n'est plus le même, et les rappels « du projet »
+ * sous chaque champ doivent suivre. Les laisser en place montrerait les valeurs
+ * d'un bâtiment sous les réponses d'un autre.
+ *
+ * **On ne touche pas aux réponses tapées** : elles valent partout, et les
+ * effacer au changement de zone ferait perdre ce qu'on venait d'essayer.
+ */
+function brancherLeChoixDeLaZone(hote, racine) {
+  const choix = hote.querySelector(`[data-geste="${GESTE_DE_LA_ZONE}"]`);
+  if (!choix) return;
+
+  choix.addEventListener("change", () => {
+    etat.zone = choix.value;
+    hote.innerHTML = renderBacDessai(etat.brouillon, {
+      reponses: etat.reponses, lance: etat.lance, memoire: etat.memoire, zone: etat.zone
+    });
+    brancherLeBac(hote, racine);
+    redessinerLaConsole(racine);
+  });
+}
+
 function brancherLeBac(hote, racine) {
   brancherLesLectures(hote, choisirLaLecture);
+  brancherLeChoixDeLaZone(hote, racine);
 
   for (const saisie of hote.querySelectorAll("[data-bac-champ]")) {
     const nom = saisie.dataset.bacChamp;
