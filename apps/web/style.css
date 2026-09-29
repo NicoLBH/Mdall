@@ -25286,6 +25286,25 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .forme-suite__titre{margin:6px 0 0;font-size:13px;font-weight:600;color:var(--text);}
 .forme-suite__dit{margin:0;font-size:13.5px;color:var(--text);}
 
+/* La référence à battre. Une ligne par bêtise : le nom, ses chiffres, et sur
+   combien ils reposent — jamais un taux sans son assiette. */
+.forme-reference{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;}
+.forme-reference__ligne{
+  display:grid;
+  grid-template-columns:minmax(0,15rem) minmax(0,1fr) minmax(0,7rem);
+  gap:10px;align-items:baseline;min-width:0;
+}
+@media (max-width: 820px){
+  .forme-reference__ligne{grid-template-columns:1fr;}
+}
+.forme-reference__quoi{display:flex;flex-direction:column;gap:1px;min-width:0;}
+.forme-reference__quoi b{font-size:13.5px;font-weight:600;color:var(--text);}
+.forme-reference__quoi i{font-style:normal;font-size:12px;color:var(--muted);}
+.forme-reference__chiffres{color:var(--text);}
+/* Sur combien ça repose, toujours à côté du taux : un chiffre de confiance
+   qu'on cache est un mensonge par omission. */
+.forme-reference__sur{color:var(--muted);text-align:right;}
+
 /* Ce qui n'a pas abouti. Même coquille que « Par usage » juste au-dessus — c'est
    la même nature de bloc, et en dessiner un second jeu ferait deux calibrages à
    recaler ensemble à chaque retouche. */
