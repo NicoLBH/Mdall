@@ -12,6 +12,8 @@ import {
 } from "./consommation/ecran-de-consommation.js";
 import { vecteurDeContexte } from "../services/vecteur-de-contexte.js";
 import { episodeDuProjet } from "../services/episode-du-projet.js";
+import { LIGNES_DE_BASE, lesDomainesVenus } from "../services/ligne-de-base.js";
+import { mesureDuPredicteur } from "../services/mesure-du-passe.js";
 import { renderLaForme } from "./ui/forme-du-chantier.js";
 
 function formatDuration(value) {
@@ -368,7 +370,15 @@ function peindreLaForme(hote) {
     assertions: formeDuProjetLue.assertions ?? []
   });
 
-  hote.innerHTML = renderLaForme(vecteur, episode);
+  // **La mesure vient avant tout moteur.** Ce que les deux bêtises savent
+  // prédire sur le passé de ce chantier est le mur contre lequel un vrai
+  // prédicteur devra cogner — et il vaut mieux le connaître d'avance.
+  const mesures = LIGNES_DE_BASE.map((ligne) => ({
+    ...ligne,
+    mesure: mesureDuPredicteur(episode, { predire: ligne.predire, arrive: lesDomainesVenus })
+  }));
+
+  hote.innerHTML = renderLaForme(vecteur, episode, mesures);
 }
 
 /* ── Ce que l'IA a consommé sur ce projet ────────────────────────────────── */

@@ -33,6 +33,7 @@ import {
   AXE, CE_QUI_NE_TRAVERSE_JAMAIS, MOT_DE_LAXE, MOT_DU_ROLE
 } from "../../services/vecteur-de-contexte.js";
 import { phraseDeLEpisode, phraseDesPasPerdus } from "../../services/episode-du-projet.js";
+import { LE_FROID, enPourCent } from "../../services/mesure-du-passe.js";
 
 /** La puce d'un axe. Les rôles s'écrivent en toutes lettres, pas en codes. */
 function renderAxe({ axe, valeur }) {
@@ -44,8 +45,76 @@ function renderAxe({ axe, valeur }) {
     escapeHtml(axe === AXE.ROLES ? dit : valeur)}</span>`;
 }
 
+/**
+ * La référence à battre — **ce qu'on saurait prédire sans rien de malin**.
+ *
+ * ## Pourquoi ce chiffre s'affiche avant qu'il y ait un moteur
+ *
+ * Un chiffre de précision sans référence ne veut rien dire. Le montrer
+ * maintenant, c'est planter le mur : le jour où un vrai prédicteur donnera
+ * 51 %, on saura tout de suite s'il a appris quelque chose ou s'il a réinventé
+ * le comptage.
+ *
+ * ## Le froid se dit, il ne s'affiche pas en pourcentage
+ *
+ * « 100 % sur 2 points » est un mensonge par omission, et c'est exactement ce
+ * que Mdall existe pour empêcher (règle 5). En dessous du seuil, on dit combien
+ * il manque de points, et rien d'autre.
+ */
+function renderLaReference(mesures = []) {
+  const lues = Array.isArray(mesures) ? mesures : [];
+  if (!lues.length) return "";
+
+  const chaudes = lues.filter((une) => !une.mesure?.froid);
+  const sur = Math.max(0, ...lues.map((une) => Number(une.mesure?.sur) || 0));
+
+  return `
+    <div class="forme-suite">
+      <h4 class="forme-suite__titre">La référence à battre</h4>
+      ${chaudes.length ? `
+        <p class="conso-usages__mot">
+          Rejouée sur le passé de ce chantier : à chaque pas, avec <b>seulement ce qu'on
+          savait alors</b>, qu'aurait dit un prédicteur qui ne sait rien faire de malin ?
+        </p>
+        <ul class="forme-reference">
+          ${chaudes.map((une) => `
+            <li class="forme-reference__ligne">
+              <span class="forme-reference__quoi">
+                <b>${escapeHtml(une.dit)}</b>
+                <i>${escapeHtml(une.quoi)}</i>
+              </span>
+              <span class="forme-reference__chiffres mono-small">
+                ${escapeHtml([
+                  `${enPourCent(une.mesure.precision1)} du premier coup`,
+                  `${enPourCent(une.mesure.precision3)} dans les trois`,
+                  Number.isFinite(une.mesure.avance)
+                    ? `${Math.round(une.mesure.avance)} j d'avance`
+                    : "",
+                  `${enPourCent(une.mesure.fausseAlerte)} de fausses alertes`
+                ].filter(Boolean).join(" · "))}
+              </span>
+              <span class="forme-reference__sur mono-small">sur ${
+                escapeHtml(String(une.mesure.sur))} ${une.mesure.sur > 1 ? "points" : "point"}</span>
+            </li>
+          `).join("")}
+        </ul>
+        <p class="conso-usages__mot">
+          Ce n'est pas un moteur : c'est le mur. Un moteur qui ne bat pas ces chiffres
+          n'a rien appris, et il vaut mieux le savoir le premier mois que la troisième année.
+        </p>
+      ` : `
+        <p class="forme-manques">
+          Trop peu de points pour se prononcer : ${escapeHtml(String(sur))} ${
+            sur > 1 ? "points notés" : "point noté"}, il en faut au moins ${LE_FROID}.
+          « 100 % sur deux points » serait un mensonge par omission.
+        </p>
+      `}
+    </div>
+  `;
+}
+
 /** La forme et la suite, en un bloc. Le contrat du fichier est en tête. */
-export function renderLaForme(vecteur, episode) {
+export function renderLaForme(vecteur, episode, mesures = []) {
   const axes = vecteur?.axes ?? [];
   const manques = vecteur?.manques ?? [];
   const suite = phraseDeLEpisode(episode);
@@ -90,6 +159,7 @@ export function renderLaForme(vecteur, episode) {
             maintenant, parce que c'est la partie qu'on ne rattrape pas.
           </p>
         </div>
+        ${renderLaReference(mesures)}
       ` : ""}
     </section>
   `;

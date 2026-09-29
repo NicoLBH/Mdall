@@ -148,7 +148,8 @@ craint : remplaçable par le prochain.
 | **le constat qui vient** | « il est assez probable que le prochain problème soit la mitoyenneté » — **avec le remède**, puisque Mdall garde comment il a été levé | les constats **et leur issue** |
 | **la divergence** | « cette fonction conclura autre chose que ce que vous affirmez » | le rejeu, qui existe déjà |
 
-La troisième est celle qu'aucun concurrent ne peut copier : elle est
+Aucune n'est encore faite : ce qui existe est **de quoi les noter**. La
+troisième est celle qu'aucun concurrent ne peut copier : elle est
 **arithmétique**. Les deux premières sont statistiques ; celle-là est un calcul
 sur des fonctions signées.
 
@@ -189,6 +190,45 @@ Mdall a des assertions **datées et ordonnées**. On peut donc rejouer : à la d
 *T* du projet *P*, avec **seulement** ce qu'on savait alors, qu'aurait dit le
 moteur ? Et qu'est-il arrivé après *T* ?
 
+L'instrument existe (`services/mesure-du-passe.js`), et trois décisions le
+tiennent debout :
+
+**La coupe est stricte.** Ce qui porte la date *T* n'entre pas dans ce qu'on
+savait *à* *T*. La différence entre `<` et `<=` semble anodine ; elle ne l'est
+pas. Une seule ligne du futur qui fuit dans le passé gonfle tous les chiffres,
+et **rien ne le signale** : un moteur qui a vu la réponse a l'air excellent.
+C'est l'épreuve la plus importante de tout l'édifice.
+
+**La fenêtre.** Un moteur qui annonce en mars un problème de novembre n'a rien
+annoncé : il a énuméré. Ce qui « est arrivé ensuite » se regarde donc dans un
+mois, et le délai d'avance ne compte que ce qui est venu **après** — ce qui
+tombe le jour même n'a pas été anticipé.
+
+**L'instrument ne sait pas prédire.** Le prédicteur entre par la porte : une
+fonction qui reçoit ce qu'on savait et rend une liste ordonnée. Un instrument
+qui saurait prédire finirait par se mesurer lui-même.
+
+### Ce qu'on mesure déjà, sur un seul chantier
+
+Le nom d'un sujet ne se retrouve pas d'un chantier à l'autre — ni même deux fois
+dans le même. Ce qui revient, c'est le **domaine** : `structure`, `incendie`,
+`acoustique`… un domaine fermé, donc comptable.
+
+Deux bêtises s'y mesurent (`services/ligne-de-base.js`), et la seconde n'est pas
+plus bête :
+
+- **le domaine le plus fréquent** — ne regarde que les comptes ;
+- **ce qui suit habituellement** — regarde la séquence : après ceci, il est venu
+  cela.
+
+Comparer les deux répond, avec un chiffre, à la question qui décide de tout ce
+plan : *est-ce que la séquence apporte quelque chose que le comptage n'a pas ?*
+La réponse dépend du chantier — et c'est précisément pour cela qu'il faut la
+mesurer plutôt que la supposer.
+
+Le jour où les sujets porteront un nom commun, le même instrument mesurera les
+mêmes prédicteurs sur les noms, sans rien changer d'autre.
+
 Cela donne des chiffres réels **avant d'avoir un seul utilisateur du moteur** :
 
 - **précision@3** sur le sujet suivant, comparée à la ligne de base. Un moteur
@@ -212,6 +252,11 @@ et il doit **le dire**. « Sur 2 projets comparables » n'est pas « sur 40 », 
 afficher les deux de la même façon détruirait la confiance qu'on met trois ans à
 bâtir. Une prédiction porte donc toujours **sur combien elle repose**, comme une
 affirmation porte sa provenance.
+
+C'est chiffré : en dessous de **cinq points**, aucun taux ne sort — `null`,
+jamais `0`, qui voudrait dire « il s'est trompé partout ». L'écran dit alors
+combien il manque de points, et rien d'autre. « 100 % sur deux points » est un
+mensonge par omission.
 
 ### Le carnet de bord du moteur
 
@@ -276,7 +321,11 @@ qui manque**.
    *(fait — `services/vecteur-de-contexte.js`, `services/episode-du-projet.js`)*
 4. **La mesure** — « prédire dans le passé », avec la ligne de base. Avant tout
    prédicteur : sinon on ne saura pas si le premier vaut quelque chose.
-5. **La fréquence globale** — le prédicteur bête, qui est la référence.
+   *(fait — `services/mesure-du-passe.js`, `services/ligne-de-base.js`)*
+5. **La fréquence globale** — le prédicteur bête, qui est la référence. Sur un
+   seul projet, il est là et mesuré ; ce qui manque est de **traverser** —
+   « après X, 62 % des chantiers ouvrent Y » demande plusieurs chantiers, donc
+   la porte du fonds commun.
 6. **Le voisinage de contexte** — le premier qui puisse battre la référence.
 7. **La porte du fonds commun** — une proposition signée, d'un projet vers le
    fonds. Pas avant : tant qu'il n'y a rien à offrir, il n'y a pas de porte à

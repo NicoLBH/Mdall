@@ -254,7 +254,7 @@ test("l'écran montre la forme, ses manques, et ce qui ne traverse jamais", asyn
   // Et le bloc est dessiné : une fonction que personne n'appelle ne montre rien.
   assert.match(ecran, /<div id="projectInsightsForme"><\/div>/, "le bloc n'a pas de place");
   assert.match(ecran, /dessinerLaForme\(root\);/, "le bloc n'est jamais rempli");
-  assert.match(ecran, /hote\.innerHTML = renderLaForme\(vecteur, episode\);/,
+  assert.match(ecran, /hote\.innerHTML = renderLaForme\(vecteur, episode, mesures\);/,
     "la forme n'est jamais peinte");
   assert.match(ecran, /import \{ renderLaForme \} from "\.\/ui\/forme-du-chantier\.js"/,
     "l'écran ne prend pas le bloc là où il vit");

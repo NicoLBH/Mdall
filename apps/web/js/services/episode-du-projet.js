@@ -123,6 +123,10 @@ function lesConstats(assertions) {
       parNom.set(cle, {
         cle,
         quoi: texte(assertion?.payload?.subject) || texte(assertion?.subject_key),
+        // **Le domaine, parce que c'est ce qui se prédit.** Un nom de constat ne
+        // se retrouve pas d'un chantier à l'autre ; son domaine, si — et c'est
+        // sur lui que la ligne de base se mesure (`services/ligne-de-base.js`).
+        domaine: texte(classifyAssertion(assertion).domain),
         quand,
         dernier: quand,
         leveLe: texte(assertion?.payload?.status) === LEVE ? quand : null
