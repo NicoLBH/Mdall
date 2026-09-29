@@ -202,7 +202,15 @@ test("chaque ligne porte un mot, et c'est celui de son autorité", () => {
   // annonçait « Règles » — le même objet, deux mots qui se contredisaient.
   const puces = [...rendu.liste.matchAll(/memory-tag--nature">([^<]+)</g)].map((un) => un[1]);
 
-  assert.deepEqual(puces, ["D'un texte", "Décidé", "Du projet", "Constaté", "Déduite", "D'un texte"]);
+  /**
+   * **L'ordre n'est plus celui de la base, et il se dit.** Un constat ouvert
+   * attend quelqu'un ; un raisonnement dont on ne sait pas ce qui a été examiné
+   * est le travail qui reste. Les deux passent devant ce qui ne demande rien —
+   * et la ligne porte la raison, « attend quelqu'un », « ne dit pas tout ».
+   */
+  assert.deepEqual(puces, ["Constaté", "Déduite", "D'un texte", "Décidé", "Du projet", "D'un texte"]);
+  assert.match(rendu.liste, /memory-row__pourquoi">attend quelqu'un</);
+  assert.match(rendu.liste, /memory-row__pourquoi">ne dit pas tout</);
 
   // **Le dernier mot vient de la forme, et non de l'autorité.** Un raisonnement
   // versé porte `provenance: décision` — c'est bien un humain qui a débattu —,
@@ -225,7 +233,7 @@ test("l'icône d'une ligne dessine ce que sa puce nomme", () => {
   const marques = [...rendu.liste.matchAll(/memory-row__mark[^"]*"\s*\n?\s*title="([^"]+)"/g)]
     .map((un) => un[1]);
 
-  assert.deepEqual(marques, ["D'un texte", "Décidé", "Du projet", "Constaté", "Déduite", "D'un texte"]);
+  assert.deepEqual(marques, ["Constaté", "Déduite", "D'un texte", "Décidé", "Du projet", "D'un texte"]);
 
   // Et une fonction porte l'icône des fonctions, jamais l'étoile des données de
   // base : son `kind` la rangeait là, et le rail annonçait autre chose.
@@ -236,7 +244,7 @@ test("l'icône d'une ligne dessine ce que sa puce nomme", () => {
     .map((un) => un[1]);
 
   assert.deepEqual(dessins,
-    ["markdown-code", "git-compare", "north-star", "tools", "project-roadmap", "markdown-code"]);
+    ["tools", "project-roadmap", "markdown-code", "git-compare", "north-star", "markdown-code"]);
 });
 
 test("le détail nomme l'autorité, et ne redit pas la nature", () => {

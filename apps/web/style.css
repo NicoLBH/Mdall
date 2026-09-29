@@ -17435,6 +17435,17 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .memory-tag--nature{ color:var(--text); }
 .memory-tag--domain{ color:var(--text); }
 .memory-tag--unknown{ border-style:dashed; }
+/* **Une puce qui s'interroge.** Celle de la zone mène à sa zone : on la lisait,
+   et l'on ne pouvait rien en faire. Elle garde le dessin des autres — c'est la
+   même chose, avec une prise — et ne s'annonce qu'au survol. */
+button.memory-tag--cliquable{
+  background:transparent; font:inherit; cursor:pointer;
+  font-size:11px; line-height:18px;
+}
+button.memory-tag--cliquable:hover{
+  color:var(--fg, var(--text));
+  border-color:var(--borderColor-accent-emphasis, #4493f8);
+}
 
 /* ── Les trois lectures de la mémoire ────────────────────────────────────────
    Ce ne sont pas trois écrans : ce sont trois filtres sur la même table. Chacun
@@ -18944,6 +18955,20 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    la phrase en dessous dit que ce n'est pas un oubli. */
 .memory-note__inerte{ color:var(--text); }
 .memory-note__pourquoi{ display:block; font-size:11.5px; color:var(--muted); }
+/* **Un chiffre découpé.** « 380 constats » décourage ; « 180 en structure » se
+   traite. Les parts se posent sous leur ligne, en retrait : c'est un détail de
+   la phrase, pas une seconde liste. */
+.memory-note__parts{
+  display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+  margin-left:18px; margin-top:2px; font-size:11px;
+}
+.memory-note__part{
+  padding:0; border:0; background:transparent; font:inherit; cursor:pointer;
+  color:var(--muted);
+}
+.memory-note__part b{ color:var(--text); }
+button.memory-note__part:hover{ color:var(--fg, var(--text)); text-decoration:underline; }
+.memory-note__part--inerte{ cursor:default; }
 
 /* La dernière partie est le détail : ce qui se compte et ne se lit pas. Elle
    s'efface d'un ton — la regarder ne doit rien coûter. */
@@ -19172,6 +19197,24 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   min-width:0;
 }
 .memory-row__statement:hover{ color:var(--accent); text-decoration:underline; }
+/* **Les autres faces du même sujet.** Une question fermée verse trois lignes —
+   la valeur, la décision, le raisonnement — et elles portaient le même titre,
+   côte à côte, sans qu'on sache laquelle ouvrir. Elles sont pliées ici, pas
+   retirées : une ligne qu'un regroupement escamoterait serait une ligne qu'on
+   ne peut plus retrouver. */
+.memory-row__faces{
+  display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; font-size:12px;
+}
+.memory-row__faces-quoi{ color:var(--muted); }
+.memory-row__face{
+  padding:0; border:0; background:transparent; font:inherit; cursor:pointer;
+  color:var(--borderColor-accent-emphasis, #4493f8); text-decoration:underline;
+}
+.memory-row__face:hover{ color:var(--fg, inherit); }
+/* Pourquoi cette ligne est là où elle est. **Un ordre qu'on ne peut pas
+   expliquer se subit** : la raison se lit sur la ligne qu'elle remonte, en ocre
+   comme tout ce dont il faut faire quelque chose. */
+.memory-row__pourquoi{ flex:0 0 auto; color:#d29922; font-size:11px; }
 .memory-row__detail{ color:var(--muted); font-size:13px; }
 .memory-row__meta{ color:var(--muted); font-size:12px; }
 .memory-row__superseded{ font-style:italic; }

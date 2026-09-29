@@ -48,7 +48,7 @@
  * phrases sans traverser un rendu.
  */
 
-import { NATURE, classifyAssertion, estUneRegle } from "./assertion-taxonomy.js";
+import { NATURE, classifyAssertion, domainLabel, estUneRegle } from "./assertion-taxonomy.js";
 import { ceQueCaRouvre } from "./ce-que-ca-rouvre.js";
 import { LACUNE, lacunes } from "./decision-versement.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
@@ -149,6 +149,68 @@ export function decisionsMuettes(assertions = []) {
 }
 
 /**
+ * Un chiffre, découpé par domaine — et chaque morceau s'ouvre.
+ *
+ * ## Le défaut
+ *
+ * « 380 constats attendent d'être levés » est un nombre qui décourage, pas qui
+ * oriente. On le lit, on se dit qu'on n'y arrivera jamais, et l'on passe. Un
+ * chiffre qui ne donne pas de prise est un chiffre qu'on cesse de regarder —
+ * et c'est exactement ce que la note existe pour éviter.
+ *
+ * Découpé, il rend la main : « 180 en structure » se traite, et
+ * « 90 sans domaine » dit autre chose encore — ce sont des constats qu'on ne
+ * peut même pas ranger, et c'est un travail à part.
+ *
+ * ## Trois, et le reste
+ *
+ * Les trois plus gros, puis « le reste ». Dix lignes de détail sous un chiffre
+ * refont exactement le mur qu'on vient d'abattre.
+ */
+function parDomaine(lignes = []) {
+  const parts = new Map();
+
+  for (const assertion of Array.isArray(lignes) ? lignes : []) {
+    const domaine = classifyAssertion(assertion).domain || "";
+    parts.set(domaine, (parts.get(domaine) ?? 0) + 1);
+  }
+
+  const tous = [...parts.entries()]
+    .map(([domaine, combien]) => ({
+      cle: domaine || "none",
+      combien,
+      // **Sans domaine se dit, et se cherche.** Un constat qu'on ne peut pas
+      // ranger n'est pas un constat de moins : c'est un travail de plus.
+      phrase: domaine ? domainLabel(domaine) : "sans domaine",
+      requete: `ouverts:oui domaine:${domaine || "non-classé"}`
+    }))
+    .sort((gauche, droite) => (droite.combien - gauche.combien)
+      || gauche.phrase.localeCompare(droite.phrase, "fr"));
+
+  // Un seul domaine ne se découpe pas : la part vaudrait le total, et la
+  // répéter ferait lire deux fois le même chiffre.
+  if (tous.length < 2) return [];
+
+  const gros = tous.slice(0, 3);
+  const reste = tous.slice(3).reduce((total, une) => total + une.combien, 0);
+
+  /**
+   * **Le reste n'ouvre rien, et c'est honnête.** « Ailleurs » n'est pas un
+   * domaine : lui donner la requête du total ferait cliquer sur « 2 ailleurs »
+   * pour en obtenir 380. Le chiffre se lit, et l'on descend dans la liste par
+   * les trois qui précèdent.
+   */
+  return reste > 0
+    ? [...gros, {
+      cle: "reste",
+      combien: reste,
+      phrase: accorde(tous.length - 3, "autre domaine", "autres domaines"),
+      requete: ""
+    }]
+    : gros;
+}
+
+/**
  * La note d'une mémoire : ce qu'il faut en savoir avant de la lire.
  *
  * @param {object[]} assertions la mémoire du projet
@@ -172,7 +234,8 @@ export function noteDeLaMemoire(assertions = [], { liens = null } = {}) {
   ).length;
   const muettes = decisionsMuettes(lignes).length;
   const manquants = nomsQueRienNePorte(lignes);
-  const ouverts = lignes.filter(isOpenFinding).length;
+  const constats = lignes.filter(isOpenFinding);
+  const ouverts = constats.length;
 
   /**
    * Une ligne de la note. **Zéro ne s'écrit pas.**
@@ -181,8 +244,8 @@ export function noteDeLaMemoire(assertions = [], { liens = null } = {}) {
    * l'absence de versement. Une note faite de zéros apprend à ne plus la
    * regarder, et c'est exactement ce qu'on cherche à éviter.
    */
-  const ligne = (cle, combien, phrase, { requete = "", pourquoi = "" } = {}) =>
-    (combien > 0 ? [{ cle, combien, phrase, requete, pourquoi }] : []);
+  const ligne = (cle, combien, phrase, { requete = "", pourquoi = "", detail = [] } = {}) =>
+    (combien > 0 ? [{ cle, combien, phrase, requete, pourquoi, detail }] : []);
 
   const parties = [
     {
@@ -223,7 +286,7 @@ export function noteDeLaMemoire(assertions = [], { liens = null } = {}) {
         ...ligne("ouverts", ouverts,
           `${accorde(ouverts, "constat attend", "constats attendent")} d'être`
           + ` ${ouverts > 1 ? "levés" : "levé"}`,
-          { requete: "ouverts:oui" })
+          { requete: "ouverts:oui", detail: parDomaine(constats) })
       ]
     }
   ].map((partie) => ({

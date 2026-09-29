@@ -211,6 +211,35 @@ export function filterByZone(assertions = [], zone = ZONE_TOUT_LOUVRAGE) {
   });
 }
 
+/**
+ * Ce qui n'est écrit **que** pour cette zone.
+ *
+ * ## Ce n'est pas la même question que `filterByZone`
+ *
+ * « Ce qui s'applique au bâtiment A » comprend ce qui vaut pour l'ouvrage
+ * entier : c'est la lecture qu'on fait neuf fois sur dix, et retrancher la
+ * hauteur de référence du projet donnerait un bâtiment A qui ne porte plus ses
+ * propres entrées.
+ *
+ * Celle-ci répond à « qu'est-ce qui distingue ce bâtiment des autres ? », et
+ * c'est la question qu'on pose en **auditant un découpage** : une zone qui ne
+ * porte rien en propre n'avait pas besoin d'être créée, et une zone qui porte
+ * trop cache une règle générale qu'on a recopiée.
+ *
+ * La zone vide — l'ouvrage entier — se lit ici aussi, et elle a un sens : ce
+ * qui n'est écrit pour aucune zone en particulier.
+ */
+export function filterByZoneSeule(assertions = [], zone = ZONE_TOUT_LOUVRAGE) {
+  const voulue = normalizeZoneKey(zone);
+  const lignes = Array.isArray(assertions) ? assertions : [];
+
+  return lignes.filter((assertion) => {
+    const portees = zonesOf(assertion);
+    if (!voulue) return portees.length === 0;
+    return portees.includes(voulue);
+  });
+}
+
 /** Le libellé d'une zone, d'après les définitions connues. */
 export function zoneLabel(zone, assertions = []) {
   const cle = normalizeZoneKey(zone);

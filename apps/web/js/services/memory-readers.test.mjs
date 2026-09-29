@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { ICONE_DE_LA_DECISION } from "./assertion-taxonomy.js";
+import { ICONE_DE_LA_DECISION, NATURE } from "./assertion-taxonomy.js";
+import { champsDeLaMemoire } from "./memoire-selection.js";
 
 import {
   READER,
@@ -333,16 +334,51 @@ test("chaque lecture du rail a sa requête, et son vocabulaire dans la barre", (
       `la lecture « ${readerLabel(lecture)} » écrit une requête qui ne filtre rien`);
   }
 
-  // Et le champ que la lecture des fonctions emploie existe dans la barre : sans
-  // lui, `fonction:oui` se lit comme du texte libre et ne filtre rien.
-  assert.match(source, /\{ key: "fonction", label: "Fonctions", values: \[\{ value: "oui"/);
+  /**
+   * **Et le vocabulaire se lit pour de vrai**, depuis qu'il vit avec le
+   * filtrage qui l'emploie plutôt qu'avec l'écran qui le peint. On relisait ce
+   * fichier comme du texte faute de pouvoir le charger ; on l'interroge
+   * maintenant, ce qui éprouve la chose et non son orthographe.
+   */
+  const champs = new Map(champsDeLaMemoire([]).map((champ) => [champ.key, champ]));
+
+  // Le champ que la lecture des fonctions emploie : sans lui, `fonction:oui` se
+  // lit comme du texte libre et ne filtre rien.
+  assert.deepEqual(champs.get("fonction")?.values?.map((une) => une.value), ["oui"]);
 
   // Les deux axes que la puce affiche se tapent aussi : une puce qu'on ne peut
   // pas interroger est un cul-de-sac — on lit « D'un texte » sur douze lignes
   // sans pouvoir demander les autres.
-  assert.match(source, /\{ key: "autorite", label: "Autorité"/);
-  assert.match(source, /\{ key: "forme", label: "Forme"/);
+  assert.ok(champs.get("autorite")?.values?.length, "l'autorité ne se tape pas");
+  assert.ok(champs.get("forme")?.values?.length, "la forme ne se tape pas");
+
+  // Et chaque filtre qu'une lecture du rail écrit se lit dans ce vocabulaire.
+  for (const attendus of Object.values(READER_FILTERS_ATTENDUS)) {
+    for (const [cle, valeur] of Object.entries(attendus)) {
+      const champ = champs.get(cle);
+      assert.ok(champ, `le rail écrit « ${cle}: », que la barre ne connaît pas`);
+      assert.ok(champ.values.some((une) => une.value === valeur),
+        `le rail écrit « ${cle}:${valeur} », que la barre ne sait pas lire`);
+    }
+  }
 });
+
+/**
+ * Ce que chaque lecture du rail pose comme filtre.
+ *
+ * Recopié de l'écran — et l'épreuve d'au-dessus vérifie que l'écran le pose
+ * bien. Le lire d'ici permet d'éprouver la **seconde** moitié : que la barre
+ * sache lire ce que le rail écrit.
+ */
+const READER_FILTERS_ATTENDUS = {
+  [READER.HYPOTHESES]: { nature: NATURE.HYPOTHESE },
+  [READER.CONSTRAINTS]: { nature: NATURE.CONTRAINTE },
+  [READER.DECISIONS]: { nature: NATURE.DECISION },
+  [READER.REASONINGS]: { nature: NATURE.RAISONNEMENT },
+  [READER.RULES]: { fonction: "oui" },
+  [READER.FINDINGS]: { nature: NATURE.CONSTAT, ouverts: "oui" },
+  [READER.BASE_DATA]: { nature: NATURE.DONNEE_BASE }
+};
 
 test("chaque lecture du rail a une icône qui existe dans la planche", () => {
   /**

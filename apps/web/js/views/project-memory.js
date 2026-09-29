@@ -37,6 +37,7 @@ import {
   definedZones,
   describeZonesOf,
   zoneLabel,
+  zoneOf,
   zonesOf
 } from "../services/project-zones.js";
 import {
@@ -75,6 +76,7 @@ import {
   READERS,
   describeEmptyReader,
   groupByDomain,
+  isOpenFinding,
   readerLabel,
   readerLead,
   readerRows,
@@ -153,7 +155,14 @@ import {
 import { bindSideResizer } from "./ui/side-resizer.js";
 import { renderBandeauVariante, brancherLeBandeauVariante } from "./ui/bandeau-variante.js";
 import { ouvrirLeCerveau } from "./ui/cerveau-du-projet.js";
-import { selectionDeLaMemoire, laRequeteRestreint } from "../services/memoire-selection.js";
+import {
+  selectionDeLaMemoire, laRequeteRestreint, champsDeLaMemoire
+} from "../services/memoire-selection.js";
+import {
+  MOT_DE_LA_FACE, MOT_DU_POURQUOI, grouperParSujet, parImportance
+} from "../services/memoire-groupes.js";
+import { lacunesDuRaisonnement } from "../services/raisonnement-du-point.js";
+import { emploisParAffirmation } from "../services/memoire-applications.js";
 import { ouvrirLePlanDeRecalcul } from "./ui/fenetre-plan.js";
 import { planDeRecalcul } from "../services/memoire-plan.js";
 import { OU, estServi, libelleDeLUsage, usagesDe } from "../services/usages-du-rejeu.js";
@@ -181,47 +190,10 @@ function jeton(label) {
   return String(label ?? "").trim().toLowerCase().replace(/\s+/g, "-");
 }
 
-const MEMORY_FIELDS = [
-  { key: "nature", label: "Nature", values: [
-    ...NATURES.map((nature) => ({ value: nature, token: jeton(natureLabel(nature)), label: natureLabel(nature) })),
-    { value: "none", token: jeton(UNCLASSIFIED_LABEL), label: UNCLASSIFIED_LABEL }
-  ] },
-  { key: "domaine", label: "Domaine", values: [
-    ...DOMAINS.map((domaine) => ({ value: domaine, token: jeton(domainLabel(domaine)), label: domainLabel(domaine) })),
-    { value: "none", token: jeton(UNCLASSIFIED_LABEL), label: UNCLASSIFIED_LABEL }
-  ] },
-  { key: "provenance", label: "Provenance", values: [
-    { value: "avis", label: "Avis" },
-    { value: "attachment", token: "rattachements", label: "Rattachements" },
-    { value: "document", token: "documents", label: "Documents" }
-  ] },
-  { key: "etat", label: "État", values: [
-    { value: "assumees", token: "assumées", label: "Assumées" },
-    { value: "ecartees", token: "écartées", label: "Écartées" }
-  ] },
-  // Les deux axes que la nature mélangeait, et qui se tapent maintenant chacun
-  // pour soi. `autorite:` est ce que la puce de la ligne affiche — une puce qu'on
-  // ne peut pas interroger est un cul-de-sac. `forme:` est l'axe de complexité :
-  // ce qu'on pose, ce qu'on déduit.
-  { key: "autorite", label: "Autorité", values: [
-    ...AUTORITES.map((autorite) => ({ value: autorite, token: jeton(autoriteCourte(autorite)), label: autoriteCourte(autorite) }))
-  ] },
-  { key: "forme", label: "Forme", values: [
-    ...FORMES.map((forme) => ({ value: forme, token: jeton(formeCourte(forme)), label: formeCourte(forme) }))
-  ] },
-  // Une fonction n'est pas une nature : elle a son champ, et il se tape. Le mot
-  // de l'écran est « fonction » — celui du langage ; « règle » reste dans le code.
-  { key: "fonction", label: "Fonctions", values: [{ value: "oui", label: "Seulement" }] },
-  // **Ce que la note met en tête se tape aussi.** Un chiffre qu'on ne peut pas
-  // ouvrir est un cul-de-sac : on le lit, on le croit, et l'on ne peut rien en
-  // faire. Les deux valeurs partagent la mémoire en deux, sans reste.
-  { key: "rouvre", label: "Rouvre", values: [
-    { value: "oui", label: "Un choix humain" },
-    { value: "non", label: "Rien" }
-  ] },
-  { key: "ouverts", label: "Constats", values: [{ value: "oui", label: "En cours" }] },
-  { key: "remplacees", label: "Remplacées", values: [{ value: "oui", label: "Montrées" }] }
-];
+function lesChamps() {
+  return champsDeLaMemoire(view.assertions ?? []);
+}
+
 
 const ETAT_VERS_STATUT = { assumees: MEMORY.ASSUMED, ecartees: MEMORY.REJECTED };
 
@@ -260,7 +232,7 @@ const READER_FILTERS = {
  * complète une recherche partie d'un raccourci.
  */
 function lectureDe(query) {
-  const { filters } = parseQuery(query, MEMORY_FIELDS);
+  const { filters } = parseQuery(query, lesChamps());
   const cles = Object.keys(filters).sort();
 
   for (const [lecture, attendus] of Object.entries(READER_FILTERS)) {
@@ -460,7 +432,7 @@ export function __setMemoryStateForPreview({
   // La colonne de discussion : une page d'essai doit pouvoir la montrer, sinon
   // seule la moitié de l'écran se vérifie.
   view.raisonnement = { ...espaceParDefaut(), copiloteOuvert: copilote === true };
-  view.query = onlyFilters(view.query, MEMORY_FIELDS, READER_FILTERS[reader] ?? {});
+  view.query = onlyFilters(view.query, lesChamps(), READER_FILTERS[reader] ?? {});
 }
 
 let mountedRoot = null;
@@ -590,7 +562,7 @@ function marqueDeLaLigne(assertion) {
  * bouton qui ouvrirait le vide (règle 5).
  */
 function renderNote() {
-  if (laRequeteRestreint(view.query, MEMORY_FIELDS)) return "";
+  if (laRequeteRestreint(view.query, lesChamps())) return "";
 
   const note = noteDeLaMemoire(view.assertions ?? [], { liens: view.dependencies ?? [] });
   if (note.vide || !note.parties.length) return "";
@@ -614,12 +586,37 @@ function renderNote() {
                       ligne.pourquoi
                         ? `<small class="memory-note__pourquoi">${escapeHtml(ligne.pourquoi)}</small>`
                         : ""}`}
+                ${renderLeDecoupage(ligne.detail ?? [])}
               </li>
             `).join("")}
           </ul>
         </div>
       `).join("")}
     </section>
+  `;
+}
+
+/**
+ * Un chiffre, découpé — et chaque morceau ouvre sa part.
+ *
+ * **« 380 constats » décourage ; « 180 en structure » se traite.** Un nombre
+ * qui ne donne pas de prise est un nombre qu'on cesse de regarder, et c'est
+ * exactement ce que la note existe pour éviter.
+ *
+ * Le reste ne se clique pas : « ailleurs » n'est pas un domaine, et lui donner
+ * la requête du total ferait cliquer sur « 2 » pour en obtenir 380.
+ */
+function renderLeDecoupage(parts = []) {
+  if (!parts.length) return "";
+
+  return `
+    <span class="memory-note__parts">
+      ${parts.map((part) => (part.requete
+        ? `<button type="button" class="memory-note__part" data-memory-note="${
+            escapeHtml(part.requete)}"><b>${part.combien}</b> ${escapeHtml(part.phrase)}</button>`
+        : `<span class="memory-note__part memory-note__part--inerte"><b>${
+            part.combien}</b> ${escapeHtml(part.phrase)}</span>`)).join("")}
+    </span>
   `;
 }
 
@@ -682,7 +679,7 @@ function renderSearch() {
     <div class="memory-recherche">
     <div class="memory-search gh-field-focus">
       <div class="memory-search__field">
-        <div class="memory-search__mirror" aria-hidden="true">${renderQueryMirror(view.query, MEMORY_FIELDS)}</div>
+        <div class="memory-search__mirror" aria-hidden="true">${renderQueryMirror(view.query, lesChamps())}</div>
       <input
         type="search"
         class="gh-input memory-search__input"
@@ -742,7 +739,7 @@ function renderSearch() {
  * autres ferait croire l'inverse.
  */
 function renderTableHead() {
-  const { filters: filtres } = parseQuery(view.query, MEMORY_FIELDS);
+  const { filters: filtres } = parseQuery(view.query, lesChamps());
 
   const menu = (id, options, valeur) =>
     renderGhSelectMenu({
@@ -790,6 +787,24 @@ function renderTableHead() {
           { value: "assumees", label: "Assumées" },
           { value: "ecartees", label: "Écartées" }
         ], filtres.etat ?? "")}
+        ${/*
+          **Où l'on regarde.** Chaque ligne porte sa portée en toutes lettres, et
+          c'était la seule puce de l'écran qu'on ne pouvait pas interroger.
+
+          Le menu offre **ce qui s'applique** à une partie d'ouvrage — ce qui y
+          est écrit, et ce qui vaut pour l'ouvrage entier. L'autre lecture,
+          `seulement:bâtiment-a`, se tape : c'est la question de l'audit d'un
+          découpage, et elle ne se pose pas tous les jours.
+
+          Rien quand le projet n'a pas de zone : un menu à un seul choix fait
+          douter de son propre écran.
+        */""}
+        ${definedZones(view.assertions ?? []).length
+          ? menu("memoryZone", [
+            { value: "", label: "Zone" },
+            ...definedZones(view.assertions ?? []).map((une) => ({ value: une.key, label: une.label }))
+          ], filtres.zone ?? "")
+          : ""}
       </div>
     </div>
   `;
@@ -865,7 +880,88 @@ function renderMarqueDeVariante(assertion) {
   `;
 }
 
-function renderAssertion(assertion) {
+/**
+ * Ce qui fait remonter un sujet, tel que cet écran sait le demander.
+ *
+ * **Chaque question se pose là où elle a déjà sa réponse** : un constat ouvert
+ * dans les lectures du rail, les lacunes d'un raisonnement dans le fichier qui
+ * les compte, les emplois dans celui qui les compte. Le poids ne redécide
+ * rien — il assemble (règle 10).
+ */
+function commentOnPese() {
+  const emplois = view.applications === null ? null : emploisParAffirmation(view.applications);
+
+  return {
+    attend: (assertion) => isOpenFinding(assertion),
+    // `null` n'est pas zéro : tant que le raisonnement n'est pas là, il n'a pas
+    // de lacune connue — et en inventer ferait remonter toute la mémoire.
+    neDitPasTout: (assertion) => Boolean(assertion?.payload?.raisonnement)
+      && lacunesDuRaisonnement(assertion.payload.raisonnement).length > 0,
+    combienSappuient: (assertion) => emplois?.get(texteDe(assertion?.id))?.lectures ?? 0
+  };
+}
+
+/**
+ * Les sujets d'une page, rangés par domaine.
+ *
+ * Le domaine d'un sujet est celui de sa **tête** : c'est la ligne qu'on lit, et
+ * ranger un sujet sous le domaine d'une face qu'on ne montre pas ferait
+ * chercher une valeur de structure dans le rayon de l'incendie.
+ */
+function parDomaine(sujets = []) {
+  const tetes = new Map(sujets.map((sujet) => [sujet.tete, sujet]));
+
+  return groupByDomain([...tetes.keys()]).map((groupe) => ({
+    ...groupe,
+    rows: groupe.rows.map((tete) => tetes.get(tete)).filter(Boolean)
+  }));
+}
+
+/**
+ * Un sujet : sa face la plus haute, et les autres à portée de clic.
+ *
+ * **Aucune face ne disparaît.** Une ligne qu'un regroupement escamoterait
+ * serait une ligne qu'on ne peut plus retrouver, et c'est exactement ce qu'un
+ * écran de mémoire ne doit jamais faire. Elles sont pliées, pas retirées.
+ */
+function renderSujet(sujet = null) {
+  const tete = sujet?.tete ?? sujet;
+  const autres = (sujet?.faces ?? []).filter(({ assertion }) => assertion !== tete);
+
+  return renderAssertion(tete, { autres, pourquoi: sujet?.pourquoi ?? [] });
+}
+
+/** Les autres faces du même sujet, sous la ligne qu'on lit. */
+function renderLesAutresFaces(autres = []) {
+  if (!autres.length) return "";
+
+  return `
+    <span class="memory-row__faces">
+      <span class="memory-row__faces-quoi">Du même sujet</span>
+      ${autres.map(({ face, assertion }) => `
+        <button type="button" class="memory-row__face"
+          data-memory-kind="${escapeHtml(assertion.kind ?? "")}"
+          data-memory-open="${escapeHtml(assertion.subject_key ?? "")}"
+        >${escapeHtml(MOT_DE_LA_FACE[face] ?? face)}</button>`).join("")}
+    </span>
+  `;
+}
+
+/**
+ * Pourquoi ce sujet est là où il est.
+ *
+ * **Un ordre qu'on ne peut pas expliquer se subit.** On doit pouvoir répondre
+ * « pourquoi celle-là est-elle en haut ? » sans ouvrir le code — et la réponse
+ * tient sur la ligne elle-même.
+ */
+function renderPourquoiEnHaut(pourquoi = []) {
+  if (!pourquoi.length) return "";
+
+  return `<span class="memory-row__pourquoi">${
+    pourquoi.map((une) => escapeHtml(MOT_DU_POURQUOI[une] ?? une)).join(" · ")}</span>`;
+}
+
+function renderAssertion(assertion, { autres = [], pourquoi = [] } = {}) {
   const remplacee = Boolean(assertion.superseded_by);
   const ecartee = assertion.status === MEMORY.REJECTED;
   const effet = assertion?.variante?.effet;
@@ -889,7 +985,9 @@ function renderAssertion(assertion) {
             ${svgIcon(ecartee ? "x-circle-fill" : "attestation", { className: "octicon" })}
             ${escapeHtml(ecartee ? "Écartée" : "Assumée")}
           </span>
+          ${renderPourquoiEnHaut(pourquoi)}
         </div>
+        ${renderLesAutresFaces(autres)}
         ${renderMarqueDeVariante(assertion)}
         ${renderHypothesisState(assertion)}
         ${renderCeQuiCouvre(assertion)}
@@ -1338,7 +1436,21 @@ function renderTaxonomy(assertion) {
   return `
     ${etiquette(mot, connu ? "nature" : "unknown")}
     ${domain ? etiquette(domainLabel(domain), "domain") : etiquette("Sans domaine", "unknown")}
-    ${etiquette(portee, zonesOf(assertion).length ? "zone" : "unknown")}
+    ${/*
+      **La puce de la zone s'interroge.** Elle disait où l'affirmation
+      s'applique et n'ouvrait sur rien : on la lisait, et l'on ne pouvait rien
+      en faire. Un clic pose `zone:` dans la barre — celle qui fait foi —, et
+      l'on voit d'un coup tout ce qui vaut pour cette partie d'ouvrage.
+
+      Rien à cliquer quand l'affirmation vaut partout : `zone:` n'a pas de
+      valeur pour « l'ouvrage entier », et un bouton qui ne filtrerait rien
+      serait un cul-de-sac de plus.
+    */""}
+    ${zonesOf(assertion).length
+      ? `<button type="button" class="memory-tag memory-tag--zone memory-tag--cliquable"
+           data-memory-zone="${escapeHtml(zoneOf(assertion))}"
+           title="Ne montrer que ce qui s'applique à cette partie d'ouvrage">${escapeHtml(portee)}</button>`
+      : etiquette(portee, "unknown")}
   `;
 }
 
@@ -1371,15 +1483,30 @@ export function renderMemoryList(lignes, page = 1, {
     `;
   }
 
-  // Une mémoire grossit à chaque fusion ; une page, non. Cinq cents lignes
-  // d'un coup ne se lisent pas — et le navigateur les peine.
-  const pagination = paginateItems(lignes, { pageSize: PAGE_SIZE, currentPage: page });
+  /**
+   * **Un sujet, une ligne** — et ses faces avec elle.
+   *
+   * Une question fermée verse trois lignes : la valeur, la décision, le
+   * raisonnement. Elles portaient le même titre et les mêmes puces, et l'on ne
+   * savait pas laquelle ouvrir. Le regroupement se fait donc **avant** la
+   * pagination : plier après aurait donné des pages de douze lignes qui n'en
+   * montrent que cinq, et un compte qui ne se retrouve nulle part.
+   *
+   * Le tri par importance suit, et il se dit sur chaque ligne : « attend
+   * quelqu'un », « ne dit pas tout ». Un ordre qu'on ne peut pas expliquer se
+   * subit ; celui-là s'audite.
+   */
+  const sujets = parImportance(grouperParSujet(lignes), commentOnPese());
 
-  // **Le regroupement se fait sur la page affichée, pas sur toute la liste** :
-  // grouper d'abord et paginer ensuite couperait un domaine au milieu sans
-  // qu'on sache qu'il continue.
+  // Une mémoire grossit à chaque fusion ; une page, non. Cinq cents sujets
+  // d'un coup ne se lisent pas — et le navigateur les peine.
+  const pagination = paginateItems(sujets, { pageSize: PAGE_SIZE, currentPage: page });
+
+  // **Le regroupement par domaine se fait sur la page affichée, pas sur toute
+  // la liste** : grouper d'abord et paginer ensuite couperait un domaine au
+  // milieu sans qu'on sache qu'il continue.
   const corps = grouped
-    ? groupByDomain(pagination.items)
+    ? parDomaine(pagination.items)
         .map(
           (groupe) => `
             <section class="memory-group">
@@ -1387,12 +1514,12 @@ export function renderMemoryList(lignes, page = 1, {
                 ${escapeHtml(groupe.label)}
                 <span class="memory-group__count">${groupe.rows.length}</span>
               </h3>
-              <ul class="memory-list">${groupe.rows.map(renderAssertion).join("")}</ul>
+              <ul class="memory-list">${groupe.rows.map(renderSujet).join("")}</ul>
             </section>
           `
         )
         .join("")
-    : `<ul class="memory-list">${pagination.items.map(renderAssertion).join("")}</ul>`;
+    : `<ul class="memory-list">${pagination.items.map(renderSujet).join("")}</ul>`;
 
   // La pagination sort du tableau : elle n'est pas une ligne de plus, c'est ce
   // qui dit où l'on en est dans la liste. Dedans, elle se lisait comme une
@@ -1947,7 +2074,7 @@ export function renderMemoryForPreview(assertions = [], {
   reader = READER.ALL, collapsed = false, projet = "", recherches = null
 } = {}) {
   view.assertions = assertions;
-  view.query = onlyFilters(view.query, MEMORY_FIELDS, READER_FILTERS[reader] ?? {});
+  view.query = onlyFilters(view.query, lesChamps(), READER_FILTERS[reader] ?? {});
   view.navCollapsed = collapsed;
   // Les recherches épinglées font partie du rail : une page d'essai qui les
   // ignorerait ne montrerait que la moitié de ce qu'on regarde. Elle les donne,
@@ -2915,7 +3042,7 @@ function lignesVisibles() {
 function selectionMemoire(assertions) {
   return selectionDeLaMemoire(assertions, {
     query: view.query,
-    champs: MEMORY_FIELDS,
+    champs: lesChamps(),
     etats: ETAT_VERS_STATUT,
     chercher: searchAssertions,
     aRevoir: pendingReviews,
@@ -3604,8 +3731,18 @@ function bind(root) {
 
 
 
+  // **La puce de la zone mène à sa zone.** Elle disait où l'affirmation
+  // s'applique et n'ouvrait sur rien.
+  for (const bouton of root.querySelectorAll("[data-memory-zone]")) {
+    bouton.addEventListener("click", () => {
+      view.query = withFilter(view.query, lesChamps(), "zone", bouton.dataset.memoryZone);
+      view.page = 1;
+      renderContent(root);
+    });
+  }
+
   root.querySelector("[data-memory-superseded]")?.addEventListener("change", (event) => {
-    view.query = withFilter(view.query, MEMORY_FIELDS, "remplacees", event.target.checked ? "oui" : "");
+    view.query = withFilter(view.query, lesChamps(), "remplacees", event.target.checked ? "oui" : "");
     view.page = 1;
     renderContent(root);
   });
@@ -3613,7 +3750,7 @@ function bind(root) {
   // Le compteur des non classés mène à ce qu'il compte : un nombre qu'on ne
   // peut pas ouvrir ne fait que culpabiliser.
   root.querySelector("[data-memory-unclassified]")?.addEventListener("click", () => {
-    view.query = withFilter(view.query, MEMORY_FIELDS, "domaine", "none");
+    view.query = withFilter(view.query, lesChamps(), "domaine", "none");
     view.page = 1;
     renderContent(root);
   });
@@ -3730,7 +3867,7 @@ function bind(root) {
   for (const bouton of root.querySelectorAll("[data-memory-reader]")) {
     bouton.addEventListener("click", () => {
       const lecture = bouton.getAttribute("data-memory-reader") || READER.ALL;
-      view.query = onlyFilters(view.query, MEMORY_FIELDS, READER_FILTERS[lecture] ?? {});
+      view.query = onlyFilters(view.query, lesChamps(), READER_FILTERS[lecture] ?? {});
       view.page = 1;
       // Changer de lecture ne garde pas les filtres de la précédente : on ne
       // cherche pas la même chose, et un filtre invisible ferait croire à une
@@ -3820,13 +3957,14 @@ function bind(root) {
         memoryAutorite: "autorite",
         memoryForme: "forme",
         memoryDomain: "domaine",
-        memoryStatus: "etat"
+        memoryStatus: "etat",
+        memoryZone: "zone"
       }[id];
       if (!champ) return;
       // Le menu écrit dans la barre : c'est elle qui fait foi, et le rail s'en
       // déduit — poser un filtre à la main rebascule donc sur « Tout » sans que
       // personne ait à y penser.
-      view.query = withFilter(view.query, MEMORY_FIELDS, champ, value);
+      view.query = withFilter(view.query, lesChamps(), champ, value);
       // Filtrer ramène à la première page : rester en page 4 d'un résultat qui
       // en compte deux montrerait un vide qu'on prendrait pour une absence.
       view.page = 1;
@@ -4016,7 +4154,7 @@ function syncSuggestions(root) {
   if (!champ || !hote) return;
 
   const propose = document.activeElement === champ
-    ? suggestAt(champ.value, MEMORY_FIELDS, champ.selectionStart ?? champ.value.length)
+    ? suggestAt(champ.value, lesChamps(), champ.selectionStart ?? champ.value.length)
     : null;
 
   if (!propose) {
@@ -4054,7 +4192,7 @@ function appliquerSuggestion(root, rang) {
   const champ = root.querySelector("[data-memory-search]");
   if (!champ) return;
 
-  const propose = suggestAt(champ.value, MEMORY_FIELDS, champ.selectionStart ?? champ.value.length);
+  const propose = suggestAt(champ.value, lesChamps(), champ.selectionStart ?? champ.value.length);
   const item = propose?.items?.[rang];
   if (!item) return;
 
@@ -4067,7 +4205,7 @@ function appliquerSuggestion(root, rang) {
   // poser. Laisser la précédente montrerait deux natures pour une affirmation
   // qui n'en a qu'une, et la liste serait vide sans que rien ne l'explique.
   if (item.replacesField) {
-    const nettoyee = dropOtherTokens(requete, MEMORY_FIELDS, item.replacesField, curseur - 1);
+    const nettoyee = dropOtherTokens(requete, lesChamps(), item.replacesField, curseur - 1);
     curseur = Math.max(0, curseur - (requete.length - nettoyee.length));
     requete = nettoyee;
   }
@@ -4090,7 +4228,7 @@ function syncMiroir(root) {
   const miroir = root.querySelector(".memory-search__mirror");
   if (!champ || !miroir) return;
 
-  miroir.innerHTML = renderQueryMirror(view.query, MEMORY_FIELDS);
+  miroir.innerHTML = renderQueryMirror(view.query, lesChamps());
   miroir.scrollLeft = champ.scrollLeft;
 }
 
@@ -4202,12 +4340,12 @@ function brancherLeCerveau(root) {
  * une deuxième façon de les dire finirait par ne plus dire la même chose.
  */
 function descriptionDeLaSelection() {
-  if (!laRequeteRestreint(view.query, MEMORY_FIELDS)) return "";
+  if (!laRequeteRestreint(view.query, lesChamps())) return "";
 
-  const dits = describeFilters(view.query, MEMORY_FIELDS)
+  const dits = describeFilters(view.query, lesChamps())
     .map((filtre) => `${filtre.label} : ${filtre.valueLabel}`);
 
-  const { text } = parseQuery(view.query, MEMORY_FIELDS);
+  const { text } = parseQuery(view.query, lesChamps());
   if (String(text ?? "").trim()) dits.push(`« ${String(text).trim()} »`);
   if (view.pending) dits.push("à revérifier");
 
