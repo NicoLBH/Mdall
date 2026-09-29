@@ -27382,6 +27382,24 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .bac-zone__choix{ flex:1 1 auto; min-width:0; max-width:360px; }
 .bac-formulaire__logique .est-actif{ border-color:var(--borderColor-accent-emphasis); }
 
+/* **Quand le projet a été lu, et de quoi le relire.** Sous le sélecteur de
+   zone : c'est le même fond — où l'on se place, et sur quoi. Discret, parce que
+   ce n'est pas un geste du travail courant ; lisible, parce qu'un essai qui
+   répond sur un projet vieux d'une demi-heure ne se relit pas. */
+.bac-projet{ display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; margin:0 0 10px; font-size:11px; }
+.bac-projet__quoi{ color:var(--muted); }
+/* Un mot, pas un bouton — comme « revenir au projet » sous un champ. Le même
+   calibrage : un second dessin de lien aurait fait deux liens dans un écran. */
+.bac-projet__relire{
+  padding:0; border:0; background:transparent;
+  color:var(--borderColor-accent-emphasis, #4493f8); cursor:pointer;
+  font:inherit; text-decoration:underline;
+}
+.bac-projet__relire:hover{ color:var(--fg, inherit); }
+/* Ce qui a bougé depuis la lecture d'avant — ou qu'on n'a pas su relire. Ocre,
+   comme tout ce dont il faut faire quelque chose. */
+.bac-projet__bouge{ color:#d29922; }
+
 .bac-resultats{ display:flex; flex-direction:column; gap:8px; }
 .bac-resultats__phrase{ margin:0; font-size:12px; color:var(--text); }
 .bac-resultat{
@@ -27410,6 +27428,24 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .bac-trace__verite--faux{ background:rgba(110,118,129,.18); color:var(--muted); }
 .bac-trace__verite--indécidable{ background:rgba(210,153,34,.22); color:#d29922; }
 .bac-trace__pourquoi{ color:var(--muted); font-family:inherit; }
+
+/* **D'où vient une valeur** — le même mot, la même pastille, partout où l'on
+   affiche une valeur dont la provenance compte : la trace d'un verdict
+   aujourd'hui, la proposition et le rejeu demain. Une pastille recalibrée par
+   écran finirait par dire « du projet » de quatre façons ; elle vit ici, une
+   fois, sans préfixe d'écran.
+
+   Les couleurs disent ce qu'on peut faire : bleu ce qu'on a tapé — la main sur
+   le volant —, gris ce que le projet tient, ocre ce que le brouillon pose,
+   vert ce qu'une autre fonction a conclu. */
+.venue{
+  padding:0 5px; border-radius:999px; font-size:10px;
+  font-family:var(--mono, ui-monospace, Menlo, Consolas, monospace);
+}
+.venue--réponse{ background:rgba(56,139,253,.18); color:var(--borderColor-accent-emphasis, #4493f8); }
+.venue--projet{ background:rgba(110,118,129,.18); color:var(--muted); }
+.venue--brouillon{ background:rgba(210,153,34,.18); color:#d29922; }
+.venue--déduit{ background:rgba(63,185,80,.14); color:var(--succes, #3fb950); }
 
 /* Le wiki du langage Mdall, en pleine fenêtre.
 

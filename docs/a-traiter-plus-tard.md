@@ -4718,21 +4718,18 @@ mémoire tourne zone par zone et l'écran montre le résultat ; on ne peut pas l
 dire « montre-moi le bâtiment B ». C'est la même décision que celle qu'on vient
 de prendre pour le bac, sur un écran qui a déjà sa propre façon de découper.
 
-**Ce qu'un essai lit du projet ne se voit pas dans son résultat.** La trace dit
-« Nature des volets = bois » sans dire que ce « bois » vient du bâtiment A plutôt
-que d'une réponse tapée. Les deux se relisent pareil, et c'est exactement ce que
-le rappel sous le champ existe pour éviter — sauf qu'il n'est pas dans la trace.
-Le dire demande de porter la provenance jusque dans les lectures du verdict.
+**Ce qu'on répond au bac n'entre pas du tout dans la proposition.** On avait
+noté ici que le repris et le tapé s'y lisaient pareil ; en allant voir, c'est
+plus simple que cela — `aProposerDuBrouillon` ne reçoit pas les réponses du
+formulaire, et la question de les distinguer ne se pose donc pas encore. C'est
+cohérent : le bac essaie, il ne verse pas. Elle se posera **entière** le jour où
+l'on voudra verser un essai tel quel, et il faudra alors décider ce qu'une
+valeur reprise du projet signifie dans une proposition — la resigner à
+l'identique n'apprend rien à personne.
 
-**Un champ repris ne se distingue pas d'une réponse une fois versé.** À l'écran,
-le trait à gauche et « du projet » disent d'où vient la valeur. Dans la
-proposition qu'on signe, plus rien : ce qu'on a repris du projet et ce qu'on a
-tapé s'y lisent pareil. C'est sans conséquence tant qu'on essaie — rien ne sort
-du bac —, et cela en aurait le jour où l'on voudrait verser l'essai tel quel.
-
-**Rien ne prévient quand ce qu'on a repris a changé au projet.** On reprend
-« 2,70 m », on corrige autre chose, on revient une heure plus tard : si
-quelqu'un a versé « 2,75 m » entre-temps, le champ le montre sans dire qu'il a
-bougé. Le dire demande de retenir ce qu'il valait quand on l'a repris, c'est-à-
-dire de donner une mémoire au bac — qui n'en a pas, et c'est ce qui le rend
-sûr.
+**`si (A) et (B)` sur une seule ligne ne se lit pas, et ne le dit pas.** Le `et`
+d'une condition veut sa propre ligne ; écrit à la suite, tout ce qui suit le
+premier guillemet est avalé dans la valeur attendue — on obtient une clause
+`A = 1") et (B = "2` qui s'affiche telle quelle dans la trace et répond « faux »
+avec aplomb. Vu à l'écran en regardant le verdict d'un essai. C'est un refus qui
+manque, pas une lecture à élargir : la forme sur deux lignes existe et marche.

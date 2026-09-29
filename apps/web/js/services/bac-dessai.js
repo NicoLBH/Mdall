@@ -52,7 +52,7 @@ import { REFUS_DU_CALCUL } from "./mdall-calcul.js";
 import {
   evaluerLaRegle, lecteurDeValeurs, lecteurQuiSaitAppeler, phraseDuDoute
 } from "./memoire-evaluateur.js";
-import { valeursDuLancement } from "./formulaire-du-brouillon.js";
+import { ceQuOnDonneAuLancement, VENU } from "./formulaire-du-brouillon.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -208,7 +208,17 @@ export function lancerLeBrouillon(fichiers = [], reponses = null, { memoire = nu
   const siennes = fonctionsDuBrouillon(fichiers);
   const fonctions = [...siennes, ...fonctionsVerseesUtiles(fichiers, siennes, memoire)];
   const ici = normalizeZoneKey(zone);
-  const valeurs = new Map(valeursDuLancement(fichiers, reponses, { memoire, zone: ici }));
+  const donne = ceQuOnDonneAuLancement(fichiers, reponses, { memoire, zone: ici });
+  const valeurs = new Map(donne.valeurs);
+  /**
+   * **D'où vient chaque valeur**, pour que la trace du verdict puisse le dire.
+   *
+   * Elle vit à côté de `valeurs` et suit les mêmes ajouts : une conclusion
+   * qu'une passe reverse s'y inscrit `DEDUIT` au même moment qu'elle entre dans
+   * `valeurs`. Les tenir à deux endroits éloignés les ferait diverger au
+   * premier tour de plus (règle 4) — ici la paire se lit d'un coup d'œil.
+   */
+  const venues = new Map(donne.venues);
 
   /**
    * **La portée où l'on se place ne se range pas dans les valeurs.**
@@ -250,7 +260,7 @@ export function lancerLeBrouillon(fichiers = [], reponses = null, { memoire = nu
      */
     if (!zonesConnuesDuProjet(memoire ?? []).has(cle)) return () => ({ connu: false, valeur: "" });
 
-    return lecteurDeValeurs(valeursDuLancement(fichiers, reponses, { memoire, zone: cle }));
+    return lecteurDeValeurs(ceQuOnDonneAuLancement(fichiers, reponses, { memoire, zone: cle }).valeurs);
   };
 
   let resultats = [];
@@ -273,11 +283,14 @@ export function lancerLeBrouillon(fichiers = [], reponses = null, { memoire = nu
    * dit (règle 5).
    */
   for (let passe = 0; passe < Math.max(1, fonctions.length); passe += 1) {
-    resultats = unePasse(fonctions, valeurs, pourLaZone);
+    resultats = unePasse(fonctions, valeurs, pourLaZone, venues);
 
     const neuves = conclusionsNeuves(fonctions, resultats, valeurs);
     if (!neuves.size) break;
-    for (const [cle, valeur] of neuves) valeurs.set(cle, valeur);
+    for (const [cle, valeur] of neuves) {
+      valeurs.set(cle, valeur);
+      venues.set(cle, VENU.DEDUIT);
+    }
   }
 
   return resultats;
@@ -313,7 +326,7 @@ function conclusionsNeuves(fonctions, resultats, valeurs) {
 }
 
 /** Toutes les fonctions, évaluées avec ce qu'on sait à cet instant. */
-function unePasse(fonctions, valeurs, pourLaZone = null) {
+function unePasse(fonctions, valeurs, pourLaZone = null, venues = new Map()) {
   /**
    * **Le bac n'a pas de zone** : la portée passée à un appel est liée comme une
    * valeur, et rien ne s'en sert ici. C'est le rejeu de la mémoire qui lui
@@ -388,6 +401,15 @@ function unePasse(fonctions, valeurs, pourLaZone = null) {
         attendu: (trace.attendu ?? []).map(texte).filter(Boolean),
         lu: texte(trace.lu),
         connu: Boolean(trace.connu),
+        /**
+         * **D'où venait ce qu'elle a lu** — ou rien, quand on ne le sait pas.
+         *
+         * Inventer une provenance pour une lecture qu'on n'a pas su suivre —
+         * l'appel d'une autre fonction, un nom lu dans un autre bâtiment —
+         * serait pire que se taire : on lirait « du projet » sur une valeur qui
+         * n'en vient pas, et l'on corrigerait au mauvais endroit (règle 5).
+         */
+        venu: venues.get(cleDuSujet(texte(trace.sujet))) ?? "",
         verite: trace.verite,
         pourquoi: trace.doute ? phraseDuDoute(trace.doute) : ""
       })),
