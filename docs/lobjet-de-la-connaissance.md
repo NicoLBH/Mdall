@@ -2488,5 +2488,7 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | un champ repris du projet, et modifiable | `docs/le-troisieme-etat-dun-champ.md` |
 | d'où vient une valeur, et depuis quand on le sait | `docs/dou-vient-une-valeur.md` |
 | dix chantiers du carnet, et les décisions qu'ils attendaient | `docs/dix-du-carnet.md` |
+| un sujet une ligne, et où l'on regarde dans la mémoire | `docs/un-sujet-une-ligne.md` |
+| la mémoire qui prédit : la logique, la mesure, et ce qu'on ne pourra pas rattraper | `docs/la-memoire-qui-predit.md` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

@@ -13,6 +13,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { champsDeLaMemoire } from "./memoire-selection.js";
+
 import {
   PARTIE,
   decisionsMuettes,
@@ -266,33 +268,42 @@ test("les constats ouverts attendent, et le chiffre ouvre leur lecture", () => {
 
 test("chaque requête de la note se tape dans la barre", () => {
   /**
-   * **Cette épreuve relit l'écran, et c'est l'exception qui le justifie.**
-   *
    * Une requête dont le champ n'est pas déclaré ne lève rien : la barre la lit
    * comme du texte libre, la recherche ne trouve aucune affirmation qui la
    * contienne, et la liste se vide. On clique un chiffre, l'écran se vide, et
    * rien ne dit pourquoi — le défaut le plus discret qu'un tel bouton puisse
    * avoir, et aucun rendu ne le montre.
+   *
+   * **On relisait l'écran comme du texte** faute de pouvoir le charger. Le
+   * vocabulaire vit maintenant avec le filtrage qui l'emploie : on l'interroge,
+   * ce qui éprouve la chose et non son orthographe.
    */
-  const source = readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), "..", "views", "project-memory.js"),
-    "utf8"
-  );
+  const champs = champsDeLaMemoire([]);
+  assert.ok(champs.length >= 5, "le vocabulaire de la barre a fondu");
 
-  const debut = source.indexOf("const MEMORY_FIELDS = [");
-  const bloc = source.slice(debut, source.indexOf("\n];", debut));
-  const declares = new Set([...bloc.matchAll(/\{ key: "([a-z]+)"/g)].map((trouve) => trouve[1]));
-
-  assert.ok(declares.size >= 5, "les champs de la barre ne se lisent plus dans le fichier");
-
-  const requetes = noteDeLaMemoire(MEMOIRE()).parties
-    .flatMap((partie) => partie.lignes.map((ligne) => ligne.requete))
-    .filter(Boolean);
+  const lignes = noteDeLaMemoire(MEMOIRE()).parties.flatMap((partie) => partie.lignes);
+  const requetes = [
+    ...lignes.map((ligne) => ligne.requete),
+    // **Les parts d'un chiffre découpé s'ouvrent aussi**, et c'est le même
+    // défaut si elles ne s'ouvrent pas : on clique « 180 en structure », et
+    // l'écran se vide.
+    ...lignes.flatMap((ligne) => (ligne.detail ?? []).map((part) => part.requete))
+  ].filter(Boolean);
 
   assert.ok(requetes.length >= 3, "la note n'ouvre plus rien");
 
   for (const requete of requetes) {
-    const champ = requete.slice(0, requete.indexOf(":"));
-    assert.ok(declares.has(champ), `« ${requete} » n'a pas de champ dans la barre`);
+    // Une requête peut poser deux filtres : `ouverts:oui domaine:structure`.
+    for (const morceau of requete.split(/\s+/).filter(Boolean)) {
+      const cle = morceau.slice(0, morceau.indexOf(":"));
+      const valeur = morceau.slice(morceau.indexOf(":") + 1);
+      const champ = champs.find((une) => une.key === cle);
+
+      assert.ok(champ, `« ${requete} » n'a pas de champ dans la barre`);
+      assert.ok(
+        champ.values.some((une) => (une.token ?? une.value) === valeur || une.value === valeur),
+        `« ${requete} » écrit une valeur que la barre ne sait pas lire`
+      );
+    }
   }
 });
