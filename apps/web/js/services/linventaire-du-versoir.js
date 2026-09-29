@@ -237,6 +237,28 @@ export function phraseDeCeQuiSeRepete(inventaire = null) {
 }
 
 /**
+ * Les images de signature, **en une ligne**.
+ *
+ * Sur le message réel qui a servi de référence, elles étaient huit, et elles
+ * remplissaient l'écran. On vient chercher un plan : le faire chercher au
+ * milieu de huit logos, c'est rater la seule chose que ces écrans doivent
+ * montrer. Elles sont gardées — on ne jette rien —, elles ne sont simplement
+ * pas détaillées.
+ *
+ * Elle vit ici parce que **deux écrans la disent** : le versoir, et l'archive.
+ * Écrite deux fois, elle aurait fini par ne plus dire la même chose (règle 4).
+ *
+ * Vide quand il n'y en a pas.
+ */
+export function phraseDesImagesDeSignature(combien = 0, poids = 0) {
+  const lesquelles = Number(combien) || 0;
+  if (!lesquelles) return "";
+
+  return `${lesquelles} ${lesquelles > 1 ? "images" : "image"} de signature`
+    + ` (${poidsDit(poids)}) : gardées, mais ce ne sont pas des documents`;
+}
+
+/**
  * Ce qu'on ne sait pas rapprocher, et qui se compte donc à part.
  *
  * `crypto.subtle` manque d'une page servie sans TLS. Sans lui, aucune pièce ne

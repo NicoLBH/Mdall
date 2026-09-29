@@ -56,6 +56,7 @@ export const RACINES = [
   "js/services/un-msg-deplie.js",
   "js/services/linventaire-du-versoir.js",
   "js/services/larchive-des-pieces-supabase.js",
+  "js/services/larchive-des-messages-supabase.js",
   // **Le lecteur de PDF de Mdall, tel quel.** Celui de l'onglet Documents et du
   // copilote. Il ne dépend de rien et dessine dans les classes que la feuille
   // de style porte déjà : un second lecteur écrit pour la console aurait

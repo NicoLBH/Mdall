@@ -384,23 +384,78 @@ plan de cinq mégaoctets —, et qu'une pièce écartée à tort par un classeme
 faux serait perdue pour de bon. Le coût est borné par l'adressage par contenu :
 le même logo dans cinq cents messages est un seul objet.
 
+### L'archive de fondement : les messages aussi
+
+Un plan sans son message **n'a pas de provenance** : on ne sait plus qui l'a
+envoyé, quand, en réponse à quoi, ni ce qu'il disait en l'envoyant. Or c'est la
+matière même de l'épisode — et **c'est la partie qu'on ne reconstitue pas après
+coup**. Les octets d'un plan, on les aura toujours ; l'ordre dans lequel les
+choses se sont dites, non.
+
+Les messages se gardent donc **de deux façons, et les deux servent** :
+
+| | où | ce que c'est |
+|---|---|---|
+| le fichier `.msg` entier | casier, `messages/<empreinte de ses octets>` | **la source** — le jour où l'on saura lire mieux, on relit sans redistribuer le carburant |
+| la forme lue | `messages_archives` | **la lecture** — qui, quand, l'objet, le propos, la chaîne : ce qui se cherche sans télécharger cent mille fichiers |
+
+L'un n'est pas la copie de l'autre. Quand la lecture s'améliorera, on refera la
+table depuis les fichiers — et c'est pour cela qu'on les garde.
+
+**Deux empreintes par message, et ce ne sont pas deux noms d'une chose.** Celle
+du message — son `Message-ID`, ou la clé calculée — dit que deux dépôts parlent
+du même échange. Celle de ses octets dit où le fichier est rangé. Deux exports
+du même message donnent deux fichiers différents et un seul message.
+
+#### Le lien, qui est le point de tout l'effort
+
+`pieces_des_messages` dit quel message portait quelle pièce, **et sous quel
+nom** : le même fichier voyage sous trois noms selon qui le renvoie, et c'est
+parfois le nom qui date la révision d'un plan. Le lien porte aussi ce que ce
+message-là déclarait de la pièce — la même image est une signature ici et un
+document ailleurs.
+
+Sans cette table, l'archive est un tas de PDF. Avec elle, chaque plan sait de
+quel message il venait, donc à quelle date, dans quel fil, et à la suite de
+quoi.
+
+#### Ce que la table ne porte pas, et pourquoi ce n'est pas une perte
+
+**Les adresses des destinataires n'y sont pas** — seulement leur nombre.
+
+Ce n'est pas de la pudeur mal placée : rien, aujourd'hui, ne sait s'en servir.
+Le vecteur de contexte raisonne sur des **rôles** (`ROLES_QUI_COMPTENT`), pas
+sur des personnes ; l'épisode sur des dates et des domaines. Une colonne
+qu'aucun code ne lit est une colonne qui finit par fuir sans avoir jamais servi.
+
+Et rien n'est perdu : **le fichier d'origine les porte toujours**. Le jour où
+une raison précise de les lire apparaîtra, elles seront là — et ce jour-là on
+écrira ce qu'on en fait avant d'écrire la colonne.
+
 ### Relire ce qui est gardé
 
-L'écran **L'archive**, dans la console. Il ouvre les PDF **avec le lecteur de
-Mdall** — `services/ct-lab-pdf-view.js`, celui de l'onglet Documents et du
-copilote, emporté tel quel par `scripts/prepare-console.mjs` avec pdf.js. Rien
-n'a été réécrit : un second lecteur aurait divergé du premier au premier
-correctif (règle 4), et il aurait fallu recalibrer toutes ses classes.
+L'écran **L'archive**, dans la console : les **messages** dans l'ordre du temps,
+chacun avec les pièces qu'il portait, puis toutes les pièces à part. Un PDF
+s'ouvre depuis l'un ou l'autre, **par le même chemin** — deux gestionnaires
+auraient fini par ne plus ouvrir de la même façon.
 
-Les octets ne descendent que pour la pièce qu'on ouvre, et la liste dit quand
-elle est tronquée — sur cent mille pièces, « voici l'archive » serait faux.
+Il ouvre les PDF **avec le lecteur de Mdall** — `services/ct-lab-pdf-view.js`,
+celui de l'onglet Documents et du copilote, emporté tel quel par
+`scripts/prepare-console.mjs` avec pdf.js. Rien n'a été réécrit : un second
+lecteur aurait divergé du premier au premier correctif (règle 4), et il aurait
+fallu recalibrer toutes ses classes.
+
+Les octets ne descendent que pour la pièce qu'on ouvre, et les listes disent
+quand elles sont tronquées — sur cent mille pièces, « voici l'archive » serait
+faux.
 
 ### Ce qui reste, dans l'ordre
 
-1. **Le lien entre une pièce et le message qui la portait.** C'est le prochain
-   irrattrapable : aujourd'hui l'archive est un tas de PDF sans provenance. Il
-   demande de garder aussi les **messages** — leur forme, leurs dates, leur
-   chaîne de réponses —, et c'est ce qui fera les épisodes.
+1. **L'épisode, reconstitué depuis l'archive.** Tout est là — les dates, la
+   chaîne de réponses, les objets, le propos —, et `episodeDuProjet` sait déjà
+   construire une suite. Ce qui manque est le pas qui relie les deux : lire un
+   fil d'archive et en tirer les sujets ouverts et les constats. C'est la
+   première fois que la mesure aura de la matière.
 2. **Retirer les citations avant d'empreindre le propos** : `ceQuonCite` sait
    déjà les séparer. Aujourd'hui l'empreinte porte sur le corps entier, donc
    deux exemplaires d'un même message dont la citation a grossi comptent pour
@@ -435,11 +490,10 @@ Le décorticage existe et il est gratuit. Ce qui manque :
    `services/episode-du-projet.js`. Ce qui manque pour **comparer** deux suites
    est un nom commun aux sujets, et cette réflexion reste ouverte.)*
 2. **Le dépôt en masse des mails**, jusqu'à l'épisode — étages 0 à 3, tout
-   gratuit. *(En cours. Étage 1 — déplier — fait pour les `.msg`, avec les
-   pièces jointes entières. Étage 0 — dédoublonner — fait, et désormais
-   **définitif** : les pièces sont gardées dans Supabase Storage sous
-   l'empreinte de leurs octets. Restent les citations à retirer du propos, le
-   lien pièce ↔ message, et les étages 2 et 3.)*
+   gratuit. *(En cours. Étages 0 et 1 faits, et **définitifs** : messages,
+   pièces et le lien entre les deux sont gardés dans Supabase Storage sous
+   l'empreinte de leurs octets. Restent les citations à retirer du propos, les
+   étages 2 et 3, et le pas qui tire un épisode d'un fil.)*
 3. **La mesure** — prédire dans le passé sur les cent projets, contre la ligne
    de base. Avant tout prédicteur. *(fait — `services/mesure-du-passe.js`,
    `services/ligne-de-base.js`. Elle attend maintenant de la matière : c'est
@@ -451,11 +505,13 @@ Le décorticage existe et il est gratuit. Ce qui manque :
 
 ### Où l'on en est, en une ligne
 
-Les étages gratuits sont ouverts (déplier, compter, dédoublonner), **les pièces
-sont gardées** et relisibles, et la mesure attend. Le prochain pas qui débloque
-le reste : **garder aussi les messages**, pour que chaque pièce sache d'où elle
-vient. C'est cela qui fera les épisodes, et c'est la partie qu'on ne pourra pas
-reconstituer plus tard.
+Les étages gratuits sont ouverts (déplier, compter, dédoublonner), **les
+messages et leurs pièces sont gardés** et relisibles, et la mesure attend. Rien
+d'irrattrapable ne se perd plus à chaque dépôt : ce qui entre reste.
+
+Le prochain pas n'est plus une question de conservation, c'est une question
+d'exploitation — **tirer un épisode d'un fil d'archive**. C'est la première fois
+que la mesure aura de la matière à se mettre sous la dent.
 
 ## 9. À enrichir
 

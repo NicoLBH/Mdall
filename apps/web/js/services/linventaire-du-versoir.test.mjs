@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   PIECE, inventaireDunMessage, inventaireDuVersoir, phraseDeCeQuOnNeSaitPasRapprocher,
-  phraseDeCeQuiSeRepete, phraseDuVersoir, poidsDit
+  phraseDeCeQuiSeRepete, phraseDesImagesDeSignature, phraseDuVersoir, poidsDit
 } from "./linventaire-du-versoir.js";
 
 const piece = (nom, taille, dansLeTexte, type = "application/pdf") =>
@@ -244,4 +244,27 @@ test("quand tout se rapproche, on ne dit rien de ce qu'on n'a pas su faire", () 
       "a.msg", { message: "<a@x>", pieces: ["abc"] })
   ]);
   assert.equal(phraseDeCeQuOnNeSaitPasRapprocher(tout), "");
+});
+
+/**
+ * **Deux écrans disent cette phrase** — le versoir et l'archive. Écrite deux
+ * fois, elle aurait fini par ne plus dire la même chose (règle 4), et c'est
+ * arrivé : l'archive a d'abord listé les huit logos un par un.
+ */
+test("les images de signature se disent en une ligne, et gardées", () => {
+  const dite = phraseDesImagesDeSignature(8, 2200000);
+  assert.match(dite, /8 images de signature/);
+  assert.match(dite, /2,2 Mo/);
+  assert.match(dite, /gardées/);
+  // « Écartées » serait faux : rien n'est jeté.
+  assert.doesNotMatch(dite, /écart/);
+});
+
+test("une seule image se dit au singulier", () => {
+  assert.match(phraseDesImagesDeSignature(1, 300), /^1 image de signature \(300 o\)/);
+});
+
+test("aucune image ne dit rien", () => {
+  assert.equal(phraseDesImagesDeSignature(0, 0), "");
+  assert.equal(phraseDesImagesDeSignature(), "");
 });
