@@ -389,7 +389,7 @@ test("les écartés constatés se dessinent, et se disent constatés", async () 
   // **Et la ligne les dessine.** Une fonction que personne n'appelle ne montre
   // rien, et rien ne tombe.
   const ligne = bloc(ecran, "renderAssertion");
-  assert.match(ligne, /renderCeQuonAEcarte\(ecarts\)/,
+  assert.match(ligne, /renderCeQuonAEcarte\(ecarts, cle\)/,
     "les écartés constatés ne sont dessinés nulle part");
   const sujet = bloc(ecran, "renderSujet");
   assert.match(sujet, /ecarts: sujet\?\.ecarts \?\? \[\]/,

@@ -19226,7 +19226,7 @@ button.memory-note__part:hover{ color:var(--fg, var(--text)); text-decoration:un
 .memory-row__ecarts{
   display:flex; flex-direction:column; gap:2px; font-size:12px;
 }
-.memory-row__ecarts-quoi{ display:inline-flex; align-items:center; gap:4px; color:var(--muted); }
+.memory-row__ecarts-quoi{ display:flex; align-items:center; gap:4px; flex-wrap:wrap; color:var(--muted); }
 .memory-row__ecart{ display:flex; align-items:baseline; gap:6px; min-width:0; }
 /* Ce qui a été écarté peut être une phrase entière — une question fermée verse
    son énoncé pour valeur. Barré et borné : la ligne dit lequel, le détail
@@ -19239,6 +19239,28 @@ button.memory-note__part:hover{ color:var(--fg, var(--text)); text-decoration:un
 .memory-row__ecart i{ color:var(--muted); font-style:normal; }
 .memory-row__ecart em{ flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); }
 .memory-row__ecart-reste{ color:var(--muted); font-style:italic; }
+/* « Dire pourquoi » : le même lien-bouton que les faces pliées juste au-dessus.
+   Un second style pour un geste de même nature se mettrait à ne pas ressembler
+   au premier, et l'on saurait que les deux n'ont pas été faits ensemble. */
+.memory-row__ecart-dire{
+  padding:0; border:0; background:transparent; font:inherit; cursor:pointer;
+  color:var(--borderColor-accent-emphasis, #4493f8); text-decoration:underline;
+}
+.memory-row__ecart-dire:hover{ color:var(--fg, inherit); }
+
+/* La fenêtre qui demande les raisons, par lot. Elle emprunte tout à la fenêtre
+   de fermeture — `fichiers-saisie`, `gh-input`, `gh-btn` — et n'ajoute que la
+   mise en page de ses lignes. */
+.raisons-ecartes__lead{ margin:0 0 4px; color:var(--muted); font-size:13px; line-height:1.5; }
+.raisons-ecartes__lot{ display:flex; flex-direction:column; gap:8px; }
+.raisons-ecartes__ligne{
+  display:grid; grid-template-columns:minmax(0,1fr) minmax(0,15rem); gap:8px; align-items:center;
+}
+@media (max-width: 620px){ .raisons-ecartes__ligne{ grid-template-columns:1fr; } }
+.raisons-ecartes__quoi{ display:flex; flex-direction:column; gap:1px; min-width:0; font-size:13px; }
+.raisons-ecartes__sujet{ color:var(--muted); font-size:12px; }
+.raisons-ecartes__quoi b{ font-weight:600; text-decoration:line-through; text-decoration-thickness:1px; }
+.raisons-ecartes__quoi i{ color:var(--muted); font-style:normal; font-size:12px; }
 .memory-row__detail{ color:var(--muted); font-size:13px; }
 .memory-row__meta{ color:var(--muted); font-size:12px; }
 .memory-row__superseded{ font-style:italic; }
