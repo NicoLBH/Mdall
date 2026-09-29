@@ -366,12 +366,13 @@ registre, le contrat type, et la **liste des sous-traitants ultérieurs** — do
 le fournisseur de modèle. Le fait qu'**aucun contenu de conversation ne
 traverse** est déjà l'architecture ; il faut l'écrire.
 
-**L'hébergement.** Où sont les données, dans quelle région, et où passent les
-appels de modèle. À **vérifier et écrire**, pas à supposer.
+**L'hébergement.** Vérifié, et écrit : voir § 6 bis. Reste à écrire où passent
+les **appels de modèle** — ce n'est pas la même question, et la réponse n'est
+pas la même région.
 
-**Les durées de conservation.** Le journal des refus et le journal des accès
-sont utiles quelques mois et deviennent un passif ensuite. Une durée décidée, et
-**appliquée par une tâche**, pas par une intention (règle 12).
+**Les durées de conservation.** Décidées au § 6 ter. Le journal des refus et le
+journal des accès sont utiles quelques mois et deviennent un passif ensuite. Une
+durée décidée, et **appliquée par une tâche**, pas par une intention (règle 12).
 
 **L'effacement.** `delete-account` existe. Il faut décider ce qu'il advient des
 indicateurs : un agrégat portant sur assez de personnes n'est plus une donnée
@@ -380,7 +381,131 @@ une cohorte de deux personnes.
 
 **Les cent historiques de projet.** Ils contiennent des noms, des adresses, des
 avis de personnes réelles, et ils appartiennent à d'anciens clients. Au-delà du
-RGPD, il y a une **confidentialité contractuelle**. Voir `docs/nourrir-mdall.md`.
+RGPD, il y a une **confidentialité contractuelle**. Voir `docs/nourrir-mdall.md`
+et le § 6 ter, où la question de leur durée est tranchée.
+
+## 6 bis. La région : rester en Irlande
+
+### Ce qui est, vérifié et non supposé
+
+Le projet Supabase de Mdall est hébergé en **`eu-west-1`, Irlande**. Ce n'est
+pas une supposition : `db.<projet>.supabase.co` résout vers `2a05:d018:…`, que
+les plages publiées par AWS rattachent à `eu-west-1`.
+
+La donnée est donc **déjà dans l'Union européenne**. La question n'est pas
+« l'Europe ou non », elle est tranchée ; elle est « l'Irlande suffit-elle, ou
+Paris vaut-il une migration ? ».
+
+### Trois raisons de ne pas bouger
+
+**1. Le droit ne fait pas la différence.** L'Irlande est dans l'EEE : le RGPD
+s'y applique entièrement, et aucun mécanisme de transfert n'est requis. Paris
+n'apporte rien de plus sur ce terrain.
+
+**2. Paris n'achèterait pas la souveraineté, et c'est le point qu'on croit
+souvent.** Supabase tourne sur AWS. Un fournisseur soumis au CLOUD Act ne peut
+pas obtenir la qualification **SecNumCloud** de l'ANSSI — cela exclut AWS, Azure
+et Google Cloud en l'état. Une région parisienne *chez AWS* reste du cloud
+américain hébergé en France : elle gagne des millisecondes, pas de
+l'indépendance juridique.
+
+**3. Le changement est irréversible en place.** Supabase ne déplace pas un
+projet : il faut en créer un neuf dans la région visée, migrer la base, **les
+objets du casier**, les comptes d'authentification, redéployer les fonctions de
+bord, et changer l'URL et la clé publique partout. C'est un risque réel pour un
+gain nul — et il grossit à chaque gigaoctet d'archive versé.
+
+> **Décision : on reste en `eu-west-1`, et on l'écrit.** Ce qui manquait n'était
+> pas la bonne région, c'était de savoir laquelle on avait.
+
+### Le seul événement qui rouvrirait la question
+
+Un client qui **exige contractuellement** un hébergement souverain — une
+collectivité, un marché public, un ouvrage sensible. Et ce jour-là, la réponse
+ne serait pas « Paris » : ce serait **quitter AWS**, c'est-à-dire un Supabase
+auto-hébergé chez un fournisseur qualifié (OVHcloud, Outscale…). C'est une autre
+décision, d'un autre ordre de grandeur, et elle ne se prend que contre une
+exigence signée — jamais par précaution.
+
+### Ce qu'il faut dire, et ne pas taire
+
+Supabase est une société américaine. Même hébergée en Irlande, la donnée reste
+exposée au CLOUD Act **par le fournisseur**. C'est un risque accepté par la
+quasi-totalité du logiciel en ligne, et il faut savoir le dire à un client qui
+pose la question — plutôt que de laisser croire qu'« hébergé en Europe » règle
+tout.
+
+## 6 ter. La conservation : deux corpus, deux horloges
+
+> *« Pour moi, jusqu'à nouvel ordre. »*
+
+C'est tenable — à condition de ne pas traiter comme un seul objet deux choses
+qui n'ont ni la même valeur ni le même risque.
+
+### Ce qui se garde sans réserve : le fonds commun
+
+Les formes anonymes — *entrées → conclusions*, un domaine, aucune colonne qui
+puisse dire d'où elles viennent (`reasoning_forms`). **Il n'y a pas de donnée
+personnelle à conserver**, donc pas de durée à justifier. L'anonymat y est une
+propriété de la forme de la table, pas une promesse.
+
+Et c'est **ce corpus-là qui nourrit la prédiction**. « Jusqu'à nouvel ordre »
+s'y applique sans la moindre réserve.
+
+### Ce qui demande une raison : l'archive source
+
+Les messages et leurs pièces, avec des noms, des adresses et des propos. C'est
+là qu'est l'exposition — et elle ne vient pas de vos données : elle vient de
+**tiers qui n'ont jamais rien demandé à Mdall** (architectes, bureaux de
+contrôle, maîtres d'ouvrage).
+
+**Le plancher défendable : dix ans après le dernier message d'un chantier.** Ce
+n'est pas un chiffre choisi : c'est la durée de la **responsabilité décennale**
+(Code civil, art. 1792-4-1), pour laquelle un professionnel du bâtiment garde
+ses dossiers. Une durée qu'on peut nommer et rattacher à une obligation est une
+durée qui se défend.
+
+Au-delà, la finalité change : ce n'est plus « garder la preuve », c'est
+« constituer un corpus ». Or ce corpus-là, c'est le fonds commun qui le porte —
+et il ne contient plus rien de personnel.
+
+> **Décision : pas de suppression automatique, et pas de promesse d'éternité
+> non plus.** Ce qui rend « jusqu'à nouvel ordre » défendable n'est pas la
+> durée : c'est de pouvoir dire **pourquoi** on garde encore, et d'avoir
+> regardé récemment.
+
+### Les quatre choses à construire pour que ce soit vrai
+
+**1. Un journal des retraits.** Aujourd'hui l'archive n'a **aucune voie de
+suppression** — ni sur le casier, ni sur les tables. C'était un choix pour ne
+rien perdre par accident ; c'est aussi l'impossibilité d'honorer une demande
+d'effacement. Un retrait est un fait comme un autre : il s'écrit — l'empreinte,
+la date, un motif pris dans un domaine fermé — et ce qui a eu lieu reste dit
+(règle 6).
+
+**2. Une date de dernier réexamen, par corpus.** C'est elle qui transforme
+« indéfiniment » d'un passif en une décision datée. Sans elle, « jusqu'à nouvel
+ordre » se lit comme « on n'y a jamais repensé ».
+
+**3. Un écran « ce qui dort ».** Ce qui a dépassé sa date de réexamen, listé —
+**jamais supprimé tout seul**. On ne détruit pas une archive par une tâche
+planifiée ; on la met sous les yeux de quelqu'un.
+
+**4. Une fiche de registre (art. 30).** C'est le premier document que réclamera
+le délégué à la protection des données d'un client. L'écrire coûte une heure
+maintenant, et beaucoup plus le jour où on la demande.
+
+### Le point qu'un conseil doit trancher, et vite
+
+Garder les messages de tiers suppose une **base légale** : l'intérêt légitime
+(art. 6-1-f) avec sa mise en balance écrite, et l'obligation d'information de
+l'**art. 14** — celle qui vaut quand la donnée n'a pas été collectée auprès de
+la personne —, dont l'exception d'effort disproportionné (art. 14-5-b) est
+précisément ce qu'il faut faire confirmer.
+
+C'est le seul point de ce document qui ne se règle ni par l'architecture ni par
+une décision interne. Il est **peu coûteux à faire valider maintenant**, et très
+coûteux à découvrir après le premier client payant.
 
 ## 7. Ce que cette console ne sera jamais
 
