@@ -17,6 +17,7 @@
  */
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
+import { noterLeRefusDunAppel } from "./journal-des-refus-supabase.js";
 
 const URL_DE_LA_FONCTION = `${getSupabaseUrl()}/functions/v1/structure-du-document`;
 
@@ -54,10 +55,18 @@ export async function reconnaitreLaStructure({ pages = [] } = {}) {
       })
     });
   } catch {
+    // **Ce qui n'aboutit pas se compte, comme ce qui aboutit.** Le motif rendu
+    // ici s'affiche une seconde et meurt ; le journal garde le genre de la
+    // panne, jamais son texte (`services/journal-des-refus.js`).
+    noterLeRefusDunAppel({ url: URL_DE_LA_FONCTION, statut: 0, projectId: await projetCourant() });
     return { ok: false, panne: "la reconnaissance de structure n'a pas pu être demandée" };
   }
 
   if (!reponse.ok) {
+    noterLeRefusDunAppel({
+      url: URL_DE_LA_FONCTION, statut: reponse.status, projectId: await projetCourant()
+    });
+
     const refuse = await reponse.json().catch(() => null);
     const panne = refuse?.panne ?? null;
     const morceaux = [

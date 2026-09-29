@@ -221,7 +221,9 @@ Le décorticage existe et il est gratuit. Ce qui manque :
 
 1. **L'épisode et son vecteur de contexte** — la structure, sans modèle. C'est
    l'étape 3 du plan de prédiction, et c'est ce que les cent historiques
-   rempliront.
+   rempliront. *(fait — `services/vecteur-de-contexte.js`,
+   `services/episode-du-projet.js`. Ce qui manque pour **comparer** deux suites
+   est un nom commun aux sujets, et cette réflexion reste ouverte.)*
 2. **Le dépôt en masse des mails**, jusqu'à l'épisode — étages 0 à 3, tout
    gratuit.
 3. **La mesure** — prédire dans le passé sur les cent projets, contre la ligne

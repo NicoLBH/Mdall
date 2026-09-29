@@ -19,6 +19,7 @@
  */
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
+import { noterLeRefusDunAppel } from "./journal-des-refus-supabase.js";
 
 /**
  * Le projet où l'on se trouve, pour le compteur de consommation.
@@ -96,10 +97,18 @@ export async function relireLesAvis({ sourceId = "", pages = [] } = {}) {
       })
     });
   } catch {
+    // **Ce qui n'aboutit pas se compte, comme ce qui aboutit.** Le motif rendu
+    // ici s'affiche une seconde et meurt ; le journal garde le genre de la
+    // panne, jamais son texte (`services/journal-des-refus.js`).
+    noterLeRefusDunAppel({ url: URL_DE_LA_FONCTION, statut: 0, projectId: await projetCourant() });
     return { ok: false, motif: REFUS.INJOIGNABLE };
   }
 
   if (!reponse.ok) {
+    noterLeRefusDunAppel({
+      url: URL_DE_LA_FONCTION, statut: reponse.status, projectId: await projetCourant()
+    });
+
     return { ok: false, motif: reponse.status === 404 ? REFUS.INJOIGNABLE : REFUS.REFUSE };
   }
 

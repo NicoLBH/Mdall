@@ -25,7 +25,12 @@ import { bornesDuMois, moisEnCours, moisEnFrancais } from "../../services/consom
 const PANNEAU = "personal-settings-facturation";
 
 /** Ce qu'on a lu, et pour quel mois. Gardé entre deux venues sur l'onglet. */
-const lecture = { mois: "", appels: null, enCours: false, echec: false };
+const lecture = {
+  mois: "", appels: null, enCours: false, echec: false,
+  // Le journal des pannes du mois. Son échec se garde à part : une lecture
+  // ratée du compteur ne dit rien de celle du journal.
+  refus: null, refusEchec: false
+};
 
 export function getFacturationPersonalSettingsTab() {
   return {
@@ -62,7 +67,8 @@ function renderPanneau() {
           parProjets: true,
           nomDuProjet: nomDuProjet,
           titreDuTotal: `Ma consommation — ${moisEnFrancais(mois)}`,
-          detailDuTotal: "Vos appels uniquement, tous projets confondus."
+          detailDuTotal: "Vos appels uniquement, tous projets confondus.",
+          refus: lecture.refusEchec ? null : (lecture.refus ?? [])
         })}
       </div>
     </section>
@@ -96,15 +102,27 @@ function brancher(panneau) {
 
   (async () => {
     try {
-      const { maConsommation } = await import("../../services/consommation-ia-supabase.js");
+      const [{ maConsommation }, { mesRefus }] = await Promise.all([
+        import("../../services/consommation-ia-supabase.js"),
+        import("../../services/journal-des-refus-supabase.js")
+      ]);
 
       // L'identité vient du magasin, où la session l'a déjà posée : la
       // redemander à l'authentification ferait un aller-retour pour une valeur
       // qu'on a sous la main, et deux endroits où la lire (règle 10).
       const ownerId = String(store.user?.id ?? "").trim();
-      const lues = ownerId ? await maConsommation({ ...bornesDuMois(mois), ownerId }) : null;
+      // **Les deux lectures ensemble.** Ce qui a coûté et ce qui n'a pas abouti
+      // se lisent d'un même mouvement ; en série, on attendrait deux fois pour
+      // un seul écran. Et l'échec de l'une n'emporte pas l'autre : chacune dit
+      // « je ne sais pas » pour elle-même.
+      const [lues, pannes] = await Promise.all([
+        ownerId ? maConsommation({ ...bornesDuMois(mois), ownerId }) : null,
+        ownerId ? mesRefus({ ...bornesDuMois(mois), ownerId }) : null
+      ]);
 
       lecture.mois = mois;
+      lecture.refusEchec = pannes === null;
+      lecture.refus = pannes;
       // `null` de la base : on ne sait pas. Le dire, plutôt que d'afficher zéro
       // euro, qui ferait croire à une facture nulle (règle 5).
       lecture.echec = lues === null;
@@ -113,6 +131,8 @@ function brancher(panneau) {
       lecture.mois = mois;
       lecture.echec = true;
       lecture.appels = null;
+      lecture.refusEchec = true;
+      lecture.refus = null;
     } finally {
       lecture.enCours = false;
       redessiner(panneau);
@@ -152,6 +172,7 @@ function redessiner(panneau) {
     parProjets: true,
     nomDuProjet,
     titreDuTotal: `Ma consommation — ${moisEnFrancais(mois)}`,
-    detailDuTotal: "Vos appels uniquement, tous projets confondus."
+    detailDuTotal: "Vos appels uniquement, tous projets confondus.",
+    refus: lecture.refusEchec ? null : (lecture.refus ?? [])
   });
 }

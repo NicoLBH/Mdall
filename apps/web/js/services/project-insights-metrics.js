@@ -135,7 +135,15 @@ function isBlockingSubject(subjectId) {
   });
 }
 
-function getAllSubjects() {
+/**
+ * Les sujets du projet, d'où qu'ils viennent dans le magasin.
+ *
+ * Exporté parce qu'un second lecteur existe — l'épisode du projet, qui a besoin
+ * de la suite des ouvertures. Ce fichier sait que le magasin les range à trois
+ * endroits selon l'écran qu'on a ouvert ; une seconde lecture écrite ailleurs
+ * en trouverait zéro un jour sur deux (règle 10).
+ */
+export function getAllSubjects() {
   const subjectsById = getSubjectsByIdMap();
   return Object.values(subjectsById);
 }
