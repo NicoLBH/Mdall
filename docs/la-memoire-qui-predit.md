@@ -50,6 +50,10 @@ Ce verdict-là est **calculé**, pas rédigé — aucun modèle ne le produit.
 **Du contexte structuré, donc interrogeable.** On ne prompte pas deux cents
 pages : on demande « les projets dont le vecteur de contexte est à distance *d* ».
 
+Et l'on peut le remplir **sans brûler de modèle** : la séquence vit dans les
+dates, les intitulés et les rôles, pas dans les corps de texte
+(`docs/nourrir-mdall.md`).
+
 > **Un meilleur LLM prédit ce qui est écrit dans les livres. Mdall prédit ce qui
 > arrive sur les chantiers.**
 
@@ -232,9 +236,10 @@ qui manque**.
    mémoire porte déjà, et le domaine fermé des raisons. Rien d'autre n'a la même
    urgence, parce que rien d'autre n'est irrattrapable. *(fait —
    `docs/ce-quon-a-ecarte.md`)*
-2. **La demande par lot** — un écran qui montre les écartés constatés et n'en
-   demande que la raison, d'un clic, à celui qui vient de chercher
-   l'information. Une fois, jamais à chaque décision.
+2. **La demande par lot** — la raison manquante se demande sur la ligne qui
+   vient de dire « écarté en chemin » sans dire pourquoi, cinq d'un coup, et
+   d'un clic. Rien ne relance, et laisser vide est une réponse.
+   *(fait — `services/demande-par-lot.js`)*
 3. **L'épisode et son vecteur de contexte** — une structure, pas un moteur. Elle
    se remplit rétroactivement sur les projets existants.
 4. **La mesure** — « prédire dans le passé », avec la ligne de base. Avant tout

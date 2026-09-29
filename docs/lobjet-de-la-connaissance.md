@@ -2491,5 +2491,7 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | un sujet une ligne, et où l'on regarde dans la mémoire | `docs/un-sujet-une-ligne.md` |
 | la mémoire qui prédit : la logique, la mesure, et ce qu'on ne pourra pas rattraper | `docs/la-memoire-qui-predit.md` |
 | ce qu'on a écarté : constaté, pas demandé | `docs/ce-quon-a-ecarte.md` |
+| la console de l'administrateur : ce qu'il faut pour exploiter, et ce qu'il ne faut pas | `docs/la-console-de-ladministrateur.md` |
+| nourrir Mdall : les mails, les normes, et les cent historiques sans brûler de modèle | `docs/nourrir-mdall.md` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

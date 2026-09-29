@@ -200,6 +200,11 @@ export function citationDeLaDecision({ sujet = "", par = "", quand = "" } = {}) 
  * @param {string[]} [options.zones] la portée
  * @param {string} [options.atelier] d'où vient le geste
  * @param {string} [options.reference] de quoi retrouver l'origine
+ * @param {boolean} [options.poseLaValeur] `false` pour **compléter** une décision
+ *   sur une valeur qui est déjà en mémoire : la décision porte ce qui a été
+ *   retenu, et aucune seconde ligne ne repose la valeur. Reposer une valeur que
+ *   le projet tient déjà ferait un second versement du même nom — un doublon
+ *   dans le fichier, et une ligne de plus dans l'histoire pour rien.
  * @returns {object[]} une ou deux affirmations, vide si ce n'est pas une décision
  */
 export function decisionVersable({
@@ -214,7 +219,8 @@ export function decisionVersable({
   natureDeLaValeur = NATURE.DONNEE_BASE,
   zones = [],
   atelier = "",
-  reference = ""
+  reference = "",
+  poseLaValeur = true
 } = {}) {
   const nom = texte(sujet);
   const dite = decisionRetenue({ question, ecartes, motif });
@@ -249,7 +255,7 @@ export function decisionVersable({
 
   // La valeur, si la décision en pose une. Elle cite la décision, comme une
   // conclusion cite sa règle.
-  if (texte(retenu)) {
+  if (texte(retenu) && poseLaValeur) {
     lignes.push({
       sujet: nom,
       valeur: texte(retenu),

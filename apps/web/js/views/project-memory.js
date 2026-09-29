@@ -938,7 +938,7 @@ function renderSujet(sujet = null) {
   const autres = (sujet?.faces ?? []).filter(({ assertion }) => assertion !== tete);
 
   return renderAssertion(tete, {
-    autres, pourquoi: sujet?.pourquoi ?? [], ecarts: sujet?.ecarts ?? []
+    autres, pourquoi: sujet?.pourquoi ?? [], ecarts: sujet?.ecarts ?? [], cle: sujet?.cle ?? ""
   });
 }
 
@@ -986,7 +986,7 @@ function ceQueMdallAConstate(sujet = null, constates = new Map()) {
  * projet : c'est une lecture de la mémoire, refaite à chaque affichage. Le
  * présenter comme le reste ferait passer un calcul pour une décision (règle 1).
  */
-function renderCeQuonAEcarte(ecarts = []) {
+function renderCeQuonAEcarte(ecarts = [], cle = "") {
   if (!ecarts.length) return "";
 
   const montres = ecarts.slice(0, ECARTS_MONTRES);
@@ -997,6 +997,15 @@ function renderCeQuonAEcarte(ecarts = []) {
       <span class="memory-row__ecarts-quoi">
         ${svgIcon("skip", { className: "octicon" })}
         Écarté en chemin — constaté par Mdall, jamais versé
+        ${
+          // **La prise est ici, et nulle part ailleurs.** Sur la ligne qui vient
+          // de dire « écarté » sans dire pourquoi : c'est le seul moment où
+          // quelqu'un a envie de le savoir. Un écran d'attente qu'on ouvrirait
+          // exprès ne s'ouvre jamais.
+          ecarts.some((ecart) => !texteDe(ecart.pourquoi))
+            ? `· <button type="button" class="memory-row__ecart-dire"
+                 data-memory-raisons="${escapeHtml(cle)}">dire pourquoi</button>`
+            : ""}
       </span>
       ${montres.map((ecart) => `
         <span class="memory-row__ecart">
@@ -1027,7 +1036,7 @@ function renderPourquoiEnHaut(pourquoi = []) {
     pourquoi.map((une) => escapeHtml(MOT_DU_POURQUOI[une] ?? une)).join(" · ")}</span>`;
 }
 
-function renderAssertion(assertion, { autres = [], pourquoi = [], ecarts = [] } = {}) {
+function renderAssertion(assertion, { autres = [], pourquoi = [], ecarts = [], cle = "" } = {}) {
   const remplacee = Boolean(assertion.superseded_by);
   const ecartee = assertion.status === MEMORY.REJECTED;
   const effet = assertion?.variante?.effet;
@@ -1054,7 +1063,7 @@ function renderAssertion(assertion, { autres = [], pourquoi = [], ecarts = [] } 
           ${renderPourquoiEnHaut(pourquoi)}
         </div>
         ${renderLesAutresFaces(autres)}
-        ${renderCeQuonAEcarte(ecarts)}
+        ${renderCeQuonAEcarte(ecarts, cle)}
         ${renderMarqueDeVariante(assertion)}
         ${renderHypothesisState(assertion)}
         ${renderCeQuiCouvre(assertion)}
@@ -3050,6 +3059,104 @@ async function verserLaForme(root, { assertionId = "", signatureId = "" } = {}) 
   renderContent(root);
 }
 
+/**
+ * Dire pourquoi ces possibles ont été écartés — **par lot, et en clics**.
+ *
+ * ## Ce que ce geste produit
+ *
+ * Une **proposition**, jamais une écriture. Une raison donnée complète une
+ * décision, et une décision se verse comme tout le reste : relue, signée,
+ * refusable (règle 1). C'est aussi la revue qui filtre — quelqu'un qui n'était
+ * pas là et qui invente une raison se fait refuser, et ce refus devient à son
+ * tour un écart constaté, signé et motivé.
+ *
+ * ## Pourquoi la fenêtre part du sujet cliqué
+ *
+ * Elle s'ouvre avec la ligne d'où l'on vient en tête, puis les autres sujets du
+ * projet dont la raison manque. C'est le lot : une question posée quinze fois
+ * dans la journée est un harcèlement, cinq d'un coup sont une tâche.
+ *
+ * ## Rien n'insiste
+ *
+ * On n'arrive ici que par un clic. Une case laissée sur « on ne sait pas » ne
+ * verse rien et ne relance personne : l'écarté reste constaté, sans motif, ce
+ * qui est exactement ce qui est vrai.
+ */
+async function direLesRaisons(root, { depuis = "" } = {}) {
+  if (view.busy) return;
+
+  const [
+    { lotDesRaisonsManquantes, decisionsDesRaisonsDonnees, titreDuLot, INTRO_DU_LOT },
+    { demanderLesRaisons },
+    { nomDeQuiParle }
+  ] = await Promise.all([
+    import("../services/demande-par-lot.js"),
+    import("./ui/raisons-des-ecartes.js"),
+    import("../services/nom-de-qui-parle.js")
+  ]);
+
+  const lot = lotDesRaisonsManquantes(view.assertions ?? [], { depuis });
+  if (!lot.length) {
+    // La mémoire a pu bouger depuis que la ligne a été dessinée. Le dire plutôt
+    // que n'ouvrir aucune fenêtre : un clic sans effet se relit comme une panne.
+    view.notice = "Plus rien n'attend sa raison : la mémoire a changé depuis que cette ligne "
+      + "a été dessinée.";
+    renderContent(root);
+    return;
+  }
+
+  const reponses = await demanderLesRaisons(lot);
+  // Renoncer à la fenêtre, c'est renoncer : on n'a encore rien fait.
+  if (!reponses) return;
+
+  const affirmations = decisionsDesRaisonsDonnees(lot, reponses, {
+    par: nomDeQuiParle(store?.user),
+    quand: new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }),
+    atelier: "Mémoire — les raisons des écartés"
+  });
+
+  if (!affirmations.length) {
+    // **Tout laisser vide est une réponse.** Le dire plutôt que se taire : sans
+    // cela, on croirait que le geste a échoué, et on le referait.
+    view.notice = "Rien n'a été proposé : aucune raison n'a été donnée, et les écartés "
+      + "restent constatés sans motif.";
+    renderContent(root);
+    return;
+  }
+
+  view.busy = true;
+  view.notice = "";
+  renderContent(root);
+
+  try {
+    const { preparerUneProposition } = await import("../services/atelier-proposition.js");
+    const rendu = await preparerUneProposition({
+      projectId: view.projectId,
+      titre: titreDuLot(affirmations),
+      intro: INTRO_DU_LOT,
+      affirmations,
+      zones: []
+    });
+
+    view.busy = false;
+
+    if (!rendu.ok) {
+      view.notice = `Les raisons n'ont pas pu être proposées : ${rendu.raison}`;
+      renderContent(root);
+      return;
+    }
+
+    // On va où la signature se donne. La laisser derrière soi sans rien dire
+    // ferait oublier la moitié du geste.
+    window.location.hash = `#project/${view.projectId}/propositions`;
+  } catch (erreur) {
+    console.warn("direLesRaisons failed", erreur);
+    view.busy = false;
+    view.notice = "Les raisons n'ont pas pu être proposées. La mémoire reste ce qu'elle était.";
+    renderContent(root);
+  }
+}
+
 async function repondreAuPortage(root, { lienId = "", confirmer = false } = {}) {
   const id = String(lienId ?? "").trim();
   if (!id || view.busy) return;
@@ -3811,6 +3918,14 @@ function bind(root) {
 
   // **La puce de la zone mène à sa zone.** Elle disait où l'affirmation
   // s'applique et n'ouvrait sur rien.
+  // « Dire pourquoi » : la seule prise vers la demande par lot, et elle est sur
+  // la ligne qui vient de dire « écarté en chemin » sans dire pourquoi.
+  for (const bouton of root.querySelectorAll("[data-memory-raisons]")) {
+    bouton.addEventListener("click", () => direLesRaisons(root, {
+      depuis: bouton.getAttribute("data-memory-raisons")
+    }));
+  }
+
   for (const bouton of root.querySelectorAll("[data-memory-zone]")) {
     bouton.addEventListener("click", () => {
       view.query = withFilter(view.query, lesChamps(), "zone", bouton.dataset.memoryZone);
