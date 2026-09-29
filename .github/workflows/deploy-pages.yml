@@ -38,10 +38,19 @@ jobs:
       - name: Build web assets
         run: npm run build:web
 
+      # La console d'administration est un autre site : elle emporte depuis
+      # apps/web ce dont elle a besoin, et se sert à part (apps/console).
+      - name: Build console
+        run: npm run build:console
+
       - name: Prepare site
         run: |
           mkdir -p dist
           cp -R apps/web/. dist/
+          # Servie sous « console/ », à côté de l'application et jamais dedans :
+          # ce qui n'est pas dans la page des utilisateurs ne s'y lit pas.
+          mkdir -p dist/console
+          cp -R apps/console/. dist/console/
           # De quoi savoir, depuis l'écran, quelle version est servie. Sans ce
           # repère, un défaut corrigé et un défaut persistant se ressemblent :
           # on refait le test sur l'ancienne page sans le savoir.

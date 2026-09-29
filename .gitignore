@@ -2,3 +2,7 @@ node_modules/
 
 # Dépendances copiées au build (npm run build:web), jamais versionnées.
 apps/web/vendor/
+
+# Ce que la console emporte depuis apps/web au build (npm run build:console).
+# Versionné, il serait la copie qui reste vraie un temps, puis diverge.
+apps/console/partage/

@@ -46,7 +46,9 @@ export const TROU = {
   FIL_EN_PLUSIEURS_MORCEAUX: "fil-en-plusieurs-morceaux",
   FIL_A_PLUSIEURS_OBJETS: "fil-a-plusieurs-objets",
   MESSAGE_RECONSTITUE: "message-reconstitue",
-  MESSAGE_SANS_PLACE: "message-sans-place"
+  MESSAGE_SANS_PLACE: "message-sans-place",
+  PAS_UN_MSG: "pas-un-msg",
+  CHEMINEMENT_RECONSTITUE: "cheminement-reconstitue"
 };
 
 /** Un trou : ce qui manque, où, et ce qui était écrit à cet endroit. */
@@ -78,7 +80,9 @@ const PHRASES = {
   [TROU.FIL_EN_PLUSIEURS_MORCEAUX]: "ce fil vient en plusieurs morceaux : les dates les ont rapprochés, la chaîne de réponses ne les relie pas",
   [TROU.FIL_A_PLUSIEURS_OBJETS]: "ces messages n'ont pas tous le même objet : ce n'est peut-être pas un seul fil",
   [TROU.MESSAGE_RECONSTITUE]: "ce message n'a pas été déposé : il a été reconstitué à partir d'une citation, avec la date que la messagerie affichait et sans ses destinataires",
-  [TROU.MESSAGE_SANS_PLACE]: "ce message n'a pas de date et rien ne le relie aux autres : sa place dans le fil est celle du dépôt"
+  [TROU.MESSAGE_SANS_PLACE]: "ce message n'a pas de date et rien ne le relie aux autres : sa place dans le fil est celle du dépôt",
+  [TROU.PAS_UN_MSG]: "ce fichier n'a pas l'allure d'un message Outlook",
+  [TROU.CHEMINEMENT_RECONSTITUE]: "ce message Outlook ne porte pas ses en-têtes de cheminement : qui, quand et à qui ont été repris de ses propriétés"
 };
 
 /**

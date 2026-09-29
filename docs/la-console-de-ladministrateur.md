@@ -27,8 +27,13 @@ comme tel ; tout le reste est à faire.
 
 | le journal des pannes — fonction, genre, code, instant, **jamais le message** | table `refus_des_fonctions`, `services/journal-des-refus.js` | ce qui n'a pas abouti |
 
+| la porte de la console — une adresse, et rien d'autre | table `administrateurs`, `services/la-porte-de-la-console.js` | « suis-je administrateur ? », et jamais « qui l'est ? » |
+| le site de la console, construit à part | `apps/console`, `scripts/prepare-console.mjs`, `npm run build:console` | un autre bâtiment, servi sous `console/` |
+| son premier écran : **le versoir** | `apps/console/js/le-versoir.js`, `services/linventaire-du-versoir.js` | on dépose des `.msg`, on voit ce qu'ils portent, rien ne part |
+
 **Ce qui n'existe pas du tout :** aucune table `organisations`, `comptes`,
-`plans` ni `abonnements`. Aucun rôle administrateur.
+`plans` ni `abonnements`. **Aucun rôle** : il y a une porte, pas un rôle — voir
+plus bas pourquoi la nuance décide.
 
 > **Le journal des pannes existe depuis peu**, et c'est le premier des quatre
 > indispensables de la section 5. Il est écrit **par le navigateur**, ce qui est
@@ -68,6 +73,59 @@ afficheur : même si son paquet fuitait, il ne révélerait que des noms de
 colonnes. Le jugement — qui a le droit, sur quoi, jusqu'où — vit **entièrement**
 côté serveur.
 
+### Ce qui est construit à ce jour, et comment on y entre
+
+**Le site.** `apps/console` : son propre `index.html`, son propre point d'entrée,
+son propre build (`npm run build:console`). Il **emporte** depuis `apps/web` la
+feuille de style et les quelques services dont il se sert — dix modules,
+listés dans `partage/ce-qui-est-emporte.txt` à chaque build. Il ne les recopie
+pas : une copie reste vraie un temps, puis diverge (règle 4). Rien de la console
+n'est servi dans la page des utilisateurs, et rien de l'orchestration du
+copilote n'entre dans la console — une épreuve le vérifie sur le parcours réel
+des imports (`scripts/prepare-console.test.mjs`).
+
+**L'adresse.** Le déploiement copie `apps/console` dans `console/`, à côté de
+l'application. Donc : `…/console/`.
+
+**L'entrée.** Depuis l'icône d'avatar, en haut à droite, **après « Réglages »** —
+et seulement pour qui ouvre la porte. Elle n'est pas dessinée pour les autres :
+non pas masquée, **absente du HTML**. C'est ce qui évite d'apprendre à tout le
+monde qu'une console existe.
+
+### La porte, et ce qu'elle n'est pas
+
+Cette page prévoyait « une table que le navigateur ne lit jamais ». Ce qui est
+construit est **un cran différent, et il faut le dire** : le navigateur lit la
+table `administrateurs`, mais sa politique de lecture ne rend **que la ligne de
+celui qui demande**. La question posable est « suis-je administrateur ? » ; la
+question « qui sont-ils ? » n'a pas de réponse, pour personne — pas même pour un
+administrateur.
+
+Pourquoi ce choix plutôt qu'une fonction de bord : parce qu'une fonction de bord
+qui répondrait « oui/non » aurait exactement la même surface de fuite (elle dit
+oui à qui est dedans), en ajoutant un déploiement, un secret et un point de
+panne. Ce qui protège ici, ce n'est pas l'endroit du jugement, c'est la **forme
+de la table** : elle n'a pas de colonne par laquelle un annuaire pourrait sortir,
+et sa politique n'a pas de clause qui rendrait la ligne d'un autre.
+
+Deux points que cela ne règle pas, et qui restent au § 5 :
+
+- **la porte ne garde rien.** Être servi n'est pas être autorisé. Ce qui protège
+  les données, ce sont les politiques des tables de projet — la console ne
+  connaît aucune d'elles, et n'en atteint aucune. Un test JavaScript
+  « d'autorisation » se contourne en ouvrant les outils de développement ; on ne
+  s'y fie donc pas, et la vérification ne sert qu'à **dire pourquoi l'écran est
+  vide** ;
+- **aucune écriture depuis l'application.** La table n'a ni politique
+  d'insertion, ni de modification, ni de suppression : la porte s'ouvre dans la
+  console Supabase, par quelqu'un qui tient déjà les clés. Une table de droits
+  que son titulaire peut étendre ne protège rien.
+
+Et deux choses prévues ici qui **ne sont pas faites** : la **deuxième preuve
+récente** (`aal2`) et le **journal des accès administrateurs**. La seconde est
+irrattrapable — elle reste au § 5, et elle doit précéder le premier vrai écran
+d'exploitation, pas le versoir qui ne lit rien.
+
 ### `admin@mdall` : non, et pour trois raisons
 
 **Un compte partagé n'a pas d'auteur.** Toute la doctrine de Mdall tient dans
@@ -87,9 +145,10 @@ document qu'un client, ou son délégué à la protection des données, demander
 ### Ce qu'on fait à la place
 
 1. **Les mêmes comptes que tout le monde.** Une personne, une identité, un nom.
-2. **Une liste d'administrateurs côté serveur uniquement** — une table que le
-   navigateur ne lit jamais. Être dedans est une **vérification faite par la
-   fonction de bord**, jamais un drapeau dans une session.
+2. **Une table d'administrateurs qui ne rend que sa propre ligne** — donc
+   aucune liste, pour personne. Être dedans n'est jamais un drapeau dans une
+   session : c'est une question reposée à la base, dont la réponse par défaut
+   est « non » (une lecture qui échoue **ferme** la porte).
 3. **Une deuxième preuve, récente.** Un geste d'administration exige un second
    facteur (Supabase sait le faire : `aal2` dans le jeton). Lire des
    indicateurs sur cent projets n'est pas un geste ordinaire.
@@ -220,6 +279,11 @@ semaine, ni quand.
 **3. Le journal des accès administrateurs.** Avant le premier accès
 administrateur, pas après. Un journal qui commence en mars ne dit rien de
 février, et c'est en février qu'on aura regardé.
+
+La console existe désormais, et son premier écran — le versoir — **ne lit rien**
+de la base : il ouvre des fichiers déposés sur le poste. Cela ne rend pas ce
+journal moins urgent, cela dit seulement dans quel ordre : le journal doit
+**précéder le premier écran qui lit un compte**, et non l'ouverture du site.
 
 **4. Un identifiant de compte distinct de l'identifiant de personne.** Aujourd'hui
 un projet a des collaborateurs, et rien ne dit **qui paie**. L'ajouter plus tard

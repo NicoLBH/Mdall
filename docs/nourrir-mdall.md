@@ -89,8 +89,8 @@ boîte de messagerie, la citation représente couramment les deux tiers du texte
 le même paragraphe y est présent quinze fois. `empreinteDuTexte` et
 `lesMessagesCites` existent. Gratuit, et c'est le plus gros gain.
 
-**Étage 1 — déplier.** `.eml`, tableurs, PDF **nés numériques** (le texte y est
-déjà, il n'y a rien à reconnaître). Gratuit.
+**Étage 1 — déplier.** `.eml`, **`.msg`**, tableurs, PDF **nés numériques** (le
+texte y est déjà, il n'y a rien à reconnaître). Gratuit.
 
 **Étage 2 — trier.** Un classement par règles : l'expéditeur, l'objet, la
 présence d'une référence normative, d'une cote, d'une date d'échéance. Il jette
@@ -202,12 +202,118 @@ anonymisées. À regarder **avant** d'ingérer, projet par projet.
 Et la règle absolue vaut ici comme partout : **les conversations avec le
 copilote ne traversent jamais**, dans aucun sens, sous aucun prétexte.
 
+## 6 bis. Les `.msg`, et les pièces qu'on garde
+
+### Le format, et ce qu'il ne coûte pas
+
+Les archives d'un cabinet français ne sont pas en `.eml` : elles sont en `.msg`,
+parce que tout le monde travaille sous Outlook. Un lecteur qui ne sait pas ouvrir
+un `.msg` ne sait pas ouvrir les archives.
+
+Un `.msg` n'est pas une image de page : c'est un **conteneur composé**, le format
+que Windows emploie depuis trente ans pour ranger plusieurs flux nommés dans un
+seul fichier. L'ouvrir est du décorticage — de la lecture d'octets, pas de la
+compréhension. **Aucun appel, aucune dépense.** C'est l'étage 1, et il est
+gratuit comme le reste de l'étage 1.
+
+### La bonne surprise : on ne redécouvre rien
+
+Un message reçu par SMTP porte ses **en-têtes de cheminement** dans une propriété
+(`PR_TRANSPORT_MESSAGE_HEADERS`) : `Date`, `From`, `To`, `Cc`, `Message-ID`,
+`References`, `In-Reply-To` — tout ce dont un fil a besoin, dans la forme exacte
+d'un `.eml`. Sur le message réel qui a servi de référence, seize mille caractères
+d'en-têtes.
+
+On les donne donc à `unMailDeplie`, qui sait déjà les lire, les dater et en tirer
+une chaîne de réponses. Une seconde lecture des dates écrite à côté finirait par
+ne plus dire la même chose que celle du `.eml` (règle 10).
+
+Ce qu'on remplace, et rien d'autre : les en-têtes qui décrivent le **corps**
+(`Content-Type`, `Content-Transfer-Encoding`) annoncent un assemblage MIME qui
+n'existe plus dans le fichier — Outlook l'a démonté, le texte est dans une
+propriété et les pièces dans des sous-dossiers. Les garder ferait chercher des
+frontières introuvables.
+
+Et quand ces en-têtes manquent — un brouillon, un message interne qui n'a jamais
+transité —, on les reconstitue depuis les propriétés, **sans inventer de date**,
+et **on le dit** : un message reconstitué ne se relit pas comme un message reçu
+(règle 5).
+
+> `services/un-msg-deplie.js`. Une épreuve grave un `.msg` synthétique, avec des
+> noms inventés : aucun message réel n'entre dans le dépôt, et celui qui a servi
+> de référence a été relu à la main, hors du dépôt.
+
+### Les pièces jointes se gardent entières — changement de décision
+
+Ce document proposait de ne retenir que les noms. **C'était une erreur, et elle
+est corrigée :**
+
+> *« Je veux que l'on extraie et que l'on conserve les PDF joints. Quand nous
+> saurons comment en exploiter la valeur, nous n'aurons pas besoin de recommencer
+> la distribution de carburant. »*
+
+C'est exact, et c'est le même raisonnement que celui qui gouverne toute cette
+page : **la partie irrattrapable se prend maintenant**. Une archive qu'on n'a pas
+ouverte aujourd'hui, on ne l'aura plus dans trois ans ; refaire tourner cent
+boîtes de messagerie dans deux ans coûtera beaucoup plus cher que de garder des
+octets qu'on tient déjà.
+
+Le lecteur garde donc **tous les octets** de chaque pièce, sans rien trier.
+
+### Ce qui distingue un plan d'un logo de signature
+
+Une précaution, et elle n'est pas du tri : un `.msg` ne fait aucune différence
+entre « le plan du R+1 » et « l'image du logo dans la signature ». Sur le message
+réel de référence, **les huit pièces jointes étaient des images de signature** —
+deux mégaoctets et demi pour rien — et les plans dont parlait le corps n'étaient
+pas dans le fichier du tout (ils voyageaient par un lien de transfert).
+
+Ce qui les sépare est **structurel** : une image collée dans le texte porte un
+identifiant de contenu (`PR_ATTACH_CONTENT_ID`), par lequel le corps HTML la
+rappelle ; un document n'en a pas. Ce n'est donc pas une devinette sur le nom ou
+la taille : un « plan.png » reste un document, une vignette de deux mégaoctets
+reste une vignette.
+
+L'inventaire compte les deux séparément et **dit le poids de chacun** : taire les
+vignettes ferait croire à des archives trois fois plus lourdes qu'elles ne sont.
+*(`services/linventaire-du-versoir.js`.)*
+
+### Le versoir
+
+Le premier écran de la console d'administration
+(`docs/la-console-de-ladministrateur.md`) : **on dépose des `.msg`, on voit ce
+qu'ils portent**. Combien de messages se lisent, combien résistent, combien de
+pièces sont de vrais documents, quelle période l'archive couvre.
+
+Rien ne quitte le poste : les fichiers sont lus par le navigateur, dépliés,
+comptés, et oubliés à la fermeture de l'onglet. **Aucun dépôt, aucun appel,
+aucune dépense.**
+
+Ce n'est pas une précaution de prudence, c'est l'ordre des opérations : on
+regarde cent archives avant de décider ce qu'on en verse, et ce qui se versera un
+jour se versera par une proposition signée, comme tout le reste (règle 1).
+
+C'est aussi ce qui dissout la difficulté soulevée plus haut : ce traitement vit
+**à côté de l'interface des utilisateurs**, dans un autre site, et il ne nourrit
+pas la mémoire d'un chantier — il prépare le fonds commun.
+
+### Ce qui reste, dans l'ordre
+
+1. **Les `.zip` et les dossiers Windows** : cent projets ne se glissent pas
+   fichier par fichier. Le navigateur sait décompresser sans aucune dépendance
+   (`DecompressionStream`), et sait lire un dossier déposé.
+2. **Écrire les pièces quelque part** : aujourd'hui l'inventaire les compte et
+   les oublie. Les garder demande de décider **où** — et c'est la question du
+   déposant, au § 9.
+3. **Le tri par règles**, sur ce que l'inventaire aura montré.
+
 ## 7. Le glissé-déposé des mails : ce qui reste à faire
 
 Le décorticage existe et il est gratuit. Ce qui manque :
 
 1. **Déposer un dossier entier**, pas un fil à la fois : cent projets ne se
-   glissent pas message par message.
+   glissent pas message par message. *(Le versoir de la console prend déjà
+   plusieurs `.msg` d'un coup ; les `.zip` et les dossiers restent à faire.)*
 2. **Rattacher un fil à un projet et à un sujet** — par les participants, les
    dates, l'objet. Des règles d'abord ; le modèle seulement sur ce qui reste
    ambigu, et il **propose**, il ne range pas.
@@ -225,7 +331,9 @@ Le décorticage existe et il est gratuit. Ce qui manque :
    `services/episode-du-projet.js`. Ce qui manque pour **comparer** deux suites
    est un nom commun aux sujets, et cette réflexion reste ouverte.)*
 2. **Le dépôt en masse des mails**, jusqu'à l'épisode — étages 0 à 3, tout
-   gratuit.
+   gratuit. *(Commencé : le lecteur de `.msg` et le versoir de la console
+   ouvrent l'étage 1 et donnent l'inventaire. Restent les `.zip`, les dossiers,
+   et l'endroit où les pièces se gardent.)*
 3. **La mesure** — prédire dans le passé sur les cent projets, contre la ligne
    de base. Avant tout prédicteur.
 4. **Le tri par règles**, affiné avec ce que la mesure aura montré d'utile.
@@ -236,7 +344,9 @@ Le décorticage existe et il est gratuit. Ce qui manque :
 ## 9. À enrichir
 
 - Le déposant : navigateur ou fonction de bord ? (cent mille pièces ne passent
-  pas par un onglet.)
+  pas par un onglet.) Le versoir tranche pour l'**inventaire** — le navigateur,
+  parce qu'il ne coûte rien et que rien ne part. La question reste entière pour
+  la **conservation** des pièces, qui demande un endroit où les écrire.
 - Le format d'un épisode, et jusqu'où il remonte dans le passé d'un projet.
 - Ce qu'on fait des plans : un indice de révision est une séquence, et c'est
   peut-être le signal le moins cher et le plus riche de tous.
