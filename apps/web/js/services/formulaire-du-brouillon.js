@@ -343,6 +343,65 @@ export function champsDuBrouillon(fichiers = [], { memoire = null, zone = "" } =
  * Une valeur du fichier qui gagnerait sur la réponse ferait un formulaire
  * décoratif.
  */
+/**
+ * Dans quel état se trouve un champ : vide, repris du projet, ou répondu.
+ *
+ * ## Pourquoi trois, et pas deux
+ *
+ * Le sélecteur de zone **éclairait** les champs sans les remplir : on lisait
+ * « du projet : alu » sous un champ vide, et l'on ne pouvait pas partir de
+ * cette valeur pour la corriger d'un caractère — il fallait la retaper. Poser
+ * la valeur dans le champ sans rien dire aurait fait l'inverse : elle serait
+ * devenue indiscernable d'une réponse, et l'écran n'aurait plus dit d'où elle
+ * vient (règle 5).
+ *
+ * Il y a donc **trois** états, et le troisième est le plus utile : la valeur est
+ * là, on peut l'éditer, et l'écran dit qu'elle n'est pas de nous.
+ *
+ * ## Ce qui n'en dépend pas
+ *
+ * **Rien de ce que l'essai calcule.** Un champ repris du projet reste une
+ * valeur du projet : elle n'entre pas dans les réponses, et `valeursDuLancement`
+ * la reprend de la mémoire comme avant. Voir le champ rempli ne vaut pas
+ * l'avoir tapé — sans quoi le sélecteur de zone changerait de zone sans changer
+ * de valeurs.
+ *
+ * @returns {{etat: string, valeur: string, duProjet: string, differe: boolean}}
+ */
+export const ETAT_DU_CHAMP = {
+  /** Personne n'a répondu, et le projet ne dit rien : le champ est nu. */
+  VIDE: "vide",
+  /** Le projet tient une valeur, et personne ne l'a corrigée. */
+  DU_PROJET: "du-projet",
+  /** Quelqu'un a répondu : c'est sa réponse qui vaut. */
+  REPONDU: "repondu"
+};
+
+export function etatDuChamp(champ = null, reponse = "") {
+  const dite = texte(reponse);
+  const duProjet = texte(champ?.duProjet);
+
+  if (dite) {
+    return {
+      etat: ETAT_DU_CHAMP.REPONDU,
+      valeur: dite,
+      duProjet,
+      /**
+       * **A-t-on dit autre chose que le projet ?**
+       *
+       * C'est ce qui décide du retour : proposer « revenir au projet » quand on
+       * a tapé exactement ce qu'il dit serait offrir de défaire quelque chose
+       * qui n'a pas été fait.
+       */
+      differe: Boolean(duProjet) && dite !== duProjet
+    };
+  }
+
+  return duProjet
+    ? { etat: ETAT_DU_CHAMP.DU_PROJET, valeur: duProjet, duProjet, differe: false }
+    : { etat: ETAT_DU_CHAMP.VIDE, valeur: "", duProjet: "", differe: false };
+}
+
 export function valeursDuLancement(fichiers = [], reponses = null, { memoire = null, zone = "" } = {}) {
   /**
    * **Trois sources, et l'ordre compte.**

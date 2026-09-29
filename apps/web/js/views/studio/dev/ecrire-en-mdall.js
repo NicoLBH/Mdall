@@ -64,7 +64,9 @@ import {
   brouillonNeuf, fichierOuvert, avecLeFichier, avecLeDit, ouvertSur, brouillonEcrit, langageDuFichier,
   fichiersRemplis, brouillonRange, brouillonRelu
 } from "../../../services/brouillon-mdall.js";
-import { champsDuBrouillon, SAISIE } from "../../../services/formulaire-du-brouillon.js";
+import {
+  champsDuBrouillon, SAISIE, ETAT_DU_CHAMP, etatDuChamp
+} from "../../../services/formulaire-du-brouillon.js";
 import { zoneChoices, normalizeZoneKey } from "../../../services/project-zones.js";
 import {
   lancerLeBrouillon, phraseDuLancement, ISSUE, MOTS_DE_LISSUE
@@ -321,61 +323,111 @@ export function renderFormulaire(champs = [], reponses = {}) {
 
   return `
     <div class="bac-formulaire">
-      ${champs.map((champ) => {
-        const donnee = String(reponses?.[champ.nom] ?? "");
-        const marque = `data-bac-champ="${escapeHtml(champ.nom)}"`;
-        const aide = champ.aide ? ` title="${escapeHtml(champ.aide)}"` : "";
-
-        const saisie = champ.saisie === SAISIE.LISTE
-          ? `<select class="gh-input bac-formulaire__saisie" ${marque}>
-               <option value=""${donnee ? "" : " selected"}>—</option>
-               ${champ.choix.map((choix) => `
-                 <option value="${escapeHtml(choix)}"${donnee === choix ? " selected" : ""}>${escapeHtml(choix)}</option>
-               `).join("")}
-             </select>`
-          : champ.saisie === SAISIE.LOGIQUE
-            ? `<span class="bac-formulaire__logique">
-                 ${["oui", "non"].map((mot) => {
-                   const marques = marquesDuChoixLogique(donnee === mot);
-                   return `
-                   <button type="button" class="gh-btn gh-btn--sm ${marques.classe}"
-                     ${marque} data-bac-valeur="${mot}" aria-pressed="${marques.presse}">${mot}</button>
-                 `;
-                 }).join("")}
-               </span>`
-            : `<input type="text" class="gh-input bac-formulaire__saisie" ${marque}
-                 value="${escapeHtml(donnee)}" placeholder="${escapeHtml(champ.saisie === SAISIE.MESURE ? "un nombre" : "")}">`;
-
-        return `
-          <label class="bac-formulaire__champ"${aide}>
-            <span class="bac-formulaire__nom">
-              ${escapeHtml(champ.nom)}
-              ${
-                // Un nom qu'aucune ligne ne déclare se remplit quand même — le
-                // refuser rendrait la règle indécidable pour toujours —, mais
-                // l'écran dit que ce qu'on tape là ne tient sur rien.
-                champ.declare ? "" : `<span class="bac-formulaire__nu">non déclaré</span>`
-              }
-            </span>
-            <span class="bac-formulaire__entree">
-              ${saisie}
-              ${champ.unite ? `<span class="bac-formulaire__unite">${escapeHtml(champ.unite)}</span>` : ""}
-            </span>
-            ${/*
-              **Ce que le projet tient déjà, et qui servira si l'on ne tape
-              rien.** Le taire ferait répondre l'essai sur une valeur venue de
-              nulle part : on la montre, avec d'où elle vient (règle 5). Dès
-              qu'on a tapé, c'est la réponse tapée qui vaut, et le rappel n'a
-              plus rien à dire.
-            */""}
-            ${champ.duProjet && !donnee
-              ? `<span class="bac-formulaire__projet">du projet : ${escapeHtml(champ.duProjet)}</span>`
-              : ""}
-          </label>
-        `;
-      }).join("")}
+      ${champs.map((champ) => renderUnChamp(champ, reponses)).join("")}
     </div>
   `;
+}
+
+/** Le geste : reprendre ce que le projet tient, après l'avoir corrigé. */
+export const GESTE_DU_RETOUR = "bac-revenir-au-projet";
+
+/**
+ * Un champ du bac, dans l'un de ses **trois** états.
+ *
+ * ## Pourquoi il est seul à savoir dessiner un champ
+ *
+ * Revenir au projet repose ce champ-là, et lui seul : redessiner le bac entier
+ * ferait partir le curseur du champ d'à côté. Un second dessin écrit pour le
+ * retour aurait fini par ne plus ressembler au premier (règle 4) — celui qu'on
+ * ne regarde pas est toujours celui qui a raison le jour où l'on cherche.
+ *
+ * ## Les trois états, et ce que chacun montre
+ *
+ * - **vide** : le champ est nu, et il n'y a rien à dire ;
+ * - **du projet** : la valeur est **dans** le champ, prête à être corrigée, et
+ *   marquée — voir la valeur ne vaut pas l'avoir tapée ;
+ * - **répondu** : c'est la réponse qui vaut, et le rappel dit ce que le projet
+ *   disait, avec de quoi y revenir.
+ */
+export function renderUnChamp(champ = null, reponses = {}) {
+  if (!champ?.nom) return "";
+
+  const lu = etatDuChamp(champ, reponses?.[champ.nom]);
+  const marque = `data-bac-champ="${escapeHtml(champ.nom)}"`;
+  const aide = champ.aide ? ` title="${escapeHtml(champ.aide)}"` : "";
+
+  /**
+   * **La marque du troisième état est sur la saisie elle-même.**
+   *
+   * Une note à côté se lit après coup ; ce qu'on regarde en tapant, c'est le
+   * champ. Un champ qu'on croit avoir rempli est un champ qu'on ne relit pas.
+   */
+  const repris = lu.etat === ETAT_DU_CHAMP.DU_PROJET ? " est-du-projet" : "";
+  const dite = ceQueLeProjetDit(champ, lu);
+
+  const saisie = champ.saisie === SAISIE.LISTE
+    ? `<select class="gh-input bac-formulaire__saisie${repris}" ${marque}>
+         <option value=""${lu.valeur ? "" : " selected"}>—</option>
+         ${champ.choix.map((choix) => `
+           <option value="${escapeHtml(choix)}"${lu.valeur === choix ? " selected" : ""}>${escapeHtml(choix)}</option>
+         `).join("")}
+       </select>`
+    : champ.saisie === SAISIE.LOGIQUE
+      ? `<span class="bac-formulaire__logique${repris}">
+           ${["oui", "non"].map((mot) => {
+             const marques = marquesDuChoixLogique(lu.valeur === mot);
+             return `
+             <button type="button" class="gh-btn gh-btn--sm ${marques.classe}"
+               ${marque} data-bac-valeur="${mot}" aria-pressed="${marques.presse}">${mot}</button>
+           `;
+           }).join("")}
+         </span>`
+      : `<input type="text" class="gh-input bac-formulaire__saisie${repris}" ${marque}
+           value="${escapeHtml(lu.valeur)}" placeholder="${escapeHtml(champ.saisie === SAISIE.MESURE ? "un nombre" : "")}">`;
+
+  return `
+    <label class="bac-formulaire__champ"${aide}>
+      <span class="bac-formulaire__nom">
+        ${escapeHtml(champ.nom)}
+        ${
+          // Un nom qu'aucune ligne ne déclare se remplit quand même — le
+          // refuser rendrait la règle indécidable pour toujours —, mais
+          // l'écran dit que ce qu'on tape là ne tient sur rien.
+          champ.declare ? "" : `<span class="bac-formulaire__nu">non déclaré</span>`
+        }
+      </span>
+      <span class="bac-formulaire__entree">
+        ${saisie}
+        ${champ.unite ? `<span class="bac-formulaire__unite">${escapeHtml(champ.unite)}</span>` : ""}
+      </span>
+      ${/*
+        **La note a toujours sa place, même vide.** Elle change à la frappe, et
+        un emplacement qui existe déjà se remplit en une ligne : insérer ou
+        retirer un nœud selon les cas ferait trois chemins là où il n'y a qu'une
+        question — que dit le projet, maintenant ?
+      */""}
+      <span class="bac-formulaire__projet"${dite ? "" : " hidden"}>${dite}</span>
+    </label>
+  `;
+}
+
+/**
+ * Ce que le projet tient pour ce nom, sous le champ.
+ *
+ * **Repris**, on dit seulement d'où vient ce qui est affiché : la valeur est
+ * déjà sous les yeux, la répéter serait du bruit.
+ *
+ * **Répondu et différent**, on dit ce que le projet disait — c'est ce qu'on ne
+ * peut plus lire nulle part une fois qu'on a tapé par-dessus — et l'on offre
+ * d'y revenir. Répondu et **identique**, il n'y a rien à défaire.
+ */
+function ceQueLeProjetDit(champ, lu) {
+  if (lu.etat === ETAT_DU_CHAMP.DU_PROJET) return "du projet";
+  if (!lu.differe) return "";
+
+  return `du projet : ${escapeHtml(lu.duProjet)}`
+    + `<button type="button" class="bac-formulaire__retour"`
+    + ` data-geste="${GESTE_DU_RETOUR}" data-bac-retour="${escapeHtml(champ.nom)}">revenir</button>`;
 }
 
 /**
@@ -2722,34 +2774,115 @@ function brancherLeChoixDeLaZone(hote, racine) {
 function brancherLeBac(hote, racine) {
   brancherLesLectures(hote, choisirLaLecture);
   brancherLeChoixDeLaZone(hote, racine);
+  brancherLesSaisies(hote, racine);
+  brancherLesRetours(hote, racine);
+}
 
+/**
+ * Ce qu'on répond entre dans l'état — **et le champ ne se redessine jamais**.
+ *
+ * Le doigt est posé dessus : le remplacer ferait partir le curseur au milieu
+ * d'un nombre. Seule la note dessous suit, parce qu'elle change de sens dès la
+ * première frappe — le champ cesse d'être repris du projet, et il faut pouvoir
+ * relire ce que le projet disait.
+ */
+function brancherLesSaisies(hote, racine) {
   for (const saisie of hote.querySelectorAll("[data-bac-champ]")) {
     const nom = saisie.dataset.bacChamp;
+
+    const repondre = (dite) => {
+      etat.reponses = { ...etat.reponses, [nom]: dite };
+      majLaNoteDuProjet(hote, nom, racine);
+      // Une réponse change ce que les fonctions concluraient : le verdict se
+      // rejoue sur le champ, et non au prochain clic sur « Lancer ».
+      redessinerLesResultats();
+      redessinerLaConsole(racine);
+    };
 
     // Les deux boutons d'un champ logique : ils portent leur valeur, et c'est
     // le voisin qu'il faut dépresser — en place, sans redessiner le formulaire.
     if (saisie.dataset.bacValeur !== undefined) {
       saisie.addEventListener("click", () => {
-        etat.reponses = { ...etat.reponses, [nom]: saisie.dataset.bacValeur };
+        // **La marque est sur l'enveloppe des deux boutons**, pas sur celui
+        // qu'on presse : c'est elle qu'il faut défaire, sinon un oui/non repris
+        // du projet garde son trait après qu'on l'a choisi — et l'on croirait
+        // n'avoir rien répondu.
+        saisie.closest(".bac-formulaire__logique")?.classList.remove("est-du-projet");
         marquerLeChoixLogique(hote, nom, saisie.dataset.bacValeur);
-        redessinerLesResultats();
-        redessinerLaConsole(racine);
+        repondre(saisie.dataset.bacValeur);
       });
       continue;
     }
 
     // **Ni la liste ni le champ de texte ne se redessinent.** Ils portent déjà
-    // ce qu'on vient de choisir — c'est le navigateur qui le tient —, et les
-    // remplacer ferait partir le curseur au milieu d'un nombre.
+    // ce qu'on vient de choisir — c'est le navigateur qui le tient.
     const evenement = saisie.tagName === "SELECT" ? "change" : "input";
     saisie.addEventListener(evenement, () => {
-      etat.reponses = { ...etat.reponses, [nom]: saisie.value };
-      // Une réponse change ce que les fonctions concluraient : le verdict se
-      // rejoue sur le champ, et non au prochain clic sur « Lancer ».
+      // Le champ a cessé d'être repris du projet dès qu'on l'a touché : la
+      // marque part, sans que rien d'autre bouge.
+      saisie.classList.remove("est-du-projet");
+      repondre(saisie.value);
+    });
+  }
+}
+
+/**
+ * **Revenir au projet** : retirer sa réponse, et reprendre ce que le projet dit.
+ *
+ * Celui-là **repose le champ**, et c'est ce qui le distingue d'une frappe : on
+ * vient de cliquer un bouton, le doigt n'est pas dans le champ, et la valeur à
+ * y remettre n'est pas celle qu'il porte. Un seul champ est refait — celui
+ * qu'on défait —, jamais le bac entier : le voisin garde son curseur.
+ */
+function brancherLesRetours(hote, racine) {
+  for (const bouton of hote.querySelectorAll(`[data-geste="${GESTE_DU_RETOUR}"]`)) {
+    bouton.addEventListener("click", () => {
+      const nom = bouton.dataset.bacRetour;
+      const label = bouton.closest(".bac-formulaire__champ");
+      const champ = champDuBac(nom);
+      if (!label || !champ) return;
+
+      const { [nom]: retiree, ...reste } = etat.reponses;
+      etat.reponses = reste;
+
+      label.outerHTML = renderUnChamp(champ, etat.reponses);
+      brancherLeBac(hote, racine);
       redessinerLesResultats();
       redessinerLaConsole(racine);
     });
   }
+}
+
+/** Le champ que le brouillon demande sous ce nom, tel que l'écran le connaît. */
+function champDuBac(nom) {
+  return champsDuBrouillon(fichiersRemplis(etat.brouillon), {
+    memoire: etat.memoire, zone: etat.zone
+  }).find((un) => un.nom === texte(nom)) ?? null;
+}
+
+/**
+ * La note sous un champ, remise à jour — **et elle seule**.
+ *
+ * Elle change de sens dès la première frappe : le champ n'est plus repris du
+ * projet, et ce que le projet disait devient la seule chose qu'on ne peut plus
+ * lire nulle part. La reposer sans toucher au champ garde le curseur où il est.
+ */
+function majLaNoteDuProjet(hote, nom, racine) {
+  const label = [...hote.querySelectorAll("[data-bac-champ]")]
+    .find((un) => un.dataset.bacChamp === texte(nom))
+    ?.closest(".bac-formulaire__champ");
+  const champ = champDuBac(nom);
+  const note = label?.querySelector(".bac-formulaire__projet");
+  if (!note || !champ) return;
+
+  const dite = ceQueLeProjetDit(champ, etatDuChamp(champ, etat.reponses?.[champ.nom]));
+  note.innerHTML = dite;
+  note.hidden = !dite;
+
+  // La note neuve porte peut-être un « revenir » : il n'écoute rien tant qu'on
+  // ne l'a pas branché, et c'est ce champ-là qu'il faut brancher, pas les
+  // autres — les leurs écoutent déjà.
+  brancherLesRetours(label, racine);
 }
 
 /**

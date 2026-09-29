@@ -212,18 +212,24 @@ fonction Reprise(zones, Nature des volets) {
 test("le formulaire dit ce que le projet tient, et d'où ça vient", () => {
   /**
    * **Un essai qui répond sur une valeur venue de nulle part ne se relit pas**
-   * (règle 5). On la montre, avec sa provenance — et le rappel s'efface dès
-   * qu'on a tapé, puisque c'est alors la réponse tapée qui vaut.
+   * (règle 5). La valeur est **dans** le champ — prête à être corrigée —, et
+   * l'écran dit qu'elle n'est pas de nous.
    */
   assert.equal(champsDuBrouillon(COULEUR, { memoire: MEMOIRE, zone: "batiment-b" })[0].duProjet, "alu");
   assert.equal(champsDuBrouillon(COULEUR, { memoire: MEMOIRE, zone: "" })[0].duProjet, "");
 
   const dessine = renderBacDessai({ fichiers: COULEUR }, { memoire: MEMOIRE, zone: "batiment-b" });
-  assert.match(dessine, /du projet : alu/);
-  assert.doesNotMatch(
-    renderBacDessai({ fichiers: COULEUR },
-      { memoire: MEMOIRE, zone: "batiment-b", reponses: { "Nature des volets": "pvc" } }),
-    /du projet/, "une fois qu'on a tapé, le rappel n'a plus rien à dire");
+  assert.match(dessine, /value="alu"[^>]*>|option value="alu" selected/,
+    "la valeur du projet n'est pas dans le champ : on ne peut pas partir d'elle");
+  assert.match(dessine, /du projet<\/span>/, "et l'écran dit qu'elle n'est pas de nous");
+
+  // Une fois qu'on a tapé, c'est la réponse qui vaut — et le rappel devient ce
+  // qu'on ne peut plus lire nulle part : ce que le projet disait.
+  const repondu = renderBacDessai({ fichiers: COULEUR },
+    { memoire: MEMOIRE, zone: "batiment-b", reponses: { "Nature des volets": "pvc" } });
+  assert.match(repondu, /value="pvc"|option value="pvc" selected/);
+  assert.match(repondu, /du projet : alu/);
+  assert.match(repondu, /revenir/);
 });
 
 test("le sélecteur offre les zones que le projet a définies, l'ensemble en tête", () => {

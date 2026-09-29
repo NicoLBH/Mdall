@@ -27357,6 +27357,24 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .bac-formulaire__logique{ display:inline-flex; gap:4px; }
 
+/* **Repris du projet, et modifiable.** La valeur est dans le champ — on peut
+   partir d'elle —, et le champ dit qu'elle n'est pas de nous : un trait à
+   gauche, et le texte en gris. Dès qu'on y touche, la marque part et le champ
+   redevient ordinaire. */
+.bac-formulaire__saisie.est-du-projet,
+.bac-formulaire__logique.est-du-projet{
+  border-left:2px solid var(--borderColor-accent-emphasis, #1f6feb);
+  color:var(--muted);
+}
+/* Revenir à ce que le projet dit, après l'avoir corrigé. Un mot, pas un bouton :
+   il vit dans la note, à la suite de la valeur qu'il remet. */
+.bac-formulaire__retour{
+  margin-left:6px; padding:0; border:0; background:transparent;
+  color:var(--borderColor-accent-emphasis, #4493f8); cursor:pointer;
+  font:inherit; text-decoration:underline;
+}
+.bac-formulaire__retour:hover{ color:var(--fg, inherit); }
+
 /* Où l'on se place pour essayer. Il précède le formulaire : c'est le fond sur
    lequel tout le reste se lit. */
 .bac-zone{ display:flex; align-items:center; gap:8px; margin:0 0 10px; }
