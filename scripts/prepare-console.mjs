@@ -36,6 +36,7 @@
  */
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -53,11 +54,23 @@ const partageDir = path.join(consoleDir, "partage");
 export const RACINES = [
   "js/services/la-porte-de-la-console-supabase.js",
   "js/services/un-msg-deplie.js",
-  "js/services/linventaire-du-versoir.js"
+  "js/services/linventaire-du-versoir.js",
+  "js/services/larchive-des-pieces-supabase.js",
+  // **Le lecteur de PDF de Mdall, tel quel.** Celui de l'onglet Documents et du
+  // copilote. Il ne dépend de rien et dessine dans les classes que la feuille
+  // de style porte déjà : un second lecteur écrit pour la console aurait
+  // divergé du premier au premier correctif (règle 4).
+  "js/services/ct-lab-pdf-view.js"
 ];
 
-/** Ce qui part tel quel, sans être suivi : ni import ni dépendance. */
-const TELS_QUELS = ["style.css", "assets/icons.svg", "assets/favicon.svg"];
+/**
+ * Ce qui part tel quel, sans être suivi : ni import ni dépendance.
+ *
+ * `vendor/unpdf` est un dossier, et il est produit par `npm run build:web` —
+ * c'est pdf.js, que le lecteur charge à la demande par un chemin calculé. Le
+ * parcours des imports ne peut pas le voir : il est nommé ici.
+ */
+export const TELS_QUELS = ["style.css", "assets/icons.svg", "assets/favicon.svg", "vendor/unpdf"];
 
 /**
  * Les chemins qu'un module importe, tels qu'ils sont écrits.
@@ -126,9 +139,16 @@ async function main() {
   await rm(partageDir, { recursive: true, force: true });
 
   for (const relatif of [...modules, ...TELS_QUELS]) {
+    const source = path.join(webDir, relatif);
+    if (!existsSync(source)) {
+      throw new Error(
+        `« ${relatif} » manque dans apps/web. Lancer « npm run build:web » avant la console.`
+      );
+    }
     const destination = path.join(partageDir, relatif);
     await mkdir(path.dirname(destination), { recursive: true });
-    await cp(path.join(webDir, relatif), destination);
+    // `recursive` : certains emportés sont des dossiers (pdf.js et ses fichiers).
+    await cp(source, destination, { recursive: true });
   }
 
   // De quoi lire, dans un diff, ce que la console a fini par emporter. Une

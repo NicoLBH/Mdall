@@ -29,7 +29,9 @@ comme tel ; tout le reste est à faire.
 
 | la porte de la console — une adresse, et rien d'autre | table `administrateurs`, `services/la-porte-de-la-console.js` | « suis-je administrateur ? », et jamais « qui l'est ? » |
 | le site de la console, construit à part | `apps/console`, `scripts/prepare-console.mjs`, `npm run build:console` | un autre bâtiment, servi sous `console/` |
-| son premier écran : **le versoir** | `apps/console/js/le-versoir.js`, `services/linventaire-du-versoir.js` | on dépose des `.msg`, on voit ce qu'ils portent, rien ne part |
+| son premier écran : **le versoir** | `apps/console/js/le-versoir.js`, `services/linventaire-du-versoir.js` | on dépose des `.msg`, on voit ce qu'ils portent, rien ne part sans un clic |
+| son second : **l'archive** | `apps/console/js/larchive.js`, `services/larchive-des-pieces.js` | ce qui a été versé, et les PDF s'y ouvrent |
+| le casier des pièces | Supabase Storage `archives` + `pieces_archivees` | les octets gardés, nommés par leur empreinte |
 
 **Ce qui n'existe pas du tout :** aucune table `organisations`, `comptes`,
 `plans` ni `abonnements`. **Aucun rôle** : il y a une porte, pas un rôle — voir
@@ -91,6 +93,18 @@ l'application. Donc : `…/console/`.
 et seulement pour qui ouvre la porte. Elle n'est pas dessinée pour les autres :
 non pas masquée, **absente du HTML**. C'est ce qui évite d'apprendre à tout le
 monde qu'une console existe.
+
+### Le lecteur de PDF n'a pas été réécrit
+
+La console ouvre les PDF de l'archive avec `services/ct-lab-pdf-view.js` —
+celui de l'onglet Documents et du copilote. Il ne dépend de rien (aucun
+`import`), il charge pdf.js depuis le dossier vendu, et il dessine dans les
+classes `documents-pdf-viewer__*` que la feuille de style porte déjà. Il est
+donc **emporté tel quel**, avec pdf.js.
+
+C'est la règle générale de cette console, et elle vaut d'être dite : *rien n'y
+est réécrit pour elle*. Un second lecteur aurait divergé du premier au premier
+correctif (règle 4), et il aurait fallu recalibrer toutes ses classes.
 
 ### La porte, et ce qu'elle n'est pas
 
@@ -160,6 +174,20 @@ document qu'un client, ou son délégué à la protection des données, demander
    permettrait de lire une conversation privée avec le copilote. Si le support
    en a besoin un jour, il faudra un consentement explicite, borné dans le temps
    et journalisé — et il est moins cher de ne pas la construire.
+
+### Ce que l'archive des pièces ne mélange pas
+
+Le casier `archives` et son registre sont réservés aux administrateurs, par la
+fonction `est_administrateur()` — la même porte, sous une forme qu'une politique
+peut appeler. Elle est `security definer` et ne rend qu'un **booléen sur
+l'appelant** : elle ne peut donc pas servir à obtenir la liste, qui reste hors
+de portée de tout le monde.
+
+**Ce casier n'est pas la mémoire d'un chantier.** Ce qu'il porte vient
+d'archives que l'administrateur ouvre lui-même pour nourrir la prédiction, à
+côté de l'interface des utilisateurs (`docs/nourrir-mdall.md`). Aucune politique
+de projet ne le connaît, et il ne connaît aucun projet. La section suivante —
+ce que la console ne lit jamais — n'en est pas entamée d'un pouce.
 
 ## 3. Ce que la console ne lit jamais
 

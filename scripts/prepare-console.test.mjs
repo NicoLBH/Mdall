@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  RACINES, cheminsImportes, horsDuSite, lesModulesAEmporter
+  RACINES, TELS_QUELS, cheminsImportes, horsDuSite, lesModulesAEmporter
 } from "./prepare-console.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -140,8 +140,87 @@ test("le versoir montre les documents un par un, et les signatures en une ligne"
   assert.match(vignettes, /gardées/);
   assert.doesNotMatch(vignettes, /écart/);
 
-  // Rien ne part : aucun appel réseau, aucun dépôt, depuis cet écran.
-  assert.doesNotMatch(source, /\bfetch\(|supabase|\.upload\(/);
+  // **Rien ne part de cet écran de lui-même.** Il ne parle à personne : pas de
+  // `fetch`, pas de client de base. Le seul départ possible est le versement,
+  // et il passe par un service nommé, sur un clic.
+  // On regarde le corps, imports retirés : le nom d'un service qui parle à la
+  // base contient « supabase », et ce n'est pas lui qu'on cherche.
+  const corps = source.replace(/^import[\s\S]*?from\s*"[^"]*";$/gm, "");
+  assert.doesNotMatch(corps, /\bfetch\(|\bsupabase\.|\.upload\(|XMLHttpRequest/);
+  assert.match(source, /verserLesPieces/);
+  assert.match(source, /#versoirVerser/);
+});
+
+/**
+ * **Verser est un geste explicite.**
+ *
+ * Verser au fil du dépôt aurait été plus court d'un clic, et faux : on ouvre
+ * cent archives pour regarder ce qu'elles portent, et toutes ne méritent pas
+ * d'être gardées.
+ */
+test("le versoir ne verse que sur un clic, et dit ce qu'il n'a pas pu faire", async () => {
+  const source = await readFile(
+    new URL("../apps/console/js/le-versoir.js", import.meta.url), "utf8");
+
+  // La lecture d'un fichier ne verse rien : seul le gestionnaire du bouton le fait.
+  const lecture = source.slice(source.indexOf("const lire = async (fichiers)"),
+    source.indexOf("choisir?.addEventListener"));
+  assert.doesNotMatch(lecture, /verserLesPieces/);
+
+  const geste = source.slice(source.indexOf('closest?.("#versoirVerser")'));
+  assert.match(geste, /verserLesPieces\(pieces\)/);
+  // Le bouton se désarme : cinq mégaoctets par plan, et un second clic
+  // relancerait tout.
+  assert.match(geste, /bouton\.disabled = true/);
+  // Une archive qu'on n'a pas pu lire ne se dit pas « rien à verser ».
+  assert.match(geste, /fait\.lu/);
+});
+
+/**
+ * **Le lecteur de PDF n'est pas réécrit.**
+ *
+ * C'est celui de l'onglet Documents et du copilote, emporté tel quel. Un second
+ * lecteur aurait divergé du premier au premier correctif (règle 4), et il aurait
+ * fallu recalibrer toutes ses classes.
+ */
+test("l'archive ouvre ses PDF avec le lecteur de Mdall, pas avec le sien", async () => {
+  const source = await readFile(
+    new URL("../apps/console/js/larchive.js", import.meta.url), "utf8");
+
+  assert.match(source, /import\("\.\.\/partage\/js\/services\/ct-lab-pdf-view\.js"\)/);
+  assert.match(source, /renderPdfDocument\(/);
+  // Aucun rendu écrit ici : pas de canevas, pas de pdf.js en direct.
+  assert.doesNotMatch(source, /getDocument|createElement\("canvas"\)|getContext\(/);
+  // Et il dessine dans les classes que la feuille de style porte déjà.
+  assert.match(source, /documents-pdf-viewer__pages/);
+
+  // **Les octets ne descendent que pour la pièce qu'on ouvre.** Une archive de
+  // cent mille pièces ne se télécharge pas pour afficher une liste : rien, ni
+  // au dessin de la liste ni à son montage, ne les réclame — seul le
+  // gestionnaire du clic le fait.
+  const avantLeClic = source.slice(source.indexOf("function renderLaListe("),
+    source.indexOf("liste.addEventListener"));
+  assert.doesNotMatch(avantLeClic, /octetsDeLaPiece/);
+
+  const auClic = source.slice(source.indexOf("liste.addEventListener"));
+  assert.match(auClic, /octetsDeLaPiece\(empreinte\)/);
+});
+
+/**
+ * **pdf.js voyage avec la console, et rien d'autre ne le dit.**
+ *
+ * Le lecteur le charge par un chemin calculé (`../../vendor/unpdf`), que le
+ * parcours des imports ne peut pas voir. Oublier de l'emporter donnerait une
+ * console qui s'ouvre, une liste qui s'affiche, et un PDF qui refuse de
+ * s'ouvrir en demandant de lancer un build — sur un poste où il a déjà tourné.
+ */
+test("la console emporte le moteur PDF que son lecteur va chercher", async () => {
+  assert.equal(TELS_QUELS.includes("vendor/unpdf"), true);
+
+  // Et c'est bien là que le lecteur le cherche : les deux bouts du même fil.
+  const lecteur = await readFile(
+    new URL("../apps/web/js/services/ct-lab-pdf-view.js", import.meta.url), "utf8");
+  assert.match(lecteur, /const VENDOR_BASE = "\.\.\/\.\.\/vendor\/unpdf"/);
 });
 
 /**

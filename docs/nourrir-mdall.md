@@ -351,11 +351,56 @@ Le versoir dit aussi, en haut de l'inventaire, **ce qui se répète** : combien 
 messages sont le même message, combien de pièces sont la même pièce, et le poids
 qu'on ne relira pas. C'est l'étage 0, et c'est le premier chiffre à connaître.
 
+### L'archive : où les pièces se gardent
+
+**Supabase Storage, casier `archives`, et le nom d'une pièce est son empreinte.**
+Chaque pièce est rangée sous `pieces/<empreinte SHA-256>`
+(`services/larchive-des-pieces.js`, migration `202610210001`). Trois
+conséquences, et les trois comptent :
+
+1. **Le dédoublonnage devient définitif, et gratuit.** Le même plan attaché à
+   quinze réponses d'un fil écrit quinze fois au même endroit le même contenu —
+   donc une fois. Il n'y a plus de décision à prendre : c'est l'adresse qui
+   décide.
+2. **Le chemin ne porte rien.** Ni nom de fichier, ni chantier, ni personne :
+   soixante-quatre caractères hexadécimaux.
+3. **Deux versements du même fichier ne peuvent pas diverger** (règle 4).
+
+Un **registre** (`pieces_archivees`) dit ce que ces octets sont — nom, type,
+poids, date — pour qu'afficher une ligne ne coûte pas cinq mégaoctets.
+
+Casier et registre sont **réservés aux administrateurs**, par la même porte que
+la console (`est_administrateur()`). Ni l'un ni l'autre n'est connu d'une
+politique de projet, et ils ne connaissent aucun projet : **ce n'est pas la
+mémoire d'un chantier.**
+
+**Verser est un geste explicite** : un bouton, après avoir vu. On ouvre cent
+archives pour regarder ce qu'elles portent, et toutes ne méritent pas d'être
+gardées.
+
+**On verse tout, images de signature comprises.** Non par principe décoratif :
+parce que notre classement peut se tromper — il s'est trompé une fois, sur un
+plan de cinq mégaoctets —, et qu'une pièce écartée à tort par un classement
+faux serait perdue pour de bon. Le coût est borné par l'adressage par contenu :
+le même logo dans cinq cents messages est un seul objet.
+
+### Relire ce qui est gardé
+
+L'écran **L'archive**, dans la console. Il ouvre les PDF **avec le lecteur de
+Mdall** — `services/ct-lab-pdf-view.js`, celui de l'onglet Documents et du
+copilote, emporté tel quel par `scripts/prepare-console.mjs` avec pdf.js. Rien
+n'a été réécrit : un second lecteur aurait divergé du premier au premier
+correctif (règle 4), et il aurait fallu recalibrer toutes ses classes.
+
+Les octets ne descendent que pour la pièce qu'on ouvre, et la liste dit quand
+elle est tronquée — sur cent mille pièces, « voici l'archive » serait faux.
+
 ### Ce qui reste, dans l'ordre
 
-1. **Écrire les pièces quelque part** : aujourd'hui l'inventaire les compte et
-   les oublie. Les garder demande de décider **où** — et c'est la question du
-   déposant, au § 9. C'est le prochain pas.
+1. **Le lien entre une pièce et le message qui la portait.** C'est le prochain
+   irrattrapable : aujourd'hui l'archive est un tas de PDF sans provenance. Il
+   demande de garder aussi les **messages** — leur forme, leurs dates, leur
+   chaîne de réponses —, et c'est ce qui fera les épisodes.
 2. **Retirer les citations avant d'empreindre le propos** : `ceQuonCite` sait
    déjà les séparer. Aujourd'hui l'empreinte porte sur le corps entier, donc
    deux exemplaires d'un même message dont la citation a grossi comptent pour
@@ -391,9 +436,10 @@ Le décorticage existe et il est gratuit. Ce qui manque :
    est un nom commun aux sujets, et cette réflexion reste ouverte.)*
 2. **Le dépôt en masse des mails**, jusqu'à l'épisode — étages 0 à 3, tout
    gratuit. *(En cours. Étage 1 — déplier — fait pour les `.msg`, avec les
-   pièces jointes entières. Étage 0 — dédoublonner — fait pour le comptage ;
-   reste à retirer les citations avant d'empreindre le propos. Restent aussi
-   l'endroit où les pièces se gardent, et les étages 2 et 3.)*
+   pièces jointes entières. Étage 0 — dédoublonner — fait, et désormais
+   **définitif** : les pièces sont gardées dans Supabase Storage sous
+   l'empreinte de leurs octets. Restent les citations à retirer du propos, le
+   lien pièce ↔ message, et les étages 2 et 3.)*
 3. **La mesure** — prédire dans le passé sur les cent projets, contre la ligne
    de base. Avant tout prédicteur. *(fait — `services/mesure-du-passe.js`,
    `services/ligne-de-base.js`. Elle attend maintenant de la matière : c'est
@@ -405,18 +451,23 @@ Le décorticage existe et il est gratuit. Ce qui manque :
 
 ### Où l'on en est, en une ligne
 
-Les étages gratuits sont ouverts (déplier, compter, dédoublonner) et la mesure
-attend. **Le prochain pas qui débloque tout le reste est le même depuis deux
-tours : décider où les pièces se gardent.** Tant qu'elles sont comptées puis
-oubliées, chaque essai recommence le décorticage — et c'est précisément la
-distribution de carburant qu'on ne veut pas refaire.
+Les étages gratuits sont ouverts (déplier, compter, dédoublonner), **les pièces
+sont gardées** et relisibles, et la mesure attend. Le prochain pas qui débloque
+le reste : **garder aussi les messages**, pour que chaque pièce sache d'où elle
+vient. C'est cela qui fera les épisodes, et c'est la partie qu'on ne pourra pas
+reconstituer plus tard.
 
 ## 9. À enrichir
 
 - Le déposant : navigateur ou fonction de bord ? (cent mille pièces ne passent
-  pas par un onglet.) Le versoir tranche pour l'**inventaire** — le navigateur,
-  parce qu'il ne coûte rien et que rien ne part. La question reste entière pour
-  la **conservation** des pièces, qui demande un endroit où les écrire.
+  pas par un onglet.) Le versoir tranche pour l'**inventaire** et pour le
+  **versement** — le navigateur, parce qu'il ne coûte rien et qu'il tient déjà
+  les octets. La question se reposera au volume : cent archives à la fois, dans
+  un onglet, demanderont au moins de reprendre là où l'on s'est arrêté.
+- La durée de conservation de l'archive, et ce qu'on répond à qui demande
+  l'effacement d'une pièce (§ 6). Le casier n'a aujourd'hui **aucune politique
+  de suppression** — c'est un choix, pas un oubli, et il devra être rediscuté
+  avant le premier client.
 - Le format d'un épisode, et jusqu'où il remonte dans le passé d'un projet.
 - Ce qu'on fait des plans : un indice de révision est une séquence, et c'est
   peut-être le signal le moins cher et le plus riche de tous.
