@@ -162,6 +162,7 @@ import {
   MOT_DE_LA_FACE, MOT_DU_POURQUOI, grouperParSujet, parImportance
 } from "../services/memoire-groupes.js";
 import { lacunesDuRaisonnement } from "../services/raisonnement-du-point.js";
+import { ecartsObservesParSujet, phraseDeLEcart } from "../services/ecarts-observes.js";
 import { emploisParAffirmation } from "../services/memoire-applications.js";
 import { ouvrirLePlanDeRecalcul } from "./ui/fenetre-plan.js";
 import { planDeRecalcul } from "../services/memoire-plan.js";
@@ -455,6 +456,14 @@ function nameOf(userId) {
 /** Les compteurs : des comptes, jamais des estimations. */
 /** Ce qu'une page porte. Au-delà, on ne lit plus, on fait défiler. */
 const PAGE_SIZE = 25;
+
+/**
+ * Combien d'écartés constatés se lisent sous une ligne.
+ *
+ * Trois, comme le découpage d'un chiffre : dix lignes de constat sous un sujet
+ * referaient le mur qu'on vient d'abattre, et l'on cesserait de les lire.
+ */
+const ECARTS_MONTRES = 3;
 
 const KIND_ICON = {
   avis: "checklist",
@@ -928,7 +937,9 @@ function renderSujet(sujet = null) {
   const tete = sujet?.tete ?? sujet;
   const autres = (sujet?.faces ?? []).filter(({ assertion }) => assertion !== tete);
 
-  return renderAssertion(tete, { autres, pourquoi: sujet?.pourquoi ?? [] });
+  return renderAssertion(tete, {
+    autres, pourquoi: sujet?.pourquoi ?? [], ecarts: sujet?.ecarts ?? []
+  });
 }
 
 /** Les autres faces du même sujet, sous la ligne qu'on lit. */
@@ -948,6 +959,61 @@ function renderLesAutresFaces(autres = []) {
 }
 
 /**
+ * Les écartés que Mdall a constatés, quand le sujet n'en déclare aucun.
+ *
+ * **Rien là où la décision les a notés.** Une mention qui s'affiche partout
+ * n'oriente plus — on l'a déjà appris en retirant « a bougé récemment ». Le
+ * constat ne vaut que là où il comble un vide : c'est le champ « ce qui a été
+ * examiné », qui cesse d'être vide sans que personne n'ait rien tapé.
+ *
+ * **Le constat ne remplace pas la déclaration.** Un écarté noté par un humain
+ * porte un motif ; un écarté constaté ne porte que la façon dont on l'a vu.
+ * Montrer le second par-dessus le premier ferait lire un constat de machine à
+ * la place d'une phrase de projet.
+ */
+function ceQueMdallAConstate(sujet = null, constates = new Map()) {
+  const declares = (sujet?.faces ?? []).some(({ assertion }) =>
+    (assertion?.payload?.decision?.ecartes ?? []).some((ecarte) => texteDe(ecarte?.quoi)));
+  if (declares) return [];
+
+  return constates.get(texteDe(sujet?.cle)) ?? [];
+}
+
+/**
+ * Ce que le projet a écarté en chemin, et que personne n'a eu à saisir.
+ *
+ * **Marqué comme constaté, et jamais versé.** Ce n'est pas une affirmation du
+ * projet : c'est une lecture de la mémoire, refaite à chaque affichage. Le
+ * présenter comme le reste ferait passer un calcul pour une décision (règle 1).
+ */
+function renderCeQuonAEcarte(ecarts = []) {
+  if (!ecarts.length) return "";
+
+  const montres = ecarts.slice(0, ECARTS_MONTRES);
+  const reste = ecarts.length - montres.length;
+
+  return `
+    <span class="memory-row__ecarts">
+      <span class="memory-row__ecarts-quoi">
+        ${svgIcon("skip", { className: "octicon" })}
+        Écarté en chemin — constaté par Mdall, jamais versé
+      </span>
+      ${montres.map((ecart) => `
+        <span class="memory-row__ecart">
+          <b>${escapeHtml(ecart.quoi)}</b>
+          <i>${escapeHtml(phraseDeLEcart(ecart))}</i>
+          ${ecart.pourquoi ? `<em>« ${escapeHtml(ecart.pourquoi)} »</em>` : ""}
+        </span>`).join("")}
+      ${reste > 0
+        // Le reste ne s'énumère pas, et ne s'ouvre pas : les trois qu'on montre
+        // sont les plus récents, et le compte dit qu'il y en a d'autres.
+        ? `<span class="memory-row__ecart-reste">et ${reste} ${reste > 1 ? "autres" : "autre"}</span>`
+        : ""}
+    </span>
+  `;
+}
+
+/**
  * Pourquoi ce sujet est là où il est.
  *
  * **Un ordre qu'on ne peut pas expliquer se subit.** On doit pouvoir répondre
@@ -961,7 +1027,7 @@ function renderPourquoiEnHaut(pourquoi = []) {
     pourquoi.map((une) => escapeHtml(MOT_DU_POURQUOI[une] ?? une)).join(" · ")}</span>`;
 }
 
-function renderAssertion(assertion, { autres = [], pourquoi = [] } = {}) {
+function renderAssertion(assertion, { autres = [], pourquoi = [], ecarts = [] } = {}) {
   const remplacee = Boolean(assertion.superseded_by);
   const ecartee = assertion.status === MEMORY.REJECTED;
   const effet = assertion?.variante?.effet;
@@ -988,6 +1054,7 @@ function renderAssertion(assertion, { autres = [], pourquoi = [] } = {}) {
           ${renderPourquoiEnHaut(pourquoi)}
         </div>
         ${renderLesAutresFaces(autres)}
+        ${renderCeQuonAEcarte(ecarts)}
         ${renderMarqueDeVariante(assertion)}
         ${renderHypothesisState(assertion)}
         ${renderCeQuiCouvre(assertion)}
@@ -1495,8 +1562,19 @@ export function renderMemoryList(lignes, page = 1, {
    * Le tri par importance suit, et il se dit sur chaque ligne : « attend
    * quelqu'un », « ne dit pas tout ». Un ordre qu'on ne peut pas expliquer se
    * subit ; celui-là s'audite.
+   *
+   * **Et ce que Mdall a constaté d'écarté**, sur chaque sujet qui ne le déclare
+   * pas. Personne n'a rien saisi : c'est du calcul sur ce que la mémoire porte
+   * déjà (`services/ecarts-observes.js`).
    */
-  const sujets = parImportance(grouperParSujet(lignes), commentOnPese());
+  //
+  // **Sur toute la mémoire, pas sur la page.** Un possible écarté est presque
+  // toujours une ligne que la recherche ne montre pas — remplacée, refusée,
+  // sortie du projet —, et c'est précisément pour cela qu'il faut le dire. Une
+  // fois, et non par sujet : le calcul parcourt la mémoire entière.
+  const constates = ecartsObservesParSujet(view.assertions ?? []);
+  const sujets = parImportance(grouperParSujet(lignes), commentOnPese())
+    .map((sujet) => ({ ...sujet, ecarts: ceQueMdallAConstate(sujet, constates) }));
 
   // Une mémoire grossit à chaque fusion ; une page, non. Cinq cents sujets
   // d'un coup ne se lisent pas — et le navigateur les peine.

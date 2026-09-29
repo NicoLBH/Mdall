@@ -379,6 +379,78 @@ export const STATUT = {
 export const STATUTS = Object.values(STATUT);
 
 /**
+ * Pourquoi un possible a été écarté — **le domaine fermé du métier**.
+ *
+ * ## Pourquoi une liste, et pas du texte libre
+ *
+ * Trois raisons, et la troisième décide.
+ *
+ * **C'est un clic, pas une phrase.** Écrire « pourquoi pas de l'ardoise » en fin
+ * de journée ne se fait pas ; choisir « trop cher » se fait. Le champ vide
+ * partout n'était pas un défaut de discipline, c'était un coût qu'on demandait à
+ * quelqu'un au profit de quelqu'un d'autre.
+ *
+ * **Ça se relit.** Douze raisons se reconnaissent d'un coup d'œil, là où cent
+ * formulations du même refus se relisent une par une.
+ *
+ * **Ça se compte.** « 7 projets sur 10 ont écarté l'ardoise pour le délai » est
+ * un chiffre ; sur du texte libre, ce n'est rien. C'est très exactement ce que
+ * le moteur de prédiction attend, et du texte libre ne le lui donnera jamais
+ * (`docs/la-memoire-qui-predit.md`).
+ *
+ * ## Douze, et pas plus
+ *
+ * Une liste qu'on ne peut pas lire en entier ne se lit pas du tout, et l'on
+ * reprend la première ligne. Douze tiennent dans un menu qu'on parcourt d'un
+ * regard. Elles couvrent ce qui écarte réellement un possible sur un chantier —
+ * l'argent, le temps, la règle, l'autorité, l'existant, la disponibilité.
+ *
+ * ## Et le texte libre reste
+ *
+ * `pourquoi` ne disparaît pas : on se rappelle parfois un argument qui n'est
+ * dans aucune case, et le perdre serait perdre la réponse à « pourquoi pas de
+ * l'ardoise ? ». Les deux se complètent — la raison se compte, la phrase se lit.
+ *
+ * ## Pourquoi ici
+ *
+ * Avec `PROVENANCE` et `STATUT` : ce sont les vocabulaires **fermés** du
+ * langage, ceux dont une valeur s'écrit dans le texte de la mémoire et se
+ * vérifie. `decisionRetenue` s'en sert pour refuser une raison inventée, et la
+ * fenêtre de fermeture pour en faire un menu — deux lecteurs, une seule table
+ * (règle 10).
+ */
+export const RAISON = {
+  TROP_CHER: "trop-cher",
+  DELAI: "delai",
+  NON_CONFORME: "non-conforme",
+  REFUS_MOA: "refus-moa",
+  INCOMPATIBLE: "incompatible",
+  AVIS_CONTROLEUR: "avis-controleur",
+  EMPRISE: "emprise",
+  PERSONNE_NE_SAIT: "personne-ne-sait",
+  HORS_GARANTIE: "hors-garantie",
+  INDISPONIBLE: "indisponible",
+  RETOUR_DEXPERIENCE: "retour-dexperience",
+  SURDIMENSIONNE: "surdimensionne"
+};
+
+/** Ce qu'on lit d'une raison. Le mot du métier, pas celui du code. */
+export const RAISONS_DITES = {
+  [RAISON.TROP_CHER]: "trop cher",
+  [RAISON.DELAI]: "incompatible avec le délai",
+  [RAISON.NON_CONFORME]: "non conforme à la norme",
+  [RAISON.REFUS_MOA]: "refusé par la maîtrise d'ouvrage",
+  [RAISON.INCOMPATIBLE]: "incompatible avec l'existant",
+  [RAISON.AVIS_CONTROLEUR]: "avis défavorable du contrôleur technique",
+  [RAISON.EMPRISE]: "contrainte d'emprise",
+  [RAISON.PERSONNE_NE_SAIT]: "aucune entreprise ne sait le faire ici",
+  [RAISON.HORS_GARANTIE]: "hors garantie décennale",
+  [RAISON.INDISPONIBLE]: "produit indisponible",
+  [RAISON.RETOUR_DEXPERIENCE]: "retour d'expérience défavorable",
+  [RAISON.SURDIMENSIONNE]: "surdimensionné pour le besoin"
+};
+
+/**
  * Les comparateurs, dans les signes qu'on lit.
  *
  * `<=` plutôt que `≤` : le second est plus joli et ne se tape pas. Un langage
@@ -1695,6 +1767,9 @@ export function ligneDePreuve(citation = "", profondeur = 2, { regle = false } =
  * langage — `parce que:`. Il peut manquer : on se rappelle souvent qu'on a
  * écarté l'ardoise sans se rappeler l'argument, et l'écarté sans son motif vaut
  * mieux que rien.
+ *
+ * Quand la raison a été **choisie** dans le domaine (`RAISON`), c'est elle qui
+ * ouvre la ligne de preuve : « parce que: trop cher — surcoût de charpente ».
  */
 export function lignesDesEcartes(ecartes = [], profondeur = 1) {
   const lignes = [];
@@ -1710,7 +1785,14 @@ export function lignesDesEcartes(ecartes = [], profondeur = 1) {
       jeton(JETON.ECARTE, quoi)
     ]);
 
-    const pourquoi = ligneDePreuve(ecarte?.pourquoi, profondeur + 1);
+    // La raison choisie **et** le mot qu'on a ajouté, sur la même ligne de
+    // preuve : ce sont deux façons de répondre à « pourquoi pas de l'ardoise ? »,
+    // et les séparer en deux lignes ferait lire deux motifs là où il y en a un.
+    // Aucun mot nouveau dans le langage — `parce que:` le portait déjà.
+    const pourquoi = ligneDePreuve([
+      RAISONS_DITES[texte(ecarte?.raison)] ?? "",
+      texte(ecarte?.pourquoi)
+    ].filter(Boolean).join(" — "), profondeur + 1);
     if (pourquoi) lignes.push(pourquoi);
   }
 

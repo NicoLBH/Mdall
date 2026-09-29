@@ -14,7 +14,7 @@ import {
   LACUNE
 } from "./decision-versement.js";
 import { NATURE } from "./assertion-taxonomy.js";
-import { PROVENANCE } from "./memoire-en-texte.js";
+import { PROVENANCE, RAISON, RAISONS_DITES } from "./memoire-en-texte.js";
 import { cleDAffirmation, itemsDeProposition } from "./atelier-proposition.js";
 import { rangementVise, rangementDuVersement, domicilesDesNoms } from "./memoire-domiciles.js";
 
@@ -53,9 +53,45 @@ test("un écarté sans son motif vaut mieux que rien", () => {
   // On se rappelle souvent qu'on a écarté l'ardoise sans se rappeler l'argument.
   const dite = decisionRetenue(COUVERTURE);
   assert.deepEqual(dite.ecartes, [
-    { quoi: "ardoise", pourquoi: "surcoût de charpente" },
-    { quoi: "membrane EPDM", pourquoi: "" }
+    { quoi: "ardoise", pourquoi: "surcoût de charpente", raison: "" },
+    { quoi: "membrane EPDM", pourquoi: "", raison: "" }
   ]);
+});
+
+test("la raison d'un écarté se prend dans le domaine, ou ne se prend pas", () => {
+  // Une raison hors du domaine ne se compterait avec rien, et la garder ferait
+  // croire à un classement qui n'en est pas un. Le texte libre est là pour ça.
+  const dite = decisionRetenue({
+    question: "Quelle couverture ?",
+    ecartes: [
+      { quoi: "ardoise", raison: RAISON.TROP_CHER },
+      { quoi: "zinc", raison: "parce que" },
+      { quoi: "tuile", raison: "trop cher", pourquoi: "le libellé n'est pas la clé" }
+    ]
+  });
+
+  assert.equal(dite.ecartes[0].raison, RAISON.TROP_CHER);
+  assert.equal(dite.ecartes[1].raison, "", "une raison inventée est entrée dans le domaine");
+  assert.equal(dite.ecartes[2].raison, "", "un libellé s'est fait passer pour une clé");
+  assert.equal(dite.ecartes[2].pourquoi, "le libellé n'est pas la clé",
+    "le texte libre a été perdu en chemin");
+});
+
+test("chaque raison du domaine se dit en français, et aucune ne se dit deux fois", () => {
+  // Une clé sans libellé s'afficherait telle quelle dans un menu — « refus-moa »
+  // ne se choisit pas. Et deux raisons qui se lisent pareil ne se distinguent
+  // plus à l'écran, donc ne se comptent plus.
+  const cles = Object.values(RAISON);
+  assert.equal(cles.length, 12);
+  assert.equal(new Set(cles).size, cles.length, "deux raisons partagent une clé");
+
+  for (const cle of cles) {
+    assert.ok(RAISONS_DITES[cle], `« ${cle} » n'a pas de libellé`);
+  }
+  assert.equal(Object.keys(RAISONS_DITES).length, cles.length,
+    "un libellé ne correspond à aucune raison");
+  assert.equal(new Set(Object.values(RAISONS_DITES)).size, cles.length,
+    "deux raisons se lisent pareil");
 });
 
 test("un écarté sans nom ne compte pas : il n'y a rien à relire", () => {

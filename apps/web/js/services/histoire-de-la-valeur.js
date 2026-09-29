@@ -43,7 +43,7 @@
 
 import { NATURE, classifyAssertion, natureIndefinie } from "./assertion-taxonomy.js";
 import { phraseDeLaVersion, uneVersionPlusRecente } from "./utilitaire-de-letabli.js";
-import { PROVENANCE } from "./memoire-en-texte.js";
+import { PROVENANCE, RAISONS_DITES } from "./memoire-en-texte.js";
 import { zonesLisibles, histoireDeLaLigne } from "./memoire-blame.js";
 import { ceQuiCouvre } from "./ce-qui-couvre.js";
 import { leDebatQuiATranche } from "./point-a-tranche.js";
@@ -467,8 +467,15 @@ export function lignesDeLHistoire(histoire = null, { dater = null } = {}) {
   const revu = phraseDeCeQuiAEteRevu(histoire.revuDepuis);
   if (revu) lignes.push({ quoi: "Revu depuis", dit: revu });
 
+  // **Avec sa raison, quand elle a été choisie.** « ardoise » seul rouvre la
+  // question qu'on venait de refermer ; « ardoise (trop cher) » y répond. C'est
+  // le libellé du domaine qui se lit, jamais sa clé.
   const ecartes = (histoire.decision?.ecartes ?? [])
-    .map((ecarte) => texte(ecarte?.quoi)).filter(Boolean);
+    .filter((ecarte) => texte(ecarte?.quoi))
+    .map((ecarte) => {
+      const raison = RAISONS_DITES[texte(ecarte?.raison)] ?? "";
+      return raison ? `${texte(ecarte.quoi)} (${raison})` : texte(ecarte.quoi);
+    });
   if (histoire.decision?.question) lignes.push({ quoi: "Question", dit: texte(histoire.decision.question) });
   if (ecartes.length) lignes.push({ quoi: "Écartés", dit: ecartes.join(" · ") });
 

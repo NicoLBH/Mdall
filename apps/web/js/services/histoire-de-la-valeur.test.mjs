@@ -258,6 +258,29 @@ test("une décision dit sa question et ce qu'elle a écarté", () => {
   assert.equal(dit.get("Écartés"), "0,60 m");
 });
 
+test("un écarté se lit avec sa raison, quand elle a été choisie", () => {
+  // « 0,60 m » seul rouvre la question qu'on venait de refermer ; « 0,60 m
+  // (non conforme à la norme) » y répond. C'est le libellé du domaine qui se
+  // lit, jamais sa clé : « non-conforme » ne se relit pas.
+  const tranchee = valeur("v-1", "Profondeur hors gel", "0,80 m", {
+    decision: {
+      question: "Quelle profondeur retenir ?",
+      ecartes: [
+        { quoi: "0,60 m", raison: "non-conforme" },
+        { quoi: "1,20 m", raison: "inventée" }
+      ],
+      motif: "étude géotechnique"
+    }
+  });
+
+  const dit = new Map(
+    lignesDeLHistoire(histoireDeLaValeur(tranchee, { assertions: [tranchee] }))
+      .map((ligne) => [ligne.quoi, ligne.dit])
+  );
+
+  assert.equal(dit.get("Écartés"), "0,60 m (non conforme à la norme) · 1,20 m");
+});
+
 test("ce que la valeur valait avant se lit, du plus récent au plus ancien", () => {
   // Une valeur qui a bougé trois fois se relit autrement qu'une valeur posée une
   // fois et jamais touchée — et c'est souvent là qu'est l'histoire.
