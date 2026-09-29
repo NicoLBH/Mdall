@@ -459,7 +459,7 @@ test("le formulaire du bac ne réécrit jamais tout le contenu de la fenêtre", 
    */
   const zone = source.match(/\nfunction brancherLeChoixDeLaZone\([^)]*\) \{\n([\s\S]*?)\n\}\n/);
   assert.ok(zone, "brancherLeChoixDeLaZone est introuvable");
-  assert.match(zone[1], /renderBacDessai\(/,
+  assert.match(zone[1], /refaireLeBac\(/,
     "changer de zone ne refait pas le formulaire : il montrerait l'autre bâtiment");
   assert.doesNotMatch(zone[1], /etat\.reponses = /,
     "changer de zone efface ce qu'on avait tapé");
@@ -477,8 +477,44 @@ test("le formulaire du bac ne réécrit jamais tout le contenu de la fenêtre", 
    */
   assert.match(zone[1], /etat\.zone = choix\.value/,
     "le choix ne se retient pas : on rejouerait la zone de départ");
-  assert.match(zone[1], /brancherLeBac\(hote, racine\)/,
+
+  /**
+   * **Refaire le bac vit à un seul endroit** — la zone, la relecture du projet
+   * et l'arrivée de la mémoire le demandent toutes les trois, et trois recopies
+   * du même rendu auraient fini par ne plus passer les mêmes choses (règle 10).
+   * C'est déjà arrivé : le premier rendu de la fenêtre oubliait la mémoire que
+   * le redessin passait, et le formulaire disait autre chose que les verdicts.
+   *
+   * `brancherLeBac` rebranche ce qu'on vient de remplacer : sans lui, le
+   * deuxième changement de zone ne fait plus rien, et les champs ne répondent
+   * plus non plus.
+   */
+  const refait = source.match(/\nfunction refaireLeBac\([^)]*\) \{\n([\s\S]*?)\n\}\n/);
+  assert.ok(refait, "refaireLeBac est introuvable");
+  assert.match(refait[1], /renderBacDessai\(/,
+    "refaire le bac ne le redessine pas : l'écran d'avant, au caractère près");
+  assert.match(refait[1], /brancherLeBac\(/,
     "le bac refait n'est pas rebranché : plus rien ne répondrait ensuite");
+  /**
+   * **L'heure de la lecture et ce qui a bougé en font partie.** Les oublier
+   * remettrait l'écran qui ne dit pas sur quel projet il répond — le défaut
+   * qu'on vient d'enlever.
+   */
+  assert.match(refait[1], /lueLe: etat\.memoireLueLe/,
+    "le bac refait ne dit plus quand le projet a été lu");
+  assert.match(refait[1], /dit: etat\.motDuProjet/,
+    "le bac refait perd ce qui avait bougé au projet");
+
+  /**
+   * **Quand le bac est l'écran, on ne le refait pas.** L'essai d'un utilitaire
+   * le dessine sans tête et sans mémoire : le refaire d'ici lui poserait un
+   * titre et un sélecteur de zone que son premier rendu n'a jamais eus, et la
+   * fenêtre et l'écran diraient deux choses du même brouillon.
+   */
+  assert.match(refait[1], /leBacEstLa\(/,
+    "refaire le bac ne regarde pas où il est : il refera l'écran d'essai avec la tête de la fenêtre");
+  assert.match(refait[1], /redessinerLesResultats\(\)/,
+    "l'écran d'essai ne rejoue plus rien quand la mémoire arrive");
 
   // Le redessin ciblé ne repose que le verdict, et il ne peut le faire que si
   // la fenêtre montre bien le bac — le wiki du langage s'ouvre dans la même.

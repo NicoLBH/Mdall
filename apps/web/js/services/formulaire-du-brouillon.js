@@ -402,26 +402,137 @@ export function etatDuChamp(champ = null, reponse = "") {
     : { etat: ETAT_DU_CHAMP.VIDE, valeur: "", duProjet: "", differe: false };
 }
 
-export function valeursDuLancement(fichiers = [], reponses = null, { memoire = null, zone = "" } = {}) {
-  /**
-   * **Trois sources, et l'ordre compte.**
-   *
-   * Ce que le **projet** tient d'abord : c'est le fond, et c'est ce que la zone
-   * choisie change. Ce que le **brouillon** pose ensuite — il est ce qu'on
-   * essaie, et une ligne qu'on vient d'écrire l'emporte sur ce qui est versé.
-   * Ce qu'on a **tapé** enfin : c'est la main sur le volant, et elle gagne
-   * partout, y compris pour un appel qui nomme une autre zone.
-   */
-  const valeurs = new Map([...valeursDuProjet(memoire, zone), ...valeursPosees(fichiers)]);
+/**
+ * D'où vient une valeur que l'essai a lue.
+ *
+ * **Toutes se relisaient pareil.** La trace du verdict disait « Nature des
+ * volets = bois » — et « bois » pouvait venir du projet, d'une ligne du
+ * brouillon, d'une réponse tapée, ou d'une autre fonction qui venait de le
+ * conclure. Quatre choses très différentes, et la seule qui se corrige en
+ * tapant ne se distinguait pas des trois autres.
+ *
+ * C'est le rappel sous le champ — « du projet » — porté jusque dans le verdict,
+ * là où on lit vraiment ce que la fonction a fait.
+ */
+export const VENU = {
+  /** Tapé dans le formulaire du bac. */
+  REPONSE: "réponse",
+  /** Versé au projet, pour la zone où l'on se place. */
+  PROJET: "projet",
+  /** Posé par une ligne du brouillon — un `.ddb`, une affirmation. */
+  BROUILLON: "brouillon",
+  /** Conclu par une autre fonction de l'essai, au tour d'avant. */
+  DEDUIT: "déduit"
+};
+
+/**
+ * Ce qu'on donne au lancement : les valeurs, **et d'où chacune vient**.
+ *
+ * ## Trois sources, et l'ordre compte
+ *
+ * Ce que le **projet** tient d'abord : c'est le fond, et c'est ce que la zone
+ * choisie change. Ce que le **brouillon** pose ensuite — il est ce qu'on
+ * essaie, et une ligne qu'on vient d'écrire l'emporte sur ce qui est versé. Ce
+ * qu'on a **tapé** enfin : c'est la main sur le volant, et elle gagne partout,
+ * y compris pour un appel qui nomme une autre zone.
+ *
+ * ## Pourquoi les deux se construisent ensemble
+ *
+ * La provenance **est** l'ordre : elle se lit dans le même empilement, et la
+ * refaire ailleurs reviendrait à réécrire cet ordre-là une seconde fois. Le
+ * jour où l'une des trois sources bougerait, l'autre copie continuerait de
+ * dire l'ancien (règle 4).
+ *
+ * @returns {{valeurs: Map<string, string>, venues: Map<string, string>}}
+ */
+export function ceQuOnDonneAuLancement(fichiers = [], reponses = null, { memoire = null, zone = "" } = {}) {
+  const valeurs = new Map();
+  const venues = new Map();
+
+  const poser = (cle, valeur, venu) => {
+    if (!cle || !texte(valeur)) return;
+    valeurs.set(cle, valeur);
+    venues.set(cle, venu);
+  };
+
+  for (const [cle, valeur] of valeursDuProjet(memoire, zone)) poser(cle, valeur, VENU.PROJET);
+  for (const [cle, valeur] of valeursPosees(fichiers)) poser(cle, valeur, VENU.BROUILLON);
+
   const declarations = declarationsDuBrouillon(fichiers);
   const dites = reponses instanceof Map ? reponses : new Map(Object.entries(reponses ?? {}));
 
   for (const [nom, valeur] of dites) {
-    const cle = cleDuSujet(texte(nom));
     // L'unité est à l'écran, à droite du champ : elle doit partir avec ce
     // qu'on tape, sinon elle ne sert qu'à décorer.
-    if (cle && texte(valeur)) valeurs.set(cle, reponseAvecSonUnite(valeur, declarations.get(cle)));
+    const cle = cleDuSujet(texte(nom));
+    if (texte(valeur)) poser(cle, reponseAvecSonUnite(valeur, declarations.get(cle)), VENU.REPONSE);
   }
 
-  return valeurs;
+  return { valeurs, venues };
+}
+
+export function valeursDuLancement(fichiers = [], reponses = null, comment = {}) {
+  return ceQuOnDonneAuLancement(fichiers, reponses, comment).valeurs;
+}
+
+/**
+ * Ce qui a bougé au projet depuis qu'on l'a lu — parmi ce que ce brouillon lit.
+ *
+ * ## Le défaut
+ *
+ * La mémoire se lisait **une fois** par session. On reprenait « Nature des
+ * volets : alu », on essayait une demi-heure, et pendant ce temps le projet
+ * avait signé « bois » : l'essai continuait de répondre sur `alu` sans qu'un
+ * mot le dise. Pire qu'une valeur absente — une valeur périmée se lit comme une
+ * valeur juste.
+ *
+ * ## Pourquoi on compare les champs, et pas les mémoires
+ *
+ * Deux mémoires diffèrent de mille façons qui ne regardent pas ce brouillon :
+ * une autre zone, un autre sujet, un versement éclipsé. Ce qui compte est ce
+ * que **ce brouillon reprend**, dans **la zone où l'on se place** — et
+ * `champsDuBrouillon` le sait déjà. On ne redécide donc rien ici : on lui pose
+ * la même question deux fois, avec l'ancienne mémoire puis la neuve, et l'on
+ * regarde ce qui n'a pas la même réponse (règle 10).
+ *
+ * Une valeur **partie** du projet en est un changement comme un autre : `apres`
+ * vaut alors la chaîne vide, et l'écran doit le dire plutôt que de laisser
+ * croire que rien n'a bougé (règle 5).
+ *
+ * @returns {{nom: string, cle: string, avant: string, apres: string}[]}
+ */
+export function ceQuiABougeAuProjet(fichiers = [], { avant = null, apres = null, zone = "" } = {}) {
+  const vieux = new Map(
+    champsDuBrouillon(fichiers, { memoire: avant, zone }).map((champ) => [champ.cle, champ.duProjet])
+  );
+
+  return champsDuBrouillon(fichiers, { memoire: apres, zone })
+    .map((champ) => ({
+      nom: champ.nom,
+      cle: champ.cle,
+      avant: texte(vieux.get(champ.cle)),
+      apres: champ.duProjet
+    }))
+    .filter((un) => un.avant !== un.apres);
+}
+
+/**
+ * Ce qui a bougé, en une phrase.
+ *
+ * **Elle nomme les valeurs**, parce que « le projet a changé » n'apprend rien :
+ * ce qu'on veut savoir est s'il faut relancer, et cela se décide sur les noms.
+ * Vide quand rien n'a bougé — une phrase rassurante à chaque relecture finirait
+ * par ne plus se lire, et celle qui compte passerait avec elle.
+ */
+export function phraseDeCeQuiABouge(bouge = []) {
+  const tous = (Array.isArray(bouge) ? bouge : []).filter((un) => texte(un?.nom));
+  if (!tous.length) return "";
+
+  const dit = tous.map((un) => (un.apres
+    ? `« ${un.nom} » : ${un.avant || "rien"} → ${un.apres}`
+    // Une valeur retirée du projet n'a pas de flèche : il n'y a plus de valeur
+    // au bout. Écrire « → rien » laisserait croire que le projet tient « rien ».
+    : `« ${un.nom} » n'est plus au projet (${un.avant})`));
+
+  return `Le projet a bougé depuis la lecture — ${dit.join(" ; ")}.`;
 }

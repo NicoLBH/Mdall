@@ -65,7 +65,8 @@ import {
   fichiersRemplis, brouillonRange, brouillonRelu
 } from "../../../services/brouillon-mdall.js";
 import {
-  champsDuBrouillon, SAISIE, ETAT_DU_CHAMP, etatDuChamp
+  champsDuBrouillon, SAISIE, ETAT_DU_CHAMP, etatDuChamp,
+  ceQuiABougeAuProjet, phraseDeCeQuiABouge
 } from "../../../services/formulaire-du-brouillon.js";
 import { zoneChoices, normalizeZoneKey } from "../../../services/project-zones.js";
 import {
@@ -656,6 +657,27 @@ function motDeLaVerite(verite) {
 }
 
 /**
+ * D'où venait ce qu'une clause a lu, en un mot.
+ *
+ * **La valeur seule ne dit pas où la corriger.** « Nature des volets = alu »
+ * pouvait venir du projet, d'une ligne du brouillon, du champ juste au-dessus,
+ * ou d'une fonction voisine qui venait de le conclure : quatre endroits pour
+ * agir, et un seul mot les sépare.
+ *
+ * Rien quand on ne sait pas d'où elle vient : un mot inventé ferait chercher là
+ * où il n'y a pas à chercher (règle 5). Et une lecture qui n'a **rien** lu n'a
+ * pas de provenance non plus — c'est la même absence, dite une seule fois : ce
+ * qui n'a pas été donné au lancement n'y a pas de provenance, et ce qui y en a
+ * une a été lu. Un second test sur `connu` aurait porté sur une paire que le
+ * lancement ne peut pas produire, et ne se serait jamais cassé.
+ */
+function renderVenue(lecture = null) {
+  const venu = texte(lecture?.venu);
+  if (!venu) return "";
+  return `<span class="venue venue--${escapeHtml(venu)}">${escapeHtml(venu)}</span>`;
+}
+
+/**
  * Ce que chaque fonction conclut, et ce qu'elle a lu pour le conclure.
  *
  * **La trace n'est pas un détail** : une règle qui rend un verdict sans montrer
@@ -741,6 +763,7 @@ export function renderResultats(resultats = [], { refus = [] } = {}) {
                        <span class="bac-trace__clause">${escapeHtml(lecture.sujet)} ${escapeHtml(lecture.operateur)} ${
                          escapeHtml(lecture.attendu.join(" ou "))}</span>
                        <span class="bac-trace__lu">${lecture.connu ? escapeHtml(lecture.lu) : "rien"}</span>
+                       ${renderVenue(lecture)}
                        <span class="bac-trace__verite bac-trace__verite--${motDeLaVerite(lecture.verite)}">${
                          motDeLaVerite(lecture.verite)}</span>
                        ${lecture.pourquoi ? `<span class="bac-trace__pourquoi">${escapeHtml(lecture.pourquoi)}</span>` : ""}
@@ -786,7 +809,13 @@ function refusDuBrouillon(fichiers = []) {
 
 /** Le bac d'essai : le formulaire, puis ce que les fonctions répondent. */
 export function renderBacDessai(brouillon = null, {
-  reponses = {}, lance = false, tete = true, memoire = null, zone = ""
+  reponses = {}, lance = false, tete = true, memoire = null, zone = "",
+  /**
+   * **Quand la mémoire a été lue**, et ce qu'il y a à en dire. Les deux viennent
+   * de l'appelant : le rendu ne lit rien de la base, et un rendu qui daterait
+   * lui-même sa propre lecture daterait le dessin, pas la lecture.
+   */
+  lueLe = null, dit = ""
 } = {}) {
   const remplis = fichiersRemplis(brouillon);
   // **Les fonctions versées jouent avec.** Le brouillon qui nomme « Couleur des
@@ -809,6 +838,7 @@ export function renderBacDessai(brouillon = null, {
         <span class="bac__quoi">Remplissez ce qui manque, et lancez. Rien ne s'écrit.</span>
       </div>` : ""}
       ${renderChoixDeLaZone(memoire, zone)}
+      ${renderLectureDuProjet(memoire, { lueLe, dit })}
       ${
         champs.length
           ? renderFormulaire(champs, reponses)
@@ -821,6 +851,9 @@ export function renderBacDessai(brouillon = null, {
 
 /** Le geste : on change de partie d'ouvrage. */
 export const GESTE_DE_LA_ZONE = "bac-zone";
+
+/** Le geste : on relit la mémoire du projet. */
+export const GESTE_DE_RELECTURE = "bac-relire";
 
 /**
  * **Où l'on se place pour essayer.**
@@ -866,6 +899,61 @@ export function renderChoixDeLaZone(memoire = null, zone = "") {
       </select>
     </label>
   `;
+}
+
+/**
+ * **Quand le projet a été lu, et de quoi le relire.**
+ *
+ * ## Le défaut
+ *
+ * La mémoire se lisait une fois, à l'ouverture, et rien ne le disait. L'essai
+ * répondait donc sur un projet vieux d'une demi-heure, avec la même assurance
+ * que sur un projet lu à l'instant — et l'on n'avait aucun moyen de demander
+ * qu'il soit relu. « Ne pas savoir n'autorise pas à prétendre qu'il n'y a
+ * rien » va dans les deux sens : ne pas savoir si c'est à jour n'autorise pas à
+ * le présenter comme à jour (règle 5).
+ *
+ * ## Ce qu'il montre, et ce qu'il ne montre pas
+ *
+ * L'heure de la lecture, et un mot pour relire. Rien tant que la mémoire n'est
+ * pas lue : annoncer « lu à 14:32 » d'un projet qu'on n'a pas su lire serait
+ * exactement le mensonge qu'on vient d'enlever.
+ *
+ * La phrase de ce qui a bougé vient **après** le mot pour relire : on relit,
+ * puis on lit ce qui a changé. L'ordre inverse ferait chercher un bouton sous
+ * une nouvelle qu'on ne pouvait pas encore avoir.
+ *
+ * **Une seule phrase, et elle est décidée à la lecture** : ce qui a bougé, ou
+ * qu'on n'a pas su relire. La recalculer ici en ferait une seconde version de
+ * ce qui s'est passé, et les deux finiraient par ne plus dire la même chose
+ * (règle 4).
+ */
+export function renderLectureDuProjet(memoire = null, { lueLe = null, dit = "" } = {}) {
+  if (!Array.isArray(memoire)) return "";
+
+  const quand = heureCourte(lueLe);
+
+  return `
+    <p class="bac-projet">
+      <span class="bac-projet__quoi">${
+        quand ? `Projet lu à ${escapeHtml(quand)}` : "Projet lu"}</span>
+      <button type="button" class="bac-projet__relire" data-geste="${GESTE_DE_RELECTURE}">relire</button>
+      ${texte(dit) ? `<span class="bac-projet__bouge">${escapeHtml(texte(dit))}</span>` : ""}
+    </p>
+  `;
+}
+
+/**
+ * L'heure d'une lecture, en heures et minutes.
+ *
+ * **Pas la date** : on parle de la session en cours, et « le 29/09 à 14:32 »
+ * ferait lire une date pour savoir si c'était il y a cinq minutes. Vide quand
+ * on n'a pas d'heure — une heure inventée serait pire que pas d'heure.
+ */
+function heureCourte(quand = null) {
+  const date = quand instanceof Date ? quand : new Date(Number(quand) || NaN);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 /** Ce qu'il y a à faire d'un panneau qui apparaît, change, ou s'en va. */
@@ -1712,6 +1800,23 @@ const etat = {
    * lorsqu'il a quelque chose à montrer (règle 5).
    */
   memoire: null,
+  /**
+   * **Quand on l'a lue.** `null` tant qu'on ne l'a pas lue.
+   *
+   * Sans elle, un essai répondait sur un projet vieux d'une demi-heure avec la
+   * même assurance que sur un projet lu à l'instant. L'heure ne garantit rien —
+   * le projet peut bouger la seconde suivante —, mais elle dit **sur quoi** on
+   * répond, et c'est ce qui manquait.
+   */
+  memoireLueLe: null,
+  /**
+   * Ce qu'il y a à dire de la dernière lecture : ce qui a bougé, ou qu'on n'a
+   * pas su relire. Vide après la première — il n'y a rien à comparer.
+   *
+   * **Une phrase, décidée une fois.** La recalculer au rendu en ferait une
+   * seconde version de ce qui s'est passé (règle 4).
+   */
+  motDuProjet: "",
   /** Ce que le dernier enregistrement a donné : `{ok, dit}`, ou `null`. */
   garde: null,
   /**
@@ -2251,7 +2356,7 @@ function ouvrirLaFicheDeLetabli(racine) {
  * libre, et l'on ne bloque pas pour autant — la base tranchera (règle 5).
  */
 /**
- * Lire la mémoire du projet, une fois.
+ * Lire la mémoire du projet — une fois, ou à la demande.
  *
  * **Après l'ouverture, et non avant** : tout ce qui vient du brouillon et du
  * langage est déjà là, et c'est ce qu'on cherche neuf fois sur dix. Attendre la
@@ -2260,22 +2365,59 @@ function ouvrirLaFicheDeLetabli(racine) {
  * Un échec laisse `null` : « la mémoire n'est pas lue » et « le projet ne
  * conclut rien » ne se disent pas pareil, et le rayon se tait plutôt que
  * d'annoncer un projet vide (règle 5).
+ *
+ * ## Pourquoi `relire`
+ *
+ * Elle se lisait **une seule fois par session**. On reprenait « Nature des
+ * volets : alu », on essayait une demi-heure, et pendant ce temps le projet
+ * signait « bois » : l'essai continuait de répondre sur `alu`, et rien ne le
+ * disait. Une valeur périmée se lit exactement comme une valeur juste — c'est
+ * pire qu'une valeur absente.
+ *
+ * **Un échec de relecture se dit**, lui : on vient de le demander d'un clic, et
+ * un clic sans effet ferait croire que le projet n'a pas bougé (règle 5). Ce
+ * qu'on avait lu reste en place — le jeter rendrait l'essai muet pour punir la
+ * base d'être injoignable.
  */
-async function assurerLaMemoire() {
-  if (etat.memoire !== null) return;
+async function assurerLaMemoire({ relire = false } = {}) {
+  if (etat.memoire !== null && !relire) return;
+
+  const echoue = (dit) => {
+    if (!relire) return;
+    etat.motDuProjet = dit;
+    refaireLeBac();
+  };
 
   // Le même chemin que « Proposer au projet » : un seul endroit décide quel
   // projet on regarde (règle 10).
   const { resolveCurrentBackendProjectId } = await import("../../../services/project-supabase-sync.js");
   const projet = await resolveCurrentBackendProjectId().catch(() => null);
-  if (!projet) return;
+  if (!projet) return void echoue("Aucun projet à relire.");
 
   const { listProjectAssertions } = await import("../../../services/project-memory-supabase.js");
   const lues = await listProjectAssertions(projet).catch(() => null);
-  if (!lues) return;
+  if (!lues) return void echoue("La mémoire du projet n'a pas pu être relue — c'est la lecture d'avant qui sert.");
 
+  const avant = etat.memoire;
   etat.memoire = lues;
-  redessinerLesResultats();
+  etat.memoireLueLe = Date.now();
+  /**
+   * **Rien à dire de la première lecture** : il n'y a pas d'avant, et tout
+   * paraîtrait avoir bougé.
+   */
+  etat.motDuProjet = avant === null ? "" : phraseDeCeQuiABouge(
+    ceQuiABougeAuProjet(fichiersRemplis(etat.brouillon), { avant, apres: lues, zone: etat.zone })
+  );
+
+  /**
+   * **Le bac entier, et non les seuls résultats.**
+   *
+   * La mémoire change ce que le formulaire **demande**, ce qu'il **reprend** du
+   * projet, les zones où l'on peut se placer, et l'heure de la lecture : n'en
+   * rafraîchir que les verdicts laissait l'écran dire deux choses à la fois —
+   * un champ vide au-dessus d'un résultat qui répond dessus.
+   */
+  refaireLeBac();
 }
 
 async function assurerLetabli() {
@@ -2569,7 +2711,8 @@ function ouvrirLeBac(racine) {
      * signée —, puis le champ disparaissait à la première frappe.
      */
     corpsHtml: renderBacDessai(etat.brouillon, {
-      reponses: etat.reponses, lance: etat.lance, memoire: etat.memoire, zone: etat.zone
+      reponses: etat.reponses, lance: etat.lance, memoire: etat.memoire, zone: etat.zone,
+      lueLe: etat.memoireLueLe, dit: etat.motDuProjet
     }),
     className: "details-modal--plein",
     surFermeture: () => { etat.lance = false; }
@@ -2763,17 +2906,72 @@ function brancherLeChoixDeLaZone(hote, racine) {
 
   choix.addEventListener("change", () => {
     etat.zone = choix.value;
-    hote.innerHTML = renderBacDessai(etat.brouillon, {
-      reponses: etat.reponses, lance: etat.lance, memoire: etat.memoire, zone: etat.zone
-    });
-    brancherLeBac(hote, racine);
-    redessinerLaConsole(racine);
+    /**
+     * **Ce qui avait bougé ne parle plus de cette zone.** Le garder afficherait
+     * « Nature des volets : alu → bois » du bâtiment A sous les champs du
+     * bâtiment B, ce qui est faux là-bas.
+     */
+    etat.motDuProjet = "";
+    refaireLeBac(hote, racine);
   });
+}
+
+/**
+ * **Relire ce que le projet a signé**, et dire ce qui a bougé.
+ *
+ * Un clic délibéré, comme le changement de zone : le bac se refait entier, et le
+ * curseur part du champ où il était. C'est le prix, et il est bon — ce qu'on a
+ * tapé vit dans l'état et revient, la seule chose perdue est le focus.
+ */
+function brancherLaRelecture(hote) {
+  const bouton = hote.querySelector(`[data-geste="${GESTE_DE_RELECTURE}"]`);
+  if (!bouton) return;
+
+  // Rien à passer : c'est la lecture qui refait le bac quand elle aboutit, et
+  // elle retrouve l'écran dans le document.
+  bouton.addEventListener("click", () => { void assurerLaMemoire({ relire: true }); });
+}
+
+/**
+ * Refaire le bac entier — **le seul endroit qui le fasse**.
+ *
+ * Trois gestes le demandent : changer de zone, relire le projet, et la première
+ * arrivée de la mémoire. Trois recopies du même rendu auraient fini par ne plus
+ * passer les mêmes choses — c'est déjà arrivé une fois, quand le premier rendu
+ * de la fenêtre oubliait la mémoire que le redessin passait (règle 10).
+ *
+ * `hote` et `racine` sont facultatifs : la mémoire arrive d'une lecture
+ * asynchrone qui n'a ni l'un ni l'autre sous la main, et les deux se retrouvent
+ * dans le document.
+ *
+ * ## Quand le bac **est** l'écran, on ne le refait pas
+ *
+ * L'essai d'un utilitaire dessine le bac sans sa tête et sans mémoire : c'est
+ * l'écran entier, et le refaire d'ici lui poserait un titre et un sélecteur de
+ * zone que son premier rendu n'a jamais eus — la fenêtre et l'écran diraient
+ * alors deux choses différentes du même brouillon. On y repose les seuls
+ * verdicts, comme avant.
+ */
+function refaireLeBac(hote = null, racine = null) {
+  const corps = hote ?? document.getElementById("detailsBodyModal");
+  if (!leBacEstLa(corps)) {
+    redessinerLesResultats();
+    return;
+  }
+
+  corps.innerHTML = renderBacDessai(etat.brouillon, {
+    reponses: etat.reponses, lance: etat.lance, memoire: etat.memoire, zone: etat.zone,
+    lueLe: etat.memoireLueLe, dit: etat.motDuProjet
+  });
+  const ecran = ecranVivant(racine);
+  brancherLeBac(corps, ecran);
+  if (ecran) redessinerLaConsole(ecran);
 }
 
 function brancherLeBac(hote, racine) {
   brancherLesLectures(hote, choisirLaLecture);
   brancherLeChoixDeLaZone(hote, racine);
+  brancherLaRelecture(hote);
   brancherLesSaisies(hote, racine);
   brancherLesRetours(hote, racine);
 }
