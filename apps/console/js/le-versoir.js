@@ -9,16 +9,20 @@
  * archives de chantier et savoir ce qu'elles contiennent
  * (`docs/nourrir-mdall.md`).
  *
- * ## Rien ne part
+ * ## Rien ne part sans qu'on le demande
  *
- * Les fichiers ne quittent pas le poste. Ils sont lus par le navigateur,
- * dépliés par `un-msg-deplie.js`, comptés par `linventaire-du-versoir.js`, et
- * oubliés dès qu'on ferme l'onglet. **Aucun dépôt, aucun appel, aucune
- * dépense.**
+ * Lire, déplier et compter se font **entièrement sur le poste** : aucun appel,
+ * aucune dépense. C'est l'ordre des opérations — on regarde cent archives
+ * avant de décider ce qu'on en garde.
  *
- * Ce n'est pas une précaution de prudence : c'est l'ordre des opérations. On
- * regarde avant de verser, et ce qui se verse un jour se versera par une
- * proposition signée, comme tout le reste (règle 1).
+ * Verser est **un geste à part, et explicite** : un bouton, une fois qu'on a
+ * vu. Verser au fil du dépôt aurait été plus court d'un clic, et faux : toutes
+ * les archives qu'on ouvre ne méritent pas d'être gardées.
+ *
+ * Et ce qui part ne va pas dans la mémoire d'un chantier — il va dans
+ * l'archive des pièces, qui ne connaît aucun projet
+ * (`services/larchive-des-pieces.js`). Ce qui entre un jour dans la mémoire y
+ * entrera par une proposition signée, comme tout le reste (règle 1).
  *
  * ## Il ne dessine que ce qu'il a lu
  *
@@ -35,6 +39,8 @@ import {
 import {
   lesEmpreintes, marquerLesRepetitions
 } from "../partage/js/services/le-dedoublonnage.js";
+import { phraseDuVersement } from "../partage/js/services/larchive-des-pieces.js";
+import { verserLesPieces } from "../partage/js/services/larchive-des-pieces-supabase.js";
 import { phraseDuTrou } from "../partage/js/services/trous-dun-mail.js";
 
 const echapper = (valeur) => String(valeur ?? "")
@@ -59,8 +65,8 @@ export function renderLeVersoir() {
         <h3 class="conso-usages__titre">Le versoir</h3>
         <p class="conso-usages__mot">
           Déposez des messages Outlook (<code>.msg</code>) : Mdall les ouvre ici,
-          sur votre poste, et dit ce qu'ils portent. <strong>Rien n'est envoyé,
-          rien n'est versé.</strong>
+          sur votre poste, et dit ce qu'ils portent. <strong>Rien ne part tant
+          que vous ne l'avez pas demandé.</strong>
         </p>
 
         <div class="documents-dropzone" id="versoirZone">
@@ -76,6 +82,29 @@ export function renderLeVersoir() {
         <div id="versoirInventaire"></div>
       </section>
     </div>
+  `;
+}
+
+/**
+ * Le geste qui verse, et il est **explicite**.
+ *
+ * Verser au fil du dépôt aurait été plus court d'un clic, et faux : on ouvre
+ * cent archives pour regarder ce qu'elles portent, et toutes ne méritent pas
+ * d'être gardées. Ce qui part du poste part parce qu'on l'a demandé.
+ *
+ * Le bouton n'apparaît que s'il y a des documents : un bouton qui ne fait rien
+ * apprend à ne plus lire les boutons.
+ */
+function renderLeGesteDeVerser(inventaire) {
+  if (!inventaire.documents && !inventaire.vignettes) return "";
+
+  return `
+    <p class="conso-usages__mot">
+      <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" id="versoirVerser">
+        Verser les pièces dans l'archive
+      </button>
+      <span class="forme-reference__sur mono-small" id="versoirBilan"></span>
+    </p>
   `;
 }
 
@@ -179,6 +208,7 @@ function renderLInventaire(messages) {
             `${inventaire.sansDate} ${inventaire.sansDate > 1 ? "messages ne portent" : "message ne porte"} pas de date lisible`
           )}</p>`
         : ""}
+      ${renderLeGesteDeVerser(inventaire)}
       ${marquerLesRepetitions(messages).map(renderUnMessage).join("")}
     </section>
   `;
@@ -192,6 +222,9 @@ export function monterLeVersoir(hote) {
   if (!zone || !champ || !ou) return;
 
   const lus = [];
+  // Les octets des pièces, gardés à part de l'inventaire : celui-ci ne porte
+  // que des nombres, et le versement a besoin de la matière.
+  const pieces = [];
 
   const lire = async (fichiers) => {
     for (const fichier of fichiers) {
@@ -200,7 +233,15 @@ export function monterLeVersoir(hote) {
       // Les empreintes se calculent ici, une seule fois, sur les octets qu'on a
       // déjà en main : les recalculer à chaque affichage relirait cent
       // mégaoctets à chaque fichier déposé.
-      lus.push(inventaireDunMessage(lu, fichier.name, await lesEmpreintes(lu)));
+      const empreintes = await lesEmpreintes(lu);
+      lus.push(inventaireDunMessage(lu, fichier.name, empreintes));
+      (lu.pieces ?? []).forEach((une, rang) => pieces.push({
+        empreinte: empreintes.pieces[rang] ?? "",
+        octets: une.octets,
+        nom: une.nom,
+        type: une.type,
+        taille: une.taille
+      }));
     }
     // **Dans l'ordre du temps**, et non dans celui où l'explorateur les a
     // rendus : une archive se relit comme une chronologie.
@@ -213,6 +254,31 @@ export function monterLeVersoir(hote) {
   champ.addEventListener("change", () => {
     lire([...champ.files]);
     champ.value = "";
+  });
+
+  /**
+   * Verser, sur demande.
+   *
+   * Le bouton se désarme pendant le versement : cinq mégaoctets par plan, et
+   * un second clic relancerait tout depuis le début.
+   */
+  ou.addEventListener("click", async (evenement) => {
+    const bouton = evenement.target.closest?.("#versoirVerser");
+    if (!bouton) return;
+
+    const bilan = ou.querySelector("#versoirBilan");
+    bouton.disabled = true;
+    if (bilan) bilan.textContent = "versement…";
+
+    const fait = await verserLesPieces(pieces);
+    bouton.disabled = false;
+    if (!bilan) return;
+
+    // **Une archive qu'on n'a pas pu lire ne se dit pas « rien à verser ».**
+    // Sans savoir ce qui est déjà là, on ne verse pas — et l'on explique.
+    bilan.textContent = fait.lu
+      ? (phraseDuVersement(fait) || "tout était déjà là")
+      : "l'archive n'a pas répondu : rien n'a été versé";
   });
 
   for (const quoi of ["dragenter", "dragover"]) {

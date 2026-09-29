@@ -40,6 +40,8 @@ jobs:
 
       # La console d'administration est un autre site : elle emporte depuis
       # apps/web ce dont elle a besoin, et se sert à part (apps/console).
+      # Elle emporte aussi pdf.js, que « build:web » vient de copier : cette
+      # étape passe donc après, et elle échoue bruyamment si ce n'est pas le cas.
       - name: Build console
         run: npm run build:console
 
