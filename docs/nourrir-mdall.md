@@ -520,10 +520,13 @@ que la mesure aura de la matière à se mettre sous la dent.
   **versement** — le navigateur, parce qu'il ne coûte rien et qu'il tient déjà
   les octets. La question se reposera au volume : cent archives à la fois, dans
   un onglet, demanderont au moins de reprendre là où l'on s'est arrêté.
-- La durée de conservation de l'archive, et ce qu'on répond à qui demande
-  l'effacement d'une pièce (§ 6). Le casier n'a aujourd'hui **aucune politique
-  de suppression** — c'est un choix, pas un oubli, et il devra être rediscuté
-  avant le premier client.
+- ~~La durée de conservation de l'archive~~ — **tranchée** :
+  `docs/la-console-de-ladministrateur.md`, § 6 ter. Deux corpus, deux horloges —
+  le fonds commun anonyme se garde sans réserve, l'archive source garde une
+  raison et une date de réexamen, avec dix ans après le dernier message d'un
+  chantier comme plancher défendable (responsabilité décennale). Reste à
+  construire : le journal des retraits, la date de réexamen, l'écran « ce qui
+  dort », la fiche de registre.
 - Le format d'un épisode, et jusqu'où il remonte dans le passé d'un projet.
 - Ce qu'on fait des plans : un indice de révision est une séquence, et c'est
   peut-être le signal le moins cher et le plus riche de tous.
