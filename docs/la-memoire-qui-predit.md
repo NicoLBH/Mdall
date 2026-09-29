@@ -43,6 +43,14 @@ réponses, jamais la **séquence** : après « profondeur hors gel » vient « t
 fondation », puis « reprise en sous-œuvre du voisin ». Cette suite n'est écrite
 nulle part ailleurs que dans la chronologie d'une mémoire de projet.
 
+Elle se constitue désormais, datée de bout en bout
+(`services/episode-du-projet.js`). Ce qui manque encore pour la **comparer**
+d'un chantier à l'autre est un **nom commun aux sujets** — une nomenclature —,
+et cette réflexion n'est pas aboutie. On garde donc la suite dès maintenant,
+parce que c'est la partie qu'on ne rattrape pas, et l'on ne feint pas un
+rapprochement sur les libellés : « Fondations bâtiment A » et « Fondation du
+hall » seraient le même sujet un jour et deux un autre jour (règle 5).
+
 **Ce qui s'est révélé faux après coup.** Le rejeu compare déjà ce qu'une
 fonction conclut aujourd'hui à ce que le projet affirme, et dit « différente ».
 Ce verdict-là est **calculé**, pas rédigé — aucun modèle ne le produit.
@@ -85,6 +93,29 @@ court** : structuré pour être calculable, court pour être comparable.
 
 **Aucune valeur de projet n'entre dans un vecteur de contexte.** C'est la règle,
 et elle se vérifie par construction (§ 6).
+
+Et « par construction » a désormais un sens précis : **chaque axe a un domaine
+fermé**, écrit dans `services/vecteur-de-contexte.js`, et une valeur qui n'y
+figure pas n'entre pas — l'axe se dit alors inconnu. C'est nécessaire parce que
+la source est sale : un fait de contexte venu de Géorisques porte le **nom de la
+commune** à côté de la zone sismique. En lire la zone est sûr ; recopier le fait
+ne le serait pas.
+
+Les ordres de grandeur suivent la même règle et sont **irréversibles** : « 4 à
+7 niveaux » se compare, « R+5 » identifie.
+
+### La distance se dit
+
+Le voisinage ne rend pas un nombre opaque : il rend **ce qui diffère, nommé** —
+« ces deux chantiers diffèrent sur la phase et la zone de neige ». C'est la
+différence entre un moteur qu'on subit et un moteur à qui l'on peut demander
+« lesquels ? » (§ 10).
+
+Et **ne pas savoir n'est pas être différent** : un axe que l'un des deux ignore
+ne compte ni pour ni contre. Le compter comme un écart ferait passer un projet
+mal renseigné pour un projet dissemblable, et l'on chercherait des voisins là où
+il n'y a qu'un formulaire vide. Quand rien n'est comparable, la distance vaut
+`null` — jamais `0`, qui voudrait dire « identiques » (règle 5).
 
 ## 4. Trois prédicteurs, du plus bête au plus fin
 
@@ -242,6 +273,7 @@ qui manque**.
    *(fait — `services/demande-par-lot.js`)*
 3. **L'épisode et son vecteur de contexte** — une structure, pas un moteur. Elle
    se remplit rétroactivement sur les projets existants.
+   *(fait — `services/vecteur-de-contexte.js`, `services/episode-du-projet.js`)*
 4. **La mesure** — « prédire dans le passé », avec la ligne de base. Avant tout
    prédicteur : sinon on ne saura pas si le premier vaut quelque chose.
 5. **La fréquence globale** — le prédicteur bête, qui est la référence.

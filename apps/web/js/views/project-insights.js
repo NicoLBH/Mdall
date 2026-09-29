@@ -1,7 +1,7 @@
 import { escapeHtml } from "../utils/escape-html.js";
 import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrollPolicy } from "./project-shell-chrome.js";
 import { getRunMetrics } from "../services/project-automation.js";
-import { getProjectInsightsMetrics } from "../services/project-insights-metrics.js";
+import { getAllSubjects, getProjectInsightsMetrics } from "../services/project-insights-metrics.js";
 import { renderSvgLineChart, getNiceChartTicks } from "../utils/svg-line-chart.js";
 import { store } from "../store.js";
 import {
@@ -10,6 +10,9 @@ import {
 import {
   renderAttente, renderCarteDeConsommation, renderConsommation
 } from "./consommation/ecran-de-consommation.js";
+import { vecteurDeContexte } from "../services/vecteur-de-contexte.js";
+import { episodeDuProjet } from "../services/episode-du-projet.js";
+import { renderLaForme } from "./ui/forme-du-chantier.js";
 
 function formatDuration(value) {
   const ms = Number(value);
@@ -252,13 +255,120 @@ export function renderProjectInsights(root) {
         ${renderExecutionInsightsCardsSection()}
         ${renderPilotageMetricStrip(insights.summary)}
         ${renderChartsSection(insights)}
+        <div id="projectInsightsForme"></div>
         <div id="projectInsightsConsommation"></div>
       </div>
     </section>
   `;
 
+  dessinerLaForme(root);
   dessinerLaConsommation(root);
   debugProjectScrollPolicy("render-project-insights");
+}
+
+/* ── La forme de ce chantier, et sa suite ────────────────────────────────── */
+
+/**
+ * Ce qui a été lu du contexte, et pour quel projet.
+ *
+ * Les faits de contexte et la mémoire viennent de la base ; la phase, les
+ * rôles et les sujets sont déjà dans le magasin. On ne relit que ce qu'on n'a
+ * pas.
+ */
+const formeDuProjetLue = { projetId: "", faits: null, assertions: null, enCours: false, echec: false };
+
+/**
+ * La forme d'un chantier, telle que ce projet la donne aujourd'hui.
+ *
+ * **Chaque valeur est prise là où elle vit déjà** : la phase et les rôles dans
+ * le magasin, les zones dans les faits de contexte. Les redécouvrir ici en
+ * ferait deux lectures du même fait (règle 10).
+ */
+function laFormeDeCeChantier() {
+  const faits = new Map(
+    (formeDuProjetLue.faits ?? []).map((fait) => [String(fait?.fact_key ?? ""), fait?.fact_value])
+  );
+
+  return vecteurDeContexte({
+    phase: store.projectForm?.currentPhase ?? "",
+    sismique: faits.get("seismic_zone"),
+    neige: faits.get("snow_zone"),
+    vent: faits.get("wind_zone"),
+    niveaux: faits.get("floors_count"),
+    // **Les codes, jamais les noms.** Un collaborateur porte un nom et une
+    // société ; sa place sur le chantier est un code du catalogue, et c'est
+    // tout ce que la forme retient.
+    roles: (store.projectForm?.collaborators ?? []).map((un) => String(un?.roleCode ?? ""))
+  });
+}
+
+function dessinerLaForme(root) {
+  const hote = root?.querySelector?.("#projectInsightsForme");
+  if (!hote) return;
+
+  const projet = String(store.currentProjectId || "").trim();
+  if (!projet) return;
+
+  if (formeDuProjetLue.projetId === projet && !formeDuProjetLue.enCours) {
+    peindreLaForme(hote);
+    return;
+  }
+
+  if (formeDuProjetLue.enCours) return;
+  formeDuProjetLue.enCours = true;
+  formeDuProjetLue.projetId = projet;
+  peindreLaForme(hote);
+
+  (async () => {
+    try {
+      const [{ listProjectContextFacts }, { resolveCurrentBackendProjectId }, memoire] =
+        await Promise.all([
+          import("../services/project-context-facts-service.js"),
+          import("../services/project-supabase-sync.js"),
+          import("../services/project-memory-supabase.js")
+        ]);
+
+      // **Deux identifiants, et il faut le bon** : la route porte celui du
+      // frontal, la base classe tout par un UUID.
+      const backendProjectId = await resolveCurrentBackendProjectId();
+      const [faits, assertions] = await Promise.all([
+        backendProjectId ? listProjectContextFacts(backendProjectId).catch(() => null) : null,
+        backendProjectId ? memoire.listProjectAssertions(backendProjectId).catch(() => null) : null
+      ]);
+
+      formeDuProjetLue.echec = faits === null && assertions === null;
+      formeDuProjetLue.faits = faits;
+      formeDuProjetLue.assertions = assertions;
+    } catch {
+      formeDuProjetLue.echec = true;
+      formeDuProjetLue.faits = null;
+      formeDuProjetLue.assertions = null;
+    } finally {
+      formeDuProjetLue.enCours = false;
+      peindreLaForme(hote);
+    }
+  })();
+}
+
+function peindreLaForme(hote) {
+  if (!hote?.isConnected) return;
+
+  if (formeDuProjetLue.enCours) {
+    hote.innerHTML = renderAttente("Lecture de la forme du chantier");
+    return;
+  }
+
+  const vecteur = laFormeDeCeChantier();
+  const episode = episodeDuProjet({
+    contexte: vecteur,
+    // Les sujets sont déjà dans le magasin : les relire ferait un aller-retour
+    // pour une liste qu'on a sous la main. Et c'est le fichier des indicateurs
+    // qui sait où le magasin les range — à trois endroits selon l'écran ouvert.
+    sujets: getAllSubjects(),
+    assertions: formeDuProjetLue.assertions ?? []
+  });
+
+  hote.innerHTML = renderLaForme(vecteur, episode);
 }
 
 /* ── Ce que l'IA a consommé sur ce projet ────────────────────────────────── */
