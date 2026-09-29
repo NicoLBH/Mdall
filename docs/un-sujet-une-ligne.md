@@ -177,3 +177,7 @@ jamais rattraper après coup.
 
 La première brique d'un moteur de prédiction n'est pas un prédicteur : c'est le
 fait de **remarquer ce qui manque**.
+
+Et la suivante n'est pas de le **demander** : c'est de le **constater**. Ce que
+le projet a écarté, Mdall le lit dans quatre traces que le travail normal laisse
+derrière lui — voir `docs/ce-quon-a-ecarte.md`.

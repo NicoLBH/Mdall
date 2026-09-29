@@ -126,9 +126,16 @@ test("un doublon se tait, une valeur qui change se dit", () => {
     verse("v1", { le: "2026-09-07T08:00:00Z", zones: ["batiment-a"], valeur: "0,9 m" }),
     verse("v2", { le: "2026-09-09T08:00:00Z", zones: ["batiment-a"], valeur: "0,5 m" })
   ];
-  assert.deepEqual(valeursCorrigees(change), [
+  const corrigees = valeursCorrigees(change);
+  assert.deepEqual(corrigees.map(({ nom, avant, apres, zones }) => ({ nom, avant, apres, zones })), [
     { nom: "H0 retenu pour le département", avant: "0,9 m", apres: "0,5 m", zones: ["batiment-a"] }
   ]);
+
+  // Les deux versements sont rendus tels quels : qui veut la date de
+  // l'écartement ou la clé du sujet les trouve dessus, sans les rechercher par
+  // le nom.
+  assert.equal(corrigees[0].enVigueur.id, "v2");
+  assert.equal(corrigees[0].ecartee.id, "v1");
 });
 
 test("trois versements du même nom ne font qu'un avis", () => {
@@ -142,6 +149,33 @@ test("trois versements du même nom ne font qu'un avis", () => {
 
   assert.equal(corrections.length, 1);
   assert.equal(corrections[0].apres, "0,5 m");
+});
+
+test("la décision et le raisonnement d'une question ne s'éclipsent pas entre eux", () => {
+  // Le défaut, vu à l'écran : une question fermée verse trois lignes qui
+  // portent **le même nom** — c'est ce qui permet de les relier. Elles
+  // passaient pour trois versements du même nom, deux se faisaient éclipser
+  // par la troisième, et la décision disparaissait de son fichier.
+  const Q = "Quelle est la profondeur hors gel ?";
+  const le = "2026-09-20T10:00:00Z";
+  const trois = [
+    { id: "v1", subject_key: "q", status: "assumed", superseded_by: null, decided_at: le,
+      payload: { subject: Q, value: "0,60 m" } },
+    { id: "d1", subject_key: "decision:q", status: "assumed", superseded_by: null, decided_at: le,
+      payload: { subject: Q, value: "0,60 m" } },
+    { id: "r1", subject_key: "raisonnement:q", status: "assumed", superseded_by: null, decided_at: le,
+      payload: { subject: Q, value: Q } }
+  ];
+
+  assert.deepEqual([...versementsEclipses(trois)], []);
+  // Et aucune correction fantôme : « la question a été remplacée par la
+  // valeur » n'est pas un désaccord du projet.
+  assert.deepEqual(valeursCorrigees(trois), []);
+
+  // Les trois restent lisibles dans leur fichier : une ligne qu'un calcul
+  // escamote est une ligne qu'on ne peut plus retrouver.
+  const lues = fichiersDeLaMemoire(trois).flatMap((fichier) => fichier.lignes ?? []);
+  assert.deepEqual(lues.map((ligne) => ligne.id).sort(), ["d1", "r1", "v1"]);
 });
 
 test("une règle ne s'éclipse pas : elle n'est pas une valeur", () => {

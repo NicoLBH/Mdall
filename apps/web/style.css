@@ -19215,6 +19215,30 @@ button.memory-note__part:hover{ color:var(--fg, var(--text)); text-decoration:un
    expliquer se subit** : la raison se lit sur la ligne qu'elle remonte, en ocre
    comme tout ce dont il faut faire quelque chose. */
 .memory-row__pourquoi{ flex:0 0 auto; color:#d29922; font-size:11px; }
+
+/* Ce que le projet a écarté en chemin — constaté, jamais versé. Mêmes tailles
+   et mêmes tons que « Du même sujet » juste au-dessus : c'est la même famille
+   de complément sous une ligne, et la recalibrer ici la ferait dériver.
+
+   **Une ligne par écarté**, et non un paragraphe qui se renvoie à la ligne :
+   vu à l'écran, trois écartés en flux continu se lisaient comme une seule
+   phrase dont on ne savait plus où commençait le deuxième. */
+.memory-row__ecarts{
+  display:flex; flex-direction:column; gap:2px; font-size:12px;
+}
+.memory-row__ecarts-quoi{ display:inline-flex; align-items:center; gap:4px; color:var(--muted); }
+.memory-row__ecart{ display:flex; align-items:baseline; gap:6px; min-width:0; }
+/* Ce qui a été écarté peut être une phrase entière — une question fermée verse
+   son énoncé pour valeur. Barré et borné : la ligne dit lequel, le détail
+   s'ouvre en ouvrant le sujet. */
+.memory-row__ecart b{
+  flex:0 1 auto; min-width:0; max-width:34ch; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap;
+  font-weight:600; text-decoration:line-through; text-decoration-thickness:1px;
+}
+.memory-row__ecart i{ color:var(--muted); font-style:normal; }
+.memory-row__ecart em{ flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); }
+.memory-row__ecart-reste{ color:var(--muted); font-style:italic; }
 .memory-row__detail{ color:var(--muted); font-size:13px; }
 .memory-row__meta{ color:var(--muted); font-size:12px; }
 .memory-row__superseded{ font-style:italic; }
@@ -23208,7 +23232,11 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
 .decision-sujet__champ{ display:flex; flex-direction:column; gap:6px; }
 .decision-sujet__champ > span{ color:var(--text); font-size:12px; font-weight:600; }
 .decision-sujet__champ > span i{ color:var(--muted); font-weight:400; font-style:normal; }
-.decision-sujet__ecarte{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+/* Trois colonnes : ce qu'on a écarté, la raison qu'on choisit, le mot qu'on
+   ajoute si la liste ne dit pas tout. La première est la plus large — c'est la
+   seule qui porte un nom d'ouvrage. */
+.decision-sujet__ecarte{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) minmax(0,0.85fr); gap:6px; }
+@media (max-width: 560px){ .decision-sujet__ecarte{ grid-template-columns:1fr; } }
 /* Trois boutons : « Annuler » part à gauche, où il ne se confond pas avec les
    deux fermetures. Le principal reste le dernier, à droite, comme partout. */
 .decision-sujet__pied{ flex-wrap:wrap; gap:8px; }

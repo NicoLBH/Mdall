@@ -1030,7 +1030,8 @@ export const WIKI_DU_LANGAGE = [
       + "la ligne qu'il explique."),
     liste(
       "`parce que:` cite la preuve — un article, une phrase d'un règlement ;",
-      "`écarté:` garde ce qu'une décision a laissé de côté, et pourquoi ;",
+      "`écarté:` garde ce qu'une décision a laissé de côté, et pourquoi — le "
+      + "pourquoi se choisit dans une liste du métier, et se complète d'un mot ;",
       "`zone` limite un bloc à une partie du projet ; sans lui, il vaut partout ;",
       "`le:` date un constat."
     ),

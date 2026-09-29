@@ -14,6 +14,19 @@
  * obligatoire sauf la question : sans elle il reste une valeur, et une valeur
  * n'engage personne.
  *
+ * ## Et surtout : cette fenêtre n'est plus la seule source des écartés
+ *
+ * Mdall **constate** ce que le projet a écarté — une valeur remplacée, un
+ * document arrivé après coup, une ligne refusée en revue
+ * (`services/ecarts-observes.js`). Ce qu'on écrit ici n'est donc pas un devoir
+ * de saisie : c'est ce que le calcul ne peut pas voir, parce que ça s'est passé
+ * dans une réunion.
+ *
+ * C'est pour cela que la raison d'un écarté se **choisit** au lieu de s'écrire.
+ * Un champ libre en fin de journée ne se remplit pas ; une liste de douze
+ * raisons du métier se clique — et elle se compte, ce que du texte libre ne fera
+ * jamais (voir `RAISON`, dans `memoire-en-texte.js`).
+ *
  * **On peut fermer sans rien enregistrer**, et c'est délibéré. Forcer une
  * décision à chaque fermeture ferait écrire des décisions inventées pour passer
  * l'écran — et une décision fabriquée après coup est pire qu'une décision
@@ -36,6 +49,7 @@
 
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
+import { RAISONS_DITES } from "../../services/memoire-en-texte.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -174,13 +188,26 @@ function renderFenetre(titre, dejaVus, { ailleurs = "", brouillon = null, refus 
 
   const ecartes = Array.isArray(brouillon?.ecartes) ? brouillon.ecartes : [];
 
+  // La raison se choisit dans le domaine du métier ; l'option vide reste en
+  // tête, et c'est elle qui est cochée par défaut. Une liste qui proposerait
+  // « trop cher » d'emblée ferait signer une raison que personne n'a donnée.
+  const raisons = (rang) => `
+    <select class="gh-input" data-decision-raison="${rang}"
+      aria-label="Pourquoi ce possible a été écarté">
+      <option value="">${rang === 0 ? "pourquoi ?" : ""}</option>
+      ${Object.entries(RAISONS_DITES).map(([cle, dit]) =>
+        `<option value="${escapeHtml(cle)}">${escapeHtml(dit)}</option>`).join("")}
+    </select>
+  `;
+
   const ecarte = (rang) => `
     <div class="decision-sujet__ecarte">
       <input type="text" class="gh-input" data-decision-ecarte="${rang}"
         placeholder="${rang === 0 ? "ce qu'on a écarté" : ""}" autocomplete="off"
         ${propose(ecartes[rang]?.quoi)}>
+      ${raisons(rang)}
       <input type="text" class="gh-input" data-decision-pourquoi="${rang}"
-        placeholder="${rang === 0 ? "pourquoi (facultatif)" : ""}" autocomplete="off"
+        placeholder="${rang === 0 ? "ou en un mot" : ""}" autocomplete="off"
         ${propose(ecartes[rang]?.pourquoi)}>
     </div>
   `;
@@ -198,6 +225,7 @@ function renderFenetre(titre, dejaVus, { ailleurs = "", brouillon = null, refus 
           Fermer ce sujet, c'est trancher quelque chose. Ce qu'on écrit ici devient une
           décision de la mémoire — après signature. Ce sont surtout les <b>possibles
           écartés</b> qui comptent : c'est la réponse à « pourquoi pas… ? », six mois plus tard.
+          Mdall en constate déjà de son côté — ici, on écrit ceux qu'il n'a pas pu voir.
         </p>
 
         ${renderDejaRaisonne(dejaVus)}
@@ -256,7 +284,7 @@ let questionOuverte = null;
  * @param {object} [options.brouillon] ce que le copilote a écrit en relisant le
  *   fil : il remplit les champs, et chacun porte sa marque
  * @param {string} [options.refus] pourquoi le brouillon a été écarté, s'il l'a été
- * @returns {Promise<{question, retenu, ecartes, motif}|SANS_DECISION|null>}
+ * @returns {Promise<{question, retenu, ecartes: {quoi, raison, pourquoi}[], motif}|SANS_DECISION|null>}
  *   `null` si l'on renonce **à fermer** ; `SANS_DECISION` si l'on ferme sans
  *   rien enregistrer.
  */
@@ -308,6 +336,7 @@ export function demanderCeQuOnATranche({
 
         const ecartes = Array.from({ length: ECARTES_OFFERTS }, (_, rang) => ({
           quoi: texte(hote.querySelector(`[data-decision-ecarte="${rang}"]`)?.value),
+          raison: texte(hote.querySelector(`[data-decision-raison="${rang}"]`)?.value),
           pourquoi: texte(hote.querySelector(`[data-decision-pourquoi="${rang}"]`)?.value)
         })).filter((ecarte) => ecarte.quoi);
 

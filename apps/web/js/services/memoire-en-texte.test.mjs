@@ -7,10 +7,30 @@ import {
   ligneDeProvenance, ligneDePreuve, ligneDeStatut, ligneDeDate,
   blocDeRegle, blocDAffirmation, blocDeVariable,
   enTeteDeFichier, nomDeFichier, cheminDeFichier, enClair, texteDesLignes,
-  natureDeLaLigne, couperLUnite, estMesuree, mesureEnFrancais, entreesDuneSignature
+  natureDeLaLigne, couperLUnite, estMesuree, mesureEnFrancais, entreesDuneSignature,
+  lignesDesEcartes, RAISON
 } from "./memoire-en-texte.js";
 
 const clair = (jetons) => enClair(jetons);
+
+test("un écarté se relit avec la raison qu'on a choisie", () => {
+  // Une raison choisie dans un menu et qui ne se relirait nulle part serait un
+  // menu qui ne sert à rien. Et pas de mot nouveau dans le langage :
+  // « parce que: » portait déjà le pourquoi d'un écarté.
+  const dites = lignesDesEcartes([
+    { quoi: "ardoise", raison: RAISON.TROP_CHER, pourquoi: "surcoût de charpente" },
+    { quoi: "zinc", raison: RAISON.DELAI, pourquoi: "" },
+    { quoi: "membrane EPDM", raison: "", pourquoi: "" }
+  ]).map(clair).map((ligne) => ligne.trim());
+
+  assert.deepEqual(dites, [
+    "écarté: ardoise",
+    "parce que: \"trop cher — surcoût de charpente\"",
+    "écarté: zinc",
+    "parce que: \"incompatible avec le délai\"",
+    "écarté: membrane EPDM"
+  ]);
+});
 
 test("une mesure s'écrit nue, un texte entre guillemets", () => {
   assert.equal(clair(ligneDAffirmation({ sujet: "Altitude du site", valeur: "490,03", unite: "m" })),

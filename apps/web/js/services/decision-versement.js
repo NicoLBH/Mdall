@@ -65,7 +65,7 @@
  */
 
 import { NATURE } from "./assertion-taxonomy.js";
-import { PROVENANCE, STATUT } from "./memoire-en-texte.js";
+import { PROVENANCE, STATUT, RAISONS_DITES } from "./memoire-en-texte.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -89,11 +89,21 @@ export const LACUNES_DITES = {
  * `pourquoi` peut manquer — on se rappelle souvent qu'on a écarté l'ardoise
  * sans se rappeler l'argument. L'écarté sans son motif vaut mieux que rien :
  * c'est déjà la moitié de la réponse à « pourquoi pas de l'ardoise ? ».
+ *
+ * **Une raison hors du domaine ne se garde pas.** Elle ne se compterait avec
+ * rien, et la garder ferait croire à un classement qui n'en est pas un — on
+ * croirait pouvoir additionner ce qui ne s'additionne pas (règle 5). Le texte
+ * libre est là pour ce qui n'entre dans aucune case.
  */
 function ecarteRetenu(ecarte) {
   const quoi = texte(ecarte?.quoi);
   if (!quoi) return null;
-  return { quoi, pourquoi: texte(ecarte?.pourquoi) };
+  const raison = texte(ecarte?.raison);
+  return {
+    quoi,
+    pourquoi: texte(ecarte?.pourquoi),
+    raison: RAISONS_DITES[raison] ? raison : ""
+  };
 }
 
 /**
@@ -181,7 +191,7 @@ export function citationDeLaDecision({ sujet = "", par = "", quand = "" } = {}) 
  * @param {string} options.sujet ce sur quoi on tranche — le même nom que la valeur
  * @param {string} [options.retenu] ce qu'on retient, s'il y a quelque chose à poser
  * @param {string} options.question ce sur quoi on a tranché, en toutes lettres
- * @param {{quoi: string, pourquoi?: string}[]} [options.ecartes] les possibles écartés
+ * @param {{quoi: string, raison?: string, pourquoi?: string}[]} [options.ecartes] les possibles écartés
  * @param {string} [options.motif] pourquoi — ou l'aveu qu'il n'y en a pas
  * @param {string} [options.par] qui a tranché
  * @param {string} [options.quand] quand

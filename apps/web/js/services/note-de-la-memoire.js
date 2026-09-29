@@ -55,6 +55,8 @@ import { cleDuSujet } from "./memoire-identifiants.js";
 import { lecturesDeLaRegle } from "./memoire-applications.js";
 import { sujetDe } from "./memoire-raisonnement.js";
 import { isOpenFinding } from "./memory-readers.js";
+import { faceDe } from "./memoire-groupes.js";
+import { ecartsObservesParSujet } from "./ecarts-observes.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -232,7 +234,16 @@ export function noteDeLaMemoire(assertions = [], { liens = null } = {}) {
   const decisions = valeurs.filter(
     (assertion) => classifyAssertion(assertion).nature === NATURE.DECISION
   ).length;
-  const muettes = decisionsMuettes(lignes).length;
+  const muets = decisionsMuettes(lignes);
+  const muettes = muets.length;
+  // Ce que Mdall a constaté d'écarté sur les sujets de ces décisions-là.
+  //
+  // **Sur toute la mémoire**, et non sur ce qui vaut : un possible écarté est
+  // presque toujours une ligne remplacée, refusée, ou sortie du projet — la
+  // filtrer d'abord ferait dire « 0 constaté » à une mémoire qui en porte dix.
+  const constates = ecartsObservesParSujet(assertions);
+  const vus = muets.reduce(
+    (total, decision) => total + (constates.get(faceDe(decision).cle)?.length ?? 0), 0);
   const manquants = nomsQueRienNePorte(lignes);
   const constats = lignes.filter(isOpenFinding);
   const ouverts = constats.length;
@@ -264,7 +275,11 @@ export function noteDeLaMemoire(assertions = [], { liens = null } = {}) {
           + (muettes
             ? ` — ${muettes > 1 ? `${muettes} ne disent pas` : "une ne dit pas"} ce ${
               muettes > 1 ? "qu'elles ont écarté" : "qu'elle a écarté"}`
-            : ""),
+            : "")
+          // **Et ce que Mdall en a constaté sans rien demander.** Sans cette
+          // moitié, la phrase n'est qu'un reproche ; avec elle, elle dit où
+          // aller regarder (`services/ecarts-observes.js`).
+          + (muettes && vus ? `, et Mdall en a constaté ${vus}` : ""),
           { requete: "nature:décision" })
       ]
     },

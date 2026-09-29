@@ -29,10 +29,14 @@ La réponse n'est pas « plus de données ». C'est **une autre nature de donné
 Tous les modèles ont lu les Eurocodes. Aucun n'a jamais vu ceci :
 
 **Ce qui a été écarté, et pourquoi.** C'est la donnée la plus rare du monde, et
-Mdall est le seul à la collecter : le champ `EXAMINE` d'un raisonnement. Le web
-est plein de bonnes réponses ; il est vide de *mauvaises réponses avec la raison
-de leur rejet*. Un modèle ne peut pas savoir que l'évidence était fausse sur ce
-chantier-là.
+Mdall est le seul à la collecter. Le web est plein de bonnes réponses ; il est
+vide de *mauvaises réponses avec la raison de leur rejet*. Un modèle ne peut pas
+savoir que l'évidence était fausse sur ce chantier-là.
+
+Et elle ne se **demande** pas : elle se **constate**. Une valeur remplacée, un
+document arrivé après coup, une ligne refusée en revue avec son motif — quatre
+traces que le travail normal laisse derrière lui, et que personne n'a saisies
+(`docs/ce-quon-a-ecarte.md`).
 
 **L'ordre dans lequel les questions se sont posées.** Les livres donnent les
 réponses, jamais la **séquence** : après « profondeur hors gel » vient « type de
@@ -183,39 +187,64 @@ s'améliore pas : il change.
 
 ## 8. Ce qu'il faut faire **maintenant**, avant tout moteur
 
-> **Remplir « ce qui a été examiné ».**
+> **Récolter les traces gratuites.**
 
-L'écran le dit déjà lui-même : *« Ce raisonnement ne dit pas tout : on ne sait
-pas ce qui a été examiné. »* Ce champ vide **est** le moteur de prédiction.
+Le champ « ce qui a été examiné » est vide partout, et c'est la donnée que
+personne d'autre n'a. La première version de cette page en concluait qu'il
+fallait le rendre « facile à remplir et impossible à sauter ». C'était une
+erreur, et elle a été corrigée avant d'écrire une ligne :
 
-C'est la donnée que personne d'autre n'a, et c'est la seule qu'on **ne peut pas
-rattraper après coup** : on n'ira jamais redemander à quelqu'un ce qu'il avait
-écarté en 2026, ni pourquoi.
+> « Personne ne veut être le professeur d'une application qui va enrichir
+> d'autres personnes grâce à l'effort qu'on lui demande de porter. »
 
-La chose la plus utile à faire aujourd'hui pour un moteur qui sortira dans deux
-ans, c'est de rendre ce champ **facile à remplir et impossible à sauter**. Tout
-le reste — vecteurs, voisinage, mesure — se construira plus tard sur des données
-qu'on aura. Celui-là, non.
+Un champ dont le coût est immédiat et le bénéfice différé — et pour quelqu'un
+d'autre — ne se remplit nulle part, dans aucun logiciel, jamais. Le rendre
+obligatoire ne l'aurait pas rempli : il l'aurait rempli **de faux**, ce qui est
+pire (règle 5).
 
-C'est pour cela que le tri de la mémoire fait désormais remonter les sujets dont
-le raisonnement ne dit pas tout (`docs/un-sujet-une-ligne.md`) : la première
-brique du moteur de prédiction n'est pas un prédicteur, c'est **le fait de
-remarquer ce qui manque**.
+> **Ce qui a été écarté se constate ; ce qui manque au constat se demande une
+> fois, par lot, à celui qui vient d'en souffrir, et sous forme de clic.**
+
+Mdall enregistre déjà des écartements, comme sous-produits du travail normal :
+une valeur qu'un versement plus récent a remplacée, un document arrivé après
+coup qui n'a pas fait foi, une ligne sortie du projet, et surtout **un item de
+proposition refusé en revue — signé, daté, motivé**. Aucune interface, aucun
+effort : du calcul sur ce qui existe (`services/ecarts-observes.js`,
+`docs/ce-quon-a-ecarte.md`).
+
+**Le champ cesse d'être vide sans que personne n'ait rien tapé.**
+
+Et ce que le calcul ne peut pas voir — ce qui s'est passé dans une réunion — se
+demande autrement : la raison d'un possible écarté se **choisit** dans un
+domaine fermé de douze raisons du métier. C'est un clic ; et une liste fermée se
+**compte**, ce que du texte libre ne fera jamais. Un moteur qui doit dire « 7
+projets sur 10 ont écarté l'ardoise pour le délai » ne peut rien faire de cent
+formulations du même refus.
+
+C'est aussi pour cela que le tri de la mémoire fait remonter les sujets dont le
+raisonnement ne dit pas tout (`docs/un-sujet-une-ligne.md`) : la première brique
+du moteur de prédiction n'est pas un prédicteur, c'est **le fait de remarquer ce
+qui manque**.
 
 ## 9. L'ordre dans lequel construire
 
-1. **Remplir `examine`** — l'écran le réclame, le tri le remonte. Rien d'autre
-   n'a la même urgence, parce que rien d'autre n'est irrattrapable.
-2. **L'épisode et son vecteur de contexte** — une structure, pas un moteur. Elle
+1. **Récolter les traces gratuites** — les quatre gisements d'écartés que la
+   mémoire porte déjà, et le domaine fermé des raisons. Rien d'autre n'a la même
+   urgence, parce que rien d'autre n'est irrattrapable. *(fait —
+   `docs/ce-quon-a-ecarte.md`)*
+2. **La demande par lot** — un écran qui montre les écartés constatés et n'en
+   demande que la raison, d'un clic, à celui qui vient de chercher
+   l'information. Une fois, jamais à chaque décision.
+3. **L'épisode et son vecteur de contexte** — une structure, pas un moteur. Elle
    se remplit rétroactivement sur les projets existants.
-3. **La mesure** — « prédire dans le passé », avec la ligne de base. Avant tout
+4. **La mesure** — « prédire dans le passé », avec la ligne de base. Avant tout
    prédicteur : sinon on ne saura pas si le premier vaut quelque chose.
-4. **La fréquence globale** — le prédicteur bête, qui est la référence.
-5. **Le voisinage de contexte** — le premier qui puisse battre la référence.
-6. **La porte du fonds commun** — une proposition signée, d'un projet vers le
+5. **La fréquence globale** — le prédicteur bête, qui est la référence.
+6. **Le voisinage de contexte** — le premier qui puisse battre la référence.
+7. **La porte du fonds commun** — une proposition signée, d'un projet vers le
    fonds. Pas avant : tant qu'il n'y a rien à offrir, il n'y a pas de porte à
    surveiller.
-7. **La rédaction par le modèle** — en dernier, et jamais au cœur.
+8. **La rédaction par le modèle** — en dernier, et jamais au cœur.
 
 ## 10. Ce que ce moteur ne sera pas
 

@@ -46,6 +46,7 @@
  */
 
 import { cleDuSujet } from "./memoire-identifiants.js";
+import { FACE, faceDe } from "./memoire-groupes.js";
 import { normalizeZoneKey } from "./project-zones.js";
 import { laValeurQuiFaitFoi, ordreDesValeurs } from "./le-temps-des-valeurs.js";
 
@@ -117,11 +118,23 @@ function duPlusRecent(versements = []) {
  * pas une. C'est du **vocabulaire** — l'endroit lui-même —, et la lire comme
  * une valeur du projet la faisait paraître dans ce qu'un essai propose de
  * remplir, avec sa description pour réponse.
+ *
+ * **Une décision ni un raisonnement**, et c'est le cas qui manquait. Une
+ * question fermée verse trois lignes qui **portent le même nom** — c'est ce qui
+ * permet de les relier. Le nom se lit ici dans `payload.subject`, où les trois
+ * écrivent la question : elles passaient donc pour trois versements du même
+ * nom, et deux d'entre elles se faisaient éclipser par la troisième. La
+ * décision et le raisonnement d'une valeur **disparaissaient de leur fichier**,
+ * sans que rien ne le dise — exactement ce qu'une mémoire ne doit jamais faire.
+ *
+ * Ce qui les distingue est le **préfixe de leur clé**, et il ne se relit pas ici :
+ * `faceDe` est le seul endroit qui sache ce qu'un préfixe veut dire (règle 10).
  */
 function porteUneValeur(assertion) {
   return Boolean(assertion)
     && assertion?.payload?.referentiel !== true
     && !assertion?.payload?.zoneDefinition
+    && faceDe(assertion).face === FACE.VALEUR
     && !texte(assertion?.superseded_by)
     && Boolean(cleDuSujet(texte(assertion?.payload?.subject) || texte(assertion?.subject_key)));
 }
@@ -219,7 +232,13 @@ export function versementsRetrospectifs(assertions = []) {
  * rien à trancher. Une valeur qui change en silence, si : quelqu'un doit savoir
  * que le projet ne dit plus la même chose qu'hier.
  *
- * @returns {{nom: string, avant: string, apres: string, zones: string[]}[]}
+ * Les deux versements sont rendus **tels quels**, comme `versementsRetrospectifs`
+ * le fait : qui veut la clé du sujet, la date de l'écartement ou l'auteur du
+ * reversement les trouve dessus. Les redécouvrir ailleurs par le nom serait une
+ * seconde lecture de ce que ce calcul tient déjà en main (règle 4).
+ *
+ * @returns {{nom: string, avant: string, apres: string, zones: string[],
+ *   enVigueur: object, ecartee: object}[]}
  */
 export function valeursCorrigees(assertions = []) {
   const eclipses = versementsEclipses(assertions);
@@ -251,7 +270,9 @@ export function valeursCorrigees(assertions = []) {
       nom: texte(vivant?.payload?.subject) || texte(vivant?.subject_key),
       avant: dit(autre),
       apres: dit(vivant),
-      zones: [...zonesDe(vivant)]
+      zones: [...zonesDe(vivant)],
+      enVigueur: vivant,
+      ecartee: autre
     });
   }
 
