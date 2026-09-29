@@ -49,6 +49,7 @@ import {
   lireUnFichier, nomsConclusParLeBloc, nomsLusParLeBloc, fonctionsAppeleesParLeBloc
 } from "./memoire-en-lecture.js";
 import { PORTEE_DUNE_FONCTION } from "./memoire-en-texte.js";
+import { valeursDeLaPortee, valeurDuVersement } from "./memoire-valeurs.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { reglesVerseesUtiles } from "./fonctions-du-projet.js";
 import { couperLUnite, estMesuree } from "./memoire-en-texte.js";
@@ -267,9 +268,34 @@ export function reponseAvecSonUnite(dite = "", declaration = null) {
  * @param {{nom: string, contenu: string}[]} fichiers
  * @returns {{nom, cle, saisie, unite, choix, aide, declare}[]}
  */
-export function champsDuBrouillon(fichiers = [], { memoire = null } = {}) {
+/**
+ * Ce que le projet tient, pour cette zone : `clé du nom → valeur écrite`.
+ *
+ * **C'est ce qui rend le sélecteur de zone autre chose qu'un décor.** Sans lui,
+ * choisir « bâtiment B » ne changeait rien : le bac ne lisait que ce qu'on
+ * avait tapé, et « la même fonction, deux bâtiments, deux réponses » ne pouvait
+ * se voir que dans le rejeu de la mémoire.
+ *
+ * `valeursDeLaPortee` décide **laquelle vaut** pour cette zone — la sienne
+ * d'abord, celle qui vaut partout à défaut, jamais celle d'une autre zone. On
+ * ne redécide rien ici (règle 10).
+ */
+export function valeursDuProjet(memoire = null, zone = "") {
+  const lues = new Map();
+  if (!Array.isArray(memoire) || !memoire.length) return lues;
+
+  for (const [cle, assertion] of valeursDeLaPortee(memoire, zone)) {
+    const dite = texte(valeurDuVersement(assertion));
+    if (cle && dite) lues.set(cle, dite);
+  }
+
+  return lues;
+}
+
+export function champsDuBrouillon(fichiers = [], { memoire = null, zone = "" } = {}) {
   const declarations = declarationsDuBrouillon(fichiers);
   const posees = valeursPosees(fichiers);
+  const duProjet = valeursDuProjet(memoire, zone);
 
   return nomsLus(fichiers, { memoire })
     // Ce que le brouillon dit déjà est une réponse. Le redemander en ferait
@@ -295,7 +321,16 @@ export function champsDuBrouillon(fichiers = [], { memoire = null } = {}) {
          * la règle indécidable pour toujours, et l'on ne saurait pas si elle
          * marche. Mais l'écran le dit : ce qu'on tape là ne tient sur rien.
          */
-        declare: Boolean(declaration)
+        declare: Boolean(declaration),
+        /**
+         * **Ce que le projet tient déjà pour ce nom, dans la zone choisie.**
+         *
+         * C'est la valeur qui servira si l'on ne tape rien — et l'écran la
+         * montre, parce qu'un essai qui répond sur une valeur venue de nulle
+         * part est un essai qu'on ne peut pas relire (règle 5). Vide quand le
+         * projet ne dit rien : on ne l'invente pas.
+         */
+        duProjet: texte(duProjet.get(cle))
       };
     });
 }
@@ -308,8 +343,17 @@ export function champsDuBrouillon(fichiers = [], { memoire = null } = {}) {
  * Une valeur du fichier qui gagnerait sur la réponse ferait un formulaire
  * décoratif.
  */
-export function valeursDuLancement(fichiers = [], reponses = null) {
-  const valeurs = new Map(valeursPosees(fichiers));
+export function valeursDuLancement(fichiers = [], reponses = null, { memoire = null, zone = "" } = {}) {
+  /**
+   * **Trois sources, et l'ordre compte.**
+   *
+   * Ce que le **projet** tient d'abord : c'est le fond, et c'est ce que la zone
+   * choisie change. Ce que le **brouillon** pose ensuite — il est ce qu'on
+   * essaie, et une ligne qu'on vient d'écrire l'emporte sur ce qui est versé.
+   * Ce qu'on a **tapé** enfin : c'est la main sur le volant, et elle gagne
+   * partout, y compris pour un appel qui nomme une autre zone.
+   */
+  const valeurs = new Map([...valeursDuProjet(memoire, zone), ...valeursPosees(fichiers)]);
   const declarations = declarationsDuBrouillon(fichiers);
   const dites = reponses instanceof Map ? reponses : new Map(Object.entries(reponses ?? {}));
 

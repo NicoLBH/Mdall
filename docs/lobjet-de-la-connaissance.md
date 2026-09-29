@@ -2484,5 +2484,6 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | pourquoi une fonction ne s'appelait pas, et ce que l'écran en disait (renversé depuis) | `docs/il-ny-a-pas-dappel-de-fonction.md` |
 | appeler une fonction sur d'autres noms, et le copilote qui voit les fonctions | `docs/appeler-une-fonction.md` |
 | la portée d'un appel, et ce qu'on donne vraiment à une fonction | `docs/la-portee-dun-appel.md` |
+| où l'on se place pour essayer, et ce qu'un essai lit du projet | `docs/le-selecteur-de-zone.md` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

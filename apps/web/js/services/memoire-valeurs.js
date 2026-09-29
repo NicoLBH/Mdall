@@ -73,10 +73,20 @@ function portee(assertion = {}) {
 }
 
 
-/** Ce qu'un versement affirme, réduit à ce qui se compare. */
-function dit(assertion = {}) {
+/**
+ * **Ce qu'un versement affirme.**
+ *
+ * `payload.value` d'abord, la phrase à défaut : les lignes versées par un repli
+ * ancien n'ont que la seconde, et les lire autrement ferait disparaître une
+ * valeur que le projet tient. Exporté parce que le bac d'essai pose la même
+ * question quand il pré-remplit son formulaire — une seconde lecture écrite
+ * là-bas cesserait un jour de dire la même chose (règle 10).
+ */
+export function valeurDuVersement(assertion = {}) {
   return texte(assertion?.payload?.value) || texte(assertion?.statement);
 }
+
+const dit = valeurDuVersement;
 
 /**
  * Le versement le plus récent l'emporte ; à date égale, l'identifiant tranche.
@@ -97,10 +107,21 @@ function duPlusRecent(versements = []) {
   return ordreDesValeurs(versements).ordonnees.map((une) => une.assertion);
 }
 
-/** Une affirmation qui ne porte pas de valeur — une règle — ne s'éclipse pas. */
+/**
+ * Une affirmation qui ne porte pas de valeur ne s'éclipse pas.
+ *
+ * **Une règle** n'en porte pas : elle dit comment une valeur se déduit.
+ *
+ * **Une définition de zone** non plus, et c'est moins évident : « Bâtiment A :
+ * le corps principal » a bien la forme d'un sujet et d'une valeur, et n'en est
+ * pas une. C'est du **vocabulaire** — l'endroit lui-même —, et la lire comme
+ * une valeur du projet la faisait paraître dans ce qu'un essai propose de
+ * remplir, avec sa description pour réponse.
+ */
 function porteUneValeur(assertion) {
   return Boolean(assertion)
     && assertion?.payload?.referentiel !== true
+    && !assertion?.payload?.zoneDefinition
     && !texte(assertion?.superseded_by)
     && Boolean(cleDuSujet(texte(assertion?.payload?.subject) || texte(assertion?.subject_key)));
 }

@@ -57,12 +57,12 @@ test("une fonction répond sur les noms qu'on lui donne, pas sur les siens", () 
   assert.deepEqual(refusDe(DEUX), []);
 
   const pourBois = lancerLeBrouillon([{ nom: "essai.ref", contenu: DEUX }],
-    { "Matériau": "bois", "zones": "Bâtiment A" });
+    { "Matériau": "bois" });
   assert.equal(pourBois.find((un) => un.sujet === "Teinte du lot B")?.valeur,
     "conforme au nuancier");
 
   const pourAlu = lancerLeBrouillon([{ nom: "essai.ref", contenu: DEUX }],
-    { "Matériau": "alu", "zones": "Bâtiment A" });
+    { "Matériau": "alu" });
   assert.equal(pourAlu.find((un) => un.sujet === "Teinte du lot B")?.valeur, "à valider");
 });
 
@@ -74,7 +74,7 @@ test("l'appel ne conclut sous aucun nom : la fonction garde le sien", () => {
    * laquelle fait foi (règle 10).
    */
   const rendu = lancerLeBrouillon([{ nom: "essai.ref", contenu: DEUX }],
-    { "Matériau": "bois", "zones": "Bâtiment A" });
+    { "Matériau": "bois" });
 
   assert.equal(rendu.filter((un) => un.sujet === "Couleur des volets").length, 1);
   // Et elle, sur sa propre lecture, ne sait rien : personne n'a donné
@@ -101,7 +101,7 @@ fonction Ce qu'on retient(zones, Famille du bâtiment) {
    alors ("renforcé");
    sinon ("courant");
 }
-` }], { "Famille du bâtiment": "3e", "zones": "Bâtiment A" });
+` }], { "Famille du bâtiment": "3e" });
 
   assert.equal(rendu.find((un) => un.sujet === "Ce qu'on retient")?.valeur, "renforcé");
 });
@@ -123,7 +123,7 @@ fonction Devis(zones, Montant) {
    si (t > 0 €)
    alors (t);
 }
-` }], { "Montant": "100 €", "Coefficient": "2", "zones": "Bâtiment A" });
+` }], { "Montant": "100 €", "Coefficient": "2" });
 
   assert.equal(rendu.find((un) => un.sujet === "Devis")?.valeur, "200 €");
 });
@@ -136,7 +136,7 @@ test("une fonction qui s'appelle elle-même ne boucle pas : elle ne sait pas", (
    si (x > 0)
    alors (1);
 }
-` }], { "A": "1", "zones": "Bâtiment A" });
+` }], { "A": "1" });
 
   assert.equal(rendu.find((un) => un.sujet === "Boucle")?.valeur, "");
 });
@@ -164,7 +164,7 @@ fonction Essai(zones, Matériau) {
    si (x = "violet")
    alors (1);
 }
-` }], { "Matériau": "bois", "zones": "B" });
+` }], { "Matériau": "bois" });
 
   const dit = rendu.find((un) => un.sujet === "Essai");
   assert.equal(dit?.valeur, "");

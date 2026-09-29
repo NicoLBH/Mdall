@@ -401,6 +401,38 @@ test("le formulaire du bac ne réécrit jamais tout le contenu de la fenêtre", 
   assert.doesNotMatch(branchement[1], /etat\.lance = false/,
     "une réponse éteint le verdict : elle ne serait jamais lue");
 
+  /**
+   * **La zone, elle, refait tout — et c'est la seule chose qui le fasse.**
+   *
+   * Ce n'est pas un champ : c'est un choix délibéré, fait une fois, et ce que
+   * le projet tient pour cette partie d'ouvrage change avec. Laisser le
+   * formulaire en place montrerait les valeurs d'un bâtiment sous les réponses
+   * d'un autre. Elle vit donc dans son propre branchement, pour que la garde
+   * ci-dessus garde ses dents là où elles servent.
+   */
+  const zone = source.match(/\nfunction brancherLeChoixDeLaZone\([^)]*\) \{\n([\s\S]*?)\n\}\n/);
+  assert.ok(zone, "brancherLeChoixDeLaZone est introuvable");
+  assert.match(zone[1], /renderBacDessai\(/,
+    "changer de zone ne refait pas le formulaire : il montrerait l'autre bâtiment");
+  assert.doesNotMatch(zone[1], /etat\.reponses = /,
+    "changer de zone efface ce qu'on avait tapé");
+
+  /**
+   * **Les deux lignes qu'aucune épreuve pure ne peut atteindre.**
+   *
+   * Un câblage ne s'éprouve que par le code qui le porte : sans elles, le
+   * sélecteur bouge et rien ne suit — l'écran d'avant, au caractère près.
+   *
+   * `etat.zone` retient le choix : sans lui, on rejoue la zone de départ.
+   * `brancherLeBac` rebranche ce qu'on vient de remplacer : sans lui, le
+   * deuxième changement de zone ne fait plus rien, et les champs ne répondent
+   * plus non plus.
+   */
+  assert.match(zone[1], /etat\.zone = choix\.value/,
+    "le choix ne se retient pas : on rejouerait la zone de départ");
+  assert.match(zone[1], /brancherLeBac\(hote, racine\)/,
+    "le bac refait n'est pas rebranché : plus rien ne répondrait ensuite");
+
   // Le redessin ciblé ne repose que le verdict, et il ne peut le faire que si
   // la fenêtre montre bien le bac — le wiki du langage s'ouvre dans la même.
   const resultats = source.match(/\nfunction redessinerLesResultats\([^)]*\) \{\n([\s\S]*?)\n\}\n/);

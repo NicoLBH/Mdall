@@ -1065,7 +1065,21 @@ export function lecteurQuiSaitAppeler(lireSimple, fonctions = new Map(), { pourL
      * deux réponses. Là où rien n'est rangé par zone, `pourLaZone` est absent
      * et la portée reste une valeur liée comme les autres.
      */
-    const zone = texte(donnees[0]?.alias ?? donnees[0]?.valeur);
+    /**
+     * **`zones` veut dire « ici », pas « un endroit qui s'appelle zones ».**
+     *
+     * Le premier argument d'un appel est la portée, et il s'écrit de deux
+     * façons : le mot de la langue — on reste où l'on est —, ou le nom d'une
+     * partie d'ouvrage. Le premier se **résout** ; le second est le lieu
+     * lui-même.
+     *
+     * Les confondre faisait chercher une zone nommée « zones », qu'aucun projet
+     * ne définit : tous les `F(zones, …)` se taisaient d'un coup.
+     */
+    const premier = texte(donnees[0]?.alias ?? donnees[0]?.valeur);
+    const zone = cleDuSujet(premier) === cleDuSujet(PORTEE_DUNE_FONCTION)
+      ? texte(lireSimple(PORTEE_DUNE_FONCTION)?.valeur)
+      : premier;
     const dessous = (pourLaZone && zone ? pourLaZone(zone) : null) ?? lireSimple;
 
     /**

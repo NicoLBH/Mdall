@@ -351,8 +351,21 @@ test("l'écran d'écriture lit bien la mémoire, et la donne aux deux qui en ont
     "la mémoire du projet n'est jamais lue : le rayon resterait vide pour toujours");
   assert.match(source, /projet: nomsConclusParLeProjet\(etat\.memoire \?\? \[\]\)/,
     "le catalogue ne reçoit pas ce que le projet conclut");
-  assert.match(source, /lancerLeBrouillon\([\s\S]{0,120}?\{ memoire: etat\.memoire \}\)/,
+  assert.match(source, /lancerLeBrouillon\([\s\S]{0,160}?memoire: etat\.memoire/,
     "l'essai ne rejoue pas les fonctions versées");
-  assert.match(source, /champsDuBrouillon\(remplis, \{ memoire \}\)/,
+  assert.match(source, /champsDuBrouillon\(remplis, \{ memoire, zone \}\)/,
     "le formulaire redemande ce que le projet déduit");
+
+  /**
+   * **Et la zone doit atteindre les deux, pour la même raison.**
+   *
+   * Un sélecteur qui ne descend nulle part rend exactement l'écran d'avant : on
+   * change de bâtiment, rien ne bouge, et il n'y a pas un caractère de
+   * différence à voir. C'est le même défaut invisible, une ronde plus tard.
+   */
+  assert.match(source, /lancerLeBrouillon\([\s\S]{0,160}?zone: etat\.zone/,
+    "l'essai ne se rejoue pas là où l'on se place");
+  assert.match(source, /renderBacDessai\(etat\.brouillon, \{[\s\S]{0,160}?memoire: etat\.memoire, zone: etat\.zone/,
+    "la fenêtre du bac ouvre sans la mémoire ni la zone : son formulaire dirait "
+      + "autre chose que ses résultats");
 });

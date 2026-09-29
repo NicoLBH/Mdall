@@ -4713,10 +4713,22 @@ ignore. Ce qui manque vraiment serait le domaine **de ce qu'une fonction rend** 
 `rend:` le dit déjà quand il est écrit, et personne ne le compare encore à ce
 qu'un appelant en attend.
 
-**Le bac d'essai n'a toujours pas de zone**, et c'est voulu : on y essaie une
-fonction, pas un ouvrage. La portée d'un appel y est donc liée comme une valeur
-et ne restreint rien — c'est en relisant la mémoire que la zone joue
-(`docs/la-portee-dun-appel.md`). Lui en donner une est une vraie décision
-d'écran : un sélecteur de plus, et la question de ce qu'il vaut par défaut. Tant
-qu'on ne l'a pas prise, un essai ne peut pas montrer « la même fonction, deux
-bâtiments, deux réponses » — seul le rejeu de la mémoire le montre.
+**Le sélecteur de zone ne remplit pas les champs, il les éclaire.** Choisir un
+bâtiment montre ce que le projet tient — « du projet : alu » — et l'essai s'en
+sert ; mais le champ reste vide, et l'on ne peut pas partir de cette valeur pour
+la modifier d'un caractère. Poser la valeur dans le champ serait indiscernable
+d'une réponse tapée, et l'écran ne dirait plus d'où elle vient. Ce qui manque
+est un troisième état — « repris du projet, et modifiable » — qui est une vraie
+question d'écran : à quoi il ressemble, et ce que « revenir au projet » veut
+dire une fois qu'on a tapé par-dessus.
+
+**Une zone ne se choisit pas encore dans l'écran des fichiers.** Le rejeu de la
+mémoire tourne zone par zone et l'écran montre le résultat ; on ne peut pas lui
+dire « montre-moi le bâtiment B ». C'est la même décision que celle qu'on vient
+de prendre pour le bac, sur un écran qui a déjà sa propre façon de découper.
+
+**Ce qu'un essai lit du projet ne se voit pas dans son résultat.** La trace dit
+« Nature des volets = bois » sans dire que ce « bois » vient du bâtiment A plutôt
+que d'une réponse tapée. Les deux se relisent pareil, et c'est exactement ce que
+le rappel sous le champ existe pour éviter — sauf qu'il n'est pas dans la trace.
+Le dire demande de porter la provenance jusque dans les lectures du verdict.

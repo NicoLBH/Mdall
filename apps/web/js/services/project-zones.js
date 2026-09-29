@@ -139,6 +139,40 @@ export function definedZones(assertions = []) {
 }
 
 /**
+ * Les zones que la mémoire **connaît**, d'une façon ou d'une autre.
+ *
+ * ## Ce n'est pas la même question que « quelles zones existent »
+ *
+ * `definedZones` répond à « qu'est-ce que ce projet a défini », et c'est ce
+ * qu'on **propose** : une zone sans définition ne se vérifie pas, et l'offrir
+ * ferait choisir un découpage que personne n'a écrit.
+ *
+ * Celle-ci répond à « peut-on lire quelque chose pour cet endroit-là », et
+ * c'est ce qu'un **appel** demande : `Couleur des volets(Bâtiment B, …)`. Une
+ * zone jamais définie mais que des valeurs portent a bien quelque chose à
+ * lire — et refuser de la lire ferait taire un appel dans une zone que le rejeu
+ * est en train de parcourir.
+ *
+ * **Une seule réponse pour les deux moteurs.** Le bac d'essai et le rejeu de la
+ * mémoire la posaient chacun de leur côté, et l'un se serait mis à taire ce que
+ * l'autre lisait (règle 4).
+ *
+ * @returns {Set<string>} des clés de zone
+ */
+export function zonesConnuesDuProjet(assertions = []) {
+  const connues = new Set(definedZones(assertions).map((une) => une.key));
+
+  for (const assertion of Array.isArray(assertions) ? assertions : []) {
+    for (const zone of zonesOf(assertion)) {
+      const cle = normalizeZoneKey(zone);
+      if (cle) connues.add(cle);
+    }
+  }
+
+  return connues;
+}
+
+/**
  * Les zones proposées à la lecture : tout l'ouvrage d'abord, puis les définies.
  *
  * Tout l'ouvrage vient en tête parce que c'est la lecture par défaut, et parce

@@ -47,7 +47,7 @@ import {
 } from "./memoire-en-lecture.js";
 import { reglesVerseesUtiles } from "./fonctions-du-projet.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
-import { PORTEE_DUNE_FONCTION } from "./memoire-en-texte.js";
+import { normalizeZoneKey, zonesConnuesDuProjet } from "./project-zones.js";
 import { REFUS_DU_CALCUL } from "./mdall-calcul.js";
 import {
   evaluerLaRegle, lecteurDeValeurs, lecteurQuiSaitAppeler, phraseDuDoute
@@ -199,12 +199,59 @@ export function fonctionsDuBrouillon(fichiers = []) {
  * @param {Map|object} reponses ce que le formulaire a recueilli
  * @param {object} [comment]
  * @param {object[]} [comment.memoire] les assertions du projet, quand on les a
+ * @param {string} [comment.zone] la partie d'ouvrage où l'on se place. Vide —
+ *   « toutes zones » — est le défaut, et c'est une portée à part entière : le
+ *   bac ne se place nulle part tant qu'on ne le lui dit pas.
  * @returns {{sujet, fichier, ligne, issue, valeur, ou, lectures, manquants, doutes}[]}
  */
-export function lancerLeBrouillon(fichiers = [], reponses = null, { memoire = null } = {}) {
+export function lancerLeBrouillon(fichiers = [], reponses = null, { memoire = null, zone = "" } = {}) {
   const siennes = fonctionsDuBrouillon(fichiers);
   const fonctions = [...siennes, ...fonctionsVerseesUtiles(fichiers, siennes, memoire)];
-  const valeurs = new Map(valeursDuLancement(fichiers, reponses));
+  const ici = normalizeZoneKey(zone);
+  const valeurs = new Map(valeursDuLancement(fichiers, reponses, { memoire, zone: ici }));
+
+  /**
+   * **La portée où l'on se place ne se range pas dans les valeurs.**
+   *
+   * On l'y avait mise, et elle n'y servait à rien : `valeurs` est **déjà** la
+   * table de cette zone-là, et un appel écrit `F(zones, …)` lit donc les bonnes
+   * valeurs sans qu'on ait à lui nommer l'endroit. La ligne ne se laissait pas
+   * casser — signe qu'elle ne défendait rien.
+   *
+   * Ce qui **change** vraiment d'endroit, c'est un appel qui **nomme** un
+   * bâtiment : `pourLaZone` s'en charge, juste dessous.
+   */
+
+  /**
+   * **Un appel peut nommer une autre zone que celle où l'on se place.**
+   *
+   * `Couleur des volets(Bâtiment B, Matériau)` lit alors ce que le projet tient
+   * pour le bâtiment B — la même fonction, deux bâtiments, deux réponses, dans
+   * l'essai et plus seulement dans le rejeu.
+   *
+   * **Ce qu'on a tapé gagne partout**, y compris là : c'est la main sur le
+   * volant, et un essai où la réponse qu'on vient d'écrire serait ignorée pour
+   * une zone ne s'expliquerait pas.
+   */
+  const pourLaZone = (dite) => {
+    const cle = normalizeZoneKey(dite);
+    if (!cle) return null;
+
+    /**
+     * **Une zone nommée qu'on ne connaît pas fait taire l'appel.**
+     *
+     * Rendre `null` voudrait dire « pas de changement d'endroit », et l'on
+     * lirait alors les valeurs d'**ici** : une réponse parfaitement plausible
+     * pour le mauvais bâtiment. On demandait le Z ; on ne répond pas avec
+     * celui où l'on se trouve sous prétexte qu'on l'a sous la main (règle 5).
+     *
+     * C'est la même règle que dans le rejeu de la mémoire, et pour la même
+     * raison : les deux moteurs doivent se taire au même endroit.
+     */
+    if (!zonesConnuesDuProjet(memoire ?? []).has(cle)) return () => ({ connu: false, valeur: "" });
+
+    return lecteurDeValeurs(valeursDuLancement(fichiers, reponses, { memoire, zone: cle }));
+  };
 
   let resultats = [];
 
@@ -226,7 +273,7 @@ export function lancerLeBrouillon(fichiers = [], reponses = null, { memoire = nu
    * dit (règle 5).
    */
   for (let passe = 0; passe < Math.max(1, fonctions.length); passe += 1) {
-    resultats = unePasse(fonctions, valeurs);
+    resultats = unePasse(fonctions, valeurs, pourLaZone);
 
     const neuves = conclusionsNeuves(fonctions, resultats, valeurs);
     if (!neuves.size) break;
@@ -266,7 +313,7 @@ function conclusionsNeuves(fonctions, resultats, valeurs) {
 }
 
 /** Toutes les fonctions, évaluées avec ce qu'on sait à cet instant. */
-function unePasse(fonctions, valeurs) {
+function unePasse(fonctions, valeurs, pourLaZone = null) {
   /**
    * **Le bac n'a pas de zone** : la portée passée à un appel est liée comme une
    * valeur, et rien ne s'en sert ici. C'est le rejeu de la mémoire qui lui
@@ -283,7 +330,7 @@ function unePasse(fonctions, valeurs) {
     siennes.set(cle, { regle: commeUneRegle(bloc), parametres: parametresDuBloc(bloc) });
   }
 
-  const lire = lecteurQuiSaitAppeler(lecteurDeValeurs(valeurs), siennes);
+  const lire = lecteurQuiSaitAppeler(lecteurDeValeurs(valeurs), siennes, { pourLaZone });
 
   return fonctions.map(({ fichier, bloc, versee = false }) => {
     const evaluation = evaluerLaRegle(commeUneRegle(bloc), lire);
