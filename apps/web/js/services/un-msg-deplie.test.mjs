@@ -283,21 +283,36 @@ const destinataire = (numero, nom, adresse, rang) => ({
  * l'épreuve n'aurait rien éprouvé : c'est exactement ce qui sépare un dossier
  * de pièce d'un dossier de destinataire.
  */
-const piece = (numero, nom, type, octets, identifiant) => ({
+/**
+ * Une pièce jointe, et **ce que le message déclare d'elle**.
+ *
+ * `cachee` et `fanions` vivent dans le paquet des valeurs de taille fixe, comme
+ * dans les messages réels ; `identifiant` est l'identifiant de contenu, que
+ * Gmail pose sur **toutes** ses pièces jointes — y compris un plan.
+ */
+const piece = (numero, nom, type, octets,
+  { identifiant = "", cachee = false, fanions = 0 } = {}) => ({
   nom: `__attach_version1.0_#0000000${numero}`,
   quoi: DOSSIER,
   enfants: [
     ...(nom === null ? [] : [texteDe("3707", nom), texteDe("3001", nom)]),
     texteDe("370E", type),
     octetsDe("3701", octets),
-    ...(identifiant ? [texteDe("3712", identifiant)] : [])
+    ...(identifiant ? [texteDe("3712", identifiant)] : []),
+    ...(cachee || fanions
+      ? [paquetDesValeurs(8, [
+          ...(cachee ? [{ marque: 0x7ffe000b, valeur: 1 }] : []),
+          ...(fanions ? [{ marque: 0x37140003, valeur: fanions }] : [])
+        ])]
+      : [])
   ]
 });
 
-function unMessageInvente({ cheminement = CHEMINEMENT } = {}) {
+function unMessageInvente({ cheminement = CHEMINEMENT, html = "" } = {}) {
   return graver([
     texteDe("0037", OBJET),
     texteDe("1000", CORPS),
+    ...(html ? [texteDe("1013", html)] : []),
     ...(cheminement ? [texteDe("007D", cheminement)] : []),
     texteDe("0C1A", "Ourdine Ferrand"),
     texteDe("5D01", "o.ferrand@novaclim.example.com"),
@@ -308,8 +323,12 @@ function unMessageInvente({ cheminement = CHEMINEMENT } = {}) {
     destinataire(2, "Atelier BERTRAND", "atelier@bertrand.example.fr", 1),
     destinataire(3, "Secrétariat", "secretariat@novaclim.example.com", 2),
     destinataire(4, "Discret", "discret@novaclim.example.com", 3),
-    piece(1, "plan-r+1.pdf", "application/pdf", LE_PLAN, ""),
-    piece(2, "vignette.png", "image/png", LA_VIGNETTE, "<vignette@novaclim>")
+    // Le plan ne déclare rien : c'est un document.
+    piece(1, "plan-r+1.pdf", "application/pdf", LE_PLAN),
+    // La vignette est déclarée cachée *et* appelée par le corps, comme le fait
+    // Outlook sur le message réel qui a servi de référence.
+    piece(2, "vignette.png", "image/png", LA_VIGNETTE,
+      { identifiant: "vignette@novaclim", cachee: true, fanions: 4 })
   ]);
 }
 
@@ -530,12 +549,116 @@ test("une petite pièce passe par le mini-flux et en ressort identique", () => {
   assert.equal(vignette.dansLeTexte, true);
 });
 
+/**
+ * **Le défaut qui a fait disparaître un plan de l'écran.**
+ *
+ * La règle disait : « une image de signature porte un identifiant de contenu ;
+ * un document n'en a pas. » Gmail en pose un sur **toutes** ses pièces jointes.
+ * Un plan d'architecte de cinq mégaoctets s'est donc affiché « image de
+ * signature », et l'écran a annoncé « aucun document joint ».
+ */
+test("un identifiant de contenu seul ne fait pas d'un plan une image de signature", () => {
+  const source = graver([
+    texteDe("0037", OBJET),
+    texteDe("1000", CORPS),
+    texteDe("007D", CHEMINEMENT),
+    // Ni caché, ni appelé par le corps : un identifiant, et rien d'autre.
+    piece(1, "plan-r+1.pdf", "application/pdf", LE_PLAN, { identifiant: "f_m35rn79k0" })
+  ]);
+
+  const lue = unMsgDeplie(source).pieces[0];
+  assert.equal(lue.nom, "plan-r+1.pdf");
+  assert.equal(lue.dansLeTexte, false);
+  assert.equal(lue.taille, LE_PLAN.length);
+});
+
+test("une pièce que le message dit cachée est collée dans le texte", () => {
+  const source = graver([
+    texteDe("0037", OBJET), texteDe("1000", CORPS), texteDe("007D", CHEMINEMENT),
+    piece(1, "logo.png", "image/png", LA_VIGNETTE, { cachee: true })
+  ]);
+  assert.equal(unMsgDeplie(source).pieces[0].dansLeTexte, true);
+});
+
+test("une pièce que le corps déclare appeler est collée dans le texte", () => {
+  const source = graver([
+    texteDe("0037", OBJET), texteDe("1000", CORPS), texteDe("007D", CHEMINEMENT),
+    piece(1, "logo.png", "image/png", LA_VIGNETTE, { fanions: 4 })
+  ]);
+  assert.equal(unMsgDeplie(source).pieces[0].dansLeTexte, true);
+
+  // Un autre fanion ne dit pas cela : seul celui-là compte.
+  const autre = graver([
+    texteDe("0037", OBJET), texteDe("1000", CORPS), texteDe("007D", CHEMINEMENT),
+    piece(1, "logo.png", "image/png", LA_VIGNETTE, { fanions: 1 })
+  ]);
+  assert.equal(unMsgDeplie(autre).pieces[0].dansLeTexte, false);
+});
+
+/**
+ * **Le recours de dernière instance, quand l'émetteur ne déclare rien.**
+ *
+ * Ce n'est plus une déclaration au sujet de la pièce : c'est le fait lui-même,
+ * lu dans le corps HTML.
+ */
+test("sans aucune déclaration, c'est le corps HTML qui dit s'il appelle la pièce", () => {
+  // **Aucun fanion, aucune mention « cachée » sur ces pièces** : sans cela, les
+  // deux premières gardes répondraient d'abord et le corps HTML ne serait
+  // jamais consulté — l'épreuve passerait sans rien éprouver.
+  const avecLeCorps = (html) => graver([
+    texteDe("0037", OBJET), texteDe("1000", CORPS), texteDe("007D", CHEMINEMENT),
+    ...(html ? [texteDe("1013", html)] : []),
+    piece(1, "logo.png", "image/png", LA_VIGNETTE, { identifiant: "vignette@novaclim" }),
+    piece(2, "plan-r+1.pdf", "application/pdf", LE_PLAN, { identifiant: "f_m35rn79k0" })
+  ]);
+
+  const lues = (source) => Object.fromEntries(
+    unMsgDeplie(source).pieces.map((une) => [une.nom, une.dansLeTexte]));
+
+  const appelee = lues(avecLeCorps(`<p>bonjour</p><img src="cid:vignette@novaclim">`));
+  assert.equal(appelee["logo.png"], true);
+  // Le plan porte lui aussi un identifiant, et le corps ne l'appelle pas : il
+  // reste un document.
+  assert.equal(appelee["plan-r+1.pdf"], false);
+
+  // Un corps qui cite un autre identifiant ne fait rien traverser.
+  const ailleurs = lues(avecLeCorps(`<img src="cid:quelquun-dautre@ailleurs">`));
+  assert.equal(ailleurs["logo.png"], false);
+
+  // Et sans corps HTML du tout, les deux restent des documents.
+  const sansCorps = lues(avecLeCorps(""));
+  assert.equal(sansCorps["logo.png"], false);
+  assert.equal(sansCorps["plan-r+1.pdf"], false);
+});
+
+/**
+ * **Le corps HTML se lit, qu'il soit écrit en texte ou en octets bruts.**
+ *
+ * Le message réel d'Outlook l'écrit en `0102` ; d'autres émetteurs l'écrivent
+ * en `001F`. Ne lire qu'une des deux formes ferait rater l'appel une fois sur
+ * deux, sans que rien ne le dise.
+ */
+test("le corps HTML se lit dans ses deux formes", () => {
+  const html = `<img src="cid:vignette@novaclim">`;
+  const enOctets = (numero, valeur) =>
+    octetsDe(numero, Uint8Array.from([...valeur].map((c) => c.codePointAt(0))));
+
+  for (const forme of [texteDe("1013", html), enOctets("1013", html)]) {
+    const source = graver([
+      texteDe("0037", OBJET), texteDe("1000", CORPS), texteDe("007D", CHEMINEMENT),
+      forme,
+      piece(1, "logo.png", "image/png", LA_VIGNETTE, { identifiant: "vignette@novaclim" })
+    ]);
+    assert.equal(unMsgDeplie(source).pieces[0].dansLeTexte, true, forme.nom);
+  }
+});
+
 test("une pièce sans nom se dit", () => {
   const source = graver([
     texteDe("0037", OBJET),
     texteDe("1000", CORPS),
     texteDe("007D", CHEMINEMENT),
-    piece(1, null, "application/pdf", LE_PLAN, "")
+    piece(1, null, "application/pdf", LE_PLAN)
   ]);
   const lu = unMsgDeplie(source);
   assert.equal(lu.pieces.length, 1);

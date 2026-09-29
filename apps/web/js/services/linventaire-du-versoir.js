@@ -39,14 +39,19 @@
  *
  * ## Ce qu'il ne fait pas
  *
- * Il ne verse rien, ne classe rien, ne rapproche rien. Il compte. Le tri, la
- * signature et le fonds commun viennent après, et ailleurs.
+ * Il ne verse rien, ne classe rien, ne jette rien. Il compte — **y compris ce
+ * qui se répète**, parce que c'est le premier chiffre à connaître : sur cent
+ * historiques de chantier, le volume réel est une fraction du volume apparent
+ * (`le-dedoublonnage.js`). Le tri, la signature et le fonds commun viennent
+ * après, et ailleurs.
  *
  * ## Il est pur
  *
  * Des messages dépliés entrent, des nombres sortent. Aucun réseau, aucun
  * écran, aucune horloge.
  */
+
+import { ceQuiSeRepete } from "./le-dedoublonnage.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -87,14 +92,19 @@ export function poidsDit(octets = 0) {
  *
  * @param {object} lu ce que rend `unMsgDeplie`
  * @param {string} [fichier] le nom du fichier déposé, pour pouvoir y revenir
+ * @param {{message?: string, pieces?: (string|null)[]}} [empreintes] ce que rend
+ *   `lesEmpreintes` — sans elles, rien ne se rapproche de rien
  */
-export function inventaireDunMessage(lu = null, fichier = "") {
+export function inventaireDunMessage(lu = null, fichier = "", empreintes = null) {
   const pieces = Array.isArray(lu?.pieces) ? lu.pieces : [];
-  const rangees = pieces.map((une) => ({
+  const rangees = pieces.map((une, rang) => ({
     nom: texte(une?.nom),
     type: texte(une?.type),
     taille: Number(une?.taille) || 0,
-    quoi: une?.dansLeTexte ? PIECE.VIGNETTE : PIECE.DOCUMENT
+    quoi: une?.dansLeTexte ? PIECE.VIGNETTE : PIECE.DOCUMENT,
+    // L'empreinte des octets, quand on a su la calculer. Vide sinon, et une
+    // pièce sans empreinte n'est jamais rapprochée d'une autre (règle 5).
+    empreinte: texte(empreintes?.pieces?.[rang])
   }));
 
   const documents = rangees.filter((une) => une.quoi === PIECE.DOCUMENT);
@@ -108,6 +118,7 @@ export function inventaireDunMessage(lu = null, fichier = "") {
 
   return {
     fichier: texte(fichier),
+    empreinte: texte(empreintes?.message),
     objet: texte(lu?.objet),
     qui: texte(lu?.qui?.adresse) || texte(lu?.qui?.nom),
     quand: texte(lu?.quand),
@@ -142,6 +153,10 @@ export function inventaireDuVersoir(messages = []) {
   return {
     messages: lus.length,
     illisibles: lus.length - lisibles.length,
+    // **Ce qui se répète, compté au même endroit que le reste.** Un écran qui
+    // dirait « 400 messages » sans dire que 260 sont le même message cité
+    // quinze fois ferait croire à une matière qu'on n'a pas.
+    repetitions: ceQuiSeRepete(lus),
     documents: compte("documents"),
     vignettes: compte("vignettes"),
     poidsDesDocuments: somme("poidsDesDocuments"),
@@ -188,4 +203,53 @@ export function phraseDuVersoir(inventaire = null) {
   }
 
   return dits.join(" · ");
+}
+
+/**
+ * Ce que le dédoublonnage épargne, en une phrase.
+ *
+ * Elle vit ici, avec l'autre phrase du versoir et avec `poidsDit` : le
+ * comptage est ailleurs, parce qu'il resservira — la phrase, non.
+ *
+ * Vide quand rien ne se répète. « 0 doublon » apprend à ne plus lire les
+ * lignes, ici comme partout.
+ */
+export function phraseDeCeQuiSeRepete(inventaire = null) {
+  const repetitions = inventaire?.repetitions ?? {};
+  const dits = [];
+
+  const messages = Number(repetitions.messages?.repetes) || 0;
+  if (messages) dits.push(`${messages} ${messages > 1 ? "messages déjà vus" : "message déjà vu"}`);
+
+  const pieces = (Number(repetitions.documents?.repetes) || 0)
+    + (Number(repetitions.vignettes?.repetes) || 0);
+  if (pieces) dits.push(`${pieces} ${pieces > 1 ? "pièces déjà vues" : "pièce déjà vue"}`);
+
+  // Aucune garde sur la liste vide : un poids épargné ne peut exister sans une
+  // répétition, donc sans une ligne — la jointure rend la chaîne vide d'elle-
+  // même. Une garde qui ne peut pas tomber ne se casse jamais, donc ne se
+  // vérifie pas (règle 4).
+  const poids = (Number(repetitions.documents?.poidsEvite) || 0)
+    + (Number(repetitions.vignettes?.poidsEvite) || 0);
+  // Le poids épargné est le chiffre qui décide : c'est ce qu'on ne relira, ne
+  // rangera et ne paiera nulle part ensuite.
+  return poids ? `${dits.join(" · ")} — ${poidsDit(poids)} qu'on ne relira pas` : dits.join(" · ");
+}
+
+/**
+ * Ce qu'on ne sait pas rapprocher, et qui se compte donc à part.
+ *
+ * `crypto.subtle` manque d'une page servie sans TLS. Sans lui, aucune pièce ne
+ * porte d'empreinte, et **rien ne se dédoublonne** — le taire ferait lire
+ * « aucun doublon » là où il faudrait lire « on n'a pas pu regarder ».
+ */
+export function phraseDeCeQuOnNeSaitPasRapprocher(inventaire = null) {
+  const repetitions = inventaire?.repetitions ?? {};
+  const combien = (Number(repetitions.documents?.sansEmpreinte) || 0)
+    + (Number(repetitions.vignettes?.sansEmpreinte) || 0);
+  if (!combien) return "";
+
+  return combien > 1
+    ? `${combien} pièces n'ont pas d'empreinte : on ne sait pas si elles se répètent`
+    : "1 pièce n'a pas d'empreinte : on ne sait pas si elle se répète";
 }

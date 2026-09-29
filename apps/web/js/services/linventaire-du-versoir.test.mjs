@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  PIECE, inventaireDunMessage, inventaireDuVersoir, phraseDuVersoir, poidsDit
+  PIECE, inventaireDunMessage, inventaireDuVersoir, phraseDeCeQuOnNeSaitPasRapprocher,
+  phraseDeCeQuiSeRepete, phraseDuVersoir, poidsDit
 } from "./linventaire-du-versoir.js";
 
 const piece = (nom, taille, dansLeTexte, type = "application/pdf") =>
@@ -151,4 +152,96 @@ test("un poids s'écrit comme on le lit", () => {
   assert.equal(poidsDit(24000000), "24 Mo");
   assert.equal(poidsDit(-1), "");
   assert.equal(poidsDit("plein"), "");
+});
+
+/* ── Ce qui se répète ────────────────────────────────────────────────────── */
+
+test("les empreintes descendent sur le message et sur chaque pièce, dans l'ordre", () => {
+  const un = inventaireDunMessage(
+    unMessage({ pieces: [piece("plan.pdf", 5000, false), piece("logo.png", 300, true)] }),
+    "a.msg",
+    { message: "<a@x>", pieces: ["abc", "def"] }
+  );
+  assert.equal(un.empreinte, "<a@x>");
+  assert.equal(un.documents[0].empreinte, "abc");
+  assert.equal(un.vignettes[0].empreinte, "def");
+});
+
+/**
+ * **Sans empreintes, rien ne se rapproche de rien.** Deux exemplaires du même
+ * message comptent alors pour deux, et l'écran le dit plutôt que d'annoncer
+ * « aucun doublon » (règle 5).
+ */
+test("sans empreintes, aucune pièce n'en porte", () => {
+  const un = inventaireDunMessage(unMessage({ pieces: [piece("plan.pdf", 5000, false)] }), "a.msg");
+  assert.equal(un.empreinte, "");
+  assert.equal(un.documents[0].empreinte, "");
+});
+
+test("l'inventaire compte ce qui se répète", () => {
+  const tout = inventaireDuVersoir([
+    inventaireDunMessage(unMessage({ pieces: [piece("plan.pdf", 5000, false)] }),
+      "a.msg", { message: "<a@x>", pieces: ["abc"] }),
+    inventaireDunMessage(unMessage({ pieces: [piece("plan-copie.pdf", 5000, false)] }),
+      "b.msg", { message: "<b@x>", pieces: ["abc"] })
+  ]);
+
+  assert.equal(tout.repetitions.messages.repetes, 0);
+  assert.equal(tout.repetitions.documents.repetes, 1);
+  assert.equal(tout.repetitions.documents.poidsEvite, 5000);
+  assert.equal(phraseDeCeQuiSeRepete(tout), "1 pièce déjà vue — 5,0 ko qu'on ne relira pas");
+});
+
+/**
+ * **Les images de signature qui se répètent sont le gros du volume.**
+ *
+ * Le même logo est attaché à chaque message d'un fil, et à chaque fil d'un
+ * chantier. Les laisser hors du compte ferait annoncer « rien ne se répète »
+ * sur une archive qui n'est que cela.
+ */
+test("une image de signature déjà vue compte comme une pièce déjà vue", () => {
+  const tout = inventaireDuVersoir([
+    inventaireDunMessage(unMessage({ pieces: [piece("logo.png", 300, true)] }),
+      "a.msg", { message: "<a@x>", pieces: ["logo"] }),
+    inventaireDunMessage(unMessage({ pieces: [piece("logo.png", 300, true)] }),
+      "b.msg", { message: "<b@x>", pieces: ["logo"] })
+  ]);
+
+  assert.equal(tout.repetitions.vignettes.repetes, 1);
+  assert.equal(tout.repetitions.documents.repetes, 0);
+  assert.equal(phraseDeCeQuiSeRepete(tout), "1 pièce déjà vue — 300 o qu'on ne relira pas");
+});
+
+test("le même message déposé deux fois se dit", () => {
+  const dun = { message: "<a@x>", pieces: [] };
+  const tout = inventaireDuVersoir([
+    inventaireDunMessage(unMessage(), "a.msg", dun),
+    inventaireDunMessage(unMessage(), "copie-de-a.msg", dun)
+  ]);
+  assert.equal(phraseDeCeQuiSeRepete(tout), "1 message déjà vu");
+});
+
+test("rien qui se répète ne s'écrit pas", () => {
+  const tout = inventaireDuVersoir([
+    inventaireDunMessage(unMessage(), "a.msg", { message: "<a@x>", pieces: [] })
+  ]);
+  assert.equal(phraseDeCeQuiSeRepete(tout), "");
+  assert.equal(phraseDeCeQuiSeRepete(null), "");
+});
+
+test("ce qu'on n'a pas su rapprocher se dit, et ne se lit pas « aucun doublon »", () => {
+  const tout = inventaireDuVersoir([
+    inventaireDunMessage(unMessage({ pieces: [piece("plan.pdf", 5000, false)] }),
+      "a.msg", { message: "<a@x>", pieces: [null] })
+  ]);
+  assert.equal(phraseDeCeQuiSeRepete(tout), "");
+  assert.match(phraseDeCeQuOnNeSaitPasRapprocher(tout), /1 pièce n'a pas d'empreinte/);
+});
+
+test("quand tout se rapproche, on ne dit rien de ce qu'on n'a pas su faire", () => {
+  const tout = inventaireDuVersoir([
+    inventaireDunMessage(unMessage({ pieces: [piece("plan.pdf", 5000, false)] }),
+      "a.msg", { message: "<a@x>", pieces: ["abc"] })
+  ]);
+  assert.equal(phraseDeCeQuOnNeSaitPasRapprocher(tout), "");
 });

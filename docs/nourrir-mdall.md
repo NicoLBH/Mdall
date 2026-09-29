@@ -89,6 +89,31 @@ boîte de messagerie, la citation représente couramment les deux tiers du texte
 le même paragraphe y est présent quinze fois. `empreinteDuTexte` et
 `lesMessagesCites` existent. Gratuit, et c'est le plus gros gain.
 
+> *Fait, pour le comptage* — `services/le-dedoublonnage.js`. Un message est
+> reconnu par son **`Message-ID`** quand il en porte un : c'est une identité
+> qu'il tient de la messagerie qui l'a émis, et qui survit aux transferts. En
+> calculer une autre alors qu'elle est là reviendrait à en avoir deux
+> (règle 10). Sans lui, une clé sur quatre choses — qui, quand, l'objet, le
+> propos ramené à ce qui le distingue —, parce qu'aucune ne suffit seule.
+>
+> Une pièce jointe est reconnue **par ses octets, et rien d'autre**. Le nom ne
+> vaut rien (« Plan.pdf » désigne quinze plans sur un chantier, et le même plan
+> voyage sous trois noms) ; la taille non plus (deux révisions pèsent souvent
+> le même nombre d'octets).
+>
+> Ce qu'on n'a pas su empreindre — `crypto.subtle` absent d'une page servie
+> sans TLS — **n'est rapproché de rien**, ni pour dire que c'est le même, ni
+> pour dire que ce ne l'est pas, et l'écran le dit (règle 5).
+>
+> **Rien n'est jeté** : cet étage *compte*. Ce qui se garde et ce qui s'écarte
+> est une décision de l'étage suivant, et elle viendra avec un endroit où
+> écrire.
+>
+> Ce qui reste de l'étage 0 : **retirer les citations** du propos avant de
+> l'empreindre. `ceQuonCite` sait déjà les séparer ; aujourd'hui l'empreinte
+> porte sur le corps entier, donc deux exemplaires d'un même message dont la
+> citation a grossi comptent pour deux.
+
 **Étage 1 — déplier.** `.eml`, **`.msg`**, tableurs, PDF **nés numériques** (le
 texte y est déjà, il n'y a rien à reconnaître). Gratuit.
 
@@ -268,11 +293,36 @@ réel de référence, **les huit pièces jointes étaient des images de signatur
 deux mégaoctets et demi pour rien — et les plans dont parlait le corps n'étaient
 pas dans le fichier du tout (ils voyageaient par un lien de transfert).
 
-Ce qui les sépare est **structurel** : une image collée dans le texte porte un
-identifiant de contenu (`PR_ATTACH_CONTENT_ID`), par lequel le corps HTML la
-rappelle ; un document n'en a pas. Ce n'est donc pas une devinette sur le nom ou
-la taille : un « plan.png » reste un document, une vignette de deux mégaoctets
-reste une vignette.
+#### La règle qu'on avait écrite, et pourquoi elle était fausse
+
+> « Une image collée dans le texte porte un identifiant de contenu
+> (`PR_ATTACH_CONTENT_ID`) ; un document n'en a pas. »
+
+Vrai du message Outlook de référence. **Faux dès le second essai** : Gmail pose
+un identifiant de contenu sur *toutes* ses pièces jointes, y compris un plan
+d'architecte de cinq mégaoctets. Ce plan s'est affiché « image de signature », et
+l'écran a annoncé « aucun document joint » alors qu'il y en avait un.
+
+La leçon vaut plus que le correctif : **un seul message réel ne fait pas une
+règle**. Ce qui ressemblait à une distinction structurelle n'était qu'une
+habitude d'un émetteur.
+
+#### Ce qu'on lit à la place : ce que le message déclare
+
+Trois signaux, du plus explicite au plus factuel :
+
+| signal | ce qu'il dit | plan Gmail | signatures Outlook |
+|---|---|---|---|
+| `PR_ATTACHMENT_HIDDEN` | « ne la montre pas comme une pièce jointe » | absent | 1 |
+| `ATT_MHTML_REF` (dans `PR_ATTACH_FLAGS`) | « le corps appelle celle-ci » | absent | 4 |
+| le corps HTML cite-t-il son `cid:` ? | le fait lui-même | non | — |
+
+Les deux premiers sont des **déclarations** du message ; le troisième est la
+vérification de dernier recours, pour un émetteur qui ne déclare rien.
+
+**Le doute penche du côté du document.** Sans aucun signal, c'est un document :
+un logo affiché parmi les documents se voit et s'ignore ; un plan rangé parmi les
+logos disparaît de l'écran.
 
 L'inventaire compte les deux séparément et **dit le poids de chacun** : taire les
 vignettes ferait croire à des archives trois fois plus lourdes qu'elles ne sont.
@@ -297,15 +347,24 @@ C'est aussi ce qui dissout la difficulté soulevée plus haut : ce traitement vi
 **à côté de l'interface des utilisateurs**, dans un autre site, et il ne nourrit
 pas la mémoire d'un chantier — il prépare le fonds commun.
 
+Le versoir dit aussi, en haut de l'inventaire, **ce qui se répète** : combien de
+messages sont le même message, combien de pièces sont la même pièce, et le poids
+qu'on ne relira pas. C'est l'étage 0, et c'est le premier chiffre à connaître.
+
 ### Ce qui reste, dans l'ordre
 
-1. **Les `.zip` et les dossiers Windows** : cent projets ne se glissent pas
-   fichier par fichier. Le navigateur sait décompresser sans aucune dépendance
-   (`DecompressionStream`), et sait lire un dossier déposé.
-2. **Écrire les pièces quelque part** : aujourd'hui l'inventaire les compte et
+1. **Écrire les pièces quelque part** : aujourd'hui l'inventaire les compte et
    les oublie. Les garder demande de décider **où** — et c'est la question du
-   déposant, au § 9.
+   déposant, au § 9. C'est le prochain pas.
+2. **Retirer les citations avant d'empreindre le propos** : `ceQuonCite` sait
+   déjà les séparer. Aujourd'hui l'empreinte porte sur le corps entier, donc
+   deux exemplaires d'un même message dont la citation a grossi comptent pour
+   deux. C'est le reste de l'étage 0.
 3. **Le tri par règles**, sur ce que l'inventaire aura montré.
+4. **Les `.zip` et les dossiers Windows** : cent projets ne se glissent pas
+   fichier par fichier. Le navigateur sait décompresser sans aucune dépendance
+   (`DecompressionStream`), et sait lire un dossier déposé. *(Mis de côté : on
+   y reviendra si le besoin se confirme.)*
 
 ## 7. Le glissé-déposé des mails : ce qui reste à faire
 
@@ -331,15 +390,26 @@ Le décorticage existe et il est gratuit. Ce qui manque :
    `services/episode-du-projet.js`. Ce qui manque pour **comparer** deux suites
    est un nom commun aux sujets, et cette réflexion reste ouverte.)*
 2. **Le dépôt en masse des mails**, jusqu'à l'épisode — étages 0 à 3, tout
-   gratuit. *(Commencé : le lecteur de `.msg` et le versoir de la console
-   ouvrent l'étage 1 et donnent l'inventaire. Restent les `.zip`, les dossiers,
-   et l'endroit où les pièces se gardent.)*
+   gratuit. *(En cours. Étage 1 — déplier — fait pour les `.msg`, avec les
+   pièces jointes entières. Étage 0 — dédoublonner — fait pour le comptage ;
+   reste à retirer les citations avant d'empreindre le propos. Restent aussi
+   l'endroit où les pièces se gardent, et les étages 2 et 3.)*
 3. **La mesure** — prédire dans le passé sur les cent projets, contre la ligne
-   de base. Avant tout prédicteur.
+   de base. Avant tout prédicteur. *(fait — `services/mesure-du-passe.js`,
+   `services/ligne-de-base.js`. Elle attend maintenant de la matière : c'est
+   exactement ce que le versoir prépare.)*
 4. **Le tri par règles**, affiné avec ce que la mesure aura montré d'utile.
 5. **Le petit modèle**, sur le reste seulement, avec son taux d'escalade mesuré.
 6. **Les règles normatives signées** — l'Établi, pas l'ingestion.
 7. **L'OCR des pièces scannées**, en dernier.
+
+### Où l'on en est, en une ligne
+
+Les étages gratuits sont ouverts (déplier, compter, dédoublonner) et la mesure
+attend. **Le prochain pas qui débloque tout le reste est le même depuis deux
+tours : décider où les pièces se gardent.** Tant qu'elles sont comptées puis
+oubliées, chaque essai recommence le décorticage — et c'est précisément la
+distribution de carburant qu'on ne veut pas refaire.
 
 ## 9. À enrichir
 
