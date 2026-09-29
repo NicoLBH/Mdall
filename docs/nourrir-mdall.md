@@ -621,49 +621,83 @@ dans une seule zone ferait choisir le mauvais mode sans le savoir.
 - **Les archives de plus de quatre gigaoctets** (Zip64), qui se refusent
   proprement mais ne se lisent pas.
 
-### B. Montrer — et le but de l'écran est de pouvoir refuser
+### B. Montrer — et le but de l'écran est de pouvoir refuser *(fait)*
 
-Une liste de cent mille messages ne s'affiche pas et ne sert à rien. Trois
-écrans, et chacun répond à une question qu'on se pose vraiment :
+> L'onglet **L'épisode** de la console (`apps/console/js/lepisode.js`).
 
-**1. La chronologie d'une archive.** Un chantier, sa durée, ses mois, la densité
-des échanges, et où les pièces tombent. C'est la première fois que **la
-séquence** se voit — et c'est précisément ce que les livres n'ont pas.
+Une liste de cent mille messages ne s'affiche pas et ne sert à rien. **Trois
+questions, et l'ordre compte.**
 
-**2. Ce qu'on n'a pas su lire.** Par archive : combien de messages, combien
-datés, combien portant un domaine reconnu, combien de constats proposés. **La
-colonne des manques est la plus utile** : c'est elle qui dit où la lecture est
-aveugle, et donc quelle règle écrire ensuite (règle 5).
+**1. Que vaut ce qu'on sait déjà faire ?** La référence à battre, **en haut**.
+C'est le chiffre qui décide de tout le reste ; le dessiner en bas de page
+reviendrait à le traiter comme une curiosité. Et c'est **le tableau de Mdall**,
+celui de la forme d'un chantier, partagé et non recopié (règle 4).
 
-**3. Le fil.** Une archive ouverte, ses messages dans l'ordre, citations
-retirées, pièces attachées. C'est le contrôle humain : on voit si l'extraction
-est honnête.
+**2. Qu'est-ce qu'on n'a pas su lire ?** Juste après. La colonne des manques dit
+où la lecture est aveugle, donc quelle ligne écrire ensuite (règle 5).
 
-Et le principe qui tient les trois : **l'extraction propose, elle n'affirme
-pas.** Chaque constat proposé montre la phrase d'où il vient, son message, sa
-date, et **la règle qui a tiré**. Un clic pour l'écarter — et cet écart est
-lui-même de la matière (`services/ecarts-observes.js`, `RAISON`).
+**3. Que s'est-il passé, et dans quel ordre ?** La suite des fils, avec leurs
+domaines en pastilles. C'est la matière que personne d'autre n'a : les livres
+donnent les réponses, jamais la séquence. Un fil s'ouvre, et montre ses messages
+dans l'ordre et **ses constats avec ce qui les a déclenchés** — le texte trouvé,
+le genre de l'indice, la date.
 
-### C. Prédire — le pont, puis le chiffre
+Le principe qui tient les trois : **l'extraction propose, elle n'affirme pas.**
+Un constat qu'on ne peut pas justifier est un constat qu'on ne peut pas refuser.
 
-**1. `episodeDuneArchive(messages)`** — le pont qui manque. Il rend **la même
-forme** que `episodeDuProjet` : un contexte, des ouvertures, des constats datés
-avec leur domaine. Même forme, donc `mesureDuPredicteur` et `LIGNES_DE_BASE`
-marchent sans une ligne de changement (règle 10).
+> Reste à brancher le refus lui-même sur ce qui existe déjà
+> (`services/ecarts-observes.js`, `RAISON`) : aujourd'hui on voit **pourquoi**
+> un constat est là, on ne peut pas encore l'écarter d'un clic.
 
-**2. Les règles qui donnent un domaine sans le deviner.** Toutes gratuites, et
-chacune dit pourquoi elle a tiré :
+### C. Prédire — le pont, puis le chiffre *(fait)*
 
-| ce qu'on lit | ce qu'on en tire |
-|---|---|
-| une référence citée (DTU 20.1, art. CO 24, EC8 § 4.3) | **le domaine**, par une table de correspondance nommée |
-| une pièce jointe qui est un rapport, un avis, un CR | un événement daté |
-| une question puis sa réponse dans un fil | un sujet ouvert, puis clos |
-| l'indice de révision d'un plan (B → C) | un changement, daté |
+> `services/les-references-citees.js`, `services/episode-dune-archive.js`.
 
-Quand aucune ne tire : **le domaine reste vide, et se compte**. C'est cette
-colonne-là qui dira si l'étage 4 — le petit modèle — vaut d'être payé, et le
-taux d'escalade sera mesuré avant d'être dépensé.
+**1. `episodeDuneArchive({messages})` rend la même forme que
+`episodeDuProjet`** : un contexte, des ouvertures, des constats datés portant un
+domaine, et des comptes. Donc `mesureDuPredicteur` et `LIGNES_DE_BASE` tournent
+dessus **sans une ligne de changement** (règle 10). Deux formes auraient voulu
+dire deux mesures, et l'on n'aurait plus su laquelle comparer à l'autre.
+
+- **Une ouverture, c'est un fil** : les messages qui partagent un objet, une
+  fois retirés les « RE: » et « TR: » empilés.
+- **Un fil ne se ferme pas.** Son dernier message dit où il s'est *arrêté* :
+  écrire `fermeLe` ferait lire « tranché le 12 mai » là où il faut lire « plus
+  rien après le 12 mai » (règle 5).
+- **Un constat, c'est un indice rencontré dans un fil**, daté de sa **première**
+  rencontre — il est recopié à chaque réponse avec la citation.
+- **`leveLe` reste toujours vide** : un mail ne dit pas qu'un sujet est levé.
+
+**2. Le domaine se lit, il ne se devine pas.** Une référence citée est un fait
+du texte : « art. CO 24 » est là ou n'y est pas, et l'article CO 24 appartient
+au règlement de sécurité incendie — ce n'est pas une opinion.
+
+| genre | exemple | ce que ça vaut |
+|---|---|---|
+| **référence** | `IT 246`, `DTU 13.2`, `Eurocode 7`, `art. CO 24`, `SSI` | sa présence est vérifiable, son domaine ne se discute pas |
+| **terme** | `désenfumage`, `parasismique`, `géotechnique` | un mot, pas une référence : un pas de plus vers l'interprétation |
+
+Les termes sont **marqués comme tels** et se retirent d'un seul argument
+(`sansLesTermes`) — ce qui permet de mesurer deux fois et de voir ce qu'ils
+apportent vraiment. Et **deux domaines ne font pas un domaine** : choisir le
+premier trouvé serait un tirage au sort déguisé.
+
+> **La table est un premier jet, et elle demande à être relue par quelqu'un dont
+> c'est le métier.** Ce n'est ni une nomenclature ni la vérité du bâtiment :
+> c'est une **liste en clair** dont chaque ligne se lit, se corrige et se
+> retire. C'est tout son intérêt, et c'est pourquoi ce n'est pas un modèle.
+
+**Ce qui ne tire pas se compte.** Aucun indice ⇒ aucun domaine, et le message
+entre dans la colonne des manques. C'est elle qui dira si le petit modèle vaut
+d'être payé, et le taux d'escalade sera mesuré avant d'être dépensé.
+
+**Ce n'est pas une mémoire.** Rien n'est signé, rien n'est versé, rien n'entre
+dans un projet : c'est une lecture, refaite à chaque affichage, faite pour être
+mesurée et pour être refusée (règle 1).
+
+*(Ce que le pont ne tire pas encore : un rapport joint comme événement daté,
+l'indice de révision d'un plan, la paire question/réponse d'un fil. Trois règles
+gratuites, à écrire quand la matière dira lesquelles manquent.)*
 
 **3. Le chiffre qui décide tout le reste.** La mesure existe déjà, avec sa coupe
 stricte. Une fois le pont posé, on rejoue cent archives réelles contre les deux
@@ -677,13 +711,15 @@ premier.
 1. ~~**Le convoi**~~ — *fait*. Le défaut des mille lignes, les lots qui
    relâchent, la reprise par l'archive elle-même, le journal, le dossier et le
    `.zip`.
-2. **Le pont** `episodeDuneArchive`, avec les règles de domaine les plus sûres
-   (les références citées), et **la mesure lancée dessus**. C'est le premier
-   chiffre réel.
-3. **Les écrans** — la chronologie, les manques, le fil — taillés sur ce que le
-   chiffre aura montré d'utile plutôt que sur ce qu'on imagine.
+2. ~~**Le pont** `episodeDuneArchive`~~ — *fait*, avec la table des références
+   citées et **la mesure branchée dessus**.
+3. ~~**Les écrans**~~ — *faits* : l'onglet **L'épisode**, où la référence à
+   battre vient en premier, comme prévu.
 
-Poser les écrans avant le chiffre reviendrait à dessiner ce qu'on espère voir.
+**Et maintenant, le chiffre.** Tout est en place pour le produire ; il manque la
+matière. Sur deux messages réels, il répond « trop peu de points pour se
+prononcer » — et c'est la bonne réponse. Ce qu'il faut ensuite n'est plus du
+code : **ce sont les cent archives.**
 
 ## 9. À enrichir
 

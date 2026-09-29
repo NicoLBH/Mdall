@@ -377,3 +377,75 @@ test("le convoi n'écrit nulle part où il en est", async () => {
     new URL("../apps/console/js/le-convoi-ecran.js", import.meta.url), "utf8");
   assert.doesNotMatch(source, /localStorage|sessionStorage|indexedDB/i);
 });
+
+/**
+ * **Le tableau de la mesure est partagé, pas recopié.**
+ *
+ * Deux écrans le montrent — la forme d'un chantier, et l'épisode d'une archive.
+ * Écrit deux fois, il aurait dit deux choses du même chiffre (règle 4), et il
+ * aurait fallu recalibrer toutes ses classes.
+ */
+test("l'épisode montre la référence à battre avec le tableau de Mdall", async () => {
+  const partage = await readFile(
+    new URL("../apps/web/js/views/ui/forme-du-chantier.js", import.meta.url), "utf8");
+  assert.match(partage, /export function renderLaReference\(/);
+
+  const source = await readFile(
+    new URL("../apps/console/js/lepisode.js", import.meta.url), "utf8");
+  assert.match(source, /import \{ renderLaReference \}/);
+  assert.match(source, /renderLaReference\(mesures, "cette archive"\)/);
+
+  // Aucun tableau écrit ici : pas de pourcentage, pas de « points » recomptés.
+  assert.doesNotMatch(source, /precision1|fausseAlerte|enPourCent/);
+});
+
+/**
+ * **La mesure porte sur l'épisode de cette archive**, et sur les deux lignes de
+ * base. La lancer sur autre chose — ou n'en garder qu'une — rendrait un chiffre
+ * qui a l'air juste et ne dit rien du passé qu'on regarde.
+ */
+test("l'épisode mesure les deux lignes de base sur son propre passé", async () => {
+  const source = await readFile(
+    new URL("../apps/console/js/lepisode.js", import.meta.url), "utf8");
+
+  assert.match(source, /LIGNES_DE_BASE\.map\(\(ligne\) => \(\{/);
+  assert.match(source,
+    /mesureDuPredicteur\(episode, \{ predire: ligne\.predire, arrive: lesDomainesVenus \}\)/);
+  assert.match(source, /episodeDuneArchive\(\{ messages: lu\.messages \}\)/);
+});
+
+/**
+ * **Le but de cet écran est de pouvoir refuser.**
+ *
+ * Un constat qu'on ne peut pas justifier est un constat qu'on ne peut pas
+ * refuser. Chacun montre donc le texte trouvé, le genre de l'indice, et le fil
+ * d'où il vient.
+ */
+test("chaque constat de l'épisode montre ce qui l'a déclenché", async () => {
+  const source = await readFile(
+    new URL("../apps/console/js/lepisode.js", import.meta.url), "utf8");
+
+  const fil = source.slice(source.indexOf("function renderUnFil("),
+    source.indexOf("function renderTout("));
+  assert.match(fil, /un\.trouve/);
+  assert.match(fil, /GENRE\.TERME/);
+  assert.match(fil, /un\.domaine/);
+
+  // Et rien n'est versé depuis cet écran : c'est une lecture.
+  const corps = source.replace(/^import[\s\S]*?from\s*"[^"]*";$/gm, "");
+  assert.doesNotMatch(corps, /\bverser|\bsupabase\.|\.upload\(/);
+  assert.match(source, /Rien n'est versé ici/);
+});
+
+/**
+ * **Ce qu'on n'a pas su lire se montre.** C'est la colonne qui dit où la
+ * lecture est aveugle, donc quelle ligne écrire ensuite (règle 5) — la cacher
+ * ferait lire « voici l'épisode » là où il faut lire « en voici ce qu'on a su
+ * en tirer ».
+ */
+test("l'épisode dit ce qu'il n'a pas su lire", async () => {
+  const source = await readFile(
+    new URL("../apps/console/js/lepisode.js", import.meta.url), "utf8");
+  assert.match(source, /phraseDeCeQuOnNaPasSuLire\(episode\)/);
+  assert.match(source, /manques \? `<p class="forme-manques">/);
+});

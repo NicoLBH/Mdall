@@ -193,6 +193,10 @@ export function unMessageArchive(ligne = null) {
     quand: texte(ligne?.quand),
     fichier: texte(ligne?.fichier),
     combienDeDestinataires: Number(ligne?.combien_de_destinataires) || 0,
+    // **Le propos entier, et pas seulement sa longueur.** C'est lui qu'on lit
+    // pour y trouver ce qui est cité (`les-references-citees.js`) : sans lui,
+    // l'épisode d'une archive n'aurait rien à se mettre sous la dent.
+    corps: texte(ligne?.corps),
     signesDuCorps: texte(ligne?.corps).length,
     trous: Array.isArray(ligne?.trous) ? ligne.trous.map(texte).filter(Boolean) : [],
     // Les pièces viennent d'une autre table : l'écran les rattache, et elles

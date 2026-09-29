@@ -33,6 +33,7 @@ comme tel ; tout le reste est à faire.
 | **le convoi** | `apps/console/js/le-convoi-ecran.js`, `services/le-convoi.js`, `services/un-zip-deplie.js` | un dossier ou un `.zip` entier, absorbé par lots sans tenir l'archive en mémoire |
 | son second : **l'archive** | `apps/console/js/larchive.js`, `services/larchive-des-pieces.js` | les messages dans l'ordre du temps, leurs pièces, et les PDF s'y ouvrent |
 | le casier des pièces | Supabase Storage `archives` + `pieces_archivees` | les octets gardés, nommés par leur empreinte |
+| **l'épisode** | `apps/console/js/lepisode.js`, `services/episode-dune-archive.js`, `services/les-references-citees.js` | la suite des fils, ce qu'on n'a pas su lire, et la référence à battre |
 | l'archive de fondement | `messages_archives`, `pieces_des_messages`, casier `messages/` | le fichier d'origine, la forme lue, et quel message portait quelle pièce |
 
 **Ce qui n'existe pas du tout :** aucune table `organisations`, `comptes`,
