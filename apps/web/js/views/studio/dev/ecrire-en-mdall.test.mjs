@@ -391,15 +391,62 @@ test("le formulaire du bac ne réécrit jamais tout le contenu de la fenêtre", 
   const { fileURLToPath } = await import("node:url");
   const source = readFileSync(fileURLToPath(new URL("./ecrire-en-mdall.js", import.meta.url)), "utf8");
 
-  const branchement = source.match(/\nfunction brancherLeBac\([^)]*\) \{\n([\s\S]*?)\n\}\n/);
-  assert.ok(branchement, "brancherLeBac est introuvable");
+  /**
+   * **C'est la frappe qui ne doit rien redessiner**, pas le branchement en
+   * général : le doigt est posé sur le champ, et le curseur partirait au milieu
+   * d'un nombre. La garde vise donc `brancherLesSaisies`, là où la frappe est
+   * écoutée — la viser plus haut la laisserait passer dès qu'on déplace une
+   * ligne d'un cran.
+   */
+  const branchement = source.match(/\nfunction brancherLesSaisies\([^)]*\) \{\n([\s\S]*?)\n\}\n/);
+  assert.ok(branchement, "brancherLesSaisies est introuvable");
 
-  assert.doesNotMatch(branchement[1], /renderBacDessai\(/,
-    "brancherLeBac redessine tout le bac : le champ où le doigt est posé mourrait avec");
+  assert.doesNotMatch(branchement[1], /renderBacDessai\(|renderUnChamp\(/,
+    "la frappe redessine le champ : le curseur partirait au milieu d'un nombre");
   assert.doesNotMatch(branchement[1], /majLaFenetreDeDetails\(/,
-    "brancherLeBac remplace le contenu de la fenêtre : le curseur partirait à la frappe");
+    "la frappe remplace le contenu de la fenêtre : le curseur partirait avec");
   assert.doesNotMatch(branchement[1], /etat\.lance = false/,
     "une réponse éteint le verdict : elle ne serait jamais lue");
+
+  /**
+   * **Et elle doit quand même reposer la note.** Elle change de sens à la
+   * première frappe : le champ cesse d'être repris du projet, et ce que le
+   * projet disait devient la seule chose qu'on ne peut plus lire nulle part.
+   */
+  assert.match(branchement[1], /majLaNoteDuProjet\(/,
+    "la note ne suit pas la frappe : elle dirait « du projet » sur une réponse tapée");
+  /**
+   * **Les deux formes de marque, et les deux se défont.** Sur la saisie pour un
+   * champ de texte ou une liste ; sur l'enveloppe des deux boutons pour un
+   * oui/non — c'est elle qui la porte, et l'oublier laisserait un oui/non
+   * repris du projet marqué après qu'on l'a choisi.
+   */
+  assert.equal((branchement[1].match(/classList\.remove\("est-du-projet"\)/g) ?? []).length, 2,
+    "une des deux formes de saisie garde sa marque : on croirait n'avoir rien tapé");
+  assert.match(branchement[1], /closest\("\.bac-formulaire__logique"\)\?\.classList\.remove/,
+    "l'enveloppe du oui/non garde sa marque après qu'on a choisi");
+
+  /**
+   * **Revenir, lui, repose le champ — et c'est ce qui le distingue.** On vient
+   * de cliquer un bouton, le doigt n'est pas dans le champ, et la valeur à y
+   * remettre n'est pas celle qu'il porte.
+   */
+  const retour = source.match(/\nfunction brancherLesRetours\([^)]*\) \{\n([\s\S]*?)\n\}\n/);
+  assert.ok(retour, "brancherLesRetours est introuvable");
+  /**
+   * **Revenir, c'est retirer sa réponse** — le reste suit. Sans cela, le
+   * bouton repose un champ qui porte toujours la réponse qu'on voulait
+   * défaire : il a l'air de marcher et ne fait rien.
+   */
+  assert.match(retour[1], /etat\.reponses = /,
+    "revenir ne touche pas aux réponses : le bouton ne ferait rien");
+  assert.match(retour[1], /\[nom\]:/,
+    "revenir ne retire pas **cette** réponse-là : les autres partiraient avec");
+
+  assert.match(retour[1], /renderUnChamp\(/,
+    "revenir ne repose pas le champ : la valeur du projet n'y reviendrait pas");
+  assert.doesNotMatch(retour[1], /renderBacDessai\(/,
+    "revenir refait le bac entier : le champ d'à côté perdrait son curseur");
 
   /**
    * **La zone, elle, refait tout — et c'est la seule chose qui le fasse.**

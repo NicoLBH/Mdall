@@ -4713,15 +4713,6 @@ ignore. Ce qui manque vraiment serait le domaine **de ce qu'une fonction rend** 
 `rend:` le dit déjà quand il est écrit, et personne ne le compare encore à ce
 qu'un appelant en attend.
 
-**Le sélecteur de zone ne remplit pas les champs, il les éclaire.** Choisir un
-bâtiment montre ce que le projet tient — « du projet : alu » — et l'essai s'en
-sert ; mais le champ reste vide, et l'on ne peut pas partir de cette valeur pour
-la modifier d'un caractère. Poser la valeur dans le champ serait indiscernable
-d'une réponse tapée, et l'écran ne dirait plus d'où elle vient. Ce qui manque
-est un troisième état — « repris du projet, et modifiable » — qui est une vraie
-question d'écran : à quoi il ressemble, et ce que « revenir au projet » veut
-dire une fois qu'on a tapé par-dessus.
-
 **Une zone ne se choisit pas encore dans l'écran des fichiers.** Le rejeu de la
 mémoire tourne zone par zone et l'écran montre le résultat ; on ne peut pas lui
 dire « montre-moi le bâtiment B ». C'est la même décision que celle qu'on vient
@@ -4732,3 +4723,16 @@ de prendre pour le bac, sur un écran qui a déjà sa propre façon de découper
 que d'une réponse tapée. Les deux se relisent pareil, et c'est exactement ce que
 le rappel sous le champ existe pour éviter — sauf qu'il n'est pas dans la trace.
 Le dire demande de porter la provenance jusque dans les lectures du verdict.
+
+**Un champ repris ne se distingue pas d'une réponse une fois versé.** À l'écran,
+le trait à gauche et « du projet » disent d'où vient la valeur. Dans la
+proposition qu'on signe, plus rien : ce qu'on a repris du projet et ce qu'on a
+tapé s'y lisent pareil. C'est sans conséquence tant qu'on essaie — rien ne sort
+du bac —, et cela en aurait le jour où l'on voudrait verser l'essai tel quel.
+
+**Rien ne prévient quand ce qu'on a repris a changé au projet.** On reprend
+« 2,70 m », on corrige autre chose, on revient une heure plus tard : si
+quelqu'un a versé « 2,75 m » entre-temps, le champ le montre sans dire qu'il a
+bougé. Le dire demande de retenir ce qu'il valait quand on l'a repris, c'est-à-
+dire de donner une mémoire au bac — qui n'en a pas, et c'est ce qui le rend
+sûr.

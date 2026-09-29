@@ -676,9 +676,18 @@ export const WIKI_DU_LANGAGE = [
     dit("**Et l'essai a un « Où l'on se place ».** Le bac commence sur « toutes "
       + "zones » — il ne se place nulle part tant qu'on ne le lui dit pas. "
       + "Choisissez un bâtiment, et les champs se remplissent de ce que le "
-      + "projet tient pour lui : chacun le dit sous lui, « du projet : alu ». "
-      + "Ce que vous tapez par-dessus gagne toujours, et vaut dans toutes les "
-      + "zones — c'est vous qui essayez."),
+      + "projet tient pour lui."),
+    dit("**Un champ ainsi rempli porte un trait à gauche et dit « du projet ».** "
+      + "La valeur est là, prête à être corrigée d'un caractère — mais elle "
+      + "n'est pas de vous, et l'écran ne vous laisse pas le croire. Dès que "
+      + "vous y touchez, le trait part : le champ est à vous."),
+    dit("**Une fois corrigé, le rappel dit ce que le projet disait** — c'est la "
+      + "seule chose qu'on ne peut plus lire nulle part — et propose d'y "
+      + "« revenir ». Y revenir retire votre réponse, et rien d'autre : le "
+      + "champ d'à côté garde ce que vous étiez en train d'y écrire."),
+    dit("**Ce que vous tapez gagne toujours**, et vaut dans toutes les zones — "
+      + "c'est vous qui essayez. Voir une valeur dans un champ ne vaut pas "
+      + "l'avoir tapée : changez de bâtiment, et les champs repris suivent."),
     dit("**Une zone que le projet ne connaît pas fait taire l'appel**, même "
       + "quand la réponse est sous la main. Répondre avec le bâtiment courant "
       + "serait plausible et faux, et une faute de frappe dans un nom de "
