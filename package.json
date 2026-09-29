@@ -10,8 +10,10 @@
     "prepare:unpdf": "node scripts/prepare-unpdf.mjs",
     "prepare:spike-engine": "node scripts/prepare-spike-engine.mjs",
     "prepare:utilitaires": "node scripts/prepare-utilitaires.mjs",
-    "build": "npm run build:web",
-    "build:web": "npm run prepare:katex && npm run prepare:unpdf && npm run prepare:spike-engine && npm run prepare:utilitaires"
+    "prepare:console": "node scripts/prepare-console.mjs",
+    "build": "npm run build:web && npm run build:console",
+    "build:web": "npm run prepare:katex && npm run prepare:unpdf && npm run prepare:spike-engine && npm run prepare:utilitaires",
+    "build:console": "npm run prepare:console"
   },
   "dependencies": {
     "katex": "^0.16.9",

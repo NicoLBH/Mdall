@@ -9,6 +9,8 @@ import { MARQUE_DES_SITUATIONS, RACCOURCIS_GLOBAUX } from "../services/raccourci
 import {
   LE_COPILOTE, TOUS_LES_PROJETS, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
 } from "../services/ecrans-transversaux.js";
+import { LA_CONSOLE } from "../services/la-porte-de-la-console.js";
+import { suisJeAdministrateur } from "../services/la-porte-de-la-console-supabase.js";
 
 function parseHash() {
   const hash = String(location.hash || "").replace(/^#/, "").trim();
@@ -224,6 +226,59 @@ function renderRaccourcisGlobaux() {
   })).join("");
 }
 
+/**
+ * La porte de la console est-elle ouverte pour celui qui regarde ?
+ *
+ * **Fermée tant qu'on ne sait pas.** La barre se dessine avant que la base ait
+ * répondu ; montrer l'entrée puis la retirer ferait clignoter un accès, et
+ * apprendrait son existence à qui n'en a pas. Elle apparaît donc une fois, et
+ * seulement dans le sens qui ajoute.
+ */
+let laPorteEstOuverteIci = false;
+let onADejaDemande = false;
+
+/**
+ * L'entrée vers la console, **après les Réglages**.
+ *
+ * Sa place n'est pas décorative : les Réglages sont le dernier endroit où l'on
+ * agit sur soi, et la console est le premier où l'on agit sur Mdall. Entre les
+ * deux, le séparateur dit qu'on change de bâtiment.
+ *
+ * Elle emprunte les classes du menu — aucune n'est recalibrée ici : une entrée
+ * qui se dessinerait autrement se verrait comme une greffe.
+ */
+function renderPorteDeLaConsole() {
+  if (!laPorteEstOuverteIci) return "";
+
+  return `
+        <a href="${LA_CONSOLE.adresse}" class="gh-user-menu__item" role="menuitem">
+          <span class="gh-user-menu__item-icon">${
+            svgIcon(LA_CONSOLE.icone, { className: `octicon octicon-${LA_CONSOLE.icone}` })}</span>
+          <span class="gh-user-menu__item-meta">
+            <span class="gh-user-menu__item-name">${escapeHtml(LA_CONSOLE.nom)}</span>
+          </span>
+        </a>
+  `;
+}
+
+/**
+ * Poser la question une seule fois, et ne redessiner que si elle ouvre.
+ *
+ * On ne la pose pas tant qu'il n'y a pas de session : sans jeton, la réponse
+ * serait « non » pour une raison qui n'a rien à voir, et elle resterait
+ * mémorisée.
+ */
+function demanderLaPorteDeLaConsole() {
+  if (onADejaDemande || laPorteEstOuverteIci || !store.user?.id) return;
+  onADejaDemande = true;
+
+  suisJeAdministrateur().then((ouverte) => {
+    if (!ouverte) return;
+    laPorteEstOuverteIci = true;
+    renderGlobalHeader();
+  });
+}
+
 function renderUserMenu() {
   const currentAvatar = store.user?.avatar || "assets/images/260093543.png";
   const isAuthenticatedUser = Boolean(store.user?.email && store.user?.id);
@@ -277,7 +332,7 @@ function renderUserMenu() {
             <span class="gh-user-menu__item-name">Réglages</span>
           </span>
         </a>
-
+${renderPorteDeLaConsole()}
         <div class="gh-user-menu__divider" role="separator"></div>
 
         <button type="button" class="gh-user-menu__item" id="ghUserMenuLogout" role="menuitem">
@@ -371,6 +426,8 @@ export function renderGlobalHeader() {
       </div>
     </header>
   `;
+
+  demanderLaPorteDeLaConsole();
 }
 
 let userMenuBound = false;

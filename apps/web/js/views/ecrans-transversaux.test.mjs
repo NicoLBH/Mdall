@@ -1431,3 +1431,68 @@ test("l'en-tête sans projet est calé comme celui d'un projet", async () => {
   // même barre finissent par ne plus dire la même chose (règle 4).
   assert.doesNotMatch(css, /body\.route--projects-list \.gh-header\{/);
 });
+
+/**
+ * **L'entrée vers la console d'administration, dans le menu de l'avatar.**
+ *
+ * On lit la source, comme pour le nom des écrans transverses : cette barre parle
+ * à l'authentification et ne s'importe pas hors d'un navigateur. Ce qu'on
+ * vérifie est ce qui est **dessiné**, et rien d'autre.
+ *
+ * Le défaut qu'on ferme est double, et les deux moitiés sont muettes. Une entrée
+ * dessinée sans condition montrerait à tout le monde qu'une console existe — et
+ * qui la tient. Une entrée dont le nom serait recopié ici finirait par différer
+ * de celui de la porte où elle mène (règle 10).
+ */
+test("le menu de l'avatar n'ouvre la console que pour celui à qui elle est ouverte", async () => {
+  const source = await readFile(new URL("./global-header.js", import.meta.url), "utf8");
+
+  const porte = source.slice(
+    source.indexOf("function renderPorteDeLaConsole()"),
+    source.indexOf("function demanderLaPorteDeLaConsole()")
+  );
+
+  // Rien n'est dessiné tant que la porte n'est pas ouverte.
+  assert.match(porte, /if \(!laPorteEstOuverteIci\) return "";/);
+
+  // Le nom, l'adresse et l'icône viennent de `LA_CONSOLE` — jamais d'une copie.
+  assert.match(porte, /\$\{LA_CONSOLE\.adresse\}/);
+  assert.match(porte, /escapeHtml\(LA_CONSOLE\.nom\)/);
+  assert.match(porte, /svgIcon\(LA_CONSOLE\.icone/);
+  assert.doesNotMatch(porte, /Console administrateur/);
+
+  // Et elle emprunte les classes du menu : une entrée recalibrée à la main se
+  // verrait comme une greffe.
+  for (const classe of ["gh-user-menu__item", "gh-user-menu__item-icon",
+    "gh-user-menu__item-meta", "gh-user-menu__item-name"]) {
+    assert.match(porte, new RegExp(classe), classe);
+  }
+
+  // **Après les Réglages**, et avant le séparateur qui précède la déconnexion.
+  const menu = source.slice(source.indexOf("function renderUserMenu()"));
+  const reglages = menu.indexOf("Réglages");
+  const appel = menu.indexOf("${renderPorteDeLaConsole()}");
+  const deconnexion = menu.indexOf("ghUserMenuLogout");
+  assert.ok(reglages > 0 && appel > reglages && deconnexion > appel,
+    "l'entrée se dessine après les Réglages et avant la déconnexion");
+
+  // La question ne se pose qu'une fois, et seulement avec une session : sans
+  // jeton, la réponse serait « non » pour une raison qui n'a rien à voir, et
+  // elle resterait mémorisée.
+  const demande = source.slice(
+    source.indexOf("function demanderLaPorteDeLaConsole()"),
+    source.indexOf("function renderUserMenu()")
+  );
+  assert.match(demande, /if \(onADejaDemande \|\| laPorteEstOuverteIci \|\| !store\.user\?\.id\) return;/);
+  assert.match(demande, /suisJeAdministrateur\(\)/);
+  // Elle ne referme jamais ce qu'elle a ouvert : une porte qui clignote
+  // apprendrait son existence à qui n'en a pas.
+  assert.match(demande, /if \(!ouverte\) return;/);
+  assert.doesNotMatch(demande, /laPorteEstOuverteIci = false/);
+
+  // Et elle se pose : la barre la déclenche en se dessinant. Sans cet appel,
+  // tout ce qui précède serait juste et l'entrée n'apparaîtrait jamais
+  // (règle 12).
+  const barre = source.slice(source.indexOf("export function renderGlobalHeader()"));
+  assert.match(barre, /demanderLaPorteDeLaConsole\(\);/);
+});
