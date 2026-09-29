@@ -46,6 +46,10 @@
  * d'un plan, il ne faudra pas redistribuer le carburant — et une archive
  * qu'on n'a pas prise aujourd'hui, on ne l'aura plus dans trois ans.
  *
+ * Reste à savoir laquelle est un document et laquelle n'est qu'un logo de
+ * signature. Cela ne se devine pas : cela se lit dans ce que le message
+ * déclare (voir `collateDansLeTexte`).
+ *
  * ## Il est pur
  *
  * Des octets entrent, un message sort. Aucun réseau, aucun écran, aucune
@@ -287,8 +291,21 @@ const QUOI = {
   PIECE_NOM: "3704",
   PIECE_TYPE: "370E",
   PIECE_OCTETS: "3701",
-  PIECE_DANS_LE_TEXTE: "3712"
+  PIECE_IDENTIFIANT: "3712",
+  CORPS_HTML: "1013"
 };
+
+/**
+ * Ce qu'un message **déclare** d'une pièce qu'il ne veut pas montrer.
+ *
+ * Deux déclarations, lues dans le paquet des valeurs de taille fixe : « celle-ci
+ * est cachée » et « celle-ci est appelée par le corps ».
+ */
+const CACHEE = "7FFE";
+const FANIONS = "3714";
+
+/** Le fanion qui dit « le corps HTML appelle cette pièce ». */
+const APPELEE_PAR_LE_CORPS = 4;
 
 /** Le rang d'un destinataire : à, en copie, en copie cachée. */
 const DESTINATAIRE = { A: 1, COPIE: 2, COPIE_CACHEE: 3 };
@@ -390,12 +407,59 @@ function lesDestinataires(conteneur, racine) {
 }
 
 /**
+ * Une pièce est-elle **collée dans le texte**, ou est-ce un document ?
+ *
+ * ## La règle qu'on avait écrite, et pourquoi elle était fausse
+ *
+ * « Une image de signature porte un identifiant de contenu ; un document n'en
+ * a pas. » C'était vrai du message Outlook qui avait servi de référence, et
+ * faux dès le second essai : **Gmail met un identifiant de contenu sur toutes
+ * ses pièces jointes**, y compris un plan d'architecte de cinq mégaoctets. Ce
+ * plan s'est affiché « image de signature », et l'écran a annoncé « aucun
+ * document joint » alors qu'il y en avait un.
+ *
+ * ## Ce qu'on lit à la place : ce que le message déclare
+ *
+ * Deux déclarations, qui ne se devinent pas :
+ *
+ * - `PR_ATTACHMENT_HIDDEN` — « ne montre pas celle-ci comme une pièce
+ *   jointe ». C'est exactement la question posée ;
+ * - `ATT_MHTML_REF`, dans `PR_ATTACH_FLAGS` — « le corps appelle celle-ci ».
+ *
+ * Et, quand un émetteur ne pose ni l'un ni l'autre, la vérification de dernier
+ * recours : **le corps HTML l'appelle-t-il vraiment**, par `cid:` ? C'est le
+ * fait lui-même, et non une déclaration à son sujet.
+ *
+ * Sur les deux messages réels, les trois signaux s'accordent : les huit images
+ * de signature sont cachées *et* appelées par le corps ; le plan n'est ni l'un
+ * ni l'autre, et son identifiant de contenu n'est cité nulle part.
+ *
+ * ## Le doute penche du côté du document
+ *
+ * Sans aucun de ces signaux, la pièce est **un document**. Les deux erreurs ne
+ * coûtent pas le même prix : un logo affiché parmi les documents se voit et
+ * s'ignore ; un plan rangé parmi les logos disparaît de l'écran — c'est le
+ * défaut qu'on vient de corriger.
+ */
+function collateDansLeTexte(conteneur, dossier, props, corpsHtml) {
+  // Huit octets d'en-tête pour le paquet d'une pièce jointe, comme pour un
+  // destinataire.
+  if (valeurEntiere(conteneur, dossier, CACHEE, 8) === 1) return true;
+  if ((valeurEntiere(conteneur, dossier, FANIONS, 8) ?? 0) & APPELEE_PAR_LE_CORPS) return true;
+
+  const identifiant = texte(props.lire(QUOI.PIECE_IDENTIFIANT));
+  // `cid:` est de l'ASCII quel que soit le jeu de caractères du corps : la
+  // recherche tient sans savoir comment celui-ci a été encodé.
+  return Boolean(identifiant) && corpsHtml.includes(`cid:${identifiant}`);
+}
+
+/**
  * Les pièces jointes, **avec leurs octets**.
  *
  * On les garde entières. Le jour où l'on saura tirer quelque chose d'un plan,
  * il ne faudra pas redistribuer le carburant.
  */
-function lesPiecesJointes(conteneur, racine, trous) {
+function lesPiecesJointes(conteneur, racine, trous, corpsHtml) {
   const pieces = [];
 
   for (const dossier of lesEnfants(conteneur.entrees, racine)) {
@@ -412,10 +476,7 @@ function lesPiecesJointes(conteneur, racine, trous) {
       // de cent mille messages, l'inventaire doit se faire sans tout charger.
       taille: props.tailleDe(QUOI.PIECE_OCTETS),
       octets: props.octetsDe(QUOI.PIECE_OCTETS),
-      // Une image collée dans la signature porte un identifiant de contenu ;
-      // un vrai document n'en a pas. C'est ce qui permettra de les trier sans
-      // les ouvrir.
-      dansLeTexte: Boolean(texte(props.lire(QUOI.PIECE_DANS_LE_TEXTE)))
+      dansLeTexte: collateDansLeTexte(conteneur, dossier, props, corpsHtml)
     });
   }
 
@@ -506,6 +567,13 @@ export function unMsgDeplie(source) {
 
   const corps = props.lire(QUOI.CORPS);
   const objet = texte(props.lire(QUOI.OBJET));
+
+  // **Le corps HTML ne sert qu'à une chose ici** : savoir quelles pièces il
+  // appelle. On ne le rend pas — le propos se lit dans le corps en clair, que
+  // `unMailDeplie` sait déjà traiter. Certains émetteurs l'écrivent en texte,
+  // d'autres en octets bruts ; les deux mènent aux mêmes `cid:`.
+  const corpsHtml = props.lire(QUOI.CORPS_HTML)
+    || new TextDecoder("windows-1252").decode(props.octetsDe(QUOI.CORPS_HTML));
   const cheminement = texte(props.lire(QUOI.EN_TETES));
 
   let enTetes = enTetesDuCheminement(cheminement);
@@ -549,7 +617,7 @@ export function unMsgDeplie(source) {
     objetNu: objetNu(sonObjet),
     // Les pièces ne sont pas dans le corps recomposé : elles viennent des
     // sous-dossiers, entières.
-    pieces: lesPiecesJointes(conteneur, racine, trous),
+    pieces: lesPiecesJointes(conteneur, racine, trous, corpsHtml),
     trous: [...lu.trous, ...trous]
   };
 }

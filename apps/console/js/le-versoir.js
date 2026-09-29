@@ -29,8 +29,12 @@
 
 import { unMsgDeplie } from "../partage/js/services/un-msg-deplie.js";
 import {
-  inventaireDunMessage, inventaireDuVersoir, phraseDuVersoir, poidsDit
+  inventaireDunMessage, inventaireDuVersoir, phraseDeCeQuOnNeSaitPasRapprocher,
+  phraseDeCeQuiSeRepete, phraseDuVersoir, poidsDit
 } from "../partage/js/services/linventaire-du-versoir.js";
+import {
+  lesEmpreintes, marquerLesRepetitions
+} from "../partage/js/services/le-dedoublonnage.js";
 import { phraseDuTrou } from "../partage/js/services/trous-dun-mail.js";
 
 const echapper = (valeur) => String(valeur ?? "")
@@ -100,7 +104,26 @@ function renderLesVignettes(un) {
   )}</p>`;
 }
 
+/**
+ * **Un message déjà vu ne se redessine pas.**
+ *
+ * Il tient sur une ligne, avec le nom du fichier qui l'a apporté : on garde de
+ * quoi y revenir, et on ne fait pas relire un plan qu'on vient de lire. Dire
+ * « 1 message déjà vu » en haut et le dessiner deux fois en dessous ferait lire
+ * deux plans là où il y en a un.
+ *
+ * Il n'est pas supprimé : rien n'est jeté ici, c'est le principe de cet écran.
+ */
+function renderUnMessageDejaVu(un) {
+  return `<p class="forme-manques">${echapper(
+    `${un.objet || un.fichier || "(sans objet)"} — déjà vu`
+    + (un.fichier && un.objet ? ` (${un.fichier})` : "")
+  )}</p>`;
+}
+
 function renderUnMessage(un) {
+  if (un.dejaVu) return renderUnMessageDejaVu(un);
+
   return `
     <div class="forme-suite">
       <h4 class="forme-suite__titre">${echapper(un.objet || un.fichier || "(sans objet)")}</h4>
@@ -139,12 +162,24 @@ function renderLInventaire(messages) {
             ? `Le ${echapper(depuis)}.`
             : `Du ${echapper(depuis)} au ${echapper(jusqua)}.`}</p>`
         : ""}
+      ${/*
+        **Ce qui se répète, tout en haut.** Sur cent historiques de chantier,
+        c'est le premier chiffre à connaître : le volume réel est une fraction
+        du volume apparent, et tout ce qui se répète est ce qu'on ne paiera
+        nulle part ensuite.
+      */""}
+      ${phraseDeCeQuiSeRepete(inventaire)
+        ? `<p class="conso-usages__mot">${echapper(phraseDeCeQuiSeRepete(inventaire))}</p>`
+        : ""}
+      ${phraseDeCeQuOnNeSaitPasRapprocher(inventaire)
+        ? `<p class="forme-manques">${echapper(phraseDeCeQuOnNeSaitPasRapprocher(inventaire))}</p>`
+        : ""}
       ${inventaire.sansDate
         ? `<p class="forme-manques">${echapper(
             `${inventaire.sansDate} ${inventaire.sansDate > 1 ? "messages ne portent" : "message ne porte"} pas de date lisible`
           )}</p>`
         : ""}
-      ${messages.map(renderUnMessage).join("")}
+      ${marquerLesRepetitions(messages).map(renderUnMessage).join("")}
     </section>
   `;
 }
@@ -161,7 +196,11 @@ export function monterLeVersoir(hote) {
   const lire = async (fichiers) => {
     for (const fichier of fichiers) {
       const octets = new Uint8Array(await fichier.arrayBuffer());
-      lus.push(inventaireDunMessage(unMsgDeplie(octets), fichier.name));
+      const lu = unMsgDeplie(octets);
+      // Les empreintes se calculent ici, une seule fois, sur les octets qu'on a
+      // déjà en main : les recalculer à chaque affichage relirait cent
+      // mégaoctets à chaque fichier déposé.
+      lus.push(inventaireDunMessage(lu, fichier.name, await lesEmpreintes(lu)));
     }
     // **Dans l'ordre du temps**, et non dans celui où l'explorateur les a
     // rendus : une archive se relit comme une chronologie.

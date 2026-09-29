@@ -143,3 +143,34 @@ test("le versoir montre les documents un par un, et les signatures en une ligne"
   // Rien ne part : aucun appel réseau, aucun dépôt, depuis cet écran.
   assert.doesNotMatch(source, /\bfetch\(|supabase|\.upload\(/);
 });
+
+/**
+ * **Un message déjà vu ne se redessine pas.**
+ *
+ * Dire « 1 message déjà vu » en haut et le dessiner deux fois en dessous ferait
+ * lire deux plans là où il y en a un — c'est exactement ce que l'écran faisait
+ * avant qu'on le regarde. Et le marquage vient du même passage que le compte,
+ * jamais d'un second calcul (règle 4).
+ */
+test("le versoir replie un message déjà vu au lieu de le redessiner", async () => {
+  const source = await readFile(
+    new URL("../apps/console/js/le-versoir.js", import.meta.url), "utf8");
+
+  const message = source.slice(
+    source.indexOf("function renderUnMessage(un)"),
+    source.indexOf("function renderLInventaire(")
+  );
+  assert.match(message, /if \(un\.dejaVu\) return renderUnMessageDejaVu\(un\);/);
+
+  // Le marquage vient du service, et la liste s'y adosse.
+  const inventaire = source.slice(source.indexOf("function renderLInventaire("));
+  assert.match(inventaire, /marquerLesRepetitions\(messages\)\.map\(renderUnMessage\)/);
+
+  // Et il n'est pas supprimé : on garde de quoi y revenir.
+  const replie = source.slice(
+    source.indexOf("function renderUnMessageDejaVu(un)"),
+    source.indexOf("function renderUnMessage(un)")
+  );
+  assert.match(replie, /un\.fichier/);
+  assert.match(replie, /déjà vu/);
+});
