@@ -30,6 +30,7 @@ comme tel ; tout le reste est à faire.
 | la porte de la console — une adresse, et rien d'autre | table `administrateurs`, `services/la-porte-de-la-console.js` | « suis-je administrateur ? », et jamais « qui l'est ? » |
 | le site de la console, construit à part | `apps/console`, `scripts/prepare-console.mjs`, `npm run build:console` | un autre bâtiment, servi sous `console/` |
 | son premier écran : **le versoir** | `apps/console/js/le-versoir.js`, `services/linventaire-du-versoir.js` | on dépose des `.msg`, on voit ce qu'ils portent, rien ne part sans un clic |
+| **le convoi** | `apps/console/js/le-convoi-ecran.js`, `services/le-convoi.js`, `services/un-zip-deplie.js` | un dossier ou un `.zip` entier, absorbé par lots sans tenir l'archive en mémoire |
 | son second : **l'archive** | `apps/console/js/larchive.js`, `services/larchive-des-pieces.js` | les messages dans l'ordre du temps, leurs pièces, et les PDF s'y ouvrent |
 | le casier des pièces | Supabase Storage `archives` + `pieces_archivees` | les octets gardés, nommés par leur empreinte |
 | l'archive de fondement | `messages_archives`, `pieces_des_messages`, casier `messages/` | le fichier d'origine, la forme lue, et quel message portait quelle pièce |

@@ -9,6 +9,16 @@
  * archives de chantier et savoir ce qu'elles contiennent
  * (`docs/nourrir-mdall.md`).
  *
+ * ## Deux gestes, et ils ne servent pas à la même chose
+ *
+ * **Regarder** : une poignée de messages, dépliés, comptés, et l'on décide.
+ * C'est ce que fait cet écran, et il garde leurs octets pour pouvoir les
+ * montrer.
+ *
+ * **Absorber** : une archive entière, qu'on ne regardera pas message par
+ * message. C'est le convoi (`le-convoi-ecran.js`), qui lit par lots et relâche
+ * à mesure.
+ *
  * ## Rien ne part sans qu'on le demande
  *
  * Lire, déplier et compter se font **entièrement sur le poste** : aucun appel,
@@ -35,6 +45,7 @@
  * qu'une archive qu'on sait avoir manquée (règle 5).
  */
 
+import { monterLeConvoi, renderLeConvoi } from "./le-convoi-ecran.js";
 import { unMsgDeplie } from "../partage/js/services/un-msg-deplie.js";
 import {
   inventaireDunMessage, inventaireDuVersoir, phraseDeCeQuOnNeSaitPasRapprocher,
@@ -89,6 +100,14 @@ export function renderLeVersoir() {
 
         <div id="versoirInventaire"></div>
       </section>
+
+      ${/*
+        **Le convoi est à part, et c'est un autre geste.** Le versoir garde les
+        octets de ce qu'on lui donne pour pouvoir le montrer ; à mille quatre
+        cents messages c'est l'onglet qui meurt. Mélanger les deux dans une
+        seule zone ferait choisir le mauvais mode sans le savoir.
+      */""}
+      ${renderLeConvoi()}
     </div>
   `;
 }
@@ -215,6 +234,8 @@ function renderLInventaire(messages) {
 }
 
 export function monterLeVersoir(hote) {
+  monterLeConvoi(hote);
+
   const zone = hote.querySelector("#versoirZone");
   const champ = hote.querySelector("#versoirFichiers");
   const choisir = hote.querySelector("#versoirChoisir");

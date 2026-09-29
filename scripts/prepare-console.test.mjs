@@ -325,3 +325,55 @@ test("le versoir replie un message déjà vu au lieu de le redessiner", async ()
   assert.match(replie, /un\.fichier/);
   assert.match(replie, /déjà vu/);
 });
+
+/**
+ * **Le convoi ne garde rien.**
+ *
+ * C'est sa seule raison d'être : le versoir accumule les octets de tout ce
+ * qu'on lui donne pour pouvoir le montrer, et à mille quatre cents messages
+ * l'onglet meurt — tard, après vingt minutes, sans avoir rien versé. Un tableau
+ * qui grossit à chaque fichier referait exactement ce mur.
+ */
+test("le convoi ne garde aucun octet d'un lot à l'autre", async () => {
+  const source = await readFile(
+    new URL("../apps/console/js/le-convoi-ecran.js", import.meta.url), "utf8");
+
+  const monte = source.slice(source.indexOf("export function monterLeConvoi"));
+
+  // Aucun tableau qui s'allonge : le journal ne porte que des nombres et les
+  // noms de ce qui a buté.
+  assert.doesNotMatch(monte, /\.push\(/);
+  // Et les octets ne sont pris qu'au moment de traiter le fichier.
+  assert.match(monte, /const octets = await ouvrir\(une\);/);
+
+  // Le lot fini, on rend la main au navigateur pour qu'il ramasse.
+  assert.match(monte, /await new Promise\(\(suivre\) => setTimeout\(suivre, 0\)\)/);
+});
+
+/**
+ * **Une archive `.zip` ne se décompresse pas d'un coup.** On lit son annuaire —
+ * quelques kilo-octets à la fin —, puis on décompresse un message à la fois.
+ * Décompresser deux gigaoctets referait le mur qu'on vient d'abattre.
+ */
+test("le convoi lit l'annuaire d'un zip avant d'en décompresser quoi que ce soit", async () => {
+  const source = await readFile(
+    new URL("../apps/console/js/le-convoi-ecran.js", import.meta.url), "utf8");
+
+  const archive = source.slice(source.indexOf('champArchive.addEventListener'));
+  assert.ok(archive.indexOf("lireLannuaire(octets)") < archive.indexOf("octetsDeLentree"),
+    "l'annuaire se lit avant la première décompression");
+  // Et la décompression est donnée comme une fonction, appelée par lot : rien
+  // n'est déplié à l'avance.
+  assert.match(archive, /ouvrir: \(une\) => octetsDeLentree\(octets, une\)/);
+});
+
+/**
+ * **Reprendre ne demande aucun registre d'avancement** : l'archive est son
+ * propre registre. Écrire où l'on s'est arrêté aurait été un second endroit de
+ * vérité, qui aurait divergé au premier convoi interrompu (règle 4).
+ */
+test("le convoi n'écrit nulle part où il en est", async () => {
+  const source = await readFile(
+    new URL("../apps/console/js/le-convoi-ecran.js", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /localStorage|sessionStorage|indexedDB/i);
+});

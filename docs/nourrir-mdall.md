@@ -451,11 +451,10 @@ faux.
 
 ### Ce qui reste, dans l'ordre
 
-1. **L'épisode, reconstitué depuis l'archive.** Tout est là — les dates, la
-   chaîne de réponses, les objets, le propos —, et `episodeDuProjet` sait déjà
-   construire une suite. Ce qui manque est le pas qui relie les deux : lire un
-   fil d'archive et en tirer les sujets ouverts et les constats. C'est la
-   première fois que la mesure aura de la matière.
+1. **Le pont vers l'épisode.** Détaillé au § 8 bis. `episodeDuProjet` mange des
+   affirmations signées d'un projet, pas des mails : le pont n'existe pas.
+   *(L'absorption à l'échelle — le convoi — est faite, défaut des mille lignes
+   compris.)*
 2. **Retirer les citations avant d'empreindre le propos** : `ceQuonCite` sait
    déjà les séparer. Aujourd'hui l'empreinte porte sur le corps entier, donc
    deux exemplaires d'un même message dont la citation a grossi comptent pour
@@ -512,6 +511,179 @@ d'irrattrapable ne se perd plus à chaque dépôt : ce qui entre reste.
 Le prochain pas n'est plus une question de conservation, c'est une question
 d'exploitation — **tirer un épisode d'un fil d'archive**. C'est la première fois
 que la mesure aura de la matière à se mettre sous la dent.
+
+## 8 bis. Absorber, montrer, prédire — le prochain chantier
+
+> *« Je croyais que le système savait déjà tirer un épisode d'un fil
+> d'archive ? »*
+
+Non, et l'écart mérite d'être nommé précisément, parce qu'il dicte tout ce qui
+suit.
+
+### Ce qui existe, et ce qui manque
+
+`episodeDuProjet` **existe et marche** — mais il mange `{contexte, sujets,
+assertions}` : les sujets d'un projet et les **affirmations signées** de sa
+mémoire. Il n'a jamais vu un mail. L'archive, elle, porte des messages : un
+objet, un propos, une date, des pièces. **Rien ne relie les deux.**
+
+Et la doctrine dit d'avance quelle forme ce pont peut prendre. Dans
+`assertion-taxonomy.js`, au-dessus du domaine :
+
+> *« Jamais déduit. C'est toute la règle. »*
+
+Un constat tiré d'un mail devra donc porter un domaine **lu**, jamais deviné.
+C'est une contrainte, et c'est une chance : elle interdit d'emblée la boîte
+noire qui chuchote « incendie » sans pouvoir dire pourquoi.
+
+### A. Absorber — le convoi *(fait)*
+
+> `services/le-convoi.js`, `services/un-zip-deplie.js`,
+> `apps/console/js/le-convoi-ecran.js`.
+
+#### Ce qui cassait en premier
+
+`lesEmpreintesDejaLa` et `lesMessagesDejaLa` demandent **toutes** les empreintes
+d'un coup. Or Supabase plafonne toute réponse à **mille lignes, en silence** :
+au-delà, le dédoublonnage cesse de voir ce qui est déjà là et **reverse tout**.
+Personne ne s'en apercevrait — le versement « réussirait » et coûterait deux
+fois.
+
+Le correctif est aussi la forme qui passe à l'échelle : ne jamais demander « que
+contient l'archive ? », mais « parmi **ces cinquante-là**, lesquelles connais-tu
+déjà ? ». Une question bornée **par nature** — on ne demande jamais plus que ce
+qu'on s'apprête à verser —, donc qui tient à cent mille.
+
+#### Les trois autres murs
+
+**La mémoire.** Le versoir garde les octets de tout ce qu'on lui donne, dans
+deux tableaux, jusqu'à la fermeture de l'onglet. Cent archives, c'est des
+dizaines de gigaoctets : l'onglet meurt. Le remède n'est pas d'optimiser, c'est
+de **travailler par lots et d'oublier** : lire cinquante messages, les empreindre,
+les verser, **relâcher les octets**, recommencer. La mémoire reste plate quelle
+que soit la taille du dépôt.
+
+**Reprendre.** Un versement de six heures qui casse à la cinquième ne doit pas
+recommencer. Rien à inventer : **l'archive est son propre registre d'avancement**
+— ce qui est dedans n'y retourne pas. Une panne coûte un lot.
+
+**Le journal du convoi.** Ce qui a été lu, versé, refusé, avec le nom du
+fichier. Sans lui, « 3 refusées » sur cent mille est une information qu'on ne
+peut pas exploiter. C'est de l'irrattrapable, comme le journal des refus.
+
+**Et le dossier et le `.zip` reviennent au programme.** On les avait mis de côté
+« si le besoin se confirme » : il se confirme. Cent archives ne se choisissent
+pas fichier par fichier dans un sélecteur.
+
+#### Le `.zip`, et pourquoi il ne coûte rien non plus
+
+Un `.zip` n'est pas opaque : c'est un **annuaire à la fin du fichier** qui dit,
+pour chaque entrée, son nom, sa taille et où ses octets commencent. Le seul
+calcul est la décompression, et le navigateur la fait lui-même
+(`DecompressionStream`). Aucune bibliothèque, aucun appel.
+
+Et c'est ce qui rend le convoi possible sur une archive : **lire ce qu'elle
+contient ne coûte presque rien** — quelques kilo-octets de la fin —, puis on
+décompresse **un message à la fois**, à mesure qu'on verse. Décompresser deux
+gigaoctets d'un coup referait le mur qu'on vient d'abattre.
+
+Deux méthodes sont lues — stocké et dégonflé, ce que produisent Windows, 7-Zip
+et macOS. Toute autre est **refusée et nommée**, jamais devinée — même quand ses
+octets se laisseraient dégonfler : la méthode déclarée dit qu'un autre
+traitement était attendu, et rendre des octets plausibles serait pire que de
+n'en rendre aucun. Les archives Zip64 se refusent de même.
+
+> **Ce que le format réel a appris, et qu'aucune épreuve n'aurait trouvé.**
+> `zip(1)` écrit des noms en UTF-8 **sans poser le drapeau qui le dit**. S'y
+> fier seul transformait « Réunion 04.msg » en « RÃ©union 04.msg » : le fichier
+> paraissait absent du dépôt. On lit donc en UTF-8 **quand les octets
+> l'acceptent** — « ces octets sont-ils de l'UTF-8 bien formé ? » est une
+> question de fait, pas une intuition — et dans l'encodage du poste sinon.
+
+#### Deux gestes, parce que ce sont deux besoins
+
+Le **versoir** sert à *regarder* : une poignée de messages, dépliés, comptés, et
+l'on décide. Il garde leurs octets, et c'est très bien pour dix fichiers.
+
+Le **convoi** sert à *absorber* : mille quatre cents messages qu'on ne regardera
+pas un par un. Ce qu'on regarde alors n'est plus la matière, **c'est le compte
+rendu** — et il fallait le dire plutôt que de faire semblant. Mélanger les deux
+dans une seule zone ferait choisir le mauvais mode sans le savoir.
+
+#### Ce qu'il reste à faire de cet étage
+
+- **Un journal durable.** Celui du convoi vit dans la page : il sert à
+  diagnostiquer un convoi en cours, et c'est déjà l'essentiel. Un convoi de six
+  heures relu le lendemain demanderait une table.
+- **Plusieurs versements à la fois.** Aujourd'hui un message après l'autre. Un
+  parallélisme borné — quatre, pas plus : un navigateur ne tient que six
+  connexions par hôte — diviserait le temps d'autant.
+- **Les archives de plus de quatre gigaoctets** (Zip64), qui se refusent
+  proprement mais ne se lisent pas.
+
+### B. Montrer — et le but de l'écran est de pouvoir refuser
+
+Une liste de cent mille messages ne s'affiche pas et ne sert à rien. Trois
+écrans, et chacun répond à une question qu'on se pose vraiment :
+
+**1. La chronologie d'une archive.** Un chantier, sa durée, ses mois, la densité
+des échanges, et où les pièces tombent. C'est la première fois que **la
+séquence** se voit — et c'est précisément ce que les livres n'ont pas.
+
+**2. Ce qu'on n'a pas su lire.** Par archive : combien de messages, combien
+datés, combien portant un domaine reconnu, combien de constats proposés. **La
+colonne des manques est la plus utile** : c'est elle qui dit où la lecture est
+aveugle, et donc quelle règle écrire ensuite (règle 5).
+
+**3. Le fil.** Une archive ouverte, ses messages dans l'ordre, citations
+retirées, pièces attachées. C'est le contrôle humain : on voit si l'extraction
+est honnête.
+
+Et le principe qui tient les trois : **l'extraction propose, elle n'affirme
+pas.** Chaque constat proposé montre la phrase d'où il vient, son message, sa
+date, et **la règle qui a tiré**. Un clic pour l'écarter — et cet écart est
+lui-même de la matière (`services/ecarts-observes.js`, `RAISON`).
+
+### C. Prédire — le pont, puis le chiffre
+
+**1. `episodeDuneArchive(messages)`** — le pont qui manque. Il rend **la même
+forme** que `episodeDuProjet` : un contexte, des ouvertures, des constats datés
+avec leur domaine. Même forme, donc `mesureDuPredicteur` et `LIGNES_DE_BASE`
+marchent sans une ligne de changement (règle 10).
+
+**2. Les règles qui donnent un domaine sans le deviner.** Toutes gratuites, et
+chacune dit pourquoi elle a tiré :
+
+| ce qu'on lit | ce qu'on en tire |
+|---|---|
+| une référence citée (DTU 20.1, art. CO 24, EC8 § 4.3) | **le domaine**, par une table de correspondance nommée |
+| une pièce jointe qui est un rapport, un avis, un CR | un événement daté |
+| une question puis sa réponse dans un fil | un sujet ouvert, puis clos |
+| l'indice de révision d'un plan (B → C) | un changement, daté |
+
+Quand aucune ne tire : **le domaine reste vide, et se compte**. C'est cette
+colonne-là qui dira si l'étage 4 — le petit modèle — vaut d'être payé, et le
+taux d'escalade sera mesuré avant d'être dépensé.
+
+**3. Le chiffre qui décide tout le reste.** La mesure existe déjà, avec sa coupe
+stricte. Une fois le pont posé, on rejoue cent archives réelles contre les deux
+lignes de base. Si *« ce qui suit habituellement »* bat *« le plus fréquent »*,
+**la séquence porte du signal** et le moat est réel. Sinon, on le sait avant
+d'avoir construit un moteur — et c'était tout l'objet de faire la mesure en
+premier.
+
+### L'ordre que je propose
+
+1. ~~**Le convoi**~~ — *fait*. Le défaut des mille lignes, les lots qui
+   relâchent, la reprise par l'archive elle-même, le journal, le dossier et le
+   `.zip`.
+2. **Le pont** `episodeDuneArchive`, avec les règles de domaine les plus sûres
+   (les références citées), et **la mesure lancée dessus**. C'est le premier
+   chiffre réel.
+3. **Les écrans** — la chronologie, les manques, le fil — taillés sur ce que le
+   chiffre aura montré d'utile plutôt que sur ce qu'on imagine.
+
+Poser les écrans avant le chiffre reviendrait à dessiner ce qu'on espère voir.
 
 ## 9. À enrichir
 
