@@ -7,7 +7,7 @@ import {
   ligneDeProvenance, ligneDePreuve, ligneDeStatut, ligneDeDate,
   blocDeRegle, blocDAffirmation, blocDeVariable,
   enTeteDeFichier, nomDeFichier, cheminDeFichier, enClair, texteDesLignes,
-  natureDeLaLigne, couperLUnite, estMesuree, mesureEnFrancais
+  natureDeLaLigne, couperLUnite, estMesuree, mesureEnFrancais, entreesDuneSignature
 } from "./memoire-en-texte.js";
 
 const clair = (jetons) => enClair(jetons);
@@ -70,9 +70,25 @@ test("le degré et le pourcentage se collent au nombre", () => {
   assert.deepEqual(couperLUnite("20 %"), { nombre: "20", unite: "%" });
   assert.equal(estMesuree("20%"), true);
 
-  // **L'euro reste non collé**, et il est seul dans ce cas : il s'écrit avec son
-  // espace partout, et rien ne le lit jamais autrement.
-  assert.deepEqual(couperLUnite("120€"), { nombre: "120€", unite: "" });
+  /**
+   * **L'euro se colle aussi**, et c'était l'exception de trop.
+   *
+   * `120 €` se lisait, `120€` non : on obtenait le **texte** « 120€ » là où
+   * l'on attendait une mesure, et la comparaison se taisait au lieu de compter
+   * (règle 5). Un devis se recopie tel qu'il est imprimé, et il est imprimé
+   * collé.
+   */
+  assert.deepEqual(couperLUnite("120€"), { nombre: "120", unite: "€" });
+  assert.deepEqual(couperLUnite("120 €"), { nombre: "120", unite: "€" });
+  assert.equal(estMesuree("120€"), true);
+  /**
+   * **`$` et `£` ne suivent pas.** Mdall n'a qu'une monnaie ; ouvrir la porte à
+   * deux symboles qu'aucune unité ne connaît donnerait des mesures qui ne se
+   * comparent à rien — ce qui se relit plus mal qu'un texte.
+   */
+  assert.deepEqual(couperLUnite("120$"), { nombre: "120$", unite: "" });
+  // Et un nom qui commencerait par le signe n'en est pas un pour autant.
+  assert.deepEqual(couperLUnite("€uro"), { nombre: "€uro", unite: "" });
   // Et rien qui ressemble à un degré sans en être un : « 3e famille B » reste
   // entier, comme il l'a toujours été.
   assert.deepEqual(couperLUnite("3e famille B"), { nombre: "3e famille B", unite: "" });
@@ -88,8 +104,19 @@ test("la portée n'est plus sur la ligne : c'est le dossier qui la porte", () =>
     clair(ligneDeDonnee("Classement du bâtiment", ["Logements superposés", "Hauteur"])),
     "Classement du bâtiment (Logements superposés, Hauteur)"
   );
-  // Deux fois la même entrée ne s'écrit qu'une fois.
-  assert.equal(clair(ligneDeDonnee("X", ["A", "A", ""])), "X (A)");
+  /**
+   * **L'écriture pose ce qu'on lui donne.** Elle dédoublonnait, et
+   * `ligneDeFonction` juste à côté ne le faisait pas — la même question, deux
+   * réponses, et il fallait les casser toutes pour qu'une épreuve tombe
+   * (règle 4). Elle comptait de travers : cette fonction recolore aussi une
+   * ligne **telle qu'on l'a tapée** dans un diff, et « (Hauteur, Hauteur) »
+   * s'y affichait « (Hauteur) » — du texte qui disparaît d'un écran qui existe
+   * pour montrer ce qui change.
+   *
+   * C'est `entreesDuneSignature` qui décide, là où la liste se compose.
+   */
+  assert.equal(clair(ligneDeDonnee("X", ["A", "A", ""])), "X (A, A)");
+  assert.deepEqual(entreesDuneSignature(["A", "A", ""]), ["A"]);
 });
 
 test("une condition porte son opérateur et son unité", () => {

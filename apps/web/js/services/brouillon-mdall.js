@@ -218,3 +218,42 @@ export function brouillonRelu(range = "") {
 
   return ouvertSur(brouillon, texte(lu.ouvert));
 }
+
+/**
+ * Où poser le curseur pour atteindre une ligne, dans un texte.
+ *
+ * ## Le défaut
+ *
+ * Le bac montre ce que la lecture a refusé, avec son fichier et son numéro —
+ * et il fallait aller chercher la ligne **à la main** dans la zone d'écriture,
+ * en comptant dans la gouttière. Pour un brouillon de quarante lignes, on
+ * compte deux fois et l'on se trompe une fois sur trois.
+ *
+ * ## Pourquoi c'est un service, et pas trois lignes dans l'écran
+ *
+ * Parce qu'il y a des cas, et qu'ils se trompent en silence : une ligne au-delà
+ * du texte, un numéro à zéro, un texte vide. Un curseur posé n'importe où ne
+ * se voit pas — il se voit **à côté**, et l'on corrige la mauvaise ligne.
+ *
+ * `debut` et `fin` bornent la ligne **sans** son retour chariot : la
+ * sélectionner entière avec son saut ferait clignoter la ligne d'en dessous.
+ *
+ * @param {string} contenu le texte entier
+ * @param {number} ligne le numéro, à partir de 1 — comme la gouttière
+ * @returns {{debut: number, fin: number}|null} `null` quand cette ligne n'existe
+ *   pas : on ne pose pas un curseur au hasard pour avoir l'air d'avoir répondu
+ *   (règle 5).
+ */
+export function ouAllerDansLeTexte(contenu = "", ligne = 0) {
+  const tout = String(contenu ?? "");
+  const rang = Math.trunc(Number(ligne));
+  if (!Number.isFinite(rang) || rang < 1) return null;
+
+  const lignes = tout.split("\n");
+  if (rang > lignes.length) return null;
+
+  let debut = 0;
+  for (let avant = 0; avant < rang - 1; avant += 1) debut += lignes[avant].length + 1;
+
+  return { debut, fin: debut + lignes[rang - 1].length };
+}

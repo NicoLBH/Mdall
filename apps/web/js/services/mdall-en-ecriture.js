@@ -151,6 +151,17 @@ const PONCTUATION = /^[(),;:]/;
 const ACCOLADE = /^[{}[\]]/;
 /** Une unité, juste derrière un nombre : « m », « km/h », « m² », « € », « % ». */
 const UNITE = /^(?:[A-Za-zÀ-ÖØ-öø-ÿ°µ]+(?:\/[A-Za-zÀ-ÖØ-öø-ÿ]+)?[²³]?|%|€)/;
+/**
+ * Les unités qui ne sont **pas des mots** : `°`, `°C`, `%`, `€`.
+ *
+ * Le reste des unités se colore dans `typeDuMot`, parce qu'il faut d'abord
+ * écarter « ou », « et », « alors » — des mots qui suivent parfois un nombre
+ * sans être des unités. Ces quatre-là ne peuvent être rien d'autre, et le
+ * découpage en mots ne les atteignait jamais : `120 €` tombait en « neutre »,
+ * `30°` aussi, et `20%` se colorait en **opérateur**. Trois unités grises au
+ * milieu d'une ligne colorée, alors que `28 m` s'allume.
+ */
+const UNITE_SYMBOLE = /^(?:°C?|%|€)/;
 
 /**
  * Les jetons d'une ligne **telle qu'elle est tapée**.
@@ -254,6 +265,16 @@ export function jetonsEcrits(ligne = "") {
         mot[0]
       );
       continue;
+    }
+
+    /**
+     * **Un symbole d'unité, juste derrière un nombre.** Il passe avant les
+     * opérateurs, sans quoi le `%` de `20%` se lirait comme un signe de calcul
+     * — ce qu'il n'est jamais après un nombre, ici comme dans la lecture.
+     */
+    if (precedent?.type === JETON.VALEUR && NOMBRE.test(precedent.texte)) {
+      const symbole = reste.match(UNITE_SYMBOLE);
+      if (symbole) { avancer(JETON.UNITE, symbole[0]); continue; }
     }
 
     const operateur = reste.match(OPERATEUR);

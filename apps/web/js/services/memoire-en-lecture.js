@@ -49,7 +49,8 @@ import {
   ligneDeProvenance, ligneDePreuve, ligneDeStatut, ligneDeDate, ligneDeNote, ligneDeLocale,
   ligneDImport, ligneDeDecision, ligneDeFonction, ligneDeLocaleVide, ligneDAffectation,
   ligneDeCourbe, ligneDuChampDeLaCourbe,
-  jetonsDeValeur, AGENT, AGENTS, VERBES, POUR_CHAQUE, PORTEE_DUNE_FONCTION
+  jetonsDeValeur, AGENT, AGENTS, VERBES, POUR_CHAQUE, PORTEE_DUNE_FONCTION,
+  couperLUnite, estMesuree
 } from "./memoire-en-texte.js";
 import {
   lireUnCalcul, nomsDuCalcul, phraseDuRefus, FONCTIONS, REFUS_DU_CALCUL,
@@ -59,7 +60,8 @@ import {
   bornesLitterales, lireUnAgregat, lireUnePourChaque, phraseDuRefusDeLaBoucle, valeursDeLaBoucle
 } from "./boucle-du-mdall.js";
 import {
-  DIT_DE_LENTRE, DIT_DU_HORS, lireUnPoint, phraseDuRefusDeLaCourbe, pointsDeLaCourbe
+  DIT_DE_LENTRE, DIT_DU_HORS, lireUnPoint, phraseDuRefusDeLaCourbe, pointsDeLaCourbe,
+  nappeDesCases, phraseDuRefusDeLaNappe
 } from "./courbe-du-mdall.js";
 import { lectureSuggeree } from "./graphique-dune-table.js";
 // La clé d'un sujet vient d'un seul endroit : comparer « Couleur des volets » à
@@ -473,9 +475,41 @@ export function lireUneDecision(ligne = "") {
 export function sansBornes(reste = "") {
   const dit = texte(reste).replace(/;\s*$/, "");
   const parentheses = dit.match(/^\(([\s\S]*)\)$/);
-  return parentheses
+  /**
+   * **La parenthèse du début doit être celle que ferme la parenthèse de la
+   * fin.**
+   *
+   * `si (A = "1") et (B = "2")` commence par `(` et finit par `)` sans que les
+   * deux se répondent : on décollait alors la première et la dernière, et il
+   * restait `A = "1") et (B = "2"` — que la lecture d'une condition acceptait
+   * sans broncher, en rangeant tout ce qui suit le premier guillemet dans la
+   * valeur attendue. On obtenait une clause `A = 1") et (B = "2` qui s'affiche
+   * telle quelle dans la trace et répond « faux » avec aplomb.
+   *
+   * Un résultat plausible et faux : la seule faute que cette langue ne
+   * pardonne pas. La ligne se rend donc entière, parenthèses comprises, et la
+   * lecture la refuse en la nommant.
+   */
+  return parentheses && sEquilibre(parentheses[1])
     ? { corps: texte(parentheses[1]), borne: true }
     : { corps: dit, borne: false };
+}
+
+/**
+ * Le contenu d'une parenthèse se referme-t-il sur lui-même ?
+ *
+ * Un compte suffit : on ne cherche pas à comprendre ce qu'il y a dedans, mais
+ * seulement si la parenthèse du début est bien celle que ferme la parenthèse de
+ * la fin. Elle ne l'est pas dès qu'on repasse à zéro avant le bout.
+ */
+function sEquilibre(dedans = "") {
+  let profondeur = 0;
+  for (const signe of String(dedans ?? "")) {
+    if (signe === "(") profondeur += 1;
+    else if (signe === ")") profondeur -= 1;
+    if (profondeur < 0) return false;
+  }
+  return profondeur === 0;
 }
 
 /** Ce qu'une ligne ouvre ou ferme. L'accolade borne, elle ne dit rien d'autre. */
@@ -493,6 +527,17 @@ function bornesDe(ligne) {
 }
 
 /**
+ * Le même texte, ses parties citées remplacées par des blancs.
+ *
+ * On y cherche des mots de la langue — `et`, un comparateur — sans les trouver
+ * dans ce qu'on compare : `= "porte et fenêtre"` est une valeur, pas deux
+ * clauses. La longueur est conservée pour que ce qu'on trouve reste à sa place.
+ */
+function horsDesGuillemets(dit = "") {
+  return String(dit ?? "").replace(/«[^»]*»|"[^"]*"/g, (cite) => " ".repeat(cite.length));
+}
+
+/**
  * Pourquoi cette condition ne se lit pas.
  *
  * Un appel de fonction se nomme, parce que c'est la faute qu'on vient de
@@ -500,6 +545,22 @@ function bornesDe(ligne) {
  * rien » envoyait chercher un `=` qui était là.
  */
 function raisonDeLaCondition(corps = "") {
+  /**
+   * **Le `et` sur une seule ligne, qui est la faute la plus naturelle.**
+   *
+   * `si (A = "1") et (B = "2")` s'écrit tout seul quand on vient d'un tableur
+   * ou d'un langage de programmation. Mdall veut une ligne par clause — c'est
+   * ce qui rend une règle relisible à haute voix —, et la forme existe déjà.
+   * Envoyer relire la grammaire pour cela serait cruel : on nomme le mot et on
+   * montre la ligne à écrire.
+   */
+  const relie = horsDesGuillemets(corps).match(/\)\s+(et|ou)\s+\(|\s(et)\s.*[=<>≤≥≠]/is);
+  if (relie) {
+    const mot = texte(relie[1] ?? relie[2]).toLowerCase();
+    return `« ${mot} » relie deux lignes, il ne s'écrit pas au milieu d'une : `
+      + `passez à la ligne et commencez-la par « ${mot} (…) ».`;
+  }
+
   const nomme = nomAppeleDans(corps);
   /**
    * **Une condition porte un appel depuis qu'un appel existe.**
@@ -679,6 +740,23 @@ export function lireUneCondition(corps = "") {
 
   const sujet = appel ? appel.arbre.nom : dite;
   if (!sujet) return null;
+
+  /**
+   * **Ce qu'on compare ne porte pas une seconde comparaison.**
+   *
+   * `si (A = "1" et B = "2")` se lisait sans broncher : la valeur attendue
+   * devenait `1" et B = "2`, une chaîne que personne n'a écrite, et la clause
+   * répondait « faux » avec aplomb. Comme pour le `et` entre deux parenthèses,
+   * c'est un résultat plausible et faux — et ici rien ne se voyait, puisque la
+   * ligne se lisait.
+   *
+   * Le `ou` d'une énumération reste : `= "1" ou "2"` est la forme du domaine
+   * fermé, et elle ne porte aucun second comparateur. C'est cela qu'on
+   * regarde, guillemets neutralisés : le `et` d'un texte cité — `= "porte et
+   * fenêtre"` — n'est pas un mot de la langue.
+   */
+  const attendu = horsDesGuillemets(texte(signe[3]));
+  if (/\set\s/i.test(attendu) || /[=<>≤≥≠]/.test(attendu)) return null;
 
   const operateur = COMPARATEURS.get(texte(signe[2]).toLowerCase()) ?? OPERATEUR.EGAL;
   const morceaux = texte(signe[3]).split(/\s+ou\s+/i).map(texte).filter(Boolean);
@@ -873,19 +951,29 @@ export function lireUnFichier(contenu = "") {
           ...(courbe.hors ? [] : ["« hors bornes: » (refuse, ou borne)"])
         ];
 
-        const lus = pointsDeLaCourbe(courbe.points);
+        /**
+         * **Une nappe se vérifie comme une courbe**, avec une colonne de plus à
+         * regarder. Le même moment, le même refus nommé : un abaque à double
+         * entrée faux rend un nombre plausible tout comme une courbe fausse.
+         */
+        const nappe = courbe.parColonne;
+        const lus = nappe
+          ? nappeDesCases(courbe.colonnes ?? [], courbe.points)
+          : pointsDeLaCourbe(courbe.points);
+        const quoi = nappe ? "cet abaque" : "cette courbe";
 
         if (manque.length) {
           refus.push({
             ligne: bloc.ligne,
             texte: `courbe ${bloc.sujet}`,
-            raison: `il manque à cette courbe ${manque.join(" et ")} : une interpolation se déclare.`
+            raison: `il manque à ${quoi} ${manque.join(" et ")} : une interpolation se déclare.`
           });
         } else if (lus.refus) {
           refus.push({
             ligne: bloc.ligne,
             texte: `courbe ${bloc.sujet}`,
-            raison: `cette courbe ne se lit pas : ${phraseDuRefusDeLaCourbe(lus.refus, lus.ou)}.`
+            raison: `${quoi} ne se lit pas : ${
+              nappe ? phraseDuRefusDeLaNappe(lus.refus, lus.ou) : phraseDuRefusDeLaCourbe(lus.refus, lus.ou)}.`
           });
         } else {
           bloc.courbe = courbe;
@@ -1193,6 +1281,18 @@ export function lireUnFichier(contenu = "") {
        * langage, et pas deux à apprendre.
        */
       if (courant?.courbe) {
+        /**
+         * **Une nappe a une ligne de plus : son en-tête.** La première ligne
+         * porte les valeurs de la seconde entrée, son coin vide — c'est le
+         * dessin de l'abaque imprimé, et c'est ce qu'on veut recopier.
+         */
+        if (courant.courbe.parColonne) {
+          const cases = casesDuBareme(corps);
+          if (!courant.courbe.colonnes) { courant.courbe.colonnes = cases; return; }
+          courant.courbe.points.push({ x: texte(cases[0]), valeurs: cases.slice(1) });
+          return;
+        }
+
         const point = lireUnPoint(casesDuBareme(corps));
         if (!point) {
           refus.push({
@@ -1437,16 +1537,40 @@ export function lireUnFichier(contenu = "") {
             /**
              * **L'abscisse, prise à la signature.** Une fonction ordinaire
              * déduit ses entrées de ses conditions — une courbe n'en a pas, et
-             * c'est sa signature qui dit ce qu'elle lit. La première entrée qui
-             * n'est pas la portée : il n'y en a qu'une, et une courbe à deux
-             * entrées serait un abaque à double entrée, c'est-à-dire un barème.
+             * c'est sa signature qui dit ce qu'elle lit.
              */
             selon: texte((tete.entrees ?? [])
               .map(texte)
-              .find((une) => une && une !== PORTEE_DUNE_FONCTION)),
+              .filter((une) => une && une !== PORTEE_DUNE_FONCTION)[0]),
             entre: "",
             hors: "",
-            points: []
+            points: [],
+            /**
+             * **La seconde entrée, quand il y en a une : c'est une nappe.**
+             *
+             * `courbe Coefficient(zones, Altitude, Zone de vent)` est un abaque
+             * à double entrée. Il s'écrivait en barème — c'est-à-dire par
+             * paliers —, et l'on perdait l'interpolation sur l'un des deux
+             * axes : la valeur d'un seuil là où le texte d'origine trace une
+             * droite.
+             *
+             * **C'est la signature qui décide**, et non la forme du tableau :
+             * deux entrées, deux axes. Le compter sur les cases ferait dépendre
+             * le sens d'une ligne d'une autre ligne.
+             *
+             * **Une courbe ordinaire n'a pas ces deux champs du tout.** Les y
+             * poser vides ferait porter à chaque abaque du projet la forme d'un
+             * abaque à deux axes, et l'on ne saurait plus lequel en est un.
+             */
+            ...(texte((tete.entrees ?? []).map(texte)
+              .filter((une) => une && une !== PORTEE_DUNE_FONCTION)[1])
+              ? {
+                parColonne: texte((tete.entrees ?? []).map(texte)
+                  .filter((une) => une && une !== PORTEE_DUNE_FONCTION)[1]),
+                /** L'en-tête d'une nappe : les valeurs de la seconde entrée. */
+                colonnes: null
+              }
+              : {})
           }
           : null,
         /**
@@ -2119,13 +2243,20 @@ export function nomsLusParLeBloc(bloc = {}) {
   for (const expression of expressionsDuBloc(bloc)) lireLexpression(expression);
 
   /**
-   * **Une courbe lit son abscisse, et c'est tout ce qu'elle lit.**
+   * **Une courbe lit son abscisse**, et un abaque à double entrée lit aussi sa
+   * colonne.
    *
-   * Elle n'a ni condition ni calcul : sans cette ligne, le formulaire du bac
-   * n'offrait **aucun champ** devant un abaque, et la fonction restait
+   * Elle n'a ni condition ni calcul : sans ces deux lignes, le formulaire du
+   * bac n'offrait **aucun champ** devant un abaque, et la fonction restait
    * indécidable pour toujours sans qu'un mot dise laquelle des valeurs manque.
+   *
+   * La seconde a été trouvée à l'écran, pas par une épreuve : l'abaque
+   * concluait — on lui avait donné la valeur à la main — et son champ n'était
+   * nulle part dans le formulaire. Une fonction qu'on ne peut pas essayer sans
+   * connaître son texte par cœur.
    */
   retenir(bloc?.courbe?.selon);
+  retenir(bloc?.courbe?.parColonne);
 
   /**
    * **Une clause qui porte un appel lit tout ce que l'appel nomme** : la
@@ -2671,6 +2802,92 @@ export function nomsPosesParLeBloc(bloc = {}) {
   // d'interroger cet ensemble, et une garde qu'on ne peut pas faire tomber est
   // une garde dont personne ne saura si elle sert (règle 4).
   return siens;
+}
+
+/**
+ * Ce qu'une fonction **paraît** rendre, quand elle ne l'annonce pas.
+ *
+ * ## Pourquoi on ne l'écrit jamais dans le fichier
+ *
+ * Une fonction qui conclut `12 kN`, `24 kN`, `36 kN` rend visiblement des
+ * kilonewtons, et l'écran peut le dire sans qu'on l'écrive. Mais une promesse
+ * **déduite d'un texte qu'on est en train d'écrire** change à chaque frappe :
+ * la poser dans le `rend:` ferait deux versions de la même promesse, et l'on ne
+ * saurait plus laquelle fait foi le jour où elles divergent (règle 4).
+ *
+ * **L'écrite gagne, toujours, et la déduite ne fait que se montrer.** Elle ne
+ * se verse pas, ne se vérifie pas contre elle-même, et n'apparaît nulle part
+ * sans le mot « déduit » à côté : on ne présente pas une observation comme un
+ * engagement.
+ *
+ * ## Ce qu'on refuse de déduire
+ *
+ * **Rien quand les conclusions ne s'accordent pas** : `12 kN` et `"gris"` dans
+ * la même fonction ne disent pas une promesse, ils disent un ennui — et c'est
+ * la vérification qui en parle, pas une déduction qui trancherait au hasard.
+ *
+ * **Rien quand une conclusion nomme une locale** : `alors (Prix TTC)` ne dit
+ * rien de la forme du résultat avant le lancement. Deviner ferait annoncer des
+ * mètres sur une fonction qui rend des euros (règle 5).
+ *
+ * @returns {{valeurs: string[], unite: string}|null}
+ */
+export function ceQuElleParaitRendre(bloc = {}) {
+  const locales = new Set([
+    ...(bloc?.calculs ?? []).map((un) => cleDuSujet(texte(un?.nom))),
+    cleDuSujet(texte(bloc?.boucle?.nom))
+  ].filter(Boolean));
+
+  const conclusions = [
+    texte(bloc?.alors),
+    texte(bloc?.sinon),
+    ...(bloc?.sinonSi ?? []).map((branche) => texte(branche?.alors))
+  ].filter(Boolean);
+
+  if (!conclusions.length) return null;
+  // Une seule conclusion qui nomme une locale suffit à ne rien savoir : la
+  // fonction peut rendre par là, et l'on ne sait pas quoi.
+  if (conclusions.some((une) => locales.has(cleDuSujet(une)))) return null;
+
+  const mesurees = conclusions.filter(estMesuree);
+
+  if (mesurees.length === conclusions.length) {
+    const portees = mesurees.map((une) => couperLUnite(une).unite);
+    // **Une seule unité, et chaque conclusion la porte.** Une fonction dont une
+    // branche conclut `12` nu ne promet pas des kilonewtons : on ne sait pas ce
+    // que ce douze mesure, et le décider pour elle serait inventer.
+    const unites = [...new Set(portees)];
+    if (unites.length !== 1 || !unites[0]) return null;
+    return { valeurs: [], unite: unites[0] };
+  }
+
+  // Aucune n'est mesurée : c'est un domaine fermé, et ce sont ces valeurs-là.
+  if (mesurees.length) return null;
+
+  const valeurs = [...new Set(conclusions)];
+  return { valeurs, unite: "" };
+}
+
+/**
+ * Ce qu'une fonction annonce rendre — écrit, ou à défaut déduit.
+ *
+ * **Une seule réponse à « que rend-elle ? »**, pour tous les écrans qui la
+ * posent : le catalogue des noms, l'aide à la signature, la fiche d'une
+ * fonction. Trois lectures du même `rend:` auraient fini par ne pas dire la
+ * même chose le jour où l'une apprend à déduire et pas les autres (règle 10).
+ *
+ * `deduit` dit laquelle des deux on regarde, et **l'écrite gagne toujours** :
+ * une promesse est un engagement, une déduction est une observation, et les
+ * présenter pareil ferait croire qu'on s'est engagé sur ce qu'on a seulement
+ * constaté.
+ *
+ * @returns {{valeurs: string[], unite: string, deduit: boolean}|null}
+ */
+export function ceQuElleAnnonce(bloc = {}) {
+  if (bloc?.rend) return { valeurs: [], unite: "", ...bloc.rend, deduit: false };
+
+  const parait = ceQuElleParaitRendre(bloc);
+  return parait ? { ...parait, deduit: true } : null;
 }
 
 /**

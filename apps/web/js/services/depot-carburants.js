@@ -36,7 +36,8 @@ import { ITEM_TYPE, STATUS_LABELS } from "./proposition-review.js";
 import { cheminDeRangement, extensionDeRangement } from "./memoire-rangement.js";
 import {
   enClair, ligneDAffirmation, ligneDeDonnee, ligneDeCondition, ligneDeConsequence,
-  ligneDeProvenance, ligneDePreuve, ligneDeStatut, ligneDeDate, blocDeFonction
+  ligneDeProvenance, ligneDePreuve, ligneDeStatut, ligneDeDate, blocDeFonction,
+  entreesDuneSignature
 } from "./memoire-en-texte.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -217,7 +218,14 @@ export function champsDuBloc({
     const commeUneRegle = { regle: true };
 
     // La tête d'une règle : la donnée et ses entrées, sans valeur de projet.
-    poser("", ligneDeDonnee(sujet, [...conditions, ...exceptions].map((c) => c?.sujet), commeUneRegle));
+    // La même composition que dans le fichier : deux conditions sur le même nom
+    // font une seule entrée, et c'est `entreesDuneSignature` qui le décide —
+    // ici comme là-bas (règle 10).
+    poser("", ligneDeDonnee(
+      sujet,
+      entreesDuneSignature([...conditions, ...exceptions].map((c) => c?.sujet)),
+      commeUneRegle
+    ));
 
     // Puis ses locales, comme dans le fichier : ce qui fonde la règle se lit
     // avant ce qu'elle fait, ici comme là-bas.

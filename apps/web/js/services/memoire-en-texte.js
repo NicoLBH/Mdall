@@ -521,10 +521,23 @@ const espace = (largeur = " ") => jeton(JETON.NEUTRE, largeur);
  * même chose, et c'est toujours celle qui se tait qui gagne (règle 4).
  *
  * Comme le degré, `%` ne peut pas se confondre avec le début d'un nom : aucun
- * sujet du projet ne commence par un signe de pourcentage. `120€` reste non
- * coupé — l'euro s'écrit avec son espace, et il est le seul de sa famille.
+ * sujet du projet ne commence par un signe de pourcentage.
+ *
+ * ## Et l'euro, qui était l'exception de trop
+ *
+ * `120 €` se lisait, `120€` non. C'était cohérent avec ce qui s'écrit ici —
+ * l'euro porte son espace partout dans le projet —, mais un devis se recopie
+ * tel qu'il est imprimé, et il est imprimé collé. On obtenait alors le
+ * **texte** « 120€ » là où l'on attendait une mesure : la comparaison se taisait
+ * au lieu de compter, ce qui est le pire des deux (règle 5).
+ *
+ * `€` court le même risque qu'aucun autre : aucun sujet du projet ne commence
+ * par un signe monétaire. **`$` et `£` ne suivent pas** — Mdall n'a qu'une
+ * monnaie, et ouvrir la porte à deux symboles qu'aucune unité ne connaît
+ * donnerait des mesures qui ne se comparent à rien, ce qui se relit encore plus
+ * mal qu'un texte.
  */
-const UNITE_COLLEE = /^(-?[\d]+(?:[.,\s]\d+)*)(°C?|%)$/;
+const UNITE_COLLEE = /^(-?[\d]+(?:[.,\s]\d+)*)(°C?|%|€)$/;
 
 export function couperLUnite(valeur) {
   const brut = texte(valeur);
@@ -658,6 +671,39 @@ export function ligneDAffirmation({ sujet = "", valeur = "", unite = "" } = {}) 
 }
 
 /**
+ * La liste des entrées d'une signature, telle qu'on l'écrit.
+ *
+ * ## Une question, une réponse
+ *
+ * « Cette liste de paramètres se dédoublonne-t-elle ? » recevait **trois**
+ * réponses sur le chemin — la liste composée, puis `ligneDeDonnee`, puis
+ * l'écriture d'une ligne de donnée —, et il fallait les casser toutes les trois
+ * pour qu'une épreuve tombe. Deux de ces gardes ne défendaient donc rien, et
+ * l'on ne savait laquelle comptait (règle 4).
+ *
+ * Elle compte **ici**, là où la liste se compose — deux conditions sur le même
+ * nom sont une seule entrée. Les deux écritures, elles, posent ce qu'on leur
+ * donne : `ligneDeFonction` le faisait déjà, parce qu'elle recolore aussi une
+ * ligne telle qu'on l'a tapée, `(zones, A, A)` compris.
+ *
+ * Un nom vide n'est pas une entrée : il viendrait d'une condition sans sujet,
+ * et écrirait une virgule qui n'ouvre sur rien.
+ */
+export function entreesDuneSignature(noms = []) {
+  const vues = new Set();
+  const gardees = [];
+
+  for (const brut of Array.isArray(noms) ? noms : [noms]) {
+    const nom = texte(brut);
+    if (!nom || vues.has(nom)) continue;
+    vues.add(nom);
+    gardees.push(nom);
+  }
+
+  return gardees;
+}
+
+/**
  * La tête d'une **règle** : la donnée, et ses entrées entre parenthèses.
  *
  * ```
@@ -667,13 +713,24 @@ export function ligneDAffirmation({ sujet = "", valeur = "", unite = "" } = {}) 
  * La signature ne se stocke pas : les entrées **sont** les sujets des
  * conditions, et une signature recopiée diverge le jour où quelqu'un ajoute une
  * condition. Elle se calcule ici, à l'écriture.
+ *
+ * **Elle écrit ce qu'on lui donne, et ne dédoublonne pas.** Elle le faisait,
+ * et `ligneDeFonction` juste à côté ne le faisait pas : la même question avait
+ * deux réponses, et l'on ne pouvait pas savoir laquelle comptait. Elle comptait
+ * de travers — cette fonction recolore aussi une ligne **telle qu'on l'a
+ * tapée** dans un diff, et `Classement du bâtiment (Hauteur, Hauteur)` s'y
+ * affichait « (Hauteur) » : du texte qui disparaît d'un écran qui existe pour
+ * montrer ce qui change.
+ *
+ * Le dédoublonnage appartient donc à qui **compose** la liste des entrées —
+ * `entreesDuneSignature`, une fois (règle 10).
  */
 export function ligneDeDonnee(sujet = "", entrees = [], { regle = false } = {}) {
   const jetons = regle
     ? [jeton(JETON.MOT_FONCTION, "fonction"), espace(), jeton(JETON.SUJET, texte(sujet))]
     : [jeton(JETON.SUJET, texte(sujet))];
 
-  const noms = [...new Set((Array.isArray(entrees) ? entrees : [entrees]).map(texte).filter(Boolean))];
+  const noms = (Array.isArray(entrees) ? entrees : [entrees]).map(texte).filter(Boolean);
 
   // Une règle porte toujours sa parenthèse, même vide : `Colonne sèche()` se
   // lit comme une fonction sans entrée, `Colonne sèche` comme un nom. La
@@ -1904,7 +1961,7 @@ export function blocDeRegle({
     const avantLaCourbe = corps.length;
     champ(ENTRE_LES_POINTS, courbe.entre);
     champ(HORS_BORNES, courbe.hors);
-    corps.push(...lignesDesPoints(courbe.points, dedans));
+    corps.push(...lignesDesPoints(courbe.points, dedans, courbe.colonnes ?? null));
     if (corps.length > avantLaCourbe) corps.push(ligneVide());
   }
 
@@ -1996,17 +2053,16 @@ export function blocDeRegle({
   // La portée est un paramètre, et le premier : une même règle s'applique à
   // plusieurs parties de l'ouvrage, et la recopier par zone en ferait trois
   // règles à maintenir pour un seul raisonnement.
-  const entrees = (Array.isArray(signature) && signature.length
+  const entrees = entreesDuneSignature(Array.isArray(signature) && signature.length
     ? [texte(portee) || PORTEE_DUNE_FONCTION, ...signature.map(texte)]
     : [
       texte(portee) || PORTEE_DUNE_FONCTION,
       // **Une courbe déclare son abscisse dans sa signature**, et nulle part
       // ailleurs : elle n'a pas de condition d'où la déduire.
-      ...(courbe ? [texte(courbe.selon)] : []),
+      // Une nappe déclare ses **deux** entrées : l'abscisse et les colonnes.
+      ...(courbe ? [texte(courbe.selon), texte(courbe.parColonne)] : []),
       ...toutes.map((condition) => condition?.sujet)
-    ])
-    .filter(Boolean)
-    .filter((une, rang, tous) => tous.indexOf(une) === rang);
+    ]);
 
   const tete = [
     espace(RETRAIT.repeat(Math.max(0, profondeur))),
@@ -2374,28 +2430,53 @@ export function ligneDuChampDeLaCourbe(cle = "", valeur = "", profondeur = 1) {
  * obligent à lire chiffre par chiffre. La largeur se calcule sur l'ensemble des
  * points — c'est pourquoi ils s'écrivent tous ensemble, et non un par un.
  */
-export function lignesDesPoints(points = [], profondeur = 1) {
-  const tous = (Array.isArray(points) ? points : [])
-    .map((un) => [texte(un?.x), texte(un?.y)])
-    .filter(([x, y]) => x && y);
-  if (!tous.length) return [];
+export function lignesDesPoints(points = [], profondeur = 1, colonnes = null) {
+  /**
+   * **Un abaque à double entrée s'écrit avec une ligne de plus : son en-tête.**
+   *
+   * Elle porte les valeurs de la seconde entrée, son coin vide — c'est le
+   * dessin du document d'origine, et c'est ce qu'on veut pouvoir recopier puis
+   * relire ligne à ligne contre lui.
+   */
+  const nappe = Array.isArray(colonnes) && colonnes.length > 1;
 
-  const large = [0, 1].map((colonne) => Math.max(...tous.map(([...cases]) => cases[colonne].length)));
+  const lignes = nappe
+    ? [
+      colonnes.map(texte),
+      ...(Array.isArray(points) ? points : []).map((un) =>
+        [texte(un?.x), ...(Array.isArray(un?.valeurs) ? un.valeurs : []).map(texte)])
+    ]
+    : (Array.isArray(points) ? points : [])
+      .map((un) => [texte(un?.x), texte(un?.y)])
+      .filter(([x, y]) => x && y);
 
-  return tous.map(([x, y]) => [
-    espace(RETRAIT.repeat(Math.max(1, profondeur))),
-    jeton(JETON.PONCTUATION, "|"),
-    espace(),
-    // L'abscisse est ce qu'on compare, l'ordonnée ce qu'on conclut : les deux
-    // couleurs d'un barème, pour la même raison.
-    jeton(JETON.OPERATEUR, x),
-    espace(" ".repeat(large[0] - x.length + 1)),
-    jeton(JETON.PONCTUATION, "|"),
-    espace(),
-    jeton(JETON.VALEUR, y),
-    espace(" ".repeat(large[1] - y.length + 1)),
-    jeton(JETON.PONCTUATION, "|")
-  ]);
+  if (!lignes.length) return [];
+
+  const combien = Math.max(...lignes.map((cases) => cases.length));
+  const large = Array.from({ length: combien }, (_, colonne) =>
+    Math.max(...lignes.map((cases) => (cases[colonne] ?? "").length)));
+
+  return lignes.map((cases, rang) => {
+    /**
+     * **L'en-tête se colore comme les abscisses**, pas comme les valeurs : ce
+     * sont des entrées, exactement comme la colonne de gauche. Les peindre en
+     * valeurs ferait lire la seconde entrée comme un résultat.
+     */
+    const enTete = nappe && rang === 0;
+
+    const dessin = [espace(RETRAIT.repeat(Math.max(1, profondeur)))];
+    for (let colonne = 0; colonne < combien; colonne += 1) {
+      const dit = cases[colonne] ?? "";
+      dessin.push(jeton(JETON.PONCTUATION, "|"), espace());
+      // L'abscisse est ce qu'on compare, l'ordonnée ce qu'on conclut : les deux
+      // couleurs d'un barème, pour la même raison.
+      dessin.push(jeton(colonne === 0 || enTete ? JETON.OPERATEUR : JETON.VALEUR, dit));
+      dessin.push(espace(" ".repeat(large[colonne] - dit.length + 1)));
+    }
+    dessin.push(jeton(JETON.PONCTUATION, "|"));
+
+    return dessin;
+  });
 }
 
 /**

@@ -167,3 +167,40 @@ caractère pareil, faute de quoi la même fonction change de couleur selon l'éc
 qui la montre. La seconde relit l'abaque de la consigne **avec le lecteur du
 langage**, et le fait conclure : un exemple dont les points seraient dans le
 désordre serait recopié tel quel par le modèle (règle 12).
+
+## Et l'abaque à double entrée
+
+Les Eurocodes ont aussi des **nappes** : un coefficient selon l'altitude **et**
+la zone de vent. Elles s'écrivaient en barème, c'est-à-dire par paliers, et l'on
+perdait l'interpolation sur l'un des deux axes.
+
+```
+courbe Coefficient d'exposition(zones, Altitude, Zone de vent) {
+   entre les points: linéaire
+   hors bornes: refuse
+   |        |    1 |    2 |    3 |
+   |    0 m | 1,00 | 1,05 | 1,10 |
+   |  500 m | 1,10 | 1,18 | 1,25 |
+   | 1000 m | 1,25 | 1,35 | 1,45 |
+}
+```
+
+**C'est la signature qui décide**, et non la forme du tableau : deux entrées,
+deux axes. L'en-tête porte les valeurs de la seconde, son coin vide — le dessin
+du document d'origine, celui qu'on veut pouvoir recopier puis relire ligne à
+ligne contre lui.
+
+> **Une nappe est une famille de courbes, et on la lit comme l'ingénieur lit
+> l'abaque imprimé : on se place sur une courbe, puis on la lit.**
+
+La seconde entrée choisit — ou interpole — **une courbe**, et cette courbe est
+une courbe ordinaire : elle se dessine, se trace et se relit avec tout ce qui
+existe déjà. La trace dit les deux pas, « entre les colonnes 1 et 2, lu entre
+500 m et 1000 m », et l'on retrouve les quatre cases du tableau d'origine.
+
+`entre les points:` et `hors bornes:` valent pour les **deux** axes : un tableau
+à seuils l'est dans les deux sens, et déclarer deux interpolations pour un seul
+tableau ferait deux choses à vérifier là où le texte n'en dit qu'une.
+
+Ce qui n'est pas fait : montrer la **famille** de courbes d'un coup d'œil. C'est
+au carnet, avec la raison — voir `docs/dix-du-carnet.md`.

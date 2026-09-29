@@ -39,6 +39,7 @@ import { renderLectureDuTableau } from "./ui/tableau-dune-boucle.js";
 import { tableauxDUneRegle } from "../services/memoire-rejeu.js";
 import { lectureQuiVaDeSoi } from "../services/graphique-dune-table.js";
 import { estUneRegle } from "../services/assertion-taxonomy.js";
+import { normalizeZoneKey, zoneLabel } from "../services/project-zones.js";
 import { profondeursDuRetrait, niveauxDesPaires } from "../services/mdall-retrait.js";
 import { renderJetons, contexteDuSujet } from "./ui/code-mdall.js";
 import {
@@ -1356,7 +1357,12 @@ export function renderFichier(fichier, {
    * ment. Les entrées d'une fonction vivent dans d'autres fichiers que celui
    * qu'on regarde, et il faut donc les avoir toutes.
    */
-  assertions = []
+  assertions = [],
+  /**
+   * La partie d'ouvrage dont on veut voir le rejeu. Vide — « toutes » — est le
+   * défaut, et c'est ce que l'écran faisait hier.
+   */
+  zoneDuRejeu = ""
 } = {}) {
   const bornes = bornesDuFichier(fichier.lignes);
   const clair = fichierEnClair(fichier, { enClair: enClairDesJetons, ouEcrit });
@@ -1635,7 +1641,7 @@ export function renderFichier(fichier, {
         // **Sous le texte, jamais à sa place.** Le fichier est ce qui est versé,
         // et le tableau est ce qu'il produit : les intervertir ferait lire un
         // résultat avant la règle qui le produit.
-        lecture === LECTURE.CODE ? renderRejeuDesFonctions(fichier, assertions) : ""
+        lecture === LECTURE.CODE ? renderRejeuDesFonctions(fichier, assertions, { zone: zoneDuRejeu }) : ""
       }
       ${
         // Ce qui a quitté le présent sans que rien ne le remplace. Ce n'est pas
@@ -1702,7 +1708,7 @@ export function renderFichier(fichier, {
  * bac choisissent une lecture, et ce choix n'a pas d'état ici — un écran de
  * lecture ne garde pas ce qu'on a cliqué.
  */
-export function renderRejeuDesFonctions(fichier = null, assertions = []) {
+export function renderRejeuDesFonctions(fichier = null, assertions = [], { zone = "" } = {}) {
   const toutes = Array.isArray(assertions) ? assertions : [];
   if (!toutes.length) return "";
 
@@ -1712,19 +1718,58 @@ export function renderRejeuDesFonctions(fichier = null, assertions = []) {
 
   if (!fonctions.length) return "";
 
-  const blocs = fonctions.map((regle) => {
-    const sujet = texte(regle?.payload?.subject) || texte(regle?.subject_key);
-    const seLitEn = texte(regle?.payload?.regle?.seLitEn);
-    const rejeux = tableauxDUneRegle(regle, toutes);
-    if (!rejeux.length) return "";
+  const deroules = fonctions.map((regle) => ({
+    sujet: texte(regle?.payload?.subject) || texte(regle?.subject_key),
+    seLitEn: texte(regle?.payload?.regle?.seLitEn),
+    rejeux: tableauxDUneRegle(regle, toutes)
+  })).filter((une) => une.rejeux.length);
 
-    return `
+  if (!deroules.length) return "";
+
+  /**
+   * **Les zones qu'on peut demander sont celles qui se déroulent.**
+   *
+   * Offrir toutes les zones du projet ferait cliquer sur un bâtiment pour
+   * obtenir un écran vide — et l'on ne saurait pas si c'est le bâtiment qui n'a
+   * rien ou l'écran qui n'a pas compris (règle 5). On prend donc les zones
+   * telles que le rejeu les rend, **dans son ordre**, toutes fonctions
+   * confondues : une fonction peut porter un bâtiment que l'autre ignore.
+   */
+  const zones = [];
+  for (const un of deroules) {
+    for (const rejeu of un.rejeux) {
+      const cle = normalizeZoneKey(rejeu?.zone);
+      if (cle && !zones.some((une) => une.cle === cle)) {
+        // **Le nom de la partie d'ouvrage, pas sa clé.** Le rejeu range par
+        // clé — `batiment-a` —, et c'est ce que l'écran affichait en tête de
+        // chaque tableau : un identifiant à la place d'un nom que quelqu'un a
+        // écrit. La mémoire porte les deux ; il n'y avait qu'à demander.
+        zones.push({ cle, nom: zoneLabel(cle, toutes) });
+      }
+    }
+  }
+
+  const ici = zones.some((une) => une.cle === normalizeZoneKey(zone)) ? normalizeZoneKey(zone) : "";
+  const retenus = deroules
+    .map((un) => ({
+      ...un,
+      rejeux: ici ? un.rejeux.filter((r) => normalizeZoneKey(r.zone) === ici) : un.rejeux
+    }))
+    .filter((un) => un.rejeux.length);
+
+  const blocs = retenus.map((un) => `
       <article class="memoire-rejeu__fonction">
-        <h4 class="memoire-rejeu__sujet">${escapeHtml(sujet)}</h4>
-        ${rejeux.map((rejeu) => renderRejeuDUneZone(rejeu, seLitEn, rejeux.length > 1)).join("")}
+        <h4 class="memoire-rejeu__sujet">${escapeHtml(un.sujet)}</h4>
+        ${/*
+          **Le tableau dit sa zone dès que la fonction en a plusieurs**, et non
+          plus seulement quand on les voit toutes. On vient d'en choisir une :
+          ne plus la nommer laisserait un tableau sans étiquette, et c'est
+          exactement le moment où l'on veut relire laquelle on regarde.
+        */""}
+        ${un.rejeux.map((rejeu) => renderRejeuDUneZone(
+          rejeu, un.seLitEn, zones.length > 1, zoneLabel(rejeu?.zone, toutes))).join("")}
       </article>
-    `;
-  }).filter(Boolean).join("");
+    `).join("");
 
   if (!blocs) return "";
 
@@ -1734,9 +1779,40 @@ export function renderRejeuDesFonctions(fichier = null, assertions = []) {
         <b>Ce que ${fonctions.length > 1 ? "ces fonctions déroulent" : "cette fonction déroule"}</b>
         <p>Sur les valeurs que le projet tient aujourd'hui, et rien d'autre : c'est
            une lecture, pas un essai. Une entrée qui change ici change le tableau.</p>
+        ${renderChoixDeLaZoneDuRejeu(zones, ici)}
       </header>
       ${blocs}
     </section>
+  `;
+}
+
+/**
+ * **Montre-moi le bâtiment B.**
+ *
+ * Le rejeu tourne zone par zone et les empilait toutes : sur un projet à six
+ * bâtiments, c'est six tableaux de quarante lignes qu'il faut faire défiler
+ * pour retrouver celui qu'on cherchait. On ne pouvait pas le demander.
+ *
+ * **« Toutes » reste le défaut**, et c'est ce que l'écran faisait hier : partir
+ * sur un bâtiment ferait croire que la fonction n'en déroule qu'un. C'est une
+ * portée à part entière, pas une absence — comme dans le bac d'essai.
+ *
+ * Rien tant qu'il n'y a qu'une zone : un sélecteur à un seul choix fait douter
+ * de son propre écran.
+ */
+function renderChoixDeLaZoneDuRejeu(zones = [], ici = "") {
+  if (zones.length < 2) return "";
+
+  return `
+    <label class="memoire-rejeu__choix">
+      <span>Quelle partie d'ouvrage</span>
+      <select class="gh-input" data-memoire-rejeu-zone>
+        <option value=""${ici ? "" : " selected"}>toutes</option>
+        ${zones.map((une) => `
+          <option value="${escapeHtml(une.cle)}"${une.cle === ici ? " selected" : ""}>${
+            escapeHtml(une.nom)}</option>`).join("")}
+      </select>
+    </label>
   `;
 }
 
@@ -1748,10 +1824,10 @@ export function renderRejeuDesFonctions(fichier = null, assertions = []) {
  * montrer que le premier ferait lire la descente de charge d'un bâtiment sous
  * le nom de l'autre.
  */
-function renderRejeuDUneZone(rejeu = null, seLitEn = "", nommerLaZone = false) {
+function renderRejeuDUneZone(rejeu = null, seLitEn = "", nommerLaZone = false, nom = "") {
   const tableau = rejeu?.tableau ?? null;
   // `""` vaut partout, et c'est une portée à part entière, pas un défaut.
-  const ou = texte(rejeu?.zone) || "partout";
+  const ou = texte(nom) || texte(rejeu?.zone) || "partout";
   const tete = nommerLaZone ? `<p class="memoire-rejeu__zone">${escapeHtml(ou)}</p>` : "";
 
   /**

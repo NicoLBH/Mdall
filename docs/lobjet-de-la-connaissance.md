@@ -2487,5 +2487,6 @@ ne devient jamais faux (règle 6) : on ajoute à côté, on n'efface pas.
 | où l'on se place pour essayer, et ce qu'un essai lit du projet | `docs/le-selecteur-de-zone.md` |
 | un champ repris du projet, et modifiable | `docs/le-troisieme-etat-dun-champ.md` |
 | d'où vient une valeur, et depuis quand on le sait | `docs/dou-vient-une-valeur.md` |
+| dix chantiers du carnet, et les décisions qu'ils attendaient | `docs/dix-du-carnet.md` |
 | les cinq objets du langage | `docs/langage-mdall.md` |
 | les règles dont tout dépend | `docs/fondamentaux.md` |

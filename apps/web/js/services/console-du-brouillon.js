@@ -88,8 +88,8 @@ function ligne({ niveau, source, quoi = "", dit = "", fichier = "", rang = 0 }) 
  * Des remarques, jamais des refus : un brouillon à demi juste se corrige, et
  * rien ne bloque. C'est déjà ce que la vérification dit d'elle-même.
  */
-function lignesDeLaVerification(fichiers) {
-  return verifierLeBrouillon(fichiers).map((remarque) => ligne({
+function lignesDeLaVerification(fichiers, memoire) {
+  return verifierLeBrouillon(fichiers, { memoire }).map((remarque) => ligne({
     niveau: NIVEAU.REMARQUE,
     source: SOURCE.VERIFICATION,
     quoi: MOTS_DE_LENNUI[remarque.quoi] ?? remarque.quoi,
@@ -280,13 +280,24 @@ function lignesDeLaProposition(fichiers, depot) {
  * @returns {{niveau, source, quoi, dit, fichier, ligne}[]}
  */
 export function laConsole({
-  fichiers = [], reponses = null, lance = false, rendu = null, depot = null
+  fichiers = [], reponses = null, lance = false, rendu = null, depot = null,
+  /**
+   * Ce que le projet a signé, quand on l'a lu.
+   *
+   * La vérification ne voyait que les fichiers : une fonction appelée depuis la
+   * mémoire — le cas le plus courant une fois qu'on verse — échappait au
+   * contrôle, et l'on obtenait le silence, qui se lit comme « tout va bien ».
+   *
+   * `null` quand elle n'est pas lue : on se tait alors sur ces appels-là, et
+   * aucune remarque ne disparaît quand elle arrive — elles s'ajoutent.
+   */
+  memoire = null
 } = {}) {
   const remplis = Array.isArray(fichiers) ? fichiers : [];
 
   const lignes = [
     ...lignesDeLaTranscription(rendu),
-    ...lignesDeLaVerification(remplis),
+    ...lignesDeLaVerification(remplis, memoire),
     // **Rien tant qu'on n'a pas lancé.** Annoncer qu'une fonction ne sait pas
     // avant qu'on le lui ait demandé serait reprocher une réponse qu'on n'a pas
     // demandée.

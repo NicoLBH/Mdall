@@ -47,7 +47,9 @@ import { renderGhActionButton, bindGhActionButtons } from "../../ui/gh-split-but
 import { renderJetons } from "../../ui/code-mdall.js";
 import { jetonsDeLaLigne, lireUnFichier } from "../../../services/memoire-en-lecture.js";
 import { couperLUnite, lireUnNombre } from "../../../services/memoire-en-texte.js";
-import { phraseDeLaLecture } from "../../../services/courbe-du-mdall.js";
+import {
+  phraseDeLaLecture, phraseDeLaLectureDeLaNappe
+} from "../../../services/courbe-du-mdall.js";
 import { traceDesGroupes, traceDesSeries } from "../../../services/trace-dun-graphique.js";
 import {
   DIT_DE_LA_LECTURE, LECTURE, abscissesPossibles, choixGarde, lectureRetenue,
@@ -62,7 +64,7 @@ import { jetonsEcrits } from "../../../services/mdall-en-ecriture.js";
 import { niveauxDesPaires } from "../../../services/mdall-retrait.js";
 import {
   brouillonNeuf, fichierOuvert, avecLeFichier, avecLeDit, ouvertSur, brouillonEcrit, langageDuFichier,
-  fichiersRemplis, brouillonRange, brouillonRelu
+  fichiersRemplis, brouillonRange, brouillonRelu, ouAllerDansLeTexte
 } from "../../../services/brouillon-mdall.js";
 import {
   champsDuBrouillon, SAISIE, ETAT_DU_CHAMP, etatDuChamp,
@@ -612,8 +614,19 @@ export function renderPointsDeLaCourbe(resultat = null) {
         **Où la lecture est tombée passe avant le compte des points.** C'est la
         ligne qu'on cherche, et la seule qui se compare au texte d'origine.
       */""}
+      ${/*
+        **Une nappe se lit comme la courbe de la colonne où l'on se trouve.**
+        C'est ainsi qu'on lit un abaque imprimé : on se place sur une courbe —
+        « je suis en zone 2 » —, puis on la lit. Une surface ne se compare pas à
+        une figure d'un coup d'œil, et c'était là le verrou ; la courbe où l'on
+        est, si. Les points montrés sont donc ceux de **cette** courbe-là, et la
+        phrase dit les deux pas.
+      */""}
       <caption class="bac-tableau__titre">${escapeHtml(
-        [phraseDeLaLecture(lu), `${points.length} points`].filter(Boolean).join(" · ")
+        [
+          lu.parColonne ? phraseDeLaLectureDeLaNappe(lu) : phraseDeLaLecture(lu),
+          `${points.length} points`
+        ].filter(Boolean).join(" · ")
       )}</caption>
       <tbody>
         ${points.map((point, rang) => `
@@ -683,7 +696,17 @@ function renderVenue(lecture = null) {
  * **La trace n'est pas un détail** : une règle qui rend un verdict sans montrer
  * sa lecture n'apprend rien, et c'est par elle qu'on comprend le langage.
  */
-export function renderResultats(resultats = [], { refus = [] } = {}) {
+export function renderResultats(resultats = [], {
+  refus = [],
+  /**
+   * Peut-on aller écrire là où le refus s'est produit ?
+   *
+   * Vrai partout sauf sur l'essai d'un utilitaire, qui n'a pas de zone de
+   * code : un bouton qui ne mène nulle part se clique deux fois avant qu'on
+   * comprenne qu'il ne fait rien.
+   */
+  menentAuCode = true
+} = {}) {
   const tous = Array.isArray(resultats) ? resultats : [];
   const rates = (Array.isArray(refus) ? refus : []).filter(Boolean);
 
@@ -710,8 +733,24 @@ export function renderResultats(resultats = [], { refus = [] } = {}) {
         ? `<ul class="bac-resultats__refus">
              ${rates.slice(0, 4).map((un) => `
                <li>
-                 <span class="bac-refus__ou">${escapeHtml(texte(un.fichier))}${
-                   un.ligne ? ` · ligne ${un.ligne}` : ""}</span>
+                 ${/*
+                   **Le refus mène à sa ligne.** Il la nommait — fichier et
+                   numéro — et il fallait aller la chercher à la main en
+                   comptant dans la gouttière. Pour quarante lignes, on compte
+                   deux fois et l'on se trompe une fois sur trois.
+
+                   Un bouton seulement là où l'on peut écrire : l'essai d'un
+                   utilitaire n'a pas de zone de code, et un bouton qui ne mène
+                   nulle part est pire que pas de bouton.
+                 */""}
+                 ${menentAuCode && texte(un.fichier)
+                   ? `<button type="button" class="bac-refus__ou bac-refus__ou--mene"
+                        data-brouillon-aller="${escapeHtml(texte(un.fichier))}"
+                        data-brouillon-ligne="${escapeHtml(String(un.ligne ?? ""))}">${
+                        escapeHtml(texte(un.fichier))}${
+                        un.ligne ? ` · ligne ${un.ligne}` : ""}</button>`
+                   : `<span class="bac-refus__ou">${escapeHtml(texte(un.fichier))}${
+                       un.ligne ? ` · ligne ${un.ligne}` : ""}</span>`}
                  <code>${escapeHtml(texte(un.texte))}</code>
                  <span class="bac-refus__dit">${escapeHtml(texte(un.raison))}</span>
                </li>`).join("")}
@@ -771,6 +810,15 @@ export function renderResultats(resultats = [], { refus = [] } = {}) {
                    `).join("")}
                  </ul>`
           }
+          ${/*
+            **La promesse, démentie par le verdict.** `rend: kN` se compare aux
+            conclusions écrites, et s'arrête à celles qui nomment un `calcule` —
+            c'est-à-dire à la plupart. Ici on vient de lancer : on connaît la
+            valeur, et l'on peut enfin le dire.
+          */""}
+          ${resultat.promesse
+            ? `<p class="bac-resultat__ment">${escapeHtml(texte(resultat.promesse))}</p>`
+            : ""}
           ${
             resultat.ou.length
               ? `<p class="bac-resultat__note">Irait dans la mémoire sous ${
@@ -815,7 +863,9 @@ export function renderBacDessai(brouillon = null, {
    * de l'appelant : le rendu ne lit rien de la base, et un rendu qui daterait
    * lui-même sa propre lecture daterait le dessin, pas la lecture.
    */
-  lueLe = null, dit = ""
+  lueLe = null, dit = "",
+  /** Y a-t-il une zone de code derrière, où un refus peut mener ? */
+  menentAuCode = true
 } = {}) {
   const remplis = fichiersRemplis(brouillon);
   // **Les fonctions versées jouent avec.** Le brouillon qui nomme « Couleur des
@@ -844,7 +894,7 @@ export function renderBacDessai(brouillon = null, {
           ? renderFormulaire(champs, reponses)
           : `<p class="review-empty-note">Rien à remplir : ce brouillon ne lit aucune entrée.</p>`
       }
-      ${lance ? renderResultats(resultats, { refus: refusDuBrouillon(remplis) }) : ""}
+      ${lance ? renderResultats(resultats, { refus: refusDuBrouillon(remplis), menentAuCode }) : ""}
     </section>
   `;
 }
@@ -1287,7 +1337,8 @@ export function renderLignesDeLaConsole(lignes = []) {
       <span class="brouillon-console__source">${escapeHtml(MOTS_DE_LA_SOURCE[ligne.source] ?? ligne.source)}</span>
       ${ligne.fichier
         ? `<button type="button" class="brouillon-console__ou"
-             data-brouillon-aller="${escapeHtml(ligne.fichier)}">
+             data-brouillon-aller="${escapeHtml(ligne.fichier)}"
+             data-brouillon-ligne="${escapeHtml(String(ligne.ligne ?? ""))}">
              ${escapeHtml(ligne.fichier)}${ligne.ligne ? `:${ligne.ligne}` : ""}
            </button>`
         : ""}
@@ -1641,10 +1692,10 @@ export function renderEcrireEnMdall(brouillon = null, {
   largeur = LARGEUR_PAR_DEFAUT, reponses = {}, lance = false,
   transcrit = false, rendu = null, depose = false, depot = null, volet = false,
   largeurConsole = LARGEUR_CONSOLE_PAR_DEFAUT, hauteurConsole = 0,
-  utilitaire = null, mode = MODE.ECRITURE
+  utilitaire = null, mode = MODE.ECRITURE, memoire = null
 } = {}) {
   const lignes = laConsole({
-    fichiers: fichiersRemplis(brouillon), reponses, lance, rendu, depot
+    fichiers: fichiersRemplis(brouillon), reponses, lance, rendu, depot, memoire
   });
 
   return `
@@ -1724,7 +1775,7 @@ export function renderEssaiDeLutilitaire(
       ${texte(utilitaire?.resume)
         ? `<p class="brouillon__essai-quoi">${escapeHtml(texte(utilitaire.resume))}</p>`
         : ""}
-      ${renderBacDessai(brouillon, { reponses, lance, tete: false })}
+      ${renderBacDessai(brouillon, { reponses, lance, tete: false, menentAuCode: false })}
     </div>
   `;
 }
@@ -2023,7 +2074,8 @@ function dessiner(racine) {
     largeurConsole: etat.largeurConsole,
     hauteurConsole: etat.hauteurConsole,
     utilitaire: etat.utilitaire,
-    mode: etat.mode
+    mode: etat.mode,
+    memoire: etat.memoire
   });
   brancher(racine);
 }
@@ -2047,6 +2099,77 @@ function dessiner(racine) {
  *
  * Un redessin ciblé pose, remplace, retire — ou ne fait rien. Jamais plus.
  * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Les renvois vers une ligne du brouillon, où qu'ils soient posés.
+ *
+ * Deux endroits les portent : la console, sous la zone d'écriture, et les refus
+ * du bac d'essai, dans sa fenêtre. **Un seul branchement pour les deux** — deux
+ * écoutes voisines finiraient par ne plus faire le même geste, et c'est déjà
+ * arrivé : la console ouvrait le fichier en ignorant le numéro qu'elle
+ * affichait juste à côté (règle 10).
+ *
+ * `ou` est l'élément qui porte les boutons — la fenêtre du bac, ou l'écran —, et
+ * `racine` l'écran, parce que c'est là que la zone de code vit.
+ */
+function brancherLesRenvois(ou, racine, ecoutes = null) {
+  for (const bouton of ou?.querySelectorAll?.("[data-brouillon-aller]") ?? []) {
+    const aller = () => allerALaLigne(racine, bouton.dataset.brouillonAller, bouton.dataset.brouillonLigne);
+    if (ecoutes) ecoutes.poser(bouton, "click", aller);
+    else bouton.addEventListener("click", aller);
+  }
+}
+
+/**
+ * Ouvrir le fichier, et **poser le curseur sur la ligne**.
+ *
+ * ## Le défaut
+ *
+ * Le bac disait « essai.ref · ligne 7 », la console « essai.ref:7 », et il
+ * fallait aller compter dans la gouttière. Pour quarante lignes, on compte deux
+ * fois et l'on se trompe une fois sur trois — puis on corrige la ligne d'à
+ * côté, ce qui fait un second refus.
+ *
+ * ## Ce qu'il faut faire dans l'ordre
+ *
+ * **Refermer la fenêtre du bac d'abord.** Elle couvre la zone d'écriture : y
+ * poser un curseur derrière ne se verrait pas, et l'on cliquerait une seconde
+ * fois en croyant que rien ne s'est passé.
+ *
+ * Puis ouvrir le bon onglet, puis poser le curseur. Une ligne qui n'existe pas
+ * ne pose rien : `ouAllerDansLeTexte` rend `null`, et un curseur posé au hasard
+ * fait corriger la mauvaise ligne (règle 5).
+ */
+function allerALaLigne(racine, fichier = "", ligne = 0) {
+  const ecran = ecranVivant(racine);
+  if (!ecran) return;
+
+  if (leBacEstLa(document.getElementById("detailsBodyModal"))) fermerLaFenetreDeDetails();
+
+  const nom = texte(fichier);
+  if (nom) etat.brouillon = ouvertSur(etat.brouillon, nom);
+  redessinerLeVolet(ecran);
+
+  const zone = ecran.querySelector("[data-brouillon-code]");
+  const ou = ouAllerDansLeTexte(fichierOuvert(etat.brouillon)?.contenu ?? "", Number(ligne));
+  if (!zone || !ou) return;
+
+  zone.focus();
+  zone.setSelectionRange(ou.debut, ou.fin);
+
+  /**
+   * **Et l'amener sous les yeux.** Poser la sélection ne fait pas défiler une
+   * zone de texte de façon fiable : la ligne 40 d'un fichier de 60 reste hors
+   * de l'écran, sélectionnée là où personne ne la voit. On la place au milieu,
+   * d'après la hauteur d'une ligne — la même que celle des numéros, puisque
+   * c'est la même feuille de style.
+   */
+  const hauteur = Number.parseFloat(getComputedStyle(zone).lineHeight);
+  if (Number.isFinite(hauteur) && hauteur > 0) {
+    zone.scrollTop = Math.max(0, (Number(ligne) - 1) * hauteur - zone.clientHeight / 2);
+    zone.dispatchEvent(new Event("scroll"));
+  }
+}
 
 /**
  * Redessiner **le seul volet de droite**.
@@ -2102,7 +2225,11 @@ function redessinerLaConsole(racine) {
 
   const lignes = laConsole({
     fichiers: fichiersRemplis(etat.brouillon),
-    reponses: etat.reponses, lance: etat.lance, rendu: etat.rendu, depot: etat.depot
+    reponses: etat.reponses, lance: etat.lance, rendu: etat.rendu, depot: etat.depot,
+    // **Ce que le projet a signé.** Sans elle, une fonction appelée depuis la
+    // mémoire échappe au contrôle des domaines : on obtient le silence, qui se
+    // lit comme « tout va bien ».
+    memoire: etat.memoire
   });
 
   // **La troisième colonne se déclare sur le cadre**, pas sur le volet : c'est
@@ -2969,6 +3096,7 @@ function refaireLeBac(hote = null, racine = null) {
 }
 
 function brancherLeBac(hote, racine) {
+  brancherLesRenvois(hote, racine);
   brancherLesLectures(hote, choisirLaLecture);
   brancherLeChoixDeLaZone(hote, racine);
   brancherLaRelecture(hote);
@@ -3093,13 +3221,8 @@ function majLaNoteDuProjet(hote, nom, racine) {
 function brancherLaConsole(racine) {
   ecoutesDeLaConsole.defaire();
 
-  // Cliquer une ligne ouvre le fichier où elle se trouve.
-  for (const bouton of racine.querySelectorAll("[data-brouillon-aller]")) {
-    ecoutesDeLaConsole.poser(bouton, "click", () => {
-      etat.brouillon = ouvertSur(etat.brouillon, bouton.dataset.brouillonAller);
-      redessinerLeVolet(racine);
-    });
-  }
+  // Cliquer une ligne ouvre le fichier où elle se trouve, **et s'y pose**.
+  brancherLesRenvois(racine, racine, ecoutesDeLaConsole);
 
   ecoutesDeLaConsole.poser(racine.querySelector("[data-brouillon-console-place]"), "click", () => {
     etat.volet = !etat.volet;

@@ -4557,13 +4557,6 @@ phrase se lit dans une table (`DOUTE`, règle 10) — et y glisser un détail pa
 demande un second champ que rien ne lit aujourd'hui. Le travail est donc dans le
 verdict, pas dans la phrase.
 
-**Une algèbre d'unités composées.** `kN/m` et `N/mm` sont la même chose, et le
-langage les refuse l'une à l'autre. Les composer demande de porter un exposant par
-grandeur plutôt qu'une grandeur unique — le travail est connu, il n'est pas petit,
-et le faire à moitié ferait accepter des conversions fausses, ce qui est pire que
-de refuser (`docs/les-unites-du-metier.md`). Même chose pour `°C`, dont la
-conversion est un décalage et non un facteur.
-
 **`pour chaque` ne parcourt qu'une suite de nombres.** Il répète de deux mètres à
 quatre-vingt-dix par pas de deux (`docs/pour-chaque-et-les-agregats.md`) ; il ne
 sait pas dire « pour chaque niveau du bâtiment » ni « pour chaque massif de la
@@ -4578,15 +4571,6 @@ condition attend un sujet donnerait `si (le plus grand de = …)`. Le proposer
 **après le `=` d'un `calcule`** serait juste, et demande un état de plus dans
 `ceQuAttendLaLigne` — la liste ne connaît aujourd'hui que « un mot », « un nom »,
 « une valeur », « un fichier », « un statut ».
-
-**Une courbe n'a qu'une entrée.** Un abaque à double entrée — un coefficient
-selon la zone **et** l'altitude — s'écrit aujourd'hui en barème, c'est-à-dire par
-paliers : on perd l'interpolation sur l'un des deux axes
-(`docs/la-courbe-et-linterpolation.md`). Interpoler sur deux axes est un travail
-connu, et il demande surtout de décider **ce qu'on montre** : une surface ne se
-relit pas comme une courbe, et le gain de cette forme est précisément qu'on la
-compare à sa figure d'un coup d'œil. Le verrou est donc à l'écran, pas dans le
-calcul.
 
 **Le rejeu d'une fonction versée ne choisit pas sa lecture.** L'écran des
 fichiers suit la suggestion de la fonction et s'arrête là
@@ -4611,35 +4595,6 @@ d'essai n'a **pas de zone**, parce qu'on y essaie une fonction, pas un ouvrage.
 Lui en donner une est une vraie décision d'écran — un sélecteur de plus, et la
 question de ce qu'il vaut par défaut.
 
-**L'euro ne se colle pas au nombre.** `120€` n'est pas lu comme une mesure, là
-où `120 €`, `20%` et `30°` le sont. C'est cohérent avec ce qui s'écrit — l'euro
-porte son espace partout dans le projet —, mais c'est une exception de plus à
-retenir, et quelqu'un la rencontrera en recopiant un devis. La coller demande de
-vérifier qu'aucun nom ne commence par `€`, ce qui est probablement vrai, et de
-décider si `$` et `£` suivent.
-
-**`rend:` ne se déduit pas quand il manque.** Une fonction qui conclut toujours
-`12 kN`, `24 kN`, `36 kN` rend visiblement des kilonewtons, et l'écran pourrait
-le dire sans qu'on l'écrive (`docs/ce-quune-fonction-annonce.md`). On ne le
-déduit pas, et c'est volontaire pour l'instant : une promesse **déduite** d'un
-texte qu'on est en train d'écrire changerait à chaque frappe, et l'on ne saurait
-plus laquelle des deux — la déduite ou l'écrite — fait foi le jour où elles
-divergent. Le faire demande de décider qui gagne, et de le montrer.
-
-**Une conclusion qui nomme un `calcule` ne se compare pas au `rend:`.** Sa
-valeur dépend des réponses, et on ne la connaît qu'au lancement. Le bac, lui,
-la connaît : il pourrait vérifier la promesse **après** avoir lancé, et dire
-« vous annonciez des kN, elle a conclu 3 m ». C'est le contrôle qui attrape les
-vrais cas — la plupart des fonctions concluent une locale. Il demande de
-décider ce qu'on fait d'un verdict qui tient mais ment sur sa forme.
-
-**Les refus du brouillon ne mènent pas à leur ligne.** Le bac les montre
-maintenant avec leur fichier et leur numéro
-(`docs/ce-quune-fonction-annonce.md`), et il faut encore aller les chercher à la
-main dans la zone d'écriture. Un clic qui pose le curseur sur la ligne fautive
-est le geste qu'on attend d'un éditeur, et il demande de relier deux panneaux
-qui ne se connaissent pas aujourd'hui.
-
 **Le domaine fermé d'un nom déclaré ne monte pas au modèle.** Ce qui monte avec
 la phrase est la liste des fonctions que le projet a signées, avec ce que
 chacune lit et rend (`docs/se-servir-du-projet.md`). Les noms **déclarés** n'y
@@ -4657,17 +4612,6 @@ l'essai tourne, mais c'est une liste de remarques qu'on n'a pas causées, sur un
 texte qu'on vient de reprendre — exactement le moment où l'on doute d'avoir
 cassé quelque chose. Les ramener demande de savoir ce que chaque nom désigne, ce
 qui est la même question que ci-dessus.
-
-**Le dédoublonnage d'une signature est écrit trois fois.** « Cette liste de
-paramètres se dédoublonne-t-elle ? » reçoit trois réponses sur le chemin :
-`nomsLusParLeBloc`, puis `blocDeRegle`, puis `ligneDeDonnee`. On l'a découvert
-en cassant : il faut les casser **toutes les trois** pour qu'un test tombe,
-c'est-à-dire qu'en casser une ne se voit jamais. Deux de ces gardes ne
-défendent donc rien, et l'on ne saura laquelle compte que le jour où la
-troisième partira — c'est la règle 4 sous une autre forme. N'en garder qu'une
-demande de décider laquelle, et `ligneDeFonction` complique le choix : elle
-**ne doit pas** dédoublonner, puisqu'elle colore la ligne telle qu'on l'a
-tapée, `(zones, A, A)` compris.
 
 **Un barème ne distingue pas le texte « 3 » du nombre 3.** La colonne de
 conclusion d'un `selon` s'écrit nue — `| a | CF 1/2 h |`, `| b | à vérifier |`
@@ -4696,27 +4640,12 @@ qu'elle attend « Nature des volets » — et c'est l'aide à la signature, qui
 existe, appliquée à un nom qu'on **nomme** plutôt qu'à une fonction qu'on
 écrit.
 
-**Le contrôle des domaines ne voit que le brouillon.** « Cette fonction ne saura
-jamais répondre pour ce nom-là » se dit quand la fonction appelée est écrite dans
-les fichiers qu'on vérifie (`docs/la-portee-dun-appel.md`). Appelée depuis la
-**mémoire** du projet — le cas le plus courant une fois qu'on verse — elle
-échappe au contrôle : `verifierLeBrouillon` ne reçoit que des fichiers. C'est la
-même limite que pour « et cette fonction lit tel nom, qui doit exister », et elle
-se lèverait du même geste : donner la mémoire à la vérification, et décider ce
-qu'un brouillon vérifié **sans** mémoire doit dire alors, pour que la même page
-ne rende pas deux verdicts.
-
-**Le domaine d'un argument calculé ne se contrôle pas.** `F(zones, Matériau)` se
-compare ; un calcul, non — faute d'un nom déclaré à interroger. C'est assumé : un
-calcul n'a pas de domaine fermé, et lui en inventer un serait affirmer ce qu'on
-ignore. Ce qui manque vraiment serait le domaine **de ce qu'une fonction rend** :
-`rend:` le dit déjà quand il est écrit, et personne ne le compare encore à ce
-qu'un appelant en attend.
-
-**Une zone ne se choisit pas encore dans l'écran des fichiers.** Le rejeu de la
-mémoire tourne zone par zone et l'écran montre le résultat ; on ne peut pas lui
-dire « montre-moi le bâtiment B ». C'est la même décision que celle qu'on vient
-de prendre pour le bac, sur un écran qui a déjà sa propre façon de découper.
+**Le domaine d'un argument vraiment calculé ne se contrôle toujours pas.**
+`F(zones, G(zones, X))` se compare désormais — `G` dit ce qu'elle rend —, mais
+`F(zones, Prix HT * 1,2)` non : un calcul n'a pas de domaine fermé, et lui en
+inventer un serait affirmer ce qu'on ignore. C'est assumé, et ce qui manquait
+vraiment — le domaine de ce qu'une fonction rend, comparé à ce qu'un appelant en
+attend — est fait (`docs/dix-du-carnet.md`).
 
 **Ce qu'on répond au bac n'entre pas du tout dans la proposition.** On avait
 noté ici que le repris et le tapé s'y lisaient pareil ; en allant voir, c'est
@@ -4727,9 +4656,20 @@ l'on voudra verser un essai tel quel, et il faudra alors décider ce qu'une
 valeur reprise du projet signifie dans une proposition — la resigner à
 l'identique n'apprend rien à personne.
 
-**`si (A) et (B)` sur une seule ligne ne se lit pas, et ne le dit pas.** Le `et`
-d'une condition veut sa propre ligne ; écrit à la suite, tout ce qui suit le
-premier guillemet est avalé dans la valeur attendue — on obtient une clause
-`A = 1") et (B = "2` qui s'affiche telle quelle dans la trace et répond « faux »
-avec aplomb. Vu à l'écran en regardant le verdict d'un essai. C'est un refus qui
-manque, pas une lecture à élargir : la forme sur deux lignes existe et marche.
+**Une unité composée ne se multiplie pas.** `kN/m` et `N/mm` s'additionnent et
+se comparent maintenant, ce qui était le manque coûteux. Mais `3 kN/m * 2 m`
+**refuse** encore, là où l'algèbre dirait `6 kN` : le résultat demande de
+convertir aussi les **nombres** — `3 N/mm * 2 mm` ne fait pas 6 de quoi que ce
+soit —, et le faire à moitié donnerait des conversions fausses d'un facteur
+mille. Refuser n'est jamais faux, seulement limité. Le lever demande de porter
+la dimension jusque dans l'évaluation d'un produit, et de décider dans quelle
+unité s'écrit un résultat composé que le lexique doit ensuite savoir relire.
+
+**Un abaque à double entrée ne se dessine pas en surface.** Il se lit comme la
+courbe de la colonne où l'on se trouve (`docs/dix-du-carnet.md`), ce qui est la
+façon dont on lit l'abaque imprimé et ce qui rend la lecture comparable au
+document. La **famille** de courbes, elle, ne se montre pas : on ne voit pas
+d'un coup d'œil que la colonne 3 monte plus vite que la colonne 1. Le faire
+demande de décider ce qu'on dessine — plusieurs courbes sur un même cadre, ou
+une surface — et surtout ce qu'on y met en évidence, faute de quoi c'est un joli
+dessin qui ne se vérifie pas.

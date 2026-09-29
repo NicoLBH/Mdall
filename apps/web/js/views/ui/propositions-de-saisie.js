@@ -69,10 +69,21 @@ function ditDeLentree(une) {
   return String(une?.dit ?? "");
 }
 
-/** Ce qu'une fonction annonce rendre, en un mot. Vide quand elle ne le dit pas. */
+/**
+ * Ce qu'une fonction annonce rendre, en un mot. Vide quand rien ne se sait.
+ *
+ * **« déduit » se dit.** Faute de `rend:`, on lit ce que la fonction conclut —
+ * trois branches en kilonewtons rendent visiblement des kilonewtons. Mais une
+ * observation n'est pas un engagement : le jour où une branche de plus conclut
+ * autre chose, la déduction change sans que personne n'ait rien promis. Le
+ * montrer sans le dire ferait compter sur une promesse qui n'a pas été faite.
+ */
 function ditDeCeQuElleRend(rend) {
-  if (rend?.valeurs?.length) return rend.valeurs.join(", ");
-  return String(rend?.unite ?? "") ? `une mesure en ${rend.unite}` : "";
+  const dit = rend?.valeurs?.length
+    ? rend.valeurs.join(", ")
+    : String(rend?.unite ?? "") ? `une mesure en ${rend.unite}` : "";
+
+  return dit && rend?.deduit ? `${dit} (déduit)` : dit;
 }
 
 /**
