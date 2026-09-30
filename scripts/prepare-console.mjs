@@ -59,6 +59,12 @@ export const RACINES = [
   "js/services/larchive-des-messages-supabase.js",
   "js/services/le-convoi.js",
   "js/services/un-zip-deplie.js",
+  "js/services/episode-dune-archive.js",
+  "js/services/ligne-de-base.js",
+  "js/services/mesure-du-passe.js",
+  // Le tableau de la référence à battre, tel quel : deux écrans le montrent, et
+  // écrit deux fois il aurait dit deux choses du même chiffre (règle 4).
+  "js/views/ui/forme-du-chantier.js",
   // **Le lecteur de PDF de Mdall, tel quel.** Celui de l'onglet Documents et du
   // copilote. Il ne dépend de rien et dessine dans les classes que la feuille
   // de style porte déjà : un second lecteur écrit pour la console aurait

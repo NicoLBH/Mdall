@@ -36,20 +36,22 @@ import { LA_CONSOLE } from "../partage/js/services/la-porte-de-la-console.js";
 import { suisJeAdministrateur } from "../partage/js/services/la-porte-de-la-console-supabase.js";
 import { monterLeVersoir, renderLeVersoir } from "./le-versoir.js";
 import { monterLArchive, renderLArchive } from "./larchive.js";
+import { monterLepisode, renderLepisode } from "./lepisode.js";
 
 const hote = document.getElementById("app");
 
 /**
  * Les écrans de la console, et leur ordre.
  *
- * **Deux, et ils se suivent dans l'ordre du geste** : on dépose, puis on
- * retrouve. Une liste nommée ici plutôt que dessinée en dur, parce que le nom
+ * **Trois, et ils se suivent dans l'ordre du geste** : on dépose, on retrouve,
+ * puis on lit ce que cela fait comme suite. Une liste nommée ici plutôt que dessinée en dur, parce que le nom
  * d'un écran et l'adresse qui y mène ne doivent vivre qu'à un endroit
  * (règle 10).
  */
 const LES_ECRANS = [
   { cle: "versoir", nom: "Le versoir", dessiner: renderLeVersoir, monter: monterLeVersoir },
-  { cle: "archive", nom: "L'archive", dessiner: renderLArchive, monter: monterLArchive }
+  { cle: "archive", nom: "L'archive", dessiner: renderLArchive, monter: monterLArchive },
+  { cle: "episode", nom: "L'épisode", dessiner: renderLepisode, monter: monterLepisode }
 ];
 
 /** L'écran demandé par l'adresse, ou le premier. */

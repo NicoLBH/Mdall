@@ -61,7 +61,17 @@ function renderAxe({ axe, valeur }) {
  * que Mdall existe pour empêcher (règle 5). En dessous du seuil, on dit combien
  * il manque de points, et rien d'autre.
  */
-function renderLaReference(mesures = []) {
+/**
+ * La référence à battre, dessinée.
+ *
+ * **Exportée parce que deux écrans la montrent** : la forme d'un chantier, et
+ * l'épisode d'une archive dans la console. Écrite deux fois, elle aurait dit
+ * deux choses différentes du même chiffre (règle 4).
+ *
+ * `ou` nomme ce qui a été rejoué — « ce chantier », « cette archive ». C'est la
+ * seule phrase qui change d'un écran à l'autre.
+ */
+export function renderLaReference(mesures = [], ou = "ce chantier") {
   const lues = Array.isArray(mesures) ? mesures : [];
   if (!lues.length) return "";
 
@@ -73,7 +83,7 @@ function renderLaReference(mesures = []) {
       <h4 class="forme-suite__titre">La référence à battre</h4>
       ${chaudes.length ? `
         <p class="conso-usages__mot">
-          Rejouée sur le passé de ce chantier : à chaque pas, avec <b>seulement ce qu'on
+          Rejouée sur le passé de ${escapeHtml(ou)} : à chaque pas, avec <b>seulement ce qu'on
           savait alors</b>, qu'aurait dit un prédicteur qui ne sait rien faire de malin ?
         </p>
         <ul class="forme-reference">
