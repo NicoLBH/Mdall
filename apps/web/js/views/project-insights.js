@@ -18,34 +18,7 @@ import { renderLaForme } from "./ui/forme-du-chantier.js";
 import {
   renderLeGesteDeRelire, renderLepisodeDeLaCorrespondance
 } from "./ui/episode-de-la-correspondance.js";
-
-function formatDuration(value) {
-  const ms = Number(value);
-
-  if (!Number.isFinite(ms)) return "—";
-  if (ms < 1000) return `${ms} ms`;
-
-  const seconds = ms / 1000;
-  if (seconds < 60) {
-    return seconds < 10 ? `${seconds.toFixed(1)} s` : `${Math.round(seconds)} s`;
-  }
-
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.round(seconds % 60);
-
-  if (minutes < 60) {
-    return remainingSeconds > 0
-      ? `${minutes} min ${remainingSeconds}s`
-      : `${minutes} min`;
-  }
-
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-
-  return remainingMinutes > 0
-    ? `${hours} h ${remainingMinutes} min`
-    : `${hours} h`;
-}
+import { dureeDite } from "../utils/duree-dite.js";
 
 function formatPercent(value) {
   const num = Number(value);
@@ -110,7 +83,7 @@ function renderExecutionInsightsCardsSection() {
 
           ${renderMetricCard({
             label: "Durée moyenne",
-            value: formatDuration(metrics.averageDurationMs),
+            value: dureeDite(metrics.averageDurationMs),
             hint: "Moyenne calculée sur les runs terminés."
           })}
         </div>

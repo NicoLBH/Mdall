@@ -104,3 +104,32 @@ test("un versement vif ne se double pas d'une relecture à l'autre", () => {
   const gardees = executionsAGarder(enMemoire, [...enFile]);
   assert.deepEqual(gardees, [], "la ligne de la file est comptée deux fois");
 });
+
+/**
+ * **Une étape en cours ne porte pas de coche verte.**
+ *
+ * L'écran montrait « Rangement en cours sur le serveur… » sous un bandeau
+ * « En cours », et juste en dessous une boîte verte cochée « Rangement en
+ * cours ». Deux choses contraires dans la même vue — et c'est la rassurante
+ * qu'on croit.
+ */
+test("l'étape d'un versement en cours se dit en cours", async () => {
+  const { buildRunGraph } = await import("./run-workflow.js");
+  const vue = laFileAuJournal(uneLigne());
+
+  assert.equal(vue.details.corpus.steps[0].statut, "en-cours");
+
+  const noeuds = buildRunGraph(vue);
+  const boite = noeuds.find((un) => un.id === "en_cours");
+  assert.ok(boite, "l'étape n'est pas dans le chemin d'exécution");
+  assert.equal(boite.enCours, true);
+  assert.equal(boite.icon, "sync", "une coche dit que c'est terminé");
+  assert.notEqual(boite.tone, "ok");
+});
+
+test("l'étape d'un versement en attente se dit en cours, elle aussi", () => {
+  // Elle n'est pas terminée non plus : rien n'a encore été pris.
+  const vue = laFileAuJournal(uneLigne({ statut: "en_attente" }));
+  assert.equal(vue.details.corpus.steps[0].statut, "en-cours");
+  assert.equal(vue.details.corpus.steps[0].label, "En attente du serveur");
+});

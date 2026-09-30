@@ -4,7 +4,9 @@ import { RUN_LOG_CHANGED_EVENT, getRunLogEntries, getRunMetrics } from "../servi
 import { syncProjectActionsFromSupabase } from "../services/project-supabase-sync.js";
 import { svgIcon } from "../ui/icons.js";
 import { renderEnchainement } from "./ui/enchainement.js";
-import { buildRunGraph, describeReadingStack, formatStepDuration } from "../services/run-workflow.js";
+import {
+  buildRunGraph, formatStepDuration, laLectureDuCorpus
+} from "../services/run-workflow.js";
 import {
   STATUT, etapeDe, etapesConsultables, numeroter, resumerEtape
 } from "../services/run-journal.js";
@@ -19,6 +21,7 @@ import {
   renderDataTableShell
 } from "./ui/data-table-shell.js";
 import { normalizePaginationState, paginateItems, renderPaginationControls } from "./ui/pagination.js";
+import { dureeDite } from "../utils/duree-dite.js";
 
 function getRunSuccessIconSvg() {
   return svgIcon("check-circle-fill", {
@@ -96,40 +99,6 @@ function formatDateTime(value) {
     dateStyle: "short",
     timeStyle: "short"
   }).format(date);
-}
-
-function formatDuration(value) {
-  // `null` n'est pas zéro. Sans ce test, `Number(null)` vaut 0 et une exécution
-  // dont la durée n'a jamais été enregistrée s'affiche « 0 ms » — instantanée.
-  // C'est la même règle qu'ailleurs : une durée non mesurée n'est pas une durée
-  // nulle, elle est absente, et l'écran a un tiret pour le dire.
-  if (value === null || value === undefined || value === "") return "—";
-
-  const ms = Number(value);
-
-  if (!Number.isFinite(ms)) return "—";
-  if (ms < 1000) return `${ms} ms`;
-
-  const seconds = ms / 1000;
-  if (seconds < 60) {
-    return seconds < 10 ? `${seconds.toFixed(1)} s` : `${Math.round(seconds)} s`;
-  }
-
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.round(seconds % 60);
-
-  if (minutes < 60) {
-    return remainingSeconds > 0
-      ? `${minutes} min ${remainingSeconds}s`
-      : `${minutes} min`;
-  }
-
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-
-  return remainingMinutes > 0
-    ? `${hours} h ${remainingMinutes} min`
-    : `${hours} h`;
 }
 
 function getRunStatusMeta(entry) {
@@ -373,7 +342,7 @@ function renderRunRows(entries) {
           </span>
           <span class="workflow-runs__when-line">
             <span class="workflow-runs__when-icon">${svgIcon("stopwatch", { className: "octicon" })}</span>
-            ${escapeHtml(formatDuration(entry.durationMs))}
+            ${escapeHtml(dureeDite(entry.durationMs))}
           </span>
         </div>
       </div>
@@ -509,23 +478,11 @@ function renderRunDetail(entry) {
     ["Déclencheur", getTriggerLabel(entry)],
     ["Lancée le", formatDateTime(entry.startedAt)],
     ["Terminée le", entry.endedAt ? formatDateTime(entry.endedAt) : "—"],
-    ["Durée", formatDuration(entry.durationMs)],
+    ["Durée", dureeDite(entry.durationMs)],
     ["Objet", entry.documentName || "—"]
   ];
 
-  const lecture = corpus
-    ? [
-        corpus.proposition ? ["Proposition", corpus.proposition] : null,
-        ["Livrables relus", `${corpus.documentCount || 0}`],
-        [
-          "Avis suivis",
-          `${corpus.trackedAvisCount || 0}${corpus.avisCount ? ` sur ${corpus.avisCount} relevés` : ""}`
-        ],
-        corpus.engineVersion || corpus.packs?.length
-          ? ["Lu par", describeReadingStack(corpus.engineVersion, corpus.packs)]
-          : null
-      ].filter(Boolean)
-    : [];
+  const lecture = laLectureDuCorpus(corpus);
 
   const annotations = [];
   if (corpus?.guardViolationCount > 0) {

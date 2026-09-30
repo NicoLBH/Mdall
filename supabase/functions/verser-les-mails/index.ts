@@ -45,7 +45,7 @@ import { verser } from "../_shared/versement/le-versement-en-ordre.js";
 // @ts-ignore
 import { laLigneDunVersement } from "../_shared/versement/le-journal-du-depouillement.js";
 // @ts-ignore
-import { phraseDuConvoi } from "../_shared/versement/le-convoi.js";
+import { SORT, noter, phraseDuConvoi } from "../_shared/versement/le-convoi.js";
 
 const entetes = {
   "Access-Control-Allow-Origin": "*",
@@ -247,6 +247,32 @@ serve(async (req) => {
       fichiers.push(new File([await data.arrayBuffer()], texte(un.nom)));
     }
 
+    // **Tout perdre n'est pas réussir, et c'est ce qu'on a affiché.** Au premier
+    // vrai dépôt, six fichiers ont été refusés à la lecture — la règle du casier
+    // ne connaissait pas encore les octets en attente (`202610310001_...`). Le
+    // versement a reçu une liste vide, a honnêtement compté zéro fichier, et
+    // l'écran a peint le tout en vert : « Versement de 0 fichier — Réussi ».
+    //
+    // Un dépôt dont aucun fichier n'a pu être lu s'arrête, et il dit pourquoi.
+    // Ne pas savoir n'autorise pas à prétendre qu'il n'y avait rien (règle 5).
+    const attendus = (ligne.fichiers ?? []).length;
+    if (attendus > 0 && fichiers.length === 0) {
+      const arrete = `aucun des ${attendus} fichiers déposés n'a pu être relu dans le casier :`
+        + " rien n'a été rangé";
+      await client.from("versements").update({
+        statut: "echec", arrete, fini_le: new Date().toISOString()
+      }).eq("id", ligne.id);
+
+      await client.from("project_runs").insert({
+        project_id: ligne.project_id,
+        ...auFormatDeLaCourse(laLigneDunVersement({
+          journal: { fichiers: attendus, arrete }, dite: "", startedAt: debut
+        }))
+      });
+
+      return reponse({ fait: false, arrete }, 500);
+    }
+
     journal = await verser(fichiers, {
       projectId: ligne.project_id,
       deposant: quiVerse,
@@ -257,8 +283,11 @@ serve(async (req) => {
       avance: leTempsEnTemps(client, ligne.id)
     });
 
+    // **Les fichiers perdus comptent comme illisibles**, et non comme une note
+    // en marge. Rangés dans `accrocs` seuls, ils ne touchaient ni le compte ni
+    // le sort de l'action : six fichiers perdus donnaient une exécution verte.
     for (const nom of perdus) {
-      journal = { ...journal, accrocs: [...(journal.accrocs ?? []), { nom, sort: "illisible", motif: "fichier introuvable dans le casier" }] };
+      journal = noter(journal, nom, SORT.ILLISIBLE, "fichier introuvable dans le casier");
     }
 
     // **Le journal se consigne, puis la file se referme.** Dans l'autre ordre,
@@ -282,6 +311,19 @@ serve(async (req) => {
       course_id: course?.id ?? null,
       fini_le: new Date().toISOString()
     }).eq("id", ligne.id);
+
+    // **Les octets bruts s'effacent une fois versés.** Leur contenu vit
+    // désormais dans les documents rangés : les garder ferait deux exemplaires
+    // de chaque mail dans le casier, et le second ne serait lu par personne.
+    //
+    // Seulement si le versement a tenu : après un arrêt, ce sont les seuls
+    // octets qui restent, et une reprise en aura besoin.
+    if (!journal?.arrete) {
+      const chemins = (ligne.fichiers ?? []).map((un: any) => texte(un.chemin)).filter(Boolean);
+      // Un effacement qui rate ne fait pas échouer le dépôt : les mails sont
+      // rangés, et ce qui traîne est du poids, pas une perte.
+      if (chemins.length) await client.storage.from(CASIER).remove(chemins);
+    }
 
     return reponse({ fait: true, verses: journal?.verses ?? 0, pieces: journal?.pieces ?? 0 });
   } catch (erreur) {

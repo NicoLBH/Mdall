@@ -85,6 +85,17 @@ export function leMotDuDebut(combien = 0) {
 export function leMotDeLaFin(journal = null, dite = "") {
   const arrete = larret(journal);
   if (arrete) return `Versement interrompu : ${arrete}`;
+
+  // **« Rien n'a été versé » ne dit pas la même chose selon qu'on attendait
+  // quelque chose.** Sur un dépôt de six fichiers dont rien n'est sorti, c'est
+  // un constat d'échec, et la phrase doit le porter : l'écran a montré le
+  // contraire.
+  const attendus = nombre(journal?.fichiers);
+  if (attendus > 0 && nombre(journal?.verses) === 0) {
+    return `Aucun message versé sur ${attendus} `
+      + `${attendus > 1 ? "fichiers déposés" : "fichier déposé"}.`;
+  }
+
   return texte(dite) || "Rien n'a été versé.";
 }
 
@@ -97,6 +108,16 @@ export function leMotDeLaFin(journal = null, dite = "") {
  */
 export function leSortDeLaction(journal = null) {
   if (larret(journal)) return "error";
+
+  // **Un versement qui n'a rien versé n'a pas réussi.** Au premier vrai dépôt,
+  // six mails envoyés ont donné « Versement de 0 fichier de messagerie » avec
+  // une coche verte et un chemin d'exécution entièrement vert : on ne pouvait
+  // pas savoir si cela avait marché. Cela n'avait pas marché.
+  //
+  // Zéro versé quand on attendait quelque chose est une anomalie, pas un
+  // succès — même sans rien à nommer comme accroc.
+  if (nombre(journal?.fichiers) > 0 && nombre(journal?.verses) === 0) return "warning";
+
   const accrocs = nombre(journal?.illisibles) + nombre(journal?.refuses);
   return accrocs ? "warning" : "success";
 }
