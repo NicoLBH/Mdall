@@ -1181,7 +1181,19 @@ export async function createDocumentFolder(projectId = "", parentFolderId = null
     });
   } catch (error) {
     if (String(error?.message || "").toLowerCase().includes("duplicate key")) {
-      throw new Error("Un dossier avec ce nom existe déjà dans ce dossier parent.");
+      // **Arriver ici veut dire quelque chose de précis.** La liste des voisins
+      // a été relue juste avant, et ce nom n'y était pas — sinon on aurait
+      // refusé plus haut. Si la base, elle, le voit en double, c'est qu'un
+      // dossier de ce nom existe et **qu'il ne nous est pas rendu** : il est
+      // privé, et il est à quelqu'un d'autre.
+      //
+      // Le dire, plutôt que « ce nom existe déjà » — un message qui envoie
+      // chercher dans la liste un dossier qu'on ne peut pas y voir (règle 5).
+      throw new Error(
+        `Un dossier « ${normalizedName} » existe déjà ici, privé et créé par `
+        + "quelqu'un d'autre : il ne vous est pas montré, et un second ne peut "
+        + "pas porter le même nom."
+      );
     }
     console.error("[documents-folders] failure", { action: "createDocumentFolder", projectId: backendProjectId, parentFolderId: normalizedParentFolderId, error: error instanceof Error ? error.message : String(error || "") });
     throw error;
