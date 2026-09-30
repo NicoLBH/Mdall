@@ -533,9 +533,29 @@ que Mdall vend.
 > La décision et son inventaire : `docs/nourrir-mdall.md`, § 8 quater. Ce qui
 > revient à la console : les comptes d'exploitation, et rien d'autre.
 >
-> **C'est fait.** Les trois écrans sont partis, leurs trois tables et leur casier
-> avec (`202610230001_larchive_quitte_la_console.sql`). Le dépouillement est dans
+> **C'est fait.** Les trois écrans sont partis, et leurs trois tables avec
+> (`202610230001_larchive_quitte_la_console.sql`). Le dépouillement est dans
 > *Fichiers*, la chronologie aux *Indicateurs*.
+>
+> **Le casier `archives`, lui, ne se supprime pas en SQL.** La migration a
+> d'abord essayé, et le déploiement l'a refusée :
+>
+> ```
+> ERROR: Direct deletion from storage tables is not allowed.
+> Use the Storage API instead. (SQLSTATE 42501)
+> ```
+>
+> Et la garde de Supabase a raison : un objet effacé par un `delete` laisse ses
+> octets dans le stockage de fond, qui ne connaît que l'API — la ligne
+> disparaîtrait, le fichier resterait. La migration retire donc les **politiques**
+> du casier, ce qui le rend inatteignable, et s'arrête là. **Reste un geste à la
+> main** : Studio → Storage → `archives` → tout supprimer, puis supprimer le
+> casier. Tant qu'il n'est pas fait, les messages d'essai sont hors d'atteinte
+> mais présents.
+>
+> Une garde empêche la prochaine réécriture du même `delete` :
+> `scripts/lordre-des-migrations.test.mjs`, avec les autres défauts qu'on
+> n'apprend qu'au déploiement.
 >
 > La mesure de ce qu'était devenue cette page tient en un chiffre : ce qu'elle
 > emportait de l'application est passé de **quarante modules à cinq**. Elle

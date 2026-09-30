@@ -1,4 +1,4 @@
--- L'archive quitte la console : les trois tables et leur casier s'en vont.
+-- L'archive quitte la console : les trois tables s'en vont, et le casier se ferme.
 --
 -- POURQUOI ON RETIRE CE QU'ON VIENT D'ÉCRIRE
 --
@@ -28,30 +28,58 @@
 -- additive protège une donnée dont quelqu'un dépend. Ici personne n'en dépend,
 -- et la garder coûterait plus que de la perdre — un casier ouvert de plus à
 -- surveiller, trois tables de plus à expliquer.
+--
+-- Elle n'est pas non plus **complète** : le casier de stockage ne se supprime
+-- pas en SQL, et la section 2 dit pourquoi et ce qui reste à faire à la main.
 
 -- 1. Le lien d'abord. Il pointe vers les deux autres : le supprimer en dernier
 --    obligerait à une cascade, et une cascade emporte ce qu'on n'a pas nommé.
-drop policy if exists pieces_des_messages_administrateur_select on public.pieces_des_messages;
-drop policy if exists pieces_des_messages_administrateur_insert on public.pieces_des_messages;
+--
+--    **Les politiques ne se suppriment pas à part** : elles appartiennent à
+--    leur table et partent avec elle. La première écriture les nommait
+--    au-dessus de chaque `drop table`, ce qui ne servait à rien — et devenait
+--    un piège au deuxième passage : ce fichier a échoué plus bas, sur le
+--    casier (section 2), donc il sera rejoué. Un `drop policy` sur une table
+--    déjà partie n'est pas le cas que `if exists` protège.
 drop table if exists public.pieces_des_messages;
-
-drop policy if exists messages_archives_administrateur_select on public.messages_archives;
-drop policy if exists messages_archives_administrateur_insert on public.messages_archives;
 drop table if exists public.messages_archives;
-
-drop policy if exists pieces_archivees_administrateur_select on public.pieces_archivees;
-drop policy if exists pieces_archivees_administrateur_insert on public.pieces_archivees;
 drop table if exists public.pieces_archivees;
 
--- 2. Le casier. Les objets d'abord : un casier ne se supprime pas tant qu'il
---    porte quelque chose, et l'erreur qu'on obtiendrait alors ne dirait pas
---    quoi.
-delete from storage.objects where bucket_id = 'archives';
-
+-- 2. Le casier : on lui retire ses portes, et c'est tout ce qu'une migration
+--    peut faire.
+--
+--    LA PREMIÈRE ÉCRITURE DE CETTE SECTION A ÉTÉ REFUSÉE AU DÉPLOIEMENT
+--
+--    Elle supprimait les objets, puis le casier :
+--
+--        delete from storage.objects where bucket_id = 'archives';
+--        delete from storage.buckets where id = 'archives';
+--
+--    et la base a répondu :
+--
+--        ERROR: Direct deletion from storage tables is not allowed.
+--        Use the Storage API instead. (SQLSTATE 42501)
+--
+--    C'est une garde de Supabase, et elle a raison : un objet supprimé par un
+--    `delete` laisse ses octets dans le stockage de fond, qui ne connaît que
+--    l'API. La ligne disparaîtrait, le fichier resterait — un casier vide en
+--    apparence, plein en vérité. Pour de la correspondance, c'est exactement
+--    le contraire de ce qu'on veut.
+--
+--    CE QUE FAIT CETTE MIGRATION, ET CE QU'ELLE LAISSE À FAIRE
+--
+--    Elle retire les deux politiques du casier `archives`. Sans elles, plus
+--    aucun jeton n'ouvre ce casier : ni en lecture, ni en écriture. Il devient
+--    inatteignable, et il le reste.
+--
+--    Elle **ne le supprime pas**, et ne prétend pas le faire. Vider le casier
+--    puis l'effacer est un geste de l'API de stockage — dans Supabase Studio,
+--    Storage → archives → tout sélectionner → supprimer, puis supprimer le
+--    casier. Tant que ce geste n'est pas fait, les quelques messages d'essai
+--    sont toujours là, hors d'atteinte mais présents (règle 5 : on le dit
+--    plutôt que de laisser croire qu'ils sont partis).
 drop policy if exists storage_archives_administrateur_select on storage.objects;
 drop policy if exists storage_archives_administrateur_insert on storage.objects;
-
-delete from storage.buckets where id = 'archives';
 
 -- 3. `est_administrateur()` part aussi, et il a fallu le vérifier pour le dire.
 --
