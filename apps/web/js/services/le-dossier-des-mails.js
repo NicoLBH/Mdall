@@ -9,9 +9,15 @@
  * CR le rendrait lisible par toute l'équipe le jour où le partage existera.
  *
  * Un mail déposé va donc dans un dossier **« Mails »**, à la racine de
- * Fichiers, **qui n'est pas partagé** : seul celui qui l'a déposé y a accès. Il
- * porte un cadenas dans l'arbre et dans le tableau — un dossier qui se comporte
- * autrement que ses voisins doit se voir.
+ * Fichiers. Le dossier est visible par l'équipe ; **son contenu ne l'est pas**
+ * — chacun n'y voit que les mails qu'il a déposés lui-même. Il porte un cadenas
+ * dans l'arbre et dans le tableau : un dossier qui se comporte autrement que
+ * ses voisins doit se voir.
+ *
+ * > Ce fut « seul celui qui l'a déposé y a accès », dossier compris. C'était
+ * > une règle de trop : elle empêchait le second déposant d'un projet de
+ * > déposer, puisqu'il ne voyait pas le dossier et qu'il ne peut y en avoir
+ * > qu'un (`docs/nourrir-mdall.md`, § 8 octies).
  *
  * > C'est une décision provisoire, et elle est à rediscuter. Elle est écrite ici
  * > et dans `docs/lire-les-mails.md` pour qu'on sache ce qui a été choisi, et
@@ -67,11 +73,25 @@ export const DOSSIER_DES_MAILS = "Mails";
  */
 export const DOSSIER_DES_PIECES = "Pièces jointes";
 
-/** Ce que porte ce qui ne se partage pas. */
+/**
+ * Ce que porte un **contenant partagé au contenu privé**.
+ *
+ * ## Le cadenas a changé de sens, et il fallait changer les mots
+ *
+ * Il disait « vous seul y avez accès », et c'était vrai du dossier : la
+ * politique ne le rendait qu'à son créateur. Cette règle n'avait jamais été
+ * demandée, et elle rendait le second déposant d'un projet incapable de déposer
+ * — il ne voyait pas le dossier et la contrainte d'unicité lui refusait le sien
+ * (`202610240001_un_contenant_partage_au_contenu_prive.sql`).
+ *
+ * Le dossier est donc visible par l'équipe, et **son contenu reste gardé
+ * document par document**. Le cadenas dit maintenant cela, et pas autre chose :
+ * une promesse plus large que la garde est une promesse qu'on tiendra mal.
+ */
 export const LE_CADENAS = {
   icone: "shield-lock",
-  titre: "Dossier privé : vous seul y avez accès",
-  mot: "Privé"
+  titre: "Contenu privé : chacun n'y voit que ce qu'il y a déposé lui-même",
+  mot: "Contenu privé"
 };
 
 /**
@@ -287,5 +307,7 @@ export function leNomDeLaPieceDeposee(nom, { dejaLa = [] } = {}) {
 /** Ce qu'on dit du dossier des mails à qui le découvre. */
 export function phraseDuDossierDesMails() {
   return `Les mails déposés vont dans « ${DOSSIER_DES_MAILS} », à la racine de Fichiers. `
-    + "Ce dossier n'est pas partagé : un compte rendu circule, un mail est de la correspondance.";
+    + "Le dossier est visible par l'équipe, mais chacun n'y voit que les mails "
+    + "qu'il a déposés lui-même : un compte rendu circule, un mail est de la "
+    + "correspondance.";
 }

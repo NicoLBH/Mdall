@@ -185,9 +185,10 @@ export function ceQuiIraOu({ messages = 0, pieces = 0, poidsDesPieces = 0 } = {}
  * dont on ne sait pas sortir se contourne en ne l'utilisant pas.
  */
 export function phraseDeLaConfidentialite() {
-  return `Tout va dans « ${DOSSIER_DES_MAILS} » : vous seul y avez accès, `
-    + "l'équipe du chantier ne le voit pas. Pour partager une pièce, déplacez-la "
-    + `hors de « ${DOSSIER_DES_MAILS} » — c'est le seul geste qui la rend visible.`;
+  return `Tout va dans « ${DOSSIER_DES_MAILS} » : le dossier est visible par `
+    + "l'équipe, mais vous seul verrez ce que vous y déposez. Pour partager "
+    + `une pièce, déplacez-la hors de « ${DOSSIER_DES_MAILS} » — c'est le seul `
+    + "geste qui la rend visible.";
 }
 
 /**

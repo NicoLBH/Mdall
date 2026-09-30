@@ -213,10 +213,13 @@ test("l'écran dit que le dépliage ne coûte rien", () => {
   assert.ok(html.includes("aucun appel au modèle"));
 });
 
-test("l'écran dit où va le mail, et que ce dossier n'est pas partagé", () => {
+test("l'écran dit où va le mail, et qui verra ce qu'on y dépose", () => {
   const html = dessine(vue());
   assert.ok(html.includes("Mails"));
-  assert.ok(html.includes("pas partagé"));
+  // Le dossier se voit, son contenu non : les deux moitiés, parce que n'en
+  // dire qu'une laisse croire à l'autre.
+  assert.ok(html.includes("visible par l&#39;équipe") || html.includes("visible par l'équipe"));
+  assert.ok(html.includes("déposés lui-même"));
 });
 
 const boutonTransformer = (html) =>

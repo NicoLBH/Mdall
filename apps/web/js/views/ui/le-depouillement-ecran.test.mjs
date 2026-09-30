@@ -32,7 +32,9 @@ test("les deux destinations sont nommées, chemin compris", () => {
  */
 test("le régime est annoncé, avec le geste qui partage", () => {
   const dessine = renderLeDepouillement({ porteurs: [unFichier("un.msg")] });
-  assert.match(dessine, /équipe du chantier/);
+  // Les deux moitiés du régime : le dossier se voit, ce qu'on y dépose non.
+  assert.match(dessine, /visible par l&#39;équipe|visible par l'équipe/);
+  assert.match(dessine, /vous seul verrez ce que vous y déposez/);
   assert.match(dessine, /déplacez/);
   assert.match(dessine, /shield-lock/);
 });

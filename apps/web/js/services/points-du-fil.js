@@ -23,7 +23,8 @@
  * de numéro : il s'appelle par son objet et sa période.
  *
  * **La provenance.** Un point issu d'un mail pointe vers un document que les
- * autres ne peuvent pas ouvrir, puisque le dossier « Mails » n'est pas partagé.
+ * autres ne peuvent pas ouvrir : le dossier « Mails » est bien visible par
+ * l'équipe, mais chacun n'y voit que les mails qu'il a déposés lui-même.
  * Cela ne se tait pas : le point porte **« issu d'un échange privé »**, et
  * celui qui le relit sait qu'il ne remontera pas à la source. C'est une
  * asymétrie assumée, pas un oubli (règle 5).
@@ -224,8 +225,8 @@ export function introDuFil({ fil = null, points = [], prises = [] } = {}) {
       ? `${combien} sujet${combien > 1 ? "s" : ""} à ouvrir ou à relancer, chacun avec la phrase `
         + "du message d'où il sort."
       : "Aucun sujet à ouvrir : ce fil ne porte ni demande, ni engagement, ni décision.",
-    `${ORIGINE_PRIVEE} : le dossier « Mails » n'est pas partagé, et les citations ci-dessous ne `
-    + "remontent donc à aucun document que l'équipe puisse ouvrir."
+    `${ORIGINE_PRIVEE} : les mails déposés ne se lisent que par celui qui les a déposés, et les `
+    + "citations ci-dessous ne remontent donc à aucun document que l'équipe puisse ouvrir."
   ];
 
   for (const { motif, combien: nombre } of dehors) {

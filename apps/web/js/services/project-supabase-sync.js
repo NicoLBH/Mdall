@@ -1151,24 +1151,25 @@ export async function createDocumentFolder(projectId = "", parentFolderId = null
     if (duplicate) {
       throw new Error("Un dossier avec ce nom existe déjà dans ce dossier parent.");
     }
-    // **`created_by` était laissé vide, et le commentaire disait déjà pourquoi
-    // c'était dangereux.** Il le disait, et le code le faisait quand même : le
-    // repli silencieux écrivait le dossier sans créateur. Or la politique de
-    // lecture accepte `created_by is null` — c'est ce qui préserve les dossiers
-    // d'avant la colonne —, donc un dossier privé sans créateur est visible de
-    // tous. Une garde qui ne garde rien, et rien à l'écran pour le dire.
+    // **`created_by` ne décide plus d'aucun accès**, depuis
+    // `202610240001_un_contenant_partage_au_contenu_prive.sql`.
     //
-    // Un dossier **privé** ne se crée donc plus sans savoir qui le crée. Un
-    // dossier ordinaire, si : sa lecture ne dépend pas de cette valeur, et
-    // refuser là aussi empêcherait de ranger des documents pour une raison qui
-    // ne les concerne pas.
+    // Il en décidait : un dossier privé n'était rendu qu'à son créateur. Cette
+    // règle-là n'avait jamais été demandée — elle était arrivée en même temps
+    // que celle qu'on voulait, « les documents ne se lisent que par leur
+    // déposant » —, et elle rendait le second déposant d'un projet incapable de
+    // déposer : il ne voyait pas le dossier « Mails » et la contrainte
+    // d'unicité lui refusait le sien.
+    //
+    // Un refus se tenait donc ici, pour une session qui ne répondrait pas. Il
+    // n'a plus d'objet : sans créateur connu, un dossier n'est ni plus ni moins
+    // visible. La valeur s'écrit quand même — c'est une provenance, et une
+    // provenance qu'on efface ne revient pas.
+    //
+    // Ce qui protège la correspondance reste entier, et se tient ailleurs : un
+    // mail ne se range pas sans déposant connu
+    // (`deposer-un-mail-supabase.js`, `le-depouillement-supabase.js`).
     const parQui = String((await getCurrentUser().catch(() => null))?.id ?? "");
-    if (prive === true && !parQui) {
-      throw new Error(
-        "Votre session n'a pas répondu : un dossier privé sans créateur connu "
-        + "serait visible par toute l'équipe, il n'a donc pas été créé."
-      );
-    }
 
     return await restInsert("project_document_folders", {
       project_id: backendProjectId,
@@ -1183,16 +1184,18 @@ export async function createDocumentFolder(projectId = "", parentFolderId = null
     if (String(error?.message || "").toLowerCase().includes("duplicate key")) {
       // **Arriver ici veut dire quelque chose de précis.** La liste des voisins
       // a été relue juste avant, et ce nom n'y était pas — sinon on aurait
-      // refusé plus haut. Si la base, elle, le voit en double, c'est qu'un
-      // dossier de ce nom existe et **qu'il ne nous est pas rendu** : il est
-      // privé, et il est à quelqu'un d'autre.
+      // refusé plus haut. Si la base le voit en double, c'est qu'il vient
+      // d'apparaître entre les deux : un second onglet, ou un dépôt lancé deux
+      // fois.
       //
-      // Le dire, plutôt que « ce nom existe déjà » — un message qui envoie
-      // chercher dans la liste un dossier qu'on ne peut pas y voir (règle 5).
+      // Ce message a dit autre chose pendant un tour : « privé et créé par
+      // quelqu'un d'autre ». C'était juste tant qu'un dossier pouvait être
+      // caché à celui qui le cherche ; plus aucun ne l'est
+      // (`202610240001_...`), et une explication qui ne peut plus être vraie
+      // est pire qu'une explication vague.
       throw new Error(
-        `Un dossier « ${normalizedName} » existe déjà ici, privé et créé par `
-        + "quelqu'un d'autre : il ne vous est pas montré, et un second ne peut "
-        + "pas porter le même nom."
+        `Un dossier « ${normalizedName} » vient d'être créé ici, peut-être `
+        + "depuis un autre onglet. Rouvrez le dossier pour le voir."
       );
     }
     console.error("[documents-folders] failure", { action: "createDocumentFolder", projectId: backendProjectId, parentFolderId: normalizedParentFolderId, error: error instanceof Error ? error.message : String(error || "") });

@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { LE_CADENAS, laMarqueDuDossier } from "../../services/le-dossier-des-mails.js";
+import { escapeHtml } from "../../utils/escape-html.js";
 import { renderLigneDArbre } from "../project-memoire-fichiers.js";
 
 const noeud = (dessus = {}) => ({
@@ -22,7 +23,10 @@ test("un dossier privé porte le cadenas dans l'arbre", () => {
   const html = renderLigneDArbre(noeud({ marque: laMarqueDuDossier({ prive: true }) }));
   assert.ok(html.includes("documents-tree__marque"));
   assert.ok(html.includes(LE_CADENAS.icone));
-  assert.ok(html.includes(LE_CADENAS.titre));
+  // Échappé, comme l'écran l'écrit : le titre porte une apostrophe depuis
+  // qu'il dit « chacun n'y voit que… », et la comparer brute chercherait dans
+  // le HTML un caractère qui n'y est jamais.
+  assert.ok(html.includes(escapeHtml(LE_CADENAS.titre)));
 });
 
 test("un dossier ordinaire n'en porte pas dans l'arbre", () => {

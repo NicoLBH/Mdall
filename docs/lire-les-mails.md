@@ -178,9 +178,10 @@ la restitution d'un CR : **on voit sur quoi il s'est fondé**.
 correspondance.** Il porte des adresses, des noms, parfois des propos qui ne regardent pas
 le projet. Le déposer comme un CR le rendrait lisible par toute l'équipe.
 
-Un mail déposé va donc dans un dossier **« Mails »**, à la racine de Fichiers, **qui n'est
-pas partagé** : seul celui qui l'a déposé y a accès. Il porte un cadenas dans l'arbre et
-dans le tableau — un dossier qui se comporte autrement que ses voisins doit se voir.
+Un mail déposé va donc dans un dossier **« Mails »**, à la racine de Fichiers : **un
+contenant visible par l'équipe, au contenu privé**. Chacun n'y voit que les mails qu'il a
+déposés lui-même. Il porte un cadenas dans l'arbre et dans le tableau — un dossier qui se
+comporte autrement que ses voisins doit se voir.
 
 > C'est une décision provisoire, et elle est à rediscuter. Elle est écrite ici pour qu'on
 > sache ce qui a été choisi, et pourquoi on pourrait en changer.

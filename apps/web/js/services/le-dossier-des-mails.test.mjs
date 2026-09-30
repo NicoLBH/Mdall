@@ -43,9 +43,35 @@ test("le nom ne suffit pas à rendre un dossier privé", () => {
 
 test("la marque rendue ne partage pas son objet avec le module", () => {
   // Un écran qui écrirait dedans changerait le cadenas de tous les autres.
+  const avant = LE_CADENAS.titre;
   const marque = laMarqueDuDossier({ prive: true });
   marque.titre = "n'importe quoi";
-  assert.equal(LE_CADENAS.titre, "Dossier privé : vous seul y avez accès");
+  assert.equal(LE_CADENAS.titre, avant);
+});
+
+/**
+ * **Le cadenas d'un dossier ne promet plus que le dossier est caché.**
+ *
+ * Il disait « vous seul y avez accès ». C'était vrai du dossier, et cette
+ * règle-là n'avait jamais été demandée : elle empêchait le second déposant d'un
+ * projet de déposer. Le dossier est visible par l'équipe ; ce qu'il contient ne
+ * l'est pas. Une promesse plus large que la garde est une promesse qu'on
+ * tiendra mal.
+ */
+test("le cadenas d'un dossier parle de son contenu, pas de lui-même", () => {
+  assert.match(LE_CADENAS.titre, /chacun n'y voit que ce qu'il y a déposé/);
+  assert.doesNotMatch(LE_CADENAS.titre, /vous seul y avez accès/);
+  assert.doesNotMatch(LE_CADENAS.mot, /^Privé$/);
+});
+
+/**
+ * **Un document, lui, n'est vu que de son déposant**, et son cadenas le dit
+ * toujours. Les deux marques ne disent donc pas la même chose, et c'est
+ * délibéré : l'une porte sur un contenant, l'autre sur une pièce.
+ */
+test("le cadenas d'un fichier promet plus que celui de son dossier", () => {
+  assert.match(LE_CADENAS_DUN_FICHIER.titre, /vous seul y avez accès/);
+  assert.notEqual(LE_CADENAS_DUN_FICHIER.titre, LE_CADENAS.titre);
 });
 
 // ── Le nom d'un mail rangé ─────────────────────────────────────────────────
@@ -269,8 +295,11 @@ test("les deux cadenas portent la même icône", () => {
 
 // ── Ce qu'on en dit ────────────────────────────────────────────────────────
 
-test("la phrase du dossier nomme le dossier et dit pourquoi il est à part", () => {
+test("la phrase du dossier nomme le dossier et dit qui voit quoi", () => {
   const phrase = phraseDuDossierDesMails();
   assert.ok(phrase.includes(DOSSIER_DES_MAILS));
-  assert.ok(phrase.includes("pas partagé"));
+  // Les deux moitiés, et il faut les deux : le dossier se voit, son contenu non.
+  assert.match(phrase, /visible par l'équipe/);
+  assert.match(phrase, /déposés lui-même/);
+  assert.doesNotMatch(phrase, /n'est pas partagé/);
 });
