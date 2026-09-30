@@ -11,6 +11,8 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
 import { renderSpinnerHtml } from "./spinner.js";
+import { renderUploadProgressBar } from "./upload-progress.js";
+import { leMotDeLaBarre } from "../../services/le-journal-du-depouillement.js";
 import { LE_CADENAS } from "../../services/le-dossier-des-mails.js";
 import {
   LES_DESTINATIONS, cheminDit, phraseDeLaConfidentialite
@@ -90,12 +92,30 @@ export function renderLeDepouillement({ porteurs = [], journal = null } = {}) {
             </li>`).join("")}</ul>`
         : ""}
 
-      ${journal
-        ? `<p class="documents-repo__message-meta${enCours ? " est-en-cours" : ""}" role="status">${
-            enCours ? renderSpinnerHtml({ label: "", size: "sm" }) : ""}${escapeHtml(
-            phraseDuConvoi(journal)
-            || (enCours ? "lecture des fichiers…" : "rien à dépouiller"))}${
-            fraction !== null && enCours ? ` — ${Math.round(fraction * 100)} %` : ""}</p>`
+      ${/*
+        **Une barre, comme pour le dépôt d'un rapport.** Vingt mails avec leurs
+        pièces prennent des minutes ; un compte qui s'incrémente ne dit pas
+        qu'il reste à attendre, une barre si. Et c'est la même barre que partout
+        ailleurs : une seule façon de montrer un envoi qui dure.
+      */""}
+      ${enCours
+        ? `<div class="documents-upload-progress">
+            ${/*
+              **Une barre à zéro ressemble à une barre bloquée.** Tant qu'aucun
+              fichier n'a été ouvert, on ne connaît pas encore l'allure : elle
+              balaie plutôt que de montrer un zéro qu'on prend pour une panne.
+            */""}
+            ${renderUploadProgressBar({
+              progressPercent: (fraction ?? 0) * 100,
+              indeterminate: !fraction
+            })}
+            <div class="documents-upload-progress__meta" role="status">${
+              renderSpinnerHtml({ label: "", size: "sm" })}${escapeHtml(leMotDeLaBarre(journal))}</div>
+          </div>`
+        : ""}
+      ${journal && !enCours
+        ? `<p class="documents-repo__message-meta" role="status">${escapeHtml(
+            phraseDuConvoi(journal) || "rien à dépouiller")}</p>`
         : ""}
 
       ${journal?.arrete

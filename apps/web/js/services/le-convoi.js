@@ -85,6 +85,47 @@ export function enLots(fichiers = [], parLot = PAR_LOT) {
   return lots;
 }
 
+/**
+ * Combien de téléversements à la fois.
+ *
+ * **Un à la fois, c'était le coût réel de l'attente.** Vingt mails et leurs
+ * pièces font une centaine d'envois ; enchaînés, chacun paie son aller-retour,
+ * et le dépôt dure deux minutes pendant lesquelles rien ne bouge à l'écran.
+ *
+ * **Quatre, et pas davantage.** Au-delà, on ne gagne plus — la liaison montante
+ * est le goulot — et l'on commence à se faire refuser par le stockage, ce qui
+ * coûte des reprises au lieu d'en économiser.
+ */
+export const A_LA_FOIS = 4;
+
+/**
+ * Faire ces travaux, quatre à la fois, dans l'ordre.
+ *
+ * **Les résultats reviennent dans l'ordre des travaux**, et non dans celui où
+ * ils se terminent : un compte rendu qui nomme les fichiers dans le désordre
+ * fait douter de tout le reste.
+ *
+ * Chaque travail est une fonction, et non une promesse déjà lancée : une
+ * promesse lancée est déjà partie, et il n'y aurait plus rien à borner.
+ */
+export async function quatreALaFois(travaux = [], aLaFois = A_LA_FOIS) {
+  const tous = Array.isArray(travaux) ? travaux : [];
+  const combien = Math.max(1, Math.floor(Number(aLaFois) || A_LA_FOIS));
+  const resultats = new Array(tous.length);
+  let prochain = 0;
+
+  const tirer = async () => {
+    while (prochain < tous.length) {
+      const rang = prochain;
+      prochain += 1;
+      resultats[rang] = await tous[rang]();
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(combien, tous.length) }, tirer));
+  return resultats;
+}
+
 /** Un journal vide : ce qu'on tient d'un convoi avant qu'il ne parte. */
 export function unJournalNeuf() {
   return {

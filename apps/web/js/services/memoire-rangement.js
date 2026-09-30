@@ -59,6 +59,7 @@
 
 import { NATURE, normalizeNature, normalizeDomain, domainLabel } from "./assertion-taxonomy.js";
 import { TOUTES_ZONES, SANS_NATURE } from "./memoire-en-texte.js";
+import { DOSSIER_DES_MAILS } from "./le-dossier-des-mails.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -106,6 +107,14 @@ export const MEMOIRE = "Mémoire";
 
 /** La racine de ce qu'il dépose. L'utilisateur y range comme il veut. */
 export const DOCUMENTS = "Documents";
+
+/**
+ * La racine de la correspondance.
+ *
+ * **Le même mot que le dossier**, repris de `le-dossier-des-mails.js` : deux
+ * noms pour un seul endroit finiraient par ne plus désigner le même (règle 10).
+ */
+export const MAILS = DOSSIER_DES_MAILS;
 
 /**
  * Les natures qui n'appartiennent à aucune discipline.
@@ -317,7 +326,16 @@ export function phraseDuDossier(nom) {
 
 /** Ce qu'une racine dit d'elle-même, en une phrase. */
 export function phraseDeLaRacine(racine) {
-  return texte(racine) === MEMOIRE
-    ? "Ce que le projet sait, et comment il l'a su. Écrit par l'application, jamais déplaçable."
-    : "Les pièces déposées : plans, notes, comptes rendus. Rangez-les comme vous voulez.";
+  const nom = texte(racine);
+  if (nom === MEMOIRE) {
+    return "Ce que le projet sait, et comment il l'a su. Écrit par l'application, jamais déplaçable.";
+  }
+  // **Les mails ont leur racine, donc leur phrase.** Sans elle, ils héritaient
+  // de celle des Documents — « rangez-les comme vous voulez » —, qui dit le
+  // contraire de ce que ce dossier est.
+  if (nom === MAILS) {
+    return "Votre correspondance déposée, et ses pièces jointes. "
+      + "Le dossier est visible par l'équipe ; chacun n'y voit que ce qu'il y a déposé.";
+  }
+  return "Les pièces déposées : plans, notes, comptes rendus. Rangez-les comme vous voulez.";
 }
