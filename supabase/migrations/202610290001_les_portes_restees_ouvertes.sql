@@ -75,10 +75,14 @@
 --        set owner_id = auth.uid()
 --      where name = 'Le nom du projet' and owner_id is null;
 
+-- `array_agg(distinct …)` et non `min(…)` : **il n'existe pas de `min(uuid)`**
+-- en PostgreSQL, et le déploiement l'a refusé (SQLSTATE 42883). Le `having`
+-- juste en dessous garantit qu'il n'y a qu'un seul candidat : on prend donc le
+-- premier du tableau, qui est le seul.
 update public.projects p
    set owner_id = seul.qui
   from (
-    select agi.project_id, min(agi.qui) as qui
+    select agi.project_id, (array_agg(distinct agi.qui))[1] as qui
       from (
         select d.project_id, d.created_by as qui
           from public.documents d
