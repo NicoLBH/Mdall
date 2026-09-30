@@ -120,3 +120,10 @@ create policy project_runs_by_project on public.project_runs for all to public
 create role authenticated;
 grant usage on schema public, auth to authenticated;
 grant all on all tables in schema public to authenticated;
+
+-- **Et sur les tables que les migrations vont créer.** Supabase pose ces droits
+-- par défaut ; sans eux, une table neuve rend « permission denied » — un refus
+-- de *droit de table*, qui n'a rien à voir avec la politique qu'on éprouve, et
+-- que l'on prendrait pour elle.
+alter default privileges in schema public grant all on tables to authenticated;
+alter default privileges in schema public grant all on sequences to authenticated;

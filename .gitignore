@@ -9,3 +9,8 @@ apps/console/partage/
 # La feuille de sprites, copiée à la racine de la console : `svgIcon` la résout
 # contre la page.
 apps/console/assets/
+
+# Les lecteurs de mails descendus au serveur (npm run prepare:versement).
+# Même raison que les autres copies : versionnée, celle-ci resterait vraie un
+# temps, puis divergerait de celle qu'on éprouve.
+supabase/functions/_shared/versement/

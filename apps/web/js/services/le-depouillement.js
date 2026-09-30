@@ -32,7 +32,7 @@
  *
  * Il ne lit aucun fichier, ne dépose rien, ne dessine rien. Il partage, il
  * projette, il dit. Ce qui lit et ce qui dépose lui sont donnés
- * (`le-depouillement-supabase.js`).
+ * (`le-versement-en-ordre.js`).
  */
 
 import {
