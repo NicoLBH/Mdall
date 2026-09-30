@@ -831,6 +831,120 @@ C'est le prochain pas, et il précède l'arrivée des cent archives : verser
 d'abord et compartimenter ensuite marcherait aussi — rien n'est perdu, le chemin
 est gardé —, mais on regarderait entre-temps un chiffre qui ne veut rien dire.
 
+## 8 quater. Où cela doit vivre — et la réponse est : pas dans la console
+
+> *« Est-ce vraiment le bon endroit ? Ne sommes-nous pas en train de refaire une
+> deuxième application ? Si je verse les mails dans mon compte utilisateur, je
+> peux déjà créer des projets ; il me faut juste la possibilité de verser 200
+> mails d'un coup. »*
+
+**Oui, et la vérification est plus dure que la question : le pipeline existe
+déjà.**
+
+### Ce qui est déjà là, côté application
+
+| ce qu'il fallait | ce qui existe |
+|---|---|
+| un projet, créé et renommé par son propriétaire | `projects`, et l'écran qui va avec |
+| ranger un mail dans un projet | `rangerLesMails(mails, {projectId})` — crée le dossier **« Mails »**, le rend **privé**, dédoublonne les noms, téléverse, écrit la ligne |
+| la confidentialité de la correspondance | `project_document_folders.prive` — la garde est **dans la base**, pas dans l'écran |
+| les pièces jointes dans *Fichiers* | `documents` + le casier, avec le lecteur de PDF |
+| déposer plusieurs fichiers d'un coup | l'entrée de *Fichiers* est déjà `multiple`, et accepte déjà `.zip` |
+| lire un fil et montrer ce qu'on en a tiré | `studio/dev/lecture-des-mails.js`, branché dans le Studio |
+
+**Ce qui manque n'est donc pas un pipeline : c'est l'entrée en masse des
+`.msg`.** Tout le reste a été écrit une seconde fois dans la console.
+
+### Et la doctrine de la console disait de ne pas le faire
+
+`docs/la-console-de-ladministrateur.md`, § 7 :
+
+> *« Ce que cette console ne sera jamais : un endroit d'où l'on lit un
+> contenu. »*
+
+Le versoir lit des propos, l'archive ouvre des PDF, l'épisode affiche des
+extraits de correspondance. C'est exactement ce que la page s'interdisait, et
+personne n'a sonné — pas même la batterie de mutation, qui ne mesure pas les
+frontières.
+
+### Ce que le déplacement règle gratuitement
+
+**Le compartimentage du § 8 ter disparaît.** Plus de profondeur de dossier à
+régler, plus de chemin à découper, plus de « quel niveau est un chantier » : **le
+projet *est* la frontière**, posée par celui qui dépose. La clé d'un fil devient
+naturellement propre à son projet, et un épisode se calcule par projet sans
+qu'on ait rien à deviner.
+
+Un problème qui disparaît vaut mieux qu'un problème bien résolu.
+
+### Et ce que cela débloque vaut plus que la prédiction
+
+C'est le point le plus fort de la proposition, et il mérite d'être dit en
+entier : **un chantier commencé il y a dix-huit mois devient utilisable
+aujourd'hui.**
+
+Sans cela, Mdall ne sert qu'aux projets qu'on démarre avec lui — et tous les
+chantiers réels sont déjà en cours. « Je l'essaierai sur le prochain » devient
+« je verse mes dix-huit mois de mails et je m'en sers cet après-midi ».
+
+La prédiction, elle, se nourrit **par surcroît** : chaque projet ainsi
+reconstitué est un épisode de plus. On cherchait comment nourrir le fonds
+commun ; la réponse est de rendre le produit adoptable, et la matière vient
+d'elle-même.
+
+### Trois points à trancher, où l'accord n'est pas entier
+
+**1. Copier-coller, ou déposer des fichiers ?** Coller le *texte* de 200 mails
+perdrait les pièces jointes, les dates, les identifiants et la chaîne de
+réponses — c'est-à-dire tout ce qui fait un épisode, et précisément ce qu'on
+s'est donné du mal à garder. **Sélectionner 200 fichiers et les déposer** donne
+tout cela gratuitement, et le convoi sait déjà le faire. C'est la voie à
+prendre ; le collage de texte, s'il en faut un, restera une entrée dégradée qui
+dit ce qu'elle perd.
+
+**2. « En arrière-plan » veut dire deux choses.** *Ne pas bloquer l'écran* : le
+convoi le fait déjà, par lots, en rendant la main entre chacun. *Continuer
+l'onglet fermé* : cela demande un serveur, et deux cents messages de cinq
+mégaoctets qui traversent une fonction de bord coûtent — là où le navigateur les
+lit pour rien. Recommandation : garder la lecture dans le navigateur, et ne
+payer un traitement serveur que le jour où quelqu'un demande vraiment à fermer
+l'onglet.
+
+**3. La confidentialité d'une lecture dérivée — le point qu'il ne faut pas
+manquer.** Le dossier « Mails » est privé : seul le déposant y accède. Mais
+l'épisode tiré de ces mails — les objets des fils, les références citées, les
+dates — **serait visible de qui ?** S'il s'affiche dans un écran de projet, les
+collaborateurs le voient, et la correspondance privée fuit par sa lecture sans
+que personne n'ait ouvert un mail.
+
+> **Une dérivation hérite de la confidentialité de sa source.** Tant que le
+> dossier est privé, ce qu'on en tire l'est aussi. Ce qui devient partageable
+> passe par une proposition signée — comme tout le reste (règle 1).
+
+### L'inventaire honnête de ce qui a été écrit
+
+**Ce qui sert et se déplace tel quel** — pur, sans lien avec la console :
+`un-msg-deplie.js`, `un-zip-deplie.js`, `le-convoi.js`, `le-dedoublonnage.js`,
+`les-references-citees.js`, `episode-dune-archive.js` (qui prend ses messages
+d'un projet au lieu d'une archive), et le correctif des mille lignes.
+
+**Ce qui était une seconde application** : les écrans *versoir*, *archive* et
+*épisode* de la console, et les trois tables `messages_archives`,
+`pieces_archivees`, `pieces_des_messages` avec le casier `archives`.
+
+Les tables sont additives et ne gênent personne ; avant de les retirer il faudra
+**vérifier qu'elles sont vides** — ce qui a été versé l'a été, et ne se jette
+pas sans le regarder (règle 6).
+
+**Ce qui reste et garde son sens** : la porte (`est_administrateur()`), la
+coquille de la console, et sa raison d'être — les comptes d'exploitation, qui
+n'existent toujours pas.
+
+### La console redevient ce qu'elle devait être
+
+Combien de comptes, qui revient, ce qui tombe en panne, ce que ça coûte, où en
+est la prédiction. **Pas un second atelier.**
+
 ## 9. À enrichir
 
 - Le déposant : navigateur ou fonction de bord ? (cent mille pièces ne passent
