@@ -1099,6 +1099,9 @@ du message retrouvé » serait une tautologie présentée comme un résultat.
 | Un mail, ou tout le fil | **Les deux**, et l'écran dit lequel — donc quel degré de certitude on a sur les dates et les destinataires. |
 | Ce qu'on relève | **Les sept natures** du tableau ci-dessus, dont deux se dérivent du fil au lieu d'être demandées au modèle. |
 | Où va le mail | Un dossier **« Mails »** à la racine de Fichiers, **non partagé**, avec un cadenas. Provisoire, et à rediscuter. |
+| Où vont ses **pièces jointes** | **`Mails/Pièces jointes/`, à plat, et privées comme lui.** Une pièce jointe est de la correspondance autant que le message qui la portait ; et à plat, parce qu'une pièce attachée à quinze réponses est un seul fichier — un arbre est un lieu, pas un graphe. Voir `docs/nourrir-mdall.md`, § 8 sexies. |
+| Comment on **partage** une pièce | **En la déplaçant** hors de « Mails », par le bouton qui existe déjà sur chaque ligne. La confidentialité est portée par le dossier : aucun interrupteur à inventer, donc aucun à oublier de vérifier. |
+| Ce que le **cadenas** dit d'un fichier | Trois réponses, sur les trois faits de la politique de lecture : **Privé**, **Visible par l'équipe** (dossier privé mais document sans déposant — la base ne le cache pas), ou rien quand la lecture n'a pas demandé le déposant (règle 5). |
 
 ## Ce qui reste à trancher
 

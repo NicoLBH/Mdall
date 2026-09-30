@@ -778,6 +778,16 @@ function mapDocumentRowToViewModel(row = {}) {
     // dit qu'il y a quelque chose à lire, sans le lire. Descendre le Markdown
     // ici ferait quarante fichiers au chargement d'un dossier de comptes rendus.
     transcribedAt: safeString(row.transcribed_at || "") || null,
+    // **Qui a déposé ce document**, quand la lecture a posé la question.
+    //
+    // `undefined` est conservé, pour la même raison que `proposition_id` juste
+    // en dessous : une lecture qui ne demande pas la colonne ne permet pas de
+    // conclure qu'elle est vide. Et ici la nuance décide d'un cadenas — dire
+    // « pas de déposant » d'un document dont on n'a rien demandé ferait
+    // afficher « visible par l'équipe » sur un fichier privé (règle 5).
+    deposant: row.deposant === undefined
+      ? undefined
+      : (safeString(row.deposant) || null),
     // La proposition par laquelle ce document est entré, **s'il en a une**.
     //
     // `undefined` est conservé tel quel : toutes les lectures de la table ne
@@ -1141,11 +1151,24 @@ export async function createDocumentFolder(projectId = "", parentFolderId = null
     if (duplicate) {
       throw new Error("Un dossier avec ce nom existe déjà dans ce dossier parent.");
     }
-    // **`created_by` était laissé vide.** Un dossier privé sans créateur connu
-    // ne garde personne : la politique de lecture s'appuie dessus, et un
-    // dossier sans propriétaire reste visible de tous — ce qui serait une
-    // garde qui ne garde rien.
+    // **`created_by` était laissé vide, et le commentaire disait déjà pourquoi
+    // c'était dangereux.** Il le disait, et le code le faisait quand même : le
+    // repli silencieux écrivait le dossier sans créateur. Or la politique de
+    // lecture accepte `created_by is null` — c'est ce qui préserve les dossiers
+    // d'avant la colonne —, donc un dossier privé sans créateur est visible de
+    // tous. Une garde qui ne garde rien, et rien à l'écran pour le dire.
+    //
+    // Un dossier **privé** ne se crée donc plus sans savoir qui le crée. Un
+    // dossier ordinaire, si : sa lecture ne dépend pas de cette valeur, et
+    // refuser là aussi empêcherait de ranger des documents pour une raison qui
+    // ne les concerne pas.
     const parQui = String((await getCurrentUser().catch(() => null))?.id ?? "");
+    if (prive === true && !parQui) {
+      throw new Error(
+        "Votre session n'a pas répondu : un dossier privé sans créateur connu "
+        + "serait visible par toute l'équipe, il n'a donc pas été créé."
+      );
+    }
 
     return await restInsert("project_document_folders", {
       project_id: backendProjectId,
@@ -1248,7 +1271,12 @@ export async function listDocumentDirectory(projectId = "", folderId = null) {
     // `transcribed_at` et pas `transcription_markdown` : une date dit qu'il y a
     // quelque chose à lire, sans le lire. Descendre le Markdown ferait quarante
     // fichiers au chargement d'un dossier qu'on ouvre pour en lire un seul.
-    fileParams.set("select", "id,project_id,folder_id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at,deleted_at,detection_status,detection_reason,detected_kind,detected_kind_label,detected_author,detection_confidence,content_fingerprint,duplicate_of_document_id,reissue_of_document_id,corpus_state,proposition_id,transcribed_at");
+    // `deposant` descend, et il n'est pas décoratif : le cadenas d'un fichier se
+    // décide sur **les trois mêmes faits que la politique de lecture** — le
+    // dossier est privé, le déposant est connu, et c'est moi. Dessiné sur la
+    // seule appartenance au dossier, il promettrait « vous seul y avez accès »
+    // sur un fichier que toute l'équipe voit.
+    fileParams.set("select", "id,project_id,folder_id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at,deleted_at,deposant,detection_status,detection_reason,detected_kind,detected_kind_label,detected_author,detection_confidence,content_fingerprint,duplicate_of_document_id,reissue_of_document_id,corpus_state,proposition_id,transcribed_at");
     fileParams.set("project_id", `eq.${backendProjectId}`);
     fileParams.set("deleted_at", "is.null");
     // Un document soumis à une proposition n'est pas encore dans le corpus : le

@@ -6,3 +6,6 @@ apps/web/vendor/
 # Ce que la console emporte depuis apps/web au build (npm run build:console).
 # Versionné, il serait la copie qui reste vraie un temps, puis diverge.
 apps/console/partage/
+# La feuille de sprites, copiée à la racine de la console : `svgIcon` la résout
+# contre la page.
+apps/console/assets/

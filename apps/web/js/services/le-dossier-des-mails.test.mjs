@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  DOSSIER_DES_MAILS, EXTENSION_DUN_MAIL, LE_CADENAS, NATURE_DUN_MAIL,
-  estLeDossierDesMails, laMarqueDuDossier, leNomDuMailDepose, phraseDuDossierDesMails
+  DOSSIER_DES_MAILS, DOSSIER_DES_PIECES, EXTENSION_DUN_MAIL, LE_CADENAS,
+  LAVERTISSEMENT_DUN_FICHIER, LE_CADENAS_DUN_FICHIER, NATURE_DUNE_PIECE,
+  NATURE_DUN_MAIL, estLeDossierDesMails,
+  laMarqueDuDossier, laMarqueDunFichier, leNomDeLaPieceDeposee, leNomDuMailDepose,
+  phraseDuDossierDesMails
 } from "./le-dossier-des-mails.js";
 
 const message = (quand, objetNu, decalage = 60) => ({ quand, objetNu, decalage });
@@ -110,10 +113,158 @@ test("l'homonyme se reconnaît sans égard à la casse", () => {
   assert.equal(nom, "2026-03-12 09h14 — Lot 3 (2).eml");
 });
 
-test("un mail se range toujours en .eml, et se distingue d'un compte rendu", () => {
+test("un mail se range en .eml par défaut, et se distingue d'un compte rendu", () => {
   assert.ok(leNomDuMailDepose(message("", "Lot 3")).endsWith(".eml"));
   assert.equal(EXTENSION_DUN_MAIL, ".eml");
   assert.notEqual(NATURE_DUN_MAIL, "source_texte");
+});
+
+/**
+ * **L'extension suit les octets qu'on garde.** Un `.msg` déposé est un conteneur
+ * Outlook : le nommer `.eml` ferait échouer son ouverture et mentirait sur ce
+ * qu'il contient.
+ */
+test("un .msg gardé tel quel se range en .msg", () => {
+  const nom = leNomDuMailDepose(message("2026-03-12T08:14:00Z", "Lot 3"), { extension: ".msg" });
+  assert.ok(nom.endsWith(".msg"), nom);
+  assert.doesNotMatch(nom, /\.eml/);
+});
+
+test("l'homonyme se distingue aussi quand l'extension n'est pas .eml", () => {
+  const dejaLa = ["2026-03-12 09h14 — Lot 3.msg"];
+  assert.equal(
+    leNomDuMailDepose(message("2026-03-12T08:14:00Z", "Lot 3"), { dejaLa, extension: ".msg" }),
+    "2026-03-12 09h14 — Lot 3 (2).msg"
+  );
+});
+
+// ── Les pièces jointes ─────────────────────────────────────────────────────
+
+/**
+ * **Son nom d'origine, et rien d'autre.** Le renommer d'après le message qui le
+ * portait rendrait le plan introuvable pour celui qui le cherche, et la même
+ * pièce arrivée par deux fils porterait deux noms.
+ */
+test("une pièce jointe garde son nom", () => {
+  assert.equal(leNomDeLaPieceDeposee("PLAN-FONDATIONS-A3.pdf"), "PLAN-FONDATIONS-A3.pdf");
+});
+
+test("une pièce sans nom en reçoit un, et il se lit", () => {
+  assert.equal(leNomDeLaPieceDeposee(""), "pièce jointe");
+  assert.equal(leNomDeLaPieceDeposee(null), "pièce jointe");
+});
+
+test("un nom de pièce qui ferait un chemin ne fait pas un chemin", () => {
+  const nom = leNomDeLaPieceDeposee("dossiers/2024\\Plan:final?.pdf");
+  assert.doesNotMatch(nom, /[/\\:?]/);
+  assert.ok(nom.endsWith(".pdf"), nom);
+});
+
+/**
+ * **Le rang se glisse avant l'extension.** « Plan (2).pdf » s'ouvre,
+ * « Plan.pdf (2) » non — et deux « Plan.pdf » venus de deux bureaux d'études
+ * sont le cas le plus courant de tous.
+ */
+test("deux pièces homonymes ne s'écrasent pas, et restent ouvrables", () => {
+  const dejaLa = ["Plan.pdf"];
+  assert.equal(leNomDeLaPieceDeposee("Plan.pdf", { dejaLa }), "Plan (2).pdf");
+
+  dejaLa.push("Plan (2).pdf");
+  assert.equal(leNomDeLaPieceDeposee("Plan.pdf", { dejaLa }), "Plan (3).pdf");
+});
+
+test("l'homonyme d'une pièce se reconnaît sans égard à la casse", () => {
+  assert.equal(leNomDeLaPieceDeposee("Plan.PDF", { dejaLa: ["plan.pdf"] }), "Plan (2).PDF");
+});
+
+test("une pièce sans extension prend son rang à la fin", () => {
+  assert.equal(leNomDeLaPieceDeposee("Notes", { dejaLa: ["Notes"] }), "Notes (2)");
+});
+
+test("une pièce n'est pas un mail, et sa nature le dit", () => {
+  assert.notEqual(NATURE_DUNE_PIECE, NATURE_DUN_MAIL);
+  assert.equal(DOSSIER_DES_PIECES, "Pièces jointes");
+});
+
+// ── Le cadenas d'un fichier ────────────────────────────────────────────────
+
+/**
+ * **Les trois mêmes faits que la politique de lecture.** Elle cache un document
+ * quand son dossier est privé *et* que son déposant n'est pas vide *et* que ce
+ * n'est pas moi. Un cadenas dessiné sur la seule appartenance au dossier
+ * promettrait « vous seul y avez accès » sur un fichier que toute l'équipe voit.
+ */
+test("un fichier déposé dans un dossier privé porte le cadenas", () => {
+  const marque = laMarqueDunFichier({ deposant: "moi" }, { prive: true });
+  assert.deepEqual(marque, { ...LE_CADENAS_DUN_FICHIER });
+});
+
+test("un fichier d'un dossier ordinaire ne porte rien", () => {
+  assert.equal(laMarqueDunFichier({ deposant: "moi" }, { prive: false }), null);
+  assert.equal(laMarqueDunFichier({ deposant: "moi" }, null), null);
+});
+
+/**
+ * **Le cas qui a motivé tout ceci.** Un document sans déposant n'est pas caché
+ * par la base, même dans un dossier privé : lui mettre un cadenas ferait déposer
+ * sans regarder. Et se taire ne suffit pas — un fichier sans marque au milieu de
+ * fichiers marqués se lit comme une ligne qu'on n'a pas regardée.
+ */
+test("un fichier sans déposant est signalé visible, pas laissé muet", () => {
+  for (const sans of [null, ""]) {
+    const marque = laMarqueDunFichier({ deposant: sans }, { prive: true });
+    assert.deepEqual(marque, { ...LAVERTISSEMENT_DUN_FICHIER }, String(sans));
+    assert.notEqual(marque.icone, LE_CADENAS_DUN_FICHIER.icone);
+    assert.match(marque.mot, /équipe/);
+  }
+});
+
+/** L'avertissement dit **qui** voit, et il dit que le reste du dossier non. */
+test("l'avertissement nomme l'équipe et le contraste avec le dossier", () => {
+  assert.match(LAVERTISSEMENT_DUN_FICHIER.titre, /équipe du chantier le voit/);
+  assert.match(LAVERTISSEMENT_DUN_FICHIER.titre, /contrairement au reste/);
+});
+
+/**
+ * **Ne pas savoir n'est pas savoir que non** (règle 5). Une lecture qui n'a pas
+ * demandé la colonne rend `undefined` : on ne dessine rien, plutôt que de dire
+ * « visible par l'équipe » d'un fichier dont on n'a rien demandé.
+ */
+test("un fichier dont on n'a pas demandé le déposant ne dit rien", () => {
+  assert.equal(laMarqueDunFichier({}, { prive: true }), null);
+  assert.equal(laMarqueDunFichier({ deposant: undefined }, { prive: true }), null);
+});
+
+/**
+ * **Les deux vides ne disent pas la même chose, et c'est tout l'objet de cette
+ * garde.** `undefined` est une question qu'on n'a pas posée ; `null` est une
+ * réponse. Les confondre ferait afficher « visible par l'équipe » sur des
+ * fichiers dont on n'a rien demandé, et ferait crier au loup à chaque écran qui
+ * ne descend pas la colonne.
+ */
+test("ne pas avoir demandé et ne pas avoir de déposant ne se disent pas pareil", () => {
+  assert.equal(laMarqueDunFichier({ deposant: undefined }, { prive: true }), null);
+  assert.notEqual(laMarqueDunFichier({ deposant: null }, { prive: true }), null);
+});
+
+test("la marque d'un fichier ne partage pas son objet avec le module", () => {
+  const marque = laMarqueDunFichier({ deposant: "moi" }, { prive: true });
+  marque.mot = "Public";
+  assert.equal(LE_CADENAS_DUN_FICHIER.mot, "Privé");
+});
+
+/**
+ * **Le cadenas dit l'inverse de l'habitude.** Partout ailleurs il veut dire
+ * « vous ne pouvez pas » ; ici il veut dire « eux ne peuvent pas ». Le titre
+ * doit donc nommer l'équipe — « privé » tout seul laisse deviner de qui.
+ */
+test("le titre du cadenas d'un fichier nomme l'équipe", () => {
+  assert.match(LE_CADENAS_DUN_FICHIER.titre, /vous seul/);
+  assert.match(LE_CADENAS_DUN_FICHIER.titre, /équipe/);
+});
+
+test("les deux cadenas portent la même icône", () => {
+  assert.equal(LE_CADENAS_DUN_FICHIER.icone, LE_CADENAS.icone);
 });
 
 // ── Ce qu'on en dit ────────────────────────────────────────────────────────

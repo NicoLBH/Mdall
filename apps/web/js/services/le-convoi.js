@@ -85,26 +85,19 @@ export function enLots(fichiers = [], parLot = PAR_LOT) {
   return lots;
 }
 
-/**
- * Ce qui, dans un dépôt, a l'allure d'un message Outlook.
- *
- * Un dossier de chantier porte des plans, des tableurs, des `.pst`, des
- * `Thumbs.db`. Les donner au lecteur de `.msg` les ferait tous compter comme
- * illisibles, et le compte rendu dirait « quatre-vingts pour cent ont résisté »
- * là où il faudrait lire « ce n'étaient pas des messages ».
- *
- * On les écarte donc **avant** de les compter, et l'on dit combien.
- */
-export function lesMessagesDuDepot(fichiers = []) {
-  const tous = Array.isArray(fichiers) ? fichiers : [];
-  const messages = tous.filter((un) => /\.msg$/i.test(texte(un?.name)));
-  return { messages, ecartes: tous.length - messages.length };
-}
-
 /** Un journal vide : ce qu'on tient d'un convoi avant qu'il ne parte. */
 export function unJournalNeuf() {
   return {
+    // **Deux comptes, et ils ne portent pas sur la même chose.** `fichiers` est
+    // ce qu'on a reçu — trois archives, par exemple ; `verses` est ce qu'on en a
+    // tiré — deux cents messages. Les confondre donnait « 3 fichiers · 41
+    // versés », qu'on ne peut lire d'aucune façon juste, et un avancement de
+    // 41/3 qui affichait fièrement « 100 % » à la quarantième minute.
     fichiers: 0,
+    // Combien de ces fichiers ont été ouverts. C'est **le seul dénominateur
+    // connu d'avance** : on ne sait pas combien de messages une archive porte
+    // avant de l'avoir lue, et l'avancement ne peut se compter que là-dessus.
+    lus: 0,
     lots: 0,
     verses: 0,
     dejaLa: 0,
@@ -130,7 +123,12 @@ export function unJournalNeuf() {
  */
 export const ACCROCS_NOMMES = 200;
 
-/** Noter ce qui est arrivé à un fichier. */
+/** Noter qu'un fichier reçu a été ouvert — ou qu'on a renoncé à l'ouvrir. */
+export function noterUnFichierLu(journal) {
+  return { ...journal, lus: (Number(journal?.lus) || 0) + 1 };
+}
+
+/** Noter ce qui est arrivé à un message. */
 export function noter(journal, fichier, sort, detail = "") {
   const suite = { ...journal, accrocs: journal.accrocs };
 
@@ -172,8 +170,10 @@ export function phraseDuConvoi(journal = null) {
   const dire = (combien, un, plusieurs) => {
     if (combien) dits.push(`${combien} ${combien > 1 ? plusieurs : un}`);
   };
-  dire(Number(journal?.verses) || 0, "versé", "versés");
-  dire(Number(journal?.dejaLa) || 0, "était déjà là", "étaient déjà là");
+  // **« Versés » tout court laissait croire qu'on parlait des fichiers reçus.**
+  // Un `.zip` en porte deux cents : le mot doit dire de quoi on compte.
+  dire(Number(journal?.verses) || 0, "message versé", "messages versés");
+  dire(Number(journal?.dejaLa) || 0, "message était déjà là", "messages étaient déjà là");
   dire(Number(journal?.pieces) || 0, "pièce versée", "pièces versées");
   dire(Number(journal?.illisibles) || 0,
     "ne s'est pas laissé ouvrir", "ne se sont pas laissé ouvrir");
@@ -193,7 +193,8 @@ export function avancement(journal = null) {
   const fichiers = Number(journal?.fichiers) || 0;
   if (!fichiers) return null;
 
-  const faits = (Number(journal?.verses) || 0) + (Number(journal?.dejaLa) || 0)
-    + (Number(journal?.illisibles) || 0) + (Number(journal?.refuses) || 0);
-  return Math.min(1, faits / fichiers);
+  // **En fichiers ouverts, et pas en messages rangés.** On ne sait pas combien
+  // de messages une archive porte avant de l'avoir lue : rapporter deux cents
+  // messages à trois fichiers donnait « 100 % » dès le premier lot.
+  return Math.min(1, (Number(journal?.lus) || 0) / fichiers);
 }

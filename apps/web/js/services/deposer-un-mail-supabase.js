@@ -30,6 +30,17 @@ import {
 
 const TYPE_DUN_MAIL = "message/rfc822";
 
+/**
+ * Pourquoi rien n'a été rangé quand on ne sait pas qui dépose.
+ *
+ * Écrit ici et non à l'endroit du refus : c'est ce que l'écran affiche, et une
+ * phrase d'erreur recopiée dans un test finit par ne plus être celle du code
+ * (règle 10).
+ */
+export const MOTIF_SANS_DEPOSANT =
+  "votre session n'a pas répondu : rien n'a été rangé, car un mail déposé sans "
+  + "déposant connu serait visible par toute l'équipe";
+
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /**
@@ -71,7 +82,19 @@ export async function rangerLesMails(mails = [], { projectId = "" } = {}) {
     });
     if (!ou.trouve) return { ranges: 0, motif: ou.motif };
 
+    // **Sans déposant connu, on ne range pas.** Ce n'était pas le cas, et c'est
+    // le défaut le plus grave qu'on ait trouvé sur ce dossier : la politique de
+    // lecture cache un document quand son dossier est privé **et** que son
+    // `deposant` n'est pas vide. Un `deposant` absent fait donc tomber la
+    // condition — le mail reste dans « Mails », et il devient lisible par
+    // l'équipe. Une panne d'authentification passagère publiait la
+    // correspondance, en silence, et le dépôt se disait réussi.
+    //
+    // Un dépôt qui échoue se reprend ; un dépôt qui réussit à découvert ne se
+    // reprend pas.
     const qui = await currentUserId().catch(() => null);
+    if (!qui) return { ranges: 0, motif: MOTIF_SANS_DEPOSANT };
+
     const dejaLa = await nomsDejaDans(projectId, ou.id);
     let ranges = 0;
 
@@ -93,7 +116,7 @@ export async function rangerLesMails(mails = [], { projectId = "" } = {}) {
         storage_bucket: stockage.storage_bucket,
         storage_path: stockage.storage_path,
         file_size_bytes: fichier.size || 0,
-        ...(qui ? { deposant: qui } : {})
+        deposant: qui
       }, "id,project_id,folder_id,filename,document_kind");
       if (ligne?.id) ranges += 1;
     }

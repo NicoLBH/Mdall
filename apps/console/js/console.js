@@ -1,11 +1,31 @@
 /**
  * La console d'administration : l'entrée.
  *
- * ## Ce que cette page est
+ * ## Ce que cette page est, et ce qu'elle a cessé d'être
  *
  * Un **autre site**, servi à côté de l'application (`console/`), construit par
- * `scripts/prepare-console.mjs`. Elle emporte la feuille de style et les
- * services de Mdall — jamais recopiés —, et ne partage aucun écran.
+ * `scripts/prepare-console.mjs`. Elle emporte la feuille de style de Mdall —
+ * jamais recopiée — et n'a aucune classe à elle.
+ *
+ * Elle a porté pendant trois tours un versoir, une archive et un épisode :
+ * ouvrir des `.msg`, en tirer des messages et des pièces, les ranger dans trois
+ * tables à elle, et lire une chronologie de cet ensemble. C'était une **seconde
+ * application**, et elle contredisait sa propre doctrine — un endroit d'où l'on
+ * lit un contenu, pas un atelier parallèle.
+ *
+ * Tout cela est retourné dans l'application, où la chaîne existait déjà : le
+ * dépouillement dans **Fichiers**, la chronologie aux **Indicateurs**
+ * (`docs/nourrir-mdall.md`, § 8 quinquies). La console attend donc ce pour quoi
+ * elle a été ouverte : des **comptes d'exploitation**, quand il y aura des
+ * comptes à faire.
+ *
+ * ## Une page qui n'a rien à montrer doit le dire
+ *
+ * Elle pouvait rester vide, ou disparaître. Les deux auraient coûté plus :
+ * quelqu'un qui a gardé l'adresse en favori arriverait sur une page blanche ou
+ * sur une erreur, et croirait à une panne. Elle dit donc **où les écrans sont
+ * partis**, avec le lien pour y aller. C'est la même raison que pour la porte
+ * fermée, un peu plus bas.
  *
  * ## La porte
  *
@@ -23,75 +43,126 @@
  * Et on la pose **par le même service que la barre du haut** : deux façons de
  * demander « suis-je administrateur ? » finiraient par ne plus répondre la
  * même chose, et l'une des deux serait celle qu'on ne relit jamais (règle 10).
- *
- * ## Les écrans
- *
- * Le **versoir** — ouvrir des `.msg`, voir ce qu'ils portent, verser les pièces
- * — et **l'archive** — retrouver ce qui a été versé, et l'ouvrir. Pas encore de
- * tableau de bord : les comptes d'exploitation viendront quand il y aura des
- * comptes à faire (`docs/la-console-de-ladministrateur.md`).
  */
 
 import { LA_CONSOLE } from "../partage/js/services/la-porte-de-la-console.js";
 import { suisJeAdministrateur } from "../partage/js/services/la-porte-de-la-console-supabase.js";
-import { monterLeVersoir, renderLeVersoir } from "./le-versoir.js";
-import { monterLArchive, renderLArchive } from "./larchive.js";
-import { monterLepisode, renderLepisode } from "./lepisode.js";
+import { leCourrielDuCompte, monterLavatar, renderLavatar } from "./lavatar.js";
 
 const hote = document.getElementById("app");
+const barre = document.getElementById("consoleHeaderHost");
+
+/** Où ramène le nom de l'application, en haut à gauche. */
+const LE_LIEN_VERS_MDALL = "../index.html";
 
 /**
- * Les écrans de la console, et leur ordre.
+ * Où sont partis les écrans de la console.
  *
- * **Trois, et ils se suivent dans l'ordre du geste** : on dépose, on retrouve,
- * puis on lit ce que cela fait comme suite. Une liste nommée ici plutôt que dessinée en dur, parce que le nom
- * d'un écran et l'adresse qui y mène ne doivent vivre qu'à un endroit
- * (règle 10).
+ * Nommés ici plutôt qu'écrits dans la page : le jour où l'un d'eux déménagera
+ * encore, il n'y aura qu'un endroit à corriger (règle 10).
  */
-const LES_ECRANS = [
-  { cle: "versoir", nom: "Le versoir", dessiner: renderLeVersoir, monter: monterLeVersoir },
-  { cle: "archive", nom: "L'archive", dessiner: renderLArchive, monter: monterLArchive },
-  { cle: "episode", nom: "L'épisode", dessiner: renderLepisode, monter: monterLepisode }
+const CE_QUI_A_DEMENAGE = [
+  {
+    quoi: "Le dépouillement des mails",
+    ou: "l'onglet Fichiers d'un projet",
+    pourquoi: "un .msg ou un .zip déposé s'y ouvre, et ce qu'il porte se range dans "
+      + "le dossier privé des mails"
+  },
+  {
+    quoi: "La chronologie de la correspondance",
+    ou: "l'onglet Indicateurs d'un projet",
+    pourquoi: "elle se lit à côté de la forme du chantier, qui répond à la même question"
+  }
 ];
 
-/** L'écran demandé par l'adresse, ou le premier. */
-function lEcranDemande() {
-  const demande = String(location.hash || "").replace(/^#/, "").trim();
-  return LES_ECRANS.find((un) => un.cle === demande) ?? LES_ECRANS[0];
+function renderLeDemenagement() {
+  return `
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">Les écrans sont dans l'application</h3>
+      <p class="conso-usages__mot">
+        La console n'ouvre plus d'archive à elle. Ce qu'elle savait faire, Mdall
+        le fait dans un projet — et un chantier commencé depuis des mois peut
+        donc être nourri comme les autres.
+      </p>
+      ${/*
+        **Un bloc par écran, et pas un tableau.** La troisième colonne d'un
+        tableau porte un chiffre ou trois mots ; une phrase entière s'y replie
+        en colonne étroite alignée à droite, et devient illisible. C'est le
+        genre de défaut qu'aucun test ne voit et qu'un regard voit tout de
+        suite.
+      */""}
+      ${CE_QUI_A_DEMENAGE.map((un) => `
+        <div class="forme-suite">
+          <h4 class="forme-suite__titre">${un.quoi}</h4>
+          <p class="forme-suite__dit">${un.ou}</p>
+          <p class="conso-usages__mot">${un.pourquoi}</p>
+        </div>
+      `).join("")}
+      <p class="conso-usages__mot"><a href="${LE_LIEN_VERS_MDALL}">Aller à Mdall</a></p>
+    </section>
+  `;
 }
 
-/**
- * La barre des écrans.
- *
- * Elle emprunte les classes de Mdall — aucune n'est recalibrée ici : un
- * interrupteur dessiné autrement se verrait comme une greffe.
- */
-function renderLesOnglets(courant) {
+function renderCeQuiViendra() {
   return `
-    <div class="verdict-switch" role="tablist">
-      ${LES_ECRANS.map((un) => `
-        <span class="verdict-switch__item${un === courant ? " is-active" : ""}">
-          <a class="gh-btn gh-btn--sm ${un === courant ? "gh-btn--primary" : "gh-btn--default"}"
-             href="#${un.cle}" role="tab"
-             aria-selected="${un === courant}">${un.nom}</a>
-        </span>
-      `).join("")}
-    </div>
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">${LA_CONSOLE.nom}</h3>
+      <p class="conso-usages__mot">
+        Rien à montrer pour l'instant, et ce n'est pas une panne. Cette console
+        est faite pour des <b>comptes d'exploitation</b> — combien de comptes,
+        qui revient, ce qui tombe en panne, ce que cela coûte, où en est la
+        prédiction. Ils s'écriront quand il y aura des comptes à faire, et pas
+        avant : un tableau de bord qui affiche des zéros apprend à ne plus
+        regarder les tableaux de bord.
+      </p>
+    </section>
   `;
 }
 
 function renderLaPorteFermee() {
   return `
-    <div class="page-large">
-      <section class="conso-usages">
-        <h3 class="conso-usages__titre">${LA_CONSOLE.nom}</h3>
-        <p class="conso-usages__mot">
-          Cette porte n'est pas la vôtre. Ce n'est pas une panne : votre compte
-          n'ouvre pas la console de Mdall.
-        </p>
-        <p class="conso-usages__mot"><a href="../index.html">Revenir à Mdall</a></p>
-      </section>
-    </div>
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">${LA_CONSOLE.nom}</h3>
+      <p class="conso-usages__mot">
+        Cette porte n'est pas la vôtre. Ce n'est pas une panne : votre compte
+        n'ouvre pas la console de Mdall.
+      </p>
+      <p class="conso-usages__mot"><a href="${LE_LIEN_VERS_MDALL}">Revenir à Mdall</a></p>
+    </section>
+  `;
+}
+
+/**
+ * La barre du haut, dans les classes de Mdall.
+ *
+ * `gh-header gh-header--global`, comme tous les écrans de l'application qui ne
+ * sont pas dans un projet : c'est la grille à trois colonnes que la feuille de
+ * style connaît déjà, et `#app` est déjà décalé de la hauteur d'un en-tête —
+ * la console laissait donc, depuis trois tours, un vide en haut de page.
+ *
+ * **L'avatar est dessiné même quand la porte est fermée**, et c'est voulu :
+ * quelqu'un qui s'est trompé de compte doit pouvoir repartir sans chercher, et
+ * savoir sous quelle adresse il est arrivé.
+ */
+function renderLaBarre(courriel) {
+  return `
+    <header class="gh-header gh-header--global">
+      <div class="gh-header__left">
+        <div class="gh-brand-wrap">
+          <a class="gh-brand" href="${LE_LIEN_VERS_MDALL}">
+            <span class="gh-brand__name">Mdall</span>
+            <span class="gh-brand__sep">/</span>
+            <span class="gh-brand__repo">console</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="gh-header__center"></div>
+
+      <div class="gh-header__right">
+        <div class="gh-header__actions">${renderLavatar(courriel)}</div>
+      </div>
+    </header>
   `;
 }
 
@@ -106,26 +177,21 @@ async function main() {
     </div>
   `;
 
-  if (!await suisJeAdministrateur()) {
-    hote.innerHTML = renderLaPorteFermee();
-    return;
-  }
+  // Les deux ensemble : l'adresse ne dépend pas de la porte, et les demander
+  // l'une après l'autre ferait attendre deux allers-retours pour une page qui
+  // n'a qu'un paragraphe à écrire.
+  const [ouverte, courriel] = await Promise.all([
+    suisJeAdministrateur(),
+    leCourrielDuCompte()
+  ]);
 
-  // **La porte ne se redemande pas à chaque écran.** Elle a répondu une fois ;
-  // la reposer à chaque changement d'onglet ajouterait un aller-retour et un
-  // clignotement, sans rien protéger de plus — ce qui protège est la politique
-  // de la base, pas ce test.
-  const dessiner = () => {
-    const ecran = lEcranDemande();
-    hote.innerHTML = `
-      <div class="page-large">${renderLesOnglets(ecran)}</div>
-      ${ecran.dessiner()}
-    `;
-    ecran.monter(hote);
-  };
-
-  window.addEventListener("hashchange", dessiner);
-  dessiner();
+  if (barre) barre.innerHTML = renderLaBarre(courriel);
+  hote.innerHTML = `
+    <div class="page-large">
+      ${ouverte ? `${renderCeQuiViendra()}${renderLeDemenagement()}` : renderLaPorteFermee()}
+    </div>
+  `;
+  monterLavatar(barre ?? document);
 }
 
 main();

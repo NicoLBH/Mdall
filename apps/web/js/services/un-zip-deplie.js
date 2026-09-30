@@ -182,15 +182,24 @@ export async function octetsDeLentree(source, entree) {
 }
 
 /**
- * Les messages Outlook d'une archive, sans les décompresser.
+ * Les messages d'une archive, sans les décompresser.
  *
  * Le nom porte son chemin dans l'archive — `2024/Taninges/RE Question.msg` —,
  * et c'est une information qu'on garde : **le dossier dit souvent le chantier**,
  * là où le nom du fichier ne dit que le sujet.
+ *
+ * `.msg` **et** `.eml` : une archive de chantier porte les deux selon la
+ * messagerie qui l'a produite, et ne prendre que les premiers laisserait des
+ * fils entiers derrière soi sans rien dire.
+ *
+ * **Pas les `.zip` imbriqués.** On pourrait ; on ne le fait pas, et c'est
+ * déclaré : une archive dans une archive dans une archive n'a pas de fond, et un
+ * parcours sans fond se découvre en production. Ce qui est dedans se compte donc
+ * comme « pas un message », et le compte rendu le dit.
  */
 export function lesMessagesDeLarchive(entrees = []) {
   return (Array.isArray(entrees) ? entrees : [])
-    .filter((une) => /\.msg$/i.test(texte(une?.nom)))
+    .filter((une) => /\.(msg|eml)$/i.test(texte(une?.nom)))
     // Les dossiers cachés des systèmes de fichiers ne portent rien.
     .filter((une) => !texte(une.nom).split("/").some((pas) => pas.startsWith("__MACOSX")));
 }

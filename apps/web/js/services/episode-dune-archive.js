@@ -226,7 +226,9 @@ export function phraseDeCeQuOnNaPasSuLire(episode = null) {
 
   const sansDate = Number(combien.sansDate) || 0;
   if (sansDate) {
-    dits.push(`${sansDate} ${sansDate > 1 ? "n'ont pas de date" : "n'a pas de date"} et ne tiennent pas dans la suite`);
+    dits.push(`${sansDate} ${sansDate > 1
+      ? "n'ont pas de date et ne tiennent pas"
+      : "n'a pas de date et ne tient pas"} dans la suite`);
   }
 
   return dits.join(" · ");
