@@ -1,4 +1,5 @@
 import { store } from "../store.js";
+import { LE_SELECT_DUN_DOCUMENT } from "./les-colonnes-dun-document.js";
 import { ensureProjectDocumentsState } from "./project-documents-store.js";
 import { cestUnIdDeProjet, laConcordanceSansCeProjet, leProjetOuLonEcrit } from "./le-projet-ou-lon-ecrit.js";
 import { ensureProjectAutomationDefaults } from "./project-automation.js";
@@ -688,7 +689,9 @@ function mapProjectRowToCatalogItem(row = {}) {
     description: safeString(row.description || ""),
     ownerId: safeString(row.owner_id || ""),
     createdAt: row.created_at || null,
-    updatedAt: row.updated_at || null
+    updatedAt: row.updated_at || null,
+    // Quand ce chantier a été rangé. `null` : il est en cours.
+    archivedAt: row.archived_at || null
   };
 }
 
@@ -715,8 +718,11 @@ function haveSameProjectCatalog(a = [], b = []) {
 
 export async function syncProjectsCatalogFromSupabase() {
   const params = new URLSearchParams();
-  params.set("select", "id,name,description,postal_code,city,project_owner_name,current_phase_code,owner_id,created_at,updated_at");
-  params.set("archived_at", "is.null");
+  // **Les deux états sont lus, et le tri se fait à l'écran.** La liste écartait
+  // les chantiers rangés dès la requête : impossible alors d'en montrer le
+  // compte, ni de les afficher quand on les demande. Un filtre qui ne peut pas
+  // compter ce qu'il cache n'est pas un filtre.
+  params.set("select", "id,name,description,postal_code,city,project_owner_name,current_phase_code,owner_id,created_at,updated_at,archived_at");
   params.set("order", "updated_at.desc.nullslast,created_at.desc");
 
   const rows = await restFetch("projects", params);
@@ -1031,7 +1037,10 @@ export async function syncProjectDocumentsFromSupabase(options = {}) {
   }
 
   const params = new URLSearchParams();
-  params.set("select", "id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at");
+  // **La même liste que les deux autres lectures.** Celle-ci écrit dans le même
+  // magasin, et elle était la plus courte des trois : selon laquelle passait en
+  // dernier, les pièces jointes retrouvaient leur message ou non.
+  params.set("select", LE_SELECT_DUN_DOCUMENT);
   params.set("project_id", `eq.${backendProjectId}`);
   params.set("deleted_at", "is.null");
   params.set("order", "created_at.desc");

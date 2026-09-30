@@ -81,7 +81,12 @@ export const RACINES = [
   // compté sur l'ensemble des chantiers — ce qu'aucun écran de projet ne peut
   // montrer, puisqu'un chantier ne voit que lui-même.
   "js/services/les-enchainements-du-systeme-supabase.js",
-  "js/services/les-enchainements-du-systeme.js"
+  "js/services/les-enchainements-du-systeme.js",
+  // Les sujets techniques que les chantiers emploient vraiment : des milliers
+  // de termes trouvés dans ce qu'ils écrivent, là où la taxonomie n'a que huit
+  // cases. Rien n'en sort qui ne soit partagé par plusieurs chantiers.
+  "js/services/les-sujets-du-systeme-supabase.js",
+  "js/services/les-sujets-du-systeme.js"
 ];
 
 /**

@@ -60,6 +60,8 @@ const reglagesDesProjets = reglagesDuRail("tousLesProjets");
 let detacherLeRailDesProjets = null;
 
 const projectListUiState = {
+  /** En cours ou archivés. Voir `un-chantier-range.js`. */
+  rangement: RANGEMENT.EN_COURS,
   loadingAccess: false,
   accessLoaded: false,
   accessError: "",
@@ -234,7 +236,13 @@ function getFilteredProjects(activeFilterId) {
 
 function renderProjectsListContent(activeFilterId) {
   const title = PROJECT_LIST_FILTERS[activeFilterId]?.label || PROJECT_LIST_FILTERS.contributions.label;
-  const projects = getFilteredProjects(activeFilterId);
+  // **Les deux piles, puis celle qu'on regarde.** Les comptes portent sur la
+  // même liste que les lignes : un compte calculé ailleurs finirait par
+  // annoncer douze archives dans un filtre qui n'en montre que trois (règle 4).
+  const tous = getFilteredProjects(activeFilterId);
+  const rangement = rangementValide(projectListUiState.rangement);
+  const comptes = lesComptesDuRangement(tous);
+  const projects = lesChantiersDe(tous, rangement);
   const rows = projects.map(renderProjectRow).join("");
   const isLoading = activeFilterId === PROJECT_LIST_FILTERS.contributions.id && !projectListUiState.accessLoaded;
 
@@ -252,7 +260,24 @@ function renderProjectsListContent(activeFilterId) {
         gridTemplate: "minmax(240px, 2fr) minmax(200px, 1.5fr) minmax(110px, 1fr) minmax(110px, .8fr) 120px",
         headHtml: renderDataTableHead({
           columns: [
-            "Nom du projet",
+            {
+              className: "projects-repo__col projects-repo__col--name",
+              label: "Nom du projet",
+              html: `<span>Nom du projet</span>${renderTableHeadFilterToggle({
+                groupClassName: "projects-repo__filtre",
+                activeValue: rangement,
+                items: [
+                  {
+                    label: "En cours", value: RANGEMENT.EN_COURS,
+                    count: comptes[RANGEMENT.EN_COURS], dataAttr: "projects-rangement"
+                  },
+                  {
+                    label: "Archivés", value: RANGEMENT.RANGES,
+                    count: comptes[RANGEMENT.RANGES], dataAttr: "projects-rangement"
+                  }
+                ]
+              })}`
+            },
             "Nom du client",
             "Ville",
             "Phase en cours",
@@ -263,12 +288,20 @@ function renderProjectsListContent(activeFilterId) {
         }),
         bodyHtml: rows,
         state: isLoading ? "loading" : (projects.length ? "ready" : "empty"),
-        emptyHtml: renderDataTableEmptyState({
-          title: activeFilterId === PROJECT_LIST_FILTERS.mine.id ? "Aucun projet créé" : "Aucune contribution",
-          description: activeFilterId === PROJECT_LIST_FILTERS.mine.id
-            ? "Créez un projet pour le retrouver ici."
-            : "Les projets créés par d'autres utilisateurs dans lesquels vous êtes collaborateur apparaîtront ici."
-        })
+        emptyHtml: renderDataTableEmptyState(
+          rangement === RANGEMENT.RANGES
+            ? {
+              title: "Aucun chantier archivé",
+              description: "Un chantier livré se range depuis ses Paramètres. Rien n'y est"
+                + " supprimé : il sort simplement de la liste de ceux qui tournent."
+            }
+            : {
+              title: activeFilterId === PROJECT_LIST_FILTERS.mine.id ? "Aucun projet créé" : "Aucune contribution",
+              description: activeFilterId === PROJECT_LIST_FILTERS.mine.id
+                ? "Créez un projet pour le retrouver ici."
+                : "Les projets créés par d'autres utilisateurs dans lesquels vous êtes collaborateur apparaîtront ici."
+            }
+        )
       })}
       ${projectListUiState.accessError && activeFilterId === PROJECT_LIST_FILTERS.contributions.id
         ? `<div class="projects-page__access-error">${escapeHtml(projectListUiState.accessError)}</div>`
@@ -668,6 +701,15 @@ export function renderProjectsList(root) {
     pageSelector: ".projects-page--listing",
     reglages: reglagesDesProjets,
     redessiner: () => renderProjectsList(root)
+  });
+
+  // En cours / Archivés. L'état vit dans le module et non dans l'adresse : c'est
+  // une façon de regarder la liste, pas un endroit où l'on est.
+  root.querySelectorAll("[data-projects-rangement]").forEach((bouton) => {
+    bouton.addEventListener("click", () => {
+      projectListUiState.rangement = rangementValide(bouton.dataset.projectsRangement);
+      renderProjectsList(root);
+    });
   });
 
   root.querySelectorAll("[data-project-id]").forEach((button) => {
