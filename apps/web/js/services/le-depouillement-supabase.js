@@ -52,6 +52,7 @@ import {
   PAR_LOT, SORT, enLots, noter, noterLesPieces, noterUnFichierLu, unJournalNeuf
 } from "./le-convoi.js";
 import { lesEmpreintes } from "./le-dedoublonnage.js";
+import { lindexDunMail } from "./la-ligne-dun-mail.js";
 import { LE_TYPE_DUN_MESSAGE, lesMessagesDunFichier } from "./les-messages-dun-fichier.js";
 import { sha256HexBytes } from "../utils/sha256.js";
 
@@ -128,7 +129,7 @@ async function nomsDejaDans(projectId, folderId) {
 
 /** Ranger un fichier, et rendre sa ligne. */
 async function ranger(octets, {
-  projectId, folderId, nom, type, nature, deposant, empreinte
+  projectId, folderId, nom, type, nature, deposant, empreinte, index = null
 }) {
   const fichier = new File([octets], nom, { type });
   const stockage = await uploadDocumentToStorage(fichier, {
@@ -146,7 +147,11 @@ async function ranger(octets, {
     storage_path: stockage.storage_path,
     file_size_bytes: fichier.size || 0,
     empreinte_des_octets: empreinte || null,
-    deposant
+    deposant,
+    // **L'index d'un mail, écrit au dépôt.** C'est le seul moment où le message
+    // est déjà déplié : le recalculer à la lecture ferait rapatrier deux cents
+    // fichiers pour dessiner deux cents lignes (`la-ligne-dun-mail.js`).
+    ...(index ?? {})
   }, "id,project_id,folder_id,filename,document_kind");
 }
 
@@ -282,7 +287,8 @@ export async function depouiller(fichiers = [], { projectId = "", avance = null 
         await ranger(un.message.octets, {
           projectId, folderId: dossiers.ou.messages, nom,
           type: LE_TYPE_DUN_MESSAGE[un.message.extension] || "application/octet-stream",
-          nature: NATURE_DUN_MAIL, deposant, empreinte: un.empreinte
+          nature: NATURE_DUN_MAIL, deposant, empreinte: un.empreinte,
+          index: lindexDunMail(un.message.lu)
         });
         if (un.empreinte) connues.add(un.empreinte);
         journal = noter(journal, un.message.nom, SORT.VERSE);

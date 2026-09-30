@@ -1370,6 +1370,78 @@ propositions.
 > désigne un fil parmi deux cents mails — et cela, il faut le dessiner avant de
 > l'écrire.
 
+## 8 decies. Lire ses mails dans Mdall
+
+### « Mails » n'est plus dans Documents
+
+Le dossier était montré **sous Documents**, c'est-à-dire sous l'endroit du
+partage — alors que c'est justement ce qu'il n'est pas. Un contenant au contenu
+privé rangé là se lit comme une promesse contraire à la garde.
+
+Il est désormais une **racine**, à côté de *Documents* et de *Mémoire*, dans
+l'ordre alphabétique : Documents, Mails, Mémoire. **Rien n'a bougé en base** —
+le dossier était déjà à la racine des dossiers (`parent_folder_id is null`),
+c'est l'arbre qui le rangeait ailleurs.
+
+Et c'est un dossier **comme un autre** : mêmes classes, mêmes icônes, même
+survol. La racine n'apparaît que si le dossier existe — une racine vide dans
+tous les projets qui n'ont jamais reçu de mail serait une promesse, pas un fait.
+
+### Sortir un mail de « Mails » se demande
+
+Déplacer ressemble à du rangement ; ici, c'est une **publication**. Le
+déplacement vers un dossier partagé pose donc la question, **dans la fenêtre où
+l'on choisit la destination** — pas dans une seconde fenêtre par-dessus, qu'on
+ferme au réflexe. Le bouton lui-même change de nom : « Déplacer et partager ».
+
+Dans l'autre sens, rien à demander : rentrer un document dans « Mails » le
+**retire** à l'équipe, et le pire qui arrive est qu'on le ressorte.
+
+### Une ligne de mail n'est pas une ligne de fichier
+
+Un fichier se dit par son nom. Un mail se dit par **qui l'a écrit, de quoi il
+parle, quand, et s'il portait quelque chose**. La ligne reprend les classes de
+la liste des sujets — `issue-row-title-grid`, `row-title-trigger` — et rien de
+plus : un dossier de mails n'est pas un écran à part.
+
+> **Ce qui a dû changer pour cela.** La console disait, depuis un tour, « rien
+> n'est extrait ». C'était tenable tant que la seule chose montrée d'un mail
+> était son nom de fichier. Une liste à la manière d'une messagerie ne l'est
+> plus : il faudrait rapatrier deux cents fichiers pour dessiner deux cents
+> lignes. Cinq colonnes portent donc l'index — expéditeur, objet, date, nombre
+> de pièces, fil (`202610260001_lindex_des_mails.sql`). C'est **un index de ses
+> propres fichiers**, au même titre que `mime_type` : rien n'y est un constat,
+> rien n'y est signé, rien n'entre dans ce que le chantier sait (règle 1).
+
+### Ouvrir un mail ouvre l'échange
+
+Comme dans une messagerie : celui qui ouvre une réponse a besoin de la question.
+Les messages d'un même fil se retrouvent par `mail_fil` — l'objet débarrassé de
+ses « RE : », écrit au dépôt — et se rapatrient **bornés à vingt**.
+
+**Il n'y a pas de lecteur de mails.** Le fil devient un document en Markdown, et
+c'est le lecteur de documents qui le montre : deux onglets, une barre, un arbre
+— ceux qui existent déjà. Un écran de plus aurait fait un second jeu de classes
+à recalibrer au premier correctif (règle 4).
+
+> **Le crayon ne s'y dessine pas**, et la garde est posée deux fois. Ce qu'on
+> lit n'est pas le fichier : c'est l'échange rendu. « Enregistrer » aurait écrit
+> ce Markdown par-dessus le `.eml` — c'est-à-dire détruit la pièce d'origine.
+
+### Ce qui reste, et dans quel ordre
+
+**1. Les pièces jointes cliquables depuis le fil.** Elles sont nommées dans
+l'en-tête de chaque message, et ne s'ouvrent pas : ce sont des documents
+distincts, rangés dans `Mails/Pièces jointes/`, et les rapprocher demande de
+décider sur quoi — le nom et la taille, faute d'avoir gardé le lien au dépôt.
+C'est ce lien qui manque, et c'est le même que la galerie réclamera.
+
+**2. La galerie des pièces**, puis **les photos à part** (§ 8 nonies).
+
+**3. Le survol bleu** vaut désormais pour toute l'arborescence. Il n'était posé
+que sur les fichiers de la Mémoire : un dossier survolé ne répondait pas, ce qui
+le faisait passer pour inerte alors qu'il s'ouvre. Un oubli, pas une intention.
+
 ## 9. À enrichir
 
 - Le déposant : navigateur ou fonction de bord ? (cent mille pièces ne passent

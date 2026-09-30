@@ -155,8 +155,11 @@ export function phraseDeCeQueCaPermet(comptes = null) {
 export const CE_QUI_NEST_PAS_FAIT = [
   {
     quoi: "L'extraction du contenu",
-    ou: "rien n'est extrait : le mail est gardé tel quel, et relu à chaque lecture",
-    pourquoi: "tant qu'on ne sait pas ce qu'on en tirera, extraire serait figer une forme"
+    ou: "cinq valeurs au dépôt — expéditeur, objet, date, nombre de pièces, fil —, "
+      + "et rien d'autre : le corps est gardé tel quel, et relu à chaque lecture",
+    pourquoi: "sans elles, une liste de deux cents mails demanderait deux cents "
+      + "rapatriements ; au-delà, extraire serait figer une forme avant de savoir "
+      + "ce qu'on en tirera"
   },
   {
     quoi: "La reconnaissance des domaines",

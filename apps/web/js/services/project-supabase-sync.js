@@ -788,6 +788,18 @@ function mapDocumentRowToViewModel(row = {}) {
     deposant: row.deposant === undefined
       ? undefined
       : (safeString(row.deposant) || null),
+    // **L'index d'un mail**, écrit au dépôt : qui a écrit, de quoi, quand, et
+    // combien de pièces. Vide partout ailleurs — un document ordinaire n'a pas
+    // d'expéditeur (`la-ligne-dun-mail.js`).
+    mailDe: safeString(row.mail_de || "") || null,
+    mailObjet: safeString(row.mail_objet || "") || null,
+    mailQuand: safeString(row.mail_quand || "") || null,
+    mailFil: safeString(row.mail_fil || "") || null,
+    // `0` et « ce n'est pas un mail » ne se disent pas pareil : le premier est
+    // un compte, le second une absence de question posée (règle 5).
+    mailPieces: row.mail_pieces === undefined || row.mail_pieces === null
+      ? null
+      : Number(row.mail_pieces),
     // La proposition par laquelle ce document est entré, **s'il en a une**.
     //
     // `undefined` est conservé tel quel : toutes les lectures de la table ne
@@ -1291,7 +1303,7 @@ export async function listDocumentDirectory(projectId = "", folderId = null) {
     // dossier est privé, le déposant est connu, et c'est moi. Dessiné sur la
     // seule appartenance au dossier, il promettrait « vous seul y avez accès »
     // sur un fichier que toute l'équipe voit.
-    fileParams.set("select", "id,project_id,folder_id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at,deleted_at,deposant,detection_status,detection_reason,detected_kind,detected_kind_label,detected_author,detection_confidence,content_fingerprint,duplicate_of_document_id,reissue_of_document_id,corpus_state,proposition_id,transcribed_at");
+    fileParams.set("select", "id,project_id,folder_id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at,deleted_at,deposant,mail_de,mail_objet,mail_quand,mail_pieces,mail_fil,detection_status,detection_reason,detected_kind,detected_kind_label,detected_author,detection_confidence,content_fingerprint,duplicate_of_document_id,reissue_of_document_id,corpus_state,proposition_id,transcribed_at");
     fileParams.set("project_id", `eq.${backendProjectId}`);
     fileParams.set("deleted_at", "is.null");
     // Un document soumis à une proposition n'est pas encore dans le corpus : le
@@ -1313,6 +1325,11 @@ export async function listDocumentDirectory(projectId = "", folderId = null) {
       currentFolder,
       breadcrumb,
       folders,
+      // **Tous les dossiers du projet**, et non les seuls enfants du dossier
+      // courant. L'arbre en a besoin pour savoir où est « Mails » : il le
+      // devinait jusqu'ici dans la liste des voisins, qui ne le contient que
+      // lorsqu'on se trouve déjà à la racine.
+      tous: allFolders,
       files
     };
   } catch (error) {

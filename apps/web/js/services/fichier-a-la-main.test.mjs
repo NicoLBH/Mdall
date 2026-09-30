@@ -424,7 +424,11 @@ test("entrer dans un dossier de Documents se dit à un seul endroit", () => {
   // l'arbre disait qu'on est dans Documents : charger le bon dossier n'y
   // changeait rien, et l'on retombait sur l'accueil de l'onglet.
   assert.notEqual(entrer.length, 0, "la fonction a changé de nom");
-  assert.match(entrer, /docsViewState\.branche = BRANCHE\.DOCUMENTS;/);
+  // **La branche est donnée, et vaut Documents par défaut.** « Mails » est une
+  // racine depuis ce tour, et entrer dans son dossier doit poser la sienne —
+  // sinon l'arbre allume Documents pendant qu'on lit un mail.
+  assert.match(entrer, /branche = BRANCHE\.DOCUMENTS\) \{/);
+  assert.match(entrer, /docsViewState\.branche = branche;/);
   // Et un fichier ouvert ne survit pas au changement de dossier : il resterait
   // à l'écran sous le chemin d'un autre dossier.
   assert.match(entrer, /docsViewState\.texte = null;/);
@@ -436,8 +440,12 @@ test("entrer dans un dossier de Documents se dit à un seul endroit", () => {
   // dépouillement. Il emmène dans un dossier qui vient parfois d'être créé, et
   // il passe par le même geste que les trois autres — l'épreuve d'à côté l'a
   // rappelé au moment où il avait été écrit autrement.
+  //
+  // Le cinquième aussi : la racine « Mails » de l'arbre. Elle n'est pas un
+  // endroit à part, c'est un dossier — donc on y entre comme dans un dossier.
   const appels = ecran.match(/await allerDansLeDossier\(root,/g) ?? [];
-  assert.equal(appels.length, 4, "l'arbre, le fil d'Ariane, le tableau, le dépouillement");
+  assert.equal(appels.length, 5,
+    "l'arbre, le fil d'Ariane, le tableau, le dépouillement, la racine des mails");
 });
 
 test("aucun geste ne charge un dossier de Documents pour son compte", () => {
