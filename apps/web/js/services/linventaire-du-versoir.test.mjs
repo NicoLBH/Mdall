@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 
 import {
   PIECE, inventaireDunMessage, inventaireDuVersoir, phraseDeCeQuOnNeSaitPasRapprocher,
-  phraseDeCeQuiSeRepete, phraseDesImagesDeSignature, phraseDuVersoir, poidsDit
+  phraseDeCeQuiSeRepete, phraseDesImagesDeSignature, phraseDuVersoir
 } from "./linventaire-du-versoir.js";
+import { poidsDit } from "../utils/poids-dit.js";
 
 const piece = (nom, taille, dansLeTexte, type = "application/pdf") =>
   ({ nom, taille, dansLeTexte, type });
@@ -149,6 +150,12 @@ test("un poids s'écrit comme on le lit", () => {
   assert.equal(poidsDit(1024), "1,0 ko");
   assert.equal(poidsDit(45500), "46 ko");
   assert.equal(poidsDit(1035588), "1,0 Mo");
+  // **Le gigaoctet, parce que « 41200 Mo » ne se lit pas.** Le défaut était à
+  // l'écran des comptes de la console, et aucune épreuve ne le voyait : elles
+  // s'arrêtaient au mégaoctet, comme le code.
+  assert.equal(poidsDit(41_200_000_000), "41 Go");
+  assert.equal(poidsDit(4_120_000_000), "4,1 Go");
+  assert.equal(poidsDit(2_500_000_000_000), "2,5 To");
   assert.equal(poidsDit(24000000), "24 Mo");
   assert.equal(poidsDit(-1), "");
   assert.equal(poidsDit("plein"), "");

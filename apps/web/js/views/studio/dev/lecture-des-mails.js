@@ -78,16 +78,24 @@ import { detailDeLAppel, prixDeLAppel } from "../../../services/consommation-ia.
 // ici contre « 95 s » là ferait douter du chiffre (règle 10).
 import { formatStepDuration } from "../../../services/run-workflow.js";
 import {
-  DOSSIER_DES_MAILS, EXTENSION_DUN_MAIL, phraseDuDossierDesMails
+  DOSSIER_DES_MAILS, phraseDuDossierDesMails
 } from "../../../services/le-dossier-des-mails.js";
+import {
+  CE_QUI_PORTE_DES_MAILS, estUnPorteurDeMails, lesMessagesDunFichier
+} from "../../../services/les-messages-dun-fichier.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
-/** Ce que cet écran accepte. Nommé une fois : la zone et le champ le lisent. */
-export const ACCEPTE = EXTENSION_DUN_MAIL;
-
-/** Ce qu'un `.eml` porte comme nom, quel que soit le système qui l'a écrit. */
-const EST_UN_EML = /\.eml$/i;
+/**
+ * Ce que cet écran accepte. Nommé une fois : la zone et le champ le lisent.
+ *
+ * **Les trois, depuis ce tour.** Il ne lisait que des `.eml`, et écartait un
+ * `.msg` en disant « ce n'est pas un mail » — alors que c'en est un, que Mdall
+ * sait l'ouvrir depuis deux tours, et que c'est le format que produit Outlook.
+ * La liste vient du service qui sait ce qu'un fichier porte : deux listes
+ * auraient fini par ne pas accepter les mêmes choses (règle 10).
+ */
+export const ACCEPTE = CE_QUI_PORTE_DES_MAILS.join(",");
 
 /** Les deux moitiés de l'écran. Le fil d'abord : c'est l'ordre du procédé. */
 export const ONGLET = { FIL: "fil", ANALYSE: "analyse" };
@@ -203,7 +211,8 @@ function renderEntete(vue) {
       ${renderRangement(vue.versement)}
       ${renderCeQueLaPropositionPortera(vue)}
       <p class="lecture-cr__mot">
-        Déposez des <code>.eml</code> : l'écran <strong>reconstitue le fil</strong> et montre,
+        Déposez des <code>.eml</code>, des <code>.msg</code> ou un <code>.zip</code> :
+        l'écran <strong>reconstitue le fil</strong> et montre,
         message par message, ce que chacun ajoute et ce qu'il recopie.
         <strong>Le dépliage ne coûte rien</strong> — un mail est du texte, pas une image de
         page : aucun appel au modèle. ${escapeHtml(phraseDuDossierDesMails())}
@@ -273,7 +282,8 @@ function renderDepot(vue) {
           svgIcon("mail", { className: "octicon" })}</span>
         <p class="lecture-cr__depot-mot">Déposez des mails, ou choisissez-les.</p>
         <p class="lecture-cr__depot-aide mono-small">
-          Des fichiers <code>.eml</code> — un seul message, ou tout un fil.
+          Des <code>.eml</code>, des <code>.msg</code> d'Outlook, ou un <code>.zip</code>
+          qui en contient — un seul message, ou tout un fil.
           Déposez-en plusieurs à la fois : les doublons ne seront comptés qu'une fois.
         </p>
         <span class="lecture-cr__depot-gestes">
@@ -871,14 +881,14 @@ function renderUnDesaccord(prise) {
 
 // ── Les gestes ─────────────────────────────────────────────────────────────
 
-const lireLesOctets = (fichier) => fichier.arrayBuffer().then((tampon) => new Uint8Array(tampon));
-
 async function prendreLesFichiers(fichiers) {
-  const { retenus, ecartes } = trierLesFichiers([...fichiers], (fichier) => EST_UN_EML.test(fichier?.name ?? ""));
+  const { retenus, ecartes } = trierLesFichiers([...fichiers],
+    (fichier) => estUnPorteurDeMails(fichier?.name ?? ""));
   if (!retenus.length) {
     refuser({
       motif: "aucun de ces fichiers n'est un mail",
-      queFaire: `Cet écran lit des fichiers ${EXTENSION_DUN_MAIL}, tels qu'une messagerie les exporte.`
+      queFaire: `Cet écran lit des ${CE_QUI_PORTE_DES_MAILS.join(", ")}, tels qu'une `
+        + "messagerie les exporte."
     });
     redessiner();
     return;
@@ -890,9 +900,26 @@ async function prendreLesFichiers(fichiers) {
   redessiner();
 
   try {
-    const octets = await Promise.all(retenus.map(lireLesOctets));
-    etat.fil = leFilDesMails(octets);
-    etat.fichiers = retenus.map((fichier) => fichier.name);
+    // **Un fichier déposé en vaut plusieurs.** Un `.zip` porte tout un dossier
+    // de messages : les donner un à un au fil, c'est ce qui fait qu'un export
+    // d'Outlook se lit ici comme ailleurs. Le service qui sait ce qu'un fichier
+    // contient est le même que celui du dépouillement.
+    const dedans = (await Promise.all(retenus.map(lesMessagesDunFichier)))
+      .flatMap((un) => un.messages)
+      .filter((un) => un.octets);
+
+    if (!dedans.length) {
+      etat.phase = "echec";
+      refuser({
+        motif: "aucun message n'a pu être tiré de ces fichiers",
+        queFaire: "Une archive vide, ou des fichiers que ce lecteur ne sait pas ouvrir."
+      });
+      redessiner();
+      return;
+    }
+
+    etat.fil = leFilDesMails(dedans.map((un) => un.octets));
+    etat.fichiers = dedans.map((un) => un.nom);
     etat.ouverts = new Set();
     etat.nonRepris = new Set();
     // **Le relevé de l'ancien fil ne survit pas au nouveau.** Le garder
@@ -922,6 +949,16 @@ async function prendreLesFichiers(fichiers) {
   if (etat.phase === "lu") await ranger(retenus);
 }
 
+/**
+ * Ranger ce qu'on vient de lire, **par le même chemin que le dépouillement**.
+ *
+ * Il y avait deux rangements : celui-ci, qui écrivait toujours en `.eml` et ne
+ * dédoublonnait rien, et celui de Fichiers, qui fait les deux et range aussi
+ * les pièces jointes. Deux façons de ranger un mail auraient fini par ne pas
+ * ranger la même chose (règle 4) — et c'est la plus pauvre qu'on aurait
+ * gardée, puisque c'est celle qu'on relit le moins.
+ */
+
 async function ranger(fichiers) {
   const projectId = texte(store.currentProject?.id ?? store.currentProjectId);
   if (!projectId) return;
@@ -930,16 +967,24 @@ async function ranger(fichiers) {
   redessiner();
 
   try {
-    const { rangerLesMails } = await import("../../../services/deposer-un-mail-supabase.js");
-    const mails = await Promise.all(fichiers.map(async (fichier, rang) => ({
-      octets: await lireLesOctets(fichier),
-      message: etat.fil?.messages?.[rang] ?? {}
-    })));
-    const range = await rangerLesMails(mails, { projectId });
-    etat.rangement = range.motif
-      ? { dit: `Rangement incomplet : ${range.motif}`, enCours: false }
-      : { dit: `${range.ranges} mail${range.ranges > 1 ? "s" : ""} rangé${
-          range.ranges > 1 ? "s" : ""} dans « ${DOSSIER_DES_MAILS} » — dossier privé.`, enCours: false };
+    const [{ depouiller }, { phraseDuConvoi }] = await Promise.all([
+      import("../../../services/le-depouillement-supabase.js"),
+      import("../../../services/le-convoi.js")
+    ]);
+    const journal = await depouiller(fichiers, {
+      projectId,
+      avance: (encours) => {
+        etat.rangement = { dit: phraseDuConvoi(encours) || "Rangement…", enCours: true };
+        redessiner();
+      }
+    });
+    etat.rangement = journal.arrete
+      ? { dit: `Rangement incomplet : ${journal.arrete}`, enCours: false }
+      : {
+        dit: `${phraseDuConvoi(journal)} — dans « ${DOSSIER_DES_MAILS} », `
+          + "que vous seul lisez.",
+        enCours: false
+      };
   } catch (erreur) {
     etat.rangement = { dit: `Rangement impossible : ${String(erreur?.message ?? "cause inconnue")}`, enCours: false };
   }

@@ -52,6 +52,7 @@
  */
 
 import { ceQuiSeRepete } from "./le-dedoublonnage.js";
+import { poidsDit } from "../utils/poids-dit.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -65,26 +66,6 @@ export const PIECE = {
 function instant(valeur) {
   const quand = Date.parse(texte(valeur));
   return Number.isFinite(quand) ? quand : null;
-}
-
-/**
- * Un poids, écrit comme on le lit.
- *
- * **En base mille, et non mille vingt-quatre.** C'est ce que l'explorateur de
- * Windows affiche, et celui qui dépose ses archives compare avec ce qu'il voit
- * chez lui : un écart de sept pour cent sans explication ferait douter du
- * reste.
- *
- * **Et avec une virgule**, comme tout le reste de Mdall. « 6.4 ko » sur un écran
- * français se lit une fois de trop.
- */
-export function poidsDit(octets = 0) {
-  const combien = Number(octets);
-  if (!Number.isFinite(combien) || combien < 0) return "";
-  const virgule = (valeur, apres) => valeur.toFixed(apres).replace(".", ",");
-  if (combien < 1000) return `${Math.round(combien)} o`;
-  if (combien < 1000000) return `${virgule(combien / 1000, combien < 10000 ? 1 : 0)} ko`;
-  return `${virgule(combien / 1000000, combien < 10000000 ? 1 : 0)} Mo`;
 }
 
 /**

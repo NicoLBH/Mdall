@@ -593,6 +593,104 @@ comptes, et dont on sort.
 rien. Chaque ligne de cette console doit pouvoir répondre à : *qu'est-ce que je
 fais différemment si ce nombre double ?*
 
+## 7 ter. Le carburant : le premier écran qui lise quelque chose
+
+> *« Je veux voir ce que le système fait des mails, et comprendre la valeur pour
+> la prédiction. »*
+
+### Ce qu'on peut répondre sans lire un seul mail
+
+Beaucoup, en fait. Pour savoir si un prédicteur a une chance, il n'y a pas
+besoin de lire une correspondance : il faut savoir **combien il y a de
+messages, sur combien de chantiers, et sur quelle durée**.
+
+`comptes_du_carburant()` rend donc des nombres et deux dates. Aucun objet,
+aucune adresse, aucun nom de projet, aucun identifiant. `count(distinct …)` rend
+un nombre, et un nombre ne se remonte pas.
+
+`security definer`, et il faut dire pourquoi : les documents sont gardés par
+`documents_by_project`, qui ne rend à chacun que ses projets — un administrateur
+ne verrait rien. La fonction contourne cette politique, et **ne peut rendre que
+des agrégats, par sa signature elle-même**. C'est la même forme de garde que
+`est_administrateur()` : ce qui sort est un nombre, pas une ligne.
+
+> `est_administrateur()` est recréée à cette occasion. Elle avait été supprimée
+> avec l'archive parce qu'elle n'avait plus un seul appelant, et qu'une fonction
+> `security definer` que rien n'appelle est le pire des deux mondes. Elle en a un
+> de nouveau, et c'est celui pour lequel elle avait été écrite.
+
+### Le total ne dit rien, la répartition dit tout
+
+« 40 000 mails » est un chiffre de plaquette. Quarante mille répartis sur mille
+chantiers sont **quarante mille fois rien** : la prédiction se nourrit de
+*suites* — après tel domaine vient tel autre —, et une suite se lit dans un
+chantier, pas en travers de mille (`docs/nourrir-mdall.md`, § 8 ter).
+
+L'écran montre donc une répartition par tranches, et la ligne qui décide est
+celle-ci : **combien de chantiers portent assez de matière**. Le seuil est de
+cinquante messages, et c'est **une hypothèse déclarée, pas une mesure** : elle
+vient de ce qu'en dessous de cinq points notés la mesure du passé refuse de se
+prononcer (`ligne-de-base.js`), et qu'un chantier rend de l'ordre d'un point
+pour dix messages. À corriger dès qu'on aura mesuré pour de vrai — un seuil faux
+et dit vaut mieux qu'un seuil caché dans une condition (règle 12).
+
+### Ce que le système n'en fait pas, nommément
+
+La question portait aussi sur « l'avancement de leur traitement — anonymisation,
+extraction du contenu, des domaines… ». La réponse honnête est qu'**aucun de ces
+traitements n'existe**. Des barres de progression à zéro pour des étapes jamais
+écrites auraient présenté une intention comme un chantier en cours (règle 12).
+
+L'écran les nomme donc, avec ce qui se passe réellement aujourd'hui :
+
+| | ce qui se passe | pourquoi |
+| --- | --- | --- |
+| l'extraction du contenu | rien n'est extrait ; le mail est gardé tel quel | figer une forme avant de savoir ce qu'on en tirera |
+| la reconnaissance des domaines | elle tourne **dans le navigateur**, à la lecture, et rien n'est gardé | sa table d'indices est un premier jet |
+| l'anonymisation | rien n'est anonymisé, et rien n'a besoin de l'être | les mails ne quittent pas le projet de leur déposant |
+| la mesure du prédicteur, agrégée | elle se calcule par chantier, chez son déposant | l'agréger demanderait de faire sortir un chiffre d'un projet |
+
+**La dernière ligne est la plus intéressante**, et c'est le prochain vrai
+chantier de cette console : la mesure existe déjà (`mesureDuPredicteur`), mais
+elle se calcule là où le contenu vit. Pour la voir ici, il faudrait faire sortir
+**un nombre** d'un projet — et donc le demander à celui qui l'a déposé. Ce n'est
+pas un problème technique, c'est un consentement.
+
+## 7 quater. Ce que je propose d'y mettre ensuite
+
+Dans l'ordre où je les écrirais, et chacune répond à *« qu'est-ce que je fais
+différemment si ce nombre bouge ? »*
+
+**1. La mesure du prédicteur, agrégée — avec consentement.** Un bouton dans les
+Indicateurs d'un projet : *« verser cette mesure au fonds commun »*, qui envoie
+**quatre nombres** — précision au premier coup, dans les trois, jours d'avance,
+taux de fausse alerte — et rien d'autre. La console montre alors la courbe de ce
+que Mdall sait prédire, sur l'ensemble des chantiers qui ont accepté. *C'est le
+seul indicateur qui dise si le produit marche.*
+
+**2. Le mur des lectures manquées.** Combien de messages n'ont **rien cité qu'on
+sache lire** — `sansIndice` existe déjà et se compte par chantier. Agrégé, c'est
+la liste des choses que la table d'indices ignore, donc la prochaine ligne à
+écrire. Un compte, jamais les textes.
+
+**3. Ce qui tombe en panne.** `refus_des_fonctions` existe : fonction, genre,
+code, instant, **jamais le message**. Une courbe par semaine et un palmarès des
+trois fonctions qui échouent le plus. Si une fonction casse pour tout le monde,
+on l'apprend ici avant qu'on ne l'écrive.
+
+**4. Les cohortes.** Date d'entrée et dernière trace de chaque compte, deux
+colonnes qui **n'existent pas encore** et qu'il faut écrire avant d'en avoir
+besoin — un journal qui commence en mars ne dit rien de février (§ 5). Ensuite :
+qui revient la deuxième semaine, et le troisième mois.
+
+**5. Le coût, rapporté à ce qu'il produit.** La consommation existe par projet ;
+agrégée, elle donne le coût d'un chantier nourri. C'est la moitié de la question
+de l'unité de facturation, et la seule moitié qui soit mesurable.
+
+**6. Le journal des accès administrateurs.** Toujours pas écrit, toujours
+irrattrapable, et **maintenant urgent** : cette console lit désormais quelque
+chose (§ 5).
+
 ## 8. À enrichir
 
 - Le support : que fait-on quand quelqu'un écrit « ma valeur a disparu » sans

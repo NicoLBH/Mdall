@@ -40,6 +40,7 @@
 import { NATURE, ceQuonCite } from "./ce-quon-cite.js";
 import { TROU, unTrou } from "./trous-dun-mail.js";
 import { uneAdresse, unMailDeplie } from "./un-mail-deplie.js";
+import { cestUnConteneurOutlook, unMsgDeplie } from "./un-msg-deplie.js";
 
 /** D'où l'on tient un message. */
 export const CERTITUDE = {
@@ -129,7 +130,11 @@ export function lesMessagesCites(blocs) {
 
 /** Un `.eml` déplié, puis séparé en propos et citations. */
 export function unMessageDuFil(source) {
-  const deplie = unMailDeplie(source);
+  // **Ce sont les octets qui disent comment les lire**, pas l'extension du
+  // fichier qui les portait. Un fil exporté d'Outlook arrive en `.msg` ; le
+  // donner au lecteur de `.eml` ne rendait ni objet ni corps, et le message
+  // comptait comme un trou sans qu'on sache pourquoi.
+  const deplie = cestUnConteneurOutlook(source) ? unMsgDeplie(source) : unMailDeplie(source);
   const decoupe = ceQuonCite(deplie.corps ?? "");
   return { deplie, decoupe, trous: [...deplie.trous, ...decoupe.trous] };
 }

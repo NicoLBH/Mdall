@@ -7,6 +7,7 @@ import {
   unMessageDuFil
 } from "./le-fil-des-mails.js";
 import { TROU } from "./trous-dun-mail.js";
+import { cestUnConteneurOutlook } from "./un-msg-deplie.js";
 
 // Aucun mail réel : les noms, les sociétés et les domaines sont inventés.
 const mail = (...lignes) => lignes.join("\r\n");
@@ -497,4 +498,49 @@ test("un message sans propos ne monte pas", () => {
 test("ce qui monte ne porte que le rang, le propos, l'auteur et la date", () => {
   const [monte] = messagesAEnvoyer(DEUX().messages);
   assert.deepEqual(Object.keys(monte).sort(), ["propos", "quand", "qui", "rang"]);
+});
+
+/* ── Un .msg dans le fil ─────────────────────────────────────────────────── */
+
+/**
+ * **Ce sont les octets qui disent comment les lire.**
+ *
+ * Un fil exporté d'Outlook arrive en `.msg`. Donné au lecteur de `.eml`, il ne
+ * rendait ni objet ni corps : le message comptait comme un trou sans qu'on
+ * sache pourquoi, et l'écran de lecture l'écartait en disant « ce n'est pas un
+ * mail ».
+ *
+ * Le nom du fichier n'aurait pas fait l'affaire : un `.msg` renommé reste un
+ * `.msg`, et une messagerie maladroite nomme parfois `.msg` ce qui n'en est pas.
+ */
+test("un conteneur Outlook se reconnaît à sa signature, pas à son nom", () => {
+  const signe = new Uint8Array(600);
+  signe.set([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+  assert.equal(cestUnConteneurOutlook(signe), true);
+
+  assert.equal(cestUnConteneurOutlook(new TextEncoder().encode("From: a@b.example\r\n\r\nBonjour")), false);
+  assert.equal(cestUnConteneurOutlook(new Uint8Array([0xd0, 0xcf])), false);
+  assert.equal(cestUnConteneurOutlook(null), false);
+
+  // **Les huit octets, pas le premier.** Se contenter de `0xd0` prendrait pour
+  // un conteneur n'importe quel fichier qui commence par cet octet — et rien
+  // ne le dirait, puisque le reste de la lecture échouerait plus loin.
+  const presque = new Uint8Array(600);
+  presque.set([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0x00]);
+  assert.equal(cestUnConteneurOutlook(presque), false);
+});
+
+/**
+ * Le conteneur est **abîmé** ici — c'est voulu. Ce qu'on vérifie n'est pas
+ * qu'on sait lire un `.msg` (les épreuves de `un-msg-deplie` s'en chargent),
+ * c'est que le fil **l'a donné au bon lecteur** : seul celui des `.msg` sait
+ * dire « ce fichier n'a pas l'allure d'un message Outlook ».
+ */
+test("le fil donne les octets signés au lecteur de .msg", () => {
+  const signe = new Uint8Array(600);
+  signe.set([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+
+  const { trous } = unMessageDuFil(signe);
+  assert.ok(trous.some((un) => un.quoi === TROU.PAS_UN_MSG),
+    "le fil a lu ces octets comme un .eml");
 });

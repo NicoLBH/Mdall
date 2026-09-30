@@ -38,37 +38,13 @@
 import {
   DOSSIER_DES_MAILS, DOSSIER_DES_PIECES, EXTENSION_DUN_MAIL
 } from "./le-dossier-des-mails.js";
-import { poidsDit } from "./linventaire-du-versoir.js";
+import { poidsDit } from "../utils/poids-dit.js";
+// **Ce qu'un fichier porte se demande à un seul endroit.** Le dépouillement et
+// la lecture des mails posent la même question ; deux réponses auraient fini
+// par ne plus dire la même chose (règle 10).
+import { estUnPorteurDeMails } from "./les-messages-dun-fichier.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
-
-/**
- * Ce qui, dans un dépôt, porte des mails.
- *
- * `.msg` et `.eml` sont des messages ; `.zip` est une archive qui en contient.
- * Un `.pst` n'y est pas, et ce n'est pas un oubli : une boîte Outlook entière ne
- * se lit pas dans un navigateur, et prétendre le contraire ferait échouer le
- * dépôt le plus important de tous sans rien expliquer (règle 12).
- */
-export const CE_QUI_PORTE_DES_MAILS = [".msg", EXTENSION_DUN_MAIL, ".zip"];
-
-/**
- * Ce qu'un message déposé déclare être, **selon les octets qu'on garde**.
- *
- * Un `.msg` est un conteneur Outlook, pas du `message/rfc822` : le déclarer
- * ainsi ferait échouer son ouverture par tout ce qui croit le type annoncé. On
- * garde les octets d'origine, donc on déclare ce qu'ils sont.
- */
-export const LE_TYPE_DUN_MESSAGE = {
-  ".msg": "application/vnd.ms-outlook",
-  [EXTENSION_DUN_MAIL]: "message/rfc822"
-};
-
-/** Ce nom a-t-il l'allure d'un porteur de mails ? */
-export function estUnPorteurDeMails(nom) {
-  const bas = texte(nom).toLowerCase();
-  return CE_QUI_PORTE_DES_MAILS.some((quoi) => bas.endsWith(quoi));
-}
 
 /**
  * Partager un dépôt en deux : ce qui se dépouille, et ce qui se dépose.

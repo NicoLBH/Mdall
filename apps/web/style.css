@@ -7313,14 +7313,22 @@ body.route--project.documents-pdf-sticky-mode.documents-local-chrome-compact #ap
   align-items:center;
   gap:10px;
   min-width:0;
+  font-size:14px;
 }
 
 .documents-uploaded-file__icon{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  color:var(--fg);
+  /* L'icône accompagne le nom, elle ne le concurrence pas : elle tient sur la
+     ligne et prend la couleur de ce qui est secondaire. */
+  color:var(--muted);
   flex:0 0 auto;
+}
+
+.documents-uploaded-file__icon svg{
+  width:20px;
+  height:20px;
 }
 
 .documents-uploaded-file__name{

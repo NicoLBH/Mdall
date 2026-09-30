@@ -1168,7 +1168,7 @@ export async function createDocumentFolder(projectId = "", parentFolderId = null
     //
     // Ce qui protège la correspondance reste entier, et se tient ailleurs : un
     // mail ne se range pas sans déposant connu
-    // (`deposer-un-mail-supabase.js`, `le-depouillement-supabase.js`).
+    // (`le-depouillement-supabase.js`).
     const parQui = String((await getCurrentUser().catch(() => null))?.id ?? "");
 
     return await restInsert("project_document_folders", {

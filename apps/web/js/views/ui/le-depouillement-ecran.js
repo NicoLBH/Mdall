@@ -10,12 +10,13 @@
 
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
+import { renderSpinnerHtml } from "./spinner.js";
 import { LE_CADENAS } from "../../services/le-dossier-des-mails.js";
 import {
   LES_DESTINATIONS, cheminDit, phraseDeLaConfidentialite
 } from "../../services/le-depouillement.js";
 import { MOTS_DU_SORT, avancement, phraseDuConvoi } from "../../services/le-convoi.js";
-import { poidsDit } from "../../services/linventaire-du-versoir.js";
+import { poidsDit } from "../../utils/poids-dit.js";
 
 /**
  * L'étape du dépouillement : **où cela va, avant que cela n'y aille**.
@@ -90,9 +91,10 @@ export function renderLeDepouillement({ porteurs = [], journal = null } = {}) {
         : ""}
 
       ${journal
-        ? `<p class="documents-repo__message-meta">${escapeHtml(
+        ? `<p class="documents-repo__message-meta${enCours ? " est-en-cours" : ""}" role="status">${
+            enCours ? renderSpinnerHtml({ label: "", size: "sm" }) : ""}${escapeHtml(
             phraseDuConvoi(journal)
-            || (enCours ? "lecture…" : "rien à dépouiller"))}${
+            || (enCours ? "lecture des fichiers…" : "rien à dépouiller"))}${
             fraction !== null && enCours ? ` — ${Math.round(fraction * 100)} %` : ""}</p>`
         : ""}
 
@@ -120,13 +122,23 @@ export function renderLeDepouillement({ porteurs = [], journal = null } = {}) {
         dépôt terminé, il n'y a plus rien à dépouiller : le bouton s'en va, il
         ne se grise pas. C'est la même règle que le geste de verser, du temps du
         versoir.
+
+        **Et il est remplacé.** Un compte rendu sans suite laissait devant
+        « 7 messages versés » sans rien à faire : on cliquait sur « Valider »,
+        qui ne concernait pas ce dépôt-là, et il ne se passait rien. Ce qu'on
+        veut à ce moment, c'est aller voir.
       */""}
-      ${porteurs.length ? `
-        <div class="documents-commit-card__actions">
-          <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" id="documentsDepouillerBtn"
-            ${enCours ? "disabled" : ""}>${
-            enCours ? "Dépouillement…" : "Dépouiller"}</button>
-        </div>` : ""}
+      <div class="documents-commit-card__actions">
+        ${porteurs.length
+          ? `<button type="button" class="gh-btn gh-btn--sm gh-btn--primary" id="documentsDepouillerBtn"
+               ${enCours ? "disabled" : ""}>${enCours ? "Dépouillement…" : "Dépouiller"}</button>`
+          : ""}
+        ${!porteurs.length && journal?.fini && !journal?.arrete && journal?.ou?.messages
+          ? `<button type="button" class="gh-btn gh-btn--sm gh-btn--primary"
+               id="documentsVoirLesMailsBtn"
+               data-dossier="${escapeHtml(journal.ou.messages)}">Voir les mails rangés</button>`
+          : ""}
+      </div>
     </section>
   `;
 }

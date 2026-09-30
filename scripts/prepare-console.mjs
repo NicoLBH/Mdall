@@ -55,7 +55,14 @@ export const RACINES = [
   "js/services/la-porte-de-la-console-supabase.js",
   // Les icônes de Mdall, pour l'avatar du retour. Le même passage que la barre
   // du haut, et la même feuille de sprites.
-  "js/ui/icons.js"
+  "js/ui/icons.js",
+  // Les comptes du carburant : des nombres, jamais un contenu. La fonction de
+  // base ne rend ni objet, ni adresse, ni nom de chantier.
+  "js/services/les-comptes-du-carburant-supabase.js",
+  // Ce que ces nombres veulent dire : les tranches, le seuil, les phrases. Pur,
+  // et il n'entraîne qu'un formatage de poids — c'est pour cela que `poidsDit`
+  // a quitté l'inventaire du versoir, que la console ne doit pas emporter.
+  "js/services/les-comptes-du-carburant.js"
 ];
 
 /**
