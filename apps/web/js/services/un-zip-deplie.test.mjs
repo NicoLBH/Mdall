@@ -272,6 +272,26 @@ test("seuls les .msg sont des messages, et leur chemin se garde", () => {
     ["2026/Montholon/reunion-04.msg", "2026/Montholon/PIECES.MSG"]);
 });
 
+/**
+ * **Une archive de chantier porte les deux.** Selon la messagerie qui l'a
+ * produite, les messages sont des `.msg` ou des `.eml` : ne prendre que les
+ * premiers laisserait des fils entiers derrière soi sans rien dire (règle 5).
+ *
+ * Et **pas les `.zip` imbriqués** : c'est déclaré, parce qu'un parcours sans
+ * fond se découvre en production.
+ */
+test("une archive rend ses .msg et ses .eml, jamais ses .zip", () => {
+  const zip = graverUnZip([
+    { nom: "2026/reunion.msg", quoi: CORPS },
+    { nom: "2026/fil-etancheite.eml", quoi: CORPS },
+    { nom: "2026/FIL.EML", quoi: CORPS },
+    { nom: "2026/dedans.zip", quoi: "rien" },
+    { nom: "2026/un.eml.pdf", quoi: "rien" }
+  ]);
+  assert.deepEqual(lesMessagesDeLarchive(lireLannuaire(zip).entrees).map((une) => une.nom),
+    ["2026/reunion.msg", "2026/fil-etancheite.eml", "2026/FIL.EML"]);
+});
+
 test("les dossiers cachés d'un système de fichiers ne portent rien", () => {
   const zip = graverUnZip([
     { nom: "__MACOSX/2026/._reunion.msg", quoi: "rien" },

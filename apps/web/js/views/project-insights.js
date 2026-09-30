@@ -15,6 +15,9 @@ import { episodeDuProjet } from "../services/episode-du-projet.js";
 import { LIGNES_DE_BASE, lesDomainesVenus } from "../services/ligne-de-base.js";
 import { mesureDuPredicteur } from "../services/mesure-du-passe.js";
 import { renderLaForme } from "./ui/forme-du-chantier.js";
+import {
+  renderLeGesteDeRelire, renderLepisodeDeLaCorrespondance
+} from "./ui/episode-de-la-correspondance.js";
 
 function formatDuration(value) {
   const ms = Number(value);
@@ -258,12 +261,22 @@ export function renderProjectInsights(root) {
         ${renderPilotageMetricStrip(insights.summary)}
         ${renderChartsSection(insights)}
         <div id="projectInsightsForme"></div>
+        ${/*
+          **La correspondance juste après la forme, et pas ailleurs.** Les deux
+          répondent à la même question — « à quoi ressemble ce chantier, et
+          qu'est-ce qui y est arrivé » —, l'une depuis la mémoire du projet,
+          l'autre depuis les mails déposés. Un écran, deux sources. Les séparer
+          aurait fait deux endroits où lire la même chose, et le second aurait
+          été celui qu'on ne relit jamais.
+        */""}
+        <div id="projectInsightsCorrespondance"></div>
         <div id="projectInsightsConsommation"></div>
       </div>
     </section>
   `;
 
   dessinerLaForme(root);
+  dessinerLaCorrespondance(root);
   dessinerLaConsommation(root);
   debugProjectScrollPolicy("render-project-insights");
 }
@@ -379,6 +392,125 @@ function peindreLaForme(hote) {
   }));
 
   hote.innerHTML = renderLaForme(vecteur, episode, mesures);
+}
+
+/* ── La correspondance déposée, et ce qu'on en tire ──────────────────────── */
+
+/**
+ * Ce qui a été relu, et pour quel projet.
+ *
+ * **Rien n'est lu tant qu'on ne le demande pas.** Deux cents rapatriements ne
+ * peuvent pas partir parce qu'on a ouvert les Indicateurs : c'est un geste, et
+ * il s'annonce. Une fois lue, la correspondance reste en mémoire le temps de la
+ * page — la relire à chaque rendu referait la dépense à chaque clic sur un fil.
+ */
+const laCorrespondanceLue = {
+  projetId: "", bilan: null, episode: null, mesures: [], enCours: false, motif: "", ouvert: ""
+};
+
+function dessinerLaCorrespondance(root) {
+  const hote = root?.querySelector?.("#projectInsightsCorrespondance");
+  if (!hote) return;
+
+  const projet = String(store.currentProjectId || "").trim();
+  if (!projet) return;
+
+  // Un autre projet : ce qui a été lu ne le décrit plus. On repart de la
+  // proposition de lecture plutôt que de montrer la chronologie du voisin.
+  if (laCorrespondanceLue.projetId !== projet) {
+    laCorrespondanceLue.projetId = projet;
+    laCorrespondanceLue.bilan = null;
+    laCorrespondanceLue.episode = null;
+    laCorrespondanceLue.mesures = [];
+    laCorrespondanceLue.motif = "";
+    laCorrespondanceLue.ouvert = "";
+  }
+
+  peindreLaCorrespondance(hote);
+
+  hote.addEventListener("click", (evenement) => {
+    if (evenement.target.closest?.("#insightsRelireBtn")) {
+      relireLaCorrespondance(hote);
+      return;
+    }
+    const fil = evenement.target.closest?.("[data-episode-fil]");
+    if (!fil) return;
+    // Recliquer sur le fil ouvert le referme : on lit une correspondance en
+    // ouvrant et refermant, pas en empilant.
+    laCorrespondanceLue.ouvert =
+      laCorrespondanceLue.ouvert === fil.dataset.episodeFil ? "" : fil.dataset.episodeFil;
+    peindreLaCorrespondance(hote);
+  });
+}
+
+async function relireLaCorrespondance(hote) {
+  if (laCorrespondanceLue.enCours) return;
+  laCorrespondanceLue.enCours = true;
+  laCorrespondanceLue.motif = "";
+  peindreLaCorrespondance(hote);
+
+  try {
+    const [{ lireLaCorrespondance }, { resolveCurrentBackendProjectId }, { episodeDuneArchive }] =
+      await Promise.all([
+        import("../services/la-correspondance-du-projet-supabase.js"),
+        import("../services/project-supabase-sync.js"),
+        import("../services/episode-dune-archive.js")
+      ]);
+
+    const backendProjectId = await resolveCurrentBackendProjectId();
+    const lu = backendProjectId ? await lireLaCorrespondance(backendProjectId) : null;
+
+    // **Ne pas savoir n'est pas savoir qu'il n'y a rien** (règle 5). Un écran
+    // qui dirait « aucun mail » après une lecture ratée ferait croire le dossier
+    // vide, et l'on ne redemanderait jamais.
+    if (lu === null) {
+      laCorrespondanceLue.motif =
+        "La correspondance n'a pas pu être lue. Ce n'est pas qu'elle est vide : "
+        + "on ne sait pas ce qu'elle contient.";
+      return;
+    }
+
+    if (!lu.messages.length) {
+      laCorrespondanceLue.motif = lu.motif
+        || "Aucun message n'a pu être relu dans ce projet.";
+      return;
+    }
+
+    const episode = episodeDuneArchive({ messages: lu.messages });
+    // **La mesure vient avant tout moteur.** Ce que les deux bêtises savent
+    // prédire sur ce passé est le mur contre lequel un vrai prédicteur devra
+    // cogner — et il vaut mieux le connaître d'avance.
+    laCorrespondanceLue.episode = episode;
+    laCorrespondanceLue.bilan = lu;
+    laCorrespondanceLue.mesures = LIGNES_DE_BASE.map((ligne) => ({
+      ...ligne,
+      mesure: mesureDuPredicteur(episode, { predire: ligne.predire, arrive: lesDomainesVenus })
+    }));
+  } catch (erreur) {
+    laCorrespondanceLue.motif = String(erreur?.message ?? "") || "cause inconnue";
+  } finally {
+    laCorrespondanceLue.enCours = false;
+    peindreLaCorrespondance(hote);
+  }
+}
+
+function peindreLaCorrespondance(hote) {
+  if (!hote?.isConnected) return;
+
+  if (laCorrespondanceLue.episode) {
+    hote.innerHTML = renderLepisodeDeLaCorrespondance(
+      laCorrespondanceLue.episode,
+      laCorrespondanceLue.mesures,
+      { bilan: laCorrespondanceLue.bilan, ouvert: laCorrespondanceLue.ouvert }
+    );
+    return;
+  }
+
+  hote.innerHTML = renderLeGesteDeRelire({ enCours: laCorrespondanceLue.enCours })
+    + (laCorrespondanceLue.motif
+      ? `<section class="conso-usages"><p class="forme-manques">${
+          escapeHtml(laCorrespondanceLue.motif)}</p></section>`
+      : "");
 }
 
 /* ── Ce que l'IA a consommé sur ce projet ────────────────────────────────── */

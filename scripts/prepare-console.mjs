@@ -53,33 +53,47 @@ const partageDir = path.join(consoleDir, "partage");
  */
 export const RACINES = [
   "js/services/la-porte-de-la-console-supabase.js",
-  "js/services/un-msg-deplie.js",
-  "js/services/linventaire-du-versoir.js",
-  "js/services/larchive-des-pieces-supabase.js",
-  "js/services/larchive-des-messages-supabase.js",
-  "js/services/le-convoi.js",
-  "js/services/un-zip-deplie.js",
-  "js/services/episode-dune-archive.js",
-  "js/services/ligne-de-base.js",
-  "js/services/mesure-du-passe.js",
-  // Le tableau de la référence à battre, tel quel : deux écrans le montrent, et
-  // écrit deux fois il aurait dit deux choses du même chiffre (règle 4).
-  "js/views/ui/forme-du-chantier.js",
-  // **Le lecteur de PDF de Mdall, tel quel.** Celui de l'onglet Documents et du
-  // copilote. Il ne dépend de rien et dessine dans les classes que la feuille
-  // de style porte déjà : un second lecteur écrit pour la console aurait
-  // divergé du premier au premier correctif (règle 4).
-  "js/services/ct-lab-pdf-view.js"
+  // Les icônes de Mdall, pour l'avatar du retour. Le même passage que la barre
+  // du haut, et la même feuille de sprites.
+  "js/ui/icons.js"
 ];
+
+/**
+ * Cette liste a perdu dix lignes d'un coup, et c'est la mesure de ce tour.
+ *
+ * Elle portait `un-msg-deplie`, `un-zip-deplie`, `le-convoi`,
+ * `linventaire-du-versoir`, `episode-dune-archive`, les deux archives, la ligne
+ * de base, la mesure du passé, le tableau de la forme et **le lecteur de PDF**.
+ * Autrement dit : la moitié des services de l'application, dans une page dont
+ * tout l'intérêt était de ne rien pouvoir atteindre.
+ *
+ * Personne ne l'avait décidé. Chaque ligne s'était ajoutée pour une bonne
+ * raison, et l'ensemble avait fini par faire une seconde application. C'est
+ * exactement ce que cette liste devait rendre visible, et elle l'a rendu
+ * visible — un tour trop tard.
+ */
 
 /**
  * Ce qui part tel quel, sans être suivi : ni import ni dépendance.
  *
- * `vendor/unpdf` est un dossier, et il est produit par `npm run build:web` —
- * c'est pdf.js, que le lecteur charge à la demande par un chemin calculé. Le
- * parcours des imports ne peut pas le voir : il est nommé ici.
+ * `vendor/unpdf` n'y est plus : il n'y était que pour le lecteur de PDF de
+ * l'archive, et pdf.js pèse à lui seul plus que tout le reste de la console.
  */
-export const TELS_QUELS = ["style.css", "assets/icons.svg", "assets/favicon.svg", "vendor/unpdf"];
+export const TELS_QUELS = ["style.css", "assets/icons.svg", "assets/favicon.svg"];
+
+/**
+ * Ce qui doit atterrir **à la racine de la console**, et pas dans `partage/`.
+ *
+ * `svgIcon` résout la feuille de sprites contre la page (`assets/icons.svg`,
+ * dans `js/ui/icons.js`), pas contre son propre module : depuis
+ * `apps/console/index.html`, elle est donc attendue à côté de la page. La
+ * corriger dans `icons.js` aurait cassé l'application, où le chemin est juste.
+ *
+ * Une copie, donc, et une seule source : le fichier de `apps/web`. Deux
+ * sprites entretenus à la main auraient fini par ne plus porter les mêmes
+ * icônes (règle 4).
+ */
+export const A_LA_RACINE = ["assets/icons.svg", "assets/images/260093543.png"];
 
 /**
  * Les chemins qu'un module importe, tels qu'ils sont écrits.
@@ -146,6 +160,7 @@ async function main() {
   const modules = await lesModulesAEmporter(lire);
 
   await rm(partageDir, { recursive: true, force: true });
+  await rm(path.join(consoleDir, "assets"), { recursive: true, force: true });
 
   for (const relatif of [...modules, ...TELS_QUELS]) {
     const source = path.join(webDir, relatif);
@@ -158,6 +173,12 @@ async function main() {
     await mkdir(path.dirname(destination), { recursive: true });
     // `recursive` : certains emportés sont des dossiers (pdf.js et ses fichiers).
     await cp(source, destination, { recursive: true });
+  }
+
+  for (const relatif of A_LA_RACINE) {
+    const destination = path.join(consoleDir, relatif);
+    await mkdir(path.dirname(destination), { recursive: true });
+    await cp(path.join(webDir, relatif), destination, { recursive: true });
   }
 
   // De quoi lire, dans un diff, ce que la console a fini par emporter. Une

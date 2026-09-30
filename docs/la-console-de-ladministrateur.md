@@ -29,12 +29,16 @@ comme tel ; tout le reste est à faire.
 
 | la porte de la console — une adresse, et rien d'autre | table `administrateurs`, `services/la-porte-de-la-console.js` | « suis-je administrateur ? », et jamais « qui l'est ? » |
 | le site de la console, construit à part | `apps/console`, `scripts/prepare-console.mjs`, `npm run build:console` | un autre bâtiment, servi sous `console/` |
-| son premier écran : **le versoir** | `apps/console/js/le-versoir.js`, `services/linventaire-du-versoir.js` | on dépose des `.msg`, on voit ce qu'ils portent, rien ne part sans un clic |
-| **le convoi** | `apps/console/js/le-convoi-ecran.js`, `services/le-convoi.js`, `services/un-zip-deplie.js` | un dossier ou un `.zip` entier, absorbé par lots sans tenir l'archive en mémoire |
-| son second : **l'archive** | `apps/console/js/larchive.js`, `services/larchive-des-pieces.js` | les messages dans l'ordre du temps, leurs pièces, et les PDF s'y ouvrent |
-| le casier des pièces | Supabase Storage `archives` + `pieces_archivees` | les octets gardés, nommés par leur empreinte |
-| **l'épisode** | `apps/console/js/lepisode.js`, `services/episode-dune-archive.js`, `services/les-references-citees.js` | la suite des fils, ce qu'on n'a pas su lire, et la référence à battre |
-| l'archive de fondement | `messages_archives`, `pieces_des_messages`, casier `messages/` | le fichier d'origine, la forme lue, et quel message portait quelle pièce |
+| le retour au compte utilisateur | `apps/console/js/lavatar.js` | l'avatar, son menu, et « Profil utilisateur » — la sortie de cette page |
+
+**Ce qui a quitté la console**, et qui vit maintenant dans l'application, par
+projet (§ 7) :
+
+| ce qui existait ici | où c'est maintenant |
+| --- | --- |
+| le versoir, le convoi | le **dépouillement**, dans *Fichiers* : `services/le-depouillement.js`, `views/ui/le-depouillement-ecran.js` |
+| l'archive, son casier `archives` et ses trois tables | le **dossier privé des mails** du projet : `Mails/` et `Mails/Pièces jointes/` |
+| l'épisode | la **chronologie de la correspondance**, aux *Indicateurs* : `views/ui/episode-de-la-correspondance.js` |
 
 **Ce qui n'existe pas du tout :** aucune table `organisations`, `comptes`,
 `plans` ni `abonnements`. **Aucun rôle** : il y a une porte, pas un rôle — voir
@@ -141,7 +145,8 @@ Deux points que cela ne règle pas, et qui restent au § 5 :
 Et deux choses prévues ici qui **ne sont pas faites** : la **deuxième preuve
 récente** (`aal2`) et le **journal des accès administrateurs**. La seconde est
 irrattrapable — elle reste au § 5, et elle doit précéder le premier vrai écran
-d'exploitation, pas le versoir qui ne lit rien.
+d'exploitation. La console n'en a plus aucun : elle ne lit, aujourd'hui, que sa
+propre porte.
 
 ### `admin@mdall` : non, et pour trois raisons
 
@@ -331,10 +336,10 @@ semaine, ni quand.
 administrateur, pas après. Un journal qui commence en mars ne dit rien de
 février, et c'est en février qu'on aura regardé.
 
-La console existe désormais, et son premier écran — le versoir — **ne lit rien**
-de la base : il ouvre des fichiers déposés sur le poste. Cela ne rend pas ce
-journal moins urgent, cela dit seulement dans quel ordre : le journal doit
-**précéder le premier écran qui lit un compte**, et non l'ouverture du site.
+La console existe désormais, et **elle ne lit rien** de la base sinon sa propre
+porte : les écrans qui lisaient sont partis dans l'application (§ 7). Cela ne
+rend pas ce journal moins urgent, cela dit seulement dans quel ordre : le journal
+doit **précéder le premier écran qui lit un compte**, et non l'ouverture du site.
 
 **4. Un identifiant de compte distinct de l'identifiant de personne.** Aujourd'hui
 un projet a des collaborateurs, et rien ne dit **qui paie**. L'ajouter plus tard
@@ -527,6 +532,42 @@ que Mdall vend.
 >
 > La décision et son inventaire : `docs/nourrir-mdall.md`, § 8 quater. Ce qui
 > revient à la console : les comptes d'exploitation, et rien d'autre.
+>
+> **C'est fait.** Les trois écrans sont partis, leurs trois tables et leur casier
+> avec (`202610230001_larchive_quitte_la_console.sql`). Le dépouillement est dans
+> *Fichiers*, la chronologie aux *Indicateurs*.
+>
+> La mesure de ce qu'était devenue cette page tient en un chiffre : ce qu'elle
+> emportait de l'application est passé de **quarante modules à cinq**. Elle
+> portait le lecteur de `.msg`, celui des `.zip`, le convoi, l'inventaire, la
+> chronologie, la ligne de base, la mesure du passé, le lecteur de PDF et pdf.js
+> — la moitié des services de Mdall, dans une page dont tout l'intérêt est de ne
+> rien pouvoir atteindre.
+>
+> Personne ne l'avait décidé : chaque ligne s'était ajoutée pour une bonne
+> raison. C'est exactement ce que la liste de `prepare-console.mjs` devait rendre
+> visible, et elle l'a rendu visible — un tour trop tard.
+
+## 7 bis. Ce qu'elle garde, et comment on en sort
+
+Il reste **la porte** et **la barre du haut**. La page dit qu'elle n'a encore
+rien à montrer, et **où les écrans sont partis** : quelqu'un qui a gardé
+l'adresse en favori doit lire une explication, pas une page blanche.
+
+La barre porte l'avatar, son menu, et un seul item : **« Profil utilisateur »**,
+qui ramène à Mdall. On y entrait par le menu de l'avatar de l'application, et on
+n'en sortait que par le bouton « page précédente » du navigateur — c'est-à-dire
+par un geste qui ne fait pas partie du produit.
+
+> **Les classes, pas le module.** `global-header.js` dessine le même menu, et il
+> aurait été tentant de l'emporter : il traîne le magasin, les routes, le carnet
+> et les raccourcis. On reprend `gh-header`, `gh-user-menu__*`, `svgIcon` et
+> l'avatar par défaut — le rendu est le même, la dépendance ne l'est pas. C'est
+> la même décision que pour la feuille de style.
+
+**Ni « Projets », ni « Réglages », ni la déconnexion.** La console n'est pas un
+endroit d'où l'on pilote son compte ; c'est un endroit d'où l'on regarde des
+comptes, et dont on sort.
 
 **Un tableau de bord commercial.** Des chiffres qui montent toujours ne décident
 rien. Chaque ligne de cette console doit pouvoir répondre à : *qu'est-ce que je

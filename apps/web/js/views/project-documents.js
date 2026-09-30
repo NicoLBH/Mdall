@@ -29,7 +29,13 @@ import { renderGhInput } from "./ui/gh-input.js";
 import { renderStateDot } from "./ui/status-badges.js";
 import { renderUploadProgressBar } from "./ui/upload-progress.js";
 import { svgIcon } from "../ui/icons.js";
-import { laMarqueDuDossier } from "../services/le-dossier-des-mails.js";
+import {
+  LE_CADENAS, laMarqueDuDossier, laMarqueDunFichier
+} from "../services/le-dossier-des-mails.js";
+import {
+  LES_DESTINATIONS, cheminDit, lePartageDuDepot, phraseDeLaConfidentialite
+} from "../services/le-depouillement.js";
+import { poidsDit } from "../services/linventaire-du-versoir.js";
 import { renderDataTableShell, renderDataTableHead, renderDataTableEmptyState } from "./ui/data-table-shell.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { proposeTitle } from "../services/proposition-title.js";
@@ -249,6 +255,22 @@ const docsViewState = {
    */
   texte: null,
   currentFolderId: null,
+  /**
+   * Le dossier ouvert **en entier**, et non son seul identifiant.
+   *
+   * C'est lui qui porte `prive`, et c'est ce qui décide du cadenas de chaque
+   * ligne de fichier. On ne gardait que l'identifiant : la table ne pouvait donc
+   * pas savoir dans quel régime elle dessinait.
+   */
+  currentFolder: null,
+  /**
+   * Où en est le dépouillement du dépôt courant.
+   *
+   * `null` quand rien n'a été demandé. Ensuite le journal du convoi, tel qu'il
+   * le tient : c'est lui qui dit l'avancement, ce qui est passé et ce qui a
+   * buté. Un second compte tenu ici aurait divergé du sien (règle 4).
+   */
+  depouillement: null,
   breadcrumb: [],
   folders: [],
   files: [],
@@ -286,6 +308,7 @@ async function loadCurrentDirectory({ forceFolderId } = {}) {
   console.info("[documents-view] load-directory.start", { projectId, folderId });
   const directory = await listDocumentDirectory(projectId, folderId);
   docsViewState.currentFolderId = directory?.currentFolder?.id || null;
+  docsViewState.currentFolder = directory?.currentFolder ?? null;
   docsViewState.breadcrumb = Array.isArray(directory?.breadcrumb) ? directory.breadcrumb : [];
   docsViewState.folders = Array.isArray(directory?.folders) ? directory.folders : [];
   docsViewState.files = Array.isArray(directory?.files) ? directory.files : [];
@@ -1600,6 +1623,11 @@ function renderRepoDocumentRow(doc) {
   // autres.
   const etiquette = etiquetteDuDocument(decoratedDoc);
   const refuse = etiquette === ETIQUETTE.HORS_CORPUS;
+  // **Le cadenas, sur la ligne du fichier.** Le dossier en portait un ; un
+  // fichier se montre hors de son dossier — une recherche, une proposition, un
+  // récent —, et là rien ne disait plus de quel régime il relève. Le service
+  // décide, avec les trois faits de la politique de lecture ; l'écran dessine.
+  const marque = laMarqueDunFichier(decoratedDoc, docsViewState.currentFolder);
 
   return `
     <div
@@ -1619,10 +1647,21 @@ function renderRepoDocumentRow(doc) {
                 escapeHtml(motDeLEtiquette(etiquette))}</span>`
             : ""
         }
+        ${marque
+          ? `<span class="documents-repo__marque" title="${escapeHtml(marque.titre)}">${
+              svgIcon(marque.icone, { className: "octicon" })}</span>`
+          : ""}
       </div>
       <div class="documents-repo__cell documents-repo__cell--message">
         <div class="documents-repo__message-main${recognition.known ? " documents-repo__message-main--known" : ""}" title="${escapeHtml(recognition.title)}">${escapeHtml(recognition.main)}</div>
-        <div class="documents-repo__message-meta">${escapeHtml(recognition.meta)}</div>
+        ${/*
+          **Le mot autant que l'icône.** Une icône seule se survole ; un
+          marqueur sans équivoque se lit. Et ici le sens est l'inverse de
+          l'habitude : le cadenas ne dit pas « vous ne pouvez pas », il dit
+          « eux ne peuvent pas ».
+        */""}
+        <div class="documents-repo__message-meta">${escapeHtml(
+          [marque ? marque.mot : "", recognition.meta].filter(Boolean).join(" · "))}</div>
       </div>
       <div class="documents-repo__cell documents-repo__cell--date">
         <span>${escapeHtml(ilYA(decoratedDoc.updatedAt))}</span>
@@ -3869,8 +3908,24 @@ function renderUploadProgress() {
     .join("");
 }
 
+/**
+ * Ce que la sélection porte de mails, et ce qu'elle porte d'ordinaire.
+ *
+ * Calculé à un seul endroit, et relu par tout l'écran : le titre, le bouton
+ * « Valider » et le panneau du dépouillement doivent compter la même chose. Deux
+ * comptages auraient fini par annoncer « 3 documents » et n'en déposer aucun
+ * (règle 4).
+ */
+function ceQueLaSelectionPorte() {
+  return lePartageDuDepot(docsViewState.selectedFiles);
+}
+
 function canSubmitUpload() {
-  return docsViewState.selectedFiles.length > 0 && !docsViewState.isUploading;
+  // **Les porteurs de mails ne passent pas par « Valider ».** Ils ne se
+  // déposent pas tels quels : ils se dépouillent, par leur propre geste. Les
+  // compter ici armerait un bouton qui ne les concerne pas, et un dépôt de
+  // deux cents `.msg` entrerait dans une proposition comme deux cents pièces.
+  return ceQueLaSelectionPorte().ordinaires.length > 0 && !docsViewState.isUploading;
 }
 
 function renderUploadView() {
@@ -3891,7 +3946,7 @@ function renderUploadView() {
         ${renderDocumentsActivityBanner()}
           <div class="documents-upload-layout">
             <section class="documents-dropzone ${isBusy}" id="documentsDropzone">
-              <input id="documentsFileInput" type="file" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip,image/*">
+              <input id="documentsFileInput" type="file" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip,.msg,.eml,image/*">
               <div class="documents-dropzone__inner">
                 <div class="documents-dropzone__icon">
                   ${getLargeDocumentIconSvg()}
@@ -3906,6 +3961,11 @@ function renderUploadView() {
 
             ${renderUploadProgress()}
 
+            ${renderLeDepouillement({
+              porteurs: ceQueLaSelectionPorte().porteurs,
+              journal: docsViewState.depouillement
+            })}
+
             <div class="documents-commit-shell">
               <div class="documents-commit-shell__avatar">
                 <img
@@ -3915,10 +3975,21 @@ function renderUploadView() {
                 >
               </div>
 
+              ${/*
+                **La carte du dépôt ordinaire disparaît quand il n'y a rien à
+                déposer ordinairement.** Un dépôt de deux cents `.msg` affichait
+                « Déposer 200 documents » au-dessus d'un titre et d'une
+                description qui ne serviraient à rien : le geste annoncé n'était
+                pas celui qui allait avoir lieu.
+                Les **actions restent**, elles : « Annuler » est le chemin de
+                sortie de cet écran, et un écran dont on ne sait pas sortir est
+                un écran où l'on n'entre pas volontiers.
+              */""}
+              ${ceQueLaSelectionPorte().ordinaires.length === 0 ? "" : `
               <section class="documents-commit-card">
                 <div class="documents-commit-card__title">${
-                  docsViewState.selectedFiles.length > 1
-                    ? `Déposer ${docsViewState.selectedFiles.length} documents`
+                  ceQueLaSelectionPorte().ordinaires.length > 1
+                    ? `Déposer ${ceQueLaSelectionPorte().ordinaires.length} documents`
                     : "Déposer le document"
                 }</div>
 
@@ -3941,6 +4012,7 @@ function renderUploadView() {
 
                 ${renderDepositMode()}
               </section>
+              `}
 
               <section class="documents-commit-card documents-commit-card-actions">
                 <div class="documents-commit-card__actions">
@@ -3955,8 +4027,89 @@ function renderUploadView() {
   `;
 }
 
+/** Au plus un rendu de l'écran toutes les tant de millisecondes, pendant le dépôt. */
+const RENDU_DU_DEPOUILLEMENT = 300;
+
+/**
+ * Dépouiller, sur demande.
+ *
+ * ## Le service fait le travail, l'écran ne fait que redessiner
+ *
+ * Tout ce qui se décide — lire, dédoublonner, ranger, tenir le journal — vit
+ * dans `le-depouillement-supabase.js`. Ici, un `await` et un rendu à chaque
+ * avancement : deux cents mails prennent des minutes, et un écran figé pendant
+ * des minutes est un écran qu'on recharge.
+ *
+ * ## Le module se charge à la demande
+ *
+ * Il entraîne les lecteurs de `.msg`, de `.eml` et de `.zip`. Les charger à
+ * l'ouverture de Fichiers les ferait descendre chez tout le monde, y compris
+ * chez ceux qui ne déposeront jamais un mail.
+ *
+ * ## Une fois terminé, la sélection se vide de ses porteurs
+ *
+ * Les garder ferait relancer le dépouillement sur des fichiers déjà rangés — ce
+ * qui ne casserait rien, puisque les empreintes les reconnaîtraient, mais ferait
+ * relire deux cents fichiers pour rien. Ce qui n'était pas un porteur reste
+ * sélectionné : son dépôt n'a pas eu lieu.
+ */
+async function lancerLeDepouillement(root) {
+  const { porteurs } = ceQueLaSelectionPorte();
+  if (!porteurs.length) return;
+
+  const projectId = String((await resolveCurrentBackendProjectId().catch(() => "")) || "").trim();
+  if (!projectId) {
+    docsViewState.depouillement = {
+      ...docsViewState.depouillement, fini: true,
+      arrete: "ce projet n'a pas été retrouvé : rien n'a été rangé"
+    };
+    renderProjectDocuments(root);
+    return;
+  }
+
+  docsViewState.depouillement = { fichiers: porteurs.length, fini: false, accrocs: [] };
+  renderProjectDocuments(root);
+
+  // **On ne redessine pas à chaque message.** Le service avance message par
+  // message ; deux cents rendus de l'écran entier en quelques secondes font
+  // clignoter la page et ralentissent le dépôt lui-même. Un rendu au plus toutes
+  // les quelques dixièmes de seconde suffit à voir que cela avance — et le
+  // journal final, lui, se dessine toujours.
+  let dernierRendu = 0;
+
+  try {
+    const { depouiller } = await import("../services/le-depouillement-supabase.js");
+    const journal = await depouiller(porteurs, {
+      projectId,
+      avance: (encours) => {
+        docsViewState.depouillement = encours;
+        const maintenant = Date.now();
+        if (maintenant - dernierRendu < RENDU_DU_DEPOUILLEMENT) return;
+        dernierRendu = maintenant;
+        if (root?.isConnected) renderProjectDocuments(root);
+      }
+    });
+    docsViewState.depouillement = journal;
+  } catch (erreur) {
+    // **Un dépouillement qui tombe ne se tait pas.** Le journal garde ce qui
+    // était passé avant la chute : dire « échec » sans le dire ferait tout
+    // recommencer.
+    docsViewState.depouillement = {
+      ...docsViewState.depouillement, fini: true,
+      arrete: String(erreur?.message ?? "") || "cause inconnue"
+    };
+  }
+
+  docsViewState.selectedFiles = ceQueLaSelectionPorte().ordinaires;
+  if (root?.isConnected) renderProjectDocuments(root);
+  // Le dossier privé vient de changer : la liste doit le refléter quand on y
+  // retourne, et la relire ici évite de la lire vide au retour.
+  await loadCurrentDirectory().catch(() => {});
+}
+
 function resetUploadState() {
   docsViewState.selectedFiles = [];
+  docsViewState.depouillement = null;
   docsViewState.depositMode = null;
   docsViewState.depositModeTouched = false;
   docsViewState.titleTouched = false;
@@ -5165,6 +5318,9 @@ function bindDocumentsView(root) {
       closeUploadView(root);
     });
   }
+
+  const depouillerBtn = document.getElementById("documentsDepouillerBtn");
+  if (depouillerBtn) depouillerBtn.addEventListener("click", () => lancerLeDepouillement(root));
 
   const reportBackBtn = document.getElementById("documentsReportBackBtn");
   if (reportBackBtn) {

@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  ACCROCS_NOMMES, MOTS_DU_SORT, PAR_LOT, SORT, avancement, enLots, lesMessagesDuDepot,
-  noter, noterLesPieces, phraseDuConvoi, unJournalNeuf
+  ACCROCS_NOMMES, MOTS_DU_SORT, PAR_LOT, SORT, avancement, enLots,
+  noter, noterLesPieces, noterUnFichierLu, phraseDuConvoi, unJournalNeuf
 } from "./le-convoi.js";
 
 const nFichiers = (combien, comment = (rang) => `m${rang}.msg`) =>
@@ -47,33 +47,6 @@ test("la taille d'un lot vaut cinquante", () => {
 });
 
 /* ── Ce qui est un message, et ce qui ne l'est pas ───────────────────────── */
-
-/**
- * Un dossier de chantier porte des plans, des tableurs, des `Thumbs.db`. Les
- * donner au lecteur de `.msg` les ferait tous compter comme illisibles, et le
- * compte rendu dirait « quatre-vingts pour cent ont résisté » là où il faut
- * lire « ce n'étaient pas des messages ».
- */
-test("ce qui n'est pas un message s'écarte avant d'être compté", () => {
-  const { messages, ecartes } = lesMessagesDuDepot([
-    { name: "reunion.msg" }, { name: "plan.pdf" }, { name: "Thumbs.db" },
-    { name: "PIECES.MSG" }, { name: "suivi.xlsx" }
-  ]);
-  assert.deepEqual(messages.map((un) => un.name), ["reunion.msg", "PIECES.MSG"]);
-  assert.equal(ecartes, 3);
-});
-
-test("un nom qui contient msg sans finir par .msg n'est pas un message", () => {
-  const { messages } = lesMessagesDuDepot([
-    { name: "msgerie.txt" }, { name: "un.msg.pdf" }, { name: "vrai.msg" }
-  ]);
-  assert.deepEqual(messages.map((un) => un.name), ["vrai.msg"]);
-});
-
-test("un dépôt vide n'écarte rien", () => {
-  assert.deepEqual(lesMessagesDuDepot([]), { messages: [], ecartes: 0 });
-  assert.deepEqual(lesMessagesDuDepot(null), { messages: [], ecartes: 0 });
-});
 
 /* ── Le journal ──────────────────────────────────────────────────────────── */
 
@@ -166,7 +139,10 @@ test("la phrase dit l'ampleur d'abord, puis ce qui vaut quelque chose", () => {
   journal = noterLesPieces(noter(journal, "a.msg", SORT.VERSE), { versees: 3 });
   const dite = phraseDuConvoi(journal);
   assert.match(dite, /^1400 fichiers/);
-  assert.match(dite, /1 versé/);
+  // **Le mot dit de quoi on compte.** « 1 versé » derrière « 1400 fichiers »
+  // laissait croire qu'un des fichiers était passé, alors qu'un `.zip` en porte
+  // deux cents : ce qu'on compte ici, ce sont des messages.
+  assert.match(dite, /1 message versé/);
   assert.match(dite, /3 pièces versées/);
   // Ce qui vaut zéro ne s'écrit pas : rien sur ce qui était déjà là, rien sur
   // ce qui a résisté.
@@ -179,7 +155,7 @@ test("ce qui a résisté se dit, même quand le reste a réussi", () => {
   journal = noter(journal, "abime.msg", SORT.ILLISIBLE);
 
   const dite = phraseDuConvoi(journal);
-  assert.match(dite, /99 versés/);
+  assert.match(dite, /99 messages versés/);
   assert.match(dite, /1 ne s'est pas laissé ouvrir/);
 });
 
@@ -194,19 +170,48 @@ test("un convoi qui n'est pas parti n'a pas d'avancement", () => {
   assert.equal(avancement(null), null);
 });
 
-test("l'avancement compte tout ce qui a connu un sort, pas seulement les versés", () => {
+/**
+ * **L'avancement se compte en fichiers ouverts, jamais en messages rangés.**
+ *
+ * Un `.zip` porte deux cents messages : rapporter les messages aux fichiers
+ * reçus donnait « 41 versés — 100 % » à la quarantième minute d'un dépôt de
+ * trois archives. Le seul dénominateur connu d'avance est le nombre de fichiers
+ * qu'on a reçus ; combien de messages ils portent ne se sait qu'après les avoir
+ * lus (règle 5).
+ */
+test("l'avancement compte les fichiers ouverts, pas les messages rangés", () => {
   let journal = { ...unJournalNeuf(), fichiers: 10 };
-  journal = noter(journal, "a.msg", SORT.VERSE);
-  journal = noter(journal, "b.msg", SORT.DEJA_LA);
-  journal = noter(journal, "c.msg", SORT.ILLISIBLE);
-  journal = noter(journal, "d.msg", SORT.REFUSE);
-  // Quatre fichiers sur dix ont connu leur sort : le convoi a bien avancé de
-  // quatre, même si un seul est entré.
+
+  // Deux cents messages tirés d'un seul fichier : l'avancement reste à un
+  // dixième, parce qu'un seul fichier sur dix a été ouvert.
+  journal = noterUnFichierLu(journal);
+  for (let rang = 0; rang < 200; rang += 1) journal = noter(journal, "a.msg", SORT.VERSE);
+  assert.equal(avancement(journal), 0.1);
+
+  for (let rang = 0; rang < 3; rang += 1) journal = noterUnFichierLu(journal);
   assert.equal(avancement(journal), 0.4);
+});
+
+/**
+ * **Un fichier qu'on n'a pas su ouvrir a quand même été traité.** Ne pas le
+ * compter figerait la barre sur un dépôt dont la moitié résiste.
+ */
+test("un fichier illisible fait avancer autant qu'un fichier lu", () => {
+  let journal = { ...unJournalNeuf(), fichiers: 4 };
+  journal = noter(noterUnFichierLu(journal), "abime.zip", SORT.ILLISIBLE, "pas une archive");
+  assert.equal(avancement(journal), 0.25);
 });
 
 test("l'avancement ne dépasse jamais un", () => {
   let journal = { ...unJournalNeuf(), fichiers: 2 };
-  for (let rang = 0; rang < 5; rang += 1) journal = noter(journal, "a.msg", SORT.VERSE);
+  for (let rang = 0; rang < 5; rang += 1) journal = noterUnFichierLu(journal);
   assert.equal(avancement(journal), 1);
+});
+
+/** Le journal reste une valeur : noter n'écrit pas dans celui qu'on lui donne. */
+test("noter un fichier lu ne modifie pas le journal donné", () => {
+  const avant = { ...unJournalNeuf(), fichiers: 3 };
+  const apres = noterUnFichierLu(avant);
+  assert.equal(avant.lus, 0);
+  assert.equal(apres.lus, 1);
 });

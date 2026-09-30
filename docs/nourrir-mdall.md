@@ -1048,6 +1048,157 @@ son menu, et un item « Profil utilisateur ».
 > `gh-user-menu__*` et `svgIcon`, comme on a repris le lecteur de PDF — le
 > rendu est le même, la dépendance ne l'est pas.
 
+## 8 sexies. Ranger les pièces jointes avec les mails — et ce qu'on a trouvé en vérifiant
+
+> *« Les mails versés depuis Fichiers sont confidentiels, le reste de l'équipe
+> ne peut les voir — et c'est exactement le comportement attendu. En revanche,
+> il n'est pas possible de rendre les pièces jointes visibles par toute l'équipe.
+> Il faut donc les ranger avec les mails et leur rendre le niveau de
+> confidentialité attendu. Est-ce possible ? Comment ? »*
+
+### Oui, et cela ne coûte rien
+
+**La confidentialité est portée par le dossier, et tenue par la base.**
+`documents_by_project` cache un document quand trois faits sont réunis :
+
+```
+son dossier est prive = true
+et son deposant n'est pas vide
+et son deposant n'est pas moi
+```
+
+Ranger les pièces jointes **dans** « Mails » leur donne donc le régime des mails
+automatiquement. Pas de colonne `prive` sur les documents, pas de second jeu de
+politiques, pas de niveau de confidentialité à gérer par fichier. Une pièce est
+privée **parce qu'elle est là**.
+
+Et le corollaire est le meilleur cadeau de cette forme : **partager, c'est
+déplacer.** Sortir un plan de « Mails » vers Fichiers le rend visible à
+l'équipe, par le bouton « Déplacer » qui existe déjà sur chaque ligne. Aucun
+interrupteur de confidentialité à inventer, donc aucun à oublier de vérifier.
+
+### Où exactement
+
+`Mails/` pour les messages, `Mails/Pièces jointes/` pour les pièces, **à plat**.
+
+Pas un dossier par fil : soixante dossiers pour deux cents mails, et surtout
+**une pièce attachée à quinze réponses est un seul fichier**. Elle ne peut pas
+être à quinze endroits. Un arbre est un lieu, pas un graphe ; la provenance
+reste dans les données, où elle peut être multiple.
+
+Les deux dossiers se créent **privés**, à chaque étage : un sous-dossier
+ordinaire dans un dossier privé serait visible de l'équipe, parce que la
+politique regarde le dossier du document, pas son grand-parent.
+
+### Ce que cela simplifie
+
+On avait prévu une étape qui **montre les deux destinations et les deux
+régimes** — message privé, pièce partagée — parce qu'un dépôt qui franchit cette
+frontière en silence est un défaut de confidentialité (§ 8 quinquies, point 2).
+
+Les deux allant désormais dans le dossier privé, **le dépôt ne franchit plus
+aucune frontière**. L'étape cesse d'être une demande de consentement et redevient
+ce qu'elle doit être : un état des lieux. Le consentement se déplace là où il
+vaut quelque chose — au moment de sortir une pièce, une à la fois, par un geste
+délibéré. Deux cents mails d'un coup, personne ne lit l'avertissement ; un plan
+qu'on sort de « Mails », on sait ce qu'on fait.
+
+## 8 septies. Les trois défauts trouvés en vérifiant cette réponse
+
+La question portait sur les pièces jointes. La vérification a trouvé autre
+chose, et c'est la raison pour laquelle on ne répond pas de mémoire.
+
+### 1. Le casier était ouvert à tout le monde
+
+`202604030003_init_triggers_policies_and_indexes.sql`, à l'initialisation du
+dépôt :
+
+```sql
+create policy "storage_documents_select_open" on storage.objects
+for select to anon, authenticated using (bucket_id = 'documents');
+```
+
+`to anon`, sans condition. La clé anonyme est dans le navigateur — elle y est
+par construction. **N'importe qui pouvait donc lister le casier et télécharger
+tout ce qu'il contenait**, y compris les `.eml` déjà déposés. La ligne était
+cachée, les octets étaient ouverts. `insert`, `update` et `delete` étaient
+ouvertes de la même façon : on pouvait aussi bien effacer les fichiers d'un
+chantier.
+
+Ce n'était pas une conséquence du dépouillement : c'était vrai avant lui. Mais
+le dépouillement multiplie l'exposition par deux cents et la fait porter sur de
+la correspondance.
+
+**Le remède existait déjà dans le dépôt**, appliqué à un autre casier, avec la
+bonne phrase dans son en-tête : *« avoids inferring authorization from path
+segments only »* (`202606150012_..._storage_select_via_attachment_table.sql`).
+On aligne la lecture du casier sur la table qui fait foi : un objet n'est
+lisible que si une ligne `documents` lisible le désigne.
+
+Le point qui rend l'édifice juste est un détail de PostgreSQL : **la
+sous-requête d'une politique subit les politiques de la table qu'elle
+interroge.** Le `exists` passe donc par `documents_by_project`, donc par la règle
+du dossier privé, **sans qu'elle soit réécrite**. Une seule décision, à un seul
+endroit (règle 4) : le jour où la règle du dossier privé changera, le casier
+suivra sans qu'on y pense.
+
+### 2. Deux replis silencieux où l'absence ouvrait au lieu de fermer
+
+- `deposer-un-mail-supabase.js` : `currentUserId().catch(() => null)`, puis
+  `...(qui ? { deposant: qui } : {})`. Or un `deposant` vide fait tomber la
+  troisième condition de la politique : **le document n'est plus caché**. Une
+  panne d'authentification passagère publiait la correspondance, en silence, et
+  le dépôt se disait réussi.
+- `project-supabase-sync.js`, `createDocumentFolder` : le même motif sur
+  `created_by`. Le commentaire au-dessus disait déjà que c'était dangereux ; le
+  code le faisait quand même.
+
+Dans les deux cas, la conduite juste est la même et elle est brutale : **sans
+déposant connu, on ne range pas.** Un dépôt qui échoue se reprend ; un dépôt qui
+réussit à découvert ne se reprend pas.
+
+### 3. Le cadenas manquait sur les fichiers — et il aurait menti
+
+Le cadenas existait, dessiné sur les **dossiers**, dans l'arbre et dans le
+tableau, depuis un seul endroit (`laMarqueDuDossier`). Il manquait sur les
+**fichiers**, et il le fallait : un fichier se montre hors de son dossier — une
+recherche, une proposition, un récent —, et là plus rien ne dit de quel régime
+il relève.
+
+Mais un cadenas dessiné sur la seule appartenance au dossier **aurait menti**
+pour un document sans déposant, que la base ne cache pas. Un marqueur sans
+équivoque qui se trompe est pire que pas de marqueur : il fait déposer sans
+regarder.
+
+`laMarqueDunFichier` rend donc **trois réponses**, sur les trois mêmes faits que
+la politique :
+
+| ce qu'on sait | ce qui se dessine |
+| --- | --- |
+| dossier privé, déposant connu | 🛡 **Privé** — vous seul y avez accès |
+| dossier privé, déposant franchement vide | 🛡 **Visible par l'équipe** — l'avertissement |
+| `deposant` non demandé par la lecture | rien (règle 5) |
+
+La troisième colonne n'est pas une subtilité de confort : sans elle, « je ne sais
+pas » et « il n'y en a pas » rendaient la même chose, et la garde qui les sépare
+ne pouvait pas tomber.
+
+### L'empreinte des octets, et pourquoi une colonne de plus
+
+`documents` portait déjà `sha256_hash` et `content_fingerprint`. Aucune des deux
+ne convenait, et il a fallu les regarder pour le savoir :
+
+- `sha256_hash` porte un index **unique global**. Deux chantiers qui reçoivent le
+  même plan — le cas ordinaire d'un bureau d'études — ne pourraient pas le
+  déposer tous les deux ;
+- `content_fingerprint` est l'empreinte du **texte** d'un document, et c'est
+  délibéré : un rapport ré-exporté n'a pas les mêmes octets et reste le même
+  rapport. Y écrire un condensé d'octets ferait dire à cette colonne deux choses
+  selon la ligne (règle 4).
+
+Un mail et une pièce jointe, eux, s'identifient par leurs octets et rien d'autre.
+D'où `empreinte_des_octets`, et un index **par projet**.
+
 ## 9. À enrichir
 
 - Le déposant : navigateur ou fonction de bord ? (cent mille pièces ne passent

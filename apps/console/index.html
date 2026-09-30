@@ -15,6 +15,12 @@
 </head>
 
 <body>
+  <!--
+    La barre du haut, hors de `#app` : celui-ci est en position fixe et décalé
+    de la hauteur d'un en-tête par la feuille de style de Mdall. Dessiner la
+    barre dedans l'aurait mise sous le vide qu'elle est censée remplir.
+  -->
+  <div id="consoleHeaderHost"></div>
   <main id="app" class="console"></main>
   <script type="module" src="js/console.js"></script>
 </body>
