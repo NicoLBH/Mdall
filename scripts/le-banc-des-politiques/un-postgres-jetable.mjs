@@ -116,10 +116,37 @@ export function unPostgresJetable() {
       return { ok: rendu.status === 0, sortie: (rendu.stdout || "").trim(), motif: (rendu.stderr || "").trim() };
     };
 
+    /**
+     * Éteindre et effacer, **une seule fois**, quoi qu'il arrive.
+     *
+     * ## Le défaut qu'on vient de voir
+     *
+     * Le serveur était éteint par `test.after`. Or l'épreuve pose le banc
+     * **avant** ses tests — elle applique la migration au chargement du
+     * module —, et une migration refusée fait tomber le fichier entier avant
+     * qu'aucun `after` ne soit enregistré. Le serveur restait donc allumé, avec
+     * son dossier, précisément dans le cas où l'on se sert du banc : quand
+     * quelque chose ne va pas. Deux essais de suite en laissaient deux.
+     *
+     * Le départ du processus est le seul moment dont on soit sûr. `exit`
+     * n'accepte que du synchrone : arrêter un serveur et effacer un dossier le
+     * sont tous les deux.
+     */
+    let dejaFerme = false;
     const fermer = () => {
+      if (dejaFerme) return;
+      dejaFerme = true;
       lancer(commentLancer(bin, "pg_ctl", ["-D", donnees, "-m", "immediate", "stop"]));
       rmSync(dossier, { recursive: true, force: true });
     };
+
+    process.on("exit", fermer);
+    for (const signal of ["SIGINT", "SIGTERM"]) {
+      // Un Ctrl-C ne doit pas laisser un serveur derrière lui non plus. On
+      // repasse la main au comportement normal : couper court ici masquerait
+      // l'interruption.
+      process.once(signal, () => { fermer(); process.exit(130); });
+    }
 
     return { sql, fermer };
   } catch {
