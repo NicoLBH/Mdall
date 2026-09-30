@@ -55,7 +55,8 @@ const LES_MIGRATIONS = [
   "202610310001_les_octets_qui_attendent_leur_tour.sql",
   "202611010001_les_expediteurs_deja_ecrits.sql",
   "202611020001_les_domaines_du_systeme.sql",
-  "202611030001_les_enchainements_du_systeme.sql"
+  "202611030001_les_enchainements_du_systeme.sql",
+  "202611040001_les_vingt_six_portes.sql"
 ];
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -101,6 +102,19 @@ function leBanc() {
     `set role authenticated;\n`
     + (qui ? `set request.jwt.claim.sub = '${qui}';\n` : "reset request.jwt.claim.sub;\n")
     + texte,
+    { doitTenir: false }
+  );
+
+  /**
+   * **Une question posée avec la seule clé publique du navigateur.**
+   *
+   * `anon` est le rôle de la clé qui est dans le code de la page, lisible par
+   * quiconque ouvre les outils de développement. C'est elle qui lisait et
+   * écrivait vingt-six tables ; c'est donc elle qu'il faut faire entrer pour
+   * savoir si la porte est fermée.
+   */
+  pg.sansCompte = (texte) => pg.sql(
+    "set role anon;\nreset request.jwt.claim.sub;\n" + texte,
     { doitTenir: false }
   );
 
@@ -490,4 +504,138 @@ test("les enchaînements se refusent à qui n'est pas administrateur",
       "select count(*) from public.les_enchainements_du_systeme();");
     assert.equal(etranger.ok, false, "la console s'ouvre à un compte ordinaire");
     assert.match(etranger.motif, /réservé à la console/);
+  });
+
+/* ── Les vingt-six portes ─────────────────────────────────────────────────── */
+
+/**
+ * Les vingt-six tables qui n'avaient que la porte pour politique.
+ *
+ * Nommées ici parce que l'épreuve doit toutes les essayer : en éprouver
+ * quelques-unes « représentatives » laisserait les autres ouvertes sans que
+ * rien le dise (règle 5).
+ */
+const LES_VINGT_SIX = [
+  "analysis_runs", "assertion_acts", "assertion_applications", "assertion_dependencies",
+  "avis_figures", "ct_avis", "directory_people", "lot_catalog", "milestone_subjects",
+  "milestones", "project_assertions", "project_collaborators", "project_identity_markers",
+  "project_labels", "project_lots", "proposition_comments", "proposition_items",
+  "proposition_notes", "propositions", "subject_assertion_links", "subject_assignees",
+  "subject_cr_mentions", "subject_evidence", "subject_labels", "subject_links",
+  "subject_observations"
+];
+
+/** Celles qui restent lisibles par tout compte connecté, et pourquoi. */
+const LES_COMMUNES = new Set([
+  // Un catalogue de codes de lots : la même liste pour tout le monde.
+  "lot_catalog",
+  // Un registre de personnes à unicité globale : voir la migration.
+  "directory_people"
+]);
+
+/**
+ * **Le cœur de ce tour.** `anon` est la clé publique du navigateur. Si elle lit
+ * une seule de ces tables, tout ce qui a été écrit par-dessus ne vaut rien.
+ */
+test("aucune des vingt-six ne se lit plus sans compte", { skip: sansPostgres }, () => {
+  for (const table of LES_VINGT_SIX) {
+    const lu = banc.sansCompte(`select count(*) from public.${table};`);
+    assert.equal(lu.ok, true, `${table} : ${lu.motif}`);
+    assert.equal(lu.sortie, "0", `${table} se lit encore avec la clé publique`);
+  }
+});
+
+/**
+ * **Lire n'est que la moitié.** Une table qu'on ne lit pas mais où l'on écrit
+ * laisse poser n'importe quoi dans le chantier de n'importe qui.
+ */
+test("aucune des vingt-six ne s'écrit plus sans compte", { skip: sansPostgres }, () => {
+  for (const table of LES_VINGT_SIX) {
+    const pose = banc.sansCompte(`insert into public.${table} (id) values (gen_random_uuid());`);
+    assert.equal(pose.ok, false, `${table} s'écrit encore avec la clé publique`);
+  }
+});
+
+/**
+ * **Et elles ne sont pas devenues muettes pour autant.** Fermer une porte sans
+ * écrire de règle rendrait la table vide pour tout le monde — c'est-à-dire
+ * casserait l'écran qui la lit, sans que rien dise pourquoi.
+ */
+test("chacune se lit encore par son propriétaire, et pas par l'autre",
+  { skip: sansPostgres }, () => {
+    for (const table of LES_VINGT_SIX) {
+      if (LES_COMMUNES.has(table)) continue;
+
+      banc.sql(`delete from public.${table};`);
+      const colonne = table === "milestone_subjects" ? "milestone_id"
+        : table === "subject_cr_mentions" ? "subject_id"
+          : "project_id";
+
+      if (colonne === "project_id") {
+        banc.sql(`insert into public.${table} (project_id) values ('${MEDIATHEQUE}');`);
+      } else if (colonne === "milestone_id") {
+        banc.sql("delete from public.milestones;");
+        const jalon = banc.sql(
+          `insert into public.milestones (project_id) values ('${MEDIATHEQUE}') returning id;`);
+        banc.sql(`insert into public.${table} (milestone_id) values ('${jalon.sortie.trim()}');`);
+      } else {
+        banc.sql("delete from public.subjects;");
+        const sujet = banc.sql(
+          `insert into public.subjects (project_id) values ('${MEDIATHEQUE}') returning id;`);
+        banc.sql(`insert into public.${table} (subject_id) values ('${sujet.sortie.trim()}');`);
+      }
+
+      // La Médiathèque appartient à A après la migration d'octobre.
+      assert.equal(banc.enTantQue(A, `select count(*) from public.${table};`).sortie, "1",
+        `${table} est devenue muette pour son propriétaire`);
+      assert.equal(banc.enTantQue(B, `select count(*) from public.${table};`).sortie, "0",
+        `${table} se lit depuis un autre compte`);
+    }
+  });
+
+/**
+ * **Les deux communes le restent, et c'est dit.** Un catalogue de codes de lots
+ * et un registre de personnes à unicité globale ne se rangent pas par projet ;
+ * ce qu'on leur a retiré est `anon`, et rien de plus. L'épreuve constate ce que
+ * la migration laisse ouvert autant que ce qu'elle ferme (règle 12).
+ */
+test("le catalogue et le registre restent lisibles par tout compte connecté",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.lot_catalog;");
+    banc.sql("insert into public.lot_catalog (code) values ('GO');");
+    assert.equal(banc.enTantQue(A, "select count(*) from public.lot_catalog;").sortie, "1");
+    assert.equal(banc.enTantQue(B, "select count(*) from public.lot_catalog;").sortie, "1");
+    // Mais il ne se réécrit plus depuis le navigateur : c'est un référentiel.
+    assert.equal(banc.enTantQue(A, "insert into public.lot_catalog (code) values ('X');").ok,
+      false, "le catalogue se laisse encore réécrire");
+
+    banc.sql("delete from public.directory_people;");
+    banc.sql("insert into public.directory_people (email) values ('o.ferrand@novaclim.example');");
+    assert.equal(banc.enTantQue(B, "select count(*) from public.directory_people;").sortie, "1");
+  });
+
+/**
+ * **La vingt-septième porte, qu'aucun compte de politiques ne pouvait voir.**
+ *
+ * `project_collaborators_view` est une vue. Une vue PostgreSQL ordinaire lit
+ * ses tables de base avec les droits de son propriétaire, sans consulter leurs
+ * politiques : fermer `project_collaborators` sans toucher à la vue n'aurait
+ * donc rien fermé.
+ */
+test("la vue des collaborateurs ne contourne plus les politiques",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.project_collaborators;");
+    banc.sql("delete from public.directory_people;");
+    banc.sql("insert into public.directory_people (email) values ('o.ferrand@novaclim.example');");
+    banc.sql(`insert into public.project_collaborators (project_id) values ('${MEDIATHEQUE}');`);
+
+    const sansCompte = banc.sansCompte("select count(*) from public.project_collaborators_view;");
+    assert.equal(sansCompte.ok === false || sansCompte.sortie === "0", true,
+      "les collaborateurs se lisent encore avec la clé publique");
+
+    // Le propriétaire les voit ; un autre compte non.
+    assert.equal(
+      banc.enTantQue(A, "select count(*) from public.project_collaborators_view;").sortie, "1");
+    assert.equal(
+      banc.enTantQue(B, "select count(*) from public.project_collaborators_view;").sortie, "0");
   });

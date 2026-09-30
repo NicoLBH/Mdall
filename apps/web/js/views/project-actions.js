@@ -485,7 +485,7 @@ function renderRunsTable() {
   const largeur = Math.max(180, Math.min(520, Number(store.projectActionsView?.railLargeur || 240)));
 
   return `
-    <div class="memoire-layout${ouvert ? "" : " memoire-layout--replie"}"
+    <div class="memoire-layout memoire-layout--actions${ouvert ? "" : " memoire-layout--replie"}"
          style="--memoire-tree-width:${ouvert ? largeur : 48}px">
       ${renderRailDesActions(piles, actif)}
       <div class="memoire-corps">

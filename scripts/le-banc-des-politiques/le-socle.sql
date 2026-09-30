@@ -143,16 +143,223 @@ create policy project_runs_by_project on public.project_runs for all to public
   with check (project_id in (select p.id from public.projects p where p.owner_id = auth.uid())
               and (personnelle = false or owner_id = auth.uid()));
 
+
+create role anon;
 create role authenticated;
-grant usage on schema public, auth to authenticated;
-grant all on all tables in schema public to authenticated;
+grant usage on schema public, auth to anon, authenticated;
+grant all on all tables in schema public to anon, authenticated;
 
 -- **Et sur les tables que les migrations vont créer.** Supabase pose ces droits
 -- par défaut ; sans eux, une table neuve rend « permission denied » — un refus
 -- de *droit de table*, qui n'a rien à voir avec la politique qu'on éprouve, et
 -- que l'on prendrait pour elle.
-alter default privileges in schema public grant all on tables to authenticated;
-alter default privileges in schema public grant all on sequences to authenticated;
+alter default privileges in schema public grant all on tables to anon, authenticated;
+alter default privileges in schema public grant all on sequences to anon, authenticated;
+
+-- ── Les vingt-six tables restées ouvertes, et la porte qu'elles portaient ──
+--
+-- Réduites à ce que la politique touche : leur clé, et ce par quoi elles
+-- tiennent à un projet. Recopier leurs colonnes entières les ferait diverger du
+-- vrai dès la migration suivante (règle 4).
+--
+-- **Avec leur porte**, sans quoi on n'éprouverait pas la fermeture : une
+-- migration qui supprime une politique inexistante réussit sans rien faire.
+create table if not exists public.analysis_runs (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.analysis_runs enable row level security;
+create policy "analysis_runs_open_all" on public.analysis_runs
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.assertion_acts (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.assertion_acts enable row level security;
+create policy "assertion_acts_open_all" on public.assertion_acts
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.assertion_applications (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.assertion_applications enable row level security;
+create policy "assertion_applications_open_all" on public.assertion_applications
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.assertion_dependencies (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.assertion_dependencies enable row level security;
+create policy "assertion_dependencies_open_all" on public.assertion_dependencies
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.avis_figures (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.avis_figures enable row level security;
+create policy "avis_figures_open_all" on public.avis_figures
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.ct_avis (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.ct_avis enable row level security;
+create policy "ct_avis_open_all" on public.ct_avis
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.milestones (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.milestones enable row level security;
+create policy "milestones_open_all" on public.milestones
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.project_assertions (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.project_assertions enable row level security;
+create policy "project_assertions_open_all" on public.project_assertions
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.project_collaborators (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.project_collaborators enable row level security;
+create policy "project_collaborators_open_all" on public.project_collaborators
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.project_identity_markers (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.project_identity_markers enable row level security;
+create policy "project_identity_markers_open_all" on public.project_identity_markers
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.project_labels (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.project_labels enable row level security;
+create policy "project_labels_open_all" on public.project_labels
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.project_lots (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.project_lots enable row level security;
+create policy "project_lots_open_all" on public.project_lots
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.proposition_comments (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.proposition_comments enable row level security;
+create policy "proposition_comments_open_all" on public.proposition_comments
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.proposition_items (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.proposition_items enable row level security;
+create policy "proposition_items_open_all" on public.proposition_items
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.proposition_notes (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.proposition_notes enable row level security;
+create policy "proposition_notes_open_all" on public.proposition_notes
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.propositions (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.propositions enable row level security;
+create policy "propositions_open_all" on public.propositions
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.subject_assertion_links (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.subject_assertion_links enable row level security;
+create policy "subject_assertion_links_open_all" on public.subject_assertion_links
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.subject_assignees (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.subject_assignees enable row level security;
+create policy "subject_assignees_open_all" on public.subject_assignees
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.subject_evidence (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.subject_evidence enable row level security;
+create policy "subject_evidence_open_all" on public.subject_evidence
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.subject_labels (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.subject_labels enable row level security;
+create policy "subject_labels_open_all" on public.subject_labels
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.subject_links (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.subject_links enable row level security;
+create policy "subject_links_open_all" on public.subject_links
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.subject_observations (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade
+);
+alter table public.subject_observations enable row level security;
+create policy "subject_observations_open_all" on public.subject_observations
+  for all to anon, authenticated using (true) with check (true);
+create table if not exists public.milestone_subjects (
+  id uuid primary key default gen_random_uuid(),
+  milestone_id uuid references public.milestones(id) on delete cascade,
+  subject_id uuid references public.subjects(id) on delete cascade
+);
+alter table public.milestone_subjects enable row level security;
+create policy "milestone_subjects_open_all" on public.milestone_subjects
+  for all to anon, authenticated using (true) with check (true);
+
+create table if not exists public.subject_cr_mentions (
+  id uuid primary key default gen_random_uuid(),
+  subject_id uuid references public.subjects(id) on delete cascade
+);
+alter table public.subject_cr_mentions enable row level security;
+create policy "subject_cr_mentions_open_all" on public.subject_cr_mentions
+  for all to anon, authenticated using (true) with check (true);
+
+create table if not exists public.lot_catalog (
+  id uuid primary key default gen_random_uuid(),
+  code text not null default ''
+);
+alter table public.lot_catalog enable row level security;
+create policy "lot_catalog_open_all" on public.lot_catalog
+  for all to anon, authenticated using (true) with check (true);
+
+create table if not exists public.directory_people (
+  id uuid primary key default gen_random_uuid(),
+  email text not null default '',
+  created_by_user_id uuid references auth.users(id)
+);
+alter table public.directory_people enable row level security;
+create policy "directory_people_open_all" on public.directory_people
+  for all to anon, authenticated using (true) with check (true);
+
+-- La vue des collaborateurs, telle qu'elle est : **sans `security_invoker`**.
+-- C'est tout l'objet de l'épreuve — une vue ordinaire lit ses tables de base
+-- avec les droits de son propriétaire, et ignore leurs politiques.
+create or replace view public.project_collaborators_view as
+select pc.id, pc.project_id, dp.email
+  from public.project_collaborators pc
+  left join public.directory_people dp on true;
+
 
 -- ── Le casier, tel que Supabase le pose ────────────────────────────────────
 --
