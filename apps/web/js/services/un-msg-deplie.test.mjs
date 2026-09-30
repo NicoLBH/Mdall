@@ -53,11 +53,22 @@ const octetsDe = (numero, octets) => flux(`__substg1.0_${numero}0102`, octets);
 function paquetDesValeurs(saut, valeurs) {
   const octets = new Uint8Array(saut + 16 * valeurs.length);
   const vue = new DataView(octets.buffer);
-  valeurs.forEach(({ marque, valeur }, rang) => {
+  valeurs.forEach(({ marque, valeur, haut }, rang) => {
     vue.setUint32(saut + 16 * rang, marque, true);
     vue.setUint32(saut + 16 * rang + 8, valeur, true);
+    // Une date occupe les huit octets : sa moitié haute suit la basse.
+    if (haut !== undefined) vue.setUint32(saut + 16 * rang + 12, haut, true);
   });
   return flux("__properties_version1.0", octets);
+}
+
+/** Une date, telle qu'Outlook l'écrit : cent-nanosecondes depuis 1601. */
+function unFiletime(iso) {
+  const centNanos = (Date.parse(iso) + 11644473600000) * 10000;
+  return {
+    valeur: centNanos % 4294967296,
+    haut: Math.floor(centNanos / 4294967296)
+  };
 }
 
 /**
@@ -308,8 +319,14 @@ const piece = (numero, nom, type, octets,
   ]
 });
 
-function unMessageInvente({ cheminement = CHEMINEMENT, html = "" } = {}) {
+function unMessageInvente({ cheminement = CHEMINEMENT, html = "", envoyeLe = "", recuLe = "" } = {}) {
   return graver([
+    ...(envoyeLe || recuLe
+      ? [paquetDesValeurs(32, [
+          ...(envoyeLe ? [{ marque: 0x00390040, ...unFiletime(envoyeLe) }] : []),
+          ...(recuLe ? [{ marque: 0x0e060040, ...unFiletime(recuLe) }] : [])
+        ])]
+      : []),
     texteDe("0037", OBJET),
     texteDe("1000", CORPS),
     ...(html ? [texteDe("1013", html)] : []),
@@ -707,4 +724,60 @@ test("une table d'allocation qui boucle ne fait pas tourner la lecture sans fin"
 
   const lu = unMsgDeplie(source);
   assert.equal(typeof lu, "object");
+});
+
+
+/* ── La date d'un message qui n'a pas transité ───────────────────────────── */
+
+/**
+ * **Le défaut tel qu'il se voyait.** Tous les messages qu'on a écrits soi-même
+ * s'affichaient « date non lue », et le fil les rangeait n'importe où : sans
+ * date, il n'y a pas d'ordre.
+ *
+ * Ces messages n'ont pas d'en-têtes — ils n'ont pas transité. On les
+ * reconstitue depuis les propriétés, où la date n'est pas une chaîne mais un
+ * `FILETIME` de huit octets, qu'on ne lisait pas.
+ */
+test("la date d'envoi se lit dans les propriétés d'un message reconstitué", () => {
+  const lu = unMsgDeplie(unMessageInvente({
+    cheminement: "", envoyeLe: "2025-02-21T14:59:00.000Z"
+  }));
+  assert.equal(lu.quand, "2025-02-21T14:59:00.000Z");
+});
+
+test("à défaut de l'envoi, la réception date le message", () => {
+  const lu = unMsgDeplie(unMessageInvente({
+    cheminement: "", recuLe: "2025-02-21T15:04:00.000Z"
+  }));
+  assert.equal(lu.quand, "2025-02-21T15:04:00.000Z");
+});
+
+test("l'envoi passe avant la réception", () => {
+  // Une boîte en retard reçoit des heures après l'envoi, et ce délai
+  // n'appartient à personne : ce qu'on date, c'est le moment où quelqu'un a
+  // écrit.
+  const lu = unMsgDeplie(unMessageInvente({
+    cheminement: "",
+    envoyeLe: "2025-02-21T14:59:00.000Z",
+    recuLe: "2025-02-21T18:30:00.000Z"
+  }));
+  assert.equal(lu.quand, "2025-02-21T14:59:00.000Z");
+});
+
+test("une propriété laissée à zéro n'est pas une date de 1601", () => {
+  const lu = unMsgDeplie(graver([
+    paquetDesValeurs(32, [{ marque: 0x00390040, valeur: 0, haut: 0 }]),
+    texteDe("0037", OBJET),
+    texteDe("1000", CORPS),
+    texteDe("0C1A", "Ourdine Ferrand"),
+    texteDe("5D01", "o.ferrand@novaclim.example.com")
+  ]));
+  assert.equal(lu.quand, "");
+  assert.doesNotMatch(String(lu.quandBrut ?? ""), /1601/);
+});
+
+test("les en-têtes d'un message qui a transité font foi", () => {
+  // Il a une vraie date, qui a voyagé : la propriété ne la remplace pas.
+  const lu = unMsgDeplie(unMessageInvente({ envoyeLe: "2001-01-01T00:00:00.000Z" }));
+  assert.doesNotMatch(lu.quand, /^2001/);
 });

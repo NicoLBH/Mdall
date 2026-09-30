@@ -320,7 +320,13 @@ export function mesureDuPredicteur(episode = null, options = {}) {
     precision1: precisionA(rendus, 1),
     precision3: precisionA(rendus, 3),
     fausseAlerte: tauxDeFausseAlerte(rendus, 3),
-    avance: delaiDAvance(rendus, 3)
+    avance: delaiDAvance(rendus, 3),
+    // **Les points eux-mêmes**, parce qu'un pourcentage ne dit pas si le
+    // système travaille : un prédicteur qui annonce toujours le domaine le plus
+    // courant obtient un bon chiffre sans rien avoir compris. Ce qui le montre,
+    // c'est le face-à-face entre ce qui a été annoncé et ce qui est venu — et
+    // il faut les points pour le dresser (`le-detail-de-la-prediction.js`).
+    rendus
   };
 }
 

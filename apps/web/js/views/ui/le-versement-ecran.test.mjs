@@ -31,31 +31,38 @@ test("le cadenas et son mot accompagnent chaque destination", () => {
   assert.match(dessine, /Contenu privé/);
 });
 
-test("les fichiers déposés sont nommés avec leur poids", () => {
+/**
+ * **Le panneau ne redit plus les fichiers.** Il les listait, et la liste du
+ * dépôt les listait aussi : deux listes d'un même dépôt, avec deux
+ * numérotations — et le geste de retrait découpait dans la mauvaise. Avec un
+ * mail et un PDF déposés ensemble, retirer le PDF retirait le mail.
+ */
+test("le panneau ne redit pas la liste des fichiers", () => {
   const dessine = renderLeVersement({ porteurs: [unFichier("a.msg", 2048), unFichier("b.zip", 5_000_000)] });
-  assert.match(dessine, /a\.msg/);
-  assert.match(dessine, /b\.zip/);
-  assert.match(dessine, /5,0 Mo/);
-  assert.match(dessine, /2,0 ko/);
+  assert.doesNotMatch(dessine, /a\.msg/);
+  assert.doesNotMatch(dessine, /b\.zip/);
+  // Ce qu'il dit, lui, c'est combien et où cela va.
+  assert.match(dessine, /Verser 2 fichiers de messagerie/);
 });
 
-test("le bouton dit qu'on envoie, et non qu'on dépouille", () => {
-  // Le dépouillement ne se fait plus ici : le mot le disait, et il promettait
-  // une attente qui n'a plus lieu à l'écran.
+/**
+ * **Le geste d'envoyer n'est plus dans ce panneau.** Il est sur la ligne des
+ * actions du dépôt, avec « Annuler » qui le défait : deux endroits pour finir
+ * un même dépôt obligeaient à chercher lequel valait.
+ */
+test("le panneau ne fait plus partir le dépôt", () => {
   const dessine = renderLeVersement({ porteurs: [unFichier("un.msg")] });
-  assert.match(dessine, /id="documentsVerserBtn"/);
-  assert.match(dessine, /Envoyer les mails/);
+  assert.doesNotMatch(dessine, /id="documentsVerserBtn"/);
   assert.doesNotMatch(dessine, /Dépouiller/);
 });
 
-test("pendant l'envoi, le bouton se tait et la barre compte les octets", () => {
+test("pendant l'envoi, la barre compte les octets", () => {
   const dessine = renderLeVersement({
     porteurs: [unFichier("a.msg"), unFichier("b.msg")],
     envoi: { envoi: true, montes: 1, parti: false, motif: "", combien: 0 }
   });
-  assert.match(dessine, /disabled/);
-  assert.match(dessine, /Envoi…/);
   assert.match(dessine, /1 sur 2 fichiers envoyés/);
+  assert.match(dessine, /documents-upload-progress/);
 });
 
 /**

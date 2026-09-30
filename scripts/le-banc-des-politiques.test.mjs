@@ -48,7 +48,8 @@ const RACINE = join(ICI, "..");
 const LES_MIGRATIONS = [
   "202610290001_les_portes_restees_ouvertes.sql",
   "202610300001_la_file_des_versements.sql",
-  "202610310001_les_octets_qui_attendent_leur_tour.sql"
+  "202610310001_les_octets_qui_attendent_leur_tour.sql",
+  "202611010001_les_expediteurs_deja_ecrits.sql"
 ];
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -280,4 +281,45 @@ test("un document rangé se lit toujours par sa ligne", { skip: sansPostgres }, 
 
   const lu = banc.enTantQue(A, `select count(*) from storage.objects where name = '${chemin}';`);
   assert.equal(lu.sortie, "1");
+});
+
+
+/* ── Les expéditeurs déjà écrits ─────────────────────────────────────────── */
+
+const X500 = "/O=EXCHANGELABS/OU=EXCHANGE ADMINISTRATIVE GROUP"
+  + " (FYDIBOHF23SPDLT)/CN=RECIPIENTS/CN=2130423FA9EF43C6B5B78421F4C7D6A2-NICOLAS.LEB";
+
+/**
+ * **La colonne sur laquelle on cherche et on trie** portait trois lignes
+ * d'identifiant d'annuaire. Corriger la lecture ne corrige pas ce qui est
+ * écrit : `mail_de` est posé au dépôt, une fois, et ne se recalcule jamais.
+ */
+test("un identifiant d'annuaire est retiré des lignes déjà versées", { skip: sansPostgres }, () => {
+  const pose = banc.sql(
+    `insert into public.documents (project_id, mail_de) values `
+    + `('${MEDIATHEQUE}', 'Nicolas Lebihan (${X500})'),`
+    + `('${MEDIATHEQUE}', 'Clément Boche (clement.boche@socotec.example)'),`
+    + `('${MEDIATHEQUE}', 'Société GLOBALIS (Savoie)'),`
+    + `('${MEDIATHEQUE}', '(${X500})')`
+    + ` returning 1;`
+  );
+  assert.equal(pose.ok, true, pose.motif);
+
+  // La migration est rejouable : on la repasse sur les lignes qu'on vient de
+  // poser, comme elle passera sur celles de la base.
+  banc.sql(readFileSync(join(
+    RACINE, "supabase", "migrations", "202611010001_les_expediteurs_deja_ecrits.sql"
+  ), "utf8"));
+
+  const dits = banc.sql("select mail_de from public.documents order by mail_de;").sortie.split("\n");
+
+  assert.equal(dits.includes("Nicolas Lebihan"), true, "l'identifiant n'a pas été retiré");
+  assert.equal(dits.some((un) => un.includes("EXCHANGELABS") && un.startsWith("Nicolas")), false);
+  // Une vraie adresse ne bouge pas.
+  assert.equal(dits.includes("Clément Boche (clement.boche@socotec.example)"), true);
+  // Des parenthèses qui ne portent pas une adresse font partie du nom.
+  assert.equal(dits.includes("Société GLOBALIS (Savoie)"), true);
+  // **Sans nom, on garde l'identifiant** : l'effacer supprimerait la seule
+  // chose qu'on sache de l'expéditeur.
+  assert.equal(dits.some((un) => un.includes("EXCHANGELABS")), true);
 });

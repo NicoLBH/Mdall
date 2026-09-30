@@ -32,6 +32,7 @@ create table if not exists public.documents (
   folder_id uuid,
   storage_bucket text,
   storage_path text,
+  mail_de text,
   deleted_at timestamptz,
   created_at timestamptz not null default now()
 );

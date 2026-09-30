@@ -311,7 +311,11 @@ const QUOI = {
   PIECE_IDENTIFIANT: "3712",
   CORPS_HTML: "1013",
   /** `PR_INTERNET_CPID` : dans quel alphabet les chaînes `001E` sont écrites. */
-  PAGE_DE_CODES: "3FDE"
+  PAGE_DE_CODES: "3FDE",
+  /** `PR_CLIENT_SUBMIT_TIME` : quand l'expéditeur a cliqué « Envoyer ». */
+  ENVOYE_LE: "0039",
+  /** `PR_MESSAGE_DELIVERY_TIME` : quand la boîte l'a reçu. */
+  RECU_LE: "0E06"
 };
 
 /**
@@ -401,6 +405,56 @@ function valeurEntiere(conteneur, dossier, numero, saut) {
     if (quoi === numero) return vue.getUint32(ou + 8, true);
   }
   return null;
+}
+
+/**
+ * Une date de taille fixe, prise dans le paquet des valeurs.
+ *
+ * ## Le défaut qu'elle répare
+ *
+ * Un `.msg` qui n'a pas transité n'a pas d'en-têtes : on les reconstitue à
+ * partir des propriétés. On y posait l'expéditeur, les destinataires, l'objet
+ * et les identifiants — **pas la date**, qui n'est pas une chaîne mais un
+ * `FILETIME`. L'écran affichait donc « date non lue » sur tous les messages
+ * qu'on a écrits soi-même, et le fil les rangeait n'importe où : sans date, il
+ * n'y a pas d'ordre.
+ *
+ * ## Ce qu'est un FILETIME
+ *
+ * Huit octets : le nombre de cent-nanosecondes depuis le 1er janvier 1601. On
+ * le lit en deux moitiés de trente-deux bits, parce qu'un nombre de cette
+ * taille ne tient pas dans un entier JavaScript ordinaire — mais la division
+ * qui suit le ramène à des millisecondes, où il tient largement.
+ *
+ * @returns {string} une date lisible par un en-tête, ou `""` si elle manque
+ */
+function valeurDate(conteneur, dossier, numero, saut) {
+  const flux = lesEnfants(conteneur.entrees, dossier)
+    .find((entree) => entree.quoi === ENTREE.FLUX && entree.nom === FLUX_DES_VALEURS);
+  if (!flux) return "";
+
+  const octets = conteneur.flux(flux);
+  if (octets.length <= saut) return "";
+  const vue = new DataView(octets.buffer, octets.byteOffset, octets.byteLength);
+
+  for (let ou = saut; ou + 16 <= octets.length; ou += 16) {
+    const marque = vue.getUint32(ou, true);
+    if ((marque >>> 16).toString(16).toUpperCase().padStart(4, "0") !== numero) continue;
+
+    const bas = vue.getUint32(ou + 8, true);
+    const haut = vue.getUint32(ou + 12, true);
+    const centNanos = haut * 4294967296 + bas;
+    // **Zéro n'est pas une date.** Outlook laisse la propriété à zéro quand il
+    // ne l'a pas remplie, et 1601 s'afficherait comme une date vraie.
+    if (!centNanos) return "";
+
+    // 11644473600000 ms séparent le 1er janvier 1601 du 1er janvier 1970.
+    const millisecondes = centNanos / 10000 - 11644473600000;
+    if (!Number.isFinite(millisecondes)) return "";
+    const quand = new Date(millisecondes);
+    return Number.isNaN(quand.getTime()) ? "" : quand.toUTCString();
+  }
+  return "";
 }
 
 /** Les destinataires, rangés par ce qu'Outlook dit de leur rang. */
@@ -545,13 +599,17 @@ function commeUnEnTete({ nom, adresse }) {
  * Sans date : un message interne peut n'en porter aucune lisible, et en
  * inventer une le placerait dans le fil à un moment qu'il n'a pas eu.
  */
-function enTetesReconstitues({ qui, a, copie, objet, identite, enReponseA, chaine }) {
+function enTetesReconstitues({ qui, a, copie, objet, identite, enReponseA, chaine, quand }) {
   const lignes = [];
   const poser = (nom, valeur) => { if (texte(valeur)) lignes.push(`${nom}: ${texte(valeur)}`); };
 
   poser("From", qui);
   poser("To", a.join(", "));
   poser("Cc", copie.join(", "));
+  // **Sans elle, « date non lue » — et un fil sans ordre.** Elle ne voyage pas
+  // dans les en-têtes d'un message qui n'a pas transité : elle est dans les
+  // propriétés, et c'est là qu'on la prend.
+  poser("Date", quand);
   poser("Subject", objet);
   poser("Message-ID", identite);
   poser("In-Reply-To", enReponseA);
@@ -623,7 +681,13 @@ export function unMsgDeplie(source) {
       objet,
       identite: texte(props.lire(QUOI.IDENTITE)),
       enReponseA: texte(props.lire(QUOI.EN_REPONSE_A)),
-      chaine: texte(props.lire(QUOI.CHAINE))
+      chaine: texte(props.lire(QUOI.CHAINE)),
+      // **L'envoi d'abord, la réception ensuite.** Ce qu'on veut dater, c'est
+      // le moment où quelqu'un a écrit ; la réception peut suivre de plusieurs
+      // heures quand une boîte est en retard, et ce délai n'appartient à
+      // personne.
+      quand: valeurDate(conteneur, racine, QUOI.ENVOYE_LE, 32)
+        || valeurDate(conteneur, racine, QUOI.RECU_LE, 32)
     });
   }
 
