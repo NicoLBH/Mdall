@@ -716,10 +716,120 @@ premier.
 3. ~~**Les écrans**~~ — *faits* : l'onglet **L'épisode**, où la référence à
    battre vient en premier, comme prévu.
 
-**Et maintenant, le chiffre.** Tout est en place pour le produire ; il manque la
-matière. Sur deux messages réels, il répond « trop peu de points pour se
-prononcer » — et c'est la bonne réponse. Ce qu'il faut ensuite n'est plus du
-code : **ce sont les cent archives.**
+4. **Le compartimentage par chantier** — § 8 ter. Sans lui, l'épisode mêle cent
+   chantiers en un seul, et le chiffre serait **faux** plutôt qu'absent.
+
+**Et ensuite, le chiffre.** Sur deux messages réels, il répond « trop peu de
+points pour se prononcer » — et c'est la bonne réponse. Une fois les chantiers
+séparés, ce qu'il faudra n'est plus du code : **ce sont les cent archives.**
+
+## 8 ter. Le compartimentage : un chantier, pas un tas
+
+> *« Ne faudrait-il pas que les paquets soient classés ou compartimentés en
+> projets ? Sinon cela risque d'être un ensemble de 40 000 mails dans lequel il
+> sera très difficile d'identifier des schémas de récurrence. »*
+
+**Oui. Et c'est plus grave que « difficile à lire » : sans compartiment, le
+chiffre serait faux.** Pas absent — faux, et d'apparence honnête.
+
+### Ce qui casse, concrètement
+
+Aujourd'hui, l'onglet **L'épisode** prend *tous* les messages de l'archive et en
+fait **un seul épisode**. À deux messages c'est sans conséquence ; à quarante
+mille, deux mécanismes se détraquent en silence.
+
+**1. La suite apprend des enchaînements qui n'ont jamais eu lieu.**
+`ceQuiSuitHabituellement` compte les **couples consécutifs** de domaines :
+« après structure est venu incendie ». Entre deux chantiers sans rapport, ce
+couple ne veut rien dire — c'est le hasard du calendrier. Sur cent chantiers
+mêlés, l'immense majorité des couples enjambent une frontière, et le prédicteur
+de séquence n'apprend plus que du bruit. Il rendrait tout de même un
+pourcentage.
+
+**2. Deux fils différents fusionnent.** La clé d'un fil est son objet
+(`cleDuSujet(titre)`). Deux chantiers ont chacun leur « RE: Réunion de chantier
+n° 4 » : aujourd'hui, c'est **un seul fil**. Leurs constats se confondent, leurs
+dates s'entremêlent, et rien ne le dit.
+
+### Le lot n'est pas une unité de sens, et c'était le piège
+
+Les deux nombres qui traînent dans le code ne veulent rien dire du métier :
+**cinquante** est la taille d'un lot de transport (`PAR_LOT`), **deux cents** le
+plafond de ce qu'un écran affiche (`AU_PLUS`). Aucun des deux n'est une
+frontière.
+
+**Le chantier, lui, en est une.** C'est la seule unité dans laquelle « après
+ceci vient cela » a un sens.
+
+### La bonne nouvelle : le classement existe déjà, et on le stocke sans s'en servir
+
+Le convoi nomme chaque message par **son chemin** — `webkitRelativePath` pour un
+dossier, le chemin interne pour une entrée de `.zip` — et ce chemin est écrit
+tel quel dans `messages_archives.fichier` :
+
+```
+Archives/2024/Taninges/EJA isolement.msg
+```
+
+C'est un classement **fait à la main, pendant des années, par quelqu'un qui
+savait**. On ne fera jamais mieux en devinant, et surtout : **il n'y a rien à
+re-ingérer.** L'information est déjà en base.
+
+### La seule chose à décider : quel niveau de dossier est un chantier
+
+`Archives/2024/Taninges/` — le chantier est-il `2024` ou `Taninges` ? Cela
+dépend de la façon dont l'archive est rangée, et **cela ne se devine pas**.
+
+Donc un **réglage à l'écran**, pas une règle : on montre les profondeurs
+observées avec de vrais exemples, et l'on choisit. Le chemin brut reste stocké ;
+la profondeur n'est qu'une **lecture**, qu'on change sans rien reverser — même
+principe que partout ici, le fichier est la source, la table est la lecture.
+
+Et ce qui n'a pas de dossier — un message déposé par le versoir, à l'unité —
+**n'est rattaché à rien, et se compte à part** (règle 5). Le ranger d'office
+dans un chantier inventé serait pire que de le laisser dehors.
+
+### La mesure se fait par chantier, puis se met en commun
+
+Et **la mise en commun n'est pas une moyenne de pourcentages.**
+
+Un chantier qui donne trois points notés et un qui en donne trois cents ne
+pèsent pas pareil ; en moyennant leurs taux, le petit compterait autant que le
+grand, et une poignée de chantiers minuscules décideraient du chiffre.
+
+La forme juste : **rejouer chaque chantier séparément, cumuler les points, puis
+calculer les taux sur le cumul.** C'est déjà presque en place —
+`rejouerLePasse` rend les points d'un épisode et `precisionA` les compte : il
+manque le geste qui les additionne avant de compter.
+
+### Compartimenter n'empêche pas les récurrences — c'est ce qui les rend possibles
+
+C'est l'inverse de l'inquiétude, et il vaut la peine de le dire : **une
+récurrence est une phrase qui a besoin d'une frontière pour avoir un sujet.**
+« Dans quarante chantiers sur cent, après un sujet de sol est venu un sujet de
+structure » ne se formule pas sur un tas. Sans compartiment, on ne peut même pas
+compter sur combien de chantiers un enchaînement se répète.
+
+Et le **nom commun** qui permet de comparer deux chantiers existe déjà : c'est le
+**domaine**, et c'est pour cela que la ligne de base prédit un domaine et non un
+sujet. Le jour où les sujets porteront une nomenclature, le même instrument
+mesurera le même prédicteur sur les noms, sans rien changer d'autre.
+
+### Ce que cela change à faire
+
+1. **Le chantier d'un message** : `dirname(fichier)` tronqué à une profondeur
+   choisie à l'écran. Aucune migration.
+2. **La clé d'un fil devient `chantier · objet`** — c'est le correctif du second
+   défaut, et il est d'une ligne.
+3. **Un épisode par chantier**, et l'écran montre la liste des chantiers avant
+   d'en ouvrir un.
+4. **La mesure cumulée** sur les points de tous les chantiers, jamais sur la
+   moyenne de leurs taux.
+5. **Ce qui n'a pas de dossier se compte**, et se dit.
+
+C'est le prochain pas, et il précède l'arrivée des cent archives : verser
+d'abord et compartimenter ensuite marcherait aussi — rien n'est perdu, le chemin
+est gardé —, mais on regarderait entre-temps un chiffre qui ne veut rien dire.
 
 ## 9. À enrichir
 
