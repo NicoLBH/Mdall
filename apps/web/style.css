@@ -23433,6 +23433,20 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
   padding-right:24px;
 }
 .memoire-layout--racine .memoire-corps{ padding-left:0; }
+
+/* **Le rail des Actions touche le bord de l'écran.**
+   Le journal vit dans `.project-page-shell`, qui centre son contenu dans
+   1216 px : le rail flottait donc au milieu, avec du vide à sa gauche, alors
+   qu'un rail est un bord — c'est ce qui le distingue d'une colonne.
+   Et pas de filet en haut : la barre d'onglets du projet en porte déjà un,
+   juste au-dessus, et deux traits parallèles à quatre pixels d'écart se lisent
+   comme un défaut d'affichage. Le corps garde sa respiration à droite. */
+.memoire-layout--actions{
+  margin-left:calc(50% - 50vw);
+  margin-right:calc(50% - 50vw);
+  border-top:none;
+}
+.memoire-layout--actions .memoire-corps{ padding-right:24px; }
 .memoire-tree{ width:var(--memoire-tree-width, 280px); align-self:stretch; }
 
 /* Le titre de la vue, au-dessus du tableau des Actions. Le rail porte la vue

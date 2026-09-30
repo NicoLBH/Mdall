@@ -86,38 +86,15 @@ function lesPortesEncoreOuvertes() {
 /**
  * Ce qui reste ouvert, nommément.
  *
- * Chacune de ces tables n'a **que** la porte pour politique : la fermer sans lui
- * écrire sa règle la rendrait muette. Elles attendent donc leur tour, et cette
- * liste est le seul endroit où l'on peut le voir.
+ * **Plus rien.** Les huit premières sont tombées en octobre ; les vingt-six
+ * autres avec `202611040001_les_vingt_six_portes.sql`, qui leur a écrit une
+ * règle chacune avant de fermer — une table fermée sans règle serait muette,
+ * c'est-à-dire un écran cassé sans que rien dise pourquoi.
+ *
+ * La liste reste, vide, et l'épreuve avec elle : c'est ce qui empêche la
+ * prochaine table de rouvrir la même porte sans que personne le voie.
  */
-const ENCORE_OUVERTES = [
-  "analysis_runs",
-  "assertion_acts",
-  "assertion_applications",
-  "assertion_dependencies",
-  "avis_figures",
-  "ct_avis",
-  "directory_people",
-  "lot_catalog",
-  "milestone_subjects",
-  "milestones",
-  "project_assertions",
-  "project_collaborators",
-  "project_identity_markers",
-  "project_labels",
-  "project_lots",
-  "proposition_comments",
-  "proposition_items",
-  "proposition_notes",
-  "propositions",
-  "subject_assertion_links",
-  "subject_assignees",
-  "subject_cr_mentions",
-  "subject_evidence",
-  "subject_labels",
-  "subject_links",
-  "subject_observations"
-];
+const ENCORE_OUVERTES = [];
 
 test("la liste des portes ouvertes ne s'allonge pas", () => {
   const restantes = lesPortesEncoreOuvertes();
@@ -131,11 +108,18 @@ test("la liste des portes ouvertes ne s'allonge pas", () => {
 
 test("ce qui a été fermé reste fermé", () => {
   const restantes = new Set(lesPortesEncoreOuvertes());
-  // Les huit tables du 202610290001 : celles qui portaient déjà une règle
-  // complète, et dont la porte ne servait donc qu'à l'annuler.
+  // Les huit du 202610290001 — celles qui portaient déjà une règle complète —
+  // et les vingt-six du 202611040001, qui ont reçu la leur.
   const fermees = [
     "projects", "documents", "subjects", "subject_history",
-    "ct_analysis_runs", "situations", "situation_subjects", "project_runs"
+    "ct_analysis_runs", "situations", "situation_subjects", "project_runs",
+    "analysis_runs", "assertion_acts", "assertion_applications", "assertion_dependencies",
+    "avis_figures", "ct_avis", "directory_people", "lot_catalog", "milestone_subjects",
+    "milestones", "project_assertions", "project_collaborators", "project_identity_markers",
+    "project_labels", "project_lots", "proposition_comments", "proposition_items",
+    "proposition_notes", "propositions", "subject_assertion_links", "subject_assignees",
+    "subject_cr_mentions", "subject_evidence", "subject_labels", "subject_links",
+    "subject_observations"
   ];
 
   for (const table of fermees) {
@@ -182,4 +166,100 @@ test("la règle de l'histoire des sujets peut écrire", () => {
   ));
   const regle = sql.slice(sql.indexOf("create policy history_by_project"));
   assert.match(regle.slice(0, 400), /with check \(/);
+});
+
+/**
+ * **Une vue ne porte pas de politique, et ce compte ne la voyait pas.**
+ *
+ * `project_collaborators_view` était donnée en lecture à `anon`. Une vue
+ * PostgreSQL ordinaire lit ses tables de base avec les droits de son
+ * propriétaire, sans consulter leurs politiques : fermer
+ * `project_collaborators` et `directory_people` sans toucher à la vue n'aurait
+ * donc rien fermé du tout.
+ *
+ * C'est exactement le genre de trou que compter des politiques ne peut pas
+ * montrer — d'où cette épreuve à côté, qui lit les vues.
+ */
+test("aucune vue n'est plus lisible avec la clé publique", () => {
+  const fichiers = readdirSync(MIGRATIONS).filter((un) => un.endsWith(".sql")).sort();
+  const donnees = new Map();
+  const reprises = new Map();
+
+  for (const fichier of fichiers) {
+    const sql = leSqlSeul(readFileSync(join(MIGRATIONS, fichier), "utf8"));
+    for (const trouve of sql.matchAll(
+      /grant\s+[a-z, ]+\s+on\s+(?:public\.)?"?([a-zA-Z0-9_]+)"?\s+to\s+([^;]*anon[^;]*);/g
+    )) {
+      donnees.set(trouve[1], fichier);
+    }
+    for (const trouve of sql.matchAll(
+      /revoke\s+[a-z, ]+\s+on\s+(?:public\.)?"?([a-zA-Z0-9_]+)"?\s+from\s+([^;]*anon[^;]*);/g
+    )) {
+      reprises.set(trouve[1], fichier);
+    }
+  }
+
+  const encore = [...donnees.entries()]
+    .filter(([objet, quand]) => !(reprises.has(objet) && reprises.get(objet) > quand))
+    .map(([objet]) => objet);
+
+  assert.deepEqual(encore, [],
+    "ces objets se lisent encore avec la clé publique du navigateur :\n" + encore.join("\n"));
+});
+
+/**
+ * **Et la vue lit désormais sous les règles de celui qui interroge.** La lui
+ * retirer à `anon` sans `security_invoker` ne suffirait pas : tout compte
+ * connecté y verrait les collaborateurs de tous les chantiers.
+ */
+test("la vue des collaborateurs lit avec les droits de celui qui interroge", () => {
+  const sql = leSqlSeul(readFileSync(
+    join(MIGRATIONS, "202611040001_les_vingt_six_portes.sql"), "utf8"
+  ));
+  assert.match(sql,
+    /alter view public\.project_collaborators_view set \(security_invoker = true\)/);
+});
+
+/**
+ * **Chaque table fermée a bien reçu sa règle**, et la même partout : une
+ * seconde formulation pour dire la même chose finirait par ne pas dire la même
+ * chose (règle 4).
+ */
+test("les vingt-six ont chacune une règle, et aucune ne s'ouvre à anon", () => {
+  const sql = leSqlSeul(readFileSync(
+    join(MIGRATIONS, "202611040001_les_vingt_six_portes.sql"), "utf8"
+  ));
+
+  const posees = [...sql.matchAll(/create\s+policy\s+([a-zA-Z0-9_]+)\s*\n\s*on\s+public\.([a-zA-Z0-9_]+)/g)]
+    .map((un) => un[2]);
+  const fermees = [...sql.matchAll(/drop\s+policy\s+if\s+exists\s+"([a-zA-Z0-9_]+)_open_all"/g)]
+    .map((un) => un[1]);
+
+  assert.equal(fermees.length, 26, `${fermees.length} portes fermées au lieu de 26`);
+  for (const table of fermees) {
+    assert.equal(posees.includes(table), true,
+      `« ${table} » est fermée sans règle : elle sera muette`);
+  }
+  // Aucune des nouvelles règles ne redonne la main à la clé publique.
+  assert.doesNotMatch(sql, /create policy[\s\S]*?to\s+anon/);
+});
+
+/**
+ * **`with check` autant que `using`.** Sans lui, une table se lit correctement
+ * et refuse toute écriture — le défaut trouvé sur `subject_history` en octobre,
+ * qui ne s'était jamais vu parce que la porte ouverte acceptait tout à côté.
+ */
+test("chaque règle posée sait aussi écrire", () => {
+  const sql = leSqlSeul(readFileSync(
+    join(MIGRATIONS, "202611040001_les_vingt_six_portes.sql"), "utf8"
+  ));
+
+  // Le catalogue est en lecture seule, et c'est voulu : il n'a pas de `with
+  // check` parce qu'il n'a pas d'écriture du tout.
+  const morceaux = sql.split(/create\s+policy\s+/).slice(1);
+  for (const morceau of morceaux) {
+    const nom = morceau.slice(0, morceau.indexOf("\n")).trim();
+    if (/for\s+select/.test(morceau.slice(0, 200))) continue;
+    assert.match(morceau.slice(0, 900), /with check \(/, `« ${nom} » ne peut rien écrire`);
+  }
 });
