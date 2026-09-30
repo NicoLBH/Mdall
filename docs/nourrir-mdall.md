@@ -945,6 +945,109 @@ n'existent toujours pas.
 Combien de comptes, qui revient, ce qui tombe en panne, ce que ça coûte, où en
 est la prédiction. **Pas un second atelier.**
 
+## 8 quinquies. Fichiers, ou un utilitaire ?
+
+> *« Y a-t-il des fonctionnalités ou actions spécifiques au dépôt en masse de
+> mails qui méritent d'en faire un utilitaire particulier ? »*
+
+### Ce que Fichiers fait déjà, et qu'on n'avait pas regardé
+
+Le dépôt de Fichiers n'est pas un simple téléversement. Il fait déjà, dans cet
+ordre :
+
+1. **dédoublonner** la sélection (par `nom|taille`) ;
+2. **inspecter** chaque fichier (`inspectFile`) et **reconnaître** ce que c'est
+   (`isExploitable`) ;
+3. **rattacher le dépôt aux propositions ouvertes** du projet.
+
+Autrement dit : **déposer → inspecter → reconnaître → proposer.** La signature
+dont il est question existe donc déjà dans ce flux ; il n'y a rien à inventer
+pour elle.
+
+### La vraie question n'est donc pas « où », mais « qu'est-ce qui est neuf »
+
+Six choses sont propres au versement en masse de mails. **Cinq sont des étapes
+ou des services ; une seule touche à autre chose qu'au confort.**
+
+**1. Un fichier déposé en devient plusieurs.** `inspectFile` *reconnaît*, il ne
+**dépouille** pas : rien aujourd'hui ne transforme un fichier déposé en
+plusieurs documents. Un `.msg` en vaut N+1, un `.zip` aussi. C'est la seule
+nouveauté vraiment structurelle — et c'est **une étape**, pas un écran.
+
+**2. Deux destinations, deux confidentialités — et c'est le point qui décide.**
+Le message va dans « Mails », qui est **privé** ; la pièce jointe va dans
+Fichiers, **partagé avec les collaborateurs**. Un dépôt qui franchit cette
+frontière **en silence** n'est pas une commodité : c'est un défaut de
+confidentialité. Le dépouillement doit donc **montrer ce qui ira où, avant de le
+faire**.
+
+C'est l'argument le plus fort pour une étape **visible** — et le seul qui ne
+soit pas une question d'ergonomie.
+
+**3. Le dédoublonnage par le contenu.** Fichiers dédoublonne par `nom|taille`,
+et seulement dans la sélection courante. Le même plan attaché à quinze réponses
+porte quinze noms possibles et **une seule empreinte**. C'est un service
+(`le-dedoublonnage.js`), pas un écran.
+
+**4. Le compte rendu remplace la liste.** À deux cents, on ne lit pas deux cents
+lignes d'état : on lit « 196 versés, 3 déjà là, 1 illisible — *le voici* ». Une
+façon de dessiner le même panneau, pas un autre panneau.
+
+**5. La signature porte sur le versement, pas sur chaque mail.** Deux cents
+signatures seraient absurdes — et fausses. Ce qu'on atteste, c'est *« je verse
+ces deux cents messages dans ce projet, ce jour »*. C'est **une propriété de la
+proposition**, et elle vaut d'être écrite maintenant : le réflexe serait une
+proposition par fichier.
+
+**6. Le temps.** Des minutes, pas des secondes : une progression, et la
+possibilité de partir. C'est la question de l'arrière-plan, déjà posée au
+§ 8 quater.
+
+### Ce qui reste hors de Fichiers, et pourquoi ce n'en est pas une duplication
+
+**`lecture-des-mails`** : un fil, ce qu'on en a compris, les trous. **On y va
+pour comprendre, pas pour verser.** Deux gestes, deux endroits, et aucun des
+deux ne fait le travail de l'autre.
+
+**L'épisode** n'est pas un dépôt, c'est une **lecture**. Sa place est aux
+Indicateurs, où `renderLaForme` dessine déjà l'épisode de la mémoire : **un
+écran, deux sources** — avec la réserve du § 8 quater, puisqu'un épisode tiré de
+correspondance privée hérite de sa confidentialité.
+
+### Recommandation : dans Fichiers, avec une étape de dépouillement
+
+Pas un second endroit où déposer. **Un utilisateur qui hésite entre deux zones
+de dépôt se trompe une fois sur deux**, et la duplication d'interface qu'il faut
+éviter serait exactement là — bien plus que dans le code.
+
+### L'argument inverse, et pourquoi il ne tient qu'à moitié
+
+Il y en a un, et il est honnête : un utilitaire **se cache**, se retire sans
+toucher à Fichiers, et ne risque pas de casser le dépôt quotidien pendant qu'on
+le met au point.
+
+C'est un vrai argument — mais **pour un interrupteur, pas pour un écran**.
+L'étape de dépouillement peut rester éteinte jusqu'à ce qu'on lui fasse
+confiance ; cela coûte une condition, là où un second écran coûte un second
+calibrage, un second jeu de classes et un second endroit à corriger (règle 4).
+
+### Les deux autres décisions de ce tour
+
+**Les trois tables de la console sont supprimées** — `messages_archives`,
+`pieces_archivees`, `pieces_des_messages` — et le casier `archives` avec. La
+migration **vérifiera d'abord qu'elles sont vides** : ce qui a été versé ne se
+jette pas sans l'avoir regardé (règle 6). Partent avec elles les écrans
+*versoir*, *archive* et *épisode* de la console.
+
+**Le retour au compte utilisateur** : l'avatar en haut à droite de la console,
+son menu, et un item « Profil utilisateur ».
+
+> **Les classes, pas le module.** `global-header.js` traîne le magasin, les
+> routes, le carnet et les raccourcis de la barre : l'emporter mettrait la
+> navigation entière de l'application dans la console. On reprend
+> `gh-user-menu__*` et `svgIcon`, comme on a repris le lecteur de PDF — le
+> rendu est le même, la dépendance ne l'est pas.
+
 ## 9. À enrichir
 
 - Le déposant : navigateur ou fonction de bord ? (cent mille pièces ne passent
