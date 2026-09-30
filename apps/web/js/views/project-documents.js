@@ -41,6 +41,7 @@ import {
 import { laGalerie } from "../services/la-galerie-des-pieces.js";
 import { renderLaGalerie } from "./ui/la-galerie-ecran.js";
 import { renderLeDepouillement } from "./ui/le-depouillement-ecran.js";
+import { leMotDunRefus } from "../services/le-projet-ou-lon-ecrit.js";
 import { renderDataTableShell, renderDataTableHead, renderDataTableEmptyState } from "./ui/data-table-shell.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { proposeTitle } from "../services/proposition-title.js";
@@ -361,7 +362,6 @@ async function loadCurrentDirectory({ forceFolderId } = {}) {
   docsViewState.currentFolder = directory?.currentFolder ?? null;
   docsViewState.breadcrumb = Array.isArray(directory?.breadcrumb) ? directory.breadcrumb : [];
   docsViewState.folders = Array.isArray(directory?.folders) ? directory.folders : [];
-  docsViewState.tousLesDossiers = Array.isArray(directory?.tous) ? directory.tous : [];
   docsViewState.tousLesDossiers = Array.isArray(directory?.tous) ? directory.tous : [];
   docsViewState.files = Array.isArray(directory?.files) ? directory.files : [];
   console.info("[documents-view] load-directory.success", { projectId, folderId: docsViewState.currentFolderId, folders: docsViewState.folders.length, files: docsViewState.files.length });
@@ -2750,8 +2750,29 @@ async function allerDansLArbre(root, adresse) {
       await allerDansLeDossier(root, String(leDossierDesMails()?.id || ""), BRANCHE.MAILS);
       return;
     }
+
+    // **Entrer dans « Documents » aussi, et c'est ce qui manquait.** Cette
+    // branche se contentait de changer son nom et de redessiner : le dossier
+    // courant, le fil d'Ariane et la liste restaient ceux d'où l'on venait.
+    // Depuis « Documents / Devis / Plans », cliquer « Documents » dans l'arbre
+    // donnait donc une liste vide sous un fil qui annonçait toujours
+    // « Devis / Plans » — l'écran disait qu'on était quelque part, et montrait
+    // le contenu de nulle part.
+    //
+    // On passe donc par le geste commun, celui qui recharge et remet le fil à
+    // sa place — le même que pour « Mails », et pour la même raison.
+    if (cible === BRANCHE.DOCUMENTS) {
+      await allerDansLeDossier(root, "", BRANCHE.DOCUMENTS);
+      return;
+    }
+
     docsViewState.branche = cible;
     docsViewState.memoireChemin = [];
+    // La Mémoire a son propre écran et son propre chemin. Laisser derrière soi
+    // le dossier de Documents ferait revenir son fil d'Ariane au retour.
+    docsViewState.currentFolderId = null;
+    docsViewState.currentFolder = null;
+    docsViewState.breadcrumb = [];
     renderProjectDocumentsContent(root);
     return;
   }
@@ -5532,12 +5553,31 @@ async function creerUnDossier(root) {
   }
   try {
     console.info("[documents-view] create-folder.submit", { parentFolderId: docsViewState.currentFolderId || null });
-    await createDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), docsViewState.currentFolderId || null, name);
+    // **L'identifiant du projet en base, comme partout ailleurs.** Cette ligne
+    // lisait le store et retombait sur l'identifiant d'**écran** : la base ne le
+    // connaît pas, et elle refusait d'écrire. C'était la troisième copie de la
+    // même question — « dans quel projet écrit-on ? » — et la seule qui répondait
+    // encore de travers (règle 10).
+    const projectId = String((await resolveCurrentBackendProjectId().catch(() => "")) || "").trim();
+    if (!projectId) {
+      setDocumentsActivity({
+        tone: "error",
+        title: "Création impossible",
+        message: "Ce projet n'a pas été retrouvé dans la base sous votre compte."
+      });
+      renderProjectDocumentsContent(root);
+      return;
+    }
+    await createDocumentFolder(projectId, docsViewState.currentFolderId || null, name);
     await loadCurrentDirectory();
     if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "create-folder" });
     renderProjectDocumentsContent(root);
   } catch (error) {
-    setDocumentsActivity({ tone: "error", title: "Création impossible", message: error instanceof Error ? error.message : "Erreur Supabase lors de la création du dossier." });
+    setDocumentsActivity({
+      tone: "error",
+      title: "Création impossible",
+      message: leMotDunRefus(error) || "Erreur Supabase lors de la création du dossier."
+    });
     renderProjectDocumentsContent(root);
   }
 }

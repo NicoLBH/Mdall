@@ -1,4 +1,5 @@
 import { store } from "../store.js";
+import { UNE_EXECUTION } from "./run-partition.js";
 
 const DEFAULT_AGENT_CATALOG = {
   solidite: {
@@ -388,7 +389,7 @@ function normalizeRunLogEntry(entry = {}) {
   return {
     schemaVersion: 2,
     id: entry.id || makeRunId(),
-    name: entry.name || "Run",
+    name: entry.name || UNE_EXECUTION,
     kind: entry.kind || "analysis",
     agentKey: entry.agentKey || "parasismique",
     lifecycleStatus,

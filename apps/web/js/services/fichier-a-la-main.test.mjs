@@ -443,9 +443,34 @@ test("entrer dans un dossier de Documents se dit à un seul endroit", () => {
   //
   // Le cinquième aussi : la racine « Mails » de l'arbre. Elle n'est pas un
   // endroit à part, c'est un dossier — donc on y entre comme dans un dossier.
+  // **Le sixième est la racine « Documents » de l'arbre**, et il répare un
+  // défaut qu'on voyait à l'écran sans le nommer : cette branche se contentait
+  // de changer son nom et de redessiner. Depuis « Documents / Devis / Plans »,
+  // cliquer « Documents » donnait une liste vide sous un fil qui annonçait
+  // toujours « Devis / Plans ». Une racine est un endroit : on y entre.
   const appels = ecran.match(/await allerDansLeDossier\(root,/g) ?? [];
-  assert.equal(appels.length, 5,
-    "l'arbre, le fil d'Ariane, le tableau, le dépouillement, la racine des mails");
+  assert.equal(appels.length, 6,
+    "l'arbre, le fil d'Ariane, le tableau, le dépouillement, les deux racines");
+});
+
+test("entrer dans une racine de l'arbre emmène à sa racine, fil compris", () => {
+  const ecran = readFileSync(new URL("../views/project-documents.js", import.meta.url), "utf8");
+  const branche = ecran.slice(
+    ecran.indexOf('if (prefixe === "branche") {'),
+    ecran.indexOf('if (prefixe === "trouver")')
+  );
+  assert.notEqual(branche.length, 0, "le cas des branches a changé de nom");
+
+  // Les deux racines de Fichiers passent par le geste commun : il recharge le
+  // dossier, et c'est lui qui remet le fil d'Ariane à sa place.
+  assert.match(branche, /BRANCHE\.MAILS[\s\S]{0,200}await allerDansLeDossier\(root,/);
+  assert.match(branche, /BRANCHE\.DOCUMENTS[\s\S]{0,400}await allerDansLeDossier\(root, "", BRANCHE\.DOCUMENTS\)/);
+
+  // La Mémoire a son propre écran : elle n'entre dans aucun dossier, mais elle
+  // ne doit pas non plus garder celui d'où l'on vient — son fil reviendrait au
+  // retour.
+  assert.match(branche, /docsViewState\.breadcrumb = \[\];/);
+  assert.match(branche, /docsViewState\.currentFolderId = null;/);
 });
 
 test("aucun geste ne charge un dossier de Documents pour son compte", () => {
