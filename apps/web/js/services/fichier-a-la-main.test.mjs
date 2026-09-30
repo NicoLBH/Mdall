@@ -448,9 +448,15 @@ test("entrer dans un dossier de Documents se dit à un seul endroit", () => {
   // de changer son nom et de redessiner. Depuis « Documents / Devis / Plans »,
   // cliquer « Documents » donnait une liste vide sous un fil qui annonçait
   // toujours « Devis / Plans ». Une racine est un endroit : on y entre.
+  //
+  // **Et « Voir les mails rangés » s'en est allé** : depuis que le rangement se
+  // fait au serveur, il n'y a rien à ouvrir au moment où l'envoi part — le
+  // dossier n'existe pas encore. Promettre de montrer ce qui n'est pas là est
+  // pire que ne rien proposer ; l'écran renvoie vers Actions, qui sait dire où
+  // cela en est.
   const appels = ecran.match(/await allerDansLeDossier\(root,/g) ?? [];
-  assert.equal(appels.length, 6,
-    "l'arbre, le fil d'Ariane, le tableau, le dépouillement, les deux racines");
+  assert.equal(appels.length, 5,
+    "l'arbre, le fil d'Ariane, le tableau, les deux racines");
 });
 
 test("entrer dans une racine de l'arbre emmène à sa racine, fil compris", () => {

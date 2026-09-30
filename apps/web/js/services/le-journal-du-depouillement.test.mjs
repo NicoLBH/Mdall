@@ -7,8 +7,8 @@ import {
 } from "./le-journal-du-depouillement.js";
 
 test("l'action porte un nom qui compte ses fichiers, et s'accorde", () => {
-  assert.equal(leNomDeLaction(1), "Dépouillement de 1 fichier de messagerie");
-  assert.equal(leNomDeLaction(20), "Dépouillement de 20 fichiers de messagerie");
+  assert.equal(leNomDeLaction(1), "Versement de 1 fichier de messagerie");
+  assert.equal(leNomDeLaction(20), "Versement de 20 fichiers de messagerie");
   assert.equal(SORTE, "depouillement");
 });
 
@@ -34,12 +34,12 @@ test("la fin reprend la phrase du convoi", () => {
 
 test("un arrêt se dit comme un arrêt, et nomme sa cause", () => {
   const dit = leMotDeLaFin({ arrete: "votre session n'a pas répondu" });
-  assert.match(dit, /^Dépouillement interrompu/);
+  assert.match(dit, /^Versement interrompu/);
   assert.match(dit, /votre session n'a pas répondu/);
 });
 
 test("rien de dépouillé ne laisse pas la ligne muette", () => {
-  assert.equal(leMotDeLaFin(null, ""), "Rien n'a été dépouillé.");
+  assert.equal(leMotDeLaFin(null, ""), "Rien n'a été versé.");
 });
 
 /**
@@ -143,7 +143,7 @@ test("les doublons évités et les accrocs ne s'ajoutent que s'il y en a", () =>
  * **Le défaut que ce banc a trouvé dans un navigateur, et qu'aucune épreuve ne
  * voyait.** Un dépôt réussi porte `arrete: false` (`unJournalNeuf()`). Lu par
  * `String(valeur ?? "")`, cela donne `"false"` — une chaîne non vide, donc vraie.
- * Tout dépôt réussi était donc consigné « Dépouillement interrompu : false », en
+ * Tout dépôt réussi était donc consigné « Versement interrompu : false », en
  * échec, alors que les mails étaient rangés.
  */
 test("un dépôt réussi n'est pas dit interrompu", () => {

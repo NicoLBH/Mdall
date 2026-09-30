@@ -1,24 +1,38 @@
 /**
- * Le dépouillement, pour de vrai : **lire, dédoublonner, ranger**.
+ * Le dépouillement, mis en ordre : **lire, dédoublonner, ranger**.
+ *
+ * ## Il ne parle plus au réseau — il reçoit des portes
+ *
+ * Ce module faisait les deux : l'ordre des gestes et les appels à Supabase. Il
+ * ne pouvait donc tourner que dans un navigateur, et **aucune épreuve ne l'a
+ * jamais exécuté** — le module qu'il importait ouvre une session au chargement.
+ * Tout ce qu'on savait de lui, on le savait en le lisant.
+ *
+ * Depuis que le dépôt se fait en file, c'est le serveur qui range, pas l'onglet.
+ * Deux copies de cet ordre-là — une par navigateur, une par fonction de bord —
+ * auraient rangé deux mails différemment sans que rien ne le dise (règle 4). Il
+ * n'y en a donc qu'une, elle reçoit ses accès par `portes`, et elle s'exécute
+ * enfin : en épreuve avec des portes de banc, au serveur avec celles de
+ * Supabase.
  *
  * ## Ce qui est à lui, et ce qui lui est prêté
  *
  * Il ne décide rien de ce qui se décide ailleurs. Le partage du dépôt, les
  * destinations, le dédoublonnage et les phrases viennent de
- * `le-depouillement.js` ; le découpage en lots, le journal et l'avancement du
+ * `le-depouillement.js` ; le découpage en lots, le journal et l'avancement de
  * `le-convoi.js` ; la lecture des `.msg`, des `.eml` et des `.zip` de leurs
- * lecteurs respectifs. Ce module met tout cela dans l'ordre et parle au réseau.
+ * lecteurs respectifs. Ce module met tout cela dans l'ordre.
  *
  * ## Par lots, et il relâche
  *
  * Deux cents mails avec leurs pièces font des centaines de mégaoctets. Un lot
  * se lit, se dépose, et **ses octets sont relâchés** ; le lot suivant repart sur
- * une mémoire vide. Ce n'est pas une optimisation : sans cela, l'onglet meurt
+ * une mémoire vide. Ce n'est pas une optimisation : sans cela, le travail meurt
  * tard, après vingt minutes, sans avoir rien déposé (`le-convoi.js`).
  *
  * ## Les pièces d'abord, le message ensuite
  *
- * Une panne entre les deux laisse alors des pièces sans leur message : elles se
+ * Une panne entre les deux laisse des pièces sans leur message : elles se
  * retrouveront par leur empreinte à la reprise, et rien n'est perdu. Dans
  * l'autre ordre, elle laisserait un message **dont les pièces ne seront jamais
  * redemandées**, puisque le message, lui, sera reconnu comme déjà là.
@@ -39,7 +53,6 @@
  * par une proposition signée, comme tout le reste (règle 1).
  */
 
-import { currentUserId, insertDocumentRow, uploadDocumentToStorage } from "./document-deposit.js";
 import { creuserLesDossiers } from "./creuser-les-dossiers.js";
 import {
   DOSSIER_DES_MAILS, DOSSIER_DES_PIECES, EXTENSION_DUN_MAIL, NATURE_DUNE_PIECE,
@@ -63,51 +76,26 @@ const texte = (valeur) => String(valeur ?? "").trim();
 export const AU_PLUS = 200;
 
 /**
- * Ce que ce projet connaît déjà de ces octets-là.
+ * Ce dont ce module a besoin pour parler à la base.
  *
- * Bornée au lot, et **par tranches** : `.in()` sur deux cents valeurs tient
- * dans une adresse, sur dix mille non.
+ * Six gestes, pas un de plus. Les nommer ici plutôt que de laisser chacun
+ * deviner ce qu'il doit fournir est ce qui permet au banc d'en poser de faux
+ * sans rien manquer.
  *
- * @returns {Promise<Set<string>|null>} `null` quand la base n'a pas répondu
+ * @typedef {object} PortesDuVersement
+ * @property {(projectId: string, parentId: string|null) => Promise<object[]>} listerLesEnfants
+ * @property {(projectId: string, parentId: string|null, nom: string) => Promise<object>} creerLeDossier
+ * @property {(projectId: string, folderId: string|null) => Promise<string[]>} lesNomsDejaLa
+ * @property {(projectId: string, empreintes: string[]) => Promise<Set<string>|null>} lesOctetsConnus
+ * @property {(octets: Uint8Array, ou: object) => Promise<object>} ranger
+ * @property {(messageId: string, piecesIds: string[]) => Promise<void>} marquerLaProvenance
  */
-export async function lesOctetsConnus(projectId, empreintes = []) {
-  const voulues = [...new Set((empreintes ?? []).map(texte).filter(Boolean))];
-  if (!texte(projectId) || !voulues.length) return new Set();
-
-  const { supabase } = await import("../../assets/js/auth.js");
-  const connues = new Set();
-
-  for (let ou = 0; ou < voulues.length; ou += AU_PLUS) {
-    const tranche = voulues.slice(ou, ou + AU_PLUS);
-    const { data, error } = await supabase
-      .from("documents")
-      .select("empreinte_des_octets")
-      .eq("project_id", projectId)
-      .is("deleted_at", null)
-      .in("empreinte_des_octets", tranche);
-
-    // **Ne pas savoir n'est pas savoir que non.** Une lecture ratée qui rendrait
-    // un ensemble vide ferait tout redéposer en double (règle 5).
-    if (error) return null;
-    for (const ligne of data ?? []) connues.add(texte(ligne?.empreinte_des_octets));
-  }
-
-  return connues;
-}
 
 /** Les deux dossiers, creusés une seule fois, privés tous les deux. */
-async function lesDeuxDossiers(projectId) {
-  const { createDocumentFolder, listDocumentFolderChildren } =
-    await import("./project-supabase-sync.js");
+async function lesDeuxDossiers(projectId, portes) {
   // **Privé à chaque étage.** Un sous-dossier ordinaire dans un dossier privé
   // serait visible de l'équipe comme dossier, et ses documents avec lui : la
   // politique de lecture regarde le dossier du document, pas son grand-parent.
-  const portes = {
-    listerLesEnfants: listDocumentFolderChildren,
-    creerLeDossier: (projet, parent, nom) =>
-      createDocumentFolder(projet, parent, nom, { prive: true })
-  };
-
   const ou = {};
   for (const destination of LES_DESTINATIONS) {
     const creuse = await creuserLesDossiers({
@@ -121,93 +109,41 @@ async function lesDeuxDossiers(projectId) {
 }
 
 /**
- * Dire de quel message viennent ces pièces.
+ * Verser un dépôt de messagerie dans un projet.
  *
- * **Un échec ici ne fait pas échouer le dépôt.** La pièce est rangée, le
- * message aussi : ce qui manque est le lien, et le pire qu'il en coûte est une
- * galerie sans date. Perdre le plan pour sauver sa provenance serait le mauvais
- * échange.
- */
-async function marquerLaProvenance(messageId, piecesIds = []) {
-  const cible = texte(messageId);
-  if (!cible || !piecesIds.length) return;
-
-  try {
-    const { supabase } = await import("../../assets/js/auth.js");
-    await supabase.from("documents")
-      .update({ piece_du_message: cible })
-      .in("id", piecesIds);
-  } catch {
-    // Silencieux : la provenance manquera, et la galerie le dira.
-  }
-}
-
-/** Les noms déjà pris dans un dossier, pour ne pas écraser un homonyme. */
-async function nomsDejaDans(projectId, folderId) {
-  const { listDocumentDirectory } = await import("./project-supabase-sync.js");
-  const contenu = await listDocumentDirectory(projectId, folderId || null);
-  return (contenu?.files ?? []).map((un) =>
-    texte(un?.name ?? un?.original_filename ?? un?.filename));
-}
-
-/** Ranger un fichier, et rendre sa ligne. */
-async function ranger(octets, {
-  projectId, folderId, nom, type, nature, deposant, empreinte, index = null,
-  dansLeTexte = null
-}) {
-  const fichier = new File([octets], nom, { type });
-  const stockage = await uploadDocumentToStorage(fichier, {
-    projectId, scope: `${folderId || "racine"}/mails`
-  });
-  return insertDocumentRow({
-    project_id: projectId,
-    folder_id: folderId,
-    filename: nom,
-    original_filename: nom,
-    mime_type: type,
-    document_kind: nature,
-    upload_status: "uploaded",
-    storage_bucket: stockage.storage_bucket,
-    storage_path: stockage.storage_path,
-    file_size_bytes: fichier.size || 0,
-    empreinte_des_octets: empreinte || null,
-    // **Une image du corps n'est pas un document.** Une signature, un bandeau :
-    // la galerie les écarte. `null` quand ce n'est pas une pièce jointe — ne
-    // pas savoir et savoir que non ne se disent pas pareil (règle 5).
-    piece_dans_le_texte: dansLeTexte,
-    deposant,
-    // **L'index d'un mail, écrit au dépôt.** C'est le seul moment où le message
-    // est déjà déplié : le recalculer à la lecture ferait rapatrier deux cents
-    // fichiers pour dessiner deux cents lignes (`la-ligne-dun-mail.js`).
-    ...(index ?? {})
-  }, "id,project_id,folder_id,filename,document_kind");
-}
-
-/**
- * Dépouiller un dépôt.
+ * Les types sont écrits : sans eux, les valeurs par défaut font conclure que
+ * `portes` **est** `null`, et la fonction de bord ne compile plus (Deno le dit,
+ * l'éditeur aussi, et tous les deux ont raison).
  *
- * @param {File[]} fichiers ce que l'utilisateur a choisi
- * @param {{projectId: string, avance?: (journal: object) => void}} ou
+ * @param {File[]} fichiers ce qui a été déposé
+ * @param {object} ou
+ * @param {string} [ou.projectId] le projet en base
+ * @param {string} [ou.deposant] qui dépose — sans lui, rien n'est rangé
+ * @param {PortesDuVersement|null} [ou.portes] les six accès à la base
+ * @param {((journal: object) => void)|null} [ou.avance] dit où l'on en est
  * @returns {Promise<object>} le journal, tel que `le-convoi.js` le tient
  */
-export async function depouiller(fichiers = [], { projectId = "", avance = null } = {}) {
+export async function verser(fichiers = [], {
+  projectId = "", deposant = "", portes = /** @type {PortesDuVersement|null} */ (null),
+  avance = /** @type {((journal: object) => void)|null} */ (null)
+} = {}) {
   const { porteurs } = lePartageDuDepot(fichiers);
   let journal = { ...unJournalNeuf(), fichiers: porteurs.length };
   const dire = () => { if (typeof avance === "function") avance(journal); };
 
   if (!texte(projectId)) return { ...journal, fini: true, arrete: "aucun projet" };
+  if (!portes) return { ...journal, fini: true, arrete: "aucun accès à la base" };
   if (!porteurs.length) return { ...journal, fini: true };
 
   // **Sans déposant connu, on ne range rien.** La politique de lecture cache un
   // document quand son dossier est privé *et* que son déposant n'est pas vide :
   // un déposant absent publierait deux cents mails de correspondance, en
   // silence, et le dépôt se dirait réussi.
-  const deposant = await currentUserId().catch(() => null);
-  if (!deposant) {
-    return { ...journal, fini: true, arrete: "votre session n'a pas répondu : rien n'a été rangé" };
+  if (!texte(deposant)) {
+    return { ...journal, fini: true, arrete: "le déposant n'est pas connu : rien n'a été rangé" };
   }
 
-  const dossiers = await lesDeuxDossiers(projectId);
+  const dossiers = await lesDeuxDossiers(projectId, portes);
   if (!dossiers.trouve) return { ...journal, fini: true, arrete: dossiers.motif };
 
   // **Où c'est allé fait partie du compte rendu.** Sans cela, l'écran annonce
@@ -272,7 +208,7 @@ export async function depouiller(fichiers = [], { projectId = "", avance = null 
     dire();
 
     const { distinctes } = lesPiecesDistinctes(aRanger.flatMap((un) => un.pieces));
-    const connues = await lesOctetsConnus(projectId, [
+    const connues = await portes.lesOctetsConnus(projectId, [
       ...aRanger.map((un) => un.empreinte),
       ...distinctes.map((une) => une.empreinte)
     ]);
@@ -284,7 +220,7 @@ export async function depouiller(fichiers = [], { projectId = "", avance = null 
     // qui se retrouveront par leur empreinte ; dans l'autre ordre, elle
     // laisserait un message reconnu « déjà là » dont les pièces ne seraient
     // jamais redemandées.
-    const nomsDesPieces = await nomsDejaDans(projectId, dossiers.ou.pieces);
+    const nomsDesPieces = [...(await portes.lesNomsDejaLa(projectId, dossiers.ou.pieces) ?? [])];
     let versees = 0;
     let piecesDejaLa = 0;
 
@@ -306,7 +242,7 @@ export async function depouiller(fichiers = [], { projectId = "", avance = null 
     // chacun paie son aller-retour.
     const sorts = await quatreALaFois(aEnvoyer.map(({ piece, nom }) => async () => {
       try {
-        const ligne = await ranger(piece.octets, {
+        const ligne = await portes.ranger(piece.octets, {
           projectId, folderId: dossiers.ou.pieces, nom,
           type: piece.type || "application/octet-stream",
           nature: NATURE_DUNE_PIECE, deposant, empreinte: piece.empreinte,
@@ -340,7 +276,7 @@ export async function depouiller(fichiers = [], { projectId = "", avance = null 
     journal = noterLesPieces(journal, { versees, dejaLa: piecesDejaLa });
     dire();
 
-    const nomsDesMails = await nomsDejaDans(projectId, dossiers.ou.messages);
+    const nomsDesMails = [...(await portes.lesNomsDejaLa(projectId, dossiers.ou.messages) ?? [])];
     for (const [rang, un] of aRanger.entries()) {
       if (un.empreinte && connues.has(un.empreinte)) {
         journal = noter(journal, un.message.nom, SORT.DEJA_LA);
@@ -352,7 +288,7 @@ export async function depouiller(fichiers = [], { projectId = "", avance = null 
       });
       nomsDesMails.push(nom);
       try {
-        const ligne = await ranger(un.message.octets, {
+        const ligne = await portes.ranger(un.message.octets, {
           projectId, folderId: dossiers.ou.messages, nom,
           type: LE_TYPE_DUN_MESSAGE[un.message.extension] || "application/octet-stream",
           nature: NATURE_DUN_MAIL, deposant, empreinte: un.empreinte,
@@ -364,7 +300,7 @@ export async function depouiller(fichiers = [], { projectId = "", avance = null 
         // leur empreinte, l'ordre inverse laisserait un message reconnu « déjà
         // là » dont les pièces ne seraient jamais redemandées. L'identifiant du
         // message n'existe donc qu'à cet instant.
-        await marquerLaProvenance(ligne?.id, piecesParMessage.get(rang) ?? []);
+        await portes.marquerLaProvenance(ligne?.id, piecesParMessage.get(rang) ?? []);
         journal = noter(journal, un.message.nom, SORT.VERSE);
       } catch (erreur) {
         journal = noter(journal, un.message.nom, SORT.REFUSE, texte(erreur?.message));

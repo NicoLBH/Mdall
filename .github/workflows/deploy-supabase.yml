@@ -19,6 +19,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Les lecteurs de mails que la fonction `verser-les-mails` importe sont
+      # **copiés au build**, jamais versionnés : versionnée, la copie resterait
+      # vraie un temps puis divergerait de celle qu'on éprouve. Sans cette
+      # étape, la fonction part sans eux et tombe au premier dépôt.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared function modules
+        run: npm run build:fonctions
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:

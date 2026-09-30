@@ -47,10 +47,18 @@ function larret(journal) {
 /** La sorte d'exécution, pour que le journal sache la ranger. */
 export const SORTE = "depouillement";
 
-/** Comment l'action s'appelle dans le journal. */
+/**
+ * Comment l'action s'appelle dans le journal.
+ *
+ * **« Versement », comme l'onglet qui la range.** Elle s'appelait
+ * « Dépouillement » — le mot du travail, qui se fait maintenant au serveur et
+ * que personne ne regarde. Ce que l'utilisateur a fait, lui, c'est verser des
+ * fichiers ; et deux mots pour un même acte obligent à savoir lequel chercher
+ * (règle 10).
+ */
 export function leNomDeLaction(combien = 0) {
   const fichiers = nombre(combien);
-  return `Dépouillement de ${fichiers} ${fichiers > 1 ? "fichiers" : "fichier"} de messagerie`;
+  return `Versement de ${fichiers} ${fichiers > 1 ? "fichiers" : "fichier"} de messagerie`;
 }
 
 /**
@@ -76,8 +84,8 @@ export function leMotDuDebut(combien = 0) {
  */
 export function leMotDeLaFin(journal = null, dite = "") {
   const arrete = larret(journal);
-  if (arrete) return `Dépouillement interrompu : ${arrete}`;
-  return texte(dite) || "Rien n'a été dépouillé.";
+  if (arrete) return `Versement interrompu : ${arrete}`;
+  return texte(dite) || "Rien n'a été versé.";
 }
 
 /**

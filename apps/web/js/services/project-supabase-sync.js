@@ -2,6 +2,7 @@ import { store } from "../store.js";
 import { ORIGINE, executionsAGarder } from "./run-partition.js";
 import { cestUnIdDeProjet, laConcordanceSansCeProjet, leProjetOuLonEcrit } from "./le-projet-ou-lon-ecrit.js";
 import { LE_GESTE } from "./le-journal-du-depouillement.js";
+import { lesVersementsAuJournal } from "./la-file-au-journal.js";
 import { ensureProjectDocumentsState } from "./project-documents-store.js";
 import { ensureProjectAutomationDefaults } from "./project-automation.js";
 import { supabase, buildSupabaseAuthHeaders, getCurrentUser, getSupabaseUrl, getSupabaseAnonKey } from "../../assets/js/auth.js";
@@ -1243,7 +1244,7 @@ export async function createDocumentFolder(projectId = "", parentFolderId = null
     //
     // Ce qui protège la correspondance reste entier, et se tient ailleurs : un
     // mail ne se range pas sans déposant connu
-    // (`le-depouillement-supabase.js`).
+    // (`le-versement-en-ordre.js`).
     const parQui = String((await getCurrentUser().catch(() => null))?.id ?? "");
 
     return await restInsert("project_document_folders", {
@@ -1572,12 +1573,35 @@ export async function syncProjectActionsFromSupabase(options = {}) {
     return [];
   };
 
-  // Trois pipelines, un seul journal. Ne pas savoir lire l'un n'autorise pas
+  /**
+   * **Ce qui n'a pas encore eu lieu**, et que le journal doit pourtant montrer :
+   * les dépôts de messagerie que le serveur n'a pas fini de ranger.
+   *
+   * Ils vivent dans `versements`, pas dans `project_runs` : une file existe pour
+   * changer d'état, un journal pour garder ce qui s'est passé. Une table qui
+   * n'existerait pas encore ne doit pas emporter le reste.
+   */
+  const lireLaFile = async () => {
+    try {
+      const file = new URLSearchParams();
+      file.set("select", "id,project_id,statut,fichiers,avancement,arrete,cree_le,pris_le");
+      file.set("project_id", `eq.${backendProjectId}`);
+      file.set("statut", "in.(en_attente,en_cours)");
+      file.set("order", "cree_le.desc");
+      return await restFetch("versements", file);
+    } catch (erreur) {
+      console.warn("[actions] versements illisible", erreur);
+      return [];
+    }
+  };
+
+  // Quatre pipelines, un seul journal. Ne pas savoir lire l'un n'autorise pas
   // à taire les autres.
-  const [rows, ctRows, gesteRows] = await Promise.all([
+  const [rows, ctRows, gesteRows, fileRows] = await Promise.all([
     restFetch("analysis_runs", params).catch(() => []),
     lireLesCourses(),
-    lireLesGestes()
+    lireLesGestes(),
+    lireLaFile()
   ]);
 
   const lues = [
@@ -1586,7 +1610,16 @@ export async function syncProjectActionsFromSupabase(options = {}) {
     ...(Array.isArray(gesteRows) ? gesteRows : []).map(mapProjectRunRowToLogEntry)
   ];
 
-  const nextItems = [...executionsEnCours(lues), ...lues]
+  // **Les versements vifs passent devant.** Ils ne sont pas dans `lues` : ils
+  // n'ont pas eu lieu.
+  const enFile = lesVersementsAuJournal(fileRows);
+
+  // **Et ils comptent comme déjà rendus.** Sans cela, la seconde relecture en
+  // voyait deux : celui que la file vient de rendre, et celui que la page garde
+  // en mémoire depuis la première — `executionsAGarder` garde toute exécution
+  // vive que la base ne porte pas, et la file n'est pas dans `lues`. Un dépôt,
+  // deux lignes (règle 4) ; le banc l'a montré au premier essai.
+  const nextItems = [...enFile, ...executionsEnCours([...lues, ...enFile]), ...lues]
     .sort((left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime());
 
   store.projectAutomation.runLog = nextItems;

@@ -40,7 +40,8 @@ import {
 } from "../services/la-ligne-dun-mail.js";
 import { laGalerie } from "../services/la-galerie-des-pieces.js";
 import { renderLaGalerie } from "./ui/la-galerie-ecran.js";
-import { renderLeDepouillement } from "./ui/le-depouillement-ecran.js";
+import { renderLeVersement } from "./ui/le-versement-ecran.js";
+import { routeDeLEcran } from "../../vendor/utilitaires/ecrans-du-projet.js";
 import { leMotDunRefus } from "../services/le-projet-ou-lon-ecrit.js";
 import { renderDataTableShell, renderDataTableHead, renderDataTableEmptyState } from "./ui/data-table-shell.js";
 import { escapeHtml } from "../utils/escape-html.js";
@@ -316,7 +317,7 @@ function etatNeufDesFichiers() {
      * le tient : c'est lui qui dit l'avancement, ce qui est passé et ce qui a
      * buté. Un second compte tenu ici aurait divergé du sien (règle 4).
      */
-    depouillement: null,
+    envoi: null,
     breadcrumb: [],
     folders: [],
     files: [],
@@ -4282,9 +4283,9 @@ function renderUploadView() {
               l'on croyait que le dépôt n'avait rien produit. La liste les
               redisait en plus, puisque le panneau les nomme déjà.
             */""}
-            ${renderLeDepouillement({
+            ${renderLeVersement({
               porteurs: ceQueLaSelectionPorte().porteurs,
-              journal: docsViewState.depouillement
+              envoi: docsViewState.envoi
             })}
 
             ${renderUploadProgress()}
@@ -4359,163 +4360,70 @@ function renderUploadView() {
   `;
 }
 
-/** Au plus un rendu de l'écran toutes les tant de millisecondes, pendant le dépôt. */
-const RENDU_DU_DEPOUILLEMENT = 300;
-
 /**
- * Dépouiller, sur demande.
+ * Envoyer les mails au serveur, et rendre la main.
  *
- * ## Le service fait le travail, l'écran ne fait que redessiner
+ * ## Ce que ce geste ne fait plus
  *
- * Tout ce qui se décide — lire, dédoublonner, ranger, tenir le journal — vit
- * dans `le-depouillement-supabase.js`. Ici, un `await` et un rendu à chaque
- * avancement : deux cents mails prennent des minutes, et un écran figé pendant
- * des minutes est un écran qu'on recharge.
+ * Il dépouillait : il ouvrait chaque `.msg`, calculait les empreintes, créait
+ * les dossiers, envoyait les pièces puis les messages. Vingt mails prenaient des
+ * minutes, pendant lesquelles la zone de dépôt restait bleue. Fermer l'onglet
+ * perdait tout.
  *
- * ## Le module se charge à la demande
+ * Il ne fait plus que déposer les octets dans le casier et poser une ligne dans
+ * la file (`202610300001_...`). Le serveur prend la ligne. **La suite se lit
+ * dans Actions**, avec les autres exécutions du projet.
  *
- * Il entraîne les lecteurs de `.msg`, de `.eml` et de `.zip`. Les charger à
- * l'ouverture de Fichiers les ferait descendre chez tout le monde, y compris
- * chez ceux qui ne déposeront jamais un mail.
+ * ## Il n'écrit plus au journal d'ici
  *
- * ## Une fois terminé, la sélection se vide de ses porteurs
- *
- * Les garder ferait relancer le dépouillement sur des fichiers déjà rangés — ce
- * qui ne casserait rien, puisque les empreintes les reconnaîtraient, mais ferait
- * relire deux cents fichiers pour rien. Ce qui n'était pas un porteur reste
- * sélectionné : son dépôt n'a pas eu lieu.
+ * La ligne d'Actions ne vient plus de la page : elle vient de la file tant que
+ * cela tourne, puis de `project_runs` quand c'est fini. Une ligne écrite ici en
+ * plus ferait deux lignes pour un seul dépôt (règle 4) — et celle de la page
+ * disparaîtrait à la première relecture, comme elle l'a déjà fait.
  */
-async function lancerLeDepouillement(root) {
+async function lancerLeVersement(root) {
   const { porteurs } = ceQueLaSelectionPorte();
   if (!porteurs.length) return;
 
-  const [{ startRunLogEntry, avancerRunLogEntry, finishRunLogEntry }, journalDit, { phraseDuConvoi }] =
-    await Promise.all([
-      import("../services/project-automation.js"),
-      import("../services/le-journal-du-depouillement.js"),
-      import("../services/le-convoi.js")
-    ]);
-
   const projectId = String((await resolveCurrentBackendProjectId().catch(() => "")) || "").trim();
   if (!projectId) {
-    docsViewState.depouillement = {
-      ...docsViewState.depouillement, fini: true,
-      arrete: "ce projet n'a pas été retrouvé : rien n'a été rangé"
+    docsViewState.envoi = {
+      envoi: false, montes: 0, parti: false, combien: 0,
+      motif: "Ce projet n'a pas été retrouvé dans la base sous votre compte : rien n'a été envoyé."
     };
     redessinerLesFichiers(root);
     return;
   }
 
-  // **Le journal des Actions porte la suite.** Vingt mails avec leurs pièces
-  // prennent des minutes : on ne demande à personne de regarder un panneau
-  // pendant des minutes. Une seule façon d'informer pour la même sorte
-  // d'action — celle du dépôt d'un rapport de bureau de contrôle.
-  // **L'origine est posée dès le départ.** Sans elle, la ligne naît dans
-  // « Partagées » — c'est-à-dire sous « tous les collaborateurs le lisent » —
-  // et saute dans « Versements » à la fin. Un dépôt de correspondance annoncé
-  // partagé, même une minute, est une promesse fausse.
-  const action = startRunLogEntry({
-    name: journalDit.leNomDeLaction(porteurs.length),
-    kind: journalDit.SORTE,
-    agentKey: journalDit.SORTE,
-    triggerType: "manual",
-    triggerLabel: "Dépôt de messagerie",
-    origine: journalDit.LE_GESTE,
-    privee: true,
-    summary: journalDit.leMotDuDebut(porteurs.length)
+  docsViewState.envoi = { envoi: true, montes: 0, parti: false, combien: 0, motif: "" };
+  redessinerLesFichiers(root);
+
+  const { verserDesMails } = await import("../services/la-file-des-versements-supabase.js");
+  const parti = await verserDesMails(porteurs, {
+    projectId,
+    avance: (montes) => {
+      docsViewState.envoi = { ...docsViewState.envoi, montes };
+      redessinerLesFichiers(root);
+    }
   });
 
-  docsViewState.depouillement = { fichiers: porteurs.length, lus: 0, fini: false, accrocs: [] };
+  docsViewState.envoi = {
+    envoi: false,
+    montes: porteurs.length,
+    parti: parti.parti,
+    combien: parti.parti ? porteurs.length : 0,
+    motif: parti.motif
+  };
+
+  // Les porteurs partis quittent la sélection : les laisser ferait croire qu'ils
+  // attendent encore un geste.
+  if (parti.parti) docsViewState.selectedFiles = ceQueLaSelectionPorte().ordinaires;
   redessinerLesFichiers(root);
-
-  // **On ne redessine pas à chaque message.** Le service avance message par
-  // message ; deux cents rendus de l'écran entier en quelques secondes font
-  // clignoter la page et ralentissent le dépôt lui-même. Un rendu au plus toutes
-  // les quelques dixièmes de seconde suffit à voir que cela avance — et le
-  // journal final, lui, se dessine toujours.
-  let dernierRendu = 0;
-
-  try {
-    const { depouiller } = await import("../services/le-depouillement-supabase.js");
-    const journal = await depouiller(porteurs, {
-      projectId,
-      avance: (encours) => {
-        docsViewState.depouillement = encours;
-        const maintenant = Date.now();
-        if (maintenant - dernierRendu < RENDU_DU_DEPOUILLEMENT) return;
-        dernierRendu = maintenant;
-        // Le journal avance aussi : celui qui a fermé l'écran suit là-bas.
-        avancerRunLogEntry(action.id, { summary: phraseDuConvoi(encours) || undefined });
-        redessinerLesFichiers(root);
-      }
-    });
-    docsViewState.depouillement = journal;
-    finishRunLogEntry(action.id, {
-      status: journalDit.leSortDeLaction(journal),
-      outcomeStatus: journalDit.leSortDeLaction(journal),
-      summary: journalDit.leMotDeLaFin(journal, phraseDuConvoi(journal))
-    });
-    await consignerLeVersement(projectId, action, journal, phraseDuConvoi(journal));
-  } catch (erreur) {
-    // **Un dépouillement qui tombe ne se tait pas.** Le journal garde ce qui
-    // était passé avant la chute : dire « échec » sans le dire ferait tout
-    // recommencer.
-    const arrete = String(erreur?.message ?? "") || "cause inconnue";
-    docsViewState.depouillement = { ...docsViewState.depouillement, fini: true, arrete };
-    finishRunLogEntry(action.id, {
-      status: "error",
-      outcomeStatus: "error",
-      summary: journalDit.leMotDeLaFin({ arrete })
-    });
-    // Un dépôt qui tombe est un dépôt qui a eu lieu : il se consigne aussi,
-    // sans quoi on ne saurait plus demain qu'on a essayé.
-    await consignerLeVersement(projectId, action, { ...docsViewState.depouillement }, "");
-  }
-
-  docsViewState.selectedFiles = ceQueLaSelectionPorte().ordinaires;
-  redessinerLesFichiers(root);
-  // Le dossier privé vient de changer : la liste doit le refléter quand on y
-  // retourne, et la relire ici évite de la lire vide au retour.
-  await loadCurrentDirectory().catch(() => {});
-}
-
-/**
- * Écrire le versement en base, pour qu'il survive à l'onglet.
- *
- * ## Le défaut que cela répare
- *
- * La ligne du dépôt n'existait qu'en mémoire. L'onglet Actions relit la base à
- * chaque venue et remplace la liste : seule une exécution *en cours* survit à la
- * relecture (`run-partition.js`). Une exécution finie et non écrite disparaissait
- * donc **au moment même où l'on allait la regarder**, et c'est pourquoi aucune
- * ligne ne s'affichait.
- *
- * ## Ce qu'un échec d'écriture coûte
- *
- * Rien de ce que le dépôt a fait : les mails sont rangés, et le journal n'est
- * que ce qu'on en raconte. On n'avertit donc pas — l'écran vient de dire ce qui
- * est entré, et un avertissement sur son journal ferait douter du dépôt.
- */
-async function consignerLeVersement(projectId, action, journal, dite) {
-  try {
-    const [{ enregistrerUneCourse }, journalDit] = await Promise.all([
-      import("../services/project-runs-supabase.js"),
-      import("../services/le-journal-du-depouillement.js")
-    ]);
-    await enregistrerUneCourse({
-      projectId,
-      ...journalDit.laLigneDunVersement({
-        journal, dite, startedAt: action?.startedAt ?? null
-      })
-    });
-  } catch (erreur) {
-    console.warn("[versement] journal non consigné", erreur);
-  }
 }
 
 function resetUploadState() {
   docsViewState.selectedFiles = [];
-  docsViewState.depouillement = null;
+  docsViewState.envoi = null;
   docsViewState.depositMode = null;
   docsViewState.depositModeTouched = false;
   docsViewState.titleTouched = false;
@@ -5825,22 +5733,21 @@ function bindDocumentsView(root) {
     });
   }
 
-  const depouillerBtn = document.getElementById("documentsDepouillerBtn");
-  if (depouillerBtn) depouillerBtn.addEventListener("click", () => lancerLeDepouillement(root));
+  const verserBtn = document.getElementById("documentsVerserBtn");
+  if (verserBtn) verserBtn.addEventListener("click", () => lancerLeVersement(root));
 
-  // **Aller voir ce qu'on vient de ranger.** Le dossier a pu être créé à
-  // l'instant : sans ce geste, il fallait deviner qu'il existait et le trouver.
-  const voirLesMailsBtn = document.getElementById("documentsVoirLesMailsBtn");
-  if (voirLesMailsBtn) {
-    voirLesMailsBtn.addEventListener("click", async () => {
-      const dossier = voirLesMailsBtn.dataset.dossier || null;
+  // **Aller voir où cela en est.** Le rangement se fait au serveur : il n'y a
+  // pas encore de dossier à ouvrir, et l'annoncer serait faux. Ce qu'on peut
+  // montrer, c'est l'exécution en cours.
+  const voirLesActionsBtn = document.getElementById("documentsVoirLesActionsBtn");
+  if (voirLesActionsBtn) {
+    voirLesActionsBtn.addEventListener("click", () => {
       resetUploadState();
-      docsViewState.mode = "list";
-      // **Par le geste commun, et pas par un chargement à soi.** Une épreuve le
-      // tient, et elle vient de le rappeler : entrer dans un dossier pose aussi
-      // la branche et referme ce qu'on lisait. Un raccourci ici aurait rechargé
-      // le bon dossier en laissant l'écran croire qu'on est ailleurs.
-      await allerDansLeDossier(root, dossier);
+      // **L'adresse se compose là où elle est déclarée.** Écrite à la main ici,
+      // elle aurait survécu au jour où l'onglet change de nom — en menant
+      // ailleurs, sans que rien ne le dise (règle 10).
+      const ou = routeDeLEcran(String(store.currentProjectId || ""), "actions");
+      if (ou) window.location.hash = ou;
     });
   }
 

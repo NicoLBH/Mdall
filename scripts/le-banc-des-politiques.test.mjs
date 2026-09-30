@@ -38,6 +38,18 @@ import { unPostgresJetable } from "./le-banc-des-politiques/un-postgres-jetable.
 const ICI = dirname(fileURLToPath(import.meta.url));
 const RACINE = join(ICI, "..");
 
+/**
+ * Les migrations que ce banc applique.
+ *
+ * Pas toutes : celles dont on veut éprouver la règle, posées sur un socle qui
+ * porte ce qu'elles touchent. Une migration qu'on ajoute ici s'ajoute aussi au
+ * socle si elle s'appuie sur une table qu'il n'a pas.
+ */
+const LES_MIGRATIONS = [
+  "202610290001_les_portes_restees_ouvertes.sql",
+  "202610300001_la_file_des_versements.sql"
+];
+
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const MEDIATHEQUE = "11111111-1111-4111-8111-111111111111";
@@ -70,9 +82,10 @@ function leBanc() {
 
   pg.sql(readFileSync(join(ICI, "le-banc-des-politiques", "le-socle.sql"), "utf8"));
   pg.sql(LES_CHANTIERS);
-  pg.sql(readFileSync(join(
-    RACINE, "supabase", "migrations", "202610290001_les_portes_restees_ouvertes.sql"
-  ), "utf8"));
+  // Les migrations que le banc éprouve, dans l'ordre où elles se déploient.
+  for (const migration of LES_MIGRATIONS) {
+    pg.sql(readFileSync(join(RACINE, "supabase", "migrations", migration), "utf8"));
+  }
 
   /** Poser une question en étant quelqu'un. */
   pg.enTantQue = (qui, texte) => pg.sql(
@@ -172,4 +185,46 @@ test("l'histoire d'un sujet peut s'écrire", { skip: sansPostgres }, () => {
     `insert into public.subject_history (project_id, actor_user_id)`
     + ` values ('${MEDIATHEQUE}', auth.uid()) returning 'écrite';`);
   assert.equal(dit.ok, true, `l'histoire ne s'écrit plus :\n${dit.motif}`);
+});
+
+
+/* ── La file des versements ──────────────────────────────────────────────── */
+
+test("une ligne de file se pose, et son auteur est posé par la base", { skip: sansPostgres }, () => {
+  const dit = banc.enTantQue(A,
+    `insert into public.versements (project_id, fichiers)`
+    + ` values ('${MEDIATHEQUE}', '[{"nom":"un.eml","chemin":"a/b/un.eml","taille":12}]'::jsonb)`
+    + ` returning statut, owner_id = auth.uid() as "le mien";`);
+  assert.equal(dit.ok, true, `la file refuse une ligne :\n${dit.motif}`);
+  assert.equal(dit.sortie, "en_attente|t");
+});
+
+test("la file d'un autre ne se lit pas", { skip: sansPostgres }, () => {
+  // Le nom d'un fichier de messagerie est souvent l'objet du mail : la file dit
+  // donc qui verse quoi, et cela ne regarde que celui qui verse.
+  const parSonAuteur = banc.enTantQue(A, "select count(*) from public.versements;");
+  const parUnAutre = banc.enTantQue(B, "select count(*) from public.versements;");
+  assert.equal(parSonAuteur.sortie, "1");
+  assert.equal(parUnAutre.sortie, "0");
+});
+
+test("on ne pose pas une ligne au nom de quelqu'un d'autre", { skip: sansPostgres }, () => {
+  const dit = banc.enTantQue(A,
+    `insert into public.versements (project_id, owner_id) values ('${MEDIATHEQUE}', '${B}');`);
+  assert.equal(dit.ok, false, "on verse au nom d'un autre");
+  assert.match(dit.motif, /row-level security/);
+});
+
+test("on ne pose pas une ligne dans le chantier d'un autre", { skip: sansPostgres }, () => {
+  const dit = banc.enTantQue(B,
+    `insert into public.versements (project_id) values ('${MEDIATHEQUE}');`);
+  assert.equal(dit.ok, false, "on verse dans le chantier d'un autre");
+});
+
+test("une ligne de file change d'état, et c'est ce qui la distingue du journal", { skip: sansPostgres }, () => {
+  const avance = banc.enTantQue(A,
+    "update public.versements set statut = 'en_cours', pris_le = now()"
+    + " where statut = 'en_attente' returning statut;");
+  assert.equal(avance.ok, true, `la file ne s'avance pas :\n${avance.motif}`);
+  assert.equal(avance.sortie, "en_cours");
 });
