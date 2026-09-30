@@ -4,7 +4,9 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ORIGINE, ONGLETS, partitionnerActions, ongletValide, decrireVisibilite } from "./run-partition.js";
+import {
+  ORIGINE, ONGLETS, decrireVisibilite, longletDit, ongletValide, partitionnerActions
+} from "./run-partition.js";
 
 const PROJET = { id: "a", origine: "projet", privee: false };
 const ATELIER = { id: "b", origine: "atelier", privee: true };
@@ -313,4 +315,24 @@ test("aucun texte affiché du journal ne dit « run »", async () => {
     coupables, [],
     `le mot est encore affiché : ${coupables.join(", ")}`
   );
+});
+
+/**
+ * **Le rail des Actions nomme ces trois vues, et le titre du tableau aussi.**
+ * Deux endroits qui choisiraient chacun leur libellé finiraient par annoncer
+ * « Versements » dans le rail et « Dépôts » au-dessus du tableau (règle 10).
+ */
+test("chaque vue porte un nom, une icône et ce qu'elle explique", () => {
+  for (const un of ONGLETS) {
+    assert.equal(Boolean(un.cle && un.libelle && un.icone && un.explication), true, un.cle);
+  }
+  const cles = ONGLETS.map((un) => un.cle);
+  assert.equal(new Set(cles).size, cles.length);
+});
+
+test("la vue entière se retrouve par sa clé, et une clé inconnue ouvre la première", () => {
+  assert.equal(longletDit(ORIGINE.VERSEMENT).libelle, "Versements");
+  assert.equal(longletDit("inconnue").cle, ORIGINE.PROJET);
+  assert.equal(longletDit("").cle, ORIGINE.PROJET);
+  assert.equal(longletDit(null).cle, ORIGINE.PROJET);
 });

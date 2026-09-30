@@ -54,12 +54,14 @@ const LES_MIGRATIONS = [
   "202610300001_la_file_des_versements.sql",
   "202610310001_les_octets_qui_attendent_leur_tour.sql",
   "202611010001_les_expediteurs_deja_ecrits.sql",
-  "202611020001_les_domaines_du_systeme.sql"
+  "202611020001_les_domaines_du_systeme.sql",
+  "202611030001_les_enchainements_du_systeme.sql"
 ];
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const MEDIATHEQUE = "11111111-1111-4111-8111-111111111111";
+const GYMNASE = "33333333-3333-4333-8333-333333333333";
 
 /** Les quatre cas du propriétaire, et ce qu'on attend de chacun. */
 const LES_CHANTIERS = `
@@ -71,7 +73,7 @@ insert into public.projects (id, name, owner_id) values
   -- sans propriétaire, deux auteurs : on ne touche à rien
   ('22222222-2222-4222-8222-222222222222', 'Montholon_Groupe scolaire', null),
   -- déjà un propriétaire : il ne bouge pas, même si un autre a déposé chez lui
-  ('33333333-3333-4333-8333-333333333333', 'Montholon_Gymnase', '${B}'),
+  ('${GYMNASE}', 'Montholon_Gymnase', '${B}'),
   -- aucune trace : reste orphelin
   ('44444444-4444-4444-8444-444444444444', 'Montholon_Vestiaires', null);
 
@@ -390,4 +392,102 @@ test("un administrateur lit les domaines, et rien que des comptes",
       "ce qu'on n'a pas su classer disparaît de l'écran");
     // Aucun identifiant de projet ne peut sortir : la signature ne le porte pas.
     assert.doesNotMatch(lu.sortie, new RegExp(MEDIATHEQUE));
+  });
+
+/**
+ * **Les couples se forment dans un chantier, jamais en travers.**
+ *
+ * C'est la seule chose que ce calcul peut se permettre de rater, et il la
+ * raterait en silence : sans `partition by project_id`, la dernière
+ * affirmation d'un chantier formerait un couple avec la première d'un autre —
+ * un enchaînement qui n'a eu lieu nulle part, et qui ressemblerait à tous les
+ * autres dans le tableau.
+ */
+test("les enchaînements ne traversent pas deux chantiers", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_assertions;");
+  // Médiathèque : incendie → structure → incendie.
+  // Gymnase : sol → thermique. Le passage de l'un à l'autre ne doit rien former.
+  banc.sql(
+    `insert into public.project_assertions (project_id, domain, created_at) values `
+    + `('${MEDIATHEQUE}', 'incendie',  '2026-01-01T00:00:00Z'),`
+    + `('${MEDIATHEQUE}', 'structure', '2026-01-02T00:00:00Z'),`
+    + `('${MEDIATHEQUE}', 'incendie',  '2026-01-03T00:00:00Z'),`
+    + `('${GYMNASE}',     'sol',       '2026-01-04T00:00:00Z'),`
+    + `('${GYMNASE}',     'thermique', '2026-01-05T00:00:00Z');`
+  );
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select avant || '>' || apres || ':' || combien || ':' || chantiers"
+    + " from public.les_enchainements_du_systeme() order by 1;");
+  assert.equal(lu.ok, true, lu.motif);
+
+  const couples = lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+  assert.deepEqual(couples.sort(), [
+    "incendie>structure:1:1",
+    "sol>thermique:1:1",
+    "structure>incendie:1:1"
+  ]);
+  // Le couple qui aurait traversé les deux chantiers.
+  assert.equal(couples.some((une) => une.startsWith("incendie>sol")), false,
+    "un enchaînement s'est formé entre deux chantiers");
+});
+
+/**
+ * **Un domaine peut se suivre lui-même**, et cela se compte : un prédicteur
+ * dont le meilleur coup est « ce qui vient de venir reviendra » ne prédit pas
+ * grand-chose, et il faut pouvoir s'en apercevoir (règle 12).
+ */
+test("un domaine qui se répète forme un couple", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_assertions;");
+  banc.sql(
+    `insert into public.project_assertions (project_id, domain, created_at) values `
+    + `('${MEDIATHEQUE}', 'incendie', '2026-02-01T00:00:00Z'),`
+    + `('${MEDIATHEQUE}', 'incendie', '2026-02-02T00:00:00Z'),`
+    // Sans domaine : elle n'entre pas dans la suite, et ne coupe donc pas le
+    // couple qui l'enjambe.
+    + `('${MEDIATHEQUE}', null,       '2026-02-03T00:00:00Z'),`
+    + `('${MEDIATHEQUE}', 'structure','2026-02-04T00:00:00Z');`
+  );
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select avant || '>' || apres || ':' || combien"
+    + " from public.les_enchainements_du_systeme() order by 1;");
+  const couples = lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+  assert.deepEqual(couples.sort(), ["incendie>incendie:1", "incendie>structure:1"]);
+});
+
+/**
+ * **Combien de fois n'est pas sur combien de chantiers.**
+ *
+ * Un enchaînement vu six fois sur un seul chantier est l'habitude de ce
+ * chantier-là ; vu six fois sur six chantiers, c'est une régularité du
+ * bâtiment. Les deux comptes disent des choses opposées, et une fonction qui
+ * rendrait le même nombre pour les deux les confondrait en silence.
+ */
+test("un couple répété dans un chantier ne fait pas deux chantiers",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.project_assertions;");
+    // Trois fois incendie → structure, toutes dans la Médiathèque.
+    banc.sql(
+      `insert into public.project_assertions (project_id, domain, created_at) values `
+      + `('${MEDIATHEQUE}', 'incendie',  '2026-03-01T00:00:00Z'),`
+      + `('${MEDIATHEQUE}', 'structure', '2026-03-02T00:00:00Z'),`
+      + `('${MEDIATHEQUE}', 'incendie',  '2026-03-03T00:00:00Z'),`
+      + `('${MEDIATHEQUE}', 'structure', '2026-03-04T00:00:00Z');`
+    );
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select avant || '>' || apres || ':' || combien || ':' || chantiers"
+      + " from public.les_enchainements_du_systeme() where avant = 'incendie';");
+    assert.equal(lu.sortie.trim(), "incendie>structure:2:1",
+      "deux occurrences dans un seul chantier passent pour deux chantiers");
+  });
+
+/** La même porte que le reste de la console, et elle tient. */
+test("les enchaînements se refusent à qui n'est pas administrateur",
+  { skip: sansPostgres }, () => {
+    const etranger = banc.sousLadresse("quelquun@ailleurs.example",
+      "select count(*) from public.les_enchainements_du_systeme();");
+    assert.equal(etranger.ok, false, "la console s'ouvre à un compte ordinaire");
+    assert.match(etranger.motif, /réservé à la console/);
   });

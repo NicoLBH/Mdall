@@ -4523,6 +4523,28 @@ body.drilldown-open .drilldown__inner,
   border-bottom:1px solid var(--border);
   z-index:auto;
 }
+/* **La barre d'onglets de la console, ancrée comme celle d'un projet.**
+
+   Même barre, mêmes classes : seul son ancrage change. Dans un projet, elle vit
+   dans un `.project-shell` en colonne sous l'en-tête fixe, qui lui donne la
+   pleine largeur et la tient en haut. La console n'a pas ce squelette : sa
+   barre se retrouvait au milieu de la page, à la largeur du contenu, et
+   défilait avec lui.
+
+   Le décalage de `#app` suit le même chemin que celui du bandeau des variantes
+   plus bas : `:has` lit la barre là où elle est, plutôt que d'attendre qu'une
+   classe soit posée sur le corps. */
+.project-tabs--console{
+  position:fixed;
+  top:var(--header-h-compact);
+  left:0;
+  right:0;
+  z-index:3;
+}
+body:has(.project-tabs--console){
+  --app-top:calc(var(--header-h-compact) + var(--project-tabs-h));
+}
+
 .project-tabs a{
   display:inline-flex;
   position:relative;
@@ -7126,16 +7148,32 @@ body.route--project.documents-pdf-sticky-mode.documents-local-chrome-compact #ap
 }
 
 
+/* **L'avatar est posé, il ne flotte plus.**
+   Il flottait à gauche, et un flottant déborde de son parent : il passait sur
+   le coin de la carte, dont la bordure lui traversait le visage. Posé en
+   absolu dans une coquille relative, il tient sa place en haut à gauche, et la
+   carte lui laisse la sienne par son creux — les deux ne se disputent plus le
+   même pixel. */
+.documents-commit-shell{
+  position:relative;
+}
+.documents-commit-shell__avatar{
+  position:absolute;
+  top:0;
+  left:0;
+}
 .documents-commit-shell__avatar-img{
   border-radius: 50%;
-  float: left;
+  display:block;
   height: 48px;
   width: 48px;
 }
+/* Le creux plutôt que la marge : l'avatar vit dans la gouttière de la carte,
+   aligné sur son bord haut. */
 .documents-commit-card{
   border:1px solid var(--border);
   border-radius:12px;
-  padding:16px;
+  padding:16px 16px 16px 64px;
   background:transparent;
 }
 
@@ -23396,6 +23434,18 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
 }
 .memoire-layout--racine .memoire-corps{ padding-left:0; }
 .memoire-tree{ width:var(--memoire-tree-width, 280px); align-self:stretch; }
+
+/* Le titre de la vue, au-dessus du tableau des Actions. Le rail porte la vue
+   active, et le rail se replie : sans ce titre, un journal replié ne dirait
+   plus ce qu'on y lit. */
+.memoire-corps__tete:has(.actions-vue__titre){
+  flex-direction:column;
+  align-items:flex-start;
+  gap:2px;
+  padding-block:10px;
+}
+.actions-vue__titre{ font-size:16px; font-weight:600; margin:0; color:var(--text); }
+.actions-vue__dit{ font-size:12px; margin:0; color:var(--muted); }
 /* Repliée, la barre n'est pas absente : elle se réduit à son bouton, qui reste
    exactement où il était. Un bouton qui se déplace selon l'état qu'il commande
    oblige à le chercher chaque fois qu'on veut revenir en arrière. */

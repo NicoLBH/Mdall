@@ -66,20 +66,32 @@ export const ONGLETS = [
   {
     cle: ORIGINE.PROJET,
     libelle: "Partagées",
+    // L'icône va avec le nom, et une seule fois : le rail des Actions la
+    // dessine, et tout écran qui nommerait ces trois vues la reprendrait
+    // plutôt que d'en choisir une autre (règle 10).
+    icone: "people",
     explication: "Ce qui est arrivé au projet. Tous les collaborateurs le lisent."
   },
   {
     cle: ORIGINE.ATELIER,
     libelle: "Atelier",
+    icone: "beaker",
     explication: "Vos essais dans l'Atelier. Ils ne sont pas partagés avec le projet."
   },
   {
     cle: ORIGINE.VERSEMENT,
     libelle: "Versements",
+    icone: "mail",
     explication: "Ce que vous avez versé dans le projet : mails, pièces jointes. "
       + "Vous seul les lisez."
   }
 ];
+
+/** La vue demandée, entière — son nom, son icône, ce qu'elle explique. */
+export function longletDit(cle) {
+  const valide = ongletValide(cle);
+  return ONGLETS.find((un) => un.cle === valide) ?? ONGLETS[0];
+}
 
 /**
  * L'origine d'une exécution, **telle qu'elle est écrite** — et `projet` quand

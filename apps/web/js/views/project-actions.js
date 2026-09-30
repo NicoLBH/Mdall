@@ -12,8 +12,10 @@ import {
 } from "../services/run-journal.js";
 import {
   LE_BATTEMENT_DU_JOURNAL, ONGLETS, UNE_EXECUTION, decrireVisibilite, lesExecutionsDites,
-  ongletValide, partitionnerActions, quelqueChoseTourne
+  longletDit, ongletValide, partitionnerActions, quelqueChoseTourne
 } from "../services/run-partition.js";
+import { renderSideNavItem } from "./ui/side-nav-layout.js";
+import { bindSideResizer, renderSideResizer } from "./ui/side-resizer.js";
 import { store } from "../store.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
@@ -384,23 +386,47 @@ function renderMarqueAtelier(entry) {
  * L'explication est sous les onglets et non dans une infobulle : la question
  * « qui voit ça ? » se pose avant de cliquer, pas après avoir survolé.
  */
-function renderOngletsActions(piles, actif) {
-  const explication = ONGLETS.find((onglet) => onglet.cle === actif)?.explication ?? "";
+/**
+ * Le rail des trois vues, à gauche.
+ *
+ * ## Pourquoi il n'est plus une rangée d'onglets
+ *
+ * Les trois vues étaient trois boutons posés au-dessus du tableau. Ils
+ * marchaient, et ils avaient deux défauts : la ligne se lisait comme un
+ * filtre secondaire alors qu'elle décide de **tout ce qu'on voit**, et le
+ * tableau n'annonçait nulle part ce qu'il montrait — on lisait trois lignes
+ * avant de se demander si l'on était dans « Partagées » ou dans « Atelier ».
+ *
+ * Les Sujets ont réglé la même chose de la même façon. On reprend leur rail
+ * — mêmes classes, même poignée, même bouton de repli — plutôt que d'en
+ * dessiner un second, qu'il faudrait recalibrer à chaque retouche.
+ *
+ * Le compte va avec le nom : « Atelier 0 » dit, avant le clic, qu'il n'y a
+ * rien à y voir.
+ */
+function renderRailDesActions(piles, actif) {
+  const ouvert = store.projectActionsView?.railOuvert !== false;
+
   return `
-    <div class="actions-onglets">
-      <div class="actions-onglets__rangee" role="tablist">
-        ${ONGLETS.map((onglet) => `
-          <button type="button" role="tab"
-                  class="actions-onglet${onglet.cle === actif ? " est-actif" : ""}"
-                  aria-selected="${onglet.cle === actif ? "true" : "false"}"
-                  data-actions-onglet="${escapeHtml(onglet.cle)}">
-            ${escapeHtml(onglet.libelle)}
-            <span class="actions-onglet__compte">${(piles[onglet.cle] ?? []).length}</span>
-          </button>
-        `).join("")}
+    <aside class="memoire-tree${ouvert ? "" : " is-collapsed"}" aria-label="Les vues du journal">
+      <div class="memoire-tree__tete">
+        <button type="button" class="bouton-discret documents-tree__toggle" data-actions-rail-replier
+          aria-label="${ouvert ? "Replier la barre latérale" : "Étendre la barre latérale"}"
+          title="${ouvert ? "Replier la barre latérale" : "Étendre la barre latérale"}">
+          ${svgIcon(ouvert ? "sidebar-collapse" : "sidebar-expand", { className: "octicon" })}
+        </button>
       </div>
-      <p class="actions-onglets__explication">${escapeHtml(explication)}</p>
-    </div>
+      <div class="documents-tree__panel">
+        ${ONGLETS.map((onglet) => renderSideNavItem({
+          label: onglet.libelle,
+          iconHtml: svgIcon(onglet.icone),
+          isActive: onglet.cle === actif,
+          tag: String((piles[onglet.cle] ?? []).length),
+          dataAttributes: { "data-actions-onglet": onglet.cle }
+        })).join("")}
+      </div>
+      ${renderSideResizer({ id: "actionsRailResize", className: "documents-tree__resize-handle" })}
+    </aside>
   `;
 }
 
@@ -454,7 +480,30 @@ function renderRunsTable() {
     state: paged.items.length ? "ready" : "empty",
     emptyHtml: renderDataTableEmptyState(vide)
   });
-  return `${renderOngletsActions(piles, actif)}${tableHtml}${renderPaginationControls(pagination, { entity: "actions" })}`;
+  const vue = longletDit(actif);
+  const ouvert = store.projectActionsView?.railOuvert !== false;
+  const largeur = Math.max(180, Math.min(520, Number(store.projectActionsView?.railLargeur || 240)));
+
+  return `
+    <div class="memoire-layout${ouvert ? "" : " memoire-layout--replie"}"
+         style="--memoire-tree-width:${ouvert ? largeur : 48}px">
+      ${renderRailDesActions(piles, actif)}
+      <div class="memoire-corps">
+        ${/*
+          **Le tableau dit ce qu'il montre.** Le rail porte la vue active, et
+          le rail peut être replié : sans ce titre, un journal replié ne dit
+          plus du tout ce qu'on y lit. L'explication tient sur la même ligne
+          logique — ce que la rangée d'onglets disait déjà, et qui n'avait pas
+          à disparaître avec elle.
+        */""}
+        <div class="memoire-corps__tete">
+          <h2 class="actions-vue__titre">${escapeHtml(vue.libelle)}</h2>
+          <p class="actions-vue__dit">${escapeHtml(vue.explication)}</p>
+        </div>
+        ${tableHtml}${renderPaginationControls(pagination, { entity: "actions" })}
+      </div>
+    </div>
+  `;
 }
 
 /**
@@ -840,10 +889,36 @@ function renderProjectActionsContent(root) {
 
   if (etape) bindRunLog(root);
   else if (open) bindRunGraph(root);
+  else brancherLeRail(root);
 
   // **Après avoir dessiné, décider s'il faut recommencer.** L'état vient d'être
   // lu : c'est le seul moment où l'on sait s'il reste quelque chose à suivre.
   reglerLeBattement();
+}
+
+/**
+ * La poignée du rail.
+ *
+ * La même que celle des Sujets et des Fichiers : on déplace pendant le geste,
+ * on redessine à la fin. Redessiner à chaque pixel reconstruirait le tableau
+ * vingt fois par seconde, et la poignée décrocherait du pointeur.
+ */
+function brancherLeRail(root) {
+  bindSideResizer({
+    handle: document.getElementById("actionsRailResize"),
+    guide: document.getElementById("actionsRailResizeGuide"),
+    getWidth: () => Number(store.projectActionsView?.railLargeur || 240),
+    onResize: (largeur) => {
+      root.querySelector(".memoire-layout")?.style.setProperty("--memoire-tree-width", `${largeur}px`);
+    },
+    onEnd: (largeur) => {
+      if (!store.projectActionsView || typeof store.projectActionsView !== "object") {
+        store.projectActionsView = {};
+      }
+      store.projectActionsView.railLargeur = largeur;
+      renderProjectActionsContent(root);
+    }
+  });
 }
 
 /**
@@ -995,6 +1070,17 @@ export function renderProjectActions(root) {
     if (event.target?.closest?.("[data-run-step-back]")) {
       event.preventDefault();
       store.projectActionsView.openStepId = "";
+      renderProjectActionsContent(root);
+      return;
+    }
+
+    // Replier le rail. Le bouton reste exactement où il était, replié ou non :
+    // un bouton qui se déplace selon l'état qu'il commande oblige à le
+    // chercher chaque fois qu'on veut revenir en arrière.
+    const replier = event.target?.closest?.("[data-actions-rail-replier]");
+    if (replier) {
+      event.preventDefault();
+      store.projectActionsView.railOuvert = store.projectActionsView.railOuvert === false;
       renderProjectActionsContent(root);
       return;
     }
