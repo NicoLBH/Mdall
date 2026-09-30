@@ -4389,12 +4389,18 @@ async function lancerLeDepouillement(root) {
   // prennent des minutes : on ne demande à personne de regarder un panneau
   // pendant des minutes. Une seule façon d'informer pour la même sorte
   // d'action — celle du dépôt d'un rapport de bureau de contrôle.
+  // **L'origine est posée dès le départ.** Sans elle, la ligne naît dans
+  // « Partagées » — c'est-à-dire sous « tous les collaborateurs le lisent » —
+  // et saute dans « Versements » à la fin. Un dépôt de correspondance annoncé
+  // partagé, même une minute, est une promesse fausse.
   const action = startRunLogEntry({
     name: journalDit.leNomDeLaction(porteurs.length),
     kind: journalDit.SORTE,
     agentKey: journalDit.SORTE,
     triggerType: "manual",
-    triggerLabel: "Dépouillement depuis Fichiers",
+    triggerLabel: "Dépôt de messagerie",
+    origine: journalDit.LE_GESTE,
+    privee: true,
     summary: journalDit.leMotDuDebut(porteurs.length)
   });
 
@@ -4428,6 +4434,7 @@ async function lancerLeDepouillement(root) {
       outcomeStatus: journalDit.leSortDeLaction(journal),
       summary: journalDit.leMotDeLaFin(journal, phraseDuConvoi(journal))
     });
+    await consignerLeVersement(projectId, action, journal, phraseDuConvoi(journal));
   } catch (erreur) {
     // **Un dépouillement qui tombe ne se tait pas.** Le journal garde ce qui
     // était passé avant la chute : dire « échec » sans le dire ferait tout
@@ -4439,6 +4446,9 @@ async function lancerLeDepouillement(root) {
       outcomeStatus: "error",
       summary: journalDit.leMotDeLaFin({ arrete })
     });
+    // Un dépôt qui tombe est un dépôt qui a eu lieu : il se consigne aussi,
+    // sans quoi on ne saurait plus demain qu'on a essayé.
+    await consignerLeVersement(projectId, action, { ...docsViewState.depouillement }, "");
   }
 
   docsViewState.selectedFiles = ceQueLaSelectionPorte().ordinaires;
@@ -4446,6 +4456,40 @@ async function lancerLeDepouillement(root) {
   // Le dossier privé vient de changer : la liste doit le refléter quand on y
   // retourne, et la relire ici évite de la lire vide au retour.
   await loadCurrentDirectory().catch(() => {});
+}
+
+/**
+ * Écrire le versement en base, pour qu'il survive à l'onglet.
+ *
+ * ## Le défaut que cela répare
+ *
+ * La ligne du dépôt n'existait qu'en mémoire. L'onglet Actions relit la base à
+ * chaque venue et remplace la liste : seule une exécution *en cours* survit à la
+ * relecture (`run-partition.js`). Une exécution finie et non écrite disparaissait
+ * donc **au moment même où l'on allait la regarder**, et c'est pourquoi aucune
+ * ligne ne s'affichait.
+ *
+ * ## Ce qu'un échec d'écriture coûte
+ *
+ * Rien de ce que le dépôt a fait : les mails sont rangés, et le journal n'est
+ * que ce qu'on en raconte. On n'avertit donc pas — l'écran vient de dire ce qui
+ * est entré, et un avertissement sur son journal ferait douter du dépôt.
+ */
+async function consignerLeVersement(projectId, action, journal, dite) {
+  try {
+    const [{ enregistrerUneCourse }, journalDit] = await Promise.all([
+      import("../services/project-runs-supabase.js"),
+      import("../services/le-journal-du-depouillement.js")
+    ]);
+    await enregistrerUneCourse({
+      projectId,
+      ...journalDit.laLigneDunVersement({
+        journal, dite, startedAt: action?.startedAt ?? null
+      })
+    });
+  } catch (erreur) {
+    console.warn("[versement] journal non consigné", erreur);
+  }
 }
 
 function resetUploadState() {
