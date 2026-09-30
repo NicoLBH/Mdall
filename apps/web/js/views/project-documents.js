@@ -29,13 +29,9 @@ import { renderGhInput } from "./ui/gh-input.js";
 import { renderStateDot } from "./ui/status-badges.js";
 import { renderUploadProgressBar } from "./ui/upload-progress.js";
 import { svgIcon } from "../ui/icons.js";
-import {
-  LE_CADENAS, laMarqueDuDossier, laMarqueDunFichier
-} from "../services/le-dossier-des-mails.js";
-import {
-  LES_DESTINATIONS, cheminDit, lePartageDuDepot, phraseDeLaConfidentialite
-} from "../services/le-depouillement.js";
-import { poidsDit } from "../services/linventaire-du-versoir.js";
+import { laMarqueDuDossier, laMarqueDunFichier } from "../services/le-dossier-des-mails.js";
+import { lePartageDuDepot } from "../services/le-depouillement.js";
+import { renderLeDepouillement } from "./ui/le-depouillement-ecran.js";
 import { renderDataTableShell, renderDataTableHead, renderDataTableEmptyState } from "./ui/data-table-shell.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { proposeTitle } from "../services/proposition-title.js";
@@ -5567,11 +5563,20 @@ export function renderProjectDocuments(root) {
     // et n'en charger qu'une ferait clignoter la racine.
     chargerLaMemoire()
   ])
+    // **Le rattrapage est avant le dessin, et non après.** Il englobait les
+    // deux : une erreur de rendu était alors rapportée comme une panne de
+    // lecture — « syncProjectDocumentsFromSupabase failed » — et l'écran
+    // restait blanc. On a cherché du côté du réseau une faute qui était dans le
+    // dessin, et la console nommait le mauvais coupable.
+    //
+    // Désormais : une lecture qui rate se note et **on dessine quand même**,
+    // avec ce qu'on a ; une erreur de dessin n'est plus rattrapée ici, et
+    // remonte avec sa pile et son vrai nom.
+    .catch((erreur) => {
+      console.warn("[documents-view] lecture incomplète", erreur);
+    })
     .then(() => {
       if (!root?.isConnected) return;
       renderProjectDocumentsContent(root);
-    })
-    .catch((error) => {
-      console.warn("syncProjectDocumentsFromSupabase failed", error);
     });
 }

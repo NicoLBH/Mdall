@@ -1199,8 +1199,100 @@ ne convenait, et il a fallu les regarder pour le savoir :
 Un mail et une pièce jointe, eux, s'identifient par leurs octets et rien d'autre.
 D'où `empreinte_des_octets`, et un index **par projet**.
 
+## 8 octies. Le dossier « Mails » : où il naît, et faut-il le créer d'avance ?
+
+> *« Ne faudrait-il pas dès la racine de Fichiers un répertoire "Mails" avec un
+> cadenas ? Comment est prévu le pipeline ? On téléverse des fichiers mails et
+> si le répertoire n'existe pas, il est créé ? Il est créé où ? À la racine ? »*
+
+### Le pipeline, tel qu'il est écrit
+
+1. On dépose des fichiers dans *Fichiers*, comme n'importe quels autres.
+2. `lePartageDuDepot` sépare ce qui porte des mails (`.msg`, `.eml`, `.zip`) du
+   reste. Les deux gestes restent dans la même zone : un utilisateur qui hésite
+   entre deux zones de dépôt se trompe une fois sur deux.
+3. Le panneau de dépouillement **nomme les deux destinations avant d'agir** —
+   « Mails » et « Mails / Pièces jointes » —, avec le cadenas et la phrase qui
+   dit ce que le régime implique.
+4. Au clic sur **Dépouiller**, et pas avant : `creuserLesDossiers` cherche
+   « Mails » **à la racine de Documents** (`depuis: null`), le crée s'il manque,
+   puis fait de même pour « Pièces jointes » **à l'intérieur**. Les deux naissent
+   `prive = true` — un sous-dossier ordinaire dans un dossier privé serait
+   visible de l'équipe, parce que la politique de lecture regarde le dossier du
+   document, pas son grand-parent.
+5. Les messages vont dans le premier, les pièces dans le second, dédoublonnés
+   par l'empreinte de leurs octets.
+
+**Donc : à la racine, à la demande, jamais avant.** Et jamais deux fois : si le
+dossier est là, il est réemployé.
+
+### Faut-il le créer d'avance ? Non, et pour trois raisons
+
+**1. Un dossier vide est une promesse, pas un fait.** La plupart des projets ne
+recevront jamais de mail. Leur poser un « Mails » vide à la racine leur apprend
+qu'il y a là quelque chose à regarder, et il n'y a rien.
+
+**2. Ce n'est pas à la création du projet que l'on sait qui déposera.** Un
+dossier privé appartient à **celui qui l'a créé** — la politique des dossiers ne
+le rend qu'à lui. Le créer au moment où le projet naît, c'est le donner au
+propriétaire du projet. Le jour où le partage existera, un collaborateur qui
+dépose sa correspondance ne verrait pas ce dossier-là et ne pourrait pas en
+créer un autre (voir ci-dessous).
+
+**3. Ce qu'il fallait vraiment, c'est le voir *avant* de déposer — et c'est
+fait.** Le panneau de dépouillement montre les deux chemins, avec leur cadenas,
+au moment où la question se pose : quand on s'apprête à lâcher les fichiers. Un
+dossier vide à la racine ne le dirait pas mieux, et le dirait au mauvais moment.
+
+### Ce qui doit être tranché avant que le partage n'existe
+
+En vérifiant ce qui précède, une **collision** est apparue, et elle bloquerait
+purement et simplement le dépôt :
+
+```sql
+constraint project_document_folders_unique_name_per_parent
+  unique nulls not distinct (project_id, parent_folder_id, name)
+```
+
+Il ne peut donc y avoir **qu'un seul** dossier « Mails » à la racine d'un projet.
+Or un dossier privé n'est rendu qu'à son créateur. Le jour du partage :
+
+- A dépose ses mails → « Mails » est créé, privé, `created_by = A` ;
+- B dépose les siens → la liste des dossiers ne lui montre rien → il tente de
+  créer « Mails » → **la contrainte d'unicité refuse**, et B ne peut plus
+  déposer un seul mail.
+
+Le message d'erreur dit maintenant la vérité — « existe déjà ici, privé et créé
+par quelqu'un d'autre » plutôt que « ce nom existe déjà », qui envoyait chercher
+dans une liste un dossier qu'on ne peut pas y voir (règle 5). **Mais un message
+juste n'est pas une solution.**
+
+**Ma recommandation, à valider.** Faire de « Mails » un **contenant partagé au
+contenu privé** : `prive = true` (c'est ce qui déclenche le masquage des
+documents) et `created_by` **vide** (c'est ce qui rend le dossier visible de
+tous). Les deux politiques existantes donnent alors exactement :
+
+| | ce que chacun voit |
+| --- | --- |
+| le dossier « Mails » | tout le monde |
+| les mails à l'intérieur | chacun les siens, et rien d'autre |
+
+Rien à écrire dans la base, aucune colonne de plus : c'est déjà ce que les
+politiques font. Et cela rend l'intuition de départ **juste** — un « Mails » à
+la racine, avec un cadenas, visible par toute l'équipe, dont le cadenas signifie
+« chacun n'y voit que les siens » et non « vous seul y avez accès ».
+
+Le prix à payer est nommé : la garde posée au tour précédent — *un dossier privé
+ne se crée pas sans créateur connu* — devient fausse pour ce dossier-là, et il
+faudrait donc distinguer **deux sortes de dossiers privés**. C'est une décision,
+pas une correction : elle n'est pas prise ici.
+
 ## 9. À enrichir
 
+- **Deux sortes de dossiers privés ?** « Mails » doit-il rester le dossier d'une
+  personne, ou devenir un contenant partagé au contenu privé ? À trancher avant
+  que le partage de projet n'existe, sinon le second déposant d'un projet ne
+  pourra pas déposer (§ 8 octies).
 - Le déposant : navigateur ou fonction de bord ? (cent mille pièces ne passent
   pas par un onglet.) Le versoir tranche pour l'**inventaire** et pour le
   **versement** — le navigateur, parce qu'il ne coûte rien et qu'il tient déjà
