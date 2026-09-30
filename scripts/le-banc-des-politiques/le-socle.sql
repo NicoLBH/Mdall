@@ -37,6 +37,28 @@ create table if not exists public.documents (
   created_at timestamptz not null default now()
 );
 
+-- **L'identité telle qu'un jeton la porte.** `est_administrateur()` lit
+-- l'adresse dans le jeton, pas l'identifiant : c'est par elle qu'on ouvre la
+-- console. Sans cette fonction, la porte ne peut pas être éprouvée du tout.
+create or replace function auth.jwt() returns jsonb language sql stable as $$
+  select coalesce(
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb,
+    '{}'::jsonb)
+$$;
+
+create table if not exists public.administrateurs (
+  courriel text primary key,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.project_assertions (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  domain text,
+  nature text,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.subjects (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects(id) on delete cascade,

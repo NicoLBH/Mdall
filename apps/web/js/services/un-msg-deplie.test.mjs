@@ -46,6 +46,17 @@ const texteAncienDe = (numero, valeur) =>
   flux(`__substg1.0_${numero}001E`,
     Uint8Array.from([...valeur].map((c) => c.codePointAt(0))));
 
+/**
+ * Une propriété `001E` dont les octets sont de l'UTF-8.
+ *
+ * **C'est ce qu'Outlook écrit aujourd'hui**, y compris dans un message qui n'a
+ * jamais transité — donc qui ne déclare aucune page de codes. Les graver en
+ * latin-1 comme `texteAncienDe` reproduirait l'archive ancienne, pas le défaut
+ * qu'on répare.
+ */
+const texteUtf8De = (numero, valeur) =>
+  flux(`__substg1.0_${numero}001E`, new TextEncoder().encode(valeur));
+
 /** Une propriété en octets bruts : une pièce jointe. */
 const octetsDe = (numero, octets) => flux(`__substg1.0_${numero}0102`, octets);
 
@@ -694,6 +705,46 @@ test("une propriété écrite dans l'encodage du poste se lit aussi", () => {
   assert.equal(lu.objet, "Réunion de chantier n°4");
   assert.match(lu.corps, /désenfumage reste à trancher/);
   assert.deepEqual(lu.qui, { nom: "Ourdine Ferrand", adresse: "o.ferrand@novaclim.example.com" });
+});
+
+/**
+ * **Le message qu'on a écrit soi-même.**
+ *
+ * Il est parti d'une boîte vers cette même boîte et n'est jamais sorti sur
+ * Internet : il n'a donc ni en-têtes de cheminement, ni `PR_INTERNET_CPID`. On
+ * reconstituait ses en-têtes depuis les propriétés MAPI, qu'on décodait en
+ * windows-1252 faute de déclaration — pendant qu'Outlook y avait écrit de
+ * l'UTF-8.
+ *
+ * Dans un même fil, le message reçu s'affichait « Frédéric COPPEL » et la
+ * réponse « FrÃ©dÃ©ric COPPEL ». Le même fil, deux comportements : le signe
+ * que ce n'est pas le fichier qui est en cause.
+ */
+test("un message sans cheminement ni page déclarée garde ses accents", () => {
+  const source = graver([
+    texteUtf8De("0037", "RE: Périmètre projet révisé"),
+    texteUtf8De("1000", "Merci pour les infos. J'ai regardé les plans.\r\n"),
+    texteUtf8De("0C1A", "Nicolas Lebihan"),
+    texteUtf8De("5D01", "n.lebihan@bertrand.example.fr"),
+    {
+      nom: "__recip_version1.0_#00000001",
+      quoi: DOSSIER,
+      enfants: [
+        texteUtf8De("3001", "Frédéric COPPEL"),
+        texteUtf8De("39FE", "fcoppel@globalis.example"),
+        paquetDesValeurs(8, [{ marque: 0x0c150003, valeur: 2 }])
+      ]
+    }
+  ]);
+
+  const lu = unMsgDeplie(source);
+  assert.equal(lu.objet, "RE: Périmètre projet révisé");
+  assert.match(lu.corps, /J'ai regardé les plans/);
+  assert.deepEqual(lu.copie, [
+    { nom: "Frédéric COPPEL", adresse: "fcoppel@globalis.example" }
+  ]);
+  // La marque du défaut : un « é » d'UTF-8 lu en windows-1252.
+  assert.doesNotMatch(JSON.stringify(lu), /Ã/);
 });
 
 test("l'annuaire se lit par son arbre, pas dans l'ordre où il est rangé", () => {

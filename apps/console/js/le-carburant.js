@@ -29,6 +29,14 @@ import {
 import {
   lesComptesDuCarburant
 } from "../partage/js/services/les-comptes-du-carburant-supabase.js";
+import {
+  laPartReconnue, lesDomainesJamaisReconnus, lesDomainesRanges,
+  phraseDeLaReconnaissance, phraseDunDomaineDuSysteme
+} from "../partage/js/services/les-domaines-du-systeme.js";
+import {
+  lesDomainesDuSysteme
+} from "../partage/js/services/les-domaines-du-systeme-supabase.js";
+import { DOMAINS, domainLabel } from "../partage/js/services/assertion-taxonomy.js";
 
 const echapper = (valeur) => String(valeur ?? "")
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -86,6 +94,67 @@ function renderCeQuiNestPasFait() {
   `;
 }
 
+/**
+ * Ce que le système reconnaît, domaine par domaine.
+ *
+ * ## Pourquoi c'est ici et pas dans un projet
+ *
+ * L'écran des Indicateurs montre la même chose **pour un chantier**. La
+ * question de la console est autre : « le système progresse-t-il ? ». Elle ne
+ * se lit pas sur un chantier — un seul chantier peut ne parler que de
+ * structure sans que rien n'aille mal — mais sur l'ensemble.
+ *
+ * ## Et cela ne lit aucun contenu
+ *
+ * Un domaine est **un mot d'un vocabulaire fermé de huit**, écrit dans une
+ * colonne. Il ne désigne ni chantier, ni personne, ni affirmation. La fonction
+ * de base ne rend que ce mot et des nombres : par sa signature, elle ne peut
+ * pas rendre autre chose.
+ */
+function renderLesDomaines(range) {
+  const part = laPartReconnue(range);
+  const jamais = lesDomainesJamaisReconnus(range, DOMAINS);
+
+  return `
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">Ce que le système reconnaît</h3>
+      <p class="conso-usages__mot">
+        Un taux de précision dit qu'on se trompe ; il ne dit jamais sur quoi.
+        Domaine par domaine : combien d'affirmations le portent, et sur combien
+        de chantiers il se montre. Un domaine vu mille fois sur un seul chantier
+        ne dit pas qu'une taxonomie marche.
+      </p>
+      <p class="conso-usages__mot"><b>${echapper(phraseDeLaReconnaissance(range))}</b></p>
+      ${part === null ? "" : `
+        <ul class="forme-reference">
+          ${range.reconnus.map((une) => `
+            <li class="forme-reference__ligne">
+              <span class="forme-reference__quoi">${echapper(domainLabel(une.domaine))}</span>
+              <span class="forme-reference__chiffres mono-small">${
+                echapper(`${compteDit(une.affirmations)} ${une.affirmations > 1
+                  ? "affirmations" : "affirmation"}`)}</span>
+              <span class="forme-reference__sur mono-small">${
+                echapper(phraseDunDomaineDuSysteme(une))}</span>
+            </li>
+          `).join("")}
+        </ul>
+        ${range.reconnus.length ? "" : `<p class="forme-manques">
+          Aucune affirmation ne porte de domaine. La classification n'attrape
+          rien — ce n'est pas que les chantiers n'en parlent pas.</p>`}
+        ${jamais.length ? `<p class="conso-usages__mot">${echapper(
+          `Jamais reconnus : ${jamais.map(domainLabel).join(", ")}. `
+          + "Soit les chantiers n'en parlent pas, soit la classification ne les "
+          + "voit pas — et c'est la question qu'il faut pouvoir se poser.")}</p>` : ""}
+        ${range.nonClasse ? `<p class="conso-usages__mot">${echapper(
+          `${compteDit(range.nonClasse.affirmations)} affirmations sans domaine, `
+          + `sur ${range.nonClasse.chantiers} ${range.nonClasse.chantiers > 1
+            ? "chantiers" : "chantier"}. Ce n'est pas une erreur : ce qu'on n'a `
+          + "pas su classer s'écrit, plutôt que de se ranger au jugé.")}</p>` : ""}
+      `}
+    </section>
+  `;
+}
+
 function renderTout(comptes) {
   const dit = phraseDuGisement(comptes);
   const depuis = leJour(comptes?.depuis);
@@ -120,6 +189,13 @@ function renderTout(comptes) {
       ${renderLaRepartition(comptes) || `<p class="forme-manques">Aucun chantier ne porte de mail.</p>`}
     </section>
 
+    ${/*
+      **Un hôte, rempli plus tard.** La lecture des domaines est une seconde
+      requête ; l'attendre ici retarderait l'affichage des comptes, qui sont ce
+      qu'on vient voir en premier.
+    */""}
+    <div id="carburantDomaines"></div>
+
     ${renderCeQuiNestPasFait()}
   `;
 }
@@ -140,4 +216,17 @@ export async function monterLeCarburant(hote) {
   }
 
   ou.innerHTML = renderTout(comptes);
+
+  // **Après les comptes, et pas avec eux.** Les deux lectures sont
+  // indépendantes : celle des domaines peut échouer sans emporter celle du
+  // carburant, qui répond à la question la plus urgente.
+  const lignes = await lesDomainesDuSysteme();
+  const apres = ou.querySelector("#carburantDomaines");
+  if (!apres) return;
+
+  apres.innerHTML = lignes === null
+    ? `<section class="conso-usages"><p class="forme-manques">
+        Les domaines n'ont pas pu être lus. Ce n'est pas qu'il n'y en a aucun :
+        on ne sait pas lesquels il y a.</p></section>`
+    : renderLesDomaines(lesDomainesRanges(lignes));
 }

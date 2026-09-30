@@ -57,7 +57,7 @@ test("ce qu'on ne nomme pas se compte, et se dit", () => {
 
 test("une pièce sans nom en reçoit un plutôt que de disparaître", () => {
   const { gardees } = lesPiecesQuiComptent([{ taille: 12 }]);
-  assert.deepEqual(gardees, [{ nom: "sans nom", taille: 12, type: "" }]);
+  assert.deepEqual(gardees, [{ nom: "sans nom", taille: 12, type: "", id: "" }]);
 });
 
 test("un même plan attaché à trois réponses ne se montre qu'une fois", () => {
@@ -82,4 +82,24 @@ test("rien n'entre, rien ne sort", () => {
   assert.deepEqual(lesPiecesQuiComptent([]), { gardees: [], cachees: [] });
   assert.deepEqual(lesPiecesQuiComptent(null), { gardees: [], cachees: [] });
   assert.deepEqual(lesPiecesDuFil(null), []);
+});
+
+/**
+ * **L'identifiant de la ligne survit au rangement.**
+ *
+ * `uneFois` recompose chaque pièce champ par champ — c'est ce qui la normalise
+ * — et il jetait donc l'identifiant que `lesPiecesAppariees` venait d'y poser.
+ * Aucune épreuve ne l'a vu : les deux modules étaient justes séparément. Le
+ * banc, lui, a montré deux pastilles mortes.
+ */
+test("une pièce garde l'identifiant de sa ligne en base", () => {
+  const { gardees } = lesPiecesQuiComptent([
+    { nom: "plan.pdf", taille: 12, id: "d-1" },
+    { nom: "sans-ligne.pdf", taille: 4 }
+  ]);
+  assert.equal(gardees[0].id, "d-1");
+  // Une pièce qu'aucune ligne ne porte vaut `""`, et non `undefined` : l'écran
+  // décide d'en faire un bouton ou non, et il ne doit pas avoir à distinguer
+  // deux façons de ne rien avoir.
+  assert.equal(gardees[1].id, "");
 });

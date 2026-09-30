@@ -224,6 +224,43 @@ function unMotEncode(jeu, forme, charge) {
 }
 
 /**
+ * **Écrire** un mot encodé (RFC 2047), l'autre moitié de la convention.
+ *
+ * ## Pourquoi il faut savoir écrire, et pas seulement lire
+ *
+ * Un en-tête de message ne transporte que de l'ASCII : c'est la règle du
+ * format, et c'est pour cela que `decoderLesMotsEncodes` existe. Or un `.msg`
+ * qui n'a jamais transité n'a pas d'en-têtes — on les recompose depuis ses
+ * propriétés MAPI, qui sont, elles, du texte quelconque.
+ *
+ * On y écrivait le nom tel quel. Le lecteur relit les en-têtes **un caractère
+ * par octet** — c'est ce qu'impose un format dont les octets n'ont pas
+ * d'alphabet déclaré — et « Frédéric COPPEL » en ressortait
+ * « FrÃ©dÃ©ric COPPEL ». Non pas parce qu'on avait mal lu le fichier, mais
+ * parce qu'on avait mal écrit l'en-tête qu'on venait de fabriquer.
+ *
+ * ## Ce qu'il ne touche pas
+ *
+ * Ce qui est déjà de l'ASCII sort inchangé — y compris un mot déjà encodé, qui
+ * en est. On peut donc l'appliquer deux fois sans rien abîmer, ce qui évite
+ * d'avoir à se rappeler qui l'a déjà fait (règle 4).
+ *
+ * Il encode **une valeur**, pas une ligne d'adresses : `<adresse@exemple>` doit
+ * rester hors du mot encodé, sans quoi plus rien ne reconnaît une adresse.
+ * L'appelant encode le nom, et lui seul.
+ */
+export function enMotEncode(valeur) {
+  const brut = String(valeur ?? "");
+  // eslint-disable-next-line no-control-regex
+  if (!brut || !/[^\u0000-\u007F]/.test(brut)) return brut;
+
+  const octets = new TextEncoder().encode(brut);
+  let binaire = "";
+  for (const un of octets) binaire += String.fromCharCode(un);
+  return `=?utf-8?B?${btoa(binaire)}?=`;
+}
+
+/**
  * Défaire les mots encodés d'un en-tête (RFC 2047).
  *
  * Un objet accentué voyage sous la forme `=?UTF-8?Q?=C3=89tanch=C3=A9it=C3=A9?=`.

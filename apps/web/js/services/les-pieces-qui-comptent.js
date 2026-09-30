@@ -41,7 +41,13 @@ function uneFois(piece) {
   return {
     nom: texte(piece?.nom) || "sans nom",
     taille: Number(piece?.taille) || 0,
-    type: texte(piece?.type)
+    type: texte(piece?.type),
+    // **L'identifiant de la ligne en base, quand il a été retrouvé.** Sans lui,
+    // la pastille n'est qu'un nom : on voyait qu'un plan existait sans pouvoir
+    // l'ouvrir. Il est posé par `lesPiecesAppariees`, et vaut `""` pour une
+    // pièce qu'aucune ligne ne porte — ce qui n'est pas une erreur : une pièce
+    // d'un message reconstitué d'une citation n'a jamais été versée.
+    id: texte(piece?.id)
   };
 }
 

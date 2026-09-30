@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { laFileAuJournal, leMotDeLaFile, lesVersementsAuJournal } from "./la-file-au-journal.js";
-import { ORIGINE, executionsAGarder, partitionnerActions } from "./run-partition.js";
+import {
+  LE_BATTEMENT_DU_JOURNAL, ORIGINE, executionsAGarder, partitionnerActions, quelqueChoseTourne
+} from "./run-partition.js";
 
 const uneLigne = (des = {}) => ({
   id: "versement-1", statut: "en_cours", fichiers: [{ nom: "a.eml" }, { nom: "b.eml" }],
@@ -132,4 +134,36 @@ test("l'étape d'un versement en attente se dit en cours, elle aussi", () => {
   const vue = laFileAuJournal(uneLigne({ statut: "en_attente" }));
   assert.equal(vue.details.corpus.steps[0].statut, "en-cours");
   assert.equal(vue.details.corpus.steps[0].label, "En attente du serveur");
+});
+
+/**
+ * **Le serveur ne prévient personne.** Depuis que le versement a lieu hors de
+ * la page, rien n'annonce au navigateur qu'une étape vient de finir : la ligne
+ * gardait son disque orange jusqu'à ce qu'on recharge. Le journal relit donc
+ * tant qu'il lui reste quelque chose de vif — et cesse dès qu'il n'en reste
+ * plus, sans quoi un onglet oublié interroge la base toute la nuit.
+ */
+test("le journal relit tant qu'une exécution tourne, et pas après", () => {
+  assert.equal(quelqueChoseTourne([{ status: "completed" }, { status: "running" }]), true);
+  assert.equal(quelqueChoseTourne([{ status: "completed" }, { status: "failed" }]), false);
+  assert.equal(quelqueChoseTourne([]), false);
+  assert.equal(quelqueChoseTourne(null), false);
+});
+
+/**
+ * **La même marque du vivant que pour `executionsAGarder`.** Une ligne de file
+ * naît « running » ; deux définitions du vivant auraient fini par ne pas dire
+ * la même chose (règle 4).
+ */
+test("une ligne de la file compte comme vive pour le battement", () => {
+  const vives = lesVersementsAuJournal([uneLigne({ statut: "en_cours" })]);
+  assert.equal(quelqueChoseTourne(vives), true);
+  assert.equal(executionsAGarder(vives, []).length, 1);
+});
+
+test("le battement ne descend pas sous la seconde", () => {
+  // Une relecture par seconde ferait, sur un versement de vingt mails, plus de
+  // requêtes que le versement n'a de fichiers.
+  assert.equal(Number.isInteger(LE_BATTEMENT_DU_JOURNAL), true);
+  assert.equal(LE_BATTEMENT_DU_JOURNAL >= 1000, true);
 });

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   ENCODAGE_PAR_DEFAUT, ENCODAGES_CONNUS, JEU_DE_SECOURS, JEU_PAR_DEFAUT, PANNE,
-  decoderBase64, decoderLesMotsEncodes, decoderQuotedPrintable, defaireLesEntites,
+  decoderBase64, decoderLesMotsEncodes, decoderQuotedPrintable, defaireLesEntites, enMotEncode,
   leTexteDuCorps, lireLesOctets, octetsDuCorps, octetsDuTexteBrut, texteBrutDe, texteDuHtml
 } from "./decoder-un-mail.js";
 
@@ -284,4 +284,44 @@ test("deux paragraphes gardent la ligne vide qui les sépare", () => {
 
 test("les éléments d'une liste tiennent chacun une ligne", () => {
   assert.equal(texteDuHtml("<ul><li>lot 3</li><li>lot 4</li></ul>"), "lot 3\nlot 4");
+});
+
+/* ── Écrire un mot encodé ────────────────────────────────────────────────── */
+
+/**
+ * **L'autre moitié de la convention.** Un en-tête ne transporte que de
+ * l'ASCII : c'est la règle du format, et c'est pourquoi `decoderLesMotsEncodes`
+ * existe. Un `.msg` qui n'a jamais transité n'a pas d'en-têtes — on les
+ * recompose depuis ses propriétés, qui sont du texte quelconque. On y écrivait
+ * le nom tel quel, et « Frédéric COPPEL » s'y relisait « FrÃ©dÃ©ric COPPEL ».
+ */
+test("un nom accentué s'écrit en mot encodé", () => {
+  const dit = enMotEncode("Frédéric COPPEL");
+  assert.match(dit, /^=\?utf-8\?B\?/);
+  assert.match(dit, /\?=$/);
+  // Et il se relit : les deux moitiés se répondent (règle 10).
+  assert.equal(decoderLesMotsEncodes(dit).texte, "Frédéric COPPEL");
+});
+
+/**
+ * **Ce qui est déjà de l'ASCII sort inchangé.** Tout encoder marcherait — le
+ * lecteur décode — mais produirait un en-tête illisible pour un humain comme
+ * pour tout autre lecteur, et six lignes de base64 pour « Bon de commande ».
+ */
+test("un texte sans accent n'est pas encodé", () => {
+  assert.equal(enMotEncode("Bon de commande"), "Bon de commande");
+  assert.equal(enMotEncode("nicolas.lebihan@bertrand.example"), "nicolas.lebihan@bertrand.example");
+  assert.equal(enMotEncode(""), "");
+  assert.equal(enMotEncode(null), "");
+});
+
+/**
+ * **On peut l'appliquer deux fois sans rien abîmer** : un mot encodé est de
+ * l'ASCII, donc il en ressort tel quel. Personne n'a à se rappeler qui l'a déjà
+ * fait (règle 4).
+ */
+test("réencoder un mot déjà encodé ne le double pas", () => {
+  const une = enMotEncode("Périmètre révisé");
+  assert.equal(enMotEncode(une), une);
+  assert.equal(decoderLesMotsEncodes(enMotEncode(une)).texte, "Périmètre révisé");
 });

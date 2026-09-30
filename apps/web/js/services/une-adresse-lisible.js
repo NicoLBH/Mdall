@@ -137,6 +137,41 @@ export function lidentiteDite(qui = null) {
  * inchangé — y compris un nom qui contiendrait des parenthèses pour une autre
  * raison.
  */
+/**
+ * Le nom seul, **pour une liste**.
+ *
+ * ## Pourquoi la liste et le fil ne montrent pas la même chose
+ *
+ * `lidentiteDite` garde l'adresse entre parenthèses, et c'est juste là où elle
+ * sert : dans un fil, elle désambiguïse deux homonymes, et l'on n'a que six
+ * lignes à lire.
+ *
+ * Dans une liste de deux cents mails, la même adresse répétée deux cents fois
+ * ne désambiguïse plus rien — elle double la longueur de chaque ligne et noie
+ * le seul mot qu'on y cherche. « Nicolas MOREL (nmorel@globalis.example) »
+ * devient « Nicolas MOREL ».
+ *
+ * ## Sans jamais laisser la case vide
+ *
+ * Un expéditeur qui n'a **que** son adresse la garde : la retirer laisserait
+ * une colonne blanche, c'est-à-dire ferait disparaître de l'écran la seule
+ * chose qu'on sache de lui (règle 5).
+ */
+export function leNomSeul(valeur) {
+  // L'identifiant d'annuaire part d'abord : ce qui reste est « Nom » ou
+  // « Nom (adresse) », et c'est la seule forme que la suite a à connaître.
+  const dit = lexpediteurNettoye(valeur);
+  const enParentheses = dit.match(/^(.*?)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*$/s);
+  if (!enParentheses) return dit;
+
+  const nom = texte(enParentheses[1]);
+  const dedans = texte(enParentheses[2]);
+  if (nom && cestUneAdresseDeMessagerie(dedans)) return nom;
+
+  // Des parenthèses qui ne portent pas une adresse font partie du nom.
+  return dit;
+}
+
 export function lexpediteurNettoye(valeur) {
   const dit = texte(valeur);
   if (!dit) return "";

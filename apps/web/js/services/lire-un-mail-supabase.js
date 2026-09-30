@@ -21,6 +21,7 @@
 
 import { downloadDocumentFile } from "./document-deposit.js";
 import { leFilDesMails } from "./le-fil-des-mails.js";
+import { lesLignesDuMessage, lesPiecesAppariees } from "./une-piece-a-lecran.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -61,9 +62,10 @@ async function lesOctets(document) {
  *
  * @param {object} document la ligne du mail qu'on ouvre
  * @param {object[]} voisins les documents du même dossier, déjà chargés
+ * @param {object[]} tousLesDocuments le projet entier, pour retrouver les pièces
  * @returns {Promise<{messages: object[], demande: object|null, lus: number, tous: number, illisibles: number}>}
  */
-export async function lireLeFil(document, voisins = []) {
+export async function lireLeFil(document, voisins = [], tousLesDocuments = []) {
   const freres = lesFreresDuFil(voisins, document?.mailFil);
   // **Le message demandé d'abord, quoi qu'il arrive.** Sans lui, ouvrir un mail
   // pourrait n'afficher que ses voisins — et c'est celui-là qu'on a cliqué.
@@ -89,8 +91,29 @@ export async function lireLeFil(document, voisins = []) {
   // dépôt le suit à travers le dédoublonnage et le classement.
   const demande = fil.messages.find((un) => un.depot === 0) ?? fil.messages[0] ?? null;
 
+  // **Les pièces retrouvent leur ligne en base.** Celles du fil viennent du
+  // fichier : un nom et une taille, rien qu'on puisse ouvrir. Le dépôt a écrit
+  // chaque pièce comme un document portant `piece_du_message` ; on les apparie
+  // par le nom, qui est ce que les deux côtés portent.
+  //
+  // `depot` est le rang de la source dans `aLire` : c'est ce qui relie un
+  // message du fil au document dont il a été tiré, et il survit au
+  // dédoublonnage. Un message reconstitué d'une citation n'en a pas — aucun
+  // fichier ne le porte, donc aucune de ses pièces n'est en base.
+  const messages = fil.messages.map((un) => {
+    const source = Number.isInteger(un?.depot) ? aLire[un.depot] : null;
+    if (!source?.id) return un;
+    return {
+      ...un,
+      // **Le projet entier, pas les voisins.** Les pièces ne sont pas dans le
+      // dossier des mails : le dépôt les range dans « Pièces jointes ». Les
+      // chercher parmi les voisins n'en trouvait aucune.
+      pieces: lesPiecesAppariees(un.pieces, lesLignesDuMessage(tousLesDocuments, source.id))
+    };
+  });
+
   return {
-    messages: fil.messages,
+    messages,
     demande,
     ordre: fil.ordre,
     doublons: fil.doublons,

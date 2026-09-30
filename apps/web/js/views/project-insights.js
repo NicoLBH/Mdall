@@ -19,6 +19,11 @@ import {
   renderLeGesteDeRelire, renderLepisodeDeLaCorrespondance
 } from "./ui/episode-de-la-correspondance.js";
 import { dureeDite } from "../utils/duree-dite.js";
+import {
+  renderSideNavGroup, renderSideNavItem, renderSideNavLayout
+} from "./ui/side-nav-layout.js";
+import { RUBRIQUES, rubriqueValide } from "./ui/les-rubriques-des-indicateurs.js";
+import { svgIcon } from "../ui/icons.js";
 
 function formatPercent(value) {
   const num = Number(value);
@@ -216,6 +221,78 @@ function renderChartsSection(insights) {
   `;
 }
 
+/**
+ * Le menu des rubriques, à gauche.
+ *
+ * Le même gabarit que Paramètres, et les mêmes classes : `settings-nav` porte
+ * déjà la largeur, les espacements et l'état actif. En dessiner un second ici
+ * obligerait à recalibrer les deux à chaque retouche.
+ */
+function renderIndicateursNav(active) {
+  return renderSideNavGroup({
+    className: "settings-nav__group settings-nav__group--project",
+    items: RUBRIQUES.map((une) => renderSideNavItem({
+      label: une.dit,
+      targetId: une.cle,
+      iconHtml: svgIcon(une.icone),
+      isActive: une.cle === active
+    }))
+  });
+}
+
+/**
+ * Ce que montre une rubrique.
+ *
+ * Les trois dernières ne rendent qu'un hôte vide : ce qu'elles portent se lit
+ * en base, et c'est `dessinerLa…` qui le pose une fois lu. Les mêmes
+ * identifiants qu'avant — ces fonctions les cherchent par `querySelector` et
+ * ne dessinent rien quand elles ne les trouvent pas, ce qui est exactement ce
+ * qu'il faut quand la rubrique n'est pas ouverte.
+ */
+function renderLaRubrique(cle, insights) {
+  if (cle === "execution") return renderExecutionInsightsCardsSection();
+  if (cle === "pilotage") {
+    return `${renderPilotageMetricStrip(insights.summary)}${renderChartsSection(insights)}`;
+  }
+  if (cle === "forme") return `<div id="projectInsightsForme"></div>`;
+  if (cle === "correspondance") return `<div id="projectInsightsCorrespondance"></div>`;
+  return `<div id="projectInsightsConsommation"></div>`;
+}
+
+/**
+ * La rubrique ouverte, gardée d'une venue à l'autre.
+ *
+ * Elle vit ici et non dans le magasin : c'est un état d'écran, pas un fait du
+ * projet. Changer de projet la garde, et c'est voulu — quelqu'un qui compare
+ * la consommation de deux chantiers ne veut pas rouvrir la rubrique à chaque
+ * fois.
+ */
+let rubriqueOuverte = rubriqueValide("");
+
+function monterLaRubrique(root, cle) {
+  if (!root) return;
+  rubriqueOuverte = rubriqueValide(cle);
+
+  root.querySelectorAll("[data-side-nav-target]").forEach((item) => {
+    const actif = item.dataset.sideNavTarget === rubriqueOuverte;
+    item.classList.toggle("is-active", actif);
+    item.setAttribute("data-side-nav-active", actif ? "true" : "false");
+    item.setAttribute("aria-current", actif ? "page" : "false");
+  });
+
+  const hote = root.querySelector("#projectInsightsContent");
+  if (!hote) return;
+
+  hote.innerHTML = renderLaRubrique(rubriqueOuverte, getProjectInsightsMetrics());
+
+  // **Les trois lectures sont relancées à chaque rubrique montée.** Chacune ne
+  // fait rien si son hôte n'est pas là ; les appeler toutes évite d'avoir à
+  // tenir ici la liste de qui lit quoi (règle 10).
+  dessinerLaForme(root);
+  dessinerLaCorrespondance(root);
+  dessinerLaConsommation(root);
+}
+
 export function renderProjectInsights(root) {
   root.className = "project-shell__content";
   clearProjectActiveScrollSource();
@@ -225,32 +302,38 @@ export function renderProjectInsights(root) {
     variant: "insights"
   });
 
-  const insights = getProjectInsightsMetrics();
+  const active = rubriqueValide(rubriqueOuverte);
 
   root.innerHTML = `
-    <section class="project-simple-page project-simple-page--settings">
-      <div class="settings-content settings-content--project-page" style="max-width:1216px;margin:0 auto;padding:24px 32px 40px;">
-        ${renderExecutionInsightsCardsSection()}
-        ${renderPilotageMetricStrip(insights.summary)}
-        ${renderChartsSection(insights)}
-        <div id="projectInsightsForme"></div>
-        ${/*
-          **La correspondance juste après la forme, et pas ailleurs.** Les deux
-          répondent à la même question — « à quoi ressemble ce chantier, et
-          qu'est-ce qui y est arrivé » —, l'une depuis la mémoire du projet,
-          l'autre depuis les mails déposés. Un écran, deux sources. Les séparer
-          aurait fait deux endroits où lire la même chose, et le second aurait
-          été celui qu'on ne relit jamais.
-        */""}
-        <div id="projectInsightsCorrespondance"></div>
-        <div id="projectInsightsConsommation"></div>
+    <section class="project-simple-page project-simple-page--settings project-simple-page--parametres">
+      <div class="settings-shell settings-shell--parametres settings-shell--project-page">
+        ${renderSideNavLayout({
+          className: "settings-layout settings-layout--parametres",
+          navClassName: "settings-nav settings-nav--parametres",
+          contentClassName: "settings-content settings-content--parametres",
+          navHtml: renderIndicateursNav(active),
+          // **Pas de titre de rubrique ici.** Chaque section porte déjà le
+          // sien — « Consommation », « La forme de ce chantier » —, et
+          // l'élément actif du menu dit lequel est ouvert. En ajouter un
+          // troisième aurait demandé une classe de plus, à recalibrer avec
+          // les deux autres.
+          contentHtml: `<div id="projectInsightsContent"></div>`
+        })}
       </div>
     </section>
   `;
 
-  dessinerLaForme(root);
-  dessinerLaCorrespondance(root);
-  dessinerLaConsommation(root);
+  if (root.__indicateursNavHandler) {
+    root.removeEventListener("click", root.__indicateursNavHandler);
+  }
+  root.__indicateursNavHandler = (event) => {
+    const item = event.target?.closest?.("[data-side-nav-target]");
+    if (!item || !root.contains(item)) return;
+    monterLaRubrique(root, item.dataset.sideNavTarget);
+  };
+  root.addEventListener("click", root.__indicateursNavHandler);
+
+  monterLaRubrique(root, active);
   debugProjectScrollPolicy("render-project-insights");
 }
 

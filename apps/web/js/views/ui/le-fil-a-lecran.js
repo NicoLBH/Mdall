@@ -116,12 +116,23 @@ function lesPastilles(pieces = []) {
   const { gardees, cachees } = lesPiecesQuiComptent(pieces);
   if (!gardees.length && !cachees.length) return "";
 
-  const dites = gardees.map((une) => `
-    <span class="fil-mail__piece" title="${escapeHtml(`${une.nom} — ${poidsDit(une.taille)}`)}">
+  // **Une pastille qui porte un identifiant s'ouvre.** Le fil est lu dans le
+  // fichier : ses pièces sont des noms et des tailles. `lesPiecesAppariees` leur
+  // rend la ligne que le dépôt a écrite, et sans elle la pastille ne prétend pas
+  // s'ouvrir — montrer un plan sans pouvoir l'ouvrir est la pire façon de dire
+  // qu'il existe, mais un faux bouton est pire encore.
+  const dites = gardees.map((une) => {
+    const dedans = `
       ${svgIcon("paperclip", { className: "octicon" })}
       <span class="fil-mail__piece-nom">${escapeHtml(une.nom)}</span>
-      <span class="fil-mail__piece-poids mono-small">${escapeHtml(poidsDit(une.taille))}</span>
-    </span>`).join("");
+      <span class="fil-mail__piece-poids mono-small">${escapeHtml(poidsDit(une.taille))}</span>`;
+    const titre = escapeHtml(`${une.nom} — ${poidsDit(une.taille)}`);
+
+    return texte(une.id)
+      ? `<button type="button" class="fil-mail__piece fil-mail__piece--ouvrable"
+           data-fil-piece="${escapeHtml(texte(une.id))}" title="${titre}">${dedans}</button>`
+      : `<span class="fil-mail__piece" title="${titre}">${dedans}</span>`;
+  }).join("");
 
   const reste = phraseDesPiecesCachees(cachees);
   return `<div class="fil-mail__pieces">${dites}${
