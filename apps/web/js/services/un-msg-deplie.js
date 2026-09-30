@@ -58,6 +58,7 @@
 
 import { unMailDeplie, objetNu } from "./un-mail-deplie.js";
 import { TROU, unTrou } from "./trous-dun-mail.js";
+import { enMotEncode } from "./decoder-un-mail.js";
 import { leTexteDesOctets } from "./le-jeu-de-caracteres.js";
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -589,8 +590,12 @@ function enTetesDuCheminement(brut) {
 
 /** Une adresse, écrite comme un en-tête l'écrirait. */
 function commeUnEnTete({ nom, adresse }) {
-  if (!adresse) return texte(nom);
-  return nom ? `${nom} <${adresse}>` : adresse;
+  // **Le nom s'encode, l'adresse jamais.** Un en-tête ne transporte que de
+  // l'ASCII ; « Frédéric COPPEL » écrit tel quel s'y relisait
+  // « FrÃ©dÃ©ric COPPEL ». Mettre l'adresse dans le mot encodé la rendrait
+  // méconnaissable — plus rien n'y verrait une adresse.
+  if (!adresse) return enMotEncode(texte(nom));
+  return nom ? `${enMotEncode(nom)} <${adresse}>` : adresse;
 }
 
 /**
@@ -599,7 +604,7 @@ function commeUnEnTete({ nom, adresse }) {
  * Sans date : un message interne peut n'en porter aucune lisible, et en
  * inventer une le placerait dans le fil à un moment qu'il n'a pas eu.
  */
-function enTetesReconstitues({ qui, a, copie, objet, identite, enReponseA, chaine, quand }) {
+function enTetesReconstitues({ qui, a, copie, identite, enReponseA, chaine, quand }) {
   const lignes = [];
   const poser = (nom, valeur) => { if (texte(valeur)) lignes.push(`${nom}: ${texte(valeur)}`); };
 
@@ -610,7 +615,13 @@ function enTetesReconstitues({ qui, a, copie, objet, identite, enReponseA, chain
   // dans les en-têtes d'un message qui n'a pas transité : elle est dans les
   // propriétés, et c'est là qu'on la prend.
   poser("Date", quand);
-  poser("Subject", objet);
+  // **Pas d'objet ici.** Il y en avait un, et personne ne le lisait : l'objet de
+  // la propriété fait foi (`sonObjet = objet || lu.objet`), et cette fonction
+  // n'est appelée qu'avec cette même propriété. Quand elle porte un objet, il
+  // gagne ; quand elle n'en porte pas, la ligne n'était pas écrite. La valeur ne
+  // pouvait donc jamais être relue — la battue de mutations l'a montrée en la
+  // cassant sans qu'aucune épreuve ne bronche. On ne garde pas ce que rien
+  // n'appelle (règle 4).
   poser("Message-ID", identite);
   poser("In-Reply-To", enReponseA);
   poser("References", chaine);
@@ -678,7 +689,6 @@ export function unMsgDeplie(source) {
       }),
       a: destinataires.a.map(commeUnEnTete),
       copie: destinataires.copie.map(commeUnEnTete),
-      objet,
       identite: texte(props.lire(QUOI.IDENTITE)),
       enReponseA: texte(props.lire(QUOI.EN_REPONSE_A)),
       chaine: texte(props.lire(QUOI.CHAINE)),

@@ -62,7 +62,20 @@ export const RACINES = [
   // Ce que ces nombres veulent dire : les tranches, le seuil, les phrases. Pur,
   // et il n'entraîne qu'un formatage de poids — c'est pour cela que `poidsDit`
   // a quitté l'inventaire du versoir, que la console ne doit pas emporter.
-  "js/services/les-comptes-du-carburant.js"
+  "js/services/les-comptes-du-carburant.js",
+  // Les domaines que le système reconnaît, sur l'ensemble des chantiers. Un mot
+  // d'un vocabulaire fermé de huit et des nombres — pas le contenu d'où il a
+  // été tiré. C'est ce qui permet de dire si la classification progresse, ce
+  // qu'aucun taux de précision ne dit.
+  "js/services/les-domaines-du-systeme-supabase.js",
+  "js/services/les-domaines-du-systeme.js",
+  // Le vocabulaire lui-même, pour nommer les domaines comme partout ailleurs et
+  // pour savoir lesquels n'ont jamais été reconnus. Il ne classe rien ici : on
+  // ne lui donne aucun texte, seulement des clés déjà écrites en base.
+  "js/services/assertion-taxonomy.js",
+  // Les onglets de la console : la même barre que côté utilisateur, nommée une
+  // seule fois. Pur, et il n'entraîne rien.
+  "js/services/les-onglets-de-la-console.js"
 ];
 
 /**

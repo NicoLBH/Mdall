@@ -46,6 +46,10 @@
  */
 
 import { LA_CONSOLE } from "../partage/js/services/la-porte-de-la-console.js";
+import {
+  ONGLETS_DE_LA_CONSOLE, ongletDeLaConsoleValide
+} from "../partage/js/services/les-onglets-de-la-console.js";
+import { svgIcon } from "../partage/js/ui/icons.js";
 import { suisJeAdministrateur } from "../partage/js/services/la-porte-de-la-console-supabase.js";
 import { leCourrielDuCompte, monterLavatar, renderLavatar } from "./lavatar.js";
 import { monterLeCarburant, renderLeCarburant } from "./le-carburant.js";
@@ -129,6 +133,38 @@ function renderCeQuiViendra() {
   `;
 }
 
+/**
+ * La barre d'onglets, dans les classes de Mdall.
+ *
+ * `project-tabs`, la même que celle d'un projet : la feuille de style connaît
+ * déjà la grille, le soulignement de l'actif et le repli en petite largeur. Une
+ * barre dessinée ici se verrait comme une greffe, et il faudrait la recalibrer
+ * à chaque retouche de l'autre.
+ *
+ * **Un seul onglet, et c'est le sujet** : sans barre, la page se lirait comme
+ * un tableau de bord complet, et l'on croirait voir tout ce que la console sait.
+ */
+function renderLesOnglets(actif) {
+  return `
+    <section class="project-context-header">
+      <nav class="project-tabs" aria-label="Console">
+        ${ONGLETS_DE_LA_CONSOLE.map((un) => `
+          <a
+            href="#${un.cle}"
+            class="${un.cle === actif ? "active" : ""}"
+            data-console-onglet="${un.cle}"
+          >
+            <span class="project-tabs__item">
+              <span class="project-tabs__icon" aria-hidden="true">${svgIcon(un.icone)}</span>
+              <span class="project-tabs__label">${un.dit}</span>
+            </span>
+          </a>
+        `).join("")}
+      </nav>
+    </section>
+  `;
+}
+
 function renderLaPorteFermee() {
   return `
     <section class="conso-usages">
@@ -199,7 +235,8 @@ async function main() {
   hote.innerHTML = `
     <div class="page-large">
       ${ouverte
-        ? `${renderCeQuiViendra()}${renderLeCarburant()}${renderLeDemenagement()}`
+        ? `${renderLesOnglets(ongletDeLaConsoleValide(location.hash.replace(/^#/, "")))}
+           ${renderCeQuiViendra()}${renderLeCarburant()}${renderLeDemenagement()}`
         : renderLaPorteFermee()}
     </div>
   `;

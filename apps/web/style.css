@@ -7137,7 +7137,6 @@ body.route--project.documents-pdf-sticky-mode.documents-local-chrome-compact #ap
   border-radius:12px;
   padding:16px;
   background:transparent;
-  margin-left:64px;
 }
 
 .documents-commit-card__title{
@@ -7219,11 +7218,34 @@ body.route--project.documents-pdf-sticky-mode.documents-local-chrome-compact #ap
 
 
 
+/* L'image ouverte : un cadre, et l'image dedans. Pas de canevas — le navigateur
+   lit une douzaine de formats mieux que nous ne le ferions. `contain` plutôt
+   que `cover` : une photo de désordre recadrée perd précisément le bord qu'on
+   voulait voir. */
+.documents-image-apercu{
+  display:flex;align-items:center;justify-content:center;
+  padding:16px;min-height:240px;
+  border:1px solid var(--border);border-radius:12px;background:var(--canvas-inset, transparent);
+}
+.documents-image-apercu__vue{
+  max-width:100%;max-height:calc(100vh - 260px);
+  object-fit:contain;border-radius:8px;
+}
+
+/* Une pastille de pièce qui s'ouvre se distingue de celle qui ne s'ouvre pas :
+   sans cela, on clique sur les deux et l'une ne répond pas. */
+.fil-mail__piece--ouvrable{cursor:pointer;font:inherit;}
+.fil-mail__piece--ouvrable:hover{border-color:var(--accent, rgb(47,129,247));}
+
+/* **Le décalage est porté par les actions, pas par la carte.** L'avatar flotte
+   à gauche : la carte se place d'elle-même à côté de lui, alors que la rangée
+   des boutons, qui vient après, retombait sous lui. */
 .documents-commit-card__actions{
   display:flex;
   align-items:center;
   gap:12px;
-  margin-top:16px;
+  margin-top:8px;
+  margin-left:64px;
 }
 
 @media (max-width: 900px){

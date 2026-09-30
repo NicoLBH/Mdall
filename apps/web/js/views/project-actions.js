@@ -11,7 +11,8 @@ import {
   STATUT, etapeDe, etapesConsultables, numeroter, resumerEtape
 } from "../services/run-journal.js";
 import {
-  ONGLETS, UNE_EXECUTION, decrireVisibilite, lesExecutionsDites, ongletValide, partitionnerActions
+  LE_BATTEMENT_DU_JOURNAL, ONGLETS, UNE_EXECUTION, decrireVisibilite, lesExecutionsDites,
+  ongletValide, partitionnerActions, quelqueChoseTourne
 } from "../services/run-partition.js";
 import { store } from "../store.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
@@ -839,6 +840,56 @@ function renderProjectActionsContent(root) {
 
   if (etape) bindRunLog(root);
   else if (open) bindRunGraph(root);
+
+  // **Après avoir dessiné, décider s'il faut recommencer.** L'état vient d'être
+  // lu : c'est le seul moment où l'on sait s'il reste quelque chose à suivre.
+  reglerLeBattement();
+}
+
+/**
+ * Relire le journal tant qu'une exécution est vive.
+ *
+ * ## Ce que ça répare
+ *
+ * Le journal se redessinait sur `RUN_LOG_CHANGED_EVENT`, qui est un événement
+ * **de la page** : une fusion menée dans l'onglet se voyait avancer. Un
+ * versement de mails, lui, n'a plus lieu dans la page depuis qu'il est passé au
+ * serveur — celui-ci écrit dans la base sans rien dire au navigateur. La ligne
+ * restait donc « en cours », avec son disque orange qui tourne, jusqu'à ce
+ * qu'on recharge la page ; c'est-à-dire pendant tout le temps où l'on regarde.
+ *
+ * ## Ce qui l'arrête
+ *
+ * Trois choses, et il faut les trois : plus rien de vif, l'écran démonté, ou
+ * une relecture qui trouve l'écran parti pendant qu'elle attendait. Un
+ * battement qu'on oublie d'arrêter interroge la base toute la nuit sur un
+ * onglet laissé ouvert, et écrit dans un élément détaché.
+ */
+let battementDuJournal = null;
+
+function arreterLeBattement() {
+  if (!battementDuJournal) return;
+  clearInterval(battementDuJournal);
+  battementDuJournal = null;
+}
+
+function reglerLeBattement() {
+  if (!mountedRoot?.isConnected || !quelqueChoseTourne(getRunLogEntries())) {
+    arreterLeBattement();
+    return;
+  }
+  // Déjà en train de battre : un second minuteur doublerait les requêtes sans
+  // rien montrer de plus.
+  if (battementDuJournal) return;
+
+  battementDuJournal = setInterval(async () => {
+    if (!mountedRoot?.isConnected) return arreterLeBattement();
+    await syncProjectActionsFromSupabase({ force: true }).catch(() => {});
+    // L'écran a pu être quitté pendant la lecture : entre l'envoi et la
+    // réponse, il s'écoule le temps d'un clic.
+    if (!mountedRoot?.isConnected) return arreterLeBattement();
+    renderProjectActionsContent(mountedRoot);
+  }, LE_BATTEMENT_DU_JOURNAL);
 }
 
 /**

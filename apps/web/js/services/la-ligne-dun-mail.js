@@ -20,7 +20,7 @@
  */
 
 import { objetNu } from "./un-mail-deplie.js";
-import { lexpediteurNettoye, lidentiteDite } from "./une-adresse-lisible.js";
+import { leNomSeul, lidentiteDite } from "./une-adresse-lisible.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -87,10 +87,14 @@ export function cestUnMailIndexe(document = null) {
 export function laLigneDunMail(document = null) {
   const pieces = Number(document?.mailPieces) || 0;
   return {
-    // **Nettoyé à la lecture aussi.** `mail_de` est écrit au dépôt et ne se
-    // recalcule pas : les mails versés avant que la règle existe portent en
+    // **Le nom seul.** L'adresse entre parenthèses a sa place dans un fil, où
+    // elle désambiguïse deux homonymes ; répétée sur deux cents lignes, elle
+    // double la longueur de chacune et noie le mot qu'on y cherche.
+    //
+    // Nettoyé à la lecture aussi : `mail_de` est écrit au dépôt et ne se
+    // recalcule pas, donc les mails versés avant que la règle existe portent en
     // base l'identifiant d'annuaire entier.
-    de: lexpediteurNettoye(document?.mailDe) || "expéditeur non lu",
+    de: leNomSeul(document?.mailDe) || "expéditeur non lu",
     objet: texte(document?.mailObjet) || "(sans objet)",
     quand: texte(document?.mailQuand),
     pieces,

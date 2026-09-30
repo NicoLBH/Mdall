@@ -46,10 +46,15 @@ const RACINE = join(ICI, "..");
  * socle si elle s'appuie sur une table qu'il n'a pas.
  */
 const LES_MIGRATIONS = [
+  // Elle porte `est_administrateur()`, dont la porte de la console dépend.
+  // L'oublier ferait tomber les épreuves de la console sur « la fonction
+  // n'existe pas » — ce qui ressemble à un refus sans en être un.
+  "202610250001_les_comptes_du_carburant.sql",
   "202610290001_les_portes_restees_ouvertes.sql",
   "202610300001_la_file_des_versements.sql",
   "202610310001_les_octets_qui_attendent_leur_tour.sql",
-  "202611010001_les_expediteurs_deja_ecrits.sql"
+  "202611010001_les_expediteurs_deja_ecrits.sql",
+  "202611020001_les_domaines_du_systeme.sql"
 ];
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -93,6 +98,19 @@ function leBanc() {
   pg.enTantQue = (qui, texte) => pg.sql(
     `set role authenticated;\n`
     + (qui ? `set request.jwt.claim.sub = '${qui}';\n` : "reset request.jwt.claim.sub;\n")
+    + texte,
+    { doitTenir: false }
+  );
+
+  /**
+   * La même chose, sous une adresse : la console se garde par le courriel du
+   * jeton, pas par l'identifiant.
+   */
+  pg.sousLadresse = (courriel, texte) => pg.sql(
+    `set role authenticated;\n`
+    + (courriel
+      ? `set request.jwt.claims = '{"email":"${courriel}"}';\n`
+      : "reset request.jwt.claims;\n")
     + texte,
     { doitTenir: false }
   );
@@ -323,3 +341,53 @@ test("un identifiant d'annuaire est retiré des lignes déjà versées", { skip:
   // chose qu'on sache de l'expéditeur.
   assert.equal(dits.some((un) => un.includes("EXCHANGELABS")), true);
 });
+
+/* ── La console : des comptes, et une porte qui tient ────────────────────── */
+
+/**
+ * **La fonction contourne les politiques de lecture**, `security definer`
+ * oblige : sans sa porte, n'importe quel compte authentifié lirait les domaines
+ * de tous les chantiers. C'est exactement le genre de trou qu'on ne voit pas en
+ * relisant, et que le banc trouve en essayant d'entrer.
+ */
+test("les domaines du système se refusent à qui n'est pas administrateur",
+  { skip: sansPostgres }, () => {
+    banc.sql(
+      `insert into public.project_assertions (project_id, domain) values `
+      + `('${MEDIATHEQUE}', 'structure'), ('${MEDIATHEQUE}', 'structure'),`
+      + `('${MEDIATHEQUE}', 'incendie'), ('${MEDIATHEQUE}', null);`
+    );
+
+    const etranger = banc.sousLadresse("quelquun@ailleurs.example",
+      "select count(*) from public.les_domaines_du_systeme();");
+    assert.equal(etranger.ok, false, "la console s'ouvre à un compte ordinaire");
+    assert.match(etranger.motif, /réservé à la console/);
+
+    const sansJeton = banc.sousLadresse("", "select count(*) from public.les_domaines_du_systeme();");
+    assert.equal(sansJeton.ok, false, "la console s'ouvre sans session");
+  });
+
+/**
+ * **Et elle rend bien ce qu'on est venu chercher** : un mot d'un vocabulaire
+ * fermé et des nombres. Une porte qui tient sur une fonction qui ne répond rien
+ * ne prouverait rien.
+ */
+test("un administrateur lit les domaines, et rien que des comptes",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select domaine, affirmations, chantiers from public.les_domaines_du_systeme() order by 2 desc;");
+    assert.equal(lu.ok, true, lu.motif);
+
+    const lignes = lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+    assert.match(lignes[0], /^structure\s*\|\s*2\s*\|\s*1$/);
+    // **Le non-classé est une ligne comme les autres** : le rapport entre ce qui
+    // est classé et ce qui ne l'est pas *est* le niveau de développement du
+    // système. Le taire montrerait une taxonomie qui marche toujours (règle 5).
+    assert.equal(lignes.some((une) => une.startsWith("non-classe")), true,
+      "ce qu'on n'a pas su classer disparaît de l'écran");
+    // Aucun identifiant de projet ne peut sortir : la signature ne le porte pas.
+    assert.doesNotMatch(lu.sortie, new RegExp(MEDIATHEQUE));
+  });

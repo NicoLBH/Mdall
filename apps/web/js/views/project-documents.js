@@ -41,6 +41,9 @@ import {
   quandDit, sensValide
 } from "../services/la-ligne-dun-mail.js";
 import { laGalerie } from "../services/la-galerie-des-pieces.js";
+import {
+  cestUneImageAffichable, laDateDunePiece, lesMessagesParId
+} from "../services/une-piece-a-lecran.js";
 import { renderLaGalerie } from "./ui/la-galerie-ecran.js";
 import { renderLeVersement } from "./ui/le-versement-ecran.js";
 import { leFilALecran } from "./ui/le-fil-a-lecran.js";
@@ -299,6 +302,8 @@ function etatNeufDesFichiers() {
      * revenir si l'on avait écrit par-dessus.
      */
     texte: null,
+    /** L'image ouverte : son lien signé, ou la raison de ne pas l'avoir. */
+    image: null,
     currentFolderId: null,
     /**
      * Le dossier ouvert **en entier**, et non son seul identifiant.
@@ -1771,13 +1776,33 @@ function renderRepoMailRow(doc) {
   `;
 }
 
+/**
+ * La date que porte une ligne, et d'où elle vient.
+ *
+ * Les messages sont rangés par identifiant une fois pour toute la liste :
+ * chercher le porteur d'une pièce en parcourant tous les documents à chaque
+ * ligne rend un dossier de trois cents pièces en cent mille comparaisons.
+ */
+let messagesDeLaListe = null;
+
+function dateDeLaLigne(documentItem) {
+  if (!documentItem?.pieceDuMessage) {
+    return { quand: documentItem?.updatedAt ?? "", duMessage: false };
+  }
+  if (!messagesDeLaListe) messagesDeLaListe = lesMessagesParId(getProjectDocuments());
+  return laDateDunePiece(documentItem, messagesDeLaListe);
+}
+
 function renderRepoDocumentRow(doc) {
   const decoratedDoc = decorateDocumentWithPhase(doc);
   const isPdf = isPdfDocument(decoratedDoc);
   // **Un fichier de texte s'ouvre aussi.** Sa ligne était morte : le seul moyen
   // de voir ce qu'il portait était de le télécharger pour l'ouvrir ailleurs.
   const estDuTexte = estUnFichierTexte(decoratedDoc.name || decoratedDoc.fileName || "");
-  const isPreviewablePdf = canPreviewPdf(decoratedDoc) || estDuTexte;
+  // **Une image s'ouvre aussi.** Un dossier de photos de chantier — ce qu'un
+  // chantier produit le plus — n'avait que des lignes mortes.
+  const estUneImage = cestUneImageAffichable(decoratedDoc);
+  const isPreviewablePdf = canPreviewPdf(decoratedDoc) || estDuTexte || estUneImage;
   const recognition = describeRecognition(decoratedDoc);
   // Ce que la ligne dit du rapport de ce document à la mémoire : « hors
   // corpus » quand il en est sorti, « hors mémoire » quand il a été déposé
@@ -1798,7 +1823,8 @@ function renderRepoDocumentRow(doc) {
       class="documents-repo__row documents-repo__row--file${isPdf ? " documents-repo__row--pdf" : ""}${isPreviewablePdf ? " is-clickable" : ""}${refuse ? " documents-repo__row--refused" : ""}"
       data-document-id="${escapeHtml(decoratedDoc.id || "")}"
       ${isPreviewablePdf
-        ? `role="button" tabindex="0" aria-label="${estDuTexte ? "Ouvrir le fichier" : "Ouvrir l’aperçu du PDF"}"`
+        ? `role="button" tabindex="0" aria-label="${
+            estUneImage ? "Ouvrir l’image" : estDuTexte ? "Ouvrir le fichier" : "Ouvrir l’aperçu du PDF"}"`
         : ""}
     >
       <div class="documents-repo__cell documents-repo__cell--name">
@@ -1828,7 +1854,16 @@ function renderRepoDocumentRow(doc) {
           [marque ? marque.mot : "", recognition.meta].filter(Boolean).join(" · "))}</div>
       </div>
       <div class="documents-repo__cell documents-repo__cell--date">
-        <span>${escapeHtml(ilYA(decoratedDoc.updatedAt))}</span>
+        ${/*
+          **Une pièce jointe porte la date de son message.** Verser en une fois
+          six mois de correspondance donne six mois de pièces à la même seconde
+          de dépôt : la colonne affichait la même valeur partout, et ne rangeait
+          rien. Faute de message connu, celle du dépôt — et le titre dit
+          laquelle des deux on montre (règle 5).
+        */""}
+        <span title="${escapeHtml(dateDeLaLigne(decoratedDoc).duMessage
+          ? "Date du message qui portait cette pièce"
+          : "Date du dépôt")}">${escapeHtml(ilYA(dateDeLaLigne(decoratedDoc).quand))}</span>
         ${
           // Ajouter, retirer, déplacer : des gestes sur des pièces déposées. Un
           // fichier de mémoire n'a pas de chemin qu'on choisit — il est calculé.
@@ -2229,6 +2264,45 @@ function renderEcritureDeFichier() {
  * En cours de lecture · lu · pas su lire. Un fichier vide est un quatrième cas,
  * et c'est une réponse : il se dit, il ne se tait pas (règle 5).
  */
+/**
+ * L'image ouverte.
+ *
+ * Le même chemin de fer que la lecture d'un texte — fil d'Ariane, arbre, cadre
+ * — pour que sortir d'une photo se fasse comme sortir d'un PDF. Trois états, et
+ * le troisième est une réponse : en cours · affichée · pas de lien (règle 5).
+ */
+function renderLectureDeLImage() {
+  const ouvert = docsViewState.image ?? {};
+  const nom = String(ouvert.nom || "image");
+
+  const treeHtml = renderArbreDesFichiers({
+    memoire: preparerLaMemoire(docsViewState.memoireAssertions ?? []),
+    ouverte: docsViewState.documentTreeOpen !== false,
+    query: docsViewState.memoireQuery ?? ""
+  });
+
+  const corps = ouvert.enCours
+    ? `<p class="conso-usages__mot">Ouverture de l'image…</p>`
+    : ouvert.lien
+      ? `<img class="documents-image-apercu__vue" src="${escapeHtml(ouvert.lien)}"
+           alt="${escapeHtml(nom)}" loading="lazy">`
+      : `<p class="forme-manques">${escapeHtml(ouvert.motif
+          || "Cette image n'a pas pu être ouverte.")}</p>`;
+
+  return `
+    <section class="project-simple-page project-simple-page--documents">
+      <div class="documents-shell documents-shell--project-page documents-layout" id="projectDocumentScroll">
+        ${treeHtml}
+        <div class="documents-layout__main">
+          ${renderDocumentsBreadcrumb()}
+          ${renderDocumentsActivityBanner()}
+          <div class="documents-image-apercu">${corps}</div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function renderLectureDuTexte() {
   const ouvert = docsViewState.texte ?? {};
   const edition = ouvert.edition ?? null;
@@ -2735,6 +2809,7 @@ async function chargerLaMemoire() {
 function allerAilleurs() {
   if (docsViewState.mode !== "list") docsViewState.mode = "list";
   docsViewState.texte = null;
+  docsViewState.image = null;
 }
 
 /**
@@ -2763,6 +2838,7 @@ async function allerDansLeDossier(root, folderId, branche = BRANCHE.DOCUMENTS) {
   // Un fichier ouvert ne survit pas à un changement de dossier : il resterait à
   // l'écran sous le chemin d'un autre dossier.
   docsViewState.texte = null;
+  docsViewState.image = null;
   await loadCurrentDirectory({ forceFolderId: String(folderId ?? "") || null });
   renderProjectDocumentsContent(root);
 }
@@ -4405,9 +4481,15 @@ function renderUploadView() {
                     au bas du panneau du versement, à deux cents pixels du
                     bouton « Annuler » qui le défait : deux endroits pour finir
                     un même dépôt, et l'on cherchait lequel valait.
+
+                    **Et il est vert**, comme tout ce qui confirme :
+                    `gh-btn--primary` est le bouton de confirmation de
+                    l'application entière — Paramètres, décisions,
+                    propositions. Un vert de plus, défini ici, aurait fait deux
+                    verts à recalibrer.
                   */""}
                   ${ceQueLaSelectionPorte().porteurs.length && !docsViewState.envoi?.envoi
-                    ? `<button type="button" class="gh-btn gh-btn--validate" id="documentsVerserBtn">${
+                    ? `<button type="button" class="gh-btn gh-btn--primary" id="documentsVerserBtn">${
                         escapeHtml(`Envoyer ${ceQueLaSelectionPorte().porteurs.length > 1
                           ? "les mails" : "le mail"}`)}</button>`
                     : ""}
@@ -4554,6 +4636,9 @@ async function ouvrirLeMail(root, documentItem) {
   const ligne = laLigneDunMail(documentItem);
 
   docsViewState.activity = null;
+  // Comme pour un texte : l'image est lue avant au rendu, et la laisser
+  // ouverte garderait la photo précédente à l'écran.
+  docsViewState.image = null;
   docsViewState.texte = {
     documentId: String(documentItem?.id || ""),
     nom: ligne.objet,
@@ -4577,7 +4662,9 @@ async function ouvrirLeMail(root, documentItem) {
   ]);
 
   const voisins = Array.isArray(docsViewState.files) ? docsViewState.files : [];
-  const fil = await lireLeFil(documentItem, voisins).catch(() => null);
+  // Le projet entier en plus des voisins : les pièces jointes ne vivent pas
+  // dans le dossier des mails, et c'est par elles que les pastilles s'ouvrent.
+  const fil = await lireLeFil(documentItem, voisins, getProjectDocuments()).catch(() => null);
 
   // Rouvrir un autre mail pendant la lecture du premier ne doit pas faire
   // atterrir le premier échange dans le second écran.
@@ -4603,10 +4690,59 @@ async function ouvrirLeMail(root, documentItem) {
   redessinerLesFichiers(root);
 }
 
+/**
+ * Ouvrir une image.
+ *
+ * ## Une balise, pas un canevas
+ *
+ * Le lecteur de PDF rend des octets sur un canevas, page par page ; une image
+ * n'a besoin de rien de tout cela. Un lien signé et une balise `img` : le
+ * navigateur sait lire une douzaine de formats, et il les lira mieux que nous.
+ *
+ * ## Le lien signé, et pas les octets
+ *
+ * Télécharger l'image pour en faire une URL d'objet marcherait, et ferait
+ * passer chaque photo par la mémoire de la page. Un dossier de relevés en porte
+ * des centaines de plusieurs mégaoctets.
+ */
+async function ouvrirLimage(root, documentItem) {
+  const nom = String(documentItem?.name || documentItem?.fileName || "image");
+
+  docsViewState.activity = null;
+  docsViewState.texte = null;
+  docsViewState.image = {
+    documentId: String(documentItem?.id || ""),
+    nom,
+    lien: "",
+    enCours: true,
+    motif: ""
+  };
+  renderProjectDocumentsContent(root);
+
+  const lien = await createSupabaseSignedStorageUrl(documentItem).catch(() => "");
+
+  // Rouvrir une autre pièce pendant la signature ne doit pas faire atterrir la
+  // première image dans le second écran.
+  if (docsViewState.image?.documentId !== String(documentItem?.id || "")) return;
+
+  docsViewState.image = {
+    ...docsViewState.image,
+    enCours: false,
+    lien,
+    // Ne pas savoir ouvrir se dit : un cadre vide ne se distingue pas d'un
+    // lecteur en panne (règle 5).
+    motif: lien ? "" : "Cette image n'a pas de lien lisible. Téléchargez-la pour l'ouvrir ailleurs."
+  };
+  renderProjectDocumentsContent(root);
+}
+
 async function ouvrirLeTexte(root, documentItem) {
   const nom = String(documentItem?.name || documentItem?.fileName || "fichier");
 
   docsViewState.activity = null;
+  // L'image est lue avant le texte au rendu : la laisser ouverte ferait rester
+  // la photo précédente à l'écran pendant qu'on croit lire un fichier.
+  docsViewState.image = null;
   docsViewState.texte = {
     documentId: String(documentItem?.id || ""),
     nom,
@@ -4749,11 +4885,18 @@ async function openPdfPreview(root, documentId) {
     await ouvrirLeTexte(root, documentItem);
     return;
   }
+  // **Une image se regarde.** Le lecteur n'ouvrait que les PDF et le texte : un
+  // dossier de photos de chantier — ce qu'un chantier produit le plus — n'avait
+  // que des lignes mortes, et il fallait télécharger chaque cliché pour le voir.
+  if (cestUneImageAffichable(documentItem)) {
+    await ouvrirLimage(root, documentItem);
+    return;
+  }
   if (!isPdfDocument(documentItem)) {
     docsViewState.activity = {
       tone: "info",
       title: `« ${String(documentItem.name || "Ce fichier")} » ne s'ouvre pas ici`,
-      message: "Le lecteur sait afficher les PDF et les fichiers de texte. Téléchargez la pièce pour l'ouvrir ailleurs."
+      message: "Le lecteur sait afficher les PDF, les images et les fichiers de texte. Téléchargez la pièce pour l'ouvrir ailleurs."
     };
     renderProjectDocumentsContent(root);
     return;
@@ -5865,6 +6008,18 @@ function bindDocumentsView(root) {
     });
   });
 
+  // **Les pastilles du fil ouvrent leur pièce.** Elles ne portaient qu'un nom
+  // et un poids : on voyait qu'un plan existait sans pouvoir le regarder.
+  // Celles qu'aucune ligne de base ne porte n'ont pas d'identifiant et ne sont
+  // pas des boutons — elles ne prétendent donc rien.
+  document.querySelectorAll("[data-fil-piece]").forEach((pastille) => {
+    pastille.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await openPdfPreview(root, pastille.getAttribute("data-fil-piece") || "");
+    });
+  });
+
   if (submitBtn) {
     submitBtn.addEventListener("click", () => {
       if (!canSubmitUpload()) return;
@@ -5971,11 +6126,16 @@ function redessinerLesFichiers(root) {
 
 function renderProjectDocumentsContent(root) {
   garderLEtatDuProjet();
+  // Le rangement des messages est refait à chaque rendu : une pièce versée
+  // entre deux rendus doit pouvoir retrouver son message.
+  messagesDeLaListe = null;
   syncDocumentsProjectViewHeader();
   mesurerLaHauteurDuContenu();
 
   root.innerHTML = docsViewState.ecriture
     ? renderEcritureDeFichier()
+    : docsViewState.image
+    ? renderLectureDeLImage()
     : docsViewState.texte
     ? renderLectureDuTexte()
     : docsViewState.mode === "list" && docsViewState.branche === ""

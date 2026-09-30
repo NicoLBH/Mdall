@@ -226,6 +226,44 @@ export function laCourseDeRepli(ligne = null) {
  * @param {object[]} vivantes ce que la page a en mémoire
  * @param {object[]} lues ce que la base vient de rendre
  */
+/**
+ * Le temps entre deux relectures du journal, tant que quelque chose tourne.
+ *
+ * Quatre secondes : assez court pour qu'un versement de vingt mails montre son
+ * avancement plutôt que de paraître bloqué, assez long pour ne pas faire une
+ * requête par seconde sur une page qu'on laisse ouverte. Le battement s'arrête
+ * de lui-même dès que plus rien n'est vif — voir `quelqueChoseTourne`.
+ */
+export const LE_BATTEMENT_DU_JOURNAL = 4000;
+
+/**
+ * Y a-t-il une exécution en cours ?
+ *
+ * ## Pourquoi cette question existe
+ *
+ * Le journal se redessinait sur un événement **de la page** : une fusion menée
+ * dans l'onglet se voyait avancer. Mais un versement de mails n'a plus lieu
+ * dans la page — il a lieu sur le serveur, qui écrit dans la base sans rien
+ * dire à personne. L'écran restait donc sur « en cours » jusqu'à ce qu'on
+ * recharge, c'est-à-dire exactement pendant le moment où l'on regarde.
+ *
+ * Tant que la réponse est oui, on relit. Dès qu'elle est non, on arrête :
+ * un écran qui interroge la base toutes les quatre secondes pour n'y rien
+ * trouver de nouveau est un écran qu'on laisse ouvert par mégarde et qui
+ * travaille toute la nuit.
+ *
+ * ## Pourquoi `running` suffit
+ *
+ * C'est la seule marque du vivant dans ce journal : les lignes de la file en
+ * portent une dès qu'elles sont posées, et `executionsAGarder` s'en sert déjà
+ * pour décider ce qu'une relecture n'a pas le droit d'effacer. Une seconde
+ * définition du vivant aurait fini par ne pas dire la même chose (règle 4).
+ */
+export function quelqueChoseTourne(entries = []) {
+  return (Array.isArray(entries) ? entries : [])
+    .some((une) => String(une?.status ?? "").trim() === "running");
+}
+
 export function executionsAGarder(vivantes = [], lues = []) {
   const enCours = (Array.isArray(vivantes) ? vivantes : [])
     .filter((entree) => String(entree?.status ?? "").trim() === "running");

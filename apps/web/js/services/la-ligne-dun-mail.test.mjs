@@ -102,11 +102,25 @@ test("un identifiant d'annuaire écrit en base ne ressort pas à l'écran", () =
     laLigneDunMail({ mailDe: "Société GLOBALIS (Savoie)", mailPieces: 0 }).de,
     "Société GLOBALIS (Savoie)"
   );
-  // Et une vraie adresse reste entre parenthèses : c'est ce qui désambiguïse
-  // deux homonymes.
+  // **Et l'adresse tombe aussi.** Répétée sur deux cents lignes, elle double la
+  // longueur de chacune sans plus rien désambiguïser. Elle reste dans le fil,
+  // où six lignes se lisent et où deux homonymes se distinguent.
   assert.equal(
     laLigneDunMail({ mailDe: "Ourdine Ferrand (o.ferrand@novaclim.example)", mailPieces: 0 }).de,
-    "Ourdine Ferrand (o.ferrand@novaclim.example)"
+    "Ourdine Ferrand"
+  );
+
+  // **Sauf quand elle est tout ce qu'on a.** La retirer laisserait la case
+  // vide, c'est-à-dire effacerait le seul moyen de joindre quelqu'un (règle 5).
+  assert.equal(
+    laLigneDunMail({ mailDe: "o.ferrand@novaclim.example", mailPieces: 0 }).de,
+    "o.ferrand@novaclim.example"
+  );
+  // Y compris écrite entre parenthèses, sans nom devant : couper là rendrait
+  // la ligne muette au lieu de l'alléger.
+  assert.equal(
+    laLigneDunMail({ mailDe: "(o.ferrand@novaclim.example)", mailPieces: 0 }).de,
+    "(o.ferrand@novaclim.example)"
   );
 });
 
