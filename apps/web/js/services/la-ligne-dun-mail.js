@@ -20,7 +20,7 @@
  */
 
 import { objetNu } from "./un-mail-deplie.js";
-import { lidentiteDite } from "./une-adresse-lisible.js";
+import { lexpediteurNettoye, lidentiteDite } from "./une-adresse-lisible.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -87,7 +87,10 @@ export function cestUnMailIndexe(document = null) {
 export function laLigneDunMail(document = null) {
   const pieces = Number(document?.mailPieces) || 0;
   return {
-    de: texte(document?.mailDe) || "expéditeur non lu",
+    // **Nettoyé à la lecture aussi.** `mail_de` est écrit au dépôt et ne se
+    // recalcule pas : les mails versés avant que la règle existe portent en
+    // base l'identifiant d'annuaire entier.
+    de: lexpediteurNettoye(document?.mailDe) || "expéditeur non lu",
     objet: texte(document?.mailObjet) || "(sans objet)",
     quand: texte(document?.mailQuand),
     pieces,
@@ -144,4 +147,67 @@ export function phraseDuFilRange(documents = []) {
   const combien = Array.isArray(documents) ? documents.length : 0;
   if (combien <= 1) return "";
   return `${combien} messages dans cet échange`;
+}
+
+/**
+ * Les deux sens dans lesquels on lit une messagerie.
+ *
+ * **Le plus récent en haut par défaut.** C'est ce que fait toute messagerie, et
+ * pour une raison : ce qui vient d'arriver est ce qu'on n'a pas encore lu.
+ * L'écran empilait du plus ancien au plus récent, donc il fallait dérouler
+ * jusqu'en bas pour voir ce qui venait d'être versé.
+ */
+export const SENS = { RECENT: "recent", ANCIEN: "ancien" };
+
+/** Le sens demandé, ramené à l'un des deux. */
+export function sensValide(cle) {
+  return String(cle ?? "").trim() === SENS.ANCIEN ? SENS.ANCIEN : SENS.RECENT;
+}
+
+/** Ce que le clic demandera, et ce qu'on en dit. */
+export function lautreSens(cle) {
+  return sensValide(cle) === SENS.RECENT ? SENS.ANCIEN : SENS.RECENT;
+}
+
+/** Ce que le bouton annonce — le geste, pas l'état. */
+export function laPhraseDuTri(cle) {
+  return sensValide(cle) === SENS.RECENT
+    ? "Afficher les plus anciens en premier"
+    : "Afficher les plus récents en premier";
+}
+
+/**
+ * Les mails rangés par leur date.
+ *
+ * ## Sur quelle date, et pourquoi pas celle du dépôt
+ *
+ * Celle du **message**, pas celle du versement. Verser en une fois six mois de
+ * correspondance donne six mois de messages à la même seconde de dépôt : trier
+ * là-dessus ne range rien, et l'ordre qu'on verrait serait celui du dossier
+ * d'Outlook.
+ *
+ * ## Un message sans date ne disparaît pas
+ *
+ * Il va **au bout**, dans les deux sens. Le mettre en tête le ferait passer
+ * pour le plus récent ; le retirer ferait disparaître un mail de la liste — ce
+ * qui est la seule chose qu'on ne peut pas se permettre. Ne pas savoir n'est
+ * pas une place (règle 5).
+ */
+export function lesMailsTries(documents = [], sens = SENS.RECENT) {
+  const ordre = sensValide(sens) === SENS.RECENT ? -1 : 1;
+
+  return [...(Array.isArray(documents) ? documents : [])]
+    .map((un, rang) => ({ un, rang, quand: Date.parse(texte(un?.mailQuand)) }))
+    .sort((gauche, droite) => {
+      const gaucheSait = Number.isFinite(gauche.quand);
+      const droiteSait = Number.isFinite(droite.quand);
+      if (!gaucheSait && !droiteSait) return gauche.rang - droite.rang;
+      if (!gaucheSait) return 1;
+      if (!droiteSait) return -1;
+      if (gauche.quand !== droite.quand) return (gauche.quand - droite.quand) * ordre;
+      // À la même seconde, on garde l'ordre d'arrivée : un tri qui change à
+      // chaque rendu fait clignoter la liste.
+      return gauche.rang - droite.rang;
+    })
+    .map((une) => une.un);
 }

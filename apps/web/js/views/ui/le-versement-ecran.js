@@ -28,7 +28,6 @@ import {
   LES_DESTINATIONS, cheminDit, phraseDeLaConfidentialite
 } from "../../services/le-depouillement.js";
 import { leMotDuDepart } from "../../services/la-file-des-versements.js";
-import { poidsDit } from "../../utils/poids-dit.js";
 
 /**
  * L'étape du versement : **où cela va, avant que cela n'y aille**.
@@ -86,14 +85,13 @@ export function renderLeVersement({ porteurs = [], envoi = null } = {}) {
         `).join("")}
       </ul>` : ""}
 
-      ${porteurs.length
-        ? `<p class="documents-repo__message-meta">Ce que vous avez déposé</p>
-          <ul class="forme-reference">${porteurs.map((un) => `
-            <li class="forme-reference__ligne">
-              <span class="forme-reference__quoi">${escapeHtml(un.name)}</span>
-              <span class="forme-reference__chiffres mono-small">${escapeHtml(poidsDit(un.size))}</span>
-            </li>`).join("")}</ul>`
-        : ""}
+      ${/*
+        **La liste des fichiers n'est plus ici.** Elle était dans ce panneau
+        *et* au-dessus, pour les fichiers ordinaires : deux listes d'un même
+        dépôt, avec deux numérotations — et le geste de retrait découpait dans
+        la mauvaise. Il n'y en a plus qu'une, au-dessus, qui porte les deux
+        sortes de fichiers avec leur icône.
+      */""}
 
       ${/*
         **Une barre pour la montée des octets, et rien d'autre.** Elle mesure ce
@@ -130,16 +128,18 @@ export function renderLeVersement({ porteurs = [], envoi = null } = {}) {
         **Et il est remplacé par où regarder.** Un compte rendu sans suite
         laissait devant « c'est parti » sans rien à faire.
       */""}
-      <div class="documents-commit-card__actions">
-        ${porteurs.length
-          ? `<button type="button" class="gh-btn gh-btn--sm gh-btn--primary" id="documentsVerserBtn"
-               ${enRoute ? "disabled" : ""}>${enRoute ? "Envoi…" : "Envoyer les mails"}</button>`
-          : ""}
-        ${!porteurs.length && envoi?.parti
-          ? `<button type="button" class="gh-btn gh-btn--sm gh-btn--primary"
-               id="documentsVoirLesActionsBtn">Suivre dans Actions</button>`
-          : ""}
-      </div>
+      ${/*
+        **Le geste d'envoyer n'est plus ici.** Il est sur la ligne des actions
+        du dépôt, avec « Annuler » qui le défait : deux endroits pour finir un
+        même dépôt obligeaient à chercher lequel valait. Ce panneau dit où cela
+        va et ce qui est parti ; il ne fait plus partir.
+      */""}
+      ${!porteurs.length && envoi?.parti
+        ? `<div class="documents-commit-card__actions">
+            <button type="button" class="gh-btn gh-btn--sm gh-btn--primary"
+              id="documentsVoirLesActionsBtn">Suivre dans Actions</button>
+          </div>`
+        : ""}
     </section>
   `;
 }

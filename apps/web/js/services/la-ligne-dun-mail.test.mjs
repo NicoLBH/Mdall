@@ -80,6 +80,36 @@ test("une ligne sans expéditeur le dit, au lieu de laisser un blanc", () => {
   assert.equal(ligne.objet, "(sans objet)");
 });
 
+/**
+ * **La lecture nettoie aussi.** `mail_de` est écrit au dépôt, une fois, et ne
+ * se recalcule jamais : les mails versés avant que la règle existe portent en
+ * base l'identifiant d'annuaire entier. Une migration les répare
+ * (`202611010001_...`), mais un écran qui dépend d'une migration pour ne pas
+ * afficher d'horreur l'affichera le jour où une ligne y échappe.
+ */
+test("un identifiant d'annuaire écrit en base ne ressort pas à l'écran", () => {
+  const ligne = laLigneDunMail({
+    mailDe: "Ourdine Ferrand (/O=EXCHANGELABS/OU=EXCHANGE ADMINISTRATIVE GROUP"
+      + " (FYDIBOHF23SPDLT)/CN=RECIPIENTS/CN=2130423FA9EF43C6B5B78421F4C7D6A2-O.FERRAND)",
+    mailPieces: 0
+  });
+  assert.equal(ligne.de, "Ourdine Ferrand");
+  assert.doesNotMatch(ligne.de, /EXCHANGELABS|CN=|O=/);
+
+  // Une parenthèse qui n'est pas un identifiant d'annuaire n'est pas touchée :
+  // « Société GLOBALIS (Savoie) » est un nom, pas une adresse X.500.
+  assert.equal(
+    laLigneDunMail({ mailDe: "Société GLOBALIS (Savoie)", mailPieces: 0 }).de,
+    "Société GLOBALIS (Savoie)"
+  );
+  // Et une vraie adresse reste entre parenthèses : c'est ce qui désambiguïse
+  // deux homonymes.
+  assert.equal(
+    laLigneDunMail({ mailDe: "Ourdine Ferrand (o.ferrand@novaclim.example)", mailPieces: 0 }).de,
+    "Ourdine Ferrand (o.ferrand@novaclim.example)"
+  );
+});
+
 test("le trombone ne se dessine qu'au-dessus de zéro", () => {
   assert.equal(laLigneDunMail({ mailPieces: 0 }).avecPieces, false);
   assert.equal(laLigneDunMail({ mailPieces: 0 }).titreDesPieces, "");
@@ -120,4 +150,76 @@ test("un fil d'un seul message ne se compte pas", () => {
   assert.equal(phraseDuFilRange([{ id: "a" }]), "");
   assert.equal(phraseDuFilRange([]), "");
   assert.equal(phraseDuFilRange([{ id: "a" }, { id: "b" }]), "2 messages dans cet échange");
+});
+
+/* ── L'ordre de lecture d'une messagerie ─────────────────────────────────── */
+
+test("le plus récent est en haut par défaut", async () => {
+  const { SENS, lesMailsTries, sensValide } = await import("./la-ligne-dun-mail.js");
+  assert.equal(sensValide(""), SENS.RECENT);
+  assert.equal(sensValide("n'importe quoi"), SENS.RECENT);
+  assert.equal(sensValide(SENS.ANCIEN), SENS.ANCIEN);
+
+  const tries = lesMailsTries([
+    { id: "a", mailQuand: "2025-01-06T09:00:00Z" },
+    { id: "b", mailQuand: "2025-02-21T14:54:00Z" },
+    { id: "c", mailQuand: "2025-02-20T14:27:00Z" }
+  ]);
+  assert.deepEqual(tries.map((un) => un.id), ["b", "c", "a"]);
+});
+
+test("l'autre sens remonte les plus anciens", async () => {
+  const { SENS, lesMailsTries, lautreSens } = await import("./la-ligne-dun-mail.js");
+  assert.equal(lautreSens(SENS.RECENT), SENS.ANCIEN);
+  assert.equal(lautreSens(SENS.ANCIEN), SENS.RECENT);
+
+  const tries = lesMailsTries([
+    { id: "a", mailQuand: "2025-01-06T09:00:00Z" },
+    { id: "b", mailQuand: "2025-02-21T14:54:00Z" }
+  ], SENS.ANCIEN);
+  assert.deepEqual(tries.map((un) => un.id), ["a", "b"]);
+});
+
+/**
+ * **Un mail sans date ne disparaît pas.** Le retirer de la liste est la seule
+ * chose qu'on ne peut pas se permettre ; le mettre en tête le ferait passer
+ * pour le plus récent.
+ */
+test("un mail sans date va au bout, dans les deux sens", async () => {
+  const { SENS, lesMailsTries } = await import("./la-ligne-dun-mail.js");
+  const mails = [
+    { id: "sans", mailQuand: "" },
+    { id: "vieux", mailQuand: "2025-01-06T09:00:00Z" },
+    { id: "neuf", mailQuand: "2025-02-21T14:54:00Z" }
+  ];
+  assert.deepEqual(lesMailsTries(mails).map((un) => un.id), ["neuf", "vieux", "sans"]);
+  assert.deepEqual(lesMailsTries(mails, SENS.ANCIEN).map((un) => un.id), ["vieux", "neuf", "sans"]);
+});
+
+test("deux mails de la même seconde gardent leur ordre d'arrivée", async () => {
+  const { lesMailsTries } = await import("./la-ligne-dun-mail.js");
+  const meme = "2025-02-20T14:27:00Z";
+  const tries = lesMailsTries([
+    { id: "un", mailQuand: meme }, { id: "deux", mailQuand: meme }, { id: "trois", mailQuand: meme }
+  ]);
+  assert.deepEqual(tries.map((un) => un.id), ["un", "deux", "trois"]);
+});
+
+test("le tri ne modifie pas la liste qu'on lui donne", async () => {
+  const { lesMailsTries } = await import("./la-ligne-dun-mail.js");
+  const mails = [{ id: "a", mailQuand: "2025-01-06T09:00:00Z" }, { id: "b", mailQuand: "2025-02-21T14:54:00Z" }];
+  lesMailsTries(mails);
+  assert.deepEqual(mails.map((un) => un.id), ["a", "b"]);
+});
+
+test("le bouton annonce le geste, pas l'état", async () => {
+  const { SENS, laPhraseDuTri } = await import("./la-ligne-dun-mail.js");
+  assert.match(laPhraseDuTri(SENS.RECENT), /anciens/);
+  assert.match(laPhraseDuTri(SENS.ANCIEN), /récents/);
+});
+
+test("rien à trier ne casse rien", async () => {
+  const { lesMailsTries } = await import("./la-ligne-dun-mail.js");
+  assert.deepEqual(lesMailsTries([]), []);
+  assert.deepEqual(lesMailsTries(null), []);
 });

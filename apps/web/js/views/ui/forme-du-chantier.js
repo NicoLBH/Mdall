@@ -34,6 +34,11 @@ import {
 } from "../../services/vecteur-de-contexte.js";
 import { phraseDeLEpisode, phraseDesPasPerdus } from "../../services/episode-du-projet.js";
 import { LE_FROID, enPourCent } from "../../services/mesure-du-passe.js";
+import {
+  laPhraseDesJamaisVus, leBilanParDomaine, lesDomainesJamaisVus, lesPointsDeLaPrediction,
+  phraseDunDomaine
+} from "../../services/le-detail-de-la-prediction.js";
+import { DOMAINS, domainLabel } from "../../services/assertion-taxonomy.js";
 
 /** La puce d'un axe. Les rôles s'écrivent en toutes lettres, pas en codes. */
 function renderAxe({ axe, valeur }) {
@@ -123,6 +128,74 @@ export function renderLaReference(mesures = [], ou = "ce chantier") {
   `;
 }
 
+/**
+ * **Ce que la prédiction a annoncé, et ce qui est arrivé.**
+ *
+ * ## Pourquoi un pourcentage ne suffit pas
+ *
+ * « 44 % dans les trois » est la bonne mesure, et elle ne dit pas si le système
+ * *travaille* : un prédicteur qui annonce toujours le domaine le plus courant
+ * d'un chantier obtient un bon chiffre sans rien avoir compris, et un
+ * prédicteur qui n'annonce jamais rien rend `null`, ce qui ressemble à une
+ * panne.
+ *
+ * Ce tableau montre les trois choses qu'un chiffre cache :
+ *
+ *   * un domaine **venu et jamais annoncé** — le système ne le voit pas ;
+ *   * un domaine **annoncé et jamais venu** — il le propose pour rien ;
+ *   * un domaine **du vocabulaire jamais rencontré** — ce n'est pas une panne,
+ *     c'est le chantier qui n'en parle pas, et le savoir évite de chercher.
+ */
+export function renderCeQueLaPredictionVoit(mesures = [], vocabulaire = []) {
+  const lues = (Array.isArray(mesures) ? mesures : []).filter((une) => !une.mesure?.froid);
+  if (!lues.length) return "";
+
+  // **Le libellé de la taxonomie, et la clé brute pour le reste.** `domainLabel`
+  // rend « Non classé » à tout ce qu'il ne connaît pas : deux domaines hors
+  // vocabulaire s'afficheraient sous le même nom, et le tableau qui sert à
+  // vérifier le prédicteur cacherait précisément ce qu'on est venu y voir. Ne
+  // pas savoir nommer n'autorise pas à effacer (règle 5).
+  const nomDuDomaine = (cle) => (DOMAINS.includes(cle) ? domainLabel(cle) : String(cle ?? ""));
+
+  return `
+    <div class="forme-suite">
+      <h4 class="forme-suite__titre">Ce que la prédiction voit</h4>
+      <p class="conso-usages__mot">
+        Domaine par domaine : combien de fois il a été <b>annoncé</b>, combien de fois il est
+        <b>venu</b>, et combien de fois les deux se sont rencontrés. Un chiffre de précision
+        ne dit pas lequel des domaines le système ne voit jamais.
+      </p>
+      ${lues.map((une) => {
+        const points = lesPointsDeLaPrediction(une.mesure?.rendus ?? []);
+        const bilan = leBilanParDomaine(points);
+        const jamais = lesDomainesJamaisVus(points, vocabulaire);
+
+        if (!bilan.length) return "";
+
+        return `
+          <section class="prediction-vue">
+            <h5 class="prediction-vue__titre">${escapeHtml(une.dit)}</h5>
+            <ul class="forme-reference">
+              ${bilan.map((ligne) => `
+                <li class="forme-reference__ligne">
+                  <span class="forme-reference__quoi">${escapeHtml(nomDuDomaine(ligne.domaine))}</span>
+                  <span class="forme-reference__chiffres mono-small">${escapeHtml(
+                    `annoncé ${ligne.annonce} · venu ${ligne.venu} · visé ${ligne.vise}`)}</span>
+                  <span class="forme-reference__sur mono-small">${
+                    escapeHtml(phraseDunDomaine(ligne))}</span>
+                </li>
+              `).join("")}
+            </ul>
+            ${jamais.length
+              ? `<p class="conso-usages__mot">${escapeHtml(laPhraseDesJamaisVus(jamais.map(nomDuDomaine)))}</p>`
+              : ""}
+          </section>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
 /** La forme et la suite, en un bloc. Le contrat du fichier est en tête. */
 export function renderLaForme(vecteur, episode, mesures = []) {
   const axes = vecteur?.axes ?? [];
@@ -170,6 +243,7 @@ export function renderLaForme(vecteur, episode, mesures = []) {
           </p>
         </div>
         ${renderLaReference(mesures)}
+        ${renderCeQueLaPredictionVoit(mesures, DOMAINS)}
       ` : ""}
     </section>
   `;

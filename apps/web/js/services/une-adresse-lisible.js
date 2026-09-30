@@ -114,3 +114,42 @@ export function lidentiteDite(qui = null) {
   if (nom && adresse) return `${nom} (${adresse})`;
   return nom || adresse;
 }
+
+/**
+ * Nettoyer un expéditeur **déjà composé**.
+ *
+ * ## Pourquoi il faut aussi savoir faire cela
+ *
+ * `mail_de` est écrit au dépôt, une fois, et il ne se recalcule pas : les mails
+ * versés avant que ce module existe portent en base la chaîne entière —
+ * « Nicolas Lebihan (/O=EXCHANGELABS/…) ». Les relire ne les corrige pas, et
+ * redéployer ne réécrit rien.
+ *
+ * La liste des mails passe donc ce qu'elle lit ici. Une migration nettoie les
+ * lignes existantes (`202611010001_...`), mais un écran qui dépend d'une
+ * migration pour ne pas afficher d'horreur est un écran qui affichera
+ * l'horreur le jour où quelque chose échappe à la migration.
+ *
+ * ## Ce qu'il reconnaît
+ *
+ * La forme que `lidentiteDite` produit : « Nom (adresse) ». Quand l'adresse
+ * entre parenthèses n'en est pas une, on garde le nom. Tout le reste passe
+ * inchangé — y compris un nom qui contiendrait des parenthèses pour une autre
+ * raison.
+ */
+export function lexpediteurNettoye(valeur) {
+  const dit = texte(valeur);
+  if (!dit) return "";
+
+  const enParentheses = dit.match(/^(.*?)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*$/s);
+  if (!enParentheses) return dit;
+
+  const nom = texte(enParentheses[1]);
+  const dedans = texte(enParentheses[2]);
+  if (!nom) return dit;
+  if (cestUneAdresseDeMessagerie(dedans)) return dit;
+  if (cestUneAdresseDannuaire(dedans)) return nom;
+
+  // Des parenthèses qui ne portent pas une adresse font partie du nom.
+  return dit;
+}

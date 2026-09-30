@@ -157,8 +157,21 @@ function repliable(titre, contenu, { classe = "" } = {}) {
  */
 export function unMessageALecran(lu = null, { cran = 0, marque = false, objetAvant = null } = {}) {
   const profondeur = Math.min(Math.max(0, Number(cran) || 0), AU_PLUS_DE_CRANS);
-  const { propos, signature } = laSignatureDunMessage(texte(lu?.corps));
+
+  // **Le propos, et non le corps.** Un `.msg` porte tout l'historique dans son
+  // corps ; `leFilDesMails` en a déjà détaché les citations, qui sont devenues
+  // des messages à part entière. Lire `corps` ici les afficherait une seconde
+  // fois — c'est ce que l'écran faisait, et le même texte s'y voyait trois fois.
+  const { propos, signature } = laSignatureDunMessage(
+    texte(lu?.propos !== undefined ? lu.propos : lu?.corps)
+  );
+
+  // Ce que `ceQuonCite` avait déjà reconnu comme signature — le séparateur
+  // normalisé — se replie avec celle qu'on vient de reconnaître à sa formule.
+  const sienne = [texte(lu?.signature), texte(signature)].filter(Boolean).join("\n\n");
+
   const objet = objetADire(lu, objetAvant);
+  const reconstitue = texte(lu?.certitude) === "cite";
 
   const a = lesGens(lu?.a);
   const copie = lesGens(lu?.copie);
@@ -169,8 +182,20 @@ export function unMessageALecran(lu = null, { cran = 0, marque = false, objetAva
       <div class="fil-mail__bloc">
         <header class="fil-mail__tete">
           <div class="fil-mail__qui">${laPersonne(lu?.qui)}</div>
-          <time class="fil-mail__quand mono-small">${escapeHtml(leMomentCourt(lu?.quand))}</time>
+          <time class="fil-mail__quand mono-small">${escapeHtml(
+            leMomentCourt(lu?.quand) )}</time>
         </header>
+
+        ${/*
+          **Un message reconstitué d'une citation se dit.** Aucun fichier ne le
+          porte : on l'a retrouvé dans le corps d'un autre. Ses pièces jointes
+          ne sont donc pas là, et ses destinataires sont ceux que le bandeau
+          nommait — le lecteur doit savoir qu'il lit une recopie.
+        */""}
+        ${reconstitue
+          ? `<p class="fil-mail__recopie">${svgIcon("quote", { className: "octicon" })}
+               Retrouvé dans la citation d'un autre message</p>`
+          : ""}
 
         ${/*
           **L'objet ne se répète pas, il se signale quand il change.** Un fil
@@ -184,14 +209,16 @@ export function unMessageALecran(lu = null, { cran = 0, marque = false, objetAva
           : ""}
 
         ${/*
-          **Les destinataires sont repliés.** Un fil de chantier en compte huit,
-          en copie, à chaque message : les déplier ferait plus de lignes
-          d'adresses que de propos.
+          **Les destinataires se lisent, ils ne se déplient pas.** Ils étaient
+          derrière un caret, pour épargner des lignes. C'était se tromper sur ce
+          qu'on lit dans un fil de chantier : savoir qui était en copie d'une
+          demande décide de qui peut y répondre, et de qui ne pourra pas dire
+          qu'il n'était pas au courant. Ce n'est pas un détail de mise en page.
         */""}
-        ${a || copie ? repliable("Destinataires", `
+        ${a || copie ? `<div class="fil-mail__gens-bloc">
           ${a ? `<p class="fil-mail__gens"><span class="fil-mail__etiquette">À</span> ${a}</p>` : ""}
           ${copie ? `<p class="fil-mail__gens"><span class="fil-mail__etiquette">Copie</span> ${copie}</p>` : ""}
-        `, { classe: "fil-mail__repli--gens" }) : ""}
+        </div>` : ""}
 
         ${lesPastilles(lu?.pieces)}
 
@@ -205,7 +232,7 @@ export function unMessageALecran(lu = null, { cran = 0, marque = false, objetAva
             : `<span class="fil-mail__vide">Ce message n'a pas de texte lisible.</span>`
         }</div>
 
-        ${repliable("Signature", `<div class="fil-mail__signature-corps">${escapeHtml(signature)}</div>`,
+        ${repliable("Signature", `<div class="fil-mail__signature-corps">${escapeHtml(sienne)}</div>`,
           { classe: "fil-mail__repli--signature" })}
       </div>
     </article>

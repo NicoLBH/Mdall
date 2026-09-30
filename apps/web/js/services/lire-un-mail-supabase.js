@@ -20,7 +20,7 @@
  */
 
 import { downloadDocumentFile } from "./document-deposit.js";
-import { deplier } from "./la-correspondance-du-projet-supabase.js";
+import { leFilDesMails } from "./le-fil-des-mails.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -41,8 +41,8 @@ export function lesFreresDuFil(documents = [], fil = "") {
     .filter((un) => texte(un?.mailFil) === cherche);
 }
 
-/** Rapatrier un document et le déplier. `null` quand il n'a pas pu être lu. */
-async function lire(document) {
+/** Rapatrier les octets d'un document. `null` quand il n'a pas pu être lu. */
+async function lesOctets(document) {
   try {
     const fichier = await downloadDocumentFile({
       storage_bucket: document.storageBucket,
@@ -50,7 +50,7 @@ async function lire(document) {
       original_filename: document.name,
       mime_type: document.mimeType
     });
-    return deplier(new Uint8Array(await fichier.arrayBuffer()), document.name);
+    return new Uint8Array(await fichier.arrayBuffer());
   } catch {
     return null;
   }
@@ -70,14 +70,33 @@ export async function lireLeFil(document, voisins = []) {
   const aLire = [document, ...freres.filter((un) => String(un?.id) !== String(document?.id))]
     .slice(0, AU_PLUS_PAR_FIL);
 
-  const lus = await Promise.all(aLire.map(lire));
-  const messages = lus.filter(Boolean);
+  const octets = await Promise.all(aLire.map(lesOctets));
+  const sources = octets.filter(Boolean);
+
+  // **Le fil se construit, il ne s'empile pas.** On rendait les documents
+  // dépliés les uns après les autres, corps entier compris. Or un `.msg`
+  // d'Outlook porte tout l'historique dans son corps : le troisième message
+  // contenait le deuxième, qui contenait le premier, et l'écran affichait le
+  // même texte trois fois — sous trois expéditeurs différents.
+  //
+  // `leFilDesMails` fait le travail : il découpe les citations, écarte les
+  // doublons, remonte les messages cités qu'aucun fichier ne porte, et range le
+  // tout par les références quand les dates manquent. Il était écrit et éprouvé
+  // ; il n'était appelé que par l'Atelier.
+  const fil = leFilDesMails(sources);
+
+  // Le message demandé est celui qu'on a mis en tête des sources : son rang de
+  // dépôt le suit à travers le dédoublonnage et le classement.
+  const demande = fil.messages.find((un) => un.depot === 0) ?? fil.messages[0] ?? null;
 
   return {
-    messages,
-    demande: lus[0] ?? null,
-    lus: messages.length,
+    messages: fil.messages,
+    demande,
+    ordre: fil.ordre,
+    doublons: fil.doublons,
+    trous: fil.trous,
+    lus: sources.length,
     tous: Math.max(freres.length, 1),
-    illisibles: lus.length - messages.length
+    illisibles: octets.length - sources.length
   };
 }

@@ -32,16 +32,19 @@ import { svgIcon } from "../ui/icons.js";
 import {
   DOSSIER_DES_MAILS, estLeDossierDesMails, laMarqueDuDossier, laMarqueDunFichier
 } from "../services/le-dossier-des-mails.js";
+import { estUnPorteurDeMails } from "../services/les-messages-dun-fichier.js";
 import { lePartageDuDepot } from "../services/le-depouillement.js";
 import { laQuestionDuDeplacement } from "../services/sortir-des-mails.js";
 import { lEtatSuitLeProjet } from "../services/letat-suit-le-projet.js";
 import {
-  cestUnMailIndexe, laLigneDunMail, quandDit
+  SENS, cestUnMailIndexe, laLigneDunMail, laPhraseDuTri, lautreSens, lesMailsTries,
+  quandDit, sensValide
 } from "../services/la-ligne-dun-mail.js";
 import { laGalerie } from "../services/la-galerie-des-pieces.js";
 import { renderLaGalerie } from "./ui/la-galerie-ecran.js";
 import { renderLeVersement } from "./ui/le-versement-ecran.js";
 import { leFilALecran } from "./ui/le-fil-a-lecran.js";
+import { renderBoutonDeTri } from "./ui/tete-de-tableau.js";
 import { routeDeLEcran } from "../../vendor/utilitaires/ecrans-du-projet.js";
 import { leMotDunRefus } from "../services/le-projet-ou-lon-ecrit.js";
 import { renderDataTableShell, renderDataTableHead, renderDataTableEmptyState } from "./ui/data-table-shell.js";
@@ -319,6 +322,9 @@ function etatNeufDesFichiers() {
      * buté. Un second compte tenu ici aurait divergé du sien (règle 4).
      */
     envoi: null,
+    // **Le plus récent en haut**, comme toute messagerie : ce qui vient
+    // d'arriver est ce qu'on n'a pas encore lu.
+    triDesMails: SENS.RECENT,
     breadcrumb: [],
     folders: [],
     files: [],
@@ -1450,11 +1456,25 @@ function renderDocumentsActivityBanner() {
  * sa colonne : des compteurs de sujets ouverts sur la ligne d'un PDF
  * répondaient à une question que personne ne pose en cherchant un fichier.
  */
-function renderDocumentsTableHeadHtml() {
+function renderDocumentsTableHeadHtml({ avecDesMails = false } = {}) {
   const classe = { nom: "name", message: "message", date: "date" };
+  const sens = sensValide(docsViewState.triDesMails);
+
   return renderDataTableHead({
     columns: COLONNES_DU_TABLEAU.map((colonne) => ({
       className: `documents-repo__col documents-repo__col--${classe[colonne.cle]}`,
+      // **Le tri est dans la tête du tableau**, comme celui des sujets : un
+      // bouton de tri qui vit ailleurs se cherche à chaque fois. Et il n'est là
+      // que s'il sert — une colonne de dates sans mail à trier n'a rien à
+      // proposer.
+      html: colonne.cle === "date" && avecDesMails
+        ? `<span>${escapeHtml(colonne.libelle)}</span>${renderBoutonDeTri({
+            attribut: "mails-tri",
+            valeur: lautreSens(sens),
+            actif: sens === SENS.ANCIEN,
+            titre: laPhraseDuTri(sens)
+          })}`
+        : undefined,
       label: colonne.libelle
     }))
   });
@@ -3953,9 +3973,17 @@ function renderDocumentsListView() {
   // **Un mail ne se dessine pas comme un fichier.** La ligne se choisit sur
   // l'index, pas sur le dossier où l'on se trouve : un mail déplacé ailleurs
   // reste un mail, et continue de se lire par son expéditeur et son objet.
+  // **Les mails se rangent par leur date, les fichiers gardent la leur.** Un
+  // dossier de correspondance se lit comme une messagerie : le dernier arrivé
+  // en haut. Les documents ordinaires n'ont pas de date de message et ne se
+  // mêlent pas à ce tri.
+  const mails = lesMailsTries(documents.filter(cestUnMailIndexe), docsViewState.triDesMails);
+  const ordinaires = documents.filter((un) => !cestUnMailIndexe(un));
+
   const bodyHtml = [
     ...folders.map(renderRepoFolderRow),
-    ...documents.map((un) => cestUnMailIndexe(un) ? renderRepoMailRow(un) : renderRepoDocumentRow(un))
+    ...mails.map(renderRepoMailRow),
+    ...ordinaires.map(renderRepoDocumentRow)
   ].join("");
 
   // **La galerie regarde le même dossier autrement.** Elle vit au-dessus de la
@@ -3992,7 +4020,7 @@ function renderDocumentsListView() {
             ${renderDataTableShell({
               className: "documents-repo data-table-shell--document-scroll",
               gridTemplate: getDocumentsTableGridTemplate(),
-              headHtml: renderDocumentsTableHeadHtml(),
+              headHtml: renderDocumentsTableHeadHtml({ avecDesMails: mails.length > 0 }),
               bodyHtml,
               state: hasDocuments ? "ready" : "empty",
               emptyHtml: renderDataTableEmptyState({
@@ -4190,9 +4218,13 @@ function renderLaQuestionDuDeplacement(folderMap) {
 }
 
 function renderUploadProgress() {
-  // Les porteurs de mails sont nommés par le panneau du dépouillement : les
-  // redire ici ferait deux listes du même dépôt (règle 4).
-  const files = ceQueLaSelectionPorte().ordinaires;
+  // **Une seule liste, et les vrais rangs.** Les porteurs de mails étaient
+  // nommés par le panneau du versement et retirés de celle-ci — deux listes
+  // pour un même dépôt, et surtout deux numérotations : le rang affiché ici
+  // était celui des seuls fichiers ordinaires, tandis que le geste de retrait
+  // découpe dans la sélection entière. Avec un mail et un PDF déposés ensemble,
+  // retirer le PDF retirait le mail.
+  const files = Array.isArray(docsViewState.selectedFiles) ? docsViewState.selectedFiles : [];
   if (files.length === 0) return "";
 
   if (docsViewState.isUploading) {
@@ -4218,7 +4250,15 @@ function renderUploadProgress() {
       (file, index) => `
         <div class="documents-uploaded-file">
           <div class="documents-uploaded-file__left">
-            <span class="documents-uploaded-file__icon">${getLargeDocumentIconSvg()}</span>
+            ${/*
+              **Un mail porte son icône.** La même que dans la liste des
+              Fichiers : c'est le seul moyen de voir, avant d'envoyer, que ce
+              `.msg` part vers « Mails » et non vers « Documents ».
+            */""}
+            <span class="documents-uploaded-file__icon">${
+              estUnPorteurDeMails(file?.name)
+                ? svgIcon("mail", { className: "octicon" })
+                : getLargeDocumentIconSvg()}</span>
             <span class="documents-uploaded-file__name">${escapeHtml(file.name)}</span>
           </div>
           <button
@@ -4359,6 +4399,17 @@ function renderUploadView() {
                   */""}
                   ${ceQueLaSelectionPorte().ordinaires.length
                     ? `<button type="button" class="gh-btn gh-btn--validate" id="documentsSubmitBtn" ${canSubmitUpload() ? "" : "disabled"}>${submitLabel}</button>`
+                    : ""}
+                  ${/*
+                    **Le geste d'envoyer est ici, avec les autres.** Il vivait
+                    au bas du panneau du versement, à deux cents pixels du
+                    bouton « Annuler » qui le défait : deux endroits pour finir
+                    un même dépôt, et l'on cherchait lequel valait.
+                  */""}
+                  ${ceQueLaSelectionPorte().porteurs.length && !docsViewState.envoi?.envoi
+                    ? `<button type="button" class="gh-btn gh-btn--validate" id="documentsVerserBtn">${
+                        escapeHtml(`Envoyer ${ceQueLaSelectionPorte().porteurs.length > 1
+                          ? "les mails" : "le mail"}`)}</button>`
                     : ""}
                   <button type="button" class="gh-btn" id="documentsCancelBtn">${
                     ceQueLaSelectionPorte().ordinaires.length ? "Annuler" : "Fermer"}</button>
@@ -5747,6 +5798,14 @@ function bindDocumentsView(root) {
   if (cancelBtn) {
     cancelBtn.addEventListener("click", () => {
       closeUploadView(root);
+    });
+  }
+
+  for (const bouton of root.querySelectorAll("[data-mails-tri]")) {
+    bouton.addEventListener("click", () => {
+      docsViewState.triDesMails = sensValide(bouton.getAttribute("data-mails-tri"));
+      // Un tri est un changement de vue, pas un aller-retour avec la base.
+      redessinerLesFichiers(root);
     });
   }
 
