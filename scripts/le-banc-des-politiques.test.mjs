@@ -59,7 +59,8 @@ const LES_MIGRATIONS = [
   "202611040001_les_vingt_six_portes.sql",
   "202611050001_lannuaire_a_son_proprietaire.sql",
   "202611060001_un_chantier_qui_se_range.sql",
-  "202611070001_les_sujets_du_systeme.sql"
+  "202611070001_les_sujets_du_systeme.sql",
+  "202611080001_les_synonymes_regroupes.sql"
 ];
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -787,6 +788,9 @@ test("un terme vu sur un seul chantier ne sort pas", { skip: sansPostgres }, () 
 test("ce qui est écarté est dit", { skip: sansPostgres }, () => {
   const lu = banc.sousLadresse("patron@mdall.example",
     "select caches > 0 from public.la_mesure_des_sujets();");
+  // Le motif dans le message : une épreuve qui cache l'erreur de la base fait
+  // chercher dans le mauvais endroit.
+  assert.equal(lu.ok, true, lu.motif);
   assert.equal(lu.sortie.trim(), "t", "la console ne dit pas ce qu'elle cache");
 });
 
@@ -841,4 +845,167 @@ test("les sujets se refusent à qui n'est pas administrateur", { skip: sansPostg
   const mesure = banc.sousLadresse("quelquun@ailleurs.example",
     "select count(*) from public.la_mesure_des_sujets();");
   assert.equal(mesure.ok, false);
+});
+
+/* ── Les synonymes regroupés ──────────────────────────────────────────────── */
+
+/**
+ * **Le mot-outil intercalé ne coupe plus le couple.**
+ *
+ * Il le coupait : le couple se formait sur des mots voisins **dans la phrase
+ * d'origine**, et « en », retiré juste avant, laissait un trou entre
+ * « plancher » et « beton ». « plancher en beton » ne formait donc aucun sujet.
+ */
+test("« plancher en beton » et « plancher beton » sont le même sujet",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.project_assertions;");
+    desAffirmations(MEDIATHEQUE, ["Le plancher en beton du R+1 reste a valider"]);
+    desAffirmations(GYMNASE, ["Reprise du plancher beton en zone C"]);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select sujet || ':' || formes || ':' || chantiers"
+      + " from public.les_sujets_du_systeme() where sujet like '%plancher%';");
+    assert.equal(lu.ok, true, lu.motif);
+    const sujets = lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+
+    // **Une seule forme, et c'est le regroupement le plus complet possible** :
+    // le couple se fabrique sur les mots qui restent, si bien que « plancher en
+    // beton » s'écrit déjà « plancher beton ». Les deux phrases ne produisent
+    // donc pas deux formes à rapprocher — elles produisent la même.
+    assert.equal(sujets.includes("plancher beton:1:2"), true,
+      `le couple ne s'est pas formé des deux côtés : ${sujets.join(" | ")}`);
+  });
+
+/**
+ * **Le pluriel ne fait pas un sujet de plus.** Et le radical reste pauvre : il
+ * ne touche qu'à la marque de nombre.
+ */
+test("le pluriel se range sous le singulier", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_assertions;");
+  desAffirmations(MEDIATHEQUE, ["Les planchers betons sont coules"]);
+  desAffirmations(GYMNASE, ["Le plancher beton est coule"]);
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select count(*) from public.les_sujets_du_systeme() where sujet like '%plancher%beton%';");
+  assert.equal(lu.sortie.trim(), "1", "le pluriel fait encore un sujet de plus");
+
+  // Le radical ne va pas plus loin que le nombre.
+  const radical = banc.sql(
+    "select public.le_radical('portails') || ':' || public.le_radical('porte')"
+    + " || ':' || public.le_radical('locaux') || ':' || public.le_radical('mur');");
+  assert.equal(radical.sortie.trim(), "portail:porte:local:mur");
+});
+
+/**
+ * **L'ordre des deux mots ne compte pas, et l'affichage garde ce qui a été
+ * écrit.** On regroupe sans réécrire ce que les gens ont écrit.
+ */
+test("« beton plancher » se range avec « plancher beton »", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_assertions;");
+  desAffirmations(MEDIATHEQUE, ["plancher beton fissure", "plancher beton repris"]);
+  desAffirmations(GYMNASE, ["beton plancher a controler"]);
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select sujet || ':' || formes from public.les_sujets_du_systeme()"
+    + " where sujet like '%plancher%' and sujet like '%beton%';");
+  const sujets = lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+
+  assert.equal(sujets.length, 1, `deux sujets pour un seul : ${sujets.join(" | ")}`);
+  // La forme la plus écrite gagne : « plancher beton », vue deux fois.
+  assert.equal(sujets[0], "plancher beton:2");
+});
+
+/* ── La prédiction portée sur les sujets ──────────────────────────────────── */
+
+/**
+ * **Le même calcul que sur les domaines, sur les sujets.** C'est ce qui donne
+ * « après une question de nappe, une question de cuvelage » là où les domaines
+ * ne savent dire que « après le sol, la structure ».
+ */
+test("les sujets s'enchaînent d'une affirmation à la suivante",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.project_assertions;");
+    // **Les deux chantiers s'entrelacent dans le temps**, exprès. Rangés bout à
+    // bout, un rang calculé sur tout le système donnerait par hasard le même
+    // résultat qu'un rang calculé par chantier, et le banc ne verrait pas la
+    // différence : une mutation a survécu ainsi. Entrelacés, « la suivante »
+    // n'a de sens qu'à l'intérieur d'un chantier.
+    banc.sql(
+      "insert into public.project_assertions (project_id, statement, created_at) values "
+      + `('${MEDIATHEQUE}', 'nappe phreatique relevee', '2026-01-01T00:00:00Z'),`
+      + `('${GYMNASE}',     'nappe phreatique haute',   '2026-01-02T00:00:00Z'),`
+      + `('${MEDIATHEQUE}', 'cuvelage a prevoir',       '2026-01-03T00:00:00Z'),`
+      + `('${GYMNASE}',     'cuvelage impose',          '2026-01-04T00:00:00Z'),`
+      // Un sujet d'un seul chantier : il ne doit entrer dans aucun couple.
+      + `('${MEDIATHEQUE}', 'garde corps vitre',        '2026-01-05T00:00:00Z');`
+    );
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select avant || '>' || apres || ':' || combien || ':' || chantiers"
+      + " from public.les_enchainements_des_sujets()"
+      + " where avant = 'nappe phreatique' and apres = 'cuvelage';");
+    assert.equal(lu.ok, true, lu.motif);
+    assert.equal(lu.sortie.trim(), "nappe phreatique>cuvelage:2:2",
+      "l'enchaînement de sujets ne se forme pas");
+  });
+
+/**
+ * **Les couples ne traversent pas deux chantiers**, comme pour les domaines :
+ * la dernière affirmation de l'un ne suit pas la première de l'autre.
+ */
+test("un enchaînement de sujets ne traverse pas deux chantiers",
+  { skip: sansPostgres }, () => {
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select count(*) from public.les_enchainements_des_sujets()"
+      + " where avant = 'cuvelage' and apres = 'nappe phreatique';");
+    assert.equal(lu.sortie.trim(), "0",
+      "un enchaînement s'est formé entre la fin d'un chantier et le début d'un autre");
+  });
+
+/**
+ * **Le seuil tient aussi sur les enchaînements.** Un sujet vu dans un seul
+ * chantier n'est pas un sujet du système : c'est le vocabulaire d'un chantier,
+ * et le faire entrer dans les couples rendrait à la console des prédictions
+ * tirées d'un seul dossier — exactement ce qu'on ne veut pas montrer.
+ */
+test("un sujet d'un seul chantier n'entre dans aucun enchaînement",
+  { skip: sansPostgres }, () => {
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select count(*) from public.les_enchainements_des_sujets()"
+      + " where avant like '%garde%' or apres like '%garde%'"
+      + " or avant like '%vitre%' or apres like '%vitre%';");
+    assert.equal(lu.ok, true, lu.motif);
+    assert.equal(lu.sortie.trim(), "0",
+      "un sujet vu sur un seul chantier s'est enchaîné");
+  });
+
+/** La même porte, et elle tient. */
+test("les enchaînements de sujets se refusent à qui n'est pas administrateur",
+  { skip: sansPostgres }, () => {
+    const etranger = banc.sousLadresse("quelquun@ailleurs.example",
+      "select count(*) from public.les_enchainements_des_sujets();");
+    assert.equal(etranger.ok, false, "la console s'ouvre à un compte ordinaire");
+    assert.match(etranger.motif, /réservé à la console/);
+  });
+
+/**
+ * **La mesure du regroupement est vérifiable, pas promise.**
+ *
+ * « Pluriels, ordre des mots, mots-outils intercalés » est une affirmation ; le
+ * nombre de formes rangées sous les sujets montrés la vérifie (règle 12).
+ */
+test("le nombre de formes rangées se compte", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_assertions;");
+  // Trois écritures de la même chose, sur deux chantiers.
+  desAffirmations(MEDIATHEQUE, ["planchers betons coules", "beton plancher repris"]);
+  desAffirmations(GYMNASE, ["plancher beton fissure"]);
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select montres || ':' || formes from public.la_mesure_des_sujets();");
+  assert.equal(lu.ok, true, lu.motif);
+
+  const [montres, formes] = lu.sortie.trim().split(":").map(Number);
+  assert.equal(montres > 0, true, "aucun sujet n'est montré");
+  assert.equal(formes > montres, true,
+    `rien ne s'est regroupé : ${formes} formes pour ${montres} sujets`);
 });

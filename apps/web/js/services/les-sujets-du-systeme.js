@@ -49,6 +49,11 @@ export function lesSujetsRanges(lignes = []) {
     .map((une) => ({
       sujet: texte(une?.sujet),
       mots: Math.max(1, nombre(une?.mots)),
+      // Combien de formes écrites se rangent sous ce sujet : « planchers
+      // betons », « plancher en beton », « beton plancher ». C'est la mesure du
+      // regroupement, et elle voyage avec le sujet plutôt que de se recalculer
+      // à l'écran (règle 4).
+      formes: Math.max(1, nombre(une?.formes)),
       affirmations: nombre(une?.affirmations),
       chantiers: nombre(une?.chantiers)
     }))
@@ -108,6 +113,38 @@ export function phraseDunSujet(ligne = null) {
 }
 
 /**
+ * Combien de formes écrites se rangent sous un sujet.
+ *
+ * **Vide quand il n'y en a qu'une** : « 1 forme » est du bruit, et l'absence de
+ * mention dit mieux que rien n'a été regroupé là.
+ */
+export function phraseDesFormes(ligne = null) {
+  const formes = nombre(ligne?.formes);
+  if (formes <= 1) return "";
+  return `${formes} formes`;
+}
+
+/**
+ * Ce que le regroupement a valu, en une phrase.
+ *
+ * **Le rapport, pas le total.** « 12 000 formes » ne dit rien ; « 12 000 formes
+ * rangées sous 4 000 sujets » dit qu'on a divisé le vocabulaire par trois, et
+ * c'est la seule chose qu'on soit venu vérifier.
+ *
+ * `null` quand rien n'a été regroupé : on ne se prononce pas sur un
+ * regroupement qui n'a pas eu lieu (règle 5).
+ */
+export function phraseDuRegroupement(sujets = [], mesure = null) {
+  const combien = (Array.isArray(sujets) ? sujets : []).length;
+  const formes = nombre(mesure?.formes);
+  if (!combien || formes <= combien) return "";
+
+  return `${formes.toLocaleString("fr-FR")} formes écrites se rangent sous ces `
+    + `${combien.toLocaleString("fr-FR")} sujets — pluriels, ordre des mots, et `
+    + "mots-outils intercalés.";
+}
+
+/**
  * Ce qu'il reste à faire, nommément.
  *
  * **Une étape qui n'a pas été écrite n'avance pas de zéro pour cent, elle
@@ -116,11 +153,12 @@ export function phraseDunSujet(ligne = null) {
  */
 export const CE_QUI_MANQUE_ENCORE = [
   {
-    quoi: "Regrouper les synonymes",
+    quoi: "Rapprocher les mots qui veulent dire la même chose",
     ou: "nulle part",
-    pourquoi: "« plancher beton », « dalle beton » et « plancher en beton » sont"
-      + " trois sujets distincts aujourd'hui. Les rapprocher demande de comparer"
-      + " des sens, pas des chaînes."
+    pourquoi: "les formes d'un même terme sont regroupées — pluriels, ordre des"
+      + " mots, mots-outils intercalés. Mais « plancher » et « dalle » restent"
+      + " deux sujets : les rapprocher demande de comparer des sens, et aucune"
+      + " règle de caractères ne le fera."
   },
   {
     quoi: "Rattacher un sujet à un domaine",
@@ -129,9 +167,11 @@ export const CE_QUI_MANQUE_ENCORE = [
       + " deux couches coexistent sans se parler."
   },
   {
-    quoi: "Prédire sur les sujets plutôt que sur les domaines",
-    ou: "la prédiction travaille toujours sur les huit cases",
-    pourquoi: "c'est ce qui donnera « après une question de nappe, une question"
-      + " de cuvelage » au lieu de « après le sol, la structure »."
+    quoi: "Prédire sur les sujets dans un chantier",
+    ou: "la console les enchaîne ; l'écran d'un projet travaille toujours sur"
+      + " les huit cases",
+    pourquoi: "il faudrait que chaque affirmation porte ses sujets en base, et"
+      + " non qu'on les recalcule à la lecture — sans quoi un chantier les"
+      + " retrouverait à chaque ouverture, sur toute sa mémoire."
   }
 ];

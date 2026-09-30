@@ -7,14 +7,14 @@ import assert from "node:assert/strict";
 
 import {
   CE_QUI_MANQUE_ENCORE, lesSujetsPrecis, lesSujetsRanges, phraseDeCeQuiEstCache,
-  phraseDeLaGranulometrie, phraseDunSujet
+  phraseDeLaGranulometrie, phraseDesFormes, phraseDuRegroupement, phraseDunSujet
 } from "./les-sujets-du-systeme.js";
 
 const DES_LIGNES = [
-  { sujet: "beton", mots: 1, affirmations: 140, chantiers: 3 },
-  { sujet: "plancher beton", mots: 2, affirmations: 42, chantiers: 3 },
-  { sujet: "nappe phreatique", mots: 2, affirmations: 18, chantiers: 2 },
-  { sujet: "cuvelage", mots: 1, affirmations: 9, chantiers: 2 }
+  { sujet: "beton", mots: 1, formes: 2, affirmations: 140, chantiers: 3 },
+  { sujet: "plancher beton", mots: 2, formes: 4, affirmations: 42, chantiers: 3 },
+  { sujet: "nappe phreatique", mots: 2, formes: 3, affirmations: 18, chantiers: 2 },
+  { sujet: "cuvelage", mots: 1, formes: 1, affirmations: 9, chantiers: 2 }
 ];
 
 /**
@@ -71,6 +71,57 @@ test("ce qui n'est pas montré se compte, et se dit", () => {
   assert.equal(phraseDeCeQuiEstCache(null), "");
 });
 
+/* ── Le regroupement des synonymes ───────────────────────────────────────── */
+
+/**
+ * **Combien de formes se rangent sous un sujet** : « planchers betons »,
+ * « plancher en beton », « beton plancher ». C'est la mesure du regroupement,
+ * et elle voyage avec le sujet plutôt que de se recalculer à l'écran (règle 4).
+ */
+test("un sujet dit combien de formes s'y rangent", () => {
+  assert.equal(phraseDesFormes({ formes: 4 }), "4 formes");
+  // **Une seule forme ne se dit pas.** « 1 forme » est du bruit, et l'absence
+  // dit mieux que rien n'a été regroupé là.
+  assert.equal(phraseDesFormes({ formes: 1 }), "");
+  assert.equal(phraseDesFormes({ formes: 0 }), "");
+  assert.equal(phraseDesFormes(null), "");
+});
+
+/**
+ * **Le compte voyage avec le sujet, il ne se recalcule pas à l'écran**
+ * (règle 4). Éprouver `phraseDesFormes` sur une ligne écrite à la main ne dit
+ * rien de ce qui arrive vraiment : le rangeur pouvait mettre tous les comptes à
+ * un sans qu'aucune épreuve ne bouge. On part donc des lignes de la base et on
+ * va jusqu'à la phrase.
+ */
+test("le compte des formes traverse le rangeur", () => {
+  assert.deepEqual(
+    lesSujetsRanges(DES_LIGNES).map((une) => `${une.sujet}:${phraseDesFormes(une)}`),
+    ["plancher beton:4 formes", "beton:2 formes", "nappe phreatique:3 formes",
+      "cuvelage:"]);
+});
+
+/**
+ * **Le rapport, pas le total.** « 12 000 formes » ne dit rien ; « 12 000 formes
+ * rangées sous 4 000 sujets » dit qu'on a divisé le vocabulaire par trois.
+ */
+test("le regroupement se dit par rapport au nombre de sujets", () => {
+  const dite = phraseDuRegroupement(lesSujetsRanges(DES_LIGNES), { formes: 10 });
+  assert.match(dite, /10 formes écrites/);
+  assert.match(dite, /4 sujets/);
+  assert.match(dite, /pluriels, ordre des mots/);
+});
+
+/**
+ * **On ne se prononce pas sur un regroupement qui n'a pas eu lieu** (règle 5).
+ * Autant de formes que de sujets veut dire que rien ne s'est regroupé.
+ */
+test("sans regroupement, on n'annonce rien", () => {
+  assert.equal(phraseDuRegroupement(lesSujetsRanges(DES_LIGNES), { formes: 4 }), "");
+  assert.equal(phraseDuRegroupement(lesSujetsRanges(DES_LIGNES), null), "");
+  assert.equal(phraseDuRegroupement([], { formes: 900 }), "");
+});
+
 test("un sujet dit sur combien de chantiers il se montre", () => {
   assert.equal(phraseDunSujet({ chantiers: 3 }), "3 chantiers");
   assert.equal(phraseDunSujet({ chantiers: 1 }), "1 chantier");
@@ -85,6 +136,11 @@ test("un sujet dit sur combien de chantiers il se montre", () => {
  */
 test("ce qui manque est nommé, et dit où cela en est", () => {
   assert.equal(CE_QUI_MANQUE_ENCORE.length >= 3, true);
+  // Ce qui vient d'être fait n'y figure plus comme à faire : une liste qui
+  // promet un travail déjà livré ne se relit plus.
+  assert.equal(
+    CE_QUI_MANQUE_ENCORE.some((un) => /^Regrouper les synonymes$/.test(un.quoi)),
+    false, "le regroupement des formes est livré, il ne s'annonce plus");
   for (const un of CE_QUI_MANQUE_ENCORE) {
     assert.equal(Boolean(un.quoi && un.ou && un.pourquoi), true, un.quoi);
   }

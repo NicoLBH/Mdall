@@ -11,6 +11,10 @@ import {
   renderDataTableHead,
   renderDataTableEmptyState
 } from "./ui/data-table-shell.js";
+import { renderTableHeadFilterToggle } from "./ui/table-head-filter-toggle.js";
+import {
+  RANGEMENT, lesChantiersDe, lesComptesDuRangement, rangementValide
+} from "../services/un-chantier-range.js";
 import { railWidth } from "./ui/project-rail.js";
 import { brancherLeRail, reglagesDuRail } from "./ui/reglages-du-rail.js";
 import { FILTRES_DES_PROJETS, renderRailDesProjets } from "./tous-les-projets-rail.js";

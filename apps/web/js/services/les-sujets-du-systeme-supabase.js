@@ -35,3 +35,21 @@ export async function laMesureDesSujets() {
     return null;
   }
 }
+
+/**
+ * Les couples « après ce sujet, celui-là », ou `null`.
+ *
+ * Même forme que `lesEnchainementsDuSysteme` — `{avant, apres, combien,
+ * chantiers}` —, et c'est voulu : les deux se lisent par le **même** module
+ * (`les-enchainements-du-systeme.js`). Une seconde façon de classer et de
+ * pondérer finirait par ne pas dire la même chose (règle 4).
+ */
+export async function lesEnchainementsDesSujets() {
+  try {
+    const { data, error } = await supabase.rpc("les_enchainements_des_sujets");
+    if (error) return null;
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return null;
+  }
+}
