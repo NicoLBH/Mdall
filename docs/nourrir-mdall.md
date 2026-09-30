@@ -1232,19 +1232,18 @@ dossier est là, il est réemployé.
 recevront jamais de mail. Leur poser un « Mails » vide à la racine leur apprend
 qu'il y a là quelque chose à regarder, et il n'y a rien.
 
-**2. Ce n'est pas à la création du projet que l'on sait qui déposera.** Un
-dossier privé appartient à **celui qui l'a créé** — la politique des dossiers ne
-le rend qu'à lui. Le créer au moment où le projet naît, c'est le donner au
-propriétaire du projet. Le jour où le partage existera, un collaborateur qui
-dépose sa correspondance ne verrait pas ce dossier-là et ne pourrait pas en
-créer un autre (voir ci-dessous).
+**2. Un dossier créé d'avance l'est par quelqu'un, et ce n'est pas celui qui
+déposera.** C'est en tirant ce fil qu'on a trouvé la collision de la section
+suivante, et qu'on a fini par changer la règle : le dossier est aujourd'hui un
+contenant partagé, donc ce point-là ne bloque plus. Restent le 1 et le 3, qui
+suffisent.
 
 **3. Ce qu'il fallait vraiment, c'est le voir *avant* de déposer — et c'est
 fait.** Le panneau de dépouillement montre les deux chemins, avec leur cadenas,
 au moment où la question se pose : quand on s'apprête à lâcher les fichiers. Un
 dossier vide à la racine ne le dirait pas mieux, et le dirait au mauvais moment.
 
-### Ce qui doit être tranché avant que le partage n'existe
+### Ce qui devait être tranché avant que le partage n'existe
 
 En vérifiant ce qui précède, une **collision** est apparue, et elle bloquerait
 purement et simplement le dépôt :
@@ -1262,37 +1261,75 @@ Or un dossier privé n'est rendu qu'à son créateur. Le jour du partage :
   créer « Mails » → **la contrainte d'unicité refuse**, et B ne peut plus
   déposer un seul mail.
 
-Le message d'erreur dit maintenant la vérité — « existe déjà ici, privé et créé
-par quelqu'un d'autre » plutôt que « ce nom existe déjà », qui envoyait chercher
-dans une liste un dossier qu'on ne peut pas y voir (règle 5). **Mais un message
-juste n'est pas une solution.**
+### La décision : un contenant partagé au contenu privé
 
-**Ma recommandation, à valider.** Faire de « Mails » un **contenant partagé au
-contenu privé** : `prive = true` (c'est ce qui déclenche le masquage des
-documents) et `created_by` **vide** (c'est ce qui rend le dossier visible de
-tous). Les deux politiques existantes donnent alors exactement :
+Elle est prise, et elle est appliquée
+(`202610240001_un_contenant_partage_au_contenu_prive.sql`).
 
-| | ce que chacun voit |
+**`prive` disait deux choses**, et c'est là qu'était la faute. Une seule colonne
+portait deux règles, appliquées par deux politiques :
+
+1. *« ce dossier n'est visible que de son créateur »* — politique des dossiers ;
+2. *« les documents qu'il porte ne sont visibles que de leur déposant »* —
+   politique des documents.
+
+**C'est la seconde qu'on voulait.** La première est arrivée avec elle, sans
+avoir été demandée, et c'est elle qui coince. Une valeur qui dit deux choses
+finit par en imposer une qu'on n'a pas choisie (règle 4).
+
+La politique des dossiers cesse donc de regarder `prive`. Celle des documents ne
+bouge **pas d'une ligne** : c'est elle qui garde la correspondance, elle a été
+éprouvée, et la réécrire pour la déplacer n'aurait ajouté qu'un risque.
+
+| ce qu'on regarde | qui le voit |
 | --- | --- |
-| le dossier « Mails » | tout le monde |
+| le dossier « Mails » | toute l'équipe du projet |
 | les mails à l'intérieur | chacun les siens, et rien d'autre |
 
-Rien à écrire dans la base, aucune colonne de plus : c'est déjà ce que les
-politiques font. Et cela rend l'intuition de départ **juste** — un « Mails » à
-la racine, avec un cadenas, visible par toute l'équipe, dont le cadenas signifie
-« chacun n'y voit que les siens » et non « vous seul y avez accès ».
+### Ce que cela ne coûte pas, et il a fallu le vérifier
 
-Le prix à payer est nommé : la garde posée au tour précédent — *un dossier privé
-ne se crée pas sans créateur connu* — devient fausse pour ce dossier-là, et il
-faudrait donc distinguer **deux sortes de dossiers privés**. C'est une décision,
-pas une correction : elle n'est pas prise ici.
+**Aucun dossier privé n'a jamais été créé par un utilisateur.** `prive: true`
+n'est posé qu'à deux endroits du code, tous deux dans le dépôt de mails ; la
+création de dossier de l'écran ne le passe pas. La moitié de règle qu'on retire
+n'a donc jamais protégé un dossier que quelqu'un aurait choisi de cacher : **on
+ne retire pas une garde, on retire un effet de bord.**
+
+Et rien n'est observable aujourd'hui — un projet n'a qu'un propriétaire. C'est
+écrit **avant** le partage pour la même raison que la migration d'octobre : le
+jour où il arrive, il est trop tard pour s'apercevoir que le second déposant ne
+peut pas déposer.
+
+### Ce qui change à l'écran, et ce qui ne change pas
+
+Le cadenas d'un **dossier** change de sens, donc de mots : « Contenu privé :
+chacun n'y voit que ce qu'il y a déposé lui-même ». Il disait « vous seul y avez
+accès » — une promesse plus large que la garde est une promesse qu'on tiendra
+mal.
+
+Le cadenas d'un **fichier** ne change pas : un document n'est vu que de son
+déposant, et « vous seul y avez accès » reste exact. Les deux marques ne disent
+donc plus la même chose, et c'est délibéré : l'une porte sur un contenant,
+l'autre sur une pièce.
+
+`created_by` reste et se remplit toujours ; il ne décide plus d'aucun accès, il
+dit qui a créé le dossier. Le refus posé au tour précédent — *un dossier privé ne
+se crée pas sans créateur connu* — disparaît avec sa raison. **Ce qui protège la
+correspondance reste entier et se tient ailleurs** : un mail ne se range pas
+sans déposant connu.
+
+### Deux conséquences qu'il vaut mieux avoir dites
+
+**Le même mail déposé par deux personnes est stocké deux fois.** Le
+dédoublonnage interroge les documents du projet, et la politique ne rend à
+chacun que les siens : B ne voit pas la copie de A, et c'est bien ainsi — la
+copie de A peut disparaître le jour où A la supprime.
+
+**Deux fichiers peuvent porter le même nom dans « Mails ».** Aucune contrainte
+ne s'y oppose, et chacun ne voit que le sien : l'homonymie est invisible à ceux
+qu'elle concerne.
 
 ## 9. À enrichir
 
-- **Deux sortes de dossiers privés ?** « Mails » doit-il rester le dossier d'une
-  personne, ou devenir un contenant partagé au contenu privé ? À trancher avant
-  que le partage de projet n'existe, sinon le second déposant d'un projet ne
-  pourra pas déposer (§ 8 octies).
 - Le déposant : navigateur ou fonction de bord ? (cent mille pièces ne passent
   pas par un onglet.) Le versoir tranche pour l'**inventaire** et pour le
   **versement** — le navigateur, parce qu'il ne coûte rien et qu'il tient déjà

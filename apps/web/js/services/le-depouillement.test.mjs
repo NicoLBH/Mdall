@@ -138,9 +138,13 @@ test("le singulier et le pluriel s'accordent des deux côtés", () => {
  * laisse deviner de qui on se protège, et un régime dont on ne sait pas sortir
  * se contourne en ne l'utilisant pas.
  */
-test("la phrase du régime nomme l'équipe et le geste qui partage", () => {
+test("la phrase du régime dit les deux moitiés, et le geste qui partage", () => {
   const dite = phraseDeLaConfidentialite();
-  assert.match(dite, /équipe du chantier/);
+  // **Le dossier se voit, son contenu non.** N'en dire qu'une moitié laisse
+  // croire à l'autre : « tout va dans Mails, vous seul y avez accès » promettait
+  // que le dossier lui-même était caché, ce qu'il n'est plus.
+  assert.match(dite, /visible par\s+l'équipe/);
+  assert.match(dite, /vous seul verrez ce que vous y déposez/);
   assert.match(dite, /déplacez/);
   assert.match(dite, new RegExp(DOSSIER_DES_MAILS));
 });
