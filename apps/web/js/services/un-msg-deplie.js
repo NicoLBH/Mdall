@@ -58,6 +58,7 @@
 
 import { unMailDeplie, objetNu } from "./un-mail-deplie.js";
 import { TROU, unTrou } from "./trous-dun-mail.js";
+import { leTexteDesOctets } from "./le-jeu-de-caracteres.js";
 
 /* ════════════════════════════════════════════════════════════════════════════
  * Le conteneur composé
@@ -308,7 +309,9 @@ const QUOI = {
   PIECE_TYPE: "370E",
   PIECE_OCTETS: "3701",
   PIECE_IDENTIFIANT: "3712",
-  CORPS_HTML: "1013"
+  CORPS_HTML: "1013",
+  /** `PR_INTERNET_CPID` : dans quel alphabet les chaînes `001E` sont écrites. */
+  PAGE_DE_CODES: "3FDE"
 };
 
 /**
@@ -339,7 +342,7 @@ const texte = (valeur) => String(valeur ?? "").trim();
  * `001E`, et les refuser reviendrait à ne pas lire les archives, qui sont tout
  * l'objet de l'exercice.
  */
-function lesProprietes(conteneur, dossier) {
+function lesProprietes(conteneur, dossier, page = null) {
   const trouvees = new Map();
 
   // Aucun tri sur le genre d'entrée : `flux` est le seul endroit qui sait ce
@@ -358,7 +361,10 @@ function lesProprietes(conteneur, dossier) {
     const enUtf16 = trouvees.get(`${numero}001F`);
     if (enUtf16) return new TextDecoder("utf-16le").decode(conteneur.flux(enUtf16));
     const enOctets = trouvees.get(`${numero}001E`);
-    if (enOctets) return new TextDecoder("windows-1252").decode(conteneur.flux(enOctets));
+    // **L'alphabet est celui que le message déclare**, pas celui qu'on suppose.
+    // On supposait windows-1252 : juste pour un poste d'avant 2010, faux dès
+    // qu'Outlook écrit en UTF-8 — et « démarré » s'affichait « démarré ».
+    if (enOctets) return leTexteDesOctets(conteneur.flux(enOctets), page);
     return "";
   };
 
@@ -398,14 +404,14 @@ function valeurEntiere(conteneur, dossier, numero, saut) {
 }
 
 /** Les destinataires, rangés par ce qu'Outlook dit de leur rang. */
-function lesDestinataires(conteneur, racine) {
+function lesDestinataires(conteneur, racine, page = null) {
   const a = [];
   const copie = [];
 
   for (const dossier of lesEnfants(conteneur.entrees, racine)) {
     if (dossier.quoi !== ENTREE.DOSSIER || !dossier.nom.startsWith("__recip_version1.0")) continue;
 
-    const props = lesProprietes(conteneur, dossier);
+    const props = lesProprietes(conteneur, dossier, page);
     const adresse = texte(props.lire(QUOI.ADRESSE_SMTP)) || texte(props.lire(QUOI.ADRESSE));
     const nom = texte(props.lire(QUOI.NOM_AFFICHE));
     if (!adresse && !nom) continue;
@@ -475,13 +481,13 @@ function collateDansLeTexte(conteneur, dossier, props, corpsHtml) {
  * On les garde entières. Le jour où l'on saura tirer quelque chose d'un plan,
  * il ne faudra pas redistribuer le carburant.
  */
-function lesPiecesJointes(conteneur, racine, trous, corpsHtml) {
+function lesPiecesJointes(conteneur, racine, trous, corpsHtml, page = null) {
   const pieces = [];
 
   for (const dossier of lesEnfants(conteneur.entrees, racine)) {
     if (dossier.quoi !== ENTREE.DOSSIER || !dossier.nom.startsWith("__attach_version1.0")) continue;
 
-    const props = lesProprietes(conteneur, dossier);
+    const props = lesProprietes(conteneur, dossier, page);
     const nom = texte(props.lire(QUOI.PIECE_NOM_LONG)) || texte(props.lire(QUOI.PIECE_NOM));
     if (!nom) trous.push(unTrou(TROU.PIECE_SANS_NOM, "une pièce jointe"));
 
@@ -579,7 +585,11 @@ export function unMsgDeplie(source) {
   }
 
   const racine = conteneur.entrees[0];
-  const props = lesProprietes(conteneur, racine);
+  // **La page de codes se lit avant les chaînes**, puisque c'est elle qui dit
+  // comment les lire. Elle vit dans le paquet des valeurs de taille fixe du
+  // message, dont l'en-tête fait trente-deux octets.
+  const page = valeurEntiere(conteneur, racine, QUOI.PAGE_DE_CODES, 32);
+  const props = lesProprietes(conteneur, racine, page);
 
   const corps = props.lire(QUOI.CORPS);
   const objet = texte(props.lire(QUOI.OBJET));
@@ -589,11 +599,15 @@ export function unMsgDeplie(source) {
   // `unMailDeplie` sait déjà traiter. Certains émetteurs l'écrivent en texte,
   // d'autres en octets bruts ; les deux mènent aux mêmes `cid:`.
   const corpsHtml = props.lire(QUOI.CORPS_HTML)
-    || new TextDecoder("windows-1252").decode(props.octetsDe(QUOI.CORPS_HTML));
+    || leTexteDesOctets(props.octetsDe(QUOI.CORPS_HTML), page);
   const cheminement = texte(props.lire(QUOI.EN_TETES));
 
   let enTetes = enTetesDuCheminement(cheminement);
-  const destinataires = lesDestinataires(conteneur, racine);
+  // **La même page de codes pour tout le message.** Un nom de destinataire et
+  // un nom de pièce jointe sont écrits par le même poste que le corps : les
+  // lire autrement ferait « Bon de commande rénové.pdf » à côté d'un corps
+  // juste.
+  const destinataires = lesDestinataires(conteneur, racine, page);
 
   if (!enTetes) {
     // **Le message n'a pas transité**, et on le dit. Un message reconstitué ne
@@ -633,7 +647,7 @@ export function unMsgDeplie(source) {
     objetNu: objetNu(sonObjet),
     // Les pièces ne sont pas dans le corps recomposé : elles viennent des
     // sous-dossiers, entières.
-    pieces: lesPiecesJointes(conteneur, racine, trous, corpsHtml),
+    pieces: lesPiecesJointes(conteneur, racine, trous, corpsHtml, page),
     trous: [...lu.trous, ...trous]
   };
 }

@@ -28123,3 +28123,223 @@ button.bac-refus__ou--mene:hover{ color:var(--fg, inherit); }
 .brouillon__essai-quoi{
   margin:0 0 14px; color:var(--muted); font-size:13px;
 }
+
+/* ===== Un échange de mails, lu pour de bon =====================================
+
+   Le fil était rendu en Markdown par le lecteur de documents. Trois choses
+   n'étaient pas possibles ainsi, et toutes trois se voyaient sur un fil réel :
+   séparer deux messages, replier une signature qui pèse plus lourd que le
+   propos, et nommer deux pièces jointes plutôt qu'onze.
+
+   Les couleurs viennent toutes des jetons de `:root` : un bleu écrit à la main
+   ici serait le jour venu le seul bleu qui ne suivrait pas. */
+
+.fil{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  padding:4px 0 32px;
+}
+
+.fil__compte{
+  color:var(--muted);
+  font-size:12px;
+  margin:0 0 14px;
+}
+
+/* **L'escalier.** Un cran par message, et les barres des crans précédents —
+   comme l'indentation d'un bloc de code. Le décalage est plafonné dans le
+   module qui dessine : au-delà de quatre crans, un fil de vingt messages
+   finirait au bord de l'écran. */
+.fil-mail{
+  display:flex;
+  align-items:stretch;
+  gap:0;
+  padding:0;
+}
+
+.fil-mail__barre{
+  flex:0 0 22px;
+  border-left:1px solid var(--border);
+  margin-left:8px;
+}
+
+/* Un objet qui change en cours de fil : c'est un changement de sujet, et il
+   doit se voir sans se confondre avec le propos. */
+.fil-mail__objet{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  margin:6px 0 0;
+  color:var(--muted);
+  font-size:12.5px;
+  font-weight:600;
+}
+
+.fil-mail__objet .octicon{ color:var(--accent); flex:0 0 auto; }
+
+.fil-mail__bloc{
+  flex:1 1 auto;
+  min-width:0;
+  border-top:1px solid var(--border2);
+  padding:16px 0 18px;
+}
+
+/* Le premier message du fil n'a rien au-dessus de lui à séparer. */
+.fil-mail:first-of-type .fil-mail__bloc{ border-top:0; padding-top:4px; }
+
+/* Celui qu'on a demandé à ouvrir : une arête bleue, et rien d'autre. Un fond
+   coloré ferait un bloc qu'on lit différemment, alors que c'est le même
+   message que les autres. */
+.fil-mail.est-demande > .fil-mail__bloc{
+  border-left:2px solid var(--accent);
+  padding-left:12px;
+  margin-left:-14px;
+}
+
+.fil-mail__tete{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+.fil-mail__nom{
+  font-weight:600;
+  color:var(--text);
+}
+
+/* Les adresses en bleu, comme les liens : c'est ce qu'on cherche du regard
+   quand on veut savoir qui a écrit. */
+.fil-mail__adresse{
+  color:var(--blueLink);
+  font-size:12px;
+  margin-left:6px;
+}
+
+.fil-mail__quand{
+  color:var(--muted);
+  font-size:12px;
+  white-space:nowrap;
+}
+
+/* ── Ce qui se replie ────────────────────────────────────────────────────── */
+
+.fil-mail__repli{
+  margin:8px 0 0;
+}
+
+.fil-mail__repli-tete{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  cursor:pointer;
+  color:var(--muted);
+  font-size:12px;
+  list-style:none;
+  user-select:none;
+  padding:2px 0;
+}
+
+.fil-mail__repli-tete::-webkit-details-marker{ display:none; }
+.fil-mail__repli-tete:hover{ color:var(--blueLink); }
+
+.fil-mail__caret{
+  transition:transform .12s ease;
+  color:var(--muted);
+}
+
+.fil-mail__repli[open] > .fil-mail__repli-tete .fil-mail__caret{
+  transform:rotate(90deg);
+}
+
+/* La ligne bleue de ce qui est déplié : elle dit d'un coup d'œil où finit le
+   bloc qu'on vient d'ouvrir. */
+.fil-mail__repli-corps{
+  border-left:2px solid var(--accent);
+  padding:6px 0 2px 12px;
+  margin:4px 0 0 6px;
+  color:var(--muted);
+  font-size:13px;
+}
+
+.fil-mail__signature-corps{
+  white-space:pre-wrap;
+  font-size:12.5px;
+  line-height:1.5;
+}
+
+.fil-mail__gens{ margin:2px 0; }
+
+.fil-mail__etiquette{
+  color:var(--muted);
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  margin-right:6px;
+}
+
+/* ── Les pièces jointes ──────────────────────────────────────────────────── */
+
+.fil-mail__pieces{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin:10px 0 0;
+}
+
+.fil-mail__piece{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  max-width:100%;
+  padding:3px 9px;
+  border:1px solid var(--border);
+  border-radius:999px;
+  background:var(--panel2);
+  font-size:12px;
+  color:var(--text);
+}
+
+.fil-mail__piece .octicon{ color:var(--fichiers-icone); flex:0 0 auto; }
+
+.fil-mail__piece-nom{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  max-width:280px;
+}
+
+.fil-mail__piece-poids{ color:var(--muted); }
+
+/* Celles qu'on ne nomme pas : dites, mais sans cadre — ce n'est pas une pièce
+   sur laquelle on va cliquer. */
+.fil-mail__piece--muette{
+  border-color:transparent;
+  background:transparent;
+  color:var(--muted);
+  padding-left:0;
+}
+
+/* ── Le propos ───────────────────────────────────────────────────────────── */
+
+.fil-mail__propos{
+  white-space:pre-wrap;
+  margin:12px 0 0;
+  line-height:1.6;
+  font-size:14px;
+  color:var(--text);
+  overflow-wrap:anywhere;
+}
+
+.fil-mail__vide{
+  color:var(--muted);
+  font-style:italic;
+}
+
+@media (max-width: 720px){
+  /* Sur un écran étroit, l'escalier mange la largeur du texte : il s'efface, et
+     la séparation entre messages suffit à s'y retrouver. */
+  .fil-mail__barre{ display:none; }
+}

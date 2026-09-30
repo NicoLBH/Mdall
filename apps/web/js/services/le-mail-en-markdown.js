@@ -23,6 +23,10 @@
  * Des messages dépliés entrent, du texte sort. Aucune lecture, aucun réseau.
  */
 
+import {
+  lesPiecesQuiComptent, phraseDesPiecesCachees
+} from "./les-pieces-qui-comptent.js";
+
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /** Ce que le titre du document porte quand on ouvre un mail. */
@@ -81,10 +85,14 @@ export function unMessageEnMarkdown(lu = null, { marque = false } = {}) {
 
   lignes.push(`- **Le** : ${leMomentDit(lu?.quand)}`);
 
-  const pieces = Array.isArray(lu?.pieces) ? lu.pieces : [];
-  if (pieces.length) {
-    lignes.push(`- **Pièces jointes** : ${pieces
-      .map((une) => texte(une?.nom) || "sans nom").join(", ")}`);
+  // **Les morceaux de logo ne sont pas des pièces jointes.** Onze noms dont
+  // neuf disent « image007.png » noient les deux qu'on cherchait — la règle
+  // vit dans `les-pieces-qui-comptent.js`, avec celle de l'écran (règle 10).
+  const { gardees, cachees } = lesPiecesQuiComptent(lu?.pieces);
+  if (gardees.length || cachees.length) {
+    const dites = gardees.map((une) => une.nom);
+    const reste = phraseDesPiecesCachees(cachees);
+    lignes.push(`- **Pièces jointes** : ${[...dites, reste].filter(Boolean).join(", ")}`);
   }
 
   lignes.push("");
@@ -116,34 +124,4 @@ export function leFilEnMarkdown(messages = [], { marque = "" } = {}) {
       marque: Boolean(marque) && texte(lu?.identite) === texte(marque)
     }))
   ].join("\n---\n\n");
-}
-
-/**
- * Les pièces jointes d'un échange, sans doublon, avec leur message.
- *
- * **Par leur nom et leur taille**, faute de mieux : ici les octets ne sont pas
- * en main, et deux pièces identiques attachées à deux réponses d'un même fil
- * portent le même nom et la même taille. Ce rapprochement-là est faux dans un
- * cas sur mille ; ne pas le faire montre quinze fois le même plan.
- */
-export function lesPiecesDuFil(messages = []) {
-  const vues = new Set();
-  const pieces = [];
-
-  for (const lu of Array.isArray(messages) ? messages : []) {
-    for (const une of Array.isArray(lu?.pieces) ? lu.pieces : []) {
-      if (une?.dansLeTexte) continue;
-      const cle = `${texte(une?.nom)}|${Number(une?.taille) || 0}`;
-      if (vues.has(cle)) continue;
-      vues.add(cle);
-      pieces.push({
-        nom: texte(une?.nom) || "sans nom",
-        taille: Number(une?.taille) || 0,
-        type: texte(une?.type),
-        quand: texte(lu?.quand)
-      });
-    }
-  }
-
-  return pieces;
 }

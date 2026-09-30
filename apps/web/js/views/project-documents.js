@@ -41,6 +41,7 @@ import {
 import { laGalerie } from "../services/la-galerie-des-pieces.js";
 import { renderLaGalerie } from "./ui/la-galerie-ecran.js";
 import { renderLeVersement } from "./ui/le-versement-ecran.js";
+import { leFilALecran } from "./ui/le-fil-a-lecran.js";
 import { routeDeLEcran } from "../../vendor/utilitaires/ecrans-du-projet.js";
 import { leMotDunRefus } from "../services/le-projet-ou-lon-ecrit.js";
 import { renderDataTableShell, renderDataTableHead, renderDataTableEmptyState } from "./ui/data-table-shell.js";
@@ -2349,6 +2350,16 @@ function renderCorpsDuTexte(ouvert = {}, lecture = LECTURE_DU_TEXTE.CODE) {
 
   const lu = leFichierLu(ouvert.contenu);
 
+  // **Un échange n'est pas un document, et ne se lit pas comme un document.**
+  // Rendu en Markdown, il n'avait ni séparation entre messages, ni signature
+  // repliable, ni pastille de pièce jointe — trois choses que le Markdown ne
+  // sait pas porter, et qui sont tout ce qui distingue une lecture d'une pile
+  // de texte. La lecture « Code », elle, montre toujours le texte brut.
+  if (ouvert.mail && lecture === LECTURE_DU_TEXTE.APERCU && ouvert.fil?.messages?.length) {
+    return `<div class="documents-texte-apercu">${
+      leFilALecran(ouvert.fil.messages, { marque: ouvert.fil.marque })}</div>`;
+  }
+
   return lecture === LECTURE_DU_TEXTE.APERCU
     ? `<div class="documents-texte-apercu md-body md-document">${
       renderMarkdownToHtml(ouvert.contenu)}</div>`
@@ -4525,6 +4536,12 @@ async function ouvrirLeMail(root, documentItem) {
   docsViewState.texte = {
     ...docsViewState.texte,
     enCours: false,
+    // **Les messages eux-mêmes**, pour l'aperçu : c'est lui qui dessine l'écran
+    // de lecture, et il a besoin des pièces, des destinataires et des corps —
+    // que du Markdown ne rend plus.
+    fil: messages.length ? { messages, marque: fil?.demande?.identite ?? "" } : null,
+    // **Et le Markdown reste**, pour la lecture « Code » : c'est le texte brut
+    // de l'échange, et c'est ce qu'on veut voir quand on demande à le voir.
     contenu: messages.length
       ? leFilEnMarkdown(messages, { marque: fil?.demande?.identite ?? "" })
       : null,
