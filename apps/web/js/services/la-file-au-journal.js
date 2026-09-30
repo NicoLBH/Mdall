@@ -101,7 +101,15 @@ export function laFileAuJournal(ligne = null) {
           id: statut,
           label: statut === "en_attente" ? "En attente du serveur" : "Rangement en cours",
           ms: null,
-          statut: "ok",
+          // **En cours n'est pas fait.** Cette étape portait « ok », et le
+          // graphe la peignait en vert avec sa coche : on lisait « Rangement en
+          // cours » sous une coche verte, pendant que le bandeau disait « En
+          // cours ». Deux choses contraires dans la même vue, et c'est la
+          // rassurante qu'on croit.
+          //
+          // Le mot est celui que le graphe connaît déjà pour une fusion en
+          // route (`run-workflow.js`) : il en fait une icône qui tourne.
+          statut: "en-cours",
           lignes: [`Fichiers : ${combien}`, `Messages versés : ${nombre(ligne?.avancement?.verses)}`]
         }]
       }

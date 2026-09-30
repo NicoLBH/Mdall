@@ -252,3 +252,24 @@ test("une étape en cours ne se dessine ni verte ni orange", async () => {
   assert.equal(par.get("memoire").tone, "warn");
   assert.equal(par.get("memoire").icon, "alert");
 });
+
+/* ── « Ce que l'analyse a lu » n'a de sens que pour une analyse ──────────── */
+
+test("un geste n'affiche pas les comptes d'une analyse", async () => {
+  // Le détail d'un versement montrait « Livrables relus 0 / Avis suivis 0 » :
+  // deux cases vides d'un autre formulaire, qui se lisent comme la raison de
+  // l'échec quand le dépôt vient d'échouer.
+  const { laLectureDuCorpus } = await import("./run-workflow.js");
+
+  assert.deepEqual(laLectureDuCorpus({ geste: "versement", steps: [] }), []);
+  assert.deepEqual(laLectureDuCorpus({ geste: "fusion", documentCount: 0 }), []);
+  assert.deepEqual(laLectureDuCorpus(null), []);
+});
+
+test("une analyse affiche bien ce qu'elle a lu", async () => {
+  const { laLectureDuCorpus } = await import("./run-workflow.js");
+  const lignes = laLectureDuCorpus({ documentCount: 12, trackedAvisCount: 3, avisCount: 40 });
+
+  assert.deepEqual(lignes[0], ["Livrables relus", "12"]);
+  assert.deepEqual(lignes[1], ["Avis suivis", "3 sur 40 relevés"]);
+});

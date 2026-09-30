@@ -7925,8 +7925,48 @@ body.route--project.documents-pdf-sticky-mode.documents-local-chrome-compact #ap
   font-weight:700;
   color:#fff;
 }
+/**
+ * L'exécution en cours : **un disque orange, et un anneau qui tourne autour.**
+ *
+ * Le disque seul était immobile. Rien ne distinguait « cela travaille » de
+ * « cela s'est arrêté là » : c'est la même image dans les deux cas, et l'on
+ * rechargeait la page pour savoir. C'est la marque que GitHub donne à un
+ * travail en cours, et pour la même raison.
+ */
 .workflow-runs__state-icon--pending{
   color:#d29922;
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:20px;
+  height:20px;
+}
+
+.workflow-runs__state-icon--pending::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:50%;
+  border:2px solid rgba(210, 153, 34, 0.25);
+  border-top-color:#d29922;
+  animation:ui-spinner-rotate 1s linear infinite;
+}
+
+/* Le disque reste au centre, et ne tourne pas avec l'anneau. */
+.workflow-runs__state-icon--pending .octicon{
+  position:relative;
+  width:8px;
+  height:8px;
+  margin-top:0 !important;
+}
+
+/**
+ * Un anneau qui tourne sans fin sur une page qu'on laisse ouverte fatigue, et
+ * quelqu'un qui a demandé moins d'animation l'a demandé pour de bon.
+ */
+@media (prefers-reduced-motion: reduce){
+  .workflow-runs__state-icon--pending::before{ animation:none; }
 }
 /* ===== Discussions ===== */
 .project-discussions:not(.side-nav-layout){

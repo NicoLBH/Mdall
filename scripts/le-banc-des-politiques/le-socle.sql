@@ -30,6 +30,9 @@ create table if not exists public.documents (
   created_by uuid references auth.users(id),
   deposant uuid references auth.users(id),
   folder_id uuid,
+  storage_bucket text,
+  storage_path text,
+  deleted_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -127,3 +130,44 @@ grant all on all tables in schema public to authenticated;
 -- que l'on prendrait pour elle.
 alter default privileges in schema public grant all on tables to authenticated;
 alter default privileges in schema public grant all on sequences to authenticated;
+
+-- ── Le casier, tel que Supabase le pose ────────────────────────────────────
+--
+-- `storage.objects` et `storage.foldername` : le banc en a besoin pour éprouver
+-- la règle de lecture des octets. Sans eux, on relirait la politique au lieu de
+-- l'essayer — et c'est précisément en la relisant qu'on a cru qu'elle tenait.
+
+create schema if not exists storage;
+
+create table if not exists storage.objects (
+  id uuid primary key default gen_random_uuid(),
+  bucket_id text not null,
+  name text not null,
+  owner uuid
+);
+
+-- La vraie rend les dossiers du chemin, sans le nom du fichier.
+create or replace function storage.foldername(name text)
+returns text[] language sql immutable as $$
+  select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1]
+$$;
+
+alter table storage.objects enable row level security;
+grant usage on schema storage to authenticated;
+grant all on storage.objects to authenticated;
+
+-- La règle d'octobre, avant la migration qu'on éprouve.
+drop policy if exists storage_documents_select on storage.objects;
+create policy storage_documents_select
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'documents'
+  and exists (
+    select 1 from public.documents d
+    where d.storage_bucket = storage.objects.bucket_id
+      and d.storage_path = storage.objects.name
+      and d.deleted_at is null
+  )
+);

@@ -174,6 +174,46 @@ function resumeDuneEtape(lignes, rate) {
   return dit || (lignes.length === 0 ? "aucun journal" : "");
 }
 
+/**
+ * Ce que l'analyse a lu — **et seulement quand il s'agit d'une analyse**.
+ *
+ * ## Le défaut que cela répare
+ *
+ * Le détail d'un versement de mails affichait :
+ *
+ *     Ce que l'analyse a lu
+ *     Livrables relus   0
+ *     Avis suivis       0
+ *
+ * Un dépôt de messagerie ne relit aucun livrable et ne suit aucun avis : ces
+ * deux zéros ne sont pas des comptes, ce sont des cases vides d'un autre
+ * formulaire. Et deux zéros sous un dépôt qui vient d'échouer se lisent comme
+ * la raison de l'échec.
+ *
+ * Un **geste** — une fusion, un versement — porte son propre chemin et n'a pas
+ * de corpus : c'est déjà la règle du graphe (`grapheDunGeste`), et c'est la
+ * même ici. Le panneau disparaît plutôt que d'afficher des zéros qui ne
+ * comptent rien.
+ *
+ * @returns {Array<[string, string]>} les lignes du panneau, ou aucune
+ */
+export function laLectureDuCorpus(corpus = null) {
+  if (!corpus) return [];
+  if (String(corpus.geste || "").trim()) return [];
+
+  return [
+    corpus.proposition ? ["Proposition", corpus.proposition] : null,
+    ["Livrables relus", `${corpus.documentCount || 0}`],
+    [
+      "Avis suivis",
+      `${corpus.trackedAvisCount || 0}${corpus.avisCount ? ` sur ${corpus.avisCount} relevés` : ""}`
+    ],
+    corpus.engineVersion || corpus.packs?.length
+      ? ["Lu par", describeReadingStack(corpus.engineVersion, corpus.packs)]
+      : null
+  ].filter(Boolean);
+}
+
 export function buildRunGraph(entry = {}) {
   const corpus = entry?.details?.corpus ?? null;
 

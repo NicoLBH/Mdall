@@ -47,7 +47,8 @@ const RACINE = join(ICI, "..");
  */
 const LES_MIGRATIONS = [
   "202610290001_les_portes_restees_ouvertes.sql",
-  "202610300001_la_file_des_versements.sql"
+  "202610300001_la_file_des_versements.sql",
+  "202610310001_les_octets_qui_attendent_leur_tour.sql"
 ];
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -227,4 +228,56 @@ test("une ligne de file change d'état, et c'est ce qui la distingue du journal"
     + " where statut = 'en_attente' returning statut;");
   assert.equal(avance.ok, true, `la file ne s'avance pas :\n${avance.motif}`);
   assert.equal(avance.sortie, "en_cours");
+});
+
+
+/* ── Les octets qui attendent leur tour ──────────────────────────────────── */
+
+/**
+ * **Le défaut du premier vrai dépôt.** Six mails envoyés, « Versement de 0
+ * fichier — Réussi ». La règle de lecture du casier exigeait une ligne
+ * `documents` pour l'objet lu ; or des octets en attente de versement n'en ont
+ * aucune, par construction. L'écriture passait, la lecture était refusée, le
+ * serveur versait ce qu'il avait : rien.
+ *
+ * On ne pouvait pas le voir en relisant la politique — elle était juste pour ce
+ * qu'elle couvrait. Il fallait essayer de lire.
+ */
+test("ses propres octets en attente se relisent", { skip: sansPostgres }, () => {
+  const chemin = `${A}/${MEDIATHEQUE}/versements/v-1/RE__Lot_3.msg`;
+  const pose = banc.sql(
+    `insert into storage.objects (bucket_id, name) values ('documents', '${chemin}');`
+  );
+  assert.equal(pose.ok, true);
+
+  const lu = banc.enTantQue(A,
+    `select count(*) from storage.objects where name = '${chemin}';`);
+  assert.equal(lu.sortie, "1", "le serveur ne peut pas relire ce que le navigateur vient de déposer");
+});
+
+test("les octets en attente d'un autre ne se lisent pas", { skip: sansPostgres }, () => {
+  const chemin = `${A}/${MEDIATHEQUE}/versements/v-1/RE__Lot_3.msg`;
+  const lu = banc.enTantQue(B, `select count(*) from storage.objects where name = '${chemin}';`);
+  assert.equal(lu.sortie, "0");
+});
+
+test("un objet du casier sans ligne `documents` reste illisible hors de la file", { skip: sansPostgres }, () => {
+  // La règle d'octobre ne bouge pas : un document ne se lit qu'à travers sa
+  // ligne, qui porte elle-même la règle du dossier privé.
+  const chemin = `${A}/${MEDIATHEQUE}/autre-chose/plan.pdf`;
+  banc.sql(`insert into storage.objects (bucket_id, name) values ('documents', '${chemin}');`);
+  const lu = banc.enTantQue(A, `select count(*) from storage.objects where name = '${chemin}';`);
+  assert.equal(lu.sortie, "0", "le casier s'est ouvert plus largement que la file");
+});
+
+test("un document rangé se lit toujours par sa ligne", { skip: sansPostgres }, () => {
+  const chemin = `${A}/${MEDIATHEQUE}/mails/message.eml`;
+  banc.sql(`insert into storage.objects (bucket_id, name) values ('documents', '${chemin}');`);
+  const pose = banc.enTantQue(A,
+    `insert into public.documents (project_id, created_by, storage_bucket, storage_path)`
+    + ` values ('${MEDIATHEQUE}', auth.uid(), 'documents', '${chemin}');`);
+  assert.equal(pose.ok, true, pose.motif);
+
+  const lu = banc.enTantQue(A, `select count(*) from storage.objects where name = '${chemin}';`);
+  assert.equal(lu.sortie, "1");
 });
