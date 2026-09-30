@@ -20,6 +20,7 @@
  */
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
+import { laCourseDeRepli } from "./run-partition.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 
@@ -65,32 +66,52 @@ export async function enregistrerUneCourse({
   startedAt = null,
   finishedAt = null,
   durationMs = null,
-  steps = null
+  steps = null,
+  personnelle = false
 } = {}) {
   if (!texte(projectId) || !texte(geste)) return null;
 
-  try {
-    const lignes = await requete("project_runs", {
-      method: "POST",
-      body: [{
-        project_id: texte(projectId),
-        geste: texte(geste),
-        proposition_id: texte(propositionId) || null,
-        titre: texte(titre),
-        resume: texte(resume),
-        statut: texte(statut) || "ok",
-        started_at: startedAt ?? new Date().toISOString(),
-        finished_at: finishedAt ?? new Date().toISOString(),
-        duration_ms: Number.isFinite(Number(durationMs)) ? Math.round(Number(durationMs)) : null,
-        // Les étapes partent telles quelles : les raboter ici reviendrait à
-        // conserver un détail en base pour ne jamais l'afficher.
-        steps: Array.isArray(steps) && steps.length > 0 ? steps : null
-      }]
-    });
+  const ligne = {
+    project_id: texte(projectId),
+    geste: texte(geste),
+    proposition_id: texte(propositionId) || null,
+    titre: texte(titre),
+    resume: texte(resume),
+    statut: texte(statut) || "ok",
+    started_at: startedAt ?? new Date().toISOString(),
+    finished_at: finishedAt ?? new Date().toISOString(),
+    duration_ms: Number.isFinite(Number(durationMs)) ? Math.round(Number(durationMs)) : null,
+    // Les étapes partent telles quelles : les raboter ici reviendrait à
+    // conserver un détail en base pour ne jamais l'afficher.
+    steps: Array.isArray(steps) && steps.length > 0 ? steps : null,
+    // **Qui lira cette ligne.** Un versement de mails ne se lit que par
+    // celui qui l'a fait ; une fusion est lue par le projet. La base tient
+    // la règle (`202610280001_...`), et `owner_id` s'y pose tout seul :
+    // l'envoyer d'ici reviendrait à accepter qu'on envoie celui d'un autre.
+    personnelle: personnelle === true
+  };
 
+  const ecrire = async (corps) => {
+    const lignes = await requete("project_runs", { method: "POST", body: [corps] });
     return Array.isArray(lignes) ? lignes[0] ?? null : null;
-  } catch {
-    return null;
+  };
+
+  try {
+    return await ecrire(ligne);
+  } catch (erreur) {
+    // **Une colonne pas encore migrée ne doit pas emporter le journal**, mais on
+    // ne retombe que dans un sens. La règle vit dans `run-partition.js`, où elle
+    // s'exécute en épreuve ; ici on ne fait qu'écrire ce qu'elle rend.
+    const repli = laCourseDeRepli(ligne);
+    if (!repli) {
+      console.warn("[project_runs] exécution personnelle non consignée", erreur);
+      return null;
+    }
+    try {
+      return await ecrire(repli);
+    } catch {
+      return null;
+    }
   }
 }
 

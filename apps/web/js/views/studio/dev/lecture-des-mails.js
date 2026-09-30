@@ -960,17 +960,33 @@ async function prendreLesFichiers(fichiers) {
  */
 
 async function ranger(fichiers) {
-  const projectId = texte(store.currentProject?.id ?? store.currentProjectId);
-  if (!projectId) return;
-
   etat.rangement = { dit: `Rangement dans « ${DOSSIER_DES_MAILS} »…`, enCours: true };
   redessiner();
+
+  // **L'identifiant du projet en base, et pas celui de l'écran.** Cette ligne
+  // lisait `store.currentProjectId` : un identifiant d'écran, que la base ne
+  // connaît pas. Elle refusait donc d'écrire, par un code SQL que l'écran
+  // montrait tel quel. Le même fichier résolvait déjà correctement deux cents
+  // lignes plus bas — deux façons de savoir où l'on est en donnent deux réponses
+  // (règle 4).
+  const { resolveCurrentBackendProjectId } =
+    await import("../../../services/project-supabase-sync.js");
+  const projectId = texte(await resolveCurrentBackendProjectId().catch(() => ""));
+  if (!projectId) {
+    etat.rangement = {
+      dit: "Ce projet n'a pas été retrouvé dans la base : rien n'a été rangé.",
+      enCours: false
+    };
+    redessiner();
+    return;
+  }
 
   try {
     const [{ depouiller }, { phraseDuConvoi }] = await Promise.all([
       import("../../../services/le-depouillement-supabase.js"),
       import("../../../services/le-convoi.js")
     ]);
+    const commence = Date.now();
     const journal = await depouiller(fichiers, {
       projectId,
       avance: (encours) => {
@@ -978,6 +994,12 @@ async function ranger(fichiers) {
         redessiner();
       }
     });
+    // **Le même acte laisse la même trace, d'où qu'on le lance.** Ce fichier
+    // porte déjà cette règle pour le rangement lui-même : deux façons de ranger
+    // un mail auraient fini par ne pas ranger la même chose (règle 4). Deux
+    // façons de le consigner auraient fini par n'en consigner qu'une — celle
+    // qu'on regarde, et l'autre aurait disparu sans qu'on s'en aperçoive.
+    await consignerLeVersement(projectId, commence, journal, phraseDuConvoi(journal));
     etat.rangement = journal.arrete
       ? { dit: `Rangement incomplet : ${journal.arrete}`, enCours: false }
       : {
@@ -989,6 +1011,28 @@ async function ranger(fichiers) {
     etat.rangement = { dit: `Rangement impossible : ${String(erreur?.message ?? "cause inconnue")}`, enCours: false };
   }
   redessiner();
+}
+
+/**
+ * Écrire le versement en base, pour qu'il survive à l'onglet.
+ *
+ * Un échec ici ne coûte rien de ce que le dépôt a fait : les mails sont rangés,
+ * et le journal n'est que ce qu'on en raconte. On n'avertit donc pas — l'écran
+ * vient de dire ce qui est entré.
+ */
+async function consignerLeVersement(projectId, commence, journal, dite) {
+  try {
+    const [{ enregistrerUneCourse }, journalDit] = await Promise.all([
+      import("../../../services/project-runs-supabase.js"),
+      import("../../../services/le-journal-du-depouillement.js")
+    ]);
+    await enregistrerUneCourse({
+      projectId,
+      ...journalDit.laLigneDunVersement({ journal, dite, startedAt: commence })
+    });
+  } catch (erreur) {
+    console.warn("[versement] journal non consigné", erreur);
+  }
 }
 
 /**

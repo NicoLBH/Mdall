@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  SORTE, leMotDeLaBarre, leMotDeLaFin, leMotDuDebut, leNomDeLaction, leSortDeLaction
+  LE_GESTE, SORTE, laLigneDunVersement, leMotDeLaBarre, leMotDeLaFin, leMotDuDebut,
+  leNomDeLaction, leSortDeLaction, lesEtapesDunVersement
 } from "./le-journal-du-depouillement.js";
 
 test("l'action porte un nom qui compte ses fichiers, et s'accorde", () => {
@@ -61,4 +62,110 @@ test("le mot de la barre compte les fichiers et annonce le relais", () => {
   assert.match(dit, /journal des Actions/);
   assert.equal(leMotDeLaBarre({ fichiers: 0 }), "");
   assert.equal(leMotDeLaBarre(null), "");
+});
+
+/* ── Ce qu'un versement laisse en base ───────────────────────────────────── */
+
+test("le geste porte le même nom que l'onglet qui le range", async () => {
+  const { ORIGINE } = await import("./run-partition.js");
+  assert.equal(LE_GESTE, ORIGINE.VERSEMENT);
+});
+
+test("un versement est écrit personnel, sans quoi il serait lu par le projet", () => {
+  const ligne = laLigneDunVersement({
+    journal: { fichiers: 24, lus: 24, verses: 187 }, dite: "187 messages versés",
+    startedAt: Date.now()
+  });
+  assert.equal(ligne.personnelle, true);
+  assert.equal(ligne.geste, LE_GESTE);
+  assert.equal(ligne.statut, "ok");
+  assert.match(ligne.titre, /24 fichiers/);
+  assert.equal(ligne.resume, "187 messages versés");
+});
+
+test("un dépôt arrêté est consigné en échec", () => {
+  const ligne = laLigneDunVersement({
+    journal: { fichiers: 24, arrete: "ce projet n'accepte pas d'écriture depuis votre session" },
+    dite: "", startedAt: Date.now()
+  });
+  assert.equal(ligne.statut, "echec");
+  assert.match(ligne.resume, /interrompu/);
+});
+
+test("le versement est daté de son début, pas de sa fin", () => {
+  const debut = Date.now() - 90_000;
+  const ligne = laLigneDunVersement({ journal: { fichiers: 2 }, dite: "x", startedAt: debut });
+  assert.equal(ligne.startedAt, new Date(debut).toISOString());
+  assert.ok(ligne.durationMs >= 90_000, "une ligne datée de sa fin durerait zéro");
+  assert.ok(new Date(ligne.finishedAt).getTime() >= debut);
+});
+
+test("sans début connu, on ne prétend pas une durée", () => {
+  // Zéro milliseconde serait faux ; un tiret dit qu'on ne sait pas (règle 5).
+  const ligne = laLigneDunVersement({ journal: { fichiers: 2 }, dite: "x" });
+  assert.equal(ligne.startedAt, null);
+  assert.equal(ligne.durationMs, null);
+});
+
+test("un versement ne porte ni expéditeur, ni objet, ni nom de fichier", () => {
+  // Le journal des Actions n'est pas un second index de la correspondance.
+  const ligne = laLigneDunVersement({
+    journal: {
+      fichiers: 1, lus: 1, verses: 1,
+      accrocs: ["Ourdine Ferrand - devis.msg"]
+    },
+    dite: "1 message versé", startedAt: Date.now()
+  });
+  const tout = JSON.stringify(ligne);
+  assert.doesNotMatch(tout, /Ourdine/);
+  assert.doesNotMatch(tout, /\.msg/);
+});
+
+test("les trois comptes sont toujours des étapes, même à zéro", () => {
+  const etapes = lesEtapesDunVersement({ fichiers: 3, lus: 3, verses: 0, pieces: 0 });
+  assert.deepEqual(etapes.map((une) => une.id), ["lecture", "messages", "pieces"]);
+  assert.deepEqual(etapes[2].lignes, ["Pièces : 0"]);
+});
+
+test("les doublons évités et les accrocs ne s'ajoutent que s'il y en a", () => {
+  const sans = lesEtapesDunVersement({ fichiers: 1, lus: 1, verses: 1 });
+  assert.equal(sans.some((une) => une.id === "deja"), false);
+  assert.equal(sans.some((une) => une.id === "accrocs"), false);
+
+  const avec = lesEtapesDunVersement({ dejaLa: 2, piecesDejaLa: 3, refuses: 1 });
+  assert.deepEqual(avec.find((une) => une.id === "deja").lignes, ["Exemplaires : 5"]);
+  assert.equal(avec.find((une) => une.id === "accrocs").statut, "echec");
+});
+
+/* ── `arrete: false` n'est pas un motif d'arrêt ──────────────────────────── */
+
+/**
+ * **Le défaut que ce banc a trouvé dans un navigateur, et qu'aucune épreuve ne
+ * voyait.** Un dépôt réussi porte `arrete: false` (`unJournalNeuf()`). Lu par
+ * `String(valeur ?? "")`, cela donne `"false"` — une chaîne non vide, donc vraie.
+ * Tout dépôt réussi était donc consigné « Dépouillement interrompu : false », en
+ * échec, alors que les mails étaient rangés.
+ */
+test("un dépôt réussi n'est pas dit interrompu", () => {
+  const reussi = { fichiers: 2, lus: 2, verses: 2, fini: true, arrete: false };
+
+  assert.equal(leMotDeLaFin(reussi, "2 messages versés"), "2 messages versés");
+  assert.doesNotMatch(leMotDeLaFin(reussi, "2 messages versés"), /interrompu/);
+  assert.doesNotMatch(leMotDeLaFin(reussi, "2 messages versés"), /false/);
+  assert.equal(leSortDeLaction(reussi), "success");
+  assert.equal(laLigneDunVersement({ journal: reussi, dite: "2 messages versés" }).statut, "ok");
+});
+
+test("un arrêt qui est une phrase reste un arrêt", () => {
+  const arrete = { fichiers: 2, arrete: "la base n'a pas répondu : le lot n'a pas été rangé" };
+  assert.match(leMotDeLaFin(arrete, ""), /interrompu : la base n'a pas répondu/);
+  assert.equal(leSortDeLaction(arrete), "error");
+  assert.equal(laLigneDunVersement({ journal: arrete }).statut, "echec");
+});
+
+test("un arrêt qui serait `true` n'est pas un motif non plus", () => {
+  // `true` ne dit pas ce qui s'est passé. Le donner à lire comme motif
+  // afficherait « Dépouillement interrompu : true ».
+  const journal = { fichiers: 1, arrete: true };
+  assert.doesNotMatch(leMotDeLaFin(journal, "1 message versé"), /true/);
 });

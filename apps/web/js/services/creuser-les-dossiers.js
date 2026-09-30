@@ -24,6 +24,8 @@
  * dit où — et `null` y est un endroit, pas une panne.
  */
 
+import { leMotDunRefus } from "./le-projet-ou-lon-ecrit.js";
+
 const texte = (valeur) => String(valeur ?? "").trim();
 
 const memeNom = (un, autre) =>
@@ -78,7 +80,13 @@ export async function creuserLesDossiers({
       courant = dossier.id;
     }
   } catch (erreur) {
-    return rate(texte(erreur?.message) || "cause inconnue");
+    // **Un refus de la base se dit en français.** Il s'affichait tel quel :
+    // « project_document_folders insert failed (403) : {"code":"42501" … } ».
+    // Ce n'est pas une information pour celui qui dépose ses mails, et cela ne
+    // lui dit surtout pas la seule chose qui le concerne — que rien n'a été
+    // rangé. La traduction vit dans `le-projet-ou-lon-ecrit.js`, avec ce qui
+    // explique la cause, et elle laisse intact tout refus qu'on ne connaît pas.
+    return rate(leMotDunRefus(erreur));
   }
 
   return { trouve: true, id: courant, motif: "" };

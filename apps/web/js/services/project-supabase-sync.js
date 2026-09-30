@@ -1,5 +1,7 @@
 import { store } from "../store.js";
-import { executionsAGarder } from "./run-partition.js";
+import { ORIGINE, executionsAGarder } from "./run-partition.js";
+import { cestUnIdDeProjet, laConcordanceSansCeProjet, leProjetOuLonEcrit } from "./le-projet-ou-lon-ecrit.js";
+import { LE_GESTE } from "./le-journal-du-depouillement.js";
 import { ensureProjectDocumentsState } from "./project-documents-store.js";
 import { ensureProjectAutomationDefaults } from "./project-automation.js";
 import { supabase, buildSupabaseAuthHeaders, getCurrentUser, getSupabaseUrl, getSupabaseAnonKey } from "../../assets/js/auth.js";
@@ -15,8 +17,13 @@ function safeString(value = "") {
   return String(value ?? "").trim();
 }
 
+/**
+ * La forme d'un identifiant de base, écrite **une seule fois** — dans
+ * `le-projet-ou-lon-ecrit.js`. Elle l'était trois fois, et une expression
+ * régulière recopiée trois fois finit par ne plus dire la même chose (règle 10).
+ */
 function looksLikeUuid(value) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(safeString(value));
+  return cestUnIdDeProjet(value);
 }
 
 function getFrontendProjectKey() {
@@ -332,66 +339,86 @@ export async function resolveCurrentBackendProjectId(options = {}) {
     return projectBucket.backendProjectId;
   }
 
-  const frontendMap = readFrontendProjectMap();
-  const mappedId = safeString(frontendMap[frontendProjectId] || "");
-  if (looksLikeUuid(mappedId)) {
-    projectBucket.backendProjectId = mappedId;
-    return mappedId;
+  const concordance = readFrontendProjectMap();
+  const ou = await leProjetOuLonEcrit({
+    frontendId: frontendProjectId,
+    concordance,
+    pistes: [
+      store.currentProject?.backendProjectId,
+      store.currentProject?.backend_project_id,
+      store.currentProject?.supabaseProjectId,
+      store.currentProject?.supabase_project_id,
+      store.projectForm?.backendProjectId,
+      store.projectForm?.backend_project_id,
+      store.currentProjectId,
+      store.currentProject?.id
+    ].map((value) => safeString(value)).filter(Boolean),
+    nom: getCurrentProjectName(),
+    portes: { relire: relireUnProjet, parLeNom: chercherUnProjetParLeNom }
+  });
+
+  // **Une entrée refusée s'oublie**, et seulement une entrée refusée : une base
+  // qui n'a pas répondu ne prouve rien (`le-projet-ou-lon-ecrit.js`).
+  if (ou.aOublier) {
+    writeFrontendProjectMap(laConcordanceSansCeProjet(concordance, frontendProjectId));
   }
 
-  const explicitBackendId = [
-    store.currentProject?.backendProjectId,
-    store.currentProject?.backend_project_id,
-    store.currentProject?.supabaseProjectId,
-    store.currentProject?.supabase_project_id,
-    store.projectForm?.backendProjectId,
-    store.projectForm?.backend_project_id
-  ].map((value) => safeString(value)).find((value) => looksLikeUuid(value));
-
-  if (explicitBackendId) {
-    frontendMap[frontendProjectId] = explicitBackendId;
-    writeFrontendProjectMap(frontendMap);
-    projectBucket.backendProjectId = explicitBackendId;
-    return explicitBackendId;
+  if (!ou.id) {
+    // **On n'a pas de projet, et on le dit.** Garder le dernier identifiant vu
+    // ferait écrire dans un projet qu'on croit être le bon, ce qui est la seule
+    // issue pire que ne pas écrire.
+    projectBucket.backendProjectId = "";
+    return "";
   }
 
-  const explicitCurrentId = safeString(store.currentProjectId || store.currentProject?.id || "");
-  if (looksLikeUuid(explicitCurrentId)) {
-    const idParams = new URLSearchParams();
-    idParams.set("select", "id");
-    idParams.set("id", `eq.${explicitCurrentId}`);
-    idParams.set("limit", "1");
-
-    const idRows = await restFetch("projects", idParams).catch(() => []);
-    const verifiedBackendId = safeString(idRows?.[0]?.id || "");
-
-    if (looksLikeUuid(verifiedBackendId)) {
-      frontendMap[frontendProjectId] = verifiedBackendId;
-      writeFrontendProjectMap(frontendMap);
-      projectBucket.backendProjectId = verifiedBackendId;
-      return verifiedBackendId;
-    }
+  if (ou.source !== "concordance") {
+    writeFrontendProjectMap({
+      ...laConcordanceSansCeProjet(concordance, frontendProjectId),
+      [frontendProjectId]: ou.id
+    });
   }
 
-  const projectName = getCurrentProjectName();
-  if (!projectName) return "";
+  projectBucket.backendProjectId = ou.id;
+  return ou.id;
+}
 
+/**
+ * Relire un projet dans la base, sous la session en cours.
+ *
+ * C'est **toute** la vérification, et elle suffit : `projects_owner_only` décide
+ * de la lecture et de l'écriture sur le même fait. Un projet que cette requête
+ * rend acceptera donc qu'on y écrive ; un projet qu'elle ne rend pas refusera,
+ * et c'est le 403 qu'on a vu.
+ *
+ * @returns {Promise<string|null>} l'identifiant, `""` si la base refuse,
+ *   **`null` si elle n'a pas répondu** — un silence n'est pas un refus.
+ */
+async function relireUnProjet(projectId = "") {
+  const params = new URLSearchParams();
+  params.set("select", "id");
+  params.set("id", `eq.${safeString(projectId)}`);
+  params.set("limit", "1");
+
+  let rows = null;
+  try {
+    rows = await restFetch("projects", params);
+  } catch (erreur) {
+    console.warn("[projet] relecture impossible", erreur);
+    return null;
+  }
+  return safeString(rows?.[0]?.id || "");
+}
+
+/** Le projet qui porte ce nom, le plus récent d'abord. */
+async function chercherUnProjetParLeNom(nom = "") {
   const params = new URLSearchParams();
   params.set("select", "id,name,created_at");
-  params.set("name", `eq.${projectName}`);
+  params.set("name", `eq.${safeString(nom)}`);
   params.set("order", "created_at.desc");
   params.set("limit", "1");
 
-  const rows = await restFetch("projects", params);
-  const backendProjectId = safeString(rows?.[0]?.id || "");
-
-  if (backendProjectId) {
-    frontendMap[frontendProjectId] = backendProjectId;
-    writeFrontendProjectMap(frontendMap);
-    projectBucket.backendProjectId = backendProjectId;
-  }
-
-  return backendProjectId;
+  const rows = await restFetch("projects", params).catch(() => []);
+  return safeString(rows?.[0]?.id || "");
 }
 
 function applyProjectIdentityLocally({
@@ -909,11 +936,18 @@ function mapProjectRunRowToLogEntry(row = {}) {
   const statut = safeString(row.statut || "ok");
   const geste = safeString(row.geste || "fusion");
 
-  const triggerLabel = row.proposition_id ? "Fusion d'une proposition" : "Exécution du projet";
+  // **L'origine se lit sur le geste, et elle décide de l'onglet.** Un versement
+  // rangé dans « Partagées » annoncerait comme lu par tout le projet ce que la
+  // base ne rend qu'à son auteur (`202610280001_...`).
+  const origine = geste === LE_GESTE ? ORIGINE.VERSEMENT : ORIGINE.PROJET;
+
+  const triggerLabel = geste === LE_GESTE
+    ? "Dépôt de messagerie"
+    : (row.proposition_id ? "Fusion d'une proposition" : "Exécution du projet");
 
   return {
     id: safeString(row.id),
-    name: safeString(row.titre) || "Fusion",
+    name: safeString(row.titre) || (geste === LE_GESTE ? "Versement" : "Fusion"),
     kind: geste,
     agentKey: geste,
     lifecycleStatus: "completed",
@@ -925,8 +959,8 @@ function mapProjectRunRowToLogEntry(row = {}) {
     triggerType: geste,
     triggerLabel,
     trigger: { type: geste, label: triggerLabel },
-    origine: "projet",
-    privee: false,
+    origine,
+    privee: row.personnelle === true,
     documentName: "",
     subject: { documentName: "" },
     startedAt: debut,
@@ -1092,10 +1126,33 @@ export async function syncProjectDocumentsFromSupabase(options = {}) {
   return nextItems;
 }
 
+/**
+ * L'identifiant de base, ou un refus — et le refus est le tout du garde.
+ *
+ * ## Ce que cette fonction ne faisait pas, alors que son nom le promettait
+ *
+ * Elle acceptait n'importe quelle chaîne non vide. `assurer` ne assurait donc
+ * rien : l'identifiant d'écran d'un projet (« projet-3 ») passait, partait à la
+ * base, et la base répondait par un code SQL. Une déclaration qu'on ne vérifie
+ * pas est une intention (règle 12), et c'est un des deux chemins par lesquels le
+ * dépôt de mails a envoyé le mauvais identifiant : `lecture-des-mails.js`
+ * passait `store.currentProjectId` sans le résoudre.
+ *
+ * Elle refuse donc maintenant ce qui n'a pas la forme d'un identifiant de base.
+ * Le refus arrive avant le réseau, il nomme la valeur reçue, et il ne peut plus
+ * se confondre avec un refus de droit — qui est une autre cause, et qu'on ne
+ * répare pas au même endroit.
+ */
 function ensureBackendProjectIdOrThrow(projectId = "") {
   const normalizedProjectId = safeString(projectId);
   if (!normalizedProjectId) {
     throw new Error("Project id is required.");
+  }
+  if (!cestUnIdDeProjet(normalizedProjectId)) {
+    throw new Error(
+      `« ${normalizedProjectId} » n'est pas l'identifiant du projet en base : `
+      + "il faut le résoudre avant d'écrire (resolveCurrentBackendProjectId)."
+    );
   }
 
   return normalizedProjectId;
@@ -1490,20 +1547,29 @@ export async function syncProjectActionsFromSupabase(options = {}) {
   // **Ce que le projet a fait**, par opposition à ce qu'il a calculé : les
   // fusions. Une table qui n'existerait pas encore ne doit pas emporter le
   // reste du journal — on rend une liste vide et l'on continue.
+  const GESTES_SOCLE =
+    "id,geste,proposition_id,titre,resume,statut,started_at,finished_at,duration_ms,steps,created_at";
+
   const lireLesGestes = async () => {
-    try {
-      const gestes = new URLSearchParams();
-      gestes.set(
-        "select",
-        "id,geste,proposition_id,titre,resume,statut,started_at,finished_at,duration_ms,steps,created_at"
-      );
-      gestes.set("project_id", `eq.${backendProjectId}`);
-      gestes.set("order", "started_at.desc");
-      return await restFetch("project_runs", gestes);
-    } catch (erreur) {
-      console.warn("[actions] project_runs illisible", erreur);
-      return [];
+    // **`personnelle` est la dernière colonne arrivée**, et PostgREST rejette
+    // toute la requête pour une seule colonne inconnue : la demander sans repli
+    // ferait disparaître **toutes** les fusions du journal tant que la migration
+    // n'est pas déployée. On l'abandonne d'abord, comme pour les courses.
+    for (const colonnes of essaisDeColonnes(GESTES_SOCLE, ["personnelle"])) {
+      try {
+        const gestes = new URLSearchParams();
+        gestes.set("select", colonnes);
+        gestes.set("project_id", `eq.${backendProjectId}`);
+        gestes.set("order", "started_at.desc");
+        return await restFetch("project_runs", gestes);
+      } catch (erreur) {
+        if (colonnes === GESTES_SOCLE) {
+          console.warn("[actions] project_runs illisible", erreur);
+          return [];
+        }
+      }
     }
+    return [];
   };
 
   // Trois pipelines, un seul journal. Ne pas savoir lire l'un n'autorise pas

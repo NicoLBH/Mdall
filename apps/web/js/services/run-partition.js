@@ -29,15 +29,39 @@
  * rangé, pas indûment.
  */
 
-/** Les deux origines possibles. Il n'y en a pas de troisième. */
+import { LE_CADENAS_DUN_FICHIER } from "./le-dossier-des-mails.js";
+
+/**
+ * Les trois origines possibles.
+ *
+ * ## Pourquoi une troisième est arrivée
+ *
+ * Un dépôt de mails n'entrait dans aucune des deux. Il n'est pas **partagé** :
+ * la correspondance d'un chantier ne se lit que par celui qui l'a versée, et
+ * ranger son dépôt dans « Partagées » aurait annoncé le contraire de ce que la
+ * base fait. Il ne vient pas non plus de l'**Atelier** : ce n'est pas un essai,
+ * c'est un acte — des fichiers sont entrés dans le projet, et ils y restent.
+ *
+ * La ranger dans l'une des deux aurait donc fait mentir l'écran dont tout le
+ * rôle est de dire qui voit quoi.
+ *
+ * ## Ce qu'un versement est
+ *
+ * **Ce que vous avez versé dans le projet** : des mails aujourd'hui, et ce qui
+ * s'y déposera de la même façon demain. Une matière première, pas une
+ * conclusion : rien de ce qui est versé n'entre dans la mémoire, qui ne se
+ * remplit que par une proposition signée (règle 1).
+ */
 export const ORIGINE = {
   /** Un acte du projet : analyse d'une proposition, dépôt, lancement manuel. */
   PROJET: "projet",
   /** Un geste de travail dans l'Atelier. */
-  ATELIER: "atelier"
+  ATELIER: "atelier",
+  /** Un dépôt de matière — des mails — que vous seul lisez. */
+  VERSEMENT: "versement"
 };
 
-/** Le nom des deux vues, tel qu'il s'affiche. */
+/** Le nom des trois vues, tel qu'il s'affiche. */
 export const ONGLETS = [
   {
     cle: ORIGINE.PROJET,
@@ -48,25 +72,44 @@ export const ONGLETS = [
     cle: ORIGINE.ATELIER,
     libelle: "Atelier",
     explication: "Vos essais dans l'Atelier. Ils ne sont pas partagés avec le projet."
+  },
+  {
+    cle: ORIGINE.VERSEMENT,
+    libelle: "Versements",
+    explication: "Ce que vous avez versé dans le projet : mails, pièces jointes. "
+      + "Vous seul les lisez."
   }
 ];
 
+/**
+ * L'origine d'une exécution, **telle qu'elle est écrite** — et `projet` quand
+ * rien ne l'est.
+ *
+ * Ce défaut est le bon : une exécution d'avant les origines est un acte du
+ * projet, et c'est ce qu'elle était. Un versement, lui, ne se devine pas : il
+ * porte sa marque, sans quoi il tomberait dans « Partagées » — c'est-à-dire
+ * qu'on annoncerait comme partagé ce que la base garde privé.
+ */
 function origineDe(entry) {
-  return entry?.origine === ORIGINE.ATELIER ? ORIGINE.ATELIER : ORIGINE.PROJET;
+  const dite = String(entry?.origine ?? "").trim();
+  if (dite === ORIGINE.ATELIER) return ORIGINE.ATELIER;
+  if (dite === ORIGINE.VERSEMENT) return ORIGINE.VERSEMENT;
+  return ORIGINE.PROJET;
 }
 
 /** Les exécutions rangées par origine, dans l'ordre où elles arrivent. */
 export function partitionnerActions(entries = []) {
   const liste = Array.isArray(entries) ? entries : [];
-  return {
-    [ORIGINE.PROJET]: liste.filter((entry) => origineDe(entry) === ORIGINE.PROJET),
-    [ORIGINE.ATELIER]: liste.filter((entry) => origineDe(entry) === ORIGINE.ATELIER)
-  };
+  const piles = {};
+  for (const onglet of ONGLETS) piles[onglet.cle] = [];
+  for (const entry of liste) piles[origineDe(entry)].push(entry);
+  return piles;
 }
 
-/** L'onglet demandé, ramené à l'un des deux qui existent. */
+/** L'onglet demandé, ramené à l'un de ceux qui existent. */
 export function ongletValide(cle) {
-  return cle === ORIGINE.ATELIER ? ORIGINE.ATELIER : ORIGINE.PROJET;
+  const demande = String(cle ?? "").trim();
+  return ONGLETS.some((onglet) => onglet.cle === demande) ? demande : ORIGINE.PROJET;
 }
 
 /**
@@ -78,11 +121,31 @@ export function ongletValide(cle) {
  * qu'elle ne tient pas.
  */
 export function decrireVisibilite(entry = {}) {
-  if (origineDe(entry) !== ORIGINE.ATELIER) return null;
+  const origine = origineDe(entry);
+
+  // **Un versement porte un cadenas, et c'est le même qu'ailleurs.** Le dossier
+  // « Mails » en porte un pour dire exactement cela : chacun n'y voit que les
+  // siens. Deux dessins pour une même règle obligeraient à apprendre deux fois
+  // la même chose.
+  //
+  // Le nom de l'icône vient d'où il vient déjà. Écrit ici à la main, il valait
+  // `lock` — un nom absent du jeu d'icônes, donc une case vide à l'écran, que
+  // ni la page ni la console ne signalent (règle 10).
+  if (origine === ORIGINE.VERSEMENT) {
+    return {
+      marque: true,
+      icone: LE_CADENAS_DUN_FICHIER.icone,
+      titre: `Versement — ${LE_CADENAS_DUN_FICHIER.titre}`,
+      note: ""
+    };
+  }
+
+  if (origine !== ORIGINE.ATELIER) return null;
 
   if (entry.privee === true) {
     return {
       marque: true,
+      icone: "cpu",
       titre: "Atelier — visible par vous seul",
       note: ""
     };
@@ -90,9 +153,33 @@ export function decrireVisibilite(entry = {}) {
 
   return {
     marque: false,
+    icone: "cpu",
     titre: "Atelier — antérieure au cloisonnement, encore visible par le projet",
     note: "antérieure au cloisonnement"
   };
+}
+
+/**
+ * Ce qu'on a le droit de réécrire quand la base refuse une colonne trop neuve.
+ *
+ * ## Pourquoi un repli, et pourquoi il ne va que dans un sens
+ *
+ * PostgREST rejette **toute** l'écriture pour une seule colonne inconnue.
+ * `personnelle` est la dernière arrivée : l'envoyer sans repli ferait perdre
+ * toutes les fusions du journal tant que la migration n'est pas déployée.
+ *
+ * Mais réécrire un versement **sans** sa marque le rendrait partagé — c'est-à-
+ * dire publierait la correspondance de quelqu'un pour sauver une ligne de
+ * journal. On préfère perdre la ligne : `null` dit qu'il n'y a pas de repli.
+ *
+ * @returns {object|null} la ligne à réessayer, ou `null` s'il ne faut pas
+ */
+export function laCourseDeRepli(ligne = null) {
+  if (!ligne || typeof ligne !== "object") return null;
+  if (ligne.personnelle === true) return null;
+
+  const { personnelle: _mise, ...sansLaMarque } = ligne;
+  return sansLaMarque;
 }
 
 /**

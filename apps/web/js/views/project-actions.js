@@ -393,10 +393,13 @@ function renderRunRows(entries) {
 function renderMarqueAtelier(entry) {
   const visibilite = decrireVisibilite(entry);
   if (!visibilite?.marque) return "";
+  // **L'icône vient de la règle, pas de l'écran.** Elle était écrite ici, en
+  // dur : un versement aurait donc porté la marque de l'Atelier, c'est-à-dire
+  // dit « essai » d'un dépôt qui est un acte (règle 10).
   return `
     <span class="workflow-runs__atelier" title="${escapeHtml(visibilite.titre)}"
           aria-label="${escapeHtml(visibilite.titre)}">
-      ${svgIcon("cpu", { className: "octicon" })}
+      ${svgIcon(visibilite.icone || "cpu", { className: "octicon" })}
     </span>
   `;
 }

@@ -149,3 +149,26 @@ test("un dossier sans nom ne se creuse pas", async () => {
   assert.equal(ou.trouve, false);
   assert.deepEqual(journal.crees.map((cree) => cree.name), ["perso"]);
 });
+
+test("un refus de droit de la base ne s'affiche pas en SQL", async () => {
+  // C'est ce que l'écran a montré à quelqu'un qui déposait vingt-quatre mails.
+  const refus = new Error(
+    'project_document_folders insert failed (403): {"code":"42501","details":null,'
+    + '"hint":null,"message":"new row violates row-level security policy for table '
+    + '\\"project_document_folders\\""}'
+  );
+  const ou = await creuserLesDossiers({
+    projectId: "11111111-1111-4111-8111-111111111111",
+    dossiers: ["Mails"],
+    portes: {
+      listerLesEnfants: async () => [],
+      creerLeDossier: async () => { throw refus; }
+    }
+  });
+
+  assert.equal(ou.trouve, false);
+  assert.doesNotMatch(ou.motif, /42501/, "un code SQL n'est pas une phrase");
+  assert.doesNotMatch(ou.motif, /row-level/);
+  assert.doesNotMatch(ou.motif, /403/);
+  assert.match(ou.motif, /rien n'a été rangé/);
+});

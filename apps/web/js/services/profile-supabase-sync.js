@@ -1,5 +1,6 @@
 import { store } from "../store.js";
 import { ensureProjectDocumentsState } from "./project-documents-store.js";
+import { cestUnIdDeProjet, laConcordanceSansCeProjet, leProjetOuLonEcrit } from "./le-projet-ou-lon-ecrit.js";
 import { ensureProjectAutomationDefaults } from "./project-automation.js";
 import { supabase, buildSupabaseAuthHeaders, getCurrentUser, getSupabaseUrl, getSupabaseAnonKey } from "../../assets/js/auth.js";
 import { AVATARS_BUCKET, DEFAULT_AVATAR_URL, resolveAvatarUrl } from "./avatar-url.js";
@@ -209,8 +210,13 @@ function safeString(value = "") {
   return String(value ?? "").trim();
 }
 
+/**
+ * La forme d'un identifiant de base, écrite **une seule fois** — dans
+ * `le-projet-ou-lon-ecrit.js`. Elle l'était trois fois, et une expression
+ * régulière recopiée trois fois finit par ne plus dire la même chose (règle 10).
+ */
 function looksLikeUuid(value) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(safeString(value));
+  return cestUnIdDeProjet(value);
 }
 
 function getFrontendProjectKey() {
@@ -526,66 +532,86 @@ export async function resolveCurrentBackendProjectId(options = {}) {
     return projectBucket.backendProjectId;
   }
 
-  const frontendMap = readFrontendProjectMap();
-  const mappedId = safeString(frontendMap[frontendProjectId] || "");
-  if (looksLikeUuid(mappedId)) {
-    projectBucket.backendProjectId = mappedId;
-    return mappedId;
+  const concordance = readFrontendProjectMap();
+  const ou = await leProjetOuLonEcrit({
+    frontendId: frontendProjectId,
+    concordance,
+    pistes: [
+      store.currentProject?.backendProjectId,
+      store.currentProject?.backend_project_id,
+      store.currentProject?.supabaseProjectId,
+      store.currentProject?.supabase_project_id,
+      store.projectForm?.backendProjectId,
+      store.projectForm?.backend_project_id,
+      store.currentProjectId,
+      store.currentProject?.id
+    ].map((value) => safeString(value)).filter(Boolean),
+    nom: getCurrentProjectName(),
+    portes: { relire: relireUnProjet, parLeNom: chercherUnProjetParLeNom }
+  });
+
+  // **Une entrée refusée s'oublie**, et seulement une entrée refusée : une base
+  // qui n'a pas répondu ne prouve rien (`le-projet-ou-lon-ecrit.js`).
+  if (ou.aOublier) {
+    writeFrontendProjectMap(laConcordanceSansCeProjet(concordance, frontendProjectId));
   }
 
-  const explicitBackendId = [
-    store.currentProject?.backendProjectId,
-    store.currentProject?.backend_project_id,
-    store.currentProject?.supabaseProjectId,
-    store.currentProject?.supabase_project_id,
-    store.projectForm?.backendProjectId,
-    store.projectForm?.backend_project_id
-  ].map((value) => safeString(value)).find((value) => looksLikeUuid(value));
-
-  if (explicitBackendId) {
-    frontendMap[frontendProjectId] = explicitBackendId;
-    writeFrontendProjectMap(frontendMap);
-    projectBucket.backendProjectId = explicitBackendId;
-    return explicitBackendId;
+  if (!ou.id) {
+    // **On n'a pas de projet, et on le dit.** Garder le dernier identifiant vu
+    // ferait écrire dans un projet qu'on croit être le bon, ce qui est la seule
+    // issue pire que ne pas écrire.
+    projectBucket.backendProjectId = "";
+    return "";
   }
 
-  const explicitCurrentId = safeString(store.currentProjectId || store.currentProject?.id || "");
-  if (looksLikeUuid(explicitCurrentId)) {
-    const idParams = new URLSearchParams();
-    idParams.set("select", "id");
-    idParams.set("id", `eq.${explicitCurrentId}`);
-    idParams.set("limit", "1");
-
-    const idRows = await restFetch("projects", idParams).catch(() => []);
-    const verifiedBackendId = safeString(idRows?.[0]?.id || "");
-
-    if (looksLikeUuid(verifiedBackendId)) {
-      frontendMap[frontendProjectId] = verifiedBackendId;
-      writeFrontendProjectMap(frontendMap);
-      projectBucket.backendProjectId = verifiedBackendId;
-      return verifiedBackendId;
-    }
+  if (ou.source !== "concordance") {
+    writeFrontendProjectMap({
+      ...laConcordanceSansCeProjet(concordance, frontendProjectId),
+      [frontendProjectId]: ou.id
+    });
   }
 
-  const projectName = getCurrentProjectName();
-  if (!projectName) return "";
+  projectBucket.backendProjectId = ou.id;
+  return ou.id;
+}
 
+/**
+ * Relire un projet dans la base, sous la session en cours.
+ *
+ * C'est **toute** la vérification, et elle suffit : `projects_owner_only` décide
+ * de la lecture et de l'écriture sur le même fait. Un projet que cette requête
+ * rend acceptera donc qu'on y écrive ; un projet qu'elle ne rend pas refusera,
+ * et c'est le 403 qu'on a vu.
+ *
+ * @returns {Promise<string|null>} l'identifiant, `""` si la base refuse,
+ *   **`null` si elle n'a pas répondu** — un silence n'est pas un refus.
+ */
+async function relireUnProjet(projectId = "") {
+  const params = new URLSearchParams();
+  params.set("select", "id");
+  params.set("id", `eq.${safeString(projectId)}`);
+  params.set("limit", "1");
+
+  let rows = null;
+  try {
+    rows = await restFetch("projects", params);
+  } catch (erreur) {
+    console.warn("[projet] relecture impossible", erreur);
+    return null;
+  }
+  return safeString(rows?.[0]?.id || "");
+}
+
+/** Le projet qui porte ce nom, le plus récent d'abord. */
+async function chercherUnProjetParLeNom(nom = "") {
   const params = new URLSearchParams();
   params.set("select", "id,name,created_at");
-  params.set("name", `eq.${projectName}`);
+  params.set("name", `eq.${safeString(nom)}`);
   params.set("order", "created_at.desc");
   params.set("limit", "1");
 
-  const rows = await restFetch("projects", params);
-  const backendProjectId = safeString(rows?.[0]?.id || "");
-
-  if (backendProjectId) {
-    frontendMap[frontendProjectId] = backendProjectId;
-    writeFrontendProjectMap(frontendMap);
-    projectBucket.backendProjectId = backendProjectId;
-  }
-
-  return backendProjectId;
+  const rows = await restFetch("projects", params).catch(() => []);
+  return safeString(rows?.[0]?.id || "");
 }
 
 function applyProjectIdentityLocally({ frontendProjectId = getFrontendProjectKey(), backendProjectId = "", name = "" } = {}) {
@@ -1838,9 +1864,9 @@ export function getCurrentProjectSubjectCounters() {
 /* ── Les personnes de tous mes chantiers ─────────────────────────────────── */
 
 /**
- * Qui travaille sur les chantiers que mon carnet regarde.
+ * Qui travaille sur les chantiers que mon concordance regarde.
  *
- * ## Pourquoi le carnet en a besoin
+ * ## Pourquoi la concordance en a besoin
  *
  * « Assigné à moi », « Créé par moi » et « Mentions » sont des **champs de la
  * grammaire des sujets**, et `champsDesSujets` ne déclare un champ que s'il a
@@ -1849,10 +1875,10 @@ export function getCurrentProjectSubjectCounters() {
  * dise pourquoi (règle 5).
  *
  * Le chargeur d'un projet ne sait lire qu'un chantier à la fois, et range dans
- * `store.projectForm` — celui du projet courant, que le carnet n'a pas. On lit
+ * `store.projectForm` — celui du projet courant, que la concordance n'a pas. On lit
  * donc les mêmes lignes pour plusieurs chantiers, avec la même transformation.
  *
- * Voir `docs/le-carnet-prend-la-forme-des-sujets.md`, étape 2.
+ * Voir `docs/le-concordance-prend-la-forme-des-sujets.md`, étape 2.
  *
  * @param {string[]} projectIds les chantiers à lire
  * @returns {Promise<object[]>} les personnes, sans doublon — quelqu'un qui
