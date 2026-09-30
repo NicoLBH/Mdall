@@ -56,7 +56,10 @@ const LES_MIGRATIONS = [
   "202611010001_les_expediteurs_deja_ecrits.sql",
   "202611020001_les_domaines_du_systeme.sql",
   "202611030001_les_enchainements_du_systeme.sql",
-  "202611040001_les_vingt_six_portes.sql"
+  "202611040001_les_vingt_six_portes.sql",
+  "202611050001_lannuaire_a_son_proprietaire.sql",
+  "202611060001_un_chantier_qui_se_range.sql",
+  "202611070001_les_sujets_du_systeme.sql"
 ];
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -594,25 +597,125 @@ test("chacune se lit encore par son propriétaire, et pas par l'autre",
   });
 
 /**
- * **Les deux communes le restent, et c'est dit.** Un catalogue de codes de lots
- * et un registre de personnes à unicité globale ne se rangent pas par projet ;
- * ce qu'on leur a retiré est `anon`, et rien de plus. L'épreuve constate ce que
- * la migration laisse ouvert autant que ce qu'elle ferme (règle 12).
+ * **Le catalogue reste commun, et c'est dit.** Les codes de lots du bâtiment
+ * sont la même liste pour tout le monde ; ce qu'on leur a retiré est `anon` et
+ * l'écriture. L'épreuve constate ce que la migration laisse ouvert autant que
+ * ce qu'elle ferme (règle 12).
  */
-test("le catalogue et le registre restent lisibles par tout compte connecté",
+test("le catalogue reste lisible par tout compte connecté, et ne s'écrit plus",
   { skip: sansPostgres }, () => {
     banc.sql("delete from public.lot_catalog;");
     banc.sql("insert into public.lot_catalog (code) values ('GO');");
     assert.equal(banc.enTantQue(A, "select count(*) from public.lot_catalog;").sortie, "1");
     assert.equal(banc.enTantQue(B, "select count(*) from public.lot_catalog;").sortie, "1");
-    // Mais il ne se réécrit plus depuis le navigateur : c'est un référentiel.
     assert.equal(banc.enTantQue(A, "insert into public.lot_catalog (code) values ('X');").ok,
       false, "le catalogue se laisse encore réécrire");
-
-    banc.sql("delete from public.directory_people;");
-    banc.sql("insert into public.directory_people (email) values ('o.ferrand@novaclim.example');");
-    assert.equal(banc.enTantQue(B, "select count(*) from public.directory_people;").sortie, "1");
   });
+
+/* ── L'annuaire des personnes ─────────────────────────────────────────────── */
+
+/**
+ * **Ce que le tour précédent laissait ouvert.** Tout compte connecté lisait le
+ * nom et l'adresse de toutes les personnes de tous les chantiers, parce que
+ * l'unicité globale sur l'adresse interdisait de fermer sans casser l'écriture.
+ */
+test("une fiche n'est lue que par celui qui l'a écrite", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_collaborators;");
+  banc.sql("delete from public.subject_assignees;");
+  banc.sql("delete from public.directory_people;");
+  banc.sql(
+    "insert into public.directory_people (email, created_by_user_id) values "
+    + `('o.ferrand@novaclim.example', '${A}');`
+  );
+
+  assert.equal(banc.enTantQue(A, "select count(*) from public.directory_people;").sortie, "1");
+  assert.equal(banc.enTantQue(B, "select count(*) from public.directory_people;").sortie, "0",
+    "l'annuaire d'un autre se lit encore");
+  assert.equal(banc.sansCompte("select count(*) from public.directory_people;").sortie, "0");
+});
+
+/**
+ * **Et deux carnets peuvent tenir la même adresse.** C'est ce que l'unicité
+ * globale interdisait, et c'est ce qui rend la fermeture possible : chacun
+ * écrit sa fiche sans heurter celle d'un autre.
+ */
+test("deux comptes tiennent chacun la fiche de la même adresse", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.directory_people;");
+  const chezA = banc.enTantQue(A,
+    "insert into public.directory_people (email, created_by_user_id)"
+    + ` values ('o.ferrand@novaclim.example', '${A}');`);
+  assert.equal(chezA.ok, true, chezA.motif);
+
+  const chezB = banc.enTantQue(B,
+    "insert into public.directory_people (email, created_by_user_id)"
+    + ` values ('o.ferrand@novaclim.example', '${B}');`);
+  assert.equal(chezB.ok, true, "l'unicité globale bloque encore le second carnet");
+
+  // Mais deux fois la même adresse dans le même carnet, non.
+  assert.equal(banc.enTantQue(A,
+    "insert into public.directory_people (email, created_by_user_id)"
+    + ` values ('o.ferrand@novaclim.example', '${A}');`).ok, false);
+});
+
+/**
+ * **On n'écrit qu'en son propre nom.** Sans `with check`, on poserait une fiche
+ * au nom de quelqu'un d'autre — et on la relirait par la première clause.
+ */
+test("on ne pose pas une fiche au nom d'un autre", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.directory_people;");
+  const pose = banc.enTantQue(A,
+    `insert into public.directory_people (email, created_by_user_id) values ('x@y.example', '${B}');`);
+  assert.equal(pose.ok, false, "une fiche s'écrit au nom d'un autre compte");
+});
+
+/**
+ * **Les trois autres façons d'avoir affaire à une personne.** Fermer à celles-ci
+ * rendrait muets des écrans qui marchent : la vue des collaborateurs joint cette
+ * table, et les assignés d'un sujet aussi.
+ */
+test("une personne se lit aussi par le chantier où elle collabore",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.project_collaborators;");
+    banc.sql("delete from public.directory_people;");
+    const qui = banc.sql(
+      `insert into public.directory_people (email, created_by_user_id)
+         values ('contact@verifas.example', '${B}') returning id;`).sortie.trim();
+    // Écrite par B, mais elle collabore à la Médiathèque, qui est à A.
+    banc.sql(`insert into public.project_collaborators (project_id, person_id)
+                values ('${MEDIATHEQUE}', '${qui}');`);
+
+    assert.equal(banc.enTantQue(A, "select count(*) from public.directory_people;").sortie, "1",
+      "le propriétaire du chantier ne voit plus ses collaborateurs");
+  });
+
+test("une personne se lit aussi quand elle est l'assignée d'un sujet",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.project_collaborators;");
+    banc.sql("delete from public.subject_assignees;");
+    banc.sql("delete from public.directory_people;");
+    const qui = banc.sql(
+      `insert into public.directory_people (email, created_by_user_id)
+         values ('atelier@bertrand.example', '${B}') returning id;`).sortie.trim();
+    banc.sql(`insert into public.subject_assignees (project_id, person_id)
+                values ('${MEDIATHEQUE}', '${qui}');`);
+
+    assert.equal(banc.enTantQue(A, "select count(*) from public.directory_people;").sortie, "1",
+      "les assignés d'un sujet ne se lisent plus");
+  });
+
+/**
+ * **Et c'est moi.** Une personne dont la fiche me désigne se lit, même écrite
+ * par quelqu'un d'autre : c'est ainsi qu'on se retrouve dans l'annuaire d'un
+ * chantier où l'on a été invité.
+ */
+test("chacun lit la fiche qui le désigne", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_collaborators;");
+  banc.sql("delete from public.subject_assignees;");
+  banc.sql("delete from public.directory_people;");
+  banc.sql(`insert into public.directory_people (email, created_by_user_id, linked_user_id)
+              values ('moi@bertrand.example', '${A}', '${B}');`);
+  assert.equal(banc.enTantQue(B, "select count(*) from public.directory_people;").sortie, "1");
+});
 
 /**
  * **La vingt-septième porte, qu'aucun compte de politiques ne pouvait voir.**
@@ -625,9 +728,13 @@ test("le catalogue et le registre restent lisibles par tout compte connecté",
 test("la vue des collaborateurs ne contourne plus les politiques",
   { skip: sansPostgres }, () => {
     banc.sql("delete from public.project_collaborators;");
+    banc.sql("delete from public.subject_assignees;");
     banc.sql("delete from public.directory_people;");
-    banc.sql("insert into public.directory_people (email) values ('o.ferrand@novaclim.example');");
-    banc.sql(`insert into public.project_collaborators (project_id) values ('${MEDIATHEQUE}');`);
+    const qui = banc.sql(
+      `insert into public.directory_people (email, created_by_user_id)
+         values ('o.ferrand@novaclim.example', '${A}') returning id;`).sortie.trim();
+    banc.sql(`insert into public.project_collaborators (project_id, person_id)
+                values ('${MEDIATHEQUE}', '${qui}');`);
 
     const sansCompte = banc.sansCompte("select count(*) from public.project_collaborators_view;");
     assert.equal(sansCompte.ok === false || sansCompte.sortie === "0", true,
@@ -639,3 +746,99 @@ test("la vue des collaborateurs ne contourne plus les politiques",
     assert.equal(
       banc.enTantQue(B, "select count(*) from public.project_collaborators_view;").sortie, "0");
   });
+
+/* ── Les sujets techniques ────────────────────────────────────────────────── */
+
+/** Poser des affirmations dans un chantier, en une fois. */
+function desAffirmations(projet, phrases) {
+  banc.sql(
+    "insert into public.project_assertions (project_id, statement) values "
+    + phrases.map((une) => `('${projet}', '${une.replace(/'/g, "''")}')`).join(",") + ";"
+  );
+}
+
+/**
+ * **Le garde-fou qui rend ceci montrable.** Un mot vu sur un seul chantier est
+ * son contenu, pas du vocabulaire. Il ne sort pas.
+ */
+test("un terme vu sur un seul chantier ne sort pas", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_assertions;");
+  desAffirmations(MEDIATHEQUE, [
+    "Le plancher beton du R+1 reste a valider",
+    "Reprise du plancher beton en zone C"
+  ]);
+  desAffirmations(GYMNASE, ["Charpente bois lamelle colle a confirmer"]);
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select sujet from public.les_sujets_du_systeme();");
+  assert.equal(lu.ok, true, lu.motif);
+
+  const sujets = lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+  // « plancher beton » n'est que sur la Médiathèque : il ne sort pas.
+  assert.equal(sujets.includes("plancher beton"), false,
+    "un terme propre à un chantier est sorti de la console");
+  assert.equal(sujets.includes("charpente bois"), false);
+});
+
+/**
+ * **Et ce qu'on écarte se compte.** Taire ce qu'on cache montrerait un
+ * vocabulaire plus pauvre qu'il n'est (règle 5).
+ */
+test("ce qui est écarté est dit", { skip: sansPostgres }, () => {
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select caches > 0 from public.la_mesure_des_sujets();");
+  assert.equal(lu.sortie.trim(), "t", "la console ne dit pas ce qu'elle cache");
+});
+
+/**
+ * **Le couple porte le sens, pas le mot seul.** « plancher » et « beton »
+ * disent bien moins que « plancher beton » — c'est toute la granulométrie qui
+ * manquait aux huit domaines.
+ */
+test("un terme partagé par deux chantiers sort, en mot et en couple",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.project_assertions;");
+    desAffirmations(MEDIATHEQUE, ["Niveau de nappe phreatique releve a 3 m"]);
+    desAffirmations(GYMNASE, ["La nappe phreatique impose un cuvelage"]);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select sujet || ':' || mots || ':' || affirmations || ':' || chantiers"
+      + " from public.les_sujets_du_systeme() order by 1;");
+    const sujets = lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+
+    assert.equal(sujets.includes("nappe phreatique:2:2:2"), true,
+      `le couple n'est pas sorti : ${sujets.join(" | ")}`);
+    assert.equal(sujets.includes("nappe:1:2:2"), true, "le mot seul n'est pas sorti");
+  });
+
+/**
+ * **Les mots-outils ne sont pas des sujets.** Sans cette liste, « cordialement »
+ * serait le premier terme du système.
+ */
+test("les mots-outils et les mots trop courts ne sont pas des sujets",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.project_assertions;");
+    desAffirmations(MEDIATHEQUE, ["Bonjour, merci pour ce document sur le desenfumage"]);
+    desAffirmations(GYMNASE, ["Bonjour, le desenfumage reste a trancher"]);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select sujet from public.les_sujets_du_systeme();");
+    const sujets = lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+
+    assert.equal(sujets.includes("desenfumage"), true, "le terme technique n'est pas sorti");
+    for (const outil of ["bonjour", "merci", "document", "pour", "sur"]) {
+      assert.equal(sujets.includes(outil), false, `« ${outil} » est compté comme un sujet`);
+    }
+  });
+
+/** La même porte que le reste de la console, et elle tient. */
+test("les sujets se refusent à qui n'est pas administrateur", { skip: sansPostgres }, () => {
+  const etranger = banc.sousLadresse("quelquun@ailleurs.example",
+    "select count(*) from public.les_sujets_du_systeme();");
+  assert.equal(etranger.ok, false, "la console s'ouvre à un compte ordinaire");
+  assert.match(etranger.motif, /réservé à la console/);
+
+  const mesure = banc.sousLadresse("quelquun@ailleurs.example",
+    "select count(*) from public.la_mesure_des_sujets();");
+  assert.equal(mesure.ok, false);
+});

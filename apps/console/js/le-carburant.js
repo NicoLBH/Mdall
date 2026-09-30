@@ -44,6 +44,13 @@ import {
 import {
   lesEnchainementsDuSysteme
 } from "../partage/js/services/les-enchainements-du-systeme-supabase.js";
+import {
+  CE_QUI_MANQUE_ENCORE, lesSujetsRanges, phraseDeCeQuiEstCache,
+  phraseDeLaGranulometrie, phraseDunSujet
+} from "../partage/js/services/les-sujets-du-systeme.js";
+import {
+  laMesureDesSujets, lesSujetsDuSysteme
+} from "../partage/js/services/les-sujets-du-systeme-supabase.js";
 
 const echapper = (valeur) => String(valeur ?? "")
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -237,6 +244,83 @@ function renderLesEnchainements(tous) {
   `;
 }
 
+/**
+ * Les sujets techniques, et ce qu'il leur manque encore.
+ *
+ * ## Ce que cet écran répond
+ *
+ * « Trois domaines pour 7 857 affirmations, c'est très largement insuffisant.
+ * Quoi en sol, quoi en structure ? » — voici quoi. Les termes que les chantiers
+ * écrivent réellement, comptés sur l'ensemble, et non huit cases décidées
+ * d'avance.
+ *
+ * ## Ce qu'il ne prétend pas être
+ *
+ * Ce n'est pas de l'apprentissage, et c'est écrit à l'écran. Un tableau de bord
+ * qui laisse croire qu'un modèle tourne derrière ferait prendre un comptage de
+ * mots pour une intelligence — et l'on s'en apercevrait au pire moment.
+ */
+function renderLesSujets(sujets, mesure) {
+  const ranges = lesSujetsRanges(sujets);
+  const cache = phraseDeCeQuiEstCache(mesure);
+
+  return `
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">Les sujets que les chantiers emploient</h3>
+      <p class="conso-usages__mot">
+        Huit cases ne décrivent pas un chantier, elles décrivent un sommaire :
+        « après le sol, la structure » est une évidence de métier. Voici ce que
+        les affirmations disent réellement — les termes qu'on y trouve, comptés
+        sur l'ensemble des chantiers. Ils ne sont pas déclarés, ils sont trouvés.
+      </p>
+      <p class="conso-usages__mot"><b>${
+        echapper(phraseDeLaGranulometrie(ranges, DOMAINS.length))}</b></p>
+
+      ${ranges.length ? `
+        <ul class="forme-reference">
+          ${ranges.slice(0, 40).map((une) => `
+            <li class="forme-reference__ligne">
+              <span class="forme-reference__quoi">${echapper(une.sujet)}</span>
+              <span class="forme-reference__chiffres mono-small">${
+                echapper(`${compteDit(une.affirmations)} ${une.affirmations > 1
+                  ? "affirmations" : "affirmation"}`)}</span>
+              <span class="forme-reference__sur mono-small">${
+                echapper(phraseDunSujet(une))}</span>
+            </li>
+          `).join("")}
+        </ul>
+        ${ranges.length > 40
+          ? `<p class="conso-usages__mot">${echapper(
+              `Les 40 premiers, sur ${compteDit(ranges.length)}.`)}</p>`
+          : ""}
+      ` : `<p class="forme-manques">
+        Aucun terme n'est encore partagé par deux chantiers. Ce n'est pas que le
+        vocabulaire est pauvre : c'est qu'il n'y a pas encore de quoi le
+        comparer.</p>`}
+
+      ${cache ? `<p class="conso-usages__mot">${echapper(cache)}</p>` : ""}
+    </section>
+
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">Ce qui manque pour que cela prédise</h3>
+      <p class="conso-usages__mot">
+        Ce tableau est un <b>comptage de termes</b>, pas un apprentissage : il ne
+        dépend d'aucun modèle et se vérifie ligne à ligne. C'est la couche qui
+        manquait — et celle sans laquelle un modèle n'aurait rien sur quoi
+        s'entraîner, ni rien à quoi se comparer. Voici ce qu'il reste, nommé
+        plutôt que dessiné en barres de progression.
+      </p>
+      ${CE_QUI_MANQUE_ENCORE.map((un) => `
+        <div class="forme-suite">
+          <h4 class="forme-suite__titre">${echapper(un.quoi)}</h4>
+          <p class="forme-suite__dit">${echapper(un.ou)}</p>
+          <p class="conso-usages__mot">${echapper(un.pourquoi)}</p>
+        </div>
+      `).join("")}
+    </section>
+  `;
+}
+
 function renderTout(comptes) {
   const dit = phraseDuGisement(comptes);
   const depuis = leJour(comptes?.depuis);
@@ -278,6 +362,7 @@ function renderTout(comptes) {
     */""}
     <div id="carburantDomaines"></div>
     <div id="carburantEnchainements"></div>
+    <div id="carburantSujets"></div>
 
     ${renderCeQuiNestPasFait()}
   `;
@@ -306,9 +391,11 @@ export async function monterLeCarburant(hote) {
   // **Les deux lectures ensemble, et chacune chez elle.** Elles ne dépendent pas
   // l'une de l'autre : les demander l'une après l'autre ferait attendre deux
   // allers-retours, et une panne de l'une emporterait l'affichage de l'autre.
-  const [lignes, couples] = await Promise.all([
+  const [lignes, couples, sujets, mesure] = await Promise.all([
     lesDomainesDuSysteme(),
-    lesEnchainementsDuSysteme()
+    lesEnchainementsDuSysteme(),
+    lesSujetsDuSysteme(),
+    laMesureDesSujets()
   ]);
 
   const apres = ou.querySelector("#carburantDomaines");
@@ -327,5 +414,14 @@ export async function monterLeCarburant(hote) {
           Les enchaînements n'ont pas pu être lus. Ce n'est pas qu'il n'y en a
           aucun : on ne sait pas lesquels il y a.</p></section>`
       : renderLesEnchainements(lesEnchainements(couples));
+  }
+
+  const ou_sujets = ou.querySelector("#carburantSujets");
+  if (ou_sujets) {
+    ou_sujets.innerHTML = sujets === null
+      ? `<section class="conso-usages"><p class="forme-manques">
+          Les sujets n'ont pas pu être lus. Ce n'est pas qu'il n'y en a aucun :
+          on ne sait pas lesquels il y a.</p></section>`
+      : renderLesSujets(sujets, mesure);
   }
 }

@@ -1,4 +1,5 @@
 import test from "node:test";
+import { LE_SELECT_DUN_DOCUMENT } from "./les-colonnes-dun-document.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
@@ -136,8 +137,9 @@ test("le listing descend la date, jamais le Markdown", () => {
   // Quarante comptes rendus feraient quarante fichiers Markdown au chargement
   // d'un dossier qu'on ouvre pour en lire un seul. Une date dit qu'il y a
   // quelque chose à lire, sans le lire.
-  const lecture = readFileSync(new URL("./project-supabase-sync.js", import.meta.url), "utf8");
-  const select = lecture.match(/fileParams\.set\("select", "([^"]*)"\)/)[1];
+  // **La liste des colonnes vit maintenant à un seul endroit** : les trois
+  // lectures de `documents` l'écrivaient chacune, et elles avaient divergé.
+  const select = LE_SELECT_DUN_DOCUMENT;
 
   assert.ok(select.includes("transcribed_at"), "le listing ne dit pas si un document est transcrit");
   assert.equal(select.includes("transcription_markdown"), false,

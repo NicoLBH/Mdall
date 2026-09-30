@@ -3,6 +3,7 @@ import { ORIGINE, executionsAGarder } from "./run-partition.js";
 import { cestUnIdDeProjet, laConcordanceSansCeProjet, leProjetOuLonEcrit } from "./le-projet-ou-lon-ecrit.js";
 import { LE_GESTE } from "./le-journal-du-depouillement.js";
 import { lesVersementsAuJournal } from "./la-file-au-journal.js";
+import { LE_SELECT_DUN_DOCUMENT } from "./les-colonnes-dun-document.js";
 import { ensureProjectDocumentsState } from "./project-documents-store.js";
 import { ensureProjectAutomationDefaults } from "./project-automation.js";
 import { supabase, buildSupabaseAuthHeaders, getCurrentUser, getSupabaseUrl, getSupabaseAnonKey } from "../../assets/js/auth.js";
@@ -523,7 +524,9 @@ function mapProjectRowToCatalogItem(row = {}) {
     description: safeString(row.description || ""),
     ownerId: safeString(row.owner_id || ""),
     createdAt: row.created_at || null,
-    updatedAt: row.updated_at || null
+    updatedAt: row.updated_at || null,
+    // Quand ce chantier a été rangé. `null` : il est en cours.
+    archivedAt: row.archived_at || null
   };
 }
 
@@ -550,8 +553,11 @@ function haveSameProjectCatalog(a = [], b = []) {
 
 export async function syncProjectsCatalogFromSupabase() {
   const params = new URLSearchParams();
-  params.set("select", "id,name,description,postal_code,city,project_owner_name,current_phase_code,owner_id,created_at,updated_at");
-  params.set("archived_at", "is.null");
+  // **Les deux états sont lus, et le tri se fait à l'écran.** La liste écartait
+  // les chantiers rangés dès la requête : impossible alors d'en montrer le
+  // compte, ni de les afficher quand on les demande. Un filtre qui ne peut pas
+  // compter ce qu'il cache n'est pas un filtre.
+  params.set("select", "id,name,description,postal_code,city,project_owner_name,current_phase_code,owner_id,created_at,updated_at,archived_at");
   params.set("order", "updated_at.desc.nullslast,created_at.desc");
 
   const rows = await restFetch("projects", params);
@@ -1109,7 +1115,10 @@ export async function syncProjectDocumentsFromSupabase(options = {}) {
   }
 
   const params = new URLSearchParams();
-  params.set("select", "id,filename,original_filename,mime_type,storage_bucket,storage_path,folder_id,document_kind,upload_status,created_at,updated_at,detection_status,detection_reason,detected_kind,detected_kind_label,detected_author,detection_confidence,content_fingerprint,duplicate_of_document_id,reissue_of_document_id");
+  // **La même liste que celle du répertoire**, et une seule fois. Celle-ci avait
+  // perdu `piece_du_message` et les colonnes de mail : les pastilles d'un fil
+  // ne retrouvaient donc jamais leur ligne, et sortaient en simple libellé.
+  params.set("select", LE_SELECT_DUN_DOCUMENT);
   params.set("project_id", `eq.${backendProjectId}`);
   params.set("deleted_at", "is.null");
   params.set("order", "created_at.desc");
@@ -1367,7 +1376,7 @@ export async function listDocumentDirectory(projectId = "", folderId = null) {
     // dossier est privé, le déposant est connu, et c'est moi. Dessiné sur la
     // seule appartenance au dossier, il promettrait « vous seul y avez accès »
     // sur un fichier que toute l'équipe voit.
-    fileParams.set("select", "id,project_id,folder_id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at,deleted_at,deposant,mail_de,mail_objet,mail_quand,mail_pieces,mail_fil,piece_du_message,piece_dans_le_texte,detection_status,detection_reason,detected_kind,detected_kind_label,detected_author,detection_confidence,content_fingerprint,duplicate_of_document_id,reissue_of_document_id,corpus_state,proposition_id,transcribed_at");
+    fileParams.set("select", LE_SELECT_DUN_DOCUMENT);
     fileParams.set("project_id", `eq.${backendProjectId}`);
     fileParams.set("deleted_at", "is.null");
     // Un document soumis à une proposition n'est pas encore dans le corpus : le

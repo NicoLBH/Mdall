@@ -56,6 +56,9 @@ create table if not exists public.project_assertions (
   project_id uuid not null references public.projects(id) on delete cascade,
   domain text,
   nature text,
+  -- Ce que l'affirmation dit, en français : la matière dont les sujets
+  -- techniques sont extraits.
+  statement text not null default '',
   created_at timestamptz not null default now()
 );
 
@@ -215,14 +218,16 @@ create policy "milestones_open_all" on public.milestones
   for all to anon, authenticated using (true) with check (true);
 create table if not exists public.project_assertions (
   id uuid primary key default gen_random_uuid(),
-  project_id uuid references public.projects(id) on delete cascade
+  project_id uuid references public.projects(id) on delete cascade,
+  statement text not null default ''
 );
 alter table public.project_assertions enable row level security;
 create policy "project_assertions_open_all" on public.project_assertions
   for all to anon, authenticated using (true) with check (true);
 create table if not exists public.project_collaborators (
   id uuid primary key default gen_random_uuid(),
-  project_id uuid references public.projects(id) on delete cascade
+  project_id uuid references public.projects(id) on delete cascade,
+  person_id uuid
 );
 alter table public.project_collaborators enable row level security;
 create policy "project_collaborators_open_all" on public.project_collaborators
@@ -285,7 +290,8 @@ create policy "subject_assertion_links_open_all" on public.subject_assertion_lin
   for all to anon, authenticated using (true) with check (true);
 create table if not exists public.subject_assignees (
   id uuid primary key default gen_random_uuid(),
-  project_id uuid references public.projects(id) on delete cascade
+  project_id uuid references public.projects(id) on delete cascade,
+  person_id uuid
 );
 alter table public.subject_assignees enable row level security;
 create policy "subject_assignees_open_all" on public.subject_assignees
@@ -346,7 +352,12 @@ create policy "lot_catalog_open_all" on public.lot_catalog
 create table if not exists public.directory_people (
   id uuid primary key default gen_random_uuid(),
   email text not null default '',
-  created_by_user_id uuid references auth.users(id)
+  -- Générée et **unique sur toute la table** : c'est cette contrainte qui
+  -- empêchait de fermer la lecture, et que la migration remplace.
+  email_normalized text generated always as (lower(btrim(email))) stored,
+  linked_user_id uuid references auth.users(id),
+  created_by_user_id uuid references auth.users(id),
+  constraint directory_people_email_normalized_unique unique (email_normalized)
 );
 alter table public.directory_people enable row level security;
 create policy "directory_people_open_all" on public.directory_people
@@ -358,7 +369,7 @@ create policy "directory_people_open_all" on public.directory_people
 create or replace view public.project_collaborators_view as
 select pc.id, pc.project_id, dp.email
   from public.project_collaborators pc
-  left join public.directory_people dp on true;
+  join public.directory_people dp on dp.id = pc.person_id;
 
 
 -- ── Le casier, tel que Supabase le pose ────────────────────────────────────

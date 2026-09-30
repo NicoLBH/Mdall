@@ -34,6 +34,7 @@ import {
 } from "../services/le-dossier-des-mails.js";
 import { estUnPorteurDeMails } from "../services/les-messages-dun-fichier.js";
 import { lePartageDuDepot } from "../services/le-depouillement.js";
+import { lesLots, rendreLaMain } from "../services/par-lots.js";
 import { laQuestionDuDeplacement } from "../services/sortir-des-mails.js";
 import { lEtatSuitLeProjet } from "../services/letat-suit-le-projet.js";
 import {
@@ -4410,12 +4411,19 @@ function renderUploadView() {
               l'on croyait que le dépôt n'avait rien produit. La liste les
               redisait en plus, puisque le panneau les nomme déjà.
             */""}
+            ${/*
+              **Les fichiers d'abord, le panneau ensuite.** Le panneau du
+              versement dit ce qui va se passer ; la liste dit ce qu'on a
+              choisi. On regarde d'abord ce qu'on vient de lâcher — et sur
+              vingt-six mails, le panneau poussait la liste hors de l'écran, si
+              bien qu'on ne voyait pas ce qu'on s'apprêtait à envoyer.
+            */""}
+            ${renderUploadProgress()}
+
             ${renderLeVersement({
               porteurs: ceQueLaSelectionPorte().porteurs,
               envoi: docsViewState.envoi
             })}
-
-            ${renderUploadProgress()}
 
             <div class="documents-commit-shell">
               <div class="documents-commit-shell__avatar">
@@ -5027,26 +5035,42 @@ function closePdfPreview(root) {
  * en glisser trois autres. Un même fichier choisi deux fois n'entre qu'une fois
  * — c'est le geste le plus courant quand on hésite.
  */
-function addSelectedFiles(root, fileList) {
+async function addSelectedFiles(root, fileList) {
   const incoming = [...(fileList ?? [])];
   if (incoming.length === 0) return;
 
   const known = new Set(docsViewState.selectedFiles.map((file) => `${file.name}|${file.size}`));
-  for (const file of incoming) {
-    const key = `${file.name}|${file.size}`;
-    if (known.has(key)) continue;
-    known.add(key);
-    docsViewState.selectedFiles.push(file);
+
+  // **Par lots, en rendant la main entre chacun.** On ajoutait les vingt-six
+  // d'un coup, puis on redessinait une fois : entre le lâcher et le premier nom
+  // affiché, rien ne bougeait, et l'on ne savait pas si le dépôt avait été
+  // pris. Cinq noms paraissent, puis cinq autres — et pendant les
+  // respirations, le navigateur peint et répond aux clics.
+  for (const lot of lesLots(incoming)) {
+    for (const file of lot) {
+      const key = `${file.name}|${file.size}`;
+      if (known.has(key)) continue;
+      known.add(key);
+      docsViewState.selectedFiles.push(file);
+    }
+
+    // Un titre proposé, jamais imposé. Le nom du premier fichier ne disait rien
+    // de ce qu'on dépose ; celui-ci se précisera dès que l'examen aura nommé
+    // les documents.
+    if (!docsViewState.titleTouched) {
+      docsViewState.title = proposeTitle([], { fallbackCount: docsViewState.selectedFiles.length });
+    }
+
+    // L'écran a pu être quitté pendant qu'on ajoutait : on ne dessine pas dans
+    // le vide.
+    if (!root?.isConnected) return;
+    redessinerLesFichiers(root);
+    await rendreLaMain();
   }
 
-  // Un titre proposé, jamais imposé. Le nom du premier fichier ne disait rien
-  // de ce qu'on dépose ; celui-ci se précisera dès que l'examen aura nommé les
-  // documents.
-  if (!docsViewState.titleTouched) {
-    docsViewState.title = proposeTitle([], { fallbackCount: docsViewState.selectedFiles.length });
-  }
-
-  redessinerLesFichiers(root);
+  if (!root?.isConnected) return;
+  // **L'examen et les propositions après**, et une seule fois : les lancer par
+  // lot ferait six lectures du réseau pour un seul dépôt.
   inspectSelection(root);
   loadOpenPropositions(root);
 }
