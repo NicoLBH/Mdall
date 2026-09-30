@@ -37,6 +37,13 @@ import {
   lesDomainesDuSysteme
 } from "../partage/js/services/les-domaines-du-systeme-supabase.js";
 import { DOMAINS, domainLabel } from "../partage/js/services/assertion-taxonomy.js";
+import {
+  ASSEZ_VU, laPartDuRedoublement, lesEnchainements, lesEnchainementsQuiPortent,
+  phraseDeLaPrediction, phraseDunEnchainement
+} from "../partage/js/services/les-enchainements-du-systeme.js";
+import {
+  lesEnchainementsDuSysteme
+} from "../partage/js/services/les-enchainements-du-systeme-supabase.js";
 
 const echapper = (valeur) => String(valeur ?? "")
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -155,6 +162,81 @@ function renderLesDomaines(range) {
   `;
 }
 
+/**
+ * Ce que fait la prédiction, montré en clair.
+ *
+ * ## Le mécanisme tient en une phrase
+ *
+ * Le prédicteur forme les couples « après ceci, il est venu cela » à
+ * l'intérieur d'un chantier, les compte, et propose les plus fréquents. Rien de
+ * plus. Ce tableau montre ces couples, comptés sur **l'ensemble des
+ * chantiers** — ce qu'aucun écran de projet ne peut faire, puisqu'un chantier
+ * ne voit que lui-même.
+ *
+ * ## L'ordre des trois choses n'est pas décoratif
+ *
+ * **Ce que cela vaut**, d'abord : le meilleur enchaînement comparé au hasard.
+ * C'est la seule ligne qui décide quelque chose, et elle doit pouvoir dire non.
+ *
+ * **Les enchaînements**, ensuite, avec leur taux *et* leur assiette.
+ *
+ * **Ce qui n'en est pas un**, enfin : la part des suites où un domaine se
+ * répète. Si l'essentiel est là, « ce qui suit habituellement » se réduit à
+ * « ce qui vient de venir », et il faut pouvoir s'en apercevoir.
+ */
+function renderLesEnchainements(tous) {
+  const porteurs = lesEnchainementsQuiPortent(tous);
+  const redoublement = laPartDuRedoublement(tous);
+
+  return `
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">Ce que fait la prédiction</h3>
+      <p class="conso-usages__mot">
+        Elle forme les couples « après ceci, il est venu cela » à l'intérieur
+        d'un chantier, les compte, et propose les plus fréquents. Rien de plus.
+        Voici ces couples, sur l'ensemble des chantiers — un chantier seul ne
+        peut pas les voir.
+      </p>
+      <p class="conso-usages__mot"><b>${echapper(phraseDeLaPrediction(tous, DOMAINS.length))}</b></p>
+
+      ${/*
+        **Le classement prend la borne basse, la ligne garde son taux observé.**
+        Six coups sur six ne valent pas trente sur quarante, et un classement
+        par le taux brut met toujours les petits échantillons en tête — c'est
+        mécanique, et c'est faux. Ce qui s'est passé reste affiché tel quel.
+      */""}
+      ${porteurs.length ? `
+        <ul class="forme-reference">
+          ${porteurs.slice(0, 12).map((une) => `
+            <li class="forme-reference__ligne">
+              <span class="forme-reference__quoi">${echapper(
+                `${domainLabel(une.avant)} → ${domainLabel(une.apres)}`)}</span>
+              <span class="forme-reference__chiffres mono-small">${
+                echapper(phraseDunEnchainement(une))}</span>
+              ${/*
+                **Le nombre de chantiers tranche.** Un enchaînement qui revient
+                partout est une régularité du bâtiment ; vu sur un seul
+                chantier, c'est l'habitude de ce chantier-là, et l'apprendre ne
+                servirait qu'à lui.
+              */""}
+              <span class="forme-reference__sur mono-small">${echapper(
+                `${une.chantiers} ${une.chantiers > 1 ? "chantiers" : "chantier"}`)}</span>
+            </li>
+          `).join("")}
+        </ul>
+      ` : `<p class="forme-manques">
+        Aucun enchaînement n'a encore été vu ${ASSEZ_VU} fois. Ce n'est pas que
+        le prédicteur se trompe : il n'a pas encore de quoi se prononcer.</p>`}
+
+      ${redoublement === null ? "" : `<p class="conso-usages__mot">${echapper(
+        `${Math.round(redoublement * 100)} % des suites sont un domaine qui se répète.`
+        + " Ce n'est pas un enchaînement — c'est le même sujet qui continue —, et"
+        + " plus cette part est haute, moins « ce qui suit » dit autre chose que"
+        + " « ce qui vient de venir ».")}</p>`}
+    </section>
+  `;
+}
+
 function renderTout(comptes) {
   const dit = phraseDuGisement(comptes);
   const depuis = leJour(comptes?.depuis);
@@ -195,6 +277,7 @@ function renderTout(comptes) {
       qu'on vient voir en premier.
     */""}
     <div id="carburantDomaines"></div>
+    <div id="carburantEnchainements"></div>
 
     ${renderCeQuiNestPasFait()}
   `;
@@ -220,13 +303,29 @@ export async function monterLeCarburant(hote) {
   // **Après les comptes, et pas avec eux.** Les deux lectures sont
   // indépendantes : celle des domaines peut échouer sans emporter celle du
   // carburant, qui répond à la question la plus urgente.
-  const lignes = await lesDomainesDuSysteme();
-  const apres = ou.querySelector("#carburantDomaines");
-  if (!apres) return;
+  // **Les deux lectures ensemble, et chacune chez elle.** Elles ne dépendent pas
+  // l'une de l'autre : les demander l'une après l'autre ferait attendre deux
+  // allers-retours, et une panne de l'une emporterait l'affichage de l'autre.
+  const [lignes, couples] = await Promise.all([
+    lesDomainesDuSysteme(),
+    lesEnchainementsDuSysteme()
+  ]);
 
-  apres.innerHTML = lignes === null
-    ? `<section class="conso-usages"><p class="forme-manques">
-        Les domaines n'ont pas pu être lus. Ce n'est pas qu'il n'y en a aucun :
-        on ne sait pas lesquels il y a.</p></section>`
-    : renderLesDomaines(lesDomainesRanges(lignes));
+  const apres = ou.querySelector("#carburantDomaines");
+  if (apres) {
+    apres.innerHTML = lignes === null
+      ? `<section class="conso-usages"><p class="forme-manques">
+          Les domaines n'ont pas pu être lus. Ce n'est pas qu'il n'y en a aucun :
+          on ne sait pas lesquels il y a.</p></section>`
+      : renderLesDomaines(lesDomainesRanges(lignes));
+  }
+
+  const encore = ou.querySelector("#carburantEnchainements");
+  if (encore) {
+    encore.innerHTML = couples === null
+      ? `<section class="conso-usages"><p class="forme-manques">
+          Les enchaînements n'ont pas pu être lus. Ce n'est pas qu'il n'y en a
+          aucun : on ne sait pas lesquels il y a.</p></section>`
+      : renderLesEnchainements(lesEnchainements(couples));
+  }
 }

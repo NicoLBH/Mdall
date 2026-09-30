@@ -146,8 +146,7 @@ function renderCeQuiViendra() {
  */
 function renderLesOnglets(actif) {
   return `
-    <section class="project-context-header">
-      <nav class="project-tabs" aria-label="Console">
+      <nav class="project-tabs project-tabs--console" aria-label="Console">
         ${ONGLETS_DE_LA_CONSOLE.map((un) => `
           <a
             href="#${un.cle}"
@@ -161,7 +160,6 @@ function renderLesOnglets(actif) {
           </a>
         `).join("")}
       </nav>
-    </section>
   `;
 }
 
@@ -231,12 +229,20 @@ async function main() {
     leCourrielDuCompte()
   ]);
 
-  if (barre) barre.innerHTML = renderLaBarre(courriel);
+  // **La barre d'onglets part avec l'en-tête**, hors de `#app`. Celui-ci est en
+  // position fixe et décalé de leur hauteur à tous deux : dessinée dedans, la
+  // barre flottait au milieu de la page, à la largeur du contenu, et défilait
+  // avec lui.
+  if (barre) {
+    barre.innerHTML = renderLaBarre(courriel)
+      + (ouverte
+        ? renderLesOnglets(ongletDeLaConsoleValide(location.hash.replace(/^#/, "")))
+        : "");
+  }
   hote.innerHTML = `
     <div class="page-large">
       ${ouverte
-        ? `${renderLesOnglets(ongletDeLaConsoleValide(location.hash.replace(/^#/, "")))}
-           ${renderCeQuiViendra()}${renderLeCarburant()}${renderLeDemenagement()}`
+        ? `${renderCeQuiViendra()}${renderLeCarburant()}${renderLeDemenagement()}`
         : renderLaPorteFermee()}
     </div>
   `;

@@ -75,7 +75,13 @@ export const RACINES = [
   "js/services/assertion-taxonomy.js",
   // Les onglets de la console : la même barre que côté utilisateur, nommée une
   // seule fois. Pur, et il n'entraîne rien.
-  "js/services/les-onglets-de-la-console.js"
+  "js/services/les-onglets-de-la-console.js",
+  // Ce que fait la prédiction : quels domaines en suivent d'autres, combien de
+  // fois, avec quelle probabilité. Le mécanisme de `ceQuiSuitHabituellement`,
+  // compté sur l'ensemble des chantiers — ce qu'aucun écran de projet ne peut
+  // montrer, puisqu'un chantier ne voit que lui-même.
+  "js/services/les-enchainements-du-systeme-supabase.js",
+  "js/services/les-enchainements-du-systeme.js"
 ];
 
 /**
