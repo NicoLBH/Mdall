@@ -6932,7 +6932,13 @@ body.documents-local-chrome-compact .bouton-haut{ display:inline-flex; }
 .documents-tree__icon-slot{width:16px;min-width:16px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;}
 .documents-tree__label{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .documents-tree__file:hover{background:rgba(110,118,129,.16);}
-.documents-tree__file:hover .documents-tree__label{color:#58a6ff;text-decoration:underline;}
+
+/* **Le survol bleu vaut pour toute l'arborescence, et pas pour ses seules
+   racines.** Il était posé sur `__file`, donc sur les fichiers de la Mémoire —
+   et sur rien d'autre. Un dossier survolé ne répondait pas, ce qui le faisait
+   passer pour inerte alors qu'il s'ouvre. Un oubli, pas une intention. */
+.documents-tree__file:hover .documents-tree__label,
+.documents-tree__item:hover .documents-tree__label{color:#58a6ff;text-decoration:underline;}
 .documents-tree__row,.documents-tree__file{position:relative;}
 /* ─────────────────────────────────────────────────────────────────────────────
    Le lecteur de PDF.

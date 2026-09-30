@@ -645,7 +645,7 @@ L'écran les nomme donc, avec ce qui se passe réellement aujourd'hui :
 
 | | ce qui se passe | pourquoi |
 | --- | --- | --- |
-| l'extraction du contenu | rien n'est extrait ; le mail est gardé tel quel | figer une forme avant de savoir ce qu'on en tirera |
+| l'extraction du contenu | **cinq valeurs** sont extraites au dépôt — expéditeur, objet, date, nombre de pièces, fil —, et rien d'autre | une liste de mails illisible sans elles ; au-delà, figer une forme avant de savoir ce qu'on en tirera |
 | la reconnaissance des domaines | elle tourne **dans le navigateur**, à la lecture, et rien n'est gardé | sa table d'indices est un premier jet |
 | l'anonymisation | rien n'est anonymisé, et rien n'a besoin de l'être | les mails ne quittent pas le projet de leur déposant |
 | la mesure du prédicteur, agrégée | elle se calcule par chantier, chez son déposant | l'agréger demanderait de faire sortir un chiffre d'un projet |

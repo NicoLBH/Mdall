@@ -29,8 +29,14 @@ import { renderGhInput } from "./ui/gh-input.js";
 import { renderStateDot } from "./ui/status-badges.js";
 import { renderUploadProgressBar } from "./ui/upload-progress.js";
 import { svgIcon } from "../ui/icons.js";
-import { laMarqueDuDossier, laMarqueDunFichier } from "../services/le-dossier-des-mails.js";
+import {
+  DOSSIER_DES_MAILS, estLeDossierDesMails, laMarqueDuDossier, laMarqueDunFichier
+} from "../services/le-dossier-des-mails.js";
 import { lePartageDuDepot } from "../services/le-depouillement.js";
+import { laQuestionDuDeplacement } from "../services/sortir-des-mails.js";
+import {
+  cestUnMailIndexe, laLigneDunMail, quandDit
+} from "../services/la-ligne-dun-mail.js";
 import { renderLeDepouillement } from "./ui/le-depouillement-ecran.js";
 import { renderDataTableShell, renderDataTableHead, renderDataTableEmptyState } from "./ui/data-table-shell.js";
 import { escapeHtml } from "../utils/escape-html.js";
@@ -105,7 +111,18 @@ function logPdfPreviewDebug(label, payload = {}) {
  * inatteignables. Un identifiant qui se **dérive** d'un texte affiché finit par
  * en dépendre.
  */
-const BRANCHE = { MEMOIRE: "memoire", DOCUMENTS: "documents" };
+/**
+ * Les trois racines de l'arborescence.
+ *
+ * **« Mails » en est une**, et ce n'était pas le cas : le dossier vivait dans
+ * *Documents*, c'est-à-dire dans l'endroit du partage — alors que c'est
+ * justement ce qu'il n'est pas. Un contenant au contenu privé rangé sous la
+ * racine de ce qui circule se lit comme une promesse contraire à la garde.
+ *
+ * Rien n'a bougé en base : le dossier était déjà à la racine des dossiers
+ * (`parent_folder_id is null`). C'est l'arbre qui le montrait sous *Documents*.
+ */
+const BRANCHE = { MEMOIRE: "memoire", DOCUMENTS: "documents", MAILS: "mails" };
 
 const docsViewState = {
   mode: "list", // "list" | "upload" | "report-preview" | "pdf-preview"
@@ -260,6 +277,12 @@ const docsViewState = {
    */
   currentFolder: null,
   /**
+   * Tous les dossiers du projet, et pas seulement les voisins du courant.
+   *
+   * C'est par eux que l'arbre sait où est « Mails », d'où qu'on le regarde.
+   */
+  tousLesDossiers: [],
+  /**
    * Où en est le dépouillement du dépôt courant.
    *
    * `null` quand rien n'a été demandé. Ensuite le journal du convoi, tel qu'il
@@ -307,6 +330,8 @@ async function loadCurrentDirectory({ forceFolderId } = {}) {
   docsViewState.currentFolder = directory?.currentFolder ?? null;
   docsViewState.breadcrumb = Array.isArray(directory?.breadcrumb) ? directory.breadcrumb : [];
   docsViewState.folders = Array.isArray(directory?.folders) ? directory.folders : [];
+  docsViewState.tousLesDossiers = Array.isArray(directory?.tous) ? directory.tous : [];
+  docsViewState.tousLesDossiers = Array.isArray(directory?.tous) ? directory.tous : [];
   docsViewState.files = Array.isArray(directory?.files) ? directory.files : [];
   console.info("[documents-view] load-directory.success", { projectId, folderId: docsViewState.currentFolderId, folders: docsViewState.folders.length, files: docsViewState.files.length });
 }
@@ -1513,13 +1538,23 @@ function renderDocumentsBreadcrumb() {
   const ici = (libelle) => `<span class="documents-breadcrumb__current">${escapeHtml(libelle)}</span>`;
   const sep = `<span class="documents-breadcrumb__sep">/</span>`;
 
+  // **La racine porte le nom de la branche où l'on est.** Et dans « Mails », le
+  // dossier lui-même est cette racine : le laisser aussi dans le chemin
+  // donnerait « Fichiers / Mails / Mails ».
+  const dansLesMails = docsViewState.branche === BRANCHE.MAILS;
+  const sonId = String(leDossierDesMails()?.id || "");
+
   const morceaux = [
     { libelle: "Fichiers", cible: `data-fichiers-branche=""` },
-    { libelle: DOCUMENTS, cible: `data-breadcrumb-folder-id=""` },
-    ...docsViewState.breadcrumb.map((dossier) => ({
-      libelle: String(dossier.name || "Dossier"),
-      cible: `data-breadcrumb-folder-id="${escapeHtml(String(dossier.id || ""))}"`
-    })),
+    dansLesMails
+      ? { libelle: DOSSIER_DES_MAILS, cible: `data-breadcrumb-folder-id="${escapeHtml(sonId)}"` }
+      : { libelle: DOCUMENTS, cible: `data-breadcrumb-folder-id=""` },
+    ...docsViewState.breadcrumb
+      .filter((dossier) => !(dansLesMails && String(dossier.id || "") === sonId))
+      .map((dossier) => ({
+        libelle: String(dossier.name || "Dossier"),
+        cible: `data-breadcrumb-folder-id="${escapeHtml(String(dossier.id || ""))}"`
+      })),
     ...(selectedDocument?.name ? [{ libelle: String(selectedDocument.name), cible: "" }] : []),
     // **Le nom du fichier ouvert vit ici, et nulle part ailleurs.** Il était
     // aussi dans la barre d'outils, à côté des lectures : deux endroits pour un
@@ -1602,6 +1637,75 @@ function renderRepoFolderRow(folder) {
   `;
 }
 
+
+/**
+ * La ligne d'un mail, **à la manière d'une messagerie**.
+ *
+ * ## Pourquoi elle ne ressemble pas à celle d'un fichier
+ *
+ * Un fichier se dit par son nom. Un mail se dit par **qui l'a écrit, de quoi il
+ * parle, quand, et s'il portait quelque chose** — c'est ce que montre une
+ * messagerie depuis trente ans, et ce n'est pas un hasard : ces quatre-là
+ * suffisent à retrouver un message dans deux cents. Le nom de fichier, lui,
+ * répétait la date et l'objet dans une seule colonne illisible.
+ *
+ * ## Les classes de la liste des sujets, et aucune de plus
+ *
+ * `issue-row-title-grid` empile déjà deux lignes à côté d'une icône, et
+ * `row-title-trigger` donne le titre bleu au survol. Un dossier de mails n'est
+ * pas un écran à part : c'est un dossier, et il se dessine comme les autres.
+ *
+ * L'index vient de la ligne, pas du fichier : il a été écrit au dépôt, sans
+ * quoi il faudrait rapatrier deux cents messages pour dessiner deux cents
+ * lignes (`la-ligne-dun-mail.js`).
+ */
+function renderRepoMailRow(doc) {
+  const decoratedDoc = decorateDocumentWithPhase(doc);
+  const ligne = laLigneDunMail(decoratedDoc);
+  const marque = laMarqueDunFichier(decoratedDoc, docsViewState.currentFolder);
+
+  return `
+    <div class="documents-repo__row documents-repo__row--file is-clickable"
+      data-document-id="${escapeHtml(decoratedDoc.id || "")}"
+      role="button" tabindex="0" aria-label="Ouvrir le message">
+      <div class="documents-repo__cell documents-repo__cell--name">
+        <span class="issue-row-title-grid">
+          <span class="issue-row-title-grid__status">${svgIcon("mail", { className: "octicon" })}</span>
+          <span class="issue-row-title-grid__title">${escapeHtml(ligne.de)}</span>
+          <span class="issue-row-title-grid__meta">
+            <button type="button" class="row-title-trigger js-document-title-trigger"
+              data-document-id="${escapeHtml(decoratedDoc.id || "")}">${escapeHtml(ligne.objet)}</button>
+          </span>
+        </span>
+      </div>
+      ${/*
+        **Le trombone et la date empilés dans la colonne du milieu, et non dans
+        la dernière.** La dernière est étroite, `nowrap` et rognée : la date y
+        sortait « 12 m… ». Celle du milieu empile déjà deux lignes — c'est pour
+        cela qu'elle existe — et n'a rien d'autre à porter pour un mail.
+
+        Le trombone ne se dessine qu'au-dessus de zéro : une colonne de
+        trombones barrés n'apprendrait rien, et ferait chercher une pièce là où
+        il n'y en a pas.
+      */""}
+      <div class="documents-repo__cell documents-repo__cell--message">
+        <div class="documents-repo__message-main">${ligne.avecPieces
+          ? `<span title="${escapeHtml(ligne.titreDesPieces)}">${
+              svgIcon("paperclip", { className: "octicon" })}</span>`
+          : ""}</div>
+        <div class="documents-repo__message-meta">${escapeHtml(quandDit(ligne.quand))}</div>
+      </div>
+      <div class="documents-repo__cell documents-repo__cell--date">
+        ${marque
+          ? `<span class="documents-repo__marque" title="${escapeHtml(marque.titre)}">${
+              svgIcon(marque.icone, { className: "octicon" })}</span>`
+          : "<span></span>"}
+        <button type="button" class="gh-btn gh-btn--sm documents-repo__geste"
+          data-document-move-id="${escapeHtml(decoratedDoc.id || "")}">Déplacer</button>
+      </div>
+    </div>
+  `;
+}
 
 function renderRepoDocumentRow(doc) {
   const decoratedDoc = decorateDocumentWithPhase(doc);
@@ -2067,7 +2171,11 @@ function renderLectureDuTexte() {
   const nom = String(edition
     ? nomComplet(leCheminSaisi(edition.nom ?? "").nom)
     : (ouvert.nom || "fichier"));
-  const lectures = lecturesDuFichier(nom);
+  // Un mail impose ses lectures : il n'a pas d'extension qui se rende en
+  // Markdown, et c'est pourtant du Markdown qu'on lui a donné.
+  const lectures = Array.isArray(ouvert.lectures) && ouvert.lectures.length
+    ? ouvert.lectures
+    : lecturesDuFichier(nom);
   const lecture = lectures.includes(ouvert.lecture) ? ouvert.lecture : lectures[0];
 
   // En édition, on ne renomme pas par-dessus soi-même : le fichier qu'on
@@ -2133,7 +2241,14 @@ function renderLectureDuTexte() {
                           fait que défaire ce qu'on vient de faire prenait la
                           place du seul geste qui manquait — corriger.
                         */""}
-                        ${typeof ouvert.contenu === "string"
+                        ${/*
+                          **Un mail ne se modifie pas.** Ce qu'on lit n'est pas
+                          le fichier : c'est l'échange rendu en Markdown. Le
+                          crayon aurait proposé de corriger un message reçu, et
+                          « Enregistrer » aurait écrit ce Markdown par-dessus le
+                          `.eml` — c'est-à-dire détruit la pièce d'origine.
+                        */""}
+                        ${typeof ouvert.contenu === "string" && !ouvert.mail
                           ? `<button type="button" class="gh-btn documents-report-table__icon-btn"
                                data-texte-editer aria-label="Modifier ce fichier" title="Modifier ce fichier"
                              >${svgIcon("pencil", { className: "octicon" })}</button>`
@@ -2569,8 +2684,8 @@ function allerAilleurs() {
  * et en sortir ferait perdre les fichiers déjà choisis. C'est l'arbre qui
  * referme, parce que lui emmène ailleurs, et il le fait avant d'appeler ici.
  */
-async function allerDansLeDossier(root, folderId) {
-  docsViewState.branche = BRANCHE.DOCUMENTS;
+async function allerDansLeDossier(root, folderId, branche = BRANCHE.DOCUMENTS) {
+  docsViewState.branche = branche;
   // Un fichier ouvert ne survit pas à un changement de dossier : il resterait à
   // l'écran sous le chemin d'un autre dossier.
   docsViewState.texte = null;
@@ -2586,6 +2701,13 @@ async function allerDansLArbre(root, adresse) {
   docsViewState.memoireQuery = "";
 
   if (prefixe === "branche") {
+    // **Entrer dans « Mails », c'est entrer dans son dossier.** La branche n'est
+    // pas un endroit à part : c'est un dossier comme un autre, montré à la
+    // racine parce que ce qu'il contient ne se partage pas.
+    if (cible === BRANCHE.MAILS) {
+      await allerDansLeDossier(root, String(leDossierDesMails()?.id || ""), BRANCHE.MAILS);
+      return;
+    }
     docsViewState.branche = cible;
     docsViewState.memoireChemin = [];
     renderProjectDocumentsContent(root);
@@ -2621,8 +2743,9 @@ async function allerDansLArbre(root, adresse) {
     return;
   }
 
-  if (prefixe === "documents") {
-    await allerDansLeDossier(root, cible);
+  if (prefixe === "documents" || prefixe === "mails") {
+    await allerDansLeDossier(root, cible,
+      prefixe === "mails" ? BRANCHE.MAILS : BRANCHE.DOCUMENTS);
     return;
   }
 
@@ -3661,23 +3784,56 @@ function renderArbreDesFichiers({ memoire, ouverte = true, query = "" } = {}) {
     ];
   };
 
-  const noeuds = [
-    ...racine(BRANCHE.MEMOIRE, MEMOIRE,
-      docsViewState.branche === BRANCHE.MEMOIRE && chemin.length === 0,
-      noeudsDeLaMemoire(memoire, {
-        chemin: docsViewState.branche === BRANCHE.MEMOIRE ? chemin : [],
-        replies: docsViewState.memoireReplies ?? new Set(),
-        profondeur: 1
-      })),
-    ...racine(BRANCHE.DOCUMENTS, DOCUMENTS,
-      // La racine ne s'allume que si rien de plus précis ne l'est : un dossier
-      // ouvert, ou une pièce en lecture. Sans quoi deux nœuds paraissaient
-      // actifs — celui qu'on regarde, et la racine qui le contient.
-      docsViewState.branche === BRANCHE.DOCUMENTS
-        && !docsViewState.currentFolderId
-        && !String(store.projectDocuments?.activeDocumentId || "").trim(),
-      noeudsDesDocuments({ profondeur: 1 }))
+  const mails = leDossierDesMails();
+  const sonId = String(mails?.id || "");
+  // La racine ne s'allume que si rien de plus précis ne l'est : un dossier
+  // ouvert, ou une pièce en lecture. Sans quoi deux nœuds paraissaient actifs —
+  // celui qu'on regarde, et la racine qui le contient.
+  const rienDeplusPrecis = !String(store.projectDocuments?.activeDocumentId || "").trim();
+
+  /**
+   * **Les trois racines, dans l'ordre alphabétique** : Documents, Mails,
+   * Mémoire. Un ordre écrit à la main aurait fini par ne plus être celui qu'on
+   * lit, et il aurait fallu se souvenir de le corriger en ajoutant la quatrième.
+   */
+  const racines = [
+    {
+      nom: MEMOIRE,
+      noeuds: racine(BRANCHE.MEMOIRE, MEMOIRE,
+        docsViewState.branche === BRANCHE.MEMOIRE && chemin.length === 0,
+        noeudsDeLaMemoire(memoire, {
+          chemin: docsViewState.branche === BRANCHE.MEMOIRE ? chemin : [],
+          replies: docsViewState.memoireReplies ?? new Set(),
+          profondeur: 1
+        }))
+    },
+    {
+      nom: DOCUMENTS,
+      noeuds: racine(BRANCHE.DOCUMENTS, DOCUMENTS,
+        docsViewState.branche === BRANCHE.DOCUMENTS
+          && !docsViewState.currentFolderId && rienDeplusPrecis,
+        noeudsDesDocuments({ profondeur: 1, sauf: sonId }))
+    }
   ];
+
+  // **La racine des mails n'existe que si le dossier existe.** Une racine vide
+  // dans tous les projets qui n'ont jamais reçu un mail serait une promesse, et
+  // pas un fait — c'est la même raison qui fait qu'on ne le crée pas d'avance
+  // (`docs/nourrir-mdall.md`, § 8 octies).
+  if (sonId) {
+    racines.push({
+      nom: DOSSIER_DES_MAILS,
+      noeuds: racine(BRANCHE.MAILS, DOSSIER_DES_MAILS,
+        docsViewState.branche === BRANCHE.MAILS
+          && String(docsViewState.currentFolderId || "") === sonId && rienDeplusPrecis,
+        noeudsDesDocuments({
+          profondeur: 1, depuis: sonId, branche: BRANCHE.MAILS
+        }))
+    });
+  }
+
+  racines.sort((gauche, droite) => gauche.nom.localeCompare(droite.nom, "fr"));
+  const noeuds = racines.flatMap((une) => une.noeuds);
 
   return renderPanneauDArbre(noeuds.map(renderLigneDArbre).join(""), {
     ouverte,
@@ -3687,10 +3843,22 @@ function renderArbreDesFichiers({ memoire, ouverte = true, query = "" } = {}) {
 }
 
 function renderDocumentsListView() {
-  const folders = Array.isArray(docsViewState.folders) ? docsViewState.folders : [];
+  // **Le dossier des mails ne s'affiche plus dans la racine des Documents.** Il
+  // a la sienne : l'y laisser le montrerait deux fois, et sous l'endroit du
+  // partage — ce qu'il n'est justement pas.
+  const sansLesMails = String(leDossierDesMails()?.id || "");
+  const folders = (Array.isArray(docsViewState.folders) ? docsViewState.folders : [])
+    .filter((un) => !sansLesMails || String(un?.id || "") !== sansLesMails
+      || docsViewState.branche === BRANCHE.MAILS);
   const documents = Array.isArray(docsViewState.files) ? docsViewState.files : [];
   const hasDocuments = folders.length + documents.length > 0;
-  const bodyHtml = [...folders.map(renderRepoFolderRow), ...documents.map(renderRepoDocumentRow)].join("");
+  // **Un mail ne se dessine pas comme un fichier.** La ligne se choisit sur
+  // l'index, pas sur le dossier où l'on se trouve : un mail déplacé ailleurs
+  // reste un mail, et continue de se lire par son expéditeur et son objet.
+  const bodyHtml = [
+    ...folders.map(renderRepoFolderRow),
+    ...documents.map((un) => cestUnMailIndexe(un) ? renderRepoMailRow(un) : renderRepoDocumentRow(un))
+  ].join("");
 
   const isRoot = !docsViewState.currentFolderId;
   // L'arbre est là dès la racine des Documents : on doit pouvoir passer d'une
@@ -3737,9 +3905,30 @@ function renderDocumentsListView() {
  * Des lignes, pas un panneau : l'arbre a deux racines et il n'y en a qu'un.
  * La racine « Documents » est posée par l'appelant, avec celle de la Mémoire.
  */
-function noeudsDesDocuments({ profondeur = 1 } = {}) {
-  const dossiers = Array.isArray(docsViewState.moveModal?.folders) && docsViewState.moveModal.folders.length
-    ? docsViewState.moveModal.folders
+/**
+ * Le dossier des mails du projet, où qu'on se trouve.
+ *
+ * **Par `prive` et par le nom**, comme partout ailleurs : le nom seul ne suffit
+ * pas — on peut appeler « Mails » un dossier ordinaire —, et `prive` seul ne
+ * suffira pas le jour où un autre dossier portera un contenu privé.
+ */
+function leDossierDesMails() {
+  const tous = Array.isArray(docsViewState.tousLesDossiers) ? docsViewState.tousLesDossiers : [];
+  return tous.find((un) =>
+    !String(un?.parent_folder_id || "") && un?.prive === true && estLeDossierDesMails(un?.name)) ?? null;
+}
+
+/**
+ * Les nœuds d'une branche de dossiers.
+ *
+ * `depuis` dit d'où l'on part — la racine pour *Documents*, le dossier des
+ * mails pour *Mails* —, et `sauf` ce qu'on ne montre pas ici. Un seul passage
+ * pour les deux branches : elles se dessinent avec les mêmes classes et les
+ * mêmes icônes, parce que **c'est un dossier comme un autre**.
+ */
+function noeudsDesDocuments({ profondeur = 1, depuis = "", sauf = "", branche = BRANCHE.DOCUMENTS } = {}) {
+  const dossiers = Array.isArray(docsViewState.tousLesDossiers) && docsViewState.tousLesDossiers.length
+    ? docsViewState.tousLesDossiers
     : (Array.isArray(docsViewState.folders) ? docsViewState.folders : []);
 
   const parParent = new Map();
@@ -3763,7 +3952,7 @@ function noeudsDesDocuments({ profondeur = 1 } = {}) {
   // La pièce ouverte ne compte que si l'on est dans les Documents : sinon un
   // PDF regardé tout à l'heure restait en surbrillance pendant qu'on lisait un
   // fichier de mémoire, et deux nœuds paraissaient actifs à la fois.
-  const dansLesDocuments = docsViewState.branche === BRANCHE.DOCUMENTS;
+  const dansLesDocuments = docsViewState.branche === branche;
   const documentOuvert = dansLesDocuments ? String(store.projectDocuments?.activeDocumentId || "").trim() : "";
 
   const parcourir = (parent, niveau) => {
@@ -3771,6 +3960,9 @@ function noeudsDesDocuments({ profondeur = 1 } = {}) {
 
     for (const dossier of parParent.get(parent) ?? []) {
       const id = String(dossier.id || "");
+      // Le dossier des mails a sa propre racine : le laisser ici le montrerait
+      // deux fois, et sous « Documents », qui est l'endroit du partage.
+      if (sauf && id === sauf) continue;
       const enfants = parParent.get(id) ?? [];
       const pieces = piecesParDossier.get(id) ?? [];
       const ouvert = deplies.has(id);
@@ -3806,8 +3998,8 @@ function noeudsDesDocuments({ profondeur = 1 } = {}) {
 
   // Les pièces déposées à la racine des Documents s'y voient aussi : rangées
   // nulle part, elles disparaissaient de l'arbre.
-  const noeuds = parcourir("", profondeur);
-  for (const piece of piecesParDossier.get("") ?? []) {
+  const noeuds = parcourir(String(depuis || ""), profondeur);
+  for (const piece of piecesParDossier.get(String(depuis || "")) ?? []) {
     noeuds.push({
       aller: `document:${String(piece?.id || "")}`,
       libelle: String(piece?.name || piece?.original_filename || piece?.filename || "Fichier"),
@@ -3853,8 +4045,38 @@ function renderMoveFileModal() {
           <button type="button" class="documents-move-modal__target${rootSelected ? " is-active" : ""}" data-move-target-folder-id="">${getFolderOpenIconSvg()} <span class="documents-tree__label">Racine / Documents</span></button>
           ${flatten("").join("")}
         </div>
-        <footer class="documents-move-modal__actions"><button type="button" class="gh-btn gh-btn--validate" id="documentsMoveModalConfirmBtn">Déplacer ici</button></footer>
+        ${renderLaQuestionDuDeplacement(folderMap)}
+        <footer class="documents-move-modal__actions"><button type="button" class="gh-btn gh-btn--validate" id="documentsMoveModalConfirmBtn">${
+          laQuestionDuDeplacement(
+            folderMap.get(String(docsViewState.moveModal?.sourceFolderId || "")) ?? null,
+            folderMap.get(String(docsViewState.moveModal?.targetFolderId || "")) ?? null
+          ) ? "Déplacer et partager" : "Déplacer ici"}</button></footer>
       </div>
+    </div>
+  `;
+}
+
+/**
+ * L'avertissement du déplacement, quand il y a lieu.
+ *
+ * **Il est dans la fenêtre, pas après.** Une seconde fenêtre par-dessus la
+ * première se ferme au réflexe : celle-ci est là pendant qu'on choisit la
+ * destination, et le bouton change de nom quand la destination la rend
+ * nécessaire. C'est le geste lui-même qui annonce ce qu'il fait.
+ *
+ * Le service décide, l'écran dessine : `sortir-des-mails.js`.
+ */
+function renderLaQuestionDuDeplacement(folderMap) {
+  const question = laQuestionDuDeplacement(
+    folderMap.get(String(docsViewState.moveModal?.sourceFolderId || "")) ?? null,
+    folderMap.get(String(docsViewState.moveModal?.targetFolderId || "")) ?? null
+  );
+  if (!question) return "";
+
+  return `
+    <div class="documents-move-modal__current" role="alert">
+      <strong>${escapeHtml(question.titre)}</strong>
+      <div class="documents-repo__message-meta">${escapeHtml(question.mot)}</div>
     </div>
   `;
 }
@@ -4161,6 +4383,71 @@ function openReportPreview(root) {
  * Un contenu vide et une lecture ratée ne se confondent pas : `contenu` reste
  * `null` dans le second cas, et le motif le dit (règle 5).
  */
+/**
+ * Ouvrir un mail : **le même écran qu'un fichier de texte**.
+ *
+ * ## Pourquoi il n'y a pas de lecteur de mails
+ *
+ * Mdall sait déjà lire un document : deux onglets — Aperçu et Code —, une barre
+ * qui dit ce qu'on regarde, un arbre à gauche. Un écran de plus aurait fait un
+ * second jeu de classes à recalibrer au premier correctif (règle 4).
+ *
+ * Un mail devient donc **un document en Markdown**, et c'est le lecteur de
+ * documents qui le montre (`le-mail-en-markdown.js`).
+ *
+ * ## Le fil, pas le message
+ *
+ * Comme dans une messagerie : celui qui ouvre une réponse a besoin de la
+ * question. L'échange se retrouve par `mail_fil`, écrit au dépôt, et se
+ * rapatrie borné — le plafond se dit plutôt que de se taire (règle 5).
+ */
+async function ouvrirLeMail(root, documentItem) {
+  const ligne = laLigneDunMail(documentItem);
+
+  docsViewState.activity = null;
+  docsViewState.texte = {
+    documentId: String(documentItem?.id || ""),
+    nom: ligne.objet,
+    // Ce qu'on lit n'est pas le fichier : c'est l'échange rendu. Rien ici ne
+    // s'enregistre par-dessus le `.eml`.
+    mail: true,
+    // **Les deux lectures, toujours.** Elles se décident d'ordinaire sur
+    // l'extension du fichier ; un `.msg` n'en a pas qui se rende en Markdown,
+    // et c'est pourtant du Markdown qu'on va lui donner.
+    lectures: [LECTURE_DU_TEXTE.APERCU, LECTURE_DU_TEXTE.CODE],
+    lecture: LECTURE_DU_TEXTE.APERCU,
+    contenu: null,
+    enCours: true,
+    motif: ""
+  };
+  redessinerLesFichiers(root);
+
+  const [{ lireLeFil }, { leFilEnMarkdown }] = await Promise.all([
+    import("../services/lire-un-mail-supabase.js"),
+    import("../services/le-mail-en-markdown.js")
+  ]);
+
+  const voisins = Array.isArray(docsViewState.files) ? docsViewState.files : [];
+  const fil = await lireLeFil(documentItem, voisins).catch(() => null);
+
+  // Rouvrir un autre mail pendant la lecture du premier ne doit pas faire
+  // atterrir le premier échange dans le second écran.
+  if (docsViewState.texte?.documentId !== String(documentItem?.id || "")) return;
+
+  const messages = fil?.messages ?? [];
+  docsViewState.texte = {
+    ...docsViewState.texte,
+    enCours: false,
+    contenu: messages.length
+      ? leFilEnMarkdown(messages, { marque: fil?.demande?.identite ?? "" })
+      : null,
+    motif: messages.length
+      ? ""
+      : "Ce message n'a pas pu être lu. Réessayez dans un instant."
+  };
+  redessinerLesFichiers(root);
+}
+
 async function ouvrirLeTexte(root, documentItem) {
   const nom = String(documentItem?.name || documentItem?.fileName || "fichier");
 
@@ -4201,6 +4488,10 @@ async function ouvrirLeTexte(root, documentItem) {
 function ouvrirLEdition(root) {
   const ouvert = docsViewState.texte;
   if (!ouvert || typeof ouvert.contenu !== "string") return;
+  // La garde est posée deux fois : le crayon ne se dessine pas sur un mail, et
+  // s'il se dessinait quand même, il n'ouvrirait rien. Ce qui est en jeu, c'est
+  // d'écraser une pièce d'origine par son propre rendu.
+  if (ouvert.mail) return;
 
   docsViewState.texte = {
     ...ouvert,
@@ -4288,6 +4579,13 @@ async function openPdfPreview(root, documentId) {
       message: "Il a peut-être été déplacé ou retiré depuis l'ouverture de l'onglet. Rechargez pour voir l'état réel."
     };
     renderProjectDocumentsContent(root);
+    return;
+  }
+  // **Un mail s'ouvre comme un échange**, et cela se décide sur l'index de la
+  // ligne — pas sur le nom du fichier. Un `.msg` et un `.eml` ne se
+  // reconnaissent pas au suffixe une fois rangés sous un nom lisible.
+  if (cestUnMailIndexe(documentItem)) {
+    await ouvrirLeMail(root, documentItem);
     return;
   }
   // **Deux lecteurs, et le nom du fichier décide.** Ils n'ont rien en commun :
