@@ -45,11 +45,11 @@ import {
   lesEnchainementsDuSysteme
 } from "../partage/js/services/les-enchainements-du-systeme-supabase.js";
 import {
-  CE_QUI_MANQUE_ENCORE, lesSujetsRanges, phraseDeCeQuiEstCache,
-  phraseDeLaGranulometrie, phraseDunSujet
+  CE_QUI_MANQUE_ENCORE, lesSujetsRanges, phraseDeCeQuiEstCache, phraseDesFormes,
+  phraseDeLaGranulometrie, phraseDuRegroupement, phraseDunSujet
 } from "../partage/js/services/les-sujets-du-systeme.js";
 import {
-  laMesureDesSujets, lesSujetsDuSysteme
+  laMesureDesSujets, lesEnchainementsDesSujets, lesSujetsDuSysteme
 } from "../partage/js/services/les-sujets-du-systeme-supabase.js";
 
 const echapper = (valeur) => String(valeur ?? "")
@@ -191,20 +191,28 @@ function renderLesDomaines(range) {
  * répète. Si l'essentiel est là, « ce qui suit habituellement » se réduit à
  * « ce qui vient de venir », et il faut pouvoir s'en apercevoir.
  */
-function renderLesEnchainements(tous) {
+function renderLesEnchainements(tous, {
+  titre = "Ce que fait la prédiction",
+  mot = "Elle forme les couples « après ceci, il est venu cela » à l'intérieur"
+    + " d'un chantier, les compte, et propose les plus fréquents. Rien de plus."
+    + " Voici ces couples, sur l'ensemble des chantiers — un chantier seul ne"
+    + " peut pas les voir.",
+  // Le nombre de cases parmi lesquelles le hasard tire. Huit pour les domaines ;
+  // autant que de sujets quand on prédit sur eux — et c'est bien pourquoi
+  // tomber juste sur un sujet vaut infiniment plus.
+  auHasardParmi = DOMAINS.length,
+  // Comment on écrit un côté du couple. Les domaines ont un libellé de
+  // taxonomie ; un sujet s'écrit tel que les chantiers l'écrivent.
+  nommer = domainLabel
+} = {}) {
   const porteurs = lesEnchainementsQuiPortent(tous);
   const redoublement = laPartDuRedoublement(tous);
 
   return `
     <section class="conso-usages">
-      <h3 class="conso-usages__titre">Ce que fait la prédiction</h3>
-      <p class="conso-usages__mot">
-        Elle forme les couples « après ceci, il est venu cela » à l'intérieur
-        d'un chantier, les compte, et propose les plus fréquents. Rien de plus.
-        Voici ces couples, sur l'ensemble des chantiers — un chantier seul ne
-        peut pas les voir.
-      </p>
-      <p class="conso-usages__mot"><b>${echapper(phraseDeLaPrediction(tous, DOMAINS.length))}</b></p>
+      <h3 class="conso-usages__titre">${echapper(titre)}</h3>
+      <p class="conso-usages__mot">${echapper(mot)}</p>
+      <p class="conso-usages__mot"><b>${echapper(phraseDeLaPrediction(tous, auHasardParmi))}</b></p>
 
       ${/*
         **Le classement prend la borne basse, la ligne garde son taux observé.**
@@ -217,7 +225,7 @@ function renderLesEnchainements(tous) {
           ${porteurs.slice(0, 12).map((une) => `
             <li class="forme-reference__ligne">
               <span class="forme-reference__quoi">${echapper(
-                `${domainLabel(une.avant)} → ${domainLabel(une.apres)}`)}</span>
+                `${nommer(une.avant)} → ${nommer(une.apres)}`)}</span>
               <span class="forme-reference__chiffres mono-small">${
                 echapper(phraseDunEnchainement(une))}</span>
               ${/*
@@ -275,12 +283,23 @@ function renderLesSujets(sujets, mesure) {
       </p>
       <p class="conso-usages__mot"><b>${
         echapper(phraseDeLaGranulometrie(ranges, DOMAINS.length))}</b></p>
+      ${/*
+        **Ce que le regroupement a valu, et non ce qu'il promet.** « Pluriels,
+        ordre des mots, mots-outils intercalés » est vérifiable : le nombre de
+        formes rangées sous ces sujets le dit.
+      */""}
+      ${phraseDuRegroupement(ranges, mesure)
+        ? `<p class="conso-usages__mot">${echapper(phraseDuRegroupement(ranges, mesure))}</p>`
+        : ""}
 
       ${ranges.length ? `
         <ul class="forme-reference">
           ${ranges.slice(0, 40).map((une) => `
             <li class="forme-reference__ligne">
-              <span class="forme-reference__quoi">${echapper(une.sujet)}</span>
+              <span class="forme-reference__quoi">${echapper(une.sujet)}${
+                phraseDesFormes(une)
+                  ? ` <i class="mono-small">${echapper(phraseDesFormes(une))}</i>`
+                  : ""}</span>
               <span class="forme-reference__chiffres mono-small">${
                 echapper(`${compteDit(une.affirmations)} ${une.affirmations > 1
                   ? "affirmations" : "affirmation"}`)}</span>
@@ -363,6 +382,7 @@ function renderTout(comptes) {
     <div id="carburantDomaines"></div>
     <div id="carburantEnchainements"></div>
     <div id="carburantSujets"></div>
+    <div id="carburantSujetsEnchaines"></div>
 
     ${renderCeQuiNestPasFait()}
   `;
@@ -391,11 +411,12 @@ export async function monterLeCarburant(hote) {
   // **Les deux lectures ensemble, et chacune chez elle.** Elles ne dépendent pas
   // l'une de l'autre : les demander l'une après l'autre ferait attendre deux
   // allers-retours, et une panne de l'une emporterait l'affichage de l'autre.
-  const [lignes, couples, sujets, mesure] = await Promise.all([
+  const [lignes, couples, sujets, mesure, couplesDeSujets] = await Promise.all([
     lesDomainesDuSysteme(),
     lesEnchainementsDuSysteme(),
     lesSujetsDuSysteme(),
-    laMesureDesSujets()
+    laMesureDesSujets(),
+    lesEnchainementsDesSujets()
   ]);
 
   const apres = ou.querySelector("#carburantDomaines");
@@ -423,5 +444,30 @@ export async function monterLeCarburant(hote) {
           Les sujets n'ont pas pu être lus. Ce n'est pas qu'il n'y en a aucun :
           on ne sait pas lesquels il y a.</p></section>`
       : renderLesSujets(sujets, mesure);
+  }
+
+  const enchaines = ou.querySelector("#carburantSujetsEnchaines");
+  if (enchaines) {
+    // **Le même module de lecture que pour les domaines.** Le classement, la
+    // borne basse et la phrase de bilan ne se refont pas ici : une seconde
+    // façon de pondérer finirait par ne pas dire la même chose (règle 4).
+    enchaines.innerHTML = couplesDeSujets === null
+      ? `<section class="conso-usages"><p class="forme-manques">
+          Les enchaînements de sujets n'ont pas pu être lus. Ce n'est pas qu'il
+          n'y en a aucun : on ne sait pas lesquels il y a.</p></section>`
+      : renderLesEnchainements(lesEnchainements(couplesDeSujets), {
+        titre: "La prédiction, portée sur les sujets",
+        mot: "Le même calcul, sur les sujets au lieu des huit domaines. C'est ici"
+          + " que se lit « après une question de nappe, une question de"
+          + " cuvelage » — là où les domaines ne savent dire que « après le sol,"
+          + " la structure », ce que tout le monde sait déjà.",
+        // Le hasard tire parmi tous les sujets, pas parmi huit cases : tomber
+        // juste sur un sujet vaut donc infiniment plus que sur un domaine, et
+        // le rapport au hasard doit le dire.
+        auHasardParmi: Math.max(2, lesSujetsRanges(sujets ?? []).length),
+        // Un sujet s'écrit comme les chantiers l'écrivent : aucun libellé de
+        // taxonomie ne lui correspond.
+        nommer: (un) => String(un ?? "")
+      });
   }
 }
