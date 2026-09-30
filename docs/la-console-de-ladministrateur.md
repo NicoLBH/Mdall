@@ -518,6 +518,16 @@ que Mdall vend.
 
 **Un endroit d'où l'on lit un contenu.** Voir § 3.
 
+> **Et cette règle a été enfreinte.** Le versoir, l'archive et l'épisode lisent
+> des propos, ouvrent des PDF et affichent des extraits de correspondance. Ils
+> n'auraient jamais dû être ici : le dépôt de mails, leur rangement dans un
+> dossier privé et leur lecture existaient **déjà côté application**, par projet
+> (`rangerLesMails`, le dossier « Mails », *Fichiers*). Ce qui manquait était
+> l'entrée en masse des `.msg`, et elle appartient à l'application.
+>
+> La décision et son inventaire : `docs/nourrir-mdall.md`, § 8 quater. Ce qui
+> revient à la console : les comptes d'exploitation, et rien d'autre.
+
 **Un tableau de bord commercial.** Des chiffres qui montent toujours ne décident
 rien. Chaque ligne de cette console doit pouvoir répondre à : *qu'est-ce que je
 fais différemment si ce nombre double ?*
