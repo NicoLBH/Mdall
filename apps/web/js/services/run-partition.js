@@ -160,6 +160,25 @@ export function decrireVisibilite(entry = {}) {
 }
 
 /**
+ * Comment une exécution s'appelle **à l'écran**.
+ *
+ * Elle s'y appelait « run » : « 1 run », « 3 runs », et « Run » pour une ligne
+ * sans titre. C'est le mot du code, et il n'a rien à faire sur un écran dont
+ * tout le reste est en français — un conducteur de travaux ne lit pas des runs,
+ * il lit ce que le chantier a fait.
+ *
+ * Le mot vit ici, une fois : il était écrit à trois endroits, et le troisième
+ * serait resté en anglais (règle 10).
+ */
+export const UNE_EXECUTION = "Exécution";
+
+/** « 1 exécution », « 3 exécutions ». */
+export function lesExecutionsDites(combien = 0) {
+  const nombre = Number(combien) || 0;
+  return `${nombre} exécution${nombre > 1 ? "s" : ""}`;
+}
+
+/**
  * Ce qu'on a le droit de réécrire quand la base refuse une colonne trop neuve.
  *
  * ## Pourquoi un repli, et pourquoi il ne va que dans un sens

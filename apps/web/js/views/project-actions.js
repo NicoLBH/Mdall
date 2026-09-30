@@ -8,7 +8,9 @@ import { buildRunGraph, describeReadingStack, formatStepDuration } from "../serv
 import {
   STATUT, etapeDe, etapesConsultables, numeroter, resumerEtape
 } from "../services/run-journal.js";
-import { ONGLETS, partitionnerActions, ongletValide, decrireVisibilite } from "../services/run-partition.js";
+import {
+  ONGLETS, UNE_EXECUTION, decrireVisibilite, lesExecutionsDites, ongletValide, partitionnerActions
+} from "../services/run-partition.js";
 import { store } from "../store.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
@@ -315,11 +317,13 @@ function getRunHistoryIconSvg() {
 function renderRunCountInline(total) {
   const totalRuns = Number(total ?? getRunMetrics().totalRuns ?? 0);
 
+  const dit = lesExecutionsDites(totalRuns);
+
   return `
-    <span class="workflow-runs__head-count" title="${escapeHtml(`${totalRuns} run${totalRuns > 1 ? "s" : ""} journalisé${totalRuns > 1 ? "s" : ""}`)}">
+    <span class="workflow-runs__head-count" title="${escapeHtml(
+      `${dit} journalisée${totalRuns > 1 ? "s" : ""}`)}">
       ${getRunHistoryIconSvg()}
-      <span>${escapeHtml(String(totalRuns))}</span>
-      <span>run${totalRuns > 1 ? "s" : ""}</span>
+      <span>${escapeHtml(dit)}</span>
     </span>
   `;
 }
@@ -355,7 +359,7 @@ function renderRunRows(entries) {
             ${renderMarqueAtelier(entry)}
             <button type="button" class="workflow-runs__title workflow-runs__title--link" data-run-open="${escapeHtml(
               entry.id || ""
-            )}">${escapeHtml(entry.name || "Run")}</button>
+            )}">${escapeHtml(entry.name || UNE_EXECUTION)}</button>
           </div>
           <div class="workflow-runs__meta workflow-runs__subline">
             ${objet}${objet && cause ? `<span class="workflow-runs__dot">·</span>` : ""}${cause}${mention}
@@ -542,7 +546,7 @@ function renderRunDetail(entry) {
       <div class="run-detail__head">
         <div class="run-detail__title-row">
           ${getRunStateIcon(entry)}
-          <h2 class="run-detail__title">${escapeHtml(entry.name || "Run")}</h2>
+          <h2 class="run-detail__title">${escapeHtml(entry.name || UNE_EXECUTION)}</h2>
           <span class="${meta.className}">${escapeHtml(meta.label)}</span>
         </div>
         <p class="run-detail__lead">${escapeHtml(entry.summary || getTriggerLabel(entry))}</p>

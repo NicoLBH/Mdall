@@ -276,3 +276,41 @@ test("un versement ne se réécrit jamais sans sa marque", async () => {
   assert.equal(laCourseDeRepli(null), null);
   assert.equal(laCourseDeRepli("bonjour"), null);
 });
+
+/* ── Le journal parle français ───────────────────────────────────────────── */
+
+test("une exécution se compte en français, et s'accorde", async () => {
+  const { lesExecutionsDites, UNE_EXECUTION } = await import("./run-partition.js");
+  assert.equal(lesExecutionsDites(0), "0 exécution");
+  assert.equal(lesExecutionsDites(1), "1 exécution");
+  assert.equal(lesExecutionsDites(12), "12 exécutions");
+  assert.equal(UNE_EXECUTION, "Exécution");
+});
+
+/**
+ * **Le mot « run » ne s'écrit plus à l'écran.** Il était le mot du code, et il
+ * s'était installé dans l'en-tête du journal — « 1 run », « 3 runs » — et dans
+ * le titre d'une ligne sans nom. Ce garde lit les textes affichés de l'écran des
+ * Actions, et eux seuls : les classes, les attributs et les chemins d'import
+ * gardent le mot, qui est du vocabulaire de fabrication.
+ */
+test("aucun texte affiché du journal ne dit « run »", async () => {
+  const { readFileSync: lire } = await import("node:fs");
+  const source = lire(
+    join(RACINE, "apps", "web", "js", "views", "project-actions.js"), "utf8"
+  );
+
+  // **Le mot isolé, et lui seul.** `run-detail`, `workflow-runs__head`,
+  // `data-run-open`, `totalRuns` portent le mot **collé** à un tiret, un
+  // souligné ou une lettre : c'est du vocabulaire de fabrication, il ne monte
+  // pas à l'écran. Un mot qui se lit vraiment est entouré d'espace, de
+  // guillemets ou de balises — c'était le cas des trois qu'on vient de traduire.
+  const ISOLE = /(^|[\s>"'`])(runs?)(?=[\s<"'`$.,;:)]|$)/gi;
+
+  const coupables = [...source.matchAll(ISOLE)].map((trouve) => trouve[2]);
+
+  assert.deepEqual(
+    coupables, [],
+    `le mot est encore affiché : ${coupables.join(", ")}`
+  );
+});
