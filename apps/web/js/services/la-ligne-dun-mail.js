@@ -20,6 +20,7 @@
  */
 
 import { objetNu } from "./un-mail-deplie.js";
+import { lidentiteDite } from "./une-adresse-lisible.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -35,12 +36,16 @@ const texte = (valeur) => String(valeur ?? "").trim();
  * d'affichage est ce qu'un expéditeur choisit, donc ce qu'il peut choisir de
  * travers.
  */
+/**
+ * Qui écrit, **tel qu'on peut le lire**.
+ *
+ * Il rendait l'adresse quelle qu'elle soit, et un `.msg` interne en porte une
+ * qui n'en est pas une : trois lignes d'identifiant d'annuaire Exchange à la
+ * place d'un nom. Ce qui est montrable se décide dans
+ * `une-adresse-lisible.js`, une fois pour tous les écrans (règle 10).
+ */
 export function quiEcrit(qui = null) {
-  if (typeof qui === "string") return texte(qui);
-  const nom = texte(qui?.nom);
-  const adresse = texte(qui?.adresse);
-  if (nom && adresse && nom.toLowerCase() !== adresse.toLowerCase()) return `${nom} (${adresse})`;
-  return nom || adresse;
+  return lidentiteDite(qui);
 }
 
 /**

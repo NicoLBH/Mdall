@@ -2,8 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  leFilEnMarkdown, leMomentDit, leNomDuMailOuvert, lesPiecesDuFil, unMessageEnMarkdown
+  leFilEnMarkdown, leMomentDit, leNomDuMailOuvert, unMessageEnMarkdown
 } from "./le-mail-en-markdown.js";
+import { lesPiecesDuFil } from "./les-pieces-qui-comptent.js";
 
 // Aucun mail réel : les noms, les sociétés et les domaines sont inventés.
 const lu = (dessus = {}) => ({
