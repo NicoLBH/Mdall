@@ -1442,6 +1442,98 @@ C'est ce lien qui manque, et c'est le même que la galerie réclamera.
 que sur les fichiers de la Mémoire : un dossier survolé ne répondait pas, ce qui
 le faisait passer pour inerte alors qu'il s'ouvre. Un oubli, pas une intention.
 
+## 8 undecies. Le dépôt ne fait plus attendre, et la galerie
+
+### Un bandeau est resté d'un projet à l'autre
+
+Il nommait un mail d'un chantier, au-dessus des fichiers d'un autre. Rien n'avait
+fui en base : c'est **l'état de l'écran**, gardé en mémoire du module, qui a
+survécu au changement de projet.
+
+Le réflexe aurait été d'effacer le bandeau au changement — puis la sélection,
+puis le dépouillement. **Cette liste est exactement ce qu'on oublie de tenir** :
+le champ suivant s'ajoutera sans elle, et le défaut reviendra sous une autre
+forme.
+
+On ne remet donc rien à zéro : **on reprend l'état neuf en entier**
+(`letat-suit-le-projet.js`). Tout ce qu'un écran ajoutera à son état sera, par
+construction, effacé avec le reste. Et les **deux** entrées du rendu le
+vérifient, parce qu'il n'y a pas de troisième chemin et qu'un chemin oublié
+suffirait.
+
+> Le service n'appartient à aucun écran : n'importe lequel gardant quelque chose
+> entre deux rendus peut s'en servir, et devrait.
+
+### Deux minutes d'attente, et la cause n'était pas celle qu'on croyait
+
+Vingt mails avec leurs pièces font **une centaine d'envois**. Ils partaient un à
+un, chacun payant son aller-retour. Ils partent maintenant **quatre à la fois**
+(`quatreALaFois`) : au-delà on ne gagne plus — la liaison montante est le goulot
+— et l'on commence à se faire refuser par le stockage.
+
+### Et pendant ce temps, une barre, puis le journal
+
+C'est le mode opératoire du dépôt d'un rapport de bureau de contrôle, et c'est
+volontairement **le même** : une seule façon d'informer pour la même sorte
+d'action. Deux façons obligent à savoir laquelle regarder, et l'on regarde la
+mauvaise.
+
+1. une **barre** pendant l'envoi, qui balaie tant qu'aucun fichier n'a été
+   ouvert — une barre à zéro ressemble à une barre bloquée ;
+2. une **action au journal** dès le premier clic : « lecture et rangement en
+   cours, vous pouvez continuer ailleurs » ;
+3. la même ligne, **mise à jour** quand c'est fini, avec la phrase du convoi —
+   celle qu'on lit déjà dans l'écran de dépôt (règle 4).
+
+> **Et le panneau est passé au-dessus de la liste.** Vingt `.msg` déposés
+> poussaient le bouton « Dépouiller » sous vingt lignes de fichiers : on ne
+> voyait pas le geste à faire, et l'on croyait que le dépôt n'avait rien
+> produit. La liste, elle, ne redit plus les porteurs — le panneau les nomme.
+
+### Le lien d'une pièce et de son message
+
+Il manquait, et il manquait **deux fois** : la lecture d'un échange ne pouvait
+pas ouvrir les pièces qu'elle nomme, et la galerie ne pouvait pas les dater.
+
+`piece_du_message` le porte (`202610270001`). **Une colonne, pas une table de
+liaison** : une pièce est dédoublonnée par ses octets, donc le même plan attaché
+à quinze réponses n'entre qu'une fois. La colonne ne dit que le premier message
+— celui qui l'a fait entrer —, et c'est ce qu'on veut savoir : **quand elle est
+arrivée et par qui**. La liste complète se reconstituerait en relisant les
+messages ; rien n'est perdu, c'est seulement dans les fichiers.
+
+`on delete set null` : supprimer un mail n'emporte pas le plan qu'il portait. La
+pièce perd sa provenance, et l'écran le dit.
+
+### La galerie
+
+Au-dessus de la liste du dossier, **pas dans un onglet à elle** : c'est une
+autre façon de regarder le même dossier, et un endroit de plus obligerait à
+savoir lequel ouvrir.
+
+Deux familles, et elles ne se regardent pas pareil : une **photo** est un relevé
+de chantier, qui se regarde par date ; un **document** se lit par son nom. Les
+mélanger ferait des rectangles gris au milieu des photos.
+
+Les **images du corps** n'y entrent pas — signatures, bandeaux, logos : huit
+exemplaires du même logo par message noieraient tout. Mais une pièce dont on
+**ignore** la nature y entre : elle a été déposée avant qu'on garde cette
+information, et l'écarter ferait disparaître des plans (règle 5).
+
+> **Les vignettes ne montrent pas l'image, et c'est un compromis nommé.** Les
+> octets sont dans un casier privé : les afficher demande une adresse signée par
+> photo, donc trois cents appels au chargement d'un dossier de trois cents
+> photos. La vignette montre ce qu'on sait sans rien rapatrier — le nom, la date,
+> l'expéditeur —, et l'image s'ouvre au clic. Le jour où l'on voudra de vraies
+> vignettes, il faudra les fabriquer **au dépôt**, pas au chargement de l'écran.
+
+### Ce qui reste
+
+**Les pièces cliquables depuis le fil.** Le lien existe désormais ; ce qui
+manque est l'endroit où le poser. Le fil est rendu **en Markdown**, et du texte
+ne porte pas de boutons : la liste des pièces devra vivre **à côté** du lecteur,
+dans l'en-tête de l'écran, et non dans le texte du message.
+
 ## 9. À enrichir
 
 - Le déposant : navigateur ou fonction de bord ? (cent mille pièces ne passent

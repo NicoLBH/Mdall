@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   ACCROCS_NOMMES, MOTS_DU_SORT, PAR_LOT, SORT, avancement, enLots,
-  noter, noterLesPieces, noterUnFichierLu, phraseDuConvoi, unJournalNeuf
+  noter, noterLesPieces, noterUnFichierLu, phraseDuConvoi, quatreALaFois, unJournalNeuf
 } from "./le-convoi.js";
 
 const nFichiers = (combien, comment = (rang) => `m${rang}.msg`) =>
@@ -214,4 +214,47 @@ test("noter un fichier lu ne modifie pas le journal donné", () => {
   const apres = noterUnFichierLu(avant);
   assert.equal(avant.lus, 0);
   assert.equal(apres.lus, 1);
+});
+
+/* ── Quatre à la fois ────────────────────────────────────────────────────── */
+
+/**
+ * **Un à la fois, c'était le coût réel de l'attente.** Vingt mails et leurs
+ * pièces font une centaine d'envois ; enchaînés, chacun paie son aller-retour,
+ * et le dépôt dure deux minutes.
+ */
+test("les travaux se font à plusieurs, sans jamais dépasser la borne", async () => {
+  let ensemble = 0;
+  let leMax = 0;
+  const travail = () => async () => {
+    ensemble += 1;
+    leMax = Math.max(leMax, ensemble);
+    await new Promise((finir) => setTimeout(finir, 1));
+    ensemble -= 1;
+    return true;
+  };
+
+  await quatreALaFois(Array.from({ length: 20 }, travail), 4);
+  assert.equal(leMax, 4);
+});
+
+/**
+ * **Les résultats reviennent dans l'ordre des travaux**, et non dans celui où
+ * ils se terminent : un compte rendu qui nomme les fichiers dans le désordre
+ * fait douter de tout le reste.
+ */
+test("l'ordre des résultats est celui des travaux, pas celui des retours", async () => {
+  const lent = (valeur, attente) => async () => {
+    await new Promise((finir) => setTimeout(finir, attente));
+    return valeur;
+  };
+
+  const rendus = await quatreALaFois([lent("a", 12), lent("b", 1), lent("c", 6)], 4);
+  assert.deepEqual(rendus, ["a", "b", "c"]);
+});
+
+test("rien à faire ne fait rien, et une borne absurde retombe sur un", async () => {
+  assert.deepEqual(await quatreALaFois([]), []);
+  assert.deepEqual(await quatreALaFois(null), []);
+  assert.deepEqual(await quatreALaFois([async () => 1], 0), [1]);
 });

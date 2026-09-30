@@ -509,3 +509,45 @@ test("le texte modifié reste à l'écran quand l'enregistrement échoue", () =>
   assert.match(rate, /edition: \{ \.\.\.edition, enCours: false \}/);
   assert.equal(/edition: null/.test(rate), false, "l'édition se referme sur un échec");
 });
+
+/* ── L'état ne traverse pas les projets ──────────────────────────────────── */
+
+/**
+ * **Un bandeau nommant un mail d'un chantier est resté au-dessus d'un autre.**
+ *
+ * Rien n'avait fui en base : c'est l'état de l'écran, gardé en mémoire du
+ * module, qui a survécu au changement de projet. Ce qui protège désormais n'est
+ * pas une liste de champs à effacer — c'est que l'état se **refait en entier**,
+ * et que les deux entrées du rendu le vérifient.
+ *
+ * Cette épreuve lit la source, et c'est le seul moyen : ces deux fonctions
+ * parlent au DOM et ne s'importent pas hors d'un navigateur. Ce qu'elle tient
+ * n'est pas un détail de rédaction, c'est qu'aucun chemin de rendu ne se passe
+ * de la garde.
+ */
+test("les deux entrées du rendu vérifient le projet avant de dessiner", () => {
+  const ecran = readFileSync(new URL("../views/project-documents.js", import.meta.url), "utf8");
+
+  for (const entree of ["export function renderProjectDocuments(root) {",
+    "function renderProjectDocumentsContent(root) {"]) {
+    const ou = ecran.indexOf(entree);
+    assert.notEqual(ou, -1, `${entree} a changé de nom`);
+    const debut = ecran.slice(ou, ou + entree.length + 120);
+    assert.match(debut, /garderLEtatDuProjet\(\);/, entree);
+  }
+
+  // Et la garde reprend l'état **neuf en entier** : un champ ajouté demain doit
+  // s'effacer sans que personne l'ajoute à une liste.
+  assert.match(ecran, /lEtatSuitLeProjet\(\s*docsViewState,[\s\S]{0,140}etatNeufDesFichiers\s*\)/);
+});
+
+/**
+ * **L'état se remplace, il ne se vide pas.** Déclaré `const`, il ne pourrait
+ * pas être refait en entier — et l'on retomberait sur la liste de champs à
+ * effacer à la main, qui est le défaut lui-même.
+ */
+test("l'état de l'onglet est une variable qu'on remplace", () => {
+  const ecran = readFileSync(new URL("../views/project-documents.js", import.meta.url), "utf8");
+  assert.match(ecran, /let docsViewState = etatNeufDesFichiers\(\);/);
+  assert.equal(/const docsViewState\s*=/.test(ecran), false, "l'état ne peut plus être refait");
+});

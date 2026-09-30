@@ -34,9 +34,12 @@ import {
 } from "../services/le-dossier-des-mails.js";
 import { lePartageDuDepot } from "../services/le-depouillement.js";
 import { laQuestionDuDeplacement } from "../services/sortir-des-mails.js";
+import { lEtatSuitLeProjet } from "../services/letat-suit-le-projet.js";
 import {
   cestUnMailIndexe, laLigneDunMail, quandDit
 } from "../services/la-ligne-dun-mail.js";
+import { laGalerie } from "../services/la-galerie-des-pieces.js";
+import { renderLaGalerie } from "./ui/la-galerie-ecran.js";
 import { renderLeDepouillement } from "./ui/le-depouillement-ecran.js";
 import { renderDataTableShell, renderDataTableHead, renderDataTableEmptyState } from "./ui/data-table-shell.js";
 import { escapeHtml } from "../utils/escape-html.js";
@@ -58,7 +61,7 @@ import {
 } from "./project-memoire-fichiers.js";
 import { enClair } from "../services/memoire-en-texte.js";
 import { emploisParAffirmation } from "../services/memoire-applications.js";
-import { MEMOIRE, DOCUMENTS, phraseDeLaRacine } from "../services/memoire-rangement.js";
+import { MEMOIRE, DOCUMENTS, MAILS, phraseDeLaRacine } from "../services/memoire-rangement.js";
 import { versementsDeLaMemoire } from "../services/memoire-blame.js";
 import { sujetsDeclares, variablesDeLaMemoire, cleDuSujet } from "../services/memoire-identifiants.js";
 import { rangVoisin } from "../services/memoire-recherche-texte.js";
@@ -124,189 +127,217 @@ function logPdfPreviewDebug(label, payload = {}) {
  */
 const BRANCHE = { MEMOIRE: "memoire", DOCUMENTS: "documents", MAILS: "mails" };
 
-const docsViewState = {
-  mode: "list", // "list" | "upload" | "report-preview" | "pdf-preview"
-  /**
-   * La branche ouverte de l'onglet Fichiers.
-   *
-   * ## Pourquoi les deux matières vivent au même endroit
-   *
-   * Les PDF et les fichiers de mémoire sont de même nature : ce sont les
-   * **sources** du projet, celles à partir desquelles il se reconstruit. Les
-   * PDF ne suffisent pas — qui a dit, quand, qui assume sont aussi des sources,
-   * et l'application les produit. Le besoin est le même, l'écran l'était déjà
-   * presque : un arbre, un tableau, un lecteur.
-   *
-   * `""` la racine, `BRANCHE.MEMOIRE` ce que le projet sait, `BRANCHE.DOCUMENTS`
-   * ce qu'il a reçu.
-   */
-  branche: "",
-  /** Le chemin ouvert dans la branche Mémoire : `["Incendie", "incendie.ctr"]`. */
-  memoireChemin: [],
-  /** Ce qu'on cherche dans la mémoire. Traverse les dossiers. */
-  memoireQuery: "",
-  /** Code ou Origine. */
-  memoireLecture: "code",
-  /**
-   * La partie d'ouvrage dont on veut voir le rejeu, dans un fichier.
-   *
-   * Vide — « toutes » — au départ : c'est ce que l'écran faisait avant d'avoir
-   * un sélecteur, et partir sur un bâtiment ferait croire qu'une fonction n'en
-   * déroule qu'un. C'est une portée à part entière, pas une absence.
-   */
-  memoireRejeuZone: "",
-  /** Les blocs repliés du fichier ouvert, par leur identifiant. */
-  memoirePlies: new Set(),
-  /**
-   * Ce qu'on cherche **dans** le fichier ouvert : `{ouverte, mot, rang}`.
-   *
-   * Distinct de `memoireQuery`, qui cherche dans tout le projet. Les deux
-   * partagent le même service et le même surlignage, mais pas le même geste :
-   * l'une répond « où est-ce ? », l'autre « où en suis-je ? ».
-   */
-  memoireCherche: { ouverte: false, mot: "", rang: null },
-  /** Le menu « Ajouter un fichier », ouvert ou non. */
-  ajoutOuvert: false,
-  /** Ce que le projet dit de lui-même. `null` tant qu'on n'a pas lu. */
-  aPropos: null,
-  /** La saisie de « À propos », ouverte ou non, et ce qu'elle porte. */
-  aProposSaisie: null,
-  /** Ce qui a empêché l'enregistrement, s'il y a lieu. */
-  aProposEchec: "",
-  /** Les racines repliées de l'arbre : « memoire », « documents ». */
-  racinesRepliees: new Set(),
-  /** Les dossiers repliés du rail de la Mémoire. */
-  memoireReplies: new Set(),
-  // Les fichiers choisis pour le prochain dépôt. `files`, plus bas, désigne tout
-  // autre chose — le contenu du répertoire affiché —, d'où ce nom-ci.
-  selectedFiles: [],
-  /**
-   * Ce qu'on fera du lot : « direct » pour l'écrire tel quel dans le projet,
-   * « proposition » pour le soumettre à jugement, ou l'identifiant d'une
-   * proposition ouverte à laquelle l'ajouter.
-   *
-   * `null` tant que l'examen des fichiers n'a pas suggéré de défaut. On ne
-   * déplace jamais ce choix sous la main de l'utilisateur : `depositModeTouched`
-   * le fige dès qu'il y a touché.
-   */
-  /**
-   * Où va le dépôt : `"proposition"` pour une nouvelle, sinon l'identifiant
-   * d'une proposition ouverte. Il n'y a plus de dépôt direct — voir
-   * `renderDepositMode`.
-   */
-  depositMode: null,
-  depositModeTouched: false,
-  /** Vrai dès que l'utilisateur a écrit le titre lui-même : on n'y touche plus. */
-  titleTouched: false,
-  /** L'examen des fichiers choisis, réutilisé au dépôt pour ne pas les relire. */
-  inspection: { running: false, exploitable: 0, byFile: null },
-  /** Les propositions ouvertes du projet, pour pouvoir y ajouter le lot. */
-  openPropositions: [],
-  title: "",
-  description: "",
-  isUploading: false,
-  uploadProgress: null,
-  selectedPhase: store.projectForm?.currentPhase || store.projectForm?.phase || "APS",
-  reportNumber: 1,
-  activity: {
-    tone: "info",
+/**
+ * L'état de l'onglet Fichiers, **neuf**.
+ *
+ * ## Pourquoi une fonction, et pas un objet
+ *
+ * Parce qu'on doit pouvoir le refaire. Un bandeau nommant un mail d'un chantier
+ * est resté affiché au-dessus des fichiers d'un autre : l'état de cet écran
+ * avait survécu au changement de projet.
+ *
+ * Le réflexe aurait été d'effacer le bandeau au changement — puis la sélection,
+ * puis le dépouillement. Cette liste est exactement ce qu'on oublie de tenir.
+ * **On ne remet donc rien à zéro : on reprend cet état en entier**, et tout ce
+ * qu'on ajoutera ici sera effacé avec le reste, sans liste à tenir
+ * (`letat-suit-le-projet.js`).
+ */
+function etatNeufDesFichiers() {
+  return {
+    /**
+     * À quel projet cet état appartient.
+     *
+     * C'est la seule valeur que `lEtatSuitLeProjet` regarde, et c'est ce qui
+     * garantit qu'aucun écran ne montre l'état d'un autre chantier.
+     */
+    projetId: "",
+    mode: "list", // "list" | "upload" | "report-preview" | "pdf-preview"
+    /**
+     * La branche ouverte de l'onglet Fichiers.
+     *
+     * ## Pourquoi les deux matières vivent au même endroit
+     *
+     * Les PDF et les fichiers de mémoire sont de même nature : ce sont les
+     * **sources** du projet, celles à partir desquelles il se reconstruit. Les
+     * PDF ne suffisent pas — qui a dit, quand, qui assume sont aussi des sources,
+     * et l'application les produit. Le besoin est le même, l'écran l'était déjà
+     * presque : un arbre, un tableau, un lecteur.
+     *
+     * `""` la racine, `BRANCHE.MEMOIRE` ce que le projet sait, `BRANCHE.DOCUMENTS`
+     * ce qu'il a reçu.
+     */
+    branche: "",
+    /** Le chemin ouvert dans la branche Mémoire : `["Incendie", "incendie.ctr"]`. */
+    memoireChemin: [],
+    /** Ce qu'on cherche dans la mémoire. Traverse les dossiers. */
+    memoireQuery: "",
+    /** Code ou Origine. */
+    memoireLecture: "code",
+    /**
+     * La partie d'ouvrage dont on veut voir le rejeu, dans un fichier.
+     *
+     * Vide — « toutes » — au départ : c'est ce que l'écran faisait avant d'avoir
+     * un sélecteur, et partir sur un bâtiment ferait croire qu'une fonction n'en
+     * déroule qu'un. C'est une portée à part entière, pas une absence.
+     */
+    memoireRejeuZone: "",
+    /** Les blocs repliés du fichier ouvert, par leur identifiant. */
+    memoirePlies: new Set(),
+    /**
+     * Ce qu'on cherche **dans** le fichier ouvert : `{ouverte, mot, rang}`.
+     *
+     * Distinct de `memoireQuery`, qui cherche dans tout le projet. Les deux
+     * partagent le même service et le même surlignage, mais pas le même geste :
+     * l'une répond « où est-ce ? », l'autre « où en suis-je ? ».
+     */
+    memoireCherche: { ouverte: false, mot: "", rang: null },
+    /** Le menu « Ajouter un fichier », ouvert ou non. */
+    ajoutOuvert: false,
+    /** Ce que le projet dit de lui-même. `null` tant qu'on n'a pas lu. */
+    aPropos: null,
+    /** La saisie de « À propos », ouverte ou non, et ce qu'elle porte. */
+    aProposSaisie: null,
+    /** Ce qui a empêché l'enregistrement, s'il y a lieu. */
+    aProposEchec: "",
+    /** Les racines repliées de l'arbre : « memoire », « documents ». */
+    racinesRepliees: new Set(),
+    /** Les dossiers repliés du rail de la Mémoire. */
+    memoireReplies: new Set(),
+    // Les fichiers choisis pour le prochain dépôt. `files`, plus bas, désigne tout
+    // autre chose — le contenu du répertoire affiché —, d'où ce nom-ci.
+    selectedFiles: [],
+    /**
+     * Ce qu'on fera du lot : « direct » pour l'écrire tel quel dans le projet,
+     * « proposition » pour le soumettre à jugement, ou l'identifiant d'une
+     * proposition ouverte à laquelle l'ajouter.
+     *
+     * `null` tant que l'examen des fichiers n'a pas suggéré de défaut. On ne
+     * déplace jamais ce choix sous la main de l'utilisateur : `depositModeTouched`
+     * le fige dès qu'il y a touché.
+     */
+    /**
+     * Où va le dépôt : `"proposition"` pour une nouvelle, sinon l'identifiant
+     * d'une proposition ouverte. Il n'y a plus de dépôt direct — voir
+     * `renderDepositMode`.
+     */
+    depositMode: null,
+    depositModeTouched: false,
+    /** Vrai dès que l'utilisateur a écrit le titre lui-même : on n'y touche plus. */
+    titleTouched: false,
+    /** L'examen des fichiers choisis, réutilisé au dépôt pour ne pas les relire. */
+    inspection: { running: false, exploitable: 0, byFile: null },
+    /** Les propositions ouvertes du projet, pour pouvoir y ajouter le lot. */
+    openPropositions: [],
     title: "",
-    message: ""
-  },
-  pdfPreview: {
-    objectUrl: "",
-    signedUrl: "",
-    sourceDocumentId: "",
-    isLoading: false,
-    errorMessage: "",
-    bytes: null,
-    pageCount: 0,
-    zoomLevel: 1,
-    rotation: 0,
-    searchQuery: "",
-    darkMode: false,
+    description: "",
+    isUploading: false,
+    uploadProgress: null,
+    selectedPhase: store.projectForm?.currentPhase || store.projectForm?.phase || "APS",
+    reportNumber: 1,
+    activity: {
+      tone: "info",
+      title: "",
+      message: ""
+    },
+    pdfPreview: {
+      objectUrl: "",
+      signedUrl: "",
+      sourceDocumentId: "",
+      isLoading: false,
+      errorMessage: "",
+      bytes: null,
+      pageCount: 0,
+      zoomLevel: 1,
+      rotation: 0,
+      searchQuery: "",
+      darkMode: false,
+      /**
+       * Ce qu'on regarde du document : sa page, ou ce que le modèle en a lu.
+       *
+       * Deux lectures de la même pièce, et non deux pièces : on bascule de l'une
+       * à l'autre pour les comparer, et c'est tout l'intérêt.
+       */
+      lecture: "pdf",
+      /**
+       * La transcription, lue à la demande.
+       *
+       * `null` : pas encore demandée, ou la lecture a échoué — et les deux se
+       * disent autrement qu'« il n'y en a pas ».
+       */
+      transcription: null,
+      transcriptionLue: false,
+      transcriptionEnCours: false
+    },
     /**
-     * Ce qu'on regarde du document : sa page, ou ce que le modèle en a lu.
+     * Le fichier qu'on est en train d'écrire à la main, s'il y en a un.
      *
-     * Deux lectures de la même pièce, et non deux pièces : on bascule de l'une
-     * à l'autre pour les comparer, et c'est tout l'intérêt.
+     * `null` : on n'en écrit pas. Son nom se tape dans le fil d'Ariane, au bout
+     * du chemin — là où le fichier va exister.
      */
-    lecture: "pdf",
+    ecriture: null,
     /**
-     * La transcription, lue à la demande.
+     * Le fichier de texte ouvert, s'il y en a un.
      *
-     * `null` : pas encore demandée, ou la lecture a échoué — et les deux se
-     * disent autrement qu'« il n'y en a pas ».
+     * `null` : on n'en lit aucun. Il ne passe pas par `pdfPreview` — ce sont deux
+     * lecteurs qui n'ont rien en commun : pas de zoom, pas de rotation, pas de
+     * recherche dans une page, pas d'octets à rendre. Les faire cohabiter dans un
+     * même état aurait donné un objet dont la moitié des champs sont morts selon
+     * le cas, et deux écrans à relire pour savoir lequel.
+     *
+     * `contenu` est `null` tant qu'on n'a pas lu, et le reste si la lecture a
+     * échoué : `motif` dit alors laquelle des deux (règle 5).
+     *
+     * `edition` : `null` quand on lit, `{nom, contenu, enCours}` quand on écrit.
+     * **Une copie**, et non le contenu lu retouché sur place : annuler doit
+     * rendre le fichier tel qu'il est en base, et il n'y aurait rien à quoi
+     * revenir si l'on avait écrit par-dessus.
      */
-    transcription: null,
-    transcriptionLue: false,
-    transcriptionEnCours: false
-  },
-  /**
-   * Le fichier qu'on est en train d'écrire à la main, s'il y en a un.
-   *
-   * `null` : on n'en écrit pas. Son nom se tape dans le fil d'Ariane, au bout
-   * du chemin — là où le fichier va exister.
-   */
-  ecriture: null,
-  /**
-   * Le fichier de texte ouvert, s'il y en a un.
-   *
-   * `null` : on n'en lit aucun. Il ne passe pas par `pdfPreview` — ce sont deux
-   * lecteurs qui n'ont rien en commun : pas de zoom, pas de rotation, pas de
-   * recherche dans une page, pas d'octets à rendre. Les faire cohabiter dans un
-   * même état aurait donné un objet dont la moitié des champs sont morts selon
-   * le cas, et deux écrans à relire pour savoir lequel.
-   *
-   * `contenu` est `null` tant qu'on n'a pas lu, et le reste si la lecture a
-   * échoué : `motif` dit alors laquelle des deux (règle 5).
-   *
-   * `edition` : `null` quand on lit, `{nom, contenu, enCours}` quand on écrit.
-   * **Une copie**, et non le contenu lu retouché sur place : annuler doit
-   * rendre le fichier tel qu'il est en base, et il n'y aurait rien à quoi
-   * revenir si l'on avait écrit par-dessus.
-   */
-  texte: null,
-  currentFolderId: null,
-  /**
-   * Le dossier ouvert **en entier**, et non son seul identifiant.
-   *
-   * C'est lui qui porte `prive`, et c'est ce qui décide du cadenas de chaque
-   * ligne de fichier. On ne gardait que l'identifiant : la table ne pouvait donc
-   * pas savoir dans quel régime elle dessinait.
-   */
-  currentFolder: null,
-  /**
-   * Tous les dossiers du projet, et pas seulement les voisins du courant.
-   *
-   * C'est par eux que l'arbre sait où est « Mails », d'où qu'on le regarde.
-   */
-  tousLesDossiers: [],
-  /**
-   * Où en est le dépouillement du dépôt courant.
-   *
-   * `null` quand rien n'a été demandé. Ensuite le journal du convoi, tel qu'il
-   * le tient : c'est lui qui dit l'avancement, ce qui est passé et ce qui a
-   * buté. Un second compte tenu ici aurait divergé du sien (règle 4).
-   */
-  depouillement: null,
-  breadcrumb: [],
-  folders: [],
-  files: [],
-  // L'arbre est ouvert d'emblée : c'est lui qui montre les deux matières du
-  // projet, et le replier par défaut cachait la moitié de ce qu'on vient voir.
-  documentTreeOpen: true,
-  moveModal: {
-    isOpen: false,
-    fileId: "",
-    sourceFolderId: null,
-    targetFolderId: null,
-    folders: []
-  },
-  treeWidth: 280,
-  treeResizeActive: false,
-  treeExpandedFolderIds: []
-};
+    texte: null,
+    currentFolderId: null,
+    /**
+     * Le dossier ouvert **en entier**, et non son seul identifiant.
+     *
+     * C'est lui qui porte `prive`, et c'est ce qui décide du cadenas de chaque
+     * ligne de fichier. On ne gardait que l'identifiant : la table ne pouvait donc
+     * pas savoir dans quel régime elle dessinait.
+     */
+    currentFolder: null,
+    /**
+     * Tous les dossiers du projet, et pas seulement les voisins du courant.
+     *
+     * C'est par eux que l'arbre sait où est « Mails », d'où qu'on le regarde.
+     */
+    tousLesDossiers: [],
+    /**
+     * Où en est le dépouillement du dépôt courant.
+     *
+     * `null` quand rien n'a été demandé. Ensuite le journal du convoi, tel qu'il
+     * le tient : c'est lui qui dit l'avancement, ce qui est passé et ce qui a
+     * buté. Un second compte tenu ici aurait divergé du sien (règle 4).
+     */
+    depouillement: null,
+    breadcrumb: [],
+    folders: [],
+    files: [],
+    // L'arbre est ouvert d'emblée : c'est lui qui montre les deux matières du
+    // projet, et le replier par défaut cachait la moitié de ce qu'on vient voir.
+    documentTreeOpen: true,
+    moveModal: {
+      isOpen: false,
+      fileId: "",
+      sourceFolderId: null,
+      targetFolderId: null,
+      folders: []
+    },
+    treeWidth: 280,
+    treeResizeActive: false,
+    treeExpandedFolderIds: []
+  };
+}
+
+// **L'état vit dans une variable qu'on remplace**, et non dans un objet qu'on
+// vide : c'est ce qui permet de le refaire en entier au changement de projet.
+let docsViewState = etatNeufDesFichiers();
 const DOCUMENTS_TREE_EXPANDED_STORAGE_KEY = "mdall.documents.tree.expanded.v1";
 
 function getFolderClosedIconSvg() {
@@ -1670,12 +1701,23 @@ function renderRepoMailRow(doc) {
       role="button" tabindex="0" aria-label="Ouvrir le message">
       <div class="documents-repo__cell documents-repo__cell--name">
         <span class="issue-row-title-grid">
+          ${/*
+            **Les deux lignes de la liste des sujets, et leurs classes.** La
+            première porte le titre — blanc, épais, bleu au survol ; la seconde
+            le complément — gris, plus petit. Elles avaient été inversées : le
+            nom de l'expéditeur s'affichait en gris et l'objet en gras, ce qui
+            donnait une colonne où rien ne se lisait d'abord.
+
+            Et c'est aussi ce que fait une messagerie : l'expéditeur d'abord,
+            l'objet dessous.
+          */""}
           <span class="issue-row-title-grid__status">${svgIcon("mail", { className: "octicon" })}</span>
-          <span class="issue-row-title-grid__title">${escapeHtml(ligne.de)}</span>
-          <span class="issue-row-title-grid__meta">
+          <span class="issue-row-title-grid__title">
             <button type="button" class="row-title-trigger js-document-title-trigger"
-              data-document-id="${escapeHtml(decoratedDoc.id || "")}">${escapeHtml(ligne.objet)}</button>
+              data-document-id="${escapeHtml(decoratedDoc.id || "")}">${escapeHtml(ligne.de)}</button>
           </span>
+          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${
+            escapeHtml(ligne.objet)}</span>
         </span>
       </div>
       ${/*
@@ -3500,8 +3542,31 @@ function renderRacineDesFichiers() {
                     <b>${versements}</b> versement${versements > 1 ? "s" : ""}
                   </span>
                 </div>
-                ${ligne(BRANCHE.MEMOIRE, MEMOIRE, phraseDeLaRacine(MEMOIRE), plusRecent)}
-                ${ligne(BRANCHE.DOCUMENTS, DOCUMENTS, phraseDeLaRacine(DOCUMENTS), quandDocuments)}
+                ${/*
+                  **Les trois racines, dans l'ordre alphabétique**, comme dans
+                  l'arbre. Cet écran est dessiné à part — c'est l'accueil — et
+                  il avait été oublié : on y voyait deux racines pendant que
+                  l'arbre d'à côté en montrait trois.
+
+                  L'ordre se calcule plutôt que de s'écrire : un ordre à la main
+                  aurait fini par ne plus être celui qu'on lit ailleurs.
+                */""}
+                ${[
+                  { branche: BRANCHE.MEMOIRE, nom: MEMOIRE, quand: plusRecent },
+                  { branche: BRANCHE.DOCUMENTS, nom: DOCUMENTS, quand: quandDocuments },
+                  // La racine des mails n'existe que si le dossier existe : une
+                  // ligne vide dans les projets qui n'en ont jamais reçu serait
+                  // une promesse, pas un fait.
+                  ...(leDossierDesMails()
+                    ? [{
+                      branche: BRANCHE.MAILS, nom: MAILS,
+                      quand: leDossierDesMails()?.updated_at || leDossierDesMails()?.created_at || null
+                    }]
+                    : [])
+                ]
+                  .sort((gauche, droite) => gauche.nom.localeCompare(droite.nom, "fr"))
+                  .map((une) => ligne(une.branche, une.nom, phraseDeLaRacine(une.nom), une.quand))
+                  .join("")}
               </div>
             </div>
 
@@ -3860,6 +3925,15 @@ function renderDocumentsListView() {
     ...documents.map((un) => cestUnMailIndexe(un) ? renderRepoMailRow(un) : renderRepoDocumentRow(un))
   ].join("");
 
+  // **La galerie regarde le même dossier autrement.** Elle vit au-dessus de la
+  // liste, et non dans un onglet à elle : un endroit de plus obligerait à
+  // savoir lequel ouvrir.
+  //
+  // Les messages viennent de `tousLesDocuments` — ils sont dans le dossier
+  // voisin, pas dans celui qu'on regarde —, et sans eux les pièces n'auraient
+  // ni date ni expéditeur.
+  const galerieHtml = renderLaGalerie(laGalerie(documents, getProjectDocuments()));
+
   const isRoot = !docsViewState.currentFolderId;
   // L'arbre est là dès la racine des Documents : on doit pouvoir passer d'une
   // matière à l'autre sans revenir en arrière.
@@ -3881,6 +3955,7 @@ function renderDocumentsListView() {
           <main class="documents-main">
             ${topBar}
             ${renderDocumentsActivityBanner()}
+            ${galerieHtml}
             ${renderDataTableShell({
               className: "documents-repo data-table-shell--document-scroll",
               gridTemplate: getDocumentsTableGridTemplate(),
@@ -4082,7 +4157,9 @@ function renderLaQuestionDuDeplacement(folderMap) {
 }
 
 function renderUploadProgress() {
-  const files = docsViewState.selectedFiles;
+  // Les porteurs de mails sont nommés par le panneau du dépouillement : les
+  // redire ici ferait deux listes du même dépôt (règle 4).
+  const files = ceQueLaSelectionPorte().ordinaires;
   if (files.length === 0) return "";
 
   if (docsViewState.isUploading) {
@@ -4177,12 +4254,19 @@ function renderUploadView() {
               </div>
             </section>
 
-            ${renderUploadProgress()}
-
+            ${/*
+              **Le panneau avant la liste, et la liste sans les porteurs.**
+              Vingt `.msg` déposés poussaient le panneau — et son bouton — sous
+              vingt lignes de fichiers : on ne voyait pas le geste à faire, et
+              l'on croyait que le dépôt n'avait rien produit. La liste les
+              redisait en plus, puisque le panneau les nomme déjà.
+            */""}
             ${renderLeDepouillement({
               porteurs: ceQueLaSelectionPorte().porteurs,
               journal: docsViewState.depouillement
             })}
+
+            ${renderUploadProgress()}
 
             <div class="documents-commit-shell">
               <div class="documents-commit-shell__avatar">
@@ -4284,6 +4368,13 @@ async function lancerLeDepouillement(root) {
   const { porteurs } = ceQueLaSelectionPorte();
   if (!porteurs.length) return;
 
+  const [{ startRunLogEntry, avancerRunLogEntry, finishRunLogEntry }, journalDit, { phraseDuConvoi }] =
+    await Promise.all([
+      import("../services/project-automation.js"),
+      import("../services/le-journal-du-depouillement.js"),
+      import("../services/le-convoi.js")
+    ]);
+
   const projectId = String((await resolveCurrentBackendProjectId().catch(() => "")) || "").trim();
   if (!projectId) {
     docsViewState.depouillement = {
@@ -4294,7 +4385,20 @@ async function lancerLeDepouillement(root) {
     return;
   }
 
-  docsViewState.depouillement = { fichiers: porteurs.length, fini: false, accrocs: [] };
+  // **Le journal des Actions porte la suite.** Vingt mails avec leurs pièces
+  // prennent des minutes : on ne demande à personne de regarder un panneau
+  // pendant des minutes. Une seule façon d'informer pour la même sorte
+  // d'action — celle du dépôt d'un rapport de bureau de contrôle.
+  const action = startRunLogEntry({
+    name: journalDit.leNomDeLaction(porteurs.length),
+    kind: journalDit.SORTE,
+    agentKey: journalDit.SORTE,
+    triggerType: "manual",
+    triggerLabel: "Dépouillement depuis Fichiers",
+    summary: journalDit.leMotDuDebut(porteurs.length)
+  });
+
+  docsViewState.depouillement = { fichiers: porteurs.length, lus: 0, fini: false, accrocs: [] };
   redessinerLesFichiers(root);
 
   // **On ne redessine pas à chaque message.** Le service avance message par
@@ -4313,18 +4417,28 @@ async function lancerLeDepouillement(root) {
         const maintenant = Date.now();
         if (maintenant - dernierRendu < RENDU_DU_DEPOUILLEMENT) return;
         dernierRendu = maintenant;
+        // Le journal avance aussi : celui qui a fermé l'écran suit là-bas.
+        avancerRunLogEntry(action.id, { summary: phraseDuConvoi(encours) || undefined });
         redessinerLesFichiers(root);
       }
     });
     docsViewState.depouillement = journal;
+    finishRunLogEntry(action.id, {
+      status: journalDit.leSortDeLaction(journal),
+      outcomeStatus: journalDit.leSortDeLaction(journal),
+      summary: journalDit.leMotDeLaFin(journal, phraseDuConvoi(journal))
+    });
   } catch (erreur) {
     // **Un dépouillement qui tombe ne se tait pas.** Le journal garde ce qui
     // était passé avant la chute : dire « échec » sans le dire ferait tout
     // recommencer.
-    docsViewState.depouillement = {
-      ...docsViewState.depouillement, fini: true,
-      arrete: String(erreur?.message ?? "") || "cause inconnue"
-    };
+    const arrete = String(erreur?.message ?? "") || "cause inconnue";
+    docsViewState.depouillement = { ...docsViewState.depouillement, fini: true, arrete };
+    finishRunLogEntry(action.id, {
+      status: "error",
+      outcomeStatus: "error",
+      summary: journalDit.leMotDeLaFin({ arrete })
+    });
   }
 
   docsViewState.selectedFiles = ceQueLaSelectionPorte().ordinaires;
@@ -5789,6 +5903,7 @@ function redessinerLesFichiers(root) {
 }
 
 function renderProjectDocumentsContent(root) {
+  garderLEtatDuProjet();
   syncDocumentsProjectViewHeader();
   mesurerLaHauteurDuContenu();
 
@@ -5882,7 +5997,22 @@ function brancherLeRetourALAccueil() {
   });
 }
 
+/**
+ * **Personne ne dessine sans avoir vérifié le projet.**
+ *
+ * Posé aux deux entrées du rendu — celle qui recharge et celle qui redessine —
+ * parce qu'il n'y a pas de troisième chemin, et qu'un chemin oublié suffirait.
+ */
+function garderLEtatDuProjet() {
+  docsViewState = lEtatSuitLeProjet(
+    docsViewState,
+    String(store.currentProjectId || "").trim(),
+    etatNeufDesFichiers
+  );
+}
+
 export function renderProjectDocuments(root) {
+  garderLEtatDuProjet();
   racineMontee = root;
   brancherLeRetourALAccueil();
   retourALAccueilDesFichiers();

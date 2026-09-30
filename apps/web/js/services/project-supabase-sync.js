@@ -800,6 +800,12 @@ function mapDocumentRowToViewModel(row = {}) {
     mailPieces: row.mail_pieces === undefined || row.mail_pieces === null
       ? null
       : Number(row.mail_pieces),
+    // D'où vient une pièce jointe, et si c'est une image du corps du message —
+    // une signature, un bandeau — plutôt qu'un document.
+    pieceDuMessage: safeString(row.piece_du_message || "") || null,
+    pieceDansLeTexte: row.piece_dans_le_texte === undefined || row.piece_dans_le_texte === null
+      ? null
+      : row.piece_dans_le_texte === true,
     // La proposition par laquelle ce document est entré, **s'il en a une**.
     //
     // `undefined` est conservé tel quel : toutes les lectures de la table ne
@@ -1303,7 +1309,7 @@ export async function listDocumentDirectory(projectId = "", folderId = null) {
     // dossier est privé, le déposant est connu, et c'est moi. Dessiné sur la
     // seule appartenance au dossier, il promettrait « vous seul y avez accès »
     // sur un fichier que toute l'équipe voit.
-    fileParams.set("select", "id,project_id,folder_id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at,deleted_at,deposant,mail_de,mail_objet,mail_quand,mail_pieces,mail_fil,detection_status,detection_reason,detected_kind,detected_kind_label,detected_author,detection_confidence,content_fingerprint,duplicate_of_document_id,reissue_of_document_id,corpus_state,proposition_id,transcribed_at");
+    fileParams.set("select", "id,project_id,folder_id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at,deleted_at,deposant,mail_de,mail_objet,mail_quand,mail_pieces,mail_fil,piece_du_message,piece_dans_le_texte,detection_status,detection_reason,detected_kind,detected_kind_label,detected_author,detection_confidence,content_fingerprint,duplicate_of_document_id,reissue_of_document_id,corpus_state,proposition_id,transcribed_at");
     fileParams.set("project_id", `eq.${backendProjectId}`);
     fileParams.set("deleted_at", "is.null");
     // Un document soumis à une proposition n'est pas encore dans le corpus : le

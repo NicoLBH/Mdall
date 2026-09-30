@@ -49,7 +49,8 @@ import {
   LES_DESTINATIONS, lePartageDuDepot, lesPiecesDistinctes
 } from "./le-depouillement.js";
 import {
-  PAR_LOT, SORT, enLots, noter, noterLesPieces, noterUnFichierLu, unJournalNeuf
+  PAR_LOT, SORT, enLots, noter, noterLesPieces, noterUnFichierLu, quatreALaFois,
+  unJournalNeuf
 } from "./le-convoi.js";
 import { lesEmpreintes } from "./le-dedoublonnage.js";
 import { lindexDunMail } from "./la-ligne-dun-mail.js";
@@ -119,6 +120,28 @@ async function lesDeuxDossiers(projectId) {
   return { trouve: true, motif: "", ou };
 }
 
+/**
+ * Dire de quel message viennent ces pièces.
+ *
+ * **Un échec ici ne fait pas échouer le dépôt.** La pièce est rangée, le
+ * message aussi : ce qui manque est le lien, et le pire qu'il en coûte est une
+ * galerie sans date. Perdre le plan pour sauver sa provenance serait le mauvais
+ * échange.
+ */
+async function marquerLaProvenance(messageId, piecesIds = []) {
+  const cible = texte(messageId);
+  if (!cible || !piecesIds.length) return;
+
+  try {
+    const { supabase } = await import("../../assets/js/auth.js");
+    await supabase.from("documents")
+      .update({ piece_du_message: cible })
+      .in("id", piecesIds);
+  } catch {
+    // Silencieux : la provenance manquera, et la galerie le dira.
+  }
+}
+
 /** Les noms déjà pris dans un dossier, pour ne pas écraser un homonyme. */
 async function nomsDejaDans(projectId, folderId) {
   const { listDocumentDirectory } = await import("./project-supabase-sync.js");
@@ -129,7 +152,8 @@ async function nomsDejaDans(projectId, folderId) {
 
 /** Ranger un fichier, et rendre sa ligne. */
 async function ranger(octets, {
-  projectId, folderId, nom, type, nature, deposant, empreinte, index = null
+  projectId, folderId, nom, type, nature, deposant, empreinte, index = null,
+  dansLeTexte = null
 }) {
   const fichier = new File([octets], nom, { type });
   const stockage = await uploadDocumentToStorage(fichier, {
@@ -147,6 +171,10 @@ async function ranger(octets, {
     storage_path: stockage.storage_path,
     file_size_bytes: fichier.size || 0,
     empreinte_des_octets: empreinte || null,
+    // **Une image du corps n'est pas un document.** Une signature, un bandeau :
+    // la galerie les écarte. `null` quand ce n'est pas une pièce jointe — ne
+    // pas savoir et savoir que non ne se disent pas pareil (règle 5).
+    piece_dans_le_texte: dansLeTexte,
     deposant,
     // **L'index d'un mail, écrit au dépôt.** C'est le seul moment où le message
     // est déjà déplié : le recalculer à la lecture ferait rapatrier deux cents
@@ -228,7 +256,15 @@ export async function depouiller(fichiers = [], { projectId = "", avance = null 
             nom: une.nom,
             type: une.type,
             taille: une.taille,
-            empreinte: empreintes.pieces[rang] ?? ""
+            // **Une image du corps n'est pas un document.** Une signature, un
+            // bandeau : la galerie les écartera, et il faut que la pièce le
+            // sache d'elle-même plutôt qu'on le redevine à la lecture.
+            dansLeTexte: une.dansLeTexte === true,
+            empreinte: empreintes.pieces[rang] ?? "",
+            // De quel message elle vient. Le rang suffit : on ne connaîtra
+            // l'identifiant du message qu'une fois sa ligne écrite, et elle
+            // s'écrit après les pièces (voir plus bas pourquoi).
+            deQuelMessage: aRanger.length
           }))
         });
       }
@@ -251,29 +287,61 @@ export async function depouiller(fichiers = [], { projectId = "", avance = null 
     const nomsDesPieces = await nomsDejaDans(projectId, dossiers.ou.pieces);
     let versees = 0;
     let piecesDejaLa = 0;
+
+    // **Les noms se réservent d'abord, les octets partent ensuite.** Nommer au
+    // moment de l'envoi, à quatre en même temps, donnerait deux fois le même
+    // nom à deux pièces homonymes : chacune verrait une liste d'où l'autre est
+    // absente.
+    const aEnvoyer = [];
     for (const piece of distinctes) {
       if (piece.empreinte && connues.has(piece.empreinte)) { piecesDejaLa += 1; continue; }
       const nom = leNomDeLaPieceDeposee(piece.nom, { dejaLa: nomsDesPieces });
       nomsDesPieces.push(nom);
+      aEnvoyer.push({ piece, nom });
+      if (piece.empreinte) connues.add(piece.empreinte);
+    }
+
+    // **Quatre à la fois.** Un à la fois était le coût réel de l'attente :
+    // vingt mails et leurs pièces font une centaine d'envois, et enchaînés
+    // chacun paie son aller-retour.
+    const sorts = await quatreALaFois(aEnvoyer.map(({ piece, nom }) => async () => {
       try {
-        await ranger(piece.octets, {
+        const ligne = await ranger(piece.octets, {
           projectId, folderId: dossiers.ou.pieces, nom,
           type: piece.type || "application/octet-stream",
-          nature: NATURE_DUNE_PIECE, deposant, empreinte: piece.empreinte
+          nature: NATURE_DUNE_PIECE, deposant, empreinte: piece.empreinte,
+          dansLeTexte: piece.dansLeTexte === true
         });
-        if (piece.empreinte) connues.add(piece.empreinte);
-        versees += 1;
+        return {
+          ok: true, id: String(ligne?.id || ""),
+          deQuelMessage: piece.deQuelMessage
+        };
       } catch {
-        // Une pièce qui résiste ne fait pas tomber son message : le propos vaut
-        // plus que le plan, et le plan se retrouvera au dépôt suivant.
-        journal = noter(journal, piece.nom, SORT.REFUSE, "pièce jointe non rangée");
+        return { ok: false, nom: piece.nom };
       }
+    }));
+
+    // Quelles pièces appartiennent à quel message, pour les marquer une fois sa
+    // ligne écrite.
+    const piecesParMessage = new Map();
+    for (const sort of sorts) {
+      if (!sort.ok || !sort.id) continue;
+      const rang = sort.deQuelMessage;
+      if (!piecesParMessage.has(rang)) piecesParMessage.set(rang, []);
+      piecesParMessage.get(rang).push(sort.id);
+    }
+
+    for (const sort of sorts) {
+      if (sort.ok) { versees += 1; continue; }
+      // Une pièce qui résiste ne fait pas tomber son message : le propos vaut
+      // plus que le plan, et le plan se retrouvera au dépôt suivant.
+      journal = noter(journal, sort.nom, SORT.REFUSE, "pièce jointe non rangée");
     }
     journal = noterLesPieces(journal, { versees, dejaLa: piecesDejaLa });
     dire();
 
     const nomsDesMails = await nomsDejaDans(projectId, dossiers.ou.messages);
-    for (const un of aRanger) {
+    for (const [rang, un] of aRanger.entries()) {
       if (un.empreinte && connues.has(un.empreinte)) {
         journal = noter(journal, un.message.nom, SORT.DEJA_LA);
         dire();
@@ -284,13 +352,19 @@ export async function depouiller(fichiers = [], { projectId = "", avance = null 
       });
       nomsDesMails.push(nom);
       try {
-        await ranger(un.message.octets, {
+        const ligne = await ranger(un.message.octets, {
           projectId, folderId: dossiers.ou.messages, nom,
           type: LE_TYPE_DUN_MESSAGE[un.message.extension] || "application/octet-stream",
           nature: NATURE_DUN_MAIL, deposant, empreinte: un.empreinte,
           index: lindexDunMail(un.message.lu)
         });
         if (un.empreinte) connues.add(un.empreinte);
+        // **La provenance se marque ici, et pas avant.** Les pièces partent en
+        // premier — une panne entre les deux laisse des pièces retrouvables par
+        // leur empreinte, l'ordre inverse laisserait un message reconnu « déjà
+        // là » dont les pièces ne seraient jamais redemandées. L'identifiant du
+        // message n'existe donc qu'à cet instant.
+        await marquerLaProvenance(ligne?.id, piecesParMessage.get(rang) ?? []);
         journal = noter(journal, un.message.nom, SORT.VERSE);
       } catch (erreur) {
         journal = noter(journal, un.message.nom, SORT.REFUSE, texte(erreur?.message));

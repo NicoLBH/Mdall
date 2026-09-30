@@ -143,7 +143,7 @@ test("un nom de fichier qui ressemble à du HTML ne fait pas de HTML", () => {
  * C'est ce qui est arrivé : vingt mails lâchés dans la zone, et rien à l'écran
  * pendant un aller-retour de réseau. On croyait que ça ne marchait pas.
  */
-test("pendant le dépouillement, une rotative accompagne le compte", () => {
+test("pendant le dépouillement, une barre et une rotative disent l'attente", () => {
   const enCours = { ...unJournalNeuf(), fichiers: 3, lus: 1, verses: 41, fini: false };
   const dessine = renderLeDepouillement({ porteurs: [unFichier("a.msg")], journal: enCours });
 
@@ -151,7 +151,23 @@ test("pendant le dépouillement, une rotative accompagne le compte", () => {
   // même sans elle, et s'y fier laissait l'épreuve passer sur un écran figé.
   assert.match(dessine, /class="ui-spinner ui-spinner--sm"/);
   assert.match(dessine, /role="status"/);
-  assert.match(dessine, /41 messages versés/);
+
+  // **Une barre, comme pour le dépôt d'un rapport.** Un compte qui s'incrémente
+  // ne dit pas qu'il reste à attendre ; une barre si.
+  assert.match(dessine, /role="progressbar"/);
+  assert.match(dessine, /aria-valuenow="33"/);
+  assert.match(dessine, /1 sur 3 fichiers/);
+
+  // **Et qu'on pourra fermer.** C'est le journal des Actions qui porte la
+  // suite : rester là pendant deux minutes n'apprend rien de plus.
+  assert.match(dessine, /journal des Actions/);
+});
+
+/** Rien de lu encore : la barre ne ment pas avec un zéro, elle balaie. */
+test("avant le premier fichier lu, la barre est indéterminée", () => {
+  const debut = { ...unJournalNeuf(), fichiers: 3, lus: 0, fini: false };
+  const dessine = renderLeDepouillement({ porteurs: [unFichier("a.msg")], journal: debut });
+  assert.match(dessine, /is-indeterminate/);
 });
 
 /**
