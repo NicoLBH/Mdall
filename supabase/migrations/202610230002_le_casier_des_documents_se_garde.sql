@@ -120,9 +120,21 @@ using (
   and (storage.foldername(name))[1] = auth.uid()::text
 );
 
--- ── Le casier n'est pas public, et on le redit ─────────────────────────────
+-- ── Le casier n'est pas public, et cela se vérifie ailleurs ────────────────
 --
 -- Il a été créé `public = false`, donc aucune adresse ne rend un objet sans
--- jeton. On le réaffirme parce qu'un casier basculé public par mégarde dans
--- l'interface de Supabase rendrait tout ce qui précède décoratif.
-update storage.buckets set public = false where id = 'documents';
+-- jeton. Cette migration écrivait ici, pour le réaffirmer :
+--
+--     update storage.buckets set public = false where id = 'documents';
+--
+-- Cette ligne est partie. Les tables de stockage ne se modifient pas en SQL —
+-- la migration voisine s'est fait refuser un `delete` sur `storage.objects`
+-- avec « Use the Storage API instead » —, et surtout elle ne servait à rien :
+-- une migration passe une fois. Elle n'aurait pas empêché un basculement
+-- ultérieur, elle aurait seulement donné l'impression de le surveiller
+-- (règle 12 : une déclaration qu'on ne vérifie pas est une intention).
+--
+-- **Ce qui protège est au-dessus** : les quatre politiques ne rendent rien à
+-- `anon`. Un casier basculé public dans Supabase Studio reste néanmoins une
+-- porte ouverte, et cela se regarde là où cela se règle — Storage →
+-- documents → Settings.

@@ -35,7 +35,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -83,4 +83,92 @@ test("l'ordre alphabétique des fichiers est celui des horodatages", () => {
   const parLeTemps = [...parLeNom].sort();
 
   assert.deepEqual(parLeNom, parLeTemps, "le libellé ne décide de rien");
+});
+
+/* ── Ce que la base refuse, et qu'on n'apprend qu'au déploiement ─────────── */
+
+/**
+ * Un fichier de migration, **sans ses commentaires**.
+ *
+ * Indispensable ici : l'épreuve ci-dessous cherche du SQL interdit, et une
+ * migration a toutes les raisons de **citer** ce SQL dans son en-tête pour
+ * expliquer pourquoi elle ne le fait pas. Chercher dans le texte entier ferait
+ * tomber l'épreuve sur la migration la mieux écrite du dossier.
+ *
+ * On retire les commentaires de ligne (`--`) et de bloc, dans cet ordre. Les
+ * `--` qui vivraient à l'intérieur d'une chaîne survivraient à tort ; aucune
+ * migration n'en porte, et une garde qui se contenterait de moins ne dirait
+ * rien.
+ */
+function leSqlSeul(source) {
+  return String(source)
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .split("\n")
+    .map((ligne) => ligne.replace(/--.*$/, ""))
+    .join("\n");
+}
+
+/**
+ * **Les tables de stockage ne se vident pas en SQL**, et on ne l'apprend qu'au
+ * déploiement.
+ *
+ *     ERROR: Direct deletion from storage tables is not allowed.
+ *     Use the Storage API instead. (SQLSTATE 42501)
+ *
+ * C'est arrivé, sur une migration qui supprimait un casier devenu inutile. Le
+ * SQL était juste, les épreuves passaient, et `supabase db push` s'est arrêté
+ * au neuvième ordre — après en avoir appliqué huit.
+ *
+ * Et la garde de Supabase a raison : un objet effacé par un `delete` laisse ses
+ * octets dans le stockage de fond, qui ne connaît que l'API. La ligne
+ * disparaîtrait, le fichier resterait — un casier vide en apparence, plein en
+ * vérité.
+ *
+ * **Seule la suppression est refusée.** `insert into storage.buckets` crée les
+ * casiers du dépôt depuis l'origine, et une migration met à jour le leur : ces
+ * deux-là passent, et cette épreuve ne les concerne pas. Vider ou supprimer un
+ * casier est un geste de l'API de stockage, à faire à la main, et la migration
+ * qui s'arrête là doit le dire.
+ */
+const LES_TABLES_DE_STOCKAGE = ["storage.objects", "storage.buckets"];
+
+/** Les tables de stockage dont ce SQL supprime des lignes. */
+function lesSuppressionsDeStockage(source) {
+  const sql = leSqlSeul(source);
+  return LES_TABLES_DE_STOCKAGE.filter((table) =>
+    new RegExp(`delete\\s+from\\s+${table.replace(".", "\\.")}`, "i").test(sql));
+}
+
+test("aucune migration ne supprime de lignes dans les tables de stockage", () => {
+  for (const nom of fichiers) {
+    assert.deepEqual(
+      lesSuppressionsDeStockage(readFileSync(join(MIGRATIONS, nom), "utf8")), [],
+      `${nom} : supprimer des lignes d'une table de stockage est refusé au `
+        + "déploiement (« Use the Storage API instead »). Vider un casier est un "
+        + "geste de l'API de stockage ; la migration retire les politiques et le dit."
+    );
+  }
+});
+
+/**
+ * **L'épreuve ci-dessus doit pouvoir tomber, sur les deux tables, et ne pas
+ * tomber sur un commentaire.**
+ *
+ * Les trois se vérifient ici, et il l'a fallu : aucune migration du dossier ne
+ * supprime de lignes dans `storage.buckets`, donc cette moitié de la garde ne
+ * pouvait pas tomber. Une garde qui ne peut pas tomber est une garde qu'on
+ * retire sans s'en apercevoir (règle 4). C'est cette épreuve-ci qui la tient.
+ */
+test("la garde voit les deux tables, et ignore le SQL cité en commentaire", () => {
+  for (const table of ["storage.objects", "storage.buckets"]) {
+    assert.deepEqual(
+      lesSuppressionsDeStockage(`delete from ${table} where id = 'x';`), [table]
+    );
+  }
+
+  assert.deepEqual(lesSuppressionsDeStockage(`
+    -- On écrivait : delete from storage.objects where bucket_id = 'archives';
+    /* et aussi delete from storage.buckets where id = 'archives'; */
+    drop policy if exists une_politique on storage.objects;
+  `), []);
 });
