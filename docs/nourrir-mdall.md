@@ -1328,6 +1328,48 @@ copie de A peut disparaître le jour où A la supprime.
 ne s'y oppose, et chacun ne voit que le sien : l'homonymie est invisible à ceux
 qu'elle concerne.
 
+## 8 nonies. Le bénéfice immédiat : lire ses mails, et voir ses pièces
+
+Le dépôt ne produit pour l'instant **que du carburant**. C'est assumé, mais un
+utilisateur qui copie-colle sa messagerie dans Mdall doit y gagner quelque
+chose tout de suite, même de peu de valeur.
+
+### Ce qui est fait ce tour-ci
+
+**L'écran de lecture accepte enfin ce qu'Outlook produit.** Il n'ouvrait que des
+`.eml` et écartait les `.msg` en disant « ce n'est pas un mail » — alors que
+c'en est un, et que Mdall sait les ouvrir depuis deux tours. Les `.zip` aussi.
+La chaîne était complète partout sauf à l'endroit où l'on dépose.
+
+Et c'est désormais **le service du dépouillement** qui range ce qu'on y lit : il
+y avait deux rangements, l'un qui dédoublonne, nomme correctement et range aussi
+les pièces jointes, l'autre non. C'est le plus pauvre qu'on aurait gardé, parce
+que c'est celui qu'on relit le moins (règle 4).
+
+### Ce qui reste à construire, et l'ordre que je propose
+
+**1. La galerie des pièces jointes.** Toutes les pièces d'un dossier de mails
+réunies, avec la date du message d'où elles viennent, sans avoir à rouvrir les
+mails un à un. C'est la valeur la plus évidente et la moins chère : les pièces
+sont déjà rangées à plat dans `Mails/Pièces jointes/`, et le lien avec leur
+message est ce qui manque — il faudrait le garder au dépôt.
+
+**2. Les photos à part.** Une pièce jointe image n'est pas un document : c'est
+une photo de chantier, et une photo de chantier se regarde en grille, par date.
+Le dépouillement sait déjà distinguer une image de signature d'un document
+(`linventaire-du-versoir.js`) ; distinguer une photo d'un plan PDF est le même
+genre de décision.
+
+**3. La lecture d'un fil depuis le dossier**, et non depuis un dépôt à la main.
+Aujourd'hui l'écran de lecture ne lit que ce qu'on lui donne ; il ne sait pas
+ouvrir ce qui est déjà rangé. C'est le même chaînon manquant que pour les
+propositions.
+
+> **Ce qui décide de l'ordre** : la galerie ne demande aucune décision et se voit
+> tout de suite. La lecture depuis le dossier demande de savoir comment on
+> désigne un fil parmi deux cents mails — et cela, il faut le dessiner avant de
+> l'écrire.
+
 ## 9. À enrichir
 
 - Le déposant : navigateur ou fonction de bord ? (cent mille pièces ne passent

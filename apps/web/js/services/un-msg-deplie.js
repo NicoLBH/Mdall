@@ -113,6 +113,22 @@ function laChaine(table, depart, combienAuPlus) {
 }
 
 /**
+ * Ces octets sont-ils un conteneur Outlook ?
+ *
+ * **La signature, pas le nom de fichier.** Un `.msg` renommé reste un `.msg`,
+ * et un `.eml` nommé `.msg` par une messagerie maladroite n'en est pas un. Ce
+ * qui décide de la façon de lire des octets, ce sont les octets.
+ *
+ * Huit octets suffisent : c'est la marque des conteneurs composés de Microsoft,
+ * et rien d'autre ne commence ainsi.
+ */
+export function cestUnConteneurOutlook(source) {
+  const octets = source instanceof Uint8Array ? source : new Uint8Array(source ?? []);
+  if (octets.length < SIGNATURE.length) return false;
+  return SIGNATURE.every((valeur, rang) => octets[rang] === valeur);
+}
+
+/**
  * Le conteneur, ouvert.
  *
  * @returns {{ok: true, entrees: object[], flux: (entree: object) => Uint8Array}

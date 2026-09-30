@@ -136,3 +136,58 @@ test("un nom de fichier qui ressemble à du HTML ne fait pas de HTML", () => {
   assert.equal(dessine.includes("<img src=x"), false);
   assert.match(dessine, /&lt;img/);
 });
+
+/**
+ * **Une attente sans rotative passe pour une panne.**
+ *
+ * C'est ce qui est arrivé : vingt mails lâchés dans la zone, et rien à l'écran
+ * pendant un aller-retour de réseau. On croyait que ça ne marchait pas.
+ */
+test("pendant le dépouillement, une rotative accompagne le compte", () => {
+  const enCours = { ...unJournalNeuf(), fichiers: 3, lus: 1, verses: 41, fini: false };
+  const dessine = renderLeDepouillement({ porteurs: [unFichier("a.msg")], journal: enCours });
+
+  // La rotative elle-même : la classe « est-en-cours » reste sur le paragraphe
+  // même sans elle, et s'y fier laissait l'épreuve passer sur un écran figé.
+  assert.match(dessine, /class="ui-spinner ui-spinner--sm"/);
+  assert.match(dessine, /role="status"/);
+  assert.match(dessine, /41 messages versés/);
+});
+
+/**
+ * **Un compte rendu sans suite laisse devant un mur.** « 7 messages versés »,
+ * et rien à faire : on cliquait sur « Valider », qui ne concernait pas ce
+ * dépôt-là, et il ne se passait rien.
+ */
+test("le dépouillement terminé propose d'aller voir ce qui a été rangé", () => {
+  const fini = {
+    ...unJournalNeuf(), fichiers: 2, lus: 2, verses: 7, pieces: 20, fini: true,
+    ou: { messages: "dossier-des-mails", pieces: "dossier-des-pieces" }
+  };
+  const dessine = renderLeDepouillement({ porteurs: [], journal: fini });
+
+  assert.match(dessine, /id="documentsVoirLesMailsBtn"/);
+  assert.match(dessine, /data-dossier="dossier-des-mails"/);
+  assert.match(dessine, /Voir les mails rangés/);
+});
+
+/**
+ * **On ne propose pas d'aller voir là où rien n'est allé.** Un dépôt arrêté n'a
+ * rangé personne, et le dossier peut n'avoir jamais été créé.
+ */
+test("un dépouillement arrêté ne propose pas d'aller voir", () => {
+  // **Les dossiers ont été creusés avant l'arrêt** : le journal les porte, et
+  // c'est bien le cas qu'il faut éprouver. Un journal sans dossier aurait fait
+  // passer l'épreuve sans que la condition sur l'arrêt serve à rien.
+  const arrete = {
+    ...unJournalNeuf(), fichiers: 2, fini: true,
+    ou: { messages: "dossier-des-mails", pieces: "dossier-des-pieces" },
+    arrete: "votre session n'a pas répondu : rien n'a été rangé"
+  };
+  assert.doesNotMatch(renderLeDepouillement({ porteurs: [], journal: arrete }),
+    /documentsVoirLesMailsBtn/);
+
+  const sansDossier = { ...unJournalNeuf(), fichiers: 1, verses: 1, fini: true };
+  assert.doesNotMatch(renderLeDepouillement({ porteurs: [], journal: sansDossier }),
+    /documentsVoirLesMailsBtn/);
+});

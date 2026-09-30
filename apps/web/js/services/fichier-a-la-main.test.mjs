@@ -430,9 +430,14 @@ test("entrer dans un dossier de Documents se dit à un seul endroit", () => {
   assert.match(entrer, /docsViewState\.texte = null;/);
 
   // `await` : la déclaration de la fonction porte les mêmes mots, et la
-  // compter parmi ses appelants en aurait fait quatre pour trois gestes.
+  // compter parmi ses appelants en aurait fait cinq pour quatre gestes.
+  //
+  // **Le quatrième est neuf** : « Voir les mails rangés », après un
+  // dépouillement. Il emmène dans un dossier qui vient parfois d'être créé, et
+  // il passe par le même geste que les trois autres — l'épreuve d'à côté l'a
+  // rappelé au moment où il avait été écrit autrement.
   const appels = ecran.match(/await allerDansLeDossier\(root,/g) ?? [];
-  assert.equal(appels.length, 3, "l'arbre, le fil d'Ariane, le tableau");
+  assert.equal(appels.length, 4, "l'arbre, le fil d'Ariane, le tableau, le dépouillement");
 });
 
 test("aucun geste ne charge un dossier de Documents pour son compte", () => {

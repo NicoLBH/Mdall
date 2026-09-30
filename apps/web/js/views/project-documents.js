@@ -4012,8 +4012,17 @@ function renderUploadView() {
 
               <section class="documents-commit-card documents-commit-card-actions">
                 <div class="documents-commit-card__actions">
-                  <button type="button" class="gh-btn gh-btn--validate" id="documentsSubmitBtn" ${canSubmitUpload() ? "" : "disabled"}>${submitLabel}</button>
-                  <button type="button" class="gh-btn" id="documentsCancelBtn">Annuler</button>
+                  ${/*
+                    **« Valider » ne s'affiche que s'il a quelque chose à
+                    valider.** Un dépôt de vingt mails ne le concerne pas : il
+                    restait là, on cliquait, et il ne se passait rien — le pire
+                    des états, puisqu'on ne sait pas si c'est en panne.
+                  */""}
+                  ${ceQueLaSelectionPorte().ordinaires.length
+                    ? `<button type="button" class="gh-btn gh-btn--validate" id="documentsSubmitBtn" ${canSubmitUpload() ? "" : "disabled"}>${submitLabel}</button>`
+                    : ""}
+                  <button type="button" class="gh-btn" id="documentsCancelBtn">${
+                    ceQueLaSelectionPorte().ordinaires.length ? "Annuler" : "Fermer"}</button>
                 </div>
               </section>
             </div>
@@ -4059,12 +4068,12 @@ async function lancerLeDepouillement(root) {
       ...docsViewState.depouillement, fini: true,
       arrete: "ce projet n'a pas été retrouvé : rien n'a été rangé"
     };
-    renderProjectDocuments(root);
+    redessinerLesFichiers(root);
     return;
   }
 
   docsViewState.depouillement = { fichiers: porteurs.length, fini: false, accrocs: [] };
-  renderProjectDocuments(root);
+  redessinerLesFichiers(root);
 
   // **On ne redessine pas à chaque message.** Le service avance message par
   // message ; deux cents rendus de l'écran entier en quelques secondes font
@@ -4082,7 +4091,7 @@ async function lancerLeDepouillement(root) {
         const maintenant = Date.now();
         if (maintenant - dernierRendu < RENDU_DU_DEPOUILLEMENT) return;
         dernierRendu = maintenant;
-        if (root?.isConnected) renderProjectDocuments(root);
+        redessinerLesFichiers(root);
       }
     });
     docsViewState.depouillement = journal;
@@ -4097,7 +4106,7 @@ async function lancerLeDepouillement(root) {
   }
 
   docsViewState.selectedFiles = ceQueLaSelectionPorte().ordinaires;
-  if (root?.isConnected) renderProjectDocuments(root);
+  redessinerLesFichiers(root);
   // Le dossier privé vient de changer : la liste doit le refléter quand on y
   // retourne, et la relire ici évite de la lire vide au retour.
   await loadCurrentDirectory().catch(() => {});
@@ -4441,7 +4450,7 @@ function addSelectedFiles(root, fileList) {
     docsViewState.title = proposeTitle([], { fallbackCount: docsViewState.selectedFiles.length });
   }
 
-  renderProjectDocuments(root);
+  redessinerLesFichiers(root);
   inspectSelection(root);
   loadOpenPropositions(root);
 }
@@ -4485,11 +4494,15 @@ async function loadOpenPropositions(root) {
  * déplace sous la main est pire qu'un mauvais défaut.
  */
 async function inspectSelection(root) {
-  const files = [...docsViewState.selectedFiles];
+  // **On n'examine que ce qui se dépose tel quel.** Un `.msg` ou un `.zip` ne
+  // va pas être reconnu comme document : il va être dépouillé. Les donner à
+  // `inspectFile` faisait vingt lectures inutiles avant que quoi que ce soit
+  // n'apparaisse — et aurait fini par les compter « illisibles ».
+  const files = ceQueLaSelectionPorte().ordinaires;
   if (files.length === 0) return;
 
   docsViewState.inspection = { running: true, exploitable: 0, byFile: new Map() };
-  renderProjectDocuments(root);
+  redessinerLesFichiers(root);
 
   try {
     const [{ inspectFile }, { isExploitable }] = await Promise.all([
@@ -4507,9 +4520,10 @@ async function inspectSelection(root) {
 
     // La sélection a pu changer pendant la lecture : ce qu'on vient d'examiner
     // ne décrirait alors plus ce que l'utilisateur a sous les yeux.
+    const ordinaires = ceQueLaSelectionPorte().ordinaires;
     const inchangee =
-      docsViewState.selectedFiles.length === files.length &&
-      docsViewState.selectedFiles.every((file, index) => file === files[index]);
+      ordinaires.length === files.length &&
+      ordinaires.every((file, index) => file === files[index]);
     if (!inchangee) return;
 
     docsViewState.inspection = { running: false, exploitable, byFile };
@@ -4530,7 +4544,7 @@ async function inspectSelection(root) {
     if (!docsViewState.depositModeTouched) docsViewState.depositMode = "proposition";
   }
 
-  if (root?.isConnected) renderProjectDocuments(root);
+  redessinerLesFichiers(root);
 }
 
 /**
@@ -5318,6 +5332,22 @@ function bindDocumentsView(root) {
   const depouillerBtn = document.getElementById("documentsDepouillerBtn");
   if (depouillerBtn) depouillerBtn.addEventListener("click", () => lancerLeDepouillement(root));
 
+  // **Aller voir ce qu'on vient de ranger.** Le dossier a pu être créé à
+  // l'instant : sans ce geste, il fallait deviner qu'il existait et le trouver.
+  const voirLesMailsBtn = document.getElementById("documentsVoirLesMailsBtn");
+  if (voirLesMailsBtn) {
+    voirLesMailsBtn.addEventListener("click", async () => {
+      const dossier = voirLesMailsBtn.dataset.dossier || null;
+      resetUploadState();
+      docsViewState.mode = "list";
+      // **Par le geste commun, et pas par un chargement à soi.** Une épreuve le
+      // tient, et elle vient de le rappeler : entrer dans un dossier pose aussi
+      // la branche et referme ce qu'on lisait. Un raccourci ici aurait rechargé
+      // le bon dossier en laissant l'écran croire qu'on est ailleurs.
+      await allerDansLeDossier(root, dossier);
+    });
+  }
+
   const reportBackBtn = document.getElementById("documentsReportBackBtn");
   if (reportBackBtn) {
     reportBackBtn.addEventListener("click", () => {
@@ -5441,6 +5471,23 @@ function mesurerLaHauteurDuContenu() {
   const top = contentHost.getBoundingClientRect().top || 0;
   const height = Math.max(320, Math.floor((window.innerHeight || 0) - top - 8));
   contentHost.style.setProperty("--documents-content-height", `${height}px`);
+}
+
+/**
+ * Redessiner **sans rien relire**.
+ *
+ * `renderProjectDocuments` relit le répertoire, la mémoire et le magasin avant
+ * de dessiner quoi que ce soit. C'est juste à l'entrée dans l'onglet ; c'est
+ * faux pour tout changement qui se décide sur le poste — choisir des fichiers,
+ * avancer dans un dépouillement.
+ *
+ * Le défaut se voyait d'un coup : on lâchait vingt mails dans la zone, et il ne
+ * se passait **rien** pendant un aller-retour de réseau. Pas de panneau, pas de
+ * compte, pas de rotative — la zone gardait son contour et c'est tout. On
+ * croyait que ça ne marchait pas.
+ */
+function redessinerLesFichiers(root) {
+  if (root?.isConnected) renderProjectDocumentsContent(root);
 }
 
 function renderProjectDocumentsContent(root) {

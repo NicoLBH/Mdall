@@ -48,6 +48,7 @@
 import { LA_CONSOLE } from "../partage/js/services/la-porte-de-la-console.js";
 import { suisJeAdministrateur } from "../partage/js/services/la-porte-de-la-console-supabase.js";
 import { leCourrielDuCompte, monterLavatar, renderLavatar } from "./lavatar.js";
+import { monterLeCarburant, renderLeCarburant } from "./le-carburant.js";
 
 const hote = document.getElementById("app");
 const barre = document.getElementById("consoleHeaderHost");
@@ -103,17 +104,26 @@ function renderLeDemenagement() {
   `;
 }
 
+/**
+ * Ce que cette console montre, et ce qu'elle ne montre pas encore.
+ *
+ * **Le carburant d'abord**, parce que c'est la seule chose qu'on puisse
+ * regarder sans lire un contenu, et parce que c'est de lui que dépend tout le
+ * reste : sans matière, aucun prédicteur n'a de chance.
+ *
+ * Les autres comptes d'exploitation — combien de comptes, qui revient, ce qui
+ * tombe en panne, ce que cela coûte — viendront quand il y aura des comptes à
+ * faire. Un tableau de bord qui affiche des zéros apprend à ne plus regarder
+ * les tableaux de bord.
+ */
 function renderCeQuiViendra() {
   return `
     <section class="conso-usages">
       <h3 class="conso-usages__titre">${LA_CONSOLE.nom}</h3>
       <p class="conso-usages__mot">
-        Rien à montrer pour l'instant, et ce n'est pas une panne. Cette console
-        est faite pour des <b>comptes d'exploitation</b> — combien de comptes,
-        qui revient, ce qui tombe en panne, ce que cela coûte, où en est la
-        prédiction. Ils s'écriront quand il y aura des comptes à faire, et pas
-        avant : un tableau de bord qui affiche des zéros apprend à ne plus
-        regarder les tableaux de bord.
+        Un seul écran pour l'instant : <b>le carburant</b>. Les autres comptes
+        d'exploitation — combien de comptes, qui revient, ce qui tombe en panne,
+        ce que cela coûte — s'écriront quand il y aura des comptes à faire.
       </p>
     </section>
   `;
@@ -188,10 +198,13 @@ async function main() {
   if (barre) barre.innerHTML = renderLaBarre(courriel);
   hote.innerHTML = `
     <div class="page-large">
-      ${ouverte ? `${renderCeQuiViendra()}${renderLeDemenagement()}` : renderLaPorteFermee()}
+      ${ouverte
+        ? `${renderCeQuiViendra()}${renderLeCarburant()}${renderLeDemenagement()}`
+        : renderLaPorteFermee()}
     </div>
   `;
   monterLavatar(barre ?? document);
+  if (ouverte) monterLeCarburant(hote);
 }
 
 main();

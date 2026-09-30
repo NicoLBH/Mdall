@@ -46,84 +46,19 @@ import {
   NATURE_DUN_MAIL, leNomDeLaPieceDeposee, leNomDuMailDepose
 } from "./le-dossier-des-mails.js";
 import {
-  LE_TYPE_DUN_MESSAGE, LES_DESTINATIONS, lePartageDuDepot, lesPiecesDistinctes
+  LES_DESTINATIONS, lePartageDuDepot, lesPiecesDistinctes
 } from "./le-depouillement.js";
 import {
   PAR_LOT, SORT, enLots, noter, noterLesPieces, noterUnFichierLu, unJournalNeuf
 } from "./le-convoi.js";
 import { lesEmpreintes } from "./le-dedoublonnage.js";
-import { unMsgDeplie } from "./un-msg-deplie.js";
-import { unMailDeplie } from "./un-mail-deplie.js";
-import { lesMessagesDeLarchive, lireLannuaire, octetsDeLentree } from "./un-zip-deplie.js";
+import { LE_TYPE_DUN_MESSAGE, lesMessagesDunFichier } from "./les-messages-dun-fichier.js";
 import { sha256HexBytes } from "../utils/sha256.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /** Au plus, par question à la base. Le plafond silencieux est à mille. */
 export const AU_PLUS = 200;
-
-/** L'extension d'un nom, en minuscules, avec son point. */
-function lExtension(nom) {
-  const bas = texte(nom).toLowerCase();
-  const point = bas.lastIndexOf(".");
-  return point > 0 ? bas.slice(point) : "";
-}
-
-/**
- * Ce qu'un fichier déposé porte comme messages.
- *
- * Un `.msg` ou un `.eml` en porte un ; un `.zip` en porte autant qu'il en
- * contient. **Chacun garde ses octets d'origine** : on ne recompose pas un
- * `.eml` à partir d'un `.msg` pour le ranger, parce que ce qu'on garde doit
- * pouvoir être relu par autre chose que Mdall.
- *
- * @returns {Promise<{messages: object[], motif: string}>}
- */
-export async function lesMessagesDunFichier(fichier) {
-  const nom = texte(fichier?.name);
-  const bout = lExtension(nom);
-
-  let octets;
-  try {
-    octets = new Uint8Array(await fichier.arrayBuffer());
-  } catch {
-    return { messages: [], motif: "le fichier n'a pas pu être lu" };
-  }
-
-  if (bout === ".msg" || bout === EXTENSION_DUN_MAIL) {
-    const lu = bout === ".msg" ? unMsgDeplie(octets) : unMailDeplie(octets);
-    return { messages: [{ nom, octets, extension: bout, lu }], motif: "" };
-  }
-
-  if (bout !== ".zip") return { messages: [], motif: "ce n'est pas un porteur de mails" };
-
-  const annuaire = lireLannuaire(octets);
-  if (!annuaire.ok) return { messages: [], motif: annuaire.motif };
-
-  const dedans = lesMessagesDeLarchive(annuaire.entrees);
-  if (!dedans.length) return { messages: [], motif: "cette archive ne contient aucun message" };
-
-  const messages = [];
-  for (const entree of dedans) {
-    const siens = await octetsDeLentree(octets, entree);
-    // **Une entrée qu'on n'a pas su sortir ne fait pas tomber l'archive.** Elle
-    // se compte, et son nom se garde : une archive laissée derrière soi sans
-    // qu'on le sache est pire qu'une archive qu'on sait avoir manquée (règle 5).
-    if (!siens) {
-      messages.push({ nom: entree.nom, octets: null, extension: lExtension(entree.nom), lu: null });
-      continue;
-    }
-    const bout2 = lExtension(entree.nom);
-    messages.push({
-      nom: entree.nom,
-      octets: siens,
-      extension: bout2,
-      lu: bout2 === ".msg" ? unMsgDeplie(siens) : unMailDeplie(siens)
-    });
-  }
-
-  return { messages, motif: "" };
-}
 
 /**
  * Ce que ce projet connaît déjà de ces octets-là.
@@ -241,6 +176,11 @@ export async function depouiller(fichiers = [], { projectId = "", avance = null 
 
   const dossiers = await lesDeuxDossiers(projectId);
   if (!dossiers.trouve) return { ...journal, fini: true, arrete: dossiers.motif };
+
+  // **Où c'est allé fait partie du compte rendu.** Sans cela, l'écran annonce
+  // « 187 messages versés » et laisse chercher où — le dossier a pu être créé à
+  // l'instant, et rien à l'écran ne l'a encore montré.
+  journal = { ...journal, ou: dossiers.ou };
 
   const lots = enLots(porteurs, PAR_LOT);
   journal = { ...journal, lots: lots.length };

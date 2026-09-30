@@ -3,8 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
-  ONGLET, lePepinDuNavigateur, leRefusDuReleve, leReleveDerive, renderLaLectureDesMails
+  ACCEPTE, ONGLET, lePepinDuNavigateur, leRefusDuReleve, leReleveDerive,
+  renderLaLectureDesMails
 } from "./lecture-des-mails.js";
+import { CE_QUI_PORTE_DES_MAILS } from "../../../services/les-messages-dun-fichier.js";
 import { NATURE } from "../../../services/prises-de-position.js";
 import { leFilDesMails } from "../../../services/le-fil-des-mails.js";
 import { TROU } from "../../../services/trous-dun-mail.js";
@@ -866,4 +868,28 @@ test("ce que le fil a nommé est échappé, jamais injecté", () => {
   });
 
   assert.doesNotMatch(html, /<img /);
+});
+
+/**
+ * **Cet écran écartait les `.msg` en disant « ce n'est pas un mail ».**
+ *
+ * C'en est un, c'est ce qu'Outlook produit, et Mdall sait l'ouvrir depuis deux
+ * tours : la chaîne était complète partout sauf à l'endroit où l'on dépose.
+ *
+ * La liste vient du service qui sait ce qu'un fichier porte. Deux listes —
+ * celle du champ de fichiers et celle du tri — auraient fini par ne pas
+ * accepter les mêmes choses, et c'est le tri qui aurait gagné, en silence
+ * (règle 10).
+ */
+test("l'écran accepte tout ce qu'un fichier peut porter comme mails", () => {
+  for (const quoi of [".eml", ".msg", ".zip"]) {
+    assert.ok(ACCEPTE.includes(quoi), quoi);
+    assert.ok(CE_QUI_PORTE_DES_MAILS.includes(quoi), quoi);
+  }
+
+  const html = dessine(vue());
+  // Le champ de fichiers propose la même chose que le tri, et il le dit à
+  // l'explorateur : sans cela, on ne peut même pas choisir un `.msg`.
+  assert.match(html, /accept="[^"]*\.msg/);
+  assert.match(html, /accept="[^"]*\.zip/);
 });
