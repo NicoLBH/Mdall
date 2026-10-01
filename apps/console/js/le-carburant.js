@@ -52,7 +52,8 @@ import {
   laMesureDesSujets, lesEnchainementsDesSujets, lesSujetsDuSysteme
 } from "../partage/js/services/les-sujets-du-systeme-supabase.js";
 import {
-  laFonctionDite, leLienDit, lesIdeesRangees, phraseDeCeQueLesIdeesValent
+  laFonctionDite, leLienDit, lesIdeesParSorteDeLien, lesIdeesRangees,
+  phraseDeCeQueLesIdeesValent, phraseDesSortesDeLiens
 } from "../partage/js/services/une-idee.js";
 import {
   lesRaisonnements, phraseDesRaisonnements, phraseDunRaisonnement
@@ -408,6 +409,49 @@ function renderLesSujets(sujets, mesure) {
  * annoncée, parce qu'elle est la mesure de ce qu'on ne voit pas (règle 5).
  */
 /**
+ * **Dix faits et quinze intentions, et non vingt-cinq idées.**
+ *
+ * Les six sortes de liens ne sont pas interchangeables : « A entraîne B » dit
+ * que B arrive, « A afin de B » dit seulement qu'on le vise. La liste les
+ * alignait sans le dire, et faire passer une intention pour un fait est
+ * exactement ce que la règle 12 interdit.
+ *
+ * Mesuré sur le corpus entier : quinze des vingt-cinq idées distinctes viennent
+ * d'une liaison de but, deux d'une cause. Ce n'est pas un détail de présentation
+ * — c'est la différence entre un corpus qui permet de prévoir et un corpus qui
+ * énumère des souhaits.
+ *
+ * Les sortes absentes sont rendues aussi : une sorte à zéro dit que le corpus
+ * n'énonce pas cette relation-là, et c'est une information.
+ */
+function renderLesSortesDeLiens(idees) {
+  const rangees = lesIdeesParSorteDeLien(idees);
+  if (!idees.length) return "";
+
+  return `
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">Ce que chaque sorte de lien affirme</h3>
+      <p class="conso-usages__mot"><b>${echapper(phraseDesSortesDeLiens(idees))}</b></p>
+      <ul class="forme-reference">
+        ${rangees.map((une) => `
+          <li class="forme-reference__ligne">
+            <span class="forme-reference__quoi">
+              <b>${echapper(une.cle ? `« ${une.libelle} »` : une.libelle)}</b>
+              <i>${echapper(une.explication)}</i>
+            </span>
+            <span class="forme-reference__chiffres mono-small">${
+              echapper(`${compteDit(une.idees)} idée${une.idees > 1 ? "s" : ""}`)}</span>
+            <span class="forme-reference__sur mono-small">${
+              echapper(`sur ${compteDit(une.affirmations)} affirmation${
+                une.affirmations > 1 ? "s" : ""}`)}</span>
+          </li>
+        `).join("")}
+      </ul>
+    </section>
+  `;
+}
+
+/**
  * **Combien de phrases, pour combien de lignes.**
  *
  * C'est le dénominateur de tout ce que cet écran annonce, et il était faux :
@@ -617,6 +661,8 @@ function renderLesIdees(lignes, mesure, liaisons, forme, chaines, repetition) {
         </ul>
       ` : ""}
     </section>
+
+    ${renderLesSortesDeLiens(idees)}
 
     ${renderLaRepetitionDuCorpus(repetition)}
 

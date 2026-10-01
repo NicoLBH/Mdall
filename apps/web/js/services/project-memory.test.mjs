@@ -516,6 +516,36 @@ test("une affirmation dit ce qu'elle affirme, pas qu'elle est un document", asyn
   );
 });
 
+/**
+ * **Le jumeau SQL dit la même chose.**
+ *
+ * Ce que dit une affirmation est écrit deux fois : ici pour l'écran, et en SQL
+ * (`le_dit_dune_affirmation`) pour les lectures de la console. L'écran ne peut
+ * pas appeler la base pour mettre en forme une ligne qu'il tient déjà.
+ *
+ * Deux définitions finissent par diverger (règle 4), et elles avaient déjà
+ * divergé : les lectures lisaient la phrase versée là où l'écran lisait le
+ * `payload`, sur un tiers du corpus. Faute de pouvoir n'en avoir qu'une, les cas
+ * sont dans un seul fichier, que cette épreuve et le banc PostgreSQL lisent tous
+ * les deux. Un cas ajouté éprouve les deux à la fois.
+ */
+test("ce que dit une affirmation : les mêmes cas que le banc", async () => {
+  const { titreDeLAffirmation } = await import("./project-memory.js");
+  const { readFileSync } = await import("node:fs");
+  const lesCas = JSON.parse(readFileSync(
+    new URL("./ce-que-dit-une-affirmation.cas.json", import.meta.url), "utf8"));
+
+  assert.ok(lesCas.cas.length >= 7,
+    `le fichier des cas en porte ${lesCas.cas.length} : la liste a été raccourcie`);
+
+  for (const un of lesCas.cas) {
+    assert.equal(
+      titreDeLAffirmation({ statement: un.statement, payload: un.payload }),
+      un.dit,
+      `${un.quoi} — l'écran et la base ne disent pas la même chose`);
+  }
+});
+
 test("une ligne ne se dit pas deux fois", async () => {
   // Un raisonnement n'affirme rien : sa seule valeur possible est sa question,
   // et la règle générale écrivait « Quelle profondeur retenir ? : Quelle
