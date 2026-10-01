@@ -63,6 +63,10 @@ create table if not exists public.project_assertions (
   -- Ce que l'affirmation dit, en français : la matière dont les sujets
   -- techniques sont extraits.
   statement text not null default '',
+  -- **Le contenu brut, tel que la revue le portait.** Un tiers des `statement`
+  -- en base sont un repli fautif qui ne nomme qu'une clé mdall ; la vraie phrase
+  -- est ici, et c'est elle que l'écran affiche. Les lectures la lisent aussi.
+  payload jsonb,
   -- La clé métier, et d'où l'affirmation vient. Ce sont les colonnes de la
   -- table réelle (`202609020001_project_assertions.sql`), et elles sont ici
   -- parce que la répétition du corpus se mesure dessus : l'unicité porte sur

@@ -259,3 +259,89 @@ export function phraseDeCeQueLesIdeesValent(idees = [], mesure = null) {
       + "pas encore de quoi les comparer."
     : `${dit} Le corpus nomme des choses ; il ne dit pas encore ce qu'elles se font.`;
 }
+
+/**
+ * Les idées rangées **par sorte de lien**.
+ *
+ * ## Pourquoi cette lecture manquait
+ *
+ * `LES_LIENS` dit depuis le début que les six sortes ne sont pas
+ * interchangeables : « A entraîne B » dit que B arrive, « A afin de B » dit
+ * seulement qu'on le vise. L'écran, lui, les alignait sans distinction.
+ *
+ * Mesuré sur le corpus entier : **quinze des vingt-cinq idées distinctes
+ * viennent d'une liaison de but**, et deux seulement d'une cause. Une liste où
+ * les deux se suivent fait croire à vingt-cinq faits, là où il y a dix faits et
+ * quinze intentions — et faire passer une intention pour un fait est exactement
+ * ce que la règle 12 interdit.
+ *
+ * Rendues dans l'ordre de `LES_LIENS`, les sortes absentes comprises : une
+ * sorte à zéro est une information — elle dit que le corpus n'énonce pas cette
+ * relation-là.
+ */
+export function lesIdeesParSorteDeLien(idees = []) {
+  const lues = Array.isArray(idees) ? idees : [];
+
+  const rangees = LES_LIENS.map((un) => {
+    const siennes = lues.filter((une) => texte(une?.lien) === un.cle);
+    return {
+      cle: un.cle,
+      libelle: un.libelle,
+      explication: un.explication,
+      idees: siennes.length,
+      affirmations: siennes.reduce((somme, une) => somme + nombre(une?.affirmations), 0)
+    };
+  });
+
+  // **Les sortes que cet écran ne connaît pas.** Une base en avance rendrait un
+  // lien que `LES_LIENS` ignore ; le taire ferait un total qui ne tombe pas
+  // juste, et l'on chercherait l'erreur ailleurs (règle 5).
+  const inconnues = lues.filter((une) => !leLienDit(une?.lien));
+  if (inconnues.length) {
+    rangees.push({
+      cle: null,
+      libelle: "sorte inconnue",
+      explication: "Ce lien vient d'une base en avance sur cet écran. Le ranger "
+        + "sous une sorte connue afficherait un lien faux avec l'aplomb d'un juste.",
+      idees: inconnues.length,
+      affirmations: inconnues.reduce((somme, une) => somme + nombre(une?.affirmations), 0)
+    });
+  }
+
+  return rangees;
+}
+
+/** Les sortes de liens qui n'affirment qu'une intention. */
+export const LES_LIENS_DINTENTION = ["but", "permet"];
+
+/**
+ * Ce que la répartition des sortes dit, en une phrase.
+ *
+ * Elle ne dit pas « voici la répartition » : elle dit ce qu'il faut en
+ * conclure. Un tableau de six nombres que personne ne sait lire ne vaut pas
+ * mieux que pas de tableau.
+ */
+export function phraseDesSortesDeLiens(idees = []) {
+  const lues = Array.isArray(idees) ? idees : [];
+  if (!lues.length) return "Aucune idée : il n'y a pas de sorte à répartir.";
+
+  const intentions = lues.filter(
+    (une) => LES_LIENS_DINTENTION.includes(texte(une?.lien))).length;
+
+  if (!intentions) {
+    return `${lues.length} idée${lues.length > 1 ? "s" : ""}, et aucune n'est une `
+      + "intention : toutes affirment quelque chose qui arrive, se conditionne ou "
+      + "s'impose.";
+  }
+
+  if (intentions === lues.length) {
+    return `Les ${lues.length} idées sont des intentions — « afin de », `
+      + "« pour permettre ». Elles disent ce qu'on cherche, jamais ce qu'on "
+      + "obtient : rien ici ne permet de prévoir.";
+  }
+
+  return `${intentions} des ${lues.length} idées sont des intentions — « afin de », `
+    + `« pour permettre » —, et ${lues.length - intentions} affirment ce qui `
+    + "arrive, se conditionne ou s'impose. Les aligner sans le dire ferait "
+    + "passer une intention pour un fait.";
+}

@@ -101,6 +101,15 @@ const LES_MIGRATIONS = [
   // « au-delà » devenait le terme « delà » : les morceaux de locution rejoignent
   // les mots-outils.
   "202611180003_les_locutions_ne_sont_pas_des_termes.sql",
+  // Une seule normalisation : la ligature « œ » coupait « manœuvre » en deux, et
+  // le correctif n'aurait touché qu'un chemin sur cinq.
+  "202611190001_une_seule_normalisation.sql",
+  // Les lectures lisent ce que l'écran lit : un tiers des phrases versées sont
+  // un repli fautif, et la vraie phrase est dans le payload.
+  "202611190002_les_lectures_lisent_ce_que_lecran_lit.sql",
+  // « non conforme » ne devient plus « conforme » : une idée qui dit le
+  // contraire du texte est pire qu'une idée manquante.
+  "202611190003_une_negation_ne_devient_pas_son_contraire.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",
@@ -181,6 +190,14 @@ function leBanc() {
 
   return pg;
 }
+
+/**
+ * Les cas de « ce que dit une affirmation », partagés avec l'épreuve
+ * JavaScript. Voir le champ `pourquoi` du fichier.
+ */
+const LES_CAS = JSON.parse(readFileSync(
+  new URL("../apps/web/js/services/ce-que-dit-une-affirmation.cas.json", import.meta.url),
+  "utf8"));
 
 const banc = leBanc();
 const sansPostgres = banc ? false : "PostgreSQL n'est pas sur cette machine";
@@ -2089,6 +2106,328 @@ test("le corpus en clair rend le texte, coupé ou non", { skip: sansPostgres }, 
                where statement in ('le garde corps permet de proteger la circulation',
                                    'Menuiseries exterieures du hall');`);
   }
+});
+
+/* ── Les lectures lisent ce que l'écran lit ──────────────────────────────── */
+
+/**
+ * **Un tiers de la mémoire était muet pour la console.**
+ *
+ * Trois mille quatre cent vingt-huit affirmations sur 9 488 portent un
+ * `statement` de repli : « Document au corpus : <clé mdall> ». L'écran ne le lit
+ * plus depuis longtemps — il lit le `payload`, qui porte le sujet et la valeur.
+ * Les lectures de la console, elles, lisaient toujours la phrase : elles
+ * mesuraient un corpus que personne ne voit (règle 4).
+ */
+test("ce que dit une affirmation se lit dans le payload", { skip: sansPostgres }, () => {
+  // **Les cas viennent du fichier que l'épreuve JavaScript lit aussi.** Faute de
+  // pouvoir n'avoir qu'une définition, on n'a au moins qu'un jeu de cas : un cas
+  // ajouté éprouve les deux à la fois. Deux listes recopiées auraient divergé à
+  // la première retouche (règle 4).
+  assert.ok(LES_CAS.cas.length >= 7,
+    `le fichier des cas en porte ${LES_CAS.cas.length} : la liste a été raccourcie`);
+
+  for (const un of LES_CAS.cas) {
+    const charge = un.payload === null
+      ? "null"
+      : `'${JSON.stringify(un.payload).replaceAll("'", "''")}'`;
+    const lu = banc.sql(
+      "select public.le_dit_dune_affirmation("
+      + `'${un.statement.replaceAll("'", "''")}', ${charge}::jsonb);`);
+    assert.equal(lu.sortie.trim(), un.dit, `${un.quoi} — rendu « ${lu.sortie.trim()} »`);
+  }
+});
+
+/**
+ * **Et les lectures la lisent pour de bon.**
+ *
+ * Vérifier la fonction seule ne suffit pas : c'est d'avoir branché les huit
+ * lectures dessus qui compte, et une lecture qu'on oublie de brancher laisse le
+ * banc vert. On pose donc une affirmation dont la phrase versée ne porte **aucun
+ * mot de liaison** et dont le payload en porte un : l'idée ne peut venir que du
+ * payload.
+ */
+test("la coupe et le corpus en clair lisent le payload", { skip: sansPostgres }, () => {
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;`);
+  banc.sql(`insert into public.project_assertions (project_id, statement, payload) values
+    ('${MEDIATHEQUE}', 'Document au corpus : le-garde-corps@batiment-a',
+     '{"subject":"le garde corps","value":"permet de proteger la circulation"}'::jsonb);`);
+
+  try {
+    // **La coupe : l'idée vient du payload, et de nulle part ailleurs.**
+    // `la_coupe_du_corpus` n'est accordée à personne — c'est voulu, elle lit tous
+    // les chantiers —, donc on la lit en direct et non sous une adresse.
+    const coupe = banc.sql(
+      "select avant || '|' || lien || '|' || apres from public.la_coupe_du_corpus()"
+      + " where avant = 'garde corps';");
+    assert.equal(coupe.sortie.trim(), "garde corps|permet|proteger",
+      "la coupe lit encore la phrase de repli : il n'y a rien à couper dedans");
+
+    // Le corpus en clair : il montre ce que l'écran montre.
+    const clair = banc.sousLadresse("patron@mdall.example",
+      "select count(*) from jsonb_array_elements("
+      + "(public.le_corpus_en_clair())->'corpus') as une"
+      + " where une->>'dit' like 'Document au corpus : le-garde-corps%';");
+    assert.equal(clair.sortie.trim(), "0",
+      "le corpus emporté montre encore la clé mdall, et non la phrase");
+
+    // Et les sujets : « garde corps » est un terme, « batiment a » n'en est pas un.
+    const sujets = banc.sql(
+      "select count(*) from public.les_sujets_dun_texte("
+      + "public.le_dit_dune_affirmation("
+      + "'Document au corpus : le-garde-corps@batiment-a',"
+      + `'{"subject":"le garde corps","value":"permet de proteger la circulation"}'::jsonb))`
+      + " where sujet = 'garde corps';");
+    assert.equal(sujets.sortie.trim(), "1", "les sujets ne lisent pas le payload");
+  } finally {
+    banc.sql(`delete from public.project_assertions
+               where statement = 'Document au corpus : le-garde-corps@batiment-a';`);
+  }
+});
+
+/**
+ * **Et les lectures du lexique aussi, pas seulement l'extraction.**
+ *
+ * La batterie l'a montré : vérifier `les_sujets_dun_texte(le_dit_dune_affirmation(…))`
+ * n'éprouve que la composition des deux fonctions. Remettre `a.statement` dans
+ * `les_sujets_du_systeme` ne cassait rien — la lecture pouvait redevenir aveugle
+ * sans qu'aucun test ne tombe.
+ *
+ * On pose donc le même terme, caché dans le `payload`, sur **deux** chantiers :
+ * il doit franchir le seuil et apparaître dans le lexique. La phrase versée, elle,
+ * ne porte que des mots-outils et une clé à tirets.
+ */
+test("le lexique du système lit le payload", { skip: sansPostgres }, () => {
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;`);
+  // Un terme qu'aucun jeu d'essai du banc ne porte, et introuvable dans la phrase.
+  banc.sql(`insert into public.project_assertions (project_id, statement, payload) values
+    ('${MEDIATHEQUE}', 'Document au corpus : cle-a-tirets-sans-mot',
+     '{"subject":"palplanche jointive","value":"profondeur 6 m"}'::jsonb),
+    ('${GYMNASE}', 'Document au corpus : cle-a-tirets-sans-mot',
+     '{"subject":"palplanche jointive","value":"profondeur 4 m"}'::jsonb);`);
+
+  try {
+    const lexique = banc.sousLadresse("patron@mdall.example",
+      "select count(*) from public.les_sujets_du_systeme()"
+      + " where sujet = 'palplanche jointive';");
+    assert.equal(lexique.sortie.trim(), "1",
+      "« palplanche jointive » n'entre pas au lexique : la lecture relit la phrase versée");
+
+    // **Et la mesure compte la même chose.** Deux lectures qui ne lisent pas le
+    // même texte donneraient deux dénominateurs pour un seul corpus.
+    const mesure = banc.sousLadresse("patron@mdall.example",
+      "select montres > 0 from public.la_mesure_des_sujets();");
+    assert.equal(mesure.sortie.trim(), "t", mesure.motif);
+
+    // **Et le prédicteur d'un chantier**, qui est la troisième lecture branchée.
+    // Le seuil y est interne : il faut le terme deux fois dans le même chantier.
+    banc.sql(`insert into public.project_assertions (project_id, statement, payload) values
+      ('${MEDIATHEQUE}', 'Document au corpus : cle-a-tirets-sans-mot-bis',
+       '{"subject":"palplanche jointive","value":"profondeur 8 m"}'::jsonb);`);
+    const sien = banc.sql(
+      `select count(*) from public.les_sujets_de_ce_chantier('${MEDIATHEQUE}')`
+      + " where sujet = 'palplanche jointive';");
+    assert.ok(Number(sien.sortie.trim()) >= 2,
+      `le prédicteur du chantier ne lit pas le payload : ${sien.sortie.trim()}`);
+  } finally {
+    banc.sql(`delete from public.project_assertions
+               where statement like 'Document au corpus : cle-a-tirets-sans-mot%';`);
+  }
+});
+
+/**
+ * **Les quatre lectures qui restaient aveugles sans que rien ne tombe.**
+ *
+ * La batterie l'a montré quatre fois de suite : brancher une lecture sur
+ * `le_dit_dune_affirmation` et ne pas l'éprouver revient à ne rien brancher — on
+ * remettait `a.statement` et le banc restait vert. Chacune se mesure donc par son
+ * écart : on lit, on pose, on relit.
+ *
+ * Le jeu d'essai est fait pour cela : la phrase versée ne porte **aucun** mot
+ * technique et **aucun** mot de liaison, et le `payload` porte les deux. Une
+ * lecture qui lit la phrase ne voit rien bouger.
+ */
+test("les six lectures du corpus lisent toutes le payload", { skip: sansPostgres }, () => {
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;`);
+
+  const lire = (sql) => banc.sousLadresse("patron@mdall.example", sql).sortie.trim().split("|");
+
+  const [montresAvant] = lire("select montres from public.la_mesure_des_sujets();");
+  const [porteesAvant] = lire(
+    "select contenues from public.le_detail_des_liaisons() where mot = 'sous reserve de';");
+  const [dixAvant, formeAvant] = lire(
+    "select au_moins_dix_mots, affirmations from public.la_forme_des_affirmations();");
+  const [distinctesAvant] = lire("select distinctes from public.la_repetition_du_corpus();");
+
+  // **Deux affirmations à la phrase identique et au payload différent.** La même
+  // clé de repli, deux sujets distincts : c'est ce qui sépare une lecture qui lit
+  // la phrase d'une lecture qui lit le payload.
+  banc.sql(`insert into public.project_assertions (project_id, statement, payload) values
+    ('${MEDIATHEQUE}', 'Document au corpus : meme-cle-de-repli',
+     '{"subject":"blindage berlinoise",
+       "value":"la pose du blindage est tenue sous reserve de la note de calcul du bureau"}'::jsonb),
+    ('${GYMNASE}', 'Document au corpus : meme-cle-de-repli',
+     '{"subject":"blindage berlinoise",
+       "value":"le blindage de la berlinoise descend a six metres sous le niveau du radier"}'::jsonb);`);
+
+  try {
+    // **Le lexique, et sa mesure.** Un écart ne suffit pas : la phrase de repli
+    // porte elle aussi des mots (« corpus », « repli »), donc `montres` monte
+    // dans les deux cas — la batterie l'a montré. Ce qui tient, c'est l'égalité :
+    // `montres` compte exactement ce que `les_sujets_du_systeme` rend, et les
+    // deux lectures doivent lire le même texte ou elles se contredisent (règle 4).
+    const [montres] = lire("select montres from public.la_mesure_des_sujets();");
+    const [rendus] = lire("select count(*) from public.les_sujets_du_systeme();");
+    assert.ok(Number(montres) > Number(montresAvant),
+      `la mesure des sujets ne voit rien de neuf (${montresAvant} → ${montres})`);
+    assert.equal(Number(montres), Number(rendus),
+      `la mesure annonce ${montres} sujets montrés et le lexique en rend ${rendus} :`
+      + " les deux ne lisent pas le même texte");
+
+    // **Et le compte des formes, qui dépend du texte lu et non du nombre de clés.**
+    // L'égalité des comptes seule ne suffisait pas : deux jeux de clés différents
+    // peuvent en avoir autant, et la batterie l'a montré deux fois. La somme des
+    // formes, elle, change dès que le texte change.
+    const [formes] = lire("select formes from public.la_mesure_des_sujets();");
+    const [formesRendues] = lire(
+      "select coalesce(sum(formes), 0) from public.les_sujets_du_systeme();");
+    assert.equal(Number(formes), Number(formesRendues),
+      `la mesure annonce ${formes} formes et le lexique en rend ${formesRendues} :`
+      + " les deux ne lisent pas le même texte");
+
+    // **Le détail mot à mot.** « sous réserve de » n'est que dans le payload.
+    const [portees] = lire(
+      "select contenues from public.le_detail_des_liaisons() where mot = 'sous reserve de';");
+    assert.equal(Number(portees), Number(porteesAvant) + 1,
+      `le détail des liaisons ne compte pas la liaison du payload (${porteesAvant} → ${portees})`);
+
+    // **La forme.** La phrase versée fait cinq mots, le dit en fait plus de dix.
+    const [dix, forme] = lire(
+      "select au_moins_dix_mots, affirmations from public.la_forme_des_affirmations();");
+    assert.equal(Number(forme), Number(formeAvant) + 2, "les deux lignes ne sont pas comptées");
+    assert.equal(Number(dix), Number(dixAvant) + 2,
+      `la forme mesure la phrase de repli, pas le dit (${dixAvant} → ${dix})`);
+
+    // **La répétition.** Même phrase versée, deux dits différents : deux textes
+    // distincts de plus. Une lecture qui lit la phrase n'en verrait qu'un.
+    const [distinctes] = lire("select distinctes from public.la_repetition_du_corpus();");
+    assert.equal(Number(distinctes), Number(distinctesAvant) + 2,
+      `la répétition compte la phrase de repli, pas le dit (${distinctesAvant} → ${distinctes})`);
+  } finally {
+    banc.sql(`delete from public.project_assertions
+               where statement = 'Document au corpus : meme-cle-de-repli';`);
+  }
+});
+
+/* ── La ligature ne coupe plus les mots ──────────────────────────────────── */
+
+/**
+ * **« manœuvre » devenait « uvre ».**
+ *
+ * `le_texte_normalise` remplaçait par une espace tout ce qui n'est pas a-z, et
+ * la ligature « œ » n'était dans aucune des deux listes. Mesuré sur le corpus :
+ * quarante et un termes distincts abîmés, deux cent deux occurrences, dont
+ * « manœuvre » quatre-vingt-trois fois et « gros œuvre » soixante-cinq.
+ *
+ * « Gros œuvre » est le lot le plus courant d'un chantier français. Le lexique
+ * de la console ne le portait pas.
+ */
+test("la ligature œ ne coupe plus les mots", { skip: sansPostgres }, () => {
+  const lu = banc.sql(
+    "select public.le_texte_normalise('Manœuvre de grue — Gros Œuvre');");
+  assert.equal(lu.sortie.trim(), "manoeuvre de grue gros oeuvre",
+    "la ligature coupe encore le mot en deux");
+
+  // **« æ » aussi**, et le corpus n'en porte aucun aujourd'hui : on l'éprouve
+  // directement, parce que `translate` ne saura jamais le faire.
+  const ae = banc.sql("select public.le_texte_normalise('ex æquo');");
+  assert.equal(ae.sortie.trim(), "ex aequo", "« æ » coupe encore le mot");
+
+  // Et l'extraction des sujets en profite, parce qu'elle passe par là.
+  const sujets = banc.sql(
+    "select string_agg(sujet, '|' order by sujet)"
+    + " from public.les_sujets_dun_texte('Gros Œuvre : coulage du radier')"
+    + " where sujet like '%oeuvre%';");
+  assert.match(sujets.sortie.trim(), /gros oeuvre/,
+    "« gros œuvre » n'est toujours pas un sujet");
+
+  // **Et le terme de tête aussi** : c'est la seconde copie de la normalisation
+  // qu'on a ramenée sur la première.
+  const terme = banc.sql("select public.le_terme_de_tete('Manœuvre de grue');");
+  assert.equal(terme.sortie.trim(), "manoeuvre",
+    "le terme de tête garde sa propre normalisation, abîmée");
+});
+
+/* ── Une négation ne devient pas son contraire ───────────────────────────── */
+
+/**
+ * **L'idée qui affirmait l'inverse du texte.**
+ *
+ * « Escalier prévu et escalier exigé : non conforme » rendait
+ * `escalier prévu —obligation→ conforme`. Le « non » fait trois lettres : il
+ * tombait sous le seuil, et le sens de la phrase avec lui.
+ *
+ * C'est pire qu'une idée manquante : celle-ci, on la cherche ; celle-là, on la
+ * croit — et rien à l'écran ne la distingue d'une vraie.
+ */
+test("un terme nié ne se rend pas", { skip: sansPostgres }, () => {
+  for (const [bout, attendu] of [
+    ["non conforme", "—"],
+    ["ne plus perdre de temps", "—"],
+    ["ne pas fragiliser les pierres", "—"],
+    ["aucune reservation ne sera faite", "—"],
+    ["sans reprise du mortier", "—"]
+  ]) {
+    const lu = banc.sql(
+      `select coalesce(public.le_terme_de_tete('${bout}'), '—');`);
+    assert.equal(lu.sortie.trim(), attendu,
+      `« ${bout} » rend encore un terme : l'idée dira le contraire du texte`);
+  }
+
+  // **Et la phrase entière ne rend plus l'idée fausse.**
+  const idee = banc.sql(
+    "select count(*) from public.les_idees_des_textes(array["
+    + "'Escalier prevu et escalier exige : non conforme'"
+    + "]);");
+  assert.equal(idee.sortie.trim(), "0",
+    "« escalier prévu —obligation→ conforme » sort encore");
+});
+
+/**
+ * **Et un refus de trop est une idée vraie qu'on ne verra jamais.**
+ *
+ * C'est la moitié qui compte : la règle ne regarde que le mot immédiatement
+ * précédent, et c'est mesuré. Une fenêtre de trois mots refusait « afin de
+ * libérer » et « afin de drainer » parce que « Lot n°1 » laisse un « n »
+ * derrière lui.
+ */
+test("une négation éloignée ne refuse rien", { skip: sansPostgres }, () => {
+  for (const [bout, attendu] of [
+    // « plus de » : « de » s'intercale, et « plus » ne touche pas le terme.
+    // Le terme rendu est « trois metres » — « trois » fait cinq lettres et n'est
+    // pas un mot-outil. Ce qui compte ici, c'est qu'il soit rendu.
+    ["plus de trois metres de hauteur", "trois metres"],
+    // La négation porte sur un autre membre que le terme.
+    ["Lot n 1 : coulage du radier", "coulage"],
+    ["le radier n est pas coule", "radier"],
+    ["conforme", "conforme"]
+  ]) {
+    const lu = banc.sql(
+      `select coalesce(public.le_terme_de_tete('${bout}'), '—');`);
+    assert.equal(lu.sortie.trim(), attendu,
+      `« ${bout} » devrait rendre « ${attendu} »`);
+  }
+
+  // Et l'idée canonique de la doctrine tient toujours.
+  const idee = banc.sql(
+    "select avant, lien, apres from public.les_idees_des_textes(array["
+    + "'le garde corps permet de proteger la circulation'"
+    + "]);");
+  assert.equal(idee.sortie.trim(), "garde corps|permet|proteger",
+    "l'idée de référence est tombée avec la règle de négation");
 });
 
 /* ── La répétition du corpus ─────────────────────────────────────────────── */

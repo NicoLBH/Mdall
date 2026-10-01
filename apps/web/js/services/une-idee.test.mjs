@@ -12,7 +12,8 @@ import assert from "node:assert/strict";
 
 import {
   LES_LIENS, LES_SORTES_DE_LIENS, cestUneIdee, laFonctionDite, leCote, leLienDit,
-  lesIdeesRangees, phraseDeCeQueLesIdeesValent, phraseDuneIdee, uneIdee
+  lesIdeesParSorteDeLien, lesIdeesRangees, phraseDeCeQueLesIdeesValent,
+  phraseDesSortesDeLiens, phraseDuneIdee, uneIdee
 } from "./une-idee.js";
 
 const UNE = { avant: "terrain argileux", lien: "cause", apres: "plancher beton",
@@ -194,4 +195,77 @@ test("la part annoncée est celle des affirmations qui portent un lien", () => {
     { affirmations: 100, liantes: 30, lisibles: 10 });
   assert.match(dit, /30 %/, `la part annoncée n'est pas celle des liantes : ${dit}`);
   assert.match(dit, /30 sur 100/);
+});
+
+/**
+ * **Quinze des vingt-cinq idées du corpus sont des intentions.**
+ *
+ * `LES_LIENS` dit depuis le début que « A afin de B » ne dit que ce qu'on vise.
+ * L'écran les alignait sans distinction : une liste de vingt-cinq lignes faisait
+ * croire à vingt-cinq faits, là où il y a dix faits et quinze intentions
+ * (règle 12).
+ */
+test("les idées se rangent par sorte de lien", () => {
+  const rangees = lesIdeesParSorteDeLien([
+    { avant: "a", lien: "but", apres: "b", affirmations: 3 },
+    { avant: "c", lien: "but", apres: "d", affirmations: 2 },
+    { avant: "e", lien: "cause", apres: "f", affirmations: 5 }
+  ]);
+
+  // **Les six sortes, dans l'ordre de la doctrine, les absentes comprises.**
+  // Une sorte à zéro dit que le corpus n'énonce pas cette relation-là.
+  assert.deepEqual(rangees.map((une) => une.cle), LES_SORTES_DE_LIENS);
+
+  const but = rangees.find((une) => une.cle === "but");
+  assert.equal(but.idees, 2);
+  assert.equal(but.affirmations, 5, "les affirmations de la sorte ne s'additionnent pas");
+
+  const vide = rangees.find((une) => une.cle === "condition");
+  assert.equal(vide.idees, 0);
+  assert.equal(vide.affirmations, 0);
+});
+
+/**
+ * **Une sorte que cet écran ne connaît pas ne se tait pas.**
+ *
+ * Elle viendrait d'une base en avance. La ranger sous une sorte connue
+ * afficherait un lien faux ; la taire ferait un total qui ne tombe pas juste, et
+ * l'on chercherait l'erreur ailleurs (règle 5).
+ */
+test("une sorte de lien inconnue est rendue à part", () => {
+  const rangees = lesIdeesParSorteDeLien([
+    { avant: "a", lien: "cause", apres: "b", affirmations: 1 },
+    { avant: "c", lien: "corrélation", apres: "d", affirmations: 4 }
+  ]);
+
+  assert.equal(rangees.length, LES_SORTES_DE_LIENS.length + 1);
+  const inconnue = rangees.at(-1);
+  assert.equal(inconnue.cle, null);
+  assert.equal(inconnue.idees, 1);
+  assert.equal(inconnue.affirmations, 4);
+  assert.match(inconnue.explication, /base en avance/);
+});
+
+/** Et la phrase dit ce qu'il faut en conclure, pas la répartition. */
+test("la phrase des sortes dit ce qu'il faut en conclure", () => {
+  assert.match(phraseDesSortesDeLiens([]), /pas de sorte à répartir/);
+
+  assert.match(
+    phraseDesSortesDeLiens([
+      { lien: "but" }, { lien: "permet" }, { lien: "cause" }, { lien: "obligation" }
+    ]),
+    /2 des 4 idées sont des intentions/);
+  assert.match(
+    phraseDesSortesDeLiens([{ lien: "but" }, { lien: "cause" }]),
+    /passer une intention pour un fait/);
+
+  // Rien que des faits : on ne met pas en garde pour rien.
+  const faits = phraseDesSortesDeLiens([{ lien: "cause" }, { lien: "obligation" }]);
+  assert.match(faits, /aucune n'est une intention/);
+  assert.doesNotMatch(faits, /intention pour un fait/);
+
+  // Rien que des intentions : le dire autrement, parce que la conclusion change.
+  assert.match(
+    phraseDesSortesDeLiens([{ lien: "but" }, { lien: "but" }]),
+    /rien ici ne permet de prévoir/);
 });

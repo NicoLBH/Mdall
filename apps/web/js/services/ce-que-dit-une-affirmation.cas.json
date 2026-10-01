@@ -1,0 +1,47 @@
+{
+  "pourquoi": "Ce que dit une affirmation est écrit deux fois : en JavaScript (titreDeLAffirmation, pour l'écran) et en SQL (le_dit_dune_affirmation, pour les lectures de la console). L'écran ne peut pas appeler la base pour mettre en forme une ligne qu'il tient déjà, et la base ne peut pas appeler l'écran. Deux définitions finissent par diverger (règle 4) — faute de pouvoir n'en avoir qu'une, les cas sont ici, et les deux épreuves lisent ce fichier. Un cas ajouté éprouve les deux à la fois.",
+  "cas": [
+    {
+      "quoi": "sujet et valeur : la vraie phrase, celle que l'écran montre",
+      "statement": "Document au corpus : acces@batiment-a",
+      "payload": { "subject": "Acces des vehicules lourds", "value": "interdit au-dela de 3,5 t" },
+      "dit": "Acces des vehicules lourds : interdit au-dela de 3,5 t"
+    },
+    {
+      "quoi": "sujet seul : la valeur n'existe pas",
+      "statement": "Document au corpus : altitude-du-site",
+      "payload": { "subject": "Altitude du site" },
+      "dit": "Altitude du site"
+    },
+    {
+      "quoi": "une ligne ne se dit pas deux fois : un raisonnement n'affirme rien, et sa seule valeur possible est sa question",
+      "statement": "peu importe",
+      "payload": { "subject": "Quelle profondeur retenir ?", "value": "Quelle profondeur retenir ?" },
+      "dit": "Quelle profondeur retenir ?"
+    },
+    {
+      "quoi": "une valeur vide ne fait pas un deux-points orphelin",
+      "statement": "peu importe",
+      "payload": { "subject": "Altitude du site", "value": "   " },
+      "dit": "Altitude du site"
+    },
+    {
+      "quoi": "pas de sujet : la phrase versee est tout ce qu'on a, et pour un vrai document elle est juste",
+      "statement": "Document au corpus : 1824_CR_14.pdf",
+      "payload": { "name": "1824_CR_14.pdf" },
+      "dit": "Document au corpus : 1824_CR_14.pdf"
+    },
+    {
+      "quoi": "pas de payload du tout",
+      "statement": "Menuiseries exterieures du hall",
+      "payload": null,
+      "dit": "Menuiseries exterieures du hall"
+    },
+    {
+      "quoi": "un sujet tout en espaces ne compte pas pour un sujet",
+      "statement": "Menuiseries exterieures du hall",
+      "payload": { "subject": "  " },
+      "dit": "Menuiseries exterieures du hall"
+    }
+  ]
+}
