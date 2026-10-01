@@ -55,6 +55,10 @@ import {
   parsePatterns,
   previewMatches
 } from "../../../services/ct-lab-patterns.js";
+import {
+  OUVRIR_UN_RAPPORT, renderLeDetailDunRapport, renderLesRapportsLus
+} from "../../ui/les-rapports-lus.js";
+import { laVueDunRapport } from "../../../services/la-lecture-dun-rapport.js";
 import { renderPropositionOuverte } from "../../ui/avertissement-proposition.js";
 import { bindGhActionButtons, renderGhActionButton } from "../../ui/gh-split-button.js";
 import { renderLightTabs } from "../../ui/light-tabs.js";
@@ -3755,6 +3759,35 @@ function renderHeader(state) {
   `;
 }
 
+/**
+ * Une lecture conservée, ouverte depuis le tableau.
+ *
+ * Le bouton de retour est **à gauche du titre**, comme pour les comptes rendus
+ * lus : posé en dessous, il se lit comme une action sur l'analyse plutôt que
+ * comme une sortie.
+ */
+function renderLaLectureOuverte(state) {
+  const vue = state.ouverte;
+  const nom = texteDe(vue?.lecture?.nom) || "Rapport de contrôle";
+  const lueLe = texteDe(vue?.conservee?.lueLe);
+
+  return `
+    <section class="ctlab__section ctlab__lecture">
+      <div class="ctlab__lecture-tete">
+        <button type="button" class="gh-btn gh-btn--sm" data-ctlab-fermer-lecture>
+          ← Les rapports lus
+        </button>
+        <h3 class="ctlab__lecture-titre">${escapeHtml(nom)}</h3>
+      </div>
+      ${lueLe
+        ? `<p class="ctlab__lecture-quand mono-small">${escapeHtml(
+            `Lue le ${lueLe.slice(0, 10)} — telle qu'elle a été faite ce jour-là.`)}</p>`
+        : ""}
+      ${renderLeDetailDunRapport(vue)}
+    </section>
+  `;
+}
+
 function render(root, state) {
   DOCUMENT_LABELS = new Map(
     state.reports.map((report) => [report.sourceId, report.filename ?? report.sourceId])
@@ -3772,10 +3805,30 @@ function render(root, state) {
         ${renderHeader(state)}
         <div class="settings-card__body studio-tool-card__body">
           ${renderTimeTravelBanner(state)}
-          ${renderCorpus(state)}
-          ${renderProgress(state)}
-          ${state.result ? renderLightTabs({ tabs, activeTabId: state.activeTab, ariaLabel: "Sections du suivi" }) : ""}
-          <div data-ctlab-results>${renderResults(state)}</div>
+          ${/*
+            **Une lecture ouverte remplace l'écran, elle ne s'y ajoute pas.**
+            C'est la place qui rend une analyse lisible, et le retour arrière qui
+            rend la navigation évidente — exactement comme le détail d'un avis.
+          */""}
+          ${state.ouverte
+            ? renderLaLectureOuverte(state)
+            : `
+              ${renderCorpus(state)}
+              ${renderProgress(state)}
+              ${/*
+                **Le tableau des rapports déjà analysés, à l'accueil.** Il vient
+                sous la zone de dépôt, comme pour les comptes rendus : on arrive
+                ici pour reprendre une analyse bien plus souvent que pour en
+                lancer une première.
+              */""}
+              ${state.result ? "" : renderLesRapportsLus({
+                lignes: state.lectures,
+                enCours: state.lecturesEnCours,
+                ouverte: texteDe(state.ouvertureEnCours)
+              })}
+              ${state.result ? renderLightTabs({ tabs, activeTabId: state.activeTab, ariaLabel: "Sections du suivi" }) : ""}
+              <div data-ctlab-results>${renderResults(state)}</div>
+            `}
         </div>
       </div>
     </section>
@@ -3859,7 +3912,20 @@ export function renderCtContinuityLab(root) {
      * Ce qui identifie ce projet : ce qu'il sait de lui-même (`self`, cherché
      * dans les documents) et ce que des humains y ont rattaché (`known`).
      */
-    identity: { known: [], self: selfMarkers(store.projectForm ?? {}) }
+    identity: { known: [], self: selfMarkers(store.projectForm ?? {}) },
+
+    /**
+     * Les rapports déjà analysés sur ce chantier.
+     *
+     * **`null` et non `[]`** : « on n'a pas encore demandé » et « aucun rapport
+     * n'a été lu » n'appellent pas la même phrase, et la seconde ferait
+     * recommencer une lecture déjà faite (règle 5).
+     */
+    lectures: null,
+    lecturesEnCours: false,
+    /** La lecture conservée qu'on regarde, s'il y en a une. */
+    ouverte: null,
+    ouvertureEnCours: ""
   };
 
   let nextDocumentNumber = 1;
@@ -3870,6 +3936,10 @@ export function renderCtContinuityLab(root) {
   // L'import est différé : ce service passe par le SDK Supabase, chargé depuis
   // le réseau, que l'exécution des tests hors navigateur ne saurait résoudre.
   const persistence = () => import("../../../services/ct-analysis-supabase.js");
+  // Même raison que les trois autres : ce service passe par `auth.js`, qui
+  // charge le SDK Supabase depuis le réseau — ce que les tests hors navigateur
+  // ne sauraient résoudre.
+  const lecturesGardees = () => import("../../../services/lectures-de-rapports-supabase.js");
   const deposit = () => import("../../../services/document-deposit.js");
   const projectIdentity = () => import("../../../services/project-identity-supabase.js");
 
@@ -3985,6 +4055,10 @@ export function renderCtContinuityLab(root) {
       state.memory = { projectId, ...((await loadCtAnalysis(projectId)) ?? {}) };
       await refreshIdentity(projectId);
       await refreshStoredDocuments(projectId);
+      // **Avant la sortie anticipée qui suit.** Le tableau des rapports lus est
+      // ce qu'on vient voir en arrivant, y compris — et surtout — quand il n'y a
+      // ni suivi conservé ni lot déposé : c'est alors la seule chose à l'écran.
+      await relireLesLectures(projectId);
 
       if (!state.memory.run && !state.stored) return;
       refresh();
@@ -4010,6 +4084,61 @@ export function renderCtContinuityLab(root) {
     // Le rendu d'une page tient dans un canvas, que le prochain rendu HTML
     // effacerait : on le dessine après coup, et une seule fois par ouverture.
     if (state.pdfView && !state.pdfView.drawn) drawPdfPage();
+  };
+
+  /**
+   * Les rapports déjà analysés sur ce chantier.
+   *
+   * **Sans bloquer, et sans empêcher quoi que ce soit.** L'utilitaire a toujours
+   * su travailler sur un lot déposé à la main ; le tableau ajoute une mémoire, il
+   * ne conditionne pas l'outil. Une table injoignable laisse `null`, et l'écran
+   * dit qu'il ne sait pas plutôt que d'afficher un tableau vide (règle 5).
+   */
+  const relireLesLectures = async (projectId) => {
+    if (!projectId) return;
+    state.lecturesEnCours = true;
+    refresh();
+    try {
+      const { listerLesLecturesDeRapports } = await lecturesGardees();
+      state.lectures = await listerLesLecturesDeRapports(projectId);
+    } catch {
+      state.lectures = null;
+    } finally {
+      state.lecturesEnCours = false;
+      refresh();
+    }
+  };
+
+  /**
+   * Ouvre une lecture conservée.
+   *
+   * L'analyse gelée n'est chargée qu'ici : elle porte le Markdown entier, et la
+   * charger pour cinquante lignes afin d'en ouvrir une ferait passer cinquante
+   * transcriptions sur le réseau pour en regarder une.
+   *
+   * Une lecture qui ne s'ouvre pas le dit, sans deviner pourquoi : la ligne peut
+   * avoir disparu, ou être d'avant que les analyses soient conservées, et les deux
+   * se disent de la même façon parce qu'on ne sait pas laquelle (règle 5).
+   */
+  const ouvrirUneLecture = async (id) => {
+    const quoi = texteDe(id);
+    if (!quoi) return;
+
+    state.ouvertureEnCours = quoi;
+    refresh();
+
+    try {
+      const { lireUneLectureDeRapport } = await lecturesGardees();
+      const ligne = await lireUneLectureDeRapport(quoi);
+      // `laVueDunRapport(null)` rend `null`, et le détail dit alors qu'il ne
+      // s'ouvre pas. On passe donc la ligne telle quelle, même absente.
+      state.ouverte = laVueDunRapport(ligne) ?? { lecture: null };
+    } catch {
+      state.ouverte = { lecture: null };
+    } finally {
+      state.ouvertureEnCours = "";
+      refresh();
+    }
   };
 
   /**
@@ -4721,6 +4850,23 @@ export function renderCtContinuityLab(root) {
     }
 
     if (handleDatePickerClick(event)) return;
+
+    // ── Le tableau des rapports lus, et le retour ───────────────────────────
+    //
+    // Traités avant les autres gestes : ce sont les seuls qui changent d'écran
+    // plutôt que de changer ce qu'on regarde dedans.
+    const ligneLue = event.target.closest(`[${OUVRIR_UN_RAPPORT}]`);
+    if (ligneLue) {
+      await ouvrirUneLecture(ligneLue.getAttribute(OUVRIR_UN_RAPPORT));
+      return;
+    }
+
+    if (event.target.closest("[data-ctlab-fermer-lecture]")) {
+      state.ouverte = null;
+      state.ouvertureEnCours = "";
+      refresh();
+      return;
+    }
 
     const target = event.target.closest(
       "[data-ctlab-resume], " +

@@ -118,6 +118,9 @@ const LES_MIGRATIONS = [
   // « aucun degré exigé » n'est pas une obligation : une négation devant la
   // liaison la nie.
   "202611200003_une_liaison_niee_nest_pas_une_liaison.sql",
+  // La lecture d'un rapport de contrôle se garde : privée, comme celles des CR
+  // et des fils, et pour une raison de plus — elle porte le verdict d'un tiers.
+  "202611210001_une_lecture_de_rapport_se_garde.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",
@@ -2878,6 +2881,76 @@ test("les morceaux de locution tombent, les termes restent", { skip: sansPostgre
   assert.equal(joint.sortie.trim(), "joint",
     "« joint » a été écarté : un terme de chantier est perdu");
 });
+
+/* ── Une lecture de rapport de contrôle n'appartient qu'à qui l'a faite ──── */
+
+/**
+ * **C'est ce qu'il y a de plus délicat à montrer d'un chantier.**
+ *
+ * Un rapport de contrôle technique porte le verdict d'un tiers sur l'ouvrage. Un
+ * avis défavorable mal relu, montré à l'entreprise concernée avant d'avoir été
+ * vérifié, est exactement ce qui discréditerait l'outil.
+ *
+ * Et c'est en outre un brouillon d'Atelier : il n'appartient qu'à qui l'a fait.
+ * Un écran qui oublierait de filtrer ne pourrait pas montrer ce qu'il ne doit pas
+ * — la séparation est tenue par la base, ou elle n'est pas tenue.
+ */
+test("la lecture d'un rapport ne se lit pas par un autre", { skip: sansPostgres }, () => {
+  banc.enTantQue(A,
+    `insert into public.rapport_lectures (project_id, document, numero_de_rapport)`
+    + ` values ('${MEDIATHEQUE}', 'rapport-initial.pdf', 'RICT-01');`);
+
+  const sien = banc.enTantQue(A, "select count(*) from public.rapport_lectures;");
+  assert.equal(sien.sortie.trim(), "1", "son auteur ne lit plus sa propre lecture");
+
+  // **B est collaborateur du même chantier**, et cela ne lui ouvre rien : une
+  // lecture d'Atelier n'appartient qu'à qui l'a faite, pas au projet.
+  const autre = banc.enTantQue(B, "select count(*) from public.rapport_lectures;");
+  assert.equal(autre.sortie.trim(), "0", "un collaborateur lit la lecture d'un autre");
+
+  const sansCompte = banc.sansCompte("select count(*) from public.rapport_lectures;");
+  assert.equal(sansCompte.ok === false || sansCompte.sortie.trim() === "0", true,
+    `la clé anonyme lit les lectures de rapports : ${sansCompte.sortie}`);
+});
+
+/** Et on ne peut pas en écrire une au nom d'un autre. */
+test("on n'écrit pas une lecture de rapport au nom d'un autre", { skip: sansPostgres }, () => {
+  const vole = banc.enTantQue(B,
+    `insert into public.rapport_lectures (project_id, document, owner_id)`
+    + ` values ('${MEDIATHEQUE}', 'Au nom de quelqu''un d''autre', '${A}');`);
+
+  assert.equal(vole.ok, false, "une lecture a été écrite au nom d'un autre");
+});
+
+/**
+ * **La table porte bien ce que la migration annonce.**
+ *
+ * L'ajouter à la liste ne suffit pas : une liste qu'on raccourcit laisse le banc
+ * vert. On demande donc les colonnes à PostgreSQL.
+ *
+ * `legende` en est une, et c'est la pièce du lot : sans elle, les avis d'un
+ * rapport ne se lisent pas, et la légende d'un autre rapport du même bureau n'est
+ * pas celle-ci.
+ */
+test("une lecture de rapport porte sa légende et ce qu'elle a vu",
+  { skip: sansPostgres }, () => {
+    const dit = banc.sql(
+      "select column_name from information_schema.columns"
+      + " where table_schema = 'public' and table_name = 'rapport_lectures'"
+      + " order by column_name;");
+    const colonnes = dit.sortie.split("\n").map((un) => un.trim()).filter(Boolean);
+
+    for (const attendue of ["document", "document_id", "numero_de_rapport", "etabli_le",
+      "nature", "legende", "mesures", "lu_par", "analyse_gelee", "proposition_id",
+      "owner_id"]) {
+      assert.ok(colonnes.includes(attendue),
+        `« rapport_lectures » n'a pas « ${attendue} » : la migration n'a pas tourné`);
+    }
+
+    // **Et pas sous le mot réservé**, celui que PostgreSQL refuse.
+    assert.ok(!colonnes.includes("analyse"),
+      "la colonne porte le mot réservé : le déploiement sera refusé");
+  });
 
 /* ── Une lecture de fil de mails n'appartient qu'à qui l'a faite ─────────── */
 
