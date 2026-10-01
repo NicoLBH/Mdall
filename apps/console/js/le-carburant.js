@@ -411,6 +411,13 @@ function renderLesSujets(sujets, mesure) {
  * mot qui promet et ne tient pas : c'est là qu'il faut regarder.
  */
 function renderLeDetailDesLiaisons(liaisons, forme) {
+  // **`null` n'est pas « aucun ».** Cette lecture-ci est la plus coûteuse des
+  // quatre — elle compte, mot à mot, sur tout le corpus — et c'est la seule qui
+  // puisse ne pas revenir. Quand elle ne revenait pas, l'écran écrivait
+  // « aucun mot de liaison n'apparaît dans le corpus » **sous** une mesure qui
+  // venait d'en annoncer soixante-quatre : deux phrases qui se contredisent,
+  // et celle qui ment est la plus catégorique des deux (règle 5).
+  const suPasLire = liaisons === null || liaisons === undefined;
   const portees = (Array.isArray(liaisons) ? liaisons : [])
     .filter((une) => Number(une?.contenues) > 0);
 
@@ -456,7 +463,10 @@ function renderLeDetailDesLiaisons(liaisons, forme) {
             </li>
           `).join("")}
         </ul>
-      ` : `<p class="forme-manques">
+      ` : suPasLire ? `<p class="forme-manques">
+        Le détail mot à mot n'a pas pu être lu. Ce n'est pas « aucun mot de
+        liaison n'apparaît » : on ne sait pas lesquels, ni combien.</p>`
+      : `<p class="forme-manques">
         Aucun mot de liaison n'apparaît dans le corpus. Ce n'est pas une panne du
         découpage : il n'y a rien à découper.</p>`}
     </section>

@@ -156,6 +156,21 @@ function renderEtape(noeud, { attributDuLien = "", consultables = null } = {}) {
               }>${escapeHtml(texte(noeud?.label))}</span>`
         }
       </span>
+      ${
+        /*
+          **Les ancrages sont sur la boîte, pas sur le trait.**
+          Ils étaient aux deux bouts de la liaison : dans une colonne de trois
+          boîtes, une seule des trois en recevait un, et les deux autres
+          semblaient ne tenir à rien. Posés sur la boîte — c'est le dessin de
+          GitHub, et c'est pour cela qu'il a été repris —, chaque boîte montre
+          par où elle entre et par où elle sort, quel que soit le nombre de
+          traits qui lui arrivent.
+
+          Décoratifs : ils ne disent rien qu'un lecteur d'écran ait à entendre.
+        */""
+      }
+      <span class="run-graph__port run-graph__port--entree" aria-hidden="true"></span>
+      <span class="run-graph__port run-graph__port--sortie" aria-hidden="true"></span>
       ${texte(noeud?.detail) ? `<span class="run-graph__detail">${escapeHtml(texte(noeud.detail))}</span>` : ""}
       ${renderFlux("lit", noeud?.entrees)}
       ${renderFlux("écrit", noeud?.sorties)}
@@ -170,7 +185,47 @@ function renderEtape(noeud, { attributDuLien = "", consultables = null } = {}) {
 }
 
 /**
+ * Les étapes regroupées par colonne, dans l'ordre où elles arrivent.
+ *
+ * Une colonne est ce qui a tourné **en même temps** ; le regroupement, lui, est
+ * décidé ailleurs (`services/les-colonnes-dun-chemin.js`), parce que c'est une
+ * question de temps et non de dessin. Ici on ne fait que rassembler ce qui
+ * porte le même numéro et se suit.
+ *
+ * Une étape sans numéro fait colonne seule : ne pas savoir quand elle a tourné
+ * n'autorise pas à l'empiler avec sa voisine (règle 5).
+ */
+function parColonnes(etapes) {
+  const colonnes = [];
+
+  for (const etape of etapes) {
+    const numero = etape?.colonne;
+    const place = numero === null || numero === undefined ? null : Number(numero);
+    const derniere = colonnes[colonnes.length - 1];
+
+    if (place !== null && derniere && derniere.numero === place) {
+      derniere.etapes.push(etape);
+      continue;
+    }
+
+    colonnes.push({ numero: place, etapes: [etape] });
+  }
+
+  return colonnes;
+}
+
+/**
  * L'enchaînement entier, boîtes et liaisons.
+ *
+ * ## Ce qui est empilé a tourné ensemble
+ *
+ * Une étape peut déclarer sa `colonne` : deux étapes de la même colonne se
+ * dessinent l'une au-dessus de l'autre, et la colonne suivante est ce qui a
+ * commencé après. C'est ce qui manquait depuis que la file lit trois comptes
+ * rendus de front — dix-neuf boîtes à la suite disaient que le quatrième avait
+ * attendu le troisième, et l'on additionnait les durées de l'œil.
+ *
+ * Sans colonnes, rien ne change : une file reste une file.
  *
  * @param {object[]} noeuds les étapes, dans l'ordre où elles se sont suivies
  * @param {object} options
@@ -191,11 +246,21 @@ export function renderEnchainement(noeuds = [], {
   const rangs = etapes.map(rangDe).filter((rang) => rang !== null);
   const arbre = vertical && rangs.length === etapes.length && new Set(rangs).size > 1;
 
+  const colonnes = parColonnes(etapes);
+  // **Des colonnes d'une seule boîte ne sont pas des colonnes.** Les envelopper
+  // quand même poserait un étage de balises sur chaque file, et la feuille de
+  // style aurait deux cas à tenir pour le même dessin.
+  const empile = !arbre && colonnes.some((colonne) => colonne.etapes.length > 1);
+
+  const boites = (colonne) => colonne.etapes
+    .map((noeud) => renderEtape(noeud, { attributDuLien, consultables })).join("");
+
   return `
     <div class="run-graph__canvas${vertical ? " run-graph__canvas--vertical" : ""}${
       arbre ? " run-graph__canvas--arbre" : ""
-    }"${attributDuCanevas ? ` ${attributDuCanevas}` : ""}>
-      ${etapes.map((noeud, position) => `
+    }${empile ? " run-graph__canvas--colonnes" : ""}"${
+      attributDuCanevas ? ` ${attributDuCanevas}` : ""}>
+      ${colonnes.map((colonne, position) => `
         ${
           // Le trait qui relie deux boîtes n'a de sens que dans une file : dans
           // un arbre, la boîte suivante n'est pas forcément la suite de la
@@ -203,7 +268,9 @@ export function renderEnchainement(noeuds = [], {
           // s'est passé. C'est le coude de l'indentation qui relie, à la place.
           position > 0 && !arbre ? `<span class="run-graph__link" aria-hidden="true"></span>` : ""
         }
-        ${renderEtape(noeud, { attributDuLien, consultables })}
+        ${empile
+          ? `<div class="run-graph__colonne">${boites(colonne)}</div>`
+          : boites(colonne)}
       `).join("")}
     </div>
   `;

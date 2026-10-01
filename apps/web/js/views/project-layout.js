@@ -8,6 +8,7 @@ import { store } from "../store.js";
 import { renderProjectDocuments } from "./project-documents.js";
 import { renderProjectSubjects } from "./project-subjects.js";
 import { renderProjectPropositions } from "./project-propositions.js";
+import { renderProjectSituations } from "./project-situations.js";
 import { renderProjectMemory } from "./project-memory.js";
 import { renderProjectActions } from "./project-actions.js";
 import { renderProjectStudio } from "./project-studio.js";
@@ -27,6 +28,7 @@ function normalizeProjectTab(tab) {
   switch (normalized) {
     case PROJECT_TAB_IDS.DOCUMENTS:
     case PROJECT_TAB_IDS.SUBJECTS:
+    case PROJECT_TAB_IDS.SITUATIONS:
     case PROJECT_TAB_IDS.PROPOSITIONS:
     case PROJECT_TAB_IDS.MEMOIRE:
     case PROJECT_TAB_IDS.STUDIO:
@@ -92,6 +94,13 @@ export function renderProjectLayout(root, projectId, tab, { ouvrir = "" } = {}) 
 
     case PROJECT_TAB_IDS.SUBJECTS:
       renderProjectSubjects(content, { ouvrir });
+      break;
+
+    case PROJECT_TAB_IDS.SITUATIONS:
+      // **Le même tableau que le carnet**, cadré sur ce chantier. Ce qui change
+      // est ce qu'il va chercher, et cela se décide dans `estMonCarnet` : ici
+      // il y a un projet courant, là-bas il n'y en a pas (règle 4).
+      renderProjectSituations(content);
       break;
 
     case PROJECT_TAB_IDS.PROPOSITIONS:

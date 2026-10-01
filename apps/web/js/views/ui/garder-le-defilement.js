@@ -37,16 +37,24 @@ export const MARQUE = "data-garde-le-defilement";
 export function garderLesPlaces(hote) {
   const places = new Map();
   for (const panneau of hote?.querySelectorAll?.(`[${MARQUE}]`) ?? []) {
-    places.set(nomDuPanneau(panneau), panneau.scrollTop);
+    // **Les deux sens, et pas seulement le vertical.** Le chemin d'une
+    // exécution se parcourt à l'horizontale, et il se redessine tout seul
+    // pendant qu'une file avance : on le faisait donc défiler à la main, et il
+    // revenait à gauche toutes les trois secondes. Une liste et un chemin ne
+    // sont pas deux problèmes — c'est le même, dans l'autre sens.
+    places.set(nomDuPanneau(panneau), { haut: panneau.scrollTop, gauche: panneau.scrollLeft });
   }
 
   return () => {
     for (const panneau of hote?.querySelectorAll?.(`[${MARQUE}]`) ?? []) {
       const place = places.get(nomDuPanneau(panneau));
-      // **Zéro est une place.** `if (place)` aurait sauté le haut de liste — ce
-      // qui ne se voit pas, puisque c'est déjà là que l'élément neuf se trouve,
-      // et qui aurait donc rendu la garde à moitié muette.
-      if (place !== undefined) panneau.scrollTop = place;
+      if (place === undefined) continue;
+
+      // **Zéro est une place.** `if (place.haut)` aurait sauté le haut de liste
+      // — ce qui ne se voit pas, puisque c'est déjà là que l'élément neuf se
+      // trouve, et qui aurait donc rendu la garde à moitié muette.
+      if (place.haut !== undefined) panneau.scrollTop = place.haut;
+      if (place.gauche !== undefined) panneau.scrollLeft = place.gauche;
     }
   };
 }

@@ -688,10 +688,11 @@ const { bindEvents } = createProjectSituationsEvents({
 export function renderProjectSituations(root) {
   bindSituationsTabReset();
   currentSituationsRoot = root;
-  // **Pas de compactage sur cet écran.** Il n'a plus de barre d'onglets de
-  // projet à réduire ; ce qu'il en restait sautait au défilement, sans rien
-  // gagner.
-  setProjectCompactEnabled(false);
+  // **Le compactage suit le montage.** Dans le carnet, il n'y a pas de barre
+  // d'onglets de projet à réduire, et ce qu'il en restait sautait au
+  // défilement sans rien gagner. Dans un chantier, elle est là, et elle se
+  // replie comme sur les autres onglets.
+  setProjectCompactEnabled(!estMonCarnet(store));
   if (store.situationsView && typeof store.situationsView === "object") {
     store.situationsView.selectedSituationId = null;
   }

@@ -13,7 +13,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { renderCoquilleTransversale } from "./mon-carnet-coquille.js";
-import { ROUTE_DU_CARNET } from "../services/mon-carnet.js";
+import { NOM_DU_CARNET, ROUTE_DU_CARNET } from "../services/mon-carnet.js";
 import { MARQUE_DES_SITUATIONS, RACCOURCIS_GLOBAUX } from "../services/raccourcis-de-la-barre.js";
 import { PROJECT_TABS } from "../constants.js";
 
@@ -77,16 +77,25 @@ test("le carnet ne porte pas de barre d'onglets à une seule entrée", () => {
 /* ── Le déménagement a bien eu lieu ──────────────────────────────────────── */
 
 /**
- * **Les situations ne sont pas un onglet du projet, et n'y reviennent pas.**
+ * **Les deux cadrages existent, et portent le même nom.**
  *
- * Une situation est au-dessus des projets : la ranger parmi leurs onglets
- * brouille exactement ce que tout ce plan installe. Un onglet qui menait dehors
- * avait été essayé — il disait la bonne adresse et le mauvais rang.
+ * Le carnet montre mes situations partout ; l'onglet du chantier les montre
+ * ici. Ce qui ne change jamais est la règle de lecture — la base ne rend que
+ * les miennes —, et c'est pour cela que le second cadrage ne coûte rien.
  *
- * On y va par la barre du haut, qui ne dit rien sur l'endroit où l'on se trouve.
+ * L'onglet avait été retiré au profit du seul carnet, et le prix a été de ne
+ * plus pouvoir regarder un chantier.
  */
-test("les situations ne sont pas un onglet du projet", () => {
-  assert.deepEqual(PROJECT_TABS.filter((onglet) => onglet.id === "situations"), []);
+test("le chantier a son onglet des situations, nommé comme le carnet", () => {
+  const onglet = PROJECT_TABS.find((un) => un.id === "situations");
+
+  assert.ok(onglet, "l'onglet doit exister");
+  assert.equal(onglet.label, NOM_DU_CARNET, "et porter le nom écrit à un seul endroit");
+
+  // **Après les Sujets**, parce qu'une situation en désigne. Un onglet rangé
+  // au hasard se cherche, et c'est la seule chose qu'un rang apprend.
+  const rangs = PROJECT_TABS.map((un) => un.id);
+  assert.equal(rangs.indexOf("situations"), rangs.indexOf("sujets") + 1);
 });
 
 /**
@@ -108,17 +117,21 @@ test("la barre du haut mène aux situations et aux projets", () => {
 });
 
 /**
- * **Le projet ne se rend pas sur cette adresse.** Une porte qui rendrait aussi
- * une vue de projet ramènerait la duplication par l'autre bout : `project-layout`
- * ne connaît plus les situations, et c'est ce qui le garantit.
+ * **Les deux montages sont le même tableau.** Le carnet et l'onglet d'un
+ * chantier montrent la même liste, cadrée autrement ; deux écrans dessinés
+ * séparément auraient fini par ne plus montrer les mêmes colonnes (règle 4).
  */
-test("la mise en page d'un projet ne sait plus dessiner les situations", () => {
+test("le projet et le carnet montent le même tableau des situations", () => {
   const layout = readFileSync(join(VUES, "project-layout.js"), "utf8");
+  const carnet = readFileSync(join(VUES, "mon-carnet.js"), "utf8");
 
-  assert.ok(
-    !/renderProjectSituations\s*\(/.test(layout),
-    "le projet ne doit plus monter cet écran : il a déménagé"
-  );
+  for (const [quoi, source] of [["la mise en page du projet", layout], ["le carnet", carnet]]) {
+    assert.match(
+      source,
+      /renderProjectSituations\(content\)|renderProjectSituations\(content\);/,
+      `${quoi} doit monter le tableau commun`
+    );
+  }
 });
 
 /**
@@ -130,7 +143,6 @@ test("le carnet est atteignable : une route, et une entrée de menu", () => {
   const routeur = readFileSync(join(JS, "router.js"), "utf8");
   assert.match(routeur, /parts\[0\] === "situations"/, "la route du carnet doit exister");
   assert.match(routeur, /renderMonCarnet\(root\)/, "et mener à l'écran");
-  assert.match(routeur, /adresseDunAncienLien\(parts\)/, "les anciens liens doivent être repris");
 
   // Le lien lui-même, pas la ligne d'import : importer une adresse sans jamais
   // la poser ferait un menu où le carnet n'apparaît pas, et rien ne lèverait.

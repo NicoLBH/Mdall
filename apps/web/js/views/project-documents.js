@@ -72,6 +72,7 @@ import {
 import { enClair } from "../services/memoire-en-texte.js";
 import { emploisParAffirmation } from "../services/memoire-applications.js";
 import { MEMOIRE, DOCUMENTS, MAILS, phraseDeLaRacine } from "../services/memoire-rangement.js";
+import { BRANCHE, lesMorceauxDuFil } from "../services/le-fil-des-fichiers.js";
 import { versementsDeLaMemoire } from "../services/memoire-blame.js";
 import { sujetsDeclares, variablesDeLaMemoire, cleDuSujet } from "../services/memoire-identifiants.js";
 import { rangVoisin } from "../services/memoire-recherche-texte.js";
@@ -135,7 +136,7 @@ function logPdfPreviewDebug(label, payload = {}) {
  * Rien n'a bougé en base : le dossier était déjà à la racine des dossiers
  * (`parent_folder_id is null`). C'est l'arbre qui le montrait sous *Documents*.
  */
-const BRANCHE = { MEMOIRE: "memoire", DOCUMENTS: "documents", MAILS: "mails" };
+
 
 /**
  * L'état de l'onglet Fichiers, **neuf**.
@@ -1597,30 +1598,33 @@ function renderDocumentsBreadcrumb() {
   const ici = (libelle) => `<span class="documents-breadcrumb__current">${escapeHtml(libelle)}</span>`;
   const sep = `<span class="documents-breadcrumb__sep">/</span>`;
 
-  // **La racine porte le nom de la branche où l'on est.** Et dans « Mails », le
-  // dossier lui-même est cette racine : le laisser aussi dans le chemin
-  // donnerait « Fichiers / Mails / Mails ».
-  const dansLesMails = docsViewState.branche === BRANCHE.MAILS;
+  // **La racine porte le nom de la branche où l'on est**, et la règle vit dans
+  // `services/le-fil-des-fichiers.js` — c'est elle qui se vérifie.
   const sonId = String(leDossierDesMails()?.id || "");
 
-  const morceaux = [
-    { libelle: "Fichiers", cible: `data-fichiers-branche=""` },
-    dansLesMails
-      ? { libelle: DOSSIER_DES_MAILS, cible: `data-breadcrumb-folder-id="${escapeHtml(sonId)}"` }
-      : { libelle: DOCUMENTS, cible: `data-breadcrumb-folder-id=""` },
-    ...docsViewState.breadcrumb
-      .filter((dossier) => !(dansLesMails && String(dossier.id || "") === sonId))
-      .map((dossier) => ({
-        libelle: String(dossier.name || "Dossier"),
-        cible: `data-breadcrumb-folder-id="${escapeHtml(String(dossier.id || ""))}"`
-      })),
-    ...(selectedDocument?.name ? [{ libelle: String(selectedDocument.name), cible: "" }] : []),
-    // **Le nom du fichier ouvert vit ici, et nulle part ailleurs.** Il était
-    // aussi dans la barre d'outils, à côté des lectures : deux endroits pour un
-    // même nom, dont l'un redisait ce que l'autre montrait déjà (règle 10). Le
-    // fil dit en plus **où** est ce fichier, ce que la barre ne disait pas.
-    ...(ouvert && !ouvert.edition ? [{ libelle: String(ouvert.nom || "fichier"), cible: "" }] : [])
-  ];
+  // **Le nom du fichier ouvert vit ici, et nulle part ailleurs.** Il était
+  // aussi dans la barre d'outils, à côté des lectures : deux endroits pour un
+  // même nom, dont l'un redisait ce que l'autre montrait déjà (règle 10). Le
+  // fil dit en plus **où** est ce fichier, ce que la barre ne disait pas.
+  const fichier = selectedDocument?.name
+    ? String(selectedDocument.name)
+    : (ouvert && !ouvert.edition ? String(ouvert.nom || "fichier") : "");
+
+  const morceaux = lesMorceauxDuFil({
+    branche: docsViewState.branche,
+    racineDesDocuments: DOCUMENTS,
+    racineDesMails: DOSSIER_DES_MAILS,
+    idDesMails: sonId,
+    chemin: docsViewState.breadcrumb,
+    fichier
+  }).map((morceau) => ({
+    libelle: morceau.libelle,
+    cible: morceau.racine
+      ? `data-fichiers-branche=""`
+      : (morceau.dossierId === null
+        ? ""
+        : `data-breadcrumb-folder-id="${escapeHtml(morceau.dossierId)}"`)
+  }));
 
   /**
    * **Le nom se tape au bout du chemin**, là où le fichier va exister.
@@ -5878,7 +5882,13 @@ function bindDocumentsView(root) {
       // destination**. C'est ce qu'il y montre — le dernier morceau est le
       // dossier où les fichiers vont atterrir —, et en sortir sans le dire
       // ferait perdre les fichiers déjà choisis.
-      await allerDansLeDossier(root, folderId);
+      //
+      // **Et il ne change pas de branche.** Chacun de ses morceaux est un
+      // dossier de la branche où l'on se trouve ; repartir sur « Documents »
+      // par défaut renvoyait les Mails dans l'arborescence partagée, et le fil
+      // annonçait « Fichiers / Documents / Mails » — un chemin qui n'existe pas
+      // (ces messages pendent à la racine, et c'est toute leur raison d'être).
+      await allerDansLeDossier(root, folderId, docsViewState.branche);
     });
   });
 

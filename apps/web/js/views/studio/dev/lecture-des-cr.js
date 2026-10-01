@@ -62,6 +62,12 @@ import {
   ceQueLeSujetEstDevenu, laVueDuneLecture, leLecteur, lesComptesRendusLus
 } from "../../../services/la-lecture-conservee.js";
 import { renderChoisirUnFichier } from "../../ui/choisir-un-fichier.js";
+import {
+  DIT_DE_LA_RELUE, DIT_SANS_RELUE, laRestitutionRelue
+} from "../../../services/la-restitution-relue.js";
+import {
+  COLONNE_DU_COMPTE, renderDataTableCount, renderDataTableHead, renderDataTableShell
+} from "../../ui/data-table-shell.js";
 import { garderLesPlaces } from "../../ui/garder-le-defilement.js";
 import {
   leMotDuDepart, lesDocumentsAEnvoyer
@@ -339,6 +345,14 @@ const etat = {
   dejaLusEnCours: false,
   /** La lecture conservée qu'on regarde, ou `null` quand on lit pour de vrai. */
   conservee: null,
+  /**
+   * Où en est la relecture du document refait, dans Fichiers.
+   *
+   * `""` on n'a rien demandé · `"en-cours"` on attend · `"trouvee"` il est là ·
+   * `"absente"` on n'a pas su le retrouver. Les deux derniers ne se disent pas
+   * pareil à l'écran (règle 5).
+   */
+  relue: "",
   /** Les sujets du projet **aujourd'hui**, à côté de ce que la lecture a vu. */
   sujetsAujourdhui: null,
   /** Le document déposé, gardé le temps de la lecture. */
@@ -433,6 +447,14 @@ function unCote() {
     dejaDuTexte: false,
     /** La transcription a-t-elle eu le squelette du document sous les yeux ? */
     surLaStructure: false,
+    /**
+     * Ce document vient-il de **Fichiers**, parce qu'on a rouvert une lecture ?
+     *
+     * Il n'a alors ni mesures, ni pages, ni prix : rien de cela n'est conservé
+     * avec la lecture. Le dire ici, une fois, évite que chaque bloc de mesure
+     * ait à deviner s'il a de quoi parler (règle 5).
+     */
+    relue: false,
     /** Les pages qui ne sont pas parties, et celles dont rien n'est revenu. */
     horsPlafond: [],
     absentes: [],
@@ -510,8 +532,13 @@ export function renderLectureDesCr(hote) {
  * Un nom qui manque ne passe plus : il lève, et il lève chez moi.
  */
 export function renderLaLecture(vue = etat) {
+  // **L'accueil respire en bas.** La liste des comptes rendus lus finissait au
+  // ras du bord : la dernière ligne touchait le bas de la fenêtre, et rien ne
+  // disait qu'on était au bout. Un pied laisse la dernière ligne monter.
+  const accueil = vue.phase === "vide" && !vue.choix;
+
   return `
-    <div class="lecture-cr">
+    <div class="lecture-cr${accueil ? " lecture-cr--accueil" : ""}">
       ${renderEntete(vue)}
       ${
         // **Deux états, et un seul se montre à la fois.** Le choix quand on
@@ -556,6 +583,22 @@ function renderEntete(vue = etat) {
   return `
     <header class="lecture-cr__entete">
       <div class="lecture-cr__entete-ligne">
+        ${
+          /**
+           * **Le retour se lit avant le titre, pas après les actions.**
+           *
+           * Il était à droite, dans la rangée des gestes, à côté de ce qui
+           * fait quelque chose au document. Or il ne fait rien au document :
+           * il sort de l'écran. Et on cherche une sortie à gauche, avant le
+           * titre — c'est là qu'elle est partout ailleurs, y compris sur le
+           * détail d'une étape du journal des Actions.
+           */
+          vue.conservee
+            ? `<button type="button" class="gh-btn gh-btn--sm lecture-cr__retour" data-lecture-cr-revenir>
+                 ${svgIcon("arrow-left", { className: "octicon" })} Les comptes rendus lus
+               </button>`
+            : ""
+        }
         <h2 class="lecture-cr__titre">Lecture d'un compte rendu de chantier</h2>
         <div class="lecture-cr__entete-actions">
           ${
@@ -564,9 +607,7 @@ function renderEntete(vue = etat) {
             // d'un document déjà lu ne sert plus à rien — et il ne se laisse pas
             // supprimer sans laisser de quoi en déposer un autre.
             vue.conservee
-              ? `<button type="button" class="gh-btn gh-btn--sm" data-lecture-cr-revenir>
-                   ${svgIcon("arrow-left", { className: "octicon" })} Les comptes rendus lus
-                 </button>`
+              ? ""
               : vue.fichier
               ? `<label class="gh-btn gh-btn--sm lecture-cr__entete-fichier">
                    ${svgIcon("file", { className: "octicon" })} Un autre document
@@ -770,17 +811,34 @@ function renderLesComptesRendusLus(vue) {
 
   return `
     <section class="lecture-cr__lus">
-      <h3 class="lecture-cr__lus-titre">
-        ${lignes.length} compte${lignes.length > 1 ? "s" : ""} rendu${lignes.length > 1 ? "s" : ""}
-        déjà analysé${lignes.length > 1 ? "s" : ""}
-      </h3>
       <p class="lecture-cr__lus-aide mono-small">
         Rangés par la date de la réunion, pas par celle de l'analyse. Cliquez pour
         rouvrir ce que la lecture avait vu ce jour-là.
       </p>
-      <ul class="lecture-cr__lus-liste">
-        ${lignes.map((ligne) => renderUneLectureGardee(ligne, vue)).join("")}
-      </ul>
+      ${/*
+        **La coquille des autres tableaux, et non une liste à part.** C'était
+        une suite de boutons, avec sa propre bordure, son propre survol et son
+        propre gris : le seul endroit de l'application où une liste de
+        documents ne ressemblait pas à une liste de documents. Les titres y
+        gagnent le bleu au survol, qui dit qu'on peut cliquer, et l'en-tête
+        compte — ce que ni le titre ni les lignes ne disaient.
+      */""}
+      ${renderDataTableShell({
+        className: "lecture-cr__lus-table",
+        gridTemplate: "minmax(280px,2fr) 220px",
+        headHtml: renderDataTableHead({
+          columns: [{
+            html: renderDataTableCount({
+              iconeHtml: svgIcon("history", { className: "octicon" }),
+              dit: `${lignes.length} compte${lignes.length > 1 ? "s" : ""} rendu${
+                lignes.length > 1 ? "s" : ""} déjà analysé${lignes.length > 1 ? "s" : ""}`,
+              titre: "Les comptes rendus dont l'analyse est conservée"
+            }),
+            className: COLONNE_DU_COMPTE
+          }]
+        }),
+        bodyHtml: lignes.map((ligne) => renderUneLectureGardee(ligne, vue)).join("")
+      })}
     </section>
   `;
 }
@@ -793,25 +851,36 @@ function renderUneLectureGardee(ligne, vue) {
   const relectures = Number(ligne?.relectures) || 1;
   const ouverte = texte(vue?.conservee?.id) === texte(ligne?.id);
 
+  // **Le gabarit de titre des Sujets**, comme le journal des Actions : une
+  // icône d'état, un titre qui se clique, et ce qu'on en dit dessous. Un
+  // troisième dessin de ligne aurait fait un troisième gris (règle 4).
   return `
-    <li class="lecture-cr__lus-ligne${ouverte ? " est-ouverte" : ""}">
-      <button type="button" class="lecture-cr__lus-bouton"
-        data-lecture-cr-gardee="${escapeHtml(texte(ligne?.id))}">
-        <span class="lecture-cr__lus-icone" aria-hidden="true">${
-          svgIcon("file", { className: "octicon" })}</span>
-        <span class="lecture-cr__lus-nom">${escapeHtml(texte(ligne?.document) || "Compte rendu")}</span>
-        <span class="lecture-cr__lus-reunion mono-small">${
-          numero ? escapeHtml(`n° ${numero}`) : ""}${numero && jour ? " · " : ""}${escapeHtml(jour)}
+    <div class="data-table-shell__row lecture-cr__lus-ligne${ouverte ? " est-ouverte" : ""}">
+      <div class="data-table-shell__cell data-table-shell__cell--titre">
+        <span class="issue-row-title-grid">
+          <span class="issue-row-title-grid__status">${
+            svgIcon("file", { className: "octicon" })}</span>
+          <span class="issue-row-title-grid__title">
+            <button type="button" class="row-title-trigger theme-text theme-text--pb"
+              data-lecture-cr-gardee="${escapeHtml(texte(ligne?.id))}"
+            >${escapeHtml(texte(ligne?.document) || "Compte rendu")}</button>
+          </span>
+          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${
+            escapeHtml([
+              numero ? `réunion n° ${numero}` : "",
+              jour,
+              // **Relu n'est pas « lu deux fois le même jour ».** On relit en
+              // ajustant une consigne, et c'est la dernière lecture qu'on
+              // ouvre — les autres restent en base pour la comparaison.
+              relectures > 1 ? `${relectures} lectures` : ""
+            ].filter(Boolean).join(" • "))}</span>
         </span>
-        <span class="lecture-cr__lus-points mono-small">
-          ${points} point${points > 1 ? "s" : ""}${
-            // **Relu n'est pas « lu deux fois le même jour ».** On relit en
-            // ajustant une consigne, et c'est la dernière lecture qu'on ouvre —
-            // les autres restent en base pour la comparaison.
-            relectures > 1 ? ` · ${relectures} lectures` : ""}
-        </span>
-      </button>
-    </li>
+      </div>
+
+      <div class="data-table-shell__cell lecture-cr__lus-chiffres mono-small">
+        <span>${points} point${points > 1 ? "s" : ""}</span>
+      </div>
+    </div>
   `;
 }
 
@@ -853,22 +922,40 @@ function renderCorps(vue) {
     ${vue.lecture ? renderIdentite(vue.lecture) : ""}
     ${
       /**
-       * **Une lecture rouverte n'a qu'un onglet.**
+       * **Une lecture rouverte retrouve ses deux onglets** — dès que le
+       * document refait est revenu de Fichiers.
        *
-       * Le document refait ne se garde pas : c'est, de loin, la plus grosse
-       * part de ce qu'une lecture produit, et on le relit dans Fichiers, sur la
-       * ligne du compte rendu, où il a été posé.
+       * Il ne se conserve pas avec l'analyse : c'est de loin la plus grosse
+       * part de ce qu'une lecture produit, et il est déjà posé dans Fichiers,
+       * sur la ligne du compte rendu. On l'y relit donc, au lieu d'en garder
+       * une seconde copie qui divergerait (règle 4).
        *
-       * L'onglet existait quand même, et il montrait la restitution du compte
-       * rendu **précédent** — celle que l'écran tenait encore en mémoire. Un
-       * document sous un autre : le genre de doublon qu'on ne remarque qu'une
-       * fois la proposition signée.
+       * Ce qui avait été retiré, c'était un onglet qui montrait la restitution
+       * du compte rendu **précédent** — celle que l'écran tenait encore en
+       * mémoire. Un document sous un autre, et le genre de doublon qu'on ne
+       * remarque qu'une fois la proposition signée. L'état est maintenant
+       * remis à neuf à chaque ouverture, et rempli par la relecture seule.
        */
-      vue.conservee ? "" : renderOnglets(vue)}
-    ${vue.conservee || vue.onglet === ONGLET.ANALYSE
+      vue.conservee && !vue.md.modele.relue ? "" : renderOnglets(vue)}
+    ${renderLaRelueManquante(vue)}
+    ${(vue.conservee && !vue.md.modele.relue) || vue.onglet === ONGLET.ANALYSE
       ? renderAnalyse(vue)
       : renderRestitution(vue)}
   `;
+}
+
+/**
+ * Ce qu'on dit quand le document refait ne revient pas de Fichiers.
+ *
+ * **« On ne sait pas » et « il n'y en a pas » ne se disent pas pareil**
+ * (règle 5). Un onglet absent, sans un mot, se lit « cette lecture n'avait pas
+ * de document » — ce qui est faux : elle en avait un, et c'est lui qu'elle a
+ * relu pour conclure.
+ */
+function renderLaRelueManquante(vue) {
+  if (!vue.conservee || vue.relue !== "absente") return "";
+
+  return `<p class="lecture-cr__mot lecture-cr__relue-manque">${escapeHtml(DIT_SANS_RELUE)}</p>`;
 }
 
 /**
@@ -1231,6 +1318,21 @@ function renderFait(intitule, valeur) {
 function renderRestitution(vue) {
   const md = vue.md;
 
+  // **Un document relu n'a pas de mesures, et n'en affiche aucune.** Les mots
+  // retrouvés, les titres inventés, les pages absentes n'ont pas été
+  // conservés : des cartes à zéro se liraient comme des résultats (règle 5).
+  if (md.modele.relue) {
+    return `
+      <section class="lecture-cr__md">
+        <p class="lecture-cr__mot">${escapeHtml(DIT_DE_LA_RELUE)}</p>
+        <div class="lecture-cr__md-fichier">
+          ${renderBarreDeLaRestitution(vue, md)}
+          ${renderCorpsDeLaRestitution(vue, md.modele, md.lecture)}
+        </div>
+      </section>
+    `;
+  }
+
   return `
     <section class="lecture-cr__md">
       ${renderMesureDeLaRestitution(md.modele)}
@@ -1490,7 +1592,12 @@ function renderBarreDeLaRestitution(vue, md) {
   // **« Origine » n'existe que face à un PDF.** La règle vit dans le service,
   // avec son pourquoi : sans page à nommer, la colonne « p. 1 » se lirait comme
   // une information et n'en serait pas une.
-  const lectures = lecturesDeLaRestitution({ depuisUnPdf: !md.modele.dejaDuTexte });
+  // **Pas d'« Origine » sans pages.** Un document relu depuis Fichiers est un
+  // texte continu : mettre un numéro de page en regard d'une ligne serait une
+  // provenance inventée.
+  const lectures = lecturesDeLaRestitution({
+    depuisUnPdf: !md.modele.dejaDuTexte && !md.modele.relue
+  });
 
   return `
     <header class="lecture-cr__md-tete">
@@ -1526,6 +1633,11 @@ function renderBarreDeLaRestitution(vue, md) {
  */
 function renderPastilleDuPrix(cote) {
   if (cote.phase !== "fait") return "";
+
+  // **Un document relu ne dit rien de son prix**, et ne prétend pas qu'il fut
+  // nul : ce que la lecture d'origine a coûté n'est pas conservé avec elle.
+  // La pastille grise des décomptes manquants ferait croire à un prix d'aujourd'hui.
+  if (cote.relue) return "";
 
   // **Déjà du texte n'est pas « coût non annoncé ».** Aucun appel n'a eu lieu,
   // et c'est une information : la pastille grise des décomptes manquants ferait
@@ -3573,23 +3685,78 @@ async function ouvrirUneLectureGardee(hote, id) {
   }
 
   // **Les restitutions appartiennent au compte rendu précédent.** Les garder
-  // afficherait un document sous un autre.
+  // afficherait un document sous un autre : l'état repart à neuf, et c'est la
+  // relecture ci-dessous qui le remplit, avec le document de celle-ci.
   Object.assign(etat, vue, {
-    onglet: ONGLET.ANALYSE, motif: "", panne: "", lance: "", md: etatDesReconstitutions()
+    onglet: ONGLET.ANALYSE, motif: "", panne: "", lance: "",
+    md: etatDesReconstitutions(), relue: "en-cours"
   });
   redessiner(hote);
 
   // **Ensuite, et seulement ensuite.** L'analyse gelée s'affiche tout de suite ;
   // ce que les sujets sont devenus arrive quand la base répond, et n'empêche
   // pas de lire ce qui est déjà là.
-  etat.sujetsAujourdhui = await sujetsDuProjet();
+  const [sujets] = await Promise.all([
+    sujetsDuProjet(),
+    relireLeDocumentRefait(texte(ligne?.document_id))
+  ]);
+  etat.sujetsAujourdhui = sujets;
   redessiner(hote);
+}
+
+/**
+ * Aller rechercher, dans Fichiers, le document refait de cette lecture-là.
+ *
+ * ## Pourquoi on va le chercher plutôt que de l'avoir gardé
+ *
+ * C'est la plus grosse part de ce qu'une lecture produit, et il est **déjà**
+ * posé sur la ligne du compte rendu, dans Fichiers. En garder une copie avec
+ * l'analyse ferait deux documents qui portent le même nom et qui divergent à
+ * la première retouche de l'un (règle 4).
+ *
+ * ## Et il ne vide rien quand il manque
+ *
+ * L'analyse est déjà à l'écran quand cet appel part. S'il ne rend rien,
+ * l'écran le dit et garde l'analyse : une lecture qui a eu lieu ne devient pas
+ * fausse parce qu'on ne retrouve plus le document qu'elle a lu (règle 6).
+ */
+async function relireLeDocumentRefait(documentId) {
+  if (!documentId) {
+    etat.relue = "absente";
+    return;
+  }
+
+  try {
+    const { lireLaTranscription } = await import(
+      "../../../services/transcription-du-document-supabase.js");
+    const ligne = await lireLaTranscription(documentId);
+    const refait = laRestitutionRelue(ligne?.transcription_markdown);
+
+    if (!refait) {
+      etat.relue = "absente";
+      return;
+    }
+
+    etat.relue = "trouvee";
+    etat.md.modele = {
+      ...etat.md.modele,
+      phase: "fait",
+      relue: true,
+      texte: refait.texte,
+      lignes: refait.lignes
+    };
+  } catch {
+    // On ne sait pas : l'écran le dira comme une absence de réponse, pas comme
+    // une absence de document.
+    etat.relue = "absente";
+  }
 }
 
 /** Refermer une lecture gardée, et revenir à la liste. */
 function revenirALaccueil(hote) {
   etat.phase = "vide";
   etat.conservee = null;
+  etat.relue = "";
   etat.lecture = null;
   etat.confrontes = null;
   etat.sujetsDuProjet = null;

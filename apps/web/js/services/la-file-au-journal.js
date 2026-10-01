@@ -174,6 +174,15 @@ export function lesEtapesDeLaFile(ligne = null, {
     return {
       id: texte(un?.id) || `pas-${rang}`,
       label: texte(un?.nom) || "Compte rendu",
+      /**
+       * **Quand le serveur a pris ce compte rendu.**
+       *
+       * C'est ce qui permet de voir ce qui a tourné en même temps : depuis que
+       * la file en lit trois de front, un chemin qui les dessine à la suite dit
+       * que le quatrième a attendu le troisième. `null` quand rien n'a
+       * commencé — et c'est une information, pas un zéro (règle 5).
+       */
+      debut: Number.isFinite(Number(un?.commenceLe)) ? Number(un.commenceLe) : null,
       // La durée d'un pas fini. Celle d'un pas qui court se dit autrement : une
       // durée figée sous une icône qui tourne se lirait comme un temps total.
       ms: court ? null : (Number.isFinite(Number(un?.dureeMs)) ? Number(un.dureeMs) : null),

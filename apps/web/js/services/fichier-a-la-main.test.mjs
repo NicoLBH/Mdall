@@ -234,7 +234,7 @@ test("le nom du fichier ouvert vit dans le fil, et non dans la barre d'outils", 
 
   // Un même nom à deux endroits finit par diverger (règle 10) — et ici l'un des
   // deux redisait simplement ce que l'autre montrait déjà.
-  assert.match(fil, /ouvert && !ouvert\.edition \? \[\{ libelle: String\(ouvert\.nom/,
+  assert.match(fil, /ouvert && !ouvert\.edition \? String\(ouvert\.nom/,
     "le fil ne porte pas le nom du fichier ouvert");
   assert.equal(/documents-transcription__tete/.test(barre), false,
     "le nom est resté dans la barre d'outils");

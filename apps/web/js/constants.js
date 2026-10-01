@@ -1,4 +1,5 @@
 import { svgIcon } from "./ui/icons.js";
+import { ICONE_DU_CARNET, NOM_DU_CARNET } from "./services/mon-carnet.js";
 
 export const PROJECT_TAB_IDS = {
   DOCUMENTS: "documents",
@@ -8,14 +9,17 @@ export const PROJECT_TAB_IDS = {
   ACTIONS: "actions",
   STUDIO: "atelier",
   /**
-   * Les situations ne sont plus un onglet du projet, et n'y reviennent pas :
-   * une situation est **au-dessus** des projets, et la ranger parmi leurs
-   * onglets brouille exactement ce que tout ce plan installe. On y va par la
-   * barre du haut, qui ne dit rien sur l'endroit où l'on se trouve.
+   * **Les situations sont deux écrans, et non deux vérités.**
    *
-   * L'identifiant reste pour que les anciens liens `#project/<id>/situations`
-   * soient reconnus et renvoyés là où l'écran a déménagé, plutôt que de
-   * retomber en silence sur Fichiers.
+   * Une situation appartient à une personne : la base ne rend que les siennes,
+   * et cela ne change pas. Ce que cet onglet ajoute est un **cadrage**, pas un
+   * droit — mes situations sur ce chantier-ci, plutôt que toutes.
+   *
+   * Il avait été retiré au profit du seul carnet
+   * (`docs/les-situations-traversent-les-projets.md`, étape 3) : traverser les
+   * chantiers était l'acquis, et le prix a été de ne plus pouvoir regarder
+   * **un** chantier. Les deux cadrages existent donc, montés sur le même
+   * tableau et sur la même règle de lecture (règle 4).
    */
   SITUATIONS: "situations",
   INSIGHTS: "insights",
@@ -65,6 +69,16 @@ export const PROJECT_TABS = [
     label: "Sujets",
     icon: svgIcon("issue-opened", { className: "octicon octicon-file" }),
     countKey: "openSujets"
+  },
+  {
+    id: PROJECT_TAB_IDS.SITUATIONS,
+    // Juste après les Sujets, parce qu'une situation en **désigne** : elle ne
+    // les possède pas, et la lire loin d'eux ferait croire le contraire.
+    // Le nom et l'icône viennent de `services/mon-carnet.js` : le menu du haut
+    // mène au même tableau, et deux écrans qui portent deux noms pour la même
+    // chose se cherchent l'un l'autre (règle 10).
+    label: NOM_DU_CARNET,
+    icon: svgIcon(ICONE_DU_CARNET, { className: `octicon octicon-${ICONE_DU_CARNET}` })
   },
   {
     id: PROJECT_TAB_IDS.PROPOSITIONS,

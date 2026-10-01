@@ -18,11 +18,12 @@ import { MARQUE, garderLesPlaces } from "./garder-le-defilement.js";
  * exactement ce que fait `innerHTML`, et c'est tout le défaut qu'on éprouve.
  */
 function unHote(noms = []) {
-  let panneaux = noms.map((nom) => ({ dataset: { gardeLeDefilement: nom }, scrollTop: 0 }));
+  const neuf = (nom) => ({ dataset: { gardeLeDefilement: nom }, scrollTop: 0, scrollLeft: 0 });
+  let panneaux = noms.map(neuf);
   return {
     querySelectorAll: (quoi) => (quoi === `[${MARQUE}]` ? panneaux : []),
     remplacer: (suivants = noms) => {
-      panneaux = suivants.map((nom) => ({ dataset: { gardeLeDefilement: nom }, scrollTop: 0 }));
+      panneaux = suivants.map(neuf);
     },
     places: () => panneaux.map((un) => [un.dataset.gardeLeDefilement, un.scrollTop])
   };
@@ -97,4 +98,62 @@ test("un hôte sans panneau, ou absent, ne lève pas", () => {
   garderLesPlaces(null)();
   garderLesPlaces({})();
   garderLesPlaces(unHote([]))();
+});
+
+/* ── Et dans l'autre sens ────────────────────────────────────────────────── */
+
+/**
+ * **Le chemin d'une exécution se parcourt à l'horizontale.**
+ *
+ * Il se redessine tout seul pendant qu'une file avance : « si je scroll dans le
+ * workflow, le scroll revient à gauche toutes les trois ou quatre secondes, ce
+ * n'est pas pratique. » Une liste qui remonte et un chemin qui revient à gauche
+ * ne sont pas deux défauts : c'est le même, dans l'autre sens.
+ */
+test("la place horizontale se garde aussi", () => {
+  const hote = unHote(["chemin-de-lexecution"]);
+  hote.querySelectorAll(`[${MARQUE}]`)[0].scrollLeft = 840;
+
+  const reposer = garderLesPlaces(hote);
+  hote.remplacer();
+  assert.equal(hote.querySelectorAll(`[${MARQUE}]`)[0].scrollLeft, 0, "le témoin repart de zéro");
+
+  reposer();
+  assert.equal(hote.querySelectorAll(`[${MARQUE}]`)[0].scrollLeft, 840);
+});
+
+/**
+ * **Zéro est une place**, à l'horizontale comme à la verticale. Un panneau
+ * qu'on avait ramené à gauche doit y rester : le laisser où le redessin l'a mis
+ * ferait sauter le chemin au moment précis où l'on venait de le recadrer.
+ */
+test("revenir à gauche se garde comme le reste", () => {
+  const hote = unHote(["chemin-de-lexecution"]);
+  const reposer = garderLesPlaces(hote);
+
+  // Le panneau neuf n'est pas à zéro : c'est le seul cas où reposer la place
+  // se voit.
+  hote.remplacer();
+  hote.querySelectorAll(`[${MARQUE}]`)[0].scrollLeft = 500;
+
+  reposer();
+  assert.equal(hote.querySelectorAll(`[${MARQUE}]`)[0].scrollLeft, 0);
+});
+
+/**
+ * **Les deux sens se gardent ensemble.** Un chemin zoomé déborde des deux
+ * côtés ; n'en garder qu'un reviendrait à réparer la moitié du défaut.
+ */
+test("haut et gauche se reposent d'un seul geste", () => {
+  const hote = unHote(["chemin-de-lexecution"]);
+  const panneau = hote.querySelectorAll(`[${MARQUE}]`)[0];
+  panneau.scrollTop = 120;
+  panneau.scrollLeft = 640;
+
+  const reposer = garderLesPlaces(hote);
+  hote.remplacer();
+  reposer();
+
+  const neuf = hote.querySelectorAll(`[${MARQUE}]`)[0];
+  assert.deepEqual([neuf.scrollTop, neuf.scrollLeft], [120, 640]);
 });

@@ -21,6 +21,8 @@
  * les nœuds, appliquée aux chiffres.
  */
 
+import { lesEtapesEnColonnes } from "./les-colonnes-dun-chemin.js";
+
 /** Ce qu'une boîte peut dire de son état. */
 export const NODE = {
   /** Un fait, sans jugement. */
@@ -120,7 +122,10 @@ export function describeReadingStack(engineVersion, packs = []) {
  * étape qui n'a pas eu lieu ne s'invente pas (règle 5).
  */
 function grapheDunGeste(corpus) {
-  const etapes = Array.isArray(corpus?.steps) ? corpus.steps : [];
+  // **Ce qui a tourné en même temps se dessine en même temps.** La file lit
+  // trois comptes rendus de front ; sans cette lecture-ci, le chemin les
+  // alignait l'un après l'autre et l'on additionnait les durées de l'œil.
+  const etapes = lesEtapesEnColonnes(Array.isArray(corpus?.steps) ? corpus.steps : []);
 
   const nodes = [];
   if (corpus.proposition) {
@@ -188,6 +193,8 @@ function grapheDunGeste(corpus) {
       // l'écran relire le statut évite qu'un troisième endroit décide de ce
       // qu'est « en cours » (règle 10).
       enCours: court,
+      // La colonne du chemin : ce qui porte le même numéro a tourné ensemble.
+      colonne: etape?.colonne ?? null,
       // La durée vient de l'étape elle-même : elle l'a mesurée, personne ne la
       // recalcule.
       duration: etape?.ms === null || etape?.ms === undefined ? null : Number(etape.ms)
