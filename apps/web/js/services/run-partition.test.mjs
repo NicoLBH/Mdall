@@ -32,12 +32,14 @@ test("l'ordre d'arrivée est conservé dans chaque pile", () => {
   assert.deepEqual(range[ORIGINE.ATELIER].map((e) => e.id), ["c", "b"]);
 });
 
-test("un onglet inconnu retombe sur les actions partagées", () => {
+test("un onglet inconnu retombe sur la vue sans filtre", () => {
   assert.equal(ongletValide("atelier"), ORIGINE.ATELIER);
   assert.equal(ongletValide("projet"), ORIGINE.PROJET);
-  assert.equal(ongletValide(""), ORIGINE.PROJET);
-  assert.equal(ongletValide(undefined), ORIGINE.PROJET);
-  assert.equal(ongletValide("brouillon"), ORIGINE.PROJET);
+  // **Et non « Partagées ».** Arriver sur une vue filtrée faisait manquer au
+  // journal ses propres versements sans que rien ne le dise.
+  assert.equal(ongletValide(""), TOUTES);
+  assert.equal(ongletValide(undefined), TOUTES);
+  assert.equal(ongletValide("brouillon"), TOUTES);
 });
 
 test("une action du projet ne porte aucune marque de visibilité", () => {
@@ -172,8 +174,8 @@ test("les piles existent même vides, pour que les compteurs disent zéro", () =
 
 test("l'onglet des versements se garde quand on le demande", () => {
   assert.equal(ongletValide(ORIGINE.VERSEMENT), ORIGINE.VERSEMENT);
-  assert.equal(ongletValide("autre-chose"), ORIGINE.PROJET);
-  assert.equal(ongletValide(""), ORIGINE.PROJET);
+  assert.equal(ongletValide("autre-chose"), TOUTES);
+  assert.equal(ongletValide(""), TOUTES);
 });
 
 /**
@@ -411,7 +413,10 @@ test("chaque vue porte un nom, une icône et ce qu'elle explique", () => {
 
 test("la vue entière se retrouve par sa clé, et une clé inconnue ouvre la première", () => {
   assert.equal(longletDit(ORIGINE.VERSEMENT).libelle, "Versements");
-  assert.equal(longletDit("inconnue").cle, ORIGINE.PROJET);
-  assert.equal(longletDit("").cle, ORIGINE.PROJET);
-  assert.equal(longletDit(null).cle, ORIGINE.PROJET);
+  assert.equal(longletDit("inconnue").cle, TOUTES);
+  assert.equal(longletDit("").cle, TOUTES);
+  assert.equal(longletDit(null).cle, TOUTES);
+  // La première de la liste **est** la vue sans filtre : si quelqu'un réordonne
+  // les onglets, c'est ici que l'arrivée change, et l'épreuve le dira.
+  assert.equal(longletDit("inconnue").libelle, "Toutes les actions");
 });

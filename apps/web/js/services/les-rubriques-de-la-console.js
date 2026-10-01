@@ -22,10 +22,16 @@
  *
  * L'ordre n'est pas décoratif, il suit la chaîne :
  *
- *   ce qu'on a reçu → ce qu'on en reconnaît → ce qu'on en prédit → ce qui manque.
+ *   ce qu'on a reçu → ce qu'on en reconnaît → ce qu'on en prédit →
+ *   de quoi on parle → ce que cela énonce → ce qui manque.
  *
  * Sans matière, rien ne se reconnaît ; sans reconnaissance, rien ne se prédit.
  * Une rubrique lue avant la précédente ne veut rien dire.
+ *
+ * **Les idées viennent après les sujets**, et c'est le même cran que celui des
+ * sujets après les domaines : un terme nomme une chose, une idée dit ce qu'elle
+ * fait. On ne peut pas relever ce qu'une chose entraîne avant de savoir la
+ * nommer.
  *
  * ## Il est pur
  *
@@ -67,6 +73,15 @@ export const LES_RUBRIQUES = [
     question: "De quoi les chantiers parlent-ils, dans leurs mots ?",
     explication: "Des termes trouvés dans ce qu'ils écrivent, là où la taxonomie "
       + "n'a que huit cases."
+  },
+  {
+    cle: "idees",
+    libelle: "Les idées énoncées",
+    icone: "north-star",
+    question: "Qu'est-ce qui entraîne quoi, et qu'est-ce qui s'enchaîne ?",
+    explication: "Le cran au-dessus des termes : non plus de quoi on parle, mais "
+      + "ce qui fait quoi. Deux idées qui se composent donnent une conséquence "
+      + "que personne n'a écrite."
   },
   {
     cle: "manques",

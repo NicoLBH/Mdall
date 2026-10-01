@@ -35,6 +35,7 @@ import { fileURLToPath } from "node:url";
 
 import { unPostgresJetable } from "./le-banc-des-politiques/un-postgres-jetable.mjs";
 import { LES_MOTS_RESERVES } from "./les-mots-reserves.mjs";
+import { LES_SORTES_DE_LIENS } from "../apps/web/js/services/une-idee.js";
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const RACINE = join(ICI, "..");
@@ -77,6 +78,9 @@ const LES_MIGRATIONS = [
   // si : appliquée ici, elle tombe chez moi.
   "202610030001_cr_lectures.sql",
   "202611120001_une_lecture_de_cr_se_garde.sql",
+  // Les idées : le découpage d'une affirmation par ses mots de liaison. Il
+  // s'appuie sur `les_mots_outils()`, que la migration des sujets pose.
+  "202611130001_les_idees_du_systeme.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",
@@ -1438,3 +1442,159 @@ test("la liste des mots réservés est celle de PostgreSQL", { skip: sansPostgre
   assert.deepEqual(enTrop, [],
     `ces mots ne sont plus réservés : la liste refuserait des noms permis — ${enTrop.join(", ")}`);
 });
+
+/* ── Les idées : ce qui entraîne quoi ─────────────────────────────────────── */
+
+/**
+ * Le découpage d'une affirmation par son mot de liaison.
+ *
+ * On ne vérifie pas que « ça marche » : on vérifie que la **flèche va dans le
+ * bon sens**. « A car B » va de B vers A, « A donc B » va de A vers B — et
+ * c'est la seule erreur qui rende un raisonnement exactement faux plutôt
+ * qu'approximatif.
+ */
+test("« donc » et « car » ne mettent pas la cause du même côté",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.project_assertions;");
+    // « sol » fait trois lettres : le découpage l'écarte, comme pour les sujets.
+    // C'est « terrain » qui porte le terme, et la première version de cette
+    // épreuve l'ignorait — elle attendait ce que je croyais, pas ce qui est.
+    for (const projet of [MEDIATHEQUE, GYMNASE]) {
+      desAffirmations(projet, [
+        "Le terrain argileux est confirme donc le plancher beton sera repris",
+        "Le plancher beton sera repris car le terrain argileux est confirme"
+      ]);
+    }
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select avant || ' > ' || apres from public.les_idees_du_systeme();");
+    assert.equal(lu.ok, true, lu.motif);
+
+    const idees = lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+    // Les deux phrases disent la même chose dans les deux sens : elles doivent
+    // donner **la même** idée, et non deux idées opposées.
+    assert.deepEqual(idees, ["terrain argileux > plancher beton"],
+      `le sens de la flèche est faux : ${idees.join(" | ")}`);
+  });
+
+/**
+ * **Le mot de liaison ne se trouve pas au milieu d'un autre mot.**
+ *
+ * La phrase porte un terme **avant** « carrelage », et c'est tout le sujet :
+ * la première version de cette épreuve disait « Le carrelage grand format… ».
+ * « car » s'y lisait bel et bien, mais le membre de gauche n'avait alors aucun
+ * terme, et l'idée tombait pour une raison qui n'était pas la bonne. L'épreuve
+ * passait **par accident** : retirer les espaces autour des mots de liaison ne
+ * la faisait pas tomber.
+ */
+test("« car » ne se lit pas dans « carrelage »", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_assertions;");
+  for (const projet of [MEDIATHEQUE, GYMNASE]) {
+    desAffirmations(projet, ["La reprise du carrelage grand format reste a valider"]);
+  }
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select count(*) from public.les_idees_du_systeme();");
+  assert.equal(lu.ok, true, lu.motif);
+  assert.equal(lu.sortie.trim(), "0", "un mot de liaison a été lu dans un autre mot");
+});
+
+/**
+ * **La première liaison de la phrase, et pas une autre.**
+ *
+ * Une affirmation qui en porte deux énonce deux idées. On lit la première, et
+ * l'on dit ce qu'on ne lit pas. Lire la seconde, ou n'importe laquelle,
+ * donnerait une idée vraie découpée au mauvais endroit — et dans un
+ * raisonnement, un maillon mal coupé contamine toute la chaîne.
+ */
+test("une affirmation qui porte deux liaisons se coupe sur la première",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.project_assertions;");
+    for (const projet of [MEDIATHEQUE, GYMNASE]) {
+      desAffirmations(projet, [
+        "Le terrain argileux impose un cuvelage renforce donc le delai augmente"
+      ]);
+    }
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select avant || ' > ' || apres || ' > ' || lien from public.les_idees_du_systeme();");
+    assert.equal(lu.ok, true, lu.motif);
+    // Coupée sur « donc », elle dirait « cuvelage renforce entraîne delai » —
+    // vrai aussi, et ce n'est pas ce qu'on a demandé.
+    assert.equal(lu.sortie.trim(), "terrain argileux > cuvelage renforce > obligation");
+  });
+
+/** Une idée vue sur un seul chantier est son contenu, pas une idée de métier. */
+test("une idée vue sur un seul chantier ne sort pas", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_assertions;");
+  desAffirmations(MEDIATHEQUE, [
+    "Le sol argileux est confirme donc le plancher beton sera repris"
+  ]);
+  desAffirmations(GYMNASE, [
+    "La nappe phreatique remonte donc le cuvelage devient obligatoire"
+  ]);
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select count(*) from public.les_idees_du_systeme();");
+  assert.equal(lu.ok, true, lu.motif);
+  assert.equal(lu.sortie.trim(), "0",
+    "une idée propre à un chantier est sortie de la console");
+});
+
+/**
+ * **Ce qu'on cache se compte.** Une liste vide veut dire deux choses opposées :
+ * le corpus n'énonce aucun lien, ou il en énonce et aucun n'est partagé.
+ */
+test("la mesure dit ce que la liste ne montre pas", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_assertions;");
+  desAffirmations(MEDIATHEQUE, [
+    "Le sol argileux est confirme donc le plancher beton sera repris",
+    "Les menuiseries exterieures restent a chiffrer"
+  ]);
+  desAffirmations(GYMNASE, [
+    "La nappe phreatique remonte donc le cuvelage devient obligatoire"
+  ]);
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select montrees || '/' || cachees || '/' || affirmations || '/' || liantes"
+    + " || '/' || lisibles from public.la_mesure_des_idees();");
+  assert.equal(lu.ok, true, lu.motif);
+  // Aucune idée partagée, deux cachées, trois affirmations, deux porteuses d'un
+  // lien, deux lisibles entièrement.
+  assert.equal(lu.sortie.trim(), "0/2/3/2/2");
+});
+
+/** La porte de la console tient aussi sur les idées. */
+test("les idées ne se lisent pas sans être administrateur", { skip: sansPostgres }, () => {
+  const refuse = banc.sousLadresse("quelquun@ailleurs.example",
+    "select count(*) from public.les_idees_du_systeme();");
+  assert.equal(refuse.ok, false, "un compte quelconque a lu les idées du système");
+
+  const mesure = banc.sousLadresse("quelquun@ailleurs.example",
+    "select count(*) from public.la_mesure_des_idees();");
+  assert.equal(mesure.ok, false, "un compte quelconque a lu la mesure des idées");
+});
+
+/**
+ * **Les sortes de liens que la base produit sont celles que l'écran nomme.**
+ *
+ * La liste des mots vit dans la base ; l'écran ne connaît que les sortes
+ * (`apps/web/js/services/une-idee.js`). Une sorte ajoutée d'un côté et pas de
+ * l'autre afficherait une flèche sans verbe, sans que rien ne tombe (règle 4).
+ */
+test("l'écran sait nommer chaque sorte de lien que la base produit",
+  { skip: sansPostgres }, () => {
+    const lu = banc.sql(
+      "select distinct lien from public.les_mots_de_liaison() order by 1;");
+    const duServeur = lu.sortie.split("\n").map((un) => un.trim()).filter(Boolean);
+
+    assert.ok(duServeur.length > 0, "la base ne produit aucune sorte de lien");
+
+    const inconnues = duServeur.filter((une) => !LES_SORTES_DE_LIENS.includes(une));
+    assert.deepEqual(inconnues, [],
+      `la base produit des liens que l'écran ne sait pas nommer : ${inconnues.join(", ")}`);
+
+    const jamaisProduites = LES_SORTES_DE_LIENS.filter((une) => !duServeur.includes(une));
+    assert.deepEqual(jamaisProduites, [],
+      `l'écran annonce des liens que rien ne produit : ${jamaisProduites.join(", ")}`);
+  });

@@ -10283,14 +10283,16 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 /* **L'en-tête ne nomme plus ses colonnes, elle compte.** « Action » au-dessus
    des actions et « Quand » au-dessus des dates n'apprenaient rien à personne.
    Ce qu'on vient y lire est combien — le seul chiffre que le tableau ne porte
-   nulle part ailleurs —, et il se pose à droite, où l'œil cherche un total. */
+   nulle part ailleurs.
+
+   **Et il se cale à gauche**, au-dessus des titres qu'il compte. Posé à droite,
+   il surplombait la colonne des dates : un nombre aligné sur une colonne se lit
+   comme le total de cette colonne-là, et celui-ci ne compte pas des dates. */
 .workflow-runs__head-col--compte{
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  /* La ligne porte une seule cellule : elle couvre la grille entière, sans quoi
-     le compte se calerait à droite de la première colonne, c'est-à-dire au
-     milieu du tableau. */
+  justify-content: flex-start;
+  /* La ligne porte une seule cellule : elle couvre la grille entière. */
   grid-column: 1 / -1;
 }
 
@@ -20136,15 +20138,16 @@ strong.est-verifie{ color:#3fb950; }
 }
 .actions-onglets__explication{ margin:8px 0 0; font-size:12px; color:var(--muted); }
 
-/* **L'origine se dit en toutes lettres, dans sa colonne.**
+/* **L'origine se dit en toutes lettres, à la suite du titre.**
 
    Elle se disait par une icône — une puce pour l'Atelier, un cadenas pour un
    versement — qu'il fallait survoler pour comprendre. Trois mots tiennent, et
    ils se lisent sans apprendre un alphabet.
 
-   Le dessin est celui d'une branche sur une forge : un mot en bleu sur un fond
-   bleuté, arrondi. On le reconnaît avant de le lire — et c'est exactement ce
-   qu'on demande à une colonne qu'on parcourt en diagonale. */
+   Le dessin est celui d'une étiquette de branche sur une forge : un mot en bleu
+   sur un fond bleuté, arrondi. On le reconnaît avant de le lire — et collée au
+   titre, elle se lit dans le même mouvement, là où une colonne réservait une
+   largeur sur toute la hauteur du tableau pour trois mots. */
 .workflow-runs__origine{
   display:inline-flex; align-items:center;
   padding:0 8px; height:22px;
@@ -20153,9 +20156,25 @@ strong.est-verifie{ color:#3fb950; }
   color:var(--blueLink, #4493f8);
   font-size:12px; font-weight:500; white-space:nowrap;
 }
-.workflow-runs__cell--origine{ display:flex; align-items:center; }
+/* **La pastille suit le titre, dans la même ligne.** Le titre prend la place
+   qu'il peut et se coupe ; la pastille, elle, ne se coupe jamais — trois mots
+   tronqués ne qualifient plus rien. */
+.workflow-runs__cell--action .issue-row-title-grid__title{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+.workflow-runs__cell--action .issue-row-title-grid__title .row-title-trigger{
+  width:auto;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.workflow-runs__cell--action .workflow-runs__origine{ flex:none; }
 .workflow-runs__mention{ color:var(--attention, #d29922); }
-.workflow-runs__head-count{ margin-right:16px; }
+
 .fondations-nappes th[scope="row"]{ font-family:ui-monospace, SFMono-Regular, Menlo, monospace; }
 .fondations-nappes td{ text-align:right; white-space:nowrap; }
 .fondations-nappes th[scope="col"]{ text-align:right; }
@@ -23508,7 +23527,9 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
    Ce qui reste ici est seulement ce que les autres n'ont pas : l'explication,
    sous le titre. Elle colle au titre, pas au tableau. */
 .actions-vue__tete{ padding-bottom:2px; }
-.actions-vue__dit{ font-size:12px; margin:0 0 10px; padding-inline:16px; color:var(--muted); }
+/* **Pas de retrait à gauche.** Elle en avait seize pixels, le titre zéro : les
+   deux lignes qui se lisent ensemble ne commençaient pas au même endroit. */
+.actions-vue__dit{ font-size:12px; margin:0 0 10px; padding-inline-end:16px; color:var(--muted); }
 /* Repliée, la barre n'est pas absente : elle se réduit à son bouton, qui reste
    exactement où il était. Un bouton qui se déplace selon l'état qu'il commande
    oblige à le chercher chaque fois qu'on veut revenir en arrière. */

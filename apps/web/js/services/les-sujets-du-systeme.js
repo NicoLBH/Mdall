@@ -207,22 +207,30 @@ export function phraseDuRegroupement(sujets = [], mesure = null) {
  */
 export const CE_QUI_MANQUE_ENCORE = [
   {
-    quoi: "Relever des idées, et non des termes",
-    ou: "nulle part",
-    pourquoi: "ce comptage rend des groupes nominaux — « portes », « plancher"
-      + " beton ». Une idée porte un verbe et une relation : « l'étanchéité de"
-      + " la toiture n'est pas reprise », « le sondage conditionne la reprise"
-      + " des linteaux ». Les tirer demande de lire la phrase entière, pas d'en"
-      + " compter les noms, et aucune règle de caractères n'y arrivera."
+    quoi: "Lire une idée dont le lien est en tête de phrase",
+    ou: "la rubrique « Les idées énoncées » lit les liaisons placées entre les"
+      + " deux membres, et seulement celles-là",
+    pourquoi: "« si le sol est argileux, les fondations descendent » commence par"
+      + " son lien : à gauche, il n'y a rien à couper. Deviner la coupure sur une"
+      + " virgule rendrait des idées fausses avec l'aplomb des vraies — et dans"
+      + " un enchaînement, un maillon mal coupé contamine toute la chaîne."
   },
   {
-    quoi: "Dire comment deux idées s'enchaînent",
-    ou: "la console enchaîne des termes, ce qui n'est pas la même chose",
-    pourquoi: "« après une question de nappe, une question de cuvelage » est une"
-      + " succession dans le temps, pas une raison. Ce qui manque est le lien :"
-      + " lequel cause lequel, lequel bloque lequel, lequel referme lequel. La"
-      + " mémoire porte déjà ces liens quand un humain les signe — ils ne se"
-      + " déduisent pas d'un comptage."
+    quoi: "Lire une idée que la phrase n'annonce par aucun mot",
+    ou: "nulle part",
+    pourquoi: "« l'étanchéité de la toiture n'est pas reprise » énonce bien"
+      + " quelque chose, et aucune liaison ne le signale. Les tirer demande de"
+      + " lire la phrase entière, pas d'y chercher des mots — et c'est là,"
+      + " précisément, qu'un modèle apporterait quelque chose que le comptage"
+      + " n'apporte pas."
+  },
+  {
+    quoi: "Faire entrer une idée dans la mémoire d'un chantier",
+    ou: "la console les mesure sur l'ensemble ; aucun projet n'en porte",
+    pourquoi: "une idée relevée est une lecture, pas une vérité : elle ne doit"
+      + " entrer dans la mémoire que par une proposition signée (règle 1). Ce"
+      + " qui manque est l'affirmation d'idée dans une proposition — la forme"
+      + " existe, le geste pas encore."
   },
   {
     quoi: "Rapprocher les mots qui veulent dire la même chose",

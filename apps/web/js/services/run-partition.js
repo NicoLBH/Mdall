@@ -183,10 +183,22 @@ export function partitionnerActions(entries = []) {
   return piles;
 }
 
-/** L'onglet demandé, ramené à l'un de ceux qui existent. */
+/**
+ * L'onglet demandé, ramené à l'un de ceux qui existent.
+ *
+ * **On arrive sur « Toutes les actions », et non sur « Partagées ».** Le défaut
+ * était la vue partagée, c'est-à-dire une vue **filtrée** : on ouvrait le
+ * journal et il manquait ses propres versements et ses propres essais, sans que
+ * rien à l'écran ne dise qu'il en manquait. « Que s'est-il passé ? » se répondait
+ * donc par une liste incomplète qui avait l'air complète (règle 5).
+ *
+ * La vue sans filtre ne montre rien de plus que ce qu'on a le droit de voir :
+ * la base ne rend que ce qui est à vous ou au projet, et chaque ligne garde sa
+ * marque de visibilité.
+ */
 export function ongletValide(cle) {
   const demande = String(cle ?? "").trim();
-  return ONGLETS.some((onglet) => onglet.cle === demande) ? demande : ORIGINE.PROJET;
+  return ONGLETS.some((onglet) => onglet.cle === demande) ? demande : TOUTES;
 }
 
 /**
