@@ -66,12 +66,13 @@ export function leLecteur(modele = "") {
 /** Les colonnes d'une lecture qu'on relit, écrites une fois (règle 10). */
 export const LE_SELECT_DUNE_LECTURE =
   "id,project_id,document,document_id,proposition_id,numero_de_reunion,tenue_le,"
-  + "mesures,analyse,lu_par,created_at";
+  + "mesures,analyse_gelee,lu_par,created_at";
 
 /**
  * Les colonnes qu'il suffit de lire pour **dresser la liste**.
  *
- * `analyse` n'en est pas : c'est la plus grosse, et la liste n'en montre rien.
+ * `analyse_gelee` n'en est pas : c'est la plus grosse, et la liste n'en montre
+ * rien.
  * La charger pour cinquante lignes afin d'en ouvrir une ferait passer cinquante
  * analyses sur le réseau pour en regarder une.
  */
@@ -168,7 +169,9 @@ export function laLigneDuneLecture(vue = null, {
     numero_de_reunion: texte(lecture?.identite?.numero),
     tenue_le: texte(lecture?.identite?.tenueLe),
     mesures: lecture.mesure,
-    analyse: lanalyseAConserver(vue),
+    // **`analyse_gelee`, et non `analyse`** : `ANALYSE` est un mot réservé de
+    // PostgreSQL, et la migration qui l'employait a été refusée au déploiement.
+    analyse_gelee: lanalyseAConserver(vue),
     lu_par: texte(lecture?.luPar)
   };
 }
@@ -184,7 +187,7 @@ export function laLigneDuneLecture(vue = null, {
  * @param {object} [aujourdhui] ce qu'on sait **maintenant** : `{sujetsDuProjet}`
  */
 export function laVueDuneLecture(ligne = null, aujourdhui = {}) {
-  const analyse = ligne?.analyse ?? null;
+  const analyse = ligne?.analyse_gelee ?? null;
   if (!analyse?.lecture) return null;
 
   return {

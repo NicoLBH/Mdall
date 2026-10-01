@@ -83,8 +83,8 @@ test("chaque colonne écrite ou relue existe dans la base", () => {
  * une ferait passer cinquante analyses sur le réseau pour en regarder une.
  */
 test("la liste ne demande pas les analyses, l'ouverture si", () => {
-  assert.ok(!LE_SELECT_DUNE_LIGNE.split(",").includes("analyse"));
-  assert.ok(LE_SELECT_DUNE_LECTURE.split(",").includes("analyse"));
+  assert.ok(!LE_SELECT_DUNE_LIGNE.split(",").includes("analyse_gelee"));
+  assert.ok(LE_SELECT_DUNE_LECTURE.split(",").includes("analyse_gelee"));
 });
 
 /* ── Ce qu'on gèle ───────────────────────────────────────────────────────── */
@@ -162,7 +162,7 @@ test("le lecteur nomme le modèle et le procédé", () => {
 
 test("une lecture gardée se rouvre telle qu'elle était", () => {
   const ligne = { id: "l-1", created_at: "2026-03-13T09:00:00Z", document_id: "d-1",
-    proposition_id: "p-1", analyse: lanalyseAConserver(UNE_VUE) };
+    proposition_id: "p-1", analyse_gelee: lanalyseAConserver(UNE_VUE) };
   const vue = laVueDuneLecture(ligne, { sujetsDuProjet: [] });
 
   assert.equal(vue.phase, "lue");
@@ -181,7 +181,7 @@ test("une lecture gardée se rouvre telle qu'elle était", () => {
 test("ce que la lecture a vu et ce qui est vrai aujourd'hui tiennent deux places", () => {
   const aujourdhui = [{ id: "s-1", title: "Planchers", status: "closed" }];
   const vue = laVueDuneLecture(
-    { id: "l-1", analyse: lanalyseAConserver(UNE_VUE) },
+    { id: "l-1", analyse_gelee: lanalyseAConserver(UNE_VUE) },
     { sujetsDuProjet: aujourdhui }
   );
 
@@ -191,14 +191,14 @@ test("ce que la lecture a vu et ce qui est vrai aujourd'hui tiennent deux places
 
 /** Les lignes d'avant la migration n'ont pas d'analyse : on le dit. */
 test("une lecture sans analyse ne s'ouvre pas, et ne s'invente pas", () => {
-  assert.equal(laVueDuneLecture({ id: "l-1", analyse: null }), null);
+  assert.equal(laVueDuneLecture({ id: "l-1", analyse_gelee: null }), null);
   assert.equal(laVueDuneLecture({ id: "l-1" }), null);
   assert.equal(laVueDuneLecture(null), null);
 });
 
 /** Rien du projet n'est gelé : l'inventer ferait dire à l'écran ce qu'il ignore. */
 test("une lecture rouverte ne prétend pas connaître les labels ni les lots", () => {
-  const vue = laVueDuneLecture({ id: "l-1", analyse: lanalyseAConserver(UNE_VUE) });
+  const vue = laVueDuneLecture({ id: "l-1", analyse_gelee: lanalyseAConserver(UNE_VUE) });
   for (const cle of ["labels", "lots", "objectifs", "situations", "suivi"]) {
     assert.equal(vue[cle], null, `« ${cle} » est inventé à la relecture`);
   }

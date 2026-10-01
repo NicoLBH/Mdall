@@ -34,6 +34,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { unPostgresJetable } from "./le-banc-des-politiques/un-postgres-jetable.mjs";
+import { LES_MOTS_RESERVES } from "./les-mots-reserves.mjs";
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const RACINE = join(ICI, "..");
@@ -44,6 +45,11 @@ const RACINE = join(ICI, "..");
  * Pas toutes : celles dont on veut éprouver la règle, posées sur un socle qui
  * porte ce qu'elles touchent. Une migration qu'on ajoute ici s'ajoute aussi au
  * socle si elle s'appuie sur une table qu'il n'a pas.
+ *
+ * **Elles sont triées avant d'être appliquées**, parce que c'est ainsi qu'elles
+ * se déploient. La liste était lue dans l'ordre où on l'avait écrite, et il ne
+ * correspondait plus : une migration d'octobre venait après une de novembre.
+ * Rien n'en souffrait encore — et c'est exactement le moment de le régler.
  */
 const LES_MIGRATIONS = [
   // Elle porte `est_administrateur()`, dont la porte de la console dépend.
@@ -63,6 +69,14 @@ const LES_MIGRATIONS = [
   "202611080001_les_synonymes_regroupes.sql",
   "202611090001_les_sujets_dun_chantier.sql",
   "202611100001_la_file_lit_les_comptes_rendus.sql",
+  // **La table des lectures, et ce qui s'y ajoute.**
+  //
+  // `202611120001` a été **refusée au déploiement** : elle ajoutait une colonne
+  // nommée `analyse`, un mot réservé de PostgreSQL. Aucune épreuve ne pouvait le
+  // voir, puisqu'aucune ne faisait lire la migration à PostgreSQL. Maintenant
+  // si : appliquée ici, elle tombe chez moi.
+  "202610030001_cr_lectures.sql",
+  "202611120001_une_lecture_de_cr_se_garde.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",
@@ -103,7 +117,7 @@ function leBanc() {
   pg.sql(readFileSync(join(ICI, "le-banc-des-politiques", "le-socle.sql"), "utf8"));
   pg.sql(LES_CHANTIERS);
   // Les migrations que le banc éprouve, dans l'ordre où elles se déploient.
-  for (const migration of LES_MIGRATIONS) {
+  for (const migration of [...LES_MIGRATIONS].sort()) {
     pg.sql(readFileSync(join(RACINE, "supabase", "migrations", migration), "utf8"));
   }
 
@@ -1364,4 +1378,63 @@ test("l'élargissement n'ouvre rien à qui n'a pas de compte", { skip: sansPostg
   const sans = banc.sansCompte("select count(*) from public.documents;");
   assert.equal(sans.ok === false || sans.sortie.trim() === "0", true,
     `la clé anonyme lit les documents : ${sans.sortie}`);
+});
+
+
+/* ── Ce qu'une migration pose vraiment ───────────────────────────────────── */
+
+/**
+ * **La migration qui a été refusée au déploiement est bien appliquée ici.**
+ *
+ * L'ajouter à la liste ne suffit pas : une liste qu'on raccourcit laisse le banc
+ * vert, puisque rien d'autre ne dépend de ce qu'elle pose. On demande donc à
+ * PostgreSQL les colonnes qu'elle doit avoir ajoutées — c'est la seule façon de
+ * dire qu'elle a tourné, et non qu'on l'a nommée.
+ */
+test("une lecture de compte rendu porte ce qu'elle a vu", { skip: sansPostgres }, () => {
+  const dit = banc.sql(
+    "select column_name from information_schema.columns"
+    + " where table_schema = 'public' and table_name = 'cr_lectures' order by column_name;"
+  );
+  const colonnes = dit.sortie.split("\n").map((un) => un.trim()).filter(Boolean);
+
+  for (const attendue of ["analyse_gelee", "document_id", "proposition_id", "mesures", "tenue_le"]) {
+    assert.ok(colonnes.includes(attendue),
+      `« cr_lectures » n'a pas « ${attendue} » : la migration n'a pas tourné`);
+  }
+
+  // **Et pas sous son ancien nom**, celui que PostgreSQL refusait.
+  assert.ok(!colonnes.includes("analyse"),
+    "la colonne porte encore le mot réservé : le déploiement sera refusé");
+});
+
+/* ── Ce que PostgreSQL refuse de laisser nommer ──────────────────────────── */
+
+/**
+ * **La liste des mots réservés ne dérive pas.**
+ *
+ * `les-mots-reserves.mjs` porte une copie écrite : l'intégration continue n'a
+ * pas de serveur PostgreSQL, et une épreuve qui en demanderait un s'ignorerait
+ * là où elle sert — juste avant le déploiement.
+ *
+ * Mais une liste écrite et jamais vérifiée dérive (règle 4). Ici, où il y a un
+ * serveur, on la confronte à `pg_get_keywords()` : les deux catégories qu'un
+ * identifiant ne peut pas porter, `R` (réservé) et `T` (réservé, utilisable
+ * comme nom de fonction ou de type).
+ */
+test("la liste des mots réservés est celle de PostgreSQL", { skip: sansPostgres }, () => {
+  const dit = banc.sql(
+    "select word from pg_get_keywords() where catcode in ('R', 'T') order by word;"
+  );
+  const duServeur = dit.sortie.split("\n").map((un) => un.trim()).filter(Boolean);
+
+  assert.ok(duServeur.length > 90, `pg_get_keywords n'a rien rendu : ${duServeur.length}`);
+
+  const manquants = duServeur.filter((mot) => !LES_MOTS_RESERVES.has(mot));
+  assert.deepEqual(manquants, [],
+    `ces mots sont réservés et la liste les laisserait passer : ${manquants.join(", ")}`);
+
+  const enTrop = [...LES_MOTS_RESERVES].filter((mot) => !duServeur.includes(mot));
+  assert.deepEqual(enTrop, [],
+    `ces mots ne sont plus réservés : la liste refuserait des noms permis — ${enTrop.join(", ")}`);
 });
