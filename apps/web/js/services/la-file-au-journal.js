@@ -108,6 +108,121 @@ export function leMotDeLaFile(ligne = null) {
 }
 
 /**
+ * Ce que la file donne à voir **pendant** qu'elle tourne.
+ *
+ * ## Le défaut, dit par celui qui regarde
+ *
+ * « On est en "En cours", puis boom d'un coup c'est terminé et on affiche douze
+ * étapes, que l'on n'a pas vu se réaliser au fur et à mesure. »
+ *
+ * Il n'y avait **qu'une** étape : « Lecture en cours », avec deux compteurs.
+ * Dix-neuf comptes rendus tournaient une heure derrière ce seul bloc, et rien
+ * ne distinguait une file qui avance d'une file bloquée.
+ *
+ * ## Une étape par compte rendu
+ *
+ * La file les porte déjà, nommés et datés : il n'y avait qu'à les rendre. On
+ * voit donc les dix-neuf, chacun passant de l'attente à la lecture puis au
+ * vert — et, quand il a résisté, en orange avec son motif.
+ *
+ * ## Le temps vient de la file, jamais de l'écran
+ *
+ * `commenceLe` est posé par le serveur quand il prend le compte rendu. Compter
+ * depuis le rendu de la page aurait remis le compteur à zéro à chaque
+ * battement, c'est-à-dire mesuré la patience de l'écran et non celle du travail.
+ */
+export function lesEtapesDeLaFile(ligne = null, {
+  statut = "", desCr = false, combien = 0, maintenant = Date.now()
+} = {}) {
+  // **Rien n'est pris : une seule étape, et elle le dit.** Détailler dix-neuf
+  // attentes avant que le serveur ait seulement répondu ferait un mur de gris
+  // qui n'apprend rien.
+  if (statut === "en_attente") {
+    return [{
+      id: "en_attente",
+      label: "En attente du serveur",
+      ms: null,
+      statut: "en-cours",
+      lignes: [`${desCr ? "Comptes rendus" : "Fichiers"} : ${combien}`]
+    }];
+  }
+
+  const pas = Array.isArray(ligne?.avancement?.pas) ? ligne.avancement.pas : [];
+
+  // Un dépôt de messagerie n'a pas de pas nommés : ses fichiers se déplient en
+  // messages, et c'est le convoi qui compte. On garde son bloc, et ses nombres.
+  if (!desCr || !pas.length) {
+    return [{
+      id: statut || "en_cours",
+      label: desCr ? "Lecture en cours" : "Rangement en cours",
+      ms: null,
+      // **En cours n'est pas fait.** Cette étape portait « ok », et le graphe
+      // la peignait en vert avec sa coche : on lisait « Rangement en cours »
+      // sous une coche verte pendant que le bandeau disait « En cours ».
+      statut: "en-cours",
+      lignes: desCr
+        ? [`Comptes rendus : ${combien}`, `Lus : ${pas.filter((un) => un?.ou === "lu").length}`]
+        : [`Fichiers : ${combien}`, `Messages versés : ${nombre(ligne?.avancement?.verses)}`]
+    }];
+  }
+
+  return pas.map((un, rang) => {
+    const ou = texte(un?.ou);
+    const rate = ou === "echoue";
+    const court = ou === "en-cours";
+
+    return {
+      id: texte(un?.id) || `pas-${rang}`,
+      label: texte(un?.nom) || "Compte rendu",
+      // La durée d'un pas fini. Celle d'un pas qui court se dit autrement : une
+      // durée figée sous une icône qui tourne se lirait comme un temps total.
+      ms: court ? null : (Number.isFinite(Number(un?.dureeMs)) ? Number(un.dureeMs) : null),
+      statut: rate ? "echec" : court ? "en-cours" : (ou === "lu" ? "ok" : "attente"),
+      lignes: lesMotsDunPas(un, { court, rate, maintenant })
+    };
+  });
+}
+
+/** Ce qu'une étape de la file dit d'elle-même, sous son nom. */
+function lesMotsDunPas(un, { court, rate, maintenant }) {
+  if (rate) {
+    return [{ niveau: "echec", texte: texte(un?.motif) || "n'a pas pu être lu" }];
+  }
+
+  if (court) {
+    const debut = Number(un?.commenceLe);
+    // **Depuis quand**, et non « en cours ». Une étape qui tourne depuis huit
+    // minutes et une étape qui vient de partir se lisaient pareil, et c'est la
+    // seule chose qu'on cherche à savoir en regardant.
+    return Number.isFinite(debut) && maintenant > debut
+      ? [`depuis ${enDuree(maintenant - debut)}`]
+      : ["en cours…"];
+  }
+
+  return texte(un?.ou) === "lu" ? [texte(un?.lecture) || "lu"] : ["en attente"];
+}
+
+/**
+ * Une durée, dite comme on la dit.
+ *
+ * Les secondes jusqu'à la minute, puis les minutes : « depuis 94 s » se lit
+ * moins bien que « depuis 1 min 34 s », et personne ne compte en secondes
+ * au-delà de la minute.
+ */
+export function enDuree(ms = 0) {
+  const total = Math.max(0, Math.round(nombre(ms) / 1000));
+  if (total < 60) return `${total} s`;
+
+  const minutes = Math.floor(total / 60);
+  const secondes = total % 60;
+  if (minutes < 60) return secondes ? `${minutes} min ${secondes} s` : `${minutes} min`;
+
+  const heures = Math.floor(minutes / 60);
+  const reste = minutes % 60;
+  return reste ? `${heures} h ${reste} min` : `${heures} h`;
+}
+
+/**
  * Une ligne de file, telle que l'onglet Actions la dessine.
  *
  * @param {object} ligne une ligne de `versements`
@@ -153,6 +268,9 @@ export function laFileAuJournal(ligne = null) {
     // s'affichait pourtant sous « Versements », où l'on cherche ce qu'on a
     // apporté.
     origine: lorigineDunGeste(leGesteDeLaLigne(ligne)),
+    // Qui l'a lancée : le journal le dit pour toutes les exécutions, et une
+    // ligne de file en est une.
+    ownerId: texte(ligne?.owner_id),
     privee: true,
     documentName: "",
     subject: { documentName: "" },
@@ -163,28 +281,7 @@ export function laFileAuJournal(ligne = null) {
     details: {
       corpus: {
         geste: LE_GESTE,
-        steps: [{
-          id: statut,
-          label: statut === "en_attente"
-            ? "En attente du serveur"
-            : (desCr ? "Lecture en cours" : "Rangement en cours"),
-          ms: null,
-          // **En cours n'est pas fait.** Cette étape portait « ok », et le
-          // graphe la peignait en vert avec sa coche : on lisait « Rangement en
-          // cours » sous une coche verte, pendant que le bandeau disait « En
-          // cours ». Deux choses contraires dans la même vue, et c'est la
-          // rassurante qu'on croit.
-          //
-          // Le mot est celui que le graphe connaît déjà pour une fusion en
-          // route (`run-workflow.js`) : il en fait une icône qui tourne.
-          statut: "en-cours",
-          lignes: desCr
-            ? [
-              `Comptes rendus : ${combien}`,
-              `Lus : ${(ligne?.avancement?.pas ?? []).filter((un) => un?.ou === "lu").length}`
-            ]
-            : [`Fichiers : ${combien}`, `Messages versés : ${nombre(ligne?.avancement?.verses)}`]
-        }]
+        steps: lesEtapesDeLaFile(ligne, { statut, desCr, combien })
       }
     },
     createdAt: debut,

@@ -6,8 +6,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  ASSEZ_VU, ceQueLeMeilleurVaut, laPartDuRedoublement, laProbabilitePrudente,
-  lesEnchainements, lesEnchainementsQuiPortent, phraseDeLaPrediction, phraseDunEnchainement
+  ASSEZ_VU, ELAN_QUI_APPREND, ceQueLeMeilleurVaut, estBanal, laPartDuRedoublement,
+  laProbabilitePrudente, lelan, lesEnchainements, lesEnchainementsQuiPortent,
+  phraseDeLaPrediction, phraseDunEnchainement
 } from "./les-enchainements-du-systeme.js";
 
 /**
@@ -41,10 +42,13 @@ test("la probabilité se compte sur les suites du même départ", () => {
  * **L'assiette voyage avec le taux.** Un taux sans elle est un mensonge par
  * omission ; la faire recalculer par l'écran la ferait diverger (règle 4).
  */
-test("un enchaînement dit son taux et son assiette", () => {
+test("un enchaînement dit son taux, son assiette et son élan", () => {
   const tous = lesEnchainements(DES_LIGNES);
   const versSol = tous.find((une) => une.apres === "sol");
-  assert.equal(phraseDunEnchainement(versSol), "25 % · 10 sur 40");
+  // **L'élan en dernier et en clair** : c'est lui qui décide si la ligne valait
+  // d'être lue. Douze lignes à « 100 % » se ressemblent toutes ; « ×1,0 » et
+  // « ×4,2 » ne se ressemblent pas.
+  assert.match(phraseDunEnchainement(versSol), /^25 % · 10 sur 40 · ×\d/);
   assert.equal(phraseDunEnchainement(null), "");
 });
 
@@ -91,22 +95,125 @@ test("le redoublement ne porte pas, et se compte à part", () => {
  * **La seule ligne qui décide quelque chose.** Avec huit domaines, le hasard
  * donne 12,5 % ; sans ce point de comparaison, « 75 % » ne veut rien dire.
  */
-test("le meilleur enchaînement se compare au hasard", () => {
-  const vaut = ceQueLeMeilleurVaut(lesEnchainements(DES_LIGNES), 8);
-  assert.equal(vaut.meilleur.apres, "structure");
-  assert.equal(vaut.auHasard, 0.125);
-  // Sur la borne basse (≈ 0,60), pas sur les 75 % observés.
-  assert.equal(Math.round(vaut.combienDeFoisMieux * 10) / 10, 4.8);
+/**
+ * **Le défaut, et il était à l'écran.**
+ *
+ *     rapport → avis           100 % · 169 sur 169
+ *     avis isolement → avis    100 % · 150 sur 150
+ *     salle → avis             100 % · 134 sur 134
+ *
+ * et en bilan : « 614 fois mieux que le hasard ». C'était vrai, et vide. Le
+ * hasard auquel on comparait tirait un sujet parmi six cent vingt-huit — or
+ * personne ne prédit comme ça. « Avis » arrive après presque tout : le dire
+ * sans rien regarder tombe juste la plupart du temps.
+ *
+ * > « L'affichage ou le résultat est banal et trivial. »
+ *
+ * La bonne référence est **la fréquence du terme qui suit**.
+ */
+test("le meilleur enchaînement se compare à la fréquence du terme qui suit", () => {
+  const tous = lesEnchainements(DES_LIGNES);
+  const versStructure = tous.find((une) => une.avant === "incendie" && une.apres === "structure");
 
-  const dite = phraseDeLaPrediction(lesEnchainements(DES_LIGNES), 8);
-  assert.match(dite, /au moins 60 % du temps/);
-  // L'assiette suit le taux, y compris dans la phrase de bilan.
-  assert.match(dite, /30 sur 40 observés/);
-  assert.match(dite, /13 % au hasard/);
-  // La virgule : « 4.8 fois mieux » se lirait anglais au milieu d'une phrase.
-  assert.match(dite, /4,8 fois mieux/);
+  // `structure` arrive 40 fois sur 51 pas : 78 % sans rien savoir.
+  assert.equal(Math.round(versStructure.partDuSuivant * 100), 78);
+  // La borne basse vaut ≈ 0,60 : connaître `incendie` rend donc `structure`
+  // **moins** probable qu'elle ne l'était déjà. L'élan tombe sous 1, la règle
+  // n'apprend rien — et c'est exactement ce que l'ancienne mesure cachait en
+  // annonçant « 4,8 fois mieux que le hasard ».
+  assert.equal(versStructure.elan < 1, true, `élan ${versStructure.elan}`);
+  assert.equal(versStructure.banal, true);
+  assert.equal(ceQueLeMeilleurVaut(tous), null);
+});
+
+/**
+ * **Une règle qui ne gagne rien sur la fréquence du terme ne porte pas.**
+ * Douze tautologies occupaient les douze premiers rangs.
+ */
+test("une règle qui n'apprend rien ne porte pas, et le bilan le dit", () => {
+  // `avis` suit tout : le prédire sans rien regarder tombe juste presque
+  // toujours, et une règle à 100 % n'a donc rien appris.
+  const trivial = lesEnchainements([
+    { avant: "rapport", apres: "avis", combien: 169, chantiers: 2 },
+    { avant: "salle", apres: "avis", combien: 134, chantiers: 1 },
+    { avant: "pente", apres: "avis", combien: 117, chantiers: 2 }
+  ]);
+
+  assert.equal(trivial.every((une) => une.banal), true, "toutes devraient être banales");
+  assert.deepEqual(lesEnchainementsQuiPortent(trivial), []);
+  assert.equal(ceQueLeMeilleurVaut(trivial), null);
+
+  const dite = phraseDeLaPrediction(trivial);
+  assert.match(dite, /aucun n'apprend rien de plus/);
+  assert.doesNotMatch(dite, /fois mieux/);
+});
+
+/** Et une vraie régularité, elle, se dit — avec ce qu'elle gagne. */
+test("une règle qui apprend quelque chose se dit, et dit combien", () => {
+  // `b` n'arrive que derrière `a` : 20 sur 120 pas, soit 17 % sans rien savoir.
+  const vraies = lesEnchainements([
+    { avant: "a", apres: "b", combien: 20, chantiers: 4 },
+    { avant: "c", apres: "d", combien: 50, chantiers: 4 },
+    { avant: "e", apres: "d", combien: 50, chantiers: 4 }
+  ]);
+
+  const vaut = ceQueLeMeilleurVaut(vraies);
+  assert.equal(vaut.meilleur.apres, "b");
+  assert.equal(vaut.combienDeFoisMieux > 2, true, `élan ${vaut.combienDeFoisMieux}`);
+
+  const dite = phraseDeLaPrediction(vraies);
+  assert.match(dite, /au moins \d+ % du temps/);
+  assert.match(dite, /20 sur 20 observés/);
+  assert.match(dite, /« b » arrive de toute façon \d+ % du temps/);
+  assert.match(dite, /fois mieux que de ne rien regarder/);
   // Le chiffre doit se regarder : aucun jugement collé dessus.
   assert.doesNotMatch(dite, /bon|mauvais|excellent|faible/i);
+});
+
+/**
+ * **C'est bien l'élan qui classe, et non la borne.**
+ *
+ * Sans un couple où les deux se contredisent, l'épreuve ne distingue pas les
+ * deux classements : ils rendent le même ordre, et l'on ne vérifie rien
+ * (règle 12).
+ *
+ * Ici `commun` tombe juste plus souvent — mais son terme arrive de toute façon
+ * presque toujours, et la règle n'apprend donc presque rien. `rare` tombe juste
+ * moins souvent, et pourtant son terme ne se voit nulle part ailleurs : la
+ * connaître change tout.
+ */
+test("une règle moins sûre mais plus instructive passe devant", () => {
+  const tous = lesEnchainements([
+    // `avis` arrive 300 fois sur 340 pas : 88 % sans rien savoir.
+    { avant: "commun", apres: "avis", combien: 150, chantiers: 3 },
+    { avant: "salle", apres: "avis", combien: 150, chantiers: 3 },
+    // `cuvelage` n'arrive que derrière `rare` : 40 sur 340, soit 12 %.
+    { avant: "rare", apres: "cuvelage", combien: 30, chantiers: 3 },
+    { avant: "rare", apres: "avis", combien: 10, chantiers: 2 }
+  ]);
+
+  const commun = tous.find((une) => une.avant === "commun");
+  const rare = tous.find((une) => une.apres === "cuvelage");
+
+  assert.equal(commun.prudente > rare.prudente, true,
+    `la borne favorise « commun » (${commun.prudente} contre ${rare.prudente})`);
+  assert.equal(rare.elan > commun.elan, true,
+    `l'élan, lui, favorise « rare » (${rare.elan} contre ${commun.elan})`);
+
+  // Et c'est l'élan qui range : le classement par la borne mettrait `commun`
+  // en tête, c'est-à-dire une tautologie.
+  assert.equal(tous[0].apres, "cuvelage");
+  assert.equal(ceQueLeMeilleurVaut(tous).meilleur.apres, "cuvelage");
+});
+
+/** L'élan refuse de se prononcer plutôt que de diviser par zéro (règle 5). */
+test("un élan qu'on ne peut pas calculer n'est pas « banal »", () => {
+  assert.equal(lelan(0.6, 0), null);
+  assert.equal(lelan(0.6, null), null);
+  assert.equal(lelan(null, 0.3), null);
+  assert.equal(estBanal(null), false, "ne pas savoir n'est pas savoir que c'est trivial");
+  assert.equal(estBanal(1), true);
+  assert.equal(estBanal(ELAN_QUI_APPREND + 0.1), false);
 });
 
 /* ── Ce qu'on peut affirmer, et ce qu'on a vu ────────────────────────────── */
@@ -153,21 +260,27 @@ test("la borne basse ne dépasse jamais le taux observé, et ne descend pas sous
  * diffèrent, sans quoi on ne vérifie rien.
  */
 test("un petit sans-faute passe derrière un grand presque sans-faute", () => {
+  // Les deux termes qui suivent arrivent **autant** l'un que l'autre : l'élan
+  // ne départage donc pas, et c'est la borne qui classe. Sans cette symétrie,
+  // on éprouverait la fréquence du terme et non la taille de l'échantillon.
   const tous = lesEnchainements([
     { avant: "sol", apres: "thermique", combien: 5, chantiers: 1 },
     { avant: "incendie", apres: "structure", combien: 30, chantiers: 7 },
-    { avant: "incendie", apres: "sol", combien: 10, chantiers: 3 }
+    { avant: "incendie", apres: "sol", combien: 10, chantiers: 3 },
+    { avant: "vent", apres: "thermique", combien: 25, chantiers: 3 },
+    { avant: "vent", apres: "sol", combien: 20, chantiers: 3 }
   ]);
   const porteurs = lesEnchainementsQuiPortent(tous);
 
   const petit = porteurs.find((une) => une.avant === "sol");
-  const grand = porteurs.find((une) => une.avant === "incendie");
+  const grand = porteurs.find((une) => une.avant === "incendie" && une.apres === "structure");
+  assert.ok(petit && grand, "les deux devraient porter");
   assert.equal(petit.probabilite > grand.probabilite, true, "le taux brut favorise le petit");
   assert.equal(petit.prudente < grand.prudente, true, "la borne, elle, le fait redescendre");
+  assert.equal(petit.elan < grand.elan, true, "et l'élan suit la borne, à terme égal");
 
-  // Et c'est bien la borne qui classe.
   assert.equal(porteurs[0].apres, "structure");
-  assert.equal(ceQueLeMeilleurVaut(tous, 8).meilleur.apres, "structure");
+  assert.equal(ceQueLeMeilleurVaut(tous).meilleur.apres, "structure");
 });
 
 test("le classement prend la borne, la ligne garde son taux observé", () => {
@@ -179,7 +292,7 @@ test("le classement prend la borne, la ligne garde son taux observé", () => {
   const petit = tous.find((une) => une.avant === "sol");
   assert.equal(petit.probabilite, 1, "le taux observé ne bouge pas");
   assert.equal(petit.prudente < 0.7, true, "la borne, elle, redescend");
-  assert.equal(phraseDunEnchainement(petit), "100 % · 6 sur 6");
+  assert.match(phraseDunEnchainement(petit), /^100 % · 6 sur 6 · ×/);
 });
 
 /**
@@ -188,11 +301,9 @@ test("le classement prend la borne, la ligne garde son taux observé", () => {
  */
 test("sans rien d'assez vu, on ne se prononce pas", () => {
   const maigre = lesEnchainements([{ avant: "a", apres: "b", combien: 1, chantiers: 1 }]);
-  assert.equal(ceQueLeMeilleurVaut(maigre, 8), null);
-  assert.equal(ceQueLeMeilleurVaut(lesEnchainements([]), 8), null);
-  // Un seul domaine : le hasard vaut 100 %, et la comparaison n'a aucun sens.
-  assert.equal(ceQueLeMeilleurVaut(lesEnchainements(DES_LIGNES), 1), null);
+  assert.equal(ceQueLeMeilleurVaut(maigre), null);
+  assert.equal(ceQueLeMeilleurVaut(lesEnchainements([])), null);
 
-  assert.match(phraseDeLaPrediction(maigre, 8), /pas de quoi se prononcer/);
-  assert.doesNotMatch(phraseDeLaPrediction(maigre, 8), /0 %/);
+  assert.match(phraseDeLaPrediction(maigre), /pas de quoi se prononcer/);
+  assert.doesNotMatch(phraseDeLaPrediction(maigre), /0 %/);
 });

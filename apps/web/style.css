@@ -4534,15 +4534,47 @@ body.drilldown-open .drilldown__inner,
    Le décalage de `#app` suit le même chemin que celui du bandeau des variantes
    plus bas : `:has` lit la barre là où elle est, plutôt que d'attendre qu'une
    classe soit posée sur le corps. */
-.project-tabs--console{
+/* **La barre du haut de la console est une seule pièce, et elle se mesure.**
+
+   Le décalage du corps était un calcul de constantes — la hauteur déclarée d'un
+   en-tête plus celle d'une barre d'onglets. Les deux sont déclarées pour
+   l'application, où le squelette est autre : dans la console, le haut de la
+   page passait **sous** la barre d'onglets, et le premier titre arrivait
+   tronqué.
+
+   L'en-tête et les onglets vivent donc ensemble dans un bloc fixe, chacun dans
+   le flux. Sa hauteur est mesurée au rendu (`console.js`, `calerLaCoque`), et
+   c'est elle qui décale le corps : une seule valeur, et c'est la vraie
+   (règle 4). */
+#consoleHeaderHost{
   position:fixed;
-  top:var(--header-h-compact);
-  left:0;
-  right:0;
-  z-index:3;
+  top:0; left:0; right:0;
+  z-index:5;
+  background:var(--headbg);
 }
+#consoleHeaderHost .gh-header{ position:static; }
+.project-tabs--console{ position:static; }
+/* De quoi se caler avant la première mesure : un corps qui démarre à zéro
+   passerait sous l'en-tête le temps d'un rendu, et l'on verrait le saut. */
 body:has(.project-tabs--console){
   --app-top:calc(var(--header-h-compact) + var(--project-tabs-h));
+}
+
+/* **Seize pixels à gauche du nom.** « Mdall / console » commençait au bord de
+   la fenêtre, collé au verre — seul écran de tout le produit à le faire. */
+.gh-brand--console{ padding-left:16px; }
+
+/* La tête d'une rubrique de la console : son nom par la ligne commune, puis la
+   question à laquelle elle répond, puis ce qu'elle explique. La question en
+   premier, parce qu'on vient chercher une réponse, pas un écran. */
+.conso-rubrique__tete{ padding-bottom:2px; }
+.conso-rubrique__question{
+  margin:0; padding-inline:16px;
+  font-size:13px; color:var(--text);
+}
+.conso-rubrique__dit{
+  margin:2px 0 12px; padding-inline:16px;
+  font-size:12px; color:var(--muted);
 }
 
 .project-tabs a{
@@ -10248,15 +10280,18 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 }
 
 
-.workflow-runs__head-col--action {
+/* **L'en-tête ne nomme plus ses colonnes, elle compte.** « Action » au-dessus
+   des actions et « Quand » au-dessus des dates n'apprenaient rien à personne.
+   Ce qu'on vient y lire est combien — le seul chiffre que le tableau ne porte
+   nulle part ailleurs —, et il se pose à droite, où l'œil cherche un total. */
+.workflow-runs__head-col--compte{
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.workflow-runs__head-label {
-  min-width: 0;
+  justify-content: flex-end;
+  /* La ligne porte une seule cellule : elle couvre la grille entière, sans quoi
+     le compte se calerait à droite de la première colonne, c'est-à-dire au
+     milieu du tableau. */
+  grid-column: 1 / -1;
 }
 
 .workflow-runs__head-count {
@@ -20101,12 +20136,25 @@ strong.est-verifie{ color:#3fb950; }
 }
 .actions-onglets__explication{ margin:8px 0 0; font-size:12px; color:var(--muted); }
 
-/* La marque de l'Atelier : elle dit d'où la ligne vient. Pas un cadenas —
-   une exécution d'Atelier n'est pas secrète, elle est personnelle. */
-.workflow-runs__atelier{ display:inline-flex; color:var(--muted); opacity:.85; }
+/* **L'origine se dit en toutes lettres, dans sa colonne.**
+
+   Elle se disait par une icône — une puce pour l'Atelier, un cadenas pour un
+   versement — qu'il fallait survoler pour comprendre. Trois mots tiennent, et
+   ils se lisent sans apprendre un alphabet.
+
+   Le dessin est celui d'une branche sur une forge : un mot en bleu sur un fond
+   bleuté, arrondi. On le reconnaît avant de le lire — et c'est exactement ce
+   qu'on demande à une colonne qu'on parcourt en diagonale. */
+.workflow-runs__origine{
+  display:inline-flex; align-items:center;
+  padding:0 8px; height:22px;
+  border-radius:999px;
+  background:color-mix(in srgb, var(--blueLink, #4493f8) 14%, transparent);
+  color:var(--blueLink, #4493f8);
+  font-size:12px; font-weight:500; white-space:nowrap;
+}
+.workflow-runs__cell--origine{ display:flex; align-items:center; }
 .workflow-runs__mention{ color:var(--attention, #d29922); }
-/* Le compte est en bout de la colonne « Action » : sans marge, il vient
-   toucher l'en-tête « Quand » et les deux se lisent comme un seul mot. */
 .workflow-runs__head-count{ margin-right:16px; }
 .fondations-nappes th[scope="row"]{ font-family:ui-monospace, SFMono-Regular, Menlo, monospace; }
 .fondations-nappes td{ text-align:right; white-space:nowrap; }
@@ -23451,15 +23499,16 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
 
 /* Le titre de la vue, au-dessus du tableau des Actions. Le rail porte la vue
    active, et le rail se replie : sans ce titre, un journal replié ne dirait
-   plus ce qu'on y lit. */
-.memoire-corps__tete:has(.actions-vue__titre){
-  flex-direction:column;
-  align-items:flex-start;
-  gap:2px;
-  padding-block:10px;
-}
-.actions-vue__titre{ font-size:16px; font-weight:600; margin:0; color:var(--text); }
-.actions-vue__dit{ font-size:12px; margin:0; color:var(--muted); }
+   plus ce qu'on y lit.
+
+   **Il emploie la ligne de titre commune** (`views/ui/titre-decran.js`), comme
+   les Sujets, la Mémoire et les Labels. Il avait la sienne — une autre taille,
+   une autre graisse —, et chaque écran se recalibrait contre les précédents.
+
+   Ce qui reste ici est seulement ce que les autres n'ont pas : l'explication,
+   sous le titre. Elle colle au titre, pas au tableau. */
+.actions-vue__tete{ padding-bottom:2px; }
+.actions-vue__dit{ font-size:12px; margin:0 0 10px; padding-inline:16px; color:var(--muted); }
 /* Repliée, la barre n'est pas absente : elle se réduit à son bouton, qui reste
    exactement où il était. Un bouton qui se déplace selon l'état qu'il commande
    oblige à le chercher chaque fois qu'on veut revenir en arrière. */

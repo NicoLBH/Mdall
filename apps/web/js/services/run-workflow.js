@@ -137,19 +137,51 @@ function grapheDunGeste(corpus) {
     // mieux, et le graphe la peignait en vert avec sa coche : on lisait une
     // fusion terminée alors qu'elle en était à sa troisième étape sur onze.
     const court = statut === "en-cours";
+    /**
+     * **Et pas commencé n'est pas fait non plus.**
+     *
+     * Depuis que la file rend un compte rendu par étape, le chemin porte aussi
+     * ce qui **attend**. Faute d'un mot pour le dire, ces étapes tombaient dans
+     * le cas par défaut — « ok » — et le graphe les peignait en vert avec leur
+     * coche : dix-neuf comptes rendus s'affichaient lus avant d'avoir été
+     * ouverts. C'est le même défaut qu'« en cours », une case plus tôt.
+     */
+    const attend = statut === "attente";
     const lignes = Array.isArray(etape?.lignes) ? etape.lignes : [];
     nodes.push({
       ...node(
         String(etape?.id || ""),
         String(etape?.label || ""),
-        court ? "en cours…" : resumeDuneEtape(lignes, rate),
+        /**
+         * **Ce que l'étape dit d'elle-même, si elle dit quelque chose.**
+         *
+         * « en cours… » était écrit ici, en dur, et écrasait la ligne que
+         * l'étape portait : une lecture qui tourne depuis huit minutes et une
+         * lecture qui vient de partir se lisaient donc pareil, alors que la
+         * file sait laquelle est laquelle.
+         */
+        court || attend
+          // **Et pas « aucun journal » sous ce qui n'a pas fini.** Une étape
+          // qui tourne n'a rien consigné parce qu'elle n'a pas fini, pas parce
+          // qu'elle est muette : les deux ne se disent pas pareil (règle 5).
+          ? (lignes.length
+            ? resumeDuneEtape(lignes, false)
+            : (court ? "en cours…" : "en attente"))
+          : resumeDuneEtape(lignes, rate),
         {
           // **L'orange reste celui de l'échec.** Peindre en orange ce qui
           // travaille et ce qui a échoué les rendrait indiscernables d'un coup
           // d'œil ; ce qui court est un fait, pas un jugement. C'est son icône
           // qui le dit, et elle tourne.
-          tone: rate ? NODE.WARN : court ? NODE.NEUTRAL : NODE.OK,
-          icon: rate ? "alert" : court ? "sync" : "check-circle-fill"
+          tone: rate ? NODE.WARN : (court || attend) ? NODE.NEUTRAL : NODE.OK,
+          // **Le même sablier que dans le titre de l'exécution.** Le graphe
+          // portait une double flèche — celle d'une synchronisation —, et le
+          // bandeau une pastille qui bat : deux dessins pour « ça tourne », sur
+          // le même écran, à trois centimètres l'un de l'autre (règle 10).
+          // Un cercle vide pour ce qui attend : il dit « pas encore » sans rien
+          // promettre, là où la coche dit « c'est fait » et la pastille « ça
+          // tourne ».
+          icon: rate ? "alert" : court ? "dot-fill-pending" : attend ? "issue-draft" : "check-circle-fill"
         }
       ),
       // L'écran en fait une icône qui tourne. Le dire ici plutôt que de laisser
@@ -165,10 +197,20 @@ function grapheDunGeste(corpus) {
   return nodes.filter((entree) => entree.id);
 }
 
-/** Ce qu'une étape dit d'elle-même, sous son nom : sa première ligne de journal. */
+/**
+ * Ce qu'une étape dit d'elle-même, sous son nom : sa première ligne de journal.
+ *
+ * Une ligne peut être une **chaîne** — ce que la file écrit — ou un objet
+ * `{niveau, texte}` — ce qu'une fusion consigne. Les deux arrivent ici, et n'en
+ * lire qu'une forme laissait l'autre muette.
+ */
 function resumeDuneEtape(lignes, rate) {
-  const premier = lignes.find((ligne) => (rate ? ligne?.niveau === "echec" : true));
-  const dit = String(premier?.texte ?? premier?.groupe ?? "").trim();
+  const premier = lignes.find((ligne) => (
+    rate ? ligne?.niveau === "echec" : true
+  ));
+  const dit = typeof premier === "string"
+    ? premier.trim()
+    : String(premier?.texte ?? premier?.groupe ?? "").trim();
   // Une étape qui n'a rien consigné se dit muette plutôt que vide : « rien
   // d'écrit » et « rien à écrire » ne sont pas la même chose (règle 5).
   return dit || (lignes.length === 0 ? "aucun journal" : "");

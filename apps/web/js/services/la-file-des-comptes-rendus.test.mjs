@@ -162,3 +162,50 @@ test("chaque état de la file se dit", () => {
     assert.ok(DANS_LA_FILE_DIT[ou], `${ou} ne se dit pas`);
   }
 });
+
+/**
+ * **Le serveur marque quand il prend un compte rendu, et combien il a duré.**
+ *
+ * ## Le défaut, dit par celui qui regarde
+ *
+ * « On est en "En cours", puis boom d'un coup c'est terminé et on affiche douze
+ * étapes, que l'on n'a pas vu se réaliser au fur et à mesure. »
+ *
+ * Rien ne distinguait une lecture qui avance d'une lecture bloquée. Et le temps
+ * est **écrit par qui travaille** : le calculer à l'affichage aurait mesuré le
+ * temps depuis la dernière relecture de la page, c'est-à-dire remis le compteur
+ * à zéro à chaque battement.
+ */
+test("un pas pris porte l'instant où il a commencé", () => {
+  const file = uneFileDeComptesRendus(new Set(["d1"]), [{ id: "d1", nom: "CR 01.pdf" }]);
+  const pris = apresUnPas(file, "d1", DANS_LA_FILE.EN_COURS, "", 1_000);
+
+  assert.equal(pris.pas[0].commenceLe, 1_000);
+  assert.equal(pris.pas[0].dureeMs, null, "une lecture qui court n'a pas de durée");
+});
+
+test("un pas fini porte sa durée, comptée depuis son départ", () => {
+  const file = uneFileDeComptesRendus(new Set(["d1"]), [{ id: "d1", nom: "CR 01.pdf" }]);
+  const pris = apresUnPas(file, "d1", DANS_LA_FILE.EN_COURS, "", 1_000);
+
+  assert.equal(apresUnPas(pris, "d1", DANS_LA_FILE.LU, "", 53_000).pas[0].dureeMs, 52_000);
+  // Un échec a duré lui aussi : c'est souvent celui-là qu'on veut chronométrer.
+  assert.equal(apresUnPas(pris, "d1", DANS_LA_FILE.ECHOUE, "x", 4_000).pas[0].dureeMs, 3_000);
+});
+
+/**
+ * **Sans départ connu, pas de durée inventée.** Une reprise après coupure
+ * retrouve un pas pris par une exécution qu'on n'a pas vue : lui compter une
+ * durée depuis zéro annoncerait cinquante-sept ans de lecture (règle 5).
+ */
+test("un pas fini sans départ connu n'invente pas de durée", () => {
+  const file = uneFileDeComptesRendus(new Set(["d1"]), [{ id: "d1", nom: "CR 01.pdf" }]);
+  assert.equal(apresUnPas(file, "d1", DANS_LA_FILE.LU, "", 9_000).pas[0].dureeMs, null);
+});
+
+/** Et un pas qui attend encore ne porte ni l'un ni l'autre. */
+test("un pas qui attend ne porte ni départ ni durée", () => {
+  const file = uneFileDeComptesRendus(new Set(["d1"]), [{ id: "d1", nom: "CR 01.pdf" }]);
+  assert.equal(file.pas[0].commenceLe, undefined);
+  assert.equal(file.pas[0].dureeMs, undefined);
+});

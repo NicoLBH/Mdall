@@ -115,14 +115,49 @@ export function leProchainDeLaFile(file = null) {
  * `ou` dit comment cela s'est passé, `motif` pourquoi quand cela s'est mal
  * passé. Un échec sans motif serait une ligne rouge dont on ne saurait rien.
  */
-export function apresUnPas(file = null, id = "", ou = DANS_LA_FILE.LU, motif = "") {
+export function apresUnPas(
+  file = null, id = "", ou = DANS_LA_FILE.LU, motif = "", maintenant = Date.now()
+) {
   const vise = texte(id);
   return {
     ...file,
     pas: (file?.pas ?? []).map((un) => (un.id === vise
-      ? { ...un, ou, motif: texte(motif) }
+      ? { ...un, ou, motif: texte(motif), ...leTempsDunPas(un, ou, maintenant) }
       : un))
   };
+}
+
+/**
+ * Quand un pas a commencé, et combien il a duré.
+ *
+ * ## Le défaut, vu à l'écran
+ *
+ * « On est en "En cours", puis boom d'un coup c'est terminé et on affiche douze
+ * étapes, que l'on n'a pas vu se réaliser au fur et à mesure. »
+ *
+ * Une file de dix-neuf comptes rendus tourne une heure, et l'écran n'en disait
+ * rien : un seul bloc « Lecture en cours », sans début, sans durée, sans rang.
+ * Rien ne distinguait une lecture qui avance d'une lecture bloquée — c'est
+ * exactement la question qu'on se pose en regardant.
+ *
+ * ## Le temps est **écrit par qui travaille**
+ *
+ * Le serveur pose `commenceLe` quand il prend un compte rendu, et `dureeMs`
+ * quand il le rend. L'écran, lui, ne fait que compter depuis. Le calculer à
+ * l'affichage aurait mesuré le temps depuis la **dernière relecture de la
+ * page**, c'est-à-dire remis le compteur à zéro à chaque battement.
+ */
+function leTempsDunPas(pas, ou, maintenant) {
+  if (ou === DANS_LA_FILE.EN_COURS) return { commenceLe: maintenant, dureeMs: null };
+
+  // Fini, d'une façon ou d'une autre : la durée se fige. Sans début connu, elle
+  // reste nulle — l'écran affiche alors un tiret plutôt qu'un zéro qui mentirait.
+  if (ou === DANS_LA_FILE.LU || ou === DANS_LA_FILE.ECHOUE) {
+    const debut = Number(pas?.commenceLe);
+    return { dureeMs: Number.isFinite(debut) ? Math.max(0, maintenant - debut) : null };
+  }
+
+  return {};
 }
 
 /** La file arrêtée : ce qui attendait n'attend plus. */
