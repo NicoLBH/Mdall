@@ -58,9 +58,12 @@ import {
   lesRaisonnements, phraseDesRaisonnements, phraseDunRaisonnement
 } from "../partage/js/services/un-raisonnement.js";
 import {
-  laFormeDesAffirmations, laMesureDesIdees, leCorpusEnClair, leDetailDesLiaisons,
-  lesIdeesDuSysteme
+  laFormeDesAffirmations, laMesureDesIdees, laRepetitionDuCorpus, leCorpusEnClair,
+  leDetailDesLiaisons, lesIdeesDuSysteme
 } from "../partage/js/services/les-idees-du-systeme-supabase.js";
+import {
+  DIT_SANS_CAUSE, lesCausesDeLaRepetition, phraseDeLaRepetition
+} from "../partage/js/services/la-repetition-du-corpus.js";
 import {
   leNomDuCorpus, leNomDuFichier, lexportDuCorpusEnJson, lexportEnJson, phraseDeLexport
 } from "../partage/js/services/lexport-des-idees.js";
@@ -405,6 +408,57 @@ function renderLesSujets(sujets, mesure) {
  * annoncée, parce qu'elle est la mesure de ce qu'on ne voit pas (règle 5).
  */
 /**
+ * **Combien de phrases, pour combien de lignes.**
+ *
+ * C'est le dénominateur de tout ce que cet écran annonce, et il était faux :
+ * mille affirmations lues, quatre-vingt-quatorze textes distincts. « 68 sur
+ * 9 488 » se lisait comme « 68 phrases sur 9 488 phrases », et comptait des
+ * copies des deux côtés (règle 12).
+ *
+ * La carte vient **avant** le détail mot à mot : savoir qu'un corpus se répète
+ * dix fois change la lecture de tout ce qui suit.
+ *
+ * **Aucun texte n'est montré**, ici comme ailleurs : on compte des
+ * répétitions, on ne les lit pas.
+ */
+function renderLaRepetitionDuCorpus(repetition) {
+  const causes = lesCausesDeLaRepetition(repetition);
+
+  return `
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">Combien de phrases, pour combien de lignes</h3>
+      <p class="conso-usages__mot"><b>${echapper(phraseDeLaRepetition(repetition))}</b></p>
+      ${causes.length ? `
+        <p class="conso-usages__mot">
+          <b>D'où viennent les copies.</b> Trois causes, et elles n'appellent pas
+          le même travail. Elles ne s'additionnent pas : une même ligne relève
+          souvent de deux d'entre elles.
+        </p>
+        <ul class="forme-reference">
+          ${causes.map((une) => `
+            <li class="forme-reference__ligne">
+              <span class="forme-reference__quoi">
+                <b>${echapper(une.quoi)}</b>
+                <i>${echapper(une.mot)}</i>
+              </span>
+              ${/*
+                **`null` n'est pas zéro.** Une cause qu'on n'a pas su compter
+                écrite « 0 » se lirait « cette cause ne joue pas », et l'on
+                chercherait ailleurs.
+              */""}
+              <span class="forme-reference__chiffres mono-small">${echapper(
+                une.combien === null ? DIT_SANS_CAUSE : compteDit(une.combien))}</span>
+              <span class="forme-reference__sur mono-small">${
+                echapper(une.sur ?? "")}</span>
+            </li>
+          `).join("")}
+        </ul>
+      ` : ""}
+    </section>
+  `;
+}
+
+/**
  * **Où le découpage casse, mot par mot.**
  *
  * « 1 % des affirmations énoncent un lien » peut vouloir dire deux choses
@@ -477,7 +531,7 @@ function renderLeDetailDesLiaisons(liaisons, forme) {
   `;
 }
 
-function renderLesIdees(lignes, mesure, liaisons, forme, chaines) {
+function renderLesIdees(lignes, mesure, liaisons, forme, chaines, repetition) {
   const idees = lesIdeesRangees(lignes);
 
   return `
@@ -563,6 +617,8 @@ function renderLesIdees(lignes, mesure, liaisons, forme, chaines) {
         </ul>
       ` : ""}
     </section>
+
+    ${renderLaRepetitionDuCorpus(repetition)}
 
     ${renderLeDetailDesLiaisons(liaisons, forme)}
 
@@ -806,21 +862,33 @@ function brancherLaPorte(ou) {
     redessinerLaPorte(ou);
   });
 
-  const lien = ou.querySelector("[data-export-corpus]");
-  lien?.addEventListener("click", async (evenement) => {
-    evenement.preventDefault();
-    // **La porte se vérifie au clic, pas au rendu.** Dix secondes ont pu
-    // passer entre les deux, et un bouton encore dessiné n'est pas une
-    // autorisation.
-    if (!laPorteEstOuverte(porteOuverteLe)) return;
-
-    const lignes = await leCorpusEnClair();
-    if (lignes === null || !laPorteEstOuverte(porteOuverteLe)) return;
-
-    emporterLeFichier(lexportDuCorpusEnJson({ lignes }), leNomDuCorpus());
-  });
+  ou.querySelector("[data-export-corpus]")?.addEventListener("click", emporterLeCorpus);
 
   reglerLeCompteARebours(ou);
+}
+
+/**
+ * Emporter le corpus, écrit **une fois**.
+ *
+ * Le bouton est dessiné à deux endroits — au rendu de la rubrique, et quand la
+ * porte s'ouvre après coup —, et il y avait deux fois la même suite de gestes.
+ * Deux copies d'une vérification de porte sont une porte qu'on finira par
+ * oublier d'un côté (règle 4).
+ */
+async function emporterLeCorpus(evenement) {
+  evenement.preventDefault();
+  // **La porte se vérifie au clic, pas au rendu.** Dix secondes ont pu passer
+  // entre les deux, et un bouton encore dessiné n'est pas une autorisation.
+  if (!laPorteEstOuverte(porteOuverteLe)) return;
+
+  const porte = await leCorpusEnClair();
+  if (porte === null || !laPorteEstOuverte(porteOuverteLe)) return;
+
+  // `attendues` voyage jusque dans le fichier : c'est par lui qu'on saura
+  // qu'il est tronqué, s'il l'est encore un jour.
+  emporterLeFichier(
+    lexportDuCorpusEnJson({ lignes: porte.lignes, attendues: porte.attendues }),
+    leNomDuCorpus());
 }
 
 /** Le compte à rebours : une seconde, tant que la porte est ouverte. */
@@ -870,13 +938,7 @@ function redessinerLaPorte(ou) {
     lien.setAttribute("data-export-corpus", "");
     lien.download = leNomDuCorpus();
     lien.textContent = "Exporter tout le corpus (JSON)";
-    lien.addEventListener("click", async (evenement) => {
-      evenement.preventDefault();
-      if (!laPorteEstOuverte(porteOuverteLe)) return;
-      const lignes = await leCorpusEnClair();
-      if (lignes === null || !laPorteEstOuverte(porteOuverteLe)) return;
-      emporterLeFichier(lexportDuCorpusEnJson({ lignes }), leNomDuCorpus());
-    });
+    lien.addEventListener("click", emporterLeCorpus);
     boite.append(lien);
     section.append(boite);
   } else if (!ouverte && bouton) {
@@ -896,8 +958,9 @@ async function leCorpsDeLaRubrique(cle) {
   }
 
   if (cle === "idees") {
-    const [lignes, mesure, liaisons, forme] = await Promise.all([
-      lesIdeesDuSysteme(), laMesureDesIdees(), leDetailDesLiaisons(), laFormeDesAffirmations()
+    const [lignes, mesure, liaisons, forme, repetition] = await Promise.all([
+      lesIdeesDuSysteme(), laMesureDesIdees(), leDetailDesLiaisons(),
+      laFormeDesAffirmations(), laRepetitionDuCorpus()
     ]);
     if (lignes === null) return renderPasLu("Les idées", "ont");
 
@@ -905,7 +968,8 @@ async function leCorpsDeLaRubrique(cle) {
     // Ce que l'export emportera, composé une seule fois : le recomposer au
     // clic aurait pu emporter autre chose que ce qui est à l'écran (règle 4).
     cequOnEmporte = { idees, mesure, forme, liaisons, raisonnements: lesRaisonnements(idees) };
-    return renderLesIdees(lignes, mesure, liaisons, forme, cequOnEmporte.raisonnements);
+    return renderLesIdees(lignes, mesure, liaisons, forme, cequOnEmporte.raisonnements,
+      repetition);
   }
 
   if (cle === "sujets") {

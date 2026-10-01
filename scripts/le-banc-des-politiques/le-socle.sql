@@ -63,6 +63,17 @@ create table if not exists public.project_assertions (
   -- Ce que l'affirmation dit, en français : la matière dont les sujets
   -- techniques sont extraits.
   statement text not null default '',
+  -- La clé métier, et d'où l'affirmation vient. Ce sont les colonnes de la
+  -- table réelle (`202609020001_project_assertions.sql`), et elles sont ici
+  -- parce que la répétition du corpus se mesure dessus : l'unicité porte sur
+  -- (proposition, nature, sujet), et c'est de là que viennent les copies.
+  kind text not null default 'avis',
+  subject_key text not null default '',
+  proposition_id uuid,
+  -- Ce qui la remplace. L'affirmation remplacée reste en base (règle 6), et une
+  -- lecture qui compte l'histoire comme le présent compte un sujet autant de
+  -- fois qu'il a été tranché.
+  superseded_by uuid references public.project_assertions(id) on delete set null,
   created_at timestamptz not null default now()
 );
 

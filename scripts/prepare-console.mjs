@@ -94,6 +94,10 @@ export const RACINES = [
   "js/services/les-idees-du-systeme-supabase.js",
   "js/services/une-idee.js",
   "js/services/un-raisonnement.js",
+  // Combien de phrases distinctes dans les affirmations, et d'où viennent les
+  // copies. C'est le dénominateur de tout ce que la console annonce : mille
+  // affirmations lues, quatre-vingt-quatorze textes distincts.
+  "js/services/la-repetition-du-corpus.js",
   // La porte par laquelle les idées sortent de la console : des comptes et des
   // termes, jamais une phrase de chantier. Elle est fermée par défaut.
   "js/services/lexport-des-idees.js",

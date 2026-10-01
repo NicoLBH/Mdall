@@ -257,3 +257,72 @@ test("un corpus vide ne se dit pas comme un constat", () => {
     phraseDuCorpus({ lignes: [{ chantier: 1, dit: "Menuiseries", avant: "" }] }),
     /1 affirmation, dont 1 dont le découpage ne tire rien/);
 });
+
+/**
+ * **Un fichier tronqué le dit, dedans et à l'écran.**
+ *
+ * Le premier fichier emporté portait mille affirmations sur neuf mille quatre
+ * cent quatre-vingt-huit — `db-max-rows`, le plafond que PostgREST applique au
+ * transport — et annonçait « 1 000 affirmations, dont 998 dont le découpage ne
+ * tire rien ». Une phrase juste sur un corpus faux, et l'ordre du tri faisait
+ * que les mille venaient toutes du premier chantier : de quoi conclure qu'un
+ * seul chantier écrit.
+ *
+ * Le défaut n'était pas la troncature, c'était son silence (règle 12).
+ */
+test("un corpus tronqué dit ce qui lui manque", () => {
+  const porte = lexportDuCorpus({
+    lignes: [{ chantier: 1, dit: "Menuiseries extérieures" }],
+    attendues: 9488
+  });
+
+  assert.equal(porte.attendues, 9488, "ce que la base porte n'est pas écrit");
+  assert.equal(porte.manque, 9487, "l'écart n'est pas calculé");
+  assert.match(phraseDuCorpus({
+    lignes: [{ chantier: 1, dit: "Menuiseries extérieures" }], attendues: 9488
+  }), /9487 manquent sur les 9488/);
+});
+
+/**
+ * **Et un fichier entier ne crie pas au manque.**
+ *
+ * Une phrase d'alerte qui s'affiche toujours ne se lit plus. Quand le compte
+ * annoncé par la base est celui du fichier, il n'y a rien à dire.
+ */
+test("un corpus entier ne dit pas qu'il manque quelque chose", () => {
+  const porte = lexportDuCorpus({
+    lignes: [{ chantier: 1, dit: "Menuiseries extérieures" }],
+    attendues: 1
+  });
+
+  assert.equal(porte.manque, 0, "un fichier complet s'annonce tronqué");
+  assert.doesNotMatch(phraseDuCorpus({
+    lignes: [{ chantier: 1, dit: "Menuiseries extérieures" }], attendues: 1
+  }), /manquent/);
+});
+
+/**
+ * **« On ne sait pas combien la base en porte » n'est pas « elle n'en porte
+ * aucune ».**
+ *
+ * `Number(null)` et `Number("")` valent zéro, et zéro est fini. Converti sans
+ * garde, `attendues` tomberait à zéro et `manque` resterait muet pour une
+ * raison fausse : le fichier se dirait complet parce qu'on n'a rien su (règle
+ * 5). Le piège est d'autant plus sûr qu'il ne se voit pas — les deux chemins
+ * donnent `manque: 0`.
+ */
+test("un corpus dont on ignore la taille ne se dit pas complet", () => {
+  for (const rien of [null, undefined, "", "deux-mille", {}]) {
+    const porte = lexportDuCorpus({
+      lignes: [{ chantier: 1, dit: "Menuiseries extérieures" }],
+      attendues: rien
+    });
+    assert.equal(porte.attendues, null,
+      `« ${String(rien)} » est devenu un compte : l'écart se lira à l'envers`);
+    assert.equal(porte.manque, 0, "on ne peut pas chiffrer un manque qu'on ne connaît pas");
+  }
+
+  // Et zéro reste zéro : la base peut vraiment ne rien porter.
+  assert.equal(lexportDuCorpus({ lignes: [], attendues: 0 }).attendues, 0,
+    "un corpus réellement vide est devenu « on ne sait pas »");
+});
