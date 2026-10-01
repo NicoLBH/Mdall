@@ -182,7 +182,7 @@ export function lesEtapesDeLaFile(ligne = null, {
        * que le quatrième a attendu le troisième. `null` quand rien n'a
        * commencé — et c'est une information, pas un zéro (règle 5).
        */
-      debut: Number.isFinite(Number(un?.commenceLe)) ? Number(un.commenceLe) : null,
+      debut: quandIlAcommence(un?.commenceLe),
       // La durée d'un pas fini. Celle d'un pas qui court se dit autrement : une
       // durée figée sous une icône qui tourne se lirait comme un temps total.
       ms: court ? null : (Number.isFinite(Number(un?.dureeMs)) ? Number(un.dureeMs) : null),
@@ -190,6 +190,20 @@ export function lesEtapesDeLaFile(ligne = null, {
       lignes: lesMotsDunPas(un, { court, rate, maintenant })
     };
   });
+}
+
+/**
+ * L'instant où le serveur a pris ce compte rendu, ou `null`.
+ *
+ * **La question se pose avant la conversion.** `Number(null)` et `Number("")`
+ * valent **0**, qui est un instant fini : un pas en attente se serait rangé au
+ * tout début de l'exécution, avec ceux qui ont réellement démarré, et le chemin
+ * l'aurait empilé avec eux (règle 5).
+ */
+function quandIlAcommence(declare) {
+  if (declare === null || declare === undefined || declare === "") return null;
+  const quand = Number(declare);
+  return Number.isFinite(quand) ? quand : null;
 }
 
 /** Ce qu'une étape de la file dit d'elle-même, sous son nom. */

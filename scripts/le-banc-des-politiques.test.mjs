@@ -1591,6 +1591,31 @@ test("les idées ne se lisent pas sans être administrateur", { skip: sansPostgr
 });
 
 /**
+ * **Et la coupe du corpus n'est accordée à personne.**
+ *
+ * Elle est `security definer` et rend toutes les affirmations de tous les
+ * chantiers : c'est ce qu'il faut aux quatre lectures, et c'est exactement ce
+ * qu'il ne faut à personne d'autre. Elle ne porte pas de porte à elle — elle
+ * n'en a pas besoin, puisque rien ne peut l'appeler.
+ *
+ * PostgreSQL accorde `execute` à tout le monde par défaut : sans le retrait
+ * explicite, n'importe quel compte authentifié lirait le contenu de tous les
+ * chantiers, sans qu'aucune règle de lecture ne s'y oppose. Une porte fermée
+ * par un retrait qu'on oublie d'écrire est une porte grande ouverte.
+ */
+test("la coupe du corpus n'est accordée à personne", { skip: sansPostgres }, () => {
+  const refuse = banc.sousLadresse("quelquun@ailleurs.example",
+    "select count(*) from public.la_coupe_du_corpus();");
+  assert.equal(refuse.ok, false, "un compte quelconque a lu tout le corpus");
+
+  // Et l'administrateur non plus : il passe par les quatre lectures, qui
+  // nomment ce qu'elles rendent.
+  const patron = banc.sousLadresse("patron@mdall.example",
+    "select count(*) from public.la_coupe_du_corpus();");
+  assert.equal(patron.ok, false, "la console lit le corpus en direct");
+});
+
+/**
  * **Les sortes de liens que la base produit sont celles que l'écran nomme.**
  *
  * La liste des mots vit dans la base ; l'écran ne connaît que les sortes
@@ -1829,8 +1854,13 @@ test("les quatre lectures de la console répondent sur quatre mille affirmations
         "les_idees_du_systeme()",
         "la_forme_des_affirmations()"
       ]) {
+        // **`set`, et non `set local`.** Hors transaction, `set local` ne vaut
+        // que pour la transaction implicite de l'instruction où il est posé :
+        // il s'annonce, il ne s'applique pas, et le délai ne s'imposait à rien.
+        // La garde était écrite et ne gardait rien — c'est la batterie qui l'a
+        // montré, pas la relecture (règle 12).
         const lu = banc.sousLadresse("patron@mdall.example",
-          `set local statement_timeout = '2s';\n`
+          `set statement_timeout = '2s';\n`
           + `select count(*) from public.${lecture};`);
 
         assert.equal(lu.ok, true,
@@ -1851,3 +1881,39 @@ test("les quatre lectures de la console répondent sur quatre mille affirmations
                     or statement = 'le terrain argileux donc le plancher beton reprend la charge';`);
     }
   });
+
+/* ── Ce que la coupe commune décide, et qu'on ne voyait pas ──────────────── */
+
+/**
+ * **Le plus long mot l'emporte, à égalité de place.**
+ *
+ * « permet » et « permet de » commencent au même endroit de la phrase. Si le
+ * court gagne, le lien change de sorte — une permission au lieu d'un but — et
+ * le terme de droite commence un mot plus tôt. Rien ne tombe : on lit une idée
+ * juste de forme et fausse de sens.
+ */
+test("à égalité de place, le mot le plus long décide", { skip: sansPostgres }, () => {
+  const lu = banc.sql(
+    "select mot from public.les_idees_des_textes(array["
+    + "'le garde corps permet de proteger la circulation'"
+    + "]);");
+
+  assert.equal(lu.sortie.trim(), "permet de",
+    "le mot court l'emporte sur celui qui le contient");
+});
+
+/**
+ * **« nappe entraîne nappe » est vrai, et c'est ce qui le rend inutile.**
+ *
+ * Une tautologie passe toutes les vérifications de forme : deux termes, un
+ * lien, une citation. Elle entrerait en mémoire comme les autres, et n'y
+ * apprendrait rien à personne.
+ */
+test("une tautologie ne sort pas du relevé d'un document", { skip: sansPostgres }, () => {
+  const lu = banc.sql(
+    "select count(*) from public.les_idees_des_textes(array["
+    + "'la nappe phreatique donc la nappe phreatique'"
+    + "]);");
+
+  assert.equal(lu.sortie.trim(), "0", "une tautologie est relevée comme une idée");
+});

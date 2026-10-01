@@ -45,14 +45,18 @@
 --  `la_coupe_du_corpus()` applique cette coupe à `project_assertions` en une
 --  passe, et les quatre lectures de la console s'appuient dessus.
 --
---  ## Les deux `materialized`, et pourquoi ils ne sont pas décoratifs
+--  ## Le `materialized` des textes, et pourquoi il n'est pas décoratif
 --
 --  Depuis PostgreSQL 12, une étape `with` citée une seule fois est **repliée**
 --  dans la requête qui la cite : son contenu est alors recalculé à chaque
---  ligne du parcours. C'est exactement ce qu'il ne faut pas ici — normaliser
---  neuf mille textes une fois coûte 240 ms, les normaliser une fois par mot de
---  liaison en coûte 6 200. `materialized` dit « calcule ceci une fois ». Les
---  retirer ne change aucun résultat et rend la console muette.
+--  ligne du parcours. C'est exactement ce qu'il ne faut pas pour les textes
+--  normalisés — les normaliser une fois coûte 240 ms, les normaliser une fois
+--  par mot de liaison en coûte 6 200. `materialized` dit « calcule ceci une
+--  fois ». Le retirer ne change aucun résultat et rend la console muette.
+--
+--  Les mots de liaison, eux, ne le portent pas : cinquante-sept lignes
+--  constantes ne coûtent rien à refaire, et le mesurer l'a confirmé. Un
+--  mot-clé posé partout « au cas où » finit par être recopié là où il nuit.
 --
 --  ## Ce qu'elle ne change pas
 --
@@ -88,7 +92,11 @@ language sql
 stable
 set search_path = public
 as $$
-  with mots as materialized (
+  -- `mots` ne porte pas `materialized`, et c'est mesuré : cinquante-sept
+  -- lignes constantes ne coûtent rien à refaire, et la batterie a montré que
+  -- le forcer ne change ni le temps ni le résultat. Un mot-clé qu'on ne peut
+  -- pas faire tomber est un mot-clé qu'on finit par recopier partout.
+  with mots as (
     select * from public.les_mots_de_liaison()
   ),
   dits as materialized (
@@ -129,31 +137,6 @@ $$;
 
 comment on function public.la_coupe_des_textes(text[]) is
   'La coupe d''un ensemble de textes par leur premier mot de liaison, en une passe. Seule definition du decoupage.';
-
--- ── La coupe d'un texte : le même découpage, pour un seul ──────────────────
---
--- Sa signature ne bouge pas. Ce qui bouge est qu'elle ne porte plus de règle :
--- elle passe son texte à la coupe commune. Un second découpage écrit ici aurait
--- divergé du premier à la première retouche (règle 4).
-
-create or replace function public.la_coupe_dun_texte(bout text)
-returns table (
-  avant text,
-  lien text,
-  apres text,
-  mot text,
-  renverse boolean
-)
-language sql
-stable
-set search_path = public
-as $$
-  select c.avant, c.lien, c.apres, c.mot, c.renverse
-    from public.la_coupe_des_textes(array[bout]) c;
-$$;
-
-comment on function public.la_coupe_dun_texte(text) is
-  'La coupe d''un texte par son premier mot de liaison. Un passage a la coupe commune.';
 
 -- ── Le corpus coupé, en une passe ──────────────────────────────────────────
 --
@@ -295,7 +278,7 @@ begin
   end if;
 
   return query
-  with mots as materialized (
+  with mots as (
     select * from public.les_mots_de_liaison()
   ),
   dits as materialized (
@@ -401,3 +384,21 @@ $$;
 
 comment on function public.les_idees_des_textes(text[]) is
   'Les idees entieres d''un ensemble de textes, rang par rang. Monte sur la coupe commune.';
+
+-- ── Et la coupe d'un seul texte s'en va ────────────────────────────────────
+--
+-- **Exception à la règle des migrations strictement additives, et elle est
+-- dite.** `la_coupe_dun_texte(text)` coupait un texte à la fois ; c'est par
+-- elle que les quatre lectures passaient, neuf mille fois. Elles passent
+-- maintenant par la coupe commune, et plus rien ne l'appelle — ni une
+-- migration, ni une fonction de bord, ni l'écran.
+--
+-- La garder serait pire que la retirer. Une fonction que rien n'appelle ne se
+-- vérifie plus : elle porterait un second découpage, à côté de celui qui sert,
+-- et le jour où l'un des deux change l'autre ne suit pas (règle 4). C'est
+-- exactement la duplication que cette migration défait.
+--
+-- Le retrait est sûr : les six fonctions qui la citaient ont été réécrites
+-- au-dessus, dans ce même fichier, avant cette ligne.
+
+drop function if exists public.la_coupe_dun_texte(text);

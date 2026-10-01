@@ -125,13 +125,24 @@ test("le projet et le carnet montent le même tableau des situations", () => {
   const layout = readFileSync(join(VUES, "project-layout.js"), "utf8");
   const carnet = readFileSync(join(VUES, "mon-carnet.js"), "utf8");
 
-  for (const [quoi, source] of [["la mise en page du projet", layout], ["le carnet", carnet]]) {
-    assert.match(
-      source,
-      /renderProjectSituations\(content\)|renderProjectSituations\(content\);/,
-      `${quoi} doit monter le tableau commun`
-    );
-  }
+  assert.match(carnet, /renderProjectSituations\(content\)/,
+    "le carnet doit monter le tableau commun");
+
+  // **Et l'onglet doit y mener, pas seulement contenir l'appel.** Un
+  // identifiant qui ne figure dans aucune branche retombe en silence sur
+  // Fichiers : on demande ses situations et l'on obtient autre chose, sans que
+  // rien ne le dise (règle 5). Les deux branches comptent — celle qui reconnaît
+  // l'adresse, et celle qui dessine.
+  assert.match(
+    layout,
+    /case PROJECT_TAB_IDS\.SITUATIONS:\s*\n\s*case PROJECT_TAB_IDS\.PROPOSITIONS:/,
+    "l'adresse des situations doit être reconnue, sans quoi elle retombe sur Fichiers"
+  );
+  assert.match(
+    layout,
+    /case PROJECT_TAB_IDS\.SITUATIONS:[\s\S]{0,400}?renderProjectSituations\(content\);/,
+    "la mise en page du projet doit mener au tableau commun"
+  );
 });
 
 /**

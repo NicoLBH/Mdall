@@ -56,6 +56,23 @@ test("une colonne n'accueille que ce qui recouvre tout le monde", () => {
 });
 
 /**
+ * **Et avec toute la colonne dans les deux sens.**
+ *
+ * L'ordre reçu est celui de la file, et rien ne garantit qu'il soit celui des
+ * départs : une étape peut arriver après une autre et avoir commencé avant.
+ * Sans la seconde moitié du recouvrement, elle rejoindrait une colonne qu'elle
+ * n'a jamais croisée — le dessin affirmerait qu'elles ont tourné ensemble alors
+ * que l'une était finie quand l'autre a commencé.
+ */
+test("une étape finie avant que la colonne commence n'y entre pas", () => {
+  assert.deepEqual(
+    // a : 0 → 1000 · b : 500 → 1500 · c : 100 → 300, donc finie avant b
+    nomsDesColonnes([pas("a", 0, 1000), pas("b", 500, 1000), pas("c", 100, 200)]),
+    [["a", "b"], ["c"]]
+  );
+});
+
+/**
  * **Une étape qui tourne encore n'a pas de fin.** Elle recouvre donc tout ce
  * qui commence après elle, et c'est la vérité de l'instant où l'on regarde :
  * lui donner une fin immédiate la détacherait de ce qui tourne avec elle.
