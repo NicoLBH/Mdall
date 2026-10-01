@@ -303,3 +303,40 @@ test("la phrase du dossier nomme le dossier et dit qui voit quoi", () => {
   assert.match(phrase, /déposés lui-même/);
   assert.doesNotMatch(phrase, /n'est pas partagé/);
 });
+
+/**
+ * **Entré en mémoire, il n'est plus privé — et la marque suit la politique.**
+ *
+ * Le cadenas se décide sur les mêmes faits que la règle de lecture : c'est tout
+ * le contrat de cette fonction. Depuis `202611110001_...`, un document qui porte
+ * une proposition signée se lit par toute l'équipe — son contenu est la
+ * connaissance du projet, et le cacher empêcherait de vérifier ce qu'on vient
+ * d'accepter.
+ *
+ * Oublier ce fait-là aurait dessiné « Privé » sur un document que l'équipe lit :
+ * un marqueur sans équivoque qui se trompe est pire que pas de marqueur, il fait
+ * déposer sans regarder.
+ */
+test("un fichier entré en mémoire ne porte plus de cadenas", () => {
+  const prive = { prive: true };
+
+  // Tant qu'il n'est pas entré : le cadenas.
+  assert.notEqual(
+    laMarqueDunFichier({ deposant: "u-1", propositionId: null }, prive), null);
+
+  // Entré : plus rien, parce que l'équipe le lit vraiment.
+  assert.equal(
+    laMarqueDunFichier({ deposant: "u-1", propositionId: "prop-1" }, prive), null);
+});
+
+/**
+ * **Ne pas savoir n'est pas savoir que oui.** Toutes les lectures de la table
+ * ne demandent pas `proposition_id` ; le rabattre sur « partagé » promettrait
+ * l'inverse de la vérité sur une question qu'on n'a pas posée (règle 5).
+ */
+test("une colonne non lue ne fait pas disparaître le cadenas", () => {
+  const prive = { prive: true };
+  assert.notEqual(laMarqueDunFichier({ deposant: "u-1" }, prive), null);
+  assert.notEqual(
+    laMarqueDunFichier({ deposant: "u-1", propositionId: undefined }, prive), null);
+});

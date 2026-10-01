@@ -42,13 +42,30 @@ export const ETIQUETTE = {
    * ce qu'il dit n'est en mémoire.
    */
   HORS_MEMOIRE: "hors-memoire",
-  /** Rien à dire : il est entré par une proposition, comme le reste. */
+  /**
+   * Entré par une proposition signée : ce qu'il dit **est** dans la mémoire du
+   * projet.
+   *
+   * ## Pourquoi ce n'est plus le silence
+   *
+   * C'était `AUCUNE` : rien ne s'affichait. Le raisonnement tenait tant que le
+   * silence était l'ordinaire — « hors mémoire » marquait l'exception.
+   *
+   * Il ne tient plus depuis que cette ligne **décide aussi de la visibilité**
+   * (`202611110001_...`) : un document entré en mémoire cesse d'être privé.
+   * Quelqu'un qui voit « Privé » disparaître d'une ligne doit pouvoir lire
+   * pourquoi, sur cette ligne. Un changement de régime qui ne s'annonce pas est
+   * un changement qu'on découvre en s'apercevant que l'équipe a vu.
+   */
+  EN_MEMOIRE: "en-memoire",
+  /** Rien à dire : on n'a pas posé la question. */
   AUCUNE: ""
 };
 
 export const MOTS = {
   [ETIQUETTE.HORS_CORPUS]: "hors corpus",
-  [ETIQUETTE.HORS_MEMOIRE]: "hors mémoire"
+  [ETIQUETTE.HORS_MEMOIRE]: "hors mémoire",
+  [ETIQUETTE.EN_MEMOIRE]: "dans la mémoire"
 };
 
 export const EXPLICATIONS = {
@@ -58,7 +75,12 @@ export const EXPLICATIONS = {
   [ETIQUETTE.HORS_MEMOIRE]:
     "Ce document a été déposé directement, avant que tout dépôt ne passe par une "
     + "proposition : il se range, se lit et se partage, mais rien de ce qu'il dit "
-    + "n'est entré dans la mémoire du projet."
+    + "n'est entré dans la mémoire du projet.",
+  [ETIQUETTE.EN_MEMOIRE]:
+    "Ce que ce document dit est entré dans la mémoire du projet, par une "
+    + "proposition que quelqu'un a signée. Il se lit donc par toute l'équipe, "
+    + "même s'il vient d'un dossier privé : une mémoire dont on ne peut pas "
+    + "ouvrir la source ne se vérifie pas."
 };
 
 /**
@@ -82,7 +104,7 @@ export function etiquetteDuDocument(document = null) {
   // étiqueter tout un dossier sur une colonne qu'on n'a pas lue.
   if (document.propositionId === undefined) return ETIQUETTE.AUCUNE;
 
-  return texte(document.propositionId) ? ETIQUETTE.AUCUNE : ETIQUETTE.HORS_MEMOIRE;
+  return texte(document.propositionId) ? ETIQUETTE.EN_MEMOIRE : ETIQUETTE.HORS_MEMOIRE;
 }
 
 /** Le mot qui se lit sur la ligne, et l'explication au survol. */

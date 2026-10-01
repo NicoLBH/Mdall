@@ -15,7 +15,9 @@ import {
   longletDit, ongletValide, partitionnerActions, quelqueChoseTourne
 } from "../services/run-partition.js";
 import { renderSideNavItem } from "./ui/side-nav-layout.js";
-import { bindSideResizer, renderSideResizer } from "./ui/side-resizer.js";
+import {
+  bindRailResizer, followRailScroll, railWidth, renderProjectRail
+} from "./ui/project-rail.js";
 import { store } from "../store.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
@@ -392,42 +394,41 @@ function renderMarqueAtelier(entry) {
  * ## Pourquoi il n'est plus une rangée d'onglets
  *
  * Les trois vues étaient trois boutons posés au-dessus du tableau. Ils
- * marchaient, et ils avaient deux défauts : la ligne se lisait comme un
- * filtre secondaire alors qu'elle décide de **tout ce qu'on voit**, et le
- * tableau n'annonçait nulle part ce qu'il montrait — on lisait trois lignes
- * avant de se demander si l'on était dans « Partagées » ou dans « Atelier ».
+ * marchaient, et ils avaient deux défauts : la ligne se lisait comme un filtre
+ * secondaire alors qu'elle décide de **tout ce qu'on voit**, et le tableau
+ * n'annonçait nulle part ce qu'il montrait.
  *
- * Les Sujets ont réglé la même chose de la même façon. On reprend leur rail
- * — mêmes classes, même poignée, même bouton de repli — plutôt que d'en
- * dessiner un second, qu'il faudrait recalibrer à chaque retouche.
+ * ## Pourquoi c'est `renderProjectRail`, et plus une copie
  *
- * Le compte va avec le nom : « Atelier 0 » dit, avant le clic, qu'il n'y a
- * rien à y voir.
+ * Ce rail était dessiné à la main, avec les classes que la Mémoire employait
+ * **avant** de passer à la coque commune : `memoire-tree`, `memoire-layout`,
+ * une poignée branchée à part, une largeur bornée autrement. La Mémoire a
+ * déménagé ; cette copie est restée.
+ *
+ * Conséquences, toutes visibles à l'écran : le rail ne se calait pas sous la
+ * barre des onglets, ne descendait pas jusqu'en bas, et replié il laissait le
+ * tableau glisser sous lui au lieu de rester au centre. Trois détails qu'il
+ * fallait régler **une fois de plus**, alors qu'ils l'étaient déjà ailleurs.
+ *
+ * Une coque dessinée deux fois diverge au premier changement, et la seconde est
+ * fausse avant d'être finie (règle 4). Il n'y en a plus qu'une.
+ *
+ * Le compte va avec le nom : « Atelier 0 » dit, avant le clic, qu'il n'y a rien
+ * à y voir.
  */
 function renderRailDesActions(piles, actif) {
-  const ouvert = store.projectActionsView?.railOuvert !== false;
-
-  return `
-    <aside class="memoire-tree${ouvert ? "" : " is-collapsed"}" aria-label="Les vues du journal">
-      <div class="memoire-tree__tete">
-        <button type="button" class="bouton-discret documents-tree__toggle" data-actions-rail-replier
-          aria-label="${ouvert ? "Replier la barre latérale" : "Étendre la barre latérale"}"
-          title="${ouvert ? "Replier la barre latérale" : "Étendre la barre latérale"}">
-          ${svgIcon(ouvert ? "sidebar-collapse" : "sidebar-expand", { className: "octicon" })}
-        </button>
-      </div>
-      <div class="documents-tree__panel">
-        ${ONGLETS.map((onglet) => renderSideNavItem({
-          label: onglet.libelle,
-          iconHtml: svgIcon(onglet.icone),
-          isActive: onglet.cle === actif,
-          tag: String((piles[onglet.cle] ?? []).length),
-          dataAttributes: { "data-actions-onglet": onglet.cle }
-        })).join("")}
-      </div>
-      ${renderSideResizer({ id: "actionsRailResize", className: "documents-tree__resize-handle" })}
-    </aside>
-  `;
+  return renderProjectRail({
+    id: "actionsRail",
+    label: "Les vues du journal",
+    collapsed: store.projectActionsView?.railOuvert === false,
+    navHtml: ONGLETS.map((onglet) => renderSideNavItem({
+      label: onglet.libelle,
+      iconHtml: svgIcon(onglet.icone),
+      isActive: onglet.cle === actif,
+      tag: String((piles[onglet.cle] ?? []).length),
+      dataAttributes: { "data-actions-onglet": onglet.cle }
+    })).join("")
+  });
 }
 
 function renderRunsTable() {
@@ -481,20 +482,23 @@ function renderRunsTable() {
     emptyHtml: renderDataTableEmptyState(vide)
   });
   const vue = longletDit(actif);
-  const ouvert = store.projectActionsView?.railOuvert !== false;
-  const largeur = Math.max(180, Math.min(520, Number(store.projectActionsView?.railLargeur || 240)));
+  const replie = store.projectActionsView?.railOuvert === false;
 
   return `
-    <div class="memoire-layout memoire-layout--actions${ouvert ? "" : " memoire-layout--replie"}"
-         style="--memoire-tree-width:${ouvert ? largeur : 48}px">
+    <div class="project-rail-layout${replie ? " project-rail-layout--collapsed" : ""}">
       ${renderRailDesActions(piles, actif)}
-      <div class="memoire-corps">
+
+      <div class="project-rail-layout__content">
         ${/*
           **Le tableau dit ce qu'il montre.** Le rail porte la vue active, et
           le rail peut être replié : sans ce titre, un journal replié ne dit
           plus du tout ce qu'on y lit. L'explication tient sur la même ligne
           logique — ce que la rangée d'onglets disait déjà, et qui n'avait pas
           à disparaître avec elle.
+
+          **Dans la colonne, jamais au-dessus du rail** : posé sur le bord
+          gauche de la coque, un titre commence derrière la barre latérale, qui
+          flotte par-dessus.
         */""}
         <div class="memoire-corps__tete">
           <h2 class="actions-vue__titre">${escapeHtml(vue.libelle)}</h2>
@@ -879,9 +883,22 @@ function renderProjectActionsContent(root) {
   // étape ouverte sans son exécution serait une page orpheline.
   const etape = open ? etapeDe(open, store.projectActionsView?.openStepId) : null;
 
+  /**
+   * **La coquille est celle des Sujets, à l'identique.**
+   *
+   * Elle était `project-page-shell`, qui borne à 1216 pixels et **centre** :
+   * avec un rail en position fixe contre le bord gauche, le contenu comptait la
+   * marge du rail **en plus** du centrage, et le tableau se retrouvait décalé
+   * d'une largeur de rail vers la droite. Replié, il glissait sous le rail.
+   *
+   * `page-large` est ce que les Sujets emploient pour la même chose : un
+   * tableau qui veut de la largeur, dans une page qui porte un rail.
+   */
   root.innerHTML = `
-    <section class="project-simple-page project-simple-page--settings">
-      <div class="settings-content project-page-shell actions-shell">
+    <section class="project-simple-page project-simple-page--actions"
+      style="--project-rail-width:${railWidth(
+        store.projectActionsView?.railLargeur, store.projectActionsView?.railOuvert === false)}px">
+      <div class="page-large">
         ${etape ? renderStepDetail(open, etape) : open ? renderRunDetail(open) : renderRunsTable()}
       </div>
     </section>
@@ -903,14 +920,21 @@ function renderProjectActionsContent(root) {
  * on redessine à la fin. Redessiner à chaque pixel reconstruirait le tableau
  * vingt fois par seconde, et la poignée décrocherait du pointeur.
  */
+let railDetacher = null;
+
 function brancherLeRail(root) {
-  bindSideResizer({
-    handle: document.getElementById("actionsRailResize"),
-    guide: document.getElementById("actionsRailResizeGuide"),
-    getWidth: () => Number(store.projectActionsView?.railLargeur || 240),
-    onResize: (largeur) => {
-      root.querySelector(".memoire-layout")?.style.setProperty("--memoire-tree-width", `${largeur}px`);
-    },
+  // **Le haut du rail suit le défilement.** Les onglets du projet défilent avec
+  // la page, l'en-tête global non : sans ce calage, le rail restait à la
+  // hauteur qu'il avait au rendu et laissait un blanc sous les onglets quand
+  // ils se compactaient. La mesure vit dans la coque commune.
+  railDetacher?.();
+  railDetacher = followRailScroll(root.querySelector(".project-rail"));
+
+  bindRailResizer({
+    root,
+    id: "actionsRail",
+    pageSelector: ".project-simple-page",
+    getWidth: () => railWidth(store.projectActionsView?.railLargeur),
     onEnd: (largeur) => {
       if (!store.projectActionsView || typeof store.projectActionsView !== "object") {
         store.projectActionsView = {};
@@ -1039,9 +1063,14 @@ export function renderProjectActions(root) {
     store.projectActionsView.openStepId = "";
   }
 
+    // **Pas de bandeau de vue.** Il portait un libellé et rien d'autre : une
+  // bande vide entre les onglets et le contenu, qui empêchait le rail de se
+  // caler sous la barre des onglets et de descendre jusqu'en bas. Les Sujets,
+  // la Mémoire, l'Atelier et les Propositions le masquent déjà.
   setProjectViewHeader({
     contextLabel: "Actions",
-    variant: "actions"
+    variant: "actions",
+    hideBar: true
   });
 
   renderProjectActionsContent(root);
@@ -1074,10 +1103,10 @@ export function renderProjectActions(root) {
       return;
     }
 
-    // Replier le rail. Le bouton reste exactement où il était, replié ou non :
-    // un bouton qui se déplace selon l'état qu'il commande oblige à le
-    // chercher chaque fois qu'on veut revenir en arrière.
-    const replier = event.target?.closest?.("[data-actions-rail-replier]");
+    // Replier le rail. Le bouton est celui de la coque commune — calé en bas,
+    // au même endroit replié ou non : un bouton qui se déplace selon l'état
+    // qu'il commande oblige à le chercher chaque fois qu'on veut revenir.
+    const replier = event.target?.closest?.("[data-project-rail-collapse]");
     if (replier) {
       event.preventDefault();
       store.projectActionsView.railOuvert = store.projectActionsView.railOuvert === false;

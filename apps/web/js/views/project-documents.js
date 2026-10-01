@@ -1892,24 +1892,30 @@ function renderRepoDocumentRow(doc) {
  */
 function describeRecognition(document = {}) {
   const detection = document.detection ?? null;
-  const phase = `${document.phaseCode || ""}${document.phaseLabel ? ` - ${document.phaseLabel}` : ""}`;
-  const fallback = document.note || "Document prêt pour l'analyse";
+  /**
+   * **La phase du projet ne se dit plus ligne par ligne.**
+   *
+   * Elle s'écrivait sous chaque document — « PC - Permis de construire »,
+   * quatre-vingt-trois fois la même chose. C'est une propriété du **projet**,
+   * pas du fichier : elle ne distingue aucune ligne d'une autre, et elle
+   * occupait la moitié de la colonne qui sert à dire ce qui cloche.
+   */
+  const fallback = document.note || "";
 
   // Un doublon ou une réédition passent avant tout le reste : c'est ce qu'il
   // faut savoir de ce document, et savoir DE QUI il double ou réédite. Le dire
   // sans nommer l'autre laisserait le lecteur chercher lequel.
   const twin = describeTwin(document);
-  if (twin) return { known: false, main: twin, meta: phase, title: twin };
+  if (twin) return { known: false, main: twin, meta: "", title: twin };
 
-  if (!detection?.status) return { known: false, main: fallback, meta: phase, title: fallback };
+  if (!detection?.status) return { known: false, main: fallback, meta: "", title: fallback };
 
   const known = detection.status === "RECOGNIZED" || detection.status === "RECOGNIZED_WITHOUT_CONTENT";
   const main = known ? detection.kindLabel || fallback : detection.reason || fallback;
   const parts = [
     detection.author ? detection.author.toLocaleUpperCase("fr") : null,
     detection.status === "RECOGNIZED_WITHOUT_CONTENT" ? "sans contenu exploitable" : null,
-    detection.confidence === "probable" ? "reconnaissance probable" : null,
-    phase || null
+    detection.confidence === "probable" ? "reconnaissance probable" : null
   ].filter(Boolean);
 
   return { known, main, meta: parts.join(" · "), title: detection.reason || main };

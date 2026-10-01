@@ -20,18 +20,33 @@ test("un texte et un PDF se cliquent tous les deux", () => {
   assert.match(html, /data-choisir-document="d2"/);
 });
 
-test("un PDF annonce ce qu'il coûtera, un texte ne dit rien", () => {
-  const html = renderChoisirUnFichier({ entrees: DOSSIER });
+/**
+ * **Le coût ne s'écrit plus ligne par ligne.**
+ *
+ * Il y avait une colonne, et elle répétait « ce document sera extrait puis
+ * restitué par le modèle » sur chaque PDF : elle mangeait la moitié de la
+ * largeur et coupait les noms exactement là où l'on reconnaît un compte rendu
+ * de chantier — on choisissait à l'aveugle.
+ *
+ * Le prix se dit toujours **avant le clic**, et mieux : dans la barre de
+ * lancement, pour toute la file et en une fois (« 2 PDF à extraire puis
+ * restituer par le modèle »). Sur la ligne, il reste en infobulle, où il ne
+ * coûte aucune place.
+ */
+test("le coût se dit dans la barre, et en infobulle sur la ligne", () => {
+  const html = renderChoisirUnFichier({
+    entrees: DOSSIER,
+    choisis: new Set(["d2"]),
+    connues: DOSSIER
+  });
 
-  // Un prix qu'on découvre après coup n'entre jamais dans la décision.
-  assert.match(html, /extrait puis restitué/);
-  // Et une phrase sur chaque ligne ferait du bruit là où il n'y a rien à dire :
-  // deux entrées sur trois n'ont rien à annoncer, et leur colonne reste vide.
-  const colonnes = [...html.matchAll(/documents-repo__message-main">([^<]*)</g)]
-    .map((trouve) => trouve[1].trim());
-
-  assert.equal(colonnes.length, 3, "un dossier, un texte, un PDF");
-  assert.deepEqual(colonnes.filter(Boolean), ["Ce document sera extrait puis restitué par le modèle."]);
+  // Plus de colonne : le nom prend toute la largeur.
+  assert.doesNotMatch(html, /documents-repo__cell--message/,
+    "la colonne du coût est encore là, et elle coupe les noms");
+  // L'infobulle, elle, reste.
+  assert.match(html, /title="Ce document sera extrait puis restitué par le modèle\."/);
+  // Et la barre l'annonce pour toute la file, avant le clic.
+  assert.match(html, /1 PDF à extraire puis restituer par le modèle/);
 });
 
 test("un format illisible ne se clique pas, et dit pourquoi", () => {
