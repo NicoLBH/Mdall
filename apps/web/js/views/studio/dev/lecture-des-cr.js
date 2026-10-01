@@ -56,9 +56,14 @@ import {
   EXTENSIONS_LISIBLES, estUnFichierTexte, laRestitutionDunTexte, nomDuFichier
 } from "../../../services/lire-un-fichier-texte.js";
 import {
-  LECTURE_DU_CHOIX, entreesDuDossier
+  LECTURE_DU_CHOIX, basculerLeChoix, entreesDuDossier, etatDeLaCaseDuDossier, toutBasculer
 } from "../../../services/choisir-depuis-fichiers.js";
-import { renderChoisirUnFichier } from "../../ui/choisir-un-fichier.js";
+import {
+  renderChoisirUnFichier, renderLaFileDesComptesRendus
+} from "../../ui/choisir-un-fichier.js";
+import {
+  DANS_LA_FILE, apresUnPas, laFileArretee, leProchainDeLaFile, uneFileDeComptesRendus
+} from "../../../services/la-file-des-comptes-rendus.js";
 import { PHRASES_DU_RANGEMENT, RANGEE } from "../../../services/restitution-rangee.js";
 import {
   LABEL_DU_CR, QUOI_DU_LABEL, labelDuCrDansLeProjet, labelsAProposer, styleDuLabel
@@ -314,6 +319,39 @@ const etat = {
    * lu » : c'est un dossier qui ne contient rien (règle 5).
    */
   choix: null,
+  /**
+   * Ce qui est coché, tous dossiers confondus.
+   *
+   * **Un `Set`, et il traverse les dossiers.** On monte une file de trente
+   * comptes rendus en descendant quatre dossiers ; une sélection remise à zéro
+   * à chaque navigation aurait obligé à tout faire depuis un seul répertoire,
+   * c'est-à-dire presque jamais.
+   */
+  coches: new Set(),
+  /**
+   * Toutes les entrées rencontrées, par identifiant.
+   *
+   * La barre de lancement doit dire **combien de PDF** la file contient, et un
+   * document coché dans un dossier qu'on a quitté n'est plus dans `choix.entrees`.
+   * Sans cette mémoire, le coût annoncé aurait baissé en changeant de dossier.
+   */
+  connues: new Map(),
+  /**
+   * Les lignes brutes des documents listés, par identifiant.
+   *
+   * Séparées de `connues`, qui est la projection pure que le rendu reçoit : y
+   * glisser un seau et un chemin de stockage aurait fait voyager des chemins
+   * dans une structure d'affichage.
+   */
+  pieces: new Map(),
+  /**
+   * La file en train de tourner, ou `null`.
+   *
+   * Voir `services/la-file-des-comptes-rendus.js`. Elle ne lit rien elle-même :
+   * elle dit quel est le suivant, et cet écran fait le geste qu'il sait déjà
+   * faire.
+   */
+  file: null,
   /** L'onglet regardé. Voir `ONGLET`. */
   onglet: ONGLET.RESTITUTION,
   /** Le document restitué. Voir `renderRestitution`. */
@@ -450,8 +488,22 @@ export function renderLaLecture(vue = etat) {
   return `
     <div class="lecture-cr">
       ${renderEntete(vue)}
-      ${vue.choix ? renderChoisirUnFichier(vue.choix) : renderDepot(vue)}
-      ${vue.choix ? "" : renderCorps(vue)}
+      ${
+        // **Trois états, et un seul se montre à la fois.** La file pendant
+        // qu'elle tourne, le choix quand on sélectionne, le dépôt sinon. Les
+        // superposer aurait laissé une zone de dépôt active sous une file de
+        // trente lectures — et un document déposé là aurait abandonné un appel
+        // déjà payé.
+        vue.file
+          ? renderLaFileDesComptesRendus(vue.file)
+          : vue.choix
+            ? renderChoisirUnFichier({
+              ...vue.choix,
+              choisis: vue.coches,
+              connues: [...(vue.connues?.values?.() ?? [])]
+            })
+            : renderDepot(vue)}
+      ${vue.choix || vue.file ? "" : renderCorps(vue)}
     </div>
   `;
 }
@@ -2555,6 +2607,50 @@ function brancher(hote) {
       return;
     }
 
+    // **La case avant le nom.** Les deux vivent dans la même ligne : si le nom
+    // était examiné d'abord, cocher ouvrirait le document — et l'on paierait
+    // une extraction pour un clic de sélection.
+    const coche = cible.closest("[data-choisir-coche]");
+    if (coche) {
+      etat.coches = basculerLeChoix(
+        etat.coches, coche.dataset.choisirCoche || "", etat.choix?.entrees ?? []);
+      redessiner(hote);
+      return;
+    }
+
+    if (cible.closest("[data-choisir-tout]")) {
+      const entrees = etat.choix?.entrees ?? [];
+      // **L'état d'avant le clic**, pris au même endroit que celui qu'on a
+      // dessiné : le navigateur a déjà basculé la case visuellement, et relire
+      // `checked` aurait inversé le geste. Un dossier partiellement coché se
+      // cochera donc entièrement, ce qui est ce qu'on attend d'un clic sur un
+      // trait.
+      etat.coches = toutBasculer(etat.coches, entrees, {
+        cocher: etatDeLaCaseDuDossier(etat.coches, entrees) !== "toutes"
+      });
+      redessiner(hote);
+      return;
+    }
+
+    if (cible.closest("[data-choisir-rien]")) {
+      etat.coches = new Set();
+      redessiner(hote);
+      return;
+    }
+
+    if (cible.closest("[data-choisir-lancer]")) {
+      void lancerLaFile(hote);
+      return;
+    }
+
+    if (cible.closest("[data-file-arreter]")) {
+      // **Ce qui est déjà proposé le reste** (règle 6) : on empêche la suite,
+      // on ne défait pas le passé.
+      etat.file = laFileArretee(etat.file);
+      redessiner(hote);
+      return;
+    }
+
     const dossier = cible.closest("[data-choisir-dossier]");
     if (dossier) {
       void ouvrirLeChoix(hote, dossier.dataset.choisirDossier || "");
@@ -2662,10 +2758,24 @@ async function ouvrirLeChoix(hote, dossierId = "") {
     const { listDocumentDirectory } = await import("../../../services/project-supabase-sync.js");
     const contenu = await listDocumentDirectory(projectId, texte(dossierId) || null);
 
+    const entrees = entreesDuDossier(contenu);
+    // **Les lignes brutes aussi.** Lire un document demande son seau et son
+    // chemin, que la projection de la liste ne porte pas — et une file traverse
+    // des dossiers qu'on a quittés.
+    for (const fichier of contenu?.files ?? []) {
+      const id = texte(fichier?.id);
+      if (id) etat.pieces.set(id, fichier);
+    }
+    // **Ce qu'on a vu reste su.** La barre de lancement doit dire combien de PDF
+    // la file contient ; un document coché dans un dossier qu'on a quitté n'est
+    // plus dans `entrees`, et sans cette mémoire le coût annoncé aurait baissé
+    // en changeant de dossier.
+    for (const une of entrees) etat.connues.set(une.id, une);
+
     etat.choix = {
       dossier: texte(dossierId),
       breadcrumb: Array.isArray(contenu?.breadcrumb) ? contenu.breadcrumb : [],
-      entrees: entreesDuDossier(contenu),
+      entrees,
       enCours: false,
       motif: ""
     };
@@ -2683,6 +2793,11 @@ async function ouvrirLeChoix(hote, dossierId = "") {
 
 function fermerLeChoix(hote) {
   etat.choix = null;
+  // **Les coches partent avec le choix, la file aussi.** Une sélection qui
+  // survivrait à « Annuler » reviendrait cochée à la prochaine ouverture, et
+  // l'on lancerait trente lectures sans l'avoir voulu.
+  etat.coches = new Set();
+  etat.file = null;
   redessiner(hote);
 }
 
@@ -2716,37 +2831,171 @@ async function prendreLeDocument(hote, documentId) {
   };
 
   try {
-    const [{ listDocumentDirectory }, stockage] = await Promise.all([
-      import("../../../services/project-supabase-sync.js"),
-      import("../../../services/fichier-a-la-main-supabase.js")
-    ]);
+    const { listDocumentDirectory } = await import("../../../services/project-supabase-sync.js");
 
+    // **Le dossier se relit avant de prendre.** Du temps a passé entre
+    // l'ouverture et le clic, et un document qui n'y est plus doit le dire
+    // plutôt que d'échouer au stockage avec un message de panne.
     const contenu = await listDocumentDirectory(projectId, texte(etat.choix.dossier) || null);
     const piece = (contenu?.files ?? []).find((fichier) => texte(fichier?.id) === texte(documentId));
     if (!piece) return rate("Ce document n'est plus dans ce dossier. Rouvrez-le.");
 
-    const enTexte = choisi.lecture === LECTURE_DU_CHOIX.TEXTE;
-    const lu = enTexte
-      ? await stockage.lireLeTexteDuFichier(piece)
-      : await stockage.lireLesOctetsDuFichier(piece);
-
-    // `null` est un échec de lecture ; une chaîne vide est un fichier vide, et
-    // le parcours le dira à sa façon. Les confondre ferait annoncer une panne
-    // pour un document qui ne porte rien (règle 5).
-    if (lu === null) return rate("Ce document n'a pas pu être lu. Réessayez dans un instant.");
+    // Le même lecteur que celui de la file : descendre les octets et nommer le
+    // fichier se décident à un seul endroit (règle 4).
+    const descendu = await leFichierDuDocument(piece, choisi.lecture, choisi.nom);
+    if (descendu.motif) return rate(descendu.motif);
 
     etat.choix = null;
-    // Un `File` plutôt qu'un `Blob` : tout le parcours nomme le document par
-    // `fichier.name`, et un `Blob` n'en a pas.
-    const nom = nomDuFichier(piece) || choisi.nom;
     // **La ligne du document voyage avec lui.** Il est déjà dans le projet : la
     // proposition s'accrochera à cette ligne-là, et non à un second exemplaire
     // qu'on redéposerait.
-    await lire(hote, new File([lu], nom, {
-      type: enTexte ? "text/markdown" : "application/pdf"
-    }), piece);
+    await lire(hote, descendu.fichier, descendu.piece);
   } catch (erreur) {
     rate(`Ce document n'a pas pu être lu (${texte(erreur?.message) || "cause inconnue"}).`);
+  }
+}
+
+/**
+ * Un `File` à partir de la ligne d'un document — **le seul lecteur d'octets**.
+ *
+ * Deux chemins y mènent, et chacun obtient la ligne à sa façon : le clic simple
+ * **relit le dossier** pour s'assurer que le document y est toujours, la file
+ * part de la ligne gardée au moment du listage, parce qu'elle traverse des
+ * dossiers qu'on a quittés et qu'un document disparu fera simplement échouer sa
+ * propre lecture, nommément.
+ *
+ * Ce qui vient après — descendre les octets, nommer le fichier — est le même, et
+ * l'écrire deux fois aurait fait un jour deux façons de nommer le même document
+ * (règle 4).
+ *
+ * @returns {Promise<{fichier: File, piece: object}|{motif: string}>}
+ */
+async function leFichierDuDocument(piece, lecture, nomDeSecours = "") {
+  const stockage = await import("../../../services/fichier-a-la-main-supabase.js");
+  const enTexte = lecture === LECTURE_DU_CHOIX.TEXTE;
+
+  const lu = enTexte
+    ? await stockage.lireLeTexteDuFichier(piece)
+    : await stockage.lireLesOctetsDuFichier(piece);
+
+  // `null` est un échec de lecture ; une chaîne vide est un fichier vide, et le
+  // parcours le dira à sa façon. Les confondre ferait annoncer une panne pour un
+  // document qui ne porte rien (règle 5).
+  if (lu === null) {
+    return { motif: "Ce document n'a pas pu être lu. Réessayez dans un instant." };
+  }
+
+  // Un `File` plutôt qu'un `Blob` : tout le parcours nomme le document par
+  // `fichier.name`, et un `Blob` n'en a pas.
+  const nom = nomDuFichier(piece) || texte(nomDeSecours) || "Document";
+  return {
+    fichier: new File([lu], nom, { type: enTexte ? "text/markdown" : "application/pdf" }),
+    piece
+  };
+}
+
+/**
+ * Lire trente comptes rendus, l'un après l'autre.
+ *
+ * ## Elle ne réinvente aucun geste
+ *
+ * C'est tout le choix de conception. La file demande « quel est le suivant ? »,
+ * puis appelle **`lire` et `transformer`** — les deux fonctions que le clic
+ * simple appelle déjà, inchangées. Un second parcours, bâti à côté, aurait
+ * dupliqué la restitution, la confrontation au projet, le rangement dans
+ * Fichiers et la rédaction de la proposition : quatre décisions qui auraient
+ * divergé de celles de l'écran à la première retouche (règle 4).
+ *
+ * `lire` remet l'état à zéro à chaque début, et c'est précisément ce qui rend la
+ * répétition possible : chaque tour part d'un écran propre.
+ *
+ * ## Une proposition par compte rendu, et aucune signature
+ *
+ * `allerALaSignature: false` : on reste sur place. Chaque tour laisse une
+ * proposition ouverte, et c'est tout — rien n'entre dans la mémoire du chantier
+ * (règle 1). La file le dit à la fin, avec le compte.
+ *
+ * ## L'un après l'autre, et jamais en parallèle
+ *
+ * Trente appels simultanés au modèle, ce sont trente factures et un écran dont
+ * on ne sait plus où il en est. Et `etat` est unique : deux lectures en vol
+ * s'écraseraient l'une l'autre. La séquence n'est donc pas une précaution, c'est
+ * la seule forme possible.
+ *
+ * ## Un échec ne l'arrête pas
+ *
+ * Il se nomme, et la file avance (règle 5). S'arrêter au premier document
+ * illisible abandonnerait vingt-neuf lectures.
+ */
+async function lancerLaFile(hote) {
+  const connues = [...etat.connues.values()];
+  const file = uneFileDeComptesRendus(etat.coches, connues);
+  if (!file.pas.length) return;
+
+  etat.file = file;
+  etat.choix = null;
+  // **Les coches partent avec le lancement.** Les garder aurait relancé la même
+  // file au clic suivant sur « Lire », sans que rien ne le dise.
+  etat.coches = new Set();
+  redessiner(hote);
+
+  for (;;) {
+    /**
+     * **Un écran qu'on a quitté arrête la file.**
+     *
+     * Trente lectures prennent de longues minutes. Sans cette garde, quitter
+     * l'Atelier au cinquième laissait la boucle appeler le modèle vingt-cinq
+     * fois de plus, pour un écran que personne ne regarde — et la facture, elle,
+     * arrivait quand même (fondamental 13).
+     *
+     * `redessiner` savait déjà ne pas écrire dans un élément détaché ; il ne
+     * pouvait pas arrêter ce qui l'appelle.
+     */
+    if (!hoteCourant?.isConnected && !hote?.isConnected) {
+      etat.file = laFileArretee(etat.file);
+      return;
+    }
+
+    const prochain = leProchainDeLaFile(etat.file);
+    if (!prochain) break;
+
+    etat.file = apresUnPas(etat.file, prochain.id, DANS_LA_FILE.EN_COURS);
+    redessiner(hote);
+
+    const motif = await unPasDeLaFile(hote, prochain);
+
+    etat.file = apresUnPas(etat.file, prochain.id,
+      motif ? DANS_LA_FILE.ECHOUE : DANS_LA_FILE.PROPOSE, motif);
+    redessiner(hote);
+  }
+}
+
+/**
+ * Un pas : lire ce compte rendu, et en faire une proposition.
+ *
+ * @returns {Promise<string>} le motif de l'échec, ou `""`.
+ */
+async function unPasDeLaFile(hote, pas) {
+  const piece = etat.pieces.get(pas.id);
+  if (!piece) return "Ce document n'est plus dans le projet.";
+
+  try {
+    const descendu = await leFichierDuDocument(piece, pas.lecture, pas.nom);
+    if (descendu.motif) return descendu.motif;
+
+    await lire(hote, descendu.fichier, descendu.piece);
+    // **`lire` dit ce qui s'est passé par la phase**, et son alerte porte le
+    // motif. Le relire ici plutôt que de le deviner évite une ligne rouge sans
+    // raison.
+    if (etat.phase !== "lue") {
+      return texte(etat.motif) || "La lecture de ce compte rendu n'a pas abouti.";
+    }
+
+    const fait = await transformer(hote, { allerALaSignature: false });
+    return fait?.ok ? "" : (texte(fait?.motif) || "La proposition n'a pas pu être préparée.");
+  } catch (erreur) {
+    return `Ce compte rendu n'a pas pu être traité (${
+      texte(erreur?.message) || "cause inconnue"}).`;
   }
 }
 
@@ -3456,7 +3705,9 @@ function garnirLeCote(cote, pages) {
  * sujet de discussion sur la lecture elle-même, ce qui n'est pas la même chose
  * que d'ouvrir les points du compte rendu.
  */
-async function transformer(hote, { sujet = false, branche = "" } = {}) {
+async function transformer(hote, {
+  sujet = false, branche = "", allerALaSignature = true
+} = {}) {
   if (sujet) {
     // **Le quatrième argument, et non le troisième.** Le troisième est le
     // diagnostic du serveur, rendu dans un cadre qui annonce « ce diagnostic
@@ -3467,7 +3718,7 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
       queFaire: "« Faire une proposition » l'est : elle porte le compte rendu et les points "
         + "qui ouvriraient un sujet, et c'est en la signant qu'ils s'ouvrent."
     });
-    return;
+    return { ok: false, motif: "Ouvrir un sujet n'est pas branché depuis cet écran." };
   }
 
   const cote = etat.md?.modele;
@@ -3480,7 +3731,7 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
       queFaire: "Le document doit d'abord avoir été relu : c'est lui que la proposition "
         + "porte, et c'est par lui que chaque point se vérifie."
     });
-    return;
+    return { ok: false, motif: "Il n'y a rien à proposer." };
   }
 
   etat.versement = { enCours: true, dit: "Rangement du compte rendu…" };
@@ -3512,7 +3763,11 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
         panne: `${cr.phraseDuRefus(cr.REFUS.SANS_DOCUMENT)}${
           range.motif ? ` (${range.motif})` : ""}`
       });
-      return;
+      return {
+        ok: false,
+        motif: `Le compte rendu n'a pas pu être rangé dans Fichiers${
+          range.motif ? ` (${range.motif})` : ""}.`
+      };
     }
 
     cote.rangement = { ...cote.rangement, range: true, document: range.document, aRanger: null };
@@ -3523,7 +3778,7 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
     if (refus) {
       etat.versement = { enCours: false, dit: cr.phraseDuRefus(refus) };
       redessiner(hote);
-      return;
+      return { ok: false, motif: cr.phraseDuRefus(refus) };
     }
 
     etat.versement = { enCours: true, dit: "Rédaction de la proposition…" };
@@ -3553,7 +3808,7 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
     if (!rendu.ok) {
       etat.versement = { enCours: false, dit: rendu.raison };
       redessiner(hote);
-      return;
+      return { ok: false, motif: rendu.raison };
     }
 
     etat.versement = {
@@ -3566,16 +3821,34 @@ async function transformer(hote, { sujet = false, branche = "" } = {}) {
     // La liste des propositions ouvertes vient de changer.
     oublierLesBranches();
 
-    // On va où la signature se donne, **et sur celle qu'on vient d'ouvrir** :
-    // la liste obligerait à retrouver à la main celle qu'on vient de préparer.
-    store.pendingPropositionId = rendu.proposition.id;
-    const projet = texte(store.currentProjectId);
-    if (projet) window.location.hash = `#project/${projet}/propositions`;
+    /**
+     * **On ne part pas signer quand on lit une file.**
+     *
+     * Le départ vers la signature est juste pour un compte rendu : on vient
+     * d'en faire une proposition, et la liste obligerait à la retrouver à la
+     * main. Pour trente, il abandonnerait les vingt-neuf suivantes au premier
+     * — l'écran changerait de route et la boucle tournerait dans le vide.
+     *
+     * La file dit à la fin combien de propositions attendent, et où.
+     */
+    if (allerALaSignature) {
+      // On va où la signature se donne, **et sur celle qu'on vient d'ouvrir**.
+      store.pendingPropositionId = rendu.proposition.id;
+      const projet = texte(store.currentProjectId);
+      if (projet) window.location.hash = `#project/${projet}/propositions`;
+    }
+
+    return { ok: true, proposition: rendu.proposition };
   } catch (erreur) {
     refuser(hote, {
       motif: "La proposition n'a pas pu être préparée.",
       panne: texte(erreur?.message) || "cause inconnue"
     });
+    return {
+      ok: false,
+      motif: `La proposition n'a pas pu être préparée (${
+        texte(erreur?.message) || "cause inconnue"}).`
+    };
   }
 }
 

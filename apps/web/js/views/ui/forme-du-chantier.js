@@ -38,6 +38,9 @@ import {
   laPhraseDesJamaisVus, leBilanParDomaine, lesDomainesJamaisVus, lesPointsDeLaPrediction,
   phraseDunDomaine
 } from "../../services/le-detail-de-la-prediction.js";
+import {
+  phraseDeLaDistanceAuHasard, phraseDeLaGranulometrieDuChantier
+} from "../../services/la-granulometrie-dun-chantier.js";
 import { DOMAINS, domainLabel } from "../../services/assertion-taxonomy.js";
 
 /** La puce d'un axe. Les rôles s'écrivent en toutes lettres, pas en codes. */
@@ -196,8 +199,113 @@ export function renderCeQueLaPredictionVoit(mesures = [], vocabulaire = []) {
   `;
 }
 
+/**
+ * **La même prédiction, à la granulométrie des sujets.**
+ *
+ * ## Pourquoi un second bloc, et pas une colonne de plus
+ *
+ * Ce ne sont pas deux notes du même devoir. Prédire parmi huit domaines et
+ * prédire parmi trois cents sujets sont deux exercices, et les poser dans le
+ * même tableau inviterait à soustraire deux pourcentages qui ne se soustraient
+ * pas. Le bloc est donc séparé, et il porte **la distance au hasard** — la seule
+ * grandeur qui se compare entre deux jeux de tailles différentes
+ * (`la-granulometrie-dun-chantier.js`).
+ *
+ * ## « Pas lu » n'est pas « rien trouvé »
+ *
+ * Si la base n'a pas rendu les sujets, on le dit. Afficher un bloc vide se
+ * lirait comme « ce chantier n'emploie aucun terme technique », ce qui est faux
+ * et mène à la décision inverse (règle 5).
+ *
+ * @param {object[]} mesures les mêmes deux bêtises, mesurées sur les sujets
+ * @param {object} quoi
+ * @param {number} [quoi.combien] combien de sujets ce chantier répète
+ * @param {boolean} [quoi.lu] la base a-t-elle rendu les sujets
+ * @param {object[]} [quoi.surDomaines] les mesures sur les domaines, pour la comparaison
+ * @param {number} [quoi.combienDeDomaines] la taille de l'autre jeu
+ */
+export function renderLaPredictionDesSujets(mesures = [], {
+  combien = 0, lu = true, surDomaines = [], combienDeDomaines = 0
+} = {}) {
+  if (!lu) {
+    return `
+      <div class="forme-suite">
+        <h4 class="forme-suite__titre">La prédiction sur les sujets</h4>
+        <p class="forme-manques">
+          Les sujets de ce chantier n'ont pas pu être lus. Ce n'est pas « aucun sujet » :
+          on ne sait pas, et le dire autrement ferait conclure l'inverse.
+        </p>
+      </div>
+    `;
+  }
+
+  const lues = Array.isArray(mesures) ? mesures : [];
+  const chaudes = lues.filter((une) => !une.mesure?.froid);
+  if (!combien) {
+    return `
+      <div class="forme-suite">
+        <h4 class="forme-suite__titre">La prédiction sur les sujets</h4>
+        <p class="forme-manques">
+          Aucun terme technique n'est encore <b>répété</b> dans ce chantier. Un terme vu une
+          seule fois n'a pas de suite à prédire : il faut d'autres comptes rendus.
+        </p>
+      </div>
+    `;
+  }
+
+  // Les deux premières lignes se correspondent une à une : « le plus fréquent »
+  // sur les domaines face à « le plus fréquent » sur les sujets.
+  const dit = phraseDeLaGranulometrieDuChantier({
+    surDomaines: (surDomaines ?? [])[1]?.mesure ?? (surDomaines ?? [])[0]?.mesure ?? null,
+    surSujets: lues[1]?.mesure ?? lues[0]?.mesure ?? null,
+    combienDeDomaines,
+    combienDeSujets: combien
+  });
+
+  return `
+    <div class="forme-suite">
+      <h4 class="forme-suite__titre">La prédiction sur les sujets</h4>
+      <p class="conso-usages__mot">
+        Les mêmes deux prédicteurs, sur les ${escapeHtml(String(combien))} termes techniques que
+        ce chantier répète au lieu des ${escapeHtml(String(combienDeDomaines))} domaines.
+        « Après une question de nappe phréatique, une question de cuvelage » plutôt
+        qu'« après le sol, la structure » — qui est une évidence, et dont personne ne veut.
+      </p>
+      ${chaudes.length ? `
+        <ul class="forme-reference">
+          ${chaudes.map((une) => `
+            <li class="forme-reference__ligne">
+              <span class="forme-reference__quoi">
+                <b>${escapeHtml(une.dit)}</b>
+                <i>${escapeHtml(une.quoi)}</i>
+              </span>
+              <span class="forme-reference__chiffres mono-small">
+                ${escapeHtml([
+                  `${enPourCent(une.mesure.precision1)} du premier coup`,
+                  `${enPourCent(une.mesure.precision3)} dans les trois`,
+                  Number.isFinite(une.mesure.avance)
+                    ? `${Math.round(une.mesure.avance)} j d'avance`
+                    : ""
+                ].filter(Boolean).join(" · "))}
+              </span>
+              <span class="forme-reference__sur mono-small">${
+                escapeHtml(phraseDeLaDistanceAuHasard(une.mesure, combien))}</span>
+            </li>
+          `).join("")}
+        </ul>
+        ${dit ? `<p class="conso-usages__mot">${escapeHtml(dit)}</p>` : ""}
+      ` : `
+        <p class="forme-manques">
+          Trop peu de points notés pour se prononcer sur les sujets : il en faut au moins
+          ${LE_FROID}. Les termes sont là, la suite est trop courte.
+        </p>
+      `}
+    </div>
+  `;
+}
+
 /** La forme et la suite, en un bloc. Le contrat du fichier est en tête. */
-export function renderLaForme(vecteur, episode, mesures = []) {
+export function renderLaForme(vecteur, episode, mesures = [], surLesSujets = null) {
   const axes = vecteur?.axes ?? [];
   const manques = vecteur?.manques ?? [];
   const suite = phraseDeLEpisode(episode);
@@ -244,6 +352,14 @@ export function renderLaForme(vecteur, episode, mesures = []) {
         </div>
         ${renderLaReference(mesures)}
         ${renderCeQueLaPredictionVoit(mesures, DOMAINS)}
+        ${surLesSujets
+          ? renderLaPredictionDesSujets(surLesSujets.mesures ?? [], {
+            combien: surLesSujets.combien ?? 0,
+            lu: surLesSujets.lu !== false,
+            surDomaines: mesures,
+            combienDeDomaines: DOMAINS.length
+          })
+          : ""}
       ` : ""}
     </section>
   `;

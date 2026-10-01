@@ -399,7 +399,7 @@ function renderCaseDeTeteDesSujetsHtml() {
   const etat = etatDeLaCaseDeTete({ selection: getSelectionDesSujets(), visibles });
 
   return `
-    <input type="checkbox" class="sujets-case sujets-case--tete"
+    <input type="checkbox" class="mdall-case mdall-case--tete"
       data-sujets-cocher-tout="1"
       ${etat === "toutes" ? "checked" : ""}
       ${etat === "partielle" ? "data-partielle=\"true\"" : ""}

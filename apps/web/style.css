@@ -25878,6 +25878,53 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .choisir-fichier__ligne--eteinte{opacity:.5;cursor:default;}
 .choisir-fichier__ligne--eteinte:hover{background:none;}
 
+/* La case, et le nom cliquable à côté d'elle.
+
+   Les deux gestes restent : cocher monte une file, cliquer sur le nom ouvre ce
+   document-là. La case a donc sa propre zone, assez large pour qu'on ne la rate
+   pas, et le nom reste un bouton — il porte le curseur et le survol de la
+   ligne, comme dans Fichiers. */
+.choisir-fichier__case{
+  flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center;
+  width:18px; margin-right:2px;
+}
+.choisir-fichier__nom{
+  /* Un bouton qui ne ressemble pas à un bouton : c'est le nom du document, et
+     lui donner un cadre aurait fait douze cadres par dossier. */
+  appearance:none; background:none; border:0; padding:0; margin:0;
+  font:inherit; color:inherit; text-align:left; cursor:pointer;
+  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.choisir-fichier__nom:hover{text-decoration:underline;}
+.choisir-fichier__nom:focus-visible{outline:2px solid var(--accent, #1f6feb);outline-offset:2px;}
+.choisir-fichier .documents-repo__row.is-selected{background:var(--panel2);}
+
+/* La barre de lancement : le compte et le coût à gauche, les gestes à droite.
+   Même cadre que la tête, pour que les deux se lisent comme les bords du même
+   panneau. */
+.choisir-fichier__barre{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:10px 14px; border-top:1px solid var(--border); background:var(--panel2);
+  flex-wrap:wrap;
+}
+.choisir-fichier__compte{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.choisir-fichier__compte i{color:var(--muted);font-style:normal;}
+.choisir-fichier__gestes{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
+
+/* La file en train de tourner. Chaque état porte sa couleur, et l'échec reste
+   lisible : une ligne rouge qu'on n'arrive pas à lire ne dit pas ce qui a
+   manqué. */
+.file-cr__ligne--en-cours{background:var(--panel2);}
+.file-cr__ligne--propose .documents-repo__message-main{color:var(--success, #3fb950);}
+.file-cr__ligne--echoue .documents-repo__message-main{color:var(--danger, #f85149);}
+.file-cr__ligne--attend .documents-repo__message-main{color:var(--muted);}
+.documents-repo__message-sub{color:var(--muted);font-size:12px;margin-top:2px;}
+
+/* La ligne de tête du choix : la case maîtresse, et rien d'autre. Elle emprunte
+   le fond des têtes de tableau de Fichiers. */
+.documents-repo__row--head{background:var(--panel2);}
+.documents-repo__row--head .mono-small{color:var(--muted);}
+
 .lecture-cr__depot-aide code{
   font-family:var(--mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   background:rgba(110,118,129,.12); border-radius:4px; padding:0 4px;
@@ -26573,9 +26620,16 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .cell-cocher-value{padding-top:1px;}
 .cell-cocher-head{align-items:center;}
 
-/* Dessinée plutôt qu'empruntée au système : la case native ne prend ni le fond
+/* La case à cocher de Mdall — **une seule, pour tous les écrans**.
+
+   Elle s'appelait « sujets-case » et ne servait qu'au tableau des sujets. Le
+   choix de plusieurs comptes rendus en avait besoin : en dessiner une seconde
+   aurait fait deux cases à recaler ensemble à chaque retouche du thème, et
+   l'une aurait fini en retard sur l'autre.
+
+   Dessinée plutôt qu'empruntée au système : la case native ne prend ni le fond
    ni la bordure du thème, et l'on ne la voyait pas sur ce noir-là. */
-.sujets-case{
+.mdall-case{
   appearance:none;
   -webkit-appearance:none;
   flex:0 0 auto;
@@ -26589,15 +26643,15 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   border:solid 1px rgb(101, 108, 118);
   cursor:pointer;
 }
-.sujets-case:hover{border-color:rgb(139, 148, 158);}
-.sujets-case:focus-visible{outline:2px solid var(--accent, #1f6feb);outline-offset:1px;}
+.mdall-case:hover{border-color:rgb(139, 148, 158);}
+.mdall-case:focus-visible{outline:2px solid var(--accent, #1f6feb);outline-offset:1px;}
 
-.sujets-case:checked{
+.mdall-case:checked{
   background:rgb(31, 111, 235);
   border:solid 1px rgb(31, 111, 235);
   border-radius:3px;
 }
-.sujets-case:checked::after{
+.mdall-case:checked::after{
   content:"";
   position:absolute;
   left:5px;
@@ -26613,12 +26667,12 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    coche. Une case vide sur une liste où trois sujets sont cochés dirait que
    rien ne l'est, et l'on cliquerait pour tout cocher en croyant ne rien
    défaire. */
-.sujets-case[data-partielle="true"]{
+.mdall-case[data-partielle="true"]{
   background:rgb(31, 111, 235);
   border:solid 1px rgb(31, 111, 235);
   border-radius:3px;
 }
-.sujets-case[data-partielle="true"]::after{
+.mdall-case[data-partielle="true"]::after{
   content:"";
   position:absolute;
   left:50%;
