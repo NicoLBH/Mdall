@@ -1593,7 +1593,10 @@ export async function syncProjectActionsFromSupabase(options = {}) {
   const lireLaFile = async () => {
     try {
       const file = new URLSearchParams();
-      file.set("select", "id,project_id,statut,fichiers,avancement,arrete,cree_le,pris_le");
+      // `geste` et `documents` : sans eux, une lecture de comptes rendus
+      // s'affichait comme un dépôt de messagerie de zéro fichier.
+      file.set("select",
+        "id,project_id,geste,statut,fichiers,documents,avancement,arrete,cree_le,pris_le");
       file.set("project_id", `eq.${backendProjectId}`);
       file.set("statut", "in.(en_attente,en_cours)");
       file.set("order", "cree_le.desc");

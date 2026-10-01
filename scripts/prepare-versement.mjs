@@ -42,37 +42,47 @@ const depuis = path.join(racine, "apps", "web", "js");
 const vers = path.join(racine, "supabase", "functions", "_shared", "versement");
 
 /**
- * Ce qui descend, et rien d'autre.
+ * **Les points de départ**, et la fermeture se calcule.
  *
- * La liste est la fermeture des imports de `les-messages-dun-fichier.js` et de
- * `le-depouillement.js` : tout ce dont la lecture d'un dépôt a besoin, et qui
- * ne touche ni au réseau ni à l'écran. Un module qui importerait `store.js` ou
- * `auth.js` ne pourrait pas descendre — et la vérification ci-dessous le dit
- * plutôt que de laisser la fonction tomber au premier appel.
+ * ## Pourquoi elle n'est plus écrite à la main
+ *
+ * Elle l'était : une liste de quinze noms, et une vérification qui refusait un
+ * import ne figurant pas dedans. Cela a tenu tant que le serveur ne savait lire
+ * que des mails. La lecture des comptes rendus en demande **cinquante et un** —
+ * la proposition, les lots, les labels, les échéances, les fermetures, les
+ * unités du métier. Les recopier à la main aurait été la première occasion d'en
+ * oublier un, et l'oubli ne se voit qu'en production, au premier appel.
+ *
+ * On nomme donc ce dont le serveur a besoin, et la fermeture des imports se
+ * calcule. C'est le même raisonnement que partout : une valeur écrite à deux
+ * endroits finit par diverger (règle 4) — et une liste d'imports est une valeur.
+ *
+ * ## Deux travaux, un seul dossier
+ *
+ * Verser des mails et lire des comptes rendus partagent la moitié de leurs
+ * modules. Les séparer en deux dossiers aurait copié deux fois `sha256.js`,
+ * `assertion-taxonomy.js` et une douzaine d'autres — et deux copies du même
+ * fichier dans le même déploiement finissent par ne plus être les mêmes.
  */
-const LES_MODULES = [
-  "services/creuser-les-dossiers.js",
-  "services/decoder-un-mail.js",
-  "services/la-ligne-dun-mail.js",
-  "services/le-convoi.js",
-  "services/le-depouillement.js",
-  "services/le-dossier-des-mails.js",
-  "services/le-journal-du-depouillement.js",
-  "services/le-projet-ou-lon-ecrit.js",
-  "services/le-dedoublonnage.js",
-  "services/le-fil-des-mails.js",
-  "services/ce-quon-cite.js",
-  "services/le-jeu-de-caracteres.js",
-  "services/le-versement-en-ordre.js",
-  "services/une-adresse-lisible.js",
+export const LES_DEPARTS = [
+  // Verser des mails : déplier un `.msg`, lire une archive, ranger.
   "services/les-messages-dun-fichier.js",
-  "services/nettoyer-le-propos.js",
-  "services/trous-dun-mail.js",
-  "services/un-mail-deplie.js",
-  "services/un-msg-deplie.js",
-  "services/un-zip-deplie.js",
-  "utils/poids-dit.js",
-  "utils/sha256.js"
+  "services/le-depouillement.js",
+  "services/le-versement-en-ordre.js",
+  "services/le-journal-du-depouillement.js",
+  // Lire des comptes rendus : la file, la lecture, la proposition.
+  "services/la-file-des-comptes-rendus.js",
+  "services/lecture-du-cr.js",
+  "services/reconstitution-markdown.js",
+  "services/lire-un-fichier-texte.js",
+  "services/identite-du-compte-rendu.js",
+  "services/liens-du-cr.js",
+  "services/proposition-du-cr.js",
+  "services/atelier-proposition.js",
+  // Importé dynamiquement par `atelier-proposition.js` : la fermeture ne le
+  // trouve pas en lisant les `from "…"`, et son absence ne se verrait qu'au
+  // premier enrichissement d'une proposition ouverte.
+  "services/proposition-branche.js"
 ];
 
 /**
@@ -84,6 +94,48 @@ const LES_MODULES = [
  * raison.
  */
 const INTERDITS = ["../store.js", "assets/js/auth.js", "/ui/", "/views/"];
+
+/**
+ * La fermeture des imports, depuis les départs.
+ *
+ * **Un import introuvable arrête.** Un module manquant ne casse pas la copie :
+ * il casse la fonction, en production, au premier appel — et le message parlera
+ * d'un module introuvable, pas de la raison.
+ */
+export async function laFermeture(departs = [], lire = leTexte) {
+  const vus = new Set();
+  const manques = [];
+
+
+  const visiter = async (module) => {
+    if (vus.has(module)) return;
+    vus.add(module);
+
+    const source = await lire(module).catch(() => null);
+    if (source === null) { manques.push(module); return; }
+
+    for (const cible of lesImports(source).filter((un) => un.startsWith("."))) {
+      await visiter(path.normalize(path.join(path.dirname(module), cible)));
+    }
+  };
+
+  for (const depart of departs) await visiter(depart);
+  const modules = [...vus].sort();
+
+  /**
+   * **Deux modules de même nom s'écraseraient**, et c'est la fermeture qui doit
+   * le dire.
+   *
+   * Tout s'aplatit dans un seul dossier au serveur : `utils/sha256.js` et un
+   * hypothétique `services/sha256.js` y deviendraient le même fichier, et le
+   * second effacerait le premier. La fonction appellerait alors la mauvaise,
+   * sans que rien ne lève.
+   *
+   * Le relevé vivait dans le script, hors de portée des épreuves : un cassage
+   * l'a retiré sans qu'aucune ne bouge. Il est rendu ici, avec le reste.
+   */
+  return { modules, manques, heurts: lesNomsQuiSeHeurtent(modules) };
+}
 
 async function leTexte(module) {
   return readFile(path.join(depuis, module), "utf8");
@@ -116,11 +168,29 @@ export function leModuleAplati(source) {
   );
 }
 
+/** Les noms de fichier que deux modules se disputent, une fois aplatis. */
+export function lesNomsQuiSeHeurtent(modules = []) {
+  const par = new Map();
+  for (const module of modules) {
+    const nom = path.basename(module);
+    if (!par.has(nom)) par.set(nom, []);
+    par.get(nom).push(module);
+  }
+  return [...par.values()].filter((siens) => siens.length > 1).map((siens) => siens.join(" et "));
+}
+
 async function principal() {
   await rm(vers, { recursive: true, force: true });
   await mkdir(vers, { recursive: true });
 
-  const manques = [];
+  const { modules: LES_MODULES, manques, heurts } = await laFermeture(LES_DEPARTS);
+  if (manques.length) {
+    throw new Error(`modules introuvables : ${manques.join(", ")}`);
+  }
+  if (heurts.length) {
+    throw new Error(`deux modules portent le même nom : ${heurts.join(" | ")}`);
+  }
+
   for (const module of LES_MODULES) {
     const source = await leTexte(module).catch(() => null);
     if (source === null) { manques.push(module); continue; }
@@ -133,20 +203,7 @@ async function principal() {
       }
     }
 
-    // Tout import relatif doit désigner un module de la liste : sinon la copie
-    // part avec un trou, et la fonction tombe au premier dépôt.
-    for (const cible of lesImports(source).filter((un) => un.startsWith("."))) {
-      const nom = path.basename(cible);
-      if (!LES_MODULES.some((un) => path.basename(un) === nom)) {
-        throw new Error(`${module} importe « ${cible} », qui ne descend pas.`);
-      }
-    }
-
     await writeFile(path.join(vers, path.basename(module)), leModuleAplati(source), "utf8");
-  }
-
-  if (manques.length) {
-    throw new Error(`modules introuvables : ${manques.join(", ")}`);
   }
 
   const poses = (await readdir(vers)).length;

@@ -167,3 +167,81 @@ test("le battement ne descend pas sous la seconde", () => {
   assert.equal(Number.isInteger(LE_BATTEMENT_DU_JOURNAL), true);
   assert.equal(LE_BATTEMENT_DU_JOURNAL >= 1000, true);
 });
+
+/* ── La lecture de comptes rendus se montre aussi ─────────────────────────── */
+
+const uneLecture = (surcharge = {}) => ({
+  id: "f1",
+  geste: "comptes_rendus",
+  statut: "en_cours",
+  fichiers: [],
+  documents: [{ id: "d1", nom: "CR 01.pdf" }, { id: "d2", nom: "CR 02.pdf" }],
+  avancement: {},
+  cree_le: "2026-10-01T09:00:00Z",
+  ...surcharge
+});
+
+/**
+ * **Le geste dit quelle colonne compter.** Les mails portent des chemins
+ * d'octets, les comptes rendus des identifiants de documents : compter sur la
+ * mauvaise annonçait « Versement de 0 fichier » sur une lecture de dix-neuf.
+ */
+test("une lecture de comptes rendus se nomme pour ce qu'elle est", () => {
+  const ligne = laFileAuJournal(uneLecture());
+
+  assert.equal(ligne.name, "Lecture de 2 comptes rendus de chantier");
+  assert.equal(ligne.triggerLabel, "Lecture de comptes rendus");
+  assert.equal(ligne.status, "running", "le sablier ne s'affiche pas");
+});
+
+test("un dépôt de messagerie garde son nom", () => {
+  const ligne = laFileAuJournal({
+    id: "f2", statut: "en_cours", fichiers: [{ nom: "a.msg" }], cree_le: "2026-10-01T09:00:00Z"
+  });
+  assert.match(ligne.name, /Versement de 1 fichier de messagerie/);
+  assert.equal(ligne.triggerLabel, "Dépôt de messagerie");
+});
+
+/**
+ * **L'avancement se dit avec la phrase de la file**, celle que l'écran emploie
+ * déjà. En écrire une seconde ici aurait fait deux comptes rendus du même
+ * travail, et l'un aurait fini par ne pas dire la même chose (règle 4).
+ */
+test("l'avancement d'une lecture reprend la phrase de la file", () => {
+  const ligne = laFileAuJournal(uneLecture({
+    avancement: {
+      arretee: false,
+      pas: [
+        { id: "d1", nom: "CR 01.pdf", ou: "lu", motif: "" },
+        { id: "d2", nom: "CR 02.pdf", ou: "echoue", motif: "aucune page lisible" }
+      ]
+    }
+  }));
+
+  assert.match(ligne.summary, /1 compte rendu lu/);
+  assert.match(ligne.summary, /1 n'a pas pu être lu/);
+  // Les étapes disent le compte, pas des messages versés : une lecture de
+  // comptes rendus n'en verse aucun.
+  assert.deepEqual(ligne.details.corpus.steps[0].lignes,
+    ["Comptes rendus : 2", "Lus : 1"]);
+});
+
+test("une lecture qui attend dit qu'elle attend, et combien", () => {
+  const ligne = laFileAuJournal(uneLecture({ statut: "en_attente" }));
+  assert.match(ligne.summary, /2 comptes rendus envoyés/);
+  assert.match(ligne.summary, /le serveur va les prendre/);
+  assert.equal(ligne.details.corpus.steps[0].label, "En attente du serveur");
+});
+
+/**
+ * **En cours n'est pas fait.** L'étape porte « en-cours », que le graphe peint
+ * en icône qui tourne. « ok » l'aurait peinte en vert avec sa coche, sous un
+ * bandeau qui dit « En cours » — deux choses contraires dans la même vue, et
+ * c'est la rassurante qu'on croit.
+ */
+test("une lecture en cours n'est jamais peinte comme faite", () => {
+  const ligne = laFileAuJournal(uneLecture());
+  assert.equal(ligne.details.corpus.steps[0].statut, "en-cours");
+  assert.equal(ligne.endedAt, null);
+  assert.equal(ligne.durationMs, null);
+});

@@ -19,17 +19,27 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { leModuleAplati, lesImports, limportAplati } from "./prepare-versement.mjs";
+import {
+  LES_DEPARTS, laFermeture, leModuleAplati, lesImports, lesNomsQuiSeHeurtent, limportAplati
+} from "./prepare-versement.mjs";
 
 const RACINE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE = path.join(RACINE, "apps", "web", "js");
 const COPIE = path.join(RACINE, "supabase", "functions", "_shared", "versement");
 
-/** Ce que le script descend, relu depuis le script lui-même. */
+/**
+ * Ce que le script descend — **calculé, et non relu dans son texte**.
+ *
+ * Cette fonction lisait la liste écrite à la main dans la source du script, à
+ * coups de `indexOf`. Elle a cessé de rien trouver le jour où la liste est
+ * devenue une fermeture calculée : un relevé de texte éprouve la forme du
+ * fichier, pas ce qu'il fait. On appelle donc la fermeture elle-même.
+ */
 async function lesModules() {
-  const script = await readFile(path.join(RACINE, "scripts", "prepare-versement.mjs"), "utf8");
-  const bloc = script.slice(script.indexOf("const LES_MODULES = ["), script.indexOf("];"));
-  return [...bloc.matchAll(/"([^"]+)"/g)].map((un) => un[1]);
+  const { modules, manques } = await laFermeture(LES_DEPARTS, (module) =>
+    readFile(path.join(SOURCE, module), "utf8"));
+  assert.deepEqual(manques, [], "des modules de la fermeture sont introuvables");
+  return modules;
 }
 
 test("un import remontant devient un import de voisin", () => {
@@ -77,7 +87,7 @@ test("aucun module descendu ne touche au navigateur", async () => {
   }
 });
 
-test("la liste est fermée : rien de ce qui descend n'importe ce qui reste", async () => {
+test("la fermeture est close : rien de ce qui descend n'importe ce qui reste", async () => {
   const modules = await lesModules();
   const noms = new Set(modules.map((un) => path.basename(un)));
 
@@ -89,5 +99,75 @@ test("la liste est fermée : rien de ce qui descend n'importe ce qui reste", asy
         `« ${module} » importe « ${cible} », qui ne descend pas : la copie partirait avec un trou`
       );
     }
+  }
+});
+
+/**
+ * **Deux modules de même nom s'écraseraient.**
+ *
+ * Tout s'aplatit dans un seul dossier au serveur : `utils/sha256.js` et un
+ * hypothétique `services/sha256.js` y deviendraient le même fichier, et le
+ * second effacerait le premier. La fonction appellerait alors la mauvaise, sans
+ * que rien ne lève — et l'on chercherait longtemps.
+ *
+ * La liste écrite à la main ne pouvait pas le voir : elle n'avait que quinze
+ * noms, tous distincts. La fermeture en trouve quatre-vingt-treize.
+ */
+test("deux modules ne se disputent jamais le même nom de fichier", async () => {
+  const { heurts } = await laFermeture(LES_DEPARTS, (module) =>
+    readFile(path.join(SOURCE, module), "utf8"));
+  assert.deepEqual(heurts, []);
+
+  /**
+   * **Et la fermeture le dit quand cela arrive.**
+   *
+   * Sans ce témoin, une fermeture sans heurt et un relevé qui ne relève rien se
+   * ressemblent exactement — c'est précisément pour cela qu'un cassage avait
+   * survécu (règle 12). On lui donne donc deux modules de même nom, et l'on
+   * vérifie qu'elle les nomme.
+   */
+  const sources = {
+    "a/zero.js": 'import { a } from "./un.js";\nimport { b } from "../b/un.js";',
+    "a/un.js": "export const a = 1;",
+    "b/un.js": "export const b = 2;"
+  };
+  const faite = await laFermeture(["a/zero.js"], async (module) => sources[module]);
+
+  assert.deepEqual(faite.manques, []);
+  assert.deepEqual(faite.heurts, ["a/un.js et b/un.js"],
+    "la fermeture ne voit pas deux modules qui s'écraseraient au serveur");
+});
+
+/**
+ * **Un module introuvable arrête**, et il se nomme. Une copie partie avec un
+ * trou ne casse rien ici : elle casse la fonction de bord, en production, au
+ * premier appel.
+ */
+test("la fermeture nomme ce qu'elle ne trouve pas", async () => {
+  const sources = { "a/zero.js": 'import { x } from "./jamais-ecrit.js";' };
+  const faite = await laFermeture(["a/zero.js"], async (module) => {
+    if (!(module in sources)) throw new Error("absent");
+    return sources[module];
+  });
+
+  assert.deepEqual(faite.manques, ["a/jamais-ecrit.js"]);
+});
+
+/**
+ * **La fermeture couvre les deux travaux.** Verser des mails et lire des comptes
+ * rendus partagent la moitié de leurs modules ; un départ oublié ne se verrait
+ * qu'en production, au premier appel, sous la forme d'un module introuvable.
+ */
+test("les deux travaux du serveur descendent", async () => {
+  const noms = new Set((await lesModules()).map((un) => path.basename(un)));
+
+  for (const attendu of [
+    // Verser des mails.
+    "un-msg-deplie.js", "le-versement-en-ordre.js", "sha256.js",
+    // Lire des comptes rendus.
+    "la-file-des-comptes-rendus.js", "lecture-du-cr.js", "proposition-du-cr.js",
+    "atelier-proposition.js", "reconstitution-markdown.js", "liens-du-cr.js"
+  ]) {
+    assert.equal(noms.has(attendu), true, `« ${attendu} » ne descend pas`);
   }
 });

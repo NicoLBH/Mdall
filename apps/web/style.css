@@ -25524,6 +25524,21 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .lecture-cr__mot{margin:0;padding:10px 5px 5px 5px;font-size:12.5px;line-height:1.5;color:var(--muted);}
 
 /* La zone de dépôt : le geste d'entrée de tout le parcours. */
+/* Ce qui vient d'être lancé, dit une fois.
+
+   La file tournait sous les yeux ; elle est au serveur, et c'est le journal des
+   Actions qui la montre. Sans cette carte, cliquer « Lire 19 comptes rendus »
+   refermerait simplement le choix — rien ne se passerait à l'écran, et l'on
+   relancerait. Deux lectures des mêmes dix-neuf, et deux factures. */
+.lecture-cr__parti{
+  display:flex; align-items:flex-start; gap:10px;
+  padding:12px 14px; margin:0 0 12px;
+  border:1px solid var(--success, #3fb950); border-radius:8px;
+  background:color-mix(in srgb, var(--success, #3fb950) 10%, transparent);
+}
+.lecture-cr__parti-icone{flex:0 0 auto;color:var(--success, #3fb950);line-height:1;padding-top:1px;}
+.lecture-cr__parti-mot{margin:0;color:var(--text);}
+
 .lecture-cr__depot{
   display:flex;
   flex-direction:column;
