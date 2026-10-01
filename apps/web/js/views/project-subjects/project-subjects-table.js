@@ -265,7 +265,7 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
   return `
     <div class="issue-row issue-row--pb click js-row-sujet${options.isSelectable === false ? "" : (options.rowSelectedClass ? options.rowSelectedClass("sujet", sujet.id) : "")}${estCoche ? " est-cochee" : ""}" data-sujet-id="${escapeHtml(sujet.id)}">
       <div class="cell cell-cocher-value">
-        <input type="checkbox" class="sujets-case"
+        <input type="checkbox" class="mdall-case"
           data-sujets-cocher="${escapeHtml(sujet.id)}" ${estCoche ? "checked" : ""}
           aria-label="Sélectionner ${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "ce sujet"))}">
       </div>

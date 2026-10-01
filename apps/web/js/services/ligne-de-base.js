@@ -24,9 +24,27 @@
  * **domaine fermé** (`DOMAIN`, dans `assertion-taxonomy.js`), donc comptable,
  * et c'est exactement ce qu'une ligne de base sait faire.
  *
- * Le jour où les sujets porteront un nom commun — la nomenclature, dont la
- * réflexion n'est pas aboutie —, le même instrument mesurera le même prédicteur
- * sur les noms, sans rien changer d'autre.
+ * ## Ce jour est arrivé, et rien d'autre n'a changé
+ *
+ * « Le jour où les sujets porteront un nom commun, le même instrument mesurera
+ * le même prédicteur sur les noms, sans rien changer d'autre » : c'est écrit
+ * ici depuis le début, et c'est exactement ce qui se passe.
+ *
+ * Les sujets sont ce nom commun — non pas le titre d'un constat, qui n'arrive
+ * qu'une fois, mais les **termes techniques** qu'il emploie : « nappe
+ * phreatique », « plancher beton », « cuvelage ». Ils viennent d'une seule
+ * extraction, en SQL (`les_sujets_dun_texte`), la même qui nourrit la console.
+ *
+ * **Pourquoi huit cases ne suffisaient pas**, et c'est tout l'enjeu : « après le
+ * sol, la structure » est une évidence, et personne ne paie pour une évidence.
+ * « après une question de nappe phréatique, une question de cuvelage » est un
+ * renseignement. Le prédicteur ne devient utile qu'à cette granulométrie.
+ *
+ * **Une affirmation porte plusieurs sujets**, là où elle ne portait qu'un
+ * domaine. Les prédicteurs changent donc d'une chose, et d'une seule : la suite
+ * n'est plus une suite de valeurs, c'est une suite d'**ensembles**. Tout le
+ * reste — le classement, l'égalité tranchée à l'alphabet, le refus de deviner —
+ * est le même, et c'est pour cela que les deux mesures se comparent.
  *
  * ## Deux bêtises, et la seconde n'est pas plus bête
  *
@@ -143,5 +161,139 @@ export const LIGNES_DE_BASE = [
     dit: "ce qui suit habituellement",
     quoi: "regarde la séquence : après ceci, il est venu cela",
     predire: ceQuiSuitHabituellement
+  }
+];
+
+/* ── Les mêmes deux bêtises, sur les sujets ───────────────────────────────── */
+
+/**
+ * La suite des **ensembles** de sujets, dans l'ordre où les constats sont venus.
+ *
+ * C'est la seule différence avec les domaines : une affirmation portait un
+ * domaine, elle porte plusieurs sujets. Un constat qui n'en porte aucun ne fait
+ * pas un pas vide dans la suite — il ne dit rien, et le garder décalerait les
+ * couples d'un cran.
+ *
+ * **Aucun dédoublonnage ici.** Il y en avait un, et un cassage a montré qu'il ne
+ * pouvait pas tomber : `episodeDuProjet` réunit déjà les sujets d'un constat
+ * dans un ensemble, et la base les rend `distinct`. Une garde qui ne peut pas
+ * tomber ne se casse jamais, donc ne se vérifie pas — et la croire utile ferait
+ * chercher ici un défaut qui vivrait ailleurs (règle 4).
+ */
+function laSuiteDesSujets(episode = null) {
+  return (episode?.constats ?? [])
+    .map((un) => (Array.isArray(un?.sujets) ? un.sujets : []).map(texte).filter(Boolean))
+    .filter((siens) => siens.length > 0);
+}
+
+/**
+ * Les sujets, du plus fréquent au moins — **la ligne de base, sur les sujets**.
+ *
+ * Un sujet répété dans la même affirmation ne compte qu'une fois, et cela se
+ * décide **à la source** : la base rend les sujets d'une affirmation `distinct`,
+ * et `episodeDuProjet` les réunit dans un ensemble. Le redire ici aurait fait un
+ * troisième endroit où la même règle vit (règle 4).
+ */
+export function lesSujetsLesPlusFrequents(episode = null) {
+  const comptes = new Map();
+  for (const siens of laSuiteDesSujets(episode)) {
+    for (const sujet of siens) comptes.set(sujet, (comptes.get(sujet) ?? 0) + 1);
+  }
+
+  return [...comptes.entries()]
+    .sort((gauche, droite) => (droite[1] - gauche[1])
+      || gauche[0].localeCompare(droite[0], "fr"))
+    .map(([sujet]) => sujet);
+}
+
+/**
+ * Ce qui suit habituellement les sujets du dernier constat.
+ *
+ * ## Ce qui change quand un pas porte plusieurs sujets
+ *
+ * On compte les couples **de chaque sujet d'un pas vers chaque sujet du
+ * suivant** — la généralisation honnête de « après ceci, il est venu cela », et
+ * ce que fait déjà `les_enchainements_des_sujets()` en base. Un pas qui porte
+ * cinq sujets pèse donc cinq fois : c'est voulu, une affirmation qui parle de
+ * cinq choses annonce la suite de cinq choses.
+ *
+ * ## Les suites des derniers sujets se **somment**
+ *
+ * Le dernier constat porte plusieurs sujets, et chacun a sa propre suite
+ * connue. On additionne, plutôt que de prendre celle du premier : un sujet qui
+ * revient dans les suites de trois des derniers sujets est plus probable qu'un
+ * qui n'apparaît que dans une, et ne pas les sommer aurait jeté cette
+ * information.
+ *
+ * **Sans rien à dire, on ne dit rien.** Si aucun des derniers sujets n'a de
+ * suite connue, la liste est vide : se rabattre sur le plus fréquent ferait
+ * mesurer deux prédicteurs pour un, et l'on ne saurait plus lequel a marché.
+ */
+export function ceQuiSuitHabituellementEnSujets(episode = null) {
+  const suite = laSuiteDesSujets(episode);
+
+  const apres = new Map();
+  for (let rang = 0; rang < suite.length - 1; rang += 1) {
+    for (const avant of suite[rang]) {
+      if (!apres.has(avant)) apres.set(avant, new Map());
+      const siens = apres.get(avant);
+      for (const puis of suite[rang + 1]) siens.set(puis, (siens.get(puis) ?? 0) + 1);
+    }
+  }
+
+  const derniers = suite[suite.length - 1] ?? [];
+  const cumul = new Map();
+  for (const dernier of derniers) {
+    for (const [puis, combien] of apres.get(dernier) ?? []) {
+      cumul.set(puis, (cumul.get(puis) ?? 0) + combien);
+    }
+  }
+
+  return [...cumul.entries()]
+    .sort((gauche, droite) => (droite[1] - gauche[1])
+      || gauche[0].localeCompare(droite[0], "fr"))
+    .map(([sujet]) => sujet);
+}
+
+/**
+ * Ce qui est réellement arrivé, en sujets — le pendant de `lesDomainesVenus`.
+ *
+ * **Une ligne par sujet venu**, et non une par constat : c'est ce que
+ * l'instrument compare aux candidats, et un constat qui porte trois sujets en a
+ * trois à confronter. La date est celle du constat, pour les trois : c'est elle
+ * qui donne le délai d'avance.
+ */
+export function lesSujetsVenus(suite = null) {
+  const venus = [];
+  for (const un of suite?.constats ?? []) {
+    const quand = texte(un?.quand);
+    // Pas d'ensemble ici non plus : les constats viennent de l'épisode, qui les
+    // a déjà réunis (voir `laSuiteDesSujets`).
+    for (const sujet of (Array.isArray(un?.sujets) ? un.sujets : []).map(texte)) {
+      if (sujet) venus.push({ quoi: sujet, quand });
+    }
+  }
+  return venus;
+}
+
+/**
+ * Les deux lignes de base **sur les sujets**, nommées.
+ *
+ * Même forme que `LIGNES_DE_BASE`, et c'est voulu : l'écran les affiche par le
+ * même rendu, et l'instrument les mesure par le même appel. Deux listes de
+ * forme différente auraient fait deux tableaux à recaler ensemble.
+ */
+export const LIGNES_DE_BASE_DES_SUJETS = [
+  {
+    cle: "les-sujets-les-plus-frequents",
+    dit: "le sujet le plus fréquent",
+    quoi: "ne regarde que les comptes, jamais l'ordre",
+    predire: lesSujetsLesPlusFrequents
+  },
+  {
+    cle: "ce-qui-suit-en-sujets",
+    dit: "ce qui suit habituellement",
+    quoi: "regarde la séquence : après ce sujet, il est venu celui-là",
+    predire: ceQuiSuitHabituellementEnSujets
   }
 ];

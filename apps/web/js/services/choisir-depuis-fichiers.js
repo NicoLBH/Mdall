@@ -31,6 +31,7 @@
 
 import { estUnFichierTexte, nomDuFichier } from "./lire-un-fichier-texte.js";
 import { extensionDe } from "./fichier-a-la-main.js";
+import { etatDeLaCaseDeTete } from "./selection-des-sujets.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -178,4 +179,182 @@ export function phraseDuDossier(entrees = []) {
   return lues.some((entree) => entree.type === ENTREE.DOSSIER)
     ? "Rien à lire ici. Ouvrez un dossier."
     : "Rien à lire ici.";
+}
+
+/* ── Choisir plusieurs comptes rendus d'un coup ───────────────────────────── */
+
+/**
+ * ## Pourquoi la sélection multiple existe, et à quoi elle sert vraiment
+ *
+ * Un chantier ne commence pas avec Mdall. Il a deux ans, trente comptes rendus
+ * de réunion, et personne ne va les relire un par un dans un écran qui en prend
+ * un à la fois. Sans **mise à niveau**, Mdall ne sert que les chantiers qui
+ * démarrent — c'est-à-dire presque aucun.
+ *
+ * Et c'est aussi ce qui nourrit la prédiction : trente comptes rendus d'un
+ * chantier déjà avancé, ce sont trente pas de séquence que rien d'autre ne
+ * donne.
+ *
+ * ## Ce que la sélection ne fait pas, et ne fera jamais
+ *
+ * **Elle ne verse rien.** Chaque compte rendu lu donne **une proposition**, et
+ * chaque proposition se signe (règle 1). Trente documents font trente
+ * propositions à relire, pas trente écritures en mémoire. C'est plus long, et
+ * c'est le contraire d'un défaut : une mémoire remplie par un bouton est une
+ * mémoire à laquelle personne ne se fie.
+ *
+ * ## Le coût se dit avant, jamais après
+ *
+ * Trente PDF, ce sont trente extractions et trente restitutions — trente appels
+ * payés. Le compte s'affiche à côté du bouton, **avant** le clic : un prix
+ * qu'on découvre sur une facture n'entre jamais dans la décision
+ * (fondamental 13).
+ */
+
+/**
+ * La sélection, après avoir basculé une entrée.
+ *
+ * **Rendue neuve, jamais modifiée sur place** : l'écran compare l'ancienne à la
+ * nouvelle pour savoir s'il doit redessiner, et muter l'ensemble aurait rendu
+ * les deux identiques.
+ *
+ * Une entrée qu'on ne peut pas choisir ne se sélectionne pas, même si son
+ * identifiant arrive : c'est la même règle que pour le clic simple, et la
+ * laisser passer aurait mis dans la file un document dont rien n'est lisible.
+ */
+export function basculerLeChoix(choisis = null, id = "", entrees = []) {
+  const voulu = texte(id);
+  const suivant = new Set(choisis ?? []);
+  if (!voulu) return suivant;
+
+  if (suivant.has(voulu)) {
+    suivant.delete(voulu);
+    return suivant;
+  }
+
+  const entree = (Array.isArray(entrees) ? entrees : [])
+    .find((une) => une.id === voulu && une.type === ENTREE.FICHIER);
+  if (entree?.choisissable) suivant.add(voulu);
+  return suivant;
+}
+
+/**
+ * Tout cocher, ou tout décocher, dans le dossier ouvert.
+ *
+ * **Seul le dossier ouvert**, et c'est voulu : « tout » ne peut pas désigner ce
+ * qu'on n'a pas lu. Un « tout cocher » qui descendrait l'arborescence
+ * sélectionnerait des documents que personne n'a vus, dans des dossiers que
+ * personne n'a ouverts — et le compte annoncé ne correspondrait à rien de
+ * visible (règle 5).
+ *
+ * Ce qui est coché **ailleurs** ne bouge pas : on monte une file en descendant
+ * plusieurs dossiers, et décocher ce dossier-ci ne doit pas vider le précédent.
+ */
+export function toutBasculer(choisis = null, entrees = [], { cocher = true } = {}) {
+  const suivant = new Set(choisis ?? []);
+  const ici = (Array.isArray(entrees) ? entrees : [])
+    .filter((une) => une.type === ENTREE.FICHIER && une.choisissable);
+
+  for (const une of ici) {
+    if (cocher) suivant.add(une.id);
+    else suivant.delete(une.id);
+  }
+  return suivant;
+}
+
+/**
+ * Ce qui se choisit dans le dossier ouvert, par identifiant.
+ *
+ * **C'est ce que « tout » désigne**, et la seule liste qui compte pour la case
+ * de tête : un dossier et un document illisible n'ont pas de case, donc ne
+ * pèsent ni dans « tout coché » ni dans « rien coché ».
+ */
+export function lesChoisissables(entrees = []) {
+  return (Array.isArray(entrees) ? entrees : [])
+    .filter((une) => une.type === ENTREE.FICHIER && une.choisissable)
+    .map((une) => une.id);
+}
+
+/**
+ * L'état de la case de tête — **et `etatDeLaCaseDeTete` existait déjà**.
+ *
+ * Le tableau des sujets la portait, avec son troisième état et la raison
+ * écrite : « une case vide sur une liste où trois sujets sont cochés dirait que
+ * rien ne l'est, et l'on cliquerait pour tout cocher en croyant ne rien
+ * défaire ». En écrire une seconde ici aurait refait ce défaut, puis l'aurait
+ * corrigé une seconde fois, un jour, peut-être (règle 10).
+ */
+export function etatDeLaCaseDuDossier(choisis = null, entrees = []) {
+  return etatDeLaCaseDeTete({
+    selection: [...(choisis ?? [])],
+    visibles: lesChoisissables(entrees)
+  });
+}
+
+/**
+ * Ce que la file coûtera, compté par ce qu'elle contient.
+ *
+ * **Deux natures, deux coûts, et il faut les séparer.** Un PDF passe par une
+ * extraction et une restitution ; un document déjà écrit en texte ne passe par
+ * aucune des deux. Annoncer « 30 documents » sans dire combien sont des PDF
+ * laisserait croire au même prix pour trente notes de texte que pour trente
+ * scans.
+ *
+ * @param {Set<string>|string[]} choisis
+ * @param {object[]} connues toutes les entrées rencontrées, tous dossiers confondus
+ * @returns {{combien: number, pdf: number, textes: number}}
+ */
+export function ceQueLaFileContient(choisis = null, connues = []) {
+  const voulus = new Set(choisis ?? []);
+  const lues = (Array.isArray(connues) ? connues : [])
+    .filter((une) => une.type === ENTREE.FICHIER && voulus.has(une.id));
+
+  return {
+    combien: voulus.size,
+    pdf: lues.filter((une) => une.lecture === LECTURE_DU_CHOIX.PDF).length,
+    textes: lues.filter((une) => une.lecture === LECTURE_DU_CHOIX.TEXTE).length
+  };
+}
+
+/**
+ * Ce qu'on dit de la sélection, et de ce qu'elle coûtera.
+ *
+ * Vide quand rien n'est choisi : « 0 document sélectionné » est du bruit, et
+ * l'absence dit mieux que le bouton n'a rien à faire.
+ */
+export function phraseDeLaSelection(contenu = null) {
+  const combien = Number(contenu?.combien) || 0;
+  if (!combien) return "";
+
+  const pdf = Number(contenu?.pdf) || 0;
+  const dits = [`${combien} ${combien > 1 ? "documents" : "document"}`];
+
+  // **Ce qui coûte se dit, ce qui ne coûte rien se dit aussi** : « dont 0 PDF »
+  // ne s'écrit pas, mais « 4 notes de texte, aucun appel » rassure.
+  if (pdf) {
+    dits.push(`${pdf} ${pdf > 1 ? "PDF" : "PDF"} à extraire puis restituer par le modèle`);
+  }
+  const textes = Number(contenu?.textes) || 0;
+  if (textes && !pdf) dits.push("déjà en texte : aucun appel au modèle");
+  else if (textes) dits.push(`${textes} déjà en texte`);
+
+  return dits.join(" · ");
+}
+
+/**
+ * Ce qu'on dit avant de lancer : **une proposition par compte rendu**.
+ *
+ * C'est la phrase qui empêche le malentendu le plus coûteux de tout l'écran.
+ * « Analyser 30 documents » se lit comme « remplir la mémoire », et ce n'est pas
+ * ce qui va se passer : chaque lecture donne une proposition, et chacune se
+ * signe (règle 1). Le dire après aurait fait découvrir trente relectures à
+ * quelqu'un qui croyait avoir fini.
+ */
+export function phraseDeCeQueLaFileFera(contenu = null) {
+  const combien = Number(contenu?.combien) || 0;
+  if (!combien) return "";
+
+  return `${combien} ${combien > 1 ? "lectures" : "lecture"}, l'une après l'autre, et `
+    + `${combien > 1 ? `${combien} propositions à signer` : "une proposition à signer"}. `
+    + `Rien n'entre dans la mémoire du chantier avant que vous ne l'ayez relu.`;
 }

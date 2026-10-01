@@ -12,7 +12,10 @@ import {
 } from "./consommation/ecran-de-consommation.js";
 import { vecteurDeContexte } from "../services/vecteur-de-contexte.js";
 import { episodeDuProjet } from "../services/episode-du-projet.js";
-import { LIGNES_DE_BASE, lesDomainesVenus } from "../services/ligne-de-base.js";
+import {
+  LIGNES_DE_BASE, LIGNES_DE_BASE_DES_SUJETS, lesDomainesVenus, lesSujetsVenus
+} from "../services/ligne-de-base.js";
+import { combienDeSujetsRepetes } from "../services/la-granulometrie-dun-chantier.js";
 import { mesureDuPredicteur } from "../services/mesure-du-passe.js";
 import { renderLaForme } from "./ui/forme-du-chantier.js";
 import {
@@ -346,7 +349,13 @@ export function renderProjectInsights(root) {
  * rôles et les sujets sont déjà dans le magasin. On ne relit que ce qu'on n'a
  * pas.
  */
-const formeDuProjetLue = { projetId: "", faits: null, assertions: null, enCours: false, echec: false };
+const formeDuProjetLue = {
+  projetId: "", faits: null, assertions: null, enCours: false, echec: false,
+  // **Les sujets que ce chantier répète**, par affirmation, tels que la base les
+  // rend. `null` veut dire « on n'a pas su » — et l'écran le dira autrement que
+  // « aucun sujet », parce que les deux mènent à des lectures opposées (règle 5).
+  sujetsParAffirmation: null
+};
 
 /**
  * La forme d'un chantier, telle que ce projet la donne aujourd'hui.
@@ -392,28 +401,38 @@ function dessinerLaForme(root) {
 
   (async () => {
     try {
-      const [{ listProjectContextFacts }, { resolveCurrentBackendProjectId }, memoire] =
-        await Promise.all([
-          import("../services/project-context-facts-service.js"),
-          import("../services/project-supabase-sync.js"),
-          import("../services/project-memory-supabase.js")
-        ]);
+      const [
+        { listProjectContextFacts }, { resolveCurrentBackendProjectId }, memoire, sujets
+      ] = await Promise.all([
+        import("../services/project-context-facts-service.js"),
+        import("../services/project-supabase-sync.js"),
+        import("../services/project-memory-supabase.js"),
+        import("../services/les-sujets-de-ce-chantier-supabase.js")
+      ]);
 
       // **Deux identifiants, et il faut le bon** : la route porte celui du
       // frontal, la base classe tout par un UUID.
       const backendProjectId = await resolveCurrentBackendProjectId();
-      const [faits, assertions] = await Promise.all([
+      const [faits, assertions, parAffirmation] = await Promise.all([
         backendProjectId ? listProjectContextFacts(backendProjectId).catch(() => null) : null,
-        backendProjectId ? memoire.listProjectAssertions(backendProjectId).catch(() => null) : null
+        backendProjectId ? memoire.listProjectAssertions(backendProjectId).catch(() => null) : null,
+        // **Le même aller-retour que les deux autres**, et non un second rendu
+        // plus tard : les sujets nourrissent le même épisode, et les lire après
+        // aurait fait afficher deux fois le bloc, d'abord sans eux.
+        backendProjectId
+          ? sujets.lesSujetsDeCeChantier(backendProjectId).catch(() => null)
+          : null
       ]);
 
       formeDuProjetLue.echec = faits === null && assertions === null;
       formeDuProjetLue.faits = faits;
       formeDuProjetLue.assertions = assertions;
+      formeDuProjetLue.sujetsParAffirmation = parAffirmation;
     } catch {
       formeDuProjetLue.echec = true;
       formeDuProjetLue.faits = null;
       formeDuProjetLue.assertions = null;
+      formeDuProjetLue.sujetsParAffirmation = null;
     } finally {
       formeDuProjetLue.enCours = false;
       peindreLaForme(hote);
@@ -436,7 +455,8 @@ function peindreLaForme(hote) {
     // pour une liste qu'on a sous la main. Et c'est le fichier des indicateurs
     // qui sait où le magasin les range — à trois endroits selon l'écran ouvert.
     sujets: getAllSubjects(),
-    assertions: formeDuProjetLue.assertions ?? []
+    assertions: formeDuProjetLue.assertions ?? [],
+    sujetsParAffirmation: formeDuProjetLue.sujetsParAffirmation
   });
 
   // **La mesure vient avant tout moteur.** Ce que les deux bêtises savent
@@ -447,7 +467,24 @@ function peindreLaForme(hote) {
     mesure: mesureDuPredicteur(episode, { predire: ligne.predire, arrive: lesDomainesVenus })
   }));
 
-  hote.innerHTML = renderLaForme(vecteur, episode, mesures);
+  /**
+   * **Les mêmes deux bêtises, le même instrument, l'autre liste.**
+   *
+   * C'est tout le portage : ni le prédicteur ni la mesure ne changent d'un
+   * caractère. Ce qui change est ce qu'on prédit — les termes que ce chantier
+   * répète au lieu des huit domaines —, et c'est pourquoi les deux se comparent
+   * (par leur distance au hasard, et jamais par leurs pourcentages bruts).
+   */
+  const surLesSujets = {
+    lu: formeDuProjetLue.sujetsParAffirmation !== null,
+    combien: combienDeSujetsRepetes(formeDuProjetLue.sujetsParAffirmation),
+    mesures: LIGNES_DE_BASE_DES_SUJETS.map((ligne) => ({
+      ...ligne,
+      mesure: mesureDuPredicteur(episode, { predire: ligne.predire, arrive: lesSujetsVenus })
+    }))
+  };
+
+  hote.innerHTML = renderLaForme(vecteur, episode, mesures, surLesSujets);
 }
 
 /* ── La correspondance déposée, et ce qu'on en tire ──────────────────────── */

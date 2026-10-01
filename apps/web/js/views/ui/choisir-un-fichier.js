@@ -29,8 +29,13 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
 import {
-  CE_QUE_CA_DEMANDE, ENTREE, PHRASES_DU_REFUS, cheminDuDossier, phraseDuDossier
+  CE_QUE_CA_DEMANDE, ENTREE, PHRASES_DU_REFUS, ceQueLaFileContient, cheminDuDossier,
+  etatDeLaCaseDuDossier, phraseDeCeQueLaFileFera, phraseDeLaSelection, phraseDuDossier
 } from "../../services/choisir-depuis-fichiers.js";
+import {
+  DANS_LA_FILE, DANS_LA_FILE_DIT, lesComptesDeLaFile, phraseDeCeQuiResteASigner,
+  phraseDeLaFile
+} from "../../services/la-file-des-comptes-rendus.js";
 
 /** Le chemin du dossier ouvert : chaque morceau remonte. */
 export function renderLeChemin(breadcrumb = []) {
@@ -47,30 +52,139 @@ export function renderLeChemin(breadcrumb = []) {
   `;
 }
 
-/** Une ligne : un dossier où entrer, un document à prendre, ou un refus. */
-function renderUneEntree(entree) {
+/**
+ * Une ligne : un dossier où entrer, un document à prendre, ou un refus.
+ *
+ * ## La case à cocher ne remplace pas le clic
+ *
+ * Les deux gestes restent : **cocher** monte une file, **cliquer sur le nom**
+ * ouvre ce document-là tout de suite. Remplacer le second par le premier aurait
+ * fait payer deux clics et une barre de lancement à qui veut lire un compte
+ * rendu — le cas le plus courant, et de loin.
+ *
+ * La case est donc une case, avec sa propre zone de clic, et elle ne déclenche
+ * pas l'ouverture : `data-choisir-coche` d'un côté, `data-choisir-document` de
+ * l'autre.
+ *
+ * Un document qu'on ne peut pas lire n'a **pas** de case : une case morte invite
+ * à cliquer pour rien.
+ */
+function renderUneEntree(entree, choisis = null) {
   const dossier = entree.type === ENTREE.DOSSIER;
   const marque = dossier
     ? `data-choisir-dossier="${escapeHtml(entree.id)}"`
     : (entree.choisissable ? `data-choisir-document="${escapeHtml(entree.id)}"` : "");
   const refus = entree.pourquoi ? (PHRASES_DU_REFUS[entree.pourquoi] ?? "") : "";
   const dit = refus || (entree.lecture ? (CE_QUE_CA_DEMANDE[entree.lecture] ?? "") : "");
+  const coche = !dossier && entree.choisissable;
+  const cochee = coche && Boolean(choisis?.has?.(entree.id));
 
   return `
     <div class="documents-repo__row documents-repo__row--file${
-      marque ? " is-clickable" : " choisir-fichier__ligne--eteinte"}"
-      ${marque ? `role="button" tabindex="0" ${marque}` : ""}
-      ${dit ? `title="${escapeHtml(dit)}"` : ""}
-    >
+      marque ? "" : " choisir-fichier__ligne--eteinte"}${cochee ? " is-selected" : ""}">
       <div class="documents-repo__cell documents-repo__cell--name">
+        <span class="choisir-fichier__case">${coche
+          ? `<input type="checkbox" class="mdall-case"
+               data-choisir-coche="${escapeHtml(entree.id)}"
+               ${cochee ? "checked" : ""}
+               aria-label="${escapeHtml(`Choisir ${entree.nom}`)}">`
+          : ""}</span>
         <span class="documents-repo__icon">${
           svgIcon(dossier ? "file-directory" : "file", { className: "octicon" })}</span>
-        <span class="documents-repo__name">${escapeHtml(entree.nom)}</span>
+        ${marque
+          ? `<button type="button" class="choisir-fichier__nom" ${marque}
+               ${dit ? `title="${escapeHtml(dit)}"` : ""}>${escapeHtml(entree.nom)}</button>`
+          : `<span class="documents-repo__name">${escapeHtml(entree.nom)}</span>`}
       </div>
       <div class="documents-repo__cell documents-repo__cell--message">
         <div class="documents-repo__message-main">${escapeHtml(dit)}</div>
       </div>
     </div>
+  `;
+}
+
+/**
+ * La barre de lancement — **et ce qu'elle dit avant qu'on clique**.
+ *
+ * Deux phrases, et chacune ferme un malentendu :
+ *
+ *   * **ce que cela coûtera** : trente PDF, ce sont trente extractions et trente
+ *     restitutions. Un prix qu'on découvre sur une facture n'entre jamais dans
+ *     la décision (fondamental 13) ;
+ *   * **ce que cela produira** : une proposition par compte rendu, chacune à
+ *     signer. « Analyser 30 documents » se lit comme « remplir la mémoire », et
+ *     ce n'est pas ce qui va se passer (règle 1).
+ *
+ * Vide quand rien n'est coché : une barre à zéro apprend à ne plus la lire.
+ */
+function renderLaBarreDeLancement(choisis = null, connues = []) {
+  const contenu = ceQueLaFileContient(choisis, connues);
+  if (!contenu.combien) return "";
+
+  return `
+    <footer class="choisir-fichier__barre">
+      <div class="choisir-fichier__compte">
+        <b>${escapeHtml(phraseDeLaSelection(contenu))}</b>
+        <i class="mono-small">${escapeHtml(phraseDeCeQueLaFileFera(contenu))}</i>
+      </div>
+      <div class="choisir-fichier__gestes">
+        <button type="button" class="gh-btn gh-btn--sm" data-choisir-rien>Tout décocher</button>
+        <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-choisir-lancer>
+          Lire ${escapeHtml(String(contenu.combien))} ${
+            contenu.combien > 1 ? "comptes rendus" : "compte rendu"}
+        </button>
+      </div>
+    </footer>
+  `;
+}
+
+/**
+ * La file en train de tourner, montrée document par document.
+ *
+ * **Chaque pas se nomme, les échecs compris** (règle 5). « 27 sur 30 » cacherait
+ * lesquels ont manqué, et l'on ne saurait pas par où reprendre.
+ */
+export function renderLaFileDesComptesRendus(file = null) {
+  const comptes = lesComptesDeLaFile(file);
+  if (!comptes.total) return "";
+
+  const reste = phraseDeCeQuiResteASigner(file);
+
+  return `
+    <section class="choisir-fichier" data-file-des-cr>
+      <header class="choisir-fichier__tete">
+        <div class="choisir-fichier__compte">
+          <b>Lecture de ${escapeHtml(String(comptes.total))} ${
+            comptes.total > 1 ? "comptes rendus" : "compte rendu"}</b>
+          <i class="mono-small">${escapeHtml(phraseDeLaFile(file))}</i>
+        </div>
+        ${comptes.attend || comptes.enCours
+          ? `<button type="button" class="gh-btn gh-btn--sm" data-file-arreter>Arrêter</button>`
+          : `<button type="button" class="gh-btn gh-btn--sm" data-choisir-fermer>Fermer</button>`}
+      </header>
+      <div class="choisir-fichier__corps">
+        ${(file?.pas ?? []).map((un) => `
+          <div class="documents-repo__row documents-repo__row--file file-cr__ligne file-cr__ligne--${
+            escapeHtml(un.ou)}">
+            <div class="documents-repo__cell documents-repo__cell--name">
+              <span class="documents-repo__icon">${
+                svgIcon(un.ou === DANS_LA_FILE.ECHOUE ? "alert" : "file", { className: "octicon" })}</span>
+              <span class="documents-repo__name">${escapeHtml(un.nom)}</span>
+            </div>
+            <div class="documents-repo__cell documents-repo__cell--message">
+              <div class="documents-repo__message-main">${
+                escapeHtml(DANS_LA_FILE_DIT[un.ou] ?? un.ou)}</div>
+              ${un.motif
+                ? `<div class="documents-repo__message-sub">${escapeHtml(un.motif)}</div>`
+                : ""}
+            </div>
+          </div>
+        `).join("")}
+      </div>
+      ${reste ? `<footer class="choisir-fichier__barre">
+        <div class="choisir-fichier__compte"><b>${escapeHtml(reste)}</b></div>
+      </footer>` : ""}
+    </section>
   `;
 }
 
@@ -84,9 +198,12 @@ function renderUneEntree(entree) {
  * @param {string} [vue.motif] ce qui a échoué, s'il y a lieu
  */
 export function renderChoisirUnFichier({
-  breadcrumb = [], entrees = [], enCours = false, motif = ""
+  breadcrumb = [], entrees = [], enCours = false, motif = "",
+  choisis = null, connues = []
 } = {}) {
   const dit = phraseDuDossier(entrees);
+  const quelquesUns = (entrees ?? []).some(
+    (une) => une.type === ENTREE.FICHIER && une.choisissable);
 
   return `
     <section class="choisir-fichier" data-choisir-fichier>
@@ -100,10 +217,31 @@ export function renderChoisirUnFichier({
           : motif
             ? `<p class="propositions-empty">${escapeHtml(motif)}</p>`
             : `
-              ${entrees.map(renderUneEntree).join("")}
+              ${quelquesUns ? (() => {
+                // **Trois états, pas deux.** Une case vide sur un dossier où
+                // trois documents sont cochés dirait que rien ne l'est, et l'on
+                // cliquerait pour tout cocher en croyant ne rien défaire. Le
+                // trait partiel est celui du tableau des sujets, à l'identique.
+                const ou = etatDeLaCaseDuDossier(choisis, entrees);
+                return `
+                <div class="documents-repo__row documents-repo__row--head">
+                  <div class="documents-repo__cell documents-repo__cell--name">
+                    <span class="choisir-fichier__case">
+                      <input type="checkbox" class="mdall-case mdall-case--tete" data-choisir-tout
+                        ${ou === "toutes" ? "checked" : ""}
+                        ${ou === "partielle" ? `data-partielle="true"` : ""}
+                        aria-label="Choisir tous les documents de ce dossier">
+                    </span>
+                    <span class="mono-small">Ce dossier</span>
+                  </div>
+                  <div class="documents-repo__cell documents-repo__cell--message"></div>
+                </div>
+              `; })() : ""}
+              ${entrees.map((une) => renderUneEntree(une, choisis)).join("")}
               ${dit ? `<p class="propositions-empty">${escapeHtml(dit)}</p>` : ""}
             `}
       </div>
+      ${renderLaBarreDeLancement(choisis, connues)}
     </section>
   `;
 }

@@ -2104,3 +2104,202 @@ test("sans rien à porter, l'écran ne dit rien plutôt que de compter des zéro
   assert.equal(phraseDeLaPart({ memoire: [], suivi: [] }), "");
   assert.equal(phraseDeLaPart({}), "");
 });
+
+/* ── Les trois états de l'écran, et leur exclusion mutuelle ──────────────── */
+
+const DES_ENTREES_DU_CHOIX = [
+  { type: "dossier", id: "f1", nom: "Archives", choisissable: false, pourquoi: "", lecture: "" },
+  { type: "fichier", id: "d1", nom: "CR 01.pdf", choisissable: true, pourquoi: "", lecture: "pdf" },
+  { type: "fichier", id: "d2", nom: "CR 02.md", choisissable: true, pourquoi: "", lecture: "texte" },
+  { type: "fichier", id: "d3", nom: "scan.tiff", choisissable: false, pourquoi: "pas-lisible", lecture: "" }
+];
+
+const unChoix = (surcharge = {}) => ({
+  dossier: "", breadcrumb: [], entrees: DES_ENTREES_DU_CHOIX, enCours: false, motif: "",
+  ...surcharge
+});
+
+/**
+ * **Trois états, un seul visible.**
+ *
+ * L'épreuve qui gardait cette règle relisait le fichier comme du texte et
+ * cherchait une expression exacte : un troisième état — la file — pouvait
+ * s'ajouter sous les deux autres sans qu'elle bouge. Ici l'écran se dessine, et
+ * l'on compte ce qu'il montre.
+ *
+ * Les deux ensemble donneraient deux façons de faire la même chose sur le même
+ * écran, et un document déposé pendant qu'une file de trente lectures tourne
+ * abandonnerait un appel déjà payé.
+ */
+test("le choix, la file et le dépôt ne se montrent jamais ensemble", () => {
+  const depot = renderLaLecture(unEtat());
+  assert.match(depot, /data-lecture-cr-depuis-fichiers/, "le dépôt ne propose pas Fichiers");
+  assert.doesNotMatch(depot, /data-choisir-fichier/);
+  assert.doesNotMatch(depot, /data-file-des-cr/);
+
+  const choix = renderLaLecture(unEtat({ choix: unChoix(), coches: new Set(), connues: new Map() }));
+  assert.match(choix, /data-choisir-fichier/, "le choix ne se dessine pas");
+  assert.doesNotMatch(choix, /data-file-des-cr/);
+  // La zone de dépôt porte le bouton « Déposer un fichier » : c'est elle qu'on
+  // ne veut pas voir sous le choix.
+  assert.doesNotMatch(choix, /lecture-cr__depot/);
+
+  const file = renderLaLecture(unEtat({
+    file: {
+      arretee: false,
+      pas: [{ id: "d1", nom: "CR 01.pdf", lecture: "pdf", ou: "en-cours", motif: "" }]
+    }
+  }));
+  assert.match(file, /data-file-des-cr/, "la file ne se dessine pas");
+  assert.doesNotMatch(file, /data-choisir-fichier/);
+  assert.doesNotMatch(file, /lecture-cr__depot/);
+});
+
+/**
+ * **Les cases à cocher n'existent que sur ce qui se lit.** Une case morte sur un
+ * `.tiff` inviterait à cliquer pour rien ; et l'en-tête du dossier porte la
+ * sienne, pour tout prendre d'un coup.
+ */
+test("seuls les documents lisibles portent une case à cocher", () => {
+  const html = renderLaLecture(unEtat({
+    choix: unChoix(), coches: new Set(), connues: new Map()
+  }));
+
+  assert.match(html, /data-choisir-coche="d1"/);
+  assert.match(html, /data-choisir-coche="d2"/);
+  assert.doesNotMatch(html, /data-choisir-coche="d3"/, "un document illisible porte une case");
+  assert.doesNotMatch(html, /data-choisir-coche="f1"/, "un dossier porte une case");
+  assert.match(html, /data-choisir-tout/, "l'en-tête n'a pas sa case maîtresse");
+});
+
+/**
+ * **La barre de lancement dit le coût et ce qui sortira, avant le clic.**
+ *
+ * Un prix qu'on découvre sur une facture n'entre jamais dans la décision
+ * (fondamental 13), et « Analyser 30 documents » se lit comme « remplir la
+ * mémoire » là où chaque lecture donne une proposition **à signer** (règle 1).
+ */
+test("la barre de lancement annonce le coût et les propositions", () => {
+  const html = renderLaLecture(unEtat({
+    choix: unChoix(),
+    coches: new Set(["d1", "d2"]),
+    connues: new Map(DES_ENTREES_DU_CHOIX.map((une) => [une.id, une]))
+  }));
+
+  assert.match(html, /data-choisir-lancer/, "rien ne lance la file");
+  assert.match(html, /Lire 2 comptes rendus/);
+  assert.match(html, commeAffichee("1 PDF à extraire puis restituer par le modèle"));
+  assert.match(html, commeAffichee("2 propositions à signer"));
+  assert.match(html, commeAffichee("Rien n'entre dans la mémoire"));
+});
+
+/** Rien de coché : pas de barre. Une barre à zéro apprend à ne plus la lire. */
+test("sans rien de coché, aucune barre de lancement", () => {
+  const html = renderLaLecture(unEtat({
+    choix: unChoix(), coches: new Set(), connues: new Map()
+  }));
+  assert.doesNotMatch(html, /data-choisir-lancer/);
+});
+
+/**
+ * **La file nomme chaque document, et ses échecs ne se noient pas** (règle 5).
+ * « 27 sur 30 » cacherait lesquels ont manqué, et l'on ne saurait pas par où
+ * reprendre.
+ */
+test("la file montre chaque compte rendu, et ce qui a échoué", () => {
+  const html = renderLaLecture(unEtat({
+    file: {
+      arretee: false,
+      pas: [
+        { id: "d1", nom: "CR 01.pdf", lecture: "pdf", ou: "propose", motif: "" },
+        { id: "d2", nom: "CR 02.md", lecture: "texte", ou: "echoue", motif: "Aucune page lisible." },
+        { id: "d3", nom: "CR 03.pdf", lecture: "pdf", ou: "attend", motif: "" }
+      ]
+    }
+  }));
+
+  assert.match(html, /CR 01\.pdf/);
+  assert.match(html, /CR 02\.md/);
+  assert.match(html, /CR 03\.pdf/);
+  assert.match(html, commeAffichee("Aucune page lisible."));
+  assert.match(html, /1 proposition prête/);
+  assert.match(html, commeAffichee("1 n'a pas pu être lu"));
+  // Tant qu'il reste à faire, on peut arrêter.
+  assert.match(html, /data-file-arreter/);
+});
+
+/**
+ * **À la fin, ce n'est pas « terminé » : ce sont des propositions à signer.**
+ * Annoncer une fin laisserait croire que la mémoire du chantier est à jour,
+ * alors que rien n'y est entré (règle 1).
+ */
+test("la file finie dit ce qui reste à signer, et ne s'arrête plus", () => {
+  const html = renderLaLecture(unEtat({
+    file: {
+      arretee: false,
+      pas: [
+        { id: "d1", nom: "CR 01.pdf", lecture: "pdf", ou: "propose", motif: "" },
+        { id: "d2", nom: "CR 02.md", lecture: "texte", ou: "propose", motif: "" }
+      ]
+    }
+  }));
+
+  assert.match(html, commeAffichee("2 propositions attendent"));
+  assert.match(html, commeAffichee("Rien n'est entré dans la mémoire du chantier"));
+  assert.doesNotMatch(html, /data-file-arreter/, "une file finie propose encore de s'arrêter");
+  assert.doesNotMatch(html, /termin/i, "l'écran annonce une fin là où le travail commence");
+});
+
+/**
+ * **Le départ vers la signature abandonnerait vingt-neuf lectures.**
+ *
+ * Après une proposition, l'écran change de route pour aller la faire signer —
+ * c'est juste pour un compte rendu, et c'est ce qu'on veut. Pour trente, la
+ * route change au premier et la boucle tourne dans le vide : les vingt-neuf
+ * suivants ne sont jamais lus, et **rien ne le dit**. L'écran a disparu, voilà
+ * tout.
+ *
+ * Ce défaut ne se dessine pas : il n'est ni dans un rendu, ni dans un service
+ * pur — c'est une affectation à `location.hash` au milieu d'une fonction qui
+ * parle au réseau. Relire la source est ici le seul moyen de le tenir, et c'est
+ * le cas précis où cela se justifie.
+ */
+test("la file ne part pas signer : le départ est conditionnel", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(fileURLToPath(new URL("./lecture-des-cr.js", import.meta.url)), "utf8");
+
+  // Le seul changement de route de cet écran, et il est gardé.
+  const departs = source.match(/window\.location\.hash\s*=/g) ?? [];
+  assert.equal(departs.length, 1, "l'écran change de route à plus d'un endroit");
+  assert.match(source, /if \(allerALaSignature\) \{[\s\S]*?window\.location\.hash/,
+    "le départ vers la signature n'est pas gardé : la file s'arrêterait au premier");
+
+  // Et la file demande explicitement à rester sur place.
+  assert.match(source, /transformer\(hote, \{ allerALaSignature: false \}\)/,
+    "la file ne demande pas à rester sur place");
+});
+
+/**
+ * **Quitter l'Atelier arrête la file, et ne coûte plus rien.**
+ *
+ * Trente lectures prennent de longues minutes. Sans garde, quitter l'écran au
+ * cinquième laissait la boucle appeler le modèle vingt-cinq fois de plus, pour
+ * un écran que personne ne regarde — et la facture arrivait quand même
+ * (fondamental 13). `redessiner` savait déjà ne pas écrire dans un élément
+ * détaché ; il ne pouvait pas arrêter ce qui l'appelle.
+ *
+ * Comme le départ vers la signature, cela ne se dessine pas : c'est une sortie
+ * de boucle au milieu d'une fonction qui parle au réseau.
+ */
+test("la file s'arrête quand l'écran n'est plus là", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(fileURLToPath(new URL("./lecture-des-cr.js", import.meta.url)), "utf8");
+
+  const boucle = source.slice(source.indexOf("async function lancerLaFile"),
+    source.indexOf("async function unPasDeLaFile"));
+  assert.ok(boucle, "lancerLaFile est introuvable");
+  assert.match(boucle, /isConnected[\s\S]*?laFileArretee\(etat\.file\);\s*\n\s*return;/,
+    "la boucle continue d'appeler le modèle sur un écran détaché");
+});

@@ -337,8 +337,18 @@ test("l'écran mesure les deux lignes de base, et les montre", async () => {
   assert.match(ecran, /LIGNES_DE_BASE\.map/, "les lignes de base ne sont pas mesurées");
   assert.match(ecran, /mesureDuPredicteur\(episode, \{ predire: ligne\.predire, arrive: lesDomainesVenus \}\)/,
     "la mesure ne porte pas sur l'épisode de ce chantier");
-  assert.match(ecran, /renderLaForme\(vecteur, episode, mesures\)/,
+  assert.match(ecran, /renderLaForme\(vecteur, episode, mesures, surLesSujets\)/,
     "les mesures ne sont jamais dessinées");
+
+  // **Le même instrument, sur l'autre liste.** C'est tout le portage : si la
+  // mesure sur les sujets n'était pas prise par `mesureDuPredicteur`, elle
+  // n'aurait ni la coupe stricte, ni le froid, ni la fenêtre — et son chiffre
+  // ne se comparerait à rien.
+  assert.match(ecran, /LIGNES_DE_BASE_DES_SUJETS\.map/,
+    "les prédicteurs sur les sujets ne sont pas mesurés");
+  assert.match(ecran,
+    /mesureDuPredicteur\(episode, \{ predire: ligne\.predire, arrive: lesSujetsVenus \}\)/,
+    "la mesure sur les sujets passe par un autre chemin que celle sur les domaines");
 });
 
 test("le froid se dit en clair, et jamais en pourcentage", async () => {

@@ -6,7 +6,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  LIGNES_DE_BASE, ceQuiSuitHabituellement, leplusFrequent, lesDomainesVenus
+  LIGNES_DE_BASE, LIGNES_DE_BASE_DES_SUJETS, ceQuiSuitHabituellement,
+  ceQuiSuitHabituellementEnSujets, leplusFrequent, lesDomainesVenus,
+  lesSujetsLesPlusFrequents, lesSujetsVenus
 } from "./ligne-de-base.js";
 import { episodeDuProjet } from "./episode-du-projet.js";
 import { mesureDuPredicteur } from "./mesure-du-passe.js";
@@ -215,4 +217,178 @@ test("les deux lignes de base se nomment, et chacune dit ce qu'elle regarde", ()
 
   assert.deepEqual(parLeCompte, ["incendie", "structure"]);
   assert.deepEqual(parLaSuite, ["structure"]);
+});
+
+/* ── Les mêmes deux bêtises, sur les sujets ───────────────────────────────── */
+
+/**
+ * Une suite de constats qui portent **plusieurs sujets chacun**.
+ *
+ * Les sujets viennent de la base, jamais d'un découpage refait ici : on les
+ * injecte donc comme la base les rend, par identifiant d'affirmation. Refaire
+ * l'extraction dans ce fixtureur aurait éprouvé le découpage du fixtureur, pas
+ * celui du système.
+ */
+const suiteDeSujets = (...paquets) => episodeDuProjet({
+  assertions: paquets.map((_, rang) => constat(`c${rang}`, jour(3 * rang + 1), "structure")),
+  sujetsParAffirmation: new Map(paquets.map((siens, rang) => [`c${rang}`, siens]))
+});
+
+test("le sujet le plus fréquent compte les sujets, pas les constats", () => {
+  const episode = suiteDeSujets(
+    ["nappe phreatique", "cuvelage"],
+    ["nappe phreatique"],
+    ["plancher beton", "nappe phreatique"]
+  );
+
+  assert.deepEqual(lesSujetsLesPlusFrequents(episode),
+    ["nappe phreatique", "cuvelage", "plancher beton"]);
+});
+
+/**
+ * **Un sujet répété dans une affirmation ne compte qu'une fois — et la règle
+ * vit dans l'épisode**, qui réunit les sujets d'un constat dans un ensemble.
+ *
+ * Elle était redite ici, et un cassage l'a montré : la garde ne pouvait pas
+ * tomber, puisque `suiteDeSujets` passe par `episodeDuProjet`. L'épreuve est
+ * donc allée où la règle vit — `episode-du-projet.test.mjs` —, et ce qu'on
+ * vérifie ici est que le classement **s'appuie** dessus plutôt que de la refaire.
+ */
+test("le classement s'appuie sur l'épisode pour ne compter qu'une fois", () => {
+  const episode = suiteDeSujets(
+    ["cuvelage", "cuvelage", "cuvelage"],
+    ["nappe phreatique"],
+    ["nappe phreatique"]
+  );
+
+  assert.deepEqual(lesSujetsLesPlusFrequents(episode), ["nappe phreatique", "cuvelage"]);
+});
+
+/**
+ * **Un constat sans sujet ne fait pas un pas vide dans la suite.** Le garder
+ * décalerait les couples d'un cran : « après cuvelage, rien », puis « après
+ * rien, plancher » — deux couples faux pour un vrai.
+ */
+test("un constat sans sujet ne décale pas la suite", () => {
+  const episode = suiteDeSujets(["cuvelage"], [], ["plancher beton"]);
+
+  assert.deepEqual(ceQuiSuitHabituellementEnSujets(episode), []);
+  // Le couple s'est bien formé par-dessus le pas vide : « plancher beton » suit
+  // « cuvelage », et c'est le dernier pas qui n'a pas encore de suite.
+  const avant = suiteDeSujets(["cuvelage"], [], ["plancher beton"], ["cuvelage"]);
+  assert.deepEqual(ceQuiSuitHabituellementEnSujets(avant), ["plancher beton"]);
+});
+
+/**
+ * **Les couples se forment de chaque sujet d'un pas vers chaque sujet du
+ * suivant.** C'est la généralisation honnête de « après ceci, il est venu
+ * cela », et ce que fait déjà `les_enchainements_des_sujets()` en base.
+ */
+test("ce qui suit croise les sujets d'un pas avec ceux du suivant", () => {
+  const episode = suiteDeSujets(
+    ["nappe phreatique"],
+    ["cuvelage", "radier"],
+    ["nappe phreatique"]
+  );
+
+  // Après « nappe phreatique », on a vu « cuvelage » et « radier », une fois
+  // chacun. Le dernier pas n'a pas encore de suite.
+  assert.deepEqual(ceQuiSuitHabituellementEnSujets(episode), ["cuvelage", "radier"]);
+});
+
+/**
+ * **Les suites des derniers sujets se somment.**
+ *
+ * Le dernier constat porte plusieurs sujets, chacun avec sa suite connue. Un
+ * sujet qui revient dans deux de ces suites est plus probable qu'un qui n'est
+ * que dans une — et prendre la suite du premier sujet seulement aurait jeté
+ * cette information.
+ */
+test("les suites des derniers sujets s'additionnent", () => {
+  const episode = suiteDeSujets(
+    ["nappe phreatique"], ["cuvelage"],
+    ["radier"], ["cuvelage"],
+    ["radier"], ["drainage"],
+    // Le dernier pas porte les deux : « cuvelage » est connu après « nappe
+    // phreatique » (1) et après « radier » (1) → 2 ; « drainage » après
+    // « radier » seulement → 1.
+    ["nappe phreatique", "radier"]
+  );
+
+  assert.deepEqual(ceQuiSuitHabituellementEnSujets(episode), ["cuvelage", "drainage"]);
+});
+
+test("sans suite connue, le prédicteur sur les sujets se tait", () => {
+  assert.deepEqual(ceQuiSuitHabituellementEnSujets(suiteDeSujets(["cuvelage"])), []);
+  assert.deepEqual(ceQuiSuitHabituellementEnSujets(null), []);
+  assert.deepEqual(lesSujetsLesPlusFrequents(null), []);
+});
+
+/**
+ * **Les sujets ne sont jamais devinés.** Sans lecture en base, le prédicteur
+ * rend une liste vide et l'instrument compte le point comme non noté. Un
+ * découpage improvisé ici aurait fait mesurer deux vocabulaires (règle 4).
+ */
+test("sans sujets lus en base, on ne prédit rien", () => {
+  const episode = suite("structure", "incendie", "structure");
+  assert.deepEqual(lesSujetsLesPlusFrequents(episode), []);
+  assert.deepEqual(ceQuiSuitHabituellementEnSujets(episode), []);
+});
+
+/**
+ * **Un constat qui porte trois sujets en a trois à confronter**, tous à la date
+ * du constat : c'est elle qui donne le délai d'avance.
+ */
+test("ce qui est venu rend un sujet par ligne, à la date du constat", () => {
+  // La suite telle que l'instrument la rend : des constats de l'épisode, dont
+  // les sujets sont déjà réunis. Une liste écrite à la main qui porterait deux
+  // fois le même sujet éprouverait un cas qui ne se produit pas.
+  const suiteVenue = {
+    constats: [
+      { quand: jour(4), sujets: ["cuvelage", "radier"] },
+      { quand: jour(7), sujets: [] }
+    ]
+  };
+
+  assert.deepEqual(lesSujetsVenus(suiteVenue), [
+    { quoi: "cuvelage", quand: jour(4) },
+    { quoi: "radier", quand: jour(4) }
+  ]);
+  assert.deepEqual(lesSujetsVenus(null), []);
+});
+
+/**
+ * **L'instrument ne change pas d'un caractère**, et c'est tout le portage. Si
+ * la mesure sur les sujets ne passait pas par `mesureDuPredicteur`, elle
+ * n'aurait ni la coupe stricte, ni le froid, ni la fenêtre — et son chiffre ne
+ * se comparerait à rien.
+ */
+test("le même instrument mesure les sujets", () => {
+  // Une alternance franche : la séquence doit y battre le comptage, exactement
+  // comme sur les domaines.
+  const episode = suiteDeSujets(
+    ["nappe phreatique"], ["cuvelage"], ["nappe phreatique"], ["cuvelage"],
+    ["nappe phreatique"], ["cuvelage"], ["nappe phreatique"], ["cuvelage"],
+    ["nappe phreatique"], ["cuvelage"], ["nappe phreatique"], ["cuvelage"]
+  );
+
+  const parComptage = mesureDuPredicteur(episode, {
+    predire: lesSujetsLesPlusFrequents, arrive: lesSujetsVenus, jours: 1
+  });
+  const parSequence = mesureDuPredicteur(episode, {
+    predire: ceQuiSuitHabituellementEnSujets, arrive: lesSujetsVenus, jours: 1
+  });
+
+  assert.equal(parSequence.froid, false, "la mesure sur les sujets reste froide");
+  assert.ok(parSequence.precision1 > parComptage.precision1,
+    `la séquence devrait battre le comptage : ${parSequence.precision1} contre ${parComptage.precision1}`);
+});
+
+test("les deux lignes de base des sujets se nomment, et disent ce qu'elles regardent", () => {
+  assert.deepEqual(LIGNES_DE_BASE_DES_SUJETS.map((une) => une.cle),
+    ["les-sujets-les-plus-frequents", "ce-qui-suit-en-sujets"]);
+  for (const une of LIGNES_DE_BASE_DES_SUJETS) {
+    assert.equal(typeof une.predire, "function", `${une.cle} ne prédit rien`);
+    assert.ok(une.dit && une.quoi, `${une.cle} ne se dit pas`);
+  }
 });

@@ -196,6 +196,81 @@ test("l'épisode porte la forme du chantier, telle qu'on la lui donne", () => {
   assert.equal(episode.contexte, contexte);
 });
 
+/* ── Les sujets voyagent avec le constat ──────────────────────────────────── */
+
+/**
+ * **Les sujets viennent de la base, et se rattachent au constat.**
+ *
+ * L'extraction — minuscules, accents, mots-outils, couples de voisins — vit
+ * dans `les_sujets_dun_texte()`, la même qui nourrit la console. La refaire ici
+ * aurait donné deux vocabulaires, et les deux prédictions auraient cessé d'être
+ * comparables sans que rien ne le dise (règle 4).
+ */
+test("un constat porte les sujets que la base lui donne", () => {
+  const episode = episodeDuProjet({
+    assertions: [constat("a1", "Fissure", "2026-01-01T09:00:00Z")],
+    sujetsParAffirmation: new Map([["a1", ["plancher beton", "fissure"]]])
+  });
+
+  // Rangés : deux lectures du même passé doivent rendre la même liste.
+  assert.deepEqual(episode.constats[0].sujets, ["fissure", "plancher beton"]);
+});
+
+/**
+ * **Un sujet écrit deux fois dans la même phrase est un sujet, pas deux — et
+ * c'est ici que cela se décide.**
+ *
+ * Le prédicteur s'appuie dessus : une phrase bavarde qui pèserait deux fois
+ * ferait remonter les tournures verbeuses devant les sujets fréquents. La règle
+ * était écrite une seconde fois dans `ligne-de-base.js`, où un cassage a montré
+ * qu'elle ne pouvait pas tomber (règle 4).
+ */
+test("un sujet répété dans une affirmation ne compte qu'une fois", () => {
+  const episode = episodeDuProjet({
+    assertions: [constat("a1", "Fissure", "2026-01-01T09:00:00Z")],
+    sujetsParAffirmation: new Map([["a1", ["beton", "beton", "plancher beton", "beton"]]])
+  });
+
+  assert.deepEqual(episode.constats[0].sujets, ["beton", "plancher beton"]);
+});
+
+/**
+ * **Les sujets de toutes les écritures d'un constat se réunissent.**
+ *
+ * Un même constat est versé plusieurs fois au fil de ses relectures, et chaque
+ * version emploie ses mots. Ne garder que ceux de la première perdrait les
+ * termes apparus en route — or c'est précisément le vocabulaire qui s'enrichit
+ * qu'on cherche à suivre.
+ */
+test("les sujets des relectures d'un constat se réunissent", () => {
+  const episode = episodeDuProjet({
+    assertions: [
+      constat("a1", "Fissure", "2026-01-01T09:00:00Z", { cle: "fissure" }),
+      constat("a2", "Fissure", "2026-02-01T09:00:00Z", { cle: "fissure" })
+    ],
+    sujetsParAffirmation: new Map([
+      ["a1", ["plancher beton"]],
+      ["a2", ["plancher beton", "reprise sous oeuvre"]]
+    ])
+  });
+
+  assert.equal(episode.constats.length, 1, "un constat relu en fait deux");
+  assert.deepEqual(episode.constats[0].sujets, ["plancher beton", "reprise sous oeuvre"]);
+});
+
+/**
+ * **Sans lecture, aucun sujet inventé.** Le prédicteur rend alors une liste
+ * vide et l'instrument compte ses points comme non notés : c'est exactement ce
+ * qu'on veut dire. Inventer des sujets pour ne pas afficher de blanc aurait
+ * fait mesurer un découpage improvisé (règle 5).
+ */
+test("sans sujets lus, le constat n'en porte aucun", () => {
+  const episode = episodeDuProjet({
+    assertions: [constat("a1", "Fissure", "2026-01-01T09:00:00Z")]
+  });
+  assert.deepEqual(episode.constats[0].sujets, []);
+});
+
 /* ════════════════════════════════════════════════════════════════════════════
  * Le câblage : seul le code qui le porte en témoigne
  * ════════════════════════════════════════════════════════════════════════════ */
@@ -254,7 +329,7 @@ test("l'écran montre la forme, ses manques, et ce qui ne traverse jamais", asyn
   // Et le bloc est dessiné : une fonction que personne n'appelle ne montre rien.
   assert.match(ecran, /<div id="projectInsightsForme"><\/div>/, "le bloc n'a pas de place");
   assert.match(ecran, /dessinerLaForme\(root\);/, "le bloc n'est jamais rempli");
-  assert.match(ecran, /hote\.innerHTML = renderLaForme\(vecteur, episode, mesures\);/,
+  assert.match(ecran, /hote\.innerHTML = renderLaForme\(vecteur, episode, mesures, surLesSujets\);/,
     "la forme n'est jamais peinte");
   assert.match(ecran, /import \{ renderLaForme \} from "\.\/ui\/forme-du-chantier\.js"/,
     "l'écran ne prend pas le bloc là où il vit");

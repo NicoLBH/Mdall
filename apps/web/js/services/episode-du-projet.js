@@ -106,8 +106,28 @@ function lesOuvertures(sujets) {
  * constat est versé plusieurs fois au fil de ses relectures : les compter tous
  * ferait lire dix problèmes là où le projet en a un.
  */
-function lesConstats(assertions) {
+function lesConstats(assertions, sujetsParAffirmation = null) {
   const parNom = new Map();
+
+  /**
+   * **Les sujets viennent de la base, jamais d'un découpage refait ici.**
+   *
+   * L'extraction — minuscules, accents, mots-outils, couples de voisins,
+   * radicaux — vit dans `les_sujets_dun_texte()`, et c'est la même qui nourrit
+   * la console. La refaire en JavaScript aurait fait deux vocabulaires : l'écran
+   * d'un chantier aurait prédit sur des termes que la console ne connaît pas, et
+   * les deux chiffres auraient cessé d'être comparables sans que rien ne le dise
+   * (règle 4).
+   *
+   * Vide quand on ne les a pas lus : le prédicteur sur les sujets rend alors une
+   * liste vide, et l'instrument compte ses points comme non notés — ce qui est
+   * exactement ce qu'on veut dire. Inventer des sujets pour ne pas afficher de
+   * blanc aurait fait mesurer un découpage improvisé.
+   */
+  const siens = (id) => {
+    const lus = sujetsParAffirmation?.get?.(texte(id));
+    return Array.isArray(lus) ? lus.map(texte).filter(Boolean) : [];
+  };
 
   for (const assertion of Array.isArray(assertions) ? assertions : []) {
     if (classifyAssertion(assertion).nature !== NATURE.CONSTAT) continue;
@@ -129,10 +149,17 @@ function lesConstats(assertions) {
         domaine: texte(classifyAssertion(assertion).domain),
         quand,
         dernier: quand,
+        // **Les sujets de toutes ses écritures, réunis.** Un même constat est
+        // versé plusieurs fois au fil de ses relectures, et chaque version
+        // emploie ses mots : ne garder que ceux de la première perdrait les
+        // termes apparus en route.
+        sujets: new Set(siens(assertion?.id)),
         leveLe: texte(assertion?.payload?.status) === LEVE ? quand : null
       });
       continue;
     }
+
+    for (const sujet of siens(assertion?.id)) vu.sujets.add(sujet);
 
     if (instant(quand) < instant(vu.quand)) vu.quand = quand;
     if (instant(quand) >= instant(vu.dernier)) {
@@ -142,7 +169,12 @@ function lesConstats(assertions) {
   }
 
   return [...parNom.values()]
-    .map(({ dernier, ...constat }) => constat)
+    // L'ensemble a servi à réunir sans doublon ; il sort en liste rangée, pour
+    // que deux lectures du même passé rendent la même chose.
+    .map(({ dernier, sujets, ...constat }) => ({
+      ...constat,
+      sujets: [...sujets].sort((gauche, droite) => gauche.localeCompare(droite, "fr"))
+    }))
     .sort(parLeTemps);
 }
 
@@ -153,12 +185,18 @@ function lesConstats(assertions) {
  * @param {object} [options.contexte] la forme du chantier (`vecteur-de-contexte.js`)
  * @param {object[]} [options.sujets] les sujets, tels que la base les rend
  * @param {object[]} [options.assertions] la mémoire du projet
+ * @param {Map<string, string[]>} [options.sujetsParAffirmation] les termes
+ *   techniques de chaque affirmation, tels que `les_sujets_de_ce_chantier()`
+ *   les rend. Injectés : ce module ne découpe pas de texte, et l'extraction
+ *   n'existe qu'en base (règle 4)
  * @returns {{contexte: object|null, depuis: string, jusqua: string,
  *   ouvertures: object[], constats: object[], combien: object}}
  */
-export function episodeDuProjet({ contexte = null, sujets = [], assertions = [] } = {}) {
+export function episodeDuProjet({
+  contexte = null, sujets = [], assertions = [], sujetsParAffirmation = null
+} = {}) {
   const { ouvertures, sansDate } = lesOuvertures(sujets);
-  const constats = lesConstats(assertions);
+  const constats = lesConstats(assertions, sujetsParAffirmation);
 
   // Les bornes du temps : c'est par elles que la mesure rejouera l'épisode.
   const moments = [...ouvertures, ...constats]

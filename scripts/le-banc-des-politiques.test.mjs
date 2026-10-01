@@ -60,7 +60,8 @@ const LES_MIGRATIONS = [
   "202611050001_lannuaire_a_son_proprietaire.sql",
   "202611060001_un_chantier_qui_se_range.sql",
   "202611070001_les_sujets_du_systeme.sql",
-  "202611080001_les_synonymes_regroupes.sql"
+  "202611080001_les_synonymes_regroupes.sql",
+  "202611090001_les_sujets_dun_chantier.sql"
 ];
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -1009,3 +1010,181 @@ test("le nombre de formes rangées se compte", { skip: sansPostgres }, () => {
   assert.equal(formes > montres, true,
     `rien ne s'est regroupé : ${formes} formes pour ${montres} sujets`);
 });
+
+/* ── Les sujets d'un chantier, pour son propre prédicteur ─────────────────── */
+
+/**
+ * **Le prédicteur d'un chantier a besoin des sujets de ce chantier**, par
+ * affirmation : c'est sur eux qu'il prédira au lieu des huit domaines.
+ *
+ * Le seuil est **interne au chantier** — « répété ici », et non « vu ailleurs ».
+ */
+test("les sujets d'un chantier sortent par affirmation", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_assertions;");
+  // Le gymnase appartient à B : c'est lui qui pourra lire.
+  desAffirmations(GYMNASE, [
+    "plancher beton fissure en sous-sol",
+    "plancher beton repris au niveau bas",
+    // Vu une seule fois dans ce chantier : rien à prédire, il ne sort pas.
+    "garde corps vitre a reprendre"
+  ]);
+
+  const lu = banc.enTantQue(B,
+    `select sujet from public.les_sujets_de_ce_chantier('${GYMNASE}') order by 1;`);
+  assert.equal(lu.ok, true, lu.motif);
+
+  const sujets = lu.sortie.split("\n").map((un) => un.trim()).filter(Boolean);
+  assert.ok(sujets.includes("plancher beton"),
+    `« plancher beton » ne sort pas : ${sujets.join(" | ")}`);
+  assert.ok(!sujets.some((un) => un.includes("garde")),
+    `un sujet vu une seule fois sort quand même : ${sujets.join(" | ")}`);
+});
+
+/**
+ * **Le chantier demandé, et lui seul.**
+ *
+ * Une mutation a survécu ici, et elle disait quelque chose : le banc n'avait
+ * qu'un propriétaire par chantier, si bien que la politique de la table
+ * suffisait à ne rendre qu'un projet. Retirer `where project_id = le_chantier`
+ * ne changeait donc rien — alors qu'un vrai compte en possède dix, et aurait vu
+ * les sujets des neuf autres sous l'onglet du premier.
+ *
+ * B possède maintenant deux chantiers, et c'est ce qui rend la clause visible.
+ */
+test("les sujets d'un chantier ne sont que les siens", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_assertions;");
+  // Les vestiaires n'avaient pas de propriétaire : on les donne à B, qui tient
+  // déjà le gymnase.
+  banc.sql(
+    "update public.projects set owner_id = '" + B + "'"
+    + " where id = '44444444-4444-4444-8444-444444444444';");
+
+  desAffirmations(GYMNASE, ["plancher beton fissure", "plancher beton repris"]);
+  desAffirmations("44444444-4444-4444-8444-444444444444",
+    ["charpente bois deposee", "charpente bois remontee"]);
+
+  const lu = banc.enTantQue(B,
+    `select coalesce(string_agg(distinct sujet, '|' order by sujet), '')`
+    + ` from public.les_sujets_de_ce_chantier('${GYMNASE}');`);
+  assert.equal(lu.ok, true, lu.motif);
+
+  const sujets = lu.sortie.trim().split("|").filter(Boolean);
+  // Les siens sont là — « plancher » seul autant que le couple : les deux sont
+  // des sujets de ce chantier, et le banc n'a pas à en préférer un.
+  assert.ok(sujets.includes("plancher beton"), `les siens manquent : ${sujets.join(" ")}`);
+  // Ceux de l'autre chantier, non — et c'est toute la clause.
+  assert.deepEqual(sujets.filter((un) => un.includes("charpente")), [],
+    `les sujets d'un autre chantier du même propriétaire sont sortis : ${sujets.join(" ")}`);
+});
+
+/**
+ * **Un sujet écrit deux fois dans la même phrase est un sujet, pas deux.**
+ *
+ * Sans le dédoublonnage, une phrase bavarde pèserait deux fois dans les
+ * fréquences du prédicteur — et les tournures verbeuses remonteraient devant les
+ * sujets réellement fréquents.
+ */
+test("un sujet répété dans une phrase ne sort qu'une fois",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.project_assertions;");
+    desAffirmations(GYMNASE, [
+      "plancher beton fissure et autre plancher beton repris",
+      "plancher beton a controler"
+    ]);
+
+    const lu = banc.enTantQue(B,
+      "select count(*) from public.les_sujets_de_ce_chantier"
+      + `('${GYMNASE}') where sujet = 'plancher beton';`);
+    assert.equal(lu.sortie.trim(), "2",
+      "« plancher beton » sort plus d'une fois par affirmation");
+  });
+
+/**
+ * **Chaque affirmation porte ses sujets**, et c'est ce qui rend la séquence
+ * mesurable : « après cette affirmation-là, celle-ci est venue ». Rendre les
+ * sujets du chantier sans dire de quelle affirmation ils sortent aurait donné
+ * un sac de mots, dont aucun prédicteur ne tire de suite.
+ */
+test("un sujet se rattache à l'affirmation d'où il sort", { skip: sansPostgres }, () => {
+  const lu = banc.enTantQue(B,
+    "select count(distinct affirmation) || ':' || count(*)"
+    + ` from public.les_sujets_de_ce_chantier('${GYMNASE}');`);
+  const [affirmations, lignes] = lu.sortie.trim().split(":").map(Number);
+  assert.equal(affirmations, 2,
+    `les deux affirmations qui répètent un sujet devraient sortir : ${affirmations}`);
+  assert.ok(lignes > affirmations,
+    `une affirmation porte plusieurs sujets : ${lignes} lignes pour ${affirmations}`);
+});
+
+/**
+ * **Le seuil est interne au chantier, et cela se vérifie.**
+ *
+ * Un sujet écrit une fois ici et une fois ailleurs passerait le seuil du
+ * système — « vu sur deux chantiers » — et ne passe pas celui-ci. C'est voulu :
+ * le faire sortir aurait appris au membre d'un projet qu'une de ses tournures
+ * se retrouve dans un autre, ce qui est une inférence sur un contenu qu'il n'a
+ * pas le droit de lire.
+ */
+test("un sujet vu ailleurs mais pas répété ici ne sort pas",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.project_assertions;");
+    desAffirmations(GYMNASE, ["etancheite toiture terrasse a revoir"]);
+    desAffirmations(MEDIATHEQUE, ["etancheite toiture terrasse reprise"]);
+
+    // Le système le montrerait : deux chantiers l'emploient.
+    const systeme = banc.sousLadresse("patron@mdall.example",
+      "select count(*) from public.les_sujets_du_systeme()"
+      + " where sujet like '%etancheite%toiture%';");
+    assert.ok(Number(systeme.sortie.trim()) > 0,
+      "le seuil du système devrait retenir ce terme");
+
+    // Le chantier, non : il ne l'a écrit qu'une fois.
+    const chantier = banc.enTantQue(B,
+      "select count(*) from public.les_sujets_de_ce_chantier"
+      + `('${GYMNASE}') where sujet like '%etancheite%';`);
+    assert.equal(chantier.sortie.trim(), "0",
+      "un sujet vu ailleurs est sorti sans avoir été répété ici");
+  });
+
+/**
+ * **La porte est celle qui existait déjà**, et c'est tout l'intérêt de laisser
+ * cette fonction en `security invoker` : un `security definer` aurait demandé un
+ * second garde-fou écrit à la main, qui aurait un jour cessé de dire la même
+ * chose que la politique de la table.
+ */
+test("les sujets d'un chantier ne sortent pas pour qui n'y a pas droit",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.project_assertions;");
+    desAffirmations(GYMNASE, ["plancher beton fissure", "plancher beton repris"]);
+
+    // A n'est pas propriétaire du gymnase : la politique ne lui rend rien.
+    const etranger = banc.enTantQue(A,
+      `select count(*) from public.les_sujets_de_ce_chantier('${GYMNASE}');`);
+    assert.equal(etranger.sortie.trim(), "0",
+      "un compte qui n'a pas le chantier en lit les sujets");
+
+    // Et la clé publique du navigateur, encore moins.
+    const sans = banc.sansCompte(
+      `select count(*) from public.les_sujets_de_ce_chantier('${GYMNASE}');`);
+    assert.equal(sans.ok === false || sans.sortie.trim() === "0", true,
+      `la clé anonyme lit les sujets d'un chantier : ${sans.sortie}`);
+  });
+
+/**
+ * **L'extraction vit à un seul endroit** (règle 4). Elle était écrite trois
+ * fois ; une quatrième copie serait partie avec la fonction par chantier.
+ *
+ * On l'éprouve directement : c'est elle que les quatre fonctions appellent, et
+ * la vérifier ici vérifie les quatre d'un coup.
+ */
+test("l'extraction d'une phrase est la même pour tout le monde",
+  { skip: sansPostgres }, () => {
+    const lu = banc.sql(
+      "select string_agg(sujet || '/' || cle || '/' || mots, ' | ' order by sujet)"
+      + " from public.les_sujets_dun_texte('Les planchers en beton');");
+
+    // « les » et « en » sont des mots-outils ; « planchers » et « beton » sont
+    // donc voisins, et le couple se forme sur les radicaux rangés.
+    assert.equal(lu.sortie.trim(),
+      "beton/beton/1 | planchers/plancher/1 | planchers beton/beton plancher/2");
+  });

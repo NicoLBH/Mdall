@@ -3,8 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
-  CE_QUE_CA_DEMANDE, ENTREE, LECTURE_DU_CHOIX, PAS_CHOISISSABLE, cheminDuDossier, commentCaSeLit,
-  entreesDuDossier, phraseDuDossier, pourquoiPasChoisissable
+  CE_QUE_CA_DEMANDE, ENTREE, LECTURE_DU_CHOIX, PAS_CHOISISSABLE, basculerLeChoix,
+  ceQueLaFileContient, cheminDuDossier, commentCaSeLit, entreesDuDossier,
+  etatDeLaCaseDuDossier, lesChoisissables, phraseDeCeQueLaFileFera, phraseDeLaSelection,
+  phraseDuDossier, pourquoiPasChoisissable, toutBasculer
 } from "./choisir-depuis-fichiers.js";
 
 const range = (nom, surcharge = {}) => ({
@@ -230,15 +232,131 @@ test("les quatre gestes du choix sont branchés dans l'Atelier", () => {
   assert.match(ATELIER, /hote\.addEventListener\("click", surLeClic\)/);
 });
 
-test("le choix remplace la zone de dépôt, il ne s'ajoute pas dessous", () => {
-  // Les deux visibles ensemble donneraient deux façons de faire la même chose
-  // sur le même écran, et un document déposé pendant qu'on en choisit un autre.
-  assert.match(ATELIER, /vue\.choix \? renderChoisirUnFichier\(vue\.choix\) : renderDepot\(vue\)/);
-});
+/**
+ * **Cette épreuve relisait le fichier comme du texte, et c'était un défaut.**
+ *
+ * Elle cherchait l'expression exacte `vue.choix ? renderChoisirUnFichier(…) :
+ * renderDepot(…)`. Un fichier qui contient les bons mots peut lever à la
+ * première seconde, et un troisième état — la file — pouvait s'ajouter sous les
+ * deux autres sans qu'elle bouge. Elle vit maintenant dans
+ * `views/studio/dev/lecture-des-cr.test.mjs`, où l'écran se **dessine**.
+ */
 
 test("le bouton mène au choix depuis les deux endroits", () => {
   // La zone de dépôt quand rien n'est ouvert, l'en-tête quand un document l'est
   // — sans quoi il faudrait fermer sa lecture pour en choisir une autre.
   const boutons = ATELIER.match(/data-lecture-cr-depuis-fichiers>/g) ?? [];
   assert.equal(boutons.length, 2, "la zone de dépôt et l'en-tête");
+});
+
+/* ── Choisir plusieurs comptes rendus d'un coup ───────────────────────────── */
+
+const TROIS = [
+  { type: ENTREE.DOSSIER, id: "f1", nom: "Archives", choisissable: false, lecture: "" },
+  { type: ENTREE.FICHIER, id: "d1", nom: "CR 01.pdf", choisissable: true, lecture: LECTURE_DU_CHOIX.PDF },
+  { type: ENTREE.FICHIER, id: "d2", nom: "CR 02.md", choisissable: true, lecture: LECTURE_DU_CHOIX.TEXTE },
+  { type: ENTREE.FICHIER, id: "d3", nom: "scan.tiff", choisissable: false, lecture: "" }
+];
+
+test("cocher ajoute, recocher enlève", () => {
+  const un = basculerLeChoix(null, "d1", TROIS);
+  assert.deepEqual([...un], ["d1"]);
+  assert.deepEqual([...basculerLeChoix(un, "d1", TROIS)], []);
+});
+
+/**
+ * **Ce qui ne se choisit pas ne se coche pas**, même si son identifiant arrive.
+ * C'est la même règle que pour le clic simple, et la laisser passer aurait mis
+ * dans la file un document dont rien n'est lisible.
+ */
+test("un document qu'on ne peut pas lire ne se coche pas", () => {
+  assert.deepEqual([...basculerLeChoix(null, "d3", TROIS)], []);
+  // Et un dossier non plus : on y entre, on ne le lit pas.
+  assert.deepEqual([...basculerLeChoix(null, "f1", TROIS)], []);
+  assert.deepEqual([...basculerLeChoix(null, "", TROIS)], []);
+});
+
+/**
+ * **« Tout » ne désigne que le dossier ouvert.** Descendre l'arborescence
+ * sélectionnerait des documents que personne n'a vus, et le compte annoncé ne
+ * correspondrait à rien de visible (règle 5).
+ */
+test("tout cocher ne prend que ce qui est lisible, et ce qui est ouvert", () => {
+  const tous = toutBasculer(null, TROIS);
+  assert.deepEqual([...tous].sort(), ["d1", "d2"]);
+  assert.deepEqual(lesChoisissables(TROIS).sort(), ["d1", "d2"]);
+
+  // Ce qui est coché ailleurs ne bouge pas : on monte une file en descendant
+  // plusieurs dossiers.
+  const ailleurs = toutBasculer(new Set(["venu-dailleurs"]), TROIS, { cocher: false });
+  assert.deepEqual([...ailleurs], ["venu-dailleurs"]);
+});
+
+/**
+ * **La case de tête a trois états, et le troisième n'est pas un détail.**
+ *
+ * Une case vide sur un dossier où un document est coché dirait que rien ne
+ * l'est, et l'on cliquerait pour tout cocher en croyant ne rien défaire. La
+ * règle et son dessin viennent du tableau des sujets, inchangés (règle 10).
+ */
+test("la case du dossier distingue « rien », « une partie » et « tout »", () => {
+  assert.equal(etatDeLaCaseDuDossier(new Set(), TROIS), "aucune");
+  assert.equal(etatDeLaCaseDuDossier(new Set(["d1"]), TROIS), "partielle");
+  assert.equal(etatDeLaCaseDuDossier(new Set(["d1", "d2"]), TROIS), "toutes");
+
+  // Ce qui est coché ailleurs ne compte pas ici : « tout » ne désigne que le
+  // dossier ouvert.
+  assert.equal(etatDeLaCaseDuDossier(new Set(["d1", "d2", "ailleurs"]), TROIS), "toutes");
+});
+
+test("un dossier sans rien de lisible n'est jamais « tout coché »", () => {
+  const rien = [TROIS[0], TROIS[3]];
+  assert.deepEqual(lesChoisissables(rien), []);
+  assert.equal(etatDeLaCaseDuDossier(new Set(), rien), "aucune");
+  assert.equal(etatDeLaCaseDuDossier(new Set(["d3"]), rien), "aucune");
+});
+
+/**
+ * **Le coût se dit avant le clic, et les deux natures se séparent.** Annoncer
+ * « 30 documents » sans dire combien sont des PDF laisserait croire au même prix
+ * pour trente notes de texte que pour trente scans (fondamental 13).
+ */
+test("la file dit combien elle coûtera, PDF par PDF", () => {
+  const contenu = ceQueLaFileContient(new Set(["d1", "d2"]), TROIS);
+  assert.deepEqual(contenu, { combien: 2, pdf: 1, textes: 1 });
+
+  const dite = phraseDeLaSelection(contenu);
+  assert.match(dite, /2 documents/);
+  assert.match(dite, /1 PDF à extraire puis restituer par le modèle/);
+  assert.match(dite, /1 déjà en texte/);
+});
+
+test("rien que du texte se dit, et rassure", () => {
+  const dite = phraseDeLaSelection(ceQueLaFileContient(new Set(["d2"]), TROIS));
+  assert.match(dite, /aucun appel au modèle/);
+});
+
+test("rien de choisi ne se dit pas", () => {
+  assert.equal(phraseDeLaSelection(ceQueLaFileContient(null, TROIS)), "");
+  assert.equal(phraseDeLaSelection(null), "");
+  assert.equal(phraseDeCeQueLaFileFera(null), "");
+});
+
+/**
+ * **Le malentendu le plus coûteux de tout l'écran.**
+ *
+ * « Analyser 30 documents » se lit comme « remplir la mémoire », et ce n'est pas
+ * ce qui va se passer : chaque lecture donne une proposition, et chacune se
+ * signe (règle 1). Le dire après aurait fait découvrir trente relectures à
+ * quelqu'un qui croyait avoir fini.
+ */
+test("ce que la file fera se dit avant : une proposition par compte rendu", () => {
+  const dite = phraseDeCeQueLaFileFera(ceQueLaFileContient(new Set(["d1", "d2"]), TROIS));
+  assert.match(dite, /2 lectures/);
+  assert.match(dite, /2 propositions à signer/);
+  assert.match(dite, /Rien n'entre dans la mémoire/);
+
+  const seule = phraseDeCeQueLaFileFera(ceQueLaFileContient(new Set(["d1"]), TROIS));
+  assert.match(seule, /une proposition à signer/);
+  assert.doesNotMatch(seule, /1 lectures/);
 });
