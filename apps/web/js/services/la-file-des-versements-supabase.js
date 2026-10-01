@@ -87,16 +87,21 @@ export async function reveillerLeServeur() {
 }
 
 /**
- * Ce qui attend ou tourne dans la file de ce projet.
+ * Ce qui attend ou tourne dans la file de ce projet, **les deux gestes**.
  *
- * Lu par l'onglet Actions pour montrer un sablier pendant que le serveur
- * travaille. La politique ne rend que les siens.
+ * Lu par l'onglet Actions pour porter une ligne « en cours » pendant que le
+ * serveur travaille. La politique ne rend que les siens.
+ *
+ * Les dépôts de messagerie et les lectures de comptes rendus vivent dans la
+ * même table et finissent dans le même journal : les lire séparément aurait
+ * fait deux endroits où l'on apprend qu'un travail est en cours, et l'un des
+ * deux aurait fini par en oublier un geste (règle 10).
  */
 export async function lesVersementsEnCours(projectId = "") {
   if (!texte(projectId)) return [];
   const { data, error } = await supabase
     .from("versements")
-    .select("id,project_id,statut,fichiers,avancement,arrete,cree_le,pris_le")
+    .select("id,project_id,geste,statut,fichiers,documents,avancement,arrete,cree_le,pris_le")
     .eq("project_id", texte(projectId))
     .in("statut", ["en_attente", "en_cours"])
     .order("cree_le", { ascending: false });

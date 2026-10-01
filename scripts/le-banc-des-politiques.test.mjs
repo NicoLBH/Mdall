@@ -61,7 +61,8 @@ const LES_MIGRATIONS = [
   "202611060001_un_chantier_qui_se_range.sql",
   "202611070001_les_sujets_du_systeme.sql",
   "202611080001_les_synonymes_regroupes.sql",
-  "202611090001_les_sujets_dun_chantier.sql"
+  "202611090001_les_sujets_dun_chantier.sql",
+  "202611100001_la_file_lit_les_comptes_rendus.sql"
 ];
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -1188,3 +1189,77 @@ test("l'extraction d'une phrase est la même pour tout le monde",
     assert.equal(lu.sortie.trim(),
       "beton/beton/1 | planchers/plancher/1 | planchers beton/beton plancher/2");
   });
+
+/* ── La file lit aussi les comptes rendus ─────────────────────────────────── */
+
+/**
+ * **Les lignes déjà posées sont des dépôts de messagerie**, et le défaut le dit.
+ *
+ * Sans défaut, la colonne serait nulle sur tout l'existant, et la fonction des
+ * mails — qui ne prend que son geste — aurait cessé de trouver ce qui l'attend.
+ */
+test("une ligne de file posée sans geste est un dépôt de messagerie",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.versements;");
+    const pose = banc.enTantQue(A,
+      `insert into public.versements (project_id) values ('${MEDIATHEQUE}')`
+      + " returning geste || ':' || documents::text;");
+    assert.equal(pose.ok, true, pose.motif);
+    assert.equal(pose.sortie.trim(), "mails:[]");
+  });
+
+/**
+ * **Une lecture de comptes rendus porte des identifiants, jamais des octets.**
+ * Ces documents sont déjà dans le projet ; recopier un chemin de stockage ici
+ * aurait fait un second endroit où l'on sait où vit un document (règle 10).
+ */
+test("une lecture de comptes rendus se pose avec ses documents",
+  { skip: sansPostgres }, () => {
+    const pose = banc.enTantQue(A,
+      "insert into public.versements (project_id, geste, documents) values "
+      + `('${MEDIATHEQUE}', 'comptes_rendus',`
+      + ` '[{"id":"d1","nom":"CR 01.pdf"},{"id":"d2","nom":"CR 02.pdf"}]'::jsonb)`
+      + " returning jsonb_array_length(documents)::text;");
+    assert.equal(pose.ok, true, pose.motif);
+    assert.equal(pose.sortie.trim(), "2");
+  });
+
+/**
+ * **La porte ne s'est pas ouverte en s'élargissant.** Trois colonnes de plus ne
+ * doivent rien changer à qui lit la file : c'est son auteur, et personne
+ * d'autre — pas même les autres membres du projet.
+ */
+test("les colonnes neuves ne rouvrent pas la file", { skip: sansPostgres }, () => {
+  const parUnAutre = banc.enTantQue(B,
+    "select count(*) from public.versements where geste = 'comptes_rendus';");
+  assert.equal(parUnAutre.sortie.trim(), "0",
+    "un autre compte lit la file de comptes rendus");
+
+  const sans = banc.sansCompte("select count(*) from public.versements;");
+  assert.equal(sans.ok === false || sans.sortie.trim() === "0", true,
+    `la clé publique du navigateur lit la file : ${sans.sortie}`);
+});
+
+/**
+ * **Une seule proposition pour toute la file**, et la ligne la porte : c'est
+ * par elle qu'on retrouve ce qu'une mise à niveau a ouvert, trois semaines plus
+ * tard.
+ */
+test("la ligne porte la proposition qu'elle a ouverte", { skip: sansPostgres }, () => {
+  const proposition = banc.sql(
+    `insert into public.propositions (project_id) values ('${MEDIATHEQUE}') returning id;`);
+  const id = proposition.sortie.trim();
+
+  const lie = banc.enTantQue(A,
+    `update public.versements set proposition_id = '${id}'`
+    + " where geste = 'comptes_rendus' returning proposition_id::text;");
+  assert.equal(lie.ok, true, lie.motif);
+  assert.equal(lie.sortie.trim(), id);
+
+  // Elle ne naît pas liée : la proposition n'existe qu'à la fin, quand on sait
+  // ce qu'il y a à proposer.
+  const neuve = banc.enTantQue(A,
+    `insert into public.versements (project_id, geste) values ('${MEDIATHEQUE}', 'comptes_rendus')`
+    + " returning coalesce(proposition_id::text, 'aucune');");
+  assert.equal(neuve.sortie.trim(), "aucune");
+});

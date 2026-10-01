@@ -32,10 +32,15 @@ import {
   CE_QUE_CA_DEMANDE, ENTREE, PHRASES_DU_REFUS, ceQueLaFileContient, cheminDuDossier,
   etatDeLaCaseDuDossier, phraseDeCeQueLaFileFera, phraseDeLaSelection, phraseDuDossier
 } from "../../services/choisir-depuis-fichiers.js";
-import {
-  DANS_LA_FILE, DANS_LA_FILE_DIT, lesComptesDeLaFile, phraseDeCeQuiResteASigner,
-  phraseDeLaFile
-} from "../../services/la-file-des-comptes-rendus.js";
+/**
+ * **La file ne se dessine plus ici.**
+ *
+ * Elle tournait dans l'écran de l'Atelier, et bloquait celui-ci pendant une
+ * heure sur dix-neuf comptes rendus. Elle est au serveur, et c'est le journal
+ * des Actions qui la montre — par `la-file-au-journal.js`, comme un dépôt de
+ * messagerie. Deux endroits pour suivre le même travail auraient obligé à
+ * savoir lequel regarder, et l'on regarde le mauvais (règle 10).
+ */
 
 /** Le chemin du dossier ouvert : chaque morceau remonte. */
 export function renderLeChemin(breadcrumb = []) {
@@ -139,56 +144,6 @@ function renderLaBarreDeLancement(choisis = null, connues = []) {
 }
 
 /**
- * La file en train de tourner, montrée document par document.
- *
- * **Chaque pas se nomme, les échecs compris** (règle 5). « 27 sur 30 » cacherait
- * lesquels ont manqué, et l'on ne saurait pas par où reprendre.
- */
-export function renderLaFileDesComptesRendus(file = null) {
-  const comptes = lesComptesDeLaFile(file);
-  if (!comptes.total) return "";
-
-  const reste = phraseDeCeQuiResteASigner(file);
-
-  return `
-    <section class="choisir-fichier" data-file-des-cr>
-      <header class="choisir-fichier__tete">
-        <div class="choisir-fichier__compte">
-          <b>Lecture de ${escapeHtml(String(comptes.total))} ${
-            comptes.total > 1 ? "comptes rendus" : "compte rendu"}</b>
-          <i class="mono-small">${escapeHtml(phraseDeLaFile(file))}</i>
-        </div>
-        ${comptes.attend || comptes.enCours
-          ? `<button type="button" class="gh-btn gh-btn--sm" data-file-arreter>Arrêter</button>`
-          : `<button type="button" class="gh-btn gh-btn--sm" data-choisir-fermer>Fermer</button>`}
-      </header>
-      <div class="choisir-fichier__corps">
-        ${(file?.pas ?? []).map((un) => `
-          <div class="documents-repo__row documents-repo__row--file file-cr__ligne file-cr__ligne--${
-            escapeHtml(un.ou)}">
-            <div class="documents-repo__cell documents-repo__cell--name">
-              <span class="documents-repo__icon">${
-                svgIcon(un.ou === DANS_LA_FILE.ECHOUE ? "alert" : "file", { className: "octicon" })}</span>
-              <span class="documents-repo__name">${escapeHtml(un.nom)}</span>
-            </div>
-            <div class="documents-repo__cell documents-repo__cell--message">
-              <div class="documents-repo__message-main">${
-                escapeHtml(DANS_LA_FILE_DIT[un.ou] ?? un.ou)}</div>
-              ${un.motif
-                ? `<div class="documents-repo__message-sub">${escapeHtml(un.motif)}</div>`
-                : ""}
-            </div>
-          </div>
-        `).join("")}
-      </div>
-      ${reste ? `<footer class="choisir-fichier__barre">
-        <div class="choisir-fichier__compte"><b>${escapeHtml(reste)}</b></div>
-      </footer>` : ""}
-    </section>
-  `;
-}
-
-/**
  * Le choix entier : le chemin, la liste, et de quoi en sortir.
  *
  * @param {object} vue
@@ -211,7 +166,7 @@ export function renderChoisirUnFichier({
         ${renderLeChemin(breadcrumb)}
         <button type="button" class="gh-btn gh-btn--sm" data-choisir-fermer>Annuler</button>
       </header>
-      <div class="choisir-fichier__corps">
+      <div class="choisir-fichier__corps" data-garde-le-defilement="choix-des-fichiers">
         ${enCours
           ? `<p class="propositions-empty">Lecture du dossier…</p>`
           : motif

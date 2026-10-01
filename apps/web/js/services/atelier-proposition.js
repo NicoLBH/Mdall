@@ -560,7 +560,20 @@ export async function preparerUneProposition({
   //
   // Elle ne s'impose qu'à ce qui n'a pas déjà la sienne : un utilitaire qui
   // sait où va chacune de ses conclusions garde le dernier mot.
-  zones = null
+  zones = null,
+  /**
+   * Les quatre accès à la base, pour qui n'est pas dans un navigateur.
+   *
+   * **La fonction de bord qui lit dix-neuf comptes rendus prépare la même
+   * proposition que l'Atelier**, et par la même fonction : les décisions — ce
+   * qu'on porte, ce qu'on écarte, ce qu'une proposition neuve raconte — sont
+   * exactement celles-ci. Une seconde version au serveur aurait proposé
+   * autrement sans que rien ne le dise (règle 4).
+   *
+   * `null` : on prend celles du navigateur. C'est le cas de l'Atelier, et c'est
+   * pourquoi rien n'a changé pour lui.
+   */
+  portes = null
 } = {}) {
   const projet = texte(projectId);
   if (!projet) return { ok: false, raison: "Ce projet n'est pas relié à la base." };
@@ -577,7 +590,7 @@ export async function preparerUneProposition({
   const items = itemsAPorter(situees);
   if (!items.length) return { ok: false, raison: "Il n'y a rien à proposer." };
 
-  const base = await import("./propositions-supabase.js");
+  const base = portes ?? await import("./propositions-supabase.js");
   const vise = texte(propositionId);
 
   const { proposition, aPorter, tranches, raison } = vise

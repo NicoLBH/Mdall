@@ -209,9 +209,16 @@ serve(async (req) => {
   // fonction après avoir posé sa ligne, mais deux dépôts rapprochés peuvent
   // n'envoyer qu'un réveil : prendre « la sienne » laisserait l'autre dormir.
   // La file se vide dans l'ordre où elle s'est remplie.
+  //
+  // **Et seulement les siennes.** La table porte depuis novembre un second
+  // geste — la lecture de comptes rendus —, qui n'a ni octets dans le casier ni
+  // messages à déplier. Sans ce filtre, cette fonction en aurait pris une,
+  // n'aurait trouvé aucun fichier, et l'aurait marquée en échec : une mise à
+  // niveau de dix-neuf comptes rendus perdue par la fonction d'à côté.
   const { data: file, error: erreurDeLecture } = await client
     .from("versements")
     .select("id,project_id,fichiers,statut")
+    .eq("geste", "mails")
     .eq("statut", "en_attente")
     .order("cree_le", { ascending: true })
     .limit(1);

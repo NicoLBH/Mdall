@@ -1,6 +1,26 @@
 /**
  * La file des comptes rendus — **où elle en est, et ce qu'elle a laissé**.
  *
+ * ## Elle a tourné dans l'onglet, et cela ne pouvait pas tenir
+ *
+ * Au premier jet, cette file tournait **dans l'écran de l'Atelier** : dix-neuf
+ * comptes rendus bloquaient l'écran pendant une heure, et quitter la page
+ * perdait tout. C'est exactement ce qu'on avait retiré du dépôt de messagerie
+ * en octobre, et pour les mêmes raisons.
+ *
+ * Elle tourne désormais **au serveur**
+ * (`supabase/functions/lire-les-comptes-rendus`). On lance, on rend la main, et
+ * le journal des Actions porte la suite. Ce module, lui, n'a pas changé de
+ * nature : il dit **où en est une file**, et c'est le serveur qui l'avance
+ * maintenant, pendant que l'écran s'en sert pour montrer.
+ *
+ * ## Il vit des deux côtés, et c'est voulu
+ *
+ * Il descend au serveur avec les lecteurs de mails (`prepare-versement.mjs`).
+ * Une seconde définition de « quel est le suivant » et de « qu'est-ce qui a
+ * échoué » aurait fait un serveur qui avance d'une façon et un écran qui
+ * raconte d'une autre, sans que rien ne le dise (règle 4).
+ *
  * ## Pourquoi une file, et pas une boucle
  *
  * Trente comptes rendus se lisent l'un après l'autre, et chacun peut échouer
@@ -13,18 +33,12 @@
  * **Ce qui a échoué se nomme, document par document** (règle 5). C'est la seule
  * façon de reprendre : on sait lesquels relancer.
  *
- * ## Ce que la file ne décide pas
- *
- * Elle ne lit rien et n'appelle rien. L'écran lui demande « quel est le
- * suivant ? », fait le geste qu'il sait déjà faire, et lui dit comment cela
- * s'est passé. C'est ce qui permet de l'éprouver sans navigateur et sans un
- * seul appel au modèle.
- *
  * ## Une exécution qui a eu lieu ne devient pas fausse (règle 6)
  *
- * Un compte rendu lu reste lu, même si le suivant échoue, même si l'on ferme
- * l'écran. La file ne se réécrit pas en arrière : elle avance, et garde la
- * trace de chaque pas.
+ * Un compte rendu lu reste lu, même si le suivant échoue, même si la fonction
+ * de bord expire en route. La file ne se réécrit pas en arrière : elle avance,
+ * et garde la trace de chaque pas — c'est par là qu'une reprise sait où elle en
+ * était.
  *
  * ## Il est pur
  *
@@ -37,7 +51,16 @@ const texte = (valeur) => String(valeur ?? "").trim();
 export const DANS_LA_FILE = {
   ATTEND: "attend",
   EN_COURS: "en-cours",
-  PROPOSE: "propose",
+  /**
+   * **`LU`, et non `PROPOSE`.**
+   *
+   * L'état s'appelait « proposé », du temps où chaque compte rendu ouvrait sa
+   * propre proposition. Il n'y en a plus qu'une, ouverte au premier et enrichie
+   * ensuite : le journal annonçait « 7 propositions prêtes » là où il y en avait
+   * une, et c'est à l'écran que cela s'est vu. Un nom qui ment est pire qu'un
+   * nom absent (règle 10).
+   */
+  LU: "lu",
   ECHOUE: "echoue"
 };
 
@@ -45,7 +68,7 @@ export const DANS_LA_FILE = {
 export const DANS_LA_FILE_DIT = {
   [DANS_LA_FILE.ATTEND]: "en attente",
   [DANS_LA_FILE.EN_COURS]: "lecture en cours",
-  [DANS_LA_FILE.PROPOSE]: "proposition prête",
+  [DANS_LA_FILE.LU]: "lu",
   [DANS_LA_FILE.ECHOUE]: "n'a pas pu être lu"
 };
 
@@ -92,7 +115,7 @@ export function leProchainDeLaFile(file = null) {
  * `ou` dit comment cela s'est passé, `motif` pourquoi quand cela s'est mal
  * passé. Un échec sans motif serait une ligne rouge dont on ne saurait rien.
  */
-export function apresUnPas(file = null, id = "", ou = DANS_LA_FILE.PROPOSE, motif = "") {
+export function apresUnPas(file = null, id = "", ou = DANS_LA_FILE.LU, motif = "") {
   const vise = texte(id);
   return {
     ...file,
@@ -116,7 +139,7 @@ export function lesComptesDeLaFile(file = null) {
     total: pas.length,
     attend: compte(DANS_LA_FILE.ATTEND),
     enCours: compte(DANS_LA_FILE.EN_COURS),
-    proposes: compte(DANS_LA_FILE.PROPOSE),
+    lus: compte(DANS_LA_FILE.LU),
     echoues: compte(DANS_LA_FILE.ECHOUE)
   };
 }
@@ -135,11 +158,11 @@ export function laFileEstFinie(file = null) {
  * s'est passé, et c'est de là qu'on repart.
  */
 export function phraseDeLaFile(file = null) {
-  const { total, attend, enCours, proposes, echoues } = lesComptesDeLaFile(file);
+  const { total, attend, enCours, lus, echoues } = lesComptesDeLaFile(file);
   if (!total) return "";
 
   const dits = [];
-  if (proposes) dits.push(`${proposes} ${proposes > 1 ? "propositions prêtes" : "proposition prête"}`);
+  if (lus) dits.push(`${lus} ${lus > 1 ? "comptes rendus lus" : "compte rendu lu"}`);
   if (enCours) dits.push("1 en cours de lecture");
   if (attend) dits.push(`${attend} en attente`);
   // **Les échecs en dernier et toujours nommés** : ils ne disparaissent pas
@@ -153,17 +176,26 @@ export function phraseDeLaFile(file = null) {
 /**
  * Ce qu'il reste à faire, dit à la fin — et ce n'est pas « c'est fini ».
  *
- * Trente lectures laissent trente propositions **à signer**. Une file qui
- * annoncerait « terminé » laisserait croire que la mémoire du chantier est à
- * jour, alors que rien n'y est encore entré (règle 1). Vide tant que la file
- * n'a rien produit.
+ * ## Dix-neuf comptes rendus ne font pas dix-neuf signatures
+ *
+ * Au premier jet, chaque compte rendu ouvrait sa proposition : dix-neuf
+ * relectures pour un seul geste, ce qui revenait à ne pas l'avoir fait. Celui
+ * qui met son chantier à niveau veut **une** proposition — il la relit une
+ * fois, il signe une fois, et tout entre ensemble.
+ *
+ * ## Mais elle attend toujours une signature
+ *
+ * Une file qui annoncerait « terminé » laisserait croire que la mémoire du
+ * chantier est à jour, alors que rien n'y est encore entré (règle 1). Vide tant
+ * que la file n'a rien produit.
  */
 export function phraseDeCeQuiResteASigner(file = null) {
-  const { proposes } = lesComptesDeLaFile(file);
-  if (!proposes) return "";
+  const { lus } = lesComptesDeLaFile(file);
+  if (!lus) return "";
 
-  return `${proposes} ${proposes > 1 ? "propositions attendent" : "proposition attend"} `
-    + `votre relecture dans Propositions. Rien n'est entré dans la mémoire du chantier.`;
+  return `${lus} ${lus > 1 ? "comptes rendus lus" : "compte rendu lu"} : `
+    + `une seule proposition à relire et à signer, dans Propositions. `
+    + `Rien n'est entré dans la mémoire du chantier.`;
 }
 
 /** Les documents qui ont échoué, nommés : c'est par eux qu'on reprend. */
