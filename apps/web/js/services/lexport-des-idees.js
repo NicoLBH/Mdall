@@ -287,10 +287,23 @@ function uneLigneDuCorpus(ligne) {
  *
  * Il sera relu ailleurs, sans l'écran qui l'explique, et peut-être par
  * quelqu'un d'autre. L'avertissement voyage donc dedans.
+ *
+ * ## Et il dit ce qui lui manque
+ *
+ * `attendues` est le nombre d'affirmations que la base porte, rendu par la
+ * fonction elle-même. Quand le fichier en porte moins, l'écart s'écrit dedans.
+ *
+ * Ce n'est pas une précaution de style : le premier fichier emporté portait
+ * mille affirmations sur neuf mille et annonçait « 1 000 affirmations, dont
+ * 998 dont le découpage ne tire rien ». Une phrase juste sur un corpus faux,
+ * et de quoi conclure qu'un seul chantier écrit. Un fichier qui ne dit pas ce
+ * qu'il lui manque fait conclure de travers (règle 12).
  */
-export function lexportDuCorpus({ lignes = [], quand = new Date() } = {}) {
+export function lexportDuCorpus({ lignes = [], attendues = null, quand = new Date() } = {}) {
   const jour = quand instanceof Date && !Number.isNaN(quand.getTime()) ? quand : new Date();
   const portees = (Array.isArray(lignes) ? lignes : []).map(uneLigneDuCorpus).filter(Boolean);
+  const attendu = combienAttendu(attendues);
+  const manque = attendu !== null && attendu > portees.length ? attendu - portees.length : 0;
 
   return {
     quoi: "Mdall — console — le corpus en clair",
@@ -303,10 +316,28 @@ export function lexportDuCorpus({ lignes = [], quand = new Date() } = {}) {
     note: "Aucun chantier n'est nommé : le numéro dit seulement que deux "
       + "affirmations viennent du même, jamais lequel.",
     affirmations: portees.length,
+    // Ce que la base en porte, et ce qui n'est pas dans ce fichier. `null`
+    // quand la fonction ne l'a pas dit : « on ne sait pas » n'est pas « rien
+    // ne manque » (règle 5).
+    attendues: attendu,
+    manque,
     // Le chiffre qu'on vient chercher, calculé ici plutôt que de tête.
     sansIdee: portees.filter((une) => !une.avant || !une.apres).length,
     corpus: portees
   };
+}
+
+/**
+ * Le nombre d'affirmations annoncé par la base, ou `null`.
+ *
+ * `Number(null)` et `Number("")` valent zéro, et zéro est fini : converti sans
+ * garde, « la fonction ne l'a pas dit » deviendrait « la base n'en porte
+ * aucune », et l'écart se lirait à l'envers.
+ */
+function combienAttendu(combien) {
+  if (combien === null || combien === undefined || combien === "") return null;
+  const lu = Number(combien);
+  return Number.isFinite(lu) && lu >= 0 ? Math.trunc(lu) : null;
 }
 
 /** Le même, en texte. */
@@ -324,5 +355,11 @@ export function phraseDuCorpus(quoi) {
 
   return `${porte.affirmations} affirmation${porte.affirmations > 1 ? "s" : ""}, `
     + `dont ${porte.sansIdee} dont le découpage ne tire rien. C'est celles-là `
-    + "qu'on vient lire.";
+    + "qu'on vient lire."
+    // **L'écart se dit sur l'écran aussi**, et pas seulement dans le fichier :
+    // c'est l'écran qu'on regarde avant de conclure.
+    + (porte.manque
+      ? ` ${porte.manque} manquent sur les ${porte.attendues} que la base porte :`
+        + " le fichier est incomplet, et ce qu'on en conclurait le serait aussi."
+      : "");
 }

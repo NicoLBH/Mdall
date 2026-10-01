@@ -92,6 +92,15 @@ const LES_MIGRATIONS = [
   // Les lectures de fils de mails : privées, comme celles des comptes rendus,
   // et pour une raison de plus — un fil dit qui a écrit quoi à qui.
   "202611170001_une_lecture_de_fil_se_garde.sql",
+  // Le corpus rendu en UN document : un ensemble de lignes se faisait tronquer
+  // à mille par PostgREST, sans le dire.
+  "202611180001_le_corpus_tient_dans_un_document.sql",
+  // Combien de phrases distinctes pour combien de lignes, et d'où viennent les
+  // copies : le dénominateur de tout ce que la console annonce.
+  "202611180002_la_repetition_du_corpus.sql",
+  // « au-delà » devenait le terme « delà » : les morceaux de locution rejoignent
+  // les mots-outils.
+  "202611180003_les_locutions_ne_sont_pas_des_termes.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",
@@ -1943,13 +1952,81 @@ test("une tautologie ne sort pas du relevé d'un document", { skip: sansPostgres
 test("le corpus en clair ne se lit pas sans être administrateur",
   { skip: sansPostgres }, () => {
     const refuse = banc.sousLadresse("quelquun@ailleurs.example",
-      "select count(*) from public.le_corpus_en_clair();");
+      "select public.le_corpus_en_clair();");
     assert.equal(refuse.ok, false, "un compte quelconque a lu le corpus en clair");
     assert.match(refuse.motif, /réservé à la console/);
 
-    const sansJeton = banc.sousLadresse("", "select count(*) from public.le_corpus_en_clair();");
+    const sansJeton = banc.sousLadresse("", "select public.le_corpus_en_clair();");
     assert.equal(sansJeton.ok, false, "le corpus en clair se lit sans session");
   });
+
+/**
+ * **Un document, et non un ensemble de lignes — et c'est PostgreSQL qui le dit.**
+ *
+ * Le premier fichier emporté portait mille affirmations sur neuf mille quatre
+ * cent quatre-vingt-huit. Mille n'est pas un nombre de hasard : c'est
+ * `db-max-rows`, le plafond que PostgREST applique à toute réponse en lignes.
+ * Il s'applique **après** la fonction, sur le transport, et la fonction ne le
+ * voit pas — sa propre limite de vingt mille n'y changeait rien.
+ *
+ * On ne vérifie donc pas un nombre de lignes rendues ici : le banc parle à
+ * PostgreSQL en direct, où le plafond n'existe pas, et le défaut ne s'y verrait
+ * jamais. Ce qui se vérifie, c'est **la forme du retour** : une valeur unique.
+ * Une ligne ne se fait pas tronquer à mille lignes.
+ *
+ * Le jour où quelqu'un remettra `returns table` pour la commodité d'un `where`,
+ * ce test tombera — et c'est tout ce qu'on lui demande.
+ */
+test("le corpus en clair rend un document, pas un ensemble de lignes",
+  { skip: sansPostgres }, () => {
+    const dit = banc.sql(
+      "select pg_catalog.pg_get_function_result("
+      + "'public.le_corpus_en_clair(integer)'::regprocedure);");
+
+    assert.equal(dit.sortie.trim(), "jsonb",
+      "le corpus revient en lignes : PostgREST en coupera mille, sans le dire");
+  });
+
+/**
+ * **Et il dit ce qu'il ne porte pas.**
+ *
+ * Le défaut n'était pas la troncature, c'était son silence : le fichier
+ * annonçait « 1 000 affirmations, dont 998 dont le découpage ne tire rien ».
+ * Une phrase juste sur un corpus faux, et de quoi conclure qu'un seul chantier
+ * écrit (règle 12).
+ *
+ * `affirmations` compte le corpus entier, `rendues` ce que le document porte.
+ * On demande ici une seule affirmation sur deux chantiers qui en portent
+ * plusieurs : l'écart doit se lire.
+ */
+test("le corpus en clair dit combien il n'a pas rendu", { skip: sansPostgres }, () => {
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;`);
+  banc.sql(`insert into public.project_assertions (project_id, statement) values
+    ('${MEDIATHEQUE}', 'la trappe donne sur la centrale'),
+    ('${MEDIATHEQUE}', 'le garde corps borde la circulation'),
+    ('${GYMNASE}', 'la toiture couvre les gradins');`);
+
+  try {
+    const dit = banc.sousLadresse("patron@mdall.example",
+      "select (public.le_corpus_en_clair(1))->>'rendues',"
+      + " (public.le_corpus_en_clair(1))->>'affirmations',"
+      + " jsonb_array_length((public.le_corpus_en_clair(1))->'corpus');");
+
+    const [rendues, affirmations, dedans] = dit.sortie.trim().split("|");
+    assert.equal(rendues, "1", "la limite demandée n'est pas tenue");
+    assert.equal(dedans, "1", "le document ne porte pas ce qu'il annonce rendre");
+    assert.ok(Number(affirmations) >= 3,
+      `le corpus entier n'est pas compté : ${affirmations}`);
+    assert.notEqual(rendues, affirmations,
+      "l'écart ne se lit pas : un fichier tronqué repasserait en silence");
+  } finally {
+    banc.sql(`delete from public.project_assertions
+               where statement in ('la trappe donne sur la centrale',
+                                   'le garde corps borde la circulation',
+                                   'la toiture couvre les gradins');`);
+  }
+});
 
 /**
  * **Un numéro d'ordre, jamais l'identifiant du chantier.**
@@ -1964,7 +2041,8 @@ test("le corpus en clair ne nomme aucun chantier", { skip: sansPostgres }, () =>
             on conflict do nothing;`);
 
   const lu = banc.sousLadresse("patron@mdall.example",
-    "select chantier, dit from public.le_corpus_en_clair() limit 50;");
+    "select une->>'chantier' || '|' || coalesce(une->>'dit', '')"
+    + " from jsonb_array_elements((public.le_corpus_en_clair(50))->'corpus') as une;");
   assert.equal(lu.ok, true, lu.motif);
 
   // Ni l'identifiant du chantier, ni celui de l'affirmation : la signature ne
@@ -1992,14 +2070,18 @@ test("le corpus en clair rend le texte, coupé ou non", { skip: sansPostgres }, 
 
   try {
     const coupee = banc.sousLadresse("patron@mdall.example",
-      "select avant, lien, apres, mot from public.le_corpus_en_clair()"
-      + " where dit = 'le garde corps permet de proteger la circulation';");
+      "select (une->>'avant') || '|' || (une->>'lien') || '|' || (une->>'apres')"
+      + " || '|' || (une->>'mot')"
+      + " from jsonb_array_elements((public.le_corpus_en_clair())->'corpus') as une"
+      + " where une->>'dit' = 'le garde corps permet de proteger la circulation';");
     assert.equal(coupee.sortie.trim(), "garde corps|permet|proteger|permet de");
 
-    // Et celle que la coupe n'a pas su lire sort quand même, sans idée.
+    // Et celle que la coupe n'a pas su lire sort quand même, sans idée. `null`
+    // et non la chaîne vide : relu dans un tableur, le second se compterait.
     const nue = banc.sousLadresse("patron@mdall.example",
-      "select coalesce(avant, '—') from public.le_corpus_en_clair()"
-      + " where dit = 'Menuiseries exterieures du hall';");
+      "select coalesce(une->>'avant', '—')"
+      + " from jsonb_array_elements((public.le_corpus_en_clair())->'corpus') as une"
+      + " where une->>'dit' = 'Menuiseries exterieures du hall';");
     assert.equal(nue.sortie.trim(), "—",
       "une affirmation sans idée ne sort pas du corpus : c'est pourtant elle qu'on vient lire");
   } finally {
@@ -2007,6 +2089,235 @@ test("le corpus en clair rend le texte, coupé ou non", { skip: sansPostgres }, 
                where statement in ('le garde corps permet de proteger la circulation',
                                    'Menuiseries exterieures du hall');`);
   }
+});
+
+/* ── La répétition du corpus ─────────────────────────────────────────────── */
+
+/**
+ * **Elle compte des répétitions, et c'est une lecture de la console comme les
+ * autres** : réservée aux administrateurs.
+ *
+ * Elle ne rend aucun texte — mais « combien de fois la phrase la plus recopiée
+ * revient » reste une mesure sur le contenu de tous les chantiers, et un compte
+ * ordinaire n'y a rien à faire.
+ */
+test("la répétition du corpus ne se lit pas sans être administrateur",
+  { skip: sansPostgres }, () => {
+    const refuse = banc.sousLadresse("quelquun@ailleurs.example",
+      "select count(*) from public.la_repetition_du_corpus();");
+    assert.equal(refuse.ok, false, "un compte quelconque a lu la répétition du corpus");
+    assert.match(refuse.motif, /réservé à la console/);
+
+    const sansJeton = banc.sousLadresse("",
+      "select count(*) from public.la_repetition_du_corpus();");
+    assert.equal(sansJeton.ok, false, "la répétition du corpus se lit sans session");
+  });
+
+/**
+ * **Et elle compte juste.**
+ *
+ * Sur le corpus réel : mille affirmations lues, quatre-vingt-quatorze textes
+ * distincts, jusqu'à trente-quatre copies du même. Le banc pose la même forme
+ * en petit, avec un compte connu à l'avance.
+ *
+ * Les trois causes sont posées séparément, parce que c'est séparément qu'on
+ * veut les lire : trois copies d'une même étiquette versées par trois
+ * propositions sur le même sujet, une affirmation remplacée, et un texte porté
+ * par deux sujets différents.
+ */
+test("la répétition du corpus compte les copies et dit d'où elles viennent",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+    // Le corpus du banc n'est pas vide : on compte l'écart, pas l'absolu.
+    const avant = banc.sousLadresse("patron@mdall.example",
+      "select affirmations, distinctes, textes_sur_plusieurs_sujets,"
+      + " remplacees, sujets_reverses from public.la_repetition_du_corpus();");
+    const [affirmationsAvant, distinctesAvant, etalesAvant, remplaceesAvant,
+      reversesAvant] = avant.sortie.trim().split("|").map(Number);
+
+    const trois = "'a1b2c3d4-0000-4000-8000-000000000001'";
+    banc.sql(`insert into public.project_assertions
+                (id, project_id, statement, kind, subject_key, proposition_id)
+              values
+                (${trois}, '${MEDIATHEQUE}', 'Avis — Amenee d''air',
+                 'avis', 'A12', '11111111-0000-4000-8000-000000000001'),
+                (gen_random_uuid(), '${MEDIATHEQUE}', 'Avis — Amenee d''air',
+                 'avis', 'A12', '11111111-0000-4000-8000-000000000002'),
+                (gen_random_uuid(), '${MEDIATHEQUE}', 'Avis — Amenee d''air',
+                 'avis', 'A12', '11111111-0000-4000-8000-000000000003'),
+                -- Le même texte sous un **autre** sujet : l'intitulé partagé.
+                (gen_random_uuid(), '${MEDIATHEQUE}', 'Avis — Amenee d''air',
+                 'avis', 'B07', '11111111-0000-4000-8000-000000000004'),
+                -- Et une phrase qui ne se répète pas, pour que « distinctes »
+                -- ne soit pas trivialement égal à 1.
+                (gen_random_uuid(), '${GYMNASE}', 'la trappe donne sur la centrale',
+                 'avis', 'C01', '11111111-0000-4000-8000-000000000005'),
+                -- **La même étiquette, écrite autrement.** Accents, majuscule,
+                -- ponctuation : c'est la même phrase recopiée, et la compter
+                -- pour deux rendrait un corpus plus riche qu'il n'est. C'est
+                -- la normalisation qui le garantit, et c'est cette ligne qui
+                -- l'éprouve — sans elle, compter sur le texte brut passait.
+                (gen_random_uuid(), '${GYMNASE}', 'AVIS -- Amenée d''air.',
+                 'avis', 'C02', '11111111-0000-4000-8000-000000000006');`);
+    // Celle-ci est remplacée : elle reste en base, et c'est l'histoire.
+    banc.sql(`update public.project_assertions
+                 set superseded_by = (select id from public.project_assertions
+                                       where subject_key = 'B07' limit 1)
+               where id = ${trois};`);
+
+    try {
+      const dit = banc.sousLadresse("patron@mdall.example",
+        "select affirmations, distinctes, copies_max, remplacees, courantes,"
+        + " distinctes_courantes, sujets, sujets_reverses, textes_sur_plusieurs_sujets"
+        + " from public.la_repetition_du_corpus();");
+      assert.equal(dit.ok, true, dit.motif);
+
+      const [affirmations, distinctes, copiesMax, remplacees, courantes,
+        distinctesCourantes, sujets, reverses, etales] =
+        dit.sortie.trim().split("|").map(Number);
+
+      assert.equal(affirmations, affirmationsAvant + 6, "les lignes ne sont pas comptées");
+      // **Deux textes neufs, pas six.** Quatre copies exactes, une cinquième
+      // écrite avec ses accents et sa ponctuation, et une phrase à part.
+      assert.equal(distinctes, distinctesAvant + 2,
+        "le même texte compte pour plusieurs phrases : les écritures ne sont pas "
+        + "ramenées l'une à l'autre");
+      assert.equal(copiesMax, 5, `la phrase la plus recopiée l'est 5 fois : ${copiesMax}`);
+
+      // **L'histoire.** Une seule remplacée de plus, et le reste est courant.
+      assert.equal(remplacees, remplaceesAvant + 1,
+        "l'affirmation remplacée n'est pas comptée");
+      assert.equal(courantes, affirmations - remplacees,
+        "les courantes ne complètent pas les lignes");
+      assert.ok(distinctesCourantes <= distinctes,
+        "il y aurait plus de phrases distinctes au présent que dans toute l'histoire");
+
+      // **Le ré-versement.** « A12 » a été versé par trois propositions.
+      assert.ok(sujets >= 4, `les sujets ne sont pas comptés : ${sujets}`);
+      assert.equal(reverses, reversesAvant + 1,
+        `un seul sujet de plus est versé par plusieurs propositions : ${reverses}`);
+
+      // **L'intitulé partagé.** « Avis — Amenee d'air » porte A12 et B07. Le
+      // banc en porte déjà : on mesure l'écart, comme pour le reste — un chiffre
+      // absolu ici se casserait au premier jeu d'essai qui change.
+      assert.equal(etales, etalesAvant + 1,
+        `un seul texte de plus est porté par deux sujets : ${etales}`);
+    } finally {
+      banc.sql(`update public.project_assertions set superseded_by = null
+                 where id = ${trois};`);
+      banc.sql(`delete from public.project_assertions
+                 where statement in ('Avis — Amenee d''air',
+                                     'AVIS -- Amenée d''air.',
+                                     'la trappe donne sur la centrale');`);
+    }
+  });
+
+/**
+ * **Un corpus vide rend zéro copie, et non « null copie ».**
+ *
+ * C'est l'état d'une installation neuve, et il n'est pas théorique. Sans le
+ * `coalesce`, `max()` rend `null` sur un ensemble vide, et la carte de la
+ * console écrirait « jusqu'à null ». Le compte à vide se vérifie à vide : on
+ * efface dans une transaction, on lit, et on défait.
+ */
+test("un corpus vide se compte à zéro, pas à null", { skip: sansPostgres }, () => {
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;`);
+
+  // **Une ligne d'abord, et c'est elle qui rend le test honnête.** Sans elle,
+  // le corpus pourrait déjà être vide selon l'ordre des tests, et l'épreuve
+  // passerait sans rien éprouver.
+  banc.sql(`insert into public.project_assertions (project_id, statement)
+            values ('${MEDIATHEQUE}', 'la trappe donne sur la centrale');`);
+
+  try {
+    const plein = banc.sql("select count(*) > 0 from public.project_assertions;");
+    assert.equal(plein.sortie.trim(), "t", "le corpus est vide avant l'épreuve");
+
+    // **L'effacement se fait avant d'endosser le rôle**, et non après : les
+    // politiques de `project_assertions` ne laissent voir à un compte
+    // authentifié que ses propres chantiers, et un administrateur de la console
+    // n'est pas pour autant collaborateur. Un `delete` passé sous ce rôle-là
+    // n'effacerait rien, et l'épreuve passerait sur un corpus intact.
+    const dit = banc.sql(
+      "begin;\n"
+      + "delete from public.project_assertions;\n"
+      + "set role authenticated;\n"
+      + `set request.jwt.claims = '{"email":"patron@mdall.example"}';\n`
+      + "select affirmations, distinctes, copies_max"
+      + " from public.la_repetition_du_corpus();\n"
+      + "reset role;\n"
+      + "rollback;\n", { doitTenir: false });
+    assert.equal(dit.ok, true, dit.motif);
+    assert.equal(dit.sortie.trim(), "0|0|0",
+      "sur un corpus vide, la carte écrira « jusqu'à null »");
+
+    // Et le corpus est bien revenu : la transaction a été défaite.
+    const apres = banc.sql("select count(*) > 0 from public.project_assertions;");
+    assert.equal(apres.sortie.trim(), "t", "le corpus du banc a été effacé pour de bon");
+  } finally {
+    banc.sql(`delete from public.project_assertions
+               where statement = 'la trappe donne sur la centrale';`);
+  }
+});
+
+/* ── « au-delà » ne donne pas le terme « delà » ──────────────────────────── */
+
+/**
+ * **L'idée fausse qu'il fallait faire tomber.**
+ *
+ * Sur tout le corpus, deux idées sortaient. L'une était `accès —empêchement→
+ * delà`, et elle vient de « Accès des véhicules lourds : interdit au-delà de
+ * 3,5 t ». Le découpage a bien travaillé ; c'est le terme de droite qui est un
+ * morceau de locution.
+ *
+ * `le_terme_de_tete` normalise le trait d'union en espace, écarte les mots de
+ * moins de quatre lettres — « au » tombe — puis les mots-outils. « dela » fait
+ * quatre lettres et passait.
+ *
+ * Une idée fausse rendue avec l'aplomb des vraies est pire qu'une idée
+ * manquante : celle-ci on la cherche, celle-là on la croit.
+ */
+test("« au-delà » ne devient pas un terme", { skip: sansPostgres }, () => {
+  const dit = banc.sql(
+    "select coalesce(public.le_terme_de_tete('au-dela de 3,5 t'), '—');");
+  assert.equal(dit.sortie.trim(), "—",
+    "« au-delà » rend encore un terme : l'idée fausse se refabriquera");
+
+  // Et la phrase entière ne rend plus l'idée fausse.
+  const idee = banc.sql(
+    "select count(*) from public.les_idees_des_textes(array["
+    + "'Acces des vehicules lourds : interdit au-dela de 3,5 t'"
+    + "]);");
+  assert.equal(idee.sortie.trim(), "0",
+    "« accès —empêchement→ delà » sort encore");
+});
+
+/**
+ * **Ses pareils aussi**, et un terme technique continue de passer.
+ *
+ * C'est la seconde moitié du test, et la plus importante : un mot-outil retiré
+ * de trop est un terme technique qu'on ne verra plus jamais, et cela ne se
+ * rattrape pas en regardant l'écran — l'idée manquante ne s'affiche pas.
+ */
+test("les morceaux de locution tombent, les termes restent", { skip: sansPostgres }, () => {
+  for (const morceau of ["au-dela", "en-deca", "ci-dessus", "par-dessous",
+    "en dedans", "au dehors"]) {
+    const dit = banc.sql(
+      `select coalesce(public.le_terme_de_tete('${morceau} du seuil'), '—');`);
+    assert.equal(dit.sortie.trim(), "seuil",
+      `« ${morceau} » prend la tête du terme devant « seuil »`);
+  }
+
+  // **Et « joint » reste un terme.** Il vient de « ci-joint » aussi souvent que
+  // d'un joint de dilatation, et on ne l'écarte pas pour autant.
+  const joint = banc.sql(
+    "select public.le_terme_de_tete('joint de dilatation');");
+  // « de » fait deux lettres : elle tombe avant d'être un voisin, et le terme
+  // s'arrête à « joint ». C'est bien un terme, et c'est ce qu'on vérifie.
+  assert.equal(joint.sortie.trim(), "joint",
+    "« joint » a été écarté : un terme de chantier est perdu");
 });
 
 /* ── Une lecture de fil de mails n'appartient qu'à qui l'a faite ─────────── */

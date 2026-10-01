@@ -86,12 +86,51 @@ export async function laFormeDesAffirmations() {
  * La porte est dans la base : la fonction est réservée aux administrateurs.
  * L'interrupteur de l'écran empêche un clic distrait, rien de plus
  * (`services/la-porte-du-developpement.js`).
+ *
+ * ## Un document, et non des lignes — le plafond de PostgREST
+ *
+ * La fonction rendait un ensemble de lignes, et PostgREST en coupait à mille :
+ * `db-max-rows` s'applique au transport, après la fonction, qui ne le voit pas.
+ * Le fichier emporté portait mille affirmations sur neuf mille, sans le dire.
+ *
+ * Elle rend maintenant **un** document. Une ligne ne se fait pas tronquer à
+ * mille lignes. `affirmations` est le compte entier et `rendues` ce que le
+ * document porte : on lit l'écart au lieu de le subir (règle 5).
+ *
+ * `null` quand on n'a pas su lire, et jamais `{ rendues: 0 }` : « on ne sait
+ * pas » n'est pas « le corpus est vide ».
  */
 export async function leCorpusEnClair({ auPlus = 20000 } = {}) {
   try {
     const { data, error } = await supabase.rpc("le_corpus_en_clair", { au_plus: auPlus });
     if (error) return null;
-    return Array.isArray(data) ? data : [];
+    if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+    return {
+      attendues: Number.isFinite(Number(data.affirmations)) ? Number(data.affirmations) : null,
+      rendues: Number.isFinite(Number(data.rendues)) ? Number(data.rendues) : null,
+      lignes: Array.isArray(data.corpus) ? data.corpus : []
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * **La répétition du corpus** : combien de phrases distinctes dans les
+ * affirmations, et d'où viennent les copies.
+ *
+ * Sur mille affirmations lues, quatre-vingt-quatorze textes distincts. Une
+ * proportion dont le dénominateur compte des copies n'est pas une proportion
+ * (règle 12), et c'est le dénominateur de tout ce que la console annonce.
+ *
+ * Aucun texte n'est rendu : on compte des répétitions, on ne les lit pas.
+ */
+export async function laRepetitionDuCorpus() {
+  try {
+    const { data, error } = await supabase.rpc("la_repetition_du_corpus");
+    if (error) return null;
+    const ligne = Array.isArray(data) ? data[0] : data;
+    return ligne && typeof ligne === "object" ? ligne : null;
   } catch {
     return null;
   }
