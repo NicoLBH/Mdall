@@ -2299,12 +2299,15 @@ test("une lecture rouverte dit qu'elle est une photographie", () => {
 });
 
 /**
- * **Une lecture rouverte n'a qu'un onglet.**
+ * **Une lecture rouverte n'offre pas l'onglet de la restitution** — tant que le
+ * document refait n'est pas revenu de Fichiers.
  *
- * Le document refait ne se garde pas — c'est la plus grosse part de ce qu'une
- * lecture produit, et il se relit dans Fichiers. L'onglet existait quand même,
+ * Il ne se garde pas avec l'analyse : c'est la plus grosse part de ce qu'une
+ * lecture produit, et il est déjà rangé ailleurs. L'onglet existait quand même,
  * et il montrait la restitution du compte rendu **précédent**, celle que
  * l'écran tenait encore en mémoire : un document sous un autre.
+ *
+ * L'analyse et la synthèse, elles, sont gelées avec la lecture : elles restent.
  */
 test("une lecture rouverte n'offre pas l'onglet de la restitution", () => {
   const gardee = renderLaLecture(unEtat({
@@ -2312,14 +2315,16 @@ test("une lecture rouverte n'offre pas l'onglet de la restitution", () => {
     md: uneRestitution(), conservee: { id: "l-1" }
   }));
 
-  assert.doesNotMatch(gardee, /data-lecture-cr-onglet/);
+  assert.doesNotMatch(gardee, /data-lecture-cr-onglet="restitution"/);
+  assert.match(gardee, /data-lecture-cr-onglet="analyse"/);
+  assert.match(gardee, /data-lecture-cr-onglet="synthese"/);
   assert.match(gardee, /Ce qui a été relevé/);
 
-  // Et une lecture vive garde ses deux onglets.
+  // Et une lecture vive garde les trois.
   const vive = renderLaLecture(unEtat({
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution()
   }));
-  assert.match(vive, /data-lecture-cr-onglet/);
+  assert.match(vive, /data-lecture-cr-onglet="restitution"/);
 });
 
 /**
@@ -2586,7 +2591,8 @@ test("un document refait introuvable se dit", () => {
   }));
 
   assert.match(html, commeAffichee("ne se retrouve pas dans Fichiers"));
-  assert.doesNotMatch(html, /data-lecture-cr-onglet/, "un onglet pour un document absent");
+  assert.doesNotMatch(html, /data-lecture-cr-onglet="restitution"/,
+    "un onglet de restitution pour un document absent");
 });
 
 /** Tant qu'on attend, on ne dit ni l'un ni l'autre. */
@@ -2598,5 +2604,5 @@ test("pendant la relecture, l'écran ne tranche pas", () => {
   }));
 
   assert.doesNotMatch(html, commeAffichee("ne se retrouve pas dans Fichiers"));
-  assert.doesNotMatch(html, /data-lecture-cr-onglet/);
+  assert.doesNotMatch(html, /data-lecture-cr-onglet="restitution"/);
 });

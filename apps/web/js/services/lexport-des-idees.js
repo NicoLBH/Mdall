@@ -227,3 +227,102 @@ export function phraseDeLexport(quoi) {
     + `de liaison détaillé${mots > 1 ? "s" : ""}, et ce que la console ne montre pas. `
     + `Des comptes et des termes, aucun contenu de projet.${pourquoiZero}${manque}`;
 }
+
+/* ── Le corpus en clair, pour la mise au point du découpage ──────────────── */
+
+/**
+ * Le nom du fichier du corpus. **Il dit ce qu'il porte**, dans son nom.
+ *
+ * Un fichier nommé `mdall-export.json` se retrouve dans un dossier partagé six
+ * mois plus tard sans que personne ne sache ce qu'il contient. Celui-ci le dit
+ * avant qu'on l'ouvre.
+ */
+export function leNomDuCorpus(quand = new Date()) {
+  const jour = quand instanceof Date && !Number.isNaN(quand.getTime()) ? quand : new Date();
+  return `mdall-corpus-en-clair-NE-PAS-PARTAGER-${jour.toISOString().slice(0, 10)}.json`;
+}
+
+/**
+ * Une ligne du corpus : ce qui a été écrit, et ce que la coupe en a tiré.
+ *
+ * `avant`, `lien`, `apres`, `mot` sont nuls quand la coupe n'a rien tiré — et
+ * ce sont ces lignes-là qu'on vient lire. Les écarter ferait un export de ce
+ * qui marche déjà, c'est-à-dire d'aucune utilité.
+ */
+function uneLigneDuCorpus(ligne) {
+  const dit = texte(ligne?.dit);
+  if (!dit) return null;
+
+  return {
+    chantier: nombre(ligne?.chantier),
+    dit,
+    // `null` et non `""` : « la coupe n'a rien tiré » n'est pas « elle a tiré
+    // un terme vide ». Relu dans un tableur, le second se compterait.
+    avant: texte(ligne?.avant) || null,
+    lien: texte(ligne?.lien) || null,
+    apres: texte(ligne?.apres) || null,
+    mot: texte(ligne?.mot) || null
+  };
+}
+
+/**
+ * Le corpus, **en clair**.
+ *
+ * ## Ce que cette porte-ci laisse sortir, et pourquoi elle existe
+ *
+ * Du **contenu de chantier** : le texte des affirmations. C'est l'inverse de
+ * tout ce que la console s'interdit, et c'est assumé — on ne peut pas améliorer
+ * le découpage sans voir ce qu'il n'a pas su lire, et ce qu'il n'a pas su lire
+ * est précisément ce qui ne sort jamais.
+ *
+ * ## Elle reste fermée par défaut, elle aussi
+ *
+ * Même règle que l'autre porte : les champs connus, recopiés un par un. Une
+ * colonne ajoutée demain — un identifiant de projet, un nom de document — ne
+ * sortira pas parce qu'elle n'est pas dans la liste. C'est ce qui fait la
+ * différence entre « on laisse sortir le texte » et « on laisse sortir la
+ * table ».
+ *
+ * ## Le fichier dit ce qu'il est
+ *
+ * Il sera relu ailleurs, sans l'écran qui l'explique, et peut-être par
+ * quelqu'un d'autre. L'avertissement voyage donc dedans.
+ */
+export function lexportDuCorpus({ lignes = [], quand = new Date() } = {}) {
+  const jour = quand instanceof Date && !Number.isNaN(quand.getTime()) ? quand : new Date();
+  const portees = (Array.isArray(lignes) ? lignes : []).map(uneLigneDuCorpus).filter(Boolean);
+
+  return {
+    quoi: "Mdall — console — le corpus en clair",
+    le: jour.toISOString(),
+    attention: "CE FICHIER PORTE DU CONTENU DE CHANTIER : le texte des "
+      + "affirmations, tel qu'il a été écrit. Il sert à comprendre pourquoi le "
+      + "découpage ne lit pas une phrase. Il ne se partage pas, et il ne se "
+      + "garde pas.",
+    // Ce qu'on ne peut pas en tirer, dit aussi : sans cela on cherchera.
+    note: "Aucun chantier n'est nommé : le numéro dit seulement que deux "
+      + "affirmations viennent du même, jamais lequel.",
+    affirmations: portees.length,
+    // Le chiffre qu'on vient chercher, calculé ici plutôt que de tête.
+    sansIdee: portees.filter((une) => !une.avant || !une.apres).length,
+    corpus: portees
+  };
+}
+
+/** Le même, en texte. */
+export function lexportDuCorpusEnJson(quoi) {
+  return JSON.stringify(lexportDuCorpus(quoi), null, 2);
+}
+
+/** Ce que l'écran dit du bouton du corpus, avant qu'on clique. */
+export function phraseDuCorpus(quoi) {
+  const porte = lexportDuCorpus(quoi);
+  if (!porte.affirmations) {
+    return "Aucune affirmation n'a été lue. Ce n'est pas « le corpus est vide » : "
+      + "on ne l'a pas demandé, ou on n'a pas su (règle 5).";
+  }
+
+  return `${porte.affirmations} affirmation${porte.affirmations > 1 ? "s" : ""}, `
+    + `dont ${porte.sansIdee} dont le découpage ne tire rien. C'est celles-là `
+    + "qu'on vient lire.";
+}

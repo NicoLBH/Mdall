@@ -72,3 +72,27 @@ export async function laFormeDesAffirmations() {
     return null;
   }
 }
+
+/**
+ * Le corpus **en clair** : le texte des affirmations, et ce que la coupe en a
+ * tiré.
+ *
+ * ## C'est du contenu de chantier, et c'est assumé
+ *
+ * Tout le reste de ce module rend des comptes. Celui-ci rend des phrases,
+ * parce qu'on ne peut pas améliorer le découpage sans voir ce qu'il n'a pas su
+ * lire — et ce qu'il n'a pas su lire est précisément ce qui ne sort jamais.
+ *
+ * La porte est dans la base : la fonction est réservée aux administrateurs.
+ * L'interrupteur de l'écran empêche un clic distrait, rien de plus
+ * (`services/la-porte-du-developpement.js`).
+ */
+export async function leCorpusEnClair({ auPlus = 20000 } = {}) {
+  try {
+    const { data, error } = await supabase.rpc("le_corpus_en_clair", { au_plus: auPlus });
+    if (error) return null;
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return null;
+  }
+}

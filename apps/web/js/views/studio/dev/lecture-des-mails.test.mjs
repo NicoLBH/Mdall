@@ -74,7 +74,7 @@ const dessine = (vue) => renderLaLectureDesMails(vue).replace(CACHE, "");
 const vue = (dessus = {}) => ({
   phase: "vide", fichiers: [], fil: null, onglet: ONGLET.FIL,
   motif: "", queFaire: "", rangement: null, ouverts: new Set(), nonRepris: new Set(),
-  releve: null, ...dessus
+  releve: null, dejaLus: null, dejaLusEnCours: false, conservee: null, idees: [], ...dessus
 });
 
 const prise = (dessus = {}) => ({
@@ -892,4 +892,123 @@ test("l'écran accepte tout ce qu'un fichier peut porter comme mails", () => {
   // l'explorateur : sans cela, on ne peut même pas choisir un `.msg`.
   assert.match(html, /accept="[^"]*\.msg/);
   assert.match(html, /accept="[^"]*\.zip/);
+});
+
+/* ── Les fils déjà lus ───────────────────────────────────────────────────── */
+
+/** Une ligne de `fil_lectures`, telle que l'accueil la reçoit. */
+const unFilLu = (dessus = {}) => ({
+  id: "f-1", objet: "Trappe face à la centrale", messages: 4,
+  commence_le: "2026-03-10", finit_le: "2026-03-14",
+  mesures: { messages: 4, prises: 3, idees: 2 },
+  created_at: "2026-03-14T09:00:00Z", ...dessus
+});
+
+/**
+ * **Le défaut que cela répare.**
+ *
+ * Le relevé d'un fil coûte un appel au modèle, et tout disparaissait en
+ * quittant l'écran : on repayait pour revoir ce qu'il avait trouvé. Pire, rien
+ * ne disait quels fils avaient déjà été lus — on redéposait les mêmes `.eml`.
+ */
+test("l'accueil liste les fils déjà analysés", () => {
+  const html = dessine(vue({
+    dejaLus: [unFilLu(), unFilLu({ id: "f-2", objet: "Cotes du R+1", finit_le: "2026-03-20" })]
+  }));
+
+  assert.match(html, /2 fils déjà analysés/);
+  assert.match(html, /data-fil-garde="f-1"/);
+  assert.ok(html.includes(escapeHtml("Trappe face à la centrale")));
+  // La coquille de tableau commune, comme partout ailleurs.
+  assert.match(html, /data-table-shell__row/);
+  assert.match(html, /row-title-trigger theme-text theme-text--pb/);
+});
+
+/**
+ * **« On n'a pas demandé » n'est pas « il n'y en a aucun »** (règle 5). Une
+ * liste vide pendant le chargement ferait croire qu'aucun fil n'a jamais été
+ * lu — et l'on repaierait un relevé déjà payé.
+ */
+test("tant qu'on ne sait pas, l'accueil ne dit pas « aucun »", () => {
+  assert.doesNotMatch(dessine(vue({ dejaLus: null, dejaLusEnCours: false })), /déjà analysé/);
+  assert.match(dessine(vue({ dejaLus: null, dejaLusEnCours: true })), /déjà analysés/);
+  assert.doesNotMatch(dessine(vue({ dejaLus: [] })), /déjà analysé/);
+});
+
+/**
+ * **« Déplié seulement » n'est pas « zéro prise ».** Le premier dit qu'on n'a
+ * rien payé, le second accuse le modèle de n'avoir rien trouvé (règle 5).
+ */
+test("un fil déplié sans relevé ne se compte pas comme un relevé vide", () => {
+  const sans = dessine(vue({ dejaLus: [unFilLu({ mesures: { messages: 4, prises: null } })] }));
+  assert.match(sans, /déplié seulement/);
+
+  const vide = dessine(vue({ dejaLus: [unFilLu({ mesures: { messages: 4, prises: 0 } })] }));
+  assert.match(vide, /0 prise/);
+});
+
+/** La liste n'est qu'à l'accueil : sous une lecture, elle ferait doublon. */
+test("la liste des fils lus ne s'affiche pas sous une lecture", () => {
+  assert.doesNotMatch(dessine(lu(PREMIER, SECOND)), /data-fil-garde/);
+});
+
+/**
+ * **La sortie d'une lecture rouverte se lit avant le titre.** Elle ne fait rien
+ * au fil : elle quitte l'écran, et une sortie se cherche à gauche.
+ */
+test("une lecture rouverte porte son retour, avant le titre", () => {
+  const html = dessine({
+    ...lu(PREMIER, SECOND), conservee: { id: "f-1", lueLe: "2026-03-14T09:00:00Z" }
+  });
+
+  const ouLeRetour = html.indexOf("data-fil-revenir");
+  const ouLeTitre = html.indexOf("lecture-cr__titre");
+  assert.notEqual(ouLeRetour, -1, "le retour a disparu");
+  assert.ok(ouLeRetour < ouLeTitre, "le retour se lit après le titre");
+  // Et pas de « Un autre fil » : on regarde une photographie, on n'en dépose pas.
+  assert.doesNotMatch(html, /data-mails-fichier/);
+});
+
+/* ── La synthèse d'un fil ────────────────────────────────────────────────── */
+
+/**
+ * **Le cran au-dessus de l'analyse, et il ne coûte rien.** Le découpage vit en
+ * base et ne lit que ce que les messages écrivent : pas d'appel au modèle.
+ */
+test("le fil a son onglet de synthèse", () => {
+  const html = dessine(lu(PREMIER, SECOND));
+  assert.match(html, /data-mails-onglet="synthese"/);
+});
+
+test("la synthèse montre les liaisons, les idées et ce que la mémoire écrirait", () => {
+  const html = dessine({
+    ...lu(PREMIER, SECOND),
+    onglet: ONGLET.SYNTHESE,
+    idees: [
+      { avant: "terrain argileux", lien: "cause", apres: "plancher beton", mot: "donc",
+        phrase: "Le terrain argileux est confirmé donc le plancher beton sera repris",
+        document: "Trappe", page: null },
+      { avant: "plancher beton", lien: "obligation", apres: "etude de sol", mot: "exige",
+        phrase: "Le plancher beton exige une etude de sol", document: "Trappe", page: null }
+    ]
+  });
+
+  assert.match(html, /Les liaisons employées/);
+  assert.ok(html.includes(escapeHtml("« donc »")));
+  assert.match(html, /Ce fil lie/);
+  assert.match(html, /Ce que la mémoire en écrirait/);
+  assert.match(html, /mdall-bloc/, "les blocs mdall ne sont pas ceux de la proposition");
+  assert.match(html, /Ce qui s'enchaîne/);
+  // Et il ne coûte rien, ce qui se dit.
+  assert.match(html, /aucun appel au modèle/);
+});
+
+/**
+ * **Sans idée, la synthèse dit une limite de méthode, pas un constat.** Le
+ * découpage ne lit que les liaisons placées entre les deux membres d'une
+ * phrase (règle 5).
+ */
+test("un fil sans idée ne se dit pas « n'enchaîne rien »", () => {
+  const html = dessine({ ...lu(PREMIER, SECOND), onglet: ONGLET.SYNTHESE, idees: [] });
+  assert.match(html, /que le découpage sache lire/);
 });

@@ -97,6 +97,7 @@ export const RACINES = [
   // La porte par laquelle les idées sortent de la console : des comptes et des
   // termes, jamais une phrase de chantier. Elle est fermée par défaut.
   "js/services/lexport-des-idees.js",
+  "js/services/la-porte-du-developpement.js",
   // Le bouton de copie commun, avec son retour — sans lui, on reclique trois
   // fois sans savoir si la copie a eu lieu.
   "js/views/ui/bouton-copier.js",

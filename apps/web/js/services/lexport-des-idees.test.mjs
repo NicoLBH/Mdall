@@ -10,7 +10,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  leNomDuFichier, lexportDesIdees, lexportEnJson, phraseDeLexport
+  leNomDuCorpus, leNomDuFichier, lexportDesIdees, lexportDuCorpus,
+  lexportEnJson, phraseDeLexport, phraseDuCorpus
 } from "./lexport-des-idees.js";
 
 const UNE = { avant: "terrain argileux", lien: "cause", apres: "plancher beton",
@@ -184,4 +185,75 @@ test("un export vide ne tombe pas", () => {
   assert.deepEqual(porte.liaisons, []);
   assert.equal(porte.mesure, null);
   assert.ok(porte.le);
+});
+
+/* ── Le corpus en clair, et sa porte à lui ───────────────────────────────── */
+
+/**
+ * **Celle-ci laisse sortir du contenu de chantier**, et c'est assumé : on ne
+ * peut pas améliorer le découpage sans voir ce qu'il n'a pas su lire. Elle
+ * reste pourtant fermée par défaut comme l'autre — les champs connus, recopiés
+ * un par un. Une colonne ajoutée demain à la fonction de base ne sortira pas
+ * parce qu'elle n'est pas dans la liste.
+ */
+test("le corpus laisse sortir le texte, et rien qui désigne un chantier", () => {
+  const porte = lexportDuCorpus({
+    lignes: [{
+      chantier: 2,
+      dit: "Le terrain argileux est confirmé donc le plancher beton sera repris",
+      avant: "terrain argileux", lien: "cause", apres: "plancher beton", mot: "donc",
+      // Ce que la base pourrait porter demain, et qui ne doit pas sortir.
+      project_id: "11111111-1111-4111-8111-111111111111",
+      document: "1824_CR_12.pdf",
+      auteur: "ourdine.ferrand@novaclim.example"
+    }],
+    quand: new Date("2026-10-01T09:00:00Z")
+  });
+
+  assert.deepEqual(Object.keys(porte.corpus[0]).sort(),
+    ["apres", "avant", "chantier", "dit", "lien", "mot"]);
+
+  const texte = JSON.stringify(porte);
+  for (const fuite of ["11111111", "1824_CR_12", "ourdine", "novaclim"]) {
+    assert.equal(texte.includes(fuite), false,
+      `« ${fuite} » est sorti : la porte laisse passer ce qu'elle ne connaît pas`);
+  }
+});
+
+/**
+ * **« La coupe n'a rien tiré » n'est pas « elle a tiré un terme vide ».**
+ * Relu dans un tableur, le second se compterait comme une idée (règle 5).
+ */
+test("une affirmation que la coupe ne lit pas sort avec des nuls", () => {
+  const porte = lexportDuCorpus({
+    lignes: [{ chantier: 1, dit: "Menuiseries extérieures", avant: "", lien: "", apres: "" }]
+  });
+
+  assert.deepEqual(porte.corpus[0],
+    { chantier: 1, dit: "Menuiseries extérieures", avant: null, lien: null, apres: null, mot: null });
+  assert.equal(porte.sansIdee, 1, "c'est le chiffre qu'on vient chercher");
+});
+
+/**
+ * **Le fichier dit ce qu'il est, dedans.** Il sera relu ailleurs, sans l'écran
+ * qui l'explique, et peut-être par quelqu'un d'autre.
+ */
+test("le fichier du corpus porte son avertissement et son nom", () => {
+  const porte = lexportDuCorpus({ lignes: [] });
+
+  assert.match(porte.attention, /CONTENU DE CHANTIER/);
+  assert.match(porte.attention, /ne se partage pas/);
+  assert.match(porte.note, /Aucun chantier n'est nommé/);
+  assert.match(leNomDuCorpus(new Date("2026-10-01T09:00:00Z")), /NE-PAS-PARTAGER/);
+});
+
+/**
+ * **Rien n'est pas « le corpus est vide ».** On ne l'a pas demandé, ou on n'a
+ * pas su (règle 5) — et les deux mènent à des gestes opposés.
+ */
+test("un corpus vide ne se dit pas comme un constat", () => {
+  assert.match(phraseDuCorpus({ lignes: [] }), /on ne l'a pas demandé, ou on n'a pas su/);
+  assert.match(
+    phraseDuCorpus({ lignes: [{ chantier: 1, dit: "Menuiseries", avant: "" }] }),
+    /1 affirmation, dont 1 dont le découpage ne tire rien/);
 });

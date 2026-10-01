@@ -4583,15 +4583,43 @@ body:has(.project-tabs--console){
 }
 .conso-export__copier{ flex:none; }
 
-/* **Ce que ce document lie**, dans la lecture d'un compte rendu.
+/* **La synthèse d'un document** : ce qu'il lie, et ce qui s'en compose.
 
-   Chaque ligne porte la fonction, d'où elle sort, et la phrase dont elle sort.
+   Elle était dessinée dans l'analyse du lecteur de comptes rendus, sous le nom
+   de cet écran-là. Trois lecteurs l'emploient maintenant — un compte rendu, un
+   fil de mails, et bientôt un rapport de bureau de contrôle : elle porte donc
+   son propre nom (règle 10).
+
+   Chaque idée porte la fonction, d'où elle sort, et la phrase dont elle sort.
    La phrase sous les deux autres, en retrait : c'est la preuve, et on la lit
    quand on doute — pas à chaque passage. */
-.lecture-cr__idees{ margin-top:20px; }
-.lecture-cr__idees-mot{ margin:4px 0 10px; font-size:12px; color:var(--muted); }
-.lecture-cr__idees-liste{ list-style:none; margin:0; padding:0; display:grid; gap:8px; }
-.lecture-cr__idee{
+.synthese{ margin-top:20px; display:grid; gap:18px; }
+.synthese__mot{ margin:0; font-size:12px; color:var(--muted); }
+.synthese__manque{ margin:0; font-size:12px; color:var(--muted); font-style:italic; }
+.synthese__bloc{ display:grid; gap:8px; }
+.synthese__titre{ margin:0; font-size:13px; font-weight:600; color:var(--text); }
+.synthese__aide{ margin:0; font-size:12px; color:var(--muted); }
+
+/* Les liaisons : le mot, le verbe qu'il porte, et combien d'idées il rend.
+   Une grille plutôt qu'une ligne de texte — c'est un tableau de trois colonnes
+   qu'on lit en diagonale. */
+.synthese__liaisons{ list-style:none; margin:0; padding:0; display:grid; gap:4px; }
+.synthese__liaison{
+  display:grid;
+  grid-template-columns:minmax(0,max-content) minmax(0,1fr) max-content;
+  align-items:baseline;
+  gap:10px;
+  padding:5px 12px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:var(--panel2);
+  font-size:13px;
+}
+.synthese__liaison i{ color:var(--muted); font-style:normal; }
+.synthese__liaison .mono-small{ color:var(--muted); white-space:nowrap; }
+
+.synthese__idees{ list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+.synthese__idee{
   display:grid;
   grid-template-columns:minmax(0,1fr) max-content;
   gap:2px 12px;
@@ -4600,14 +4628,62 @@ body:has(.project-tabs--console){
   border-radius:8px;
   background:var(--panel2);
 }
-.lecture-cr__idee-fonction{ font-size:13.5px; font-weight:600; color:var(--text); min-width:0; }
-.lecture-cr__idee-ou{ color:var(--muted); white-space:nowrap; align-self:center; }
-.lecture-cr__idee-phrase{
+.synthese__idee-fonction{ font-size:13.5px; font-weight:600; color:var(--text); min-width:0; }
+.synthese__idee-ou{ color:var(--muted); white-space:nowrap; align-self:center; }
+.synthese__idee-phrase{
   grid-column:1 / -1;
   color:var(--muted);
   font-size:12px;
   font-style:italic;
 }
+
+/* Un raisonnement porte toujours ses maillons : ce qu'il conclut n'est écrit
+   dans aucun document, et sans eux il ne se conteste pas. */
+.synthese__chaines{ list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+.synthese__chaine{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) max-content;
+  gap:4px 12px;
+  padding:8px 12px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:var(--panel2);
+}
+.synthese__chaine-dit{ font-size:13.5px; font-weight:600; color:var(--text); min-width:0; }
+.synthese__chaine-pas{ color:var(--muted); white-space:nowrap; align-self:center; }
+.synthese__maillons{
+  grid-column:1 / -1;
+  list-style:none;
+  margin:2px 0 0;
+  padding:0 0 0 4px;
+  display:grid;
+  gap:2px;
+  color:var(--muted);
+  font-size:12px;
+}
+.synthese__maillons .octicon{ opacity:.6; vertical-align:-2px; }
+/* **La porte du corpus en clair.** Elle laisse sortir ce que tout le reste de
+   la console s'interdit — le texte des affirmations —, parce qu'on ne corrige
+   pas un découpage sans voir ce qu'il n'a pas su lire. Elle se coche, elle dit
+   ce qu'elle laisse sortir, et elle se referme toute seule.
+
+   Au repos, elle ne crie pas : c'est un interrupteur parmi d'autres. Ouverte,
+   elle se voit de loin — on doit savoir qu'elle l'est sans la chercher. */
+.conso-porte{ display:grid; gap:8px; }
+.conso-porte.est-ouverte{
+  border-color:var(--fgColor-attention, #d29922);
+  box-shadow:inset 2px 0 0 var(--fgColor-attention, #d29922);
+}
+.conso-porte__interrupteur{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:13px;
+  color:var(--text);
+  cursor:pointer;
+}
+.conso-porte__interrupteur input{ accent-color:var(--fgColor-attention, #d29922); }
+
 /* C'est un bouton, pas un lien : il porte un `href` parce que le navigateur
    ne télécharge que depuis un lien, et le soulignement le faisait lire comme
    une navigation. */

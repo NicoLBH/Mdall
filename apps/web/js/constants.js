@@ -71,16 +71,6 @@ export const PROJECT_TABS = [
     countKey: "openSujets"
   },
   {
-    id: PROJECT_TAB_IDS.SITUATIONS,
-    // Juste après les Sujets, parce qu'une situation en **désigne** : elle ne
-    // les possède pas, et la lire loin d'eux ferait croire le contraire.
-    // Le nom et l'icône viennent de `services/mon-carnet.js` : le menu du haut
-    // mène au même tableau, et deux écrans qui portent deux noms pour la même
-    // chose se cherchent l'un l'autre (règle 10).
-    label: NOM_DU_CARNET,
-    icon: svgIcon(ICONE_DU_CARNET, { className: `octicon octicon-${ICONE_DU_CARNET}` })
-  },
-  {
     id: PROJECT_TAB_IDS.PROPOSITIONS,
     label: "Propositions",
     icon: svgIcon("git-pull-request", { className: "octicon octicon-git-pull-request" }),
@@ -103,6 +93,17 @@ export const PROJECT_TABS = [
     id: PROJECT_TAB_IDS.ACTIONS,
     label: "Actions",
     icon: svgIcon("play", { className: "octicon octicon-play" })
+  },
+  {
+    id: PROJECT_TAB_IDS.SITUATIONS,
+    // **Après les Actions.** Une situation n'est pas une matière du chantier —
+    // ni un fichier, ni un sujet, ni une proposition : c'est une façon de
+    // travailler, et elle se range avec ce qui se fait plutôt qu'avec ce qui
+    // est. Le nom et l'icône viennent de `services/mon-carnet.js` : le menu du
+    // haut mène au même tableau, et deux écrans qui portent deux noms pour la
+    // même chose se cherchent l'un l'autre (règle 10).
+    label: NOM_DU_CARNET,
+    icon: svgIcon(ICONE_DU_CARNET, { className: `octicon octicon-${ICONE_DU_CARNET}` })
   },
   {
     id: PROJECT_TAB_IDS.INSIGHTS,

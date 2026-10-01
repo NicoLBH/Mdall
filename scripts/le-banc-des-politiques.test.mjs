@@ -86,6 +86,12 @@ const LES_MIGRATIONS = [
   // La coupe, écrite une fois pour un ensemble de textes : appelée affirmation
   // par affirmation, elle coûtait vingt-huit fois plus et ne revenait pas.
   "202611150001_la_coupe_passe_sur_tout_le_corpus.sql",
+  // Le corpus en clair : du contenu de chantier, pour la mise au point du
+  // découpage. C'est la porte la plus ouverte du produit — elle a sa règle.
+  "202611160001_le_corpus_en_clair.sql",
+  // Les lectures de fils de mails : privées, comme celles des comptes rendus,
+  // et pour une raison de plus — un fil dit qui a écrit quoi à qui.
+  "202611170001_une_lecture_de_fil_se_garde.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",
@@ -1916,4 +1922,156 @@ test("une tautologie ne sort pas du relevé d'un document", { skip: sansPostgres
     + "]);");
 
   assert.equal(lu.sortie.trim(), "0", "une tautologie est relevée comme une idée");
+});
+
+/* ── Le corpus en clair, et la porte qui le tient ────────────────────────── */
+
+/**
+ * **C'est la porte la plus ouverte du produit, et elle doit être la mieux
+ * gardée.**
+ *
+ * `le_corpus_en_clair()` rend le **texte** des affirmations — du contenu de
+ * chantier. C'est nécessaire : on ne peut pas améliorer le découpage sans voir
+ * ce qu'il n'a pas su lire, et ce qu'il n'a pas su lire est précisément ce qui
+ * ne sort jamais. Mais un compte ordinaire qui l'atteindrait lirait tous les
+ * chantiers d'un coup.
+ *
+ * L'écran y ajoute un interrupteur qui se referme au bout de dix secondes.
+ * Cet interrupteur empêche un clic distrait ; il n'est pas une porte. Celle-ci
+ * l'est, et c'est elle qu'on éprouve.
+ */
+test("le corpus en clair ne se lit pas sans être administrateur",
+  { skip: sansPostgres }, () => {
+    const refuse = banc.sousLadresse("quelquun@ailleurs.example",
+      "select count(*) from public.le_corpus_en_clair();");
+    assert.equal(refuse.ok, false, "un compte quelconque a lu le corpus en clair");
+    assert.match(refuse.motif, /réservé à la console/);
+
+    const sansJeton = banc.sousLadresse("", "select count(*) from public.le_corpus_en_clair();");
+    assert.equal(sansJeton.ok, false, "le corpus en clair se lit sans session");
+  });
+
+/**
+ * **Un numéro d'ordre, jamais l'identifiant du chantier.**
+ *
+ * Savoir que deux affirmations viennent du même chantier sert : on voit si l'un
+ * d'eux écrit autrement. Savoir **lequel** ne sert à rien pour corriger un
+ * découpage, et c'est la différence entre un corpus de mise au point et un
+ * export de base.
+ */
+test("le corpus en clair ne nomme aucun chantier", { skip: sansPostgres }, () => {
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;`);
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select chantier, dit from public.le_corpus_en_clair() limit 50;");
+  assert.equal(lu.ok, true, lu.motif);
+
+  // Ni l'identifiant du chantier, ni celui de l'affirmation : la signature ne
+  // les porte pas, et c'est ce qui le garantit.
+  assert.doesNotMatch(lu.sortie, new RegExp(MEDIATHEQUE));
+  assert.doesNotMatch(lu.sortie, new RegExp(GYMNASE));
+  // Et le rang est un entier, pas un identifiant déguisé.
+  for (const ligne of lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean)) {
+    assert.match(ligne, /^\d+\|/, `« ${ligne} » ne commence pas par un rang`);
+  }
+});
+
+/**
+ * **Et il rend bien ce qu'on vient y chercher** : le texte, et ce que la coupe
+ * en a tiré — ou rien, quand elle n'a rien tiré. C'est cette colonne vide qui
+ * est la matière du travail : ce sont les affirmations que le découpage n'a
+ * pas su lire.
+ */
+test("le corpus en clair rend le texte, coupé ou non", { skip: sansPostgres }, () => {
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;`);
+  banc.sql(`insert into public.project_assertions (project_id, statement) values
+    ('${MEDIATHEQUE}', 'le garde corps permet de proteger la circulation'),
+    ('${MEDIATHEQUE}', 'Menuiseries exterieures du hall');`);
+
+  try {
+    const coupee = banc.sousLadresse("patron@mdall.example",
+      "select avant, lien, apres, mot from public.le_corpus_en_clair()"
+      + " where dit = 'le garde corps permet de proteger la circulation';");
+    assert.equal(coupee.sortie.trim(), "garde corps|permet|proteger|permet de");
+
+    // Et celle que la coupe n'a pas su lire sort quand même, sans idée.
+    const nue = banc.sousLadresse("patron@mdall.example",
+      "select coalesce(avant, '—') from public.le_corpus_en_clair()"
+      + " where dit = 'Menuiseries exterieures du hall';");
+    assert.equal(nue.sortie.trim(), "—",
+      "une affirmation sans idée ne sort pas du corpus : c'est pourtant elle qu'on vient lire");
+  } finally {
+    banc.sql(`delete from public.project_assertions
+               where statement in ('le garde corps permet de proteger la circulation',
+                                   'Menuiseries exterieures du hall');`);
+  }
+});
+
+/* ── Une lecture de fil de mails n'appartient qu'à qui l'a faite ─────────── */
+
+/**
+ * **C'est ce qu'il y a de plus personnel dans un chantier.**
+ *
+ * Un fil de mails dit qui a écrit quoi, à qui, et ce qu'on en a déduit. Une
+ * lecture d'Atelier est déjà un brouillon qu'on ne publie pas ; celle-ci est en
+ * outre de la correspondance.
+ *
+ * Un écran qui oublierait de filtrer ne pourrait pas montrer ce qu'il ne doit
+ * pas : la séparation est tenue par la base, ou elle n'est pas tenue.
+ */
+test("la lecture d'un fil ne se lit pas par un autre", { skip: sansPostgres }, () => {
+  banc.enTantQue(A,
+    `insert into public.fil_lectures (project_id, objet, messages, finit_le)`
+    + ` values ('${MEDIATHEQUE}', 'Trappe face à la centrale', 4, '2026-03-14');`);
+
+  const sien = banc.enTantQue(A, "select count(*) from public.fil_lectures;");
+  assert.equal(sien.sortie.trim(), "1", "son auteur ne lit plus sa propre lecture");
+
+  // **B est collaborateur du même chantier**, et cela ne lui ouvre rien : une
+  // lecture d'Atelier n'appartient qu'à qui l'a faite, pas au projet.
+  const autre = banc.enTantQue(B, "select count(*) from public.fil_lectures;");
+  assert.equal(autre.sortie.trim(), "0", "un collaborateur lit la correspondance d'un autre");
+
+  const sansCompte = banc.sansCompte("select count(*) from public.fil_lectures;");
+  assert.equal(sansCompte.ok === false || sansCompte.sortie.trim() === "0", true,
+    `la clé anonyme lit les lectures de fils : ${sansCompte.sortie}`);
+});
+
+/**
+ * **Et on ne peut pas en écrire une au nom d'un autre.**
+ *
+ * Sans la règle d'écriture, on ne lit pas les lectures des autres mais on peut
+ * leur en déposer une — ou modifier la leur en devinant un identifiant.
+ */
+test("on n'écrit pas une lecture de fil au nom d'un autre", { skip: sansPostgres }, () => {
+  const vole = banc.enTantQue(B,
+    `insert into public.fil_lectures (project_id, objet, owner_id)`
+    + ` values ('${MEDIATHEQUE}', 'Au nom de quelqu''un d''autre', '${A}');`);
+
+  assert.equal(vole.ok, false, "une lecture a été écrite au nom d'un autre");
+});
+
+/**
+ * **La table porte bien ce que la migration annonce.**
+ *
+ * L'ajouter à la liste ne suffit pas : une liste qu'on raccourcit laisse le
+ * banc vert. On demande donc les colonnes à PostgreSQL.
+ */
+test("une lecture de fil porte ce qu'elle a vu", { skip: sansPostgres }, () => {
+  const dit = banc.sql(
+    "select column_name from information_schema.columns"
+    + " where table_schema = 'public' and table_name = 'fil_lectures' order by column_name;");
+  const colonnes = dit.sortie.split("\n").map((un) => un.trim()).filter(Boolean);
+
+  for (const attendue of ["analyse_gelee", "objet", "fichiers", "messages",
+    "commence_le", "finit_le", "mesures", "lu_par", "proposition_id", "owner_id"]) {
+    assert.ok(colonnes.includes(attendue),
+      `« fil_lectures » n'a pas « ${attendue} » : la migration n'a pas tourné`);
+  }
+
+  // **Et pas sous le mot réservé**, celui que PostgreSQL refuse.
+  assert.ok(!colonnes.includes("analyse"),
+    "la colonne porte le mot réservé : le déploiement sera refusé");
 });

@@ -48,6 +48,14 @@ import { store } from "../../../store.js";
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { svgIcon } from "../../../ui/icons.js";
 import { renderSpinnerHtml } from "../../ui/spinner.js";
+import {
+  COLONNE_DU_COMPTE, renderDataTableCount, renderDataTableHead, renderDataTableShell
+} from "../../ui/data-table-shell.js";
+import { renderLaSyntheseDunDocument } from "../../ui/la-synthese.js";
+import {
+  laLigneDunFil, laVueDunFil, lesFilsLus, lesPhrasesDunFil
+} from "../../../services/la-lecture-dun-fil.js";
+import { lesIdeesDesCoupes } from "../../../services/une-idee-relevee.js";
 import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.js";
 import { TRANSFORMER, brancheDeLAction, renderTransformer } from "../../ui/transformer.js";
 import { brancherLesBoutonsCopier, renderBoutonCopier } from "../../ui/bouton-copier.js";
@@ -98,9 +106,21 @@ const texte = (valeur) => String(valeur ?? "").trim();
 export const ACCEPTE = CE_QUI_PORTE_DES_MAILS.join(",");
 
 /** Les deux moitiés de l'écran. Le fil d'abord : c'est l'ordre du procédé. */
-export const ONGLET = { FIL: "fil", ANALYSE: "analyse" };
+export const ONGLET = { FIL: "fil", ANALYSE: "analyse", SYNTHESE: "synthese" };
 
-const NOMS_DES_ONGLETS = { [ONGLET.FIL]: "Le fil", [ONGLET.ANALYSE]: "Analyse" };
+const NOMS_DES_ONGLETS = {
+  [ONGLET.FIL]: "Le fil",
+  [ONGLET.ANALYSE]: "Analyse",
+  /**
+   * **Le cran au-dessus de l'analyse**, et il ne coûte rien.
+   *
+   * L'analyse relève des prises de position, et elle se paie. La synthèse dit
+   * ce que le fil **enchaîne** — par quels mots de liaison, quelles idées, et
+   * ce qu'elles composent —, et le découpage est en base : il ne lit que ce
+   * que les messages écrivent déjà.
+   */
+  [ONGLET.SYNTHESE]: "Synthèse"
+};
 
 /** Ce que l'ordre des messages doit dire, quand il y a quelque chose à dire. */
 const MOT_DE_LORDRE = {
@@ -139,7 +159,25 @@ const etat = {
   /** Les propositions ouvertes du projet. `null` : on n'a pas pu demander. */
   branches: [],
   /** Où en est « Transformer ». Rien tant qu'on n'a rien demandé. */
-  versement: null
+  versement: null,
+  /**
+   * Les fils déjà lus sur ce chantier.
+   *
+   * `null` : on n'a pas encore demandé, ou on n'a pas pu. L'accueil ne dit
+   * alors pas « aucun » (règle 5).
+   */
+  dejaLus: null,
+  dejaLusEnCours: false,
+  /** La lecture conservée qu'on regarde, ou `null` quand on lit pour de vrai. */
+  conservee: null,
+  /**
+   * Les idées que ce fil énonce, relevées au moment du dépliage.
+   *
+   * Elles ne coûtent rien : le découpage est en base, et il ne lit que ce que
+   * les messages écrivent. C'est pour cela qu'on les relève dès le dépliage,
+   * sans attendre qu'on paie un relevé.
+   */
+  idees: []
 };
 
 let hoteCourant = null;
@@ -159,6 +197,11 @@ export function renderLectureDesMails(hote) {
   hoteCourant = hote;
   hote.innerHTML = renderLaLectureDesMails(etat);
   brancher(hote);
+
+  // **Une seule fois, et à l'arrivée.** La liste des fils déjà lus ne se
+  // redemande pas à chaque redessin : l'écran se réécrit entier à chaque
+  // geste, et ce serait une requête par clic.
+  if (etat.dejaLus === null && !etat.dejaLusEnCours) chargerLesFilsLus();
 }
 
 /**
@@ -174,11 +217,122 @@ export function renderLectureDesMails(hote) {
  * manque ne passe plus.
  */
 export function renderLaLectureDesMails(vue = etat) {
+  // **L'accueil respire en bas**, comme celui des comptes rendus : la dernière
+  // ligne ne doit pas finir au ras de la fenêtre.
+  const accueil = vue.phase === "vide" && !vue.motif;
+
   return `
-    <div class="lecture-cr">
+    <div class="lecture-cr${accueil ? " lecture-cr--accueil" : ""}">
       ${renderEntete(vue)}
       ${renderDepot(vue)}
+      ${renderLesFilsLus(vue)}
       ${renderCorps(vue)}
+    </div>
+  `;
+}
+
+/**
+ * Les fils déjà lus sur ce chantier.
+ *
+ * ## Le défaut que cela répare
+ *
+ * Le relevé d'un fil coûte un appel au modèle, et tout disparaissait en
+ * quittant l'écran : on repayait pour revoir ce qu'il avait trouvé. Pire, rien
+ * ne disait quels fils avaient déjà été lus — on redéposait les mêmes `.eml`
+ * sans le savoir.
+ *
+ * ## La même coquille de tableau que partout
+ *
+ * Celle des Actions, des Fichiers et des comptes rendus. Une liste de
+ * documents qui ne ressemblerait pas à une liste de documents serait le seul
+ * endroit du produit où il faudrait réapprendre à lire (règle 4).
+ */
+function renderLesFilsLus(vue) {
+  if (vue.phase !== "vide" || vue.conservee) return "";
+
+  // **« On n'a pas demandé » et « il n'y en a aucun » ne se disent pas pareil**
+  // (règle 5) : une liste vide affichée pendant le chargement ferait croire
+  // qu'aucun fil n'a jamais été lu.
+  if (vue.dejaLus === null) {
+    return vue.dejaLusEnCours
+      ? `<p class="lecture-cr__lus-mot mono-small">Lecture des fils déjà analysés…</p>`
+      : "";
+  }
+
+  const lignes = lesFilsLus(vue.dejaLus);
+  if (!lignes.length) return "";
+
+  return `
+    <section class="lecture-cr__lus">
+      <p class="lecture-cr__lus-aide mono-small">
+        Rangés par la date du dernier message, pas par celle de l'analyse.
+        Cliquez pour rouvrir ce que la lecture avait vu ce jour-là.
+      </p>
+      ${renderDataTableShell({
+        className: "lecture-cr__lus-table",
+        gridTemplate: "minmax(280px,2fr) 220px",
+        headHtml: renderDataTableHead({
+          columns: [{
+            html: renderDataTableCount({
+              iconeHtml: svgIcon("history", { className: "octicon" }),
+              dit: `${lignes.length} fil${lignes.length > 1 ? "s" : ""} déjà analysé${
+                lignes.length > 1 ? "s" : ""}`,
+              titre: "Les fils de mails dont l'analyse est conservée"
+            }),
+            className: COLONNE_DU_COMPTE
+          }]
+        }),
+        bodyHtml: lignes.map((ligne) => renderUnFilLu(ligne, vue)).join("")
+      })}
+    </section>
+  `;
+}
+
+/** Une ligne de la table des fils lus. */
+function renderUnFilLu(ligne, vue) {
+  const messages = Number(ligne?.messages) || 0;
+  // **`Number(null)` vaut 0, qui est un compte fini.** Sans la question posée
+  // avant la conversion, un fil déplié sans relevé s'afficherait « 0 prise » —
+  // ce qui accuse le modèle de n'avoir rien trouvé là où on ne lui a rien
+  // demandé (règle 5).
+  const declarees = ligne?.mesures?.prises;
+  const prises = declarees === null || declarees === undefined || declarees === ""
+    ? null
+    : Number(declarees);
+  const idees = Number(ligne?.mesures?.idees) || 0;
+  const relectures = Number(ligne?.relectures) || 1;
+  const ouverte = texte(vue?.conservee?.id) === texte(ligne?.id);
+
+  return `
+    <div class="data-table-shell__row lecture-cr__lus-ligne${ouverte ? " est-ouverte" : ""}">
+      <div class="data-table-shell__cell data-table-shell__cell--titre">
+        <span class="issue-row-title-grid">
+          <span class="issue-row-title-grid__status">${
+            svgIcon("mail", { className: "octicon" })}</span>
+          <span class="issue-row-title-grid__title">
+            <button type="button" class="row-title-trigger theme-text theme-text--pb"
+              data-fil-garde="${escapeHtml(texte(ligne?.id))}"
+            >${escapeHtml(texte(ligne?.objet) || "Fil de mails")}</button>
+          </span>
+          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${
+            escapeHtml([
+              `${messages} message${messages > 1 ? "s" : ""}`,
+              texte(ligne?.finit_le) ? `dernier le ${texte(ligne.finit_le)}` : "",
+              relectures > 1 ? `${relectures} lectures` : ""
+            ].filter(Boolean).join(" • "))}</span>
+        </span>
+      </div>
+
+      <div class="data-table-shell__cell lecture-cr__lus-chiffres mono-small">
+        ${/*
+          **Le relevé n'a pas toujours eu lieu**, et « 0 prise » ne se dit pas
+          comme « on n'a rien demandé » : le premier accuse le modèle, le
+          second dit qu'on n'a rien payé (règle 5).
+        */""}
+        <span>${prises !== null && Number.isFinite(prises)
+          ? escapeHtml(`${prises} prise${prises > 1 ? "s" : ""}`)
+          : "déplié seulement"}${idees ? escapeHtml(` · ${idees} idée${idees > 1 ? "s" : ""}`) : ""}</span>
+      </div>
     </div>
   `;
 }
@@ -187,9 +341,18 @@ function renderEntete(vue) {
   return `
     <header class="lecture-cr__entete">
       <div class="lecture-cr__entete-ligne">
+        ${
+          // **La sortie se lit avant le titre.** Elle ne fait rien au fil :
+          // elle quitte l'écran, et une sortie se cherche à gauche.
+          vue.conservee
+            ? `<button type="button" class="gh-btn gh-btn--sm lecture-cr__retour" data-fil-revenir>
+                 ${svgIcon("arrow-left", { className: "octicon" })} Les fils lus
+               </button>`
+            : ""
+        }
         <h2 class="lecture-cr__titre">Lecture d'un fil de mails</h2>
         <div class="lecture-cr__entete-actions">
-          ${vue.fil ? `
+          ${vue.fil && !vue.conservee ? `
             <label class="gh-btn gh-btn--sm lecture-cr__entete-fichier">
               ${svgIcon("mail", { className: "octicon" })} Un autre fil
               <input type="file" accept="${escapeHtml(ACCEPTE)}" multiple hidden data-mails-fichier>
@@ -312,7 +475,7 @@ function renderCorps(vue) {
     ${renderAlerte(vue)}
     ${vue.fil ? renderIdentite(vue.fil) : ""}
     ${vue.fil ? renderOnglets(vue) : ""}
-    ${vue.fil ? (vue.onglet === ONGLET.ANALYSE ? renderAnalyse(vue) : renderLeFil(vue)) : ""}
+    ${vue.fil ? renderLeCorpsDeLonglet(vue) : ""}
   `;
 }
 
@@ -412,6 +575,13 @@ function renderEmporter() {
   `;
 }
 
+/** Ce que l'onglet choisi montre. */
+function renderLeCorpsDeLonglet(vue) {
+  if (vue.onglet === ONGLET.SYNTHESE) return renderLaSyntheseDuFil(vue);
+  if (vue.onglet === ONGLET.ANALYSE) return renderAnalyse(vue);
+  return renderLeFil(vue);
+}
+
 function renderOnglets(vue) {
   return `
     <nav class="light-tabs lecture-cr__onglets" aria-label="Le fil ou l'analyse">
@@ -446,6 +616,27 @@ function renderAnalyse(vue) {
   if (vue.releve?.enCours) return renderReleveEnCours();
   if (!vue.releve?.prises) return renderAvantLeReleve(vue);
   return renderLesPrises(vue);
+}
+
+/**
+ * La synthèse d'un fil : ce qu'il lie, et ce qui s'en compose.
+ *
+ * **Le même composant que le lecteur de comptes rendus.** Un fil et un compte
+ * rendu enchaînent de la même façon ; deux dessins donneraient deux listes
+ * d'idées qui divergeraient (règle 4).
+ */
+function renderLaSyntheseDuFil(vue) {
+  const phrases = lesPhrasesDunFil(vue.fil).length;
+
+  return renderLaSyntheseDunDocument(vue.idees, {
+    quoi: "Ce fil",
+    // Sur combien de phrases : la synthèse ne les compte pas, c'est l'écran
+    // qui les a découpées.
+    sur: phrases
+      ? `Découpage lu sur ${phrases} phrase${phrases > 1 ? "s" : ""} de quatre mots ou plus. `
+        + "Il ne coûte rien : aucun appel au modèle."
+      : "Aucune phrase de ce fil ne fait quatre mots. Il n'y a rien à découper."
+  });
 }
 
 function renderAvantLeReleve(vue) {
@@ -924,8 +1115,10 @@ async function prendreLesFichiers(fichiers) {
     etat.nonRepris = new Set();
     // **Le relevé de l'ancien fil ne survit pas au nouveau.** Le garder
     // afficherait des prises citant des messages qui ne sont plus là, sous un
-    // fil qui ne les porte pas.
+    // fil qui ne les porte pas. Les idées non plus, pour la même raison.
     etat.releve = null;
+    etat.idees = [];
+    etat.conservee = null;
     etat.phase = "lu";
     if (ecartes.length) {
       refuser({
@@ -942,6 +1135,14 @@ async function prendreLesFichiers(fichiers) {
     });
   }
   redessiner();
+
+  // **Les idées se relèvent après le dessin**, parce que le fil est déjà
+  // lisible et qu'elles ne coûtent rien : le découpage est en base, et il ne
+  // lit que ce que les messages écrivent. Un échec ici ne retire rien au fil.
+  if (etat.fil) {
+    await releverLesIdees();
+    redessiner();
+  }
 
   // **Le fil s'affiche avant d'être rangé.** Le dépliage ne dépend de rien ; le
   // rangement demande le réseau. Les lier ferait perdre le premier quand le
@@ -1092,6 +1293,140 @@ export function lePepinDuNavigateur(erreur) {
   };
 }
 
+/**
+ * Relever les idées que ce fil énonce.
+ *
+ * **Gratuit, et c'est ce qui le rend possible dès le dépliage.** Le découpage
+ * vit en base, et il ne lit que les mots de liaison que les messages écrivent
+ * eux-mêmes : aucun appel au modèle, aucune dépense, rien à décider.
+ *
+ * Un échec ne coûte rien non plus : le fil est déjà à l'écran, et il n'a pas
+ * besoin des idées pour se lire.
+ */
+async function releverLesIdees() {
+  const phrases = lesPhrasesDunFil(etat.fil);
+  if (!phrases.length) {
+    etat.idees = [];
+    return;
+  }
+
+  try {
+    const { supabase } = await import("../../../../assets/js/auth.js");
+    const { data, error } = await supabase.rpc("les_idees_des_textes", { textes: phrases });
+    if (error) return;
+
+    etat.idees = lesIdeesDesCoupes(data ?? [],
+      // La coupe rend un rang dans le tableau qu'on lui a donné : c'est par lui
+      // que chaque idée retrouve la phrase dont elle sort.
+      phrases.map((phrase) => ({ citation: phrase })),
+      { document: texte(etat.fil?.objet) });
+  } catch {
+    // On ne sait pas : la synthèse dira qu'il n'y a rien, et c'est le seul cas
+    // où elle le dira à tort. Le fil, lui, n'a rien perdu.
+  }
+}
+
+/**
+ * Conserver cette lecture, pour pouvoir la rouvrir.
+ *
+ * **Après le relevé, et seulement après.** C'est lui qui coûte ; un fil déplié
+ * sans relevé se redéplie gratuitement, et en garder une ligne ferait une liste
+ * d'essais plutôt qu'une liste de fils lus.
+ *
+ * Un échec d'écriture ne coûte rien de la lecture : elle a eu lieu, elle est à
+ * l'écran, elle se transforme en proposition.
+ */
+async function garderCetteLectureDeFil() {
+  try {
+    const [base, { resolveCurrentBackendProjectId }] = await Promise.all([
+      import("../../../services/lectures-du-fil-supabase.js"),
+      import("../../../services/project-supabase-sync.js")
+    ]);
+
+    const projet = await resolveCurrentBackendProjectId();
+    const ligne = laLigneDunFil(etat, { projectId: projet ?? "" });
+    if (!ligne) return;
+
+    const ecrite = await base.conserverUneLectureDeFil(ligne);
+    if (!ecrite) return;
+
+    // La liste de l'accueil se tient à jour sans second aller-retour : on vient
+    // d'écrire la ligne, on sait ce qu'elle porte.
+    etat.dejaLus = [ecrite, ...(Array.isArray(etat.dejaLus) ? etat.dejaLus : [])];
+  } catch {
+    // Rien : le suivi n'est que ce qu'on garde pour la fois suivante.
+  }
+}
+
+/** Les fils déjà lus sur ce chantier, pour l'accueil. */
+async function chargerLesFilsLus() {
+  etat.dejaLusEnCours = true;
+
+  try {
+    const [base, { resolveCurrentBackendProjectId }] = await Promise.all([
+      import("../../../services/lectures-du-fil-supabase.js"),
+      import("../../../services/project-supabase-sync.js")
+    ]);
+
+    const projet = await resolveCurrentBackendProjectId();
+    if (!projet) return;
+
+    etat.dejaLus = await base.listerLesLecturesDeFils(projet);
+  } catch {
+    // Rien : on ne sait pas, et l'accueil ne dit rien (règle 5).
+  } finally {
+    etat.dejaLusEnCours = false;
+    redessiner();
+  }
+}
+
+/**
+ * Rouvrir une lecture de fil gardée.
+ *
+ * **Elle est gelée.** Le fil tel qu'il a été déplié, les prises telles qu'elles
+ * ont été relevées, les idées telles qu'elles ont été coupées ce jour-là. Rien
+ * ne se recalcule : une analyse qui change sous l'œil de celui qui la relit
+ * n'est plus une analyse (règle 6).
+ */
+async function ouvrirUneLectureDeFil(id) {
+  if (!texte(id)) return;
+
+  const base = await import("../../../services/lectures-du-fil-supabase.js");
+  const ligne = await base.lireUneLectureDeFil(texte(id));
+  const vue = laVueDunFil(ligne);
+
+  if (!vue) {
+    refuser({
+      motif: "cette lecture ne s'ouvre pas",
+      queFaire: ligne
+        ? "Elle n'a pas d'analyse à rouvrir : elle est d'avant leur conservation."
+        : "Elle n'existe plus, ou la base n'a pas répondu."
+    });
+    redessiner();
+    return;
+  }
+
+  Object.assign(etat, vue, {
+    onglet: vue.releve ? ONGLET.ANALYSE : ONGLET.FIL,
+    motif: "", queFaire: "", ouverts: new Set(), nonRepris: new Set(), versement: null
+  });
+  redessiner();
+}
+
+/** Refermer une lecture gardée, et revenir à l'accueil. */
+function revenirALaccueilDesFils() {
+  etat.phase = "vide";
+  etat.conservee = null;
+  etat.fil = null;
+  etat.fichiers = [];
+  etat.releve = null;
+  etat.idees = [];
+  etat.motif = "";
+  etat.queFaire = "";
+  etat.onglet = ONGLET.FIL;
+  redessiner();
+}
+
 async function relever() {
   if (!etat.fil || etat.releve?.enCours) return;
 
@@ -1110,6 +1445,11 @@ async function relever() {
     etat.releve = lePepinDuNavigateur(erreur);
   }
   redessiner();
+
+  // **Gardée dès qu'elle a abouti.** C'est le relevé qui coûte ; attendre un
+  // geste de plus pour le conserver, c'est accepter de le repayer dès qu'on
+  // quitte l'écran.
+  if (etat.releve?.prises) await garderCetteLectureDeFil();
 }
 
 /**
@@ -1276,6 +1616,16 @@ function brancher(hote) {
 
   hote.querySelectorAll("[data-mails-relever]").forEach((bouton) => {
     bouton.addEventListener("click", () => { relever(); });
+  });
+
+  hote.querySelectorAll("[data-fil-garde]").forEach((bouton) => {
+    bouton.addEventListener("click", () => {
+      ouvrirUneLectureDeFil(bouton.getAttribute("data-fil-garde") ?? "");
+    });
+  });
+
+  hote.querySelectorAll("[data-fil-revenir]").forEach((bouton) => {
+    bouton.addEventListener("click", () => { revenirALaccueilDesFils(); });
   });
 
   const emporter = hote.querySelector("[data-mails-telecharger]");
