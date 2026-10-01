@@ -82,6 +82,15 @@ import {
 } from "../_shared/versement/proposition-du-cr.js";
 // @ts-ignore
 import { preparerUneProposition } from "../_shared/versement/atelier-proposition.js";
+// @ts-ignore
+import {
+  LA_TABLE_DES_SUJETS, LE_SELECT_DES_SUJETS, LE_SELECT_DUN_ITEM,
+  laLigneDuneProposition, lesLignesDesItems
+} from "../_shared/versement/les-lignes-dune-proposition.js";
+// @ts-ignore
+import {
+  ABANDONNEE_APRES_MS, GESTE_DES_CR
+} from "../_shared/versement/reveiller-la-file.js";
 
 const entetes = {
   "Access-Control-Allow-Origin": "*",
@@ -92,7 +101,9 @@ const entetes = {
 };
 
 const CASIER = "documents";
-const GESTE = "comptes_rendus";
+// Le mot vit dans `reveiller-la-file.js`, avec la fonction qu'il réveille : la
+// ligne écrite sous un nom et cherchée sous un autre ne se retrouve pas (règle 10).
+const GESTE = GESTE_DES_CR;
 
 /**
  * Ce qu'on s'autorise à durer avant de se rappeler soi-même.
@@ -106,16 +117,6 @@ const GESTE = "comptes_rendus";
  */
 const LE_BUDGET_MS = 110_000;
 
-/**
- * Au bout de combien de temps une ligne prise est tenue pour abandonnée.
- *
- * **Sans cela, une fonction coupée en route bloquerait la file pour toujours** :
- * la ligne reste `en_cours`, et plus aucun réveil ne la prend. Dix minutes est
- * largement au-dessus d'un budget, et bien en dessous de la patience de
- * quelqu'un qui attend ses dix-neuf comptes rendus.
- */
-const ABANDONNEE_APRES_MS = 10 * 60 * 1000;
-
 const texte = (valeur: unknown) => String(valeur ?? "").trim();
 
 function reponse(corps: unknown, statut = 200) {
@@ -127,15 +128,30 @@ function reponse(corps: unknown, statut = 200) {
 
 /* ── Les accès à la base, tels que les services les demandent ─────────────── */
 
-/** Les quatre portes de `preparerUneProposition`, côté serveur. */
+/**
+ * Les quatre portes de `preparerUneProposition`, côté serveur.
+ *
+ * **Elles ne nomment plus aucune colonne.** Chaque ligne vient de
+ * `les-lignes-dune-proposition.js`, le même module que le navigateur appelle.
+ *
+ * Ce n'est pas une élégance : la version précédente écrivait les lignes des
+ * items ainsi — `{ proposition_id, project_id, ...un }` — où `un` portait
+ * `itemType` et `itemKey`, des noms de JavaScript. Les colonnes s'appellent
+ * `item_type` et `item_key`. L'insertion était refusée à chaque fois, et comme
+ * la proposition naît avant les lignes, trois comptes rendus ont donné deux
+ * propositions **vides**.
+ */
 function lesPortesDeLaProposition(client: any, quiDemande: string) {
   return {
     createProposition: async ({ projectId, title, description }: any) => {
+      const ligne = laLigneDuneProposition({
+        projectId, title, description, createdBy: quiDemande
+      });
+      if (!ligne) throw new Error("une proposition sans projet ni titre ne s'écrit pas");
+
       const { data, error } = await client
         .from("propositions")
-        .insert({
-          project_id: projectId, title, description, status: "open", created_by: quiDemande
-        })
+        .insert(ligne)
         .select("id,project_id,number,title,status")
         .single();
       if (error) throw new Error(error.message);
@@ -155,19 +171,23 @@ function lesPortesDeLaProposition(client: any, quiDemande: string) {
      */
     listPropositionItems: async (id: string) => {
       const { data, error } = await client
-        .from("proposition_items").select("*").eq("proposition_id", id);
+        .from("proposition_items").select(LE_SELECT_DUN_ITEM).eq("proposition_id", id);
       if (error) return null;
       return data ?? [];
     },
 
+    /**
+     * **Fusion sur conflit, comme dans le navigateur.** Reproposer la même
+     * affirmation dans la même proposition met la ligne à jour au lieu
+     * d'échouer : c'est ce qui permet à une reprise de repasser sur un compte
+     * rendu déjà porté sans faire échouer tout le lot.
+     */
     soumettreDesItems: async ({ propositionId, projectId, items }: any) => {
-      const lignes = (items ?? []).map((un: any) => ({
-        proposition_id: propositionId,
-        project_id: projectId,
-        ...un
-      }));
+      const lignes = lesLignesDesItems(items, { propositionId, projectId });
       if (!lignes.length) return true;
-      const { error } = await client.from("proposition_items").insert(lignes);
+      const { error } = await client
+        .from("proposition_items")
+        .upsert(lignes, { onConflict: "proposition_id,item_type,item_key" });
       return !error;
     }
   };
@@ -271,14 +291,25 @@ async function unCompteRendu(client: any, {
   // rien lire — la décision vit dans le service, avec son pourquoi.
   const { pages: aLire, lueSur } = pagesALire(lues.pages, cote);
 
-  const { data: sujetsDuProjet } = await client
-    .from("project_subjects").select("id,title,status").eq("project_id", projectId);
+  // `subjects`, et non `project_subjects` : la seconde n'existe pas. La
+  // confrontation se faisait donc sur une liste vide, et chaque point repartait
+  // neuf — un sujet déjà suivi était reproposé comme s'il était inconnu.
+  const { data: sujetsDuProjet, error: pasLus } = await client
+    .from(LA_TABLE_DES_SUJETS).select(LE_SELECT_DES_SUJETS).eq("project_id", projectId);
+
+  // **Ne pas savoir ce que le projet suit n'autorise pas à lire comme s'il ne
+  // suivait rien** (règle 5). Confronter à une liste vide reproposerait chaque
+  // point comme neuf, et la signature créerait des doublons de sujets déjà
+  // ouverts. On s'arrête, en le disant, et la reprise relira.
+  if (pasLus || !Array.isArray(sujetsDuProjet)) {
+    return { motif: "les sujets du chantier n'ont pas pu être relus" };
+  }
 
   const lu = await demanderAuModele("extract-sujets", {
     source_id: "lecture-serveur",
     project_id: projectId,
     pages: aLire,
-    sujets_du_projet: sujetsDuProjet ?? []
+    sujets_du_projet: sujetsDuProjet
   }, autorisation);
 
   if (!lu?.ok && !Array.isArray(lu?.sujets)) {
@@ -301,11 +332,11 @@ async function unCompteRendu(client: any, {
   lecture.lueSur = lueSur;
 
   const relies = verifierLesLiens({
-    points: lecture.points, connus: sujetsDuProjet ?? []
+    points: lecture.points, connus: sujetsDuProjet
   });
   lecture.points = relies.points;
 
-  const confrontes = confrontation(lecture.points, sujetsDuProjet ?? []);
+  const confrontes = confrontation(lecture.points, sujetsDuProjet);
 
   /**
    * **La restitution se pose sur la ligne du document, et rien n'est déposé.**
@@ -353,7 +384,15 @@ async function unCompteRendu(client: any, {
     portes: lesPortesDeLaProposition(client, quiDemande)
   });
 
-  if (!rendu?.ok) return { motif: texte(rendu?.raison) || "la proposition n'a pas pu être préparée" };
+  // **L'échec rend la proposition qu'il a ouverte**, si elle l'a été. Sans cela,
+  // le compte rendu suivant en ouvrirait une autre : trois comptes rendus ont
+  // donné deux propositions vides exactement comme ça (règle 6).
+  if (!rendu?.ok) {
+    return {
+      motif: texte(rendu?.raison) || "la proposition n'a pas pu être préparée",
+      propositionId: texte(rendu?.proposition?.id) || texte(propositionId)
+    };
+  }
   return { propositionId: texte(rendu.proposition?.id) || texte(propositionId) };
 }
 
@@ -477,7 +516,12 @@ serve(async (req) => {
       .from("project_runs")
       .insert({
         project_id: ligne.project_id,
-        geste: "versement",
+        // **Le geste de la file, et non « versement ».** L'onglet Actions lisait
+        // le mot pour écrire « Dépôt de messagerie » sous une lecture de trois
+        // comptes rendus. Le rangement en « Versements » et le caractère
+        // personnel ne changent pas : la politique les tient sur `personnelle`,
+        // pas sur le geste (`202610280001_...`).
+        geste: GESTE,
         personnelle: true,
         titre: `Lecture de ${comptes.total} ${comptes.total > 1 ? "comptes rendus" : "compte rendu"} de chantier`,
         resume: arrete

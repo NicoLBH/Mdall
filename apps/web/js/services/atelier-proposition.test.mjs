@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   cleDAffirmation, etabliRetenu, itemsDeProposition, descriptionDeLaProposition,
-  provenanceRetenue, sansDoublonDItems } from "./atelier-proposition.js";
+  preparerUneProposition, provenanceRetenue, sansDoublonDItems } from "./atelier-proposition.js";
 
 const DEGRE = {
   sujet: "Degré coupe-feu des planchers",
@@ -182,4 +182,35 @@ test("elle arrive jusqu'à l'item qu'on versera", () => {
 test("une ligne qui ne vient d'aucun outil personnel n'en invente pas un", () => {
   const [item] = itemsDeProposition([{ sujet: "Altitude du site", valeur: "890 m" }]);
   assert.equal(item.payload.etabli, null);
+});
+
+/**
+ * **Une proposition ouverte ne se perd pas, même quand ses lignes échouent.**
+ *
+ * C'est ce qui a manqué en production : la lecture de trois comptes rendus
+ * échouait sur chacun, et comme l'échec ne rendait aucune proposition, le compte
+ * rendu suivant en ouvrait une autre. Deux propositions **entièrement vides**,
+ * et personne pour dire laquelle garder.
+ *
+ * Ce qui a eu lieu ne devient pas faux (règle 6) : celui qui enchaîne enrichit
+ * celle-là.
+ */
+test("un lot qui n'a pas pu être porté rend quand même sa proposition", async () => {
+  const rendu = await preparerUneProposition({
+    projectId: "c-1",
+    titre: "Lecture de 3 comptes rendus",
+    affirmations: [DEGRE],
+    portes: {
+      createProposition: async () => ({ id: "p-1", project_id: "c-1", number: 7 }),
+      loadProposition: async () => null,
+      listPropositionItems: async () => [],
+      // La base refuse les lignes : c'est exactement le défaut de novembre.
+      soumettreDesItems: async () => false
+    }
+  });
+
+  assert.equal(rendu.ok, false);
+  assert.equal(rendu.proposition?.id, "p-1",
+    "l'échec oublie la proposition ouverte : la suivante en ouvrirait une autre");
+  assert.match(rendu.raison, /n'ont pas pu/);
 });

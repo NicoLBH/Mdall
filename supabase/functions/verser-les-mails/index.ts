@@ -46,6 +46,10 @@ import { verser } from "../_shared/versement/le-versement-en-ordre.js";
 import { laLigneDunVersement } from "../_shared/versement/le-journal-du-depouillement.js";
 // @ts-ignore
 import { SORT, noter, phraseDuConvoi } from "../_shared/versement/le-convoi.js";
+// @ts-ignore
+import {
+  ABANDONNEE_APRES_MS, GESTE_DES_MAILS
+} from "../_shared/versement/reveiller-la-file.js";
 
 const entetes = {
   "Access-Control-Allow-Origin": "*",
@@ -215,10 +219,30 @@ serve(async (req) => {
   // messages à déplier. Sans ce filtre, cette fonction en aurait pris une,
   // n'aurait trouvé aucun fichier, et l'aurait marquée en échec : une mise à
   // niveau de dix-neuf comptes rendus perdue par la fonction d'à côté.
+  // **Une ligne prise et jamais finie se referme, elle ne se rejoue pas.**
+  //
+  // Une fonction coupée net laisse sa ligne `en_cours` : l'onglet Actions montre
+  // alors un dépôt qui tourne depuis des heures et que personne ne fait. La
+  // reprendre serait pire — les messages déjà rangés le seraient deux fois. On
+  // la referme donc en échec, en le disant, et celui qui veut la refaire la
+  // relance lui-même : lui seul sait si son dépôt vaut un second envoi
+  // (fondamental 13 — un prix découvert après coup n'entre pas dans la décision).
+  const abandonnee = new Date(Date.now() - ABANDONNEE_APRES_MS).toISOString();
+  await client
+    .from("versements")
+    .update({
+      statut: "echec",
+      arrete: "le serveur a été coupé pendant ce dépôt : relancez-le pour le reprendre",
+      fini_le: new Date().toISOString()
+    })
+    .eq("geste", GESTE_DES_MAILS)
+    .eq("statut", "en_cours")
+    .lt("pris_le", abandonnee);
+
   const { data: file, error: erreurDeLecture } = await client
     .from("versements")
     .select("id,project_id,fichiers,statut")
-    .eq("geste", "mails")
+    .eq("geste", GESTE_DES_MAILS)
     .eq("statut", "en_attente")
     .order("cree_le", { ascending: true })
     .limit(1);

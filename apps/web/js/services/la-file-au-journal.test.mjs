@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { laFileAuJournal, leMotDeLaFile, lesVersementsAuJournal } from "./la-file-au-journal.js";
+import {
+  estUnGesteDeLaFile, laFileAuJournal, laProvenanceDuGeste, leMotDeLaFile, lesVersementsAuJournal
+} from "./la-file-au-journal.js";
 import {
   LE_BATTEMENT_DU_JOURNAL, ORIGINE, executionsAGarder, partitionnerActions, quelqueChoseTourne
 } from "./run-partition.js";
@@ -244,4 +246,40 @@ test("une lecture en cours n'est jamais peinte comme faite", () => {
   assert.equal(ligne.details.corpus.steps[0].statut, "en-cours");
   assert.equal(ligne.endedAt, null);
   assert.equal(ligne.durationMs, null);
+});
+
+/**
+ * **Le geste décide de l'onglet, et l'onglet décide de qui lit.**
+ *
+ * Une course rangée dans « Partagées » annoncerait comme lue par tout le projet
+ * ce que la base ne rend qu'à son auteur. Les deux gestes de la file — les mails
+ * et les comptes rendus — vont donc dans « Versements », et rien d'autre n'y va.
+ */
+test("les deux gestes de la file se reconnaissent, et eux seuls", () => {
+  assert.equal(estUnGesteDeLaFile("mails"), true);
+  assert.equal(estUnGesteDeLaFile("comptes_rendus"), true);
+  assert.equal(estUnGesteDeLaFile("versement"), false);
+  assert.equal(estUnGesteDeLaFile("fusion"), false);
+  assert.equal(estUnGesteDeLaFile(""), false);
+  assert.equal(estUnGesteDeLaFile(), false);
+});
+
+/**
+ * **Le défaut vu à l'écran** : une lecture de trois comptes rendus portait
+ * « Dépôt de messagerie » en sous-titre, parce que la course finie et la ligne
+ * vive ne lisaient pas la même phrase.
+ */
+test("une lecture de comptes rendus ne se dit pas dépôt de messagerie", () => {
+  assert.equal(laProvenanceDuGeste("comptes_rendus"), "Lecture de comptes rendus");
+  assert.equal(laProvenanceDuGeste("mails"), "Dépôt de messagerie");
+});
+
+test("la ligne vive et la course finie disent la même provenance", () => {
+  const ligne = laFileAuJournal({
+    id: "f-1", geste: "comptes_rendus", statut: "en_cours",
+    documents: [{ id: "d-1", nom: "1824_CR_12.pdf" }], cree_le: "2026-10-01T09:18:00Z"
+  });
+
+  assert.equal(ligne.triggerLabel, laProvenanceDuGeste("comptes_rendus"));
+  assert.equal(ligne.trigger.label, laProvenanceDuGeste("comptes_rendus"));
 });

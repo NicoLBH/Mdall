@@ -17,6 +17,9 @@
     "build:fonctions": "npm run prepare:versement",
     "build:console": "npm run prepare:console"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "katex": "^0.16.9",
     "unpdf": "^1.8.1"

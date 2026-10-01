@@ -2,8 +2,19 @@ import { store } from "../store.js";
 import { ORIGINE, executionsAGarder } from "./run-partition.js";
 import { estUnDepotAbouti, phraseDuDepot } from "./le-mot-dun-depot.js";
 import { cestUnIdDeProjet, laConcordanceSansCeProjet, leProjetOuLonEcrit } from "./le-projet-ou-lon-ecrit.js";
-import { LE_GESTE } from "./le-journal-du-depouillement.js";
-import { lesVersementsAuJournal } from "./la-file-au-journal.js";
+import {
+  estUnGesteDeLaFile, laProvenanceDuGeste, lesVersementsAuJournal
+} from "./la-file-au-journal.js";
+import { lesReveilsADemander } from "./reveiller-la-file.js";
+
+/**
+ * Quand chaque fonction de bord a été demandée pour la dernière fois.
+ *
+ * **Par page, et non par projet.** C'est le compte de l'appel, pas celui du
+ * chantier : réveiller `lire-les-comptes-rendus` sert toute la file, qui est
+ * commune.
+ */
+const LE_DERNIER_REVEIL = new Map();
 import { LE_SELECT_DUN_DOCUMENT } from "./les-colonnes-dun-document.js";
 import { ensureProjectDocumentsState } from "./project-documents-store.js";
 import { ensureProjectAutomationDefaults } from "./project-automation.js";
@@ -960,15 +971,19 @@ function mapProjectRunRowToLogEntry(row = {}) {
   // **L'origine se lit sur le geste, et elle décide de l'onglet.** Un versement
   // rangé dans « Partagées » annoncerait comme lu par tout le projet ce que la
   // base ne rend qu'à son auteur (`202610280001_...`).
-  const origine = geste === LE_GESTE ? ORIGINE.VERSEMENT : ORIGINE.PROJET;
+  // **Les deux gestes de la file se rangent dans « Versements ».** La liste n'est
+  // plus un seul mot : une lecture de comptes rendus est, comme un dépôt de
+  // mails, un travail long et personnel que le serveur fait pour vous.
+  const deLaFile = estUnGesteDeLaFile(geste);
+  const origine = deLaFile ? ORIGINE.VERSEMENT : ORIGINE.PROJET;
 
-  const triggerLabel = geste === LE_GESTE
-    ? "Dépôt de messagerie"
+  const triggerLabel = deLaFile
+    ? laProvenanceDuGeste(geste)
     : (row.proposition_id ? "Fusion d'une proposition" : "Exécution du projet");
 
   return {
     id: safeString(row.id),
-    name: safeString(row.titre) || (geste === LE_GESTE ? "Versement" : "Fusion"),
+    name: safeString(row.titre) || (deLaFile ? "Versement" : "Fusion"),
     kind: geste,
     agentKey: geste,
     lifecycleStatus: "completed",
@@ -1597,8 +1612,37 @@ export async function syncProjectActionsFromSupabase(options = {}) {
   };
 
   /**
+   * Rappeler les fonctions de bord dont la file porte du travail.
+   *
+   * **Sans attendre, et sans rien dire à l'écran.** Un réveil qui n'aboutit pas
+   * ne perd rien : la ligne reste là, et la relecture suivante redemandera.
+   * Attendre ici rendrait l'onglet Actions aussi lent que le travail qu'il
+   * décrit — ce qu'on vient précisément de retirer.
+   *
+   * Ce qu'on réveille et ce qu'on laisse travailler se décide dans
+   * `reveiller-la-file.js`, qui est pur et éprouvé.
+   */
+  const reveillerCeQuiAttend = (lignes) => {
+    for (const fonction of lesReveilsADemander(lignes, { dejaReveille: LE_DERNIER_REVEIL })) {
+      LE_DERNIER_REVEIL.set(fonction, Date.now());
+      void (async () => {
+        try {
+          await fetch(`${SUPABASE_URL}/functions/v1/${fonction}`, {
+            method: "POST",
+            headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
+            body: "{}"
+          });
+        } catch (erreur) {
+          console.warn(`[actions] réveil de ${fonction} impossible`, erreur);
+        }
+      })();
+    }
+  };
+
+  /**
    * **Ce qui n'a pas encore eu lieu**, et que le journal doit pourtant montrer :
-   * les dépôts de messagerie que le serveur n'a pas fini de ranger.
+   * les dépôts de messagerie et les lectures de comptes rendus que le serveur
+   * n'a pas fini de traiter.
    *
    * Ils vivent dans `versements`, pas dans `project_runs` : une file existe pour
    * changer d'état, un journal pour garder ce qui s'est passé. Une table qui
@@ -1639,6 +1683,18 @@ export async function syncProjectActionsFromSupabase(options = {}) {
   // **Les versements vifs passent devant.** Ils ne sont pas dans `lues` : ils
   // n'ont pas eu lieu.
   const enFile = lesVersementsAuJournal(fileRows);
+
+  // **Et s'il y a de quoi réveiller, on réveille.**
+  //
+  // Une fonction de bord coupée net laisse sa ligne `en_cours` ; une reprise
+  // existe au bout de dix minutes, mais elle ne sert à rien si personne ne
+  // rappelle la fonction. Or seul le navigateur peut l'appeler : ces fonctions
+  // travaillent sous l'identité de celui qui demande, pas avec la clé de
+  // service. Une lecture lancée a tourné dix-huit minutes sans avancer d'un pas.
+  //
+  // C'est ici que cela se fait, parce que c'est l'écran où l'on vient voir où en
+  // est son travail.
+  reveillerCeQuiAttend(Array.isArray(fileRows) ? fileRows : []);
 
   // **Et ils comptent comme déjà rendus.** Sans cela, la seconde relecture en
   // voyait deux : celui que la file vient de rendre, et celui que la page garde

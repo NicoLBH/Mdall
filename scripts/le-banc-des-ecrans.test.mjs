@@ -13,6 +13,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import process from "node:process";
 
 import { lesNomsImportes } from "./le-banc-des-ecrans.mjs";
 
@@ -27,13 +28,45 @@ import("${BANC}")
   });
 `;
 
+const LE_DELAI_MS = 120_000;
+
 const enfant = spawnSync(process.execPath,
   ["--experimental-vm-modules", "--no-warnings", "--input-type=module", "-e", ENFANT],
-  { encoding: "utf8", timeout: 120_000 });
+  { encoding: "utf8", timeout: LE_DELAI_MS });
+
+/**
+ * **Pourquoi l'enfant n'a rien rendu, en le nommant.**
+ *
+ * Le message disait « le banc n'a rien rendu », et c'est tout ce qu'on a eu
+ * quand l'intégration continue est tombée : trois épreuves en échec, aucune
+ * cause. L'enfant était mort d'un **signal** — un segment de mémoire perdu dans
+ * `vm.SourceTextModule`, sous un Node plus ancien que celui du projet —, et un
+ * signal ne laisse ni sortie, ni erreur, ni code de retour.
+ *
+ * Ne pas savoir n'autorise pas à se taire sur ce qu'on sait (règle 5) : le
+ * signal, le code, et le runtime sont là, et ils disent lequel des trois
+ * problèmes on a.
+ */
+function pourquoiRien() {
+  if (enfant.error) return `le banc n'a pas pu être lancé : ${enfant.error.message}`;
+
+  if (enfant.signal) {
+    const delai = enfant.signal === "SIGTERM"
+      ? ` (le délai de ${Math.round(LE_DELAI_MS / 1000)} s est peut-être dépassé)`
+      : "";
+    return `le banc est mort du signal ${enfant.signal}${delai}, sous Node ${process.version}`
+      + " — ce n'est pas une faute des écrans, mais du moteur qui les évalue :"
+      + " « vm.SourceTextModule » perd un segment de mémoire sous Node 20."
+      + " Le runtime du projet est dans « .nvmrc ».";
+  }
+
+  if (enfant.stderr) return enfant.stderr;
+  return `le banc a rendu ${enfant.status} sans rien écrire, sous Node ${process.version}`;
+}
 
 const rendu = enfant.status === 0 && enfant.stdout
   ? JSON.parse(enfant.stdout)
-  : { panne: enfant.stderr || "le banc n'a rien rendu" };
+  : { panne: pourquoiRien() };
 
 /**
  * **Le défaut que ceci attrape, et il est parti deux fois en production.**
@@ -105,4 +138,39 @@ test("les noms importés se lisent, sous toutes leurs formes", () => {
   assert.deepEqual([...lus.get("./quatre.js")], []);
   assert.deepEqual([...lus.get("./cinq.js")], []);
   assert.deepEqual([...lus.get("./six.js")], ["e", "f"]);
+});
+
+/**
+ * **Le message d'une panne doit nommer la panne.**
+ *
+ * « le banc n'a rien rendu » est ce que l'intégration continue a dit pendant
+ * trois échecs : rien sur la cause, rien sur le runtime, rien à chercher. Une
+ * phrase qui ne dit pas pourquoi coûte une heure à chaque fois (règle 12).
+ */
+test("une panne de l'enfant se nomme", () => {
+  // On n'attend pas qu'elle arrive : on la pose, et l'on vérifie ce qui se dit.
+  const dit = (quoi) => {
+    const garde = { error: enfant.error, signal: enfant.signal, stderr: enfant.stderr,
+      status: enfant.status };
+    Object.assign(enfant, { error: undefined, signal: null, stderr: "", status: 1 }, quoi);
+    try {
+      return pourquoiRien();
+    } finally {
+      Object.assign(enfant, garde);
+    }
+  };
+
+  assert.match(dit({ signal: "SIGSEGV" }), /SIGSEGV/);
+  assert.match(dit({ signal: "SIGSEGV" }), /\.nvmrc/,
+    "la phrase ne dit pas où lire le runtime du projet");
+  assert.match(dit({ signal: "SIGTERM" }), /délai/,
+    "un enfant tué par le délai se dit comme un plantage");
+  assert.match(dit({ error: new Error("spawn ENOENT") }), /ENOENT/);
+  assert.match(dit({ stderr: "ReferenceError: machin" }), /ReferenceError/);
+  assert.match(dit({ status: 7 }), /7/,
+    "un code de retour sans sortie ne se dit pas");
+  // Et aucune de ces phrases n'est celle qui ne disait rien.
+  for (const quoi of [{ signal: "SIGSEGV" }, { status: 7 }, { error: new Error("x") }]) {
+    assert.doesNotMatch(dit(quoi), /^le banc n'a rien rendu$/);
+  }
 });

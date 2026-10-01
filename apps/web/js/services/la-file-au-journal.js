@@ -28,15 +28,37 @@
 import { ORIGINE } from "./run-partition.js";
 import { LE_GESTE, leNomDeLaction } from "./le-journal-du-depouillement.js";
 import { phraseDuConvoi } from "./le-convoi.js";
-import { GESTE_DES_CR } from "./lancer-la-lecture-des-cr.js";
+import { GESTE_DES_CR, LA_FONCTION_DU_GESTE, leGesteDeLaLigne } from "./reveiller-la-file.js";
 import { phraseDeLaFile } from "./la-file-des-comptes-rendus.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const nombre = (valeur) => Number(valeur) || 0;
 
-/** Le geste que cette ligne demande. `mails` quand rien ne le dit. */
-function leGeste(ligne) {
-  return texte(ligne?.geste) === GESTE_DES_CR ? GESTE_DES_CR : "mails";
+/**
+ * Ce geste est-il un travail de la file ?
+ *
+ * **La question se pose sur une course finie, pas sur une ligne de file.** Une
+ * course écrit son geste dans `project_runs`, et l'onglet qui la range en dépend
+ * : rangée dans « Partagées », elle annoncerait comme lue par tout le projet ce
+ * que la base ne rend qu'à son auteur.
+ *
+ * La liste vient de `LA_FONCTION_DU_GESTE` : un geste de la file est, par
+ * définition, un geste qu'une fonction de bord vide (règle 10).
+ */
+export function estUnGesteDeLaFile(geste = "") {
+  return Object.hasOwn(LA_FONCTION_DU_GESTE, texte(geste));
+}
+
+/**
+ * D'où vient ce geste, tel que l'écran le dit sous le nom de l'exécution.
+ *
+ * **Deux gestes, deux phrases, un seul endroit où elles s'écrivent** (règle 10).
+ * Elles étaient écrites deux fois — une pour la ligne vive, une pour la course
+ * finie — et la seconde n'en connaissait qu'une : une lecture de trois comptes
+ * rendus s'affichait « Dépôt de messagerie », ce qu'elle n'est pas.
+ */
+export function laProvenanceDuGeste(geste = "") {
+  return texte(geste) === GESTE_DES_CR ? "Lecture de comptes rendus" : "Dépôt de messagerie";
 }
 
 /**
@@ -48,7 +70,7 @@ function leGeste(ligne) {
  * compte rendu » sur une file de dix-neuf.
  */
 export function combienDePieces(ligne = null) {
-  const liste = leGeste(ligne) === GESTE_DES_CR ? ligne?.documents : ligne?.fichiers;
+  const liste = leGesteDeLaLigne(ligne) === GESTE_DES_CR ? ligne?.documents : ligne?.fichiers;
   return Array.isArray(liste) ? liste.length : 0;
 }
 
@@ -62,7 +84,7 @@ export function combienDePieces(ligne = null) {
  */
 export function leMotDeLaFile(ligne = null) {
   const combien = combienDePieces(ligne);
-  const desCr = leGeste(ligne) === GESTE_DES_CR;
+  const desCr = leGesteDeLaLigne(ligne) === GESTE_DES_CR;
 
   if (texte(ligne?.statut) === "en_attente") {
     return desCr
@@ -99,14 +121,14 @@ export function laFileAuJournal(ligne = null) {
   if (!id) return null;
 
   const combien = combienDePieces(ligne);
-  const desCr = leGeste(ligne) === GESTE_DES_CR;
+  const desCr = leGesteDeLaLigne(ligne) === GESTE_DES_CR;
   const debut = ligne?.cree_le ? new Date(ligne.cree_le).getTime() : Date.now();
 
   // **Deux gestes, deux noms, un seul endroit où ils s'écrivent** (règle 10).
   const nom = desCr
     ? `Lecture de ${combien} ${combien > 1 ? "comptes rendus" : "compte rendu"} de chantier`
     : leNomDeLaction(combien);
-  const dAou = desCr ? "Lecture de comptes rendus" : "Dépôt de messagerie";
+  const dAou = laProvenanceDuGeste(leGesteDeLaLigne(ligne));
 
   return {
     // **L'identifiant de la file, tel quel.** Quand la course finira par

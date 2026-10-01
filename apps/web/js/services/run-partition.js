@@ -82,8 +82,8 @@ export const ONGLETS = [
     cle: ORIGINE.VERSEMENT,
     libelle: "Versements",
     icone: "mail",
-    explication: "Ce que vous avez versé dans le projet : mails, pièces jointes. "
-      + "Vous seul les lisez."
+    explication: "Ce que vous avez versé dans le projet, et ce que le serveur en a "
+      + "lu : mails, pièces jointes, comptes rendus. Vous seul le lisez."
   }
 ];
 
