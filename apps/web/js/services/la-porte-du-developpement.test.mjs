@@ -29,6 +29,16 @@ test("la porte s'ouvre, et se referme au bout de dix secondes", () => {
  * et donc fermée aujourd'hui, par chance. La chance n'est pas un garde-fou.
  */
 test("une porte jamais ouverte est fermée", () => {
+  // **Et pas par chance.** `Number(null)` vaut 0 ; avec un instant courant
+  // lointain, la soustraction dépasse dix secondes et la porte se trouve
+  // fermée sans que rien ne l'ait décidé. On l'éprouve donc **près de zéro**,
+  // là où le défaut se voit : c'est le contrat de la fonction, et il ne dépend
+  // pas de la grandeur de l'horloge qui l'appelle.
+  assert.equal(laPorteEstOuverte(null, 5_000), false,
+    "une porte jamais ouverte s'ouvre dans les dix premières secondes de 1970");
+  assert.equal(laPorteEstOuverte("", 5_000), false);
+  assert.equal(ceQuiResteDeLaPorte(null, 5_000), 0);
+
   assert.equal(laPorteEstOuverte(null, 1_000_000), false);
   assert.equal(laPorteEstOuverte(undefined, 1_000_000), false);
   assert.equal(laPorteEstOuverte("", 1_000_000), false);

@@ -252,3 +252,22 @@ test("une idée sans mot de liaison se relève quand même", () => {
   assert.ok(sansMot, "l'idée a été refusée faute de mot");
   assert.equal(sansMot.mot, "");
 });
+
+/**
+ * **Le mot de liaison traverse la coupe.**
+ *
+ * C'est la base qui dit par quel tour une phrase a été coupée ; le perdre en
+ * chemin laisserait la synthèse d'un document ne dire que « deux idées », ce
+ * qui ne se corrige pas.
+ */
+test("une coupe porte son mot de liaison jusqu'à l'idée", () => {
+  const idees = lesIdeesDesCoupes(
+    [{ rang: 1, avant: "terrain argileux", lien: "cause", apres: "plancher beton", mot: "donc" }],
+    [{ citation: "Le terrain argileux est confirmé donc le plancher beton sera repris." }],
+    { document: "1824_CR_12.pdf" }
+  );
+
+  assert.equal(idees.length, 1);
+  assert.equal(idees[0].mot, "donc");
+  assert.equal(idees[0].document, "1824_CR_12.pdf");
+});

@@ -211,3 +211,20 @@ test("un fil sans message ne donne rien à couper", () => {
   assert.deepEqual(lesPhrasesDunFil(null), []);
   assert.deepEqual(lesPhrasesDunFil(), []);
 });
+
+/**
+ * **Ce qu'un message cite ne se coupe pas.**
+ *
+ * Un fil recopie : le troisième message porte le premier, et le cinquième les
+ * quatre autres. Couper les citations compterait la même idée autant de fois
+ * qu'elle a été recopiée, et la ferait paraître d'autant plus solide — alors
+ * qu'une seule personne l'a écrite, une seule fois.
+ */
+test("les citations d'un message ne se coupent pas", () => {
+  assert.deepEqual(lesPhrasesDunFil({
+    messages: [{
+      propos: "Le plancher beton exige une etude de sol",
+      cite: "Le terrain argileux est confirmé donc le plancher sera repris"
+    }]
+  }), ["Le plancher beton exige une etude de sol"]);
+});
