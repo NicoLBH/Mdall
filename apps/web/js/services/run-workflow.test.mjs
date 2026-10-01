@@ -360,3 +360,57 @@ test("une ligne de journal se lit, chaîne ou objet", () => {
   assert.match(noeuds[0].detail, /quatre points/);
   assert.match(noeuds[1].detail, /cinq points/);
 });
+
+/* ── Ce qui a tourné ensemble se porte sur la boîte ──────────────────────── */
+
+/**
+ * **Trois comptes rendus lus de front ne sont pas trois étapes à la suite.**
+ *
+ * Le chemin les alignait de gauche à droite, chacun avec sa durée : on
+ * additionnait de l'œil, et l'on lisait une heure là où le serveur avait mis
+ * vingt minutes. La colonne est posée **sur la boîte** : le dessin n'a pas à
+ * refaire le regroupement, et deux regroupements auraient fini par ne plus
+ * s'accorder (règle 4).
+ */
+test("un geste porte la colonne de chacune de ses étapes", () => {
+  const nodes = buildRunGraph({
+    id: "file-1",
+    details: {
+      corpus: {
+        geste: "comptes_rendus",
+        steps: [
+          { id: "a", label: "CR 12", debut: 1000, ms: 5000, statut: "ok", lignes: [] },
+          { id: "b", label: "CR 13", debut: 1000, ms: 4000, statut: "ok", lignes: [] },
+          { id: "c", label: "CR 14", debut: 1000, ms: 6000, statut: "ok", lignes: [] },
+          { id: "d", label: "CR 15", debut: 8000, ms: 3000, statut: "ok", lignes: [] }
+        ]
+      }
+    }
+  });
+
+  assert.deepEqual(nodes.map((une) => [une.id, une.colonne]),
+    [["a", 0], ["b", 0], ["c", 0], ["d", 1]]);
+});
+
+/**
+ * **Une étape qui n'a pas commencé n'est dans aucune colonne.** La ranger avec
+ * ses voisines affirmerait qu'elles partiront ensemble — ce que personne ne
+ * sait, et ce qui est faux dès qu'une lecture déborde (règle 5).
+ */
+test("ce qui attend ne s'empile avec rien", () => {
+  const nodes = buildRunGraph({
+    id: "file-2",
+    details: {
+      corpus: {
+        geste: "comptes_rendus",
+        steps: [
+          { id: "a", label: "CR 12", debut: 1000, statut: "en-cours", lignes: [] },
+          { id: "b", label: "CR 13", statut: "attente", lignes: [] },
+          { id: "c", label: "CR 14", statut: "attente", lignes: [] }
+        ]
+      }
+    }
+  });
+
+  assert.deepEqual(nodes.map((une) => une.colonne), [0, 1, 2]);
+});

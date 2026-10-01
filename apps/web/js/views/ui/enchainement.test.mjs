@@ -113,3 +113,74 @@ test("une étape qui déclare `rang: null` n'est pas rangée au tronc", () => {
   assert.doesNotMatch(html, /data-run-graph-rang="0"/);
   assert.equal((html.match(/run-graph__link/g) ?? []).length, 1);
 });
+
+/* ── Ce qui a tourné ensemble se dessine ensemble ────────────────────────── */
+
+/**
+ * **Trois comptes rendus lus de front ne sont pas trois étapes à la suite.**
+ *
+ * Le chemin les alignait de gauche à droite, chacun avec sa durée : on
+ * additionnait de l'œil, et l'on lisait une heure là où le serveur avait mis
+ * vingt minutes.
+ */
+test("deux étapes de la même colonne s'empilent", () => {
+  const html = renderEnchainement([
+    { id: "a", label: "Un", colonne: 0 },
+    { id: "b", label: "Deux", colonne: 0 },
+    { id: "c", label: "Trois", colonne: 1 }
+  ]);
+
+  assert.match(html, /run-graph__canvas--colonnes/);
+  assert.equal((html.match(/run-graph__colonne/g) ?? []).length, 2, "deux colonnes, pas trois");
+  // Et un seul trait : il relie les colonnes, pas les boîtes.
+  assert.equal((html.match(/run-graph__link/g) ?? []).length, 1);
+});
+
+/**
+ * **Une file reste une file.** Envelopper chaque boîte d'une colonne d'une
+ * seule poserait un étage de balises sur tous les chemins du produit, et la
+ * feuille de style aurait deux cas à tenir pour le même dessin.
+ */
+test("un chemin sans rien de parallèle ne gagne pas de colonnes", () => {
+  const html = renderEnchainement([
+    { id: "a", label: "Un", colonne: 0 },
+    { id: "b", label: "Deux", colonne: 1 }
+  ]);
+
+  assert.doesNotMatch(html, /run-graph__canvas--colonnes/);
+  assert.doesNotMatch(html, /run-graph__colonne/);
+});
+
+/**
+ * **Une étape sans colonne ne rejoint pas sa voisine.** Ne pas savoir quand
+ * elle a tourné n'autorise pas à l'empiler avec celle d'à côté (règle 5).
+ */
+test("une étape sans colonne fait colonne seule", () => {
+  const html = renderEnchainement([
+    { id: "a", label: "Un", colonne: 0 },
+    { id: "b", label: "Deux", colonne: 0 },
+    { id: "c", label: "Trois" },
+    { id: "d", label: "Quatre" }
+  ]);
+
+  assert.equal((html.match(/run-graph__colonne/g) ?? []).length, 3);
+});
+
+/* ── L'ancrage est sur la boîte ──────────────────────────────────────────── */
+
+/**
+ * **Chaque boîte montre par où elle entre et par où elle sort.**
+ *
+ * Les ancrages étaient aux deux bouts du trait : dans une colonne de trois
+ * boîtes, une seule des trois en recevait un, et les deux autres semblaient ne
+ * tenir à rien.
+ */
+test("chaque boîte porte ses deux ancrages", () => {
+  const html = renderEnchainement([{ id: "a", label: "Un" }, { id: "b", label: "Deux" }]);
+
+  assert.equal((html.match(/run-graph__port--entree/g) ?? []).length, 2);
+  assert.equal((html.match(/run-graph__port--sortie/g) ?? []).length, 2);
+  // Décoratifs : un lecteur d'écran n'a rien à en entendre. Quatre ancrages
+  // pour deux boîtes, et chacun muet.
+  assert.equal((html.match(/run-graph__port[^"]*" aria-hidden="true"/g) ?? []).length, 4);
+});

@@ -7,7 +7,7 @@ import { renderTousLesSujets } from "./views/tous-les-sujets.js";
 import { renderToutesLesPropositions } from "./views/toutes-les-propositions.js";
 import { renderCopiloteTransversal } from "./views/copilote-transversal.js";
 import { renderLeReferentiel } from "./views/le-referentiel.js";
-import { ROUTE_DU_CARNET, adresseDunAncienLien } from "./services/mon-carnet.js";
+import { ROUTE_DU_CARNET } from "./services/mon-carnet.js";
 import {
   LE_COPILOTE, LE_REFERENTIEL, TOUS_LES_SUJETS, TOUTES_LES_PROPOSITIONS, cheminDe
 } from "./services/ecrans-transversaux.js";
@@ -116,15 +116,6 @@ function route() {
   if (parts[0] === "project") {
     const projectId = parts[1];
     const tab = parts[2] || "dashboard";
-
-    // **Un ancien lien ne se perd pas en silence.** `#project/<id>/situations`
-    // était l'adresse de l'onglet ; il n'existe plus, et sans ceci la page
-    // retomberait sur Fichiers sans rien dire (règle 5).
-    const ailleurs = adresseDunAncienLien(parts);
-    if (ailleurs) {
-      location.hash = ailleurs;
-      return;
-    }
 
     store.currentProjectId = projectId || null;
     syncCurrentProjectFromRoute(projectId);

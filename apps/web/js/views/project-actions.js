@@ -24,9 +24,12 @@ import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
   renderDataTableEmptyState,
   renderDataTableHead,
-  renderDataTableShell
+  renderDataTableShell,
+  renderDataTableCount,
+  COLONNE_DU_COMPTE
 } from "./ui/data-table-shell.js";
 import { normalizePaginationState, paginateItems, renderPaginationControls } from "./ui/pagination.js";
+import { garderLesPlaces } from "./ui/garder-le-defilement.js";
 import { dureeDite } from "../utils/duree-dite.js";
 
 function getRunSuccessIconSvg() {
@@ -294,13 +297,11 @@ function renderRunCountInline(total) {
 
   const dit = lesExecutionsDites(totalRuns);
 
-  return `
-    <span class="workflow-runs__head-count" title="${escapeHtml(
-      `${dit} journalisée${totalRuns > 1 ? "s" : ""}`)}">
-      ${getRunHistoryIconSvg()}
-      <span>${escapeHtml(dit)}</span>
-    </span>
-  `;
+  return renderDataTableCount({
+    iconeHtml: getRunHistoryIconSvg(),
+    dit,
+    titre: `${dit} journalisée${totalRuns > 1 ? "s" : ""}`
+  });
 }
 
 /**
@@ -330,8 +331,8 @@ function renderRunRows(entries) {
     ].filter(Boolean);
 
     return `
-      <div class="workflow-runs__row">
-        <div class="workflow-runs__cell workflow-runs__cell--action">
+      <div class="data-table-shell__row">
+        <div class="data-table-shell__cell data-table-shell__cell--titre">
           ${/*
             **Le gabarit des sujets, et non un second.** Les titres de lignes
             étaient dessinés ici, avec leurs propres classes : deux graisses,
@@ -364,7 +365,7 @@ function renderRunRows(entries) {
           </span>
         </div>
 
-        <div class="workflow-runs__cell workflow-runs__cell--when">
+        <div class="data-table-shell__cell workflow-runs__cell--when">
           <span class="workflow-runs__when-line">
             <span class="workflow-runs__when-icon">${svgIcon("calendar", { className: "octicon" })}</span>
             ${escapeHtml(formatDateTime(entry.startedAt))}
@@ -567,7 +568,7 @@ function renderRunsTable() {
            * Il se pose à droite, où l'œil va chercher un total.
            */
           html: renderRunCountInline(entries.length),
-          className: "workflow-runs__head-col workflow-runs__head-col--compte"
+          className: COLONNE_DU_COMPTE
         }
       ]
     }),
@@ -753,7 +754,8 @@ function renderRunGraph(entry) {
           ? `<p class="run-graph__unmeasured">Aucune étape de cette exécution n'a enregistré de journal : il n'y a rien à ouvrir. Les exécutions plus récentes en tiennent un.</p>`
           : ""
       }
-      <div class="run-graph" data-run-graph-viewport>
+      <div class="run-graph" data-run-graph-viewport
+        data-garde-le-defilement="chemin-de-lexecution">
         ${
           // Le même dessin que la chaîne d'une variante, et volontairement :
           // deux enchaînements dessinés deux fois donneraient deux gris et deux
@@ -981,6 +983,10 @@ function getOpenRun() {
 }
 
 function renderProjectActionsContent(root) {
+  // **Ce qui défile garde sa place.** Le chemin d'une exécution se redessine
+  // tout seul pendant qu'une file avance ; sans cette garde, il revenait à
+  // gauche toutes les trois secondes, pendant qu'on le parcourait.
+  const reposerLesPlaces = garderLesPlaces(root);
   const open = getOpenRun();
   // Trois niveaux, et le plus profond n'existe que si le précédent existe : une
   // étape ouverte sans son exécution serait une page orpheline.
@@ -1010,6 +1016,8 @@ function renderProjectActionsContent(root) {
   if (etape) bindRunLog(root);
   else if (open) bindRunGraph(root);
   else brancherLeRail(root);
+
+  reposerLesPlaces();
 
   // **Après avoir dessiné, décider s'il faut recommencer.** L'état vient d'être
   // lu : c'est le seul moment où l'on sait s'il reste quelque chose à suivre.

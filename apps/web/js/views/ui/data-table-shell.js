@@ -86,3 +86,40 @@ export function renderDataTableShell({
     </div>
   `;
 }
+
+/**
+ * Ce que l'en-tête d'un tableau compte.
+ *
+ * ## Pourquoi un compte, et pas des intitulés
+ *
+ * « Action » au-dessus des actions et « Quand » au-dessus des dates
+ * n'apprennent rien à personne, et prennent toute la ligne. Ce qu'on vient y
+ * lire est **combien** — le seul chiffre qu'un tableau ne porte nulle part
+ * ailleurs.
+ *
+ * Il se cale à gauche, au-dessus de la colonne des titres qu'il compte : posé
+ * à droite, il surplombe la colonne des dates, et un nombre aligné sur une
+ * colonne se lit comme le total de cette colonne-là.
+ *
+ * ## Pourquoi il est ici
+ *
+ * Le journal des Actions l'avait écrit chez lui. Tout écran qui veut la même
+ * ligne d'en-tête devait donc emprunter ses classes ou s'en refaire une, et la
+ * seconde aurait dérivé (règle 4).
+ *
+ * @param {object} quoi
+ * @param {string} [quoi.iconeHtml] l'icône, déjà rendue
+ * @param {string} [quoi.dit] ce qu'on compte, écrit en toutes lettres
+ * @param {string} [quoi.titre] l'infobulle
+ */
+export function renderDataTableCount({ iconeHtml = "", dit = "", titre = "" } = {}) {
+  return `
+    <span class="data-table-shell__compte"${titre ? ` title="${escapeHtml(titre)}"` : ""}>
+      ${iconeHtml}
+      <span>${escapeHtml(dit)}</span>
+    </span>
+  `;
+}
+
+/** La classe de la cellule d'en-tête qui porte ce compte. Écrite une fois. */
+export const COLONNE_DU_COMPTE = "data-table-shell__head-col--compte";

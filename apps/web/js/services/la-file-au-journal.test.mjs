@@ -396,3 +396,43 @@ test("la ligne vive et la course finie disent la même provenance", () => {
   assert.equal(ligne.triggerLabel, laProvenanceDuGeste("comptes_rendus"));
   assert.equal(ligne.trigger.label, laProvenanceDuGeste("comptes_rendus"));
 });
+
+/* ── Quand chaque compte rendu a été pris ────────────────────────────────── */
+
+/**
+ * **Le chemin ne peut empiler que ce qu'il sait daté.**
+ *
+ * Depuis que la file lit trois comptes rendus de front, un chemin qui les
+ * dessine à la suite dit que le quatrième a attendu le troisième — et l'on
+ * additionne les durées de l'œil. Pour savoir ce qui a tourné ensemble, il faut
+ * l'instant où le serveur a pris chacun, et c'est la file qui le porte.
+ */
+test("chaque pas dit quand il a commencé", () => {
+  const etapes = lesEtapesDeLaFile({
+    avancement: { pas: [
+      { id: "a", nom: "CR 12", ou: "lu", commenceLe: 1000, dureeMs: 4000 },
+      { id: "b", nom: "CR 13", ou: "en-cours", commenceLe: 1000 },
+      { id: "c", nom: "CR 14", ou: "attend" }
+    ] }
+  }, { desCr: true, combien: 3, maintenant: 6000 });
+
+  assert.deepEqual(etapes.map((une) => une.debut), [1000, 1000, null]);
+});
+
+/**
+ * **Rien n'est pas zéro.** `Number(null)` vaut 0, qui est un instant fini :
+ * un pas en attente se rangerait au tout début de l'exécution, avec ceux qui
+ * ont réellement démarré (règle 5).
+ */
+test("un pas qui n'a pas commencé n'a pas d'instant", () => {
+  const etapes = lesEtapesDeLaFile({
+    avancement: { pas: [
+      { id: "a", nom: "CR 12", ou: "attend", commenceLe: null },
+      { id: "b", nom: "CR 13", ou: "attend" },
+      { id: "c", nom: "CR 14", ou: "attend", commenceLe: "" },
+      { id: "d", nom: "CR 15", ou: "attend", commenceLe: "bientôt" }
+    ] }
+  }, { desCr: true, combien: 4, maintenant: 6000 });
+
+  assert.deepEqual(etapes.map((une) => une.debut), [null, null, null, null]);
+});

@@ -5,7 +5,6 @@ import {
   COMPTE_INCONNU,
   NOM_DU_CARNET,
   ROUTE_DU_CARNET,
-  adresseDunAncienLien,
   enTeteDuCarnet,
   estMonCarnet
 } from "./mon-carnet.js";
@@ -46,28 +45,6 @@ test("le nom et l'adresse du carnet sont écrits une fois", () => {
 });
 
 /* ── Les anciens liens ───────────────────────────────────────────────────── */
-
-/**
- * **Un ancien lien ne se perd pas en silence.**
- *
- * `#project/<id>/situations` était l'adresse de l'onglet. Il n'existe plus, et
- * sans cette règle la page retomberait sur Fichiers sans rien dire : on aurait
- * demandé ses situations et obtenu autre chose (règle 5).
- */
-test("l'ancien lien des situations mène au carnet", () => {
-  assert.equal(adresseDunAncienLien(["project", "chantier-1", "situations"]), ROUTE_DU_CARNET);
-});
-
-/** Et les autres onglets ne bougent pas d'un pouce. */
-test("les autres onglets d'un projet ne sont pas détournés", () => {
-  assert.equal(adresseDunAncienLien(["project", "chantier-1", "documents"]), null);
-  assert.equal(adresseDunAncienLien(["project", "chantier-1", "memoire"]), null);
-  assert.equal(adresseDunAncienLien(["project", "chantier-1"]), null);
-  assert.equal(adresseDunAncienLien(["projects"]), null);
-  assert.equal(adresseDunAncienLien(["situations"]), null, "on y est déjà : pas de renvoi en boucle");
-  assert.equal(adresseDunAncienLien([]), null);
-  assert.equal(adresseDunAncienLien(), null);
-});
 
 /* ── Tout en haut ────────────────────────────────────────────────────────── */
 

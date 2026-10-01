@@ -83,7 +83,55 @@ test("un champ que la porte ne connaît pas ne sort pas", () => {
   assert.deepEqual(Object.keys(porte.raisonnements[0]).sort(),
     ["affirmations", "boucle", "chantiers", "dit", "pas", "tronquee"]);
   assert.deepEqual(Object.keys(porte).sort(),
-    ["forme", "idees", "le", "liaisons", "mesure", "note", "quoi", "raisonnements"]);
+    ["forme", "idees", "le", "liaisons", "manques", "mesure", "note", "quoi",
+      "raisonnements"]);
+});
+
+/* ── Ce qu'on n'a pas su lire se nomme ───────────────────────────────────── */
+
+/**
+ * **Le défaut, tel qu'il s'est vu.**
+ *
+ * L'écran annonçait « 64 affirmations énoncent un lien », et le bouton
+ * d'export, deux cartes plus bas : « 0 idée, 0 mot de liaison détaillé ». Le
+ * second zéro n'était pas un compte — c'était une lecture qui n'était pas
+ * revenue, recopiée en liste vide.
+ *
+ * Relu trois semaines plus tard, loin de l'écran, rien ne permettait de faire
+ * la différence entre « le corpus ne porte aucun mot de liaison » et « on n'a
+ * pas su les compter » (règle 5).
+ */
+test("une lecture qui n'est pas revenue se nomme dans le fichier", () => {
+  const porte = lexportDesIdees({ ...TOUT, liaisons: null, forme: null });
+
+  assert.deepEqual(porte.manques, ["la forme des affirmations", "le détail des liaisons"]);
+  assert.deepEqual(porte.liaisons, [], "et le fichier reste lisible");
+  assert.equal(porte.forme, null);
+});
+
+/** Tout revenu : rien à dire, et rien n'est dit. */
+test("un export complet ne se commente pas", () => {
+  assert.deepEqual(lexportDesIdees(TOUT).manques, []);
+});
+
+/**
+ * **Et la phrase du bouton explique son zéro.** « 0 idée » est vrai et
+ * déroutant : ce qui manque n'est pas le découpage, c'est le **second
+ * chantier** — la console ne montre que ce que deux chantiers partagent.
+ */
+test("la phrase du bouton dit pourquoi zéro, et ce qui manque", () => {
+  const dite = phraseDeLexport({ ...TOUT, idees: [], liaisons: null });
+
+  assert.match(dite, /Aucune idée n'est encore partagée par deux chantiers/);
+  assert.match(dite, /Non lu : le détail des liaisons\./);
+});
+
+/** Avec des idées et tout lu, elle ne porte ni l'une ni l'autre. */
+test("la phrase ne s'excuse pas quand il n'y a rien à expliquer", () => {
+  const dite = phraseDeLexport(TOUT);
+
+  assert.doesNotMatch(dite, /Aucune idée/);
+  assert.doesNotMatch(dite, /Non lu/);
 });
 
 test("une non-idée ne s'exporte pas, et une chaîne sans verbe non plus", () => {

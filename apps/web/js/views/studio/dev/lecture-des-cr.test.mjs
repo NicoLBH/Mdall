@@ -2461,3 +2461,142 @@ test("une lecture rouverte montre l'analyse, quel que soit l'onglet reçu", () =
   assert.match(html, /Ce qui a été relevé/);
   assert.doesNotMatch(html, /lecture-cr__restitution/);
 });
+
+/* ── L'accueil, et la sortie d'une lecture rouverte ──────────────────────── */
+
+/**
+ * **La liste prend la coquille de tableau des autres écrans.**
+ *
+ * C'était une suite de boutons, avec sa propre bordure, son propre survol et
+ * son propre gris : le seul endroit de l'application où une liste de documents
+ * ne ressemblait pas à une liste de documents. Les titres y gagnent le bleu au
+ * survol — qui dit qu'on peut cliquer — et l'en-tête compte, ce que ni le titre
+ * ni les lignes ne disaient.
+ */
+test("les comptes rendus lus prennent le tableau commun", () => {
+  const html = renderLaLecture(unEtat({ dejaLus: [uneLigneGardee()] }));
+
+  assert.match(html, /class="data-table-shell/, "la coquille commune");
+  assert.match(html, /data-table-shell__row/, "la ligne commune");
+  assert.match(html, /data-table-shell__head/, "un en-tête");
+  assert.match(html, /row-title-trigger theme-text theme-text--pb/,
+    "le titre ne se distingue pas comme ailleurs");
+});
+
+/**
+ * **L'accueil respire en bas.** La dernière ligne finissait au ras de la
+ * fenêtre : rien ne disait qu'on était au bout, et il n'y avait pas la place de
+ * poser l'œil sous ce qu'on venait de lire.
+ */
+test("l'accueil porte son pied, et lui seul", () => {
+  assert.match(renderLaLecture(unEtat({ dejaLus: [uneLigneGardee()] })), /lecture-cr--accueil/);
+
+  const lue = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES
+  }));
+  assert.doesNotMatch(lue, /lecture-cr--accueil/,
+    "le pied de l'accueil s'ajoute sous une lecture");
+});
+
+/**
+ * **La sortie se lit avant le titre.**
+ *
+ * Elle était à droite, dans la rangée des gestes, à côté de ce qui fait
+ * quelque chose au document. Or elle ne fait rien au document : elle quitte
+ * l'écran, et une sortie se cherche à gauche.
+ */
+test("le retour passe avant le titre", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, onglet: "analyse",
+    conservee: { id: "l-1", documentId: "d-1", propositionId: "", lueLe: "2026-03-13T09:00:00Z" },
+    sujetsAujourdhui: []
+  }));
+
+  const ouLeRetour = html.indexOf("data-lecture-cr-revenir");
+  const ouLeTitre = html.indexOf("lecture-cr__titre");
+  assert.notEqual(ouLeRetour, -1, "le retour a disparu");
+  assert.notEqual(ouLeTitre, -1, "le titre a disparu");
+  assert.ok(ouLeRetour < ouLeTitre, "le retour se lit après le titre");
+});
+
+/* ── Le document refait revient de Fichiers ──────────────────────────────── */
+
+/** Une lecture rouverte dont le document refait a été retrouvé. */
+function unEtatRelue(surcharge = {}) {
+  return unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, onglet: "restitution",
+    conservee: { id: "l-1", documentId: "d-1", propositionId: "", lueLe: "2026-03-13T09:00:00Z" },
+    sujetsAujourdhui: [], relue: "trouvee",
+    md: {
+      lecture: LECTURE.APERCU,
+      modele: unCote({
+        phase: "fait", relue: true,
+        texte: "# Compte rendu n° 12\n\nLe plancher est repris.",
+        lignes: [
+          { rang: 1, texte: "# Compte rendu n° 12" },
+          { rang: 2, texte: "" },
+          { rang: 3, texte: "Le plancher est repris." }
+        ]
+      })
+    },
+    ...surcharge
+  });
+}
+
+/**
+ * **Rouvrir une lecture ne montrait plus que ses conclusions.**
+ *
+ * Le document refait avait disparu de l'écran avec son onglet. On lisait donc
+ * ce que la lecture avait conclu sans pouvoir voir sur quoi — or c'est
+ * exactement la question qu'on se pose en rouvrant.
+ */
+test("une lecture rouverte retrouve son document", () => {
+  const html = renderLaLecture(unEtatRelue());
+
+  assert.match(html, /data-lecture-cr-onglet="restitution"/, "l'onglet du document manque");
+  assert.match(html, commeAffichee("Le plancher est repris."));
+  assert.match(html, commeAffichee("Ce document vient de Fichiers"));
+});
+
+/**
+ * **Un document relu n'a pas de mesures, et n'en affiche aucune.** Les mots
+ * retrouvés, les titres inventés, les pages absentes n'ont pas été conservés :
+ * des cartes à zéro se liraient comme des résultats (règle 5).
+ */
+test("un document relu n'invente ni mesures ni prix", () => {
+  const html = renderLaLecture(unEtatRelue());
+
+  assert.doesNotMatch(html, /Mots du PDF retrouvés/, "une mesure qui n'a pas été gardée");
+  assert.doesNotMatch(html, /lecture-cr__md-prix/, "un prix qu'on ne connaît pas");
+  // Et pas de lecture « Origine » : un document relu est un texte continu, et
+  // un numéro de page en regard d'une ligne serait une provenance inventée.
+  assert.doesNotMatch(html, /data-lecture-cr-md-lecture="origine"/);
+});
+
+/**
+ * **« On ne sait pas » n'est pas « il n'y en a pas »** (règle 5). Un onglet
+ * absent, sans un mot, se lit « cette lecture n'avait pas de document » — ce
+ * qui est faux : elle en avait un, et c'est lui qu'elle a relu pour conclure.
+ */
+test("un document refait introuvable se dit", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, onglet: "analyse",
+    conservee: { id: "l-1", documentId: "d-1", propositionId: "", lueLe: "2026-03-13T09:00:00Z" },
+    sujetsAujourdhui: [], relue: "absente"
+  }));
+
+  assert.match(html, commeAffichee("ne se retrouve pas dans Fichiers"));
+  assert.doesNotMatch(html, /data-lecture-cr-onglet/, "un onglet pour un document absent");
+});
+
+/** Tant qu'on attend, on ne dit ni l'un ni l'autre. */
+test("pendant la relecture, l'écran ne tranche pas", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, onglet: "analyse",
+    conservee: { id: "l-1", documentId: "d-1", propositionId: "", lueLe: "2026-03-13T09:00:00Z" },
+    sujetsAujourdhui: [], relue: "en-cours"
+  }));
+
+  assert.doesNotMatch(html, commeAffichee("ne se retrouve pas dans Fichiers"));
+  assert.doesNotMatch(html, /data-lecture-cr-onglet/);
+});

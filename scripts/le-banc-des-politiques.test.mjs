@@ -83,6 +83,9 @@ const LES_MIGRATIONS = [
   "202611130001_les_idees_du_systeme.sql",
   // Le découpage, écrit une seule fois, et de quoi savoir où il casse.
   "202611140001_la_coupe_dun_texte.sql",
+  // La coupe, écrite une fois pour un ensemble de textes : appelée affirmation
+  // par affirmation, elle coûtait vingt-huit fois plus et ne revenait pas.
+  "202611150001_la_coupe_passe_sur_tout_le_corpus.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",
@@ -1588,6 +1591,31 @@ test("les idées ne se lisent pas sans être administrateur", { skip: sansPostgr
 });
 
 /**
+ * **Et la coupe du corpus n'est accordée à personne.**
+ *
+ * Elle est `security definer` et rend toutes les affirmations de tous les
+ * chantiers : c'est ce qu'il faut aux quatre lectures, et c'est exactement ce
+ * qu'il ne faut à personne d'autre. Elle ne porte pas de porte à elle — elle
+ * n'en a pas besoin, puisque rien ne peut l'appeler.
+ *
+ * PostgreSQL accorde `execute` à tout le monde par défaut : sans le retrait
+ * explicite, n'importe quel compte authentifié lirait le contenu de tous les
+ * chantiers, sans qu'aucune règle de lecture ne s'y oppose. Une porte fermée
+ * par un retrait qu'on oublie d'écrire est une porte grande ouverte.
+ */
+test("la coupe du corpus n'est accordée à personne", { skip: sansPostgres }, () => {
+  const refuse = banc.sousLadresse("quelquun@ailleurs.example",
+    "select count(*) from public.la_coupe_du_corpus();");
+  assert.equal(refuse.ok, false, "un compte quelconque a lu tout le corpus");
+
+  // Et l'administrateur non plus : il passe par les quatre lectures, qui
+  // nomment ce qu'elles rendent.
+  const patron = banc.sousLadresse("patron@mdall.example",
+    "select count(*) from public.la_coupe_du_corpus();");
+  assert.equal(patron.ok, false, "la console lit le corpus en direct");
+});
+
+/**
  * **Les sortes de liens que la base produit sont celles que l'écran nomme.**
  *
  * La liste des mots vit dans la base ; l'écran ne connaît que les sortes
@@ -1765,4 +1793,127 @@ test("la liste et la mesure comptent la même chose", { skip: sansPostgres }, ()
   assert.equal(mesure.ok, true, mesure.motif);
   assert.equal(liste.sortie.trim(), mesure.sortie.trim(),
     "la liste et la mesure ne comptent pas la même chose : le découpage a divergé");
+});
+
+/* ── La console doit répondre sur un vrai corpus ─────────────────────────── */
+
+/**
+ * **Une lecture qui ne revient pas est une lecture qui ment.**
+ *
+ * La console annonçait « 64 affirmations énoncent un lien » en haut, et
+ * « aucun mot de liaison n'apparaît dans le corpus » trois cartes plus bas.
+ * La seconde phrase n'était pas un compte : c'était `le_detail_des_liaisons()`
+ * qui n'avait pas répondu dans le délai accordé, recopié en liste vide.
+ *
+ * ## Pourquoi un délai, et pas un chronomètre
+ *
+ * Un chronomètre dans une épreuve mesure la machine qui la fait tourner, et
+ * finit par tomber un jour de forte charge pour rien. Un **délai** pose la
+ * question qui se posait vraiment : la base rend-elle cette lecture dans le
+ * temps qu'on lui accorde ? C'est PostgreSQL qui tranche, pas l'horloge de
+ * l'épreuve.
+ *
+ * Deux secondes sur quatre mille affirmations, c'est quinze fois ce que la
+ * coupe en une passe demande, et moins de la moitié de ce que la coupe
+ * affirmation par affirmation demandait. L'écart est tel qu'aucune machine ne
+ * le franchit par hasard, dans un sens comme dans l'autre.
+ *
+ * ## Le corpus est rendu avant de sortir
+ *
+ * Les autres épreuves comptent les affirmations du banc. Quatre mille lignes
+ * laissées derrière soi les feraient toutes tomber, et pour une raison qui
+ * n'aurait aucun rapport avec ce qu'elles vérifient.
+ */
+test("les quatre lectures de la console répondent sur quatre mille affirmations",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+
+    // Ce que le banc portait déjà : les autres épreuves ont posé leurs
+    // affirmations, et quelques-unes énoncent un lien. On compte donc ce que
+    // ce corpus-ci ajoute, pas ce que la table contient.
+    const liantesAvant = Number(banc.sousLadresse("patron@mdall.example",
+      "select liantes from public.la_mesure_des_idees();").sortie.trim());
+
+    // Un corpus réaliste : une affirmation sur cent énonce un lien, les autres
+    // sont des intitulés. C'est la forme du vrai corpus, et c'est elle qui rend
+    // la lecture coûteuse — cinquante-sept mots cherchés dans quatre mille
+    // textes qui, pour la plupart, n'en portent aucun.
+    banc.sql(`insert into public.project_assertions (project_id, statement)
+      select '${MEDIATHEQUE}',
+        case when g % 100 = 0
+          then 'le terrain argileux donc le plancher beton reprend la charge'
+          else 'menuiseries exterieures du niveau ' || g
+               || ' plancher haut du R plus un lot gros oeuvre' end
+      from generate_series(1, 4000) g;`);
+
+    try {
+      for (const lecture of [
+        "le_detail_des_liaisons()",
+        "la_mesure_des_idees()",
+        "les_idees_du_systeme()",
+        "la_forme_des_affirmations()"
+      ]) {
+        // **`set`, et non `set local`.** Hors transaction, `set local` ne vaut
+        // que pour la transaction implicite de l'instruction où il est posé :
+        // il s'annonce, il ne s'applique pas, et le délai ne s'imposait à rien.
+        // La garde était écrite et ne gardait rien — c'est la batterie qui l'a
+        // montré, pas la relecture (règle 12).
+        const lu = banc.sousLadresse("patron@mdall.example",
+          `set statement_timeout = '2s';\n`
+          + `select count(*) from public.${lecture};`);
+
+        assert.equal(lu.ok, true,
+          `${lecture} n'a pas répondu dans le délai accordé : ${lu.motif}`);
+      }
+
+      // **Et elle répond juste.** Une lecture rapide qui compterait faux serait
+      // pire que lente. Quarante des quatre mille énoncent un lien (une sur
+      // cent), et pas une de plus : les trois mille neuf cent soixante autres
+      // sont des intitulés.
+      const liantes = Number(banc.sousLadresse("patron@mdall.example",
+        "select liantes from public.la_mesure_des_idees();").sortie.trim());
+      assert.equal(liantes - liantesAvant, 40,
+        "les affirmations que ce corpus ajoute et qui portent un lien");
+    } finally {
+      banc.sql(`delete from public.project_assertions
+                 where statement like 'menuiseries exterieures du niveau %'
+                    or statement = 'le terrain argileux donc le plancher beton reprend la charge';`);
+    }
+  });
+
+/* ── Ce que la coupe commune décide, et qu'on ne voyait pas ──────────────── */
+
+/**
+ * **Le plus long mot l'emporte, à égalité de place.**
+ *
+ * « permet » et « permet de » commencent au même endroit de la phrase. Si le
+ * court gagne, le lien change de sorte — une permission au lieu d'un but — et
+ * le terme de droite commence un mot plus tôt. Rien ne tombe : on lit une idée
+ * juste de forme et fausse de sens.
+ */
+test("à égalité de place, le mot le plus long décide", { skip: sansPostgres }, () => {
+  const lu = banc.sql(
+    "select mot from public.les_idees_des_textes(array["
+    + "'le garde corps permet de proteger la circulation'"
+    + "]);");
+
+  assert.equal(lu.sortie.trim(), "permet de",
+    "le mot court l'emporte sur celui qui le contient");
+});
+
+/**
+ * **« nappe entraîne nappe » est vrai, et c'est ce qui le rend inutile.**
+ *
+ * Une tautologie passe toutes les vérifications de forme : deux termes, un
+ * lien, une citation. Elle entrerait en mémoire comme les autres, et n'y
+ * apprendrait rien à personne.
+ */
+test("une tautologie ne sort pas du relevé d'un document", { skip: sansPostgres }, () => {
+  const lu = banc.sql(
+    "select count(*) from public.les_idees_des_textes(array["
+    + "'la nappe phreatique donc la nappe phreatique'"
+    + "]);");
+
+  assert.equal(lu.sortie.trim(), "0", "une tautologie est relevée comme une idée");
 });

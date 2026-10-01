@@ -7795,7 +7795,13 @@ body.route--project.documents-pdf-sticky-mode.documents-local-chrome-compact #ap
   background:transparent;
 }
 
-.workflow-runs__row{
+/* **La ligne d'un tableau, et elle n'appartient à aucun écran.**
+   Elle était écrite sous le nom du journal des Actions, et tout écran qui
+   voulait la même ligne devait soit emprunter ce nom, soit s'en refaire une.
+   Deux grilles pour la même ligne finissent par ne plus s'aligner, et c'est
+   l'écran qu'on regarde le moins qui reste de travers (règle 4). Elle porte
+   donc le nom de la coquille qui la contient. */
+.data-table-shell__row{
   display:grid;
   grid-template-columns:var(--data-table-cols);
   gap:0;
@@ -7804,28 +7810,20 @@ body.route--project.documents-pdf-sticky-mode.documents-local-chrome-compact #ap
   border-bottom:1px solid rgba(48,54,61,.35);
 }
 
-.workflow-runs__row:last-child{
+.data-table-shell__row:last-child{
   border-bottom:none;
 }
 
-.workflow-runs__cell{
+.data-table-shell__cell{
   min-width:0;
   font-size:13px;
 }
 
-.workflow-runs__cell--action{
+/* La colonne du titre : le titre, et ce qu'on en dit dessous. */
+.data-table-shell__cell--titre{
   display:flex;
   flex-direction:column;
   gap:4px;
-}
-
-.workflow-runs__cell--status{
-  justify-self:start;
-}
-
-.workflow-runs__cell--muted{
-  color:var(--muted);
-  font-size:12px;
 }
 
 .workflow-runs__title{
@@ -10338,7 +10336,7 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
    **Et il se cale à gauche**, au-dessus des titres qu'il compte. Posé à droite,
    il surplombait la colonne des dates : un nombre aligné sur une colonne se lit
    comme le total de cette colonne-là, et celui-ci ne compte pas des dates. */
-.workflow-runs__head-col--compte{
+.data-table-shell__head-col--compte{
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -10346,7 +10344,7 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   grid-column: 1 / -1;
 }
 
-.workflow-runs__head-count {
+.data-table-shell__compte {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -10355,7 +10353,7 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   white-space: nowrap;
 }
 
-.workflow-runs__head-count .ui-icon {
+.data-table-shell__compte .ui-icon {
   opacity: 0.9;
 }
 
@@ -17062,6 +17060,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
      celles-ci ont perdu leur couleur, c'est lui qui porte l'enchaînement, et
      un trait du même gris qu'un cadre se lit comme un bord, pas comme un lien. */
   --run-graph-trait:rgb(125,133,144);
+  /* Le fond d'une boîte, nommé : l'ancrage le reprend pour se découper dessus,
+     et deux valeurs écrites séparément se seraient décalées au premier
+     changement de thème (règle 4). */
+  --run-graph-carte:rgb(21,27,35);
 }
 
 .run-graph__node{
@@ -17069,6 +17071,9 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   flex-direction:column;
   gap:4px;
   flex:0 0 auto;
+  /* Les ancrages se posent sur le bord de la boîte : c'est elle qui leur sert
+     de repère. */
+  position:relative;
   min-width:168px;
   padding:12px 14px;
   border:1px solid var(--run-graph-line);
@@ -17144,19 +17149,78 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   border-radius:1px;
   background:var(--run-graph-trait);
 }
-.run-graph__link::before,
-.run-graph__link::after{
-  content:"";
+
+/* **L'ancrage est sur la boîte, et non au bout du trait.**
+
+   Il était aux deux extrémités de la liaison. Dans une colonne de trois boîtes
+   menées de front, une seule des trois en recevait un : les deux autres
+   semblaient ne tenir à rien. Posé sur la boîte, chacune montre par où elle
+   entre et par où elle sort, quel que soit le nombre de traits qui lui arrivent.
+
+   Le dessin est celui des cartes de workflow de GitHub, repris tel quel : un
+   disque de 16 px à cheval sur le bord, dont la moitié intérieure est du fond
+   de la carte et la moitié extérieure de la couleur du cadre, puis un disque de
+   14 px qui creuse le centre, puis un noyau de 8 px. C'est ce qui lui donne
+   l'air d'être percé dans le bord plutôt que collé dessus. */
+.run-graph__port{
   position:absolute;
   top:50%;
-  width:9px;
-  height:9px;
+  width:16px;
+  height:16px;
+  margin-top:-8px;
   border-radius:50%;
-  background:var(--run-graph-trait);
-  transform:translate(0, -50%);
+  background-image:linear-gradient(
+    90deg,
+    var(--run-graph-carte) 0%, var(--run-graph-carte) 50%,
+    var(--run-graph-line) 50%, var(--run-graph-line) 100%);
 }
-.run-graph__link::before{ left:-3px; }
-.run-graph__link::after{ right:-3px; }
+.run-graph__port--sortie{ right:-8px; }
+/* L'entrée est la même pièce, retournée : son demi-cadre regarde vers la
+   gauche. La redessiner aurait fait deux dégradés à tenir d'accord. */
+.run-graph__port--entree{ left:-8px; transform:rotate(180deg); }
+
+.run-graph__port::before{
+  content:"";
+  position:absolute;
+  top:1px;
+  left:1px;
+  width:14px;
+  height:14px;
+  border-radius:50%;
+  background-color:var(--run-graph-carte);
+}
+.run-graph__port::after{
+  content:"";
+  position:absolute;
+  top:4px;
+  left:4px;
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background-color:var(--run-graph-trait);
+}
+
+/* **Ce qui est empilé a tourné en même temps.** La file lit trois comptes
+   rendus de front ; alignés à la suite, ils disaient que le quatrième avait
+   attendu le troisième, et l'on additionnait les durées de l'œil. */
+.run-graph__colonne{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  justify-content:center;
+  gap:10px;
+  flex:0 0 auto;
+}
+/* Une colonne vit à côté d'autres colonnes : le trait les relie en son milieu,
+   et les boîtes doivent donc rester de la même largeur. */
+.run-graph__canvas--colonnes .run-graph__node{ width:100%; }
+.run-graph__canvas--colonnes{ align-items:center; }
+
+/* Dans un arbre, le coude de l'indentation relie les boîtes, et la boîte
+   emploie déjà ses deux pseudo-éléments pour le tracer : les ancrages n'y ont
+   ni place ni sens. */
+.run-graph__canvas--arbre .run-graph__port,
+.run-graph__canvas--vertical .run-graph__port{ display:none; }
 
 /* Le même enchaînement, tourné d'un quart de tour. Un chemin d'exécution se lit
    à l'horizontale parce qu'il est long et large ; la chaîne d'une variante se lit
@@ -20241,20 +20305,20 @@ strong.est-verifie{ color:#3fb950; }
 /* **La pastille suit le titre, dans la même ligne.** Le titre prend la place
    qu'il peut et se coupe ; la pastille, elle, ne se coupe jamais — trois mots
    tronqués ne qualifient plus rien. */
-.workflow-runs__cell--action .issue-row-title-grid__title{
+.data-table-shell__cell--titre .issue-row-title-grid__title{
   display:flex;
   align-items:center;
   gap:8px;
   min-width:0;
 }
-.workflow-runs__cell--action .issue-row-title-grid__title .row-title-trigger{
+.data-table-shell__cell--titre .issue-row-title-grid__title .row-title-trigger{
   width:auto;
   min-width:0;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
 }
-.workflow-runs__cell--action .workflow-runs__origine{ flex:none; }
+.data-table-shell__cell--titre .workflow-runs__origine{ flex:none; }
 .workflow-runs__mention{ color:var(--attention, #d29922); }
 
 .fondations-nappes th[scope="row"]{ font-family:ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -25668,10 +25732,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   margin:0 auto;
 }
 .lecture-cr__entete-fichier{flex:0 0 auto;}
+/* **Le pied de l'accueil.** Sans lui, la dernière ligne des comptes rendus lus
+   s'arrête au ras de la fenêtre : rien ne dit qu'on est au bout, et il n'y a
+   pas la place de poser l'œil sous ce qu'on vient de lire. */
+.lecture-cr--accueil{padding-bottom:250px;}
 .lecture-cr__entete{display:flex;flex-direction:column;gap:6px;}
-/* Le titre à gauche, le bouton du document refait à droite : une commande qui
-   ne concerne que ce qu'on vient de lire se pose au bord de son titre. */
-.lecture-cr__entete-ligne{display:flex;align-items:center;justify-content:space-between;gap:16px;}
 .lecture-cr__titre{margin:0;font-size:19px;font-weight:600;color:var(--text);}
 .lecture-cr__mot{margin:0;padding:10px 5px 5px 5px;font-size:12.5px;line-height:1.5;color:var(--muted);}
 
@@ -25701,30 +25766,20 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    Rangée par la date de la réunion, jamais par celle de l'analyse : un compte
    rendu tenu en mars et lu en septembre est de mars. */
 .lecture-cr__lus{ margin:20px 0 0; }
-.lecture-cr__lus-titre{ margin:0; font-size:13px; font-weight:600; color:var(--text); }
 .lecture-cr__lus-aide{ margin:2px 0 10px; color:var(--muted); }
 .lecture-cr__lus-mot{ margin:16px 0 0; color:var(--muted); }
-.lecture-cr__lus-liste{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }
 
-.lecture-cr__lus-bouton{
-  display:grid;
-  /* L'icône, le nom qui prend ce qui reste, puis deux colonnes de faits qui ne
-     bougent pas d'une ligne à l'autre : c'est ce qui rend la liste lisible en
-     diagonale. */
-  grid-template-columns:16px minmax(0,1fr) auto auto;
-  align-items:center; gap:10px;
-  width:100%; padding:8px 10px; text-align:left;
-  background:transparent; border:1px solid transparent; border-radius:8px;
-  color:var(--text); font:inherit; cursor:pointer;
+/* **La coquille commune fait tout le reste.** Cette liste avait sa grille, son
+   survol et son gris à elle ; ce qui reste ici est ce que les autres tableaux
+   n'ont pas à savoir : la colonne de droite, et la ligne qu'on vient de
+   rouvrir. */
+.lecture-cr__lus-chiffres{
+  display:flex; justify-content:flex-end;
+  color:var(--muted); white-space:nowrap;
 }
-.lecture-cr__lus-bouton:hover{ background:var(--surface-2, #1b1f24); border-color:var(--border); }
-.lecture-cr__lus-icone{ color:var(--muted); line-height:1; }
-/* Le nom d'un compte rendu est long et porte sa date à la fin : il se coupe au
-   début plutôt qu'à la fin, où tout se ressemble. */
-.lecture-cr__lus-nom{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.lecture-cr__lus-reunion, .lecture-cr__lus-points{ color:var(--muted); white-space:nowrap; }
-.lecture-cr__lus-ligne.est-ouverte .lecture-cr__lus-bouton{
-  background:var(--surface-2, #1b1f24); border-color:var(--accent, #2f81f7);
+.lecture-cr__lus-ligne.est-ouverte{
+  background:var(--surface-2, #1b1f24);
+  box-shadow:inset 2px 0 0 var(--accent, #2f81f7);
 }
 
 /* **Une lecture rouverte est datée, et elle ne se recalcule pas.** Le bandeau
@@ -26364,8 +26419,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 /* Une date comptée ou complétée n'est pas une date écrite : elle se dit. */
 .lecture-cr__objectif-sur{color:var(--fgColor-attention, #d29922);}
 
-/* Le titre de l'utilitaire et sa seule sortie, sur la même ligne. */
+/* Le titre de l'utilitaire, sa sortie, et ce qu'on peut faire du document.
+   La sortie vient **avant** le titre : elle ne fait rien au document, elle
+   quitte l'écran, et une sortie se cherche à gauche. */
 .lecture-cr__entete-ligne{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.lecture-cr__retour{flex:0 0 auto;}
 .lecture-cr__titre{flex:1;min-width:0;}
 .lecture-cr__entete-actions{display:flex;align-items:center;gap:8px;margin-left:auto;}
 

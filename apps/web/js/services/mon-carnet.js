@@ -21,7 +21,13 @@
  * c'est toujours celui qu'on ne regarde pas qui reste faux (règle 10).
  */
 
-/** Le nom de l'écran, partout le même. */
+/**
+ * Le nom de l'écran, partout le même.
+ *
+ * Il nomme **les deux montages** : l'entrée du menu du haut, qui montre toutes
+ * mes situations, et l'onglet d'un chantier, qui montre les miennes sur
+ * celui-ci. Un seul tableau, un seul nom.
+ */
 export const NOM_DU_CARNET = "Situations";
 
 /**
@@ -103,28 +109,6 @@ export const COMPTE_INCONNU = "—";
  */
 export const POURQUOI_LE_COMPTE_MANQUE =
   "Les sujets d'une situation automatique se comptent dans leur chantier.";
-
-/**
- * Où emmener un ancien lien.
- *
- * `#project/<id>/situations` était l'adresse de l'onglet. Il n'existe plus, et
- * sans cette question la page retomberait sur Fichiers **sans rien dire** —
- * on aurait demandé ses situations et obtenu autre chose, sans savoir pourquoi
- * (règle 5).
- *
- * La connaissance « les anciens liens des situations mènent au carnet » vit
- * ici, et pas dans le routeur : c'est une règle sur le carnet, pas sur les
- * adresses en général (règle 10).
- *
- * @param {string[]} parties le chemin découpé, sans le `#`
- * @returns {string|null} l'adresse où aller, ou `null` s'il n'y a rien à faire
- */
-export function adresseDunAncienLien(parties = []) {
-  const chemin = Array.isArray(parties) ? parties.map((part) => String(part ?? "").trim()) : [];
-  if (chemin[0] !== "project") return null;
-  if (chemin[2] !== "situations") return null;
-  return ROUTE_DU_CARNET;
-}
 
 /**
  * Ce que l'en-tête, tout en haut, dit quand on est dans le carnet.

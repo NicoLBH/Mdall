@@ -159,6 +159,18 @@ export function lexportDesIdees({
     // sans l'écran qui l'explique.
     note: "Des comptes et des termes partagés par au moins deux chantiers. "
       + "Aucun contenu de projet : ni phrase, ni nom, ni adresse.",
+    /**
+     * **Ce qui n'a pas pu être lu**, nommé.
+     *
+     * Une lecture qui échoue arrivait ici comme une liste vide, et le fichier
+     * disait alors « aucun mot de liaison » avec le même aplomb qu'un corpus
+     * qui n'en porte aucun. Relu trois semaines plus tard, loin de l'écran,
+     * rien ne permettait de faire la différence (règle 5).
+     *
+     * Vide quand tout est revenu : c'est le cas normal, et il ne se commente
+     * pas.
+     */
+    manques: lesManques({ idees, mesure, forme, liaisons, raisonnements }),
     mesure: laMesure(mesure),
     forme: laForme(forme),
     liaisons: (Array.isArray(liaisons) ? liaisons : []).map(uneLiaison).filter(Boolean),
@@ -166,6 +178,22 @@ export function lexportDesIdees({
     raisonnements: (Array.isArray(raisonnements) ? raisonnements : [])
       .map(unRaisonnement).filter(Boolean)
   };
+}
+
+/**
+ * Ce qu'on a demandé et qu'on n'a pas obtenu.
+ *
+ * `null` dit « on n'a pas su » ; une liste vide dit « il n'y en a pas ». Les
+ * deux arrivent ici de la même façon et mènent à des décisions opposées.
+ */
+function lesManques({ idees, mesure, forme, liaisons, raisonnements }) {
+  return [
+    mesure === null ? "la mesure" : "",
+    forme === null ? "la forme des affirmations" : "",
+    liaisons === null ? "le détail des liaisons" : "",
+    idees === null ? "les idées" : "",
+    raisonnements === null ? "les raisonnements" : ""
+  ].filter(Boolean);
 }
 
 /** Le même, en texte — ce qu'on colle dans un fichier ou dans un message. */
@@ -182,7 +210,20 @@ export function phraseDeLexport(quoi) {
   const combien = porte.idees.length;
   const mots = porte.liaisons.length;
 
+  // **Un zéro qu'on n'explique pas se lit comme une panne.** « 0 idée » est
+  // vrai et déroutant : il n'y a pas d'idée **partagée par deux chantiers**,
+  // ce qui n'est pas la même chose que « le découpage n'a rien trouvé ».
+  const pourquoiZero = combien === 0
+    ? " Aucune idée n'est encore partagée par deux chantiers : la console n'en "
+      + "montre pas d'autres, et n'en emporte pas d'autres."
+    : "";
+
+  // Et ce qui n'a pas pu être lu se nomme, plutôt que de se compter comme zéro.
+  const manque = porte.manques.length
+    ? ` Non lu : ${porte.manques.join(", ")}.`
+    : "";
+
   return `${combien} idée${combien > 1 ? "s" : ""}, ${mots} mot${mots > 1 ? "s" : ""} `
     + `de liaison détaillé${mots > 1 ? "s" : ""}, et ce que la console ne montre pas. `
-    + "Des comptes et des termes, aucun contenu de projet.";
+    + `Des comptes et des termes, aucun contenu de projet.${pourquoiZero}${manque}`;
 }
