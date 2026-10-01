@@ -21,6 +21,9 @@ const UNE = {
   avant: "terrain argileux",
   lien: "cause",
   apres: "plancher beton",
+  // Le tour de langue par lequel la phrase a été coupée. Il n'entre pas en
+  // mémoire ; il reste parce que c'est lui qui explique le découpage.
+  mot: "donc",
   phrase: "Le terrain argileux est confirmé donc le plancher béton sera repris.",
   document: "1824_CR_12.pdf",
   page: 3
@@ -220,4 +223,51 @@ test("une coupe sur un point sans texte ne se garde pas", () => {
 test("rien à couper ne fait pas tomber le relevé", () => {
   assert.deepEqual(lesIdeesDesCoupes(), []);
   assert.deepEqual(lesIdeesDesCoupes(null, null), []);
+});
+
+/**
+ * **Le mot de liaison reste, et il ne monte pas en mémoire.**
+ *
+ * Il explique le découpage — un document qui emploie « exige » dix fois pour
+ * deux idées n'a pas le même défaut qu'un document qui n'emploie aucune
+ * liaison. Mais l'affirmation, elle, porte le **verbe du lien** : « entraîne »
+ * est ce que l'idée dit, « donc » est la façon dont le document l'a écrit, et
+ * mettre le second dans la mémoire y mettrait un tour de langue.
+ */
+test("le mot de liaison reste sur l'idée, et n'entre pas dans l'affirmation", () => {
+  assert.equal(uneIdeeRelevee(UNE).mot, "donc");
+
+  // La citation, elle, porte la phrase entière — « donc » compris, puisque
+  // c'est la phrase du document. Ce qu'on vérifie est que l'affirmation n'a
+  // pas de champ à elle qui porte le tour de langue.
+  const affirmation = laffirmationDuneIdee(UNE);
+  assert.equal(affirmation.mot, undefined, "le tour de langue a son champ en mémoire");
+  assert.equal(affirmation.valeur, "entraîne", "la valeur dit le verbe du lien");
+  assert.equal(affirmation.citation, UNE.phrase);
+});
+
+/** Une idée relevée sans mot reste une idée : le mot est facultatif. */
+test("une idée sans mot de liaison se relève quand même", () => {
+  const sansMot = uneIdeeRelevee({ ...UNE, mot: "" });
+  assert.ok(sansMot, "l'idée a été refusée faute de mot");
+  assert.equal(sansMot.mot, "");
+});
+
+/**
+ * **Le mot de liaison traverse la coupe.**
+ *
+ * C'est la base qui dit par quel tour une phrase a été coupée ; le perdre en
+ * chemin laisserait la synthèse d'un document ne dire que « deux idées », ce
+ * qui ne se corrige pas.
+ */
+test("une coupe porte son mot de liaison jusqu'à l'idée", () => {
+  const idees = lesIdeesDesCoupes(
+    [{ rang: 1, avant: "terrain argileux", lien: "cause", apres: "plancher beton", mot: "donc" }],
+    [{ citation: "Le terrain argileux est confirmé donc le plancher beton sera repris." }],
+    { document: "1824_CR_12.pdf" }
+  );
+
+  assert.equal(idees.length, 1);
+  assert.equal(idees[0].mot, "donc");
+  assert.equal(idees[0].document, "1824_CR_12.pdf");
 });

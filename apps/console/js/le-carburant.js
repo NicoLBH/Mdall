@@ -58,11 +58,15 @@ import {
   lesRaisonnements, phraseDesRaisonnements, phraseDunRaisonnement
 } from "../partage/js/services/un-raisonnement.js";
 import {
-  laFormeDesAffirmations, laMesureDesIdees, leDetailDesLiaisons, lesIdeesDuSysteme
+  laFormeDesAffirmations, laMesureDesIdees, leCorpusEnClair, leDetailDesLiaisons,
+  lesIdeesDuSysteme
 } from "../partage/js/services/les-idees-du-systeme-supabase.js";
 import {
-  leNomDuFichier, lexportEnJson, phraseDeLexport
+  leNomDuCorpus, leNomDuFichier, lexportDuCorpusEnJson, lexportEnJson, phraseDeLexport
 } from "../partage/js/services/lexport-des-idees.js";
+import {
+  LA_DUREE_DE_LA_PORTE, LE_NOM_DE_LA_PORTE, laPorteEstOuverte, phraseDeLaPorte
+} from "../partage/js/services/la-porte-du-developpement.js";
 import {
   brancherLesBoutonsCopier, renderBoutonCopier
 } from "../partage/js/views/ui/bouton-copier.js";
@@ -580,6 +584,51 @@ function renderLesIdees(lignes, mesure, liaisons, forme, chaines) {
           download="${echapper(leNomDuFichier())}">Exporter en JSON</a>
       </div>
     </section>
+
+    ${renderLaPorteDuDeveloppement()}
+  `;
+}
+
+/**
+ * La porte du corpus en clair — **cochée, dix secondes, et elle se referme**.
+ *
+ * ## Pourquoi elle existe
+ *
+ * La console ne laisse jamais sortir une phrase de chantier, et cet export-ci
+ * n'en laisse sortir que ça. C'est contradictoire, et c'est délibéré : **on ne
+ * peut pas améliorer le découpage sans voir ce qu'il n'a pas su lire**, et ce
+ * qu'il n'a pas su lire est précisément ce qui ne sort jamais. Neuf mille
+ * quatre cents affirmations sans mot de liaison sont la matière du travail.
+ *
+ * ## Ce que l'interrupteur arrête, et ce qu'il n'arrête pas
+ *
+ * La porte est dans la base : `le_corpus_en_clair()` est réservée aux
+ * administrateurs, et rien ici ne peut l'ouvrir à quelqu'un d'autre. Un
+ * interrupteur dans un navigateur n'arrête personne qui sait en ouvrir un.
+ *
+ * Ce qu'il arrête est **l'habitude** : un bouton toujours là finit par être
+ * cliqué sans y penser. Celui-ci se coche, dit ce qu'il laisse sortir, et se
+ * referme tout seul.
+ */
+function renderLaPorteDuDeveloppement() {
+  const ouverte = laPorteEstOuverte(porteOuverteLe);
+
+  return `
+    <section class="conso-usages conso-porte${ouverte ? " est-ouverte" : ""}">
+      <h3 class="conso-usages__titre">${echapper(LE_NOM_DE_LA_PORTE)}</h3>
+      <label class="conso-porte__interrupteur">
+        <input type="checkbox" data-porte-du-developpement ${ouverte ? "checked" : ""}>
+        <span>Laisser sortir le corpus en clair pendant ${
+          Math.round(LA_DUREE_DE_LA_PORTE / 1000)} secondes</span>
+      </label>
+      <p class="conso-usages__mot" data-porte-mot>${echapper(phraseDeLaPorte(porteOuverteLe))}</p>
+      ${ouverte ? `
+        <div class="conso-export">
+          <a class="gh-btn gh-btn--danger conso-export__fichier" href="#" data-export-corpus
+            download="${echapper(leNomDuCorpus())}">Exporter tout le corpus (JSON)</a>
+        </div>
+      ` : ""}
+    </section>
   `;
 }
 
@@ -694,6 +743,17 @@ export async function monterLeCarburant(hote, cle = LE_CARBURANT) {
 let cequOnEmporte = null;
 
 /**
+ * Quand la porte du corpus en clair a été ouverte, ou `null`.
+ *
+ * **Au niveau du module, et non dans le DOM.** Une case cochée est un état du
+ * navigateur ; l'instant de l'ouverture est la seule chose qui décide, et le
+ * lire dans l'attribut d'une case reviendrait à faire décider l'affichage
+ * (règle 4). Elle se referme toute seule, même si personne ne redessine.
+ */
+let porteOuverteLe = null;
+let leCompteARebours = null;
+
+/**
  * Le bouton de copie et le lien de téléchargement.
  *
  * **Le fichier se fabrique au clic**, pas au rendu : une adresse `blob:` créée
@@ -706,22 +766,122 @@ function brancherLexport(ou) {
   });
 
   const lien = ou.querySelector("[data-export-idees]");
-  if (!lien) return;
+  if (lien) {
+    lien.addEventListener("click", (evenement) => {
+      if (!cequOnEmporte) return;
+      evenement.preventDefault();
+      emporterLeFichier(lexportEnJson(cequOnEmporte), leNomDuFichier());
+    });
+  }
 
-  lien.addEventListener("click", (evenement) => {
-    if (!cequOnEmporte) return;
-    evenement.preventDefault();
+  brancherLaPorte(ou);
+}
 
-    const fichier = new Blob([lexportEnJson(cequOnEmporte)], { type: "application/json" });
-    const adresse = URL.createObjectURL(fichier);
-    const emporte = document.createElement("a");
-    emporte.href = adresse;
-    emporte.download = leNomDuFichier();
-    emporte.click();
-    // Rendue tout de suite : le navigateur a déjà le contenu, et une adresse
-    // gardée retient le fichier entier en mémoire jusqu'à la fermeture.
-    URL.revokeObjectURL(adresse);
+/** Emporter un texte dans un fichier. Écrit une fois (règle 10). */
+function emporterLeFichier(texte, nom) {
+  const adresse = URL.createObjectURL(new Blob([texte], { type: "application/json" }));
+  const emporte = document.createElement("a");
+  emporte.href = adresse;
+  emporte.download = nom;
+  emporte.click();
+  // Rendue tout de suite : le navigateur a déjà le contenu, et une adresse
+  // gardée retient le fichier entier en mémoire jusqu'à la fermeture.
+  URL.revokeObjectURL(adresse);
+}
+
+/**
+ * L'interrupteur du corpus en clair, et son compte à rebours.
+ *
+ * **Elle se referme toute seule, et l'écran le montre.** Une porte qui se
+ * ferme sans que rien ne change à l'écran se croit encore ouverte, et l'on
+ * clique sur un bouton qui ne répond pas — ce qui est pire qu'un bouton absent.
+ */
+function brancherLaPorte(ou) {
+  const interrupteur = ou.querySelector("[data-porte-du-developpement]");
+  if (!interrupteur) return;
+
+  interrupteur.addEventListener("change", () => {
+    porteOuverteLe = interrupteur.checked ? Date.now() : null;
+    reglerLeCompteARebours(ou);
+    redessinerLaPorte(ou);
   });
+
+  const lien = ou.querySelector("[data-export-corpus]");
+  lien?.addEventListener("click", async (evenement) => {
+    evenement.preventDefault();
+    // **La porte se vérifie au clic, pas au rendu.** Dix secondes ont pu
+    // passer entre les deux, et un bouton encore dessiné n'est pas une
+    // autorisation.
+    if (!laPorteEstOuverte(porteOuverteLe)) return;
+
+    const lignes = await leCorpusEnClair();
+    if (lignes === null || !laPorteEstOuverte(porteOuverteLe)) return;
+
+    emporterLeFichier(lexportDuCorpusEnJson({ lignes }), leNomDuCorpus());
+  });
+
+  reglerLeCompteARebours(ou);
+}
+
+/** Le compte à rebours : une seconde, tant que la porte est ouverte. */
+function reglerLeCompteARebours(ou) {
+  clearInterval(leCompteARebours);
+  leCompteARebours = null;
+  if (!laPorteEstOuverte(porteOuverteLe)) return;
+
+  leCompteARebours = setInterval(() => {
+    if (!laPorteEstOuverte(porteOuverteLe)) {
+      porteOuverteLe = null;
+      clearInterval(leCompteARebours);
+      leCompteARebours = null;
+    }
+    redessinerLaPorte(ou);
+  }, 1000);
+}
+
+/**
+ * Redessiner la porte seule.
+ *
+ * **Et non la rubrique entière** : la recomposer chaque seconde relancerait
+ * quatre lectures de la base, et le reste de l'écran sauterait sous l'œil.
+ */
+function redessinerLaPorte(ou) {
+  const section = ou.querySelector(".conso-porte");
+  if (!section) return;
+
+  const ouverte = laPorteEstOuverte(porteOuverteLe);
+  section.classList.toggle("est-ouverte", ouverte);
+
+  const mot = section.querySelector("[data-porte-mot]");
+  if (mot) mot.textContent = phraseDeLaPorte(porteOuverteLe);
+
+  const interrupteur = section.querySelector("[data-porte-du-developpement]");
+  if (interrupteur) interrupteur.checked = ouverte;
+
+  const bouton = section.querySelector("[data-export-corpus]");
+  // Le bouton **existe ou n'existe pas** : un bouton grisé invite à cliquer,
+  // puis à se demander pourquoi rien n'arrive.
+  if (ouverte && !bouton) {
+    const boite = document.createElement("div");
+    boite.className = "conso-export";
+    const lien = document.createElement("a");
+    lien.className = "gh-btn gh-btn--danger conso-export__fichier";
+    lien.href = "#";
+    lien.setAttribute("data-export-corpus", "");
+    lien.download = leNomDuCorpus();
+    lien.textContent = "Exporter tout le corpus (JSON)";
+    lien.addEventListener("click", async (evenement) => {
+      evenement.preventDefault();
+      if (!laPorteEstOuverte(porteOuverteLe)) return;
+      const lignes = await leCorpusEnClair();
+      if (lignes === null || !laPorteEstOuverte(porteOuverteLe)) return;
+      emporterLeFichier(lexportDuCorpusEnJson({ lignes }), leNomDuCorpus());
+    });
+    boite.append(lien);
+    section.append(boite);
+  } else if (!ouverte && bouton) {
+    bouton.closest(".conso-export")?.remove();
+  }
 }
 
 /** Ce qu'une rubrique lit, et ce qu'elle en dessine. */

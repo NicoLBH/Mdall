@@ -100,6 +100,20 @@ export function uneIdeeRelevee(brute) {
     avant: texte(brute?.avant),
     lien: texte(brute?.lien),
     apres: texte(brute?.apres),
+    /**
+     * **Le mot de liaison par lequel la phrase a été coupée.**
+     *
+     * Il n'entre pas en mémoire — l'affirmation porte le verbe du lien, pas le
+     * tour de langue — mais il reste ici, parce que c'est lui qui explique le
+     * découpage : un document qui emploie « exige » dix fois pour deux idées
+     * n'a pas le même défaut qu'un document qui n'emploie aucune liaison.
+     * Sans lui, la synthèse d'un document ne pourrait dire que « deux idées »,
+     * ce qui ne se corrige pas.
+     *
+     * Facultatif : une idée relevée autrement qu'en coupant un texte n'en a
+     * pas, et ce n'en est pas moins une idée.
+     */
+    mot: texte(brute?.mot),
     phrase: texte(brute?.phrase),
     document: texte(brute?.document),
     page: Number.isFinite(Number(brute?.page)) && brute?.page !== null
@@ -271,6 +285,7 @@ export function lesIdeesDesCoupes(coupes = [], points = [], { document = "" } = 
       avant: coupe?.avant,
       lien: coupe?.lien,
       apres: coupe?.apres,
+      mot: coupe?.mot,
       phrase: textes[rang - 1],
       document: texte(document),
       page: lus[rang - 1]?.page ?? null

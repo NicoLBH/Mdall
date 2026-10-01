@@ -92,10 +92,12 @@ test("le chantier a son onglet des situations, nommé comme le carnet", () => {
   assert.ok(onglet, "l'onglet doit exister");
   assert.equal(onglet.label, NOM_DU_CARNET, "et porter le nom écrit à un seul endroit");
 
-  // **Après les Sujets**, parce qu'une situation en désigne. Un onglet rangé
-  // au hasard se cherche, et c'est la seule chose qu'un rang apprend.
+  // **Après les Actions**, parce qu'une situation n'est pas une matière du
+  // chantier mais une façon de travailler : elle se range avec ce qui se fait.
+  // Un onglet posé au hasard se cherche, et c'est la seule chose qu'un rang
+  // apprend.
   const rangs = PROJECT_TABS.map((un) => un.id);
-  assert.equal(rangs.indexOf("situations"), rangs.indexOf("sujets") + 1);
+  assert.equal(rangs.indexOf("situations"), rangs.indexOf("actions") + 1);
 });
 
 /**

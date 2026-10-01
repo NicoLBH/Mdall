@@ -62,6 +62,7 @@ import {
   ceQueLeSujetEstDevenu, laVueDuneLecture, leLecteur, lesComptesRendusLus
 } from "../../../services/la-lecture-conservee.js";
 import { renderChoisirUnFichier } from "../../ui/choisir-un-fichier.js";
+import { renderLaSyntheseDunDocument } from "../../ui/la-synthese.js";
 import {
   DIT_DE_LA_RELUE, DIT_SANS_RELUE, laRestitutionRelue
 } from "../../../services/la-restitution-relue.js";
@@ -81,7 +82,7 @@ import { branchesOuvertes, oublierLesBranches } from "../../../services/branches
 import { lotsAProposer, phraseDesLots } from "../../../services/lots-du-cr.js";
 import { itemsDuCompteRendu } from "../../../services/proposition-du-cr.js";
 import {
-  laProvenanceDuneIdee, lesIdeesRelevees, phraseDesIdeesRelevees, phraseDuneIdeeRelevee
+  lesIdeesRelevees, phraseDesIdeesRelevees
 } from "../../../services/une-idee-relevee.js";
 import { partDeLaProposition, phraseDeLaPart } from "../../ui/mdall-a-proposer.js";
 import {
@@ -151,7 +152,7 @@ const estUnDocumentAccepte = (nom) => EST_UN_PDF.test(texte(nom)) || estUnFichie
  * avoir vu le document dont ils sortent, c'est ce qu'on faisait avant, et c'est
  * ce qui rendait les déceptions inexplicables.
  */
-const ONGLET = { RESTITUTION: "restitution", ANALYSE: "analyse" };
+const ONGLET = { RESTITUTION: "restitution", ANALYSE: "analyse", SYNTHESE: "synthese" };
 
 /**
  * La version du procédé de lecture d'un compte rendu.
@@ -200,7 +201,19 @@ const ETAPES = [
 
 const NOMS_DES_ONGLETS = {
   [ONGLET.RESTITUTION]: "Restitution",
-  [ONGLET.ANALYSE]: "Analyse"
+  [ONGLET.ANALYSE]: "Analyse",
+  /**
+   * **Le cran au-dessus de l'analyse.**
+   *
+   * L'analyse dit ce que le document **dit** — ses points, rangés et
+   * confrontés au projet. La synthèse dit ce qu'il **enchaîne** : par quels
+   * mots de liaison, quelles idées ils rendent, ce que la mémoire en
+   * écrirait, et ce que ces idées composent entre elles.
+   *
+   * À droite, parce qu'elle se lit après : on ne juge pas un enchaînement sans
+   * avoir vu les points dont il sort.
+   */
+  [ONGLET.SYNTHESE]: "Synthèse"
 };
 
 /**
@@ -936,12 +949,50 @@ function renderCorps(vue) {
        * remarque qu'une fois la proposition signée. L'état est maintenant
        * remis à neuf à chaque ouverture, et rempli par la relecture seule.
        */
-      vue.conservee && !vue.md.modele.relue ? "" : renderOnglets(vue)}
+      renderOnglets(vue)}
     ${renderLaRelueManquante(vue)}
-    ${(vue.conservee && !vue.md.modele.relue) || vue.onglet === ONGLET.ANALYSE
-      ? renderAnalyse(vue)
-      : renderRestitution(vue)}
+    ${renderLeCorpsDeLonglet(vue)}
   `;
+}
+
+/**
+ * Ce que l'onglet choisi montre.
+ *
+ * **Une lecture rouverte sans son document refait n'a pas d'onglets** : il n'y
+ * a alors qu'une chose à montrer, et c'est l'analyse. Dessiner une barre
+ * d'onglets dont un seul répond ferait chercher ce qui manque.
+ */
+function renderLeCorpsDeLonglet(vue) {
+  // **Un onglet qu'on n'offre plus ne se dessine pas.** Rouvrir une lecture
+  // alors qu'on regardait la Restitution de la précédente montrerait le
+  // document d'un autre compte rendu sous celui-ci.
+  const offerts = lesOngletsOfferts(vue);
+  const ici = offerts.includes(vue.onglet) ? vue.onglet : ONGLET.ANALYSE;
+
+  if (ici === ONGLET.SYNTHESE) return renderLaSynthese(vue);
+  if (ici === ONGLET.ANALYSE) return renderAnalyse(vue);
+  return renderRestitution(vue);
+}
+
+/**
+ * La synthèse : ce que ce document lie, et ce qui s'en compose.
+ *
+ * **Le même composant que les autres lecteurs de l'Atelier.** Un fil de mails
+ * et un rapport de bureau de contrôle enchaînent de la même façon ; trois
+ * dessins donneraient trois listes qui divergeraient (règle 4).
+ */
+function renderLaSynthese(vue) {
+  if (!vue.lecture) return renderLattente(vue);
+
+  const idees = lesIdeesRelevees(vue.lecture.idees);
+  const points = Array.isArray(vue.lecture.points) ? vue.lecture.points.length : 0;
+
+  return renderLaSyntheseDunDocument(vue.lecture.idees, {
+    quoi: "Ce compte rendu",
+    // Sur combien de points, et ce que ce relevé n'est pas : la synthèse ne
+    // connaît pas les points — c'est l'écran qui les a comptés.
+    sur: phraseDesIdeesRelevees(idees, { points })
+  });
 }
 
 /**
@@ -1127,13 +1178,26 @@ function renderAlerte(vue) {
  * page faisait défiler l'une pour atteindre l'autre, alors qu'on passe son
  * temps à faire l'aller-retour.
  */
+/**
+ * Les onglets que cet écran offre, dans l'état où il est.
+ *
+ * **La Restitution n'est pas toujours là.** Une lecture rouverte dont le
+ * document refait ne revient pas de Fichiers n'a rien à y montrer, et un
+ * onglet qui ne répond pas fait chercher ce qui manque. L'analyse et la
+ * synthèse, elles, sont gelées avec la lecture : elles sont toujours là.
+ */
+function lesOngletsOfferts(vue) {
+  const sansDocument = vue.conservee && !vue.md.modele.relue;
+  return Object.values(ONGLET).filter((cle) => !(sansDocument && cle === ONGLET.RESTITUTION));
+}
+
 function renderOnglets(vue) {
   // Le dessin est celui des onglets de l'application — `light-tabs`. Deux
   // barres d'onglets dessinées différemment se mettraient à diverger, et la
   // seconde aurait l'air d'appartenir à un autre produit (règle 4).
   return `
-    <nav class="light-tabs lecture-cr__onglets" aria-label="Restitution ou analyse">
-      ${Object.values(ONGLET).map((cle) => `
+    <nav class="light-tabs lecture-cr__onglets" aria-label="Ce que la lecture a produit">
+      ${lesOngletsOfferts(vue).map((cle) => `
         <button type="button" class="light-tabs__item${vue.onglet === cle ? " is-active" : ""}"
           data-lecture-cr-onglet="${escapeHtml(cle)}" aria-pressed="${vue.onglet === cle}">
           <span class="light-tabs__label">${escapeHtml(NOMS_DES_ONGLETS[cle])}</span>
@@ -1168,7 +1232,6 @@ function renderAnalyse(vue) {
     ${renderAmbiguites(vue.lecture.points)}
     ${renderConfrontation(vue.confrontes, vue.lecture, vue.labels, vue)}
     ${renderCeQueLeCrApporte(vue)}
-    ${renderLesIdeesRelevees(vue)}
     ${renderRubriques(vue)}
     ${
       /**
@@ -1181,54 +1244,6 @@ function renderAnalyse(vue) {
        * analyse juste.
        */
       vue.conservee ? "" : renderSuite(vue)}
-  `;
-}
-
-/**
- * **Ce que ce document lie**, et où cela vit tant que personne n'a signé.
- *
- * ## La question à laquelle cette section répond
- *
- * Une idée relevée dans un compte rendu n'est **pas** dans la mémoire du
- * projet : elle est dans l'analyse de ce document-là, que seul celui qui a
- * lancé la lecture voit. C'est la réponse à « où vivent les idées qu'on n'a pas
- * encore versées » — au même endroit que le reste de l'analyse, et nulle part
- * ailleurs (règle 1).
- *
- * ## Ce qu'elle montre, et ce qu'elle ne promet pas
- *
- * Chaque ligne porte la fonction — deux termes et un verbe — et **la phrase
- * dont elle sort**. Sans la phrase, une idée fausse ne se conteste pas : on ne
- * saurait plus si c'est le document qui le dit ou le découpage qui s'est
- * trompé.
- *
- * Une lecture sans idée ne veut pas dire que le document n'en énonce aucune :
- * seules les liaisons placées entre les deux membres d'une phrase sont lues, et
- * cela se dit plutôt que de laisser croire au constat (règle 5).
- */
-function renderLesIdeesRelevees(vue) {
-  const idees = lesIdeesRelevees(vue?.lecture?.idees);
-  const points = Array.isArray(vue?.lecture?.points) ? vue.lecture.points.length : 0;
-
-  return `
-    <section class="lecture-cr__idees">
-      <h3>Ce que ce document lie</h3>
-      <p class="lecture-cr__idees-mot">${escapeHtml(phraseDesIdeesRelevees(idees, { points }))}</p>
-
-      ${idees.length ? `
-        <ul class="lecture-cr__idees-liste">
-          ${idees.map((une) => `
-            <li class="lecture-cr__idee">
-              <span class="lecture-cr__idee-fonction">${
-                escapeHtml(phraseDuneIdeeRelevee(une))}</span>
-              <span class="lecture-cr__idee-ou mono-small">${
-                escapeHtml(laProvenanceDuneIdee(une))}</span>
-              <q class="lecture-cr__idee-phrase">${escapeHtml(une.phrase)}</q>
-            </li>
-          `).join("")}
-        </ul>
-      ` : ""}
-    </section>
   `;
 }
 
