@@ -110,6 +110,14 @@ const LES_MIGRATIONS = [
   // « non conforme » ne devient plus « conforme » : une idée qui dit le
   // contraire du texte est pire qu'une idée manquante.
   "202611190003_une_negation_ne_devient_pas_son_contraire.sql",
+  // Toutes les natures se relisent : 2 274 affirmations ne se lisaient que par
+  // leur identifiant, parce que la lecture n'avait qu'une branche sur cinq.
+  "202611200001_toutes_les_natures_se_relisent.sql",
+  // Le lot est un intitulé : la coupe lit la phrase, le lexique lit tout.
+  "202611200002_le_lot_est_un_intitule_pas_un_sujet.sql",
+  // « aucun degré exigé » n'est pas une obligation : une négation devant la
+  // liaison la nie.
+  "202611200003_une_liaison_niee_nest_pas_une_liaison.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",
@@ -2124,8 +2132,12 @@ test("ce que dit une affirmation se lit dans le payload", { skip: sansPostgres }
   // pouvoir n'avoir qu'une définition, on n'a au moins qu'un jeu de cas : un cas
   // ajouté éprouve les deux à la fois. Deux listes recopiées auraient divergé à
   // la première retouche (règle 4).
-  assert.ok(LES_CAS.cas.length >= 7,
+  assert.ok(LES_CAS.cas.length >= 18,
     `le fichier des cas en porte ${LES_CAS.cas.length} : la liste a été raccourcie`);
+
+  const enSql = (valeur) => (valeur === null || valeur === undefined
+    ? "null"
+    : `'${String(valeur).replaceAll("'", "''")}'`);
 
   for (const un of LES_CAS.cas) {
     const charge = un.payload === null
@@ -2133,7 +2145,7 @@ test("ce que dit une affirmation se lit dans le payload", { skip: sansPostgres }
       : `'${JSON.stringify(un.payload).replaceAll("'", "''")}'`;
     const lu = banc.sql(
       "select public.le_dit_dune_affirmation("
-      + `'${un.statement.replaceAll("'", "''")}', ${charge}::jsonb);`);
+      + `${enSql(un.kind)}, ${enSql(un.cle)}, ${enSql(un.statement)}, ${charge}::jsonb);`);
     assert.equal(lu.sortie.trim(), un.dit, `${un.quoi} — rendu « ${lu.sortie.trim()} »`);
   }
 });
@@ -2175,8 +2187,8 @@ test("la coupe et le corpus en clair lisent le payload", { skip: sansPostgres },
     // Et les sujets : « garde corps » est un terme, « batiment a » n'en est pas un.
     const sujets = banc.sql(
       "select count(*) from public.les_sujets_dun_texte("
-      + "public.le_dit_dune_affirmation("
-      + "'Document au corpus : le-garde-corps@batiment-a',"
+      + "public.le_dit_dune_affirmation('base-datum', 'le-garde-corps@batiment-a',"
+      + " 'Document au corpus : le-garde-corps@batiment-a',"
       + `'{"subject":"le garde corps","value":"permet de proteger la circulation"}'::jsonb))`
       + " where sujet = 'garde corps';");
     assert.equal(sujets.sortie.trim(), "1", "les sujets ne lisent pas le payload");
@@ -2320,6 +2332,214 @@ test("les six lectures du corpus lisent toutes le payload", { skip: sansPostgres
     banc.sql(`delete from public.project_assertions
                where statement = 'Document au corpus : meme-cle-de-repli';`);
   }
+});
+
+/**
+ * **Un avis, un rattachement, un point de chantier se relisent aussi.**
+ *
+ * La lecture ne connaissait qu'une branche sur cinq : celle de l'affirmation
+ * (`payload->>'subject'`). D'où 2 274 lignes — 24 % de la mémoire — qui se
+ * relisaient « Document au corpus : 02b81e88-8a77-… ».
+ *
+ * Les cas du fichier partagé couvrent les cinq natures ; ici on vérifie que les
+ * **lectures** en profitent, et non la seule fonction.
+ */
+test("les lectures relisent toutes les natures", { skip: sansPostgres }, () => {
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;`);
+
+  // Un avis dont la phrase versée n'est qu'un identifiant, et dont la charge
+  // porte le numéro et la rubrique. Un mot de liaison dans la rubrique : l'idée
+  // ne peut venir que de là.
+  banc.sql(`insert into public.project_assertions
+              (project_id, kind, subject_key, statement, payload) values
+    ('${MEDIATHEQUE}', 'avis', 'A12',
+     'Document au corpus : 02b81e88-8a77-4dd0-96a2-d25a78127665',
+     '{"reference":"A12","title":"le garde corps permet de proteger la circulation"}'::jsonb),
+    ('${GYMNASE}', 'sujet', '12.02.1',
+     'Document au corpus : 7f3c9a10-0000-4000-8000-000000000001',
+     '{"lot":"09 CLOISONS","titre":"palplanche jointive au R+2"}'::jsonb);`);
+
+  try {
+    const avis = banc.sousLadresse("patron@mdall.example",
+      "select une->>'dit'"
+      + " from jsonb_array_elements((public.le_corpus_en_clair())->'corpus') as une"
+      + " where une->>'dit' like 'Avis A12%';");
+    assert.match(avis.sortie, /Avis A12 — le garde corps permet/,
+      "un avis se relit encore par son identifiant");
+
+    // **Le point de chantier aussi**, et son lot se lit devant son titre.
+    const point = banc.sousLadresse("patron@mdall.example",
+      "select une->>'dit'"
+      + " from jsonb_array_elements((public.le_corpus_en_clair())->'corpus') as une"
+      + " where une->>'dit' like '09 CLOISONS%';");
+    assert.match(point.sortie, /09 CLOISONS — palplanche jointive au R\+2/,
+      "un point de chantier se relit encore par son identifiant");
+
+    // Et la coupe tire bien l'idée du titre de l'avis.
+    const coupe = banc.sql(
+      "select avant || '|' || lien || '|' || apres from public.la_coupe_du_corpus()"
+      + " where avant = 'garde corps';");
+    assert.equal(coupe.sortie.trim(), "garde corps|permet|proteger",
+      "la coupe ne lit pas le titre de l'avis");
+  } finally {
+    banc.sql(`delete from public.project_assertions
+               where statement like 'Document au corpus : 02b81e88%'
+                  or statement like 'Document au corpus : 7f3c9a10%';`);
+  }
+});
+
+/**
+ * **Et une reconstruction qui ne porte rien ne remplace pas ce qui est écrit.**
+ *
+ * Un avis sans numéro ni rubrique rendrait « Avis relevé sur une fiche ». Mille
+ * cent quatre-vingt-cinq lignes du corpus sont dans ce cas : elles se liraient
+ * toutes **identiquement**, et l'on croirait à une seule. Un identifiant
+ * illisible reste au moins distinct, et leur nombre est la mesure honnête de ce
+ * que la mémoire ne sait pas dire (règle 5).
+ */
+test("une reconstruction vide n'écrase pas la phrase versée", { skip: sansPostgres }, () => {
+  const garde = banc.sql(
+    "select public.le_dit_dune_affirmation('avis', 'fiche:ab12',"
+    + " 'Document au corpus : 02b81e88-8a77-4dd0-96a2-d25a78127665', '{}'::jsonb);");
+  assert.match(garde.sortie, /02b81e88/,
+    "mille lignes distinctes se liraient « Avis relevé sur une fiche »");
+
+  // **Mais à l'écriture, il n'y a rien à garder** : c'est là que la phrase vaut.
+  const neuve = banc.sql(
+    "select public.le_dit_dune_affirmation('avis', 'fiche:ab12', '', '{}'::jsonb);");
+  assert.equal(neuve.sortie.trim(), "Avis relevé sur une fiche",
+    "une ligne neuve n'a plus de phrase du tout");
+});
+
+/* ── Le lot est un intitulé, pas le sujet de l'idée ──────────────────────── */
+
+/**
+ * **La coupe lit la phrase, le lexique lit tout.**
+ *
+ * Retirer l'intitulé partout faisait tomber les termes partagés de 627 à 597 :
+ * les noms de lots sont du vocabulaire de métier partagé entre chantiers. Les
+ * garder dans la coupe donnait « démolition gros —vise→ … », le lot pour sujet.
+ *
+ * Les deux lectures sont donc séparées, et c'est cette séparation qu'on éprouve :
+ * le même terme doit être **absent** de l'idée et **présent** au lexique.
+ */
+test("l'intitulé de lot sort de la coupe et reste au lexique",
+  { skip: sansPostgres }, () => {
+    for (const [dit, attendue] of [
+      ["01 Terrassements-VRD — le radier permet de drainer la nappe",
+       "le radier permet de drainer la nappe"],
+      ["Lot n° 1 : Démolition / Gros Œuvre — le radier permet de drainer la nappe",
+       "le radier permet de drainer la nappe"],
+      ["Lot 13 — le radier permet de drainer la nappe",
+       "le radier permet de drainer la nappe"],
+      // **« Avis » est l'autre marqueur**, et pour la même raison : c'est une
+      // étiquette que le versement a écrite. Sans cela, « avis » devenait un
+      // terme d'idée sur des milliers de lignes.
+      ["Avis 146 — Hauteur des marches de 16 cm", "Hauteur des marches de 16 cm"],
+      ["Avis — le radier permet de drainer la nappe", "le radier permet de drainer la nappe"],
+      ["Revêtements de la cage d'escalier : M2 — avis favorable",
+       "Revêtements de la cage d'escalier : M2 — avis favorable"],
+      // Un numéro sans tiret : il n'y a pas d'intitulé à détacher.
+      ["01 le radier permet de drainer la nappe",
+       "01 le radier permet de drainer la nappe"]
+    ]) {
+      const lu = banc.sql(
+        `select public.la_phrase_dune_affirmation('${dit.replaceAll("'", "''")}');`);
+      assert.equal(lu.sortie.trim(), attendue, `« ${dit} » se coupe mal`);
+    }
+
+    // **Et l'intitulé est rendu, pas jeté** : c'est la dimension qu'on dégage.
+    const tete = banc.sql(
+      "select coalesce(public.lintitule_dune_affirmation("
+      + "'01 Terrassements-VRD — le radier permet de drainer la nappe'), '—');");
+    assert.equal(tete.sortie.trim(), "01 Terrassements-VRD");
+    const sans = banc.sql(
+      "select coalesce(public.lintitule_dune_affirmation("
+      + "'Revetements de la cage d escalier : M2 — avis favorable'), '—');");
+    assert.equal(sans.sortie.trim(), "—",
+      "le sujet d'une affirmation passe pour un intitulé : on jetterait ce dont elle parle");
+  });
+
+/**
+ * **Et la séparation se voit sur les deux lectures, pas seulement sur la
+ * fonction.**
+ *
+ * Une affirmation dont l'intitulé porte un terme qu'aucune autre ne porte : il
+ * doit être au lexique et absent de l'idée.
+ */
+test("le lot n'est pas le sujet de l'idée, et reste du vocabulaire",
+  { skip: sansPostgres }, () => {
+    banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+              on conflict do nothing;`);
+    banc.sql(`insert into public.project_assertions (project_id, statement) values
+      ('${MEDIATHEQUE}', '07 Palplanche Berlinoise — le radier permet de drainer la nappe'),
+      ('${GYMNASE}', '07 Palplanche Berlinoise — la nappe remonte au printemps');`);
+
+    try {
+      // **L'idée ne nomme pas le lot.**
+      const idee = banc.sql(
+        "select coalesce(string_agg(avant, '|'), '—') from public.la_coupe_du_corpus()"
+        + " where avant like '%palplanche%';");
+      assert.equal(idee.sortie.trim(), "—",
+        `le lot est encore le sujet de l'idée : ${idee.sortie.trim()}`);
+      const vraie = banc.sql(
+        "select avant || '|' || apres from public.la_coupe_du_corpus()"
+        + " where avant = 'radier';");
+      assert.equal(vraie.sortie.trim(), "radier|drainer",
+        "la phrase n'est plus lue du tout");
+
+      // **Le lexique, lui, le porte** : vu sur deux chantiers, il franchit le seuil.
+      const lexique = banc.sousLadresse("patron@mdall.example",
+        "select count(*) from public.les_sujets_du_systeme()"
+        + " where sujet = 'palplanche berlinoise';");
+      assert.equal(lexique.sortie.trim(), "1",
+        "le nom du lot a été jeté : le lexique s'appauvrit");
+    } finally {
+      banc.sql(`delete from public.project_assertions
+                 where statement like '07 Palplanche Berlinoise%';`);
+    }
+  });
+
+/* ── Une liaison niée n'est pas une liaison ──────────────────────────────── */
+
+/**
+ * **« aucun degré exigé » n'est pas une obligation.**
+ *
+ * Dès que les avis ont retrouvé leur phrase, celle-ci est sortie : « Parois
+ * séparant les ensembles de celliers ou caves : aucun degré exigé par cet
+ * alinéa » rendait `parois séparant —impose→ alinéa`. La règle du round
+ * précédent ne pouvait pas l'attraper : « aucun » ne précède aucun des deux
+ * termes — il précède **le mot de liaison**.
+ */
+test("une liaison niée ne rend rien", { skip: sansPostgres }, () => {
+  for (const texte of [
+    "Parois separant les ensembles de celliers : aucun degre exige par cet alinea",
+    "le radier ne permet pas de drainer la nappe",
+    "la dalle n est plus exigee par le reglement"
+  ]) {
+    const lu = banc.sql(
+      `select count(*) from public.les_idees_des_textes(array['${texte}']);`);
+    assert.equal(lu.sortie.trim(), "0", `« ${texte} » rend encore une idée`);
+  }
+
+  // **La fenêtre est de deux mots, et pas plus.** Une négation plus loin que cela
+  // porte sur autre chose, et refuser serait perdre une idée vraie.
+  const loin = banc.sql(
+    "select avant || '|' || apres from public.les_idees_des_textes(array["
+    + "'le radier n est pas fissure et le drainage permet de secher la nappe'"
+    + "]);");
+  // Le terme de gauche est « radier », le premier mot technique du membre : la
+  // négation n'y change rien, et c'est ce qu'on vérifie — l'idée est rendue.
+  assert.equal(loin.sortie.trim(), "radier|secher",
+    "une négation éloignée refuse une idée vraie");
+
+  // Et l'idée de référence de la doctrine tient toujours.
+  const refer = banc.sql(
+    "select avant || '|' || lien || '|' || apres from public.les_idees_des_textes(array["
+    + "'le garde corps permet de proteger la circulation'"
+    + "]);");
+  assert.equal(refer.sortie.trim(), "garde corps|permet|proteger");
 });
 
 /* ── La ligature ne coupe plus les mots ──────────────────────────────────── */

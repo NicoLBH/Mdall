@@ -71,7 +71,12 @@ create table if not exists public.project_assertions (
   -- table réelle (`202609020001_project_assertions.sql`), et elles sont ici
   -- parce que la répétition du corpus se mesure dessus : l'unicité porte sur
   -- (proposition, nature, sujet), et c'est de là que viennent les copies.
-  kind text not null default 'avis',
+  -- **Une nature neutre par défaut, et non « avis ».** Le banc pose des
+  -- affirmations dont il veut que la phrase se lise telle quelle ; les donner
+  -- toutes pour des avis les faisait toutes relire « Avis relevé sur une
+  -- fiche ». Un jeu d'essai qui ment sur la nature des lignes éprouve autre
+  -- chose que le produit. Les tests qui tiennent à une nature la posent.
+  kind text not null default '',
   subject_key text not null default '',
   proposition_id uuid,
   -- Ce qui la remplace. L'affirmation remplacée reste en base (règle 6), et une

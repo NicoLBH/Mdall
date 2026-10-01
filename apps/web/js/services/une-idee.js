@@ -311,8 +311,92 @@ export function lesIdeesParSorteDeLien(idees = []) {
   return rangees;
 }
 
-/** Les sortes de liens qui n'affirment qu'une intention. */
-export const LES_LIENS_DINTENTION = ["but", "permet"];
+/**
+ * **La sorte qui ne fait pas une idée, mais une tâche.**
+ *
+ * `but` — « afin de », « pour permettre » — ne relie pas une chose à une chose :
+ * il relie une **action** à son **but**. « Réaliser un carottage afin de drainer
+ * la nappe » dit quoi faire et pourquoi ; ce n'est pas « A entraîne B ».
+ *
+ * Mesuré sur le corpus entier : quinze des vingt-six idées distinctes venaient
+ * de là, et **aucune ne tenait comme idée** — leur membre de gauche est un verbe
+ * à l'infinitif, parce que c'est une instruction.
+ *
+ * `permet` n'y est **pas**, et c'est délibéré. « Le garde-corps permet de
+ * protéger la circulation » relie bien deux choses : c'est l'exemple de
+ * référence de la doctrine, et le ranger parmi les tâches l'aurait perdu.
+ */
+export const LE_LIEN_DUNE_TACHE = "but";
+
+/**
+ * Les sortes de liens qui n'affirment qu'une intention.
+ *
+ * Plus large que la tâche : `permet` reste une idée, mais « possible » n'est pas
+ * « fait », et l'écran doit pouvoir le dire.
+ */
+export const LES_LIENS_DINTENTION = [LE_LIEN_DUNE_TACHE, "permet"];
+
+/** Ce qui fait une tâche plutôt qu'une idée. */
+export function cestUneTache(idee) {
+  return texte(idee?.lien) === LE_LIEN_DUNE_TACHE;
+}
+
+/**
+ * Les idées d'un côté, les tâches de l'autre.
+ *
+ * **Elles ne se comptent pas ensemble, et c'est tout l'objet.** Une liste de
+ * vingt-six lignes faisait croire à vingt-six faits, là où il y a onze idées et
+ * quinze tâches. Faire passer une intention pour un fait est exactement ce que
+ * la règle 12 interdit.
+ *
+ * Rien n'est jeté : une tâche justifiée est une information — « voici ce qu'il
+ * faut faire, et voici pourquoi » est ce qu'un compte rendu de chantier écrit le
+ * plus souvent. Elle n'est simplement pas une idée.
+ */
+export function lesIdeesEtLesTaches(idees = []) {
+  const lues = Array.isArray(idees) ? idees : [];
+  return {
+    idees: lues.filter((une) => !cestUneTache(une)),
+    taches: lues.filter(cestUneTache)
+  };
+}
+
+/**
+ * Ce qu'une tâche dit, en français.
+ *
+ * Pas « A vise B » : « faire A, pour B ». La forme compte — elle est la raison
+ * pour laquelle ce n'est pas une idée, et l'écrire comme une idée reviendrait à
+ * défaire la distinction qu'on vient de poser.
+ */
+export function laTacheDite(tache) {
+  const quoi = texte(tache?.avant);
+  const pourquoi = texte(tache?.apres);
+  if (!quoi || !pourquoi) return "";
+  return `${quoi} → pour ${pourquoi}`;
+}
+
+/** Ce que le partage des deux dit, en une phrase. */
+export function phraseDesTaches(idees = []) {
+  const { idees: vraies, taches } = lesIdeesEtLesTaches(idees);
+
+  if (!taches.length) {
+    return vraies.length
+      ? `${vraies.length} idée${vraies.length > 1 ? "s" : ""}, et aucune tâche : `
+        + "tout ce qui sort relie une chose à une chose."
+      : "Ni idée, ni tâche.";
+  }
+
+  if (!vraies.length) {
+    return `${taches.length} tâche${taches.length > 1 ? "s" : ""} et aucune idée. `
+      + "Le corpus dit quoi faire et pourquoi ; il ne dit pas encore ce qui "
+      + "entraîne quoi.";
+  }
+
+  return `${vraies.length} idée${vraies.length > 1 ? "s" : ""} et ${taches.length} `
+    + `tâche${taches.length > 1 ? "s" : ""}. Une tâche relie une action à son but, `
+    + "pas une chose à une chose : les compter ensemble ferait passer une "
+    + "intention pour un fait.";
+}
 
 /**
  * Ce que la répartition des sortes dit, en une phrase.

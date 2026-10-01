@@ -11,9 +11,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  LES_LIENS, LES_SORTES_DE_LIENS, cestUneIdee, laFonctionDite, leCote, leLienDit,
-  lesIdeesParSorteDeLien, lesIdeesRangees, phraseDeCeQueLesIdeesValent,
-  phraseDesSortesDeLiens, phraseDuneIdee, uneIdee
+  LES_LIENS, LES_LIENS_DINTENTION, LES_SORTES_DE_LIENS, LE_LIEN_DUNE_TACHE,
+  cestUneIdee, cestUneTache, laFonctionDite, laTacheDite, leCote, leLienDit,
+  lesIdeesEtLesTaches, lesIdeesParSorteDeLien, lesIdeesRangees,
+  phraseDeCeQueLesIdeesValent, phraseDesSortesDeLiens, phraseDesTaches,
+  phraseDuneIdee, uneIdee
 } from "./une-idee.js";
 
 const UNE = { avant: "terrain argileux", lien: "cause", apres: "plancher beton",
@@ -268,4 +270,64 @@ test("la phrase des sortes dit ce qu'il faut en conclure", () => {
   assert.match(
     phraseDesSortesDeLiens([{ lien: "but" }, { lien: "but" }]),
     /rien ici ne permet de prévoir/);
+});
+
+/**
+ * **Onze idées et quinze tâches, et non vingt-six idées.**
+ *
+ * `but` — « afin de », « pour permettre » — relie une action à son but, non une
+ * chose à une chose. Mesuré sur le corpus entier : quinze des vingt-six venaient
+ * de là, et aucune ne tenait comme idée.
+ */
+test("les tâches se comptent à part des idées", () => {
+  const lignes = [
+    { avant: "realiser un carottage", lien: "but", apres: "drainer" },
+    { avant: "mettre une bande", lien: "but", apres: "couler" },
+    { avant: "terrain argileux", lien: "cause", apres: "plancher repris" },
+    { avant: "garde corps", lien: "permet", apres: "proteger" }
+  ];
+  const { idees, taches } = lesIdeesEtLesTaches(lignes);
+
+  assert.equal(taches.length, 2);
+  assert.equal(idees.length, 2);
+
+  // **`permet` reste une idée**, et c'est délibéré : « le garde-corps permet de
+  // protéger la circulation » relie bien deux choses, et c'est l'exemple de
+  // référence de la doctrine.
+  assert.equal(cestUneTache({ lien: "permet" }), false);
+  assert.equal(cestUneTache({ lien: "but" }), true);
+  assert.equal(LE_LIEN_DUNE_TACHE, "but");
+  assert.ok(LES_LIENS_DINTENTION.includes("permet"),
+    "« permet » n'est plus une intention : « possible » redevient « fait »");
+});
+
+/** Une tâche se dit « faire A, pour B » — jamais « A vise B ». */
+test("une tâche ne se dit pas comme une idée", () => {
+  assert.equal(laTacheDite({ avant: "realiser un carottage", apres: "drainer" }),
+    "realiser un carottage → pour drainer");
+
+  // Une tâche à demi lue ne se dit pas : une flèche sans sa cible n'apprend rien.
+  assert.equal(laTacheDite({ avant: "realiser", apres: "" }), "");
+  assert.equal(laTacheDite(null), "");
+});
+
+/** Et la phrase dit ce qu'il faut en conclure, selon ce qu'il y a. */
+test("la phrase des tâches dit ce qu'il faut en conclure", () => {
+  assert.match(phraseDesTaches([]), /Ni idée, ni tâche/);
+
+  assert.match(
+    phraseDesTaches([{ lien: "cause" }, { lien: "but" }]),
+    /1 idée et 1 tâche/);
+  assert.match(
+    phraseDesTaches([{ lien: "cause" }, { lien: "but" }]),
+    /intention pour un fait/);
+
+  // Rien que des tâches : la conclusion change, et le dire autrement compte.
+  assert.match(phraseDesTaches([{ lien: "but" }, { lien: "but" }]),
+    /ne dit pas encore ce qui entraîne quoi/);
+
+  // Rien que des idées : on ne met pas en garde pour rien.
+  const faits = phraseDesTaches([{ lien: "cause" }, { lien: "permet" }]);
+  assert.match(faits, /aucune tâche/);
+  assert.doesNotMatch(faits, /intention pour un fait/);
 });
