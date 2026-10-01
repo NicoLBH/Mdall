@@ -1,5 +1,5 @@
 import { store } from "../store.js";
-import { ORIGINE, executionsAGarder } from "./run-partition.js";
+import { ORIGINE, executionsAGarder, lorigineDunGeste } from "./run-partition.js";
 import { estUnDepotAbouti, phraseDuDepot } from "./le-mot-dun-depot.js";
 import { cestUnIdDeProjet, laConcordanceSansCeProjet, leProjetOuLonEcrit } from "./le-projet-ou-lon-ecrit.js";
 import {
@@ -971,11 +971,12 @@ function mapProjectRunRowToLogEntry(row = {}) {
   // **L'origine se lit sur le geste, et elle décide de l'onglet.** Un versement
   // rangé dans « Partagées » annoncerait comme lu par tout le projet ce que la
   // base ne rend qu'à son auteur (`202610280001_...`).
-  // **Les deux gestes de la file se rangent dans « Versements ».** La liste n'est
-  // plus un seul mot : une lecture de comptes rendus est, comme un dépôt de
-  // mails, un travail long et personnel que le serveur fait pour vous.
+  // **Chaque geste de la file a son onglet, et la règle vit à un seul endroit**
+  // (`run-partition.js`, `docs/dou-vient-une-execution.md`) : un dépôt de mails
+  // fait entrer de la matière, donc « Versements » ; une lecture de comptes
+  // rendus relit ce qui est déjà là, donc « Atelier ».
   const deLaFile = estUnGesteDeLaFile(geste);
-  const origine = deLaFile ? ORIGINE.VERSEMENT : ORIGINE.PROJET;
+  const origine = (deLaFile && lorigineDunGeste(geste)) || ORIGINE.PROJET;
 
   const triggerLabel = deLaFile
     ? laProvenanceDuGeste(geste)

@@ -91,6 +91,8 @@ import {
 import {
   ABANDONNEE_APRES_MS, GESTE_DES_CR
 } from "../_shared/versement/reveiller-la-file.js";
+// @ts-ignore
+import { laLigneDuneLecture, leLecteur } from "../_shared/versement/la-lecture-conservee.js";
 
 const entetes = {
   "Access-Control-Allow-Origin": "*",
@@ -330,6 +332,10 @@ async function unCompteRendu(client: any, {
     rubriques: Array.isArray(lu.rubriques) ? lu.rubriques : []
   });
   lecture.lueSur = lueSur;
+  // **Par quoi ce compte rendu a été lu**, dans les mêmes mots que l'Atelier.
+  // Sans lui, comparer deux lectures ne dit pas si c'est le document qui a
+  // changé ou la façon de le lire.
+  lecture.luPar = leLecteur(texte(lu.modele));
 
   const relies = verifierLesLiens({
     points: lecture.points, connus: sujetsDuProjet
@@ -367,6 +373,31 @@ async function unCompteRendu(client: any, {
   }
 
   const document = piece;
+
+  /**
+   * **Ce que la lecture a vu se garde, et se rouvre.**
+   *
+   * Sans cela, la lecture au serveur ne rend **rien à regarder** : une
+   * proposition tombe dans la mémoire, et tout ce que l'Atelier montrait — les
+   * points relevés, la confrontation au projet, le document refait — n'existe
+   * nulle part. C'est ce qu'on a perdu en déplaçant la file.
+   *
+   * La même ligne, par le même module que le navigateur : deux versions
+   * auraient gardé deux analyses du même écran (règle 4).
+   *
+   * **Avant la proposition, et sans la conditionner.** Un compte rendu qui
+   * n'apporte rien à proposer a quand même été lu, et c'est souvent celui-là
+   * qu'on veut rouvrir pour comprendre pourquoi (règle 6). Et un échec
+   * d'écriture ici ne fait pas tomber la lecture : elle a eu lieu.
+   */
+  const gardee = laLigneDuneLecture(
+    { lecture, confrontes, sujetsDuProjet },
+    { projectId, documentId: texte(piece?.id), propositionId: texte(propositionId) }
+  );
+  if (gardee) {
+    const { error: pasGardee } = await client.from("cr_lectures").insert(gardee);
+    if (pasGardee) console.warn("[lecture-cr] lecture non conservée", pasGardee.message);
+  }
 
   const items = itemsDuCompteRendu({
     confrontes, document, rubriques: lecture.rubriques, luPar: texte(lu.modele),

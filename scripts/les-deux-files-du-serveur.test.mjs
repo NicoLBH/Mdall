@@ -301,3 +301,59 @@ test("une lecture de comptes rendus se consigne sous son geste", () => {
   // par tout le projet.
   assert.match(course, /personnelle: true/, "la course deviendrait lisible par tout le projet");
 });
+
+/**
+ * **Le serveur garde ce que la lecture a vu, et par le même module que l'écran.**
+ *
+ * Sans cela, la lecture au serveur ne rend rien à regarder : une proposition
+ * tombe dans la mémoire, et tout ce que l'Atelier montrait — les points relevés,
+ * la confrontation au projet — n'existe nulle part. C'est ce qu'on a perdu en
+ * déplaçant la file.
+ */
+test("la lecture au serveur conserve ce qu'elle a vu", () => {
+  const texte = source("lire-les-comptes-rendus");
+
+  assert.match(texte, /laLigneDuneLecture\(/,
+    "la lecture ne se conserve pas : le serveur ne rendrait rien à regarder");
+  // **La garde avec son insertion.** Cherchée seule, l'insertion reste écrite
+  // dans une branche qu'on a éteinte : `if (false)` laissait l'épreuve verte et
+  // le serveur ne gardait plus rien.
+  assert.match(
+    texte,
+    /if \(gardee\) \{\s*\n\s*const \{ error: pasGardee \} = await client\.from\("cr_lectures"\)\.insert\(gardee\);/,
+    "la ligne conservée ne part pas en base"
+  );
+  assert.match(
+    texte,
+    /import \{[\s\S]{0,120}laLigneDuneLecture[\s\S]{0,120}\} from "\.\.\/_shared\/versement\/la-lecture-conservee\.js"/,
+    "le serveur construit la ligne lui-même : elle divergera de celle de l'écran"
+  );
+
+  /**
+   * **Avant la proposition, et sans la conditionner.** Un compte rendu qui
+   * n'apporte rien à proposer a quand même été lu, et c'est souvent celui-là
+   * qu'on veut rouvrir pour comprendre pourquoi (règle 6).
+   */
+  const ouGardee = texte.indexOf("laLigneDuneLecture(");
+  const ouRien = texte.indexOf("ce compte rendu n'apporte rien à proposer");
+  assert.ok(ouGardee !== -1 && ouRien !== -1);
+  assert.ok(ouGardee < ouRien,
+    "un compte rendu qui n'apporte rien à proposer ne se conserve pas : "
+    + "c'est pourtant celui-là qu'on veut rouvrir");
+});
+
+/**
+ * **Le procédé de lecture s'écrit à un seul endroit.**
+ *
+ * Il vivait dans l'écran de l'Atelier, et le serveur — qui lit par les mêmes
+ * services — ne l'écrivait pas : deux lectures du même procédé se disaient
+ * faites par deux procédés différents, et comparer leurs chiffres ne disait
+ * plus si c'est le document qui avait changé ou la façon de le lire (règle 10).
+ */
+test("le serveur dit par quoi il a lu, dans les mêmes mots que l'Atelier", () => {
+  const texte = source("lire-les-comptes-rendus");
+
+  assert.match(texte, /lecture\.luPar = leLecteur\(/, "le serveur ne dit pas par quoi il a lu");
+  assert.doesNotMatch(texte, /"lecture de CR v\d"/,
+    "le procédé est réécrit ici : il divergera de celui de l'écran");
+});

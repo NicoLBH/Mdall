@@ -88,6 +88,10 @@ export const LES_DEPARTS = [
   // comme l'écran : deux valeurs auraient fait un écran qui réveille avant que
   // la reprise n'accepte (règle 4).
   "services/reveiller-la-file.js",
+  // Ce qu'une lecture de compte rendu garde, et ce qu'on en rouvre. Le
+  // navigateur et le serveur gardent la même chose, par le même module : deux
+  // versions auraient gardé deux analyses du même écran (règle 4).
+  "services/la-lecture-conservee.js",
   // Importé dynamiquement par `atelier-proposition.js` : la fermeture ne le
   // trouve pas en lisant les `from "…"`, et son absence ne se verrait qu'au
   // premier enrichissement d'une proposition ouverte.

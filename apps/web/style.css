@@ -25539,6 +25539,68 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .lecture-cr__parti-icone{flex:0 0 auto;color:var(--success, #3fb950);line-height:1;padding-top:1px;}
 .lecture-cr__parti-mot{margin:0;color:var(--text);}
 
+/* **Les comptes rendus déjà analysés, sous la zone de dépôt.**
+
+   Une liste, pas un tableau : chaque ligne porte un nom, une réunion et un
+   nombre de points — trois faits, qui n'ont pas besoin de colonnes alignées
+   pour se lire. Un tableau aurait demandé une en-tête, une pagination et un
+   tri, c'est-à-dire trois réglages pour une liste qu'on parcourt des yeux.
+
+   Rangée par la date de la réunion, jamais par celle de l'analyse : un compte
+   rendu tenu en mars et lu en septembre est de mars. */
+.lecture-cr__lus{ margin:20px 0 0; }
+.lecture-cr__lus-titre{ margin:0; font-size:13px; font-weight:600; color:var(--text); }
+.lecture-cr__lus-aide{ margin:2px 0 10px; color:var(--muted); }
+.lecture-cr__lus-mot{ margin:16px 0 0; color:var(--muted); }
+.lecture-cr__lus-liste{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }
+
+.lecture-cr__lus-bouton{
+  display:grid;
+  /* L'icône, le nom qui prend ce qui reste, puis deux colonnes de faits qui ne
+     bougent pas d'une ligne à l'autre : c'est ce qui rend la liste lisible en
+     diagonale. */
+  grid-template-columns:16px minmax(0,1fr) auto auto;
+  align-items:center; gap:10px;
+  width:100%; padding:8px 10px; text-align:left;
+  background:transparent; border:1px solid transparent; border-radius:8px;
+  color:var(--text); font:inherit; cursor:pointer;
+}
+.lecture-cr__lus-bouton:hover{ background:var(--surface-2, #1b1f24); border-color:var(--border); }
+.lecture-cr__lus-icone{ color:var(--muted); line-height:1; }
+/* Le nom d'un compte rendu est long et porte sa date à la fin : il se coupe au
+   début plutôt qu'à la fin, où tout se ressemble. */
+.lecture-cr__lus-nom{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lecture-cr__lus-reunion, .lecture-cr__lus-points{ color:var(--muted); white-space:nowrap; }
+.lecture-cr__lus-ligne.est-ouverte .lecture-cr__lus-bouton{
+  background:var(--surface-2, #1b1f24); border-color:var(--accent, #2f81f7);
+}
+
+/* **Une lecture rouverte est datée, et elle ne se recalcule pas.** Le bandeau
+   le dit avant tout le reste : sans lui, on lirait l'analyse de mars comme si
+   elle était d'aujourd'hui, et l'on s'étonnerait qu'un sujet fermé y soit
+   encore ouvert. */
+.lecture-cr__photo{
+  display:flex; align-items:flex-start; gap:10px;
+  margin:12px 0 0; padding:10px 12px;
+  border:1px solid var(--border); border-radius:8px;
+  background:var(--surface-2, #1b1f24);
+  color:var(--muted); font-size:13px;
+}
+.lecture-cr__photo svg{ flex:0 0 auto; margin-top:2px; }
+
+/* Ce que le sujet est devenu **depuis** — à côté de ce que la lecture a vu,
+   jamais à la place. Les deux faits se lisent donc d'un coup d'œil, et aucun
+   ne se fait passer pour l'autre. */
+.lecture-cr__sujet-depuis{
+  padding:0 6px; border-radius:999px;
+  border:1px solid var(--border);
+  color:var(--text);
+}
+.lecture-cr__sujet-depuis.est-parti{
+  border-color:var(--danger, #f85149);
+  color:var(--danger, #f85149);
+}
+
 .lecture-cr__depot{
   display:flex;
   flex-direction:column;
