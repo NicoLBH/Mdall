@@ -51,6 +51,15 @@ import {
 import {
   laMesureDesSujets, lesEnchainementsDesSujets, lesSujetsDuSysteme
 } from "../partage/js/services/les-sujets-du-systeme-supabase.js";
+import {
+  laFonctionDite, leLienDit, lesIdeesRangees, phraseDeCeQueLesIdeesValent
+} from "../partage/js/services/une-idee.js";
+import {
+  lesRaisonnements, phraseDesRaisonnements, phraseDunRaisonnement
+} from "../partage/js/services/un-raisonnement.js";
+import {
+  laMesureDesIdees, lesIdeesDuSysteme
+} from "../partage/js/services/les-idees-du-systeme-supabase.js";
 import { LE_CARBURANT, laRubriqueDite } from "../partage/js/services/les-rubriques-de-la-console.js";
 import { renderTitreDEcranHtml } from "../partage/js/views/ui/titre-decran.js";
 
@@ -359,6 +368,123 @@ function renderLesSujets(sujets, mesure) {
 }
 
 /**
+ * Les idées que les chantiers énoncent, et ce qu'elles composent.
+ *
+ * ## Le cran au-dessus des termes
+ *
+ * > « Plafonds, dispositions, passage, portes… et alors ? Où sont les idées,
+ * > les raisonnements, les fonctions ? Comment est-ce que ça s'enchaîne ? »
+ *
+ * Et alors rien, en effet. Un terme nomme une chose ; il ne dit pas ce qu'elle
+ * entraîne, ce qu'elle impose, ni ce qu'elle interdit. Voici l'autre question :
+ * **qu'est-ce qui fait quoi**.
+ *
+ * ## Deux listes, et la seconde est la seule qui raisonne
+ *
+ * Les idées sont trouvées, une par affirmation, par le mot de liaison que la
+ * phrase écrit elle-même. Les **enchaînements** ne sont trouvés nulle part :
+ * ils se calculent en composant deux idées qui se touchent, souvent venues de
+ * deux documents qui ne se connaissent pas. C'est la seule chose de tout cet
+ * écran que personne n'a écrite.
+ *
+ * ## Ce que cela n'est pas, dit avant qu'on le prenne pour autre chose
+ *
+ * Aucun modèle ne tourne derrière. Le découpage se fait sur « donc », « car »,
+ * « à condition que » : cela se vérifie à la main, et cela ne lit pas les
+ * phrases qui ne portent aucun de ces mots. La part qui en porte un est
+ * annoncée, parce qu'elle est la mesure de ce qu'on ne voit pas (règle 5).
+ */
+function renderLesIdees(lignes, mesure) {
+  const idees = lesIdeesRangees(lignes);
+  const chaines = lesRaisonnements(idees);
+
+  return `
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">Ce que les chantiers énoncent</h3>
+      <p class="conso-usages__mot">
+        Un terme nomme une chose ; il ne dit pas ce qu'elle fait. Voici le cran
+        au-dessus : <b>ce qui entraîne quoi</b>, lu dans les mots de liaison que
+        les affirmations écrivent elles-mêmes — « donc », « car »,
+        « à condition que ». Chaque idée est une fonction : quelque chose entre,
+        quelque chose sort.
+      </p>
+      <p class="conso-usages__mot"><b>${
+        echapper(phraseDeCeQueLesIdeesValent(idees, mesure))}</b></p>
+      ${/*
+        **Ce que le découpage ne sait pas lire.** « Si le sol est argileux, les
+        fondations descendent » commence par son lien : à gauche, il n'y a rien.
+        Le taire ferait prendre une limite de méthode pour une absence dans le
+        corpus (règle 5).
+      */""}
+      <p class="conso-usages__mot">
+        Seules les liaisons placées <b>entre</b> les deux membres sont lues :
+        « si… » commence par son lien, et n'a rien à sa gauche. Deviner la
+        coupure sur une virgule rendrait des idées fausses avec l'aplomb des
+        vraies.
+      </p>
+
+      ${idees.length ? `
+        <ul class="forme-reference">
+          ${idees.slice(0, 40).map((une) => `
+            <li class="forme-reference__ligne">
+              <span class="forme-reference__quoi">
+                <b>${echapper(laFonctionDite(une))}</b>
+                <i>${echapper(leLienDit(une.lien)?.libelle ?? "")}</i>
+              </span>
+              <span class="forme-reference__chiffres mono-small">${
+                echapper(`${compteDit(une.affirmations)} ${une.affirmations > 1
+                  ? "affirmations" : "affirmation"}`)}</span>
+              <span class="forme-reference__sur mono-small">${
+                echapper(`sur ${compteDit(une.chantiers)} chantier${
+                  une.chantiers > 1 ? "s" : ""}`)}</span>
+            </li>
+          `).join("")}
+        </ul>
+        ${idees.length > 40
+          ? `<p class="conso-usages__mot">${echapper(
+              `Les 40 premières, sur ${compteDit(idees.length)}.`)}</p>`
+          : ""}
+      ` : ""}
+    </section>
+
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">Ce qui s'enchaîne — un raisonnement</h3>
+      <p class="conso-usages__mot">
+        Deux idées composent quand ce que l'une produit est ce que l'autre
+        demande. Ce qui sort de la composition n'est écrit dans aucun document :
+        c'est une conséquence obtenue, pas relevée. C'est la seule ligne de cette
+        console qui ressemble à du raisonnement.
+      </p>
+      <p class="conso-usages__mot"><b>${
+        echapper(phraseDesRaisonnements(chaines, idees))}</b></p>
+
+      ${chaines.length ? `
+        <ul class="forme-reference">
+          ${chaines.slice(0, 20).map((une) => `
+            <li class="forme-reference__ligne">
+              <span class="forme-reference__quoi">
+                <b>${echapper(phraseDunRaisonnement(une))}</b>
+                <i>${echapper(`${une.pas} maillons`)}</i>
+              </span>
+              <span class="forme-reference__chiffres mono-small">${
+                echapper(`${compteDit(une.affirmations)} affirmations`)}</span>
+              ${/*
+                **Le maillon le plus faible, et on le dit.** Une chaîne n'est pas
+                mieux attestée que le lien qui l'est le moins ; annoncer le
+                meilleur donnerait une assise qu'elle n'a pas (règle 12).
+              */""}
+              <span class="forme-reference__sur mono-small">${
+                echapper(`au plus faible : ${compteDit(une.chantiers)} chantier${
+                  une.chantiers > 1 ? "s" : ""}`)}</span>
+            </li>
+          `).join("")}
+        </ul>
+      ` : ""}
+    </section>
+  `;
+}
+
+/**
  * La tête d'une rubrique : son nom, et la question à laquelle elle répond.
  *
  * **La question, pas le nom de la table.** La console posait sept blocs à la
@@ -467,6 +593,11 @@ async function leCorpsDeLaRubrique(cle) {
     return lignes === null
       ? renderPasLu("Les domaines", "ont")
       : renderLesDomaines(lesDomainesRanges(lignes));
+  }
+
+  if (cle === "idees") {
+    const [lignes, mesure] = await Promise.all([lesIdeesDuSysteme(), laMesureDesIdees()]);
+    return lignes === null ? renderPasLu("Les idées", "ont") : renderLesIdees(lignes, mesure);
   }
 
   if (cle === "sujets") {

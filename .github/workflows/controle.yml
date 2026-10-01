@@ -1,0 +1,77 @@
+# Le contrôle d'une proposition de changement.
+#
+# POURQUOI IL EXISTE
+#
+# Il n'y en avait pas. Les deux autres journées de travail ne se déclenchent
+# que sur `push` vers `main` : les épreuves ne tournaient donc **qu'après la
+# fusion**, dans le déploiement. Deux fois dans la même journée, le résultat a
+# été le même — une PR relue et fusionnée, puis un déploiement rouge :
+#
+#   · « 7 987 épreuves, 3 échecs » : un défaut du moteur Node, pas du code.
+#   · « syntax error at or near "analyse" » : un mot réservé de PostgreSQL.
+#
+# Les deux étaient visibles avant la fusion. Personne ne les a vus parce que
+# rien ne regardait. Une déclaration qu'on ne vérifie pas est une intention
+# (règle 12) — et ici la vérification existait, mais elle arrivait **après** la
+# décision, ce qui revient au même.
+#
+# CE QU'IL FAIT, ET CE QU'IL NE FAIT PAS
+#
+# Exactement ce que le déploiement fait avant de servir la page : les épreuves,
+# puis les trois constructions. Rien de plus — il ne déploie rien, ne publie
+# rien, et n'a besoin d'aucun secret. Une proposition de changement n'a pas à
+# toucher l'infrastructure pour être jugée.
+#
+# Les commandes ne sont pas recopiées ici : elles vivent dans « package.json »,
+# et ce fichier les appelle (règle 10). La version de Node se lit dans
+# « .nvmrc », pour la même raison — elle était écrite en dur dans le
+# déploiement, et les épreuves tombaient ici en passant là-bas.
+name: Contrôle
+
+on:
+  pull_request:
+  # De quoi le relancer à la main sur une branche, sans ouvrir de proposition.
+  workflow_dispatch:
+
+# Un contrôle ne lit rien d'autre que le dépôt. Il n'écrit nulle part.
+permissions:
+  contents: read
+
+# Une proposition qu'on pousse deux fois n'a pas besoin de deux contrôles : le
+# premier juge un état qui n'existe plus.
+concurrency:
+  group: controle-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  epreuves:
+    name: Les épreuves et les constructions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build web assets
+        run: npm run build:web
+
+      # Après « build:web » : la console emporte pdf.js, que celui-ci vient de
+      # copier. L'ordre est le même que dans le déploiement, et pour la même
+      # raison.
+      - name: Build console
+        run: npm run build:console
+
+      - name: Build edge functions
+        run: npm run build:fonctions

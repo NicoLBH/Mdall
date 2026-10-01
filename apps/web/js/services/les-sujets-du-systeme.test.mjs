@@ -141,14 +141,32 @@ test("le comptage de termes dit qu'il ne relève pas des idées", () => {
 });
 
 /**
- * **Et ce qui manque est nommé.** Relever des idées et dire comment elles
- * s'enchaînent ne se déduisent pas d'un comptage de noms : l'écrire évite de
- * laisser croire que la question est réglée.
+ * **Et ce qui manque est nommé — à jour de ce qui a été fait.**
+ *
+ * Cette liste disait « relever des idées : nulle part » et « dire comment deux
+ * idées s'enchaînent : nulle part ». Les deux existent maintenant, dans la
+ * rubrique des idées. Les y laisser ferait annoncer comme absent ce qui est là,
+ * c'est-à-dire mentir dans l'autre sens — et une liste de manques qu'on ne
+ * corrige pas finit par n'être plus lue du tout.
+ *
+ * Ce qui la remplace est ce qui manque **vraiment** après ce tour : les liaisons
+ * de tête, les idées qu'aucun mot n'annonce, et le geste qui ferait entrer une
+ * idée dans la mémoire d'un chantier.
  */
-test("ce qui manque nomme les idées et leurs liens", () => {
+test("ce qui manque est à jour de ce qui a été fait", () => {
   const dits = CE_QUI_MANQUE_ENCORE.map((un) => un.quoi).join(" | ");
-  assert.match(dits, /idées, et non des termes/);
-  assert.match(dits, /comment deux idées s'enchaînent/);
+
+  // Ce qui est fait n'est plus annoncé comme absent.
+  assert.doesNotMatch(dits, /Relever des idées, et non des termes/,
+    "relever des idées est annoncé comme nulle part, et la console en relève");
+
+  // Ce qui reste est nommé, et la limite de méthode d'abord.
+  assert.match(dits, /lien est en tête de phrase/);
+  assert.match(dits, /par aucun mot/);
+
+  // **Et le garde-fou de la règle 1** : une idée relevée est une lecture, pas
+  // une vérité. Rien n'entre dans la mémoire sans une proposition signée.
+  assert.match(dits, /entrer une idée dans la mémoire/);
 
   for (const un of CE_QUI_MANQUE_ENCORE) {
     assert.ok(un.quoi && un.ou && un.pourquoi, "une étape sans son pourquoi n'apprend rien");

@@ -19,14 +19,15 @@ import {
 /**
  * **L'ordre suit la chaîne**, il n'est pas décoratif :
  *
- *   ce qu'on a reçu → ce qu'on en reconnaît → ce qu'on en prédit → ce qui manque.
+ *   ce qu'on a reçu → ce qu'on en reconnaît → ce qu'on en prédit →
+ *   de quoi on parle → ce que cela énonce → ce qui manque.
  *
  * Sans matière, rien ne se reconnaît ; sans reconnaissance, rien ne se prédit.
  * Une rubrique lue avant la précédente ne veut rien dire.
  */
 test("l'ordre des rubriques est celui de la chaîne", () => {
   assert.deepEqual(LES_RUBRIQUES.map((une) => une.cle),
-    [LE_CARBURANT, "reconnaissance", "prediction", "sujets", "manques"]);
+    [LE_CARBURANT, "reconnaissance", "prediction", "sujets", "idees", "manques"]);
 });
 
 /**

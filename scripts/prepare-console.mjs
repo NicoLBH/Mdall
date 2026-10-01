@@ -87,6 +87,13 @@ export const RACINES = [
   // cases. Rien n'en sort qui ne soit partagé par plusieurs chantiers.
   "js/services/les-sujets-du-systeme-supabase.js",
   "js/services/les-sujets-du-systeme.js",
+  // Les idées que les chantiers énoncent : ce qui entraîne quoi. Le découpage
+  // se fait en base, sur les mots de liaison ; ce qui vient ici est la forme
+  // d'une idée — deux termes partagés et une sorte de lien —, et la composition
+  // de deux idées qui se touchent, qu'aucune requête ne saurait faire.
+  "js/services/les-idees-du-systeme-supabase.js",
+  "js/services/une-idee.js",
+  "js/services/un-raisonnement.js",
   // Les rubriques de la console : une question par rubrique, et l'ordre de la
   // chaîne. Pur, et il n'entraîne rien.
   "js/services/les-rubriques-de-la-console.js",

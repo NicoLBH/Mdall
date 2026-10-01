@@ -344,19 +344,24 @@ function renderRunRows(entries) {
               ${/*
                 **Pas de marque d'Atelier ici.** Elle y posait une icône de
                 puce au milieu des titres, qu'il fallait apprendre à lire.
-                L'origine se dit maintenant en toutes lettres, dans sa colonne.
+                L'origine se dit en toutes lettres, juste après le titre.
               */""}
               <button type="button" class="row-title-trigger theme-text theme-text--pb"
                 data-run-open="${escapeHtml(entry.id || "")}"
               >${escapeHtml(entry.name || UNE_EXECUTION)}</button>
+              ${/*
+                **L'origine suit le titre, elle n'a plus sa colonne.** En
+                colonne, elle imposait une largeur réservée sur toute la
+                hauteur du tableau pour trois mots, et l'œil faisait l'aller-
+                retour entre le titre et elle. Collée au titre, elle se lit
+                dans le même mouvement — c'est le dessin d'une étiquette de
+                branche sur une forge, et c'est pour cela qu'il a été choisi.
+              */""}
+              ${renderLaPastilleDeLorigine(entry)}
             </span>
             <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${
               dits.join(" • ")}</span>
           </span>
-        </div>
-
-        <div class="workflow-runs__cell workflow-runs__cell--origine">
-          ${renderLaPastilleDeLorigine(entry)}
         </div>
 
         <div class="workflow-runs__cell workflow-runs__cell--when">
@@ -404,11 +409,11 @@ function lauteurDe(entry) {
  * L'origine d'une exécution, **en toutes lettres**.
  *
  * Elle se disait par une icône — une puce pour l'Atelier, un cadenas pour un
- * versement — qu'il fallait survoler pour comprendre. Trois mots tiennent dans
- * une colonne, et ils se lisent sans apprendre un alphabet.
+ * versement — qu'il fallait survoler pour comprendre. Trois mots tiennent à la
+ * suite du titre, et ils se lisent sans apprendre un alphabet.
  *
  * Le dessin est celui d'une branche sur une forge : un mot, en bleu, sur un
- * fond bleuté. On le reconnaît avant de le lire.
+ * fond bleuté, posé contre ce qu'il qualifie. On le reconnaît avant de le lire.
  */
 function renderLaPastilleDeLorigine(entry) {
   const vue = longletDit(entry?.origine);
@@ -544,7 +549,10 @@ function renderRunsTable() {
 
   const tableHtml = renderDataTableShell({
     className: "workflow-runs-table data-table-shell--document-scroll",
-    gridTemplate: "minmax(320px,2fr) max-content 220px",
+    // Deux colonnes : ce qui s'est passé, et quand. L'origine était la
+    // troisième ; elle tient maintenant à la suite du titre, et la largeur
+    // qu'elle réservait est rendue aux titres.
+    gridTemplate: "minmax(320px,2fr) 220px",
     headHtml: renderDataTableHead({
       columns: [
         {
