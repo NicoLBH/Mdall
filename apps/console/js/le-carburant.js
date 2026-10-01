@@ -52,8 +52,9 @@ import {
   laMesureDesSujets, lesEnchainementsDesSujets, lesSujetsDuSysteme
 } from "../partage/js/services/les-sujets-du-systeme-supabase.js";
 import {
-  laFonctionDite, leLienDit, lesIdeesParSorteDeLien, lesIdeesRangees,
-  phraseDeCeQueLesIdeesValent, phraseDesSortesDeLiens
+  laFonctionDite, laTacheDite, leLienDit, lesIdeesEtLesTaches,
+  lesIdeesParSorteDeLien, lesIdeesRangees, phraseDeCeQueLesIdeesValent,
+  phraseDesSortesDeLiens, phraseDesTaches
 } from "../partage/js/services/une-idee.js";
 import {
   lesRaisonnements, phraseDesRaisonnements, phraseDunRaisonnement
@@ -409,6 +410,52 @@ function renderLesSujets(sujets, mesure) {
  * annoncée, parce qu'elle est la mesure de ce qu'on ne voit pas (règle 5).
  */
 /**
+ * **Les tâches, à part des idées.**
+ *
+ * « Afin de », « pour permettre » relient une **action** à son **but** :
+ * « Réaliser un carottage afin de drainer la nappe » dit quoi faire et pourquoi.
+ * Ce n'est pas « A entraîne B », et c'est pourtant ce que la liste en faisait.
+ *
+ * Mesuré sur le corpus entier : quinze des vingt-six venaient de là. Les mettre
+ * ici n'est pas les écarter — un compte rendu de chantier écrit surtout cela, et
+ * « voici quoi faire, et voici pourquoi » est une information. C'est seulement
+ * qu'une tâche ne se compte pas avec une idée.
+ *
+ * Et elle ne s'écrit pas comme une idée : « faire A, pour B », jamais
+ * « A vise B » — la forme est la raison pour laquelle ce n'en est pas une.
+ */
+function renderLesTaches(taches) {
+  if (!taches.length) return "";
+
+  return `
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">Ce qu'il faut faire, et pourquoi</h3>
+      <p class="conso-usages__mot">
+        Une tâche relie une <b>action</b> à son <b>but</b>. Elle dit ce qu'on
+        cherche, jamais ce qu'on obtient : rien ici ne permet de prévoir, et
+        c'est pourquoi elle ne compte pas parmi les idées.
+      </p>
+      <ul class="forme-reference">
+        ${taches.slice(0, 40).map((une) => `
+          <li class="forme-reference__ligne">
+            <span class="forme-reference__quoi">
+              <b>${echapper(laTacheDite(une))}</b>
+              <i>${echapper(leLienDit(une.lien)?.explication ?? "")}</i>
+            </span>
+            <span class="forme-reference__chiffres mono-small">${
+              echapper(`${compteDit(une.affirmations)} affirmation${
+                une.affirmations > 1 ? "s" : ""}`)}</span>
+            <span class="forme-reference__sur mono-small">${
+              echapper(`sur ${compteDit(une.chantiers)} chantier${
+                une.chantiers > 1 ? "s" : ""}`)}</span>
+          </li>
+        `).join("")}
+      </ul>
+    </section>
+  `;
+}
+
+/**
  * **Dix faits et quinze intentions, et non vingt-cinq idées.**
  *
  * Les six sortes de liens ne sont pas interchangeables : « A entraîne B » dit
@@ -576,7 +623,11 @@ function renderLeDetailDesLiaisons(liaisons, forme) {
 }
 
 function renderLesIdees(lignes, mesure, liaisons, forme, chaines, repetition) {
-  const idees = lesIdeesRangees(lignes);
+  const rangees = lesIdeesRangees(lignes);
+  // **Les tâches ne figurent pas dans la liste des idées.** « Afin de » relie une
+  // action à son but ; quinze des vingt-six lignes venaient de là, et les
+  // aligner avec les autres faisait croire à vingt-six faits (règle 12).
+  const { idees, taches } = lesIdeesEtLesTaches(rangees);
 
   return `
     <section class="conso-usages">
@@ -590,6 +641,7 @@ function renderLesIdees(lignes, mesure, liaisons, forme, chaines, repetition) {
       </p>
       <p class="conso-usages__mot"><b>${
         echapper(phraseDeCeQueLesIdeesValent(idees, mesure))}</b></p>
+      <p class="conso-usages__mot">${echapper(phraseDesTaches(rangees))}</p>
       ${/*
         **Ce que le découpage ne sait pas lire.** « Si le sol est argileux, les
         fondations descendent » commence par son lien : à gauche, il n'y a rien.
@@ -662,7 +714,9 @@ function renderLesIdees(lignes, mesure, liaisons, forme, chaines, repetition) {
       ` : ""}
     </section>
 
-    ${renderLesSortesDeLiens(idees)}
+    ${renderLesTaches(taches)}
+
+    ${renderLesSortesDeLiens(rangees)}
 
     ${renderLaRepetitionDuCorpus(repetition)}
 

@@ -67,37 +67,60 @@ function texte(value) {
 }
 
 /**
- * Ce qu'une affirmation dit, en une phrase.
+ * Ce qu'une affirmation dit, **reconstruit depuis sa nature et sa charge**.
  *
- * Elle est écrite au moment où l'on tranche, et conservée telle quelle. La
- * recalculer plus tard, avec le vocabulaire du moteur d'alors, réécrirait
- * silencieusement ce que quelqu'un a signé.
+ * ## Une seule construction, pour l'écriture et pour la lecture
+ *
+ * Cette fonction était le corps de `statementOf`, l'écrivain. La lecture, elle,
+ * n'en connaissait qu'une branche sur cinq : elle ne regardait que
+ * `payload.subject`. D'où un défaut mesuré sur le corpus entier — **2 274
+ * affirmations, 24 % de la mémoire, se relisaient « Document au corpus :
+ * 02b81e88-8a77-4dd0-96a2-d25a78127665 »**, c'est-à-dire un identifiant et rien
+ * d'autre, alors que leur charge portait leur titre et leur numéro.
+ *
+ * Ces lignes ont été écrites par un repli qui précède les branches par nature.
+ * On ne les réécrit pas — une exécution qui a eu lieu ne devient pas fausse
+ * (règle 6) —, on les **relit** par où l'écrivain passerait aujourd'hui. Et
+ * l'écrivain et le lecteur passent par ici tous les deux, parce que deux
+ * constructions auraient divergé à la première retouche (règle 4).
+ *
+ * `null` quand il n'y a rien de mieux à dire que ce qui est déjà écrit : c'est
+ * ainsi que la lecture sait quand garder la phrase versée.
  */
-function statementOf(item = {}) {
-  const payload = item.payload ?? {};
+export function laPhraseDuneAffirmation({ kind, cle, dit, payload } = {}) {
+  const charge = payload ?? {};
+  const ecrit = texte(dit);
 
-  if (item.itemType === ITEM_TYPE.AVIS) {
-    const titre = texte(payload.title);
-    const numero = texte(payload.reference);
+  if (kind === ITEM_TYPE.AVIS) {
+    const titre = texte(charge.title);
+    const numero = texte(charge.reference);
+
+    // **Une reconstruction qui ne porte rien de la ligne ne remplace pas ce qui
+    // est écrit.** Un avis sans numéro ni rubrique rendrait « Avis relevé sur une
+    // fiche » — et mille cent quatre-vingt-cinq lignes se liraient alors
+    // *identiquement*. Un identifiant illisible reste au moins distinct, et leur
+    // nombre est la mesure honnête de ce que la mémoire ne sait pas dire
+    // (règle 5). À l'écriture, il n'y a rien à garder : la phrase est celle-là.
+    if (!numero && !titre) return ecrit || "Avis relevé sur une fiche";
 
     // Un avis sans numéro se nomme par sa rubrique. « Avis  — Fondations
     // superficielles » laissait un trou là où la plupart des fiches n'ont
     // simplement rien imprimé, et « Avis fiche:ab12cd34 » ne désigne rien.
-    if (!numero) return titre ? `Avis — ${titre}` : `Avis relevé sur une fiche`;
+    if (!numero) return `Avis — ${titre}`;
     return titre ? `Avis ${numero} — ${titre}` : `Avis ${numero}`;
   }
 
-  if (item.itemType === ITEM_TYPE.ATTACHMENT) {
-    return `Rattachement au projet : ${texte(payload.label) || texte(item.itemKey)}`;
+  if (kind === ITEM_TYPE.ATTACHMENT) {
+    return `Rattachement au projet : ${texte(charge.label) || texte(cle)}`;
   }
 
   // Un point de compte rendu se lit par son lot et ce qu'il dit. Le numéro
   // seul — « 12.02.1 » — ne désigne rien pour qui ne tient pas le compte rendu
   // ouvert à côté.
-  if (item.itemType === ITEM_TYPE.SUJET) {
-    const titre = texte(payload.titre);
-    const lot = texte(payload.lot);
-    if (!titre) return `Point de chantier ${texte(payload.reference) || texte(item.itemKey)}`;
+  if (kind === ITEM_TYPE.SUJET) {
+    const titre = texte(charge.titre);
+    const lot = texte(charge.lot);
+    if (!titre) return `Point de chantier ${texte(charge.reference) || texte(cle)}`;
     return lot ? `${lot} — ${titre}` : titre;
   }
 
@@ -105,13 +128,37 @@ function statementOf(item = {}) {
   // interdit au-delà de 3,5 t ». Elle tombait dans le repli des documents et se
   // relisait « Document au corpus : acces-des-vehicules-lourds@batiment-a » —
   // ce qui nomme un fichier qui n'existe pas, avec une clé que personne n'écrit.
-  const sujet = texte(payload.subject);
+  const sujet = texte(charge.subject);
   if (sujet) {
-    const valeur = texte(payload.value);
-    return valeur ? `${sujet} : ${valeur}` : sujet;
+    const valeur = texte(charge.value);
+    // **Une ligne ne se dit pas deux fois.** Un raisonnement n'affirme rien : sa
+    // seule valeur possible est sa question.
+    return valeur && valeur !== sujet ? `${sujet} : ${valeur}` : sujet;
   }
 
-  return `Document au corpus : ${texte(payload.name) || texte(item.itemKey)}`;
+  // **Un document garde son nom**, et c'est la seule fois où ce repli est juste.
+  const nom = texte(charge.name);
+  if (nom) return `Document au corpus : ${nom}`;
+
+  // Rien de mieux que ce qui est déjà écrit. Rendre « Document au corpus :
+  // <identifiant> » à la lecture écraserait une phrase parfois meilleure.
+  return ecrit || null;
+}
+
+/**
+ * Ce qu'une affirmation dit, au moment où on la verse.
+ *
+ * Elle est écrite au moment où l'on tranche, et conservée telle quelle. La
+ * recalculer plus tard, avec le vocabulaire du moteur d'alors, réécrirait
+ * silencieusement ce que quelqu'un a signé.
+ */
+function statementOf(item = {}) {
+  // **Pas de `dit` à l'écriture** : il n'y a encore rien d'écrit à garder, et
+  // c'est ce qui fait que l'avis sans numéro reçoit bien sa phrase ici, là où la
+  // lecture garde l'identifiant déjà versé.
+  return laPhraseDuneAffirmation({
+    kind: item.itemType, cle: item.itemKey, payload: item.payload
+  }) ?? `Document au corpus : ${texte(item.payload?.name) || texte(item.itemKey)}`;
 }
 
 /**
@@ -127,18 +174,20 @@ function statementOf(item = {}) {
  * n'en était qu'une mise en forme.
  */
 export function titreDeLAffirmation(assertion = {}) {
-  const payload = assertion?.payload ?? {};
-  const sujet = texte(payload.subject);
-  if (!sujet) return texte(assertion?.statement);
+  // **Toutes les natures, et non la seule affirmation.** Cette fonction ne
+  // regardait que `payload.subject` : un avis, un rattachement et un point de
+  // chantier tombaient donc sur leur phrase versée, et 2 274 d'entre elles
+  // — 24 % de la mémoire — se lisaient « Document au corpus : <identifiant> ».
+  const reconstruite = laPhraseDuneAffirmation({
+    kind: assertion?.kind,
+    cle: assertion?.subject_key,
+    dit: assertion?.statement,
+    payload: assertion?.payload
+  });
 
-  const valeur = texte(payload.value);
-  // **Une ligne ne se dit pas deux fois.** Un raisonnement n'affirme rien : sa
-  // seule valeur possible est sa question, et la règle générale écrivait alors
-  // « Quelle profondeur retenir ? : Quelle profondeur retenir ? ». Vu à l'écran
-  // dès que la fermeture d'un sujet a commencé à en verser.
-  if (!valeur || valeur === sujet) return sujet;
-
-  return `${sujet} : ${valeur}`;
+  // `null` veut dire « rien de mieux que ce qui est écrit » : on garde alors la
+  // phrase versée, qui peut valoir mieux que ce qu'on saurait reconstruire.
+  return reconstruite ?? texte(assertion?.statement);
 }
 
 function lisible(value) {

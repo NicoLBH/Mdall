@@ -1,44 +1,146 @@
 {
-  "pourquoi": "Ce que dit une affirmation est écrit deux fois : en JavaScript (titreDeLAffirmation, pour l'écran) et en SQL (le_dit_dune_affirmation, pour les lectures de la console). L'écran ne peut pas appeler la base pour mettre en forme une ligne qu'il tient déjà, et la base ne peut pas appeler l'écran. Deux définitions finissent par diverger (règle 4) — faute de pouvoir n'en avoir qu'une, les cas sont ici, et les deux épreuves lisent ce fichier. Un cas ajouté éprouve les deux à la fois.",
+  "pourquoi": "Ce que dit une affirmation est écrit deux fois : en JavaScript (laPhraseDuneAffirmation, pour l'écran et pour le versement) et en SQL (le_dit_dune_affirmation, pour les lectures de la console). L'écran ne peut pas appeler la base pour mettre en forme une ligne qu'il tient déjà, et la base ne peut pas appeler l'écran. Deux définitions finissent par diverger (règle 4) — et elles avaient déjà divergé deux fois : la lecture SQL ignorait le payload, puis la lecture JavaScript n'en connaissait qu'une branche sur cinq. Faute de pouvoir n'avoir qu'une définition, les cas sont ici, et les deux épreuves lisent ce fichier. Un cas ajouté éprouve les deux à la fois.",
   "cas": [
     {
-      "quoi": "sujet et valeur : la vraie phrase, celle que l'écran montre",
+      "quoi": "un avis numéroté : son numéro et sa rubrique",
+      "kind": "avis",
+      "cle": "A12",
+      "statement": "Document au corpus : 02b81e88-8a77-4dd0-96a2-d25a78127665",
+      "payload": { "reference": "A12", "title": "Fondations superficielles" },
+      "dit": "Avis A12 — Fondations superficielles"
+    },
+    {
+      "quoi": "un avis sans numéro : sa rubrique seule, et pas de tiret orphelin",
+      "kind": "avis",
+      "cle": "fiche:ab12cd34",
+      "statement": "Document au corpus : fiche:ab12cd34",
+      "payload": { "title": "Amenee d air" },
+      "dit": "Avis — Amenee d air"
+    },
+    {
+      "quoi": "un avis sans numéro ni rubrique : la phrase versée est gardée, parce que « Avis relevé sur une fiche » ferait lire 1 185 lignes à l'identique",
+      "kind": "avis",
+      "cle": "fiche:ab12cd34",
+      "statement": "Document au corpus : fiche:ab12cd34",
+      "payload": {},
+      "dit": "Document au corpus : fiche:ab12cd34"
+    },
+    {
+      "quoi": "le même avis, mais rien n'a encore été versé : c'est là que « Avis relevé sur une fiche » est juste",
+      "kind": "avis",
+      "cle": "fiche:ab12cd34",
+      "statement": "",
+      "payload": {},
+      "dit": "Avis relevé sur une fiche"
+    },
+    {
+      "quoi": "un rattachement : son intitule",
+      "kind": "attachment",
+      "cle": "affaire:13861",
+      "statement": "Document au corpus : affaire:13861",
+      "payload": { "label": "Affaire 13861 du bureau de controle" },
+      "dit": "Rattachement au projet : Affaire 13861 du bureau de controle"
+    },
+    {
+      "quoi": "un rattachement sans intitule : sa cle metier, qui au moins se lit",
+      "kind": "attachment",
+      "cle": "affaire:13861",
+      "statement": "Document au corpus : affaire:13861",
+      "payload": {},
+      "dit": "Rattachement au projet : affaire:13861"
+    },
+    {
+      "quoi": "un point de chantier : son lot et ce qu'il dit",
+      "kind": "sujet",
+      "cle": "12.02.1",
+      "statement": "Document au corpus : 12.02.1",
+      "payload": { "lot": "09 CLOISONS", "titre": "Bandes a joints au R+2" },
+      "dit": "09 CLOISONS — Bandes a joints au R+2"
+    },
+    {
+      "quoi": "un point de chantier sans lot : son titre seul",
+      "kind": "sujet",
+      "cle": "12.02.1",
+      "statement": "Document au corpus : 12.02.1",
+      "payload": { "titre": "Bandes a joints au R+2" },
+      "dit": "Bandes a joints au R+2"
+    },
+    {
+      "quoi": "un point de chantier sans titre : le numero seul ne designe rien, on le dit",
+      "kind": "sujet",
+      "cle": "12.02.1",
+      "statement": "Document au corpus : 12.02.1",
+      "payload": { "reference": "12.02.1" },
+      "dit": "Point de chantier 12.02.1"
+    },
+    {
+      "quoi": "une affirmation : son sujet et sa valeur",
+      "kind": "base-datum",
+      "cle": "acces@batiment-a",
       "statement": "Document au corpus : acces@batiment-a",
       "payload": { "subject": "Acces des vehicules lourds", "value": "interdit au-dela de 3,5 t" },
       "dit": "Acces des vehicules lourds : interdit au-dela de 3,5 t"
     },
     {
-      "quoi": "sujet seul : la valeur n'existe pas",
+      "quoi": "une affirmation sans valeur : son sujet seul",
+      "kind": "base-datum",
+      "cle": "altitude-du-site",
       "statement": "Document au corpus : altitude-du-site",
       "payload": { "subject": "Altitude du site" },
       "dit": "Altitude du site"
     },
     {
       "quoi": "une ligne ne se dit pas deux fois : un raisonnement n'affirme rien, et sa seule valeur possible est sa question",
+      "kind": "declared",
+      "cle": "quelle-profondeur",
       "statement": "peu importe",
       "payload": { "subject": "Quelle profondeur retenir ?", "value": "Quelle profondeur retenir ?" },
       "dit": "Quelle profondeur retenir ?"
     },
     {
       "quoi": "une valeur vide ne fait pas un deux-points orphelin",
+      "kind": "base-datum",
+      "cle": "altitude-du-site",
       "statement": "peu importe",
       "payload": { "subject": "Altitude du site", "value": "   " },
       "dit": "Altitude du site"
     },
     {
-      "quoi": "pas de sujet : la phrase versee est tout ce qu'on a, et pour un vrai document elle est juste",
+      "quoi": "un document garde son nom : c'est la seule fois ou ce repli est juste",
+      "kind": "document",
+      "cle": "doc-1",
       "statement": "Document au corpus : 1824_CR_14.pdf",
       "payload": { "name": "1824_CR_14.pdf" },
       "dit": "Document au corpus : 1824_CR_14.pdf"
     },
     {
+      "quoi": "un document dont la phrase versee ne dit pas son nom : le nom gagne, parce que c'est ce que l'ecrivain ecrirait",
+      "kind": "document",
+      "cle": "doc-2",
+      "statement": "Document au corpus : doc-2",
+      "payload": { "name": "20250108 CR 36.pdf" },
+      "dit": "Document au corpus : 20250108 CR 36.pdf"
+    },
+    {
+      "quoi": "rien a reconstruire : la phrase versee est gardee, meme si c'est un identifiant",
+      "kind": "document",
+      "cle": "02b81e88-8a77-4dd0-96a2-d25a78127665",
+      "statement": "Document au corpus : 02b81e88-8a77-4dd0-96a2-d25a78127665",
+      "payload": {},
+      "dit": "Document au corpus : 02b81e88-8a77-4dd0-96a2-d25a78127665"
+    },
+    {
       "quoi": "pas de payload du tout",
+      "kind": null,
+      "cle": null,
       "statement": "Menuiseries exterieures du hall",
       "payload": null,
       "dit": "Menuiseries exterieures du hall"
     },
     {
       "quoi": "un sujet tout en espaces ne compte pas pour un sujet",
+      "kind": "base-datum",
+      "cle": "x",
       "statement": "Menuiseries exterieures du hall",
       "payload": { "subject": "  " },
       "dit": "Menuiseries exterieures du hall"

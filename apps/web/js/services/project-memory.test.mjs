@@ -517,6 +517,31 @@ test("une affirmation dit ce qu'elle affirme, pas qu'elle est un document", asyn
 });
 
 /**
+ * **Ce que l'écrivain écrit, et qui n'est pas ce que le lecteur relit.**
+ *
+ * Un avis sans numéro ni rubrique reçoit « Avis relevé sur une fiche » **au
+ * versement** : il n'y a encore aucune phrase à garder, et « Document au corpus :
+ * fiche:ab12cd34 » ne désignerait rien.
+ *
+ * À la **relecture**, c'est l'inverse : la phrase déjà versée est gardée, parce
+ * que mille cent quatre-vingt-cinq lignes du corpus sont dans ce cas et se
+ * liraient toutes identiquement. Les deux comportements sortent de la même
+ * fonction, et c'est l'absence de phrase versée qui les sépare.
+ */
+test("un avis sans numéro ni rubrique se nomme au versement", async () => {
+  const { assertionsFromProposition } = await import("./project-memory.js");
+
+  const [ligne] = assertionsFromProposition({
+    proposition: { id: "p1", project_id: "pr", merged_at: "2026-01-01T00:00:00Z" },
+    items: [{ itemType: "avis", itemKey: "fiche:ab12cd34", status: "accepted", payload: {} }]
+  });
+
+  assert.equal(ligne.statement, "Avis relevé sur une fiche");
+  // Et surtout pas l'identifiant : il ne désigne rien pour personne.
+  assert.doesNotMatch(ligne.statement, /ab12cd34/);
+});
+
+/**
  * **Le jumeau SQL dit la même chose.**
  *
  * Ce que dit une affirmation est écrit deux fois : ici pour l'écran, et en SQL
@@ -535,12 +560,14 @@ test("ce que dit une affirmation : les mêmes cas que le banc", async () => {
   const lesCas = JSON.parse(readFileSync(
     new URL("./ce-que-dit-une-affirmation.cas.json", import.meta.url), "utf8"));
 
-  assert.ok(lesCas.cas.length >= 7,
+  assert.ok(lesCas.cas.length >= 18,
     `le fichier des cas en porte ${lesCas.cas.length} : la liste a été raccourcie`);
 
   for (const un of lesCas.cas) {
     assert.equal(
-      titreDeLAffirmation({ statement: un.statement, payload: un.payload }),
+      titreDeLAffirmation({
+        kind: un.kind, subject_key: un.cle, statement: un.statement, payload: un.payload
+      }),
       un.dit,
       `${un.quoi} — l'écran et la base ne disent pas la même chose`);
   }
