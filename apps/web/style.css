@@ -4552,8 +4552,16 @@ body.drilldown-open .drilldown__inner,
   z-index:5;
   background:var(--headbg);
 }
-#consoleHeaderHost .gh-header{ position:static; }
-.project-tabs--console{ position:static; }
+/* **L'en-tête se peint par-dessus les onglets, et c'est tout ce que le
+   `z-index` sert ici.** Le menu de l'avatar s'ouvre vers le bas, donc par
+   dessus la barre des onglets — qui vient après lui dans la page et se peignait
+   donc après lui. Le menu arrivait coupé en son milieu : on voyait sa tête,
+   puis la barre, puis son pied.
+
+   Les deux restent dans le flux (`relative` sans décalage ne déplace rien) :
+   seul leur ordre de peinture change. */
+#consoleHeaderHost .gh-header{ position:relative; z-index:2; }
+.project-tabs--console{ position:relative; z-index:1; }
 /* De quoi se caler avant la première mesure : un corps qui démarre à zéro
    passerait sous l'en-tête le temps d'un rendu, et l'on verrait le saut. */
 body:has(.project-tabs--console){
@@ -4563,6 +4571,48 @@ body:has(.project-tabs--console){
 /* **Seize pixels à gauche du nom.** « Mdall / console » commençait au bord de
    la fenêtre, collé au verre — seul écran de tout le produit à le faire. */
 .gh-brand--console{ padding-left:16px; }
+
+/* **Emporter ce qui est mesuré.** Deux gestes côte à côte : copier, et
+   télécharger. Le même bouton de copie que partout ailleurs — avec sa coche,
+   qui est la seule réponse à « est-ce que ça a marché ? ». */
+.conso-export{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:12px;
+}
+.conso-export__copier{ flex:none; }
+
+/* **Ce que ce document lie**, dans la lecture d'un compte rendu.
+
+   Chaque ligne porte la fonction, d'où elle sort, et la phrase dont elle sort.
+   La phrase sous les deux autres, en retrait : c'est la preuve, et on la lit
+   quand on doute — pas à chaque passage. */
+.lecture-cr__idees{ margin-top:20px; }
+.lecture-cr__idees-mot{ margin:4px 0 10px; font-size:12px; color:var(--muted); }
+.lecture-cr__idees-liste{ list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+.lecture-cr__idee{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) max-content;
+  gap:2px 12px;
+  padding:8px 12px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:var(--panel2);
+}
+.lecture-cr__idee-fonction{ font-size:13.5px; font-weight:600; color:var(--text); min-width:0; }
+.lecture-cr__idee-ou{ color:var(--muted); white-space:nowrap; align-self:center; }
+.lecture-cr__idee-phrase{
+  grid-column:1 / -1;
+  color:var(--muted);
+  font-size:12px;
+  font-style:italic;
+}
+/* C'est un bouton, pas un lien : il porte un `href` parce que le navigateur
+   ne télécharge que depuis un lien, et le soulignement le faisait lire comme
+   une navigation. */
+.conso-export__fichier{ text-decoration:none; }
+.conso-export__fichier:hover{ text-decoration:none; }
 
 /* La tête d'une rubrique de la console : son nom par la ligne commune, puis la
    question à laquelle elle répond, puis ce qu'elle explique. La question en
@@ -17006,7 +17056,13 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 /* Les liaisons et les cartes partagent leur trait : c'est un même dessin, et
    deux gris voisins mais différents se lisent comme une erreur d'alignement.
    La valeur est posée une fois ici, sur le graphe. */
-.run-graph{ --run-graph-line:rgb(61,68,77); }
+.run-graph{
+  --run-graph-line:rgb(61,68,77);
+  /* Le trait du chemin est plus clair que les bordures de boîtes : depuis que
+     celles-ci ont perdu leur couleur, c'est lui qui porte l'enchaînement, et
+     un trait du même gris qu'un cadre se lit comme un bord, pas comme un lien. */
+  --run-graph-trait:rgb(125,133,144);
+}
 
 .run-graph__node{
   display:flex;
@@ -17020,7 +17076,15 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   background-color:rgb(21,27,35);
   box-shadow:0 1px 0 rgba(1,4,9,.5);
 }
-.run-graph__node--ok{ border-color:rgba(63,185,80,.5); }
+/* **Plus de bordure verte.**
+
+   Elle entourait chaque étape qui s'était bien passée — c'est-à-dire presque
+   toutes. Une marque qui est partout ne marque rien, et douze cadres verts
+   autour de douze boîtes faisaient un sapin sans rien dire de plus que les
+   douze coches déjà posées en tête de chacune.
+
+   L'ambre et le rouge restent : ils sont rares, et ce sont eux qu'on cherche.
+   C'est tout l'intérêt d'une couleur — ne servir qu'à ce qu'on cherche. */
 .run-graph__node--warn{ border-color:rgba(210,153,34,.55); }
 .run-graph__node--error{ border-color:rgba(248,81,73,.55); }
 
@@ -17056,27 +17120,43 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   font-variant-numeric:tabular-nums;
 }
 
-/* La liaison : un trait fin qui part d'une boîte et s'arrête à la suivante,
-   avec une pointe. Assez discret pour ne pas concurrencer les boîtes. */
+/* **La liaison : un trait, et un ancrage rond à chaque bout.**
+
+   Elle finissait par une pointe de cinq pixels, faite de deux bordures d'un
+   pixel tournées de 45°. À l'écran, cela ne se voyait pas : on lisait des
+   boîtes posées côte à côte, sans savoir si le trait entre elles allait
+   quelque part.
+
+   Les ancrages ronds disent la même chose en se voyant. Le sens se lit dans la
+   mise en page — de gauche à droite, de haut en bas —, comme sur un journal de
+   branches : une flèche qui répète la direction que l'œil a déjà prise ne lui
+   apprend rien, et il faut la dessiner assez grosse pour qu'elle se voie.
+
+   Le trait s'épaissit d'un demi-pixel et s'éclaircit : il tenait son gris des
+   bordures de boîtes, et les boîtes ont perdu leur couleur — c'est lui,
+   maintenant, qui porte le chemin. */
 .run-graph__link{
   position:relative;
   flex:0 0 auto;
   align-self:center;
-  width:28px;
-  height:1px;
-  background:var(--run-graph-line);
+  width:34px;
+  height:2px;
+  border-radius:1px;
+  background:var(--run-graph-trait);
 }
+.run-graph__link::before,
 .run-graph__link::after{
   content:"";
   position:absolute;
-  right:0;
   top:50%;
-  width:5px;
-  height:5px;
-  border-top:1px solid var(--run-graph-line);
-  border-right:1px solid var(--run-graph-line);
-  transform:translate(0, -50%) rotate(45deg);
+  width:9px;
+  height:9px;
+  border-radius:50%;
+  background:var(--run-graph-trait);
+  transform:translate(0, -50%);
 }
+.run-graph__link::before{ left:-3px; }
+.run-graph__link::after{ right:-3px; }
 
 /* Le même enchaînement, tourné d'un quart de tour. Un chemin d'exécution se lit
    à l'horizontale parce qu'il est long et large ; la chaîne d'une variante se lit
@@ -17097,16 +17177,18 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .run-graph__canvas--vertical .run-graph__label{ min-width:0; overflow-wrap:anywhere; }
 .run-graph__canvas--vertical .run-graph__link{
   align-self:center;
-  width:1px;
-  height:18px;
+  width:2px;
+  height:22px;
 }
+/* Le même dessin, tourné : les deux ancrages passent en haut et en bas. */
+.run-graph__canvas--vertical .run-graph__link::before,
 .run-graph__canvas--vertical .run-graph__link::after{
-  right:auto;
   left:50%;
-  top:auto;
-  bottom:0;
-  transform:translate(-50%, 0) rotate(135deg);
+  right:auto;
+  transform:translate(-50%, 0);
 }
+.run-graph__canvas--vertical .run-graph__link::before{ top:-3px; }
+.run-graph__canvas--vertical .run-graph__link::after{ top:auto; bottom:-3px; }
 
 /* ── L'arbre : une valeur changée fourche ─────────────────────────────────
    Changer la commune change la zone de neige **et** la cote hors gel — deux

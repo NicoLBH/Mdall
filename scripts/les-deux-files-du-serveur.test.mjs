@@ -166,7 +166,11 @@ test("la proposition s'ouvre au premier compte rendu et s'enrichit", () => {
 
   assert.match(texte, /propositionId: texte\(propositionId\)/,
     "chaque compte rendu ouvre sa propre proposition");
-  assert.match(texte, /if \(pas\.propositionId\) proposition = pas\.propositionId;/,
+  // **Sur n'importe quel nom.** La première version de cette épreuve lisait
+  // `pas.propositionId` — le nom d'une variable locale. Renommer la variable la
+  // faisait tomber sans que rien n'ait changé, et c'est le genre d'épreuve qui
+  // apprend à ne plus lire les échecs.
+  assert.match(texte, /if \(\w+\.propositionId\) proposition = \w+\.propositionId;/,
     "la proposition ouverte n'est pas gardée d'un compte rendu au suivant");
   assert.match(texte, /proposition_id: proposition \|\| null/,
     "la ligne de file ne porte pas la proposition qu'elle a ouverte");
@@ -176,6 +180,46 @@ test("la proposition s'ouvre au premier compte rendu et s'enrichit", () => {
   // (règle 6).
   assert.match(texte, /propositionId: texte\(rendu\?\.proposition\?\.id\) \|\| texte\(propositionId\)/,
     "un échec oublie la proposition qu'il vient d'ouvrir");
+});
+
+/**
+ * **Les lectures de front, les ajouts en file.**
+ *
+ * C'est le genre de défaut qu'un test de comportement ne verra jamais, et qu'on
+ * ne découvre qu'en doublons dans une proposition de production : ajouter des
+ * lignes se fait en deux temps — relire ce que la proposition porte, puis
+ * écrire ce qui manque. Deux ajouts menés ensemble verraient le même état et
+ * écriraient les mêmes lignes deux fois.
+ *
+ * Le jour où quelqu'un voudra « finir de paralléliser », c'est cette épreuve
+ * qui l'arrêtera. Elle lit le source parce que c'est précisément un défaut
+ * invisible autrement.
+ */
+test("les ajouts à la proposition ne se font jamais de front", () => {
+  const texte = source("lire-les-comptes-rendus");
+
+  // Les lectures, elles, partent ensemble.
+  assert.match(texte, /await Promise\.all\(prochains\.map\(/,
+    "les comptes rendus ne se lisent pas de front : la file reste séquentielle");
+
+  // Et l'ajout se fait dans une boucle, jamais dans un `Promise.all`.
+  assert.match(texte, /for \(let rang = 0; rang < prochains\.length; rang \+= 1\)[\s\S]*?porterDansLaProposition/,
+    "l'ajout à la proposition n'est plus en file");
+  assert.doesNotMatch(texte, /Promise\.all\([\s\S]{0,400}porterDansLaProposition/,
+    "les ajouts à la proposition partent ensemble : ils écriront des doublons");
+});
+
+/**
+ * **Ce qui était en vol réattend.**
+ *
+ * Une fonction coupée laisse ses pas à `en-cours`. Chercher ensuite le prochain
+ * qui **attend** les saute pour toujours : ni lus, ni échoués, ni comptés. La
+ * file se terminait « 18 lus sur 19 » sans que le dix-neuvième apparaisse.
+ */
+test("la file reprise remet en attente ce qui était en vol", () => {
+  const texte = source("lire-les-comptes-rendus");
+  assert.match(texte, /laFileReprise\(ligne\.avancement\)/,
+    "la reprise repart de l'état brut : les pas restés en vol seront sautés");
 });
 
 /**

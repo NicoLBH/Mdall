@@ -39,3 +39,36 @@ export async function laMesureDesIdees() {
     return null;
   }
 }
+
+/**
+ * Où le découpage casse, mot par mot.
+ *
+ * C'est la seule lecture qui réponde à « pourquoi un pour cent ? » : un mot que
+ * beaucoup d'affirmations portent et qui ne rend aucune idée est un mot qui
+ * promet et ne tient pas.
+ */
+export async function leDetailDesLiaisons() {
+  try {
+    const { data, error } = await supabase.rpc("le_detail_des_liaisons");
+    if (error) return null;
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Sur quoi le découpage travaille : des phrases, ou des intitulés ?
+ *
+ * Un corpus de titres — « Menuiseries extérieures » — ne porte aucun lien, et
+ * ce n'est alors pas le découpage qu'il faut corriger.
+ */
+export async function laFormeDesAffirmations() {
+  try {
+    const { data, error } = await supabase.rpc("la_forme_des_affirmations");
+    if (error) return null;
+    return (Array.isArray(data) ? data[0] : data) ?? null;
+  } catch {
+    return null;
+  }
+}

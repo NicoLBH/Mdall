@@ -59,8 +59,8 @@ import { extractText, getDocumentProxy } from "npm:unpdf";
 import { requireUser } from "../_shared/require-user.ts";
 // @ts-ignore — modules JavaScript descendus au build (npm run prepare:versement)
 import {
-  DANS_LA_FILE, apresUnPas, laFileEstFinie, leProchainDeLaFile, lesComptesDeLaFile,
-  phraseDeLaFile, uneFileDeComptesRendus
+  DANS_LA_FILE, EN_MEME_TEMPS, apresUnPas, laFileEstFinie, laFileReprise,
+  lesComptesDeLaFile, lesProchainsDeLaFile, phraseDeLaFile, uneFileDeComptesRendus
 } from "../_shared/versement/la-file-des-comptes-rendus.js";
 // @ts-ignore
 import { confrontation, lectureAssemblee } from "../_shared/versement/lecture-du-cr.js";
@@ -93,6 +93,10 @@ import {
 } from "../_shared/versement/reveiller-la-file.js";
 // @ts-ignore
 import { laLigneDuneLecture, leLecteur } from "../_shared/versement/la-lecture-conservee.js";
+// @ts-ignore
+import {
+  lesIdeesDesCoupes, lesTextesAcouper
+} from "../_shared/versement/une-idee-relevee.js";
 
 const entetes = {
   "Access-Control-Allow-Origin": "*",
@@ -246,12 +250,23 @@ async function demanderAuModele(nom: string, corps: unknown, autorisation: strin
 }
 
 /**
- * Un compte rendu : lu, rangé, et porté dans la proposition.
+ * Un compte rendu : lu et rangé. **Il ne touche pas à la proposition.**
  *
- * @returns `{motif}` quand il n'a pas pu l'être, `{propositionId}` sinon.
+ * ## Pourquoi la proposition est restée dehors
+ *
+ * Y ajouter des lignes se fait en deux temps : on relit ce qu'elle porte déjà,
+ * puis on écrit ce qui manque. Deux lectures menées de front verraient le même
+ * état et écriraient les mêmes lignes deux fois — c'est la perte de mise à jour
+ * la plus classique, et elle ne se voit qu'après coup, en doublons.
+ *
+ * Les lectures se font donc **de front**, et les ajouts **en file**, dans
+ * l'ordre des documents. C'est aussi ce qui garde l'ouverture de la proposition
+ * à un seul endroit : le premier ajout l'ouvre, les suivants la retrouvent.
+ *
+ * @returns `{motif}` quand elle n'a pas pu se faire, `{items}` sinon.
  */
 async function unCompteRendu(client: any, {
-  projectId, documentId, nom, quiDemande, autorisation, propositionId
+  projectId, documentId, nom, autorisation, propositionId
 }: any) {
   const { data: piece } = await client
     .from("documents")
@@ -345,6 +360,33 @@ async function unCompteRendu(client: any, {
   const confrontes = confrontation(lecture.points, sujetsDuProjet);
 
   /**
+   * **Ce que ce document lie, relevé pendant la lecture.**
+   *
+   * Le découpage vit dans la base, à côté de celui qui compte les idées de tous
+   * les chantiers : une seconde façon de couper une phrase aurait fini par ne
+   * plus couper pareil, et c'est la console qui aurait eu tort sans qu'on le
+   * sache (règle 4, `202611140001_la_coupe_dun_texte.sql`).
+   *
+   * **Ici, et non à l'ouverture de l'écran.** L'analyse est gelée : elle doit
+   * porter ce qu'on a vu au moment où on l'a vu. Relever les idées à l'écran
+   * les ferait changer le jour où la liste des mots de liaison change, sous une
+   * lecture datée qui, elle, n'a pas changé (règle 6).
+   *
+   * Un échec ne fait pas tomber la lecture : les points sont lus, et ce qui
+   * manque est une couche par-dessus.
+   */
+  let idees: any[] = [];
+  try {
+    const { data: coupes } = await client.rpc("les_idees_des_textes", {
+      textes: lesTextesAcouper(lecture.points)
+    });
+    idees = lesIdeesDesCoupes(coupes ?? [], lecture.points, { document: nom });
+  } catch (erreur) {
+    console.warn("[lecture-cr] idées non relevées", (erreur as Error)?.message);
+  }
+  lecture.idees = idees;
+
+  /**
    * **La restitution se pose sur la ligne du document, et rien n'est déposé.**
    *
    * Le premier jet appelait `rangerLaRestitution`, qui cherche le compte rendu
@@ -401,23 +443,40 @@ async function unCompteRendu(client: any, {
 
   const items = itemsDuCompteRendu({
     confrontes, document, rubriques: lecture.rubriques, luPar: texte(lu.modele),
-    identite
+    idees, identite
   });
   if (!items?.length) return { motif: "ce compte rendu n'apporte rien à proposer" };
 
+  // Ce qu'il faudra pour l'ajouter à la proposition, rendu à l'appelant : c'est
+  // lui qui tient la file des ajouts.
+  return {
+    items,
+    titre: titreDeLaProposition({ nom, identite }),
+    intro: introDuCompteRendu({ confrontes, nom })
+  };
+}
+
+/**
+ * L'ajout d'une lecture à la proposition — **un seul à la fois**.
+ *
+ * Le premier l'ouvre, les suivants la retrouvent. L'échec rend la proposition
+ * qu'il a ouverte, si elle l'a été : sans cela, le compte rendu suivant en
+ * ouvrirait une autre, et trois comptes rendus ont donné deux propositions
+ * vides exactement comme ça (règle 6).
+ */
+async function porterDansLaProposition(client: any, lu: any, {
+  projectId, nom, quiDemande, propositionId
+}: any) {
   const rendu = await preparerUneProposition({
     projectId,
     propositionId: texte(propositionId),
-    titre: titreDeLaProposition({ nom, identite }),
-    intro: introDuCompteRendu({ confrontes, nom }),
+    titre: lu.titre,
+    intro: lu.intro,
     source: nom || "compte rendu de chantier",
-    affirmations: items,
+    affirmations: lu.items,
     portes: lesPortesDeLaProposition(client, quiDemande)
   });
 
-  // **L'échec rend la proposition qu'il a ouverte**, si elle l'a été. Sans cela,
-  // le compte rendu suivant en ouvrirait une autre : trois comptes rendus ont
-  // donné deux propositions vides exactement comme ça (règle 6).
   if (!rendu?.ok) {
     return {
       motif: texte(rendu?.raison) || "la proposition n'a pas pu être préparée",
@@ -487,19 +546,39 @@ serve(async (req) => {
   const connues = documents.map((un: any) => ({
     id: texte(un?.id), nom: texte(un?.nom) || "Document", lecture: "", type: "fichier"
   }));
+  /**
+   * **Ce qui était en vol réattend.**
+   *
+   * Une fonction coupée en plein travail laisse ses pas à `en-cours`. On
+   * cherchait ensuite le prochain qui **attend** : ces pas-là étaient sautés
+   * pour toujours — ni lus, ni échoués, ni comptés. La file se terminait
+   * « 18 lus sur 19 » sans que le dix-neuvième apparaisse nulle part.
+   */
   let etat = Array.isArray(ligne.avancement?.pas) && ligne.avancement.pas.length
-    ? ligne.avancement
+    ? laFileReprise(ligne.avancement)
     : uneFileDeComptesRendus(new Set(connues.map((un: any) => un.id)), connues);
 
   let proposition = texte(ligne.proposition_id);
 
   try {
     for (;;) {
-      const prochain = leProchainDeLaFile(etat);
-      if (!prochain) break;
+      /**
+       * **Trois de front, et les ajouts en file.**
+       *
+       * Une lecture est de l'attente pure : deux appels au modèle pendant
+       * lesquels cette fonction ne fait rien. Les mener ensemble divise le
+       * temps d'une file de dix-neuf par trois.
+       *
+       * L'ajout à la proposition, lui, reste en file : il relit ce qu'elle
+       * porte avant d'écrire, et deux ajouts simultanés verraient le même état
+       * et écriraient les mêmes lignes deux fois.
+       */
+      const prochains = lesProchainsDeLaFile(etat, EN_MEME_TEMPS);
+      if (!prochains.length) break;
 
-      // **Le budget d'abord.** Coupée en plein appel au modèle, la fonction
-      // laisserait une ligne `en_cours` et un appel payé pour rien.
+      // **Le budget d'abord**, et avant de marquer quoi que ce soit en cours.
+      // Coupée en plein appel au modèle, la fonction laisserait des pas en vol
+      // et des appels payés pour rien.
       if (Date.now() - debut > LE_BUDGET_MS) {
         await client.from("versements")
           .update({ avancement: etat, proposition_id: proposition || null })
@@ -509,30 +588,60 @@ serve(async (req) => {
         return reponse({ fait: false, motif: "budget épuisé, la suite au prochain réveil" });
       }
 
-      etat = apresUnPas(etat, prochain.id, DANS_LA_FILE.EN_COURS);
+      // Tous marqués en cours d'un coup, puis **une seule écriture** : trois
+      // écritures pour trois pas feraient trois fois le tour, et l'écran ne
+      // verrait de toute façon que la dernière.
+      for (const un of prochains) etat = apresUnPas(etat, un.id, DANS_LA_FILE.EN_COURS);
       await client.from("versements").update({ avancement: etat }).eq("id", ligne.id);
 
-      let pas: any;
-      try {
-        pas = await unCompteRendu(client, {
-          projectId: ligne.project_id,
-          documentId: prochain.id,
-          nom: prochain.nom,
-          quiDemande,
-          autorisation,
-          propositionId: proposition
-        });
-      } catch (erreur) {
-        pas = { motif: texte((erreur as Error)?.message) || "cause inconnue" };
+      const lus = await Promise.all(prochains.map(async (prochain: any) => {
+        try {
+          return await unCompteRendu(client, {
+            projectId: ligne.project_id,
+            documentId: prochain.id,
+            nom: prochain.nom,
+            autorisation,
+            propositionId: proposition
+          });
+        } catch (erreur) {
+          return { motif: texte((erreur as Error)?.message) || "cause inconnue" };
+        }
+      }));
+
+      // **Les ajouts, un par un, dans l'ordre des documents.** Le premier ouvre
+      // la proposition, les suivants la retrouvent.
+      for (let rang = 0; rang < prochains.length; rang += 1) {
+        const prochain = prochains[rang];
+        const lu: any = lus[rang];
+
+        if (lu?.motif) {
+          // **Un échec ne fait pas tomber la file** : il se nomme, et la suite
+          // part. S'arrêter au premier document illisible abandonnerait
+          // dix-huit lectures (règle 5).
+          etat = apresUnPas(etat, prochain.id, DANS_LA_FILE.ECHOUE, lu.motif);
+          continue;
+        }
+
+        let porte: any;
+        try {
+          porte = await porterDansLaProposition(client, lu, {
+            projectId: ligne.project_id,
+            nom: prochain.nom,
+            quiDemande,
+            propositionId: proposition
+          });
+        } catch (erreur) {
+          porte = { motif: texte((erreur as Error)?.message) || "cause inconnue" };
+        }
+
+        if (porte.propositionId) proposition = porte.propositionId;
+        etat = apresUnPas(etat, prochain.id,
+          porte.motif ? DANS_LA_FILE.ECHOUE : DANS_LA_FILE.LU, porte.motif ?? "");
       }
 
-      if (pas.propositionId) proposition = pas.propositionId;
-
-      // **Un échec ne fait pas tomber la file** : il se nomme, et la suite
-      // part. S'arrêter au premier document illisible abandonnerait dix-huit
-      // lectures (règle 5).
-      etat = apresUnPas(etat, prochain.id,
-        pas.motif ? DANS_LA_FILE.ECHOUE : DANS_LA_FILE.LU, pas.motif ?? "");
+      await client.from("versements")
+        .update({ avancement: etat, proposition_id: proposition || null })
+        .eq("id", ligne.id);
     }
 
     const comptes = lesComptesDeLaFile(etat);

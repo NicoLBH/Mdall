@@ -63,6 +63,13 @@ import { numeroDuLot } from "./lots-du-cr.js";
 import { labelDeLaRubrique } from "./label-du-cr.js";
 import { rubriquesDuCompteRendu } from "./rubriques-du-cr.js";
 import { VUE_DES_LOTS } from "./vue-des-lots.js";
+// **Les idées passent par le même traducteur que l'Atelier.** Une idée relevée
+// est une affirmation de mémoire, pas une nouvelle sorte de ligne : la
+// proposition sait déjà l'écrire en mdall, la revue la cocher, la fusion
+// l'appliquer. Inventer une nature « idée » aurait fait un second chemin pour
+// écrire la même chose (règle 4).
+import { itemsDeProposition } from "./atelier-proposition.js";
+import { lesAffirmationsDesIdees } from "./une-idee-relevee.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -271,6 +278,9 @@ export function pointsAOuvrir(confrontes = [], { leJour = "" } = {}) {
  *   que la lecture les a rendues
  * @param {object[]} [options.rangements] les sujets déjà ouverts à ranger sous
  *   leur lot — ce que `rattrapageAProposer` a rendu
+ * @param {object[]} [options.idees] les liens que le document énonce — ce que
+ *   `lesIdeesRelevees` a rendu. Chacune porte la phrase dont elle sort : sans
+ *   elle, une idée fausse ne se conteste pas.
  * @param {object|null} [options.identite] le numéro et la date du compte rendu.
  *   **C'est la source de tout ce que la proposition porte, et sa date.** Un
  *   sujet ouvert ou fermé sans savoir de quel document ni de quel jour il vient
@@ -286,6 +296,7 @@ export function itemsDuCompteRendu({
   disparition = null,
   rubriques = [],
   rangements = [],
+  idees = [],
   identite = null,
   luPar = ""
 } = {}) {
@@ -306,6 +317,11 @@ export function itemsDuCompteRendu({
     ...labelItems(labels),
     ...objectifItems(objectifs),
     ...sujetItems(pointsAOuvrir(confrontes, { leJour: objectifs?.leJour })),
+    // **Les idées relevées dans le document.** Elles ne sont ni un sujet à
+    // ouvrir ni une rubrique : elles n'appellent personne à faire quelque
+    // chose. Elles disent ce que le document lie, et elles entrent dans la
+    // mémoire — si, et seulement si, quelqu'un signe.
+    ...ideeItems(idees),
     ...relanceItems(pointsARelancer(confrontes, { leJour: objectifs?.leJour })),
     // Les fermetures en dernier : un sujet se ferme après avoir reçu ce que ce
     // compte rendu en dit, sans quoi la dernière chose écrite dans son fil
@@ -369,6 +385,18 @@ export function pointsARelancer(confrontes = [], { leJour = "" } = {}) {
       vus.add(point.sujetId);
       return true;
     });
+}
+
+/**
+ * Les idées relevées, en lignes de proposition.
+ *
+ * Elles passent par `itemsDeProposition`, le traducteur de l'Atelier : c'est
+ * lui qui sait quels champs d'une affirmation voyagent et lesquels tombent, et
+ * une seconde traduction aurait fini par ne plus porter les mêmes (règle 4).
+ */
+function ideeItems(idees = []) {
+  const affirmations = lesAffirmationsDesIdees(idees);
+  return affirmations.length ? itemsDeProposition(affirmations) : [];
 }
 
 /** Une affirmation de proposition, dans la forme que la revue attend. */

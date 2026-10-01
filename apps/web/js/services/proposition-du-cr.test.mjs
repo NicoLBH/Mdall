@@ -957,3 +957,54 @@ test("l'identité traverse jusqu'aux items de la proposition", () => {
   const fermeture = items.find((item) => item.payload?.motif);
   assert.equal(fermeture?.payload?.sourceLe, "3 septembre 2026");
 });
+
+/* ── Les idées que le document énonce ─────────────────────────────────────── */
+
+/**
+ * **Une idée est une affirmation de mémoire, pas une nature de plus.**
+ *
+ * La proposition sait déjà écrire une affirmation en mdall, la revue la cocher,
+ * la fusion l'appliquer. Inventer une nature « idée » aurait fait un second
+ * chemin pour écrire la même chose (règle 4) — et c'est ce que cette épreuve
+ * tient : les idées passent, et elles passent **par là**.
+ */
+test("les idées relevées deviennent des affirmations de la proposition", () => {
+  const items = itemsDuCompteRendu({
+    idees: [{
+      avant: "terrain argileux",
+      lien: "cause",
+      apres: "plancher beton",
+      phrase: "Le terrain argileux est confirmé donc le plancher béton sera repris.",
+      document: "1824_CR_12.pdf",
+      page: 3
+    }]
+  });
+
+  const idees = items.filter((un) => un.payload?.subject?.includes("→"));
+  assert.equal(idees.length, 1,
+    `l'idée n'est pas arrivée dans la proposition : ${items.map((un) => un.itemType).join(", ")}`);
+
+  const dite = idees[0];
+  assert.equal(dite.payload.subject, "terrain argileux → plancher beton");
+  // **Le verbe du lien, pas une valeur inventée.** « repris » n'est écrit nulle
+  // part dans ce que le découpage a lu.
+  assert.equal(dite.payload.value, "entraîne");
+  assert.equal(dite.payload.nature, "constat");
+  assert.equal(dite.payload.statut, "supposé");
+  assert.equal(dite.payload.citation,
+    "Le terrain argileux est confirmé donc le plancher béton sera repris.");
+  assert.equal(dite.payload.reference, "page 3");
+});
+
+/** Une lecture sans idée ne porte pas de ligne d'idée. */
+test("sans idée relevée, la proposition n'en porte aucune", () => {
+  const items = itemsDuCompteRendu({ idees: [] });
+  assert.deepEqual(items.filter((un) => un.payload?.subject?.includes("→")), []);
+
+  // Et ce qui n'est pas une idée ne devient pas une ligne.
+  const sansPhrase = itemsDuCompteRendu({
+    idees: [{ avant: "a", lien: "cause", apres: "b", phrase: "", document: "x.pdf" }]
+  });
+  assert.deepEqual(sansPhrase.filter((un) => un.payload?.subject?.includes("→")), [],
+    "une idée sans sa phrase est entrée dans la proposition : elle ne se conteste pas");
+});

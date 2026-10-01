@@ -81,6 +81,8 @@ const LES_MIGRATIONS = [
   // Les idées : le découpage d'une affirmation par ses mots de liaison. Il
   // s'appuie sur `les_mots_outils()`, que la migration des sujets pose.
   "202611130001_les_idees_du_systeme.sql",
+  // Le découpage, écrit une seule fois, et de quoi savoir où il casse.
+  "202611140001_la_coupe_dun_texte.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",
@@ -1564,15 +1566,25 @@ test("la mesure dit ce que la liste ne montre pas", { skip: sansPostgres }, () =
   assert.equal(lu.sortie.trim(), "0/2/3/2/2");
 });
 
-/** La porte de la console tient aussi sur les idées. */
+/**
+ * **La porte de la console tient sur les quatre lectures.**
+ *
+ * `security definer` veut dire que la fonction travaille avec les droits de
+ * celui qui l'a écrite : sans la porte, n'importe quel compte authentifié
+ * lirait les comptes de tous les chantiers. Chaque fonction nouvelle doit donc
+ * être nommée ici — une porte posée sur trois des quatre est une porte ouverte.
+ */
 test("les idées ne se lisent pas sans être administrateur", { skip: sansPostgres }, () => {
-  const refuse = banc.sousLadresse("quelquun@ailleurs.example",
-    "select count(*) from public.les_idees_du_systeme();");
-  assert.equal(refuse.ok, false, "un compte quelconque a lu les idées du système");
-
-  const mesure = banc.sousLadresse("quelquun@ailleurs.example",
-    "select count(*) from public.la_mesure_des_idees();");
-  assert.equal(mesure.ok, false, "un compte quelconque a lu la mesure des idées");
+  for (const appel of [
+    "public.les_idees_du_systeme()",
+    "public.la_mesure_des_idees()",
+    "public.le_detail_des_liaisons()",
+    "public.la_forme_des_affirmations()"
+  ]) {
+    const refuse = banc.sousLadresse("quelquun@ailleurs.example",
+      `select count(*) from ${appel};`);
+    assert.equal(refuse.ok, false, `un compte quelconque a lu ${appel}`);
+  }
 });
 
 /**
@@ -1598,3 +1610,159 @@ test("l'écran sait nommer chaque sorte de lien que la base produit",
     assert.deepEqual(jamaisProduites, [],
       `l'écran annonce des liens que rien ne produit : ${jamaisProduites.join(", ")}`);
   });
+
+/* ── Où le découpage casse ────────────────────────────────────────────────── */
+
+/**
+ * **Un chiffre qu'on ne sait pas expliquer ne sert à rien.**
+ *
+ * La console annonçait « 1 % des affirmations énoncent un lien » sans rien
+ * pour dire où cela casse : le corpus n'énonce rien, ou le découpage ne sait
+ * pas lire ? Les deux mènent à des travaux opposés (règle 12).
+ */
+test("le détail dit quel mot promet et ne rend rien", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_assertions;");
+  desAffirmations(MEDIATHEQUE, [
+    // Coupée, et entière.
+    "Le terrain argileux est confirme donc le plancher beton sera repris",
+    // Porte « donc », mais rien de technique à droite — « on le met » n'a
+    // aucun mot d'au moins quatre lettres. Elle échoue, et on veut savoir que
+    // c'est pour cette raison-là, et non parce que le mot manquait.
+    "Le terrain argileux est confirme donc on le met",
+    // Ne porte aucun mot de liaison.
+    "Menuiseries exterieures"
+  ]);
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select mot || ':' || contenues || '/' || premieres || '/' || entieres"
+    + " || '/' || sans_terme from public.le_detail_des_liaisons()"
+    + " where contenues > 0 order by mot;");
+  assert.equal(lu.ok, true, lu.motif);
+
+  const lignes = lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+  // « donc » est dans deux affirmations, coupe les deux, n'en rend qu'une
+  // entière, et la seconde échoue faute de terme à droite.
+  assert.deepEqual(lignes, ["donc:2/2/1/1"],
+    `le détail ne dit pas où le découpage casse : ${lignes.join(" | ")}`);
+});
+
+/**
+ * **Un mot de liaison en bout de phrase se compte quand même.**
+ *
+ * Le texte est encadré d'espaces avant qu'on y cherche les mots : sans cela, un
+ * « donc » en fin de phrase n'est trouvé par aucune recherche de « espace donc
+ * espace », et le détail dirait que le mot n'est jamais employé. Rien ne serait
+ * coupé de toute façon — il n'y a rien à droite — mais le détail existe
+ * précisément pour dire où les mots sont, pas seulement où ils marchent.
+ */
+test("un mot de liaison en bout de phrase se compte", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_assertions;");
+  desAffirmations(MEDIATHEQUE, ["Le plancher beton sera repris donc"]);
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select contenues || '/' || premieres || '/' || entieres"
+    + " from public.le_detail_des_liaisons() where mot = 'donc';");
+  assert.equal(lu.ok, true, lu.motif);
+  // Porté par une affirmation, coupé sur elle, et aucune idée entière : il n'y
+  // a rien à droite du mot.
+  assert.equal(lu.sortie.trim(), "1/1/0",
+    "un mot de liaison en bout de phrase n'est pas compté");
+});
+
+/** Un mot qu'aucune affirmation ne porte sort quand même, à zéro. */
+test("un mot de liaison jamais rencontré sort à zéro", { skip: sansPostgres }, () => {
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select count(*) from public.le_detail_des_liaisons() where contenues = 0;");
+  assert.equal(lu.ok, true, lu.motif);
+  assert.ok(Number(lu.sortie.trim()) > 0,
+    "les mots jamais rencontrés sont absents : on ne saurait pas qu'ils ne servent à rien");
+});
+
+/**
+ * **Avant d'accuser le découpage, savoir sur quoi il travaille.** Un corpus
+ * d'intitulés ne porte aucun lien, et ce n'est pas le découpage qu'il faut
+ * corriger.
+ */
+test("la forme des affirmations dit si ce sont des phrases ou des intitulés",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.project_assertions;");
+    desAffirmations(MEDIATHEQUE, [
+      "Le terrain argileux est confirme donc le plancher beton sera repris",
+      "Menuiseries exterieures",
+      "Plancher haut du R+1"
+    ]);
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select affirmations || '/' || mots_moyens || '/' || au_moins_dix_mots"
+      + " || '/' || sans_liaison from public.la_forme_des_affirmations();");
+    assert.equal(lu.ok, true, lu.motif);
+
+    // Trois affirmations ; une seule dépasse dix mots ; deux ne portent aucun
+    // mot de liaison. La moyenne tombe à cause des deux intitulés.
+    const [combien, , dixMots, sansLien] = lu.sortie.trim().split("/");
+    assert.equal(combien, "3");
+    assert.equal(dixMots, "1", "le compte des phrases longues est faux");
+    assert.equal(sansLien, "2", "le compte des affirmations sans liaison est faux");
+  });
+
+/** La coupe se lit aussi texte par texte : c'est ainsi qu'un document s'analyse. */
+test("les idées se relèvent texte par texte, avec le rang de chacun",
+  { skip: sansPostgres }, () => {
+    const lu = banc.sql(
+      "select rang || ':' || avant || '>' || apres || ':' || lien"
+      + " from public.les_idees_des_textes(array["
+      + "'Menuiseries exterieures',"
+      + "'Le terrain argileux est confirme donc le plancher beton sera repris',"
+      + "'La nappe phreatique remonte donc on le met'"
+      + "]) order by rang;");
+
+    const lignes = lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+    // Le premier texte n'énonce rien, le troisième n'a pas de terme à droite :
+    // ni l'un ni l'autre ne sort, et le rang du second le situe quand même.
+    assert.deepEqual(lignes, ["2:terrain argileux>plancher beton:cause"],
+      `le relevé texte par texte est faux : ${lignes.join(" | ")}`);
+
+    /**
+     * **Et une ligne de moins, c'est une ligne de moins.**
+     *
+     * La première version de cette épreuve ne lisait que la liste. Or une idée
+     * incomplète concatène à `NULL` en SQL, donc à une ligne vide — que le
+     * nettoyage ci-dessus jetait. Laisser sortir les idées à moitié n'y
+     * changeait rien : l'épreuve passait **par accident**.
+     */
+    const combien = banc.sql(
+      "select count(*) from public.les_idees_des_textes(array["
+      + "'Menuiseries exterieures',"
+      + "'Le terrain argileux est confirme donc le plancher beton sera repris',"
+      + "'La nappe phreatique remonte donc on le met'"
+      + "]);");
+    assert.equal(combien.sortie.trim(), "1",
+      "des idées incomplètes sortent du relevé texte par texte");
+  });
+
+/**
+ * **Le découpage n'est écrit qu'à un seul endroit.**
+ *
+ * Il l'était deux fois, par copie de sept lignes de CTE. Une seconde copie
+ * finit par ne plus dire la même chose, et c'est la seconde qu'on oublie de
+ * corriger (règle 4). Les deux lectures doivent donc tomber d'accord.
+ */
+test("la liste et la mesure comptent la même chose", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.project_assertions;");
+  for (const projet of [MEDIATHEQUE, GYMNASE]) {
+    desAffirmations(projet, [
+      "Le terrain argileux est confirme donc le plancher beton sera repris",
+      "La nappe phreatique remonte donc le cuvelage renforce devient obligatoire"
+    ]);
+  }
+
+  const liste = banc.sousLadresse("patron@mdall.example",
+    "select count(*) from public.les_idees_du_systeme();");
+  const mesure = banc.sousLadresse("patron@mdall.example",
+    "select montrees from public.la_mesure_des_idees();");
+
+  assert.equal(liste.ok, true, liste.motif);
+  assert.equal(mesure.ok, true, mesure.motif);
+  assert.equal(liste.sortie.trim(), mesure.sortie.trim(),
+    "la liste et la mesure ne comptent pas la même chose : le découpage a divergé");
+});

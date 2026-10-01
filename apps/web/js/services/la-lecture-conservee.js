@@ -111,6 +111,15 @@ export function lanalyseAConserver(vue = null) {
       lueSur: texte(lecture.lueSur),
       luPar: texte(lecture.luPar),
       liensEcartes: liste(lecture.liensEcartes),
+      /**
+       * **Les liens que ce document énonce, gelés avec le reste.**
+       *
+       * Ils sont relevés au moment de la lecture, et non à l'ouverture de
+       * l'écran : la liste des mots de liaison bougera, et une analyse datée
+       * qui changerait sous l'œil de celui qui la relit ne serait plus une
+       * analyse (règle 6).
+       */
+      idees: liste(lecture.idees),
       coupee: lecture.coupee === true
     },
 
