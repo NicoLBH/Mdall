@@ -111,29 +111,134 @@ export function lesEnchainements(lignes = []) {
     .filter((une) => une.avant && une.apres && une.combien > 0);
 
   const departs = new Map();
+  /**
+   * Combien de fois chaque terme **arrive**, tous départs confondus.
+   *
+   * C'est ce qui manquait, et c'est tout le sujet. Voir `lelan`.
+   */
+  const arrivees = new Map();
+  let tousLesPas = 0;
   for (const une of toutes) {
     departs.set(une.avant, (departs.get(une.avant) ?? 0) + une.combien);
+    arrivees.set(une.apres, (arrivees.get(une.apres) ?? 0) + une.combien);
+    tousLesPas += une.combien;
   }
 
   return toutes
-    .map((une) => ({
-      ...une,
-      // L'assiette voyage avec le taux : l'écran doit pouvoir dire « sur
-      // combien », et le lui faire recalculer le ferait diverger (règle 4).
-      surCombien: departs.get(une.avant) ?? une.combien,
-      probabilite: une.combien / (departs.get(une.avant) ?? une.combien),
-      // Ce qu'on peut affirmer, par opposition à ce qu'on a vu — voir
-      // `laProbabilitePrudente`. C'est elle qui classe.
-      prudente: laProbabilitePrudente(une.combien, departs.get(une.avant) ?? une.combien),
-      // Ce qui se répète à l'identique n'est pas un enchaînement : c'est le
-      // même domaine qui continue. L'écran le dira, il ne l'effacera pas.
-      surLuiMeme: une.avant === une.apres,
-      assezVu: une.combien >= ASSEZ_VU
-    }))
-    .sort((gauche, droite) => droite.prudente - gauche.prudente
+    .map((une) => {
+      const surCombien = departs.get(une.avant) ?? une.combien;
+      const prudente = laProbabilitePrudente(une.combien, surCombien);
+      // Ce que vaut ce terme **sans rien savoir** : sa part de toutes les
+      // arrivées. C'est contre cela qu'un enchaînement doit faire mieux.
+      const partDuSuivant = tousLesPas ? (arrivees.get(une.apres) ?? 0) / tousLesPas : 0;
+
+      return {
+        ...une,
+        // L'assiette voyage avec le taux : l'écran doit pouvoir dire « sur
+        // combien », et le lui faire recalculer le ferait diverger (règle 4).
+        surCombien,
+        probabilite: une.combien / surCombien,
+        // Ce qu'on peut affirmer, par opposition à ce qu'on a vu — voir
+        // `laProbabilitePrudente`.
+        prudente,
+        partDuSuivant,
+        elan: lelan(prudente, partDuSuivant),
+        banal: estBanal(lelan(prudente, partDuSuivant)),
+        // Ce qui se répète à l'identique n'est pas un enchaînement : c'est le
+        // même domaine qui continue. L'écran le dira, il ne l'effacera pas.
+        surLuiMeme: une.avant === une.apres,
+        assezVu: une.combien >= ASSEZ_VU
+      };
+    })
+    // **On classe sur l'élan, plus sur le taux.** Classer sur le taux mettait en
+    // tête douze lignes à 100 % qui disaient toutes la même chose, et ne
+    // disaient rien.
+    .sort((gauche, droite) => (droite.elan ?? 0) - (gauche.elan ?? 0)
+      || droite.prudente - gauche.prudente
       || droite.combien - gauche.combien
       || gauche.avant.localeCompare(droite.avant, "fr")
       || gauche.apres.localeCompare(droite.apres, "fr"));
+}
+
+/**
+ * **Ce que l'enchaînement apprend, par-dessus ce qu'on savait déjà.**
+ *
+ * ## Le défaut, et il était à l'écran
+ *
+ * La console affichait douze lignes de suite :
+ *
+ *     rapport → avis           100 % · 169 sur 169
+ *     avis isolement → avis    100 % · 150 sur 150
+ *     salle → avis             100 % · 134 sur 134
+ *
+ * et concluait « 614 fois mieux que le hasard ». C'était vrai, et c'était vide.
+ * Le hasard auquel on comparait tirait un sujet parmi six cent vingt-huit — or
+ * **personne ne prédit comme ça**. « Avis » arrive après presque tout : le
+ * prédire sans rien regarder tombe juste la plupart du temps, et une règle qui
+ * fait 100 % n'a alors rien appris.
+ *
+ * > « L'affichage ou le résultat est banal et trivial. »
+ *
+ * Il l'était. Pas l'affichage : la mesure.
+ *
+ * ## La bonne référence
+ *
+ * Non pas « une chance sur le nombre de sujets », mais **la fréquence du terme
+ * qui suit**. L'élan est le rapport des deux :
+ *
+ *     élan = P(après | avant) / P(après)
+ *
+ * À 1, la règle n'apprend rien — on savait déjà qu'« avis » allait venir. À 4,
+ * connaître ce qui précède rend le terme quatre fois plus probable qu'il ne
+ * l'était. C'est cela qu'un prédicteur vaut.
+ *
+ * **La borne basse au numérateur**, comme avant : fonder la ligne qui prétend
+ * dire ce que la prédiction vaut sur six coups sur six annoncerait beaucoup de
+ * six coups sur six.
+ *
+ * `null` quand le terme n'arrive jamais ailleurs : on ne divise pas par zéro, et
+ * on ne prétend pas savoir (règle 5).
+ */
+export function lelan(prudente, partDuSuivant) {
+  // **`Number(null)` vaut zéro, et zéro est fini.** Sans ce refus explicite, une
+  // borne absente passait pour une borne nulle et rendait un élan de zéro —
+  // c'est-à-dire « cette règle est pire que rien », affirmé de ce qu'on n'a pas
+  // mesuré (règle 5). Le même piège qu'avec la précision des sujets.
+  if (prudente === null || prudente === undefined) return null;
+  if (partDuSuivant === null || partDuSuivant === undefined) return null;
+
+  const part = Number(partDuSuivant);
+  if (!Number.isFinite(part) || part <= 0) return null;
+
+  const sur = Number(prudente);
+  if (!Number.isFinite(sur)) return null;
+
+  return sur / part;
+}
+
+/**
+ * En dessous de quel élan une règle n'apprend rien.
+ *
+ * **Un peu au-dessus de 1, et c'est voulu.** À élan 1,05 on a « gagné » cinq
+ * pour cent sur une marge d'erreur qui en vaut bien plus : annoncer cela comme
+ * une régularité serait du bruit présenté comme une trouvaille.
+ */
+export const ELAN_QUI_APPREND = 1.2;
+
+/** Cette règle n'apprend-elle rien de plus que la fréquence du terme ? */
+export function estBanal(elan) {
+  // **Un élan qu'on n'a pas pu calculer n'est pas « banal ».** Ne pas savoir
+  // n'est pas savoir que c'est trivial (règle 5).
+  //
+  // Et le refus est **explicite** : `Number(null)` vaut zéro, qui est fini et
+  // bien inférieur au seuil — une règle qu'on n'a pas su mesurer serait donc
+  // passée pour une tautologie, et écartée en silence. Le même piège que dans
+  // `lelan`, et il ne se voit pas en lisant.
+  if (elan === null || elan === undefined) return false;
+
+  const lu = Number(elan);
+  if (!Number.isFinite(lu)) return false;
+  return lu < ELAN_QUI_APPREND;
 }
 
 /**
@@ -147,7 +252,10 @@ export function lesEnchainements(lignes = []) {
  */
 export function lesEnchainementsQuiPortent(enchainements = []) {
   return (Array.isArray(enchainements) ? enchainements : [])
-    .filter((une) => une.assezVu && !une.surLuiMeme);
+    // **Et pas ceux qui n'apprennent rien.** Une règle à 100 % dont le terme
+    // suivant arrive de toute façon n'est pas une régularité : c'est une
+    // tautologie, et elle occupait les douze premiers rangs.
+    .filter((une) => une.assezVu && !une.surLuiMeme && !une.banal);
 }
 
 /**
@@ -160,20 +268,20 @@ export function lesEnchainementsQuiPortent(enchainements = []) {
  *
  * `null` quand il n'y a rien d'assez vu : on ne se prononce pas (règle 5).
  */
-export function ceQueLeMeilleurVaut(enchainements = [], combienDeDomaines = 0) {
+export function ceQueLeMeilleurVaut(enchainements = []) {
   const porteurs = lesEnchainementsQuiPortent(enchainements);
-  const domaines = Math.max(0, Number(combienDeDomaines) || 0);
-  if (!porteurs.length || domaines < 2) return null;
+  if (!porteurs.length) return null;
 
   const meilleur = porteurs[0];
+  if (!Number.isFinite(Number(meilleur.elan))) return null;
+
   return {
     meilleur,
-    auHasard: 1 / domaines,
-    // **Sur la borne basse, pas sur le taux observé.** C'est cette ligne qui
-    // prétend dire ce que la prédiction vaut : la fonder sur six coups sur six
-    // annoncerait « huit fois mieux que le hasard » d'un enchaînement dont on
-    // ne sait presque rien.
-    combienDeFoisMieux: meilleur.prudente * domaines
+    // **Ce que valait le terme sans rien savoir**, et non une chance sur N.
+    // Personne ne prédit en tirant au sort parmi six cent vingt-huit sujets :
+    // on dit le terme le plus fréquent, et c'est contre cela qu'il faut gagner.
+    sansRienSavoir: meilleur.partDuSuivant,
+    combienDeFoisMieux: meilleur.elan
   };
 }
 
@@ -183,22 +291,34 @@ export function ceQueLeMeilleurVaut(enchainements = [], combienDeDomaines = 0) {
  * **Jamais « bon » ni « mauvais ».** Le chiffre doit se regarder, et un
  * jugement collé dessus dispense de le lire.
  */
-export function phraseDeLaPrediction(enchainements = [], combienDeDomaines = 0) {
-  const vaut = ceQueLeMeilleurVaut(enchainements, combienDeDomaines);
+export function phraseDeLaPrediction(enchainements = []) {
+  const vaut = ceQueLeMeilleurVaut(enchainements);
   if (!vaut) {
-    return `Aucun enchaînement n'a encore été vu ${ASSEZ_VU} fois : il n'y a pas`
-      + " de quoi se prononcer.";
+    const vus = (Array.isArray(enchainements) ? enchainements : [])
+      .filter((une) => une.assezVu && !une.surLuiMeme);
+    // **Deux silences, et ils ne disent pas la même chose** (règle 5). « Rien
+    // n'a été vu assez de fois » appelle plus de matière ; « rien n'apprend
+    // quoi que ce soit » appelle un autre prédicteur.
+    return vus.length
+      ? `${vus.length} enchaînement${vus.length > 1 ? "s ont" : " a"} été vu${
+          vus.length > 1 ? "s" : ""} assez souvent, et aucun n'apprend rien de plus`
+        + " que la fréquence du terme qui suit : la prédiction ne fait, pour l'instant,"
+        + " que redire ce qui revient le plus."
+      : `Aucun enchaînement n'a encore été vu ${ASSEZ_VU} fois : il n'y a pas`
+        + " de quoi se prononcer.";
   }
 
-  const { meilleur, auHasard, combienDeFoisMieux } = vaut;
+  const { meilleur, sansRienSavoir, combienDeFoisMieux } = vaut;
   // « au moins » : c'est une borne basse, et le dire évite de la lire comme une
   // mesure. Elle est fondée sur ce qui a été vu — l'assiette suit.
-  return `Le plus régulier tombe juste au moins ${Math.round(meilleur.prudente * 100)} % du temps`
+  return `Le plus instructif tombe juste au moins ${Math.round(meilleur.prudente * 100)} % du temps`
     + ` (${meilleur.combien} sur ${meilleur.surCombien} observés),`
-    + ` contre ${Math.round(auHasard * 100)} % au hasard —`
+    + ` là où « ${meilleur.apres} » arrive de toute façon ${
+        Math.round(sansRienSavoir * 100)} % du temps —`
     // La virgule, pas le point : « 4.9 fois mieux » se lit anglais au milieu
     // d'une phrase française.
-    + ` ${combienDeFoisMieux.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} fois mieux.`;
+    + ` ${combienDeFoisMieux.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} fois mieux`
+    + " que de ne rien regarder.";
 }
 
 /**
@@ -217,10 +337,22 @@ export function laPartDuRedoublement(enchainements = []) {
   return memes / total;
 }
 
-/** Ce qu'un enchaînement dit de lui-même : le taux, et son assiette. */
+/**
+ * Ce qu'un enchaînement dit de lui-même : le taux, son assiette, et son élan.
+ *
+ * **L'élan en dernier et en clair**, parce que c'est lui qui décide si la ligne
+ * valait d'être lue. Douze lignes à « 100 % » se ressemblaient toutes ; « ×1,0 »
+ * et « ×4,2 » ne se ressemblent pas.
+ */
 export function phraseDunEnchainement(ligne = null) {
   const combien = nombre(ligne?.combien);
   if (!combien) return "";
+
+  const elan = Number(ligne?.elan);
+  const dit = Number.isFinite(elan)
+    ? ` · ×${elan.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}`
+    : "";
+
   return `${Math.round(nombre(ligne?.probabilite) * 100)} % · ${combien} sur ${
-    nombre(ligne?.surCombien)}`;
+    nombre(ligne?.surCombien)}${dit}`;
 }

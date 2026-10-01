@@ -86,7 +86,17 @@ export const RACINES = [
   // de termes trouvés dans ce qu'ils écrivent, là où la taxonomie n'a que huit
   // cases. Rien n'en sort qui ne soit partagé par plusieurs chantiers.
   "js/services/les-sujets-du-systeme-supabase.js",
-  "js/services/les-sujets-du-systeme.js"
+  "js/services/les-sujets-du-systeme.js",
+  // Les rubriques de la console : une question par rubrique, et l'ordre de la
+  // chaîne. Pur, et il n'entraîne rien.
+  "js/services/les-rubriques-de-la-console.js",
+  // Le rail commun, celui des Sujets, de la Mémoire et des Actions. La console
+  // posait sept blocs à la suite sur une seule page ; elle emploie maintenant
+  // la même coque que les écrans de projet, plutôt qu'une navigation à elle qui
+  // divergerait au premier réglage (règle 4).
+  "js/views/ui/project-rail.js",
+  "js/views/ui/nav-list.js",
+  "js/views/ui/titre-decran.js"
 ];
 
 /**

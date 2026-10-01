@@ -15,6 +15,7 @@ import {
   lesExecutionsDites, longletDit, ongletValide, partitionnerActions, quelqueChoseTourne
 } from "../services/run-partition.js";
 import { renderNavList, renderNavListGroup, renderNavListItem } from "./ui/nav-list.js";
+import { renderTitreDEcranHtml } from "./ui/titre-decran.js";
 import {
   bindRailResizer, followRailScroll, railWidth, renderProjectRail
 } from "./ui/project-rail.js";
@@ -313,31 +314,49 @@ function renderRunCountInline(total) {
  */
 function renderRunRows(entries) {
   return entries.map((entry) => {
-    const objet = entry.documentName
-      ? `<span class="workflow-runs__object">${escapeHtml(entry.documentName)}</span>`
-      : "";
-    const cause = `<span class="workflow-runs__trigger">${escapeHtml(getTriggerLabel(entry))}</span>`;
-    // Une exécution d'Atelier antérieure au cloisonnement est encore lue par
-    // tout le monde. L'absence de marque ne le dit pas — seule une mention le
-    // dit, et il faut qu'elle soit dite.
+    // **Le sous-titre d'une ligne dit toujours les mêmes choses, dans le même
+    // ordre** : ce sur quoi elle a porté, d'où elle vient, qui l'a lancée.
+    // Chacune peut manquer ; les points ne se mettent qu'entre deux présentes,
+    // sans quoi une ligne sans objet commence par un point qui ne sépare rien.
     const visibilite = decrireVisibilite(entry);
-    const mention = visibilite?.note
-      ? `<span class="workflow-runs__dot">·</span><span class="workflow-runs__mention">${escapeHtml(visibilite.note)}</span>`
-      : "";
+    const dits = [
+      escapeHtml(texteDe(entry.documentName)),
+      escapeHtml(getTriggerLabel(entry)),
+      // **Qui l'a lancée.** Le journal disait ce qui s'est passé et quand, mais
+      // jamais par qui : sur un chantier à cinq, « qui a versé ces mails ? »
+      // n'avait pas de réponse à l'écran.
+      escapeHtml(lauteurDe(entry)),
+      escapeHtml(texteDe(visibilite?.note))
+    ].filter(Boolean);
 
     return `
       <div class="workflow-runs__row">
         <div class="workflow-runs__cell workflow-runs__cell--action">
-          <div class="workflow-runs__title-row">
-            ${getRunStateIcon(entry)}
-            ${renderMarqueAtelier(entry)}
-            <button type="button" class="workflow-runs__title workflow-runs__title--link" data-run-open="${escapeHtml(
-              entry.id || ""
-            )}">${escapeHtml(entry.name || UNE_EXECUTION)}</button>
-          </div>
-          <div class="workflow-runs__meta workflow-runs__subline">
-            ${objet}${objet && cause ? `<span class="workflow-runs__dot">·</span>` : ""}${cause}${mention}
-          </div>
+          ${/*
+            **Le gabarit des sujets, et non un second.** Les titres de lignes
+            étaient dessinés ici, avec leurs propres classes : deux graisses,
+            deux tailles, deux façons de couper un titre trop long, pour la même
+            chose. Celui-ci est celui des Sujets (règle 4).
+          */""}
+          <span class="issue-row-title-grid">
+            <span class="issue-row-title-grid__status">${getRunStateIcon(entry)}</span>
+            <span class="issue-row-title-grid__title">
+              ${/*
+                **Pas de marque d'Atelier ici.** Elle y posait une icône de
+                puce au milieu des titres, qu'il fallait apprendre à lire.
+                L'origine se dit maintenant en toutes lettres, dans sa colonne.
+              */""}
+              <button type="button" class="row-title-trigger theme-text theme-text--pb"
+                data-run-open="${escapeHtml(entry.id || "")}"
+              >${escapeHtml(entry.name || UNE_EXECUTION)}</button>
+            </span>
+            <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${
+              dits.join(" • ")}</span>
+          </span>
+        </div>
+
+        <div class="workflow-runs__cell workflow-runs__cell--origine">
+          ${renderLaPastilleDeLorigine(entry)}
         </div>
 
         <div class="workflow-runs__cell workflow-runs__cell--when">
@@ -355,30 +374,49 @@ function renderRunRows(entries) {
   }).join("");
 }
 
+const texteDe = (valeur) => String(valeur ?? "").trim();
+
 /**
- * La marque d'une exécution d'Atelier.
+ * Qui a lancé cette exécution.
  *
- * Pas un cadenas : un cadenas dit « secret », et ce n'est pas de cela qu'il
- * s'agit. Une exécution d'Atelier n'est pas cachée, elle est **personnelle** —
- * un essai en cours, qui n'a pas à devenir un acte du projet parce qu'on l'a
- * lancé. La marque est donc celle de l'Atelier lui-même : elle dit d'où la
- * ligne vient, et l'onglet au-dessus a déjà dit ce qui en découle.
+ * **Le nom, pas l'identifiant.** Un UUID dans un journal ne répond à personne :
+ * la question est « qui a versé ces mails ? », et elle se pose à cinq sur un
+ * chantier. Le nom se lit dans les collaborateurs du projet, qui sont déjà
+ * chargés pour les assignations.
  *
- * Elle ne s'affiche que lorsque la confidentialité est réelle. Une exécution
- * d'Atelier antérieure au cloisonnement reste lue par tout le monde : elle
- * porte alors une mention, pas la marque.
+ * `""` quand on ne sait pas : une exécution d'avant les propriétaires n'en a
+ * pas, et inventer « System » ferait croire que la machine l'a lancée seule
+ * (règle 5).
  */
-function renderMarqueAtelier(entry) {
-  const visibilite = decrireVisibilite(entry);
-  if (!visibilite?.marque) return "";
-  // **L'icône vient de la règle, pas de l'écran.** Elle était écrite ici, en
-  // dur : un versement aurait donc porté la marque de l'Atelier, c'est-à-dire
-  // dit « essai » d'un dépôt qui est un acte (règle 10).
+function lauteurDe(entry) {
+  const qui = texteDe(entry?.ownerId);
+  if (!qui) return "";
+
+  const collaborateurs = Array.isArray(store?.projectForm?.collaborators)
+    ? store.projectForm.collaborators
+    : [];
+  const trouve = collaborateurs.find((un) => texteDe(un?.user_id ?? un?.id) === qui);
+
+  return texteDe(trouve?.display_name ?? trouve?.name ?? trouve?.full_name ?? trouve?.email);
+}
+
+/**
+ * L'origine d'une exécution, **en toutes lettres**.
+ *
+ * Elle se disait par une icône — une puce pour l'Atelier, un cadenas pour un
+ * versement — qu'il fallait survoler pour comprendre. Trois mots tiennent dans
+ * une colonne, et ils se lisent sans apprendre un alphabet.
+ *
+ * Le dessin est celui d'une branche sur une forge : un mot, en bleu, sur un
+ * fond bleuté. On le reconnaît avant de le lire.
+ */
+function renderLaPastilleDeLorigine(entry) {
+  const vue = longletDit(entry?.origine);
+  if (!vue) return "";
+
   return `
-    <span class="workflow-runs__atelier" title="${escapeHtml(visibilite.titre)}"
-          aria-label="${escapeHtml(visibilite.titre)}">
-      ${svgIcon(visibilite.icone || "cpu", { className: "octicon" })}
-    </span>
+    <span class="workflow-runs__origine" title="${escapeHtml(vue.explication)}">${
+      escapeHtml(vue.libelle)}</span>
   `;
 }
 
@@ -506,14 +544,23 @@ function renderRunsTable() {
 
   const tableHtml = renderDataTableShell({
     className: "workflow-runs-table data-table-shell--document-scroll",
-    gridTemplate: "minmax(320px,2fr) 220px",
+    gridTemplate: "minmax(320px,2fr) max-content 220px",
     headHtml: renderDataTableHead({
       columns: [
         {
-          html: `<span class="workflow-runs__head-label">Action</span>${renderRunCountInline(entries.length)}`,
-          className: "workflow-runs__head-col workflow-runs__head-col--action"
-        },
-        "Quand"
+          /**
+           * **L'en-tête ne nomme plus ses colonnes.**
+           *
+           * Elle disait « Action » au-dessus des actions et « Quand » au-dessus
+           * des dates : deux intitulés qui n'apprennent rien à personne, et qui
+           * prenaient toute la ligne. Ce qu'on veut y lire est **combien** —
+           * c'est le seul chiffre que le tableau ne porte nulle part ailleurs.
+           *
+           * Il se pose à droite, où l'œil va chercher un total.
+           */
+          html: renderRunCountInline(entries.length),
+          className: "workflow-runs__head-col workflow-runs__head-col--compte"
+        }
       ]
     }),
     bodyHtml: renderRunRows(paged.items),
@@ -539,10 +586,19 @@ function renderRunsTable() {
           gauche de la coque, un titre commence derrière la barre latérale, qui
           flotte par-dessus.
         */""}
-        <div class="memoire-corps__tete">
-          <h2 class="actions-vue__titre">${escapeHtml(vue.libelle)}</h2>
-          <p class="actions-vue__dit">${escapeHtml(vue.explication)}</p>
-        </div>
+        ${/*
+          **La ligne de titre commune.** Elle était écrite ici, avec ses propres
+          classes : une autre taille, une autre graisse, un autre espacement que
+          les Sujets, la Mémoire et les Labels — qui emploient tous
+          `renderTitreDEcranHtml`. Chaque écran se recalibrait donc contre les
+          précédents (règle 10, `views/ui/titre-decran.js`).
+
+          L'explication reste, **sous** le titre : c'est ce que la rangée
+          d'onglets disait avant le rail, et elle n'avait pas à disparaître
+          avec elle.
+        */""}
+        ${renderTitreDEcranHtml({ titre: vue.libelle, className: "actions-vue__tete" })}
+        <p class="actions-vue__dit">${escapeHtml(vue.explication)}</p>
         ${tableHtml}${renderPaginationControls(pagination, { entity: "actions" })}
       </div>
     </div>

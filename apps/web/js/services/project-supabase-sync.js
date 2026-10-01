@@ -997,6 +997,11 @@ function mapProjectRunRowToLogEntry(row = {}) {
     triggerLabel,
     trigger: { type: geste, label: triggerLabel },
     origine,
+    // **Qui l'a lancée.** Le journal disait ce qui s'est passé et quand, jamais
+    // par qui : sur un chantier à cinq, « qui a versé ces mails ? » n'avait pas
+    // de réponse à l'écran. Le nom se résout à l'affichage, dans les
+    // collaborateurs déjà chargés — ici on ne porte que l'identifiant.
+    ownerId: safeString(row.owner_id),
     privee: row.personnelle === true,
     documentName: "",
     subject: { documentName: "" },
@@ -1078,6 +1083,7 @@ function mapCtRunRowToLogEntry(row = {}) {
     trigger: { type: triggerType, label: triggerLabel },
     origine,
     privee,
+    ownerId: safeString(row.owner_id),
     documentName,
     subject: { documentName },
     startedAt: computedAt,
@@ -1654,8 +1660,10 @@ export async function syncProjectActionsFromSupabase(options = {}) {
       const file = new URLSearchParams();
       // `geste` et `documents` : sans eux, une lecture de comptes rendus
       // s'affichait comme un dépôt de messagerie de zéro fichier.
+      // `owner_id` : le journal dit maintenant qui a lancé chaque exécution,
+      // et une ligne de file est une exécution comme une autre.
       file.set("select",
-        "id,project_id,geste,statut,fichiers,documents,avancement,arrete,cree_le,pris_le");
+        "id,project_id,owner_id,geste,statut,fichiers,documents,avancement,arrete,cree_le,pris_le");
       file.set("project_id", `eq.${backendProjectId}`);
       file.set("statut", "in.(en_attente,en_cours)");
       file.set("order", "cree_le.desc");

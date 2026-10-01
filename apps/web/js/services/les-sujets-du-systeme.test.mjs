@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 
 import {
   CE_QUI_MANQUE_ENCORE, lesSujetsPrecis, lesSujetsRanges, phraseDeCeQuiEstCache,
-  phraseDeLaGranulometrie, phraseDesFormes, phraseDuRegroupement, phraseDunSujet
+  phraseDeCeQueCeNestPas, phraseDeLaGranulometrie, phraseDesFormes, phraseDuRegroupement,
+  phraseDunSujet
 } from "./les-sujets-du-systeme.js";
 
 const DES_LIGNES = [
@@ -18,15 +19,29 @@ const DES_LIGNES = [
 ];
 
 /**
- * **Les couples avant les mots seuls, à nombre de chantiers égal.** « plancher
- * beton » dit ce que « beton » ne dit pas, et c'est toute la granulométrie
- * qu'on cherche : un classement qui remonte les mots seuls redonnerait le
- * sommaire qu'on essaie de quitter.
+ * **Les termes qualifiés d'abord, et avant le nombre de chantiers.**
+ *
+ * Le classement partait des chantiers : en tête venaient donc les mots qu'on
+ * trouve partout — « corpus », « portes », « locaux » —, qui sont sur tous les
+ * chantiers parce qu'ils sont sur tous les chantiers, c'est-à-dire qu'ils ne
+ * distinguent rien.
+ *
+ * > « Plafonds, dispositions, passage, portes… et alors ? »
+ *
+ * Un mot seul nomme un objet ; « plancher beton » nomme un ouvrage. C'est la
+ * seule chose que ce comptage sache produire qui ressemble à une idée, et elle
+ * se noyait derrière les mots les plus répandus.
  */
-test("à chantiers égaux, le couple passe devant le mot seul", () => {
+test("un terme qualifié passe devant un mot seul, même plus répandu", () => {
   const ranges = lesSujetsRanges(DES_LIGNES);
   assert.deepEqual(ranges.map((une) => une.sujet),
-    ["plancher beton", "beton", "nappe phreatique", "cuvelage"]);
+    ["plancher beton", "nappe phreatique", "beton", "cuvelage"]);
+
+  // Et « beton » est sur trois chantiers quand « nappe phreatique » n'est que
+  // sur deux : c'est bien le nombre de mots qui a tranché, pas l'étendue.
+  const beton = ranges.find((une) => une.sujet === "beton");
+  const nappe = ranges.find((une) => une.sujet === "nappe phreatique");
+  assert.equal(beton.chantiers > nappe.chantiers, true);
 });
 
 test("une ligne vide ou sans occurrence n'entre pas", () => {
@@ -97,8 +112,47 @@ test("un sujet dit combien de formes s'y rangent", () => {
 test("le compte des formes traverse le rangeur", () => {
   assert.deepEqual(
     lesSujetsRanges(DES_LIGNES).map((une) => `${une.sujet}:${phraseDesFormes(une)}`),
-    ["plancher beton:4 formes", "beton:2 formes", "nappe phreatique:3 formes",
+    ["plancher beton:4 formes", "nappe phreatique:3 formes", "beton:2 formes",
       "cuvelage:"]);
+});
+
+/**
+ * **Ce comptage dit ce qu'il n'est pas**, avant qu'on le prenne pour autre chose.
+ *
+ * > « Le niveau de sémantique est très largement insuffisant pour porter du
+ * > sens. Où sont les idées, les raisonnements, les fonctions ? »
+ *
+ * La critique porte sur la mesure, pas sur l'affichage : un terme n'est ni une
+ * idée ni une fonction. Une couche présentée pour ce qu'elle n'est pas fait
+ * croire la question résolue, et personne ne la rouvre (règle 12).
+ */
+test("le comptage de termes dit qu'il ne relève pas des idées", () => {
+  const dite = phraseDeCeQueCeNestPas(lesSujetsRanges(DES_LIGNES));
+
+  assert.match(dite, /des termes, pas des idées/);
+  // Deux mots seuls sur quatre sujets.
+  assert.match(dite, /50 %/);
+  // Et ce à quoi cela sert quand même : la granulométrie de la prédiction.
+  assert.match(dite, /huit cases/);
+
+  // Rien à dire quand il n'y a rien : on n'invente pas un aveu sur du vide.
+  assert.equal(phraseDeCeQueCeNestPas([]), "");
+  assert.equal(phraseDeCeQueCeNestPas(null), "");
+});
+
+/**
+ * **Et ce qui manque est nommé.** Relever des idées et dire comment elles
+ * s'enchaînent ne se déduisent pas d'un comptage de noms : l'écrire évite de
+ * laisser croire que la question est réglée.
+ */
+test("ce qui manque nomme les idées et leurs liens", () => {
+  const dits = CE_QUI_MANQUE_ENCORE.map((un) => un.quoi).join(" | ");
+  assert.match(dits, /idées, et non des termes/);
+  assert.match(dits, /comment deux idées s'enchaînent/);
+
+  for (const un of CE_QUI_MANQUE_ENCORE) {
+    assert.ok(un.quoi && un.ou && un.pourquoi, "une étape sans son pourquoi n'apprend rien");
+  }
 });
 
 /**

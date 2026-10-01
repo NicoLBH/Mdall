@@ -45,12 +45,14 @@ import {
   lesEnchainementsDuSysteme
 } from "../partage/js/services/les-enchainements-du-systeme-supabase.js";
 import {
-  CE_QUI_MANQUE_ENCORE, lesSujetsRanges, phraseDeCeQuiEstCache, phraseDesFormes,
-  phraseDeLaGranulometrie, phraseDuRegroupement, phraseDunSujet
+  CE_QUI_MANQUE_ENCORE, lesSujetsRanges, phraseDeCeQueCeNestPas, phraseDeCeQuiEstCache,
+  phraseDesFormes, phraseDeLaGranulometrie, phraseDuRegroupement, phraseDunSujet
 } from "../partage/js/services/les-sujets-du-systeme.js";
 import {
   laMesureDesSujets, lesEnchainementsDesSujets, lesSujetsDuSysteme
 } from "../partage/js/services/les-sujets-du-systeme-supabase.js";
+import { LE_CARBURANT, laRubriqueDite } from "../partage/js/services/les-rubriques-de-la-console.js";
+import { renderTitreDEcranHtml } from "../partage/js/views/ui/titre-decran.js";
 
 const echapper = (valeur) => String(valeur ?? "")
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -197,10 +199,17 @@ function renderLesEnchainements(tous, {
     + " d'un chantier, les compte, et propose les plus fréquents. Rien de plus."
     + " Voici ces couples, sur l'ensemble des chantiers — un chantier seul ne"
     + " peut pas les voir.",
-  // Le nombre de cases parmi lesquelles le hasard tire. Huit pour les domaines ;
-  // autant que de sujets quand on prédit sur eux — et c'est bien pourquoi
-  // tomber juste sur un sujet vaut infiniment plus.
-  auHasardParmi = DOMAINS.length,
+  /*
+    **Plus de « hasard parmi N ».** La comparaison se faisait à un tirage
+    uniforme : une chance sur huit pour les domaines, sur six cent vingt-huit
+    pour les sujets. Elle annonçait « 614 fois mieux que le hasard » de règles
+    qui n'apprenaient rien — « avis » suit presque tout, et le prédire sans
+    rien regarder tombe juste la plupart du temps.
+
+    La référence est maintenant la fréquence du terme qui suit, et elle se
+    calcule dans le service, à partir des couples eux-mêmes : il n'y a plus de
+    nombre à passer ici, donc plus de nombre à se tromper.
+  */
   // Comment on écrit un côté du couple. Les domaines ont un libellé de
   // taxonomie ; un sujet s'écrit tel que les chantiers l'écrivent.
   nommer = domainLabel
@@ -212,7 +221,7 @@ function renderLesEnchainements(tous, {
     <section class="conso-usages">
       <h3 class="conso-usages__titre">${echapper(titre)}</h3>
       <p class="conso-usages__mot">${echapper(mot)}</p>
-      <p class="conso-usages__mot"><b>${echapper(phraseDeLaPrediction(tous, auHasardParmi))}</b></p>
+      <p class="conso-usages__mot"><b>${echapper(phraseDeLaPrediction(tous))}</b></p>
 
       ${/*
         **Le classement prend la borne basse, la ligne garde son taux observé.**
@@ -277,10 +286,19 @@ function renderLesSujets(sujets, mesure) {
       <h3 class="conso-usages__titre">Les sujets que les chantiers emploient</h3>
       <p class="conso-usages__mot">
         Huit cases ne décrivent pas un chantier, elles décrivent un sommaire :
-        « après le sol, la structure » est une évidence de métier. Voici ce que
-        les affirmations disent réellement — les termes qu'on y trouve, comptés
-        sur l'ensemble des chantiers. Ils ne sont pas déclarés, ils sont trouvés.
+        « après le sol, la structure » est une évidence de métier. Voici les
+        termes qu'on trouve dans les affirmations, comptés sur l'ensemble des
+        chantiers. Ils ne sont pas déclarés, ils sont trouvés.
       </p>
+      ${/*
+        **Ce que ce comptage n'est pas, dit avant qu'on le prenne pour autre
+        chose.** L'écran annonçait « voici ce que les affirmations disent
+        réellement » et déroulait : plafonds, dispositions, passage, portes.
+        Un terme n'est ni une idée, ni une fonction, ni un raisonnement — et une
+        couche présentée pour ce qu'elle n'est pas fait croire la question
+        réglée (règle 12).
+      */""}
+      <p class="conso-usages__mot">${echapper(phraseDeCeQueCeNestPas(ranges))}</p>
       <p class="conso-usages__mot"><b>${
         echapper(phraseDeLaGranulometrie(ranges, DOMAINS.length))}</b></p>
       ${/*
@@ -340,6 +358,23 @@ function renderLesSujets(sujets, mesure) {
   `;
 }
 
+/**
+ * La tête d'une rubrique : son nom, et la question à laquelle elle répond.
+ *
+ * **La question, pas le nom de la table.** La console posait sept blocs à la
+ * suite sans rien pour dire lequel répondait à quoi — on faisait défiler
+ * jusqu'à trouver, et l'on finissait par ne plus regarder.
+ */
+function renderLaTeteDeLaRubrique(cle) {
+  const rubrique = laRubriqueDite(cle);
+
+  return `
+    ${renderTitreDEcranHtml({ titre: rubrique.libelle, className: "conso-rubrique__tete" })}
+    <p class="conso-rubrique__question">${echapper(rubrique.question)}</p>
+    <p class="conso-rubrique__dit">${echapper(rubrique.explication)}</p>
+  `;
+}
+
 function renderTout(comptes) {
   const dit = phraseDuGisement(comptes);
   const depuis = leJour(comptes?.depuis);
@@ -347,7 +382,6 @@ function renderTout(comptes) {
 
   return `
     <section class="conso-usages">
-      <h3 class="conso-usages__titre">Le carburant</h3>
       ${dit ? `<p class="conso-usages__mot">${echapper(dit)}</p>` : ""}
       ${depuis && jusqua
         ? `<p class="conso-usages__mot">${depuis === jusqua
@@ -374,100 +408,109 @@ function renderTout(comptes) {
       ${renderLaRepartition(comptes) || `<p class="forme-manques">Aucun chantier ne porte de mail.</p>`}
     </section>
 
-    ${/*
-      **Un hôte, rempli plus tard.** La lecture des domaines est une seconde
-      requête ; l'attendre ici retarderait l'affichage des comptes, qui sont ce
-      qu'on vient voir en premier.
-    */""}
-    <div id="carburantDomaines"></div>
-    <div id="carburantEnchainements"></div>
-    <div id="carburantSujets"></div>
-    <div id="carburantSujetsEnchaines"></div>
-
-    ${renderCeQuiNestPasFait()}
   `;
 }
 
-export async function monterLeCarburant(hote) {
+/** Ce qu'on dit quand une lecture n'a pas répondu. Jamais « il n'y a rien » (règle 5). */
+function renderPasLu(quoi, lesquels) {
+  return `<section class="conso-usages"><p class="forme-manques">
+    ${echapper(quoi)} n'${echapper(lesquels)} pas pu être lus. Ce n'est pas qu'il n'y
+    en a aucun : on ne sait pas lesquels il y a.</p></section>`;
+}
+
+/**
+ * La console, **une rubrique à la fois**.
+ *
+ * ## Le défaut que cela répare
+ *
+ * Elle posait sept blocs à la suite sur une seule page : les comptes, la
+ * répartition, la reconnaissance, deux tables d'enchaînements, les sujets, et
+ * ce qui n'est pas fait.
+ *
+ * > « L'affichage est laborieux, trop d'informations sur la même page. »
+ *
+ * On ne lit pas sept blocs : on fait défiler jusqu'à trouver, et l'on finit par
+ * ne plus regarder du tout.
+ *
+ * ## Et on ne demande que ce qu'on montre
+ *
+ * Chaque rubrique a sa lecture. Les cinq partaient ensemble à l'ouverture —
+ * cinq requêtes lourdes dont quatre pour des blocs qu'on ne regarderait pas.
+ *
+ * @param {HTMLElement} hote où dessiner
+ * @param {string} cle la rubrique à montrer (`les-rubriques-de-la-console.js`)
+ */
+export async function monterLeCarburant(hote, cle = LE_CARBURANT) {
   const ou = hote?.querySelector?.("#carburantHote");
   if (!ou) return;
 
-  const comptes = await lesComptesDuCarburant();
+  const rubrique = laRubriqueDite(cle);
+  ou.innerHTML = `${renderLaTeteDeLaRubrique(rubrique.cle)}
+    <section class="conso-usages"><p class="conso-usages__mot">Lecture…</p></section>`;
 
-  // **Ne pas savoir n'est pas savoir qu'il n'y a rien** (règle 5). « Aucun mail
-  // déposé » et « la base n'a pas répondu » mènent à des décisions opposées.
-  if (comptes === null) {
-    ou.innerHTML = `<section class="conso-usages"><p class="forme-manques">
-      Les comptes n'ont pas pu être lus. Ce n'est pas qu'il n'y a rien : on ne
-      sait pas ce qu'il y a.</p></section>`;
-    return;
-  }
+  const corps = await leCorpsDeLaRubrique(rubrique.cle);
 
-  ou.innerHTML = renderTout(comptes);
+  // **Une rubrique qu'on a quittée pendant la lecture ne s'écrit pas.** Deux
+  // clics rapides lançaient deux lectures, et la plus lente écrasait la plus
+  // récente : on lisait les domaines sous le titre des sujets.
+  if (ou.dataset.rubrique && ou.dataset.rubrique !== rubrique.cle) return;
 
-  // **Après les comptes, et pas avec eux.** Les deux lectures sont
-  // indépendantes : celle des domaines peut échouer sans emporter celle du
-  // carburant, qui répond à la question la plus urgente.
-  // **Les deux lectures ensemble, et chacune chez elle.** Elles ne dépendent pas
-  // l'une de l'autre : les demander l'une après l'autre ferait attendre deux
-  // allers-retours, et une panne de l'une emporterait l'affichage de l'autre.
-  const [lignes, couples, sujets, mesure, couplesDeSujets] = await Promise.all([
-    lesDomainesDuSysteme(),
-    lesEnchainementsDuSysteme(),
-    lesSujetsDuSysteme(),
-    laMesureDesSujets(),
-    lesEnchainementsDesSujets()
-  ]);
+  ou.innerHTML = `${renderLaTeteDeLaRubrique(rubrique.cle)}${corps}`;
+}
 
-  const apres = ou.querySelector("#carburantDomaines");
-  if (apres) {
-    apres.innerHTML = lignes === null
-      ? `<section class="conso-usages"><p class="forme-manques">
-          Les domaines n'ont pas pu être lus. Ce n'est pas qu'il n'y en a aucun :
-          on ne sait pas lesquels il y a.</p></section>`
+/** Ce qu'une rubrique lit, et ce qu'elle en dessine. */
+async function leCorpsDeLaRubrique(cle) {
+  if (cle === "manques") return renderCeQuiNestPasFait();
+
+  if (cle === "reconnaissance") {
+    const lignes = await lesDomainesDuSysteme();
+    return lignes === null
+      ? renderPasLu("Les domaines", "ont")
       : renderLesDomaines(lesDomainesRanges(lignes));
   }
 
-  const encore = ou.querySelector("#carburantEnchainements");
-  if (encore) {
-    encore.innerHTML = couples === null
-      ? `<section class="conso-usages"><p class="forme-manques">
-          Les enchaînements n'ont pas pu être lus. Ce n'est pas qu'il n'y en a
-          aucun : on ne sait pas lesquels il y a.</p></section>`
+  if (cle === "sujets") {
+    const [sujets, mesure] = await Promise.all([lesSujetsDuSysteme(), laMesureDesSujets()]);
+    return sujets === null ? renderPasLu("Les sujets", "ont") : renderLesSujets(sujets, mesure);
+  }
+
+  if (cle === "prediction") {
+    const [couples, couplesDeSujets, sujets] = await Promise.all([
+      lesEnchainementsDuSysteme(), lesEnchainementsDesSujets(), lesSujetsDuSysteme()
+    ]);
+
+    const desDomaines = couples === null
+      ? renderPasLu("Les enchaînements", "ont")
       : renderLesEnchainements(lesEnchainements(couples));
-  }
 
-  const ou_sujets = ou.querySelector("#carburantSujets");
-  if (ou_sujets) {
-    ou_sujets.innerHTML = sujets === null
-      ? `<section class="conso-usages"><p class="forme-manques">
-          Les sujets n'ont pas pu être lus. Ce n'est pas qu'il n'y en a aucun :
-          on ne sait pas lesquels il y a.</p></section>`
-      : renderLesSujets(sujets, mesure);
-  }
-
-  const enchaines = ou.querySelector("#carburantSujetsEnchaines");
-  if (enchaines) {
-    // **Le même module de lecture que pour les domaines.** Le classement, la
-    // borne basse et la phrase de bilan ne se refont pas ici : une seconde
-    // façon de pondérer finirait par ne pas dire la même chose (règle 4).
-    enchaines.innerHTML = couplesDeSujets === null
-      ? `<section class="conso-usages"><p class="forme-manques">
-          Les enchaînements de sujets n'ont pas pu être lus. Ce n'est pas qu'il
-          n'y en a aucun : on ne sait pas lesquels il y a.</p></section>`
+    const desSujets = couplesDeSujets === null
+      ? renderPasLu("Les enchaînements de sujets", "ont")
+      // **Le même module de lecture que pour les domaines.** Le classement, la
+      // borne basse et la phrase de bilan ne se refont pas ici : une seconde
+      // façon de pondérer finirait par ne pas dire la même chose (règle 4).
       : renderLesEnchainements(lesEnchainements(couplesDeSujets), {
         titre: "La prédiction, portée sur les sujets",
         mot: "Le même calcul, sur les sujets au lieu des huit domaines. C'est ici"
           + " que se lit « après une question de nappe, une question de"
           + " cuvelage » — là où les domaines ne savent dire que « après le sol,"
-          + " la structure », ce que tout le monde sait déjà.",
-        // Le hasard tire parmi tous les sujets, pas parmi huit cases : tomber
-        // juste sur un sujet vaut donc infiniment plus que sur un domaine, et
-        // le rapport au hasard doit le dire.
-        auHasardParmi: Math.max(2, lesSujetsRanges(sujets ?? []).length),
+          + " la structure », ce que tout le monde sait déjà."
+          + " Ce qui est montré gagne quelque chose sur la simple fréquence du"
+          + " terme qui suit : une règle à 100 % dont le terme arrive de toute"
+          + " façon n'apprend rien, et n'est plus comptée.",
         // Un sujet s'écrit comme les chantiers l'écrivent : aucun libellé de
         // taxonomie ne lui correspond.
         nommer: (un) => String(un ?? "")
       });
+
+    return `${desSujets}${desDomaines}`;
   }
+
+  const comptes = await lesComptesDuCarburant();
+  // **Ne pas savoir n'est pas savoir qu'il n'y a rien** (règle 5). « Aucun mail
+  // déposé » et « la base n'a pas répondu » mènent à des décisions opposées.
+  return comptes === null
+    ? `<section class="conso-usages"><p class="forme-manques">
+        Les comptes n'ont pas pu être lus. Ce n'est pas qu'il n'y a rien : on ne
+        sait pas ce qu'il y a.</p></section>`
+    : renderTout(comptes);
 }

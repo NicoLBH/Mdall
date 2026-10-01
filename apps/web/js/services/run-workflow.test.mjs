@@ -242,7 +242,10 @@ test("une étape en cours ne se dessine ni verte ni orange", async () => {
   assert.notEqual(par.get("gel").enCours, true);
 
   assert.equal(par.get("corpus").tone, "neutral");
-  assert.equal(par.get("corpus").icon, "sync");
+  // **Le même sablier que dans le titre de l'exécution.** Le graphe portait une
+  // double flèche — celle d'une synchronisation —, et le bandeau une pastille
+  // qui bat : deux dessins pour « ça tourne », sur le même écran (règle 10).
+  assert.equal(par.get("corpus").icon, "dot-fill-pending");
   assert.equal(par.get("corpus").enCours, true);
   assert.match(par.get("corpus").detail, /en cours/);
   // Pas de durée : elle n'a pas fini, et « 0 ms » se lirait comme une performance.
@@ -272,4 +275,88 @@ test("une analyse affiche bien ce qu'elle a lu", async () => {
 
   assert.deepEqual(lignes[0], ["Livrables relus", "12"]);
   assert.deepEqual(lignes[1], ["Avis suivis", "3 sur 40 relevés"]);
+});
+
+/**
+ * **Pas commencé n'est pas fait.**
+ *
+ * Depuis que la file rend un compte rendu par étape, le chemin porte aussi ce
+ * qui **attend**. Faute d'un mot pour le dire, ces étapes tombaient dans le cas
+ * par défaut — « ok » — et le graphe les peignait en vert avec leur coche :
+ * dix-neuf comptes rendus s'affichaient lus avant d'avoir été ouverts. C'est le
+ * même défaut qu'« en cours », une case plus tôt.
+ */
+test("une étape qui attend ne porte pas de coche verte", () => {
+  const noeuds = buildRunGraph({
+    details: { corpus: { geste: "comptes_rendus", steps: [
+      { id: "a", label: "CR 01.pdf", statut: "ok", lignes: ["4 points relevés"] },
+      { id: "b", label: "CR 02.pdf", statut: "en-cours", lignes: ["depuis 1 min 34 s"] },
+      { id: "c", label: "CR 03.pdf", statut: "attente", lignes: ["en attente"] }
+    ] } }
+  });
+
+  const parId = new Map(noeuds.map((un) => [un.id, un]));
+
+  assert.equal(parId.get("a").icon, "check-circle-fill");
+  assert.notEqual(parId.get("c").icon, "check-circle-fill", "une coche dit que c'est fait");
+  assert.notEqual(parId.get("c").tone, parId.get("a").tone, "le vert dit que c'est fait");
+  assert.equal(parId.get("c").enCours, false, "elle ne tourne pas non plus");
+});
+
+/**
+ * **Le même sablier que dans le titre de l'exécution.**
+ *
+ * Le graphe portait une double flèche — celle d'une synchronisation —, et le
+ * bandeau une pastille qui bat : deux dessins pour « ça tourne », à trois
+ * centimètres l'un de l'autre sur le même écran (règle 10).
+ */
+test("ce qui tourne porte le sablier du titre", () => {
+  const noeuds = buildRunGraph({
+    details: { corpus: { geste: "versement", steps: [
+      { id: "b", label: "x", statut: "en-cours", lignes: [] }
+    ] } }
+  });
+  assert.equal(noeuds[0].icon, "dot-fill-pending");
+  assert.equal(noeuds[0].enCours, true);
+});
+
+/**
+ * **Ce que l'étape dit d'elle-même, et non « en cours… » en dur.**
+ *
+ * La phrase était écrite dans le graphe et écrasait la ligne que l'étape
+ * portait : une lecture qui tourne depuis huit minutes et une lecture qui vient
+ * de partir se lisaient donc pareil, alors que la file sait laquelle est
+ * laquelle.
+ */
+test("une étape qui tourne dit sa propre ligne quand elle en a une", () => {
+  const avec = buildRunGraph({
+    details: { corpus: { geste: "versement", steps: [
+      { id: "b", label: "x", statut: "en-cours", lignes: ["depuis 1 min 34 s"] }
+    ] } }
+  });
+  assert.match(avec[0].detail, /depuis 1 min 34 s/);
+
+  // Et sans ligne, la phrase de repli reste.
+  const sans = buildRunGraph({
+    details: { corpus: { geste: "versement", steps: [
+      { id: "b", label: "x", statut: "en-cours", lignes: [] }
+    ] } }
+  });
+  assert.match(sans[0].detail, /en cours/);
+});
+
+/**
+ * Une ligne peut être une **chaîne** — ce que la file écrit — ou un objet
+ * `{niveau, texte}` — ce qu'une fusion consigne. N'en lire qu'une forme
+ * laissait l'autre muette.
+ */
+test("une ligne de journal se lit, chaîne ou objet", () => {
+  const noeuds = buildRunGraph({
+    details: { corpus: { geste: "versement", steps: [
+      { id: "a", label: "x", statut: "ok", lignes: ["quatre points"] },
+      { id: "b", label: "y", statut: "ok", lignes: [{ texte: "cinq points" }] }
+    ] } }
+  });
+  assert.match(noeuds[0].detail, /quatre points/);
+  assert.match(noeuds[1].detail, /cinq points/);
 });

@@ -51,6 +51,13 @@ import {
 } from "../partage/js/services/les-onglets-de-la-console.js";
 import { svgIcon } from "../partage/js/ui/icons.js";
 import { suisJeAdministrateur } from "../partage/js/services/la-porte-de-la-console-supabase.js";
+import {
+  LES_RUBRIQUES, laRubriqueValide
+} from "../partage/js/services/les-rubriques-de-la-console.js";
+import { renderProjectRail } from "../partage/js/views/ui/project-rail.js";
+import {
+  renderNavList, renderNavListGroup, renderNavListItem
+} from "../partage/js/views/ui/nav-list.js";
 import { leCourrielDuCompte, monterLavatar, renderLavatar } from "./lavatar.js";
 import { monterLeCarburant, renderLeCarburant } from "./le-carburant.js";
 
@@ -104,31 +111,6 @@ function renderLeDemenagement() {
         </div>
       `).join("")}
       <p class="conso-usages__mot"><a href="${LE_LIEN_VERS_MDALL}">Aller à Mdall</a></p>
-    </section>
-  `;
-}
-
-/**
- * Ce que cette console montre, et ce qu'elle ne montre pas encore.
- *
- * **Le carburant d'abord**, parce que c'est la seule chose qu'on puisse
- * regarder sans lire un contenu, et parce que c'est de lui que dépend tout le
- * reste : sans matière, aucun prédicteur n'a de chance.
- *
- * Les autres comptes d'exploitation — combien de comptes, qui revient, ce qui
- * tombe en panne, ce que cela coûte — viendront quand il y aura des comptes à
- * faire. Un tableau de bord qui affiche des zéros apprend à ne plus regarder
- * les tableaux de bord.
- */
-function renderCeQuiViendra() {
-  return `
-    <section class="conso-usages">
-      <h3 class="conso-usages__titre">${LA_CONSOLE.nom}</h3>
-      <p class="conso-usages__mot">
-        Un seul écran pour l'instant : <b>le carburant</b>. Les autres comptes
-        d'exploitation — combien de comptes, qui revient, ce qui tombe en panne,
-        ce que cela coûte — s'écriront quand il y aura des comptes à faire.
-      </p>
     </section>
   `;
 }
@@ -193,7 +175,7 @@ function renderLaBarre(courriel) {
     <header class="gh-header gh-header--global">
       <div class="gh-header__left">
         <div class="gh-brand-wrap">
-          <a class="gh-brand" href="${LE_LIEN_VERS_MDALL}">
+          <a class="gh-brand gh-brand--console" href="${LE_LIEN_VERS_MDALL}">
             <span class="gh-brand__name">Mdall</span>
             <span class="gh-brand__sep">/</span>
             <span class="gh-brand__repo">console</span>
@@ -239,15 +221,100 @@ async function main() {
         ? renderLesOnglets(ongletDeLaConsoleValide(location.hash.replace(/^#/, "")))
         : "");
   }
+  if (!ouverte) {
+    hote.innerHTML = `<div class="page-large">${renderLaPorteFermee()}</div>`;
+    monterLavatar(barre ?? document);
+    calerLaCoque();
+    return;
+  }
+
+  dessinerLaRubrique(laRubriqueValide(location.hash.replace(/^#/, "")));
+  monterLavatar(barre ?? document);
+  calerLaCoque();
+
+  // Le rail et la barre d'onglets changent tous deux `#carburant`, `#sujets`…
+  // L'un comme l'autre passent par l'adresse : il n'y a donc qu'un chemin à
+  // suivre, et un signet sur une rubrique ouvre cette rubrique (règle 10).
+  window.addEventListener("hashchange", () => {
+    dessinerLaRubrique(laRubriqueValide(location.hash.replace(/^#/, "")));
+  });
+}
+
+/**
+ * Cale le corps sous la barre du haut, **en la mesurant**.
+ *
+ * ## Le défaut que cela répare
+ *
+ * Le décalage était un calcul de constantes — la hauteur déclarée d'un en-tête
+ * plus celle d'une barre d'onglets. Les deux sont déclarées pour l'application,
+ * où le squelette est autre ; dans la console, l'en-tête ne fait pas cette
+ * hauteur-là, et le haut de la page passait **sous** la barre d'onglets : le
+ * premier titre arrivait tronqué.
+ *
+ * Deux valeurs écrites pour un même fait finissent par diverger (règle 4).
+ * Celle-ci se mesure : il n'y en a plus qu'une, et c'est la vraie.
+ */
+function calerLaCoque() {
+  if (!barre) return;
+  const hauteur = Math.round(barre.getBoundingClientRect().height);
+  if (hauteur > 0) document.body.style.setProperty("--app-top", `${hauteur}px`);
+}
+
+/**
+ * Le rail des rubriques — **le même que celui des Sujets, de la Mémoire et des
+ * Actions**.
+ *
+ * Une navigation dessinée ici aurait divergé au premier réglage : le haut qui
+ * suit le défilement, le repli calé en bas, la poignée de largeur. Il y en a
+ * assez pour que la seconde copie soit fausse avant d'être finie (règle 4).
+ */
+function renderLeRail(actif) {
+  return renderProjectRail({
+    id: "consoleRail",
+    label: "Les rubriques de la console",
+    navHtml: renderNavList({
+      label: "Les rubriques de la console",
+      html: renderNavListGroup({
+        items: LES_RUBRIQUES.map((une) => renderNavListItem({
+          label: une.libelle,
+          iconHtml: svgIcon(une.icone),
+          isActive: une.cle === actif,
+          title: une.question,
+          as: "a",
+          href: `#${une.cle}`
+        }))
+      })
+    })
+  });
+}
+
+/** Une rubrique, dessinée dans la coque commune. */
+function dessinerLaRubrique(cle) {
   hote.innerHTML = `
-    <div class="page-large">
-      ${ouverte
-        ? `${renderCeQuiViendra()}${renderLeCarburant()}${renderLeDemenagement()}`
-        : renderLaPorteFermee()}
+    <div class="project-rail-layout">
+      ${renderLeRail(cle)}
+      <div class="project-rail-layout__content">
+        <div class="page-large">
+          ${renderLeCarburant()}
+          ${/*
+            **Où les écrans sont partis, sous « ce qui n'est pas fait ».** C'est
+            la même question — qu'est-ce qui n'est pas ici — et la réponse n'est
+            pas « rien » mais « ailleurs ». La laisser sur toutes les rubriques
+            la faisait lire zéro fois.
+          */""}
+          ${cle === "manques" ? renderLeDemenagement() : ""}
+        </div>
+      </div>
     </div>
   `;
-  monterLavatar(barre ?? document);
-  if (ouverte) monterLeCarburant(hote);
+
+  const ou = hote.querySelector("#carburantHote");
+  // **Qui est en train d'être lu.** Deux clics rapides lançaient deux lectures,
+  // et la plus lente écrasait la plus récente : on lisait les domaines sous le
+  // titre des sujets.
+  if (ou) ou.dataset.rubrique = cle;
+
+  void monterLeCarburant(hote, cle);
 }
 
 main();

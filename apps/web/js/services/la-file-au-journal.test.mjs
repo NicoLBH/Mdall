@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  estUnGesteDeLaFile, laFileAuJournal, laProvenanceDuGeste, leMotDeLaFile, lesVersementsAuJournal
+  enDuree, estUnGesteDeLaFile, laFileAuJournal, laProvenanceDuGeste, leMotDeLaFile,
+  lesEtapesDeLaFile, lesVersementsAuJournal
 } from "./la-file-au-journal.js";
 import {
   LE_BATTEMENT_DU_JOURNAL, ORIGINE, executionsAGarder, partitionnerActions, quelqueChoseTourne
@@ -127,7 +128,11 @@ test("l'étape d'un versement en cours se dit en cours", async () => {
   const boite = noeuds.find((un) => un.id === "en_cours");
   assert.ok(boite, "l'étape n'est pas dans le chemin d'exécution");
   assert.equal(boite.enCours, true);
-  assert.equal(boite.icon, "sync", "une coche dit que c'est terminé");
+  // **Le même sablier que dans le titre de l'exécution.** Le graphe portait une
+  // double flèche — celle d'une synchronisation —, et le bandeau une pastille
+  // qui bat : deux dessins pour « ça tourne », à trois centimètres l'un de
+  // l'autre sur le même écran (règle 10).
+  assert.equal(boite.icon, "dot-fill-pending", "une coche dit que c'est terminé");
   assert.notEqual(boite.tone, "ok");
 });
 
@@ -208,13 +213,17 @@ test("un dépôt de messagerie garde son nom", () => {
  * **L'avancement se dit avec la phrase de la file**, celle que l'écran emploie
  * déjà. En écrire une seconde ici aurait fait deux comptes rendus du même
  * travail, et l'un aurait fini par ne pas dire la même chose (règle 4).
+ *
+ * **Et le chemin montre un compte rendu par étape.** Il n'en montrait qu'une —
+ * « Lecture en cours » — derrière laquelle dix-neuf comptes rendus tournaient
+ * une heure : rien ne distinguait une file qui avance d'une file bloquée.
  */
 test("l'avancement d'une lecture reprend la phrase de la file", () => {
   const ligne = laFileAuJournal(uneLecture({
     avancement: {
       arretee: false,
       pas: [
-        { id: "d1", nom: "CR 01.pdf", ou: "lu", motif: "" },
+        { id: "d1", nom: "CR 01.pdf", ou: "lu", motif: "", lecture: "4 points relevés" },
         { id: "d2", nom: "CR 02.pdf", ou: "echoue", motif: "aucune page lisible" }
       ]
     }
@@ -222,10 +231,89 @@ test("l'avancement d'une lecture reprend la phrase de la file", () => {
 
   assert.match(ligne.summary, /1 compte rendu lu/);
   assert.match(ligne.summary, /1 n'a pas pu être lu/);
-  // Les étapes disent le compte, pas des messages versés : une lecture de
-  // comptes rendus n'en verse aucun.
-  assert.deepEqual(ligne.details.corpus.steps[0].lignes,
-    ["Comptes rendus : 2", "Lus : 1"]);
+
+  const etapes = ligne.details.corpus.steps;
+  assert.deepEqual(etapes.map((une) => une.label), ["CR 01.pdf", "CR 02.pdf"]);
+  assert.deepEqual(etapes.map((une) => une.statut), ["ok", "echec"]);
+  assert.deepEqual(etapes[0].lignes, ["4 points relevés"]);
+  // Un échec sans motif serait une ligne rouge dont on ne saurait rien.
+  assert.deepEqual(etapes[1].lignes, [{ niveau: "echec", texte: "aucune page lisible" }]);
+});
+
+/**
+ * **« Depuis quand », et non « en cours ».** Une étape qui tourne depuis huit
+ * minutes et une étape qui vient de partir se lisaient pareil — et c'est la
+ * seule chose qu'on cherche à savoir en regardant.
+ */
+test("une étape qui court dit depuis combien de temps", () => {
+  const maintenant = Date.parse("2026-10-01T09:10:00Z");
+  const etapes = lesEtapesDeLaFile(
+    {
+      avancement: {
+        pas: [
+          { id: "d1", nom: "CR 01.pdf", ou: "lu", dureeMs: 42_000 },
+          // **Une durée d'une lecture précédente traîne sur le pas qui court.**
+          // Le serveur ne l'efface pas en reprenant : la file garde ce qu'elle a
+          // écrit. L'écran doit donc refuser de la montrer — figée sous une
+          // icône qui tourne, elle se lirait comme un temps total.
+          { id: "d2", nom: "CR 02.pdf", ou: "en-cours",
+            commenceLe: maintenant - 94_000, dureeMs: 12_000 },
+          { id: "d3", nom: "CR 03.pdf", ou: "attend" }
+        ]
+      }
+    },
+    { statut: "en_cours", desCr: true, combien: 3, maintenant }
+  );
+
+  assert.deepEqual(etapes[1].lignes, ["depuis 1 min 34 s"]);
+  assert.equal(etapes[1].statut, "en-cours");
+  // Une durée figée sous une icône qui tourne se lirait comme un temps total.
+  assert.equal(etapes[1].ms, null);
+  assert.equal(etapes[0].ms, 42_000);
+  assert.deepEqual(etapes[2].lignes, ["en attente"]);
+  assert.equal(etapes[2].statut, "attente");
+});
+
+/** Sans début connu, on ne compte pas : un « depuis 0 s » serait faux. */
+test("une étape sans date de départ ne compte pas", () => {
+  const etapes = lesEtapesDeLaFile(
+    { avancement: { pas: [{ id: "d1", nom: "CR.pdf", ou: "en-cours" }] } },
+    { statut: "en_cours", desCr: true, combien: 1 }
+  );
+  assert.deepEqual(etapes[0].lignes, ["en cours…"]);
+});
+
+/** Un dépôt de messagerie n'a pas de pas nommés : il garde son bloc et ses nombres. */
+test("un dépôt de messagerie garde son bloc unique", () => {
+  const etapes = lesEtapesDeLaFile(
+    { avancement: { verses: 18 } },
+    { statut: "en_cours", desCr: false, combien: 3 }
+  );
+  assert.equal(etapes.length, 1);
+  assert.equal(etapes[0].label, "Rangement en cours");
+  assert.deepEqual(etapes[0].lignes, ["Fichiers : 3", "Messages versés : 18"]);
+});
+
+/**
+ * **Rien n'est pris : une seule étape.** Détailler dix-neuf attentes avant que
+ * le serveur ait seulement répondu ferait un mur de gris qui n'apprend rien.
+ */
+test("une file qui attend ne détaille pas ses dix-neuf attentes", () => {
+  const etapes = lesEtapesDeLaFile(
+    { avancement: { pas: [{ id: "d1", ou: "attend" }, { id: "d2", ou: "attend" }] } },
+    { statut: "en_attente", desCr: true, combien: 2 }
+  );
+  assert.equal(etapes.length, 1);
+  assert.equal(etapes[0].label, "En attente du serveur");
+});
+
+test("une durée se dit en secondes, puis en minutes, puis en heures", () => {
+  assert.equal(enDuree(0), "0 s");
+  assert.equal(enDuree(42_000), "42 s");
+  assert.equal(enDuree(60_000), "1 min");
+  assert.equal(enDuree(94_000), "1 min 34 s");
+  assert.equal(enDuree(3_600_000), "1 h");
+  assert.equal(enDuree(3_900_000), "1 h 5 min");
 });
 
 test("une lecture qui attend dit qu'elle attend, et combien", () => {

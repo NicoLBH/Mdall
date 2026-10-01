@@ -58,10 +58,64 @@ export function lesSujetsRanges(lignes = []) {
       chantiers: nombre(une?.chantiers)
     }))
     .filter((une) => une.sujet && une.affirmations > 0)
-    .sort((gauche, droite) => droite.chantiers - gauche.chantiers
-      || droite.mots - gauche.mots
+    /**
+     * **Les termes qualifiés d'abord, et c'est un changement.**
+     *
+     * Le classement partait du nombre de chantiers : en tête venaient donc les
+     * mots qu'on trouve partout — « corpus », « portes », « locaux », « mise ».
+     * Ils sont sur cinq chantiers parce qu'ils sont sur tous les chantiers,
+     * c'est-à-dire qu'ils ne distinguent rien.
+     *
+     * > « Plafonds, dispositions, passage, portes… et alors ? »
+     *
+     * Et alors rien, en effet. Un mot seul nomme un objet ; « plancher beton »
+     * nomme un ouvrage. C'est la seule chose que ce comptage sache produire qui
+     * ressemble à une idée, et elle se noyait au rang quatre-vingtième.
+     */
+    .sort((gauche, droite) => droite.mots - gauche.mots
+      || droite.chantiers - gauche.chantiers
       || droite.affirmations - gauche.affirmations
       || gauche.sujet.localeCompare(droite.sujet, "fr"));
+}
+
+/**
+ * **Ce que ce comptage n'est pas**, dit avant qu'on le prenne pour autre chose.
+ *
+ * ## Pourquoi cette phrase existe
+ *
+ * L'écran annonçait « voici ce que les affirmations disent réellement » et
+ * déroulait : plafonds, dispositions, passage, portes.
+ *
+ * > « Le niveau de sémantique est très largement insuffisant pour porter du
+ * > sens. On n'est pas là pour refaire un lexique du vocabulaire de
+ * > construction. Où sont les idées, les raisonnements, les fonctions ? »
+ *
+ * La critique est juste, et elle porte sur la **mesure**, pas sur l'affichage.
+ * Ce comptage relève des **termes** : des groupes nominaux, tirés des
+ * affirmations par des règles de caractères. Un terme n'est ni une idée, ni une
+ * fonction, ni un raisonnement — « portes » ne dit pas si elles ferment, si
+ * elles manquent, ou ce qu'on en attend.
+ *
+ * Ce qu'il sert, et il ne sert qu'à cela : donner à la prédiction une
+ * granulométrie plus fine que huit cases. « Après une question de nappe, une
+ * question de cuvelage » se lit ; « après le sol, la structure » ne se lit pas.
+ *
+ * **Le dire est la seule chose honnête à faire tant que ce n'est pas réglé**
+ * (règle 12) : une couche présentée pour ce qu'elle n'est pas fait croire la
+ * question résolue, et personne ne la rouvre.
+ */
+export function phraseDeCeQueCeNestPas(sujets = []) {
+  const tous = Array.isArray(sujets) ? sujets : [];
+  if (!tous.length) return "";
+
+  const seuls = tous.length - lesSujetsPrecis(tous).length;
+  const part = Math.round((seuls / tous.length) * 100);
+
+  return `Ce sont des termes, pas des idées : ${part} % d'entre eux tiennent en`
+    + " un mot, et un mot nomme un objet sans rien en dire. Ce comptage sert à"
+    + " une seule chose — donner à la prédiction une granulométrie plus fine que"
+    + " huit cases. Il ne dit ni ce qu'on en attend, ni ce qui ne va pas, ni ce"
+    + " qui en découle.";
 }
 
 /** Ceux qui portent plusieurs mots : les plus précis. */
@@ -152,6 +206,24 @@ export function phraseDuRegroupement(sujets = [], mesure = null) {
  * la dernière ; l'écrire ici évite de laisser croire que la question est réglée.
  */
 export const CE_QUI_MANQUE_ENCORE = [
+  {
+    quoi: "Relever des idées, et non des termes",
+    ou: "nulle part",
+    pourquoi: "ce comptage rend des groupes nominaux — « portes », « plancher"
+      + " beton ». Une idée porte un verbe et une relation : « l'étanchéité de"
+      + " la toiture n'est pas reprise », « le sondage conditionne la reprise"
+      + " des linteaux ». Les tirer demande de lire la phrase entière, pas d'en"
+      + " compter les noms, et aucune règle de caractères n'y arrivera."
+  },
+  {
+    quoi: "Dire comment deux idées s'enchaînent",
+    ou: "la console enchaîne des termes, ce qui n'est pas la même chose",
+    pourquoi: "« après une question de nappe, une question de cuvelage » est une"
+      + " succession dans le temps, pas une raison. Ce qui manque est le lien :"
+      + " lequel cause lequel, lequel bloque lequel, lequel referme lequel. La"
+      + " mémoire porte déjà ces liens quand un humain les signe — ils ne se"
+      + " déduisent pas d'un comptage."
+  },
   {
     quoi: "Rapprocher les mots qui veulent dire la même chose",
     ou: "nulle part",

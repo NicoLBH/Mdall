@@ -101,7 +101,7 @@ export async function lesVersementsEnCours(projectId = "") {
   if (!texte(projectId)) return [];
   const { data, error } = await supabase
     .from("versements")
-    .select("id,project_id,geste,statut,fichiers,documents,avancement,arrete,cree_le,pris_le")
+    .select("id,project_id,owner_id,geste,statut,fichiers,documents,avancement,arrete,cree_le,pris_le")
     .eq("project_id", texte(projectId))
     .in("statut", ["en_attente", "en_cours"])
     .order("cree_le", { ascending: false });
