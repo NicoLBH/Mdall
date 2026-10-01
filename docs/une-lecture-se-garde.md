@@ -42,7 +42,7 @@ l'autre :
 
 | ce que la lecture a vu | ce que c'est devenu |
 | --- | --- |
-| gelé dans `analyse` | lu en direct dans `subjects` |
+| gelé dans `analyse_gelee` | lu en direct dans `subjects` |
 | « #7 · open » | « aujourd'hui : closed » |
 
 Et quand on n'a pas pu relire les sujets d'aujourd'hui, **on ne dit rien** : une
@@ -77,6 +77,28 @@ La liste se range sur `tenue_le`, la date de la réunion — un compte rendu ten
 en mars et lu en septembre est de mars. Sans date, sur le numéro de réunion.
 Sans numéro ni date, en dernier : on ne lui invente pas une place dans la
 chronologie du chantier (règle 5).
+
+## Un nom que PostgreSQL refusait
+
+La colonne s'appelait `analyse`, et le déploiement a été refusé :
+
+```
+ERROR: syntax error at or near "analyse" (SQLSTATE 42601)
+```
+
+`ANALYSE` est un mot **réservé** — l'orthographe britannique d'`ANALYZE`. Rien ne
+le disait : le mot est français, il est ordinaire, et les épreuves qui relisaient
+les migrations lisaient du **texte**.
+
+Deux gardes sont nées de là, et elles se complètent :
+
+- `scripts/les-noms-des-colonnes.test.mjs` confronte chaque nom déclaré à la
+  liste des mots réservés. Elle tourne **partout**, intégration continue
+  comprise, qui n'a pas de serveur PostgreSQL.
+- `scripts/le-banc-des-politiques.test.mjs` **applique la migration pour de
+  vrai**, dans un PostgreSQL jetable. C'est le seul juge, et il tombe du même
+  message que le déploiement. Il vérifie aussi que la liste écrite est bien
+  celle de `pg_get_keywords()` : une liste jamais confrontée dérive (règle 4).
 
 ## Où c'est écrit
 

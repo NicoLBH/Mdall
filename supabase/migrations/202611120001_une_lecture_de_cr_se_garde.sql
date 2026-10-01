@@ -70,7 +70,16 @@ alter table if exists public.cr_lectures
   --
   -- `null` pour les lignes d'avant cette migration : elles ont leurs nombres,
   -- pas leur analyse, et l'écran le dit plutôt que de dessiner une lecture vide.
-  add column if not exists analyse jsonb;
+  --
+  -- **`analyse_gelee`, et non `analyse`.** `ANALYSE` est un mot **réservé** de
+  -- PostgreSQL — l'orthographe britannique d'`ANALYZE` —, et le déploiement a
+  -- été refusé : « syntax error at or near "analyse" ». On pourrait l'écrire
+  -- entre guillemets, mais chaque requête devrait alors y penser, et la
+  -- première qui l'oublierait tomberait au même endroit.
+  --
+  -- Le suffixe dit aussi ce que la colonne porte : une photographie, qui ne se
+  -- recalcule pas.
+  add column if not exists analyse_gelee jsonb;
 
 -- « Les comptes rendus de ce projet, dans l'ordre des réunions. »
 --
@@ -81,5 +90,5 @@ alter table if exists public.cr_lectures
 create index if not exists cr_lectures_par_reunion_idx
   on public.cr_lectures (project_id, tenue_le desc, created_at desc);
 
-comment on column public.cr_lectures.analyse is
+comment on column public.cr_lectures.analyse_gelee is
   'Ce que la lecture a vu, gelé au moment où elle a eu lieu : points, confrontation, rubriques. Ne se recalcule jamais — l''état d''aujourd''hui des sujets se lit à côté, en direct.';
