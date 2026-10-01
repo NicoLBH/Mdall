@@ -2214,3 +2214,250 @@ test("le départ se dit, et renvoie vers Actions", () => {
 test("sans départ, rien ne s'annonce", () => {
   assert.doesNotMatch(renderLaLecture(unEtat()), /lecture-cr__parti/);
 });
+
+/* ── Les comptes rendus déjà lus, et la lecture qu'on rouvre ─────────────── */
+
+/** Une ligne de `cr_lectures`, telle que l'accueil la reçoit. */
+const uneLigneGardee = (surcharge = {}) => ({
+  id: "l-1", document: "1824_CR_12.pdf", document_id: "d-1",
+  numero_de_reunion: "12", tenue_le: "2026-03-12",
+  mesures: { points: 4 }, created_at: "2026-03-13T09:00:00Z",
+  ...surcharge
+});
+
+/**
+ * **Le défaut : la lecture est passée au serveur, et l'écran n'a plus rien
+ * montré.** On lançait dix-neuf comptes rendus, une proposition tombait, et
+ * tout ce que l'Atelier affichait n'existait nulle part.
+ */
+test("l'accueil liste les comptes rendus déjà analysés", () => {
+  const html = renderLaLecture(unEtat({
+    dejaLus: [uneLigneGardee(), uneLigneGardee({
+      id: "l-2", document: "1824_CR_15.pdf", document_id: "d-2",
+      numero_de_reunion: "15", tenue_le: "2026-04-02"
+    })]
+  }));
+
+  assert.match(html, /2 comptes rendus\s*\n?\s*déjà analysés/);
+  assert.match(html, commeAffichee("1824_CR_12.pdf"));
+  assert.match(html, commeAffichee("1824_CR_15.pdf"));
+  assert.match(html, /data-lecture-cr-gardee="l-1"/);
+});
+
+/**
+ * **« On n'a pas demandé » n'est pas « il n'y en a aucun »** (règle 5). Une
+ * liste vide affichée pendant le chargement ferait croire qu'aucun compte rendu
+ * n'a jamais été lu — et l'on relancerait dix-neuf lectures déjà payées.
+ */
+test("tant qu'on ne sait pas, l'accueil ne dit pas « aucun »", () => {
+  const rien = renderLaLecture(unEtat({ dejaLus: null, dejaLusEnCours: false }));
+  assert.doesNotMatch(rien, /déjà analysé/);
+
+  const charge = renderLaLecture(unEtat({ dejaLus: null, dejaLusEnCours: true }));
+  assert.match(charge, /déjà analysés/);
+
+  const aucun = renderLaLecture(unEtat({ dejaLus: [] }));
+  assert.doesNotMatch(aucun, /déjà analysé/);
+});
+
+/** La liste n'est qu'à l'accueil : sous une lecture, elle ferait doublon. */
+test("la liste des comptes rendus lus ne s'affiche pas sous une lecture", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, dejaLus: [uneLigneGardee()]
+  }));
+  assert.doesNotMatch(html, /data-lecture-cr-gardee/);
+});
+
+/** Un compte rendu relu ne compte qu'une fois, et la ligne le dit. */
+test("deux lectures du même compte rendu font une ligne, et l'annoncent", () => {
+  const html = renderLaLecture(unEtat({
+    dejaLus: [
+      uneLigneGardee(),
+      uneLigneGardee({ id: "l-2", created_at: "2026-05-02T09:00:00Z" })
+    ]
+  }));
+
+  assert.match(html, /1 compte rendu\s*\n?\s*déjà analysé/);
+  assert.match(html, /2 lectures/);
+  // C'est la plus récente qu'on ouvre.
+  assert.match(html, /data-lecture-cr-gardee="l-2"/);
+});
+
+/**
+ * **Une lecture rouverte est datée, et elle ne se recalcule pas.** Sans ce
+ * bandeau, on lirait l'analyse de mars comme si elle était d'aujourd'hui.
+ */
+test("une lecture rouverte dit qu'elle est une photographie", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, onglet: "analyse",
+    conservee: { id: "l-1", documentId: "d-1", propositionId: "", lueLe: "2026-03-13T09:00:00Z" },
+    sujetsAujourdhui: []
+  }));
+
+  assert.match(html, commeAffichee("Elle ne se recalcule pas"));
+  assert.match(html, /data-lecture-cr-revenir/);
+});
+
+/**
+ * **Une lecture rouverte n'a qu'un onglet.**
+ *
+ * Le document refait ne se garde pas — c'est la plus grosse part de ce qu'une
+ * lecture produit, et il se relit dans Fichiers. L'onglet existait quand même,
+ * et il montrait la restitution du compte rendu **précédent**, celle que
+ * l'écran tenait encore en mémoire : un document sous un autre.
+ */
+test("une lecture rouverte n'offre pas l'onglet de la restitution", () => {
+  const gardee = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, onglet: "analyse",
+    md: uneRestitution(), conservee: { id: "l-1" }
+  }));
+
+  assert.doesNotMatch(gardee, /data-lecture-cr-onglet/);
+  assert.match(gardee, /Ce qui a été relevé/);
+
+  // Et une lecture vive garde ses deux onglets.
+  const vive = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution()
+  }));
+  assert.match(vive, /data-lecture-cr-onglet/);
+});
+
+/**
+ * **Pas de « Transformer » sur une lecture rouverte.** Ses rapprochements sont
+ * ceux du jour où elle a eu lieu : en faire une proposition aujourd'hui
+ * porterait des liens vers des sujets peut-être fermés ou fusionnés depuis.
+ */
+test("une lecture rouverte ne propose pas de transformer", () => {
+  const vive = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution()
+  }));
+  assert.match(vive, /lectureCrTransformer/);
+
+  const gardee = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution(),
+    conservee: { id: "l-1" }
+  }));
+  assert.doesNotMatch(gardee, /lectureCrTransformer/);
+});
+
+/**
+ * **Ce que le sujet est devenu se lit à côté de ce que la lecture a vu.**
+ *
+ * Un sujet rapproché en mars et fermé depuis ne rend pas la lecture de mars
+ * fausse : elle a eu lieu (règle 6).
+ */
+test("un sujet fermé depuis se dit, sans effacer ce que la lecture a vu", () => {
+  const html = renderLaLecture(unEtatConfronte(
+    { sort: SORT.RELANCE, sujet: { id: "s-1", title: "Étanchéité", status: "open", subject_number: 7 } },
+    { conservee: { id: "l-1" }, sujetsAujourdhui: [{ id: "s-1", title: "Étanchéité", status: "closed" }] }
+  ));
+
+  assert.match(html, /aujourd'hui : closed/);
+  // Et ce que la lecture a vu reste là.
+  assert.match(html, />open</);
+});
+
+/**
+ * **Un sujet qui n'a pas bougé ne se dit pas.**
+ *
+ * Répéter « aujourd'hui : open » sous chaque « open » ferait une colonne qui
+ * parle à chaque ligne, donc une colonne qu'on cesse de lire — c'est-à-dire
+ * qu'on ne lirait pas non plus le jour où elle porte un changement.
+ */
+test("un sujet inchangé ne répète pas son état", () => {
+  const html = renderLaLecture(unEtatConfronte(
+    { sort: SORT.RELANCE, sujet: { id: "s-1", title: "Étanchéité", status: "open" } },
+    { conservee: { id: "l-1" }, sujetsAujourdhui: [{ id: "s-1", title: "Étanchéité", status: "open" }] }
+  ));
+  assert.doesNotMatch(html, /aujourd'hui :/);
+});
+
+/** Un sujet disparu se dit disparu, et ne passe pas pour inchangé. */
+test("un sujet qui n'existe plus se dit", () => {
+  const html = renderLaLecture(unEtatConfronte(
+    { sort: SORT.RELANCE, sujet: { id: "s-1", title: "Étanchéité", status: "open" } },
+    { conservee: { id: "l-1" }, sujetsAujourdhui: [{ id: "s-9", status: "open" }] }
+  ));
+  assert.match(html, /n'existe plus aujourd'hui/);
+});
+
+/**
+ * **Ne pas avoir pu relire les sujets n'est pas « rien n'a changé »** (règle 5).
+ * Une colonne vide ferait croire que tout est resté en l'état.
+ */
+test("sans les sujets d'aujourd'hui, on ne dit rien de ce qu'ils sont devenus", () => {
+  const html = renderLaLecture(unEtatConfronte(
+    { sort: SORT.RELANCE, sujet: { id: "s-1", title: "Étanchéité", status: "open" } },
+    { conservee: { id: "l-1" }, sujetsAujourdhui: null }
+  ));
+
+  assert.doesNotMatch(html, /aujourd'hui :/);
+  assert.doesNotMatch(html, /n'existe plus aujourd'hui/);
+  assert.match(html, /n'a pas pu être relu/);
+});
+
+/** Sur une lecture vive, l'état affiché est déjà celui d'aujourd'hui. */
+test("une lecture en cours ne répète pas l'état du sujet", () => {
+  const html = renderLaLecture(unEtatConfronte(
+    { sort: SORT.RELANCE, sujet: { id: "s-1", title: "Étanchéité", status: "open" } },
+    { sujetsAujourdhui: [{ id: "s-1", status: "closed" }] }
+  ));
+  assert.doesNotMatch(html, /aujourd'hui :/);
+});
+
+
+/**
+ * **Vu à l'écran, et rien ne le disait.**
+ *
+ * Une lecture rouverte n'a pas de fichier — il est au projet, pas dans la page.
+ * La zone de dépôt se posait donc **au milieu de l'analyse** : un rectangle
+ * « déposez un compte rendu » entre le document et ses points.
+ */
+test("une lecture rouverte n'affiche pas la zone de dépôt", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, onglet: "analyse",
+    conservee: { id: "l-1" }
+  }));
+  assert.doesNotMatch(html, /data-lecture-cr-zone/);
+});
+
+/**
+ * **Deux phrases fausses sous une analyse juste.**
+ *
+ * « La suite passe par Transformer, en haut à droite » — un bouton qui n'y est
+ * plus — et « la restitution sera rangée dans Fichiers à la fusion de la
+ * proposition », une promesse au futur sur une proposition faite il y a six mois.
+ */
+test("une lecture rouverte ne promet plus rien au futur", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, onglet: "analyse",
+    conservee: { id: "l-1" }
+  }));
+
+  assert.doesNotMatch(html, /lecture-cr__suite/);
+  assert.doesNotMatch(html, commeAffichee("sera rangée"));
+
+  // Et une lecture vive les garde : c'est là qu'elles sont vraies.
+  const vive = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution(), onglet: "analyse"
+  }));
+  assert.match(vive, /lecture-cr__suite/);
+});
+
+/**
+ * **L'onglet gardé d'avant ne doit pas sortir la restitution d'un autre.**
+ *
+ * L'écran est pur : il ne décide pas quel onglet est actif, il le reçoit. Un
+ * état rouvert qui arriverait avec « restitution » — parce qu'on regardait la
+ * restitution juste avant de cliquer — afficherait le document refait du compte
+ * rendu **précédent**, celui que l'écran tient encore en mémoire.
+ */
+test("une lecture rouverte montre l'analyse, quel que soit l'onglet reçu", () => {
+  const html = renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, md: uneRestitution(),
+    onglet: "restitution", conservee: { id: "l-1" }
+  }));
+
+  assert.match(html, /Ce qui a été relevé/);
+  assert.doesNotMatch(html, /lecture-cr__restitution/);
+});

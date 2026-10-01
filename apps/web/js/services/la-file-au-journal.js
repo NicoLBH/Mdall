@@ -25,7 +25,7 @@
  * ailleurs.
  */
 
-import { ORIGINE } from "./run-partition.js";
+import { lorigineDunGeste } from "./run-partition.js";
 import { LE_GESTE, leNomDeLaction } from "./le-journal-du-depouillement.js";
 import { phraseDuConvoi } from "./le-convoi.js";
 import { GESTE_DES_CR, LA_FONCTION_DU_GESTE, leGesteDeLaLigne } from "./reveiller-la-file.js";
@@ -147,7 +147,12 @@ export function laFileAuJournal(ligne = null) {
     triggerType: "manual",
     triggerLabel: dAou,
     trigger: { type: LE_GESTE, label: dAou },
-    origine: ORIGINE.VERSEMENT,
+    // **L'origine vient du geste, et la règle vit à un seul endroit**
+    // (`run-partition.js`, `docs/dou-vient-une-execution.md`). Une lecture de
+    // comptes rendus est un essai : elle relit des documents déjà là, et
+    // s'affichait pourtant sous « Versements », où l'on cherche ce qu'on a
+    // apporté.
+    origine: lorigineDunGeste(leGesteDeLaLigne(ligne)),
     privee: true,
     documentName: "",
     subject: { documentName: "" },

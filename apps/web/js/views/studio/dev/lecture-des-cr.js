@@ -58,6 +58,9 @@ import {
 import {
   LECTURE_DU_CHOIX, basculerLeChoix, entreesDuDossier, etatDeLaCaseDuDossier, toutBasculer
 } from "../../../services/choisir-depuis-fichiers.js";
+import {
+  ceQueLeSujetEstDevenu, laVueDuneLecture, leLecteur, lesComptesRendusLus
+} from "../../../services/la-lecture-conservee.js";
 import { renderChoisirUnFichier } from "../../ui/choisir-un-fichier.js";
 import { garderLesPlaces } from "../../ui/garder-le-defilement.js";
 import {
@@ -152,7 +155,14 @@ const ONGLET = { RESTITUTION: "restitution", ANALYSE: "analyse" };
  * Elle se relève à chaque changement de la chaîne : les pages qu'on envoie, la
  * consigne du serveur, ce qu'on garde de la réponse.
  */
-const LECTURE_DES_CR = "lecture de CR v1";
+/**
+ * **Par quoi un compte rendu est lu : le mot vit dans le service.**
+ *
+ * `LECTURE_DES_CR` était écrit ici, et le serveur — qui lit par les mêmes
+ * services — ne l'écrivait pas : deux lectures du même procédé se disaient
+ * faites par deux procédés différents (règle 10). Voir `leLecteur`, dans
+ * `la-lecture-conservee.js`.
+ */
 
 /**
  * Les étapes d'une lecture, nommées et cochées.
@@ -308,6 +318,26 @@ const etat = {
    * vraisemblable pour remplir le cadre (règle 5).
    */
   panne: "",
+  /**
+   * La ligne du document **dans le projet**, quand la lecture en vient.
+   *
+   * `null` quand le PDF vient du disque : il n'est rangé nulle part, et lui
+   * inventer un identifiant ferait deux lectures du même compte rendu se lire
+   * comme deux comptes rendus différents.
+   */
+  document: null,
+  /**
+   * Les comptes rendus déjà lus sur ce projet, et celui qu'on rouvre.
+   *
+   * `null` : on n'a pas encore demandé, ou on n'a pas pu. L'accueil ne dit
+   * alors pas « aucun » (règle 5).
+   */
+  dejaLus: null,
+  dejaLusEnCours: false,
+  /** La lecture conservée qu'on regarde, ou `null` quand on lit pour de vrai. */
+  conservee: null,
+  /** Les sujets du projet **aujourd'hui**, à côté de ce que la lecture a vu. */
+  sujetsAujourdhui: null,
   /** Le document déposé, gardé le temps de la lecture. */
   fichier: null,
   /**
@@ -492,6 +522,7 @@ export function renderLaLecture(vue = etat) {
             connues: [...(vue.connues?.values?.() ?? [])]
           })
           : renderDepot(vue)}
+      ${vue.choix ? "" : renderLesComptesRendusLus(vue)}
       ${vue.choix ? "" : renderCorps(vue)}
     </div>
   `;
@@ -529,7 +560,11 @@ function renderEntete(vue = etat) {
             // rectangle en pointillés qui occupe un tiers de l'écran au-dessus
             // d'un document déjà lu ne sert plus à rien — et il ne se laisse pas
             // supprimer sans laisser de quoi en déposer un autre.
-            vue.fichier
+            vue.conservee
+              ? `<button type="button" class="gh-btn gh-btn--sm" data-lecture-cr-revenir>
+                   ${svgIcon("arrow-left", { className: "octicon" })} Les comptes rendus lus
+                 </button>`
+              : vue.fichier
               ? `<label class="gh-btn gh-btn--sm lecture-cr__entete-fichier">
                    ${svgIcon("file", { className: "octicon" })} Un autre document
                    <input type="file" accept="${escapeHtml(ACCEPTE)}" hidden data-lecture-cr-fichier>
@@ -539,21 +574,66 @@ function renderEntete(vue = etat) {
                  </button>`
               : ""
           }
-          ${renderTransformer({
-            id: "lectureCrTransformer",
-            disabled: !pret || vue.versement?.enCours === true,
-            ouvertes: vue.branches
-          })}
+          ${
+            /**
+             * **Pas de « Transformer » sur une lecture rouverte.**
+             *
+             * Elle est gelée : ses rapprochements sont ceux du jour où elle a
+             * eu lieu, contre les sujets de ce jour-là. En faire une
+             * proposition aujourd'hui porterait des liens vers des sujets
+             * peut-être fermés, renommés ou fusionnés depuis — sans que rien ne
+             * le dise. On relit le compte rendu, c'est plus honnête et ça coûte
+             * ce que ça coûte.
+             */
+            vue.conservee ? "" : renderTransformer({
+              id: "lectureCrTransformer",
+              disabled: !pret || vue.versement?.enCours === true,
+              ouvertes: vue.branches
+            })}
         </div>
       </div>
       ${renderVersement(vue.versement)}
+      ${vue.conservee ? renderLaPhotographie(vue) : `
       <p class="lecture-cr__mot">
         Déposez un compte rendu : l'écran le <strong>restitue d'abord en Markdown</strong> —
         c'est ce document-là que le modèle relit pour en tirer les points. On voit donc
         exactement sur quoi il s'est fondé. Rien n'est ouvert ni écrit : la suite passe par
         une proposition.
-      </p>
+      </p>`}
     </header>
+  `;
+}
+
+/**
+ * Ce qu'on regarde quand on rouvre une lecture.
+ *
+ * **Elle est datée, et elle ne se recalcule pas.** Les points relevés et la
+ * confrontation sont ceux du jour de la lecture, contre les sujets qui
+ * existaient ce jour-là. Un sujet fermé depuis ne rend pas cette lecture
+ * fausse : elle a eu lieu (règle 6).
+ *
+ * Ce que les sujets sont devenus se lit **à côté**, en direct. Et l'on dit
+ * quand on ne le sait pas : une colonne vide ferait croire que plus aucun sujet
+ * n'existe (règle 5).
+ */
+function renderLaPhotographie(vue) {
+  const quand = texte(vue?.lecture?.identite?.tenueLe);
+  const numero = texte(vue?.lecture?.identite?.numero);
+
+  return `
+    <p class="lecture-cr__photo">
+      ${svgIcon("history", { className: "octicon" })}
+      <span>
+        Cette analyse est celle de la lecture${numero ? ` du compte rendu n° ${escapeHtml(numero)}` : ""}${
+          quand ? `, tenu le ${escapeHtml(quand)}` : ""}.
+        <strong>Elle ne se recalcule pas</strong> : elle dit ce qui a été vu ce jour-là.
+        ${
+          vue.sujetsAujourdhui === null
+            ? "Ce que les sujets sont devenus depuis n'a pas pu être relu."
+            : "Ce que les sujets sont devenus depuis se lit à côté de chacun."
+        }
+      </span>
+    </p>
   `;
 }
 
@@ -592,6 +672,12 @@ function renderDepot(vue) {
   // sous la ligne de flottaison. Ce qu'elle portait — choisir un autre PDF —
   // est passé dans l'en-tête, où les commandes vivent déjà.
   if (vue.fichier) return "";
+
+  // **Ni sous une lecture rouverte.** Elle n'a pas de fichier — il est au
+  // projet, pas dans la page —, et la zone se posait donc au milieu de
+  // l'analyse : un rectangle « déposez un compte rendu » entre le document et
+  // ses points. On en dépose un autre depuis la liste, qui est juste au-dessus.
+  if (vue.conservee) return "";
 
   return `
     ${
@@ -641,6 +727,92 @@ function renderDepot(vue) {
 }
 
 /**
+ * Les comptes rendus déjà lus sur ce chantier.
+ *
+ * ## Ce qu'elle répare
+ *
+ * La lecture est passée au serveur, et l'écran n'a plus rien montré : on lançait
+ * dix-neuf comptes rendus, une proposition tombait, et tout ce que l'Atelier
+ * affichait — les points relevés, la confrontation au projet, le document
+ * refait — n'existait nulle part.
+ *
+ * Il y avait déjà, avant, une perte plus discrète : une fois le compte rendu
+ * transformé en proposition, son analyse était perdue pour de bon.
+ *
+ * ## L'ordre est celui des réunions
+ *
+ * Pas celui des lectures. Un compte rendu n° 12 lu après les n° 15 et 16
+ * reprend sa place entre les deux, parce que **rien ne dépend de l'ordre dans
+ * lequel on a lu** : chaque lecture ne dit que ce qu'elle a vu.
+ *
+ * ## Elle ne s'affiche qu'à l'accueil
+ *
+ * Sous une lecture en cours, elle ferait une seconde liste de comptes rendus
+ * au-dessus de celui qu'on regarde.
+ */
+function renderLesComptesRendusLus(vue) {
+  if (vue.phase !== "vide" || vue.lance) return "";
+
+  // **« On n'a pas demandé » et « il n'y en a aucun » ne se disent pas pareil**
+  // (règle 5) : une liste vide affichée pendant le chargement ferait croire
+  // qu'aucun compte rendu n'a jamais été lu.
+  if (vue.dejaLus === null) {
+    return vue.dejaLusEnCours
+      ? `<p class="lecture-cr__lus-mot mono-small">Lecture des comptes rendus déjà analysés…</p>`
+      : "";
+  }
+
+  const lignes = lesComptesRendusLus(vue.dejaLus);
+  if (!lignes.length) return "";
+
+  return `
+    <section class="lecture-cr__lus">
+      <h3 class="lecture-cr__lus-titre">
+        ${lignes.length} compte${lignes.length > 1 ? "s" : ""} rendu${lignes.length > 1 ? "s" : ""}
+        déjà analysé${lignes.length > 1 ? "s" : ""}
+      </h3>
+      <p class="lecture-cr__lus-aide mono-small">
+        Rangés par la date de la réunion, pas par celle de l'analyse. Cliquez pour
+        rouvrir ce que la lecture avait vu ce jour-là.
+      </p>
+      <ul class="lecture-cr__lus-liste">
+        ${lignes.map((ligne) => renderUneLectureGardee(ligne, vue)).join("")}
+      </ul>
+    </section>
+  `;
+}
+
+/** Une ligne de la table des comptes rendus lus. */
+function renderUneLectureGardee(ligne, vue) {
+  const numero = texte(ligne?.numero_de_reunion);
+  const jour = texte(ligne?.tenue_le);
+  const points = Number(ligne?.mesures?.points) || 0;
+  const relectures = Number(ligne?.relectures) || 1;
+  const ouverte = texte(vue?.conservee?.id) === texte(ligne?.id);
+
+  return `
+    <li class="lecture-cr__lus-ligne${ouverte ? " est-ouverte" : ""}">
+      <button type="button" class="lecture-cr__lus-bouton"
+        data-lecture-cr-gardee="${escapeHtml(texte(ligne?.id))}">
+        <span class="lecture-cr__lus-icone" aria-hidden="true">${
+          svgIcon("file", { className: "octicon" })}</span>
+        <span class="lecture-cr__lus-nom">${escapeHtml(texte(ligne?.document) || "Compte rendu")}</span>
+        <span class="lecture-cr__lus-reunion mono-small">${
+          numero ? escapeHtml(`n° ${numero}`) : ""}${numero && jour ? " · " : ""}${escapeHtml(jour)}
+        </span>
+        <span class="lecture-cr__lus-points mono-small">
+          ${points} point${points > 1 ? "s" : ""}${
+            // **Relu n'est pas « lu deux fois le même jour ».** On relit en
+            // ajustant une consigne, et c'est la dernière lecture qu'on ouvre —
+            // les autres restent en base pour la comparaison.
+            relectures > 1 ? ` · ${relectures} lectures` : ""}
+        </span>
+      </button>
+    </li>
+  `;
+}
+
+/**
  * Le corps de l'écran, **dès que le fichier est là**.
  *
  * ## Pourquoi il ne commence plus à la fin
@@ -676,8 +848,23 @@ function renderCorps(vue) {
     }
     ${renderAlerte(vue)}
     ${vue.lecture ? renderIdentite(vue.lecture) : ""}
-    ${renderOnglets(vue)}
-    ${vue.onglet === ONGLET.ANALYSE ? renderAnalyse(vue) : renderRestitution(vue)}
+    ${
+      /**
+       * **Une lecture rouverte n'a qu'un onglet.**
+       *
+       * Le document refait ne se garde pas : c'est, de loin, la plus grosse
+       * part de ce qu'une lecture produit, et on le relit dans Fichiers, sur la
+       * ligne du compte rendu, où il a été posé.
+       *
+       * L'onglet existait quand même, et il montrait la restitution du compte
+       * rendu **précédent** — celle que l'écran tenait encore en mémoire. Un
+       * document sous un autre : le genre de doublon qu'on ne remarque qu'une
+       * fois la proposition signée.
+       */
+      vue.conservee ? "" : renderOnglets(vue)}
+    ${vue.conservee || vue.onglet === ONGLET.ANALYSE
+      ? renderAnalyse(vue)
+      : renderRestitution(vue)}
   `;
 }
 
@@ -892,7 +1079,17 @@ function renderAnalyse(vue) {
     ${renderConfrontation(vue.confrontes, vue.lecture, vue.labels, vue)}
     ${renderCeQueLeCrApporte(vue)}
     ${renderRubriques(vue)}
-    ${renderSuite(vue)}
+    ${
+      /**
+       * **La suite ne se dit pas sur une lecture rouverte.**
+       *
+       * Elle annonçait « la suite passe par Transformer, en haut à droite » —
+       * un bouton qui n'y est plus — et « la restitution sera rangée dans
+       * Fichiers à la fusion de la proposition », une promesse au futur sur une
+       * proposition faite il y a six mois. Deux phrases fausses sous une
+       * analyse juste.
+       */
+      vue.conservee ? "" : renderSuite(vue)}
   `;
 }
 
@@ -2387,6 +2584,7 @@ function renderSujetRetrouve(vue, sujet, sort, confronte = null) {
         ${sujet.subject_number ? `<span>#${escapeHtml(String(sujet.subject_number))}</span>` : ""}
         ${sujet.status ? `<span>${escapeHtml(String(sujet.status))}</span>` : ""}
         <span class="lecture-cr__sujet-effet">${escapeHtml(EFFETS_DU_SORT[sort] ?? "")}</span>
+        ${renderCeQuIlEstDevenu(vue, sujet)}
       </div>
 
       ${renderQuiARapproche(confronte)}
@@ -2407,6 +2605,37 @@ function renderSujetRetrouve(vue, sujet, sort, confronte = null) {
  * La raison que le modèle donne est là pour cela : c'est elle qu'on lit quand
  * on hésite, et c'est elle qui permet de dire « non, ce n'est pas le même ».
  */
+/**
+ * Ce que ce sujet est devenu **depuis** la lecture.
+ *
+ * Rien sur une lecture en cours : l'état affiché est déjà celui d'aujourd'hui,
+ * et le répéter ferait deux fois le même mot.
+ *
+ * Sur une lecture rouverte, trois cas, et ils ne se disent pas pareil :
+ *
+ *   - on n'a pas pu relire les sujets → on ne dit rien (règle 5) ;
+ *   - le sujet n'est plus dans la liste → il a été fusionné ou supprimé ;
+ *   - il est là → son état d'aujourd'hui, **quand il a changé**.
+ */
+function renderCeQuIlEstDevenu(vue, sujet) {
+  if (!vue?.conservee) return "";
+  if (!Array.isArray(vue.sujetsAujourdhui)) return "";
+
+  const devenu = ceQueLeSujetEstDevenu(texte(sujet?.id), vue.sujetsAujourdhui);
+  if (!devenu.connu) {
+    return `<span class="lecture-cr__sujet-depuis est-parti">n'existe plus aujourd'hui</span>`;
+  }
+
+  const avant = texte(sujet?.status);
+  if (!avant || devenu.statut === avant) return "";
+
+  return `
+    <span class="lecture-cr__sujet-depuis">
+      aujourd'hui : ${escapeHtml(devenu.statut)}
+    </span>
+  `;
+}
+
 function renderQuiARapproche(confronte) {
   const par = texte(confronte?.par);
   if (!par) return "";
@@ -2574,6 +2803,11 @@ function brancher(hote) {
   // « une proposition ouverte » sans dire laquelle.
   etat.branches = branchesOuvertes(() => redessiner(hote));
 
+  // **Les comptes rendus déjà lus se demandent une fois**, au premier dessin.
+  // Les redemander à chaque redessin ferait une requête par clic — et l'écran
+  // se redessine à chaque case cochée.
+  if (etat.dejaLus === null && !etat.dejaLusEnCours) void chargerLesLecturesGardees(hote);
+
   const champ = hote.querySelector("[data-lecture-cr-fichier]");
   const surLeChamp = (evenement) => {
     const fichier = evenement.target?.files?.[0];
@@ -2604,6 +2838,17 @@ function brancher(hote) {
 
     if (cible.closest("[data-lecture-cr-depuis-fichiers]")) {
       void ouvrirLeChoix(hote, "");
+      return;
+    }
+
+    const gardee = cible.closest("[data-lecture-cr-gardee]");
+    if (gardee) {
+      void ouvrirUneLectureGardee(hote, texte(gardee.dataset.lectureCrGardee));
+      return;
+    }
+
+    if (cible.closest("[data-lecture-cr-revenir]")) {
+      revenirALaccueil(hote);
       return;
     }
 
@@ -3059,6 +3304,11 @@ async function lire(hote, fichier, piece = null) {
   etat.queFaire = "";
   etat.pagesLues = [];
   etat.fichier = fichier ?? null;
+  // **La ligne du document du projet, quand il y en a une.** C'est elle qui
+  // rattache la lecture conservée au compte rendu de Fichiers — sans elle, deux
+  // lectures du même document se liraient comme deux comptes rendus différents.
+  // Rien quand le PDF vient du disque : il n'est rangé nulle part.
+  etat.document = piece ?? null;
   etat.confrontes = null;
   etat.labels = null;
   etat.lots = null;
@@ -3149,7 +3399,7 @@ async function lire(hote, fichier, piece = null) {
     // la proposition portera, et il voyage avec elle : sans lui, le contrôle
     // « le référentiel de lecture est connu » se déclarait non vérifiable sur
     // une information qu'on avait sous la main.
-    etat.lecture.luPar = [texte(lu.modele), LECTURE_DES_CR].filter(Boolean).join(" · ");
+    etat.lecture.luPar = leLecteur(lu.modele);
     etat.lecture.rapprochementDemande = Boolean(lu.rapprochementDemande);
     etat.lecture.rapprochementsEcartes = Number(lu.rapprochementsEcartes) || 0;
     etat.lecture.labelsEcartes = Array.isArray(lu.labelsEcartes) ? lu.labelsEcartes : [];
@@ -3179,10 +3429,149 @@ async function lire(hote, fichier, piece = null) {
 
     etat.phase = "lue";
     redessiner(hote);
+
+    // **On garde la lecture entière, et seulement ici.**
+    //
+    // Elle se gardait plus haut, dès les mesures connues — et elle n'emportait
+    // donc **pas la confrontation**, qui n'est calculée qu'après. Rouvrir une
+    // lecture aurait rendu ses points sans ce qu'ils sont devenus face au
+    // projet, c'est-à-dire la moitié de l'écran.
+    //
+    // L'écriture ne conditionne rien : la lecture est là, elle se transforme en
+    // proposition. Une lecture qu'on n'a pas su garder reste à l'écran.
+    void garderCetteLecture();
   } catch (erreur) {
     echouer(hote, {
       motif: `La lecture n'a pas abouti : ${texte(erreur?.message) || "cause inconnue"}`
     });
+  }
+}
+
+/**
+ * Garde cette lecture, entière, pour qu'on puisse la rouvrir.
+ *
+ * **Ce qu'elle a vu, gelé** : les points relevés et la confrontation telle
+ * qu'elle s'est faite, contre les sujets qui existaient ce jour-là. Elle ne se
+ * recalcule jamais — `la-lecture-conservee.js` dit pourquoi, et
+ * `docs/une-lecture-se-garde.md` le raconte en entier.
+ */
+/**
+ * Les comptes rendus déjà lus sur ce chantier.
+ *
+ * **`null` reste `null` quand on n'a pas pu lire** (règle 5) : l'accueil
+ * n'affiche alors rien plutôt que d'annoncer qu'aucun compte rendu n'a été
+ * analysé — ce qui ferait relancer dix-neuf lectures déjà payées.
+ */
+async function chargerLesLecturesGardees(hote) {
+  etat.dejaLusEnCours = true;
+
+  try {
+    const [base, { resolveCurrentBackendProjectId }] = await Promise.all([
+      import("../../../services/lectures-du-cr-supabase.js"),
+      import("../../../services/project-supabase-sync.js")
+    ]);
+
+    const projet = await resolveCurrentBackendProjectId();
+    if (!projet) return;
+
+    // **Assez pour un chantier entier.** Le défaut de vingt sert au suivi, qui
+    // ne veut que la précédente ; ici on dresse la liste des réunions, et un
+    // chantier d'un an en compte cinquante.
+    etat.dejaLus = await base.listerLesLectures(projet, { limite: 300 });
+  } catch {
+    // Rien : on ne sait pas, et l'accueil ne dit rien.
+  } finally {
+    etat.dejaLusEnCours = false;
+    redessiner(hote);
+  }
+}
+
+/**
+ * Rouvrir une lecture gardée.
+ *
+ * ## Deux lectures, et elles ne se mêlent pas
+ *
+ * L'analyse est **gelée** : les points relevés, et la confrontation telle
+ * qu'elle s'est faite ce jour-là contre les sujets qui existaient ce jour-là.
+ *
+ * Les sujets d'**aujourd'hui** se lisent en direct, à côté. Un sujet rapproché
+ * en mars et fermé depuis ne rend pas la lecture de mars fausse : elle a eu
+ * lieu (règle 6). L'écran montre les deux — « vu le 12/03 » et « aujourd'hui » —
+ * plutôt que de recalculer une photographie, ce qui en ferait une lecture qui
+ * change toute seule et qu'on ne peut plus opposer à personne.
+ */
+async function ouvrirUneLectureGardee(hote, id) {
+  if (!texte(id)) return;
+
+  const base = await import("../../../services/lectures-du-cr-supabase.js");
+  const ligne = await base.lireUneLecture(texte(id));
+
+  const vue = laVueDuneLecture(ligne, { sujetsDuProjet: null });
+  if (!vue) {
+    // **On ne devine pas laquelle des deux.** Une lecture d'avant la
+    // conservation et une lecture qui n'a relevé aucun point portent toutes
+    // deux une analyse nulle, et rien ne les distingue en base. Dire l'une des
+    // deux serait une affirmation qu'on n'a pas vérifiée (règle 5).
+    etat.motif = ligne
+      ? "Cette lecture n'a pas d'analyse à rouvrir : elle est d'avant leur conservation, "
+        + "ou elle n'a relevé aucun point. Ses chiffres, eux, sont gardés."
+      : "Cette lecture ne s'ouvre pas.";
+    redessiner(hote);
+    return;
+  }
+
+  // **Les restitutions appartiennent au compte rendu précédent.** Les garder
+  // afficherait un document sous un autre.
+  Object.assign(etat, vue, {
+    onglet: ONGLET.ANALYSE, motif: "", panne: "", lance: "", md: etatDesReconstitutions()
+  });
+  redessiner(hote);
+
+  // **Ensuite, et seulement ensuite.** L'analyse gelée s'affiche tout de suite ;
+  // ce que les sujets sont devenus arrive quand la base répond, et n'empêche
+  // pas de lire ce qui est déjà là.
+  etat.sujetsAujourdhui = await sujetsDuProjet();
+  redessiner(hote);
+}
+
+/** Refermer une lecture gardée, et revenir à la liste. */
+function revenirALaccueil(hote) {
+  etat.phase = "vide";
+  etat.conservee = null;
+  etat.lecture = null;
+  etat.confrontes = null;
+  etat.sujetsDuProjet = null;
+  etat.sujetsAujourdhui = null;
+  etat.fichier = null;
+  etat.document = null;
+  etat.motif = "";
+  etat.panne = "";
+  etat.md = etatDesReconstitutions();
+  redessiner(hote);
+}
+
+async function garderCetteLecture() {
+  try {
+    const [{ laLigneDuneLecture }, base, { resolveCurrentBackendProjectId }] = await Promise.all([
+      import("../../../services/la-lecture-conservee.js"),
+      import("../../../services/lectures-du-cr-supabase.js"),
+      import("../../../services/project-supabase-sync.js")
+    ]);
+
+    const projet = await resolveCurrentBackendProjectId();
+    if (!projet) return;
+
+    const ligne = laLigneDuneLecture(etat, {
+      projectId: projet,
+      // Le document du projet quand la lecture est partie de Fichiers ; rien
+      // quand le PDF vient du disque et n'est rangé nulle part.
+      documentId: texte(etat.document?.id)
+    });
+    if (!ligne) return;
+
+    await base.conserverUneLecture(ligne);
+  } catch {
+    // Rien à dire à l'écran : la lecture est là, c'est l'essentiel.
   }
 }
 
@@ -3246,10 +3635,6 @@ async function suivreCetteLecture(lecture) {
     // aucun », et le moteur de chronologie s'en sert pour refuser de déduire.
     const lectures = await base.listerLesLectures(projet);
     const avant = suivi.laLecturePrecedente(lectures);
-
-    // L'écriture ne conditionne pas l'affichage : une lecture qu'on n'a pas su
-    // conserver se compare quand même à celle d'avant.
-    void base.conserverUneLecture(suivi.lectureAConserver(lecture, { projectId: projet }));
 
     const ecarts = suivi.ecartsDeLaLecture(lecture?.mesure, avant?.mesures);
     return { ecarts, phrase: suivi.phraseDuSuivi(avant, ecarts), lectures };

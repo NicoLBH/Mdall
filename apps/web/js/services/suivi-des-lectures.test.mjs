@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 
 import {
   CHIFFRES_SUIVIS, SENS, ecartDuChiffre, ecartsDeLaLecture, laLecturePrecedente,
-  lectureAConserver, motDeLEcart, phraseDuSuivi
+  motDeLEcart, phraseDuSuivi
 } from "./suivi-des-lectures.js";
 import { mesureDeLaLecture } from "./lecture-du-cr.js";
 
@@ -130,34 +130,6 @@ test("la phrase nomme ce à quoi l'on compare", () => {
   assert.match(phraseDuSuivi(null), /Première lecture/);
 });
 
-/* ── Ce qu'on conserve ───────────────────────────────────────────────────── */
-
-test("une lecture se conserve avec ses mesures telles quelles", () => {
-  const mesure = mesureDeLaLecture([unPoint()], PAGES, []);
-  const ligne = lectureAConserver(
-    { nom: "1824_CR_19.pdf", identite: { numero: "19", tenueLe: "01/10/2025" }, mesure, luPar: "gpt · v1" },
-    { projectId: "projet-1" }
-  );
-
-  assert.deepEqual(ligne, {
-    project_id: "projet-1",
-    document: "1824_CR_19.pdf",
-    numero_de_reunion: "19",
-    tenue_le: "01/10/2025",
-    // Telles quelles : les raboter ici reviendrait à garder un détail en base
-    // pour ne jamais l'afficher, et le jour où l'on voudrait suivre un chiffre
-    // de plus, les lectures d'avant ne le porteraient pas.
-    mesures: mesure,
-    lu_par: "gpt · v1"
-  });
-});
-
-/** Une lecture sans mesure ne se conserve pas : il n'y aurait rien à comparer. */
-test("une lecture sans mesure ne se conserve pas", () => {
-  assert.equal(lectureAConserver({ nom: "x" }, { projectId: "p" }), null);
-  assert.equal(lectureAConserver(null, { projectId: "p" }), null);
-});
-
 /** Les chiffres suivis sont nommés à un seul endroit, et l'orphelin en est. */
 test("les chiffres suivis se nomment à un seul endroit", () => {
   const cles = CHIFFRES_SUIVIS.map(([cle]) => cle);
@@ -191,7 +163,11 @@ test("la lecture se conserve, et ses écarts atteignent les chiffres", async () 
 
   // La lecture est conservée, et comparée à la précédente.
   assert.match(source, /etat\.suivi = await suivreCetteLecture\(etat\.lecture\)/);
-  assert.match(source, /conserverUneLecture\(suivi\.lectureAConserver\(/);
+  // **Et elle se garde entière, après la confrontation.** Gardée plus haut, dès
+  // les mesures connues, elle n'emportait pas la confrontation — rouvrir une
+  // lecture aurait rendu ses points sans ce qu'ils valent face au projet.
+  assert.match(source, /void garderCetteLecture\(\);/);
+  assert.match(source, /base\.conserverUneLecture\(ligne\)/);
   // La liste sert deux fois : l'écart de cette lecture-ci, et la place du
   // document dans le temps du projet. Un second appel en rendrait deux listes,
   // et l'écran pourrait se croire en tête sur l'une et derrière sur l'autre.

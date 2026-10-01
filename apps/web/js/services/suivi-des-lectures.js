@@ -161,21 +161,11 @@ export function phraseDuSuivi(avant = null, ecarts = null) {
 }
 
 /**
- * Ce qu'on conserve d'une lecture, dans la forme que la base attend.
+ * **La ligne d'une lecture se construit ailleurs** — dans
+ * `la-lecture-conservee.js`, avec l'analyse qu'elle porte maintenant.
  *
- * **Les mesures telles quelles.** Les raboter ici reviendrait à garder un détail
- * en base pour ne jamais l'afficher — et le jour où l'on voudrait suivre un
- * chiffre de plus, les lectures d'avant ne le porteraient pas.
+ * Elle se construisait ici, avec les seules mesures. Depuis que la lecture se
+ * garde entière et se rouvre, deux constructeurs auraient écrit deux lignes
+ * différentes de la même lecture, et la seconde serait fausse avant d'être
+ * finie (règle 4). Ce module garde ce qu'il sait faire : **comparer**.
  */
-export function lectureAConserver(lecture = null, { projectId = "" } = {}) {
-  if (!lecture?.mesure) return null;
-
-  return {
-    project_id: texte(projectId),
-    document: texte(lecture?.nom),
-    numero_de_reunion: texte(lecture?.identite?.numero),
-    tenue_le: texte(lecture?.identite?.tenueLe),
-    mesures: lecture.mesure,
-    lu_par: texte(lecture?.luPar)
-  };
-}

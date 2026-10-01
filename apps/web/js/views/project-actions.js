@@ -11,10 +11,10 @@ import {
   STATUT, etapeDe, etapesConsultables, numeroter, resumerEtape
 } from "../services/run-journal.js";
 import {
-  LE_BATTEMENT_DU_JOURNAL, ONGLETS, UNE_EXECUTION, decrireVisibilite, lesExecutionsDites,
-  longletDit, ongletValide, partitionnerActions, quelqueChoseTourne
+  LE_BATTEMENT_DU_JOURNAL, ONGLETS, ORIGINE, TOUTES, UNE_EXECUTION, decrireVisibilite,
+  lesExecutionsDites, longletDit, ongletValide, partitionnerActions, quelqueChoseTourne
 } from "../services/run-partition.js";
-import { renderSideNavItem } from "./ui/side-nav-layout.js";
+import { renderNavList, renderNavListGroup, renderNavListItem } from "./ui/nav-list.js";
 import {
   bindRailResizer, followRailScroll, railWidth, renderProjectRail
 } from "./ui/project-rail.js";
@@ -415,21 +415,68 @@ function renderMarqueAtelier(entry) {
  *
  * Le compte va avec le nom : « Atelier 0 » dit, avant le clic, qu'il n'y a rien
  * à y voir.
+ *
+ * ## Et les entrées sont celles des autres rails
+ *
+ * Elles étaient dessinées avec `side-nav-layout`, le gabarit des pages de
+ * réglages — qui ne se replient pas. La coque, elle, se replie : les règles qui
+ * masquent le texte d'un rail replié sont écrites pour `nav-list`, le gabarit
+ * que la Mémoire, les Sujets, l'Accueil et le Copilote emploient tous.
+ *
+ * Résultat à l'écran : **le rail des Actions replié gardait ses libellés et ses
+ * compteurs**, à cheval sur la colonne d'icônes. Il était le dernier à ne pas
+ * se servir du composant commun ; il n'y en a plus qu'un (règle 4).
  */
 function renderRailDesActions(piles, actif) {
   return renderProjectRail({
     id: "actionsRail",
     label: "Les vues du journal",
     collapsed: store.projectActionsView?.railOuvert === false,
-    navHtml: ONGLETS.map((onglet) => renderSideNavItem({
-      label: onglet.libelle,
-      iconHtml: svgIcon(onglet.icone),
-      isActive: onglet.cle === actif,
-      tag: String((piles[onglet.cle] ?? []).length),
-      dataAttributes: { "data-actions-onglet": onglet.cle }
-    })).join("")
+    navHtml: renderNavList({
+      label: "Les vues du journal",
+      html: renderNavListGroup({
+        items: ONGLETS.map((onglet) => renderNavListItem({
+          label: onglet.libelle,
+          iconHtml: svgIcon(onglet.icone),
+          isActive: onglet.cle === actif,
+          trailing: String((piles[onglet.cle] ?? []).length),
+          // Le libellé est tronqué dans un rail étroit : l'infobulle le rend.
+          title: onglet.libelle,
+          dataAttributes: { "data-actions-onglet": onglet.cle }
+        }))
+      })
+    })
   });
 }
+
+/**
+ * Ce qu'on dit d'une vue qui ne porte rien.
+ *
+ * **Une phrase par vue, et chacune dit quoi faire.** « Aucune action exécutée »
+ * sous « Versements » n'apprend rien : ce qui manque là n'est pas une action
+ * lancée, c'est un dépôt. Le dire au bon endroit évite de chercher le bouton
+ * dans le mauvais écran.
+ */
+const LE_VIDE_DUNE_VUE = {
+  [TOUTES]: {
+    title: "Rien ne s'est encore passé sur ce projet",
+    description: "Les analyses, les dépôts et les lectures viendront ici, toutes ensemble."
+  },
+  [ORIGINE.PROJET]: {
+    title: "Aucune action exécutée",
+    description: "Lance une analyse ou un enrichissement manuel pour alimenter le journal d’exécution."
+  },
+  [ORIGINE.ATELIER]: {
+    title: "Aucun essai dans l'Atelier",
+    description: "Ce que vous lancerez depuis l'Atelier — une lecture de comptes rendus, "
+      + "un utilitaire — viendra ici, et n'ira pas plus loin."
+  },
+  [ORIGINE.VERSEMENT]: {
+    title: "Vous n'avez encore rien versé",
+    description: "Déposez des mails depuis Fichiers : le serveur les range, et le dépôt "
+      + "se suivra ici."
+  }
+};
 
 function renderRunsTable() {
   const piles = partitionnerActions(getRunLogEntries());
@@ -455,15 +502,7 @@ function renderRunsTable() {
   };
   const paged = paginateItems(entries, pagination);
 
-  const vide = actif === "atelier"
-    ? {
-        title: "Aucun essai dans l'Atelier",
-        description: "Ce que vous lancerez depuis l'Atelier viendra ici, et n'ira pas plus loin."
-      }
-    : {
-        title: "Aucune action exécutée",
-        description: "Lance une analyse ou un enrichissement manuel pour alimenter le journal d’exécution."
-      };
+  const vide = LE_VIDE_DUNE_VUE[actif] ?? LE_VIDE_DUNE_VUE[ORIGINE.PROJET];
 
   const tableHtml = renderDataTableShell({
     className: "workflow-runs-table data-table-shell--document-scroll",

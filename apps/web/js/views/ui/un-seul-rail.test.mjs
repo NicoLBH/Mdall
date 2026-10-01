@@ -133,3 +133,42 @@ test("le journal des Actions emploie le rail commun", () => {
   // vide empêchait le rail de se caler sous les onglets.
   assert.match(source, /hideBar: true/, "le bandeau de vue vide est encore là");
 });
+
+/**
+ * **Les entrées d'un rail se dessinent toutes avec le même gabarit.**
+ *
+ * Le journal des Actions employait `side-nav-layout`, celui des pages de
+ * réglages — qui ne se replient pas. Les règles qui masquent le texte d'un rail
+ * replié sont écrites pour `nav-list`, le gabarit que la Mémoire, les Sujets,
+ * l'Accueil et le Copilote emploient tous.
+ *
+ * Rien ne levait : **le rail des Actions replié gardait ses libellés et ses
+ * compteurs**, à cheval sur la colonne d'icônes. Un composant employé à moitié
+ * ne se voit qu'à l'écran, et seulement dans l'état où on ne regarde pas.
+ */
+test("un écran à rail dessine ses entrées avec nav-list, jamais side-nav-layout", () => {
+  const fautes = [];
+
+  for (const chemin of lesEcrans()) {
+    const relatif = path.relative(VUES, chemin).split(path.sep).join("/");
+    if (LES_DESSINATEURS.includes(relatif)) continue;
+
+    const source = readFileSync(chemin, "utf8");
+    if (!/renderProjectRail\(\{/.test(source)) continue;
+
+    if (/\brenderSideNav(Item|Group)\(/.test(source)) {
+      fautes.push(
+        `${relatif} remplit un rail avec « side-nav-layout » : replié, `
+        + "il gardera ses libellés et ses compteurs"
+      );
+    }
+  }
+
+  assert.deepEqual(fautes, [], fautes.join("\n"));
+
+  // **Sans ce compte, un dépôt sans rail passerait** en n'ayant rien relu
+  // (règle 12).
+  const aRail = lesEcrans().filter((un) =>
+    /renderProjectRail\(\{/.test(readFileSync(un, "utf8")));
+  assert.ok(aRail.length >= 5, `trop peu d'écrans à rail relus : ${aRail.length}`);
+});

@@ -30,6 +30,7 @@
  */
 
 import { LE_CADENAS_DUN_FICHIER } from "./le-dossier-des-mails.js";
+import { GESTE_DES_CR, GESTE_DES_MAILS } from "./reveiller-la-file.js";
 
 /**
  * Les trois origines possibles.
@@ -61,31 +62,88 @@ export const ORIGINE = {
   VERSEMENT: "versement"
 };
 
-/** Le nom des trois vues, tel qu'il s'affiche. */
+/**
+ * La vue sans filtre : **tout ce que vous avez le droit de voir**.
+ *
+ * Ce n'est pas une quatrième origine, et elle ne range rien. C'est l'union des
+ * trois, et le rail la met en tête : il faut pouvoir répondre à « que s'est-il
+ * passé ? » sans deviner d'abord sous quel onglet chercher.
+ *
+ * Elle ne montre rien de plus : la base ne rend que ce qui est à vous ou au
+ * projet. Et chaque ligne garde sa marque de visibilité — sans quoi une liste
+ * mêlée ferait croire que tout y est partagé.
+ */
+export const TOUTES = "toutes";
+
+/** Le nom des vues, tel qu'il s'affiche. */
 export const ONGLETS = [
+  {
+    cle: TOUTES,
+    libelle: "Toutes les actions",
+    icone: "history",
+    explication: "Tout ce que vous pouvez voir de ce projet, sans filtre. "
+      + "Chaque ligne dit qui la lit."
+  },
   {
     cle: ORIGINE.PROJET,
     libelle: "Partagées",
     // L'icône va avec le nom, et une seule fois : le rail des Actions la
-    // dessine, et tout écran qui nommerait ces trois vues la reprendrait
-    // plutôt que d'en choisir une autre (règle 10).
+    // dessine, et tout écran qui nommerait ces vues la reprendrait plutôt
+    // que d'en choisir une autre (règle 10).
     icone: "people",
     explication: "Ce qui est arrivé au projet. Tous les collaborateurs le lisent."
   },
   {
     cle: ORIGINE.ATELIER,
     libelle: "Atelier",
-    icone: "beaker",
-    explication: "Vos essais dans l'Atelier. Ils ne sont pas partagés avec le projet."
+    // **La même que la barre des onglets du projet.** Le rail en dessinait une
+    // autre — une fiole —, et deux dessins pour un même endroit obligent à
+    // apprendre deux fois la même chose (règle 10).
+    icone: "cpu",
+    explication: "Vos essais dans l'Atelier — lectures de comptes rendus comprises. "
+      + "Ils ne sont pas partagés avec le projet."
   },
   {
     cle: ORIGINE.VERSEMENT,
     libelle: "Versements",
-    icone: "mail",
-    explication: "Ce que vous avez versé dans le projet, et ce que le serveur en a "
-      + "lu : mails, pièces jointes, comptes rendus. Vous seul le lisez."
+    icone: "file-symlink-file",
+    explication: "Ce que vous avez fait entrer dans le projet : mails, pièces jointes. "
+      + "Vous seul les lisez."
   }
 ];
+
+/**
+ * **Où se range une exécution, et pourquoi.** La règle, en trois questions
+ * posées dans cet ordre — `docs/dou-vient-une-execution.md`.
+ *
+ *   1. Tout le projet la lit ? → **Partagées**.
+ *   2. Sinon, a-t-elle fait **entrer de la matière** dans le projet ? → **Versements**.
+ *   3. Sinon, c'est un **essai** → **Atelier**.
+ *
+ * Ce n'est pas « d'où on a cliqué ». On verse des mails depuis Fichiers, on lit
+ * des comptes rendus depuis l'Atelier, et demain on fera les deux d'ailleurs :
+ * une règle fondée sur l'écran de départ aurait changé à chaque bouton déplacé.
+ * Celle-ci tient à ce que l'exécution **a fait**, qui ne bouge pas.
+ *
+ * C'est elle qui range une lecture de comptes rendus dans l'Atelier : elle relit
+ * des documents **déjà là** et n'en fait entrer aucun — elle prépare une
+ * proposition, c'est-à-dire un essai, tant que personne n'a signé (règle 1).
+ */
+export const LORIGINE_DUN_GESTE = {
+  [GESTE_DES_MAILS]: ORIGINE.VERSEMENT,
+  [GESTE_DES_CR]: ORIGINE.ATELIER
+};
+
+/**
+ * L'origine d'un geste de la file.
+ *
+ * `null` quand ce geste n'est pas de la file : à l'appelant de dire ce qu'il en
+ * fait. Rendre « projet » ici ferait ranger dans « Partagées » un geste qu'on ne
+ * connaît pas — c'est-à-dire annoncer comme partagé ce qu'on n'a pas lu.
+ */
+export function lorigineDunGeste(geste = "") {
+  return LORIGINE_DUN_GESTE[String(geste ?? "").trim()] ?? null;
+}
 
 /** La vue demandée, entière — son nom, son icône, ce qu'elle explique. */
 export function longletDit(cle) {
@@ -109,12 +167,19 @@ function origineDe(entry) {
   return ORIGINE.PROJET;
 }
 
-/** Les exécutions rangées par origine, dans l'ordre où elles arrivent. */
+/**
+ * Les exécutions rangées par origine, dans l'ordre où elles arrivent.
+ *
+ * **`toutes` n'est pas une pile de plus : c'est la liste entière.** La remplir
+ * en poussant au fur et à mesure aurait fait une quatrième copie à tenir à jour,
+ * et le jour où une origine s'ajoute elle en manquerait une (règle 4).
+ */
 export function partitionnerActions(entries = []) {
   const liste = Array.isArray(entries) ? entries : [];
   const piles = {};
   for (const onglet of ONGLETS) piles[onglet.cle] = [];
   for (const entry of liste) piles[origineDe(entry)].push(entry);
+  piles[TOUTES] = liste;
   return piles;
 }
 

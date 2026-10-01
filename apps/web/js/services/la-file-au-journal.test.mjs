@@ -274,6 +274,31 @@ test("une lecture de comptes rendus ne se dit pas dépôt de messagerie", () => 
   assert.equal(laProvenanceDuGeste("mails"), "Dépôt de messagerie");
 });
 
+/**
+ * **L'origine décide de l'onglet, et elle vient du geste.**
+ *
+ * Une lecture de comptes rendus se lance depuis l'Atelier et relit des documents
+ * déjà là : c'est un essai, pas un apport. Elle s'affichait pourtant sous
+ * « Versements », où l'on cherche ce qu'on a apporté
+ * (`docs/dou-vient-une-execution.md`).
+ */
+test("une lecture en cours se range dans l'Atelier, un dépôt dans les Versements", () => {
+  const lecture = laFileAuJournal({
+    id: "f-1", geste: "comptes_rendus", statut: "en_cours",
+    documents: [{ id: "d-1", nom: "1824_CR_12.pdf" }], cree_le: "2026-10-01T09:18:00Z"
+  });
+  const depot = laFileAuJournal({
+    id: "f-2", statut: "en_attente",
+    fichiers: [{ chemin: "a.msg" }], cree_le: "2026-10-01T09:18:00Z"
+  });
+
+  assert.equal(lecture.origine, "atelier");
+  assert.equal(depot.origine, "versement");
+  // Et les deux restent personnelles : l'onglet range, il ne décide pas de qui lit.
+  assert.equal(lecture.privee, true);
+  assert.equal(depot.privee, true);
+});
+
 test("la ligne vive et la course finie disent la même provenance", () => {
   const ligne = laFileAuJournal({
     id: "f-1", geste: "comptes_rendus", statut: "en_cours",

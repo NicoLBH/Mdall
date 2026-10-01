@@ -5,7 +5,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  ORIGINE, ONGLETS, decrireVisibilite, longletDit, ongletValide, partitionnerActions
+  ORIGINE, ONGLETS, TOUTES, decrireVisibilite, longletDit, lorigineDunGeste,
+  ongletValide, partitionnerActions
 } from "./run-partition.js";
 
 const PROJET = { id: "a", origine: "projet", privee: false };
@@ -60,10 +61,12 @@ test("une exécution d'Atelier sans propriétaire ne se prétend pas privée", (
 });
 
 test("chaque onglet porte un libellé et une explication", () => {
-  assert.equal(ONGLETS.length, 3);
   const cles = ONGLETS.map((onglet) => onglet.cle);
-  assert.deepEqual(cles, [ORIGINE.PROJET, ORIGINE.ATELIER, ORIGINE.VERSEMENT]);
-  assert.equal(new Set(cles).size, 3, "deux onglets de même clé rangeraient au même endroit");
+  // **« Toutes » vient en tête.** On doit pouvoir répondre à « que s'est-il
+  // passé ? » sans deviner d'abord sous quel onglet chercher.
+  assert.deepEqual(cles, [TOUTES, ORIGINE.PROJET, ORIGINE.ATELIER, ORIGINE.VERSEMENT]);
+  assert.equal(new Set(cles).size, cles.length,
+    "deux onglets de même clé rangeraient au même endroit");
   for (const onglet of ONGLETS) {
     assert.ok(onglet.libelle, "un onglet sans libellé ne se clique pas");
     assert.ok(onglet.explication.length > 20, "l'onglet doit dire ce qu'il change pour le lecteur");
@@ -84,7 +87,83 @@ test("un versement ne tombe pas dans « Partagées »", () => {
   assert.deepEqual(piles[ORIGINE.ATELIER].map((un) => un.id), ["c"]);
 });
 
-test("les trois piles existent même vides, pour que les compteurs disent zéro", () => {
+/**
+ * **La vue sans filtre rend la liste entière**, et dans l'ordre où elle arrive.
+ *
+ * La remplir en poussant au fur et à mesure aurait fait une quatrième copie à
+ * tenir à jour : le jour où une origine s'ajoute, elle en manquerait une.
+ */
+test("« Toutes » rend tout, sans rien ranger", () => {
+  const liste = [
+    { id: "a", origine: ORIGINE.VERSEMENT },
+    { id: "b", origine: ORIGINE.PROJET },
+    { id: "c", origine: ORIGINE.ATELIER },
+    { id: "d" }
+  ];
+  assert.deepEqual(partitionnerActions(liste)[TOUTES].map((un) => un.id),
+    ["a", "b", "c", "d"]);
+  assert.deepEqual(partitionnerActions([])[TOUTES], []);
+});
+
+/**
+ * **La règle de l'origine, en trois questions** — `docs/dou-vient-une-execution.md`.
+ *
+ * Ce n'est pas « d'où on a cliqué » : une lecture de comptes rendus se lance
+ * depuis l'Atelier et relit des documents déjà là, donc elle n'apporte rien et
+ * reste un essai. Un dépôt de mails fait entrer de la matière.
+ */
+/**
+ * **Chaque onglet nomme une icône qui existe dans le jeu.**
+ *
+ * `svgIcon` rend une référence au sprite : un nom absent ne lève pas, il dessine
+ * **une case vide**. Ni la page ni la console ne le signalent — c'est le défaut
+ * qui a déjà fait passer un cadenas pour un carré blanc (règle 10).
+ *
+ * Et les deux qui ont changé sont nommées : l'Atelier porte celle de la barre
+ * des onglets du projet, et le versement n'est plus une enveloppe depuis qu'il
+ * ne porte plus que des mails.
+ */
+test("chaque onglet porte une icône qui existe, et c'est la bonne", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  const sprite = readFileSync(
+    fileURLToPath(new URL("../../assets/icons.svg", import.meta.url)), "utf8"
+  );
+
+  for (const onglet of ONGLETS) {
+    assert.ok(onglet.icone, `l'onglet « ${onglet.libelle} » n'a pas d'icône`);
+    assert.ok(
+      sprite.includes(`<symbol id="${onglet.icone}"`),
+      `« ${onglet.icone} » n'est pas dans le jeu d'icônes : l'onglet dessinerait une case vide`
+    );
+  }
+
+  const parCle = new Map(ONGLETS.map((un) => [un.cle, un]));
+  assert.equal(parCle.get(ORIGINE.ATELIER).icone, "cpu",
+    "le rail dessine une autre icône que la barre des onglets du projet");
+  assert.equal(parCle.get(ORIGINE.VERSEMENT).icone, "file-symlink-file",
+    "l'enveloppe ne dit plus ce que l'onglet porte");
+});
+
+test("un geste de la file se range sur ce qu'il fait, pas sur l'écran d'où il part", () => {
+  assert.equal(lorigineDunGeste("mails"), ORIGINE.VERSEMENT);
+  assert.equal(lorigineDunGeste("comptes_rendus"), ORIGINE.ATELIER);
+});
+
+/**
+ * **Un geste inconnu ne se devine pas.** Rendre « projet » ici ferait ranger
+ * dans « Partagées » — c'est-à-dire annoncer comme lu par tout le projet ce
+ * qu'on n'a pas su lire (règle 5).
+ */
+test("un geste qui n'est pas de la file ne rend aucune origine", () => {
+  assert.equal(lorigineDunGeste("fusion"), null);
+  assert.equal(lorigineDunGeste("versement"), null);
+  assert.equal(lorigineDunGeste(""), null);
+  assert.equal(lorigineDunGeste(), null);
+});
+
+test("les piles existent même vides, pour que les compteurs disent zéro", () => {
   const piles = partitionnerActions([]);
   for (const onglet of ONGLETS) {
     assert.deepEqual(piles[onglet.cle], [], `la pile ${onglet.cle} doit exister`);

@@ -21,10 +21,9 @@
  */
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
+import { LE_SELECT_DUNE_LECTURE, LE_SELECT_DUNE_LIGNE } from "./la-lecture-conservee.js";
 
 const SUPABASE_URL = getSupabaseUrl();
-
-const COLONNES = "id,project_id,document,numero_de_reunion,tenue_le,mesures,lu_par,created_at";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -84,13 +83,40 @@ export async function listerLesLectures(projectId, { limite = 20 } = {}) {
   try {
     const lignes = await requete("cr_lectures", {
       params: {
-        select: COLONNES,
+        // **Sans l'analyse.** C'est la plus grosse colonne, et la liste n'en
+        // montre rien : la charger pour cinquante lignes afin d'en ouvrir une
+        // ferait passer cinquante analyses sur le réseau pour en regarder une.
+        select: LE_SELECT_DUNE_LIGNE,
         project_id: `eq.${texte(projectId)}`,
         order: "created_at.desc",
         limit: String(Math.max(1, Number(limite) || 20))
       }
     });
     return Array.isArray(lignes) ? lignes : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Une lecture, **entière** — son analyse comprise.
+ *
+ * C'est le second appel : la liste se charge sans les analyses, et celle qu'on
+ * ouvre se demande seule.
+ *
+ * `null` quand on n'a pas pu lire, **et aussi** quand la ligne n'existe plus.
+ * L'écran dit « cette lecture ne s'ouvre pas » dans les deux cas : il n'a rien
+ * d'utile à ajouter, et deviner lequel des deux serait une affirmation de plus
+ * que ce qu'on sait (règle 5).
+ */
+export async function lireUneLecture(id = "") {
+  if (!texte(id)) return null;
+
+  try {
+    const lignes = await requete("cr_lectures", {
+      params: { select: LE_SELECT_DUNE_LECTURE, id: `eq.${texte(id)}`, limit: "1" }
+    });
+    return Array.isArray(lignes) ? lignes[0] ?? null : null;
   } catch {
     return null;
   }
