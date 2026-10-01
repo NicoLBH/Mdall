@@ -94,6 +94,12 @@ export const RACINES = [
   "js/services/les-idees-du-systeme-supabase.js",
   "js/services/une-idee.js",
   "js/services/un-raisonnement.js",
+  // La porte par laquelle les idées sortent de la console : des comptes et des
+  // termes, jamais une phrase de chantier. Elle est fermée par défaut.
+  "js/services/lexport-des-idees.js",
+  // Le bouton de copie commun, avec son retour — sans lui, on reclique trois
+  // fois sans savoir si la copie a eu lieu.
+  "js/views/ui/bouton-copier.js",
   // Les rubriques de la console : une question par rubrique, et l'ordre de la
   // chaîne. Pur, et il n'entraîne rien.
   "js/services/les-rubriques-de-la-console.js",

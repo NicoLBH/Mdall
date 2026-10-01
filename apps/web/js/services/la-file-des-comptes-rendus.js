@@ -110,6 +110,65 @@ export function leProchainDeLaFile(file = null) {
 }
 
 /**
+ * Combien de comptes rendus se lisent **de front**.
+ *
+ * Chaque lecture est de l'attente pure : deux appels au modèle, pendant
+ * lesquels la fonction de bord ne fait rien. Les mener à quatre divise le temps
+ * d'une file de dix-neuf par trois.
+ *
+ * **Trois, et pas dix-neuf.** Le fournisseur du modèle refuse les appels
+ * simultanés au-delà d'un certain nombre, et un refus coûte la lecture entière
+ * — on aurait échangé une heure d'attente contre dix-neuf échecs. Trois est le
+ * nombre qu'on sait tenir ; il se change ici, et à un seul endroit.
+ */
+export const EN_MEME_TEMPS = 3;
+
+/**
+ * Les prochains à lire, au plus `combien`.
+ *
+ * Dans l'ordre de la file : lire le douzième avant le premier ne changerait
+ * rien au résultat, mais l'écran montrerait un chemin qui saute, et personne ne
+ * saurait dire si c'est normal.
+ */
+export function lesProchainsDeLaFile(file = null, combien = EN_MEME_TEMPS) {
+  if (file?.arretee) return [];
+  const combienAuPlus = Math.max(1, Number(combien) || 1);
+  return (file?.pas ?? [])
+    .filter((un) => un.ou === DANS_LA_FILE.ATTEND)
+    .slice(0, combienAuPlus);
+}
+
+/**
+ * La file reprise après une coupure : **ce qui était en vol réattend**.
+ *
+ * ## Le défaut que cela répare
+ *
+ * Une fonction de bord coupée en plein travail laisse ses pas à `en-cours`. À
+ * la reprise, on cherchait le prochain qui **attend** : les pas restés en vol
+ * étaient sautés, pour toujours. Ils n'étaient ni lus, ni échoués, ni comptés —
+ * la file se terminait « 18 lus sur 19 » sans que le dix-neuvième apparaisse
+ * nulle part.
+ *
+ * Le défaut existait déjà à un pas à la fois ; en lire trois de front le rend
+ * trois fois plus probable, et c'est ce qui l'a fait voir.
+ *
+ * ## Ce qui est perdu, et ce qui ne l'est pas
+ *
+ * Le début du pas est effacé avec son état : une durée comptée depuis un départ
+ * d'avant la coupure dirait « depuis 40 minutes » pour une lecture qui vient de
+ * repartir. Le motif d'un échec, lui, n'est pas touché : un pas qui a échoué a
+ * échoué, et la reprise ne le rejoue pas (règle 6).
+ */
+export function laFileReprise(file = null) {
+  return {
+    ...file,
+    pas: (file?.pas ?? []).map((un) => (un.ou === DANS_LA_FILE.EN_COURS
+      ? { ...un, ou: DANS_LA_FILE.ATTEND, commenceLe: null, dureeMs: null }
+      : un))
+  };
+}
+
+/**
  * La file après un pas — **rendue neuve**, jamais modifiée sur place.
  *
  * `ou` dit comment cela s'est passé, `motif` pourquoi quand cela s'est mal

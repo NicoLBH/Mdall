@@ -94,26 +94,27 @@ test("une idée sans comptes se range quand même", () => {
 });
 
 /**
- * **Par nombre de chantiers d'abord.**
+ * **Par occurrence décroissante.**
  *
- * C'est la leçon des sujets : une idée vue mille fois sur un seul chantier est
- * le contenu de ce chantier-là ; vue quatre fois sur quatre chantiers, c'est du
- * métier. Un classement par fréquence remonterait la première.
+ * Le seuil des deux chantiers est tenu par la base : rien n'arrive ici qui ne
+ * l'ait passé. Reclasser par chantiers par-dessus ne protégerait de rien et
+ * déformerait la lecture — trois idées à deux chantiers se rangeaient par ordre
+ * alphabétique (règle 4).
  */
-test("les idées se rangent par chantiers avant la fréquence", () => {
+test("les idées se rangent par occurrence décroissante", () => {
   const range = lesIdeesRangees([
     { avant: "a", lien: "cause", apres: "b", affirmations: 900, chantiers: 2 },
     { avant: "c", lien: "cause", apres: "d", affirmations: 3, chantiers: 5 },
     { avant: "pas une idee", lien: "concession", apres: "x", affirmations: 90, chantiers: 9 }
   ]);
 
-  assert.deepEqual(range.map((une) => une.avant), ["c", "a"],
-    "le classement est reparti de la fréquence, ou une non-idée est passée");
+  assert.deepEqual(range.map((une) => une.avant), ["a", "c"],
+    "le classement est reparti des chantiers, ou une non-idée est passée");
 });
 
-test("à chantiers égaux, la plus fréquente passe devant", () => {
+test("à occurrence égale, la plus répandue passe devant", () => {
   const range = lesIdeesRangees([
-    { avant: "a", lien: "cause", apres: "b", affirmations: 3, chantiers: 4 },
+    { avant: "a", lien: "cause", apres: "b", affirmations: 30, chantiers: 2 },
     { avant: "c", lien: "cause", apres: "d", affirmations: 30, chantiers: 4 }
   ]);
   assert.deepEqual(range.map((une) => une.avant), ["c", "a"]);

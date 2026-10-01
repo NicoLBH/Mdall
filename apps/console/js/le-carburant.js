@@ -58,8 +58,14 @@ import {
   lesRaisonnements, phraseDesRaisonnements, phraseDunRaisonnement
 } from "../partage/js/services/un-raisonnement.js";
 import {
-  laMesureDesIdees, lesIdeesDuSysteme
+  laFormeDesAffirmations, laMesureDesIdees, leDetailDesLiaisons, lesIdeesDuSysteme
 } from "../partage/js/services/les-idees-du-systeme-supabase.js";
+import {
+  leNomDuFichier, lexportEnJson, phraseDeLexport
+} from "../partage/js/services/lexport-des-idees.js";
+import {
+  brancherLesBoutonsCopier, renderBoutonCopier
+} from "../partage/js/views/ui/bouton-copier.js";
 import { LE_CARBURANT, laRubriqueDite } from "../partage/js/services/les-rubriques-de-la-console.js";
 import { renderTitreDEcranHtml } from "../partage/js/views/ui/titre-decran.js";
 
@@ -394,9 +400,71 @@ function renderLesSujets(sujets, mesure) {
  * phrases qui ne portent aucun de ces mots. La part qui en porte un est
  * annoncée, parce qu'elle est la mesure de ce qu'on ne voit pas (règle 5).
  */
-function renderLesIdees(lignes, mesure) {
+/**
+ * **Où le découpage casse, mot par mot.**
+ *
+ * « 1 % des affirmations énoncent un lien » peut vouloir dire deux choses
+ * opposées : le corpus n'énonce rien, ou le découpage ne sait pas le lire. Un
+ * chiffre qu'on ne sait pas expliquer ne sert à rien (règle 12).
+ *
+ * Un mot que beaucoup d'affirmations portent et qui ne rend aucune idée est un
+ * mot qui promet et ne tient pas : c'est là qu'il faut regarder.
+ */
+function renderLeDetailDesLiaisons(liaisons, forme) {
+  const portees = (Array.isArray(liaisons) ? liaisons : [])
+    .filter((une) => Number(une?.contenues) > 0);
+
+  return `
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">Où le découpage casse</h3>
+      ${forme ? `<p class="conso-usages__mot">${echapper(
+        `Les affirmations font ${forme.mots_moyens} mots en moyenne, et ${
+          compteDit(forme.au_moins_dix_mots)} en portent au moins dix sur ${
+          compteDit(forme.affirmations)}. ${compteDit(forme.sans_liaison)} n'en portent `
+        + "aucun mot de liaison.")}</p>
+      <p class="conso-usages__mot">
+        <b>C'est la première chose à regarder.</b> Un corpus fait d'intitulés —
+        « Menuiseries extérieures », « Plancher haut du R+1 » — ne porte aucun
+        lien, et ce n'est alors pas le découpage qu'il faut corriger.
+      </p>` : `<p class="forme-manques">
+        La forme des affirmations n'a pas pu être lue. Ce n'est pas qu'elles
+        n'en ont pas : on ne sait pas laquelle.</p>`}
+
+      ${portees.length ? `
+        <ul class="forme-reference">
+          ${portees.map((une) => `
+            <li class="forme-reference__ligne">
+              <span class="forme-reference__quoi">
+                <b>${echapper(`« ${une.mot} »`)}</b>
+                <i>${echapper(`${une.lien} · ${compteDit(une.contenues)} affirmation${
+                  une.contenues > 1 ? "s" : ""} le portent`)}</i>
+              </span>
+              <span class="forme-reference__chiffres mono-small">${
+                echapper(`${compteDit(une.entieres)} idée${une.entieres > 1 ? "s" : ""}`)}</span>
+              ${/*
+                **Pourquoi les autres échouent**, et non seulement combien. Un
+                mot coupé cent fois qui ne rend rien faute de terme à droite
+                n'appelle pas le même travail qu'un mot qui n'est jamais coupé.
+              */""}
+              <span class="forme-reference__sur mono-small">${echapper(
+                une.premieres
+                  ? `coupé ${compteDit(une.premieres)} fois · ${
+                      compteDit(une.sans_terme)} sans terme · ${
+                      compteDit(une.tautologies)} tautologie${
+                      une.tautologies > 1 ? "s" : ""}`
+                  : "jamais le premier de sa phrase")}</span>
+            </li>
+          `).join("")}
+        </ul>
+      ` : `<p class="forme-manques">
+        Aucun mot de liaison n'apparaît dans le corpus. Ce n'est pas une panne du
+        découpage : il n'y a rien à découper.</p>`}
+    </section>
+  `;
+}
+
+function renderLesIdees(lignes, mesure, liaisons, forme, chaines) {
   const idees = lesIdeesRangees(lignes);
-  const chaines = lesRaisonnements(idees);
 
   return `
     <section class="conso-usages">
@@ -480,6 +548,27 @@ function renderLesIdees(lignes, mesure) {
           `).join("")}
         </ul>
       ` : ""}
+    </section>
+
+    ${renderLeDetailDesLiaisons(liaisons, forme)}
+
+    ${/*
+      **De quoi emporter ce que l'écran montre.** Soixante lignes ne se
+      comparent pas à l'œil, et l'on ne corrige pas un découpage qu'on ne peut
+      pas étaler côte à côte. L'export passe par une porte fermée par défaut :
+      des comptes, des mots de liaison et des termes partagés par au moins deux
+      chantiers — jamais une phrase de chantier.
+    */""}
+    <section class="conso-usages">
+      <h3 class="conso-usages__titre">Emporter ce qui est mesuré</h3>
+      <p class="conso-usages__mot">${echapper(phraseDeLexport({
+        idees, mesure, forme, liaisons, raisonnements: chaines }))}</p>
+      <div class="conso-export">
+        ${renderBoutonCopier({ cible: "les-idees", className: "conso-export__copier",
+          titre: "Copier le JSON dans le presse-papiers" })}
+        <a class="gh-btn conso-export__fichier" href="#" data-export-idees
+          download="${echapper(leNomDuFichier())}">Exporter en JSON</a>
+      </div>
     </section>
   `;
 }
@@ -582,6 +671,47 @@ export async function monterLeCarburant(hote, cle = LE_CARBURANT) {
   if (ou.dataset.rubrique && ou.dataset.rubrique !== rubrique.cle) return;
 
   ou.innerHTML = `${renderLaTeteDeLaRubrique(rubrique.cle)}${corps}`;
+  brancherLexport(ou);
+}
+
+/**
+ * Ce que l'export emportera, composé au moment du rendu.
+ *
+ * Il vit ici, et non dans le DOM : un JSON de deux cents lignes dans un
+ * attribut `data-` serait écrit dans la page, échappé, puis relu — trois
+ * occasions de ne plus dire la même chose que l'écran (règle 4).
+ */
+let cequOnEmporte = null;
+
+/**
+ * Le bouton de copie et le lien de téléchargement.
+ *
+ * **Le fichier se fabrique au clic**, pas au rendu : une adresse `blob:` créée
+ * à chaque affichage de la rubrique resterait en mémoire du navigateur sans que
+ * personne ne la demande jamais.
+ */
+function brancherLexport(ou) {
+  brancherLesBoutonsCopier(ou, {
+    texteDe: () => cequOnEmporte ? lexportEnJson(cequOnEmporte) : ""
+  });
+
+  const lien = ou.querySelector("[data-export-idees]");
+  if (!lien) return;
+
+  lien.addEventListener("click", (evenement) => {
+    if (!cequOnEmporte) return;
+    evenement.preventDefault();
+
+    const fichier = new Blob([lexportEnJson(cequOnEmporte)], { type: "application/json" });
+    const adresse = URL.createObjectURL(fichier);
+    const emporte = document.createElement("a");
+    emporte.href = adresse;
+    emporte.download = leNomDuFichier();
+    emporte.click();
+    // Rendue tout de suite : le navigateur a déjà le contenu, et une adresse
+    // gardée retient le fichier entier en mémoire jusqu'à la fermeture.
+    URL.revokeObjectURL(adresse);
+  });
 }
 
 /** Ce qu'une rubrique lit, et ce qu'elle en dessine. */
@@ -596,8 +726,16 @@ async function leCorpsDeLaRubrique(cle) {
   }
 
   if (cle === "idees") {
-    const [lignes, mesure] = await Promise.all([lesIdeesDuSysteme(), laMesureDesIdees()]);
-    return lignes === null ? renderPasLu("Les idées", "ont") : renderLesIdees(lignes, mesure);
+    const [lignes, mesure, liaisons, forme] = await Promise.all([
+      lesIdeesDuSysteme(), laMesureDesIdees(), leDetailDesLiaisons(), laFormeDesAffirmations()
+    ]);
+    if (lignes === null) return renderPasLu("Les idées", "ont");
+
+    const idees = lesIdeesRangees(lignes);
+    // Ce que l'export emportera, composé une seule fois : le recomposer au
+    // clic aurait pu emporter autre chose que ce qui est à l'écran (règle 4).
+    cequOnEmporte = { idees, mesure, forme, liaisons, raisonnements: lesRaisonnements(idees) };
+    return renderLesIdees(lignes, mesure, liaisons, forme, cequOnEmporte.raisonnements);
   }
 
   if (cle === "sujets") {

@@ -8,8 +8,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  DANS_LA_FILE, DANS_LA_FILE_DIT, apresUnPas, ceQuiNaPasPuEtreLu, laFileArretee,
-  laFileEstFinie, leProchainDeLaFile, lesComptesDeLaFile, phraseDeCeQuiResteASigner,
+  DANS_LA_FILE, DANS_LA_FILE_DIT, EN_MEME_TEMPS, apresUnPas, ceQuiNaPasPuEtreLu,
+  laFileArretee, laFileEstFinie, laFileReprise, leProchainDeLaFile,
+  lesComptesDeLaFile, lesProchainsDeLaFile, phraseDeCeQuiResteASigner,
   phraseDeLaFile, uneFileDeComptesRendus
 } from "./la-file-des-comptes-rendus.js";
 import { ENTREE, LECTURE_DU_CHOIX } from "./choisir-depuis-fichiers.js";
@@ -208,4 +209,110 @@ test("un pas qui attend ne porte ni départ ni durée", () => {
   const file = uneFileDeComptesRendus(new Set(["d1"]), [{ id: "d1", nom: "CR 01.pdf" }]);
   assert.equal(file.pas[0].commenceLe, undefined);
   assert.equal(file.pas[0].dureeMs, undefined);
+});
+
+/* ── Trois de front, et ce qui était en vol ───────────────────────────────── */
+
+/**
+ * **Lire à trois divise par trois.** Une lecture est de l'attente pure : deux
+ * appels au modèle pendant lesquels le serveur ne fait rien.
+ */
+test("la file rend plusieurs prochains, dans son ordre", () => {
+  const file = uneFileDeComptesRendus(
+    new Set(["a", "b", "c", "d"]),
+    ["a", "b", "c", "d"].map((id) => ({ id, nom: `CR ${id}` }))
+  );
+
+  assert.deepEqual(lesProchainsDeLaFile(file, 3).map((un) => un.id), ["a", "b", "c"]);
+  // **Dans l'ordre de la file.** Lire le quatrième avant le premier ne
+  // changerait rien au résultat, mais l'écran montrerait un chemin qui saute.
+  assert.deepEqual(lesProchainsDeLaFile(file, 10).map((un) => un.id), ["a", "b", "c", "d"]);
+  assert.deepEqual(lesProchainsDeLaFile(file, 1).map((un) => un.id), ["a"]);
+});
+
+test("ce qui est déjà en cours n'est pas repris pour un prochain", () => {
+  let file = uneFileDeComptesRendus(
+    new Set(["a", "b", "c"]), ["a", "b", "c"].map((id) => ({ id, nom: id }))
+  );
+  file = apresUnPas(file, "a", DANS_LA_FILE.EN_COURS);
+
+  assert.deepEqual(lesProchainsDeLaFile(file, 3).map((un) => un.id), ["b", "c"],
+    "un pas déjà en vol a été relancé : il serait lu deux fois, et facturé deux fois");
+});
+
+test("une file arrêtée ne rend aucun prochain, même à plusieurs", () => {
+  const file = laFileArretee(uneFileDeComptesRendus(
+    new Set(["a", "b"]), [{ id: "a", nom: "a" }, { id: "b", nom: "b" }]
+  ));
+  assert.deepEqual(lesProchainsDeLaFile(file, 3), []);
+});
+
+test("un nombre absurde se ramène à un", () => {
+  const file = uneFileDeComptesRendus(
+    new Set(["a", "b"]), [{ id: "a", nom: "a" }, { id: "b", nom: "b" }]
+  );
+  assert.equal(lesProchainsDeLaFile(file, 0).length, 1);
+  assert.equal(lesProchainsDeLaFile(file, -4).length, 1);
+  assert.equal(lesProchainsDeLaFile(file, "trois").length, 1);
+  // Et sans rien demander, la valeur du module.
+  assert.equal(lesProchainsDeLaFile(file).length, Math.min(2, EN_MEME_TEMPS));
+});
+
+/**
+ * **Ce qui était en vol réattend.**
+ *
+ * Une fonction coupée en plein travail laisse ses pas à `en-cours`. On
+ * cherchait ensuite le prochain qui **attend** : ces pas-là étaient sautés pour
+ * toujours — ni lus, ni échoués, ni comptés. La file se terminait « 18 lus sur
+ * 19 » sans que le dix-neuvième apparaisse nulle part.
+ */
+test("une reprise remet en attente ce qui était en vol", () => {
+  let file = uneFileDeComptesRendus(
+    new Set(["a", "b", "c"]), ["a", "b", "c"].map((id) => ({ id, nom: id }))
+  );
+  file = apresUnPas(file, "a", DANS_LA_FILE.LU);
+  file = apresUnPas(file, "b", DANS_LA_FILE.EN_COURS);
+
+  const reprise = laFileReprise(file);
+  assert.deepEqual(reprise.pas.map((un) => `${un.id}:${un.ou}`),
+    ["a:lu", "b:attend", "c:attend"]);
+  assert.deepEqual(lesProchainsDeLaFile(reprise, 3).map((un) => un.id), ["b", "c"],
+    "le pas resté en vol est encore sauté : il ne sera jamais lu");
+});
+
+/**
+ * **Le départ s'efface avec l'état.** Une durée comptée depuis un départ
+ * d'avant la coupure dirait « depuis 40 minutes » pour une lecture qui vient
+ * de repartir.
+ */
+test("une reprise efface le départ du pas remis en attente", () => {
+  let file = uneFileDeComptesRendus(new Set(["a"]), [{ id: "a", nom: "a" }]);
+  file = apresUnPas(file, "a", DANS_LA_FILE.EN_COURS, "", 1000);
+  assert.equal(file.pas[0].commenceLe, 1000);
+
+  assert.equal(laFileReprise(file).pas[0].commenceLe, null);
+  assert.equal(laFileReprise(file).pas[0].dureeMs, null);
+});
+
+/**
+ * **Un pas qui a échoué a échoué.** La reprise ne le rejoue pas : une exécution
+ * qui a eu lieu ne devient pas fausse (règle 6).
+ */
+test("une reprise ne rejoue ni les lus ni les échoués", () => {
+  let file = uneFileDeComptesRendus(
+    new Set(["a", "b"]), [{ id: "a", nom: "a" }, { id: "b", nom: "b" }]
+  );
+  file = apresUnPas(file, "a", DANS_LA_FILE.LU);
+  file = apresUnPas(file, "b", DANS_LA_FILE.ECHOUE, "aucune page lisible");
+
+  const reprise = laFileReprise(file);
+  assert.equal(reprise.pas[0].ou, DANS_LA_FILE.LU);
+  assert.equal(reprise.pas[1].ou, DANS_LA_FILE.ECHOUE);
+  assert.equal(reprise.pas[1].motif, "aucune page lisible",
+    "le motif d'un échec a été perdu à la reprise");
+});
+
+test("une reprise d'une file vide ne tombe pas", () => {
+  assert.deepEqual(laFileReprise(null).pas, []);
+  assert.deepEqual(laFileReprise({}).pas, []);
 });

@@ -74,6 +74,9 @@ import { TRANSFORMER, brancheDeLAction, renderTransformer } from "../../ui/trans
 import { branchesOuvertes, oublierLesBranches } from "../../../services/branches-ouvertes.js";
 import { lotsAProposer, phraseDesLots } from "../../../services/lots-du-cr.js";
 import { itemsDuCompteRendu } from "../../../services/proposition-du-cr.js";
+import {
+  laProvenanceDuneIdee, lesIdeesRelevees, phraseDesIdeesRelevees, phraseDuneIdeeRelevee
+} from "../../../services/une-idee-relevee.js";
 import { partDeLaProposition, phraseDeLaPart } from "../../ui/mdall-a-proposer.js";
 import {
   EFFETS_DE_LA_FERMETURE, FERMETURE, PHRASES_DE_LA_FERMETURE, fermeturesDuCompteRendu,
@@ -1078,6 +1081,7 @@ function renderAnalyse(vue) {
     ${renderAmbiguites(vue.lecture.points)}
     ${renderConfrontation(vue.confrontes, vue.lecture, vue.labels, vue)}
     ${renderCeQueLeCrApporte(vue)}
+    ${renderLesIdeesRelevees(vue)}
     ${renderRubriques(vue)}
     ${
       /**
@@ -1090,6 +1094,54 @@ function renderAnalyse(vue) {
        * analyse juste.
        */
       vue.conservee ? "" : renderSuite(vue)}
+  `;
+}
+
+/**
+ * **Ce que ce document lie**, et où cela vit tant que personne n'a signé.
+ *
+ * ## La question à laquelle cette section répond
+ *
+ * Une idée relevée dans un compte rendu n'est **pas** dans la mémoire du
+ * projet : elle est dans l'analyse de ce document-là, que seul celui qui a
+ * lancé la lecture voit. C'est la réponse à « où vivent les idées qu'on n'a pas
+ * encore versées » — au même endroit que le reste de l'analyse, et nulle part
+ * ailleurs (règle 1).
+ *
+ * ## Ce qu'elle montre, et ce qu'elle ne promet pas
+ *
+ * Chaque ligne porte la fonction — deux termes et un verbe — et **la phrase
+ * dont elle sort**. Sans la phrase, une idée fausse ne se conteste pas : on ne
+ * saurait plus si c'est le document qui le dit ou le découpage qui s'est
+ * trompé.
+ *
+ * Une lecture sans idée ne veut pas dire que le document n'en énonce aucune :
+ * seules les liaisons placées entre les deux membres d'une phrase sont lues, et
+ * cela se dit plutôt que de laisser croire au constat (règle 5).
+ */
+function renderLesIdeesRelevees(vue) {
+  const idees = lesIdeesRelevees(vue?.lecture?.idees);
+  const points = Array.isArray(vue?.lecture?.points) ? vue.lecture.points.length : 0;
+
+  return `
+    <section class="lecture-cr__idees">
+      <h3>Ce que ce document lie</h3>
+      <p class="lecture-cr__idees-mot">${escapeHtml(phraseDesIdeesRelevees(idees, { points }))}</p>
+
+      ${idees.length ? `
+        <ul class="lecture-cr__idees-liste">
+          ${idees.map((une) => `
+            <li class="lecture-cr__idee">
+              <span class="lecture-cr__idee-fonction">${
+                escapeHtml(phraseDuneIdeeRelevee(une))}</span>
+              <span class="lecture-cr__idee-ou mono-small">${
+                escapeHtml(laProvenanceDuneIdee(une))}</span>
+              <q class="lecture-cr__idee-phrase">${escapeHtml(une.phrase)}</q>
+            </li>
+          `).join("")}
+        </ul>
+      ` : ""}
+    </section>
   `;
 }
 

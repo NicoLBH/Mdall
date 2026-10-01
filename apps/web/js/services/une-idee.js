@@ -176,19 +176,28 @@ export function uneIdee(ligne) {
 }
 
 /**
- * Les idées, rangées.
+ * Les idées, rangées **par occurrence décroissante**.
  *
- * **Par nombre de chantiers d'abord.** Une idée vue sur quatre chantiers est du
- * métier ; la même vue mille fois sur un seul est le contenu de ce chantier-là.
- * C'est la leçon des sujets, où le classement par fréquence remontait les mots
- * qu'on trouve partout parce qu'on les trouve partout.
+ * Le premier classement partait du nombre de chantiers, par la leçon des
+ * sujets : un terme vu mille fois sur un seul chantier est le contenu de ce
+ * chantier-là, pas du métier.
+ *
+ * Cette leçon tient toujours — mais elle est déjà tenue **ailleurs**, et mieux :
+ * la base ne rend aucune idée vue sur moins de deux chantiers. Ce qui arrive
+ * ici a donc déjà passé la porte. Entre deux idées qui l'ont passée, ce qu'on
+ * veut lire est la plus fréquente, et c'est la seule chose qu'un classement par
+ * chantiers ne montrait jamais : trois idées à deux chantiers se rangeaient par
+ * ordre alphabétique.
+ *
+ * Un garde-fou posé à deux endroits n'est pas deux fois plus sûr : le second
+ * déforme la lecture sans rien ajouter (règle 4).
  */
 export function lesIdeesRangees(lignes = []) {
   return (Array.isArray(lignes) ? lignes : [])
     .map(uneIdee)
     .filter(Boolean)
-    .sort((gauche, droite) => droite.chantiers - gauche.chantiers
-      || droite.affirmations - gauche.affirmations
+    .sort((gauche, droite) => droite.affirmations - gauche.affirmations
+      || droite.chantiers - gauche.chantiers
       || gauche.avant.localeCompare(droite.avant, "fr")
       || gauche.apres.localeCompare(droite.apres, "fr"));
 }
