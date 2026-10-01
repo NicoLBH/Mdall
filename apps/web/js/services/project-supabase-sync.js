@@ -1,5 +1,6 @@
 import { store } from "../store.js";
 import { ORIGINE, executionsAGarder } from "./run-partition.js";
+import { estUnDepotAbouti, phraseDuDepot } from "./le-mot-dun-depot.js";
 import { cestUnIdDeProjet, laConcordanceSansCeProjet, leProjetOuLonEcrit } from "./le-projet-ou-lon-ecrit.js";
 import { LE_GESTE } from "./le-journal-du-depouillement.js";
 import { lesVersementsAuJournal } from "./la-file-au-journal.js";
@@ -788,7 +789,20 @@ function mapDocumentRowToViewModel(row = {}) {
     id: safeString(row.id),
     name: displayName,
     title: displayName,
-    note: safeString(row.document_kind || row.upload_status || "Document prêt pour l'analyse"),
+    /**
+     * **Ce qu'on dit d'un document quand on n'a rien à en dire : rien.**
+     *
+     * Cette ligne posait `document_kind` tel quel, et l'écran l'affichait : la
+     * colonne du milieu de Fichiers répétait « piece_de_mail » sur
+     * quatre-vingt-trois lignes — une clé de base de données, avec son tiret
+     * bas, en face de chaque nom. Elle n'apprenait rien et prenait plus de place
+     * que les noms eux-mêmes.
+     *
+     * La nature d'un document se lit déjà ailleurs : son dossier, son icône, son
+     * étiquette de mémoire. Ce qui reste ici est ce qui **ne se déduit pas** —
+     * un dépôt qui n'a pas abouti. Vide quand tout va bien.
+     */
+    note: estUnDepotAbouti(row.upload_status) ? "" : phraseDuDepot(row.upload_status),
     phaseCode: safeString(store.projectForm?.currentPhase || store.projectForm?.phase || ""),
     phaseLabel: "",
     updatedAt: formatDocumentUpdatedAt(row.updated_at || row.created_at),

@@ -703,8 +703,20 @@ export const COLONNES_DU_TABLEAU = [
   { cle: "date", libelle: "Date du dernier versement" }
 ];
 
-/** La largeur des trois colonnes. Un seul gabarit, sinon elles se décalent. */
-export const GABARIT_DU_TABLEAU = "minmax(160px, 2fr) minmax(0, 3fr) minmax(90px, auto)";
+/**
+ * La largeur des trois colonnes. Un seul gabarit, sinon elles se décalent.
+ *
+ * **Le nom passe devant.** Il valait `2fr` contre `3fr` à la colonne du
+ * milieu : celle-ci était donc la plus large du tableau, pour y répéter une clé
+ * de base de données en face de chaque ligne. Les noms, eux, étaient coupés —
+ * et sur `26-02-25_-_74CHAMONIXCENTRE_RECHERCHE_ECOSYSTEME…`, ce qui est coupé
+ * est exactement ce qui sert à reconnaître un document.
+ *
+ * Le milieu ne porte plus que ce qui ne se déduit pas : un dépôt qui n'a pas
+ * abouti, un doublon et de qui, le régime de lecture. Il lui faut de la place
+ * quand il parle, pas quand il se tait — d'où un minimum nul.
+ */
+export const GABARIT_DU_TABLEAU = "minmax(260px, 5fr) minmax(0, 2fr) minmax(90px, auto)";
 
 export function renderEnteteDuTableau() {
   return `

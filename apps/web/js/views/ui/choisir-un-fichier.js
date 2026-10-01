@@ -73,6 +73,24 @@ export function renderLeChemin(breadcrumb = []) {
  *
  * Un document qu'on ne peut pas lire n'a **pas** de case : une case morte invite
  * à cliquer pour rien.
+ *
+ * ## Une seule colonne, et le nom tout entier
+ *
+ * Il y en avait deux : le nom, et « ce document sera extrait puis restitué par
+ * le modèle » — la même phrase sur chaque ligne, qui mangeait la moitié de la
+ * largeur. Sur des noms comme
+ * `26-02-25_-_74CHAMONIXCENTRE_RECHERCHE_ECOSYSTEME…`, elle coupait exactement
+ * ce qui sert à reconnaître un compte rendu de chantier : on choisissait à
+ * l'aveugle.
+ *
+ * Et elle ne disait rien qui ne soit déjà dit : **le coût s'annonce dans la
+ * barre de lancement**, avant le clic, et pour toute la file — « 2 PDF à
+ * extraire puis restituer par le modèle ». Une information donnée deux fois est
+ * une information qui prend la place d'une autre.
+ *
+ * Ce qui reste est **le refus**, et seulement lui : « Mdall ne sait pas lire ce
+ * format » ne se déduit pas d'un nom de fichier, et sans lui un document éteint
+ * le serait sans raison (règle 5). Il tient sur la même ligne, en retrait.
  */
 function renderUneEntree(entree, choisis = null) {
   const dossier = entree.type === ENTREE.DOSSIER;
@@ -100,9 +118,7 @@ function renderUneEntree(entree, choisis = null) {
           ? `<button type="button" class="choisir-fichier__nom" ${marque}
                ${dit ? `title="${escapeHtml(dit)}"` : ""}>${escapeHtml(entree.nom)}</button>`
           : `<span class="documents-repo__name">${escapeHtml(entree.nom)}</span>`}
-      </div>
-      <div class="documents-repo__cell documents-repo__cell--message">
-        <div class="documents-repo__message-main">${escapeHtml(dit)}</div>
+        ${refus ? `<span class="choisir-fichier__refus mono-small">${escapeHtml(refus)}</span>` : ""}
       </div>
     </div>
   `;
@@ -189,7 +205,6 @@ export function renderChoisirUnFichier({
                     </span>
                     <span class="mono-small">Ce dossier</span>
                   </div>
-                  <div class="documents-repo__cell documents-repo__cell--message"></div>
                 </div>
               `; })() : ""}
               ${entrees.map((une) => renderUneEntree(une, choisis)).join("")}

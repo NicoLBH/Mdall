@@ -220,6 +220,25 @@ export function laMarqueDuDossier(dossier) {
 export function laMarqueDunFichier(document, dossier = null) {
   if (dossier?.prive !== true) return null;
   if (document?.deposant === undefined) return null;
+
+  /**
+   * **Entré en mémoire, il n'est plus privé** — et la marque doit le suivre.
+   *
+   * Depuis `202611110001_...`, la politique de lecture laisse passer un
+   * document qui porte une proposition : son contenu est la connaissance du
+   * projet, et le cacher empêcherait de vérifier ce qu'on vient d'accepter.
+   *
+   * Le cadenas se décide sur **les mêmes faits que la politique** — c'est tout
+   * le contrat de cette fonction. Oublier celui-ci aurait dessiné « Privé » sur
+   * un document que toute l'équipe lit : un marqueur sans équivoque qui se
+   * trompe est pire que pas de marqueur, il fait déposer sans regarder.
+   *
+   * `undefined` ne compte pas : toutes les lectures ne demandent pas cette
+   * colonne, et le rabattre sur « partagé » promettrait l'inverse de la vérité
+   * sur une question qu'on n'a pas posée (règle 5).
+   */
+  if (document.propositionId) return null;
+
   if (!document.deposant) return { ...LAVERTISSEMENT_DUN_FICHIER };
   return { ...LE_CADENAS_DUN_FICHIER };
 }

@@ -62,7 +62,11 @@ const LES_MIGRATIONS = [
   "202611070001_les_sujets_du_systeme.sql",
   "202611080001_les_synonymes_regroupes.sql",
   "202611090001_les_sujets_dun_chantier.sql",
-  "202611100001_la_file_lit_les_comptes_rendus.sql"
+  "202611100001_la_file_lit_les_comptes_rendus.sql",
+  // Celle du dossier des mails pose la politique que la suivante élargit :
+  // sans elle, on éprouverait un élargissement de rien.
+  "202610160001_le_dossier_des_mails_est_prive.sql",
+  "202611110001_ce_qui_entre_en_memoire_se_partage.sql"
 ];
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -1262,4 +1266,102 @@ test("la ligne porte la proposition qu'elle a ouverte", { skip: sansPostgres }, 
     `insert into public.versements (project_id, geste) values ('${MEDIATHEQUE}', 'comptes_rendus')`
     + " returning coalesce(proposition_id::text, 'aucune');");
   assert.equal(neuve.sortie.trim(), "aucune");
+});
+
+/* ── Ce qui entre en mémoire cesse d'être privé ───────────────────────────── */
+
+/**
+ * **Une mémoire dont la source est invisible n'est pas vérifiable.**
+ *
+ * Tout tient sur « chaque point se remonte au compte rendu dont il sort ». Un
+ * collaborateur qui lit une affirmation doit pouvoir ouvrir le document qui la
+ * porte ; si ce document reste caché parce qu'il est arrivé par le dossier des
+ * mails, l'affirmation devient une parole qu'on croit sur parole.
+ *
+ * La règle du dossier privé ne bouge pas — elle gagne une **fin** : tant qu'il
+ * n'est pas entré en mémoire.
+ */
+test("un document du dossier privé reste privé tant qu'il n'est pas en mémoire",
+  { skip: sansPostgres }, () => {
+    banc.sql("delete from public.documents;");
+    // Le gymnase appartient à B. A y a déposé un document dans un dossier privé.
+    const dossier = banc.sql(
+      "insert into public.project_document_folders (project_id, name, prive)"
+      + ` values ('${GYMNASE}', 'Mails', true) returning id;`).sortie.trim();
+    banc.sql(
+      "insert into public.documents (project_id, folder_id, deposant, proposition_id)"
+      + ` values ('${GYMNASE}', '${dossier}', '${A}', null);`);
+
+    // B possède le chantier, et ne voit pourtant pas ce que A y a déposé.
+    const parLeProprietaire = banc.enTantQue(B,
+      `select count(*) from public.documents where folder_id = '${dossier}';`);
+    assert.equal(parLeProprietaire.sortie.trim(), "0",
+      "la correspondance d'un autre se lit : la règle d'octobre est tombée");
+
+    // Son déposant, lui, le voit toujours.
+    const parSonDeposant = banc.enTantQue(A,
+      `select count(*) from public.documents where folder_id = '${dossier}';`);
+    assert.equal(parSonDeposant.sortie.trim(), "0",
+      "A ne possède pas ce chantier : la règle du projet passe avant");
+  });
+
+/**
+ * **Et le jour où quelqu'un signe, il se partage.**
+ *
+ * `proposition_id` ne se pose que lorsqu'une proposition est signée (règle 1) :
+ * il n'existe aucun chemin par lequel un document devienne partagé sans que
+ * quelqu'un l'ait décidé.
+ */
+test("un document entré en mémoire se lit par l'équipe", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.documents;");
+  const dossier = banc.sql(
+    "insert into public.project_document_folders (project_id, name, prive)"
+    + ` values ('${GYMNASE}', 'Mails signés', true) returning id;`).sortie.trim();
+  const proposition = banc.sql(
+    `insert into public.propositions (project_id) values ('${GYMNASE}') returning id;`)
+    .sortie.trim();
+
+  // Deux documents dans le même dossier privé, déposés par le même tiers : un
+  // seul est entré en mémoire. C'est la seule différence entre les deux.
+  banc.sql(
+    "insert into public.documents (project_id, folder_id, deposant, proposition_id) values "
+    + `('${GYMNASE}', '${dossier}', '${A}', null),`
+    + `('${GYMNASE}', '${dossier}', '${A}', '${proposition}');`);
+
+  const lu = banc.enTantQue(B,
+    `select count(*) from public.documents where folder_id = '${dossier}';`);
+  assert.equal(lu.ok, true, lu.motif);
+  assert.equal(lu.sortie.trim(), "1",
+    "le document signé ne se partage pas, ou celui qui ne l'est pas se partage");
+
+  // Et c'est bien celui-là.
+  const lequel = banc.enTantQue(B,
+    `select proposition_id::text from public.documents where folder_id = '${dossier}';`);
+  assert.equal(lequel.sortie.trim(), proposition);
+});
+
+/**
+ * **Un dossier ordinaire ne change pas de régime.** La règle ne s'applique
+ * qu'aux dossiers privés : l'élargir aux autres n'aurait rien élargi, et
+ * l'aurait rendue impossible à relire.
+ */
+test("un dossier ordinaire se lit comme avant", { skip: sansPostgres }, () => {
+  banc.sql("delete from public.documents;");
+  const dossier = banc.sql(
+    "insert into public.project_document_folders (project_id, name, prive)"
+    + ` values ('${GYMNASE}', 'Comptes rendus', false) returning id;`).sortie.trim();
+  banc.sql(
+    "insert into public.documents (project_id, folder_id, deposant, proposition_id)"
+    + ` values ('${GYMNASE}', '${dossier}', '${A}', null);`);
+
+  const lu = banc.enTantQue(B,
+    `select count(*) from public.documents where folder_id = '${dossier}';`);
+  assert.equal(lu.sortie.trim(), "1", "un dossier ordinaire s'est mis à cacher");
+});
+
+/** Et la clé publique du navigateur ne lit toujours rien. */
+test("l'élargissement n'ouvre rien à qui n'a pas de compte", { skip: sansPostgres }, () => {
+  const sans = banc.sansCompte("select count(*) from public.documents;");
+  assert.equal(sans.ok === false || sans.sortie.trim() === "0", true,
+    `la clé anonyme lit les documents : ${sans.sortie}`);
 });

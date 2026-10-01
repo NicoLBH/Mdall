@@ -21,12 +21,27 @@ test("un document déposé directement se dit hors mémoire", () => {
   assert.match(explicationDeLEtiquette(etiquette), /rien de ce qu'il dit\s+n'est entré/);
 });
 
-test("un document entré par une proposition ne porte aucun mot", () => {
-  // Il est comme les autres : le dire serait du bruit sur chaque ligne.
+/**
+ * **Un document entré par une proposition le dit maintenant.**
+ *
+ * Il se taisait : il était comme les autres, et le dire aurait fait du bruit sur
+ * chaque ligne. Le raisonnement ne tient plus depuis que cette ligne **décide
+ * aussi de la visibilité** — un document entré en mémoire cesse d'être privé
+ * (`202611110001_...`).
+ *
+ * Quelqu'un qui voit « Privé » disparaître d'une ligne doit pouvoir lire
+ * pourquoi, sur cette ligne. Un changement de régime qui ne s'annonce pas est un
+ * changement qu'on découvre en s'apercevant que l'équipe a vu.
+ */
+test("un document entré par une proposition dit qu'il est dans la mémoire", () => {
   assert.equal(
     etiquetteDuDocument({ corpusState: "accepted", propositionId: "prop-1" }),
-    ETIQUETTE.AUCUNE
+    ETIQUETTE.EN_MEMOIRE
   );
+  assert.equal(motDeLEtiquette(ETIQUETTE.EN_MEMOIRE), "dans la mémoire");
+  // L'explication dit pourquoi il se partage : sans elle, le mot se lirait
+  // comme un simple rangement.
+  assert.match(explicationDeLEtiquette(ETIQUETTE.EN_MEMOIRE), /toute l'équipe/);
 });
 
 /* ── Deux absences, qui ne se lisent pas pareil ──────────────────────────── */

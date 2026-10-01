@@ -33,6 +33,10 @@ create table if not exists public.documents (
   storage_bucket text,
   storage_path text,
   mail_de text,
+  -- **La proposition qui a fait entrer ce document en mémoire.** C'est par elle
+  -- que `202611110001_...` décide de sa visibilité : sans la colonne, la règle
+  -- ne se déploie pas, et sans elle dans le socle on ne l'éprouve pas.
+  proposition_id uuid,
   deleted_at timestamptz,
   created_at timestamptz not null default now()
 );

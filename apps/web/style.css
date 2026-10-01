@@ -16872,15 +16872,9 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    pour un même geste faisaient hésiter sur l'endroit où l'on se trouve. */
 .run-detail__title{ margin:0; font-size:32px; font-weight:400; line-height:43px; color:#fff; }
 
-/* Le journal des actions tient la largeur des sujets : c'est le même tableau,
-   dans la même coque. Il se dimensionnait sur son contenu — 610px au milieu de
-   1376 — parce que la coque centre ses enfants sans les étirer. */
-.actions-shell{
-  width:100%;
-  /* Aucune marge latérale : les sujets n'en ont pas, et 32px de chaque côté
-     décalaient les deux tableaux de 32px l'un par rapport à l'autre. */
-  padding:24px 0 40px;
-}
+/* `.actions-shell` est partie : le journal emploie `page-large`, la coque des
+   Sujets. C'est elle qui tient la largeur, et il n'y a plus de seconde classe à
+   recalibrer quand la première bouge. */
 .run-detail__lead{ margin:0; color:var(--muted); font-size:13px; }
 
 .run-section{
@@ -19710,6 +19704,13 @@ button.memory-note__part:hover{ color:var(--fg, var(--text)); text-decoration:un
 .documents-repo__etiquette--hors-corpus{
   border-color:var(--fgColor-danger);
   color:var(--fgColor-danger);
+}
+/* « Dans la mémoire » : la seule des trois qui annonce quelque chose de bien,
+   et la seule qui change la visibilité du document. Verte, donc — les deux
+   autres marquent une absence. */
+.documents-repo__etiquette--en-memoire{
+  border-color:var(--success, #3fb950);
+  color:var(--success, #3fb950);
 }
 
 
@@ -23435,18 +23436,17 @@ button.fichiers-ajout__item:hover{ background:rgba(110,118,129,.16); }
 .memoire-layout--racine .memoire-corps{ padding-left:0; }
 
 /* **Le rail des Actions touche le bord de l'écran.**
-   Le journal vit dans `.project-page-shell`, qui centre son contenu dans
-   1216 px : le rail flottait donc au milieu, avec du vide à sa gauche, alors
-   qu'un rail est un bord — c'est ce qui le distingue d'une colonne.
-   Et pas de filet en haut : la barre d'onglets du projet en porte déjà un,
-   juste au-dessus, et deux traits parallèles à quatre pixels d'écart se lisent
-   comme un défaut d'affichage. Le corps garde sa respiration à droite. */
-.memoire-layout--actions{
-  margin-left:calc(50% - 50vw);
-  margin-right:calc(50% - 50vw);
-  border-top:none;
-}
-.memoire-layout--actions .memoire-corps{ padding-right:24px; }
+   **Ces règles sont parties avec le rail qu'elles rattrapaient.**
+
+   Le journal avait son rail à lui, dessiné avec les classes que la Mémoire
+   employait avant de passer à la coque commune. Il fallait donc le sortir de la
+   coque centrée à coups de marges négatives, lui retirer un filet en haut, et
+   lui rendre une respiration à droite — trois rattrapages pour une disposition
+   qui était déjà réglée ailleurs.
+
+   Il emploie `project-rail-layout` depuis, comme les Sujets et la Mémoire : le
+   rail est en position fixe contre le bord, le contenu s'écarte par une marge,
+   et il n'y a plus rien à rattraper. */
 .memoire-tree{ width:var(--memoire-tree-width, 280px); align-self:stretch; }
 
 /* Le titre de la vue, au-dessus du tableau des Actions. Le rail porte la vue
@@ -25883,9 +25883,15 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 }
 .choisir-fichier__fil{margin:0;min-width:0;overflow:hidden;}
 .choisir-fichier__corps{
-  /* Deux colonnes ici, et non les trois de Fichiers : on choisit un document,
-     on ne le gère pas — il n'y a ni date à comparer ni geste à poser. */
-  --data-table-cols:minmax(220px, 1fr) minmax(180px, 1.4fr);
+  /* **Une seule colonne**, et non les trois de Fichiers : on choisit un
+     document, on ne le gère pas — il n'y a ni date à comparer ni geste à poser.
+
+     Il y en avait deux, et la seconde répétait sur chaque ligne « ce document
+     sera extrait puis restitué par le modèle » : elle mangeait la moitié de la
+     largeur et coupait les noms exactement là où l'on reconnaît un compte rendu
+     de chantier. Le coût s'annonce dans la barre de lancement, pour toute la
+     file et avant le clic. */
+  --data-table-cols:minmax(0, 1fr);
   flex:1 1 auto; min-height:0; max-height:52vh; overflow:auto;
 }
 /* Ce qui ne se choisit pas reste lisible, et dit pourquoi au survol. Le
@@ -25911,6 +25917,9 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .choisir-fichier__nom:hover{text-decoration:underline;}
+/* Le refus, à la suite du nom plutôt que dans sa colonne : il ne concerne que
+   quelques lignes, et une colonne pour quelques lignes coûte à toutes. */
+.choisir-fichier__refus{flex:0 0 auto;margin-left:10px;color:var(--muted);}
 .choisir-fichier__nom:focus-visible{outline:2px solid var(--accent, #1f6feb);outline-offset:2px;}
 .choisir-fichier .documents-repo__row.is-selected{background:var(--panel2);}
 
