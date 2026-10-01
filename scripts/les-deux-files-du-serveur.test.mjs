@@ -42,7 +42,7 @@ function laPrise(texte) {
 
 test("verser-les-mails ne prend que des dépôts de messagerie", () => {
   const prise = laPrise(source("verser-les-mails"));
-  assert.match(prise, /\.eq\("geste", "mails"\)/,
+  assert.match(prise, /\.eq\("geste", GESTE_DES_MAILS\)/,
     "elle prendrait une lecture de comptes rendus, et la marquerait en échec");
 });
 
@@ -170,6 +170,12 @@ test("la proposition s'ouvre au premier compte rendu et s'enrichit", () => {
     "la proposition ouverte n'est pas gardée d'un compte rendu au suivant");
   assert.match(texte, /proposition_id: proposition \|\| null/,
     "la ligne de file ne porte pas la proposition qu'elle a ouverte");
+
+  // **Et un échec rend celle qu'il a ouverte.** Sans cela, le compte rendu
+  // suivant en ouvrait une autre : trois comptes rendus, deux propositions vides
+  // (règle 6).
+  assert.match(texte, /propositionId: texte\(rendu\?\.proposition\?\.id\) \|\| texte\(propositionId\)/,
+    "un échec oublie la proposition qu'il vient d'ouvrir");
 });
 
 /**
@@ -186,4 +192,112 @@ test("les deux fonctions travaillent sous l'identité de celui qui demande", () 
       `${nom} passe outre les politiques avec la clé de service`);
     assert.match(texte, /requireUser\(req, entetes\)/, `${nom} ne vérifie pas qui appelle`);
   }
+});
+
+/**
+ * **Un dépôt de messagerie abandonné se referme, il ne se rejoue pas.**
+ *
+ * `verser-les-mails` n'avait aucune reprise : coupée net, elle laissait sa ligne
+ * `en_cours`, et l'onglet Actions montrait un dépôt qui tournait depuis des
+ * heures et que personne ne faisait.
+ *
+ * **La reprendre serait pire** : les messages déjà rangés le seraient deux fois.
+ * On la referme en échec, en le disant, et celui qui veut la refaire la relance.
+ */
+test("un dépôt de messagerie abandonné se referme", () => {
+  const texte = source("verser-les-mails");
+
+  assert.match(texte, /ABANDONNEE_APRES_MS/, "rien ne dit quand un dépôt est abandonné");
+  // **Les trois moitiés de la clause, et pas seulement sa fin.** La première
+  // version ne nommait pas le statut cherché : remplacer « en_cours » par
+  // « fini » la laissait verte, et le dépôt bloqué restait bloqué — c'est la
+  // ligne prise que l'on referme, et aucune autre.
+  assert.match(
+    texte,
+    /statut: "echec"[\s\S]{0,400}\.eq\("statut", "en_cours"\)\s*\n\s*\.lt\("pris_le", abandonnee\)/,
+    "la clause ne referme pas les lignes prises et jamais finies"
+  );
+  // **Et surtout pas rejouée.** Une reprise de dépôt rangerait deux fois les
+  // mêmes messages, ce qu'aucun écran ne montrerait avant le second index.
+  const prise = laPrise(texte);
+  assert.doesNotMatch(prise, /statut\.eq\.en_cours/,
+    "le dépôt reprend une ligne abandonnée : les messages entreraient deux fois");
+});
+
+/**
+ * **Le délai d'abandon s'écrit à un seul endroit.**
+ *
+ * L'écran réveille le serveur quand il voit une ligne abandonnée ; la fonction
+ * décide si elle la reprend. Deux valeurs auraient fait un écran qui réveille
+ * avant que la reprise n'accepte — donc des appels payés pour rien — ou après
+ * qu'elle a cessé d'être utile (règle 4).
+ */
+test("le délai d'abandon vient du module partagé, et de nulle part ailleurs", () => {
+  for (const nom of ["verser-les-mails", "lire-les-comptes-rendus"]) {
+    const texte = source(nom);
+    assert.match(texte, /import \{[\s\S]{0,120}ABANDONNEE_APRES_MS[\s\S]{0,120}\} from "\.\.\/_shared\/versement\/reveiller-la-file\.js"/,
+      `${nom} ne lit pas le délai dans le module partagé`);
+    assert.doesNotMatch(texte, /const ABANDONNEE_APRES_MS\s*=/,
+      `${nom} redéclare le délai : il finira par différer de celui de l'écran`);
+  }
+});
+
+/**
+ * **Les lignes d'une proposition ne se nomment plus ici.**
+ *
+ * La version précédente posait les lignes d'items ainsi :
+ * `{ proposition_id, project_id, ...un }`, où `un` porte `itemType` et `itemKey`.
+ * Les colonnes s'appellent `item_type` et `item_key` : chaque insertion était
+ * refusée, et trois comptes rendus ont donné deux propositions **vides**.
+ */
+test("la lecture ne traduit plus les colonnes d'une proposition à la main", () => {
+  const texte = source("lire-les-comptes-rendus");
+
+  assert.match(texte, /lesLignesDesItems\(items, \{ propositionId, projectId \}\)/,
+    "les lignes d'items ne passent pas par le module partagé");
+  assert.match(texte, /laLigneDuneProposition\(\{/,
+    "la ligne de la proposition ne passe pas par le module partagé");
+  // Aucune colonne d'item nommée ici : c'est la seconde traduction qui a fauté.
+  assert.doesNotMatch(texte, /item_type:/, "une colonne d'item se nomme encore ici");
+  assert.doesNotMatch(texte, /item_key:/, "une colonne d'item se nomme encore ici");
+  // **L'étalement en fin de ligne, et non le mot.** Cherché n'importe où, il se
+  // trouvait dans le commentaire qui explique pourquoi on ne le fait plus :
+  // l'épreuve refusait sa propre explication.
+  assert.doesNotMatch(texte, /\.\.\.un\s*\n/,
+    "les lignes se construisent encore en étalant un objet de JavaScript");
+});
+
+/**
+ * **La table des sujets est `subjects`.** La fonction lisait `project_subjects`,
+ * qui n'existe pas : la confrontation au projet se faisait sur une liste vide, et
+ * chaque point d'un compte rendu repartait neuf.
+ */
+test("la lecture confronte aux sujets qui existent", () => {
+  const texte = source("lire-les-comptes-rendus");
+
+  assert.doesNotMatch(texte, /from\("project_subjects"\)/, "cette table n'existe pas");
+  assert.match(texte, /\.from\(LA_TABLE_DES_SUJETS\)\.select\(LE_SELECT_DES_SUJETS\)/,
+    "la table et les colonnes des sujets ne viennent pas du module partagé");
+  // **Et ne pas savoir n'est pas savoir qu'il n'y a rien** (règle 5) : confronter
+  // à une liste vide reproposerait chaque sujet déjà suivi.
+  assert.match(texte, /if \(pasLus \|\| !Array\.isArray\(sujetsDuProjet\)\)/,
+    "une lecture ratée des sujets passe pour un projet qui ne suit rien");
+});
+
+/**
+ * **Le journal nomme le geste qu'il raconte.**
+ *
+ * La course s'écrivait avec `geste: "versement"`, et l'onglet Actions affichait
+ * donc « Dépôt de messagerie » sous une lecture de trois comptes rendus.
+ */
+test("une lecture de comptes rendus se consigne sous son geste", () => {
+  const texte = source("lire-les-comptes-rendus");
+  const course = texte.slice(texte.indexOf('.from("project_runs")'));
+
+  assert.match(course, /geste: GESTE,/, "la course se consigne sous le geste d'une autre file");
+  assert.doesNotMatch(course, /geste: "versement"/, "la course se dit dépôt de messagerie");
+  // **Et elle reste personnelle** : la politique le tient sur cette colonne, pas
+  // sur le geste. Sans elle, une lecture de comptes rendus deviendrait lisible
+  // par tout le projet.
+  assert.match(course, /personnelle: true/, "la course deviendrait lisible par tout le projet");
 });

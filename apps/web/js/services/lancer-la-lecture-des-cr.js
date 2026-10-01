@@ -36,10 +36,19 @@
  * sans réseau, et de vérifier qu'il n'attend pas le serveur.
  */
 
+import { GESTE_DES_CR } from "./reveiller-la-file.js";
+
 const texte = (valeur) => String(valeur ?? "").trim();
 
-/** Ce que la ligne demande : relire des comptes rendus du projet. */
-export const GESTE_DES_CR = "comptes_rendus";
+/**
+ * Ce que la ligne demande : relire des comptes rendus du projet.
+ *
+ * **Le mot vit dans `reveiller-la-file.js`**, avec celui des mails et avec la
+ * fonction de bord que chacun réveille. Il était écrit ici et le mot « mails »
+ * ailleurs : deux moitiés d'une même table, et personne pour les tenir
+ * ensemble (règle 10).
+ */
+export { GESTE_DES_CR };
 
 /**
  * Ce qu'on envoie au serveur pour chaque document.

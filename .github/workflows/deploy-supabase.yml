@@ -26,7 +26,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # **Le runtime du projet, lu dans « .nvmrc ».** Il était écrit « 20 »
+          # ici, et le conteneur de développement tourne en 22 : trois épreuves
+          # passaient ici et tombaient là-bas, sur un défaut du moteur et non du
+          # code (un segment de mémoire perdu dans « vm.SourceTextModule », que
+          # « le-banc-des-ecrans » emploie). Une version écrite à deux endroits
+          # finit par diverger — et le déploiement l'apprend le dernier (règle 4).
+          node-version-file: ".nvmrc"
           cache: npm
 
       - name: Install dependencies

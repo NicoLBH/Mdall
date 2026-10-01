@@ -616,10 +616,19 @@ export async function preparerUneProposition({
     propositionId: proposition.id, projectId: projet, items: aPorter
   });
   if (!soumis) {
-    // La proposition existe et elle n'a rien reçu : le dire vaut mieux que de
-    // laisser croire qu'elle porte ce qu'on vient de préparer.
+    /**
+     * La proposition existe et elle n'a rien reçu : le dire vaut mieux que de
+     * laisser croire qu'elle porte ce qu'on vient de préparer.
+     *
+     * **Et on la nomme quand même.** C'est ce qui a manqué : la lecture de trois
+     * comptes rendus a échoué sur chacun, et comme l'échec ne rendait aucune
+     * proposition, le suivant en ouvrait une autre — deux propositions
+     * entièrement vides. Ce qui a eu lieu ne devient pas faux (règle 6) : celui
+     * qui enchaîne enrichit celle-là plutôt que d'en ouvrir une troisième.
+     */
     return {
       ok: false,
+      proposition,
       raison: vise
         ? "Les lignes n'ont pas pu être portées dans cette proposition."
         : "La proposition a été ouverte, mais ses lignes n'ont pas pu y être portées."

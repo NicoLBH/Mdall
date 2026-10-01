@@ -79,6 +79,15 @@ export const LES_DEPARTS = [
   "services/liens-du-cr.js",
   "services/proposition-du-cr.js",
   "services/atelier-proposition.js",
+  // Les lignes d'une proposition, en colonnes de base. La fonction de bord s'en
+  // sert directement : sans ce départ, la fermeture ne le trouverait pas, et la
+  // fonction échouerait à l'import, en production, au premier compte rendu.
+  "services/les-lignes-dune-proposition.js",
+  // Qui réveille le serveur et quand — et le délai au bout duquel une ligne
+  // prise est tenue pour abandonnée. Les deux fonctions de bord le lisent là,
+  // comme l'écran : deux valeurs auraient fait un écran qui réveille avant que
+  // la reprise n'accepte (règle 4).
+  "services/reveiller-la-file.js",
   // Importé dynamiquement par `atelier-proposition.js` : la fermeture ne le
   // trouve pas en lisant les `from "…"`, et son absence ne se verrait qu'au
   // premier enrichissement d'une proposition ouverte.

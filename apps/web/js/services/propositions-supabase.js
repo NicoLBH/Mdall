@@ -15,12 +15,21 @@
 
 import { buildSupabaseAuthHeaders, getCurrentUser, getSupabaseUrl } from "../../assets/js/auth.js";
 import { PROPOSITION } from "./proposition-state.js";
+import {
+  LA_TABLE_DES_SUJETS,
+  LE_SELECT_DES_SUJETS,
+  LE_SELECT_DUNE_PROPOSITION,
+  LE_SELECT_DUN_ITEM,
+  laLigneDuneProposition,
+  lesLignesDesItems
+} from "./les-lignes-dune-proposition.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 
-const COLUMNS =
-  "id,number,project_id,title,description,status,created_by,created_at,updated_at," +
-  "merged_at,merged_by,merge_title,merge_note,closed_at,closed_by,snapshot";
+// Écrites dans `les-lignes-dune-proposition.js`, et nulle part ailleurs : la
+// fonction de bord lit les mêmes colonnes, et deux listes finiraient par
+// différer (règle 4).
+const COLUMNS = LE_SELECT_DUNE_PROPOSITION;
 
 async function request(path, { method = "GET", body = null, headers = {}, params = {} } = {}) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${path}`);
@@ -169,13 +178,7 @@ export async function createProposition({ projectId, title, description = "" } =
       method: "POST",
       params: { select: COLUMNS },
       headers: { Prefer: "return=representation" },
-      body: {
-        project_id: projectId,
-        title: String(title).trim(),
-        description: String(description ?? "").trim() || null,
-        status: PROPOSITION.OPEN,
-        created_by: createdBy
-      }
+      body: laLigneDuneProposition({ projectId, title, description, createdBy })
     });
     return rows?.[0] ?? null;
   } catch {
@@ -266,13 +269,13 @@ export async function listProjectSubjectTitles(projectId) {
 
   try {
     return (
-      (await request("subjects", {
+      (await request(LA_TABLE_DES_SUJETS, {
         params: {
           // `parent_subject_id` vient avec : c'est ce qui permet de vérifier
           // qu'un rattachement à un sujet père ne referme pas une boucle. Sans
           // lui, la vérification se ferait sur une hiérarchie vide, donc sur
           // rien.
-          select: "id,subject_number,title,status,parent_subject_id",
+          select: LE_SELECT_DES_SUJETS,
           project_id: `eq.${projectId}`,
           order: "subject_number.asc"
         }
@@ -302,7 +305,7 @@ export async function listProjectSubjectsARanger(projectId) {
 
   try {
     return (
-      (await request("subjects", {
+      (await request(LA_TABLE_DES_SUJETS, {
         params: {
           select: "id,subject_number,title,description,status,parent_subject_id",
           project_id: `eq.${projectId}`,
@@ -360,7 +363,7 @@ export async function listPropositionItems(propositionId) {
     return (
       (await request("proposition_items", {
         params: {
-          select: "id,item_type,item_key,payload,status,reason,decided_by,decided_at",
+          select: LE_SELECT_DUN_ITEM,
           proposition_id: `eq.${propositionId}`,
           // Un ordre stable : sur un procès-verbal, deux lectures d'affilée ne
           // doivent pas présenter les mêmes lignes dans deux ordres différents.
@@ -445,22 +448,7 @@ export async function soumettreDesItems({ propositionId, projectId, items = [] }
       method: "POST",
       params: { on_conflict: "proposition_id,item_type,item_key" },
       headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: items.map(({ itemType, itemKey, payload = null, status = "proposed" }) => ({
-        proposition_id: propositionId,
-        project_id: projectId,
-        item_type: itemType,
-        item_key: itemKey,
-        payload,
-        // « proposé » d'ordinaire. **« refusé » est un retrait** : c'est ainsi
-        // qu'on sort un document du corpus ou qu'on écarte une affirmation, et
-        // c'est déjà ce que la fusion sait appliquer — un document refusé passe
-        // hors corpus, une affirmation refusée entre en mémoire comme écartée.
-        // Le mot dit ce que le projet en fait, pas ce qu'on pense d'elle.
-        status,
-        // Ni signataire ni date : rien n'a encore été décidé. La fusion signe.
-        decided_by: null,
-        decided_at: null
-      }))
+      body: lesLignesDesItems(items, { propositionId, projectId })
     });
     return true;
   } catch {
@@ -726,7 +714,7 @@ export async function listProjectRefs(projectId) {
 
   try {
     const [sujets, propositions] = await Promise.all([
-      request("subjects", {
+      request(LA_TABLE_DES_SUJETS, {
         params: {
           select: "id,subject_number,title,status",
           project_id: `eq.${projectId}`,
