@@ -63,6 +63,13 @@ import {
   laLigneDunRapport, laVueDunRapport
 } from "../../../services/la-lecture-dun-rapport.js";
 import { ETAPE } from "../../../services/le-parcours-dun-rapport.js";
+import {
+  DEPUIS_FICHIERS, LA_ZONE, UN_FICHIER_LOCAL, brancherLaZoneDeDepot, renderLaZoneDeDepot
+} from "../../ui/zone-de-depot.js";
+import { renderChoisirUnFichier } from "../../ui/choisir-un-fichier.js";
+import {
+  ENTREE, basculerLeChoix, entreesDuDossier, toutBasculer
+} from "../../../services/choisir-depuis-fichiers.js";
 import { renderPropositionOuverte } from "../../ui/avertissement-proposition.js";
 import { bindGhActionButtons, renderGhActionButton } from "../../ui/gh-split-button.js";
 import { renderLightTabs } from "../../ui/light-tabs.js";
@@ -1584,13 +1591,21 @@ function renderProgressBar(done, total) {
 /**
  * Ce que l'atelier a sous la main, et d'où cela vient.
  *
- * La zone de dépôt a disparu, et c'est le point de l'étape : **une seule
- * porte**. Les documents entrent par l'onglet Documents, une proposition les
- * soumet, quelqu'un l'accepte. Ici, on lit le corpus — on ne l'alimente pas.
+ * ## La zone de dépôt était partie trop loin
  *
- * L'écran doit donc dire d'où viennent les documents qu'il montre, sans quoi
- * l'absence de bouton passerait pour une panne. C'est la seule chose que cette
- * zone ajoute maintenant : une phrase, et le chemin à suivre.
+ * Elle avait été retirée au nom d'**une seule porte** : les documents entrent par
+ * l'onglet Documents, une proposition les soumet, quelqu'un l'accepte. La règle
+ * est juste pour le **corpus** — ce qui devient la mémoire du chantier.
+ *
+ * Mais lire un rapport n'est pas le verser. Sans zone, il fallait d'abord faire
+ * entrer un rapport au corpus du projet pour avoir le droit de le lire — c'est
+ * exactement l'inverse de l'ordre naturel : on lit pour décider si cela vaut
+ * d'entrer. Le lecteur de comptes rendus n'a jamais eu ce défaut, et les deux
+ * écrans doivent se ressembler.
+ *
+ * Cette zone-ci dit donc ce que l'atelier a **sous la main** et d'où cela vient ;
+ * la zone de dépôt, en dessous, dit que ce qu'on y pose est lu sans rien ajouter
+ * au corpus.
  */
 function renderCorpus(state) {
   // Pendant un chargement ou une analyse, la zone s'efface : c'est le
@@ -1622,8 +1637,13 @@ function renderCorpus(state) {
         }
       </b>
       <div class="ctlab__drop-lead">
-        Les livrables entrent par l'onglet <b>Documents</b> ; une proposition les soumet, et c'est
-        son acceptation qui les fait entrer au corpus. Cet écran les lit, il ne les dépose pas.${
+        ${empty
+          ? `Déposez un rapport ci-dessous pour le lire, ou reprenez ceux du projet.
+             Entrer au <b>corpus</b> est autre chose : les livrables y entrent par l'onglet
+             <b>Documents</b>, une proposition les soumet, et c'est son acceptation qui les
+             fait entrer. Lire ici n'y ajoute rien.`
+          : `Lus ici, et non versés : entrer au <b>corpus</b> passe par une proposition
+             acceptée, depuis l'onglet <b>Documents</b>.`}${
           failed > 0 ? ` ${failed} fichier(s) illisible(s).` : ""
         }
       </div>
@@ -3814,10 +3834,42 @@ function render(root, state) {
             C'est la place qui rend une analyse lisible, et le retour arrière qui
             rend la navigation évidente — exactement comme le détail d'un avis.
           */""}
-          ${state.ouverte
+          ${/*
+            **Le choix d'un document prend tout l'écran.** Il se pose sinon
+            au-dessus d'une analyse qu'on est en train de lire, et l'on ne sait
+            plus lequel des deux on regarde.
+          */""}
+          ${state.choix
+            ? renderChoisirUnFichier({
+              ...state.choix,
+              choisis: state.coches,
+              connues: [...state.connues.values()],
+              // Les mots de cet écran-ci : on y lit des rapports, et aucune
+              // proposition n'en sort.
+              quoi: { un: "rapport", plusieurs: "rapports" },
+              fera: "Chaque rapport est lu en trois etapes — structure et legende, "
+                + "transcription, releve des avis — et sa lecture est conservee. "
+                + "Rien n'entre dans la memoire du chantier."
+            })
+            : state.ouverte
             ? renderLaLectureOuverte(state)
             : `
               ${renderCorpus(state)}
+              ${/*
+                **La zone de dépôt, la même que celle des comptes rendus.** Elle
+                avait disparu de cet écran au nom d'une seule porte ; mais lire un
+                rapport n'est pas le verser, et il n'y avait plus aucun moyen d'en
+                lire un sans passer par le corpus du projet.
+              */""}
+              ${state.result || state.loading || state.running ? "" : renderLaZoneDeDepot({
+                mot: "Déposez un rapport de contrôle, ou choisissez-le.",
+                aide: "Des PDF, autant qu'on veut. Ils sont lus ici : les déposer "
+                  + "n'ajoute rien au corpus du projet, et rien n'entre en mémoire.",
+                accepte: ".pdf,application/pdf",
+                plusieurs: true,
+                icone: "file-pdf",
+                choisirDit: "Choisir des rapports"
+              })}
               ${renderProgress(state)}
               ${/*
                 **Le tableau des rapports déjà analysés, à l'accueil.** Il vient
@@ -3944,7 +3996,24 @@ export function renderCtContinuityLab(root) {
     parcours: {
       running: false, courant: "", quoi: "", faits: 0, total: 0,
       refus: [], dit: "", error: ""
-    }
+    },
+    /**
+     * Le choix d'un document déjà rangé dans le projet, quand il est ouvert.
+     *
+     * `null` quand il ne l'est pas — et c'est ce que l'écran regarde pour savoir
+     * s'il dessine le choix ou le reste.
+     */
+    choix: null,
+    /** Ce qui est coché, par identifiant de document. */
+    coches: new Set(),
+    /**
+     * Ce qu'on a vu en chemin.
+     *
+     * La barre de lancement doit dire combien de documents la file contient ; un
+     * document coché dans un dossier qu'on a quitté n'est plus dans `entrees`, et
+     * sans cette mémoire le compte annoncé baisserait en changeant de dossier.
+     */
+    connues: new Map()
   };
 
   let nextDocumentNumber = 1;
@@ -4094,8 +4163,30 @@ export function renderCtContinuityLab(root) {
     if (lexicon) state.lexiconText = lexicon.value;
   };
 
+  /**
+   * Ce qui débranche la zone de dépôt du rendu précédent.
+   *
+   * Le HTML est réécrit à chaque redessin : sans débrancher, les écouteurs du
+   * rendu précédent restent posés sur un bloc qui n'est plus dans la page, et
+   * chaque redessin en ajoute une couche.
+   */
+  let debrancherLaZone = () => {};
+
   const refresh = () => {
     render(root, state);
+
+    debrancherLaZone();
+    const zone = root.querySelector(`[${LA_ZONE}]`);
+    debrancherLaZone = zone
+      ? brancherLaZoneDeDepot(zone, {
+        onFichiers: (fichiers) => { void addFiles(fichiers); },
+        // Pendant une lecture ou une analyse, la zone refuse le dépôt sans
+        // disparaître : un lot déposé par-dessus celui qu'on lit mêlerait les
+        // deux, et retirer la zone ferait croire que le dépôt n'existe plus.
+        actif: () => !state.running && !state.loading && !state.parcours.running
+      })
+      : () => {};
+
     if (state.selectedCell) {
       const holder = root.querySelector("[data-ctlab-detail]");
       if (holder) holder.innerHTML = renderDetail(state.selectedCell);
@@ -4170,6 +4261,129 @@ export function renderCtContinuityLab(root) {
       state.ouvertureEnCours = "";
       refresh();
     }
+  };
+
+  /**
+   * Ouvrir un dossier des Fichiers du projet.
+   *
+   * **Un dossier illisible le dit, et ne se dessine pas vide.** Une liste vide se
+   * lirait comme une réponse — « ce dossier ne contient rien » — alors qu'on ne
+   * sait pas ce qu'il contient (règle 5).
+   */
+  const ouvrirLeChoix = async (dossierId = "") => {
+    state.choix = {
+      dossier: texteDe(dossierId), breadcrumb: state.choix?.breadcrumb ?? [],
+      entrees: [], enCours: true, motif: ""
+    };
+    refresh();
+
+    const projectId = state.memory?.projectId ?? null;
+    if (!projectId) {
+      state.choix = { ...state.choix, enCours: false, motif: "Aucun projet ouvert." };
+      refresh();
+      return;
+    }
+
+    try {
+      // Chargé à la demande : ce module passe par le SDK Supabase, importé depuis
+      // le réseau, qu'une exécution hors navigateur ne saurait résoudre.
+      const { listDocumentDirectory } = await import("../../../services/project-supabase-sync.js");
+      const contenu = await listDocumentDirectory(projectId, texteDe(dossierId) || null);
+      const entrees = entreesDuDossier(contenu);
+
+      /**
+       * **La ligne du document voyage avec son entrée.**
+       *
+       * `entreesDuDossier` ne rend que de quoi dessiner — un nom, s'il est
+       * choisissable, comment il se lira. Le seau et le chemin de stockage
+       * restent dans la ligne, et sans eux on ne peut pas descendre les octets.
+       * Les garder ici évite de relire le dossier au moment de prendre, ce qui
+       * ferait une seconde requête par document.
+       */
+      const lignes = new Map(
+        (Array.isArray(contenu?.files) ? contenu.files : [])
+          .map((fichier) => [texteDe(fichier?.id), fichier])
+      );
+      for (const une of entrees) {
+        state.connues.set(une.id, { ...une, ligne: lignes.get(une.id) ?? null });
+      }
+
+      state.choix = {
+        dossier: texteDe(dossierId),
+        breadcrumb: Array.isArray(contenu?.breadcrumb) ? contenu.breadcrumb : [],
+        entrees, enCours: false, motif: ""
+      };
+    } catch (erreur) {
+      state.choix = {
+        ...state.choix, enCours: false,
+        motif: `Ce dossier n'a pas pu être lu (${texteDe(erreur?.message) || "cause inconnue"}).`
+      };
+    }
+    refresh();
+  };
+
+  /**
+   * Prendre les documents cochés, et les ouvrir comme s'ils venaient d'être déposés.
+   *
+   * **Leur ligne voyage avec eux.** Ils sont déjà dans le projet : la garder
+   * rattache la lecture au document dont elle vient, au lieu d'un second
+   * exemplaire qu'on redéposerait.
+   */
+  const prendreLesDocumentsCoches = async () => {
+    const voulus = [...state.coches]
+      .map((id) => state.connues.get(id))
+      .filter((une) => une?.type === ENTREE.FICHIER && une.choisissable);
+    if (!voulus.length) return;
+
+    state.choix = { ...state.choix, enCours: true, motif: "" };
+    refresh();
+
+    const fichiers = [];
+    const documentIds = new Map();
+    let injoignables = 0;
+
+    try {
+      const { downloadDocumentFile } = await deposit();
+      for (const une of voulus) {
+        try {
+          // `une.ligne` est la ligne du document telle que le dossier l'a rendue :
+          // c'est elle qui porte le seau et le chemin de stockage.
+          const fichier = await downloadDocumentFile(une.ligne ?? une);
+          fichiers.push(fichier);
+          documentIds.set(fichier, une.id);
+        } catch {
+          injoignables += 1;
+        }
+      }
+    } catch {
+      state.choix = {
+        ...state.choix, enCours: false,
+        motif: "Les documents n'ont pas pu être rapatriés."
+      };
+      refresh();
+      return;
+    }
+
+    if (!fichiers.length) {
+      state.choix = {
+        ...state.choix, enCours: false,
+        motif: "Aucun de ces documents n'a pu être rapatrié."
+      };
+      refresh();
+      return;
+    }
+
+    state.choix = null;
+    state.coches = new Set();
+    // **Ce qui n'a pas pu être descendu se dit, et n'arrête pas le reste.** Les
+    // autres sont là, lisibles, et payés.
+    state.parcours = {
+      ...state.parcours,
+      dit: injoignables
+        ? `${injoignables} document(s) n'ont pas pu être rapatriés depuis Fichiers.`
+        : ""
+    };
+    await addFiles(fichiers, { documentIds });
   };
 
   /**
@@ -4971,6 +5185,23 @@ export function renderCtContinuityLab(root) {
       // récapitulatifs lus dans les documents, et l'écran le dit.
     });
 
+  /**
+   * Le champ de fichiers.
+   *
+   * **Délégué sur l'hôte, et non posé sur le champ.** Le champ est réécrit à
+   * chaque redessin ; un écouteur posé dessus mourrait avec lui, et le second
+   * choix ne ferait rien. `change` ne remonte pas de lui-même — `capture` le
+   * rattrape, comme pour les autres champs de l'Atelier.
+   */
+  root.addEventListener("change", async (event) => {
+    if (!event.target?.closest?.(`[${UN_FICHIER_LOCAL}]`)) return;
+    const fichiers = [...(event.target.files ?? [])];
+    // **Le champ se vide après coup.** Choisir deux fois le même fichier ne
+    // déclencherait sinon rien la seconde fois, et l'on croirait l'outil cassé.
+    event.target.value = "";
+    if (fichiers.length) await addFiles(fichiers);
+  }, true);
+
   root.addEventListener("ghaction:action", (event) => {
     const action = String(event.detail?.action ?? "");
     if (!action.startsWith("ctlab-export-")) return;
@@ -5002,6 +5233,72 @@ export function renderCtContinuityLab(root) {
     //
     // Traités avant les autres gestes : ce sont les seuls qui changent d'écran
     // plutôt que de changer ce qu'on regarde dedans.
+    // ── Le choix d'un document déjà rangé dans le projet ────────────────────
+    //
+    // Délégués sur l'hôte : la liste se réécrit à chaque dossier ouvert, donc des
+    // écouteurs posés sur les lignes mourraient avec elles.
+    if (event.target.closest(`[${DEPUIS_FICHIERS}]`)) {
+      state.coches = new Set();
+      state.connues = new Map();
+      await ouvrirLeChoix("");
+      return;
+    }
+
+    if (event.target.closest("[data-choisir-fermer]")) {
+      state.choix = null;
+      state.coches = new Set();
+      refresh();
+      return;
+    }
+
+    const dossier = event.target.closest("[data-choisir-dossier]");
+    if (dossier) {
+      await ouvrirLeChoix(dossier.dataset.choisirDossier || "");
+      return;
+    }
+
+    const coche = event.target.closest("[data-choisir-coche]");
+    if (coche) {
+      state.coches = basculerLeChoix(
+        state.coches, coche.dataset.choisirCoche || "", state.choix?.entrees ?? []);
+      refresh();
+      return;
+    }
+
+    if (event.target.closest("[data-choisir-tout]")) {
+      const entrees = state.choix?.entrees ?? [];
+      // La case de tête bascule tout le dossier ouvert : cocher quand il en reste
+      // à cocher, décocher quand tout l'est. Le contraire ferait qu'un clic sur
+      // une case à moitié pleine viderait ce qu'on vient de choisir.
+      const tout = entrees
+        .filter((une) => une.type === ENTREE.FICHIER && une.choisissable)
+        .every((une) => state.coches.has(une.id));
+      state.coches = toutBasculer(state.coches, entrees, { cocher: !tout });
+      refresh();
+      return;
+    }
+
+    if (event.target.closest("[data-choisir-rien]")) {
+      state.coches = new Set();
+      refresh();
+      return;
+    }
+
+    if (event.target.closest("[data-choisir-lancer]")) {
+      await prendreLesDocumentsCoches();
+      return;
+    }
+
+    const unDocument = event.target.closest("[data-choisir-document]");
+    if (unDocument) {
+      // Un clic sur le titre coche, il ne prend pas : c'est la barre de lancement
+      // qui lance, et l'on choisit presque toujours plusieurs rapports.
+      state.coches = basculerLeChoix(
+        state.coches, unDocument.dataset.choisirDocument || "", state.choix?.entrees ?? []);
+      refresh();
+      return;
+    }
+
     if (event.target.closest(`[${LIRE_LES_RAPPORTS}]`)) {
       await lireLesRapportsDeposes();
       return;

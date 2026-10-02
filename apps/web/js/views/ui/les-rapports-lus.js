@@ -174,6 +174,16 @@ export function renderLinvitationALire({ deposes = 0, parcours = null } = {}) {
   const refus = liste(parcours?.refus);
   const dit = texte(parcours?.dit);
 
+  /**
+   * **Rien à dire, rien à l'écran.**
+   *
+   * Sans rapport déposé, cette section disait « Déposez un rapport de contrôle
+   * pour le lire » — juste sous la zone de dépôt, qui dit déjà exactement cela.
+   * Deux fois la même phrase à dix pixels l'une de l'autre fait douter qu'on ait
+   * compris, et non le contraire.
+   */
+  if (!combien && !dit && !refus.length && !texte(parcours?.error)) return "";
+
   return `
     <section class="rapports-lire">
       ${dit ? `<p class="rapports-lire__dit mono-small">${escapeHtml(dit)}</p>` : ""}
@@ -196,8 +206,7 @@ export function renderLinvitationALire({ deposes = 0, parcours = null } = {}) {
           <p class="rapports-lire__cout mono-small">${escapeHtml(
             "Trois appels par rapport, en série. La lecture est conservée : on ne "
             + "la repaye pas pour la revoir.")}</p>`
-        : `<p class="rapports-lire__cout mono-small">${escapeHtml(
-            "Déposez un rapport de contrôle pour le lire.")}</p>`}
+        : ""}
     </section>
   `;
 }

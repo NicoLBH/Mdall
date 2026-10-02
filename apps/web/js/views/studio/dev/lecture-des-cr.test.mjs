@@ -1683,14 +1683,38 @@ test("une restitution sans réserve ne dit rien", () => {
  * **La zone de dépôt s'en va quand le document est là**, et c'est voulu : elle
  * gardait un tiers de l'écran pour redire ce qu'on venait de faire.
  */
+test("pendant une lecture, la zone se tait et n'offre rien", () => {
+  // Déposer un second document par-dessus celui qu'on lit mêlerait les deux. La
+  // zone le dit et retire ses portes — sans disparaître, sinon le glisser-déposer
+  // ne serait plus branché au retour.
+  const html = renderLaLecture(unEtat({ phase: "lecture" }));
+
+  assert.match(html, /en cours de lecture/);
+  assert.doesNotMatch(html, /data-zone-fichier/);
+  assert.doesNotMatch(html, /data-zone-depuis-fichiers/);
+  assert.match(html, /data-zone-de-depot/);
+});
+
+test("on peut choisir depuis Fichiers des deux endroits", () => {
+  // La zone de dépôt quand rien n'est ouvert, l'en-tête quand un document l'est —
+  // sans quoi il faudrait fermer sa lecture pour en choisir une autre. L'épreuve
+  // vivait dans `choisir-depuis-fichiers.test.mjs`, où elle comptait deux
+  // occurrences dans le **source** ; le bouton de la zone est passé dans le
+  // composant commun, et le compte serait devenu rouge sans que l'écran change.
+  assert.match(renderLaLecture(unEtat({ phase: "vide" })), /data-zone-depuis-fichiers/);
+  assert.match(renderLaLecture(unEtat({
+    phase: "lue", lecture: uneLecture(), pagesLues: PAGES, fichier: { name: "1824_CR_17.pdf" }
+  })), /data-zone-depuis-fichiers/);
+});
+
 test("un document ouvert fait disparaître la zone de dépôt", () => {
   const avec = renderLaLecture(unEtat({
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES, fichier: { name: "1824_CR_17.pdf" }
   }));
-  assert.doesNotMatch(avec, /data-lecture-cr-zone/);
+  assert.doesNotMatch(avec, /data-zone-de-depot/);
 
   const sans = renderLaLecture(unEtat({ phase: "vide" }));
-  assert.match(sans, /data-lecture-cr-zone/);
+  assert.match(sans, /data-zone-de-depot/);
 });
 
 /**
@@ -2131,7 +2155,7 @@ const unChoix = (surcharge = {}) => ({
  */
 test("le choix et le dépôt ne se montrent jamais ensemble", () => {
   const depot = renderLaLecture(unEtat());
-  assert.match(depot, /data-lecture-cr-depuis-fichiers/, "le dépôt ne propose pas Fichiers");
+  assert.match(depot, /data-zone-depuis-fichiers/, "le dépôt ne propose pas Fichiers");
   assert.doesNotMatch(depot, /data-choisir-fichier/);
 
   const choix = renderLaLecture(unEtat({ choix: unChoix(), coches: new Set(), connues: new Map() }));
@@ -2423,7 +2447,7 @@ test("une lecture rouverte n'affiche pas la zone de dépôt", () => {
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES, onglet: "analyse",
     conservee: { id: "l-1" }
   }));
-  assert.doesNotMatch(html, /data-lecture-cr-zone/);
+  assert.doesNotMatch(html, /data-zone-de-depot/);
 });
 
 /**

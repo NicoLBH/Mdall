@@ -138,21 +138,40 @@ function renderUneEntree(entree, choisis = null) {
  *
  * Vide quand rien n'est coché : une barre à zéro apprend à ne plus la lire.
  */
-function renderLaBarreDeLancement(choisis = null, connues = []) {
+/**
+ * La barre de lancement.
+ *
+ * ## Ce que l'écran nomme, et ce que le composant ne doit pas nommer
+ *
+ * Le bouton disait « Lire 19 comptes rendus », et la phrase parlait de
+ * propositions à signer. Les deux appartiennent au lecteur de comptes rendus :
+ * le suivi des avis, qui se sert du même choix, lit des **rapports** et n'ouvre
+ * **aucune** proposition. Un composant partagé qui nomme l'un des deux écrans
+ * ment à l'autre dès la deuxième utilisation (règle 10).
+ *
+ * Les mots viennent donc de qui appelle. Les valeurs par défaut sont neutres —
+ * « document » — plutôt que celles du premier arrivé : un défaut qui dit
+ * « compte rendu » se serait glissé dans l'autre écran sans que rien ne le dise.
+ */
+function renderLaBarreDeLancement(choisis = null, connues = [], {
+  quoi = { un: "document", plusieurs: "documents" }, fera = null
+} = {}) {
   const contenu = ceQueLaFileContient(choisis, connues);
   if (!contenu.combien) return "";
+
+  const dit = fera === null ? phraseDeCeQueLaFileFera(contenu) : String(fera ?? "");
 
   return `
     <footer class="choisir-fichier__barre">
       <div class="choisir-fichier__compte">
         <b>${escapeHtml(phraseDeLaSelection(contenu))}</b>
-        <i class="mono-small">${escapeHtml(phraseDeCeQueLaFileFera(contenu))}</i>
+        ${dit ? `<i class="mono-small">${escapeHtml(dit)}</i>` : ""}
       </div>
       <div class="choisir-fichier__gestes">
         <button type="button" class="gh-btn gh-btn--sm" data-choisir-rien>Tout décocher</button>
         <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-choisir-lancer>
-          Lire ${escapeHtml(String(contenu.combien))} ${
-            contenu.combien > 1 ? "comptes rendus" : "compte rendu"}
+          Lire ${escapeHtml(String(contenu.combien))} ${escapeHtml(
+            contenu.combien > 1 ? quoi.plusieurs : quoi.un)}
         </button>
       </div>
     </footer>
@@ -170,7 +189,11 @@ function renderLaBarreDeLancement(choisis = null, connues = []) {
  */
 export function renderChoisirUnFichier({
   breadcrumb = [], entrees = [], enCours = false, motif = "",
-  choisis = null, connues = []
+  choisis = null, connues = [],
+  /** Ce que l'écran appelant lit : les mots du bouton de lancement. */
+  quoi = { un: "document", plusieurs: "documents" },
+  /** Ce que la file fera, dit par l'écran. `null` garde la phrase des propositions. */
+  fera = null
 } = {}) {
   const dit = phraseDuDossier(entrees);
   const quelquesUns = (entrees ?? []).some(
@@ -211,7 +234,7 @@ export function renderChoisirUnFichier({
               ${dit ? `<p class="propositions-empty">${escapeHtml(dit)}</p>` : ""}
             `}
       </div>
-      ${renderLaBarreDeLancement(choisis, connues)}
+      ${renderLaBarreDeLancement(choisis, connues, { quoi, fera })}
     </section>
   `;
 }

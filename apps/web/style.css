@@ -25884,7 +25884,11 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   color:var(--danger, #f85149);
 }
 
-.lecture-cr__depot{
+/* La zone de dépôt, commune à tous les écrans qui en ont une. Elle était écrite
+   trois fois dans le lecteur de comptes rendus, sous ses propres classes : tout
+   autre écran devait donc emprunter les classes d'un voisin, ou s'en refaire une
+   qui aurait dérivé au premier ajustement (règle 4). */
+.zone-de-depot{
   display:flex;
   flex-direction:column;
   align-items:center;
@@ -25897,11 +25901,20 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   text-align:center;
 }
 
-.lecture-cr__depot.is-dragover{border-color:var(--accent, #316dca);background:rgba(49,109,202,.08);}
-.lecture-cr__depot.is-occupee{border-style:solid;}
-.lecture-cr__depot-icone{color:var(--muted);}
-.lecture-cr__depot-mot{margin:0;color:var(--muted);font-size:13px;}
-.lecture-cr__depot-choix{cursor:pointer;}
+.zone-de-depot.is-dragover{border-color:var(--accent, #316dca);background:rgba(49,109,202,.08);}
+.zone-de-depot.is-occupee{border-style:solid;}
+.zone-de-depot__icone{color:var(--muted);}
+/* **La phrase principale passe devant son aide.** Les deux écrans côte à côte
+   l'ont montré : l'aide, plus claire et plus dense, se lisait comme le titre, et
+   la consigne comme une note de bas de page. */
+.zone-de-depot__mot{margin:0;color:var(--text);font-size:14px;font-weight:600;}
+.zone-de-depot__choix{cursor:pointer;}
+.zone-de-depot__aide{margin:4px 0 10px;color:var(--muted);max-width:52ch;text-align:center;}
+.zone-de-depot__gestes{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;}
+.zone-de-depot__aide code{
+  font-family:var(--mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  background:rgba(110,118,129,.12); border-radius:4px; padding:0 4px;
+}
 
 /* **Sans fond.** « Le document » n'est pas un panneau de plus : ce sont quatre
    faits lus dans le fichier, et un aplat les mettait au même rang que les blocs
@@ -26205,8 +26218,6 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 
 /* Ce que la zone de dépôt accepte, dit sous son invitation. Un `.md` déposé
    ici ne coûte rien : le dire évite de rouvrir le PDF pour le même document. */
-.lecture-cr__depot-aide{margin:4px 0 10px;color:var(--text-muted);max-width:52ch;text-align:center;}
-.lecture-cr__depot-gestes{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;}
 
 /* Le choix d'un document déjà déposé.
 
@@ -26293,11 +26304,6 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
    le fond des têtes de tableau de Fichiers. */
 .documents-repo__row--head{background:var(--panel2);}
 .documents-repo__row--head .mono-small{color:var(--muted);}
-
-.lecture-cr__depot-aide code{
-  font-family:var(--mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-  background:rgba(110,118,129,.12); border-radius:4px; padding:0 4px;
-}
 
 /* Une restitution qui n'a rien pu rendre. Elle explique ce qui manque plutôt
    que de rester vide — un cadre vide se lit « le document était vide ». */

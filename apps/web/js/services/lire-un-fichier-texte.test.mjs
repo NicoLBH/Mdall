@@ -216,9 +216,19 @@ test("les deux champs de fichier de l'Atelier acceptent ce que l'écran accepte"
   // Un `accept="application/pdf"` resté en place n'empêche pas de déposer un
   // `.md` : il l'empêche seulement d'apparaître dans le sélecteur de fichiers.
   // Le bouton s'ouvre, le dossier est vide, et l'on croit n'avoir rien.
+  //
+  // **Deux des trois champs ont déménagé.** La zone de dépôt est devenue
+  // commune — elle est partagée avec le suivi des avis, qui n'accepte que des
+  // PDF —, et c'est l'écran qui lui passe ce qu'il accepte. Compter les
+  // `accept=` dans ce fichier-ci ne dirait donc plus rien : ce qu'il faut
+  // vérifier est que les trois portes reçoivent la même liste.
   const champs = ATELIER.match(/accept="[^"]*"/g) ?? [];
-  assert.equal(champs.length, 3, "la zone de dépôt, l'en-tête, et l'écran en panne");
-  for (const champ of champs) assert.equal(champ, 'accept="${escapeHtml(ACCEPTE)}"');
+  assert.equal(champs.length, 1, "l'en-tête, seul champ encore écrit ici");
+  assert.equal(champs[0], 'accept="${escapeHtml(ACCEPTE)}"');
+
+  const zones = ATELIER.match(/renderLaZoneDeDepot\(\{[\s\S]*?\n {4,6}\}\)/g) ?? [];
+  assert.equal(zones.length, 2, "la zone de dépôt, et celle de l'écran en panne");
+  for (const zone of zones) assert.match(zone, /accepte: ACCEPTE/);
 });
 
 test("un document de texte déposé dans l'Atelier n'est pas écarté", () => {

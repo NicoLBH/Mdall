@@ -264,13 +264,20 @@ test("l'invitation dit combien de rapports seront lus, et ce que cela coûte", (
   assert.match(html, /Trois appels par rapport/);
 });
 
-test("sans rapport déposé, il n'y a rien à lancer", () => {
-  const html = renderLinvitationALire({ deposes: 0 });
-
+test("sans rapport déposé, il n'y a rien à lancer et rien à dire", () => {
   // Un bouton qui ne peut rien faire est pire qu'un bouton absent : on clique, et
-  // l'on croit que l'outil est cassé.
-  assert.doesNotMatch(html, new RegExp(LIRE_LES_RAPPORTS));
-  assert.match(html, /Déposez un rapport/);
+  // l'on croit que l'outil est cassé. Et la phrase « déposez un rapport » est
+  // celle de la zone de dépôt, dix pixels plus haut : la répéter faisait douter
+  // qu'on ait compris.
+  assert.equal(renderLinvitationALire({ deposes: 0 }), "");
+
+  // Mais ce qu'une lecture précédente a dit survit au vidage du lot : c'est là
+  // qu'on lit ce qui n'a pas pu être lu.
+  const apres = renderLinvitationALire({
+    deposes: 0, parcours: { dit: "1 rapport lu et conservé." }
+  });
+  assert.match(apres, /1 rapport lu et conservé/);
+  assert.doesNotMatch(apres, new RegExp(LIRE_LES_RAPPORTS));
 });
 
 test("la lecture en cours nomme l'étape, elle ne la compte pas", () => {

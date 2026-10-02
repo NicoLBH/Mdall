@@ -8,7 +8,10 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { brancherLaZoneDeDepot, aDesFichiers, trierLesFichiers } from "./zone-de-depot.js";
+import {
+  DEPUIS_FICHIERS, LA_ZONE, UN_FICHIER_LOCAL, aDesFichiers, brancherLaZoneDeDepot,
+  renderLaZoneDeDepot, trierLesFichiers
+} from "./zone-de-depot.js";
 
 /** Une zone de fiction : elle retient ses classes et ses écouteurs. */
 function zoneDeFiction() {
@@ -143,4 +146,94 @@ test("ce qui est refusé se dit, il ne disparaît pas", () => {
   const { retenus, ecartes } = trierLesFichiers([FICHIER, image], (f) => f.type === "application/pdf");
   assert.deepEqual(retenus, [FICHIER]);
   assert.deepEqual(ecartes, [image]);
+});
+
+/* ── Le dessin de la zone ─────────────────────────────────────────────────── */
+
+test("la zone porte ses deux portes, et son attribut", () => {
+  const html = renderLaZoneDeDepot({
+    mot: "Déposez un rapport de contrôle, ou choisissez-le.",
+    accepte: ".pdf", plusieurs: true
+  });
+
+  assert.match(html, new RegExp(LA_ZONE));
+  assert.match(html, new RegExp(UN_FICHIER_LOCAL));
+  assert.match(html, new RegExp(DEPUIS_FICHIERS));
+  assert.match(html, /multiple/);
+  assert.match(html, /accept="\.pdf"/);
+  assert.match(html, /Déposez un rapport de contrôle/);
+});
+
+test("un seul document à la fois ne porte pas `multiple`", () => {
+  assert.doesNotMatch(renderLaZoneDeDepot({ accepte: ".pdf" }), /multiple/);
+});
+
+test("la seconde porte se refuse quand elle n'est pas branchée", () => {
+  // Un bouton qui ne fait rien est pire qu'un bouton absent : on clique, et l'on
+  // croit que l'outil est cassé.
+  const html = renderLaZoneDeDepot({ mot: "Déposez", depuisFichiers: false });
+  assert.doesNotMatch(html, new RegExp(DEPUIS_FICHIERS));
+  assert.match(html, new RegExp(UN_FICHIER_LOCAL));
+});
+
+test("occupée, la zone se tait mais garde son attribut", () => {
+  const html = renderLaZoneDeDepot({ occupee: true, motOccupee: "Une lecture est en cours." });
+
+  assert.match(html, /Une lecture est en cours\./);
+  assert.doesNotMatch(html, new RegExp(UN_FICHIER_LOCAL));
+  // **Et elle garde `LA_ZONE`.** Le branchement la cherche par cet attribut à
+  // chaque redessin : la lui retirer ferait qu'au retour, plus rien ne serait
+  // branché, et le dépôt par glisser cesserait sans que rien ne le dise.
+  assert.match(html, new RegExp(LA_ZONE));
+});
+
+test("l'aide passe en HTML, le reste est échappé", () => {
+  // L'aide porte des `<code>` dans les deux écrans ; le mot, lui, vient parfois
+  // d'un nom de fichier.
+  const html = renderLaZoneDeDepot({
+    mot: "Déposez <b>ceci</b>", aide: "Un PDF, ou un <code>.md</code>."
+  });
+  assert.match(html, /<code>\.md<\/code>/);
+  assert.match(html, /&lt;b&gt;ceci&lt;\/b&gt;/);
+});
+
+/* ── Dessinée et branchée, ou ni l'une ni l'autre ─────────────────────────── */
+
+/**
+ * **Le seul défaut qu'aucun rendu ne peut dire.**
+ *
+ * Une zone dessinée que personne ne branche se voit, s'ouvre au clic, et refuse
+ * le glisser-déposer en silence : le navigateur ouvre le PDF dans un onglet, et
+ * la page est perdue avec ce qui s'y écrivait. La batterie l'a montré — remplacer
+ * l'attribut cherché par un ancien nom ne faisait tomber aucune épreuve.
+ *
+ * On lit donc le source des écrans, ce qu'on ne s'autorise que pour cela.
+ */
+const LES_ECRANS = [
+  "../studio/dev/lecture-des-cr.js",
+  "../studio/dev/ct-continuity-lab.js"
+];
+
+test("tout écran qui dessine la zone la branche, et par le même nom", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
+  let vus = 0;
+  for (const ou of LES_ECRANS) {
+    const source = readFileSync(fileURLToPath(new URL(ou, import.meta.url)), "utf8");
+    if (!source.includes("renderLaZoneDeDepot(")) continue;
+    vus += 1;
+
+    // Cherchée **par la constante**, et non par une chaîne : c'est ce qui
+    // garantit qu'on branche bien la zone que le composant pose (règle 10).
+    assert.match(source, /querySelector\(`\[\$\{LA_ZONE\}\]`\)/, ou);
+    assert.match(source, /brancherLaZoneDeDepot\(/, ou);
+    // Le champ est cherché de deux façons selon l'écran — au redessin, ou par
+    // délégation sur l'hôte. Ce qui compte est qu'il le soit par le même nom.
+    assert.match(source, /`\[\$\{UN_FICHIER_LOCAL\}\]`/, ou);
+  }
+
+  // Sans ce compte, une liste d'écrans fautive rendrait l'épreuve verte en
+  // n'ayant rien lu — ce qui est pire que de ne pas l'avoir écrite.
+  assert.equal(vus, LES_ECRANS.length);
 });
