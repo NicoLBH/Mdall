@@ -72,7 +72,9 @@ import {
 import {
   FAMILLE, TOUTES, ceQueDitLaFamille, lesDocumentsAnalyses
 } from "../../../services/les-documents-analyses.js";
-import { laFamilleQuiSeLit } from "../../../services/les-familles-de-document.js";
+import {
+  ceQueLaZoneDit, laFamilleQuiSeLit
+} from "../../../services/les-familles-de-document.js";
 import { renderLeDetailDunFil } from "../../ui/le-detail-dun-fil.js";
 import { lesFilsLus } from "../../../services/la-lecture-dun-fil.js";
 import { laVueDunFil } from "../../../services/la-lecture-dun-fil.js";
@@ -157,7 +159,14 @@ const EST_UN_PDF = /\.pdf$/i;
  * regard. L'écran ne les affiche donc pas, plutôt que d'afficher des chiffres
  * qui ne mesurent rien (règle 5).
  */
-const ACCEPTE = [".pdf", ...EXTENSIONS_LISIBLES].join(",");
+/**
+ * Ce que les champs de fichiers de cet écran acceptent.
+ *
+ * **Celui de la famille des comptes rendus**, qui est le seul document que cet
+ * écran dépose depuis le disque. Il était calculé ici, et le registre en portait
+ * une copie : deux listes pour une question (règle 4).
+ */
+const ACCEPTE = ceQueDitLaFamille(FAMILLE.CR).accepte;
 
 const estUnDocumentAccepte = (nom) => EST_UN_PDF.test(texte(nom)) || estUnFichierTexte(texte(nom));
 
@@ -646,8 +655,6 @@ export function renderLaLecture(vue = etat) {
             // la phrase des propositions aussi — un rapport n'en ouvre aucune.
             ...lesMotsDuChoix(vue.famille)
           })
-          : vue.famille && vue.famille !== TOUTES && vue.famille !== FAMILLE.CR
-          ? renderOuSeLitCetteFamille(vue.famille)
           : renderDepot(vue)}
       ${vue.choix ? "" : renderCeQuiEstParti(vue)}
       ${vue.choix ? "" : renderLesDocumentsAnalyses(vue)}
@@ -742,43 +749,6 @@ function leTitreDeLaVue(vue) {
     return ceQueDitLaFamille(TOUTES).titre;
   }
   return (ceQueDitLaFamille(vue?.famille) ?? ceQueDitLaFamille(TOUTES)).titre;
-}
-
-/**
- * Où se lit une famille que cet écran ne lit pas encore./**
- * Où se lit une famille que cet écran ne lit pas encore.
- *
- * **On le dit, on ne le cache pas.** Le rail réunit ce qui a été analysé ; la
- * lecture, elle, vit encore dans l'utilitaire de chaque famille. Laisser la zone
- * de dépôt des comptes rendus sous « Bureau de Contrôle » ferait lancer une
- * lecture de compte rendu sur un rapport — et taire la question laisserait
- * chercher un bouton qui n'existe pas (règle 5).
- */
-function renderOuSeLitCetteFamille(famille) {
-  const ce = laFamilleQuiSeLit(famille);
-  if (!ce) return "";
-
-  return `
-    <div class="zone-de-depot" ${LA_ZONE}>
-      <span class="zone-de-depot__icone" aria-hidden="true">${
-        svgIcon(ce.icone, { className: "octicon" })}</span>
-      <p class="zone-de-depot__mot">${escapeHtml(
-        `Choisissez des ${ce.quoi.plusieurs} à analyser.`)}</p>
-      <p class="zone-de-depot__aide mono-small">${escapeHtml(ce.vide.quoi)}</p>
-      <span class="zone-de-depot__gestes">
-        ${/*
-          **Une seule porte ici, et c'est Fichiers.** Ces documents sont déjà dans
-          le projet : les redéposer depuis le disque en ferait un second exemplaire,
-          et c'est le genre de doublon qu'on ne remarque qu'au vingtième. Le dépôt
-          depuis l'ordinateur reste au compte rendu, qui est le seul que cet écran
-          sache lire sans passer par la file.
-        */""}
-        <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" ${DEPUIS_FICHIERS}>
-          Choisir depuis Fichiers
-        </button>
-      </span>
-    </div>
-  `;
 }
 
 /**
@@ -1052,13 +1022,32 @@ function renderDepot(vue) {
   // ses points. On en dépose un autre depuis la liste, qui est juste au-dessus.
   if (vue.conservee) return "";
 
+  /**
+   * **Une seule zone, et ses mots viennent de la famille ouverte.**
+   *
+   * Le bureau de contrôle avait la sienne, écrite à la main : bordure pleine au
+   * lieu de pointillés, bouton vert, aide à une autre place. Deux zones pour un
+   * geste se ressemblaient de moins en moins (règle 4). Celle-ci reste, et chaque
+   * famille lui passe sa phrase — demain une notice, un plan.
+   *
+   * Hors d'une famille qui se lit — la vue d'ensemble —, ce sont les mots des
+   * comptes rendus : c'est le seul document que cet écran dépose à la main.
+   */
+  const ce = ceQueLaZoneDit(vue.famille) ?? ceQueLaZoneDit(FAMILLE.CR);
+  const laFamille = laFamilleQuiSeLit(vue.famille) ?? ceQueDitLaFamille(FAMILLE.CR);
+
   return `
     ${renderLaZoneDeDepot({
       occupee: enLecture,
-      mot: "Déposez un compte rendu, ou choisissez-le.",
-      aide: "Un PDF, ou un document déjà écrit en texte — <code>.md</code>, <code>.txt</code>. "
-        + "Le second se lit sans extraction ni restitution : aucun appel au modèle pour le relire.",
-      accepte: ACCEPTE
+      mot: ce.mot,
+      aide: ce.aide,
+      icone: laFamille.icone,
+      // **Pas de dépôt depuis le disque** là où les documents sont déjà dans le
+      // projet : les redéposer en ferait un second exemplaire.
+      duDisque: ce.duDisque,
+      plusieurs: ce.duDisque && vue.famille === FAMILLE.MAIL,
+      choisirDit: `Choisir ${laFamille.quoi.un === "fil" ? "des mails" : `un ${laFamille.quoi.un}`}`,
+      accepte: vue.famille && vue.famille !== TOUTES ? laFamille.accepte : ACCEPTE
     })}
   `;
 }

@@ -53,6 +53,29 @@ aucune. Un compte rendu a des points rapprochés des sujets ; un rapport a des a
 et une légende ; un fil a des prises de position, qui n'existent nulle part
 ailleurs.
 
+### Une seule zone de dépôt, trois phrases
+
+Le bureau de contrôle avait la sienne, écrite à la main : bordure pleine au lieu de
+pointillés, bouton vert, aide ailleurs, et une liste d'extensions à elle. Deux
+zones pour le même geste se ressemblaient de moins en moins (règle 4). C'est celle
+du compte rendu qui reste, et chaque famille lui passe ses mots, par son entrée
+`laZone` du registre :
+
+| famille | ce que la zone dit | depuis le disque | ce qu'elle accepte |
+| --- | --- | --- | --- |
+| CR chantier | « Déposez un compte rendu, ou choisissez-le. » | oui | `.pdf` + tout ce qui se lit comme du texte |
+| Bureau de contrôle | « Choisissez des rapports de bureau de contrôle. » | non | — |
+| Mails | « Déposez des mails, ou choisissez-les. » | oui | ce qui porte des mails |
+
+**Et les listes d'extensions ne s'écrivent plus là.** Il y en avait trois pour une
+seule question — « ce fichier se lit-il ? » : la liste du registre, celle de
+l'écran, et celle du lecteur. Elles viennent maintenant toutes de celui qui lit :
+les textes de `lire-un-fichier-texte.js`, les porteurs de mails de
+`le-dossier-des-mails.js`. Une épreuve vérifie qu'**aucune famille n'annonce une
+extension que personne ne sait ouvrir**, et qu'aucune n'en oublie une que son
+lecteur ouvre — rétrécir une liste est aussi faux que l'élargir, et plus difficile
+à voir : le sélecteur s'ouvre, le dossier paraît vide.
+
 **Les mesures aussi restent propres à leur famille.** « 12 » ne dit rien ;
 « 12 points » sous un compte rendu et « 12 avis » sous un rapport ne parlent pas de
 la même chose, et une colonne qui dirait « 12 » pour les deux ferait croire
@@ -125,10 +148,11 @@ C'est le point du registre `les-familles-de-document.js`. Il faut, et il suffit 
 
 1. **une entrée** — un geste, un nom, un titre, une icône, le nom nu de ce qu'on
    lit, ce qu'elle accepte, et le nom de sa fonction de bord ;
-2. **une fonction de bord** de ce nom, qui vide la file de ce geste.
-   `lire-les-rapports` est le patron : elle prend la plus ancienne ligne qui
-   attend, la marque avant de travailler, lit par paquets, s'arrête sur son budget
-   et se rappelle elle-même ;
+2. **une fonction de bord** de ce nom, qui appelle `viderLaFile` avec le geste et
+   une fonction qui sait lire **un** document de cette famille. La mécanique —
+   prendre la ligne, la marquer, reprendre, tenir le budget, se rappeler,
+   consigner, refermer — est commune et déjà éprouvée ; `lire-les-rapports` est le
+   patron, et il ne reste presque rien à écrire ;
 3. **une table** où sa lecture se garde, et un service pur qui dit ce qu'elle
    garde — comme `la-lecture-dun-rapport.js` le fait pour les rapports.
 
@@ -141,18 +165,56 @@ Deux épreuves gardent ce chemin : l'une vérifie que chaque fonction déclarée
 aucune erreur, il ne fait rien, et la file reste bloquée sans que l'écran sache
 pourquoi —, l'autre que chaque icône existe dans la planche.
 
-## Ce qui reste écrit deux fois, et c'est dit
+## La mécanique de file, écrite une fois
 
-La **mécanique de file** — prendre la plus ancienne ligne, la marquer, respecter un
-budget, se rappeler, consigner le journal — est écrite dans
-`lire-les-comptes-rendus` et de nouveau dans `lire-les-rapports`. Les décisions
-pures sont partagées (`la-file-des-comptes-rendus.js`) ; c'est la plomberie
-Supabase qui est en double, une centaine de lignes.
+Elle était recopiée : prendre la plus ancienne ligne qui attend, la marquer prise
+avant de travailler, reprendre ce qui était en vol après une coupure, tenir un
+budget, se rappeler soi-même, consigner la course, refermer la ligne — sept
+décisions, dans `lire-les-comptes-rendus` et de nouveau dans `lire-les-rapports`.
 
-Elle n'a pas été extraite dans ce round parce que porter la lecture des comptes
-rendus sur une mécanique neuve, sans pouvoir l'éprouver autrement qu'en production,
-aurait risqué de casser ce qui marche pour éviter une duplication. **À la
-troisième famille, elle s'extrait** — c'est là que le coût devient réel.
+Ce n'était pas le volume qui coûtait. C'est qu'une correction portée sur l'une ne
+touchait pas l'autre : le défaut « ce qui était en vol réattend » — une file qui
+finissait « 18 lus sur 19 » sans que le dix-neuvième apparaisse nulle part —
+n'avait été corrigé que du côté des comptes rendus (règle 4).
+
+Elle tient maintenant à deux endroits, séparés par ce qu'on sait éprouver :
+
+| où | quoi | éprouvé par |
+| --- | --- | --- |
+| `services/la-file-dun-geste.js` | la mécanique, **pure**, portes injectées | `npm test`, 34 épreuves |
+| `_shared/la-file-au-serveur.ts` | les six requêtes à `versements` et `project_runs` | la relecture de source |
+
+C'est ce découpage qui lève le risque qu'on avait nommé au round précédent :
+porter une file qui marche sur une mécanique neuve qu'on ne peut essayer qu'en
+production. Les portes étant injectées, l'ordre des écritures, la reprise, le
+budget épuisé et l'échec d'un document au milieu d'un lot se rejouent en une
+milliseconde — chacun de ces défauts a coûté un aller-retour en production avant.
+
+Chaque fonction de bord ne garde que ce qui lui est propre :
+
+```
+lire-les-rapports        → lireUn : ouvrir le PDF, l'orchestrer, conserver la lecture
+lire-les-comptes-rendus  → lireUn : lire le document ; apresChaque : porter dans la proposition
+```
+
+**`apresChaque`, et non `lireUn`.** Les lectures se font de front, les ajouts à la
+proposition en file : deux ajouts simultanés relisent le même état et écrivent les
+mêmes lignes deux fois. La mécanique le garantit, et une épreuve vérifie que la
+lecture des comptes rendus n'a pas glissé son ajout du mauvais côté.
+
+**`emporte`** est ce qu'une famille traîne d'un document au suivant — la
+proposition, ouverte au premier et enrichie ensuite. La mécanique ne sait pas ce
+que c'est ; les portes savent qu'elle s'écrit dans `proposition_id`. Un rapport de
+contrôle n'emporte rien : sa lecture se conserve, et c'est tout (règle 1).
+
+**`verser-les-mails` reste dehors.** Sa file n'a ni pas par document ni
+proposition : la plier là-dedans ferait porter à la mécanique commune un cas
+qu'elle seule emploierait.
+
+Les mots de la course viennent du registre — titre, phrase de clôture, nom de
+l'étape, pluriel de ce qu'on compte. « Lecture de 3 rapports de bureau de
+contrôle » et « Lecture de 3 comptes rendus de chantier » sont la même structure
+autour de deux entrées de `les-familles-de-document.js`.
 
 ## Ce qui n'est pas fait, et c'est dit à l'écran
 

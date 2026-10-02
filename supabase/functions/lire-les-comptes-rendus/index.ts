@@ -27,13 +27,17 @@
  *      fonction expire au douzième, la proposition porte déjà les onze
  *      premiers : rien n'est perdu, et la reprise continue dedans.
  *
- * ## Elle reprend là où elle s'arrête
+ * ## Elle reprend là où elle s'arrête, et ce n'est plus écrit ici
  *
  * Une lecture de dix-neuf comptes rendus dépasse de loin ce qu'une fonction de
  * bord a le droit de durer. Elle travaille donc **sous budget** : quand il est
  * épuisé, elle écrit où elle en est, se rappelle elle-même, et rend la main.
  * L'état de la file vit dans `avancement`, et c'est le même objet que l'écran
  * sait lire (`la-file-des-comptes-rendus.js`).
+ *
+ * Cette mécanique était recopiée dans `lire-les-rapports` : elle vit maintenant
+ * dans `la-file-dun-geste.js`, pure et éprouvée par `npm test`, et ses six
+ * requêtes dans `_shared/la-file-au-serveur.ts`.
  *
  * ## Elle ne réinvente aucune décision
  *
@@ -57,11 +61,11 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { extractText, getDocumentProxy } from "npm:unpdf";
 
 import { requireUser } from "../_shared/require-user.ts";
+import { appelerUneFonction, lesPortesDeLaFile } from "../_shared/la-file-au-serveur.ts";
 // @ts-ignore — modules JavaScript descendus au build (npm run prepare:versement)
-import {
-  DANS_LA_FILE, EN_MEME_TEMPS, apresUnPas, laFileEstFinie, laFileReprise,
-  lesComptesDeLaFile, lesProchainsDeLaFile, phraseDeLaFile, uneFileDeComptesRendus
-} from "../_shared/versement/la-file-des-comptes-rendus.js";
+import { EN_MEME_TEMPS } from "../_shared/versement/la-file-des-comptes-rendus.js";
+// @ts-ignore
+import { viderLaFile } from "../_shared/versement/la-file-dun-geste.js";
 // @ts-ignore
 import { confrontation, lectureAssemblee } from "../_shared/versement/lecture-du-cr.js";
 // @ts-ignore
@@ -88,9 +92,7 @@ import {
   laLigneDuneProposition, lesLignesDesItems
 } from "../_shared/versement/les-lignes-dune-proposition.js";
 // @ts-ignore
-import {
-  ABANDONNEE_APRES_MS, GESTE_DES_CR
-} from "../_shared/versement/reveiller-la-file.js";
+import { FAMILLE } from "../_shared/versement/les-familles-de-document.js";
 // @ts-ignore
 import { laLigneDuneLecture, leLecteur } from "../_shared/versement/la-lecture-conservee.js";
 // @ts-ignore
@@ -107,21 +109,15 @@ const entetes = {
 };
 
 const CASIER = "documents";
-// Le mot vit dans `reveiller-la-file.js`, avec la fonction qu'il réveille : la
-// ligne écrite sous un nom et cherchée sous un autre ne se retrouve pas (règle 10).
-const GESTE = GESTE_DES_CR;
-
 /**
- * Ce qu'on s'autorise à durer avant de se rappeler soi-même.
+ * Le geste de cette file. Il vient du registre, comme celui que l'écran pose.
  *
- * Une fonction de bord est coupée sans préavis au bout de son temps ; coupée en
- * plein appel au modèle, elle laisse une ligne `en_cours` que personne ne
- * reprend. On s'arrête donc **avant**, proprement, et l'on repart.
- *
- * Cent dix secondes : de quoi lire deux ou trois comptes rendus, et de la marge
- * pour écrire où l'on en est.
+ * **Du registre, et non de `GESTE_DES_CR`.** Les deux mots valent la même chose,
+ * mais la seconde est l'alias que le navigateur emploie comme famille par défaut :
+ * les deux fonctions de bord qui vident une file le prennent au même endroit, de
+ * sorte qu'une épreuve puisse le vérifier d'un coup (règle 10).
  */
-const LE_BUDGET_MS = 110_000;
+const GESTE = FAMILLE.CR;
 
 const texte = (valeur: unknown) => String(valeur ?? "").trim();
 
@@ -231,24 +227,6 @@ async function lesPagesDu(client: any, piece: any) {
   return { pages, dejaDuTexte: false };
 }
 
-/** Demander au modèle, par la fonction qui porte déjà la consigne. */
-async function demanderAuModele(nom: string, corps: unknown, autorisation: string) {
-  const reponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/${nom}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: autorisation,
-      apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? ""
-    },
-    body: JSON.stringify(corps)
-  });
-  if (!reponse.ok) {
-    const dit = await reponse.text().catch(() => "");
-    throw new Error(`${nom} a refusé (HTTP ${reponse.status}) ${dit.slice(0, 200)}`);
-  }
-  return await reponse.json();
-}
-
 /**
  * Un compte rendu : lu et rangé. **Il ne touche pas à la proposition.**
  *
@@ -287,7 +265,7 @@ async function unCompteRendu(client: any, {
   if (lues.dejaDuTexte) {
     cote = { phase: "fait", pages: lues.refait.pages, texte: lues.refait.texte, dejaDuTexte: true };
   } else {
-    const refait = await demanderAuModele("reconstituer-en-markdown", {
+    const refait = await appelerUneFonction("reconstituer-en-markdown", {
       project_id: projectId,
       pages: lues.pages.map((une: any) => ({ page: une.page, text: une.text }))
     }, autorisation);
@@ -322,7 +300,7 @@ async function unCompteRendu(client: any, {
     return { motif: "les sujets du chantier n'ont pas pu être relus" };
   }
 
-  const lu = await demanderAuModele("extract-sujets", {
+  const lu = await appelerUneFonction("extract-sujets", {
     source_id: "lecture-serveur",
     project_id: projectId,
     pages: aLire,
@@ -506,205 +484,59 @@ serve(async (req) => {
     }
   );
 
-  // **La plus ancienne qui attend, ou celle qu'on a abandonnée en route.** Sans
-  // le second cas, une fonction coupée en plein travail bloquerait la file pour
-  // toujours : sa ligne reste `en_cours`, et plus aucun réveil ne la prend.
-  const abandonnee = new Date(Date.now() - ABANDONNEE_APRES_MS).toISOString();
-  const { data: file, error: erreurDeLecture } = await client
-    .from("versements")
-    .select("id,project_id,documents,statut,avancement,proposition_id,cree_le,pris_le")
-    .eq("geste", GESTE)
-    .or(`statut.eq.en_attente,and(statut.eq.en_cours,pris_le.lt.${abandonnee})`)
-    .order("cree_le", { ascending: true })
-    .limit(1);
-
-  if (erreurDeLecture) return reponse({ error: erreurDeLecture.message }, 500);
-
-  const ligne = (file ?? [])[0];
-  if (!ligne) return reponse({ fait: false, motif: "rien à lire" });
-
-  // **Marquée prise avant de travailler.** Deux réveils simultanés prendraient
-  // sinon la même ligne, et liraient deux fois les mêmes comptes rendus — deux
-  // factures. Le filtre sur le statut d'origine fait que le second ne trouve
-  // rien à marquer.
-  const { data: prise } = await client
-    .from("versements")
-    .update({ statut: "en_cours", pris_le: new Date().toISOString() })
-    .eq("id", ligne.id)
-    .eq("statut", ligne.statut)
-    .select("id");
-
-  if (!prise?.length) return reponse({ fait: false, motif: "déjà prise" });
-
-  const debut = Date.now();
-
-  // **La file se reprend là où elle en était**, et c'est le même objet que
-  // l'écran sait lire. Une file neuve au premier réveil, celle d'`avancement`
-  // ensuite : relancer de zéro après une coupure relirait — et refacturerait —
-  // ce qui est déjà lu (règle 6).
-  const documents = Array.isArray(ligne.documents) ? ligne.documents : [];
-  const connues = documents.map((un: any) => ({
-    id: texte(un?.id), nom: texte(un?.nom) || "Document", lecture: "", type: "fichier"
-  }));
   /**
-   * **Ce qui était en vol réattend.**
+   * **La mécanique est commune, et elle est éprouvée.**
    *
-   * Une fonction coupée en plein travail laisse ses pas à `en-cours`. On
-   * cherchait ensuite le prochain qui **attend** : ces pas-là étaient sautés
-   * pour toujours — ni lus, ni échoués, ni comptés. La file se terminait
-   * « 18 lus sur 19 » sans que le dix-neuvième apparaisse nulle part.
+   * Prendre la plus ancienne ligne qui attend, la marquer prise avant de
+   * travailler, reprendre ce qui était en vol après une coupure, tenir le budget,
+   * se rappeler, consigner la course, refermer la ligne : tout cela vivait ici, et
+   * une seconde fois dans `lire-les-rapports`. C'est maintenant
+   * `la-file-dun-geste.js`, que `npm test` exerce — le défaut « ce qui était en vol
+   * réattend » n'avait d'ailleurs été corrigé que d'un côté (règle 4).
+   *
+   * Il ne reste ici que ce qui est propre aux comptes rendus : **lire** l'un
+   * d'eux, et **ce qui suit**.
+   *
+   * ## Ce que la file emporte
+   *
+   * La proposition. Elle s'ouvre au premier compte rendu et s'enrichit à chaque
+   * suivant — dix-neuf propositions seraient dix-neuf relectures pour un seul
+   * geste, c'est-à-dire ne pas l'avoir fait. La mécanique la traîne d'un document
+   * au suivant sous le nom `emporte`, et ne sait pas ce que c'est ; les portes
+   * savent qu'elle s'écrit dans `proposition_id`.
+   *
+   * **Et `apresChaque`, non `lireUn`.** Les lectures se font de front, les ajouts
+   * à la proposition en file : deux ajouts simultanés relisent le même état et
+   * écrivent les mêmes lignes deux fois.
    */
-  let etat = Array.isArray(ligne.avancement?.pas) && ligne.avancement.pas.length
-    ? laFileReprise(ligne.avancement)
-    : uneFileDeComptesRendus(new Set(connues.map((un: any) => un.id)), connues);
+  const rendu = await viderLaFile({
+    geste: GESTE,
+    portes: lesPortesDeLaFile(client, {
+      geste: GESTE, autorisation, emporteDans: "proposition_id"
+    }),
+    enMemeTemps: EN_MEME_TEMPS,
 
-  let proposition = texte(ligne.proposition_id);
+    lireUn: (prochain: any, { ligne, emporte }: any) => unCompteRendu(client, {
+      projectId: ligne.project_id,
+      documentId: prochain.id,
+      nom: prochain.nom,
+      autorisation,
+      propositionId: emporte
+    }),
 
-  try {
-    for (;;) {
-      /**
-       * **Trois de front, et les ajouts en file.**
-       *
-       * Une lecture est de l'attente pure : deux appels au modèle pendant
-       * lesquels cette fonction ne fait rien. Les mener ensemble divise le
-       * temps d'une file de dix-neuf par trois.
-       *
-       * L'ajout à la proposition, lui, reste en file : il relit ce qu'elle
-       * porte avant d'écrire, et deux ajouts simultanés verraient le même état
-       * et écriraient les mêmes lignes deux fois.
-       */
-      const prochains = lesProchainsDeLaFile(etat, EN_MEME_TEMPS);
-      if (!prochains.length) break;
-
-      // **Le budget d'abord**, et avant de marquer quoi que ce soit en cours.
-      // Coupée en plein appel au modèle, la fonction laisserait des pas en vol
-      // et des appels payés pour rien.
-      if (Date.now() - debut > LE_BUDGET_MS) {
-        await client.from("versements")
-          .update({ avancement: etat, proposition_id: proposition || null })
-          .eq("id", ligne.id);
-        // On se rappelle sans attendre : la suite est un autre réveil.
-        void demanderAuModele("lire-les-comptes-rendus", {}, autorisation).catch(() => {});
-        return reponse({ fait: false, motif: "budget épuisé, la suite au prochain réveil" });
-      }
-
-      // Tous marqués en cours d'un coup, puis **une seule écriture** : trois
-      // écritures pour trois pas feraient trois fois le tour, et l'écran ne
-      // verrait de toute façon que la dernière.
-      for (const un of prochains) etat = apresUnPas(etat, un.id, DANS_LA_FILE.EN_COURS);
-      await client.from("versements").update({ avancement: etat }).eq("id", ligne.id);
-
-      const lus = await Promise.all(prochains.map(async (prochain: any) => {
-        try {
-          return await unCompteRendu(client, {
-            projectId: ligne.project_id,
-            documentId: prochain.id,
-            nom: prochain.nom,
-            autorisation,
-            propositionId: proposition
-          });
-        } catch (erreur) {
-          return { motif: texte((erreur as Error)?.message) || "cause inconnue" };
-        }
-      }));
-
-      // **Les ajouts, un par un, dans l'ordre des documents.** Le premier ouvre
-      // la proposition, les suivants la retrouvent.
-      for (let rang = 0; rang < prochains.length; rang += 1) {
-        const prochain = prochains[rang];
-        const lu: any = lus[rang];
-
-        if (lu?.motif) {
-          // **Un échec ne fait pas tomber la file** : il se nomme, et la suite
-          // part. S'arrêter au premier document illisible abandonnerait
-          // dix-huit lectures (règle 5).
-          etat = apresUnPas(etat, prochain.id, DANS_LA_FILE.ECHOUE, lu.motif);
-          continue;
-        }
-
-        let porte: any;
-        try {
-          porte = await porterDansLaProposition(client, lu, {
-            projectId: ligne.project_id,
-            nom: prochain.nom,
-            quiDemande,
-            propositionId: proposition
-          });
-        } catch (erreur) {
-          porte = { motif: texte((erreur as Error)?.message) || "cause inconnue" };
-        }
-
-        if (porte.propositionId) proposition = porte.propositionId;
-        etat = apresUnPas(etat, prochain.id,
-          porte.motif ? DANS_LA_FILE.ECHOUE : DANS_LA_FILE.LU, porte.motif ?? "");
-      }
-
-      await client.from("versements")
-        .update({ avancement: etat, proposition_id: proposition || null })
-        .eq("id", ligne.id);
+    apresChaque: async (lu: any, prochain: any, { ligne, emporte }: any) => {
+      const porte = await porterDansLaProposition(client, lu, {
+        projectId: ligne.project_id,
+        nom: prochain.nom,
+        quiDemande,
+        propositionId: emporte
+      });
+      return { motif: porte.motif, emporte: porte.propositionId };
     }
+  });
 
-    const comptes = lesComptesDeLaFile(etat);
-    const arrete = comptes.lus === 0 && comptes.total > 0
-      ? `aucun des ${comptes.total} comptes rendus n'a pu être lu`
-      : "";
-
-    // **Le journal se consigne, puis la file se referme.** Dans l'autre ordre,
-    // une panne entre les deux laisserait une file finie sans trace de ce
-    // qu'elle a fait.
-    const { data: course } = await client
-      .from("project_runs")
-      .insert({
-        project_id: ligne.project_id,
-        // **Le geste de la file, et non « versement ».** L'onglet Actions lisait
-        // le mot pour écrire « Dépôt de messagerie » sous une lecture de trois
-        // comptes rendus. Le rangement en « Versements » et le caractère
-        // personnel ne changent pas : la politique les tient sur `personnelle`,
-        // pas sur le geste (`202610280001_...`).
-        geste: GESTE,
-        personnelle: true,
-        titre: `Lecture de ${comptes.total} ${comptes.total > 1 ? "comptes rendus" : "compte rendu"} de chantier`,
-        resume: arrete
-          ? `Lecture interrompue : ${arrete}`
-          : `${phraseDeLaFile(etat)} — une seule proposition à relire et à signer.`,
-        statut: arrete ? "echec" : (comptes.echoues ? "warning" : "ok"),
-        started_at: new Date(ligne.pris_le ?? ligne.cree_le ?? Date.now()).toISOString(),
-        finished_at: new Date().toISOString(),
-        duration_ms: Math.max(0, Date.now() - debut),
-        steps: [{
-          id: "lecture",
-          label: "Comptes rendus lus",
-          ms: null,
-          statut: arrete ? "echec" : "ok",
-          lignes: [
-            `Demandés : ${comptes.total}`,
-            `Lus : ${comptes.lus}`,
-            `Illisibles : ${comptes.echoues}`
-          ]
-        }]
-      })
-      .select("id")
-      .single();
-
-    await client.from("versements").update({
-      statut: arrete ? "echec" : "fini",
-      avancement: etat,
-      arrete,
-      proposition_id: proposition || null,
-      course_id: course?.id ?? null,
-      fini_le: new Date().toISOString()
-    }).eq("id", ligne.id);
-
-    return reponse({
-      fait: !arrete, lus: comptes.lus, echoues: comptes.echoues, proposition
-    });
-  } catch (erreur) {
-    const arrete = texte((erreur as Error)?.message) || "cause inconnue";
-    await client.from("versements").update({
-      statut: "echec", arrete, avancement: etat,
-      proposition_id: proposition || null,
-      fini_le: new Date().toISOString()
-    }).eq("id", ligne.id);
-    return reponse({ fait: false, arrete }, 500);
-  }
+  return reponse({
+    fait: rendu.fait, lus: rendu.lus, echoues: rendu.echoues,
+    proposition: rendu.emporte, arrete: rendu.arrete
+  }, rendu.arrete ? 500 : 200);
 });

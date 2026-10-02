@@ -33,6 +33,22 @@ const RACINE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = (nom) =>
   readFileSync(path.join(RACINE, "supabase", "functions", nom, "index.ts"), "utf8");
 
+/**
+ * Les portes communes de la file, côté base.
+ *
+ * **C'est là que la plupart de ces épreuves ont déménagé.** La mécanique — tenir
+ * le budget, reprendre ce qui était en vol, consigner avant de refermer, faire
+ * les ajouts un par un — vit maintenant dans `la-file-dun-geste.js`, qui est pur
+ * et que `npm test` **exécute** : ce qui s'y vérifie en jouant ne se lit plus
+ * comme du texte ici, et les épreuves qui le faisaient ont été retirées plutôt
+ * que réécrites. Ne reste que ce qu'aucune exécution n'atteint : six requêtes.
+ */
+const LES_PORTES = readFileSync(
+  path.join(RACINE, "supabase", "functions", "_shared", "la-file-au-serveur.ts"), "utf8");
+
+/** Les deux fonctions qui vident une file par la mécanique commune. */
+const LES_LECTURES = ["lire-les-comptes-rendus", "lire-les-rapports"];
+
 /** La requête qui prend une ligne de la file, dans cette fonction. */
 function laPrise(texte) {
   const ou = texte.indexOf('.from("versements")');
@@ -46,10 +62,23 @@ test("verser-les-mails ne prend que des dépôts de messagerie", () => {
     "elle prendrait une lecture de comptes rendus, et la marquerait en échec");
 });
 
-test("lire-les-comptes-rendus ne prend que des lectures de comptes rendus", () => {
-  const prise = laPrise(source("lire-les-comptes-rendus"));
-  assert.match(prise, /\.eq\("geste", GESTE\)/,
-    "elle prendrait un dépôt de messagerie, dont elle ne saurait rien faire");
+test("les portes communes ne prennent que le geste qu'on leur donne", () => {
+  const prise = laPrise(LES_PORTES);
+  assert.match(prise, /\.eq\("geste", geste\)/,
+    "une lecture prendrait un dépôt de messagerie, dont elle ne saurait rien faire");
+});
+
+test("chaque lecture passe le geste de sa famille, et le sien seul", () => {
+  // **Le geste vient du registre**, et la même constante sert à prendre la ligne
+  // et à consigner la course : deux mots auraient fait une file vidée sous un nom
+  // et racontée sous un autre (règle 10).
+  for (const nom of LES_LECTURES) {
+    const texte = source(nom);
+    assert.match(texte, /const GESTE = FAMILLE\.\w+;/,
+      `${nom} ne prend pas son geste dans le registre des familles`);
+    assert.match(texte, /lesPortesDeLaFile\(client, \{\s*\n?\s*geste: GESTE,/,
+      `${nom} donne aux portes un geste qui n'est pas le sien`);
+  }
 });
 
 /**
@@ -59,13 +88,26 @@ test("lire-les-comptes-rendus ne prend que des lectures de comptes rendus", () =
  * les mêmes dix-neuf comptes rendus — deux factures. Le filtre sur le statut
  * d'origine fait que le second ne trouve rien à marquer.
  */
-test("les deux fonctions marquent la ligne avant de travailler", () => {
-  for (const nom of ["verser-les-mails", "lire-les-comptes-rendus"]) {
-    const texte = source(nom);
-    assert.match(texte, /statut: "en_cours", pris_le: new Date\(\)\.toISOString\(\)/,
-      `${nom} ne marque pas la ligne prise`);
-    assert.match(texte, /if \(!prise\?\.length\) return reponse\(\{ fait: false, motif: "déjà prise" \}\)/,
-      `${nom} travaille sur une ligne qu'un autre réveil a déjà prise`);
+test("la ligne se marque prise, et sous son statut d'origine", () => {
+  // `verser-les-mails` tient encore sa propre file : son dépôt n'a ni pas par
+  // document ni proposition, et la plier dans la mécanique commune lui ferait
+  // porter un cas qu'elle seule emploierait.
+  const mails = source("verser-les-mails");
+  assert.match(mails, /statut: "en_cours", pris_le: new Date\(\)\.toISOString\(\)/,
+    "verser-les-mails ne marque pas la ligne prise");
+  assert.match(mails, /if \(!prise\?\.length\) return reponse\(\{ fait: false, motif: "déjà prise" \}\)/,
+    "verser-les-mails travaille sur une ligne qu'un autre réveil a déjà prise");
+
+  // Les deux lectures passent par les portes communes. **Le filtre sur le statut
+  // d'origine est ce qui compte** : sans lui, deux réveils simultanés marquent
+  // tous les deux, lisent tous les deux, et facturent deux fois.
+  assert.match(LES_PORTES, /statut: "en_cours", pris_le: new Date\(\)\.toISOString\(\)/,
+    "les portes ne marquent pas la ligne prise");
+  assert.match(LES_PORTES, /\.eq\("statut", ligne\.statut\)/,
+    "les portes marquent sans vérifier d'où partait la ligne");
+  for (const nom of LES_LECTURES) {
+    assert.match(source(nom), /portes: lesPortesDeLaFile\(/,
+      `${nom} n'emploie pas les portes communes : sa prise divergera`);
   }
 });
 
@@ -78,53 +120,9 @@ test("les deux fonctions marquent la ligne avant de travailler", () => {
  * afficherait « lecture en cours » jusqu'à la fin des temps (règle 5).
  */
 test("une lecture abandonnée en route se reprend", () => {
-  const texte = source("lire-les-comptes-rendus");
-
-  assert.match(texte, /ABANDONNEE_APRES_MS/, "rien ne dit quand une ligne est abandonnée");
-  assert.match(texte, /statut\.eq\.en_cours,pris_le\.lt\./,
+  assert.match(LES_PORTES, /ABANDONNEE_APRES_MS/, "rien ne dit quand une ligne est abandonnée");
+  assert.match(LES_PORTES, /statut\.eq\.en_cours,pris_le\.lt\./,
     "une ligne prise et abandonnée n'est jamais reprise : la file se bloque");
-});
-
-/**
- * **Le budget doit être employé, pas seulement déclaré.**
- *
- * Une constante nommée et jamais lue est une intention (règle 12), et c'est ce
- * qu'un cassage a montré : remplacer le test par `if (false)` ne faisait tomber
- * aucune épreuve, parce qu'elles cherchaient le nom de la constante — qui
- * restait écrit, à sa déclaration.
- *
- * Sans ce test dans la boucle, la fonction est coupée sans préavis au milieu
- * d'un appel au modèle : elle laisse une ligne `en_cours`, un appel payé pour
- * rien, et dix-neuf comptes rendus qui ne repartent qu'au bout de dix minutes.
- */
-test("le budget s'éprouve à chaque tour de boucle, et la suite se rappelle", () => {
-  const texte = source("lire-les-comptes-rendus");
-  const boucle = texte.slice(texte.indexOf("for (;;) {"), texte.indexOf("const comptes ="));
-  assert.ok(boucle, "la boucle de la file est introuvable");
-
-  assert.match(boucle, /if \(Date\.now\(\) - debut > LE_BUDGET_MS\) \{/,
-    "la boucle ne regarde jamais le budget : la fonction sera coupée en plein appel");
-
-  /**
-   * Et ce qu'elle fait quand il est épuisé : écrire où l'on en est, se rappeler,
-   * rendre la main. Sans l'écriture, la reprise relirait — et refacturerait —
-   * ce qui est déjà lu (règle 6).
-   *
-   * **Le bloc seul, et pas la boucle entière.** La première version de cette
-   * épreuve coupait à `LE_BUDGET_MS` et gardait tout ce qui suivait : elle
-   * trouvait `avancement: etat` dans l'écriture de pas d'après, et passait alors
-   * même que le bloc du budget n'écrivait plus rien. Une épreuve qui regarde
-   * trop large ne regarde rien.
-   */
-  const ouvre = boucle.indexOf("if (Date.now() - debut > LE_BUDGET_MS)");
-  const quandIlEstEpuise = boucle.slice(ouvre, boucle.indexOf("\n      }", ouvre));
-
-  assert.match(quandIlEstEpuise, /avancement: etat/,
-    "la file ne garde pas où elle en était : la reprise relirait tout");
-  assert.match(quandIlEstEpuise, /lire-les-comptes-rendus/,
-    "la fonction ne se rappelle pas : la file s'arrête là");
-  assert.match(quandIlEstEpuise, /return reponse\(/,
-    "la fonction ne rend pas la main : elle sera coupée quand même");
 });
 
 /**
@@ -160,66 +158,67 @@ test("la lecture ne dépose aucun second exemplaire d'un compte rendu", () => {
  * Dix-neuf propositions, c'étaient dix-neuf relectures pour un seul geste. Et
  * l'ouvrir à la fin aurait tout perdu si la fonction expirait en route : ce qui
  * a eu lieu ne devient pas faux (règle 6).
+ *
+ * **Ce qu'on vérifie ici est le branchement, et non la mécanique.** Qu'une file
+ * traîne ce qu'elle emporte d'un document au suivant, et le garde même quand un
+ * ajout échoue, est joué par `la-file-dun-geste.test.mjs`. Ce qui reste invisible
+ * autrement est que la lecture des comptes rendus **dise aux portes dans quelle
+ * colonne** elle l'écrit : sans ce mot, la mécanique traînerait la proposition
+ * pendant la passe et la perdrait au réveil suivant, qui en ouvrirait une
+ * seconde — et rien, dans aucune épreuve de comportement, ne le dirait.
  */
-test("la proposition s'ouvre au premier compte rendu et s'enrichit", () => {
+test("la lecture des comptes rendus dit où s'écrit ce qu'elle emporte", () => {
   const texte = source("lire-les-comptes-rendus");
 
-  assert.match(texte, /propositionId: texte\(propositionId\)/,
-    "chaque compte rendu ouvre sa propre proposition");
-  // **Sur n'importe quel nom.** La première version de cette épreuve lisait
-  // `pas.propositionId` — le nom d'une variable locale. Renommer la variable la
-  // faisait tomber sans que rien n'ait changé, et c'est le genre d'épreuve qui
-  // apprend à ne plus lire les échecs.
-  assert.match(texte, /if \(\w+\.propositionId\) proposition = \w+\.propositionId;/,
-    "la proposition ouverte n'est pas gardée d'un compte rendu au suivant");
-  assert.match(texte, /proposition_id: proposition \|\| null/,
-    "la ligne de file ne porte pas la proposition qu'elle a ouverte");
+  assert.match(texte, /emporteDans: "proposition_id"/,
+    "la proposition ouverte ne survit pas au réveil suivant, qui en ouvrira une autre");
+  assert.match(texte, /propositionId: emporte/,
+    "la proposition emportée n'est pas rendue à la lecture du compte rendu suivant");
+  assert.match(texte, /emporte: porte\.propositionId/,
+    "la proposition ouverte n'est pas rendue à la file : chaque document en ouvrira une");
 
   // **Et un échec rend celle qu'il a ouverte.** Sans cela, le compte rendu
   // suivant en ouvrait une autre : trois comptes rendus, deux propositions vides
-  // (règle 6).
+  // (règle 6). La mécanique la garde ; encore faut-il qu'on la lui donne.
   assert.match(texte, /propositionId: texte\(rendu\?\.proposition\?\.id\) \|\| texte\(propositionId\)/,
     "un échec oublie la proposition qu'il vient d'ouvrir");
+
+  // La famille des rapports n'emporte rien : lui donner une colonne lui ferait
+  // écrire un identifiant de proposition qu'elle n'a pas ouverte.
+  assert.doesNotMatch(source("lire-les-rapports"), /emporteDans/,
+    "une lecture de rapport n'ouvre aucune proposition (règle 1)");
 });
 
 /**
  * **Les lectures de front, les ajouts en file.**
  *
- * C'est le genre de défaut qu'un test de comportement ne verra jamais, et qu'on
- * ne découvre qu'en doublons dans une proposition de production : ajouter des
- * lignes se fait en deux temps — relire ce que la proposition porte, puis
- * écrire ce qui manque. Deux ajouts menés ensemble verraient le même état et
- * écriraient les mêmes lignes deux fois.
+ * Ajouter des lignes à une proposition se fait en deux temps — relire ce qu'elle
+ * porte, puis écrire ce qui manque. Deux ajouts menés ensemble verraient le même
+ * état et écriraient les mêmes lignes deux fois : des doublons qu'on ne découvre
+ * qu'en production, dans une proposition déjà signée.
  *
- * Le jour où quelqu'un voudra « finir de paralléliser », c'est cette épreuve
- * qui l'arrêtera. Elle lit le source parce que c'est précisément un défaut
- * invisible autrement.
+ * La mécanique commune fait les lectures de front et les suites une par une, et
+ * c'est joué : `la-file-dun-geste.test.mjs` refuse deux suites simultanées. Ce
+ * qu'aucune exécution ne peut dire est **de quel côté la lecture des comptes
+ * rendus a rangé son ajout** : glissé dans `lireUn`, il repart de front, et la
+ * mécanique n'en sait rien.
+ *
+ * Le jour où quelqu'un voudra « finir de paralléliser », c'est cette épreuve qui
+ * l'arrêtera.
  */
-test("les ajouts à la proposition ne se font jamais de front", () => {
+test("l'ajout à la proposition est une suite, et non une lecture", () => {
   const texte = source("lire-les-comptes-rendus");
 
-  // Les lectures, elles, partent ensemble.
-  assert.match(texte, /await Promise\.all\(prochains\.map\(/,
-    "les comptes rendus ne se lisent pas de front : la file reste séquentielle");
+  const ouLireUn = texte.indexOf("lireUn:");
+  const ouApres = texte.indexOf("apresChaque:");
+  assert.ok(ouLireUn !== -1 && ouApres !== -1, "la file n'est plus branchée");
+  assert.ok(ouLireUn < ouApres, "les deux crochets ont changé d'ordre : l'épreuve est à relire");
 
-  // Et l'ajout se fait dans une boucle, jamais dans un `Promise.all`.
-  assert.match(texte, /for \(let rang = 0; rang < prochains\.length; rang \+= 1\)[\s\S]*?porterDansLaProposition/,
-    "l'ajout à la proposition n'est plus en file");
-  assert.doesNotMatch(texte, /Promise\.all\([\s\S]{0,400}porterDansLaProposition/,
-    "les ajouts à la proposition partent ensemble : ils écriront des doublons");
-});
-
-/**
- * **Ce qui était en vol réattend.**
- *
- * Une fonction coupée laisse ses pas à `en-cours`. Chercher ensuite le prochain
- * qui **attend** les saute pour toujours : ni lus, ni échoués, ni comptés. La
- * file se terminait « 18 lus sur 19 » sans que le dix-neuvième apparaisse.
- */
-test("la file reprise remet en attente ce qui était en vol", () => {
-  const texte = source("lire-les-comptes-rendus");
-  assert.match(texte, /laFileReprise\(ligne\.avancement\)/,
-    "la reprise repart de l'état brut : les pas restés en vol seront sautés");
+  const laLecture = texte.slice(ouLireUn, ouApres);
+  assert.doesNotMatch(laLecture, /porterDansLaProposition/,
+    "l'ajout à la proposition part de front : il écrira des doublons");
+  assert.match(texte.slice(ouApres), /porterDansLaProposition\(/,
+    "l'ajout à la proposition ne se fait plus en file");
 });
 
 /**
@@ -277,12 +276,22 @@ test("un dépôt de messagerie abandonné se referme", () => {
  * qu'elle a cessé d'être utile (règle 4).
  */
 test("le délai d'abandon vient du module partagé, et de nulle part ailleurs", () => {
-  for (const nom of ["verser-les-mails", "lire-les-comptes-rendus"]) {
-    const texte = source(nom);
-    assert.match(texte, /import \{[\s\S]{0,120}ABANDONNEE_APRES_MS[\s\S]{0,120}\} from "\.\.\/_shared\/versement\/reveiller-la-file\.js"/,
-      `${nom} ne lit pas le délai dans le module partagé`);
+  // Les deux lectures le reçoivent par les portes communes ; `verser-les-mails`,
+  // qui tient encore sa propre file, le lit elle-même.
+  for (const [quoi, texte] of [
+    ["verser-les-mails", source("verser-les-mails")],
+    ["les portes de la file", LES_PORTES]
+  ]) {
+    assert.match(texte, /import \{[\s\S]{0,120}ABANDONNEE_APRES_MS[\s\S]{0,160}\} from "\.[\s\S]{0,20}\/versement\/reveiller-la-file\.js"/,
+      `${quoi} ne lit pas le délai dans le module partagé`);
     assert.doesNotMatch(texte, /const ABANDONNEE_APRES_MS\s*=/,
-      `${nom} redéclare le délai : il finira par différer de celui de l'écran`);
+      `${quoi} redéclare le délai : il finira par différer de celui de l'écran`);
+  }
+
+  // Et aucune lecture ne le redit de son côté.
+  for (const nom of LES_LECTURES) {
+    assert.doesNotMatch(source(nom), /ABANDONNEE_APRES_MS/,
+      `${nom} décide elle-même quand une ligne est abandonnée`);
   }
 });
 
@@ -326,24 +335,6 @@ test("la lecture confronte aux sujets qui existent", () => {
   // à une liste vide reproposerait chaque sujet déjà suivi.
   assert.match(texte, /if \(pasLus \|\| !Array\.isArray\(sujetsDuProjet\)\)/,
     "une lecture ratée des sujets passe pour un projet qui ne suit rien");
-});
-
-/**
- * **Le journal nomme le geste qu'il raconte.**
- *
- * La course s'écrivait avec `geste: "versement"`, et l'onglet Actions affichait
- * donc « Dépôt de messagerie » sous une lecture de trois comptes rendus.
- */
-test("une lecture de comptes rendus se consigne sous son geste", () => {
-  const texte = source("lire-les-comptes-rendus");
-  const course = texte.slice(texte.indexOf('.from("project_runs")'));
-
-  assert.match(course, /geste: GESTE,/, "la course se consigne sous le geste d'une autre file");
-  assert.doesNotMatch(course, /geste: "versement"/, "la course se dit dépôt de messagerie");
-  // **Et elle reste personnelle** : la politique le tient sur cette colonne, pas
-  // sur le geste. Sans elle, une lecture de comptes rendus deviendrait lisible
-  // par tout le projet.
-  assert.match(course, /personnelle: true/, "la course deviendrait lisible par tout le projet");
 });
 
 /**

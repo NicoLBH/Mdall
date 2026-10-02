@@ -237,3 +237,17 @@ test("tout écran qui dessine la zone la branche, et par le même nom", async ()
   // n'ayant rien lu — ce qui est pire que de ne pas l'avoir écrite.
   assert.equal(vus, LES_ECRANS.length);
 });
+
+test("la porte de l'ordinateur se refuse là où elle ferait un doublon", () => {
+  // Les familles qui relisent des documents déjà rangés dans le projet ne
+  // l'offrent pas : les redéposer depuis le disque en ferait un second exemplaire.
+  const sans = renderLaZoneDeDepot({ mot: "Choisissez", duDisque: false });
+  assert.doesNotMatch(sans, new RegExp(UN_FICHIER_LOCAL));
+  assert.match(sans, new RegExp(DEPUIS_FICHIERS));
+  // La zone reste la même, avec son cadre et son attribut.
+  assert.match(sans, /class="zone-de-depot"/);
+  assert.match(sans, new RegExp(LA_ZONE));
+
+  const avec = renderLaZoneDeDepot({ mot: "Déposez", duDisque: true });
+  assert.match(avec, new RegExp(UN_FICHIER_LOCAL));
+});

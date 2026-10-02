@@ -72,6 +72,10 @@ export const LES_DEPARTS = [
   "services/le-journal-du-depouillement.js",
   // Lire des comptes rendus : la file, la lecture, la proposition.
   "services/la-file-des-comptes-rendus.js",
+  // La mécanique de file elle-même, commune aux gestes. Les deux fonctions de bord
+  // l'appellent directement : sans ce départ, la fermeture ne la trouverait pas, et
+  // l'absence ne se verrait qu'à l'import, en production, au premier réveil.
+  "services/la-file-dun-geste.js",
   "services/lecture-du-cr.js",
   "services/reconstitution-markdown.js",
   "services/lire-un-fichier-texte.js",

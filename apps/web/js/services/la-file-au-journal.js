@@ -29,6 +29,7 @@ import { lorigineDunGeste } from "./run-partition.js";
 import { LE_GESTE, leNomDeLaction } from "./le-journal-du-depouillement.js";
 import { phraseDuConvoi } from "./le-convoi.js";
 import { GESTE_DES_CR, LA_FONCTION_DU_GESTE, leGesteDeLaLigne } from "./reveiller-la-file.js";
+import { ceQueLaFileDit } from "./les-familles-de-document.js";
 import { phraseDeLaFile } from "./la-file-des-comptes-rendus.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -58,7 +59,9 @@ export function estUnGesteDeLaFile(geste = "") {
  * rendus s'affichait « Dépôt de messagerie », ce qu'elle n'est pas.
  */
 export function laProvenanceDuGeste(geste = "") {
-  return texte(geste) === GESTE_DES_CR ? "Lecture de comptes rendus" : "Dépôt de messagerie";
+  // **Et non « tout ce qui n'est pas un compte rendu est un dépôt de mails ».**
+  // Une lecture de rapports s'annonçait ainsi, déclencheur compris.
+  return ceQueLaFileDit(texte(geste))?.provenance ?? "Dépôt de messagerie";
 }
 
 /**
@@ -70,7 +73,8 @@ export function laProvenanceDuGeste(geste = "") {
  * compte rendu » sur une file de dix-neuf.
  */
 export function combienDePieces(ligne = null) {
-  const liste = leGesteDeLaLigne(ligne) === GESTE_DES_CR ? ligne?.documents : ligne?.fichiers;
+  const ou = ceQueLaFileDit(leGesteDeLaLigne(ligne))?.piecesDans ?? "fichiers";
+  const liste = ligne?.[ou];
   return Array.isArray(liste) ? liste.length : 0;
 }
 
@@ -132,8 +136,22 @@ export function leMotDeLaFile(ligne = null) {
  * battement, c'est-à-dire mesuré la patience de l'écran et non celle du travail.
  */
 export function lesEtapesDeLaFile(ligne = null, {
-  statut = "", desCr = false, combien = 0, maintenant = Date.now()
+  statut = "", geste = "", combien = 0, maintenant = Date.now()
 } = {}) {
+  /**
+   * **Les mots de l'étape viennent de la famille.**
+   *
+   * Ils étaient choisis par un booléen « est-ce un compte rendu ? » : une lecture
+   * de rapports affichait donc « Rangement en cours — Fichiers : 0 », les mots du
+   * dépôt de messagerie sur un travail qui n'en est pas un.
+   */
+  const laFile = ceQueLaFileDit(geste);
+  const dit = {
+    enCours: laFile?.enCours ?? "Rangement en cours",
+    pieces: laFile?.pieces ?? "Fichiers"
+  };
+  // Une file dont les pas sont nommés document par document : les deux lectures.
+  const parDocument = laFile?.piecesDans === "documents";
   // **Rien n'est pris : une seule étape, et elle le dit.** Détailler dix-neuf
   // attentes avant que le serveur ait seulement répondu ferait un mur de gris
   // qui n'apprend rien.
@@ -143,7 +161,7 @@ export function lesEtapesDeLaFile(ligne = null, {
       label: "En attente du serveur",
       ms: null,
       statut: "en-cours",
-      lignes: [`${desCr ? "Comptes rendus" : "Fichiers"} : ${combien}`]
+      lignes: [`${dit.pieces} : ${combien}`]
     }];
   }
 
@@ -151,18 +169,18 @@ export function lesEtapesDeLaFile(ligne = null, {
 
   // Un dépôt de messagerie n'a pas de pas nommés : ses fichiers se déplient en
   // messages, et c'est le convoi qui compte. On garde son bloc, et ses nombres.
-  if (!desCr || !pas.length) {
+  if (!parDocument || !pas.length) {
     return [{
       id: statut || "en_cours",
-      label: desCr ? "Lecture en cours" : "Rangement en cours",
+      label: dit.enCours,
       ms: null,
       // **En cours n'est pas fait.** Cette étape portait « ok », et le graphe
       // la peignait en vert avec sa coche : on lisait « Rangement en cours »
       // sous une coche verte pendant que le bandeau disait « En cours ».
       statut: "en-cours",
-      lignes: desCr
-        ? [`Comptes rendus : ${combien}`, `Lus : ${pas.filter((un) => un?.ou === "lu").length}`]
-        : [`Fichiers : ${combien}`, `Messages versés : ${nombre(ligne?.avancement?.verses)}`]
+      lignes: parDocument
+        ? [`${dit.pieces} : ${combien}`, `Lus : ${pas.filter((un) => un?.ou === "lu").length}`]
+        : [`${dit.pieces} : ${combien}`, `Messages versés : ${nombre(ligne?.avancement?.verses)}`]
     }];
   }
 
@@ -258,15 +276,23 @@ export function laFileAuJournal(ligne = null) {
   const id = texte(ligne?.id);
   if (!id) return null;
 
+  const geste = leGesteDeLaLigne(ligne);
   const combien = combienDePieces(ligne);
-  const desCr = leGesteDeLaLigne(ligne) === GESTE_DES_CR;
   const debut = ligne?.cree_le ? new Date(ligne.cree_le).getTime() : Date.now();
 
-  // **Deux gestes, deux noms, un seul endroit où ils s'écrivent** (règle 10).
-  const nom = desCr
-    ? `Lecture de ${combien} ${combien > 1 ? "comptes rendus" : "compte rendu"} de chantier`
-    : leNomDeLaction(combien);
-  const dAou = laProvenanceDuGeste(leGesteDeLaLigne(ligne));
+  /**
+   * **Le nom vient de la famille, et non d'un binaire.**
+   *
+   * Il y avait deux cas : comptes rendus, ou tout le reste. Une lecture de
+   * rapports de bureau de contrôle tombait donc du côté des mails, et Actions
+   * affichait « Versement de 0 fichier de messagerie » sur une analyse de
+   * rapport — faux sur le travail, faux sur le nombre, et faux sur l'origine.
+   *
+   * Le repli garde l'ancien nom pour un geste qu'on ne connaît pas : une ligne
+   * posée par une version plus récente que cet écran reste lisible.
+   */
+  const nom = ceQueLaFileDit(geste)?.titre(combien) ?? leNomDeLaction(combien);
+  const dAou = laProvenanceDuGeste(geste);
 
   return {
     // **L'identifiant de la file, tel quel.** Quand la course finira par
@@ -290,7 +316,7 @@ export function laFileAuJournal(ligne = null) {
     // comptes rendus est un essai : elle relit des documents déjà là, et
     // s'affichait pourtant sous « Versements », où l'on cherche ce qu'on a
     // apporté.
-    origine: lorigineDunGeste(leGesteDeLaLigne(ligne)),
+    origine: lorigineDunGeste(geste),
     // Qui l'a lancée : le journal le dit pour toutes les exécutions, et une
     // ligne de file en est une.
     ownerId: texte(ligne?.owner_id),
@@ -304,7 +330,7 @@ export function laFileAuJournal(ligne = null) {
     details: {
       corpus: {
         geste: LE_GESTE,
-        steps: lesEtapesDeLaFile(ligne, { statut, desCr, combien })
+        steps: lesEtapesDeLaFile(ligne, { statut, geste, combien })
       }
     },
     createdAt: debut,
