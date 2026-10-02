@@ -9,9 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  LIRE_LES_RAPPORTS, OUVRIR_UN_RAPPORT, renderLaLegendeLue, renderLeDetailDunRapport,
-  renderLesAvisReleves, renderLesEtapesDuRapport, renderLesLecturesAnterieures,
-  renderLesRapportsLus, renderLinvitationALire
+  LIRE_LES_RAPPORTS, OUVRIR_UN_RAPPORT, renderLaLegendeLue, renderLeDetailDunRapport, renderLesAvisReleves, renderLesEtapesDuRapport, renderLesLecturesAnterieures, renderLesRapportsLus, renderLidentiteDunRapport, renderLinvitationALire
 } from "./les-rapports-lus.js";
 
 const LA_LEGENDE = [
@@ -214,26 +212,54 @@ test("des avis non relevés ne se disent pas « aucun avis »", () => {
     /Aucun avis relevé/);
 });
 
-/** Le détail entier, dans l'ordre de ce qu'on vient y chercher. */
-test("le détail montre les mesures, les étapes, la légende, les avis, puis la transcription", () => {
+/** L'analyse, dans l'ordre de ce qu'on vient y chercher. */
+test("l'analyse montre les étapes, la légende, puis les avis", () => {
   const html = renderLeDetailDunRapport({ lecture: UNE_LECTURE });
 
-  const ouMesures = html.indexOf("page");
   const ouEtapes = html.indexOf("Reconnaître la structure");
   const ouLegende = html.indexOf("La légende");
   const ouAvis = html.indexOf("Les avis relevés");
-  const ouMarkdown = html.indexOf("La transcription en Markdown");
 
-  assert.ok(ouMesures < ouEtapes, "les mesures viennent avant les étapes");
-  assert.ok(ouEtapes < ouLegende, "les étapes viennent avant la légende");
+  assert.ok(ouEtapes >= 0 && ouEtapes < ouLegende, "les étapes viennent avant la légende");
   assert.ok(ouLegende < ouAvis, "la légende vient avant les avis");
-  assert.ok(ouAvis < ouMarkdown, "la transcription vient en dernier");
 
-  // Les marques illisibles et les avis sans marque sont comptés en tête.
-  assert.match(html, /1 marque\(s\) illisible\(s\)/);
-  assert.match(html, /1 sans marque/);
-  // Et la transcription est rendue, non montrée en source.
+  // **La transcription n'est plus là** : elle a son onglet, comme chez les
+  // comptes rendus. Repliée en bas d'un `<details>`, elle était le document que
+  // le modèle a relu et que personne n'ouvrait.
+  assert.doesNotMatch(html, /markdown-body/);
+});
+
+test("la restitution est le document transcrit, et rien d'autre", () => {
+  const html = renderLeDetailDunRapport({ lecture: UNE_LECTURE }, { onglet: "restitution" });
+
   assert.match(html, /markdown-body/);
+  assert.doesNotMatch(html, /Les avis relevés/);
+});
+
+test("les mesures sont dans l'encart d'identité, et non en petites capitales", () => {
+  // Le détail s'ouvrait sur « 2 pages • 2 607 caractères • 0 avis » sans dire de
+  // quel fichier ni de quel jour il parlait.
+  const html = renderLidentiteDunRapport({ lecture: UNE_LECTURE });
+
+  assert.match(html, /document-identite/);
+  assert.match(html, /Fichier/);
+  assert.match(html, /Référence/);
+  assert.match(html, /Émis le/);
+});
+
+test("des avis non relevés se disent « non relevés », et non « 0 »", () => {
+  // `Number(null)` vaut zéro, qui est fini : « 0 avis » dirait que le rapport
+  // n'en porte aucun, là où l'étape n'a pas eu lieu (règle 5).
+  const html = renderLidentiteDunRapport({ lecture: { ...UNE_LECTURE, avis: null } });
+  assert.match(html, /non relevés/);
+  assert.doesNotMatch(html, /<dd>0<\/dd>/);
+});
+
+test("un rapport sans date d'émission dit ce que son absence coûte", () => {
+  const html = renderLidentiteDunRapport({
+    lecture: { ...UNE_LECTURE, identite: { numero: "RICT-2", etabliLe: "" } }
+  });
+  assert.match(html, /ne se place pas dans la suite du dossier/);
 });
 
 /** Une lecture qui ne s'ouvre pas le dit, sans deviner pourquoi. */

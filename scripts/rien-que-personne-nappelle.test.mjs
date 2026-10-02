@@ -61,6 +61,9 @@ const LES_MODULES_SOUS_GARDE = [
   "apps/web/js/views/ui/les-rapports-lus.js",
   // La zone de dépôt commune, qui porte maintenant son dessin et son branchement.
   "apps/web/js/views/ui/zone-de-depot.js",
+  // L'encart d'identité d'un document, et ce que devient un avis de contrôle.
+  "apps/web/js/views/ui/lidentite-dun-document.js",
+  "apps/web/js/services/le-devenir-dun-avis.js",
   // La vue d'ensemble des documents analysés, et la vue propre aux fils de mails.
   "apps/web/js/services/les-documents-analyses.js",
   "apps/web/js/views/ui/les-documents-analyses.js",

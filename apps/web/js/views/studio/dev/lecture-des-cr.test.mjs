@@ -151,7 +151,7 @@ test("l'écran se coupe en Restitution et Analyse, sous l'identité du document"
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES, onglet: "restitution", md: uneRestitution()
   }));
 
-  assert.match(restitution, /lecture-cr__identite/);
+  assert.match(restitution, /document-identite/);
   assert.match(restitution, />\s*Restitution\s*</);
   assert.match(restitution, />\s*Analyse\s*</);
   assert.match(restitution, /lecture-cr__md/);
@@ -159,7 +159,7 @@ test("l'écran se coupe en Restitution et Analyse, sous l'identité du document"
   assert.doesNotMatch(restitution, /Ce qui a été relevé/);
 
   // Et l'identité vient avant les onglets, qui viennent avant le contenu.
-  assert.ok(restitution.indexOf("lecture-cr__identite") < restitution.indexOf("lecture-cr__onglets"));
+  assert.ok(restitution.indexOf("document-identite") < restitution.indexOf("lecture-cr__onglets"));
   assert.ok(restitution.indexOf("lecture-cr__onglets") < restitution.indexOf("lecture-cr__md"));
 });
 
@@ -2784,8 +2784,14 @@ test("le retour est une flèche, et celle des Situations", () => {
   // **La coque et l'icône**, et non l'icône seule : changer la coque pour un
   // `gh-btn` ramènerait un bouton qui se lit, avec sa bordure et son fond, sans
   // que l'icône bouge — la batterie l'a montré.
-  assert.match(html, /class="project-situation-edit__back"/);
+  assert.match(html, /class="project-situation-edit__back[ "]/);
   assert.match(html, /project-situation-edit__back-icon/);
+  // **Et elle est dans l'en-tête, sur la ligne du titre.** Elle vivait au-dessus
+  // du nom du document, sur une ligne à elle, alors qu'une lecture de compte
+  // rendu rouverte la portait déjà à côté du titre : deux sorties pour un même
+  // geste (règle 4).
+  assert.ok(html.indexOf("data-lecture-cr-fermer-ailleurs") < html.indexOf("lecture-cr__titre"),
+    "la flèche est posée après le titre : elle prendra une ligne à elle");
   assert.doesNotMatch(html, /gh-btn[^"]*"\s*\n?\s*data-lecture-cr-fermer-ailleurs/);
   assert.match(html, /data-lecture-cr-fermer-ailleurs/);
   // Le libellé répétait le titre du tableau pour dire qu'on y retourne.
@@ -2824,4 +2830,114 @@ test("le lancement porte la famille ouverte, et non un geste figé", async () =>
   assert.match(source, /demanderUneLecture\(documents, \{ projectId, famille \}\)/);
   // Et ce qu'on annonce au départ s'accorde à la même famille.
   assert.match(source, /leMotDuDepart\(documents\.length, famille\)/);
+});
+
+/* ── Le détail d'un rapport de contrôle, dans la coquille commune ─────────── */
+
+/** Une lecture de rapport conservée, telle que la base la rend. */
+const UN_RAPPORT_OUVERT = {
+  famille: "rapports",
+  titre: "RICT-03.pdf",
+  lueLe: "2026-10-02T09:00:00Z",
+  vue: {
+    conservee: { id: "r-3", document: "RICT-03.pdf" },
+    lecture: {
+      nom: "RICT-03.pdf",
+      identite: { numero: "RICT-03", etabliLe: "2026-04-18" },
+      legende: [{ marque: "S", signification: "Suspendu" }],
+      markdown: "# Fiche d'examen",
+      pages: [{ page: 1 }],
+      avis: [{ reference: "A-12", intitule: "Ancrages", marque: "S" }]
+    },
+    suite: {
+      rapports: [{ id: "r-3" }],
+      avis: [{
+        reference: "A-12", intitule: "Ancrages", sansNouvelles: false, depuis: "",
+        vie: { label: "ouvert", tone: "open" },
+        etapes: [{
+          rapportId: "r-3", document: "RICT-03.pdf", numero: "RICT-03",
+          etabliLe: "2026-04-18", marque: "S", sens: "Suspendu", vaut: "pending",
+          constat: "", ou: "page 12", apporte: "neuf"
+        }]
+      }],
+      sansReference: 0, sansDate: [], muets: []
+    }
+  }
+};
+
+test("un rapport ouvert prend l'encart d'identité et la barre d'onglets", () => {
+  // **Les mêmes composants que le compte rendu.** Le détail d'un rapport ouvrait
+  // sur une ligne de mesures en petites capitales, sans dire de quel fichier ni
+  // de quel jour il parlait — c'était dans un titre qu'on a remplacé par celui
+  // de la vue.
+  const html = renderLaLecture(unEtat({
+    famille: "rapports", ouvertAilleurs: UN_RAPPORT_OUVERT
+  }));
+
+  assert.match(html, /document-identite/);
+  assert.match(html, /RICT-03\.pdf/);
+  assert.match(html, /light-tabs__item/);
+  assert.match(html, /data-lecture-cr-onglet="restitution"/);
+  assert.match(html, /data-lecture-cr-onglet="analyse"/);
+});
+
+test("un rapport n'offre pas de Synthèse : il ne relève pas d'idées", () => {
+  // Un onglet vide fait chercher ce qui manque (règle 5).
+  const html = renderLaLecture(unEtat({
+    famille: "rapports", ouvertAilleurs: UN_RAPPORT_OUVERT
+  }));
+  assert.doesNotMatch(html, /data-lecture-cr-onglet="synthese"/);
+});
+
+test("un onglet qu'un rapport n'a pas retombe sur l'Analyse", () => {
+  /**
+   * La Synthèse est celle d'un compte rendu : la garder active sous un rapport
+   * dessinerait une barre dont aucun onglet n'est allumé, et un corps vide.
+   *
+   * **Ce qui n'est pas éprouvé ici** : qu'ouvrir un rapport *remette* l'onglet
+   * sur l'Analyse. C'est un geste du gestionnaire de clic, pas du rendu ; il se
+   * vérifie au banc de navigateur, et il y est vérifié (règle 5).
+   */
+  for (const onglet of ["restitution", "analyse", "synthese"]) {
+    const html = renderLaLecture(unEtat({
+      famille: "rapports", onglet, ouvertAilleurs: UN_RAPPORT_OUVERT
+    }));
+
+    const actif = /class="light-tabs__item is-active"[\s\S]*?data-lecture-cr-onglet="(\w+)"/
+      .exec(html);
+    assert.equal(actif?.[1], onglet === "restitution" ? "restitution" : "analyse", onglet);
+  }
+});
+
+test("la restitution d'un rapport montre la transcription, et non ses avis", () => {
+  const html = renderLaLecture(unEtat({
+    famille: "rapports", onglet: "restitution", ouvertAilleurs: UN_RAPPORT_OUVERT
+  }));
+
+  assert.match(html, /markdown-body/);
+  assert.doesNotMatch(html, /Les avis relevés/);
+});
+
+test("l'analyse d'un rapport porte ce que chaque avis est devenu", () => {
+  // C'est ce que l'utilitaire de suivi répondait, et que le détail ne disait
+  // pas : « 23 suspendus » sans savoir si c'étaient les mêmes qu'au rapport
+  // précédent.
+  const html = renderLaLecture(unEtat({
+    famille: "rapports", onglet: "analyse", ouvertAilleurs: UN_RAPPORT_OUVERT
+  }));
+
+  assert.match(html, /Ce que chaque avis est devenu/);
+  assert.match(html, /suite-avis__frise/);
+});
+
+test("une analyse rouverte dit qu'elle ne se recalcule pas", () => {
+  // Elle le disait en une ligne grise — « Lue le 2026-10-02 » —, qui ne dit pas
+  // la chose qui compte : ce qu'on regarde est daté, et le restera (règle 6).
+  const html = renderLaLecture(unEtat({
+    famille: "rapports", ouvertAilleurs: UN_RAPPORT_OUVERT
+  }));
+
+  assert.match(html, /lecture-cr__photo/);
+  assert.match(html, /ne se recalcule pas/);
+  assert.match(html, /2026-10-02/);
 });

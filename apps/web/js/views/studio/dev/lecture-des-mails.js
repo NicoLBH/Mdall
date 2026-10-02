@@ -518,7 +518,7 @@ function renderIdentite(fil) {
   const duFil = (fil.trous ?? []).filter((trou) => trou.ou === "le fil");
 
   return `
-    <section class="lecture-cr__identite">
+    <section class="document-identite">
       <h3>${escapeHtml(fil.phrase)}</h3>
       ${mot ? `<p class="lecture-cr__mot">Fil ${escapeHtml(mot)}.</p>` : ""}
       ${fil.doublons > 0 ? `
@@ -657,7 +657,7 @@ function renderAvantLeReleve(vue) {
         tout ce qui précède était gratuit.
       </p>
       ${vue.releve?.motif ? `
-        <p class="lecture-cr__reserve">${escapeHtml(vue.releve.motif)}</p>
+        <p class="document-identite__reserve">${escapeHtml(vue.releve.motif)}</p>
         ${texte(vue.releve.queFaire) ? `<p class="lecture-cr__mot">${escapeHtml(vue.releve.queFaire)}</p>` : ""}
         ${/*
           **D'où vient le diagnostic, et non « du serveur » quoi qu'il arrive.**
@@ -711,11 +711,11 @@ function renderLesPrises(vue) {
   const rienTire = ceQueLeModeleNaPasDit(releve);
 
   return `
-    <section class="lecture-cr__identite">
+    <section class="document-identite">
       <h3>${escapeHtml(phraseDuReleve(releve))}</h3>
       ${renderPrixDuReleve(releve)}
       ${releve.ecartees > 0 ? `
-        <p class="lecture-cr__reserve">${escapeHtml(
+        <p class="document-identite__reserve">${escapeHtml(
           `${releve.ecartees} prise${releve.ecartees > 1 ? "s" : ""} n'${
             releve.ecartees > 1 ? "ont" : "a"} pas franchi la porte : ${
             releve.ecartees > 1 ? "leurs citations ne se retrouvent" : "sa citation ne se retrouve"} `
@@ -724,7 +724,7 @@ function renderLesPrises(vue) {
         )}</p>
       ` : ""}
       ${rienTire.phrase ? `
-        <p class="lecture-cr__reserve">${escapeHtml(`Ce dont rien n'a été tiré : ${rienTire.phrase}.`)}</p>
+        <p class="document-identite__reserve">${escapeHtml(`Ce dont rien n'a été tiré : ${rienTire.phrase}.`)}</p>
       ` : ""}
       ${renderLesSujetsDuFil(releve)}
       <p>
@@ -778,7 +778,7 @@ function renderLesSujetsDuFil(releve) {
       accordé ; la suite reste invariable, sans quoi il faudrait l'accorder deux
       fois — et c'est la seconde fois qu'on oublie.
     */""}
-    ${perdus ? `<p class="lecture-cr__reserve">${escapeHtml(
+    ${perdus ? `<p class="document-identite__reserve">${escapeHtml(
       `${perdus}. Le relevé les garde, sans sujet : le rattachement au plus proche prêterait `
       + "à quelqu'un une position sur une question qu'il n'a pas nommée."
     )}</p>` : ""}

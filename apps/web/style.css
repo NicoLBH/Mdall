@@ -25916,10 +25916,14 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   background:rgba(110,118,129,.12); border-radius:4px; padding:0 4px;
 }
 
-/* **Sans fond.** « Le document » n'est pas un panneau de plus : ce sont quatre
+/* **Sans fond.** « Le document » n'est pas un panneau de plus : ce sont quelques
    faits lus dans le fichier, et un aplat les mettait au même rang que les blocs
-   de mesure qui, eux, concluent. */
-.lecture-cr__identite{
+   de mesure qui, eux, concluent.
+
+   Le bloc est **commun aux familles** : un compte rendu y met son numéro et sa
+   date de réunion, un rapport de contrôle sa référence et sa date d'émission. Il
+   s'appelait `lecture-cr__` du temps où un seul écran l'employait. */
+.document-identite{
   display:flex;
   flex-direction:column;
   gap:12px;
@@ -25927,6 +25931,7 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   border:1px solid var(--border);
   border-radius:var(--radius);
 }
+.document-identite h3{margin:0;font-size:14px;font-weight:600;color:var(--text);}
 
 .lecture-cr__mesure,
 .lecture-cr__ambigu,
@@ -25946,14 +25951,14 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
 .lecture-cr h3{margin:0;font-size:14px;font-weight:600;color:var(--text);}
 .lecture-cr h4{margin:0;}
 
-.lecture-cr__faits{display:flex;flex-wrap:wrap;gap:24px;margin:0;}
-.lecture-cr__fait{display:flex;flex-direction:column;gap:2px;}
-.lecture-cr__fait dt{font-size:11.5px;color:var(--muted);}
-.lecture-cr__fait dd{margin:0;font-size:14px;font-weight:600;color:var(--text);}
+.document-identite__faits{display:flex;flex-wrap:wrap;gap:24px;margin:0;}
+.document-identite__fait{display:flex;flex-direction:column;gap:2px;}
+.document-identite__fait dt{font-size:11.5px;color:var(--muted);}
+.document-identite__fait dd{margin:0;font-size:14px;font-weight:600;color:var(--text);}
 
 /* Ce qui n'a pas été lu se dit, plutôt que de laisser un champ vide qu'on
    prendrait pour une absence dans le document. */
-.lecture-cr__reserve{margin:0;font-size:12.5px;color:var(--fgColor-attention, #d29922);}
+.document-identite__reserve{margin:0;font-size:12.5px;color:var(--fgColor-attention, #d29922);}
 /* Le verdict du découpage passe au-dessus de ses trois chiffres : on lit la
    conclusion, puis ce qui la fonde. */
 .lecture-cr__verdict{display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;}
@@ -29046,3 +29051,97 @@ button.bac-refus__ou--mene:hover{ color:var(--fg, inherit); }
   .rapport-etapes__pas{ grid-template-columns:28px minmax(0,1fr); }
   .rapport-etapes__etat{ grid-column:2; justify-content:flex-start; text-align:left; }
 }
+
+/* ── Ce que devient un avis de bureau de contrôle ──────────────────────────
+   La frise d'un avis : les rapports qui en ont parlé, dans l'ordre. Elle vivait
+   dans l'utilitaire de suivi, avec ses propres variables de couleur ; ici elle
+   reprend les jetons de l'application, parce qu'elle vit maintenant à côté des
+   avis du rapport ouvert. */
+.suite-avis{display:flex;flex-direction:column;gap:12px;}
+.suite-avis__compte{color:var(--muted);}
+.suite-avis__reserves{margin:0;padding-left:18px;color:var(--fgColor-attention, #d29922);font-size:12.5px;}
+.suite-avis__reserves li{margin:2px 0;}
+.suite-avis__liste{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px;}
+
+.suite-avis__un{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:14px 16px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+}
+.suite-avis__tete{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.suite-avis__reference{font-size:13px;}
+.suite-avis__intitule{color:var(--text);min-width:0;overflow-wrap:anywhere;}
+
+/* Un avis que plus personne ne reprend n'est pas un avis levé : c'est la seule
+   ligne de cet écran qui demande une action, et elle se voit. */
+.suite-avis__perdu{
+  display:flex;
+  align-items:flex-start;
+  gap:6px;
+  margin:0;
+  font-size:12.5px;
+  color:var(--fgColor-attention, #d29922);
+}
+.suite-avis__perdu .octicon{flex:0 0 auto;margin-top:2px;}
+
+/* La frise : un trait relie les étapes, sauf après la dernière. */
+.suite-avis__frise{list-style:none;margin:0;padding:0;}
+.suite-avis__etape{
+  position:relative;
+  display:flex;
+  align-items:baseline;
+  flex-wrap:wrap;
+  gap:8px;
+  padding:0 0 12px 18px;
+}
+.suite-avis__etape::before{
+  content:"";
+  position:absolute;
+  left:4px;
+  top:14px;
+  bottom:0;
+  width:2px;
+  background:var(--border);
+}
+.suite-avis__etape::after{
+  content:"";
+  position:absolute;
+  left:0;
+  top:6px;
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:var(--border);
+}
+.suite-avis__etape:last-child{padding-bottom:0;}
+.suite-avis__etape:last-child::before{display:none;}
+
+/* Ce que le rapport apporte : soulevé, redit, levé, rouvert. */
+.suite-avis__etape--neuf::after{background:var(--fgColor-attention, #d29922);}
+.suite-avis__etape--leve::after{background:var(--fgColor-success, #3fb950);}
+.suite-avis__etape--rouvert::after{background:var(--fgColor-danger, #f85149);}
+.suite-avis__quoi{font-weight:600;font-size:12.5px;}
+.suite-avis__ou{color:var(--muted);}
+.suite-avis__constat{flex:1 1 100%;color:var(--muted);overflow-wrap:anywhere;}
+
+/* L'appréciation, en toutes lettres et à la couleur de ce qu'elle implique :
+   une pastille et une majuscule — « ● S » — demandaient de connaître la légende
+   par cœur. Les mots sont ceux de `le-devenir-dun-avis.js`. */
+.suite-avis__appreciation{
+  display:inline-block;
+  border:1px solid currentColor;
+  border-radius:6px;
+  padding:1px 8px;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.02em;
+}
+.suite-avis__appreciation--ok{color:var(--fgColor-success, #3fb950);}
+.suite-avis__appreciation--pending{color:var(--fgColor-attention, #d29922);}
+.suite-avis__appreciation--danger{color:var(--fgColor-danger, #f85149);}
+.suite-avis__appreciation--info{color:var(--fgColor-accent, #58a6ff);}
+.suite-avis__appreciation--neutral,
+.suite-avis__appreciation--unknown{color:var(--muted);}

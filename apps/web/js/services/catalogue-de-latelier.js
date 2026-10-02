@@ -45,6 +45,8 @@
  * navigateur. Ce catalogue ne décrit que ce qui s'affiche.
  */
 
+import { TOUTES, ceQueDitLaFamille } from "./les-familles-de-document.js";
+
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /**
@@ -272,7 +274,14 @@ export const UTILITAIRES = [
   },
   {
     cible: "dev-lecture-cr",
-    nom: "Les documents du chantier",
+    /**
+     * **Le nom vient du registre des familles**, qui le donne déjà au titre de
+     * l'écran. Il était écrit ici une seconde fois : l'utilitaire s'est appelé
+     * « Les documents du chantier » dans le catalogue pendant que son écran
+     * s'appelait « Analyse de documents », et l'on ne retrouvait plus l'un en
+     * cherchant l'autre (règle 10).
+     */
+    nom: ceQueDitLaFamille(TOUTES).titre,
     rayon: RAYONS.DEVELOPPEMENT,
     resume: "Tout ce qui a été analysé sur ce chantier — mails, rapports de contrôle, "
       + "comptes rendus — et la lecture d'un compte rendu.",

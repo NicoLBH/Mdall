@@ -79,7 +79,10 @@ import { renderLeDetailDunFil } from "../../ui/le-detail-dun-fil.js";
 import { lesFilsLus } from "../../../services/la-lecture-dun-fil.js";
 import { laVueDunFil } from "../../../services/la-lecture-dun-fil.js";
 import { laVueDunRapport, lesRapportsLus } from "../../../services/la-lecture-dun-rapport.js";
-import { renderLeDetailDunRapport } from "../../ui/les-rapports-lus.js";
+import {
+  renderLeDetailDunRapport, renderLidentiteDunRapport
+} from "../../ui/les-rapports-lus.js";
+import { renderLidentiteDunDocument } from "../../ui/lidentite-dun-document.js";
 import { bindRailResizer, followRailScroll, railWidth } from "../../ui/project-rail.js";
 import { renderLaSyntheseDunDocument } from "../../ui/la-synthese.js";
 import {
@@ -793,7 +796,6 @@ function renderLesDocumentsAnalyses(vue) {
  */
 function renderUnDocumentDuneAutreFamille(vue) {
   const ouvert = vue.ouvertAilleurs;
-  const ce = ceQueDitLaFamille(ouvert?.famille);
 
   return `
     <div class="lecture-cr"
@@ -806,35 +808,86 @@ function renderUnDocumentDuneAutreFamille(vue) {
           replie: vue.railOuvert === false
         })}
         <div class="project-rail-layout__content">
+      ${/*
+        **La flèche est dans l'en-tête, sur la ligne du titre.** Elle vivait ici,
+        au-dessus du nom du document, sur une ligne à elle : deux sorties
+        différentes selon la famille ouverte, alors que le geste est le même
+        (règle 4). C'est la même que celle d'une lecture de compte rendu rouverte.
+      */""}
       ${renderEntete(vue)}
       <section class="lecture-cr__ailleurs">
-        <div class="lecture-cr__ailleurs-tete">
-          ${/*
-            **Une flèche, et non un bouton qui se lit.** « ← Les documents
-            analysés » répétait le titre du tableau pour dire qu'on y retourne ;
-            la flèche des Situations le dit sans prendre une ligne, et c'est la
-            même partout (règle 4).
-          */""}
-          <button type="button" class="project-situation-edit__back"
-            data-lecture-cr-fermer-ailleurs title="Revenir aux documents analysés"
-            aria-label="Revenir aux documents analysés">
-            <span class="project-situation-edit__back-icon">${svgIcon("arrow-left", {
-              className: "octicon", width: 24, height: 24 })}</span>
-          </button>
-          <h3 class="lecture-cr__ailleurs-titre">${escapeHtml(texte(ouvert?.titre)
-            || (ce ? ce.nom : "Document"))}</h3>
-        </div>
-        ${texte(ouvert?.lueLe)
-          ? `<p class="lecture-cr__ailleurs-quand mono-small">${escapeHtml(
-              `Lue le ${texte(ouvert.lueLe).slice(0, 10)} — telle qu'elle a été faite ce jour-là.`)}</p>`
-          : ""}
+        ${renderLaPhotographieDuDocument(ouvert)}
         ${ouvert?.famille === FAMILLE.MAIL
           ? renderLeDetailDunFil(ouvert?.vue)
-          : renderLeDetailDunRapport(ouvert?.vue)}
+          : renderLeDetailDunRapportDansSaCoquille(vue, ouvert)}
       </section>
         </div>
       </div>
     </div>
+  `;
+}
+
+/**
+ * Le bandeau qui dit qu'une analyse ne se recalcule pas.
+ *
+ * **Le même que celui d'un compte rendu rouvert.** Il était écrit en petit, sous
+ * le titre, en une ligne grise — « Lue le 2026-10-02 » —, et ne disait pas la
+ * chose qui compte : que ce qu'on regarde est daté, et le restera (règle 6).
+ */
+function renderLaPhotographieDuDocument(ouvert) {
+  const quand = texte(ouvert?.lueLe).slice(0, 10);
+  if (!quand) return "";
+
+  return `
+    <p class="lecture-cr__photo">
+      ${svgIcon("history", { className: "octicon" })}
+      <span>
+        Cette analyse est celle de la lecture, tenue le ${escapeHtml(quand)}.
+        <strong>Elle ne se recalcule pas</strong> : elle dit ce qui a été vu ce
+        jour-là. Ce que les rapports suivants en ont fait se lit en dessous.
+      </span>
+    </p>
+  `;
+}
+
+/**
+ * Le détail d'un rapport, dans la coquille des comptes rendus.
+ *
+ * ## Pourquoi les mêmes pièces
+ *
+ * Deux détails de document, deux présentations : l'un ouvrait sur un encart
+ * « Le document » et trois onglets, l'autre sur une ligne de mesures en petites
+ * capitales et tout à la suite. Le second ne disait même pas de quel fichier ni
+ * de quel jour il parlait — c'était dans le titre, qu'on venait de remplacer par
+ * celui de la vue.
+ *
+ * L'encart et la barre d'onglets sont donc les mêmes composants ; ce qui change
+ * est ce qu'on y met, et c'est bien ce qui doit changer : un compte rendu a des
+ * points rapprochés des sujets, un rapport a des avis et une légende.
+ *
+ * ## La Synthèse n'est pas offerte
+ *
+ * Un rapport de contrôle ne relève pas d'idées : son analyse gelée n'en porte
+ * pas. Un onglet vide ferait chercher ce qui manque (règle 5) ; les deux qu'il a
+ * sont ceux qu'il remplit.
+ */
+function renderLeDetailDunRapportDansSaCoquille(vue, ouvert) {
+  const laVue = ouvert?.vue ?? null;
+  if (!laVue?.lecture) return renderLeDetailDunRapport(laVue);
+
+  const ici = vue.onglet === ONGLET.RESTITUTION ? ONGLET.RESTITUTION : ONGLET.ANALYSE;
+
+  return `
+    ${renderLidentiteDunRapport(laVue)}
+    <nav class="light-tabs lecture-cr__onglets" aria-label="Ce que la lecture a produit">
+      ${[ONGLET.RESTITUTION, ONGLET.ANALYSE].map((cle) => `
+        <button type="button" class="light-tabs__item${ici === cle ? " is-active" : ""}"
+          data-lecture-cr-onglet="${escapeHtml(cle)}" aria-pressed="${ici === cle}">
+          <span class="light-tabs__label">${escapeHtml(NOMS_DES_ONGLETS[cle])}</span>
+        </button>
+      `).join("")}
+    </nav>
+    ${renderLeDetailDunRapport(laVue, { onglet: ici })}
   `;
 }
 
@@ -873,9 +926,10 @@ function renderEntete(vue = etat) {
            * titre — c'est là qu'elle est partout ailleurs, y compris sur le
            * détail d'une étape du journal des Actions.
            */
-          vue.conservee
+          vue.conservee || vue.ouvertAilleurs
             ? `<button type="button" class="project-situation-edit__back lecture-cr__retour"
-                 data-lecture-cr-revenir title="Revenir aux documents analysés"
+                 ${vue.ouvertAilleurs ? "data-lecture-cr-fermer-ailleurs" : "data-lecture-cr-revenir"}
+                 title="Revenir aux documents analysés"
                  aria-label="Revenir aux documents analysés">
                  <span class="project-situation-edit__back-icon">${svgIcon("arrow-left", {
                    className: "octicon", width: 24, height: 24 })}</span>
@@ -1437,30 +1491,20 @@ function renderSurQuoiLaLecture(vue) {
 function renderIdentite(lecture) {
   const { numero, tenueLe } = lecture.identite;
 
-  return `
-    <section class="lecture-cr__identite">
-      <h3>Le document</h3>
-      <dl class="lecture-cr__faits">
-        ${renderFait("Fichier", lecture.nom || "—")}
-        ${renderFait("Numéro", numero || "non lu")}
-        ${renderFait("Tenue le", tenueLe || "non lue")}
-        ${renderFait("Pages", String(lecture.pages.length))}
-      </dl>
-      ${!numero || !tenueLe ? `
-        <p class="lecture-cr__reserve">
-          ${escapeHtml(
-            !numero && !tenueLe ? "Ni le numéro ni la date n'ont été lus : sans eux, un point ne peut pas être suivi d'une réunion à l'autre."
-              : !numero ? "Le numéro n'a pas été lu : la ligne d'activité ne pourra nommer aucun compte rendu."
-              : "La date n'a pas été lue : l'ordre des reprises n'est plus sûr."
-          )}
-        </p>
-      ` : ""}
-    </section>
-  `;
-}
-
-function renderFait(intitule, valeur) {
-  return `<div class="lecture-cr__fait"><dt>${escapeHtml(intitule)}</dt><dd>${escapeHtml(valeur)}</dd></div>`;
+  return renderLidentiteDunDocument({
+    faits: [
+      { quoi: "Fichier", valeur: lecture.nom || "—" },
+      { quoi: "Numéro", valeur: numero || "non lu" },
+      { quoi: "Tenue le", valeur: tenueLe || "non lue" },
+      { quoi: "Pages", valeur: String(lecture.pages.length) }
+    ],
+    reserve: numero && tenueLe ? ""
+      : !numero && !tenueLe
+        ? "Ni le numéro ni la date n'ont été lus : sans eux, un point ne peut pas être "
+          + "suivi d'une réunion à l'autre."
+      : !numero ? "Le numéro n'a pas été lu : la ligne d'activité ne pourra nommer aucun compte rendu."
+      : "La date n'a pas été lue : l'ordre des reprises n'est plus sûr."
+  });
 }
 
 /* ── La restitution : le document, refait ────────────────────────────────── */
@@ -3965,6 +4009,10 @@ async function lesRapportsDuProjet(projet) {
  */
 async function ouvrirUnDocumentAilleurs(hote, famille, id) {
   etat.ouvertureEnCours = texte(id);
+  // **On atterrit sur l'analyse.** L'onglet gardé est celui du document
+  // précédent : ouvrir un rapport sur « Restitution » parce qu'on y était
+  // montrerait soixante pages de Markdown à qui vient voir des avis.
+  etat.onglet = ONGLET.ANALYSE;
   redessiner(hote);
 
   try {
@@ -3978,16 +4026,33 @@ async function ouvrirUnDocumentAilleurs(hote, famille, id) {
         vue: laVueDunFil(ligne)
       };
     } else {
-      const { lireUneLectureDeRapport } =
+      const { lesAvisDesRapports, lireUneLectureDeRapport } =
         await import("../../../services/lectures-de-rapports-supabase.js");
-      const ligne = await lireUneLectureDeRapport(id);
+
+      /**
+       * **La lecture et la suite des avis ensemble.** La seconde ne dépend pas
+       * de la première — elle lit tout le chantier —, et les enchaîner aurait
+       * fait attendre la frise derrière une transcription de soixante pages.
+       */
+      const [ligne, avisDuChantier] = await Promise.all([
+        lireUneLectureDeRapport(id),
+        lesAvisDesRapports(texte(store.currentProjectId))
+      ]);
+
+      const { laSuiteDesAvis } = await import("../../../services/le-devenir-dun-avis.js");
+
       etat.ouvertAilleurs = {
         famille,
         titre: texte(ligne?.document),
         lueLe: texte(ligne?.created_at),
         // `laVueDunRapport(null)` rend `null`, et le détail dit alors qu'il ne
         // s'ouvre pas. On passe donc la ligne telle quelle, même absente.
-        vue: laVueDunRapport(ligne) ?? { lecture: null }
+        vue: {
+          ...(laVueDunRapport(ligne) ?? { lecture: null }),
+          // **`null` traverse.** « On n'a pas su demander » ne se dit pas comme
+          // « ce chantier n'a aucun avis suivi » (règle 5).
+          suite: avisDuChantier === null ? null : laSuiteDesAvis(avisDuChantier)
+        }
       };
     }
   } catch {
