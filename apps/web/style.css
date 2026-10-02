@@ -28976,6 +28976,39 @@ button.bac-refus__ou--mene:hover{ color:var(--fg, inherit); }
   font-size:12px; line-height:1.45;
 }
 
+/* ── Les documents analysés, toutes familles ───────────────────────────────
+   Le tableau reprend `data-table-shell` ; il ne lui reste que ses marges. Un
+   quatrième dessin de liste de documents aurait fait un quatrième gris. */
+.documents-analyses{ margin:20px 0 0; }
+.documents-analyses__aide{ margin:2px 0 10px; color:var(--muted); }
+.documents-analyses__mot{ margin:16px 0 0; color:var(--muted); }
+.documents-analyses__ligne.est-ouverte{ background:rgba(49,109,202,.10); }
+
+/* Un document d'une autre famille, rouvert : le retour à gauche du titre, comme
+   partout — posé en dessous, il se lit comme une action sur l'analyse. */
+.lecture-cr__ailleurs{ margin:16px 0 0; }
+.lecture-cr__ailleurs-tete{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.lecture-cr__ailleurs-titre{ margin:0; font-size:16px; }
+.lecture-cr__ailleurs-quand{ margin:6px 0 14px; color:var(--muted); }
+
+/* ── Le détail d'un fil de mails ─────────────────────────────────────────── */
+.detail-fil__mesures{ margin:0 0 4px; color:var(--muted); }
+.detail-fil__phrase{ margin:0 0 14px; }
+.detail-fil__titre{ margin:0 0 6px; font-size:14px; }
+.detail-fil__prises, .detail-fil__idees{ margin:18px 0 0; }
+.detail-fil__nature{ margin:12px 0 0; }
+.detail-fil__nature-nom{ margin:0 0 4px; color:var(--muted); }
+.detail-fil__reste{ margin:8px 0 0; color:var(--muted); }
+.detail-fil__messages{ margin:18px 0 0; }
+.detail-fil__messages-titre{ cursor:pointer; font-weight:600; padding:6px 0; }
+.detail-fil__liste{ margin:10px 0 0; padding:0; list-style:none; }
+.detail-fil__message{
+  padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius);
+  margin-bottom:8px;
+}
+.detail-fil__message-tete{ margin:0 0 4px; color:var(--muted); }
+.detail-fil__message-propos{ margin:0; white-space:pre-wrap; }
+
 /* Les lectures antérieures du même rapport : la comparaison, pas l'archive. */
 .rapport-anterieures{ margin:18px 0 0; }
 

@@ -272,19 +272,24 @@ export const UTILITAIRES = [
   },
   {
     cible: "dev-lecture-cr",
-    nom: "Lecture des comptes rendus",
+    nom: "Les documents du chantier",
     rayon: RAYONS.DEVELOPPEMENT,
-    resume: "Déposer un compte rendu de chantier, le voir restitué, puis voir ce qu'on en tire.",
+    resume: "Tout ce qui a été analysé sur ce chantier — mails, rapports de contrôle, "
+      + "comptes rendus — et la lecture d'un compte rendu.",
     entrees: ["Un compte rendu de chantier, en PDF"],
     sorties: [
+      "Tout ce qui a été analysé, par famille",
       "Le document restitué en Markdown — c'est lui que le modèle relit",
       "Les points relevés, avec leur citation",
       "Ce qu'ils deviendraient face aux sujets du projet"
     ],
-    version: "0.4",
+    version: "0.5",
     intelligence: true,
     aussiALaMain: "Lire le compte rendu et ouvrir les sujets un par un.",
-    mots: ["compte rendu", "CR", "chantier", "extraction", "pdf", "réunion", "points", "markdown"],
+    mots: [
+      "compte rendu", "CR", "chantier", "extraction", "pdf", "réunion", "points",
+      "markdown", "mails", "bureau de contrôle", "analysés"
+    ],
     ajouteLe: "2026-09-12"
   },
   {

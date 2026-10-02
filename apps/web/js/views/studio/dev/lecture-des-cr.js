@@ -65,6 +65,19 @@ import {
   ceQueLeSujetEstDevenu, laVueDuneLecture, leLecteur, lesComptesRendusLus
 } from "../../../services/la-lecture-conservee.js";
 import { renderChoisirUnFichier } from "../../ui/choisir-un-fichier.js";
+import {
+  CHOISIR_UNE_FAMILLE, OUVRIR_UN_DOCUMENT, laFamilleDesignee, leDocumentDesigne,
+  renderLeRailDesFamilles, renderLeTableauDesDocuments
+} from "../../ui/les-documents-analyses.js";
+import {
+  FAMILLE, TOUTES, ceQueDitLaFamille, lesDocumentsAnalyses
+} from "../../../services/les-documents-analyses.js";
+import { renderLeDetailDunFil } from "../../ui/le-detail-dun-fil.js";
+import { lesFilsLus } from "../../../services/la-lecture-dun-fil.js";
+import { laVueDunFil } from "../../../services/la-lecture-dun-fil.js";
+import { laVueDunRapport, lesRapportsLus } from "../../../services/la-lecture-dun-rapport.js";
+import { renderLeDetailDunRapport } from "../../ui/les-rapports-lus.js";
+import { bindRailResizer, followRailScroll, railWidth } from "../../ui/project-rail.js";
 import { renderLaSyntheseDunDocument } from "../../ui/la-synthese.js";
 import {
   DIT_DE_LA_RELUE, DIT_SANS_RELUE, laRestitutionRelue
@@ -359,6 +372,31 @@ const etat = {
    */
   dejaLus: null,
   dejaLusEnCours: false,
+  /**
+   * Les deux autres familles de lectures de ce chantier.
+   *
+   * **`null` et non `[]`** : « on n'a pas encore demandé » et « il n'y en a
+   * aucune » n'appellent pas la même phrase, et la seconde ferait recommencer une
+   * lecture déjà faite — et déjà payée (règle 5).
+   */
+  dejaLusMails: null,
+  dejaLusControles: null,
+  /** Une demande qui a échoué. Sans ce drapeau, « pas encore demandé » se lirait comme une panne. */
+  dejaLusRate: false,
+  /** La famille ouverte dans le rail. On atterrit sur la vue d'ensemble. */
+  famille: TOUTES,
+  /** Le rail est-il déplié. */
+  railOuvert: true,
+  railLargeur: 0,
+  /**
+   * Un document d'une autre famille, ouvert depuis le tableau.
+   *
+   * Les comptes rendus ont leur propre chemin de réouverture, qui existe depuis
+   * des rounds et qui dessine l'écran entier. Les deux autres familles ont leur
+   * vue à elles : `{ famille, titre, vue }`.
+   */
+  ouvertAilleurs: null,
+  ouvertureEnCours: "",
   /** La lecture conservée qu'on regarde, ou `null` quand on lit pour de vrai. */
   conservee: null,
   /**
@@ -553,15 +591,49 @@ export function renderLaLecture(vue = etat) {
   // disait qu'on était au bout. Un pied laisse la dernière ligne monter.
   const accueil = vue.phase === "vide" && !vue.choix;
 
+  // **Un document d'une autre famille remplace l'écran.** Un fil de mails ou un
+  // rapport de contrôle rouvert n'a rien à voir avec le corps de cet écran-ci, qui
+  // est celui d'un compte rendu : l'afficher dessous ferait lire deux analyses
+  // superposées sans que rien ne dise laquelle est laquelle.
+  if (vue.ouvertAilleurs) return renderUnDocumentDuneAutreFamille(vue);
+
+  /**
+   * **Le rail enveloppe l'écran entier, il ne s'y glisse pas.**
+   *
+   * Il est en `position:fixed` contre le bord gauche : posé à l'intérieur, sous
+   * l'en-tête et la zone de dépôt, il remontait par-dessus le titre et le texte
+   * d'aide, qui se lisaient à travers lui. C'est la coque qui décide de la place,
+   * et le contenu qui s'écarte — comme pour les Actions, la Mémoire et les Sujets.
+   */
   return `
-    <div class="lecture-cr${accueil ? " lecture-cr--accueil" : ""}">
+    <div class="lecture-cr${accueil ? " lecture-cr--accueil" : ""}"
+      style="--project-rail-width:${railWidth(vue.railLargeur, vue.railOuvert === false)}px">
+      <div class="project-rail-layout${
+        vue.railOuvert === false ? " project-rail-layout--collapsed" : ""}">
+        ${renderLeRailDesFamilles({
+          actif: vue.famille,
+          documents: lesDocumentsDeLaVue(vue) ?? [],
+          replie: vue.railOuvert === false
+        })}
+        <div class="project-rail-layout__content">
       ${renderEntete(vue)}
       ${
         // **Deux états, et un seul se montre à la fois.** Le choix quand on
         // sélectionne, le dépôt sinon. Les superposer donnerait deux façons de
         // faire la même chose sur le même écran, et un document déposé pendant
         // qu'on en choisit d'autres.
-        vue.choix
+        /**
+         * **Le dépôt n'est offert que là où il mène quelque part.**
+         *
+         * Ce qui se dépose ici est un compte rendu : c'est le seul chemin de
+         * lecture que cet écran porte aujourd'hui. Sous « Mails » ou « Bureau de
+         * Contrôle », une zone qui dit « Déposez un compte rendu » contredit le
+         * rail — et déposer un rapport y lancerait une lecture de compte rendu,
+         * qui est pire qu'un bouton absent.
+         */
+        vue.famille && vue.famille !== TOUTES && vue.famille !== FAMILLE.CR
+          ? renderOuSeLitCetteFamille(vue.famille)
+          : vue.choix
           ? renderChoisirUnFichier({
             ...vue.choix,
             choisis: vue.coches,
@@ -572,8 +644,133 @@ export function renderLaLecture(vue = etat) {
             quoi: { un: "compte rendu", plusieurs: "comptes rendus" }
           })
           : renderDepot(vue)}
-      ${vue.choix ? "" : renderLesComptesRendusLus(vue)}
+      ${vue.choix ? "" : renderLesDocumentsAnalyses(vue)}
       ${vue.choix ? "" : renderCorps(vue)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Les trois familles mises sur une même ligne, ou `null` quand on n'a rien demandé.
+ *
+ * **`?? null` et non `=== null`.** Un état d'écran qui ne porte pas encore la clé
+ * la rend `undefined`, et `undefined !== null` : sans cela, « on n'a pas encore
+ * demandé » se dessinait comme « il n'y en a aucun », avec son état vide et sa
+ * phrase définitive. Les deux se ressemblent à l'écran et ne disent pas du tout la
+ * même chose (règle 5).
+ */
+function lesDocumentsDeLaVue(vue) {
+  const mails = vue.dejaLusMails ?? null;
+  const controles = vue.dejaLusControles ?? null;
+  const crs = vue.dejaLus ?? null;
+  if (mails === null && controles === null && crs === null) return null;
+
+  return lesDocumentsAnalyses({
+    mails: lesFilsLus(mails ?? []),
+    controles: lesRapportsLus(controles ?? []),
+    crs: lesComptesRendusLus(crs ?? [])
+  });
+}
+
+/**
+ * Où se lit une famille que cet écran ne lit pas encore.
+ *
+ * **On le dit, on ne le cache pas.** Le rail réunit ce qui a été analysé ; la
+ * lecture, elle, vit encore dans l'utilitaire de chaque famille. Laisser la zone
+ * de dépôt des comptes rendus sous « Bureau de Contrôle » ferait lancer une
+ * lecture de compte rendu sur un rapport — et taire la question laisserait
+ * chercher un bouton qui n'existe pas (règle 5).
+ */
+function renderOuSeLitCetteFamille(famille) {
+  const ce = ceQueDitLaFamille(famille);
+  const ou = famille === FAMILLE.MAIL
+    ? "Lecture d'un fil de mails"
+    : "Suivi des avis BC";
+
+  return `
+    <div class="zone-de-depot is-occupee">
+      <p class="zone-de-depot__mot">${escapeHtml(
+        `${ce.nom} : ce qui a été analysé se lit ici, la lecture se lance encore depuis « ${ou} ».`)}</p>
+    </div>
+  `;
+}
+
+/**
+ * Le rail des familles, et le tableau de ce qui a déjà été analysé.
+ *
+ * ## Pourquoi cet écran les porte
+ *
+ * Les mails, les comptes rendus et les rapports de bureau de contrôle font la
+ * **même démarche** : on va les chercher dans Fichiers, on choisit ceux qu'on veut
+ * analyser, on lit, et l'on décide ensuite d'en faire une proposition. Trois
+ * utilitaires pour une démarche, c'était trois accueils et surtout **aucune vue
+ * d'ensemble** — la question « qu'est-ce qui a déjà été analysé sur ce chantier ? »
+ * n'avait de réponse nulle part, alors que c'est la première qu'on se pose.
+ *
+ * ## La coque est celle des Actions, et de la Mémoire, et des Sujets
+ *
+ * `project-rail-layout`, `renderProjectRail`, `nav-list` : rien de dessiné ici. Un
+ * quatrième rail aurait fait un quatrième calibrage, et le replié aurait gardé ses
+ * libellés comme celui des Actions les gardait avant (règle 4).
+ */
+function renderLesDocumentsAnalyses(vue) {
+  if (vue.phase !== "vide" || vue.lance) return "";
+
+  return renderLeTableauDesDocuments({
+    documents: lesDocumentsDeLaVue(vue),
+    famille: vue.famille,
+    enCours: vue.dejaLusEnCours,
+    rate: vue.dejaLusRate === true,
+    ouverte: texte(vue.ouvertureEnCours)
+  });
+}
+
+/**
+ * Un fil de mails ou un rapport de contrôle, rouvert.
+ *
+ * **Le bouton de retour est à gauche du titre**, comme partout ailleurs : posé en
+ * dessous, il se lit comme une action sur l'analyse plutôt que comme une sortie.
+ *
+ * Les deux vues sont **propres à leur famille** : un fil a des prises de position,
+ * un rapport a des avis et une légende. Une vue commune aurait dit « 3 éléments »
+ * des deux, ce qui ne renseigne sur aucune.
+ */
+function renderUnDocumentDuneAutreFamille(vue) {
+  const ouvert = vue.ouvertAilleurs;
+  const ce = ceQueDitLaFamille(ouvert?.famille);
+
+  return `
+    <div class="lecture-cr"
+      style="--project-rail-width:${railWidth(vue.railLargeur, vue.railOuvert === false)}px">
+      <div class="project-rail-layout${
+        vue.railOuvert === false ? " project-rail-layout--collapsed" : ""}">
+        ${renderLeRailDesFamilles({
+          actif: vue.famille,
+          documents: lesDocumentsDeLaVue(vue) ?? [],
+          replie: vue.railOuvert === false
+        })}
+        <div class="project-rail-layout__content">
+      ${renderEntete(vue)}
+      <section class="lecture-cr__ailleurs">
+        <div class="lecture-cr__ailleurs-tete">
+          <button type="button" class="gh-btn gh-btn--sm" data-lecture-cr-fermer-ailleurs>
+            ← Les documents analysés
+          </button>
+          <h3 class="lecture-cr__ailleurs-titre">${escapeHtml(texte(ouvert?.titre)
+            || (ce ? ce.nom : "Document"))}</h3>
+        </div>
+        ${texte(ouvert?.lueLe)
+          ? `<p class="lecture-cr__ailleurs-quand mono-small">${escapeHtml(
+              `Lue le ${texte(ouvert.lueLe).slice(0, 10)} — telle qu'elle a été faite ce jour-là.`)}</p>`
+          : ""}
+        ${ouvert?.famille === FAMILLE.MAIL
+          ? renderLeDetailDunFil(ouvert?.vue)
+          : renderLeDetailDunRapport(ouvert?.vue)}
+      </section>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -619,7 +816,7 @@ function renderEntete(vue = etat) {
                </button>`
             : ""
         }
-        <h2 class="lecture-cr__titre">Lecture d'un compte rendu de chantier</h2>
+        <h2 class="lecture-cr__titre">Les documents du chantier</h2>
         <div class="lecture-cr__entete-actions">
           ${
             // **La porte d'entrée reste, la zone d'accueil s'en va.** Un
@@ -657,9 +854,20 @@ function renderEntete(vue = etat) {
         </div>
       </div>
       ${renderVersement(vue.versement)}
-      ${vue.conservee ? renderLaPhotographie(vue) : `
+      ${/*
+        **La phrase d'accueil suit ce qu'on regarde.**
+        Elle décrit la lecture d'un compte rendu ; sous « Mails » ou « Bureau de
+        Contrôle », elle contredisait le rail et promettait une restitution que
+        cet écran n'y fait pas. Un document ouvert n'en a pas besoin non plus :
+        il est là, on le lit.
+      */""}
+      ${vue.conservee ? renderLaPhotographie(vue)
+        : vue.ouvertAilleurs
+          || (vue.famille && vue.famille !== TOUTES && vue.famille !== FAMILLE.CR) ? ""
+        : `
       <p class="lecture-cr__mot">
-        Déposez un compte rendu : l'écran le <strong>restitue d'abord en Markdown</strong> —
+        Tout ce qui a déjà été analysé sur ce chantier est à gauche, par famille. Et pour
+        un compte rendu : déposez-le, l'écran le <strong>restitue d'abord en Markdown</strong> —
         c'est ce document-là que le modèle relit pour en tirer les points. On voit donc
         exactement sur quoi il s'est fondé. Rien n'est ouvert ni écrit : la suite passe par
         une proposition.
@@ -770,119 +978,6 @@ function renderDepot(vue) {
   `;
 }
 
-/**
- * Les comptes rendus déjà lus sur ce chantier.
- *
- * ## Ce qu'elle répare
- *
- * La lecture est passée au serveur, et l'écran n'a plus rien montré : on lançait
- * dix-neuf comptes rendus, une proposition tombait, et tout ce que l'Atelier
- * affichait — les points relevés, la confrontation au projet, le document
- * refait — n'existait nulle part.
- *
- * Il y avait déjà, avant, une perte plus discrète : une fois le compte rendu
- * transformé en proposition, son analyse était perdue pour de bon.
- *
- * ## L'ordre est celui des réunions
- *
- * Pas celui des lectures. Un compte rendu n° 12 lu après les n° 15 et 16
- * reprend sa place entre les deux, parce que **rien ne dépend de l'ordre dans
- * lequel on a lu** : chaque lecture ne dit que ce qu'elle a vu.
- *
- * ## Elle ne s'affiche qu'à l'accueil
- *
- * Sous une lecture en cours, elle ferait une seconde liste de comptes rendus
- * au-dessus de celui qu'on regarde.
- */
-function renderLesComptesRendusLus(vue) {
-  if (vue.phase !== "vide" || vue.lance) return "";
-
-  // **« On n'a pas demandé » et « il n'y en a aucun » ne se disent pas pareil**
-  // (règle 5) : une liste vide affichée pendant le chargement ferait croire
-  // qu'aucun compte rendu n'a jamais été lu.
-  if (vue.dejaLus === null) {
-    return vue.dejaLusEnCours
-      ? `<p class="lecture-cr__lus-mot mono-small">Lecture des comptes rendus déjà analysés…</p>`
-      : "";
-  }
-
-  const lignes = lesComptesRendusLus(vue.dejaLus);
-  if (!lignes.length) return "";
-
-  return `
-    <section class="lecture-cr__lus">
-      <p class="lecture-cr__lus-aide mono-small">
-        Rangés par la date de la réunion, pas par celle de l'analyse. Cliquez pour
-        rouvrir ce que la lecture avait vu ce jour-là.
-      </p>
-      ${/*
-        **La coquille des autres tableaux, et non une liste à part.** C'était
-        une suite de boutons, avec sa propre bordure, son propre survol et son
-        propre gris : le seul endroit de l'application où une liste de
-        documents ne ressemblait pas à une liste de documents. Les titres y
-        gagnent le bleu au survol, qui dit qu'on peut cliquer, et l'en-tête
-        compte — ce que ni le titre ni les lignes ne disaient.
-      */""}
-      ${renderDataTableShell({
-        className: "lecture-cr__lus-table",
-        gridTemplate: "minmax(280px,2fr) 220px",
-        headHtml: renderDataTableHead({
-          columns: [{
-            html: renderDataTableCount({
-              iconeHtml: svgIcon("history", { className: "octicon" }),
-              dit: `${lignes.length} compte${lignes.length > 1 ? "s" : ""} rendu${
-                lignes.length > 1 ? "s" : ""} déjà analysé${lignes.length > 1 ? "s" : ""}`,
-              titre: "Les comptes rendus dont l'analyse est conservée"
-            }),
-            className: COLONNE_DU_COMPTE
-          }]
-        }),
-        bodyHtml: lignes.map((ligne) => renderUneLectureGardee(ligne, vue)).join("")
-      })}
-    </section>
-  `;
-}
-
-/** Une ligne de la table des comptes rendus lus. */
-function renderUneLectureGardee(ligne, vue) {
-  const numero = texte(ligne?.numero_de_reunion);
-  const jour = texte(ligne?.tenue_le);
-  const points = Number(ligne?.mesures?.points) || 0;
-  const relectures = Number(ligne?.relectures) || 1;
-  const ouverte = texte(vue?.conservee?.id) === texte(ligne?.id);
-
-  // **Le gabarit de titre des Sujets**, comme le journal des Actions : une
-  // icône d'état, un titre qui se clique, et ce qu'on en dit dessous. Un
-  // troisième dessin de ligne aurait fait un troisième gris (règle 4).
-  return `
-    <div class="data-table-shell__row lecture-cr__lus-ligne${ouverte ? " est-ouverte" : ""}">
-      <div class="data-table-shell__cell data-table-shell__cell--titre">
-        <span class="issue-row-title-grid">
-          <span class="issue-row-title-grid__status">${
-            svgIcon("file", { className: "octicon" })}</span>
-          <span class="issue-row-title-grid__title">
-            <button type="button" class="row-title-trigger theme-text theme-text--pb"
-              data-lecture-cr-gardee="${escapeHtml(texte(ligne?.id))}"
-            >${escapeHtml(texte(ligne?.document) || "Compte rendu")}</button>
-          </span>
-          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${
-            escapeHtml([
-              numero ? `réunion n° ${numero}` : "",
-              jour,
-              // **Relu n'est pas « lu deux fois le même jour ».** On relit en
-              // ajustant une consigne, et c'est la dernière lecture qu'on
-              // ouvre — les autres restent en base pour la comparaison.
-              relectures > 1 ? `${relectures} lectures` : ""
-            ].filter(Boolean).join(" • "))}</span>
-        </span>
-      </div>
-
-      <div class="data-table-shell__cell lecture-cr__lus-chiffres mono-small">
-        <span>${points} point${points > 1 ? "s" : ""}</span>
-      </div>
-    </div>
-  `;
-}
 
 /**
  * Le corps de l'écran, **dès que le fichier est là**.
@@ -2958,6 +3053,9 @@ let detacher = null;
  * doit être vrai pour brancher, c'est qu'il y ait un hôte ; la zone, elle, se
  * branche si elle est là.
  */
+/** Ce qui débranche le calage du rail du rendu précédent. */
+let railDetacher = null;
+
 function brancher(hote) {
   if (!hote) return;
   const zone = hote.querySelector(`[${LA_ZONE}]`);
@@ -2973,6 +3071,32 @@ function brancher(hote) {
   // Les redemander à chaque redessin ferait une requête par clic — et l'écran
   // se redessine à chaque case cochée.
   if (etat.dejaLus === null && !etat.dejaLusEnCours) void chargerLesLecturesGardees(hote);
+
+  /**
+   * Le rail : son calage au défilement, et sa poignée.
+   *
+   * **Le haut du rail suit le défilement.** Les onglets du projet défilent avec la
+   * page, l'en-tête global non : sans ce calage, le rail resterait à la hauteur
+   * qu'il avait au rendu et laisserait un blanc sous les onglets. La mesure vit
+   * dans la coque commune, comme pour les Actions.
+   *
+   * **La poignée déplace pendant le geste et redessine à la fin.** Redessiner à
+   * chaque pixel reconstruirait le tableau vingt fois par seconde, et la poignée
+   * décrocherait du pointeur.
+   */
+  railDetacher?.();
+  railDetacher = followRailScroll(hote.querySelector(".project-rail"));
+
+  bindRailResizer({
+    root: hote,
+    id: "documentsAnalysesRail",
+    pageSelector: ".lecture-cr",
+    getWidth: () => railWidth(etat.railLargeur),
+    onEnd: (largeur) => {
+      etat.railLargeur = largeur;
+      redessiner(hote);
+    }
+  });
 
   const champ = hote.querySelector(`[${UN_FICHIER_LOCAL}]`);
   const surLeChamp = (evenement) => {
@@ -3007,9 +3131,42 @@ function brancher(hote) {
       return;
     }
 
-    const gardee = cible.closest("[data-lecture-cr-gardee]");
-    if (gardee) {
-      void ouvrirUneLectureGardee(hote, texte(gardee.dataset.lectureCrGardee));
+    // ── Le rail des familles, et le tableau des documents analysés ──────────
+    //
+    // Délégués sur l'hôte : la liste se réécrit à chaque famille ouverte, donc des
+    // écouteurs posés sur les lignes mourraient avec elles.
+    const entreeDuRail = cible.closest(`[${CHOISIR_UNE_FAMILLE}]`);
+    if (entreeDuRail) {
+      const voulue = laFamilleDesignee(entreeDuRail.getAttribute(CHOISIR_UNE_FAMILLE));
+      if (voulue) {
+        etat.famille = voulue;
+        redessiner(hote);
+      }
+      return;
+    }
+
+    // Le bouton de la coque commune, calé en bas, au même endroit replié ou non.
+    if (cible.closest("[data-project-rail-collapse]")) {
+      evenement.preventDefault();
+      etat.railOuvert = etat.railOuvert === false;
+      redessiner(hote);
+      return;
+    }
+
+    const ligne = cible.closest(`[${OUVRIR_UN_DOCUMENT}]`);
+    if (ligne) {
+      const vise = leDocumentDesigne(ligne.getAttribute(OUVRIR_UN_DOCUMENT));
+      if (!vise) return;
+      // **Chaque famille par sa porte.** Un compte rendu rouvre l'écran entier,
+      // qui est le sien depuis des rounds ; les deux autres ont leur vue à elles.
+      if (vise.famille === FAMILLE.CR) void ouvrirUneLectureGardee(hote, vise.id);
+      else void ouvrirUnDocumentAilleurs(hote, vise.famille, vise.id);
+      return;
+    }
+
+    if (cible.closest("[data-lecture-cr-fermer-ailleurs]")) {
+      etat.ouvertAilleurs = null;
+      redessiner(hote);
       return;
     }
 
@@ -3643,11 +3800,103 @@ async function chargerLesLecturesGardees(hote) {
     // **Assez pour un chantier entier.** Le défaut de vingt sert au suivi, qui
     // ne veut que la précédente ; ici on dresse la liste des réunions, et un
     // chantier d'un an en compte cinquante.
-    etat.dejaLus = await base.listerLesLectures(projet, { limite: 300 });
+    /**
+     * **Les trois familles ensemble, et en parallèle.**
+     *
+     * Ce sont trois tables distinctes et trois requêtes indépendantes : les
+     * enchaîner triplerait l'attente avant le premier affichage, pour rien. Une
+     * famille injoignable laisse la sienne à `null` et les deux autres s'affichent
+     * — perdre la vue d'ensemble parce qu'une table est muette serait un mauvais
+     * échange.
+     */
+    const [crs, fils, rapports] = await Promise.all([
+      base.listerLesLectures(projet, { limite: 300 }),
+      lesFilsDuProjet(projet),
+      lesRapportsDuProjet(projet)
+    ]);
+
+    etat.dejaLus = crs;
+    etat.dejaLusMails = fils;
+    etat.dejaLusControles = rapports;
+    // **Rien n'est revenu des trois** : ce n'est pas « rien n'a été analysé ».
+    etat.dejaLusRate = crs === null && fils === null && rapports === null;
   } catch {
-    // Rien : on ne sait pas, et l'accueil ne dit rien.
+    // On ne sait pas, et l'écran le dit plutôt que d'annoncer un chantier vierge.
+    etat.dejaLusRate = true;
   } finally {
     etat.dejaLusEnCours = false;
+    redessiner(hote);
+  }
+}
+
+/**
+ * Les fils de mails déjà lus, sans faire tomber le reste.
+ *
+ * Chargé à la demande : ce service passe par `auth.js`, qui charge le SDK Supabase
+ * depuis le réseau — ce qu'une exécution hors navigateur ne saurait résoudre.
+ */
+async function lesFilsDuProjet(projet) {
+  try {
+    const { listerLesLecturesDeFils } = await import("../../../services/lectures-du-fil-supabase.js");
+    return await listerLesLecturesDeFils(projet, { limite: 300 });
+  } catch {
+    return null;
+  }
+}
+
+/** Les rapports de contrôle déjà lus, à la même enseigne. */
+async function lesRapportsDuProjet(projet) {
+  try {
+    const { listerLesLecturesDeRapports } =
+      await import("../../../services/lectures-de-rapports-supabase.js");
+    return await listerLesLecturesDeRapports(projet, { limite: 300 });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ouvrir un document d'une autre famille que les comptes rendus.
+ *
+ * L'analyse gelée n'est chargée qu'ici : elle porte le fil entier ou la
+ * transcription entière, et la charger pour cinquante lignes afin d'en ouvrir une
+ * ferait passer cinquante analyses sur le réseau pour en regarder une.
+ *
+ * Une lecture qui ne s'ouvre pas le dit, sans deviner pourquoi : la ligne peut
+ * avoir disparu, ou être d'avant que les analyses soient conservées, et les deux se
+ * disent de la même façon parce qu'on ne sait pas laquelle (règle 5).
+ */
+async function ouvrirUnDocumentAilleurs(hote, famille, id) {
+  etat.ouvertureEnCours = texte(id);
+  redessiner(hote);
+
+  try {
+    if (famille === FAMILLE.MAIL) {
+      const { lireUneLectureDeFil } = await import("../../../services/lectures-du-fil-supabase.js");
+      const ligne = await lireUneLectureDeFil(id);
+      etat.ouvertAilleurs = {
+        famille,
+        titre: texte(ligne?.objet),
+        lueLe: texte(ligne?.created_at),
+        vue: laVueDunFil(ligne)
+      };
+    } else {
+      const { lireUneLectureDeRapport } =
+        await import("../../../services/lectures-de-rapports-supabase.js");
+      const ligne = await lireUneLectureDeRapport(id);
+      etat.ouvertAilleurs = {
+        famille,
+        titre: texte(ligne?.document),
+        lueLe: texte(ligne?.created_at),
+        // `laVueDunRapport(null)` rend `null`, et le détail dit alors qu'il ne
+        // s'ouvre pas. On passe donc la ligne telle quelle, même absente.
+        vue: laVueDunRapport(ligne) ?? { lecture: null }
+      };
+    }
+  } catch {
+    etat.ouvertAilleurs = { famille, titre: "", lueLe: "", vue: null };
+  } finally {
+    etat.ouvertureEnCours = "";
     redessiner(hote);
   }
 }
@@ -4515,7 +4764,7 @@ function renderEcranEnPanne(erreur) {
     <div class="lecture-cr">
       <header class="lecture-cr__entete">
         <div class="lecture-cr__entete-ligne">
-          <h2 class="lecture-cr__titre">Lecture d'un compte rendu de chantier</h2>
+          <h2 class="lecture-cr__titre">Les documents du chantier</h2>
         </div>
       </header>
       <section class="lecture-cr__echec">
