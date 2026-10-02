@@ -11,7 +11,8 @@ import assert from "node:assert/strict";
 
 import {
   LE_PROCEDE_DUN_RAPPORT, LE_SELECT_DUNE_LIGNE_DE_RAPPORT, LE_SELECT_DUN_RAPPORT,
-  laLegendeDuRapport, laLigneDunRapport, lanalyseDunRapportAconserver, laVueDunRapport,
+  laLegendeComplete, laLegendeDuRapport, laLigneDunRapport,
+  lanalyseDunRapportAconserver, laVueDunRapport,
   leLecteurDunRapport, leSensDeLaMarque, lesLecturesDeRapportsEnOrdre, lesMesuresDunRapport,
   lesRapportsLus, phraseDesRapportsLus
 } from "./la-lecture-dun-rapport.js";
@@ -298,4 +299,44 @@ test("la phrase de l'accueil dit ce qu'il y a à cliquer", () => {
       { id: "3", document: "b.pdf", created_at: "2026-03-12" }
     ]),
     /2 rapports lus, dont 1 relu au moins une fois/);
+});
+
+/* ── Deux lectures d'une même légende ────────────────────────────────────── */
+
+test("la première légende gagne, la seconde la complète", () => {
+  const reunie = laLegendeComplete(
+    [{ marque: "F", signification: "Avis favorable", ou: "page 2" }],
+    [
+      { marque: "F", signification: "Favorable sous réserve" },
+      { marque: "D", signification: "Avis défavorable" }
+    ]
+  );
+
+  assert.deepEqual(reunie.map((une) => une.marque), ["F", "D"]);
+  // En cas de désaccord, la reconnaissance tranche : elle est allée chercher la
+  // table exprès, là où le relevé la ramasse en passant. Prendre la plus récente
+  // ferait dépendre le sens de « F » de l'ordre des appels.
+  assert.equal(reunie[0].signification, "Avis favorable");
+});
+
+test("la casse ne déclare pas une seconde marque, dans les deux sens", () => {
+  assert.equal(laLegendeComplete(
+    [{ marque: "SO", signification: "Sans objet" }],
+    [{ marque: "so", signification: "Sans objet" }]
+  ).length, 1);
+
+  // **Et quand c'est la première qui est en minuscule.** La batterie a montré que
+  // le premier sens passait sans que la comparaison soit normalisée des deux
+  // côtés : « so » puis « SO » faisaient deux marques.
+  const lautre = laLegendeComplete(
+    [{ marque: "so", signification: "Sans objet" }],
+    [{ marque: "SO", signification: "Sans objet, selon le relevé" }]
+  );
+  assert.equal(lautre.length, 1);
+  assert.equal(lautre[0].signification, "Sans objet");
+});
+
+test("une légende réunie n'invente rien quand les deux sont vides", () => {
+  assert.deepEqual(laLegendeComplete(null, undefined), []);
+  assert.deepEqual(laLegendeComplete([{ marque: "F" }], [{ signification: "Favorable" }]), []);
 });

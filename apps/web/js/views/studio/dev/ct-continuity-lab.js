@@ -56,9 +56,13 @@ import {
   previewMatches
 } from "../../../services/ct-lab-patterns.js";
 import {
-  OUVRIR_UN_RAPPORT, renderLeDetailDunRapport, renderLesRapportsLus
+  LIRE_LES_RAPPORTS, OUVRIR_UN_RAPPORT, renderLeDetailDunRapport,
+  renderLesRapportsLus, renderLinvitationALire
 } from "../../ui/les-rapports-lus.js";
-import { laVueDunRapport } from "../../../services/la-lecture-dun-rapport.js";
+import {
+  laLigneDunRapport, laVueDunRapport
+} from "../../../services/la-lecture-dun-rapport.js";
+import { ETAPE } from "../../../services/le-parcours-dun-rapport.js";
 import { renderPropositionOuverte } from "../../ui/avertissement-proposition.js";
 import { bindGhActionButtons, renderGhActionButton } from "../../ui/gh-split-button.js";
 import { renderLightTabs } from "../../ui/light-tabs.js";
@@ -3821,6 +3825,10 @@ function render(root, state) {
                 ici pour reprendre une analyse bien plus souvent que pour en
                 lancer une première.
               */""}
+              ${state.result ? "" : renderLinvitationALire({
+                deposes: state.reports.filter((un) => !un.error).length,
+                parcours: state.parcours
+              })}
               ${state.result ? "" : renderLesRapportsLus({
                 lignes: state.lectures,
                 enCours: state.lecturesEnCours,
@@ -3925,7 +3933,18 @@ export function renderCtContinuityLab(root) {
     lecturesEnCours: false,
     /** La lecture conservée qu'on regarde, s'il y en a une. */
     ouverte: null,
-    ouvertureEnCours: ""
+    ouvertureEnCours: "",
+    /**
+     * La lecture en cours : quel rapport, à quelle étape, et ce qu'elle a rendu.
+     *
+     * Elle vit à côté de `state.relecture`, qui est l'ancien relevé par motifs
+     * lancé depuis le versement. Les deux ne font pas la même chose, et les fondre
+     * aurait fait croire qu'un rapport relevé est un rapport lu.
+     */
+    parcours: {
+      running: false, courant: "", quoi: "", faits: 0, total: 0,
+      refus: [], dit: "", error: ""
+    }
   };
 
   let nextDocumentNumber = 1;
@@ -4128,17 +4147,145 @@ export function renderCtContinuityLab(root) {
     refresh();
 
     try {
-      const { lireUneLectureDeRapport } = await lecturesGardees();
+      const { lesLecturesDunMemeRapport, lireUneLectureDeRapport } = await lecturesGardees();
       const ligne = await lireUneLectureDeRapport(quoi);
       // `laVueDunRapport(null)` rend `null`, et le détail dit alors qu'il ne
       // s'ouvre pas. On passe donc la ligne telle quelle, même absente.
-      state.ouverte = laVueDunRapport(ligne) ?? { lecture: null };
+      const vue = laVueDunRapport(ligne) ?? { lecture: null };
+
+      // **Les lectures antérieures du même rapport**, pour comparer. Elles sont
+      // demandées ici et non au tableau : celui-ci n'en montre qu'une par rapport,
+      // et charger l'historique de cinquante rapports pour en ouvrir un reviendrait
+      // à payer cinquante requêtes pour une comparaison.
+      state.ouverte = vue.lecture
+        ? {
+          ...vue,
+          anterieures: await lesLecturesDunMemeRapport(
+            state.memory?.projectId ?? "", texteDe(ligne?.document))
+        }
+        : vue;
     } catch {
       state.ouverte = { lecture: null };
     } finally {
       state.ouvertureEnCours = "";
       refresh();
     }
+  };
+
+  /**
+   * Lire les rapports déposés : les trois étapes, puis la conservation.
+   *
+   * ## C'est le geste qui manquait
+   *
+   * Le round précédent a livré de quoi **rouvrir** une lecture, et rien pour en
+   * faire une. Le tableau était donc vide à jamais — et un tableau vide ne se
+   * voit pas, ce qui a rendu tout le round invisible à l'écran.
+   *
+   * ## En série, et sans tout perdre pour un
+   *
+   * Trois appels par rapport : un lot de trente lancé d'un coup se ferait
+   * limiter. Un rapport qui échoue n'arrête pas les suivants, et son motif se dit.
+   *
+   * ## La conservation ne conditionne pas la lecture
+   *
+   * Une écriture refusée laisse la lecture à l'écran : elle a eu lieu, et ce
+   * qu'on en garde n'est que le confort de la rouvrir. Mais le dire est
+   * obligatoire, sans quoi l'on croirait l'avoir gardée (règle 5).
+   */
+  const lireLesRapportsDeposes = async () => {
+    if (state.parcours.running) return;
+
+    const rapports = state.reports.filter((un) => !un.error && (un.pages ?? []).length);
+    if (!rapports.length) return;
+
+    const projectId = state.memory?.projectId ?? null;
+
+    state.parcours = {
+      running: true, courant: "", quoi: "", faits: 0, total: rapports.length,
+      refus: [], dit: "", error: ""
+    };
+    refresh();
+
+    try {
+      const [{ lireLesRapports, phraseDuLotLu, phraseDuRefusDeLecture },
+        { reconnaitreLaStructure }, { refaireLeDocument }, { relireLesAvis }] =
+        await Promise.all([
+          import("../../../services/lire-un-rapport.js"),
+          import("../../../services/structure-par-le-modele.js"),
+          import("../../../services/markdown-par-le-modele.js"),
+          import("../../../services/avis-par-le-modele.js")
+        ]);
+
+      const { vues, refus } = await lireLesRapports(
+        rapports.map((un) => ({
+          nom: nomDuRapport(un),
+          sourceId: texteDe(un.sourceId),
+          pages: un.pages ?? [],
+          documentId: texteDe(un.documentId)
+        })),
+        {
+          reconnaitreLaStructure,
+          refaireLeDocument,
+          relireLesAvis,
+          onEtape: ({ quoi, nom }) => {
+            // Le rang avance au **début** de chaque rapport, non à sa fin : sans
+            // cela, le premier rapport s'annoncerait « 0 sur 3 ».
+            const change = quoi === ETAPE.STRUCTURE && texteDe(nom) !== state.parcours.courant;
+            if (change && state.parcours.courant) state.parcours.faits += 1;
+            state.parcours = { ...state.parcours, courant: texteDe(nom), quoi };
+            refresh();
+          }
+        }
+      );
+
+      /**
+       * **Conserver chaque lecture, une par une.**
+       *
+       * Une seule écriture pour le lot aurait fait qu'un refus sur le trentième
+       * rapport perdrait les vingt-neuf premiers, alors qu'ils sont lus et payés.
+       */
+      let gardees = 0;
+      if (projectId) {
+        const { conserverUneLectureDeRapport } = await lecturesGardees();
+        for (const vue of vues) {
+          const rapport = rapports.find((un) => nomDuRapport(un) === vue.lecture?.nom);
+          const ligne = laLigneDunRapport(vue, {
+            projectId, documentId: texteDe(rapport?.documentId)
+          });
+          if (ligne && await conserverUneLectureDeRapport(ligne)) gardees += 1;
+        }
+      }
+
+      state.parcours = {
+        running: false, courant: "", quoi: "", faits: rapports.length, total: rapports.length,
+        refus: refus.map((un) => ({ ...un, dit: phraseDuRefusDeLecture(un.motif) })),
+        dit: [
+          phraseDuLotLu({ vues, refus }),
+          // **Ce qui n'a pas été gardé se dit, et ne se devine pas.** Une lecture
+          // à l'écran qu'on croit conservée est une lecture qu'on repayera.
+          !projectId && vues.length
+            ? "Ce projet n'est pas relié à la base : les lectures ne sont pas conservées."
+            : gardees < vues.length
+              ? `${vues.length - gardees} lecture(s) n'ont pas pu être conservées : `
+                + "elles sont à l'écran, elles ne seront pas rouvrables."
+              : ""
+        ].filter(Boolean).join(" "),
+        error: ""
+      };
+
+      await relireLesLectures(projectId);
+
+      // **Une seule lecture s'ouvre d'elle-même.** C'est ce qu'on vient de
+      // demander, et la faire chercher dans un tableau d'une ligne serait un clic
+      // pour rien. À plusieurs, on reste au tableau : il dit lesquels ont été lus.
+      if (vues.length === 1) state.ouverte = vues[0];
+    } catch (error) {
+      state.parcours = {
+        running: false, courant: "", quoi: "", faits: 0, total: 0,
+        refus: [], dit: "", error: texteDe(error?.message) || "cause inconnue"
+      };
+    }
+    refresh();
   };
 
   /**
@@ -4855,6 +5002,11 @@ export function renderCtContinuityLab(root) {
     //
     // Traités avant les autres gestes : ce sont les seuls qui changent d'écran
     // plutôt que de changer ce qu'on regarde dedans.
+    if (event.target.closest(`[${LIRE_LES_RAPPORTS}]`)) {
+      await lireLesRapportsDeposes();
+      return;
+    }
+
     const ligneLue = event.target.closest(`[${OUVRIR_UN_RAPPORT}]`);
     if (ligneLue) {
       await ouvrirUneLecture(ligneLue.getAttribute(OUVRIR_UN_RAPPORT));

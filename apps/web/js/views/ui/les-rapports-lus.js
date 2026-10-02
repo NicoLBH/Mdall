@@ -22,6 +22,7 @@
 
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
+import { renderAttenteSpinner } from "./spinner.js";
 import { renderMarkdownToHtml } from "../../utils/markdown-renderer.js";
 import {
   COLONNE_DU_COMPTE, renderDataTableCount, renderDataTableHead, renderDataTableShell
@@ -31,7 +32,7 @@ import {
   phraseDesRapportsLus
 } from "../../services/la-lecture-dun-rapport.js";
 import {
-  lEtatDuParcours, phraseDesMarquesSansSens, phraseDuParcours
+  ceQueFaitLetape, lEtatDuParcours, phraseDesMarquesSansSens, phraseDuParcours
 } from "../../services/le-parcours-dun-rapport.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -63,7 +64,15 @@ export function renderLesRapportsLus({ lignes = null, enCours = false, ouverte =
   }
 
   const rapports = lesRapportsLus(lignes);
-  if (!rapports.length) return "";
+
+  // **Aucun rapport lu se dit.** Rendre une chaîne vide faisait disparaître la
+  // section entière : on ne pouvait pas distinguer « ce chantier n'a encore rien
+  // de lu » de « cet écran ne sait pas lire les lectures », et surtout rien
+  // n'invitait à en lire un. C'est ce qui a rendu tout un round invisible.
+  if (!rapports.length) {
+    return `<p class="rapports-lus__mot mono-small">${escapeHtml(
+      phraseDesRapportsLus(lignes))}</p>`;
+  }
 
   return `
     <section class="rapports-lus">
@@ -133,6 +142,93 @@ function renderUnRapportLu(rapport, { ouverte = "" } = {}) {
           : "sans légende"
       ].filter(Boolean).join(" • "))}</div>
     </div>
+  `;
+}
+
+/** L'attribut par lequel l'écran reconnaît la demande de lire les rapports déposés. */
+export const LIRE_LES_RAPPORTS = "data-lire-les-rapports";
+
+/**
+ * Le geste qui lance la lecture, et ce qu'il coûte dit avant qu'on clique.
+ *
+ * ## Pourquoi il est offert, et non lancé d'office
+ *
+ * Trois appels par rapport, dont une transcription entière. Lancer cela au dépôt
+ * ferait payer la lecture d'un lot qu'on a peut-être déposé pour voir.
+ *
+ * ## Pourquoi il est ici et non dans l'écran
+ *
+ * L'utilitaire du bureau de contrôle fait cinq mille lignes. Un bouton écrit
+ * là-bas ne s'éprouverait qu'en ouvrant un navigateur, et c'est précisément ce
+ * bouton qui manquait au round précédent sans que rien ne le dise.
+ *
+ * @param {object} quoi
+ * @param {number} [quoi.deposes] combien de rapports sont dans l'Atelier
+ * @param {object|null} [quoi.parcours] l'état de la lecture en cours, s'il y en a une
+ */
+export function renderLinvitationALire({ deposes = 0, parcours = null } = {}) {
+  const combien = Math.max(0, Number(deposes) || 0);
+
+  if (parcours?.running) return renderLaLectureEnCours(parcours);
+
+  const refus = liste(parcours?.refus);
+  const dit = texte(parcours?.dit);
+
+  return `
+    <section class="rapports-lire">
+      ${dit ? `<p class="rapports-lire__dit mono-small">${escapeHtml(dit)}</p>` : ""}
+      ${texte(parcours?.error)
+        ? `<p class="forme-manques">${escapeHtml(texte(parcours.error))}</p>`
+        : ""}
+      ${refus.length
+        ? `<ul class="rapports-lire__refus">
+            ${refus.map((un) => `<li class="forme-manques">${escapeHtml(
+              `${texte(un?.nom) || "Un document"} — ${texte(un?.dit) || texte(un?.motif)}`
+            )}</li>`).join("")}
+          </ul>`
+        : ""}
+      ${combien
+        ? `<p>
+            <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" ${LIRE_LES_RAPPORTS}>
+              ${escapeHtml(`Lire ${combien} rapport${combien > 1 ? "s" : ""} : structure, Markdown, avis`)}
+            </button>
+          </p>
+          <p class="rapports-lire__cout mono-small">${escapeHtml(
+            "Trois appels par rapport, en série. La lecture est conservée : on ne "
+            + "la repaye pas pour la revoir.")}</p>`
+        : `<p class="rapports-lire__cout mono-small">${escapeHtml(
+            "Déposez un rapport de contrôle pour le lire.")}</p>`}
+    </section>
+  `;
+}
+
+/**
+ * La lecture en cours : quel rapport, et à quelle étape.
+ *
+ * **L'étape est nommée, pas comptée.** « 2/3 » ne dit pas ce qu'on attend, et la
+ * transcription peut durer une minute sur un rapport de soixante pages : sans son
+ * nom, l'écran a l'air figé.
+ */
+export function renderLaLectureEnCours(parcours = null) {
+  const ce = ceQueFaitLetape(texte(parcours?.quoi));
+  const total = Math.max(0, Number(parcours?.total) || 0);
+  const faits = Math.max(0, Number(parcours?.faits) || 0);
+
+  return `
+    <section class="rapports-lire rapports-lire--en-cours">
+      <p class="rapports-lire__dit">
+        ${/*
+          **Le sablier commun, et non une icône qu'on ferait tourner ici.** Trois
+          écrans attendent déjà de la même façon ; une quatrième animation aurait
+          fait croire à une quatrième nature d'attente (règle 4).
+        */""}
+        ${renderAttenteSpinner({ label: "Lecture en cours" })}
+        <b>${escapeHtml(texte(parcours?.courant) || "Lecture en cours")}</b>
+        ${total > 1 ? escapeHtml(` — ${Math.min(faits + 1, total)} sur ${total}`) : ""}
+      </p>
+      <p class="rapports-lire__cout mono-small">${escapeHtml(
+        ce ? `${ce.titre} — ${ce.cout}.` : "…")}</p>
+    </section>
   `;
 }
 
@@ -255,6 +351,16 @@ export function renderLesAvisReleves(lecture = null, { auPlus = 60 } = {}) {
                 <b>${escapeHtml([texte(un?.reference), texte(un?.intitule)]
                   .filter(Boolean).join(" — ") || "Avis sans intitulé")}</b>
                 <i>${escapeHtml(texte(un?.ou))}</i>
+                ${/*
+                  **Le constat, sous l'intitulé.** C'est ce que le bureau a écrit
+                  en plus du verdict — « Région A2, altitude 260 m » —, et c'est
+                  précisément ce que la lecture par motifs perdait. Un avis sans
+                  son constat ne se vérifie pas : on sait que le bureau a dit
+                  « favorable », pas sur quoi.
+                */""}
+                ${texte(un?.constat)
+                  ? `<small class="rapport-avis__constat">${escapeHtml(texte(un.constat))}</small>`
+                  : ""}
               </span>
               <span class="forme-reference__chiffres mono-small">${
                 escapeHtml(marque || "—")}</span>
@@ -282,6 +388,76 @@ export function renderLesAvisReleves(lecture = null, { auPlus = 60 } = {}) {
  * la plus longue, et celle qu'on déroule quand les quatre premières ne suffisent
  * pas.
  */
+/**
+ * Les lectures antérieures du même rapport.
+ *
+ * ## Pourquoi elles sont ici, et nulle part ailleurs
+ *
+ * Le tableau de l'accueil montre **une ligne par rapport** : montrer huit fois le
+ * même rapport ferait perdre de vue combien de rapports du chantier ont été lus.
+ * Le round qui a posé cette règle a écrit, en toutes lettres, que « le détail d'un
+ * rapport montre ses lectures précédentes » — et ne l'a pas fait. Une déclaration
+ * qu'on ne vérifie pas est une intention (règle 12) ; la voici tenue.
+ *
+ * ## À quoi elles servent
+ *
+ * À comparer. Relire en ajustant une consigne est le geste le plus fréquent ici, et
+ * « 42 avis » ne dit rien tant qu'on ne sait pas que la lecture précédente en
+ * donnait 11. Chaque ligne porte donc sa date, son lecteur et ses nombres.
+ *
+ * @param {object[]|null} lignes les lectures du même document, la courante comprise
+ * @param {string} courante l'identifiant de celle qu'on regarde
+ */
+export function renderLesLecturesAnterieures(lignes = null, { courante = "" } = {}) {
+  if (lignes === null) {
+    return `<p class="rapport-anterieures forme-manques">Les lectures précédentes de ce
+      rapport n'ont pas pu être listées. Ce n'est pas « il n'y en a pas ».</p>`;
+  }
+
+  const autres = liste(lignes).filter((une) => texte(une?.id) !== texte(courante));
+  if (!autres.length) return "";
+
+  return `
+    <section class="rapport-anterieures">
+      <h4 class="rapport-legende__titre">${escapeHtml(
+        `${autres.length} lecture${autres.length > 1 ? "s" : ""} antérieure${
+          autres.length > 1 ? "s" : ""} de ce rapport`)}</h4>
+      <p class="rapport-legende__mot mono-small">${escapeHtml(
+        "Elles ne sont pas remplacées : une relecture est une seconde lecture, et "
+        + "c'est en les comparant qu'on voit si une consigne a fait mieux.")}</p>
+      <ul class="forme-reference">
+        ${autres.map((une) => {
+          const mesures = une?.mesures ?? {};
+          return `
+            <li class="forme-reference__ligne">
+              <span class="forme-reference__quoi">
+                <b><button type="button" class="row-title-trigger theme-text theme-text--pb"
+                  ${OUVRIR_UN_RAPPORT}="${escapeHtml(texte(une?.id))}"
+                >${escapeHtml(texte(une?.created_at).slice(0, 10) || "lecture sans date")}</button></b>
+                <i>${escapeHtml(texte(une?.lu_par))}</i>
+              </span>
+              <span class="forme-reference__chiffres mono-small">${escapeHtml(
+                // **`null` n'est pas zéro** : une lecture dont le relevé a échoué
+                // n'a pas trouvé « aucun avis » (règle 5).
+                mesures.avis === null || mesures.avis === undefined
+                  ? "avis non relevés"
+                  : `${mesures.avis} avis`)}</span>
+              <span class="forme-reference__sur mono-small">${escapeHtml([
+                Number(mesures.illisibles) > 0
+                  ? `${mesures.illisibles} illisible${mesures.illisibles > 1 ? "s" : ""}`
+                  : "",
+                laLegendeDuRapport(une?.legende).length
+                  ? `${laLegendeDuRapport(une.legende).length} marques`
+                  : "sans légende"
+              ].filter(Boolean).join(" • "))}</span>
+            </li>
+          `;
+        }).join("")}
+      </ul>
+    </section>
+  `;
+}
+
 export function renderLeDetailDunRapport(vue = null) {
   const lecture = vue?.lecture ?? null;
   if (!lecture) {
@@ -305,6 +481,16 @@ export function renderLeDetailDunRapport(vue = null) {
       ${renderLesEtapesDuRapport(lecture)}
       ${renderLaLegendeLue(lecture)}
       ${renderLesAvisReleves(lecture)}
+      ${/*
+        **Les lectures antérieures, après les avis.** On vient d'abord voir ce que
+        cette lecture-ci a trouvé ; on compare ensuite. L'inverse ferait lire un
+        historique avant de savoir de quoi.
+      */""}
+      ${vue?.anterieures === undefined
+        ? ""
+        : renderLesLecturesAnterieures(vue.anterieures, {
+          courante: texte(vue?.conservee?.id)
+        })}
 
       <details class="rapport-detail__markdown">
         <summary class="rapport-detail__markdown-titre">La transcription en Markdown</summary>
