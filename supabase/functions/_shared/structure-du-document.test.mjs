@@ -263,3 +263,101 @@ test("le mobilier de page ne se restitue nulle part", () => {
   assert.match(dit, /ni une fois, ni au début, ni à la fin/);
   assert.match(dit, /ce sont les bords du papier/);
 });
+
+/* ── La légende, celle sans laquelle les avis ne se lisent pas ───────────── */
+
+/**
+ * **Un rapport de contrôle technique n'écrit pas ses avis en toutes lettres.**
+ *
+ * Il pose « F », « D », « SO » dans une colonne étroite et dit une seule fois ce
+ * que chaque marque veut dire — souvent en première ou en dernière page. Sans
+ * cette table, deux cents avis sont illisibles ; et pire, devinables de travers,
+ * puisque « S » vaut « suspendu » chez l'un et « sans objet » chez l'autre.
+ *
+ * Elle est reconnue ici, avec les colonnes, et pour la même raison : la question
+ * n'a qu'une réponse par document, et la poser douze fois en donnerait douze.
+ */
+test("la légende se lit, marque par marque", () => {
+  const lue = structureLue({
+    nature: "rapport initial de contrôle technique",
+    decoupage: "par ouvrage",
+    entete_repete: "",
+    pied_repete: "",
+    chapitres: [],
+    tableaux: [],
+    legende: [
+      { marque: "F", signification: "Avis favorable", ou: "légende en page 2" },
+      { marque: "SO", signification: "Sans objet", ou: "légende en page 2" }
+    ],
+    consignes: []
+  });
+
+  assert.deepEqual(lue.legende, [
+    { marque: "F", signification: "Avis favorable", ou: "légende en page 2" },
+    { marque: "SO", signification: "Sans objet", ou: "légende en page 2" }
+  ]);
+});
+
+/**
+ * **Une entrée à trous n'est pas une entrée.**
+ *
+ * Une marque sans signification n'explique rien, une signification sans marque ne
+ * désigne rien. Les porter jusqu'à l'analyse lui donnerait une table dont elle ne
+ * saurait pas quelle moitié manque.
+ */
+test("une entrée de légende sans marque ou sans sens ne passe pas", () => {
+  const lue = structureLue({
+    nature: "", decoupage: "", entete_repete: "", pied_repete: "",
+    chapitres: [], tableaux: [], consignes: [],
+    legende: [
+      { marque: "F", signification: "Avis favorable", ou: "" },
+      { marque: "  ", signification: "Défavorable", ou: "" },
+      { marque: "D", signification: "   ", ou: "" }
+    ]
+  });
+
+  assert.deepEqual(lue.legende.map((une) => une.marque), ["F"]);
+});
+
+/** Et un document sans légende rend une liste vide, qui est une réponse. */
+test("un document sans légende n'en invente pas", () => {
+  const lue = structureLue({
+    nature: "compte rendu de réunion de chantier", decoupage: "par lot",
+    entete_repete: "", pied_repete: "", chapitres: [], tableaux: [], consignes: []
+  });
+
+  assert.deepEqual(lue.legende, []);
+});
+
+/**
+ * **La légende se recopie, elle ne se résout pas.**
+ *
+ * La tentation est de remplacer « F » par « Avis favorable » partout. Ce serait
+ * réécrire le document au lieu de le transcrire — et une légende mal lue se
+ * propagerait à deux cents lignes sans laisser de trace. La consigne dit donc
+ * l'inverse : la table une fois, les marques telles quelles.
+ */
+test("la consigne de transcription porte la légende, et interdit de la résoudre", () => {
+  const dit = structureEnTexte({
+    nature: "rapport de contrôle technique",
+    legende: [{ marque: "F", signification: "Avis favorable", ou: "page 2" }],
+    chapitres: [], tableaux: [], consignes: []
+  });
+
+  assert.match(dit, /LÉGENDE/);
+  assert.match(dit, /F = Avis favorable/);
+  assert.match(dit, /\(page 2\)/);
+  // Ce qu'on interdit, et c'est le fond de l'affaire.
+  assert.match(dit, /LAISSE LES MARQUES\s+TELLES QUELLES/);
+  assert.match(dit, /## Légende/);
+});
+
+/** Rien de tout cela n'apparaît quand le document n'a pas de légende. */
+test("sans légende, la consigne n'en parle pas", () => {
+  const dit = structureEnTexte({
+    nature: "compte rendu", chapitres: [], tableaux: [], consignes: [], legende: []
+  });
+
+  assert.doesNotMatch(dit, /LÉGENDE/);
+  assert.doesNotMatch(dit, /## Légende/);
+});

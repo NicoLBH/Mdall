@@ -1,0 +1,240 @@
+/**
+ * Le tableau des rapports lus, et le détail d'une lecture.
+ *
+ * Les épreuves portent sur des rapports **inventés** : un rapport réel porte le
+ * verdict d'un tiers sur un ouvrage, et n'a rien à faire dans un dépôt de code.
+ */
+
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  OUVRIR_UN_RAPPORT, renderLaLegendeLue, renderLeDetailDunRapport, renderLesAvisReleves,
+  renderLesEtapesDuRapport, renderLesRapportsLus
+} from "./les-rapports-lus.js";
+
+const LA_LEGENDE = [
+  { marque: "F", signification: "Avis favorable", ou: "légende en page 2" },
+  { marque: "D", signification: "Avis défavorable", ou: "légende en page 2" }
+];
+
+const UNE_LECTURE = {
+  nom: "rapport-initial.pdf",
+  identite: { numero: "RICT-01", etabliLe: "2026-03-14" },
+  structure: { nature: "rapport initial de contrôle technique" },
+  legende: LA_LEGENDE,
+  markdown: "## Légende\n\n| Marque | Sens |\n|---|---|\n| F | Avis favorable |\n",
+  pages: [{ rang: 1 }, { rang: 2 }],
+  avis: [
+    { reference: "A12", intitule: "Fondations superficielles", marque: "F", ou: "page 3" },
+    { reference: "A13", intitule: "Escalier protégé", marque: "S", ou: "page 4" },
+    { reference: "A14", intitule: "Amenée d'air", marque: "", ou: "page 4" }
+  ],
+  mesure: {},
+  luPar: "gpt-5 · lecture d'un rapport v1"
+};
+
+/**
+ * **« On n'a pas demandé » ne se dit pas comme « il n'y en a aucun ».**
+ *
+ * Un tableau vide affiché pendant le chargement ferait croire qu'aucun rapport n'a
+ * jamais été lu, et l'on recommencerait une lecture déjà faite (règle 5).
+ */
+test("le tableau distingue le chargement, l'échec et le vide", () => {
+  assert.match(renderLesRapportsLus({ lignes: null, enCours: true }),
+    /Lecture des rapports déjà analysés/);
+
+  const echoue = renderLesRapportsLus({ lignes: null, enCours: false });
+  assert.match(echoue, /n'ont pas pu/);
+  assert.match(echoue, /on ne sait pas lesquels/);
+
+  // Aucun rapport lu : rien du tout, et non un tableau à zéro ligne.
+  assert.equal(renderLesRapportsLus({ lignes: [] }), "");
+});
+
+/** Une ligne par rapport, avec de quoi décider si l'on clique. */
+test("une ligne dit lequel, et si sa légende a été lue", () => {
+  const html = renderLesRapportsLus({
+    lignes: [{
+      id: "aaaa", document: "rapport-initial.pdf", numero_de_rapport: "RICT-01",
+      etabli_le: "2026-03-14", nature: "rapport initial de contrôle technique",
+      legende: LA_LEGENDE, mesures: { avis: 12 }, created_at: "2026-03-14T09:00:00Z"
+    }]
+  });
+
+  assert.match(html, /rapport-initial\.pdf/);
+  assert.match(html, /n° RICT-01/);
+  assert.match(html, /2026-03-14/);
+  assert.match(html, /12 avis/);
+  assert.match(html, /2 marques/);
+  // Et le titre se clique, par l'attribut que l'écran écoute.
+  assert.match(html, new RegExp(`${OUVRIR_UN_RAPPORT}="aaaa"`));
+  // La coquille commune, et non une liste à part.
+  assert.match(html, /data-table-shell/);
+});
+
+/**
+ * **`null` n'est pas zéro, jusque dans la ligne du tableau.**
+ *
+ * « On n'a pas relevé les avis » et « ce rapport n'en porte aucun » mènent à des
+ * gestes opposés, et zéro est fini (règle 5).
+ */
+test("une ligne dont les avis n'ont pas été relevés ne dit pas zéro", () => {
+  const html = renderLesRapportsLus({
+    lignes: [{ id: "a", document: "x.pdf", legende: [], mesures: {}, created_at: "2026-03-14" }]
+  });
+
+  assert.match(html, /avis non relevés/);
+  assert.doesNotMatch(html, /0 avis/);
+  // Et l'absence de légende se dit, elle aussi.
+  assert.match(html, /sans légende/);
+});
+
+/** Une lecture relue le dit : c'est ce qui donne de quoi comparer. */
+test("un rapport relu annonce ses lectures", () => {
+  const html = renderLesRapportsLus({
+    lignes: [
+      { id: "1", document: "x.pdf", legende: [], mesures: {}, created_at: "2026-03-10" },
+      { id: "2", document: "x.pdf", legende: [], mesures: {}, created_at: "2026-03-14" }
+    ]
+  });
+
+  assert.match(html, /2 lectures/);
+  // Et c'est la plus récente que le clic ouvre.
+  assert.match(html, new RegExp(`${OUVRIR_UN_RAPPORT}="2"`));
+  assert.doesNotMatch(html, new RegExp(`${OUVRIR_UN_RAPPORT}="1"`));
+});
+
+/** La ligne ouverte se distingue : sinon on ne sait plus laquelle on regarde. */
+test("la ligne ouverte porte sa marque", () => {
+  const html = renderLesRapportsLus({
+    lignes: [{ id: "aaaa", document: "x.pdf", legende: [], mesures: {}, created_at: "2026-03-14" }],
+    ouverte: "aaaa"
+  });
+
+  assert.match(html, /est-ouverte/);
+});
+
+/**
+ * **Les trois étapes s'affichent même quand tout est fait.**
+ *
+ * C'est le procédé qu'on vient juger, pas seulement son résultat.
+ */
+test("les trois étapes se montrent, avec ce qu'elles font et pourquoi", () => {
+  const html = renderLesEtapesDuRapport(UNE_LECTURE);
+
+  assert.match(html, /Reconnaître la structure et la légende/);
+  assert.match(html, /Transcrire en Markdown/);
+  assert.match(html, /Relever les avis/);
+  // Le pourquoi de la première, qui est le fond de l'affaire.
+  assert.match(html, /« F »/);
+  assert.match(html, /Les trois étapes sont faites/);
+});
+
+/** L'étape en cours se distingue de celle qui est faite. */
+test("l'étape en cours se voit", () => {
+  const html = renderLesEtapesDuRapport({ structure: {} }, { enCours: "markdown" });
+
+  assert.match(html, /est-en-cours/);
+  assert.match(html, /en cours…/);
+});
+
+/**
+ * **Une structure non reconnue se dit, et ne se tait pas.**
+ *
+ * Sans cette ligne, on relirait une transcription faite sans squelette en croyant
+ * lire une transcription faite avec (règle 5).
+ */
+test("une structure non reconnue est signalée dans les étapes", () => {
+  const html = renderLesEtapesDuRapport({
+    sansStructure: true, markdown: "x", avis: []
+  });
+
+  assert.match(html, /est-sautee/);
+  // `escapeHtml` rend l'apostrophe en `&#39;` : on cherche ce qui s'affiche.
+  assert.match(html, /non reconnue — la suite s&#39;est faite sans elle/);
+  assert.match(html, /la structure n&#39;a pas été reconnue/);
+});
+
+/**
+ * **La légende montrée à côté des avis est ce qui rend l'erreur visible.**
+ *
+ * Une marque du corps qui n'est pas dans la table se voit d'un coup d'œil, et dit
+ * que la légende a été mal lue.
+ */
+test("la légende se montre, avec les marques qui n'y sont pas", () => {
+  const html = renderLaLegendeLue(UNE_LECTURE);
+
+  assert.match(html, /La légende/);
+  assert.match(html, /Avis favorable/);
+  assert.match(html, /légende en page 2/);
+  // « S » est employée par un avis et n'est pas déclarée.
+  assert.match(html, /« S » \(1\)/);
+  assert.match(html, /mal lue, soit le rapport emploie une marque/);
+});
+
+/**
+ * Une légende absente se dit, et les deux raisons de l'être ne se disent pas
+ * pareil : un rapport qui n'en déclare pas, et une structure non reconnue.
+ */
+test("une légende absente dit laquelle des deux raisons", () => {
+  const sansTable = renderLaLegendeLue({ ...UNE_LECTURE, legende: [] });
+  assert.match(sansTable, /ne déclare aucune légende/);
+  assert.doesNotMatch(sansTable, /pas été cherchée/);
+
+  const sansStructure = renderLaLegendeLue({ ...UNE_LECTURE, legende: [], sansStructure: true });
+  assert.match(sansStructure, /pas été cherchée/);
+});
+
+/**
+ * **Une marque non déclarée est dite telle quelle, et signalée.**
+ *
+ * La remplacer par une devinette rendrait un avis faux avec l'aplomb d'un vrai.
+ */
+test("un avis dont la marque n'est pas déclarée le dit", () => {
+  const html = renderLesAvisReleves(UNE_LECTURE);
+
+  assert.match(html, /Fondations superficielles/);
+  assert.match(html, /Avis favorable/);
+  assert.match(html, /marque non déclarée dans la légende/);
+  // Et un avis sans marque n'est pas un avis illisible : le rapport ne tranche pas.
+  assert.match(html, /le rapport ne tranche pas/);
+});
+
+/** Un relevé qui n'a pas eu lieu ne se dit pas comme un relevé vide. */
+test("des avis non relevés ne se disent pas « aucun avis »", () => {
+  assert.match(renderLesAvisReleves({ ...UNE_LECTURE, avis: null }),
+    /l'étape n'a pas eu lieu/);
+  assert.match(renderLesAvisReleves({ ...UNE_LECTURE, avis: [] }),
+    /Aucun avis relevé/);
+});
+
+/** Le détail entier, dans l'ordre de ce qu'on vient y chercher. */
+test("le détail montre les mesures, les étapes, la légende, les avis, puis la transcription", () => {
+  const html = renderLeDetailDunRapport({ lecture: UNE_LECTURE });
+
+  const ouMesures = html.indexOf("page");
+  const ouEtapes = html.indexOf("Reconnaître la structure");
+  const ouLegende = html.indexOf("La légende");
+  const ouAvis = html.indexOf("Les avis relevés");
+  const ouMarkdown = html.indexOf("La transcription en Markdown");
+
+  assert.ok(ouMesures < ouEtapes, "les mesures viennent avant les étapes");
+  assert.ok(ouEtapes < ouLegende, "les étapes viennent avant la légende");
+  assert.ok(ouLegende < ouAvis, "la légende vient avant les avis");
+  assert.ok(ouAvis < ouMarkdown, "la transcription vient en dernier");
+
+  // Les marques illisibles et les avis sans marque sont comptés en tête.
+  assert.match(html, /1 marque\(s\) illisible\(s\)/);
+  assert.match(html, /1 sans marque/);
+  // Et la transcription est rendue, non montrée en source.
+  assert.match(html, /markdown-body/);
+});
+
+/** Une lecture qui ne s'ouvre pas le dit, sans deviner pourquoi. */
+test("une lecture sans analyse dit qu'elle ne s'ouvre pas", () => {
+  const html = renderLeDetailDunRapport(null);
+
+  assert.match(html, /ne s'ouvre pas/);
+  assert.match(html, /on ne sait pas lequel des deux/);
+});

@@ -56,6 +56,11 @@ On te donne un échantillon de pages, pas le document entier : décris ce qui se
   - \`nom\` : comment l'appeler — « tableau des présences », « tableau des observations par lot ».
   - \`colonnes\` : ses en-têtes de colonne, DANS L'ORDRE, tels qu'ils sont écrits. C'est le champ qui compte le plus : c'est lui qui rendra les douze pages cohérentes. Si un en-tête n'est écrit qu'une fois, en tête du tableau, il vaut pour toutes les pages où le tableau se poursuit.
   - \`reconnaissance\` : à quoi on reconnaît ce tableau quand on tombe dessus, en une phrase.
+- \`legende\` : LA LÉGENDE DU DOCUMENT, s'il en a une. Un rapport de contrôle technique ne porte presque jamais ses avis en toutes lettres : il écrit « F », « D », « SO », « ○ », « ● », et explique une seule fois, souvent en première ou en dernière page, ce que chaque marque veut dire. Sans cette table, les deux cents avis du corps du document sont illisibles — et pire, devinables de travers : « S » peut valoir « suspendu » comme « sans objet ». Pour chaque entrée :
+  - \`marque\` : le code, le symbole ou la couleur, recopié tel qu'il est écrit — « F », « SO », « ● », « cadre rouge ».
+  - \`signification\` : ce que le document en dit, recopié. Ne reformule pas, ne traduis pas : « Avis favorable » reste « Avis favorable ».
+  - \`ou\` : où tu l'as trouvée — « légende en page 2 », « note de bas de tableau », « colonne Observations ».
+  N'INVENTE AUCUNE ENTRÉE. Un document sans légende rend une liste vide : c'est une réponse, et une bonne. Une légende devinée est pire que pas de légende, parce qu'elle a l'air d'une lecture.
 - \`consignes\` : deux à cinq règles de transcription PROPRES À CE DOCUMENT, que tu écris pour celui qui va le transcrire. Ce sont les pièges que tu as vus : une colonne qui n'a pas d'en-tête, un tableau qui se poursuit d'une page à l'autre sans se redéclarer, un bloc qui ressemble à un titre et n'en est pas. N'y écris pas de généralités — elles sont déjà dans sa consigne.
 
 N'invente aucun tableau ni aucun chapitre. Un document sans tableau rend une liste vide : c'est une réponse.
@@ -112,10 +117,37 @@ export const SCHEMA_DE_LA_STRUCTURE = {
           required: ["nom", "colonnes", "reconnaissance"]
         }
       },
+      /**
+       * **La table qui rend les avis lisibles.**
+       *
+       * Un rapport de contrôle technique n'écrit pas ses avis en toutes lettres :
+       * il pose « F », « D », « SO » dans une colonne étroite, et dit une seule
+       * fois ce que chaque marque veut dire. Sans cette table, deux cents avis
+       * sont illisibles — et devinables de travers : « S » vaut « suspendu » ou
+       * « sans objet » selon le bureau.
+       *
+       * Elle est reconnue **ici** et non à l'analyse, pour la même raison que les
+       * colonnes : la question n'a qu'une réponse par document, et la poser
+       * douze fois en donnerait douze.
+       */
+      legende: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            marque: { type: "string" },
+            signification: { type: "string" },
+            ou: { type: "string" }
+          },
+          required: ["marque", "signification", "ou"]
+        }
+      },
       consignes: { type: "array", items: { type: "string" } }
     },
     required: [
-      "nature", "decoupage", "entete_repete", "pied_repete", "chapitres", "tableaux", "consignes"
+      "nature", "decoupage", "entete_repete", "pied_repete", "chapitres", "tableaux",
+      "legende", "consignes"
     ]
   }
 };
@@ -194,6 +226,14 @@ export function structureEnTexte(structure = null) {
     }))
     .filter((chapitre) => chapitre.motif);
 
+  const legende = (Array.isArray(structure?.legende) ? structure.legende : [])
+    .map((une) => ({
+      marque: texte(une?.marque),
+      signification: texte(une?.signification),
+      ou: texte(une?.ou)
+    }))
+    .filter((une) => une.marque && une.signification);
+
   const consignes = (Array.isArray(structure?.consignes) ? structure.consignes : [])
     .map(texte).filter(Boolean);
 
@@ -269,6 +309,26 @@ export function structureEnTexte(structure = null) {
     );
   }
 
+  if (legende.length > 0) {
+    // **La légende se recopie, elle ne se résout pas.** La tentation est de
+    // remplacer « F » par « Avis favorable » dans tout le document : ce serait
+    // réécrire le document au lieu de le transcrire, et toute erreur de lecture
+    // de la légende se propagerait à deux cents lignes sans laisser de trace.
+    // Les marques restent, la table les accompagne, et l'analyse les résout.
+    morceaux.push(
+      "CE DOCUMENT PORTE UNE LÉGENDE. Restitue-la **une fois**, en tableau, au"
+      + " début du Markdown, sous le titre `## Légende`. Puis LAISSE LES MARQUES"
+      + " TELLES QUELLES dans le corps : n'écris pas « Avis favorable » là où le"
+      + " document écrit « F ». Remplacer une marque par son sens réécrirait le"
+      + " document au lieu de le transcrire, et une légende mal lue se"
+      + " propagerait à toutes les lignes sans laisser de trace :"
+      + legende.map((une) => (
+        `\n- ${une.marque} = ${une.signification}`
+        + (une.ou ? `  (${une.ou})` : "")
+      )).join("")
+    );
+  }
+
   if (consignes.length > 0) {
     morceaux.push(`PIÈGES RELEVÉS DANS CE DOCUMENT :${consignes.map((consigne) => `\n- ${consigne}`).join("")}`);
   }
@@ -297,6 +357,21 @@ export function structureLue(payload = null) {
         reconnaissance: texte(chapitre?.reconnaissance)
       }))
       .filter((chapitre) => chapitre.motif),
+    /**
+     * La légende, ramenée à ce qui se lit.
+     *
+     * Une entrée sans marque ou sans signification n'est pas une entrée : la
+     * première ne désigne rien, la seconde n'explique rien. On les écarte plutôt
+     * que de porter une table à trous jusqu'à l'analyse, qui n'aurait aucun
+     * moyen de savoir laquelle manque.
+     */
+    legende: (Array.isArray(payload?.legende) ? payload.legende : [])
+      .map((une) => ({
+        marque: texte(une?.marque),
+        signification: texte(une?.signification),
+        ou: texte(une?.ou)
+      }))
+      .filter((une) => une.marque && une.signification),
     tableaux: (Array.isArray(payload?.tableaux) ? payload.tableaux : [])
       .map((tableau) => ({
         nom: texte(tableau?.nom),

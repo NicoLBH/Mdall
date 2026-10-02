@@ -28888,3 +28888,105 @@ button.bac-refus__ou--mene:hover{ color:var(--fg, inherit); }
      la séparation entre messages suffit à s'y retrouver. */
   .fil-mail__barre{ display:none; }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Les rapports de contrôle déjà analysés, et le détail d'une lecture.
+
+   **La coquille commune fait tout le gros.** `data-table-shell` porte la grille,
+   le survol et le gris, comme pour les Sujets, les Actions et les comptes rendus
+   lus. Ce qui reste ici est ce que les autres tableaux n'ont pas à savoir : la
+   ligne qu'on vient de rouvrir, et les trois blocs du détail.
+
+   Un cinquième dessin de liste de documents aurait fait un cinquième gris et un
+   cinquième calibrage — ce qui est précisément ce qu'on a passé des rounds à
+   défaire (règle 4). */
+.rapports-lus{ margin:20px 0 0; }
+.rapports-lus__aide{ margin:2px 0 10px; color:var(--muted); }
+.rapports-lus__mot{ margin:16px 0 0; color:var(--muted); }
+.rapports-lus__ligne.est-ouverte{
+  background:var(--surface-2, #1b1f24);
+  box-shadow:inset 2px 0 0 var(--accent, #2f81f7);
+}
+
+/* Les trois étapes du procédé.
+
+   **Elles s'affichent même quand tout est fait** : c'est le procédé qu'on vient
+   juger ici, pas seulement son résultat. Le rang est devant, parce que l'ordre
+   est ce qui compte — la reconnaissance décide de la forme de la transcription,
+   et l'inverser reviendrait à trancher douze fois une question qui n'a qu'une
+   réponse. */
+.rapport-etapes{ margin:18px 0 0; }
+.rapport-etapes__mot{ margin:0 0 10px; }
+.rapport-etapes__liste{
+  list-style:none; margin:0; padding:0;
+  display:flex; flex-direction:column; gap:1px;
+  border:1px solid var(--border, #30363d); border-radius:6px; overflow:hidden;
+}
+.rapport-etapes__pas{
+  display:grid; grid-template-columns:28px minmax(0,1fr) 220px; gap:12px;
+  align-items:start; padding:10px 12px; background:var(--surface-1, #0d1117);
+}
+.rapport-etapes__rang{
+  display:flex; align-items:center; justify-content:center;
+  width:22px; height:22px; border-radius:50%;
+  border:1px solid var(--border, #30363d); color:var(--muted);
+}
+/* Une étape faite porte sa marque sur le rang, et non sur toute la ligne : une
+   ligne entièrement grisée se lit comme désactivée, alors qu'elle est le seul
+   endroit où lire ce qui a été fait. */
+.rapport-etapes__pas.est-faite .rapport-etapes__rang{
+  border-color:var(--success, #238636); color:var(--success, #3fb950);
+}
+.rapport-etapes__pas.est-en-cours .rapport-etapes__rang{
+  border-color:var(--accent, #2f81f7); color:var(--accent, #58a6ff);
+}
+/* **Une étape sautée ne se dit pas comme une étape réussie.** La reconnaissance
+   peut échouer sans rien bloquer, et le taire ferait croire que les deux étapes
+   ont eu lieu (règle 5). */
+.rapport-etapes__pas.est-sautee .rapport-etapes__rang{
+  border-color:var(--warning, #9e6a03); color:var(--warning, #d29922);
+}
+.rapport-etapes__quoi{ display:flex; flex-direction:column; gap:3px; min-width:0; }
+.rapport-etapes__quoi i{ color:var(--muted); font-style:normal; }
+.rapport-etapes__pourquoi{ font-size:12px; opacity:.85; }
+.rapport-etapes__etat{
+  display:flex; justify-content:flex-end; color:var(--muted); text-align:right;
+}
+
+/* La légende, et les avis qu'elle rend lisibles.
+
+   Ils reprennent `forme-reference`, la liste de la console : trois colonnes —
+   ce dont il s'agit, le chiffre, et d'où il vient. Le même dessin pour la même
+   forme de données. */
+.rapport-legende{ margin:18px 0 0; }
+.rapport-legende__titre{ margin:0 0 6px; font-size:14px; }
+.rapport-legende__mot{ margin:0 0 10px; color:var(--muted); }
+.rapport-avis{ margin:18px 0 0; }
+.rapport-avis__reste{ margin:8px 0 0; color:var(--muted); }
+
+/* La transcription vient en dernier, et repliée : c'est la plus longue, et celle
+   qu'on déroule quand les quatre premières ne suffisent pas. */
+.rapport-detail__mesures{ margin:0 0 4px; color:var(--muted); }
+.rapport-detail__markdown{ margin:18px 0 0; }
+.rapport-detail__markdown-titre{
+  cursor:pointer; font-weight:600; padding:6px 0;
+}
+.rapport-detail__markdown .markdown-body{
+  margin-top:10px; padding:12px;
+  border:1px solid var(--border, #30363d); border-radius:6px;
+  max-height:70vh; overflow:auto;
+}
+
+/* Le retour est **à gauche du titre**, comme pour les comptes rendus lus : posé
+   en dessous, il se lit comme une action sur l'analyse plutôt que comme une
+   sortie. */
+.ctlab__lecture-tete{ display:flex; align-items:center; gap:12px; }
+.ctlab__lecture-titre{ margin:0; min-width:0; }
+.ctlab__lecture-quand{ margin:6px 0 0; color:var(--muted); }
+
+@media (max-width: 720px){
+  /* Sur un écran étroit, l'état d'une étape passe sous ce qu'elle fait : à
+     droite, il ne reste plus de place pour l'un ni pour l'autre. */
+  .rapport-etapes__pas{ grid-template-columns:28px minmax(0,1fr); }
+  .rapport-etapes__etat{ grid-column:2; justify-content:flex-start; text-align:left; }
+}
