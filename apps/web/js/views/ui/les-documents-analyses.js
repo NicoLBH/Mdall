@@ -33,6 +33,7 @@ import {
   LES_FAMILLES, TOUTES, ceQueDitLaFamille, lesComptesParFamille, parFamille,
   phraseDeLaFamille
 } from "../../services/les-documents-analyses.js";
+import { leCompteDit } from "../../services/les-familles-de-document.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const liste = (valeur) => (Array.isArray(valeur) ? valeur : []);
@@ -152,7 +153,7 @@ export function renderLeTableauDesDocuments({
           columns: [{
             html: renderDataTableCount({
               iconeHtml: svgIcon(ce.icone, { className: "octicon" }),
-              dit: `${ici.length} ${ici.length > 1 ? ce.compte.plusieurs : ce.compte.un}`,
+              dit: leCompteDit(famille, ici.length),
               titre: "Les documents dont l'analyse est conservée"
             }),
             className: COLONNE_DU_COMPTE

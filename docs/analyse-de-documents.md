@@ -1,4 +1,4 @@
-# Les documents du chantier
+# Analyse de documents
 
 ## Une démarche, trois utilitaires
 
@@ -90,18 +90,81 @@ et trois requêtes indépendantes, les enchaîner triplerait l'attente pour rien
 famille injoignable laisse la sienne à `null` et les deux autres s'affichent —
 perdre la vue d'ensemble parce qu'une table est muette serait un mauvais échange.
 
+## Un seul chemin de lecture, et il passe par la file
+
+Les trois familles lisaient de trois façons. Les comptes rendus et les mails
+passaient par une **file au serveur** — on lance, on rend la main, Actions montre
+où cela en est. Les rapports de contrôle se lisaient dans le navigateur : trois
+appels au modèle enchaînés dans un onglet qu'il ne fallait pas fermer, un lot de
+trente perdu en changeant d'écran, et rien dans Actions puisqu'il n'y avait pas de
+ligne de file à montrer.
+
+```
+choisir dans Fichiers  →  une ligne dans `versements`, avec le geste de la famille
+                       →  la fonction de bord de ce geste la prend
+                       →  la lecture est conservée
+```
+
+**Le geste est la clé de la famille.** Celui qu'on écrit dans `versements`, celui
+que la fonction de bord cherche, celui que le rail pose dans son attribut : un seul
+mot, du clic jusqu'à la ligne de file. Il y en avait deux — l'écran disait `cr`, la
+file disait `comptes_rendus` — et c'est la divergence qui attendait son tour
+(règle 10).
+
+### Le même orchestrateur des deux côtés
+
+`lire-un-rapport.js` enchaîne les trois étapes et reçoit ses trois appels. L'écran
+lui donnait les trois services du navigateur ; la fonction de bord lui donne les
+trois fonctions de bord. Une seconde orchestration au serveur aurait lu un rapport
+autrement sans que rien ne le dise (règle 4) — et celle-ci est éprouvée par
+`npm test`, échecs d'étape compris.
+
+## Ajouter une famille — un plan, un cartouche, une notice
+
+C'est le point du registre `les-familles-de-document.js`. Il faut, et il suffit :
+
+1. **une entrée** — un geste, un nom, un titre, une icône, le nom nu de ce qu'on
+   lit, ce qu'elle accepte, et le nom de sa fonction de bord ;
+2. **une fonction de bord** de ce nom, qui vide la file de ce geste.
+   `lire-les-rapports` est le patron : elle prend la plus ancienne ligne qui
+   attend, la marque avant de travailler, lit par paquets, s'arrête sur son budget
+   et se rappelle elle-même ;
+3. **une table** où sa lecture se garde, et un service pur qui dit ce qu'elle
+   garde — comme `la-lecture-dun-rapport.js` le fait pour les rapports.
+
+Rien à changer dans le rail, ni dans le tableau, ni dans le lancement : ils lisent
+tous le registre. **La colonne `geste` de `versements` est un `text` libre, sans
+contrainte : une famille de plus ne demande aucune migration de la file.**
+
+Deux épreuves gardent ce chemin : l'une vérifie que chaque fonction déclarée
+**existe pour de bon** — un réveil envoyé à un nom que personne ne sert ne rend
+aucune erreur, il ne fait rien, et la file reste bloquée sans que l'écran sache
+pourquoi —, l'autre que chaque icône existe dans la planche.
+
+## Ce qui reste écrit deux fois, et c'est dit
+
+La **mécanique de file** — prendre la plus ancienne ligne, la marquer, respecter un
+budget, se rappeler, consigner le journal — est écrite dans
+`lire-les-comptes-rendus` et de nouveau dans `lire-les-rapports`. Les décisions
+pures sont partagées (`la-file-des-comptes-rendus.js`) ; c'est la plomberie
+Supabase qui est en double, une centaine de lignes.
+
+Elle n'a pas été extraite dans ce round parce que porter la lecture des comptes
+rendus sur une mécanique neuve, sans pouvoir l'éprouver autrement qu'en production,
+aurait risqué de casser ce qui marche pour éviter une duplication. **À la
+troisième famille, elle s'extrait** — c'est là que le coût devient réel.
+
 ## Ce qui n'est pas fait, et c'est dit à l'écran
 
-**La lecture n'a pas encore déménagé.** Cet écran réunit ce qui a été *analysé* ;
-lancer une lecture de fil ou de rapport se fait encore depuis l'utilitaire de
-chaque famille. Sous « Mails » et « Bureau de Contrôle », la zone de dépôt des
-comptes rendus s'efface donc et dit où aller : la laisser contredirait le rail, et
-déposer un rapport y lancerait une lecture de compte rendu — pire qu'un bouton
-absent.
+**Le dépôt depuis le disque reste au compte rendu.** Les autres familles n'offrent
+que « Choisir depuis Fichiers », et c'est volontaire : ces documents sont déjà dans
+le projet, les redéposer depuis l'ordinateur en ferait un second exemplaire — le
+genre de doublon qu'on ne remarque qu'au vingtième.
 
-C'est le round suivant, et c'est le plus gros : il faudra que les trois lectures
-partagent un même chemin — choisir dans Fichiers, lire, conserver — avant de
-pouvoir se lancer d'ici.
+**La lecture d'un fil de mails ne part pas encore d'ici.** Son geste est déclaré,
+sa fonction de bord existe depuis octobre, et le registre la connaît ; ce qui
+manque est que le dépôt de messagerie monte les octets, là où les deux autres
+familles lisent des documents déjà rangés. C'est un round à part.
 
 **Rien n'entre en mémoire depuis cet écran.** Le chemin reste copilote → atelier →
 proposition → mémoire (règle 1).

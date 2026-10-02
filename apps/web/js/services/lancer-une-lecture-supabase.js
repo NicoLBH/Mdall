@@ -2,19 +2,28 @@
  * Les accès à la base pour lancer une lecture de comptes rendus.
  *
  * Ce module ne décide de rien : ce qu'on envoie, et ce qu'il advient d'une
- * demande qui ne part pas, vit dans `lancer-la-lecture-des-cr.js`, qui est pur
+ * demande qui ne part pas, vit dans `lancer-une-lecture.js`, qui est pur
  * et éprouvé. Ici, il n'y a que des allers-retours.
  */
 
 import { supabase, getSupabaseUrl, buildSupabaseAuthHeaders } from "../../assets/js/auth.js";
-import { GESTE_DES_CR, lancerLaLectureDesCr } from "./lancer-la-lecture-des-cr.js";
+import { GESTE_DES_CR, lancerUneLecture } from "./lancer-une-lecture.js";
+import { laFamilleQuiSeLit } from "./les-familles-de-document.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
-/** Lancer la lecture de plusieurs comptes rendus, et rendre la main. */
-export async function demanderLaLectureDesCr(documents = [], { projectId = "" } = {}) {
-  return lancerLaLectureDesCr(documents, {
+/**
+ * Lancer la lecture de plusieurs documents, et rendre la main.
+ *
+ * **La famille décide de tout** : du geste écrit dans la file, donc de la fonction
+ * de bord qui prendra la ligne. Elle vaut les comptes rendus par défaut, parce que
+ * c'est d'eux que ce chemin vient — et le défaut disparaîtra quand les trois
+ * écrans l'appelleront tous nommément.
+ */
+export async function demanderUneLecture(documents = [], { projectId = "", famille = GESTE_DES_CR } = {}) {
+  return lancerUneLecture(documents, {
     projectId,
+    famille,
     portes: {
       poserLaLigne: async ({ projectId: projet, geste, documents: liste }) => {
         const { data, error } = await supabase
@@ -28,7 +37,7 @@ export async function demanderLaLectureDesCr(documents = [], { projectId = "" } 
         return texte(data?.id);
       },
 
-      reveiller: () => { void reveillerLaLecture(); }
+      reveiller: () => { void reveillerLaLecture(famille); }
     }
   });
 }
@@ -41,9 +50,15 @@ export async function demanderLaLectureDesCr(documents = [], { projectId = "" } 
  * n'aboutit pas, la ligne reste `en_attente` : le prochain réveil prendra la
  * plus ancienne, et rien n'est perdu.
  */
-export async function reveillerLaLecture() {
+export async function reveillerLaLecture(famille = GESTE_DES_CR) {
+  // **Le nom vient du registre.** L'écrire ici l'aurait écrit deux fois, et un
+  // réveil envoyé à un nom que personne ne sert ne rend aucune erreur : il ne fait
+  // rien, et la file reste bloquée sans que l'écran sache pourquoi (règle 10).
+  const quoi = laFamilleQuiSeLit(famille);
+  if (!quoi) return;
+
   try {
-    await fetch(`${getSupabaseUrl()}/functions/v1/lire-les-comptes-rendus`, {
+    await fetch(`${getSupabaseUrl()}/functions/v1/${quoi.fonction}`, {
       method: "POST",
       headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
       body: "{}"

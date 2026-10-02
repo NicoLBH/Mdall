@@ -46,6 +46,10 @@
  * après qu'elle a cessé d'être utile (règle 4).
  */
 
+import {
+  FAMILLE, LA_FONCTION_DU_GESTE, leGesteDeLaLigne
+} from "./les-familles-de-document.js";
+
 const texte = (valeur) => String(valeur ?? "").trim();
 
 /**
@@ -66,29 +70,24 @@ export const ABANDONNEE_APRES_MS = 10 * 60 * 1000;
  */
 export const PAS_PLUS_SOUVENT_QUE_MS = 30 * 1000;
 
+/**
+ * **Les gestes et leurs fonctions viennent du registre des familles.**
+ *
+ * Ils étaient écrits ici, et les familles étaient écrites dans le module de
+ * l'écran — sous d'autres clés : `cr` d'un côté, `comptes_rendus` de l'autre. Deux
+ * listes pour une chose, dont l'une servait à poser les lignes et l'autre à les
+ * afficher : la divergence attendait son tour (règle 10).
+ *
+ * Ajouter une famille — un plan, une notice — se fait donc **dans le registre**,
+ * et le réveil la sert sans qu'on y touche.
+ */
+export { FAMILLE, LA_FONCTION_DU_GESTE, leGesteDeLaLigne };
+
 /** Le geste d'un dépôt de messagerie, tel que la base le nomme par défaut. */
-export const GESTE_DES_MAILS = "mails";
+export const GESTE_DES_MAILS = FAMILLE.MAIL;
 
 /** Le geste d'une lecture de comptes rendus. */
-export const GESTE_DES_CR = "comptes_rendus";
-
-/**
- * Quelle fonction de bord vide quelle file.
- *
- * Les noms sont ceux du déploiement, et ils s'écrivent ici une fois : un réveil
- * envoyé à un nom que personne ne sert ne rend pas d'erreur visible — il ne
- * fait rien, et la file reste bloquée sans que l'écran sache pourquoi.
- */
-export const LA_FONCTION_DU_GESTE = {
-  [GESTE_DES_MAILS]: "verser-les-mails",
-  [GESTE_DES_CR]: "lire-les-comptes-rendus"
-};
-
-/** Le geste d'une ligne. `mails` quand elle ne le dit pas, comme la base. */
-export function leGesteDeLaLigne(ligne = null) {
-  const dit = texte(ligne?.geste);
-  return dit === GESTE_DES_CR ? GESTE_DES_CR : GESTE_DES_MAILS;
-}
+export const GESTE_DES_CR = FAMILLE.CR;
 
 /**
  * Cette ligne a-t-elle été prise puis abandonnée en route ?

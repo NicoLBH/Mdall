@@ -37,6 +37,7 @@
  */
 
 import { GESTE_DES_CR } from "./reveiller-la-file.js";
+import { ceQueDitLaFamille, laFamilleQuiSeLit } from "./les-familles-de-document.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -76,13 +77,27 @@ export function lesDocumentsAEnvoyer(choisis = null, connues = []) {
  * Annoncer la fin au moment du départ ferait chercher une proposition qui
  * n'existe pas encore, et douter de tout le reste.
  */
-export function leMotDuDepart(combien = 0) {
+export function leMotDuDepart(combien = 0, famille = GESTE_DES_CR) {
   const lectures = Number(combien) || 0;
   if (!lectures) return "";
 
-  return `${lectures} ${lectures > 1 ? "comptes rendus envoyés" : "compte rendu envoyé"} — `
+  const ce = ceQueDitLaFamille(famille) ?? ceQueDitLaFamille(GESTE_DES_CR);
+  const quoi = lectures > 1 ? ce.quoi.plusieurs : ce.quoi.un;
+
+  /**
+   * **Ce qui attend à la fin n'est pas le même pour toutes les familles.**
+   *
+   * Un compte rendu donne une proposition à signer ; un rapport donne une lecture
+   * conservée, et rien n'entre en mémoire. Annoncer une proposition qui n'existera
+   * pas ferait chercher, puis douter de tout le reste.
+   */
+  const alaFin = famille === GESTE_DES_CR
+    ? "une seule proposition vous attendra à la fin."
+    : "les lectures vous attendront. Rien n'entrera en mémoire.";
+
+  return `${lectures} ${quoi} ${lectures > 1 ? "envoyés" : "envoyé"} — `
     + "la lecture se fait sur le serveur. Vous pouvez fermer cet écran : "
-    + "suivez-la dans Actions, et une seule proposition vous attendra à la fin.";
+    + `suivez-la dans Actions, et ${alaFin}`;
 }
 
 /**
@@ -94,8 +109,8 @@ export function leMotDuDepart(combien = 0) {
  * @param {object} ou.portes `{poserLaLigne, reveiller}`
  * @returns {Promise<{parti: boolean, versementId: string, motif: string}>}
  */
-export async function lancerLaLectureDesCr(documents = [], {
-  projectId = "", portes = null
+export async function lancerUneLecture(documents = [], {
+  projectId = "", portes = null, famille = GESTE_DES_CR
 } = {}) {
   const liste = (Array.isArray(documents) ? documents : [])
     .map((un) => ({ id: texte(un?.id), nom: texte(un?.nom) }))
@@ -107,10 +122,23 @@ export async function lancerLaLectureDesCr(documents = [], {
     return { parti: false, versementId: "", motif: "aucun accès à la base" };
   }
 
+  /**
+   * **Une famille qui ne se lit pas ne pose pas de ligne.**
+   *
+   * La vue d'ensemble n'a ni fonction de bord ni table : lui demander une lecture
+   * poserait une ligne qu'aucun serveur ne prendrait, et la file resterait en
+   * attente sans que rien ne le dise (règle 5).
+   */
+  if (!laFamilleQuiSeLit(famille)) {
+    return { parti: false, versementId: "", motif: "cette famille ne se lit pas" };
+  }
+
   let versementId = "";
   try {
     versementId = texte(await portes.poserLaLigne({
-      projectId: texte(projectId), geste: GESTE_DES_CR, documents: liste
+      // **Le geste est la clé de la famille**, et c'est tout l'intérêt : la
+      // fonction de bord déclarée dans le registre cherche exactement ce mot-là.
+      projectId: texte(projectId), geste: famille, documents: liste
     }));
   } catch (erreur) {
     return {

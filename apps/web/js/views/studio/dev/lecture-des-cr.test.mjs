@@ -2267,7 +2267,7 @@ test("l'accueil liste les comptes rendus déjà analysés", () => {
   assert.match(html, /2 documents analysés/);
   assert.match(html, commeAffichee("1824_CR_12.pdf"));
   assert.match(html, commeAffichee("1824_CR_15.pdf"));
-  assert.match(html, /data-document-analyse="cr:l-1"/);
+  assert.match(html, /data-document-analyse="comptes_rendus:l-1"/);
 });
 
 /**
@@ -2299,7 +2299,7 @@ test("l'écran porte le rail des familles, et il enveloppe tout", () => {
   const html = renderLaLecture(unEtat({ dejaLus: [uneLigneGardee()] }));
 
   // Les quatre entrées, dans l'ordre par lequel les documents arrivent.
-  for (const quoi of ["toutes", "mail", "controle", "cr"]) {
+  for (const quoi of ["toutes", "mails", "rapports", "comptes_rendus"]) {
     assert.match(html, new RegExp(`data-famille-analysee="${quoi}"`), quoi);
   }
 
@@ -2331,40 +2331,66 @@ test("le rail filtre, et chaque famille compte dans ses propres mots", () => {
   assert.match(toutes, commeAffichee("Reprise des enduits"));
   assert.match(toutes, /RICT-03\.pdf/);
 
-  const mails = renderLaLecture(unEtat({ ...trois, famille: "mail" }));
+  const mails = renderLaLecture(unEtat({ ...trois, famille: "mails" }));
   assert.match(mails, /1 fil analysé/);
   assert.doesNotMatch(mails, /RICT-03\.pdf/);
 
-  const controle = renderLaLecture(unEtat({ ...trois, famille: "controle" }));
+  const controle = renderLaLecture(unEtat({ ...trois, famille: "rapports" }));
   assert.match(controle, /1 rapport analysé/);
   assert.doesNotMatch(controle, commeAffichee("Reprise des enduits"));
 
-  const crs = renderLaLecture(unEtat({ ...trois, famille: "cr" }));
+  const crs = renderLaLecture(unEtat({ ...trois, famille: "comptes_rendus" }));
   assert.match(crs, /1 compte rendu analysé/);
   assert.doesNotMatch(crs, /RICT-03\.pdf/);
 });
 
-test("sous une autre famille, le dépôt des CR s'efface et dit où lire", () => {
+test("chaque famille offre sa propre porte, et dit ce qu'elle lit", () => {
   // Une zone qui dit « Déposez un compte rendu » sous « Bureau de Contrôle »
-  // contredit le rail, et déposer un rapport y lancerait une lecture de compte
+  // contredirait le rail, et déposer un rapport y lancerait une lecture de compte
   // rendu — pire qu'un bouton absent.
-  const bc = renderLaLecture(unEtat({ dejaLus: [], famille: "controle" }));
+  const bc = renderLaLecture(unEtat({ dejaLus: [], famille: "rapports" }));
   assert.doesNotMatch(bc, /Déposez un compte rendu/);
-  assert.match(bc, /Suivi des avis BC/);
+  assert.match(bc, /Choisissez des rapports à analyser/);
+  assert.match(bc, /data-zone-depuis-fichiers/);
+  // **Pas de dépôt depuis le disque** : ces documents sont déjà dans le projet,
+  // les redéposer en ferait un second exemplaire.
+  assert.doesNotMatch(bc, /data-zone-fichier/);
 
-  const mails = renderLaLecture(unEtat({ dejaLus: [], famille: "mail" }));
-  assert.match(mails, commeAffichee("Lecture d'un fil de mails"));
+  const mails = renderLaLecture(unEtat({ dejaLus: [], famille: "mails" }));
+  assert.match(mails, /Choisissez des fils à analyser/);
 
-  // Et sous les comptes rendus, le dépôt est bien là.
-  const crs = renderLaLecture(unEtat({ dejaLus: [], famille: "cr" }));
+  // Et sous les comptes rendus, le dépôt depuis le disque est bien là.
+  const crs = renderLaLecture(unEtat({ dejaLus: [], famille: "comptes_rendus" }));
   assert.match(crs, /Déposez un compte rendu/);
   const toutes = renderLaLecture(unEtat({ dejaLus: [] }));
   assert.match(toutes, /Déposez un compte rendu/);
 });
 
+test("le choix dit ce qu'on lit, et ce qui attend à la fin", () => {
+  const unChoix = (famille) => renderLaLecture(unEtat({
+    famille,
+    choix: { dossier: "", breadcrumb: [], entrees: [], enCours: false, motif: "" },
+    coches: new Set(["d-1"]),
+    connues: new Map([["d-1", {
+      type: "fichier", id: "d-1", nom: "RICT-03.pdf", choisissable: true, lecture: "pdf"
+    }]])
+  }));
+
+  // « Lire 1 compte rendu » sous les rapports mentirait, et la phrase des
+  // propositions aussi : un rapport n'en ouvre aucune.
+  const rapports = unChoix("rapports");
+  assert.match(rapports, /Lire 1 rapport/);
+  assert.match(rapports, commeAffichee("Rien n'entre dans la mémoire du chantier."));
+  assert.doesNotMatch(rapports, /proposition à signer/);
+
+  const crs = unChoix("comptes_rendus");
+  assert.match(crs, /Lire 1 compte rendu/);
+  assert.match(crs, /proposition à signer/);
+});
+
 test("une famille vide dit laquelle, et quoi faire", () => {
   const html = renderLaLecture(unEtat({
-    dejaLus: [uneLigneGardee()], dejaLusMails: [], dejaLusControles: [], famille: "mail"
+    dejaLus: [uneLigneGardee()], dejaLusMails: [], dejaLusControles: [], famille: "mails"
   }));
 
   assert.match(html, /Aucun fil de mails analysé/);
@@ -2391,7 +2417,7 @@ test("deux lectures du même compte rendu font une ligne, et l'annoncent", () =>
   assert.match(html, /1 document analysé/);
   assert.match(html, /2 lectures/);
   // C'est la plus récente qu'on ouvre.
-  assert.match(html, /data-document-analyse="cr:l-2"/);
+  assert.match(html, /data-document-analyse="comptes_rendus:l-2"/);
 });
 
 /**
@@ -2716,4 +2742,82 @@ test("pendant la relecture, l'écran ne tranche pas", () => {
 
   assert.doesNotMatch(html, commeAffichee("ne se retrouve pas dans Fichiers"));
   assert.doesNotMatch(html, /data-lecture-cr-onglet="restitution"/);
+});
+
+/* ── Le rail décide de tout ce qu'on voit ─────────────────────────────────── */
+
+test("le titre de l'écran suit le filtre du rail", () => {
+  // Rail replié, le filtre n'est plus écrit nulle part : un titre qui ne bouge
+  // pas laisse croire qu'on regarde autre chose.
+  const dits = {
+    toutes: "Analyse de documents",
+    mails: "Mails",
+    rapports: "Rapports de Bureau de Contrôle",
+    comptes_rendus: "Compte rendu de chantier"
+  };
+
+  for (const [famille, dit] of Object.entries(dits)) {
+    const html = renderLaLecture(unEtat({ dejaLus: [], famille }));
+    assert.match(html, new RegExp(`lecture-cr__titre">${dit.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), famille);
+  }
+});
+
+test("un document ouvert rend le titre d'ensemble", () => {
+  // On ne regarde plus une famille : on regarde un document.
+  const html = renderLaLecture(unEtat({
+    famille: "mails",
+    ouvertAilleurs: { famille: "mails", titre: "Reprise des enduits", vue: { fil: { messages: [] } } }
+  }));
+  assert.match(html, /lecture-cr__titre">Analyse de documents/);
+});
+
+test("le retour est une flèche, et celle des Situations", () => {
+  const html = renderLaLecture(unEtat({
+    famille: "mails",
+    ouvertAilleurs: { famille: "mails", titre: "Reprise des enduits", vue: { fil: { messages: [] } } }
+  }));
+
+  // **La coque et l'icône**, et non l'icône seule : changer la coque pour un
+  // `gh-btn` ramènerait un bouton qui se lit, avec sa bordure et son fond, sans
+  // que l'icône bouge — la batterie l'a montré.
+  assert.match(html, /class="project-situation-edit__back"/);
+  assert.match(html, /project-situation-edit__back-icon/);
+  assert.doesNotMatch(html, /gh-btn[^"]*"\s*\n?\s*data-lecture-cr-fermer-ailleurs/);
+  assert.match(html, /data-lecture-cr-fermer-ailleurs/);
+  // Le libellé répétait le titre du tableau pour dire qu'on y retourne.
+  assert.doesNotMatch(html, /Les documents analysés<\/button>/);
+  // Et il reste nommé pour qui ne voit pas la flèche.
+  assert.match(html, /aria-label="Revenir aux documents analysés"/);
+});
+
+test("ce qui vient d'être lancé se dit, quelle que soit la famille", () => {
+  // La phrase était dans la zone de dépôt des comptes rendus, qui ne se dessine
+  // pas sous les autres familles : on lançait dix-neuf rapports et l'écran restait
+  // muet — le défaut même qu'elle devait fermer.
+  for (const famille of ["toutes", "mails", "rapports", "comptes_rendus"]) {
+    const html = renderLaLecture(unEtat({
+      dejaLus: [], famille, lance: "2 rapports envoyés — la lecture se fait sur le serveur."
+    }));
+    assert.match(html, /2 rapports envoyés/, famille);
+  }
+});
+
+/**
+ * **Le geste posé est celui de la famille ouverte.**
+ *
+ * Aucun rendu ne peut le dire : le lancement est un gestionnaire, et ce qu'il
+ * envoie ne se voit pas à l'écran. Un écran qui poserait toujours le geste des
+ * comptes rendus enverrait des rapports à la fonction qui lit les comptes rendus —
+ * elle ne les prendrait jamais, et la file resterait en attente sans un mot. On
+ * lit donc le source, ce qu'on ne s'autorise que pour ce genre de défaut.
+ */
+test("le lancement porte la famille ouverte, et non un geste figé", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(fileURLToPath(new URL("./lecture-des-cr.js", import.meta.url)), "utf8");
+
+  assert.match(source, /const famille = laFamilleQuiSeLit\(etat\.famille\) \? etat\.famille : FAMILLE\.CR;/);
+  assert.match(source, /demanderUneLecture\(documents, \{ projectId, famille \}\)/);
+  // Et ce qu'on annonce au départ s'accorde à la même famille.
+  assert.match(source, /leMotDuDepart\(documents\.length, famille\)/);
 });

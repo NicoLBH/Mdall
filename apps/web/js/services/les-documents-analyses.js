@@ -33,89 +33,25 @@
  * d'intervalle. Ici il s'appelle `combien`, une fois (règle 10).
  */
 
+import {
+  CE_QUE_DIT_LA_FAMILLE, FAMILLE, LES_FAMILLES, TOUTES, ceQueDitLaFamille
+} from "./les-familles-de-document.js";
+
+/**
+ * **Le registre vit à côté, et il est réexporté ici.**
+ *
+ * Ce module dressait lui-même la liste des familles, et `reveiller-la-file.js`
+ * dressait celle des gestes : la même chose, sous deux clés différentes — `cr`
+ * ici, `comptes_rendus` là-bas. Elles ont fusionné dans
+ * `les-familles-de-document.js`, où la clé d'une famille **est** son geste.
+ *
+ * La réexportation garde un seul chemin d'import pour les écrans, qui n'ont pas à
+ * savoir que le registre descend aussi au serveur.
+ */
+export { CE_QUE_DIT_LA_FAMILLE, FAMILLE, LES_FAMILLES, TOUTES, ceQueDitLaFamille };
+
 const texte = (valeur) => String(valeur ?? "").trim();
 const liste = (valeur) => (Array.isArray(valeur) ? valeur : []);
-
-/** Les trois familles de documents qu'on sait lire. */
-export const FAMILLE = {
-  MAIL: "mail",
-  CONTROLE: "controle",
-  CR: "cr"
-};
-
-/**
- * L'ordre du rail : **les mails d'abord**.
- *
- * C'est par eux que presque tout arrive sur un chantier, et c'est donc par eux
- * qu'on commence à chercher. Ranger par ordre alphabétique mettrait le bureau de
- * contrôle en tête, ce qui ne correspond à rien de l'usage.
- */
-export const LES_FAMILLES = [FAMILLE.MAIL, FAMILLE.CONTROLE, FAMILLE.CR];
-
-/** La vue d'ensemble. Ce n'est pas une famille : c'est leur réunion. */
-export const TOUTES = "toutes";
-
-/**
- * Ce que chaque famille est, et ce qu'on dit quand elle est vide.
- *
- * **Une phrase par famille, et chacune dit quoi faire.** « Aucun document » sous
- * Mails n'apprend rien : ce qui manque là n'est pas un document, c'est un fil
- * déposé. Le dire au bon endroit évite de chercher le bouton dans le mauvais
- * écran — c'est déjà la règle du journal des Actions.
- */
-export const CE_QUE_DIT_LA_FAMILLE = {
-  [TOUTES]: {
-    /** Ce que l'en-tête compte. Le nom du rail ne s'y accorde pas : « 2 tous les documents analysés » ne se dit pas. */
-    compte: { un: "document analysé", plusieurs: "documents analysés" },
-    nom: "Tous les documents",
-    icone: "stack",
-    vide: {
-      titre: "Rien n'a encore été analysé sur ce chantier",
-      quoi: "Les mails, les comptes rendus et les rapports de contrôle que vous lirez "
-        + "viendront ici, tous ensemble."
-    }
-  },
-  [FAMILLE.MAIL]: {
-    /** Ce que l'en-tête compte. Le nom du rail ne s'y accorde pas : « 2 tous les documents analysés » ne se dit pas. */
-    compte: { un: "fil analysé", plusieurs: "fils analysés" },
-    nom: "Mails",
-    icone: "mail",
-    vide: {
-      titre: "Aucun fil de mails analysé",
-      quoi: "Choisissez un ou plusieurs .eml depuis Fichiers : le fil se déplie, et les "
-        + "prises de position se relèvent."
-    }
-  },
-  [FAMILLE.CONTROLE]: {
-    /** Ce que l'en-tête compte. Le nom du rail ne s'y accorde pas : « 2 tous les documents analysés » ne se dit pas. */
-    compte: { un: "rapport analysé", plusieurs: "rapports analysés" },
-    nom: "Bureau de Contrôle",
-    // `shield` existe dans la planche ; `shield-check` n'y est pas, et une icône
-    // absente ne laisse qu'un vide que rien ne signale.
-    icone: "shield",
-    vide: {
-      titre: "Aucun rapport de contrôle analysé",
-      quoi: "Choisissez un rapport : sa structure et sa légende sont reconnues, il est "
-        + "transcrit, puis ses avis sont relevés."
-    }
-  },
-  [FAMILLE.CR]: {
-    /** Ce que l'en-tête compte. Le nom du rail ne s'y accorde pas : « 2 tous les documents analysés » ne se dit pas. */
-    compte: { un: "compte rendu analysé", plusieurs: "comptes rendus analysés" },
-    nom: "CR chantier",
-    icone: "file",
-    vide: {
-      titre: "Aucun compte rendu analysé",
-      quoi: "Choisissez un compte rendu : il est restitué en Markdown, puis ses points "
-        + "sont relevés et rapprochés des sujets du chantier."
-    }
-  }
-};
-
-/** Ce qu'une famille est, ou `null` quand on ne la connaît pas (règle 5). */
-export function ceQueDitLaFamille(quoi) {
-  return CE_QUE_DIT_LA_FAMILLE[texte(quoi)] ?? null;
-}
 
 /* ── Ce que chaque famille met sur la ligne ──────────────────────────────── */
 

@@ -95,7 +95,23 @@ export const LES_DEPARTS = [
   // Importé dynamiquement par `atelier-proposition.js` : la fermeture ne le
   // trouve pas en lisant les `from "…"`, et son absence ne se verrait qu'au
   // premier enrichissement d'une proposition ouverte.
-  "services/proposition-branche.js"
+  "services/proposition-branche.js",
+  /**
+   * Lire un rapport de bureau de contrôle : les trois étapes, et ce qu'une
+   * lecture garde.
+   *
+   * **C'est le même orchestrateur que le navigateur exécute.** Les trois appels
+   * lui sont passés : l'écran lui donnait les trois services du navigateur, la
+   * fonction de bord lui donne les trois fonctions de bord. Une seconde
+   * orchestration au serveur aurait lu un rapport autrement sans que rien ne le
+   * dise (règle 4).
+   */
+  "services/lire-un-rapport.js",
+  "services/la-lecture-dun-rapport.js",
+  // Le registre des familles : la fonction de bord y lit son propre geste, et
+  // l'écran y lit le même. Deux listes auraient fait un geste posé par le
+  // navigateur que le serveur ne cherche pas (règle 10).
+  "services/les-familles-de-document.js"
 ];
 
 /**
