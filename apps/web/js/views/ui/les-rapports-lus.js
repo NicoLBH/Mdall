@@ -163,11 +163,13 @@ export const LIRE_LES_RAPPORTS = "data-lire-les-rapports";
  * bouton qui manquait au round précédent sans que rien ne le dise.
  *
  * @param {object} quoi
- * @param {number} [quoi.deposes] combien de rapports sont dans l'Atelier
+ * @param {number} [quoi.deposes] combien de rapports **peuvent être lus**
+ * @param {string} [quoi.muets] ce que l'écran dit de ceux qui ne le peuvent pas
  * @param {object|null} [quoi.parcours] l'état de la lecture en cours, s'il y en a une
  */
-export function renderLinvitationALire({ deposes = 0, parcours = null } = {}) {
+export function renderLinvitationALire({ deposes = 0, muets = "", parcours = null } = {}) {
   const combien = Math.max(0, Number(deposes) || 0);
+  const sansTexte = texte(muets);
 
   if (parcours?.running) return renderLaLectureEnCours(parcours);
 
@@ -182,11 +184,18 @@ export function renderLinvitationALire({ deposes = 0, parcours = null } = {}) {
    * Deux fois la même phrase à dix pixels l'une de l'autre fait douter qu'on ait
    * compris, et non le contraire.
    */
-  if (!combien && !dit && !refus.length && !texte(parcours?.error)) return "";
+  if (!combien && !dit && !sansTexte && !refus.length && !texte(parcours?.error)) return "";
 
   return `
     <section class="rapports-lire">
       ${dit ? `<p class="rapports-lire__dit mono-small">${escapeHtml(dit)}</p>` : ""}
+      ${/*
+        **Ce qui ne sera pas lu se dit avant le clic, et non après.**
+        Le bouton comptait les rapports déposés, la lecture n'en gardait que ceux
+        qui portent du texte : un PDF scanné faisait un bouton « Lire 1 rapport »
+        qui ne faisait rien, sans un mot (règle 5).
+      */""}
+      ${sansTexte ? `<p class="forme-manques">${escapeHtml(sansTexte)}</p>` : ""}
       ${texte(parcours?.error)
         ? `<p class="forme-manques">${escapeHtml(texte(parcours.error))}</p>`
         : ""}

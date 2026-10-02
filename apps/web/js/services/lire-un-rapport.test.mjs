@@ -13,7 +13,8 @@ import assert from "node:assert/strict";
 
 import {
   PHRASES_DU_REFUS_DE_LECTURE, REFUS_DE_LECTURE, laLegendeDuReleve, lesAvisReleves,
-  lireLesRapports, lireUnRapport, phraseDuLotLu, phraseDuRefusDeLecture, unAvisReleve
+  leLotALire, lesPagesLisibles, lireLesRapports, lireUnRapport, phraseDesRapportsMuets,
+  phraseDuLotLu, phraseDuRefusDeLecture, unAvisReleve
 } from "./lire-un-rapport.js";
 import { ETAPE } from "./le-parcours-dun-rapport.js";
 import { lEtapeQuiReste } from "./le-parcours-dun-rapport.js";
@@ -296,4 +297,54 @@ test("chaque refus porte une phrase, et un motif inconnu n'en invente pas", () =
   }
   assert.equal(Object.keys(PHRASES_DU_REFUS_DE_LECTURE).length, Object.values(REFUS_DE_LECTURE).length);
   assert.equal(phraseDuRefusDeLecture("autre-chose"), "");
+});
+
+/* ── Ce qui peut être lu, et ce qui ne le peut pas ────────────────────────── */
+
+const UN_SCAN = { nom: "scan.pdf", pages: [{ page: 1, text: "" }, { page: 2, text: "   " }] };
+
+test("un PDF scanné n'a aucune page lisible", () => {
+  assert.equal(lesPagesLisibles(UN_SCAN).length, 0);
+  assert.equal(lesPagesLisibles(UN_RAPPORT).length, 2);
+  assert.equal(lesPagesLisibles(null).length, 0);
+});
+
+test("le lot se partage en deux, et les muets ne sont pas des erreurs", () => {
+  const { lisibles, muets } = leLotALire([UN_RAPPORT, UN_SCAN]);
+
+  assert.deepEqual(lisibles.map((un) => un.nom), ["RICT-03-NOVACLIM.pdf"]);
+  assert.deepEqual(muets.map((un) => un.nom), ["scan.pdf"]);
+});
+
+test("un rapport muet est nommé, et l'on dit quoi en faire", () => {
+  const dit = phraseDesRapportsMuets([UN_SCAN]);
+
+  assert.match(dit, /scan\.pdf/);
+  assert.match(dit, /aucun texte extractible/);
+  assert.match(dit, /reconnaissance de caractères/);
+  // Rien à dire quand il n'y a rien à dire.
+  assert.equal(phraseDesRapportsMuets([]), "");
+});
+
+/**
+ * **La règle de lisibilité vit à un seul endroit, et l'écran s'en sert aux deux.**
+ *
+ * C'est le défaut qu'on vient de payer : le bouton comptait les rapports déposés
+ * sans erreur, la lecture n'en gardait que ceux qui portent du texte. Un PDF
+ * scanné faisait donc un bouton « Lire 1 rapport » dont le clic ne faisait rien,
+ * sans un mot. Aucun rendu ne peut dire cela — les deux moitiés sont justes
+ * séparément —, d'où cette lecture du source.
+ */
+test("l'écran compte et lit la même liste", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(
+    fileURLToPath(new URL("../views/studio/dev/ct-continuity-lab.js", import.meta.url)), "utf8");
+
+  // Deux emplois : celui qui compte pour le bouton, celui qui lit.
+  assert.ok((source.match(/leLotALire\(/g) ?? []).length >= 2, "le partage n'est pas partagé");
+
+  // Et aucune seconde règle : un filtre sur les pages écrit sur place serait la
+  // divergence qui vient de coûter un bouton mort.
+  assert.doesNotMatch(source, /\(un\.pages \?\? \[\]\)\.length/);
 });
