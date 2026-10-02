@@ -1,7 +1,7 @@
 /**
  * Lancer une lecture de comptes rendus, et rendre la main.
  *
- * Le contrat est en tête de `lancer-la-lecture-des-cr.js`. Ce qu'on éprouve ici
+ * Le contrat est en tête de `lancer-une-lecture.js`. Ce qu'on éprouve ici
  * est le seul point qui compte : **l'écran ne doit rien attendre**.
  */
 
@@ -9,8 +9,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  GESTE_DES_CR, lancerLaLectureDesCr, leMotDuDepart, lesDocumentsAEnvoyer
-} from "./lancer-la-lecture-des-cr.js";
+  GESTE_DES_CR, lancerUneLecture, leMotDuDepart, lesDocumentsAEnvoyer
+} from "./lancer-une-lecture.js";
+import { FAMILLE, TOUTES } from "./les-familles-de-document.js";
 
 const DES_ENTREES = [
   { type: "dossier", id: "f1", nom: "Archives", choisissable: false },
@@ -47,7 +48,7 @@ test("ce qui ne se lit pas ne s'envoie pas", () => {
  */
 test("le lancement n'attend pas le serveur", async () => {
   let reveille = false;
-  const parti = await lancerLaLectureDesCr([{ id: "d1", nom: "CR 01.pdf" }], {
+  const parti = await lancerUneLecture([{ id: "d1", nom: "CR 01.pdf" }], {
     projectId: "p1",
     portes: {
       poserLaLigne: async () => "v1",
@@ -68,7 +69,7 @@ test("le lancement n'attend pas le serveur", async () => {
  * factures.
  */
 test("un réveil qui échoue ne défait pas la demande", async () => {
-  const parti = await lancerLaLectureDesCr([{ id: "d1", nom: "CR 01.pdf" }], {
+  const parti = await lancerUneLecture([{ id: "d1", nom: "CR 01.pdf" }], {
     projectId: "p1",
     portes: {
       poserLaLigne: async () => "v1",
@@ -83,7 +84,7 @@ test("un réveil qui échoue ne défait pas la demande", async () => {
 /** La ligne, elle, doit porter le geste : sans lui, c'est un dépôt de mails. */
 test("la ligne posée dit ce qu'elle demande", async () => {
   let posee = null;
-  await lancerLaLectureDesCr([{ id: "d1", nom: "CR 01.pdf" }], {
+  await lancerUneLecture([{ id: "d1", nom: "CR 01.pdf" }], {
     projectId: "p1",
     portes: { poserLaLigne: async (quoi) => { posee = quoi; return "v1"; }, reveiller: () => {} }
   });
@@ -94,12 +95,12 @@ test("la ligne posée dit ce qu'elle demande", async () => {
 });
 
 test("sans ligne posée, rien n'est parti", async () => {
-  const sansId = await lancerLaLectureDesCr([{ id: "d1", nom: "a" }], {
+  const sansId = await lancerUneLecture([{ id: "d1", nom: "a" }], {
     projectId: "p1", portes: { poserLaLigne: async () => "", reveiller: () => {} }
   });
   assert.equal(sansId.parti, false);
 
-  const casse = await lancerLaLectureDesCr([{ id: "d1", nom: "a" }], {
+  const casse = await lancerUneLecture([{ id: "d1", nom: "a" }], {
     projectId: "p1",
     portes: { poserLaLigne: async () => { throw new Error("refusé"); }, reveiller: () => {} }
   });
@@ -108,9 +109,9 @@ test("sans ligne posée, rien n'est parti", async () => {
 });
 
 test("rien à lire, aucun projet, aucune porte : on ne pose rien", async () => {
-  assert.equal((await lancerLaLectureDesCr([], { projectId: "p1", portes: {} })).parti, false);
-  assert.equal((await lancerLaLectureDesCr([{ id: "d1" }], { portes: {} })).parti, false);
-  assert.equal((await lancerLaLectureDesCr([{ id: "d1" }], { projectId: "p1" })).parti, false);
+  assert.equal((await lancerUneLecture([], { projectId: "p1", portes: {} })).parti, false);
+  assert.equal((await lancerUneLecture([{ id: "d1" }], { portes: {} })).parti, false);
+  assert.equal((await lancerUneLecture([{ id: "d1" }], { projectId: "p1" })).parti, false);
 });
 
 /**
@@ -127,4 +128,53 @@ test("le mot du départ renvoie vers Actions, et annonce une seule proposition",
 
   assert.equal(leMotDuDepart(0), "");
   assert.match(leMotDuDepart(1), /1 compte rendu envoyé/);
+});
+
+/* ── Une lecture, quelle que soit la famille ──────────────────────────────── */
+
+test("le geste posé est la clé de la famille", async () => {
+  const posees = [];
+  const portes = {
+    poserLaLigne: async (quoi) => { posees.push(quoi); return "v-1"; },
+    reveiller: () => {}
+  };
+
+  for (const famille of [FAMILLE.MAIL, FAMILLE.CONTROLE, FAMILLE.CR]) {
+    await lancerUneLecture([{ id: "d-1", nom: "Un.pdf" }], {
+      projectId: "p-1", portes, famille
+    });
+  }
+
+  // C'est tout l'intérêt : la fonction de bord déclarée dans le registre cherche
+  // exactement ce mot-là.
+  assert.deepEqual(posees.map((une) => une.geste),
+    [FAMILLE.MAIL, FAMILLE.CONTROLE, FAMILLE.CR]);
+});
+
+test("une famille qui ne se lit pas ne pose pas de ligne", async () => {
+  // La vue d'ensemble n'a ni fonction de bord ni table : poser sa ligne ferait
+  // une file qu'aucun serveur ne prendrait, en attente pour toujours (règle 5).
+  let posee = false;
+  const parti = await lancerUneLecture([{ id: "d-1", nom: "Un.pdf" }], {
+    projectId: "p-1", famille: TOUTES,
+    portes: { poserLaLigne: async () => { posee = true; return "v-1"; } }
+  });
+
+  assert.equal(parti.parti, false);
+  assert.match(parti.motif, /ne se lit pas/);
+  assert.equal(posee, false);
+});
+
+test("ce qui attend à la fin n'est pas le même pour toutes les familles", () => {
+  // Un compte rendu donne une proposition à signer ; un rapport donne une lecture
+  // conservée. Annoncer une proposition qui n'existera pas la ferait chercher.
+  assert.match(leMotDuDepart(19, FAMILLE.CR), /19 comptes rendus envoyés/);
+  assert.match(leMotDuDepart(19, FAMILLE.CR), /une seule proposition/);
+
+  assert.match(leMotDuDepart(2, FAMILLE.CONTROLE), /2 rapports envoyés/);
+  assert.match(leMotDuDepart(2, FAMILLE.CONTROLE), /Rien n'entrera en mémoire/);
+  assert.doesNotMatch(leMotDuDepart(2, FAMILLE.CONTROLE), /proposition/);
+
+  assert.match(leMotDuDepart(1, FAMILLE.MAIL), /1 fil envoyé/);
+  assert.equal(leMotDuDepart(0, FAMILLE.MAIL), "");
 });

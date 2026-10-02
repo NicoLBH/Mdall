@@ -72,6 +72,7 @@ import {
 import {
   FAMILLE, TOUTES, ceQueDitLaFamille, lesDocumentsAnalyses
 } from "../../../services/les-documents-analyses.js";
+import { laFamilleQuiSeLit } from "../../../services/les-familles-de-document.js";
 import { renderLeDetailDunFil } from "../../ui/le-detail-dun-fil.js";
 import { lesFilsLus } from "../../../services/la-lecture-dun-fil.js";
 import { laVueDunFil } from "../../../services/la-lecture-dun-fil.js";
@@ -88,7 +89,7 @@ import {
 import { garderLesPlaces } from "../../ui/garder-le-defilement.js";
 import {
   leMotDuDepart, lesDocumentsAEnvoyer
-} from "../../../services/lancer-la-lecture-des-cr.js";
+} from "../../../services/lancer-une-lecture.js";
 import { PHRASES_DU_RANGEMENT, RANGEE } from "../../../services/restitution-rangee.js";
 import {
   LABEL_DU_CR, QUOI_DU_LABEL, labelDuCrDansLeProjet, labelsAProposer, styleDuLabel
@@ -623,27 +624,32 @@ export function renderLaLecture(vue = etat) {
         // faire la même chose sur le même écran, et un document déposé pendant
         // qu'on en choisit d'autres.
         /**
-         * **Le dépôt n'est offert que là où il mène quelque part.**
+         * **Le choix passe avant tout le reste.**
          *
-         * Ce qui se dépose ici est un compte rendu : c'est le seul chemin de
-         * lecture que cet écran porte aujourd'hui. Sous « Mails » ou « Bureau de
-         * Contrôle », une zone qui dit « Déposez un compte rendu » contredit le
-         * rail — et déposer un rapport y lancerait une lecture de compte rendu,
-         * qui est pire qu'un bouton absent.
+         * Il remplace la porte, quelle que soit la famille : les superposer
+         * donnerait deux façons de faire la même chose sur le même écran, et un
+         * document choisi pendant qu'on en choisit d'autres. L'ordre inverse
+         * cachait le choix dès qu'on l'ouvrait sous une famille autre que les
+         * comptes rendus — on cliquait, et rien ne s'ouvrait.
+         *
+         * **Et la porte est celle de la famille ouverte.** Une zone qui dit
+         * « Déposez un compte rendu » sous « Bureau de Contrôle » contredit le
+         * rail, et y déposer un rapport lancerait une lecture de compte rendu.
          */
-        vue.famille && vue.famille !== TOUTES && vue.famille !== FAMILLE.CR
-          ? renderOuSeLitCetteFamille(vue.famille)
-          : vue.choix
+        vue.choix
           ? renderChoisirUnFichier({
             ...vue.choix,
             choisis: vue.coches,
             connues: [...(vue.connues?.values?.() ?? [])],
-            // Les mots sont ceux de cet écran-ci : le composant est partagé avec
-            // le suivi des avis, qui lit des rapports et n'ouvre aucune
-            // proposition.
-            quoi: { un: "compte rendu", plusieurs: "comptes rendus" }
+            // **Les mots viennent de la famille ouverte.** Le composant est
+            // partagé : « Lire 19 comptes rendus » sous les rapports mentirait, et
+            // la phrase des propositions aussi — un rapport n'en ouvre aucune.
+            ...lesMotsDuChoix(vue.famille)
           })
+          : vue.famille && vue.famille !== TOUTES && vue.famille !== FAMILLE.CR
+          ? renderOuSeLitCetteFamille(vue.famille)
           : renderDepot(vue)}
+      ${vue.choix ? "" : renderCeQuiEstParti(vue)}
       ${vue.choix ? "" : renderLesDocumentsAnalyses(vue)}
       ${vue.choix ? "" : renderCorps(vue)}
         </div>
@@ -675,6 +681,71 @@ function lesDocumentsDeLaVue(vue) {
 }
 
 /**
+ * Ce qui vient d'être lancé, dit **une fois et quelle que soit la famille**.
+ *
+ * ## Il était dans la porte des comptes rendus
+ *
+ * La file tourne au serveur : sans cette phrase, cliquer « Lire 19 rapports »
+ * referme le choix et rien ne se passe à l'écran — on relance, et l'on paye deux
+ * fois. Elle était écrite dans la zone de dépôt des comptes rendus, qui ne se
+ * dessine pas sous les autres familles : on lançait dix-neuf rapports, et l'écran
+ * restait muet. C'est le défaut même qu'elle était censée fermer.
+ */
+function renderCeQuiEstParti(vue) {
+  if (!texte(vue?.lance)) return "";
+
+  return `
+    <div class="lecture-cr__parti">
+      <span class="lecture-cr__parti-icone" aria-hidden="true">${
+        svgIcon("check-circle", { className: "octicon" })}</span>
+      <p class="lecture-cr__parti-mot">${escapeHtml(texte(vue.lance))}</p>
+    </div>
+  `;
+}
+
+/**
+ * Ce que la barre de lancement du choix dit, selon la famille./**
+ * Ce que la barre de lancement du choix dit, selon la famille.
+ *
+ * **Ce qui attend à la fin n'est pas le même.** Un compte rendu donne une
+ * proposition à signer ; un rapport donne une lecture conservée, et rien n'entre
+ * en mémoire. Annoncer une proposition qui n'existera pas ferait la chercher, puis
+ * douter de tout le reste.
+ */
+function lesMotsDuChoix(famille) {
+  const ce = laFamilleQuiSeLit(famille) ?? ceQueDitLaFamille(FAMILLE.CR);
+
+  return {
+    quoi: ce.quoi,
+    /**
+     * `null` garde la phrase des propositions, qui est celle des comptes rendus.
+     * Les autres familles disent ce qui les attend vraiment : une lecture
+     * conservée, et rien en mémoire.
+     */
+    fera: famille === FAMILLE.CR || !famille
+      ? null
+      : "Chaque document est lu sur le serveur, et sa lecture est conservée. "
+        + "Vous pouvez fermer cet écran. Rien n'entre dans la mémoire du chantier."
+  };
+}
+
+/**
+ * Le titre de l'écran, selon ce que le rail montre./**
+ * Le titre de l'écran, selon ce que le rail montre.
+ *
+ * **Il vient du registre des natures**, et non d'une seconde liste écrite ici :
+ * deux endroits qui nomment les mêmes familles finiraient par les nommer
+ * autrement (règle 10).
+ */
+function leTitreDeLaVue(vue) {
+  if (vue?.ouvertAilleurs || vue?.conservee || vue?.phase !== "vide") {
+    return ceQueDitLaFamille(TOUTES).titre;
+  }
+  return (ceQueDitLaFamille(vue?.famille) ?? ceQueDitLaFamille(TOUTES)).titre;
+}
+
+/**
+ * Où se lit une famille que cet écran ne lit pas encore./**
  * Où se lit une famille que cet écran ne lit pas encore.
  *
  * **On le dit, on ne le cache pas.** Le rail réunit ce qui a été analysé ; la
@@ -684,15 +755,28 @@ function lesDocumentsDeLaVue(vue) {
  * chercher un bouton qui n'existe pas (règle 5).
  */
 function renderOuSeLitCetteFamille(famille) {
-  const ce = ceQueDitLaFamille(famille);
-  const ou = famille === FAMILLE.MAIL
-    ? "Lecture d'un fil de mails"
-    : "Suivi des avis BC";
+  const ce = laFamilleQuiSeLit(famille);
+  if (!ce) return "";
 
   return `
-    <div class="zone-de-depot is-occupee">
+    <div class="zone-de-depot" ${LA_ZONE}>
+      <span class="zone-de-depot__icone" aria-hidden="true">${
+        svgIcon(ce.icone, { className: "octicon" })}</span>
       <p class="zone-de-depot__mot">${escapeHtml(
-        `${ce.nom} : ce qui a été analysé se lit ici, la lecture se lance encore depuis « ${ou} ».`)}</p>
+        `Choisissez des ${ce.quoi.plusieurs} à analyser.`)}</p>
+      <p class="zone-de-depot__aide mono-small">${escapeHtml(ce.vide.quoi)}</p>
+      <span class="zone-de-depot__gestes">
+        ${/*
+          **Une seule porte ici, et c'est Fichiers.** Ces documents sont déjà dans
+          le projet : les redéposer depuis le disque en ferait un second exemplaire,
+          et c'est le genre de doublon qu'on ne remarque qu'au vingtième. Le dépôt
+          depuis l'ordinateur reste au compte rendu, qui est le seul que cet écran
+          sache lire sans passer par la file.
+        */""}
+        <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" ${DEPUIS_FICHIERS}>
+          Choisir depuis Fichiers
+        </button>
+      </span>
     </div>
   `;
 }
@@ -755,8 +839,17 @@ function renderUnDocumentDuneAutreFamille(vue) {
       ${renderEntete(vue)}
       <section class="lecture-cr__ailleurs">
         <div class="lecture-cr__ailleurs-tete">
-          <button type="button" class="gh-btn gh-btn--sm" data-lecture-cr-fermer-ailleurs>
-            ← Les documents analysés
+          ${/*
+            **Une flèche, et non un bouton qui se lit.** « ← Les documents
+            analysés » répétait le titre du tableau pour dire qu'on y retourne ;
+            la flèche des Situations le dit sans prendre une ligne, et c'est la
+            même partout (règle 4).
+          */""}
+          <button type="button" class="project-situation-edit__back"
+            data-lecture-cr-fermer-ailleurs title="Revenir aux documents analysés"
+            aria-label="Revenir aux documents analysés">
+            <span class="project-situation-edit__back-icon">${svgIcon("arrow-left", {
+              className: "octicon", width: 24, height: 24 })}</span>
           </button>
           <h3 class="lecture-cr__ailleurs-titre">${escapeHtml(texte(ouvert?.titre)
             || (ce ? ce.nom : "Document"))}</h3>
@@ -811,12 +904,20 @@ function renderEntete(vue = etat) {
            * détail d'une étape du journal des Actions.
            */
           vue.conservee
-            ? `<button type="button" class="gh-btn gh-btn--sm lecture-cr__retour" data-lecture-cr-revenir>
-                 ${svgIcon("arrow-left", { className: "octicon" })} Les comptes rendus lus
+            ? `<button type="button" class="project-situation-edit__back lecture-cr__retour"
+                 data-lecture-cr-revenir title="Revenir aux documents analysés"
+                 aria-label="Revenir aux documents analysés">
+                 <span class="project-situation-edit__back-icon">${svgIcon("arrow-left", {
+                   className: "octicon", width: 24, height: 24 })}</span>
                </button>`
             : ""
         }
-        <h2 class="lecture-cr__titre">Les documents du chantier</h2>
+        ${/*
+          **Le titre suit le filtre.** Le rail décide de tout ce qu'on voit ;
+          un titre qui ne bouge pas avec lui laisse croire qu'on regarde autre
+          chose, surtout rail replié — où le filtre n'est plus écrit nulle part.
+        */""}
+        <h2 class="lecture-cr__titre">${escapeHtml(leTitreDeLaVue(vue))}</h2>
         <div class="lecture-cr__entete-actions">
           ${
             // **La porte d'entrée reste, la zone d'accueil s'en va.** Un
@@ -952,22 +1053,6 @@ function renderDepot(vue) {
   if (vue.conservee) return "";
 
   return `
-    ${
-      /**
-       * **Ce qui vient d'être lancé se dit, et une seule fois.**
-       *
-       * La file tournait ici, sous les yeux ; elle est au serveur. Sans cette
-       * phrase, cliquer « Lire 19 comptes rendus » refermerait simplement le
-       * choix — rien ne se passerait à l'écran, et l'on relancerait. Deux
-       * lectures des mêmes dix-neuf, et deux factures.
-       */
-      vue.lance ? `
-      <div class="lecture-cr__parti">
-        <span class="lecture-cr__parti-icone" aria-hidden="true">${
-          svgIcon("check-circle", { className: "octicon" })}</span>
-        <p class="lecture-cr__parti-mot">${escapeHtml(vue.lance)}</p>
-      </div>
-    ` : ""}
     ${renderLaZoneDeDepot({
       occupee: enLecture,
       mot: "Déposez un compte rendu, ou choisissez-le.",
@@ -3140,7 +3225,23 @@ function brancher(hote) {
       const voulue = laFamilleDesignee(entreeDuRail.getAttribute(CHOISIR_UNE_FAMILLE));
       if (voulue) {
         etat.famille = voulue;
-        redessiner(hote);
+        /**
+         * **Le rail reprend la main sur ce qui est ouvert.**
+         *
+         * Il était posé à côté du détail d'un document : cliquer sur « Mails »
+         * changeait le filtre d'un tableau qu'on ne voyait plus, et l'écran ne
+         * bougeait pas. Rester prisonnier d'un détail jusqu'à avoir trouvé le
+         * retour n'est pas une navigation, c'est une impasse — et le rail décide
+         * de **tout ce qu'on voit**, c'est la raison même de sa place.
+         *
+         * Les trois sorties, parce qu'il y a trois façons d'être « dans » un
+         * document : un fil ou un rapport ouvert, un compte rendu rouvert, et un
+         * choix de fichiers en cours.
+         */
+        etat.ouvertAilleurs = null;
+        etat.choix = null;
+        if (etat.conservee) revenirALaccueil(hote);
+        else redessiner(hote);
       }
       return;
     }
@@ -3494,10 +3595,17 @@ async function lancerLaFile(hote) {
 
   // Chargé à la demande : ce module passe par le SDK Supabase, importé depuis le
   // réseau, qu'une exécution hors navigateur ne saurait résoudre.
-  const { demanderLaLectureDesCr } = await import(
-    "../../../services/lancer-la-lecture-des-cr-supabase.js"
+  const { demanderUneLecture } = await import(
+    "../../../services/lancer-une-lecture-supabase.js"
   );
-  const parti = await demanderLaLectureDesCr(documents, { projectId });
+  /**
+   * **La famille ouverte décide du geste**, donc de la fonction de bord qui
+   * prendra la ligne. Hors d'une famille qui se lit — la vue d'ensemble —, on
+   * retombe sur les comptes rendus : c'est la seule qu'on puisse déposer à la
+   * main depuis cet écran, et elle reste ce qu'on y fait par défaut.
+   */
+  const famille = laFamilleQuiSeLit(etat.famille) ? etat.famille : FAMILLE.CR;
+  const parti = await demanderUneLecture(documents, { projectId, famille });
 
   if (!parti.parti) {
     etat.choix = {
@@ -3512,7 +3620,7 @@ async function lancerLaFile(hote) {
   // et c'est le journal des Actions qui la montre.
   etat.choix = null;
   etat.coches = new Set();
-  etat.lance = leMotDuDepart(documents.length);
+  etat.lance = leMotDuDepart(documents.length, famille);
   redessiner(hote);
 }
 
@@ -4764,7 +4872,7 @@ function renderEcranEnPanne(erreur) {
     <div class="lecture-cr">
       <header class="lecture-cr__entete">
         <div class="lecture-cr__entete-ligne">
-          <h2 class="lecture-cr__titre">Les documents du chantier</h2>
+          <h2 class="lecture-cr__titre">Analyse de documents</h2>
         </div>
       </header>
       <section class="lecture-cr__echec">

@@ -114,16 +114,16 @@ test("la ligne ouverte est marquée", () => {
 
 test("une ligne porte sa famille avec son identifiant", () => {
   const html = renderLeTableauDesDocuments({ documents: TOUS, famille: TOUTES });
-  assert.match(html, new RegExp(`${OUVRIR_UN_DOCUMENT}="controle:r-1"`));
-  assert.match(html, new RegExp(`${OUVRIR_UN_DOCUMENT}="mail:f-1"`));
+  assert.match(html, new RegExp(`${OUVRIR_UN_DOCUMENT}="rapports:r-1"`));
+  assert.match(html, new RegExp(`${OUVRIR_UN_DOCUMENT}="mails:f-1"`));
 });
 
 test("une marque à moitié ne désigne rien", () => {
   // Deux tables peuvent rendre le même identifiant : sans la famille on ne sait
   // pas où aller le chercher, ni quel détail dessiner (règle 5).
-  assert.deepEqual(leDocumentDesigne("cr:c-1"), { famille: "cr", id: "c-1" });
+  assert.deepEqual(leDocumentDesigne("comptes_rendus:c-1"), { famille: "comptes_rendus", id: "c-1" });
   assert.equal(leDocumentDesigne("c-1"), null);
-  assert.equal(leDocumentDesigne("cr:"), null);
+  assert.equal(leDocumentDesigne("comptes_rendus:"), null);
   assert.equal(leDocumentDesigne("inconnue:c-1"), null);
   // `toutes` n'est pas une famille : c'est leur réunion.
   assert.equal(leDocumentDesigne("toutes:c-1"), null);

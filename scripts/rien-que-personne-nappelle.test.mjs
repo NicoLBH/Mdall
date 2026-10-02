@@ -64,7 +64,10 @@ const LES_MODULES_SOUS_GARDE = [
   // La vue d'ensemble des documents analysés, et la vue propre aux fils de mails.
   "apps/web/js/services/les-documents-analyses.js",
   "apps/web/js/views/ui/les-documents-analyses.js",
-  "apps/web/js/views/ui/le-detail-dun-fil.js"
+  "apps/web/js/views/ui/le-detail-dun-fil.js",
+  // Le registre des familles, et le lancement d'une lecture quelle qu'elle soit.
+  "apps/web/js/services/les-familles-de-document.js",
+  "apps/web/js/services/lancer-une-lecture.js"
 ];
 
 /** Où l'on cherche les appels. Les tests n'en sont pas : ils appellent tout. */

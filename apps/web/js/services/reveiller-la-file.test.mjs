@@ -15,6 +15,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { LES_FAMILLES, laFamilleQuiSeLit } from "./les-familles-de-document.js";
 import {
   ABANDONNEE_APRES_MS,
   GESTE_DES_CR,
@@ -141,10 +142,34 @@ test("une file vide ne réveille rien", () => {
  * ne sert ne rend pas d'erreur visible : il ne fait rien, et la file reste
  * bloquée sans que l'écran sache pourquoi.
  */
-test("chaque geste nomme une fonction qui existe", () => {
-  assert.deepEqual(Object.keys(LA_FONCTION_DU_GESTE).sort(), [GESTE_DES_CR, GESTE_DES_MAILS].sort());
+test("chaque geste nomme une fonction qui existe pour de bon", async () => {
+  const { existsSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+
   assert.equal(LA_FONCTION_DU_GESTE[GESTE_DES_MAILS], "verser-les-mails");
   assert.equal(LA_FONCTION_DU_GESTE[GESTE_DES_CR], "lire-les-comptes-rendus");
+
+  /**
+   * **Et la fonction est déployable.**
+   *
+   * Un réveil envoyé à un nom que personne ne sert ne rend aucune erreur : il ne
+   * fait rien, et la file reste bloquée sans que l'écran sache pourquoi. Le
+   * registre peut donc déclarer une famille dont la fonction n'existe pas, et
+   * tout paraîtra normal jusqu'à ce que quelqu'un attende une lecture qui ne
+   * viendra jamais. On va voir.
+   */
+  for (const [geste, fonction] of Object.entries(LA_FONCTION_DU_GESTE)) {
+    const ou = fileURLToPath(
+      new URL(`../../../../supabase/functions/${fonction}/index.ts`, import.meta.url));
+    assert.ok(existsSync(ou), `${geste} : la fonction « ${fonction} » n'existe pas`);
+  }
+
+  // Toute famille qui se lit a son geste dans la table : une famille sans geste
+  // ne pourrait rien demander, et personne ne le dirait.
+  assert.deepEqual(
+    Object.keys(LA_FONCTION_DU_GESTE).sort(),
+    LES_FAMILLES.filter((une) => laFamilleQuiSeLit(une)).sort()
+  );
 });
 
 /** « Reprise » explique l'attente ; « en cours » pendant vingt minutes la nie. */
