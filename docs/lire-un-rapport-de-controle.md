@@ -117,6 +117,68 @@ défavorable mal relu, montré à l'entreprise concernée avant d'avoir été v�
 est exactement ce qui discréditerait l'outil. La séparation est tenue par la base,
 ou elle n'est pas tenue.
 
+## Le geste qui manquait, et ce qu'il a appris
+
+Le premier round de ce lecteur a livré la moitié qui **relit** — la table, le
+service pur, le tableau de l'accueil, le détail au clic — et pas celle qui **lit**.
+Rien n'appelait les trois étapes, rien n'écrivait de ligne. Le tableau était donc
+vide à jamais, et un tableau vide ne se voyait pas du tout : `renderLesRapportsLus`
+rendait une chaîne vide quand il n'y avait aucune lecture. L'écran était
+rigoureusement inchangé, et une épreuve l'exigeait même explicitement.
+
+Trois choses en sont sorties, et elles valent plus que le bouton lui-même.
+
+**Un tableau vide se dit.** « Aucun rapport n'a encore été lu sur ce chantier » est
+une information ; une section absente n'en est pas une. L'épreuve qui demandait la
+chaîne vide a été réécrite : elle encodait le défaut.
+
+**Un banc refuse ce que personne n'appelle.** `scripts/rien-que-personne-nappelle.test.mjs`
+lit les modules du lecteur comme du texte — ce qu'on ne s'autorise que pour les
+défauts invisibles autrement — et refuse un export dont le nom n'apparaît nulle
+part ailleurs, pas même chez lui. C'est la forme exacte du défaut payé :
+`conserverUneLectureDeRapport` était écrit, éprouvé, et appelé par personne.
+
+Un export **employé dans son propre module** passe : `renderLesAvisReleves` n'est
+appelé que par `renderLeDetailDunRapport`, qui l'est par l'écran. Exiger un
+appelant extérieur condamnerait tout découpage d'un gros rendu en pièces
+éprouvables, qui est ce qu'on veut encourager.
+
+Le banc a trouvé une seconde chose du même round : `lesLecturesDunMemeRapport`,
+écrite et jamais appelée — alors que ce document promettait, en toutes lettres, que
+« le détail d'un rapport montre ses lectures précédentes ». Une déclaration qu'on
+ne vérifie pas est une intention (règle 12). Le détail les montre maintenant, avec
+leur date, leur lecteur et leurs nombres, parce que c'est en comparant deux
+lectures qu'on voit si une consigne a fait mieux — « 42 avis » ne dit rien tant
+qu'on ne sait pas que la précédente en donnait 11.
+
+## Ce que la lecture fait, et ce qu'un échec laisse
+
+Les trois appels sont **passés** à l'orchestrateur, jamais faits par lui. C'est ce
+qui permet d'éprouver le parcours entier, échecs compris, sans serveur : une
+épreuve qui ne sait pas faire tomber la deuxième étape ne vérifie pas qu'une
+lecture sans Markdown est refusée.
+
+| l'étape qui tombe | ce qui reste | pourquoi |
+|---|---|---|
+| la structure | tout le reste | la transcription se fait sans squelette : on perd la cohérence entre pages, pas la lecture |
+| la transcription | **rien** | une lecture sans Markdown n'est pas une lecture : il n'y a rien à rouvrir |
+| le relevé | la transcription | le document transcrit vaut d'être gardé, et l'écran dit que les avis n'ont pas été relevés — jamais qu'il n'y en a aucun |
+
+Un rapport qui échoue n'arrête pas les suivants, et les rapports se lisent **en
+série** : trois appels chacun, un lot de trente lancé d'un coup se ferait limiter.
+
+**La légende de la structure gagne, celle du relevé la complète.** Les deux lisent
+le même document, donc compléter n'est pas emprunter la légende du voisin. Mais en
+cas de désaccord sur une marque, la reconnaissance tranche : elle est allée
+chercher la table exprès, sur six pages choisies pour cela, là où le relevé la
+ramasse en passant. Prendre la plus récente ferait dépendre le sens de « S » de
+l'ordre des appels.
+
+**Le constat est gardé et montré** — « Région A2, altitude 260 m ». C'est ce que le
+bureau a écrit en plus du verdict, ce que la lecture par motifs perdait, et sans
+quoi un engagement ne se vérifie pas : on saurait que le bureau a dit
+« favorable », pas sur quoi.
+
 ## Ce qui n'est pas fait
 
 **Rien n'entre en mémoire depuis cet écran.** Le chemin reste copilote → atelier →

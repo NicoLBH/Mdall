@@ -28963,6 +28963,23 @@ button.bac-refus__ou--mene:hover{ color:var(--fg, inherit); }
 .rapport-legende__mot{ margin:0 0 10px; color:var(--muted); }
 .rapport-avis{ margin:18px 0 0; }
 .rapport-avis__reste{ margin:8px 0 0; color:var(--muted); }
+/* Le constat — ce que le bureau a écrit en plus du verdict. En retrait sous
+   l'intitulé : c'est une précision de l'avis, non un second avis. */
+.rapport-avis__constat{
+  display:block; margin-top:3px; color:var(--muted);
+  font-size:12px; line-height:1.45;
+}
+
+/* Les lectures antérieures du même rapport : la comparaison, pas l'archive. */
+.rapport-anterieures{ margin:18px 0 0; }
+
+/* Le geste qui lance la lecture, et son avancement. Il reprend l'espacement des
+   sections de l'utilitaire : un bloc qui se calibre tout seul finit par ne
+   ressembler à rien de ce qui l'entoure (règle 4). */
+.rapports-lire{ margin:16px 0 0; }
+.rapports-lire__dit{ margin:0 0 6px; display:flex; align-items:center; gap:6px; }
+.rapports-lire__cout{ margin:6px 0 0; color:var(--muted); }
+.rapports-lire__refus{ margin:6px 0 10px; padding-left:18px; }
 
 /* La transcription vient en dernier, et repliée : c'est la plus longue, et celle
    qu'on déroule quand les quatre premières ne suffisent pas. */

@@ -108,6 +108,40 @@ export function laLegendeDuRapport(brutes) {
 }
 
 /**
+ * Deux lectures de la légende **du même document**, réunies.
+ *
+ * ## Pourquoi réunir, et pourquoi ce n'est pas emprunter
+ *
+ * Deux étapes voient la table des marques : la reconnaissance de structure, qui
+ * va la chercher exprès, et le relevé des avis, qui la ramasse en passant. Elles
+ * lisent le même document — compléter l'une par l'autre ne fait donc pas ce que
+ * ce module interdit ailleurs, qui est de résoudre un rapport avec la légende du
+ * voisin.
+ *
+ * ## La première gagne
+ *
+ * En cas de désaccord sur une marque, celle de la première liste est gardée :
+ * c'est la reconnaissance, qui a regardé les pages de légende pour cela. Prendre
+ * la plus récente ferait dépendre le sens de « S » de l'ordre des appels.
+ *
+ * La comparaison ignore la casse, comme `leSensDeLaMarque` : un tableau qui écrit
+ * « f » là où la légende écrit « F » ne déclare pas une seconde marque.
+ */
+export function laLegendeComplete(premiere, seconde) {
+  const retenues = laLegendeDuRapport(premiere);
+  const deja = new Set(retenues.map((une) => une.marque.toLocaleUpperCase("fr-FR")));
+
+  for (const une of laLegendeDuRapport(seconde)) {
+    const haute = une.marque.toLocaleUpperCase("fr-FR");
+    if (deja.has(haute)) continue;
+    deja.add(haute);
+    retenues.push(une);
+  }
+
+  return retenues;
+}
+
+/**
  * Ce que signifie une marque, selon **cette** légende.
  *
  * `null` quand la légende ne la déclare pas — et c'est l'information qui compte.

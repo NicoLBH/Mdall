@@ -9,8 +9,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  OUVRIR_UN_RAPPORT, renderLaLegendeLue, renderLeDetailDunRapport, renderLesAvisReleves,
-  renderLesEtapesDuRapport, renderLesRapportsLus
+  LIRE_LES_RAPPORTS, OUVRIR_UN_RAPPORT, renderLaLegendeLue, renderLeDetailDunRapport,
+  renderLesAvisReleves, renderLesEtapesDuRapport, renderLesLecturesAnterieures,
+  renderLesRapportsLus, renderLinvitationALire
 } from "./les-rapports-lus.js";
 
 const LA_LEGENDE = [
@@ -48,8 +49,12 @@ test("le tableau distingue le chargement, l'échec et le vide", () => {
   assert.match(echoue, /n'ont pas pu/);
   assert.match(echoue, /on ne sait pas lesquels/);
 
-  // Aucun rapport lu : rien du tout, et non un tableau à zéro ligne.
-  assert.equal(renderLesRapportsLus({ lignes: [] }), "");
+  // Aucun rapport lu : la phrase, et non un tableau à zéro ligne — ni rien du
+  // tout, comme ce test l'exigeait d'abord. C'est l'écran vide qui a fait croire
+  // que la fonctionnalité n'était pas là.
+  const vide = renderLesRapportsLus({ lignes: [] });
+  assert.doesNotMatch(vide, /data-table-shell/);
+  assert.match(vide, /Aucun rapport/);
 });
 
 /** Une ligne par rapport, avec de quoi décider si l'on clique. */
@@ -237,4 +242,132 @@ test("une lecture sans analyse dit qu'elle ne s'ouvre pas", () => {
 
   assert.match(html, /ne s'ouvre pas/);
   assert.match(html, /on ne sait pas lequel des deux/);
+});
+
+/* ── Le geste qui lance la lecture ───────────────────────────────────────── */
+
+test("aucun rapport lu se dit, au lieu de ne rien rendre", () => {
+  // **Un tableau vide ne doit pas être un écran vide.** Rendre une chaîne vide
+  // faisait disparaître la section entière : rien ne distinguait « ce chantier
+  // n'a rien de lu » de « cet écran ne sait rien afficher », et c'est ce qui a
+  // rendu tout un round invisible.
+  const html = renderLesRapportsLus({ lignes: [] });
+  assert.notEqual(html.trim(), "");
+  assert.match(html, /Aucun rapport n&#39;a encore été lu/);
+});
+
+test("l'invitation dit combien de rapports seront lus, et ce que cela coûte", () => {
+  const html = renderLinvitationALire({ deposes: 3 });
+
+  assert.match(html, new RegExp(LIRE_LES_RAPPORTS));
+  assert.match(html, /Lire 3 rapports : structure, Markdown, avis/);
+  assert.match(html, /Trois appels par rapport/);
+});
+
+test("sans rapport déposé, il n'y a rien à lancer", () => {
+  const html = renderLinvitationALire({ deposes: 0 });
+
+  // Un bouton qui ne peut rien faire est pire qu'un bouton absent : on clique, et
+  // l'on croit que l'outil est cassé.
+  assert.doesNotMatch(html, new RegExp(LIRE_LES_RAPPORTS));
+  assert.match(html, /Déposez un rapport/);
+});
+
+test("la lecture en cours nomme l'étape, elle ne la compte pas", () => {
+  const html = renderLinvitationALire({
+    deposes: 2,
+    parcours: { running: true, courant: "RICT-03.pdf", quoi: "markdown", faits: 0, total: 2 }
+  });
+
+  assert.match(html, /RICT-03\.pdf/);
+  assert.match(html, /1 sur 2/);
+  assert.match(html, /Transcrire en Markdown/);
+  // Le coût de l'étape : la transcription peut durer une minute, et un écran
+  // muet pendant une minute a l'air figé.
+  assert.match(html, /le plus cher/);
+  // Pendant la lecture, le bouton disparaît : deux lots lancés en parallèle se
+  // feraient limiter tous les deux.
+  assert.doesNotMatch(html, new RegExp(LIRE_LES_RAPPORTS));
+});
+
+test("un rapport non lu dit lequel et pourquoi", () => {
+  const html = renderLinvitationALire({
+    deposes: 2,
+    parcours: {
+      running: false,
+      dit: "1 rapport lu et conservé — 1 non lu, et l'on dit pourquoi.",
+      refus: [{ nom: "scan.pdf", dit: "ce document ne porte aucun texte extractible" }]
+    }
+  });
+
+  assert.match(html, /scan\.pdf/);
+  assert.match(html, /aucun texte extractible/);
+  assert.match(html, /1 rapport lu et conservé/);
+});
+
+test("le constat s'affiche sous l'intitulé de l'avis", () => {
+  // C'est ce que la lecture par motifs perdait : « favorable » sans « sur quoi ».
+  const html = renderLesAvisReleves({
+    legende: LA_LEGENDE,
+    avis: [{
+      reference: "A12", intitule: "Neige", marque: "F", ou: "page 3",
+      constat: "Région A2, altitude 260 m"
+    }]
+  });
+
+  assert.match(html, /rapport-avis__constat/);
+  assert.match(html, /Région A2, altitude 260 m/);
+});
+
+/* ── Les lectures antérieures du même rapport ────────────────────────────── */
+
+test("les lectures antérieures se comparent, et la courante n'y figure pas", () => {
+  const html = renderLesLecturesAnterieures([
+    { id: "a", created_at: "2026-04-18T10:00:00Z", lu_par: "gpt-5 · lecture d'un rapport v1",
+      mesures: { avis: 42, illisibles: 0 }, legende: LA_LEGENDE },
+    { id: "b", created_at: "2026-04-02T10:00:00Z", lu_par: "gpt-5 · lecture d'un rapport v1",
+      mesures: { avis: 11, illisibles: 3 }, legende: [] }
+  ], { courante: "a" });
+
+  assert.doesNotMatch(html, /2026-04-18/);
+  assert.match(html, /2026-04-02/);
+  assert.match(html, /11 avis/);
+  assert.match(html, /3 illisibles/);
+  assert.match(html, /sans légende/);
+  assert.match(html, /1 lecture antérieure de ce rapport/);
+});
+
+test("une seule lecture : rien à comparer, et rien à l'écran", () => {
+  assert.equal(renderLesLecturesAnterieures([{ id: "a" }], { courante: "a" }), "");
+  assert.equal(renderLesLecturesAnterieures([]), "");
+});
+
+test("un historique injoignable ne se dit pas « il n'y en a pas »", () => {
+  const html = renderLesLecturesAnterieures(null);
+  assert.match(html, /n'ont pas pu être listées/);
+  assert.match(html, /Ce n'est pas/);
+});
+
+test("une lecture antérieure dont le relevé a échoué ne dit pas « 0 avis »", () => {
+  const html = renderLesLecturesAnterieures([
+    { id: "a" },
+    { id: "b", created_at: "2026-04-02T10:00:00Z", mesures: { avis: null } }
+  ], { courante: "a" });
+
+  assert.match(html, /avis non relevés/);
+  assert.doesNotMatch(html, /0 avis/);
+});
+
+test("le détail ne montre l'historique que lorsqu'il a été demandé", () => {
+  // Sans la clé, l'écran n'a rien demandé : afficher « aucune lecture antérieure »
+  // serait affirmer ce qu'on n'a pas lu (règle 5).
+  const sans = renderLeDetailDunRapport({ lecture: UNE_LECTURE });
+  assert.doesNotMatch(sans, /rapport-anterieures/);
+
+  const avec = renderLeDetailDunRapport({
+    lecture: UNE_LECTURE,
+    conservee: { id: "a" },
+    anterieures: null
+  });
+  assert.match(avec, /rapport-anterieures/);
 });
