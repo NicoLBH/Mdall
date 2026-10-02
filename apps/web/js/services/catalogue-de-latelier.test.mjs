@@ -327,3 +327,22 @@ test("« Ajouté récemment » mêle les deux sources par leur date", () => {
   assert.equal(ranges[ranges.length - 1].cible, "etabli:vieux",
     "un outil de 2000 ne passe pas devant ceux de cette année");
 });
+
+/**
+ * **L'utilitaire porte le nom de son écran, et il n'y a qu'un nom.**
+ *
+ * Il s'est appelé « Les documents du chantier » dans le catalogue pendant que son
+ * écran s'appelait « Analyse de documents » : on ne retrouvait plus l'un en
+ * cherchant l'autre, et c'est le catalogue qui sert à retrouver (règle 10).
+ *
+ * L'épreuve confronte les deux au lieu de figer la chaîne : écrite en dur ici,
+ * elle demanderait de la changer à chaque fois qu'on renomme l'écran — c'est-à-
+ * dire exactement le geste qu'on vient de rater.
+ */
+test("l'analyse de documents porte le même nom au catalogue et à l'écran", async () => {
+  const { TOUTES, ceQueDitLaFamille } = await import("./les-familles-de-document.js");
+  const utilitaire = utilitaireParCible("dev-lecture-cr");
+
+  assert.ok(utilitaire, "l'utilitaire n'est plus au catalogue");
+  assert.equal(utilitaire.nom, ceQueDitLaFamille(TOUTES).titre);
+});

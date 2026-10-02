@@ -20,7 +20,7 @@
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import {
-  LE_SELECT_DUNE_LIGNE_DE_RAPPORT, LE_SELECT_DUN_RAPPORT
+  LE_SELECT_DES_AVIS_DUN_RAPPORT, LE_SELECT_DUNE_LIGNE_DE_RAPPORT, LE_SELECT_DUN_RAPPORT
 } from "./la-lecture-dun-rapport.js";
 
 const SUPABASE_URL = getSupabaseUrl();
@@ -141,6 +141,49 @@ export async function lesLecturesDunMemeRapport(projectId, document = "", { limi
       }
     });
     return Array.isArray(lignes) ? lignes : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Les avis de **tous** les rapports lus d'un chantier, pour en suivre la trace.
+ *
+ * C'est ce que le détail d'un rapport pose sous ses propres avis : ce que chacun
+ * est devenu d'un rapport au suivant. La suite elle-même se calcule dans
+ * `le-devenir-dun-avis.js`, qui est pur ; ici, un aller-retour, et rien d'autre.
+ *
+ * **`null` sur une erreur, jamais `[]`.** Une frise vide parce qu'on n'a pas su
+ * demander se lirait comme un chantier sans aucun avis (règle 5).
+ *
+ * **Une seule lecture par rapport.** On relit le même document pour ajuster une
+ * consigne, et deux lectures du même rapport donneraient deux fois ses avis dans
+ * la frise — un rappel inventé, et une levée qui paraîtrait double. On garde la
+ * plus récente, qui est celle qu'on a voulue.
+ */
+export async function lesAvisDesRapports(projectId, { limite = 300 } = {}) {
+  if (!texte(projectId)) return [];
+
+  try {
+    const lignes = await requete(LA_TABLE, {
+      params: {
+        select: LE_SELECT_DES_AVIS_DUN_RAPPORT,
+        project_id: `eq.${texte(projectId)}`,
+        order: "created_at.desc",
+        limit: String(Math.max(1, Number(limite) || 300))
+      }
+    });
+    if (!Array.isArray(lignes)) return null;
+
+    // La plus récente d'abord : la première vue de chaque document est donc
+    // celle qu'on garde.
+    const vues = new Set();
+    return lignes.filter((une) => {
+      const cle = texte(une?.document) || texte(une?.id);
+      if (vues.has(cle)) return false;
+      vues.add(cle);
+      return true;
+    });
   } catch {
     return null;
   }

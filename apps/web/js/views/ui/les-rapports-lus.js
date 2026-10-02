@@ -34,6 +34,10 @@ import {
 import {
   ceQueFaitLetape, lEtatDuParcours, phraseDesMarquesSansSens, phraseDuParcours
 } from "../../services/le-parcours-dun-rapport.js";
+import {
+  CE_QUE_LE_RAPPORT_APPORTE, LA_VIE_DUN_AVIS, phraseDeLaSuite
+} from "../../services/le-devenir-dun-avis.js";
+import { renderLidentiteDunDocument } from "./lidentite-dun-document.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const liste = (valeur) => (Array.isArray(valeur) ? valeur : []);
@@ -476,7 +480,7 @@ export function renderLesLecturesAnterieures(lignes = null, { courante = "" } = 
   `;
 }
 
-export function renderLeDetailDunRapport(vue = null) {
+export function renderLeDetailDunRapport(vue = null, { onglet = "analyse" } = {}) {
   const lecture = vue?.lecture ?? null;
   if (!lecture) {
     return `<p class="forme-manques">Cette lecture ne s'ouvre pas. Soit elle a été
@@ -484,41 +488,218 @@ export function renderLeDetailDunRapport(vue = null) {
       et l'on ne sait pas lequel des deux.</p>`;
   }
 
-  const mesures = lesMesuresDunRapport(lecture);
+  // **La restitution d'un côté, ce qu'on en a tiré de l'autre.** Elle vivait
+  // repliée tout en bas, sous un `<details>` ; c'est pourtant le document que le
+  // modèle a relu pour relever les avis, et c'est à lui qu'on confronte un avis
+  // qui surprend. Le compte rendu lui donne un onglet depuis le début.
+  if (onglet === "restitution") {
+    return `
+      <div class="rapport-detail">
+        <section class="rapport-detail__markdown">
+          <div class="markdown-body">${renderMarkdownToHtml(texte(lecture.markdown))}</div>
+        </section>
+      </div>
+    `;
+  }
 
   return `
     <div class="rapport-detail">
-      <p class="rapport-detail__mesures mono-small">${escapeHtml([
-        `${mesures.pages} page${mesures.pages > 1 ? "s" : ""}`,
-        `${mesures.caracteres} caractères transcrits`,
-        mesures.avis === null ? "avis non relevés" : `${mesures.avis} avis`,
-        mesures.illisibles ? `${mesures.illisibles} marque(s) illisible(s)` : "",
-        mesures.sansMarque ? `${mesures.sansMarque} sans marque` : ""
-      ].filter(Boolean).join(" • "))}</p>
-
       ${renderLesEtapesDuRapport(lecture)}
       ${renderLaLegendeLue(lecture)}
       ${renderLesAvisReleves(lecture)}
       ${/*
-        **Les lectures antérieures, après les avis.** On vient d'abord voir ce que
-        cette lecture-ci a trouvé ; on compare ensuite. L'inverse ferait lire un
-        historique avant de savoir de quoi.
+        **Ce que chaque avis est devenu, après les avis de ce rapport-ci.** On
+        vient d'abord voir ce que ce rapport dit ; on regarde ensuite ce qu'il
+        devient. L'inverse ferait lire une suite avant de savoir de quoi.
+      */""}
+      ${vue?.suite === undefined ? "" : renderLaSuiteDesAvis(vue.suite)}
+      ${/*
+        **Les lectures antérieures en dernier.** Elles ne parlent pas du dossier
+        mais de la façon dont on l'a lu : c'est le geste d'ajustement d'une
+        consigne, pas celui du suivi de chantier.
       */""}
       ${vue?.anterieures === undefined
         ? ""
         : renderLesLecturesAnterieures(vue.anterieures, {
           courante: texte(vue?.conservee?.id)
         })}
-
-      <details class="rapport-detail__markdown">
-        <summary class="rapport-detail__markdown-titre">La transcription en Markdown</summary>
-        ${/*
-          **Rendu en Markdown, et non en texte brut.** C'est ce que la deuxième
-          étape a produit, et c'est sous cette forme qu'on juge si la structure
-          reconnue tenait : un tableau mal fermé se voit rendu, pas en source.
-        */""}
-        <div class="markdown-body">${renderMarkdownToHtml(texte(lecture.markdown))}</div>
-      </details>
     </div>
+  `;
+}
+
+/* ── Ce que devient un avis, d'un rapport au suivant ─────────────────────── */
+
+/**
+ * L'identité d'un rapport, dans l'encart commun aux familles.
+ *
+ * Le détail s'ouvrait sur une ligne de mesures en petites capitales — « 2 pages
+ * • 2 607 caractères • 0 avis » — sans dire de quel fichier ni de quel jour il
+ * parlait. Le compte rendu, lui, avait son encart depuis le début. Même geste,
+ * deux présentations : c'est la coquille qui est commune, et les faits qui sont
+ * propres à la famille.
+ */
+export function renderLidentiteDunRapport(vue = null) {
+  const lecture = vue?.lecture ?? null;
+  const conservee = vue?.conservee ?? null;
+  const mesures = lesMesuresDunRapport(lecture);
+
+  return renderLidentiteDunDocument({
+    faits: [
+      { quoi: "Fichier", valeur: texte(lecture?.nom) || texte(conservee?.document) || "—" },
+      { quoi: "Référence", valeur: texte(lecture?.identite?.numero)
+        || texte(conservee?.numero_de_rapport) || "non lue" },
+      { quoi: "Émis le", valeur: texte(lecture?.identite?.etabliLe)
+        || texte(conservee?.etabli_le) || "non lue" },
+      { quoi: "Pages", valeur: String(mesures.pages) },
+      { quoi: "Transcrit", valeur: `${mesures.caracteres} caractères` },
+      {
+        quoi: "Avis",
+        // **`null` n'est pas zéro.** « 0 avis » dit que le rapport n'en porte
+        // aucun ; « non relevés » dit que l'étape n'a pas eu lieu (règle 5).
+        valeur: mesures.avis === null ? "non relevés" : String(mesures.avis)
+      }
+    ],
+    reserve: !texte(lecture?.identite?.etabliLe) && !texte(conservee?.etabli_le)
+      ? "La date d'émission n'a pas été lue : sans elle, ce rapport ne se place pas "
+        + "dans la suite du dossier, et ses avis ne s'y suivent pas."
+      : ""
+  });
+}
+
+/** Ce qu'un rapport apporte à un avis, dans les mots et la couleur qui vont avec. */
+const CE_QUE_DIT_LETAPE = {
+  [CE_QUE_LE_RAPPORT_APPORTE.NEUF]: { mot: "Soulevé", ton: "neuf" },
+  [CE_QUE_LE_RAPPORT_APPORTE.RAPPEL]: { mot: "Redit", ton: "rappel" },
+  [CE_QUE_LE_RAPPORT_APPORTE.LEVE]: { mot: "Levé", ton: "leve" },
+  [CE_QUE_LE_RAPPORT_APPORTE.ROUVERT]: { mot: "Rouvert", ton: "rouvert" }
+};
+
+/** Le rapport d'une étape, nommé par sa référence quand elle a été lue. */
+function leRapportDeLetape(etape) {
+  const quand = texte(etape?.etabliLe);
+  const numero = texte(etape?.numero);
+  return [
+    numero ? `Rapport n° ${numero}` : texte(etape?.document) || "Rapport",
+    quand ? `du ${quand}` : ""
+  ].filter(Boolean).join(" ");
+}
+
+/** La pastille de vie d'un avis : les couleurs des sujets, pour la même notion. */
+function renderLaVieDunAvis(vie) {
+  const ferme = vie?.tone === "closed";
+  const icone = svgIcon(
+    ferme ? "check-circle" : vie === LA_VIE_DUN_AVIS.ROUVERT ? "issue-reopened" : "issue-opened",
+    { style: "color: #fff" }
+  );
+
+  return `<span class="gh-state ${ferme ? "gh-state--closed" : "gh-state--open"}">
+    <span class="gh-state-dot" aria-hidden="true">${icone}</span>${
+      escapeHtml(texte(vie?.label).replace(/^./, (une) => une.toLocaleUpperCase("fr")))}</span>`;
+}
+
+/** La frise d'un avis : chaque rapport qui en a parlé, dans l'ordre. */
+function renderLaFriseDunAvis(avis) {
+  return `
+    <li class="suite-avis__un">
+      <div class="suite-avis__tete">
+        ${renderLaVieDunAvis(avis.vie)}
+        <b class="suite-avis__reference">${escapeHtml(avis.reference)}</b>
+        <span class="suite-avis__intitule">${escapeHtml(avis.intitule || "sans intitulé")}</span>
+      </div>
+      ${avis.sansNouvelles ? `
+        <p class="suite-avis__perdu">
+          ${svgIcon("alert", { className: "octicon" })}
+          ${escapeHtml(`Sans nouvelles depuis le rapport du ${avis.depuis}. Aucun rapport
+            postérieur ne le reprend — ce n'est pas une levée, personne ne l'a refermé.`
+            .replace(/\s+/g, " "))}
+        </p>` : ""}
+      <ol class="suite-avis__frise">
+        ${avis.etapes.map((etape) => {
+          const dit = CE_QUE_DIT_LETAPE[etape.apporte] ?? CE_QUE_DIT_LETAPE.rappel;
+          return `
+            <li class="suite-avis__etape suite-avis__etape--${dit.ton}">
+              <span class="suite-avis__quoi">${escapeHtml(dit.mot)}</span>
+              <span class="suite-avis__appreciation suite-avis__appreciation--${
+                escapeHtml(etape.vaut)}">${escapeHtml(
+                  etape.sens || etape.marque || "le rapport ne tranche pas")}</span>
+              <span class="suite-avis__ou mono-small">${escapeHtml([
+                leRapportDeLetape(etape), texte(etape.ou)
+              ].filter(Boolean).join(" · "))}</span>
+              ${texte(etape.constat)
+                ? `<small class="suite-avis__constat">${escapeHtml(etape.constat)}</small>`
+                : ""}
+            </li>
+          `;
+        }).join("")}
+      </ol>
+    </li>
+  `;
+}
+
+/**
+ * Ce que devient chaque avis du chantier, d'un rapport au suivant.
+ *
+ * ## Ce que cela rend
+ *
+ * Le détail d'un rapport montrait les avis **de ce rapport-là**, et s'arrêtait
+ * là : « 23 suspendus » sans savoir si c'étaient les mêmes que le mois dernier,
+ * ni lesquels avaient été levés depuis. C'est la question qu'on vient poser à un
+ * dossier de bureau de contrôle, et elle ne vivait que dans l'utilitaire de
+ * suivi, qui relit le corpus entier à chaque ouverture.
+ *
+ * ## Elle ne conclut pas à la place du dossier
+ *
+ * Un avis dont plus personne ne parle est **sans nouvelles**, et non levé. Un
+ * rapport dont les avis n'ont pas été relevés ne fait taire personne : il n'a pas
+ * été interrogé. Les deux se disent (règle 5), parce que les confondre donne un
+ * dossier « 0 avis ouvert » obtenu par oubli.
+ *
+ * @param {object|null} suite ce que `laSuiteDesAvis` a rendu, ou `null`
+ * @param {object} options
+ * @param {number} [options.auPlus] combien d'avis au plus
+ */
+export function renderLaSuiteDesAvis(suite = null, { auPlus = 40 } = {}) {
+  if (suite === null) {
+    return `<p class="forme-manques">La suite des avis n'a pas pu être relue. Ce
+      n'est pas « ce chantier n'en a aucun » : la demande n'a pas abouti.</p>`;
+  }
+
+  const avis = liste(suite?.avis);
+  if (!avis.length) {
+    return `<p class="forme-manques">Aucun avis numéroté ne se suit encore : il faut
+      au moins un rapport dont les avis ont été relevés.</p>`;
+  }
+
+  const reserves = [
+    suite.muets?.length
+      ? `${suite.muets.length} rapport(s) lu(s) sans que leurs avis soient relevés : ils ne `
+        + `disent rien d'aucune référence.`
+      : "",
+    suite.sansDate?.length
+      ? `${suite.sansDate.length} rapport(s) sans date d'émission : ils ne se placent pas `
+        + `dans la suite.`
+      : "",
+    suite.sansReference
+      ? `${suite.sansReference} avis sans numéro : ils ne se suivent pas d'un rapport à `
+        + `l'autre, et restent dans la liste de leur rapport.`
+      : ""
+  ].filter(Boolean);
+
+  return `
+    <section class="suite-avis">
+      <h4 class="rapport-legende__titre">Ce que chaque avis est devenu</h4>
+      <p class="suite-avis__compte mono-small">${escapeHtml(phraseDeLaSuite(suite))}</p>
+      ${reserves.length
+        ? `<ul class="suite-avis__reserves">${reserves
+            .map((une) => `<li>${escapeHtml(une)}</li>`).join("")}</ul>`
+        : ""}
+      <ul class="suite-avis__liste">
+        ${avis.slice(0, auPlus).map(renderLaFriseDunAvis).join("")}
+      </ul>
+      ${avis.length > auPlus
+        ? `<p class="suite-avis__reste mono-small">${escapeHtml(
+            `Les ${auPlus} premiers, sur ${avis.length}.`)}</p>`
+        : ""}
+    </section>
   `;
 }

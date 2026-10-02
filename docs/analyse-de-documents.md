@@ -45,13 +45,34 @@ Elles ne se **lisent** pas pareil du tout, et c'est voulu :
 | famille | ce que le détail montre |
 |---|---|
 | Mails | les prises de position — qui a constaté quoi, qui s'est engagé, pour quand — puis les idées, puis le fil replié |
-| Bureau de Contrôle | les mesures, les trois étapes, la légende, les avis avec leur marque résolue, puis la transcription repliée |
+| Bureau de Contrôle | les trois étapes, la légende, les avis avec leur marque résolue, puis **ce que chaque avis est devenu** d'un rapport au suivant |
 | CR chantier | le chemin existant : la restitution en Markdown, les points relevés, leur confrontation aux sujets du chantier |
 
 Une vue commune aurait dit « 3 éléments » des trois, ce qui ne renseigne sur
 aucune. Un compte rendu a des points rapprochés des sujets ; un rapport a des avis
 et une légende ; un fil a des prises de position, qui n'existent nulle part
 ailleurs.
+
+### La coquille, elle, est la même
+
+Ce qui **entoure** le détail ne dépend pas de la famille, et divergeait pourtant :
+
+- **la flèche de retour** — elle était dans l'en-tête à côté du titre pour un
+  compte rendu rouvert, et sur une ligne à elle, au-dessus du nom du document,
+  pour les deux autres familles. Deux sorties pour un même geste ;
+- **l'encart « Le document »** — `views/ui/lidentite-dun-document.js`. Le détail
+  d'un rapport ouvrait sur une ligne de mesures en petites capitales — « 2 pages
+  • 2 607 caractères • 0 avis » — sans dire de quel fichier ni de quel jour il
+  parlait. Les faits, eux, restent propres à la famille : numéro et date de
+  réunion pour un compte rendu, référence et date d'émission pour un rapport ;
+- **la barre d'onglets** — `light-tabs`, la même qu'ailleurs. Un rapport en a
+  deux, Restitution et Analyse ; il n'a pas de Synthèse, parce qu'il ne relève
+  pas d'idées et qu'un onglet vide fait chercher ce qui manque (règle 5).
+
+La transcription en Markdown a ainsi quitté le `<details>` replié où elle
+terminait le détail. C'est le document que le modèle a relu pour relever les
+avis : c'est à lui qu'on confronte un avis qui surprend, et personne ne
+l'ouvrait.
 
 ### Une seule zone de dépôt, trois phrases
 
@@ -215,6 +236,59 @@ Les mots de la course viennent du registre — titre, phrase de clôture, nom de
 l'étape, pluriel de ce qu'on compte. « Lecture de 3 rapports de bureau de
 contrôle » et « Lecture de 3 comptes rendus de chantier » sont la même structure
 autour de deux entrées de `les-familles-de-document.js`.
+
+## Ce que devient un avis de bureau de contrôle
+
+Le détail d'un rapport montrait les avis **de ce rapport-là**, et s'arrêtait là :
+« 23 suspendus » sans savoir si c'étaient les mêmes qu'au rapport précédent, ni
+lesquels avaient été levés depuis. C'est pourtant la question qu'on pose à un
+dossier de contrôle, et elle ne vivait que dans l'utilitaire **Suivi des avis
+BC** — qui existe toujours, à l'Atelier, rayon Développements : il relit le
+corpus entier avec son moteur de continuité, et ce round ne lui retire rien.
+
+Ce que l'onglet Analyse pose maintenant sous les avis du rapport est reconstruit
+**à partir des lectures déjà conservées** (`le-devenir-dun-avis.js`). Rien n'est
+relu, rien n'est redemandé à un modèle : la chronologie et le devenir de chaque
+avis se déduisent de ce qui est en base.
+
+```
+les lectures de rapports du chantier
+  → rangées par date d'émission        (et non par date de lecture)
+  → chaque avis suivi par sa référence (et jamais par son intitulé)
+  → soulevé · redit · levé · rouvert   (étape par étape)
+  → ouvert · fermé · rouvert           (au bout du compte)
+```
+
+### Trois vocabulaires, et on ne les mélange pas
+
+C'est la leçon de l'ancien écran, reprise telle quelle : **l'appréciation**
+— favorable, suspendu, défavorable — est le jugement du bureau de contrôle et
+n'appartient qu'au document qui l'a écrit ; **ce qu'un rapport apporte** ne vaut
+que pour ce rapport-là ; **la vie de l'avis** dit s'il reste quelque chose à
+faire, et prend les couleurs des sujets Mdall. Un avis étiqueté « Levé » sur fond
+violet empruntait au deuxième vocabulaire la couleur du premier.
+
+Les tables qui classent une appréciation vivaient dans l'écran de suivi. Les deux
+écrans les tiennent maintenant du même module : deux tables auraient fini par
+ranger « NC » de deux façons, et c'est la vue la moins relue qui serait restée
+fausse (règle 4).
+
+### Ce qu'il refuse de conclure
+
+Deux conclusions de trop, et chacune donne un dossier « 0 avis ouvert » obtenu
+par oubli :
+
+- **un avis dont plus personne ne parle est sans nouvelles, pas levé.** Personne
+  ne l'a refermé ; il a cessé de paraître, ce qui est une question. Il est signalé
+  comme tel, avec la date du dernier rapport qui l'a dit ;
+- **un rapport dont les avis n'ont pas été relevés ne fait taire personne.**
+  L'étape n'a pas eu lieu : il n'a pas été interrogé. Les rapports muets se
+  comptent à part, comme ceux dont la date d'émission n'a pas été lue — qui ne
+  peuvent pas se placer dans la suite (règle 5).
+
+Un avis **sans numéro** ne se suit pas d'un rapport à l'autre : deux lignes qui se
+ressemblent dans deux rapports ne sont pas la même question, et les confondre
+inventerait une levée. Ils restent dans la liste de leur rapport, et se comptent.
 
 ## Ce qui n'est pas fait, et c'est dit à l'écran
 

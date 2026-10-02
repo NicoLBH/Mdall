@@ -63,6 +63,9 @@ import {
   laLigneDunRapport, laVueDunRapport
 } from "../../../services/la-lecture-dun-rapport.js";
 import { ETAPE } from "../../../services/le-parcours-dun-rapport.js";
+import {
+  LA_VIE_DUN_AVIS, ceQueVautLappreciation, laVieDunAvis
+} from "../../../services/le-devenir-dun-avis.js";
 import { leLotALire, phraseDesRapportsMuets } from "../../../services/lire-un-rapport.js";
 import {
   DEPUIS_FICHIERS, LA_ZONE, UN_FICHIER_LOCAL, brancherLaZoneDeDepot, renderLaZoneDeDepot
@@ -602,28 +605,13 @@ function formatDate(iso) {
  * peut avancer, orange en attente, rouge il faut reprendre, gris rien à faire,
  * bleu pour information. L'application n'en définissait aucune ; celles-ci
  * s'appuient sur ses jetons de statut.
+ *
+ * **Les tables elles-mêmes ont déménagé** dans `le-devenir-dun-avis.js`, qui est
+ * pur et éprouvé : l'écran d'analyse de documents suit maintenant les mêmes avis
+ * et doit les classer pareil. Deux tables auraient fini par ranger « NC » de deux
+ * façons, et c'est la vue la moins relue qui serait restée fausse (règle 4).
  */
-const OPINION_TONES = {
-  F: "ok",
-  C: "ok",
-  SO: "neutral",
-  HM: "neutral",
-  PM: "info",
-  S: "pending",
-  D: "danger",
-  NC: "danger"
-};
-
-const OPINION_LABEL_TONES = {
-  FAVORABLE: "ok",
-  CONFORME: "ok",
-  "SANS OBJET": "neutral",
-  "HORS MISSION": "neutral",
-  "POUR MEMOIRE": "info",
-  SUSPENDU: "pending",
-  DEFAVORABLE: "danger",
-  "NON CONFORME": "danger"
-};
+const opinionTone = ceQueVautLappreciation;
 
 /**
  * Deux pictogrammes que le sprite de l'application ne porte pas, parce qu'ils
@@ -778,34 +766,17 @@ function avisRowMeta({ reference, code, label, page, raisedAt, ageMonths, notes 
  *
  * Un avis étiqueté « Levé » sur fond violet empruntait au deuxième vocabulaire
  * la couleur du premier.
+ *
+ * **La règle vit dans `le-devenir-dun-avis.js`**, avec les tables
+ * d'appréciation : le détail d'un rapport la pose maintenant sur les mêmes avis.
  */
 const LIFECYCLE = {
-  OPEN: { label: "ouvert", tone: "open" },
-  CLOSED: { label: "fermé", tone: "closed" },
-  REOPENED: { label: "réouvert", tone: "open" }
+  OPEN: LA_VIE_DUN_AVIS.OUVERT,
+  CLOSED: LA_VIE_DUN_AVIS.FERME,
+  REOPENED: LA_VIE_DUN_AVIS.ROUVERT
 };
 
-/**
- * Où en est un avis, qu'il porte un numéro ou non.
- *
- * Le tableau « Où en est-on » ne suit que les avis numérotés, et tenait leur
- * état du moteur de continuité. L'onglet « Avis » les montre tous, et n'en
- * affichait aucun : la même ligne y paraissait sans état, comme si
- * l'information manquait — alors qu'elle se lit dans l'appréciation elle-même.
- *
- * Un avis favorable, sans objet, hors mission ou pour mémoire n'appelle aucune
- * action : il est clos dès sa première écriture. Seuls suspendu, défavorable et
- * non conforme laissent quelque chose d'ouvert. Un avis sans nouvelles, lui,
- * n'a jamais été refermé : personne n'en a rien dit, et il reste ouvert.
- */
-export function avisLifecycle(code, label, status = null, reopened = false) {
-  if (status === "RESOLVED") return LIFECYCLE.CLOSED;
-  if (status === "OPEN" || status === "NO_NEWS") return reopened ? LIFECYCLE.REOPENED : LIFECYCLE.OPEN;
-
-  const tone = opinionTone(code, label);
-  const settled = tone !== "pending" && tone !== "danger" && tone !== "unknown";
-  return settled ? LIFECYCLE.CLOSED : LIFECYCLE.OPEN;
-}
+export const avisLifecycle = laVieDunAvis;
 
 /**
  * Les avis qu'un rapport a rouverts.
@@ -898,18 +869,6 @@ export function titleCase(value) {
   // première lettre se relève.
   const text = String(value ?? "").toLocaleLowerCase("fr");
   return text.length === 0 ? text : text[0].toLocaleUpperCase("fr") + text.slice(1);
-}
-
-function opinionTone(code, label = null) {
-  const byCode = OPINION_TONES[String(code ?? "").toUpperCase()];
-  if (byCode) return byCode;
-
-  // Un rapport lu ligne à ligne écrit le libellé en toutes lettres, sans code.
-  const key = String(label ?? code ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toUpperCase();
-  return OPINION_LABEL_TONES[key] ?? "unknown";
 }
 
 /**

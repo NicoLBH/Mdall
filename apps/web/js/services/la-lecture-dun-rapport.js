@@ -89,6 +89,21 @@ export const LE_SELECT_DUNE_LIGNE_DE_RAPPORT =
   + "mesures,lu_par,proposition_id,created_at";
 
 /**
+ * Les colonnes qu'il faut pour **suivre un avis d'un rapport au suivant**.
+ *
+ * Ce sont celles du tableau, plus les avis seuls — `analyse_gelee->lecture->avis`,
+ * et non l'analyse entière. La frise d'un chantier de cent rapports demanderait
+ * sinon cent transcriptions complètes sur le réseau pour en lire les numéros.
+ *
+ * **L'alias importe.** La colonne arrive sous le nom `avis`, et c'est celui que
+ * `le-devenir-dun-avis.js` lit : une lecture tirée par ce select et une lecture
+ * gelée entière doivent donner la même frise (règle 4).
+ */
+export const LE_SELECT_DES_AVIS_DUN_RAPPORT =
+  "id,project_id,document,numero_de_rapport,etabli_le,legende,created_at,"
+  + "avis:analyse_gelee->lecture->avis";
+
+/**
  * Une entrée de légende, ramenée à ce qui se lit.
  *
  * Une marque sans signification n'explique rien ; une signification sans marque
