@@ -219,12 +219,17 @@ test("les quatre gestes du choix sont branchés dans l'Atelier", () => {
   // Une marque posée sans écouteur fait exactement ce que fait une marque
   // absente : rien, sans erreur et sans rien pour le dire.
   for (const marque of [
-    "data-lecture-cr-depuis-fichiers", "data-choisir-fermer",
-    "data-choisir-dossier", "data-choisir-document"
+    "data-choisir-fermer", "data-choisir-dossier", "data-choisir-document"
   ]) {
     const ou = ATELIER.indexOf(`[${marque}]`);
     assert.notEqual(ou, -1, `${marque} n'est pas écouté`);
   }
+
+  // **Le quatrième porte un nom, et non une chaîne.** L'attribut du choix depuis
+  // Fichiers est déclaré par la zone de dépôt commune, et l'écran l'écoute par la
+  // constante qu'elle exporte — c'est ce qui garantit qu'il écoute bien celui que
+  // la zone pose (règle 10).
+  assert.match(ATELIER, /closest\(`\[\$\{DEPUIS_FICHIERS\}\]`\)/);
 
   // Et le clic est **délégué sur l'hôte** : la liste se réécrit à chaque
   // dossier ouvert, donc des écouteurs posés sur les lignes mourraient avec
@@ -242,12 +247,15 @@ test("les quatre gestes du choix sont branchés dans l'Atelier", () => {
  * `views/studio/dev/lecture-des-cr.test.mjs`, où l'écran se **dessine**.
  */
 
-test("le bouton mène au choix depuis les deux endroits", () => {
-  // La zone de dépôt quand rien n'est ouvert, l'en-tête quand un document l'est
-  // — sans quoi il faudrait fermer sa lecture pour en choisir une autre.
-  const boutons = ATELIER.match(/data-lecture-cr-depuis-fichiers>/g) ?? [];
-  assert.equal(boutons.length, 2, "la zone de dépôt et l'en-tête");
-});
+/**
+ * **Celle-ci est partie chez l'écran.**
+ *
+ * Elle comptait deux fois la chaîne `data-lecture-cr-depuis-fichiers>` dans le
+ * source. Le bouton de la zone de dépôt vit maintenant dans le composant commun :
+ * l'occurrence a disparu du fichier sans que rien ne disparaisse de l'écran, et
+ * un compte d'occurrences aurait été rouge pour une raison fausse. Elle se
+ * vérifie où l'écran se **dessine**, dans `views/studio/dev/lecture-des-cr.test.mjs`.
+ */
 
 /* ── Choisir plusieurs comptes rendus d'un coup ───────────────────────────── */
 

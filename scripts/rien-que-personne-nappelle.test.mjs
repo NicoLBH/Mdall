@@ -58,7 +58,9 @@ const LES_MODULES_SOUS_GARDE = [
   "apps/web/js/services/le-parcours-dun-rapport.js",
   "apps/web/js/services/lire-un-rapport.js",
   "apps/web/js/services/lectures-de-rapports-supabase.js",
-  "apps/web/js/views/ui/les-rapports-lus.js"
+  "apps/web/js/views/ui/les-rapports-lus.js",
+  // La zone de dépôt commune, qui porte maintenant son dessin et son branchement.
+  "apps/web/js/views/ui/zone-de-depot.js"
 ];
 
 /** Où l'on cherche les appels. Les tests n'en sont pas : ils appellent tout. */

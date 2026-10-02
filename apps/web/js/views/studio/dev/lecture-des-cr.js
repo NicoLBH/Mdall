@@ -40,7 +40,10 @@ import { motDeLEcart } from "../../../services/suivi-des-lectures.js";
 // durée finiraient par ne plus s'accorder, et « 1 min 30 » ici contre « 90 s »
 // là ferait douter du chiffre (règle 10).
 import { formatStepDuration } from "../../../services/run-workflow.js";
-import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.js";
+import {
+  DEPUIS_FICHIERS, LA_ZONE, UN_FICHIER_LOCAL, brancherLaZoneDeDepot,
+  renderLaZoneDeDepot, trierLesFichiers
+} from "../../ui/zone-de-depot.js";
 import { brancherLesBoutonsCopier, renderBoutonCopier } from "../../ui/bouton-copier.js";
 import {
   EFFETS_DU_SORT, MANQUE, PAR, PHRASES_DU_MANQUE, PHRASES_DU_PAR, PHRASES_DU_SORT, SORT,
@@ -562,7 +565,11 @@ export function renderLaLecture(vue = etat) {
           ? renderChoisirUnFichier({
             ...vue.choix,
             choisis: vue.coches,
-            connues: [...(vue.connues?.values?.() ?? [])]
+            connues: [...(vue.connues?.values?.() ?? [])],
+            // Les mots sont ceux de cet écran-ci : le composant est partagé avec
+            // le suivi des avis, qui lit des rapports et n'ouvre aucune
+            // proposition.
+            quoi: { un: "compte rendu", plusieurs: "comptes rendus" }
           })
           : renderDepot(vue)}
       ${vue.choix ? "" : renderLesComptesRendusLus(vue)}
@@ -624,9 +631,9 @@ function renderEntete(vue = etat) {
               : vue.fichier
               ? `<label class="gh-btn gh-btn--sm lecture-cr__entete-fichier">
                    ${svgIcon("file", { className: "octicon" })} Un autre document
-                   <input type="file" accept="${escapeHtml(ACCEPTE)}" hidden data-lecture-cr-fichier>
+                   <input type="file" accept="${escapeHtml(ACCEPTE)}" hidden ${UN_FICHIER_LOCAL}>
                  </label>
-                 <button type="button" class="gh-btn gh-btn--sm" data-lecture-cr-depuis-fichiers>
+                 <button type="button" class="gh-btn gh-btn--sm" ${DEPUIS_FICHIERS}>
                    ${svgIcon("file-directory", { className: "octicon" })} Depuis Fichiers
                  </button>`
               : ""
@@ -753,33 +760,13 @@ function renderDepot(vue) {
         <p class="lecture-cr__parti-mot">${escapeHtml(vue.lance)}</p>
       </div>
     ` : ""}
-    <div class="lecture-cr__depot${enLecture ? " is-occupee" : ""}" data-lecture-cr-zone>
-      ${enLecture ? `
-        <p class="lecture-cr__depot-mot">Un document est en cours de lecture.</p>
-      ` : `
-        <span class="lecture-cr__depot-icone" aria-hidden="true">${svgIcon("file", { className: "octicon" })}</span>
-        <p class="lecture-cr__depot-mot">Déposez un compte rendu, ou choisissez-le.</p>
-        <p class="lecture-cr__depot-aide mono-small">
-          Un PDF, ou un document déjà écrit en texte — <code>.md</code>, <code>.txt</code>.
-          Le second se lit sans extraction ni restitution : aucun appel au modèle pour le relire.
-        </p>
-        <span class="lecture-cr__depot-gestes">
-          <label class="gh-btn gh-btn--sm lecture-cr__depot-choix">
-            Choisir un document
-            <input type="file" accept="${escapeHtml(ACCEPTE)}" hidden data-lecture-cr-fichier>
-          </label>
-          ${/*
-            **On descend chercher dans Fichiers, on n'en remonte rien.** Le
-            document est déjà déposé : le ressortir de son dossier pour le
-            redéposer ferait un second exemplaire du même compte rendu, et c'est
-            le genre de doublon qu'on ne remarque qu'au vingtième.
-          */""}
-          <button type="button" class="gh-btn gh-btn--sm" data-lecture-cr-depuis-fichiers>
-            Choisir depuis Fichiers
-          </button>
-        </span>
-      `}
-    </div>
+    ${renderLaZoneDeDepot({
+      occupee: enLecture,
+      mot: "Déposez un compte rendu, ou choisissez-le.",
+      aide: "Un PDF, ou un document déjà écrit en texte — <code>.md</code>, <code>.txt</code>. "
+        + "Le second se lit sans extraction ni restitution : aucun appel au modèle pour le relire.",
+      accepte: ACCEPTE
+    })}
   `;
 }
 
@@ -2973,7 +2960,7 @@ let detacher = null;
  */
 function brancher(hote) {
   if (!hote) return;
-  const zone = hote.querySelector("[data-lecture-cr-zone]");
+  const zone = hote.querySelector(`[${LA_ZONE}]`);
 
   detacher?.();
 
@@ -2987,7 +2974,7 @@ function brancher(hote) {
   // se redessine à chaque case cochée.
   if (etat.dejaLus === null && !etat.dejaLusEnCours) void chargerLesLecturesGardees(hote);
 
-  const champ = hote.querySelector("[data-lecture-cr-fichier]");
+  const champ = hote.querySelector(`[${UN_FICHIER_LOCAL}]`);
   const surLeChamp = (evenement) => {
     const fichier = evenement.target?.files?.[0];
     if (fichier) void lire(hote, fichier);
@@ -3015,7 +3002,7 @@ function brancher(hote) {
       return;
     }
 
-    if (cible.closest("[data-lecture-cr-depuis-fichiers]")) {
+    if (cible.closest(`[${DEPUIS_FICHIERS}]`)) {
       void ouvrirLeChoix(hote, "");
       return;
     }
@@ -4538,13 +4525,13 @@ function renderEcranEnPanne(erreur) {
           redéposer ne changerait rien. Le détail est dans la console du navigateur.
         </p>
       </section>
-      <div class="lecture-cr__depot" data-lecture-cr-zone>
-        <p class="lecture-cr__depot-mot">Déposez un autre compte rendu, ou choisissez-le.</p>
-        <label class="gh-btn gh-btn--sm lecture-cr__depot-choix">
-          Choisir un document
-          <input type="file" accept="${escapeHtml(ACCEPTE)}" hidden data-lecture-cr-fichier>
-        </label>
-      </div>
+      ${renderLaZoneDeDepot({
+        mot: "Déposez un autre compte rendu, ou choisissez-le.",
+        accepte: ACCEPTE,
+        // L'écran n'a pas pu s'afficher : son choix depuis Fichiers n'est pas
+        // branché non plus, et un bouton qui ne fait rien est pire qu'absent.
+        depuisFichiers: false
+      })}
     </div>
   `;
 }

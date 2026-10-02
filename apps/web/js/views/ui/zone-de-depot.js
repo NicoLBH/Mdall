@@ -1,5 +1,5 @@
 /**
- * Déposer des fichiers en les faisant glisser.
+ * La zone de dépôt : son dessin, et le glisser-déposer qui va avec.
  *
  * ## Pourquoi un composant pour vingt lignes
  *
@@ -28,6 +28,112 @@
  * rend la liste déposée. Qui appelle décide de ce qu'un fichier acceptable
  * veut dire — un PDF ici, une image ailleurs.
  */
+
+import { escapeHtml } from "../../utils/escape-html.js";
+import { svgIcon } from "../../ui/icons.js";
+
+const texte = (valeur) => String(valeur ?? "").trim();
+
+/** La zone elle-même : c'est elle qu'on branche au glisser-déposer. */
+export const LA_ZONE = "data-zone-de-depot";
+
+/** Le champ de fichiers, caché derrière son intitulé. */
+export const UN_FICHIER_LOCAL = "data-zone-fichier";
+
+/** Le bouton qui ouvre les documents déjà rangés dans le projet. */
+export const DEPUIS_FICHIERS = "data-zone-depuis-fichiers";
+
+/**
+ * Le dessin de la zone, pour tous les écrans qui en ont une.
+ *
+ * ## Pourquoi il rejoint le branchement, et ne vit pas à côté
+ *
+ * Le glisser-déposer était ici depuis trois rounds ; le dessin, lui, était écrit
+ * trois fois dans le lecteur de comptes rendus, sous ses propres classes. Tout
+ * autre écran devait donc emprunter les classes d'un voisin — ce qui se lit mal
+ * et se maintient encore plus mal — ou s'en refaire une, qui aurait dérivé au
+ * premier ajustement (règle 4). Le suivi des avis de bureau de contrôle en avait
+ * besoin, et c'est exactement le même geste.
+ *
+ * Les deux moitiés d'une même chose vivent donc au même endroit, et les attributs
+ * par lesquels l'écran reconnaît les gestes sont nommés une fois : deux écrans
+ * qui écriraient le leur finiraient par n'en traiter qu'un (règle 10).
+ *
+ * ## Les deux portes, et pourquoi il en faut deux
+ *
+ * **Depuis l'ordinateur** : le document qu'on vient de recevoir, qui n'est nulle
+ * part encore.
+ *
+ * **Depuis Fichiers** : celui qui est déjà dans le projet. On descend l'y
+ * chercher, on n'en remonte rien — le ressortir de son dossier pour le redéposer
+ * ferait un second exemplaire du même document, et c'est le genre de doublon
+ * qu'on ne remarque qu'au vingtième.
+ *
+ * @param {object} quoi
+ * @param {string} [quoi.mot] la phrase principale — ce qu'on attend ici
+ * @param {string} [quoi.aide] ce qu'elle accepte, et ce que cela coûte. **Du HTML**,
+ *   parce que les écrans y écrivent des `<code>` ; à qui l'appelle de l'échapper.
+ * @param {string} [quoi.accepte] la liste d'extensions du champ de fichiers
+ * @param {boolean} [quoi.plusieurs] plusieurs documents à la fois
+ * @param {boolean} [quoi.occupee] une lecture est en cours : la zone se tait
+ * @param {string} [quoi.motOccupee] ce qu'elle dit alors
+ * @param {string} [quoi.choisirDit] l'intitulé du bouton de l'ordinateur
+ * @param {boolean} [quoi.depuisFichiers] offrir la seconde porte
+ * @param {string} [quoi.icone] l'icône posée au-dessus
+ */
+export function renderLaZoneDeDepot({
+  mot = "",
+  aide = "",
+  accepte = "",
+  plusieurs = false,
+  occupee = false,
+  motOccupee = "Un document est en cours de lecture.",
+  choisirDit = "Choisir un document",
+  depuisFichiers = true,
+  icone = "file"
+} = {}) {
+  /**
+   * **Occupée, elle garde son attribut.**
+   *
+   * Le branchement du glisser-déposer cherche la zone par cet attribut au
+   * redessin : la lui retirer pendant une lecture ferait qu'au retour, plus rien
+   * ne serait branché — et le dépôt par glisser cesserait de marcher sans que
+   * rien ne le dise. C'est `actif()` qui refuse le dépôt, pas l'absence de zone.
+   */
+  if (occupee) {
+    return `
+      <div class="zone-de-depot is-occupee" ${LA_ZONE}>
+        <p class="zone-de-depot__mot">${escapeHtml(texte(motOccupee))}</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="zone-de-depot" ${LA_ZONE}>
+      <span class="zone-de-depot__icone" aria-hidden="true">${
+        svgIcon(texte(icone) || "file", { className: "octicon" })}</span>
+      <p class="zone-de-depot__mot">${escapeHtml(texte(mot))}</p>
+      ${aide ? `<p class="zone-de-depot__aide mono-small">${aide}</p>` : ""}
+      <span class="zone-de-depot__gestes">
+        ${/*
+          **Un `label`, et non un bouton.** Le champ de fichiers est caché : c'est
+          l'intitulé qui l'ouvre, et un bouton demanderait du script pour faire ce
+          que le navigateur fait seul.
+        */""}
+        <label class="gh-btn gh-btn--sm zone-de-depot__choix">
+          ${escapeHtml(texte(choisirDit))}
+          <input type="file" accept="${escapeHtml(texte(accepte))}"${
+            plusieurs ? " multiple" : ""} hidden ${UN_FICHIER_LOCAL}>
+        </label>
+        ${depuisFichiers
+          ? `<button type="button" class="gh-btn gh-btn--sm" ${DEPUIS_FICHIERS}>
+              Choisir depuis Fichiers
+            </button>`
+          : ""}
+      </span>
+    </div>
+  `;
+}
 
 /**
  * Brancher une zone de dépôt.

@@ -151,6 +151,59 @@ leur date, leur lecteur et leurs nombres, parce que c'est en comparant deux
 lectures qu'on voit si une consigne a fait mieux — « 42 avis » ne dit rien tant
 qu'on ne sait pas que la précédente en donnait 11.
 
+## La porte, et la zone qui avait disparu
+
+L'écran n'avait plus de zone de dépôt. Elle avait été retirée au nom d'**une
+seule porte** : les documents entrent par l'onglet Documents, une proposition les
+soumet, quelqu'un l'accepte.
+
+La règle est juste — pour le **corpus**, qui devient la mémoire du chantier. Mais
+lire un rapport n'est pas le verser. Sans zone, il fallait d'abord faire entrer un
+rapport au corpus pour avoir le droit de le lire, c'est-à-dire l'inverse de
+l'ordre naturel : on lit pour décider si cela vaut d'entrer. Le lecteur de comptes
+rendus n'a jamais eu ce défaut, et les deux écrans font le même geste.
+
+La zone est donc revenue, avec ses deux portes — **depuis l'ordinateur** pour le
+rapport qu'on vient de recevoir, **depuis Fichiers** pour celui qui est déjà dans
+le projet, qu'on descend chercher sans en remonter un second exemplaire. Et elle
+dit ce qu'elle ne fait pas : les rapports sont lus ici, les déposer n'ajoute rien
+au corpus, et rien n'entre en mémoire.
+
+### Une seule zone pour les deux écrans
+
+Elle était écrite trois fois dans le lecteur de comptes rendus, sous ses propres
+classes `lecture-cr__depot*`. Tout autre écran devait donc emprunter les classes
+d'un voisin, ou s'en refaire une qui aurait dérivé au premier ajustement
+(règle 4).
+
+Le dessin a rejoint le **branchement** du glisser-déposer, qui vivait déjà dans
+`views/ui/zone-de-depot.js` : les deux moitiés d'une même chose au même endroit,
+et les attributs nommés une fois — deux écrans qui écriraient le leur finiraient
+par n'en traiter qu'un (règle 10).
+
+Mettre les deux côte à côte a montré un défaut que ni l'un ni l'autre ne
+montrait seul : l'aide, plus claire et plus dense que la consigne, se lisait comme
+le titre, et la consigne comme une note de bas de page. Les deux écrans y gagnent.
+
+Le composant de choix dans Fichiers a dû cesser de nommer un écran : son bouton
+disait « Lire 19 comptes rendus » et sa phrase parlait de propositions à signer.
+Le suivi des avis lit des **rapports** et n'ouvre **aucune** proposition. Les mots
+viennent maintenant de qui appelle, et les valeurs par défaut sont neutres plutôt
+que celles du premier arrivé — un défaut qui dit « compte rendu » se serait glissé
+dans l'autre écran sans que rien ne le dise.
+
+### Le défaut qu'aucun rendu ne peut dire
+
+Une zone dessinée que personne ne branche se voit, s'ouvre au clic, et refuse le
+glisser-déposer **en silence** : le navigateur ouvre alors le PDF dans un onglet,
+et la page est perdue avec ce qui s'y écrivait. La batterie l'a montré — remplacer
+l'attribut cherché par un ancien nom ne faisait tomber aucune épreuve.
+
+Une épreuve lit donc le source des deux écrans et exige que chacun qui **dessine**
+la zone la **branche**, par la constante et non par une chaîne. Elle compte aussi
+les écrans qu'elle a lus : sans ce compte, une liste devenue fausse la rendrait
+verte en ne vérifiant plus rien.
+
 ## Ce que la lecture fait, et ce qu'un échec laisse
 
 Les trois appels sont **passés** à l'orchestrateur, jamais faits par lui. C'est ce
