@@ -2262,10 +2262,12 @@ test("l'accueil liste les comptes rendus déjà analysés", () => {
     })]
   }));
 
-  assert.match(html, /2 comptes rendus\s*\n?\s*déjà analysés/);
+  // La vue d'ensemble compte des **documents** : « 2 tous les documents analysés »
+  // ne se dit pas, et « 2 comptes rendus » serait faux dès qu'un mail s'y ajoute.
+  assert.match(html, /2 documents analysés/);
   assert.match(html, commeAffichee("1824_CR_12.pdf"));
   assert.match(html, commeAffichee("1824_CR_15.pdf"));
-  assert.match(html, /data-lecture-cr-gardee="l-1"/);
+  assert.match(html, /data-document-analyse="cr:l-1"/);
 });
 
 /**
@@ -2274,14 +2276,99 @@ test("l'accueil liste les comptes rendus déjà analysés", () => {
  * n'a jamais été lu — et l'on relancerait dix-neuf lectures déjà payées.
  */
 test("tant qu'on ne sait pas, l'accueil ne dit pas « aucun »", () => {
+  // Trois états, et non deux : on n'a pas encore demandé, on attend, on n'a pas su.
   const rien = renderLaLecture(unEtat({ dejaLus: null, dejaLusEnCours: false }));
-  assert.doesNotMatch(rien, /déjà analysé/);
+  // Le tableau ne se dessine pas du tout : ni compte, ni état vide, ni panne.
+  assert.doesNotMatch(rien, /documents-analyses__table/);
+  assert.doesNotMatch(rien, /Rien n&#39;a encore été analysé/);
+  assert.doesNotMatch(rien, /data-document-analyse/);
 
   const charge = renderLaLecture(unEtat({ dejaLus: null, dejaLusEnCours: true }));
-  assert.match(charge, /déjà analysés/);
+  assert.match(charge, /Lecture de ce qui a déjà été analysé/);
 
-  const aucun = renderLaLecture(unEtat({ dejaLus: [] }));
-  assert.doesNotMatch(aucun, /déjà analysé/);
+  const rate = renderLaLecture(unEtat({ dejaLus: null, dejaLusRate: true }));
+  assert.match(rate, /n'a pas pu\s*\n?\s*être lu/);
+  assert.match(rate, /on ne sait pas quoi/);
+
+  // Rien d'analysé se dit, et nomme la famille : c'est l'état vide du tableau.
+  const aucun = renderLaLecture(unEtat({ dejaLus: [], dejaLusMails: [], dejaLusControles: [] }));
+  assert.match(aucun, /Rien n&#39;a encore été analysé sur ce chantier/);
+});
+
+test("l'écran porte le rail des familles, et il enveloppe tout", () => {
+  const html = renderLaLecture(unEtat({ dejaLus: [uneLigneGardee()] }));
+
+  // Les quatre entrées, dans l'ordre par lequel les documents arrivent.
+  for (const quoi of ["toutes", "mail", "controle", "cr"]) {
+    assert.match(html, new RegExp(`data-famille-analysee="${quoi}"`), quoi);
+  }
+
+  // **La coque enveloppe l'écran entier.** Le rail est en `position:fixed` contre
+  // le bord gauche : posé à l'intérieur, sous l'en-tête, il remontait par-dessus
+  // le titre, qui se lisait à travers lui.
+  const coque = html.indexOf("project-rail-layout");
+  const entete = html.indexOf("lecture-cr__entete");
+  assert.ok(coque > 0 && coque < entete, "le rail doit précéder l'en-tête");
+  assert.match(html, /--project-rail-width:/);
+});
+
+test("le rail filtre, et chaque famille compte dans ses propres mots", () => {
+  const trois = {
+    dejaLus: [uneLigneGardee()],
+    dejaLusMails: [{
+      id: "f-1", objet: "Reprise des enduits", finit_le: "2026-03-02",
+      created_at: "2026-03-03T10:00:00Z", mesures: { messages: 7, prises: 3 }
+    }],
+    dejaLusControles: [{
+      id: "r-1", document: "RICT-03.pdf", numero_de_rapport: "RICT-03",
+      etabli_le: "2026-04-18", created_at: "2026-04-19T10:00:00Z",
+      mesures: { avis: 12, marques: 4 }
+    }]
+  };
+
+  const toutes = renderLaLecture(unEtat(trois));
+  assert.match(toutes, /3 documents analysés/);
+  assert.match(toutes, commeAffichee("Reprise des enduits"));
+  assert.match(toutes, /RICT-03\.pdf/);
+
+  const mails = renderLaLecture(unEtat({ ...trois, famille: "mail" }));
+  assert.match(mails, /1 fil analysé/);
+  assert.doesNotMatch(mails, /RICT-03\.pdf/);
+
+  const controle = renderLaLecture(unEtat({ ...trois, famille: "controle" }));
+  assert.match(controle, /1 rapport analysé/);
+  assert.doesNotMatch(controle, commeAffichee("Reprise des enduits"));
+
+  const crs = renderLaLecture(unEtat({ ...trois, famille: "cr" }));
+  assert.match(crs, /1 compte rendu analysé/);
+  assert.doesNotMatch(crs, /RICT-03\.pdf/);
+});
+
+test("sous une autre famille, le dépôt des CR s'efface et dit où lire", () => {
+  // Une zone qui dit « Déposez un compte rendu » sous « Bureau de Contrôle »
+  // contredit le rail, et déposer un rapport y lancerait une lecture de compte
+  // rendu — pire qu'un bouton absent.
+  const bc = renderLaLecture(unEtat({ dejaLus: [], famille: "controle" }));
+  assert.doesNotMatch(bc, /Déposez un compte rendu/);
+  assert.match(bc, /Suivi des avis BC/);
+
+  const mails = renderLaLecture(unEtat({ dejaLus: [], famille: "mail" }));
+  assert.match(mails, commeAffichee("Lecture d'un fil de mails"));
+
+  // Et sous les comptes rendus, le dépôt est bien là.
+  const crs = renderLaLecture(unEtat({ dejaLus: [], famille: "cr" }));
+  assert.match(crs, /Déposez un compte rendu/);
+  const toutes = renderLaLecture(unEtat({ dejaLus: [] }));
+  assert.match(toutes, /Déposez un compte rendu/);
+});
+
+test("une famille vide dit laquelle, et quoi faire", () => {
+  const html = renderLaLecture(unEtat({
+    dejaLus: [uneLigneGardee()], dejaLusMails: [], dejaLusControles: [], famille: "mail"
+  }));
+
+  assert.match(html, /Aucun fil de mails analysé/);
+  assert.match(html, /depuis Fichiers/);
 });
 
 /** La liste n'est qu'à l'accueil : sous une lecture, elle ferait doublon. */
@@ -2289,7 +2376,7 @@ test("la liste des comptes rendus lus ne s'affiche pas sous une lecture", () => 
   const html = renderLaLecture(unEtat({
     phase: "lue", lecture: uneLecture(), pagesLues: PAGES, dejaLus: [uneLigneGardee()]
   }));
-  assert.doesNotMatch(html, /data-lecture-cr-gardee/);
+  assert.doesNotMatch(html, /data-document-analyse/);
 });
 
 /** Un compte rendu relu ne compte qu'une fois, et la ligne le dit. */
@@ -2301,10 +2388,10 @@ test("deux lectures du même compte rendu font une ligne, et l'annoncent", () =>
     ]
   }));
 
-  assert.match(html, /1 compte rendu\s*\n?\s*déjà analysé/);
+  assert.match(html, /1 document analysé/);
   assert.match(html, /2 lectures/);
   // C'est la plus récente qu'on ouvre.
-  assert.match(html, /data-lecture-cr-gardee="l-2"/);
+  assert.match(html, /data-document-analyse="cr:l-2"/);
 });
 
 /**
