@@ -63,6 +63,7 @@ import {
   laLigneDunRapport, laVueDunRapport
 } from "../../../services/la-lecture-dun-rapport.js";
 import { ETAPE } from "../../../services/le-parcours-dun-rapport.js";
+import { leCorpusDuSuivi, phraseDuCorpus } from "../../../services/le-corpus-du-suivi.js";
 import {
   LA_VIE_DUN_AVIS, ceQueVautLappreciation, laVieDunAvis
 } from "../../../services/le-devenir-dun-avis.js";
@@ -314,11 +315,19 @@ function renderMemory(state) {
            au ${escapeHtml(formatDate(run.computed_at))}${vocabulaire ? ` — lu par ${escapeHtml(vocabulaire)}` : ""}.
          </li>`
       : "",
+    /**
+     * **D'où vient ce lot.** Il venait d'une seule porte — la famille reconnue
+     * au dépôt — et les rapports lus par Analyse de documents n'y entraient pas :
+     * le corpus était vide sur les chantiers d'aujourd'hui, et tout cet écran
+     * avec lui. La phrase dit les deux portes, et dit quand le lot est incomplet.
+     */
     stored.length > 0
-      ? `<li>${stored.length} livrable(s) du bureau de contrôle enregistré(s) dans ce projet.</li>`
+      ? `<li>${escapeHtml(phraseDuCorpus(state.stored?.corpus)
+          || `${stored.length} livrable(s) du bureau de contrôle dans ce projet.`)}</li>`
       : `<li>
-           Aucun livrable du bureau de contrôle n'est encore au corpus de ce projet.
-           Déposez-les dans l'onglet Documents, puis acceptez la proposition qui les porte.
+           Aucun rapport de bureau de contrôle n'est encore au corpus de ce projet.
+           Lisez-en depuis <b>Analyse de documents</b>, ou déposez-les dans l'onglet
+           Documents puis acceptez la proposition qui les porte.
          </li>`,
     ...(change?.lines ?? [])
   ].filter(Boolean);
@@ -335,11 +344,18 @@ function renderMemory(state) {
       <ul>${lignes.join("")}</ul>
       ${stored.length > 0
         ? `<div class="ctlab__drop-actions">
+             ${/*
+               L'autre bout du chemin : c'est là qu'on lit un rapport et qu'on
+               regarde ses avis un par un. Cet écran-ci répond d'un dossier.
+             */""}
+             <button type="button" class="gh-btn gh-btn--sm" data-side-nav-target="dev-lecture-cr">
+               Lire un rapport
+             </button>
              <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-ctlab-resume>
                ${
                  change?.stale
                    ? "Mettre à jour l'analyse"
-                   : `Reprendre les ${stored.length} livrable(s) enregistré(s)`
+                   : `Analyser les ${stored.length} rapport(s) du chantier`
                }
              </button>
            </div>`
@@ -4075,15 +4091,36 @@ export function renderCtContinuityLab(root) {
       // Le corpus accepté, et lui seul : un document en attente de jugement dans
       // une proposition ouverte ne fait pas encore partie du projet, et le lire
       // ici reviendrait à le faire entrer sans que personne l'ait accepté.
-      const documents = await listProjectDocuments(projectId, {
-        kind: CT_REPORT_KIND,
-        corpusState: "accepted"
+      const [parLaFamille, documentsDuProjet] = await Promise.all([
+        listProjectDocuments(projectId, { kind: CT_REPORT_KIND, corpusState: "accepted" }),
+        /**
+         * **Tous les documents du projet, pour y retrouver ceux qu'une lecture
+         * nomme.** Une lecture conservée porte l'identifiant de son document,
+         * pas sa ligne : sans elle, ni casier ni chemin, donc rien à relire.
+         */
+        listProjectDocuments(projectId, { corpusState: "accepted" })
+      ]);
+
+      /**
+       * **Les rapports déjà lus entrent au corpus, même sans marque de famille.**
+       *
+       * Ils arrivent par Analyse de documents, qui les choisit dans Fichiers et
+       * ne leur pose aucun `ct_report`. Le corpus était donc vide sur les
+       * chantiers d'aujourd'hui, cet écran sortait avant d'analyser, et la
+       * chronologie, le retour arrière, les jalons, la complétude et les
+       * indicateurs ne se dessinaient jamais.
+       */
+      const corpus = leCorpusDuSuivi({
+        parLaFamille, lectures: state.lectures ?? [], documentsDuProjet
       });
+      const documents = corpus.documents;
       const run = state.memory?.run ?? null;
 
       state.stored = documents.length > 0
         ? {
             documents,
+            /** D'où vient ce lot. L'écran le dit : un corpus muet ne se discute pas. */
+            corpus,
             matchesRun: run?.corpus_fingerprint
               ? (await corpusFingerprint(documents)) === run.corpus_fingerprint
               : null,
@@ -4107,11 +4144,11 @@ export function renderCtContinuityLab(root) {
 
       state.memory = { projectId, ...((await loadCtAnalysis(projectId)) ?? {}) };
       await refreshIdentity(projectId);
-      await refreshStoredDocuments(projectId);
-      // **Avant la sortie anticipée qui suit.** Le tableau des rapports lus est
-      // ce qu'on vient voir en arrivant, y compris — et surtout — quand il n'y a
-      // ni suivi conservé ni lot déposé : c'est alors la seule chose à l'écran.
+      // **Les lectures d'abord : le corpus en dépend.** Elles étaient relues
+      // après, et le corpus se composait donc sans elles — c'est-à-dire sans
+      // aucun des rapports entrés par Analyse de documents.
       await relireLesLectures(projectId);
+      await refreshStoredDocuments(projectId);
 
       if (!state.memory.run && !state.stored) return;
       refresh();

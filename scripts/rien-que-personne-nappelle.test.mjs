@@ -64,6 +64,8 @@ const LES_MODULES_SOUS_GARDE = [
   // L'encart d'identité d'un document, et ce que devient un avis de contrôle.
   "apps/web/js/views/ui/lidentite-dun-document.js",
   "apps/web/js/services/le-devenir-dun-avis.js",
+  // D'où le suivi des avis tire les rapports qu'il analyse.
+  "apps/web/js/services/le-corpus-du-suivi.js",
   // La vue d'ensemble des documents analysés, et la vue propre aux fils de mails.
   "apps/web/js/services/les-documents-analyses.js",
   "apps/web/js/views/ui/les-documents-analyses.js",

@@ -29145,3 +29145,12 @@ button.bac-refus__ou--mene:hover{ color:var(--fg, inherit); }
 .suite-avis__appreciation--info{color:var(--fgColor-accent, #58a6ff);}
 .suite-avis__appreciation--neutral,
 .suite-avis__appreciation--unknown{color:var(--muted);}
+
+/* L'en-tête de la frise : son titre, et la sortie vers le suivi complet. */
+.suite-avis__entete{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}

@@ -290,6 +290,88 @@ Un avis **sans numéro** ne se suit pas d'un rapport à l'autre : deux lignes qu
 ressemblent dans deux rapports ne sont pas la même question, et les confondre
 inventerait une levée. Ils restent dans la liste de leur rapport, et se comptent.
 
+## Les deux écrans du bureau de contrôle, et le défaut qui les a vidés tous les deux
+
+Pendant plusieurs rounds, ni **Analyse de documents › Bureau de Contrôle** ni
+**Suivi des avis BC** ne montraient quoi que ce soit : ni avis, ni chronologie,
+ni retour arrière, ni jalons, ni complétude, ni indicateurs. Deux causes sans
+rapport l'une avec l'autre, et aucune ne levait : toutes deux rendaient un écran
+**vide**, et un écran vide se lit « ce chantier n'a rien ».
+
+### 1. Le relevé des avis partait dans la mauvaise forme
+
+`extract-avis` vérifie chaque avis contre le texte du document, puis rendait les
+rescapés dans la forme du **moteur de continuité** — `title_raw`,
+`value.opinion_raw`, `provenance.page`. Or la lecture d'un rapport garde la forme
+du **document** — `reference`, `intitule`, `teneur`. Aucun des noms ne se
+rencontrait : `unAvisReleve` rendait `null` pour chacun, et **tous** les avis
+étaient jetés en silence.
+
+```
+le modèle rend     { reference, intitule, teneur, constat, page, citation }
+la porte vérifie   → les mêmes, moins ceux qu'elle n'a pas retrouvés
+extract-avis rend  { title_raw, value: { opinion_raw }, provenance: { page } }   ← ici
+la lecture cherche { reference, intitule, teneur }                              ← et là
+la lecture garde   rien
+```
+
+L'écran affichait « Aucun avis relevé dans ce rapport » sur un rapport qui en
+portait vingt-trois. Et comme la **référence du rapport et sa date d'émission**
+arrivent par le même relevé, le rapport y perdait aussi sa place dans la
+chronologie du dossier : un décalage de noms, quatre écrans muets.
+
+**Pourquoi aucune épreuve ne l'a vu.** Les deux côtés étaient éprouvés, chacun
+sur *son* jeu d'essai — celui de la lecture lui donnait des avis dans la forme
+qu'elle attendait, c'est-à-dire qu'il recopiait l'hypothèse du code au lieu de la
+mettre à l'épreuve. Personne ne branchait la sortie de l'un sur l'entrée de
+l'autre. C'est ce que fait maintenant `les-avis-du-serveur.test.mjs`, et il
+n'invente aucune forme : il appelle les fonctions réelles des deux bouts.
+
+Le serveur rend désormais les deux formes — `avis` dans les mots du document,
+`avis_moteur` pour le versement du suivi, toutes deux issues du **même** relevé
+vérifié —, et la lecture accepte l'une comme l'autre : une fonction de bord et un
+navigateur ne se déploient pas à la même seconde, et aucune de ces secondes-là ne
+doit reperdre un relevé payé.
+
+### 2. Le suivi cherchait son corpus à une porte qu'on n'emprunte plus
+
+Son corpus était : les documents du projet que la reconnaissance a marqués
+`ct_report`, **et** qu'une proposition acceptée a fait entrer. C'était vrai du
+temps où l'on déposait ses rapports par sa propre porte.
+
+Depuis, les rapports arrivent par Analyse de documents : on les choisit dans
+Fichiers, le serveur les lit, la lecture se conserve. Rien dans ce chemin ne leur
+pose la marque `ct_report`. Le suivi ne trouvait donc aucun corpus, **sortait
+avant d'analyser**, et tout ce qu'il sait faire restait invisible.
+
+`le-corpus-du-suivi.js` décide maintenant ce corpus, et les deux portes s'y
+**réunissent** plutôt que de se remplacer — un chantier peut avoir d'anciens
+rapports entrés par l'ancienne porte et des rapports lus depuis, et n'en prendre
+qu'une moitié fabriquerait une chronologie trouée, ce que cet écran existe
+précisément pour montrer. L'écran dit d'où vient son lot, et dit quand une
+lecture ne retrouve pas son document.
+
+### Ce que chaque écran répond
+
+| | Analyse de documents › Bureau de Contrôle | Suivi des avis BC |
+| --- | --- | --- |
+| la question | ce que **ce rapport** dit, et ce que chaque avis est devenu | où en est **le dossier** |
+| la matière | les lectures déjà conservées | les PDF du corpus, relus par le moteur de continuité |
+| le coût | aucun appel au modèle | aucun appel au modèle, mais un rapatriement des PDF |
+| ce qu'on y voit | les étapes, la légende, les avis, la frise de chaque avis | la chronologie, le retour arrière à une date, les jalons, la complétude, les indicateurs |
+
+Les deux se renvoient l'un à l'autre par un bouton : on passait de l'un à l'autre
+en se souvenant que l'autre existe.
+
+### Ce qu'il faut savoir des lectures déjà faites
+
+Les lectures conservées **avant** cette correction portent `avis: []` : leurs
+avis ont été jetés au moment de la lecture, et rien ne peut les retrouver
+après coup. Il faut relire ces rapports une fois. Un rapport dont tous les avis
+ont été écartés par la porte le dit maintenant à l'écran, au lieu de passer pour
+un rapport muet — les deux appellent des gestes opposés : un rapport muet se
+classe, un rapport mal lu se relit.
+
 ## Ce qui n'est pas fait, et c'est dit à l'écran
 
 **Le dépôt depuis le disque reste au compte rendu.** Les autres familles n'offrent

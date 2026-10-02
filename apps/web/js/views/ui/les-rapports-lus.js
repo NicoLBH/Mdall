@@ -351,13 +351,31 @@ export function renderLaLegendeLue(lecture = null) {
 export function renderLesAvisReleves(lecture = null, { auPlus = 60 } = {}) {
   const avis = liste(lecture?.avis);
 
+  /**
+   * **Ce que la porte a jeté se dit avant tout le reste.**
+   *
+   * Un rapport dont tous les avis ont été écartés — leur ligne ne se retrouvant
+   * pas dans le texte extrait — s'affichait « Aucun avis relevé dans ce
+   * rapport ». On prêtait le silence au document, alors que c'est la lecture qui
+   * n'a pas su (règle 5). Et la conduite à tenir n'est pas la même : un rapport
+   * muet se classe, un rapport mal lu se relit.
+   */
+  const ecartes = Number(lecture?.avisEcartes) || 0;
+  const phraseDesEcartes = ecartes
+    ? `${ecartes} avis ${ecartes > 1 ? "ont été relevés mais écartés" : "a été relevé mais écarté"} : `
+      + "leur ligne ne s'est pas retrouvée dans le texte extrait du PDF. Ce n'est pas le "
+      + "document qui se tait, c'est la lecture qui n'a pas su — relancer la lecture peut suffire."
+    : "";
+
   if (!Array.isArray(lecture?.avis)) {
     return `<p class="forme-manques">Les avis n'ont pas été relevés. Ce n'est pas
-      « ce rapport n'en porte aucun » : l'étape n'a pas eu lieu.</p>`;
+      « ce rapport n'en porte aucun » : l'étape n'a pas eu lieu.${
+        ecartes ? ` ${escapeHtml(phraseDesEcartes)}` : ""}</p>`;
   }
 
   if (!avis.length) {
-    return `<p class="forme-manques">Aucun avis relevé dans ce rapport.</p>`;
+    return `<p class="forme-manques">${escapeHtml(phraseDesEcartes
+      || "Aucun avis relevé dans ce rapport.")}</p>`;
   }
 
   return `
@@ -397,6 +415,9 @@ export function renderLesAvisReleves(lecture = null, { auPlus = 60 } = {}) {
       ${avis.length > auPlus
         ? `<p class="rapport-avis__reste mono-small">${escapeHtml(
             `Les ${auPlus} premiers, sur ${avis.length}.`)}</p>`
+        : ""}
+      ${phraseDesEcartes
+        ? `<p class="forme-manques">${escapeHtml(phraseDesEcartes)}</p>`
         : ""}
     </section>
   `;
@@ -687,7 +708,19 @@ export function renderLaSuiteDesAvis(suite = null, { auPlus = 40 } = {}) {
 
   return `
     <section class="suite-avis">
-      <h4 class="rapport-legende__titre">Ce que chaque avis est devenu</h4>
+      <div class="suite-avis__entete">
+        <h4 class="rapport-legende__titre">Ce que chaque avis est devenu</h4>
+        ${/*
+          **Les deux écrans se renvoient l'un à l'autre.** Celui-ci suit les avis
+          d'un rapport au suivant sur les lectures déjà conservées ; l'autre relit
+          les PDF avec le moteur de continuité et rend la chronologie du dossier,
+          le retour arrière à une date, les jalons, la complétude et les
+          indicateurs. On passait de l'un à l'autre en se souvenant qu'il existe.
+        */""}
+        <button type="button" class="gh-btn gh-btn--sm" data-side-nav-target="dev-ct-continuity-lab">
+          ${svgIcon("history", { className: "octicon" })} Le suivi complet du dossier
+        </button>
+      </div>
       <p class="suite-avis__compte mono-small">${escapeHtml(phraseDeLaSuite(suite))}</p>
       ${reserves.length
         ? `<ul class="suite-avis__reserves">${reserves

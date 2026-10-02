@@ -209,6 +209,13 @@ export function lanalyseDunRapportAconserver(vue = null) {
       pages: liste(lecture.pages),
       /** Les avis relevés, avec la marque que le document leur donne. */
       avis: liste(lecture.avis),
+      /**
+       * Combien la porte du serveur en a jeté, faute de citation retrouvée.
+       *
+       * Gelé avec le reste : rouvrir une lecture six mois plus tard doit dire
+       * ce qu'elle n'a pas su lire autant que ce qu'elle a lu (règle 5).
+       */
+      avisEcartes: Number(lecture.avisEcartes) || 0,
       mesure: lecture.mesure ?? null,
       lueSur: texte(lecture.lueSur),
       luPar: texte(lecture.luPar),

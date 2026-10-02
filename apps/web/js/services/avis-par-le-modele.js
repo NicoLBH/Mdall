@@ -113,12 +113,29 @@ export async function relireLesAvis({ sourceId = "", pages = [] } = {}) {
   }
 
   const rendu = await reponse.json().catch(() => null);
-  const avis = Array.isArray(rendu?.avis) ? rendu.avis : [];
+
+  /**
+   * **La forme du moteur, et non celle du document.**
+   *
+   * Ce que ce module rend part au versement du suivi des avis, qui lit
+   * `title_raw` et `value.opinion_raw` depuis le premier jour. Le serveur sort
+   * désormais les deux formes : celle du document sous `avis`, pour la lecture
+   * d'un rapport, et celle-ci sous `avis_moteur`.
+   *
+   * Le repli sur `avis` n'est pas une politesse : tant qu'une fonction de bord
+   * d'avant ce round répond, c'est elle qui porte la forme du moteur. Sans ce
+   * repli, le versement perdrait ses avis le temps d'un déploiement — soit
+   * exactement le défaut qu'on vient de passer un round à comprendre.
+   */
+  const moteur = Array.isArray(rendu?.avis_moteur) ? rendu.avis_moteur : null;
+  const avis = moteur ?? (Array.isArray(rendu?.avis) ? rendu.avis : []);
   if (!avis.length) return { ok: false, motif: REFUS.RIEN_DE_VERIFIE };
 
   return {
     ok: true,
     avis,
+    /** Les avis dans les mots du document, quand le serveur les rend. */
+    avisDuDocument: Array.isArray(rendu?.avis) ? rendu.avis : [],
     organisme: texte(rendu?.organisme),
     typeDeRapport: texte(rendu?.type_de_rapport),
     referenceDuRapport: texte(rendu?.reference_du_rapport),

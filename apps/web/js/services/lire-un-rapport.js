@@ -99,21 +99,35 @@ export function laLegendeDuReleve(brutes) {
  * qu'on vient de corriger.
  */
 export function unAvisReleve(brut = null) {
-  const intitule = texte(brut?.intitule);
-  const reference = texte(brut?.reference);
+  /**
+   * **Les deux formes se lisent ici, et c'est le prix d'une leçon.**
+   *
+   * Le relevé partait du serveur dans la forme du moteur de continuité —
+   * `title_raw`, `value.opinion_raw`, `provenance.page` — et cette fonction ne
+   * cherchait que la forme du document. Résultat : `intitule` et `reference`
+   * vides, `null` rendu, et **tous** les avis d'un rapport jetés en silence.
+   * L'écran disait « Aucun avis relevé dans ce rapport » sur un rapport qui en
+   * portait vingt-trois.
+   *
+   * Le serveur rend maintenant la bonne forme. Mais une fonction de bord et un
+   * navigateur ne se déploient pas à la même seconde : accepter les deux fait
+   * qu'aucune de ces secondes-là ne reperd un relevé payé.
+   */
+  const intitule = texte(brut?.intitule) || texte(brut?.title_raw);
+  const reference = texte(brut?.reference) || texte(brut?.value?.external_reference_raw);
   if (!intitule && !reference) return null;
 
-  const page = Number(brut?.page);
+  const page = Number(brut?.page ?? brut?.provenance?.page);
 
   return {
     reference,
     intitule,
-    marque: texte(brut?.teneur ?? brut?.marque),
+    marque: texte(brut?.teneur ?? brut?.marque ?? brut?.value?.opinion_raw),
     /** Où il se lit. `ou` est le mot des listes de l'écran, partout ailleurs déjà. */
     ou: Number.isFinite(page) && page > 0 ? `page ${page}` : "",
-    constat: texte(brut?.constat),
+    constat: texte(brut?.constat) || texte(brut?.description_raw),
     /** La ligne d'où il sort, déjà confrontée au document par le serveur. */
-    citation: texte(brut?.citation),
+    citation: texte(brut?.citation) || texte(brut?.provenance?.excerpt),
     page: Number.isFinite(page) && page > 0 ? page : null
   };
 }
@@ -267,6 +281,17 @@ export async function lireUnRapport(rapport = null, {
     markdown: assemble.texte,
     pages: liste(refait.pages),
     avis,
+    /**
+     * Combien d'avis la porte du serveur a jetés, faute de retrouver leur ligne
+     * dans le document.
+     *
+     * **Ce n'est pas un détail de mécanique.** Sans ce nombre, un rapport dont
+     * tous les avis ont été écartés s'affiche « Aucun avis relevé dans ce
+     * rapport » — c'est-à-dire qu'on lui prête le silence du document alors que
+     * c'est notre lecture qui n'a pas su (règle 5). Zéro est une réponse : la
+     * porte n'a rien jeté.
+     */
+    avisEcartes: Number(releve?.ecartes) || 0,
     lueSur: texte(releve?.organisme),
     luPar: leLecteurDunRapport(texte(refait.modele) || texte(reconnue?.modele)),
     sansStructure: !structure

@@ -117,7 +117,33 @@ serve(async (req) => {
       reference_du_rapport: lu.reference_du_rapport ?? null,
       emis_le: lu.emis_le ?? null,
       legende: Array.isArray(lu.legende) ? lu.legende : [],
-      avis: avisAuFormatDuMoteur(retenus, { sourceId }),
+
+      /**
+       * **Les avis tels qu'ils ont été lus dans le document.**
+       *
+       * Ils partaient d'ici dans la forme du moteur de continuité —
+       * `title_raw`, `value.opinion_raw` —, et c'est ce qui a coûté un round
+       * entier : la lecture d'un rapport garde `{reference, intitule, teneur}`,
+       * ne retrouvait aucun de ces noms, et jetait **tous** les avis. L'écran
+       * affichait « Aucun avis relevé dans ce rapport » sur un rapport qui en
+       * portait vingt-trois, et le rapport perdait du même coup sa référence et
+       * sa date d'émission — donc sa place dans la chronologie du dossier.
+       *
+       * Ce qui sort d'ici est donc ce que le document dit, dans ses mots. La
+       * forme du moteur part à côté, pour ceux qui la lisent.
+       */
+      avis: retenus,
+
+      /**
+       * La même chose dans la forme du moteur de continuité.
+       *
+       * `services/avis-versement.js` et `services/avis-liaison.js` la lisent
+       * depuis le premier jour, et la leur retirer aurait réparé un écran en
+       * cassant l'autre. Les deux formes sortent du **même** relevé vérifié :
+       * elles ne peuvent pas se contredire.
+       */
+      avis_moteur: avisAuFormatDuMoteur(retenus, { sourceId }),
+
       // Ce qui a été jeté, et pourquoi. Se dit, se compte, ne se cache pas.
       ecartes: ecartes.map((ecart: { motif: string }) => ecart.motif),
       pages_corrigees: pagesCorrigees,
