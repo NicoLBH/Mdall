@@ -204,6 +204,42 @@ la zone la **branche**, par la constante et non par une chaîne. Elle compte aus
 les écrans qu'elle a lus : sans ce compte, une liste devenue fausse la rendrait
 verte en ne vérifiant plus rien.
 
+## Le bouton qui ne faisait rien
+
+« Lire 1 rapport », un clic, et **rien** : ni appel, ni message, ni changement à
+l'écran.
+
+La cause est une règle écrite à deux endroits. Le bouton comptait les rapports
+déposés **sans erreur** ; la lecture, elle, n'en gardait que ceux dont au moins
+une page **porte du texte**. Un PDF scanné — une image, sans couche de texte —
+passait le premier compte et tombait au second. Les deux moitiés étaient justes
+séparément, et c'est pour cela qu'aucune épreuve de rendu ne pouvait le dire
+(règle 4).
+
+Le partage vit maintenant dans `leLotALire`, et l'écran s'en sert **des deux
+côtés** : ce qu'il compte est exactement ce qu'il lira. Ce qui ne peut pas être lu
+est nommé avant le clic, avec ce qu'il faut en faire — un scan doit passer par une
+reconnaissance de caractères avant d'être déposé. Et si l'on arrive malgré tout
+sans rien à lire, on le dit : rendre la main en silence était le défaut lui-même
+(règle 5).
+
+Une épreuve lit le source de l'écran et refuse qu'une seconde règle de lisibilité
+y réapparaisse.
+
+## Pourquoi rien n'apparaît dans Actions
+
+C'est voulu, et c'est la différence de fond avec le lecteur de comptes rendus.
+
+Celui-ci réveille une **file au serveur** : la lecture s'inscrit dans
+`versements`, et c'est cette table qu'Actions dresse. Le lecteur de rapports, lui,
+appelle les trois fonctions de bord **depuis le navigateur** et garde sa lecture
+dans `rapport_lectures` — aucune ligne de file, donc rien dans Actions.
+
+La conséquence est réelle : fermer l'onglet pendant la lecture d'un lot l'arrête,
+là où une file aurait continué. C'est acceptable pour un ou deux rapports, et ça ne
+l'est plus pour trente. Le jour où ce lecteur passera au serveur, il entrera dans
+Actions par la même porte que les autres.
+
 ## Ce que la lecture fait, et ce qu'un échec laisse
 
 Les trois appels sont **passés** à l'orchestrateur, jamais faits par lui. C'est ce

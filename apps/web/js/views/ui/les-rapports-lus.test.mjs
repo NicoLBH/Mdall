@@ -378,3 +378,25 @@ test("le détail ne montre l'historique que lorsqu'il a été demandé", () => {
   });
   assert.match(avec, /rapport-anterieures/);
 });
+
+test("un rapport qu'on ne peut pas lire est nommé, et n'offre pas de bouton", () => {
+  // Le bouton comptait les rapports déposés, la lecture n'en gardait que ceux qui
+  // portent du texte : « Lire 1 rapport » ne faisait rien, sans un mot.
+  const html = renderLinvitationALire({
+    deposes: 0,
+    muets: "1 rapport ne porte aucun texte extractible et ne sera pas lu : scan.pdf."
+  });
+
+  assert.doesNotMatch(html, new RegExp(LIRE_LES_RAPPORTS));
+  assert.match(html, /scan\.pdf/);
+  assert.match(html, /aucun texte extractible/);
+});
+
+test("un lot mêlé lance ce qui se lit, et nomme ce qui ne se lit pas", () => {
+  const html = renderLinvitationALire({
+    deposes: 2, muets: "1 rapport ne porte aucun texte extractible : scan.pdf."
+  });
+
+  assert.match(html, /Lire 2 rapports/);
+  assert.match(html, /scan\.pdf/);
+});

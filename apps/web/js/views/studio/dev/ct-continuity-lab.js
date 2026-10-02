@@ -63,6 +63,7 @@ import {
   laLigneDunRapport, laVueDunRapport
 } from "../../../services/la-lecture-dun-rapport.js";
 import { ETAPE } from "../../../services/le-parcours-dun-rapport.js";
+import { leLotALire, phraseDesRapportsMuets } from "../../../services/lire-un-rapport.js";
 import {
   DEPUIS_FICHIERS, LA_ZONE, UN_FICHIER_LOCAL, brancherLaZoneDeDepot, renderLaZoneDeDepot
 } from "../../ui/zone-de-depot.js";
@@ -3878,7 +3879,12 @@ function render(root, state) {
                 lancer une première.
               */""}
               ${state.result ? "" : renderLinvitationALire({
-                deposes: state.reports.filter((un) => !un.error).length,
+                // **Le même partage que celui de la lecture**, et non un second
+                // compte : le bouton disait « Lire 1 rapport » pour un PDF scanné
+                // que la lecture écartait ensuite, sans un mot (règle 4).
+                deposes: leLotALire(state.reports.filter((un) => !un.error)).lisibles.length,
+                muets: phraseDesRapportsMuets(
+                  leLotALire(state.reports.filter((un) => !un.error)).muets),
                 parcours: state.parcours
               })}
               ${state.result ? "" : renderLesRapportsLus({
@@ -4409,8 +4415,27 @@ export function renderCtContinuityLab(root) {
   const lireLesRapportsDeposes = async () => {
     if (state.parcours.running) return;
 
-    const rapports = state.reports.filter((un) => !un.error && (un.pages ?? []).length);
-    if (!rapports.length) return;
+    const { lisibles, muets } = leLotALire(state.reports.filter((un) => !un.error));
+
+    /**
+     * **Un clic sans effet se dit.**
+     *
+     * Il ne se passait rien, et rien ne l'expliquait : le bouton comptait les
+     * rapports déposés, la lecture n'en gardait que ceux qui portent du texte. Le
+     * bouton compte maintenant la même liste, et si l'on arrive ici sans rien à
+     * lire, on le dit plutôt que de rendre la main en silence (règle 5).
+     */
+    if (!lisibles.length) {
+      state.parcours = {
+        running: false, courant: "", quoi: "", faits: 0, total: 0, refus: [],
+        dit: phraseDesRapportsMuets(muets) || "Aucun rapport à lire.",
+        error: ""
+      };
+      refresh();
+      return;
+    }
+
+    const rapports = lisibles;
 
     const projectId = state.memory?.projectId ?? null;
 

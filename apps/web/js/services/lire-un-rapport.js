@@ -137,6 +137,54 @@ export function lesAvisReleves(brutes) {
  * @param {function} [outils.onEtape] appelé à chaque étape : `{quoi, nom}`
  * @returns {Promise<{ok: true, vue: object}|{ok: false, motif: string, etape: string}>}
  */
+/**
+ * Les pages d'un rapport qui portent quelque chose à lire.
+ *
+ * **Écrit une fois, et c'est tout le sujet.** La règle « ce rapport est-il
+ * lisible ? » vivait à deux endroits : l'écran comptait les rapports déposés sans
+ * erreur pour écrire « Lire 1 rapport », et la lecture, elle, écartait ceux qui ne
+ * portent aucun texte. Un PDF scanné — une image, sans couche de texte — passait
+ * donc le premier compte et tombait au second : le bouton s'affichait, le clic ne
+ * faisait rien, et rien ne le disait (règle 4).
+ */
+export function lesPagesLisibles(rapport = null) {
+  return liste(rapport?.pages).filter((page) => texte(page?.text ?? page?.texte));
+}
+
+/**
+ * Le lot partagé en deux : ce qui peut être lu, et ce qui ne le peut pas.
+ *
+ * **Les muets ne sont pas une erreur.** Le fichier s'est ouvert, ses pages ont été
+ * comptées ; il n'y a simplement pas un mot à transcrire, parce que c'est une
+ * image. Les ranger avec les illisibles ferait croire à un dépôt raté, et les
+ * taire ferait un bouton qui ne fait rien.
+ */
+export function leLotALire(rapports = []) {
+  const lisibles = [];
+  const muets = [];
+
+  for (const rapport of liste(rapports)) {
+    (lesPagesLisibles(rapport).length ? lisibles : muets).push(rapport);
+  }
+  return { lisibles, muets };
+}
+
+/** Ce que l'écran dit des rapports qu'il ne peut pas lire. */
+export function phraseDesRapportsMuets(muets = []) {
+  const combien = liste(muets).length;
+  if (!combien) return "";
+
+  const noms = liste(muets)
+    .map((un) => texte(un?.nom) || texte(un?.filename) || "un document")
+    .join(", ");
+
+  return `${combien} rapport${combien > 1 ? "s" : ""} ne port${combien > 1 ? "ent" : "e"} `
+    + `aucun texte extractible et ne ser${combien > 1 ? "ont" : "a"} pas lu${
+      combien > 1 ? "s" : ""} : ${noms}. `
+    + "C'est le cas d'un PDF scanné — une image, sans couche de texte. "
+    + "Il faudrait le passer par une reconnaissance de caractères avant de le déposer.";
+}
+
 export async function lireUnRapport(rapport = null, {
   reconnaitreLaStructure = null,
   refaireLeDocument = null,
@@ -144,7 +192,7 @@ export async function lireUnRapport(rapport = null, {
   onEtape = null
 } = {}) {
   const nom = texte(rapport?.nom) || texte(rapport?.filename);
-  const pages = liste(rapport?.pages).filter((page) => texte(page?.text ?? page?.texte));
+  const pages = lesPagesLisibles(rapport);
 
   if (!pages.length) {
     return { ok: false, motif: REFUS_DE_LECTURE.SANS_TEXTE, etape: ETAPE.STRUCTURE };
