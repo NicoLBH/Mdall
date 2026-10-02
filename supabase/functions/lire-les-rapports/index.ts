@@ -128,11 +128,18 @@ function lesAppelsDuServeur(autorisation: string, projectId: string) {
           project_id: projectId, source_id: sourceId, pages
         }, autorisation);
         const avis = Array.isArray(rendu?.avis) ? rendu.avis : [];
-        if (!avis.length) return { ok: false, motif: "rien-de-verifie" };
+        const ecartes = Array.isArray(rendu?.ecartes) ? rendu.ecartes.length : 0;
+
+        // **Un relevé où tout a été écarté n'est pas un relevé vide.** Le motif
+        // le nomme, et la lecture le garde : dire « ce rapport ne porte aucun
+        // avis » quand la porte en a jeté vingt-trois est faux (règle 5).
+        if (!avis.length) return { ok: false, motif: "rien-de-verifie", ecartes };
 
         return {
           ok: true,
           avis,
+          /** Ce que la porte du serveur a jeté faute de citation retrouvée. */
+          ecartes,
           legende: Array.isArray(rendu?.legende) ? rendu.legende : [],
           organisme: texte(rendu?.organisme),
           referenceDuRapport: texte(rendu?.reference_du_rapport),

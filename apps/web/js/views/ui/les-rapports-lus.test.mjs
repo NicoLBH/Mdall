@@ -426,3 +426,49 @@ test("un lot mêlé lance ce qui se lit, et nomme ce qui ne se lit pas", () => {
   assert.match(html, /Lire 2 rapports/);
   assert.match(html, /scan\.pdf/);
 });
+
+/* ── Ce que la porte a jeté ne passe pas pour un document muet ───────────── */
+
+/**
+ * Le défaut, vu en production : un rapport portant vingt-trois avis s'affichait
+ * « Aucun avis relevé dans ce rapport ». Ils avaient bien été relevés — leur
+ * ligne ne s'était simplement pas retrouvée dans le texte extrait du PDF, et la
+ * porte du serveur les avait écartés.
+ *
+ * Les deux phrases mènent à des gestes opposés : un rapport muet se classe, un
+ * rapport mal lu se relit (règle 5).
+ */
+test("un rapport dont tous les avis ont été écartés ne passe pas pour muet", () => {
+  const html = renderLesAvisReleves({ ...UNE_LECTURE, avis: [], avisEcartes: 23 });
+
+  assert.doesNotMatch(html, /Aucun avis relevé/);
+  assert.match(html, /23 avis ont été relevés mais écartés/);
+  assert.match(html, /relancer la lecture peut suffire/);
+});
+
+test("un rapport vraiment muet le dit toujours", () => {
+  const html = renderLesAvisReleves({ ...UNE_LECTURE, avis: [], avisEcartes: 0 });
+  assert.match(html, /Aucun avis relevé dans ce rapport/);
+});
+
+test("un relevé qui n'a pas eu lieu nomme aussi ce qui a été écarté", () => {
+  // `avis: null` dit que l'étape a échoué ; le compte dit pourquoi.
+  const html = renderLesAvisReleves({ ...UNE_LECTURE, avis: null, avisEcartes: 23 });
+
+  assert.match(html, /l'étape n'a pas eu lieu/);
+  assert.match(html, /23 avis ont été relevés mais écartés/);
+});
+
+test("des avis gardés et des avis écartés se disent tous les deux", () => {
+  // Un rapport dont on a gardé trois avis sur vingt-six n'est pas un rapport
+  // lu : afficher les trois sans dire les vingt-trois ferait croire au compte.
+  const html = renderLesAvisReleves({ ...UNE_LECTURE, avisEcartes: 23 });
+
+  assert.match(html, /Les avis relevés/);
+  assert.match(html, /23 avis ont été relevés mais écartés/);
+});
+
+test("un seul avis écarté se dit au singulier", () => {
+  assert.match(renderLesAvisReleves({ ...UNE_LECTURE, avis: [], avisEcartes: 1 }),
+    /1 avis a été relevé mais écarté/);
+});

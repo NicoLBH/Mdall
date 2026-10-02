@@ -348,3 +348,45 @@ test("l'écran compte et lit la même liste", async () => {
   // divergence qui vient de coûter un bouton mort.
   assert.doesNotMatch(source, /\(un\.pages \?\? \[\]\)\.length/);
 });
+
+/* ── Ce que la porte du serveur a jeté ───────────────────────────────────── */
+
+/**
+ * **« Aucun avis » et « on n'a pas su les retrouver » appellent des gestes
+ * opposés** : un rapport muet se classe, un rapport mal lu se relit. La lecture
+ * doit donc garder ce que la porte a écarté, faute de quoi l'écran prête au
+ * document un silence qui n'est pas le sien (règle 5).
+ */
+test("la lecture garde combien d'avis la porte a écartés", async () => {
+  const lu = await lireUnRapport(UN_RAPPORT, lesOutils({
+    relireLesAvis: async () => ({
+      ok: true,
+      avis: [{ reference: "A12", intitule: "Fondations", teneur: "F", page: 2, citation: "x" }],
+      ecartes: 23,
+      legende: [], organisme: "VERIFAS", referenceDuRapport: "RICT-03",
+      emisLe: "2026-04-18", modele: "gpt-5"
+    })
+  }));
+
+  assert.equal(lu.ok, true);
+  assert.equal(lu.vue.lecture.avisEcartes, 23);
+});
+
+test("une porte qui n'a rien jeté le dit par zéro, et non par rien", () => {
+  // `undefined` se lirait comme « on ne sait pas », alors qu'on sait : zéro.
+  return lireUnRapport(UN_RAPPORT, lesOutils()).then((lu) => {
+    assert.equal(lu.vue.lecture.avisEcartes, 0);
+  });
+});
+
+test("un relevé où tout a été écarté garde quand même le compte", async () => {
+  // C'est le cas qui compte le plus : la lecture n'a aucun avis, et c'est
+  // précisément là qu'il faut pouvoir dire pourquoi.
+  const lu = await lireUnRapport(UN_RAPPORT, lesOutils({
+    relireLesAvis: async () => ({ ok: false, motif: "rien-de-verifie", ecartes: 23 })
+  }));
+
+  assert.equal(lu.ok, true);
+  assert.equal(lu.vue.lecture.avis, null, "l'étape a eu lieu, mais n'a rien retenu");
+  assert.equal(lu.vue.lecture.avisEcartes, 23);
+});
