@@ -78,6 +78,7 @@ export const DEPUIS_FICHIERS = "data-zone-depuis-fichiers";
  * @param {boolean} [quoi.occupee] une lecture est en cours : la zone se tait
  * @param {string} [quoi.motOccupee] ce qu'elle dit alors
  * @param {string} [quoi.choisirDit] l'intitulé du bouton de l'ordinateur
+ * @param {boolean} [quoi.duDisque] offrir la porte de l'ordinateur
  * @param {boolean} [quoi.depuisFichiers] offrir la seconde porte
  * @param {string} [quoi.icone] l'icône posée au-dessus
  */
@@ -89,6 +90,15 @@ export function renderLaZoneDeDepot({
   occupee = false,
   motOccupee = "Un document est en cours de lecture.",
   choisirDit = "Choisir un document",
+  /**
+   * **La porte de l'ordinateur ne va pas de soi.**
+   *
+   * Les familles qui relisent des documents déjà rangés dans le projet ne
+   * l'offrent pas : les redéposer depuis le disque en ferait un second
+   * exemplaire du même document, et c'est le genre de doublon qu'on ne remarque
+   * qu'au vingtième.
+   */
+  duDisque = true,
   depuisFichiers = true,
   icone = "file"
 } = {}) {
@@ -120,11 +130,13 @@ export function renderLaZoneDeDepot({
           l'intitulé qui l'ouvre, et un bouton demanderait du script pour faire ce
           que le navigateur fait seul.
         */""}
-        <label class="gh-btn gh-btn--sm zone-de-depot__choix">
-          ${escapeHtml(texte(choisirDit))}
-          <input type="file" accept="${escapeHtml(texte(accepte))}"${
-            plusieurs ? " multiple" : ""} hidden ${UN_FICHIER_LOCAL}>
-        </label>
+        ${duDisque
+          ? `<label class="gh-btn gh-btn--sm zone-de-depot__choix">
+              ${escapeHtml(texte(choisirDit))}
+              <input type="file" accept="${escapeHtml(texte(accepte))}"${
+                plusieurs ? " multiple" : ""} hidden ${UN_FICHIER_LOCAL}>
+            </label>`
+          : ""}
         ${depuisFichiers
           ? `<button type="button" class="gh-btn gh-btn--sm" ${DEPUIS_FICHIERS}>
               Choisir depuis Fichiers

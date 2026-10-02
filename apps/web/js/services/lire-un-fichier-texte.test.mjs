@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { EXTENSIONS_ECRITES } from "./fichier-a-la-main.js";
+import { CE_QUI_PORTE_DES_MAILS } from "./le-dossier-des-mails.js";
+import { FAMILLE, LES_FAMILLES, ceQueDitLaFamille } from "./les-familles-de-document.js";
 import {
   EXTENSIONS_LISIBLES, LECTURE_DU_TEXTE, estUnFichierTexte, laRestitutionDunTexte, leFichierLu,
   lectureParDefaut, lecturesDuFichier, nomDuFichier, pagesDuTexte, pagesLuesDuTexte,
@@ -212,23 +214,84 @@ const ATELIER = readFileSync(
   new URL("../views/studio/dev/lecture-des-cr.js", import.meta.url), "utf8");
 const FICHIERS = readFileSync(new URL("../views/project-documents.js", import.meta.url), "utf8");
 
-test("les deux champs de fichier de l'Atelier acceptent ce que l'écran accepte", () => {
+test("aucune famille n'annonce une extension que personne ne sait lire", () => {
+  // C'est l'épreuve de fond, et elle ne lit aucune source : chaque famille
+  // déclare ce que son sélecteur de fichiers affiche, et cette liste ne doit
+  // contenir que des extensions qu'on sait ouvrir — le PDF par son extracteur,
+  // les porteurs de mails par le liseur de messages, le reste par le lecteur de
+  // texte. Une famille qui annoncerait `.markdown` ou `.pst` ouvrirait un
+  // sélecteur où le fichier apparaît, et le refuserait ensuite sans rien dire.
+  //
+  // **L'ensemble est construit depuis les lecteurs eux-mêmes**, et non recopié :
+  // une liste de référence écrite ici reproduirait l'hypothèse du code au lieu
+  // de la mettre à l'épreuve.
+  const lisibles = new Set([".pdf", ...CE_QUI_PORTE_DES_MAILS, ...EXTENSIONS_LISIBLES]);
+
+  for (const famille of LES_FAMILLES) {
+    const annonce = ceQueDitLaFamille(famille).accepte.split(",").filter(Boolean);
+    assert.ok(annonce.length > 0, `${famille} n'accepte rien`);
+    for (const extension of annonce) {
+      assert.ok(lisibles.has(extension), `${famille} annonce ${extension}, que rien ne lit`);
+    }
+  }
+});
+
+test("les mails annoncent exactement ce que le liseur de messages ouvre", () => {
+  // **Exactement, et non « rien de plus ».** Une batterie l'a montré : réduire la
+  // liste des mails à `.eml` passait l'épreuve d'au-dessus — un `.eml` se lit
+  // bien — alors qu'un `.msg` déposé par celui qui en a trois cents n'apparaît
+  // plus dans le sélecteur. Rétrécir une liste est aussi faux que l'élargir, et
+  // c'est plus difficile à voir : rien ne s'affiche, et le dossier paraît vide.
+  assert.deepEqual(
+    ceQueDitLaFamille(FAMILLE.MAIL).accepte.split(","), [...CE_QUI_PORTE_DES_MAILS]);
+});
+
+test("les comptes rendus annoncent le PDF et tout ce qui se lit comme du texte", () => {
+  assert.deepEqual(
+    ceQueDitLaFamille(FAMILLE.CR).accepte.split(","), [".pdf", ...EXTENSIONS_LISIBLES]);
+});
+
+test("les champs de fichier de l'Atelier tiennent leur liste du registre", () => {
   // Un `accept="application/pdf"` resté en place n'empêche pas de déposer un
   // `.md` : il l'empêche seulement d'apparaître dans le sélecteur de fichiers.
   // Le bouton s'ouvre, le dossier est vide, et l'on croit n'avoir rien.
   //
-  // **Deux des trois champs ont déménagé.** La zone de dépôt est devenue
-  // commune — elle est partagée avec le suivi des avis, qui n'accepte que des
-  // PDF —, et c'est l'écran qui lui passe ce qu'il accepte. Compter les
-  // `accept=` dans ce fichier-ci ne dirait donc plus rien : ce qu'il faut
-  // vérifier est que les trois portes reçoivent la même liste.
+  // **Les champs ont déménagé.** La zone de dépôt est devenue commune — elle
+  // sert aux comptes rendus, aux rapports de contrôle, aux mails —, et c'est
+  // l'écran qui lui passe ce qu'il accepte. Compter les `accept=` ici ne dirait
+  // donc plus rien ; ce qui reste invisible autrement est qu'une des portes
+  // reçoive une liste **écrite à la main** plutôt que celle du registre.
   const champs = ATELIER.match(/accept="[^"]*"/g) ?? [];
   assert.equal(champs.length, 1, "l'en-tête, seul champ encore écrit ici");
   assert.equal(champs[0], 'accept="${escapeHtml(ACCEPTE)}"');
 
-  const zones = ATELIER.match(/renderLaZoneDeDepot\(\{[\s\S]*?\n {4,6}\}\)/g) ?? [];
-  assert.equal(zones.length, 2, "la zone de dépôt, et celle de l'écran en panne");
-  for (const zone of zones) assert.match(zone, /accepte: ACCEPTE/);
+  // Le repli de l'écran, qui est la liste des comptes rendus, vient lui aussi
+  // du registre : aucune extension n'est écrite dans cet écran.
+  assert.match(ATELIER, /const ACCEPTE = ceQueDitLaFamille\(FAMILLE\.CR\)\.accepte;/);
+
+  const annonces = ATELIER.match(/^\s*accepte: .*$/gm) ?? [];
+  assert.equal(annonces.length, 2, "la zone de dépôt, et celle de l'écran en panne");
+  for (const annonce of annonces) {
+    assert.doesNotMatch(annonce, /"\./, "une extension écrite à la main");
+  }
+
+  /**
+   * **La zone prend la liste de la famille ouverte, et le repli derrière elle.**
+   *
+   * C'est le défaut qu'on vient de réparer, et une batterie a montré qu'il
+   * repassait : écrire `accepte: ACCEPTE` sur la zone commune la laisse accepter
+   * des `.md` sous le bureau de contrôle, qui ne lit que des PDF. Rien ne lève,
+   * rien ne s'affiche de travers — le sélecteur montre simplement des fichiers
+   * que la lecture refusera ensuite.
+   */
+  const [laZone, lecranEnPanne] = annonces;
+  assert.match(laZone, /laFamille\.accepte/,
+    "la zone de dépôt ignore la famille ouverte : elle accepte ce qu'une autre lit");
+  assert.match(laZone, /ACCEPTE/,
+    "la vue d'ensemble, qui n'est pas une famille, n'aurait aucun repli");
+
+  // L'écran en panne, lui, est celui du compte rendu : il n'a pas de famille.
+  assert.match(lecranEnPanne, /^\s*accepte: ACCEPTE,$/);
 });
 
 test("un document de texte déposé dans l'Atelier n'est pas écarté", () => {

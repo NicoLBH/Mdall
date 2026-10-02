@@ -65,6 +65,8 @@ const LES_MODULES_SOUS_GARDE = [
   "apps/web/js/services/les-documents-analyses.js",
   "apps/web/js/views/ui/les-documents-analyses.js",
   "apps/web/js/views/ui/le-detail-dun-fil.js",
+  // La mécanique de file commune aux gestes, et les portes qui lui parlent à la base.
+  "apps/web/js/services/la-file-dun-geste.js",
   // Le registre des familles, et le lancement d'une lecture quelle qu'elle soit.
   "apps/web/js/services/les-familles-de-document.js",
   "apps/web/js/services/lancer-une-lecture.js"

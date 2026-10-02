@@ -31,6 +31,7 @@
 
 import { LE_CADENAS_DUN_FICHIER } from "./le-dossier-des-mails.js";
 import { GESTE_DES_CR, GESTE_DES_MAILS } from "./reveiller-la-file.js";
+import { LES_FAMILLES, ceQueLaFileDit } from "./les-familles-de-document.js";
 
 /**
  * Les trois origines possibles.
@@ -129,10 +130,19 @@ export const ONGLETS = [
  * des documents **déjà là** et n'en fait entrer aucun — elle prépare une
  * proposition, c'est-à-dire un essai, tant que personne n'a signé (règle 1).
  */
-export const LORIGINE_DUN_GESTE = {
-  [GESTE_DES_MAILS]: ORIGINE.VERSEMENT,
-  [GESTE_DES_CR]: ORIGINE.ATELIER
-};
+/**
+ * **Écrite à partir du registre des familles.**
+ *
+ * Elle nommait deux gestes ; un troisième — les rapports de contrôle — tombait
+ * donc dans `null`, et c'est la bonne façon de ne pas savoir, mais pas la bonne
+ * façon de ranger. Les familles disent où elles se rangent, là où elles disent
+ * tout le reste (règle 10).
+ */
+export const LORIGINE_DUN_GESTE = Object.fromEntries(
+  LES_FAMILLES
+    .map((famille) => [famille, ceQueLaFileDit(famille)?.origine])
+    .filter(([, ou]) => ou)
+);
 
 /**
  * L'origine d'un geste de la file.

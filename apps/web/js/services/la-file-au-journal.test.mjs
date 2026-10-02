@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  combienDePieces,
   enDuree, estUnGesteDeLaFile, laFileAuJournal, laProvenanceDuGeste, leMotDeLaFile,
   lesEtapesDeLaFile, lesVersementsAuJournal
 } from "./la-file-au-journal.js";
@@ -262,7 +263,7 @@ test("une étape qui court dit depuis combien de temps", () => {
         ]
       }
     },
-    { statut: "en_cours", desCr: true, combien: 3, maintenant }
+    { statut: "en_cours", geste: "comptes_rendus", combien: 3, maintenant }
   );
 
   assert.deepEqual(etapes[1].lignes, ["depuis 1 min 34 s"]);
@@ -278,7 +279,7 @@ test("une étape qui court dit depuis combien de temps", () => {
 test("une étape sans date de départ ne compte pas", () => {
   const etapes = lesEtapesDeLaFile(
     { avancement: { pas: [{ id: "d1", nom: "CR.pdf", ou: "en-cours" }] } },
-    { statut: "en_cours", desCr: true, combien: 1 }
+    { statut: "en_cours", geste: "comptes_rendus", combien: 1 }
   );
   assert.deepEqual(etapes[0].lignes, ["en cours…"]);
 });
@@ -287,7 +288,7 @@ test("une étape sans date de départ ne compte pas", () => {
 test("un dépôt de messagerie garde son bloc unique", () => {
   const etapes = lesEtapesDeLaFile(
     { avancement: { verses: 18 } },
-    { statut: "en_cours", desCr: false, combien: 3 }
+    { statut: "en_cours", geste: "mails", combien: 3 }
   );
   assert.equal(etapes.length, 1);
   assert.equal(etapes[0].label, "Rangement en cours");
@@ -301,7 +302,7 @@ test("un dépôt de messagerie garde son bloc unique", () => {
 test("une file qui attend ne détaille pas ses dix-neuf attentes", () => {
   const etapes = lesEtapesDeLaFile(
     { avancement: { pas: [{ id: "d1", ou: "attend" }, { id: "d2", ou: "attend" }] } },
-    { statut: "en_attente", desCr: true, combien: 2 }
+    { statut: "en_attente", geste: "comptes_rendus", combien: 2 }
   );
   assert.equal(etapes.length, 1);
   assert.equal(etapes[0].label, "En attente du serveur");
@@ -414,7 +415,7 @@ test("chaque pas dit quand il a commencé", () => {
       { id: "b", nom: "CR 13", ou: "en-cours", commenceLe: 1000 },
       { id: "c", nom: "CR 14", ou: "attend" }
     ] }
-  }, { desCr: true, combien: 3, maintenant: 6000 });
+  }, { geste: "comptes_rendus", combien: 3, maintenant: 6000 });
 
   assert.deepEqual(etapes.map((une) => une.debut), [1000, 1000, null]);
 });
@@ -432,7 +433,49 @@ test("un pas qui n'a pas commencé n'a pas d'instant", () => {
       { id: "c", nom: "CR 14", ou: "attend", commenceLe: "" },
       { id: "d", nom: "CR 15", ou: "attend", commenceLe: "bientôt" }
     ] }
-  }, { desCr: true, combien: 4, maintenant: 6000 });
+  }, { geste: "comptes_rendus", combien: 4, maintenant: 6000 });
 
   assert.deepEqual(etapes.map((une) => une.debut), [null, null, null, null]);
+});
+
+/* ── Une famille nomme sa propre file ─────────────────────────────────────── */
+
+test("une lecture de rapports ne s'annonce plus comme un dépôt de mails", () => {
+  // C'est ce que l'écran faisait : le nom venait d'un binaire « est-ce un compte
+  // rendu ? », et tout le reste tombait du côté des mails. Une analyse de rapport
+  // s'affichait « Versement de 0 fichier de messagerie », déclencheur compris —
+  // faux sur le travail, faux sur le nombre, faux sur l'origine.
+  const vive = laFileAuJournal({
+    id: "v-1", statut: "en_cours", geste: "rapports", cree_le: "2026-10-02T09:18:00Z",
+    documents: [{ id: "d-1", nom: "RICT-03.pdf" }, { id: "d-2", nom: "RICT-04.pdf" }]
+  });
+
+  assert.equal(vive.name, "Lecture de 2 rapports de bureau de contrôle");
+  assert.equal(vive.triggerLabel, "Lecture de rapports de contrôle");
+  assert.equal(vive.origine, "atelier");
+
+  const etapes = vive.details.corpus.steps;
+  assert.equal(etapes[0].label, "Lecture en cours");
+  assert.match(etapes[0].lignes.join(" "), /Rapports : 2/);
+  assert.doesNotMatch(JSON.stringify(vive), /messagerie/);
+});
+
+test("les pièces se comptent dans la colonne de la famille", () => {
+  // Les mails portent des chemins d'octets, les lectures des identifiants de
+  // documents : compter sur la mauvaise annonce « 0 » sur une file de dix-neuf.
+  assert.equal(combienDePieces({ geste: "rapports", documents: [{}, {}], fichiers: [] }), 2);
+  assert.equal(combienDePieces({ geste: "mails", fichiers: [{}, {}, {}], documents: [] }), 3);
+  // Une ligne sans geste est un dépôt de messagerie, comme la base le déclare.
+  assert.equal(combienDePieces({ fichiers: [{}] }), 1);
+});
+
+test("un geste inconnu garde l'ancien nom, et ne se range nulle part", () => {
+  // Une ligne posée par une version plus récente que cet écran reste lisible,
+  // et ne se fait pas passer pour autre chose (règle 5).
+  const vive = laFileAuJournal({
+    id: "v-2", statut: "en_attente", geste: "plans", documents: [{ id: "d-1" }]
+  });
+
+  assert.match(vive.name, /Versement de/);
+  assert.equal(vive.origine, null);
 });

@@ -2350,14 +2350,18 @@ test("chaque famille offre sa propre porte, et dit ce qu'elle lit", () => {
   // rendu — pire qu'un bouton absent.
   const bc = renderLaLecture(unEtat({ dejaLus: [], famille: "rapports" }));
   assert.doesNotMatch(bc, /Déposez un compte rendu/);
-  assert.match(bc, /Choisissez des rapports à analyser/);
+  assert.match(bc, /Choisissez des rapports de bureau de contrôle/);
   assert.match(bc, /data-zone-depuis-fichiers/);
   // **Pas de dépôt depuis le disque** : ces documents sont déjà dans le projet,
   // les redéposer en ferait un second exemplaire.
   assert.doesNotMatch(bc, /data-zone-fichier/);
+  // **Et c'est la même zone**, celle des comptes rendus : une seconde écrite à la
+  // main avait sa bordure, son bouton et son aide à une autre place (règle 4).
+  assert.match(bc, /class="zone-de-depot"/);
 
   const mails = renderLaLecture(unEtat({ dejaLus: [], famille: "mails" }));
-  assert.match(mails, /Choisissez des fils à analyser/);
+  assert.match(mails, /Déposez des mails, ou choisissez-les/);
+  assert.match(mails, /data-zone-fichier/);
 
   // Et sous les comptes rendus, le dépôt depuis le disque est bien là.
   const crs = renderLaLecture(unEtat({ dejaLus: [], famille: "comptes_rendus" }));

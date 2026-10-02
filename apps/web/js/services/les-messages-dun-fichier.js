@@ -19,7 +19,7 @@
  */
 
 import {
-  EXTENSION_DUN_MAIL
+  CE_QUI_PORTE_DES_MAILS, EXTENSION_DUN_MAIL
 } from "./le-dossier-des-mails.js";
 import { unMsgDeplie } from "./un-msg-deplie.js";
 import { unMailDeplie } from "./un-mail-deplie.js";
@@ -27,8 +27,10 @@ import { lesMessagesDeLarchive, lireLannuaire, octetsDeLentree } from "./un-zip-
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
-/** Ce qu'un fichier doit porter comme suffixe pour qu'on l'ouvre. */
-export const CE_QUI_PORTE_DES_MAILS = [".msg", EXTENSION_DUN_MAIL, ".zip"];
+// La liste des porteurs vit dans le dossier des mails, et se relaie ici : les
+// écrans qui demandent « qu'y a-t-il dans ce fichier ? » n'ont pas à connaître
+// deux modules pour obtenir la question et sa réponse.
+export { CE_QUI_PORTE_DES_MAILS };
 
 /** Ce nom a-t-il l'allure d'un porteur de mails ? */
 export function estUnPorteurDeMails(nom) {

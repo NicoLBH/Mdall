@@ -141,6 +141,17 @@ export const LAVERTISSEMENT_DUN_FICHIER = {
 /** Ce qu'un mail déposé devient comme fichier. */
 export const EXTENSION_DUN_MAIL = ".eml";
 
+/**
+ * Ce qu'un fichier doit porter comme suffixe pour qu'on l'ouvre comme des mails.
+ *
+ * **Elle vit ici, et non chez celui qui fend les fichiers.** Trois endroits la
+ * tenaient : le liseur de messages, l'écran de lecture des mails, et le registre
+ * des familles qui la recopiait à la main. Un `.pst` ajouté à l'un des trois
+ * aurait ouvert un sélecteur où le fichier apparaît, pour le refuser ensuite
+ * (règle 4). Le dossier des mails est le seul des trois dont rien ne dépend.
+ */
+export const CE_QUI_PORTE_DES_MAILS = [".msg", EXTENSION_DUN_MAIL, ".zip"];
+
 /** Ce que le type de document porte, pour distinguer un mail d'un compte rendu. */
 export const NATURE_DUN_MAIL = "mail_depose";
 
