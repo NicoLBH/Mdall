@@ -28985,7 +28985,61 @@ button.bac-refus__ou--mene:hover{ color:var(--fg, inherit); }
    Le tableau reprend `data-table-shell` ; il ne lui reste que ses marges. Un
    quatrième dessin de liste de documents aurait fait un quatrième gris. */
 .documents-analyses{ margin:20px 0 0; }
-.documents-analyses__aide{ margin:2px 0 10px; color:var(--muted); }
+/* La phrase d'aide a été retirée : elle redisait le compte que l'en-tête porte,
+   et expliquait un geste qu'on fait sans qu'on le dise. */
+
+/* ── Le filtre à pastilles, en tête de tableau ─────────────────────────────
+   Il vit dans la colonne du compte, à sa droite : c'est la même information —
+   combien, et de quoi — et les séparer aurait fait deux endroits où compter. */
+.documents-analyses__filtre{ display:inline-flex; align-items:center; gap:6px; margin-left:12px; }
+
+.documents-analyses__pastille{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:2px 10px;
+  border:1px solid var(--border);
+  border-radius:999px;
+  background:transparent;
+  color:var(--muted);
+  font:inherit;
+  font-size:12px;
+  cursor:pointer;
+}
+.documents-analyses__pastille:hover{ color:var(--text); border-color:var(--fgColor-accent, #58a6ff); }
+/* Allumée, elle dit ce qu'on regarde — et qu'un second clic la rééteint. */
+.documents-analyses__pastille.est-active{
+  color:var(--fgColor-accent, #58a6ff);
+  border-color:var(--fgColor-accent, #58a6ff);
+  background:rgba(49,109,202,.12);
+}
+.documents-analyses__compte{ font-weight:600; font-variant-numeric:tabular-nums; }
+
+/* ── Le badge d'état, à côté du titre ─────────────────────────────────────
+   Il se lit avant d'avoir parcouru la ligne, qui est le moment où l'on décide
+   de cliquer ou non. */
+.documents-analyses__badge{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  margin-left:8px;
+  padding:1px 8px;
+  border:1px solid currentColor;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:600;
+  vertical-align:1px;
+  white-space:nowrap;
+}
+.documents-analyses__badge .octicon{ width:12px; height:12px; }
+/* Bleu : c'est fait, et cela se rouvre — la couleur des Actions pour la même idée. */
+.documents-analyses__badge--analyse{ color:var(--fgColor-accent, #58a6ff); }
+/* Attention : lancé, pas revenu. */
+.documents-analyses__badge--attente{ color:var(--fgColor-attention, #d29922); }
+
+/* Un document qui attend n'a pas d'analyse à ouvrir : son titre est du texte. */
+.documents-analyses__titre{ color:var(--muted); }
+.documents-analyses__ligne.est-en-attente .issue-row-title-grid__status{ opacity:.55; }
 .documents-analyses__mot{ margin:16px 0 0; color:var(--muted); }
 .documents-analyses__ligne.est-ouverte{ background:rgba(49,109,202,.10); }
 

@@ -372,6 +372,132 @@ ont été écartés par la porte le dit maintenant à l'écran, au lieu de passe
 un rapport muet — les deux appellent des gestes opposés : un rapport muet se
 classe, un rapport mal lu se relit.
 
+## L'écran appartient au chantier ouvert, et à lui seul
+
+On affichait la liste des documents d'un chantier, on changeait de chantier dans
+l'en-tête, et **la liste de l'ancien restait à l'écran**. Il fallait recharger la
+page au navigateur. Ce n'est pas un retard d'affichage : c'est l'écran qui
+présentait les documents d'un chantier sous le nom d'un autre, ce qui est la pire
+forme du défaut — on y aurait relancé une lecture, ouvert un rapport, décidé
+quelque chose (règle 5).
+
+La cause : l'état de l'écran vivait au niveau du module, posé une fois au
+chargement, et **personne n'en était propriétaire**. Dix-sept champs — la famille
+ouverte, le document ouvert, les lectures lues, le filtre, les coches, le lancé,
+la file — et aucun endroit qui les remette à neuf.
+
+Deux corrections, et pas une remise à zéro écrite à la main :
+
+1. **l'état naît d'une fabrique.** `unEtatNeuf()` rend l'objet entier ; changer de
+   chantier le rappelle. Une remise à zéro champ par champ aurait oublié celui
+   qu'on ajoute au round suivant, et l'aurait oublié en silence (règle 4) ;
+2. **la décision est pure.** `leChantierAChange(connu, ici)` ne touche rien et
+   s'éprouve : un premier affichage n'est **pas** un changement — sinon l'écran
+   repartirait de zéro à chaque redessin —, et un chantier qu'on ne sait pas
+   nommer non plus, car ne pas savoir n'est pas savoir que c'est un autre.
+
+**Et une réponse qui revient en retard ne s'installe plus.** Les quatre requêtes
+partent pour un chantier donné ; avant d'écrire ce qu'elles rapportent, on vérifie
+qu'on est toujours sur celui-là. Sans cela, la fabrique ferait son travail et la
+réponse de l'ancien chantier se reposerait par-dessus une demi-seconde plus tard.
+
+## Ce qui attend, et ce qui est analysé
+
+Le tableau ne montrait que les lectures **conservées**. Un document qu'on venait
+d'envoyer au serveur n'y figurait nulle part : il disparaissait de l'écran entre
+le clic et le retour de la lecture, c'est-à-dire pendant les minutes où l'on se
+demande justement ce qui se passe. Et une lecture qui avait **échoué** ne
+reparaissait jamais : rien ne la distinguait d'un document qu'on n'avait jamais
+choisi.
+
+La file des `versements` répond à cela, et c'est elle qu'on lit — une quatrième
+requête, en parallèle des trois autres. « En attente » veut donc dire **une
+lecture lancée qui n'est pas revenue** : elle attend son tour, elle tourne, ou elle
+n'a pas abouti. Ce n'est pas « tous les documents du chantier qu'on n'a jamais
+analysés » — ce compte-là se chiffre en centaines et ne dit rien à personne.
+
+```
+versements (en_attente · en_cours · echec)   →  ce qui attend
+les trois tables de lectures conservées      →  ce qui est analysé
+                                             →  un seul tableau, l'attente d'abord
+```
+
+**L'attente d'abord**, et c'est le seul ordre défendable : c'est la seule part sur
+laquelle on peut encore agir. Les analysés suivent, par date de lecture.
+
+**Un document déjà analysé n'attend plus**, même si une ligne de file le nomme
+encore — une file abandonnée en route, ou une relecture lancée sur un document
+déjà lu, le ferait sinon paraître dans les deux comptes. Et un pas `lu` de la file
+ne compte pas : sa lecture est conservée, c'est elle qu'on ouvre.
+
+### Le badge, et les pastilles
+
+**Un badge par ligne**, à côté du titre : bleu « Analysé », attention « En
+attente ». Il se lit *avant* d'avoir parcouru la ligne, qui est le moment où l'on
+décide de cliquer. Une colonne de plus l'aurait mis après. La colonne de droite,
+elle, dit ce que la lecture a **valu** — « 12 avis », « 7 messages » ; l'état n'est
+pas une mesure, c'est ce qui dit si la mesure existe.
+
+**Un document qui attend ne s'ouvre pas** : il n'a pas d'analyse à montrer. Son
+titre reste du texte, et le badge dit pourquoi — un titre qui se clique pour ne
+rien ouvrir se lit comme un écran en panne (règle 5).
+
+**Deux pastilles de comptage dans l'en-tête du tableau**, à gauche, à côté du
+compte : « En attente 5 » · « Analysés 26 ». Elles filtrent au clic.
+
+- **elles comptent la famille ouverte**, et non le chantier entier : « En
+  attente 5 » sous Mails doit dire cinq mails, sinon cliquer dessus en rendrait
+  trois et le compte passerait pour faux ;
+- **une pastille allumée se rééteint au clic.** Il n'y a pas de troisième pastille
+  « Tous » : l'état de repos est celui où aucune n'est allumée, et sans ce second
+  clic il n'y aurait aucun chemin de retour vers la liste entière ;
+- **un état sans document garde sa pastille.** « En attente 0 » est une réponse :
+  rien n'est en cours. La faire disparaître laisserait se demander si le filtre
+  existe encore ;
+- **un filtre qui ne rend rien dit lequel**, et où sont les autres. « Aucun rapport
+  de contrôle analysé » serait faux : il y en a, ils sont dans l'autre état.
+
+**Et la phrase d'aide s'en va.** « 19 documents analysés. Cliquer sur une ligne
+rouvre son analyse » redisait le compte que l'en-tête porte déjà, et expliquait un
+geste qu'on fait sans qu'on le dise. Ce qui comptait — combien, et dans quel
+état — est passé dans les pastilles.
+
+### Où se décide ce qu'on lit de la file
+
+`lesStatutsALire({ dontLesEchecs })`, dans `reveiller-la-file.js`, qui est pur et
+éprouvé. Deux écrans lisent la même table et n'attendent pas la même chose :
+
+| qui lit | quels statuts | pourquoi |
+| --- | --- | --- |
+| l'onglet Actions | `en_attente` · `en_cours` | une ligne en échec a déjà sa course au journal, avec son motif ; la redire « en cours » serait faux |
+| Analyse de documents | + `echec` | une lecture qui n'a pas abouti et qui disparaîtrait serait une lecture qu'on croit faite — on ne la relancerait jamais (règle 5) |
+
+Cette décision était écrite dans le module d'accès à la base, où elle ne
+s'éprouvait nulle part : il n'y a là-bas que des allers-retours. Elle est
+remontée d'un cran, et elle tombe maintenant quand on la casse.
+
+## La zone de dépôt redevient un geste secondaire
+
+Elle occupait le haut de l'écran en permanence, alors que ce qu'on vient faire
+ici, neuf fois sur dix, c'est **regarder ce qui a déjà été analysé**. Le tableau
+commençait sous la ligne de flottaison.
+
+Elle part donc derrière un bouton vert **« + Documents »**, dans la ligne du
+titre, à gauche de Transformer. Les deux gestes de l'écran se tiennent ainsi côte
+à côte : faire entrer des documents, et faire sortir ce qu'on en a tiré. Le vert
+dit celui qui ajoute, comme ailleurs dans l'application.
+
+- **la zone est fermée au repos**, et le bouton dit par `aria-expanded` si elle
+  est ouverte — un bouton qui ne dit pas l'état de ce qu'il commande laisse
+  chercher si le clic a porté ;
+- **elle se referme au départ de la lecture.** Le geste est fait ; la laisser
+  ouverte reprendrait l'écran qu'on vient de dégager, au moment précis où l'on
+  veut revoir le tableau pour y suivre ce qui part. Ce qui part y apparaît
+  aussitôt, en attente : la file est relue dans le même geste ;
+- **le bouton ne paraît pas par-dessus un document ouvert** ni sur une lecture
+  rouverte : on y déposerait par-dessus ce qu'on est en train de lire, et il
+  faudrait d'abord en sortir.
+
 ## Ce qui n'est pas fait, et c'est dit à l'écran
 
 **Le dépôt depuis le disque reste au compte rendu.** Les autres familles n'offrent

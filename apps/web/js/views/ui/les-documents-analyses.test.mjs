@@ -8,10 +8,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  CHOISIR_UNE_FAMILLE, OUVRIR_UN_DOCUMENT, laFamilleDesignee, leDocumentDesigne,
-  renderLeRailDesFamilles, renderLeTableauDesDocuments
+  CHOISIR_UNE_FAMILLE, FILTRER_PAR_ETAT, OUVRIR_UN_DOCUMENT, laFamilleDesignee,
+  leDocumentDesigne, renderLeRailDesFamilles, renderLeTableauDesDocuments
 } from "./les-documents-analyses.js";
-import { FAMILLE, TOUTES, lesDocumentsAnalyses } from "../../services/les-documents-analyses.js";
+import {
+  FAMILLE, OU_EN_EST, TOUTES, lesDocumentsAnalyses, lesDocumentsDuTableau,
+  lesDocumentsEnAttente
+} from "../../services/les-documents-analyses.js";
 
 const TOUS = lesDocumentsAnalyses({
   mails: [{
@@ -27,6 +30,51 @@ const TOUS = lesDocumentsAnalyses({
     created_at: "2026-09-30T10:00:00Z", mesures: { points: 11 }
   }]
 });
+
+/**
+ * Ce qui attend, **tel que le service le tire de la file** — et non écrit à la
+ * main ici.
+ *
+ * Une ligne dont j'aurais posé moi-même le `ou` et le `dit` recopierait
+ * l'hypothèse du code : elle passerait encore si le service cessait de lire la
+ * file. Les lignes brutes ci-dessous sont celles de la table `versements`.
+ */
+const EN_ATTENTE = lesDocumentsEnAttente([
+  {
+    geste: FAMILLE.CONTROLE, cree_le: "2026-10-03T08:00:00Z",
+    avancement: { pas: [
+      { id: "r-9", nom: "RICT-04.pdf", ou: "en-cours" },
+      { id: "r-8", nom: "RICT-05.pdf", ou: "echoue", motif: "le fichier est illisible" },
+      // Déjà lu : il a sa lecture conservée, et n'attend plus rien.
+      { id: "r-1", nom: "RICT-03.pdf", ou: "lu" }
+    ] }
+  },
+  {
+    geste: FAMILLE.MAIL, cree_le: "2026-10-03T09:00:00Z",
+    fichiers: [{ id: "m-4", nom: "Relance toiture.msg" }]
+  }
+]);
+
+/** Les deux états réunis, comme l'écran les passe au tableau. */
+const MELANGE = lesDocumentsDuTableau({ analyses: TOUS, enAttente: EN_ATTENTE });
+
+/**
+ * Ce que les pastilles affichent, lu dans le HTML : leur mot et leur compte.
+ *
+ * Les lire au lieu de les déduire est le point : une pastille qui compterait le
+ * chantier entier au lieu de la famille ouverte n'est visible que là.
+ */
+function lesPastillesDisent(html) {
+  const dit = {};
+  const trouve = /documents-analyses__pastille[\s\S]*?>([^<]*)<span class="documents-analyses__compte">(\d+)</g;
+  for (const une of html.matchAll(trouve)) dit[une[1].trim()] = Number(une[2]);
+  return dit;
+}
+
+/** Ce que chaque pastille émet au clic. */
+function lesPastillesEmettent(html) {
+  return [...html.matchAll(new RegExp(`${FILTRER_PAR_ETAT}="([^"]*)"`, "g"))].map((un) => un[1]);
+}
 
 /* ── Le rail ──────────────────────────────────────────────────────────────── */
 
@@ -108,6 +156,118 @@ test("la ligne ouverte est marquée", () => {
     documents: TOUS, famille: TOUTES, ouverte: "r-1"
   });
   assert.equal((html.match(/est-ouverte/g) ?? []).length, 1);
+});
+
+/* ── Les deux états, à l'écran ─────────────────────────────────── */
+
+test("chaque ligne porte un badge, et il dit lequel des deux états", () => {
+  // Le badge est ce qu'on lit **avant** de parcourir la ligne, au moment où l'on
+  // décide de cliquer ou non. Un badge qui dirait la même chose des deux états
+  // ferait croire qu'une lecture partie est déjà revenue (règle 5).
+  const html = renderLeTableauDesDocuments({ documents: MELANGE, famille: TOUTES });
+
+  // Le mot de la pastille, lui, est suivi de son compte : seuls les badges
+  // referment leur `span` juste après le mot.
+  assert.equal((html.match(/En attente<\/span>/g) ?? []).length, 3, "trois en attente");
+  assert.equal((html.match(/Analysé<\/span>/g) ?? []).length, 3, "trois analysés");
+
+  assert.match(html, /documents-analyses__badge--attente/);
+  assert.match(html, /documents-analyses__badge--analyse"/);
+  // Et ce qui attend se dit sur sa ligne : ce que la file en sait.
+  assert.match(html, /lecture en cours/);
+  assert.match(html, /le fichier est illisible/);
+});
+
+test("un document qui attend ne s'ouvre pas", () => {
+  // Il n'a pas d'analyse à montrer : un titre qui se clique pour ne rien ouvrir
+  // se lit comme un écran en panne (règle 5).
+  const html = renderLeTableauDesDocuments({ documents: MELANGE, famille: TOUTES });
+
+  assert.doesNotMatch(html, new RegExp(`${OUVRIR_UN_DOCUMENT}="rapports:r-9"`));
+  assert.doesNotMatch(html, new RegExp(`${OUVRIR_UN_DOCUMENT}="mails:m-4"`));
+  assert.match(html, /<span class="documents-analyses__titre">RICT-04\.pdf<\/span>/);
+  // Celui qui est analysé, lui, s'ouvre toujours.
+  assert.match(html, new RegExp(`${OUVRIR_UN_DOCUMENT}="rapports:r-1"`));
+  assert.equal((html.match(/est-en-attente/g) ?? []).length, 3);
+});
+
+test("les pastilles comptent la famille ouverte, et non le chantier entier", () => {
+  // « En attente (5) » sous Mails doit dire cinq mails : sinon cliquer dessus en
+  // rendrait trois, et le compte passerait pour faux.
+  assert.deepEqual(
+    lesPastillesDisent(renderLeTableauDesDocuments({ documents: MELANGE, famille: TOUTES })),
+    { "En attente": 3, "Analysés": 3 }
+  );
+  assert.deepEqual(
+    lesPastillesDisent(renderLeTableauDesDocuments({
+      documents: MELANGE, famille: FAMILLE.CONTROLE
+    })),
+    { "En attente": 2, "Analysés": 1 }
+  );
+  assert.deepEqual(
+    lesPastillesDisent(renderLeTableauDesDocuments({
+      documents: MELANGE, famille: FAMILLE.CR
+    })),
+    { "En attente": 0, "Analysés": 1 }
+  );
+});
+
+test("un état sans document garde sa pastille", () => {
+  // « En attente (0) » est une réponse : rien n'est en cours. La faire
+  // disparaître laisserait se demander si le filtre existe encore.
+  const html = renderLeTableauDesDocuments({ documents: TOUS, famille: TOUTES });
+  assert.deepEqual(lesPastillesDisent(html), { "En attente": 0, "Analysés": 3 });
+});
+
+test("le filtre ne montre qu'un état", () => {
+  const attente = renderLeTableauDesDocuments({
+    documents: MELANGE, famille: TOUTES, filtre: OU_EN_EST.ATTENTE
+  });
+  assert.match(attente, /RICT-04\.pdf/);
+  assert.doesNotMatch(attente, /RICT-03\.pdf/, "un analysé reste dans le filtre d'attente");
+  assert.doesNotMatch(attente, /Reprise des enduits/);
+
+  const analyses = renderLeTableauDesDocuments({
+    documents: MELANGE, famille: TOUTES, filtre: OU_EN_EST.ANALYSE
+  });
+  assert.match(analyses, /RICT-03\.pdf/);
+  assert.doesNotMatch(analyses, /RICT-04\.pdf/);
+});
+
+test("une pastille allumée se rééteint au clic", () => {
+  // Sans cela, il n'y aurait aucun chemin de retour vers la liste entière, et
+  // l'on chercherait un bouton qui n'existe pas.
+  assert.deepEqual(
+    lesPastillesEmettent(renderLeTableauDesDocuments({ documents: MELANGE })),
+    [OU_EN_EST.ATTENTE, OU_EN_EST.ANALYSE]
+  );
+  assert.deepEqual(
+    lesPastillesEmettent(renderLeTableauDesDocuments({
+      documents: MELANGE, filtre: OU_EN_EST.ATTENTE
+    })),
+    ["", OU_EN_EST.ANALYSE]
+  );
+  assert.match(renderLeTableauDesDocuments({
+    documents: MELANGE, filtre: OU_EN_EST.ANALYSE
+  }), /est-active/);
+});
+
+test("un filtre qui ne rend rien dit lequel, et où sont les autres", () => {
+  // « Aucun rapport de contrôle analysé » serait faux : il y en a, ils sont
+  // juste dans l'autre état.
+  const html = renderLeTableauDesDocuments({
+    documents: TOUS, famille: TOUTES, filtre: OU_EN_EST.ATTENTE
+  });
+  assert.match(html, /Aucun document en attente/);
+  assert.match(html, /Le filtre en haut du tableau en montre d&#39;autres/);
+});
+
+test("rien ne se dresse entre le tableau et son en-tête", () => {
+  // « 19 documents analysés. Cliquer sur une ligne rouvre son analyse » redisait
+  // le compte que l'en-tête porte, et expliquait un geste qu'on fait sans qu'on
+  // le dise. Ce qui comptait est passé dans les pastilles.
+  const html = renderLeTableauDesDocuments({ documents: MELANGE, famille: TOUTES });
+  assert.match(html, /<section class="documents-analyses">\s*<div class="data-table-shell/);
 });
 
 /* ── Ce qu'un clic désigne ────────────────────────────────────────────────── */

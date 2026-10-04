@@ -25,7 +25,8 @@ import {
   laLigneEstAbandonnee,
   leGesteDeLaLigne,
   leMotDeLaReprise,
-  lesReveilsADemander
+  lesReveilsADemander,
+  lesStatutsALire
 } from "./reveiller-la-file.js";
 
 const MAINTENANT = Date.parse("2026-10-01T09:36:00Z");
@@ -237,4 +238,33 @@ test("sans mémoire des réveils, la demande part", () => {
     lesReveilsADemander(attend, { maintenant: MAINTENANT, dejaReveille: new Map() }),
     ["lire-les-comptes-rendus"]
   );
+});
+
+/* ── Quels états se lisent, et pour qui ───────────────────────────── */
+
+test("Actions ne reprend pas les échecs dans ce qui tourne", () => {
+  // Une ligne en échec a déjà sa course au journal, avec son motif : la redire
+  // « en cours » serait faux, et l'onglet montrerait un travail qui n'avance pas.
+  assert.deepEqual(lesStatutsALire(), ["en_attente", "en_cours"]);
+  assert.deepEqual(lesStatutsALire({}), ["en_attente", "en_cours"]);
+  assert.deepEqual(lesStatutsALire({ dontLesEchecs: false }), ["en_attente", "en_cours"]);
+});
+
+test("l'écran d'analyse reprend les échecs, pour les montrer en attente", () => {
+  // Une lecture qui n'a pas abouti et qui disparaîtrait du tableau serait une
+  // lecture qu'on croit faite : on ne la relancerait jamais (règle 5).
+  assert.deepEqual(
+    lesStatutsALire({ dontLesEchecs: true }),
+    ["en_attente", "en_cours", "echec"]
+  );
+});
+
+test("un état lu n'est jamais à relire", () => {
+  // `lu` et `fini` sont des lectures conservées : c'est elles qu'on ouvre, et les
+  // reprendre ici les montrerait deux fois.
+  for (const quoi of [{}, { dontLesEchecs: true }]) {
+    const statuts = lesStatutsALire(quoi);
+    assert.ok(!statuts.includes("lu"), JSON.stringify(statuts));
+    assert.ok(!statuts.includes("fini"), JSON.stringify(statuts));
+  }
 });

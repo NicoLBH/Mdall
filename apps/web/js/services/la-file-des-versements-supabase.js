@@ -8,6 +8,7 @@
 
 import { supabase, getCurrentUser, getSupabaseUrl, buildSupabaseAuthHeaders } from "../../assets/js/auth.js";
 import { CASIER, envoyerLesMails } from "./la-file-des-versements.js";
+import { lesStatutsALire } from "./reveiller-la-file.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -97,13 +98,18 @@ export async function reveillerLeServeur() {
  * fait deux endroits où l'on apprend qu'un travail est en cours, et l'un des
  * deux aurait fini par en oublier un geste (règle 10).
  */
-export async function lesVersementsEnCours(projectId = "") {
+export async function lesVersementsEnCours(projectId = "", { dontLesEchecs = false } = {}) {
   if (!texte(projectId)) return [];
+
+  // **Quels états comptent, et pour qui**, se décide dans `reveiller-la-file.js`,
+  // qui est pur et éprouvé : ici, il n'y a que l'aller-retour.
+  const statuts = lesStatutsALire({ dontLesEchecs });
+
   const { data, error } = await supabase
     .from("versements")
     .select("id,project_id,owner_id,geste,statut,fichiers,documents,avancement,arrete,cree_le,pris_le")
     .eq("project_id", texte(projectId))
-    .in("statut", ["en_attente", "en_cours"])
+    .in("statut", statuts)
     .order("cree_le", { ascending: false });
 
   // **Ne pas savoir n'est pas savoir qu'il n'y a rien.** Une lecture ratée qui

@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   CE_QUE_DIT_LA_FAMILLE, FAMILLE, LES_FAMILLES, TOUTES, ceQueDitLaFamille,
-  lesComptesParFamille, lesDocumentsAnalyses, parFamille, phraseDeLaFamille,
+  lesComptesParFamille, lesDocumentsAnalyses, parFamille,
   unDocumentAnalyse
 } from "./les-documents-analyses.js";
 
@@ -110,17 +110,15 @@ test("filtrer rend la famille, et rien d'autre", () => {
 });
 
 test("une famille vide dit quoi faire, et non « aucun résultat »", () => {
+  // La phrase vit dans le registre, et c'est l'état vide du tableau qui la pose.
+  // Elle avait aussi une seconde vie en tête de tableau — « 19 documents
+  // analysés. Cliquer sur une ligne… » —, qui redisait le compte de l'en-tête et
+  // expliquait un geste qu'on fait sans qu'on le dise : elle a été retirée, et
+  // avec elle la fonction qui la composait (règle 4).
   for (const famille of [TOUTES, ...LES_FAMILLES]) {
-    const dit = phraseDeLaFamille(famille, []);
+    const dit = CE_QUE_DIT_LA_FAMILLE[famille].vide.quoi;
     assert.ok(dit.length > 30, famille);
-    assert.equal(dit, CE_QUE_DIT_LA_FAMILLE[famille].vide.quoi);
   }
-});
-
-test("une famille relue le dit, parce que c'est ce qui fait comparer", () => {
-  assert.match(phraseDeLaFamille(FAMILLE.MAIL, TOUS()), /dont 1 relu au moins une fois/);
-  assert.match(phraseDeLaFamille(FAMILLE.CONTROLE, TOUS()), /dont 1 relu au moins une fois/);
-  assert.match(phraseDeLaFamille(FAMILLE.CR, TOUS()), /1 document analysé\./);
 });
 
 test("une famille inconnue n'est pas inventée", () => {
@@ -144,4 +142,179 @@ test("chaque famille porte une icône qui existe", () => {
     const nom = CE_QUE_DIT_LA_FAMILLE[famille].icone;
     assert.ok(planche.includes(`id="${nom}"`), `${famille} : l'icône « ${nom} » n'existe pas`);
   }
+});
+
+/* ── Ce qui a été lancé, et qui n'est pas revenu ─────────────────────────── */
+
+import {
+  CE_QUE_DIT_LETAT, OU_EN_EST, lesComptesParEtat, lesDocumentsDuTableau,
+  lesDocumentsEnAttente, parEtat
+} from "./les-documents-analyses.js";
+
+/** Une ligne de file, telle que la table `versements` la rend. */
+function uneFile(geste, pas, reste = {}) {
+  return {
+    id: `v-${geste}`, geste, statut: "en_cours", cree_le: "2026-10-04T09:00:00Z",
+    avancement: pas === null ? null : { pas },
+    ...reste
+  };
+}
+
+test("les documents d'une file qui tourne sont en attente", () => {
+  const attente = lesDocumentsEnAttente([
+    uneFile("rapports", [
+      { id: "d-1", nom: "RICT-01.pdf", ou: "attend" },
+      { id: "d-2", nom: "RICT-02.pdf", ou: "en-cours" }
+    ])
+  ]);
+
+  assert.deepEqual(attente.map((un) => un.titre), ["RICT-01.pdf", "RICT-02.pdf"]);
+  assert.deepEqual(attente.map((un) => un.ou), [OU_EN_EST.ATTENTE, OU_EN_EST.ATTENTE]);
+  assert.deepEqual(attente.map((un) => un.famille), ["rapports", "rapports"]);
+  assert.deepEqual(attente.map((un) => un.dit),
+    ["en attente de lecture", "lecture en cours"]);
+});
+
+test("un document déjà lu par la file n'est pas en attente", () => {
+  // Il a une lecture conservée : le reprendre ici le montrerait deux fois, une
+  // fois en attente et une fois analysé, pour le même document.
+  const attente = lesDocumentsEnAttente([
+    uneFile("rapports", [
+      { id: "d-1", nom: "RICT-01.pdf", ou: "lu" },
+      { id: "d-2", nom: "RICT-02.pdf", ou: "attend" }
+    ])
+  ]);
+
+  assert.deepEqual(attente.map((un) => un.id), ["d-2"]);
+});
+
+test("une lecture qui a échoué reste en attente, et dit pourquoi", () => {
+  // Une lecture qui n'a pas abouti et qui disparaîtrait serait une lecture
+  // qu'on croit faite (règle 5).
+  const attente = lesDocumentsEnAttente([
+    uneFile("comptes_rendus", [
+      { id: "d-9", nom: "CR_16.pdf", ou: "echoue", motif: "ce document ne porte aucun texte" }
+    ])
+  ]);
+
+  assert.equal(attente.length, 1);
+  assert.equal(attente[0].dit, "la lecture n'a pas abouti");
+  assert.equal(attente[0].motif, "ce document ne porte aucun texte");
+});
+
+test("une ligne que le serveur n'a pas encore prise attend tout entière", () => {
+  // Attendre le premier battement pour la faire paraître laisserait l'écran
+  // muet juste après le clic — c'est-à-dire au moment où l'on regarde.
+  const attente = lesDocumentsEnAttente([
+    uneFile("rapports", null, {
+      documents: [{ id: "d-1", nom: "RICT-01.pdf" }, { id: "d-2", nom: "RICT-02.pdf" }]
+    })
+  ]);
+
+  assert.deepEqual(attente.map((un) => un.id), ["d-1", "d-2"]);
+  assert.deepEqual(attente.map((un) => un.dit), ["en attente de lecture", "en attente de lecture"]);
+});
+
+test("un dépôt de mails attend par ses fichiers", () => {
+  // Les mails portent des chemins d'octets, les lectures des identifiants de
+  // documents : les deux se comptent, sinon le dépôt de messagerie n'apparaît pas.
+  const attente = lesDocumentsEnAttente([
+    uneFile("mails", null, { fichiers: [{ chemin: "p/a.eml", nom: "Reprise des enduits" }] })
+  ]);
+
+  assert.equal(attente.length, 1);
+  assert.equal(attente[0].titre, "Reprise des enduits");
+  assert.equal(attente[0].famille, "mails");
+});
+
+test("le même document relancé deux fois n'occupe qu'une ligne", () => {
+  // C'est le document qu'on regarde, pas la tentative.
+  const attente = lesDocumentsEnAttente([
+    uneFile("rapports", [{ id: "d-1", nom: "RICT-01.pdf", ou: "echoue" }], { id: "v-1" }),
+    uneFile("rapports", [{ id: "d-1", nom: "RICT-01.pdf", ou: "attend" }], { id: "v-2" })
+  ]);
+
+  assert.equal(attente.length, 1);
+});
+
+test("une file d'un geste qu'on ne connaît pas n'entre pas au tableau", () => {
+  // Deviner sa famille la rangerait sous un rail qui ne la lit pas (règle 5).
+  assert.deepEqual(lesDocumentsEnAttente([uneFile("notices", [{ id: "d-1", ou: "attend" }])]), []);
+});
+
+test("un pas sans identifiant ne fait pas de ligne", () => {
+  // Une ligne qu'on ne peut pas désigner n'a rien à faire dans un tableau.
+  assert.deepEqual(lesDocumentsEnAttente([uneFile("rapports", [{ nom: "x", ou: "attend" }])]), []);
+});
+
+test("aucune file ne donne aucune attente, et non une erreur", () => {
+  assert.deepEqual(lesDocumentsEnAttente([]), []);
+  assert.deepEqual(lesDocumentsEnAttente(null), []);
+});
+
+/* ── Les deux états réunis ───────────────────────────────────────────────── */
+
+const UN_ANALYSE = {
+  id: "l-1", famille: "rapports", titre: "RICT-00.pdf", documentId: "d-0",
+  lueLe: "2026-10-01T10:00:00Z", quand: "2026-09-01", dit: "12 avis", combien: 1
+};
+
+test("ce qui attend se lit avant ce qui est analysé", () => {
+  // C'est la seule part sur laquelle on peut encore agir.
+  const tout = lesDocumentsDuTableau({
+    analyses: [UN_ANALYSE],
+    enAttente: lesDocumentsEnAttente([uneFile("rapports", [{ id: "d-1", nom: "A.pdf", ou: "attend" }])])
+  });
+
+  assert.deepEqual(tout.map((un) => un.id), ["d-1", "l-1"]);
+  assert.deepEqual(tout.map((un) => un.ou), [OU_EN_EST.ATTENTE, OU_EN_EST.ANALYSE]);
+});
+
+test("un document déjà analysé n'attend plus, même si une file le nomme encore", () => {
+  // Une file abandonnée en route, ou une relecture lancée sur un document déjà
+  // lu, le ferait paraître dans les deux comptes.
+  const tout = lesDocumentsDuTableau({
+    analyses: [UN_ANALYSE],
+    enAttente: lesDocumentsEnAttente([uneFile("rapports", [{ id: "d-0", nom: "RICT-00.pdf", ou: "attend" }])])
+  });
+
+  assert.deepEqual(tout.map((un) => un.id), ["l-1"]);
+});
+
+test("ne pas savoir ce qui est analysé ne dresse aucun tableau", () => {
+  // Un tableau qui ne porterait que la file laisserait croire que rien n'a
+  // jamais été analysé (règle 5).
+  assert.equal(lesDocumentsDuTableau({ analyses: null, enAttente: [{ id: "d-1" }] }), null);
+});
+
+test("un analysé sans état déclaré est analysé", () => {
+  const [un] = lesDocumentsDuTableau({ analyses: [UN_ANALYSE] });
+  assert.equal(un.ou, OU_EN_EST.ANALYSE);
+});
+
+/* ── Le filtre et ses pastilles ──────────────────────────────────────────── */
+
+test("le filtre rend ceux d'un état, et tous quand il n'y en a pas", () => {
+  const tout = lesDocumentsDuTableau({
+    analyses: [UN_ANALYSE],
+    enAttente: lesDocumentsEnAttente([uneFile("rapports", [{ id: "d-1", nom: "A.pdf", ou: "attend" }])])
+  });
+
+  assert.deepEqual(parEtat(tout, OU_EN_EST.ATTENTE).map((un) => un.id), ["d-1"]);
+  assert.deepEqual(parEtat(tout, OU_EN_EST.ANALYSE).map((un) => un.id), ["l-1"]);
+  assert.equal(parEtat(tout, "").length, 2);
+});
+
+test("les pastilles comptent les deux états", () => {
+  const tout = lesDocumentsDuTableau({
+    analyses: [UN_ANALYSE, { ...UN_ANALYSE, id: "l-2", documentId: "d-2" }],
+    enAttente: lesDocumentsEnAttente([uneFile("rapports", [{ id: "d-1", nom: "A.pdf", ou: "attend" }])])
+  });
+
+  assert.deepEqual(lesComptesParEtat(tout), { attente: 1, analyse: 2 });
+});
+
+test("chaque état se dit dans les mots de l'écran", () => {
+  assert.equal(CE_QUE_DIT_LETAT[OU_EN_EST.ATTENTE], "En attente");
+  assert.equal(CE_QUE_DIT_LETAT[OU_EN_EST.ANALYSE], "Analysés");
 });

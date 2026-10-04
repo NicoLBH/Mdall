@@ -90,6 +90,37 @@ export const GESTE_DES_MAILS = FAMILLE.MAIL;
 export const GESTE_DES_CR = FAMILLE.CR;
 
 /**
+ * Les statuts d'une ligne de file **qu'il reste quelque chose à dire**.
+ *
+ * ## Pourquoi deux réponses, et non une
+ *
+ * Deux écrans lisent la même table, et n'attendent pas la même chose.
+ *
+ * L'onglet Actions montre **ce qui tourne** : une ligne en échec y a déjà sa
+ * course au journal, avec son motif, et la redire « en cours » serait faux.
+ *
+ * L'écran d'analyse montre **ce qui n'est pas encore analysé** : une lecture qui
+ * n'a pas abouti et qui disparaîtrait du tableau serait une lecture qu'on croit
+ * faite, et l'on ne la relancerait jamais (règle 5).
+ *
+ * `lu` n'en est d'aucun côté : la lecture est conservée, et c'est elle qu'on
+ * ouvre.
+ *
+ * ## Pourquoi ici, et non à l'endroit de la requête
+ *
+ * C'est une décision — **quels états comptent, pour qui** —, et une décision
+ * écrite dans un module d'accès à la base ne s'éprouve nulle part : il n'y a
+ * là-bas que des allers-retours. Ici, elle tombe quand on la casse.
+ *
+ * @param {{dontLesEchecs?: boolean}} [quoi]
+ * @returns {string[]}
+ */
+export function lesStatutsALire({ dontLesEchecs = false } = {}) {
+  const tournent = ["en_attente", "en_cours"];
+  return dontLesEchecs ? [...tournent, "echec"] : tournent;
+}
+
+/**
  * Cette ligne a-t-elle été prise puis abandonnée en route ?
  *
  * Une ligne `en_cours` **sans date de prise** est abandonnée : on ne sait pas
