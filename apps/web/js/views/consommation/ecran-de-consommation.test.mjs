@@ -4,11 +4,13 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import {
-  renderCarteDeConsommation, renderConsommation, renderCourbeDesJours,
-  renderLectureImpossible, renderRepartitionParProjet, renderTarifApplique
+  renderCarteDeConsommation, renderConsommation, renderLaCourbe,
+  renderLectureImpossible, renderLevolutionDesPostes, renderRepartitionParProjet,
+  renderTarifApplique
 } from "./ecran-de-consommation.js";
 import {
-  bornesDuMois, parJour, parNature, parProjet, totalDesAppels
+  COMBIEN_DE_COURBES, PAS, bornesDuMois, laFenetreDe, lEvolutionDesPostes, nomDeLaNature,
+  parNature, parPas, parProjet, totalDesAppels
 } from "../../services/consommation-ia.js";
 import { renderRepartitionParNature } from "./ecran-de-consommation.js";
 
@@ -76,13 +78,90 @@ test("la courbe est celle de l'évolution des sujets, pas une nouvelle", () => {
  * plaquerait sur le bord et l'on ne saurait pas si elle est vide ou cassée.
  */
 test("un mois sans appel garde un axe lisible", () => {
-  const html = renderCourbeDesJours(parJour([], bornesDuMois("2026-09")));
+  const html = renderLaCourbe(parPas([], { pas: PAS.JOUR, ...bornesDuMois("2026-09") }));
   assert.match(html, /conso-courbe/);
   assert.doesNotMatch(html, /NaN|Infinity/);
 });
 
-test("sans aucun jour, la courbe dit qu'il n'y a rien plutôt que de se dessiner vide", () => {
-  assert.match(renderCourbeDesJours([]), /Aucun appel sur cette période/);
+test("sans aucun pas, la courbe dit qu'il n'y a rien plutôt que de se dessiner vide", () => {
+  assert.match(renderLaCourbe([]), /Aucun appel sur cette période/);
+});
+
+test("le bouton du pas est à côté de la courbe, et dit lequel est posé", () => {
+  // C'est la courbe qu'il change, pas l'écran : posé en haut, il se lirait comme
+  // un second choix de période et l'on ne saurait plus lequel agit sur quoi.
+  const html = renderLaCourbe(parPas([], { pas: PAS.MOIS, ...laFenetreDe({ pas: PAS.MOIS, mois: "2026-10" }) }),
+    { titre: "Consommation par mois", pas: PAS.MOIS, avecLeChoix: true });
+
+  assert.match(html, /data-action-id="consoPas"/);
+  assert.match(html, /conso-courbe__tete/);
+  assert.ok(html.indexOf("consoPas") < html.indexOf("svg-line-chart")
+    || !html.includes("svg-line-chart"), "le bouton précède le tracé");
+  // Les trois pas se proposent, et un seul est actif.
+  for (const quoi of [PAS.JOUR, PAS.MOIS, PAS.ANNEE]) {
+    assert.match(html, new RegExp(`data-menu-action="conso-pas:${quoi}"`), quoi);
+  }
+
+  // Sans le demander, pas de bouton : l'évolution secondaire n'en a pas besoin,
+  // elle suit le pas de la courbe principale.
+  assert.doesNotMatch(renderLaCourbe([{ cle: "2026-09-01", dit: "01", euros: 1 }]),
+    /data-action-id="consoPas"/);
+});
+
+/* ── L'évolution, l'affichage secondaire ────────────────────────── */
+
+test("l'évolution montre les plus gros postes, et pas plus de quatre courbes", () => {
+  // La feuille de style déclare quatre couleurs de série : une cinquième
+  // prendrait celle du texte et se lirait comme un défaut d'affichage.
+  const appels = ["lecture_cr", "titre", "synthese", "classement", "autre_chose", "encore"]
+    .flatMap((nature, rang) => [
+      appel({ nature, entree: (rang + 1) * 100_000, le: "2026-09-02T10:00:00Z" }),
+      appel({ nature, entree: (rang + 1) * 300_000, le: "2026-10-02T10:00:00Z" })
+    ]);
+
+  const fenetre = laFenetreDe({ pas: PAS.MOIS, mois: "2026-10" });
+  const postes = lEvolutionDesPostes(appels, {
+    pas: PAS.MOIS, ...fenetre, cleDuPoste: (un) => un.nature, nomDuPoste: nomDeLaNature
+  });
+
+  assert.equal(postes.length, COMBIEN_DE_COURBES);
+  // Le classement porte sur la fenêtre entière : le plus gros est le dernier
+  // déclaré, qui porte les plus gros jetons.
+  assert.equal(postes[0].cle, "encore");
+
+  const html = renderLevolutionDesPostes(postes);
+  assert.match(html, /conso-evolution/);
+  assert.equal((html.match(/svg-line-chart__series--/g) ?? []).length >= COMBIEN_DE_COURBES, true);
+  assert.doesNotMatch(html, /svg-line-chart__series--5/, "une cinquième série n'a pas de couleur");
+  assert.doesNotMatch(html, /NaN|Infinity/);
+});
+
+test("un seul pas ne dessine pas d'évolution", () => {
+  // Un point unique trace une courbe qui ne monte ni ne descend : la réponse la
+  // plus trompeuse possible (règle 5).
+  assert.equal(renderLevolutionDesPostes([
+    { cle: "lecture_cr", nom: "Lecture", points: [{ cle: "2026-10", dit: "oct", euros: 3 }] }
+  ]), "");
+  assert.equal(renderLevolutionDesPostes([]), "");
+  assert.equal(renderLevolutionDesPostes(null), "");
+});
+
+test("les usages et les chantiers montrent chacun leur évolution", () => {
+  // « 60 % de la facture » dit où part l'argent, jamais si cela monte — et ce
+  // sont deux décisions différentes.
+  const html = renderConsommation({
+    appels: [
+      appel({ nature: "lecture_cr", projetId: "p1", le: "2026-09-02T10:00:00Z" }),
+      appel({ nature: "titre", projetId: "p2", le: "2026-10-02T10:00:00Z" })
+    ],
+    bornes: laFenetreDe({ pas: PAS.MOIS, mois: "2026-10" }),
+    pas: PAS.MOIS,
+    parProjets: true,
+    nomDuProjet: (id) => (id === "p1" ? "Presbytère" : "Médiathèque")
+  });
+
+  assert.match(html, /L&#39;évolution des usages/);
+  assert.match(html, /L&#39;évolution des chantiers/);
 });
 
 /* ── La répartition ──────────────────────────────────────────────────────── */
@@ -284,4 +363,38 @@ test("le projet montre aussi où va son argent", () => {
 
   assert.match(html, /conso-usages/);
   assert.match(html, /Lecture des rapports de contrôle/);
+});
+
+test("une répartition par usage sur une seule case inconnue ne se dessine pas", () => {
+  // La console lit la consommation d'un compte **groupée par pas et par
+  // modèle** : la nature de l'appel n'en fait pas partie. La dessiner quand
+  // même donnait une seule barre, « inconnu — 100 % », qui n'apprend rien et se
+  // lit comme une panne (règle 12).
+  const sansNature = [
+    { model: "gpt-4.1-mini", entree: 1000, sortie: 200, combien: 3, le: "2026-10-01T00:00:00Z", nature: "" }
+  ];
+
+  const avec = renderConsommation({ appels: sansNature, bornes: bornesDuMois("2026-10") });
+  assert.match(avec, /Par usage/, "l'écran de l'utilisateur la garde");
+
+  const sans = renderConsommation({
+    appels: sansNature, bornes: bornesDuMois("2026-10"), parUsages: false
+  });
+  assert.doesNotMatch(sans, /Par usage/);
+  assert.doesNotMatch(sans, /L&#39;évolution des usages/);
+  // Et ce qui reste est bien ce qu'on vient voir : la carte, la courbe, le tarif.
+  assert.match(sans, /conso-carte/);
+  assert.match(sans, /conso-courbe/);
+  assert.match(sans, /conso-tarif/);
+});
+
+test("une ligne groupée compte ses appels jusqu'à la carte", () => {
+  // Trois appels groupés en une ligne doivent s'écrire « 3 appels » : « 1 appel »
+  // ferait croire à un coût unitaire énorme.
+  const html = renderConsommation({
+    appels: [{ model: "gpt-4.1-mini", entree: 3000, sortie: 600, combien: 3, le: "2026-10-01T00:00:00Z" }],
+    bornes: bornesDuMois("2026-10"),
+    parUsages: false
+  });
+  assert.match(html, /3 appels/);
 });

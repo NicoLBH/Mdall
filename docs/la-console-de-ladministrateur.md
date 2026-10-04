@@ -328,18 +328,34 @@ Deux choses restent : **l'étendre** aux autres fonctions (l'Établi, le copilot
 les dépôts de pièces), et **décider sa durée de conservation** — un journal
 utile six mois devient un passif ensuite (§ 6).
 
-**2. La date d'entrée et la dernière trace de chaque compte.** Sans elles,
-aucune cohorte ne se reconstitue — on ne saura jamais qui est parti la première
-semaine, ni quand.
+**2. La date d'entrée et la dernière trace de chaque compte — *lues*.** Elles
+étaient déjà en base, dans `auth.users` ; ce qui manquait était un endroit d'où
+les regarder. *Utilisateurs › Les comptes* les montre (§ 7 quinquies). La cohorte
+elle-même — « sur les dix inscrits de la semaine 3, combien ont versé quelque
+chose en semaine 4 » — reste à faire : la matière est là, le calcul non.
 
-**3. Le journal des accès administrateurs.** Avant le premier accès
-administrateur, pas après. Un journal qui commence en mars ne dit rien de
-février, et c'est en février qu'on aura regardé.
+**3. Le journal des accès administrateurs — *fait*.** Table
+`acces_administrateurs`, posée **dans la même migration** que le premier écran
+qui lit un compte. C'était la règle que cette page écrivait depuis des mois, et
+elle a été tenue : qui, quelle page, quand, quel filtre.
 
-La console existe désormais, et **elle ne lit rien** de la base sinon sa propre
-porte : les écrans qui lisaient sont partis dans l'application (§ 7). Cela ne
-rend pas ce journal moins urgent, cela dit seulement dans quel ordre : le journal
-doit **précéder le premier écran qui lit un compte**, et non l'ouverture du site.
+Trois décisions qu'il faut dire :
+
+- **la base écrit, pas la console.** Les trois fonctions de lecture appellent
+  `la_porte_de_la_console()` avant de répondre ; une console qui pourrait choisir
+  de ne pas se journaliser ne se journalise pas ;
+- **un refus ne laisse pas de ligne.** La porte vérifie avant d'écrire : une
+  tentative refusée n'est pas un accès, et un journal rempli de tentatives est un
+  journal qu'on ne relit plus ;
+- **personne ne le lit depuis un navigateur**, pas même un administrateur. La
+  table n'a aucune politique — ni de lecture, ni d'écriture. Un journal que son
+  sujet peut relire est un journal qu'il peut vérifier avant d'effacer.
+
+Il couvre **les pages qui lisent des personnes**. Les pages déjà en place — le
+carburant, les domaines, les sujets du système — ne rendent que des agrégats
+anonymes, sans un identifiant qui désigne quiconque, et ne sont pas journalisées.
+Ce n'est pas un oubli, c'est la ligne qu'on tient ; l'étendre demandera de passer
+ces fonctions de `stable` à `volatile`, donc de les modifier.
 
 **4. Un identifiant de compte distinct de l'identifiant de personne.** Aujourd'hui
 un projet a des collaborateurs, et rien ne dit **qui paie**. L'ajouter plus tard
@@ -350,6 +366,97 @@ Puis, dans la foulée : **une page unique** — cohorte · délai jusqu'au premi
 versement signé · coût agrégé · refus des dernières 24 h. Une page. Dix pages
 qui montent toujours sont dix pages qu'on cesse de regarder, et c'est
 exactement le défaut qu'on vient de corriger sur « 380 constats ».
+
+## 5 bis. *Utilisateurs › Les comptes* — le premier écran qui lit des personnes
+
+### Ce qui change de régime
+
+Jusqu'ici la console ne lisait que des **agrégats anonymes** : des nombres, deux
+dates, aucun identifiant. Même ouverte à tort, elle ne nommait personne. Cet
+écran nomme des gens — un nom, un prénom, une adresse. C'est un autre régime, et
+il s'accompagne du journal ci-dessus, posé dans la même migration.
+
+### Ce qu'il montre
+
+| où | quoi |
+| --- | --- |
+| le tableau | une page de vingt-cinq comptes : nom, adresse, identifiant court, date d'entrée, dernière trace, combien de chantiers à lui et combien avec d'autres |
+| la recherche | sur le nom, le prénom, l'adresse et la société ; elle attend qu'on ait fini de taper, pour ne pas faire six lignes de journal pour un mot |
+| le détail | ses chantiers (possédés / où il collabore, avec leurs sujets comptés et ce qui est rangé), ses sujets créés, ses appels de modèle, ses jetons, ses premier et dernier appels |
+| sa consommation | le même rendu que *Profil › Factures et abonnement*, avec les mêmes boutons gris — par jour, par mois, par an — et **le même barème** |
+
+**Possédé n'est pas collaboré**, et les séparer est tout l'intérêt : un
+déclencheur inscrit le propriétaire comme collaborateur de son propre chantier,
+et les fondre ferait monter « collabore à » avec « possède » sans rien apprendre
+de plus.
+
+**Un compte effacé quitte la liste.** Le droit à l'effacement n'est pas « on ne
+le montre plus à l'écran de l'utilisateur » : c'est aussi, et surtout, « la
+console ne le liste plus ».
+
+### Ce qu'il ne montre pas, et pourquoi la règle tient encore
+
+Rien de ce que le § 3 interdit. Une épreuve lit **le texte de la migration**, les
+deux modules que la console emporte pour elle, le parcours réel de ses imports et
+le site construit, et refuse `copilot_conversations`, `copilot_messages`,
+`subject_messages`, `project_assertions`, les trois tables de lectures
+conservées et le dossier des mails.
+
+C'est le cas précis où une épreuve sur la source vaut quelque chose : une console
+qui lirait une conversation privée **marcherait parfaitement**. Aucun test de
+comportement ne tomberait, aucune page ne s'afficherait de travers. Le seul
+moment où l'on s'en apercevrait est le jour où quelqu'un le découvre — et ce
+jour-là, le produit est discrédité.
+
+**L'exception reste nommée.** `le_corpus_en_clair` est du contenu, et la console
+le lit, derrière une porte de développement ouverte dix secondes, pour la mise au
+point du découpage des idées. L'épreuve la nomme et vérifie qu'elle est **la
+seule** : une deuxième qui s'ajouterait sans être écrite la ferait tomber.
+
+### Où le jugement vit
+
+Entièrement en base, comme pour le reste de la console :
+
+```
+le navigateur appelle   les_comptes_de_mdall(page, par_page, cherche)
+la fonction vérifie     est_administrateur()        — sinon elle lève, sans journaliser
+la fonction journalise  acces_administrateurs       — qui, quelle page, quel filtre
+la fonction répond      des comptes, des dates, des noms de chantier
+```
+
+Un contrôle écrit dans la page serait une suggestion : il se contourne en ouvrant
+les outils de développement. Et la porte du navigateur **ne garde rien** — elle
+sert seulement à dire pourquoi l'écran est vide.
+
+### Le barème n'est pas recopié
+
+La fonction de base rend les jetons d'un compte **groupés par pas et par
+modèle** : rendre dix mille appels pour en faire douze points serait dix mille
+lignes de trop. Mais l'axe, les pas vides, les libellés et le tarif restent dans
+`services/consommation-ia.js` — le même module que l'écran de l'utilisateur.
+
+Un second barème en SQL aurait divergé de la facture au premier tarif relevé
+(règle 4), et c'est précisément le chiffre qu'un administrateur vient vérifier.
+Une épreuve branche les deux bouts l'un sur l'autre : ce que la base groupe et ce
+que le JavaScript aurait compté appel par appel donnent le même total, le même
+axe et le même montant.
+
+**Ce que cet écran ne montre pas de la consommation** : ni la répartition par
+usage, ni celle par chantier. La fonction groupée ne porte ni la nature de
+l'appel ni le projet ; les dessiner quand même donnait une seule barre,
+« inconnu — 100 % », qui n'apprend rien et se lit comme une panne (règle 12).
+
+### La barre d'onglets commande enfin quelque chose
+
+Elle existait avec **un** onglet, pour dire qu'il y en aurait d'autres.
+« Utilisateurs » est le second, et il passe **en premier** : la première question
+d'exploitation est « qui est là », et tout le reste porte sur ce que ces gens ont
+versé.
+
+**Chaque rubrique déclare son onglet**, et non l'inverse. L'adresse nomme la
+rubrique — `#comptes`, `#sujets` — et l'onglet s'en déduit : un signet ouvre la
+bonne rubrique dans le bon onglet, et il n'y a pas deux états à accorder entre la
+barre du haut et le rail de gauche (règle 10).
 
 ## 6. Ce qu'il faut décider et écrire — la conformité
 

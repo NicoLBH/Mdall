@@ -12,7 +12,18 @@
 create schema if not exists auth;
 create extension if not exists pgcrypto;
 
-create table if not exists auth.users (id uuid primary key default gen_random_uuid());
+-- **Ce que Supabase met dans `auth.users`, réduit à ce qu'on touche.** La
+-- console lit les comptes par leur adresse, leur entrée et leur dernière trace :
+-- sans ces colonnes, la migration des comptes ne se déploie pas, et sans elles
+-- ici on ne l'éprouve pas.
+create table if not exists auth.users (
+  id uuid primary key default gen_random_uuid(),
+  email text,
+  created_at timestamptz not null default now(),
+  last_sign_in_at timestamptz,
+  -- Un compte effacé ne doit pas reparaître dans l'annuaire de la console.
+  deleted_at timestamptz
+);
 create or replace function auth.uid() returns uuid language sql stable as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
 $$;
@@ -54,6 +65,32 @@ create table if not exists public.administrateurs (
   courriel text primary key,
   created_at timestamptz not null default now()
 );
+
+-- Le profil public : le prénom, le nom, la société. C'est ce que la console
+-- montre à côté de l'adresse, et c'est tout ce qu'elle en montre.
+create table if not exists public.user_public_profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  first_name text,
+  last_name text,
+  public_email text,
+  company text,
+  created_at timestamptz not null default now()
+);
+alter table public.user_public_profiles enable row level security;
+
+-- Le coût de chaque appel de modèle — jamais son contenu. La console en tire la
+-- consommation d'un compte, groupée par pas et par modèle.
+create table if not exists public.ai_usages (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete set null,
+  owner_id uuid references auth.users(id) on delete set null,
+  model text,
+  usage_kind text,
+  input_tokens bigint,
+  output_tokens bigint,
+  created_at timestamptz not null default now()
+);
+alter table public.ai_usages enable row level security;
 
 create table if not exists public.project_assertions (
   id uuid primary key default gen_random_uuid(),
@@ -251,7 +288,12 @@ create policy "project_assertions_open_all" on public.project_assertions
 create table if not exists public.project_collaborators (
   id uuid primary key default gen_random_uuid(),
   project_id uuid references public.projects(id) on delete cascade,
-  person_id uuid
+  person_id uuid,
+  -- **Le compte derrière la personne.** La console compte les chantiers où
+  -- quelqu'un collabore par cette colonne, et non par `person_id` : l'annuaire
+  -- porte aussi des gens qui n'ont pas de compte Mdall.
+  collaborator_user_id uuid references auth.users(id) on delete cascade,
+  status text default 'Actif'
 );
 alter table public.project_collaborators enable row level security;
 create policy "project_collaborators_open_all" on public.project_collaborators

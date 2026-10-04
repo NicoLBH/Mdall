@@ -46,13 +46,12 @@
  */
 
 import { LA_CONSOLE } from "../partage/js/services/la-porte-de-la-console.js";
-import {
-  ONGLETS_DE_LA_CONSOLE, ongletDeLaConsoleValide
-} from "../partage/js/services/les-onglets-de-la-console.js";
+import { ONGLETS_DE_LA_CONSOLE } from "../partage/js/services/les-onglets-de-la-console.js";
 import { svgIcon } from "../partage/js/ui/icons.js";
 import { suisJeAdministrateur } from "../partage/js/services/la-porte-de-la-console-supabase.js";
 import {
-  LES_RUBRIQUES, laRubriqueValide
+  LES_COMPTES, laPremiereRubriqueDe, laRubriqueValide, lesRubriquesDeLonglet,
+  ongletDeLaRubrique
 } from "../partage/js/services/les-rubriques-de-la-console.js";
 import { renderProjectRail } from "../partage/js/views/ui/project-rail.js";
 import {
@@ -60,6 +59,7 @@ import {
 } from "../partage/js/views/ui/nav-list.js";
 import { leCourrielDuCompte, monterLavatar, renderLavatar } from "./lavatar.js";
 import { monterLeCarburant, renderLeCarburant } from "./le-carburant.js";
+import { monterLesComptes, renderLesComptes } from "./les-comptes.js";
 
 const hote = document.getElementById("app");
 const barre = document.getElementById("consoleHeaderHost");
@@ -123,15 +123,24 @@ function renderLeDemenagement() {
  * barre dessinée ici se verrait comme une greffe, et il faudrait la recalibrer
  * à chaque retouche de l'autre.
  *
- * **Un seul onglet, et c'est le sujet** : sans barre, la page se lirait comme
- * un tableau de bord complet, et l'on croirait voir tout ce que la console sait.
+ * ## L'onglet actif se déduit de l'adresse, et l'adresse nomme une rubrique
+ *
+ * Le fragment porte la rubrique — `#comptes`, `#sujets` —, jamais l'onglet : un
+ * onglet n'a pas d'écran à lui. Chaque lien mène donc à **la première rubrique**
+ * de son onglet, et l'onglet souligné est celui dont la rubrique ouverte relève.
+ *
+ * C'est ce qui garde **une adresse pour un écran** : un signet sur `#sujets`
+ * ouvre l'onglet Carburant à la bonne rubrique, et il n'y a pas deux états à
+ * accorder (règle 10).
  */
-function renderLesOnglets(actif) {
+function renderLesOnglets(rubrique) {
+  const actif = ongletDeLaRubrique(rubrique);
+
   return `
       <nav class="project-tabs project-tabs--console" aria-label="Console">
         ${ONGLETS_DE_LA_CONSOLE.map((un) => `
           <a
-            href="#${un.cle}"
+            href="#${laPremiereRubriqueDe(un.cle)}"
             class="${un.cle === actif ? "active" : ""}"
             data-console-onglet="${un.cle}"
           >
@@ -218,7 +227,7 @@ async function main() {
   if (barre) {
     barre.innerHTML = renderLaBarre(courriel)
       + (ouverte
-        ? renderLesOnglets(ongletDeLaConsoleValide(location.hash.replace(/^#/, "")))
+        ? renderLesOnglets(laRubriqueValide(location.hash.replace(/^#/, "")))
         : "");
   }
   if (!ouverte) {
@@ -236,7 +245,12 @@ async function main() {
   // L'un comme l'autre passent par l'adresse : il n'y a donc qu'un chemin à
   // suivre, et un signet sur une rubrique ouvre cette rubrique (règle 10).
   window.addEventListener("hashchange", () => {
-    dessinerLaRubrique(laRubriqueValide(location.hash.replace(/^#/, "")));
+    const rubrique = laRubriqueValide(location.hash.replace(/^#/, ""));
+    // **La barre du haut se resouligne.** Elle vit hors de `#app` : sans cela,
+    // on passait aux comptes et « Carburant » restait souligné.
+    const barreDesOnglets = barre?.querySelector(".project-tabs--console");
+    if (barreDesOnglets) barreDesOnglets.outerHTML = renderLesOnglets(rubrique);
+    dessinerLaRubrique(rubrique);
   });
 }
 
@@ -267,6 +281,10 @@ function calerLaCoque() {
  * Une navigation dessinée ici aurait divergé au premier réglage : le haut qui
  * suit le défilement, le repli calé en bas, la poignée de largeur. Il y en a
  * assez pour que la seconde copie soit fausse avant d'être finie (règle 4).
+ *
+ * **Il ne montre que les rubriques de l'onglet ouvert.** Les montrer toutes
+ * ferait de la barre d'onglets une décoration : on atteindrait les comptes
+ * depuis le carburant, et l'on ne saurait plus où l'on est.
  */
 function renderLeRail(actif) {
   return renderProjectRail({
@@ -275,7 +293,7 @@ function renderLeRail(actif) {
     navHtml: renderNavList({
       label: "Les rubriques de la console",
       html: renderNavListGroup({
-        items: LES_RUBRIQUES.map((une) => renderNavListItem({
+        items: lesRubriquesDeLonglet(ongletDeLaRubrique(actif)).map((une) => renderNavListItem({
           label: une.libelle,
           iconHtml: svgIcon(une.icone),
           isActive: une.cle === actif,
@@ -288,14 +306,22 @@ function renderLeRail(actif) {
   });
 }
 
-/** Une rubrique, dessinée dans la coque commune. */
+/**
+ * Une rubrique, dessinée dans la coque commune.
+ *
+ * **Chaque onglet a son écran**, et la barre d'onglets le désigne. Dessiner le
+ * carburant sous l'onglet Utilisateurs aurait fait une barre qui ne commande
+ * rien — ce qu'elle était, faute d'un second onglet.
+ */
 function dessinerLaRubrique(cle) {
+  const lesComptes = cle === LES_COMPTES;
+
   hote.innerHTML = `
     <div class="project-rail-layout">
       ${renderLeRail(cle)}
       <div class="project-rail-layout__content">
         <div class="page-large">
-          ${renderLeCarburant()}
+          ${lesComptes ? renderLesComptes() : renderLeCarburant()}
           ${/*
             **Où les écrans sont partis, sous « ce qui n'est pas fait ».** C'est
             la même question — qu'est-ce qui n'est pas ici — et la réponse n'est
@@ -307,6 +333,11 @@ function dessinerLaRubrique(cle) {
       </div>
     </div>
   `;
+
+  if (lesComptes) {
+    void monterLesComptes(hote);
+    return;
+  }
 
   const ou = hote.querySelector("#carburantHote");
   // **Qui est en train d'être lu.** Deux clics rapides lançaient deux lectures,

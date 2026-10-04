@@ -7,7 +7,10 @@ import { readdirSync } from "node:fs";
 import {
   CHANGE, NATURES, TARIFS, appelPourLEcran, bornesDuMois, coutDeLAppel, detailDeLAppel,
   enEuros, enJetons, prixDeLAppel,
-  jourDeLAppel, moisEnCours, moisEnFrancais, nomDeLaNature, parJour, parNature, parProjet,
+  COMBIEN_DANNEES, COMBIEN_DE_MOIS, LES_PAS, PAS, jourDeLAppel, laFenetreDe, lePasValide,
+  ceQueLaFenetreDit, lesMoisARemonter, leTitreDuPas, moisDecale, moisEnCours,
+  moisEnFrancais, nomDeLaNature,
+  parNature, parPas, parProjet,
   partDeLaPersonne, quoiDeLaNature, tarifDuModele, totalDesAppels
 } from "./consommation-ia.js";
 
@@ -84,26 +87,129 @@ test("un total vide est un total, pas une absence", () => {
   );
 });
 
-/* ── Jour par jour ───────────────────────────────────────────────────────── */
+/* ── Pas par pas ─────────────────────────────────────────────────────────── */
 
 /**
- * **Tous les jours de la fenêtre, y compris les vides.** Une courbe qui saute
- * les jours sans appel rapproche visuellement deux dates éloignées : on lit une
+ * **Tous les pas de la fenêtre, y compris les vides.** Une courbe qui saute les
+ * pas sans appel rapproche visuellement deux dates éloignées : on lit une
  * activité continue là où il y a eu une semaine de silence.
  */
 test("la courbe porte tous les jours du mois, même ceux sans appel", () => {
-  const jours = parJour([appel({ le: "2026-09-03T10:00:00Z" })], bornesDuMois("2026-09"));
+  const jours = parPas([appel({ le: "2026-09-03T10:00:00Z" })],
+    { pas: PAS.JOUR, ...bornesDuMois("2026-09") });
 
   assert.equal(jours.length, 30);
-  assert.equal(jours[0].jour, "2026-09-01");
+  assert.equal(jours[0].cle, "2026-09-01");
   assert.equal(jours[0].appels, 0);
-  assert.equal(jours[2].jour, "2026-09-03");
+  assert.equal(jours[2].cle, "2026-09-03");
   assert.equal(jours[2].appels, 1);
 });
 
 test("un appel hors de la fenêtre n'entre pas dans la courbe", () => {
-  const jours = parJour([appel({ le: "2026-08-31T23:00:00Z" })], bornesDuMois("2026-09"));
+  const jours = parPas([appel({ le: "2026-08-31T23:00:00Z" })],
+    { pas: PAS.JOUR, ...bornesDuMois("2026-09") });
   assert.equal(jours.reduce((somme, jour) => somme + jour.appels, 0), 0);
+});
+
+test("les douze mois se lisent, et le dernier est celui qu'on regarde", () => {
+  // Un mois seul ne dit jamais « est-ce que cela monte » : il faut les douze
+  // précédents à côté, et c'est la fenêtre qui change, pas le groupement.
+  const fenetre = laFenetreDe({ pas: PAS.MOIS, mois: "2026-10" });
+  assert.deepEqual(fenetre, { du: "2025-11-01", au: "2026-10-31" });
+
+  const mois = parPas([
+    appel({ le: "2025-11-15T10:00:00Z" }),
+    appel({ le: "2026-10-02T10:00:00Z" }),
+    appel({ le: "2026-10-28T10:00:00Z" })
+  ], { pas: PAS.MOIS, ...fenetre });
+
+  assert.equal(mois.length, COMBIEN_DE_MOIS);
+  assert.equal(mois[0].cle, "2025-11");
+  assert.equal(mois[0].appels, 1);
+  assert.equal(mois.at(-1).cle, "2026-10");
+  assert.equal(mois.at(-1).appels, 2, "les deux appels d'octobre tombent dans le même pas");
+  // Les mois vides restent : onze mois de silence ne doivent pas rapprocher
+  // novembre d'octobre.
+  assert.equal(mois.filter((un) => un.appels === 0).length, COMBIEN_DE_MOIS - 2);
+});
+
+test("le passage d'une année à l'autre se compte par un calendrier", () => {
+  // Reculer sur le numéro du mois se trompe une fois par an, en décembre.
+  assert.equal(moisDecale("2026-01", -2), "2025-11");
+  assert.equal(moisDecale("2025-12", 1), "2026-01");
+  assert.equal(moisDecale("2026-03", 0), "2026-03");
+  assert.equal(moisDecale("n'importe quoi", -1), "");
+});
+
+test("les années se lisent, et pas une de plus", () => {
+  const fenetre = laFenetreDe({ pas: PAS.ANNEE, mois: "2026-10" });
+  assert.deepEqual(fenetre, { du: "2022-01-01", au: "2026-12-31" });
+
+  const annees = parPas([appel({ le: "2024-06-01T10:00:00Z" })], { pas: PAS.ANNEE, ...fenetre });
+  assert.equal(annees.length, COMBIEN_DANNEES);
+  assert.deepEqual(annees.map((un) => un.cle), ["2022", "2023", "2024", "2025", "2026"]);
+  assert.equal(annees[2].appels, 1);
+});
+
+test("un pas inconnu retombe sur le jour, et ne vide pas l'écran", () => {
+  // Un signet, une faute de frappe : l'écran doit montrer quelque chose plutôt
+  // qu'une courbe vide, qui se lit « rien n'a été consommé » (règle 5).
+  assert.equal(lePasValide("semaine"), PAS.JOUR);
+  assert.equal(lePasValide(""), PAS.JOUR);
+  assert.equal(lePasValide(PAS.ANNEE), PAS.ANNEE);
+  assert.deepEqual(laFenetreDe({ pas: "semaine", mois: "2026-09" }), bornesDuMois("2026-09"));
+});
+
+test("chaque pas se nomme, et porte son titre de courbe", () => {
+  // Le menu les propose tous : un pas sans nom serait une entrée vide.
+  assert.deepEqual(LES_PAS.map((un) => un.cle), [PAS.JOUR, PAS.MOIS, PAS.ANNEE]);
+  for (const un of LES_PAS) {
+    assert.ok(un.nom.length > 0, un.cle);
+    assert.ok(leTitreDuPas(un.cle).length > 0, un.cle);
+  }
+  assert.match(leTitreDuPas(PAS.MOIS), new RegExp(String(COMBIEN_DE_MOIS)));
+});
+
+test("les douze derniers mois se proposent du plus récent au plus ancien", () => {
+  // On vient voir le mois en cours ou le précédent neuf fois sur dix : à
+  // l'endroit, il faudrait descendre la liste pour atteindre le cas courant.
+  const mois = lesMoisARemonter(COMBIEN_DE_MOIS, "2026-01");
+
+  assert.equal(mois.length, COMBIEN_DE_MOIS);
+  assert.equal(mois[0].cle, "2026-01");
+  assert.equal(mois[0].dit, "janvier 2026");
+  assert.equal(mois.at(-1).cle, "2025-02");
+  assert.deepEqual([...mois].sort((a, b) => b.cle.localeCompare(a.cle)).map((un) => un.cle),
+    mois.map((un) => un.cle), "l'ordre est bien du plus récent au plus ancien");
+});
+
+test("une période groupée vaut ses appels, sans second barème", () => {
+  // La console lit la consommation d'un compte déjà groupée en base : rendre
+  // dix mille lignes pour en faire douze points serait dix mille de trop. Le
+  // coût étant proportionnel aux jetons, la somme coûte ce que coûtent les
+  // appels — et le tarif reste écrit une seule fois (règle 4).
+  const unitaires = totalDesAppels([
+    appel({ entree: 1000, sortie: 500 }),
+    appel({ entree: 3000, sortie: 1500 })
+  ]);
+  const groupe = totalDesAppels([
+    { ...appel({ entree: 4000, sortie: 2000 }), combien: 2 }
+  ]);
+
+  assert.equal(groupe.appels, 2);
+  assert.equal(groupe.jetons, unitaires.jetons);
+  assert.ok(Math.abs(groupe.euros - unitaires.euros) < 1e-12, "le même montant");
+});
+
+test("une ligne groupée sans décompte en compte autant qu'elle vaut", () => {
+  // « 40 appels sans décompte du fournisseur » et « 1 appel » ne disent pas de
+  // combien on se trompe.
+  const total = totalDesAppels([
+    { model: "claude-sonnet-5-5", entree: null, sortie: null, combien: 40 }
+  ]);
+  assert.equal(total.sansDecompte, 40);
+  assert.equal(total.appels, 40);
+  assert.equal(total.euros, 0);
 });
 
 test("les bornes d'un mois tiennent compte de sa longueur", () => {
@@ -438,4 +544,20 @@ test("le détail d'un appel dit les jetons, le modèle et la date du tarif", () 
 
 test("le détail d'un appel sans rien d'annoncé ne raconte rien", () => {
   assert.equal(detailDeLAppel({ model: "", entree: null, sortie: null }), "");
+});
+
+test("le titre dit la fenêtre lue, et non le mois cliqué", () => {
+  // « Ma consommation — octobre 2026 » devant un total de douze mois est un
+  // montant faux de onze mois, affiché sans la moindre erreur (règle 5).
+  assert.equal(ceQueLaFenetreDit({ pas: PAS.JOUR, mois: "2026-10" }), "octobre 2026");
+  assert.equal(ceQueLaFenetreDit({ pas: PAS.MOIS, mois: "2026-10" }),
+    `les ${COMBIEN_DE_MOIS} mois jusqu'à octobre 2026`);
+  assert.equal(ceQueLaFenetreDit({ pas: PAS.ANNEE, mois: "2026-10" }),
+    `les ${COMBIEN_DANNEES} années jusqu'à 2026`);
+
+  // Un pas inconnu retombe sur le jour, comme partout ailleurs : les mots et
+  // les données doivent parler du même pas.
+  assert.equal(ceQueLaFenetreDit({ pas: "semaine", mois: "2026-10" }), "octobre 2026");
+  // Et sans mois, c'est celui en cours — jamais une phrase vide.
+  assert.ok(ceQueLaFenetreDit().length > 0);
 });

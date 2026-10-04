@@ -125,6 +125,92 @@ Chaque ligne nomme **le geste**, pas la fonction : « Lecture des comptes
 rendus », et non « extract-sujets ». Le nom technique n'apprend rien sur ce
 qu'on pourrait faire autrement.
 
+## Étape 7 — Est-ce que ça monte ? *(faite)*
+
+L'écran ne savait montrer qu'**un mois, jour par jour** — le mois en cours. C'est
+la bonne vue pour « combien ce mois-ci », et la mauvaise pour la seule question
+qui vient ensuite. Il n'y avait aucun moyen de regarder le mois précédent, ni de
+comparer douze mois : la vue était vraie et presque sans usage.
+
+### Deux boutons gris, et ce que chacun commande
+
+| où | quoi | ce qu'il change |
+| --- | --- | --- |
+| la ligne du titre | « Période : octobre 2026 » | le mois regardé, sur les **douze derniers** |
+| au-dessus de la courbe | « Par jour » · « Par mois » · « Par an » | le **pas**, donc la fenêtre qu'on lit |
+
+Le premier est en haut parce qu'il commande l'écran entier — le total, les
+usages, la courbe, les chantiers. Le second est **à côté de ce qu'il commande** :
+posé en haut, il se lirait comme un second choix de période, et l'on ne saurait
+plus lequel agit sur quoi.
+
+**Le mois choisi est écrit sur le bouton**, et non caché dans le menu : un bouton
+qui dirait seulement « Période » obligerait à l'ouvrir pour savoir ce qu'on
+regarde, ce que l'écran existe précisément pour dire.
+
+Les deux sont le **bouton à menu de Mdall**, celui du kebab des propositions et
+des Fichiers. Ils vivent dans `views/ui/le-choix-de-la-periode.js` pour que
+*Projet › Indicateurs* les reprenne sans rien recalibrer, et la console les
+reprend déjà.
+
+### Le pas décide ce qu'on va chercher, pas seulement ce qu'on dessine
+
+```
+par jour   →  le mois choisi              →  28 à 31 points
+par mois   →  les 12 mois qui s'y terminent →  12 points
+par an     →  les 5 années qui s'y terminent →  5 points
+```
+
+Demander « par mois » en ne lisant qu'un mois donnerait **un point unique** —
+une courbe qui ne monte ni ne descend, la réponse la plus trompeuse possible
+(règle 5). C'est pourquoi le pas fait partie de **ce qui désigne une lecture** :
+garder ce qu'on a lu pour le mois et le redessiner « par mois » donnerait une
+courbe qui s'arrête net à la fin du mois lu, et se lirait comme un effondrement
+de la consommation — un chiffre faux, obtenu sans erreur.
+
+**Cinq ans, et pas plus** : au-delà, l'axe porterait des années où Mdall
+n'existait pas, c'est-à-dire des zéros qui se lisent comme une chute.
+
+**Tous les pas, y compris les vides.** Une courbe qui saute les pas sans appel
+rapproche visuellement deux dates éloignées : on lit une activité continue là où
+il y a eu une semaine de silence.
+
+### Un registre, et non trois boucles
+
+Écrire « par jour », « par mois » et « par an » l'une après l'autre aurait fait
+trois fois la même chose à une troncature près — et la troisième aurait oublié
+les pas vides, que la première avait appris à garder (règle 4). Chaque pas
+déclare donc comment il tronque une date, comment il avance, ce qu'il écrit sous
+un axe, et quelle fenêtre il demande.
+
+### L'évolution, l'affichage secondaire
+
+Sous les usages et sous les chantiers, une seconde courbe — **les quatre plus
+coûteux de la période**, sur les pas de la fenêtre.
+
+« La lecture de PDF fait 60 % de la facture » dit où part l'argent, jamais si cela
+monte. Ce sont deux décisions différentes : un poste qui pèse et qui baisse se
+laisse tranquille ; un poste qui pèse peu et qui triple tous les mois est le
+prochain problème.
+
+**Quatre, parce que la feuille de style déclare quatre couleurs de série.** Une
+cinquième prendrait celle du texte et se lirait comme un défaut d'affichage. C'est
+aussi le bon nombre : douze courbes sur un même axe ne se distinguent pas, et une
+évolution qu'on ne peut pas lire ne vaut pas mieux que pas d'évolution (règle 12).
+Le classement porte sur **la fenêtre entière**, et non sur le dernier pas : sinon
+des courbes entreraient et sortiraient d'un mois à l'autre, et l'on comparerait
+des évolutions qui ne portent pas sur les mêmes postes.
+
+**Rien quand il n'y a qu'un pas**, pour la même raison que plus haut.
+
+### Un cinquième endroit où le coût se voit
+
+*Console › Utilisateurs › Les comptes* montre la consommation d'un compte, avec
+les mêmes boutons et **le même barème** : la base y groupe les jetons par pas et
+par modèle pour ne pas rendre dix mille lignes, et c'est tout ce qu'elle fait —
+l'axe, les pas vides, les libellés et le tarif restent ici. Voir
+`docs/la-console-de-ladministrateur.md`, § 5 bis.
+
 ---
 
 ## Ce que cet ordre refuse
