@@ -164,7 +164,7 @@ function renderLaBarreDeLancement(choisis = null, connues = [], {
   return `
     <footer class="choisir-fichier__barre">
       <div class="choisir-fichier__compte">
-        <b>${escapeHtml(phraseDeLaSelection(contenu))}</b>
+        <b>${escapeHtml(phraseDeLaSelection(contenu, quoi))}</b>
         ${dit ? `<i class="mono-small">${escapeHtml(dit)}</i>` : ""}
       </div>
       <div class="choisir-fichier__gestes">

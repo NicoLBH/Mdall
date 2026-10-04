@@ -96,6 +96,19 @@ const LEXPLOITATION = join(RACINE, "supabase", "migrations",
   "202611230001_lexploitation_de_mdall.sql");
 
 /**
+ * Celle des venues — **la seule table du produit qu'un navigateur remplit sur
+ * lui-même**.
+ *
+ * Elle porte une présence, donc une personne. « Qui a passé combien de temps sur
+ * quel chantier » serait utile, et ce serait un journal de navigation : on
+ * saurait qui lit quoi sans jamais lire une ligne. La table n'a donc que quatre
+ * colonnes, et cette épreuve vérifie qu'elle n'en gagne pas une cinquième qui
+ * porterait un écran, un projet ou un document.
+ */
+const LES_VENUES = join(RACINE, "supabase", "migrations",
+  "202611240001_les_venues_de_mdall.sql");
+
+/**
  * Le SQL sans ses commentaires.
  *
  * **Les commentaires doivent pouvoir nommer ces tables**, et c'est même
@@ -121,7 +134,8 @@ function duCodeSansCommentaires(texte) {
 /* ── La migration ─────────────────────────────────────────────────────────── */
 
 test("les fonctions de la console ne nomment aucune table de contenu", () => {
-  for (const [nom, chemin] of [["des comptes", LA_MIGRATION], ["de l'exploitation", LEXPLOITATION]]) {
+  for (const [nom, chemin] of [["des comptes", LA_MIGRATION],
+    ["de l'exploitation", LEXPLOITATION], ["des venues", LES_VENUES]]) {
     const sql = duSqlSansCommentaires(lire(chemin));
 
     for (const interdit of CE_QUI_NE_TRAVERSE_PAS) {
@@ -404,4 +418,65 @@ test("le site construit de la console ne nomme aucune table de contenu", () => {
         `${chemin.slice(RACINE.length + 1)} touche à « ${interdit} »`);
     }
   }
+});
+
+/**
+ * **Une venue ne porte que quatre choses, et pas une de plus.**
+ *
+ * Le jour où quelqu'un ajoutera `project_id` ou `page` à cette table, ce sera
+ * pour une bonne raison et le produit changera de nature : on saura qui lit
+ * quoi, sans jamais lire une ligne. Cette épreuve n'empêche pas de le faire ;
+ * elle empêche de le faire **sans s'en apercevoir** (règle 5).
+ */
+test("la table des venues ne gagne pas de colonne où du contenu tiendrait", () => {
+  const sql = duSqlSansCommentaires(lire(LES_VENUES));
+
+  const creation = sql.slice(
+    sql.indexOf("create table if not exists public.venues"),
+    sql.indexOf(");", sql.indexOf("create table if not exists public.venues")));
+
+  const colonnes = creation.split("\n")
+    .map((une) => une.trim().split(/\s+/)[0])
+    .filter((une) => /^[a-z_]+$/.test(une) && une !== "create" && une !== "constraint");
+
+  assert.deepEqual(colonnes.sort(),
+    ["commencee_le", "id", "owner_id", "secondes_actives", "vue_le"],
+    `la table des venues a changé de forme : ${colonnes.join(", ")}`);
+
+  // Et nommément, les colonnes qu'on serait tenté d'ajouter.
+  for (const quoi of ["project_id", "page", "route", "ecran", "document_id", "subject_id"]) {
+    assert.doesNotMatch(creation, new RegExp(`\\b${quoi}\\b`),
+      `la table des venues porte « ${quoi} » : c'est un journal de navigation`);
+  }
+});
+
+/**
+ * **Le trafic se lit agrégé, jamais venue par venue.**
+ *
+ * La fonction de la console rend des comptes par pas de temps. Si elle rendait
+ * les lignes, un administrateur saurait à quelle heure chacun était devant son
+ * écran — ce qui n'est une information de chantier pour personne.
+ */
+test("le trafic ne rend jamais une venue, mais des comptes", () => {
+  const sql = lire(LES_VENUES);
+
+  const fonctions = [...sql.matchAll(/create or replace function public\.(\w+)/g)]
+    .map((un) => un[1]);
+  assert.deepEqual(fonctions,
+    ["prolonger_une_venue", "le_trafic_de_mdall", "effacer_les_vieilles_venues"]);
+
+  const trafic = sql.slice(sql.indexOf("function public.le_trafic_de_mdall"),
+    sql.indexOf("comment on function public.le_trafic_de_mdall"));
+
+  // Elle groupe, et ne rend donc pas de ligne isolée.
+  assert.match(trafic, /group by/, "le trafic ne groupe pas : il rendrait des venues");
+  // Et elle ne rend aucun identifiant de personne.
+  assert.doesNotMatch(duSqlSansCommentaires(trafic), /\bowner_id\b(?!\))/,
+    "le trafic rend un identifiant de compte : on saurait qui était là quand");
+
+  // Les deux fonctions de la console passent par la porte ; `prolonger_une_venue`
+  // n'en est pas une — c'est le navigateur qui l'appelle sur sa propre venue.
+  const appels = (sql.match(/perform public\.la_porte_de_la_console\(/g) ?? []).length;
+  assert.equal(appels, 2,
+    "une fonction de console des venues ne journalise pas son accès");
 });

@@ -6,6 +6,7 @@ import {
   estUnGesteDeLaFile, laProvenanceDuGeste, lesVersementsAuJournal
 } from "./la-file-au-journal.js";
 import { lesReveilsADemander } from "./reveiller-la-file.js";
+import { ceQueLaLectureDirecteDit } from "./les-familles-de-document.js";
 
 /**
  * Quand chaque fonction de bord a été demandée pour la dernière fois.
@@ -976,11 +977,26 @@ function mapProjectRunRowToLogEntry(row = {}) {
   // fait entrer de la matière, donc « Versements » ; une lecture de comptes
   // rendus relit ce qui est déjà là, donc « Atelier ».
   const deLaFile = estUnGesteDeLaFile(geste);
-  const origine = (deLaFile && lorigineDunGeste(geste)) || ORIGINE.PROJET;
+  /**
+   * **L'origine déclarée vaut, que le geste passe par la file ou non.**
+   *
+   * Elle ne valait qu'avec `deLaFile`, et une lecture qui ne prend pas la file —
+   * un fil de mails — retombait donc sur « projet », c'est-à-dire « Partagées ».
+   * On y annonçait comme partagée une lecture que la base garde privée.
+   *
+   * `lorigineDunGeste` ne rend que ce qui est **écrit** dans le registre, et
+   * `null` sinon : le repli sur « projet » reste pour un geste qu'on ne connaît
+   * pas, ce qui est le cas d'une fusion.
+   */
+  const origine = lorigineDunGeste(geste) || ORIGINE.PROJET;
 
+  // La provenance suit la même règle : celle de la file, celle de la lecture
+  // directe, ou le repli des gestes du projet.
+  const directe = ceQueLaLectureDirecteDit(geste);
   const triggerLabel = deLaFile
     ? laProvenanceDuGeste(geste)
-    : (row.proposition_id ? "Fusion d'une proposition" : "Exécution du projet");
+    : directe?.provenance
+      || (row.proposition_id ? "Fusion d'une proposition" : "Exécution du projet");
 
   return {
     id: safeString(row.id),

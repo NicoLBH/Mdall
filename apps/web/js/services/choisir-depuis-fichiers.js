@@ -393,12 +393,23 @@ export function ceQueLaFileContient(choisis = null, connues = []) {
  * Vide quand rien n'est choisi : « 0 document sélectionné » est du bruit, et
  * l'absence dit mieux que le bouton n'a rien à faire.
  */
-export function phraseDeLaSelection(contenu = null) {
+export function phraseDeLaSelection(contenu = null, quoi = null) {
   const combien = Number(contenu?.combien) || 0;
   if (!combien) return "";
 
+  /**
+   * **Le nom de ce qu'on choisit vient de la famille ouverte.**
+   *
+   * Le bouton disait « Lire 4 mails » et la ligne au-dessus « 4 documents » :
+   * deux mots pour la même chose, à deux centimètres l'un de l'autre. Le second
+   * était le mot générique du composant partagé, laissé là où le premier avait
+   * été personnalisé — la moitié d'un travail fait (règle 4).
+   */
+  const un = texte(quoi?.un) || "document";
+  const plusieurs = texte(quoi?.plusieurs) || "documents";
+
   const pdf = Number(contenu?.pdf) || 0;
-  const dits = [`${combien} ${combien > 1 ? "documents" : "document"}`];
+  const dits = [`${combien} ${combien > 1 ? plusieurs : un}`];
 
   // **Ce qui coûte se dit, ce qui ne coûte rien se dit aussi** : « dont 0 PDF »
   // ne s'écrit pas, mais « 4 notes de texte, aucun appel » rassure.
@@ -412,15 +423,6 @@ export function phraseDeLaSelection(contenu = null) {
   return dits.join(" · ");
 }
 
-/**
- * Ce qu'on dit avant de lancer : **une proposition par compte rendu**.
- *
- * C'est la phrase qui empêche le malentendu le plus coûteux de tout l'écran.
- * « Analyser 30 documents » se lit comme « remplir la mémoire », et ce n'est pas
- * ce qui va se passer : chaque lecture donne une proposition, et chacune se
- * signe (règle 1). Le dire après aurait fait découvrir trente relectures à
- * quelqu'un qui croyait avoir fini.
- */
 export function phraseDeCeQueLaFileFera(contenu = null) {
   const combien = Number(contenu?.combien) || 0;
   if (!combien) return "";

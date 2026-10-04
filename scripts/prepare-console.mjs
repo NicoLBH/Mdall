@@ -132,6 +132,10 @@ export const RACINES = [
   // page de console — **jamais un nom de fichier**. La cloison le vérifie.
   "js/services/lexploitation-de-mdall.js",
   "js/services/lexploitation-de-mdall-supabase.js",
+  // Le trafic : des venues et des comptes, jamais un écran ni un chantier. Et
+  // ce que le temps compté **n'est pas**, qui s'affiche avec lui.
+  "js/services/le-trafic-de-mdall.js",
+  "js/services/les-venues.js",
   // Les genres de panne et leurs remèdes, pris là où l'écran de l'utilisateur
   // les prend déjà : deux listes auraient fini par conseiller deux gestes
   // différents pour la même panne (règle 4).

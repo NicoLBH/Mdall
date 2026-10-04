@@ -205,16 +205,45 @@ export function leMotDuFilALire(combien = 0) {
  * présenterait comme complet ferait lire une correspondance à laquelle il
  * manque une réponse, sans que rien ne le signale.
  */
-export function leMotDuFilLu({ fil = null, perdus = [] } = {}) {
+export function leMotDuFilLu(lu = null) {
+  /**
+   * **On lit `vue.fil`, et non `fil`.**
+   *
+   * C'est là que l'orchestrateur le met, et c'est le défaut qui a fait dire
+   * « 0 message lu » à chaque lecture réussie : la fonction lisait `lu.fil`, qui
+   * n'existe sur rien de ce qui sort d'ici. Un zéro à la place d'un compte se
+   * lit « il ne s'est rien passé », et c'est exactement ce qu'on a cru.
+   *
+   * L'épreuve passait pourtant le vrai objet — elle ne regardait que la phrase
+   * des manquants. Un compte qu'aucune épreuve ne lit est un compte qui peut
+   * valoir n'importe quoi (règle 5).
+   */
+  const fil = lu?.vue?.fil ?? null;
   const combien = liste(fil?.messages).length;
+  const objet = texte(fil?.objet);
+
   const morceaux = [`${combien} message${combien > 1 ? "s" : ""} lu${combien > 1 ? "s" : ""}`];
 
-  const manquants = liste(perdus).filter(Boolean);
+  // **L'objet du fil, quand il y en a un.** Sans lui, deux lectures de suite
+  // rendent la même phrase, et l'on ne sait pas laquelle vient d'aboutir.
+  if (objet) morceaux.push(`« ${objet} »`);
+
+  const manquants = liste(perdusDe(lu)).filter(Boolean);
   if (manquants.length) {
     morceaux.push(`${manquants.length} mail${manquants.length > 1 ? "s" : ""} `
       + `n'${manquants.length > 1 ? "ont" : "a"} pas pu être descendu${
         manquants.length > 1 ? "s" : ""} : le fil est incomplet`);
   }
 
+  // **Et où la lecture est allée.** Le relèvement ne laisse rien dans la mémoire
+  // du chantier : le dire évite d'aller chercher une proposition qui n'existe
+  // pas, puis de douter du reste (règle 1).
+  morceaux.push("la lecture est conservée, rien n'entre en mémoire");
+
   return `${morceaux.join(" — ")}.`;
+}
+
+/** Les mails qu'on n'a pas su descendre, quelle que soit l'issue du fil. */
+function perdusDe(lu = null) {
+  return liste(lu?.perdus);
 }

@@ -133,6 +133,9 @@ const LES_MIGRATIONS = [
   // stockage. Trois fonctions `security definer` de plus — dont une qui rend
   // lisible un journal posé sans aucune politique.
   "202611230001_lexploitation_de_mdall.sql",
+  // Les venues : le trafic et le temps passé. Une table de présence, écrite par
+  // le navigateur — donc celle où il faut essayer d'écrire la venue d'un autre.
+  "202611240001_les_venues_de_mdall.sql",
   // Celle du dossier des mails pose la politique que la suivante élargit :
   // sans elle, on éprouverait un élargissement de rien.
   "202610160001_le_dossier_des_mails_est_prive.sql",
@@ -3858,4 +3861,331 @@ test("chaque page de l'exploitation s'inscrit au journal sous son nom",
       `la santé ne nomme pas sa fenêtre : ${lignes.join(" | ")}`);
     assert.ok(lignes.some((une) => une === "exploitation/usage[]"),
       `l'usage ne nomme pas sa page : ${lignes.join(" | ")}`);
+  });
+
+// ── Les venues ──────────────────────────────────────────────────────────────
+//
+// **La seule table du produit qu'un navigateur remplit sur lui-même.** Le
+// journal des refus est écrit par le navigateur aussi, mais il ne porte que des
+// mots d'un domaine fermé ; celle-ci porte la présence d'une personne. C'est
+// exactement le cas où il faut essayer d'écrire celle d'un autre.
+
+/** Deux venues à A, une à B, d'empans et de durées différents. */
+function desVenues() {
+  banc.sql(`
+    insert into public.administrateurs (courriel) values ('patron@mdall.example')
+      on conflict do nothing;
+    delete from public.venues;
+
+    insert into public.venues (owner_id, commencee_le, vue_le, secondes_actives) values
+      -- A, hier : une longue et une courte.
+      ('${A}', now() - interval '1 day', now() - interval '1 day' + interval '40 minutes', 2100),
+      ('${A}', now() - interval '1 day' + interval '3 hours',
+        now() - interval '1 day' + interval '3 hours' + interval '4 minutes', 240),
+      -- B, hier aussi : c'est ce qui distingue « 3 venues » de « 2 personnes ».
+      ('${B}', now() - interval '1 day' + interval '2 hours',
+        now() - interval '1 day' + interval '2 hours' + interval '12 minutes', 700),
+      -- A, il y a deux ans : hors de toute fenêtre qu'on regardera.
+      ('${A}', now() - interval '2 years', now() - interval '2 years', 60);
+  `);
+}
+
+/**
+ * **Personne n'écrit la présence d'un autre.**
+ *
+ * C'est la raison d'être de cette épreuve : si on le pouvait, la seule table où
+ * « quelqu'un était là » se lit comme un fait serait falsifiable par n'importe
+ * quelle session. `owner_id` vient de la base ; la politique interdit qu'on le
+ * remplace.
+ */
+test("une venue ne s'écrit que pour soi", { skip: sansPostgres }, () => {
+  desVenues();
+
+  // A, pour A : cela passe, et `owner_id` se pose tout seul.
+  const sien = banc.enTantQue(A,
+    "insert into public.venues (commencee_le) values (now()) returning owner_id;");
+  assert.equal(sien.ok, true, sien.motif);
+  assert.match(sien.sortie, new RegExp(A));
+
+  // A, pour B : refusé.
+  const lautre = banc.enTantQue(A,
+    `insert into public.venues (owner_id) values ('${B}');`);
+  assert.equal(lautre.ok, false, "on peut écrire la présence de quelqu'un d'autre");
+
+  // Et la clé publique, pour personne.
+  const anonyme = banc.sansCompte(
+    `insert into public.venues (owner_id) values ('${A}');`);
+  assert.equal(anonyme.ok, false, "la clé publique écrit des venues");
+});
+
+/**
+ * **Et personne ne lit celles d'un autre.**
+ *
+ * Savoir quand un collègue était devant son écran n'est pas une information de
+ * chantier. Le trafic se lit **agrégé**, par la console et par elle seule.
+ */
+test("une venue ne se lit que par celui qu'elle compte", { skip: sansPostgres }, () => {
+  desVenues();
+
+  const lesSiennes = banc.enTantQue(A, "select count(*) from public.venues;");
+  assert.equal(lesSiennes.ok, true, lesSiennes.motif);
+  // A en a trois : il ne voit pas celle de B.
+  assert.equal(lesSiennes.sortie.trim(), "3", lesSiennes.sortie);
+
+  const celleDeB = banc.enTantQue(A,
+    `select count(*) from public.venues where owner_id = '${B}';`);
+  assert.equal(celleDeB.sortie.trim(), "0", "on lit la présence de quelqu'un d'autre");
+
+  const anonyme = banc.sansCompte("select count(*) from public.venues;");
+  assert.ok(!anonyme.ok || anonyme.sortie.trim() === "0",
+    "la clé publique lit des venues");
+});
+
+/**
+ * **Chacun efface les siennes, et c'est voulu.**
+ *
+ * Le droit à l'effacement rendu réel plutôt qu'écrit dans une politique : la
+ * mesure de ma présence m'appartient. Le prix est que le trafic est diminuable
+ * par ceux qu'il compte, et c'est le bon prix.
+ */
+test("chacun peut effacer ses propres venues, et seulement elles",
+  { skip: sansPostgres }, () => {
+    desVenues();
+
+    const avant = Number(banc.sql("select count(*) from public.venues;").sortie.trim());
+    const efface = banc.enTantQue(A, "delete from public.venues;");
+    assert.equal(efface.ok, true, efface.motif);
+
+    // Celle de B est toujours là : A n'a effacé que les siennes.
+    const reste = Number(banc.sql("select count(*) from public.venues;").sortie.trim());
+    assert.equal(reste, 1, `${avant} venues, ${reste} après l'effacement de A`);
+    assert.equal(banc.sql(
+      `select count(*) from public.venues where owner_id = '${B}';`).sortie.trim(), "1");
+  });
+
+/**
+ * **La base borne ce que le navigateur déclare.**
+ *
+ * Il envoie un nombre, donc il peut envoyer n'importe lequel : un onglet
+ * réveillé après une heure de veille déclarerait une heure d'un coup, et le
+ * « temps moyen d'utilisation » monterait d'une heure sans que personne n'ait
+ * travaillé une minute (règle 12).
+ */
+test("un battement ne peut pas déclarer plus de cinq minutes",
+  { skip: sansPostgres }, () => {
+    desVenues();
+
+    const sienne = banc.sql(
+      `insert into public.venues (owner_id, secondes_actives) values ('${A}', 0)
+       returning id;`).sortie.trim();
+
+    // Une heure déclarée d'un coup : la base n'en prend que trois cents secondes.
+    const triche = banc.enTantQue(A,
+      `select public.prolonger_une_venue('${sienne}', 3600);`);
+    assert.equal(triche.ok, true, triche.motif);
+    assert.equal(
+      banc.sql(`select secondes_actives from public.venues where id = '${sienne}';`)
+        .sortie.trim(),
+      "300", "la borne du battement ne tient pas");
+
+    /**
+     * **Un battement négatif n'enlève rien, et n'échoue pas.**
+     *
+     * La contrainte `check` empêcherait de toute façon un total négatif — mais
+     * elle le ferait en **levant**, et la fonction rendrait alors `null` : le
+     * navigateur en conclurait que sa venue n'est plus à lui et en ouvrirait une
+     * neuve. Une venue fragmentée à chaque horloge qui recule, pour rien.
+     *
+     * Ce qu'on mesure est donc que l'appel **aboutit** et rend un instant, pas
+     * seulement que le total n'a pas bougé.
+     */
+    const negatif = banc.enTantQue(A, `select public.prolonger_une_venue('${sienne}', -1000);`);
+    assert.equal(negatif.ok, true, `un battement négatif lève : ${negatif.motif}`);
+    assert.notEqual(negatif.sortie.trim(), "",
+      "un battement négatif rend « rien » : le navigateur ouvrirait une venue de plus");
+    assert.equal(
+      banc.sql(`select secondes_actives from public.venues where id = '${sienne}';`)
+        .sortie.trim(),
+      "300", "un battement négatif retire du temps");
+
+    // Et l'ajout s'accumule : deux battements normaux font deux minutes.
+    banc.enTantQue(A, `select public.prolonger_une_venue('${sienne}', 60);`);
+    banc.enTantQue(A, `select public.prolonger_une_venue('${sienne}', 60);`);
+    assert.equal(
+      banc.sql(`select secondes_actives from public.venues where id = '${sienne}';`)
+        .sortie.trim(),
+      "420", "les battements ne s'ajoutent pas");
+  });
+
+/**
+ * **Prolonger la venue d'un autre ne fait rien, et le dit.**
+ *
+ * `null` plutôt qu'une erreur : le navigateur en ouvre alors une neuve plutôt
+ * que de battre dans le vide. Une erreur l'aurait fait renoncer, et la venue
+ * suivante n'aurait jamais été comptée (règle 5).
+ */
+test("prolonger la venue d'un autre ne touche à rien", { skip: sansPostgres }, () => {
+  desVenues();
+
+  const celleDeB = banc.sql(
+    `select id from public.venues where owner_id = '${B}' limit 1;`).sortie.trim();
+  const avant = banc.sql(
+    `select secondes_actives from public.venues where id = '${celleDeB}';`).sortie.trim();
+
+  const essai = banc.enTantQue(A, `select public.prolonger_une_venue('${celleDeB}', 300);`);
+  assert.equal(essai.ok, true, essai.motif);
+  // Elle rend `null` — rien n'a bougé, et c'est l'information.
+  assert.equal(essai.sortie.trim(), "", `elle rend « ${essai.sortie.trim()} » au lieu de rien`);
+
+  assert.equal(
+    banc.sql(`select secondes_actives from public.venues where id = '${celleDeB}';`)
+      .sortie.trim(),
+    avant, "le temps de quelqu'un d'autre a bougé");
+});
+
+/**
+ * **Dix venues d'une personne ne font pas dix personnes.**
+ *
+ * C'est le chiffre qu'on croit lire sur un trafic, et c'est celui qui décide
+ * d'un tarif. Les rendre fondus aurait donné un produit dix fois plus fréquenté
+ * qu'il ne l'est.
+ */
+test("le trafic distingue les venues des comptes", { skip: sansPostgres }, () => {
+  desVenues();
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select venues, comptes, secondes_actives from public.le_trafic_de_mdall("
+    + "(now() - interval '2 days')::date, now()::date, 'day');");
+  assert.equal(lu.ok, true, lu.motif);
+
+  // Trois venues hier, deux comptes. Et 2100 + 240 + 700 secondes.
+  assert.equal(leChamp(lu.sortie, 0), "3", lu.sortie);
+  assert.equal(leChamp(lu.sortie, 1), "2",
+    `les venues sont comptées comme des personnes : ${lu.sortie}`);
+  assert.equal(leChamp(lu.sortie, 2), "3040", lu.sortie);
+
+  // La venue d'il y a deux ans n'est pas dans la fenêtre.
+  const lignes = lu.sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+  assert.equal(lignes.length, 1, `la fenêtre déborde : ${lignes.join(" | ")}`);
+});
+
+/**
+ * **La médiane et le maximum, parce que la moyenne recouvre deux usages.**
+ *
+ * Vingt visites d'une minute et une d'une heure donnent la même moyenne qu'une
+ * poignée de sessions de travail — et ce ne sont pas les mêmes gens.
+ */
+test("le trafic rend la médiane et le plus long, pas seulement la somme",
+  { skip: sansPostgres }, () => {
+    desVenues();
+
+    const lu = banc.sousLadresse("patron@mdall.example",
+      "select secondes_medianes, secondes_maximum from public.le_trafic_de_mdall("
+      + "(now() - interval '2 days')::date, now()::date, 'day');");
+    assert.equal(lu.ok, true, lu.motif);
+
+    // 240, 700, 2100 : médiane 700, maximum 2100.
+    assert.equal(leChamp(lu.sortie, 0), "700", lu.sortie);
+    assert.equal(leChamp(lu.sortie, 1), "2100",
+      `le plus long n'est pas rendu : ${lu.sortie}`);
+  });
+
+/** La borne de fin est incluse : un trafic qui s'arrête la veille est faux. */
+test("la dernière journée de la fenêtre compte", { skip: sansPostgres }, () => {
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;
+    delete from public.venues;
+    insert into public.venues (owner_id, commencee_le, vue_le, secondes_actives)
+      values ('${A}', now(), now(), 120);`);
+
+  const lu = banc.sousLadresse("patron@mdall.example",
+    "select venues from public.le_trafic_de_mdall(now()::date, now()::date, 'day');");
+  assert.equal(lu.ok, true, lu.motif);
+  assert.equal(lu.sortie.trim(), "1", "la venue du dernier jour disparaît");
+});
+
+/** Trois pas, et pas un de plus : l'axe du JavaScript n'en dessine pas d'autre. */
+test("le trafic refuse un pas que l'écran ne sait pas dessiner",
+  { skip: sansPostgres }, () => {
+    desVenues();
+
+    for (const pas of ["week", "quarter", "millennium"]) {
+      const essai = banc.sousLadresse("patron@mdall.example",
+        `select count(*) from public.le_trafic_de_mdall('2026-01-01', '2026-12-31', '${pas}');`);
+      assert.equal(essai.ok, false, `le pas « ${pas} » est passé`);
+      assert.match(essai.motif, /pas inconnu/);
+    }
+
+    for (const pas of ["day", "month", "year"]) {
+      const essai = banc.sousLadresse("patron@mdall.example",
+        `select count(*) from public.le_trafic_de_mdall('2026-01-01', '2026-12-31', '${pas}');`);
+      assert.equal(essai.ok, true, `${pas} : ${essai.motif}`);
+    }
+  });
+
+/** La porte de la console tient sur le trafic comme sur le reste. */
+test("le trafic se refuse à qui n'est pas administrateur", { skip: sansPostgres }, () => {
+  desVenues();
+
+  const etranger = banc.sousLadresse("quelquun@ailleurs.example",
+    "select count(*) from public.le_trafic_de_mdall('2026-01-01', '2026-12-31', 'day');");
+  assert.equal(etranger.ok, false, "le trafic s'ouvre à un étranger");
+
+  const sansJeton = banc.sansCompte(
+    "select count(*) from public.le_trafic_de_mdall('2026-01-01', '2026-12-31', 'day');");
+  assert.equal(sansJeton.ok, false, "le trafic s'ouvre à la clé publique");
+
+  // Et la purge aussi : elle efface, c'est le geste le plus dangereux de la console.
+  const purge = banc.sousLadresse("quelquun@ailleurs.example",
+    "select public.effacer_les_vieilles_venues();");
+  assert.equal(purge.ok, false, "n'importe qui peut effacer les venues");
+});
+
+/**
+ * **La conservation est de treize mois, et la purge n'emporte rien d'autre.**
+ *
+ * Treize pour comparer un mois à celui de l'an passé. Une purge qui prendrait
+ * aussi le mois d'il y a douze effacerait la seule chose que la durée existe
+ * pour permettre.
+ */
+test("la purge n'emporte que ce qui dépasse treize mois", { skip: sansPostgres }, () => {
+  banc.sql(`insert into public.administrateurs (courriel) values ('patron@mdall.example')
+            on conflict do nothing;
+    delete from public.venues;
+    insert into public.venues (owner_id, commencee_le, vue_le) values
+      ('${A}', now() - interval '14 months', now() - interval '14 months'),
+      ('${A}', now() - interval '2 years', now() - interval '2 years'),
+      -- Douze mois : dans la durée, et c'est celle-là qu'on garde pour comparer.
+      ('${A}', now() - interval '12 months', now() - interval '12 months'),
+      ('${A}', now(), now());`);
+
+  const purge = banc.sousLadresse("patron@mdall.example",
+    "select public.effacer_les_vieilles_venues();");
+  assert.equal(purge.ok, true, purge.motif);
+  assert.equal(purge.sortie.trim(), "2", `elle a effacé ${purge.sortie.trim()} lignes`);
+
+  assert.equal(banc.sql("select count(*) from public.venues;").sortie.trim(), "2");
+  assert.equal(
+    banc.sql("select count(*) from public.venues "
+      + "where commencee_le < now() - interval '13 months';").sortie.trim(),
+    "0", "une venue de plus de treize mois a survécu");
+});
+
+/**
+ * **Une venue ne porte aucun contenu, et la table n'en a pas la place.**
+ *
+ * C'est la garantie de structure : « qui a passé combien de temps sur quel
+ * chantier » serait utile et serait un journal de navigation. Quatre colonnes,
+ * et aucune ne peut porter un écran, un projet ni un document.
+ */
+test("la table des venues n'a aucune colonne où du contenu tiendrait",
+  { skip: sansPostgres }, () => {
+    const colonnes = banc.sql(
+      "select column_name from information_schema.columns "
+      + "where table_schema = 'public' and table_name = 'venues' order by 1;")
+      .sortie.split("\n").map((une) => une.trim()).filter(Boolean);
+
+    assert.deepEqual(colonnes,
+      ["commencee_le", "id", "owner_id", "secondes_actives", "vue_le"],
+      `la table des venues a changé de forme : ${colonnes.join(", ")}`);
   });

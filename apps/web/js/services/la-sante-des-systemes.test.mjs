@@ -304,11 +304,25 @@ test("un refus sans nombre compte pour un", () => {
  * comme un tableau complet. Et GitHub en fait partie, parce que c'est la question
  * qui a été posée : la réponse n'est pas « vert », c'est « on ne le demande pas ».
  */
-test("ce qu'on ne sait pas d'ici nomme GitHub, le quota et le trafic", () => {
+test("ce qu'on ne sait pas d'ici nomme GitHub, le quota et le temps de travail", () => {
   const quoi = CE_QUON_NE_SAIT_PAS_DICI.map((un) => un.quoi).join(" | ");
   assert.match(quoi, /GitHub/);
   assert.match(quoi, /quota/i);
-  assert.match(quoi, /trafic/i);
+
+  /**
+   * **Le trafic en est sorti le jour où il s'est mis à se mesurer**, et le
+   * temps de travail l'a remplacé — qui, lui, ne se mesure toujours pas.
+   *
+   * C'est la seule façon correcte de retirer une ligne d'ici : non pas l'effacer
+   * parce qu'on a livré quelque chose, mais la remplacer par ce qui reste
+   * vraiment inconnu. Effacée, « 34 minutes » se lirait « 34 minutes de travail »
+   * six mois plus tard (règle 5).
+   */
+  assert.doesNotMatch(quoi, /^Le trafic|\| Le trafic/,
+    "le trafic est encore annoncé comme inconnaissable alors qu'il se mesure");
+  assert.match(quoi, /temps de travail/i);
+  assert.ok(CE_QUON_NE_SAIT_PAS_DICI.some((un) => /premier plan|touchée/.test(un.pourquoi)),
+    "rien ne dit ce que le temps compté est, ni ce qu'il n'est pas");
 
   for (const un of CE_QUON_NE_SAIT_PAS_DICI) {
     assert.ok(un.pourquoi.length > 40,
