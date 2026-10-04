@@ -50,8 +50,8 @@ import { ONGLETS_DE_LA_CONSOLE } from "../partage/js/services/les-onglets-de-la-
 import { svgIcon } from "../partage/js/ui/icons.js";
 import { suisJeAdministrateur } from "../partage/js/services/la-porte-de-la-console-supabase.js";
 import {
-  LES_COMPTES, laPremiereRubriqueDe, laRubriqueValide, lesRubriquesDeLonglet,
-  ongletDeLaRubrique
+  LA_SANTE, LES_COMPTES, LES_CONSULTATIONS, LUSAGE, laPremiereRubriqueDe, laRubriqueValide,
+  lesRubriquesDeLonglet, ongletDeLaRubrique
 } from "../partage/js/services/les-rubriques-de-la-console.js";
 import { renderProjectRail } from "../partage/js/views/ui/project-rail.js";
 import {
@@ -60,6 +60,7 @@ import {
 import { leCourrielDuCompte, monterLavatar, renderLavatar } from "./lavatar.js";
 import { monterLeCarburant, renderLeCarburant } from "./le-carburant.js";
 import { monterLesComptes, renderLesComptes } from "./les-comptes.js";
+import { monterLexploitation, renderLexploitation } from "./lexploitation.js";
 
 const hote = document.getElementById("app");
 const barre = document.getElementById("consoleHeaderHost");
@@ -315,13 +316,22 @@ function renderLeRail(actif) {
  */
 function dessinerLaRubrique(cle) {
   const lesComptes = cle === LES_COMPTES;
+  /**
+   * **Les trois rubriques de l'exploitation partagent un écran**, et il choisit
+   * laquelle dessiner. Trois modules auraient recopié trois fois l'en-tête, la
+   * phrase du journal des accès et la forme d'un échec — et c'est la troisième
+   * copie qui aurait fini par ne plus dire la même chose (règle 4).
+   */
+  const lexploitation = [LA_SANTE, LUSAGE, LES_CONSULTATIONS].includes(cle);
 
   hote.innerHTML = `
     <div class="project-rail-layout">
       ${renderLeRail(cle)}
       <div class="project-rail-layout__content">
         <div class="page-large">
-          ${lesComptes ? renderLesComptes() : renderLeCarburant()}
+          ${lesComptes
+            ? renderLesComptes()
+            : lexploitation ? renderLexploitation() : renderLeCarburant()}
           ${/*
             **Où les écrans sont partis, sous « ce qui n'est pas fait ».** C'est
             la même question — qu'est-ce qui n'est pas ici — et la réponse n'est
@@ -336,6 +346,11 @@ function dessinerLaRubrique(cle) {
 
   if (lesComptes) {
     void monterLesComptes(hote);
+    return;
+  }
+
+  if (lexploitation) {
+    void monterLexploitation(hote, cle);
     return;
   }
 

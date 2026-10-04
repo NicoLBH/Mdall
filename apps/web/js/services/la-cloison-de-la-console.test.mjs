@@ -85,6 +85,17 @@ const LEXCEPTION_AUTORISEE = ["le_corpus_en_clair"];
 const LA_MIGRATION = join(RACINE, "supabase", "migrations", "202611220001_les_comptes_de_mdall.sql");
 
 /**
+ * Celle de l'exploitation, qui lit par-dessus les politiques elle aussi.
+ *
+ * Trois fonctions `security definer` de plus, dont une qui rend **lisible** un
+ * journal posé sans aucune politique. La même épreuve s'applique : ni table de
+ * contenu, ni colonne de mémoire, ni ouverture à la clé anonyme — et chacune
+ * passe par la porte qui journalise.
+ */
+const LEXPLOITATION = join(RACINE, "supabase", "migrations",
+  "202611230001_lexploitation_de_mdall.sql");
+
+/**
  * Le SQL sans ses commentaires.
  *
  * **Les commentaires doivent pouvoir nommer ces tables**, et c'est même
@@ -109,19 +120,32 @@ function duCodeSansCommentaires(texte) {
 
 /* ── La migration ─────────────────────────────────────────────────────────── */
 
-test("les fonctions des comptes ne nomment aucune table de contenu", () => {
-  const sql = duSqlSansCommentaires(lire(LA_MIGRATION));
+test("les fonctions de la console ne nomment aucune table de contenu", () => {
+  for (const [nom, chemin] of [["des comptes", LA_MIGRATION], ["de l'exploitation", LEXPLOITATION]]) {
+    const sql = duSqlSansCommentaires(lire(chemin));
 
-  for (const interdit of CE_QUI_NE_TRAVERSE_PAS) {
-    assert.doesNotMatch(sql, new RegExp(`\\b${interdit}\\b`),
-      `la migration des comptes touche à « ${interdit} » : la console lirait un contenu`);
-  }
+    for (const interdit of CE_QUI_NE_TRAVERSE_PAS) {
+      assert.doesNotMatch(sql, new RegExp(`\\b${interdit}\\b`),
+        `la migration ${nom} touche à « ${interdit} » : la console lirait un contenu`);
+    }
 
-  // Les colonnes de contenu de la mémoire, nommément : `project_assertions` est
-  // déjà refusée, mais un jour une vue portera ces noms.
-  for (const colonne of ["statement", "payload"]) {
-    assert.doesNotMatch(sql, new RegExp(`\\b${colonne}\\b`),
-      `la migration lit « ${colonne} » : c'est du contenu de mémoire`);
+    // Les colonnes de contenu de la mémoire, nommément : `project_assertions` est
+    // déjà refusée, mais un jour une vue portera ces noms.
+    for (const colonne of ["statement", "payload"]) {
+      assert.doesNotMatch(sql, new RegExp(`\\b${colonne}\\b`),
+        `la migration ${nom} lit « ${colonne} » : c'est du contenu de mémoire`);
+    }
+
+    /**
+     * **Et aucun nom de fichier.** C'est la tentation propre à un tableau de
+     * stockage : « les dix plus gros documents » serait utile, et chaque ligne
+     * porterait le nom d'un fichier de chantier. On somme donc par casier, et
+     * le nom d'un document ne sort jamais de la base.
+     */
+    for (const colonne of ["storage_path", "file_name", "original_name", "title"]) {
+      assert.doesNotMatch(sql, new RegExp(`\\b${colonne}\\b`),
+        `la migration ${nom} lit « ${colonne} » : c'est un nom de fichier ou un intitulé`);
+    }
   }
 });
 
@@ -171,6 +195,72 @@ test("chaque fonction de la console passe par la porte qui journalise", () => {
   }
 });
 
+/** Les trois fonctions de l'exploitation, sous la même règle. */
+test("chaque fonction de l'exploitation passe par la porte qui journalise", () => {
+  const sql = lire(LEXPLOITATION);
+
+  const fonctions = [...sql.matchAll(/create or replace function public\.(\w+)/g)]
+    .map((un) => un[1]);
+  assert.deepEqual(fonctions, [
+    "la_sante_des_systemes",
+    "les_consultations_de_la_console",
+    "lexploitation_de_mdall"
+  ]);
+
+  const appels = (sql.match(/perform public\.la_porte_de_la_console\(/g) ?? []).length;
+  assert.equal(appels, fonctions.length,
+    "une fonction de l'exploitation ne journalise pas son accès");
+
+  // **Aucune n'est `stable`.** Déclarée ainsi, elle tournerait en lecture seule
+  // et Postgres refuserait l'insertion du journal : l'écran marcherait, le
+  // journal serait vide.
+  assert.doesNotMatch(sql, /^stable$/m,
+    "une fonction qui journalise est déclarée stable : son journal restera vide");
+
+  for (const octroi of sql.match(/grant execute on function[^;]*/g) ?? []) {
+    const aQui = octroi.slice(octroi.lastIndexOf(" to ") + 4).split(",").map((un) => un.trim());
+    assert.deepEqual(aQui, ["authenticated"],
+      `une fonction de l'exploitation est accordée à ${aQui.join(", ")}`);
+  }
+});
+
+/**
+ * **Rendre le journal lisible ne le rend pas effaçable.**
+ *
+ * C'est le point délicat de cette migration : la table a été posée sans aucune
+ * politique, et la propriété à tenir n'était pas « illisible » mais
+ * **ineffaçable**. Une politique d'écriture ou de suppression glissée ici la
+ * défait — et le journal ne défendrait plus rien.
+ *
+ * Le banc des politiques l'éprouve en essayant d'effacer ; cette épreuve-ci
+ * attrape le cas plus tôt, sur le texte, parce qu'elle tourne sans PostgreSQL.
+ */
+test("l'exploitation n'ouvre ni écriture ni suppression sur le journal", () => {
+  const sql = duSqlSansCommentaires(lire(LEXPLOITATION));
+
+  const politiques = [...sql.matchAll(/create policy[^;]*on public\.(\w+)/g)].map((un) => un[1]);
+  assert.deepEqual(politiques, [],
+    "la migration de l'exploitation pose une politique : le journal deviendrait falsifiable");
+
+  for (const geste of ["insert into public.acces_administrateurs",
+    "delete from public.acces_administrateurs",
+    "update public.acces_administrateurs"]) {
+    assert.ok(!sql.includes(geste),
+      `l'exploitation écrit dans le journal : « ${geste} »`);
+  }
+
+  /**
+   * **Et elle ne crée, ne modifie ni ne supprime aucune table.** Elle est
+   * déclarée strictement additive dans son propre en-tête : trois fonctions
+   * neuves, et rien d'autre.
+   */
+  for (const geste of [/create table/, /drop table/, /alter table/, /drop function/,
+    /drop policy/]) {
+    assert.doesNotMatch(sql, geste,
+      `la migration de l'exploitation n'est pas additive : elle contient ${geste}`);
+  }
+});
+
 /**
  * **Le journal ne se lit pas depuis un navigateur.**
  *
@@ -190,8 +280,10 @@ test("le journal des accès n'a aucune politique", () => {
 
 /* ── Ce que la console emporte ────────────────────────────────────────────── */
 
-test("les deux modules des comptes ne nomment aucune table de contenu", () => {
-  for (const nom of ["les-comptes-de-mdall.js", "les-comptes-de-mdall-supabase.js"]) {
+test("les modules de la console ne nomment aucune table de contenu", () => {
+  for (const nom of ["les-comptes-de-mdall.js", "les-comptes-de-mdall-supabase.js",
+    "la-sante-des-systemes.js", "lexploitation-de-mdall.js",
+    "lexploitation-de-mdall-supabase.js"]) {
     const source = duCodeSansCommentaires(lire(join(WEB, "js", "services", nom)));
     for (const interdit of CE_QUI_NE_TRAVERSE_PAS) {
       assert.doesNotMatch(source, new RegExp(`\\b${interdit}\\b`),

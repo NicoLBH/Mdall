@@ -1,7 +1,7 @@
 /**
  * Les onglets de la console d'administration.
  *
- * ## Deux onglets, et ce que la barre dit avant qu'on clique
+ * ## Trois onglets, et ce que la barre dit avant qu'on clique
  *
  * La console n'en a eu qu'un pendant plusieurs tours — le carburant —, et la
  * barre était quand même posée : elle disait, avant qu'on ait cliqué nulle part,
@@ -39,12 +39,23 @@
 export const ONGLET = {
   /** Qui est là : les comptes, et ce que chacun a fait. */
   UTILISATEURS: "utilisateurs",
+  /**
+   * L'installation elle-même : répond-elle, que contient-elle, qui l'a regardée.
+   *
+   * **Après les utilisateurs, et non avant.** « Qui est là » reste la première
+   * question d'exploitation, et cet ordre a été posé explicitement. On pourrait
+   * défendre l'inverse — on regarde d'abord si la machine tourne — mais le
+   * changer sans qu'on le demande ferait déplacer un onglet sous la main de
+   * quelqu'un qui avait appris où il était.
+   */
+  EXPLOITATION: "exploitation",
   /** Ce que Mdall a reçu, et ce que cela permet. */
   CARBURANT: "carburant"
 };
 
 export const ONGLETS_DE_LA_CONSOLE = [
   { cle: ONGLET.UTILISATEURS, dit: "Utilisateurs", icone: "people" },
+  { cle: ONGLET.EXPLOITATION, dit: "Exploitation", icone: "pulse" },
   { cle: ONGLET.CARBURANT, dit: "Carburant", icone: "fire" }
 ];
 

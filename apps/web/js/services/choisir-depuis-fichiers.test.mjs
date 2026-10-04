@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { FAMILLE, TOUTES } from "./les-familles-de-document.js";
 import {
-  CE_QUE_CA_DEMANDE, ENTREE, LECTURE_DU_CHOIX, PAS_CHOISISSABLE, basculerLeChoix,
+  CE_QUE_CA_DEMANDE, ENTREE, LECTURE_DU_CHOIX, PAS_CHOISISSABLE, PHRASES_DU_REFUS,
+  basculerLeChoix,
   ceQueLaFileContient, cheminDuDossier, commentCaSeLit, entreesDuDossier,
   etatDeLaCaseDuDossier, lesChoisissables, phraseDeCeQueLaFileFera, phraseDeLaSelection,
   phraseDuDossier, pourquoiPasChoisissable, toutBasculer
@@ -62,6 +64,75 @@ test("les deux refus ne se confondent pas", () => {
   // « ce n'est pas du texte » se traite en déposant le fichier ; « rien à lire »
   // en le redéposant. Deux gestes différents.
   assert.notEqual(PAS_CHOISISSABLE.PAS_DU_TEXTE, PAS_CHOISISSABLE.RIEN_A_LIRE);
+});
+
+/* ── Ce que chaque famille lit ────────────────────────────────── */
+
+/**
+ * **Un `.eml` sous « Bureau de contrôle » disait « Mdall ne sait pas lire ce
+ * format ».** C'était faux : Mdall le lit très bien, ailleurs. Une phrase fausse
+ * sur l'écran qui explique pourquoi une ligne est éteinte est pire qu'un écran
+ * muet — on en conclut que le format n'est pas pris en charge, et l'on ne
+ * cherche plus (règle 5).
+ */
+test("une famille ne propose que ce qu'elle lit", () => {
+  assert.equal(commentCaSeLit(range("cr.pdf"), FAMILLE.CR), LECTURE_DU_CHOIX.PDF);
+  assert.equal(commentCaSeLit(range("notice.md"), FAMILLE.CR), LECTURE_DU_CHOIX.TEXTE);
+  // Le bureau de contrôle ne lit que des PDF : pas de texte, pas de mails.
+  assert.equal(commentCaSeLit(range("cr.pdf"), FAMILLE.CONTROLE), LECTURE_DU_CHOIX.PDF);
+  assert.equal(commentCaSeLit(range("notice.md"), FAMILLE.CONTROLE), "");
+  // Et les mails ne lisent que des porteurs de mails.
+  assert.equal(commentCaSeLit(range("fil.eml"), FAMILLE.MAIL), LECTURE_DU_CHOIX.MAIL);
+  assert.equal(commentCaSeLit(range("export.zip"), FAMILLE.MAIL), LECTURE_DU_CHOIX.MAIL);
+  assert.equal(commentCaSeLit(range("cr.pdf"), FAMILLE.MAIL), "");
+});
+
+test("un format que Mdall lit ailleurs le dit, et ne prétend pas être inconnu", () => {
+  assert.equal(pourquoiPasChoisissable(range("fil.eml"), FAMILLE.CONTROLE),
+    PAS_CHOISISSABLE.PAS_DE_CETTE_FAMILLE);
+  assert.equal(pourquoiPasChoisissable(range("cr.pdf"), FAMILLE.MAIL),
+    PAS_CHOISISSABLE.PAS_DE_CETTE_FAMILLE);
+
+  // Et ce que Mdall ne lit nulle part garde l'autre refus : les deux gestes
+  // qu'ils appellent sont différents — changer de famille, ou renoncer.
+  assert.equal(pourquoiPasChoisissable(range("plan.dwg"), FAMILLE.MAIL),
+    PAS_CHOISISSABLE.PAS_LISIBLE);
+
+  assert.notEqual(PHRASES_DU_REFUS[PAS_CHOISISSABLE.PAS_DE_CETTE_FAMILLE],
+    PHRASES_DU_REFUS[PAS_CHOISISSABLE.PAS_LISIBLE]);
+  assert.match(PHRASES_DU_REFUS[PAS_CHOISISSABLE.PAS_DE_CETTE_FAMILLE], /mais pas ici/);
+});
+
+test("sans famille, tout ce que Mdall sait lire se choisit", () => {
+  // L'appelant qui ne regarde aucune famille en particulier ne doit pas voir des
+  // documents éteints sans raison visible. `toutes` est leur réunion, et non une
+  // famille qui refuserait tout.
+  for (const quoi of ["", TOUTES]) {
+    assert.equal(commentCaSeLit(range("cr.pdf"), quoi), LECTURE_DU_CHOIX.PDF);
+    assert.equal(commentCaSeLit(range("notice.md"), quoi), LECTURE_DU_CHOIX.TEXTE);
+    assert.equal(commentCaSeLit(range("fil.eml"), quoi), LECTURE_DU_CHOIX.MAIL);
+  }
+});
+
+test("un fil annonce qu'il coûte un appel, et un seul", () => {
+  // Dix mails choisis ne font pas dix appels : c'est une autre économie que
+  // celle des PDF, et la taire ferait renoncer à choisir large.
+  assert.match(CE_QUE_CA_DEMANDE[LECTURE_DU_CHOIX.MAIL], /un seul appel/);
+  assert.notEqual(CE_QUE_CA_DEMANDE[LECTURE_DU_CHOIX.MAIL],
+    CE_QUE_CA_DEMANDE[LECTURE_DU_CHOIX.PDF]);
+});
+
+test("la liste d'un dossier suit la famille ouverte", () => {
+  const dossier = { folders: [], files: [range("cr.pdf"), range("fil.eml")] };
+
+  const sousLeControle = entreesDuDossier(dossier, FAMILLE.CONTROLE);
+  assert.deepEqual(sousLeControle.map((une) => une.choisissable), [true, false]);
+  // Éteint, mais **listé** : masquer ferait un dossier de douze mails qui
+  // paraîtrait vide, ce qui se lit comme une panne (règle 5).
+  assert.equal(sousLeControle.length, 2);
+
+  const sousLesMails = entreesDuDossier(dossier, FAMILLE.MAIL);
+  assert.deepEqual(sousLesMails.map((une) => une.choisissable), [false, true]);
 });
 
 // ── L'ordre de la liste ────────────────────────────────────────────────────

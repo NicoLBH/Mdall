@@ -31,6 +31,7 @@
 
 import { estUnFichierTexte, nomDuFichier } from "./lire-un-fichier-texte.js";
 import { extensionDe } from "./fichier-a-la-main.js";
+import { FAMILLE, ceQueDitLaFamille } from "./les-familles-de-document.js";
 import { etatDeLaCaseDeTete } from "./selection-des-sujets.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -42,44 +43,114 @@ export const ENTREE = { DOSSIER: "dossier", FICHIER: "fichier" };
  * Ce qu'un document déjà déposé demande pour être lu.
  *
  * **Le texte ne demande rien** : il est déjà le document. **Un PDF demande une
- * extraction**, et c'est le seul parcours qui coûte un appel — il est donc dit,
- * à côté du document, avant qu'on clique.
+ * extraction**, et c'est un parcours qui coûte un appel — il est donc dit, à
+ * côté du document, avant qu'on clique.
+ *
+ * **Un mail ne coûte rien non plus à ouvrir** : le dépliage se fait dans le
+ * navigateur. Ce qui coûte est le relèvement du fil, **une fois pour tout le
+ * fil** — et c'est une autre phrase, parce que c'est une autre économie : dix
+ * mails choisis ne font pas dix appels.
  */
-export const LECTURE_DU_CHOIX = { TEXTE: "texte", PDF: "pdf" };
+export const LECTURE_DU_CHOIX = { TEXTE: "texte", PDF: "pdf", MAIL: "mail" };
 
 export const CE_QUE_CA_DEMANDE = {
   [LECTURE_DU_CHOIX.TEXTE]: "",
-  [LECTURE_DU_CHOIX.PDF]: "Ce document sera extrait puis restitué par le modèle."
+  [LECTURE_DU_CHOIX.PDF]: "Ce document sera extrait puis restitué par le modèle.",
+  [LECTURE_DU_CHOIX.MAIL]: "Les mails choisis forment un fil, relevé en un seul appel."
 };
 
 /**
  * Pourquoi un fichier ne se choisit pas.
  *
- * Il ne reste que deux cas, et ni l'un ni l'autre n'est un format : un document
- * que Mdall ne sait pas lire, et un document dont le dépôt ne s'est pas terminé.
+ * ## Trois cas, et le troisième a été ajouté parce que le premier mentait
+ *
+ * Un `.eml` proposé sous « Bureau de contrôle » disait « Mdall ne sait pas lire
+ * ce format ». C'était faux : Mdall le lit très bien, **ailleurs**. Une phrase
+ * fausse sur un écran qui explique pourquoi quelque chose est éteint est pire
+ * qu'un écran muet — on en conclut que le format n'est pas pris en charge, et
+ * l'on ne cherche plus (règle 5).
  */
 export const PAS_CHOISISSABLE = {
   PAS_LISIBLE: "pas-lisible",
+  PAS_DE_CETTE_FAMILLE: "pas-de-cette-famille",
   RIEN_A_LIRE: "rien-a-lire"
 };
 
 export const PHRASES_DU_REFUS = {
   [PAS_CHOISISSABLE.PAS_LISIBLE]:
-    "Mdall ne sait pas lire ce format : un PDF, ou un document de texte.",
+    "Mdall ne sait pas lire ce format.",
+  [PAS_CHOISISSABLE.PAS_DE_CETTE_FAMILLE]:
+    "Mdall sait lire ce format, mais pas ici : choisissez la famille qui le lit.",
   [PAS_CHOISISSABLE.RIEN_A_LIRE]:
     "Aucun contenu n'est attaché à ce document : son dépôt ne s'est pas terminé."
 };
 
-/** Comment ce document se lirait — `""` s'il ne se lit pas du tout. */
-export function commentCaSeLit(document = null) {
+/** Les extensions d'une famille, en minuscules, telles que le registre les déclare. */
+function ceQuelleAccepte(famille) {
+  return texte(ceQueDitLaFamille(famille)?.accepte)
+    .split(",").map((un) => un.trim().toLowerCase()).filter(Boolean);
+}
+
+/**
+ * De quelle nature est ce document, indépendamment de qui le lit.
+ *
+ * ## Les mails d'abord, et par le registre
+ *
+ * Un `.zip` est un porteur de mails et rien d'autre ici ; le ranger au texte en
+ * ferait un document qu'on ouvrirait comme une page. La liste de ce qui porte
+ * des mails n'est pas recopiée : c'est celle de la famille, et elle vient de
+ * celui qui les range (règle 10).
+ *
+ * **C'est la seule famille nommée ici, et c'est assumé** : les deux autres lisent
+ * un document, celle-ci lit un *fil* — plusieurs documents en un seul appel. La
+ * différence n'est pas de format, elle est d'économie, et c'est pour cela qu'elle
+ * a sa phrase à elle.
+ */
+function laNatureDe(document = null) {
   const nom = nomDuFichier(document);
+  if (ceQuelleAccepte(FAMILLE.MAIL).includes(extensionDe(nom))) return LECTURE_DU_CHOIX.MAIL;
   if (estUnFichierTexte(nom)) return LECTURE_DU_CHOIX.TEXTE;
   return extensionDe(nom) === ".pdf" ? LECTURE_DU_CHOIX.PDF : "";
 }
 
+/**
+ * Comment ce document se lirait **pour la famille ouverte** — `""` sinon.
+ *
+ * ## Ce que la famille accepte vient du registre
+ *
+ * Il le déclare déjà, pour la zone de dépôt : une famille lit des PDF et du
+ * texte, une autre des porteurs de mails. En tenir une seconde liste ici, c'est
+ * accepter qu'elles divergent au premier format ajouté — et la divergence ne se
+ * verrait que sur l'écran qu'on relit le moins (règle 10).
+ *
+ * **Sans famille, tout ce que Mdall sait lire.** C'est le cas de l'appelant qui
+ * ne regarde pas une famille en particulier ; restreindre par défaut aurait
+ * éteint des documents sans raison visible.
+ */
+export function commentCaSeLit(document = null, famille = "") {
+  const nature = laNatureDe(document);
+  if (!nature) return "";
+
+  const voulue = texte(famille);
+  if (!voulue) return nature;
+
+  const accepte = ceQuelleAccepte(voulue);
+  // Une famille qui n'accepte rien ne restreint rien : c'est `TOUTES`, qui est
+  // la réunion des autres et non une famille qui refuserait tout.
+  if (!accepte.length) return nature;
+
+  return accepte.includes(extensionDe(nomDuFichier(document))) ? nature : "";
+}
+
 /** Pourquoi ce document ne se choisit pas — ou `""` s'il se choisit. */
-export function pourquoiPasChoisissable(document = null) {
-  if (!commentCaSeLit(document)) return PAS_CHOISISSABLE.PAS_LISIBLE;
+export function pourquoiPasChoisissable(document = null, famille = "") {
+  if (!commentCaSeLit(document, famille)) {
+    // **Mdall le lit-il ailleurs ?** La distinction est tout l'intérêt : dire
+    // « ce format n'est pas pris en charge » d'un `.eml` ferait renoncer.
+    return laNatureDe(document)
+      ? PAS_CHOISISSABLE.PAS_DE_CETTE_FAMILLE
+      : PAS_CHOISISSABLE.PAS_LISIBLE;
+  }
 
   const seau = texte(document?.storageBucket ?? document?.storage_bucket);
   const chemin = texte(document?.storagePath ?? document?.storage_path);
@@ -102,7 +173,7 @@ export function pourquoiPasChoisissable(document = null) {
  * changeait le résultat ici. Un réglage qu'aucune vérification ne justifie se
  * lit comme une précaution, et l'on hésite à y toucher pour rien.
  */
-export function entreesDuDossier(contenu = null) {
+export function entreesDuDossier(contenu = null, famille = "") {
   // **`null` n'est pas `undefined`.** Une valeur par défaut de déstructuration
   // ne couvre que le second, et la lecture d'un dossier peut très bien rendre
   // `null` : on lèverait alors au lieu d'afficher un dossier vide.
@@ -122,7 +193,7 @@ export function entreesDuDossier(contenu = null) {
 
   const fichiers = (Array.isArray(files) ? files : [])
     .map((fichier) => {
-      const pourquoi = pourquoiPasChoisissable(fichier);
+      const pourquoi = pourquoiPasChoisissable(fichier, famille);
       return {
         type: ENTREE.FICHIER,
         id: texte(fichier?.id),
@@ -137,7 +208,7 @@ export function entreesDuDossier(contenu = null) {
         // abouti est bien du texte, il n'y a simplement rien à lire. Le blanchir
         // aurait été une ligne qu'aucun cassage ne fait tomber — rien ne lit ce
         // champ sur une entrée qu'on ne peut pas prendre.
-        lecture: commentCaSeLit(fichier)
+        lecture: commentCaSeLit(fichier, famille)
       };
     })
     .filter((entree) => entree.id)

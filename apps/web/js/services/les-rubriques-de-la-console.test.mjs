@@ -31,13 +31,25 @@ import {
  */
 test("l'ordre des rubriques est celui de la chaîne", () => {
   assert.deepEqual(LES_RUBRIQUES.map((une) => une.cle),
-    [LES_COMPTES, LE_CARBURANT, "reconnaissance", "prediction", "sujets", "idees", "manques"]);
+    [LES_COMPTES, "sante", "usage", "consultations",
+     LE_CARBURANT, "reconnaissance", "prediction", "sujets", "idees", "manques"]);
 
   // **Les comptes viennent avant la chaîne, pas dedans** : ils répondent à une
   // autre question — qui est là —, et c'est la première qu'on se pose. La
   // chaîne du carburant, elle, garde son ordre entier.
   assert.deepEqual(lesRubriquesDeLonglet(ONGLET.CARBURANT).map((une) => une.cle),
     [LE_CARBURANT, "reconnaissance", "prediction", "sujets", "idees", "manques"]);
+
+  /**
+   * **L'exploitation va de « est-ce que cela répond » à « qui a regardé ».**
+   *
+   * La santé d'abord : si rien ne répond, les chiffres d'usage de l'écran
+   * suivant sont ceux d'une installation en panne, et on les lirait comme un
+   * creux d'activité. Les consultations ferment, parce qu'elles portent sur la
+   * console elle-même et non sur le produit.
+   */
+  assert.deepEqual(lesRubriquesDeLonglet(ONGLET.EXPLOITATION).map((une) => une.cle),
+    ["sante", "usage", "consultations"]);
 });
 
 /**
