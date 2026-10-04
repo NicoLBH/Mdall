@@ -293,8 +293,15 @@ test("le site construit de la console ne nomme aucune table de contenu", () => {
   };
   descendre(CONSOLE);
 
-  // Le build dépose `partage/` ; sans lui, cette épreuve ne regarderait que
-  // trois fichiers et passerait pour verte.
+  // **Le build dépose `partage/`, et `pretest` le fait tourner.** Sans lui,
+  // cette épreuve ne regarderait que cinq fichiers et passerait pour verte —
+  // c'est pour cela qu'elle compte d'abord ce qu'elle a sous les yeux.
+  //
+  // C'est aussi ce qui l'a fait tomber en intégration continue : les épreuves y
+  // tournent **avant** les constructions, et `npm run build:console` n'avait
+  // donc pas eu lieu. Le dossier étant un produit de construction (il n'est pas
+  // dans le dépôt), c'est à `pretest` de le poser, comme il pose déjà les
+  // utilitaires et les modules descendus dont d'autres épreuves dépendent.
   assert.ok(fichiers.length > 20,
     `le site de la console n'a que ${fichiers.length} fichiers : « npm run build:console » n'a pas tourné`);
 
